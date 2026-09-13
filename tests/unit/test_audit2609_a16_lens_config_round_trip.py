@@ -271,7 +271,7 @@ def test_to_kwargs_emits_only_requests_unless_asked_for_defaults():
     assert cfg.to_kwargs() == {'newton_poly_order': 8}
     everything = cfg.to_kwargs(include_defaults=True)
     n_fields = sum(len(_dataclass_defaults(d)) for _, d, _ in lc._GROUPS)
-    assert len(everything) == n_fields == 39, (
+    assert len(everything) == n_fields == 40, (
         f'to_kwargs(include_defaults=True) emitted {len(everything)} of '
         f'{n_fields} fields.')
     assert everything['newton_poly_order'] == 8
@@ -294,6 +294,7 @@ def test_to_kwargs_for_an_entry_point_is_exactly_what_it_accepts(ep):
                               min_coarse_samples_per_aperture=8,
                               fit_radius_beam_factor=1.5,
                               newton_fit='spline', newton_poly_order=8,
+                              fit_basis='zernike',
                               newton_max_iters=40, inversion_method='fit',
                               amplitude_model='ray_density',
                               caustic='multibranch', caustic_band='plain',

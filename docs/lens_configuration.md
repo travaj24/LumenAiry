@@ -261,7 +261,7 @@ the config is passed to it un-narrowed.
 | `beam_centre` | None | -- | Y | -- | -- | -- | -- | -- |
 | `roi` | None | -- | -- | -- | Y | Y | -- | -- |
 
-### `LensNumerics` (18 fields)
+### `LensNumerics` (19 fields)
 
 | field | default | analytic | traced | prepare | maslov | gbd | fga | multibranch |
 |---|---|---|---|---|---|---|---|---|
@@ -275,6 +275,7 @@ the config is passed to it un-narrowed.
 | `fit_radius_beam_factor` | None | -- | Y | Y | -- | -- | -- | -- |
 | `newton_fit` | `'auto'` | -- | Y | Y | -- | -- | -- | -- |
 | `newton_poly_order` | 6 | -- | Y | Y | -- | -- | -- | -- |
+| `fit_basis` | 'chebyshev' | -- | Y | Y | -- | -- | -- | -- |
 | `newton_max_iters` | None | -- | Y | Y | -- | -- | -- | -- |
 | `inversion_method` | `'newton'` | -- | Y | Y | -- | -- | -- | -- |
 | `amplitude_model` | `'screen'` | -- | Y | Y | -- | -- | -- | -- |

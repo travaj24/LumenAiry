@@ -450,6 +450,14 @@ class LensNumerics:
     newton_poly_order : int, default 6
         Total degree of the Chebyshev OPL fit.  Accepted by:
         ``apply_real_lens_traced``, ``prepare_real_lens_traced``.
+    fit_basis : str, default 'chebyshev'
+        Design basis of the traced ray fits: ``'chebyshev'`` (tensor Chebyshev
+        on the launch square) or ``'zernike'`` (orthonormal on the ray-fit
+        disc).  The two span the same polynomial space at the same total
+        degree, so this changes the CONDITIONING of the fit's least squares and
+        not the fit; ``'zernike'`` requires ``newton_fit='polynomial'`` and
+        ``inversion_method='newton'``.  Membership checked by the entry point.
+        Accepted by: ``apply_real_lens_traced``, ``prepare_real_lens_traced``.
     newton_max_iters : int or None, default None
         Cap on per-pixel Newton iterations; ``None`` -> the module default.
         Accepted by: ``apply_real_lens_traced``, ``prepare_real_lens_traced``.
@@ -496,6 +504,7 @@ class LensNumerics:
     fit_radius_beam_factor: Optional[float] = None
     newton_fit: str = 'auto'
     newton_poly_order: int = 6
+    fit_basis: str = 'chebyshev'
     newton_max_iters: Optional[int] = None
     inversion_method: str = 'newton'
     amplitude_model: str = 'screen'
@@ -728,6 +737,7 @@ _NUMERICS_FOR: Dict[str, Dict[str, str]] = {
         'min_coarse_samples_per_aperture': 'min_coarse_samples_per_aperture',
         'fit_radius_beam_factor': 'fit_radius_beam_factor',
         'newton_fit': 'newton_fit', 'newton_poly_order': 'newton_poly_order',
+        'fit_basis': 'fit_basis',
         'newton_max_iters': 'newton_max_iters',
         'inversion_method': 'inversion_method',
         'amplitude_model': 'amplitude_model', 'caustic': 'caustic',
@@ -741,6 +751,7 @@ _NUMERICS_FOR: Dict[str, Dict[str, str]] = {
         'min_coarse_samples_per_aperture': 'min_coarse_samples_per_aperture',
         'fit_radius_beam_factor': 'fit_radius_beam_factor',
         'newton_fit': 'newton_fit', 'newton_poly_order': 'newton_poly_order',
+        'fit_basis': 'fit_basis',
         'newton_max_iters': 'newton_max_iters',
         'inversion_method': 'inversion_method',
         'amplitude_model': 'amplitude_model',

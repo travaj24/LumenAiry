@@ -2255,6 +2255,11 @@ def _cheb_fit_state(ev):
     ``backend`` is deliberately absent -- it is a fact about the process that
     will evaluate, not about the fit, and it travels separately as the
     payload's ``cheb_backend`` (see :func:`_resolved_cheb_backend`).
+
+    The two ``fit_basis='zernike'`` keys are added ONLY on that basis, so the
+    default payload is the nine keys it has always been -- which is what
+    ``_newton_worker_bytes`` prices and what
+    ``test_the_shipped_state_carries_the_fit_and_not_the_grids`` pins.
     """
     _xp = getattr(ev, 'xp', np)
 
@@ -2264,7 +2269,7 @@ def _cheb_fit_state(ev):
         # insurance against that ever changing silently.
         return np.asarray(_xp.asnumpy(a) if _xp is not np else a)
 
-    return {
+    state = {
         'order': int(ev.order),
         'mi': [(int(kx), int(ky)) for (kx, ky) in ev._mi],
         'coeffs': np.asarray(_host(ev.coeffs), dtype=np.float64),
@@ -2273,6 +2278,10 @@ def _cheb_fit_state(ev):
         'xmin': float(ev.xmin), 'xmax': float(ev.xmax),
         'ymin': float(ev.ymin), 'ymax': float(ev.ymax),
     }
+    if getattr(ev, 'basis', 'chebyshev') != 'chebyshev':
+        state['basis'] = str(ev.basis)
+        state['disc'] = (float(ev.cx), float(ev.cy), float(ev.radius))
+    return state
 
 
 def _cheb_fit_payload(Sx, Sy, So, newton_fit='polynomial'):
@@ -3249,10 +3258,11 @@ class _Cheb2DEvaluator:
     """
 
     __slots__ = ('order', 'coeffs', 'xmin', 'xmax', 'ymin', 'ymax',
-                 '_mi', '_K1', '_K2', 'xp', 'backend')
+                 '_mi', '_K1', '_K2', 'xp', 'backend',
+                 'basis', 'cx', 'cy', 'radius')
 
     def __init__(self, xs_in, ys_in, values, order=6, xp=None, weights=None,
-                 backend=None):
+                 backend=None, basis='chebyshev', disc=None):
         if xp is None:
             xp = _get_array_module(values)
         self.xp = xp
@@ -3282,58 +3292,84 @@ class _Cheb2DEvaluator:
         vals_np = np.asarray(xp.asnumpy(values) if xp is not np else values,
                               dtype=np.float64)
         self.order = int(order)
+        # THE DESIGN BASIS.  ``'chebyshev'`` is the shipped default and every
+        # byte-identity contract in this module rests on it; ``'zernike'``
+        # spans the same total-degree space on the disc named by ``disc`` --
+        # see ``_VALID_FIT_BASES`` and ``_zernike_columns``.
+        self.basis = _validated_fit_basis(basis, '_Cheb2DEvaluator')
+        self.cx, self.cy, self.radius = _fit_basis_disc_or_raise(
+            self.basis, disc)
         # Scalars extracted as Python floats so chain-rule multiplies
         # stay backend-agnostic and don't pull host-device copies later.
         self.xmin = float(xs_np.min())
         self.xmax = float(xs_np.max())
         self.ymin = float(ys_np.min())
         self.ymax = float(ys_np.max())
-        # Build total-degree multi-indices (kx, ky) with kx + ky <= order
-        self._mi = [(kx, ky)
+        # Build total-degree multi-indices (kx, ky) with kx + ky <= order,
+        # or the Zernike ``(n, m)`` of the same total degree.
+        self._mi = (_zernike_terms(order) if self.basis == 'zernike' else
+                    [(kx, ky)
                      for kx in range(order + 1)
-                     for ky in range(order + 1 - kx)]
+                     for ky in range(order + 1 - kx)])
         n_terms = len(self._mi)
         # Fit on CPU using NumPy
         X_np, Y_np = np.meshgrid(xs_np, ys_np, indexing='ij')
-        u_np = (2.0 * X_np - (self.xmin + self.xmax)) / (self.xmax - self.xmin)
-        v_np = (2.0 * Y_np - (self.ymin + self.ymax)) / (self.ymax - self.ymin)
         K1_np = np.asarray([m[0] for m in self._mi], dtype=np.int64)
         K2_np = np.asarray([m[1] for m in self._mi], dtype=np.int64)
-        Tu_np = _cheb_vand_2d(u_np, order, np)
-        Tv_np = _cheb_vand_2d(v_np, order, np)
-        # FIX_RUNNER_OOM_2026_08_13.  Built in ROW BLOCKS into a preallocated
-        # buffer.  The one-liner this replaces,
-        # ``(Tu_np[K1_np] * Tv_np[K2_np]).reshape(n_terms, -1).T``, is three
-        # full ``(n_terms, n_samples)`` arrays alive at once -- the two fancy-
-        # index GATHERS and their product -- so a fit that RETURNS a 1.29 GB
-        # design matrix (measured: 2401^2 retained samples at order 6, the
-        # ``test_niche_c1_consolidation`` exit-NA case) transiently claimed
-        # 4.7 GB, three times over in one call.  That is survivable on a 128 GB
-        # dev box and is 2/3 of a CI runner.
-        #
-        # BIT-IDENTICAL, in values AND in what the SOLVE sees.  Every entry is
-        # the same product of the same two Chebyshev values -- elementwise, no
-        # reduction, so no summation order to change.  Layout would be
-        # load-bearing (``_solve_lstsq_thread_safe`` forms ``A.T @ A``, whose
-        # BLAS reduction order depends on it) except that the solver's FIRST
-        # line is ``np.ascontiguousarray(A)``: it always squared a C-contiguous
-        # copy.  Building C-contiguous here hands it exactly that array and
-        # RETIRES the copy -- one 1.29 GB allocation less on the measured case,
-        # and the weighted branch's ``np.ascontiguousarray`` below likewise
-        # becomes a no-op that scales in place.
-        _Tu_f = Tu_np.reshape(order + 1, -1)
-        _Tv_f = Tv_np.reshape(order + 1, -1)
-        _n_flat = _Tu_f.shape[1]
-        A_full = np.empty((_n_flat, n_terms), dtype=np.float64)
-        _step = max(1, _CHEB_FIT_CHUNK_ENTRIES // max(1, n_terms))
-        for _s in range(0, _n_flat, _step):
-            _e = min(_s + _step, _n_flat)
-            # SLICE first, gather second: ``_Tu_f[K1_np][:, s:e]`` would
-            # materialise the full ``(n_terms, n_samples)`` gather this whole
-            # block exists to avoid.
-            np.multiply(_Tu_f[:, _s:_e][K1_np].T, _Tv_f[:, _s:_e][K2_np].T,
-                        out=A_full[_s:_e])
-        del _Tu_f, _Tv_f, Tu_np, Tv_np
+        if self.basis == 'zernike':
+            # Disc coordinates, in ROW BLOCKS against the same entry budget the
+            # Chebyshev branch below uses -- the design matrix is the same
+            # shape, so the allocation argument recorded there applies here
+            # unchanged.
+            _uf = ((X_np.ravel() - self.cx) / self.radius)
+            _vf = ((Y_np.ravel() - self.cy) / self.radius)
+            A_full = np.empty((_uf.shape[0], n_terms), dtype=np.float64)
+            _stepz = max(1, _CHEB_FIT_CHUNK_ENTRIES // max(1, n_terms))
+            for _s in range(0, _uf.shape[0], _stepz):
+                _e = min(_s + _stepz, _uf.shape[0])
+                _zernike_design(_uf[_s:_e], _vf[_s:_e], order, xp=np,
+                                out=A_full[_s:_e])
+            del _uf, _vf
+        else:
+            u_np = (2.0 * X_np - (self.xmin + self.xmax)) / (self.xmax - self.xmin)
+            v_np = (2.0 * Y_np - (self.ymin + self.ymax)) / (self.ymax - self.ymin)
+            Tu_np = _cheb_vand_2d(u_np, order, np)
+            Tv_np = _cheb_vand_2d(v_np, order, np)
+            # FIX_RUNNER_OOM_2026_08_13.  Built in ROW BLOCKS into a
+            # preallocated buffer.  The one-liner this replaces,
+            # ``(Tu_np[K1_np] * Tv_np[K2_np]).reshape(n_terms, -1).T``, is
+            # three full ``(n_terms, n_samples)`` arrays alive at once -- the
+            # two fancy-index GATHERS and their product -- so a fit that
+            # RETURNS a 1.29 GB design matrix (measured: 2401^2 retained
+            # samples at order 6, the ``test_niche_c1_consolidation`` exit-NA
+            # case) transiently claimed 4.7 GB, three times over in one call.
+            # That is survivable on a 128 GB dev box and is 2/3 of a CI runner.
+            #
+            # BIT-IDENTICAL, in values AND in what the SOLVE sees.  Every entry
+            # is the same product of the same two Chebyshev values --
+            # elementwise, no reduction, so no summation order to change.
+            # Layout would be load-bearing (``_solve_lstsq_thread_safe`` forms
+            # ``A.T @ A``, whose BLAS reduction order depends on it) except
+            # that the solver's FIRST line is ``np.ascontiguousarray(A)``: it
+            # always squared a C-contiguous copy.  Building C-contiguous here
+            # hands it exactly that array and RETIRES the copy -- one 1.29 GB
+            # allocation less on the measured case, and the weighted branch's
+            # ``np.ascontiguousarray`` below likewise becomes a no-op that
+            # scales in place.
+            _Tu_f = Tu_np.reshape(order + 1, -1)
+            _Tv_f = Tv_np.reshape(order + 1, -1)
+            _n_flat = _Tu_f.shape[1]
+            A_full = np.empty((_n_flat, n_terms), dtype=np.float64)
+            _step = max(1, _CHEB_FIT_CHUNK_ENTRIES // max(1, n_terms))
+            for _s in range(0, _n_flat, _step):
+                _e = min(_s + _step, _n_flat)
+                # SLICE first, gather second: ``_Tu_f[K1_np][:, s:e]`` would
+                # materialise the full ``(n_terms, n_samples)`` gather this
+                # whole block exists to avoid.
+                np.multiply(_Tu_f[:, _s:_e][K1_np].T,
+                            _Tv_f[:, _s:_e][K2_np].T,
+                            out=A_full[_s:_e])
+            del _Tu_f, _Tv_f, Tu_np, Tv_np
         vals_flat = vals_np.ravel()
         finite = np.isfinite(vals_flat)
         if weights is not None:
@@ -3416,6 +3452,10 @@ class _Cheb2DEvaluator:
         self = cls.__new__(cls)
         self.xp = xp
         self.backend = _validated_cheb_backend(backend)
+        self.basis = _validated_fit_basis(state.get('basis', 'chebyshev'),
+                                          '_Cheb2DEvaluator.from_state')
+        self.cx, self.cy, self.radius = _fit_basis_disc_or_raise(
+            self.basis, state.get('disc'))
         self.order = int(state['order'])
         self._mi = [(int(kx), int(ky)) for (kx, ky) in state['mi']]
         self.xmin = float(state['xmin'])
@@ -3490,6 +3530,8 @@ class _Cheb2DEvaluator:
         xp = self.xp
         x = xp.asarray(x, dtype=xp.float64)
         y = xp.asarray(y, dtype=xp.float64)
+        if self.basis == 'zernike':
+            return self._ev_zernike(x, y)
         u = self._to_u(x)
         v = self._to_v(y)
         sx = 2.0 / (self.xmax - self.xmin)
@@ -3573,6 +3615,44 @@ class _Cheb2DEvaluator:
         return (f_out.reshape(shape), fx_out.reshape(shape) * sx,
                 fy_out.reshape(shape) * sy)
 
+    # ----------------------------------------------------------------
+    # The DISC-ORTHOGONAL branch of the same contract.
+    # ----------------------------------------------------------------
+    def _ev_zernike(self, x, y):
+        """``ev_value_and_grad`` on the Zernike basis.
+
+        ONE implementation, on every backend: the numba Chebyshev kernel has no
+        Zernike counterpart, so there is no second floating-point order for a
+        Newton pool worker to disagree with its parent about, and
+        ``self.backend`` is inert here by construction rather than by policy.
+
+        Chunked over the QUERY axis for the reason the pure-xp Chebyshev
+        fallback above is (``_CHEB_FIT_CHUNK_ENTRIES``), but against a larger
+        step: the generator accumulates one basis column at a time, so the live
+        set is a handful of ``(step,)`` temporaries rather than four
+        ``(n_terms, step)`` gathers.
+        """
+        xp = self.xp
+        shape = x.shape
+        u_f = ((x.reshape(-1) - self.cx) / self.radius)
+        v_f = ((y.reshape(-1) - self.cy) / self.radius)
+        n_q = int(u_f.shape[0])
+        f_out = xp.empty(n_q, dtype=xp.float64)
+        fx_out = xp.empty(n_q, dtype=xp.float64)
+        fy_out = xp.empty(n_q, dtype=xp.float64)
+        step = max(1, int(_CHEB_FIT_CHUNK_ENTRIES) // 16)
+        for s0 in range(0, n_q, step):
+            s1 = min(s0 + step, n_q)
+            f_b, fu_b, fv_b = _zernike_value_and_grad(
+                self.coeffs, u_f[s0:s1], v_f[s0:s1], self.order, xp=xp)
+            f_out[s0:s1] = f_b
+            fx_out[s0:s1] = fu_b
+            fy_out[s0:s1] = fv_b
+        # the disc scaling is the whole chain rule: u = (x - cx) / radius
+        s = 1.0 / self.radius
+        return (f_out.reshape(shape), fx_out.reshape(shape) * s,
+                fy_out.reshape(shape) * s)
+
 
 def _cheb_vand_2d(u, max_k, xp=None):
     """Chebyshev T_k(u) for k=0..max_k as (max_k+1,) + u.shape array.
@@ -3605,6 +3685,215 @@ def _cheb_deriv_vand_2d(u, max_k, xp=None):
     if xp is None:
         xp = _get_array_module(u)
     return _chebyshev_derivative_vandermonde(u, max_k, xp=xp)
+
+
+# ---------------------------------------------------------------------------
+# THE DISC-ORTHOGONAL FIT BASIS (``fit_basis='zernike'``, opt-in)
+#
+# The Zernike polynomials are orthogonal on the UNIT DISC, where the tensor
+# Chebyshev basis above is orthogonal on the unit SQUARE.  Both span, at a
+# given ``order``, exactly the same space: every bivariate polynomial of total
+# degree <= ``order``, ``(order+1)(order+2)/2`` terms -- so a fit that swaps one
+# for the other minimises the same weighted residual over the same space and
+# returns the SAME polynomial up to floating point.  What moves is the
+# CONDITIONING of the least-squares problem, which is a statement about the
+# basis and the sample measure together: a basis orthogonal on the disc is well
+# conditioned when the samples fill that disc, and not otherwise.
+#
+# ``fit_basis`` therefore buys conditioning and coefficient interpretability
+# (a coefficient IS a Zernike mode of the fitted map), never a different fit.
+# Measurements, both fixtures and both directions:
+# ``docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/WP-B10_REPORT.md``.
+# ---------------------------------------------------------------------------
+
+#: The design bases the traced ray fits can be expressed in.  ``'chebyshev'``
+#: is the shipped default and the byte-identity reference.
+_VALID_FIT_BASES = ('chebyshev', 'zernike')
+
+
+def _validated_fit_basis(basis, fn='apply_real_lens_traced'):
+    """Return ``basis`` if it names a design basis, else raise.
+
+    Refused rather than coerced: a typo that quietly meant ``'chebyshev'``
+    would report the shipped fit as the opt-in one, which is the one outcome a
+    basis comparison cannot survive.
+    """
+    b = str(basis)
+    if b not in _VALID_FIT_BASES:
+        raise ValueError(
+            f"{fn}: fit_basis={basis!r} is not a design basis for the traced "
+            f"ray fits.  Choose 'chebyshev' (the default -- tensor Chebyshev "
+            f"on the launch square) or 'zernike' (orthogonal on the fit disc; "
+            f"same polynomial space, different conditioning).")
+    return b
+
+
+def _fit_basis_disc_or_raise(basis, disc):
+    """``(cx, cy, radius)`` the ``'zernike'`` basis is normalised to.
+
+    ``(0, 0, 0)`` for ``'chebyshev'``, which normalises to the sample axes'
+    own bounding box and reads none of these.  A zernike fit without a disc is
+    refused rather than defaulted: the whole content of the basis is WHICH disc
+    it is orthogonal on, so inventing one here would silently answer a
+    different question than the caller asked.
+    """
+    if basis != 'zernike':
+        return 0.0, 0.0, 0.0
+    try:
+        cx, cy, r = (float(disc[0]), float(disc[1]), float(disc[2]))
+    except (TypeError, IndexError, ValueError):
+        raise ValueError(
+            f"_Cheb2DEvaluator: basis='zernike' needs disc=(cx, cy, radius) "
+            f"in the sample coordinates' own units; got disc={disc!r}."
+        ) from None
+    if not (np.isfinite(cx) and np.isfinite(cy) and np.isfinite(r) and r > 0.0):
+        raise ValueError(
+            f"_Cheb2DEvaluator: basis='zernike' needs a finite disc with a "
+            f"positive radius; got centre ({cx!r}, {cy!r}), radius {r!r}.")
+    return cx, cy, r
+
+
+def _zernike_terms(order):
+    """``(n, m)`` of every Zernike of total degree ``n <= order``, ordered by
+    degree and then by azimuthal index (the OSA/ANSI order).
+
+    ``n + 1`` terms per degree ``n``, so ``(order+1)(order+2)/2`` in all --
+    term for term the count of the tensor-Chebyshev total-degree set, which is
+    what makes the two bases spans of the same space.
+    """
+    return [(n, m) for n in range(int(order) + 1)
+            for m in range(-n, n + 1, 2)]
+
+
+def _zernike_columns(u, v, order, grad=False, xp=None):
+    """Generate the Zernike basis columns at the disc coordinates ``(u, v)``.
+
+    Yields ``(j, Z_j)``, or ``(j, Z_j, dZ_j/du, dZ_j/dv)`` when ``grad``, with
+    ``j`` indexing :func:`_zernike_terms`.  ``u, v`` are flat arrays already
+    scaled to the fit disc (``rho = hypot(u, v) <= 1`` inside it); nothing here
+    requires ``rho <= 1``, because every ``Z`` is a polynomial in ``(u, v)`` and
+    the Newton loop evaluates the fitted map outside the disc it was normalised
+    to.
+
+    ONE generator feeds both consumers -- the least-squares design matrix and
+    the value+gradient evaluation -- so the recurrences below have a single
+    home and the fit cannot come to disagree with the evaluation.
+
+    The radial factor is the Jacobi form ``R_n^m(rho) = rho^m
+    P_{(n-m)/2}^{(0, m)}(2 rho^2 - 1)``, evaluated by the Jacobi three-term
+    recurrence in ``t = 2 rho^2 - 1`` (and its termwise derivative), rather than
+    by the monomial sum of the radial polynomial: ``R_16^0``'s monomial
+    coefficients alternate in sign and reach 84 084 against a polynomial
+    bounded by 1 on the disc, so summing them loses five digits INSIDE the
+    disc, where the fit is meant to be exact.  The azimuthal
+    factor is ``Re``/``Im`` of ``(u + i v)^|m|``, which is ``rho^|m|`` times
+    ``cos``/``sin (|m| theta)`` with no trigonometry and no ``rho = 0`` case.
+
+    Normalised so the columns are ORTHONORMAL under the mean over the unit
+    disc: ``N = sqrt(2n + 2)``, or ``sqrt(n + 1)`` for ``m = 0``.  That is what
+    makes the Gram of a disc-filling sample set the identity, i.e. what the
+    basis is being chosen for.
+    """
+    if xp is None:
+        xp = _get_array_module(u)
+    order = int(order)
+    idx = {nm: j for j, nm in enumerate(_zernike_terms(order))}
+    t = 2.0 * (u * u + v * v) - 1.0
+    if grad:
+        # dt/du, dt/dv; kept as arrays because every column reuses them
+        tu = 4.0 * u
+        tv = 4.0 * v
+    one = xp.ones_like(t)
+    zero = xp.zeros_like(t)
+    # Re/Im of (u + i v)^mm, carried up one azimuthal order at a time.
+    cur_re, cur_im = one, zero
+    for mm in range(order + 1):
+        if mm == 0:
+            prev_re, prev_im = zero, zero        # x 0: never read
+        # the Jacobi family P_k^{(0, mm)}(t), k = 0 .. (order - mm) // 2
+        p_prev = p_cur = dp_prev = dp_cur = None
+        for k in range((order - mm) // 2 + 1):
+            if k == 0:
+                p_cur, dp_cur = one, zero
+            elif k == 1:
+                # P_1^{(a,b)} = (a - b)/2 + (a + b + 2) t / 2, a = 0, b = mm.
+                # Spelled out because the general recurrence's leading
+                # coefficient vanishes at k = 1, mm = 0.
+                p_prev, dp_prev = p_cur, dp_cur
+                p_cur = 0.5 * (mm + 2.0) * t - 0.5 * mm
+                dp_cur = 0.5 * (mm + 2.0) * one
+            else:
+                c0 = 2.0 * k * (k + mm) * (2 * k + mm - 2)
+                c1 = (2 * k + mm - 1) * (2 * k + mm) * (2 * k + mm - 2)
+                c2 = -(2 * k + mm - 1) * mm * mm
+                c3 = 2.0 * (k - 1) * (k + mm - 1) * (2 * k + mm)
+                lin = c1 * t + c2
+                p_new = (lin * p_cur - c3 * p_prev) / c0
+                dp_new = ((c1 * p_cur + lin * dp_cur - c3 * dp_prev) / c0
+                          if grad else None)
+                p_prev, p_cur = p_cur, p_new
+                dp_prev, dp_cur = dp_cur, dp_new
+            n = 2 * k + mm
+            norm = np.sqrt(2.0 * n + 2.0) if mm else np.sqrt(n + 1.0)
+            for sgn in ((1, -1) if mm else (1,)):
+                m = sgn * mm
+                j = idx[(n, m)]
+                ang = cur_re if sgn > 0 else cur_im
+                col = norm * ang * p_cur
+                if not grad:
+                    yield j, col
+                    continue
+                # d/du, d/dv of Re/Im (u + i v)^mm: mm * (Re, -Im) and
+                # mm * (Im, Re) of the NEXT-LOWER power.
+                if sgn > 0:
+                    a_u, a_v = mm * prev_re, -mm * prev_im
+                else:
+                    a_u, a_v = mm * prev_im, mm * prev_re
+                yield (j, col,
+                       norm * (a_u * p_cur + ang * dp_cur * tu),
+                       norm * (a_v * p_cur + ang * dp_cur * tv))
+        prev_re, prev_im = cur_re, cur_im
+        cur_re, cur_im = (cur_re * u - cur_im * v, cur_re * v + cur_im * u)
+
+
+def _zernike_design(u, v, order, xp=None, out=None):
+    """The ``(n_samples, n_terms)`` Zernike design matrix at ``(u, v)``.
+
+    ``out`` is an optional preallocated buffer, so the fit can build the design
+    in row blocks against a fixed budget the way the Chebyshev fit does
+    (``_CHEB_FIT_CHUNK_ENTRIES``) instead of peaking at a second full copy.
+    """
+    if xp is None:
+        xp = _get_array_module(u)
+    n_terms = len(_zernike_terms(order))
+    A = (xp.empty((int(u.shape[0]), n_terms), dtype=xp.float64)
+         if out is None else out)
+    for j, col in _zernike_columns(u, v, order, xp=xp):
+        A[:, j] = col
+    return A
+
+
+def _zernike_value_and_grad(coeffs, u, v, order, xp=None):
+    """``(f, df/du, df/dv)`` of the Zernike expansion ``coeffs`` at ``(u, v)``.
+
+    Accumulated column by column rather than through a materialised design
+    matrix: the Newton loop evaluates these fits over the whole output grid
+    every iteration, and three ``(n_query, n_terms)`` matrices at 512^2 x 153
+    would be 1 GB of transient per call.  The generator emits one column at a
+    time, so the peak is a handful of ``(n_query,)`` temporaries.
+    """
+    if xp is None:
+        xp = _get_array_module(u)
+    f = xp.zeros_like(u)
+    fu = xp.zeros_like(u)
+    fv = xp.zeros_like(u)
+    c = coeffs
+    for j, col, dcu, dcv in _zernike_columns(u, v, order, grad=True, xp=xp):
+        cj = c[j]
+        f += cj * col
+        fu += cj * dcu
+        fv += cj * dcv
+    return f, fu, fv
 
 
 def _geometric_lens_phase(lens_prescription, wavelength, dx, N):
@@ -4274,7 +4563,8 @@ def _decentred_fit_restriction(disc, weighted, base_order, dec_order):
     return np.where(disc, 1.0, w_out), max(base, order)
 
 
-def _decentred_fit_score(xs_in, opl_grid, weight, disc, weights, order):
+def _decentred_fit_score(xs_in, opl_grid, weight, disc, weights, order,
+                         basis='chebyshev', basis_disc=None):
     """Beam-weighted rms of one ray-fit candidate's OPL residual against the
     TRACED samples, in the OPL's own length units.
 
@@ -4288,6 +4578,10 @@ def _decentred_fit_score(xs_in, opl_grid, weight, disc, weights, order):
     because it is the quantity that becomes phase.  Returns ``inf`` when the
     candidate carries no usable weight, so an inadmissible candidate can never
     win.  See :data:`DECENTRED_FIT_ARBITER`.
+
+    ``basis`` / ``basis_disc`` carry the caller's ``fit_basis`` and THIS
+    candidate's own disc, for the same reason the weights and the order are
+    carried: each candidate is scored in the basis it would be applied in.
     """
     vals = opl_grid if weights is not None else np.where(disc, opl_grid, np.nan)
     # the launch lattice, indexing='ij' -- axis 0 is X, axis 1 is Y, matching
@@ -4296,9 +4590,11 @@ def _decentred_fit_score(xs_in, opl_grid, weight, disc, weights, order):
     # combined value+grad kernel wants two arrays of the SAME shape, and a
     # broadcast pair silently yields a column-rank answer.
     _X, _Y = np.meshgrid(xs_in, xs_in, indexing='ij')
+    _bkw = ({} if basis == 'chebyshev'
+            else {'basis': basis, 'disc': basis_disc})
     try:
         ev = _Cheb2DEvaluator(xs_in, xs_in, vals, order=int(order),
-                              weights=weights)
+                              weights=weights, **_bkw)
         pred = np.asarray(ev.ev(_X, _Y))
     except (np.linalg.LinAlgError, ValueError):
         return float('inf')
@@ -7512,6 +7808,7 @@ def apply_real_lens_traced(
     fast_analytic_phase: bool = False,
     newton_fit: str = 'auto',
     newton_poly_order: int = 6,
+    fit_basis: str = 'chebyshev',
     use_gpu: bool = False,
     amp_use_gpu: bool = False,
     wave_propagator: Optional[str] = None,
@@ -8190,7 +8487,47 @@ def apply_real_lens_traced(
         terms.  If the off-centre accuracy matters, keep ``ray_subsample`` low
         enough to satisfy the inequality above rather than assuming the full
         raise is in force.
+    fit_basis : ``'chebyshev'`` (default) / ``'zernike'``
+        The DESIGN BASIS of the entrance-plane ray fits -- the forward
+        coordinate maps and the OPL the Newton inversion is handed (WP-B10,
+        audit sec. 15.9).  ``'chebyshev'`` is the tensor Chebyshev basis
+        normalised to the launch square and is byte-identical to every prior
+        release; ``'zernike'`` is the Zernike basis orthonormal on the ray-fit
+        DISC (beam-centred on the off-centre branch), at the same total degree.
 
+        WHAT IT DOES NOT CHANGE: the fit.  Both sets span exactly the same
+        space -- every bivariate polynomial of total degree ``<= order``, term
+        for term -- so the weighted least squares minimises the same residual
+        over the same space and the fitted polynomial is the same function in
+        exact arithmetic.  The samples, the weights
+        (``_FIT_DISC_OUTSIDE_WEIGHT_REL``), the order and its step-down, and
+        the niche-C11 arbiter's verdict are all untouched.  This is niche D7's
+        affine-invariance refusal generalised: a change of basis inside one
+        span cannot move a least-squares answer, so it cannot be a cure for
+        anything a least-squares answer does.
+
+        WHAT IT DOES CHANGE: the CONDITIONING of the solve, in both directions,
+        because conditioning is a statement about the basis and the SAMPLE
+        MEASURE together.  Where the retained samples are the disc -- the
+        concentric branch, whose restriction is a hard NaN mask -- the Gram
+        becomes nearly the identity and the niche-C13 step-down stops firing.
+        Where they are not -- the off-centre branch, where D1's weighted skirt
+        keeps every sample out to the launch square's corners at up to 4x the
+        disc radius -- the disc basis is orthogonal with respect to a measure
+        the data does not have, its columns grow as ``(r/R)^n`` out there, and
+        the conditioning gets WORSE than the square basis's.  The ladders for
+        both fixtures, both bases, orders 6..20:
+        ``docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/
+        WP-B10_REPORT.md``.
+
+        Also buys interpretability -- a coefficient IS a Zernike mode of the
+        fitted map, so ``So.coeffs`` reads as defocus / astigmatism / coma on
+        the fit disc -- and costs the numba evaluation kernel, which is
+        Chebyshev-only (measured 1.4-1.7x on a decentred call).
+
+        Requires ``newton_fit='polynomial'`` and ``inversion_method='newton'``;
+        any other combination raises rather than accepting a knob it would
+        ignore.
     preserve_input_phase : bool or 'remap', default True
         If True, the input field's phase structure (source tilts,
         MLA / DOE phase modulation, off-axis wavefronts, etc.) is
@@ -8806,6 +9143,32 @@ def apply_real_lens_traced(
     # workstation, so a gate inside the warning branch would validate the knob
     # on one box and not the other.
     on_pool_memory = _pool_memory_policy(on_pool_memory)
+
+    # ``fit_basis`` (WP-B10, audit sec. 15.9).  Gated here with its siblings,
+    # and gated for EVERY call rather than only for the calls that build a
+    # polynomial fit: the two combinations below have no meaning at all, and a
+    # knob that is silently inert on the spline path is the defect the
+    # ``on_fit_domain_basis`` ledger above exists to record.
+    _fit_basis = _validated_fit_basis(fit_basis)
+    if _fit_basis != 'chebyshev':
+        if newton_fit != 'polynomial':
+            raise ValueError(
+                f"apply_real_lens_traced: fit_basis={fit_basis!r} needs "
+                f"newton_fit='polynomial'; got newton_fit={newton_fit!r}.  "
+                f"The design basis is a property of the polynomial ray fit -- "
+                f"the spline path interpolates a bicubic tensor spline "
+                f"through the same samples and has no design matrix to "
+                f"express in another basis.")
+        if inversion_method != 'newton':
+            raise ValueError(
+                f"apply_real_lens_traced: fit_basis={fit_basis!r} needs "
+                f"inversion_method='newton'; got "
+                f"inversion_method={inversion_method!r}.  ``fit_basis`` "
+                f"selects the basis of the ENTRANCE-plane forward/OPL fits, "
+                f"whose disc is the ray-fit disc; the 'fit' inverse-map path "
+                f"fits the OPL over the EXIT coordinates, which is a "
+                f"different domain with a different disc, and "
+                f"'backward_trace' runs no polynomial fit at all.")
 
     # ---- N12 (P11): opt-in ray-density (Jacobian) amplitude model -------
     # ``amplitude_model='screen'`` (default) is byte-identical to prior
@@ -11221,6 +11584,13 @@ def apply_real_lens_traced(
     # ``_DECENTRED_FIT_POLY_ORDER``.
     _fit_weights = None
     _fit_poly_order = int(newton_poly_order)
+    # WP-B10: the disc the opt-in ``fit_basis='zernike'`` design is orthogonal
+    # on -- the APPLIED fit disc, beam-centred on the off-centre branch.  It is
+    # resolved beside the restriction and not at the fit site because the
+    # niche-C11 arbiter can still move which disc is applied.  ``None`` means
+    # no restriction was resolved at all; the fit site then falls back to the
+    # launch lattice's own circumscribing disc.
+    _fit_basis_disc = None
     # FIX FIT-DOMAIN SYMMETRY (2026-08-12): the inverse-map model's copy of the
     # SAME restriction, resolved here on either basis and consumed only at the
     # ``build_inverse_map`` call site.  ``None`` everywhere means "the forward
@@ -11283,10 +11653,22 @@ def apply_real_lens_traced(
                 _wc, _oc = _decentred_fit_restriction(
                     _disc_c, _use_w and _c6_fit_guard, newton_poly_order,
                     _dec_order)
+                # Each candidate in ITS OWN disc's basis, for the same reason it
+                # is scored at its own order (``_decentred_fit_restriction``).
+                # Passed as ``**kwargs`` that are EMPTY on the default basis, so
+                # the scoring calls stay the calls they were -- niches C11/C12
+                # wrap this function with fixed-signature spies.
+                _sk_off = ({} if _fit_basis == 'chebyshev' else {
+                    'basis': _fit_basis,
+                    'basis_disc': (float(_bcx), float(_bcy),
+                                   float(_beam_fit_radius))})
+                _sk_conc = ({} if _fit_basis == 'chebyshev' else {
+                    'basis': _fit_basis,
+                    'basis_disc': (0.0, 0.0, float(_fit_r_max_conc))})
                 _s_off = _decentred_fit_score(
-                    xs_in, opl_grid, _wgt, _fit_disc, _wo, _oo)
+                    xs_in, opl_grid, _wgt, _fit_disc, _wo, _oo, **_sk_off)
                 _s_conc = _decentred_fit_score(
-                    xs_in, opl_grid, _wgt, _disc_c, _wc, _oc)
+                    xs_in, opl_grid, _wgt, _disc_c, _wc, _oc, **_sk_conc)
                 # niche C11's verdict: smaller residual wins, an exact tie --
                 # including two unscoreable candidates -- keeps the historical
                 # branch.  Computed either way, because with the C12 predictor
@@ -11329,13 +11711,20 @@ def apply_real_lens_traced(
                     _m_conc, _m_off = _s_conc, _s_off
                     _resolved = False
                     if _tails:
+                        # the tails themselves stay on the BOX-normalised
+                        # Chebyshev spectrum (the ``s^n`` inflation law is a
+                        # property of that basis -- see
+                        # ``_decentred_fit_spectrum``); what is scored on them
+                        # is a candidate, so it follows the applied basis
                         _t_conc = _decentred_fit_score(
-                            xs_in, _tails[int(_oc)], _wgt, _disc_c, _wc, _oc)
+                            xs_in, _tails[int(_oc)], _wgt, _disc_c, _wc, _oc,
+                            **_sk_conc)
                         _t_off = _decentred_fit_score(
-                            xs_in, _tails[int(_oo)], _wgt, _fit_disc, _wo, _oo)
+                            xs_in, _tails[int(_oo)], _wgt, _fit_disc, _wo, _oo,
+                            **_sk_off)
                         _sp_gap = _decentred_fit_score(
                             xs_in, opl_grid - _tails[int(_oc)], _wgt,
-                            _disc_c, _wc, _oc)
+                            _disc_c, _wc, _oc, **_sk_conc)
                         _resolved = bool(np.isfinite(_sp_gap)
                                          and np.isfinite(_sp_resid)
                                          and _sp_gap <= min(_t_conc, _t_off))
@@ -11392,6 +11781,17 @@ def apply_real_lens_traced(
                                  f"off-centre against {_s_conc:.3e} m "
                                  f"concentric)")
         if int(_fit_disc.sum()) >= _CARRIER_FIT_MIN_SAMPLES:
+            # WP-B10: the APPLIED disc, now that the arbiter has had its say
+            # and the restriction is known to hold enough samples to be
+            # applied at all (the ``elif`` below ABANDONS it, and a basis
+            # normalised to a disc the fit is not restricted to would be
+            # normalised to nothing the data has).  Off centre the disc is the
+            # BEAM's -- the geometric intersection above only trims the side
+            # away from the beam -- and concentric it is the restriction's own
+            # radius about the grid centre.
+            _fit_basis_disc = (
+                (float(_bcx), float(_bcy), float(_beam_fit_radius))
+                if _off_branch else (0.0, 0.0, float(_fit_r_max)))
             # The restriction is built ONCE and then routed on
             # ``_fit_domain_basis_ok``: to the forward arrays when this basis
             # can honour it (byte-identical to the shipped path), and
@@ -11601,15 +12001,30 @@ def apply_real_lens_traced(
         _xout_xp = _xp.asarray(x_out_grid)
         _yout_xp = _xp.asarray(y_out_grid)
         _opl_xp = _xp.asarray(opl_grid)
+        # WP-B10: the opt-in disc-orthogonal design.  The default basis passes
+        # NO extra keyword, so the three shipped calls are the calls they were
+        # -- which is what keeps the fit-order spies in niches C1/D7 (they
+        # replace ``__init__`` with a fixed signature) and every byte-identity
+        # contract on this site intact.  When no fit disc was resolved the
+        # samples themselves are the domain, so the basis is normalised to the
+        # launch lattice's own circumscribing disc: the smallest one that keeps
+        # every sample at ``rho <= 1``, where the basis is orthogonal.
+        if _fit_basis != 'chebyshev' and _fit_basis_disc is None:
+            _c_lat = 0.5 * float(xs_in[0] + xs_in[-1])
+            _h_lat = 0.5 * float(xs_in[-1] - xs_in[0])
+            _fit_basis_disc = (_c_lat, _c_lat,
+                               float(np.hypot(_h_lat, _h_lat)) or 1.0)
+        _bkw = ({} if _fit_basis == 'chebyshev'
+                else {'basis': _fit_basis, 'disc': _fit_basis_disc})
         Sx = _Cheb2DEvaluator(_xs_xp, _xs_xp, _xout_xp,
                                order=_fit_poly_order, xp=_xp,
-                               weights=_fit_weights)
+                               weights=_fit_weights, **_bkw)
         Sy = _Cheb2DEvaluator(_xs_xp, _xs_xp, _yout_xp,
                                order=_fit_poly_order, xp=_xp,
-                               weights=_fit_weights)
+                               weights=_fit_weights, **_bkw)
         So = _Cheb2DEvaluator(_xs_xp, _xs_xp, _opl_xp,
                                order=_fit_poly_order, xp=_xp,
-                               weights=_fit_weights)
+                               weights=_fit_weights, **_bkw)
     elif newton_fit == 'spline':
         try:
             from scipy.interpolate import RectBivariateSpline
@@ -14649,6 +15064,7 @@ def prepare_real_lens_traced(
     inversion_method: str = 'newton',
     newton_fit: str = 'auto',
     newton_poly_order: int = 6,
+    fit_basis: str = 'chebyshev',
     newton_max_iters: Optional[int] = None,
     amp_use_gpu: bool = False,
     use_gpu: bool = False,
@@ -14805,7 +15221,8 @@ def prepare_real_lens_traced(
         on_noncollimated=_screen_noncol, parallel_amp=False,
         newton_amp_mask_rel=0.0, inversion_method=inversion_method,
         fast_analytic_phase=False, newton_fit=newton_fit,
-        newton_poly_order=newton_poly_order, newton_max_iters=newton_max_iters,
+        newton_poly_order=newton_poly_order, fit_basis=fit_basis,
+        newton_max_iters=newton_max_iters,
         use_gpu=use_gpu, amp_use_gpu=amp_use_gpu,
         wave_propagator=wave_propagator, sag_dtype=sag_dtype,
         sag_chunk_rows=sag_chunk_rows, n_workers=n_workers, progress=progress,
