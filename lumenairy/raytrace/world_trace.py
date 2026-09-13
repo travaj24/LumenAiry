@@ -24,6 +24,7 @@ import numpy as np
 from ..glass import get_glass_index
 from .intersection import (
     _intersect_surface,
+    _normalize_directions,
     _reflect,
     _refract,
 )
@@ -78,6 +79,8 @@ def trace_world(
     wavelength: float,
     output_filter: Union[str, Callable[..., Any]] = 'all',
     surface_diffraction: Optional[Dict[int, Tuple[float, float, float, float]]] = None,
+    renormalize: str = 'surface',
+    sphere_normal: str = 'generic',
 ) -> 'TraceResult':
     """Sequential ray trace in world coordinates.
 
@@ -118,11 +121,31 @@ def trace_world(
     surface_diffraction : dict or None
         Same {surface_index: (mx, my, period_x_m, period_y_m)}
         spec accepted by :func:`trace`.
+    renormalize : ``'surface'`` (default) | ``'exit'``
+        Identical semantics to :func:`trace`: where the direction
+        cosines are rescaled to unit length.  ``'exit'`` rescales once,
+        on the bundle leaving the last surface -- in that surface's LOCAL
+        frame, which is the frame the history records, so the returned
+        ``image_rays`` is unit-length there.
+    sphere_normal : ``'generic'`` (default) | ``'analytic'``
+        Identical semantics to :func:`trace`: which route computes the
+        surface normal at a pure sphere.  Opt-in, for the same last-bit
+        reason.
 
     Returns
     -------
     TraceResult
     """
+    if renormalize not in ('surface', 'exit'):
+        raise ValueError(
+            f"trace_world: renormalize must be 'surface' or 'exit'; "
+            f"got {renormalize!r}.")
+    if sphere_normal not in ('generic', 'analytic'):
+        raise ValueError(
+            f"trace_world: sphere_normal must be 'generic' or 'analytic'; "
+            f"got {sphere_normal!r}.")
+    _renorm_surface = (renormalize == 'surface')
+    _sph_norm = sphere_normal
     r = rays.copy()
     history = []
     final = None
@@ -157,9 +180,11 @@ def trace_world(
 
         # 3. Refract or reflect at the surface.
         if surf.is_mirror:
-            _reflect(r, surf)
+            _reflect(r, surf, renormalize=_renorm_surface,
+                     sphere_normal=_sph_norm)
         else:
-            _refract(r, surf, n1, n2)
+            _refract(r, surf, n1, n2, renormalize=_renorm_surface,
+                     sphere_normal=_sph_norm)
 
         # 3.5. Diffractive-order kick (DOE) -- applied in the local
         # frame where (L, M) are the in-plane direction cosines that
@@ -211,6 +236,12 @@ def trace_world(
                         np.uint8(RAY_EVANESCENT),
                         r.error_code,
                     )
+
+        # 3.9. renormalize='exit': the one direction rescale the
+        # per-surface calls skipped, applied before the last surface's
+        # snapshot so ``image_rays`` is unit-length.
+        if not _renorm_surface and i == len(surfaces) - 1:
+            _normalize_directions(r)
 
         # 4. Record post-surface state in the LOCAL frame so the
         # GUI's ``world_pos = surf.world_origin + surf.world_R @

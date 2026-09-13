@@ -29,7 +29,11 @@ from typing import List
 
 import numpy as np
 
-from ._conic_core import reflect_mirror, refract_snell
+from ._conic_core import (
+    check_even_aspheric_powers,
+    reflect_mirror,
+    refract_snell,
+)
 from .trace import _make_bundle, trace
 
 
@@ -397,6 +401,125 @@ def _adrt_coordbreak(x, y, ux, uy, surf, wavelength, apply_transfer,
     return px, py, ux_out, uy_out, opd, dead
 
 
+_ADRT_ASPHERIC_NEWTON_STEPS = 6
+
+
+def _adrt_aspheric_items(surf):
+    """``((power, coeff), ...)`` for a rotationally-symmetric asphere.
+
+    Empty when the surface carries no polynomial departure, so the caller
+    can branch on truthiness.  Odd powers are rejected here with the same
+    message the sag / normal twins use -- an odd power is
+    sag/normal-inconsistent in every backend
+    (:func:`_conic_core.check_even_aspheric_powers`).
+    """
+    asph = getattr(surf, 'aspheric_coeffs', None)
+    if not asph:
+        return ()
+    check_even_aspheric_powers(asph.keys(), fn_label='_adrt_step')
+    return tuple(sorted((int(p), float(c)) for p, c in asph.items()))
+
+
+def _adrt_u_pow(u, m):
+    """``u ** m`` for a non-negative integer ``m`` by squaring.
+
+    ``_AdrtDual`` implements only ``+ - * /``, and the JAX backend must
+    stay in the same elementary ops so the two agree; binary
+    exponentiation keeps both to ``O(log m)`` multiplications.  ``m = 0``
+    returns the Python float ``1.0``, which every consumer here adds or
+    multiplies into a dual / array without promotion.
+    """
+    if m == 0:
+        return 1.0
+    result = None
+    base = u
+    while m:
+        if m & 1:
+            result = base if result is None else result * base
+        m >>= 1
+        if m:
+            base = base * base
+    return result
+
+
+def _adrt_poly_sag(u, asph_items, O):
+    """``(P(u), dP/du)`` of the even-power polynomial departure.
+
+    ``u = x**2 + y**2``, so an even power ``p`` is ``u ** (p // 2)`` and
+    the rotationally-symmetric chain rule is
+    ``dP/dx = (dP/du) * 2x`` -- no ``sqrt(u)`` anywhere, which is what
+    keeps the departure and its gradient smooth through the vertex.
+    """
+    P = 0.0
+    dP = 0.0
+    for power, coeff in asph_items:
+        m = power // 2
+        P = P + coeff * _adrt_u_pow(u, m)
+        if m >= 1:
+            dP = dP + (coeff * m) * _adrt_u_pow(u, m - 1)
+    return P, dP
+
+
+def _adrt_conic_sag(u, c, k, O):
+    """``(S(u), dS/du)`` of the base conic, on ``u = x**2 + y**2``.
+
+    ``S = c u / (1 + w)`` with ``w = sqrt(1 - (1+k) c^2 u)``; the radial
+    derivative ``dS/dh = c h / w`` divided by ``2h`` gives ``dS/du =
+    c / (2 w)``, which has no ``1/h`` and is therefore finite at the
+    vertex.  A FLAT base (``c = 0``) gives ``w = 1``, ``S = 0``,
+    ``dS/du = 0`` with no special case.
+    """
+    sqrt = O['sqrt']
+    w = sqrt(1.0 - ((1.0 + k) * c * c) * u)
+    return (c * u) / (1.0 + w), c / (2.0 * w)
+
+
+def _adrt_aspheric_intersect(x, y, L, M, Nn, tau, c, k, asph_items, O):
+    """Newton-refine the conic root onto ``conic + polynomial``, and
+    return the intersection point with the surface normal there.
+
+    The seed ``tau`` is the EXACT root of the base conic (the caller's
+    Spencer & Murty ``e/q`` form), so only the polynomial departure is
+    left to iterate on -- Newton on
+
+        G(tau) = z(tau) - S(u(tau)) - P(u(tau)),
+        dG/dtau = Nz - (dS/du + dP/du) * du/dtau,
+        du/dtau = 2 (x(tau) L + y(tau) M)
+
+    converges in two to three steps for a physical asphere.  The step
+    count is FIXED (no data-dependent break) because this runs under
+    forward-mode AD on both backends: a ``while`` on a dual value has no
+    derivative, and a ``lax.while_loop`` would not be ``jacfwd``-able
+    here.  Differentiating the iteration itself is what makes the
+    returned Jacobian exact -- the tangent converges with the value.
+
+    The normal comes from the implicit form ``F = z - S(u) - P(u)``:
+    ``grad F = (-2x D, -2y D, 1)`` with ``D = dS/du + dP/du``, normalised.
+    """
+    for _ in range(_ADRT_ASPHERIC_NEWTON_STEPS):
+        xi = x + tau * L
+        yi = y + tau * M
+        zi = tau * Nn
+        u = xi * xi + yi * yi
+        S, dSdu = _adrt_conic_sag(u, c, k, O)
+        P, dPdu = _adrt_poly_sag(u, asph_items, O)
+        D = dSdu + dPdu
+        G = zi - S - P
+        dG = Nn - D * (2.0 * (xi * L + yi * M))
+        tau = tau - G / dG
+    xi = x + tau * L
+    yi = y + tau * M
+    zi = tau * Nn
+    u = xi * xi + yi * yi
+    _S, dSdu = _adrt_conic_sag(u, c, k, O)
+    _P, dPdu = _adrt_poly_sag(u, asph_items, O)
+    D = dSdu + dPdu
+    gx = (-2.0 * D) * xi
+    gy = (-2.0 * D) * yi
+    gn = O['sqrt'](gx * gx + gy * gy + 1.0)
+    return tau, xi, yi, zi, gx / gn, gy / gn, 1.0 / gn
+
+
 def _adrt_step(x, y, ux, uy, surf, wavelength, apply_transfer, O,
                compute_dead=True):
     """One surface: exact intersect (conic) + refract/reflect + optional
@@ -431,17 +554,29 @@ def _adrt_step(x, y, ux, uy, surf, wavelength, apply_transfer, O,
     q = -0.5 * (b + sgn * sq)
     # stable near-vertex root tau = e/q; flat surface (a == 0) -> tau = -e/b
     tau = dwhere(abs(val(a)) < 1e-14, (0.0 - e) / b, e / q)
-    xi = x + tau * L
-    yi = y + tau * M
-    zi = tau * Nn
-    # surface normal grad F = (2c x, 2c y, -2 + 2(1+k)c z), oriented against ray
-    gx = (2.0 * c) * xi
-    gy = (2.0 * c) * yi
-    gz = -2.0 + (2.0 * (1.0 + k) * c) * zi
-    gn = sqrt(gx * gx + gy * gy + gz * gz)
-    nx = gx / gn
-    ny = gy / gn
-    nz = gz / gn
+    asph_items = _adrt_aspheric_items(surf)
+    if asph_items:
+        # Conic + POLYNOMIAL departure: the conic root above is the seed;
+        # Newton refines it onto the full surface and the normal picks up
+        # the polynomial gradient (:func:`_adrt_aspheric_intersect`).
+        # ``disc`` from the base conic stays the miss test, exactly as
+        # ``intersection._intersect_surface`` uses it (R4): exact for a
+        # pure conic, conservative for a conic plus a departure.
+        tau, xi, yi, zi, nx, ny, nz = _adrt_aspheric_intersect(
+            x, y, L, M, Nn, tau, c, k, asph_items, O)
+    else:
+        xi = x + tau * L
+        yi = y + tau * M
+        zi = tau * Nn
+        # surface normal grad F = (2c x, 2c y, -2 + 2(1+k)c z), oriented
+        # against ray
+        gx = (2.0 * c) * xi
+        gy = (2.0 * c) * yi
+        gz = -2.0 + (2.0 * (1.0 + k) * c) * zi
+        gn = sqrt(gx * gx + gy * gy + gz * gz)
+        nx = gx / gn
+        ny = gy / gn
+        nz = gz / gn
     # S3-10: vector Snell / reflection via the backend-agnostic shared
     # core (raytrace._conic_core).  The core orients the (un-oriented)
     # grad-F normal against the ray and applies the same law this site
@@ -597,14 +732,20 @@ _ADRT_NUMBA_PRIMS = None        # None until _build_adrt_numba_kernel() runs
 
 
 def _adrt_surfaces_numba_eligible(surfaces):
-    """True iff every surface is a plain rotationally-symmetric conic
-    refract/reflect surface (no coordinate break) -- the class the numba
-    forward-AD kernel handles.  Aspheric / freeform / biconic / field-frame
-    surfaces are already rejected by ``ray_transfer_jacobian_analytic`` before
-    this is reached; here we additionally exclude coordinate breaks (a smooth
-    frame transform handled only by the ``_AdrtDual`` ``_adrt_coordbreak``)."""
+    """True iff every surface is a plain rotationally-symmetric CONIC
+    refract/reflect surface (no coordinate break, no polynomial asphere) --
+    the class the numba forward-AD kernel handles.  Freeform / biconic /
+    field-frame surfaces are rejected by ``ray_transfer_jacobian_analytic``
+    before this is reached; coordinate breaks (a smooth frame transform
+    handled only by the ``_AdrtDual`` ``_adrt_coordbreak``) and aspheric
+    departures (the Newton refinement in ``_adrt_aspheric_intersect``, which
+    the kernel's inlined conic primitives do not carry) are excluded here.
+    The kernel would otherwise trace an asphere as its BASE CONIC -- right
+    shape, wrong surface, silently."""
     for s in surfaces:
         if bool(getattr(s, 'is_coordbrk', False)):
+            return False
+        if getattr(s, 'aspheric_coeffs', None):
             return False
     return True
 
@@ -947,8 +1088,16 @@ def ray_transfer_jacobian_analytic(
     frame transform) ARE handled and differentiable, giving alignment /
     tolerancing sensitivity through a fold (a *large* tilt shares the slope-
     space caveat: ``u = L/N`` degenerates as the folded ``N -> 0``).
-    Aspheric-polynomial departures, freeforms and biconics are not yet handled
-    (use the FD primitive there).
+    EVEN-power aspheric-polynomial departures are handled: the conic root
+    seeds a fixed 6-step Newton refinement onto ``conic + polynomial``, and
+    the normal carries the polynomial gradient
+    (:func:`_adrt_aspheric_intersect`).  Because the iteration itself is
+    differentiated, the Jacobian is exact rather than
+    converged-value-only -- cross-checked against the FD primitive on an
+    A4 / A6 singlet.  An aspheric surface takes the ``_AdrtDual`` (or JAX)
+    path: the numba kernel's inlined conic primitives carry no polynomial
+    departure, so it is excluded there.  Freeforms and biconics are still
+    not handled (use the FD primitive there).
 
     Returns
     -------
@@ -956,12 +1105,12 @@ def ray_transfer_jacobian_analytic(
     """
     from ..backend.array import is_jax_array
     for s in surfaces:
-        # _adrt_step reads only ``radius`` / ``conic`` (rotationally symmetric)
-        # for refracting/reflecting surfaces (coordinate breaks are handled
-        # separately), so a biconic ``radius_y`` / ``conic_y`` /
-        # ``aspheric_coeffs_y``, an asphere, or a freeform must be rejected
-        # (else a biconic would be silently traced as if it were rotationally
-        # symmetric, giving a wrong y-axis power).
+        # _adrt_step reads ``radius`` / ``conic`` / ``aspheric_coeffs`` --
+        # all rotationally symmetric -- for refracting/reflecting surfaces
+        # (coordinate breaks are handled separately), so a biconic
+        # ``radius_y`` / ``conic_y`` / ``aspheric_coeffs_y`` or a freeform
+        # must be rejected (else a biconic would be silently traced as if it
+        # were rotationally symmetric, giving a wrong y-axis power).
         # N10a: a FIELD-FRAME decenter / tilt / freeform sag_callable breaks the
         # rotational symmetry the analytic conic ``_adrt_step`` assumes -- reject
         # so ``jacobian='auto'`` falls back to the finite-difference primitive
@@ -972,17 +1121,16 @@ def ray_transfer_jacobian_analytic(
                    and tuple(float(v) for v in s.field_decenter) != (0.0, 0.0))
                or (getattr(s, 'field_tilt', None) is not None
                    and tuple(float(v) for v in s.field_tilt) != (0.0, 0.0)))
-        if (getattr(s, 'aspheric_coeffs', None)
-                or getattr(s, 'freeform', None)
+        if (getattr(s, 'freeform', None)
                 or getattr(s, 'radius_y', None) is not None
                 or getattr(s, 'conic_y', None) is not None
                 or getattr(s, 'aspheric_coeffs_y', None) is not None
                 or _ff):
             raise NotImplementedError(
                 'ray_transfer_jacobian_analytic handles rotationally-symmetric '
-                'conic surfaces (plus coordinate breaks) only; aspheric-'
-                'polynomial departures, freeforms, biconic (radius_y / '
-                'conic_y) and field-frame decenter / tilt surfaces are not yet '
+                'conic + even-aspheric surfaces (plus coordinate breaks) only; '
+                'freeforms, biconic (radius_y / conic_y / aspheric_coeffs_y) '
+                'and field-frame decenter / tilt surfaces are not yet '
                 'supported -- use ray_transfer_jacobian (FD) for those.')
     # NB (R2, AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11): ``_adrt_step``
     # starts every ray at ``opd = 0`` on the ``z = 0`` launch PLANE and

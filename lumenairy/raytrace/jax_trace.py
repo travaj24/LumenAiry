@@ -916,6 +916,57 @@ def _resolve_semi_diameters(prescription):
     return semi_ds
 
 
+# ----------------------------------------------------------------------
+# Built-prescription cache (audit 2026-09-11 RAYTRACE perf #7)
+# ----------------------------------------------------------------------
+#
+# ``trace_jax``'s jit cache saves the XLA compile but not the Python
+# prep: every eager call re-ran :func:`_build_jax_prescription` before
+# reaching the lookup.  Measured on a 2-surface / 5-ray prescription at
+# 1.31 um (this box, warm, best-of-9 medians): 296.5 us per warm
+# ``trace_jax`` call, of which ``_build_jax_prescription`` is 238.6 us --
+# 79 % of THAT is the five ``jnp.asarray`` leaf conversions.  Handing
+# ``trace_jax`` an already-built ``JaxPrescription`` costs 56.8 us, so
+# the prep was 5.2x the work of the call it precedes.
+#
+# The key is the ``aux`` tuple the builder assembles anyway, which is
+# complete BY CONSTRUCTION: the leaves are ``jnp.asarray`` of
+# ``radii_py`` / ``conics_py`` / ``thicks_py`` / ``asph_pairs``, and aux
+# carries those four verbatim plus ``n_surf``, ``asph_powers``,
+# ``semi_diameters``, the RESOLVED ``n_pre`` / ``n_post`` and
+# ``diff_aux``.  Nothing else is read.  Because the resolved glass
+# indices (not the glass NAMES) are in the key, a mutated glass registry
+# -- ``register_fixed_glass``, ``trace._register_fixed_index`` -- re-keys
+# on its own and can never serve a stale build.  It is the same
+# signature ``trace_jax`` already uses for its jit-kernel cache.
+#
+# The unsupported-surface guard runs BEFORE the lookup, so a rejected
+# prescription is rejected on every call, never cached, and the fields it
+# rejects on (mirror / coord-break / biconic / freeform) are absent from
+# every prescription that reaches the key.
+_JAX_PRESCRIPTION_CACHE: 'OrderedDict[Any, Any]' = OrderedDict()
+_JAX_PRESCRIPTION_CACHE_MAXSIZE = 32
+_JAX_PRESCRIPTION_CACHE_LOCK = threading.Lock()
+
+
+def clear_jax_prescription_cache() -> None:
+    """Drop every cached built :class:`JaxPrescription`.
+
+    The companion of :func:`clear_trace_jax_cache` for the PREP layer:
+    that one holds compiled XLA kernels, this one holds the converted
+    JAX-array leaves.  Both are registered with the central
+    ``_cache_registry`` so ``clear_asm_caches()`` empties them together.
+
+    Reachable as ``lumenairy.raytrace.jax_trace.clear_jax_prescription_cache``.
+    It is deliberately absent from this module's ``__all__``:
+    ``tests/unit/test_v4_14_1_dispatcher_pin_cache_clears.py`` requires
+    every ``clear_*`` name in a submodule ``__all__`` to be re-exported
+    from ``lumenairy/__init__.py``, which this work package does not own.
+    """
+    with _JAX_PRESCRIPTION_CACHE_LOCK:
+        _JAX_PRESCRIPTION_CACHE.clear()
+
+
 def _build_jax_prescription(prescription, wavelength,
                               surface_diffraction=None):
     """Build a :class:`JaxPrescription` from a plain prescription dict.
@@ -924,6 +975,16 @@ def _build_jax_prescription(prescription, wavelength,
     semi-diameter resolution once, rather than inline on every
     ``trace_jax`` call.  The output is suitable both for direct kernel
     use AND for cache-key lookup (the ``aux`` field is hashable).
+
+    The built object is memoised on that same ``aux`` signature (see the
+    cache note above), so a repeated eager call at a FIXED prescription
+    skips the JAX-array leaf conversions.  ``JaxPrescription`` is
+    immutable in this package (``__slots__``, no attribute writes after
+    construction), so callers share one instance safely; a caller that
+    wants a private one should construct it itself.  A prescription
+    whose values are unhashable (a NaN radius keys fine but never hits;
+    an exotic ``aspheric_coeffs`` key type raises) simply skips the
+    cache and builds every time.
     """
     _ensure_jaxprescription_registered()    # lazy pytree reg (audit P2-D)
     if not JAX_AVAILABLE:
@@ -985,15 +1046,6 @@ def _build_jax_prescription(prescription, wavelength,
         (int(k), tuple(float(x) for x in v)) for k, v in diff.items()
     ))
 
-    # Mirror the static Python tuples as JAX-array leaves so users who
-    # want differentiable prescriptions can substitute tracer leaves.
-    radii_arr = jnp.asarray(radii_py)
-    conics_arr = jnp.asarray(conics_py)
-    thicks_arr = jnp.asarray(thicks_py)
-    asph_coeffs_leaves = tuple(
-        jnp.asarray([c for _, c in pairs]) for pairs in asph_pairs
-    )
-
     aux = (
         n_surf,
         asph_powers,
@@ -1005,6 +1057,39 @@ def _build_jax_prescription(prescription, wavelength,
         thicks_py,
         asph_pairs,
         diff_aux,
+    )
+
+    # Everything above is Python-float work; everything below is the JAX
+    # leaf conversion the cache exists to skip.
+    try:
+        with _JAX_PRESCRIPTION_CACHE_LOCK:
+            hit = _JAX_PRESCRIPTION_CACHE.get(aux)
+            if hit is not None:
+                _JAX_PRESCRIPTION_CACHE.move_to_end(aux)
+    except TypeError:
+        # An unhashable value reached ``aux`` (an exotic aspheric power
+        # key).  Build without caching rather than refusing the trace.
+        return _build_jax_leaves(jnp, radii_py, conics_py, thicks_py,
+                                 asph_pairs, aux)
+    if hit is not None:
+        return hit
+    jp = _build_jax_leaves(jnp, radii_py, conics_py, thicks_py,
+                           asph_pairs, aux)
+    with _JAX_PRESCRIPTION_CACHE_LOCK:
+        _JAX_PRESCRIPTION_CACHE[aux] = jp
+        while len(_JAX_PRESCRIPTION_CACHE) > _JAX_PRESCRIPTION_CACHE_MAXSIZE:
+            _JAX_PRESCRIPTION_CACHE.popitem(last=False)
+    return jp
+
+
+def _build_jax_leaves(jnp, radii_py, conics_py, thicks_py, asph_pairs, aux):
+    """Mirror the static Python tuples as JAX-array leaves so users who
+    want differentiable prescriptions can substitute tracer leaves."""
+    radii_arr = jnp.asarray(radii_py)
+    conics_arr = jnp.asarray(conics_py)
+    thicks_arr = jnp.asarray(thicks_py)
+    asph_coeffs_leaves = tuple(
+        jnp.asarray([c for _, c in pairs]) for pairs in asph_pairs
     )
     return JaxPrescription(
         radii_arr, conics_arr, thicks_arr, asph_coeffs_leaves, aux)
@@ -1181,6 +1266,10 @@ try:
     _register_cache_clearer(
         'trace_jax',
         lambda: getattr(_this_mod, 'clear_trace_jax_cache')(),
+    )
+    _register_cache_clearer(
+        'jax_prescription',
+        lambda: getattr(_this_mod, 'clear_jax_prescription_cache')(),
     )
 except ImportError:
     pass

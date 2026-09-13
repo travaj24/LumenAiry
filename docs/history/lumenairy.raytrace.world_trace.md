@@ -1,10 +1,12 @@
 <!-- lumenairy-history-doc
 module: lumenairy/raytrace/world_trace.py
-ast_sha256: bc86743128dac35d879098d43ee5e1ac918e61a31cea618342dee150ceb15220
-token_sha256: 5fbec0e52f6a07744cbdcd9ae83bb5c6eaf776b409ece49151cb24001f1c3629
+ast_sha256: fe602817e7621d3c428b3a2b04634a222493acbdef909960724aee7eeeb500e9
+token_sha256: 84adcb4ca47803a8e2fbe1b45c990371f61a042be037140de714db1bb0fb3a0d
 pre_relocation_lines: 250
 recorded_by: WP-A17 SWEEP-3 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
+re_recorded: 2026-09-13 -- WP-B9 items 1-2: trace_world() gains renormalize= and sphere_normal=, defaults unchanged, matching trace()
+re_recorded: 2026-09-13 -- WP-B9 items 1-2: trace_world() gains renormalize= and sphere_normal=, defaults unchanged, matching trace()
 -->
 
 

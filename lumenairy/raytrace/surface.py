@@ -647,13 +647,90 @@ def _surface_sag_derivative(h, R, conic=0.0, aspheric_coeffs=None):
     return dz_dh
 
 
-def _surface_normal(x, y, surface):
+def _is_pure_spherical(surface) -> bool:
+    """True for a surface that is exactly a sphere of finite radius.
+
+    The predicate the ray-sphere closed forms need: finite base radius,
+    no conic, no aspheric-polynomial departure, no biconic y axis, no
+    freeform departure and no active FIELD-FRAME decenter / tilt.  Every
+    one of those extensions makes the surface something other than
+    ``x**2 + y**2 + (z - R)**2 = R**2``, so the closed-form intersection
+    root (:func:`intersection._intersect_surface`) and the closed-form
+    normal (:func:`_sphere_normal`) would be evaluating a different
+    surface than the sag dispatch does.
+
+    Shared by the intersection fast path and the normal fast path so the
+    two can never select on different criteria -- the failure mode of the
+    v4.12.0 analytic-normal attempt, which changed the normal without the
+    matching intersection.
+    """
+    R = surface.radius
+    return (
+        R is not None
+        and (not np.isinf(R))
+        and surface.conic == 0.0
+        and not surface.aspheric_coeffs
+        and getattr(surface, 'radius_y', None) is None
+        and getattr(surface, 'freeform', None) is None
+        and not _field_frame_active(surface)
+    )
+
+
+def _sphere_normal(x, y, R):
+    """Closed-form outward unit normal of the sphere ``x**2 + y**2 +
+    (z - R)**2 = R**2`` at the point above ``(x, y)``.
+
+    The generic route to the same vector evaluates ``sqrt(x**2 + y**2)``,
+    a ``np.where(h > 0, ...)`` guard, two divisions by ``h``, a second
+    ``sqrt`` inside :func:`_surface_sag_derivative` and finally the
+    normalising ``sqrt`` + three divisions of :func:`_surface_normal` --
+    about fourteen N-sized array operations and three Python calls.  The
+    sphere's normal is the radius vector, so it is available directly:
+
+        n = -(x, y, z - R) / R = (-x/R, -y/R, sqrt(1 - h^2/R^2))
+
+    (the second form drops ``z`` by substituting the near-branch sag, and
+    is a unit vector identically).  Five array operations, no Python
+    calls, no cancellation -- and it agrees with the JAX twin's
+    ``conic_sag_derivs`` form to fewer ULPs than the generic route does,
+    because it never divides by the small ``h`` near the vertex.
+
+    ``nz`` is NaN outside ``h**2/R**2 < 0.9999``, reproducing the
+    out-of-domain policy of :func:`_surface_sag_derivative` exactly: a
+    ray there carries a NaN normal and is killed as ``RAY_NAN`` by the
+    degenerate-direction guard in :func:`intersection._refract`.  A
+    NOT-FINITE position propagates into all three components (the S11-7
+    policy the shared core ``conic_sag_derivs`` already implements), so
+    such a ray is killed rather than refracting off a fabricated
+    ``(-0, -0, 1)`` axial normal.
+    """
+    norm = (x * x + y * y) / (R * R)
+    valid = norm < 0.9999
+    nz = np.where(valid, np.sqrt(np.maximum(1.0 - norm, 0.0)), np.nan)
+    return -x / R, -y / R, nz
+
+
+def _surface_normal(x, y, surface, *, analytic_sphere=False):
     """Outward unit normal at point (x, y) on the given surface.
 
     Returns (nx, ny, nz) arrays.  The normal points from glass_before
     toward glass_after (i.e. in the +z direction for a flat surface).
     Handles biconic / anamorphic surfaces via ``_surface_sag_derivatives_xy``.
+
+    Parameters
+    ----------
+    analytic_sphere : bool, default False
+        Take the closed-form :func:`_sphere_normal` when the surface is a
+        pure sphere (:func:`_is_pure_spherical` -- the same predicate the
+        intersection fast path selects on).  The default is the generic
+        sag-derivative route, which is the arithmetic every caller has
+        always got; the two agree to ~1e-16 and the closed form is the
+        more accurate of the pair, but "more accurate" is still a
+        different last bit, so the switch is explicit.  See
+        ``trace(sphere_normal=...)``.
     """
+    if analytic_sphere and _is_pure_spherical(surface):
+        return _sphere_normal(x, y, surface.radius)
     dz_dx, dz_dy = _surface_sag_derivatives_xy(x, y, surface)
     # Normal = (-dz/dx, -dz/dy, 1), normalised
     mag = np.sqrt(dz_dx ** 2 + dz_dy ** 2 + 1.0)
@@ -743,7 +820,7 @@ __all__ = [
     # signalling -- callers should not rely on these from user code).
     '_surface_sag_xy',
     '_surface_sag_derivatives_xy', '_surface_sag_derivative',
-    '_surface_normal',
+    '_surface_normal', '_sphere_normal', '_is_pure_spherical',
     # N10a field-frame decenter / tilt geometry (shared by traced + GBD)
     '_field_frame_active', '_field_frame_sag_and_grad',
     # Surface utility

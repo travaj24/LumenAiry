@@ -1,10 +1,12 @@
 <!-- lumenairy-history-doc
 module: lumenairy/raytrace/intersection.py
-ast_sha256: 866962a5e8a4ef97250d9320a96dd7f2afbac8843f23987893dc465c17ba66d1
-token_sha256: 38fc4b57e4a39e4cef958818fa7f05808c89dde7adafa8fc2d8fb20f935c933f
+ast_sha256: b32fdebb8c9727704f04a4419ee320e16f4a77189dc9a0eb78d31d2136070507
+token_sha256: 86d4cc94de36f85b23ff3f146da712b7e7808d508eb93a4e5744a668508febe4
 pre_relocation_lines: 843
 recorded_by: WP-A17 SWEEP-3 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
+re_recorded: 2026-09-13 -- WP-B9 items 1-2: _refract/_reflect gain renormalize= and sphere_normal= (both defaulting to today's arithmetic); new normalize_directions single-pass helper; the pure-spherical predicate moves to surface.is_pure_spherical
+re_recorded: 2026-09-13 -- WP-B9 items 1-2: _refract/_reflect gain renormalize= and sphere_normal= (both defaulting to today's arithmetic); new _normalize_directions single-pass helper; the pure-spherical predicate moves to surface._is_pure_spherical
 -->
 
 

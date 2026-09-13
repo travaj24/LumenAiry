@@ -1,10 +1,11 @@
 <!-- lumenairy-history-doc
 module: lumenairy/raytrace/jax_trace.py
-ast_sha256: bd850b7885d2bc25659d943f39b681b6df95e0305269e1b5cde5d6ac33f5cb8c
-token_sha256: 26316495716c3092b0f9729fbe89ffae55e776c54b29f10da642a27bdc920924
+ast_sha256: 28147c2954849ca39828847f34cef62559b9d18394c2196358f686de5343dd78
+token_sha256: 774792f9aae7f960d33e89d6330ba0e3683b5818fe1448338d1a489fdee81f9e
 pre_relocation_lines: 1821
 recorded_by: WP-A17 SWEEP-3 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
+re_recorded: 2026-09-13 -- WP-B9 item 4: _build_jax_prescription memoises its built JaxPrescription on the aux content signature (LRU 32, lock-guarded, registered with the central cache registry); leaf construction split into _build_jax_leaves
 -->
 
 

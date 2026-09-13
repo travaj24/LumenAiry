@@ -1,10 +1,11 @@
 <!-- lumenairy-history-doc
 module: lumenairy/raytrace/differential.py
-ast_sha256: b61fd2e3bd3f8e6457a652167e72e05945fd60bd3be8f9967f3c0e9530ae0c4d
-token_sha256: 2686edc2224e2e8ec2d9d23dfb19630c58d37ddf8967654bfdc3225b7e4d5f23
+ast_sha256: 124a4c02f3a5db2e9d423ab3a8937d72f454a1850495a866ea20129f67039b27
+token_sha256: 3aaf95c898d1ee3244b7b8e87ad17b3d3b1bda5b54ddb741dc8b779cbaa12863
 pre_relocation_lines: 1078
 recorded_by: WP-A17 SWEEP-3 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
+re_recorded: 2026-09-13 -- WP-B9 item 6: _adrt_step handles even-power aspheres (conic seed + 6-step differentiated Newton in _adrt_aspheric_intersect, polynomial gradient in the normal); the analytic Jacobian no longer raises for aspheric_coeffs; the numba kernel is excluded for aspheres
 -->
 
 

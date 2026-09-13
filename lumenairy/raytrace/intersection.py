@@ -27,6 +27,7 @@ from .surface import (
     RAY_OK,
     RAY_TIR,
     _field_frame_active,
+    _is_pure_spherical,
     _surface_normal,
     _surface_sag_derivatives_xy,
     _surface_sag_xy,
@@ -140,21 +141,23 @@ def _intersect_surface(rays, surface, n_medium=1.0):
 
     Notes
     -----
-    pure-spherical surfaces (``conic == 0``, no
-    aspheric / biconic / freeform / coord-break extensions, finite
-    radius) take a "Newton-skip" fast path that uses the analytical
-    ray-sphere quadratic root directly.  For a sphere this root is
-    the exact intersection (modulo LSB rounding), so the legacy 10-
-    iteration Newton refinement does at most one ~1e-17 step before
-    converging -- on a 1k-ray doublet trace this represents the bulk
-    of the per-surface cost.  The surface-normal pathway in
-    :func:`_refract` / :func:`_reflect` still routes through
-    :func:`_surface_sag_derivatives_xy` (numerical-radial-derivative
-    based), so the normal rounding behaviour is bit-identical to
-    pre-v4.12.1.  Switching the spherical normal to the analytic
-    ``(x/R, y/R, (z-R)/R)`` form (matching :mod:`jax_trace`) compounds a
-    1.17e-3 cross-backend rel error in the Maslov asymptotic test -- this
-    conservative variant avoids
+    Pure-spherical surfaces (:func:`surface._is_pure_spherical`: finite
+    radius, ``conic == 0``, no aspheric / biconic / freeform / field-frame
+    extension) take a "Newton-skip" fast path that uses the analytical
+    ray-sphere quadratic root directly.  For a sphere this root is the
+    exact intersection (modulo LSB rounding), so the legacy 10-iteration
+    Newton refinement does at most one ~1e-17 step before converging --
+    on a 1k-ray doublet trace that refinement was the bulk of the
+    per-surface cost.
+
+    A closed-form NORMAL for the same class of surface is available --
+    :func:`surface._sphere_normal`, reached from :func:`_refract` /
+    :func:`_reflect` under ``sphere_normal='analytic'`` -- and it selects
+    on the SAME predicate as this intersection.  That pairing is what
+    makes it safe: it is the normal of the sphere the intersection
+    actually solved, at the point the intersection actually returned.
+    It is opt-in because it differs in the last bit from the
+    sag-derivative route every caller has been getting.
     """
     R = surface.radius
     kc = surface.conic
@@ -168,25 +171,21 @@ def _intersect_surface(rays, surface, n_medium=1.0):
     # field-frame ``_surface_sag_xy`` / ``_surface_sag_derivatives_xy``).
     field_frame = _field_frame_active(surface)
 
-    # Detect the pure-spherical fast path.  Requires
-    # finite R, conic == 0, no aspherics, no biconic axis, no
-    # freeform departure.  Coord-break surfaces never reach
-    # :func:`_intersect_surface` -- the trace loop dispatches them
-    # via :func:`_apply_coord_break` -- so no guard is needed here.
-    is_pure_spherical = (
-        (not np.isinf(R))
-        and kc == 0.0
-        and not asph
-        and radius_y is None
-        and freeform is None
-        and not field_frame
-    )
+    # Detect the pure-spherical fast path (finite R, conic == 0, no
+    # aspherics, no biconic axis, no freeform departure, no field frame).
+    # Coord-break surfaces never reach :func:`_intersect_surface` -- the
+    # trace loop dispatches them via :func:`_apply_coord_break` -- so no
+    # guard is needed here.  The predicate lives in ``surface.py`` so the
+    # closed-form NORMAL (``surface._sphere_normal``, reached from
+    # :func:`_refract` / :func:`_reflect`) selects on exactly the same
+    # criteria as this closed-form INTERSECTION.
+    pure_spherical = _is_pure_spherical(surface)
 
     # S9-RT1 (audit review4a, pattern #4 -- an ``inf`` sentinel silently
     # disabling logic).  ``radius = inf`` means "no power ON THE X AXIS", NOT
     # "flat surface": a cylinder powered in y is spelled exactly
     # ``radius=inf, radius_y=<finite>`` (and a phase plate on a flat base is
-    # ``radius=inf, freeform=...``).  ``is_pure_spherical`` above carefully
+    # ``radius=inf, freeform=...``).  ``_is_pure_spherical`` carefully
     # excludes ``radius_y`` / ``freeform``, but the flat fast path was tested
     # FIRST and excluded only ``asph`` / ``field_frame``, so every such
     # surface was intersected at z = 0 -- the sag was silently discarded while
@@ -240,7 +239,7 @@ def _intersect_surface(rays, surface, n_medium=1.0):
         # fault, so ``_kill_unreachable`` stamps RAY_NAN there instead of
         # RAY_MISSED_SURFACE (VERIFY-WP-A1 open item 5).
         _kill_unreachable(rays, unreachable)
-    elif is_pure_spherical:
+    elif pure_spherical:
         # ---- v4.12.1 Track C: Newton-skip fast path -----------------
         # For a sphere ``x^2 + y^2 + (z - R)^2 = R^2`` the ray-surface
         # intersection is the smaller-magnitude root of a quadratic in
@@ -518,7 +517,29 @@ def _intersect_surface(rays, surface, n_medium=1.0):
 # Vector Snell's law (refraction and reflection)
 # ============================================================================
 
-def _refract(rays, surface, n1, n2):
+def _normalize_directions(rays) -> None:
+    """Rescale ``(L, M, N)`` to unit length in place.
+
+    The single-pass form of the per-surface renormalisation that
+    :func:`_refract` / :func:`_reflect` apply when ``renormalize=True``:
+    the same ``mag = sqrt(L**2 + M**2 + N**2)``, the same ``1e-30`` floor
+    against a collapsed direction, the same three in-place divisions, and
+    the same "every row, alive or not" scope.  It carries no
+    degenerate-ray diagnosis of its own -- the per-surface calls keep
+    that, because a direction that collapses at surface 3 must be
+    reported as having died at surface 3.
+
+    Used by ``trace`` / ``trace_world`` under ``renormalize='exit'``.
+    """
+    mag = np.sqrt(rays.L ** 2 + rays.M ** 2 + rays.N ** 2)
+    mag = np.maximum(mag, 1e-30)
+    rays.L /= mag
+    rays.M /= mag
+    rays.N /= mag
+
+
+def _refract(rays, surface, n1, n2, *, renormalize=True,
+             sphere_normal='generic'):
     """Apply vector Snell's law at the surface.
 
     Updates direction cosines (L, M, N) in place.  Rays that undergo
@@ -530,8 +551,34 @@ def _refract(rays, surface, n1, n2):
     Refracted direction:
         d̂_t = mu * d̂_i + (mu * cos_i - cos_t) * n̂
     where mu = n1 / n2.
+
+    Parameters
+    ----------
+    renormalize : bool, default True
+        Rescale the refracted direction to unit length before returning.
+        Exact vector Snell with a UNIT normal returns a unit vector
+        identically, so this only removes the ~1e-16 of rounding drift
+        the surface contributes.  ``False`` keeps the degenerate-ray
+        diagnosis (the ``mag`` test below, which is a real fault report)
+        but skips the floor and the three divisions, leaving them to one
+        :func:`_normalize_directions` pass at the end of the trace.  The
+        caller then owns the ``|(L, M, N)| = 1`` invariant that the
+        ray-sphere quadratic's ``a = 1`` and the DOE evanescence test
+        both assume.  The default is what every direct caller
+        (``analysis.ghost``, the finite-difference differential path)
+        sees, so their arithmetic is unchanged by construction.
+    sphere_normal : ``'generic'`` (default) | ``'analytic'``
+        Which route computes the surface normal for a PURE SPHERE.
+        ``'generic'`` is the sag-derivative dispatch every caller has
+        always used; ``'analytic'`` is the closed form
+        ``(-x/R, -y/R, sqrt(1 - h^2/R^2))``, which is both cheaper and
+        more accurate but differs in the last bit.  Non-spherical
+        surfaces take the generic route either way.  See
+        ``trace(sphere_normal=...)``.
     """
-    nx, ny, nz = _surface_normal(rays.x, rays.y, surface)
+    nx, ny, nz = _surface_normal(
+        rays.x, rays.y, surface,
+        analytic_sphere=(sphere_normal == 'analytic'))
 
     # S3-10: vector Snell law via the backend-agnostic shared core
     # (raytrace._conic_core.refract_snell).  The core orients the normal
@@ -568,11 +615,13 @@ def _refract(rays, surface, n1, n2):
     rays.M = np.where(rays.alive, Mp, rays.M)
     rays.N = np.where(rays.alive, Np, rays.N)
 
-    # Renormalise.  If the direction vector magnitude collapsed to
-    # zero (arithmetic fault: NaN-propagating refraction, degenerate
-    # geometry, etc.), flag the ray dead with RAY_NAN instead of
-    # silently promoting (0, 0, 0) to a bogus unit vector along
-    # the small-epsilon direction.
+    # Degenerate-direction diagnosis.  If the direction vector magnitude
+    # collapsed to zero (arithmetic fault: NaN-propagating refraction,
+    # degenerate geometry, etc.), flag the ray dead with RAY_NAN instead
+    # of silently promoting (0, 0, 0) to a bogus unit vector along
+    # the small-epsilon direction.  This runs at EVERY surface in both
+    # renormalise modes: the surface that produced the fault is the one
+    # the error code has to name.
     mag = np.sqrt(rays.L ** 2 + rays.M ** 2 + rays.N ** 2)
     _degenerate = (mag < 1e-30) | ~np.isfinite(mag)
     if np.any(_degenerate):
@@ -583,17 +632,19 @@ def _refract(rays, surface, n1, n2):
         # treated NaN-direction rays as still active and propagated
         # garbage through subsequent surfaces.
         rays.alive = rays.alive & ~_degenerate
-    mag = np.maximum(mag, 1e-30)
-    rays.L /= mag
-    rays.M /= mag
-    rays.N /= mag
+    if renormalize:
+        mag = np.maximum(mag, 1e-30)
+        rays.L /= mag
+        rays.M /= mag
+        rays.N /= mag
 
     # Accumulate OPD at this surface
     # OPD contribution from the refraction surface itself is zero
     # (OPD is accumulated during transfer between surfaces)
 
 
-def _reflect(rays, surface):
+def _reflect(rays, surface, *, renormalize=True,
+             sphere_normal='generic'):
     """Reflect rays at a mirror surface.
 
     Updates direction cosines in place.
@@ -603,8 +654,12 @@ def _reflect(rays, surface):
 
     Reflected direction:
         d̂_r = d̂_i + 2 * cos_i * n̂
+
+    ``renormalize`` and ``sphere_normal`` are as in :func:`_refract`.
     """
-    nx, ny, nz = _surface_normal(rays.x, rays.y, surface)
+    nx, ny, nz = _surface_normal(
+        rays.x, rays.y, surface,
+        analytic_sphere=(sphere_normal == 'analytic'))
 
     # S3-10: vector reflection via the backend-agnostic shared core
     # (raytrace._conic_core.reflect_mirror).  The core orients the
@@ -617,8 +672,9 @@ def _reflect(rays, surface):
     rays.M = Mp
     rays.N = Np
 
-    # Renormalise.  Flag degenerate rays as RAY_NAN rather than
-    # silently promoting (0, 0, 0) to a unit vector.
+    # Degenerate-direction diagnosis (every surface, both renormalise
+    # modes).  Flag degenerate rays as RAY_NAN rather than silently
+    # promoting (0, 0, 0) to a unit vector.
     mag = np.sqrt(rays.L ** 2 + rays.M ** 2 + rays.N ** 2)
     _degenerate = (mag < 1e-30) | ~np.isfinite(mag)
     if np.any(_degenerate):
@@ -626,10 +682,11 @@ def _reflect(rays, surface):
         rays.error_code = np.where(new_fault, RAY_NAN, rays.error_code)
         # 4.11.1: also flag dead -- pre-4.11.1 only error_code was set.
         rays.alive = rays.alive & ~_degenerate
-    mag = np.maximum(mag, 1e-30)
-    rays.L /= mag
-    rays.M /= mag
-    rays.N /= mag
+    if renormalize:
+        mag = np.maximum(mag, 1e-30)
+        rays.L /= mag
+        rays.M /= mag
+        rays.N /= mag
 
 
 def _transfer(rays, thickness, n_medium):
@@ -840,4 +897,5 @@ __all__ = [
     '_transfer',
     '_apply_coord_break',
     '_advance_along_rays',
+    '_normalize_directions',
 ]

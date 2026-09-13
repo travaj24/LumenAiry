@@ -32,6 +32,7 @@ from ..glass import get_glass_index
 from .intersection import (
     _apply_coord_break,
     _intersect_surface,
+    _normalize_directions,
     _reflect,
     _refract,
     _transfer,
@@ -56,6 +57,8 @@ def trace(
     wavelength: float,
     output_filter: Union[str, Callable[..., Any]] = 'all',
     surface_diffraction: Optional[Dict[int, Tuple[float, float, float, float]]] = None,
+    renormalize: str = 'surface',
+    sphere_normal: str = 'generic',
 ) -> 'TraceResult':
     """Trace a ray bundle through a sequential list of surfaces.
 
@@ -108,6 +111,59 @@ def trace(
         (``L_new**2 + M_new**2 > 1``) are flagged
         ``alive=False`` with ``error_code=RAY_EVANESCENT``.  See also
         :func:`apply_doe_phase_traced`.
+    renormalize : ``'surface'`` (default) | ``'exit'``
+        Where the refracted / reflected direction cosines are rescaled
+        to unit length.
+
+        * ``'surface'`` -- after every refraction and reflection, as the
+          trace has always done.
+        * ``'exit'`` -- once, on the bundle that leaves the last surface.
+          Exact vector Snell with a unit normal returns a unit vector
+          identically, so each per-surface rescale only removes ~1e-16 of
+          rounding drift; hoisting it saves ``np.maximum`` + three
+          divisions per surface.  The degenerate-direction diagnosis
+          (``|d| < 1e-30`` or non-finite -> ``RAY_NAN`` + killed) still
+          runs at every surface, so a collapsed direction is still
+          attributed to the surface that produced it.
+
+        ``'exit'`` is NOT bit-identical to ``'surface'``: the surviving
+        drift enters the next surface's ray-sphere quadratic (which
+        assumes ``a = |d|**2 = 1``).  Measured on a 20k-ray 7-surface
+        spherical stack and a 3-surface conic stack: identical ``alive``
+        masks, ``max |dx| = 6.2e-17 m``, ``max |dopd| = 1.9e-16 m``,
+        ``max |dL| = 4.7e-16`` -- one to two decades below the trace's own
+        60-digit-oracle OPL floor (1.4e-17 m) but not zero.  Under
+        ``output_filter='all'`` the INTERMEDIATE ``ray_history`` bundles
+        carry ``| |d| - 1 | <= 1e-15`` (only the final bundle is
+        rescaled), so a consumer that reads history direction cosines as
+        exactly unit should stay on ``'surface'``.
+    sphere_normal : ``'generic'`` (default) | ``'analytic'``
+        Which route computes the surface normal at a PURE SPHERE
+        (:func:`surface._is_pure_spherical`: finite radius, no conic,
+        aspheric, biconic, freeform or field-frame extension).
+
+        * ``'generic'`` -- ``sqrt(x^2+y^2)``, a ``np.where(h > 0, ...)``
+          guard, two divisions by ``h``, a second ``sqrt`` inside
+          ``_surface_sag_derivative`` and the normalising ``sqrt`` + three
+          divisions of ``_surface_normal``.  The arithmetic every caller
+          has always got.
+        * ``'analytic'`` -- the closed form ``(-x/R, -y/R,
+          sqrt(1 - h^2/R^2))``, which is the same vector with five array
+          operations instead of ~fourteen and no division by a small
+          ``h`` near the vertex.  It selects on the SAME predicate as the
+          closed-form ray-sphere intersection, which is what the failed
+          v4.12.0 attempt lacked.
+
+        The normal block is 24 % of ``trace``'s own time (audit
+        RAYTRACE perf #2); MEASURED end to end on a 200k-ray 7-surface
+        spherical stack, ``'analytic'`` is 464.8 -> 373.0 ms, a 1.25x.
+        It is OPT-IN because it is not bit-identical: measured
+        ``max |dx| = 2.8e-17 m``, ``max |dopd| = 8.3e-17 m``,
+        ``max |dL| = 2.8e-16`` on a 1500-ray sweep, with every ``alive``
+        and ``error_code`` byte-identical.  Prescriptions with no pure
+        sphere (conic, biconic, mirror) are byte-identical either way.
+        Downstream BIT-EQUAL pins exist (``propagate_modal_asymptotic``),
+        so the default cannot move without restating them.
 
     Returns
     -------
@@ -133,10 +189,21 @@ def trace(
     Do not read ``L/M/N`` of a dead row and expect cross-backend
     agreement; read ``alive`` / ``error_code``.
     """
+    if renormalize not in ('surface', 'exit'):
+        raise ValueError(
+            f"trace: renormalize must be 'surface' or 'exit'; "
+            f"got {renormalize!r}.")
+    if sphere_normal not in ('generic', 'analytic'):
+        raise ValueError(
+            f"trace: sphere_normal must be 'generic' or 'analytic'; "
+            f"got {sphere_normal!r}.")
+    _renorm_surface = (renormalize == 'surface')
+    _sph_norm = sphere_normal
     r = rays.copy()
     history = [] if output_filter != 'last' else None
     final = None
     _diff = dict(surface_diffraction) if surface_diffraction else {}
+    _last = len(surfaces) - 1
 
     # Pre-resolve all glass indices once per wavelength.  Each
     # get_glass_index call has module-level LRU caching, so repeated
@@ -160,6 +227,8 @@ def trace(
         # aligned), and continue to the transfer step below.
         if surf.is_coordbrk:
             _apply_coord_break(r, surf)
+            if not _renorm_surface and i == _last:
+                _normalize_directions(r)
             if output_filter == 'all':
                 history.append(r.copy())
             elif callable(output_filter):
@@ -182,9 +251,11 @@ def trace(
 
         # 2. Refract or reflect
         if surf.is_mirror:
-            _reflect(r, surf)
+            _reflect(r, surf, renormalize=_renorm_surface,
+                     sphere_normal=_sph_norm)
         else:
-            _refract(r, surf, n1, n2)
+            _refract(r, surf, n1, n2, renormalize=_renorm_surface,
+                     sphere_normal=_sph_norm)
 
         # 2.5. Diffractive-order kick (if this surface is registered as
         # a grating in surface_diffraction).  Modifies (L, M, N) in
@@ -262,6 +333,13 @@ def trace(
                         np.uint8(RAY_EVANESCENT),
                         r.error_code,
                     )
+
+        # 2.9. renormalize='exit': the one direction rescale the
+        # per-surface calls skipped, applied to the bundle that leaves
+        # the last surface -- before it is snapshotted, so ``image_rays``
+        # satisfies |(L, M, N)| = 1 on every output_filter.
+        if not _renorm_surface and i == _last:
+            _normalize_directions(r)
 
         # Save state after this surface, per output_filter
         if output_filter == 'all':
@@ -1122,23 +1200,36 @@ def make_rings(
     field_angle: float = 0.0,
     wavelength: float = 550e-9,
     include_chief: bool = True,
+    *,
+    pattern: str = 'rings',
 ) -> 'RayBundle':
-    """Create concentric rings of rays (good for spot diagrams).
+    """Create a pupil ray bundle (good for spot diagrams).
 
     Parameters
     ----------
     semi_aperture : float
         Pupil semi-diameter [m].
     num_rings : int
-        Number of concentric rings.
+        Number of concentric rings (``pattern='rings'``), or one factor
+        of the ray count (``pattern='vogel'``).
     rays_per_ring : int
-        Rays per ring (each ring has this many).
+        Rays per ring (each ring has this many), or the other factor of
+        the Vogel ray count.
     field_angle : float
         Off-axis angle [radians].
     wavelength : float
         Vacuum wavelength [m].
     include_chief : bool
         If True, add the on-axis chief ray at the centre.
+    pattern : ``'rings'`` (default) | ``'vogel'``
+        Pupil sampling geometry.  Both produce
+        ``num_rings * rays_per_ring`` pupil rays (plus the chief).
+
+        * ``'rings'`` -- concentric equal-radius, equal-count rings.  The
+          library default, unchanged.
+        * ``'vogel'`` -- the Vogel / sunflower disk ``r_i = R sqrt(i/N)``,
+          ``theta_i = i * pi * (3 - sqrt(5))`` (the golden angle), which
+          is AREA-UNIFORM.
 
     Returns
     -------
@@ -1146,10 +1237,10 @@ def make_rings(
 
     Notes
     -----
-    The rings are EQUALLY SPACED in radius (``r = semi_aperture * ring /
-    num_rings``) and each carries the SAME ``rays_per_ring``.  The pupil
-    AREAL sampling density therefore falls off as ``~1/r`` -- rays are
-    packed more densely near the axis than at the rim.  Consequences:
+    ``'rings'`` is equally spaced in radius (``r = semi_aperture * ring /
+    num_rings``) with the SAME ``rays_per_ring`` on every ring, so the
+    pupil AREAL sampling density falls off as ``~1/r`` -- rays are packed
+    more densely near the axis than at the rim.  Consequences:
 
     * The best-focus LOCATION found by scanning ``spot_rms`` vs. focus is
       robust to this weighting (the minimum is insensitive to a monotone
@@ -1157,9 +1248,33 @@ def make_rings(
     * An UNWEIGHTED ``spot_rms`` over these rays is center-biased SMALL --
       it is not an area-representative RMS.  For an area-true wavefront /
       spot statistic weight each ray by its annulus area (``propto r``) or
-      use an area-uniform pupil sampling (e.g. a Fibonacci / sunflower
-      disk) instead of concentric equal-count rings.
+      pass ``pattern='vogel'``.
+
+    Measured at the defaults (``num_rings=6``, ``rays_per_ring=36``,
+    ``include_chief=True``, 217 rays):
+
+    | quantity | ``'rings'`` | ``'vogel'`` | area-uniform limit |
+    |---|---|---|---|
+    | mean ``r/R``     | 0.580645 | 0.665834 | 2/3      |
+    | mean ``r^2/R^2`` | 0.419355 | 0.500000 | 1/2      |
+
+    The ``r^2`` row is EXACT for ``'vogel'`` with the chief included:
+    ``r_i^2/R^2 = i/N`` for ``i = 1..N`` plus the chief's 0 averages to
+    ``((N+1)/2)/(N+1) = 1/2`` for every ``N``.
+
+    The default stays ``'rings'``: every spot number the library has ever
+    published carries that weighting, and moving it silently would move
+    them all -- measured at the same counts, ``spot_rms`` reads +2.14 %
+    on an f/4 plano-convex N-BK7 singlet (108.2226 -> 110.5391 um) and
+    +10.37 % on a biconvex R = +-60 mm (106.1941 -> 117.2050 um).
+    ``'vogel'`` is the opt-in for an area-true statistic.
     """
+    if pattern not in ('rings', 'vogel'):
+        raise ValueError(
+            f"make_rings: pattern must be 'rings' or 'vogel'; got "
+            f"{pattern!r}.  'rings' is the equal-radius / equal-count "
+            f"concentric default; 'vogel' is the area-uniform "
+            f"sunflower disk.")
     all_x = []
     all_y = []
 
@@ -1167,12 +1282,26 @@ def make_rings(
         all_x.append(0.0)
         all_y.append(0.0)
 
-    for ring in range(1, num_rings + 1):
-        frac = ring / num_rings
-        theta = np.linspace(0, 2 * np.pi, rays_per_ring, endpoint=False)
-        r = semi_aperture * frac
+    if pattern == 'vogel':
+        # Vogel (1979) / Fibonacci sunflower: equal AREA per ray.
+        # ``sqrt(i/N)`` maps a uniform index to a uniform-area radius and
+        # the golden angle ``pi (3 - sqrt(5))`` (== 2 pi / phi**2)
+        # maximises the angular irrationality, so no ray count produces
+        # radial spokes.  ``i`` runs 1..N so the outermost ray sits
+        # exactly on the rim, as the outer ring of ``'rings'`` does.
+        n_pupil = int(num_rings) * int(rays_per_ring)
+        i = np.arange(1, n_pupil + 1, dtype=np.float64)
+        r = semi_aperture * np.sqrt(i / n_pupil)
+        theta = i * (np.pi * (3.0 - np.sqrt(5.0)))
         all_x.append(r * np.cos(theta))
         all_y.append(r * np.sin(theta))
+    else:
+        for ring in range(1, num_rings + 1):
+            frac = ring / num_rings
+            theta = np.linspace(0, 2 * np.pi, rays_per_ring, endpoint=False)
+            r = semi_aperture * frac
+            all_x.append(r * np.cos(theta))
+            all_y.append(r * np.sin(theta))
 
     x = np.concatenate([np.atleast_1d(xi) for xi in all_x])
     y = np.concatenate([np.atleast_1d(yi) for yi in all_y])
@@ -1419,9 +1548,12 @@ def trace_prescription(
     field_angle : float
         Off-axis field angle [radians].
     num_rings, rays_per_ring : int
-        Parameters for the ``'rings'`` pattern.
+        Parameters for the ``'rings'`` / ``'vogel'`` patterns.
     ray_pattern : str
-        ``'rings'``, ``'grid'``, or ``'fan_xy'``.
+        ``'rings'`` (default), ``'vogel'``, ``'grid'``, or ``'fan_xy'``.
+        ``'vogel'`` is the area-uniform sunflower pupil sampling of
+        :func:`make_rings`; ``'rings'`` is the equal-radius / equal-count
+        concentric default.
     n_across : int
         Grid size for the ``'grid'`` pattern.
     image_distance : float or None
@@ -1440,9 +1572,9 @@ def trace_prescription(
         semi_aperture = ap / 2.0 if ap else 12.7e-3
 
     # Generate rays
-    if ray_pattern == 'rings':
+    if ray_pattern in ('rings', 'vogel'):
         rays = make_rings(semi_aperture, num_rings, rays_per_ring,
-                          field_angle, wavelength)
+                          field_angle, wavelength, pattern=ray_pattern)
     elif ray_pattern == 'grid':
         rays = make_grid(semi_aperture, n_across, field_angle,
                          wavelength, pattern='circular')
@@ -1806,6 +1938,9 @@ def raytrace_system(
     field_angle : float
         Off-axis field angle [radians].
     num_rings, rays_per_ring, ray_pattern, n_across : int/str
+        ``ray_pattern`` accepts ``'rings'`` (default), ``'vogel'`` (the
+        area-uniform sunflower pupil of :func:`make_rings`) and
+        ``'grid'``; anything else falls back to ``'rings'``.
         Ray generation parameters (see :func:`trace_prescription`).
     image_distance : float or None
         Distance from last surface to image plane [m].  If None, uses
@@ -1848,16 +1983,17 @@ def raytrace_system(
             # caller picks a default further down.
             pass
 
-    # Generate rays
-    if ray_pattern == 'rings':
-        rays = make_rings(semi_aperture, num_rings, rays_per_ring,
-                          field_angle, wavelength)
-    elif ray_pattern == 'grid':
+    # Generate rays.  Anything that is not 'grid' falls back to the
+    # concentric-ring launcher, which is what every unrecognised
+    # ``ray_pattern`` has always done here.
+    if ray_pattern == 'grid':
         rays = make_grid(semi_aperture, n_across, field_angle,
                          wavelength, pattern='circular')
     else:
-        rays = make_rings(semi_aperture, num_rings, rays_per_ring,
-                          field_angle, wavelength)
+        rays = make_rings(
+            semi_aperture, num_rings, rays_per_ring, field_angle,
+            wavelength,
+            pattern='vogel' if ray_pattern == 'vogel' else 'rings')
 
     # Add image plane if we have a distance.
     # R7 (AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11): CLONE the last

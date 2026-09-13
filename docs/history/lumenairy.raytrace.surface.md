@@ -1,10 +1,12 @@
 <!-- lumenairy-history-doc
 module: lumenairy/raytrace/surface.py
-ast_sha256: e545dade6b06e974a3cf511197608b08abc7daec8e797524c44b29b1334cac47
-token_sha256: 2404a25514aad91db31ee9801dcd3aa5470917239fb9fe84c7c5bfb3f22ca7b9
+ast_sha256: 296c0892a536d44ebea0803b96b1523870ccf553cf62c5d4b75992fed0737388
+token_sha256: 23b3dfb373d0419ad7be53469de1e4733d8b7545b081153b7d2443857d8f6ff5
 pre_relocation_lines: 751
 recorded_by: WP-A17 SWEEP-3 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
+re_recorded: 2026-09-13 -- WP-B9 item 2: closed-form sphere normal _sphere_normal + the shared is_pure_spherical predicate; _surface_normal gains analytic_sphere= (default False, generic route unchanged)
+re_recorded: 2026-09-13 -- WP-B9 item 2: closed-form sphere normal _sphere_normal + the shared _is_pure_spherical predicate; _surface_normal gains analytic_sphere= (default False, generic route unchanged)
 -->
 
 

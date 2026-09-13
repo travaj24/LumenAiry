@@ -1,10 +1,11 @@
 <!-- lumenairy-history-doc
 module: lumenairy/raytrace/ray_fan.py
-ast_sha256: 7fbbd609ee24d0e0a78ed074dd5cab13c5c04879585579ac90cdac40e914c74f
-token_sha256: 9d9d5b19c9154c076f7401a4ff667d49cdd42228551991fc3667a386ce698947
+ast_sha256: 4addc32887ca4f7478128f1f08636d9259291a0b155c14c43950c887cc952b0b
+token_sha256: cbbb5674e47df7e15beded7d90d93009af77cb88775b7bff11b408cda2656dd1
 pre_relocation_lines: 1074
 recorded_by: WP-A17 SWEEP-3 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
+re_recorded: 2026-09-13 -- WP-B9 item 3: both ray fans and both OPD fans issue ONE concatenated trace via the new _trace_fan_set / _bundle_slice helpers instead of four; through_focus_rms gains pattern= for the area-uniform pupil
 -->
 
 

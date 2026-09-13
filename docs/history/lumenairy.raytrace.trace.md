@@ -1,10 +1,12 @@
 <!-- lumenairy-history-doc
 module: lumenairy/raytrace/trace.py
-ast_sha256: 203f98301738699d31242087e61af6c85506df01178f7bcf57eeed71992174c0
-token_sha256: b8781f810536108543c4c5541f78cd95ee74b0825859c67d72cbd981596dd428
+ast_sha256: 4d2dbbe0b6ed2f29bf4a6cf566c1e45282d479055dee7cf2f673a4fdb9a94dde
+token_sha256: 648519993a143e9e97039348d0042bacc2b98b2b4aa9d8772d8e400b79b618a5
 pre_relocation_lines: 1902
 recorded_by: WP-A17 SWEEP-3 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
+re_recorded: 2026-09-13 -- WP-B9 items 1, 2, 5: trace() gains renormalize= and sphere_normal= (defaults unchanged); make_rings gains pattern='vogel' area-uniform sampling with the 'rings' default unchanged; ray_pattern='vogel' threaded through trace_prescription / raytrace_system
+re_recorded: 2026-09-13 -- WP-B9 items 1, 2, 5: trace() gains renormalize= and sphere_normal= (defaults unchanged); make_rings gains pattern='vogel' area-uniform sampling with the 'rings' default unchanged; ray_pattern='vogel' threaded through trace_prescription / raytrace_system
 -->
 
 

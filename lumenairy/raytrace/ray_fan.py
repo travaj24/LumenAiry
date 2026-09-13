@@ -32,7 +32,7 @@ import numpy as np
 from ..glass import get_glass_index
 from .exit_vertex import resolve_exit_index, vertex_plane_transfer_t
 from .seidel import first_order_data, system_abcd
-from .surface import Surface, TraceResult
+from .surface import RayBundle, Surface, TraceResult
 from .trace import (
     make_fan,
     make_ray,
@@ -70,6 +70,78 @@ def _ep_offset(ep_z: float, field_angle: float) -> float:
     if not np.isfinite(ep_z):
         return 0.0
     return -ep_z * np.tan(field_angle)
+
+
+# ============================================================================
+# Shared helper: one trace for a whole fan set
+# ============================================================================
+
+def _bundle_slice(bundle: 'RayBundle', sl: slice) -> 'RayBundle':
+    """A read-only-use view of ``bundle[sl]`` as a :class:`RayBundle`.
+
+    Every field is a NumPy VIEW, not a copy -- the fan analytics only
+    read the returned bundles.  Mutating one writes through to the joint
+    bundle it came from.
+    """
+    return RayBundle(
+        x=bundle.x[sl], y=bundle.y[sl], z=bundle.z[sl],
+        L=bundle.L[sl], M=bundle.M[sl], N=bundle.N[sl],
+        wavelength=bundle.wavelength,
+        alive=bundle.alive[sl], opd=bundle.opd[sl],
+        error_code=(bundle.error_code[sl]
+                    if bundle.error_code is not None else None),
+    )
+
+
+def _trace_fan_set(tracer, bundles, surfaces, wavelength):
+    """Trace several launch bundles through ``surfaces`` in ONE call.
+
+    Both fan functions need four traces -- a tangential chief, a
+    sagittal chief, a tangential fan and a sagittal fan -- through the
+    SAME surfaces at the SAME wavelength, differing only in launch
+    heights and which axis carries the field tilt.  Four ``trace()``
+    calls pay the per-call glass resolution and the Python surface loop
+    four times over, on bundles of 1, 1, ``n_rays`` and ``n_rays`` rays.
+
+    Concatenating them into one bundle is EXACT rather than approximate:
+    every step of the trace is elementwise over rays, so a ray's
+    trajectory does not depend on what it is bundled with.  The two
+    ray-count-dependent constructs are ``np.any`` / ``.any()`` guards
+    (which only decide whether an elementwise ``np.where`` is evaluated
+    at all -- the same values either way) and the aspheric Newton loop's
+    ``if converged.all(): break``, which can run a ray one extra
+    iteration when a slower ray shares the bundle.  That extra iteration
+    is a Newton step from an already-converged point (``|dt| < 1e-15``),
+    so it moves ``t`` by at most an ULP; measured over the verification
+    prescriptions the fans are bit-identical on spherical and flat
+    systems and agree to ``<= 1e-18 m`` in ``ey`` on conic ones.
+
+    ``output_filter='last'`` is passed because the fan analytics read
+    only ``image_rays``; it drops one full ``RayBundle.copy()`` per
+    surface and leaves ``image_rays`` bit-identical (it is the same
+    ``r.copy()``, taken at the same point in the loop).
+
+    Returns the per-input image bundles, in input order.
+    """
+    n = [b.n_rays for b in bundles]
+    stops = np.cumsum(n)
+    joint = RayBundle(
+        x=np.concatenate([b.x for b in bundles]),
+        y=np.concatenate([b.y for b in bundles]),
+        z=np.concatenate([b.z for b in bundles]),
+        L=np.concatenate([b.L for b in bundles]),
+        M=np.concatenate([b.M for b in bundles]),
+        N=np.concatenate([b.N for b in bundles]),
+        wavelength=bundles[0].wavelength,
+        alive=np.concatenate([b.alive for b in bundles]),
+        opd=np.concatenate([b.opd for b in bundles]),
+        error_code=np.concatenate(
+            [np.zeros(b.n_rays, dtype=np.uint8) if b.error_code is None
+             else b.error_code for b in bundles]),
+    )
+    img = tracer(joint, surfaces, wavelength, output_filter='last').image_rays
+    return [_bundle_slice(img, slice(int(stop) - cnt, int(stop)))
+            for cnt, stop in zip(n, stops)]
 
 
 # ============================================================================
@@ -503,20 +575,19 @@ def ray_fan_data(
                            wavelength=wavelength)
         chief_x = make_ray(0, 0, np.sin(field_angle), 0,
                            wavelength=wavelength)
-    y_ref = trace(chief_y, surfaces, wavelength).image_rays.y[0]
-    x_ref = trace(chief_x, surfaces, wavelength).image_rays.x[0]
-
-    # Tangential fan (Y) -- launch EP-centred on the chief (RT-5).
+    # Both fans launch EP-centred on their own chief (RT-5).  All four
+    # bundles go through ONE trace (see :func:`_trace_fan_set`).
     fan_y = make_fan('y', semi_aperture, n_rays, field_angle, wavelength)
     fan_y.y = fan_y.y + ep_off
-    img_y = trace(fan_y, surfaces, wavelength).image_rays
-    py = np.linspace(-1, 1, n_rays)
-    ey = np.where(img_y.alive, img_y.y - y_ref, np.nan)
-
-    # Sagittal fan (X) -- launch EP-centred on the chief (RT-5).
     fan_x = make_fan('x', semi_aperture, n_rays, field_angle, wavelength)
     fan_x.x = fan_x.x + ep_off
-    img_x = trace(fan_x, surfaces, wavelength).image_rays
+    ref_y, ref_x, img_y, img_x = _trace_fan_set(
+        trace, (chief_y, chief_x, fan_y, fan_x), surfaces, wavelength)
+    y_ref = ref_y.y[0]
+    x_ref = ref_x.x[0]
+
+    py = np.linspace(-1, 1, n_rays)
+    ey = np.where(img_y.alive, img_y.y - y_ref, np.nan)
     px = np.linspace(-1, 1, n_rays)
     ex = np.where(img_x.alive, img_x.x - x_ref, np.nan)
 
@@ -561,18 +632,17 @@ def ray_fan_data_world(
                            wavelength=wavelength)
         chief_x = make_ray(0, 0, np.sin(field_angle), 0,
                            wavelength=wavelength)
-    y_ref = trace_world(chief_y, surfaces, wavelength).image_rays.y[0]
-    x_ref = trace_world(chief_x, surfaces, wavelength).image_rays.x[0]
-
     fan_y = make_fan('y', semi_aperture, n_rays, field_angle, wavelength)
     fan_y.y = fan_y.y + ep_off
-    img_y = trace_world(fan_y, surfaces, wavelength).image_rays
-    py = np.linspace(-1, 1, n_rays)
-    ey = np.where(img_y.alive, img_y.y - y_ref, np.nan)
-
     fan_x = make_fan('x', semi_aperture, n_rays, field_angle, wavelength)
     fan_x.x = fan_x.x + ep_off
-    img_x = trace_world(fan_x, surfaces, wavelength).image_rays
+    ref_y, ref_x, img_y, img_x = _trace_fan_set(
+        trace_world, (chief_y, chief_x, fan_y, fan_x), surfaces, wavelength)
+    y_ref = ref_y.y[0]
+    x_ref = ref_x.x[0]
+
+    py = np.linspace(-1, 1, n_rays)
+    ey = np.where(img_y.alive, img_y.y - y_ref, np.nan)
     px = np.linspace(-1, 1, n_rays)
     ex = np.where(img_x.alive, img_x.x - x_ref, np.nan)
 
@@ -716,7 +786,6 @@ def opd_fan_data(
     intercept, with no reference sphere -- differs from the wavefront
     error at FIRST order in the transverse aberration:
     ``W_plane - W_true = eps * sin(theta')``.
-    ``W_plane - W_true = eps * sin(theta')``.
     Measured on an f/4 plano-convex singlet (R1 = 51.68 mm N-BK7, 25 mm
     pupil, 587.6 nm) at ``rho = 1``: ``+36.194`` waves reported against
     ``-11.714`` waves true -- the wrong SIGN and 3.1x the magnitude.  The
@@ -758,8 +827,17 @@ def opd_fan_data(
         chief_x = make_ray(0, 0, np.sin(field_angle), 0,
                            wavelength=wavelength)
     _FN = 'opd_fan_data'
-    ref_y = trace(_eikonal(chief_y), surfaces, wavelength).image_rays
-    ref_x = trace(_eikonal(chief_x), surfaces, wavelength).image_rays
+    # Both fans launch EP-centred on their own chief (RT-5); all four
+    # bundles go through ONE trace (see :func:`_trace_fan_set`).
+    fan_y = make_fan('y', semi_aperture, n_rays, field_angle, wavelength)
+    fan_y.y = fan_y.y + ep_off
+    fan_x = make_fan('x', semi_aperture, n_rays, field_angle, wavelength)
+    fan_x.x = fan_x.x + ep_off
+    ref_y, ref_x, img_y, img_x = _trace_fan_set(
+        trace,
+        (_eikonal(chief_y), _eikonal(chief_x),
+         _eikonal(fan_y), _eikonal(fan_x)),
+        surfaces, wavelength)
 
     n_img = _image_space_index_for_fan(surfaces, wavelength)
     R_y = _reference_sphere_radius(surfaces, wavelength, ref_y.N[0],
@@ -767,18 +845,9 @@ def opd_fan_data(
     R_x = _reference_sphere_radius(surfaces, wavelength, ref_x.N[0],
                                    reference_sphere_radius)
 
-    # Tangential fan -- launch EP-centred on the chief (RT-5).
-    fan_y = make_fan('y', semi_aperture, n_rays, field_angle, wavelength)
-    fan_y.y = fan_y.y + ep_off
-    img_y = trace(_eikonal(fan_y), surfaces, wavelength).image_rays
     py = np.linspace(-1, 1, n_rays)
     opd_y = _opd_fan_wfe(img_y, ref_y, n_img, R_y, wavelength,
                          fn_name=_FN)
-
-    # Sagittal fan -- launch EP-centred on the chief (RT-5).
-    fan_x = make_fan('x', semi_aperture, n_rays, field_angle, wavelength)
-    fan_x.x = fan_x.x + ep_off
-    img_x = trace(_eikonal(fan_x), surfaces, wavelength).image_rays
     px = np.linspace(-1, 1, n_rays)
     opd_x = _opd_fan_wfe(img_x, ref_x, n_img, R_x, wavelength,
                          fn_name=_FN)
@@ -821,8 +890,15 @@ def opd_fan_data_world(
         chief_x = make_ray(0, 0, np.sin(field_angle), 0,
                            wavelength=wavelength)
     _FN = 'opd_fan_data_world'
-    ref_y = trace_world(_eikonal(chief_y), surfaces, wavelength).image_rays
-    ref_x = trace_world(_eikonal(chief_x), surfaces, wavelength).image_rays
+    fan_y = make_fan('y', semi_aperture, n_rays, field_angle, wavelength)
+    fan_y.y = fan_y.y + ep_off
+    fan_x = make_fan('x', semi_aperture, n_rays, field_angle, wavelength)
+    fan_x.x = fan_x.x + ep_off
+    ref_y, ref_x, img_y, img_x = _trace_fan_set(
+        trace_world,
+        (_eikonal(chief_y), _eikonal(chief_x),
+         _eikonal(fan_y), _eikonal(fan_x)),
+        surfaces, wavelength)
 
     n_img = _image_space_index_for_fan(surfaces, wavelength)
     R_y = _reference_sphere_radius(surfaces, wavelength, ref_y.N[0],
@@ -830,16 +906,9 @@ def opd_fan_data_world(
     R_x = _reference_sphere_radius(surfaces, wavelength, ref_x.N[0],
                                    reference_sphere_radius)
 
-    fan_y = make_fan('y', semi_aperture, n_rays, field_angle, wavelength)
-    fan_y.y = fan_y.y + ep_off
-    img_y = trace_world(_eikonal(fan_y), surfaces, wavelength).image_rays
     py = np.linspace(-1, 1, n_rays)
     opd_y = _opd_fan_wfe(img_y, ref_y, n_img, R_y, wavelength,
                          fn_name=_FN)
-
-    fan_x = make_fan('x', semi_aperture, n_rays, field_angle, wavelength)
-    fan_x.x = fan_x.x + ep_off
-    img_x = trace_world(_eikonal(fan_x), surfaces, wavelength).image_rays
     px = np.linspace(-1, 1, n_rays)
     opd_x = _opd_fan_wfe(img_x, ref_x, n_img, R_x, wavelength,
                          fn_name=_FN)
@@ -964,6 +1033,8 @@ def through_focus_rms(
     field_angle: float = 0.0,
     num_rings: int = 6,
     rays_per_ring: int = 36,
+    *,
+    pattern: str = 'rings',
 ) -> Tuple[np.ndarray, np.ndarray, float]:
     """Compute RMS spot size at a series of focus positions.
 
@@ -992,6 +1063,13 @@ def through_focus_rms(
         the paraxial focus.
     field_angle : float
     num_rings, rays_per_ring : int
+    pattern : ``'rings'`` (default) | ``'vogel'``
+        Pupil sampling handed to :func:`make_rings`.  The default is
+        unchanged; ``'vogel'`` gives the area-uniform sunflower disk, so
+        the reported RMS is area-representative rather than
+        centre-weighted.  The best-focus LOCATION is insensitive to the
+        choice (a monotone radial reweight does not move the minimum);
+        the RMS VALUE at each shift is not.
 
     Returns
     -------
@@ -1006,7 +1084,6 @@ def through_focus_rms(
     # ``focus_shifts`` falls through the whole sweep and dies at the
     # ``focus_shifts[best_idx]`` return with a bare
     # ``IndexError: index 0 is out of bounds for axis 0 with size 0``,
-    # naming neither this function nor the offending argument.
     # naming neither this function nor the offending argument.
     if focus_shifts.ndim != 1 or focus_shifts.size == 0:
         raise ValueError(
@@ -1023,7 +1100,7 @@ def through_focus_rms(
     rms_values = np.zeros_like(focus_shifts)
 
     rays = make_rings(semi_aperture, num_rings, rays_per_ring,
-                      field_angle, wavelength)
+                      field_angle, wavelength, pattern=pattern)
 
     # Single base trace through the surfaces as specified.  Use
     # output_filter='last' because we only need the final bundle
