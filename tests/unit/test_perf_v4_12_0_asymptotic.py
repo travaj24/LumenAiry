@@ -68,6 +68,7 @@ import numpy as np
 import pytest
 
 import lumenairy as lm
+from lumenairy.propagators.asymptotic_maslov import van_vleck_weight
 from lumenairy.propagators.asymptotic import (
     _compute_M_b,
     _contract_against_moment_table,
@@ -261,7 +262,11 @@ def _scalar_pixel_reference_propagate_modal(fit, *,
         b_quad = 0.25 * (b @ M_inv @ b)
         if not math.isfinite(abs(b_quad)) or abs(b_quad.real) > 700:
             continue
-        amp_lead = (detJ * (math.pi / sqrt_detM) * G0
+        # The leading amplitude carries the van Vleck weight
+        # ``|det J| / lambda^2``-normalised (audit 2026-09-11 Y1: the bare
+        # ``det J`` the v4.15 references used was the unnormalised form).
+        amp_lead = (van_vleck_weight(detJ, fit.wavelength)
+                    * (math.pi / sqrt_detM) * G0
                     * np.exp(2j * math.pi * phi_star)
                     * np.exp(b_quad))
         if not math.isfinite(abs(amp_lead)):
@@ -414,7 +419,11 @@ def _batched_cold_start_reference_propagate_modal(
         b_quad = 0.25 * (b @ M_inv @ b)
         if not math.isfinite(abs(b_quad)) or abs(b_quad.real) > 700:
             continue
-        amp_lead = (detJ * (math.pi / sqrt_detM) * G0
+        # The leading amplitude carries the van Vleck weight
+        # ``|det J| / lambda^2``-normalised (audit 2026-09-11 Y1: the bare
+        # ``det J`` the v4.15 references used was the unnormalised form).
+        amp_lead = (van_vleck_weight(detJ, fit.wavelength)
+                    * (math.pi / sqrt_detM) * G0
                     * np.exp(2j * math.pi * phi_star)
                     * np.exp(b_quad))
         if not math.isfinite(abs(amp_lead)):

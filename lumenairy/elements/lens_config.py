@@ -81,6 +81,7 @@ Author: Andrew Traverso
 from __future__ import annotations
 
 import os
+import threading
 from dataclasses import dataclass, field, fields
 from typing import (
     Any,
@@ -186,6 +187,10 @@ def _dataclass_hash(self: Any) -> int:
 # scope: a module-level import back would be a cycle.
 
 _VOCAB_CACHE: Dict[str, Any] = {}
+# Companion lock: the fill below writes four keys, and a concurrent reader must
+# see either none or all of them (the repository's cache/lock pin requires one
+# per module-level cache).
+_VOCAB_CACHE_LOCK = threading.Lock()
 
 
 def _vocab(name: str) -> Any:
@@ -194,9 +199,10 @@ def _vocab(name: str) -> Any:
         return _VOCAB_CACHE[name]
     except KeyError:
         from . import _lens_real as _lr
-        for k in ('_VALID_SURFACE_MODELS', '_VALID_WAVE_PROPAGATORS',
-                  '_VALID_REMAP_ORDERS', '_VALID_ACCUMULATOR_STORE'):
-            _VOCAB_CACHE[k] = getattr(_lr, k)
+        with _VOCAB_CACHE_LOCK:
+            for k in ('_VALID_SURFACE_MODELS', '_VALID_WAVE_PROPAGATORS',
+                      '_VALID_REMAP_ORDERS', '_VALID_ACCUMULATOR_STORE'):
+                _VOCAB_CACHE[k] = getattr(_lr, k)
         return _VOCAB_CACHE[name]
 
 
@@ -210,7 +216,8 @@ def clear_lens_config_vocabulary_cache() -> None:
     validated against the pre-swap copy for the life of the process.  Dropping
     them is always safe -- :func:`_vocab` refills on the next call.
     """
-    _VOCAB_CACHE.clear()
+    with _VOCAB_CACHE_LOCK:
+        _VOCAB_CACHE.clear()
 
 
 # Enrol with the central cache-clearer registry (late-binding lambda, mirroring

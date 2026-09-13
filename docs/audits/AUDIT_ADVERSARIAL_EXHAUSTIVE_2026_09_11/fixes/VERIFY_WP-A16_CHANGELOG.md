@@ -38,3 +38,12 @@ of the kind. Replaced by two tests with derived bars: the on-fold limit against 
 `sqrt(2 pi) k^(1/6) e^{i pi/4} e^{ikS0} (-i sqrt 2 A0) Ai(0)` (measured 4.4e-4 relative at a 1e-12 m
 half-separation, bar 1e-2; plain branch sum 7.2x larger, bar 4x), and the far-fold reduction to the plain
 branch sum (1.1e-3 at 20 wavelengths, 4.4e-5 at 500).
+
+### Fixed -- `lens_config._VOCAB_CACHE` has its companion lock (full-run follow-up)
+
+The repository's cache/lock pin (`tests/unit/test_v4_14_2_dispatcher_pin_cache_locks.py`) requires every
+module-level cache to have a `_<NAME>_LOCK` beside it; the vocabulary cache enrolled with the registry
+above had none.  `lumenairy/elements/lens_config.py` now holds `_VOCAB_CACHE_LOCK`, and the four-key fill
+in `_vocab` and the clear in `clear_lens_config_vocabulary_cache` run under it, so a concurrent reader
+sees either none or all of the borrowed tuples.  125 ids (the lock pin, the A16 files, the relocation
+checker's lens_config arm) pass.

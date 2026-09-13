@@ -76,6 +76,10 @@ import inspect
 
 import numpy as np
 import pytest
+
+# Slow lane: this file measured 166 s single-threaded on the 2026-09-13
+# calibration run, over the 2 min/file bar that routes a file to the sharded slow CI lane.
+pytestmark = pytest.mark.slow
 from scipy.linalg import expm
 
 

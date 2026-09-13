@@ -727,3 +727,11 @@ tests from the gate on exactly the runners that mattered").  The bound was also
 is 0.229 GB (24 grid-units of `16 N^2`) against the 1.58 GB the skip demanded.
 Both sites now assert that requirement (doubled for headroom) and fail loudly
 with the number.
+
+### Changed -- `test_niche_r3_gbd_mem_lstsq`'s lstsq reference stub accepts `score_domain=` (full-run follow-up)
+
+The stub the three `test_traced_field_matches_lstsq_reference` ids substitute for
+`_solve_lstsq_thread_safe` took `(A, b, deterministic=False)`; the conditioning step-down above now also
+passes the diagnostic-only `score_domain=` (the full-lattice design), so the stub raised `TypeError` on
+the 5.46.0 full run.  It accepts and ignores the keyword, as it does `deterministic=`: the claim is the
+lstsq REFERENCE value, not the reduction order.  17 ids pass.

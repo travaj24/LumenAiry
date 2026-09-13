@@ -28,6 +28,10 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
+# Slow lane: this file measured 126 s single-threaded on the 2026-09-13
+# calibration run, over the 2 min/file bar that routes a file to the sharded slow CI lane.
+pytestmark = pytest.mark.slow
+
 from lumenairy.elements.rcwa import (
     _eps_convolution_2d,
     _harmonic_orders_2d,

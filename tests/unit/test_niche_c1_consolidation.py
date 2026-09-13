@@ -56,6 +56,10 @@ import warnings
 import numpy as np
 import pytest
 
+# Slow lane: this file measured 158 s single-threaded on the 2026-09-13
+# calibration run, over the 2 min/file bar that routes a file to the sharded slow CI lane.
+pytestmark = pytest.mark.slow
+
 import lumenairy as la
 import lumenairy.elements._lens_traced as _lt
 from lumenairy.elements._lens_traced import _Cheb2DEvaluator

@@ -615,8 +615,7 @@ _ASM_F64_GRID_ARRAYS = 0.7       # dtype-independent frequency-grid transients
 # est/measured stays a BOUND at every N >= 256 point of both dtypes and
 # within the derived tightness fence.  Fail-safe direction: on CI Linux the
 # allocator retains a much smaller cold peak, so the bound only widens
-# there.  The superseded calibrations (38 MiB at derivation, 56 MiB on
-# 2026-08-01, 40 MiB earlier on 2026-09-12) are in
+# there.  Earlier calibrations of this constant are recorded in
 # docs/history/lumenairy.memory.md.
 _ASM_FIRST_CALL_FIXED_BYTES = 53 * 1024 * 1024
 # Row-band (sag_chunk_rows) mode: the full-grid float64 lens stack never

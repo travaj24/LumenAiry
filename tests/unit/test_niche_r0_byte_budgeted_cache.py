@@ -27,6 +27,10 @@ import threading
 import numpy as np
 import pytest
 
+# Slow lane: this file measured 141 s single-threaded on the 2026-09-13
+# calibration run, over the 2 min/file bar that routes a file to the sharded slow CI lane.
+pytestmark = pytest.mark.slow
+
 import lumenairy as la
 from lumenairy import cache as cache_mod
 from lumenairy.cache import (

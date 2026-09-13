@@ -10,6 +10,10 @@ regression pins) to avoid stepping on concurrent edits there.
 import numpy as np
 import pytest
 
+# Slow lane: this file measured 173 s single-threaded on the 2026-09-13
+# calibration run, over the 2 min/file bar that routes a file to the sharded slow CI lane.
+pytestmark = pytest.mark.slow
+
 from lumenairy.propagators.gbd import (
     apply_aperture_to_beamlets,
     decompose_field_to_beamlets,

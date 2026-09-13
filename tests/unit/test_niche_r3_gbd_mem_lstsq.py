@@ -43,6 +43,10 @@ from typing import Any, Tuple
 import numpy as np
 import pytest
 
+# Slow lane: this file measured 206 s single-threaded on the 2026-09-13
+# calibration run, over the 2 min/file bar that routes a file to the sharded slow CI lane.
+pytestmark = pytest.mark.slow
+
 import lumenairy as la
 from lumenairy.elements._lens_traced import _solve_lstsq_thread_safe
 from lumenairy.memory import available_memory_bytes
@@ -420,9 +424,11 @@ def test_traced_field_matches_lstsq_reference(kw, monkeypatch):
     base = dict(prescription=presc, wavelength=_WL, dx=dx,
                 on_undersample='silent', **kw)
 
-    def _lstsq_solve(A, b, deterministic=False):
-        # ``deterministic=`` mirrors _solve_lstsq_thread_safe's v5.41
-        # signature (D14); this reference stub ignores it -- the claim
+    def _lstsq_solve(A, b, deterministic=False, score_domain=None):
+        # ``deterministic=`` and ``score_domain=`` mirror
+        # _solve_lstsq_thread_safe's signature (``score_domain`` is the
+        # diagnostic-only full-lattice design the conditioning step-down
+        # scores against); this reference stub ignores both -- the claim
         # here is the lstsq REFERENCE value, not the reduction order.
         A = np.ascontiguousarray(A, dtype=np.float64)
         b = np.asarray(b, dtype=np.float64)

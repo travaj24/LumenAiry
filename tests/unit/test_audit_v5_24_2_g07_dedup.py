@@ -177,10 +177,15 @@ def test_s2_14_gbd_freespace_moebius_matches_former():
     )
 
     def former(Q, amp, t, k0):
+        # The formula the shared helper documents: per-eigenvalue
+        # amplitude factor CONJUGATED (audit 2026-09-11 S5 convention,
+        # the same one the scalar and tensor free-space branches use),
+        # axial phase, then the Moebius map of Q.
         I2 = np.eye(2)[None, :, :]
         lam = _eigvals2x2(Q, np)
         _guard_tensor_freespace_branch(lam, t, np)
-        amp = amp * np.prod(1.0 / np.sqrt(1.0 + t[:, None] * lam), axis=1)
+        amp = amp * np.conj(
+            np.prod(1.0 / np.sqrt(1.0 + t[:, None] * lam), axis=1))
         amp = amp * np.exp(1j * k0 * t)
         Q = Q @ _inv2x2(I2 + t[:, None, None] * Q, np)
         Q = 0.5 * (Q + np.transpose(Q, (0, 2, 1)))

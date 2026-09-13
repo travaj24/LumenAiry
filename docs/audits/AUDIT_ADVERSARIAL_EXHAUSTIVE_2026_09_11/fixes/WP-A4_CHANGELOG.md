@@ -602,3 +602,17 @@ through the shared Van Vleck helper, the cached aberration-free reference,
 the `clear_maslov_local_window_cache` re-export, and five pins in
 `test_niche_audit_w3_oracles.py` / `test_v5_21_2_subsystem_audits.py`
 carried through the audit-Y2 scale move.
+
+### Changed -- two test-side reference re-implementations brought to the corrected conventions (full-run follow-up)
+
+The 5.46.0 full two-lane run found two pins whose reference copies of the algorithm pre-dated this
+package's fixes: `tests/unit/test_perf_v4_12_0_asymptotic.py`'s scalar-pixel and batched cold-start
+re-implementations of `propagate_modal_asymptotic` still multiplied the leading amplitude by the bare
+`det J` (the library applies `van_vleck_weight(det J, lambda)`, the Y1 normalisation above), so the
+`LG_(0,0)` per-pixel pin read `max|new - ref| = 1.5e4` against a peak of `2e-3`; both references now call
+the library's `van_vleck_weight`, and the file's 16 ids pass with their tolerances unchanged.
+`tests/unit/test_audit_v5_24_2_g07_dedup.py::test_s2_14_gbd_freespace_moebius_matches_former`'s inline
+"former" block omitted the S5 conjugation of the per-eigenvalue amplitude factor that
+`_freespace_tensor_moebius_np` now applies (the `Q` map agreed bit for bit, only the amplitude's phase
+differed); the reference carries the conjugation and the dedup pin is green again.  No library code
+changed for either.
