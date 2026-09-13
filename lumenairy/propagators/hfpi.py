@@ -1138,6 +1138,46 @@ def _walk_legs_are_free_space(surfaces, surface_diffraction, wavelength):
     return True
 
 
+def _walk_zero_length_reemission(surfaces, diffracting_surfaces,
+                                 object_distance):
+    """Index of the first surface a prescription walk would re-emit at
+    with a zero-length incoming leg, or ``None`` when every re-emission
+    has one (audit K13, the second thing the binning Jacobian needs).
+
+    :func:`_reemission_measure` scales each re-emitted path by ``r_in``,
+    the geometric length of the leg that ENDED at the surface.  A
+    diffracting surface sitting ON the plane the paths were last emitted
+    from gives every path ``r_in = 0``; ``normalisation='physical'`` then
+    has nothing to scale by and refuses, because an aperture there is a
+    mask on the source field rather than a Huygens re-emission.  The gaps
+    are a property of the prescription alone, so they are read before the
+    walk starts and ``'auto'`` can decline the photometric branch instead
+    of walking into that refusal.
+
+    The emission planes are the source plane (``z = -object_distance``)
+    and then each diffracting surface in turn, and surface ``i`` sits at
+    ``sum(thickness[:i])`` with the first surface at ``z = 0``.  A surface
+    is a re-emitter only if it has the finite positive ``semi_diameter``
+    the walk requires before calling
+    :func:`apply_aperture_diffraction`.
+
+    A folded stack makes the axial difference meaningless, which does not
+    matter here: :func:`_walk_legs_are_free_space` already reports False
+    for a mirror, and ``'auto'`` needs both answers.
+    """
+    z_prev = -float(object_distance)
+    z_here = 0.0
+    for i, s in enumerate(surfaces):
+        if i in diffracting_surfaces:
+            sd = getattr(s, 'semi_diameter', None)
+            if sd is not None and 0 < sd < float('inf'):
+                if not (z_here - z_prev) > 0.0:
+                    return i
+                z_prev = z_here
+        z_here += float(getattr(s, 'thickness', 0.0) or 0.0)
+    return None
+
+
 def _sobol_cube_draw(rs, n_paths, Ny, Nx, cos_max):
     """Place ``n_paths`` scrambled Sobol points in the 4-D
     ``(pixel_x, pixel_y, cos theta, phi)`` cube -- the ``sampler='sobol'``
@@ -1515,7 +1555,9 @@ def propagate_hfpi_through_prescription(
         The hop is a necessary and NOT a sufficient condition for
         photometric amplitudes: that Jacobian is the free-space ray-tube
         relation, so it is the right one only when the walk's legs are
-        free space.  ``normalisation`` (below) resolves both questions.
+        free space, and every re-emission on the way needs an incoming
+        leg of its own.  ``normalisation`` (below) resolves all three
+        questions.
 
         Paths whose direction cannot reach the plane (already past it, or
         travelling parallel to it) are killed by the hop, exactly as on
@@ -1545,22 +1587,30 @@ def propagate_hfpi_through_prescription(
         aperture re-emission and to the final binning, because those are
         two halves of ONE estimator.
 
-        ``'auto'`` resolves to ``'physical'`` when BOTH conditions the
-        estimator needs hold -- ``z_output`` gives the walk a plane to
-        close on, and every leg of the walk is free space
-        (:func:`_walk_legs_are_free_space`) -- and to ``'legacy'``
-        otherwise.  So a call that passes no ``z_output`` returns exactly
-        what it did before the keyword existed, a flat-optics walk that
-        names its output plane gets photometric amplitudes with no second
-        keyword to remember, and a walk through an element WITH POWER is
-        not silently handed an amplitude the free-space Jacobian cannot
-        produce (measured 4879x at a thin lens's image plane).
+        ``'auto'`` resolves to ``'physical'`` when ALL THREE conditions
+        the estimator needs hold -- ``z_output`` gives the walk a plane to
+        close on, every leg of the walk is free space
+        (:func:`_walk_legs_are_free_space`), and no surface re-emits on
+        the plane the paths were last emitted from
+        (:func:`_walk_zero_length_reemission`) -- and to ``'legacy'``
+        otherwise, warning with the condition that failed.  So a call that
+        passes no ``z_output`` returns exactly what it did before the
+        keyword existed, a flat-optics walk that names its output plane
+        gets photometric amplitudes with no second keyword to remember, a
+        walk through an element WITH POWER is not silently handed an
+        amplitude the free-space Jacobian cannot produce (measured 4879x
+        at a thin lens's image plane), and a stop that coincides with the
+        source plane -- ``object_distance = 0``, or a zero thickness in
+        front of it -- falls back rather than raising out of the
+        re-emission measure.
 
         ``'physical'`` and ``'legacy'`` force the choice.  Forcing
         ``'physical'`` through a powered prescription is allowed and
         warns with that measurement, because the shape is still usable
         and re-normalising against a reference is a legitimate workflow.
-        See :func:`accumulate_to_grid` for what each does per path.
+        Forcing it onto a zero-length re-emission raises instead: there is
+        no factor to apply, only zeros to return.  See
+        :func:`accumulate_to_grid` for what each does per path.
 
     Returns
     -------
@@ -1598,9 +1648,11 @@ def propagate_hfpi_through_prescription(
         raise ValueError(
             f"propagate_hfpi_through_prescription: normalisation must be "
             f"'auto' (default: 'physical' when z_output gives the walk a "
-            f"plane to close on AND every leg of the walk is free space, "
-            f"'legacy' otherwise), 'physical' (forced, and warned about "
-            f"when the legs are not free space) or 'legacy' (the raw path "
+            f"plane to close on AND every leg of the walk is free space "
+            f"AND no surface re-emits on the plane the paths were last "
+            f"emitted from, 'legacy' otherwise), 'physical' (forced, "
+            f"warned about when the legs are not free space and refused "
+            f"on a zero-length re-emission) or 'legacy' (the raw path "
             f"sum); got {normalisation!r}.")
     if z_output is not None:
         z_output = float(z_output)
@@ -1630,22 +1682,53 @@ def propagate_hfpi_through_prescription(
     surfaces = surfaces_from_prescription(prescription)
     object_distance = float(prescription.get('object_distance', 0.0))
 
+    # Which surfaces re-emit.  Resolved here rather than at the walk
+    # itself because the estimator below needs the same list: a surface
+    # that re-emits is a surface whose incoming leg has to have a length.
+    if diffracting_surfaces is None:
+        diffracting_surfaces = []
+        for i, s in enumerate(surfaces):
+            sd = getattr(s, 'semi_diameter', None)
+            if sd is not None and sd > 0 and sd < float('inf'):
+                diffracting_surfaces.append(i)
+    diffracting_surfaces = set(diffracting_surfaces)
+
     # Resolve the estimator UP FRONT, because the aperture re-emissions
     # and the final binning are two halves of ONE estimator and the walk
     # threads a single value to both.
     #
     # K13: the per-path Jacobian both halves apply is the FREE-SPACE
-    # ray-tube relation, so 'physical' means what it says only when the
-    # walk's legs are free space AND a closing hop gives the last one a
-    # length.  'auto' therefore asks both questions; see
-    # :func:`_walk_legs_are_free_space` for the measurement that settles
-    # the first one.
+    # ray-tube relation ``r/(dx_out^2 cos theta_out)``, so 'physical'
+    # means what it says only when all three of its inputs exist -- a
+    # closing hop to give the last leg a length, free-space legs for the
+    # relation to describe, and a non-zero leg in front of every
+    # re-emission for :func:`_reemission_measure` to scale by.  'auto'
+    # asks all three; see :func:`_walk_legs_are_free_space` and
+    # :func:`_walk_zero_length_reemission` for what each one costs.
     _free_legs = _walk_legs_are_free_space(surfaces, surface_diffraction,
                                            wavelength)
+    _zero_leg = _walk_zero_length_reemission(surfaces, diffracting_surfaces,
+                                             object_distance)
     norm_used = normalisation
     if norm_used == 'auto':
-        norm_used = ('physical' if (z_output is not None and _free_legs)
+        norm_used = ('physical'
+                     if (z_output is not None and _free_legs
+                         and _zero_leg is None)
                      else 'legacy')
+    elif norm_used == 'physical' and _zero_leg is not None:
+        raise ValueError(
+            f"propagate_hfpi_through_prescription: "
+            f"normalisation='physical' scales every re-emission by the "
+            f"length of the leg that reached it, and surface "
+            f"{_zero_leg} sits on the plane the paths were last emitted "
+            f"from, so that length is zero for every path.  An aperture "
+            f"there is a mask on the source field rather than a Huygens "
+            f"re-emission: apply it to E_in before the call, give the "
+            f"prescription a non-zero object_distance or thickness in "
+            f"front of that surface, drop the surface from "
+            f"diffracting_surfaces, or pass normalisation='legacy' (or "
+            f"the default 'auto', which declines the photometric branch "
+            f"here) for the raw path sum.")
     elif norm_used == 'physical' and not _free_legs:
         warnings.warn(
             "propagate_hfpi_through_prescription: normalisation='physical' "
@@ -1705,14 +1788,6 @@ def propagate_hfpi_through_prescription(
             cone_half_angle=cone_half_angle,
             z_input_plane=-object_distance,
         )
-
-    if diffracting_surfaces is None:
-        diffracting_surfaces = []
-        for i, s in enumerate(surfaces):
-            sd = getattr(s, 'semi_diameter', None)
-            if sd is not None and sd > 0 and sd < float('inf'):
-                diffracting_surfaces.append(i)
-    diffracting_surfaces = set(diffracting_surfaces)
 
     # 3.  Walk forward through each surface.  Group surfaces between
     # diffractors into segments; trace each segment with the existing
@@ -1805,24 +1880,52 @@ def propagate_hfpi_through_prescription(
 
     # 5.  Accumulate to output grid.
     if norm_used == 'legacy':
+        # Name the condition that actually failed.  The three are
+        # independent, a caller can hit more than one at a time, and the
+        # remedy differs for each -- so the diagnostic is assembled from
+        # the answers the estimator was resolved on rather than stating
+        # the commonest one.
+        if normalisation == 'legacy':
+            why = ["normalisation='legacy' was asked for"]
+        else:
+            why = []
+            if z_output is None:
+                why.append(
+                    "no z_output was given, so the bundle is binned where "
+                    "the surface list leaves it and the last leg has zero "
+                    "length (pass z_output=<the plane you want the field "
+                    "on>)")
+            if not _free_legs:
+                why.append(
+                    "this prescription puts an element with power -- a "
+                    "curved surface, an index step, a tilt, a fold or a "
+                    "grating order -- between the emissions and the output "
+                    "plane, where the system's own Jacobian applies "
+                    "instead of the free-space ray-tube relation the "
+                    "per-path factor carries (measured 4879x at a 19.41 mm "
+                    "singlet's image plane, with the spot shape still "
+                    "close); normalisation='physical' is honoured there if "
+                    "asked for, and warns with those numbers")
+            if _zero_leg is not None:
+                why.append(
+                    f"surface {_zero_leg} re-emits on the plane the paths "
+                    f"were last emitted from, so its incoming leg has zero "
+                    f"length and there is no r to scale that re-emission "
+                    f"by (move it off that plane, or apply it to E_in as a "
+                    f"mask)")
         warnings.warn(
             "propagate_hfpi_through_prescription: the returned amplitudes "
-            "are NOT photometric.  This walk bins the bundle at the last "
-            "surface rather than propagating it to a separate output "
-            "plane, so the per-path r/(dx_out^2 cos theta_out) "
-            "Huygens-Fresnel binning Jacobian (audit K13, applied by the "
-            "free-space entry points) cannot be evaluated -- the last leg "
-            "has zero length.  Fringe positions and interference contrast "
-            "are unaffected; re-normalise against a known-amplitude "
-            "reference (e.g. ASM on the same geometry) for anything "
-            "photometric.  Pass z_output=<the plane you want the field on> "
-            "to give the walk a final leg -- on a prescription whose legs "
-            "are all free space (flat, index-matched, unsteered surfaces) "
-            "that makes the amplitudes photometric and retires this "
-            "warning.  Through an element WITH POWER it cannot: the "
-            "per-path Jacobian is the free-space ray-tube relation and the "
-            "system's own applies instead, so 'auto' stays here and "
-            "normalisation='physical' has to be asked for explicitly.",
+            "are NOT photometric, because " + "; and ".join(why) + ".  The "
+            "per-path r/(dx_out^2 cos theta_out) Huygens-Fresnel binning "
+            "Jacobian (audit K13, applied by the free-space entry points) "
+            "is therefore not evaluable here and the raw path sum is what "
+            "comes back.  Fringe positions and interference contrast are "
+            "unaffected; re-normalise against a known-amplitude reference "
+            "(e.g. ASM on the same geometry) for anything photometric.  A "
+            "walk with z_output on a prescription whose legs are all free "
+            "space (flat, index-matched, unsteered surfaces) and whose "
+            "every re-emission has a non-zero incoming leg is photometric "
+            "and does not warn.",
             RuntimeWarning, stacklevel=2)
     return accumulate_to_grid(
         paths,

@@ -523,6 +523,126 @@ class TestK13PrescriptionWalkOutputPlane:
         assert not np.any(np.abs(np.asarray(fwd)) > 0), (
             'no reflected path can reach a plane in front of the mirror')
 
+    @pytest.mark.parametrize('rx_kind', ['stop_on_the_source_plane',
+                                         'coincident_second_stop'])
+    def test_a_zero_length_re_emission_does_not_get_a_photometric_default(
+            self, rx_kind):
+        """VERIFY-B3.  ``'auto'`` needs a THIRD answer, not two.
+        ``_reemission_measure`` scales every re-emitted path by ``r_in``,
+        the length of the leg that reached the surface; a stop sitting ON
+        the plane the paths were last emitted from makes that zero for
+        every path, and the measure refuses rather than returning zeros.
+        Both prescriptions below are otherwise flat, index-matched and
+        unsteered, so the first two conditions hold and ``'auto'`` used to
+        resolve to ``'physical'`` and walk straight into that refusal.
+
+        Property, no oracle: adding ``z_output`` to a call that worked
+        must not turn it into an exception.  ``'auto'`` therefore falls
+        back and says which condition failed, and the field it returns is
+        BYTE-IDENTICAL to the same call with ``normalisation='legacy'``
+        spelled out -- so the fallback is the legacy estimator itself, not
+        a third thing.
+
+        FAIL-BEFORE (both fixtures, measured on WP-B3 as committed):
+        ``ValueError: apply_aperture_diffraction: normalisation='physical'
+        needs the geometric length of the leg …`` -- raised from a private
+        helper, naming a function the caller never called and offering
+        ``init_paths_from_field`` as the remedy.  The second fixture is
+        the ordinary one: ``object_distance`` is 1 mm, and it is the
+        SECOND stop, at zero thickness behind the first, that has no leg.
+
+        Forcing ``'physical'`` there still raises -- there is no factor to
+        apply -- but now at the walk's own altitude, naming the surface.
+        """
+        E0, _R, _X, _Y = _gauss_grid(16, 4e-6, 12e-6)
+        if rx_kind == 'stop_on_the_source_plane':
+            rx = _plane_prescription(semi_diameter=50e-6,
+                                     object_distance=0.0)
+            bad_surface = 0
+        else:
+            rx = {'object_distance': 1e-3,
+                  'surfaces': [{'radius': np.inf, 'glass_before': 'air',
+                                'glass_after': 'air',
+                                'semi_diameter': 60e-6},
+                               {'radius': np.inf, 'glass_before': 'air',
+                                'glass_after': 'air',
+                                'semi_diameter': 60e-6}],
+                  'thicknesses': [0.0, 0.0]}
+            bad_surface = 1
+        kw = dict(wavelength=LAM, n_paths=20_000, rng=1,
+                  cone_half_angle=0.05, output_dx=4e-6,
+                  output_shape=(16, 16), on_undersampled='silent')
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter('always')
+            auto = propagate_hfpi_through_prescription(
+                E0, 4e-6, rx, z_output=2e-3, **kw)
+        msgs = [str(w.message) for w in caught]
+        assert any('NOT photometric' in m for m in msgs), (
+            "'auto' must fall back to the legacy sum when a re-emission "
+            'has no incoming leg')
+        assert any(f'surface {bad_surface} re-emits' in m for m in msgs), (
+            f'the warning must name surface {bad_surface} as the one with '
+            f'the zero-length leg; got {msgs!r}')
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            spelled = propagate_hfpi_through_prescription(
+                E0, 4e-6, rx, z_output=2e-3, normalisation='legacy', **kw)
+        assert np.asarray(auto).tobytes() == np.asarray(spelled).tobytes(), (
+            "the 'auto' fallback must BE the legacy estimator")
+        with pytest.raises(ValueError, match=(
+                r"propagate_hfpi_through_prescription: "
+                r"normalisation='physical'")):
+            with warnings.catch_warnings():
+                warnings.simplefilter('ignore')
+                propagate_hfpi_through_prescription(
+                    E0, 4e-6, rx, z_output=2e-3, normalisation='physical',
+                    **kw)
+
+    def test_the_legacy_warning_names_the_condition_that_failed(self):
+        """VERIFY-B3.  Three independent conditions send the walk down the
+        legacy branch, and a caller can hit more than one at once, so the
+        diagnostic states the ones that applied instead of the commonest.
+
+        Property, no oracle: a caller who HAS passed ``z_output`` must not
+        be told to pass ``z_output``.
+
+        FAIL-BEFORE (WP-B3 as committed): every legacy walk got the same
+        sentence -- "This walk bins the bundle at the last surface rather
+        than propagating it to a separate output plane … the last leg has
+        zero length.  Pass z_output=…" -- including the singlet walk
+        below, which passes ``z_output`` and does propagate to a separate
+        plane, and the mirror walk, which does both and is folded.
+        """
+        import lumenairy as lm
+
+        E0, _R, _X, _Y = _gauss_grid(16, 4e-6, 12e-6)
+        kw = dict(wavelength=LAM, n_paths=20_000, rng=1,
+                  cone_half_angle=0.05, output_dx=4e-6,
+                  output_shape=(16, 16), on_undersampled='silent')
+
+        def _why(rx, **extra):
+            with warnings.catch_warnings(record=True) as caught:
+                warnings.simplefilter('always')
+                propagate_hfpi_through_prescription(E0, 4e-6, rx,
+                                                    **kw, **extra)
+            return '\n'.join(str(w.message) for w in caught
+                             if 'NOT photometric' in str(w.message))
+
+        no_plane = _why(_plane_prescription())
+        assert 'no z_output was given' in no_plane
+        assert 'element with power' not in no_plane
+
+        rx_s = lm.make_singlet(R1=20e-3, R2=-20e-3, d=1e-5, glass='N-BK7',
+                               aperture=1e-3)
+        rx_s['object_distance'] = 0.06
+        powered = _why(rx_s, z_output=0.0287, diffracting_surfaces=[])
+        assert 'element with power' in powered
+        assert 'no z_output was given' not in powered, (
+            'this call passed z_output; the diagnostic must not ask for it')
+
+        asked = _why(_plane_prescription(), normalisation='legacy')
+        assert "normalisation='legacy' was asked for" in asked
+
 
 # ===========================================================================
 # K22 -- the Sobol sampler
@@ -1120,3 +1240,119 @@ class TestK6ChirpZResampler:
         p_in = float(np.sum(np.abs(E) ** 2)) * self.DX ** 2
         p_out = float(np.sum(np.abs(got) ** 2)) * (self.DX / 2) ** 2
         assert abs(p_out / p_in - 1.0) < 1e-9
+
+    @pytest.mark.parametrize('Ny,Nx,dx_out_mul', [(65, 65, 0.5),
+                                                  (45, 63, 0.7),
+                                                  (33, 21, 1.4),
+                                                  (17, 17, 0.55)])
+    def test_the_chirpz_leg_places_an_odd_grids_origin(self, Ny, Nx,
+                                                       dx_out_mul):
+        """VERIFY-B3.  ``ifftshift`` puts the spectrum's spatial origin at
+        the INTEGER index ``N//2`` while this family's declared grid is
+        ``x = (n - N/2) d``, so for ODD ``N`` the two differ by half an
+        input pixel and the leg has to carry that offset.  Both halves of
+        the handling are pinned here: the ``off_in`` shift folded into the
+        output centre, and the ``N_in // 2`` frequency-bin centre the
+        ``fftshift`` actually produces.
+
+        Oracle: the Dirichlet-kernel interpolant as an explicit double sum
+        over the centred DFT bins, written out below for a NON-SQUARE grid
+        so each axis is placed on its own count -- the definition, with no
+        Bluestein, no chirp and no cache.
+
+        Bar: relative L2 below 1e-12.  Both routes are float64 sums of the
+        same ``Ny_in*Nx_in`` terms in a different order, so the residual is
+        round-off; measured 6.0e-15 .. 1.8e-14 on these four grids.
+
+        FAIL-BEFORE, measured on the same four fixtures: dropping the
+        half-pixel offset gives 1.077 .. 1.098, and using ``N_in/2``
+        instead of ``N_in//2`` for the input bin centre gives 1.038 ..
+        1.094 -- a 100 %-class error, fourteen decades outside the bar, and
+        exactly 0 on every EVEN grid, which is why an even-N pin cannot
+        see either of them.
+        """
+        dx_in = self.DX
+        dx_out = self.DX * dx_out_mul
+        rng = np.random.default_rng(11)
+        E = (rng.normal(size=(Ny, Nx)) + 1j * rng.normal(size=(Ny, Nx)))
+        Nx_out = int(round(Nx * dx_in / dx_out))
+        Ny_out = int(round(Ny * dx_in / dx_out))
+
+        fx = (np.arange(Nx) - Nx // 2) / (Nx * dx_in)
+        fy = (np.arange(Ny) - Ny // 2) / (Ny * dx_in)
+        x_in = (np.arange(Nx) - Nx / 2.0) * dx_in
+        y_in = (np.arange(Ny) - Ny / 2.0) * dx_in
+        A = (np.exp(-2j * np.pi * np.outer(fy, y_in)) @ E
+             @ np.exp(-2j * np.pi * np.outer(fx, x_in)).T)
+        x_out = (np.arange(Nx_out) - Nx_out / 2.0) * dx_out
+        y_out = (np.arange(Ny_out) - Ny_out / 2.0) * dx_out
+        want = (np.exp(2j * np.pi * np.outer(y_out, fy)) @ A
+                @ np.exp(2j * np.pi * np.outer(x_out, fx)).T) / (Nx * Ny)
+
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            got, _ = resample_field(E, dx_in, dx_out, None, method='chirpz')
+        assert got.shape == (Ny_out, Nx_out)
+        rel = float(np.linalg.norm(got - want) / np.linalg.norm(want))
+        assert rel < 1e-12, (
+            f'chirpz vs the explicit interpolant on a {Ny}x{Nx} grid at '
+            f'dx_out/dx_in = {dx_out_mul}: relative L2 {rel:.3e}.  A '
+            f'result near 1.0 means the odd-N half-pixel origin is not '
+            f'being carried.')
+
+    def test_the_faithful_zone_warning_sizes_each_axis_separately(self):
+        """``resample_field``'s extent-preserving default gives each axis
+        its own sample count, so the periodicity test has to as well --
+        that is what ``_warn_mft_output_window(N_out_y=…)`` exists for.
+
+        Oracle: the period is the input extent per axis (``N_in*dx_in``)
+        and the window is the output extent per axis
+        (``N_out_axis*dx_out``), both exact products of the arguments.
+        Fixture: a 44x63 input at 1 um resampled to 0.7 um, where the
+        extent-preserving default rounds y UP (63 samples x 0.7 um =
+        44.1 um against a 44 um period, 1.0023x) and x exactly ON its
+        period (90 x 0.7 = 63.0 um against 63 um).  So the warning must
+        fire, and name y ALONE.
+
+        Bar: the warning fires and its axis list is 'y'.  There is no
+        tolerance here -- the comparison is between two exact products.
+
+        The 45x63 companion is the half that bites: there y rounds DOWN
+        (64 x 0.7 = 44.8 um inside a 45 um period) and x lands exactly on
+        its period, so the call must be SILENT.
+
+        FAIL-BEFORE: with the y axis sized by ``N_out`` -- the x count --
+        the 45x63 call compares x's 63 um window against y's 45 um period
+        and warns about an axis that fits, while the 44x63 call keeps
+        warning for a reason that is no longer the measured one.
+        """
+        def _run(Ny, Nx, dx_in, dx_out, N_out=None):
+            x = (np.arange(Nx) - Nx / 2) * dx_in
+            y = (np.arange(Ny) - Ny / 2) * dx_in
+            X, Y = np.meshgrid(x, y, indexing='xy')
+            E = np.exp(-(X ** 2 + Y ** 2) / self.W0 ** 2).astype(complex)
+            with warnings.catch_warnings(record=True) as caught:
+                warnings.simplefilter('always')
+                got, _ = resample_field(E, dx_in, dx_out, N_out,
+                                        method='chirpz')
+            return got, [str(w.message) for w in caught
+                         if issubclass(w.category, UserWarning)]
+
+        got, msgs = _run(44, 63, 1e-6, 0.7e-6)
+        assert got.shape == (63, 90)                  # y rounds UP: 44.1 um
+        assert msgs, (
+            'a y window of 44.1 um against a 44 um period leaves the '
+            'faithful zone and must warn')
+        assert 'on y' in msgs[0] and 'on x' not in msgs[0], (
+            f'the warning must name the y axis alone; got {msgs[0]!r}')
+
+        got, msgs = _run(45, 63, 1e-6, 0.7e-6)
+        assert got.shape == (64, 90)                  # y rounds DOWN: 44.8
+        assert not msgs, (
+            f'64 x 0.7 um = 44.8 um fits inside the 45 um y period and '
+            f'90 x 0.7 um = 63.0 um lands exactly on the 63 um x period, '
+            f'so this call is faithful on both axes; got {msgs!r}')
+
+        got, msgs = _run(44, 63, 1e-6, 0.7e-6, N_out=40)
+        assert not msgs, (
+            '40 x 0.7 um = 28 um fits inside both periods (44 and 63 um)')
