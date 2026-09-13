@@ -1067,7 +1067,12 @@ def test_the_focus_readout_whitelist_is_exactly_what_the_chain_consumes():
               # WP-A6 / C1 (2026-09-12): the paraxial readout's beam-vs-grid
               # containment guard, likewise -- and likewise 'ignore', because
               # this fixture is the whitelist's fixture and not the guard's.
-              'on_focus_containment': 'ignore'}
+              'on_focus_containment': 'ignore',
+              # What the readout writes outside one Bluestein period once
+              # ``on_replica`` has let the window through.  The non-default
+              # value, so this fixture proves it survives validation and the
+              # forwarding, not just the listing.
+              'replica_fill': 'zero'}
     assert set(sample) == _FOCUS_READOUT_KEYS
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')

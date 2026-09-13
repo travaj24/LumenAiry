@@ -2770,6 +2770,7 @@ def carrier_referenced_focus_readout(
     gap_kernel: str = 'auto',
     tilt: Tuple[float, float] = (0.0, 0.0),
     on_replica: str = 'error',
+    replica_fill: str = 'repeat',
     on_focus_containment: str = 'error',
     _period_out: Optional[dict] = None,
 ) -> np.ndarray:
@@ -2853,23 +2854,42 @@ def carrier_referenced_focus_readout(
         ``centre_out`` in that frame.
     on_replica : {'error', 'warn', 'ignore'}, default 'error'
         What to do when the requested readout reaches OUTSIDE one Bluestein
-        period of the final zoom, i.e. when part of the window is filled with
-        periodic REPLICAS of the spot rather than signal.  The condition is
+        period of the final zoom, i.e. when part of the window lies where the
+        transform can only repeat what it already evaluated.  The condition is
         per axis (defect V3, 2026-08-06)::
 
             2 * |centre_out| + N_out * dx_out  <=  period
 
         -- the faithful zone is centred on the FIELD's own origin, not on
         ``centre_out``, so pushing the window off axis SPENDS the period
-        rather than carrying it along.  The default REFUSES, because the core
-        of the spot is unharmed by replicas -- a width or a peak still reads
-        correctly while every wing-weighted metric is silently wrong, and a
-        window a full period off axis returns a full-amplitude GHOST spot.
-        The period scales with ``standoff``; the error message quotes the
-        measured overshoot, the largest safe ``N_out`` at this ``centre_out``,
-        and the standoff that would cover the window asked for.  See
+        rather than carrying it along.  The default REFUSES, because the
+        request cannot be met out there: the transform has no information
+        past one period, so those samples are periodic REPLICAS -- and a
+        replica is a full-amplitude image of the core placed where the field
+        is weak, so beyond TWO periods -- where the nearest replica's centre
+        falls inside the window -- it wins an argmax and a peak or a width is
+        no longer safe either (measured on the P2 battery's unclipped doublet
+        cell, same leg: 1.829 periods reads 18.50 um FWHM / 99.70 % encircled
+        energy, 2.063 periods reads 20.50 um / 49.5 %).  The period scales with
+        ``standoff``; the error message quotes the measured overshoot, the
+        largest safe ``N_out`` at this ``centre_out``, and the standoff that
+        would cover the window asked for.  See
         :func:`_check_readout_replica` for the derivation and the measured
-        degradation.
+        degradation, and ``replica_fill`` for keeping the window without the
+        replicas.
+    replica_fill : {'repeat', 'zero'}, default 'repeat'
+        What the readout WRITES outside one period, when ``on_replica`` has
+        let such a window through.  ``'repeat'`` leaves the periodic replicas
+        the transform produces -- the historical answer, and the one a caller
+        deliberately reading the periodic reconstruction needs.  ``'zero'``
+        blanks them, so a window-wide reduction sees measurement and zeros
+        instead of measurement and copies: on the battery cell above that is
+        the difference between 20.50 um / 49.5 % and 18.50 um / 99.70 %, the
+        latter matching this readout at any standoff long enough to cover the
+        window.  Both settings return the requested shape and are
+        BIT-IDENTICAL inside one period (a faithful window is returned by
+        identity on either); ``_period_out``'s ``'faithful_samples'`` says how
+        many samples per axis that is.  See :func:`_fill_readout_replicas`.
     on_focus_containment : {'error', 'warn', 'ignore'}, default 'error'
         What to do when the beam DOES NOT FIT the co-moving grid at the stop
         plane -- the failure mode the replica guard above cannot see, because
@@ -2908,14 +2928,18 @@ def carrier_referenced_focus_readout(
         stop plane's, and a ratio above ``1 +
         _FOCUS_READOUT_WINDOW_ENERGY_TOL`` means periodic replicas have been
         folded in -- energy that was created rather than measured.  That
-        tripwire is only reachable with ``on_replica`` downgraded.
+        tripwire is only reachable with ``on_replica`` downgraded AND
+        ``replica_fill='repeat'``, which is what leaves the replicas in.
 
     Returns
     -------
     E_out : ndarray, complex, shape (N_out, N_out)
         The full physical field at the target plane on the centred
         ``(dx_out)`` grid -- carries the absolute physical phase, same
-        convention as :func:`angular_spectrum_propagate_mft`.
+        convention as :func:`angular_spectrum_propagate_mft`.  Outside one
+        Bluestein period of the field's own origin it carries periodic
+        replicas, or zeros under ``replica_fill='zero'``; with the default
+        ``on_replica='error'`` no such sample can be requested.
 
     Other Parameters
     ----------------
@@ -2934,10 +2958,12 @@ def carrier_referenced_focus_readout(
 
         The same dict also receives ``'containment'`` /
         ``'containment_model'`` (beam radii of co-moving half-width at the
-        stop plane, measured and modelled -- see ``on_focus_containment``) and
-        ``'window_energy_frac'`` (the Bluestein window's power as a fraction
-        of the stop-plane power), so the margins are readable without
-        catching a warning.
+        stop plane, measured and modelled -- see ``on_focus_containment``),
+        ``'window_energy_frac'`` (the RETURNED window's power as a fraction of
+        the stop-plane power) and ``'faithful_samples'`` (the ``(nx, ny)``
+        samples per axis that lie inside one period and therefore carry
+        measurement; ``(N_out, N_out)`` whenever the window is faithful), so
+        the margins are readable without catching a warning.
 
     Notes
     -----
@@ -2990,6 +3016,7 @@ def carrier_referenced_focus_readout(
     # typo cannot ride through the whole carrier leg before being noticed.
     _check_guard_action('on_replica', on_replica,
                         'carrier_referenced_focus_readout')
+    _check_replica_fill(replica_fill, 'carrier_referenced_focus_readout')
     _check_guard_action('on_focus_containment', on_focus_containment,
                         'carrier_referenced_focus_readout')
 
@@ -3075,11 +3102,17 @@ def carrier_referenced_focus_readout(
     E_out = angular_spectrum_propagate_mft(
         E_stop, z - z_stop, wavelength, dx_s, dx_out, int(N_out),
         centre_out=centre_out, bandlimit=bandlimit)
+    # Measure the part of the window that lies outside one Bluestein period --
+    # and, under replica_fill='zero', blank it rather than hand back the copies
+    # the transform writes there (:func:`_fill_readout_replicas`).
+    E_out = _fill_readout_replicas(E_out, _period, dx_out, N_out, centre_out,
+                                   fill=replica_fill, out=_period_out)
     # C1, the window side: the zoom writes a SUB-window of one Bluestein
     # period, so its power cannot exceed the stop plane's.  Above 1 the
     # transform has folded periodic replicas in and the surplus is energy the
     # readout created rather than measured -- a direct, geometry-free witness
-    # for the failure ``on_replica`` predicts from the window arithmetic.
+    # for the failure ``on_replica`` predicts from the window arithmetic, and
+    # unreachable under ``replica_fill='zero'``, which blanks them.
     if _p_stop > 0.0:
         _wef = (float((np.abs(to_numpy(E_out)) ** 2).sum())
                 * float(dx_out) * float(dx_out) / _p_stop)
@@ -3095,9 +3128,10 @@ def carrier_referenced_focus_readout(
                 f"is periodic REPLICAS folded into the window -- energy the "
                 f"transform created, not signal it measured.  Lengthen the "
                 f"standoff (the period is linear in it: >= {_need:.6e} m "
-                f"covers this window), narrow N_out*dx_out, or restore "
-                f"on_replica='error'.  Pass on_focus_containment='ignore' to "
-                f"silence.",
+                f"covers this window), narrow N_out*dx_out, keep the window "
+                f"and pass replica_fill='zero' so the unmeasurable part comes "
+                f"back as zeros, or restore on_replica='error'.  Pass "
+                f"on_focus_containment='ignore' to silence.",
                 stacklevel=2)
     return E_out
 
@@ -3483,12 +3517,16 @@ def _publish_readout_containment(stage, pd):
     diagnostics are: ``readout_containment`` (measured beam radii of
     co-moving half-width at the stop plane), ``readout_containment_model``
     (the same from the beam's own Gaussian ABCD width, ``None`` when the leg
-    routed through the near-focus bridge and the model does not describe it)
-    and ``readout_window_energy`` (the window's power as a fraction of the
-    stop plane's).  See ``on_focus_containment``."""
+    routed through the near-focus bridge and the model does not describe it),
+    ``readout_window_energy`` (the returned window's power as a fraction of
+    the stop plane's) and ``readout_faithful_samples`` (the ``(nx, ny)``
+    samples per axis of the returned window that lie inside one Bluestein
+    period and therefore carry measurement -- ``(N_out, N_out)`` unless the
+    requested window reached outside it).  See ``on_focus_containment``."""
     for _k, _s in (('containment', 'readout_containment'),
                    ('containment_model', 'readout_containment_model'),
-                   ('window_energy_frac', 'readout_window_energy')):
+                   ('window_energy_frac', 'readout_window_energy'),
+                   ('faithful_samples', 'readout_faithful_samples')):
         if _k in pd:
             stage[_s] = pd[_k]
 
@@ -3611,16 +3649,30 @@ def _check_readout_replica(fn, period, dx_out, N_out, on_replica,
     caller leaves ``centre_out`` on the optical axis, which is exactly the
     configuration that makes the residual large.
 
-    WHY THIS IS AN ERROR AND NOT A WARNING.  The failure is a
-    plausible-looking wrong answer, exactly the class this module's other
-    guards exist for: the CORE of the spot is untouched, so a width or a peak
-    still reads perfectly, while every wing-weighted quantity (second moment,
+    WHY THIS IS AN ERROR AND NOT A WARNING.  The request cannot be met: past
+    one period the transform has no information, so those samples are periodic
+    REPLICAS of the field.  The failure is a plausible-looking wrong answer,
+    exactly the class this module's other guards exist for, and it has two
+    regimes.  Up to ~1.5 periods the CORE is untouched, so a width or a peak
+    still reads correctly while every wing-weighted quantity (second moment,
     r^2 spot size, encircled energy at large radius, centroid) is silently
-    garbage.  Measured on the paraxial readout at a NA 0.03 focus, relative L2
-    of ``|F|`` against an exact discrete paraxial focal-plane oracle:
-    3.6e-3 at 0.9 period, 3.5e-1 at 1.5 periods, 4.9 at 4 periods -- three
-    decades of degradation with no symptom in the core.  Until this fix the
-    only thing that fired was a downstream ``UserWarning`` from
+    garbage: measured on the paraxial readout at a NA 0.03 focus, relative L2
+    of ``|F|`` against an exact discrete paraxial focal-plane oracle, 3.6e-3 at
+    0.9 period, 3.5e-1 at 1.5 periods, 4.9 at 4 periods -- three decades of
+    degradation with no symptom in the core.  Beyond TWO periods the core's own
+    replica lands inside the window and the core stops being safe as well: the
+    nearest replica's centre sits one period from the origin and the window's
+    edge at half its width, so ``2|centre_out| + N_out dx_out > 2 period`` puts
+    a FULL-AMPLITUDE image of the spot in the window, where it wins any
+    max / argmax / centroid reduction.  Measured on the P2 battery's unclipped
+    doublet cell, same leg, window varied (2026-09-13): at 1.829 periods the
+    through-focus scan still reads the truth (18.50 um FWHM, 99.70 % encircled
+    energy inside two waists) and at 2.063 it reads the replica in the window's
+    corner (20.50 um, 49.5 %).  A caller who wants the window anyway can have
+    the replicas blanked with ``replica_fill='zero'``
+    (:func:`_fill_readout_replicas`), which on that cell restores 18.50 um and
+    99.70 %; the faithful part is bit-identical either way.  Until this guard
+    the only thing that fired was a downstream ``UserWarning`` from
     ``angular_spectrum_propagate_mft``, which any upstream
     ``filterwarnings('ignore')`` removes; the module's own ``on_replica`` note
     in :func:`propagate_traced_carrier_chain_multi` already says that is the
@@ -3656,9 +3708,11 @@ def _check_readout_replica(fn, period, dx_out, N_out, on_replica,
     ladder above ends in (relL2 1.0 by two periods, i.e. a 750x degradation
     over the same span in which the first 10% cost 7%).  What the guard CAN
     do -- and now does -- is quote the measured overshoot (how many samples
-    per edge are aliases, and by what factor the span exceeds the period) so a
-    caller who judges the halo negligible can make that call knowingly with
-    ``on_replica='warn'`` rather than have the library make it for them.
+    per edge are aliases, and by what factor the span exceeds the period) and
+    name ``replica_fill='zero'``, so a caller who judges the halo negligible,
+    or who would rather have zeros than copies out there, can make that call
+    knowingly with ``on_replica='warn'`` rather than have the library make it
+    for them.
 
     ``remedy`` is appended verbatim so each caller can name the knob that
     actually moves ITS period.  The refusal is a ``RuntimeError``, matching
@@ -3704,6 +3758,33 @@ def _check_readout_replica(fn, period, dx_out, N_out, on_replica,
     # aliases of samples already returned.
     n_alias = max(n - n_safe, 0)
     over = max(span_x - px, span_y - py, 0.0)
+    # WHICH REGIME the caller is in, because they differ in what survives.  The
+    # nearest replica's CENTRE sits one period from the origin and the window's
+    # edge at half its span, so past two periods a full image of the core is
+    # inside the window and the core stops being a safe reading; under that,
+    # only the wings carry replicas.  Measured on the P2 battery's unclipped
+    # doublet cell, same leg, window varied (2026-09-13): 1.829 periods reads
+    # 18.50 um FWHM / 99.70 % encircled energy, 2.063 periods reads 20.50 um /
+    # 49.5 % off the replica sitting in the window's corner.
+    _core_hit = (
+        f"Up to 1.5 periods the CORE itself still reads correctly and only "
+        f"the wing-weighted metrics (second moment, r^2 spot size, "
+        f"large-radius encircled energy, centroid) are wrong -- measured "
+        f"relL2 3.6e-3 -> 3.5e-1 -> 4.9 at 0.9 / 1.5 / 4 periods against an "
+        f"exact focal-plane oracle.  Beyond TWO periods, which this request "
+        f"is at {ratio:.4g}x, the core's OWN replica lands inside the window "
+        f"and a peak or a width found by an argmax is unsafe too: measured on "
+        f"the P2 battery's unclipped doublet cell, 1.829 periods reads "
+        f"18.50 um FWHM / 99.70 % encircled energy and 2.063 periods reads "
+        f"20.50 um / 49.5 % off the replica in the window's corner.  "
+        if ratio > 2.0 else
+        "At this overshoot the CORE is still untouched -- a width or a peak "
+        "reads correctly -- while every wing-weighted metric (second moment, "
+        "r^2 spot size, large-radius encircled energy, centroid) reads the "
+        "replicas as signal: measured relL2 3.6e-3 -> 3.5e-1 -> 4.9 at "
+        "0.9 / 1.5 / 4 periods against an exact focal-plane oracle.  Beyond "
+        "TWO periods the core's own replica lands inside the window and stops "
+        "being safe as well.  ")
     _guard_dispose(
         on_replica,
         f"{fn}: the requested readout REACHES OUTSIDE one Bluestein period -- "
@@ -3719,22 +3800,130 @@ def _check_readout_replica(fn, period, dx_out, N_out, on_replica,
         f"E(u + period) == E(u) in ABSOLUTE output coordinates, so moving "
         f"centre_out does not move the zone -- it spends it.  Everything "
         f"outside +/-period/2 OF THE ORIGIN is filled with PERIODIC REPLICAS "
-        f"of the field, not new information: the spot CORE is unaffected -- so a "
-        f"width or a peak still looks right -- while second-moment / "
-        f"r^2-weighted / large-radius encircled-energy / centroid metrics "
-        f"read wildly wrong (measured relL2 3.6e-3 -> 3.5e-1 -> 4.9 at "
-        f"0.9 / 1.5 / 4 periods against an exact focal-plane oracle, and a "
-        f"window one full period off axis returned a peak bit-identical to "
-        f"the on-axis one where the truth was 1e5 times smaller).  "
+        f"of the field, not new information, and a replica is a FULL-AMPLITUDE "
+        f"image of the core laid down where the field is weak: it wins any "
+        f"max / argmax / centroid / encircled-energy reduction taken over the "
+        f"window.  "
+        + _core_hit
         + (f"Reduce the window to N_out <= {n_safe} at this dx_out (or lower "
            f"dx_out at fixed N_out)" if n_safe > 0 else
            f"|centre_out| = {c_max:.6e} m alone already exceeds half the "
            f"period, so NO window is faithful at this offset: bring "
            f"centre_out inside +/-{0.5 * p_min:.6e} m of the field origin")
         + (remedy or "") +
-        ".  on_replica='warn' accepts the replicas with a RuntimeWarning, "
+        ", or keep the window and pass replica_fill='zero' to have the "
+        "unmeasurable part returned as ZERO instead of as replicas (the "
+        "faithful part is bit-identical either way, and _period_out's "
+        "'faithful_samples' says how many samples that is).  "
+        "on_replica='warn' accepts the replicas with a RuntimeWarning, "
         "'ignore' silences the check entirely.",
         stacklevel=stacklevel)
+
+
+#: Accepted ``replica_fill`` values -- what a readout writes in the part of a
+#: requested window that lies outside one Bluestein period of the field's own
+#: origin.  ``'repeat'`` leaves the periodic copies the transform produces
+#: (the historical answer, and the one the multi-congruence chain's own
+#: field-of-view contract and the V3 ghost fixtures are written against);
+#: ``'zero'`` writes zeros there instead.
+_REPLICA_FILLS = frozenset({'repeat', 'zero'})
+
+
+def _check_replica_fill(value, fn):
+    """Validate ``replica_fill``, raising a ValueError that names the knob and
+    its vocabulary -- a typo must not silently restore the other behaviour."""
+    if value not in _REPLICA_FILLS:
+        raise ValueError(
+            f"{fn}: replica_fill must be 'repeat' or 'zero', got {value!r}.")
+    return value
+
+
+def _fill_readout_replicas(E_out, period, dx_out, N_out,
+                           centre_out=(0.0, 0.0), fill='repeat', out=None):
+    """Measure -- and, under ``fill='zero'``, blank -- the part of a readout
+    window that lies outside one Bluestein period of the field's own origin.
+
+    Both public readouts finish on
+    :func:`~lumenairy.propagators.mft.angular_spectrum_propagate_mft`, whose
+    reconstruction obeys ``E(u + period) == E(u)`` identically in ABSOLUTE
+    output coordinates.  Only ``|u| <= period/2`` about that origin carries
+    measurement; every sample beyond it repeats a point the transform already
+    evaluated, whatever the field, the NA, the leg and the window
+    (:func:`_check_readout_replica` derives the geometry and states the bar).
+    ``on_replica`` decides whether such a request is refused, reported or
+    accepted; ``fill`` decides what an accepted answer CONTAINS out there.
+
+    The region is the exact complement of the guard's own condition -- empty
+    precisely when ``2|centre_out| + N_out dx_out <= period`` holds on both
+    axes -- so a faithful window is returned by IDENTITY on either setting and
+    nothing the guard would pass is ever touched.  Its size is published as
+    ``out['faithful_samples']`` on both settings: the ``(nx, ny)`` samples per
+    axis that carry measurement.
+
+    WHAT THE TWO FILLS COST.  A replica is not a degraded reading of the field:
+    it is a full-amplitude image of the core laid down where the real field is
+    weak, so it wins every max / argmax / centroid / encircled-energy reduction
+    taken over the window -- including the one a spot budget uses to decide
+    where the spot IS.  The core's own replica enters the window at exactly TWO
+    periods (the nearest replica's centre sits one period from the origin, the
+    window's edge at half its span), which is the line between "the wings are
+    wrong" and "everything is".  Measured on the P2 design battery's unclipped
+    cell (a 2 mm Gaussian through a 50 mm achromat at a 2.5x aperture, readout
+    512 x 0.5 um = 2.063 periods of 124.113 um, 2026-09-13): under ``'repeat'``
+    the window's brightest sample sits in its CORNER, 1.031 periods off axis on
+    both axes, and a through-focus scan that takes its argmax over the window
+    scores THAT -- FWHM 20.50 um against an analytic Gaussian 17.41 um
+    (1.177x), 49.5 % of the launched power inside two waists, the window
+    holding 5.700x the stop plane's power.  Under ``'zero'`` the same cell
+    reads 18.50 um (1.062x) / 0.8585 / 0.9970 / 0.9980 at dz = +0.131 mm on
+    0.9987x the stop-plane power -- which is also what this readout returns at
+    a standoff long enough for one period to cover the window (768 um and
+    1536 um agree to the digit), i.e. three independent geometries with no
+    replicas in them.
+
+    ``'repeat'`` is the default because the replicas are load-bearing where a
+    caller is deliberately looking at the periodic reconstruction itself: the
+    multi-congruence chain's ``K == 1`` field-of-view contract requires the
+    whole requested grid live (`readout_tile='auto'` is a SIZING convenience,
+    not a blanking one), and the V3 off-axis ghost fixtures exist to show that
+    a window one whole period off the chief ray returns a full-amplitude copy.
+    Blanking is therefore something a caller asks for, per call.
+
+    Neither fill moves the leg: the standoff stays the accuracy-optimal one
+    :func:`_default_focus_standoff` resolves from the beam, for the reason
+    stated there -- buying window with leg length costs the core
+    (``L ~ 0.155 NA^3 f^1.6``)."""
+    try:
+        px, py = float(period[0]), float(period[1])
+    except (TypeError, IndexError, ValueError):
+        return E_out
+    if not (np.isfinite(px) and px > 0.0 and np.isfinite(py) and py > 0.0):
+        return E_out
+    try:
+        cx, cy = float(centre_out[0]), float(centre_out[1])
+    except (TypeError, IndexError, ValueError):
+        cx = cy = 0.0
+    if not (np.isfinite(cx) and np.isfinite(cy)):
+        cx = cy = 0.0
+    n = int(N_out)
+    # The abscissae the Bluestein step evaluates, in ABSOLUTE coordinates:
+    # ``(arange(N) - N/2)*d_out + centre_out``, the grid
+    # angular_spectrum_propagate_mft builds.  Same 1e-9 relative slack as the
+    # guard, so a window landing exactly ON one period is untouched.
+    u = (np.arange(n, dtype=np.float64) - n / 2.0) * float(dx_out)
+    keep_x = np.abs(u + cx) <= 0.5 * px * (1.0 + 1e-9)
+    keep_y = np.abs(u + cy) <= 0.5 * py * (1.0 + 1e-9)
+    nx, ny = int(keep_x.sum()), int(keep_y.sum())
+    if out is not None:
+        out['faithful_samples'] = (nx, ny)
+    if fill != 'zero' or (nx == n and ny == n):
+        return E_out                    # every sample is a measurement
+    xp, is_jax, bld = _backend_of(E_out)
+    # Field-INDEPENDENT boolean grid, built on ``bld`` like every other
+    # geometric mask here.  A bool array is weak against the field's complex
+    # dtype under NEP 50, so a complex64 readout stays complex64 (C3).
+    mask = bld.asarray(np.logical_and(keep_y[:, None], keep_x[None, :]))
+    return E_out * _to_dev(mask, xp, is_jax)
 
 
 # ===========================================================================
@@ -5046,6 +5235,7 @@ def carrier_referenced_exact_focus_readout(
     on_readout_window: str = 'error',
     readout_window_tol: float = 1e-4,
     on_replica: str = 'error',
+    replica_fill: str = 'repeat',
     _period_out: Optional[dict] = None,
 ) -> np.ndarray:
     """Exact (non-paraxial) readout of a strongly-converging FINAL leg (R9).
@@ -5203,9 +5393,19 @@ def carrier_referenced_exact_focus_readout(
         (``centre``), the offset that spends period is the RESIDUAL
         ``centre_out - centre`` -- a decentred congruence read out on its own
         chief ray costs none of it, however far off axis it sits.  Default
-        REFUSES: replicas leave the spot core -- and therefore FWHM, peak and
-        Strehl -- looking correct while every wing-weighted metric is silently
-        wrong.  See :func:`_check_readout_replica`.
+        REFUSES: the transform has nothing to report out there, so a window
+        that reaches past one period is a request that cannot be met -- and
+        beyond TWO periods a replica of the core lands inside the window, so a
+        peak or a width found by an argmax is no longer safe either.  See
+        :func:`_check_readout_replica`, and ``replica_fill`` for keeping the
+        window without the replicas.
+    replica_fill : {'repeat', 'zero'}, default 'repeat'
+        What to write outside one period when ``on_replica`` has let such a
+        window through: the periodic replicas the transform produces
+        (``'repeat'``, the historical answer) or zeros (``'zero'``).  Both
+        return the requested shape and are bit-identical inside one period;
+        ``_period_out['faithful_samples']`` says how many samples per axis
+        that is.  See :func:`_fill_readout_replicas`.
     centre : (float, float), default (0, 0)
         Transverse position ``(x0, y0)`` (m) of the congruence's CHIEF RAY on
         the input grid -- niche D6.  Everything the readout references to "the
@@ -5307,6 +5507,8 @@ def carrier_referenced_exact_focus_readout(
     # D3: validated AT ENTRY, not only at the guard site far below, so a typo
     # cannot ride all the way through the fine trace before being noticed.
     _check_guard_action('on_replica', on_replica,
+                        'carrier_referenced_exact_focus_readout')
+    _check_replica_fill(replica_fill,
                         'carrier_referenced_exact_focus_readout')
     _check_guard_action('on_n_fine_cap', on_n_fine_cap,
                         'carrier_referenced_exact_focus_readout')
@@ -5592,10 +5794,15 @@ def carrier_referenced_exact_focus_readout(
                    f"window on the chief ray costs no period at all"
                    if _dec else "")),
         stacklevel=2)
-    return angular_spectrum_propagate_mft(
-        E_fine, z, wavelength, dx_fine, dx_out, int(N_out),
-        centre_out=_co, bandlimit=bandlimit,
-        _bluestein_separable=bool(_EXACT_READOUT_SEPARABLE_BLUESTEIN))
+    # The same window bookkeeping as the paraxial readout: the fine crop grid's
+    # own period bounds what this transform can report, and the offset the fill
+    # must weigh is the same RESIDUAL ``_co`` the guard weighed.
+    return _fill_readout_replicas(
+        angular_spectrum_propagate_mft(
+            E_fine, z, wavelength, dx_fine, dx_out, int(N_out),
+            centre_out=_co, bandlimit=bandlimit,
+            _bluestein_separable=bool(_EXACT_READOUT_SEPARABLE_BLUESTEIN)),
+        _period, dx_out, N_out, _co, fill=replica_fill, out=_period_out)
 
 
 # ===========================================================================
@@ -9321,7 +9528,8 @@ def propagate_traced_carrier_chain(
         # inapplicable on this path, so drop them rather than crash.
         _par_kw = {kk: fr[kk] for kk in (
             'dx_out', 'N_out', 'standoff', 'centre_out', 'bandlimit',
-            'on_replica', 'on_focus_containment') if kk in fr}
+            'on_replica', 'replica_fill', 'on_focus_containment')
+            if kk in fr}
         # C5: the readout's own carrier leg runs the CHAIN's gap kernel, not
         # its own default.  ``gap_kernel='fresnel'`` exists to be "pinned
         # FP-identical to prior releases"; a readout leg silently running the
@@ -9590,8 +9798,11 @@ _OUTPUT_GRID_PASSTHROUGH = ('standoff', 'bandlimit', 'window_factor',
                             # It is reachable from the multi entry point via
                             # ``on_replica`` (forwarded in ``_window`` below);
                             # this key lets the SINGLE chain and an explicit
-                            # per-congruence override reach it too.
-                            'on_replica',
+                            # per-congruence override reach it too.  A25: and
+                            # ``replica_fill`` beside it, because a caller who
+                            # waives that guard from here has to be able to say
+                            # what the unmeasurable part of the window holds.
+                            'on_replica', 'replica_fill',
                             # C1: the paraxial readout's beam-vs-grid
                             # containment guard, for the same reason -- its
                             # message prescribes 'warn' as the way to look at

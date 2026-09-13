@@ -1,12 +1,14 @@
 <!-- lumenairy-history-doc
 module: lumenairy/propagators/carrier.py
-ast_sha256: 6ffc86b74b8cdb928d0f28605eefb811c25c5759fa8016cd62ab30b51d9cb870
-token_sha256: 1343e6c6dd48ded22f14717aac9fc3fd778da3df0e21662d51b2b98cbd0c184c
+ast_sha256: f557e0c8cec3aa6acd83e9498ffb23b1487e6c193ce7a1eef4e088f48e3724dc
+token_sha256: fb1d743288cba502e34dbe4c7bbe46d27417913e5fc58deae5c3115ab1f143c2
 pre_relocation_lines: 11602
 recorded_by: WP-A17 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
 re_recorded: 2026-09-12 -- WP-A24: the decentre_fit_frac warning quotes the 2026-09-12 six-point calibration and states the measured ordering (was the 2026-07-29 one, whose on-axis and 1.0 w rows have since crossed over)
 re_recorded: 2026-09-12 -- ruff isort combine-as-imports (pyproject.toml, WP-A16 recommendation): aliased import statements from the same module merged into one; the set of bound names is unchanged
+re_recorded: 2026-09-13 -- WP-A25: replica_fill={'repeat','zero'} on both focus readouts (what the window holds outside one Bluestein period), _period_out['faithful_samples'] / stage readout_faithful_samples, and the replica refusal's two measured regimes
+re_recorded: 2026-09-13 -- WP-A25: replica_fill on both focus readouts, faithful-window publication, the replica refusal's two regimes; seven placeholder-free f-string prefixes removed from the new message
 -->
 
 # Version history -- `lumenairy/propagators/carrier.py`
