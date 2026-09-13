@@ -60,7 +60,7 @@ excluded wholesale.  Findings on arrival: 13 in `lumenairy/` (9 x I001, 2 x F541
 F401), **331 in `lumenairy/ui/`** in exactly seven rules (F401 121, I001 116, E701 37, E702
 37, F811 10, F841 7, F541 3), 37 in `tests/`.  After: `ruff check lumenairy/ tests/` ->
 **All checks passed**.  What is now enforced in the previously-unlinted GUI: F821 undefined
-name -- the exact class that shipped `carrier_field.py:466` to main this month -- plus F632,
+name -- the exact class that shipped `carrier_field.py:465` to main this month -- plus F632,
 E711/E712/E713/E714, E722 and E731.
 
 Every ignore carries its reason.  `I001` is granted only to the files that use this

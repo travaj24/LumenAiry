@@ -215,7 +215,7 @@ screen cannot do: the rod's back focal distance is `cos(gd)/(n0 g sin(gd))` from
 the exit face while a thin screen focuses a collimated input at `f` past itself,
 so the focus POSITION relative to the rod faces needs a ray/split-step model.
 
-Files: `lumenairy/elements/_lens_thin.py:1094` (`thin_form` kwarg), `:1258-1281`
+Files: `lumenairy/elements/_lens_thin.py:1096` (`thin_form` kwarg), `:1258-1281`
 (guards), `:1305` (the power).
 Tests: `tests/unit/test_audit2609_a8_thin_elements.py::test_e5_*`.
 

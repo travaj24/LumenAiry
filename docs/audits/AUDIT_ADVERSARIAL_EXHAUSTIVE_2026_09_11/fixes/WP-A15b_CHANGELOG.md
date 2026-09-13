@@ -53,8 +53,8 @@ for all 17).
 `CUPY_AVAILABLE` / `NUMBA_AVAILABLE` flags. The audit found `_ensure_cupy_loaded`,
 `_is_cupy_array` and `_load_numba` hand-copied **five times each** across eight modules, so the
 accelerator-absent path had five implementations and no single place to test it. The three
-NON-lens sites now delegate -- `propagators/fft_infra.py:46-48`, `sources/core.py:26-27`,
-`optimize/_merit_jit.py:44-45` -- while keeping their module-level `cp` alias and their
+NON-lens sites now delegate -- `propagators/fft_infra.py:46-48`, `sources/core.py:26`,
+`optimize/_merit_jit.py:44-47` -- while keeping their module-level `cp` alias and their
 `_ensure_cupy_loaded` / `_is_cupy_array` / `_NUMBA_AVAILABLE` names, all of which are load-bearing
 (`fft_infra.__all__` exports two of them, `propagation.py` re-exports them, and
 `test_v5_3_multi_field_merit_jit.py` monkeypatches `_merit_jit._NUMBA_AVAILABLE`). Behaviour is
