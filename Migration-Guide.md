@@ -937,6 +937,19 @@ For the `apply_real_lens` family specifically, the living contract is
   the default `min_segment_power=1e-3` the extra bins were dropped as empty
   anyway.
 
+* **Decentred fits, `beam_centre` off axis (WP-A26, full-run follow-up).**  The
+  polynomial order the off-centre ray fit is given (`_DECENTRED_FIT_POLY_ORDER`)
+  is 16, was 10.  The 10 had been calibrated against a ray set the tracer was
+  truncating at `|h| = |R|` on conic surfaces; WP-A1 stopped that truncation
+  (correctly: the resurrected rays agree with an exact conic trace to 2e-19 m),
+  the fit's data domain grew 2.4x on a fast conic, and at order 10 the decentred
+  exit wavefront read **44.5 / 31.6 urad** of slope error against the analytic
+  Fermat sphere at 0.5 / 1.0 beam radii of decentre.  At 16 it reads
+  **2.37 / 1.68 urad** (2.16 / 1.96 before the truncation stopped).  Concentric
+  calls are byte-identical; a decentred call pays ~1.56x at the fit.  *Way back:*
+  `decentred_fit_poly_order=10`; a caller's value above the constant is honoured
+  as before.
+
 ### Maslov / GBD / FGA and the asymptotic family
 
 * **`apply_real_lens_maslov(normalize_output='none')` (S4)** now returns a
@@ -1087,6 +1100,19 @@ For the `apply_real_lens` family specifically, the living contract is
   `dataclasses.replace` / a fresh `CarrierField`, and for in-place accumulation
   to `np.add(acc.envelope, other, out=acc.envelope)` -- the same arithmetic bit
   for bit, with no rebind.
+
+* **`focus_readout` / `output_grid` windows wider than one Bluestein period
+  (WP-A25, full-run follow-up).**  A caller who waives the replica refusal
+  (`on_replica='ignore'`) can now pass `replica_fill='zero'`: the samples the
+  transform cannot measure come back zero instead of as periodic replicas of
+  the core, which win every argmax / peak / encircled-energy reduction once the
+  window is wider than TWO periods (the P2 design battery's unclipped doublet
+  read FWHM 20.50 um / EE(2 waists) 0.495 against an analytic 17.41 um / 0.997
+  that way; blanked, 18.50 um / 0.997).  The default `'repeat'` is unchanged, so
+  no existing call moves; each chain stage dict carries a
+  'readout_faithful_samples' entry saying how much of the window is
+  measurement, and the refusal message states the
+  two regimes instead of promising a safe peak.
 
 ### Analysis metrics
 

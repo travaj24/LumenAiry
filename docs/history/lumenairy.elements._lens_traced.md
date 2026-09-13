@@ -1,11 +1,12 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/_lens_traced.py
-ast_sha256: 4a3bb3c5108c799aabf499945d3fcfb2965fdfb4857509caa35f80b2fd98718d
-token_sha256: 7cdf836bd41359fcf135cb1cb8aac405d809554ba1817db4367fd7bd92c8f44b
+ast_sha256: 6f441ab6043a1bcaefbfdea0f04dec8129ee7cbc94032ab302b94f479878fe60
+token_sha256: be21921edf293300ba3e2c7e540439f4628f284e16ae38ef488918686422c1c7
 pre_relocation_lines: 14898
 recorded_by: WP-A17 SWEEP-4 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
 re_recorded: 2026-09-12 -- ruff isort combine-as-imports (pyproject.toml, WP-A16 recommendation): aliased import statements from the same module merged into one; the set of bound names is unchanged
+re_recorded: 2026-09-13 -- WP-A26: _DECENTRED_FIT_POLY_ORDER re-derived 10 -> 16 against the ray set WP-A1's exact conic intersection produces -- the lowest order that returns the decentred exit slope to the pre-truncation scale on both decentres
 -->
 
 # Version history -- `lumenairy/elements/_lens_traced.py`

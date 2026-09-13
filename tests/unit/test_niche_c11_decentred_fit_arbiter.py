@@ -311,8 +311,11 @@ def test_the_f6_fixture_still_routes_to_the_weighted_raised_order_path():
             seen.clear()
             _apply(c, (c, 0.0), True, presc=_SLOW)
             applied = seen[-3:]
+            # The RAISE is the claim, not the constant's value: this f/6 fixture
+            # holds 223 in-disc coarse samples, which the 3-samples-per-term
+            # step-down caps at order 10 whatever the module constant says.
             assert applied and all(
-                o == _lt._DECENTRED_FIT_POLY_ORDER for o, _w in applied), seen
+                6 < o <= _lt._DECENTRED_FIT_POLY_ORDER for o, _w in applied), seen
             assert all(w for _o, w in applied), 'the disc lost its weights'
     finally:
         _Cheb2DEvaluator.__init__ = orig

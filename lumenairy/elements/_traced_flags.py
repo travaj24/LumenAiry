@@ -193,8 +193,10 @@ _TRACED_ERA_FLAGS = (
             'configuration"'),
     _f(_LT, '_DECENTRED_FIT_POLY_ORDER', 'D7', NOT_A_VALUE, (),
        note='fail-before is the kwarg ``decentred_fit_poly_order = '
-            'newton_poly_order``.  OPEN ANOMALY: orders 6, 8 and 12 all close '
-            'the (-1,0) chain residual and the shipped 10 does not'),
+            'newton_poly_order``.  OPEN ANOMALY on design 121: orders 6, 8 and '
+            '12 close the (-1,0) chain residual and order 10 does not; the '
+            'shipped order (16, re-derived against the full conic ray set) is '
+            'not yet measured on that chain'),
     _f(_LT, '_DECENTRE_GATE_PIXELS', 'C1', 0.0,
        {'v5.31': 0.0, 'v5.32': 0.5},
        note='null-decentre gate, stage 1 (absolute pixels)'),

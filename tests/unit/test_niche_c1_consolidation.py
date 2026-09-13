@@ -237,7 +237,9 @@ def test_a_genuine_decentre_still_routes_to_the_weighted_raised_order_path(
         _Cheb2DEvaluator.__init__ = spy
         try:
             _apply_dec(c, (c, 0.0))
-            assert seen and all(o == _lt._DECENTRED_FIT_POLY_ORDER
+            # the raise, not the constant: the step-down caps this fixture's
+            # disc (ray_subsample=8) at order 10
+            assert seen and all(6 < o <= _lt._DECENTRED_FIT_POLY_ORDER
                                 for o, _w in seen), seen
             assert all(w for _o, w in seen), \
                 'the off-centre disc lost its weights'

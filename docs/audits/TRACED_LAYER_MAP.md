@@ -57,7 +57,7 @@ absence of a carrier); those are called out in S2.2.
 | 4 | P2 | `_FIT_RADIUS_BEAM_FACTOR_DEFAULT` | `_lens_traced` | `2.0` | -- | 5.29.0 |
 | 5 | P2 | `_APERTURE_BEAM_WARN_RATIO` | `_lens_traced` | `1.5` | -- | 5.29.0 |
 | 6 | D1 | `_FIT_DISC_OUTSIDE_WEIGHT_REL` | `_lens_traced` | `1e-8` | `0.0` | 5.32.0 |
-| 7 | D7 | `_DECENTRED_FIT_POLY_ORDER` | `_lens_traced` | `10` | -- | 5.32.0 |
+| 7 | D7 | `_DECENTRED_FIT_POLY_ORDER` | `_lens_traced` | `16` | -- | 5.32.0 |
 | 8 | C1 | `_DECENTRE_GATE_PIXELS` | `_lens_traced` | `0.5` | `0.0` | 5.32.0 |
 | 9 | C1 | `_DECENTRE_GATE_W_FRAC` | `_lens_traced` | `0.05` | `0.0` | 5.32.0 |
 | 10 | C5 | `TILTED_CARRIER_EXACT_EIKONAL` | `_lens_traced` | `True` | `False` | 5.32.0 |

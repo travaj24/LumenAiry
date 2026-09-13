@@ -302,9 +302,12 @@ def test_the_fit_order_actually_rises_only_off_centre():
         assert seen and all(o == 6 for o, _w in seen), seen
         # a caller asking for MORE still gets more
         seen.clear()
-        _apply(_X0, newton_poly_order=14)
+        # 20 is above the module constant, so ``max(constant, requested)``
+        # is visibly the caller's number (the disc holds ~9 900 coarse
+        # samples at ray_subsample=2 against the 693 an order-20 fit needs)
+        _apply(_X0, newton_poly_order=20)
         seen[:] = seen[-3:]
-        assert seen and all(o == 14 for o, _w in seen), seen
+        assert seen and all(o == 20 for o, _w in seen), seen
     finally:
         _Cheb2DEvaluator.__init__ = orig
 

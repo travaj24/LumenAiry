@@ -3988,14 +3988,81 @@ _FIT_DISC_OUTSIDE_WEIGHT_REL = 1e-8
 # weighted path puts them at the 0.02-0.10 nm level.  Nothing in the D7
 # argument rests on them -- it rests on the off-axis row.
 #
-# i.e. order 6 is 14x worse off axis than on, order 10 recovers 20x of that,
-# and order 14 starts to LOSE to conditioning (the normal-equations Gram matrix
-# runs 1.0e10 -> 1.9e13 across the sweep).  End to end on the niche-D6
-# ``K = -n^2`` conic stand-in -- whose truth is analytic AND decentre-invariant,
-# so chain/oracle EE ratios are directly comparable on axis and off -- the EE2
-# ratio at one full beam radius of decentre reads 0.9498 (order 6), 0.9828
-# (order 10), 0.9877 (order 14) against 0.9966 on axis.  10 takes ~87 % of the
-# available recovery at 66 basis terms against 120.
+# i.e. order 6 is 14x worse off axis than on and order 10 recovers 20x of that,
+# while order 14 reads slightly worse again on that fixture (0.199 nm against
+# 0.121) as the normal-equations Gram matrix runs 1.0e10 -> 1.9e13 across the
+# sweep.  End to end on the niche-D6 ``K = -n^2`` conic stand-in -- whose truth
+# is analytic AND decentre-invariant, so chain/oracle EE ratios are directly
+# comparable on axis and off -- the EE2 ratio at one full beam radius of
+# decentre reads 0.9498 (order 6), 0.9828 (order 10), 0.9877 (order 14) against
+# 0.9966 on axis.
+#
+# A SECOND CONSTRAINT SETS THE SHIPPED VALUE, and it is the binding one: THE
+# DATA THE FIT IS GIVEN.  The restriction above keeps every traced launch
+# sample in the least squares and only DOWN-WEIGHTS the out-of-disc ones, so
+# the order has to be enough to follow the whole launch square and not just the
+# disc -- what a weighted least squares trades away where it cannot follow is
+# accuracy where it can.  That square has half-width
+# ``launch_radius = 0.75*aperture``, i.e. 2.12 clear-aperture radii at its
+# corners, and on a CONIC every one of those nodes carries a live ray (the
+# exact-conic intersection test, audit 2026-09-11 R4; a sphere's own domain
+# ``h <= |R|`` still truncates the set on a spherical prescription).
+#
+# Measured on the D7 Fermat singlet (N-BK7, f = 3 mm, K = -n^2, 3.40 mm
+# aperture, 2.550 mm launch radius, 0.60 mm beam, ``fit_radius_beam_factor=1.5``,
+# ``ray_subsample=1``, 2026-09-13): exit-slope rms over the beam core against
+# that fixture's analytic decentre-INVARIANT conic oracle, at 0.5 and 1.0 beam
+# radii of decentre --
+#
+#     order      10       12       14       16       18       20       24
+#     0.5 w   44.457   10.841    3.718    2.371    1.044    0.321    0.071 urad
+#     1.0 w   31.556   11.829    5.419    1.683    0.655    0.301    0.057
+#
+# against 41.089 urad on axis, which is the concentric order-6 fit and does not
+# move by one bit across this table.  Monotone: more terms are strictly better
+# here, so the value is a COST/ACCURACY CHOICE rather than a plateau, and the
+# choice is made against the figure this element returned before the ray set
+# stopped being truncated -- 2.162 urad at 0.5 w and 1.958 at 1.0 w.  16 is the
+# LOWEST order on the ladder that reaches that scale on BOTH decentres (2.371
+# urad, 1.10x of it, and 1.683 urad, 0.86x); 14 is still 1.7x and 2.8x short of
+# it.  16 clears the D7 acceptance bar (decentred exit slope < 0.25x the on-axis
+# one) by 4.3x and 6.1x, at 153 basis terms against 66.  18 / 20 / 24 are better
+# still and cost 190 / 231 / 325 terms.
+#
+# THE COST is in the Newton hot loop, which evaluates these fits per output
+# pixel.  Medians of 7 INTERLEAVED runs of one decentred
+# ``apply_real_lens_traced`` (N = 512, dx = 8 um, ``ray_subsample=8``), box
+# shared with other jobs: 248.2 ms at order 10 against 386.2 ms at 16, i.e.
+# **1.56x**, and it is paid only on the off-centre branch -- the concentric path
+# keeps ``newton_poly_order`` and is byte-identical.
+#
+# THE FOLD REGULARISATION IS INDIFFERENT to every order in the table.  Scored
+# the way niche D1's own adversarial ghost geometry is scored -- a weak
+# R = 32 mm singlet, 12 mm aperture, 0.40 mm beam at 5.6 mm of decentre,
+# ``amplitude_model='ray_density'`` -- orders 10 through 24 all give 0
+# fold-caustic warnings, 0 sign changes of ``d(x_out)/dx`` over the whole launch
+# lattice, and an off-beam amplitude of 1.76e-04 of peak.  More terms do not buy
+# the fold back, which is why the ORDER is the knob this defect is fixed with
+# and the skirt's WEIGHT is not: a radially graded weight (full inside the clear
+# aperture, a fraction outside) folds this fixture at the first fraction that
+# helps the one above -- measured, 0 sign changes at 1e-1 and 212 at 1e-2 --
+# and a uniformly smaller one costs niche D1's tilted relay its on-axis
+# diffraction limit.
+#
+# CONDITIONING, re-measured here rather than inherited from the design-121
+# sweep above, which predates niche C13's ``LSTSQ_CONDITIONING_STEPDOWN``
+# (shipped ``True``): the census the C13 tests use reads IDENTICALLY at order 10
+# and at 14 / 16 / 18 / 20 on both fixtures in the tree -- Fermat singlet Gram rcond
+# 5.025e-15 with a returned-fit residual ratio 1.000009 against an independent
+# QR at every order, D1's ghost fixture 1.802e-14 and 1.012192 at both.  The
+# worst solve of the call is the inverse-characteristic model's own
+# degree-14 exit fit, not this one, and the extra terms cost it nothing.  D1's
+# adversarial ghost geometry is likewise untouched across the whole table: 0
+# fold-caustic warnings, 0 sign changes of ``d(x_out)/dx`` over the launch
+# square and an off-beam amplitude of 1.76e-04 of peak at every order from 10
+# to 24.  Design 121's own fixture is local-only
+# (``validation/repro_traced_carrier_121/decentred_fit_defect.py``) and is not
+# re-measured here.
 #
 # Engaged ONLY on the off-centre branch (the concentric / on-axis path keeps
 # ``newton_poly_order`` exactly, so the shipped default is byte-identical), and
@@ -4016,7 +4083,7 @@ _FIT_DISC_OUTSIDE_WEIGHT_REL = 1e-8
 # ``x_out`` at the launch corners (5.2e-9 m at order 6).  Conditioning alone is
 # not a reason to ship it: cond(Gram) does fall 1.0e10 -> 3.2e4, but float64
 # already carries the answer.
-_DECENTRED_FIT_POLY_ORDER = 10
+_DECENTRED_FIT_POLY_ORDER = 16
 
 # niche C1 item 1 (2026-07-30): WHEN a declared beam centre counts as OFF
 # CENTRE at all.
@@ -4186,18 +4253,20 @@ def _decentred_fit_restriction(disc, weighted, base_order, dec_order):
     # D7: give that off-centre fit the terms its region needs -- but never
     # more terms than the disc can constrain.  The out-of-disc samples carry
     # ~1e-4 of the weight, so the IN-DISC count is what determines the fit;
-    # require 3 samples per basis term (order 10 -> 66 terms -> 198 samples)
+    # require 3 samples per basis term (order 16 -> 153 terms -> 459 samples)
     # and step the order down until that holds.  Without this the raise could
-    # hand an order-10 fit as few as ``_CARRIER_FIT_MIN_SAMPLES`` = 64
-    # effective rows for 66 unknowns -- an under-determined normal matrix.
+    # hand an order-16 fit as few as ``_CARRIER_FIT_MIN_SAMPLES`` = 64
+    # effective rows for 153 unknowns -- an under-determined normal matrix.
     #
     # This cap is SILENT and it can zero the raise out entirely: the disc
-    # holds ~pi (frbf w / (dx rs))^2 samples, so order 10 survives only while
-    # frbf*w/(dx*rs) >~ 7.9 coarse pixels.  At the DEFAULT ray_subsample=8
-    # both documented configs clear it (223 samples for the synthetic f/6
-    # example, 1735 for design 121's last group, against 198) -- but the first
-    # clears by only 1.13x and reverts to order 6 at ray_subsample=16, and
-    # design 121 reverts at 32.  See ``decentred_fit_poly_order``.
+    # holds ~pi (frbf w / (dx rs))^2 samples, so the full order survives only
+    # while frbf*w/(dx*rs) >~ 12.1 coarse pixels.  At the DEFAULT
+    # ray_subsample=8 design 121's last group clears it 3.8x (1735 samples
+    # against 459) while the synthetic f/6 example holds 223 and takes order
+    # 10; the f/6 example reverts to order 6 at ray_subsample=16, and design 121
+    # takes order 15 at 16 and order 7 at 32.  The walk is one degree at a time, so a thin disc gets the highest
+    # order it can constrain rather than a jump back to ``base_order``.
+    # See ``decentred_fit_poly_order``.
     order = int(dec_order)
     base = int(base_order)
     while order > base and (order + 1) * (order + 2) * 3 // 2 > n_in:
@@ -4295,8 +4364,13 @@ def _decentred_fit_score_weight(xs_in, bcx, bcy, w_beam, floor=None):
 #: niche C12: the total degree at which the traced OPL's own Chebyshev
 #: spectrum is measured on the launch box.  It has to exceed
 #: ``_DECENTRED_FIT_POLY_ORDER`` for the tail beyond the OFF-CENTRE candidate's
-#: own order to be visible at all; 14 gives two even shells of headroom above
-#: 10 and costs 120 basis terms against that candidate's 66.  ``0`` disables
+#: own order to be visible at all, and at 14 against that candidate's 16 it does
+#: NOT -- which costs nothing today because the predictor that reads it ships
+#: disabled (:data:`DECENTRED_FIT_PREDICTOR` is ``False``, and with the spectral
+#: half unresolved it decides from the candidate residuals alone anyway).
+#: Re-deriving it is part of any change that enables the predictor: two even
+#: shells of headroom above 16 is 20, at 231 basis terms against the 120 this
+#: degree costs now.  ``0`` disables
 #: the spectral half of the predictor (it then decides from the measured
 #: candidate residuals alone, which is what it does on an unresolved spectrum
 #: anyway -- see :data:`DECENTRED_FIT_PREDICTOR`).
@@ -8063,51 +8137,59 @@ def apply_real_lens_traced(
     decentred_fit_poly_order : int, optional
         Minimum tensor-Chebyshev total degree for the ray fit WHEN THAT FIT'S
         DISC IS OFF CENTRE (niche D7).  ``None`` (default) uses
-        ``_DECENTRED_FIT_POLY_ORDER`` = 10; the effective order is
+        ``_DECENTRED_FIT_POLY_ORDER`` = 16; the effective order is
         ``max(newton_poly_order, this)``, so a caller asking for more still
         gets more, and passing your own ``newton_poly_order`` restores the
         pre-D7 behaviour exactly.
 
-        Why it exists: an off-centre disc of radius ``r`` about a chief ray
-        ``|c|`` off axis covers the aperture out to ``|c| + r`` instead of
-        ``r``, so the same degree buys a worse fit over strictly more aberrated
-        territory.  Measured on design 121's last group at 0.97 beam radii of
-        decentre, the OPL residual over the beam is **14x** the on-axis one at
-        order 6 (2.508 nm vs 0.177 nm) and recovers 20x at order 10 (0.121 nm);
-        end to end on the ``K = -n^2`` conic stand-in the chain/oracle EE2 ratio
-        goes 0.9498 -> 0.9828 at one beam radius of decentre.  See
-        ``_DECENTRED_FIT_POLY_ORDER`` for the full sweep, the cost, and the
-        basis-domain re-map that was measured and REFUSED.
+        Why it exists: TWO reasons, and the second is what sets the value.  An
+        off-centre disc of radius ``r`` about a chief ray ``|c|`` off axis
+        covers the aperture out to ``|c| + r`` instead of ``r``, so the same
+        degree buys a worse fit over strictly more aberrated territory --
+        measured on design 121's last group at 0.97 beam radii of decentre, the
+        OPL residual over the beam is **14x** the on-axis one at order 6
+        (2.508 nm vs 0.177 nm) and recovers 20x at order 10 (0.121 nm).  And
+        the off-centre disc is restricted by WEIGHTS rather than by a hard
+        mask, so the fit is handed every launch sample out to the launch
+        square's corners (2.12 clear-aperture radii) and has to be able to
+        follow them: on the ``K = -n^2`` Fermat conic stand-in the decentred
+        exit-slope error against its analytic decentre-invariant oracle runs
+        44.5 / 31.6 urad at order 10 and 2.4 / 1.7 at order 16, for 0.5 and 1.0
+        beam radii of decentre against 41.1 urad on axis.  See
+        ``_DECENTRED_FIT_POLY_ORDER`` for the full sweeps, the conditioning and
+        fold measurements, the cost, and the basis-domain re-map that was
+        measured and REFUSED.
 
         Ignored (and the on-axis path byte-identical) whenever the disc is
         concentric with the launch square, and on ``newton_fit='spline'``,
         which takes no fit-domain restriction at all.
 
-        CAN GO INERT, SILENTLY.  The raise is capped by the "3 samples per
-        basis term" step-down below it: order 10 needs 198 in-disc COARSE ray
-        samples, and the loop walks the order back down to
-        ``newton_poly_order`` until that holds.  The disc holds about
+        STEPS DOWN, SILENTLY.  The raise is capped by the "3 samples per basis
+        term" rule below it: order 16 needs 459 in-disc COARSE ray samples, and
+        the loop walks the order back down -- one degree at a time, so what a
+        thin disc gets is the highest order it CAN constrain, never a jump to
+        ``newton_poly_order``.  The disc holds about
         ``pi * (fit_radius_beam_factor * w / (dx * ray_subsample)) ** 2``
-        samples, so the raise survives only while
+        samples, so the full raise survives only while
 
-            ``fit_radius_beam_factor * w / (dx * ray_subsample) >~ 7.9``
+            ``fit_radius_beam_factor * w / (dx * ray_subsample) >~ 12.1``
 
-        i.e. while the fit disc spans ~8 coarse pixels in radius.  Both
-        documented configurations clear this at the default
-        ``ray_subsample=8`` -- but not by much, and ONE step is enough to lose
-        it, with no warning and no diagnostic:
+        i.e. while the fit disc spans ~12 coarse pixels in radius, and the
+        order the disc does support follows the same square-root law.  At the
+        default ``ray_subsample=8``:
 
           * the synthetic f/6 example above (N=512, dx=30 um, w=1.0 mm,
-            ``fit_radius_beam_factor=2``) holds 223 samples against 198, a
-            **1.13x** margin; at ``ray_subsample=16`` it holds 56 and the
-            order falls straight back to 6, i.e. D7 is fully inert.
+            ``fit_radius_beam_factor=2``) holds 223 samples, which supports
+            order 10; at ``ray_subsample=16`` it holds 56 and the order falls
+            back to 6, i.e. D7 is fully inert.
           * design 121's last group (N=1024, dx=33.211 um, w=3.1255 mm) holds
-            1735 at ``ray_subsample=8`` and 432 at 16, and goes inert at 32.
+            1735 -- clearing 459 by 3.8x -- and 432 at 16, which supports
+            order 15.  At 32 it holds 108 and takes order 7.
 
-        So a caller who coarsens the ray grid to buy speed can silently get
-        the pre-D7 fit back.  If the off-centre accuracy matters, keep
-        ``ray_subsample`` low enough to satisfy the inequality above rather
-        than assuming the raise is in force.
+        So a caller who coarsens the ray grid to buy speed silently gets fewer
+        terms.  If the off-centre accuracy matters, keep ``ray_subsample`` low
+        enough to satisfy the inequality above rather than assuming the full
+        raise is in force.
 
     preserve_input_phase : bool or 'remap', default True
         If True, the input field's phase structure (source tilts,
