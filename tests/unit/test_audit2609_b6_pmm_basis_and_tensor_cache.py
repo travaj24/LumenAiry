@@ -34,6 +34,19 @@ Findings pinned here
   stack caches it; the operators are asserted BIT-IDENTICAL with and without
   the cache, and the saving is asserted as a deterministic BUILD COUNT, never
   as wall clock.
+
+  Two of those build-count contracts are asserted TWICE, at different
+  instruments, because the obvious instrument cannot see the regression it
+  exists to forbid.  ``_count_builds`` spies on ``stack2d``'s binding of
+  ``_tensor_projected_ops``, which counts the assembly that FILLS the cache
+  but not the one ``_tensor_layer_modes`` performs for itself through
+  ``twod_jones``'s own global when it is handed no ``ops``; and
+  ``::test_b6_the_cached_entry_serves_both_truncations`` builds a fresh stack
+  per truncation, so it never shares one entry between the two.
+  ``::test_b6_the_stack_hands_its_cached_build_to_the_layer_modes_builder``
+  and ``::test_b6_one_entry_serves_a_truncation_FLIP_on_the_same_stack`` close
+  those two, counting BOTH module bindings and flipping ``truncation`` on ONE
+  stack; each names the source mutation it was measured to catch.
 """
 import os
 
@@ -594,6 +607,32 @@ def _count_builds(monkeypatch, run):
     return tuple(n), out
 
 
+def _count_every_assembly(monkeypatch, run):
+    """Source-free tensor assemblies for ``run()``, counted at BOTH module
+    bindings of ``_tensor_projected_ops``.
+
+    ``stack2d`` and ``twod_jones`` hold SEPARATE names for that function, and
+    the rebuild ``_tensor_layer_modes`` performs when it is handed no ``ops``
+    goes through ``twod_jones``'s own global.  A spy installed only on
+    ``stack2d`` cannot see it, so it cannot tell "the stack reused its cached
+    build" from "the stack stored a build it never used and every sweep point
+    rebuilt anyway" -- the two halves of G10(d).  Counting both bindings is
+    what makes the saving falsifiable.
+    """
+    n = [0]
+    for mod in (S2, TJ):
+        orig = mod._tensor_projected_ops
+
+        def spy(*a, _o=orig, **kw):
+            n[0] += 1
+            return _o(*a, **kw)
+
+        monkeypatch.setattr(mod, "_tensor_projected_ops", spy)
+    out = run()
+    monkeypatch.undo()
+    return n[0], out
+
+
 _WLS = np.array([0.55e-6, 0.60e-6, 0.65e-6, 0.70e-6, 0.75e-6])
 _THETAS = (0.0, 0.11, 0.23, 0.41, 0.55)
 
@@ -651,6 +690,98 @@ def test_b6_a_tensor_sweep_assembles_the_projected_operators_once(
                 f"{label}: sweep point {i}, return {j} is not bit-identical "
                 f"with and without the cache "
                 f"(max|d| = {np.max(np.abs(x - y)):.3e})")
+
+
+@pytest.mark.parametrize("cell,label", [(_SEPX, "separable"),
+                                        (_CROSS, "crossed"),
+                                        (_SEPX_O, "out-of-plane")])
+@pytest.mark.parametrize("sweep", [_wl_sweep, _angle_sweep])
+def test_b6_the_stack_hands_its_cached_build_to_the_layer_modes_builder(
+        monkeypatch, cell, label, sweep):
+    """G10(d)'s saving, counted where the rebuild would actually happen.
+
+    ``::test_b6_a_tensor_sweep_assembles_the_projected_operators_once`` counts
+    ``stack2d``'s binding of ``_tensor_projected_ops``, which sees the
+    assembly that FILLS the cache but not the one
+    ``_tensor_layer_modes`` performs for itself when the stack hands it no
+    ``ops``.  Dropping ``ops=tops`` at ``stack2d.py:1127`` therefore restores
+    the pre-WP-B6 behaviour in full -- one stored-and-unused build plus one
+    rebuild per sweep point -- while leaving that count at 1.  MEASURED
+    2026-09-13 with exactly that one-word mutation applied to an isolated copy
+    of the tree: all 44 tests stayed GREEN.  This one counts both bindings and
+    reads 1 + 5 = 6 against the required 1.
+
+    Fail-before (the same mutation, same run): 6 assemblies over a 5-point
+    sweep.  Two-sided: the priced-out arm must return to one per point, and
+    every return of every point must be bit-identical between the arms.
+    """
+    npts = len(_WLS)
+    n_warm, warm = _count_every_assembly(
+        monkeypatch, lambda: sweep(_tensor_stack(cell)))
+    assert n_warm == 1, (
+        f"{label}: the source-free tensor assembly ran {n_warm} times over a "
+        f"{npts}-point sweep counting BOTH module bindings -- the stack is "
+        f"caching a build that _tensor_layer_modes is not being given")
+
+    n_cold, cold = _count_every_assembly(
+        monkeypatch, lambda: sweep(_tensor_stack(cell, cache_max_bytes=1)))
+    assert n_cold == npts, (
+        f"{label}: pricing the cache out must restore one assembly per point, "
+        f"got {n_cold}")
+
+    for i, (a, b) in enumerate(zip(warm, cold)):
+        for j, (x, y) in enumerate(zip(a, b)):
+            assert np.array_equal(x, y), (
+                f"{label}: sweep point {i}, return {j} is not bit-identical "
+                f"with and without the cache")
+
+
+def test_b6_one_entry_serves_a_truncation_FLIP_on_the_same_stack(monkeypatch):
+    """The "one entry serves both truncations" property, asserted on ONE
+    cache.
+
+    ``truncation`` is deliberately absent from ``_geom_key`` because the
+    cached build is the FULL order box and ``keep`` is applied at use.
+    ``::test_b6_the_cached_entry_serves_both_truncations`` parametrises over
+    the truncation but builds a FRESH stack for each value, so it never shares
+    an entry between the two and stays green if ``truncation`` is added to the
+    key.  MEASURED 2026-09-13 with
+    ``self.truncation`` appended to ``_geom_key`` on an isolated copy of the
+    tree: all 44 tests stayed GREEN.  Here one stack solves rectangular, has
+    ``truncation`` flipped, and solves again; the assembly must still have run
+    exactly ONCE.
+
+    Fail-before (that mutation): 2 assemblies.  Non-vacuity: the two arms are
+    required to have DIFFERENT order-set shapes, so "one entry served both" is
+    a real claim rather than two identical solves.
+    """
+    st = _tensor_stack(_CROSS)
+
+    def both():
+        out = []
+        for trunc in ("rectangular", "circular"):
+            st.truncation = trunc
+            st.set_source(_WL2, theta=0.21, phi=0.37)
+            out.append(tuple(np.asarray(v) for v in st.solve()))
+        return out
+
+    n_asm, got = _count_every_assembly(monkeypatch, both)
+    assert got[0][0].shape != got[1][0].shape, (
+        f"the two truncations must retain DIFFERENT order sets for this "
+        f"contract to mean anything; both gave {got[0][0].shape}")
+    assert n_asm == 1, (
+        f"a truncation flip on ONE stack rebuilt the projected tensor "
+        f"operators {n_asm} times; the cached build is the full order box and "
+        f"must serve both order-set shapes")
+
+    for i, trunc in enumerate(("rectangular", "circular")):
+        fresh = _tensor_stack(_CROSS, truncation=trunc)
+        fresh.set_source(_WL2, theta=0.21, phi=0.37)
+        ref = fresh.solve()
+        for j, (x, y) in enumerate(zip(got[i], ref)):
+            assert np.array_equal(np.asarray(x), np.asarray(y)), (
+                f"{trunc}: return {j} from the flipped stack is not "
+                f"bit-identical to a freshly built one")
 
 
 @pytest.mark.parametrize("truncation", ["rectangular", "circular"])
