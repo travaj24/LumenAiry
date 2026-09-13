@@ -1340,11 +1340,17 @@ def test_b8_apply_jones_matrix_is_bit_identical_for_a_spatial_callable():
 
 
 def test_b8_apply_jones_matrix_is_bit_identical_on_a_mixed_precision_field():
-    """The dtype gate: with ``Ex`` complex64 and ``Ey`` complex128 the
-    in-place accumulation would NARROW the sum, so the function must fall
-    back to the original expression.  Pinned, because this is exactly the
-    shape that would pass a tolerance test and fail a bit-identity
-    one."""
+    """A mixed-precision field with a ``complex128`` MATRIX, which does
+    NOT engage the dtype gate and is pinned for that reason.
+
+    ``np.asarray(matrix, dtype=complex)`` makes every array-form Jones
+    matrix ``complex128``, and under NEP 50 a NumPy scalar is strong, so
+    ``J[0,0] * Ex`` is ``complex128`` even for a ``complex64`` ``Ex``:
+    both products land in ``complex128``, the in-place add is taken, and
+    it is bit-identical because nothing narrows.  The case that DOES
+    engage the gate needs a lower-precision matrix and lives in
+    ``test_verifyb8_apply_jones_matrix_falls_back_when_the_two_products_
+    disagree`` below."""
     N = 16
     rng = np.random.default_rng(2)
     Ex = (rng.standard_normal((N, N))
@@ -1377,3 +1383,234 @@ def test_b8_apply_jones_matrix_peak_full_grid_arrays():
         JonesField(Ex, Ey, 1e-6, WL), J), grid)
     assert old > 3.5, old
     assert new < 3.5, new
+
+
+# ===========================================================================
+# VERIFY-WP-B8 -- pins added by the adversarial re-verification pass
+# ===========================================================================
+
+
+def test_verifyb8_apply_jones_matrix_falls_back_when_products_disagree():
+    """The dtype gate, on inputs that actually engage it.
+
+    ``Ex_new = j00*Ex`` and ``scratch = j01*Ey`` only land in different
+    dtypes when the matrix is narrower than one of the components: a
+    ``complex64`` SPATIALLY-VARYING matrix (the callable path is the only
+    one that can carry a dtype other than ``complex128``) against ``Ex``
+    ``complex64`` and ``Ey`` ``complex128`` gives ``complex64`` and
+    ``complex128``.  ``Ex_new += scratch`` would then compute in
+    ``complex128`` and NARROW back to ``complex64`` -- a different answer
+    AND a different dtype from ``Ex_new + scratch``.
+
+    Fail-before is measured, not quoted: the narrowed form is evaluated
+    here and asserted to differ from the pre-fix expression, so the pass
+    arm cannot be satisfied by a build where the two happen to agree.
+
+    Found by VERIFY-WP-B8: dropping the ``Ex_new.dtype ==
+    scratch.dtype`` guard left all 256 WP-B8 tests green.
+    """
+    N = 12
+    rng = np.random.default_rng(20260913)
+    base = rng.standard_normal((N, N)) + 1j * rng.standard_normal((N, N))
+    Ex = base.astype(np.complex64)
+    Ey = base * (0.37 - 1.9j)
+
+    def cb(X, Y):
+        s = (np.cos(X / 1e-6) + 1j * np.sin(Y / 1e-6)).astype(np.complex64)
+        return np.array([[s, 0.5 * s], [-0.25 * s, s * s]],
+                        dtype=np.complex64)
+
+    # dy defaults to dx, so the callable sees this same square grid
+    x = (np.arange(N) - N / 2) * 1e-6
+    X, Y = np.meshgrid(x, x)
+    J = cb(X, Y)
+    want_x, want_y = _pre_fix_jones(J, Ex, Ey)
+
+    # the state this gate exists for: the two products really do differ
+    assert (J[0, 0] * Ex).dtype != (J[0, 1] * Ey).dtype
+
+    # fail-before: the narrowed accumulation is a different answer
+    narrowed = (J[0, 0] * Ex).copy()
+    narrowed += J[0, 1] * Ey
+    assert narrowed.dtype != want_x.dtype
+    assert not _same_bits(narrowed.astype(want_x.dtype), want_x)
+
+    out = apply_jones_matrix(JonesField(Ex.copy(), Ey.copy(), 1e-6), cb)
+    assert out.Ex.dtype == want_x.dtype and out.Ey.dtype == want_y.dtype
+    assert _same_bits(out.Ex, want_x) and _same_bits(out.Ey, want_y)
+
+
+@pytest.mark.parametrize('shape', [(16, 16), (16, 14), (17, 15), (20, 21)])
+def test_verifyb8_centred_fft2_keeps_the_input_memory_order(shape):
+    """``_centred_fft2`` must return what ``fftshift(fft2(ifftshift(a)))``
+    returns, LAYOUT included.
+
+    ``ifftshift`` goes through ``np.roll``, whose ``empty_like`` carries
+    the input's order, and the FFT carries it through; a plain ``copy()``
+    inside ``_centred_fft2`` is C-ordered, so a Fortran-ordered PSF came
+    back C-ordered -- same values, different buffer, a contract change
+    nobody asked for.  Asserted on the FLAGS, since the values are
+    already pinned above.
+
+    Found by VERIFY-WP-B8.
+    """
+    rng = np.random.default_rng(sum(shape))
+    a = rng.standard_normal(shape) + 1j * rng.standard_normal(shape)
+    for arr in (np.ascontiguousarray(a), np.asfortranarray(a),
+                np.pad(a, 2)[2:-2, 2:-2]):
+        want = np.fft.fftshift(np.fft.fft2(np.fft.ifftshift(arr)))
+        got = _psf._centred_fft2(arr, np)
+        assert _same_bits(want, got)
+        assert got.flags['C_CONTIGUOUS'] == want.flags['C_CONTIGUOUS']
+        assert got.flags['F_CONTIGUOUS'] == want.flags['F_CONTIGUOUS']
+
+
+def test_verifyb8_compute_otf_keeps_a_fortran_psf_fortran():
+    """The public consequence of the test above."""
+    rng = np.random.default_rng(5)
+    psf = np.asfortranarray(rng.random((32, 32)))
+    otf = compute_otf(psf)
+    assert otf.flags['F_CONTIGUOUS'] and not otf.flags['C_CONTIGUOUS']
+    ref = np.fft.fftshift(np.fft.fft2(np.fft.ifftshift(psf)))
+    assert _same_bits(otf, ref / ref[16, 16])
+
+
+@pytest.mark.parametrize('bad,why', [
+    ((np.arange(9.0), np.linspace(1.0, 0.0, 9), 9.0), 'p_cum decreasing'),
+    ((np.arange(9.0), np.linspace(0.0, 5.0, 9), 9.0), 'p_cum past 1'),
+    ((np.linspace(9.0, 0.0, 9), np.linspace(0.0, 1.0, 9), 9.0),
+     'radii descending'),
+    ((np.arange(9.0), np.full(9, np.nan), 9.0), 'p_cum NaN'),
+])
+def test_verifyb8_a_structurally_invalid_profile_is_refused(bad, why):
+    """``profile=`` carried no endpoint check, so a profile that is not a
+    cumulative-energy profile at all was accepted and silently answered a
+    different question -- while both docstrings claimed the endpoints
+    were validated.  O(1), so it costs nothing the argument was bought
+    for.
+
+    Found by VERIFY-WP-B8.
+    """
+    E = np.exp(-np.add.outer((np.arange(3) - 1.0) ** 2,
+                             (np.arange(3) - 1.0) ** 2)) + 0j
+    for fn in (encircled_energy_curve, encircled_energy_radius):
+        with pytest.raises(ValueError, match='endpoints'):
+            fn(E, 1e-6, profile=bad)
+
+
+def test_verifyb8_a_profile_from_a_differently_sized_field_is_refused():
+    """The one wrong-field case that IS catchable in O(1).  A profile
+    from a same-sized field still cannot be, and the docstring now says
+    so.
+
+    Found by VERIFY-WP-B8.
+    """
+    rng = np.random.default_rng(3)
+    E_small = rng.random((8, 8)) + 0j
+    E_big = rng.random((16, 16)) + 0j
+    prof = encircled_energy_profile(E_small, 1e-6)
+    for fn in (encircled_energy_curve, encircled_energy_radius):
+        with pytest.raises(ValueError, match='different field'):
+            fn(E_big, 1e-6, profile=prof)
+    # and the right-sized one still goes through, bit for bit
+    good = encircled_energy_profile(E_big, 1e-6)
+    r0, ee0 = encircled_energy_curve(E_big, 1e-6)
+    r1, ee1 = encircled_energy_curve(E_big, 1e-6, profile=good)
+    assert _same_bits(r0, r1) and _same_bits(ee0, ee1)
+
+
+def test_verifyb8_profile_endpoint_slack_admits_every_real_profile():
+    """The bar has a gap on both sides.  The ``len(p_cum) * eps`` slack
+    sits above every real ``cumsum`` drift with room to spare -- measured
+    over N = 16...2048 x {Gaussian, noise, Airy, near-delta}
+    (2026-09-13), the drift is 23x under the slack at N = 16, where the
+    reduction is shortest and the ratio worst, and 105x under it at
+    N = 2048 (8.8e-12 against n eps = 9.3e-10) -- and ten decades below
+    the O(1) violations the guard rejects.  One decade is asserted."""
+    rng = np.random.default_rng(17)
+    for N in (16, 64, 256):
+        x = (np.arange(N) - N / 2) * 1e-6
+        X, Y = np.meshgrid(x, x)
+        for E in (np.exp(-(X ** 2 + Y ** 2) / (N * 1e-7) ** 2) + 0j,
+                  rng.standard_normal((N, N))
+                  + 1j * rng.standard_normal((N, N)),
+                  (rng.random((N, N)) ** 12).astype(complex)):
+            prof = encircled_energy_profile(E, 1e-6)
+            tol = prof[1].size * float(np.finfo(np.float64).eps)
+            assert abs(float(prof[1][-1]) - 1.0) < tol / 10.0
+            encircled_energy_curve(E, 1e-6, profile=prof)
+            encircled_energy_radius(E, 1e-6, profile=prof)
+
+
+@pytest.mark.parametrize('sigma_g', [0.0, -4e-6, np.inf, np.nan])
+def test_verifyb8_modes_refuses_a_degenerate_coherence_length(sigma_g):
+    """``generator='modes'`` draws ``k ~ N(0, 1/sigma_g)``, so a zero /
+    negative / non-finite coherence length is undefined.  Before the fix
+    ``0.0`` raised ``ZeroDivisionError`` from inside ``_gori_mode_count``
+    (whose own ``cells <= 0`` guard could never run, because a Python
+    float divide by zero raises first), ``nan`` returned an all-NaN
+    field, and ``inf`` / a negative value returned a field for
+    ``|sigma_g|`` without a word.
+
+    Found by VERIFY-WP-B8.  ``generator='fft'`` is a default and is NOT
+    touched -- this asserts only that ``'modes'`` no longer answers
+    silently.
+    """
+    with pytest.raises(ValueError, match='coherence_length'):
+        _schell_phase_realizations(
+            Ny=8, Nx=8, dx=1e-6, dy=1e-6, coherence_length=sigma_g,
+            n_realizations=1, rng=np.random.default_rng(0),
+            generator='modes')
+    # the helper itself is total now, whatever it is handed
+    assert _gori_mode_count(8e-6, 8e-6, sigma_g) == _GORI_MIN_MODES
+
+
+def test_verifyb8_float32_geometry_survives_a_numpy_scalar_centre():
+    """NEP 50 makes a NumPy scalar STRONG, so ``float32_array -
+    np.float64(x0)`` came back float64 and ``geometry_dtype=np.float32``
+    silently did nothing -- a different field AND the full
+    double-precision transient.  Both arms are asserted: same bits either
+    way, and the peak stays under 1.75 full grids (1.50 after, 2.00
+    before).
+
+    Found by VERIFY-WP-B8.
+    """
+    N = 512
+    out = N * N * 8                       # one complex64 full grid
+    kw = dict(dx=1e-6, wavelength=WL, w0=40e-6, dtype=np.complex64,
+              geometry_dtype=np.float32)
+    E_py, _, _ = create_gaussian_beam(N, x0=3e-6, y0=-2e-6, **kw)
+    E_np, _, _ = create_gaussian_beam(N, x0=np.float64(3e-6),
+                                      y0=np.float64(-2e-6), **kw)
+    assert _same_bits(E_py, E_np)
+    peak = _peak_grids(
+        lambda: create_gaussian_beam(N, x0=np.float64(3e-6),
+                                     y0=np.float64(-2e-6), **kw), out)
+    assert peak < 1.75, peak
+
+
+def test_verifyb8_the_fft_path_refuses_n_psf_below_the_pupil_size():
+    """``N_psf < N_pupil`` is the one place the two samplers part company.
+    The FFT sampler cannot crop, so it used to return an
+    ``N_pupil x N_pupil`` array while reporting ``wavelength*f/(N_psf*dx_pupil)``
+    as its pitch (measured on the pre-fix library: shape (32, 32) for
+    ``N_psf=16``, the same reported pitch as the MFT's (16, 16)).  It now
+    refuses with a message that names the remedy; the MFT path honours
+    ``N_psf``.
+
+    Found by VERIFY-WP-B8; the refusal is the orchestrator's ruling.
+    """
+    N, dx = 32, 5e-6
+    g = np.arange(N) - N / 2
+    pupil = (np.hypot(*np.meshgrid(g, g)) <= 12).astype(complex)
+    with pytest.raises(ValueError,
+                       match=r"compute_psf: N_psf=16 is smaller than the pupil"):
+        compute_psf(pupil, WL, FOCAL, dx, N_psf=16)
+    b, dxb = compute_psf(pupil, WL, FOCAL, dx, N_psf=16, method='mft')
+    assert b.shape == (16, 16)          # the MFT path honours N_psf
+    assert dxb == pytest.approx(WL * FOCAL / (16 * dx))
+    # at or above the pupil size they agree, which is the contract
+    c, _ = compute_psf(pupil, WL, FOCAL, dx, N_psf=N)
+    d, _ = compute_psf(pupil, WL, FOCAL, dx, N_psf=N, method='mft')
+    assert c.shape == d.shape == (N, N)
+    assert np.abs(c - d).max() / c.max() < 1e-13

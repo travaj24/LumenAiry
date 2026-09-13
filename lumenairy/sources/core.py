@@ -443,11 +443,14 @@ def create_gaussian_beam(
         they are the caller's coordinates, not an intermediate.
 
         Measured tolerance (2026-09-13): the float32-geometry field
-        differs from the float64-then-cast one by at most **1.2e-07 of
-        the peak** over N in {64, 512, 2048} x three ``normalize`` modes
-        x on- and off-axis centres -- one float32 ULP of the exponent,
-        which is all the ``complex64`` container can hold anyway.  Peak
-        memory and time are in the Notes.
+        differs from the float64-then-cast one by **1.2e-07 of the peak
+        on axis and up to 3.2e-07 off axis** over N in {64, 512, 2048} x
+        three ``normalize`` modes x centres out to 0.6 of the grid
+        half-width.  On axis that is one float32 ULP (1.192e-07), which
+        is all the ``complex64`` container can hold anyway; off axis
+        ``(X - x0)`` cancels in single precision and costs a further
+        factor of ~2.6, so the honest bound is **a few float32 ULP**.
+        Peak memory and time are in the Notes.
 
     Returns
     -------
@@ -548,6 +551,15 @@ def create_gaussian_beam(
         # float64 -- they are returned to the caller.
         X = X.astype(geom_dt)
         Y = Y.astype(geom_dt)
+        # The centre has to be a PYTHON float here.  Under NEP 50 a
+        # NumPy scalar is strong, so ``float32_array - np.float64(0.0)``
+        # comes back float64 and the single-precision exponent silently
+        # becomes a double-precision one again -- measured peak 2.00x
+        # the complex64 output instead of 1.50x at N = 1024, and a
+        # different field for the same physical centre.  A Python float
+        # is weak and keeps the array's dtype.
+        x0 = float(x0)
+        y0 = float(y0)
     arg = (X - x0) ** 2 + (Y - y0) ** 2
     arg /= (2 * sigma ** 2)
     xp.negative(arg, out=arg)
@@ -2125,6 +2137,12 @@ def _gori_mode_count(Lx: float, Ly: float, sigma_g: float) -> int:
     nothing but flops.  Clamped into
     ``[_GORI_MIN_MODES, _GORI_MAX_MODES]`` -- see those constants.
     """
+    if not (np.isfinite(sigma_g) and sigma_g > 0.0):
+        # Guarded BEFORE the divide: ``Lx / 0.0`` on Python floats raises
+        # ZeroDivisionError rather than producing the ``inf`` the census
+        # test below would catch.  The caller rejects a degenerate
+        # sigma_g outright; this keeps the helper total if called direct.
+        return _GORI_MIN_MODES
     cells = (Lx / sigma_g) * (Ly / sigma_g)
     if not np.isfinite(cells) or cells <= 0:
         return _GORI_MIN_MODES
@@ -2257,7 +2275,10 @@ def _schell_phase_realizations(
           exact by construction at any ``M``, with no grid and therefore
           no periodisation to pad against; the marginal approaches
           circular-Gaussian as ``M`` grows, with an intensity-contrast
-          error of exactly ``1 / M``.
+          error of exactly ``1 / M``.  It requires a finite POSITIVE
+          ``coherence_length`` -- the mode wavevectors are drawn with
+          standard deviation ``1 / coherence_length`` -- and says so
+          rather than dividing by it.
 
         Measured 2026-09-13 at ``sigma_g = L/8``, per realisation
         (interleaved ``tracemalloc`` peak / ``perf_counter`` medians),
@@ -2317,6 +2338,21 @@ def _schell_phase_realizations(
     L_min = min(Lx, Ly)
 
     if gen == 'modes':
+        if not (np.isfinite(sigma_g) and sigma_g > 0.0):
+            # The pseudo-mode sum divides by sigma_g to scale k, so a
+            # zero / negative / non-finite coherence length is either an
+            # exception from inside the helper (0.0 -> ZeroDivisionError)
+            # or, worse, a silent answer: NaN throughout for nan, a
+            # single random phasor for inf, and the |sigma_g| field for a
+            # negative value.  Name the condition here.  ('fft' keeps its
+            # own behaviour, which is a default and is not this item's to
+            # move: it accepts 0.0 and raises its own errors elsewhere.)
+            raise ValueError(
+                f"_schell_phase_realizations: generator='modes' needs a "
+                f"finite positive coherence_length [m]; got "
+                f"{coherence_length!r}.  The pseudo-mode wavevectors are "
+                f"drawn with standard deviation 1/coherence_length, which "
+                f"is undefined here.")
         if pad_sigma != _SCHELL_PAD_SIGMA:
             raise ValueError(
                 f"_schell_phase_realizations: pad_sigma={pad_sigma!r} has "

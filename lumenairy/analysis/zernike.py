@@ -89,8 +89,16 @@ def zernike_nm_to_index(n: int, m: int) -> int:
 #: answering the question.  Below it the sum is kept EXACTLY as it was,
 #: so every mode any shipped table, docstring or realistic decomposition
 #: touches (n <= 8 in the tables here; j < 253 for n < 22) is unchanged
-#: bit for bit.  The recurrence's own error over the same sweep is
-#: <= 3.9e-15 at every (n, m) with n <= 32 and <= 3.0e-15 out to n = 40.
+#: bit for bit.  ``|R_n^m| <= 1`` on the unit disc, so the recurrence's
+#: own envelope is quoted ABSOLUTE against the same exact oracle
+#: (2026-09-13): <= 3.9e-15 at every ``(n, m)`` with ``n <= 40`` on that
+#: same ``k/128`` grid, <= 1.5e-14 on 257 random ``rho`` in [0, 1], and
+#: <= 2.7e-14 on the hardest grid measured, ``rho = 1 - 10^-j``
+#: (j = 1..15) where the alternating terms are all near 1.  Call it
+#: **3e-14 out to n = 40** and take the k/128 figure for what it is --
+#: one grid.  The same sweep runs out to ``n = 64`` at <= 5.8e-14, which
+#: is why no upper limit is enforced: the recurrence does not fall over
+#: anywhere this library can reach (n = 40 is already j >= 820).
 _ZERNIKE_RECURRENCE_MIN_N = 22
 
 

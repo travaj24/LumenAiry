@@ -121,9 +121,11 @@ def _centred_fft2_take(box: list, xp):
     N = 2...1024, three input families); on an even non-power-of-two it
     agrees only to ~5e-16 relative (N = 100 / 192 / 384), and on an odd
     length it is a different array entirely (relative 1.8 -- the cyclic
-    shift the design warned about).  A quadrant exchange moves no bits
-    at any length, so it is the form that leaves every existing caller's
-    PSF byte-for-byte where it was.
+    shift the design warned about; at a power of two the values agree
+    but the SIGN OF ZERO can still differ, measured on a single-hot-pixel
+    pupil at N = 2).  A quadrant exchange moves no bits at any length,
+    so it is the form that leaves every existing caller's PSF
+    byte-for-byte where it was.
     """
     a = box[0]
     box[0] = None
@@ -142,10 +144,18 @@ def _centred_fft2_take(box: list, xp):
 def _centred_fft2(a, xp):
     """Non-consuming :func:`_centred_fft2_take`: one copy is taken of an
     array the caller still owns, which is exactly what the ``ifftshift``
-    it replaces cost anyway."""
+    it replaces cost anyway.
+
+    ``order='K'`` on that copy is what ``ifftshift`` does -- it goes
+    through ``np.roll``, whose ``empty_like`` keeps the input's layout --
+    and the FFT carries the layout through to its result.  A plain
+    ``copy()`` would be C-ordered, so a Fortran-ordered PSF handed to
+    :func:`compute_otf` would come back C-ordered: the same values in a
+    different buffer layout, which is a contract change and not one
+    anybody asked for."""
     if (xp is np and isinstance(a, np.ndarray)
             and a.shape[0] % 2 == 0 and a.shape[1] % 2 == 0):
-        return _centred_fft2_take([a.copy()], xp)
+        return _centred_fft2_take([a.copy(order='K')], xp)
     return xp.fft.fftshift(xp.fft.fft2(xp.fft.ifftshift(a)))
 
 def compute_psf(
@@ -241,8 +251,9 @@ def compute_psf(
     Notes
     -----
     **``method='mft'`` compatibility (audit section 15.9).**  The PSF
-    grid contract does not move: with ``dx_psf=None`` the MFT samples
-    the same lattice the padded FFT does, and on an EVEN ``N_pupil`` and
+    grid contract does not move: with ``dx_psf=None`` and
+    ``N_psf >= N_pupil`` the MFT samples the same lattice the padded FFT
+    does, and on an EVEN ``N_pupil`` and
     ``N_psf`` the two agree to **1.1e-15 of the peak** (measured over
     ``N_pupil`` 64/128/256 x oversample 1/2/4 on an aberrated circular
     pupil; the MFT's own floor against a brute-force centred Fourier sum
@@ -253,6 +264,13 @@ def compute_psf(
     ``(arange(N) - N / 2) * dx``, and for odd ``N`` those are not the
     same sample.  ``method='mft'`` warns rather than silently handing
     back the shifted grid.
+
+    ``N_psf < N_pupil`` is refused on the FFT path.  The FFT sampler
+    cannot crop, so it would return an ``N_pupil x N_pupil`` array while
+    reporting ``wavelength*f/(N_psf*dx_pupil)`` as its pitch (and, under
+    ``normalize='power'``, scale by a pixel area built from that pitch).
+    ``'mft'`` honours ``N_psf`` at any size.  Ask for ``N_psf >= N_pupil``
+    (or use ``oversample``) on the FFT path.
 
     ``normalize='power'`` is the analytic Parseval constant on the MFT
     path (``(dx_pupil^2 / (wavelength f))^2``, which is what the FFT
@@ -337,6 +355,17 @@ def compute_psf(
             f"(got method={method!r}).  The FFT grid is fixed at "
             f"wavelength*f/(N_psf*dx_pupil); ask for a finer pitch with "
             f"a larger N_psf / oversample, or pass method='mft'.")
+
+    if method == 'fft' and int(N_psf) < Np:
+        # The FFT sampler cannot crop: it would return the pupil-sized
+        # array while reporting the N_psf pitch, and scale 'power' by a
+        # pixel area built from that pitch.  Refuse rather than answer.
+        raise ValueError(
+            f"compute_psf: N_psf={int(N_psf)} is smaller than the pupil "
+            f"({Np}x{Np}); the FFT sampler cannot crop, so it would return "
+            f"an {Np}x{Np} array while reporting the N_psf pitch.  Ask for "
+            f"N_psf >= N_pupil (or use oversample), or pass method='mft', "
+            f"which samples N_psf points at whatever pitch you name.")
 
     if method == 'mft':
         psf, dx_psf_out = _compute_psf_mft(
@@ -796,11 +825,16 @@ def encircled_energy_profile(
     path, and a key on anything less than the content is exactly the
     incomplete-cache-key shape of audit section 15.5.
 
-    The profile is only valid for the ``(dx, dy, centroid)`` it was
-    built with; passing it to a consumer called with different sampling
-    silently answers the question you did not ask, so the consumers
-    check what they cheaply can (shape and monotonicity of the
-    endpoints) and document the rest.
+    The profile is only valid for the FIELD and the
+    ``(dx, dy, centroid)`` it was built with; passing it to a consumer
+    called with different sampling silently answers the question you did
+    not ask.  The consumers check what they cheaply can -- the shapes,
+    the length against ``E.size``, and that ``p_cum`` runs 0 -> 1
+    non-decreasing at its endpoints over an ascending ``r_sorted`` --
+    and document the rest.  In particular a profile from a DIFFERENT
+    field of the SAME size cannot be told apart in O(1) and is accepted;
+    ``dy`` / ``centroid`` are refused alongside a profile for the same
+    reason.
 
     Examples
     --------
@@ -839,11 +873,22 @@ def _resolve_ee_profile(profile, E, dx, dy, centroid, fn_name):
     profile must never be written through (``encircled_energy_radius``
     clamps ``p_cum`` in place when it owns it).
 
-    Validation of a supplied profile is deliberately O(1) -- the two
-    shapes, the two lengths and the endpoints.  Re-checking that
-    ``r_sorted`` is sorted and ``p_cum`` monotone would cost the very
-    pass the argument exists to avoid; the docstring states the
-    contract instead.
+    Validation of a supplied profile is deliberately O(1): the two
+    shapes, the two lengths, the length against ``E.size``, and the two
+    ENDPOINTS -- ``p_cum`` starts at or above 0, ends at or below 1 and
+    ends no lower than it starts, and ``r_sorted`` ends no lower than it
+    starts.  Re-checking that ``r_sorted`` is sorted and ``p_cum``
+    monotone THROUGHOUT would cost the very pass the argument exists to
+    avoid; the docstring states that half of the contract instead.
+
+    The endpoint slack is ``len(p_cum) * eps``: ``p_cum`` is a
+    ``cumsum`` over that many positive terms divided by their exact
+    total, so its drift off 1 is bounded by the reduction's own rounding
+    -- measured 8.8e-12 worst over N = 16...2048 x {Gaussian, noise,
+    Airy, near-delta} against ``n eps = 9.3e-10`` at N = 2048
+    (2026-09-13), two decades of headroom, while every shape this guard
+    exists to catch (a reversed profile, a ``p_cum`` running to 5, a
+    profile from a differently-sized field) is off by O(1).
     """
     if profile is None:
         r_sorted, p_cum, r_max = _ee_sorted_cumulative(E, dx, dy, centroid)
@@ -866,6 +911,24 @@ def _resolve_ee_profile(profile, E, dx, dy, centroid, fn_name):
     r_max = float(r_max)
     if p_cum.size == 0:
         return None, None, r_max, False
+    n_pixels = getattr(E, 'size', None)
+    if isinstance(n_pixels, (int, np.integer)) and p_cum.size != n_pixels:
+        raise ValueError(
+            f"{fn_name}: profile holds {p_cum.size} radii but E has "
+            f"{int(n_pixels)} pixels, so it was built from a different "
+            f"field.  A profile is only valid for the field, pitch and "
+            f"centre it was built with.")
+    tol = p_cum.size * float(np.finfo(np.float64).eps)
+    if not (p_cum[0] >= -tol and p_cum[-1] <= 1.0 + tol
+            and p_cum[-1] >= p_cum[0] - tol
+            and r_sorted[-1] >= r_sorted[0]):
+        raise ValueError(
+            f"{fn_name}: profile's endpoints are not those of a "
+            f"cumulative-energy profile -- p_cum runs "
+            f"{p_cum[0]!r} -> {p_cum[-1]!r} (wanted 0 -> 1, "
+            f"non-decreasing, within {tol:.2e}) over radii "
+            f"{r_sorted[0]!r} -> {r_sorted[-1]!r} (wanted ascending).  "
+            f"Build it with encircled_energy_profile(E, dx, ...).")
     if centroid is not None or dy is not None:
         # Both are frozen INTO the profile, so accepting them alongside
         # one would quietly answer a different question.
