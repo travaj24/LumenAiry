@@ -43,6 +43,8 @@ _REEXPORTS = {
     'clear_meshgrid_cache': 'lumenairy.analysis.beam_stats',
     'meshgrid_cache_bytes': 'lumenairy.analysis.beam_stats',
     'zernike_basis_cache_bytes': 'lumenairy.analysis.zernike',
+    # WP-B8 -- analysis (the shared encircled-energy profile)
+    'encircled_energy_profile': 'lumenairy.analysis.psf_mtf_otf',
     # WP-A10 -- optimize (edge-thickness merit + its free-function oracle)
     'MinEdgeThicknessMerit': 'lumenairy.optimize.core',
     'edge_thickness': 'lumenairy.optimize.core',

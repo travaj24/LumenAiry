@@ -655,6 +655,34 @@ def apply_jones_matrix(field: 'JonesField', matrix: Union[np.ndarray, Callable[[
     -------
     JonesField
         Transformed field (modified in place and returned).
+
+    Notes
+    -----
+    Peak transient: **3.00** full-grid complex arrays, down from 4.00
+    (audit Z3 follow-up).  ``J00*Ex + J01*Ey`` written out builds two
+    products and a sum per component, so at the moment the second
+    component is formed the first component's result plus three
+    temporaries are live.  One scratch buffer serves both components
+    and both sums land in place.
+
+    3.00 is the FLOOR for this operation, not a step towards 2.00: the
+    two results must both exist at the end, none of the four products
+    can be written into a result before the other term of that result
+    exists, and ``field.Ex`` / ``field.Ey`` belong to the caller until
+    the last product is read.  Two outputs plus one scratch is
+    therefore the minimum.
+
+    Bit-identity is what gates the in-place forms.  ``a += b`` and
+    ``multiply(j, E, out=buf)`` are the same ufuncs on the same
+    operands as ``a + b`` and ``j * E`` ONLY while the destination
+    dtype is what the out-of-place expression would have produced --
+    ``a += b`` computes in ``result_type(a, b)`` and then NARROWS to
+    ``a``, which is a different answer for a mixed-precision
+    ``JonesField``.  So each step is taken only when the dtypes already
+    agree, and a mixed-precision field keeps the original expressions.
+    The complex-multiply operand ORDER is preserved everywhere (NumPy's
+    vectorised complex multiply is not bitwise commutative on this
+    build -- measured 1.8e-15 in the Z3 Stokes work).
     """
     if callable(matrix):
         x = (np.arange(field.shape[1]) - field.shape[1] / 2) * field.dx
@@ -677,8 +705,6 @@ def apply_jones_matrix(field: 'JonesField', matrix: Union[np.ndarray, Callable[[
                     f"apply_jones_matrix: callable returned shape "
                     f"{J.shape}, expected {expected} (2x2 Jones matrix "
                     f"with per-pixel spatial extent).")
-        Ex_new = J[0, 0] * field.Ex + J[0, 1] * field.Ey
-        Ey_new = J[1, 0] * field.Ex + J[1, 1] * field.Ey
     else:
         J = np.asarray(matrix, dtype=complex)
         if J.shape != (2, 2):
@@ -686,12 +712,45 @@ def apply_jones_matrix(field: 'JonesField', matrix: Union[np.ndarray, Callable[[
                 f"apply_jones_matrix: matrix array shape {J.shape}, "
                 f"expected (2, 2).  Use a callable for spatially-"
                 f"varying matrices.")
-        Ex_new = J[0, 0] * field.Ex + J[0, 1] * field.Ey
-        Ey_new = J[1, 0] * field.Ex + J[1, 1] * field.Ey
 
+    Ex_new, Ey_new = _jones_mix_2x2(J, field.Ex, field.Ey)
     field.Ex = Ex_new
     field.Ey = Ey_new
     return field
+
+
+def _jones_mix_2x2(J, Ex, Ey):
+    """``(J00*Ex + J01*Ey, J10*Ex + J11*Ey)`` through one scratch buffer.
+
+    See :func:`apply_jones_matrix`'s Notes for the array count and for
+    why each in-place step is conditioned on the dtypes already
+    agreeing.  Every fall-back arm is the original expression verbatim.
+    """
+    j00, j01, j10, j11 = J[0, 0], J[0, 1], J[1, 0], J[1, 1]
+    Ex_new = j00 * Ex
+    scratch = j01 * Ey
+    if (isinstance(Ex_new, np.ndarray) and isinstance(scratch, np.ndarray)
+            and Ex_new.dtype == scratch.dtype
+            and Ex_new.shape == scratch.shape):
+        Ex_new += scratch
+        reuse = True
+    else:
+        Ex_new = Ex_new + scratch
+        reuse = False
+
+    Ey_new = j10 * Ex
+    if (reuse and isinstance(Ey_new, np.ndarray)
+            and Ey_new.dtype == scratch.dtype
+            and np.result_type(np.asarray(j11).dtype,
+                               np.asarray(Ey).dtype) == scratch.dtype
+            and np.broadcast_shapes(np.shape(j11),
+                                    np.shape(Ey)) == scratch.shape
+            and Ey_new.shape == scratch.shape):
+        np.multiply(j11, Ey, out=scratch)
+        Ey_new += scratch
+    else:
+        Ey_new = Ey_new + j11 * Ey
+    return Ex_new, Ey_new
 
 
 def apply_polarizer(

@@ -1,10 +1,11 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/polarization.py
-ast_sha256: 65b9fe0e7f12a7d7666c321d132c2579b8b0ed6cd15270aa9f477cec88000774
-token_sha256: c025b8c10bec32a240fff95d1230fc664c52ff63dbbfe4b5b143638ac4ad85b0
+ast_sha256: 1a97668f3a64829e0933ed70903aa573791daba90007637fdc6a914612112fb6
+token_sha256: fa8663125aa74b26120413665a639dc9a75c2a19ac19dc4fa159e3d2da0d5b1c
 pre_relocation_lines: 1838
 recorded_by: WP-A17 SWEEP-2 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
+re_recorded: 2026-09-13 -- WP-B8 (audit Z3 / WP-A11 sec. 6.3): apply_jones_matrix's 2x2 mix moves into _jones_mix_2x2 and accumulates through one shared scratch buffer (4.00 -> 3.00 full-grid complex arrays, the floor), bit-identical and gated on the dtypes already agreeing so a mixed-precision JonesField keeps the original expressions
 -->
 
 # Version history -- `lumenairy/elements/polarization.py`

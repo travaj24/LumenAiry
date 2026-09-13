@@ -1,10 +1,11 @@
 <!-- lumenairy-history-doc
 module: lumenairy/analysis/psf_mtf_otf.py
-ast_sha256: 9b1cddc0e769c5ddb48a57475595fdf5bc384cc51b358f8ea40dcc385feaea13
-token_sha256: 60dae352e8ce16025fec376da99d81fc20263f1f652f1fdaef00393701af87d9
+ast_sha256: d068419daeec1d31a6ddfdc7d944f4a5f6bcc83c80042855a5ecd2cf4ac92e4a
+token_sha256: c569472dd378ed37a9036d2396381fae4ddede68cebb110a5bf04248f844cd36
 pre_relocation_lines: 1579
 recorded_by: WP-A17 SWEEP-1 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
+re_recorded: 2026-09-13 -- WP-B8 (audit A6.1 / sec. 15.9): the centred transform does both fftshifts as in-place quadrant exchanges and splits fft2 into its two axis passes (4.00 -> 2.00 full padded grids, bit-identical); compute_psf gains method='fft'|'mft' with dx_psf= for the Soummer matrix Fourier transform; encircled_energy_profile is exposed and accepted as profile= on the curve and the radius (A6.2)
 -->
 
 # Version history -- `lumenairy/analysis/psf_mtf_otf.py`

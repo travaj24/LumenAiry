@@ -84,6 +84,20 @@ import numpy as np
 # a 32x32 DM on a 1024x1024 grid (= 1 GB) goes lazy automatically.
 _DEFAULT_CACHE_CEILING_BYTES = 512 * 1024 * 1024
 
+# Above this the eager influence-function stack is worth a word to the
+# caller.  DERIVED as HALF the caching ceiling above, which is the point
+# at which the cache is the largest single object the DM owns by a
+# factor of two or more: the pupil field it is applied to is
+# ``N**2`` complex128 = ``16 N**2`` bytes, so the stack outweighs it
+# whenever ``n_actuators**2 > 2``, and it outweighs it by 16x at the
+# ceiling on a 512 grid.  The audit's own case sits exactly ON the
+# ceiling -- a 16x16 DM on 512x512 is 536 870 912 bytes, which
+# ``'auto'`` accepts (``<=``) and then allocates in silence.  The
+# threshold only decides whether to SAY so; it moves no default, because
+# the cached and the lazy ``phase()`` are different summation orders and
+# switching between them would move the phase map.
+_IF_CACHE_WARN_BYTES = _DEFAULT_CACHE_CEILING_BYTES // 2
+
 
 @dataclass
 class DeformableMirror:
@@ -132,6 +146,14 @@ class DeformableMirror:
           :meth:`phase` call but uses ~``N**2`` floats of scratch
           memory regardless of ``n_actuators``.
 
+        A ``UserWarning`` names the allocation whenever the stack that
+        is about to be built exceeds ``_IF_CACHE_WARN_BYTES``
+        (half the ``'auto'`` ceiling; see the constant for the
+        derivation).  It fires ONCE, at construction, and changes
+        nothing -- the cached and on-demand :meth:`phase` sum in
+        different orders, so the boundary itself cannot be moved
+        without moving the phase map.
+
     command : ndarray of shape (n_actuators, n_actuators)
         Current command amplitudes [radians of OPD].  Initialised to
         zero.
@@ -158,11 +180,35 @@ class DeformableMirror:
         )
         # Decide cache strategy.
         want_cache = self.cache_basis
+        bytes_needed = (self.n_actuators ** 2) * (self.N ** 2) * 8
         if want_cache == 'auto':
-            bytes_needed = (self.n_actuators ** 2) * (self.N ** 2) * 8
             want_cache = bytes_needed <= _DEFAULT_CACHE_CEILING_BYTES
         self._cache_active = bool(want_cache)
         if self._cache_active:
+            if bytes_needed > _IF_CACHE_WARN_BYTES:
+                # ONE warning, at construction, naming what is about to be
+                # allocated and the escape.  ``cache_basis=True`` has no
+                # ceiling at all (the docstring's own example is 8 GB), and
+                # ``'auto'``'s ceiling is inclusive, so the audit's 16x16 DM
+                # on 512x512 lands exactly on it.
+                import warnings
+                warnings.warn(
+                    f"DeformableMirror: caching the influence-function "
+                    f"stack for {self.n_actuators}x{self.n_actuators} "
+                    f"actuators on a {self.N}x{self.N} grid allocates "
+                    f"{bytes_needed / 2 ** 20:.1f} MiB of float64 and holds "
+                    f"it for the life of this object "
+                    f"(cache_basis={self.cache_basis!r}; the 'auto' ceiling "
+                    f"is {_DEFAULT_CACHE_CEILING_BYTES / 2 ** 20:.0f} MiB "
+                    f"and this warning fires above half of it).  Pass "
+                    f"cache_basis=False to compute each actuator's "
+                    f"influence on demand instead: phase() then streams "
+                    f"into one N x N accumulator and fit_phase() bands the "
+                    f"normal equations, both in ~N**2 floats regardless of "
+                    f"the actuator count.  NOTE the two paths sum in "
+                    f"different orders, so the phase map moves by "
+                    f"rounding.",
+                    UserWarning, stacklevel=3)
             self._build_IF_basis()
 
     def _build_IF_basis(self) -> None:
@@ -172,11 +218,8 @@ class DeformableMirror:
         Memory: ``n_actuators**2 * N**2 * 8`` bytes (float64).
         """
         N = self.N
-        dx = self.dx
         n = self.n_actuators
-        x = (np.arange(N) - N / 2) * dx
-        y = (np.arange(N) - N / 2) * dx
-        X, Y = np.meshgrid(x, y)
+        X, Y = self._grid_views()
         stack = np.empty((n, n, N, N), dtype=np.float64)
         s2 = self._sigma_IF ** 2
         for i, xi in enumerate(self._act_centres):
@@ -184,6 +227,55 @@ class DeformableMirror:
                 d2 = (X - xi) ** 2 + (Y - yj) ** 2
                 stack[j, i] = np.exp(-d2 / (2.0 * s2))
         self._IF_basis = stack
+
+    def _grid_views(self, r0: int = 0, r1: Optional[int] = None):
+        """``(X, Y)`` for grid rows ``[r0, r1)`` as BROADCAST VIEWS.
+
+        S3-7: ``np.meshgrid`` materialises two ``rows x N`` float64
+        arrays whose rows (resp. columns) are all identical; every
+        expression here is elementwise, so broadcasting ``x[None, :]``
+        against ``y[:, None]`` gives bit-identical results out of two
+        1-D arrays.  At N = 2048 that is 64 MB of avoidable transient
+        per call site.
+        """
+        N = self.N
+        dx = self.dx
+        x = (np.arange(N) - N / 2) * dx
+        y = (np.arange(N) - N / 2) * dx
+        if r1 is None:
+            r1 = N
+        return x[None, :], y[r0:r1, None]
+
+    def _banded_IF_apply(self, target_2d, n2: int, rows_band: int):
+        """Accumulate ``(A^T A, A^T b)`` for the influence-function design
+        matrix ``A`` over horizontal bands of the pupil grid.
+
+        ``A`` is ``(N**2, n_act**2)`` -- the thing the memory contract
+        exists to avoid materialising.  Each band builds only
+        ``(rows_band * N, n_act**2)`` of it, feeds two BLAS gemms and is
+        dropped, so peak scratch is the band plus the two ``n_act**2``
+        normal arrays.
+
+        Shared by :meth:`fit_phase` (which is where it used to be
+        inline) so there is ONE banded influence-function construction
+        in this class rather than a copy per consumer.
+        """
+        N = self.N
+        s2 = self._sigma_IF ** 2
+        AtA = np.zeros((n2, n2), dtype=np.float64)
+        Atb = np.zeros(n2, dtype=np.float64)
+        for r0 in range(0, N, rows_band):
+            r1 = min(r0 + rows_band, N)
+            Xb, Yb = self._grid_views(r0, r1)
+            C = np.empty(((r1 - r0) * N, n2), dtype=np.float64)
+            for k in range(n2):
+                j, i = divmod(k, self.n_actuators)
+                d2 = ((Xb - self._act_centres[i]) ** 2
+                      + (Yb - self._act_centres[j]) ** 2)
+                C[:, k] = np.exp(-d2 / (2.0 * s2)).ravel()
+            AtA += C.T @ C
+            Atb += C.T @ target_2d[r0:r1].ravel()
+        return AtA, Atb
 
     def set_command(self, command: np.ndarray) -> None:
         """Set actuator amplitudes from a (n_act, n_act) array or a
@@ -208,7 +300,8 @@ class DeformableMirror:
         problems materialise the design matrix and solve via ``lstsq``
         directly; large problems (design matrix over ~128 MB) fall
         back to normal equations accumulated over horizontal bands of
-        the pupil grid, so peak scratch memory is the band block
+        the pupil grid by :meth:`_banded_IF_apply`, so peak scratch
+        memory is the band block
         (bounded at ~32 MB) plus the ``n_act**2 x n_act**2`` normal
         matrix -- the full ``N**2 x n_act**2`` design matrix is never
         materialised.  When the IF basis is already cached the normal
@@ -251,29 +344,12 @@ class DeformableMirror:
                 # No cache: accumulate over horizontal bands of grid
                 # rows.  Band block is (rows_band * N, n2); bound its
                 # size to ~ceiling/16 (= 32 MB default) of scratch.
-                N = self.N
-                dx = self.dx
-                s2 = self._sigma_IF ** 2
-                x = (np.arange(N) - N / 2) * dx
-                y = (np.arange(N) - N / 2) * dx
-                bytes_per_row = N * n2 * 8
+                bytes_per_row = self.N * n2 * 8
                 rows_band = max(
                     1, (_DEFAULT_CACHE_CEILING_BYTES // 16)
                     // bytes_per_row)
-                AtA = np.zeros((n2, n2), dtype=np.float64)
-                Atb = np.zeros(n2, dtype=np.float64)
-                target_2d = target.reshape(N, N)
-                for r0 in range(0, N, rows_band):
-                    r1 = min(r0 + rows_band, N)
-                    Xb, Yb = np.meshgrid(x, y[r0:r1])
-                    C = np.empty(((r1 - r0) * N, n2), dtype=np.float64)
-                    for k in range(n2):
-                        j, i = divmod(k, self.n_actuators)
-                        d2 = ((Xb - self._act_centres[i]) ** 2
-                              + (Yb - self._act_centres[j]) ** 2)
-                        C[:, k] = np.exp(-d2 / (2.0 * s2)).ravel()
-                    AtA += C.T @ C
-                    Atb += C.T @ target_2d[r0:r1].ravel()
+                AtA, Atb = self._banded_IF_apply(
+                    target.reshape(self.N, self.N), n2, rows_band)
             # lstsq (not solve) so a rank-deficient normal matrix
             # yields the minimum-norm solution instead of blowing up.
             coeffs, *_ = np.linalg.lstsq(AtA, Atb, rcond=None)
@@ -292,11 +368,7 @@ class DeformableMirror:
         j, i = divmod(k, n)
         xi = self._act_centres[i]
         yj = self._act_centres[j]
-        dx = self.dx
-        N = self.N
-        x = (np.arange(N) - N / 2) * dx
-        y = (np.arange(N) - N / 2) * dx
-        X, Y = np.meshgrid(x, y)
+        X, Y = self._grid_views()
         d2 = (X - xi) ** 2 + (Y - yj) ** 2
         return np.exp(-d2 / (2.0 * self._sigma_IF ** 2))
 
@@ -317,11 +389,7 @@ class DeformableMirror:
         # Lazy / on-demand path: stream per-actuator gaussians into the
         # accumulator.  Skips actuators with command 0.0 for free.
         out = np.zeros((self.N, self.N), dtype=np.float64)
-        dx = self.dx
-        N = self.N
-        x = (np.arange(N) - N / 2) * dx
-        y = (np.arange(N) - N / 2) * dx
-        X, Y = np.meshgrid(x, y)
+        X, Y = self._grid_views()
         s2 = self._sigma_IF ** 2
         cmd = self.command
         for j, yj in enumerate(self._act_centres):

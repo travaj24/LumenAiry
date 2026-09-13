@@ -1,10 +1,11 @@
 <!-- lumenairy-history-doc
 module: lumenairy/analysis/zernike.py
-ast_sha256: d6d07f65c285b06977c29e568d81314b35f57d2c503f104526b10a413a76a10b
-token_sha256: c66645e08137b0a4d9cfad0c944a1156a15962d5a867400553302488865d644a
+ast_sha256: 658f5e715e0433f5467c4879f54f207d5a38434ed66b3543df2f7a7de61a3db9
+token_sha256: 8640108bea4a0a353ef4ab8289e5070ca84f8ed51bcd75a5abbdabe3af6200c5
 pre_relocation_lines: 876
 recorded_by: WP-A17 SWEEP-1 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
+re_recorded: 2026-09-13 -- WP-B8 (audit A6.3): the basis build shares one rho**k memo and one hoisted pupil mask across the modes (1.58-3.57x, bit-identical), and _zernike_radial hands orders n >= 22 to the Kintner recurrence, which is where the factorial sum's relative error against an exact rational oracle first exceeds 1e-9
 -->
 
 # Version history -- `lumenairy/analysis/zernike.py`

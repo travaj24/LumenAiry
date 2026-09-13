@@ -1,11 +1,12 @@
 <!-- lumenairy-history-doc
 module: lumenairy/analysis/ao.py
-ast_sha256: ef03e90a28561055412b693a6d11c99eb7f9d5a028b57d3c02800a59729ffde5
-token_sha256: 12b3d541efebb2d71dbb8f9694cdb1acde563f4d7d547019a41f0eed6951d077
+ast_sha256: 6bcc87d232028496574c2537323a36c2f502ebb045e9474fc98d2fbbb06aacb6
+token_sha256: 460674be97d21d55eca6f2b61efa126119fa2f4b10d39e6986dfa75c95778450
 pre_relocation_lines: 1355
 recorded_by: WP-A17 SWEEP-1 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
 re_recorded: 2026-09-12 -- ruff isort combine-as-imports (pyproject.toml, WP-A16 recommendation): aliased import statements from the same module merged into one; the set of bound names is unchanged
+re_recorded: 2026-09-13 -- WP-B8 (audit A6.3): the banded influence-function construction is hoisted out of fit_phase into DeformableMirror._banded_IF_apply, the dense meshgrids become broadcast views (S3-7, bit-identical), and an eager IF stack above half the 'auto' ceiling warns once at construction; the cache decision boundary itself is unmoved
 -->
 
 # Version history -- `lumenairy/analysis/ao.py`

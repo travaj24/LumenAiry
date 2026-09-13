@@ -393,6 +393,7 @@ def create_gaussian_beam(
     dy: Optional[float] = None,
     normalize: str = 'peak',
     dtype: Optional[Any] = None,
+    geometry_dtype: Optional[Any] = None,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Create a Gaussian beam field.
@@ -429,6 +430,24 @@ def create_gaussian_beam(
         whenever you want to chain or compare across the mode-family
         helpers).  ``'none'`` returns the raw ``exp(-r^2/(2 sigma^2))``
         without scaling.
+    geometry_dtype : dtype, optional
+        Real dtype the EXPONENT is built in.  ``None`` (default) is
+        ``float64`` -- the historical behaviour, bit for bit.
+        ``numpy.float32`` halves the transient the exponent needs and
+        runs ``exp`` on a single-precision buffer; it is accepted only
+        together with a ``complex64`` output, because a ``complex128``
+        request is a request for double precision and filling it from a
+        float32 exponent would be a silent precision trap.
+
+        The returned ``x`` / ``y`` axes stay ``float64`` either way --
+        they are the caller's coordinates, not an intermediate.
+
+        Measured tolerance (2026-09-13): the float32-geometry field
+        differs from the float64-then-cast one by at most **1.2e-07 of
+        the peak** over N in {64, 512, 2048} x three ``normalize`` modes
+        x on- and off-axis centres -- one float32 ULP of the exponent,
+        which is all the ``complex64`` container can hold anyway.  Peak
+        memory and time are in the Notes.
 
     Returns
     -------
@@ -444,6 +463,14 @@ def create_gaussian_beam(
     Signature is ``(N, dx, wavelength, *, w0, ...)``: the width argument is
     keyword-only and ``wavelength`` sits in the third positional slot,
     matching every other source factory.
+
+    ``geometry_dtype=np.float32`` with ``dtype=np.complex64`` measured
+    at N = 2048 (``tracemalloc`` peak, ``perf_counter`` median of 5,
+    interleaved, 2026-09-13): peak **67.1 -> 50.4 MB** (2.00x -> 1.50x
+    the 33.6 MB output) and **93.6 -> 55.7 ms**, i.e. half the exponent
+    buffer and half the ``exp``.  Worst deviation from the float64
+    geometry over that sweep: 1.19e-07 of the peak.  The default
+    float64 geometry is untouched.
 
     .. versionchanged:: 5.30
         The ``sigma`` kwarg is **removed**.  Migrate ``sigma=s`` ->
@@ -495,6 +522,32 @@ def create_gaussian_beam(
     # out-of-place `exp(-(...)/(2 sigma^2))` while dropping two full-grid
     # float64 temporaries.
     target_dtype = _resolve_complex_dtype(dtype)
+    if geometry_dtype is None:
+        geom_dt = np.dtype(np.float64)
+    else:
+        geom_dt = np.dtype(geometry_dtype)
+        if geom_dt not in (np.dtype(np.float32), np.dtype(np.float64)):
+            raise ValueError(
+                f"create_gaussian_beam: geometry_dtype must be "
+                f"np.float32 or np.float64 (the real dtype the exponent "
+                f"is built in); got {geom_dt!r}.")
+        if (geom_dt == np.dtype(np.float32)
+                and target_dtype != np.dtype(np.complex64)):
+            raise ValueError(
+                f"create_gaussian_beam: geometry_dtype=float32 needs a "
+                f"complex64 output, but this call resolves to "
+                f"{target_dtype!r}.  A float32 exponent carries ~7 "
+                f"decimal digits; writing it into a complex128 array "
+                f"would advertise double precision it does not have.  "
+                f"Pass dtype=np.complex64 (or set the library default) "
+                f"if that is what you want.")
+    if geom_dt != np.dtype(np.float64):
+        # Single-precision geometry: the exponent buffer, the divide,
+        # the negate and the exp all run at half the width, and the cast
+        # to complex64 at the end is then exact.  The x / y axes stay
+        # float64 -- they are returned to the caller.
+        X = X.astype(geom_dt)
+        Y = Y.astype(geom_dt)
     arg = (X - x0) ** 2 + (Y - y0) ** 2
     arg /= (2 * sigma ** 2)
     xp.negative(arg, out=arg)
@@ -2020,6 +2073,26 @@ _SCHELL_PAD_SIGMA = 4.0
 #: warns with the residual periodisation error it actually leaves.
 _SCHELL_MAX_PAD_GROWTH = 4.0
 
+#: Floor on the Gori pseudo-mode count.  DERIVED from the exact finite-M
+#: moment of a random-phasor sum: for ``phi = M^(-1/2) sum_j exp(i psi_j)``
+#: the intensity obeys ``E[I^2] / E[I]^2 = 2 - 1/M`` exactly, against 2 for
+#: the circular-Gaussian field the Schell model assumes, so ``M`` modes leave
+#: a contrast error of exactly ``1/M``.  128 puts that under 1 %.  (The
+#: two-point correlation is exact at ANY ``M >= 1`` -- the mode directions are
+#: redrawn per realisation -- so this floor buys Gaussian STATISTICS, not the
+#: kernel.)
+_GORI_MIN_MODES = 128
+
+#: Cap on the heuristic pseudo-mode count.  The cost is one ``zgemm`` of
+#: ``O(M Ny Nx)`` per realisation, and the heuristic ``(L / sigma_g)^2`` runs
+#: away as ``sigma_g -> dx`` (it reaches ``N^2`` at one pixel).  Measured on
+#: a 512 x 512 grid: 10.1 / 18.7 / 37.9 / 69.3 ms per realisation at
+#: M = 128 / 256 / 512 / 1024 against the padded FFT's 152.8 ms, so 4096 is
+#: still within ~2x of the FFT generator it replaces.  When the cap binds the
+#: generator warns and says what it costs: a single realisation resolves
+#: k-space more coarsely, and the contrast error stays ``1/M``.
+_GORI_MAX_MODES = 4096
+
 
 def _periodised_gaussian_error(span: float, period: float,
                                sigma: float) -> float:
@@ -2041,6 +2114,72 @@ def _periodised_gaussian_error(span: float, period: float,
     return float(np.abs(w / w0 - np.exp(-d ** 2 / (2.0 * sigma ** 2))).max())
 
 
+def _gori_mode_count(Lx: float, Ly: float, sigma_g: float) -> int:
+    """Heuristic pseudo-mode count from the coherence-cell census.
+
+    ``(Lx / sigma_g) * (Ly / sigma_g)`` is the number of coherence cells
+    the grid holds, i.e. the number of independent k-space cells of width
+    ``1 / L`` that fit inside the ``1 / sigma_g`` support of the mode
+    distribution.  Fewer modes than cells and one realisation is visibly
+    sparse in k-space (the ensemble mean is still exact); more buys
+    nothing but flops.  Clamped into
+    ``[_GORI_MIN_MODES, _GORI_MAX_MODES]`` -- see those constants.
+    """
+    cells = (Lx / sigma_g) * (Ly / sigma_g)
+    if not np.isfinite(cells) or cells <= 0:
+        return _GORI_MIN_MODES
+    return int(min(max(int(np.ceil(cells)), _GORI_MIN_MODES),
+                   _GORI_MAX_MODES))
+
+
+def _gori_pseudo_mode_realizations(
+    *, Ny: int, Nx: int, dx: float, dy: float, sigma_g: float,
+    n_realizations: int, rng: np.random.Generator, M: int,
+) -> np.ndarray:
+    """Gori pseudo-mode realisations of a Gaussian-correlated field.
+
+    A stationary complex field whose correlation is exactly
+    ``exp(-|d|^2 / (2 sigma_g^2))`` is
+
+        ``phi(r) = M^(-1/2) sum_j exp(i (k_j . r + psi_j))``
+
+    with ``k_j`` normal of variance ``sigma_g^(-2)`` per component and
+    ``psi_j`` uniform, because ``<exp(i k . d)>`` over that ``k`` IS the
+    Gaussian: the characteristic function of a normal is the target
+    kernel.  The independent phases kill every cross term, so
+
+        ``<phi(r1) conj(phi(r2))> = <exp(i k . (r1 - r2))>
+          = exp(-|r1 - r2|^2 / (2 sigma_g^2))``
+
+    for ANY ``M >= 1``.  There is no grid in that statement and no
+    transform, so there is nothing to periodise -- the wrap the padded
+    FFT generator spends a 4-sigma pad suppressing (audit Z2) cannot
+    arise here at all, and ``E[<|phi|^2>] = 1`` holds exactly rather than
+    through a Parseval constant.
+
+    Each realisation is one rank-``M`` update, computable as a single
+    ``zgemm``: ``phi = A @ B`` with ``A = exp(i (y (x) k_y + psi))``
+    ``(Ny, M)`` and ``B = exp(i k_x (x) x)`` ``(M, Nx)``.  Cost
+    ``O(M Ny Nx)`` against the FFT's ``O(N_pad^2 log N_pad)``; because
+    the pad makes ``N_pad`` 2-5x ``N`` per axis, the measured ranking on
+    this machine is the OPPOSITE of the estimate in the WP-A11 design --
+    see the ``generator`` docstring for the table.
+    """
+    x = (np.arange(Nx) - Nx / 2.0) * dx
+    y = (np.arange(Ny) - Ny / 2.0) * dy
+    out = np.empty((int(n_realizations), Ny, Nx), dtype=np.complex128)
+    inv_sqrt_M = 1.0 / np.sqrt(float(M))
+    for k in range(int(n_realizations)):
+        kx = rng.standard_normal(M) / sigma_g
+        ky = rng.standard_normal(M) / sigma_g
+        psi = rng.uniform(0.0, 2.0 * np.pi, M)
+        A = np.exp(1j * (np.outer(y, ky) + psi))
+        B = np.exp(1j * np.outer(kx, x))
+        np.matmul(A, B, out=out[k])
+        out[k] *= inv_sqrt_M
+    return out
+
+
 def _schell_phase_realizations(
     *,
     Ny: int,
@@ -2051,6 +2190,8 @@ def _schell_phase_realizations(
     n_realizations: int,
     rng: np.random.Generator,
     pad_sigma: float = _SCHELL_PAD_SIGMA,
+    generator: str = 'fft',
+    n_pseudo_modes: Optional[int] = None,
 ) -> np.ndarray:
     """Generate ``n_realizations`` band-limited complex random fields
     with the Gaussian Schell kernel as their two-point correlation.
@@ -2102,6 +2243,41 @@ def _schell_phase_realizations(
         Values above 0 must satisfy ``exp(-2 pad_sigma^2)`` residual; the
         pad is additionally capped at ``_SCHELL_MAX_PAD_GROWTH`` times the
         requested grid per axis, with a warning naming the residual left.
+        Meaningless for ``generator='modes'``, which has no transform to
+        wrap; a non-default value there is a ``ValueError`` rather than a
+        silent no-op.
+    generator : ``'fft'`` (default) / ``'modes'``
+        Which construction realises the kernel.
+
+        * ``'fft'`` -- the padded filtered-noise recipe above.  The
+          default, and byte-identical to every earlier release for a
+          given ``rng``.
+        * ``'modes'`` -- Gori pseudo-modes
+          (:func:`_gori_pseudo_mode_realizations`).  The correlation is
+          exact by construction at any ``M``, with no grid and therefore
+          no periodisation to pad against; the marginal approaches
+          circular-Gaussian as ``M`` grows, with an intensity-contrast
+          error of exactly ``1 / M``.
+
+        Measured 2026-09-13 at ``sigma_g = L/8``, per realisation
+        (interleaved ``tracemalloc`` peak / ``perf_counter`` medians),
+        with ``M`` from the heuristic (= 128 at these sizes)::
+
+            N     fft ms   modes ms   fft peak    modes peak
+            64      2.16       0.81    1.98 MB       0.86 MB
+            128     8.85       2.03    7.88 MB       2.11 MB
+            256    37.89       4.26   31.47 MB       6.30 MB
+            512   154.14      11.43  125.85 MB      20.99 MB
+
+        i.e. 2.6x to 13.5x CHEAPER in time and 2.3-6.0x in peak memory,
+        not the ~100x penalty the WP-A11 design estimated: that estimate
+        priced the FFT at ``N`` while the anti-wrap pad actually runs it
+        at 2-5x ``N`` per axis.  The crossover on a 512 grid is near
+        ``M = 2300`` (18.7 / 37.9 / 69.3 ms at M = 256 / 512 / 1024);
+        above that the FFT wins again.
+    n_pseudo_modes : int, optional
+        ``generator='modes'`` only.  ``None`` (default) takes the
+        coherence-cell heuristic :func:`_gori_mode_count`.
 
     Returns
     -------
@@ -2119,9 +2295,74 @@ def _schell_phase_realizations(
         raise ValueError(
             f"_schell_phase_realizations: pad_sigma must be a finite "
             f"non-negative number (units of sigma_g); got {pad_sigma!r}.")
+    gen = generator.lower().strip() if isinstance(generator, str) else generator
+    if gen not in ('fft', 'modes'):
+        raise ValueError(
+            f"_schell_phase_realizations: generator must be 'fft' or "
+            f"'modes'; got {generator!r}.")
+    if n_pseudo_modes is not None:
+        if gen != 'modes':
+            raise ValueError(
+                f"_schell_phase_realizations: n_pseudo_modes= is only "
+                f"meaningful with generator='modes' (got "
+                f"generator={generator!r}).")
+        if (not isinstance(n_pseudo_modes, (int, np.integer))
+                or isinstance(n_pseudo_modes, bool)
+                or int(n_pseudo_modes) < 1):
+            raise ValueError(
+                f"_schell_phase_realizations: n_pseudo_modes must be a "
+                f"positive integer; got {n_pseudo_modes!r}.")
 
     Lx, Ly = Nx * dx, Ny * dy
     L_min = min(Lx, Ly)
+
+    if gen == 'modes':
+        if pad_sigma != _SCHELL_PAD_SIGMA:
+            raise ValueError(
+                f"_schell_phase_realizations: pad_sigma={pad_sigma!r} has "
+                f"no meaning for generator='modes' -- the pseudo-mode sum "
+                f"has no transform to wrap, so there is nothing to pad "
+                f"against and pad_sigma=0.0 does NOT reproduce the pre-Z2 "
+                f"periodised kernel here.  Use generator='fft' with "
+                f"pad_sigma=0.0 for that.")
+        M = (_gori_mode_count(Lx, Ly, sigma_g) if n_pseudo_modes is None
+             else int(n_pseudo_modes))
+        if sigma_g > L_min / 6.0:
+            # Same convergence caveat as the FFT branch below, minus the
+            # kernel half: the pseudo-mode kernel is exact at any sigma_g,
+            # but an ensemble that holds fewer than six coherence cells
+            # still estimates two-point quantities from the aperture.
+            warnings.warn(
+                f"_schell_phase_realizations: coherence_length "
+                f"sigma_g={sigma_g:.4g} m exceeds L/6 = {L_min / 6.0:.4g} m "
+                f"(L = min(Nx*dx, Ny*dy) = {L_min:.4g} m), so fewer than 6 "
+                f"coherence lengths fit across the grid.  The pseudo-mode "
+                f"kernel is exact regardless -- there is no grid in it -- "
+                f"but the ENSEMBLE average of any two-point quantity (the "
+                f"MCF, the coherent-mode spectrum) is aperture-dominated "
+                f"rather than source-dominated and converges slowly.  "
+                f"Enlarge the grid (N*dx >= 6*sigma_g) for a "
+                f"source-dominated result.",
+                UserWarning, stacklevel=3)
+        cells = (Lx / sigma_g) * (Ly / sigma_g)
+        if n_pseudo_modes is None and cells > _GORI_MAX_MODES:
+            warnings.warn(
+                f"_schell_phase_realizations: the pseudo-mode heuristic "
+                f"asks for {cells:.4g} modes (the grid holds that many "
+                f"coherence cells at sigma_g={sigma_g:.4g} m) and is "
+                f"capped at {_GORI_MAX_MODES}.  The two-point kernel stays "
+                f"exact in expectation and the intensity-contrast error "
+                f"stays 1/M = {1.0 / _GORI_MAX_MODES:.3g}; what the cap "
+                f"costs is the k-space resolution of a SINGLE realisation, "
+                f"which now samples {_GORI_MAX_MODES} of those cells.  "
+                f"Average more realisations, or pass n_pseudo_modes= "
+                f"explicitly to override (the cost is O(M*Ny*Nx) per "
+                f"realisation).",
+                UserWarning, stacklevel=3)
+        return _gori_pseudo_mode_realizations(
+            Ny=Ny, Nx=Nx, dx=dx, dy=dy, sigma_g=sigma_g,
+            n_realizations=int(n_realizations), rng=rng, M=M)
+
     # CONVERGENCE / COST guard.  With the pad the kernel is right at any
     # sigma_g, but a grid shorter than ~6 coherence lengths holds too few
     # independent coherence cells for an ensemble estimate of ANY two-point
@@ -2228,6 +2469,8 @@ def create_gaussian_schell_source(
     max_full_N: int = 64,
     n_modes: Optional[int] = None,
     energy_threshold: float = 0.99,
+    generator: str = 'fft',
+    n_pseudo_modes: Optional[int] = None,
 ) -> Union[Tuple[np.ndarray, float, float, float], 'PartialCoherenceMCF']:
     """Gaussian-Schell partial-coherence source.
 
@@ -2318,6 +2561,20 @@ def create_gaussian_schell_source(
         signature symmetry but a no-op there (no modal truncation
         occurs).  v4.15.2 (P2): added to close the kwarg-forwarding
         gap flagged by the v4.15.1 audit.
+    generator : ``'fft'`` (default) / ``'modes'``
+        How the coherence kernel is realised -- the padded filtered-noise
+        FFT (default, unchanged) or Gori pseudo-modes.  ``'modes'``
+        carries the Gaussian correlation exactly by construction with no
+        grid and no periodisation, and on this machine costs 2.6-13.5x
+        LESS time and 2.3-6.0x less peak memory than the padded FFT it
+        replaces.  It realises a DIFFERENT random field for the same
+        ``rng``; the ensemble statistics are the ones that agree, not the
+        samples.  See :func:`_schell_phase_realizations` for the table
+        and the ``1/M`` contrast error.
+    n_pseudo_modes : int, optional
+        ``generator='modes'`` only: the number of pseudo-modes ``M``.
+        ``None`` (default) uses the coherence-cell heuristic
+        ``(Lx/sigma_g) * (Ly/sigma_g)``, clamped to [128, 4096].
 
     Returns
     -------
@@ -2369,7 +2626,8 @@ def create_gaussian_schell_source(
     phi = _schell_phase_realizations(
         Ny=int(N), Nx=int(N), dx=float(dx), dy=float(dy),
         coherence_length=float(sigma_g),
-        n_realizations=int(n_realizations), rng=rng)
+        n_realizations=int(n_realizations), rng=rng,
+        generator=generator, n_pseudo_modes=n_pseudo_modes)
     # E_k(r) = sqrt(I(r)) * phi_k(r).
     E_ensemble = (amp[None, :, :] * phi).astype(target_dtype)
 
@@ -2401,6 +2659,8 @@ def create_schell_model_source(
     max_full_N: int = 64,
     n_modes: Optional[int] = None,
     energy_threshold: float = 0.99,
+    generator: str = 'fft',
+    n_pseudo_modes: Optional[int] = None,
 ) -> Union[Tuple[np.ndarray, float, float, float], 'PartialCoherenceMCF']:
     """Generic Schell-model source with user-supplied intensity profile.
 
@@ -2444,6 +2704,9 @@ def create_schell_model_source(
         See :func:`create_gaussian_schell_source`.  v4.15.2 (P2):
         forwarded to :meth:`PartialCoherenceMCF.from_ensemble` on the
         ``return_kind='mcf'`` path; ignored otherwise.
+    generator, n_pseudo_modes
+        See :func:`create_gaussian_schell_source`.  The default stays
+        ``'fft'``, byte-identical to every earlier release.
 
     Returns
     -------
@@ -2483,7 +2746,8 @@ def create_schell_model_source(
     phi = _schell_phase_realizations(
         Ny=int(N), Nx=int(N), dx=float(dx), dy=float(dy),
         coherence_length=float(coherence_length),
-        n_realizations=int(n_realizations), rng=rng)
+        n_realizations=int(n_realizations), rng=rng,
+        generator=generator, n_pseudo_modes=n_pseudo_modes)
     E_ensemble = (amp[None, :, :] * phi).astype(target_dtype)
 
     if rk == 'mcf':

@@ -10,8 +10,12 @@ re-export shell in ``lumenairy.analysis.core``.
 Contents:
 
 * Fraunhofer PSF + OTF + MTF (:func:`compute_psf`, :func:`compute_otf`,
-  :func:`compute_mtf`, :func:`mtf_radial`).
-* Spec-sheet metrics (v4.14.0): encircled-energy curve / radius,
+  :func:`compute_mtf`, :func:`mtf_radial`).  :func:`compute_psf` offers
+  two samplers: the padded FFT on its natural grid (``method='fft'``,
+  the default) and the Soummer matrix Fourier transform on any pitch
+  you name (``method='mft'``).
+* Spec-sheet metrics (v4.14.0): the shared
+  :func:`encircled_energy_profile` and the curve / radius built on it,
   :func:`mtf_cutoff`.
 * Optical resolution metrics (v4.15.0): Rayleigh, Sparrow, FWHM.
 
@@ -34,6 +38,7 @@ __all__ = [
     'compute_mtf',
     'mtf_radial',
     'mtf_cutoff',
+    'encircled_energy_profile',
     'encircled_energy_curve',
     'encircled_energy_radius',
     'rayleigh_resolution',
@@ -49,6 +54,100 @@ from ..backend import array_namespace as _xp_of  # noqa: E402
 # PSF / MTF COMPUTATION
 # =============================================================================
 
+
+def _swap_halves_inplace(a: np.ndarray) -> None:
+    """Exchange opposite quadrants of ``a`` IN PLACE (both axes even).
+
+    For an even-length axis ``fftshift`` and ``ifftshift`` are the same
+    roll by ``N // 2``, so in two dimensions both are this one quadrant
+    exchange.  It is a PERMUTATION of the values: no arithmetic happens,
+    so the buffer handed to the FFT afterwards holds bit-for-bit what
+    ``ifftshift`` would have put in a fresh copy, and applying it to the
+    FFT output is ``fftshift`` by definition.  That is what makes
+    :func:`_centred_fft2` bit-identical by construction rather than by
+    measurement.
+
+    Scratch: one quadrant (``Ny * Nx / 4`` elements), reused for the
+    second exchange -- against the full-grid copy each explicit shift
+    allocates.
+    """
+    ny, nx = a.shape
+    hy, hx = ny // 2, nx // 2
+    tmp = a[:hy, :hx].copy()
+    a[:hy, :hx] = a[hy:, hx:]
+    a[hy:, hx:] = tmp
+    tmp[...] = a[:hy, hx:]
+    a[:hy, hx:] = a[hy:, :hx]
+    a[hy:, :hx] = tmp
+
+
+def _centred_fft2_take(box: list, xp):
+    """``fftshift(fft2(ifftshift(a)))`` for ``a = box[0]``, CONSUMING it.
+
+    The centred transform is the one every function here wants: input
+    origin at the array centre, output DC at the array centre.  Written
+    out as three calls it materialises the ``ifftshift`` copy, the two
+    intermediates ``fft2`` makes internally, and the ``fftshift`` copy;
+    with the padded input still named by the caller that is a peak of
+    **4.00** full-grid complex arrays.  Here the two shifts are quadrant
+    exchanges done in place, ``fft2`` is written out as its own two
+    passes so the input can be released between them, and ``box`` is
+    emptied on entry so the caller's name cannot hold the input past
+    the first pass.  Peak **2.00**: the two padded copies the audit
+    counted are gone.  Measured end to end through ``compute_psf``
+    (2026-09-13, interleaved medians): 4.00 -> 2.00 padded grids at
+    every point of ``N_pupil`` 512/1024 x oversample 2/4, i.e.
+    **268.4 -> 134.2 MB** at oversample 4 on a 512 pupil, and 1.06-1.32x
+    less wall time.
+
+    ``box`` is a one-element list purely as a transfer of ownership --
+    Python has no move, and a plain argument leaves the caller's
+    reference alive, which is worth a whole padded grid here.
+
+    ``fft2`` IS ``fft(axis=-1)`` then ``fft(axis=-2)``: ``_raw_fftnd``
+    walks ``axes`` in reverse, so splitting it changes no arithmetic
+    (asserted bit-for-bit by the regression file).
+
+    The in-place route needs a mutable buffer and an even length on both
+    axes, so it is taken only for NumPy arrays (JAX arrays are
+    immutable; CuPy would work but is left on the unchanged path so the
+    claim is proved on the backend the suite measures).  Everything else
+    keeps the explicit shifts.
+
+    The ALTERNATIVE the audit design named -- the separable chessboard
+    identity ``(-1)^(i+j) * fft2((-1)^(i+j) * a)`` -- is NOT used, and
+    the reason is measured: it is bit-identical to the explicit shifts
+    only when both lengths are a POWER OF TWO (checked over
+    N = 2...1024, three input families); on an even non-power-of-two it
+    agrees only to ~5e-16 relative (N = 100 / 192 / 384), and on an odd
+    length it is a different array entirely (relative 1.8 -- the cyclic
+    shift the design warned about).  A quadrant exchange moves no bits
+    at any length, so it is the form that leaves every existing caller's
+    PSF byte-for-byte where it was.
+    """
+    a = box[0]
+    box[0] = None
+    if (xp is np and isinstance(a, np.ndarray)
+            and a.shape[0] % 2 == 0 and a.shape[1] % 2 == 0):
+        _swap_halves_inplace(a)
+        tmp = np.fft.fft(a, axis=-1)
+        del a
+        F = np.fft.fft(tmp, axis=-2)
+        del tmp
+        _swap_halves_inplace(F)
+        return F
+    return xp.fft.fftshift(xp.fft.fft2(xp.fft.ifftshift(a)))
+
+
+def _centred_fft2(a, xp):
+    """Non-consuming :func:`_centred_fft2_take`: one copy is taken of an
+    array the caller still owns, which is exactly what the ``ifftshift``
+    it replaces cost anyway."""
+    if (xp is np and isinstance(a, np.ndarray)
+            and a.shape[0] % 2 == 0 and a.shape[1] % 2 == 0):
+        return _centred_fft2_take([a.copy()], xp)
+    return xp.fft.fftshift(xp.fft.fft2(xp.fft.ifftshift(a)))
+
 def compute_psf(
     pupil: np.ndarray,
     wavelength: float,
@@ -57,6 +156,9 @@ def compute_psf(
     N_psf: Optional[int] = None,
     oversample: int = 1,
     normalize: str = 'power',
+    *,
+    method: str = 'fft',
+    dx_psf: Optional[float] = None,
 ) -> Tuple[np.ndarray, float]:
     """
     Compute the point spread function (PSF) from a pupil function.
@@ -98,16 +200,91 @@ def compute_psf(
           at all.  Useful for absolute-photon-flux calculations when
           the pupil is normalised to a known input power.
 
+    method : ``'fft'`` (default) / ``'mft'``, keyword-only
+        Which Fourier sampler reaches the focal plane.
+
+        * ``'fft'`` (default): zero-pad the pupil to ``N_psf`` and take
+          one centred FFT.  The focal-plane pitch is then fixed at
+          ``wavelength * f / (N_psf * dx_pupil)`` -- a finer pitch costs
+          a proportionally larger padded grid, in memory and in time,
+          whether or not you want the wider field it also delivers.
+        * ``'mft'``: the Soummer *et al.* (*Opt. Express* **15** (2007)
+          15935) matrix Fourier transform, through
+          :func:`lumenairy.propagators.fraunhofer_propagate_mft`.  It
+          samples the SAME Fraunhofer integral directly onto whatever
+          ``dx_psf`` you ask for, with no padding at all, so the cost
+          scales with ``N_pupil + N_psf`` instead of with the zoom.
+          See ``dx_psf`` and the Notes for the compatibility statement.
+
+    dx_psf : float, optional, keyword-only
+        Focal-plane pitch [m], ``method='mft'`` only.  ``None`` (default)
+        uses the natural Fraunhofer pitch
+        ``wavelength * f / (N_psf * dx_pupil)``, i.e. exactly the grid
+        the padded FFT would deliver.  A smaller value zooms in (finer
+        sampling of the core over a narrower field), a larger one zooms
+        out.  Passing it with ``method='fft'`` is a ``ValueError`` --
+        the FFT grid is not free.
+
     Returns
     -------
     psf : ndarray (real, N_psf x N_psf)
         Intensity point spread function, scaled according to
         ``normalize``.
     dx_psf : float
-        Focal-plane grid spacing [m] = wavelength * f / (N_psf * dx_pupil).
+        Focal-plane grid spacing [m].  For ``method='fft'`` this is
+        ``wavelength * f / (N_psf * dx_pupil)``; for ``method='mft'``
+        it is the ``dx_psf`` argument (the same expression when that is
+        left ``None``).  Either way the returned grid is
+        ``(arange(N_psf) - N_psf / 2) * dx_psf`` in both axes, centred
+        on the optical axis.
 
     Notes
     -----
+    **``method='mft'`` compatibility (audit section 15.9).**  The PSF
+    grid contract does not move: with ``dx_psf=None`` the MFT samples
+    the same lattice the padded FFT does, and on an EVEN ``N_pupil`` and
+    ``N_psf`` the two agree to **1.1e-15 of the peak** (measured over
+    ``N_pupil`` 64/128/256 x oversample 1/2/4 on an aberrated circular
+    pupil; the MFT's own floor against a brute-force centred Fourier sum
+    is 7.7e-15, and against the closed-form Gaussian PSF 1.1e-15).  On
+    an ODD length the two differ by HALF A PIXEL and nothing else: the
+    FFT path's ``ifftshift`` centres the pupil on index ``N // 2`` while
+    the MFT follows the package coordinate convention
+    ``(arange(N) - N / 2) * dx``, and for odd ``N`` those are not the
+    same sample.  ``method='mft'`` warns rather than silently handing
+    back the shifted grid.
+
+    ``normalize='power'`` is the analytic Parseval constant on the MFT
+    path (``(dx_pupil^2 / (wavelength f))^2``, which is what the FFT
+    path's empirical in-window ratio evaluates to on the full grid),
+    NOT a rescale of the delivered window -- on a zoomed window an
+    empirical rescale would force the visible fraction of the energy to
+    equal the whole pupil's, which is simply wrong.
+
+    Use ``'mft'`` when you want a fine pitch over a small window, which
+    is the coronagraph / high-contrast case it was written for; keep
+    the default ``'fft'`` when you want the whole natural field.
+    Measured on this machine (512 pupil, 64 x 64 output window,
+    ``tracemalloc`` peak / ``perf_counter`` median, 2026-09-13)::
+
+        zoom   N_psf (fft)   fft peak    fft ms    mft peak   mft ms
+        1              512      8.4 MB      20.9     24.5 MB     20.2
+        2             1024     33.6 MB      70.6     24.5 MB     20.4
+        4             2048    134.2 MB     332.7     24.5 MB     23.0
+        8             4096    536.9 MB    1462.7     24.5 MB     23.2
+        16            8192   2147.5 MB    6520.6     24.5 MB     18.6
+        32           16384   8589.9 MB   27797.0     24.5 MB     22.7
+
+    The MFT's cost is FLAT in the zoom (it scales with
+    ``N_pupil + N_psf``, not with the pitch), so the ratio grows
+    without bound: **87.7x memory and 349.7x time at 16x**, 350.9x and
+    1223.6x at 32x.  On the FULL natural grid the ranking reverses --
+    the Bluestein pads to ``N_pupil + N_psf`` and transforms that,
+    costing 3.1-7.5x the memory and 2.5-5.0x the time of the plain
+    padded FFT (measured at oversample 4 / 2 / 1).  That is why
+    ``'fft'`` stays the default; the crossover on this pupil is between
+    1x and 2x zoom.
+
     The PSF is the intensity response of the system to a point source at
     infinity. For an unaberrated circular aperture of diameter D, the PSF
     is the Airy pattern with first zero at r = 1.22 * lambda * f / D.
@@ -151,6 +328,20 @@ def compute_psf(
     Np = pupil.shape[0]
     if N_psf is None:
         N_psf = Np * oversample
+    if method not in ('fft', 'mft'):
+        raise ValueError(
+            f"compute_psf: method must be 'fft' or 'mft'; got {method!r}.")
+    if dx_psf is not None and method != 'mft':
+        raise ValueError(
+            f"compute_psf: dx_psf= is only meaningful with method='mft' "
+            f"(got method={method!r}).  The FFT grid is fixed at "
+            f"wavelength*f/(N_psf*dx_pupil); ask for a finer pitch with "
+            f"a larger N_psf / oversample, or pass method='mft'.")
+
+    if method == 'mft':
+        psf, dx_psf_out = _compute_psf_mft(
+            pupil, wavelength, f, dx_pupil, N_psf, normalize, dx_psf, xp)
+        return psf, dx_psf_out
 
     # Zero-pad pupil if oversampling.  Uses xp.pad so CuPy / JAX
     # arrays don't get coerced through NumPy.
@@ -160,19 +351,49 @@ def compute_psf(
         pupil_padded = xp.pad(pupil, ((pad_before, pad_after),
                                        (pad_before, pad_after)),
                               mode='constant')
+        owns_padded = True
     else:
         pupil_padded = pupil
+        owns_padded = False
 
-    # Fraunhofer: PSF amplitude is FFT of pupil
-    amp = xp.fft.fftshift(xp.fft.fft2(xp.fft.ifftshift(pupil_padded)))
-    psf = xp.abs(amp) ** 2
+    # The pupil-side half of the 'power' Parseval ratio is read HERE, off
+    # the padded array, because the transform below consumes it.  Same
+    # expression, same array, same value -- the move is only in time.
+    pupil_power_area = None
+    if normalize == 'power':
+        pupil_power_area = (float(xp.sum(xp.abs(pupil_padded) ** 2))
+                            * (dx_pupil ** 2))
+
+    # Fraunhofer: PSF amplitude is FFT of pupil.  Ownership of the padded
+    # array is handed over (see _centred_fft2_take): when this function
+    # made the pad it is consumed in place, and the local name is cleared
+    # first so it cannot keep a whole padded grid alive across the
+    # transform.
+    if owns_padded:
+        _box = [pupil_padded]
+        pupil_padded = None
+        amp = _centred_fft2_take(_box, xp)
+    else:
+        amp = _centred_fft2(pupil_padded, xp)
+        pupil_padded = None
+    if xp is np and isinstance(amp, np.ndarray):
+        # |amp|^2 through one real buffer: ``np.square(t, out=t)`` is the
+        # same ufunc as ``t ** 2`` on the same values, and releasing the
+        # complex grid first keeps the peak at the transform's.
+        psf = np.abs(amp)
+        del amp
+        np.square(psf, out=psf)
+    else:
+        psf = xp.abs(amp) ** 2
+        del amp
 
     # Apply the requested normalisation.  Default is 'power' because
     # Strehl-ratio computations rely on the peak-ratio of two PSFs
     # normalised to equal total intensity.
     if normalize == 'peak':
-        if float(psf.max()) > 0:
-            psf = psf / psf.max()
+        psf_max = psf.max()
+        if float(psf_max) > 0:
+            psf = _scaled(psf, 1.0, xp, divisor=psf_max)
     elif normalize == 'power':
         # 4.10: Parseval-correct rescaling.  Physical Parseval says
         #   ∫ |E_pupil(x)|^2 dA_pupil  ==  ∫ |E_psf(x)|^2 dA_psf
@@ -183,10 +404,9 @@ def compute_psf(
         # users asking for absolute photon flux (also a documented
         # use-case) were getting the wrong answer.
         dx_psf_local = wavelength * f / (N_psf * dx_pupil)
-        pupil_power_area = float(xp.sum(xp.abs(pupil_padded) ** 2)) * (dx_pupil ** 2)
         psf_power_area = float(xp.sum(psf)) * (dx_psf_local ** 2)
         if psf_power_area > 0 and pupil_power_area > 0:
-            psf = psf * (pupil_power_area / psf_power_area)
+            psf = _scaled(psf, pupil_power_area / psf_power_area, xp)
     elif normalize == 'none':
         pass
     else:
@@ -196,6 +416,94 @@ def compute_psf(
     # Focal-plane grid spacing from Fraunhofer relation
     dx_psf = wavelength * f / (N_psf * dx_pupil)
 
+    return psf, dx_psf
+
+
+def _scaled(a, factor, xp, *, divisor=None):
+    """``a * factor`` (or ``a / divisor``), in place when ``a`` is a NumPy
+    array this module just built.
+
+    ``a *= c`` and ``a /= c`` are the same ufuncs as ``a * c`` / ``a / c``
+    on the same operands, so the values are bit-identical; the only
+    difference is that the result lands in the buffer that already exists
+    instead of a second full-grid one."""
+    if xp is np and isinstance(a, np.ndarray):
+        if divisor is None:
+            a *= factor
+        else:
+            a /= divisor
+        return a
+    return a / divisor if divisor is not None else a * factor
+
+
+def _compute_psf_mft(pupil, wavelength, f, dx_pupil, N_psf, normalize,
+                     dx_psf, xp):
+    """``compute_psf(method='mft')``: Soummer (2007) matrix Fourier
+    transform onto an arbitrary focal-plane pitch, no padding.
+
+    Delegates the sampler to
+    :func:`lumenairy.propagators.fraunhofer_propagate_mft`, whose output
+    already carries the physical Fraunhofer prefactor
+    ``exp(ikz)/(i lambda z) * dx_in * dy_in``.  The MODULUS of that
+    prefactor, ``dx_pupil^2 / (wavelength f)``, is exactly the square
+    root of the Parseval ratio the FFT path measures empirically on the
+    full grid, so ``|E_out|^2`` IS the ``normalize='power'`` PSF with no
+    further scaling -- and unlike an in-window rescale it stays right
+    when the window is a zoomed sub-field.  ``'none'`` divides that
+    constant back out to recover the FFT path's raw ``|FT{pupil}|^2``
+    convention."""
+    import warnings
+
+    from ..propagators.mft import fraunhofer_propagate_mft
+
+    if not (np.isfinite(f) and f > 0):
+        raise ValueError(
+            f"compute_psf: method='mft' needs a positive finite focal "
+            f"length (got f={f!r}); the matrix Fourier transform is the "
+            f"far-field limit and is forward-only.")
+    if dx_psf is None:
+        dx_psf = wavelength * f / (N_psf * dx_pupil)
+    dx_psf = float(dx_psf)
+    Np = pupil.shape[0]
+    if Np % 2 or int(N_psf) % 2:
+        # The two samplers do NOT centre an odd grid on the same sample:
+        # the FFT path's ifftshift puts the origin at index N // 2, the
+        # MFT follows the package convention (arange(N) - N/2)*dx.  For
+        # odd N that is half a pixel apart, which is invisible in a
+        # single call and obvious in a method-to-method comparison.
+        warnings.warn(
+            f"compute_psf: method='mft' on an ODD grid "
+            f"(N_pupil={Np}, N_psf={int(N_psf)}) samples a grid shifted "
+            f"by half a pixel from method='fft'.  The FFT path centres "
+            f"an odd axis on index N//2 (numpy's ifftshift); the MFT "
+            f"centres it on N/2, the package's "
+            f"(arange(N) - N/2)*dx convention.  Use an even N_pupil and "
+            f"N_psf if the two methods have to agree pixel for pixel.",
+            UserWarning, stacklevel=3)
+
+    E_focal = fraunhofer_propagate_mft(
+        pupil, float(f), float(wavelength), float(dx_pupil),
+        dx_psf, int(N_psf))
+    if xp is np and isinstance(E_focal, np.ndarray):
+        psf = np.abs(E_focal)
+        del E_focal
+        np.square(psf, out=psf)
+    else:
+        psf = xp.abs(E_focal) ** 2
+        del E_focal
+
+    if normalize == 'peak':
+        psf_max = psf.max()
+        if float(psf_max) > 0:
+            psf = _scaled(psf, 1.0, xp, divisor=psf_max)
+    elif normalize == 'power':
+        pass                       # analytic Parseval, already applied
+    elif normalize == 'none':
+        prefactor_sq = (dx_pupil ** 2 / (wavelength * f)) ** 2
+        psf = _scaled(psf, 1.0, xp, divisor=prefactor_sq)
+    else:
+        raise ValueError(
+            f"normalize must be 'power', 'peak', or 'none'; got {normalize!r}")
     return psf, dx_psf
 
 
@@ -241,11 +549,15 @@ def compute_otf(psf: np.ndarray) -> np.ndarray:
     from lumenairy._validation import _check_2d_scalar_field
     _check_2d_scalar_field(psf, 'compute_otf', input_kind='psf')
     xp = _xp_of(psf)
-    otf = xp.fft.fftshift(xp.fft.fft2(xp.fft.ifftshift(psf)))
+    otf = _centred_fft2(psf, xp)
     # Normalize so DC component = 1
     dc = otf[otf.shape[0] // 2, otf.shape[1] // 2]
     if abs(complex(dc)) > 0:
-        otf = otf / dc
+        # In place: ``otf`` is this function's own array and ``dc`` was
+        # read out of it before the divide, so ``/=`` is the same ufunc
+        # on the same operands as ``otf / dc`` and saves the second
+        # full-grid complex result.
+        otf = _scaled(otf, 1.0, xp, divisor=dc)
     return otf
 
 
@@ -420,6 +732,151 @@ def _ee_sorted_cumulative(
     return r_sorted, p_cum, float(r_sorted[-1])
 
 
+#: Empty profile arrays for a degenerate (zero-power) field, so the public
+#: :func:`encircled_energy_profile` has ONE return type rather than a
+#: tuple that is sometimes ``(None, None, float)``.
+_EE_EMPTY = np.empty(0, dtype=np.float64)
+
+
+def encircled_energy_profile(
+    E: np.ndarray,
+    dx: float,
+    *,
+    dy: Optional[float] = None,
+    centroid: Optional[Tuple[float, float]] = None,
+) -> Tuple[np.ndarray, np.ndarray, float]:
+    """The radial cumulative-energy profile both encircled-energy
+    functions are built on -- computed once, usable by both.
+
+    :func:`encircled_energy_curve` samples this profile and
+    :func:`encircled_energy_radius` inverts it, and each builds its own
+    when it is not given one.  A caller that wants BOTH (the usual
+    spec-sheet pattern: the curve to plot, the 84 % radius to quote)
+    otherwise pays for two identical ``argsort`` passes over the whole
+    grid -- 499 ms + 487 ms at N = 2048 as the audit measured it.  Build
+    the profile once and hand it to both through their ``profile=``
+    argument.
+
+    Parameters
+    ----------
+    E : ndarray, complex, shape (Ny, Nx)
+        Complex electric-field distribution; the intensity is
+        ``|E|**2``.  A real-valued array is treated as an amplitude.
+    dx : float
+        Grid spacing in x [m].
+    dy : float, optional
+        Grid spacing in y [m].  Defaults to ``dx``.
+    centroid : (cx, cy), optional
+        Centre of the circles [m] from the grid origin (pixel
+        ``(Nx/2, Ny/2)``).  Defaults to the intensity centroid via
+        :func:`beam_centroid` -- which is the decision the profile
+        freezes, so both consumers see the same centre.
+
+    Returns
+    -------
+    r_sorted : ndarray, shape (Ny*Nx,)
+        Every pixel's distance from the centre, sorted ascending.
+    p_cum : ndarray, shape (Ny*Nx,)
+        Cumulative fraction of the total in-grid power in that order:
+        ``p_cum[k]`` is the power inside AND INCLUDING ``r_sorted[k]``.
+        Non-decreasing, ending at 1 up to ``cumsum`` rounding.
+    r_max : float
+        The largest in-grid radius (the grid corner).
+
+    For a degenerate, zero-power field ``r_sorted`` and ``p_cum` come
+    back EMPTY (size 0) and ``r_max`` is still the grid corner; both
+    consumers recognise that and emit their documented zero answer.
+
+    Notes
+    -----
+    This is a plain value: it holds no reference to ``E`` and is not
+    cached anywhere.  A content-keyed cache was considered and rejected
+    -- keying on the array CONTENT means hashing ~67 MB per call at
+    N = 2048 (~60 ms), a 12 % tax on the far more common single-call
+    path, and a key on anything less than the content is exactly the
+    incomplete-cache-key shape of audit section 15.5.
+
+    The profile is only valid for the ``(dx, dy, centroid)`` it was
+    built with; passing it to a consumer called with different sampling
+    silently answers the question you did not ask, so the consumers
+    check what they cheaply can (shape and monotonicity of the
+    endpoints) and document the rest.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from lumenairy.analysis import (encircled_energy_profile,
+    ...                                 encircled_energy_curve,
+    ...                                 encircled_energy_radius)
+    >>> N, dx = 128, 1e-6
+    >>> x = (np.arange(N) - N/2) * dx
+    >>> X, Y = np.meshgrid(x, x)
+    >>> E = np.exp(-(X**2 + Y**2) / (20e-6)**2).astype(complex)
+    >>> prof = encircled_energy_profile(E, dx)
+    >>> r, ee = encircled_energy_curve(E, dx, profile=prof)
+    >>> r84 = encircled_energy_radius(E, dx, profile=prof)
+    >>> bool(np.all(np.diff(ee) >= -1e-12))
+    True
+    """
+    from lumenairy._validation import _check_2d_scalar_field
+    _check_2d_scalar_field(E, 'encircled_energy_profile', input_kind='field')
+    if E.ndim != 2:
+        raise ValueError(
+            f"encircled_energy_profile: E must be 2-D; got shape "
+            f"{E.shape!r}.")
+    dy_f = dx if dy is None else dy
+    r_sorted, p_cum, r_max = _ee_sorted_cumulative(E, dx, dy_f, centroid)
+    if p_cum is None:
+        return _EE_EMPTY, _EE_EMPTY, float(r_max)
+    return r_sorted, p_cum, float(r_max)
+
+
+def _resolve_ee_profile(profile, E, dx, dy, centroid, fn_name):
+    """Return ``(r_sorted, p_cum, r_max, owned)`` for either a supplied
+    profile or a freshly built one.
+
+    ``owned`` says whether the arrays were built here; a caller-supplied
+    profile must never be written through (``encircled_energy_radius``
+    clamps ``p_cum`` in place when it owns it).
+
+    Validation of a supplied profile is deliberately O(1) -- the two
+    shapes, the two lengths and the endpoints.  Re-checking that
+    ``r_sorted`` is sorted and ``p_cum`` monotone would cost the very
+    pass the argument exists to avoid; the docstring states the
+    contract instead.
+    """
+    if profile is None:
+        r_sorted, p_cum, r_max = _ee_sorted_cumulative(E, dx, dy, centroid)
+        return r_sorted, p_cum, r_max, True
+    try:
+        r_sorted, p_cum, r_max = profile
+    except (TypeError, ValueError):
+        raise ValueError(
+            f"{fn_name}: profile must be the 3-tuple "
+            f"(r_sorted, p_cum, r_max) returned by "
+            f"encircled_energy_profile; got {type(profile).__name__}.")
+    r_sorted = np.asarray(r_sorted, dtype=np.float64)
+    p_cum = np.asarray(p_cum, dtype=np.float64)
+    if r_sorted.ndim != 1 or p_cum.ndim != 1 or r_sorted.size != p_cum.size:
+        raise ValueError(
+            f"{fn_name}: profile's r_sorted and p_cum must be 1-D arrays "
+            f"of the same length; got shapes {r_sorted.shape!r} and "
+            f"{p_cum.shape!r}.  Build it with "
+            f"encircled_energy_profile(E, dx, ...).")
+    r_max = float(r_max)
+    if p_cum.size == 0:
+        return None, None, r_max, False
+    if centroid is not None or dy is not None:
+        # Both are frozen INTO the profile, so accepting them alongside
+        # one would quietly answer a different question.
+        raise ValueError(
+            f"{fn_name}: profile= already carries the centre and the "
+            f"pixel pitch it was built with, so centroid= / dy= cannot "
+            f"be supplied with it.  Pass them to "
+            f"encircled_energy_profile instead.")
+    return r_sorted, p_cum, r_max, False
+
+
 def encircled_energy_curve(
     E: np.ndarray,
     dx: float,
@@ -428,6 +885,7 @@ def encircled_energy_curve(
     radii: Optional[np.ndarray] = None,
     centroid: Optional[Tuple[float, float]] = None,
     n_radii: int = 64,
+    profile: Optional[Tuple[np.ndarray, np.ndarray, float]] = None,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """Encircled-energy curve of an intensity distribution.
 
@@ -457,6 +915,15 @@ def encircled_energy_curve(
         intensity centroid via :func:`beam_centroid`.
     n_radii : int, default 64
         Number of radii to sample when ``radii`` is ``None``.
+    profile : (r_sorted, p_cum, r_max), optional
+        A profile from :func:`encircled_energy_profile`, reused instead
+        of sorting ``E`` again.  It already carries the pixel pitch and
+        the centre it was built with, so ``dy`` / ``centroid`` may not
+        be given alongside it.  Use it when the same field also goes to
+        :func:`encircled_energy_radius` -- one sort instead of two,
+        measured 2.11x on the pair at N = 1024 (221.7 -> 105.0 ms) and
+        2.14x at N = 2048 (1016.0 -> 474.4 ms), at no change in peak
+        memory.
 
     Returns
     -------
@@ -505,6 +972,7 @@ def encircled_energy_curve(
     # intensity PSF -- the function detects both).
     from lumenairy._validation import _check_2d_scalar_field
     _check_2d_scalar_field(E, 'encircled_energy_curve', input_kind='field')
+    dy_raw = dy
     if dy is None:
         dy = dx
     if E.ndim != 2:
@@ -516,8 +984,9 @@ def encircled_energy_curve(
             f"encircled_energy_curve: n_radii must be >= 2; got "
             f"{n_radii!r}.")
 
-    r_sorted, p_cum, r_max_grid = _ee_sorted_cumulative(
-        E, dx, dy, centroid)
+    r_sorted, p_cum, r_max_grid, _owned = _resolve_ee_profile(
+        profile, E, dx, dy if profile is None else dy_raw, centroid,
+        'encircled_energy_curve')
 
     if p_cum is None:
         # Degenerate input -- emit a zero curve over the requested
@@ -577,6 +1046,7 @@ def encircled_energy_radius(
     dy: Optional[float] = None,
     threshold: float = 0.84,
     centroid: Optional[Tuple[float, float]] = None,
+    profile: Optional[Tuple[np.ndarray, np.ndarray, float]] = None,
 ) -> float:
     """Radius within which a given fraction of the total power is
     encircled.
@@ -599,6 +1069,14 @@ def encircled_energy_radius(
         Encircled-power fraction in ``(0, 1]``.
     centroid : (cx, cy), optional
         Centroid coordinates [m].  Defaults to the intensity centroid.
+    profile : (r_sorted, p_cum, r_max), optional
+        A profile from :func:`encircled_energy_profile`, inverted
+        instead of sorting ``E`` again.  It already carries the pixel
+        pitch and the centre it was built with, so ``dy`` / ``centroid``
+        may not be given alongside it.  Passing the SAME profile here
+        and to :func:`encircled_energy_curve` is what makes the radius
+        the exact inverse of that curve by construction rather than by
+        the two calls happening to agree.
 
     Returns
     -------
@@ -691,8 +1169,9 @@ def encircled_energy_radius(
     # Invert the EXACT cumulative-energy curve (see Notes).  No radius
     # ladder is involved, so the answer cannot depend on the array
     # size / zero-padding.
-    r_sorted, p_cum, r_max_grid = _ee_sorted_cumulative(
-        E, dx, dy_f, centroid)
+    r_sorted, p_cum, r_max_grid, owned = _resolve_ee_profile(
+        profile, E, dx, dy_f if profile is None else dy, centroid,
+        'encircled_energy_radius')
     if p_cum is None:
         # Degenerate (zero-power) input: the curve is identically zero
         # and never reaches any threshold in (0, 1] -- report the grid
@@ -704,8 +1183,13 @@ def encircled_energy_radius(
     # Numerical-safety clamp -- np.cumsum can drift a few ULP outside
     # [0, 1] but the curve is bounded there by definition.  Mirrors
     # the clamp encircled_energy_curve applies to its own output so
-    # the two stay consistent.
-    np.clip(p_cum, 0.0, 1.0, out=p_cum)
+    # the two stay consistent.  In place only on a profile this call
+    # built: a caller-supplied one belongs to the caller and may well
+    # be handed to encircled_energy_curve next.
+    if owned:
+        np.clip(p_cum, 0.0, 1.0, out=p_cum)
+    else:
+        p_cum = np.clip(p_cum, 0.0, 1.0)
 
     # If the curve never reaches the threshold (beam clips the grid,
     # or threshold == 1.0 and the cumulative sum saturates a hair
