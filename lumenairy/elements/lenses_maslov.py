@@ -89,13 +89,77 @@ _QUAD_FACTORIZE = True
 _N_V2_AUTO_MIN = 32
 _N_V2_AUTO_MAX = 256
 
-# S6 (audit): the input angular spread (3-sigma direction-cosine NA, measured
-# from E_in's angular spectrum) above which the OPD-only saddle of the two
-# asymptotic evaluators is no longer the stationary point of the full
-# integrand.  1e-3 rad is ~1/1000 of the horizon: far below any real
+# S6 (audit): the input WAVEFRONT spread (3-sigma local-direction-cosine NA)
+# above which the OPD-only saddle of the two asymptotic evaluators is no longer
+# the stationary point of the full integrand -- so above it the driver fits the
+# input's local wavevector into the saddle, and below it the OPD-only saddle
+# ships unchanged.  1e-3 rad is ~1/1000 of the horizon: far below any real
 # divergence, far above the 1e-10..1e-12 floor a numerically flat wave leaves
-# in an FFT second moment, so a genuinely collimated input never trips it.
+# in a phase-gradient estimate, so a genuinely collimated input never trips it.
+# This bar is a FLATNESS DECLARATION, not a claim that the sub-bar error is
+# negligible: the OPD-only saddle's launch direction is wrong by the input's
+# own |v1_in|, so an input tilt theta misplaces the spot by ~f*theta whatever
+# f is, and at the bar that is 2 um on the f = 6 mm fixture (one
+# diffraction-limited spot there, 0.3 mm on an f = 1 m system).  MEASURED
+# across it (f = 6 mm N-BK7 singlet, NA 0.05 chart, readout 0.6 mm past best
+# focus, 'stationary_phase'), the relative L2 the fitted saddle moves the
+# field by is 4.3e-02 at NA_wf = 3.0e-04, 1.46e-01 at the bar, 4.7e-01 at
+# 3.0e-03 and O(1) beyond: linear in the tilt, with no natural knee.  What the
+# bar really separates is a field that HAS a wavefront from one that is flat
+# up to numerical noise (a numerically real field measures EXACTLY 0 here, and
+# a field carrying float64 phase dirt measures ~1e-16), which matters because
+# fitting k1 out of phase dirt would trip the residual gate below and warn
+# about nothing.  A caller whose optic makes 3e-04 rad matter sets
+# ``_S6_INPUT_WAVEVECTOR_SADDLE = True``.
 _SADDLE_FLAT_INPUT_NA = 1e-3
+
+# S6 fallback: the largest intensity-weighted RMS residual of the (k1x, k1y)
+# fit, as a fraction of their own intensity-weighted RMS, at which the fitted
+# local wavevector is still trusted to place the saddle.  0.5 is "the fit
+# explains at least 75 % of the local wavevector's power".  Above it the
+# driver keeps the OPD-only saddle and warns.
+#
+# MEASURED on the f = 6 mm N-BK7 singlet chart (order 4, 16^4 rays, readout
+# 0.6 mm past best focus), as the residual and the field fidelity against a
+# lumenairy-free conic-raytrace + Rayleigh-Sommerfeld oracle, OPD-only saddle
+# -> fitted saddle:
+#
+#   residual 1.5e-12 (pure tilt) ......................  0.192 -> 0.907
+#   residual 1.1e-05..1.7e-05 (converging / diverging) . 0.481 -> 0.991
+#   residual 8.0e-05..5.7e-02 (10-20 waves of coma /
+#            astigmatism / trefoil / spherical) ........ (all improve)
+#   residual 7.2e-02..2.9e-01 (hard-edged aperture at
+#            0.4..0.95 of the traced pupil) ............ 0.164 -> 0.812,
+#                                            0.118 -> 0.279, 0.086 -> 0.190
+#   residual 1.1e-01..9.1e-01 (speckle, 0.002..0.05 rad
+#            rms phase noise on a tilt) ................ 0.192 -> 0.911,
+#                                            0.192 -> 0.439, 0.191 -> 0.251
+#   residual 9.6e-01 (0.1 rad rms speckle) ............. 0.191 -> 0.105 (WORSE)
+#   residual 9.8e-01 (0.3 rad rms speckle) ............. 0.572 -> 0.000 (WORSE)
+#   residual 9.9e-01 (uniform white-noise phase) ....... 0.014 -> 0.009 (WORSE)
+#
+# So the measured turning point sits between residual 0.91 and 0.96, and the
+# bar is placed a factor 1.8 below it.  That deliberately refuses a band
+# (0.5..0.91) in which the fitted saddle would still have helped: the
+# criterion has to be a property of the INPUT -- the library has no oracle at
+# run time -- and "three quarters of the wavevector's power is explained" is
+# the strongest statement the fit itself supports.  The refused band is
+# reachable with ``_S6_INPUT_WAVEVECTOR_SADDLE = True``, and it warns.
+_K1_FIT_RESIDUAL_MAX = 0.5
+
+# S6 A/B seam, in the style of ``_QUAD_FACTORIZE`` above.  ``None`` (default)
+# is the decision described at ``_SADDLE_FLAT_INPUT_NA`` and
+# ``_K1_FIT_RESIDUAL_MAX``; ``False`` always solves ``grad_v2 OPD = 0`` -- the
+# OPD-only saddle, and its warning, for every input -- and ``True`` uses the
+# fitted local wavevector whenever the input is not flat, faithful fit or not.
+# It is how the regression tests hold the two saddles side by side on one
+# build, and the only way to ask for the OPD-only answer on a non-collimated
+# input; the changelog's Migration note says when a caller wants that.
+# Process-global and private: the per-call spelling is an
+# ``input_wavevector_saddle=`` keyword, which needs a
+# ``lens_config.KWARG_ONLY`` entry to land and is requested in the WP-B1
+# report.
+_S6_INPUT_WAVEVECTOR_SADDLE = None
 
 # poly_order='auto' (v5.21): raise the tensor-Chebyshev OPD-fit order until the
 # held-out fit residual stops improving (plateau) or reaches a good-enough
@@ -1015,8 +1079,99 @@ def _opd6_xp(xp, coef, K1, K2, K3, K4, u1, u2, u3, u4, P):
     return f, df_du3, df_du4, d2f_33, d2f_34, d2f_44
 
 
+# ---------------------------------------------------------------------------
+# The INPUT field's phase in the saddle condition (finding S6).
+#
+# The integrand is  E_in(s1(s2, v2)) |det ds1/dv2|^(1/2) exp(2 pi i OPD_waves),
+# so the phase that is stationary in v2 is the TOTAL
+#
+#     Psi(v2) = OPD_waves(s2, v2) + arg E_in(s1(s2, v2)) / (2 pi).
+#
+# Writing k1 = (1/k0) grad arg E_in -- the input's local wavevector, which is
+# ``n1`` times its direction cosine and is exactly what
+# ``_local_direction_cosines`` returns -- the second term's v2-gradient is
+# ``(k1 . ds1/dv2) / lambda`` in waves.  Dropping it leaves grad_v2 OPD = 0,
+# and the symplectic identity ``dOPD/dv2 = -n1 (v1 . ds1/dv2)`` makes THAT the
+# v1 = 0 (on-axis collimated) launch ray at every pixel and for every input.
+# Keeping it makes the saddle condition ``(v1_in - v1) . ds1/dv2 = 0``: the ray
+# whose LAUNCH direction matches the input's local wavevector, which is the
+# ray the leading-order expansion is supposed to be about.
+#
+# ``k1`` reaches here as two more Chebyshev fits over the SAME chart
+# coordinates the OPD and s1 fits use (``apply_real_lens_maslov`` builds them),
+# so the term and its derivative come out of the same 4-variable evaluator and
+# the CPU / GPU twins cannot drift apart.  E_in's own amplitude AND its phase
+# VALUE stay where they are -- the integrand still samples the complex field,
+# so the input phase enters the answer exactly rather than through the fit;
+# the fit is used only to say WHERE the saddle is and how sharp it is.
+# ---------------------------------------------------------------------------
+
+def _input_phase_terms(s1x_ev, s1y_ev, k1x_ev, k1y_ev, inv_wavelength):
+    """Gradient and Hessian of the input field's phase, in WAVES per unit of
+    the normalised chart coordinate -- the S6 term.
+
+    ``s1x_ev`` / ``s1y_ev`` are the full 6-tuples
+    ``(f, df_du3, df_du4, d2f_33, d2f_34, d2f_44)`` of the entrance-coordinate
+    fits; ``k1x_ev`` / ``k1y_ev`` the same 6-tuples of the local-wavevector
+    fits (only the value and the two first derivatives are read).  Returns
+    ``(g3, g4, a33, a34, a44)``.
+
+    The mixed second derivative is SYMMETRISED.  ``d(k1 . ds1/du3)/du4`` and
+    ``d(k1 . ds1/du4)/du3`` differ by ``(dk1a/ds1b - dk1b/ds1a)`` contracted
+    with the two chart tangents, which vanishes for the true field (``k1`` is
+    a gradient, so its Jacobian is symmetric) and is pure fit residual here.
+    The Newton step solves a symmetric 2x2, so taking the mean is both the
+    consistent reading and the one that keeps the two twins' step identical.
+    """
+    s1x, ds1x_3, ds1x_4, d2x_33, d2x_34, d2x_44 = s1x_ev
+    s1y, ds1y_3, ds1y_4, d2y_33, d2y_34, d2y_44 = s1y_ev
+    k1x, dkx_3, dkx_4 = k1x_ev[0], k1x_ev[1], k1x_ev[2]
+    k1y, dky_3, dky_4 = k1y_ev[0], k1y_ev[1], k1y_ev[2]
+    g3 = (k1x * ds1x_3 + k1y * ds1y_3) * inv_wavelength
+    g4 = (k1x * ds1x_4 + k1y * ds1y_4) * inv_wavelength
+    a33 = (dkx_3 * ds1x_3 + k1x * d2x_33
+           + dky_3 * ds1y_3 + k1y * d2y_33) * inv_wavelength
+    a44 = (dkx_4 * ds1x_4 + k1x * d2x_44
+           + dky_4 * ds1y_4 + k1y * d2y_44) * inv_wavelength
+    a34 = (0.5 * (dkx_4 * ds1x_3 + dkx_3 * ds1x_4
+                  + dky_4 * ds1y_3 + dky_3 * ds1y_4)
+           + k1x * d2x_34 + k1y * d2y_34) * inv_wavelength
+    return g3, g4, a33, a34, a44
+
+
+def _eval_input_phase_terms(evalf, k1_fit, u1, u2, u3, u4):
+    """:func:`_input_phase_terms` with the four fits evaluated by ``evalf``
+    (the caller's banded / Numba / CuPy 4-variable Chebyshev kernel).
+
+    ``k1_fit`` is the 5-tuple
+    ``(coef_s1x, coef_s1y, coef_k1x, coef_k1y, 1 / wavelength)`` that
+    :func:`apply_real_lens_maslov` assembles, or ``None`` when the input's
+    local wavevector is flat (or was refused) -- in which case no caller
+    reaches this function and the arithmetic is the pre-S6 one, bit for bit.
+    """
+    csx, csy, ckx, cky, inv_wl = k1_fit
+    return _input_phase_terms(evalf(csx, u1, u2, u3, u4),
+                              evalf(csy, u1, u2, u3, u4),
+                              evalf(ckx, u1, u2, u3, u4),
+                              evalf(cky, u1, u2, u3, u4), inv_wl)
+
+
+def _k1_fit_to_device(xp, k1_fit):
+    """The four ``k1_fit`` coefficient vectors as ``xp`` arrays.
+
+    The GPU twins take the fit on the host (the driver builds it with NumPy)
+    and upload it once, exactly as they do for ``coef_opd`` / ``coef_s1*``.
+    ``None`` passes straight through, so a flat input costs nothing.
+    """
+    if k1_fit is None:
+        return None
+    return (xp.asarray(k1_fit[0]), xp.asarray(k1_fit[1]),
+            xp.asarray(k1_fit[2]), xp.asarray(k1_fit[3]), k1_fit[4])
+
+
 def _maslov_newton_saddle_xp(xp, opd6, coef_opd, u_s2x, u_s2y, inbox_flat,
-                             newton_iter, newton_tol, lin_v3, lin_v4):
+                             newton_iter, newton_tol, lin_v3, lin_v4,
+                             k1_fit=None):
     """Per-pixel Newton solve for the v2 stationary point, shared by the
     stationary_phase / local_quadrature GPU twins.
 
@@ -1027,6 +1182,10 @@ def _maslov_newton_saddle_xp(xp, opd6, coef_opd, u_s2x, u_s2y, inbox_flat,
     pixel's ``u_v2`` never changes, so its later gradients are irrelevant).
     Out-of-box pixels start ``converged`` (frozen at ``u_v2 = 0``) and are
     zeroed by the caller.  Returns ``(u_v2x, u_v2y, converged)``.
+
+    ``k1_fit`` (S6) adds the input field's own phase to the stationary
+    condition -- see :func:`_input_phase_terms`.  ``None`` (a flat input, or
+    the refused fallback) leaves every operation below exactly as it was.
     """
     n_px = u_s2x.shape[0]
     u_v2x = xp.zeros(n_px, dtype=xp.float64)
@@ -1036,6 +1195,14 @@ def _maslov_newton_saddle_xp(xp, opd6, coef_opd, u_s2x, u_s2y, inbox_flat,
         _, g3, g4, H33, H34, H44 = opd6(coef_opd, u_s2x, u_s2y, u_v2x, u_v2y)
         g3 = g3 + lin_v3
         g4 = g4 + lin_v4
+        if k1_fit is not None:
+            e3, e4, a33, a34, a44 = _eval_input_phase_terms(
+                opd6, k1_fit, u_s2x, u_s2y, u_v2x, u_v2y)
+            g3 = g3 + e3
+            g4 = g4 + e4
+            H33 = H33 + a33
+            H34 = H34 + a34
+            H44 = H44 + a44
         det_H = H33 * H44 - H34 * H34
         # MSL-1 (AUDIT_MASLOV): sign-preserving floor that NEVER returns 0.
         # The old ``sign(det_H)*1e-30 + 1e-30`` cancelled to exactly 0 for a
@@ -1064,7 +1231,7 @@ def _maslov_newton_saddle_xp(xp, opd6, coef_opd, u_s2x, u_s2y, inbox_flat,
 
 def _maslov_newton_saddle_cpu(opd_eval, coef_opd, u_s2x_flat, u_s2y_flat,
                               inbox_flat, newton_iter, newton_tol,
-                              lin_v3, lin_v4, progress=None):
+                              lin_v3, lin_v4, progress=None, k1_fit=None):
     """CPU active-subset Newton solve for the per-pixel v2 stationary point --
     the shared engine of the stationary-phase and local-quadrature CPU
     integrators (audit S2-14: the loop was written out identically at both
@@ -1079,7 +1246,11 @@ def _maslov_newton_saddle_cpu(opd_eval, coef_opd, u_s2x_flat, u_s2y_flat,
     ``None`` (the stationary-phase caller uses it for its verbose banner).
     ``u_v2x``/``u_v2y`` start at 0; out-of-box pixels start converged (frozen at
     0).  Returns ``(u_v2x, u_v2y, converged)``.  Reproduces the former inline
-    loops operation-for-operation, so both routed sites are bit-identical."""
+    loops operation-for-operation, so both routed sites are bit-identical.
+
+    ``k1_fit`` (S6) adds the input field's own phase to the stationary
+    condition -- see :func:`_input_phase_terms`.  ``None`` (a flat input, or
+    the refused fallback) leaves every operation below exactly as it was."""
     N_px = u_s2x_flat.shape[0]
     u_v2x = np.zeros(N_px, dtype=np.float64)
     u_v2y = np.zeros(N_px, dtype=np.float64)
@@ -1099,6 +1270,14 @@ def _maslov_newton_saddle_cpu(opd_eval, coef_opd, u_s2x_flat, u_s2y_flat,
         # point but not its curvature.  Add it to the gradient here.
         g3 = g3 + lin_v3
         g4 = g4 + lin_v4
+        if k1_fit is not None:
+            e3, e4, a33, a34, a44 = _eval_input_phase_terms(
+                opd_eval, k1_fit, u1, u2, u3, u4)
+            g3 = g3 + e3
+            g4 = g4 + e4
+            H33 = H33 + a33
+            H34 = H34 + a34
+            H44 = H44 + a44
         det_H = H33 * H44 - H34 * H34
         # MSL-1 (AUDIT_MASLOV): sign-preserving floor that never returns 0
         # (the old ``sign(det_H)*1e-30 + 1e-30`` cancelled to 0 for a tiny
@@ -1564,6 +1743,41 @@ def apply_real_lens_maslov(
     (a rigorous residual bound is refined until met).  Pure NumPy and adaptive
     per pixel -- suited to caustic-band ROI studies and hard high-NA charts,
     not (yet) to full-grid production sweeps.
+
+    **The two ASYMPTOTIC evaluators follow the INPUT field's local wavevector**
+    (audit finding S6).  The v2 integrand's phase is
+    ``arg E_in(s1(v2)) + 2 pi OPD_waves``; solving ``grad_v2 OPD = 0`` alone
+    selects, by the symplectic identity ``dOPD/dv2 = -n1 (v1 . ds1/dv2)``, the
+    ``v1 = 0`` collimated launch ray at every pixel -- right for a flat input,
+    wrong for the diverging / converging / tilted one the pupil chart is
+    deliberately sized to cover (``na_proxy = na_lens + na_input``).  So when
+    the input's wavefront spread over the traced aperture exceeds
+    ``_SADDLE_FLAT_INPUT_NA``, its local wavevector
+    ``k1 = (1/k0) grad arg E_in`` is fitted over the same chart coordinates as
+    the OPD and the entrance coordinates, and ``(k1 . ds1/dv2) / lambda`` joins
+    the saddle gradient (and its derivative the Hessian, which sets the
+    Gaussian-moment amplitude, the Maslov signature and the local_quadrature
+    window).  The saddle condition becomes ``(v1_in - v1) . ds1/dv2 = 0``: the
+    ray whose LAUNCH direction is the input's own.  ``E_in`` is still sampled
+    as the complex field, so its phase enters the answer exactly and the fit
+    only places the saddle.  A flat input (``k1 = 0`` everywhere, which is what
+    a real non-negative ``E_in`` gives EXACTLY) and ``collimated_input=True``
+    never build the fit at all, so they run the OPD-only arithmetic bit for
+    bit -- the S6 term is not small there, it is absent.  When the local
+    wavevector is not
+    representable on the chart -- speckle, or a hard-edged aperture, whose dark
+    side reports a launch direction of 0 that the illuminated side contradicts
+    -- the fit's intensity-weighted residual exceeds
+    ``_K1_FIT_RESIDUAL_MAX``, the OPD-only saddle is kept, and the S6
+    ``RuntimeWarning`` fires naming both measurements.  A wavefront steeper
+    than the grid's own Nyquist angle ``lambda / (2 dx)`` is a DIFFERENT
+    failure and this gate does not see it: the phase-difference estimator
+    aliases to a wrapped direction that is perfectly smooth (measured
+    residual 1.2e-10 at a 1.2 x Nyquist tilt), so the whole sampled field --
+    not just this saddle -- is the aliased one.  Sample the input finely
+    enough that ``max|grad arg E_in| dx < pi``.  ``'quadrature'`` and
+    ``'levin'`` integrate the true integrand pointwise, have no saddle, and
+    are untouched by all of this.
 
     ``poly_order`` (default ``4``) accepts ``'auto'`` (v5.21): the tensor-
     Chebyshev fit order is raised from ``_MZ_POLY_AUTO_MIN`` until the OPD-fit
@@ -2481,49 +2695,132 @@ def apply_real_lens_maslov(
             f"'quadrature', 'stationary_phase', 'local_quadrature', 'levin', "
             f"got {integration_method!r}")
 
-    # S6 (audit): both asymptotic evaluators solve grad_v2 OPD = 0, i.e. the
-    # saddle of the OPTICAL PATH alone.  The symplectic identity
-    # dOPD/dv2 = -n1 (v1 . ds1/dv2) (verified to 5.8e-7 relative on a real
-    # singlet chart) means that saddle sits where the LAUNCH direction v1 -> 0
-    # -- the on-axis collimated ray, for every pixel and every input.  The
-    # stationary point of the TOTAL integrand phase is
-    # grad_v2[arg E_in(s1(v2)) + k OPD] = 0, which selects the ray whose launch
-    # direction matches the input field's local wavevector.  The two coincide
-    # only for a flat (collimated) input, yet the chart is deliberately sized
-    # to cover a diverging / tilted one (na_proxy = na_lens + na_input).  Say
-    # so rather than returning a silently wrong field; 'quadrature' and
-    # 'levin' integrate the true integrand and are unaffected.
+    # -----------------------------------------------------------------
+    # S6: the input field's local wavevector in the asymptotic saddle
+    # -----------------------------------------------------------------
+    # The two asymptotic evaluators expand the v2 integral about the saddle of
+    # its TOTAL phase, arg E_in(s1(v2)) + 2 pi OPD_waves.  Keeping only the OPD
+    # half makes the saddle condition grad_v2 OPD = 0, and the symplectic
+    # identity dOPD/dv2 = -n1 (v1 . ds1/dv2) (measured closing to 5.8e-7
+    # relative on a real singlet chart) makes THAT the v1 = 0 on-axis
+    # collimated launch ray, at every pixel and for every input -- while the
+    # chart is deliberately sized to cover a diverging / tilted one
+    # (na_proxy = na_lens + na_input).  So the input's local wavevector
+    # k1 = (1/k0) grad arg E_in is fitted here over the SAME chart coordinates
+    # as the OPD and s1 fits and handed to the integrators, which put
+    # (k1 . ds1/dv2) / lambda into the saddle gradient and its derivative into
+    # the Hessian: the saddle condition becomes (v1_in - v1) . ds1/dv2 = 0.
+    # 'quadrature' and 'levin' integrate the true integrand pointwise and have
+    # no saddle, so they never build this fit.
     #
-    # VERIFY-A4: the trigger is the WAVEFRONT NA (the spread of the input's
-    # local wavevector), NOT the second moment of |FFT(E_in)|^2 that sizes
-    # the pupil chart.  A COLLIMATED beam of finite width has a real angular
-    # spectrum -- a Gaussian of waist w spreads by lambda/(pi w) -- while its
-    # geometric launch direction is v1 = 0 everywhere, which is precisely the
-    # case this saddle gets RIGHT.  Gating on the spectral moment therefore
-    # fired on every collimated beam narrower than ~1 mm: measured 3-sigma
-    # NA 3.54e-03 / 1.10e-03 at waist 0.25 / 0.8 mm (lambda = 1.31 um), both
-    # above the 1e-3 threshold, where ``_wavefront_na`` returns EXACTLY 0.
+    # The MEASUREMENT of "is the input flat" is the WAVEFRONT NA (the spread of
+    # the local wavevector), NOT the second moment of |FFT(E_in)|^2 that sizes
+    # the pupil chart (VERIFY-A4): a COLLIMATED beam of finite width has a real
+    # angular spectrum -- a Gaussian of waist w spreads by lambda/(pi w),
+    # measured 3-sigma NA 3.54e-03 / 1.10e-03 at waist 0.25 / 0.8 mm
+    # (lambda = 1.31 um) -- while its geometric launch direction is v1 = 0
+    # everywhere, where ``_wavefront_na`` returns EXACTLY 0 and the OPD-only
+    # saddle is already the right one.  The decision below reads that spread
+    # over the TRACED RAY entrance points, weighted by the input intensity
+    # there: that is the part of the wavefront the integral actually samples,
+    # and it keeps the denominator of the fit-quality ratio away from zero.
+    _k1_fit = None
     _na_wf = 0.0
-    if (integration_method in ('stationary_phase', 'local_quadrature')
-            and not collimated_input):
-        _na_wf = _wavefront_na(E_in, dx, dy, wavelength)
-    if (integration_method in ('stationary_phase', 'local_quadrature')
-            and not collimated_input and _na_wf > _SADDLE_FLAT_INPUT_NA):
+    _k1_na_rays = 0.0
+    _k1_res_rel = 0.0
+    _s6_mode = _S6_INPUT_WAVEVECTOR_SADDLE
+    _asymptotic = integration_method in ('stationary_phase',
+                                         'local_quadrature')
+    if _asymptotic and not collimated_input:
+        _intensity = np.abs(E_in) ** 2
+        _k1x_grid, _k1y_grid = _local_direction_cosines(
+            E_in, dx, dy, wavelength)
+        _na_wf = _wavefront_na_from_cosines(_intensity, _k1x_grid, _k1y_grid)
+    if _asymptotic and not collimated_input and _s6_mode is not False:
+        _k1x_rays = _sample_real_bilinear(_k1x_grid, N, dx, dy,
+                                          s1x_live, s1y_live)
+        _k1y_rays = _sample_real_bilinear(_k1y_grid, N, dx, dy,
+                                          s1x_live, s1y_live)
+        _w_rays = _sample_real_bilinear(_intensity, N, dx, dy,
+                                        s1x_live, s1y_live)
+        _w_tot = float(_w_rays.sum())
+        _k1_pow = (float((_w_rays * (_k1x_rays ** 2
+                                     + _k1y_rays ** 2)).sum()) / _w_tot
+                   if _w_tot > 0.0 else 0.0)
+        _k1_na_rays = 3.0 * float(np.sqrt(max(_k1_pow, 0.0)))
+        _engage = (_k1_na_rays > _SADDLE_FLAT_INPUT_NA if _s6_mode is None
+                   else _k1_na_rays > 0.0)
+        if _engage:
+            # One more least-squares solve against the SAME design matrix.  It
+            # is a SEPARATE solve rather than two more columns on the stacked
+            # OPD/s1x/s1y right-hand side (~20 ms on a 40k-ray chart, measured)
+            # because widening a GEMM's right-hand side is entitled to move the
+            # existing columns in the last bits, and the price of that is that
+            # no run of the OTHER three integrators would be reproducible
+            # across this release.  This way every call that does not engage
+            # the S6 saddle is bit-for-bit the OPD-only answer.
+            _k1_rhs = np.column_stack([_k1x_rays, _k1y_rays])
+            _coef_k1 = _solve_fit(A, _k1_rhs)
+            _k1_res = A @ _coef_k1 - _k1_rhs
+            _k1_res_pow = float((_w_rays * (_k1_res[:, 0] ** 2
+                                            + _k1_res[:, 1] ** 2)).sum())
+            _k1_res_rel = (float(np.sqrt(_k1_res_pow / _w_tot / _k1_pow))
+                           if (_w_tot > 0.0 and _k1_pow > 0.0) else np.inf)
+            # FALLBACK CRITERION.  The saddle correction is only as good as
+            # the chart's ability to REPRESENT the input's local wavevector:
+            # a speckled input, or one cut by a hard-edged aperture (where
+            # ``_local_direction_cosines`` reports 0 in the dark and the true
+            # wavefront in the light), is not a degree-``poly_order`` tensor
+            # polynomial of the chart coordinates in any useful sense, and a
+            # saddle placed by a bad fit is a different wrong ray, not a
+            # better one.  Measure it: the intensity-weighted RMS fit residual
+            # of (k1x, k1y) as a fraction of their intensity-weighted RMS.
+            # Below the bar, use the fit; above it, keep the OPD-only saddle
+            # and say so, which is the honest answer when the input's launch
+            # direction is not a chart-representable field.
+            if _k1_res_rel <= _K1_FIT_RESIDUAL_MAX or _s6_mode:
+                _k1_fit = (coef_s1x, coef_s1y, _coef_k1[:, 0], _coef_k1[:, 1],
+                           1.0 / float(wavelength))
+            _progress('integrate', 0.598,
+                      f'S6 input-wavevector saddle: ray NA {_k1_na_rays:.4f}, '
+                      f'k1 fit residual {_k1_res_rel:.2e} '
+                      f'({"engaged" if _k1_fit is not None else "refused"})')
+    if (_asymptotic and not collimated_input and _k1_fit is None
+            and (_na_wf > _SADDLE_FLAT_INPUT_NA
+                 or _k1_na_rays > _SADDLE_FLAT_INPUT_NA)):
         import warnings  # function-local, matching this driver
+        if _s6_mode is False:
+            _why = ("the module seam _S6_INPUT_WAVEVECTOR_SADDLE is False, so "
+                    "the saddle of the OPD alone is being solved")
+        elif _k1_na_rays <= _SADDLE_FLAT_INPUT_NA:
+            _why = (f"the wavefront is flat ACROSS THE TRACED APERTURE "
+                    f"(ray-sampled NA {_k1_na_rays:.4f}), so nothing was "
+                    f"fitted and the saddle of the OPD alone is solved")
+        else:
+            _why = (f"its local wavevector could not be represented on the "
+                    f"chart -- the intensity-weighted RMS residual of the "
+                    f"order-{poly_order} fit to (k1x, k1y) is "
+                    f"{_k1_res_rel:.2f} of their own RMS, above the "
+                    f"{_K1_FIT_RESIDUAL_MAX:g} bar (speckle and a hard-edged "
+                    f"aperture do this; so does an input wavefront the fit "
+                    f"order cannot carry, which a larger poly_order fixes) "
+                    f"-- so the saddle of the OPD alone is being solved")
         warnings.warn(
             f"apply_real_lens_maslov: integration_method="
-            f"{integration_method!r} solves for the saddle of the OPD alone, "
-            f"which selects the v1 = 0 (collimated) launch ray at every "
-            f"pixel; the input field's measured WAVEFRONT spread is "
-            f"NA ~ {_na_wf:.4f} (> {_SADDLE_FLAT_INPUT_NA:g}; its angular "
-            f"spectrum spans {_na_meas:.4f}, which for a collimated beam is "
-            f"just diffraction and is NOT what this gate tests), so the OPD "
-            f"saddle is NOT the stationary point of the full integrand and "
-            f"the result is a leading-order expansion about the wrong ray.  "
-            f"Use integration_method='quadrature' (exact) or 'levin' "
-            f"(caustic-uniform) for a diverging / converging / tilted input, "
-            f"or pass collimated_input=True if the input really is flat and "
-            f"the measured spread is aperture-edge content.",
+            f"{integration_method!r} expands about the stationary point of "
+            f"the integrand's total phase, but {_why}, which selects the "
+            f"v1 = 0 (collimated) launch ray at every pixel.  The input's "
+            f"measured WAVEFRONT spread is NA ~ {_na_wf:.4f} over the grid "
+            f"and {_k1_na_rays:.4f} over the traced aperture "
+            f"(> {_SADDLE_FLAT_INPUT_NA:g}; its angular spectrum spans "
+            f"{_na_meas:.4f}, which for a collimated beam is just "
+            f"diffraction and is NOT what this gate tests), so the result is "
+            f"a leading-order expansion about the wrong ray.  Use "
+            f"integration_method='quadrature' (exact) or 'levin' "
+            f"(caustic-uniform) for a diverging / converging / tilted input "
+            f"whose wavefront this chart cannot fit, or pass "
+            f"collimated_input=True if the input really is flat and the "
+            f"measured spread is aperture-edge content.",
             RuntimeWarning, stacklevel=2)
 
     _progress('integrate', 0.60,
@@ -2565,6 +2862,7 @@ def apply_real_lens_maslov(
                 _E_in_gpu, N, dx, dy,
                 stationary_newton_iter, stationary_newton_tol,
                 out_dtype=E_in.dtype, lin_v3=_lin_v3, lin_v4=_lin_v4,
+                k1_fit=_k1_fit,
             ))
         else:
             E_out_coarse = _integrate_stationary_phase(
@@ -2577,7 +2875,7 @@ def apply_real_lens_maslov(
                 stationary_newton_iter, stationary_newton_tol,
                 _progress, verbose,
                 out_dtype=E_in.dtype,
-                lin_v3=_lin_v3, lin_v4=_lin_v4,
+                lin_v3=_lin_v3, lin_v4=_lin_v4, k1_fit=_k1_fit,
             )
     elif integration_method == 'local_quadrature':
         if _use_gpu:
@@ -2591,6 +2889,7 @@ def apply_real_lens_maslov(
                 stationary_newton_iter, stationary_newton_tol,
                 local_n_samples, local_window_sigma,
                 out_dtype=E_in.dtype, lin_v3=_lin_v3, lin_v4=_lin_v4,
+                k1_fit=_k1_fit,
             ))
         else:
             E_out_coarse = _integrate_local_quadrature(
@@ -2604,7 +2903,7 @@ def apply_real_lens_maslov(
                 local_n_samples, local_window_sigma,
                 _progress, verbose,
                 out_dtype=E_in.dtype,
-                lin_v3=_lin_v3, lin_v4=_lin_v4,
+                lin_v3=_lin_v3, lin_v4=_lin_v4, k1_fit=_k1_fit,
             )
     else:
         # N2 (audit): estimate the v2 oscillation count of the integrand
@@ -3063,11 +3362,43 @@ def _wavefront_na(E, dx, dy, wavelength):
     f = +50 mm -> 3.37e-02 both.
     """
     ux, uy = _local_direction_cosines(E, dx, dy, wavelength)
-    a2 = np.abs(np.asarray(E)) ** 2
-    tot = float(a2.sum())
+    return _wavefront_na_from_cosines(np.abs(np.asarray(E)) ** 2, ux, uy)
+
+
+def _wavefront_na_from_cosines(intensity, ux, uy):
+    """:func:`_wavefront_na` given the intensity and the cosines already in
+    hand -- the form the driver uses, which needs the cosine GRIDS themselves
+    to sample the input's local wavevector at the traced ray entrance points
+    (S6) and must not pay for a second ``np.angle`` pass over the field."""
+    tot = float(np.asarray(intensity).sum())
     if not np.isfinite(tot) or tot <= 0.0:
         return 0.0
-    return 3.0 * float(np.sqrt(float((a2 * (ux * ux + uy * uy)).sum()) / tot))
+    return 3.0 * float(np.sqrt(
+        float((intensity * (ux * ux + uy * uy)).sum()) / tot))
+
+
+def _sample_real_bilinear(G, N, dx, dy, xq, yq):
+    """Bilinear sample of a REAL (N, N) grid at physical ``(xq, yq)``.
+
+    The grid origin convention is the driver's own
+    (``x[0] = -(N/2) dx``), matching ``sample_E_bilinear``.  Query points
+    outside the grid are CLAMPED to the edge cell rather than zeroed: this
+    samples the input's local wavevector at ray entrance points, and a zero
+    there would assert "this ray launches on axis", which is a statement about
+    the field the grid does not make.  The aperture-vs-grid mismatch that puts
+    a ray outside is announced separately by
+    :func:`_warn_if_aperture_exceeds_grid`.
+    """
+    fx = (np.asarray(xq) + (N / 2) * dx) / dx
+    fy = (np.asarray(yq) + (N / 2) * dy) / dy
+    ix = np.clip(np.floor(fx).astype(np.int64), 0, N - 2)
+    iy = np.clip(np.floor(fy).astype(np.int64), 0, N - 2)
+    wx = np.clip(fx - ix, 0.0, 1.0)
+    wy = np.clip(fy - iy, 0.0, 1.0)
+    return ((1.0 - wx) * (1.0 - wy) * G[iy, ix]
+            + wx * (1.0 - wy) * G[iy, ix + 1]
+            + (1.0 - wx) * wy * G[iy + 1, ix]
+            + wx * wy * G[iy + 1, ix + 1])
 
 
 def _input_direction_cosines(E_vec, dx, dy, wavelength):
@@ -3493,12 +3824,17 @@ def _integrate_stationary_phase(
     newton_iter, newton_tol,
     _progress, verbose,
     out_dtype=np.complex128,
-    lin_v3=0.0, lin_v4=0.0,
+    lin_v3=0.0, lin_v4=0.0, k1_fit=None,
 ):
     """Leading-order stationary-phase (Gaussian-moment) evaluation.
 
     v4.14.0: ``out_dtype`` defaults to ``np.complex128`` for back-
     compat; callers pass ``E_in.dtype`` to preserve complex64 inputs.
+
+    ``k1_fit`` (S6) puts the input field's own phase into the stationary
+    condition and into the Hessian that sets the Gaussian-moment amplitude and
+    the Maslov signature; see :func:`_input_phase_terms`.  ``None`` -- a flat
+    input, or the refused fallback -- runs the pre-S6 arithmetic bit for bit.
     """
     t_int_start = time.perf_counter()
     _progress('integrate', 0.65,
@@ -3551,7 +3887,8 @@ def _integrate_stationary_phase(
     # Shared CPU active-subset Newton (S2-14); banded OPD eval caps peak memory.
     u_v2x, u_v2y, converged_mask = _maslov_newton_saddle_cpu(
         _opd_and_derivs_banded, coef_opd, u_s2x_flat, u_s2y_flat, inbox_flat,
-        newton_iter, newton_tol, lin_v3, lin_v4, progress=_sp_progress)
+        newton_iter, newton_tol, lin_v3, lin_v4, progress=_sp_progress,
+        k1_fit=k1_fit)
 
     _progress('integrate', 0.85, 'evaluating saddle-point formula')
 
@@ -3559,10 +3896,24 @@ def _integrate_stationary_phase(
         coef_opd, u_s2x_flat, u_s2y_flat, u_v2x, u_v2y)
     # N4: add the linear-in-v2 OPD contribution at the (shifted) saddle.
     opd_star = opd_star + lin_v3 * u_v2x + lin_v4 * u_v2y
-    s1x_star, ds1x_du3, ds1x_du4, _, _, _ = _opd_and_derivs_banded(
+    _s1x_ev = _opd_and_derivs_banded(
         coef_s1x, u_s2x_flat, u_s2y_flat, u_v2x, u_v2y)
-    s1y_star, ds1y_du3, ds1y_du4, _, _, _ = _opd_and_derivs_banded(
+    _s1y_ev = _opd_and_derivs_banded(
         coef_s1y, u_s2x_flat, u_s2y_flat, u_v2x, u_v2y)
+    s1x_star, ds1x_du3, ds1x_du4 = _s1x_ev[0], _s1x_ev[1], _s1x_ev[2]
+    s1y_star, ds1y_du3, ds1y_du4 = _s1y_ev[0], _s1y_ev[1], _s1y_ev[2]
+    if k1_fit is not None:
+        # S6: the Gaussian-moment amplitude and the Maslov signature both read
+        # the curvature of the TOTAL stationary phase, not of the OPD alone.
+        _, _, _a33, _a34, _a44 = _input_phase_terms(
+            _s1x_ev, _s1y_ev,
+            _opd_and_derivs_banded(k1_fit[2], u_s2x_flat, u_s2y_flat,
+                                   u_v2x, u_v2y),
+            _opd_and_derivs_banded(k1_fit[3], u_s2x_flat, u_s2y_flat,
+                                   u_v2x, u_v2y), k1_fit[4])
+        H33 = H33 + _a33
+        H34 = H34 + _a34
+        H44 = H44 + _a44
 
     det_J_norm = ds1x_du3 * ds1y_du4 - ds1x_du4 * ds1y_du3
     abs_J = _van_vleck_density(np.abs(det_J_norm), v2x_h, v2y_h)
@@ -4098,7 +4449,7 @@ def _integrate_local_quadrature(
     n_samples, window_sigma,
     _progress, verbose,
     out_dtype=np.complex128,
-    lin_v3=0.0, lin_v4=0.0,
+    lin_v3=0.0, lin_v4=0.0, k1_fit=None,
 ):
     """Gaussian-windowed local quadrature about the per-pixel saddle.
 
@@ -4117,6 +4468,14 @@ def _integrate_local_quadrature(
 
     v4.14.0: ``out_dtype`` defaults to ``np.complex128`` for back-
     compat; callers pass ``E_in.dtype`` to preserve complex64 inputs.
+
+    ``k1_fit`` (S6) puts the input field's own phase into the stationary
+    condition -- which re-CENTRES the window -- and into the Hessian that sets
+    the window's principal axes, widths and taper correction; see
+    :func:`_input_phase_terms`.  The integrand itself is unchanged: it samples
+    the complex ``E_in``, which already carries that phase exactly.  ``None``
+    -- a flat input, or the refused fallback -- runs the pre-S6 arithmetic bit
+    for bit.
     """
     t_int_start = time.perf_counter()
     _progress('integrate', 0.60,
@@ -4134,11 +4493,20 @@ def _integrate_local_quadrature(
 
     u_v2x, u_v2y, converged = _maslov_newton_saddle_cpu(   # shared CPU (S2-14)
         _opd_and_derivs, coef_opd, u_s2x_flat, u_s2y_flat, inbox_flat,
-        newton_iter, newton_tol, lin_v3, lin_v4)
+        newton_iter, newton_tol, lin_v3, lin_v4, k1_fit=k1_fit)
 
     _progress('integrate', 0.72, 'computing Hessian eigen-scales')
     _, _, _, H33, H34, H44 = _opd_and_derivs(
         coef_opd, u_s2x_flat, u_s2y_flat, u_v2x, u_v2y)
+    if k1_fit is not None:
+        # S6: the window is laid out on the principal axes of the TOTAL
+        # stationary phase, and its taper is divided back out of the SAME
+        # quadratic model -- so both read the input phase's curvature too.
+        _, _, _a33, _a34, _a44 = _eval_input_phase_terms(
+            _opd_and_derivs, k1_fit, u_s2x_flat, u_s2y_flat, u_v2x, u_v2y)
+        H33 = H33 + _a33
+        H34 = H34 + _a34
+        H44 = H44 + _a44
     (sigma1_phys, sigma2_phys, cos_t, sin_t,
      window_corr) = _local_window_geometry(
         np, H33, H34, H44, v2x_h, v2y_h, n_samples, window_sigma)
@@ -4267,7 +4635,7 @@ def _integrate_stationary_phase_cupy(
     v2x_h, v2y_h,
     E_in_gpu, N, dx, dy,
     newton_iter, newton_tol,
-    out_dtype=np.complex128, lin_v3=0.0, lin_v4=0.0,
+    out_dtype=np.complex128, lin_v3=0.0, lin_v4=0.0, k1_fit=None,
 ):
     """CuPy GPU twin of :func:`_integrate_stationary_phase`.
 
@@ -4294,14 +4662,27 @@ def _integrate_stationary_phase_cupy(
     def opd6(coef, u1, u2, u3, u4):
         return _opd6_xp(xp, coef, K1, K2, K3, K4, u1, u2, u3, u4, poly_order)
 
+    k1_dev = _k1_fit_to_device(xp, k1_fit)
     u_v2x, u_v2y, converged = _maslov_newton_saddle_xp(
         xp, opd6, cop, u_s2x, u_s2y, inbox, newton_iter, newton_tol,
-        lin_v3, lin_v4)
+        lin_v3, lin_v4, k1_fit=k1_dev)
 
     opd_star, g3, g4, H33, H34, H44 = opd6(cop, u_s2x, u_s2y, u_v2x, u_v2y)
     opd_star = opd_star + lin_v3 * u_v2x + lin_v4 * u_v2y
-    s1x_star, ds1x_du3, ds1x_du4, _, _, _ = opd6(csx, u_s2x, u_s2y, u_v2x, u_v2y)
-    s1y_star, ds1y_du3, ds1y_du4, _, _, _ = opd6(csy, u_s2x, u_s2y, u_v2x, u_v2y)
+    _s1x_ev = opd6(csx, u_s2x, u_s2y, u_v2x, u_v2y)
+    _s1y_ev = opd6(csy, u_s2x, u_s2y, u_v2x, u_v2y)
+    s1x_star, ds1x_du3, ds1x_du4 = _s1x_ev[0], _s1x_ev[1], _s1x_ev[2]
+    s1y_star, ds1y_du3, ds1y_du4 = _s1y_ev[0], _s1y_ev[1], _s1y_ev[2]
+    if k1_dev is not None:
+        # S6: total-phase curvature, matching the CPU twin operation for
+        # operation (the s1 fits are the SAME two ``opd6`` calls above).
+        _, _, _a33, _a34, _a44 = _input_phase_terms(
+            _s1x_ev, _s1y_ev,
+            opd6(k1_dev[2], u_s2x, u_s2y, u_v2x, u_v2y),
+            opd6(k1_dev[3], u_s2x, u_s2y, u_v2x, u_v2y), k1_dev[4])
+        H33 = H33 + _a33
+        H34 = H34 + _a34
+        H44 = H44 + _a44
 
     det_J_norm = ds1x_du3 * ds1y_du4 - ds1x_du4 * ds1y_du3
     abs_J = _van_vleck_density(xp.abs(det_J_norm), v2x_h, v2y_h)
@@ -4334,7 +4715,7 @@ def _integrate_local_quadrature_cupy(
     E_in_gpu, N, dx, dy,
     newton_iter, newton_tol,
     n_samples, window_sigma,
-    out_dtype=np.complex128, lin_v3=0.0, lin_v4=0.0,
+    out_dtype=np.complex128, lin_v3=0.0, lin_v4=0.0, k1_fit=None,
 ):
     """CuPy GPU twin of :func:`_integrate_local_quadrature`.
 
@@ -4362,11 +4743,20 @@ def _integrate_local_quadrature_cupy(
     def opd6(coef, u1, u2, u3, u4):
         return _opd6_xp(xp, coef, K1, K2, K3, K4, u1, u2, u3, u4, poly_order)
 
+    k1_dev = _k1_fit_to_device(xp, k1_fit)
     u_v2x, u_v2y, converged = _maslov_newton_saddle_xp(
         xp, opd6, cop, u_s2x, u_s2y, inbox, newton_iter, newton_tol,
-        lin_v3, lin_v4)
+        lin_v3, lin_v4, k1_fit=k1_dev)
 
     _, _, _, H33, H34, H44 = opd6(cop, u_s2x, u_s2y, u_v2x, u_v2y)
+    if k1_dev is not None:
+        # S6: total-phase curvature -- the window's axes, widths and taper
+        # correction, exactly as the CPU twin computes them.
+        _, _, _a33, _a34, _a44 = _eval_input_phase_terms(
+            opd6, k1_dev, u_s2x, u_s2y, u_v2x, u_v2y)
+        H33 = H33 + _a33
+        H34 = H34 + _a34
+        H44 = H44 + _a44
     (sigma1_phys, sigma2_phys, cos_t, sin_t,
      window_corr) = _local_window_geometry(
         xp, H33, H34, H44, v2x_h, v2y_h, n_samples, window_sigma)

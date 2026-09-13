@@ -821,8 +821,24 @@ def test_s6_saddle_warning_fires_only_on_a_non_flat_input():
         return [str(w.message) for w in rec
                 if 'saddle of the OPD alone' in str(w.message)]
 
-    assert saddle_warnings(tilted, integration_method='stationary_phase'), (
-        'a 0.01 rad tilted input must trip the S6 warning')
+    # The saddle carries the input's fitted local wavevector (audit S6), so a
+    # 0.01 rad tilt is the case that is COMPUTED CORRECTLY and must be SILENT
+    # (measured k1 fit residual 3.61e-13 on this fixture, against the 0.5
+    # bar).  The warning marks the FALLBACK: an input whose local wavevector
+    # the chart cannot represent.  The same tilt carrying 0.6 rad rms phase
+    # noise measures 7.50e-01 and is refused, so both arms of the gate are
+    # pinned here.
+    assert not saddle_warnings(tilted,
+                               integration_method='stationary_phase'), (
+        'a 0.01 rad tilted input is now expanded about its OWN launch ray '
+        'and must NOT warn')
+    speckled = tilted * np.exp(
+        1j * 0.6 * np.random.default_rng(4).standard_normal(tilted.shape))
+    assert saddle_warnings(speckled,
+                           integration_method='stationary_phase'), (
+        'a speckled input, whose local wavevector an order-4 chart cannot '
+        'fit, must still trip the S6 warning -- the fallback keeps the '
+        'OPD-only saddle')
     assert not saddle_warnings(flat, integration_method='stationary_phase'), (
         'a COLLIMATED input must not -- its 3.54e-03 angular spectrum is '
         'diffraction, not divergence')

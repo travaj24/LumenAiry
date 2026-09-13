@@ -459,6 +459,13 @@ def test_s6_asymptotic_methods_warn_on_a_non_collimated_input():
     the spectral moment therefore warned on every collimated beam narrower
     than ~1 mm; the gate now reads the WAVEFRONT spread, which is exactly
     zero there.  Both arms are asserted below so the distinction is pinned.
+
+    The warning marks the FALLBACK regime of the input-wavevector saddle, and
+    this fixture is in it: its 0.30 mm clear aperture is 3.1x the grid
+    half-width, so most traced ray entrance points are off the sampled field,
+    and its f = -0.5 mm wavefront passes the grid's Nyquist angle (0.125) at
+    r = 62 um.  Measured k1 fit residual 1.55 against the 0.5 bar -- refused,
+    and announced, which is what these assertions pin.
     """
     N, dx, lam = 48, 4.0e-6, 1.0e-6
     ap = 0.30e-3

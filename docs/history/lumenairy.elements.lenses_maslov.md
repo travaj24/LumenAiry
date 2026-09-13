@@ -1,11 +1,12 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/lenses_maslov.py
-ast_sha256: 5f32b2e80cf42ae4aaafa706e50b6ddb03f6c27367e3e1539c0f3380f5d0d27f
-token_sha256: e0c70c5fa612e2d4f315a0a88f3860472b795cf52cc4629f4ea30d11d5d81659
+ast_sha256: b31b147df3ba6d0763e9589a9cf8dc248966ecaaa21d1b1acbc6ef388aebac7c
+token_sha256: 041017a14720a027485c49bade77505a600bb60a205568f0eacb7411cc00732b
 pre_relocation_lines: 4484
 recorded_by: WP-A17 SWEEP-4 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
 re_recorded: 2026-09-12 -- ruff isort combine-as-imports (pyproject.toml, WP-A16 recommendation): aliased import statements from the same module merged into one; the set of bound names is unchanged
+re_recorded: 2026-09-13 -- WP-B1 (audit S6): the two asymptotic evaluators' saddle now carries the input field's fitted local wavevector in its gradient and Hessian, with a flatness gate, a fit-residual fallback and an A/B seam
 -->
 
 # Version history -- `lumenairy/elements/lenses_maslov.py`
