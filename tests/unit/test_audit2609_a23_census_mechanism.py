@@ -333,3 +333,35 @@ def test_the_committed_census_agrees_with_what_this_file_measures():
     assert hist, sorted(t["arms"])
     assert {t["classes"][a]["sliver/pmm1d@1e-05"] for a in hist} == {"wrong"}, \
         {a: t["classes"][a]["sliver/pmm1d@1e-05"] for a in hist}
+
+
+def test_the_threadpoolctl_branch_records_the_same_per_library_table_as_the_fallback(monkeypatch):
+    """``_arm_id`` has two instruments: ``threadpoolctl`` when it is installed,
+    the ``ctypes`` read-back otherwise.  The fallback fills ``blas_libraries``
+    (one row per loaded BLAS build: corename and thread width); the
+    threadpoolctl branch used to leave it ``{}``, and nothing noticed because
+    no host in the census had threadpoolctl until the dependency was
+    installed at campaign close -- the first six arms recorded through it
+    came back with an empty table.  The branch is exercised here with a
+    synthetic ``threadpool_info`` so the two instruments cannot drift apart
+    on what an arm records.
+    """
+    import threadpoolctl
+
+    m = _probe()
+    monkeypatch.setattr(threadpoolctl, "threadpool_info", lambda: [
+        {"internal_api": "openblas", "filepath": "C:/x/libscipy_openblas-abc.dll",
+         "architecture": "SkylakeX", "num_threads": 1},
+        {"internal_api": "openmp", "filepath": "C:/x/libgomp.dll", "num_threads": 20},
+        {"internal_api": "mkl", "filepath": "C:/x/mkl_rt.2.dll", "num_threads": 4},
+    ])
+    arm, build, arch, tag, nthreads, source, detail = m._arm_id()
+    assert source == "threadpoolctl", source
+    assert arch == "SkylakeX" and nthreads == 1, (arch, nthreads)
+    assert arm.endswith("-SkylakeX-" + tag), arm
+    # one row per BLAS build, keyed by the library basename, OpenMP runtimes ignored
+    assert detail == {
+        "libscipy_openblas-abc.dll": {"corename": "SkylakeX", "num_threads": 1},
+        "mkl_rt.2.dll": {"corename": "unknown", "num_threads": 4},
+    }, detail
+

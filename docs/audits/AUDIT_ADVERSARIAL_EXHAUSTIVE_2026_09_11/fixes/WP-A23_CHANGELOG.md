@@ -150,3 +150,22 @@ readings (`test_audit2609_a12_pmm1d.py`, `test_audit2609_a12_verify_pmm1d.py`,
 — docstrings only, no assertion, bar or fixture touched.
 
 **Nothing under `lumenairy/` was changed.**
+
+### Changed -- CI kernel census: re-recorded with `threadpoolctl` installed; the probe's threadpoolctl branch now records the per-library table
+
+`threadpoolctl` -- a declared core dependency that was absent from this workstation for the
+whole campaign -- was installed at campaign close, as WP-A23 section 7 asked, and the six Windows
+live arms were re-recorded through it (`validation/probe_ci_kernel_sweep/arms/win_live_AUTO_t1.json`
+and its five siblings; `validation/probe_ci_kernel_sweep/decisions.json` re-merged, exit 0).  Every
+one of the 61 decisions, 12 classes and 30 readings per arm is bit-identical to the ctypes-era
+recording, the arm names are unchanged, and `kernel_source` now reads `threadpoolctl` instead of
+`ctypes(openblas_get_corename)`.  The first re-run exposed a defect in the branch no host had been
+able to execute: `_arm_id`'s threadpoolctl path recorded the kernel and thread width but left
+`blas_libraries` empty, where the ctypes fallback fills one row per loaded BLAS build.
+`validation/probe_ci_kernel_sweep/probe_decisions.py` now records the same table from
+`threadpool_info()` (library basename -> corename, thread width; OpenMP runtimes ignored), and
+`tests/unit/test_audit2609_a23_census_mechanism.py` pins the branch with a synthetic
+`threadpool_info` (fail-before: the pre-fix probe returns `{}`).  The six WSL arms keep their
+ctypes-era recording (that environment has no threadpoolctl) and `merge_arms.py` accepts the mixed
+provenance.  `set_blas_threads` / `rcwa_blas_threads` are live on this box for the first time; the
+13 census tests pass.

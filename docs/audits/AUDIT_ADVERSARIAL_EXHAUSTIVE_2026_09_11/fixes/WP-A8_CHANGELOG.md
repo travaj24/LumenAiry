@@ -51,7 +51,7 @@ is **not** run at import (it parses one catalogue YAML per row); the test suite
 runs it.  Injecting the pre-fix coefficients makes it flag exactly those three
 rows and raise.
 
-Files: `lumenairy/glass.py:1031-1279` (new constants, `_bundled_row_catalogue_source`,
+Files: `lumenairy/glass.py:1031-1277` (new constants, `_bundled_row_catalogue_source`,
 `_catalogue_index_fn_from_entry`, `_catalogue_index_fn`, `_nd_vd`,
 `_cross_check_bundled_values`), `:1255` (`check_values` parameter).
 Tests: `tests/unit/test_audit2609_a8_glass.py::test_e1_whole_bundled_table_agrees_with_refractiveindex_info`,
@@ -78,7 +78,7 @@ non-finite κ now takes the same warn-once + κ = 0 path as a missing one.
 `N-BK7`'s real extinction and its sign convention are unchanged
 (1.5006520 + 1.4361e-7 j at 1.55 µm).
 
-Files: `lumenairy/glass.py:1959-2009`.
+Files: `lumenairy/glass.py:1959-2005`.
 Tests: `tests/unit/test_audit2609_a8_glass.py::test_e2_complex_index_never_raises_for_a_catalogue_glass`,
 `::test_e2_extinction_is_finite_and_non_negative`,
 `::test_e2_missing_kappa_warns_once_and_returns_zero`,
@@ -277,7 +277,7 @@ caller passes an extra key (grepped `lumenairy/`, `tests/`, `validation/`,
 of the spec dict — the alternative, a silently-ignored key, is the defect this
 entry is about.
 
-Files: `lumenairy/elements/bsdf.py:628-715`.
+Files: `lumenairy/elements/bsdf.py:628-714`.
 Tests: `tests/unit/test_audit2609_a8_thin_elements.py::test_e6_make_bsdf_*`.
 
 ### Performance -- bsdf: `sample_scatter_rays` vectorised over the bundle (113×–377×), and the Harvey-Shack rejection sampler replaced by its exact inverse CDF (E6)
@@ -329,7 +329,7 @@ coefficients are untouched and still exact (η₊₁ = 4/π² = 0.405285,
 η₊₃ = 4/(9π²) = 0.045032 for the 50 %-duty π-step grating).  The module
 docstring's garbled `t_m` formula is replaced with the correct expression.
 
-Files: `lumenairy/elements/thin_grating.py:1-108` (docstring, thresholds,
+Files: `lumenairy/elements/thin_grating.py` (the first 108 lines: docstring, thresholds,
 `_warn_thin_grating_validity`), `:196` (the call).
 Tests: `tests/unit/test_audit2609_a8_thin_elements.py::test_e6_klein_cook_guard_fires_in_the_bragg_regime`,
 `::test_e6_short_period_guard_fires_when_q_is_small`,
@@ -435,7 +435,7 @@ no `'air'`), and `'vacuum'` / `'__MIRROR__'` still raise as before.
 returns 1.0 — the name is case-folded before the short-circuit, so the registry
 is only ever consulted at `'air'`.  Register ambient models at `'air'`.
 
-Files: `lumenairy/glass.py:1721-1733`, `:1852-1866`.
+Files: `lumenairy/glass.py:1722-1733`, `:1852-1866`.
 Tests: `tests/unit/test_audit2609_a8_glass.py::test_e7_*`.
 
 ### Verified -- glass: the 24 formula-3 polynomial rows the auditor could not reach

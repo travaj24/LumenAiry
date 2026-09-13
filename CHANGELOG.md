@@ -2,6 +2,9063 @@
 
 All notable changes to the core library are documented here.
 
+## [5.46.0] — 2026-09-12
+
+This release implements the 2026-09-11 adversarial audit of the library
+(`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11.md`: 147 consolidated
+findings from 22 partition reports, with the `apply_real_lens` family as the
+focus).  The work was organised as 23 work packages, one per subsystem, each
+implemented by an engineer and then re-verified by an INDEPENDENT adversarial
+verifier who re-ran the audit's own reproduction scripts
+(`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/repro/`), built oracles
+the library did not produce, tried to break every fix on fixtures the engineer
+had not used, and fixed the defects that turned up in the package's own files.
+The per-package reports and verification reports are under
+`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/` (`WP-*_REPORT.md`,
+`VERIFY_WP-*.md`), and the per-finding resolution table is
+`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/RESOLUTION_STATUS.md`.
+
+Two cross-cutting changes ride with the fixes.  Source comments now describe
+what the code does and why; the version-history narrative that used to sit in
+the source (17 to 38 % of several core modules) has moved verbatim to
+`docs/history/<module>.md`, and each relocation is proved behaviour-free by two
+fingerprints (the docstring-free AST and the comment-free token stream) that
+`tests/unit/test_audit2609_a17_history_relocation.py` checks; a deliberate code
+change to such a module re-records them with
+`scripts/record_history_fingerprints.py` in the same commit.  And `import
+lumenairy` loads SciPy's FFT and linear-algebra stacks on first use rather than
+at import.
+
+Every entry below names its finding IDs, the files, the tests added and the
+measured before/after numbers; defaults that changed carry a migration note
+and are collected in `Migration-Guide.md` under "5.46.0 -- adversarial audit
+remediation".  2 726 test ids were added and 747 removed or renamed (73 new test
+files; wall-clock speedup assertions became operation counts).  The release block was
+assembled from the package changelog files and checked with the repository's
+own walkers: V12 (every cited path exists), V17 (count claims), V18 (every
+`file.py:N` citation lands on a non-trivial line, re-anchored against the commit
+that wrote it), plus `scripts/check_doc_identifiers.py`;
+`scripts/verify_changelog_closures.py` finds no audit-closure bullets in this
+block, whose per-finding closures are the resolution table above.
+
+Decisions left to the maintainer (each documented where it arises):
+
+* the three AC254-050/100/200-C catalogue rows need Thorlabs vendor data and
+  warn on every call until they get it (`lumenairy/io/prescriptions_builders.py`);
+* the BICONICX surface mapping needs a reference file;
+* CaF2: the bundled Malitson row and the `GLASS_REGISTRY` dispatch to Daimon
+  differ by 2.8e-5 in n_d -- documented and pinned, one has to be chosen;
+* `save_field_h5(compression='lzf')` did not complete in 400 s on a 1024^2
+  complex field -- not a default, flagged;
+* two designer-UI items (a form write-back race and lazy dock construction)
+  need a real PySide6 installation to verify.
+
+Findings deferred with a written design (not silently dropped; each design is
+in its package report's deferred section and is queued as follow-on work):
+
+* Maslov: the input-wavevector saddle (S6 proper; a warning ships now);
+* analytic lens: the Newton-inverted 2-D remap and the launch-lattice raise
+  (L9), the unified band generator, the displaced-carrier tangent functions,
+  `seidel_correction` on an under-filled pupil (a scope limit, stated), a
+  `LensPhysics` configuration object and the lens-module cycle extraction;
+* propagators: the HFPI prescription-walk output plane, a Sobol sampler, a
+  band-limited chirp-Z resampler, the Shen-Wang pixel-integrated RS kernel;
+* carrier chain: Collins/ABCD transport with a Bluestein output grid, a
+  decentred re-reference, the module split;
+* gratings: Levinson Toeplitz and the two-interface closed form (RCWA),
+  off-plane fff_nv symmetrisation, the PMM 2-D tensor operator cache, a PMM 1-D
+  Gegenbauer option, the aberration-free reference re-expanded about the
+  saddle (LG merit);
+* asymptotic family: Y4 performance, the FGA convergence knob, the Pearcey
+  uniform asymptotics; analysis and ray-tracing performance items; Gori
+  pseudo-modes; the designer's wave-optics run decomposition, aperture-stop
+  control and worker re-basing.
+
+<!-- WP-A2: Analytic `apply_real_lens` and its displaced-model siblings -->
+### Fixed -- apply_real_lens: `seidel_correction=True` no longer injects ~90 µm·ρ² of spurious defocus (L1, V1)
+
+Three compounding defects made the option 8×–3600× WORSE than leaving it off,
+on the very prescriptions its docstring recommended it for.  All three are
+fixed in `_lens_real.py`'s Seidel block:
+
+* the 41-ray fan's OPL was read at the LAST SURFACE'S SAG, not on the exit
+  vertex plane.  Exactly 0 nm of error on a plano rear face (every fixture in
+  the suite) and −17.05 µm at h = 3.6 mm on a cemented doublet's R = −291 mm
+  rear.  Now read through `TraceResult.at_exit_vertex()` (WP-A1);
+* the model reference was `Σ (n2−n1)·sag_i(h)` — every surface at the same
+  entrance height with no propagation — so the residual it fitted was
+  dominated by the in-glass obliquity `n·t·θ²/2` that the split-step's own ASM
+  legs already carry exactly (337 nm measured against a 341 nm prediction on a
+  plano-convex whose true residual is 0.85 nm).  Replaced by
+  `_split_step_fan_opl`, a thin-screen ray model of what the split step
+  actually does: screen deflection `−∇[(n2−n1)·sag]` at each surface's vertex
+  plane, then a straight ray through each glass gap accumulating `n·t/cosθ`;
+* the fit basis started at ρ², i.e. it CONTAINED defocus, so every reference
+  mismatch was absorbed as focus and imprinted (ρ² term 420 nm at the rim on a
+  plano-convex, −5.5 µm on a doublet).  The fit now starts at ρ⁴, and the 5 nm
+  gate is scored on the fitted ρ⁴+ part rather than the raw residual.
+
+The ray OPL is also carried from the ray's landing point to the MODEL ray's
+landing point at the exit momentum `p = n_exit·L` (they differ by up to
+12.7 µm on an 8 mm doublet), because the screen multiplies the field at a fixed
+exit coordinate.
+
+Measured exit-plane OPD rms against an independent Newton-intersection +
+vector-Snell ray oracle (`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/repro/RL-CORE/p6_seidel.py`), correction OFF / ON:
+
+| prescription | OFF | ON before | ON after | after/before |
+|---|---:|---:|---:|---:|
+| plano-convex 4 mm | 0.848 nm | 88.87 nm (105× worse) | 0.848 nm (gate SKIPS) | 105× |
+| biconvex R=±60 4 mm | 1.829 | 6599.4 (3608× worse) | 1.829 (gate SKIPS) | 3608× |
+| biconvex R=±30 4 mm | 14.758 | 12128.7 (822× worse) | 0.141 (**104× better**) | 86 000× |
+| cemented doublet 4 mm | 10.857 | 311.6 (28.7× worse) | 1.841 (**5.9× better**) | 169× |
+| cemented doublet 8 mm | 173.47 | 1430.0 (8.2× worse) | 1.126 (**154× better**) | 1270× |
+
+Through-focus, unwrap-free (`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/repro/RL-CORE/p6d_psf.py`,
+`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/repro/orch/seidel_focus_shift.py`): the plano-convex is now bit-identical with
+the flag on and off (peak 41 849.17 at z = 95.0657 mm both ways; before, ON lost
+4.0 % of the peak and moved focus +2.0 %); the 4 mm doublet's peak goes
+111 324.86 → 114 553.08 (before: −26.8 %) with focus unmoved; and the
+AC254-100-like doublet's on-axis peak stays at z = 114.0 mm against a 114.85 mm
+paraxial BFL (before it moved to z = 62.0 mm).
+
+FOLLOW-UP (VERIFY-A2, 2026-09-12).  Two further changes to the same block,
+both of which only improve the numbers above.  (1) The 41-ray fan is launched
+across the FULL clear aperture (`±0.999·r_pupil`, was `±0.9`).  (2) The fitted
+screen is now HELD CONSTANT beyond the largest radius the fan lands at instead
+of being extrapolated: the transverse walk through the element is inward, so
+the rays land short of the pupil edge (measured 0.897 of it on an f/2 singlet,
+0.783 on the 8 mm doublet) and continuing a ρ⁴+ρ⁶ polynomial past its own data
+put three waves of nothing on a third of the pupil area.  Re-measured: the
+8 mm doublet 173.6 → **1.053 nm (165×)**, the f/2 singlet 402.6 → **1.504 nm
+(268×)**, the 4 mm doublet's through-focus peak −0.24 % with the focus unmoved
+(+0.146 %).  The plano-convex gate still SKIPS bit-identically.
+
+KNOWN SCOPE LIMIT, measured and now in the docstring: the radial screen assumes
+the exit field FILLS the pupil the fit is normalised to.  On a fast, thick
+element it does not — on an f/2 singlet at converged sampling |E| falls 20×
+between ρ = 0.85 and ρ = 0.93, and the model-vs-wave difference over the full
+pupil is 3.7 µm against 1.5 nm over ρ ≤ 0.85.  Whatever the screen puts on that
+annulus scatters its ~5 % of the energy out of the core: the exit wavefront
+improves 268× while the focal PEAK drops 37 %.  Judge the option on a filled
+pupil, and use `apply_real_lens_traced` (no radial screen) otherwise.  Also in
+the docstring: any exit-OPD measurement on an apertured prescription needs
+`dx ≈ 1.45·aperture/2048` or finer — coarser and the aperture edge aliases
+through the in-glass ASM and reads hundreds of nm that are entirely the grid
+(measured on a meniscus: 558 nm at N = 512, 0.03 nm at N = 2048).
+
+### Fixed -- apply_real_lens: `slant_correction=True` used normal-referenced cosines and was 2.94× WORSE than the screen it corrects (L12)
+
+The screen applied `(n2·cosθt − n1·cosθi)·sag`, with both cosines referenced to
+the facet NORMAL.  The module's own axial-translation identity (equation (3) of
+the SCREEN OBLIQUITY derivation) needs them referenced to the **Z axis** — a
+facet is displaced along z, not along its own normal — which for the collimated
+input this screen assumes is `(n2·cos(θi − θt) − n1)·sag`.  Expanded to O(θ²)
+with n1 = 1: exact `(n2−1) − θ²(n2−1)²/(2n2)`, shipped
+`(n2−1) + θ²(n2−1)/(2n2)` — opposite SIGN and 1/(n2−1) = 1.94× too large, so its
+total error was n2/(n2−1) = 2.94× the paraxial screen's.  Fixed in both copies
+(whole-grid and the banded `_slant_narrow_chunk` arm).
+
+Measured exit OPD rms against an independent ray oracle
+(`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/repro/RL-CORE/p5_slant.py`), default / slant:
+
+| fixture | default | slant before | slant after |
+|---|---:|---:|---:|
+| plano-convex curved-first | 0.848 nm | 2.487 (0.34×) | **0.037 (23.2×)** |
+| plano-convex flat-first | 1.177 | 2.282 (0.52×) | **0.017 (68.9×)** |
+| parabolic asphere (k=−1, A4, A6) | 7.764 | 22.846 (0.34×) | **0.053 (147×)** |
+| biconvex R=±60 | 1.829 | 1.133 (1.61×) | 1.641 (1.11×) |
+| biconvex R=±25 | 25.591 | 17.588 (1.46×) | 23.907 (1.07×) |
+| meniscus R=20/25 | 870.79 | 875.67 (0.99×) | 891.54 (0.98×) |
+
+Against the exact one-facet eikonal on a single N-BK7 face the corrected screen
+is 940× better than paraxial (0.0041 vs 3.83 nm rms).
+
+**BEHAVIOUR CHANGE / migration.**  The flag's numbers move for every caller.
+The biconvex and meniscus rows above show why the old form sometimes scored
+better: its wrong-signed, oversized error partly cancelled a DIFFERENT error —
+the identity is exact only for a COLLIMATED input, and on a thick symmetric
+element the bundle at the second surface is already converging.  Measured on the
+f/5 hammer fixture (R = ±51.68 mm, t = 5 mm, image r2m against a 65 µm
+dual-oracle truth), at converged sampling dx ≤ 3 µm: paraxial 40.55 µm, old
+slant 76.70 µm (overshoot), new slant 43.06 µm (undershoot).  If you turned
+`slant_correction` on for a fast SYMMETRIC element, move to `carrier=`
+(`screen_obliquity`), `surface_model='displaced'` / `'tangent_facet'`, or
+`apply_real_lens_traced`: all three carry the true local ray angle, which is
+what that residual is.  `slant_correction` now also refuses to combine with
+`seidel_correction` (see below).
+
+### Fixed -- apply_real_lens: `fresnel=True` applied |t|² instead of the power transmittance (L13)
+
+`T_eff` was `0.5(|t_s|² + |t_p|²)` — the AMPLITUDE coefficients — where this
+library's `Σ|E|²·dx·dy` IS the power (the ASM legs are Parseval-unitary and the
+in-glass propagation adds no impedance factor).  Crossing an index step needs
+the POWER transmittance `T = (n2 cosθt)/(n1 cosθi)·|t|²`.  Fixed in both copies.
+Measured (`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/repro/RL-CORE/p3_fresnel_energy.py`), transmitted power fraction:
+
+| configuration | before | after | correct |
+|---|---:|---:|---:|
+| single flat AIR→N-BK7 face | 0.632344 | **0.958057** | 0.958057 |
+| prescription ENDING in glass | 0.632344 | **0.958057** | 0.958057 |
+| bare cemented N-BK7→N-SF11 | 0.846390 | **0.993599** | 0.993599 |
+| AIR→N-BK7→AIR plate | 0.917873 | 0.917873 | 0.917873 |
+
+**BEHAVIOUR CHANGE / migration.**  An element that starts and ends in air is
+UNCHANGED at normal incidence (the `n2/n1` factors telescope to
+`n_last/n_first = 1`), which is why every plate fixture passed before.  Anything
+that ends in glass, any bare cemented interface, and the `cosθt/cosθi` half at
+finite NA all move — a single air-glass face by +51 %.  The shipped
+per-interface loss is now the ~4.2 % the docstring has always claimed.
+
+### Fixed -- apply_real_lens: `surface_frame=True` deleted the surface tilt (L2, F-O2, V2)
+
+The rigid-body branch evaluated the sag at the rotated transverse FOOTPRINT and
+discarded the rotated surface's own field-frame HEIGHT — which is where the tilt
+lives.  A rotation re-expresses the ramp; it does not delete it.  The screen now
+imprints `(n2−n1)·z_f` with
+`z_f = R_zx·x_s + R_zy·y_s + R_zz·g(x_s, y_s)` and
+`R_z· = (−cos θx sin θy, sin θx, cos θx cos θy)`.
+
+Measured: a flat N-BK7 face tilted 5 mrad now deviates the beam by 2.537 mrad
+against the thin-prism value (n−1)θ = 2.538 mrad, on both axes
+(`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/repro/orch/surface_frame_tilt_check.py`); before, `surface_frame=True`
+deviated **0.000 mrad** and a tilted flat face was a byte-identical no-op.
+Against the closed-form rigid-body rotated sphere (R = 50 mm over ±2 mm), the
+field-frame height error drops from 2.002 / 10.011 / 40.077 µm (1.63 / 8.15 /
+32.6 waves) to 1.7 / 10.3 / 80.1 nm (0.0014 / 0.0084 / 0.065 waves) at 1 / 5 /
+20 mrad — 1180× / 970× / 500×.  `decenter` is unaffected and remains
+byte-identical between the two branches.
+
+### Changed -- apply_real_lens: `surface_frame=True` now reads `tilt` the same way every other consumer does (L19)
+
+With the ramp restored, the two branches had to agree about which axis a `tilt`
+component acts about.  The surface-frame branch's rotation angles are now taken
+from the library-wide reading of the key — `tilt = (t0, t1)` IS the linear sag
+ramp `t0·x + t1·y`, i.e. `θx = t1`, `θy = −t0` — which is what the field-frame
+branch, `_disp_surface_z_grad`, `raytrace`'s `field_tilt` and the lumenairy-free
+geometric spot oracle all use.  Flipping `surface_frame` no longer re-points the
+element.  This changes `surface_frame=True` results for a tilted surface (the
+footprint rotation swaps which component scales which axis), on top of the L2
+change above; `surface_frame=False` is untouched.
+
+Note for the record: that shared reading is `(−θy, +θx)` relative to
+CONVENTIONS §7's right-hand-rotation wording for `tilt=(theta_x, theta_y,
+theta_z)`.  Re-spelling it to §7 would have to change `_lens_real`,
+`raytrace/surface.py` and `validation/oracles/geom_spot_decenter_oracle.py`
+together, plus every caller's `tilt` value; it is recorded as a cross-module
+follow-up rather than taken unilaterally here.
+
+### Fixed -- apply_real_lens: the `displaced` remaps discarded the input field's phase (L3)
+
+`_apply_displaced_remap` and `_apply_displaced_remap_2d` sampled only
+`np.abs(E_in)` and rebuilt the exit phase from the `conjugate` congruence
+(default: collimated), so any phase the caller's field carried was thrown away
+with no warning — and because `displaced_obliquity='auto'` routes any
+decentered / tilted / `sag_callable` element to the 2-D remap, that was the
+DEFAULT path for an asymmetric element.  Both now demodulate `E_in` by the
+traced congruence (`_residual_input_field`), transport the complex residual
+along the same rays, and re-apply it; `|F| = |E_in|`, so this replaces the old
+real resample rather than adding one.
+
+Measured (`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/repro/RL-MODELS/t5_phase_discard.py`, `t6_phase_discard2.py`): a flat
+and a 35.4-wave-defocused input now separate by 1.974 (1-D remap) and 1.961
+(2-D remap) of peak, against 1.978 for the thin reference and 1.977 for the
+pointwise screen — they read **4.7e-16** before.  A 150 mm diverging source
+through a decentered N-BK7 singlet with the DEFAULT `conjugate=None` now focuses
+at 25.000 mm, matching the thin model and `conjugate='auto'`; before it focused
+at 21.000 mm, the COLLIMATED focus, a 4 mm / 19 % error.  The `conjugate`
+docstring, which asserted the opposite, is corrected.
+
+### Fixed -- apply_real_lens: an out-of-range `stop_index` silently removed ALL aperture clipping (L14)
+
+The entrance aperture ran only when `stop_index is None` and the per-surface
+stop matched `i == stop_index`, so an out-of-range value matched nothing and
+disabled both.  Measured transmitted power with a 3 mm stop on a 5.12 mm grid:
+0.269 for `None`/0, 0.279 for 1, and **1.00000 for 2, 5, −1 and −2** with zero
+warnings — 3.7× the energy.  `stop_index` is now normalised (`-1` means the last
+surface, as everywhere else in Python: it transmits exactly what
+`len(surfaces)-1` transmits) and anything outside `[0, len(surfaces))`, or not
+an integer, raises a `ValueError` with the §2 prefix.  `prepare_real_lens` reads
+the key through the same helper, so the two entry points diagnose a malformed
+value identically before the former refuses a mid-train stop as it always did.
+
+### Fixed -- apply_real_lens: `screen_obliquity` double-counted n1 for the `'auto'` and ndarray carriers (L4)
+
+`_screen_obliquity_angle_field` multiplied by `n1` for every carrier vocabulary.
+That is right for the two GEOMETRIC congruences (a `TiltedCarrier`, whose
+`(L, M)` are unit-ray direction cosines, and a signed scalar conjugate, whose
+`grad W = sin α`), and wrong for `'auto'` (which fits
+`angle(E[:, 1:]·conj(E[:, :-1]))/(k0 dx)` — the field's phase is `k0·S` with `S`
+the OPTICAL path, so the reading IS `p_x`) and for an explicit wavefront ndarray
+(documented as "reference phase = k0·W").  Measured on an exact plane wave in
+N-BK7 at 50 mrad, true `q = n1 sin θ = 0.075808`: `'auto'` and ndarray now read
+0.075808 (before 0.114986, ×1.5168), `TiltedCarrier` still 0.075808.  On an
+immersed R = 25 mm surface the inflated `q` made the "corrected" screen carry
+0.0971 waves at 100 mrad — worse than the uncorrected 0.0784.
+
+### Fixed -- apply_real_lens: two `displaced` caches returned stale results (L5, L6)
+
+* `_DISPLACED_COS_GRID_CACHE` keyed a freeform `sag_callable` by object
+  IDENTITY, which does not imply value equality for a MUTABLE callable — and
+  the cache exists for exactly the design-iteration workload that mutates one.
+  Measured: 164 % of peak amplitude of error (0.987 of peak in this build's
+  fixture) from a stale grid.  The key now carries a VALUE fingerprint as well:
+  the callable is probed on a fixed 24-point stencil spanning the traced extent
+  and the float64 bytes go into the key, so a state change is a MISS.  A
+  callable that cannot be probed makes the entry uncacheable rather than
+  identity-keyed.
+* `_DISPLACED_LUT_CACHE` (on by default) keyed glasses by registry NAME.
+  `GLASS_REGISTRY` is a documented mutable extension point, so re-pointing an
+  entry left the key unchanged and the cosines stale — measured 1.3 % of peak.
+  Both keys now carry the RESOLVED index (`get_glass_index`, already memoised),
+  which is strictly more correct and removes the name-aliasing hazard.
+
+### Fixed -- apply_real_lens: the `displaced` ray maps referenced the exit leg through air (L7)
+
+`_build_displaced_ray_map` and its 2-D twin walked the ray from the last
+surface's sag back to the exit vertex plane with `opl += 1.0 * t_f`, but that
+leg is travelled in `surfaces[-1]['glass_after']`.  Measured on an immersed-exit
+singlet against a closed-form trace: 1.03e-5 m = **16.3 waves** of error before,
+8.1e-19 m after.
+
+### Fixed -- apply_real_lens: `tangent_facet_remap` refused ordinary padded grids (L8)
+
+The fold determinant and the pull-back residual were reduced over EVERY pixel of
+the grid, including the padding outside the clear aperture where the field is
+identically zero and the sag grows without bound — so padding, which a
+converging beam needs, CAUSED refusals.  Both reductions now score the
+illuminated support (`|E| > 1e-6·max|E|`, which is 1e-12 of peak intensity and
+is exactly the aperture for a hard-apertured pupil); the whole-grid minimum is
+kept in the message as a diagnostic.  The pull-back loop also stops as soon as
+the residual stops contracting (so real divergence is reported in 2–3 sweeps
+instead of 64) and its ceiling rises from 64 to 256 sweeps, because the cap
+exists to stop divergence, not to truncate a slow contraction.
+
+Measured (`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/repro/RL-MODELS/t9_fold.py`), a 2 mm pupil at five pad/pitch
+combinations: **5 of 5 accepted**, against 3 of 5 before (the 8.2× pads were
+declined at `min det = −0.87` on dark corner pixels while the illuminated pupil
+sat at 0.9986, three orders inside the 1e-4 bar).  A genuine fold inside the
+support is still refused.
+
+### Fixed -- apply_real_lens: `form_error` had no shape or dtype validation (L15)
+
+An `(N,)` map was silently BROADCAST across every row — one row of a figure map
+replicated N times, applied with no diagnostic; a mismatched 2-D map died with a
+raw numpy broadcast error and an `(N, N, 1)` one survived the lens and died
+inside the ASM.  All three now raise with the `apply_real_lens: surfaces[i]
+['form_error'] ...` prefix, as does a complex map.  Value and sign are unchanged
+(Δφ = −0.511441 rad for a uniform 100 nm map, exactly `−k0(n−1)·100 nm`).  The
+docstring now states that it is a FIELD-frame map: it is added after the
+surface-frame coordinates are consumed, so it is neither shifted by `decenter`
+nor rotated by `surface_frame`.
+
+### Fixed -- apply_real_lens: `absorption=True` attenuated by the AXIAL gap thickness (L19)
+
+The glass a pixel crosses between surfaces i and i+1 is
+`t_i + sag_{i+1} − sag_i`, not `t_i`.  Factorising that exponential puts
+`exp(+k0 κ sag_i)` on surface i and `exp(−k0 κ sag_{i+1})` on surface i+1, so
+each surface applies ONE local factor with the sag it already has — no second
+sag grid, no halo, and the product over the element telescopes back to the true
+local path.  Measured on a 6 mm-centre / 5.38 mm-edge N-BK7-like biconvex
+against a Beer-Lambert ray-column oracle: max deviation 4.2e-4 against 1.52e-2
+for the axial-only factor, **36×**, recovering 97 % of the apodisation depth.  A
+flat plate and "no attenuation after the last surface" are unchanged exactly.
+
+### Fixed -- elements: `surface_sag_general` dropped the whole aspheric polynomial for a non-C-contiguous `h_sq` (E4)
+
+The numba kernel accumulates through `sag.ravel()`, which is a VIEW only when
+`sag` is C-contiguous.  `sag` inherits its memory order from `h_sq`, so for an
+F-ordered, transposed or strided `h_sq` the kernel added the polynomial into a
+temporary copy that was then discarded — exactly zero aspheric contribution,
+silently (measured 9.41e-6 m = 100 % of the term; 3.84e-5 m on this build's
+fixture).  The buffer is made contiguous, accumulated into, and copied back.
+
+### Fixed -- elements: `surface_sag_general(R=0)` returned an all-NaN grid behind anonymous numpy warnings
+
+A zero radius is not a surface (the conic sag divides by `R**2` and then by
+`R`).  It now raises a §2-prefixed `ValueError` naming the two spellings of a
+FLAT surface (`np.inf`, `None`), both of which still return zeros.
+
+### Performance -- elements: `surface_sag_general` rewritten in place; the phase screen built with cos/sin and applied in place; flat faces skipped
+
+All three are BIT-IDENTICAL — asserted, not assumed: the banded/whole-grid
+byte-identity matrix (5 prescriptions × 7 band sizes + the slant arm × 3),
+`prepare_real_lens` vs `apply_real_lens` at complex128 and complex64, and a
+direct comparison against the previous expressions all hold at `max|d| = 0.0`.
+
+| change | before | after | gain |
+|---|---|---|---|
+| `surface_sag_general` conic chain, one grid + one bool instead of 7 fresh grids (N = 2048, medians of 5 interleaved runs) | 176.4 ms / 4.13 float64 grids | **56.5 ms / 1.13 grids** | 3.12× / 3.67× |
+| phase screen: `cos`/`sin` into a preallocated complex array, then `E *= ph` (N = 2048, complex128, float64 geometry) | 253.1 ms / 3.00 complex128 grids | **172.2 ms / 2.50 grids** | 1.47× / 1.20× |
+| flat-face early-out: screens BUILT per call | plano-convex 2, window 2 | **plano-convex 1, window 0** | one full complex `exp` + multiply per plano face |
+| entrance aperture, TIR mask, clear aperture and stop mask as in-place boolean assignments instead of fresh `xp.where` grids | 4 full complex grids per element | 0 | — |
+| end to end, the audit's 3-surface fixture, N = 2048 whole grid | 4.01 s / 16.13 float64 grids | **1.57 s / 14.00 grids** | **2.55× / 1.15×** |
+
+The NaN-safe sense of the masks is preserved (`not (sin2_tt < 1.0)`, so a NaN
+still lands on the zeroed side) and `complex64` input still returns `complex64`.
+
+The cos/sin screen is restricted to float64 GEOMETRY (`set_lens_sag_dtype`'s
+default).  At float32 the two forms are not the same arithmetic — numpy's
+`complex64` exponential carries more than float32 through its own sine/cosine
+while `np.cos(float32_arg, out=<float32 view>)` does not — and they diverge by
+~8.4e-08 of unit modulus, which is enough to break `PreparedAnalyticLens`'s
+byte-identity with `apply_real_lens` under `set_lens_sag_dtype(np.float32)`
+(measured 1.2e-07 of peak field before the restriction).  `_screen_exp` falls
+back to `xp.exp` for any narrower dtype, and the bit-identity test covers both.
+
+### Performance -- apply_real_lens: the four geometric Newton loops stop at their fixed point (L9)
+
+`_build_displaced_cos_luts`, `_build_displaced_cos_grid` and the two ray-map
+builders each ran a FIXED 24 intersection sweeps, and each sweep costs three
+`_surface_sag_general` evaluations over the whole fan.  They now break when `t`
+reaches a BITWISE fixed point — not a tolerance: once another sweep provably
+cannot change a bit, the remaining ones are pure cost, so the output is
+unchanged by construction.
+
+Re-measured (VERIFY-A2, 2026-09-12) on a spherical singlet and a
+conic+aspheric one: the bitwise fixed point is reached after **13** sweeps in
+both ray-map builders and 3 in `_build_displaced_cos_luts`, so
+`_surface_sag_general` calls drop **150 → 84 (1.79x)** per two-surface build,
+not the "2 sweeps / ~10x" an earlier revision of this entry (and RL-MODELS)
+quoted — the residual is zero to a TOLERANCE after ~2 sweeps, but `t` keeps
+moving in the last bits for a further ~11.  The property the change rests on is
+unaffected and was verified directly: forcing the old 24 sweeps back (by making
+the fixed-point test never fire) changes **no bit** of any of the four
+builders' outputs across 2 prescriptions x 4 fan radii x 3 grid sizes
+(`tests/unit/test_audit2609_a2_verify_lens_analytic.py::
+TestVerifyL9NewtonEarlyExitIsBitwise`).
+
+### Changed -- apply_real_lens: two `displaced` resolutions now scale with the grid (L9)
+
+* the pointwise obliquity cos-grid spread a fixed 384 coarse samples over the
+  FIELD extent, so its accuracy fell LINEARLY with pad factor (measured 24×
+  worse over a 16× pad) — a numerical artefact of padding rather than of
+  anything physical.  The count now scales with the pad factor so the pitch
+  INSIDE the traced aperture is fixed at its unpadded value; measured error
+  inside the pupil against a 4096-sample reference: **0.0** at every pad
+  factor from 1× to 16×, against 1.5e-6 → 3.6e-5 before.
+* the 2-D transverse-walk remap rebuilds the whole exit field from a fixed
+  181 × 181 launch lattice whatever the field sampling, so structure finer
+  than the launch pitch (a hard stop edge, an obscuration, an upstream DOE,
+  speckle) is smoothed to the lattice — silently.  It now WARNS, naming the
+  launch pitch, the field pitch and the two routes that do not smooth
+  (`displaced_obliquity='pointwise'`, which lives on the field grid, and
+  `apply_real_lens_traced`).  The lattice itself is NOT raised: measured on a
+  decentered f/5 singlet at N = 512, scored by the mirror-symmetry residual of
+  the image-plane intensity (+d vs −d, an exact symmetry of the physics, so any
+  residual is the model's own artefact), it reads 7.9e-14 at n_side = 181,
+  5.5e-14 at 257 and 4.1e-14 at 513 — but **4.1e-03 at 512 and 7.4e-03 at
+  1025**.  The instability is QHull's, not the resolution's: a denser scattered
+  set gives the Delaunay triangulation more near-degenerate cells to resolve
+  arbitrarily, and which way it resolves them is not reflection-stable.
+  Trading a documented smoothing limit for a measurable loss of an exact
+  symmetry is a bad trade; the real fix is to replace `LinearNDInterpolator`
+  with the structured Newton inversion this module already implements at
+  `_interp2_structured` (which removes the ceiling AND the triangulation), and
+  that is recorded as follow-up work rather than half-done.
+
+### Changed -- apply_real_lens: `slant_correction=True` + `seidel_correction=True` is refused (L20)
+
+Both flags replace the SAME per-surface coefficient and the Seidel block's model
+reference is built from the screen the split step actually applies, so stacking
+them double-counted the facet obliquity: measured 173.5 → 1488.6 nm rms exit OPD
+on an 8 mm cemented doublet with both on.  `_check_apply_real_lens_kwarg_combination`
+now raises.
+
+### Fixed -- apply_real_lens: input-validation contracts and stale documentation (L10, L11, L18, L20)
+
+* `assert len(thicknesses) == len(surfaces) - 1` is a `ValueError` with the §2
+  prefix.  Under `python -O` the assert was stripped, so a short list surfaced
+  as a bare `IndexError` from inside the loop and an over-long one was accepted
+  silently; `prepare_real_lens` already raised properly for the same condition.
+* `_warn_if_aperture_exceeds_grid` was called with `shape[0]` (Ny) paired with
+  `dx`, describing a semi-extent that exists on NEITHER axis of an anamorphic
+  grid.  It now takes both axes (`N_y=`, `dy=`, defaulting to the x values so
+  every other caller is unchanged) and checks the smaller semi-extent.
+* `lens_sag_float32_opd_error`'s `on_partial_aperture` guard could not fire on a
+  default call: with `field_check_dx=None` the pitch is chosen so the aperture
+  spans 80 % of the window, making `cover` 1.25 by construction, while the
+  docstring said it warns by default and its own text said the PITCH is what the
+  error depends on.  An auto-chosen pitch now also marks the run a proxy.
+* the dead `_split_mode` arm in `_obl_gap_advance` is removed (a carrier is
+  refused with every non-`'thin'` surface model, so it was unreachable), and the
+  comment that described it is corrected.
+* `_VALID_SCREEN_OBLIQUITY` was dead; it is now the single place the accepted
+  set is spelled and is read by the error message, with a note on why membership
+  testing is deliberately not used (`1 in ('auto', True, False)` is True).
+* `sag_chunk_rows` was documented "wall-clock neutral" unqualified.  Measured
+  against the whole-grid path with an explicit `sag_chunk_rows=256`: +28 % at
+  N = 512, +5 % at N = 1024, +9 % at N = 2048, with the real payoff being memory
+  (16.1 → 6.4–6.8 float64 grids).  The AUTO default only bands at N ≥ 4096, so
+  shipped behaviour is unaffected; the sentence is now qualified with those
+  numbers.
+* the `screen_obliquity` cost table ("2.2× / 2.9× / 3.6× at N = 512/1024/2048",
+  "+3 float geometry grids") was not reproducible and its TREND has the wrong
+  sign — a fixed O(N²) addition measured against an O(N² log N) baseline must
+  FALL with N.  Replaced with the re-measured table (3.88× / 5.09× / 2.38×,
+  +11.13 grids).
+* the numexpr-vs-numpy complex64 difference is documented on
+  `PreparedAnalyticLens`: on a numexpr build at N ≥ 1024 the two paths differ by
+  about one float32 ULP (1.05e-07 relative, 2.4e-08 rms), because numexpr
+  narrows at the `out=` store while the prepared lens casts before the multiply.
+* the `fresnel` parameter text now states that the refraction ANGLE comes from
+  the real indices while the coefficients use the complex ones, that `θi` is the
+  AOI of an AXIAL ray at the local facet normal, and that no path in the
+  function has both a true local AOI and Fresnel.
+* the `slant_correction` guidance ("helpful for an asymmetric meniscus, very
+  steep asphere") and the `seidel_correction` recommendation ("turn on for
+  AC254*-class cemented doublets") are rewritten against the measurements above.
+
+### Changed -- tests: three test files that pinned the defects (V1, V2, L14)
+
+* `tests/unit/test_audit_glass.py` — the repository's ONLY `seidel_correction`
+  test wrapped the phase difference into (−π, π], divided by 2π (so the quantity
+  was ≤ 0.5 by construction) and asserted it was < 50.0; a synthetic 10⁴-wave
+  error scored 0.288 and passed.  Its fixture was also plano-REAR, where the
+  exit-vertex defect is identically zero, and it scored exit-pupil phase, never
+  focus.  Replaced by three falsifiable tests: the 5 nm gate must SKIP a
+  well-corrected singlet (asserted as bit identity with the flag off); the
+  correction must improve a CURVED-REAR doublet's exit wavefront by ≥ 3× against
+  an independent exit-vertex ray oracle written from the surface equation; and
+  it must not move the focus or cost peak intensity, measured unwrap-free by a
+  parabola-refined through-focus scan.
+* `tests/unit/test_v5_2_off_axis_conic_surface_frame.py` — the ±20 % slope band
+  asserting that `surface_frame=True` has NO tilt ramp was the defect (L2); the
+  two `array_equal(no_kwarg, default_kwarg)` assertions tested CPython's
+  default-argument mechanism.  Replaced by a thin-prism deviation test (both
+  branches must deviate by (n2−n1)θ, about the same axis, read from the exit
+  field's spectral centroid) and a closed-form pin of the field-frame tilt-ramp
+  convention plus the decenter bit-identity.
+* `tests/unit/test_hammer_h1_slant_obliquity.py` — two of its three tests ran on
+  under-sampled grids (dx = 12 µm against a 6.55 µm exit Nyquist, where the
+  PARAXIAL arm itself reads 5.53 µm) and one was labelled "converged sampling"
+  at dx = 6 µm where the same measurement moves 60 % on refinement.  Re-fixtured
+  at Nyquist-compliant sampling and re-barred on the slant/paraxial RATIO, which
+  converges to three digits two samplings before the absolute number does and
+  brackets both defects (the pre-v5.25.0 cancellation below 1.0, the v5.25.0
+  over-correction at 1.9–2.0).
+* `tests/unit/test_audit_misc.py` — `test_traced_emits_warning_for_stop_index_2`
+  used an out-of-range `stop_index = 2` on a two-surface singlet, which is now a
+  `ValueError`.  Re-fixtured on the valid non-entrance `stop_index = 1` (which is
+  what the warning is about) and joined by a pin of the new out-of-range
+  contract.
+
+### Added -- tests: `tests/unit/test_audit2609_a2_analytic_lens.py`, `tests/unit/test_audit2609_a2_displaced_models.py`
+
+62 new regression tests (49 + 13) covering L3–L20 and E4, each with its oracle,
+the oracle's own error floor, the measured value and the measured value of the
+defect it guards.  No test asserts a wall clock or a speed-up, skips on a
+resource precondition, or scores the code against another implementation in this
+library.
+
+<!-- WP-A3: Traced lens family (`apply_real_lens_traced`, caustic siblings) -->
+### Fixed -- caustic siblings: `caustic='multibranch'` / `'uniform'` evaluated on the last surface's SAG, not on the output plane (audit S1, P0)
+
+`lumenairy/elements/_lens_traced_multibranch.py::_trace_launch_grid` and both
+meridional traces in `lumenairy/elements/_lens_traced_uniform.py`
+(`_trace_meridional_fold`, `_trace_meridional_cusp`) advanced `rt.trace`'s
+`image_rays` — which sit at `z = sag(rho)` of the last surface — by
+`output_plane_distance / N`, so every ray was read at `z = sag(rho) + d`: a
+ray-DEPENDENT longitudinal position, not a plane.  Two branches arriving at the
+same `(x, y)` therefore came from different `rho`, different `sag`, different
+`z`, and their interference was computed between fields at different
+longitudinal positions.  `output_plane_distance = 0.0` (the DEFAULT) was
+affected exactly as much as a through-focus plane, because the error is the
+sag, not the propagation.
+
+All three sites now route through WP-A1's shared
+`TraceResult.at_exit_vertex()`.
+
+Measured against an independent vector-Snell trace on a plano-convex with
+`R2 = -25 mm` over a 20 mm aperture (`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/repro/TR-SIBLINGS/repro_vertex.py`):
+transverse error **476.8 µm → 1.7e-12 µm**, OPD error **3 501 waves →
+4.4e-12 waves**; `R2 = -100 mm` 24.59 µm / 820.3 waves → 1.7e-12 µm /
+1.2e-11 waves; biconvex ±50 mm 40.57 µm / 568 waves → 1.7e-12 µm /
+1.2e-11 waves.  End to end through the public API
+(`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/repro/TR-SIBLINGS/repro_vertex_field.py`), multibranch against the
+single-valued traced path at the same plane: curved rear (R2 = -100 mm)
+**1.7984 rad rms (0.286 waves, max π) → 0.0003 rad rms (max 0.0049 rad)**;
+biconvex ±60 mm 1.8100 → 0.0045 rad rms — both now better than the flat-rear
+CONTROL's own 0.0050 rad floor, which is unchanged.
+
+Every physics fixture for this layer used a plano-rear singlet
+(`sag ≡ 0`), which is why `pytest -k "multibranch or uniform or ludwig"`
+passed 8/8 on the unfixed code.  New curved-rear fixtures:
+`tests/unit/test_audit2609_a3_caustic_siblings.py`.
+
+### Added -- `apply_real_lens_traced(caustic='wave')`: the ray-to-wave hand-off (audit §15.9)
+
+A new `caustic` mode that takes the single-valued traced field at the
+exit-vertex plane — where geometric optics is exact — and propagates it to
+`output_plane_distance` with the library's band-limited angular spectrum.  No
+branch enumeration, no KMAH index, no `1/sqrt|J|`, no Ludwig swap and no
+dark-side completion: exact through folds, cusps AND the axial point focus
+alike, and it carries the exponentially-decaying dark-side tail the branch sum
+drops to exactly zero.  This is the commercial-POP pattern (Zemax POP /
+CODE V BSP; Goodman §3.10, Matsushima & Shimobaba 2009 for the band limit).
+
+Implemented as ONE recursion with `caustic='single'`,
+`output_plane_distance=0` — so every other keyword of the function applies
+verbatim — plus one ASM leg at the exit medium's in-medium wavelength.
+
+Measured (f ≈ 25 mm biconvex, N = 512, dx = 4 µm, w₀ = 0.30 mm, BFL =
+24.4833 mm): at `d = 0` the result is **bit-identical** to the ordinary traced
+call (`np.array_equal` True); at the paraxial focus `P_out/P_in = 0.999999`,
+peak 8.5781 and EE(5/10/25 µm) = 0.0408 / 0.1609 / 0.6348, matching an
+INDEPENDENT `apply_real_lens` + ASM oracle to four digits (8.5781, 0.0408 /
+0.1609 / 0.6348) — where `caustic='multibranch'` returns nothing at all.  Away
+from any caustic it tracks the multibranch to 1.7 % over the bright core.
+
+NOT made the default for `output_plane_distance != 0`: the existing
+multibranch/uniform tests pin the branch-sum field and switching the default
+would move every one of those numbers.  The docstrings recommend it for new
+work at any plane the ray map is multi-valued.
+
+### Fixed -- traced lens: a real-dtype `E_in` crashed on the last assembly line (audit T1, P1)
+
+`target_cdtype = E_in.dtype if np.iscomplexobj(E_in) else np.complex128`
+selected the numpy scalar TYPE for a real input, which has no `.type`
+attribute, so all four `target_cdtype.type(0)` masking sites raised
+`AttributeError` — two of them on the BANDED path, the shipped default at
+N ≥ 4096 — after the whole ray trace, the three fits and the Newton inversion
+had already run.  `apply_real_lens` and `PreparedTracedLens` accepted the same
+array.  Now `np.dtype(...)`, resolved once at the top of the function.
+
+Also fixed the related `_reference_input()` cast, which built the carrier
+phasor `exp(i k0 W)` in `E_in.dtype`: for a real input that discarded the
+imaginary part behind a bare `ComplexWarning` and turned a unit-modulus phasor
+into `cos(k0 W)` (measured modulus 1.8e-4 … 1.0).
+
+`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/repro/orch/verify_trmain2.py` item 1: **AttributeError → complex128**.
+
+### Fixed -- traced lens: `caustic='multibranch'` returned an identically-ZERO field at an axial focus, silently (audit T2, P1)
+
+At and around a paraxial focus every mapped launch triangle either collapses
+below `caustic_min_area_ratio` or compresses below one pixel, so the rasteriser
+covers nothing and the returned field is exactly zero — reported to the caller
+as `P_out/P_in = 0.0000e+00`, 0 non-zero pixels, **0 warnings**.  The mode now
+counts the degenerate triangles and REFUSES with a `RuntimeError` naming the
+axial point-focus catastrophe and the remedies (`caustic='wave'`, GBD, Maslov),
+plus a warning when more than 25 % of the triangles are skipped without a total
+collapse.
+
+The energy tripwire is now TWO-SIDED and re-tuned: `_ENERGY_BLOWUP_FACTOR`
+10.0 → **2.0** and a new `_ENERGY_COLLAPSE_FACTOR = 0.5`.  The old one-sided
+10× test was mute through the whole 4–8× run-up to the focus (measured 3.99 at
+z = 24.70 mm and 8.10 at 24.74 mm on a 24.834 mm BFL) and could not see an
+energy LOSS at all (measured 0.887 on a resolved fold at N = 4096 against an
+independent ASM oracle's 1.000).  `return_diagnostics=True` now also reports
+`n_triangles`, `n_triangles_finite`, `n_triangles_degenerate` and
+`power_ratio`.
+
+The tripwire's REFERENCE power is also corrected.  It divided the reconstructed
+grid power by the input power inside the aperture circle measured on the `E_in`
+grid, which is the wrong denominator in two ordinary geometries: the launch
+sampler clamps `E_in` at the grid edge, so an aperture wider than the grid
+launches the edge amplitude over the whole rim annulus; and light that leaves
+the output grid is off-screen, not lost.  On a 6 mm-aperture singlet sampled on
+a 48 × 25 µm grid the shipped tripwire read **12.3×** at a plane where the
+launched energy is in fact conserved to 0.2 % — a false alarm on the SHIPPED
+10× bar, not only on the new 2× one.  The reference is now the power the launch
+congruence carries ONTO the grid (`Σ|E_launch|² h²` over alive launch nodes
+whose mapped exit point lands inside the grid) against `dx²·Σ|E_out|²`, so
+numerator and denominator are the same physical quantity.  On a fixture whose
+beam sits inside the grid the two agree to four digits, and every real detection
+is unchanged (measured across a 12-plane through-focus scan).  `power_ratio` is
+now that ratio, and the messages say "the launched power that reaches this
+grid".
+
+`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/repro/orch/verify_trmain2.py` item 3: **P/P_in = 0, 0 warnings →
+RuntimeError naming the cause and the remedy**.
+
+### Fixed -- traced lens: `newton_fit='spline'` + any vignetted ray returned an identically-ZERO field (audit T3, P1)
+
+The launch lattice is a SQUARE of half-width `0.75*aperture`, so its corners
+sit at `sqrt(2)*0.75 = 1.06` aperture radii — past any per-surface
+`semi_diameter` of `aperture/2`.  Those rays die, their forward-map entries
+became NaN, and `RectBivariateSpline` (an interpolating `s = 0` FITPACK fit,
+which does NOT ignore NaN) turned ~90 % of its coefficients into NaN, making
+`valid = isfinite(opl_map)` all-False and the field zero.  The in-code guard
+comment claimed the opposite ("filling dead entries with NaN and extrapolating
+with the spline's natural extrapolation"); the only diagnostic was a
+100 %-unconverged Newton warning that misdiagnosed the cause and mis-stated the
+outcome.
+
+Dead launch nodes are now filled from their NEAREST LIVE neighbour
+(`scipy.ndimage.distance_transform_edt`) so the solve is finite, the filled
+mask travels in the Newton payload, and any output pixel whose entrance
+solution lands on a filled node is masked exactly as an out-of-domain pixel is.
+A `RuntimeWarning` names the vignetting and points at `newton_fit='polynomial'`
+(the default, whose least squares drops dead samples); a prescription with NO
+live launch ray raises.  `_warn_newton_unconverged` now distinguishes "the fit
+is NaN everywhere" from "the iteration hit its cap".
+
+`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/repro/orch/verify_trmain2.py` item 2: spline **P_out/P_in 0.0000 with 0
+non-zero pixels → 0.9501 with 17 493**, against the polynomial control's
+0.9754 / 21 601.
+
+### Fixed -- traced lens: `fast_analytic_phase=True` raised `AttributeError` on every refracting prescription (audit T4, P1)
+
+`_geometric_lens_phase` called `raytrace._surface_sag_xy`, which lives in
+`raytrace.surface` and is not re-exported by the package, so the documented
+public kwarg (and GUI checkbox) crashed on every prescription that actually
+refracts.  Now imported from the module that defines it.
+
+Three further corrections in the same function:
+* NaN outside the conic domain no longer propagates into `delta_phase` (it
+  contributed NaN pixels to the returned field with no diagnostic); such points
+  now contribute zero from that surface and the count is reported through a
+  `RuntimeWarning`.
+* The bulk glass piston is accumulated as a float64 scalar and folded modulo
+  2π BEFORE it touches the accumulator, so
+  `set_default_real_dtype(np.float32)` no longer injects the 1.95e-3 rad
+  (λ/3220) float32 ulp of a 2.9e4 rad piston, growing linearly with thickness.
+  Measured float32-vs-float64 agreement **< 1e-4 rad** on a 4 mm element.
+* The docstring's "under 10 nm OPL on F/10+" claim is replaced with the
+  measured thickness scaling: the omitted term is the in-glass ASM leg, so the
+  error is LINEAR IN CENTRE THICKNESS — 0.0003 rad max at 1 µm, 0.034 rad at
+  100 µm and **0.68 rad (14.1 nm rms / 41.6 nm PV) at 2 mm** on an f/12.1
+  biconvex.  Budget ~7 nm rms per mm of glass.  The absence of an aperture mask
+  is documented too.
+
+### Fixed -- traced lens: a surface `form_error` was silently cancelled out of the answer (audit T5, P1)
+
+`lumenairy.raytrace.Surface` has no `form_error` field, so `opl_traced` carried
+none of it while BOTH analytic legs of
+`E_analytic * exp(i(k0 opl - phase_analytic_lens))` did — and the two cancelled.
+A figure-error or tolerancing study routed through the traced model returned
+the NOMINAL answer, with no warning and no mention in the docstring (the string
+`form_error` did not occur in the module).  Measured suppression **254×** on a
+250 nm PV astigmatic map.
+
+The screen `phi_i = -k0 (n_after - n_before)_i * form_error_i` — exactly what
+`apply_real_lens` applies, same sign convention — is now built once and added
+explicitly at the assembly, on both the banded and whole-grid paths and on both
+`preserve_input_phase` branches.  Measured against the exact screen over the
+bright support: **0.0034 rad rms against a 0.564 rad screen (0.6 %)**, which is
+better than the analytic sibling's own 2.6 % (that carries the ASM diffraction
+of the figure error).  Pre-fix the traced model reproduced 0.0 % of it.
+
+`caustic='multibranch'`/`'uniform'` REFUSE a `form_error` prescription: they are
+a pure ray construction with no analytic leg to re-apply the screen onto.
+
+**Migration note.**  `apply_real_lens_traced` on a prescription carrying
+`form_error` now returns a DIFFERENT (correct) field.  Code that relied on the
+traced model ignoring `form_error` should drop the key.  The traced docstring
+now enumerates every phase-only prescription feature the ray model lacks and
+says what happens to each.
+
+### Fixed -- traced lens: `_reverse_prescription` did not negate the aspheric / freeform / tilt / `sag_callable` departures, and mis-paired the thicknesses (audit T6, P1)
+
+Reversal is the reflection `z → -z`, under which `sag → -sag` TERM BY TERM.
+The radius flip supplies the conic term's sign; the polynomial aspheric, the
+freeform block, the field-frame `tilt` and a `sag_callable` have no radius to
+flip and were passed through UNCHANGED — so `inversion_method='backward_trace'`
+on any such element traced the wrong surface.  Measured on a 100 mm/plano
+N-BK7 singlet with `aspheric_coeffs={4: 1.0e3}` at h = 5 mm: reversed sag
+**-2.500031447e-04 m against the correct -2.512531447e-04 m, an error of
+1.25e-06 m = 2.13 waves at 588 nm → 0.0e+00 m**.
+
+`validate_prescription` accepts both `len(thicknesses) == len(surfaces)` (each
+surface's forward gap, the last being the BFD) and `== len - 1`;
+`list(reversed(thicknesses))` is correct only for the second.  Under the first
+it made the reversed GLASS gap the forward BFD: forward OPL 7.583992e-03 m
+against backward 1.516798e-01 m, and a ray launched at +4.000 mm landing at
++6.576 mm.  The PAIRING is now reversed, not the list, and the caller's
+convention is preserved on output.  Measured after: forward/backward OPL agree
+to **0.0 / 1.7e-18 / 5.2e-18 m** at h = 0 / 2 / 4 mm under BOTH conventions,
+with the back-traced ray returning to its launch height exactly.
+
+`stop_index` is remapped to `len(surfaces) - 1 - i`, `elements` is reversed
+(`surfaces_from_prescription` reads it for vignetting), and every other
+top-level key is carried through; only `aperture_diameter` used to survive.
+
+### Fixed -- traced lens: `_sample_local_tilts` wrapped the grid boundary and stored the gradient half a pixel off (audit T7, P2)
+
+`np.roll(E, -1, axis=1)` differenced the LAST column against column 0, so on
+any field that fills the grid — a plane wave, a top hat, a post-DOE multi-order
+field, i.e. exactly what this function exists for — the rim read a tilt
+unrelated to the beam (measured L = -0.1175 against a true +0.03, **5× the tilt
+itself**), and the shipped σ = 4 px amplitude-weighted smoothing SPREAD it 12
+columns / 4.7 % of the grid inward rather than suppressing it.  Separately,
+`angle(E[i+1] conj(E[i]))/dx` estimates `dphi/dx` at `i + 1/2` and was stored
+at `i`, biasing every launch direction by `dx/(2R)` — coherent across the pupil
+and invisible on collimated fixtures.
+
+Both estimators now use the MIDPOINT construction the two sibling estimators in
+the same file already use (`_compute_carrier('auto')`,
+`_fit_residual_eikonal`), with the half-pixel lookup offset applied PER AXIS.
+
+Measured (`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/repro/TR-INFRA/p7_tilts.py`): whole-grid `max |L - L0|` on a tilted
+plane wave **1.475e-01 → 1.232e-15** (σ = 0) and **8.111e-02 → 2.220e-16**
+(σ = 4); mean half-pixel bias on a spherical wave **+2.0000e-05 → +4.5e-21**
+at R = 0.10 m (the pre-fix value is `dx/(2R)` to five digits) and
+**+4.0000e-05 → -2.6e-22** at R = 0.05 m.
+
+### Fixed -- traced lens: `carrier=<ndarray>` sampled the entrance eikonal by nearest neighbour (audit T7 / T12, P2)
+
+The launch lattice is a `linspace` over ±0.75·aperture with an odd sample
+count, so its nodes are NOT wave-grid pixel centres.  The ndarray-carrier
+branch looked up both the direction cosines and — the larger of the two, and
+the one the in-code note omitted — the H6 entrance eikonal `W` by fancy-index
+with `.astype(np.int64)`, i.e. by FLOOR, giving a half-pixel error linear in
+`dx` plus a systematic −0.494 px offset.
+
+Now bilinear (`scipy.ndimage.map_coordinates(order=1, mode='nearest')`), the
+same cost class.  Measured at the source (`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/repro/TR-MAIN-1/p6b_ndarray.py`):
+eikonal error **301.4 / 150.9 / 69.0 nm rms → 0.269 / 0.066 / 0.015 nm** at
+N = 256 / 512 / 1024 (and now scaling as `dx²`), cosine error
+4.5e-5 / 2.3e-5 / 9.9e-6 → 2.5e-10 / 6.1e-11 / 1.7e-11.  End to end against an
+independent exact-sphere trace on a diverging 200 mm conjugate through an f/32
+singlet (`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/repro/TR-MAIN-1/p6_carrier.py`): `carrier=<ndarray>` **9.914e-02 rad
+rms (20.67 nm) → 1.874e-03 rad (0.391 nm)**, i.e. within 1.5 % of the
+analytically identical `carrier=<float>`'s 1.845e-03 rad instead of 54× worse.
+The `'auto'`, float and `TiltedCarrier` branches are untouched.
+
+The remaining error is now the grid's own: `np.gradient` (central difference of
+step `dx`) sampled bilinearly costs `(dx^2/6 + dx^2/8)|d^2g/dx^2|`, and on the
+tilted-sphere fixture in `test_niche_d1_tilted_carrier.py` the measured
+gradient error 1.7197e-08 sits at 0.957 of that derived
+`(7/24) dx^2 max|g''|` bound (nearest-neighbour read 3.324e-04 there).  That
+file's fail-before arm, which asserted the branch must be worse than 1e-5, is
+restated against the derived bound on a 4x refinement ladder rather than
+deleted.
+
+### Fixed -- traced lens: `_multi(reuse_prepared=True)` and `_segmented` contracts (audit T8, P2)
+
+* `apply_real_lens_traced_multi(reuse_prepared=True)` raised an opaque
+  `TypeError: prepare_real_lens_traced() got an unexpected keyword argument`
+  from three frames down for TWELVE public kwargs (`dy`, `remap_sampling`,
+  `on_fit_domain_basis`, `on_pool_memory`, `parallel_amp_min_free_gb`,
+  `newton_mask_dilate_coarse_px`, `fast_analytic_phase`,
+  `output_plane_distance`, `caustic_ray_subsample`, `caustic_band`,
+  `caustic_min_area_ratio`, `origin`) — and only on the DEFAULT reuse path, so
+  the same call worked or crashed depending on the carrier kind.  That is
+  exactly the failure the v5.29 `_NO_SCREEN` block was written to close; it
+  enumerated six of the eighteen by hand.  The accepted set is now DERIVED from
+  `inspect.signature` of both functions, so a keyword added to either is
+  handled without editing a list, and the refusal names the keyword and
+  `reuse_prepared=False`.
+* `apply_real_lens_traced_segmented` handed `dy` to the angular partition and
+  then called `apply_real_lens_traced(..., dx=dx)` WITHOUT it, so the element's
+  square-pixel refusal was never reached: `segmented(dy=2*dx)` returned a field
+  where the direct call raises, with the fy axis scaled by `dy` and the ray
+  trace, exit grid and aperture mask all assuming `dy = dx`.  It now raises the
+  same square-pixel `ValueError` up front.
+* The single-segment path forwarded a possibly-SEQUENCE `carriers` as a scalar
+  `carrier=`; since the segment count is data-dependent, the same call was
+  valid or ill-typed depending on the input spectrum.  A one-element sequence
+  is now unwrapped and a longer one refused with the reason.
+
+### Fixed -- traced lens: the exit-NA guard measured rays the output mask deletes (audit T13, P2)
+
+The trace runs with `aperture_diameter` popped, so unless the SURFACES carry a
+`semi_diameter` the rays go out to `0.75*aperture` while the returned field is
+masked to `aperture/2`; the significance gate looked only at input AMPLITUDE,
+which does nothing for a flat / top-hat / wide-Gaussian input.  Measured on an
+f/5 fixture with `E_in = ones`: `na_exit` **0.78487 against the true marginal
+0.24964 — 3.144× overstated**, which demands `dx ≤ 0.83 µm` instead of 2.62 µm
+(a 3× finer grid, 9× the memory) and feeds
+`propagate_traced_carrier_chain`'s `on_tilt_exact_grid`, whose default action
+is `'error'`.  The gate is now intersected with the same aperture disc the
+output mask uses.
+
+### Changed -- traced lens: `parallel_amp_min_free_gb` is a floor, and the gate scales with the field (audit T15, P2)
+
+The 48.0 GB default was applied as a FLAT threshold, which the docstring itself
+described as "tuned for the N=32768 complex128 case" — so the measured win was
+unreachable on any box with less than 48 GB free at ANY grid size.  Measured at
+N = 1024, `ray_subsample=4`, median of 4: `parallel_amp=False` 5.195 s /
+151.0 MB tracemalloc peak against `True` 3.839 s / 218.2 MB — **1.35× wall for
++67 MB**, i.e. the guard demanded 48 GB to spend 67 MB (700× over-conservative).
+The requirement is now `max(2.0 GB, 6 × E_in.nbytes)`, which is what the
+doubled working set actually costs (26.0 vs 18.0 grids of `8N²` measured);
+passing `parallel_amp_min_free_gb` explicitly raises the floor to
+`max(size-scaled, yours)`.
+
+### Performance -- traced lens: bit-identical kernel and allocation work (audit T9 / T10, P2)
+
+All five items are bit-identical or bitwise-verified; none changes a returned
+number.
+
+* **numba Chebyshev kernel blocked.**  Four `np.empty`/`np.zeros` scratch
+  arrays were allocated per SAMPLE inside `prange`; they are now hoisted to a
+  512-sample block.  Measured over 4 Mpt, 7 interleaved reps, min wall, 20
+  numba threads: order 6 (M = 28) **346.4 → 213.4 ms (86.6 → 53.3 ns/pt,
+  1.62×)**, order 10 (M = 66) **236.4 → 152.7 ms (1.55×)**, with
+  `max|diff| = 0.000e+00` on all three outputs.
+* **pure-NumPy Chebyshev fallback chunked** over the query axis against
+  `_CHEB_FIT_CHUNK_ENTRIES` — the one large-array site in the module that was
+  not row-blocked, and the REQUIRED branch for CuPy.  Measured tracemalloc peak
+  at n = 1e6: **1160 MB (145 float64/point) → 120 MB (15.0/point)**, bitwise
+  identical; the peak is now O(budget) rather than O(n).
+* **`inversion_method='fit'` design matrix chunked.**  It built two
+  `(N², order+1)` Chebyshev Vandermondes and an `(N², M)` product unchunked —
+  measured 141 full-grid units at N = 1024 (1.18 GB) and 198 at N = 512,
+  projecting to ~76 GB at N = 8192.  Bit-identical (the design is pointwise in
+  the output pixel).
+* **whole-grid final masking in place.**  `np.where` × 2 over `X**2 + Y**2`
+  materialised from broadcast VIEWS → `np.copyto(where=)` over the 1-D axes
+  form the banded path already used: ~7.1 → ~3.1 units of `8N²` at that stage
+  (61 → 27 GB at N = 32768).
+* **`_ray_density_self_checks` allocation.**  The complex128 upcast of `E_in`
+  purely to take its modulus (3.0× the field's bytes at peak for a complex64
+  input, 25.8 GB at N = 32768) is gone, and `(np.abs(E_out)**2).sum()` is now
+  `np.vdot` (17.2 GB of transient removed; agreement 2.2e-16 relative).
+* **strided `|E_analytic|`.**  On the DEFAULT configuration
+  (`preserve_input_phase=True`, `ray_subsample=8`) `amp` is either deleted
+  unread or read exactly once as `amp[::sub, ::sub]`; the full-grid modulus is
+  now taken only where a full-grid `amp` is actually consumed.  Measured
+  14.17 ms / 8.4 MB at N = 1024 and 37.29 ms / 33.6 MB at N = 2048 against
+  0.114 / 0.853 ms strided (≈9.6 s and 8.59 GB at N = 32768).
+
+### Performance -- caustic siblings: the rasteriser and the uniform dark fill (audit S9, P2)
+
+* **Multibranch triangle rasteriser: exact bounding boxes and a chunk budget.**
+  Triangles were batched by a POWER-OF-TWO bounding box with no bound on
+  `n_tri × 2^{2c}`.  At `output_plane_distance = 0` — the DEFAULT — the map is
+  near-identity, so a 5×5-pixel triangle was padded to 8×8 and most of the
+  barycentric arithmetic was discarded: measured **144 s at N = 2048 and 882 s
+  at N = 4096** for the exit-vertex call against **0.85 s** for the same grid
+  near focus.  Unchunked, the worst bucket held 1 187 616 triangles at 8×8 =
+  0.61 GB per temporary with ~15–18 alive at once — **7.74 GB traced /
+  12.2 GB RSS** for one default-argument call, with no warning and no model in
+  `lumenairy.memory.estimate_lens_memory`.  Batches now share an EXACT
+  `(wx, wy)` box (falling back to the power-of-two grouping above 96 distinct
+  shapes) and are capped at `_RASTER_CHUNK_ENTRIES = 4e6` entries.  The
+  contribution SET is unchanged; only `np.add.at`'s summation order on a
+  multi-branch pixel can move, which this module already documents.
+* **Ludwig caustic-band swap vectorised.**  It was a per-pixel Python loop with
+  four small NumPy calls and a scalar `scipy.special.airy` per multi-branch
+  pixel: measured **+3.22 s over 3 004 pixels at N = 2048 (1073 µs/pixel)** and
+  +9.14 s over 12 020 at N = 4096 (761 µs/pixel).  Same selection rule (sort by
+  eikonal, take the closest adjacent pair, swap inside the Kravtsov–Orlov
+  band), now as one padded-array pass.  The `scipy.special.airy` import is
+  hoisted to module scope.
+* **Uniform dark fill restricted** to `r_c < r < r_c + 20 l_airy`.  The CFU
+  Airy kernel ran on EVERY pixel outside `r_c` (measured 4 193 535 of
+  4 194 304 = 100.0 % at N = 2048) although `Ai` is 4e-16 of its ring value by
+  20 Airy lengths and is clamped to numerical zero by `_AIRY_ARG_CAP` anyway:
+  **25.42 s against the multibranch's 0.85 s at N = 2048** (the saving is
+  grid-size specific -- at N = 384 / 512 it is only 1.1-1.2x, because the
+  dark fill is a small share of the call there; the returned FIELD is
+  unmoved either way, measured 9.7e-27 of peak), 93.1 s against
+  11.9 s at N = 4096.
+
+### Fixed -- inverse map: the cache key omitted the flags that change its arithmetic (audit S8, P2)
+
+`build_inverse_map`'s SHA-256 key hashed 12 scalars and the bytes of every
+input array, but none of the `_lens_traced` flags that select the branch of the
+least-squares solve it runs — and `_det_traced()` reads
+`DETERMINISTIC_TRACED_FIT` at CALL time.  So
+`traced_flags(DETERMINISTIC_TRACED_FIT=False)`, whose registry entry states
+"restores the G = A.T @ A / rhs = A.T @ b route for the traced chain EXACTLY,
+bit for bit, and is the fail-before for the whole layer", was defeated by a
+cache HIT on the second and every later call in a process: measured
+`key(det=True) == key(det=False) → True` with the SAME OBJECT served.  Nine
+flags (`DETERMINISTIC_TRACED_FIT`, `LSTSQ_CONDITIONING_STEPDOWN`, the refine
+and Gram constants, `_LSTSQ_RESID_MARGIN`) are now in the key.
+Re-measured: **`key(det=True) == key(det=False) → False`, no stale object**.
+
+`report_refusal` no longer tells the user a refusal "costs speed, never
+accuracy" — the module's own numbers three hundred lines above say the
+incumbent carries 6.0e-3…1.08e-2 waves rms of core wavefront error against the
+model's ~2e-12 and moves design 121's banner FWHM 3.350 → 3.450 µm with a 0.8 %
+peak change.  The GRAM guard additionally records whether its budget came from
+an explicit `set_max_ram` or from psutil's LIVE available reading, and says so,
+because in the latter case the returned FIELD depends on what else the machine
+is doing.
+
+### Fixed -- traced lens: the `__main__`-guard predicate could not see the module body (audit T10, P2)
+
+`_script_has_main_guard` tested "does a top-level `ast.If` whose test mentions
+both `__name__` and `'__main__'` exist anywhere", which cannot see the BODY —
+the only thing the warning it feeds is about.  The ordinary shape of a real
+driver defeats it: `import numpy as np` / a decorative guard / `BIG =
+np.zeros((4096, 4096))` / `main()` classified as GUARDED, so the spawn pool ran
+and every worker paid the 134 MB — precisely the 22.1 GB/worker failure the
+warning exists for.  The predicate now asks whether every top-level statement
+other than imports, `def`/`class`, docstrings and literal constant assignments
+sits inside a guard.  Two further shapes fixed: an INVERTED guard
+(`if __name__ != '__main__': raise SystemExit`) is no longer accepted (a spawn
+child's `__name__` is `'__mp_main__'`, so it takes the branch and dies), and
+`match __name__: case '__main__':` is now recognised.
+
+`tests/unit/test_fix_newton_pool_memory.py` is updated: the parametrised
+classification table now carries the three fixed shapes, and two rows that used
+`x = 1` as "unguarded" use a top-level CALL instead (a literal assignment is
+not work a spawn child re-runs).
+
+### Changed -- traced lens: the C13 step-down's blind spot is now measured and reported (audit T10, P2)
+
+`LSTSQ_CONDITIONING_STEPDOWN` scores the two candidate solves on
+`||b - A x||` over the RETAINED rows, while the Newton loop evaluates the
+chosen polynomial over the WHOLE launch square (its iterate is clamped to
+`|u| <= 0.999`, not to the fit's disc).  Measured on a 129² lattice with a hard
+`r <= 0.5 R` disc, two candidates agreeing IN DISC to 4.2e-18 differ over the
+square by 1.99e-08 of peak at order 10 (det-vs-QR) and 1.05e-02 at order 10
+(raw normal equations vs QR).  `_solve_lstsq_thread_safe` gains an optional,
+diagnostic-only `score_domain=` (the full-lattice design), and a residual TIE
+that hides a difference above `_LSTSQ_SCORE_DOMAIN_TOL = 1e-6` of the in-fit
+peak now emits a `RuntimeWarning`.  Which candidate is returned is unchanged;
+at the shipped `newton_poly_order = 6` the difference measures 3.9e-08 and the
+warning stays silent.
+
+### Changed -- traced lens: three doc claims corrected against measurement (audit T11 / T14 / T16, P3)
+
+* `ray_subsample`'s "typically loses < 1 nm of fidelity at 4 or 8" described
+  the v5.35 inverse-characteristic evaluator's numbers as if they were the
+  coarse upsample's.  With the evaluator ON the coarse lattice costs nothing
+  (**0.000 nm rms**, < 5e-17 m, at sub = 4, 8 and 16 alike against an
+  independent exact-sphere oracle); with it OFF the order-1 upsample costs
+  `(sub·dx)²·f''/8` — **3.40 / 11.63 / 44.18 nm rms** (12.90 / 51.58 /
+  206.3 nm max) at sub = 4 / 8 / 16 on an f/7.5 singlet.  The evaluator is off
+  for `use_gpu=True`, `inversion_method != 'newton'`, `inverse_map=False` and
+  `sag_chunk_rows` banding, and those configurations now emit the accuracy
+  notice an internal guard refusal already emitted.
+* `_opl_by_backward_trace`'s "~35–40 nm RMS vs Newton on singlets at N=512" is
+  not reproducible on any fixture in the tree and no test pins the one it was
+  measured on; re-measured on an N-BK7 100/−100 singlet at N = 256 it reads
+  **1.93 rad rms (180 nm), max 372 nm** — the 1.81 rad of a uniformly wrapped
+  difference, i.e. more than a wave.  The docstring now says so and labels the
+  route's exit-phase error unquantified.  Its on-axis reference index
+  (`N_c // 2`) is also corrected: the coarse sample nearest x = 0, which
+  matters when `ray_subsample` does not divide `N` (at N = 250, sub = 8 the old
+  form was 3 fine pixels off axis).
+* `on_noncollimated='off'` is documented as a suppression knob, not a cost
+  knob: the `else` branch recomputes the same `_input_tilt_stats`, measured
+  4.013 s (`'warn'`) against 4.209 s (`'off'`) at N = 1024.
+* The order-3 OPL upsample's comment stated the OPPOSITE of the code about
+  `prefilter`; it now says what the code does and what that costs at the
+  lattice edge (order 3 is 7.09 / 1.90 / 0.51 / 0.04 nm at 0 / 1 / 2 / 4 coarse
+  cells of inset against order 1's flat 0.64 nm — better deep inside, worse
+  within ~2 cells).  The `mode='nearest'` trailing-band extrapolation is
+  documented with its measured 69.2 nm (N = 256) / 140.8 nm (N = 512) and left
+  for a follow-up.
+
+### Fixed -- traced lens: `on_noncollimated='delegate'` could swap models in silence (audit T16, P3)
+
+The dropped-kwarg report omitted four physics-affecting knobs
+(`newton_amp_mask_rel`, `newton_mask_dilate_coarse_px`, `beam_centre`,
+`fast_analytic_phase`), and the emitter was gated on
+`if _dropped or carrier is not None` — so a delegating call passing only
+defaults changed model with ZERO warnings.  Those four, plus `origin` and the
+three `caustic_*` sub-knobs, are now listed, and the model swap is ALWAYS
+announced.  The pure POLICY knobs (`on_undersample`, `on_aperture_beam`,
+`on_fit_domain_basis`, `on_pool_memory`) and RESOURCE knobs (`n_workers`,
+`parallel_amp*`, `use_gpu`, `min_coarse_samples_per_aperture`) are
+deliberately NOT listed: none of them changes an answer, and a caller who set
+one to keep the output quiet should not be answered with a warning about it.
+`return_screen=True` with `on_noncollimated='delegate'` now raises: the
+fallback returns `apply_real_lens(E_in)`, i.e. a FIELD containing `E_in`, where
+`return_screen` promises an input-independent screen — caching that as a screen
+bakes one call's input into every later one.
+
+### Fixed -- caustic siblings: KMAH fill wrap, the dead turning-point counter, and two naming defects (audit S11, P3)
+
+* The KMAH NaN-fill used `np.roll`, making the launch lattice a TORUS: a
+  left-edge node's "nearest valid neighbour" was the RIGHT-edge node, up to
+  `2·launch_radius` away and possibly on a different sheet.  Now edge-clamped,
+  with a no-progress break so a fully dead lattice cannot spin to the cap.
+* `_count_interior_turning_points` — written to be "robust to an isolated
+  zero-slope SAMPLE at an extremum (which would otherwise double-count a
+  `+ → 0 → -` transition)" — was never called; both meridional traces used the
+  raw `diff(sign(diff))` form it was written to replace, which misclassifies a
+  clean FOLD as a cusp and routes it away from the Airy completion it qualifies
+  for.  It is now the counter.
+* `_build_pearcey_cusp_field` took a `wavelength` it never read — the shape of
+  a missing `k`-scaling.  The parameter is dropped and the λ-freedom explained
+  (the scaling is absorbed upstream, where the control coordinates are fitted
+  to phases in radians).
+* `L0`/`M0` — the input congruence's launch direction cosines — were rebound
+  mid-function to per-vertex slowness components, silently shadowing them for
+  the rest of the body.  Renamed `p0x`/`p0y` etc.
+
+### Changed -- `_math.chebyshev.chebyshev_fit_2d`: the round-trip claim is now conditional (audit S11, P3)
+
+`normalize_xy=True` fits about the GRID's own midpoint (an affine map
+`2(x - x.min())/span - 1`), while
+`lumenairy.elements.freeform.surface_sag_chebyshev` evaluates about the AXIS
+(a pure scale `T_i(x/norm_x)`), so the emitted coefficients round-trip through
+the library's own evaluator — which this function's docstring promised
+unconditionally — only for a CENTRED grid.  An off-centre grid whose fit
+carries any non-constant term now emits a `RuntimeWarning` naming the offset
+and the remedy; a pure `T_0 T_0` fit is shift-invariant and stays silent.
+
+### Changed -- traced lens: three Chebyshev Vandermonde copies collapsed onto the shared module (audit T11, P3)
+
+`lumenairy/_math/chebyshev.py` exists specifically to de-duplicate these (its
+header says so, and `lenses.py`, `lenses_maslov.py` and four
+`propagators/asymptotic*.py` modules already import from it), while
+`_lens_traced.py` and `_lens_imap.py` each kept a private reimplementation.
+All three were BITWISE equal, so the duplication bought only three places for a
+fix to land in one of.  `_lens_traced._cheb_vand_2d` /
+`_cheb_deriv_vand_2d` and `_lens_imap._cheb_dvander` are now thin
+backend-resolving wrappers over the shared helpers; bit-identity re-verified
+against them and against `numpy.polynomial.chebyshev.chebvander`
+(`max|Δ| = 0.0` at orders 0, 1, 6, 8, 12).
+
+### Fixed -- traced lens: a malformed `stop_index` is now diagnosed by the traced entry itself (WP-A2 follow-up)
+
+`apply_real_lens_traced` only tested `int(stop_index) != 0`, so an out-of-range
+index -- which matches no surface AND suppresses the entrance aperture, i.e.
+silently removes every aperture mask -- reached the analytic amplitude leg and
+surfaced, if at all, as an `apply_real_lens:` ValueError raised from inside a
+worker thread, after the ray trace had run and after a "non-entrance stop, use
+apply_real_lens" warning had already fired; a non-integer produced a bare
+`invalid literal for int() with base 10`.  The key is now read through the
+shared `_normalise_stop_index` helper, so the traced family refuses under its
+own name, before the trace.  Every in-range spelling is bit-identical, negative
+indices count from the end as Python does (`-1` now names the surface it
+selects, and `-2` on a 2-surface lens -- the entrance -- correctly stops
+warning), and a prescription with no `surfaces` key is left to
+`validate_prescription`.
+
+### Fixed -- traced lens: the pre-flight aperture-vs-grid notice measures the axis that truncates (WP-A2 follow-up)
+
+The call passed the field's `shape[0]` (Ny) together with `dx`, describing a
+semi-extent that exists on neither axis of an anamorphic grid.  On a TALL grid
+it reported the WIDE y half-width and stayed silent while the aperture
+over-filled x: measured 0 warnings on Nx = 64 / Ny = 256 / dx = dy = 20 µm with
+a 2 mm aperture whose x half-width is 0.64 mm.  The traced entry now passes its
+own `N_y` / `dy`, and `_warn_if_aperture_exceeds_grid` checks the smaller
+semi-extent.  Square grids are unchanged by construction.
+
+---
+
+### VERIFY-A3 follow-up (added 2026-09-12 by the verifier)
+
+### Fixed -- traced lens: the exit-NA undersample guard was priced on the entrance disc (VERIFY-A3 OI-1)
+
+`apply_real_lens_traced`'s exit-NA statistic is intersected with the ENTRANCE
+aperture disc (audit T13, which removed a 3.14x overstatement), but the mask the
+returned field carries is applied on the OUTPUT grid.  On a thick fast element
+those sets differ: measured against an independent Newton+Snell trace at
+lambda = 1.0 um, `R = +-20 mm / t = 12 mm / aperture 18 mm` reads 0.49809 on the
+entrance disc against 0.85802 on the output disc, so the guard's advice
+`dx <= lambda/(2*NA_exit)` said 1.00 um where 0.58 um is required -- 1.72x too
+coarse, in the unsafe direction.  The WARNING is now decided on the larger of
+the two, and `_exit_na_out` reports `na_exit_entrance_disc`,
+`na_exit_output_disc`, `na_exit_guard` and `n_exit` alongside the unchanged
+`na_exit` (which `propagators/carrier.py`'s `on_tilt_exact_grid` reads and which
+is therefore deliberately not moved).  Thin elements move by <= 5 %
+(0.246183 -> 0.257506 on the audit's f/5 fixture).
+
+### Fixed -- traced lens: the exit-NA Nyquist test now uses the IN-MEDIUM wavelength (VERIFY-A3 OI-3)
+
+The exit leg runs in the medium after the last surface, whose wavelength is
+`lambda/n_exit`, so a ray at angle theta carries transverse spatial frequency
+`n_exit*sin(theta)/lambda`.  The guard compared the bare direction cosine
+against `lambda/(2*dx)`, i.e. it told a prescription ENDING IN GLASS that it had
+`n_exit` times more room than it has.  Measured on an immersed rear
+(`glass_after='N-SF11'`, n = 1.75588, R = +-30 mm, aperture 16 mm,
+lambda = 1.0 um): the statistic is `sin(theta) = 0.040931` where the criterion
+needs `n_exit*sin(theta) = 0.071870`, so the advised `dx` was **1.76x too
+coarse** (12.216 um quoted against the 6.957 um required); an N-BK7 rear reads
+5.252 -> 3.484 um.  `power_frac_above_nyquist` is compared in the same units.
+
+**Migration.** `n_exit == 1` on every air-ending prescription, where the test,
+the message and the reported fraction are BIT-IDENTICAL to before -- that is
+every fixture in the tree.  A prescription ending in glass (a cemented interface
+left open, an immersed sensor, a sub-assembly handed to another element) will
+now see the undersample `RuntimeWarning` fire where it did not, and will be
+asked for a grid `n_exit` times finer.  That is the physically required
+sampling; pass `on_undersample='silent'` to acknowledge it deliberately.
+The reported `na_exit` / `na_exit_entrance_disc` / `na_exit_output_disc` stay
+bare direction cosines, so nothing calibrated against them moves;
+`na_exit_guard` is the in-medium numerical aperture and `n_exit` is reported so
+the two are convertible.
+
+### Fixed -- caustic siblings: the energy tripwire's gain arm is bracketed against boundary-straddling triangles (VERIFY-A3 OI-2)
+
+The launched-power normaliser counts a launch node only when its own mapped
+point lands on the output grid, while the reconstructed power counts every pixel
+a triangle covers -- including triangles that straddle the grid boundary with
+their nodes outside.  On a coarse launch lattice over a grid much smaller than
+the beam that mismatch alone reached 3.26x: measured on the delta-audit's D3
+fixture (a 6 mm aperture on a 1.2 mm grid) at `ray_subsample=8`,
+z = 100 / 110 / 120 mm gives 3.257 / 2.563 / 2.069 with `n_branch = 1` and ZERO
+degenerate triangles -- three spurious `RuntimeWarning`s with no coalescence
+anywhere, from the same geometry the launched-power normaliser was introduced to
+quieten.  The gain arm now requires the excess to clear a second denominator,
+the launch power of the triangles that rasterise onto the grid, which counts a
+straddling triangle whole and so bounds the launched power from above.  All four
+false positives go silent (bracketed ratios 0.549..0.865) while the real
+blow-up is unmoved: 1.803e+05 / 2.331e+05 / 1.291e+05 at 0.98 / 0.99 / 0.995 of
+the ray-traced BFL on BOTH denominators, and the audit's silent 4-8x pre-focus
+band still warns (3.988 / 8.102 / 13.07).  `return_diagnostics` gains
+`power_ratio_triangles`; `power_ratio` is unchanged.
+
+### Changed -- traced lens: `_spectral_gap_cuts` scores its flanking peaks INSIDE the occupied band (audit T11 / VERIFY-A3 OI-4)
+
+The audit's T11 row recorded that the docstring contradicted the code; WP-A3
+changed the CODE, restricting the "a real gap has a peak on each side" test to
+the 0.995-power support the docstring describes, and that change shipped without
+a changelog line.  It is a real behaviour change to
+`apply_real_lens_traced_segmented`: spectral leakage OUTSIDE the occupied band
+can no longer justify a cut.  Demonstrated on a synthetic marginal with one
+in-band lobe at f = +20 and an out-of-band lobe at f = -80, support declared
+[-40, +40]: the pre-fix predicate cuts at `[-40.0]` on the strength of the
+out-of-band peak, the shipped one returns `[]`; a genuine two-lobe gap is still
+found by both (`[0.0]`).  The exact-reconstruction contract is untouched --
+`max|sum(segments) - E| / peak = 5.55e-16` at `min_segment_power` 0 and 1e-3.
+Pinned by `tests/unit/test_audit2609_a3_verify_traced.py::test_spectral_gap_cuts_only_counts_peaks_inside_the_occupied_band`
+and `::test_the_angular_segmentation_still_sums_back_to_the_input`.
+
+**Migration.** A field whose spectrum has structure outside its own 0.995-power
+support may now be split into FEWER angular segments.  At the default
+`min_segment_power=1e-3` the extra bins were dropped as empty anyway; at
+`min_segment_power=0` they cost two extra inverse FFTs and produced empty
+segments in the returned list.
+
+### Fixed -- traced lens: `_sample_local_tilts` says when it is at its sampling limit (VERIFY-A3 OI-5)
+
+The estimator reads a WRAPPED phase difference `angle(E[i+1] conj(E[i]))`, so it
+cannot return a direction cosine above `lambda/(2*dx)` whatever the field does:
+a steeper launch tilt folds into that band and comes back as a plausible small
+number.  The audit's own repro prints the case and calls it "silently WRONG, no
+warning" (`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/repro/TR-INFRA/p7_tilts.py` 7c: a 0.8 launch tilt at dx = 4 um,
+lambda = 1.31 um, `max_sin=0.5` returns `max|L| = 0.1450` against a 0.16375
+Nyquist -- nowhere near the 0.5 clip, which can never fire on that grid).  A
+`RuntimeWarning` now fires in two situations: when the `max_sin` clip actually
+bites (naming the clipped fraction), and when `max_sin` is beyond what the grid
+can carry AND the reading has run up to within 20 % of the fold (naming both
+numbers).  Silent below that: measured 0.885 of Nyquist for the aliased case
+against 0.183 (tilt 0.03) and 0.611 (tilt 0.10) for ordinary well-sampled
+tilts, and silent on a collimated field and under the shipped
+`smooth_sigma_px=4`.
+
+### Fixed -- traced lens: a per-surface `semi_diameter` now reaches the DEFAULT (polynomial) answer (VERIFY-A3 OI-11)
+
+`newton_fit='spline'` rejects output pixels whose entrance solution lands on a
+node it had to FILL (audit T3), but the default polynomial fit simply dropped the
+dead samples from its least squares and was then smooth across the hole -- so a
+prescription whose vignetting comes from a per-surface `semi_diameter` returned
+the UN-VIGNETTED field.  Measured on an N-SF11 singlet whose rear semi-diameter
+is 1.4 mm inside a 5 mm aperture (N = 192, dx = 30 um, lambda = 1.064 um):
+`P/P_in = 0.9983` with 21 821 non-zero pixels, identical to the same call with no
+`semi_diameter` at all, while the spline path read 0.8657 / 6 637.  Both fits now
+mask an output pixel whose converged entrance solution lands on a DEAD launch
+node, and the polynomial path reads **0.8840 / 7 093** -- within 2 % of the
+spline.  A `RuntimeWarning` names the count, and only when the vignetting is
+inside the clear aperture (the launch square's corners sit at 1.06 aperture
+radii and die against any `semi_diameter <= aperture/2`, which changes nothing
+the output mask keeps: measured `P/P_in` 0.998312 both ways at
+`semi_diameter = aperture/2`).
+
+**Migration.** A prescription that vignettes rays with `semi_diameter` /
+`clear_aperture` now returns LESS power through `apply_real_lens_traced` -- the
+vignetting is in the answer instead of being fitted over.  Nothing moves when no
+ray dies (the mask is `None` and the arithmetic is bit-identical), nor when the
+dead rays are outside the clear aperture.  The CuPy branch (`use_gpu=True`,
+polynomial only) keeps the historical extrapolating behaviour, because the
+rejection kernel is NumPy.
+
+### Fixed -- analytic lens: the ndarray carrier differentiates and samples with its OWN pitch on each axis (VERIFY-A3 OI-10)
+
+`_compute_carrier`'s `carrier=<ndarray>` / `conjugate=<ndarray>` branch used
+`np.gradient(W, dx, dx)` and a `/dx` lookup index on BOTH axes, and took the
+sample count from `X.shape[0]` for both.  `apply_real_lens_traced` refuses a
+non-square grid, but `apply_real_lens` supports `dy != dx` and forwards the
+carrier straight through, so on an anamorphic grid the y eikonal gradient was
+wrong by `dy/dx`: measured against the closed-form tilted congruence
+(R = -30 mm, L = 0.046, M = 0.031) at dy = 3 dx, the y gradient error was
+**1.051e-01** against a derived discretisation bar of 1.198e-07, and at
+dy = 0.4 dx **1.936e-02** against 5.622e-09.  The branch now takes `dy=None`
+(defaulting to `dx`) and `apply_real_lens`'s six call sites pass their own.
+Bit-identical for `dy is None` and `dy == dx`, i.e. on every square grid and
+every path through `apply_real_lens_traced`.
+
+### Changed -- tests: two resource `pytest.skip`s replaced by asserted preconditions (VERIFY-A3 OI-9)
+
+`tests/unit/test_niche_k4_uniform_caustic.py` skipped its two
+`caustic_fold_ref` gates below `8*N*N*16 + 1.5` GB of free memory, which
+`docs/TESTING_STANDARDS.md` rule 4 forbids ("two skips silently removed five
+tests from the gate on exactly the runners that mattered").  The bound was also
+7x too conservative: the MEASURED tracemalloc peak of the N = 768 uniform call
+is 0.229 GB (24 grid-units of `16 N^2`) against the 1.58 GB the skip demanded.
+Both sites now assert that requirement (doubled for headroom) and fail loudly
+with the number.
+
+<!-- WP-A4: Maslov / GBD / FGA / asymptotic / JAX lens models -->
+### Fixed -- Maslov propagator: the canonical chart is built on the exit VERTEX plane (audit S3)
+
+`apply_real_lens_maslov` read `TraceResult.image_rays` directly, i.e. the rays
+as `raytrace.trace` leaves them -- ON the last surface, at `z = sag(rho)` -- and
+fitted the canonical map `(s2, v2) -> OPD` there while documenting and returning
+it as the exit-plane field.  The missing `n_exit * sag(rho) / N` term is a pure
+`rho^2` (defocus) contribution that the Chebyshev fit absorbs silently.  With
+`output_plane_distance != 0` the free-space leg was `t = d/N` instead of
+`(d - z)/N`, so the requested observation plane was offset by the sag as well.
+
+The driver now transfers through the shared `TraceResult.at_exit_vertex()`
+(§15.1) before anything is fitted, and the `output_plane_distance` leg starts
+from `z = 0`.
+
+* `lumenairy/elements/lenses_maslov.py` (`apply_real_lens_maslov`, trace block).
+* Measured (`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/repro/orch/maslov_exit_vertex_check2.py`, biconvex R = ±100 mm
+  N-BK7, t = 3 mm, 5 mm pupil, λ = 1 µm, N = 512, dx = 14 µm): the
+  maslov − traced `rho^2` term **−31.303 µm → −0.053 µm** against the predicted
+  `n_exit * sag_exit(rho=1) = −31.255 µm`; `rho^4` +0.104 → +0.099 µm and the fit
+  residual 4.2 nm rms, both unchanged.  Appending a zero-thickness FLAT dummy
+  surface -- a physically null prescription edit -- used to change the fitted OPD
+  by **4.90 waves** at ρ = 0.14 mm (`= |sag|`); it now changes it by 2.3e-13
+  waves.
+* Tests: `tests/unit/test_audit2609_a4_maslov_gbd.py::test_s3_*` (2).
+
+### Fixed -- Maslov propagator: Van Vleck amplitude and the k/(2πi) prefactor (audit S4)
+
+The integrand carried `|det(ds1/dv2)|` where the Van Vleck–Maslov kernel
+requires its SQUARE ROOT, and the `k/(2 pi i) = 1/(i lambda)` prefactor was
+absent.  On a free-space chart, where `ds1/dv2 = -z I` exactly, the returned
+field was `i * lambda * z` times the true one -- wavelength- AND
+distance-dependent, not the "arbitrary overall prefactor" the docstring claimed.
+`normalize_output='power'` (the default) hid the constant part but not the
+spatial variation of `sqrt(J)`, which re-weights the angular spectrum inside the
+integral; `roi=` runs are forced onto `normalize_output='none'` and returned an
+absolutely wrong scale.
+
+Fixed at all seven sites through one shared `_van_vleck_density` helper (the
+four NumPy integrators `quadrature` / `stationary_phase` / `local_quadrature` /
+`levin`, plus the three CuPy twins -- CuPy is not installed here, so those are
+desk-checked), with the `1/(i lambda)` prefactor applied once to the assembled
+field.  `_integrate_levin` regained the `v2x_h` / `v2y_h` half-widths that
+E-L9 had dropped as dead: the square root no longer cancels against the
+`d^2 v2` measure, so the unit-box Levin engine has to carry
+`sqrt(v2x_h * v2y_h)` explicitly.
+
+* `lumenairy/elements/lenses_maslov.py`.
+* Measured (`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/repro/MASLOV-GBD-FGA/p12_prefactor.py`, `normalize_output='none'`
+  vs `angular_spectrum_propagate`): `|E_maslov / E_ASM|`
+  **4.998e-10 / 9.996e-10 / 1.996e-09 → 0.99966 / 0.99963 / 0.99800** at
+  λ = 1 µm, z = 0.5 / 1 / 2 mm, and `arg` **+1.5716 rad (= +π/2) → +0.0002 rad**;
+  the same at λ = 2 µm.  `ratio/(λz)` was 0.998–1.000 on every row before, which
+  is the proof that the Jacobian power was wrong.
+* Tests: `tests/unit/test_audit2609_a4_maslov_gbd.py::test_s4_*` (3).
+* **Migration.**  `apply_real_lens_maslov(..., normalize_output='none')` now
+  returns a physically-scaled field; its absolute amplitude changes by
+  `1/(i * lambda * |det ds1/dv2|^{1/2})` relative to v5.45.  The default
+  `normalize_output='power'` is unaffected except for the (small, real) shape
+  change from the corrected density: 0.44 % / 0.42 % of the `|E|` profile on a
+  benign converging chart, 0.30 % at NA 0.13, unbounded on an aberrated one.
+
+### Fixed -- Maslov `local_quadrature`: principal axes, a window, and the window divided back out (audit S2, P0)
+
+`integration_method='auto'` -- the default -- routed every real focusing chart
+into `_integrate_local_quadrature`, which had three compounding defects: the
+sampling box was scaled by the Hessian EIGENVALUES but laid out on the
+COORDINATE axes (so the two widths swapped whenever `H44 > H33`, and the cross
+term `H34` was ignored entirely); the samples were a hard-truncated uniform
+Riemann sum of a chirp, leaving the Fresnel endpoint oscillation -- an
+`O(1/extent)` error that does not shrink with `local_n_samples`; and `np.clip`
+folded out-of-box samples onto the box edge while still counting them at the
+full unclipped cell area.
+
+The integrator now diagonalises the 2×2 physical Hessian and samples on the
+rotated lattice, tapers with a Gaussian window, divides that window's exact
+effect on the QUADRATIC MODEL back out (computed on the same finite lattice, so
+the scheme is exact for a quadratic chart at any `local_n_samples` /
+`local_window_sigma`), and DROPS out-of-chart samples instead of piling them on
+the boundary.  The CuPy twin follows, sharing the host-side lattice/taper/
+correction so the two cannot drift.
+
+* `lumenairy/elements/lenses_maslov.py` (`_integrate_local_quadrature`,
+  `_integrate_local_quadrature_cupy`, new `_local_window_1d` /
+  `_local_window_geometry`).
+* Measured (`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/repro/MASLOV-GBD-FGA/p6`, `p7`; synthetic quadratic charts with a
+  closed-form answer) at the shipped defaults `local_n_samples=8`,
+  `local_window_sigma=3.0`:
+
+  | A | B | H34 | before | after |
+  |---|---|---|---|---|
+  | 40 | 40 | 0 | 1.19 | 1.15e-14 |
+  | 40 | 4 | 0 | 1.19 | 1.29e-15 |
+  | 4 | 40 | 0 | **9.12** | 5.87e-15 |
+  | 100 | 10 | 0 | 1.19 | 1.45e-14 |
+  | 40 | 40 | 30 | 2.48 | 7.83e-15 |
+  | 60 | 20 | 25 | 3.07 | 2.67e-16 |
+
+  The 40 % convergence floor is gone: 1e-14…1e-15 at every
+  `(window_sigma, n)` in {3, 4, 6, 10} × {8, 16, 32, 64, 128} (it was flat at
+  4.0e-01 from n = 32 on).  Where the requested window exceeds the fitted chart
+  box (`window_sigma` = 20 / 40) the error is now bounded at 2e-01…2e+00 -- the
+  honest cost of truncating the chart -- instead of the 7.5e+01…2.0e+03 the
+  `np.clip` over-count produced.
+* Tests: `tests/unit/test_audit2609_a4_maslov_gbd.py::test_s2_*` (10).
+
+### Changed -- Maslov `integration_method='auto'` falls back to `stationary_phase`, and warns (audit S2)
+
+`'auto'` resolved to `'local_quadrature'` whenever uniform quadrature would need
+more than `_N_V2_AUTO_MAX` samples.  It now resolves to `'stationary_phase'`
+and emits a `RuntimeWarning`.
+
+Measured on an f = 6 mm N-BK7 biconvex at its exit plane, scored against a
+converged uniform quadrature (n_v2 = 320, self-converged to 8.5e-04 at
+n_v2 = 256): `stationary_phase` relL2 **0.84**, `local_quadrature` **2.58** at
+its defaults (1.47 at n = 16, 1.14 at n = 24 / ws = 4).  Both are exact on the
+synthetic quadratic charts; the difference is that the local window reaches into
+pupil zones where the order-4 fit is extrapolating.  Neither asymptotic
+evaluator is valid at or near the exit plane of a focusing system -- the
+v2-Hessian and `ds1/dv2` both collapse there -- which is what the new warning
+says, together with the two remedies (`integration_method='quadrature'` with an
+explicit `n_v2`, or `output_plane_distance=` to move the observation plane to
+where the asymptotics belong).
+
+* **Migration.** A call that relied on `'auto'` silently selecting
+  `local_quadrature` now gets `stationary_phase` plus a warning.  Pass
+  `integration_method='local_quadrature'` explicitly to keep the old routing
+  (the integrator itself is now correct); pass `'quadrature'` for an
+  exit-plane field.
+
+### Fixed -- Maslov: the v2-oscillation estimator counts total variation, not excursion (audit S9/N2)
+
+The `'auto'` integrator choice, the `'auto'` `n_v2` resolution and the
+under-resolution warning all used `sum |c_k|` over v2-dependent Chebyshev terms,
+justified as an upper bound on the OPD excursion.  The number of CYCLES along
+v2 is bounded by the TOTAL VARIATION, and `TV(T_n)` on [-1, 1] is `2n`, so the
+correct bound is `sum |c_k| * max(k3, k4)` -- now in one shared
+`_v2_oscillation_bound` used at all three sites.  The audit measured the two
+differing by up to **2.47×** on real fitted charts (f = 2 mm biconvex, order 8:
+136.2 → 337.1; f = 6 mm, order 8: 634.0 → 1539.7), i.e. `auto` could pick
+`quadrature` for a chart that then speckled, with the warning that would have
+said so silenced by the same under-count.
+
+### Added -- Maslov: the asymptotic evaluators warn on a non-collimated input (audit S6)
+
+`stationary_phase` and `local_quadrature` solve `grad_v2 OPD = 0`.  The
+symplectic identity `dOPD/dv2 = -n1 (v1 . ds1/dv2)` (verified to 5.8e-7 relative
+on a real singlet chart) makes that the `v1 = 0` collimated launch ray at every
+pixel and for every input -- while the driver deliberately sizes the chart to
+cover a diverging / tilted one (`na_proxy = na_lens + na_input`).  There was no
+warning and no docstring caveat.  A `RuntimeWarning` now fires when either
+asymptotic method is selected and the measured input angular spread exceeds
+`_SADDLE_FLAT_INPUT_NA = 1e-3`, pointing at `'quadrature'` / `'levin'` (which
+integrate the true integrand) or `collimated_input=True`.
+
+* Tests: `tests/unit/test_audit2609_a4_maslov_gbd.py::test_s6_*`.
+* Deferred: fitting the input's local wavevector `(k1x, k1y)(s1)` and adding
+  `k1 . ds1/dv2` to the Newton gradient/Hessian, which would make the two
+  asymptotic methods correct rather than merely honest.
+
+### Fixed -- GBD: the beamlet Gouy / Collins phase was conjugated (audit S5)
+
+`BeamletBundle.Q` is the ENGINEERING `1/q` (`q_code = conj(q_physics)`) and the
+renderer converts on output (`exp(+0.5j k conj(Q) rho^2)`); the AMPLITUDE did
+not.  `propagate_beamlets_freespace` used `Q_new / Q_old` where the physics
+amplitude ratio is `conj(Q_new / Q_old)`, and the two Collins sites used
+`1/(A + B Q)` where it is `conj(1/(A + B Q))`.  The library had documented the
+resulting `2 arctan(z / zR_beamlet)` as an inter-propagator "convention" and
+shipped three public functions plus a test file to compensate for it -- but the
+offset depended on `waist_factor`, a purely numerical knob, which is the
+definition of an error.
+
+Conjugated at five sites: the scalar and tensor branches of
+`propagate_beamlets_freespace`, `_freespace_tensor_moebius_np`, both branches of
+`apply_abcd_to_beamlets`, and `apply_prescription_persurface_to_beamlets`.
+
+* `lumenairy/propagators/gbd.py`.
+* Measured (`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/repro/MASLOV-GBD-FGA/p1`, one beamlet vs the analytic Gaussian):
+  `arg(E/A)` **+0.927295 / +2.214297 / +2.942255 rad (= 2ψ exactly, to 1e-13) →
+  0.000000**, and relative L2 with NO phase fit **0.894 / 1.789 / 1.990 →
+  1.41e-13 / 5.37e-13 / 4.20e-12** at z = 0.5 / 2 / 10 z_R.
+* Measured (`p2`, full pipeline vs `angular_spectrum_propagate`, N = 256,
+  λ = 1 µm, z = 3 mm): residual global phase **+3.133 rad → +5e-06 rad** and
+  relL2 with no phase fit **1.999 / 1.995 / 1.987 → 1.76e-03 / 7.02e-03 /
+  1.57e-02** at waist_factor 1 / 2 / 3 (the Gabor-frame floor).
+* Measured (`p3`, `decompose_field_adaptive` mixed-waist bundle, where the error
+  was NOT a global phase): relL2 **1.78e-01 … 1.82e+00 raw, 9.2–18.4 % after the
+  best global-phase fit → 5.06e-02 flat at z = 20 / 50 / 200 / 1000 µm**, with
+  nothing left for a phase fit to remove.
+* Tests: `tests/unit/test_audit2609_a4_maslov_gbd.py::test_s5_*` (2);
+  `tests/unit/test_v5_21_gbd_asm_interop.py` REWRITTEN (it pinned the defect);
+  `tests/unit/test_audit_w5_propagators.py::TestP230CollinsFactor::test_matches_analytic_collins_and_gaussian_w_of_z`
+  re-based on a textbook Gaussian-beam oracle instead of the library's own
+  expression (post-fix agreement **3.20e-16**, the old pinned expression scores
+  **2.00**).
+
+### Deprecated -- `gbd_asm_gouy_phase`, `gbd_field_to_asm`, `asm_field_to_gbd` (audit S5)
+
+The three functions existed only to compensate the conjugated Gouy phase above.
+They are now no-ops (`0.0` and the identity respectively), emit a
+`DeprecationWarning` through `_deprecation.warn_deprecated_alias`, and are
+scheduled for removal in v5.48.
+
+* **Migration.** Delete the call: a GBD free-space field already matches
+  `angular_spectrum_propagate` in absolute phase.  For a general
+  propagator-agnostic reconciliation use `match_global_phase`, which is
+  unchanged.
+
+### Changed -- `_lens_jax` requires `jax_enable_x64` (audit S7)
+
+`apply_real_lens_traced_jax` and `apply_real_lens_maslov_jax` never read JAX's
+x64 setting, so under JAX's default a complex128 input was truncated at
+`jnp.asarray` and the result came back complex64 -- silently.  Both now call a
+new `_require_jax_x64` that RAISES with actionable text, adopting the
+`elements/rcwa/_core.py` policy the audit identified as the right one (§15.6).
+
+* Measured on this fixture (f = 6 mm biconvex, 0.3 mm aperture, λ = 1 µm): with
+  x64 off the pre-fix code returned **complex64** for a complex128 input, and
+  its phase screen differed from the float64 one by **1.71e-05 waves rms /
+  8.17e-05 waves p-v**; the audit measured 1.5e-4 … 1.8e-3 waves rms on a larger
+  lens against 2e-10 … 3e-9 with x64.
+* **Migration.** `jax.config.update('jax_enable_x64', True)` once at import.
+  The NumPy `apply_real_lens_traced` / `apply_real_lens_maslov` are unaffected.
+
+### Fixed -- `_lens_jax`: the default path is `jax.jit`-able, and uses the shared exit-vertex operator (audit S7, §15.1)
+
+Both JAX entry points seeded their Newton inversion with
+`float(x_out_grid[...])`, which raises `ConcretizationTypeError` under
+`jax.jit` -- so the default (static-geometry) path could not be jitted at all,
+contradicting the docstring's "vmap+JIT replaces the pool".  The already-written
+tracer-safe expression (with `stop_gradient`, since the Newton root does not
+depend on its starting point) is now used unconditionally.  The two hand-written
+exit-vertex copies, which clamped `N` to `1e-30` and so gave a grazing ray
+`t = -z/1e-30` (~1e26 m of phantom OPL) where the NumPy copies gave `t = 0`, are
+replaced by `raytrace.jax_trace.exit_vertex_transfer_jax`.
+
+* Measured: `jax.jit` now compiles both entry points and agrees with the eager
+  call to **1.30e-12** on a unit-peak field (pre-fix: `ConcretizationTypeError:
+  Abstract tracer value encountered where concrete value is expected`).
+* Tests: `tests/unit/test_audit2609_a4_maslov_gbd.py::test_s7_*` (5).
+
+### Fixed -- asymptotic family: the v2-linear phase stays inside the integrand (audit Y1, P0)
+
+`extract_linear_phase=True` (the DEFAULT) pre-fits and removes
+`a0 + a1 u1 + a2 u2 + a3 u3 + a4 u4` from `Phi`.  The `a3 u3 + a4 u4` terms are
+linear in the INTEGRATION variable `v2`, so dropping them moves the complex
+saddle `delta* = M^-1 b / 2` and `Re(b^T M^-1 b / 4)` -- an amplitude and
+position error, not a phase reference.  On an off-axis `source_centre` the
+rank-deficient design splits a ~2 700-wave ramp roughly 50/50 between `a1` and
+`a3`, so this is reached by `propagators/subaperture.py:514` for every
+off-centre patch of the patch-decomposition propagator.  The identical defect
+was found and fixed in the sibling `lenses_maslov` (audit N4) and never ported.
+
+`CanonicalPolyFit.eval_phi` and `eval_phi_with_v2_grad` (and the JAX
+`eval_phi_xp`) now always include `a3 u3 + a4 u4` and its `a3` / `a4`
+contribution to the gradient; `include_linear` gates only `a0 + a1 u1 + a2 u2`,
+which is constant in `v2` and factors out.  `H_Phi` needs no change.
+
+* `lumenairy/propagators/asymptotic_canonical_fit.py`,
+  `asymptotic_jax_twin.py`.
+* Measured (`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/repro/ASYMPTOTIC/t8`, stock N-BK7 singlet, λ = 1.31 µm,
+  `source_centre = (100 µm, 0)`), against an independent ray trace of the chief
+  ray at **(9.665e-05, 0) m**: with the DEFAULT flag the peak moves
+  **(-3.174e-04, -6.228e-04) m → (9.785e-05, 0.0) m** and the peak amplitude
+  **2.277e-05 → 1.99959e-03** (88× low → identical to the
+  `extract_linear_phase=False` reference).  The two flags' |E| now agree to
+  **9.21e-10** over 149 bright pixels; on-axis fits are unaffected (ratio
+  exactly 1.0 before and after), which is why every pin passed.
+* Tests: `tests/unit/test_audit2609_a4_asymptotic.py::test_y1_*` (2);
+  `tests/unit/test_niche_audit_w6_asymptotic.py` W6-A4 premise restated (it
+  asserted `|a3| + |a4| < 1e-8` as a load-bearing premise).
+
+### Fixed -- asymptotic family: Van Vleck–Maslov normalisation of the modal propagator (audit Y2)
+
+Same class as S4.  The `v2` integrand carried `|det J|` where Van Vleck–Maslov
+requires `-1j sqrt(|det J|) / lambda`, so the output was
+`i * lambda * sqrt(|det J|)` times the true field -- wavelength- AND
+field-point-dependent, not the constant the docstring described.  Fixed at all
+four consumer sites through one shared `van_vleck_weight` helper
+(`propagate_modal_asymptotic`, `aberration_tensor`, and the two JAX evaluators).
+
+* `lumenairy/propagators/asymptotic_maslov.py` (new helper), `asymptotic.py`,
+  `asymptotic_aberration_tensor.py`, `asymptotic_jax_twin.py`.
+* Measured (`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/repro/ASYMPTOTIC/t16`, a synthetic fit encoding exact free-space
+  Fresnel propagation, z = 20 mm, λ = 1 µm, vs the analytic q-parameter Gaussian
+  beam): `E_code / E_true` **(8.09e-19 + 2.0000000000256e-08 j) →
+  (1.0000000000128 − 4.04e-11 j)**, spatial spread of the ratio 4.2e-11.  The
+  pre-fix value is exactly `i * lambda * z`.
+* The correctly-normalised sibling `propagate_hf_chebyshev_quadrature` is
+  UNCHANGED and re-verified at **2.7398e-11** against the same analytic beam
+  (audit: 2.74e-11), so the two families are now on one scale.
+* Tests: `tests/unit/test_audit2609_a4_asymptotic.py::test_y2_*` (2);
+  `tests/unit/test_niche_audit_w6_asymptotic.py::test_w6_a7_output_field_carries_the_van_vleck_normalisation`
+  INVERTED (it pinned the absence of the normalisation as a documentation gap);
+  the two `test_audit_propagation.py` `…ModalAsymptoticStillBitEqual` inline
+  scalar references and the two `test_niche_audit_w6_asymptotic.py` brute-force
+  quadrature oracles updated to the corrected weight (they were stale COPIES of
+  the algorithm, and their tolerances -- all relative to their own reference --
+  are unchanged).
+* **Migration.** Every `L` entry of `aberration_tensor` and every pixel of
+  `propagate_modal_asymptotic` changes scale by `1 / (lambda^2 |det J|)` in
+  `|.|^2`.  Measured on the two shipped test fixtures the factor is
+  8.362145e+16 (R1 = 60 mm, ap 12 mm) and 1.486604e+17 (R1 = 500 mm, ap 4 mm),
+  reproducing the previously-pinned `|L_00|^2` values to 6 significant figures
+  when divided back out.  `AberrationTensorResult.van_vleck_weight` (new, with a
+  `None` default) exposes the applied factor so a caller that needs the v5.45
+  scale can recover it: `L_legacy = L * lambda**2 * |det J|` in magnitude.
+
+### Fixed -- asymptotic JAX twin: degenerate `eigvalsh` gradient and the four missing guards (audit Y3)
+
+`aberration_tensor_lg00_jax`'s default `w_o` came from
+`jnp.linalg.eigvalsh(Re M)`, whose JVP carries `1/(lambda_i - lambda_j)`;
+`Re M = J^T J / w_s^2 + I / w_p^2` is near-isotropic for any
+rotationally-symmetric system (measured gap/mean **3.3e-10**), so `jax.grad` was
+~86 % wrong for every parameter that ROTATES `Re M` (image point, saddle point,
+decentre) while the ones that only rescale it (`w_s`, `w_p`) survived.
+
+The eigensolve is replaced by the closed-form 2×2 largest eigenvalue
+(`sym2x2_max_eigenvalue`, double-`where`d so the gradient is finite at an exact
+degeneracy) in a shared `lg00_sampling_waist_from_M` that BOTH backends now
+call, and the default `w_o` is `stop_gradient`-ed: `lambda_max` of a
+near-degenerate symmetric matrix is genuinely non-smooth, and on this branch
+`w_o` is a normalisation convention rather than a physical length, so
+differentiating through it is ill-posed.  Pass `w_o=` explicitly to make it a
+live differentiable slot.
+
+Separately, the JAX twins reproduced none of the NumPy path's guards.  The four
+masks (in-box `s2`, in-box `v2`, `|det M| >= 1e-300`, `|Re b_quad| <= 700`) plus
+a final finite gate are now `jnp.where` gates in `_modal_field_lg00_pixel_jax`.
+
+* `lumenairy/propagators/asymptotic_jax_twin.py`,
+  `asymptotic_aberration_tensor.py`, `asymptotic_maslov.py`.
+* Measured (`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/repro/ASYMPTOTIC/t13`, stock singlet): with an explicit `w_o`,
+  `d/ds2x` **9.438e-03 vs a converged 5-point FD of 6.738e-02 (rel 8.60e-01) →
+  -9.57454010e+11 vs -9.57379958e+11 (rel 7.7e-05)**, and `d/dv*_x` rel
+  **8.61e-01 → 7.0e-04**.  The default-`w_o` gradient now equals the
+  explicit-`w_o` one to 1.7e-11 relative.
+* Measured (`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/repro/ASYMPTOTIC/t10`, a grid 3× the fit half-box): the JAX twin
+  returned **60 non-finite values of 81** where NumPy returned zeros; it now
+  returns **0 non-finite** and is exactly 0 on all 72 pixels NumPy zeroes.
+  In-box parity is preserved: `aberration_tensor` (0,0) **1.148e-11** relative
+  (audit 7.99e-11), the 17×17 grid **2.745e-10 RMS / 9.353e-10 worst** (audit
+  2.64e-10 / 7.14e-10), and the IFT solver's `v*` **3.042e-19** (audit 7.3e-19).
+* Tests: `tests/unit/test_audit2609_a4_asymptotic.py::test_y3_*` (3).
+
+### Fixed -- asymptotic family: `w_o` cross-backend clamp, `A_lead` overflow, `pupil_modes`, and three wrong narrative claims (audit Y5)
+
+* The "BIT-FOR-BIT cross-backend contract" for the default `w_o` was false: the
+  NumPy side clamped to `[1e-9, 1.0]` and the JAX side did not, so for
+  `lambda_max(Re M) < 1` they returned 1.000000 and 29.857 and `|L|` differed by
+  **97 %**.  Both now call the same helper, clamp included.
+* `aberration_tensor`'s scalar `A_lead` had no `|Re b_quad| <= 700` guard and
+  overflowed to `inf` with a bare NumPy warning on inputs the batched path
+  rejects cleanly.  Both now share `B_QUAD_EXP_MAX`.
+* `pupil_modes` is very nearly inert -- the pupil CONTENT comes only from
+  `pupil_amplitudes` -- so a caller who passed `pupil_modes=[(0,0),(1,0)]`
+  without matching amplitudes silently got an LG_{0,0} pupil and a result object
+  that claimed otherwise.  `aberration_tensor` now warns, naming the modes that
+  carry no coefficient.
+* "This is exact at the stationary point", said of the dropped Gauss–Newton
+  Hessian term in three places, is wrong: at the stationary point
+  `J^T(s1 - s_src)/w_s^2 = -(v - v_c)/w_p^2 != 0`, so the term does not vanish;
+  only the residual does.  Reworded in all three.
+* The Seidel/Zernike framing at the top of `asymptotic.py` and on
+  `AberrationTensorResult` over-claimed what `L` measures (an image-plane LG
+  overlap, not a pupil wavefront-error expansion; the module's own W4-T2 note
+  records 5 of 6 sign flips of the "(2,0) spherical" channel across adjacent
+  designs).  Caveated in both places.
+
+### Fixed -- `propagate_modal_asymptotic` says how many pixels it zeroed, and stops leaking NumPy warnings (audit Y4)
+
+Six independent gates dropped pixels to exactly 0, and five early exits could
+return an all-zero array, with no warning and no diagnostic -- while the sibling
+`propagate_hf_chebyshev_quadrature` warns when its grids leave the fit box.
+`optimize/driver.py` and `propagators/dispatch.py` feed this field straight into
+cross-propagator wave merits, where "mostly zero" is indistinguishable from
+"dark".  A single `RuntimeWarning` now names the fraction dropped and the
+dominant reason, from every exit.  Separately, `np.sqrt(det_M)` and
+`math.pi / safe_sqrt` were applied to the whole array including the NaN entries
+from out-of-box Newton results (the dtype-aware sentinel
+`np.where(sqrt != 0, ...)` does not catch NaN, since `NaN != 0` is True), which
+leaked `RuntimeWarning: invalid value encountered in sqrt` and `… in divide`
+from routine calls; both are now computed on the valid entries only,
+bit-identically.
+
+### Fixed -- Maslov: the canonical fit no longer returns an arbitrary null-space member (NEW, found while verifying S3)
+
+The v5.21 normal-equations Cholesky in `_solve_fit` is justified by "``A`` is a
+normalized tensor-Chebyshev Vandermonde -- well-conditioned and ~1.5x
+oversampled -- so squaring the condition number in ``G`` is safe".  That does
+not hold on a small, fast chart, and the `LinAlgError` fallback ladder cannot
+see the failure: a numerically positive-semidefinite but RANK-DEFICIENT Gram
+factors happily and returns an arbitrary member of the solution set.
+
+Measured on an f = 6 mm N-BK7 biconvex, 0.2 mm aperture, `poly_order=4`:
+`rank(A) = 65` of 70 columns, `cond(A) = 1.81e+15`, `cond(A^T A) = 6.18e+18`.
+Two runs of the SAME optic -- `output_plane_distance=d` versus baking `d` into
+the prescription's last thickness -- whose design matrices agree to **3.1e-15**
+and whose OPD right-hand sides agree to **6.8e-13 waves** came back with
+coefficients **0.869 waves apart**, both with the same fit residual
+(1.613e-09 vs 1.756e-09 waves, and 1.756e-09 cross-evaluated).  The difference
+lives entirely in the null space: invisible on the training manifold, and not
+invisible inside the v2 integral, which samples `(s2, v2)` combinations off it.
+
+`_solve_fit` now measures `cond(A^T A)` once (an `M x M` `eigvalsh`, microseconds
+beside the `A^T A` GEMM) and routes anything above `_GRAM_COND_MAX = 1e12` to
+`np.linalg.lstsq`, whose minimum-norm solution is a deterministic, unique
+function of `(A, RHS)` -- and which is also the pre-v5.21 behaviour, so this
+restores it exactly where it mattered.  Above `1/eps` (~4.5e15) it additionally
+warns, because there the fit is genuinely rank-deficient and even the min-norm
+answer depends on the solver's `rcond` cut.
+
+* Measured effect on the documented `output_plane_distance` contract
+  ("matches baking the same distance into the prescription's last thickness"),
+  same fixture at d = 0.5 / 1 / 2 / 5 mm: relL2 **0.449 / 0.757 / 0.849 /
+  1.384 → 3.48e-05 / 1.70e-05 / 2.33e-05 / 9.27e-04**.  The docstring's
+  "~1e-10" is corrected to the measured numbers, with the chart-identity
+  (6.8e-13 waves in OPD, 0 m in s1) stated as the exact part.
+* Well-conditioned charts keep the fast Cholesky path, byte-identical to
+  v5.21 (`cond(A^T A) = 1.24e9` at poly_order 4 on the audit's own 1.5 mm
+  fixture, well inside the gate).
+* Tests: `tests/unit/test_audit2609_a4_maslov_gbd.py::test_solve_fit_*` (3).
+
+### Fixed -- Maslov `fold_split` free-space legs honour `dy` (audit S11)
+
+The two mirror-leg gaps called `angular_spectrum_propagate(E, d, wavelength,
+dx)` with no `dy`, so an anamorphic grid silently propagated those gaps with
+`dy = dx` while the rest of the driver is anamorphic-aware.
+
+### Changed -- `apply_real_lens_maslov` validates `stop_index` and checks the anamorphic aperture extent (WP-A2 hand-off)
+
+`prescription['stop_index']` now goes through `_lens_real._normalise_stop_index`,
+so an out-of-range or non-integer value RAISES with the §2 prefix instead of
+being `int()`-ed into the "non-entrance stop" warning path -- where a negative
+index read as a mid-train stop and a float raised a bare `TypeError`.
+`stop_index=-1` now means the LAST surface, as Python indexing does.  The
+pre-flight aperture check passes the y extent (`N_y` / `dy`) so an anamorphic
+grid is checked against the axis that truncates first.
+
+* **Migration.** A prescription carrying an out-of-range `stop_index` now raises
+  from `apply_real_lens_maslov` where it previously warned about a non-entrance
+  stop and continued.
+* Tests: `tests/unit/test_audit2609_a4_maslov_gbd.py::test_a2_*` (8).
+
+### Fixed -- fga: the universal dispatcher's two tilt-blind discriminators (audit S10)
+
+`apply_real_lens_universal` routed a TILTED but perfectly collimated,
+single-valued, high-NA plane AT ITS FOCUS to `phase_screen` -- NA 0.145 above
+the 0.12 `na_threshold` and inside the caustic, precisely the regime the
+dispatcher's own docstring says the thin screen cannot handle.  Both
+discriminators in that decision were blind to a global tilt:
+
+* `_caustic_zone` scored each exit ray's crossing with the optical AXIS
+  (`z = -x_exit / u_exit`).  A global input tilt moves the focus off axis by
+  ~`f * theta`, so the axis crossings measure a different quantity entirely.
+  It now scores the crossing with the CHIEF ray -- the amplitude centroid of
+  the meridional row launched along the amplitude-weighted mean local slope,
+  traced in the SAME `ray_transfer_jacobian` call as the fan (one extra array
+  element), so it costs nothing and cannot drift from it.
+* the final escape hatch asked `_carrier_residual_rms(E_in, None, ...)`, which
+  returns EXACTLY the tilt magnitude for a pure tilt.  It now asks it on the
+  DE-TILTED field (new `_remove_global_tilt` / `_global_mean_tilt`): a global
+  linear phase is a change of reference direction, not a divergence.
+
+* `lumenairy/propagators/fga.py` (`_caustic_zone`, `_universal_route`, new
+  module-private `_global_mean_tilt` / `_remove_global_tilt`).  Both
+  `_caustic_zone` call sites -- `apply_real_lens_auto` and `_universal_route`
+  -- get the fix.
+* **Independent oracle** (`tests/unit/test_audit2609_a4_fga_s10.py::_ray_focal_zone`):
+  real rays through `raytrace.trace` + `TraceResult.at_exit_vertex` -- a
+  different code path from the `ray_transfer_jacobian` differential fan -- with
+  the geometric focal zone taken as the axial range where the bundle's RMS
+  transverse spread about its own centroid is within 20 % of its minimum.
+  Measured best-focus planes: **1.021305 mm** (collimated), 1.020605 (tilt
+  0.02), 1.018505 (tilt 0.05), 1.019905 (tilt 0.05 + 80 um decentre) -- the
+  focal DISTANCE of a collimated beam moves by at most **0.27 %** under tilt.
+* Measured `_caustic_zone`, f = 1.2 mm N-BK7 biconvex, 0.30 mm aperture,
+  lambda = 1 um, N = 192, dx = 2 um:
+
+  | input | before [mm] | after [mm] | contains the real focus? |
+  |---|---|---|---|
+  | collimated | [1.021056, 1.032698] | **bit-identical** | yes -> yes |
+  | tilt 0.02 rad | [1.318251, 10.987635] | [1.021117, 1.032215] | **no -> yes** |
+  | tilt 0.05 rad | [2.002278, 11.019568] | [1.019191, 1.029461] | **no -> yes** |
+  | tilt 0.05 + 80 um decentre | [1.996611, 28.212060] | [1.009260, 1.025989] | **no -> yes** |
+  | 80 um decentre | [1.020926, 1.032689] | [1.010242, 1.028427] | yes -> yes |
+  | slow lens, exit plane | [98.021603, 98.021702] | **bit-identical** | - |
+  | multi-valued (2 tilted beams) | [0.277843, 3.274212] | **bit-identical** | - |
+
+  The zone CENTRE moved **+534.1 %** under a 0.05 rad tilt before the fix and
+  **-0.25 %** after, against the oracle's own -0.27 %.  The three symmetric
+  fixtures are bit-identical because a centred beam's chief ray IS the axis.
+* Measured collimation discriminator (`_NONCOLLIMATED_RESID_THRESH = 0.02`):
+  raw `_carrier_residual_rms` **5.000000e-03 / 2.000000e-02 / 5.000000e-02 /
+  1.000000e-01** at tilt 0.005 / 0.02 / 0.05 / 0.1 -- exactly the tilt --
+  against **1.257379e-09 / 5.029515e-09 / 1.257379e-08 / 2.514758e-08**
+  de-tilted.  Real divergence readings survive: R = 10 mm 9.714549e-03 ->
+  9.715578e-03, R = 3 mm 3.238183e-02 -> 3.238526e-02.  A 0.05 rad TILTED
+  R = 3 mm beam read **5.956998e-02** raw (84 % high, and over the gate for the
+  wrong reason) and now reads 3.238526e-02, matching the untilted beam to
+  4.0e-09 relative.
+* Routing, same fixtures: tilt 0.02 **'traced' -> 'fga'**, tilt 0.05
+  **'phase_screen' -> 'fga'**, tilt 0.05 + decentre **'phase_screen' -> 'fga'**.
+  The four regimes the audit found correctly routed (collimated slow at the
+  exit plane, collimated fast at focus, decentred at focus, multi-valued) are
+  unchanged.  `apply_real_lens_auto`'s 2-way choice follows: **'gbd' -> 'fga'**
+  for the tilted case.
+* **What this does NOT claim.**  The fix makes the router frame-invariant; it
+  does not make the chosen member more accurate on this fixture.  Measured at
+  the focus against the traced chief-ray landing (+66.402 um) and the real-ray
+  geometric fan (+66.439 um, 0.645 um rms; diffraction limit
+  lambda/(2 NA) = 3.44 um): `phase_screen` gives centroid +66.469 um and
+  intensity-rms width 3.269 um, `fga` gives +62.524 um and 12.721 um.  The two
+  members disagree by 3.9 um and a factor 3.9 -- and by the SAME factor at
+  tilt 0 (3.169 vs 12.607 um), so that is the members' own accuracy question
+  (the auditor's open suspicion about FGA's convergence knob through a real
+  singlet, re-measured here), not a tilt artefact.  What the pre-fix router
+  did was pick between them on the observer's frame.
+* Tests: `tests/unit/test_audit2609_a4_fga_s10.py` (16).
+
+### Verified correct -- fga: the vector wrapper normalises the Jones components jointly (audit S10)
+
+S10's third sub-item is that `apply_real_lens_maslov_vector` threads
+`normalize_output` through with its `'power'` default and applies it
+INDEPENDENTLY to `E_x` and `E_y`, so any differential transmission, vignetting
+or in-box clipping between the two is normalised away and the output
+polarization ratio is forced back to the post-Fresnel input ratio.
+`apply_real_lens_fga_vector` does NOT share that defect and needed no change:
+it applies ONE joint scale to `(ex, ey, ez)`, carries the per-surface Fresnel
+s/p Jones with the geometric frame rotation, and ships a real `E_z` via
+`return_longitudinal=True`.
+
+Measured on a `(2, 48, 48)` Jones input with `P_x/P_y = 4` exactly, through an
+f = 1.2 mm singlet to 1 mm past the vertex: `normalize_output='none'` gives
+`P_x/P_y = 3.9999998702357877` and `'power'` gives `3.999999870235787` -- the
+same to **2.2e-16 (1 ulp)** -- while the total power is restored to
+1.0000000000000002.  The 3.2e-08 departure from the input ratio is the s/p
+diattenuation the system really applies, and it survives the normalisation.
+Pinned so it stays that way.
+
+### Added -- cache registry: the `local_quadrature` sample-lattice cache
+
+`_local_window_1d` (new, `functools.lru_cache`) is enrolled with
+`_cache_registry.register_cache_clearer` under `'maslov_local_window'` and gets
+a `clear_maslov_local_window_cache()` clearer, so it participates in
+`clear_asm_caches()` / `lumenairy_context(clear_caches_on_exit=True)` like every
+other module-level cache.  Entries are a few kB each at an LRU cap of 32, so no
+byte-budget hook.
+
+---
+
+### VERIFY-A4 follow-up (independent re-verification pass)
+
+The changes VERIFY-A4 made on top of `32ba3ba2` have their own changelog text
+in `docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/VERIFY_WP-A4_CHANGELOG.md` (same voice, same assembly).  They are:
+
+* **`### Fixed -- optimize`** — the LG aberration merit is now a DIMENSIONLESS
+  coupling `|L|^2 / |L_ref(0,0)|^2`, referenced to the aberration-free twin of
+  the same optic, on both backends.  **Migration note:** the (0, 0)
+  contribution moves from `-4.79e+14` (32ba3ba2) / `+0.9968` (v5.45) to a
+  Strehl deficit in about `[-3e-03, 1]`; any absolute threshold, logged value
+  or stopping tolerance tuned against either old scale must be re-derived.
+  Relative channel weights keep their meaning (every channel is divided by the
+  same per-field-point constant), so an optimiser converges to the same design.
+  `LGAberrationMerit` gained `strehl_branch` (default `'sigma'`, a real Strehl;
+  `'closed_form'` is the JAX-parity branch and warns that it is not one) and
+  `sigma_grid_n` (default 64); it now costs two `aberration_tensor` calls per
+  field point.
+* **`### Fixed -- lenses_maslov`** — `apply_real_lens_maslov_vector` applies ONE
+  joint `normalize_output` scale to the Jones pair (audit S10, third sub-item,
+  requested in §5 item 6 of the report) and launches its polarization base rays
+  along the input field's own local wavevector.
+* **`### Fixed -- lenses_maslov`** — the S6 saddle warning is gated on the
+  input's WAVEFRONT NA, not on the second moment of its angular spectrum; it
+  used to fire on every collimated beam narrower than ~1 mm.
+* **`### Changed -- tests`** — four oracles that imported
+  `van_vleck_weight` from the module under test now derive it locally.
+* **`### Changed -- validation`** — the three JAX cases in
+  `validation/elements/test_lenses.py` enable x64 for their process, so
+  `validation/run_all.py test_lenses` is green again (46/46).
+* **`### Changed -- tests`** —
+  `test_a1_auto_n_v2_resolves_demanding_default_quadrature` restated against a
+  converged `n_v2 = 512` quadrature oracle.
+* **`### Changed -- tests`** — WP-A15a §5 item 8: three wall-clock
+  assertions (`test_audit_propagation.py` × 2, `test_audit_optimize.py` × 1)
+  replaced by exact operation counts, and `pytestmark = pytest.mark.slow` on
+  `test_audit_lens_models_2026_07.py`.
+* **`### Added`** —
+  `lumenairy.propagators.asymptotic.aberration_free_reference_fit` (the name is
+  final; `lumenairy/__init__.py`'s eager re-export is safe).
+
+A second block in the same file covers the VERIFY-A4 FOLLOW-UP (the
+coordinator's rulings on the report's §5): the JAX LG merit's new sigma
+branch, `local_quadrature`'s window-truncation warning, `_integrate_levin`
+through the shared Van Vleck helper, the cached aberration-free reference,
+the `clear_maslov_local_window_cache` re-export, and five pins in
+`test_niche_audit_w3_oracles.py` / `test_v5_21_2_subsystem_audits.py`
+carried through the audit-Y2 scale move.
+
+<!-- WP-VERIFY_WP-A4: Maslov / asymptotic verification follow-ups (dimensionless LG Strehl merit) -->
+### Fixed -- optimize: the LG aberration merit is a dimensionless coupling, not a raw `|L|^2`
+
+`LGAberrationMerit` and `make_lg_aberration_merit_jax` reported the bare
+`|L|^2` of the LG aberration tensor and documented `1 - |L|^2` as "a Strehl
+deficit".  `L` is dimensional: the pure-`(0, 0)` request takes the closed-form
+point-sampling branch, which returns `U(chief) * conj(LG_k(0))` — field per
+length — and after audit Y2 put the Van Vleck weight `-1j sqrt(|det J|)/lambda`
+into the integrand, `|L|^2` reads **4.79e+14** on the stock singlet, so
+`1 - |L|^2` was **-4.79e+14**.  Before Y2 it read 3.2e-03 and only *looked*
+like a Strehl ratio because the missing `lambda*sqrt(|det J|)` (a LENGTH)
+cancelled the branch's 1/length² by dimensional accident.
+
+Both merits now divide every channel by `|L_ref(0, 0)|^2`, the same
+coefficient evaluated on the **aberration-free twin** of the same optic — new
+`lumenairy.propagators.asymptotic.aberration_free_reference_fit`, which zeroes
+every `Phi` coefficient of total degree >= 3 in the pupil variables and leaves
+the geometry (`coef_s1x` / `coef_s1y`, hence `|det J|`), the boxes, the
+extracted linear ramp and the wavelength untouched.  Every dimensional factor
+cancels identically, and an already-aberration-free fit is returned *unchanged*
+so the ratio is exactly `1.0` bit-for-bit.  The reference is evaluated at the
+twin's own chief-ray landing, so moving the image point off the chief ray
+LOWERS the coupling (measured merit `-2.84e-03 / +0.258 / +0.851 / +0.99994` at
+`dy = 0 / 20 / 50 / 100 um`).
+
+`LGAberrationMerit` gained `strehl_branch` (default `'sigma'`) and
+`sigma_grid_n` (default 64).  The default routes through the sigma-grid
+OVERLAP, where the normalised coupling is a real Strehl ratio: measured
+`1.000000 / 0.901312 / 0.811431 / 0.659170 / 0.447292` as an f/2.5 N-BK7
+plano-convex singlet's cubic-and-higher pupil phase is scaled by
+`0 / 0.5 / 1 / 2 / 4`, and `0.815601` (curved side toward the source, 25.8
+waves of cubic+ phase) vs `0.731874` (flat side toward it, 39.8 waves) on the
+classic orientation pair.  `strehl_branch='closed_form'` keeps the branch the
+JAX twin is restricted to; it warns, because a truncated leading-order saddle
+expansion does not conserve energy and that ratio RISES with aberration
+(`1.000000 -> 1.024914 -> 1.095510` on the same ladder).  The sigma ratio is
+insensitive to the grid (identical to 6 significant figures from
+`sigma_grid_n` 32 to 256), so the cheap default costs ~1.4 s per field point
+against the closed form's ~0.15 s rather than the ~11 s the adaptive grid
+would.
+
+**Migration.** Any absolute threshold, weight calibration or logged value tuned
+against the old merit must be re-derived: the (0, 0) contribution moves from
+`-4.79e+14` (v5.46-pre) / `+0.9968` (v5.45) to a Strehl deficit in
+approximately `[-3e-03, 1]`.  A composite merit's RELATIVE channel weights are
+unchanged in meaning — every channel is divided by the same per-field-point
+constant — so an optimiser converges to the same design; only the printed
+numbers and any absolute stopping tolerance change.  The merit now costs two
+`aberration_tensor` calls per field point instead of one.  Pass
+`strehl_branch='closed_form'` to keep the cheap branch, at the documented cost
+that it is not a descent direction.
+
+Tests: `tests/unit/test_audit2609_a4_verify_maslov_asymptotic.py::test_ruling1_*`
+(2), and the re-pinned
+`tests/unit/test_niche_audit_r_guards_and_merits.py::test_r5_*` (4) /
+`tests/unit/test_audit_optimize.py::...::test_piston_weight_scales_merit_linearly`.
+
+### Fixed -- lenses_maslov: `apply_real_lens_maslov_vector` applies ONE joint normalisation to the Jones pair
+
+The wrapper forwarded `normalize_output` (default `'power'`) to the two scalar
+legs, which normalised `E_x` and `E_y` INDEPENDENTLY — forcing the output
+polarization ratio back to the post-Fresnel input ratio and deleting the
+diattenuation the wrapper exists to compute.  Both legs now run at
+`normalize_output='none'` and one scale is applied to the pair, as
+`apply_real_lens_fga_vector` does.  Measured on an f/3.3 N-BK7 biconvex with a
+`P_x/P_y = 1.777777777778` linear input: the propagated ratio is
+`1.777777663332023` under `'none'`, `'power'` and `'peak'` alike —
+bit-identical, 0 ULP — and it departs from the input ratio by `-6.4376e-08`
+(the s/p diattenuation, 5.154e+08 ULP, so the pre-fix behaviour is
+distinguishable by 8 decades).  An unknown `normalize_output` now raises with
+the Section 2 prefix.
+
+The scale's reference is the POST-FRESNEL pair, i.e. the field the two scalar
+legs are actually handed — the literal joint form of the scalar
+`normalize_output='power'` contract — so the surface Fresnel transmission
+stays in the absolute scale (`T1*T2 = 0.9219035` on the fixture above;
+`'power'` restores that to `1.000000000000000` and `'none'` is 28.46x it).
+`apply_real_lens_fga_vector` normalises to the RAW input pair instead, under a
+lossless assumption; the difference is documented in the wrapper's Notes and
+keeps `tests/unit/test_v5_21_maslov_jax_caustic.py::test_maslov_vector_polarization`
+— which pins that `T1*T2` survives — passing unchanged.
+
+The polarization base rays are also launched along the input field's own local
+wavevector instead of axially (new `_local_direction_cosines` /
+`_input_direction_cosines`, the same conjugate-product estimator the FGA
+router uses).  A real, non-negative input gives EXACTLY `(0, 0)`, so a
+collimated call is bit-identical to the pre-v5.46 behaviour; a 0.03 rad tilt is
+recovered as `ux = 0.030000` and an f = 20 mm converging wavefront as `-x/f` to
+`4.0e-04 = dx/(2f)`, the forward-difference bias.  The docstring's
+"polarization-resolved study through a focus" claim is retracted: there is
+still no `E_z` and no exit-frame transport of the Jones vector (audit S10's
+remaining sub-item).
+
+Tests: `test_audit2609_a4_verify_maslov_asymptotic.py::test_s10_vector_*` (3).
+
+### Fixed -- lenses_maslov: the S6 saddle warning no longer fires on a collimated beam
+
+The audit-S6 `RuntimeWarning` was gated on the second moment of
+`|FFT(E_in)|^2`, which for a collimated beam of finite width is its
+DIFFRACTION spread, not a divergence — measured 3-sigma NA `3.54e-03` /
+`1.10e-03` for flat-phase Gaussians of waist 0.25 / 0.8 mm at 1.31 um, both
+above the `_SADDLE_FLAT_INPUT_NA = 1e-3` threshold, so the warning fired on
+every collimated beam narrower than ~1 mm.  It is now gated on the spread of
+the input's LOCAL WAVEVECTOR (new `_wavefront_na`), which is EXACTLY zero for a
+real, flat-phase field at any width and reproduces the physical number when the
+input really is non-flat: `6.00e-03 / 3.00e-02` for tilts of 0.002 / 0.01 rad
+and `8.42e-02 / 3.37e-02` for f = -20 / +50 mm, against `6.11e-03 / 3.00e-02`
+and `8.42e-02 / 3.37e-02` spectrally.  The message still reports both numbers.
+
+Tests: `test_audit2609_a4_verify_maslov_asymptotic.py::test_s6_*` (7).
+
+### Changed -- tests: two oracles that imported the library helper they verify
+
+`tests/unit/test_niche_audit_w6_asymptotic.py`'s two brute-force quadrature
+oracles (`_quad_oracle`, `_a9_quad`) and
+`tests/unit/test_audit_propagation.py`'s two inline `amp_lead` references were
+changed by WP-A4 to call `lumenairy.propagators.asymptotic.van_vleck_weight`.
+An oracle that reuses the library's own weight cannot detect a wrong weight —
+the exact failure mode audit Y2 recorded, where every pre-fix pin passed with
+`|det J|` to the first power.  All four now derive the weight in the test file
+from the stationary-phase Fresnel integral (`-1j sqrt(|det J|) / lambda`), and
+a new
+`test_w6_verify_van_vleck_weight_matches_the_textbook_fresnel_form` is the one
+place the two forms are compared (0 ULP over a 6 x 3 ladder of
+`(|det J|, lambda)`).  All 53 W6 tests and all 101 `test_audit_propagation`
+tests still pass.
+
+### Changed -- validation: the JAX real-lens cases enable x64 for their process
+
+`validation/run_all.py test_lenses` went red on three of the four
+`apply_real_lens_traced_jax` / `apply_real_lens_maslov_jax` cases when audit
+S7's x64 contract landed (`RuntimeError: ... requires double precision`).  The
+three cases now call `jax.config.update('jax_enable_x64', True)`, the one-liner
+the fourth case and the other JAX validation cases already use.  The refusal
+itself stays pinned in
+`tests/unit/test_audit2609_a4_maslov_gbd.py::test_s7_*`.
+`validation/run_all.py test_lenses` is **46/46 passed** (27.7 s).
+
+### Changed -- tests: `test_a1_auto_n_v2_resolves_demanding_default_quadrature` restated
+
+Audit S2 changed the `'auto'` router: on a demanding tight-focus chart the
+router reports `need n_v2 ~ 2248` against a cap of 256 and `'auto'` resolves to
+`'stationary_phase'`, so `n_v2` is inert and the default call is
+**byte-identical** to the historical `n_v2=32`.  The test's fail-before arm
+(`il2(old32, truth) > 0.5`, measured 0.67 pre-S2) therefore measured
+`1.325e-04`.  It is restated — not deleted — as the property that now holds:
+both defaults track the well-resolved `local_quadrature` reference the test
+already carried to `il2 = 1.325e-04` (bar 5e-3), `'auto'` is no worse than the
+fixed default, and the two are asserted byte-identical so a router change
+re-opens the question.  A dated one-off against a converged uniform quadrature
+(`n_v2 = 512`, self-converged to `il2 = 2.14e-06` vs `n_v2 = 384`) is recorded
+in the docstring — both defaults `5.844e-04`, the `local_quadrature` reference
+`5.754e-04` — rather than re-run, because that oracle costs ~40 min on this
+fixture.  The restated test runs in 1.64 s.
+
+### Fixed -- optimize: the LG merit says so when its aberration-free reference collapses
+
+The reference is a reference SPHERE only while the pupil phase it removes is a
+perturbation.  On the validation suite's own fixture (51.5 mm N-BK7 singlet,
+`object_distance = 200 mm`, `pupil_box_half = 0.02`) the fit carries
+**4.206e+05 waves** of cubic-and-higher pupil phase; zeroing it builds a
+different optic whose focus leaves `s2_image`, and the reference coupling
+collapses (`|L_ref(0,0)|^2 = 6.16e-10` against `|L(0,0)|^2 = 0.799`, i.e. a
+coupling of 1.30e+09).  `LGAberrationMerit` now emits one `RuntimeWarning`
+naming the removed waves and stating that the channels are mutually consistent
+and monotone but NOT Strehl-normalised on that chart.  Silent on a well-posed
+chart (measured coupling 1.0029).  `validation/run_all.py test_asymptotic` is
+48/48 passed (62 s).
+
+### Fixed -- docs: `AberrationTensorResult.van_vleck_weight` round-trip
+
+The field's docstring said `L_legacy = L * |det J| / van_vleck_weight`, "i.e.
+`L * lambda**2 * |det J|` in magnitude".  The first form is right; the
+restatement is the factor for `|L|^2`, not for `L` — in magnitude
+`L_legacy = L * lambda * sqrt(|det J|)`.  Corrected.
+
+### Changed -- tests: three wall-clock assertions replaced by operation counts, one slow marker
+
+TESTING_STANDARDS S1, from WP-A15a's section 5 item 8.
+
+* `test_audit_propagation.py::…::test_fused_path_does_the_fused_work` --
+  `assert t_fused < 60.0` retired.  Its stated purpose (catch an accidental
+  O(N^2), a dropped chunking, a per-pixel Python loop) is already covered by
+  the per-chunk `np.exp`/`np.einsum`/`np.sum` counts the test carries; the one
+  thing they missed -- GRID scaling -- is now a count too: the heavy-call
+  counts on a DOUBLED grid must be identical.  Timing still printed.
+* `test_audit_propagation.py::…::test_decompose_lg_cache_speedup` ->
+  `::test_decompose_lg_cache_builds_no_modes_on_a_hit`.  The `>= 5x` floor
+  (whose own docstring called it "a soft speedup floor ... timing on CI hosts
+  is noisy") becomes an exact count on `asymptotic_modes._evaluate_poly2d`:
+  **28** polynomials cold (`(p_max+1)(2 ell_max+1)` at `p_max = ell_max = 3`),
+  **0** cached, **28** again after `clear_lg_mode_stack_cache()`, plus the
+  v5.30 W6-A13 identity contract (the hit returns the SAME array).
+* `test_audit_optimize.py::…::test_dual_annealing_terminates_quickly_when_cancelled`
+  -- `assert dt < 180.0` retired; the two merit-evaluation-count assertions
+  above it already pin "not stuck", exactly and machine-independently.
+* `test_audit_lens_models_2026_07.py` gains `pytestmark = pytest.mark.slow`
+  (641.0 s on the committed `.test_durations`; 206.7 s on this box after the
+  ruling-2 restatement, still over the 2 min/file bar).  Verified: `-m "not
+  slow"` deselects all 69 ids.
+
+### Added -- `lumenairy.propagators.asymptotic.aberration_free_reference_fit`
+
+Public helper returning the aberration-free twin of a `CanonicalPolyFit` (see
+the first entry).  Idempotent, and returns the *same object* when there is
+nothing to remove, so a caller that divides by the reference gets exactly 1.0.
+
+
+---
+
+### VERIFY-A4 follow-up (coordinator rulings on the report's section 5)
+
+### Added -- optimize: `make_lg_aberration_merit_jax` gets a sigma-grid branch
+
+The JAX LG merit was restricted to the closed-form point-sampling branch,
+which is a leading-order saddle value and therefore not a descent direction
+even after the aberration-free normalisation -- its coupling RISES with
+aberration.  It now has the same `strehl_branch` choice as the NumPy
+`LGAberrationMerit`, defaulting to `'sigma'`: a new
+`_lg00_sigma_overlap_jax` builds the sigma grid, `jax.vmap`s
+`solve_envelope_stationary_jax_ift` + `_modal_field_lg00_pixel_jax` over it
+and projects onto LG_{0,0} analytically, all in `jnp` and differentiable.
+
+It does NOT have to reproduce NumPy's `_measure_image_plane_waist` probe or
+its adaptive `sigma_grid_n` ladder: the merit uses only the RATIO
+`|L|^2/|L_ref|^2` and the basis waist, extent and grid are identical on both
+sides of it, so they cancel.  MEASURED on an f/2.5 N-BK7 plano-convex
+singlet (w_s = 20 um, w_p = 0.05, on-axis): JAX coupling **1.002678** against
+the NumPy sigma branch's **1.002871**, i.e. 1.92e-04 relative, with the
+residual identified as the basis-waist convention (moving the JAX `w_frac`
+0.25 -> 0.5 moves that side by 6.3e-04 while `n_grid` 16 -> 32 moves it by
+3e-09).  `jax.grad` through the whole thing is finite
+(`d(1-S)/dw_s = -3.10e+01`).  Cost 11.7 s first call (XLA compile), 1.4 s
+warm.  `strehl_branch='closed_form'` keeps the old path and warns.
+`tests/unit/test_niche_audit_r_guards_and_merits.py::test_r5_numpy_lg_merit_matches_jax_twin`
+now compares sigma to sigma at `abs=2e-03` on the coupling (2.9x the worst
+measured 6.97e-04, 2.5 decades below an x-vs-(1-x) confusion).
+
+### Fixed -- lenses_maslov: `local_quadrature` says when it truncates its window
+
+The Gaussian-taper correction is computed on the FULL lattice while
+out-of-box samples are DROPPED, so the scheme's exactness on a quadratic
+chart holds only while the lattice fits inside the fitted Chebyshev box.
+New `_warn_local_window_truncation` (NumPy and CuPy integrators both) emits
+one `RuntimeWarning` naming the dropped fraction above a 1 % trigger.
+MEASURED on an anamorphic quadratic chart against the closed-form Fresnel
+value: 0/64 dropped and relerr 6.60e-15 at `window_sigma = 3.0`, 0/1089 and
+3.41e-15 at 2.5; **44/121 (36.4 %) and 8.09e-02** at 5.0, **78/169 (46.2 %)
+and 8.79e-02** at 7.5 -- and 8.17e-01 at the shipped defaults on a chart
+whose small Hessian eigenvalue puts `sigma2_norm` at 1.785.  The module
+comment and the function docstring gain the "while the tapered lattice fits
+inside the chart box" qualifier.
+
+### Changed -- lenses_maslov: `_integrate_levin` uses the shared Van Vleck helper
+
+Both Levin integrand closures wrote `sqrt(|det J_norm|)` out by hand -- the
+duplication `_van_vleck_density` exists to prevent.  They call it now, in the
+association that is BIT-IDENTICAL (`np.array_equal` over 1e5 samples x 3
+anamorphic half-width pairs): `_van_vleck_density(d, 1, 1)` is `d ** 0.5`,
+NumPy's `** 0.5` is `sqrt` bit-for-bit, and the box Jacobian `sqrt(hx*hy)`
+is applied as before.  Unit half-widths are correct here because the Levin
+engine works in the normalised unit box end to end.
+
+### Performance -- optimize: the LG merit's aberration-free reference is cached
+
+`LGAberrationMerit` takes the reference from `ctx._canonical_fit_cache`,
+keyed by `('lg_ref', <the fit's own key>, source_point, w_s, w_p, w_o,
+strehl_branch, sigma_grid_n)`, and requests it on a FIXED minimal mode set
+rather than the term's own `output_modes` -- only its `(0, 0)` entry is read,
+and pinning it makes every channel of every term on one optic divide by the
+same constant (which is what lets a `CompositeMerit` compare its channels)
+as well as letting one cached reference serve them all.  MEASURED, three
+terms on one fit (medians of 3): **4.365 s -> 2.807 s**, i.e. 1.455 ->
+0.936 s per term, with exactly ONE `lg_ref` cache entry.  Values unchanged
+(composite 1.829191e-01 before and after).  No timing is asserted anywhere.
+
+### Added -- `clear_maslov_local_window_cache` is re-exported at top level
+
+Added to `lenses_maslov.__all__` and imported / listed in
+`lumenairy/__init__.py`, which is what
+`test_v4_14_1_dispatcher_pin_cache_clears` requires of every
+submodule-`__all__` `clear_*` name.  The cache was already enrolled with
+`_cache_registry`, so `clear_asm_caches()` behaviour is unchanged.
+
+### Changed -- tests: five pins carried through the audit-Y2 scale move
+
+`tests/unit/test_niche_audit_w3_oracles.py` (x4) and
+`tests/unit/test_v5_21_2_subsystem_audits.py` (x1) were red at `32ba3ba2`
+from WP-A4's own Y2 change, in files its report did not list.  Re-pinned by
+DERIVATION, not by re-baking: `L_new = L_old * (-1j)/(lambda sqrt|det J|)`
+and `|L|^2_new = |L|^2_old / (lambda^2 |det J|)`, with `|det J|` read off
+`AberrationTensorResult.van_vleck_weight`.  Measured at lambda = 1.31 um:
+`|det J| = 3.908349e-02 / 3.931805e-02` on the two validation designs, so
+the factor is 1.490953e+13 / 1.482059e+13.
+
+* the closed-form constants `15.448+3.188j` / `-6.571-14.392j` become
+  `1.2310011487876e+07-5.9649449469122e+07j` /
+  `-5.5405030010922e+07+2.5295326982543e+07j`, and the test now ALSO asserts
+  the identity that produced them (measured 3.6e-14 / 1.8e-13 relative);
+* the sigma anchors `9.0968975e-14 / 7.1975598e-14` become
+  `1.3564605658e+00 / 1.0671876291e+00` (measured ratios 1.491124e+13 /
+  1.482708e+13, i.e. the predicted factor to 1.1e-04 / 4.4e-04 -- the
+  residual is `det J`'s variation over the sigma grid);
+* the LG-merit curvature-response values become 2.2006679213e+09 /
+  9.9881936194e+04 with response 9.999546e-01 (the 2e-2 relative tolerance
+  is UNCHANGED), and the docstring records that this fixture trips the
+  reference-collapse guard;
+* `test_opt1_lg_jax_merit_is_strehl_deficit_not_amplitude` keeps its claim
+  but changes its driver: a waist mismatch is not an aberration and now
+  cancels against the reference, so the test walks the IMAGE POINT off the
+  chief ray instead -- merit -3.19e-03 / +1.70e-01 / +6.94e-01 / +9.91e-01
+  at dy = 0 / 20 / 50 / 100 um, pinned as strict monotonicity plus
+  `v(100 um) > 0.5` and `|v(0)| < 0.05`.
+
+No bar was loosened; every changed one carries its derivation.
+
+### Added -- tests: the mirror exit vertex and Y1 at a second field angle
+
+`tests/unit/test_audit2609_a4_verify_maslov_asymptotic.py` gains six tests:
+the O-1 truncation warning (fires / silent, with the fraction in the
+message), the O-2 bit-identity, the mirror-last-surface exit vertex
+(`n_exit = n(glass_before) = 1.503583` applied to 0.0; the "air" mistake
+would be 7.783e-06 m = 5.9 waves), and Y1's chief ray at THREE field angles
+-- (100, 0), (0, 150) and (-70, 70) um, which split the extracted ramp
+`|a3| / |a4|` as 2.74e+03 / 2.6e-10, 8.5e-10 / 4.00e+03 and 1.89e+03 /
+1.89e+03, so the `a4 u4` half of the Y1 fix is exercised for the first time.
+PSF within 1.20 / 1.80 / 1.21 um of the independently traced chief ray on a
+92.3 um pitch.
+
+<!-- WP-A6: Traced-carrier chain -->
+### Fixed -- carrier readout: the focal peak no longer collapses when the reference carrier is a few percent off the beam (C1)
+
+`carrier_referenced_focus_readout` sized its co-moving stop grid from the
+CARRIER and never from the field.  Both the standoff resolver
+(`_default_focus_standoff`) and the near-focus gate (`_near_focus_needs_bridge`)
+estimate the beam at the stop plane as `w(s) = w0 sqrt(1+(s/zR)^2)` about a waist
+at `-R`, which is a statement about the carrier's geometric contraction; when the
+envelope carries residual curvature -- i.e. whenever the carrier is not the
+beam's own wavefront -- the beam does not contract with the co-moving grid and
+nothing between the carrier leg and the Bluestein zoom measured what landed
+there.  `propagate_traced_carrier_chain` supplies that carrier from a paraxial
+ABCD (`_paraxial_group_r_out`), so the mismatch is structural rather than user
+error, and the returned spot looked entirely plausible: core shape intact, power
+book-keeping unremarkable, no warning from any guard.
+
+Two independent changes:
+
+* **the resolver now measures the beam.**  The envelope's own residual
+  inverse-curvature is fitted (`_fit_carrier_inv`, `estimator='increment'`,
+  centred on the amplitude centroid) and composed with the carrier,
+  `1/R_eff = 1/R + 1/R_env`; the containment condition is then written against
+  the beam's Gaussian ABCD width at the stop plane and solved in closed form
+  (`_beam_containment_standoff`, a quadratic in the stop-plane position).  The
+  resolved standoff is the LONGER of that and the shipped law, so the leg can
+  only ever be lengthened.
+* **the result is measured.**  A new `on_focus_containment` guard
+  (`'error'` / `'warn'` / `'ignore'`, default `'error'`) reads the beam that
+  actually landed on the stop grid and refuses when it does not fit -- below
+  `_FOCUS_READOUT_CONTAINMENT_MIN` = 1.0 beam radii of co-moving half-width.  It
+  takes two readings and disposes on the worse: the MEASURED amplitude radius,
+  and the beam's modelled Gaussian ABCD width there (the measured second moment
+  saturates once the beam overfills the grid -- at the worst row of the audit
+  fixture it reads 46 um on a 40 um half-grid while the beam's true un-clipped
+  radius is 109 um).
+
+Measured on the audit's own fixture (a converging Gaussian, `w = 1 mm`, true
+radius `R0 = -20 mm`, NA 0.05, `lambda = 1.31 um`, N = 1024, half-extent 4 mm,
+`dx_out = w0/8`, `N_out = 64`; ONLY the reference carrier is varied, the physical
+field is identical; `docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/repro/CARRIER/p6c_mismatch.py`):
+
+| R/R0 | standoff before | after | containment before | after | peak vs truth before | after |
+|---|---|---|---|---|---|---|
+| 1.00 |  222.4 um |  222.4 um | 3.21 | 3.21 | 1.000000 | 1.000000 |
+| 0.99 |  418.0 um | 1008.6 um | 1.96 | 3.20 | 0.986188 | 0.999514 |
+| 0.98 |  613.6 um | 1874.0 um | 1.39 | 3.20 | 0.745432 | 0.998602 |
+| 0.95 | 1200.7 um | 4173.3 um | 0.91 | 3.20 | 0.187913 | 0.994304 |
+| 0.90 | 2180.1 um | 7144.9 um | 0.87 | 3.20 | 0.026309 | 0.985236 |
+
+-- a 37x recovery on the worst row, with zero warnings on any row.  The
+containment now equals `_FOCUS_STANDOFF_MARGIN` = 3.2 exactly (the resolver
+solves for equality).  Fed the PRE-FIX leg, the new guard refuses the two rows
+whose peak had collapsed (containment 0.909 and 0.863).
+
+**Migration.**  The default standoff is unchanged for every field whose envelope
+is flat -- the beam term is exactly `0.0` there, verified over the resolver's own
+6 NA x 10 extent calibration matrix (60 cells, 0 with a non-zero beam term, and
+the resolved leg bit-identical).  On a field whose envelope carries residual
+curvature the leg is LONGER and the answer more accurate; if a caller needs the
+old number, pass `standoff=` explicitly.  The new guard refuses configurations
+that previously returned a silently-wrong spot: `on_focus_containment='warn'`
+returns the field and says so, `'ignore'` restores the old silence.  Three
+existing test arms that deliberately exercise a broken readout now pass
+`on_focus_containment='ignore'` (see "Changed -- tests" below).
+
+### Fixed -- carrier: `carrier_referenced_fit_radius` fits about the beam, not the grid origin (C2)
+
+`_fit_carrier_inv` built its coordinates about the grid origin with no `centre`
+argument, although every sibling helper in the module has one
+(`_envelope_amp_radius`, `_envelope_amp_centroid`, `_radial_carrier_phase`,
+`_exact_sphere_eikonal`, `_tilt_exactness_phase`, `_sphere_parab_conversion`).
+Because the estimator is a moment, a beam decentred by `x0` carrying a perfect
+parabola about its OWN centre read `R*(1 + 2 x0^2/w^2)`, and a FLAT wavefront
+carrying only a uniform tilt read a finite radius.  Measured
+(`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/repro/CARRIER/p4_fit.py`; `lambda = 1.31 um`, N = 512, dx = 2 um, w = 100 um,
+R = 50 mm):
+
+```
+decentred parabola            before -> after   (truth 1.0000)
+  x0 = 0.5 w   R_fit/R        1.5000 -> 1.0000
+  x0 = 1.0 w   R_fit/R        3.0000 -> 1.0000
+  x0 = 2.0 w   R_fit/R        9.0000 -> 1.0000
+decentred pure TILT           before -> after   (truth inf)
+  L = 0.002, x0 =  50 um      0.0750 m -> 4.8e+15 m
+  L = 0.020, x0 =  50 um      0.0075 m -> 2.5e+14 m
+  L = 0.020, x0 = 200 um      0.0113 m -> 6.8e+13 m
+```
+
+`carrier_referenced_fit_radius` gains `centre='auto' | 'origin' | (x0, y0)`,
+defaulting to `'auto'` = the intensity centroid; a non-default centre also
+projects the residual tilt out of the phase slope before the curvature moment is
+taken, so a decentred tilt cannot masquerade as `R` even when the centre is not
+exactly the centroid.  `_envelope_amp_centroid` sub-pixel-snaps to exactly
+`(0, 0)`, so every effectively-centred field takes the historical origin
+arithmetic BIT for bit and no on-axis answer moves; `centre='origin'` pins the
+historical behaviour unconditionally.
+
+`carrier_referenced_aperture(refit_carrier=True)` deliberately keeps its internal
+fit about the grid origin, because `_rereference` builds its screen on the
+centred grid and the two are a matched pair; that is now stated in its docstring
+with the decentred alternative (fit with `centre='auto'`, pass the result as
+`new_carrier=`).
+
+### Fixed -- carrier: a tilted complex64 chain stays complex64 (C3)
+
+Three chain sites applied the tilt obliquity piston as
+`env * np.exp(1j*k0*own*(ob-1))`.  `np.exp(1j*x)` is a numpy complex128 SCALAR,
+which is STRONG under NEP 50 and promoted the complex64 envelope; nothing cast
+back until the group exit, so `E_full` and every full-grid phase screen in
+between ran at complex128 -- defeating the v5.44 complex64 memory campaign for
+exactly the tilted per-order DOE-fan configuration it targeted.  Measured
+(`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/repro/CARRIER/p8_c64chain.py`, one-singlet chain, complex64 input):
+
+```
+carrier = inf                             -> complex64  (unchanged)
+carrier = TiltedCarrier(inf, L=0.02, ...) -> complex128  =>  complex64
+```
+
+Fixed by wrapping the scalar in `complex(...)` at all four obliquity sites and in
+`_carrier_step_fast`'s NumPy amplitude/piston scale (which additionally removes
+one full-grid complex128 temporary per leg for a complex64 field).  Bit-identical
+on a complex128 chain; on a complex64 one the product now rounds once instead of
+twice.
+
+`carrier_field.py`: `CarrierSpec.phasor_on` gains `dtype=`, routing the sphere
+through `_phasor_rows` and forwarding the dtype to `_tilt_ramp` /
+`_tilt_exactness_phase`; `full_field()`, `from_full_field()` and `re_reference`
+pass the envelope's own dtype, and `aggregate`'s accumulator is sized from
+`np.result_type(np.complex64, *[f.envelope.dtype ...])` the way the multi
+orchestrator already does.  `CarrierField.full_field()` on a complex64 envelope
+returns complex64 (was complex128); the complex64 phasor agrees with the narrowed
+complex128 one to one float32 rounding (measured <= 1.2e-07, flat in the
+argument).  `phasor_on`'s own default is unchanged (complex128).
+
+**Migration -- `aggregate` now sums at the members' own dtype.**  An
+all-complex64 fan is accumulated in complex64 where it used to be widened to
+complex128 unconditionally, so `aggregate(...).field.envelope.dtype` follows the
+inputs and the coherent sum carries float32 accumulation error: measured
+**7.6e-08 relL2** against the complex128 sum of the same 16 fields, inside the
+`sqrt(K)*eps32` = 4.8e-07 random-walk bound.  That is the point of the change
+(4.29 GB saved per grid at N = 16384, and it is the rule
+`propagate_traced_carrier_chain_multi` already used), but a caller who needs the
+old precision from complex64 storage must now ask for it -- pass complex128
+envelopes, or widen with `dataclasses.replace(f, envelope=f.envelope.astype(
+np.complex128))` before aggregating.  Any complex128 member still widens the
+whole sum, as `np.result_type` requires.
+
+### Performance -- carrier: separable reference phases, an allocation-free transfer function, and an in-place fine-grid rescale (C4)
+
+All bit-exact or bounded by a measured, derived tolerance.  No test asserts a
+timing.
+
+* **`_radial_carrier_phase`, `_tilt_ramp` and `_rereference` are built as outer
+  products.**  `exp(i a (x^2+y^2))` factorises exactly as
+  `exp(i a x^2) (x) exp(i a y^2)`, so the screens need `2N` exponentials instead
+  of `N^2`.  Measured `_radial_carrier_phase` **6.9x** faster at N = 2048
+  (197.0 -> 28.6 ms) and **11.5x** at N = 4096 (805.5 -> 70.1 ms), at
+  **3.50 -> 1.01** complex128 full grids of `tracemalloc` peak; `_tilt_ramp`
+  **4.9x** at N = 2048; `_rereference` 3.50 -> 2.01 grids.  End to end,
+  `carrier_referenced_reconstruct` is 4.7x faster at N = 1024 (63.6 -> 13.3 ms)
+  and 4.4x at N = 2048 (248.6 -> 55.8 ms) at 3.50 -> 2.00 grids.
+  The regrouping is not bit-identical: measured max difference 1.1e-13 (N = 2048)
+  and 5.7e-13 (N = 4096), against the ~1e-11 rad float64 representation noise of
+  the `k r^2/2R` ~ 1e5-1e6 rad arguments these screens carry, i.e. two decades
+  inside the existing noise.  `_SEPARABLE_CARRIER_PHASE = False` restores the
+  whole-grid `meshgrid` build bit for bit (the fail-before switch).
+* **`_exact_envelope_tf_step` builds `H` with `cos`/`sin` into `H.real`/`H.imag`
+  and short-circuits the untilted path in place.**  Profiled, this build was 60 %
+  of a carrier leg at N = 2048 (tottime 0.711 s of 1.181 s cumtime, against
+  0.223 / 0.208 s for the two FFTs).  Measured **4.00 -> 2.00** complex128 grids
+  of peak and 1.54x on the isolated build -- at **exactly 0.0** difference, at
+  every shape tested (N = 63/64/65/128/256, tilted and untilted): `np.exp` of a
+  pure-imaginary argument IS `cos + i sin` through the same libm, and the
+  untilted re-association uses addition and multiplication only, both commutative
+  to the bit in IEEE-754.  A carrier leg now peaks at 2.00 grids instead of 4.00.
+  The same `cos`/`sin` build goes into `_tf_phase_to_H` (the CuPy / JAX kernels'
+  NumPy arm) and `_asm_axis`.
+* **`_fourier_upsample_crop` scales in place.**  `out` is the fresh
+  `np.fft.fftshift` result its own BUFFER OWNERSHIP note establishes aliases
+  nothing, so `out *= scale` saves one full FINE-grid temporary -- 4.29 GB at the
+  shipped `n_fine_cap = 16384`, on the function the memory audit already had
+  running twice per exact final leg.  Values unchanged (elementwise product;
+  measured relL2 5.3e-16 against a raw-numpy oracle).
+* **`_envelope_amp_radius` and `_fit_carrier_inv` broadcast instead of
+  `meshgrid`.**  Bit-identical (verified over both estimators, all three axes and
+  both centre branches); `_envelope_amp_radius` 1.6x faster (98.2 -> 60.8 ms at
+  N = 2048).
+
+### Fixed -- carrier: the P3 cluster (C5)
+
+* **`_freq_sq_1d` deleted.**  It had NO call sites and still carried the `- N/2`
+  offset that defect D7 fixed everywhere else, while `_freq_sq_1d_bld`'s
+  docstring asserted the two agreed.  Measured at N = 5 they did not:
+  `[9.87 3.55 0.39 0.39 3.55]` against `[6.32 1.58 0. 1.58 6.32]`.  The false
+  claim is gone with it; the surviving builders are `fftfreq` to the ulp at both
+  parities.
+* **`_asm_axis`'s band-limit mask is back in register at odd N.**  `H` is built on
+  the `N//2` frequency axis and the Matsushima mask used `N/2`, so at ODD `N` the
+  mask sat half a bin out of register with the transfer function it masks
+  (measured 3.85e3 1/m at N = 65, dx = 2 um): one bin too many kept on one side,
+  one too many dropped on the other.  Now relL2 0.000e+00 against a hand-built
+  1-D angular spectrum at N = 64 / 65 / 127.  Even `N` is unaffected
+  (`N/2 == N//2` exactly), so the whole validated surface is bit-identical.
+* **The chain's `gap_kernel` reaches the paraxial focus readout.**  It had
+  stopped at the gap legs and the bare final leg, so
+  `carrier_referenced_focus_readout`'s internal carrier leg always ran its own
+  `'auto'` -> `'exact'` default and a chain asked for `'fresnel'` -- whose whole
+  documented purpose is to be pinned FP-identical to prior releases -- got a
+  MIXED chain.  Both defaults are `'auto'`, so no shipped default path moves.
+  The chain's `gap_kernel` is now documented (it had no Parameters entry at all),
+  including the two legs it deliberately does NOT reach: the exact final readout
+  and the high-NA fine retrace run no carrier transport at all, so there is no
+  kernel there to select.
+* **`carrier_referenced_focus_readout` gains `tilt=`**, forwarded to its internal
+  carrier leg, and `propagate_traced_carrier_chain` passes the congruence's tilt
+  on the tilted paraxial landing.  That leg had been transported by an UNTILTED
+  kernel while the chain's own `gap_kernel` prose claimed the exact kernel
+  "carries the tilt to all orders"; the envelope's diffraction there is
+  anisotropic (`z/N^3` along the tilt, `z/N` across it, +0.32 % of effective
+  distance at 46 mrad).  The chief-ray advance and the obliquity piston stay with
+  the caller, exactly as on a gap leg.
+* **`_sphere_parab_conversion` takes `dy`** (it built its y axis on `dx`, so a
+  non-square-pixel chain would have converted the y axis against the wrong
+  pitch); the band-limit radius `r_safe` now takes the coarser of the two
+  pitches.  Every shipped call site is square, so `dy=None`/`dy=dx` is
+  bit-identical.
+* **`CarrierField` announces attribute assignment as deprecated** and becomes
+  hard-`frozen` at v5.48, joining its already-frozen `CarrierSpec` and
+  `FieldGrid` members.  Assigning to a built field bypasses every
+  `__post_init__` invariant -- envelope shape vs the grid, complexity,
+  wavelength, provenance canonicalisation -- and could leave a field whose grid
+  no longer described its array.  The assignment still takes effect (this is the
+  announcement half of the cycle), so no caller breaks; migrate to
+  `with_provenance` / `re_reference` / `dataclasses.replace` / a fresh
+  `CarrierField`, and for in-place accumulation to
+  `np.add(acc.envelope, other, out=acc.envelope)`, which is the same arithmetic
+  bit for bit and needs no rebind.
+* **Self-contradicting comments corrected** in `_carrier_step_fast`
+  (`'auto'` "resolves by BACKEND" four lines above `'auto'` "resolves to 'exact'
+  everywhere") and `propagate_carrier_referenced` (a fast path described as
+  byte-identical "on the default `gap_kernel='fresnel'`" when the default is
+  `'auto'`), and the in-code claim that the exact kernel is "the physically
+  correct transfer function" for a SCALED-frame leg is now stated as what the
+  derivation supports (the exact kernel of the paraxially-reduced envelope leg;
+  the two kernels are measured to agree to ~1e-4 relative on a real carrier leg).
+
+### Added -- carrier: readout diagnostics published per stage
+
+`carrier_referenced_focus_readout`'s private `_period_out` dict now also
+receives `containment` / `containment_model` (beam radii of co-moving half-width
+at the stop plane, measured and modelled), `standoff`, and
+`window_energy_frac` -- the Bluestein window's power as a fraction of the stop
+plane's.  `propagate_traced_carrier_chain` publishes them on the target stage as
+`readout_containment` / `readout_containment_model` / `readout_window_energy`,
+so the margins are readable without catching a warning, exactly as the `gap_*`
+diagnostics are.
+
+A window is a SUB-window of one Bluestein period, so its power cannot exceed the
+stop plane's; above `1 + _FOCUS_READOUT_WINDOW_ENERGY_TOL` the transform has
+folded periodic REPLICAS in and the surplus is energy it created rather than
+measured.  That tripwire warns (silenced by `on_focus_containment='ignore'`) and
+is only reachable with `on_replica` downgraded; measured worst 0.999863 across
+the resolver's 60-cell calibration matrix, against 169.0 on a deliberately
+replica-laden window in `test_niche_tight_focus_readout`.
+
+### Changed -- tests
+
+* `tests/unit/test_audit2609_a6_carrier.py` (new, 79 tests) pins C1-C5.
+* `test_niche_c5_exact_tilted_reference.py::test_the_sphere_parabola_conversion_is_untouched`
+  asserted `np.array_equal(_radial_carrier_phase(...), np.exp(...))`, i.e. the
+  whole-grid build bit for bit.  It now asserts the derived 1e-11 rad agreement
+  bound AND the byte-identity behind `_SEPARABLE_CARRIER_PHASE = False`, so the
+  pin survives as the fail-before switch rather than as a blocker.
+* Five fixtures now waive `on_focus_containment` explicitly:
+  `test_niche_r9_highna_final_leg.py` (the paraxial arm the test asserts
+  `ee_par < 0.10` on), `test_niche_c1_consolidation.py` (the "no tilt ramp"
+  arm it asserts collapses to 3e-6 of the shipped peak, plus the focus-readout
+  whitelist fixture), `test_niche_d3_guards.py` (the multi-congruence FAN
+  fixture, whose second moment is taken across the beam SEPARATION) and
+  `test_niche_d5_dx_flatness_gate.py` (the `paraxial_leg` TEETH arm, a
+  deliberately reverted configuration at FWHM 8.58 um / EE2 8.4 %).  In every
+  case the arm is a DELIBERATE fail-before that the new guard correctly
+  refuses, so the waiver is the same kind, and for the same reason, as the
+  `on_replica='ignore'` already sitting next to it; the guard's own default
+  refusal is pinned in the new test file instead.  The r9 test additionally
+  now asserts that the un-waived call IS refused.
+* `test_carrier_field.py::test_aggregate_refuses_mixed_wavelengths` constructed
+  its second wavelength by assigning onto a built field; it now builds one, and a
+  new test pins the deprecation.
+
+<!-- WP-A24: Traced-carrier chain: decentre calibration re-measured, d6 bar restated -->
+### Fixed -- traced carrier chain: the shipped decentre calibration was stale, and its ordering had inverted
+
+`propagate_traced_carrier_chain`'s `decentre_fit_frac` warning
+(`lumenairy/propagators/carrier.py`, `_check_decentred_fit`) quoted a
+2026-07-29 measurement of the `K = -n^2` conic stand-in -- "0.00 w -> 0.997;
+0.25 w -> 1.002; 0.50 w -> 1.005; 0.75 w -> 0.977; 1.00 w -> 0.983;
+1.50 w -> 0.923" (chain / independent ray-trace + Kirchhoff oracle, EE2
+ratio).  Re-measured on the same stand-in, the same oracle and the same metric
+on 2026-09-12: **0.970 / 1.010 / 1.008 / 1.002 / 0.986 / 0.903**.  The fall
+past one beam radius reproduces, but the on-axis and 1.0 w rows have **crossed
+over**, so the message stated the opposite of the measured ordering to every
+user whose fan trips the guard.  Both the message and `_check_decentred_fit`'s
+docstring now carry the re-measured six points, the date, the oracle's own
+floor on the ratio (6.4e-04, measured by sweeping the oracle's pupil patch
+2.2 -> 4.0 beam radii and halving its quadrature pitch), and the reason the
+ordering moved: it is set by the terminal fine retrace's v5.35
+inverse-characteristic evaluator, not by the decentre.  With
+`traced_kwargs={'inverse_map': False}` the same stand-in reads 0.997 on axis
+and 0.971 at 1.0 w -- the 2026-07-29 ordering -- and the evaluator improves the
+WORSE of the two arms (field-fidelity defect 1.90e-03 -> 1.61e-03, decentred
+FWHM ratio 1.0952 -> 1.0000), so it is a trade and not a loss.  No behaviour
+changed; the numbers a user is told did.
+
+### Changed -- `test_niche_d6_exact_tilted_leg`'s on-axis EE2 bar is a derived two-sided envelope
+
+`test_decentred_carrier_decentre_penalty_envelope`'s `assert r_on > 0.97` was a
+per-build number: a one-sided threshold parked 0.0266 under a single
+2026-07-29 reading of 0.9966, with no oracle error floor, no defect scale and
+no upper arm (`docs/TESTING_STANDARDS.md` S5).  It read **0.969787** and went
+red on a 2.2e-04 margin.  It is now `0.95 < r_on < 1.02`, derived: the oracle's
+own floor on this ratio is 6.4e-04; the 0.0268 between 0.9698 and 0.9966 is the
+inverse-characteristic evaluator's documented model choice (42x the floor, so
+both readings are real, and a bar inside that band measures the build); the
+lower arm sits 1.66x under the measured shortfall from 1 and 9.7x over the
+mildest on-axis defect the fixture has ever shown (a mis-placed readout centre,
+ratio 0.516; the paraxial route reads 0.217); the upper arm sits 0.010 over the
+largest value the metric takes anywhere on the stand-in's decentre curve
+(1.010 at 0.25 w).  The docstring's premise -- "the chain tracks the oracle on
+axis and slightly worse when the same beam is decentred" -- is corrected to the
+measured ordering, and the `r_off` arm's recorded value is updated
+(0.9828 on 2026-07-29, 0.9855 on 2026-09-12; its bar, already two-sided, is
+unchanged).
+
+### Added -- `tests/unit/test_audit2609_a24_decentre_calibration.py` (7 tests)
+
+Pins the corrected warning text (fail-before: the superseded 0.997 / 0.983 pair
+is asserted absent), the attribution -- `final_leg='exact'` never reaches
+`_default_focus_standoff` or the beam-referenced term WP-A6's C1 added to it,
+with the paraxial leg as its falsifier -- and the oracle floor the restated
+envelope is derived against (EE(2 um) moves 6.8e-04 between a 2.2 w and a
+3.2 w pupil patch, against a 5e-03 bar).
+
+### Note -- WP-A6 is NOT the cause of the d6 failure, and the bisect that said so is corrected
+
+`WP-A16_REPORT.md` section 8.3 attributed the d6 crossing to `a18ab074`
+(WP-A6, "focus readout sized from the BEAM").  Re-measured read-only with
+`git archive`: **`a18ab074^` already reads 0.969787**, bit for bit HEAD's
+value, and C1's resolver is not on that fixture's code path at all.  The step
+is `a4e8e855` 0.996575 -> `4e8ea247` 0.971526 (**-0.0251**, the
+inverse-characteristic evaluator, reproduced at HEAD to six digits by
+`inverse_map=False`) plus `0067d63b` 0.971526 -> `f602b72c` 0.969787
+(**-0.0017**, WP-A1's raytrace corrections), bit-stable through every commit
+since.  No change was made to the C1 resolver or its guard.
+
+<!-- WP-A1: Ray tracing and the exit-vertex helper -->
+### Added -- raytrace: one shared exit-vertex transfer (audit §15.1 / F-O3)
+
+`raytrace.trace()` leaves every ray at its intersection with the LAST surface,
+i.e. at `z = sag(rho)`, not on that surface's vertex plane.  The audit's
+exit-vertex census found SEVEN consumers reading `image_rays.opd / .x / .y`
+there -- six re-deriving the correction by hand, five of them getting some part
+of it wrong, and the two JAX copies disagreeing with the NumPy ones on grazing
+rays.  There is now exactly one implementation:
+
+* `TraceResult.at_exit_vertex(n_exit=None)` -- returns a NEW `RayBundle`
+  transferred to the exit vertex plane; `n_exit` defaults to the index of
+  `surfaces[-1].glass_after` at the trace wavelength (`glass_before` when the
+  last surface is a mirror).
+* `raytrace.exit_vertex_transfer(bundle, n_exit)` -- the functional form for
+  callers that hold a bare bundle.
+* `raytrace.jax_trace.exit_vertex_transfer_jax(state, n_exit)` -- the
+  JAX-traceable twin (`jax.grad`-safe at the grazing boundary).
+* `raytrace.EXIT_VERTEX_GRAZING_TOL` (`1e-30`) -- the shared `|N|` tolerance.
+
+Semantics: signed `t = -z/N` on ALIVE rays only; `opd += n_exit*t`;
+`x, y += (L, M)*t`; `z = 0`.  Grazing rays (`|N| <= 1e-30`) are KILLED with
+`RAY_MISSED_SURFACE` instead of being teleported to the vertex plane with zero
+optical path; dead rays are frozen exactly as they were.  The operator is
+idempotent and never mutates its input.  Measured against the analytic
+vertex-plane OPL `n_exit*(-sag/N)` on sphere / parabola / hyperbola / oblate
+ellipsoid exit surfaces: `max |delta| = 0.0e+00 m`.  On a curved-rear singlet
+the term the consumers were missing is a pure defocus: `-1.117e-03 m` of
+`rho^2` with `|c4/c2| = 0.064`.
+
+`intersection._intersect_surface` (flat branch), `intersection._transfer` and
+`ray_fan.refocus` now share the same `vertex_plane_transfer_t` kernel, so the
+four "advance to a `z = const` plane" primitives use identical arithmetic and
+one definition of "grazing".
+
+Migration note for the other work packages: replace every hand-written
+`t = -z/N; opd += n*t; x,y += (L,M)*t; z = 0` block with
+`result.at_exit_vertex()` (or `exit_vertex_transfer(bundle, n)` /
+`exit_vertex_transfer_jax(state, n)`).  The helper differs from those copies in
+four ways:
+
+1. Grazing rays (`|N| <= 1e-30`, finite) die with `RAY_MISSED_SURFACE` rather
+   than being teleported to `z = 0` with zero OPL (NumPy copies) or given
+   `t = -z/1e-30` (the two `_lens_jax` copies).
+2. A NOT-FINITE `N` dies with `RAY_NAN` -- it fails the same `|N| > tol` test
+   but is a numerical fault, not a geometry one.
+3. Dead rays keep their pre-transfer state, **`z` included**.  A vignetted ray
+   therefore reports the `z` at which it died, not `0`; mask on `alive` before
+   reading any coordinate.  (`_transfer` adopted the same policy, so this is
+   already true of `image_rays.z` before you call the helper.)
+4. The bundle's dtype is preserved on every field -- `n_exit` is validated in
+   float64 and then cast to `bundle.opd`'s own dtype, so a uniformly-float32
+   bundle no longer comes back with `opd` alone widened to float64.
+
+The helper itself never mutates its input.  The three in-package kernel sites
+do, and since this release "in place" includes the ARRAYS:
+`intersection._advance_along_rays` writes through `rays.x/.y/.z/.opd` with
+`np.add(..., out=)`, so a direct caller of `_intersect_surface` / `_transfer`
+that passes a bundle aliasing its own buffers will see it change.  `trace` /
+`trace_world` operate on a private `rays.copy()` and are unaffected.
+
+### Fixed -- raytrace: `opd_fan_data` had no reference sphere (R1)
+
+`opd_fan_data` / `opd_fan_data_world` returned `(image_rays.opd - opd_chief)`,
+the OPL to each ray's OWN intercept, which differs from the wavefront error at
+FIRST order in the transverse aberration (`W_plane - W_true = eps sin(theta')`).
+Each ray is now referenced to a reference sphere centred on the chief ray's
+image point and passing through the exit pupil (Welford §4; the convention
+`analysis.eval_image_plane_wfe(sphere_tangent='exit_pupil')` already used).
+
+Measured at `rho = 1` against an independent exact singlet trace (ray/sphere
+intersection + vector Snell + straight leg to the Gaussian image point, no
+library code):
+
+| system | before | after | oracle |
+|---|---|---|---|
+| f/4 plano-convex (convex first) | **+36.194 w** | -11.720 w | -11.714 w |
+| f/4 plano-convex (flat first) | **+151.789 w** | -45.063 w | -45.054 w |
+| f/20 plano-convex | +0.0545 w | -0.01813 w | -0.01813 w |
+| f/50 plano-convex | +0.0014 w | -0.000464 w | -0.000464 w |
+| spherical mirror R=-200 mm, h=25 mm | **+64.502 w** | -20.611 w | -20.774 w (Seidel -S1/8) |
+
+i.e. the wrong SIGN and 3.1x the magnitude at f/4, now agreeing with the oracle
+to 0.0067 waves (the residual is the second-order difference between the
+exit-pupil-tangent and last-surface-tangent reference-sphere conventions).  The
+aberration-free control is unchanged: a parabolic mirror gives PV 7.0e-11 waves
+before and after.
+
+New keyword `reference_sphere_radius` (default `None` = derive from the exit
+pupil; `np.inf` selects a reference PLANE; a positive float overrides).  When
+the prescription does not end at or near an image plane there IS no image point
+to reference to; the function now emits a `RuntimeWarning` naming the geometry
+and falls back to the reference-plane limit instead of returning NaN and
+~1400-wave garbage.
+
+### Fixed -- raytrace: off-axis OPD fans carried a launch-plane tilt (R2)
+
+`make_fan` / `make_ray` launch on the `z = 0` PLANE with `opd = 0`, which for a
+field-angle bundle is not a wavefront: every ray at height `y` has already
+travelled `y sin(theta)` relative to the common incident wavefront.  The OPD
+fans now seed the **entrance eikonal** `L*x + M*y` on both the fans and their
+chief rays.  Fitted linear term of the fan on an f/4 plano-convex singlet
+(25 mm pupil, 587.6 nm):
+
+| field | before | after |
+|---|---|---|
+| 0.5 deg | **-185.64 w** | +0.01 w |
+| 2.0 deg | **-744.06 w** | +0.06 w |
+| 5.0 deg | **-1879.86 w** | +0.15 w |
+
+against 37.6 waves of real (quartic) aberration -- a 50:1 contamination at
+5 deg.  Bit-identical on axis.
+
+`_make_bundle` gains an opt-in `opd_seed={'plane', 'eikonal'}` (default
+`'plane'`, i.e. unchanged) and `raytrace.trace.seed_entrance_eikonal(rays)` is
+exported as the functional form, including the `N*z` term for bundles launched
+off the `z = 0` plane.  The default is deliberately NOT changed: `_make_bundle`
+is the shared launcher for ~20 consumers, two of which (`_lens_traced.py`'s
+v5.25.1 H6 `_carrier_W_fn`, and the asymptotic canonical fit) add their own
+entrance eikonal downstream and would double-count it.
+
+### Fixed -- raytrace: `seidel_coefficients` ignored conic + aspheric terms (R3)
+
+The per-surface loop read only `radius` / glasses / `thickness` / `is_mirror`;
+`grep -n "conic\|aspheric" seidel.py` returned zero hits.  The Welford §8.5
+aspheric contribution `dS_I = 8 (n2 - n1) A4_eff h^4` with
+`A4_eff = conic/(8 R^3) + A4` is now added to S1, and its
+`(y_chief/y_marginal)^{1,2,3}` scalings to S2 / S3 / S5 (S4, Petzval, is
+curvature-only and unaffected), in all three branches (mirror, curved refractor,
+flat-base asphere -- a Schmidt plate is the last of those).
+
+| case | S1 before | S1 after | real-ray rho^4 oracle |
+|---|---|---|---|
+| mirror R=-200 mm, k=0 | +9.765625e-05 | +9.765625e-05 | -12.2047 um (-S1/8 = -12.2070) |
+| mirror R=-200 mm, k=-0.5 | **+9.765625e-05** | +4.882813e-05 | -6.1023 um (-S1/8 = -6.1035) |
+| mirror R=-200 mm, k=-1 (parabola) | **+9.765625e-05** | **1.355e-20** | 0.0000 um |
+| mirror R=-200 mm, k=-1.5 | **+9.765625e-05** | -4.882812e-05 | +6.1016 um (-S1/8 = +6.1035) |
+| singlet A4 = -500 m^-3 | **+5.320645e-05** | +2.737848e-06 | -0.3326 um (-S1/8 = -0.3422) |
+| singlet A4 = -2000 m^-3 | **+5.320645e-05** | -1.486679e-04 | +18.6130 um (-S1/8 = +18.5835) |
+
+Agreement with the real-ray rho^4 fit is 0.14-0.29 % across
+A4 in {0, +-250, +500, -1000, -2000} m^-3 (the residual is genuine fifth order)
+and exact (1.4e-20) for the parabola at every k.  A parabolic mirror at infinite
+conjugate is now reported as aberration-free, and an A4 = -500 aplanatised
+singlet as 0.34 um rather than 6.65 um.
+
+The docstring now states what IS and is NOT included, and a `RuntimeWarning`
+names any surface whose geometry contributes nothing to the returned sums:
+biconic `radius_y` / `conic_y` / `aspheric_coeffs_y`, `freeform`, the
+field-frame decenter/tilt block, and a power-2 aspheric coefficient (which
+changes the paraxial curvature) -- none of which a rotationally-symmetric
+third-order expansion can represent at all -- and `aspheric_coeffs[6]`, `[8]`,
+... , whose third-order contribution is genuinely ZERO because they generate
+fifth- and higher-order aberration.  The A6/A8 arm is DISCLOSURE ONLY: the
+sums are bit-identical with and without such a coefficient (pinned with
+A6 = 1e9), but a caller who tuned an A6 term and saw the sums not move
+deserves to be told the coefficient was read and dropped.  Silence of exactly
+that kind is what let this whole finding survive.
+
+### Fixed -- raytrace: conic surfaces falsely reported RAY_MISSED_SURFACE (R4)
+
+`intersection._intersect_surface`'s Newton branch seeded from the ray-SPHERE
+quadratic and used ITS discriminant as the miss test.  A sphere of radius `R`
+only exists for `h <= |R|`, so any ray beyond that on a paraboloid, hyperboloid
+or flattened ellipsoid was killed although it genuinely hits the conic.  Both
+JAX kernels (`_intersect_jax`, `_intersect_jax_param`) carried the identical
+test.  All three now use the EXACT conic quadratic
+(`F = c(x^2+y^2) - 2z + (1+k) c z^2 = 0`) as both seed and miss test, solved in
+the Spencer & Murty (JOSA 52, 672 (1962)) stable form `t = e/q` with
+`q = -(b + sign(b) sqrt(disc))/2` -- which is also the near root by
+construction, preserving the v5.4.1 direction-aware behaviour for
+backward-propagating (post-mirror) rays.
+
+Thorlabs-class aspheric condenser R = 10.84 mm, k = -0.6 (conic valid to
+h = 17.14 mm), collimated axial rays:
+
+| h [mm] | before | after | true sag [mm] |
+|---|---|---|---|
+| 10.83 | alive, t = 6.095530 | alive, t = 6.095530 | 6.095530 |
+| 10.90 | **dead (err 3), t = 0** | alive, t = 6.186249 | 6.186249 |
+| 11.40 | **dead (err 3), t = 0** | alive, t = 6.863647 | 6.863647 |
+| 15.00 | **dead (err 3), t = 0** | alive, t = 13.988555 | 13.988555 |
+
+and a parabola R = 50 mm at h = 60 mm returns t = 36.000000 mm where it
+previously returned `alive=False, t=0`.  Agreement with the closed-form conic
+sag is `max |dz| = 8.7e-19 m` over h/|R| up to 1.8 including concave
+hyperbolas.  A 41-ray fan through the public `trace()` API on the condenser goes
+from 39/41 to 41/41 alive.  Genuine misses still die: an oblate ellipsoid
+(k = +2, domain h < |R|/sqrt(1+k)) kills rays outside its domain exactly as
+before.
+
+Unchanged: the pure-spherical fast path (`conic == 0`, no aspherics) keeps its
+own branch on both backends -- `max |dt| = 3.331e-16 m` vs an independent
+Spencer-Murty root over the audit's 480k-random-ray sweep, the same figure as
+before.  Anamorphic / freeform / field-frame surfaces keep the legacy sphere
+seed, since a conic discriminant is not a valid miss test for them.
+
+### Fixed -- raytrace: the diffraction-order kick omitted the medium index (R5)
+
+The grating equation conserves the tangential wavevector,
+`n2 L' = n1 L + m lambda_vac / Lambda`, so the kick applied to the
+post-refraction direction cosines carries a `1/n2`.  All four sites
+(`trace`, `trace_world`, `jax_trace._apply_doe_kick_jax`,
+`apply_doe_phase_traced`) applied `m lambda / Lambda` directly: exact in air,
+high by exactly `n2` at any interface into glass.  Measured on a grating on the
+glass side of an air -> N-BK7 interface (Lambda = 5 um, lambda = 1.31 um,
+m = 1): `L = 0.26200000` before vs `0.17425045` after, ratio 1.503583 = n(N-BK7)
+exactly -- a 50 % direction error (15.2 deg instead of 10.0 deg).
+
+The grating's own phase-screen OPL term `m lambda_vac x / Lambda` is
+index-INDEPENDENT (its transverse gradient must equal `n2 L' - n1 L`) and is
+unchanged; the two quantities are now computed separately so the identity holds.
+`apply_doe_phase_traced` gains `n_medium: float = 1.0` (default reproduces the
+pre-fix, air-correct behaviour); the in-trace kicks resolve the index from the
+surface's `glass_after` automatically.
+
+### Fixed -- raytrace: `rays_from_field` aliased at half the grid Nyquist (R6)
+
+`_angle_complex_gradient` used the two-pixel phase ratio
+`arg(E[j+1] conj(E[j-1])) / (2 dx)`, unambiguous only for
+`|L| < lambda/(4 dx)` -- HALF what the grid supports -- and wrapping silently
+above it.  It is now the symmetrised ONE-pixel circular mean
+`arg(u(E[j+1] conj(E[j])) + u(E[j] conj(E[j-1]))) / dx` (each phasor normalised
+before summing), exact to the full grid Nyquist.
+
+At lambda = 1 um, dx = 2 um (grid Nyquist |L| <= 0.25):
+
+| L_true | before | after |
+|---|---|---|
+| 0.150 | **-0.100000** | +0.150000 |
+| 0.200 | **-0.050000** | +0.200000 |
+| 0.240 | (aliased) | +0.240000 |
+| 0.260 | -0.240000 | -0.240000 (beyond the GRID Nyquist) |
+
+Boundary columns/rows now use a one-sided one-pixel difference instead of the
+clipped self-reference, so edge rays get the full direction cosine: measured
+ratio to truth 0.5000 before, 1.0000 after, over 128 edge rays.  The verified
+sign convention (5e-16) and the converging-wave focus (0.001 nm rms at +f) are
+preserved.  The old docstring claim that the two-pixel form "can detect
+evanescent rays" is removed -- measured, an evanescent `L = 0.49` came back as a
+benign `L = -0.01`.
+
+### Fixed -- raytrace: `_transfer` teleported grazing rays (R6)
+
+`_transfer` masked `t` to 0 for `|N| <= 1e-30` but reset `rays.z` to the next
+vertex plane unconditionally, so a ray parallel to the axis-normal planes was
+moved one gap downstream with ZERO optical path and stayed `alive=True,
+error_code=0` -- the "immortal phantom" that R-4 removed from
+`_intersect_surface`'s flat branch but not from here, and a reachable state
+because `trace`'s DOE branch keeps an `N == 0` order alive by design.  Measured
+on a bundle at `z = 1e-4` with `N = 0` through `_transfer(10 mm, n=1)`:
+`z=[0 0], alive=[T T], opd=[0 0], error_code=[0 0]` before;
+`z=[1e-4 1e-4], alive=[F F], opd=[0 0], error_code=[3 3]` after.  Dead rays
+(including the newly-killed grazing ones) now keep their `z`, matching the
+`_transfer_jax` freeze-dead-rays policy adopted in S3-12.
+
+### Performance -- raytrace: in-place position / OPL updates in the hot path (R6)
+
+`_intersect_surface`'s position+OPL block and `_transfer` allocated two
+N-sized temporaries per update line (~8 per surface).  Both now write through a
+single reusable buffer via `np.multiply(..., out=)` / `np.add(..., out=)`,
+guarded so a non-float64 or read-only bundle falls back to the allocating form.
+Output is BIT-IDENTICAL (the two roundings are the same two roundings):
+measured `max |dx| = max |dy| = max |dopd| = 0.0` on a 7-surface trace.
+
+Medians of 7 interleaved runs on a 7-surface prescription,
+`output_filter='last'`, box shared with other jobs:
+
+| N | before | after | speedup |
+|---|---|---|---|
+| 300 000 | 2806 ns/ray | 2676 ns/ray | 1.049x |
+| 1 000 000 | 2932 ns/ray | 2841 ns/ray | 1.032x |
+
+No peak-memory claim is made.  An earlier draft of this entry carried a
+`tracemalloc peak` column (70.7 -> 65.8 MiB, 235.6 -> 219.4 MiB); independent
+re-measurement (VERIFY-WP-A1) could not reproduce it -- medians of 3
+INTERLEAVED runs taken after warming both code paths read 178.3 MiB for BOTH
+implementations at N = 1e6 and 35.7 MiB for both at N = 2e5.  The allocating
+form frees each temporary as it rebinds the attribute, so the instantaneous
+peak differs by about one array rather than eight.  The speedup and the
+bit-identity above both reproduce.
+
+NOTE (behaviour change at the boundary): `_transfer` no longer resets a DEAD
+ray's `z`.  `image_rays.z` of a vignetted ray is now the `z` at which it died
+instead of `0` -- its `x`, `y` and `opd` were already frozen there, so the
+dead-ray record is self-consistent for the first time, but any consumer that
+read `image_rays.z` without masking on `alive` must now mask.  A ray whose `N`
+is not finite is killed with `RAY_NAN` rather than `RAY_MISSED_SURFACE`
+(grazing rays keep `RAY_MISSED_SURFACE`).  And `_advance_along_rays` writes
+THROUGH `rays.x/.y/.z/.opd` with `out=` rather than rebinding them, so a direct
+caller of `_intersect_surface` / `_transfer` that passes a bundle aliasing its
+own buffers now sees the mutation; `trace` / `trace_world` pass a private copy
+and are unaffected.
+
+### Fixed -- raytrace: the P3 bundle (R7)
+
+* `intersection._refract` -- the `RAY_TIR` stamp is now genuinely
+  first-failure-wins (`newly_tir & (error_code == RAY_OK)`), as its own comment
+  had promised since the matching aperture-block fix; the `np.where` was
+  unconditional and relabelled any code a ray already carried.
+* `raytrace.rays_from_field` -- `opd` is seeded from `np.angle(E)`, which is
+  WRAPPED into `(-lambda/2, +lambda/2]`.  This is now documented at three
+  levels (module, parameter, `Returns`) and a new `opd_phase={'wrapped',
+  'unwrapped'}` keyword (default `'wrapped'`, unchanged) unwraps the phase over
+  the sampled support for consumers that treat `RayBundle.opd` as a geometric
+  path.  Measured on a converging wave with 0.8 waves of true spread: returned
+  `opd` covered the whole [-494.6, +498.3] nm wrap interval.
+* `raytrace.trace_summary` -- the loss breakdown now includes
+  `evanescent=` (and an `unclassified=` column), so it sums to the reported
+  lost count when a `surface_diffraction` order goes evanescent.
+* `raytrace.trace._register_fixed_index` -- the `GLASS_REGISTRY` /
+  `_glass_cache` read-modify-write is now made under `glass._GLASS_CACHE_LOCK`,
+  the lock the GL-2 comment says exists to serialise exactly that.  The
+  import-time `'__thin_lens__'` registration is kept (it is load-bearing and
+  pinned by `tests/unit/test_audit_p1_glass_registration.py`) and documented as
+  deliberate, including the unbounded growth of content-derived index names.
+* `raytrace.raytrace_system` -- CLONES the last surface with the image distance
+  instead of mutating it in place, the pattern `trace_prescription` moved away
+  from in v4.13.2 (audit P1-NEW-J).
+* `raytrace.layout` -- the module docstring now states plainly that it contains
+  no layout GEOMETRY and points at `analysis.plotting.plot_lens_layout` and
+  `raytrace.spot_diagram`; the name is a v5.1.0 split artefact.
+* `differential._adrt_jax` -- walked the whole prescription TWICE
+  (`jacfwd(_state)` for the Jacobian, then `vmap(_full)` for the state and OPL).
+  One `jax.jacfwd(_full, has_aux=True)` pass now returns all three; the Jacobian
+  matches the NumPy dual backend to 3.3e-16 and the OPL/position exactly.
+* `raytrace.field_of_view` -- the finite-conjugate branch returned
+  `arctan((aperture/2)/object_distance)`, the object-space APERTURE half-angle,
+  which does not depend on the sensor and is a numerical aperture, not a field
+  of view.  With `sensor_half_height_m` it now returns the Gaussian-imaging
+  field of view (`m = -f/(s_obj - f)`, `h_obj = h_img/|m|`); without it the
+  legacy proxy is kept but emits a `RuntimeWarning` saying what it actually is.
+
+### Changed -- tests that pinned the old behaviour
+
+* `validation/raytrace/test_raytrace.py::t_opd_fan_small_for_singlet` passed a
+  bare singlet with no image surface, so the "OPD" it measured was the lens's
+  own converging curvature at its rear face (6.0 waves at f/40) rather than any
+  aberration -- it could not have failed for an aberrated lens.  It now appends
+  a flat image surface at the paraxial focus and the bar drops from 10 waves to
+  1.0 (measured 0.0001).
+* `validation/raytrace/test_raytrace.py::t_field_of_view_finite_conjugate`
+  asserted the aperture-half-angle formula, i.e. it pinned R7 as correct.  It
+  now pins the sensor-driven field of view and separately checks that the legacy
+  proxy still returns the old number behind its warning.
+
+### Added -- tests
+
+* `tests/unit/test_audit2609_a1_exit_vertex.py` (17 tests) -- the exit-vertex
+  helper against the analytic vertex-plane OPL on sphere / parabola /
+  hyperbola / oblate-ellipsoid CURVED-REAR fixtures, alive masking, grazing
+  kill, first-failure-wins, idempotence, non-mutation, `refocus(0)` equivalence,
+  `n_exit` inference (including the mirror case), and JAX parity +
+  grad-safety.
+* `tests/unit/test_audit2609_a1_raytrace.py` (48 tests) -- R1..R7, each against
+  an independent oracle and each asserting it is no longer the pre-fix value.
+
+<!-- WP-A5: Propagator kernels -->
+### Fixed -- propagators/vector_diffraction: Richards--Wolf returned `E_z` with the wrong sign (K16, P0)
+
+`richards_wolf_focus` returned the longitudinal component `E_z` with the
+sign OPPOSITE to `E_x` / `E_y`, on every call, since the function was
+written. `phi_p = arctan2(Yp, Xp)` is the APERTURE-point azimuth, while
+the textbook aplanatic strength vector is written in the RAY-DIRECTION
+azimuth `phi_ray = phi_p + pi`; `e_x` and `e_y` are even under
+`phi -> phi + pi` and were unaffected, but `e_z` is odd, so the `-` in
+`Pz = P*(-px*cp*s - py*sp*s)` (`vector_diffraction.py:347`) delivered the
+negative of the correct value. `|E_z|^2` is blind to the sign, so
+`debye_wolf_psf`, the GUI dock and every existing test were blind: no
+test pinned it. Wrong before this release: focal-field handedness and
+spin angular momentum, `S3` of the focal field, optical-force and
+spin--orbit calculations, and any coherent superposition using all three
+components — i.e. the entire reason the function returns `E_z`
+separately.
+
+Measured against an independently derived Debye--Wolf oracle (rigid
+rotation of the pupil polarisation reduced to the radial Bessel form
+`E_z/E_x = -2i I01/(I00+I02)`, `scipy.integrate.quad`; x-polarised
+uniform pupil, NA 0.5, f = 4 mm, lambda = 633 nm, Np = 256), per-component
+code/oracle ratios at `x_f` = 0.60 / 1.21 / 1.81 / 3.01 um:
+
+| component | before | after |
+|---|---|---|
+| `E_x` | +1.0006 / +0.9954 / +0.9994 / +0.9670 | unchanged |
+| `E_z` | **−1.0006 / −0.9954 / −0.9994 / −0.9670** | **+1.0006 / +0.9954 / +0.9994 / +0.9670** |
+
+`Im(E_z/E_x)` just off axis at `x_f > 0` moves from **+0.6966** to
+**−0.6966**, which is the sign Novotny & Hecht eq. 3.66 requires.
+Symmetries are untouched: `E_z` odd in `x` to 4.5e-16, `E_x` even to
+2.4e-16, `E_z` on the `y` axis 3.1e-19 of its own maximum.
+
+Files: `lumenairy/propagators/vector_diffraction.py`.
+Tests: `tests/unit/test_audit2609_a5_propagators.py::TestK16RichardsWolfEzSign`
+(4 tests).
+
+**Migration.** Any code that consumed `E_z` from `richards_wolf_focus`
+coherently — a three-component superposition, a Stokes/spin calculation,
+an optical-force integral — was wrong by the sign of that component and
+now is not. Intensity-only consumers (`debye_wolf_psf`, `|E|^2` maps) are
+bit-identical.
+
+---
+
+### Added -- propagators/vector_diffraction: the `pupil` coordinate convention is documented (K10, P3)
+
+Two auditors reached opposite conclusions about `richards_wolf_focus`'s
+pupil indexing because the docstring never stated it. It is the PHYSICAL
+EXIT-PUPIL (aperture) coordinate, not the projected ray direction; the
+two differ by a point inversion, invisible for a 180-degree-symmetric
+pupil and immediately wrong for coma, tilt, a decentred sub-aperture, a
+segmented aperture or a metasurface pupil. The convention is now stated
+in the `pupil` parameter docstring with the measurement that pins it (a
+pupil ramp `exp(+2j pi u x_p)` moves the focus to `x_f = +u lambda f`;
+measured +2.3600 um against a predicted +2.3737 um), and the `Returns`
+section states `E_z`'s symmetry and sign.
+
+Files: `lumenairy/propagators/vector_diffraction.py`.
+Tests: `...::TestK16RichardsWolfEzSign::test_k10_pupil_is_indexed_by_the_aperture_coordinate`.
+
+---
+
+### Fixed -- propagators/rs: the Rayleigh--Sommerfeld kernel created energy in the near field (K9, P0)
+
+`rayleigh_sommerfeld_propagate` point-sampled the RS Green's function on
+the padded `2N` grid. Its local phase gradient `k sin(theta) dx` exceeds
+the `pi`/pixel Nyquist limit whenever `z < 2 N dx^2 / lambda`, and
+nothing checked it — so on ordinary grids, with all-default arguments,
+the convolution CREATED energy. Reached by `propagate(method='rs')`,
+`propagate(method='hf')` and `propagate_huygens_fresnel` (a three-line
+delegation to RS). `bandlimit=True` was all-pass in exactly that regime
+(its cutoff exceeds the grid Nyquist under the same algebraic condition)
+and made things five decades worse outside it.
+
+`kernel` (new, `{'auto', 'transfer', 'spatial'}`, default `'auto'`) now
+routes between two discretisations of the same RS-I operator:
+`'transfer'` evaluates the exact RS-I transfer function
+`exp(i k z sqrt(1 - (lambda f)^2))` analytically in the FREQUENCY domain
+on the padded grid (with the evanescent set zeroed), and `'spatial'` is
+the historical point-sampled build. `'auto'` selects `'transfer'` below
+`2 N dx^2 / lambda` and `'spatial'` at and above it, so **every call at
+or above the threshold is bit-identical to v5.45** and only the regime
+the audit measured as broken is re-routed. `'spatial'` now RAISES inside
+its alias regime rather than returning the wrong field.
+
+Measured against an exact Hankel angular-spectrum oracle (Gaussian
+w0 = 6 um, lambda = 633 nm, z = 50 um):
+
+| grid | `P_out/P_in` before | after | relative L2 before | after |
+|---|---|---|---|---|
+| N = 64, dx = 2 um | 21.44 | **1.000000** | 4.50 | **5.3e-8** |
+| N = 128, dx = 1 um | 5.31 | **1.000000** | 2.08 | **6.1e-8** |
+| N = 128, dx = 2 um | 25.70 | **1.000000** | 4.95 | **5.3e-8** |
+
+Far field unchanged and bit-identical: 6.1e-8 / 6.3e-8 / 6.8e-8 /
+4.4e-8 at z = 200 um / 300 um / 1 mm / 3 mm on the N = 128 / dx = 1 um
+probe. The two branches converge onto each other as the grid is refined
+— at `z = z_crit` the step between them is 6.3e-5 / 1.0e-9 / 3.8e-14 at
+(N, dx) = (64, 0.50 um) / (128, 0.40 um) / (256, 0.25 um), always well
+below each arm's own error at that grid.
+
+Files: `lumenairy/propagators/rs.py`.
+Tests: `tests/unit/test_audit2609_a5_propagators.py::TestK9RayleighSommerfeldNearField`
+(17 tests).
+
+**Migration.** No signature change for existing calls. Near-field RS
+results (`z < 2 N dx^2 / lambda`) change — they were wrong. Pass
+`kernel='spatial'` to force the historical build; it raises rather than
+aliasing.
+
+---
+
+### Changed -- propagators/rs: the docstring now says what was measured (K8, K15, P3)
+
+Three claims were measured false and are replaced with the measurements:
+
+* "Near-field propagation (z ~ a few wavelengths) where ASM's
+  band-limiting can suppress valid high-frequency content" — the
+  opposite: at z = 50 um on the N = 128 / dx = 1 um probe, ASM with its
+  default `bandlimit=True` measures 6.1e-8 while the pre-v5.46 RS spatial
+  kernel was 2.08 (208 %) wrong.
+* "For intermediate distances they agree to machine precision when ASM
+  uses no band-limiting" — the RS-vs-ASM difference plateaued at 2.8e-2
+  (the point-sampling floor), not zero.
+* The `bandlimit` parameter is documented as NOT a near-field remedy,
+  with the measurement (4.4e-8 vs 1.8e-2 at z = 3 mm).
+
+RS's real advantage over single-grid ASM is now stated correctly: the
+zero padding makes it a LINEAR convolution, so it does not wrap energy
+around the grid (measured 4.4e-8 vs 7.6e-1 at z = 3 mm).
+
+Files: `lumenairy/propagators/rs.py`.
+
+---
+
+### Added -- propagators/fresnel, propagators/mft: a chirp-sampling guard on the single-FFT Fresnel kernels (K1, P1)
+
+`fresnel_propagate` samples the quadratic chirp `exp(i k r1^2/(2z))` at
+the grid pitch; the sum is a valid quadrature only for
+`z >= max(Nx dx^2, Ny dy^2)/lambda`, and nothing checked it. Measured
+against an 8x-oversampled direct Fresnel quadrature (N = 128, dx = 2 um,
+lambda = 633 nm, smooth Gaussian so the FIELD is fully sampled): relative
+error 3.34e-1 / 3.43e-1 / 3.92e-2 at three output points at
+`z = 0.25 z_crit`, with **zero** warnings. `fresnel_propagate_mft`
+evaluates the same aliased sum (the two agree to 3e-14 at every z, which
+is why the MFT sibling is not an oracle for this) and gets the same
+guard.
+
+A `RuntimeWarning` naming `angular_spectrum_propagate` now fires below
+the bound; values are unchanged. Measured after: 2 warnings at
+`z = 0.25 / 0.50 z_crit`, 0 at `z >= z_crit`.
+
+Files: `lumenairy/propagators/fresnel.py`, `lumenairy/propagators/mft.py`.
+Tests: `tests/unit/test_audit2609_a5_propagators.py::TestK1FresnelChirpGuard`
+(5 tests, including the counter-pin that it stays silent where the kernel
+is valid).
+
+---
+
+### Fixed -- backend/scipy: `jv(v, x)` computed `scipy.special.jv(x, v)` (K2, P1)
+
+`lumenairy.backend.scipy.jv` passed the array as the FIRST positional
+argument of a two-argument special function, transposing order and
+argument, while the JAX branch three lines above was correct — so the two
+backends disagreed and the NumPy branch returned a plausible wrong
+number. `_dispatch_special` gains an `arg_pos` keyword so the backend
+selector no longer has to be the first argument.
+
+| call | before | scipy / after |
+|---|---|---|
+| `jv(0, 2.0)` | +0.000000000 | +0.223890779 |
+| `jv(1, 3.0)` | +0.019563354 | +0.339058959 |
+| `jv(2, 1.5)` | +0.491293779 | +0.232087672 |
+| `jv(0.5, 4.0)` | +0.000160736 | −0.301920513 |
+| `jv(1, [1,2,3])` | [0.44005, 0.11490, 0.01956] | [0.44005, 0.57672, 0.33906] |
+
+No in-library consumer was affected (`elements/bor/*` import `jv` from
+`scipy.special` directly), so this was latent — but it is a module-level
+function in the public backend namespace.
+
+Files: `lumenairy/backend/scipy.py`.
+Tests: `tests/unit/test_audit2609_a5_propagators.py::TestK2BackendBesselArgumentOrder`
+(5 tests).
+
+---
+
+### Fixed -- propagators/sas: single-precision SAS lost its ASM−Fresnel correction to cancellation (K3, P1)
+
+`scalable_angular_spectrum_propagate` built its frequency axes and kernel
+phase arguments in the caller's real dtype, so a complex64 input formed
+`h_AS - h_Fr` — a cancellation of two quantities near 1 — in float32 and
+then multiplied it by `k z`. Measured `max|Delta(h_AS - h_Fr)|` float32
+vs float64 = **9.091e-08**, i.e. 2.9e-3 rad of phase error at
+z = 3.24 mm and **0.902 rad at z = 1 m** — and long distance is SAS's
+reason to exist. This contradicted the library's own complex64 contract
+("does not degrade with phase magnitude").
+
+The frequency axes and both chirp coordinate grids are now built in
+float64 unconditionally (the f64-carrier-then-cast recipe `fresnel.py`
+already uses), and the difference is evaluated through its
+cancellation-free closed form `-u^2/(2(1+sqrt(1-u))^2)`. Only the
+finished complex kernels are cast; the returned dtype is unchanged.
+
+Measured end-to-end, complex64 field against its complex128 twin, max
+phase error over the bright region:
+
+| z | before (kernel-level) | after |
+|---|---|---|
+| 3.24 mm | 2.9e-3 rad | **1.50e-5 rad** |
+| 1 m | **0.902 rad** | **6.76e-6 rad** |
+
+i.e. the error no longer grows with `k z` — it is flat at the float32
+FFT noise floor. In float64 the closed form is also exact where the
+subtraction lost everything below `u ~ 1e-4`; the resulting change to
+existing complex128 results is 1.7e-9 rad at z = 1 m.
+
+Files: `lumenairy/propagators/sas.py`.
+Tests: `tests/unit/test_audit2609_a5_propagators.py::TestK3SasSinglePrecisionCancellation`
+(2 tests).
+
+---
+
+### Performance -- propagators/asm: cap the transfer-function build's workspace (K5, P2, byte-identical)
+
+`_get_asm_H_natural` sized its row chunk at 10 % of the RAM budget, which
+resolves to the WHOLE grid below N ~ 8192 on a large box, so the float64
+kernel workspace was built full-grid. The streamed sibling already capped
+its band in elements for exactly this reason, but only for itself. A new
+`_ASM_H_BUILD_BAND_ELEMS = 1 << 18` caps the plain builder too, so the
+default path, every cold `_H_CACHE` build and the batch variant get it.
+
+Measured (tracemalloc, complex128, bandlimit on; one grid = 67.1 MB at
+N = 2048): H-build transient **4.06 -> 1.26 full grids** at N = 2048 and
+4.06 -> 2.03 at N = 1024, **byte-identical** output at both. Timing is
+flat (211.0 ms vs 222.3 ms median of 3 at N = 2048). At N = 32768 the
+kernel workspace goes from ~8.6 GB to ~134 MB.
+
+Not reproduced: the audit's implied improvement to the FULL cold ASM
+call. Measured in a cold process at N = 2048 the peak is 6.55 grids
+either way — with warm plans the H build is no longer the peak, and in a
+cold process the pyFFTW aligned-buffer allocation dominates.
+
+Files: `lumenairy/propagators/asm.py`.
+Tests: `tests/unit/test_audit2609_a5_propagators.py::TestK5AsmKernelWorkspaceCap`
+(2 tests).
+
+---
+
+### Performance -- propagators/fft_infra: one lock per pyFFTW ping-pong slot (K4, P2)
+
+`_build_plan_entry` allocated one `pyfftw.FFTW` plan per buffer but a
+single `threading.Lock` for the entry, and `_fft2` / `_ifft2` /
+`_fft2_nd` / `_ifft2_nd` held that one lock across copy-in and execute.
+The slot index is already advanced under `_PYFFTW_PLAN_LOCK`, so two
+threads always receive different plans and different buffers — there was
+nothing for them to race on, yet they serialised. Measured max
+simultaneous threads inside the pyFFTW critical section with 4 threads x
+6 calls on one (1024, 1024) complex128 shape: **1 before, 2 after** (the
+`n_bufs = 2` ceiling). The per-slot lock still guards the one real hazard
+— two callers wrapping around to the same slot.
+
+Files: `lumenairy/propagators/fft_infra.py`.
+Tests: `tests/unit/test_audit2609_a5_propagators.py::TestK4PerSlotPlanLocks`.
+
+---
+
+### Fixed -- propagators/fft_infra: the pyFFTW failure blacklist is keyed on (shape, dtype, direction) (K7, P2)
+
+`_PYFFTW_BAD_SHAPES` recorded the bare shape, so one complex128
+`MemoryError` at (512, 512) also blacklisted complex64 at the same shape
+— half the memory, likely to succeed — and the inverse direction, which
+has its own plan and buffer. Measured: after one simulated failure the
+blacklist was `{(512, 512)}` and a subsequent complex64 transform skipped
+pyFFTW. Entries are now `(shape, dtype.str, direction)` triples, matching
+the plan cache's own key minus `threads`; the warning names all three.
+
+Files: `lumenairy/propagators/fft_infra.py`.
+Tests: `tests/unit/test_audit2609_a5_propagators.py::TestK7PyfftwBlacklistKey`.
+
+---
+
+### Fixed -- propagators/asm, fft_infra, result: three small correctness / contract gaps (K8, P3)
+
+* **`_build_asm_H_square`'s "bit-exact" contract was false for odd N.**
+  It formed the frequency axis by DIVISION while the shared
+  `_get_or_make_freq_grids` multiplies by the reciprocal — up to 1 ULP
+  apart whenever `1/(N dx)` is inexact. Measured `max|dH| = 9.096e-13` at
+  N = 255 / dx = 0.5 um / `bandlimit=False`; now **0** at every parity
+  tested (N = 64, 127, 129, 255, 256). `_get_or_make_bandlimit`'s masks
+  use the same expression, closing the latent mask/kernel label
+  mismatch. This is the `shack_hartmann` per-lenslet path.
+* **The `_H_CACHE` handed its entries out writeable.** Two successive
+  `_get_asm_H_natural` calls at one key return arrays sharing memory, and
+  "callers must not mutate it in place" was a comment. Entries are now
+  stored read-only; the public `return_transfer_function=True` return
+  still copies and stays writeable.
+* **`PropagationResult.__array__` rejected numpy 2's `copy=` keyword.**
+  On numpy 2.4.6 `np.array(result, copy=True)` emitted a
+  `DeprecationWarning` and `np.array(result, copy=False)` raised
+  `ValueError`. Both now work.
+* The `_asm_H_from_kz` complex64 comment claimed an accuracy win the
+  measurements do not support (the naive `astype(complex64)` IS the
+  correctly-rounded value; the mod-2*pi fold is 1.58x WORSE at
+  `k z = 6e8`). The code is kept — it is genuinely needed on the JAX-x32
+  path and uses less transient memory — and the comment now says so.
+
+Files: `lumenairy/propagators/asm.py`, `lumenairy/propagators/fft_infra.py`,
+`lumenairy/propagators/result.py`.
+Tests: `tests/unit/test_audit2609_a5_propagators.py::TestK8BitExactnessAndCacheHygiene`
+(8 tests).
+
+---
+
+### Fixed -- propagators/hf, propagators/mhs: the resample renormalisation fabricated energy across a crop (K11, P1)
+
+`propagate_huygens_fresnel_freespace` and
+`mhs.prescription_subdomain(method='maslov')` each carried a verbatim
+copy of a `sqrt(p_in/p_out)` Parseval renormalisation that conflated two
+different things: the small interpolation drift of a bicubic
+`map_coordinates` (which should be corrected) and a genuine physical CROP
+when the requested window is smaller than the source's (which must not
+be). Measured on
+`propagate_huygens_fresnel_freespace(E, 1e-3, 633e-9, 2e-6, output_dx=0.5e-6)`
+at N = 64: the requested +-16 um window genuinely contains **67.27 %** of
+the native-grid power and the returned array carried **100.00 %** —
+amplitudes inflated **1.219x**, intensities 1.486x.
+
+One shared helper `_resample_preserving_window_power` now measures the
+reference power on the SOURCE grid restricted to the area the output
+pixels tile, so the correction is the interpolation drift alone, and a
+crop discarding more than a part in 1e6 is reported as a
+`RuntimeWarning` naming the retained fraction. When the target window
+covers the whole source the restriction is the identity and behaviour is
+unchanged. The duplicated block and its three stale cross-references are
+gone.
+
+Files: `lumenairy/propagators/hf.py`, `lumenairy/propagators/mhs.py`.
+Tests: `tests/unit/test_audit2609_a5_propagators.py::TestK11ResampleDoesNotFabricateEnergy`
+(2 tests, including the counter-pin for the uncropped case).
+
+---
+
+### Fixed -- propagators/hf: a 0.5 % pitch change was a silent no-op (K21, P2)
+
+`propagate_huygens_fresnel_freespace`'s same-grid short-circuit compared
+pitches with `np.isclose(dx, target_dx, rtol=1e-12)`, which still carries
+numpy's default `atol = 1e-8` — **10 nm in this library's metres**. A
+0.5 % pitch change at 1 um and a 10 % change at 100 nm both compared
+equal, so the un-resampled field came back LABELLED with the requested
+pitch: the "wrong sampling metadata" class the dispatcher raises for
+elsewhere. Now `abs(dx - target_dx) <= 1e-12*dx`; a genuine no-op still
+short-circuits bit-for-bit.
+
+Files: `lumenairy/propagators/hf.py`.
+Tests: `tests/unit/test_audit2609_a5_propagators.py::TestK21PitchGate`
+(3 tests).
+
+---
+
+### Fixed -- propagators/dispatch: `propagate(method='hf')` returns an ndarray like every other method (K20, P2)
+
+The `hf` free-space branch was the only output-grid-capable method that
+changed its RETURN TYPE — a bare ndarray with no grid kwargs, an
+`(E, dx)` TUPLE with either of them, including an `output_grid` equal to
+the input (a strict no-op) — while `asm` / `gbd` / `hfpi` returned an
+ndarray in both cases, and the dispatcher's own W9-4 message steers
+callers to `method='hf'`. With `return_result=False` — what
+`mhs.prescription_subdomain` uses — the tuple leaked. The dispatcher now
+unpacks it; the requested pitch is the caller's own argument.
+
+Files: `lumenairy/propagators/dispatch.py`.
+Tests: `tests/unit/test_audit2609_a5_propagators.py::TestK20UniformReturnType`
+(4 parametrised), and `tests/unit/test_v5_3_hf_freespace_output_grid.py`
+(3 tests updated — they PINNED the inconsistency).
+
+---
+
+### Changed -- propagators/hf: `chunk_output` is un-deprecated and honestly sized (K22, P2)
+
+`chunk_output` was deprecated in v5.17 as a no-op with a note naming the
+fix and then removing it. It is restored as a genuine output-batch size:
+the output coordinates are broadcast to `(n_chunk, 1, 1)` so one
+vectorised `opl_fn` evaluation covers a whole block of output pixels. A
+one-shot probe detects a callable that cannot take the batched form (the
+pre-v5.46 contract said the output coordinates are scalars) and falls
+back to the per-pixel path with a `RuntimeWarning`. Output is
+**bit-identical** for every value of `chunk_output`, with and without Van
+Vleck.
+
+**The audit's projected gain is not reproducible and the docstring says
+so.** Batching removes Python-level DISPATCH, which is a small share of a
+memory-bandwidth-bound computation; measured ladder on this workstation
+(medians of 5 interleaved runs, ms per output pixel, Van Vleck on,
+complex128):
+
+| N_in | c=1 | c=2 | c=4 | c=8 | c=16 | c=32 |
+|---|---|---|---|---|---|---|
+| 64 | 0.401 | 0.360 | **0.323** | 0.328 | 0.449 | 1.634 |
+| 128 | **1.450** | 1.465 | 2.099 | 7.077 | 6.422 | 6.419 |
+| 256 | **9.563** | 30.45 | 28.02 | 29.50 | 30.34 | 28.82 |
+
+The best available gain is **1.24x at N_in = 64**, and a batch whose
+working array leaves the L2 cache is 3–5x SLOWER. The auto rule therefore
+targets a ~128 KB working array, which selects the measured optimum at
+each of those three sizes. (The audit's "119 min -> minutes for 256^2" is
+not achievable by batching; this workstation measures 9.56 ms/px at
+N_in = 256, i.e. ~10 min for a full 256x256 output, and the docstring
+points at the Fourier routes instead.)
+
+Also on this path: the JAX branch accumulates batches into a Python list
+and assembles once instead of allocating a full output array per output
+pixel, and a complex64 caller now gets its kernel built in single
+precision after a float64 mod-one-cycle fold of `Phi` (which is in waves
+and of order `z/lambda`), instead of a complex128 grid built and thrown
+away.
+
+Files: `lumenairy/propagators/hf.py`.
+Tests: `tests/unit/test_audit2609_a5_propagators.py::TestK22HfQuadratureChunking`
+(4 tests); `tests/unit/test_audit_w6_propagators.py::TestP357ChunkOutputDeprecated`
+updated (it pinned the deprecation).
+
+---
+
+### Fixed -- propagators/hfpi, vectorial_hfpi: `wavelength` is keyword-required (K12, P1)
+
+`apply_aperture_diffraction` and `apply_vector_aperture_diffraction` took
+`wavelength: float = 0.0`, and the `1/(i lambda)` Kirchhoff prefactor was
+gated on `wavelength > 0` — so omitting it silently DROPPED the physics.
+Measured: every path weight wrong by exactly `1/lambda` = 1.5798e6 in
+magnitude AND by −90 degrees in phase, with zero warnings — precisely the
+failure the v4.11.2 prefactor work fixed. Both functions are in `__all__`
+and are the documented way to build a custom cascade by hand.
+`wavelength` is now keyword-required and raises on non-positive or
+non-finite values.
+
+Files: `lumenairy/propagators/hfpi.py`,
+`lumenairy/propagators/vectorial_hfpi.py`.
+Tests: `tests/unit/test_audit2609_a5_propagators.py::TestK12WavelengthIsRequired`
+(2 tests).
+
+**Migration.** Add `wavelength=` to any direct call. Every in-library
+call site already passed it; two validation call sites were updated.
+
+---
+
+### Fixed -- propagators/hfpi, vectorial_hfpi: the HFPI estimator is now the Huygens--Fresnel integral (K13, K18, P1)
+
+Two compounding normalisation defects made the returned amplitude depend
+on the OUTPUT PIXEL AREA and the SOURCE PIXEL COUNT, so merely rebinning
+the grids changed the answer with no physics change, and `|E|max` moved
+14x between 2 M and 8 M paths.
+
+* **K18 — the source-area factor.** The source pixel is drawn uniformly
+  over `Ny*Nx` pixels, so the unbiased estimate carries the whole
+  illuminated area `Ny*Nx*dx^2`; the code applied ONE pixel's `dx^2`.
+  Measured `sum(weights)/exact` against the closed-form source term:
+  1.000004 (1x1), 0.062140 (4x4), 0.003945 (16x16), 0.000260 (64x64) —
+  tracking `1/N_pix`, i.e. **4096x low at a 64x64 source**. After:
+  0.999985 / 1.0106 / 0.9515 / 1.2089, all consistent with 1 to the
+  Monte-Carlo noise of the probe.
+* **K13 — the output-binning Jacobian.** The exact bias law
+  `E[HFPI]/E_true = dx_out^2 cos(theta)/(N_src_px r)` was derived and
+  confirmed to MC noise (meas/pred 1.0068 and 0.9950 at z = 2 / 4 mm with
+  24 M paths at occupancy 1.000). Each landed path is now weighted by
+  `r/(dx_out^2 cos(theta_out))` at bin time, which supplies the missing
+  `1/r` spreading and the pixel-solid-angle conversion together.
+  `PathBundle` / `VectorPathBundle` gain a `leg` field carrying the
+  GEOMETRIC distance since the last emission (`opl` cannot serve: it is
+  the OPTICAL path on free-space legs and the absolute accumulated `opd`
+  on the prescription walk).
+
+Measured end-to-end against band-limited ASM (exact there: 6.1e-8 against
+the Hankel oracle) on a Gaussian w0 = 12 um, N = 32, dx = 4 um, z = 2 mm,
+read out as the unbiased least-squares complex scale:
+
+| | before | after |
+|---|---|---|
+| HFPI / ASM | 7.8e-12 (`dx^2/(N_pix z)`) | **0.976 – 1.012** across seeds and 0.5–8 M paths |
+
+`accumulate_to_grid` / `accumulate_vector_to_grid` gain
+`normalisation={'physical','legacy'}` (default `'physical'`), and refuse
+`'physical'` with an actionable message on a bundle whose landed paths
+have travelled zero distance instead of silently returning zeros.
+`propagate_hfpi_through_prescription` defaults to `'legacy'` and now
+WARNS, because that walk bins at the last surface rather than propagating
+to a separate output plane, so the last leg has zero length and the
+Jacobian is undefined there (deferred, see the report).
+
+The 38-line normalisation warning on `propagate_hfpi` was itself wrong —
+it listed "the source pixel area `dx^2`" under *does apply* — and is
+rewritten to the corrected accounting.
+
+Files: `lumenairy/propagators/hfpi.py`,
+`lumenairy/propagators/vectorial_hfpi.py`.
+Tests: `tests/unit/test_audit2609_a5_propagators.py::TestK18SourceAreaNormalisation`
+(3 parametrised), `::TestK13BinningJacobian` (2 tests).
+
+**Migration.** **Returned HFPI amplitudes change by orders of magnitude.**
+Phase structure (fringe positions, interference contrast) is unaffected.
+Pass `normalisation='legacy'` to restore the raw path sum. Code that
+re-normalised HFPI against an ASM reference should drop that step.
+
+---
+
+### Fixed -- propagators/hfpi, vectorial_hfpi: `rng=None` draws fresh entropy (K19, P1)
+
+`_spawn_rng`'s `None` branch is documented as "let each aperture pull
+from system entropy", but all five consumers wrote
+`RandomState(rng if rng is not None else 0)`, so the DEFAULT was the
+fixed seed 0 and that branch was unreachable. Measured: two default runs
+byte-identical, and identical to `rng=0`. HFPI is a `1/sqrt(N)`
+Monte-Carlo estimator sold on that convergence, and the canonical way to
+see its error is to re-run with a new seed — on the default path that
+error estimate was identically ZERO, so any ensemble / tolerancing /
+seed-averaging loop that did not vary `rng` reported a spuriously tight
+spread. All five sites now pass `rng` through unchanged.
+
+Files: `lumenairy/propagators/hfpi.py`,
+`lumenairy/propagators/vectorial_hfpi.py`.
+Tests: `tests/unit/test_audit2609_a5_propagators.py::TestK19RngDefaultDrawsEntropy`
+(3 tests, including the counter-pin that an explicit seed is still
+reproducible).
+
+**Migration.** Pass an explicit `rng=` for reproducible runs. Every
+existing determinism test in the suite already did.
+
+---
+
+### Fixed -- propagators/hfpi: `_spawn_rng` is a pure function of (parent, stream) (K24, P3)
+
+The `np.random.Generator` branch called `rng.spawn(stream_index + 1)[-1]`,
+which MUTATES the caller's generator on every call and discards
+`stream_index` children to use one — so "stream 1 drawn after stream 0"
+differed from "stream 1 drawn alone". It now derives the child from the
+parent's SeedSequence entropy, exactly as the `int` branch does. The JAX
+branch's `except Exception: pass` — which fell through to "return as-is",
+handing BOTH streams the identical key, the exact correlation the
+function exists to prevent — is narrowed and now warns.
+
+Files: `lumenairy/propagators/hfpi.py`.
+Tests: `tests/unit/test_audit2609_a5_propagators.py::TestK24SpawnRngIsAPureFunction`
+(2 tests).
+
+---
+
+### Added -- propagators/vectorial_hfpi: actual vector physics (K17, P1)
+
+The module's header advertised "the m-theory dipole obliquity tensor for
+vector-correct secondary-source amplitudes" and listed high-NA imaging,
+cascaded polarizing elements and birefringent elements as cases that
+REQUIRE it. No such tensor existed: the default path multiplied both
+Jones components by the same scalar, i.e. by the identity as far as
+polarisation is concerned. Measured — 24x24 source, two 200 um legs
+around a 40 um aperture, 60 000 paths, same seed — the vector `Ex` output
+was bit-identical to a scalar HFPI run on `Ex_in`
+(max|diff| = 1.9e-23), and a 45-degree linear input showed
+`|Ey/Ex - 1| <= 1.1e-16` over the WHOLE output grid: zero depolarisation,
+anywhere, at twice the cost of the scalar propagator. The opt-in
+`vector_projection=True` did rotate, but discarded the longitudinal
+component it created (8.8 % of the incident `|E|^2` at a 0.8 rad cone),
+multiplied by the scalar obliquity a second time, and never projected at
+emission.
+
+Implemented instead: `VectorPathBundle` carries `Ez`, and at emission and
+at every re-emission the three-component field is carried onto the path's
+own transverse plane by the RIGID ROTATION taking the previous
+propagation direction to the new one (Rodrigues; for `s_from = +z` it
+reduces term by term to the Richards--Wolf aplanatic
+`R_z(phi) R_y(theta) R_z(-phi)`). That rotation is orthogonal, so it adds
+no amplitude and cannot double-count the obliquity; the scalar Kirchhoff
+obliquity is applied exactly once. `Ez` is accumulated alongside `Ex` /
+`Ey` and returned on request.
+
+Measured after (24x24 source, 0.35 rad cone, 200 000 paths):
+
+| | before | after |
+|---|---|---|
+| `|E|^2` preserved by the projection | 0.841 (15.9 % dropped) | **1 − 1.1e-15** |
+| transversality `max|E'.s|` | n/a | **4.6e-16** |
+| x-pol: `|Ez|^2` fraction | **0** | **1.40e-2** |
+| x-pol: cross-polarised `|Ey|^2` fraction | **0** | **9.3e-5** |
+| 45-degree: `max|Ey/Ex − 1|` over the grid | **1.3e-16** | **0.143** |
+
+The module docstring is rewritten: the "m-theory dipole obliquity tensor"
+claim is deleted, what the module does and does NOT do is stated, and
+high-NA vector FOCUSING is routed to `richards_wolf_focus`.
+
+Files: `lumenairy/propagators/vectorial_hfpi.py`.
+Tests: `tests/unit/test_audit2609_a5_propagators.py::TestK17VectorialHfpi`
+(5 tests, including the counter-pin that `vector_projection=False` still
+reproduces two scalar runs to 1e-12).
+
+**Migration.** `vector_projection` defaults to `True` and the operation
+it names changed. `vector_projection=False` reproduces the pre-v5.46
+behaviour exactly. Pass `return_ez=True` for the longitudinal component;
+the historical 2-tuple return is unchanged by default.
+
+---
+
+### Fixed -- propagators/hfpi, vectorial_hfpi: guards, caps and reachable levers (K14, K23, P2)
+
+* **`cone_half_angle` reaches the free-space entry points.** The v5.31
+  under-sampling guard's own message recommends narrowing it "from its
+  ~90-degree default toward the angle the output grid actually
+  subtends", and passing it raised `TypeError` on
+  `propagate_hfpi_freespace_aperture`,
+  `propagate_vector_hfpi_freespace_aperture`, `propagate_hfpi` and
+  `propagate(method='hfpi')` — only the prescription walk exposed it. It
+  is now accepted and threaded on both free-space entry points.
+* **The vector accumulator shares the guard.** v4.13.1 forked it for
+  index sharing, so the v5.31 guard never ran there: measured on
+  identical geometry, 20 000 paths onto a 64x64 grid gave 2 non-zero
+  pixels (0.05 %) with the scalar path warning and the vector path
+  silent, and the vector entry point accepted no `on_undersampled`
+  kwarg. Both accumulators now call one `_check_landed` helper and share
+  `_bin_paths`; the vector entry point accepts `on_undersampled`.
+* **`n_paths` is a cap in `init_paths_stratified`.** `n_per = max(1,
+  n_paths // n_total)` clamped to 1 and `n_paths_actual = n_per*n_total
+  >= n_total` regardless of `n_paths`, so an explicit stratification
+  allocated up to **10 486x** the requested paths (measured 1 048 576
+  from an `n_paths=100` call at (32,32)/(32,32), 76.6 MB; 16.8 M and
+  ~1.2 GB at (64,64)/(64,64)), and the `[:n_paths_actual]` truncation was
+  always a no-op. The docstring's sub-sampling ("sample only `n_paths`
+  strata uniformly without replacement") is now implemented.
+* **CuPy.** `accumulate_to_grid`'s guard and `_hfpi_segment_trace` route
+  through `to_numpy` unconditionally instead of `np.asarray`, which
+  raises on a CuPy device array. Desk-checked — CuPy is not installed
+  here — and the module docstring now states that the prescription walk
+  host-round-trips and is therefore not `jit`/`vmap`/`grad`-traceable.
+
+Files: `lumenairy/propagators/hfpi.py`,
+`lumenairy/propagators/vectorial_hfpi.py`.
+Tests: `tests/unit/test_audit2609_a5_propagators.py::TestK14K23GuardsAndCaps`
+(5 tests, including the counter-pin that the default stratification is
+unaffected).
+
+---
+
+### Added -- propagators/system: warn when a Fresnel / SAS leg's resample-back CROPS the field (K6, P2)
+
+After `fresnel_propagate` / `scalable_angular_spectrum_propagate` the
+field lives at `dx_new` over `N*dx_new`; `propagate_through_system` then
+resamples it onto `N*current_dx`, and when `dx_new > current_dx` —
+the common diverging-beam case — everything outside the central window is
+discarded by `map_coordinates(mode='constant', cval=0)`, silently.
+Measured (grid-filling top-hat, N = 512, dx = 2 um, z = 5 mm,
+`dx_new/dx = 1.5454`): `P_out/P_in` = 0.998990 (asm, band limit,
+expected) vs 0.996685 (fresnel) and 0.950689 (sas); the Fresnel step
+itself conserves power to 1.000000 and the retained window holds 0.996980
+of it, so essentially all of the Fresnel loss is the crop. A
+`RuntimeWarning` now names the retained fraction; values are unchanged.
+
+Files: `lumenairy/propagators/system.py`.
+
+---
+
+### Changed -- propagators/mft: `resample_field`'s documented MTF is the measured one (K6, P2)
+
+The docstring rated the cubic-spline resampler at "< 0.1 % when features
+are sampled at >= 4 pixels". It interpolates the real and imaginary parts
+SEPARATELY, so a near-Nyquist complex carrier is attenuated; the measured
+power ratios are 0.999549 / 0.990621 / 0.931504 / 0.718458 at 0.10 / 0.20
+/ 0.30 / 0.40 cycles per pixel, which brackets the "4 pixels per feature"
+case (0.25 cyc/px) between **0.9 % and 6.8 %** — at least an order of
+magnitude worse than documented. The docstring now carries the table, the
+reason it bites hardest on the single-FFT Fresnel output (whose residual
+chirp sits at exactly Nyquist at the grid edge by construction), the
+pointer to the band-limited `angular_spectrum_propagate_mft(z=0)`
+alternative, and the fact that there is no anti-alias low-pass on
+downsampling.
+
+Files: `lumenairy/propagators/mft.py`.
+
+---
+
+### Changed -- propagators/hf, mhs: module docstrings describe the code (K15, K24, P3)
+
+* **`hf.py`** advertised "the direct Huygens-Fresnel diffraction integral
+  with the Van Vleck density correction", and named
+  `propagate_huygens_fresnel` "the recommended entry point for new code"
+  — that entry point is a three-line delegation to
+  `rayleigh_sommerfeld_propagate` with no Van Vleck factor, and its own
+  summary line claimed "the standard `1/(i lambda z)` Van Vleck factor"
+  for a kernel whose leading term is `cos(theta)/(i lambda r)`. The
+  docstring now separates the module's two unrelated halves and says
+  which one each entry point is.
+* **`mhs.py`** opened by describing rays propagating geometrically within
+  subdomains and "a Huygens-surface integral" converting a ray bundle to
+  a field at each surface. There is no ray bundle, no Huygens-surface
+  integral and no ray tracing anywhere in the file, and
+  `HuygensSurface` is flat-only. The paragraph is demoted to background
+  and the module is described as what it is — a composition framework
+  over delegated propagators.
+* **`finite_diff_step`'s documented accuracy** ("−2.53e-8 at the 1e-6
+  default") was measured on an exact-quadratic OPL where the 4th-order
+  truncation term vanishes identically. On a spherical OPL the default
+  gives **+2.4e-7** and the optimum moves a decade to `h = 1e-5`
+  (−3.8e-8). Both are ~4 decades below the quadrature's own ~1e-3 floor,
+  so this is documentation only — but the numbers now say which OPL they
+  were measured on.
+* **`__all__` integrity**: `propagate_huygens_fresnel` and
+  `propagate_hfpi` — the documented canonical entry points — were absent
+  from their modules' `__all__` (reachable throughout as
+  `lumenairy.propagate_*`, so an integrity gap rather than a breakage).
+  Added.
+
+Files: `lumenairy/propagators/hf.py`, `lumenairy/propagators/hfpi.py`,
+`lumenairy/propagators/mhs.py`.
+
+---
+
+### Fixed -- propagators/mhs: `MhsPipeline._validate` compares `centre` (K14, K24, P3)
+
+The chain check compared `z` / `Ny` / `Nx` / `dx` but not `centre`, so
+two surfaces at identical z/N/dx whose centres differ were accepted as
+the same plane and the transverse jump was silently discarded (measured
+at 50 um and at 1 mm) — while `HuygensSurface.grid()` and
+`aperture_subdomain` both honour `centre`, so the field really is on a
+different coordinate system either side. The error message now prints
+every field of both surfaces.
+
+Files: `lumenairy/propagators/mhs.py`.
+Tests: `tests/unit/test_audit2609_a5_propagators.py::TestK14MhsSurfaceCentre`.
+
+---
+
+### Changed -- propagators/mhs: the two subdomain constructors' differing default method is documented (K24, P3)
+
+`MhsPipeline.from_prescription` defaults to `method='gbd'` and
+`prescription_subdomain` to `method='maslov'` — two constructors for the
+same subdomain, two different physics models unless the method is named,
+and `'maslov'` is the one that needs the square-grid guards and the
+post-hoc resample. Neither default is changed (both are long-standing
+public contracts); both docstrings now cross-reference the other and say
+to name the method explicitly.
+
+Files: `lumenairy/propagators/mhs.py`.
+
+
+---
+---
+
+### WP-A5 follow-up (v5.46.1) -- the VERIFY-A5 open items, plus two cross-WP requests
+
+---
+
+### Fixed -- propagators/hfpi, vectorial_hfpi: cascaded HFPI amplitudes were low by `n_paths x z_to_aperture` (K13 / verify V1, P1)
+
+v5.46's K13 work fixed the single-leg estimator but left the APERTURE
+chain wrong, and `propagate_hfpi_freespace_aperture` -- the function its
+own docstring calls "the canonical single-aperture-diffraction validation
+case", and what `propagate_hfpi` and `propagate(method='hfpi')` call --
+defaulted to `normalisation='physical'` while returning an amplitude that
+still scaled as `1/n_paths`.
+
+Two distinct errors in one line (`hfpi.py`'s re-emission,
+`vectorial_hfpi.py`'s twin):
+
+1. **A second division by the sample count.** A path is ONE sample of
+   the joint (source pixel, direction_1, ..., direction_m) integral, so
+   the `1/n_paths` belongs once and already lives in
+   `init_paths_from_field` alongside `A_src * Omega_1`; the re-emission
+   divided by it again.
+2. **The intermediate leg carried no Jacobian.** Written in the
+   direction variables the estimator samples,
+   `dOmega = dS cos(theta)/r^2` turns the Kirchhoff kernel
+   `dS (cos(theta)/r) e^{ikr}` into `dOmega * r * e^{ikr}` -- a factor
+   **`r`, not `1/r`**, and no obliquity.  The emission applied
+   `cos(theta_1)` where the chain needs `r_1`.
+
+One shared `_reemission_measure` now applies the derived factor
+
+    F = (1/(i lambda)) * Omega_out * r_in * cos(theta_out) / cos(theta_in)
+
+where `r_in` is the geometric length of the leg that just ended
+(`PathBundle.leg`), the `1/cos(theta_in)` removes the `cos(theta)` the
+source applied on the then-unknown assumption that its leg would be the
+last one, and `cos(theta_out)` is the genuine RS-I obliquity of the new
+surface.  The formula composes, so it is correct for any number of
+apertures.  Both twins call it.
+
+**Measured.**  Oracle-free property -- an unobstructed aperture plane is
+transparent, so a two-leg walk over `z1 + z2` must equal the one-leg walk
+over the same total:
+
+| z1 / z2 (mm) | n_paths | two-leg / one-leg BEFORE | x n_paths x z1 | AFTER |
+|---|---|---|---|---|
+| 0.25 / 0.75 | 500 k | 8.78e-3 | 1.098 | 1.099 |
+| 0.25 / 0.75 | 2 M | 2.09e-3 | 1.046 | 1.047 |
+| 0.50 / 0.50 | 500 k | 3.44e-3 | 0.860 | 0.860 |
+| 0.50 / 0.50 | 2 M | 9.20e-4 | 0.920 | 0.920 |
+| 1.00 / 1.00 | 500 k | 2.68e-3 | 1.339 | 1.347 |
+| 1.00 / 1.00 | 2 M | 4.00e-4 | 0.801 | 0.803 |
+
+i.e. the residual was exactly `n_paths * z1` and is gone; at 8 M paths
+the scale reads 1.009 / 1.010 / 1.057 / 0.963 / 1.245 / 0.977 across
+those z1 and two seeds.
+
+Against an INDEPENDENT RS-I **double** quadrature through a real
+(clipping) 25 um aperture -- super-sampled midpoint over the source and a
+polar midpoint over the aperture disc, no FFT and no library propagator
+on the oracle side, on a 9x9 block of output points -- the least-squares
+complex scale is **0.908 .. 1.046** at 8-32 M paths and two seeds
+(pre-fix ~`1/(n z1)` = 2.5e-7 at 8 M).  The vector twin's `Ex` channel
+tracks the scalar to **4e-5**.
+
+Files: `lumenairy/propagators/hfpi.py`,
+`lumenairy/propagators/vectorial_hfpi.py`.
+Tests: `tests/unit/test_audit2609_a5_followup.py::TestV1ReemissionMeasure`
+(7 tests), including an EXACT closed-form pin on the pure function
+(bar 1e-13, measured < 1e-16).
+
+**Migration.**  **Cascaded HFPI amplitudes change by `n_paths * r`** --
+they were wrong.  `apply_aperture_diffraction` and
+`apply_vector_aperture_diffraction` gain `normalisation`
+(`'physical'` default, `'legacy'` = the pre-v5.46 factor); it MUST match
+the value passed to the accumulator, and the library's entry points
+thread one value to both.  `normalisation='legacy'` end to end reproduces
+the pre-audit v5.45 raw path sum exactly.  An aperture applied ON the
+emission plane (no travelled leg) now RAISES under `'physical'` -- a mask
+on the source field is not a Huygens re-emission -- instead of silently
+returning zeros.
+
+---
+
+### Added -- propagators/rs: a wrap-around guard on the `kernel='transfer'` branch (verify V6, P2)
+
+Multiplying by `H` is a CIRCULAR convolution on the padded window, so
+light leaving it re-enters on the opposite side.  `kernel='auto'` routes
+to the truncating `'spatial'` branch above the alias threshold, but BELOW
+it there is no alternative to offer, and the verifier showed the failure
+is reachable: a band-limited random-phase screen at `dx ~ lambda` whose
+angular content fills the grid loses 3-21 % of its power out of the
+padded window and reads 2.1e-4 .. 2.9e-3 against an 8x-padded reference,
+with zero warnings.
+
+A `RuntimeWarning` now reports the power that has reached the outer 1/8
+of the padded window, above a 2 % threshold.  Values are unchanged
+(pinned bit-identical with the guard disabled).
+
+**Calibration.**  Exposed corner (ring fraction -> relative L2 against
+the 8x-padded linear convolution): 0.0722 -> 2.4e-3, 0.3035 -> 3.3e-2,
+0.3012 -> 2.3e-2, 0.3609 -> 1.7e-1.  Counter-fixture -- a properly
+sampled Gaussian on four grids at three distances -- puts **5.5e-22 down
+to 9.3e-28** of its power in the ring (worst case 8.1e-14), i.e. **12
+decades** below the threshold.  It is not reachable at all for a properly
+sampled beam: leaving the padded window before `z = 2 N dx^2/lambda`
+requires `tan(theta) > lambda/(2 dx)`, i.e. exceeding the grid's own
+maximum representable angle.
+
+The detector is a fixed-budget STRIDED estimate (4096 points per band),
+so it is O(1) in grid size: measured **0.035-0.084 ms**, flat from
+N = 128 to N = 1024, against a 5.5-187 ms call.  (A full reduction over
+the ring measured +91 % of the call at N = 256 and +15 % at N = 1024 --
+unacceptable for a diagnostic.)  The sampled ring fraction matches the
+full reduction to **0.5 %**.
+
+Files: `lumenairy/propagators/rs.py`.
+Tests: `tests/unit/test_audit2609_a5_followup.py::TestV6TransferWraparoundGuard`
+(10 tests, including the counter-pins that a contained beam stays quiet,
+that the spatial branch never warns, and that the field is bit-identical).
+
+---
+
+### Performance -- propagators/asm: the spatial fftshift/ifftshift pair folds away at even N (WP-A2 section 5 item 4, byte-identical)
+
+v5.5.3 and S5-8g had already removed the two SPECTRUM-domain shifts by
+caching `H` in natural layout.  The pair around the FIELD --
+`fftshift(ifft2(fft2(ifftshift(E)) * H))` -- remained on every
+propagation, and for EVEN N it is the identity: `ifftshift(E)[n] =
+E[n + N/2]` circularly, so the shift theorem gives
+`fft2(ifftshift(E)) = fft2(E) * (-1)^(kx+ky)` and, inverted,
+`fftshift(ifft2(F)) = ifft2(F * (-1)^(kx+ky))`; the two `(-1)^k` phases
+cancel.  No checkerboard array is built -- the shifts cancel each other,
+not the kernel.
+
+For ODD N the circular shift is not by `N/2` and the phase is not `+-1`,
+so the fold is gated on both axes being even and odd grids keep the
+shifted form.
+
+**Measured.**  Byte-identical to the pre-change module in every
+configuration tested -- N = 64 / 128 / 256 / 512 / 1024 even, 63 / 65 /
+127 / 255 odd, anamorphic `dy = 2 dx`, complex64, `bandlimit` on and off,
+and the streamed path -- `max|diff|` **exactly 0.0**.  End to end with a
+warm H cache:
+
+| N | before | after | speed-up | tracemalloc peak |
+|---|---|---|---|---|
+| 1024 | 54.74 ms | 36.48 ms | **1.50x** | 16.78 MB both |
+| 2048 | 242.55 ms | 186.28 ms | **1.30x** | 67.12 / 67.11 MB |
+
+The peak is unchanged because the `.copy()` the folded NumPy path needs
+-- `_ifft2` returns a view into the pyFFTW ping-pong buffer, which the
+dropped `fftshift` used to detach -- replaces the transient the two rolls
+allocated.  The win is the two full-grid permutations, not memory.  The
+audit's own ASM repro numbers are unchanged (relL2 4.857e-04 / 1.457e-03
+vs the analytic Gaussian, energy 1.00000000, the 0.99999502 band-limit
+case, the sub-wavelength 0.127457 both signs, the 0.934 round-trip).
+
+Files: `lumenairy/propagators/asm.py`.
+Tests: `tests/unit/test_audit2609_a5_followup.py::TestAsmSpatialShiftFold`
+(8 tests), including a pin that the returned array owns its memory (the
+v5.4.6 audit F-3 hazard the dropped `fftshift` used to cover).
+
+---
+
+### Changed -- propagators/sas: K3's rewrite also moves the complex128 default path (verify V8)
+
+The K3 entry presented the SAS fix as a float32-only change.  It is not:
+the cancellation-free `-u^2/(2(1+sqrt(1-u))^2)` form is strictly more
+accurate than the subtraction it replaces, and the `W & prop` gate
+replaces a `W *` multiply, so the **complex128** default path moves too
+-- measured relative **1.76e-12 / 5.43e-12 / 5.43e-11 / 5.43e-10** at
+z = 3.24 mm / 1 cm / 10 cm / 1 m on an N = 256 / w0 = 30 um fixture (the
+verifier measured up to 1.8e-9 on its own).  The direction is correct
+(toward the exact value), but it is a numerical change on a default path
+and is stated here.
+
+---
+
+### Added -- propagators/mft: the MFT / Bluestein complex64 contract is pinned (WP-A6 section 5.3)
+
+WP-A6's C3 residual-risk note said the traced-carrier chain's TILTED
+paraxial landing still returns complex128 "because ... making it
+dtype-aware would need `angular_spectrum_propagate_mft` to preserve
+complex64".  **Measured, that premise does not hold** -- see the report's
+follow-up section.  The whole MFT / Bluestein family is already
+dtype-preserving:
+
+* returned dtype: complex64 in -> complex64 out for all three entry
+  points (`angular_spectrum_propagate_mft`, `fresnel_propagate_mft`,
+  `fraunhofer_propagate_mft`); complex128 in -> complex128 out;
+* working dtype: `_bluestein_2d` is entered AND left at the caller's
+  precision, with `target_cdtype` threaded through;
+* memory: tracemalloc peak **86.75 MB at complex64 against 168.49 MB at
+  complex128** at N = 512 -- the same 41.4 / 40.2 input-grid units, i.e.
+  half the bytes for the same structure;
+* accuracy: the complex64 result equals the narrowed complex128 one to
+  **2.03e-7 / 2.17e-7 / 2.73e-7** (the float32 floor for a pre-chirp,
+  two FFTs, a kernel multiply and a post-chirp).
+
+No code change was needed; `mft.py` and `_bluestein.py` are byte-identical
+to the previous commit.  The property is now PINNED so the chain's fix can
+depend on it.
+
+Files: none changed.
+Tests: `tests/unit/test_audit2609_a5_followup.py::TestMftDtypePreservation`
+(12 tests).
+
+---
+
+### Note -- the K1 / K2 label collision (verify V5)
+
+The audit's section 3 table numbers the `backend.scipy.jv` row **K1** and
+the Fresnel chirp-guard row **K2**; the WP-A5 brief and report use the
+opposite assignment (K1 = Fresnel guard, K2 = `jv`).  **Both items are
+fixed** -- only the cross-reference differs.  This changelog follows the
+WP's labels.
+
+<!-- WP-A7: Analysis -->
+### Fixed -- analysis/opd: `wave_opd_2d` slipped whole waves on any aberrated pupil (A1, P0)
+
+`wave_opd_2d` took `np.angle` over the WHOLE grid -- zero-amplitude exterior
+included, where `np.angle(0) == 0` -- and unwrapped `axis=1` then `axis=0`.
+The row pass anchored at column 0 (outside the pupil) and the column pass
+re-anchored INDEPENDENTLY IN EVERY COLUMN, so each column picked up its own
+`2*pi*k`. Masking happened only afterwards. The failure needed no
+under-sampling: it appeared at phase gradients 10-25x below Nyquist, on
+smooth, single-valued, simply connected wavefronts, while
+`check_opd_sampling` reported SAFE. `wave_opd_2d` is the library's only 2-D
+OPD extractor and feeds `optimize/driver.py` -> `RMSWavefrontMerit` /
+`ZernikeCoefficientMerit` / `MatchTargetOPDMerit`, the GUI wavefront docks and
+the cookbook recipe, so an optimiser driven by it converged on a wrong
+prescription.
+
+The unwrap now runs on the PUPIL MASK: the wrapped gradient is integrated
+along horizontal runs of valid samples (one `cumsum`) and the runs are linked
+to each other through their vertical neighbours by whole waves, so no
+integration path ever crosses the exterior and the result is independent of
+the path. Measured on a flat circular pupil (N = 512, dx = 1 um, aperture
+400 um, 633 nm) carrying pure primary coma and no defocus:
+
+| coma [waves rms] | max abs OPD error before | after | fitted OSA c8 before -> after (true) |
+|---|---|---|---|
+| 0.20 | 1.000 waves (5.2 % of the pupil wrong) | 0.000 | +0.1024 -> +0.2000 (0.2000) |
+| 0.50 | 1.000 waves (55.2 %) | 0.000 | +0.5489 -> +0.5000 (0.5000) |
+| 1.00 | 4.000 waves (76.6 %) | 0.000 | +0.9979 -> +1.0000 (1.0000) |
+| 5.00 | 19.000 waves (95.2 %) | 0.000 | +4.8492 -> +5.0000 (5.0000) |
+
+and the orchestrator's own cross-verification (`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/repro/orch/verify_analysis.py`,
+0.5 waves rms coma at 0.27 rad/sample) goes from `max error 1.000 waves,
+53.2 % of pupil wrong` to `0.000 waves, 0.0 %`.
+
+`wave_opd_2d` also gained a `unwrap=` kwarg (`'itoh'`, the default described
+above, or `'reliability'` -- the quality-guided Herraez, Burton, Lalor &
+Gdeisat, *Appl. Opt.* **41** (2002) 7437 unwrap for noisy maps), and the
+kernel is exported as the new public `lumenairy.analysis.unwrap_phase_2d`.
+
+Files: `lumenairy/analysis/opd.py`, `lumenairy/analysis/__init__.py`.
+Tests: `tests/unit/test_audit2609_a7_opd_unwrap.py` (18).
+
+### Added -- analysis/opd: `wave_opd_2d` reports when no unwrap can succeed (A1)
+
+The returned map is checked against the data it came from: every in-mask
+neighbour link a single-valued map must satisfy is re-derived, and the largest
+one it could not is warned about with its size in waves. Measured: 1.0 waves
+for a charge-1 optical vortex, 1.0-7.0 for 5-30 waves rms of aliased coma,
+11.0 for uniformly random phase, 0.0000 for every well-sampled pupil. A
+second `RuntimeWarning` fires when the pupil support has disconnected
+regions, whose relative piston is undetermined. The documented blind spot --
+a radially symmetric aliased wavefront wraps onto the exactly self-consistent
+phase of a lower-frequency wavefront and has no residue at all (measured
+0.0000 waves at 16.5 / 32.9 / 98.8 rad per sample) -- is covered by the
+pre-existing `focal_length` sampling gate instead, and both are now spelled
+out in the docstring.
+
+### Changed -- analysis/opd: `wave_opd_2d` anchors its piston at the pupil centre (A1)
+
+An unwrap fixes the phase only up to one additive whole wave per connected
+region. The map is now anchored on the principal value of the valid sample
+NEAREST `x = y = 0` rather than on whatever sample the integration started
+from, so a pupil carrying a known defocus comes back with the right INTEGER
+WAVE COUNT (a converging wavefront is stationary at the pupil centre).
+Measured on a 51.8-wave defocus pupil: absolute error 17.0000 waves before,
+0.0000 after. The docstring states the condition: it is a CENTRED pupil that
+comes back absolutely anchored, because that is where the anchor sample and
+the wavefront's stationary point coincide. A pupil that does not straddle the
+grid origin is anchored on its rim instead and its piston is an arbitrary --
+but always EXACT -- whole number of waves (measured on a 1.2-waves-rms coma
+pupil decentred by (+60, -40) and (+110, +90) um: +1.0000 and +2.0000 waves,
+against 0.0000 centred). **Migration:** any caller that stored an absolute
+`opd_map` piston from a strongly curved pupil may see it move by a whole
+number of waves; the piston it stored was arbitrary. Shape, PV, RMS, Zernike
+coefficients above piston, and every nearly-flat map are unaffected.
+
+### Fixed -- analysis/through_focus: the Strehl denominator was a PARAXIAL reference (A2, P0)
+
+`diffraction_limited_peak` built its aberration-free reference from the
+paraxial quadratic phase `exp(-i k r^2 / 2 f)` while
+`angular_spectrum_propagate` -- the propagator the reference and the
+measurement both go through -- is exact. The quadratic differs from the
+sphere by a real spherical-aberration term
+`W040 = (D / lambda) / (128 (f/#)^3)` waves, so the "diffraction-limited"
+denominator was itself aberrated, its peak depressed by its own Strehl, and
+every ratio taken against it inflated by `1 / S_ref`. It is the denominator
+for `through_focus_scan` / `_jax`, `single_plane_metrics`,
+`tolerancing_sweep`, `monte_carlo_tolerancing`, `polychromatic_strehl`,
+`polychromatic_psf`'s `per_wavelength_strehl` and the optimiser's
+`StrehlMerit`.
+
+The reference is now the exact sphere
+`-k0 * sign(f) * (sqrt(x^2 + y^2 + f^2) - abs(f))`, which reduces to the
+quadratic in the paraxial limit and costs one `sqrt` per sample. Measured
+end-to-end on a PERFECT, aberration-free exact-spherical converging wavefront
+at f/2 (D = 614 um, f = 1.228 mm, 600 nm, N = 4096):
+
+```
+diffraction_limited_peak   1.342173e+04  ->  1.519335e+05
+peak of the perfect sphere at z = f      = 1.519335e+05  (unchanged)
+through_focus_scan best Strehl           11.3200  ->  1.0000
+```
+
+Across f/#, the Strehl reported for an aberration-free pupil (D = 200 um,
+600 nm, N = 2048):
+
+| f/# | W040 [waves] | Strehl before | after |
+|---|---|---|---|
+| f/50 | 0.0000 | 1.0000 | 1.000000000 |
+| f/10 | 0.0026 | 1.0000 | 1.000000000 |
+| f/5 | 0.0208 | 1.0015 | 1.000000000 |
+| f/3.9 | 0.0439 | 1.0067 | 1.000000000 |
+| f/2.5 | 0.1667 | 1.0988 | 1.000000000 |
+| f/2 | 0.3255 | 1.4292 | 1.000000000 |
+
+f/50 is unchanged to 1e-6 relative, so the change is confined to the
+non-paraxial regime it is about. **Migration:** any recorded Strehl from an
+f/# faster than ~f/10 was inflated by `1 / S_ref` and will now read lower --
+correctly; a Strehl above 1 for a diffraction-limited pupil is no longer
+produced. The "Strehl can exceed 1 in some edge cases" note in
+`plot_through_focus` described this defect, not a methodology consequence.
+
+Files: `lumenairy/analysis/through_focus.py`.
+Tests: `tests/unit/test_audit2609_a7_strehl_reference.py` (11).
+
+### Fixed -- analysis/detector: the Shack-Hartmann `wavefront` was exactly half (A3, P1)
+
+`shack_hartmann`'s reconstruction averaged two ONE-SIDED cumulative
+integrals: `wf_x[i, j]` is `W(x_j, y_i) - W(x_0, y_i)` and `wf_y[i, j]` is
+`W(x_j, y_i) - W(x_j, y_0)`, so for any wavefront separable in x and y --
+tilt, defocus, astigmatism, i.e. essentially every use -- their average is
+`(W - W_00) / 2`. Anchoring removed each half's piston but not the factor.
+`slopes_x` / `slopes_y` (what the AO stack consumes) were correct; only the
+documented third return value was wrong, and anyone budgeting from it was 2x
+optimistic.
+
+It is now a zonal least-squares solve of the co-located Southwell geometry
+(*JOSA* **70** (1980) 998), which uses both slope components at every lenslet
+and is correct for wavefronts that are not separable. Measured against the
+analytic truth scaled by the sensor's own slope gain (N = 256, dx = 5 um,
+pitch = 32 dx, f = 5 mm, 632.8 nm):
+
+| input | ratio before | after | slope gain |
+|---|---|---|---|
+| tilt 0.20 mrad | 0.4741 | 0.9481 | 0.9481 |
+| tilt 0.50 mrad | 0.4744 | 0.9488 | 0.9488 |
+| tilt 1.00 mrad | 0.4725 | 0.9450 | 0.9450 |
+| defocus, 1 um edge | 0.4626 | 0.9340 | -- |
+
+`max abs wf` on the defocus case: 5.4263e-07 m -> 1.4351e-06 m against a
+truth of 1.5000e-06 m. The docstring's "cumulative trapezoidal integration"
+was also inaccurate (it was a rectangle-rule `cumsum`); both reconstructions
+now really are trapezoidal.
+
+### Changed -- analysis/detector: `shack_hartmann` gains `reconstruction=`, and unmeasured lenslets are NaN (A3)
+
+`reconstruction='southwell'` (new default) or `'itoh'` (the single path
+integral, down column 0 then along each row). **Migration:** a lenslet whose
+slopes are the NaN out-of-bounds sentinel now returns NaN in `wavefront` as
+well, instead of being integrated through as if it had measured zero slope --
+the NaN pattern of `wavefront` matches `slopes_x` exactly. Callers that
+reduce the map should mask (`np.nanmax`, `np.isfinite`).
+
+Files: `lumenairy/analysis/detector.py`.
+The `'itoh'` path does NOT get the NaN exclusion, and the docstrings now say
+so on all three sites (`shack_hartmann(reconstruction=)`,
+`_reconstruct_wavefront`, `_itoh_wavefront`): a path integral has one route to
+each lenslet, so an un-measured lenslet on that route is substituted with zero
+slope and integrated through, and everything beyond it on the path inherits
+the error. Measured on an annular lenslet mask with exact analytic slopes:
+`'itoh'` off by 0.49 of the wavefront span where `'southwell'` is exact to
+8.7e-15 of it.
+
+Tests: `tests/unit/test_audit2609_a7_detector_sh.py` (12);
+`tests/unit/test_niche_s12_shack_hartmann_reference.py::TestTiltOracle::test_reconstruction_integrates_the_uniform_slope`
+and `tests/unit/test_v4_16_1_agent_a.py::_measured_pitch_from_wf` had the
+factor 0.5 / 2.0 baked into their oracles and were pinning the defect; both
+are corrected in place (measured ptp 2.2680e-06 m post-fix against the oracle
+2.2680e-06, ratio 1.0000; pre-fix 1.1340e-06, ratio 0.5000).
+
+### Added -- analysis/image_plane_wfe: `object_distance = inf` (A4, P1)
+
+`eval_image_plane_wfe` required a finite `object_distance > 0` and launched
+the bundle at the object, so an infinite conjugate could only be approximated
+by a large finite number -- and the object-side ray-surface intersection then
+cancels catastrophically in float64 (`|P - C|^2 ~ object_distance^2` against
+`R^2`, with the two roots separated by only `~2 abs(R)`). Measured on a
+biconvex N-BK7 singlet (R = +-50 mm, d = 3 mm, D = 10 mm, 587.6 nm, EFL
+48.87 mm, BFL 47.875 mm):
+
+| object_distance | chief ray z0 (must be 0) | PV [waves] | RMS [waves] |
+|---|---|---|---|
+| 1e3 m | +0.0006 um | 3.4675 | 1.0430 |
+| 1e4 m | +0.0238 um | 3.6912 | 1.0649 |
+| 1e5 m | -5.34 um | 47.2747 | 10.7591 |
+| 1e6 m | +589.41 um | 213.5098 | 61.9051 |
+| **inf (new)** | **0 exactly** | **3.5944** | **1.0686** |
+
+`prescription['object_distance'] = float('inf')` (or `None`) now launches a
+collimated bundle on a plane wavefront a few aperture widths before surface 0,
+with the object-side OPL carried exactly for any field angle; the paraxial
+image distance comes out at the BFL (47.87519 mm) to 1e-9 relative. Verified
+against an independent transverse-ray-aberration integral (PV 3.6586 waves,
+-1.8 %) and the traced longitudinal spherical aberration (LSA -0.8144 mm =>
+W040 3.651 waves, -1.6 %). `image_plane='best_rms'` on the same fixture moved
+the reference sphere to 96.6435 mm on a 47.9 mm-BFL lens at 1e6 m; at infinity
+it lands at 47.4773 mm with PV 0.9425 / RMS 0.2723 waves.
+
+A new `field_max_rad` kwarg (and `prescription['field_max_rad']`) carries the
+off-axis field for an infinite conjugate, where a field point is a DIRECTION
+rather than a height; a non-zero `field` at infinity without it is refused,
+and a `field_max_rad` at or beyond 90 deg is refused on the ANGLE (a guard on
+the direction cosine `N = sqrt(1 - sin^2 x - sin^2 y)` cannot catch it: `sin`
+is not monotonic past `pi/2`, so 2.0 rad = 114.6 deg would fold back silently
+to 65.4 deg). **`field` keeps its object-position sense at BOTH conjugates**:
+`field = (0, +1)` is an object above the axis either way, so the chief travels
+towards `-y` and the direction cosines are `L = -sin(Hx * field_max_rad)`,
+`M = -sin(Hy * field_max_rad)` -- the NEGATIVE of `raytrace.ray_fan`'s
+`field_angle`, which is a ray-direction angle. Measured on the singlet above:
+`object_distance = inf` at `field = (0, +1)` agrees with `object_distance =
+1e3 m` at the same `field = (0, +1)` to 0.0025 / 0.0033 / 0.0033 waves
+(<= 0.07 % of the map's span) at 0.5 / 1 / 2 deg, where the opposite sign
+differs by 0.854 / 1.706 / 3.404 waves (23 / 40 / 59 % of span). PV and RMS
+are sign-blind, so only a per-ray comparison sees it.
+The collimated launch measures its OPL from the incident wavefront through
+`raytrace.trace.seed_entrance_eikonal` (R2's helper, which carries the `N*z`
+term an off-`z=0` launch needs); the finite point-source launch keeps
+`opd_seed='plane'`, which is the correct zero for a bundle whose rays all
+leave one point.
+
+The read of `image_rays` at `image_plane_wfe.py:530` is **not** in the
+exit-vertex bug class and was left alone: the rays are genuinely left on the
+last surface's sag (measured `image_rays.z` over -242.084 … 0.000 um on a
+prescription that does not end in an image plane), but `_ray_sphere_opd`
+carries that `s2z` into the ray-sphere quadratic, so the OPD computed from the
+sag state and from `res.at_exit_vertex()` agree to 1.774e-11 waves over a PV of
+3.5944 waves.
+
+### Added -- analysis/image_plane_wfe: a warning when a finite `object_distance` has lost the surface sag (A4)
+
+Gated on the mechanism rather than a round number: the intersection error is
+`~eps * object_distance^2 / min|R|`, and the warning fires when that exceeds a
+tenth of a wave. On the fixture above it is silent at 1 m, 1e2 m and 1e3 m --
+where the reported PV is flat at 3.465-3.468 waves -- and fires at 1e4 m,
+where PV has already moved to 3.691, and above.
+
+Files: `lumenairy/analysis/image_plane_wfe.py`.
+Tests: `tests/unit/test_audit2609_a7_image_plane_wfe.py` (13).
+
+### Fixed -- analysis/phase_retrieval: `gerchberg_saxton`'s reported error was off by N_pix (A5, P2)
+
+`far_field` is an unnormalised DFT (`sum |F|^2 = N_pix * sum |field|^2`) and
+was compared against a target rescaled to the SOURCE power, leaving a
+hard-wired factor `N_pix` in the mean-square error, which therefore could not
+reach zero even for an exact solution. On a target built as
+`|FFT(source * exp(i phi0))|` with `phi0` supplied as `initial_phase` -- an
+exact solution to 2.132e-14 -- the reported error was **3.775380e+02**, 97 %
+of the target energy 3.896184e+02, and flat over 50 iterations; it is now
+**3.26e-29**. The retrieved PHASE is unaffected (both amplitude-replacement
+steps are scale invariant), which is why this survived. The JAX twin
+`gerchberg_saxton_jax` never rescaled at all, so the two backends' `err`
+differed by `N_pix` despite documenting the same physics; both now use
+`sqrt(N_pix * source_power / target_power)`.
+
+### Fixed -- analysis/phase_retrieval: `gerchberg_saxton_jax`'s `dtype` handling (A5 follow-up)
+
+Two defects behind the "same physics" claim, both found in verification:
+
+* A COMPLEX `dtype` (`np.complex128`) fell through the "unrecognised real
+  dtype" branch, made `src` / `tgt` complex, and killed the call in
+  `float(err)` with `TypeError: float() argument must be a string or a real
+  number, not 'complex'`. A complex request now names the iteration's FIELD
+  type and the amplitude / phase arrays take its real counterpart, so `err` is
+  always a real float.
+* `dtype=None` resolved to float32 unconditionally, so a caller who had
+  enabled `jax_enable_x64` still got a single-precision answer. It now follows
+  the flag, as `jax.numpy`'s own default float type does. Measured with x64
+  on, 10 iterations at N = 32: the two backends' `err` now agree to every
+  digit float64 carries (1.5027588862e-01 both, previously 2.0e-05 relative
+  apart), and on an exactly-solvable target the JAX floor drops from 2.3e-12
+  to 5.2e-29. **Migration:** a caller who wants the historical single
+  precision under x64 passes `dtype=np.float32` explicitly.
+
+Files: `lumenairy/analysis/phase_retrieval.py`.
+Tests: `tests/unit/test_audit2609_a7_misc.py` (4);
+`tests/unit/test_audit_analysis.py::_gs_reference` and
+`test_3a_return_history_matches_reference` re-implemented the old scaling in
+their own oracles and are corrected in place.
+
+### Fixed -- analysis/plotting: `plot_stokes` used the x extent for both axes, and two half-pixel conventions disagreed (A5 / A7)
+
+`plot_stokes` had no `dy` and took `_auto_extent(Nx, dx)` for both axes, so
+any `Ny != Nx` or anamorphic Jones field got a mislabelled y axis --
+invisibly, since `_auto_extent(64, 1e-6)` and `_auto_extent(32, 2e-6)` are
+identical. It now takes `dy` (defaulting to `jones_field.dy`) and builds the
+y half from `Ny`. Open since AUDIT_V4_13_0 (S2.1).
+
+Separately, `_auto_extent` returned `(-N/2*dx, +N/2*dx)` while the sample grid
+is `(arange(N) - N/2) * dx`; since `extent` addresses pixel EDGES, every drawn
+pixel centre sat `+dx/2` from the sample it displayed, and `plot_psf`'s
+`(x[0], x[-1])` form had the opposite half-pixel error -- so the same field
+plotted two ways landed a whole pixel apart. Both now address the same edges,
+`(-(N/2 + 1/2) dx, +(N/2 - 1/2) dx)`. Five sites that resolved the y unit with
+a second independent `'auto'` call (which can land on a different unit and
+silently mix units on one figure) now inherit the x axis's resolved unit.
+
+### Changed -- analysis/plotting: the lens-layout runaway-focus census re-measured (A7 follow-up)
+
+The measured envelope behind `_LAYOUT_FOCUS_RUNAWAY_RATIO = 10.0` recorded
+`LA1509-C 0.9883`, taken before the `LA1509-C` catalogue radius was corrected
+(R1 103.29 -> 51.5 mm, EFL 199 -> 99.652 mm). Re-measured on the six catalogue
+rows: LA1050-C 0.9733 -> 0.9729, **LA1509-C 0.9883 -> 0.9762**, LA1301-C
+0.9912 -> 0.9910, AC254-050-C 0.8677 -> 0.8664, AC254-100-C 0.9511 -> 0.9508,
+AC254-200-C 0.9806 -> 0.9805. Max over the whole census 0.9992, so the
+envelope claim and the bar are unchanged; the comment now carries both
+measurement dates and names the rows that were re-measured.
+
+Files: `lumenairy/analysis/plotting.py`.
+
+### Performance -- analysis/through_focus: 202.3 -> 128.8 ms/plane, 36 % of a through-focus scan (A6)
+
+Two changes, measured together on a 21-plane scan at N = 1024 complex128
+(interleaved medians, `OPENBLAS_NUM_THREADS=1`):
+
+* `through_focus_scan` rebuilt `exp(1j * kz * z)` over the whole K-grid every
+  plane -- 52.9 of the plane body on this machine, 185.7 of 264.5 ms on the
+  auditor's. For a uniformly spaced z it is a recurrence,
+  `H(z + dz) = H(z) * H(dz)`: one complex multiply, measured 11.0 ms/plane,
+  **4.8x**. Gated on z uniformity measured to better than 1e-12 rad of phase
+  on the actual `z_values`, so a non-uniform scan keeps the direct `exp` and
+  stays bit-identical to a per-plane `angular_spectrum_propagate`. The
+  band-limit mask is now two 1-D broadcasts instead of a full N^2 boolean per
+  plane (bit-identical), and the mask multiply is in place.
+* `single_plane_metrics` built `|E|^2` three times (once itself, once inside
+  `beam_centroid`, once inside `beam_d4sigma`) and the centroid twice.
+  The default path now shares one intensity map, one meshgrid and one set of
+  moment sums through a new `beam_stats._whole_grid_moments` /
+  `_centroid_and_d4sigma`: 81.4 -> 52.4 ms/plane, **1.55x**, bit-identical
+  (`peak_I`, `centroid_x/y`, `d4sigma_x/y` compare `==` against
+  `beam_centroid` / `beam_d4sigma`). The ISO 11146 `background` / `aperture`
+  paths, and anything that is not a plain 2-D NumPy field, are routed to the
+  unchanged two-call form.
+
+**Accuracy note (documented tolerance, not bit-identity).** Both the direct
+`exp` and the recurrence evaluate the same exact function and both round the
+ARGUMENT at `|kz z| eps / 2`, so their difference is bounded by
+`2 |kz z|_max eps` and neither is the more accurate one. Measured
+`max |H_rec - H_dir|`: 6.2e-12 at N = 1024 / 21 planes / `max|kz z|` =
+1.09e4 rad, and 1.1e-10 at 2.23e5 rad, against a predicted 4.8e-12 / 9.8e-11.
+The modulus of H is preserved to 1.8e-15, so no energy drifts. The worst
+relative metric drift measured against a per-plane
+`angular_spectrum_propagate` reference is 9.5e-12, and
+`tests/unit/test_perf_v4_12_0_through_focus.py`'s agreement bar moves from
+1e-12 to a derived `HOIST_RTOL = 1e-9` with that derivation recorded in the
+file.
+
+The JAX twin `through_focus_scan_jax` deliberately keeps its per-plane
+`exp(1j kz z)`: it is the reference evaluation the NumPy path is checked
+against (`TestThroughFocusScanMatchesJAXTwin`), and re-deriving it per plane
+is what makes that check independent. The recurrence is a NumPy-path
+optimisation only.
+
+### Performance -- analysis/polychromatic: `radial_power_bands` stops growing with the band count (A6)
+
+The mask-and-sum loop built a full `Ny x Nx` boolean and re-summed the whole
+grid once per radius. Above a measured crossover (`_RADIAL_SORT_CROSSOVER =
+96` bands; the crossover sits at 65-82 across N = 256...2048, almost
+independently of N) it now sorts the pixels by radius once and reads every
+band off the cumulative sum. At N = 1024, including the shared meshgrid and
+`|E|^2` setup:
+
+| n_radii | before | after |
+|---|---|---|
+| 1 | 29.6 ms | 29.8 ms (bit-identical, loop kept) |
+| 8 | 35.1 ms | 34.1 ms (bit-identical) |
+| 64 | 87.8 ms | 78.3 ms (bit-identical) |
+| 256 | 387.8 ms | 129.8 ms (**2.99x**) |
+| 1024 | 1245.7 ms | 129.3 ms (**9.63x**) |
+
+Below the crossover the result is bit-identical to every earlier release --
+`single_plane_metrics(bucket_radius=...)` asks for ONE radius per plane. Above
+it the value differs only by float64 summation order (a sequential `cumsum`
+over a radius-ordered permutation instead of numpy's pairwise reduction),
+bounded by `O(Ny*Nx * eps)` = 7e-12 relative at N = 1024 and measured at
+2.1e-13.
+
+One query the two paths would otherwise answer differently is a **NaN
+radius**: `R2 <= nan` is False everywhere, so the masked loop returns 0, while
+`searchsorted` sorts NaN ABOVE every finite key and the sorted path handed
+back the whole grid's power (measured 2.513e-09 against 0.0). The sorted path
+now reproduces the masked loop's answer, so the crossover is invisible to the
+caller. `+/- inf` needs no special case -- `r*r` is `+inf` on both paths and
+both return the total.
+
+Files: `lumenairy/analysis/through_focus.py`, `lumenairy/analysis/beam_stats.py`,
+`lumenairy/analysis/polychromatic.py`.
+Tests: `tests/unit/test_audit2609_a7_misc.py` (9);
+`tests/unit/test_audit2609_verify_a7.py` (the crossover, NaN and inf pins).
+
+### Fixed -- analysis: the P3 row (A7)
+
+* `ghost.retrace_ghost_path` reported a "50 % encircled-energy" FWHM from the
+  MEDIAN RAY radius. `make_rings` puts the same ray count on every ring, so
+  the areal sampling density falls as `1/r` and the median ray is not the
+  median of the ENERGY: on a uniform disc it reads 0.500 R for every ring
+  count where the truth is `1 / sqrt(2) = 0.7071 R`, 29 % low. Rays are now
+  weighted by the pupil area each stands for and the radius is the 50 % point
+  of the resulting encircled-energy curve: 0.667 / 0.667 / 0.708 R at 6 / 12 /
+  24 rings, i.e. within one ring spacing.
+* `aberration.caustic_diagnostic` silently clamped a complex-conjugate
+  eigenvalue pair to `tr / 2` via `max(0.25 tr^2 - det, 0)`, reporting two
+  spurious coincident real eigenvalues and a wrong Maslov index for any system
+  whose transverse map rotates. Those planes are now counted and warned about
+  (an axisymmetric system never reaches the branch).
+* `interferometry.simulate_interferogram` built the y tilt ramp on `dx`; it now
+  takes `dy`. Its docstring promised "values in [0, 1]" where the
+  implementation returns `background * (1 + V cos phi)`; the real range is
+  documented.
+* `ao_closed_loop`, `make_shack_hartmann_wfs` and `coronagraph_contrast_curve`
+  live in `analysis/` but were reachable only from the package root;
+  `clear_meshgrid_cache`, `meshgrid_cache_bytes` and
+  `zernike_basis_cache_bytes` were exported nowhere. All are now in
+  `lumenairy.analysis.__all__`, alongside the new `unwrap_phase_2d`.
+* `strehl_phase_integral` and `strehl_ratio` disagree by three orders of
+  magnitude on a tilted wavefront (measured 0.00069 vs 0.99996 at 1 wave rms
+  of pure tilt) because the phase integral does not remove piston or tilt.
+  Both conventions are legitimate; the docstring now says so.
+* `zernike_basis_matrix`'s cache key sampled `X.flat[N * N / 2]`, which is
+  `X[N / 2, 0]` = `x[0]` = `X.flat[0]` for the row-repeating meshgrid every
+  caller passes -- no information for X at all. It now samples 16 points along
+  the grid DIAGONAL, which moves in both axes; the key stays O(1) to build so
+  a cache hit is still cheap.
+
+Files: `lumenairy/analysis/ghost.py`, `lumenairy/analysis/aberration.py`,
+`lumenairy/analysis/interferometry.py`, `lumenairy/analysis/zernike.py`,
+`lumenairy/analysis/strehl.py`, `lumenairy/analysis/__init__.py`.
+Tests: `tests/unit/test_audit2609_a7_misc.py` (7).
+
+<!-- WP-A8: Thin elements, apertures, BSDF, gratings, glass catalogue -->
+### Fixed -- glass: three bundled Sellmeier rows held a DIFFERENT GLASS, and they were the only dispatch path for those names (E1, P0)
+
+`N-BAF52`, `N-LAK33A` and `N-LAK33B` are registered `'__sellmeier__'`, and that
+branch fires **before** any refractiveindex.info lookup — so the bundled row is
+what every install returned, package present or not.  Measured against the
+refractiveindex.info SCHOTT-optical catalogue (database commit `a66ef88`) and
+against SCHOTT's own published data sheet:
+
+| glass | n_d before | n_d after | data sheet | V_d before | V_d after | data sheet |
+|---|---|---|---|---|---|---|
+| N-BAF52 | 1.637147 | **1.608631** | 1.60863 | 42.469 | **46.597** | 46.60 |
+| N-LAK33A | 1.754279 | **1.753930** | 1.75393 | 53.031 | **52.271** | 52.27 |
+| N-LAK33B | 1.755294 | **1.755000** | 1.75500 | 52.940 | **52.300** | 52.30 |
+
+The `N-BAF52` row was off by **2.85e-2 in index (1.8 %)** — a ~1.9 % focal-length
+error on any singlet and a wholly wrong Abbe number for any achromat — with the
+nearest catalogue curve being N-KZFS11 (1.63775 / 42.41), i.e. the same
+mis-copied-neighbouring-row failure the v4.11.2 sweep fixed for S-LAH64 /
+S-LAH79 without re-checking the rest of the table.  `N-LAK33A/B` carried the
+wrong third Sellmeier pole (C3 = 107.10 / 101.74 µm² instead of 80.938 /
+80.741), worth 2.8e-3 / 2.3e-3 of index across 0.4–1.6 µm.  All three rows are
+replaced from the SCHOTT Zemax 2017-01-20b catalogue and now reproduce the data
+sheet's n_d to 1.0e-6 and V_d to 0.003.  `N-BK7` and `N-SF11` are unchanged and
+still exact.
+
+Files: `lumenairy/glass.py:125-145`.
+Tests: `tests/unit/test_audit2609_a8_glass.py::test_e1_bundled_row_reproduces_the_manufacturer_data_sheet`,
+`::test_e1_repaired_rows_are_not_the_pre_fix_rows`.
+
+### Added -- glass: a VALUE cross-check over every bundled dispersion row, so this class cannot recur (E1)
+
+`_check_glass_registry_consistency` proved a row *exists* and is *reachable*; it
+could not see a row that is present, reachable, evaluates cleanly and holds the
+wrong glass.  It gains an opt-in seventh check,
+`_check_glass_registry_consistency(check_values=True)`, delegating to the new
+`_cross_check_bundled_values()`: every `SELLMEIER_COEFFICIENTS` **and**
+`POLYNOMIAL_COEFFICIENTS` row is re-derived at the d/F/C lines and compared to
+the refractiveindex.info page it was sourced from, to 5e-5 in n_d and 1e-3
+relative in V_d.  Provenance for the literature-shelf rows (whose catalogue page
+is named after the author, not the glass) is recorded in the new
+`_BUNDLED_ROW_SOURCE` map.
+
+Bars derived from the measured residual of the whole repaired table (76 rows
+resolved, 0.46 s): worst |Δn_d| 4.18e-6 and worst |ΔV_d|/V_d 1.13e-4 (both
+N-LASF40), with 46 of 49 Sellmeier rows and **all 24 formula-3 polynomial rows
+exact to ≤ 2.2e-16** — so each bar sits ~1 decade above the honest-row floor and
+~1 decade below the weakest real defect (N-LAK33A's 2.9e-4 / 1.2e-2).  The check
+is **not** run at import (it parses one catalogue YAML per row); the test suite
+runs it.  Injecting the pre-fix coefficients makes it flag exactly those three
+rows and raise.
+
+Files: `lumenairy/glass.py:1031-1277` (new constants, `_bundled_row_catalogue_source`,
+`_catalogue_index_fn_from_entry`, `_catalogue_index_fn`, `_nd_vd`,
+`_cross_check_bundled_values`), `:1255` (`check_values` parameter).
+Tests: `tests/unit/test_audit2609_a8_glass.py::test_e1_whole_bundled_table_agrees_with_refractiveindex_info`,
+`::test_e1_value_gate_rejects_the_pre_fix_rows`,
+`::test_e1_import_time_check_stays_structural_only`.
+
+### Fixed -- glass: `get_glass_index_complex` RAISED instead of the documented κ = 0 fallback, for exactly the common bulk materials (E2, P1)
+
+With the recommended `pip install lumenairy[glass]` extra installed, a catalogue
+page carrying no k-table raises `refractiveindex.refractiveindex.NoExtinctionCoefficient`,
+which subclasses `Exception` **directly** and so was not in the caught tuple
+`(AttributeError, NotImplementedError, KeyError, ValueError, TypeError)`.
+Measured over all tuple-registered glasses at 1.31 µm: **7 raised** — `CaF2`,
+`FUSED_SILICA`, `F_SILICA`, `MgF2`, `SILICA`, `SILICON`, `SiO2`, i.e. every
+`main`-shelf window material — now **0**.  The class is resolved from the
+installed package rather than imported (CONVENTIONS §10) by the new
+`_missing_kappa_exceptions()`.
+
+The same sweep found a second silent-wrong arm of the same contract: a page whose
+tabulated k does not span the requested wavelength **interpolates to NaN** rather
+than raising, so `get_glass_index_complex('E-BAK1', 1.31e-6)` returned
+`1.5560943 + nan·j` and poisoned every downstream absorption product.  A
+non-finite κ now takes the same warn-once + κ = 0 path as a missing one.
+`N-BK7`'s real extinction and its sign convention are unchanged
+(1.5006520 + 1.4361e-7 j at 1.55 µm).
+
+Files: `lumenairy/glass.py:1959-2005`.
+Tests: `tests/unit/test_audit2609_a8_glass.py::test_e2_complex_index_never_raises_for_a_catalogue_glass`,
+`::test_e2_extinction_is_finite_and_non_negative`,
+`::test_e2_missing_kappa_warns_once_and_returns_zero`,
+`::test_e2_pages_that_do_carry_k_keep_their_value_and_sign`.
+
+### Changed -- glass: a catalogue lookup outside the page's data range now RAISES instead of returning NaN (E2, second arm) — **default change**
+
+The κ arm above was half the contract.  A refractiveindex.info page whose data
+does not span the requested wavelength interpolates the REAL index to NaN as
+well, and that one was never guarded: `get_glass_index('SILICON', 633e-9)`
+returned `nan` and `get_glass_index_complex` returned `nan + 0j`, with only a
+validity *warning* to show for it — measured at 5 of 8 wavelengths swept
+(0.35 / 0.4 / 0.5876 / 0.633 / 1.064 µm; the `main/Si/Li-293K` page starts at
+1.2 µm).  One multiplication later the NaN is across the whole field.
+
+It is now a named `ValueError` (CONVENTIONS §2 prefix) quoting the page's own
+wavelength range and the offending wavelength, e.g.
+
+```
+get_glass_index: the refractiveindex.info page for 'SILICON' has no data at
+6.3300e-07 m; its wavelength range is [1.200e-06, 1.400e-05] m. ...
+```
+
+Only the live-catalogue (tuple-registered) path can produce it; the bundled
+Sellmeier and polynomial evaluators are closed forms with their own guards and
+are untouched.  **Migration.**  A caller that relied on the NaN as an
+in-band "no data" signal must catch `ValueError` (or test the range first);
+in-range lookups are bit-identical (SILICON 3.5003 at 1.31 µm, 3.4757 at
+1.55 µm, 3.4150 at 10 µm) and every other catalogue glass is unaffected.
+
+Files: `lumenairy/glass.py` (`_catalogue_page_wavelength_range_m`,
+`_require_finite_catalogue_index`, and the tuple-path return of
+`get_glass_index`).
+Tests: `tests/unit/test_audit2609_a8_verify.py::test_verify_a8_e2_out_of_range_catalogue_lookup_refuses_instead_of_nan`.
+
+### Changed -- glass: the two new catalogue-lookup guards catch named exception tuples, not bare `Exception` (E1)
+
+`_catalogue_index_fn_from_entry` and `_cross_check_bundled_values` shipped with
+`except Exception`, which took the non-`ui/` broad-except census from 48 to 50
+against a budget of 48 (`tests/unit/test_audit_except_budget.py`).  Both are
+narrowed to `_catalogue_lookup_exceptions()` — an explicit built-in tuple plus
+the optional package's own exception classes resolved from the installed
+module, exactly as `_missing_kappa_exceptions()` already does (CONVENTIONS §10,
+no hard dependency).  The one case that genuinely could not be named — the
+package raising a BARE `Exception` from `get_refractive_index` for a page that
+carries only tabulated k — is now TESTED for (`_n_func is None`) rather than
+caught, with the forced evaluation kept as the fallback if a future version
+renames that attribute.  Coverage is unchanged: 76 of 76 bundled rows still
+resolve, 0 problems, same residuals; census contribution back to **0**.
+
+Files: `lumenairy/glass.py` (`_CATALOGUE_LOOKUP_BUILTIN_EXCEPTIONS`,
+`_NoSuchAttributeSentinel`, `_catalogue_lookup_exceptions`,
+`_catalogue_index_fn_from_entry`, `_cross_check_bundled_values`).
+
+### Changed -- elements: `generate_turbulence_screen` delivered 2× the requested phase variance; the spurious `sqrt(2)` is gone (E3, P1) — **default change**
+
+The amplitude was `sqrt(2 * PSD) * df`.  With `c_k = (a_k + i b_k)·A_k` and `a`,
+`b` independent standard normals, `Var(Re c_k) = A_k²` already — taking the real
+part costs no factor of two, so the `sqrt(2)` doubled the screen's variance and
+its structure function.  The correct amplitude is `sqrt(PSD) * df` (Schmidt
+2010, `ft_phase_screen`).
+
+Measured (N = 512, dx = 5 mm, r0 = 0.1 m, 60 seeds) against the exact discrete
+structure function of the code's own lattice:
+
+| r [m] | D_meas/D_lattice before | after |
+|---|---|---|
+| 0.005 | 1.987 | **0.994** |
+| 0.010 | 1.984 | **0.992** |
+| 0.020 | 1.979 | **0.990** |
+
+and the screen variance / ΣPSD·df² over 40 seeds at N = 256 went **1.976 → 0.988**
+(orchestrator repro `verify_turb.py`).  Against the continuum Kolmogorov target
+`D = 6.88 (r/r0)^(5/3)` the screen read **1.584 at r = 0.05 r0 — above the
+continuum**, which is unphysical for a band-limited screen; it now reads 0.798,
+below it, as an FFT screen must be.
+
+**Migration.**  Every screen from this entry point is now smaller by exactly
+`sqrt(2)` on the same seed (verified: `new * sqrt(2) == old` to 5.5e-16
+relative).  Runs that were tuned by eye against the old screen were running
+1.5× stronger turbulence than requested at small separations (effective
+`r0 = r0/2^{3/5} = r0/1.516`) and a φ_rms `sqrt(2)` too large; to reproduce the
+old numbers exactly, ask for `r0_old_equivalent = r0 * 2**(-3/5)`.  The in-code
+claim that the `sqrt(2)` was "verified against D(r=r0) = 6.88" was false: the
+agreement it cited happens only near r ≈ 3.2 r0, where the 2× excess crosses the
+FFT screen's own low-frequency deficit.
+
+The PSD *shape* (the 0.023 f^-11/3 constant in cycles/m, the von Kármán knee, the
+inner-scale cutoff and the v5.30 integer `N//2` DC anchor) is unchanged and still
+audit-verified correct; only the amplitude moved.
+
+Files: `lumenairy/elements/elements.py:1186` (re-anchored 2026-09-12 after the history relocation moved lines); PSD extracted to the shared
+`_turbulence_psd` helper at `:1151`.
+Tests: `tests/unit/test_audit2609_a8_turbulence.py` (whole file);
+`tests/unit/test_niche_audit_w3_elements.py::_turbulence_reference` updated —
+its independent E-L11 oracle carried the same spurious `sqrt(2)`, i.e. it pinned
+the defect.
+
+### Added -- elements: `generate_turbulence_screen(subharmonics=N)`, the Lane low-frequency correction (E3)
+
+An FFT screen cannot hold eddies larger than the grid, so even with the
+amplitude fixed its structure function falls below Kolmogorov at large
+separations.  `subharmonics=p` adds `p` levels of 3×3 frequency grids at
+spacing `1/(3**p · N · dx)` (Lane, Glindemann & Dainty 1992; Schmidt 2010
+`ft_sh_phase_screen`), summed in the separable `e.T @ cn @ e` form (three
+length-N exponentials per level, not nine full-grid ones).
+
+Default **0** — the shipped behaviour is unchanged and bit-identical for
+`subharmonics=0`.  Measured D/D_Kolmogorov over 40 seeds (N = 512, dx = 5 mm,
+r0 = 0.1 m): 0.798 → **0.880** at r = 0.05 r0 and 0.463 → **0.777** at
+r = 3.2 r0, for +23–28 % wall time and no extra peak memory.
+
+Files: `lumenairy/elements/elements.py:1186` (re-anchored 2026-09-12 after the history relocation moved lines) (signature + validation),
+`:1352` (`_turbulence_subharmonics`).
+
+### Fixed -- elements: `apply_grin_lens` was 36 % wrong at the quarter pitch its own Notes recommend (E5, P1) — **default change**
+
+The screen applied the short-rod power `n0·g²·d`; the rod's exact paraxial ABCD
+has `C = −n0·g·sin(g·d)`, so the two differ by `sin(gd)/(gd)`.  Measured
+`f_code/f_exact`: 0.9996 at g·d = 0.05, 0.9851 at 0.30, 0.9003 at π/4,
+**0.6366 at the quarter pitch π/2** and 0.1093 at 0.9π.  An ASM focus scan
+confirmed the screen tracked the wrong focal length, not just the wrong formula.
+The screen now carries `φ = −k·n0·g·sin(g·d)·r²/2`, exact at any pitch and the
+same cost.  Re-measured ASM focus / f_exact after the fix: 1.0000 / 0.9955 /
+0.9940 / 0.9940 at g·d = 0.05 / 0.30 / π/4 / π/2 (the residual is the paraxial
+screen's own spherical-aberration focal shift at these NAs).
+
+**Migration.**  `thin_form=True` reproduces the previous screen bit-identically
+and warns above g·d = 0.2, naming the measured `sin(gd)/(gd)` factor.  On the
+exact path, g·d beyond the quarter pitch now warns that a single screen carries
+the rod's power only — that power passes through zero at the half pitch, where
+the rod instead reimages 1:1 inverted.  The Notes now also state what a single
+screen cannot do: the rod's back focal distance is `cos(gd)/(n0 g sin(gd))` from
+the exit face while a thin screen focuses a collimated input at `f` past itself,
+so the focus POSITION relative to the rod faces needs a ray/split-step model.
+
+Files: `lumenairy/elements/_lens_thin.py:1096` (`thin_form` kwarg), `:1258-1281`
+(guards), `:1305` (the power).
+Tests: `tests/unit/test_audit2609_a8_thin_elements.py::test_e5_*`.
+
+### Fixed -- bsdf: Harvey-Shack TIS under-read by up to 32 %, and the inherited quadrature could not resolve any realistic lobe (E6, P2)
+
+`HarveyShackBSDF` was the only shipped model without a closed-form TIS, so it fell
+back to the base class's 256-point **linear-θ** grid — Δθ = 6.16 mrad, coarser
+than the whole lobe, whose shoulder `l` defaults to 0.01.  Measured against a
+dense reference:
+
+| model | TIS before | TIS after | reference | error before → after |
+|---|---|---|---|---|
+| HarveyShack(l = 1e-2, s = 2) *(the defaults)* | 0.00287272 | **0.00289355** | 0.00289355 | −0.72 % → −1.4e-9 |
+| HarveyShack(l = 1e-3, s = 2) | 3.54486e-5 | **4.34027e-5** | 4.34027e-5 | **−18.3 %** → −9.3e-8 |
+| HarveyShack(l = 1e-4, s = 2) | 3.94725e-7 | **5.78703e-7** | 5.78703e-7 | **−31.8 %** → −7.0e-6 |
+| HarveyShack(l = 1e-2, s = 1.5) | 0.0112895 | **0.01131** | 0.01131 | −0.18 % → −3.6e-10 |
+
+`HarveyShackBSDF.total_integrated_scatter` is now the exact closed form
+`π b0 l² [(1+1/l²)^(1−s/2) − 1]/(1 − s/2)` (`π b0 l² ln(1+1/l²)` at s = 2),
+O(1) and exact.
+
+The **base-class** quadrature — what any user subclass gets — is rebuilt on the
+same node count (256 × 128): the variable is `u = sin θ` (for which
+`BSDF cos θ dΩ = BSDF(u) u du dφ` exactly), the cells are geometric in `ln u`
+from 1e-7 to 1 with two-point Gauss-Legendre inside each, and the `u < 1e-7`
+disc is added analytically.  Worst-case relative error across Lambertian,
+Gaussian (σ = 1e-2 and 0.3) and Harvey-Shack (l = 1e-1…1e-4, s = 1.5/2/2.5):
+**1.4e-6** (typical 1e-9), against −32 % / −18 % for the grid it replaces.
+
+That 1.4e-6 is the worst of those lobes, not a bound.  The rule is exact
+through cubic order in `v = ln u`, so the residual is the quartic term
+`dv⁴·2⁴/4320`; with `dv = ln(1e7)/128` that is **9.3e-7 even for a FLAT lobe**
+(whose integrand `u² = e^{2v}` is not a cubic), measured at −9.2935e-07 for
+`B = const` and 1.3e-5 for `B = 1 − u²`.  Budget ~1e-5 for a broad smooth lobe
+— still four to five decades better than the grid this replaces.
+
+Files: `lumenairy/elements/bsdf.py:61` (`_TIS_U_MIN`), `:130-201` (base
+quadrature), `:503-528` (the closed form).
+Tests: `tests/unit/test_audit2609_a8_thin_elements.py::test_e6_harvey_shack_tis_*`,
+`::test_e6_base_class_quadrature_*`, `::test_e6_shipped_model_tis_values_are_unchanged`.
+
+### Fixed -- bsdf: `make_bsdf` silently ignored unknown dict keys, including the `A`/`B`/`C` aliases its own docstrings teach (E6, P2)
+
+`make_bsdf({'kind':'gaussian','sigma':0.001,'scatter_fraction':0.5})` built
+`GaussianBSDF(sigma_rad=0.01, scattered_fraction=0.01)` — a 10× wider lobe and
+50× less scatter than requested, silently; and
+`make_bsdf({'kind':'harvey_shack','A':1e-3,'B':0.02})` returned all defaults even
+though `A` / `B` are the alias names the `HarveyShackBSDF` docstring itself
+introduces.  Unknown keys now raise, naming the accepted set; `A` / `B` / `C` are
+accepted as aliases for `b0` / `l` / `s`, and supplying both spellings of one
+parameter raises rather than silently picking one.
+
+**Migration.**  This is a strictness change, not only an alias addition: ANY key
+the chosen `kind` does not consume is now a `ValueError`, so a surface `bsdf`
+spec that carried a free-text annotation (`'comment'`, `'source'`, `'notes'`)
+alongside its parameters used to be accepted and is now rejected.  No in-repo
+caller passes an extra key (grepped `lumenairy/`, `tests/`, `validation/`,
+`examples/`); prescriptions written outside the repo may.  Move such keys out
+of the spec dict — the alternative, a silently-ignored key, is the defect this
+entry is about.
+
+Files: `lumenairy/elements/bsdf.py:628-714`.
+Tests: `tests/unit/test_audit2609_a8_thin_elements.py::test_e6_make_bsdf_*`.
+
+### Performance -- bsdf: `sample_scatter_rays` vectorised over the bundle (113×–377×), and the Harvey-Shack rejection sampler replaced by its exact inverse CDF (E6)
+
+`sample_scatter_rays` made one Python `sample()` call per incident ray, each with
+its own `np.array` build and — for Harvey-Shack — its own rejection loop with a
+Python `list.extend`.  The lobe-local draw is incidence-independent, so the whole
+bundle is now drawn in one call and rotated by a batched frame build; the
+rotation reproduces the per-ray code it replaces, including the near-pole
+branch, to **4.441e-16** — 2 ULP of a unit direction cosine — and exactly on
+350 of 407 incidences swept (the residual is `np.linalg.norm(v)` on a 1-D
+vector dispatching to a BLAS `nrm2` where `norm(v, axis=-1)` is a ufunc
+reduction; it is not bit-identity and must not be asserted as such).
+Measured on 20 000 incident rays, `n_per_ray = 1`:
+**113× (lambertian), 327× (gaussian), 377× (harvey_shack)**.
+
+**Migration.**  `sample_scatter_rays` prefers a new batched
+`BSDFModel._sample_local` hook, which the three shipped models implement.  A
+user subclass that implements only the ABC's abstract `sample` keeps working:
+it has no hook, so the function falls back to the per-ray loop for it.
+
+`HarveyShackBSDF` draws `u = sin θ` from the closed-form inverse CDF
+(`t = T^ξ` at s = 2, `t = (1 + ξ(T^p − 1))^{1/p}` otherwise, `u = l√(t−1)`),
+replacing a rejection sampler whose acceptance was measured at 46 % / 9.2 % /
+1.3 % at l = 0.1 / 0.01 / 0.001.  `sample()` of 20 000 directions:
+5.47 → 3.73 ms, 7.33 → 3.28 ms, 24.93 → **3.58 ms** — and now constant-time.
+Distribution verified against a numerically-integrated CDF (KS = 0.0020 at
+n = 2e5, inside the 0.0030 95 % band).
+
+**Migration.** `sample()` on all three models and `sample_scatter_rays` draw
+different random numbers than before for a given seed (a different algorithm and
+a different per-ray ordering); the sampled distributions are unchanged.
+
+Files: `lumenairy/elements/bsdf.py:113-127` (`_sample_local` contract),
+`:306-326`, `:407-426`, `:539-566` (the three local samplers), `:582-615`
+(`_rotate_local_to_specular`), `:753-771` (`sample_scatter_rays`).
+
+### Added -- thin_grating: a Klein-Cook / short-period validity guard (E6, P2)
+
+`thin_grating_efficiency_1d` had no regime check, and the failure is invisible in
+its output: measured at λ = 1 µm, depth = 10 µm, **Q = 0.16 / 15.7 / 62.8** at
+Λ = 20 / 2 / 1 µm produced **zero warnings and ΣT = 1.0000 every time**, so
+energy closure cannot be used as the tripwire.  A `UserWarning` now fires when
+`Q = 2πλd/(n̄Λ²) > 1` (Bragg regime), or failing that when `Λ < 10λ`, mirroring
+`emt.py`'s `_warn_rytov_validity` so the diagnostic policy is consistent inside
+the package.  Verified silent at Q = 0.13 and firing at Q = 12.6 and 50.3
+(n̄ = duty-weighted 1.25 for the audit's fixture).  The analytic Fourier
+coefficients are untouched and still exact (η₊₁ = 4/π² = 0.405285,
+η₊₃ = 4/(9π²) = 0.045032 for the 50 %-duty π-step grating).  The module
+docstring's garbled `t_m` formula is replaced with the correct expression.
+
+Files: `lumenairy/elements/thin_grating.py` (the first 108 lines: docstring, thresholds,
+`_warn_thin_grating_validity`), `:196` (the call).
+Tests: `tests/unit/test_audit2609_a8_thin_elements.py::test_e6_klein_cook_guard_fires_in_the_bragg_regime`,
+`::test_e6_short_period_guard_fires_when_q_is_small`,
+`::test_e6_grating_fourier_coefficients_are_untouched`,
+`::test_e6_grating_module_docstring_formula_is_well_formed`.
+
+### Performance -- doe: `create_microlens_array` rebuilt on the separable phase — 4.3× memory, 3.0× time, bit-identical (E6, P2)
+
+The lenslet phase `−k/(2f)·(dX² + dY²)` is separable and the footprint test is
+too, but `X, Y, in_mla, jx, jy, xc, yc, dX, dY, r_sq, phase` were all full N×N
+grids.  The snap, the local coordinate and the footprint test are now length-N
+vectors; only `r_sq` is a full grid, and `cos`/`sin` are written straight into
+the output's real/imaginary views instead of going through `np.exp(1j·phase)`.
+Measured tracemalloc peak in units of one N² float64 grid, one implementation
+per process and identical at N = 1024 and N = 2048: **14.13 → 3.25**; median
+wall time at N = 2048: **426 → 144 ms**.
+Output is bit-identical (`np.array_equal`, several N / pitch / lenslet-count
+combinations).  `|T| = 1` everywhere and the exactly-zero steer at each lenslet
+centre are unchanged.
+
+Files: `lumenairy/elements/doe.py:251-279`.
+Tests: `tests/unit/test_audit2609_a8_thin_elements.py::test_e6_microlens_array_separable_form_is_bit_identical`,
+`::test_e6_microlens_array_allocates_a_handful_of_grids_not_ten`,
+`::test_e6_microlens_array_physics_is_untouched`.
+
+### Fixed -- doe: `create_periodic_phase_mask` assumed a square cell without checking (E7, P3)
+
+`cell_N = phase_cell.shape[0]` indexed both axes: a `(4, 8)` cell silently
+sampled only columns 0–3 — half the design never appeared in the mask — and an
+`(8, 4)` cell raised a bare `IndexError` naming neither the function nor the
+argument.  Both now raise a named `ValueError`.  Square-cell behaviour is
+unchanged (per-cell-pixel occupancy still exactly uniform, 0.0000 % of power off
+the order lattice).
+
+Files: `lumenairy/elements/doe.py:155-163`.
+Tests: `tests/unit/test_audit2609_a8_thin_elements.py::test_e7_periodic_phase_mask_*`.
+
+### Added -- elements: `apply_aperture(edge='gray')`, an area-weighted aperture edge (E7, P3)
+
+The aperture family offered a hard binary mask only, so an under-sampled stop
+carried a systematic throughput bias plus extra Gibbs ringing.  `edge='gray'`
+gives each boundary pixel its `edge_samples**2`-supersampled open-area fraction
+(default 4 → 16 sub-samples), accumulated one sub-mask at a time so the peak
+cost does not grow with `edge_samples` (measured 6.0 float64 grids at N = 2048
+for every `n_sub`, against 5.0 for the hard edge).  Measured transmitted-area
+error against the analytic disc area, **before and after on the same grid**
+(N = 1024, dx = 1 µm): at D/dx = 50 px **−0.5345 % → +0.0384 %**, at 200 px
+−0.0220 % → −0.0006 %, at 800 px −0.0075 % → +0.0005 %; `edge_samples=16`
+reaches −0.00056 % at 50 px.  The hard-edge error depends on where the rim
+falls on the pixel lattice, so the honest summary is the rms over sub-pixel rim
+placements: **0.386 % → 0.044 %** at 50 px and 0.031 % → 0.0041 % at 200 px,
+over `linspace(0, 0.95, 12)`.  Those are CIRCULAR-rim figures; an axis-aligned
+(rectangular) rim is quantised rather than sampled and improves as `1/n_sub`
+exactly (0.639 % at 4 → 0.158 % at 16 on a 40.3 × 17.7 px stop).  Default
+`'hard'` is bit-identical to before on circular / annular / rectangular,
+dtype-preserving, and the JAX path matches NumPy exactly (0.00e+00) for both
+edges.  A fully blocked pixel comes out exactly zero for any input, including a
+field carrying NaN or inf outside the stop.
+
+Files: `lumenairy/elements/elements.py:227` (re-anchored 2026-09-12 after the history relocation moved lines).
+Tests: `tests/unit/test_audit2609_a8_thin_elements.py::test_e7_aperture_*`.
+
+### Fixed -- documentation: four claims in `elements/` and `glass.py` that said the opposite of the code (E7, P3)
+
+* `elements.zernike` told Noll users to map `j_Noll -> (n, m)` with
+  `lumenairy.analysis.zernike_index_to_nm`, which is the **OSA** map
+  (`m = 2j − n(n+2)`): OSA j = 5 is (2, +2), Noll j = 5 is (2, −2), so a reader
+  following the pointer got the wrong polynomial for every j ≥ 5.  The docstring
+  now says the library ships no Noll converter and that only the single-index
+  ORDERING differs.
+* `apply_spherical_lens`'s See Also now states the **reference-plane** difference
+  from `apply_real_lens`, re-measured for this fix: on n = 1.5168, R1 = +20 mm,
+  R2 = −20 mm, d = 3 mm at 1 µm, thin-lens f = 19.3498 mm, thick EFL 19.8573 mm,
+  BFL 18.8424 mm, `apply_spherical_lens` focuses at 19.3111 mm and
+  `apply_real_lens` at 18.8080 mm — **503 µm apart on a 19 mm lens (2.6 %)**, with
+  1.708 rad rms (0.272 waves) of phase difference across the illuminated pupil.
+* `glass.py`'s `_GLASS_VALIDITY_REGISTRY_EXEMPTIONS` comment described `'air'`,
+  `'vacuum'` and `'__MIRROR__'` as registry entries; none of the three is one.
+  The comment now describes what they actually are.
+* The `BaF2` Sellmeier row's comment credited "the authoritative Li 1980 fit
+  (main/BaF2/Li)"; the coefficients are Malitson & Dodge 1972, which the row
+  reproduces to 2.2e-16 while differing from Li by 8.1e-5 in n_d.  Attribution
+  corrected; the data is unchanged.  The `CaF2` row's comment now records that
+  the registry dispatches to a *different* published fit (`main/CaF2/Daimon-20`,
+  2.8e-5 away in n_d) when `refractiveindex` is installed, so the bundled
+  fallback is reached only on a minimal install.
+
+### Changed -- glass: the `'air'` short-circuit now consults the registry, so an ambient model is implementable (E7, P3)
+
+`get_glass_index` / `get_glass_index_complex` returned 1.0 for any spelling of
+`'air'` **before** the registry lookup, so a user who registered the Edlén
+callable the exemptions comment described had it silently ignored — n = 1.000000
+instead of 1.000274 at 1 atm / 1.064 µm, i.e. 274 µm of OPD per metre of air path
+(≈ 256 waves).  The short-circuit now honours a callable registered under the
+canonical lower-case key `'air'` and falls back to 1.0 otherwise.  **No default
+changes**: `'air'` ships unregistered, `list_glasses()` is unchanged (77 names,
+no `'air'`), and `'vacuum'` / `'__MIRROR__'` still raise as before.
+
+**Migration.**  The consult is by the CANONICAL LOWER-CASE key only.
+`get_glass_index('AIR')` and `get_glass_index('Air')` honour
+`GLASS_REGISTRY['air']`, but a callable stored under a mixed-case key
+(`GLASS_REGISTRY['Air'] = ...`) is still silently ignored and the lookup
+returns 1.0 — the name is case-folded before the short-circuit, so the registry
+is only ever consulted at `'air'`.  Register ambient models at `'air'`.
+
+Files: `lumenairy/glass.py:1722-1733`, `:1852-1866`.
+Tests: `tests/unit/test_audit2609_a8_glass.py::test_e7_*`.
+
+### Verified -- glass: the 24 formula-3 polynomial rows the auditor could not reach
+
+The partition report listed the 4 CDGM + 10 Hikari + 10 Sumita `POLYNOMIAL_COEFFICIENTS`
+rows as its single biggest remaining gap ("given that 3 of 49 Sellmeier rows are
+wrong, the polynomial table deserves the same treatment").  All 24 are now
+value-checked by the new cross-check and every one is **exact to 0.00e+00** in
+both n_d and V_d against its catalogue page.
+
+<!-- WP-A12: PMM 1-D -->
+### Fixed -- pmm: the differentiable `PMMStack.solve` twin returned before EVERY guard, and returned silently-wrong answers where NumPy raises (G1, P1)
+
+`PMMStack.solve` dispatched to `pmm/_jax_stack.py` and **returned** before
+`_require_propagating_incidence`, before the cross-layer sliver screen and before
+`_warn_stack_energy`.  `_jax_stack.py` contained zero occurrences of any of those names; its only
+guard was a grazing check on `|kz_inc| < 1e-9`.  Measured on the audit's two-layer Si/SiO2 fixture,
+routing to the twin by making one layer's `eps` a `jnp` array while every other input stays a plain
+Python value:
+
+| case | NumPy branch | JAX branch, before | JAX branch, after |
+|---|---|---|---|
+| gain superstrate `n_sup = 1 - 1e-3j` (fully **concrete**) | `ValueError: gain incidence medium ...` | returns `R+T = [-0.848, -0.863]` -- **negative efficiencies, silently** | the **identical** `ValueError`, string for string |
+| manufactured sliver `s = 1.5e-5` of the period, degree 14 / 16 / 18 (`min_feature` PINNED at `period * 1e-5`, see below) | `ValueError` (sliver refusal) | `T0(E_y) = 1.3417`, `max R+T = 8.35` -- a 735 % energy violation, **no warning** | same number, now under **two** warnings: the geometric sliver screen and `energy not conserved (max R+T = 8.35 > 1)` |
+| same, degree 12 / 20 | returns 0.76587 | returns 0.76589 | returns 0.76589 under the geometric screen warning alone |
+
+The sliver rows are measured with `min_feature` **pinned at `period * 1e-5`**, the pre-2026-09-12
+default.  That has to be said because the two findings interact: at the default this release raises
+to `period * 1e-3` (G2 below) the same `s = 1.5e-5` collision is SNAPPED AWAY, the fixture carries
+no sliver at all, and the audit's reproducer reads `T0 = 0.7658976`, `tot = 1.000000` silently on
+both branches at every degree 12-20.  That is the G2 cure acting on the G1 reproducer, not the G1
+guard standing down; the guard itself is exercised at the old threshold, above and in the
+regression tests.
+
+The gain case is **exactly the audit-M3 2026-07-25 defect** the NumPy path was fixed for, still
+alive on the twin -- and `n_superstrate` is fully concrete there, so the documented "a TRACED value
+skips the guard" carve-out never covered it.  The sliver case is worse than the gain case because it
+is *degree-dependent*: it passes any spot check the user makes at a neighbouring degree.  This is the
+differentiable design loop -- the LC-QWP inverse-design path this library exists for.
+
+Three things now run on both branches:
+
+* the concrete incidence guard (`_jpmm_concrete_incidence_guard`) is hoisted **above** the traced
+  dispatch, so a gain / evanescent / metallic incidence medium raises identically on both;
+* the **pure-geometry** sliver screen runs before the twin and WARNS.  It reads only wall
+  coordinates, `min_feature`, `degree` and `period`, every one of which is a concrete host value on
+  the differentiable path (the twin freezes the geometry), so it is trace-safe;
+* `_warn_stack_energy` runs on the returned arrays whenever they are **concrete** -- an ordinary
+  eager `solve()` -- raising on a non-finite or negative total and warning above the super-unity bar.
+
+What still does not run, and is now stated in the `PMMStack.solve` docstring rather than nowhere:
+under `jit`/`grad` the outputs are Tracers, so the energy tripwire is skipped (its comparison cannot
+be taken without severing the trace); a *traced* `n_superstrate`/`angle` skips the incidence raise
+for the same reason; and the three-solve sliver **arbiter** -- the only thing that can turn a screen
+hit into the NumPy path's `ValueError` -- is never available under a trace, so a sliver stack WARNS
+here where NumPy refuses.  The docstring previously asserted the opposite (*"same physics ...
+forward-identical to NumPy at ~1e-15"*) and listed only slant / out-of-plane / `stabilize` /
+`retain_internal` / sweep as raising.
+
+Parity and gradients are unaffected (they were never the problem): NumPy-vs-JAX per-order
+efficiencies agree to 1.2e-15 on the audit's own over-capacity ladder, a clean stack fires **no**
+warning, and `jax.grad` w.r.t. `eps_ridge` matches a central difference to **2.0e-8 relative**
+(AD -0.02222695101, FD -0.02222695056).
+
+Tests: `tests/unit/test_audit2609_a12_pmm1d.py::test_g1_*` (4 tests, including a trace-safety test
+that the screen still fires under `jax.grad` while the tripwire correctly stands down).
+
+---
+
+### Changed -- pmm: `PMMStack`'s default `min_feature` is now `period * 1e-3` (was `period * 1e-5`), which is ABOVE the measured sliver hazard band instead of at its bottom (G2, P2)
+
+The union-grid wall snap is the only thing that removes a manufactured cross-layer sliver before it
+reaches the solve, and the sliver pathology has a *measured width* that is ABSOLUTE rather than a
+multiple of the knob: an unsnapped collision of size `s` corrupts the answer for `s` at roughly
+**1e-5 .. 1e-4 of a PERIOD** (both fixtures below, degrees 10-26) and is harmless outside that.
+That is what makes raising the threshold a cure at all -- a band that scaled WITH `min_feature`
+could never be cleared by raising it, and the ladder below shows it does not, because at
+`period * 1e-3` the rungs at 1x .. 8x of the threshold are clean where at `period * 1e-5` they were
+the whole hazard.  The old default therefore snapped away only the collisions that were already
+harmless and left the entire dangerous decade exposed -- and with the refusal armed (the shipped
+default) a staircased stack at `s = 1.5e-5` of the period was **REFUSED at every degree from 10 to
+24**, i.e. could not be solved at all at the library default.
+
+Re-measured on the audit's second, independent fixture (TiO2-like 2.35/1.46, 0.55 um pitch, 0.70 um,
+31 deg, two layers, refusal disarmed), sweeping `s` over a 0.3x..100x ladder of `min_feature` at
+degrees 10/14/18/22/26 and scoring **degree-SCATTER at fixed `s`** (a smooth drift with `s` is a
+genuinely different geometry and is correct physics; an answer that jumps between branches as
+`degree` changes is the pathology).  Reference `T0 = 0.199229666`:
+
+| `min_feature` | rungs of 11 showing degree-scatter |
+|---|---|
+| `period * 1e-5` (the old default) | **6 of 11** -- every rung from 1x to 8x; `T0` reads 0.2645 / 0.3082 / 0.1939, up to 55 % wrong and scattering by +-5 % between ADJACENT degrees |
+| `period * 1e-4` | **1 of 11** (only the 1.0x rung, and at one degree of five) |
+| `period * 1e-3` (the new default) | **0 of 11** -- every rung degree-independent to 7 digits |
+
+and where two settings both leave a collision unsnapped they agree **exactly**: `s = 1.5e-4` reads
+0.19839028 under `1e-5` and `1e-4`, `s = 3e-4` reads 0.19755266 under both, `s = 1e-3` reads
+0.19366045 under `1e-5` and `1e-3`.  Raising the knob does not perturb the cases it does not touch --
+it only removes cells the union manufactured.  On the audit's first fixture (Si/SiO2, 1.0 um pitch,
+1.55 um, 12 deg) the same band reaches `T0 = 22.38` and `147.67` against a correct 0.7577.
+
+`1e-3` is also the scale the sliver refusal itself already prescribes as its first remedy
+(`mf_fix = 2 * w_wide * P`).
+
+**Migration.**  A caller who relied on the old value -- for example to keep a deliberate sub-nm
+cross-layer offset in the grid, or to reproduce a number measured before this release -- gets it
+back with `min_feature=period*1e-5`.  The snap moves walls by at most `min_feature/2`, so a stack
+**with** colliding cross-layer walls can now see its solved geometry differ from the requested one
+by up to 5e-4 of a period; a stack **without** them is byte-identical (no pair inside the threshold
+-> identical grid -> identical answer).  The snap has always been cross-layer-pairs-only: a close
+pair a single layer owns (an intentional thin liner) is never thinned, whatever this is set to
+(verified across liner widths 1e-2 .. 1e-6 of a period: byte-identical union grids at the old and
+the new default).
+
+**What that costs in ANSWERS, and what it now says out loud.**  Where a collision exists and is
+snapped, the number moves -- measured on the audit's second fixture at `s = 3e-4` of the period,
+`T0 = 0.19829790` on the snapped grid against `0.19755266` unsnapped, i.e. **3.8e-3 relative**.  And
+because the threshold is two decades higher, `_pmm_union_grid` now WARNS
+(`_pmm_union_grid: snapped N pair(s) of NEAR-COINCIDENT cross-layer walls closer than
+min_feature=... (period fractions): ...`) on stacks that were previously silent -- any stack whose
+cross-layer walls sit between 1e-5 and 1e-3 of a period apart.  That warning is not new code; it is
+the existing snap notice reaching a population it did not reach before, and it is the intended
+signal: it names the pairs and the maximum wall displacement, so the caller can see how far the
+solved geometry has drifted from the requested one.  A caller who needs the requested geometry
+verbatim passes `min_feature=period*1e-5` (or smaller); a caller who wants the snap but not the
+notice should NOT filter it blind -- check first that the displacement it reports is below the
+accuracy they need.
+
+`PMMStack.__init__` now documents `min_feature` in its `Parameters` section -- it had no entry at
+all -- and states the **collision-scale rule** the caller should actually reason with: the threshold
+must sit ~10x ABOVE the geometry's own cross-layer collision scale, and that scale is not a period
+fraction (for a taper it is `(thickness / n_slices) * tan(sidewall)`, in nanometres, independent of
+the period).  The period-scaled default is a convenience, not a derivation.
+
+Tests: `tests/unit/test_audit2609_a12_pmm1d.py::test_g2_*` (4 tests: the value, the geometric band
+sweep, the numeric degree-scatter cure on the second fixture, and the bit-identity of what the
+larger snap does not touch).  Three existing fixtures that inherited the old default and *need* the
+sliver to survive now pin `min_feature` explicitly and say why:
+`tests/unit/test_fix_pmmstack_sliver_walls.py` (the O-11 hazard-band fixture),
+`tests/unit/test_pmm_m2_window_contract.py::_mk` (whose T3-1 measurement asserts the snap is inert)
+and `tests/unit/test_pmm_m3_efficiency.py`'s T3-4 sweep-ordering fixture.
+
+---
+
+### Performance -- pmm: the sliver arbiter's extra solves are lazy; the exactly-diagonal GLL masses take an O(n) path; `Q @ W2` is built once (G3, P2)
+
+All four changes are **bit-identical**, verified by an in-process A/B over 75 arrays spanning single-
+layer Jones (normal / oblique / metal), the scalar `te`/`tm` entries, conical, four multilayer stacks
+(shared grid, anisotropic, lossy, per-layer, normal-incidence and slanted) and the modal kernels
+themselves: **0 of 75 arrays differ, worst |A - B| = 0.000e+00**.
+
+**The sliver arbiter: 4 solves -> 2 on a `truncation` verdict.**  Counted deterministically by
+wrapping `PMMStack.solve` itself (not a `_core` helper -- `stack.py` binds those names at import,
+which is the instrumentation bug the auditor caught and recorded):
+
+| n_slices | sliver `s` | solves before | solves after | guard OFF | verdict |
+|---|---|---|---|---|---|
+| 4 | 3e-4 | 4 | **2** | 1 | truncation |
+| 8 | 3e-4 | 4 | **2** | 1 | truncation |
+| 8 | 1e-4 | 4 | 4 | 1 | refused (needs `d12`) |
+| 16 | 5e-5 | 4 | 4 | 1 | refused (needs `d12`) |
+| 4 | 0 | 1 | 1 | 1 | *control -- no sliver* |
+| 1 | 0 | 1 | 1 | 1 | *control -- single layer* |
+
+`d12` -- the device's own measured sensitivity to where the contested wall sits -- is read only on
+the `'sliver'`/`'wall'` fork, and that fork is reached only after `d0` has cleared the geometric
+floor, so the two `_sliver_collapse_solve` calls are now paid only when they are used.  On a
+`'truncation'` verdict `ev['d12']`, `ev['d0_over_d12']` and `ev['closed_super_unity']` are `None`:
+they were not measured, and reporting a number nobody computed would be worse than reporting none.
+No verdict and no returned number changes -- only how many solves are paid to reach them.
+
+`PMM_SLIVER_ARBITER_LAZY` (module-level, default `True`) is the fail-before switch: `False` restores
+the eager form bit for bit -- all three solves, every evidence field populated -- for an A/B or for a
+diagnostic that wants the wall sensitivity on a row the criterion did not need it for.  Three tests
+whose SUBJECT is that denominator now ask for it through the switch and keep every number they
+measured (`test_fix_pmmstack_sliver_walls_round2.py` x2, `test_fix_pmmstack_sliver_round4.py` x2),
+and the arbiter's cost test is restated to the per-verdict contract with the pre-lazy count
+re-derived through the switch instead of quoted.
+
+*Correcting the audit on two points.*  (1) The finding says memoizing the verdict means "a sweep pays
+it once".  It does not and cannot: `wl` is part of the determinant of what the re-solves read, so
+each point of `solve_vs_wavelength` is genuinely different physics and would miss by construction.
+(2) A memo keyed on that determinant WAS implemented and then **removed**: its only remaining
+beneficiary was a repeated *identical* `solve()` (measured 10 -> 6 and 20 -> 8 invocations over five
+repeats), and against that it made the arbiter's re-solves invisible to the three shipped contracts
+that instrument `_sliver_probe_solve` to assert WHICH source it is handed -- a worse trade than the
+saving.  See the WP report for the design a future attempt should use instead.
+
+**Diagonal GLL masses.**  GLL mass lumping makes every nodal mass operator structurally diagonal
+(`Mloc = diag(ref_w * J)`; the only overlaps are shared element-boundary nodes), and the geometric
+mass `S0` additionally real and positive.  `_safe_inv`, `_safe_solve` and the seven `inv(S0) @ X`
+products inside `_sem_modes_tensor` now take an `O(n)` reciprocal / row scale on an exactly-REAL
+diagonal, and the dense LAPACK path otherwise.  The restriction to *real* diagonals is measured, not
+cautious: over 1,000 random diagonals (positive; mixed-sign; `float64` and `complex128`; magnitudes
+spanning 16 decades including the 1e-14 sliver-element regime) `inv(D)` vs `diag(1/d)`,
+`solve(D, B)` vs `B / d[:, None]` and `diag(1/d) @ B` vs `(1/d)[:, None] * B` differ in **0 of
+1,000** trials -- while on genuinely COMPLEX diagonals they differ in **1,000 of 1,000** by 2-4e-16
+relative, because LAPACK's complex division and NumPy's are not the same last bit.  A lossy `1/eps`
+mass therefore stays on the dense path and keeps its exact shipped arithmetic.
+
+**`Q @ W2` once.**  `_sem_modes_tensor` built the same `(2n)^3` product twice -- for the probe
+partner `V0` whose flux picks the forward set, and again for the returned `V2`, which differs only
+by the per-column branch flip already folded into the divisor.  It is now named once.  The trailing
+`@ np.diag(...)` stay gemms deliberately: `A @ np.diag(v)` and `A * v[None, :]` agree only to ~2e-16
+relative for complex `v` (measured), and `lam` is complex, so collapsing them would have traded
+bit-identity for one column scale.
+
+**`_sem_fourier_projection`** scatters with `np.add.at` instead of a Python loop over
+`degree + 1` global nodes.  `l2g` repeats a global index at the periodic wrap, so the accumulation
+order matters; `np.add.at` accumulates in index order -- the same order the loop used -- and is
+bit-identical (0 of 200 random layouts differ) and **1.45-2.6x** faster over
+`(degree, n_el) = (12, 4) .. (32, 20)`.  The JAX twin's static copy takes the same change.
+
+**`_grazing_safe_wavelength`** (WP-A14's change) now emits a `WoodNudgeWarning` whenever it nudges
+a wavelength off an exact Rayleigh cut-off.  Every 1-D PMM caller of it now passes `fn_name=`, so the
+warning names the entry point the user actually called (`pmm_efficiency_1d`, `pmm_jones_1d`,
+`pmm_efficiency_1d_segments`, `pmm_jones_1d_segments`, `pmm_jones_1d_conical`,
+`pmm_jones_1d_conical_tensor`, `PMMStack.solve (conical)` and the shared `_conical_nodal_solve`
+label) rather than a private helper.  Numerics unchanged -- the nudge fires only on a wavelength
+within ~1e-9 of a cut-off, and away from one the call is silent and returns the wavelength unchanged.
+
+**`_GEO_EIG_CACHE`** is keyed on a 32-byte blake2b digest instead of the full operator bytes -- at a
+production `n_glob` = 300 the old key was ~1.4 MB of complex128 *retained per entry*, beside a
+~1.4 MB value, plus an `O(n^2)` copy on every lookup -- and is now a `ByteBudgetedLRU`
+(`pmm_geometric_eig`) bounded by `LUMENAIRY_CACHE_BUDGET_MB` and drained by `clear_asm_caches()`,
+as its sibling `_PERLAYER_GEO_CACHE` already was.  The 64-entry count cap is gone: bytes, not
+entries, are the resource being protected.
+
+**Speed, reported honestly.**  On a 4-layer fixture the deterministic call counts read **22 -> 14**
+dense `np.linalg.inv` per solve (`solve` unchanged at 10, `eig` at 5), worth 0.77 % of the
+inv/solve/eig flop total; the gemm side (7*n^3 of row scales per patterned layer plus 8*n^3 from the
+`Q@W2` reuse, against ~344 n^3 per layer) is ~4 % by the flop model and is not separately measurable
+at run time (the `@` operator does not route through `np.matmul`).  An **interleaved** min/median-of-9
+wall-clock A/B on this box reads OFF/ON = 0.985-1.004 (min) and 0.948-1.182 (median) across degree
+10/14/20/26 -- indistinguishable from contention noise -- and `tracemalloc` peaks are identical to
+the byte (13.01 MB / 44.74 MB at degree 14 / 26).  **No speedup is claimed**: what is established is
+bit-identity, 8 fewer dense inverses per solve, 2 fewer whole-stack solves on a truncation verdict,
+and a cache key that no longer retains megabytes.
+
+Tests: `tests/unit/test_audit2609_a12_pmm1d.py::test_g3_*` (7 tests -- the solve counts with the
+pre-lazy control flow re-derived in-process through the fail-before switch, the digest key, the
+diagonal kernels against LAPACK, an end-to-end fail-before A/B with the fast path neutralised, the
+projection scatter, the no-sliver scope control, and the quadratic-in-wavelength pencil).
+
+---
+
+### Changed -- pmm: `PMMStack.internal_field(pol=...)` takes the family's `'te'`/`'tm'`/`'s'`/`'p'` spellings (G4, P3)
+
+`internal_field(..., pol='x')` raised `ValueError: pol must be 0 or 1`.  CONVENTIONS §7 pins that the
+`s`/`te` and `p`/`tm` aliases are "accepted everywhere (case-insensitive)"; this was the one place in
+the PMM surface that was an index into the Jones columns instead.  `'tm'`/`'p'` now select the
+incident `E_x` row and `'te'`/`'s'` the incident `E_y` row -- the same rows as `R_eff[0]`/`R_eff[1]`
+-- case-insensitively and whitespace-tolerantly; the integers `0`/`1` still work unchanged; an
+unknown spelling raises with the §2 `fn_name: ` prefix and names every accepted value.
+
+### Changed -- pmm: `set_source(angle=A, theta=T)` with `A != T` is no longer silent (G4, P3)
+
+The "alias wins, no equality check" rule is a deliberate, test-pinned cross-suite contract and does
+**not** change -- `theta` still wins, and the resolved number is unchanged.  What changes is that two
+*different* non-zero angles in one call, which has no legitimate reading, now emits a warning naming
+both values and the one that won.  The warning is gated on `angle != 0` because an ordinary
+`theta=`-only call leaves `angle` at its `0.0` default and is indistinguishable from an explicit
+zero.  (A raise would be strictly safer and is what the audit recommends, but it has to land in the
+RCWA resolver at the same time or the two suites stop agreeing -- which is the property
+`test_v5_12_0_naming_aliases` exists to pin.  Recorded as a requested cross-suite change.)
+
+### Fixed -- pmm: `PMMStack.prepare().solve()` silently dropped propagating orders (G4, P3)
+
+The far-field order-budget block was copy-pasted **13 times** across `_core.py`, `stack.py` and the
+JAX twin -- the exact multi-copy shape this codebase's own audits blame for its three worst recent
+defects (the six-copy factor-i defect, the six-copy `_sqrt_decay` branch-cut defect, and the T3-3
+conical order-cap defect, which was *one copy of this very block* capping from the wrong grid).  All
+thirteen are now one `_core._farfield_order_set(...)` helper, and consolidating them surfaced a
+divergent copy: `_PreparedPMMStack.solve` clamped the projector to the nodal capacity but **never
+refused** when the propagating orders did not fit inside it, so the prepared path returned a far
+field with orders missing -- sub-unity power, which the one-sided energy tripwire cannot see.  It now
+raises like every sibling path.  The refusal wording is unified across the thirteen sites (the four
+minority spellings differed only in prose; none was asserted anywhere).
+
+### Fixed -- docs: three PMM 1-D performance / convergence claims that the measurements contradict (G4, P3)
+
+* `_core.py`'s headline *"the dominant cost of a PMM solve is the dense `np.linalg.eig` ... (~85% of
+  runtime)"* is replaced by what is actually known: a cProfile of an 8-layer degree-24
+  `PMMStack.solve` counts **42 `np.linalg.inv` / 18 `np.linalg.solve` / 8 `np.linalg.eig`** calls,
+  and an arithmetic flop model puts the eig at ~58 %, the interface at ~14 % and the Redheffer star
+  at ~19 % per layer -- i.e. a third of the work is in the interface and star **inverses**.  The note
+  now also says, in as many words, that the empirical split is **unmeasured**: every wall-clock
+  attempt was destroyed by machine contention (a 144x144 complex eig timed at 490 ms against a ~5 ms
+  expectation; `inv(384)` timed *faster* than `inv(320)`), so the percentages are a flop model and
+  should be re-measured on a quiet machine before anyone optimises against them.
+* `elements_per_region > 1` + `grade=True` was documented as *"the speed lever for TM
+  (hp-refinement)"*.  Measured on the Au (0.18 + 3.43j) / air corner case it is advertised for,
+  against an `R_inf + c/n` extrapolation of the library's own RCWA at `n_orders` 401/601/801/1201,
+  single-element p-refinement beats it by **2.5-4x at matched DOF** (48 DOF: 4.36e-5 vs 1.07e-4;
+  96: ~5.6e-6 vs 2.00e-5; 192: 9.90e-7 vs 1.23e-6), and the eig cost goes as DOF^3.  Grading does
+  beat non-grading at fixed element count (1.5-3x), which is why it stays the default *when the knob
+  is raised at all* -- but uniform-degree grading is not hp-refinement, and the docstring now says
+  so and carries the ladder.
+* `pmm_jones_1d` claimed *"Converges SPECTRALLY in the polynomial `degree` with no accuracy floor"*
+  without qualification -- and `pmm_jones_1d` is the physics `PMMStack` runs.  True for `E_y` (TE):
+  9.4e-6 / 2.6e-7 / 1.8e-8 / 4.9e-9 at degree 8/12/16/20 on a metal lamellar cell, a local rate ~9
+  and rising.  False for `E_x` (TM), where the wall corner -- not the metal -- limits it:
+  5.4e-4 / 2.2e-4 / 1.1e-4 / 4.4e-5 / 2.1e-5 / 8.0e-6 / 1.9e-6 at degree 8/12/16/24/32/44/60, and on
+  a *lossless* high-contrast n = 3.48/1 cell a flat `O(N^-2.7)` out to degree 44 with no acceleration
+  at all.  At degree 28 the TM order-0 error is ~2.4e-6 where TE is ~2.8e-11 -- five orders apart on
+  the same cell.  Both ladders are now in the docstring, with the same caveat added to `PMMStack`'s
+  class docstring.
+* `pmm_efficiency_1d_slanted` / `pmm_jones_1d_slanted` now record the slanted-TM **energy-closure
+  floor**: on a *lossless* slanted cell the inclined-coordinate generator reads `ΣR + ΣT` =
+  1.0000908 / 1.0000604 / 1.0000432 at degree 16 / 22 / 28, super-unity by 4-9e-5 and *decreasing*
+  with degree (so it converges and is not an instability), where the vertical cascade on the same
+  solid reads 1.0000000000.  Anyone using `|ΣR + ΣT - 1|` as a tripwire on a slanted TM stack must
+  calibrate against that floor rather than against 1e-10.  TE is unaffected (`|tot - 1| <= 1.5e-8`).
+
+### Fixed -- CONVENTIONS §7.1 named the wrong basis for the 1-D Jones, and the mislabel hid a sign (G4, P3)
+
+§7.1 said *"The 1-D solvers return `te`/`tm` (`s`/`p`)"* and that at `phi = 0` the bases coincide "up
+to the `tm` <-> `x`, `te` <-> `y` identification".  Measured on a uniform slab (n = 2.1, d = 0.32 um,
+lambda = 0.55 um, n_sup = 1, n_sub = 1.5) against an independent analytic TMM:
+
+| angle | `pmm J[0,0] / r_p` | `pmm J[1,1] / r_s` | `rcwa J / pmm J` |
+|---|---|---|---|
+| 0 deg | **-1.000000 + 0.000000j** | +1.000000 | +1.000000 |
+| 30 deg | **-1.000000 - 0.000000j** | +1.000000 | +1.000000 |
+| 60 deg | **-1.000000 - 0.000000j** | +1.000000 | +1.000000 |
+
+Both 1-D Jones solvers return the **lab Cartesian `(E_x, E_y)`** basis (their own docstrings say so),
+whose `xx` entry is `-r_p` in the standard Fresnel p convention; at normal incidence they correctly
+give `J_xx = J_yy` (lab-frame isotropy), which a true `te`/`tm` matrix would not.  The library is
+internally consistent -- PMM and RCWA agree to 1e-15 -- but §7.1 is the declared source of truth and
+said something different, so a consumer taking it literally picked up a sign on the p row/column at
+`phi = 0`.  §7.1 now states, for 1-D **and** 2-D, that the returned Jones is the lab Cartesian basis
+with index 0 = `x` and index 1 = `y`, that at `phi = 0` the `x` column is the p channel *up to the
+sign of the p unit vector* (`J[0, 0] = -r_p`), and that at conical incidence the `te`/`tm` matrix is
+the lab one conjugated by the rotation.  This is the same §7.1 defect the PMM-2-D partition found
+from the other side (G13).
+
+Tests: `tests/unit/test_audit2609_a12_pmm1d.py::test_g4_*` (6 tests, including the §7.1 statement
+checked against an analytic three-medium TMM written in the test rather than against library code,
+and a DISCOVERED sweep that fails if copy fourteen of the order-budget block ever ships).
+
+<!-- WP-A13: PMM 2-D -->
+### Fixed -- PMM 2-D stack: `formulation='li'` no longer depends on which axis you drew the grating along
+
+`PMM2DStackHybrid` (and its JAX twin) never routed the per-slot Li operators
+`EpnxF`/`EpnyF` that `twod._pmm2d_solve_core` has passed since audit P3-33, so
+under the class's **default** `formulation='li'` a y-patterned layer received
+the y-axis inverse-rule operator on the **Ex** slot and Laurent on Ey -- both
+slots anti-Li -- while an x-patterned layer was routed correctly.  One physical
+grating therefore gave two different answers depending on the axis it was drawn
+along, and a one-layer stack disagreed with `pmm_efficiency_2d_cell`, which is
+documented as the same physics.  Nothing warned; `formulation='laurent'` was
+symmetric throughout, which is what isolates the cause to the routing.
+(`lumenairy/elements/pmm/stack2d.py` `_symmetric_layer_specs` /
+`_build_layer_modes`, `lumenairy/elements/pmm/_jax_stack2d.py`
+`_modes_projected`; finding **G5**, P1.)
+
+MEASURED on one Si grating (eps 12.25/1.0, duty 1/2, Λ = 0.47 µm, λ = 1 µm,
+d = 0.3 µm, n_sub = 1.5, normal incidence) drawn along x and along y:
+
+| quantity | before | after |
+|---|---|---|
+| T00, n_orders 5 | 0.0231919632 vs 0.0229566480 (Δ 2.35e-04) | identical |
+| T00, n_orders 9 | 0.0334736588 vs 0.0322424723 (Δ **1.23e-03**, 5.3 % of T00) | identical |
+| `max|ΔT|` (degree 7, n_orders 5) | 4.977e-03 | **3.39e-14** |
+| `|ΔJ|` reflection Jones | 2.318e-02 | **7.81e-14** |
+| one-layer stack vs `pmm_efficiency_2d_cell` | 1.23e-03 | 3.8e-14 … 8.2e-13 |
+
+Both `symmetry='auto'` and `symmetry=False` carried the defect; both are fixed.
+No cache-key change was needed (`formulation` was already in `_mode_key`).
+Gate: `tests/unit/test_audit2609_a13_stack2d.py` (six parametrisations of
+`test_g5_li_is_90deg_rotation_invariant_on_the_stack`,
+`test_g5_one_layer_stack_equals_the_single_cell_entry`,
+`test_g5_the_routed_pair_is_what_the_stack_now_passes`) and
+`tests/unit/test_audit2609_a13_jax.py::test_g5_jax_stack_twin_routes_the_per_slot_li_operators`
+-- all ten fail on the pre-fix code.
+
+### Fixed -- PMM 2-D sweeps: `PreparedPMM2D.solve` now folds, truncates and warns like the direct entry
+
+`PreparedPMM2D.solve` -- the path every `pmm_efficiency_2d[_cell]_vs_wavelength`
+sweep takes -- silently differed from `pmm_efficiency_2d` in three ways
+(`lumenairy/elements/pmm/twod.py`; finding **G8**, P2):
+
+* **no even-parity fold.**  `prepare_pmm_2d` took no `symmetry` argument at all
+  and `solve` never called `_symmetric_solve_2d`, so the class docstring's
+  "reproduces `pmm_efficiency_2d(...)` to ~1e-13 (the only delta: `Gx0F/k0`
+  reorders one division)" was describing the MISSING FOLD: measured against
+  `symmetry=False` it was exactly `0.000e+00`, and against the entry's DEFAULT
+  `symmetry='auto'` `max|dR| = 6.33e-14` / `max|dT| = 1.08e-13`.  `symmetry` is
+  now a parameter of `prepare_pmm_2d` / `prepare_pmm_2d_cell` and of both
+  `*_vs_wavelength` helpers, defaulting to `'auto'` as on the direct entries,
+  and the two paths are now **bit-identical** (`max|dR| = max|dT| = 0.000e+00`
+  at both settings, degree 9 / n_orders 4 and degree 7 / n_orders 3).
+* **no `truncation`.**  `pmm_efficiency_2d_cell(truncation='circular')`
+  retained 29 orders on the audit's fixture while the prepared and sweep paths
+  rejected the keyword with a `TypeError` and swept rectangular (49).
+  `truncation` is now threaded and applied at prepare time (it is
+  wavelength-free), and the retained sets and efficiencies match the direct
+  entry exactly.
+* **no lossless tripwire.**  `_warn_lossless_energy_2d` ran only from the
+  `stabilize=False` arm of the direct entries.  At degree 7 / n_orders 2 on a
+  provably lossless eps-12.25 pillar all three paths return
+  `sum(R+T) = 1.054125` -- identical to the last digit -- and only the direct
+  one warned, so a whole wavelength sweep could sit at a 5.4 % energy excess
+  with no signal.  `solve` now runs it (`eps_reals` was already stored).
+
+**Migration.** A prepared sweep built at the defaults now takes the even-parity
+fold, so its numbers move by ~1e-13 (they move ONTO `pmm_efficiency_2d`'s
+default answer).  Pass `symmetry=False` to `prepare_pmm_2d*` /
+`*_vs_wavelength` for the previous bits.  A lossless sweep in an
+ill-conditioned `(degree, n_orders)` corner will now emit the closure warning
+it always should have.
+Gate: `tests/unit/test_audit2609_a13_twod.py::test_g8_*`.
+
+### Added -- `pmm_2d_order_drift`: the convergence signal lossless closure cannot give you
+
+On the Fourier-projected hybrid, `sum(R)+sum(T)` is not a proxy for the
+per-order error, and the two can move in OPPOSITE directions.  MEASURED on one
+fixed cell (12×12 pixel grid, eps 12.25 pillar at duty 1/2, Px = Py = 0.9 µm,
+λ = 1 µm, d = 0.3 µm, n_sub = 1.45, degree 11): closure improves monotonically
+9.69e-03 → 3.63e-03 → 4.35e-04 at `n_orders` 5 / 9 / 11 while `T00` goes
+0.2715167 → 0.2373950 → 0.1542801, i.e. **−35 %** between the last two with no
+sign of settling -- so a user watching energy alone picks the worst of the
+three.  `lumenairy.elements.pmm.twod.pmm_2d_order_drift(solve_at_n_orders,
+n_orders)` re-solves at `n_orders - step` and reports `max_drift` / `drift_00`
+/ `closure` / `closure_prev` / `converged`, warning when either bar is missed.
+The module docstrings of `pmm_jones_2d` and `pmm_efficiency_2d[_cell]` now
+state the measured plateau and point energy-critical work at the no-floor
+staggered engine, as `pmm_efficiency_2d`'s already did.
+(Finding **G7**, P2; gate `tests/unit/test_audit2609_a13_twod.py::test_g7_*`.)
+
+### Added -- `energy_tol=` on the scalar 2-D entries, and `_ADVISORY_TOL_2D`
+
+`_PASSIVE_TOL_2D = 5e-2` is a CATASTROPHE gate: it sits 2.5 decades above the
+~3e-3 a clean hybrid solve reaches (measured 1.5e-03 / 1.4e-04 / 5.9e-04 at
+`n_orders` 5 / 9 / 11 on a lossless Si pillar), so it cannot see a
+1e-3-class regression.  It is NOT tightened -- the plateau is a documented
+property of a Fourier-truncated engine (an L-shaped chiral cell legitimately
+reads 1.1e-02 at n_orders 5) and closure is anti-correlated with the per-order
+error anyway -- but `pmm_efficiency_2d` / `pmm_efficiency_2d_cell` now take
+`energy_tol=` so a caller can ask for the tighter gate on a geometry they know
+is clean, and `_ADVISORY_TOL_2D` (3e-3) documents the measured clean floor.
+(Finding **G7**, P2.)
+
+### Added -- `pmm_jones_2d(return_jones_transmission=True)`
+
+`pmm_jones_2d` returned no TRANSMISSION Jones -- the observable for a
+transmissive metasurface QWP -- and neither the module docstring nor the
+Returns section pointed at `PMM2DStackHybrid/Pure.jones_transmission()`, the
+only route that produced one.  The 5th return uses the same convention as those
+accessors (rows `[E_x; E_y]`, columns = incident `E_x`/`E_y`, public
+`exp(-iωt)`) and carries the slanted-frame anchor, so it is **bit-identical**
+to `PMM2DStackHybrid.jones_transmission()` on the same slanted or vertical
+layer.  `stabilize=True` returns the transmission Jones of the degree the
+consensus picked; the JAX path refuses loudly (the jnp twin keeps no
+amplitudes).  MEASURED on the form-birefringent Si/air QWP at Λ/λ = 0.2
+(duty 0.5, d = λ/4/(n∥ − n⊥) = 208.14 nm): the retardance
+`wrap(arg(J^t_yy) − arg(J^t_xx))` is POSITIVE on the SLOW axis --
+`exp(+i·retardance)`, exactly CONVENTIONS §7 -- and reads +100.12 / +100.23 /
++99.90° at `n_orders` 5 / 9 / 15 with `formulation='fff_nv'` against the
+`rcwa_jones_1d(n_orders=60, 'li')` reference **+100.066°**, i.e. inside 0.17°
+at every truncation tested (`'laurent'` is 5.37° out at n_orders 5 and a
+0th-order Rytov EMT slab is 4.19° out).  The Returns block and the Notes now
+document the cross-engine seam.
+(Finding **G13**, P3; gate `tests/unit/test_audit2609_a13_twod.py::test_g13_*`.)
+
+### Changed -- `pmm_jones_2d`: the formulation docstring is now the measurement, and `formulation='auto'` is added
+
+On this entry `'li'` and `'laurent'` differ ONLY in the `E_z` rule (the
+in-plane block is Laurent either way), so `'li'` is not the wall-normal inverse
+rule it is on the scalar entries -- and the docstring's "the hybrid's
+*validated* inverse-rule elimination" read as "at least as good" when it is
+measurably the worst of the three.  MEASURED on a separable high-contrast Si
+stripe (degree 11) against `rcwa_jones_1d(n_orders=80, 'li')`, `|Jxx − ref|`:
+
+| n_orders | `fff_nv` | `laurent` | `li` | `rcwa_jones_2d li` |
+|---|---|---|---|---|
+| 5 | 4.91e-02 | 1.38e-01 | 1.81e-01 | 7.31e-03 |
+| 11 | **2.72e-03** | 3.02e-02 | **6.90e-02** | 2.95e-04 |
+
+and on a C4 Si pillar `'li'` keeps the WRONG SIGN on `Im(Jxx)` at every
+affordable truncation (`arg(Jxx)` 8.9° out at n_orders 11 against 1.2° for
+`'laurent'`) while energy closes to 1e-5 on both, so no tripwire fires.  The
+docstring now carries that table and the ordering.
+
+**The ordering is qualified to the REFLECTION Jones (VERIFY-A13, 2026-09-12).**
+Both tables above measure the reflection Jones, and the docstring originally
+stated `fff_nv > laurent > li` as a blanket preference.  On the TRANSMISSION
+retardance — the observable `return_jones_transmission=` exists for, and the one
+the LC-QWP work is designed against — the order is different.  MEASURED on the
+form-birefringent Si/air stripe at Λ/λ = 0.2 (duty 0.5, d = 208.14 nm) against
+the `rcwa_jones_1d(n_orders=60, 'li')` reference **+100.066°**, cross-checked by
+a no-floor `PMM2DStackPure` at M = 8 (**+100.051°**):
+
+| n_orders | `fff_nv` | `laurent` | `li` |
+|---|---|---|---|
+| 5 | +100.12 | +94.69 | +96.73 |
+| 9 | +100.23 | +98.94 | **+100.04** |
+| 15 | +99.90 | +99.63 | **+100.04** |
+
+`'li'` is the most accurate of the three at `n_orders ≥ 9` there (0.03° against
+0.17–0.34° for `'fff_nv'`), despite being the worst on the reflection Jones of
+the stripe above.  The docstring now says the ordering is the reflection one,
+carries this table, and tells the reader to pick the rule for the observable
+they are designing against.  `'auto'` still resolves on the reflection ordering
+(it is unchanged); nothing about the default moves.
+
+`formulation='auto'` is added: `'fff_nv'` on a SEPARABLE in-plane cell (where
+it is both available and best) and `'laurent'` otherwise; on the JAX path it
+resolves to `'laurent'` (`'fff_nv'` is NumPy only).  The DEFAULT stays
+`'laurent'` -- making `'fff_nv'` the default would silently break the
+documented EXACT reduction of a scalar cell to
+`pmm_efficiency_2d_cell(formulation='laurent')` for precisely the separable
+cells the LC-QWP work uses -- so `'auto'` is opt-in and documented as the
+recommended setting for new code.
+(Finding **G6**, P2; gate `tests/unit/test_audit2609_a13_twod.py::test_g6_*`.)
+
+### Performance -- `pmm_jones_2d`: the even-parity fold now runs for `fff_nv` (3.96×)
+
+The fold was gated off for `fff_nv` alone (`twod_jones.py`
+`formulation != "fff_nv"`), so the most accurate formulation was also the
+slowest.  `fff_nv` is reachable only on a SEPARABLE cell, where every operator
+the fold touches is a 1-D projected mass kron'd with an identity -- exactly the
+shape the other two rules hand over -- and the fold's own precondition (a
+centro-symmetric cell at normal incidence) is unchanged and still
+auto-detected.  MEASURED at degree 11 / n_orders 11 on a centred Si stripe:
+fold-vs-full `max|ΔJ| = 1.49e-12` (against 4.92e-13 / 5.02e-13 for
+`laurent` / `li` on the same cell) for **3.96×** wall time (1.83 s vs 7.24 s).
+(Finding **G6**, P2.)
+
+### Performance -- PMM 2-D: exactly diagonal GLL masses are no longer inverted with LAPACK
+
+`_build_axis` assembles `M` and every `Mtile` from `np.diag(w·J)` element
+blocks, so `count_nonzero(M − diag(diag(M))) == 0` exactly (verified at degree
+5/7/11 and 1-3 elements per strip).  The crossed-cell branch of
+`_scalar_projected_ops` has exploited that since v5.14; the SEPARABLE branches
+-- the ones a 1-D grating layer in a 2-D stack takes, i.e. the LC-QWP geometry
+-- still ran `np.linalg.inv(M)`, `Minv @ P` and `np.linalg.solve(P_inv, M)`.
+Replaced by reciprocals and nodal-vector accumulations, **bit-identical**
+(`np.array_equal` on all four operators of `twod._axis_ops_1d` at every setting
+measured, and on `twod_jones`'s separable `_mass`): `twod._axis_ops_1d`
+**3.7×** (200 calls 29.2 → 7.8 ms at n = 33), `twod_jones._tensor_layer_modes`'s
+separable component mass **4.8×** (400 calls 41.7 → 8.7 ms), both growing as
+O(n³) vs O(n).  (Findings **G10** / G3, P2;
+gate `tests/unit/test_audit2609_a13_twod.py::test_g10_diagonal_mass_identities_are_exact`.)
+
+### Performance -- PMM 2-D JAX twins: the dense Kronecker projector pair is gone
+
+`_jax_twod._static_prep` / `_static_prep_cell` and
+`_jax_stack2d._layer_static_traced` still built `Tp = kron(Ty, Tx)` and
+`pinv(Tp)` -- the `(Nf, N)` pair the NumPy F5 audit deleted -- and then
+rebuilt the per-axis projectors three lines later; `_static_prep` additionally
+formed a dense `N×N` `diag(1/Mdiag)` and two dense `Minv @ kron(...)` products.
+The three preps now build `Tx/Txp/Ty/Typ` once and every jnp sandwich
+(`_jax_twod._scalar_jax_tail`, `_jax_twod_jones._proj`,
+`_jax_stack2d`'s traced branch) is the two per-axis einsum contractions of
+`twod._sandwich_factorized`.  MEASURED: the dropped pair alone is 7.2 / 22.2 /
+43.2 MiB at (12, 16, 32) strips per axis (degree 9, n_orders 7/11/11) against
+2.5 / 13.1 / 13.7 MiB retained by the whole prep, and **2.4 GiB** at the
+documented `_MAX_NODAL_DOF = 150 000` ceiling with n_orders 11 -- plus one
+`O(N·Nf²)` pinv and two redundant per-axis pinvs in every case.
+
+It is also a PARITY improvement: the dense `Tp @ Gx0 @ Tpinv` spelling carried
+an extra `Ty Typ` factor the NumPy path does not, so the frozen constants are
+now **bit-identical** to `_scalar_projected_ops`'s and the pillar entry's
+NumPy/JAX `T` parity improves from RMS relative **8.47e-11** to **1.63e-13**
+(`R` 2.94e-14; Jones 2.70e-12; AD-vs-central-FD 1.04e-07 against the 1e-4
+gate).  `_static_prep*` no longer expose `Tp`/`Tpinv`
+(`tests/unit/test_audit_w4_jax_static_caches.py` renamed its key list
+accordingly; the cache contract it pins is unchanged).
+(Finding **G10**, P2; gate `tests/unit/test_audit2609_a13_jax.py::test_g10_*`.)
+
+### Added -- circular (Lalanne-1997) truncation on `pmm_jones_2d` and `PMM2DStackHybrid`
+
+Circular truncation existed only on `pmm_efficiency_2d[_cell]`.  The projected
+operators are functions of the order LIST, so restricting them to the circular
+subspace IS the operator built on that subspace; both entries now take
+`truncation='circular'` (and so do `prepare_pmm_2d*` and both
+`*_vs_wavelength` helpers -- see G8).  MEASURED at n_orders 5, degree 9:
+121 → 81 retained orders and 0.216 → 0.068 s on a scalar stack layer,
+81 → 49 orders and 0.069 → 0.034 s (in-plane tensor) / 0.117 → 0.051 s
+(out-of-plane tensor), 0.200 → 0.082 s on `pmm_jones_2d` with
+`symmetry=False`; the tensor→scalar reduction contract still holds under the
+circular set (3.9e-14).  `'rectangular'` remains the default and is
+bit-for-bit unchanged.  NumPy only -- both JAX dispatches refuse loudly.
+(Finding **G10**, P2.)
+
+### Added -- PMM 2-D stack: the eig-cache refusal is surfaced
+
+`LayerCache` is refuse-never-degrade: at its byte budget it returns the modal
+set and does not retain it, so the physics is untouched and NOTHING said the
+sweep had just lost all modal reuse -- `cache_stats()['eig']['refused']` was
+the only signal.  `PMM2DStackHybrid.solve` now warns once per instance when
+that counter moves, naming the retained bytes, the budget and the per-entry
+cost (~3.7 MB at n_orders 6, ~36 MB at n_orders 11, so a few hundred distinct
+wavelengths at production truncation walk past the 5 %-of-RAM budget).
+(Finding **G10**, P2; gate
+`tests/unit/test_audit2609_a13_stack2d.py::test_g10_eig_cache_refusal_is_surfaced`.)
+
+### Fixed -- staggered PMM 2-D: `eps_cell` is a SEGMENT grid, and an unguarded ~1000× cost cliff now signals
+
+`eps_cell` means two incompatible things across the two 2-D PMM families.  The
+HYBRID family takes a PIXEL grid whose redundant rows/columns
+`_cell_to_walls_tile` merges away for free, and it has had a cost guard
+(`max_nodal_dof`) all along.  The STAGGERED family
+(`pmm_efficiency_2d_staggered`, `pmm_jones_2d_staggered`,
+`PMM2DStackPure.add_layer`) takes a SEGMENT grid where every row and column IS
+an element and the generalized pencil is `2·Nx(M−1)·Ny(M−1)` -- and it had NO
+cost guard at all.  MEASURED on the same 12×12 half-fill-pillar array (3
+distinct strips per axis, expressible on a 4-segment lattice):
+`pmm_efficiency_2d_staggered(degree=6)`
+**498 s CPU / 8.4 GB** (a 7200×7200 QZ pencil where 800×800 suffices),
+`PMM2DStackPure(n_modes=5).add_layer` **1096 s / 3.9 GB**, against **0.22 s /
+< 1 GB** for the same array through `pmm_efficiency_2d_cell` -- and neither
+staggered call raised, warned or printed anything.
+
+Added (`lumenairy/elements/pmm/twod_staggered.py`,
+`lumenairy/elements/pmm/stack2d_pure.py`):
+
+* `max_pencil_dof` (default 12 000, ~28 GB projected) on all three surfaces,
+  the SEGMENT-grid sibling of the hybrid's `max_nodal_dof`.  It refuses with
+  the pencil dimension, the projected footprint and the PIXEL-vs-SEGMENT
+  distinction in the message.  Every grid in the shipped staggered suite is far
+  below it (largest: 8 segments/axis at M = 8, pencil 6272; the documented
+  M = 10 / 3-segment solve is 1458).
+* a REDUNDANCY warning naming the merged strip count (computed with
+  `_cell_to_walls_tile`'s own merge rule) AND the grid the caller should
+  actually pass.  Those are not the same number, and that distinction is the
+  care this guard needed: the audit's 12×12 pillar has 3 distinct strips but
+  its walls sit at indices 3 and 9, i.e. at 1/4 and 3/4, which a 3-segment
+  uniform lattice (walls at 1/3, 2/3) does NOT contain — "re-express it on a
+  3×3 grid" would silently change the DUTY CYCLE, the same failure mode as the
+  sibling `period_x` finding.  The suggestion is therefore the smallest SQUARE
+  UNIFORM lattice that holds every wall on either axis,
+  `N / gcd(N, all wall indices)` = **4**, and the message reads "your grid has
+  12×12 segments and only 3×3 DISTINCT strips … the SAME geometry — the same
+  walls, to the segment — is expressible on the uniform 4×4 lattice at pencil
+  512, 729× less QZ time and 81× less memory".  It warns rather than refuses
+  because splitting a region into more segments is a legal h-refinement.  A
+  grid that reduces to 1×1 is exempt: tiling a uniform axis into equal segments
+  is the documented way to satisfy the `Nx == Ny` contract.
+* the redundancy advice is a STACK property on the union grid (VERIFY-A13).
+  `layer_grids='shared'` makes the lattice shared, so ONE layer's minimal
+  lattice is not a grid the caller may pass: measured, a 2x2 and a 3x3 pillar
+  tiled onto a common 6x6 each drew "use the uniform 2x2 / 3x3 lattice", and
+  following either made the other layer's `add_layer` raise the union-grid
+  error.  The followable number is the lcm of the per-layer minima
+  (`lcm(2, 3) = 6` — the grid already passed), which is what
+  `_stag_minimal_uniform_segments` returns over the layers' JOINT wall set
+  since `N / gcd(g_A, g_B) = lcm(N/g_A, N/g_B)`.  `PMM2DStackPure.solve`
+  therefore takes the WARN arm once over every patterned layer,
+  `add_layer` on a shared stack keeps only the absolute refusal, and
+  `layer_grids='per-layer'` is unchanged (there each layer really does own its
+  lattice).  A single-patterned-layer stack reduces exactly to the old
+  per-layer check, so the audit's 12x12 case still warns naming 4x4 — now at
+  the top of `solve`, before the QZ it is warning about.  `max_pencil_dof=` on
+  any layer still acknowledges and silences it.  MEASURED:
+  `tests/unit/test_pmm2d_staggered_mortar.py` 6 warnings -> **0**.
+* PIXEL-vs-SEGMENT cross-references in both families' `eps_cell` docs
+  (`twod._cell_to_walls_tile`, `pmm_efficiency_2d_cell`,
+  `pmm_efficiency_2d_staggered`, `pmm_jones_2d_staggered`,
+  `PMM2DStackPure.add_layer`), the way CONVENTIONS §11 cross-references
+  `fff_nv`.
+
+(Finding **G9**, P2; gate `tests/unit/test_audit2609_a13_staggered_cost.py`,
+8 tests, 0.12 s -- every assertion is on the guard, never on a solve.)
+
+### Fixed -- PMM 2-D stack: `symmetry` is in the modal cache key, and the lattice periods are frozen
+
+Two cache/attribute gaps the W7 A11 hardening missed
+(`lumenairy/elements/pmm/stack2d.py`; finding **G12**, P3):
+
+* `symmetry` was absent from `_mode_key` although `_build_layer_modes` passes
+  `block_eig=self.symmetry` to `_tensor_layer_modes`, where it selects between
+  the parity-sign block reduction and the dense 4Nf zgeev.  Mutating it between
+  solves served the stale modal set: measured on an out-of-plane tensor pillar,
+  the re-solve came back BIT-IDENTICAL to the pre-mutation answer
+  (`|J_b − J_a| = 0.0`) while a fresh object differed by 7.16e-16.  (`truncation`
+  is in the key for the same reason.)
+* `period_x` / `period_y` were plain attributes, but `add_layer` has already
+  frozen the walls in METRES -- so a later period change re-solved the OLD
+  walls at a NEW period, i.e. a silently different DUTY CYCLE: measured
+  `|J_reused − J_fresh(same duty)| = 4.390e-01` against the parameter's true
+  sensitivity 6.492e-01, while every other public attribute in the same sweep
+  read 0.0.  They are now read-only properties once a layer exists (assignment
+  raises with the measurement); before the first `add_layer` they are still
+  settable.  The class docstring documents which attributes are mutable
+  between solves and why.
+
+Gate: `tests/unit/test_audit2609_a13_stack2d.py::test_g12_*`.
+
+### Changed -- documentation only
+
+* `twod._assemble_2d` is labelled a KEPT REFERENCE IMPLEMENTATION, on no live
+  solve path, naming the two files that use it as the dense-kron oracle
+  (finding **G13**).
+* `twod._layer_modes_projected`'s docstring no longer says "the PMM2DStack path
+  keeps the legacy assignment" -- every in-tree caller now routes the pair.
+* the two dead `# noqa: F401` re-exports of `is_jax_array` in
+  `_jax_twod.py` / `_jax_twod_jones.py` are deleted (the dispatch imports it
+  from `...backend` directly) (finding **G13**).
+* `PMM2DStackHybrid`'s `cascade` docstring carries the measured `'fused'`
+  comparison (agreement `max|dR| ≤ 2.0e-14` / `max|dT| ≤ 1.0e-13` /
+  `max|dJ| ≤ 8.7e-14`, never bit-identical; whole-solve median 1.04×-1.15× over
+  5 interleaved runs on three fixtures).  The default stays `'fast'`: a 1e-13
+  move of every user's bits is not paid for by a few per cent (finding
+  **G10**, measured and NOT adopted).
+
+### Added -- PMM 2-D side of the branch-cut bound (G11 landed in WP-A14)
+
+`rcwa/_core._sqrt_decay`'s on-cut predicate tested proximity of `Re(r)` to the
+ORIGIN rather than to the IMAGINARY AXIS, so it could flip a near-zero
+EVANESCENT mode and return `Re(lam) < 0` -- a forward propagator that grows.
+The predicate is WP-A14's and now carries `& (Im(r)^2 > Re(r)^2)`;
+`tests/unit/test_audit2609_a13_twod.py::test_g11_no_layer_mode_grows_beyond_the_branch_cut_band`
+pins the PMM-2D side of it in two layers: the FIXED predicate asserted directly
+on the audit's counterexample (`_sqrt_decay([1e-20 - 1e-30j])` read
+`-1.000000e-10 + 5.000000e-21j` before and `+1.000000e-10 - 5.000000e-21j`
+after, so `Re(lam) >= 0`), AND the analytic bound
+`|exp(-lam k0 L)| <= exp(band * max|lam| * k0 * L)` (~ 1 + 5.6e-7 in the regime
+these entries run) measured on a real PMM-2D layer spectrum -- which held
+before the predicate change and still holds after, so the file keeps saying
+something true if the predicate is ever re-tuned.
+
+### Changed -- PMM 2-D: every Wood-anomaly nudge now names the entry that took it
+
+WP-A14 made `_grazing_safe_wavelength` announce its substitution through a
+`lumenairy.elements.rcwa.WoodNudgeWarning` and accept `fn_name=`.  All eight
+PMM 2-D call sites now pass it, so the message reads
+`pmm_efficiency_2d_cell: a diffracted order sits EXACTLY at cut-off ...`
+instead of `_grazing_safe_wavelength: ...`:
+`pmm_efficiency_2d[_cell]` (through `_pmm2d_solve_core`'s own `fn_name`),
+`prepare_pmm_2d[_cell](...).solve`, `pmm_jones_2d`, `PMM2DStackHybrid.solve`,
+`PMM2DStack.solve` (the jnp twin), `pmm_efficiency_2d_staggered`,
+`PMM2DStackPure.solve`, and the JAX host guard (which forwards its caller's
+name).  Numerics are unchanged -- the same 1e-7 relative step on the same 1e-9
+detection.  A test that deliberately solves ON an anomaly should filter that
+category; no PMM 2-D test needed one (the whole PMM-2D suite passes with the
+warning live).
+
+<!-- WP-A14: RCWA / EME / BOR -->
+### Fixed -- BOR: `guided_modes` returned an EMPTY list for every weakly-guiding fiber (H1)
+
+The guided-window guard band was `5e-3 * k0` per side -- a fraction of `k0`, not of the
+`(n_core - n_clad) * k0`-wide window it guards -- so nothing at all was admitted unless
+`n_core - n_clad > 0.01`.  Standard telecom SMF (`dn ~ 0.005`) and the textbook `V = 2.4`
+fiber (1.45 / 1.44, `dn = 0.010` exactly, where the admissible interval collapses to a
+single point) both returned `[]` at every `(Rbig, N)` tried, with no warning and no way to
+tell the result from a genuinely cut-off structure -- while `radial_coupled_modes` held
+the correct HE11 all along.  The band is now `max(1e-6 * k0, 1e-3 * (qhi - qlo))`, which is
+invariant under BOTH a unit rescale (the W6-B2 fix) and an index-contrast rescale; the
+real-axis tolerance is clamped to half the window, which only binds where it previously
+exceeded the whole guided band.  A window narrower than twice the band now RAISES
+`ValueError` naming both permittivities, and an empty result that had candidates inside the
+band WARNS naming the closest one.
+
+Measured (`lambda = 1.55 um`, `V = 2.4`, `Rbig = 6a`, `N = 150`) against the exact hybrid
+HE11 oracle: `dn = 0.010` 0 modes -> 1 mode at `n_eff = 1.445294274` (exact 1.445293173,
+err +1.10e-06); `dn = 0.005` 0 modes -> 1 mode at `n_eff = 1.447648919` (exact 1.447648366,
+err +5.53e-07).  The four existing `guided_modes` fixtures all use `dn = 1.04`, 100x the old
+band, which is why CI was green.
+
+Files: `lumenairy/elements/bor/coupled_radial_eigensolver.py:566` (re-anchored 2026-09-12 after the history relocation moved lines).
+Tests: `tests/unit/test_audit2609_a14_rcwa_eme_bor.py::test_h1_weakly_guiding_fiber_is_not_an_empty_list`,
+`::test_h1_margin_scales_with_the_window_not_with_k0`,
+`::test_h1_degenerate_window_raises_instead_of_returning_empty`.
+
+### Fixed -- RCWA: the Rayleigh-anomaly wavelength nudge was silent, one-sided and non-monotone (H2)
+
+When a diffracted order sits EXACTLY at cut-off the solver substitutes
+`wavelength * (1 + 1e-7)` because the half-space mode basis is genuinely degenerate there
+(`kz = 0` gives two coincident modes and a singular interface match -- confirmed:
+`LinAlgError: Singular matrix` from `_interface_smatrix` for 1-D TE and for both 2-D
+polarizations at the canonical mount).  The substitution was completely silent, and the
+one-sided answer was 4.05e-04 relative wrong AND sat above BOTH of its neighbours in a
+wavelength sweep -- a one-point spike, not a limit.
+
+Three changes: (1) the nudge now emits a `WoodNudgeWarning` (a new public category so a
+deliberate on-anomaly sweep can filter it, or a strict caller can promote it to an error)
+naming the requested wavelength, the effective one and the relative shift; (2) the RCWA
+entry points report the SYMMETRIC AVERAGE of two solves bracketing the requested wavelength
+(`wavelength * (1 -/+ rel)`, exactly symmetric), on the NARROWEST bracket that clears the
+detection threshold -- `rel` grows geometrically from a new RCWA-local
+`_WOOD_PAIR_STEP_REL = 1e-9`, two decades narrower than the shared one-sided step; (3)
+`Efficiency2D.wl_eff` and `RCWAResult.wl_eff` carry the wavelength(s) actually
+solved -- a float normally, the `(lo, hi)` pair when the answer is an average.
+
+Measured at the Moharam mount `Lambda = lambda = 1 um` (n_ridge 2.04, d = 1 um, duty 0.5,
+normal incidence, n_orders 21) against an independent direct-4N-boundary-match oracle at the
+EXACT wavelength (0.155845785342, its own closure 1.8e-15):
+
+* TM R0: 0.155908839054 (+4.05e-04 rel) -> 0.155846827297 (+6.69e-06 rel), a factor **60.5**;
+* TE R0: 0.040265175260 (+1.36e-05 rel) -> 0.040264572250 (-1.42e-06 rel), a factor 9.5;
+* over the whole order array, TM max|dR| 6.31e-05 -> 2.34e-06, TE 5.46e-07 -> 3.96e-07.
+  The TRANSMITTED orders are the larger residual and were not quoted at first: TM
+  max|dT| is **1.45e-05** after the fix, which is the largest single deviation
+  anywhere in the 24-configuration oracle sweep (VERIFY-A14 V12);
+* warnings emitted: 0 -> 1;
+* the TM R0 sweep over `delta = -3e-7 .. +3e-7` is now strictly monotone (smallest forward
+  difference +5.23e-06); before, the value AT the anomaly equalled its `+1e-7` neighbour and
+  exceeded its `+3e-8` one, so the sequence decreased twice;
+* energy closure through the average: -3.75e-14 (TM) / +1.87e-14 (TE);
+* the audit's own 24-configuration oracle sweep still agrees to <= 1.5e-13 at the 22 off-anomaly
+  configurations (its <= 2.0e-13 bar), and the 12-configuration energy sweep to <= 1.03e-13.
+
+NOTE ON THE AUDIT'S RATIONALE: the symmetric average is NOT "the continuous limit to
+O(delta^2)".  A Wood anomaly is a SQUARE-ROOT branch point in the wavelength, so both the
+one-sided and the averaged error fall as `sqrt(delta)` -- measured over five decades
+(`delta` 1e-6 .. 3e-9, ratio 1.732 per 3x in delta) and re-confirmed independently on
+FOUR mounts x two polarizations (per-decade ratio 3.15-3.18 against `sqrt(10)` = 3.162).
+
+WHICH LEVER PAYS (re-measured, VERIFY-A14): two things changed at once -- the bracket is
+100x narrower than the shared one-sided step, and the two sides are averaged.  Isolated at
+a MATCHED `delta = 1e-7`, the AVERAGE helps on 3 of those 8 mount/polarization arms and
+HURTS on 5, by up to 10x (lossy Ag TM: one-sided +8.0e-05 against average -7.7e-04); the
+6.05x it buys on the Moharam TM arm is its best case, not its behaviour.  The reliable
+lever is the NARROWER BRACKET, which the `sqrt(shift)` law turns into a guaranteed ~10x on
+every mount, and which is only possible because the solve stays clean far below it (closure
+2e-14 .. 5e-14 and the physical `sqrt(shift)` agreement measured all the way down to a
+1e-13 shift).  What the average buys UNCONDITIONALLY is CONTINUITY of the wavelength sweep
+-- the property no choice of one-sided step can have, and the one an optimiser differencing
+through the anomaly actually trips over.
+
+HOW ACCURATE THE RESULT IS, ACROSS MOUNTS (not just the fixture below): the post-fix
+residual against an exact-wavelength oracle is 6.7e-06 relative on the Moharam mount but
+reaches **2.9e-04** on a `n_sub = 1.5` substrate anomaly, and the gain over the one-sided
+nudge ranges **1.05x .. 60.5x** over the eight arms.  The finding is MITIGATED and now
+ANNOUNCED; it is not eliminated.
+
+The SHARED one-sided nudge is numerically unchanged (`1e-7` per iteration, detection threshold
+`1e-9`): `_grazing_safe_wavelength` is imported by 12 sites in `elements/pmm`, whose staggered
+engine degrades like `1/sqrt(distance)` TOWARD a cut-off, so a narrower step would help RCWA and
+hurt PMM.  The narrower bracket and the averaging are both local to the RCWA path.
+
+ONE THING THE AVERAGE GETS WRONG, stated exactly: an order that is EXACTLY grazing at the
+requested wavelength carries no z-directed power (a theorem; the oracle returns exactly 0).  The
+one-sided nudge happened to agree -- at `+delta` those orders are evanescent -- while the average
+does not, because at `-delta` they are propagating and carry ~`sqrt(delta)` of power, half of
+which survives the mean.  Measured at the shipped bracket, m = +/-1: TM R 0.0 -> 2.344e-06, TE
+R 0.0 -> 3.963e-07 on the Moharam mount, and 10x smaller than at a 1e-7 bracket.  Relative to
+the specular order of the same port that is 4.8-5.0 decades HERE, but the census over four
+mounts x two polarizations puts the worst at **3.25 decades** (lossy Ag TM transmission) --
+the bound that generalises is the bracket's own `sqrt(2 * 1e-9) = 4.5e-05` times an O(1)
+coefficient, and the measured worst is **3.81e-05 absolute / 5.67e-04 relative**.  The power
+comes OUT of the specular order, so the closure stays exact; zeroing those orders afterwards
+would leave the closure short by exactly that amount and trip the library's own 1e-6 lossless
+clause, so it was rejected.  Pinned by a dedicated test against those derived bars.
+
+The TRACED (JAX) path does NOT carry this artefact: with a traced wavelength the anomaly
+cannot be detected host-side, so the grazing mode is regularised in place at the `+rel` leg's
+own offset (`_traced_grazing_floor`) and stays EVANESCENT -- it carries exactly zero power.
+That path used to return all-NaN under `jax.jit`; see the H2 note below.
+
+Migration: `rcwa_efficiency_1d`, `rcwa_jones_1d`, `rcwa_jones_1d_segments`,
+`rcwa_efficiency_2d`, `rcwa_efficiency_2d_shapes`, `RCWA2DPrepared.solve`, `rcwa_jones_2d`
+and `RCWAStack.solve` return DIFFERENT numbers at an exact Wood anomaly than before (closer
+to the exact-wavelength answer), and now warn there.  Off-anomaly solves are bit-identical
+and unwarned.  `RCWAStack.solve(retain_internal=True)` keeps the one-sided nudge (the
+retained per-layer partial S-matrices are not linear in the field, so averaging them is not
+defined) and says so in its warning.  To restore silence,
+`warnings.filterwarnings('ignore', category=lumenairy.elements.rcwa.WoodNudgeWarning)`.
+
+Files: `lumenairy/elements/rcwa/_core.py:1651-1962` (the warning category, the narrow symmetric
+bracket `_WOOD_PAIR_STEP_REL`, the `_WoodAnomaly` control-flow signal, the `_wood_symmetric`
+decorator and the result combiner), `lumenairy/elements/rcwa/oned.py:603, :1365, :1575`, `lumenairy/elements/rcwa/twod.py:1093, :1297, :1813, :2313`,
+`lumenairy/elements/rcwa/stack.py:642, :647, :2982`.
+Tests: `tests/unit/test_audit2609_a14_rcwa_eme_bor.py::test_h2_the_nudge_announces_itself`,
+`::test_h2_exact_wood_point_beats_the_one_sided_nudge`,
+`::test_h2_wavelength_sweep_is_monotone_through_the_anomaly`,
+`::test_h2_exactly_grazing_orders_stay_under_the_sqrt_bracket_bound`,
+`::test_h2_wl_eff_is_on_the_result`,
+`::test_h2_off_anomaly_solves_are_untouched_and_unwarned`.
+
+### Fixed -- RCWA: `rcwa_jones_2d(formulation='fff_nv')` manufactured form birefringence on a symmetric cell (H3)
+
+On the Jones entry `fff_nv` selects the Li-2003 successive `L2 L1` tensor factorization,
+which factorizes x first and y second.  That order is not x<->y symmetric, so a cell that is
+(`np.array_equal(cell, cell.T)`) came back with `Jxx != Jyy` at normal incidence, where the
+cell's own C4 / C-infinity symmetry makes them identical.  The in-plane operator is now the
+symmetric mean `(L2 L1 + L1 L2) / 2`, which is exactly symmetric for a transpose-symmetric
+cell (`T L2L1(eps) T = L1L2(eps^T)`) at the cost of one extra scalar-pivot factorization.
+
+Measured `|Jxx - Jyy|` (period 0.5 um, depth 0.3 um, lambda 0.633 um, eps 6.25 in 2.25,
+96x96 cell, normal incidence), `n_orders` 4 -> 12:
+
+| cell | before | after | `laurent` / `li` reference |
+|---|---|---|---|
+| square (C4) | 9.04e-04 -> 1.06e-04 | 4.1e-14 -> 1.4e-13 | 5e-15 .. 3e-13 |
+| disk (C-inf) | 2.06e-02 -> 5.75e-03 | 5.4e-15 -> 4.5e-14 | 1e-15 .. 2e-13 |
+
+A y-uniform (separable) stripe is unchanged (the two orders coincide analytically there):
+max|dJ| 8.7e-14 / 4.5e-14 / 1.3e-12 at `n_orders` 4 / 8 / 12; the same holds on an
+x-UNIFORM stripe (8.7e-14), which only the transposed leg can get right, and on a
+non-square raster with `n_orders_x != n_orders_y`.
+
+MIGRATION, stated for the general cell (VERIFY-A14 V10): a cell that is NOT
+transpose-symmetric also returns DIFFERENT numbers than before -- measured max|dJ| between
+the symmetrized and the single-order operator of **8.3e-04 at `n_orders` 4 falling to
+1.2e-04 at 12** on three axis-aligned fixtures (an off-centre rectangle, a 12x72
+rectangle, a two-bar union).  That is inside the truncation error and the two converge to
+the SAME limit (both track `li` at `n_orders` 16 to 7.5e-05 .. 2.1e-04 at 12, with the mean
+equal or slightly closer on every rung), but a user pinning `fff_nv` Jones values will see
+the change.  Only a SEPARABLE cell is bit-unchanged.
+
+Second half of the finding: `rcwa_efficiency_2d(formulation='fff_nv')` REFUSES a curved cell
+while the Jones entry accepted the same disk silently.  `rcwa_jones_2d` now emits a
+validated-scope `UserWarning` naming the diagonal-boundary fraction (18% on the disk, 0 on
+the square), with a new `allow_nonseparable_nv=False` kwarg to silence it.  It WARNS rather
+than raising because the Li-2003 failure mode here is a convergence rate, not the
+normal-vector method's ~50% absorptance mis-split.
+
+`RCWAStack`'s `_li_blocks` passes `symmetrize=False`: that call wants the Li-1997 PER-AXIS
+rule, whose documented exact reduction to `_li_convolutions_2d` the mean would break.
+
+Files: `lumenairy/elements/rcwa/twod.py:410-539` (the symmetrized entry plus the split-out
+single-order `_li_tensor_l2l1`), `:726-772` (`_li_tensor_scope_notice`), `:1861`;
+`lumenairy/elements/rcwa/stack.py:2654-2661`.
+Tests: `tests/unit/test_audit2609_a14_rcwa_eme_bor.py::test_h3_fff_nv_keeps_the_cells_own_symmetry`,
+`::test_h3_separable_stripe_is_unchanged_by_the_symmetrisation`,
+`::test_h3_curved_cell_gets_the_validated_scope_notice`.
+
+### Performance -- RCWA / BOR (H4)
+
+* **The even-parity fold now covers every in-plane formulation on `rcwa_jones_2d`.**  It was
+  gated on `formulation == 'laurent'` even though it acts on the `(P, Q)` generator and is
+  indifferent to how the permittivity operators were factorized, so `'li'` and `'fff_nv'`
+  users always ran the full `2N` solve.  The operator set is now built once, before the
+  attempt, and reused by whichever path runs.  Measured on a 96x96 square cell, 5 interleaved
+  medians, `OPENBLAS_NUM_THREADS=1`: `'li'` 3.01x (`n_orders` 6) / 3.21x (9), `'fff_nv'`
+  2.47x / 3.15x, against 1.00x before; `'laurent'` unchanged at 2.71x / 3.31x and
+  bit-identical (it used the same direct-rule operators either way).  Agreement with the
+  full solve: max|dJ| 5.3e-14 .. 3.4e-13, inside the documented "~1e-12, not bit-identical"
+  even-basis contract.
+* **`_inplane_ops` builds the Li operators once for an isotropic cell.**
+  `_li_convolutions_2d` computes BOTH `Cxx` and `Cyy` on every call and the two-call form
+  discarded half of each.  Guarded on array identity then value equality (skipped on JAX,
+  which cannot branch on data): 1 call for an isotropic cell, still 2 for a genuinely
+  anisotropic one, retained blocks bit-identical (0.0 / 0.0).
+* **The BOR SEM pencils use `eigh(A, M)`.**  `radial_spectrum` formed `M^-1 A` explicitly and
+  ran a non-symmetric `eig` on what is a symmetric-definite pair, then truncated a complex
+  spectrum with `.real`.  Accuracy against the Bessel zeros IMPROVES 2-4x (degree 8,
+  12 elements): m = 0/1/3 Dirichlet 3.11e-13/1.78e-13/5.42e-14 -> 1.19e-13/9.26e-14/1.38e-14,
+  m = 1/3 Neumann 7.04e-13/1.83e-13 -> 1.74e-13/3.81e-14.  Whole-call speed 1.03x / 0.97x /
+  1.70x at n = 97 / 241 / 481 -- below the audit's structural 3-5x estimate because the
+  Python element-assembly loop dominates under n ~ 250.  `return_modes=True` eigenvectors are
+  now `M`-ORTHONORMAL (`INT r psi^2 dr = 1`) instead of unit 2-norm: a scale change, and the
+  natural normalisation for this weak form.  Both existing eigenvector gates normalise, so
+  they are unaffected.
+
+Files: `lumenairy/elements/rcwa/twod.py:1839-1899`; `lumenairy/elements/bor/radial_eigensolver.py:166-178`.
+Tests: `tests/unit/test_audit2609_a14_rcwa_eme_bor.py::test_h4_even_parity_fold_covers_every_in_plane_formulation`,
+`::test_h4_bor_pencil_eigh_accuracy`, `::test_h4_isotropic_cell_builds_the_li_operators_once`.
+
+### Changed -- RCWA: the inert-BLAS-cap warning now quantifies what it costs (H5)
+
+`set_blas_threads` / `rcwa_blas_threads` / the `@_with_blas_limit` wrapper on every public
+entry point are inert without `threadpoolctl`, which is not a declared dependency.  The
+existing once-per-process warning said the cap was inert; it now says what that costs,
+measured: `inv()` of a 163x163 complex matrix 2.29 s unpinned vs 0.0057 s at one thread
+(400x) on a 24-thread Windows OpenBLAS 0.3.31 build, and a 1-D TM solve at `n_orders = 81`
+18.2 s instead of 0.13 s (140x) -- with both remedies spelled out.
+
+The dependency declaration itself is requested from the tests/CI work package (exact line in
+`WP-A14_REPORT.md` section 5).
+
+Files: `lumenairy/elements/rcwa/_core.py:249-263`.
+
+### Fixed -- RCWA / EME: documentation-vs-behaviour and aliasing hygiene (H6)
+
+* **`RCWAResult.per_order_amplitudes()` now copies every array it hands out.**  `kz` was
+  explicitly copied "so the public dict keeps its writable-array contract", but
+  `Ex`/`Ey`/`kx`/`ky`/`orders` were handed out by reference into the result's own modal dict,
+  so `amp['Ex'][:] = 0` made the NEXT call on the SAME result return `max|Ex| = 0.0`
+  (`to_numpy` is a no-op view on a NumPy backend, which is how the alias survived the W7-B
+  pass).  One dict of copies per call is ~5 x (2, N) complex, negligible beside the solve.
+* **`_check_energy` gained a passive-structure one-sided bar.**  The tight lossless closure
+  clause is disarmed by ANY complex permittivity, so a metal grating in air -- where
+  `R + T <= 1` is a THEOREM because the incidence medium is lossless and nothing has gain --
+  could return `R + T` anywhere in `(1, 1.05]` with no signal.  The new clause (armed by
+  `_passive_media`: exactly lossless incidence, no gain anywhere, symmetric tensors) warns
+  above a `1e-6` one-sided excess, ~7 decades above the 1.4e-13 closure clean solves hold and
+  3.7 decades below the 1.05 hard tripwire that was the only guard before.
+* **The M8 "`n_orders_y = 0` reproduces `rcwa_efficiency_1d` per order to ~5e-15" claim is
+  restated with its rasterisation scope.**  The 1-D core builds exact analytic step
+  coefficients while the 2-D core FFTs a rasterised cell, so the gap is a rasterisation
+  error, clean `O(1/Sx^2)`: 5.16e-04 at `Sx = 64` down to 1.26e-07 at 4096, and ~1e-3 at the
+  minimum sampling `_validate_cell_sampling` allows.  The ~5e-15 is the y-harmonic claim
+  (`N_y = 0` vs `N_y = 1`), not a 1-D/2-D equivalence.
+* **EME `eme_2d.strip_x_modes`' dead `np.isrealobj` arm removed** -- `A` is built
+  `dtype=complex` unconditionally, so the `.real` arm never ran.
+* **EME `ref_2d_modes` uses `np.conj(px)` / `np.conj(py)` for the Bloch wrap**, the same rule
+  `strip_x_modes` states at `:83-86` and for the same reason (for `|p| = 1` the two agree
+  analytically but `1/p` carries a roundoff error that makes the operator only
+  APPROXIMATELY Hermitian -- and this is the FD oracle that Hermitian operator is compared
+  against).  Bit-identical at `kx0 = ky0 = 0`.
+
+Files: `lumenairy/elements/rcwa/stack.py:736-745, :2337-2353`;
+`lumenairy/elements/rcwa/_core.py:932-1026, :1801-1831 (docstring)`; `lumenairy/elements/rcwa/oned.py:761`; `lumenairy/elements/rcwa/twod.py:1235, :1480, :2025, :2389`;
+`lumenairy/elements/eme/eme_2d.py:90-96, :451-455`.
+Tests: `tests/unit/test_audit2609_a14_rcwa_eme_bor.py::test_h6_per_order_amplitudes_hands_out_copies`,
+`::test_h6_passive_media_predicate`, `::test_h6_passive_bound_is_armed_on_a_lossy_cell`.
+
+### Fixed -- RCWA: `_sqrt_decay`'s on-cut predicate flipped near-ZERO evanescent modes (G11)
+
+The pin tested `|Re r| <= band * scale`, i.e. proximity to the ORIGIN on the SPECTRUM's
+scale, which a deeply evanescent root also satisfies once its own magnitude has collapsed:
+`_sqrt_decay([1e-20 - 1e-30j])` returned `-1e-10 + 5e-21j`, handing a genuinely DECAYING
+mode back with `Re(lam) < 0` -- the `exp(+|gamma| k0 L)` growth the `Re >= 0` rule exists to
+prevent.  Because the scale is the array maximum, a spectrum with a large top could pull an
+ordinary near-cutoff evanescent mode in too, with a worst price
+`|X| = exp(band * max|lam| * k0 L)` = 1.059 / 302 / 1e248 for spectrum scales 1 / 1e2 / 1e4
+at the docstring's own worst `k0 L = 1.14e7`.  The predicate gains a third conjunct
+`Im(r)^2 > Re(r)^2` -- "nearer the IMAGINARY axis than the real one", which is what "on the
+cut" means and is scale free -- so the docstring's "a flipped mode is by construction a
+PROPAGATING one" becomes a theorem rather than a census.
+
+Inert on every population the band was derived against: the worst `|Re r| / |r|` ever
+flipped there is 2.0751e-03, so `Im^2 / Re^2 > 2e5`, five decades clear of the new edge.
+All RCWA / PMM branch-cut, even-sector and round-2/3 verification gates pass unchanged.
+
+Files: `lumenairy/elements/rcwa/_core.py:1564-1578` and the docstring's PRICE paragraph.
+Tests: `tests/unit/test_audit2609_a14_rcwa_eme_bor.py::test_g11_near_zero_evanescent_mode_is_not_flipped`,
+`::test_g11_scale_relative_band_cannot_flip_an_evanescent_mode`,
+`::test_g11_genuine_on_cut_propagating_mode_still_flips`.
+
+### Added -- BOR: the propagating S-matrix's SUPERPOSITION energy closure is now gated
+
+The audit measured that the staggered BOR modal basis is flux-orthonormal and the
+propagating S-matrix is unitary, so energy closes for ARBITRARY excitation -- a strictly
+stronger statement than the per-channel `energy` array (which is exactly the DIAGONAL of
+`U^H U`) can make, and nothing in the suite pinned it.  Gate added on an index-matched
+lossless ring grating (Rbig 12 um, m = 1, one 0.5 um ring layer, lambda 1 um, 78 propagating
+channels): Gram max|offdiag| 2.50e-12 and worst closure 1.67e-12 over 300 random unit-norm
+multi-channel inputs, against a 1e-9 bar.
+
+Tests: `tests/unit/test_audit2609_a14_rcwa_eme_bor.py::test_bor_propagating_smatrix_is_unitary_and_closes_on_superpositions`.
+
+### Fixed -- RCWA: `jax.jit` returned all-NaN at an exact Wood anomaly (H2 follow-up, VERIFY-A14 V5)
+
+The host-side Rayleigh-anomaly nudge needs a CONCRETE wavelength -- it compares
+`|eps - kt^2|` against a threshold and moves the wavelength if any order is at cut-off.
+Under `jax.jit` every constant built inside the traced function is a `DynamicJaxprTracer`,
+so `geom_concrete` was False, the whole guard block was SKIPPED and the solve ran AT the
+anomaly, where the half-space basis has two coincident modes.  Measured on the canonical
+`Lambda = lambda = 1 um` mount: `jax.jit(rcwa_efficiency_1d)` returned `NaN` for every
+order and `jax.grad` through it was NaN too, for TE and TM alike -- while the same call
+EAGERLY (concrete arrays, host-side nudge) returned 0.040057645.  Forcing the PRE-2026-09-12
+one-sided wavelength reproduced the NaN, so this predates the symmetric bracket.
+
+The traced path now regularises the grazing mode in place instead, at the `+rel` leg's own
+offset: an order whose `|kz^2|` is below `2 * _WOOD_PAIR_STEP_REL * |eps|` is pushed onto
+the EVANESCENT side at exactly `|kz| = sqrt(2 * rel * |eps|)`, and the SAME shifted `kz^2`
+builds the mode matrix `Q` -- which is the load-bearing half, because for a uniform
+half-space `det Q = eps^N prod(kz^2)`, so `V = Q diag(1/lam)` is exactly rank-deficient
+whenever any `kz = 0` no matter how `1/lam` is floored (flooring `lam` alone was measured
+and left the NaN in place).
+
+Measured after: finite for TE and TM, closure `|sum R + sum T - 1| <= 4.4e-16`, agreement
+with the eager (bracket-mean) answer **9.4e-08 (TE) / 5.3e-06 (TM)** -- inside the same
+`sqrt(delta) ~ 4.5e-05` band the bracket itself carries -- and `jax.grad` finite (0.4397).
+The floored order stays EVANESCENT, so unlike the symmetric average the traced path leaves
+an exactly grazing order at EXACTLY zero power.  OFF the anomaly the floor never binds and
+the traced path is BIT-IDENTICAL with it and without it (measured 0.0 over TE/TM x five
+wavelengths).  The NumPy and concrete-JAX paths are untouched (`grazing_floor=None`).
+
+The 2-D entry points are unaffected: with a traced wavelength they refuse LOUDLY
+(`TracerArrayConversionError`) before reaching the solver, and with a concrete wavelength
+and a traced cell they take the host-side nudge as before (verified finite and closing at
+1e-16 at the anomaly).
+
+Files: `lumenairy/elements/rcwa/_core.py` (`_traced_grazing_floor`, `grazing_floor=` on
+`_homogeneous_eigenmodes` and `_layer_eigenmodes`), `oned.py`.
+Tests: `tests/unit/test_rcwa.py::test_jax_wood_anomaly_no_nan` (extended to run under
+`jit` with a traced layer index, both polarizations, with the off-anomaly bit-identity arm).
+
+### Fixed -- BOR: a SHORT `guided_modes` result is no longer silent either (H1 follow-up, VERIFY-A14)
+
+The 2026-09-12 H1 work made an EMPTY list audible through every filter.  A list that was
+merely SHORT stayed quiet: Si/SiO2 (`dn = 2.04`) at V = 4.0 returned ONE mode while the
+exact hybrid characteristic equation has THREE (`n_eff` = 3.038391486 / 1.566626407 /
+1.440009396), with no signal at all.  Every call now also counts the roots of that exact
+equation for the requested azimuthal order -- a sign-change scan of `fiber_oracle.fiber_det`,
+the 4x4 Bessel boundary-match determinant, which shares no code with the finite-difference
+vector eigensolver -- and WARNS, naming both counts and the order, when the solver returns
+fewer.
+
+The census is a scan, not a solve: 2001 samples, no bisection, MEASURED 49-72 ms against
+0.72 s / 17.9 s / 67.8 s for the FD eigensolve at N = 150 / 400 / 600, i.e. 9.9% of the
+call at the smallest grid anyone uses and 0.1-0.4% at the grids real work runs.  Its
+resolution is `(n_core - n_clad) / 2000` in `n_eff`, so two roots closer than one cell (a
+near-degenerate HE/EH pair, or a tangential double root) are counted once -- an error that
+is ONE-SIDED in the safe direction, so the notice can miss a shortfall but can never invent
+one.  Counts verified identical to the BISECTING `fiber_modes` on twelve fixtures spanning
+m = 0..5, V = 1.8..9 and three index systems.  `census=False` skips the scan.
+
+Files: `lumenairy/elements/bor/coupled_radial_eigensolver.py`
+(`_step_index_root_census`, `_CENSUS_SCAN`, `census=` on `guided_modes`).
+Tests: `tests/unit/test_audit2609_a14_verify.py::test_h1_a_short_guided_mode_list_is_never_silent`.
+
+### Fixed -- RCWA: the `fff_nv` validated-scope notice now reaches the OUT-OF-PLANE path (H3 follow-up, VERIFY-A14 V6)
+
+`_li_tensor_scope_notice` was reachable only from the IN-PLANE branch of
+`rcwa_jones_2d`, so an out-of-plane (full 3x3) tensor cell with a CURVED pattern got
+`formulation='fff_nv'` with no scope signal at all -- while the identical in-plane cell
+warned.  The off-plane path runs the same Li-2003 staircase factorization (and, per the
+deferred D3, the un-symmetrized one), so it carries the same notice now: measured 1 notice
+on an out-of-plane disk, 0 on an out-of-plane square, 0 for `laurent` / `li` on either, and
+silenced by `allow_nonseparable_nv=True`.
+
+Files: `lumenairy/elements/rcwa/twod.py`.
+Tests: `tests/unit/test_audit2609_a14_verify.py::test_h3_offplane_fff_nv_gets_the_scope_notice_too`.
+
+<!-- WP-A11: Polarization, coatings, sources, algebra, infrastructure -->
+### Fixed -- coatings: `polarization='te'` applied the **TM** coefficient to a TE beam, and every unrecognised spelling did the same, silently (Z1, P1)
+
+`coating_reflectance` and its JAX twin never normalised or validated the polarization argument.
+Both branched on the literal `pol == 's'` and sent *everything else* down the p branch --
+`'te'`, `'S'`, `'tm'`, `'P'`, `'banana'`, `''`.  `CONVENTIONS.md` Section 7 states the opposite
+and names this file: *"`s` == `te` ... both aliases are accepted everywhere (case-insensitive) |
+`rcwa.py::_normalize_pol`, `coatings.py`"*.  `rcwa._core._normalize_pol` does implement that
+contract and raises on junk; `coatings.py` did neither.
+
+Measured on the audit's fixture (50 nm MgF2 on n = 1.52 at 60 deg, 550 nm), `R` by spelling:
+
+| `polarization=` | before | after |
+|---|---|---|
+| `'s'` | 0.15427715 | 0.15427715 |
+| `'te'` / `'S'` / `'TE'` | **0.00322899** (p branch) | **0.15427715** (s branch) |
+| `'p'` / `'tm'` / `'P'` / `'TM'` | 0.00322899 | 0.00322899 |
+| `'avg'` | 0.07875307 | 0.07875307 |
+| `'banana'`, `''`, `'ss'`, `0`, `None` | **0.00322899** (p branch, silent) | **`ValueError`** naming `{'s','te','p','tm','avg'}` |
+
+Reachable from the public wave path: a `{'type': 'coating', 'polarization': 'te'}` element in
+`propagate_through_system` returned `|t| = 0.9969635` (the TM coefficient) for a TE beam where the
+TE answer is `0.94840576` -- 5 % in amplitude, 10 % in power at this angle, and order-unity near
+Brewster (`R_s = 0.154` vs `R_p = 0.003`).  `p9_infra.py` section I now reports
+`te == s ? True   te == p ? False` (was `False` / `True`).
+
+The JAX twin carried the identical defect, so a gradient-based AR/HR design optimising
+`polarization='te'` optimised the TM stack: measured `dR/d(thickness)` under `'te'` is now exactly
+the `'s'` gradient (-1052475.33 1/m) and differs from the `'tm'` one.
+
+Both entry points now route through a shared `_normalize_coating_pol` helper that delegates the
+te/tm/s/p alias table to the RCWA `_normalize_pol` (single source of truth -- a regression test
+asserts the two accept exactly the same set, plus the coatings-only `'avg'`) and raises a
+`ValueError` with the Section 2 `f"{fn_name}: ..."` prefix on anything else.
+
+**Migration.**  A call that passed a typo, an empty string or any spelling outside
+`{'s','te','p','tm','avg'}` used to return the p-polarised result and now raises.  Callers that
+meant `'p'` should say so; callers that meant `'te'` were getting the wrong physics and now get
+the right one.  `'s'`, `'p'` and `'avg'` are bit-identical to before (the TMM itself is untouched:
+the audit's Airy / Rouard oracles still agree to `<= 6.7e-16` on R and `<= 7.8e-16` on T,
+including absorbing exit media and past-critical TIR).
+
+Files: `lumenairy/elements/coatings.py`.
+Tests: `tests/unit/test_audit2609_a11_polar_sources_infra.py::test_z1_*` (24 cases: ten spellings
+against an in-test analytic Airy oracle, nine junk rejections, the RCWA-equivalence pin, the
+`propagate_through_system` path, and four JAX-twin pins including the gradient).
+
+---
+
+### Fixed -- sources: Gaussian-Schell / Schell ensembles realised the grid-PERIODISED coherence kernel, so opposite edges of the grid came out ~99 % coherent (Z2, P1)
+
+`_schell_phase_realizations` filtered complex white noise with `H(k) = exp(-|k|^2 sigma_g^2 / 4)`
+on the FFT grid and inverse-FFT'd it.  An FFT filter is a **circular** convolution, so by Poisson
+summation the two-point correlation it realises is the periodised Gaussian
+`sum_m exp(-|d + mL|^2 / (2 sigma_g^2))` with `L = N dx`, not the `exp(-|d|^2/(2 sigma_g^2))` the
+module header, both factory docstrings and the Schell-model contract all promise.  Nothing in the
+code or docs mentioned the window and no guard fired.
+
+Measured (N = 64, dx = 1 um so L = 64 um; pair-averaged linear correlation over 20 000
+realisations; the escape hatch `pad_sigma=0.0` reproduces the pre-fix path bit-for-bit, so both
+arms come from the same run):
+
+| sigma_g / L | max abs(mu - Gaussian), before | after | mu at the largest separation (N-1)dx, before | after | true value |
+|---|---|---|---|---|---|
+| 0.313 | **0.9949** | 0.0081 | **1.0019** | 0.0151 | 0.0070 |
+| 0.125 | **0.9922** | 0.0036 | **0.9922** | -0.0036 | 3.4e-14 |
+| 0.031 | **0.8836** | 0.0007 | **0.8836** | 0.0007 | 3.4e-216 |
+
+The wrap manufactured *long-range* coherence between opposite edges of the grid -- the failure mode
+that most looks like a real physical result.  With the audit's own single-reference estimator
+(40 000 realisations, `p6_gsm_grid.py`) the departure from the documented Gaussian at
+`sigma_g = L/3` was **0.2692** of peak and is now **0.0041** (Monte-Carlo floor).
+
+Downstream, the coherent-mode spectrum of the `return_kind='mcf'` form (N = 20, dx = 2.5 um,
+w0 = 20 um, sigma_g = 10 um, 4000 realisations) against the Starikov & Wolf (1982) analytic
+eigen-spectrum `[0.38202, 0.14592, 0.14592, 0.05574, 0.05574, 0.05574]`:
+
+| | leading six eigenvalues | n=2 shell mass | degeneracy spread within the shell |
+|---|---|---|---|
+| before | `[0.40081, 0.14175, 0.13891, 0.07445, 0.06990, 0.05077]` | 0.19512 (**+16.7 %**) | **36.4 %** |
+| after | `[0.39205, 0.15411, 0.14527, 0.05830, 0.05597, 0.05424]` | 0.16851 (+0.8 %) | 7.2 % |
+
+(the n = 2 shell is exactly 3-fold degenerate in the analytic answer).
+
+**What ships.**  The noise is drawn and filtered on a grid padded by `4 * sigma_g` per side
+(rounded up to an FFT-fast length) and the central window cropped.  The nearest wrapped image then
+sits at least `8 sigma_g` away, leaving `exp(-32) = 1.3e-14` of residual -- below the float64 noise
+floor of the kernel itself.  The noise is drawn over the *whole* padded grid rather than zeroed
+outside the window, so `phi` stays statistically stationary (zero-padding the noise itself would
+taper the variance within `sigma_g` of the crop edge).  The deterministic unit-mean-intensity
+normalisation (v5.4.6 P3-10) is computed on the padded grid, which is the right constant for the
+cropped window because that grid is homogeneous: measured `E[<|phi|^2>]` = 0.9967-0.99999.
+
+### Changed -- sources: Gaussian-Schell / Schell ensembles are no longer bit-identical for a given `rng` seed, and warn when the grid is too short for the coherence length (Z2)
+
+Fixing the kernel changes the realisations a seed produces (the RNG is now drawn on the padded
+grid).  This is a deliberate change of a WRONG default; `_schell_phase_realizations(pad_sigma=0.0)`
+reproduces the pre-v5.46 path bit-for-bit for reproducing an archived ensemble, and is pinned as
+such.  The public factories have no new kwarg.
+
+`create_gaussian_schell_source` / `create_schell_model_source` now emit a `UserWarning` when
+`sigma_g > N*dx/6`: the kernel is correct there, but fewer than six coherence cells fit across the
+grid, so the ensemble estimate of any two-point quantity is aperture-dominated (the degeneracy
+breaking above was measured at `sigma_g = L/5`), and the anti-wrap pad costs `~((L + 8 sigma_g)/L)^2`
+the FFT work.  A second `UserWarning` fires -- naming the residual periodisation it actually leaves
+-- if the pad has to be capped at 4x the grid per axis (only reachable for `sigma_g > ~L/2`).
+
+The pad is not free.  Interleaved medians of 5 runs, 64 realisations, `OPENBLAS_NUM_THREADS=1`:
+
+| N | sigma_g/L | padded N | before | after | slowdown | peak before | peak after |
+|---|---|---|---|---|---|---|---|
+| 64 | 0.031 | 80 | 22.6 ms | 29.0 ms | 1.28x | 4.6 MB | 4.9 MB |
+| 64 | 0.125 | 128 | 23.2 ms | 71.6 ms | 3.09x | 4.6 MB | 5.9 MB |
+| 128 | 0.031 | 160 | 74.6 ms | 123.1 ms | 1.65x | 18.5 MB | 19.5 MB |
+| 128 | 0.125 | 256 | 80.2 ms | 464.7 ms | 5.79x | 18.5 MB | 23.6 MB |
+| 256 | 0.125 | 512 | 529 ms | 2339 ms | 4.42x | 73.9 MB | 94.4 MB |
+
+The FFT work scales as `(1 + 8 sigma_g/L)^2`; the resident ensemble dominates the peak, so memory
+grows only ~28 %.  Gori's pseudo-mode representation would remove both the window and the FFT cost
+-- see the deferred item in `WP-A11_REPORT.md`.
+
+**Docstring corrections.**  `sigma_g`'s "``sigma_g >> w0`` approaches the coherent limit" steered
+users straight into the bad regime, since a typical grid is `L ~ 4 w0` (so `sigma_g >> w0` means
+`sigma_g > L/6`).  It now states the global degree of coherence `q = sigma_g/w0` as the physics and
+`dx << sigma_g <= N dx/6` as the grid constraint, and says to enlarge `N` rather than shrink `w0`.
+
+Files: `lumenairy/sources/core.py`.
+Tests: `tests/unit/test_audit2609_a11_polar_sources_infra.py::test_z2_*` (five: the kernel against
+both hypotheses with the pre-fix arm measured in-process, unit mean intensity, the `pad_sigma=0.0`
+bit-identity against a local restatement of the old body, the `L/6` warning and its silent
+counter-arm, and both public factories);
+`tests/unit/test_s3_7_broadcast_grid.py::test_schell_phase_realizations_kxky_bit_identical_{unpadded,padded}`
+(the S3-7 broadcast-view orientation pin, split so it covers both paths).
+
+---
+
+### Fixed -- memory: `estimate_lens_memory(lens_model='real')` under-predicted `apply_real_lens`'s peak by up to 2.8x (Z3, P2)
+
+The `'real'` branch reused the *traced* calibration and then scaled the float64 core DOWN by
+`5 / _LENS_F64_ARRAYS`, on the documented reasoning that the bare entry point "omits the traced
+final-assembly float64 arrays".  Measured, it does not.  A pre-flight budget computed with the
+model the docstring names for that entry point under-reserved -- the exact failure
+`check_sim_memory` exists to prevent.
+
+Re-derived from `tracemalloc` on `apply_real_lens` itself (N-BK7 biconvex singlet R = +-50 mm,
+d = 5 mm, 25 mm aperture, 633 nm, caches warmed, whole-grid mode).  The peak is pure `N^2` -- no
+fixed term -- so bytes/pixel is the whole calibration, and two dtypes give an exact two-unknown
+solve on the `N >= 1024` asymptote: **7.00 complex full-grid arrays + 8.00 float64 ones**, of which
+2 float64-equivalents are the `phase_exp` complex128-first transient the shared term already
+models.  The shipped constants carry ~7 % margin so the estimate BOUNDS the measurement.
+
+`est / measured` (the audit's own `p8_memory.py`, plus N = 512 and complex64):
+
+| N | dtype | measured peak | before (`parallel_amp=False`) | before (`=True`, default) | after |
+|---|---|---|---|---|---|
+| 512 | c128 | 46.8 MB | 0.39 | 0.68 | **1.06** |
+| 1024 | c128 | 184.6 MB | 0.36 | 0.63 | **1.07** |
+| 2048 | c128 | 738.3 MB | 0.36 | 0.63 | **1.07** |
+| 512 | c64 | 31.5 MB | 0.52 | 0.91 | **1.07** |
+| 1024 | c64 | 125.9 MB | 0.52 | 0.91 | **1.07** |
+| 2048 | c64 | 503.4 MB | 0.52 | 0.91 | **1.07** |
+
+`estimate_asm_memory` is untouched (the audit verified it over-predicts, i.e. is already fail-safe).
+
+### Changed -- memory: `parallel_amp` is inert for `estimate_lens_memory(lens_model='real')` (Z3)
+
+`apply_real_lens` has no `parallel_amp` argument, so there is nothing to switch off; the `'real'`
+constants are measured on its shipped behaviour and doubling them would double-count.  The kwarg
+still applies to `lens_model='traced'` and to the row-band (`sag_chunk_rows`) branch.  Before,
+`parallel_amp=False` halved the `'real'` estimate to `0.36x` the measured peak.
+
+Files: `lumenairy/memory.py`.
+Test: `...::test_z3_estimate_lens_memory_real_bounds_apply_real_lens` (tracemalloc vs the estimator
+at N = 512, two-sided: `1.0 <= est/measured <= 1.6`).
+
+---
+
+### Performance -- sources: `create_gaussian_beam` peak memory 3.00x -> 1.50x the output (complex128) and 5.00x -> 2.00x (complex64), byte-identical (Z3, P2)
+
+It was the last factory still building a dense `np.meshgrid` -- two float64 `N^2` arrays whose rows
+and columns are all identical -- and normalising out of place.  Every sibling carries the S3-7
+`# broadcast views, not a dense N x N grid` comment.
+
+Measured at N = 4096 (`tracemalloc` peak / `time.perf_counter`):
+
+| dtype | peak before | peak after | output | ratio before -> after | time before -> after |
+|---|---|---|---|---|---|
+| complex128 | 805.4 MB | 402.7 MB | 268.4 MB | 3.00x -> **1.50x** | 0.705 s -> **0.326 s** |
+| complex64 | 671.2 MB | 268.5 MB | 134.2 MB | 5.00x -> **2.00x** | 0.682 s -> **0.337 s** |
+
+At N = 8192 / complex128 that is ~1.6 GB of avoidable transient.  The exponent is now built through
+one real `N^2` buffer with `np.negative` / `np.exp` `out=`, and both `normalize` divides are in
+place (matching `_apply_field_normalization`).  Output is **bit-identical** over 36 configurations
+(N in {17, 64, 257} x three `normalize` modes x complex128/complex64 x on- and off-axis centres):
+the arithmetic is elementwise and `(-S)/c == -(S/c)` exactly in IEEE.  `create_fiber_mode` and
+`Source.gaussian` route through this function and inherit it.
+
+Files: `lumenairy/sources/core.py`.
+Tests: `...::test_z3_gaussian_beam_broadcast_is_bit_identical` (12 configs),
+`...::test_z3_gaussian_beam_peak_over_output` (both dtypes, pre-fix arm measured in the same test),
+`tests/unit/test_s3_7_broadcast_grid.py::test_gaussian_beam_broadcast_bit_identical` (adds the one
+missing factory to the S3-7 census).
+
+### Performance -- polarization: `stokes_parameters` 7.00 -> 6.00 and `degree_of_polarization` 8.25 -> 6.00 full-grid arrays, bit-identical (Z3, P2)
+
+`stokes_parameters` recomputed `abs(Ex)**2` for S0 and again for S1, and `Ex*conj(Ey)` for S2 and
+again for S3; `degree_of_polarization` then built `safe`, three ratios, three squares and two
+`np.where` results on top of it.  Each quantity is now computed once and consumed, and the DOP
+accumulates in place over the Stokes arrays it owns.
+
+Measured at N = 2048 (`tracemalloc` peak, in full-grid REAL arrays of `N*N*8` B; times are medians
+of the same runs):
+
+| | peak before | peak after | time before | time after |
+|---|---|---|---|---|
+| `stokes_parameters` | 7.00 (234.9 MB) | **6.00** (201.3 MB) | 0.258 s | **0.110 s** |
+| `degree_of_polarization` | 8.25 (276.8 MB) | **6.00** (201.3 MB) | 0.396 s | **0.198 s** |
+
+6.00 is the floor for a bit-identical implementation (four outputs plus the one complex cross-term
+the exact S2/S3 need).  Output is bit-identical over eight configurations including dark, NaN, inf
+and 1e-160-underflow pixels -- the regime the E-L13/E-L17 guards exist for.  One subtlety is
+recorded in the source: NumPy's vectorised complex multiply is **not** bitwise commutative here
+(measured 1.8e-15 on S3 at N = 64), so `Ex` stays the left operand.
+
+Files: `lumenairy/elements/polarization.py`.
+Tests: `...::test_z3_stokes_and_dop_are_bit_identical`, `...::test_z3_stokes_and_dop_peak_arrays`.
+
+---
+
+### Changed -- algebra: `FreeSpace`'s default propagator is now `'asm'`, so the delivered grid agrees with the ABCD the operator reports (Z3, P2)
+
+With the previous `method='auto'` default the dispatcher selected SAS on every far-field segment,
+which RESAMPLES.  On the canonical 4f chain
+`FreeSpace(f) ThinLens(f) FreeSpace(2f) ThinLens(f) FreeSpace(f)` (f = 200 mm, N = 256, dx = 8 um,
+633 nm) the operator reported `abcd = [[-1, 0], [0, -1]]` -- magnification -1, so the field returns
+at the input pitch -- while delivering `dx_out = 15.45 um`, **1.93x** the input; and `propagate`
+raised its own `UserWarning` three times per evaluation ("a caller that unpacks this return has no
+stable contract ... drop the argument"), advice the caller could not act on because the argument it
+names is the algebra layer's own.
+
+| | before | after |
+|---|---|---|
+| `UserWarning`s per 4f evaluation | **3** | **0** |
+| `dx_out / dx_in` (ABCD says 1.0000) | **1.9318** | **1.0000** |
+| power ratio | 1.0000 | 0.9995 |
+| centroid +304 um -> | -304.0 um | -303.9 um |
+
+`'auto'` remains fully supported and, when named, no longer emits the un-actionable warning either
+(0 per evaluation) while still reporting its resampled pitch honestly (1.9318x) -- the algebra layer
+now consumes the shape-stable `PropagationResult` on the square-grid branch.  The anamorphic branch
+keeps the legacy tuple and its v5.30 `dy` contract unchanged (verified: `dx=2 um, dy=3 um` in ->
+`2 um / 3 um` out, for both `'asm'` and `'auto'`).  `FourierTransform` deliberately pins `'auto'`
+for its two legs (the optical FT *is* a re-gridding operation) and is unchanged.
+
+The PITCH CONTRACT is now documented on `Operator.abcd`: a ray matrix describes `(height, angle)`,
+not sampling; read the delivered pitch off the returned Source/tuple, never off `|A|`, unless every
+`FreeSpace` in the chain is pitch-preserving.
+
+**Migration.**  `FreeSpace(d)` now propagates by ASM.  Pass `method='auto'` to restore the
+dispatcher-selected kernel and its resampling.  `algebra.from_prescription` keeps `method='auto'`
+(measured pitch-preserving on singlet/meniscus/doublet at N = 256, dx = 8 um).
+
+Files: `lumenairy/algebra/primitives.py`, `lumenairy/algebra/base.py`,
+`lumenairy/algebra/from_prescription.py`.
+Tests: `...::test_z3_freespace_default_preserves_the_pitch_its_abcd_reports`,
+`...::test_z3_freespace_auto_still_available_and_no_longer_spams`,
+`...::test_z3_freespace_anamorphic_dy_still_threaded`; existing pins updated in
+`tests/unit/test_niche_audit_w4_p5_return_contract.py`, `tests/unit/test_v4_15_2_agent_b.py`,
+`tests/unit/test_v4_15_1_agent_g_application.py`.
+
+---
+
+### Fixed -- deprecation warnings named lumenairy instead of the caller (Z4, P3)
+
+`_deprecation._emit` used `stacklevel=3`, which from inside `_emit` resolves to the *public
+function's own body*, and from inside `deprecated_alias._shim` to `_deprecation.py` itself.  The
+`_emit` docstring's claim ("lets the warning point at the caller of the public function") was wrong
+by one frame in both cases, and the v4.15.3 sweep had papered over it by passing `stacklevel=4`
+explicitly at seven call sites.
+
+`la.load_zmx_prescription(...)` called from a user script, before: `filename=_deprecation.py
+line=551`.  After: the user's own file and line.  Same for the direct helpers (before: the public
+function's body; after: its caller).  The default is now `_DEFAULT_STACKLEVEL = 4` with the frame
+arithmetic written out; `warn_renamed_function` takes 5 because it inserts a frame of its own.  The
+library's two live aliases (`load_zmx_prescription`, `load_zemax_prescription_txt`) are the only
+production consumers.
+
+Files: `lumenairy/_deprecation.py`.
+Tests: `...::test_z4_deprecated_alias_warning_names_the_caller`,
+`...::test_z4_live_alias_points_at_user_code`.
+
+### Fixed -- `_check_2d_scalar_field` promised "2-D complex" but accepted object dtype and `np.matrix` (Z4, P3)
+
+The guard tested `ndim == 2` and nothing else while every message it emits says *"expected 2-D
+complex ..."*.  `np.matrix` is the dangerous one: its `*` is matrix multiplication and its `**` is
+matrix power, so any kernel multiplying a field by an aperture mask, a phase screen or a transfer
+function silently computed a matrix product and returned a plausible finite array.  Object dtype
+reached the kernels too and ran NumPy's Python-object slow path.
+
+| input | before | after |
+|---|---|---|
+| 2-D complex / float / int / bool, non-contiguous | accepted | accepted (unchanged -- a real-dtype amplitude mask is legitimate) |
+| **2-D object dtype** | **accepted** | `TypeError` |
+| **`np.matrix`** | **accepted** | `TypeError`, pointing at `np.asarray(M)` |
+| 1-D / 3-D / 0-D / nested list | `ValueError` | `ValueError` (unchanged) |
+
+The dtype gate is a `dtype.kind` membership test (~60 ns) because this helper runs at the entry
+point of every propagator and lens call.  The module's absolute `from lumenairy.sources.core
+import ...` also became the relative form the rest of the package uses (the audit's secondary nit).
+
+Files: `lumenairy/_validation.py`.
+Tests: `...::test_z4_check_2d_scalar_field_dtype_gate`,
+`...::test_z4_check_2d_scalar_field_rejects_np_matrix`;
+`tests/unit/test_v4_15_4_agent_b.py::test_validation_helper_lazy_import_removed` broadened to
+accept either import spelling (its contract -- module scope, not lazy -- is unchanged).
+
+### Fixed -- cache registry: a colliding name silently dropped the second clearer, and a failing clearer was invisible (Z4, P3)
+
+`register_cache_clearer` returned early on an existing name -- intended as reload-idempotence, but
+it equally dropped a *different* function registered under a colliding name, leaving that cache
+permanently unclearable, in the module whose entire purpose is to retire the "fix N, miss N+1"
+pattern.  `clear_all_registered_caches` then swallowed `ImportError`/`RuntimeError`/`AttributeError`
+per clearer, so a caller who ran `clear_asm_caches()` to free RAM before a large allocation got no
+signal that a cache had stayed full.
+
+A collision now raises a `RuntimeWarning` naming both call sites; the first registration still wins,
+so behaviour is otherwise unchanged.  Reload-idempotence is preserved by deciding "same call site"
+on `(module, qualname, source file, first line)` -- which `importlib.reload` preserves and two
+distinct functions (including two lambdas on different lines) do not.  The walk is still
+best-effort and does not raise, but now emits one `RuntimeWarning` at the end naming every clearer
+that failed and why.
+
+Files: `lumenairy/_cache_registry.py`.
+Tests: `...::test_z4_cache_registry_warns_on_a_colliding_name`,
+`...::test_z4_cache_registry_is_still_reload_idempotent`,
+`...::test_z4_clear_all_reports_a_failing_clearer`.
+
+### Fixed -- `lumenairy.algebra.from_prescription` the MODULE shadowed the function of the same name (Z4, P3)
+
+`from lumenairy.algebra import from_prescription; from_prescription(rx, 633e-9)` -- the call the
+submodule's own `__all__` and docstring advertise -- raised `TypeError: 'module' object is not
+callable`, because importing the submodule bound it as an attribute of the package.  Only
+`Operator.from_prescription(rx, wl)` and the fully-qualified
+`lumenairy.algebra.from_prescription.from_prescription` worked.  The package attribute is now
+rebound to the function after the import.  The submodule stays in `sys.modules` under its dotted
+name, so `from lumenairy.algebra.from_prescription import from_prescription` and
+`importlib.import_module(...)` keep working; the chained
+`...from_prescription.from_prescription` workaround no longer resolves -- drop the duplicated tail.
+
+Files: `lumenairy/algebra/__init__.py`, `lumenairy/algebra/from_prescription.py`.
+Test: `...::test_z4_algebra_from_prescription_is_callable` (all four access paths).
+
+### Fixed -- `_plane_wave_carrier` centred its grid on `nx // 2` while the package uses `N / 2` (Z4, P3)
+
+Identical for even `N`, half a pixel apart for odd `N`, so a `JonesField` built by
+`jones_field_from_orders` on an odd grid sat `dx/2` off every element subsequently applied to it
+(apertures, spatially-varying Jones callables).  Measured at nx = 7, dx = 1 um: the package grid is
+`[-3.5 ... +2.5] um`, the carrier grid was `[-3 ... +3] um`.  The site also moved to broadcast views
+(dropping two dense float64 `(ny, nx)` arrays).
+
+Files: `lumenairy/elements/polarization.py`.
+Test: `...::test_z4_plane_wave_carrier_uses_the_package_grid_centring` (nx in {7, 8, 9, 16},
+cross-checked against the grid `apply_jones_matrix` hands to a callable).
+
+### Fixed -- `user_library`: `**` and `<<` on integer literals could exhaust memory from an untrusted phase-mask string (Z4, P3)
+
+The allowlist AST interpreter in `_safe_eval_expression` is a genuine sandbox -- the auditor could
+not escape it -- but CPython's `int` is arbitrary precision, so `2 ** (10 ** 9)` asks for a 125 MB
+integer (and `1 << (10 ** 9)` the same) inside a routine whose input is an untrusted user-library
+string.  Nothing is compromised; the process stalls or dies.  The evaluator now bounds the RESULT's
+bit length at 4096 bits (~1234 decimal digits) for the pure-Python-`int` path only, so it refuses
+before allocating: measured 0.02 ms per rejection.  Float, complex and every ndarray operand are
+untouched, and `X ** 2`, `2 ** 10`, `10 ** 9`, `1 << 32`, `2 ** -3`, `(-1) ** 1000000000` all still
+evaluate.  `<<` is guarded alongside `**` (the audit named only `Pow`; the shift is the identical
+bignum path and was one `_BIN_OPS` entry away).
+
+Files: `lumenairy/user_library.py`.
+Tests: `...::test_z4_user_library_bounds_integer_growth`,
+`...::test_z4_user_library_pow_guard_passes_real_expressions`,
+`...::test_z4_user_library_pow_guard_ignores_array_operands`.
+
+### Documentation -- `JonesField.propagate*` mutate in place; two docstrings said otherwise (Z4, P3)
+
+`propagate_fresnel` and `propagate_fraunhofer` were documented "Returns new grid spacings"; both
+return `self` and write the new spacings onto `self.dx` / `self.dy`.  `propagate` documented neither
+the mutation nor the return.  All four now state the in-place-and-return-`self` convention that
+`sas_propagate` already did, note that the caller's original arrays are rebound rather than written,
+and say which methods change the pitch.  No behaviour change.
+
+Also documented: `coating_reflectance`'s p-polarisation reflection phase is pi from the textbook
+Fresnel convention (the Macleod tilted admittance `eta_p = n/cos(theta)`), which is observable
+through `propagate_through_system`'s `'reflection'` port -- the audit verified the sign is
+self-consistent with `berreman_jones_1d` to 1.8e-15, but nothing said so at the call site.
+
+Files: `lumenairy/elements/polarization.py`, `lumenairy/elements/coatings.py`.
+Test: `...::test_z4_jones_propagate_methods_are_in_place_and_return_self` (pins the behaviour, not
+the prose).
+
+---
+
+### Appendix -- O-1 / O-2 resolution (VERIFY-A11, orchestrator ruling 2026-09-12)
+
+Added by the independent verifier after re-measuring this WP.  Two entries; both belong in the same
+v5.46 block as the Z3 rows above.
+
+### Added -- algebra: `FreeSpace` now reports when the pitch-preserving default has CLIPPED the beam at the window edge (Z3 / VERIFY-A11 O-1)
+
+`FreeSpace`'s v5.46 default `method='asm'` is pitch-preserving, which is the whole point of the Z3
+fix -- the delivered sampling agrees with the ABCD the operator reports.  The price is that the
+window stays `N*dx` wide, so a beam that has diverged past it is truncated at the grid edge.  Before
+this entry that happened silently, and it is the one regime where the new default is worse than the
+old one.  Measured at N = 256, dx = 8 um, 633 nm (window +-1.024 mm), a 20 um waist propagated
+500 mm -- true `w(z) = 5037.3 um`:
+
+| | 1/e^2 radius returned | error | power kept | delivered dx |
+|---|---|---|---|---|
+| `method='asm'` (default) | 1071.0 um | **79 % low** | **0.0961** | 8.00 um |
+| `method='auto'` (resampling) | 5034.0 um | 0.07 % | 0.9998 | 77.27 um |
+
+`FreeSpace._apply` now emits one `UserWarning` (Section 2 prefix `FreeSpace._apply: ...`) naming the
+distance, the resolved method, the grid, the threshold, the measured fraction of power kept and the
+window half-width, and pointing at `method='auto'` as the remedy (on an anamorphic grid, which forces
+`'asm'` because the resampling kernels are square-grid only, it points at enlarging `N*dx` instead).
+**The default still does not resample** -- a silent re-grid is the contradiction this version exists
+to remove.
+
+Two conditions, both required, because the cheap one alone is not the property.  The gate is
+`z > z_max = min(Nx*dx^2, Ny*dy^2)/lambda` read off the delivered grid (25.9 mm for the grid above);
+the decision is the measured power the step handed back.  `z > z_max` says a step COULD truncate, not
+that it did: every one of the canonical 4f chain's five legs (f = 200 mm) is past `z_max` and none of
+them clips, so warning on the gate alone would have restored exactly the three-warnings-per-4f-
+evaluation spam the Z3 entry above removed (measured: 3).  With the measurement in the loop the 4f
+chain stays at **0**.
+
+Tolerance `_FAR_FIELD_POWER_LOSS_TOL = 0.05`, derived from measurement at N = 256, dx = 8 um, 633 nm:
+untruncated segments lose at most 1.76 % (the 4f chain's own 2f leg, 0.98239; its f leg 1.00000; a
+collimated 200 um waist over 500 mm 0.99990; a 400 um waist just past `z_max` 1.00000) while
+truncated ones lose 87-95 % (0.09612, 0.12669, 0.04658).  The bar sits 2.8x above the worst benign
+loss and 17x below the smallest real one.  The `O(N^2)` power sum is paid only by a pitch-preserving
+step past `z_max` that has not already warned.
+
+Reported **once per `FreeSpace` instance**: the condition is a property of `(z, N, dx, lambda)`, and
+an optimiser loop re-applies the same operator thousands of times.  `method='auto'`, `'sas'` and
+`'fresnel'` never warn (they are the remedy); `'rs'`, which is pitch-preserving like `'asm'`, does.
+`FourierTransform` pins `'auto'` for its legs and is unaffected.
+
+Files: `lumenairy/algebra/primitives.py`.
+Tests: `tests/unit/test_audit2609_a11_polar_sources_infra.py::test_o1_freespace_reports_far_field_truncation_and_stays_quiet_otherwise`,
+`::test_o1_far_field_warning_is_once_per_instance_and_skips_the_remedy` (both two-sided: the benign
+arms are all PAST `z_max` and must stay silent).
+
+### Fixed -- memory: `estimate_lens_memory(lens_model=...)` silently accepted any typo as `'real'` (Z3 / VERIFY-A11 O-2)
+
+The branch was written `_real = (lens_model != 'traced')`, so `'Traced'`, `'REAL'`, `'banana'`, `''`,
+`None` and `0` all selected the `'real'` model and returned its budget -- 49.5 MB instead of 47.1 MB
+at N = 512 / complex128, and up to 2.3x apart at other grids -- with no signal, inside the function
+`check_sim_memory` exists to make trustworthy.  The vocabulary is now closed:
+`lens_model` outside `{'traced', 'real'}` raises `ValueError` with the Section 2 prefix, naming both
+tokens.  Case-SENSITIVE, matching the lower-case strings the module compares against throughout and
+the contract the docstring has always stated.  This is the same house rule Z1 applied to the coatings
+`polarization` argument one file away.
+
+**Migration.**  A caller who passed a differently-cased or misspelled `lens_model` was reserving the
+wrong budget and now gets an exception.  `'traced'` (the default) and `'real'` are bit-identical to
+before.  No call site in `lumenairy/`, `tests/`, `validation/` or `examples/` passes anything else.
+(The `lens_model=` arguments of `apply_thin_lens` / `propagate_through_system` /
+`ui/waveoptics_dock` -- `'paraxial'`, `'stigmatic'`, `'aplanatic'`, `'asm'`, `'local_only'` -- are a
+different parameter of the same name and are untouched.)
+
+Files: `lumenairy/memory.py`.
+Tests: `...::test_o2_estimate_lens_memory_rejects_an_unknown_lens_model` (10 tokens),
+`...::test_o2_estimate_lens_memory_keeps_both_valid_models_distinct` (counter-pin: the guard must not
+collapse the vocabulary it protects -- the two models still differ, the default is still `'traced'`,
+and the row-band branch validates too).
+
+<!-- WP-A10: I/O, prescriptions, optimisation -->
+### Fixed -- io/CODE V: `DIM M` is MILLIMETRES, and `C` / `I` are recognised (I1, P0)
+
+`load_codev_seq` read CODE V's `DIM M` as METRES and ignored the `C` and `I`
+tokens entirely, falling through to that same metre default; `export_codev_seq`
+mirrored it, so every file the library wrote with the default `units='M'` was
+1000x too large when CODE V opened it — while the docstring advertised the
+kwarg as "useful for handing files to CODE V users".  CODE V's `DIM` command
+takes exactly three lens-unit tokens — `M` (millimetres), `C` (centimetres),
+`I` (inches); the language has no metre unit.
+
+Measured on the AC254-100 doublet written as an ordinary CODE V sequence
+(`DIM M`, `RDY 62.75`, …), `docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/repro/IO-OPTIMIZE/p2_codev.py`:
+
+| file says | before | after | CODE V means |
+|---|---|---|---|
+| `DIM M` | R1 = 62.75 m, EFL = 72.2154 m, **0 warnings** | R1 = 0.06275 m, EFL = 0.0722154 m | 62.75 mm |
+| `DIM C` | R1 = 62.75 m (token ignored) | R1 = 0.6275 m | 62.75 cm |
+| `DIM I` | R1 = 62.75 m (token ignored) | R1 = 1.59385 m | 62.75 in |
+| unknown token | silent fall-through to the default | `UserWarning` naming the token and the unit in force | — |
+
+The writer now emits CODE V lens units (`RDY 50.00000000` for a 50 mm radius,
+was `RDY 0.05000000`) and normalises the tolerated aliases `MM`/`CM`/`IN`/`INCH`
+to the CODE V token they mean, so an exported file never carries a `DIM` token
+CODE V does not define.  `export -> load` stays a lossless identity
+(max |ΔR| = 0.0 on a doublet).
+
+**Migration.** Files written by lumenairy **before this release** with the
+default `units='M'` carry `DIM M` with SI-metre numbers.  The writer now stamps
+a format marker (`! LUMENAIRY-SEQ-FORMAT 2`) next to its generator banner, and
+`load_codev_seq` uses the pairing *banner present + marker absent + a `DIM M`
+line* to identify such a file exactly: it is read with the legacy metre scale
+(so its values are unchanged) and raises a `UserWarning` saying so.  Re-export
+it once to get a file CODE V can read, or pass the new `dim_units=` kwarg
+(`'M'`/`'C'`/`'I'`/`'SI'`) to force a reading.  Files from CODE V itself, and
+files written from this release on, are unaffected.
+
+A pre-release file written with `units='MM'` or `units='IN'` needs **no**
+migration and gets no warning: those tokens meant millimetres and inches then
+and still do, so such a file reads identically under both conventions.  (The
+legacy sniff is deliberately keyed on the `DIM` token for this reason — keying
+it on the banner alone read a pre-release `DIM MM` file 1000x too large and a
+`DIM IN` file 39.37x too large, which VERIFY-A10 caught and fixed before
+release.)
+
+Files: `lumenairy/io/prescriptions_code_v.py`.
+Fixtures corrected (both pinned the wrong convention):
+`tests/unit/test_audit_misc.py::test_d2_codev_seq_roundtrip_preserves_bfl`
+(hand-written `.seq` that wrote SI metres under `DIM M`) and
+`validation/io/test_io.py::t_codev_seq_units_mm` (asserted the writer emits
+`DIM MM`, a token CODE V does not define).
+Tests: `tests/unit/test_audit2609_a10_codev.py` (19 tests),
+`validation/io/test_io.py` (`CODE V .seq: DIM M/C/I scaling + unknown-token
+warning`).
+
+### Fixed -- io/CODE V: mirrors, conics and aspheres are parsed instead of dropped (I3)
+
+`load_codev_seq`'s per-surface dispatch handled only `STO`/`RDY`/`CUY`/`THI`/
+`GLA`/`CON`; everything else fell into the silent-ignore tail.
+
+* `REFL` / `RMD REFL` (mirrors) were in neither warn set, so a CODE V fold or
+  catadioptric mirror imported as an **air-to-air dummy surface** — the design
+  silently un-folded *and* lost the mirror's optical power.  Measured before:
+  `glasses [('air','N-BK7'), ('N-BK7','air'), ('air','air')]`, `'elements' in
+  rx` False, `has_mirrors` False.  After: `element_type` `['surface','mirror',
+  'mirror']`, `has_mirrors` True, and the writer emits `REFL` so a folded
+  design round-trips.
+* `K` (CODE V's conic keyword) was ignored — only the exporter's own `CON` was
+  accepted.  Measured before: `conics [0.0, 0.0, 0.0]` for a file carrying
+  `K -1.0`, with no mention even though an `ASP` warning did fire.  Both
+  keywords are now read; the writer emits `K`.
+* `A`…`J` (4th…20th-order asphere coefficients, CODE V skips the letter `I`)
+  were dropped.  Now parsed into `aspheric_coeffs` with the lens-unit → SI rule
+  `a_p = a_file / L**(p-1)` (the same rule the Zemax loader uses): measured
+  `A 1.234E-07` → 123.4 m^-3 and `B -5.0E-11` → -5.0e4 m^-5, exact.  The writer
+  emits the matching `ASP` + `A`…`J` block and warns for any power outside it.
+* A surface with no `RDY` yielded `radius=None`, not `inf`: the dict was
+  pre-seeded with `'radius': None` so the documented `s.get('radius',
+  float('inf'))` default was dead code.  A legal CODE V dummy surface therefore
+  produced a prescription `validate_prescription` rejects
+  (`surfaces[1].radius: is None`).  Now `inf`, and `system_abcd` accepts it.
+
+### Fixed -- io/Zemax: powered air-to-air surfaces are no longer deleted by the window auto-detect (I2)
+
+The lens-window auto-detect admitted only glass / mirror / DGRATING surfaces,
+so a `TYPE PARAXIAL` ideal lens, an air-spaced phase surface, or an `ABCD`
+black box — and the STOP flag on it — were removed **before** reaching the
+unsupported-SURFTYPE branch that would have warned.  Measured on `PARAXIAL
+f = 100 mm` + STOP ahead of a glass singlet: `elements surf_nums = [2, 3]`,
+`stop_index = None`, **0 warnings** — the 100 mm lens and the declared stop
+were both gone and only the lens's DISZ survived as free space.  This is the
+same failure the v5.32 DGRATING fix repaired, applied to one surface type only.
+
+The air-to-air powered SURFTYPEs that carry their power in a `PARM` table or a
+curvature -- `PARAXIAL` / `PARAXIALXY` / `IDEAL` / `ABCD` / `BINARY_*` /
+`GRID_PHASE` / `ZERNPHASE` / `HOLOGRAM*` / `TILTSURF` -- now enter the window,
+so they reach the loud per-surface unsupported-SURFTYPE warning instead of
+vanishing, and their STOP and DIAM survive.  An air-spaced **aspheric** phase
+plate (`EVENASPH` / `QBFS` / `QCON` / `ZERNSAG` / `GRID_SAG` outside the glass
+span) is still excluded -- mapping those onto the window would change which
+surfaces an ordinary aspheric design imports -- but it is no longer silent:
+any optical surface the window excludes that carries a non-zero `CURV`, a
+non-empty `PARM` table or the STOP flag is named once in a `UserWarning`.  An
+ordinary doublet gains no new diagnostic.
+
+Both Zemax loaders share the predicate and the diagnostic.
+`load_zemax_prescription_data_txt` is a near-copy of the `.zmx` pipeline and
+had the same defect; it now calls the same `_raw_surface_is_air_powered` and
+`_warn_window_excluded_powered` helpers, so the two cannot drift.  (Measured
+on a `PRESCRIPTION DATA` report with a `PARAXIAL` STOP row ahead of the glass:
+2 surfaces / `stop_index None` / 0 warnings -> 3 surfaces / `stop_index 0` /
+the P3-43 shape warning.)
+
+### Fixed -- io: cylindrical / biconic surfaces no longer export as spheres in silence (I4)
+
+`export_zemax_zmx`, `export_zemax_lens_data` and `export_codev_seq` emit
+curvature from `radius` only, so `radius_y` / `conic_y` / `aspheric_coeffs_y`
+were dropped and a one-axis focusing element became a two-axis one with no
+diagnostic (measured: `cyl S0 radius=0.05 radius_y=inf` → `.zmx`/`.seq`
+`radius_y preserved=False, warnings=[]`; the Quadoa writer handles it, which
+makes the gap an inconsistency rather than a format limitation).  All three
+writers now raise a `UserWarning` per anamorphic surface, as loudly as
+`_warn_dropped_qtype` does for a Forbes-Q surface.  A surface whose `radius_y`
+equals its `radius` loses nothing and stays quiet.
+
+### Fixed -- io/codegen (security): untrusted `.zmx` strings can no longer reach code positions (I5)
+
+`generate_simulation_script` interpolated the raw `GLAS` token, the labels
+derived from it, and the system name (the file stem by default) into **code**
+positions of the generated script with no escaping — `la.GLASS_REGISTRY['{g}']
+= …`, `print("Applying {label} …")`, `print('Running: {sys_name}')`.  A
+whitespace-free `GLAS` token such as `X'];<payload>;#` therefore became live
+code that ran the moment the user executed the generated file; the audit's
+proof of concept emitted a line parsing as **2 statements** and the full script
+parsed as valid Python.
+
+Two independent guards now stand between the file and the script: every
+interpolated string goes through `repr()` / a comment-safe collapse, and
+glass / name tokens are validated at the boundary against
+`[A-Za-z0-9_\-.+]+` (anything else is stripped, with a `UserWarning` that says
+an out-of-charset token in a third-party `.zmx` is an injection attempt).
+After: every emitted `GLASS_REGISTRY` line parses as exactly one `Assign` whose
+subscript key is a string constant, and executing the emitted registry block
+against a stub registry produces no output at all.
+
+Threat model, unchanged from the audit: `generate_script_from_zmx()` on a
+vendor / colleague-supplied `.zmx`, or one fetched from a lens-catalogue site.
+There is still no `eval`/`exec` on any load path.
+
+### Fixed -- io/storage: Zarr per-plane metadata goes through the canonical codec (I6)
+
+`_zarr_append_plane` was the one metadata write site still using the pre-A-4
+raw loop, while every HDF5 site and `_zarr_write_sim_metadata` used the
+type-tagged `_meta_dumps` codec — so the same call with the same arguments had
+different fidelity depending on the global backend switch.  Measured over the
+module's own 19-type probe set (`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/repro/IO-OPTIMIZE/p6_storage.py`):
+
+```
+             before            after
+HDF5         18/19 faithful    18/19
+ZARR         13/19 faithful    18/19      (only np.float32 -> float remains,
+                                           inherent to the JSON lowering)
+```
+
+The five recovered types were `complex` → `str '(1+2j)'`, `bytes` → `str`,
+`tuple` → `list`, `np.float32` → `str`, and — irrecoverably — `ndarray` →
+`str(...)`, which inserts `...` past numpy's 1000-element print threshold, so
+the values were simply gone.  A 4096-element array now round-trips exactly.
+`_zarr_load_planes` / `_zarr_list_planes` / `_zarr_load_plane_by_label` /
+`_zarr_load_plane_slice` apply the same blob overlay `_h5_read_attrs` applies;
+files written before the blob existed read back exactly as before.
+
+### Fixed -- io: `THORLABS_CATALOG['LA1509-C']` was a 200 mm lens under a 100 mm part number (I6)
+
+The entry carried `R1 = 103.29 mm` — the radius of a 200 mm lens — with
+LA1509's own 3.6 mm thickness, so `thorlabs_lens('LA1509-C')` returned a
+**2x focal-length error with no diagnostic**, and the validation fixture
+`validation/real_lens_opd/zemax_prescriptions/LA1509_C.zmx` carried the same
+wrong radius (`CURV 0.0096814793`) so it could not catch it.  Thorlabs LA1509
+is R = 51.5 mm, tc = 3.6 mm, N-BK7, f = 100.0 mm.
+
+Measured paraxial EFL at 587.6 nm: **199.865 mm → 99.652 mm** (nominal 100.0 mm, i.e. the pre-fix value was 1.9987x the part number);
+at 1310 nm 205.11 mm → 102.27 mm.  The `.zmx` and `.txt` fixtures and the
+`INDEX.md` row were regenerated from the corrected entry (`CURV 0.0194174757`),
+and `validation/real_lens_opd/lens_cases.py`'s description ("f=200 mm") was
+corrected.
+
+### Added -- io: every Thorlabs catalogue row is checked against its own part number (I6)
+
+`thorlabs_lens` now re-derives the paraxial EFL from the row's radii /
+thicknesses / glass with an independent reduced-slope trace and raises a
+`UserWarning` when it misses the focal length the part number states by more
+than 3 %.  Audit of the whole table at 587.6 nm:
+
+| part | nominal | measured | deviation |
+|---|---:|---:|---:|
+| LA1050-C | 100 mm | 99.652 mm | −0.35 % |
+| LA1509-C | 100 mm | 99.652 mm | −0.35 % (pre-fix: 199.865 mm, **+99.9 %**) |
+| LA1301-C | 250 mm | 250.001 mm | +0.0004 % |
+| **AC254-050-C** | 50 mm | 44.560 mm | **−10.9 %** |
+| **AC254-100-C** | 100 mm | 83.171 mm | **−16.8 %** |
+| **AC254-200-C** | 200 mm | 137.395 mm | **−31.3 %** |
+
+The three doublet rows are left as data (no vendor surface table was available
+to correct them in this pass) but `thorlabs_lens` now warns about them -- once
+per part per process, so a loop over a catalogue is not drowned in repeats.
+The header comment's claim "Surface data from Thorlabs Zemax files" is false
+for them.  **They need vendor data.**
+
+### Fixed -- io: `scale_prescription` is self-similar for Forbes-Q, diffractives and the stored BFL (I7)
+
+Three families of LENGTHS appeared in neither the "scales" nor the "deliberately
+does not scale" half of the docstring, so their absence read as coverage.
+Measured at `s = 0.25` (`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/repro/IO-OPTIMIZE/p7b.py`), before → after:
+
+```
+r_max                 0.0075  -> 0.001875        (expected 0.001875)
+q_bfs_coeffs    [1e-06, 2e-07] -> [2.5e-07, 5e-08]
+back_focal_length     0.084   -> 0.021
+diffractive period    2e-06   -> 5e-07
+diffractive gap_before 0.01   -> 0.0025
+```
+
+`origin`, `gap_after`, `semi_diameter` and `lines_per_um` (inverse) scale too;
+`order` deliberately does not.  The core identities the audit verified correct
+are unchanged (round-trip max |ΔR| = 0.0, aspheric self-similarity exactly
+0.25).  Any *unrecognised* length-like key now raises a `UserWarning` instead of
+being left at its original size in silence.
+
+**Note.** Scaling a grating `period` is what geometric self-similarity requires,
+but the wavelength is deliberately not scaled, so a scaled DOE diffracts at a
+different angle — documented explicitly in the docstring.
+
+### Fixed -- io/codegen: `inf` / `nan` emission, `-inf` sign, and `normalize_prescription` output (I7)
+
+* The generated prescription block emitted bare `inf` / `nan` (not Python
+  literals) for conic and aspheric values and failed with `NameError: name
+  'inf' is not defined`, and `np.isinf` being sign-blind wrote a `radius =
+  -inf` surface as `float('inf')` — **a silent sign flip**.  One shared
+  `_py(value)` helper now renders radius, conic, thicknesses, aperture and
+  every aspheric coefficient; the emitted block executes and
+  `LENS_1_RX['surfaces'][1]['radius']` comes back `-inf`.
+* `generate_simulation_script` raised `KeyError: 'element_type'` on the output
+  of `normalize_prescription` — the one helper documented as "the recommended
+  idiom" for making a builder prescription codegen-shaped.  codegen now
+  defaults the key, and `normalize_prescription` stamps
+  `element_type='surface'` on the mirrored entries **in place**, so the
+  documented `q['elements'] == q['surfaces']` identity (and the aliasing it
+  rests on) is preserved — both views now carry the canonical discriminator
+  instead of neither.
+* One level up, a prescription straight from a **builder** (`make_singlet` /
+  `make_doublet` / `combine_prescriptions`) raised a bare
+  `KeyError: 'elements'` from `_decompose_prescription`.  The message now
+  carries the CONVENTIONS §2 `generate_simulation_script:` prefix, names the
+  missing keys and the keys the prescription does have, and gives the one-line
+  fix (`generate_simulation_script(la.normalize_prescription(rx), ...)`).
+* Two `#` comment lines in the generated script were built from file-supplied
+  text without the comment collapse every other comment site uses — the
+  per-lens header (whose text is the first surface's `COMM`) and the
+  `style='system_list'` DOE placeholder.  A `COMM` carrying U+2028 / U+2029 /
+  U+0085 therefore reached the emitted file verbatim: inert under CPython,
+  which does not treat them as source newlines, but any tool that re-reads the
+  script with `str.splitlines()` disagreed with the compiler about where the
+  comment ends.  Both now route through `_comment_text`, which also strips
+  those three separators explicitly.
+
+### Added -- io/Zemax: multi-configuration (`MNUM` / `MCON`) records are surfaced (I7)
+
+Neither keyword was matched at any level, so a zoom / thermal / multi-config
+`.zmx` imported as the base lens-data-editor state with no `configurations` key
+and **no warning**, while `optimize/multiconfig.py` and
+`examples/08_multiconfig_zoom.py` make the feature look supported end to end.
+`load_zemax_zmx` now returns `configurations` — `None` for a single-config file
+(the overwhelming majority), else the `MNUM` header plus the raw `MCON` operand
+rows — and warns once naming the operands found.
+
+Each operand row is `{'raw', 'operand', 'fields_provisional'}`.  **Only `raw`
+and `operand` are contractual.**  The positional layout of an `MCON` row after
+the operand token is version-dependent and could not be confirmed against an
+OpticStudio-written file, so the trailing fields are exposed as an undecoded
+list rather than under invented names: an earlier named decode assigned
+`config = 3.0` to all three rows of a three-configuration fixture, which cannot
+be right.  Read `raw`; the docstring says so, and the warning points at it.
+
+### Fixed -- io: CODE V and Quadoa loaders emit the schema three docstrings promised (I7)
+
+`normalize_prescription` and `split_prescription_at_mirrors` both documented
+`load_codev_seq` / `load_quadoa_qos` as carrying `elements` and
+`all_thicknesses`; neither did (measured key diff for the same doublet:
+`.zmx` 10 keys vs `.seq` 7).  Both loaders now emit them, and
+`split_prescription_at_mirrors` warns when it takes the
+`elements is None` early return instead of silently reporting one refractive
+leg — which is indistinguishable from a genuinely unfolded design.
+
+Both loaders also gained the unknown-glass `UserWarning` the Zemax loaders have
+had since v4.16.1; CODE V names are routinely `N-BK7_SCHOTT` or a 6-digit code,
+neither of which is a `GLASS_REGISTRY` key, and the failure previously surfaced
+much later as a `ValueError` from `get_glass_index` inside a propagation.
+
+### Fixed -- io/Quadoa: the writer no longer invents an aperture stop (I8)
+
+`stop_surface` defaulted to `0` when the prescription declared none, and every
+surface was then written with `is_stop = (i == 0)`, so re-loading **always**
+yielded `stop_index = 0`.  The default is now `None` and no `is_stop` flag is
+written unless a stop was actually declared; a declared stop still round-trips.
+
+### Changed -- io/storage: HDF5 `compression` and `chunk_size` default to `'auto'` (I7, Performance)
+
+`compression='gzip', compression_opts=4` was the default on `save_field_h5`,
+`save_planes_h5`, `save_jones_field_h5` and `append_plane_h5` — the last of
+which is the per-plane hot path of every multi-plane run.  Complex float
+mantissas are incompressible, so gzip is almost pure overhead there.  Measured
+on this workstation, 1024² complex128 (16 MiB), **medians of 7 interleaved
+runs** (interleaved because the box is shared):
+
+| compression | write | read | on disk | tracemalloc peak |
+|---|---:|---:|---:|---:|
+| `gzip` level 4 (old default) | 0.4274 s | 0.0867 s | 15.12 MiB | 1.8 MiB |
+| `None` | 0.0074 s | 0.0122 s | 16.01 MiB | 0.0 MiB |
+| ratio | **×57.9** | **×7.1** | −5.6 % | — |
+
+(The audit measured the same shape at 4096²: 17.05 s vs 0.70 s for −5.6 %.)
+
+`'auto'` means **no compression for complex data, gzip level 4 for everything
+else** — so real-valued arrays keep the historical behaviour exactly, and an
+explicit `compression='gzip'` / `'lzf'` / `None` still does what it says.
+`chunk_size='auto'` picks the largest power-of-two edge whose chunk is ≤ 1 MiB
+(256 for complex128); the old fixed `1024` made a **16 MiB** chunk for
+complex128, sixteen times HDF5's 1 MiB default chunk cache, so every partial
+read touched a whole chunk.  Stored values are unchanged — this is a layout
+change only.
+
+`append_plane` on a `.zarr` store now warns that `compression` /
+`compression_opts` are dropped (the Zarr path has no compression parameter at
+all), instead of ignoring the request silently.
+
+**Migration.** New files written by the four functions above are larger by
+~5.6 % for complex fields and are not gzip-filtered; existing files are
+unaffected and still read.  Pass `compression='gzip', compression_opts=4` to
+restore the old default.
+
+### Performance -- optimize: the 31-plane through-focus scan runs only when a merit reads it (I7)
+
+`design_optimize`'s wave leg ran `through_focus_scan` over `z_scan_n = 31`
+planes on **every** merit evaluation, against the leg's one lens propagation —
+and on the default `jac='auto'` path without a `JaxMeritTerm` scipy
+finite-differences the merit, so every gradient paid it n+1 times.  The audit
+measured 17 merit evaluations → **527 focus-scan slices**, i.e. 97 % of the
+wave-leg work, recomputed from scratch for every FD probe **even when no merit
+read `strehl_best` / `z_best` / `rms_radius_best`**.
+
+A `needs_focus_scan` flag (default `True`, so a user-written merit class that
+predates it is unaffected) joins the existing `needs_wave` / `needs_ray` gates.
+The library's own wave merits declare it accurately: `StrehlMerit` and
+`SpotSizeMerit` read the scan; `RMSWavefrontMerit`,
+`MatchIdealThinLensMerit`, `MatchIdealSystemMerit`, `MatchTargetOPDMerit` and
+`ZernikeCoefficientMerit` read `ctx.opd_map` (built from `ctx.bfl`) and do not.
+`CompositeMerit` / `NormalizedMerit` / the three wrapper merits forward the
+requirement from the merit they wrap.
+
+Measured on a 1-variable, N = 64 `RMSWavefrontMerit` run (3 merit evaluations):
+**3 scan calls / 93 propagation slices → 0**, i.e. the wave leg drops from
+1 + 31 = 32 propagations per evaluation to 1 (**×32**) for that merit family.
+A `StrehlMerit` run is unchanged (31 slices per call, byte-identical results).
+
+### Added -- optimize: `MinEdgeThicknessMerit` and `edge_thickness` (I7)
+
+No edge-thickness constraint existed anywhere in the library: `MinThicknessMerit`
+/ `MaxThicknessMerit` penalise the **centre** thickness only, while
+`MinThicknessMerit`'s "Minimum acceptable GLASS thickness [m]" docstring reads
+as manufacturability coverage — and a repo-wide grep for
+`edge_thickness|EdgeThickness|edge thickness` hit only two incidental comments.
+Edge thickness is the constraint an unconstrained radius optimisation violates
+first (every commercial code ships it: `ETGT`/`ETVA` in OpticStudio, `ETH` in
+CODE V).
+
+`edge_thickness(prescription, slot, semi_diameter=None)` returns
+`t_c + sag(R2, k2, h) - sag(R1, k1, h)`, verified against an independently
+written closed-form spherical sag to |Δ| ≤ 5.2e-18 m on four shapes including
+the concave-first meniscus where the two sags have the same sign and partly
+cancel (the case a `t_c - |sag1| - |sag2|` formula gets wrong: +1.238 mm vs
+−6.5 mm).  `MinEdgeThicknessMerit(min_edge, weight, semi_diameter,
+include_air)` sums `max(0, min_edge - t_edge)²` over the glass slots.
+Exported from `lumenairy.optimize`; a top-level re-export is requested in the
+WP report.
+
+A slot whose edge thickness is not finite — one of its surfaces does not reach
+the clear semi-diameter at all, so there is no edge to measure — counts as a
+**maximal** violation (`deficit = min_edge`), not as satisfied.  Scoring it 0
+rewarded exactly the geometry the constraint exists to prevent, which is the
+shape S4-5 fixed for a NaN `strehl_best` in `driver.py`.  Measured on a
+R = 8 mm surface evaluated at h = 10 mm: contribution 0.0 → 1e-6 (= `min_edge²`
+at `min_edge = 1 mm`), while a well-defined knife edge still scores its own
+larger deficit (1.15e-4) and a healthy element still scores exactly 0.
+
+### Fixed -- optimize: `design_optimize_multi_objective` refuses an infeasible run (I7)
+
+pymoo sets `Result.X` / `.F` to `None` when the final population is entirely
+infeasible.  `np.asarray(None, dtype=np.float64)` is `array(nan)` with
+`ndim == 0`, so the `if X.ndim == 1` normalisation did not fire and a **0-d NaN
+array was returned as the Pareto front**; with `progress` supplied,
+`X.shape[0]` raised `IndexError: tuple index out of range` instead.  The
+function now raises a `ValueError` naming the generation count, the smallest
+constraint violation in the final population, and the knobs that fix it.
+(pymoo is an optional dependency and is not installed on this machine; the
+numpy half is measured directly and the pymoo half is exercised through a
+`sys.modules` stub reproducing the documented contract.)
+
+`x0` is now bounds-checked, as the docstring has always claimed ("used to infer
+`n_params` and as a sanity check against `bounds`") — pre-fix only `n_params`
+was read.
+
+### Fixed -- optimize: `create_zoom_configs` no longer writes glass thicknesses or truncates silently (I8)
+
+The parameter is named `zoom_spacings` and documented as "the air-gap
+thicknesses", but the loop was positional over the whole `thicknesses` list and
+`if j < len(...)` dropped extra entries with no warning — so a mis-sized zoom
+vector silently produced a system nobody asked for, and slot 0 of a cemented
+doublet's vector overwrote the glass centre thickness.  A flat spacing list must
+now match the slot count exactly (`ValueError` otherwise), and a new
+`(slot_index, value)` pair form writes only the named slots.
+`examples/08_multiconfig_zoom.py` is unaffected (its vectors already match).
+
+### Fixed -- optimize: `method='newton'` says that it drops bounds (I8)
+
+`trust-ncg` accepts no `bounds`; only the finite-difference stencil is clipped,
+so a bounded Newton run looked bounded and was not.  The generic `minimize`
+branch and the `lm` branch both warn loudly in exactly this situation; the
+Newton branch now does too.
+
+### Fixed -- optimize: the ndarray aperture cache key is a content digest (I8)
+
+`_wrapper_merit_aperture_key` keyed an ndarray aperture on Python's 64-bit
+`hash(arr.tobytes())`, so a collision returned the **wrong** cached aperture
+mask.  Astronomically unlikely, but a 128-bit `blake2b` digest costs the same
+single byte-scan and removes the class entirely — and a cache key that is not a
+pure function of its input by value is the pattern §15.5 of the audit flags
+across the library.
+
+### Fixed -- io/Zemax: `.zmx` record injection via `NAME` / `COMM`, and UTF-16-BE files (I8)
+
+`export_zemax_zmx` wrote `NAME` and `COMM` verbatim, so a newline inside a
+prescription name injected arbitrary `.zmx` records — measured: a name of
+`'bad\nSURF 99\n  CURV 0.5\nNAME x'` produced an extra `SURF` row, and the file
+reloaded as a different system.  `NAME` (both writer paths) and `COMM` (the
+`elements` path, the only one that emits it) are now collapsed to one line with
+control characters and the `"` field delimiter replaced, warning when anything
+changed; the record count is back to 4 on a singlet.  `export_codev_seq` does
+the same for its `! title` comment and its `GLA` tokens.
+
+The `.zmx` encoding ladder now tries BOM-sniffing `utf-16` first, so a
+big-endian export is decoded by its BOM instead of falling through to `latin-1`
+and being reported as "does not appear to be a Zemax .zmx lens file" — a
+diagnostic that pointed at the wrong cause.
+
+---
+
+Kept intact (re-verified, not changed): EVENASPH mapping and unit scaling,
+`UNIT` MM/CM/M/IN handling with its unknown-token warning, UTF-16-LE BOM
+detection, semi-diameter ×2, COORDBRK `PARM 1..6` → decenter/tilt/order, CB
+DISZ folding, STOP-on-CB reassignment, `system_abcd` vs an independent paraxial
+trace, `scale_prescription`'s core identities, multi-process HDF5 append, the
+HDF5 metadata codec, numba-vs-NumPy merit parity, `jax.grad` vs FD, and the
+absence of `eval`/`exec` on every load path.
+
+<!-- WP-A9: Designer UI -->
+### Fixed -- designer UI: `SystemModel.to_prescription()` now exports the system the layout shows (audit U1, U2)
+
+`lumenairy/ui/model.py` `to_prescription()` emitted only
+`radius / conic / aspheric_coeffs / glass_before / glass_after / radius_y /
+conic_y / aspheric_coeffs_y` on each legacy `surfaces` entry.  `is_mirror`,
+`semi_diameter` and `is_stop` were all dropped, and the coord-break Surfaces
+were `continue`d with their transfer thickness.  Consequences in the exported
+dict — the single prescription handed to 18 call sites across 14 docks,
+including the user's saved lens library:
+
+* a mirror round-tripped as an air→air refracting surface (a no-op) while its
+  Zemax-signed **negative** post-mirror gap survived, so the negative thickness
+  became a literal backwards propagation;
+* `surfaces_from_prescription` fell back to matching the `elements` list, whose
+  refracting-surface filter skips mirrors while its index counts them, so every
+  mirror shifted the aperture mapping by one and the trailing surface fell
+  through to `aperture_diameter / 2`;
+* a 45° fold lost its entire mirror-to-next-element air gap.
+
+Measured on the audit's fixture (concave mirror R = −200 mm + N-BK7 singlet),
+exported prescription vs the model's own internal surface list:
+
+| quantity | before | after | oracle |
+|---|---|---|---|
+| EFL | 158.862 mm | **178.774 mm** | 178.774 mm (`build_trace_surfaces()`) |
+| BFL | 156.201 mm | **127.802 mm** | 127.802 mm |
+| trailing-surface semi-diameter | 12.7 mm | **6.0 mm** | 6.0 mm (the surface's own) |
+| 45° fold total axial gap | 3 mm | **43 mm** | 43 mm |
+
+`to_prescription()` additionally emits `object_distance` (the geometric
+source-to-first-optic gap, 0.0 for a collimated source), `image_distance` (last
+surface to Detector) and `stop_index`.  `analysis.eval_image_plane_wfe` and
+`analysis.plotting`'s finite-conjugate ray launch consume `object_distance`, so
+a point-source design is no longer analysed as if it were collimated.
+Byte-equivalence of the unfolded singlet export to `make_singlet` is unchanged
+(EFL 99.288517 mm / BFL 97.293283 mm from both, to 15 digits).
+
+New: `SurfaceRow.is_stop`, carried through `load_prescription` (from either a
+per-surface `is_stop` or a `stop_index`), the two trace-surface builders, the
+session JSON and `to_prescription`.  The .zmx `STOP` keyword previously could
+not survive an import → edit → export round trip at all.
+
+Tests: `tests/unit/test_audit2609_a9_ui.py::test_u1_*`, `::test_u2_*`.
+
+### Fixed -- designer UI: a wave-optics run no longer disables pyFFTW / SciPy FFT for the whole process (audit U4)
+
+`ui/waveoptics_dock.py`'s worker set `fft_infra.USE_PYFFTW = USE_SCIPY_FFT =
+False` unconditionally at the top of every run — from the worker thread, on
+module globals shared with every other dock, the REPL dock and anything the user
+scripts — and never restored them.  The backend combo's index 0 was `NumPy FFT`,
+so one **default** Run silently downgraded every subsequent FFT in the session
+from multi-threaded SciPy/pyFFTW to single-threaded numpy, with no UI
+indication.  `set_max_ram(mem_limit)` had the same shape.
+
+Both are now scoped to the run by a `try/finally` context manager
+(`_process_overrides`), restored on every exit path including an exception, and
+the combo gained a new index-0 entry **"Library default"** that touches no global
+at all.  `tests/conftest.py`'s cross-module flag leak-guard comment cites this
+exact site as the reason `fft_infra` is in `_LEAK_GUARD_MODULES`; the leak it
+describes no longer exists (the guard itself is still worth keeping).
+
+Test: `tests/unit/test_audit2609_a9_ui.py::test_u4_*`.
+
+### Fixed -- designer UI: `lumenairy.ui` no longer imports matplotlib at module scope (performance)
+
+14 dock modules imported `matplotlib.figure` and
+`matplotlib.backends.backend_qtagg` at module scope, so importing ANY of them —
+including from a headless test harness — pulled the whole matplotlib stack
+(`python -X importtime -c "import matplotlib.figure"`: ~17.5 s cumulative cold on
+this workstation, sub-second warm).  They now go through a new
+`lumenairy/ui/_mpl.py` PEP-562 shim that imports on first figure construction,
+so a dock the user never opens costs nothing.  `_mpl.style_axes(ax)` also
+replaces the `set_facecolor` / `tick_params` / per-spine `set_color` triple that
+was copy-pasted into ~20 docks.
+
+Measured: importing 15 dock modules leaves `matplotlib.figure` out of
+`sys.modules` (pinned by
+`tests/unit/test_audit2609_a9_ui.py::test_u7_matplotlib_is_not_imported_by_the_dock_modules`).
+`import lumenairy` still does not pull `lumenairy.ui` (also pinned).
+
+### Changed -- designer UI: the point-source object distance comes from the element geometry
+
+`SourceDefinition.object_distance_mm` and the first element's `distance_mm` were
+two independent knobs for one quantity: rays launch from the Source element at
+world z = 0 and the first surface sits at its own `distance_mm`, so the pupil
+fill was correct only when the user happened to keep the two equal.  The ray
+launch and the exported `object_distance` now both use the geometric gap
+(`SystemModel.object_distance_m()`); the form field is honoured only when no
+optic has been placed yet, and its tooltip says so.
+
+**Migration.** A design whose source form said e.g. 1000 mm while the first lens
+sat at 200 mm previously under-filled the entrance pupil by 5×; it now fills it
+correctly.  To reproduce the old numbers, move the first element to the distance
+the form field named.
+
+### Added -- `lumenairy/ui/_worker.py`
+
+`AnalysisWorker` (a `QThread` base with a non-shadowing `finished_result`
+signal, a guaranteed single emission on every path, and a `check_interrupt()`
+helper), `ThreadCancellableProgress` (a `CancellableProgress` that is also
+tripped by Qt's `requestInterruption()`), and `interrupt_check(worker)`.
+
+---
+
+<!-- WP-A16: Lens configuration objects (new feature) -->
+### Added -- lens configuration objects: `LensGeometry` / `LensNumerics` / `LensResources` / `LensConfig`
+
+The seven `apply_real_lens`-family entry points carry ~110 distinct keyword
+arguments between them (31 / 51 / 28 / 32 / 29 / 24 / 14 keyword-only
+parameters as measured 2026-09-12), with about twenty names shared between
+siblings.  The 2026-09-11 audit (TESTS-ARCH section 14, item 13) measured 673
+call sites in the corpus exercising only 177 distinct combinations, 68 % of
+them passing zero or one optional keyword, and traced four of the five seeded
+defects to *interaction* cases the suite had no power against -- because a
+48-parameter signature is not a thing you can parametrise over.
+
+New module `lumenairy/elements/lens_config.py` (leaf; imports nothing from
+`lumenairy` at module scope) adds three frozen dataclasses, partitioned by
+role and covering 38 of the family's parameters:
+
+* **`LensGeometry`** (10 fields) -- what optical problem is being solved:
+  `dy`, `output_plane_distance`, `output_plane_n`, `conjugate`,
+  `surface_model`, `clip_aperture`, `carrier`, `origin`, `beam_centre`, `roi`.
+* **`LensNumerics`** (17) -- how it is discretised: `bandlimit`,
+  `wave_propagator`, `ray_subsample`, `output_subsample`, `remap_order`,
+  `min_coarse_samples_per_aperture`, `fit_radius_beam_factor`, `newton_fit`,
+  `newton_poly_order`, `newton_max_iters`, `inversion_method`,
+  `amplitude_model`, `caustic`, `caustic_band`, `caustic_ray_subsample`,
+  `caustic_min_area_ratio`, `inverse_map`.
+* **`LensResources`** (11) -- what machine the call may use and what it
+  reports: `use_gpu`, `amp_use_gpu`, `n_workers`, `parallel_amp`,
+  `parallel_amp_min_free_gb`, `sag_dtype`, `sag_chunk_rows`,
+  `accumulator_store`, `scratch_dir`, `progress`, `verbose`.
+* **`LensConfig`** holds the triple and adds `from_kwargs()` / `to_kwargs()`
+  (both accepting `entry_point=` so they speak that entry point's own
+  spelling), `narrowed_to(entry_point)` and `requests()`.
+
+All four are exported from `lumenairy` and `lumenairy.elements`.
+
+`apply_real_lens`, `apply_real_lens_traced`, `prepare_real_lens_traced`,
+`apply_real_lens_maslov`, `apply_real_lens_gbd`, `apply_real_lens_fga` and
+`apply_real_lens_traced_multibranch` each gained `geometry=` / `numerics=` /
+`resources=` / `config=`, all defaulting to `None`.
+
+**This is purely additive and there is no deprecation.**  Every existing
+keyword still works with the same default; a call that passes none of the four
+runs exactly the code it ran before (four `is not None` tests and nothing
+else).  Verified bit-identical, `np.array_equal`, across all seven entry points
+on the WP-A15a covering-array fixture --- the configured call, the
+three-component call and the keyword call return the same bytes, and an
+all-default `LensConfig()` returns the same bytes as passing no config.
+
+Precedence: a config field that differs from its default and a keyword that
+differs from its signature default must AGREE or the call raises with the
+`CONVENTIONS.md` section 2 prefix; a field that is set but that the entry point
+has no parameter for also raises (naming the entry points that do take it, and
+pointing at `narrowed_to`) rather than being silently discarded --- which is the
+failure class the audit found.  Field-local validation moved into
+`__post_init__`, so a bad setting is refused where it is built rather than
+several hundred lines inside a 5 700-line call.
+
+New: `docs/lens_configuration.md` (partition tables, precedence rule, worked
+cross-engine example, the full list of deliberately keyword-only parameters
+with reasons, and the module-layout plan).
+New tests: `tests/unit/test_audit2609_a16_lens_config_round_trip.py` (84 ids),
+`tests/unit/test_audit2609_a16_lens_config_bit_identity.py` (27).
+
+### Changed -- lens family: one shared optional-dependency probe
+
+`elements/_lens_real.py`, `elements/_lens_traced.py`, `elements/lenses.py`,
+`elements/_lens_imap.py` and `propagators/fga.py` had seven hand-copied
+implementations of `_ensure_cupy_loaded` / `_is_cupy_array` / `_load_numba`
+between them (audit TESTS-ARCH P2-9); they now delegate to
+`lumenairy/backend/_optional.py`.  No behaviour change: each module keeps its
+own `cp` alias (the GPU branches read the module-level name), each keeps
+`_NUMBA_AVAILABLE` as a module attribute that tests monkeypatch to reach the
+pure-NumPy arm, and `apply_real_lens_fga` keeps its deliberate `ImportError`
+with the `pip install lumenairy[numba]` hint --- it is the one consumer with no
+NumPy fallback.
+
+### Changed -- the three lens knobs are restorable
+
+`lens_sag_dtype`, `lens_parallel_amp` and `pointwise_cos_grid_cache_budget` are
+registered with `lumenairy._knobs`, so `lumenairy.override(...)`,
+`snapshot()`/`restore()` and the suite's autouse fixture now reach them (audit
+TESTS-ARCH P2-5).  That takes the registry to the audit's 20 and completes
+`set_low_memory`'s coverage: `lens_parallel_amp` was the last of its four knobs
+that a test could leak.  `pointwise_cos_grid_cache_budget` is registered
+against a private byte/byte accessor pair, because the public setter takes
+MEGABYTES while the public getter returns BYTES --- registering the public pair
+would have multiplied the budget by 2**20 on every restore.
+
+### Performance -- `import lumenairy` no longer loads `scipy.linalg`
+
+`lumenairy/backend/__init__.py` forwards `scipy` through a PEP 562
+`__getattr__` instead of `from . import scipy as scipy`, and
+`elements/_lens_traced_multibranch.py`'s module-level
+`from scipy.special import airy` became a cached first-use accessor.
+`lumenairy.backend` has 41 module-level importers that want only
+`array_namespace` / `is_*_array`, so every user was paying the rigorous-solver
+scipy bill at import.
+
+MEASURED on this box (Windows, CPython 3.14, `OPENBLAS_NUM_THREADS=1`, fresh
+interpreters, medians of 9 interleaved same-build A/B pairs -- full table in
+the WP-A16 report):
+`import lumenairy` **745.0 ms -> 673.8 ms** (-71.2 ms / -9.6 %) on a quiet
+box, and the interleaved same-build delta (which is immune to cross-run noise)
+is **+0.1 ms before -> +70.8 ms after**; under load both numbers shrink to
+~45 ms.  `lumenairy.backend`'s cumulative import cost goes from 567.3 ms
+(WP-A15b's measurement) to **2.4 ms**, and `scipy.linalg` is no longer in
+`sys.modules` after `import lumenairy` at all.
+`la.backend.scipy.X`, `from lumenairy.backend import scipy` and
+`import lumenairy.backend.scipy` are unchanged.
+
+Smaller than the ~540 ms the earlier estimate suggested, for a measured reason
+recorded in the report: `propagators/fft_infra.py` imports `scipy.fft` at
+module scope, and `scipy.fft._fftlog_backend` imports `scipy.special` --- so
+`scipy.special` and the heavy shared prefix (`scipy._lib._array_api` ->
+`array_api_compat.numpy` -> `numpy.f2py` -> `charset_normalizer` ->
+`numpy.testing`) are still charged to `import lumenairy` by a module outside
+this work package (`scipy.fft` measures 426.5 ms cumulative).  What this change
+removes is the marginal `scipy.linalg` cost.
+
+### Fixed -- two `f`-string prefixes without placeholders (ruff F541)
+
+`elements/_lens_real.py`'s unfolded-equivalent mirror warning carried two
+`f"..."` continuation lines with no placeholders.  Dropped the prefixes; the
+warning text is unchanged (re-measured: `ruff --isolated --select F541` reports
+2 on the previous blob and 0 now).  The
+`"lumenairy/elements/_lens_real.py" = ["F541"]` entry in
+`[tool.ruff.lint.per-file-ignores]` is now unnecessary and should be deleted.
+
+### Fixed -- one broad `except` narrowed
+
+`elements/_lens_imap.py`'s `build_inverse_map` RAM-budget diagnostic caught
+`Exception` around a bare `from .. import memory`; narrowed to `ImportError`
+(audit TESTS-ARCH except budget, WP-A15a section 5.7).  `_lens_imap.py` now
+carries zero broad except clauses.
+
+New tests for the four items above:
+`tests/unit/test_audit2609_a16_lens_arch.py` (27 ids).
+
+### Changed -- `mypy --strict` reaches the package root
+
+`lumenairy/elements/lenses.py` is a compatibility shell that re-imports 31
+names from the six `_lens_*` modules so the pre-v3.5.5 import paths keep
+working.  Under `no_implicit_reexport` those are not re-exports, which was the
+whole of `mypy --strict lumenairy/__init__.py`'s 33-error count; each is now
+spelled `X as X`.  `trace_world` comes from its defining module
+(`raytrace/world_trace.py`, which lists it in `__all__`) rather than from the
+`raytrace` package, which imports it but omits it from `__all__`.  The PEP 562
+`__getattr__` / `__dir__` pairs in `lumenairy/__init__.py`,
+`lumenairy/elements/__init__.py` and `lumenairy/backend/__init__.py` are
+annotated (`typing` bound under underscore names so the public namespaces gain
+nothing), as are the last five gaps in `elements/lens_config.py`.
+
+MEASURED: `lumenairy/__init__.py` **33 errors -> 0**;
+`lumenairy/elements/__init__.py`, `lumenairy/backend/__init__.py` and
+`lumenairy/elements/lens_config.py` also clean.  No runtime change: every name
+is the same object by the same path (`la.trace_world is
+lumenairy.raytrace.trace_world` verified), `ruff check lumenairy/` is clean,
+and the export, lazy-load and shell-vs-canonical walkers are green.  These four
+paths can now join `[tool.mypy] files`.
+
+### Added -- the lens-config vocabulary cache is drainable
+
+`elements/lens_config.py`'s `_VOCAB_CACHE` -- the four enum vocabularies the
+dataclasses borrow from `_lens_real` on first use -- gained
+`clear_lens_config_vocabulary_cache()` and is enrolled with the central
+registry as `lens_config_vocabulary`, so `clear_asm_caches()` and
+`clear_all_registered_caches()` drain it (registry 18 -> 19 clearers).  Not a
+memory measure: the entries are tens of bytes.  They are BORROWED, and a test
+or an `importlib.reload` that swaps one of those vocabularies would otherwise
+be validated against the pre-swap copy for the life of the process.
+
+### Migration note
+
+None required.  Every existing call site is unchanged and bit-identical.  The
+one thing worth knowing if you adopt the new objects: `LensConfig` refuses a
+setting the entry point has no parameter for, rather than ignoring it, so a
+config shared across engines needs `config.narrowed_to('apply_real_lens_…')`
+at the call sites that do not take every field.  `docs/lens_configuration.md`
+has the worked example.
+
+<!-- WP-VERIFY_WP-A16: Lens configuration objects: verifier fixes (sag_dtype rule, value equality, import-time restated) -->
+### Fixed -- `sag_dtype`: one rule for all three spellings (VERIFY-A16)
+
+`apply_real_lens` / `prepare_real_lens` (and the traced entry points through them) resolved an
+unrecognised `sag_dtype` to float64 in silence, while `set_lens_sag_dtype` and the new
+`LensResources.sag_dtype` refused it. `sag_dtype=np.float16` returned the float64 field byte for byte
+with no warning -- a setting discarded without a word. The shared resolver in
+`lumenairy/elements/_lens_real.py` now refuses anything but `None` / `np.float64` / `np.float32`, with the
+`CONVENTIONS.md` section 2 prefix and the caller's own name. `None`, `np.float64`, `'float64'` and `'f4'`
+are unchanged and byte-identical; only previously-ignored values now raise. Test:
+`tests/unit/test_audit2609_a16_verify_config_and_arch.py::test_all_three_spellings_of_sag_dtype_refuse_the_same_set`.
+
+### Fixed -- lens configuration objects compare by value with an array-valued field (VERIFY-A16)
+
+`LensGeometry.carrier` may hold a wavefront ndarray, but the dataclass-generated `__eq__` compared field
+tuples and raised `ValueError: The truth value of an array ... is ambiguous` for exactly those values --
+so the documented round trip `LensConfig.from_kwargs(**cfg.to_kwargs()) == cfg`, `narrowed_to()`'s
+idempotence and `pickle` equality all raised. The three dataclasses now compare field by field through the
+same `_same()` the resolver uses (`np.array_equal` for arrays) and hash by the field tuple as before; an
+array-valued instance is unhashable and says so. Test: `...::test_value_equality_survives_an_array_valued_field`.
+
+### Changed -- the WP-A16 import-time figure, restated for the release tree (VERIFY-A16)
+
+WP-A16's text measured `import lumenairy` 745.0 -> 673.8 ms (-71 ms) at its own commit, when
+`propagators/fft_infra.py` still imported `scipy.fft` eagerly and paid the shared SciPy prefix. After
+WP-A22 made that import lazy too, the two deferrals WP-A16 introduced (`lumenairy.backend.scipy`,
+`scipy.special.airy`) are worth **+360 to +407 ms** on the release tree: `import lumenairy` measures
+**~294 ms** against **~654 ms** with them eager (interleaved same-build A/B, medians of 7 pairs, two runs).
+`scipy.fft`, `scipy.special` and `scipy.linalg` are absent from `sys.modules` after `import lumenairy`
+until first use; the structural fact is what the test asserts, no timing is asserted.
+
+### Fixed -- a Ludwig-fold test called the function with its arguments scrambled (VERIFY-A16)
+
+`tests/unit/test_audit2609_a16_lens_arch.py` called `ludwig_fold(a, a, s, s, k)` against the signature
+`ludwig_fold(k, S_plus, S_minus, A_plus, A_minus)`, so its "finite on the fold" assertion measured nothing
+of the kind. Replaced by two tests with derived bars: the on-fold limit against the closed form
+`sqrt(2 pi) k^(1/6) e^{i pi/4} e^{ikS0} (-i sqrt 2 A0) Ai(0)` (measured 4.4e-4 relative at a 1e-12 m
+half-separation, bar 1e-2; plain branch sum 7.2x larger, bar 4x), and the far-fold reduction to the plain
+branch sum (1.1e-3 at 20 wavelengths, 4.4e-5 at 500).
+
+<!-- WP-A15a: Tests, CI, packaging -->
+### Added -- tests: combination coverage for the `apply_real_lens` family (V3)
+
+The audit measured 673 `apply_real_lens*` call sites in the corpus exercising 177 distinct
+kwarg combinations, **68 % of them passing zero or one optional kwarg**, against a family
+whose traced entry point has 48 parameters.  Four of the five defects the orchestrator
+seeded were *interaction* defects -- a flag combined with a geometry -- and the suite,
+organised one file per past bug and testing one knob at a time against a default
+background, had by construction almost no power against them.
+
+`tests/unit/test_audit2609_a15a_lens_covering_array.py` adds a pairwise covering array over
+the physics-affecting kwargs of both entry points -- **16 kwargs in 12 rows** for
+`apply_real_lens`, **20 kwargs in 15 rows** for `apply_real_lens_traced` -- on the geometry
+the suite never tested: an AC254-ish cemented doublet with a **curved rear**
+(R3 = -291.07 mm; the only existing `seidel_correction` fixture is plano-rear, on which the
+whole exit-vertex class is invisible) illuminated by a **diverging** spherical wave.  Each
+arm asserts only what holds for every legal combination -- finiteness, output shape, and
+that a passive lens cannot GAIN power -- because an oracle that held for every combination
+would be a second implementation of the lens.
+
+Measured over all 27 arms: the largest `P_out/P_in` is 0.996170598 (analytic) and
+0.996162541 (traced), the smallest 0.438620794 and 0.354847608, and the largest excess over
+1 is **-3.83e-03** -- no arm gains.  The bar is 1e-6 relative: seven decades above the
+float64 accumulation floor for a 64x64 reduction and four below the smallest gain a real
+defect produces (a double-applied Fresnel transmittance, a dropped obliquity cosine, an
+un-normalised ray-density Jacobian).
+
+A second property test passes **17 analytic and 28 traced kwargs each at its own signature
+default** and requires the result to be bit-identical to omitting it -- the "knob silently
+discarded" detector, which catches a kwarg whose unset sentinel and documented default
+disagree and which nothing else in the suite can see.
+
+Building the array surfaced the family's constraint lattice, measured by sweeping all 141
+analytic and 308 traced factor-level pairs: 11 and 3 of them are refused outright
+(`slant_correction` x `seidel_correction`; `surface_model='displaced'` against fresnel /
+absorption / slant / seidel / surface_frame / carrier / non-ASM propagator;
+`surface_model='tangent_facet_remap'` against slant / surface_frame / screen_obliquity /
+non-ASM propagator; `amplitude_model='ray_density'` x `newton_amp_mask_rel`).  Each
+exclusion is declared with the library's own refusal text and **re-measured on every run**,
+so the table cannot become a hiding place.
+
+45 collected ids, 3.34 s.  The fixture factory and the factor tables are module-level and
+importable: WP-A16's config-object work reuses them.
+
+### Fixed -- CI: `ruff` was advisory and blind to `lumenairy/ui/` (V4/P1-3)
+
+The lint job carried `continue-on-error: true`, so the only always-on static gate on the
+codebase reported green on a lint failure -- nothing in the merge-blocking path failed on an
+unused import, a shadowed symbol or an **undefined name**.  Separately, `extend-exclude`
+removed all of `lumenairy/ui/` (~30 modules including the 3 626-line `main_window.py`) from
+linting entirely.
+
+The job is now `continue-on-error: false`, its scope widens from `tests/unit/` to `tests/`,
+and `lumenairy/ui/` is scoped back IN behind a per-directory ignore list rather than
+excluded wholesale.  Findings on arrival: 13 in `lumenairy/` (9 x I001, 2 x F541, 2 x
+F401), **331 in `lumenairy/ui/`** in exactly seven rules (F401 121, I001 116, E701 37, E702
+37, F811 10, F841 7, F541 3), 37 in `tests/`.  After: `ruff check lumenairy/ tests/` ->
+**All checks passed**.  What is now enforced in the previously-unlinted GUI: F821 undefined
+name -- the exact class that shipped `carrier_field.py:465` to main this month -- plus F632,
+E711/E712/E713/E714, E722 and E731.
+
+Every ignore carries its reason.  `I001` is granted only to the files that use this
+library's documented interleaved-import convention (the same convention `E402` is already
+ignored project-wide for; `ruff --fix` on `raytrace/__init__.py` was measured to relocate a
+commented import block and delete its commentary).  Four ignores are marked
+`TODO(audit-2609)` because the finding needs a one-line code change in a module this work
+package does not own; they are listed in the report as requests and should be deleted, not
+kept.
+
+### Fixed -- CI: `mypy --strict` covered 6 of 227 modules behind a comment 43 releases stale (V4/P1-4)
+
+The `[tool.mypy]` block carried "No CI wiring at v5.0.1; `unit-tests.yml` keeps mypy unwired
+until v5.1's cleanup lands".  `unit-tests.yml` has had a merge-blocking `mypy` job since
+v5.2, and the repo is at 5.45.1 -- the comment described a state 43 minor versions old while
+the gate it described was live and nearly empty.
+
+The comment is corrected, and the whitelist is grown by measurement rather than by waiting
+on a cleanup: one `mypy --strict --follow-imports=silent --ignore-missing-imports
+--python-version 3.12` pass over all 170 non-`ui` candidate modules, attributing each error
+to the file it was reported in.  20 modules come back clean; the 11 that are not
+`__init__.py` are added, smallest first -- `elements/coronagraph.py` (54 lines),
+`raytrace/core.py` (68), `analysis/core.py` (69), `io/prescriptions.py` (106),
+`raytrace/layout.py` (190), `raytrace/bundles.py` (227), `algebra/from_prescription.py`
+(230), `propagators/result.py` (244), `_cache_registry.py` (292), `analysis/strehl.py`
+(557), `propagators/asymptotic_modes.py` (893).  The gate goes from 6 declared paths /
+**11 source files** to 17 / **22**, and `mypy` reports `Success: no issues found in 22
+source files`.  The nine clean `__init__.py` hubs are deliberately held back until the
+lazy-loading rewrite lands, because a PEP 562 `__getattr__` needs its own annotations first.
+
+### Fixed -- packaging: CPython 3.14 is the development interpreter and was in no CI leg (V4/P1-5)
+
+The classifier block dropped 3.14 because "3.14 is too new for the optional accelerator
+dependencies (numba, jax, pyfftw) to have published wheels against".  MEASURED on the dev
+box: numba 0.65.1, jax 0.10.1 and pyfftw 0.15.1 are all installed on CPython 3.14.6, the
+repo tracks `.benchmarks/Windows-CPython-3.14-64bit/*.json`, and `tests/unit/__pycache__`
+holds `cpython-314` artefacts -- i.e. every line of this library was developed and
+hand-tested on an interpreter no CI leg exercised.
+
+3.14 joins the `unit-tests.yml` matrix (3.10-3.14) and the `publish.yml` release verify -- a
+classifier is a promise and the release gate is what backs it -- the
+`Programming Language :: Python :: 3.14` classifier is restored, and the false comment is
+replaced by the measurement.  A new test asserts the two agree in both directions, so a
+classifier no leg runs fails the gate.
+
+### Fixed -- packaging: installed metadata was two releases behind the source (V4/P1-7)
+
+`lumenairy.__version__` read 5.45.1 while `importlib.metadata.version('lumenairy')` read
+**5.43.0**, with the editable finder in the `-X importtime` trace generated at 5.21.2 -- 24
+releases stale.  Anything reading installed metadata (a user's `pip show`, a packaging
+check, a plugin version gate) saw the wrong number and no test compared them.  After
+`pip install -e .` both read 5.45.1, and
+`tests/unit/test_public_api.py::test_installed_metadata_version_matches_source_version`
+now pins the equality.  It is deliberately **skip-free**: every environment that runs this
+suite installs the package, so a missing distribution is a broken environment and the
+failure message names the command that fixes it.
+
+### Changed -- tests: `test_public_api.py` 726 collected ids -> 7, same coverage (V4/P1-9)
+
+A 104-line file parametrised over `lumenairy.__all__` and generated **726 collected ids**,
+4.9 % of the whole suite, for what is one property -- inflating the headline test count
+that is used as a proxy for physics coverage.  The parametrisation is now a loop that
+reports every failing name at once (strictly more useful than 726 ids that each reported
+one), so the file collects **7 ids, one per property, in 0.12 s** (was 0.65 s) while still
+checking all 708 names on every run.  Two properties are added (`__all__` entries must be
+identifier strings; installed metadata must match `__version__`) and the existing phantom
+counter-pin is strengthened to assert the *aggregate* loop observes the injection -- the
+half the parametrisation could not express.
+
+### Added -- dependencies: `threadpoolctl>=3.1` is now a hard dependency (H5)
+
+`set_blas_threads`, `rcwa_blas_threads` and the `@_with_blas_limit` wrapper on every public
+RCWA entry point are **inert** without `threadpoolctl` -- they warn and pass through.  On an
+oversubscribed many-core box that is catastrophic rather than a micro-optimisation:
+MEASURED on a 24-thread Windows OpenBLAS 0.3.31 build, `inv()` of a 163x163 complex matrix
+takes 2.29 s unpinned against 0.0057 s at one thread (**400x**), and a 1-D TM RCWA solve at
+`n_orders=81` takes 18.2 s instead of 0.13 s (**140x**).  It is tiny and pure Python, so the
+library's own remedy now works out of the box.  Declared in `pyproject.toml` and mirrored in
+`requirements.txt`, with a test that both carry it.  Floor 3.1: `ThreadpoolController` (the
+cached-enumeration path `rcwa/_core.py` prefers) landed in 3.0 and 3.1 is the first release
+with the Windows OpenBLAS 0.3.x detection.
+
+Two further `requirements.txt` drifts corrected in the same pass: `cupy>=11.0` -> `>=14.0`
+(the floor `pyproject.toml` has carried since `cupy.linalg.eig` became a requirement) and
+`jax>=0.4.20` -> `jax>=0.11.0 ; python_version >= "3.12"` (floor and PEP 508 marker both).
+
+### Changed -- packaging: `.gitignore` stops blanket-ignoring binary fixtures (V4/P1-10)
+
+Repo-wide `*.png` / `*.jpg` / `*.pdf` / `*.fits` / `*.dat` / `*.log` rules made every binary
+of those types un-addable without `git add -f` -- the audit found 33 `.png` under
+`validation/` in exactly that state.  They are replaced by directory-scoped rules derived
+from `git ls-files --others --ignored` (113 files under `validation/repro_traced_carrier_121`,
+26 under `docs/audits`, 22 under `validation/real_lens_opd`, 9 under `examples/output`, plus
+`importtime.log`), so a fixture in `tests/` or `benchmarks/` is now addable normally while
+the generated trees stay ignored.  `.mypy_cache/`, `.ruff_cache/` and `.benchmarks/` are
+added -- all three appear in a working tree as soon as the tool runs -- and
+`validation/repro_*/` covers the 89 MB untracked `repro_traced_carrier_122` scratch tree.
+The untracked-file count is unchanged (27 -> 26), i.e. the rewrite adds no noise.
+
+`.test_durations` remains **tracked**, deliberately, with a comment saying so: pytest-split
+reads it to balance the CI shards.
+
+### Changed -- packaging: `MANIFEST.in` no longer ships 808 probe-scratch files (V7)
+
+The validation-suite comment claimed "31 files with ~370 physics-fidelity tests", a 4.4.0
+count that is 28x off: MEASURED, the tree holds **876 `.py` across 70 sub-directories**, of
+which 624 are under `validation/probe_*` and 184 under `validation/repro_*` -- per-round
+audit scratch promoted to permanent tracked artefacts, several hard-coding absolute paths on
+one dev box.  The comment now carries the measurement and both prefixes are pruned from the
+sdist.  The 37 `t_*.py` / `test_*.py` entry points are the part of the old claim that
+survives.
+
+### Changed -- repo: `scripts/` holds only the four maintained tools (V7/P3-4)
+
+Eleven one-off audit reproductions (`_d5_byteid`, `_d5_probe`, `_d5_probe2..6`, `_d5_spl`,
+`_g8_c15lad`, `_g8_failbefore`, `_g8_probe`) sat in `scripts/` beside
+`check_dep_metadata.py`, `check_source_line_citations.py`, `verify_changelog_closures.py`
+and `stamp_changelog.py`, where an unqualified `.py` in a tools directory reads as a
+maintained tool.  They move to `validation/probe_scripts_legacy/` -- recoverable, pruned
+from the sdist, and documented -- with their repo-root arithmetic repointed one level up so
+they still run.  A test keeps `scripts/` clean.
+
+### Changed -- tests: the slow lane is re-marked at the > 2 min/file bar (V5/P2-1)
+
+The suite's documented contract said `tests/unit/` is "fast (<30 s) API-contract tests".
+MEASURED from the committed `.test_durations` against today's collection: **13 061 s =
+3.63 h across 14 199 ids** -- wrong by a factor of ~440.  The `pyproject.toml` text is
+corrected to the measurement, and the marker block now records what is actually applied
+(`slow` in 54 files before this change, 65 after; `unit`, `regression` and `bench` zero
+times each, kept as declared-but-unused so `--strict-markers` turns a future
+`@pytest.mark.unit` into a collection error rather than a silent no-op).
+
+Eleven files at or over the 2 min/file bar gain a module-level `pytest.mark.slow`, moving
+**2 341.0 s** out of the fast gate: the fast lane goes 9 487.1 s -> 7 144.0 s (**31.6 ->
+23.8 min per shard** on 5 shards, against a 45-min step cap) and the slow lane 3 573.9 s ->
+5 915.0 s, which is 32.9 min per shard on 3 -- **over** the 30-min step cap -- and 19.7 min
+on 5.  So the slow gate goes **3 -> 5 shards**; no timeout is raised.  Nine further files at
+or over the bar are left marked as-is and listed in the report: five belong to other work
+packages, and four are jax-guarded, where marking them slow would silently delete them from
+the only CI leg that runs jax.
+
+`test_fga.py` carried a comment explicitly declining the marker.  Both of its premises had
+moved, and rather than leave a comment contradicting the code beneath it, the comment is
+rewritten with the re-measurement: its claim that the file "measures 1791.7 s (~30 min)" is
+**stale by 10x**, a pre-v5.31 unpinned-BLAS artefact -- the same 27 ids total **178.8 s** on
+the regenerated file.
+
+The release gate is widened to match.  `publish.yml` verified the **fast lane only**
+(`-m "not integration and not slow"`), so every `slow`-marked test was outside tag
+verification entirely -- a hole that predates this change and that the re-marking widens.  A
+`verify-slow` job (5 shards, 3.12, single-threaded BLAS) now gates `build` and `publish`.
+
+### Added -- tests: a `.test_durations` staleness gate (V5/P2-3)
+
+`.test_durations` is load-bearing CI infrastructure, not a convenience file: pytest-split
+weights every id it cannot find there at a default, so the shard split degrades toward a
+count split as the gap grows.  The audit measured the difference -- a greedy 5-way split on
+fresh durations is exact (max/min = **1.000**) where an alphabetical split is **3.85x**
+imbalanced, and an over-weighted shard is the failure behind two 30-minute publish-verify
+timeouts.  Nothing was watching it.
+
+`tests/unit/test_audit2609_a15a_durations_staleness.py` collects the suite in a subprocess
+and fails when more than **2 %** of collected ids carry no timing (derivation in the module
+docstring: at the measured ~1.0 s mean, 2 % of ~14 000 ids is ~280 s of unmodelled work,
+about 5 % of one fast shard, while 20 % is a whole shard and a guaranteed cap hit).  It also
+bounds the reverse direction -- timings for ids that no longer collect -- and carries a
+counter-pin that the two id sets really overlap, so a path-separator or rootdir change
+reports as a gate failure rather than as data.
+
+**This gate is RED on the audit-fixes branch, at 15.04 % (2 117 of 14 076), and that is the
+gate working.**  The staleness is the fix campaign's own: the untimed ids are the tests the
+fix and verify work packages added over the last two weeks.  Regenerating mid-campaign would
+be stale again within the hour, so the regeneration belongs at campaign exit; the failure
+message carries the exact procedure.
+
+### Changed -- tests: eight wall-clock / speedup assertions converted to operation counts (V5, TESTING_STANDARDS S1)
+
+Each of these read a `time.perf_counter()` delta and asserted on it -- the shape S1 forbids,
+because the pass/fail boundary sits inside the cross-build spread of the quantity being
+read.  Each is replaced by the operation count it was standing in for, which no machine, no
+BLAS build and no CPU contention can move:
+
+* **Gerchberg-Saxton** `elapsed_ms < 5000.0` (on a call the comment itself measured at
+  600-900 ms) -> the routine performs **exactly `n_iter + 1` forward and `n_iter` inverse
+  transforms**, measured 11/10, 26/25, 51/50 at `n_iter` = 10/25/50.
+* **Pure-spherical doublet trace** `fast < 20 ms` and `speedup >= 1.2` (measured 1.78 /
+  1.13 / 1.59 / 2.65 across four consecutive runs -- one outright failure) -> a 1k-ray trace
+  through a pure-spherical doublet evaluates the surface sag **0 times** (the closed-form
+  branch), a conic doublet **3 times** (one per surface), the Newton fallback 10 per
+  surface.
+* **`trace_jax` cache** `warm < 20 ms` and `first/warm >= 20x` (the docstring tabulates the
+  ratio sliding 391-652x idle to 102-155x loaded, and the file logs it twice as a timing
+  flake) -> `_TRACE_JAX_CACHE` holds exactly **one entry after each of 20 identical calls**
+  and serves the **same object** every time.
+* **through-focus JAX cache** `speedup >= 10.0` -> the same one-entry / same-object count.
+* **numba multi-field kernel** `t_jit < 8 s` (against a measured 0.58-1.36 s) -> the kernel
+  pair in `_NUMBA_KERNELS['multi_field']` is built once and keeps its identity across eight
+  field angles.
+* **RCWA analytic-shape overlap** `dt < 4.0` (against a measured 51.8-60.1 ms; the
+  docstring's own stated intent is "to catch an accidental O(K^2)-in-the-predicate
+  regression, not to race") -> a 1024-shape lattice reaches the exact overlap predicate
+  **0 times** out of 523 776 pairs, while a genuinely overlapping pair reaches it once.
+
+One further wall-clock bar -- the Shack-Hartmann `elapsed_ms < 5000.0` -- is **retired rather
+than converted**: the per-lenslet gather it guarded is still a nested Python loop, so there
+is no operation-count oracle that would not simply restate the loop.  It is replaced by the
+contract the call owes its caller (all five returned arrays are `(n_lenslets, n_lenslets)`;
+a uniform illumination yields measured, non-NaN slopes).  Three more sites live in files
+owned by other work packages and are listed in the report with their suggested conversions.
+
+### Removed -- tests: five assertions on README / ROADMAP / CHANGELOG prose (V5)
+
+A regex over a 180 KB README is not a test of the library: it fails when someone rewords a
+sentence and passes when the code underneath the sentence is wrong.  Five such tests are
+deleted from `tests/unit/test_v4_16_2_agent_d.py` (13 -> 8 collected ids), with a block in
+the file recording what went and why.  The drift they were written for -- `refractiveindex`
+moving to the `[glass]` extra -- is pinned structurally by the `requirements.txt` tests kept
+beside them and by `scripts/check_dep_metadata.py`, which compares `requirements.txt`
+against `pyproject.toml` itself.
+
+The **CHANGELOG fabrication walkers** are explicitly NOT part of this retirement: they check
+a changelog claim against `git diff`, i.e. a fact rather than a wording, and they are
+release gates.
+
+### Changed -- tests: the broad-`except` budget is a per-file census, not a scalar (audit V4/L5 rule)
+
+`tests/unit/test_audit_except_budget.py` pinned a single number, 48, which was already 3
+short of the tree at the audit base and 7 short mid-campaign -- and a scalar cannot say
+WHICH file grew, so one module could add a clause while another removed one and the gate
+stayed green on the way past.
+
+All **53** current non-`ui` `except Exception:` sites were read and justified individually,
+and the scalar is replaced by a per-file census across 27 modules, grouped by the
+justification that licenses each: 34 JAX tracer/concretization guards (the raised type is
+untypeable without importing jax at module scope, and every fallback routes a traced input
+to the exact path), 4 other untypeable optional-package boundaries (numba's compilation
+errors; two `refractiveindex` lookups, one of which re-raises as `ValueError`), 9
+user-code and best-effort probes, 2 teardown paths that must not raise, and **3 recorded as
+narrowing requests** -- bare imports that want `except ImportError`.  Both the per-file and
+the total bars are `<=`, so narrowing a clause never fails the gate while adding one does,
+and a module absent from the census has an implicit allowance of zero.  A fourth test
+bounds the census's own slack at 3 clauses (measured: **0**) so it cannot be set uniformly
+generous.
+
+### Fixed -- tests: `WinError 6 / 50` in subprocess tests was a stdio-handle defect, not machine load (V5)
+
+Three work packages logged `OSError: [WinError 6] The handle is invalid` /
+`[WinError 50] The request is not supported` from `subprocess.Popen._get_handles` as an
+intermittent environment flake that "passes in isolation".  MEASURED under this suite's own
+configuration: with `--capture=fd` (the default) a spawn that names only `stdout=PIPE`
+raises WinError 6 before the child exists, while the same spawn with all three streams named
+succeeds, and under `pytest -s` every shape succeeds.  The mechanism is CPython's
+`Popen._get_handles` on Windows resolving **any stream left as `None`** through
+`GetStdHandle()` and then `DuplicateHandle`: pytest's fd-capture reassigns the process's
+file descriptors without calling `SetStdHandle`, so those Win32 handles can be stale.  The
+all-`None` case is safe because CPython short-circuits it -- which is why only *partial*
+spawns ever failed, and why it looked environmental.
+
+Fixed deterministically by naming all three streams (`stdin=subprocess.DEVNULL` beside
+`capture_output=True`; none of these children reads stdin) at **25 sites in 15 test files**
+plus `scripts/verify_changelog_closures.py::_run_git` and `scripts/stamp_changelog.py::_run`,
+which is where the surviving reproduction actually lived.  The reproducing batch went from
+**1 failed / 31 passed to 32 passed, three runs in a row**.  A static AST gate now fails on
+any new spawn that leaves some but not all streams inherited, with an exemption list that
+may shrink but not grow.
+
+### Fixed -- tests: the ASM cache-lock pin was order-dependent (V5)
+
+`test_propagation_asm_cache_lock_still_paired` asserted
+`'_ASM_CACHE_LOCK' in inspect.getsource(_clear_local_asm_caches)`, and VERIFY-A10 recorded
+it passing standalone and failing inside a 577-test session.  `inspect.getsource` resolves
+through `linecache` against the file **on disk** at the function's `co_firstlineno`, which
+was fixed when the module was imported -- so any edit to `fft_infra.py` after import shifts
+the definition and the lookup returns a neighbouring function's text.  A long session gives
+that window; a 0.2 s standalone run does not.
+
+Rewritten as a behavioural pin: recording locks are substituted for `_ASM_CACHE_LOCK` and
+`_PYFFTW_PLAN_LOCK`, the clearer is called, and both must have been entered.  Strictly
+stronger than what it replaces -- the old assertion passed on a body that merely mentioned
+the name in a comment, and would have passed on an `acquire()` with no release.
+
+### Changed -- CI: `--maxfail` 50 -> 10 (V7)
+
+At 50 per shard across 5 shards x 5 interpreters the fast gate tolerated up to 1 250
+failures before any job aborted, which is not an early-abort budget.  10 still shows the
+pattern -- one shard's first ten failures name the class -- while a catastrophic break stops
+the matrix in minutes instead of burning 45 of them per job.  Applied to `unit-tests.yml`
+and to `publish.yml`'s release verify.
+
+---
+
+### Migration notes
+
+* **`threadpoolctl` is a new hard dependency.**  `pip install lumenairy` now pulls it.  It is
+  pure Python and ~30 KB; environments that already have scikit-learn have it as a transitive
+  dependency.  Nothing breaks without it -- the library degrades exactly as before -- but the
+  BLAS caps it advertises only take effect with it installed.
+
+* **`lumenairy` now declares support for CPython 3.14** and the CI matrix runs 3.10-3.14.
+
+* **`validation/probe_*` and `validation/repro_*` no longer ship in the sdist.**  A PyPI
+  tarball still carries the 37 validation entry points, `tests/`, `examples/`, the workflows
+  and the reference docs; it no longer carries ~808 per-audit-round probe scripts.
+
+* **`scripts/_d5_*.py` and `scripts/_g8_*.py` moved** to
+  `validation/probe_scripts_legacy/`.  Nothing in the repository referenced them.
+
+* **The `slow` marker now means "at or over 2 min of file-total runtime"** and selects a
+  5-shard CI lane on CPython 3.12.  Eleven files joined it; if you run
+  `pytest tests/unit` locally without `-m`, nothing changes.
+
+<!-- WP-A15b: Architecture: optional dependencies, knob overrides, lazy loading -->
+### Added -- config: `lumenairy.override(...)`, a scoped context manager for every process-global knob
+
+`with lumenairy.override(fft_threads=1, pyfftw_planner='FFTW_ESTIMATE'): ...` now scopes any
+registered knob and restores the previous values in reverse order on every exit path -- normal
+return, `break`, or exception -- with a roll-back if a setter raises partway through entry.
+Unknown names raise `ValueError` **before** the first setter runs, so a typo cannot leave half a
+block applied.
+
+The audit measured **53 `set_` verbs, 0 context-manager forms and 0 resets** across 227 modules,
+in a suite that is deliberately run serially: a knob a test forgot to put back changed a later
+test's physics and did not reproduce under `-k`. New `lumenairy/_knobs.py` (357 lines) carries the
+registry -- `register_knob(name, *, getter, setter, doc)`, `override(**knobs)`, `snapshot()`,
+`restore(snapshot)`, `knobs()`, `knob_doc(name)` -- and **17 knobs** are registered one line beside
+their setter:
+
+* `lumenairy/propagators/fft_infra.py` (12): `asm_cache_size`, `default_complex_dtype`,
+  `default_dy`, `default_real_dtype`, `default_wave_propagator`, `fft_auto_promote`,
+  `fft_double_buffer`, `fft_fallback`, `fft_plan_cache_size`, `fft_plan_max_bytes_per_buffer`,
+  `fft_threads`, `pyfftw_planner`;
+* `lumenairy/memory.py` `max_ram`; `lumenairy/cache.py` `cache_budget`;
+  `lumenairy/io/storage.py` `storage_backend`; `lumenairy/user_library.py` `library_path`;
+  `lumenairy/elements/rcwa/_core.py` `blas_threads`.
+
+Registration happens at import time of the module that OWNS the knob, so a knob becomes visible
+only once that module is imported -- documented, and the reason `knobs()` grows as a session
+proceeds. `override` is process-global (not thread-local) and is documented as such.
+`lumenairy_context` (which scopes a fixed set of five knobs) is unchanged and still works.
+
+`tests/conftest.py` gains an autouse per-test fixture (`_knob_leak_guard`) that snapshots every
+registered knob and restores it, alongside the existing flag and glass guards; set
+`LUMEN_TEST_KNOB_LEAK_STRICT=1` to fail the leaking test instead of restoring silently.
+Measured cost: snapshot 2.98 us, no-change restore 5.67 us, i.e. **11.6 us per test** -- 0.155 s
+across the 13 319-test suite (1.2e-5 of its 3.65 h). A setter is called only for a knob whose
+value actually changed, so a clean test does not pay the cache invalidations several setters carry.
+
+Tests: `tests/unit/test_audit2609_a15b_optional_and_knobs.py` (33 tests -- restore ORDER,
+roll-back on a raising setter, nesting, unknown-name validation before any apply, worker-thread
+use, the "every audited process global is registered" census, the `setter(getter())` round-trip
+for all 17).
+
+### Added -- backend: `lumenairy/backend/_optional.py`, one place for the optional-accelerator probes
+
+`ensure_cupy()`, `cupy_module()`, `is_cupy_array(x)`, `load_numba()`, `numba_handles()` plus the
+`CUPY_AVAILABLE` / `NUMBA_AVAILABLE` flags. The audit found `_ensure_cupy_loaded`,
+`_is_cupy_array` and `_load_numba` hand-copied **five times each** across eight modules, so the
+accelerator-absent path had five implementations and no single place to test it. The three
+NON-lens sites now delegate -- `propagators/fft_infra.py:46-48`, `sources/core.py:26`,
+`optimize/_merit_jit.py:44-47` -- while keeping their module-level `cp` alias and their
+`_ensure_cupy_loaded` / `_is_cupy_array` / `_NUMBA_AVAILABLE` names, all of which are load-bearing
+(`fft_infra.__all__` exports two of them, `propagation.py` re-exports them, and
+`test_v5_3_multi_field_merit_jit.py` monkeypatches `_merit_jit._NUMBA_AVAILABLE`). Behaviour is
+unchanged, including CONVENTIONS section 10 absence semantics (absence is a value, never an
+exception) and the first-use memoisation. The five lens-family copies are WP-A16's to switch.
+
+### Performance -- import: `import lumenairy` no longer builds the rigorous-solver stack
+
+`lumenairy/elements/__init__.py` and the solver blocks of `lumenairy/__init__.py` resolve
+`berreman` / `bor` / `eme` / `pmm` / `rcwa` and their public names through a PEP 562
+`__getattr__` (63 names at the package root, 38 of them also on `lumenairy.elements`), caching
+each resolved object into module globals so the second access is an ordinary dict hit. `from lumenairy.elements import rcwa`, `import lumenairy.elements.rcwa as r`,
+`lumenairy.elements.rcwa.X`, `dir()`, `from lumenairy.elements import *`, pickling of objects
+defined in those modules, and every name in both `__all__` lists behave exactly as before; an
+unknown name raises `AttributeError` (never `ImportError`).
+
+MEASURED (`python -X importtime -c "import lumenairy"`, medians of 5 before / 7 after on a
+shared workstation): `lumenairy.elements` cumulative **144.6 ms -> 121.7 ms**, and the four solver
+subpackages (16.0 + 5.3 + 6.1 + 5.3 ms cumulative) disappear from the trace entirely. The
+noise-free interleaved measurement -- the same build, `import lumenairy` against
+`import lumenairy` plus an explicit import of exactly what used to be eager, 9 pairs -- gives
+**749.0 ms -> 711.7 ms, i.e. -37.3 ms (-5.0 %)**.
+
+That is much less than the audit's "~65 % of import time", and the reason is a measurement the
+audit's chain no longer matches: on this HEAD `scipy.linalg` + `scipy.special` are reached through
+`analysis.beam_stats -> lumenairy.backend -> backend.scipy` (then a module-level `from . import scipy` in
+`backend/__init__.py`; WP-A16 replaced it with the PEP 562 `__getattr__` at
+`lumenairy/backend/__init__.py:58`), not through `elements -> berreman -> rcwa`, and `lumenairy.backend` has
+**41 module-level importers** including `propagators.rs`, `propagators.hf` and
+`elements.elements`. `backend.scipy` costs 566 ms of the 955 ms total. Deferring it is a ~12-line
+PEP 562 change in `lumenairy/backend/__init__.py` -- outside this work package -- and it is worth
+~47 ms on its own, or ~540 ms (≈70 %) together with the module-level
+`from scipy.special import airy` in `elements/_lens_traced_multibranch.py` (WP-A16 binds it on
+first use in `_airy`), which was the only other module-level `scipy.special` importer left. Both requests are in `WP-A15b_REPORT.md` section 5 with the measured numbers.
+
+### Fixed -- architecture: the library's last import-time layering violation
+
+`lumenairy/raytrace/surface.py` imported `elements.lenses` at module level -- the ONE import-time
+edge among the audit's 12 layering violations (the other 11 are already in-function). The two sag
+kernels move into `_base_surface_sag_xy`, which already imports `elements.freeform` the same way
+three lines below. Bit-identical: the sag dispatch is pinned against `elements.lenses`'s own
+kernels with `np.array_equal` on rotationally-symmetric, biconic and flat surfaces.
+Tests: `tests/unit/test_audit2609_a15b_lazy_and_layering.py` (23 tests, including an AST walk of
+the whole package that separates module-level from in-function imports and excludes
+`if TYPE_CHECKING:` bodies).
+
+### Added -- public API: 15 names promoted to the package root
+
+`lumenairy.__all__` 708 -> 723. Every one was already public in a submodule `__all__` and was
+requested by the work package named beside it; the `__all__`-symmetry walker was RED on 19 entries
+and is now green with **no new exemptions**:
+
+* `unwrap_phase_2d`, `clear_meshgrid_cache`, `meshgrid_cache_bytes`, `zernike_basis_cache_bytes`
+  (WP-A7);
+* `MinEdgeThicknessMerit`, `edge_thickness` (WP-A10);
+* `pmm_2d_order_drift` (WP-A13 / VERIFY-A13; VERIFY-A12 had added it to
+  `elements/pmm/__init__.py::__all__`);
+* `exit_vertex_transfer`, `EXIT_VERTEX_GRAZING_TOL`, `resolve_exit_index`,
+  `vertex_plane_transfer_t`, `exit_vertex_transfer_jax` -- the shared exit-vertex transfer of
+  audit section 15.1 and its pieces (WP-A1);
+* `seed_entrance_eikonal` (WP-A7 section 5.3; also added to `lumenairy.raytrace.__all__`
+  alongside `resolve_exit_index` / `vertex_plane_transfer_t`);
+* `aberration_free_reference_fit` (WP-A4's Y2 follow-up);
+* `override` (this work package).
+
+`algebra.from_prescription` stays submodule-only by decision: `Operator.from_prescription` is the
+canonical spelling and a free function would put two names with identical semantics on the surface.
+The walker's existing exemption and its cited rationale stand, and
+`tests/unit/test_audit2609_a15b_reexports.py` records the decision so it is not silently
+re-litigated.
+
+### Fixed -- propagators: `propagate_through_system` forwards `subharmonics` to the turbulence screen
+
+`system.py:1007` now passes `subharmonics=elem.get('subharmonics', 0)` to
+`generate_turbulence_screen`, and the element-dict documentation lists the key. WP-A8 added the
+Lane subharmonic levels (audit section 5, E3) but the element chain was the one caller that could
+not reach them, so `{'type': 'turbulence', ..., 'subharmonics': 3}` was silently discarded -- the
+"documented option that does not work" class of audit section 15.3. The default is the generator's
+own `0`, so a chain without the key is **bit-identical** (`np.array_equal` against the 0-level
+screen applied by hand). MEASURED effect of the discarded knob on the regression fixture:
+`subharmonics=3` moves the screen by max |dphi| = 2.6701 rad, rms 1.3526 rad (1 level: 0.8413 /
+0.3906 rad). Tests: `tests/unit/test_audit2609_a15b_system_subharmonics.py` (6 tests).
+
+### Changed -- memory: `_ASM_FIRST_CALL_FIXED_BYTES` re-calibrated 56 -> 53 MiB, and its test bar is now derived
+
+`estimate_asm_memory`'s one-time first-call term was calibrated at 56 MiB on 2026-08-01 against a
+then-measured 52.5-53.0 MiB backend import. RE-MEASURED 2026-09-12 by the same method (fresh
+interpreter + `tracemalloc`, N = 256..2048 x {complex64, complex128}, fitting
+`cold = slope * N^2 + fixed` on consecutive-N pairs), twice in this release: **36.71 MiB** while
+`scipy.fft` was still imported at `import lumenairy` (outside the measured first call), then
+**49.61 MiB** once `fft_infra` loads `scipy.fft` on first use -- the import alone measures
+13.06 MiB in a fresh interpreter, the whole of the difference; the six pair fits agree to 0.01 MiB.
+At 56 MiB the estimate had read **est/measured = 1.341 at N = 512** against a docstring promising
+1.06-1.09: the published accuracy had stopped being true. The constant is 53 MiB (6.8 % headroom
+over the worst pair fit, the same convention the 2026-08-01 calibration used); the superseded
+calibrations are recorded in `docs/history/lumenairy.memory.md`.
+
+`tests/unit/test_niche_audit_w3_infra.py`'s flat `<= 1.35` Windows fence -- sized in 2026-08-01 to
+admit a band then measured at 1.06-1.09, i.e. 25 % of unexplained slack -- is replaced by a
+two-sided DERIVED bar: `est/cold` is a weighted mediant of `F_est/F_meas` and `s_est/s_meas` and
+therefore lies between them for every N, giving `1.0 <= ratio <= 1.12` with no per-build number.
+The measured cold peak is additionally pinned against its dated two-term model (2 % band on a
+quantity that reproduces to 0.003 %), and a new test bars the CONSTANT itself at
+`[F_meas, 1.10 * F_meas]` so the next drift has to be re-measured rather than absorbed. Both
+directions have a fail-before on this tree: the 40 MiB constant reads 0.888 (N = 512) / 0.972
+(N = 1024) against the `>= 1.0` bound, and the 56 MiB constant is 1.129x the measured term against
+the 1.10 bar. `tests/unit/test_verify_perf_fixes_2026_08_10.py`'s two absolute GB pins now derive
+that term from the constant, so a re-calibration moves them with it. Closes WP-A11 section 5 item 4
+("either the constant comes down or that test's Windows fence goes up -- one decision, one place").
+
+### Changed -- tests: the `fft_infra` leak-guard comment now matches the code
+
+`tests/conftest.py` cited `ui/waveoptics_dock.py` clearing `USE_PYFFTW` unconditionally as the live
+reason `fft_infra` is in `_LEAK_GUARD_MODULES`. WP-A9 fixed the dock (U4 -- every exit path
+restores the FFT and RAM overrides), so the sentence now says the leak is fixed and the guard is
+there to catch a recurrence. No code change. (WP-A9 report section 5.3.)
+
+<!-- WP-A20: Loose ends: legacy folded library entries, rs_alias_free_distance, two restated pins -->
+### Fixed -- user_library: folded designs saved before the U1/U2 fix load as the layout they were saved from (WP-A9 §6.1, VERIFY-A9 §5.3)
+
+`SystemModel.to_prescription()` did not emit per-surface `is_mirror`,
+`semi_diameter` or `is_stop` until the U1/U2 fix, so a FOLDED design
+already sitting in a user's lens library carries none of them. Loading
+one gave a system with no mirror in it at all: the fold analysed as an
+air->air refracting surface, and because the `elements` fallback in
+`surfaces_from_prescription` filters to refracting entries while the
+index counts every surface, the mirror was additionally handed the
+FOLLOWING lens's clear aperture.
+
+`load_lens` now migrates such an entry on load, recovering the three keys
+from the entry's own `elements` list by position. Measured on a concave
+fold mirror (R = -200 mm, semi-diameter 25 mm) followed by an N-BK7
+singlet at a Zemax-signed -30 mm, at the d line:
+
+| | EFL [m] | BFL [m] | semi-diameters [m] | is_mirror |
+|---|---|---|---|---|
+| designer layout (the truth) | 0.1825479198383674 | 0.1304206774044291 | 0.025, 0.006, 0.006 | T, F, F |
+| pre-fix entry, before | 0.15479922951064448 | 0.1521620959930726 | 0.006, 0.006, 0.0127 | F, F, F |
+| pre-fix entry, **after** | **0.1825479198383674** | **0.1304206774044291** | **0.025, 0.006, 0.006** | **T, F, F** |
+
+-15.2 % EFL and +16.7 % BFL before; bit-identical to the layout after
+(`==`, not `approx` — both sides are the same paraxial recursion on the
+same float64 inputs).
+
+The migration runs ONLY on entries that need it, and states its rule
+rather than guessing. It requires `elements` to be a list of dicts of
+exactly `len(surfaces)`, at least one of them a `'mirror'`, and no
+`surfaces` entry already carrying `is_mirror`; it then checks that every
+`elements` entry is an optical surface whose `radius` matches its
+surface's bit for bit (and, for refracting entries, its glasses). If
+that check fails the two lists are not positionally consistent — most
+often a lens-only `surfaces` list whose `elements` happens to have the
+same length — and NOTHING is written: a `UserWarning` names the index
+that disagreed instead. Unfolded entries, entries that already carry the
+keys, and the lens-only `.zmx` / CodeV shape are returned byte-for-byte
+unchanged and silently.
+
+Also reported (not repaired): the same pre-fix exporter dropped a
+coordinate break's transfer thickness in the `cb_post` case (a tilted
+element behind a mirror), writing `thicknesses [0.0, 0.004]` where the
+current one writes `[0.04, 0.004]`. That is a different key, and the true
+value survives in the entry's own `all_thicknesses`, so a second
+`UserWarning` quotes both numbers and points at the fix. On that fixture
+the layout is EFL/BFL 1.0459951945424169 / 1.4670304058769554 m; without
+the migration a pre-fix load reports 0.15479922951064448 /
+0.1521620959930726, with it 0.2824843175588363 / 0.2851214510764082.
+
+**Migration note.** A folded library entry saved before the U1/U2 fix
+now loads with a DIFFERENT (correct) EFL/BFL/aperture set than it did
+before, and says so once per entry with a `UserWarning`. Re-saving the
+design from the designer produces a prescription that needs no repair
+and silences the warning. Nothing else changes: unfolded entries, modern
+entries and `.zmx`-shaped prescriptions are bit-identical to before.
+
+Files: `lumenairy/user_library.py:719-953` (`_FOLDED_SURFACE_KEYS`,
+`_same_radius`, `_backfill_folded_surface_keys`,
+`_warn_lost_coord_break_gap`), `:955-989` (`load_lens`).
+Tests: `tests/unit/test_audit2609_a20_user_library_and_rs.py::TestA20FoldedLibraryBackfill`
+(13 tests; 7 of them fail on the pre-migration load path).
+
+---
+
+### Changed -- propagators/rs: `rs_alias_free_distance` is public API (WP-A15b §5.3)
+
+`2*N*dx**2/wavelength` is the distance `rayleigh_sommerfeld_propagate`
+routes `kernel='auto'` on (`'transfer'` below it, `'spatial'` at and
+above) and the distance below which `kernel='spatial'` refuses outright,
+so it is the number a caller needs in order to choose `z`, `N` or `dx`
+for an RS step. It was spelled `_rs_alias_free_distance` and therefore
+could not be re-exported.
+
+Renamed to `rs_alias_free_distance` and added to `rs.__all__`, with the
+derivation, an example and a `See Also` in the docstring.
+`_rs_alias_free_distance` remains bound to the SAME function object (an
+alias, not a wrapper), so existing importers — including three audit
+regression files — are unaffected and monkeypatching either name patches
+one function.
+
+Files: `lumenairy/propagators/rs.py:40` (`__all__`), `:180-236` (the
+function, its `Examples`/`See Also` block and the alias), `:5-9` (module
+docstring), `:331`, `:541-548` (internal callers).
+Tests: `tests/unit/test_audit2609_a20_user_library_and_rs.py::TestA20RsAliasFreeDistanceIsPublic`
+(7 tests: the closed form at four `(N, dx, lambda)` points, the `is`
+identity of the alias, and that `kernel='auto'` really is bit-identical
+to `'transfer'` below the distance and to `'spatial'` at it).
+
+**Requires the companion top-level re-export** (see WP-A20 report §5):
+until `lumenairy/__init__.py` gains it,
+`tests/unit/test_v4_16_0_walker_all_symmetry.py::test_all_submodule_entries_reexported_or_exempt`
+fails with exactly that instruction.
+
+---
+
+### Fixed -- tests: two regressions pinned behaviour the audit has retired
+
+* `test_niche_audit_w5_shim_removals.py::TestPropagatorInertKwargRemovals::test_hf_chunk_output_is_KEPT`
+  asserted that `propagate_huygens_fresnel_with_opl_callable(chunk_output=)`
+  warns `DeprecationWarning` and does nothing. K22 un-deprecated it and
+  made it real, so the test failed `DID NOT WARN`. Restated as
+  `test_hf_chunk_output_is_KEPT_and_FUNCTIONAL`: the kwarg is kept, no
+  `DeprecationWarning` fires, and the effect is MEASURED against the
+  closed form `1 probe + 17 evaluations per batch x ceil(n_out/n_chunk)`
+  (17 = `Phi` plus the 16 cross-Hessian stencil corners; 1 without Van
+  Vleck). On a 12x12 -> 12x12 fixture: **2448 / 1225 / 613 / 154 / 35**
+  `opl_fn` calls for `chunk_output` 1 / 2 / 4 / 16 / auto, with output
+  coordinates of shape `(n, 1, 1)` instead of scalars, and the returned
+  field bit-identical across all of them. Pre-K22 the same probe gives
+  **2448 calls for every value**, scalars throughout, plus the warning.
+* `test_v5_4_6_wave4_polarization.py::test_vector_aperture_diffraction_has_projection_kwarg`
+  pinned `apply_vector_aperture_diffraction`'s `vector_projection`
+  default at `False`. K17 flipped it to `True` deliberately and with a
+  migration note (`vector_projection=False` reproduces the pre-v5.46
+  behaviour exactly), so the pin is restated to `True` and now also pins
+  that the kwarg stays keyword-only and still EXISTS — the part that
+  protects migrating callers. The docstring records why: with the
+  projection off the "vectorial" propagator measured identical to two
+  scalar HFPI runs (`max|Ex_vec - Ex_scalar|` 1.9e-23, 45-degree
+  `max|Ey/Ex - 1|` <= 1.1e-16, i.e. zero depolarisation) at twice the
+  cost; with it on, `|Ez|^2` 1.40e-2, cross-pol 9.3e-5, 45-degree 0.143,
+  and `|E|^2` conserved to 1 - 1.1e-15 against the old opt-in's 0.841.
+
+Files: `tests/unit/test_niche_audit_w5_shim_removals.py:82-87,114,592-699`,
+`tests/unit/test_v5_4_6_wave4_polarization.py:5-6,84-122`.
+
+<!-- WP-A21: Final hygiene pass -->
+### Fixed -- RCWA 2-D: the Wood-anomaly diagnostic named a class that does not exist
+
+`rcwa_efficiency_2d`'s prepared sweep path passed
+`fn_name="RCWA2DPrepared.solve"` into the Rayleigh-anomaly nudge and into the
+`_WoodAnomaly` control-flow signal (`lumenairy/elements/rcwa/twod.py:1300`,
+`:1302`).  There is no `RCWA2DPrepared`: the class is **`PreparedRCWA2D`**
+(`lumenairy/elements/rcwa/twod.py:1258`, built by `prepare_rcwa_2d`), so a user who grepped the
+`WoodNudgeWarning` text for the class found nothing, and `Migration-Guide.md`
+had to document both spellings.  Both literals now name the real class.
+Measured on the 2-D Moharam mount (`Lambda_x = Lambda_y = lambda = 1 um`, air
+both sides, `n_orders 3x3`): the emitted warning now leads with
+`PreparedRCWA2D.solve:` and `getattr(rcwa.twod, 'PreparedRCWA2D').solve`
+resolves.  No numerics change -- the nudge, the symmetric bracket and the
+returned `wl_eff` are untouched.  (Audit WP-A18 section 8.2.)
+
+### Fixed -- designer: the `fast_analytic_phase` tooltip promised an error and a speedup that were not measured
+
+`lumenairy/ui/lens_options_dialog.py`'s `LENS_KWARG_REGISTRY` entry claimed
+"~25 % speedup with <10 nm OPL error on typical refractive prescriptions".
+Both halves were wrong:
+
+* the OPL error is not a flat 10 nm.  The omitted term is the **in-glass ASM
+  leg**, so it is LINEAR IN CENTRE THICKNESS, not in f-number: measured
+  0.007 nm rms at 1 um of centre thickness, 0.7 nm at 100 um and
+  **14.1 nm rms / 41.6 nm PV at 2 mm** on an N-BK7 100/-100 biconvex at
+  f/12.1 -- i.e. **~7 nm rms per mm of glass**, the form
+  `docs/subsystems/real_lens.md` section 4 and
+  `_lens_traced._geometric_lens_phase`'s docstring already carried;
+* there is no ~25 % speedup on this build.  Measured on a 2 mm N-BK7 singlet,
+  medians of 9 interleaved pairs: **0.87x-1.00x** (i.e. no gain, and a small
+  loss) with the "Parallel amp pass" default ON -- that option already
+  overlaps the analytic reference leg with the amplitude leg, so skipping the
+  reference saves nothing -- and **1.06x-1.17x** with it off (N = 512 / 1024).
+
+The tooltip now states the per-mm error with its measurement and says the
+option is an accuracy control, not a speed one.  Behaviour unchanged.
+(Audit WP-A3 section 5.8, re-raised by WP-A18 section 8.3.)
+
+### Fixed -- `memory.py`: two broad `except Exception:` narrowed, and a promoted warning no longer swallowed
+
+`set_low_memory`'s two `try: from .propagators.fft_infra import ... except
+Exception: pass` guards (`lumenairy/memory.py`) are now `except ImportError:`
+with only the import inside the `try`.  The guarded work cannot raise anything
+else and now says so: `get_default_complex_dtype()` is a bare global read, and
+`set_default_complex_dtype(np.complex64)` validates against the
+`{complex64, complex128}` pair it is being handed a member of.  The module is
+imported unguarded higher in the same function, so the reachable failure is
+narrower still -- a vendored `fft_infra` without the two dtype names.
+
+One behaviour improves as a consequence.  The aggressive-mode
+`RuntimeWarning` ("set the default field dtype to complex64") used to sit
+INSIDE the `except Exception`, so under `-W error::RuntimeWarning` the promoted
+warning was caught and discarded -- the caller got no error, no warning, and a
+flipped dtype.  It is now emitted **after** the restore snapshot is written, so
+`-W error` sees it and `set_low_memory(False)` still has the prior values to
+put back.
+
+`tests/unit/test_audit_except_budget.py`'s per-file census drops the
+`memory.py: 2` narrowing request: **53 -> 51 justified sites across 26
+modules** (tree measured 51, slack 0).  (Audit WP-A15a section 2.9 / section 5
+item 6.)
+
+### Fixed -- `propagators/propagation.py`: the pyFFTW buffer-race latch was not live-forwarded
+
+`fft_infra._PYFFTW_FIRST_FFT_THREAD` and `_PYFFTW_SHARED_BUFFERS_UNSAFE` -- the
+K4 ping-pong-buffer race latch, rebound by `_note_fft_thread()` the moment a
+second thread issues an FFT -- were missing from
+`propagation._LIVE_FORWARD_NAMES`, so `propagation._PYFFTW_SHARED_BUFFERS_UNSAFE`
+returned the import-time snapshot (`False`) forever.  Both are now forwarded;
+measured, flipping the `fft_infra` globals is now visible through
+`propagation` immediately.  `tests/unit/test_v5_2_walker_pep562_forwarding.py::test_v14_every_mutable_fft_infra_global_is_in_live_forward_names`
+goes red -> green.
+
+### Changed -- RCWA: three dead imports and three import blocks cleaned; the ruff TODO ignores are gone
+
+`_grazing_safe_wavelength` was imported and no longer called in
+`lumenairy/elements/rcwa/oned.py` and `twod.py` (WP-A14 routed both entry
+points through `_grazing_safe_wavelength_pair`); the import is dropped, and the
+`_core` import block in `oned.py`, `twod.py` and `stack.py` is re-sorted.  The
+three `# TODO(audit-2609)` entries that covered them in
+`[tool.ruff.lint.per-file-ignores]` are **deleted**, so those files are gated
+like the rest of the package.  `ruff check lumenairy tests scripts` is clean.
+No behaviour change: the name is still exported from `rcwa/_core.__all__` and
+every caller imports it from there.  (Audit WP-A15a section 5 item 4.)
+
+### Changed -- `mypy --strict` whitelist: 17 -> 25 declared paths
+
+The eight subpackage `__init__.py` re-export surfaces (`_math`, `sources`,
+`io`, `analysis`, `elements/pmm`, `elements/rcwa`, `elements/eme`,
+`elements/bor`) join `[tool.mypy] files`, each measured strict-clean **after**
+the lazy-loading rewrite.  They are pure re-export bookkeeping, which is
+exactly where a mis-spelled or dropped name ships as an `ImportError` at a
+user's first call.  `mypy` now checks 30 source files, up from 22.  The ratchet
+in `test_audit2609_a15a_packaging.py::test_the_mypy_whitelist_only_grows` moves
+17 -> 25.  (Audit WP-A15a section 5 item 10 / WP-A15b section 5.6.)
+
+### Changed -- PMM 2-D staggered: how to catch the SEGMENT-grid redundancy advice in CI
+
+VERIFY-A13 recorded that `-W error::UserWarning:lumenairy.elements.pmm.twod_staggered`
+"does not reliably catch" the shared-grid redundancy warning and had to count
+it by grepping the message text.  Measured and settled: a module-scoped filter
+on that module **cannot** work at any correct `stacklevel`, because Python
+matches a filter's `module` field against the `__name__` of the frame
+`stacklevel` selects and the point of a non-1 `stacklevel` is to select the
+CALLER.  Measured on a 4x4 segment grid reducible to 2x2 (M = 3): the direct
+`pmm_efficiency_2d_staggered` entry is attributed to the caller's own module
+and the deferred `PMM2DStackPure.solve` entry to `stack2d_pure`; neither to
+`twod_staggered`.
+
+The filter CI must use is therefore a MESSAGE filter, now documented beside the
+warning and pinned:
+
+```
+-W "error:.*eps_cell is a SEGMENT grid:UserWarning"
+filterwarnings = ["error:.*eps_cell is a SEGMENT grid:UserWarning"]
+```
+
+`_validate_stag_cost` also gains a `stacklevel=` keyword (default 3 --
+unchanged for every existing caller) so the deferred path, which reaches the
+warning through one extra helper and currently lands on `stack2d_pure.py`'s own
+line instead of the user's `solve()` call, can pass 4 in a one-word change.
+
+### Added -- `scripts/check_doc_identifiers.py`: the doc-identifier resolver is now a gate
+
+The audit's "78 % of backticked identifiers in the top-level docs do not
+resolve" was measured on a 60-token sample with no clean denominator; WP-A18
+built the denominator and drove the genuinely unresolved count to 0 but could
+commit no `.py`.  The resolver now ships beside
+`scripts/check_source_line_citations.py`.  It extracts every backticked
+identifier-shaped token from `README.md`, `ROADMAP.md`, `Migration-Guide.md`
+and `CONVENTIONS.md`, removes two auditable layers of exclusions (mechanical:
+builtins, live parameter names, test ids, file names, third-party prefixes,
+enum-like option strings, file-format record tokens; plus 51 hand-triaged
+tokens each carrying the reason read at its citation site) and resolves the
+rest against the importable package plus a static AST index of
+`lumenairy/**/*.py` -- the AST index is what makes `lumenairy/ui/` resolvable
+where PySide6 is absent.
+
+Measured on this tree: 1 952 backticked occurrences, 1 055 distinct
+identifier-shaped tokens, a **593-token API-claiming denominator, 593
+resolving, 0 unresolved**, 4.5 s end to end, no network.  Exit status 0/1 so CI
+can gate on it.  `tests/unit/test_audit2609_a21_doc_identifiers.py` pins the
+zero, pins that the denominator has not collapsed, demonstrates the gate
+failing on a fabricated name, and keeps the triaged list from going stale or
+growing.
+
+### Changed -- test hygiene: three wall-clock bars converted, four slow markers, three subprocess spawns, one bit-equality
+
+Following TESTING_STANDARDS S1 ("no wall-clock or speedup assertions"), the
+last three live timing bars outside `test_ci_kernel_consistency.py` are
+operation counts:
+
+* `test_pmm2d_staggered_slant.py::test_cost_slant_is_free_against_the_out_of_plane_solve_it_must_use`
+  -> `::test_cost_slant_adds_no_eigenwork_to_the_solve_it_must_use`.  Was
+  `min(slant/vertical) < 2.0` over `perf_counter` medians, closed by
+  `assert ti > 0.0` -- an assertion that cannot fail -- on a ratio its own
+  docstring measured at 0.869..1.167 across WIN/WSL, idle and loaded.  Now a
+  census of every dense eigendecomposition by kind and dimension: the vertical
+  out-of-plane and the SLANTED region solves are each **one standard eig at
+  4q^2** (256 at M = 5, 400 at M = 6) and identical, while the in-plane path
+  the slant does not take is **one generalized eig at 2q^2** (128, 200).
+* `test_v4_15_agent_a.py::test_modal_asymptotic_perf_win`
+  -> `::test_modal_asymptotic_is_batched_not_per_pixel`.  Was
+  `t_ref/t_new >= 5.0` at N = 128.  Now: the public path issues **exactly one**
+  `_solve_envelope_stationary_batch` and **one** `_compute_M_b_batch` at
+  N = 16/32/64 (flat across a 16x change in pixel count) and **zero** scalar
+  per-pixel calls, while the preserved pre-v4.15 reference issues exactly
+  `N*N` scalar solves.  The speedup is reported, not asserted (measured 14.9x /
+  16.1x / 14.9x at N = 32/64/128).  The test also drops from ~35 s to 4.3 s.
+* `test_audit2609_a7_misc.py::test_transfer_function_recurrence_engages_only_on_a_uniform_scan`.
+  Was a bit-equality that was RED on this build by 1 ULP.  Diagnosed: both
+  routes build a **bit-identical** transfer function (measured
+  `max|H_scan - fftshift(H_asm)| = 0.0`); what differs is where the `fftshift`
+  pair sits -- `through_focus_scan` transforms the shifted field,
+  `angular_spectrum_propagate` uses the even-N identity at `asm.py:107-119` and
+  runs unshifted.  Measured drift: **0 ULP at N = 64/128/256 and 2 / 4 ULP at
+  the mixed-radix 96 / 192**.  The bar is now a derived two-sided band,
+  `8 log2(N)` = 52.7 ULP at N = 96 (2-D FFT: `2 log2(N)` stages x `eps`,
+  doubled by `|E|^2`, over a >= `eps/2` ULP), with an in-process counter-arm
+  showing that a wrongly-engaged recurrence moves the answer by 2.6e14-5.0e14
+  ULP.
+
+`pytestmark = pytest.mark.slow` added to `test_niche_d2_chain_multi.py`
+(338.8 s), `test_pmm2d_staggered_mortar.py` (229.3 s) and
+`test_niche_d6_exact_tilted_leg.py` (124.7 s); `test_audit_misc.py` gets the
+marker on ONE test instead (`ReadmeCookbookExamples::test_real_lens_from_zemax_cookbook`,
+308.4 s of the file's 320.7 s) because the file is jax-guarded and a
+module-level marker would have deleted its jax ids from the only CI leg that
+installs jax.  **1 001.4 s moved out of the fast lane.**
+
+`stdin=subprocess.DEVNULL` added to the last three partial subprocess spawns
+(`test_niche_audit_w3_infra.py`, `test_niche_d14_deterministic_carrier_fit.py`
+x2), the shape that raises `OSError [WinError 6]` under pytest's fd-capture on
+Windows; `test_audit2609_a15a_packaging.py::_STDIO_EXEMPT` is now **empty**, so
+that gate covers `tests/` with no hole.
+
+---
+
+**Migration notes.** None.  No public API, default, signature or numeric
+result changes in this work package.  Two operational notes for anyone reading
+CI configuration:
+
+* the slow lane gains three files and one test (~1 001 s), so a shard-count
+  review belongs with the `.test_durations` regeneration at campaign exit;
+* the PMM 2-D staggered redundancy advice must be filtered **by message**, not
+  by module -- see the block above.
+
+<!-- WP-A22: Final code pass (lazy scipy.fft, fingerprint recorder, isolation fixes) -->
+### Performance -- `import lumenairy` is **2.1x** faster: `scipy.fft` is no longer imported eagerly
+
+`lumenairy/propagators/fft_infra.py` imported `scipy.fft` at module scope.
+`import lumenairy` reaches that module unconditionally
+(`analysis.coherence` -> `elements.lenses` -> `propagators.fft_infra`), and on
+this SciPy build `scipy/fft/_fftlog_backend.py` does
+`from ..special import loggamma, poch`, so `scipy.special` and its shared
+prefix (`numpy.f2py`, `numpy.testing`, `charset_normalizer`) were pulled in
+too -- for every caller, including the ones that never take an FFT.
+
+`scipy.fft` is now probed with `importlib.util.find_spec` at import and bound
+on first use by `_ensure_scipy_fft_loaded()`, exactly as pyFFTW already was in
+the same module.  `fft_infra._scipy_fft` still resolves (through a PEP 562
+module `__getattr__`, which performs the same first-use import), so
+`propagators/_bluestein.py` and any external reader are unaffected.
+
+MEASURED, WP-A15b's interleaved same-build method, medians of 9 fresh-
+interpreter pairs, `OPENBLAS_NUM_THREADS=1`:
+
+| tree | arm | median | the 9 samples (ms) |
+|---|---|---|---|
+| BEFORE | `import lumenairy` | **633.3 ms** | 616.8 617.3 620.3 623.0 **633.3** 636.7 648.1 651.1 691.5 |
+| BEFORE | + explicit `scipy.fft` | 628.3 ms | 614.6 621.7 623.3 623.8 **628.3** 635.6 652.1 668.9 669.2 |
+| | | delta **-5.0 ms** | as expected: both arms were already eager |
+| AFTER | `import lumenairy` | **298.1 ms** | 279.6 290.3 295.5 297.2 **298.1** 301.8 308.7 309.0 310.7 |
+| AFTER | + explicit `scipy.fft` | 622.2 ms | 600.4 602.4 606.2 610.9 **622.2** 629.6 636.3 644.7 673.9 |
+| | | delta **+324.1 ms** | the cost this change defers |
+
+Two independent numbers that agree: the plain before/after median difference
+is **633.3 -> 298.1 ms, -335.2 ms (-52.9 %)**, and the interleaved A/B on the
+AFTER tree is **+324.1 ms**.  Named cumulative rows (`python -X importtime`,
+medians of 5):
+
+| module | BEFORE cum | AFTER cum |
+|---|---|---|
+| `lumenairy` | 622.7 ms | **280.3 ms** |
+| `lumenairy.propagators.fft_infra` | 415.5 ms | **50.2 ms** |
+| `scipy.fft` | 396.0 ms | *(not imported)* |
+| `scipy` | 27.6 ms | 27.6 ms |
+| `scipy.special` | 49.0 ms | *(not imported)* |
+| `numpy.f2py` | 108.3 ms | *(not imported)* |
+| `numpy.testing` | 96.6 ms | *(not imported)* |
+| `charset_normalizer` | 77.2 ms | *(not imported)* |
+
+The `find_spec` probe costs the plain `scipy` package import, 27.6 ms with
+NumPy already loaded, against the 396.0 ms it defers.
+
+**No behaviour change.**  `SCIPY_FFT_AVAILABLE`, `USE_SCIPY_FFT`,
+`SCIPY_FFT_WORKERS`, every dispatcher and `fft_infra._scipy_fft` behave as
+before; the first FFT that routes to SciPy imports it.  `_fft2` / `_ifft2` /
+`_fft2_nd` / `_ifft2_nd` / `_scipy_or_numpy_fft2` / `_scipy_or_numpy_ifft2`
+return bit-identical arrays.  Gate: the seven FFT/ASM/propagation test files
+pass unchanged (248 passed).
+
+### Added -- `scripts/record_history_fingerprints.py`, the maintenance path for the history pin
+
+`tests/unit/test_audit2609_a17_history_relocation.py` pins every module with a
+document under `docs/history/` to the AST and token fingerprints recorded when
+its version-history narrative moved out of the source.  That pin has no expiry,
+so the first *deliberate* code change to any of those modules turns it red --
+correct, and unworkable if the only way to clear it were hand-editing a hash.
+
+`python scripts/record_history_fingerprints.py <module> --reason "..."`
+recomputes both fingerprints **with the checker's own helpers** (a second
+implementation would be two definitions of "unchanged") and rewrites the two
+header lines in place, appending a `re_recorded: <date> -- <reason>` line so
+the header carries every baseline move and its justification.  `--check`
+reports drift across every document and exits 1 without writing; a write
+without `--reason` is refused.
+
+**The rule, now stated in `CONTRIBUTING.md`, in the checker's module docstring
+and in both of its failure messages: a commit that intentionally changes code
+in a module with a history document re-records that document in the same
+commit, and says why.**
+
+Gated by `tests/unit/test_audit2609_a22_history_fingerprint_tool.py` (11 ids,
+2.5 s), which drifts a temp copy of a two-file tree and re-records it.  It
+asserts on the recorder's own AST that it defines neither fingerprint itself;
+that `--check` is byte-for-byte read-only; that a value-preserving literal
+re-spelling (`5` -> `0x5`, invisible to the AST) is still caught; that the
+re-recorded hashes equal the *checker's* reading of the drifted source; that
+every other header field survives; that two re-records leave two trail lines;
+and that one malformed document does not abort the sweep.
+
+### Changed -- the last wall-clock assertion in `tests/` is now an operation count
+
+`tests/unit/test_ci_kernel_consistency.py::test_this_arm_agrees_with_the_committed_census`
+ended with `assert elapsed < 20.0`.  That was a proxy for the real promise --
+the current-arm re-take runs the four CHEAP census sections and leaves the two
+expensive ones (mortar 4.7 s, T22 5.3 s) to the committed table -- and it is
+the shape TESTING_STANDARDS S1 rules out: it goes red when the box is loaded,
+and green on the regression it exists to catch, because a fast enough machine
+can run both expensive sections inside 20 s.
+
+It is replaced by the count WP-A15a section 6 item 3 designed, derived from
+the committed census rather than transcribed: the re-take must cover exactly
+the census's cheap rows, produce none from the expensive prefixes, and probe
+the recorded number of hypothetical bars.  MEASURED: 24 decisions (interface
+6, sliver 2, band 4, branch_cut 12) against 24 cheap census rows, 4
+hypotheticals, 0 expensive rows, against the 30 expensive rows every measured
+arm carries.  Both sides exact, gap 0.  The wall clock (1.7 s) is PRINTED for
+triage and asserted nowhere.
+
+### Fixed -- `tests/unit/test_v4_14_0_dispatcher_pin_apply_lens.py` passed only by collection order
+
+Twelve of its 35 ids -- every `apply_real_lens_traced_jax` /
+`apply_real_lens_maslov_jax` parametrisation -- failed when the file was run
+ALONE, with `RuntimeError: ... requires double precision, but jax_enable_x64
+is disabled`.  `jax.config` is process-global and the module never enabled
+x64, so the file was passing on whatever another module (about twenty of them
+do) had switched on first.
+
+The flag is now set in the same `try:` block that decides whether JAX exists,
+and a module-scoped autouse fixture re-asserts it at run time (two modules in
+this suite deliberately toggle it off to exercise refusal paths, and imports
+all happen before any test runs) and RESTORES the previous value on teardown,
+so the file does not export its own precondition to whatever runs next.
+
+MEASURED: alone, **12 failed / 23 passed -> 0 failed / 35 passed**.  Run
+alongside `test_v5_12_0_audit_fixes.py`, which toggles the flag, 40 passed in
+both orders.
+
+### Changed -- documentation
+
+* `Migration-Guide.md` 5.46.0 gained the three late packages' notes: the
+  `LensGeometry` / `LensNumerics` / `LensResources` / `LensConfig` objects
+  (**new API, no migration required** -- every keyword still works, with a
+  runnable snippet verified bit-identical to the loose-keyword form, and a
+  pointer to `docs/lens_configuration.md`); the `docs/history/` relocation
+  with the re-record rule; and three diagnostic corrections (the committed
+  `scripts/check_doc_identifiers.py` gate, the staggered-PMM **message**
+  filter spelling `-W "error:.*eps_cell is a SEGMENT grid:UserWarning"` and
+  why a module filter cannot work, and the `fast_analytic_phase` tooltip's
+  real figure of ~7 nm rms **per mm of glass**).
+* `Migration-Guide.md` no longer quotes the dead `RCWA2DPrepared.solve`
+  spelling; it states that pre-v5.46.0 logs name a class that does not exist.
+  The matching hand-triaged exclusion was deleted from
+  `scripts/check_doc_identifiers.py` in the same change.
+* `README.md`'s "Start here" table gained rows for `docs/lens_configuration.md`
+  and `docs/history/`, and the real-lens section gained a pointer to the
+  configuration objects.
+* `CONTRIBUTING.md` gained a "Modules with a history document" section
+  carrying the re-record rule and the commands, and a bullet against
+  version-history narrative in the source.
+
+### Changed -- gates tightened as their debts were paid
+
+* `pyproject.toml`: the `lumenairy/elements/_lens_real.py = ["F541"]`
+  per-file ignore is **deleted** -- the two placeholder-free `f"..."`
+  continuation lines are gone (MEASURED: `ruff check --isolated --select F541`
+  reports 0 on that file), so it is F541-gated like the rest.  The TODO-ignore
+  group is now empty.  `ruff check lumenairy tests scripts` passes.
+* `tests/unit/test_audit_except_budget.py`: the `elements/_lens_imap.py`
+  census entry is deleted -- its clause is now `except ImportError:`.  Census
+  **51 -> 50**, tree 50, slack 0.  The NARROWING REQUESTS group is empty:
+  every narrowing the census asked for has landed.
+* `scripts/check_doc_identifiers.py`: the `LensGeometry` / `LensNumerics` /
+  `LensResources` triaged exclusions are deleted -- they resolve on their own
+  now that the config objects ship.  API-claiming denominator **593 -> 597**,
+  unresolved 0.
+
+---
+
+### Follow-up group (same work package, after the element sweeps landed)
+
+### Fixed -- JAX asymptotic twin: two `where` fills silently made a real phase complex
+
+`lumenairy/propagators/asymptotic_jax_twin.py`'s `_modal_field_lg00_pixel_jax`
+filled two guarded `jnp.where` branches with the Python literal `0.0 + 0.0j`.
+A Python complex is WEAKLY typed in JAX, so the fill promotes the whole `where`
+to complex whenever the other branch is REAL -- and `phi_star` is real
+(measured float64 on the x64 path).  Both fills are now dtype-matched
+(`jnp.zeros((), x.dtype)`).
+
+MEASURED under `jax.jit`, x64 enabled:
+
+| operand | before (`0.0 + 0.0j`) | after (`zeros((), dtype)`) |
+|---|---|---|
+| `b_quad` complex64 / complex128 | unchanged | unchanged |
+| `phi_star` float32 | **complex64** | **float32** |
+| `phi_star` float64 | **complex128** | **float64** |
+
+Values are preserved on every branch, and the end-to-end float64 output of
+`propagate_modal_asymptotic_lg00_jax` is **bit-identical** (`np.array_equal`
+True, `max|diff| = 0.0` on the Y3 9x9 fixture) -- so this is a dtype-contract
+fix with no numerical change.
+
+Corrects the characterisation in the finding as reported: the literal does not
+force complex128 on a complex64 iterate (weak typing prevents that); it forces
+real -> complex.  The site the existing pin caught (`safe_bquad`) was inert on
+this build because `b_quad` is already complex; the site it MISSED (`safe_phi`)
+was the live one.
+
+### Fixed -- the P1-NEW-4 pin could not see a wrapped call
+
+`tests/unit/test_v4_14_2_dispatcher_pin_zero_plus_zeroj.py` scanned line by
+line with a regex requiring the `where` call and its fill on the SAME line, so
+
+```python
+safe_phi = jnp.where(jnp.isfinite(jnp.abs(phi_star)), phi_star,
+                     0.0 + 0.0j)
+```
+
+was invisible to it -- and stayed invisible from v4.14 to v5.45, two lines
+below a site the pin did catch, on nothing but where the line broke.
+
+A structural (AST) pass now runs beside the regex and the two are UNIONED, so
+the regex's behaviour is unchanged and the walk only adds sites it was blind
+to.  It matches any `*.where(cond, value, <literal complex zero>)` regardless
+of line breaks, treats `0j` / `0.0j` / `0.0 + 0.0j` as one rule via
+`ast.literal_eval`, and -- being structural -- cannot match inside a comment or
+a string at all.  Two stated exemptions: a NON-ZERO sentinel such as
+`1.0 + 0.0j`, whose value is load-bearing and for which `zeros((), dtype)` is
+not the migration; and a call whose value branch is itself a literal complex
+constant, where the array is complex by construction and there is no operand
+dtype to preserve.
+
+`test_the_structural_walk_has_teeth` pins the behaviour on eight synthetic
+sources, asserting each row's premise (what the regex sees) as well as its
+verdict.  The file goes **239 -> 247 ids**.
+
+It found one further site, `elements/doe.py:539`
+(`T = np.where(inside, T, 0.0 + 0j)`), rated **P3 by measurement**: on that
+branch `T` is complex128 unconditionally (the phase is built from Python float
+literals), so nothing is promoted on any reachable call.  It is recorded in the
+pin's own `_P3_ALLOWLIST` with that measurement and the one-line migration
+written at the entry.
+
+### Fixed -- architecture: the fourth lens import cycle is gone
+
+`lumenairy/elements/_lens_thin.py` took `CUPY_AVAILABLE` and its CuPy helpers
+from `.lenses`, which imports `_lens_thin` back.  It now takes them from
+`lumenairy/backend/_optional.py`, a leaf, keeping the PEP 562 `cp` forward
+pointed at the same shared lazy slot.  MEASURED with a module-level-only AST
+walk over the lens family: **4 -> 3** module-level 2-cycles, and the six
+thin-element entry points plus a complex64 case are bit-identical.  No public
+API changed -- `lenses` still re-exports every name.
+
+### Fixed -- the staggered PMM 2-D shared-grid advisory points at the caller
+
+`PMM2DStackPure.solve`'s deferred advisory reached the warning through one
+extra helper, so at the default `stacklevel=3` it reported at
+`stack2d_pure.py`'s own line instead of at the user's `solve()` call.  It now
+passes `stacklevel=4`.  The advice is about a ~1000x cost cliff, so a caller
+who cannot see WHICH call is expensive cannot act on it.  Pinned by a new
+`test_the_deferred_path_reports_at_the_callers_line` (that file: 6 -> 7 ids),
+which fails on the pre-fix spelling.
+
+### Changed -- three history blocks that were CODE, not comments
+
+The WP-A17 element sweep could not take these, because changing any of them
+moves both of a module's fingerprints:
+
+* `elements/eme/eme_diffraction.py` -- the zero-norm refusal's user-facing
+  message carried "this used to surface as an opaque 'SVD did not converge'
+  LinAlgError".  It now states, in the present tense, what the guard prevents.
+* `elements/pmm/stack.py` -- the per-layer `stabilize='slices'` refusal quoted
+  and retracted its own earlier wording; it now states the corrected fact
+  positively.  Every operative instruction is unchanged in both.
+* `elements/pmm/_core.py` -- `_ARCHIVE_SLANT_FOLD`, a ~50-line module-level
+  raw-string constant archiving a superseded slant treatment, was parsed and
+  bound on every `import lumenairy` and read by nothing (verified: no code,
+  test or `__all__` entry referenced it).  Its text moved verbatim into
+  `docs/history/lumenairy.elements.pmm._core.md` and the two comments that
+  named it now name the document.  `__all__` is byte-identical and exactly one
+  module-level name was removed.
+
+Each retired wording is reproduced verbatim in the module's history document
+under its pre-relocation line number, and every affected module's fingerprints
+were re-recorded in the same change with
+`scripts/record_history_fingerprints.py --reason ...`.
+
+### Fixed -- the history checker's falsifiability arm could run out of targets
+
+`tests/unit/test_audit2609_a17_history_relocation.py`'s third mutation
+re-spells an integer literal to prove the token fingerprint sees what the AST
+folds away.  `lumenairy/_context.py` contains no integer constant at all
+(measured), so the arm failed with "no small integer literal found to
+re-spell" -- reporting the module as suspect when the catalogue had simply run
+out of targets.  It now falls back to flipping a string's quote style,
+skipping docstrings (which both fingerprints ignore by design) and any string
+where the flip would not be value-preserving.  That file is now fully green:
+**708 passed**.
+
+<!-- WP-A23: CI kernel census re-recorded -->
+### Fixed -- CI kernel census: the committed table had gone stale under a default change, and the consistency gate said so
+
+`tests/unit/test_ci_kernel_consistency.py::test_this_arm_agrees_with_the_committed_census`
+was RED: the census (recorded 2026-09-11, commit `da377e0b`) records
+`sliver/pmm1d@1e-05` as `wrong` on all ten measured arms, while every arm on
+this tree read the eight 1-D rows `correct`, and two `pmm1d_interface/warned@`
+rows took `warn` at answer class `correct` — a decision the census's rule table
+forbids.  The gate was working: it is built to fail when the table stops
+describing the library.
+
+**The cause was measured, not attributed.**  Audit finding G2 (WP-A12,
+`56a76f22`) raised `elements/pmm/stack.py::_MIN_FEATURE_DEFAULT_FRAC` from
+`period*1e-5` to `period*1e-3`.  The census's 1-D fixture is a cross-layer wall
+pair 1e-04 / 1e-05 of a period apart and did not pin `min_feature`, so the new
+default — two decades above both separations — snapped both pairs to
+coincidence: the two layers become geometrically identical and the
+ill-conditioned interface every row in that section is about ceases to exist.
+Flipping only that constant in process, in one interpreter, and back again:
+
+| `min_feature` | `rcond` @1e-04 | `rcond` @1e-05 | `max(R+T)` @1e-05 | class | sliver guard |
+|---|---|---|---|---|---|
+| `period*1e-5` (the census's) | 9.6940e-11 | 9.7297e-13 | **3.6124215325** | wrong | refuse |
+| `period*1e-3` (shipped) | 4.2942e-04 | **5.2104e-04** | **1.0000000000000628** | correct | return |
+
+Nine decades of `rcond`, reversible in process, with the band and branch-cut
+sections byte-identical across the flip as the control.
+
+**The repair, and it is a hardening, not a relaxation.**
+
+* `validation/probe_ci_kernel_sweep/probe_decisions.py` now **pins**
+  `min_feature = period*1e-5` as a fixture parameter (`_1D_MF_PINNED`) — the
+  same remedy WP-A12 applied to its three inherited fixtures and VERIFY-A12
+  applied to the mortar round-2 rationale test this section exists to mirror.
+  The fixture is ill-conditioned again, which is strictly harder.
+* The **shipped default is censused beside it** under a new `@mf-default` tag,
+  so the next default change is a row rather than an erasure.
+* `pmm1d_interface/warned@` now measures the **energy tripwire** — the voice
+  its own comment always named — instead of "did any warning come out".  G2
+  also added a deliberate geometry notice (`_pmm_union_grid: snapped N
+  pair(s)`) that speaks on a correct answer; counting it as a warning made the
+  census report a guard crying wolf when no guard had spoken.  The
+  answer-independent voices get their own row, `pmm1d_interface/notices@`.
+  **The rule table is byte-identical**: a correct answer still may not be
+  warned about.
+* Environment advisories (a `RuntimeWarning` saying a package is "not
+  installed") are classified separately and kept out of every decision, with
+  the count retained as a reading.  Measured: the WSL build here raises
+  `memory.py`'s "psutil not installed" three times per solve and Windows zero,
+  which would otherwise have made two builds disagree on a row with no answer
+  class.
+
+`tests/unit/test_ci_kernel_consistency.py`: **7 ids (one failing) → 8 ids, all
+passing**, 2.45 s.
+
+### Changed -- the kernel census is re-recorded, dated, and carries its own provenance
+
+`validation/probe_ci_kernel_sweep/decisions.json`: **12 arms → 24**, now in
+three explicit kinds, so an archived reading can never again be mistaken for a
+current one:
+
+* **12 LIVE** arms measured 2026-09-12 on `audit-fixes-2026-09` `2622449f` —
+  2 builds × 5 OpenBLAS kernels (SkylakeX / Haswell / Sandybridge / Nehalem /
+  Katmai) × 2 thread widths, each carrying its date, its tree, the library
+  version and the `min_feature` default it measured;
+* **11 HISTORICAL** arms — the 2026-09-11 census, **kept and marked, not
+  deleted** (`"historical": true`, re-keyed `<arm>@2026-09-11`, with the tree
+  and the reason).  Not one measured value in them was touched.  They are the
+  only evidence of a host that could not execute AVX-512, and the before-side
+  of the change above;
+* **1 SYNTHETIC** arm — the transcribed CI runner, unchanged.
+
+`test_ci_kernel_consistency.py` gained the requirement that stops this
+recurring: the coverage spans stay asserted of every arm that was RUN, and a
+second, **freshness** requirement is asserted of the LIVE arms alone (at least
+six, two kernels, two widths, all recorded on the tree the file names).  A
+requirement an archived arm can satisfy is satisfied forever, which is how the
+old table kept passing while its rows described a library that no longer
+existed.  `merge_arms.py` refuses a historical arm with no date, and an arm
+marked both historical and synthetic.
+
+### Added -- the census can name its own BLAS kernel without `threadpoolctl`
+
+`probe_decisions._arm_id` falls back to reading `openblas_get_corename()` out
+of the loaded library with `ctypes` when `threadpoolctl` is unavailable —
+the same runtime-dispatch read-back `threadpoolctl` performs, so the census's
+"measured, not requested" invariant is untouched.  This matters on two
+machines the census has to speak about: the GitHub runner (which is why the
+transcribed arm is called `CI-unknown-t1`) and this workstation, where a
+declared core dependency is simply not installed.  Without it four different
+kernels all want the same arm key and the census's kernel axis collapses
+exactly where it is meant to discriminate.  Wheel symbol spellings measured:
+`scipy_openblas_get_corename` (scipy's LP64 build) and
+`scipy_openblas_get_corename64_` (numpy's ILP64 build); the unmangled name is
+absent from both.
+
+### Fixed -- the 2026-09-11 OPEN item: why the CI runner answers these fixtures correctly
+
+`docs/audits/CI_PREMISE_GATES_2026_09_11.md` §2 recorded as **OPEN** why the CI
+runner solves the ill-conditioned 1-D interface correctly where every local arm
+got it wrong, having ruled out the thread width, the numpy version and the OS —
+and having been unable to rule the BLAS micro-kernel either way, because the
+2026-09-11 host could not execute the AVX-512 kernels at all (SIGILL).  On an
+AVX-512 host it is reproducible:
+
+| arm | `R+T` @1e-04 | `R+T` @1e-05 | class |
+|---|---|---|---|
+| CI runner (transcribed, 5.45.0 matrix) | 1.0000003658397656 | 1.0000010471871335 | correct |
+| **`WSL-SkylakeX-t4`** (measured 2026-09-12) | **1.0000003658397656** | **1.0000010471871335** | correct |
+| `WIN-SkylakeX-t1`, same silicon | 1.0000004784011818 | **3.6124215324602997** | wrong |
+
+**Bit for bit on both readings, over two independent runs.**  So the CI arm is
+a Linux + AVX-512 arm; the divergence is a micro-kernel effect after all; and
+the campaign now has a local reproduction instead of a transcription.  The
+premise gates in six test families that cite this divergence were re-measured
+on this tree and **all still hold** (268 passed, 2 skipped, 0 failed over 20
+files; neither skip is the census divergence).  Two audit documents now carry
+premises that are refuted rather than merely unproven — the runner being AMD
+EPYC 7763, and "the local default arm IS the CI kernel" — and the corrections
+are recorded in `test_ci_kernel_consistency.py`'s docstring.
+
+### Added -- `tests/unit/test_audit2609_a23_census_mechanism.py`
+
+Five tests pinning the finding so it cannot recur silently, split the way
+`CI_PREMISE_GATES` §3 requires: the geometry — the raised default snaps the
+fixture, `rcond` moving nine decades and the union grid saying so — is
+**unconditional**, because no BLAS kernel takes part in comparing two floats;
+only the claim that the pinned fixture reads WRONG *here* is premise-gated,
+measured, and skipped with its reading on an arm of the CI class.  Verified to
+skip rather than fail.
+
+---
+
+**Files:** `validation/probe_ci_kernel_sweep/{probe_decisions,merge_arms,make_ci_arm}.py`,
+`arms/*.json` (11 marked historical, 12 new live, 1 regenerated),
+`decisions.json`; `tests/unit/test_ci_kernel_consistency.py`;
+**new** `tests/unit/test_audit2609_a23_census_mechanism.py`; a dated docstring
+note in the eight premise-gated files that cite the `3.61` / `1.000115` kernel
+readings (`test_audit2609_a12_pmm1d.py`, `test_audit2609_a12_verify_pmm1d.py`,
+`test_fix_pmmstack_sliver_round3.py`, `test_fix_pmmstack_sliver_round4.py`,
+`test_fix_pmmstack_sliver_walls.py`, `test_fix_pmmstack_sliver_walls_round2.py`,
+`test_verify_pmmstack_sliver_round2.py`, `test_verify_pmmstack_sliver_walls.py`)
+— docstrings only, no assertion, bar or fixture touched.
+
+**Nothing under `lumenairy/` was changed.**
+
+### Changed -- CI kernel census: re-recorded with `threadpoolctl` installed; the probe's threadpoolctl branch now records the per-library table
+
+`threadpoolctl` -- a declared core dependency that was absent from this workstation for the
+whole campaign -- was installed at campaign close, as WP-A23 section 7 asked, and the six Windows
+live arms were re-recorded through it (`validation/probe_ci_kernel_sweep/arms/win_live_AUTO_t1.json`
+and its five siblings; `validation/probe_ci_kernel_sweep/decisions.json` re-merged, exit 0).  Every
+one of the 61 decisions, 12 classes and 30 readings per arm is bit-identical to the ctypes-era
+recording, the arm names are unchanged, and `kernel_source` now reads `threadpoolctl` instead of
+`ctypes(openblas_get_corename)`.  The first re-run exposed a defect in the branch no host had been
+able to execute: `_arm_id`'s threadpoolctl path recorded the kernel and thread width but left
+`blas_libraries` empty, where the ctypes fallback fills one row per loaded BLAS build.
+`validation/probe_ci_kernel_sweep/probe_decisions.py` now records the same table from
+`threadpool_info()` (library basename -> corename, thread width; OpenMP runtimes ignored), and
+`tests/unit/test_audit2609_a23_census_mechanism.py` pins the branch with a synthetic
+`threadpool_info` (fail-before: the pre-fix probe returns `{}`).  The six WSL arms keep their
+ctypes-era recording (that environment has no threadpoolctl) and `merge_arms.py` accepts the mixed
+provenance.  `set_blas_threads` / `rcwa_blas_threads` are live on this box for the first time; the
+13 census tests pass.
+
+<!-- WP-A17: History relocation (part 1: carrier chain, FFT layer) -->
+### Changed -- propagators: version-history narrative moved out of `carrier.py`, `carrier_field.py` and `fft_infra.py` into `docs/history/`
+
+Audit `AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11` finding **P2-4**
+(`TESTS-ARCH.md`) / consolidated report **§14 V6** and **§15.7** measured the
+carrier and FFT-infrastructure modules at 32-37 % *git history* — blocks shaped
+"v5.xx (audit X): pre-fix this did A, which was wrong because B; now it does C".
+Those blocks are now in three new documents, reproduced **verbatim** under the
+source line they came from, with a table of contents in original-line order:
+
+* `docs/history/carrier.md` (35 blocks, 534 prose lines)
+* `docs/history/fft_infra.md` (43 blocks, 372 prose lines)
+* `docs/history/carrier_field.md` (5 blocks, 41 prose lines)
+
+Line counts: `carrier.py` 11 602 → 11 275, `fft_infra.py` 2 678 → 2 501,
+`carrier_field.py` 1 857 → 1 852.  Measured history share (the audit's own
+`tokenize` classifier): `fft_infra.py` 34.8 % → **13.3 %**, `carrier.py`
+35.8 % → **30.5 %**, `carrier_field.py` 20.2 % → **14.9 %**.  Measured on the
+strict form the finding actually names — an explicit `vN.N (`, `pre-fix`,
+`used to`, `formerly`, `previously`, `was wrong` — the reduction is larger:
+**−80 %**, **−79 %** and **−38 %** of those lines respectively.
+
+**No behaviour changed, and that is proved rather than asserted.** For every
+module the SHA-256 of (a) its AST with all docstrings removed and source
+positions ignored and (b) its `tokenize` stream reduced to NAME/OP/NUMBER/STRING
+with comments and docstrings dropped are **identical** before and after.
+
+What stayed in the source: every derivation of a live numeric bar
+(`docs/TESTING_STANDARDS.md` S5 requires one), every live deprecation and
+migration statement, and a condensed why-comment plus a pointer to the history
+document wherever the rationale is load-bearing for the current behaviour.  What
+moved: superseded derivations of constants that have since been re-measured
+(`_FINE_GRID_WORK_ARRAYS` alone carried four, 4 → 16 → 20 → 22 → 24), and
+comments correcting earlier *comments*.
+
+### Fixed -- propagators: four comments that stated the opposite of the code beneath them
+
+Audit §15.7 ("a stale comment is worse than none").  Documentation-only; no
+executable change:
+
+* `fft_infra.warmup_fft_plans` — the `threads` parameter documented a default of
+  `available_cpus()`; the audit-F-32 fix had already changed the call site to
+  `FFTW_THREADS` and the doc had not followed.  Getting this wrong makes a
+  warm-up build plans under a key the runtime never queries — a silent no-op.
+* `carrier._sphere_parab_conversion` — "…while the untapered swap breaks a
+  coarse chain", a claim the flag note 30 lines above already re-derives as a
+  mis-citation of a measurement that says the opposite.
+* `carrier._fourier_upsample_crop` — the dtype-parity promotion's stated premise
+  ("numpy's FFT is double-only") lapsed at numpy 2.0; the comment now states
+  only what the promotion does today.
+* `fft_infra._PYFFTW_DOUBLE_BUFFER` — priced the single-buffer copy at "~1-3 %
+  of a large transform"; the byte-cap note 40 lines below measures it at ~65 %
+  of the transform at N = 8192.
+
+### Added -- `tests/unit/test_audit2609_a17_history_relocation.py`: a reusable behaviour-free gate on documentation-only edits
+
+19 tests.  Each `docs/history/*.md` header records the module it came from and
+the two pre-relocation fingerprints; the test re-computes both from the live
+file on every run, so an edit that changes behaviour while claiming to be
+history-only fails here.  The registry is discovered from the documents
+themselves, so WP-A17 part 2 extends the gate by adding its documents — no
+change to the test file.
+
+Two fingerprints rather than one, because they catch different things: the AST
+fingerprint sees a statement being deleted, added, reordered or re-spelled but
+folds `5` and `0x5` to the same `Constant`; the token fingerprint sees the
+literal's *spelling*.  `test_the_fingerprints_are_actually_sensitive` proves
+both are live by mutating an in-memory copy of each module three ways —
+delete a statement (AST must move), rename an identifier (both must move),
+re-spell an integer to the same value (token must move, AST must **not**) —
+with every mutation anchored on a real AST node so it cannot land in a comment
+or docstring and pass vacuously.
+
+### Known issue (pre-existing, not introduced here)
+
+`tests/unit/test_v5_2_walker_pep562_forwarding.py::test_v14_every_mutable_fft_infra_global_is_in_live_forward_names`
+fails: `_PYFFTW_FIRST_FFT_THREAD` and `_PYFFTW_SHARED_BUFFERS_UNSAFE` (added by
+WP-A5 / audit K4) are rebound at runtime but are not listed in
+`propagation._LIVE_FORWARD_NAMES`, so `propagation.X` returns the stale
+import-time snapshot after the multi-thread latch flips.  Confirmed pre-existing
+by running the walker against the unmodified baseline file.  The fix — two names
+added to `_LIVE_FORWARD_NAMES` in `lumenairy/propagators/propagation.py` — is
+outside WP-A17's ownership and is recorded in `WP-A17_REPORT.md` §6.
+
+### Migration
+
+None.  No public API, default, signature or numeric result changed.  Readers
+looking for the rationale behind a past change will find it in
+`docs/history/<module>.md`, indexed by the source line it used to occupy.
+
+<!-- WP-A17_SWEEP1: History relocation sweep 1 (propagators, analysis, sources) -->
+### Changed -- documentation: version-history narrative moved out of
+`propagators/` (non-lens), `analysis/` and `sources/`
+
+The "vN.N (audit X): pre-fix this did A, which was wrong because B; now it
+does C" passages were relocated **verbatim** from 38 modules into per-module
+documents under `docs/history/`, leaving a pointer in the source only where
+the old rationale still explains present behaviour (audit P2-4 / sec. 14 V6).
+This is the library-wide continuation of the WP-A17 part-1 relocation
+(`propagators/carrier.py`, `carrier_field.py`, `fft_infra.py`).
+
+Comments on live guards that explained themselves by naming the release that
+added them ("Pre-4.10 this silently ...") were **rewritten in the present
+tense** rather than deleted: the hazard each guard prevents is still reachable,
+so the source now states it as what goes wrong WITHOUT the guard, with every
+measurement kept, and the original wording is recorded in the module's
+document.
+
+**Zero executable change.**  Every one of the 38 modules is byte-for-byte
+identical to its pre-relocation self under both fingerprints the checker
+records -- the docstring-free AST and the comment-free/docstring-free token
+stream -- verified by
+`tests/unit/test_audit2609_a17_history_relocation.py`.
+
+Measured over the 38 modules: 39 239 -> 38 575 source lines; "history" lines
+by the audit's own loose classifier 11 925 -> 10 556; by the strict "pre-fix
+this did A" classifier the finding actually names, 8 901 -> 5 662 (-36 %).
+226 blocks, 2 074 prose lines, moved into `docs/history/*.md`; the condensed
+rationale stays at the source sites.
+
+Measured derivations of live constants stayed in the source, as
+`docs/TESTING_STANDARDS.md` S5 requires: the `_SIGMA_GRID_N_MAX_DEFAULT` 7-rung
+accuracy/cost table and the W4-T1 chirp-Nyquist argument
+(`asymptotic_aberration_tensor.py`), the K18 source-area derivation and the
+W9-14 sampling-adequacy occupancy figures (`hfpi.py`), the W9-12
+`ray_subsample` two-arm measurement (`system.py`), the 2-shift-fold and
+audit-P1 DC-anchor derivations (`asm.py`), the W6-A2 scale-relative
+convergence argument (`asymptotic_maslov.py`), the W6-A11 grid-corner
+fingerprint proof (`asymptotic_modes.py`) and the `bandlimit`-costs-five-decades
+measurement (`rs.py`).
+
+### Fixed -- documentation: comments that stated the OPPOSITE of the code
+(sec. 15.7)
+
+* `analysis/detector.py` -- the banner above the detector-integration block had
+  been appended to three times without being edited and described **three
+  different algorithms in sequence**, two of which name a `scipy.ndimage.zoom`
+  path this module has not used since 4.10 (`scipy.ndimage` is not imported;
+  `zoom` appeared nowhere outside that comment).  It now states what the two
+  live branches do, and keeps the dimensional argument against point-sampling
+  interpolation as a do-not-do-this.
+* `propagators/asymptotic_modes.py` -- `_lg_mode_conj_stack`'s docstring opened
+  by naming the grid ORIGIN as its cache key, two paragraphs above the
+  paragraph explaining that the origin is not enough.  The key is now stated
+  once, with the `indexing='xy'` / `indexing='ij'` collision that forced the
+  three-corner fingerprint.
+* `sources/core.py` -- `PartialCoherenceMCF`'s "deferred to v4.16+",
+  `Source.gaussian_schell`'s "MCF-aware downstream propagators are not in
+  v4.15.x scope", and the promise of "a future `Source.realizations()`
+  per-realization iterator ... in scope for v4.16+".  The library is at v5.46;
+  none shipped, and `lumenairy/_validation.py` still refuses a
+  `PartialCoherenceMCF` at every propagator entry point.  All three now state
+  the live limitation.
+
+### Changed -- tests
+
+* `tests/unit/test_niche_audit_w4_input_kind.py` --
+  `test_shack_hartmann_declares_field_not_pupil`'s `assert 'superseding' in
+  src` required `analysis/detector.py` to keep the v5.32 retraction of its own
+  v4.15.5 `Input kind: 'pupil'` gloss.  With the gloss itself relocated there
+  is nothing left to contradict, so the assertion tightens to the stronger
+  pair: the superseded claim must be ABSENT and the live declaration
+  (`input_kind='field'`, not 'pupil') must be stated.
+
+### Added
+
+* 38 documents under `docs/history/` (one per relocated module, named by the
+  dotted module path because basenames collide across packages), each carrying
+  the module's two pre-relocation fingerprints, a line-ordered table of
+  contents, and every moved block verbatim under the source line it came from
+  with a *Left in the source:* note.
+
+---
+
+**Module list (38).**  `lumenairy/propagators/`: `asm.py`, `asymptotic.py`,
+`asymptotic_aberration_tensor.py`, `asymptotic_canonical_fit.py`,
+`asymptotic_jax_twin.py`, `asymptotic_maslov.py`, `asymptotic_modes.py`,
+`dispatch.py`, `ensemble.py`, `fresnel.py`, `hf.py`, `hfpi.py`, `mft.py`,
+`mhs.py`, `result.py`, `rs.py`, `sas.py`, `subaperture.py`, `system.py`,
+`vector_diffraction.py`, `vectorial_hfpi.py`.
+`lumenairy/analysis/`: `aberration.py`, `ao.py`, `beam_stats.py`,
+`coherence.py`, `coronagraph.py`, `detector.py`, `field.py`, `ghost.py`,
+`image_plane_wfe.py`, `interferometry.py`, `opd.py`, `phase_retrieval.py`,
+`psf_mtf_otf.py`, `strehl.py`, `through_focus.py`, `zernike.py`.
+`lumenairy/sources/core.py`.
+
+<!-- WP-A17_SWEEP2: History relocation sweep 2 (elements) -->
+### Changed -- elements: version-history narrative moved out of the source into `docs/history/`
+
+Thirty modules under `lumenairy/elements/` (the PMM, RCWA-stack, BOR, EME,
+Berreman, polarization, thin-element, DOE, coating, BSDF and geometry families)
+carried `vN.NN (audit X): pre-fix this did A, which was wrong because B; now it
+does C` narrative, multi-round `ROUND 2 / ROUND 3 / UPDATE 2026-08-xx`
+chronologies, and comments that quote and retract an earlier revision of
+themselves.  All of it moves **verbatim** into one `docs/history/<dotted module
+path>.md` document per module (182 blocks, 4 078 lines of documentation), under
+the source line it came from, with a line-ordered table of contents and a
+*Left in the source* note per block.  Where the rationale is load-bearing for
+what the code does now, the source keeps a condensed why-comment plus a pointer
+to the document.
+
+Measured over the thirty modules: source 42 100 -> 41 765 lines; the audit's
+loose history classifier 8 091 -> 7 627 lines; its strict
+"pre-fix this did A" classifier 4 614 -> **2 042** (-56 %); and narrative
+trigger lines (`pre-fix`, `used to`, `formerly`, `previously`, `the old`,
+`was wrong`, `historical`, `retracted`, `superseded`, excluding the bare
+`vN.NN (audit X)` provenance tag) 231 -> **81** (-65 %).
+
+**Zero executable change**: every module's docstring-free AST fingerprint and
+its comment-free / docstring-free token fingerprint are byte-identical to the
+pre-relocation file, pinned by
+`tests/unit/test_audit2609_a17_history_relocation.py`, which discovers the new
+documents automatically.  The 31 test files that assert on this partition's
+source or docstrings run green unchanged (1 267 passed, 6 skipped, 0 failed);
+no prose assertion was retired and no test file was modified.
+
+### Fixed -- elements: comments that stated the opposite of the code or of the repo
+
+Seven sites where a comment contradicted the code beneath it, the truth
+elsewhere in the repo, or a correction printed a few lines below it:
+
+* `pmm/stack.py` `PMM_SLIVER_GUARD` -- "the guard changes nothing on any solve
+  that does not trip BOTH conjuncts" described round 1.  The trigger has been
+  the geometric screen alone since round 4.
+* `polarization.py` module docstring -- "CONVENTIONS.md section 7 still calls
+  this row `Born-Wolf` and should be relabelled".  `CONVENTIONS.md` line 159
+  already reads "IEEE / right-hand-rule".
+* `bor/bor_solve.py` `_BOR_NODAL_SUPERUNITY_WARN` -- the bar claimed
+  "3.71 decades above the healthy ceiling"; the binding two-sided margin,
+  measured ten lines below, is **0.57 decades**.
+* `bor/_sem_contract.py` `_BOR_Q_EXCESS` -- a two-sided margin ("0.95 decades
+  above the worst ordinary geometry") that the conjunction can never reach.
+  The honest one-sided margin is 1.20 decades below the mildest damaging rung.
+* `bor/_sem_contract.py` `_BOR_SLIVER_BAND_FRAC` -- the ordinary margin is
+  **1.003x** (graded hp refinement), not the 9.77x stated above it.
+* `bor/_orient.py` `orient_band_scale` -- the two-sided population table prints
+  `0.98 dec` for the thin SIGNAL end; the union minimum is **0.38 decades**.
+* `pmm/_core.py` `_MORTAR_RESID_REFUSE` -- "rank-deficient by construction
+  whenever ONE side is promoted", which reads as "either side"; the mechanism
+  needs an ASYMMETRIC interface (EXACTLY ONE promoted side), and with BOTH
+  promoted the operand is healthy by five decades.
+
+No behaviour change: all seven are comment/docstring text and are covered by
+the identity gate above.
+
+### Added
+
+* `docs/history/lumenairy.elements.*.md` -- 30 documents (one per relocated
+  module), each carrying the module's two pre-relocation fingerprints, its
+  pre-relocation line count, a line-ordered table of contents, and every moved
+  block verbatim.
+
+**Migration note:** none.  No public API, default, message or numeric result
+changes.  A reader looking for the rationale behind a guard finds a condensed
+why-comment plus the `docs/history/` pointer at the site; the full
+round-by-round record is in that document, and `git log -S` on any phrase in it
+still lands on the commit that wrote it.
+
+<!-- WP-A17_SWEEP3: History relocation sweep 3 (root, io, optimize, raytrace, ui, backend) -->
+### Changed -- source comments: version history moved to `docs/history/`
+
+- **`lumenairy/*.py` (except `__init__.py`, `memory.py`), `io/`, `optimize/`,
+  `raytrace/`, `ui/` (except `lens_options_dialog.py`), `backend/` (except
+  `backend/__init__.py`), `_math/`, `algebra/` — version-history narrative
+  relocated out of the source** (audit 2026-09-11, finding **P2-4** /
+  consolidated report **§14 V6**).  94 modules changed, **68 900 → 68 577
+  lines**; the audit's own history classifier reads **9 350 (13.6 %) → 5 799
+  (8.5 %)**, and a per-line count of the shapes the finding actually names
+  (`vN.N (`, `pre-fix`, `used to`, `formerly`, `previously`, `the old`,
+  `was wrong`, `no longer`, `historically`) reads **843 → 158 (−81 %)**.
+  444 blocks are reproduced **verbatim** in 45 new documents under
+  `docs/history/`, each under the source line it came from, each with a
+  *Left in the source:* note saying which half of the rationale stayed and
+  why.  A further 287 one-line release TAGS carrying no narrative (111 of
+  them the same three lines of `v5.4.3 (audit GUI-resize)` /
+  `v5.4.4 (audit GUI-resize round 2)` boilerplate repeated across the UI dock
+  family) were stripped in place; the complete verbatim before/after list is
+  in the WP report.  **No executable change:** the docstring-free AST and the
+  comment-free, docstring-free token stream are byte-identical on all 111
+  modules in the partition, enforced by
+  `tests/unit/test_audit2609_a17_history_relocation.py`.
+
+- **`lumenairy/_deprecation.py` 688 → 619 lines** — the largest single
+  relocation, and the clearest instance of the pattern §14 V6 names: three
+  running logs had accumulated inside the module (a five-entry
+  horizon-slip log on `NEXT_REMOVAL_VERSION`, a shim-removal execution log,
+  and two registry tombstones), each release appending an entry and none
+  updating the one above.  All three now live in
+  `docs/history/lumenairy._deprecation.md`.  `NEXT_REMOVAL_VERSION` is
+  unchanged at `'5.48'`, `REMOVAL_SCHEDULE` and `API_TRANSITION_VERSION`
+  unchanged, and `check_removal_schedule()` still returns no violations.
+
+### Fixed -- comments that stated the opposite of the code (audit §15.7)
+
+- **`glass.py`** — the `get_glass_index` polynomial-fallback comment claimed
+  `POLYNOMIAL_COEFFICIENTS` was *"Empty at v4.16.2 ship; populating the 24
+  catalogue entries is staged for v5.2.1"*.  All 24 entries have been bundled
+  since v5.2.3 and `_POLYNOMIAL_STUB_NAMES` is an empty frozenset, so that arm
+  covers every registered formula-3 glass on a minimal install.  Comment
+  corrected.
+- **`glass.py`** — `_glass_value_cache`'s comment carried a parenthetical
+  correcting its own earlier *"femtometre"* wording.  The source now states
+  the key once, in picometres, with the expression that produces it.
+- **`raytrace/trace.py`** — `apply_doe_phase_traced`'s Notes corrected an
+  earlier version of the same docstring (*"the pre-R5 docstring's claim that
+  it 'neglects the cosine factor …' was itself inaccurate"*).  The source now
+  states the settled fact once: the direction-cosine form is exact for
+  in-plane diffraction, and the only approximation is the missing `1 / n2`.
+
+### Unchanged on purpose
+
+- Every **measured derivation of a live value** stayed in the source, as
+  `docs/TESTING_STANDARDS.md` S5 requires — the `_GLASS_VALUE_CACHE_SIZE`
+  65536 sizing argument, the wrapper-merit grid cache's 7.6 GB-at-N=2048
+  retention figure, the Zemax EVENASPH power derivation with its +2.8 mm
+  poc1-19/20 defocus, the Seidel sign conventions with their exact-trace
+  oracles, the grating `1 / n2` ratio 1.503583 = n(N-BK7), `deep_nbytes`'s
+  64× over-budget and 8000 B double-count, and the HDF5 compression
+  measurements.
+- Every **live migration statement** stayed — the `.. versionchanged:: 5.30`
+  blocks on `design_optimize` / `MatchIdealSystem`, `io/storage.py`'s
+  `compression='auto'` / `pre-v5.46` note, `optimize/context.py`'s one-cycle
+  `DeprecationWarning`, `_context.py`'s `install_atexit_restore` alias.
+- **`io/prescriptions_code_v.py`** was left entirely alone: its `pre-v5.46`
+  references describe a file dialect the reader still has to detect on disk,
+  which is a format-migration contract, not narrative.
+- **`optimize/core.py`** and **`raytrace/core.py`** were left entirely alone:
+  their comment blocks are a source-grep contract that five separate tests
+  depend on.
+
+### Migration
+
+None.  No public API, default, signature or numeric result changes in this
+sweep.  A reader looking for the rationale a comment used to carry will find
+it, verbatim and under its original source line, in
+`docs/history/<dotted.module.path>.md` — for example
+`docs/history/lumenairy.io.storage.md` for `lumenairy/io/storage.py`.
+
+### Note -- the `Tombstone, v5.30` label is back on the two executed deprecation-registry slots
+
+Sweep 3 moved the two tombstone passages of `lumenairy/_deprecation.py` into `docs/history/lumenairy._deprecation.md` and left the slots saying only that their entries had been EXECUTED.  `tests/unit/test_niche_audit_w4_p5_return_contract.py::TestTransitionMachineryIsRetired::test_the_executed_entry_is_tombstoned_in_the_registry` pins the literal label, so each slot now names its tombstone in the present tense -- `REMOVAL_SCHEDULE`: the `'5.27' -> '5.32'` source-factory kwarg entry, removed with the kwargs; `API_TRANSITION_VERSION`: `propagate()` returns a `PropagationResult` by default -- without re-importing the narrative (comment-only; the module's fingerprints are unchanged by construction).
+
+<!-- WP-A17_SWEEP4: History relocation sweep 4 (lens family, hygiene-pass files) -->
+### Changed -- documentation: version-history relocated out of the lens family, the RCWA/PMM hygiene files and the package roots (audit 2026-09-11, finding P2-4 / sec. 14 V6, sec. 15.7)
+
+The fourth and final version-history relocation sweep clears the partition the
+audit's census found densest: `elements/_lens_traced.py` (14 898 lines, 32.6 %
+classified history -- the largest module in the library), `_lens_real.py`,
+`lenses_maslov.py`, the rest of the lens family, `propagators/gbd.py` /
+`fga.py`, the RCWA/PMM hygiene files and the three package roots.
+**22 modules, 60 926 -> 60 707 lines; comments and docstrings only, zero
+executable change.**
+
+* **Strict version-history lines 263 -> 10 (-96 %)** across the partition,
+  where "strict" is the per-line count of the shapes the finding names
+  (`vN.N (audit …)`, `pre-fix`, `pre-4.10` / `pre-v5.29`, `used to say/claim/
+  read`, `formerly`, `was wrong`, `superseded`, `re-scheduled`, `retract`).
+  The residual 10 are all the English word *prefix* -- `CONVENTIONS.md`
+  Section 2 requires every error message to carry an `fn_name:` prefix -- which
+  `\bpre-?fix\b` matches by construction.
+* **88 blocks (863 source lines) moved VERBATIM** into **7 new documents**
+  under `docs/history/` (`lumenairy.elements._lens_traced.md`,
+  `._lens_real.md`, `.lenses_maslov.md`, `.lenses.md`, `._lens_jax.md`,
+  `lumenairy.propagators.gbd.md`, `lumenairy.memory.md` -- 1 895 document
+  lines), each under the source line it came from in the pre-relocation file,
+  with a line-ordered table of contents and a *Left in the source* note per
+  block.  Where the old rationale still explains present behaviour the source
+  keeps a condensed present-tense why-comment plus a pointer to its document.
+* **192 release tags stripped or rewritten in place** on otherwise-live why-comments, or
+  rewritten from "pre-fix this did X" into the present-tense hazard they
+  describe.  A `pre-fix` guard note that describes a hazard still reachable
+  today was rewritten, not deleted, with the original wording recorded in the
+  module's history document.
+* **What stayed**: every measured derivation of a live constant
+  (`docs/TESTING_STANDARDS.md` S5) -- the `_RD_HALO_*` 180-call calibration and
+  its 123x separation table, the `_FIT_DISC_OUTSIDE_WEIGHT_REL` sweep and its
+  niche-C2 envelope, the `_DECENTRE_GATE_*` table, the niche-C11 arbiter's
+  42-point validation, the Newton pool's 267.2 B/point commit sweep, the
+  `_GRAM_COND_MAX` conditioning numbers, the `lens_model='real'`
+  bytes-per-pixel solve -- plus every live migration statement
+  (`.. versionchanged::`, the CODE V / RCWA `formulation='li'` correctness
+  advisories, the `output_grid` -> `output_shape` deprecation) and the
+  fail-before switches.
+* **Behaviour-free, proved**: every one of the 22 modules is byte-identical to
+  its pre-relocation self under BOTH the AST fingerprint (docstrings and
+  positions removed) and the token fingerprint (comments and docstrings
+  dropped).  The splicer recomputes both and refuses to write on any drift, so
+  a mistake could not reach disk.
+
+### Added -- tests: a ratchet that stops the version-history backlog re-accumulating
+
+* `tests/unit/test_audit2609_a17_history_lint.py` (+ its committed baseline
+  `test_audit2609_a17_history_lint_baseline.json`, 122 modules / 688 lines,
+  measured on the finished tree).  The relocation checker proves each MOVE was
+  behaviour-free; it says nothing about the next comment somebody writes.  This
+  one counts the finding's own shapes per module over `lumenairy/**/*.py` and
+  **fails when any module's count grows**, listing the offending lines; a count
+  that shrinks passes and prints the re-baseline hint.  A module with no
+  baseline entry is held to 0, so narrative cannot enter through a new file.
+  Re-baseline with `python tests/unit/test_audit2609_a17_history_lint.py
+  --write` or `LUMENAIRY_HISTORY_LINT_WRITE=1 python -m pytest <file>`.
+  Falsifiability: `test_the_counter_actually_counts` (11 synthetic modules,
+  including the "executable string is behaviour, not prose" and "unparseable
+  file falls back to a whole-file count" arms), `test_the_ratchet_direction_is_
+  enforced` and `test_the_write_path_round_trips`.
+
+### Fixed -- tests: the V20 JAX root-pick parity pin is structural, not a grep
+
+* `tests/unit/test_v5_4_7_walker_v20_cross_backend_parity.py::
+  test_jax_intersect_direction_aware_root_pick_present` matched the forbidden
+  direction-blind selector as TEXT (`'t1 if R' not in src`), which a comment
+  quoting that selector trips -- the test already carried a hand-written
+  `str.replace` to hide one such comment from itself -- while a real regression
+  spelled `t1 if radius > 0` or `jnp.where(R_safe > 0, t1, t2)` passed
+  untouched.  The pin is now an AST match on the root-pick EXPRESSION: the
+  min-modulus `where(|t1| <= |t2|, t1, t2)` or the Spencer-Murty stable-
+  quadratic quotient must be present, and the direction-blind
+  radius-sign selector (in both its `IfExp` and `jnp.where` forms) must not be.
+  Two new falsifiability tests:
+  `test_the_root_pick_matcher_rejects_a_direction_blind_kernel` mutates each
+  REAL kernel in memory into exactly that regression (2 sites in
+  `_intersect_jax`, 1 in `_intersect_jax_param`) and requires the verdict to
+  flip on both counts, and `test_the_root_pick_matcher_is_not_a_text_search`
+  asserts both failure directions the text form had.
+
+### Migration
+
+None.  Comments and docstrings only; no public API, default, or numerical
+result changes.  Seven `docs/history/` documents are new
+(`docs/history/lumenairy.elements._lens_traced.md` and siblings), the source
+points at each one, and `scripts/record_history_fingerprints.py --check`
+covers all 123 documents green.
+
+### Not in this change, but found by it
+
+`tests/unit/test_niche_audit_w4_p5_return_contract.py::TestTransitionMachineryIsRetired::test_the_executed_entry_is_tombstoned_in_the_registry`
+is RED on the current tree: it pins the literal `Tombstone, v5.30` in
+`lumenairy/_deprecation.py`, which WP-A17 SWEEP 3 moved wholesale into
+`docs/history/lumenairy._deprecation.md` (0 occurrences in the source, 2 in
+the document; the test's other four phrases all survive).  `_deprecation.py`
+is not in this sweep's partition and is unmodified here.  Restoring the
+heading `Tombstone, v5.30 (EXECUTED)` on the surviving registry-slot comment
+fixes it without re-importing narrative -- the word is a present-tense
+description of what that entry is.
+
+<!-- WP-A18: Documentation -->
+### Added -- docs: `docs/subsystems/real_lens.md`, the living contract of the `apply_real_lens` family
+
+The first of the per-subsystem documents the audit recommends (section 14 V7: "archive
+`docs/audits/` by year and keep one living document per subsystem").  343 lines covering:
+the nine entry points and when to use each; the one invariant that binds them (the
+exit-vertex plane, audit section 15.1) with a runnable demonstration that a plano-convex
+singlet leaves its rays **0.118 mm** off the vertex plane; what every physics-affecting
+option of `apply_real_lens` and `apply_real_lens_traced` does NOW, with the measured
+envelope and the finding ID; the `tilt` key; how to choose a caustic mode; the router's
+frame-invariance fix; the **measurement recipe** (`dx ~ 1.45 * aperture / 2048` for an
+exit-OPL measurement -- at N = 512 a meniscus reads 557.8 nm of pure hard-edge aliasing
+through the in-glass ASM, converging to 0.03 nm by N = 2048); seven known limits; and a
+table mapping every claim to the test that pins it.
+
+The known-limits section records the two scope limits the verification passes found and
+did not close: `seidel_correction` on an **under-filled pupil** (f/2 biconvex: exit
+wavefront 268x better inside `rho <= 0.85`, focal peak ~37 % lower, best focus 8.2 DOF
+away -- and `rho_fit` does NOT separate that case from the 8 mm cemented doublet where
+the same flag is excellent, so no guard ships), and **FGA convergence through a real
+singlet** (intensity-rms width 12.721 um against `phase_screen`'s 3.269 um and the
+real-ray fan's 3.44 um, at tilt 0 as well as under tilt).
+
+Both code blocks in the file execute.
+
+### Changed -- docs: `CONVENTIONS.md` section 7 states the power convention, the implemented tilt convention and the Richards--Wolf pupil coordinate
+
+* **Power (audit L13).**  New table row + bullet: `sum(abs(E)**2) * dx * dy` **IS** the
+  optical power -- the propagators are Parseval-unitary and carry no impedance factor --
+  so any element crossing an index step must apply the POWER transmittance
+  `T = (n2 cos theta_t)/(n1 cos theta_i) abs(t)**2`, not `abs(t)**2`.  Measured
+  AIR -> N-BK7: 0.632344 against 0.958057 (and the closed form
+  `4 n1 n2/(n1+n2)**2` to 1.1e-16).  The convention `fresnel=True`'s fix depends on was
+  written down only inside `_lens_real.py`.
+* **Tilt (audit L2 / L19).**  The old row claimed
+  `tilt=(theta_x, theta_y, theta_z)`, a spelling **no consumer of that key has ever
+  implemented**.  It is replaced by the implemented convention: `tilt = (t0, t1)` IS the
+  linear sag ramp `t0*(x - dcx) + t1*(y - dcy)` added to the surface's z-departure, with
+  the correspondingly tilted normal; as a right-hand rotation pair, `theta_x = t1` and
+  `theta_y = -t0`.  The row names its five consumers (the `surface_frame=False` ramp,
+  the `surface_frame=True` rigid-body branch, `_disp_surface_z_grad`,
+  `raytrace/surface.py::_field_frame_sag_and_grad` and the lumenairy-free
+  `geom_spot_decenter_oracle`) and the cross-model pin
+  `tests/unit/test_niche_p9_decenter_tilt.py`.  A bullet after the table says explicitly
+  that a `(theta_x, theta_y, theta_z)` spelling describes the *coordinate-break* keys
+  `tilt_x_deg` / `tilt_y_deg` / `tilt_z_deg` one row down, which are a different key with
+  a rigid-frame meaning.  **No stored `tilt` value needs migrating.**
+* **Richards--Wolf `pupil` (audit K10 / K16).**  New row: indexed by the physical
+  exit-pupil (aperture) coordinate, NOT the projected ray direction; the two differ by a
+  point inversion -- invisible for a 180-degree-symmetric pupil, immediately wrong for
+  coma, tilt, a decentred sub-aperture, a segmented aperture or a metasurface pupil.
+* **Section 7.1 (audit G4/G13)** -- WP-A12's replacement text was reviewed and kept
+  unchanged; it already states the index ORDER explicitly (index 0 = x = p/tm at
+  `phi = 0`, index 1 = y = s/te) and `J[0,0] = -r_p`, which is what WP-A13 section 5.2
+  asked for.  Recorded in the file's own changelog so the decision is not re-litigated.
+* **Section 11 (audit H3 / G6)** -- records `rcwa_jones_2d(formulation='fff_nv')`'s new
+  validated-scope warning on a curved cell and its `allow_nonseparable_nv` escape, and
+  `pmm_jones_2d`'s new `formulation='auto'` with the observable-dependent accuracy
+  ordering (the docstring ordering is the REFLECTION one; on the TRANSMISSION retardance
+  `'li'` is the most accurate of the three at `n_orders >= 9`).
+* **Section 10 / new 10.1 (audit H5, V6)** -- `threadpoolctl` is a HARD dependency, not
+  an optional one (measured: a 1-D TM RCWA solve at `n_orders=81` takes 18.2 s unpinned
+  against 0.13 s at one thread), and process globals are scoped with
+  `lumenairy.override(**knobs)`, with the rule for registering a new knob.
+
+Every entry above is recorded in the file's "Changelog of this file" section.
+
+### Added -- docs: `Migration-Guide.md` gains the v5.46 audit-remediation section
+
+~650 lines, eleven area groups (analytic lens; traced lens and caustic siblings;
+Maslov / GBD / FGA and the asymptotic family; propagator kernels; traced-carrier chain;
+analysis metrics; thin elements and materials; polarization / sources / algebra / memory;
+rigorous grating solvers; I/O, prescriptions and the optimiser; designer UI and the lens
+library; packaging, configuration and public API).  Every note names its finding ID, the
+old and the new behaviour with the measured numbers, and the way back where one exists
+(`method='auto'` on `FreeSpace`, `min_feature=period*1e-5`, `symmetry=False`,
+`normalisation='legacy'`, `vector_projection=False`, `kernel='spatial'`, `thin_form=True`,
+`pad_sigma=0.0`, `dim_units=`, `compression='gzip'`, `r0 * 2**(-3/5)`, an explicit
+`standoff=`, an explicit `rng=`, `dtype=np.float32`, `on_undersample='silent'`,
+`integration_method='local_quadrature'`) -- and says so plainly where there is none
+because the old answer was simply wrong.
+
+The notes are taken in substance from the WP changelog files; nothing is invented.  The
+v5.2.0 `surface_frame` section gained a superseded-in-part banner pointing at the new
+section, and the stale "This guide covers v4.x" preamble was corrected.
+
+### Changed -- docs: README landing section, CODE V units, and the identifier sweep
+
+* A **Start here** table at the top routes the reader to the cookbook, the
+  Migration-Guide's v5.46 section, `CONVENTIONS.md`, the new subsystem document, the
+  audit report + per-partition reports + repro scripts + the resolution table, the
+  CHANGELOG and the ROADMAP -- with the power convention and the metres-everywhere rule
+  stated in two lines before the first call.
+* **CODE V units (audit I1, WP-A10 section 5.4)**: "units M/MM/IN" is corrected to
+  "units **M (mm) / C (cm) / I (inch)**, with `MM`/`CM`/`IN` tolerated as aliases on
+  read", and the entry now says that `DIM M` is CODE V's millimetre token, that files
+  lumenairy wrote before v5.46 carry SI metres under it and are detected and warned
+  about, and that `dim_units=` forces a reading.
+* The `LGAberrationMerit` cookbook block carries a v5.46 scale-change note pointing at
+  the migration note (the merit is now a dimensionless coupling and gained
+  `strehl_branch`).  The block was executed to confirm the constructor still accepts the
+  arguments shown.
+* **Non-resolving identifiers (audit V7 / P3-2).**  A resolver over every backticked
+  identifier in `README.md`, `ROADMAP.md`, `Migration-Guide.md` and `CONVENTIONS.md`
+  (1 952 occurrences / 1 055 distinct identifier-shaped tokens) against the CURRENT
+  package -- dotted paths, module attributes, class members, nested definitions, and a
+  static AST index for `lumenairy/ui/` (which needs PySide6) -- now reports **0
+  unresolved** of a 592-token API-claiming denominator, against 4 before this pass.  Of
+  the twelve identifiers the audit named, five already resolved against a deep module
+  (`_decompose_prescription`, `_detect_backend`, `_PROPAGATE_SYSTEM_JAX_CACHE`,
+  `_spawn_rng`, `_fd_grad_pure` -- the audit resolved only against `lumenairy` and its
+  nine subpackages) and are now cited by their module path where the bare name was
+  ambiguous; three are real kwargs (`return_kind`, `opl_fn`, `image_centres`); two are
+  `raytrace.Surface` fields (`world_origin`, `world_R`); `focus_fixed_sampling` is
+  **prysm's** API named as a comparison (now stated in the text, along with POPPY's
+  `apply_image_plane_fftmft`); `rcwa_1d` is documented as removed and the second
+  citation now says so and names `rcwa_efficiency_1d`; `fiber_mode` is a source-kind
+  string and is now quoted as one.  Four genuinely stale references were rewritten:
+  `row_reset` / `last_v_star` (a dead local name; now written as the
+  `maslov_tracking='row_reset'` option it describes),
+  `raytrace._intersect_surface` -> `raytrace.intersection._intersect_surface`,
+  `lumenairy.asymptotic` -> `lumenairy.propagators.asymptotic` in the feature list
+  (with the v5.0 relocation stated at the historical mention), and a test-class citation
+  replaced by prose.
+
+### Changed -- docs: `ROADMAP.md` leads with the audit backlog
+
+The file opened with "There is no open ROADMAP code-work as of v5.4.7" and a
+2026-05-30 date.  A new leading section dates it 2026-09-12, points at the audit report
+and the resolution table, and tabulates what remains after the v5.46 physics and data
+remediation with the audit's own effort estimates: the lens-family config objects (10 d),
+history blocks out of the source (5 d, -12 484 lines across six files), a leaf
+`elements/_lens_kernels.py` (3 d), docs consolidation (3 d -- started here), the pairwise
+covering array (3 d), `probe_*` out of `validation/` (2 d), the section 15.4
+consolidation targets and the section 15.9 alternative algorithms.  It also records the
+process rule the audit calls highest-leverage: an audit round may not add a new test
+file; it must strengthen the existing test for that kwarg or explain why one does not
+exist.  The historical v5.4.x content is kept below, unchanged.
+
+---
+
+**Files:** `README.md`, `Migration-Guide.md`, `CONVENTIONS.md`, `ROADMAP.md`, new
+`docs/subsystems/real_lens.md`.  No source file and no test file was modified.
+
+**Verification:** the repository's doc-reading tests -- **216 passed, 2 skipped, 1 failed**
+across `test_niche_p8_capstone.py`, `test_audit_v5_24_2_g01_conventions.py`,
+`test_v4_16_1_agent_d.py`, `test_v4_16_2_agent_d.py`,
+`test_v4_16_2_dispatcher_pin_doc_consistency.py`, the six `test_v4_15*` / `test_v4_16_3*`
+agent files, `test_g08_s4_20_packaging_ui.py`, `test_g10_s5_9_layerspec_tracked.py`,
+`test_v5_2_walker_changelog_changeset.py`, `test_v5_4_1_walker_scope_the_workaround.py`,
+`test_validation_helpers.py`, `test_v5_2_5_ao_closed_loop_residuals.py` and
+`test_audit2609_a12_pmm1d.py::test_g4_the_1d_jones_is_the_lab_cartesian_basis_and_jxx_is_minus_rp`.
+The one failure, `test_v4_16_3_agent_d.py::test_propagation_documents_multiprocess_fork_semantics`,
+reads only `.py` files and is **not attributable to this work package**: the
+`Multiprocess / fork notes` section it asserts on is present in
+`lumenairy/propagators/fft_infra.py` at `HEAD` and absent from the uncommitted working
+tree of that file, which another work package is editing.  Every fenced `python` block
+in the seven cookbook entries, the new subsystem document and the new migration section
+executes.
+
 ## [5.45.1] — 2026-09-12
 
 ### Fixed -- BOR: the forward-orientation band was scaled by the MODE'S OWN collapsing magnitude, so near a radial cutoff the R/T CHANNEL COUNT moved with the BLAS kernel and the thread count

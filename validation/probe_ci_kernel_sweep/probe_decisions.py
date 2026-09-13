@@ -877,11 +877,18 @@ def _arm_id():
     try:
         import threadpoolctl  # noqa: I001, PLC0415
         for d in threadpoolctl.threadpool_info():
-            if d.get("internal_api") in ("openblas", "mkl"):
+            if d.get("internal_api") not in ("openblas", "mkl"):
+                continue
+            # The same per-library table the ctypes fallback records, so an
+            # arm carries the loaded BLAS builds whichever instrument answered.
+            lib = os.path.basename(str(d.get("filepath") or d.get("prefix")
+                                       or d.get("internal_api")))
+            detail[lib] = {"corename": str(d.get("architecture") or "unknown"),
+                           "num_threads": d.get("num_threads")}
+            if arch == "unknown":
                 arch = str(d.get("architecture") or "unknown")
                 nthreads = d.get("num_threads")
                 source = "threadpoolctl"
-                break
     except Exception:                                   # noqa: BLE001
         pass
     if arch == "unknown":

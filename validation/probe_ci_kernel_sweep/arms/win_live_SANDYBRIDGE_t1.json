@@ -99,8 +99,8 @@
   "pmm1d_interface/rcond_decade@1e-05@mf-default": "1e-04"
  },
  "kernel": "Sandybridge",
- "kernel_source": "ctypes(openblas_get_corename)",
- "lumenairy": "5.45.1",
+ "kernel_source": "threadpoolctl",
+ "lumenairy": "5.46.0",
  "min_feature_default_frac": 0.001,
  "numpy": "2.4.6",
  "platform": "Windows-11-10.0.26200-SP0",
@@ -145,5 +145,5 @@
   "OMP_NUM_THREADS": "1",
   "OPENBLAS_NUM_THREADS": "1"
  },
- "tree": "audit-fixes-2026-09 2622449f +dirty"
+ "tree": "audit-fixes-2026-09 fa13469f +dirty"
 }

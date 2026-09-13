@@ -77,8 +77,8 @@
    "coretype_requested": "HASWELL",
    "historical": false,
    "kernel": "Haswell",
-   "kernel_source": "ctypes(openblas_get_corename)",
-   "lumenairy": "5.45.1",
+   "kernel_source": "threadpoolctl",
+   "lumenairy": "5.46.0",
    "min_feature_default_frac": 0.001,
    "numpy": "2.4.6",
    "platform": "Windows-11-10.0.26200-SP0",
@@ -95,7 +95,7 @@
     "OMP_NUM_THREADS": "1",
     "OPENBLAS_NUM_THREADS": "1"
    },
-   "tree": "audit-fixes-2026-09 2622449f +dirty"
+   "tree": "audit-fixes-2026-09 fa13469f +dirty"
   },
   "WIN-Haswell-t1@2026-09-11": {
    "blas_libraries": {},
@@ -170,8 +170,8 @@
    "coretype_requested": "KATMAI",
    "historical": false,
    "kernel": "Katmai",
-   "kernel_source": "ctypes(openblas_get_corename)",
-   "lumenairy": "5.45.1",
+   "kernel_source": "threadpoolctl",
+   "lumenairy": "5.46.0",
    "min_feature_default_frac": 0.001,
    "numpy": "2.4.6",
    "platform": "Windows-11-10.0.26200-SP0",
@@ -188,7 +188,7 @@
     "OMP_NUM_THREADS": "1",
     "OPENBLAS_NUM_THREADS": "1"
    },
-   "tree": "audit-fixes-2026-09 2622449f +dirty"
+   "tree": "audit-fixes-2026-09 fa13469f +dirty"
   },
   "WIN-Katmai-t1@2026-09-11": {
    "blas_libraries": {},
@@ -235,8 +235,8 @@
    "coretype_requested": "NEHALEM",
    "historical": false,
    "kernel": "Nehalem",
-   "kernel_source": "ctypes(openblas_get_corename)",
-   "lumenairy": "5.45.1",
+   "kernel_source": "threadpoolctl",
+   "lumenairy": "5.46.0",
    "min_feature_default_frac": 0.001,
    "numpy": "2.4.6",
    "platform": "Windows-11-10.0.26200-SP0",
@@ -253,7 +253,7 @@
     "OMP_NUM_THREADS": "1",
     "OPENBLAS_NUM_THREADS": "1"
    },
-   "tree": "audit-fixes-2026-09 2622449f +dirty"
+   "tree": "audit-fixes-2026-09 fa13469f +dirty"
   },
   "WIN-Nehalem-t1@2026-09-11": {
    "blas_libraries": {},
@@ -300,8 +300,8 @@
    "coretype_requested": "SANDYBRIDGE",
    "historical": false,
    "kernel": "Sandybridge",
-   "kernel_source": "ctypes(openblas_get_corename)",
-   "lumenairy": "5.45.1",
+   "kernel_source": "threadpoolctl",
+   "lumenairy": "5.46.0",
    "min_feature_default_frac": 0.001,
    "numpy": "2.4.6",
    "platform": "Windows-11-10.0.26200-SP0",
@@ -318,7 +318,7 @@
     "OMP_NUM_THREADS": "1",
     "OPENBLAS_NUM_THREADS": "1"
    },
-   "tree": "audit-fixes-2026-09 2622449f +dirty"
+   "tree": "audit-fixes-2026-09 fa13469f +dirty"
   },
   "WIN-Sandybridge-t1@2026-09-11": {
    "blas_libraries": {},
@@ -365,8 +365,8 @@
    "coretype_requested": "",
    "historical": false,
    "kernel": "SkylakeX",
-   "kernel_source": "ctypes(openblas_get_corename)",
-   "lumenairy": "5.45.1",
+   "kernel_source": "threadpoolctl",
+   "lumenairy": "5.46.0",
    "min_feature_default_frac": 0.001,
    "numpy": "2.4.6",
    "platform": "Windows-11-10.0.26200-SP0",
@@ -383,7 +383,7 @@
     "OMP_NUM_THREADS": "1",
     "OPENBLAS_NUM_THREADS": "1"
    },
-   "tree": "audit-fixes-2026-09 2622449f +dirty"
+   "tree": "audit-fixes-2026-09 fa13469f +dirty"
   },
   "WIN-SkylakeX-t4": {
    "blas_libraries": {
@@ -402,8 +402,8 @@
    "coretype_requested": "",
    "historical": false,
    "kernel": "SkylakeX",
-   "kernel_source": "ctypes(openblas_get_corename)",
-   "lumenairy": "5.45.1",
+   "kernel_source": "threadpoolctl",
+   "lumenairy": "5.46.0",
    "min_feature_default_frac": 0.001,
    "numpy": "2.4.6",
    "platform": "Windows-11-10.0.26200-SP0",
@@ -416,11 +416,11 @@
    "synthetic": false,
    "thread_arm": "t4",
    "threads": {
-    "MKL_NUM_THREADS": "4",
-    "OMP_NUM_THREADS": "4",
+    "MKL_NUM_THREADS": "1",
+    "OMP_NUM_THREADS": "1",
     "OPENBLAS_NUM_THREADS": "4"
    },
-   "tree": "audit-fixes-2026-09 2622449f +dirty"
+   "tree": "audit-fixes-2026-09 fa13469f +dirty"
   },
   "WSL-Haswell-t1": {
    "blas_libraries": {

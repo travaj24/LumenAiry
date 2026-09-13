@@ -279,7 +279,7 @@ Inert on every population the band was derived against: the worst `|Re r| / |r|`
 flipped there is 2.0751e-03, so `Im^2 / Re^2 > 2e5`, five decades clear of the new edge.
 All RCWA / PMM branch-cut, even-sector and round-2/3 verification gates pass unchanged.
 
-Files: `lumenairy/elements/rcwa/_core.py:1564-1579` and the docstring's PRICE paragraph.
+Files: `lumenairy/elements/rcwa/_core.py:1564-1578` and the docstring's PRICE paragraph.
 Tests: `tests/unit/test_audit2609_a14_rcwa_eme_bor.py::test_g11_near_zero_evanescent_mode_is_not_flipped`,
 `::test_g11_scale_relative_band_cannot_flip_an_evanescent_mode`,
 `::test_g11_genuine_on_cut_propagating_mode_still_flips`.
