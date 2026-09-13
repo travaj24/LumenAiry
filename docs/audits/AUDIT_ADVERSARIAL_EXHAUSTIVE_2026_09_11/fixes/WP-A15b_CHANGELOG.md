@@ -138,17 +138,19 @@ screen applied by hand). MEASURED effect of the discarded knob on the regression
 `subharmonics=3` moves the screen by max |dphi| = 2.6701 rad, rms 1.3526 rad (1 level: 0.8413 /
 0.3906 rad). Tests: `tests/unit/test_audit2609_a15b_system_subharmonics.py` (6 tests).
 
-### Changed -- memory: `_ASM_FIRST_CALL_FIXED_BYTES` re-calibrated 56 -> 40 MiB, and its test bar is now derived
+### Changed -- memory: `_ASM_FIRST_CALL_FIXED_BYTES` re-calibrated 56 -> 53 MiB, and its test bar is now derived
 
 `estimate_asm_memory`'s one-time first-call term was calibrated at 56 MiB on 2026-08-01 against a
 then-measured 52.5-53.0 MiB backend import. RE-MEASURED 2026-09-12 by the same method (fresh
-interpreter + `tracemalloc`, 12 points N = 64..2048 x {complex64, complex128}, fitting
-`cold = slope * N^2 + fixed`): the import cost is now **36.71 MiB** -- the three N >= 256
-complex128 pair fits agree to 0.01 MiB and the cold peak reproduces to 0.003 % over 5 fresh
-interpreters. At 56 MiB the estimate read **est/measured = 1.341 at N = 512** against a docstring
-promising 1.06-1.09: the published accuracy had stopped being true. The constant is back to 40 MiB
-(6.3 % headroom over the worst pair fit, the same convention the 2026-08-01 calibration used), and
-the measured band is **1.061-1.112** over all eight N >= 256 points, a bound at every one.
+interpreter + `tracemalloc`, N = 256..2048 x {complex64, complex128}, fitting
+`cold = slope * N^2 + fixed` on consecutive-N pairs), twice in this release: **36.71 MiB** while
+`scipy.fft` was still imported at `import lumenairy` (outside the measured first call), then
+**49.61 MiB** once `fft_infra` loads `scipy.fft` on first use -- the import alone measures
+13.06 MiB in a fresh interpreter, the whole of the difference; the six pair fits agree to 0.01 MiB.
+At 56 MiB the estimate had read **est/measured = 1.341 at N = 512** against a docstring promising
+1.06-1.09: the published accuracy had stopped being true. The constant is 53 MiB (6.8 % headroom
+over the worst pair fit, the same convention the 2026-08-01 calibration used); the superseded
+calibrations are recorded in `docs/history/lumenairy.memory.md`.
 
 `tests/unit/test_niche_audit_w3_infra.py`'s flat `<= 1.35` Windows fence -- sized in 2026-08-01 to
 admit a band then measured at 1.06-1.09, i.e. 25 % of unexplained slack -- is replaced by a
@@ -156,11 +158,11 @@ two-sided DERIVED bar: `est/cold` is a weighted mediant of `F_est/F_meas` and `s
 therefore lies between them for every N, giving `1.0 <= ratio <= 1.12` with no per-build number.
 The measured cold peak is additionally pinned against its dated two-term model (2 % band on a
 quantity that reproduces to 0.003 %), and a new test bars the CONSTANT itself at
-`[F_meas, 1.10 * F_meas]` so the next drift has to be re-measured rather than absorbed. Both new
-bars FAIL on the 56 MiB constant (1.341 / 1.188 against 1.12; 1.526x against 1.10).
-`tests/unit/test_verify_perf_fixes_2026_08_10.py`'s two absolute GB pins move by exactly the
-16 MiB re-calibration (19.762 -> 19.745 GB; 22.648 -> 22.631 GB) and now derive that term from the
-constant so a future re-calibration moves them with it. Closes WP-A11 section 5 item 4
+`[F_meas, 1.10 * F_meas]` so the next drift has to be re-measured rather than absorbed. Both
+directions have a fail-before on this tree: the 40 MiB constant reads 0.888 (N = 512) / 0.972
+(N = 1024) against the `>= 1.0` bound, and the 56 MiB constant is 1.129x the measured term against
+the 1.10 bar. `tests/unit/test_verify_perf_fixes_2026_08_10.py`'s two absolute GB pins now derive
+that term from the constant, so a re-calibration moves them with it. Closes WP-A11 section 5 item 4
 ("either the constant comes down or that test's Windows fence goes up -- one decision, one place").
 
 ### Changed -- tests: the `fft_infra` leak-guard comment now matches the code

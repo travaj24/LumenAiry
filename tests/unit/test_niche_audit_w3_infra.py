@@ -768,16 +768,18 @@ def _measure_asm_peak(n_grid, dtype):
 # The MEASURED model of the cold first-call peak, ``cold = F + s * N^2``.
 # ---------------------------------------------------------------------------
 # MEASURED 2026-09-12 on the Windows calibration box (audit 2026-09-11
-# remediation, WP-A15b), same method as ``_measure_asm_peak`` above: 12 fresh
-# interpreters, N = 64..2048 x {complex64, complex128}, fitting consecutive-N
-# pairs.  Every N >= 256 c128 pair returns F = 36.71 MiB and s = 96.01 B/px to
-# the reported precision; the c64 pairs give F = 36.48 / 37.62 / 36.72 MiB and
-# s = 51.66 / 47.10 / 48.01 B/px (the 256->512 c64 slope is inflated by the
-# backend import still growing there, which is why the fit uses the N >= 512
-# asymptote).  The cold peak is a ``tracemalloc`` COUNT, not a wall-clock or
-# RSS reading: it reproduced to 0.003 % over 5 fresh interpreters per point on
-# the same day, so these are model constants, not noisy samples.
-_A6_COLD_FIXED_BYTES = 36.71 * 1024 * 1024
+# remediation), same method as ``_measure_asm_peak`` above: 8 fresh
+# interpreters, N = 256..2048 x {complex64, complex128}, fitting consecutive-N
+# pairs.  Every pair of BOTH dtypes returns F = 49.60 / 49.61 / 49.61 MiB and
+# s = 96.01 B/px (c128) / 48.01 B/px (c64) to the reported precision.  Earlier
+# the same day the fit read F = 36.71 MiB: that reading was taken while
+# ``scipy.fft`` was still imported at ``import lumenairy``, i.e. OUTSIDE the
+# measured first call; ``fft_infra`` now loads it on first use, and the import
+# alone measures 13.06 MiB under tracemalloc in a fresh interpreter -- the
+# whole of the difference.  The cold peak is a ``tracemalloc`` COUNT, not a
+# wall-clock or RSS reading (0.003 % over 5 fresh interpreters per point when
+# last checked), so these are model constants, not noisy samples.
+_A6_COLD_FIXED_BYTES = 49.61 * 1024 * 1024
 _A6_COLD_SLOPE_B_PER_PX = {'complex128': 96.01, 'complex64': 48.01}
 
 #: Upper (tightness) bar on ``estimate_asm_memory / measured cold peak``.
@@ -788,7 +790,7 @@ _A6_COLD_SLOPE_B_PER_PX = {'complex128': 96.01, 'complex64': 48.01}
 #: therefore lies BETWEEN them for every N -- no per-N bar is needed, only
 #: the larger of the two endpoints:
 #:
-#:     F_est / F_meas  = 40 MiB / 36.71 MiB            = 1.0896
+#:     F_est / F_meas  = 53 MiB / 49.61 MiB            = 1.0683
 #:     s_est / s_meas  = 101.6 / 96.01   (complex128)  = 1.0582
 #:                     =  53.6 / 48.01   (complex64)   = 1.1164
 #:
@@ -796,14 +798,18 @@ _A6_COLD_SLOPE_B_PER_PX = {'complex128': 96.01, 'complex64': 48.01}
 #: below, and both sides follow from the two constants rather than from a
 #: measured ratio, so a build cannot drift into the bar.
 #:
-#: CONFIRMED by measurement 2026-09-12 over all eight N >= 256 x dtype points:
-#: est/cold = 1.0610 (2048 c128) / 1.0669 (1024 c128) / 1.0773 (512 c128) /
-#: 1.0811 (512 c64) / 1.0854 (256 c128) / 1.0918 (256 c64) / 1.1048 (1024 c64)
-#: / 1.1122 (2048 c64) -- a bound at every one, and the worst sits 0.7 % under
-#: this bar, exactly where the complex64 mediant endpoint says it should.
+#: CONFIRMED by measurement 2026-09-12 (53 MiB term, scipy.fft loading on first
+#: use) over all eight N >= 256 x dtype points: est/cold = 1.0594 (2048 c128) /
+#: 1.0617 (1024 c128) / 1.0651 (512 c128) / 1.0673 (256 c128) / 1.0711 (256
+#: c64) / 1.0777 (512 c64) / 1.0920 (1024 c64) / 1.1066 (2048 c64) -- a bound
+#: at every one, and the worst sits 1.2 % under this bar, where the complex64
+#: mediant endpoint puts it.
 #:
-#: FAIL-BEFORE: with the pre-2026-09-12 56 MiB fixed term the same two points
-#: read 1.341 (N=512) and 1.188 (N=1024) -- 20 % and 6 % over this bar.  The
+#: FAIL-BEFORE: with the 40 MiB term of the earlier 2026-09-12 calibration the
+#: ``>= 1.0`` bound below read 0.888 (N=512) / 0.972 (N=1024); with the 56 MiB
+#: term of 2026-08-01, against the 36.71 MiB import cost measured before
+#: ``scipy.fft`` became lazy, the same two points read 1.341 and 1.188 -- 20 %
+#: and 6 % over this bar.  The
 #: bar it replaces was a flat 1.35, chosen in 2026-08-01 to admit a band that
 #: was then measured at 1.06-1.09: 25 % of unexplained slack, which is exactly
 #: the margin the estimate silently consumed as the import cost moved.
@@ -833,7 +839,8 @@ class TestA6EstimateAsmMemory:
 
         The A-6 contract is that the estimate BOUNDS the cold first-call
         peak, so the constant must not fall below the measured import cost
-        (:data:`_A6_COLD_FIXED_BYTES`, 36.71 MiB, fitted 2026-09-12) -- that
+        (:data:`_A6_COLD_FIXED_BYTES`, 49.61 MiB, fitted 2026-09-12 with
+        ``scipy.fft`` loading on first use) -- that
         is the lower bar and it is the fail-safe direction.
 
         The UPPER bar is what was missing and what let the estimate drift:
@@ -843,8 +850,9 @@ class TestA6EstimateAsmMemory:
         worst pair fit of 52.97 MiB) is ~6 % headroom for dependency drift;
         10 % is the bar, which admits that convention with room to spare.
 
-        FAIL-BEFORE: the 56 MiB constant this replaces is 1.526x the
-        measured 36.71 MiB, so it fails this bar by a factor of 1.39.
+        FAIL-BEFORE: the 40 MiB constant this replaces is 0.806x the
+        measured 49.61 MiB and fails the LOWER bar; the 56 MiB constant
+        before it was 1.129x and fails the upper bar.
         """
         from lumenairy import memory as m
         f = m._ASM_FIRST_CALL_FIXED_BYTES
@@ -906,6 +914,11 @@ class TestA6EstimateAsmMemory:
         asymptotic ratio is again unchanged -- the shape term has never
         moved.
 
+        2026-09-12, later the same day: ``scipy.fft`` became a first-use
+        import (WP-A22), its 13.06 MiB moved into the measured first call,
+        and the constant went 40 -> 53 MiB; the derived small-N ratio is
+        19.60.  The asymptote is once more untouched.
+
         2026-08-10 (docs/audits/FIX_VERIFY_PERF_2026_08_10.md sec 1): the
         LARGE-N ratio moved 6.35 -> 4.36, and this test was already RED on
         Linux before that -- it is the one pin the D1 dtype defect reached.
@@ -929,9 +942,9 @@ class TestA6EstimateAsmMemory:
                                 + m._ASM_F64_GRID_ARRAYS * 8
                                 + 2 * 2 * 16) * 512 * 512)
                             / (512 * 512 * 16))
-        assert small_n_expected == pytest.approx(16.35, rel=0.02), (
+        assert small_n_expected == pytest.approx(19.60, rel=0.02), (
             f"the small-N ratio is now {small_n_expected:.2f}; the docstring "
-            f"above says 16.35 -- update both together.")
+            f"above says 19.60 -- update both together.")
         # rel=1e-7, not 0: ``estimate_asm_memory`` returns ``int(...)`` and the
         # 0.7-float64-array term makes the exact total fractional, so the
         # returned value is up to 1 B below the model -- 1.5e-8 relative here.
@@ -979,7 +992,16 @@ class TestA6EstimateAsmMemory:
         (:data:`_A6_EST_OVER_COLD_MAX`); the re-measured band is 1.06-1.10
         over all twelve N x dtype points.  The cold peak is ALSO pinned
         against its dated two-term model below, so a future drift names
-        itself instead of silently eating the fence's slack."""
+        itself instead of silently eating the fence's slack.
+
+        2026-09-12, later the same day (WP-A22 made ``scipy.fft`` a
+        first-use import in ``fft_infra``): the 13.06 MiB ``scipy.fft``
+        import moved INTO the measured first call, every pair fit read
+        F = 49.61 MiB, and the 40 MiB estimate no longer bounded the peak
+        (0.888 at N=512, 0.972 at N=1024).  The constant is 53 MiB
+        (6.8 % over the worst fit) and the model constants above are
+        re-fitted; the fence is unchanged because the complex64 slope
+        endpoint still sets it."""
         cold, steady, est = _measure_asm_peak(n_grid, dtype)
         ratio = est / cold
         assert ratio >= 1.0, (
