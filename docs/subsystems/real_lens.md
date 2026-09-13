@@ -105,6 +105,13 @@ field's actual congruence, the better.  A wildly mismatched pair (a 20-wave-per-
 residual) is aliased, not refused.  The 2-D remap carries **no in-glass diffraction** --
 documented in `displaced_mode`.
 
+The 2-D remap's transverse resolution is the LAUNCH pitch `2 r_aperture / (displaced_n_side - 1)`,
+not `dx`: it is a geometric transfer, so input structure finer than that pitch is smoothed to
+the lattice, and the call warns (naming the `displaced_n_side` that would clear it) whenever the
+launch pitch is coarser than twice the field pitch.  Default 257 rays a side; the inversion of the
+launch->exit map is structured (Newton on the lattice's bilinear interpolant), so the exit field
+carries no triangulation-hull holes inside the illuminated pupil.
+
 ### 3.2 Per-surface modifiers
 
 * **`fresnel=True`** applies the POWER transmittance
@@ -311,6 +318,7 @@ crossing with a step <= 0.1 DOF; a single coarse scan is not enough to call a pe
 
 | claim | pin |
 |---|---|
+| 2-D remap: structured inversion, mirror stability vs the launch lattice, `displaced_n_side` | `tests/unit/test_audit2609_b2_displaced_remap_inversion.py` |
 | exit-vertex transfer, grazing policy, JAX twin | `tests/unit/test_audit2609_a1_exit_vertex.py` |
 | caustic siblings on a **curved rear** | `tests/unit/test_audit2609_a3_caustic_siblings.py` |
 | `caustic='wave'` == traced at `d = 0`; focus vs an independent oracle | `tests/unit/test_audit2609_a3_verify_traced.py` |

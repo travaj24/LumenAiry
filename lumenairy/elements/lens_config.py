@@ -194,14 +194,17 @@ _VOCAB_CACHE_LOCK = threading.Lock()
 
 
 def _vocab(name: str) -> Any:
-    """Return one of ``_lens_real``'s validation tuples, cached."""
+    """Return one of ``_lens_real``'s validation vocabularies (a choice tuple
+    or a bound), cached.  Read from the model rather than restated here, so a
+    config cannot accept a value the call would refuse."""
     try:
         return _VOCAB_CACHE[name]
     except KeyError:
         from . import _lens_real as _lr
         with _VOCAB_CACHE_LOCK:
             for k in ('_VALID_SURFACE_MODELS', '_VALID_WAVE_PROPAGATORS',
-                      '_VALID_REMAP_ORDERS', '_VALID_ACCUMULATOR_STORE'):
+                      '_VALID_REMAP_ORDERS', '_VALID_ACCUMULATOR_STORE',
+                      '_DISP_REMAP_2D_MIN_N_SIDE'):
                 _VOCAB_CACHE[k] = getattr(_lr, k)
         return _VOCAB_CACHE[name]
 
@@ -419,6 +422,17 @@ class LensNumerics:
         Spline order (1/3/5) of the tangent-facet transverse remap.  Validated
         against ``_lens_real._VALID_REMAP_ORDERS``.  Accepted by:
         ``apply_real_lens``.
+    displaced_n_side : int or None, default None
+        Side of the square launch lattice, in RAYS, that the 2-D
+        transverse-walk remap of ``surface_model='displaced'`` traces; ``None``
+        -> the module default ``_lens_real._DISP_REMAP_2D_N_SIDE``.  The remap
+        is a geometric transfer, so this and not ``dx`` sets the transverse
+        resolution of its output (launch pitch
+        ``2 * r_aperture / (displaced_n_side - 1)``); cost is its square.
+        Floored at ``_lens_real._DISP_REMAP_2D_MIN_N_SIDE``.  The call refuses
+        it when it does not route to that remap, so a config that sets it is
+        only legal for a decentered / tilted / ``sag_callable`` element.
+        Accepted by: ``apply_real_lens``.
     min_coarse_samples_per_aperture : int, default 32
         Undersample guard: the minimum number of coarse ray samples across the
         aperture before ``on_undersample`` fires.  ``0`` disables the guard.
@@ -477,6 +491,7 @@ class LensNumerics:
     ray_subsample: int = 8
     output_subsample: int = 1
     remap_order: int = 3
+    displaced_n_side: Optional[int] = None
     min_coarse_samples_per_aperture: int = 32
     fit_radius_beam_factor: Optional[float] = None
     newton_fit: str = 'auto'
@@ -506,6 +521,10 @@ class LensNumerics:
         _require_positive_int(fn, 'output_subsample', self.output_subsample)
         _require_choice(fn, 'remap_order', self.remap_order,
                         _vocab('_VALID_REMAP_ORDERS'))
+        if self.displaced_n_side is not None:
+            _require_positive_int(
+                fn, 'displaced_n_side', self.displaced_n_side,
+                minimum=_vocab('_DISP_REMAP_2D_MIN_N_SIDE'))
         _require_positive_int(fn, 'min_coarse_samples_per_aperture',
                               self.min_coarse_samples_per_aperture, minimum=0)
         if self.fit_radius_beam_factor is not None:
@@ -701,7 +720,8 @@ _GEOMETRY_FOR: Dict[str, Dict[str, str]] = {
 _NUMERICS_FOR: Dict[str, Dict[str, str]] = {
     'apply_real_lens': {
         'bandlimit': 'bandlimit', 'wave_propagator': 'wave_propagator',
-        'remap_order': 'remap_order'},
+        'remap_order': 'remap_order',
+        'displaced_n_side': 'displaced_n_side'},
     'apply_real_lens_traced': {
         'bandlimit': 'bandlimit', 'wave_propagator': 'wave_propagator',
         'ray_subsample': 'ray_subsample',

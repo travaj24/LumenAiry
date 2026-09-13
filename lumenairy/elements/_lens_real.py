@@ -1555,6 +1555,25 @@ def _element_is_asymmetric(surfaces):
     return False
 
 
+def _routes_to_displaced_remap_2d(surface_model, displaced_mode,
+                                  displaced_obliquity, surfaces):
+    """True when this keyword set routes to the 2-D transverse-walk remap
+    (:func:`_apply_displaced_remap_2d`).
+
+    The 2-D remap takes an ASYMMETRIC element under
+    ``surface_model='displaced'``, either explicitly (``displaced_mode=
+    'remap'``) or as the default for that element (``'screen'`` + the ``auto``
+    obliquity, which an explicit ``displaced_obliquity='pointwise'`` overrides
+    in favour of the single-plane screen).  One predicate so the guard that
+    refuses a discarded ``displaced_n_side`` and the dispatch that consumes it
+    cannot drift apart."""
+    return (surface_model == 'displaced'
+            and _element_is_asymmetric(surfaces)
+            and (displaced_mode == 'remap'
+                 or (displaced_mode == 'screen'
+                     and displaced_obliquity == 'auto')))
+
+
 _VALID_DISPLACED_OBLIQUITY = ('auto', 'meridional', 'pointwise')
 
 
@@ -1947,29 +1966,111 @@ def _apply_displaced_remap(E_in, h_in, h_out, wavelength, dx, dy, opl,
 # 2026_07_19.md (P10 / N11).
 # ---------------------------------------------------------------------------
 
-#: The 2-D transverse-walk remap's launch-lattice side.
+#: The 2-D transverse-walk remap's DEFAULT launch-lattice side, overridable
+#: per call with ``apply_real_lens(displaced_n_side=...)``.
 #:
-#: The exit field is rebuilt by Delaunay-interpolating ``n_side**2`` scattered
-#: exit points onto the whole field grid, so the LAUNCH pitch -- not ``dx`` --
-#: sets the transverse resolution of the result: at 181 the pitch is 11.4 um
-#: for a 2 mm aperture whatever the field sampling, and structure finer than
-#: that (a hard stop edge, an obscuration, an upstream DOE, speckle) is
-#: smoothed to the lattice.  ``_warn_if_remap_lattice_smooths`` says so out
-#: loud, which is the half of that finding this pass fixes.
+#: Everything the exit field knows comes from ``n_side**2`` launched rays, so
+#: the LAUNCH pitch -- not ``dx`` -- sets the transverse resolution of the
+#: result: at 257 the pitch is 39 um across a 10 mm aperture whatever the field
+#: sampling, and input structure finer than that (a hard stop edge, an
+#: obscuration, an upstream DOE, speckle) is smoothed to the lattice.
+#: :func:`_warn_if_remap_lattice_smooths` says so out loud whenever that is
+#: true of the call in hand, and names the keyword that buys the resolution
+#: back -- which no constant can, the bar being the CALLER's field pitch.
 #:
-#: RAISING IT IS NOT THE FIX, measured.  On a decentered f/5 singlet at
-#: N = 512, scored by the mirror-symmetry residual of the image-plane intensity
-#: (+d vs -d, an EXACT symmetry of the physics, so any residual is the model's
-#: own artefact): 7.9e-14 at 181, 5.5e-14 at 257, 4.1e-14 at 513 -- but
-#: 4.1e-03 at 512 and 7.4e-03 at 1025.  The instability is QHull's, not the
-#: resolution's: a denser scattered set gives the triangulation more
-#: near-degenerate cells to resolve arbitrarily, and which way it resolves them
-#: is not reflection-stable.  Trading a documented smoothing limit for a
-#: measurable loss of an exact symmetry is a bad trade, so the lattice stays
-#: where it was and the real fix -- the structured Newton inversion this module
-#: already implements at ``_interp2_structured``, which removes the ceiling AND
-#: the triangulation -- is recorded as follow-up work rather than half-done.
-_DISP_REMAP_2D_N_SIDE = 181
+#: Measured on the decentered f/5 singlet of
+#: ``tests/unit/test_niche_p10_transverse_walk_remap.py`` (10 mm aperture, 5 mm
+#: of N-BK7-like glass, 0.5-0.6 mm decenter), 2026-09-13, this build.  The
+#: accuracy reference is a RAY-EXACT oracle: the same fan, but with each field
+#: point's launch coordinate found by Newton on the TRUE trace instead of on
+#: the lattice, so the oracle has no lattice at all.  Peak-relative exit-field
+#: error over the illuminated core, with the trace cost and the field-grid
+#: interpolation cost it feeds:
+#:
+#: ======  =========  =========  =========  =========  ==================
+#: n_side  pitch um   |E| rms    phase rad  trace s    structured interp s
+#: ======  =========  =========  =========  =========  ==================
+#:    181      55.6    8.7e-04    4.7e-02      0.064   0.17 / 0.62 / 2.45
+#:    257      39.1    4.3e-04    2.4e-02      0.152   0.17 / 0.64 / 2.36
+#:    513      19.5    1.1e-04    5.9e-03      1.055   0.21 / 0.64 / 2.66
+#:   1025       9.8    2.7e-05    1.4e-03      4.661   0.41 / 0.84 / 2.73
+#: ======  =========  =========  =========  =========  ==================
+#:
+#: (interp at N = 512 / 1024 / 2048.)  The error is second order in the launch
+#: pitch -- a clean 4x per doubling -- and the trace is ``n_side**2``, so the
+#: choice is a cost/accuracy point.  257 is where the two halves of the call
+#: balance: it is the largest lattice whose TRACE still costs less than the
+#: interpolation it feeds on every grid measured, and it halves the remap's
+#: interpolation error for that.
+#:
+#: What the raise does NOT buy, stated because it is easy to assume: on a
+#: SMOOTH input the model's own observables were already converged at 181.  On
+#: the p10 decentered singlet at N = 1280 the image-plane centroid, RMS radius
+#: and EE80 move by 8e-06, 1.4e-04 and 5e-04 relative between 181 and 2049.
+#: What the lattice does govern is input STRUCTURE: contrast transfer collapses
+#: onto one curve in launch-samples-per-period (measured 0.94 / 0.92 at 7.2
+#: samples, 0.76 / 0.70 at 3.6 and 3.1, 0.57 / 0.60 at 2.2 across four
+#: lattices), so the resolved period scales with the pitch and a caller with a
+#: structured pupil raises the lattice through the keyword.
+#:
+#: The lattice is FREE TO MOVE, which is the other half of the choice.  The
+#: image-plane mirror residual of a +d / -d decenter pair -- an EXACT symmetry
+#: of the physics, so any residual is the model's own artefact -- reads 2.9e-14
+#: to 8.5e-12 across 181, 257, 512, 513, 1025 and 2049 with either
+#: interpolation backend, the top of that range being the densest lattice's
+#: longer reduction rather than anything discrete.  What decides it is the
+#: symmetric input window cut in :func:`_apply_displaced_remap_2d`, not the
+#: backend; see ``docs/history/lumenairy.elements._lens_real.md`` for the
+#: measurement that separated the two.
+_DISP_REMAP_2D_N_SIDE = 257
+
+#: Smallest launch lattice the 2-D remap can be asked for: ``np.gradient``
+#: needs three rows to have one central-difference interior row, and the
+#: bilinear inversion needs a cell on each side of the lattice centre.  This is
+#: a structural floor, not a quality bar -- the quality bar is the launch pitch
+#: against the field pitch, which :func:`_warn_if_remap_lattice_smooths`
+#: reports on every call where it binds.
+_DISP_REMAP_2D_MIN_N_SIDE = 3
+
+#: Sweep cap for the structured inversion's Newton loop.  Points still moving
+#: at the cap keep whatever coordinate they reached and are then judged by the
+#: residual bar like any other, so the cap bounds cost, not correctness.
+_DISP_REMAP_2D_INV_MAX_ITERS = 32
+
+#: Convergence bar for the structured inversion's Newton loop, as a fraction of
+#: the LOCAL exit cell: a field point retires once its residual
+#: ``|P(u, v) - (x, y)|`` is below it, and retired points leave the sweep.
+#:
+#: Derived, not tuned.  A residual ``r`` leaves the launch coordinate off by
+#: ``r / |dP/du|``, which costs the interpolated output ``|df/du| r / |dP/du|``
+#: = ``|df/du| r dstep / cell``; the bilinear interpolation it feeds already
+#: costs ``~ dstep**2 |d2f/du2| / 8``.  The inversion is therefore negligible
+#: while ``r / cell << dstep |f''| / (8 |f'|)``.  Measured for the transported
+#: OPL over the illuminated pupil of the p10 singlet, that right-hand side is
+#: 8.7e-03 / 6.2e-03 / 3.1e-03 at n_side 181 / 257 / 513 -- three decades above
+#: this bar at every lattice.  On the same fixture at N = 512 the residual
+#: falls 2.4e-06 -> 1.0e-11 -> 6.2e-16 m over three sweeps against a 3.9e-11 m
+#: bar, so 97 % of the grid retires after two.
+#:
+#: It cannot be a BITWISE fixed point of the launch coordinate, which is what
+#: the surface-intersection Newtons in this module use: the Jacobian here is a
+#: central difference of the lattice while the residual is of the bilinear
+#: interpolant, so the two disagree at O(dstep**2) and the iteration
+#: limit-cycles in its last bits instead of landing (measured on the p10
+#: fixture at N = 512: 95 % of the grid was still moving at sweep 32).
+_DISP_REMAP_2D_INV_TOL_FRAC = 1.0e-6
+
+#: Coverage bar for the structured inversion, as a fraction of the LOCAL exit
+#: cell.  A field point the ray map reaches retires at the convergence bar
+#: above; a point it does not reach either clips out of the launch rectangle
+#: (and then fails the aperture cut, the fan being 3 % wider than the aperture)
+#: or stalls a fraction of a cell away.  1e-3 sits three decades above the
+#: convergence bar every reached point crosses and three below the smallest
+#: genuine miss, so it is a gap, not a tuned number.
+_DISP_REMAP_2D_INV_MISS_FRAC = 1.0e-3
+
+#: Backends for the 2-D remap's scattered-exit -> field-grid step.
+_VALID_DISP_REMAP_INTERP = ('structured', 'delaunay')
 
 
 def _warn_if_remap_lattice_smooths(r_max, dx, dy, n_side):
@@ -1980,6 +2081,12 @@ def _warn_if_remap_lattice_smooths(r_max, dx, dy, n_side):
     pitch is not propagated, it is SMOOTHED AWAY.  Measured: a ripple at
     2.2 launch samples per period comes back at 0.51 of its input
     contrast where the (field-grid) screen path resolves it at 1.26.
+
+    The lattice is a per-call choice (``displaced_n_side=``), so the message
+    quotes both pitches and the lattice that would clear the bar -- raising it
+    costs ``n_side**2`` in the trace and nothing in stability, the structured
+    inversion having removed the resolution/reflection-stability trade the
+    scattered backend imposed.
     """
     try:
         h = min(float(dx), float(dy))
@@ -1991,6 +2098,7 @@ def _warn_if_remap_lattice_smooths(r_max, dx, dy, n_side):
     pitch = 2.0 * r / max(int(n_side) - 1, 1)
     if pitch <= 2.0 * h:
         return
+    n_clear = int(np.ceil(r / h)) + 1
     import warnings
     warnings.warn(
         f"apply_real_lens: surface_model='displaced' is routing this "
@@ -2001,10 +2109,46 @@ def _warn_if_remap_lattice_smooths(r_max, dx, dy, n_side):
         f"finer than the LAUNCH pitch (a hard stop edge, an obscuration, an "
         f"upstream DOE, speckle) is smoothed to that lattice, and the remap "
         f"carries no in-glass diffraction at all.  Pass "
-        f"displaced_obliquity='pointwise' for the single-plane obliquity "
-        f"screen, which lives on the field grid, or apply_real_lens_traced "
-        f"for a per-pixel ray-traced OPL.",
+        f"displaced_n_side={n_clear} to resolve the field pitch (the trace "
+        f"costs n_side**2), displaced_obliquity='pointwise' for the "
+        f"single-plane obliquity screen, which lives on the field grid, or "
+        f"apply_real_lens_traced for a per-pixel ray-traced OPL.",
         RuntimeWarning, _WARN_STACKLEVEL)
+
+
+def _normalise_displaced_n_side(n_side, fn_name='apply_real_lens'):
+    """Validate a public ``displaced_n_side`` into an ``int``, or ``None``.
+
+    ``None`` means "the module default" (:data:`_DISP_REMAP_2D_N_SIDE`).  A
+    float that is not an exact integer is refused rather than truncated: the
+    lattice is a ray count, and silently turning 512.5 into 512 is the
+    discarded-setting class this family's guards exist to close."""
+    if n_side is None:
+        return None
+    if isinstance(n_side, bool) or not isinstance(n_side, (int, np.integer,
+                                                          float, np.floating)):
+        raise ValueError(
+            f"{fn_name}: displaced_n_side must be an integer ray count (the "
+            f"side of the 2-D remap's square launch lattice, in rays) or None "
+            f"for the default {_DISP_REMAP_2D_N_SIDE}; got "
+            f"{type(n_side).__name__}.")
+    v = float(n_side)
+    if not np.isfinite(v) or v != int(v):
+        raise ValueError(
+            f"{fn_name}: displaced_n_side={n_side!r} is not an exact integer "
+            f"ray count.  Pass the side of the square launch lattice, in rays "
+            f"(the trace costs displaced_n_side**2), or None for the default "
+            f"{_DISP_REMAP_2D_N_SIDE}.")
+    v = int(v)
+    if v < _DISP_REMAP_2D_MIN_N_SIDE:
+        raise ValueError(
+            f"{fn_name}: displaced_n_side={n_side!r} is below the "
+            f"{_DISP_REMAP_2D_MIN_N_SIDE}-ray structural minimum (the "
+            f"finite-difference Jacobian needs one central-difference interior "
+            f"row and the inversion needs a bilinear cell either side of it).  "
+            f"The launch pitch is 2*r_aperture/(displaced_n_side-1); the call "
+            f"warns whenever it is coarser than twice the field pitch.")
+    return v
 
 
 def _build_displaced_ray_map_2d(surfaces, thicknesses, wavelength, r_max,
@@ -2158,8 +2302,223 @@ def _build_displaced_ray_map_2d(surfaces, thicknesses, wavelength, r_max,
             float(r_max))
 
 
+def _remap2d_interp_delaunay(XO, YO, amp_out, OPL, m, Xg, Yg):
+    """Scattered exit points -> field grid by QHull Delaunay barycentric
+    interpolation, the SCATTERED backend of :func:`_apply_displaced_remap_2d`.
+
+    ONE ``LinearNDInterpolator`` (3-column value array) does the barycentric
+    interpolation for the transported complex amplitude AND the OPL in one
+    pass: the triangulation and the per-query-point weights depend only on
+    ``pts``, and each column is a separate ``sum(weight_k * value_k)``
+    reduction, so this reproduces three single-column interps bit for bit while
+    building the Delaunay once and walking the full-grid query once (measured
+    ~1.6x).  ``amp_grid`` / ``opl_grid`` are strided VIEWS into the single
+    ``(Ny, Nx, 3)`` result -- no per-column dense copy -- so the peak footprint
+    is one 3-wide grid.  The transported quantity is the COMPLEX residual
+    field, carried as its real and imaginary parts (both smooth wherever the
+    remap is valid, unlike a wrapped phase), so it takes two of the three
+    columns.  Outside the hull every column comes back NaN: the amplitude is
+    set to 0 and the OPL is nearest-filled.
+
+    Retained as the structured backend's independent oracle: it approximates
+    the same map by a different O(h**2) rule (barycentric over the exit
+    triangulation, against bilinear in launch space), so the two converging to
+    one answer is a check neither could give alone.  Its own limits are why it
+    is not the default -- the hull stops at the outermost retained exit point,
+    so a truncated pupil comes back with a ring of exactly-zero pixels inside
+    the illuminated region, and the triangulation of a near-degenerate exit set
+    resolves its cells arbitrarily."""
+    from scipy.interpolate import LinearNDInterpolator, NearestNDInterpolator
+    pts = np.column_stack([XO[m].ravel(), YO[m].ravel()])
+    _opl_flat = OPL[m].ravel()
+    _a_flat = amp_out[m].ravel()
+    _q = LinearNDInterpolator(
+        pts, np.column_stack([_a_flat.real, _a_flat.imag, _opl_flat]))(Xg, Yg)
+    amp_grid = _q[..., 0] + 1j * _q[..., 1]
+    opl_grid = _q[..., 2]
+    nan = np.isnan(opl_grid)
+    if bool(nan.any()):
+        opl_grid[nan] = NearestNDInterpolator(pts, _opl_flat)(
+            Xg[nan], Yg[nan])
+        amp_grid[nan] = 0.0
+    return amp_grid, opl_grid
+
+
+def _remap2d_affine_seed(XOf, YOf, dstep, u0, v0, Xt, Yt):
+    """Newton seed for :func:`_remap2d_interp_structured`: the exit map's own
+    GLOBAL AFFINE part, inverted.
+
+    ``P(u, v) ~ M (u, v) + b`` in the least-squares sense over the whole launch
+    lattice.  ``M`` is dominated by the element's magnification, so seeding at
+    ``M^-1 ((x, y) - b)`` starts one squaring of the Newton error closer than
+    seeding at the target itself -- measured on the p10 decentered singlet, a
+    2.4e-06 m seed residual against 5.5e-05 m, which is one whole sweep of the
+    grid.  The normal equations are accumulated as moments (nine sums over the
+    lattice) rather than assembled as a design matrix, so the cost is one pass
+    and no ``n_side**2 x 3`` allocation.
+
+    Falls back to the target itself when ``M`` is singular or non-finite -- a
+    fold that collapses the map onto a line -- which the Newton then handles
+    exactly as it did before."""
+    n_v, n_u = XOf.shape
+    uu = u0 + np.arange(n_u, dtype=np.float64) * dstep
+    vv = v0 + np.arange(n_v, dtype=np.float64) * dstep
+    U, V = np.meshgrid(uu, vv)
+    n = float(U.size)
+    su, sv = float(U.sum()), float(V.sum())
+    suu, svv, suv = float((U * U).sum()), float((V * V).sum()), float((U * V).sum())
+    G = np.array([[suu, suv, su], [suv, svv, sv], [su, sv, n]])
+    rhs = np.array([
+        [float((U * XOf).sum()), float((U * YOf).sum())],
+        [float((V * XOf).sum()), float((V * YOf).sum())],
+        [float(XOf.sum()), float(YOf.sum())]])
+    try:
+        coef = np.linalg.solve(G, rhs)
+        Minv = np.linalg.inv(coef[:2, :].T)
+    except np.linalg.LinAlgError:
+        return Xt.copy(), Yt.copy()
+    if not bool(np.all(np.isfinite(Minv))):
+        return Xt.copy(), Yt.copy()
+    px = Xt - coef[2, 0]
+    py = Yt - coef[2, 1]
+    return (Minv[0, 0] * px + Minv[0, 1] * py,
+            Minv[1, 0] * px + Minv[1, 1] * py)
+
+
+def _remap2d_interp_structured(XOf, YOf, amp_src, opl_src, box_mask,
+                               u0, v0, dstep, r_ap, Xg, Yg):
+    """Launch->exit map INVERTED on its own structured launch grid, the
+    default backend of :func:`_apply_displaced_remap_2d`.
+
+    The fan is a REGULAR square lattice, so ``(XOf, YOf)`` -- the exit position
+    as a function of the launch coordinate ``(u, v)`` -- is a smooth
+    curvilinear grid, not a scattered point cloud.  For each field point this
+    solves ``P(u, v) = (x, y)`` by Newton, reading ``P`` and its lattice
+    gradients through ``map_coordinates``, and then reads the transported
+    amplitude and OPL at the launch coordinate that comes back -- so the
+    interpolation stencil is always the regular launch quad.
+
+    Three things follow from inverting the map rather than triangulating its
+    image, and together they are why this is the default:
+
+    * no combinatorial choice.  Every step is a smooth function of the traced
+      data, so a 1-ULP perturbation of the launch grid (which is all that
+      separates a +d from a -d decenter) stays a 1-ULP perturbation of the
+      output.  A Delaunay backend must instead choose a diagonal for each
+      near-degenerate exit quad, and that choice is not reflection-stable.
+    * no resolution ceiling.  A denser lattice cannot create a sliver cell, so
+      accuracy improves with ``n_side`` instead of trading against symmetry.
+    * the aperture is cut on the inverted LAUNCH coordinate
+      (``u**2 + v**2 <= r_ap**2``), i.e. on the entrance footprint at sub-cell
+      resolution, instead of at the convex hull of the retained exit points.
+
+    ``box_mask`` marks the launch points that carry pupil amplitude; only the
+    field points inside their exit bounding box (plus one exit cell, so an
+    interpolated interior point cannot fall outside it) are inverted.  That is
+    exact -- the scattered path's hull is empty out there too -- and it is what
+    keeps a heavily padded grid cheap.
+
+    A field point the lattice does not reach keeps amplitude 0: Newton either
+    walks out of the launch rectangle, whereupon the clipped coordinate fails
+    the aperture cut because the fan is launched 3 % wider than the aperture,
+    or it stalls at a residual the ``_DISP_REMAP_2D_INV_TOL_FRAC`` bar
+    refuses."""
+    from scipy.ndimage import map_coordinates
+    n_v, n_u = XOf.shape
+    amp_grid = np.zeros(Xg.shape, dtype=np.complex128)
+    opl_grid = np.zeros(Xg.shape, dtype=np.float64)
+    # Lattice gradients of the exit map w.r.t. the launch coordinate
+    # (axis 0 = y_in, axis 1 = x_in) -- the Newton Jacobian, and the local
+    # exit-cell size the inversion residual is scored against.
+    dXO_dv, dXO_du = np.gradient(XOf, dstep, dstep)
+    dYO_dv, dYO_du = np.gradient(YOf, dstep, dstep)
+    # The longer edge of the exit cell one launch cell maps to: the scale the
+    # inversion residual is meaningful against, and the margin the search box
+    # needs.  A lattice quantity, so it is interpolated in ONE pass rather than
+    # rebuilt from four interpolated derivatives.
+    cell_lat = np.maximum(np.hypot(dXO_du, dYO_du),
+                          np.hypot(dXO_dv, dYO_dv)) * dstep
+    _cell_max = float(cell_lat.max())
+    _bx = XOf[box_mask]
+    _by = YOf[box_mask]
+    box = ((Xg >= _bx.min() - _cell_max) & (Xg <= _bx.max() + _cell_max)
+           & (Yg >= _by.min() - _cell_max) & (Yg <= _by.max() + _cell_max))
+    if not bool(box.any()):
+        return amp_grid, opl_grid
+    Xt = Xg[box]
+    Yt = Yg[box]
+    u_hi = u0 + (n_u - 1) * dstep
+    v_hi = v0 + (n_v - 1) * dstep
+    # Seed from the exit map's own GLOBAL AFFINE part (a least-squares fit over
+    # the launch lattice, inverted in closed form).  The map is a
+    # magnification plus a transverse walk, so the affine part is most of it
+    # and inverting it first costs one 3x3 solve and removes a whole Newton
+    # sweep: the seed residual runs 2.5e-06 m against 5.5e-05 m for the
+    # identity seed on the p10 singlet, which is one squaring of the error.
+    u, v = _remap2d_affine_seed(XOf, YOf, dstep, u0, v0, Xt, Yt)
+    np.clip(u, u0, u_hi, out=u)
+    np.clip(v, v0, v_hi, out=v)
+    crd = np.stack([(v - v0) / dstep, (u - u0) / dstep])
+    # The local exit cell, read once at the seed: it is a SCALE for the two
+    # bars, and the seed is already a fraction of a cell from the answer, so
+    # re-reading it every sweep would buy a few percent of a quantity that is
+    # three decades from either bar.
+    cell = map_coordinates(cell_lat, crd, order=1, mode='nearest')
+    tol = _DISP_REMAP_2D_INV_TOL_FRAC * cell
+    # Sweep only the points not yet converged.  A converged point's further
+    # sweeps are pure cost, and the RESIDUAL is what decides -- see
+    # _DISP_REMAP_2D_INV_TOL_FRAC for why this loop cannot stop on a bitwise
+    # fixed point the way the surface-intersection Newtons do.
+    resid = np.empty(Xt.size)
+    act = np.arange(Xt.size)
+    ua = u[act]
+    va = v[act]
+    for _ in range(_DISP_REMAP_2D_INV_MAX_ITERS):
+        rx = Xt[act] - map_coordinates(XOf, crd, order=1, mode='nearest')
+        ry = Yt[act] - map_coordinates(YOf, crd, order=1, mode='nearest')
+        r = np.hypot(rx, ry)
+        resid[act] = r
+        run = r > tol[act]
+        if not bool(run.any()):
+            act = act[:0]
+            break
+        if not bool(run.all()):
+            act = act[run]
+            ua = ua[run]
+            va = va[run]
+            rx = rx[run]
+            ry = ry[run]
+            crd = np.stack([(va - v0) / dstep, (ua - u0) / dstep])
+        a = map_coordinates(dXO_du, crd, order=1, mode='nearest')
+        b = map_coordinates(dXO_dv, crd, order=1, mode='nearest')
+        c = map_coordinates(dYO_du, crd, order=1, mode='nearest')
+        d = map_coordinates(dYO_dv, crd, order=1, mode='nearest')
+        det = a * d - b * c
+        det = np.where(np.abs(det) < 1e-30, 1e-30, det)
+        ua = np.clip(ua + (d * rx - b * ry) / det, u0, u_hi)
+        va = np.clip(va + (-c * rx + a * ry) / det, v0, v_hi)
+        u[act] = ua
+        v[act] = va
+        crd = np.stack([(va - v0) / dstep, (ua - u0) / dstep])
+    if act.size:
+        # The cap, not the bar, stopped the loop: re-score the stragglers at
+        # the coordinates they actually reached.
+        resid[act] = np.hypot(
+            Xt[act] - map_coordinates(XOf, crd, order=1, mode='nearest'),
+            Yt[act] - map_coordinates(YOf, crd, order=1, mode='nearest'))
+    ok = resid <= _DISP_REMAP_2D_INV_MISS_FRAC * cell
+    ok &= (u * u + v * v) <= (r_ap * (1.0 + 1e-9)) ** 2
+    crd = np.stack([(v - v0) / dstep, (u - u0) / dstep])
+    _ar = map_coordinates(amp_src.real, crd, order=1, mode='nearest')
+    _ai = map_coordinates(amp_src.imag, crd, order=1, mode='nearest')
+    _op = map_coordinates(opl_src, crd, order=1, mode='nearest')
+    amp_grid[box] = np.where(ok, _ar + 1j * _ai, 0.0)
+    opl_grid[box] = np.where(ok, _op, 0.0)
+    return amp_grid, opl_grid
+
+
 def _apply_displaced_remap_2d(E_in, ray_map_2d, wavelength, dx, dy,
-                              eik_fn=None):
+                              eik_fn=None, interp_method='structured'):
     """P10 / niche N11 -- energy-conserving 2-D transverse-walk remap for a
     decentered / tilted / freeform element.
 
@@ -2175,15 +2534,25 @@ def _apply_displaced_remap_2d(E_in, ray_map_2d, wavelength, dx, dy,
     ``|E_out|^2 dA_out = |E_in|^2 dA_in``), and the exit phase is the ray eikonal
     ``k0 * OPL`` (which carries the entrance-plane carrier eikonal) PLUS the
     input field's residual phase against that congruence, transported along the
-    same rays (see :func:`_residual_input_field`).  Amplitude and OPL are
-    interpolated SEPARATELY from the scattered exit points onto the field grid
-    (phase-safe: the eikonal is smooth even where the amplitude is warped), then
-    combined.  ``eik_fn(x, y) -> W_conj`` is the congruence the fan was launched
-    along (``None`` = collimated); pass the SAME callable the ray map was built
-    with.  Returns the exit-vertex-plane field (same reference plane as the
-    default screen path)."""
-    from scipy.interpolate import LinearNDInterpolator, NearestNDInterpolator
-    from scipy.ndimage import map_coordinates
+    same rays (see :func:`_residual_input_field`).  Amplitude and OPL reach the
+    field grid SEPARATELY (phase-safe: the eikonal is smooth even where the
+    amplitude is warped), then combine.  ``eik_fn(x, y) -> W_conj`` is the
+    congruence the fan was launched along (``None`` = collimated); pass the
+    SAME callable the ray map was built with.  Returns the exit-vertex-plane
+    field (same reference plane as the default screen path).
+
+    ``interp_method`` selects how the traced exit map reaches the field grid:
+
+    * ``'structured'`` (default) -- invert the launch->exit map on its own
+      regular launch lattice (:func:`_remap2d_interp_structured`).
+    * ``'delaunay'`` -- the scattered QHull backend
+      (:func:`_remap2d_interp_delaunay`), retained as that inversion's oracle.
+    """
+    from scipy.ndimage import distance_transform_edt, map_coordinates
+    if interp_method not in _VALID_DISP_REMAP_INTERP:
+        raise ValueError(
+            f"_apply_displaced_remap_2d: interp_method must be one of "
+            f"{list(_VALID_DISP_REMAP_INTERP)} (got {interp_method!r}).")
     X0, Y0, XO, YO, OPL, ALIVE, dstep, r_ap = ray_map_2d
     Ny, Nx = E_in.shape
     k0 = 2.0 * np.pi / wavelength
@@ -2207,6 +2576,26 @@ def _apply_displaced_remap_2d(E_in, ray_map_2d, wavelength, dx, dy,
                                      mode='constant', cval=0.0)
               ).reshape(X0.shape)
     del _F
+    # The carried envelope is the input field over the largest CENTRED window
+    # the caller's grid holds: |x| <= x[-1] = (Nx/2 - 1) dx, and the same in y.
+    #
+    # The field axis ``(arange(N) - N/2) * d`` reaches one whole sample further
+    # on the -x side than on +x, so a ray launched between x[-1] and x[-1] + dx
+    # would carry NOTHING (the sample is off the grid) while its mirror
+    # between x[0] - dx and x[0] carries the full envelope.  That is a rim of
+    # pupil amplitude decided by a half-pixel of grid convention, and whether
+    # the launch lattice has a ray in that one-pixel band is arbitrary: on the
+    # p10 decentered singlet at N = 512 it does at n_side 512, 1025 and 2049
+    # and does not at 181, 257 and 513.  That, and not the choice of
+    # interpolation backend, is what ties the launch lattice to the mirror
+    # symmetry: without the window the image-plane mirror residual reads
+    # 6.3e-03 at 512 against 7.9e-14 at 181 on BOTH backends.  Cutting the
+    # envelope at the symmetric window costs the outermost input row and
+    # column and makes the sampled envelope mirror-exact to 4.4e-16 at every
+    # lattice.
+    _win = ((np.abs(X0) <= (Nx / 2.0 - 1.0) * dx)
+            & (np.abs(Y0) <= (Ny / 2.0 - 1.0) * dy))
+    amp_in = np.where(_win, amp_in, 0.0)
     # Forward Jacobian det d(x_out,y_out)/d(x_in,y_in) on the regular launch grid
     # (physical spacing).  Fill any dead-ray (TIR / miss) exit position by
     # nearest-alive FIRST so a dead ray does not poison a live neighbour's
@@ -2215,6 +2604,7 @@ def _apply_displaced_remap_2d(E_in, ray_map_2d, wavelength, dx, dy,
     YOf = YO.copy()
     dead = ~ALIVE
     if bool(dead.any()) and bool(ALIVE.any()):
+        from scipy.interpolate import NearestNDInterpolator
         pa = np.column_stack([X0[ALIVE], Y0[ALIVE]])
         XOf[dead] = NearestNDInterpolator(pa, XO[ALIVE])(X0[dead], Y0[dead])
         YOf[dead] = NearestNDInterpolator(pa, YO[ALIVE])(X0[dead], Y0[dead])
@@ -2226,42 +2616,38 @@ def _apply_displaced_remap_2d(E_in, ray_map_2d, wavelength, dx, dy,
     # Enforce the aperture on the ENTRANCE footprint: the 3%-wider fan only
     # supplies Jacobian neighbours; rays launched outside r_ap carry no pupil
     # amplitude (else a ``stop_index`` prescription -- whose field is not
-    # pre-apertured -- would leak the beyond-aperture ring).
+    # pre-apertured -- would leak the beyond-aperture ring).  The scattered
+    # backend applies it by dropping those rays before it triangulates; the
+    # structured backend applies the same disk to the INVERTED launch
+    # coordinate, so it cuts the pupil edge at sub-launch-pitch resolution
+    # while the rays just outside still serve as interpolation neighbours.
     in_ap = (X0 * X0 + Y0 * Y0) <= (r_ap * (1.0 + 1e-9)) ** 2
     m = ALIVE & in_ap & np.isfinite(amp_out) & (np.abs(amp_in) > 0.0)
     if int(m.sum()) < 4:
         return np.zeros_like(E_in, dtype=np.complex128)
-    pts = np.column_stack([XO[m].ravel(), YO[m].ravel()])
     x = (np.arange(Nx, dtype=np.float64) - Nx / 2) * dx
     y = (np.arange(Ny, dtype=np.float64) - Ny / 2) * dy
     Xg, Yg = np.meshgrid(x, y)
-    # K3 (N15 perf): the amplitude and OPL remaps share ONE Delaunay
-    # triangulation of ``pts`` -- a single LinearNDInterpolator with a 2-column
-    # value array does the barycentric interpolation for BOTH quantities in one
-    # pass.  The triangulation and the per-query-point barycentric weights depend
-    # only on ``pts`` (identical for both columns), and each column is a separate
-    # ``sum(weight_k * value_k)`` reduction, so this reproduces the two former
-    # single-column interps BIT-FOR-BIT while building the Delaunay once and
-    # walking the full-grid query once (measured ~1.6x on this 2-D remap).
-    # ``amp_grid`` / ``opl_grid`` are strided VIEWS into the single (Ny, Nx, 3)
-    # result -- no per-column dense copy -- so the peak footprint is one 3-wide
-    # grid.  The transported quantity is now the COMPLEX residual field, carried
-    # as its real and imaginary parts (both smooth wherever the remap is valid,
-    # unlike a wrapped phase), so it takes two of the three columns.  Outside
-    # the hull every column comes back NaN: the amplitude is set to 0 (matching
-    # the former ``fill_value=0.0``) and the OPL is nearest-filled, exactly as
-    # before.
-    _opl_flat = OPL[m].ravel()
-    _a_flat = amp_out[m].ravel()
-    _q = LinearNDInterpolator(
-        pts, np.column_stack([_a_flat.real, _a_flat.imag, _opl_flat]))(Xg, Yg)
-    amp_grid = _q[..., 0] + 1j * _q[..., 1]
-    opl_grid = _q[..., 2]
-    nan = np.isnan(opl_grid)
-    if bool(nan.any()):
-        opl_grid[nan] = NearestNDInterpolator(pts, _opl_flat)(
-            Xg[nan], Yg[nan])
-        amp_grid[nan] = 0.0
+    if interp_method == 'delaunay':
+        amp_grid, opl_grid = _remap2d_interp_delaunay(
+            XO, YO, amp_out, OPL, m, Xg, Yg)
+    else:
+        # Interpolation sources on the launch lattice.  A dead (TIR / miss)
+        # ray carries no amplitude, so it enters as an exact 0 rather than as
+        # an invented value; its OPL is nearest-filled by the structured (EDT)
+        # fill so a NaN cannot reach a live neighbour's bilinear stencil, and
+        # nothing reads it (its amplitude is 0).
+        _good = ALIVE & np.isfinite(amp_out) & np.isfinite(OPL)
+        amp_src = np.where(_good, amp_out, 0.0).astype(np.complex128)
+        opl_src = np.asarray(OPL, dtype=np.float64)
+        if not bool(_good.all()):
+            _fi = tuple(distance_transform_edt(
+                ~_good, return_distances=False, return_indices=True))
+            opl_src = opl_src[_fi]
+        amp_grid, opl_grid = _remap2d_interp_structured(
+            XOf, YOf, amp_src, opl_src, m,
+            float(X0[0, 0]), float(Y0[0, 0]), float(dstep), float(r_ap),
+            Xg, Yg)
     opl_ref = float(np.median(OPL[m]))
     E_out = amp_grid * np.exp(1j * k0 * (opl_grid - opl_ref))
     out_dtype = E_in.dtype if np.iscomplexobj(E_in) else np.complex128
@@ -4401,6 +4787,7 @@ def _check_displaced_support(*, surface_model, slant_correction, fresnel,
                              conjugate=None, E_shape=None,
                              displaced_mode='screen',
                              displaced_obliquity='auto',
+                             displaced_n_side=None,
                              remap_order=3):
     """Validate ``surface_model`` and, for ``'displaced'``, that the requested
     feature set + prescription are within the ray-angle-aware refraction OPD's
@@ -4419,6 +4806,22 @@ def _check_displaced_support(*, surface_model, slant_correction, fresnel,
             f"apply_real_lens: unknown displaced_obliquity "
             f"{displaced_obliquity!r}.  Valid choices: "
             f"{sorted(_VALID_DISPLACED_OBLIQUITY)}.")
+    displaced_n_side = _normalise_displaced_n_side(displaced_n_side)
+    if displaced_n_side is not None and not _routes_to_displaced_remap_2d(
+            surface_model, displaced_mode, displaced_obliquity,
+            prescription.get('surfaces') or []):
+        raise ValueError(
+            f"apply_real_lens: displaced_n_side={displaced_n_side!r} sets the "
+            f"launch lattice of the 2-D transverse-walk remap, and this call "
+            f"does not run it (surface_model={surface_model!r}, "
+            f"displaced_mode={displaced_mode!r}, displaced_obliquity="
+            f"{displaced_obliquity!r}, element "
+            f"{'asymmetric' if _element_is_asymmetric(prescription.get('surfaces') or []) else 'rotationally symmetric'}"
+            f").  The 2-D remap runs for a decentered / tilted / sag_callable "
+            f"element under surface_model='displaced' with displaced_mode="
+            f"'remap', or with the default 'screen' and "
+            f"displaced_obliquity='auto'.  Drop displaced_n_side or route the "
+            f"call to that model.")
     if surface_model in _TANGENT_FACET_MODELS:
         if remap_order not in _VALID_REMAP_ORDERS:
             raise ValueError(
@@ -4638,6 +5041,7 @@ def apply_real_lens(
     conjugate: Any = None,
     displaced_mode: str = 'screen',
     displaced_obliquity: str = 'auto',
+    displaced_n_side: Optional[int] = None,
     remap_order: int = 3,
     carrier: Any = None,
     screen_obliquity: Any = 'auto',
@@ -5340,6 +5744,31 @@ def apply_real_lens(
         the documented walk-off-limited peer.  See
         ``docs/audit_real_lens_displaced_2026_07_19.md`` (P3 screen limit + P10
         remap fix).
+    displaced_n_side : int or None, default None
+        Side of the SQUARE LAUNCH LATTICE the 2-D transverse-walk remap traces,
+        in RAYS; ``None`` uses the module default (257).  The remap is a
+        geometric transfer, so this -- not ``dx`` -- sets the transverse
+        resolution of its output: the launch pitch is
+        ``2 * r_aperture / (displaced_n_side - 1)`` across the traced aperture,
+        the fan itself is launched 3 % wider so the edge rays have interior
+        Jacobian neighbours, and input structure finer than that pitch (a hard
+        stop edge, an obscuration, an upstream DOE, speckle) is SMOOTHED to the
+        lattice.  The call warns, naming both pitches and the lattice that
+        would clear the bar, whenever the launch pitch is coarser than twice
+        the field pitch.
+
+        Cost is ``displaced_n_side**2`` rays traced through the prescription;
+        accuracy is second order in the launch pitch (measured 4x per
+        doubling, see :data:`_DISP_REMAP_2D_N_SIDE`), with no upper limit
+        imposed by the model -- the exit map is inverted on its own regular
+        launch grid, so a denser lattice cannot produce the degenerate cells
+        that made a scattered triangulation lose reflection symmetry.
+
+        Only meaningful when the call actually routes to the 2-D remap (an
+        asymmetric element under ``surface_model='displaced'`` with
+        ``displaced_mode='remap'``, or the default ``'screen'`` +
+        ``displaced_obliquity='auto'``); anything else raises rather than
+        discard the setting.
     carrier : TiltedCarrier / float / 'auto' / ndarray / None, default None
         The INPUT CONGRUENCE, in the same vocabulary
         :func:`apply_real_lens_traced` takes: a
@@ -5556,6 +5985,7 @@ def apply_real_lens(
             conjugate=conjugate,
             displaced_mode=displaced_mode,
             displaced_obliquity=displaced_obliquity,
+            displaced_n_side=displaced_n_side,
             remap_order=remap_order,
             carrier=carrier,
             screen_obliquity=screen_obliquity,
@@ -5590,6 +6020,7 @@ def _apply_real_lens_impl(
     conjugate: Any = None,
     displaced_mode: str = 'screen',
     displaced_obliquity: str = 'auto',
+    displaced_n_side: Optional[int] = None,
     remap_order: int = 3,
     carrier: Any = None,
     screen_obliquity: Any = 'auto',
@@ -5658,8 +6089,15 @@ def _apply_real_lens_impl(
         E_shape=np.shape(E_in),
         displaced_mode=displaced_mode,
         displaced_obliquity=displaced_obliquity,
+        displaced_n_side=displaced_n_side,
         remap_order=remap_order,
     )
+    # The launch lattice the 2-D remap will trace: the validated per-call
+    # override, else the module default.  Resolved once, so the smoothing
+    # warning and the trace cannot disagree about it.
+    _disp_n_side = _normalise_displaced_n_side(displaced_n_side)
+    if _disp_n_side is None:
+        _disp_n_side = _DISP_REMAP_2D_N_SIDE
     # The screen-obliquity correction + its accuracy guard.  Reached ONLY
     # through the ``carrier=`` keyword, so a call that does not pass one is
     # structurally bit-unchanged (BUILD_SCREEN_OBLIQUITY_2026_08_11 S6).
@@ -5796,9 +6234,8 @@ def _apply_real_lens_impl(
     # displaced_obliquity='pointwise' keeps the P3 single-plane obliquity SCREEN
     # (the documented walk-off-limited peer).
     _disp_asym = _displaced and _element_is_asymmetric(surfaces)
-    _disp_2d_remap = _disp_asym and (
-        displaced_mode == 'remap'
-        or (displaced_mode == 'screen' and displaced_obliquity == 'auto'))
+    _disp_2d_remap = _routes_to_displaced_remap_2d(
+        surface_model, displaced_mode, displaced_obliquity, surfaces)
     _remap_mode = (_displaced and displaced_mode == 'remap'
                    and not _disp_asym)             # 1-D symmetric remap (P2)
     _split_mode = _displaced and displaced_mode == 'split'
@@ -5842,11 +6279,10 @@ def _apply_real_lens_impl(
             _dir2, _eik2 = _displaced_carrier_dir_eik_fn(
                 conjugate, E_in, wavelength, dx, dy, Nx, Ny)
             _disp_eik_fn = _eik2
-            _warn_if_remap_lattice_smooths(
-                _r_max, dx, dy, _DISP_REMAP_2D_N_SIDE)
+            _warn_if_remap_lattice_smooths(_r_max, dx, dy, _disp_n_side)
             _disp_ray_map_2d = _build_displaced_ray_map_2d(
                 surfaces, thicknesses, wavelength, _r_max,
-                n_side=_DISP_REMAP_2D_N_SIDE,
+                n_side=_disp_n_side,
                 dir_fn=_dir2, eik_fn=_eik2)
         elif _disp_pointwise:
             # P3 (N2): 2-D pointwise obliquity SCREEN for decenter / tilt /

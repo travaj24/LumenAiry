@@ -261,7 +261,7 @@ the config is passed to it un-narrowed.
 | `beam_centre` | None | -- | Y | -- | -- | -- | -- | -- |
 | `roi` | None | -- | -- | -- | Y | Y | -- | -- |
 
-### `LensNumerics` (17 fields)
+### `LensNumerics` (18 fields)
 
 | field | default | analytic | traced | prepare | maslov | gbd | fga | multibranch |
 |---|---|---|---|---|---|---|---|---|
@@ -270,6 +270,7 @@ the config is passed to it un-narrowed.
 | `ray_subsample` | 8 | -- | Y | Y | -- | -- | -- | -- |
 | `output_subsample` | 1 | -- | -- | -- | Y | Y | -- | -- |
 | `remap_order` | 3 | Y | -- | -- | -- | -- | -- | -- |
+| `displaced_n_side` | None | Y | -- | -- | -- | -- | -- | -- |
 | `min_coarse_samples_per_aperture` | 32 | -- | Y | Y | -- | -- | -- | -- |
 | `fit_radius_beam_factor` | None | -- | Y | Y | -- | -- | -- | -- |
 | `newton_fit` | `'auto'` | -- | Y | Y | -- | -- | -- | -- |

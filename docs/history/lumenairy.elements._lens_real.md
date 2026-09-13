@@ -1,11 +1,12 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/_lens_real.py
-ast_sha256: f9d76940ddabdd9c5060b9b3c74dc52f33c1901dca0654e76789a7530f782bf9
-token_sha256: 70f5975ca289211a7fbc3b27ddb0155ebe8ac5a5f01109d3921ed75d6b1612e0
+ast_sha256: 872143302a7fde8aeca0d1d415ee61aababff8f73e1e725bd7e7c42b9faee658
+token_sha256: 7ea5039289a9f57ed7f7b4de002dccd05f1ebdf30026435abac545e0dc7fe0aa
 pre_relocation_lines: 8117
 recorded_by: WP-A17 SWEEP-4 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
 re_recorded: 2026-09-12 -- ruff isort combine-as-imports (pyproject.toml, WP-A16 recommendation): aliased import statements from the same module merged into one; the set of bound names is unchanged
+re_recorded: 2026-09-13 -- WP-B2 (audit 2026-09-11 L9): the 2-D displaced remap's launch->exit map is inverted on its own structured launch grid instead of Delaunay-triangulating the scattered exit points (the scattered backend is retained as its oracle); the carried input envelope is cut at the largest centred window the field grid holds, which is what actually made the launch lattice reflection-unstable; the lattice is raised 181 -> 257 and exposed as a validated displaced_n_side keyword
 -->
 
 # Version history -- `lumenairy/elements/_lens_real.py`
@@ -275,3 +276,98 @@ below as *Left in the source*.
     # later set_default_wave_propagator('fresnel') desynchronised the prepared
     # object from apply_real_lens by 49.6 with no diagnostic.
 ```
+
+---
+
+## WP-B2 (2026-09-13) -- the 2-D displaced remap's launch lattice and its inversion
+
+Recorded here rather than in the source, per `CONTRIBUTING.md`: the source says
+what the code does now and why, and this is the "what it used to do, what that
+was thought to be, and what it turned out to be" that would otherwise
+accumulate on `_DISP_REMAP_2D_N_SIDE` and `_apply_displaced_remap_2d`.
+
+### The finding
+
+Audit `AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11.md` L9 (P2): *"2-D displaced
+remap resolution fixed by `n_side=181` and Delaunay."*  WP-A2 fixed the
+silence -- `_warn_if_remap_lattice_smooths` -- but left the lattice at 181,
+because raising it alone was a measured regression:
+
+> Scored by the mirror residual of the image-plane intensity on
+> `test_niche_p10_transverse_walk_remap.py`'s fixture (N = 512, f/5 singlet,
+> d = 0.6 mm): 7.9e-14 at n_side = 181, 5.5e-14 at 257, 4.1e-14 at 513 -- but
+> **4.1e-03 at 512 and 7.4e-03 at 1025**.  The instability is the Delaunay
+> backend's, not the resolution's: a denser scattered set hands QHull more
+> near-degenerate cells to resolve arbitrarily, and which way it resolves them
+> is not reflection-stable.
+
+That reading reproduces exactly on this build (relL2 7.927e-14 / 5.498e-14 /
+6.288e-03 / 4.124e-14 / 7.409e-03 at 181 / 257 / 512 / 513 / 1025; the "4.1e-03
+at 512" WP-A2 quoted is the EE80 column of the same sweep, 4.082e-03).
+
+### What it actually was
+
+The attribution to QHull was wrong.  Running the same sweep through the new
+structured inversion, with no triangulation anywhere, gave 6.807e-03 at 512 and
+3.888e-03 at 1025 -- the same instability, same lattices.  The cause is one
+line upstream of both backends:
+
+```python
+    cx = X0.ravel() / dx + Nx / 2.0
+    amp_in = map_coordinates(_F.real, [cy, cx], order=1,
+                             mode='constant', cval=0.0) + 1j * (...)
+```
+
+The field axis `(arange(N) - N/2) * dx` runs from `-(N/2) dx` to `+(N/2 - 1) dx`
+-- one whole sample further on the `-x` side.  A ray launched in the band
+`(x[-1], x[-1] + dx]` therefore samples off the grid and carries nothing, while
+its mirror between `x[0] - dx` and `x[0]` carries the full envelope.  On the p10
+fixture that is 0.63 of the peak, and whether any ray lands in the band is
+decided by the launch pitch:
+
+| n_side | dstep [um] | a ray in the band? | mirror-asymmetric launch samples | max amp asymmetry |
+|---|---|---|---|---|
+| 181 | 57.22 | no | 0 | 4.4e-16 |
+| 257 | 40.23 | no | 0 | 3.3e-16 |
+| 512 | 20.16 | **yes** | 406 | 6.281e-01 |
+| 513 | 20.12 | no | 0 | 3.3e-16 |
+| 1025 | 10.06 | **yes** | 812 | 6.292e-01 |
+
+which is the whole of the "raising the lattice breaks the mirror symmetry"
+effect, and why it looked like a property of the lattice.  `_apply_displaced_
+remap_2d` now cuts the carried envelope at the largest CENTRED window the grid
+holds (`|x| <= x[-1]`, `|y| <= y[-1]`), and the mirror residual reads 2.9e-14
+to 8.5e-12 across 181, 257, 512, 513, 1025 and 2049, on both backends -- nine
+decades below the readings it replaced.
+
+### The backend that was replaced
+
+`_apply_displaced_remap_2d` rebuilt the exit field with a single
+`LinearNDInterpolator` over the scattered exit points (one 3-column
+triangulation shared by the complex amplitude and the OPL -- the K3 / N15
+perf work).  That code is not gone: it is `_remap2d_interp_delaunay`, reachable
+as `interp_method='delaunay'`, and it is the oracle the structured inversion is
+checked against in
+`tests/unit/test_audit2609_b2_displaced_remap_inversion.py`.
+
+Byte-identity between the two was never achievable and was not claimed:
+barycentric interpolation over the exit triangulation and bilinear
+interpolation in launch space are different second-order approximations of the
+same map.  Measured against a ray-exact oracle (the same fan, each field
+point's launch coordinate found by Newton on the TRUE trace, so the oracle has
+no lattice at all), peak-relative over the illuminated core of a 0.7 mm beam at
+N = 512:
+
+| n_side | delaunay \|E\| rms | structured \|E\| rms | delaunay phase | structured phase |
+|---|---|---|---|---|
+| 181 | 9.213e-04 | 8.722e-04 | 4.715e-02 | 4.715e-02 |
+| 257 | 4.571e-04 | 4.251e-04 | 2.410e-02 | 2.410e-02 |
+| 513 | 1.156e-04 | 1.079e-04 | 5.882e-03 | 5.883e-03 |
+| 1025 | 2.918e-05 | 2.743e-05 | 1.439e-03 | 1.439e-03 |
+
+-- second order in the launch pitch for both, with the structured backend 5-6 %
+closer in amplitude and identical in phase.  Where the two genuinely differ is
+a truncated pupil: the hull ends at the outermost retained exit point, so the
+scattered backend leaves a ring of exactly-zero pixels inside the illuminated
+region (61 to 360 of 3782 sampled core points, lattice-dependent) and loses the
+power in it (0.97720 against 0.98658 of the input at n_side = 181).
