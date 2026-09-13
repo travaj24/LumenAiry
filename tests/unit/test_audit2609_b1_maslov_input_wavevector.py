@@ -1016,3 +1016,85 @@ def test_b1_the_s6_warning_is_gone_exactly_where_the_fix_applies():
             _, old = _maslov(E, method, seam=False)
             assert _s6_warnings(old), (
                 f'premise: 5.46 warned on {tag} ({method})')
+
+
+# ===========================================================================
+# 6.  The per-call keyword and the process seam say the same thing
+# ===========================================================================
+@pytest.mark.parametrize('method', ['stationary_phase', 'local_quadrature'])
+def test_b1_the_keyword_overrides_the_seam_in_both_directions(method):
+    """``input_wavevector_saddle=`` is the per-call spelling of the process
+    seam ``_S6_INPUT_WAVEVECTOR_SADDLE``, and the keyword WINS.
+
+    Both directions are pinned, and each against the seam-driven result
+    byte-for-byte -- the point of the keyword is to select one of exactly two
+    computations, not to open a third:
+
+    * seam ``True`` + ``input_wavevector_saddle=False``  ==  seam ``False``
+    * seam ``False`` + ``input_wavevector_saddle=True``  ==  seam ``True``
+
+    plus the two no-op arms (keyword agreeing with the seam, and the keyword
+    on its own against the shipped default), so a reading of the precedence
+    that simply ignored one of the two inputs would fail here.  The fixture is
+    a tilted input, which engages: on a flat one both settings collapse to the
+    same arithmetic and the test would be vacuous, which the last assertion
+    guards against.
+    """
+    E = _field(tilt_x=_na_in_cached())
+    opd_only, _ = _maslov(E, method, seam=False)
+    fitted, _ = _maslov(E, method, seam=True)
+    assert not np.array_equal(opd_only, fitted), (
+        'premise: the two saddles must differ on this fixture, or the '
+        'override has nothing to select between')
+
+    # the keyword overrides a seam that says the opposite ...
+    kw_off, msgs_off = _maslov(E, method, seam=True,
+                               input_wavevector_saddle=False)
+    assert np.array_equal(kw_off, opd_only), (
+        f'{method}: input_wavevector_saddle=False did not override the '
+        f'process seam; max |diff| = {np.max(np.abs(kw_off - opd_only)):.3e}')
+    assert _s6_warnings(msgs_off), (
+        'asking for the OPD-only saddle on a non-flat input must still warn')
+    kw_on, msgs_on = _maslov(E, method, seam=False,
+                             input_wavevector_saddle=True)
+    assert np.array_equal(kw_on, fitted), (
+        f'{method}: input_wavevector_saddle=True did not override the '
+        f'process seam; max |diff| = {np.max(np.abs(kw_on - fitted)):.3e}')
+    assert not _s6_warnings(msgs_on), (
+        'the fitted saddle on a chart-representable wavefront must be silent')
+
+    # ... and agrees with itself when the two do not conflict
+    assert np.array_equal(
+        _maslov(E, method, seam=False, input_wavevector_saddle=False)[0],
+        opd_only)
+    assert np.array_equal(
+        _maslov(E, method, seam='auto', input_wavevector_saddle=None)[0],
+        _maslov(E, method, seam='auto')[0])
+
+
+def test_b1_the_keyword_is_classified_by_lens_config():
+    """``lens_config`` must carry a written decision for every keyword-only
+    parameter of the seven lens entry points (WP-A16's "silently ignored
+    kwarg" detector).  This one is deliberately NOT a config field: which
+    stationary point to expand about is a property of the INPUT FIELD, so it
+    cannot travel in a ``LensNumerics`` that is reused across fields.
+
+    Pinned here as well as in
+    ``test_audit2609_a16_lens_config_round_trip.py`` so the two halves of the
+    change -- the keyword and its classification -- cannot land apart.
+    """
+    from lumenairy.elements import lens_config as lc
+    entry = lc.KWARG_ONLY.get('apply_real_lens_maslov', {})
+    assert 'input_wavevector_saddle' in entry, (
+        'lens_config.KWARG_ONLY does not classify input_wavevector_saddle; '
+        'the A16 census will fail on apply_real_lens_maslov')
+    reason = entry['input_wavevector_saddle']
+    assert isinstance(reason, str) and len(reason) >= 30, (
+        f'the exclusion reason must be a real sentence; got {reason!r}')
+    import inspect
+    params = inspect.signature(la.apply_real_lens_maslov).parameters
+    assert params['input_wavevector_saddle'].kind is inspect.Parameter.KEYWORD_ONLY
+    assert params['input_wavevector_saddle'].default is None, (
+        'the documented default is None (auto); a default that disagreed with '
+        'the signature is exactly what the A15a default-identity detector and '
+        'the A16 table comparison exist to catch')

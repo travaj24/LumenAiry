@@ -869,6 +869,12 @@ KWARG_ONLY: Dict[str, Dict[str, str]] = {
         'on_noncollimated': "per-call diagnostic policy knob.",
     },
     'apply_real_lens_maslov': {
+        'input_wavevector_saddle':
+            "per-call numerical-method policy: which stationary point the two "
+            "asymptotic evaluators expand about (audit S6).  It is a property "
+            "of the INPUT FIELD, not of the optic or the machine, so it "
+            "cannot travel in a LensGeometry / LensNumerics / LensResources "
+            "that is reused across fields.",
         'ray_field_samples': _MODEL_PRIVATE,
         'ray_pupil_samples': _MODEL_PRIVATE,
         'poly_order': _MODEL_PRIVATE,

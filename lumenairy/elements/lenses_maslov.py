@@ -153,12 +153,11 @@ _K1_FIT_RESIDUAL_MAX = 0.5
 # OPD-only saddle, and its warning, for every input -- and ``True`` uses the
 # fitted local wavevector whenever the input is not flat, faithful fit or not.
 # It is how the regression tests hold the two saddles side by side on one
-# build, and the only way to ask for the OPD-only answer on a non-collimated
-# input; the changelog's Migration note says when a caller wants that.
-# Process-global and private: the per-call spelling is an
-# ``input_wavevector_saddle=`` keyword, which needs a
-# ``lens_config.KWARG_ONLY`` entry to land and is requested in the WP-B1
-# report.
+# build, and how a caller asks a whole process for the OPD-only answer on a
+# non-collimated input; the changelog's Migration note says when that is what
+# someone wants.  Process-global and private, so it sets the DEFAULT only: the
+# ``input_wavevector_saddle=`` keyword takes precedence per call, and is the
+# spelling to reach for unless you mean every call in the process.
 _S6_INPUT_WAVEVECTOR_SADDLE = None
 
 # poly_order='auto' (v5.21): raise the tensor-Chebyshev OPD-fit order until the
@@ -1625,6 +1624,7 @@ def apply_real_lens_maslov(
     levin_tol: float = 1e-3,
     collimated_input: bool = False,
     input_na: Optional[float] = None,
+    input_wavevector_saddle: Optional[bool] = None,
     normalize_output: str = 'power',
     verbose: bool = False,
     progress: Optional[Any] = None,
@@ -1775,7 +1775,23 @@ def apply_real_lens_maslov(
     aliases to a wrapped direction that is perfectly smooth (measured
     residual 1.2e-10 at a 1.2 x Nyquist tilt), so the whole sampled field --
     not just this saddle -- is the aliased one.  Sample the input finely
-    enough that ``max|grad arg E_in| dx < pi``.  ``'quadrature'`` and
+    enough that ``max|grad arg E_in| dx < pi``.
+
+    ``input_wavevector_saddle`` chooses that stationary point PER CALL.  The
+    two candidates are ``grad_v2 OPD = 0`` (the ``v1 = 0`` collimated launch
+    ray at every pixel) and ``grad_v2[arg E_in(s1(v2)) + 2 pi OPD_waves] = 0``
+    (the ray whose launch direction is the input's own).  ``None`` (the
+    default) decides as described above -- the input's own wavefront spread
+    and the fit's own residual pick; ``True`` uses the fitted local wavevector
+    whenever the input is not flat, faithful fit or not; ``False`` always
+    solves ``grad_v2 OPD = 0``, and warns, which is what a caller who wants
+    the OPD-only answer on a non-collimated input passes (the changelog's
+    Migration note says when that is what someone wants).  It is
+    keyword-only and NOT a ``LensNumerics`` field on purpose: it is a property
+    of the INPUT FIELD, not of the optic or the machine, so it cannot travel
+    in a config object that is reused across fields.  The module-level
+    ``_S6_INPUT_WAVEVECTOR_SADDLE`` sets the process default this keyword
+    overrides.  ``'quadrature'`` and
     ``'levin'`` integrate the true integrand pointwise, have no saddle, and
     are untouched by all of this.
 
@@ -1956,6 +1972,7 @@ def apply_real_lens_maslov(
                 local_window_sigma=local_window_sigma,
                 levin_tol=levin_tol,
                 collimated_input=collimated_input, input_na=input_na,
+                input_wavevector_saddle=input_wavevector_saddle,
                 normalize_output=normalize_output, verbose=verbose,
                 use_gpu=use_gpu)
             from ..propagators.asm import angular_spectrum_propagate
@@ -2728,7 +2745,8 @@ def apply_real_lens_maslov(
     _na_wf = 0.0
     _k1_na_rays = 0.0
     _k1_res_rel = 0.0
-    _s6_mode = _S6_INPUT_WAVEVECTOR_SADDLE
+    _s6_mode = (_S6_INPUT_WAVEVECTOR_SADDLE if input_wavevector_saddle is None
+                else input_wavevector_saddle)
     _asymptotic = integration_method in ('stationary_phase',
                                          'local_quadrature')
     if _asymptotic and not collimated_input:
@@ -2790,8 +2808,11 @@ def apply_real_lens_maslov(
                  or _k1_na_rays > _SADDLE_FLAT_INPUT_NA)):
         import warnings  # function-local, matching this driver
         if _s6_mode is False:
-            _why = ("the module seam _S6_INPUT_WAVEVECTOR_SADDLE is False, so "
-                    "the saddle of the OPD alone is being solved")
+            _why = ("it was asked for the OPD-only saddle "
+                    + ("(input_wavevector_saddle=False)"
+                       if input_wavevector_saddle is not None
+                       else "(_S6_INPUT_WAVEVECTOR_SADDLE = False)")
+                    + ", so the saddle of the OPD alone is being solved")
         elif _k1_na_rays <= _SADDLE_FLAT_INPUT_NA:
             _why = (f"the wavefront is flat ACROSS THE TRACED APERTURE "
                     f"(ray-sampled NA {_k1_na_rays:.4f}), so nothing was "

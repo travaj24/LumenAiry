@@ -1,12 +1,13 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/lenses_maslov.py
-ast_sha256: b31b147df3ba6d0763e9589a9cf8dc248966ecaaa21d1b1acbc6ef388aebac7c
-token_sha256: 041017a14720a027485c49bade77505a600bb60a205568f0eacb7411cc00732b
+ast_sha256: 3b307beee739d20597d1f9259e6781448039375358527f669c6b63d731e442fe
+token_sha256: 52617ff504ab0cd1708dd7403fffeb566be6f2f5bc1efaaeab91968df3bcdb40
 pre_relocation_lines: 4484
 recorded_by: WP-A17 SWEEP-4 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
 re_recorded: 2026-09-12 -- ruff isort combine-as-imports (pyproject.toml, WP-A16 recommendation): aliased import statements from the same module merged into one; the set of bound names is unchanged
 re_recorded: 2026-09-13 -- WP-B1 (audit S6): the two asymptotic evaluators' saddle now carries the input field's fitted local wavevector in its gradient and Hessian, with a flatness gate, a fit-residual fallback and an A/B seam
+re_recorded: 2026-09-13 -- WP-B1 follow-up: input_wavevector_saddle= becomes a per-call keyword now that lens_config.KWARG_ONLY classifies it; the module seam stays as its process default
 -->
 
 # Version history -- `lumenairy/elements/lenses_maslov.py`

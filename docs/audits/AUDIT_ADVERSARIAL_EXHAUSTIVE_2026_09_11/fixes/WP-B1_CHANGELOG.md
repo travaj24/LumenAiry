@@ -104,6 +104,38 @@ carry the input's local wavevector and the OPD-only saddle is retained:
 * The warning also fires when the module seam is set to `False`, and when the
   wavefront is flat across the traced aperture but not across the grid.
 
+### Added -- `apply_real_lens_maslov(input_wavevector_saddle=)`
+
+Chooses, PER CALL, which stationary point the two asymptotic evaluators expand
+about.  The two candidates are `grad_v2 OPD = 0` -- which the symplectic
+identity makes the `v1 = 0` collimated launch ray at every pixel -- and
+`grad_v2[arg E_in(s1(v2)) + 2 pi OPD_waves] = 0`, the ray whose launch
+direction is the input's own.
+
+* `None` (default): decide from the input's own measured wavefront spread over
+  the traced aperture and from the `(k1x, k1y)` fit's own residual, as above.
+* `True`: use the fitted local wavevector whenever the input is not flat,
+  faithful fit or not.
+* `False`: always solve `grad_v2 OPD = 0`, and warn.
+
+Keyword-only, and deliberately NOT a `LensNumerics` field: which stationary
+point to expand about is a property of the INPUT FIELD, not of the optic or
+the machine, so it cannot travel in a config object that is reused across
+fields (`lens_config.KWARG_ONLY` carries that reason).  It overrides the
+process-wide `lenses_maslov._S6_INPUT_WAVEVECTOR_SADDLE`, which is now just
+the default it starts from, and it is forwarded to each leg of a
+`fold_split=True` run.
+
+* `lumenairy/elements/lenses_maslov.py` (signature :1628, `_leg_kw` :1960,
+  `_s6_mode` :2734, docstring :1779-1795).
+* Adds no arithmetic: the committed 5.47 saddle and this build agree by
+  `np.array_equal` on **18 of 18** cells (collimated / tilted / converging x
+  `stationary_phase` / `local_quadrature` x seam `None` / `False` / `True`),
+  and passing `input_wavevector_saddle=X` reproduces
+  `_S6_INPUT_WAVEVECTOR_SADDLE = X` byte-for-byte on the same 18.
+* Tests: `tests/unit/test_audit2609_b1_maslov_input_wavevector.py::test_b1_the_keyword_overrides_the_seam_in_both_directions`
+  (2) and `::test_b1_the_keyword_is_classified_by_lens_config`.
+
 ### Added -- `lenses_maslov._S6_INPUT_WAVEVECTOR_SADDLE`, a module-level A/B seam
 
 `None` (default) is the decision above; `False` always solves
@@ -115,20 +147,17 @@ same module.
 * **Migration.**  For a NON-COLLIMATED input with `integration_method` of
   `'stationary_phase'`, `'local_quadrature'`, or `'auto'` where it resolves to
   `'stationary_phase'`, the returned field CHANGES -- that is the fix.  A caller
-  who needs to reproduce a 5.46 number sets
-  `lumenairy.elements.lenses_maslov._S6_INPUT_WAVEVECTOR_SADDLE = False`
-  (process-global, private, no stability guarantee) or pins 5.46.
+  who needs to reproduce a 5.46 number passes
+  `input_wavevector_saddle=False` (see the entry above; for a whole process,
+  `lumenairy.elements.lenses_maslov._S6_INPUT_WAVEVECTOR_SADDLE = False`) or
+  pins 5.46.
   `collimated_input=True` also pins the old saddle but is NOT a way back to the
   old numbers: it re-sizes the pupil chart as well (`na_lens = 1e-5`,
   `na_input = 0`).  `'quadrature'` and `'levin'` integrate the true integrand
   pointwise, have no saddle, and are byte-identical to 5.46 for every input --
   they were already the correct choice for a non-collimated input and remain
   so where the fallback fires.  Collimated inputs are unchanged everywhere.
-* The per-call spelling of the seam is an `input_wavevector_saddle=` keyword.
-  It is NOT in this release: a new keyword-only parameter on
-  `apply_real_lens_maslov` requires an entry in
-  `lumenairy/elements/lens_config.py::KWARG_ONLY`, which belongs to another
-  work package in this wave.  Requested in the WP-B1 report.
+* The per-call spelling is `input_wavevector_saddle=`, entered above.
 
 ### Performance
 

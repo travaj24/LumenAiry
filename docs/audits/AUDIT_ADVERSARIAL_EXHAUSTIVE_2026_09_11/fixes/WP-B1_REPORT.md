@@ -502,3 +502,77 @@ was right to — a comment says what the code does now.  Both were reworded to
 name the BEHAVIOUR (`the OPD-only saddle`) instead of a release, and the
 migration statement lives in the changelog where it belongs.  The lint is
 green without re-baselining.
+
+---
+
+## 9. Follow-up (after commit `2871e92e`): the per-call keyword
+
+§6 item 1 and §7 item 1 deferred `input_wavevector_saddle=` because a new
+keyword-only parameter on `apply_real_lens_maslov` fails the WP-A16
+"silently ignored kwarg" census until `lens_config.KWARG_ONLY` classifies it,
+and that file belonged to another package in this wave.  The orchestrator has
+added the classification, so the `lenses_maslov.py` half is done here, exactly
+as §7 item 1 specified.
+
+**Changed** (`lumenairy/elements/lenses_maslov.py`):
+
+* `input_wavevector_saddle: Optional[bool] = None` added to the signature
+  immediately after `input_na` (:1628) — keyword-only, like every parameter of
+  this entry point.
+* forwarded in the `fold_split` `_leg_kw` dict (:1960), so a folded
+  prescription does not silently drop it on its per-leg calls.  That omission
+  is finding E-L20's exact shape, and the same block already raises for the
+  kwargs it genuinely cannot carry.
+* read in place of the module seam (:2734):
+  `_s6_mode = (_S6_INPUT_WAVEVECTOR_SADDLE if input_wavevector_saddle is None
+  else input_wavevector_saddle)` — so the keyword takes precedence per call and
+  the seam is demoted to the process DEFAULT it always was.
+* documented in the docstring's parameter narrative (:1779-1795): what the two
+  candidate stationary points are, what each of the three values does, and why
+  it is per-call rather than a `LensNumerics` field — which stationary point to
+  expand about is a property of the INPUT FIELD, so it cannot travel in a
+  config object that is reused across fields.
+* the S6 warning's "you asked for the OPD-only saddle" branch now names
+  whichever of the two the caller actually used, instead of always naming the
+  seam.
+* the seam's own comment restated to say it sets the default the keyword
+  overrides.  (An earlier draft of the new docstring said "reproduce a
+  pre-5.47 number"; the WP-A17 ratchet caught it, correctly — a comment says
+  what the code does now — and it was reworded to name the behaviour, with the
+  migration statement left where it belongs, in the changelog.)
+
+**Verified.**  The keyword changes no number anywhere:
+
+| check | result |
+|---|---|
+| committed `2871e92e` vs this file, both seams set to each of `None` / `False` / `True`, collimated + tilted + converging × `stationary_phase` / `local_quadrature` | **18 / 18 `np.array_equal`** |
+| `input_wavevector_saddle=X` vs `_S6_INPUT_WAVEVECTOR_SADDLE = X` for the same 18 cells | **18 / 18 `np.array_equal`** |
+
+**Pinned** in `tests/unit/test_audit2609_b1_maslov_input_wavevector.py` (25 →
+**28 tests**):
+
+* `test_b1_the_keyword_overrides_the_seam_in_both_directions` (×2 methods) —
+  keyword `False` against a seam saying `True` reproduces the seam-`False`
+  field byte-for-byte and still warns; keyword `True` against a seam saying
+  `False` reproduces the seam-`True` field byte-for-byte and is silent; the two
+  no-conflict arms agree; and the premise assertion fails the test if the two
+  saddles ever stop differing on the fixture, so no arm can pass vacuously.
+* `test_b1_the_keyword_is_classified_by_lens_config` — the `KWARG_ONLY` entry
+  exists with a real reason, and the live signature is keyword-only with
+  default `None`.  This lives here as well as in the A16 census so the two
+  halves of the change cannot land apart.
+
+**Tests run** (working tree, other packages' edits present):
+
+| command | result |
+|---|---|
+| `pytest tests/unit/test_audit2609_b1_maslov_input_wavevector.py` | **28 passed** (35.2 s) |
+| `pytest tests/unit/test_audit2609_a16_lens_config_round_trip.py -k maslov` | **4 passed**, 80 deselected |
+| `pytest a16_round_trip a16_bit_identity a17_history_lint a17_history_relocation a4_maslov_gbd a4_verify_maslov_asymptotic` | **938 passed, 5 failed** — every failure is `_lens_traced` / `*_real_lens_traced` (another package's in-flight parameter and its un-re-recorded history document); the `apply_real_lens_maslov` census cells, both `a17` gates for this module, and both A4 files (with the restatements from §7 items 2–3 applied) are green |
+| `ruff check lumenairy/elements/lenses_maslov.py tests/unit/test_audit2609_b1_maslov_input_wavevector.py` | **All checks passed** |
+| `python scripts/record_history_fingerprints.py lumenairy/elements/lenses_maslov.py --check` | **exit 0** — re-recorded in this change |
+
+`docs/history/lumenairy.elements.lenses_maslov.md` carries a second
+`re_recorded:` line for this follow-up.
+
+§6 item 1 is closed; items 2–6 stand.
