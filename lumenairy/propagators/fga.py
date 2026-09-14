@@ -789,47 +789,72 @@ _RIM_CELLS = 3              # dilation (coarse cells) of the vignetting boundary
 _COARSE_SUPP_FRAC = 1e-3    # rim direct-trace only where windowed |u0| is >= this
 
 
-def _is_all_conic(surfaces):
-    """True when EVERY surface is a rotationally-symmetric conic (sphere / conic,
-    no aspheric-polynomial / freeform / biconic terms) -- the class this module
-    routes to the analytic (forward-mode-AD) differential Jacobian.
+def _analytic_jacobian_applies(surfaces):
+    """True when EVERY surface is inside
+    :func:`~lumenairy.raytrace.differential.ray_transfer_jacobian_analytic`'s
+    own domain -- a rotationally-symmetric conic, with or without an even-power
+    aspheric departure, and with no field-frame coordinate break.
 
-    It is a whitelist, and a STRICTER one than the analytic primitive's own
-    guard, which also accepts an even-power aspheric departure (the conic root
-    seeds a differentiated Newton refinement onto ``conic + polynomial``; see
-    :func:`~lumenairy.raytrace.differential.ray_transfer_jacobian_analytic`).
-    An aspheric prescription therefore traces the finite-difference bundle here
-    whatever ``exact_jacobian`` says.  ``jacobian='auto'`` in
-    :mod:`lumenairy.propagators.gbd` reaches the analytic path for that class
-    instead, because it dispatches on the primitive's own
-    ``NotImplementedError`` rather than on a list of surface kinds."""
+    It mirrors that primitive's guard term for term, so the two agree on every
+    prescription: the analytic ``_adrt_step`` reads ``radius`` / ``conic`` /
+    ``aspheric_coeffs``, all rotationally symmetric, and a biconic
+    (``radius_y`` / ``conic_y`` / ``aspheric_coeffs_y``), a freeform, or a
+    field-frame ``field_decenter`` / ``field_tilt`` / ``field_sag_callable``
+    breaks that symmetry.  Keeping the two predicates identical is what lets
+    this module DISPATCH on a predicate where
+    :mod:`lumenairy.propagators.gbd`'s ``jacobian='auto'`` dispatches on the
+    primitive's own ``NotImplementedError``: a surface the primitive rejects
+    never reaches it from here, so there is no call-time raise to catch.
+
+    ``_is_all_conic`` is a back-compat alias for this predicate."""
     for s in surfaces:
-        if (getattr(s, 'aspheric_coeffs', None) or getattr(s, 'freeform', None)
+        _ff = (getattr(s, 'field_sag_callable', None) is not None
+               or (getattr(s, 'field_decenter', None) is not None
+                   and tuple(float(v) for v in s.field_decenter) != (0.0, 0.0))
+               or (getattr(s, 'field_tilt', None) is not None
+                   and tuple(float(v) for v in s.field_tilt) != (0.0, 0.0)))
+        if (getattr(s, 'freeform', None)
                 or getattr(s, 'radius_y', None) is not None
                 or getattr(s, 'conic_y', None) is not None
-                or getattr(s, 'aspheric_coeffs_y', None) is not None):
+                or getattr(s, 'aspheric_coeffs_y', None) is not None
+                or _ff):
             return False
     return True
 
 
+_is_all_conic = _analytic_jacobian_applies   # back-compat alias
+
+
 def _pick_ray_transfer(surfaces, exact):
     """Differential ray-transfer Jacobian primitive (lever #1).  ``exact=True``
-    uses the truncation-free analytic (forward-mode-AD) Jacobian when EVERY
-    surface is a rotationally-symmetric conic -- exact vs the finite-difference
+    uses the truncation-free analytic (forward-mode-AD) Jacobian when every
+    surface is inside that primitive's domain -- exact vs the finite-difference
     ~1e-8, pure NumPy, ~1.2x faster on a large aperture AND ~5x lighter (one
     traced ray vs the FD 9-ray bundle, so a large-N full trace fits a memory
     budget the FD path OOMs -- H4c).  Falls back to the FD primitive whenever
-    :func:`_is_all_conic` is False -- aspheric, freeform or biconic surfaces --
-    and when ``exact=False``.  ``exact=None`` (the default) AUTO-selects:
-    analytic for an all-conic prescription, FD otherwise."""
+    :func:`_analytic_jacobian_applies` is False -- a freeform, a biconic or a
+    field-frame coordinate break -- and when ``exact=False``.  ``exact=None``
+    (the default) AUTO-selects: analytic where it applies, FD otherwise.
+
+    A rotationally-symmetric EVEN-ASPHERIC prescription is inside the analytic
+    domain (the conic root seeds a differentiated Newton refinement onto
+    ``conic + polynomial``), so it takes the analytic primitive here.  The
+    ``1.2x`` above is the CONIC class, which runs the numba kernel; an aspheric
+    surface takes the primitive's ``_AdrtDual`` path instead (the kernel's
+    inlined conic primitives carry no polynomial departure), measured ~2x
+    SLOWER per call than the FD bundle on a 4001-ray A4 trace.  What the
+    aspheric class buys is accuracy and memory, not time: the two primitives'
+    base rays agree to 3.5e-16 relative while their Jacobians differ by 2.4e-09,
+    which is the FD central-difference truncation at the shipped steps and which
+    the analytic side does not have, at N traced rays rather than 9N."""
     from ..raytrace.differential import (
         ray_transfer_jacobian,
         ray_transfer_jacobian_analytic,
     )
-    all_conic = _is_all_conic(surfaces)
+    applies = _analytic_jacobian_applies(surfaces)
     if exact is None:
-        exact = all_conic       # H4c: default to the analytic Jacobian when it applies
-    if not exact or not all_conic:
+        exact = applies         # H4c: default to the analytic Jacobian when it applies
+    if not exact or not applies:
         return ray_transfer_jacobian
     return ray_transfer_jacobian_analytic
 
@@ -1690,16 +1715,17 @@ def apply_real_lens_fga(
         path (``M`` already thins the trace).  Use ``M`` ~ ``4-8``.
     exact_jacobian : bool, optional
         ``None`` (the default) AUTO-selects: the truncation-free analytic
-        (forward-mode-AD) differential ray-transfer Jacobian for an ALL-CONIC
-        prescription (every surface a rotationally-symmetric sphere / conic), the
-        finite-difference Jacobian otherwise.  The analytic form is exact vs the
-        FD ``~1e-8`` truncation, ~``1.2x`` faster on a large aperture, AND ~``5x``
-        lighter (one traced ray vs the FD 9-ray bundle), so an all-conic large-N
-        full trace fits a memory budget that the FD path OOMs (H4c).  Pass
-        ``True`` to force it (still falls back to FD for aspheric / freeform /
-        biconic, which is this dispatcher's whitelist -- see
-        :func:`_is_all_conic`) or ``False`` to force
-        the FD Jacobian.  Applies to the full-trace path (``coarse_stride=1``; the
+        (forward-mode-AD) differential ray-transfer Jacobian for a
+        rotationally-symmetric prescription (every surface a sphere / conic /
+        even-asphere, no field-frame coordinate break), the finite-difference
+        Jacobian otherwise.  The analytic form is exact vs the FD ``~1e-8``
+        truncation, ~``1.2x`` faster on a large aperture, AND ~``5x`` lighter
+        (one traced ray vs the FD 9-ray bundle), so a large-N full trace fits a
+        memory budget that the FD path OOMs (H4c).  Pass ``True`` to force it
+        (still falls back to FD for a freeform, a biconic or a field-frame
+        decenter / tilt / sag callable, which the analytic primitive rejects --
+        see :func:`_analytic_jacobian_applies`) or ``False`` to force the FD
+        Jacobian.  Applies to the full-trace path (``coarse_stride=1``; the
         coarse path uses FD, where the interpolation dominates the accuracy
         budget anyway).
     cache_trace : bool
@@ -1975,9 +2001,9 @@ def fga_memory_estimate(
 
     # ---- analytic (single-ray) vs FD (9-ray bundle) Jacobian -----------
     surfs = surfaces_from_prescription(prescription)
-    all_conic = _is_all_conic(surfs)
-    exact = all_conic if exact_jacobian is None else bool(exact_jacobian)
-    fd_bundle = not (exact and all_conic)
+    analytic_ok = _analytic_jacobian_applies(surfs)
+    exact = analytic_ok if exact_jacobian is None else bool(exact_jacobian)
+    fd_bundle = not (exact and analytic_ok)
 
     # ---- lattice + per-point memory ------------------------------------
     Nq_full = (len(range(0, Nx, int(dq_step)))
@@ -2957,7 +2983,48 @@ def _universal_route(E_in, prescription, wavelength, dx, dyg, opd, na_threshold,
     if zone is not None:
         pad = caustic_pad_dof * float(wavelength) / (na * na)
         if (zone[0] - pad) <= opd <= (zone[1] + pad):
-            return "fga"
+            # At a caustic, a SINGLE-VALUED field inside the sag-screen
+            # aberration envelope takes the thin screen plus the exact angular
+            # spectrum, not 'fga'.  What 'fga' uniquely provides at a caustic is
+            # the MULTI-VALUED field, and the branch above has already routed
+            # that; for a single-valued one the frozen-Gaussian swarm is the
+            # measurably worse member here.
+            #
+            # MEASURED (WP-B7b, 2026-09-14) against a brute-force
+            # Rayleigh-Sommerfeld oracle built on an exact conic raytrace --
+            # N-SF11 biconvex R = +/-1.6 mm, t = 0.60 mm, 0.30 mm aperture,
+            # lambda = 633 nm, N = 256, dx = 1.4 um, w = 80 um, read at the
+            # traced best focus 925.9 um past the exit vertex; the oracle is
+            # converged to 1.1e-06 relative L2 in its own ray quadrature and
+            # 1.2e-14 in its azimuthal one:
+            #
+            #   member         fidelity   intensity-rms spot
+            #   oracle         1          1.523 um
+            #   phase_screen   0.9991     1.540 um
+            #   fga            0.1251     7.241 um
+            #
+            # 'phase_screen' is the closer member at EVERY NA of a
+            # 0.048 .. 0.260 sweep on that singlet: its rms spot error grows
+            # 0.016 -> 0.112 um with NA (the thin-screen obliquity ceiling is
+            # real) against 'fga' 13.363 -> 4.243 um, i.e. 38x to 835x wider.
+            # The deficit is not a sampling deficit -- over fifteen sampling
+            # settings 'fga' CONVERGES in n_p (fidelity 0.1412 / 0.1450 /
+            # 0.1462 at n_p = 21 / 41 / 61) and is inert in dq_step to four
+            # digits, so the swarm is not under-sampled; it converges to the
+            # wrong field.  WP-B7 measured the same on an N-BK7 f = 1.2 mm
+            # NA 0.145 singlet at 1.0 um: 'fga' 0.3234 (0.3826 at the best of
+            # the same fifteen settings) against 'phase_screen' 0.9965.
+            #
+            # The H2 aberration gate keeps the other half of the decision: a
+            # prescription whose sag-screen estimate is OVER budget still never
+            # reaches the thin screen, so it keeps 'fga' here.  That class is
+            # the 2026-07-19 displaced / Debye-oracle regime where the analytic
+            # model is 58-123 % wrong (the G1 matrix designs read 20 .. 2893 rad
+            # against the 2.0 rad budget), and it is outside what the oracle
+            # above covers -- its whole NA ladder reads 0.003 .. 0.231 rad.
+            # Force the old route with method='fga' (or caustic_pad_dof=0.0 to
+            # narrow the zone itself).
+            return "fga" if aberrated else "phase_screen"
     # smooth plane: the sub-nm traced OPL, but traced launches rays along the local
     # phase gradient and is valid only for a ~collimated beam.  A single-valued but
     # DIVERGING beam would be blurred -> route a BENIGN diverging beam to the
@@ -3009,9 +3076,21 @@ def apply_real_lens_universal(
       (``< na_threshold``) **and within the sag-screen aberration envelope**: the
       thin-element phase-screen model is accurate there and the exact
       angular-spectrum propagation handles focus/caustics, so it is wave-exact and
-      fast, with no beamlet-discretization or ray-model cost;
-    * ``'fga'`` (:func:`apply_real_lens_fga`) -- HIGH NA **and** near a caustic:
-      the only caustic-accurate *and* ray-based (no thin-screen obliquity) option;
+      fast, with no beamlet-discretization or ray-model cost.  Also the member for
+      a SINGLE-VALUED field near a caustic at any NA, again within the aberration
+      envelope: the exact angular spectrum renders the caustic and the thin screen
+      is measurably the closer model there (see ``'fga'`` below);
+    * ``'fga'`` (:func:`apply_real_lens_fga`) -- near a caustic with a
+      MULTI-VALUED field (whose several local directions only a phase-space swarm
+      transports), or near a caustic with a prescription OUTSIDE the sag-screen
+      aberration envelope (where the thin screen is not available).  A
+      single-valued field inside the envelope goes to ``'phase_screen'``:
+      measured against a brute-force Rayleigh-Sommerfeld oracle on an N-SF11
+      f = 1.12 mm NA 0.160 singlet at its focus, fidelity 0.9991 for
+      ``'phase_screen'`` against 0.1251 for ``'fga'``, and ``'phase_screen'`` is
+      the closer member at every NA from 0.048 to 0.260 (WP-B7b; WP-B7 measured
+      0.9965 against 0.3234 on an N-BK7 f = 1.2 mm NA 0.145 singlet).  Pass
+      ``method='fga'`` to force the frozen-Gaussian member anyway;
     * ``'traced'`` (:func:`lumenairy.elements.apply_real_lens_traced`) -- HIGH NA,
       smooth, single-valued AND **~collimated**: per-pixel ray-traced OPL, sub-nm,
       no thin-screen ceiling.  A single-valued but **diverging** beam (large
@@ -3117,16 +3196,18 @@ def apply_real_lens_universal(
     older GBD/FGA-only 2-way subset).
 
     .. note::
-       **Split-step callers.**  The near-caustic -> ``'fga'`` decision keys on
+       **Split-step callers.**  The near-caustic decision keys on
        ``output_plane_distance`` (the geometric caustic lies DOWNSTREAM of the
        exit vertex).  A caller that applies the lens at ``output_plane_distance=0``
        and does its OWN downstream free-space propagation (a split-step BPM /
-       manual ASM) therefore never triggers the ``'fga'`` branch -- at the vertex a
+       manual ASM) therefore never reaches that branch -- at the vertex a
        single-valued field routes only to ``'phase_screen'`` / ``'traced'``
-       (or ``'fga'`` if it is itself multi-valued).  If you split the lens and the
-       propagation and want caustic-accurate rendering, pass the full
-       ``output_plane_distance`` here (let the dispatcher finish the leg) or force
-       ``method='fga'``.
+       (or ``'fga'`` if it is itself multi-valued).  Since a single-valued field
+       inside the aberration envelope now takes ``'phase_screen'`` at a caustic
+       too, and ``'phase_screen'`` returns at the exit vertex, that split costs
+       such a caller nothing but the router's own leg; an aberrated or
+       multi-valued field still wants the full ``output_plane_distance`` passed
+       here (let the dispatcher finish the leg), or ``method='fga'``.
     """
     from .._validation import _check_2d_scalar_field
     _check_2d_scalar_field(E_in, 'apply_real_lens_universal',

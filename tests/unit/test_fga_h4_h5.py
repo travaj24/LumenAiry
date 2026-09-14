@@ -180,8 +180,10 @@ def test_h4_memory_model_counts_fd_bundle():
 
 # --------------------------------------------------------------------------
 # H4c fix -- FAST: exact_jacobian DEFAULTS (None) to the analytic single-ray
-# Jacobian for an all-conic prescription (the 9N-ray FD bundle removed); explicit
-# True/False preserved; aspheric falls back to FD.
+# Jacobian wherever that primitive applies (the 9N-ray FD bundle removed);
+# explicit True/False preserved.  The predicate is the primitive's own domain --
+# rotationally-symmetric conic / even-asphere, no field-frame coordinate break --
+# so a biconic or a freeform still falls back to FD.
 # --------------------------------------------------------------------------
 def test_h4_exact_jacobian_default_analytic_for_conic(presc):
     from lumenairy.raytrace import surfaces_from_prescription
@@ -190,19 +192,34 @@ def test_h4_exact_jacobian_default_analytic_for_conic(presc):
         ray_transfer_jacobian_analytic,
     )
     surfs = surfaces_from_prescription(presc)
-    assert fga._is_all_conic(surfs)
+    assert fga._analytic_jacobian_applies(surfs)
+    assert fga._is_all_conic is fga._analytic_jacobian_applies   # back-compat alias
     # DEFAULT (None) auto-selects the analytic Jacobian for the conic singlet.
     assert fga._pick_ray_transfer(surfs, None) is ray_transfer_jacobian_analytic
     assert fga._pick_ray_transfer(surfs, True) is ray_transfer_jacobian_analytic
     assert fga._pick_ray_transfer(surfs, False) is ray_transfer_jacobian
 
-    # an aspheric surface is NOT all-conic -> analytic unavailable -> FD, even at
-    # the True/None default (the analytic form does not handle aspheres).
+    # WP-B9 gave the analytic primitive even-aspheric support, so an aspheric
+    # surface now REACHES it; a biconic still does not.  MEASURED on this
+    # module's own A4 singlet with aspheric_coeffs {4: 4.0e3} over 4001 rays
+    # (WP-B7b): the two primitives' base-ray exit states agree to 3.5e-16
+    # relative in height, 2.8e-16 in slope and 1.3e-17 m in OPL -- they trace
+    # the same base ray -- while their JACOBIANS differ by 2.4e-09 relative,
+    # which is the FD central-difference truncation at the shipped steps (the
+    # step ladder reads 2.43e-07 / 2.42e-09 / 1.18e-10 at h_pos = 1e-5 / 1e-6 /
+    # 1e-7 and turns up to 8.5e-10 at 1e-8 as round-off takes over).  The
+    # analytic side is the exact one and costs N rays where the FD bundle costs
+    # 9N (36009 -> 4001 here; 8924 -> 7484 B per FGA lattice point).
     class _Stub:
         aspheric_coeffs = [1e-3]
-    assert not fga._is_all_conic([_Stub()])
-    assert fga._pick_ray_transfer([_Stub()], None) is ray_transfer_jacobian
-    assert fga._pick_ray_transfer([_Stub()], True) is ray_transfer_jacobian
+    assert fga._analytic_jacobian_applies([_Stub()])
+    assert (fga._pick_ray_transfer([_Stub()], None)
+            is ray_transfer_jacobian_analytic)
+
+    class _Biconic:
+        radius_y = 25e-3
+    assert not fga._analytic_jacobian_applies([_Biconic()])
+    assert fga._pick_ray_transfer([_Biconic()], True) is ray_transfer_jacobian
 
 
 # --------------------------------------------------------------------------

@@ -271,22 +271,31 @@ def test_s10_router_is_invariant_under_a_global_tilt(tilt, pre_fix_route):
     propagator.
 
     This is the finding in one line: pre-fix ``apply_real_lens_universal``
-    answered ``'fga'`` for a collimated beam at its focus and
+    answered one member for a collimated beam at its focus and
     ``{pre_fix_route!r}`` for THE SAME BEAM tilted by {tilt} rad -- two
     different physical models for one piece of physics, chosen by the observer's
-    frame.
+    frame.  What the invariance is worth is the size of the disagreement between
+    the members it picks between: measured at this focus the ``phase_screen``
+    and ``fga`` fields differ by 3.9 um in intensity centroid and by a factor
+    3.9 in intensity-rms width (12.72 um vs 3.27 um), the same at tilt 0
+    (12.61 vs 3.17 um).
 
-    The two members are not interchangeable here: measured at this focus, the
-    ``phase_screen`` and ``fga`` fields differ by 3.9 um in intensity centroid
-    and by a factor 3.9 in intensity-rms width (12.72 um vs 3.27 um), and that
-    disagreement is the SAME at tilt 0 (12.61 vs 3.17 um) -- so it is the
-    members' own accuracy question, not a tilt artefact, and it is the size of
-    what the frame-dependence was buying.
+    The untilted premise reads ``'phase_screen'`` since WP-B7b: a SINGLE-VALUED
+    field at a caustic, inside the sag-screen aberration envelope, takes the
+    thin screen plus the exact angular spectrum rather than ``'fga'``.  MEASURED
+    against a brute-force Rayleigh-Sommerfeld oracle on an exact conic raytrace
+    (WP-B7b, N-SF11 f = 1.12 mm NA 0.160 singlet at its traced best focus,
+    lambda = 633 nm): fidelity 0.9991 for ``'phase_screen'`` against 0.1251 for
+    ``'fga'``, and ``'phase_screen'`` closer at every NA from 0.048 to 0.260;
+    WP-B7 measured 0.9965 against 0.3234 on this file's own N-BK7 f = 1.2 mm
+    NA 0.145 fixture at 1.0 um.  The invariance property under test is
+    untouched by which member that is.
     """
     base = _route(_beam(), FAST, Z_FOCUS)
-    assert base == 'fga', (
-        f'premise: the untilted high-NA plane at its focus routes to fga '
-        f'(the audit accepted this regime); got {base!r}')
+    assert base == 'phase_screen', (
+        f'premise: the untilted high-NA single-valued plane at its focus routes '
+        f'to phase_screen (WP-B7b; it was fga before that measurement); '
+        f'got {base!r}')
     got = _route(_beam(tilt=tilt), FAST, Z_FOCUS)
     assert got == base, (
         f'tilt={tilt}: router returned {got!r} for the tilted beam and '
@@ -295,10 +304,18 @@ def test_s10_router_is_invariant_under_a_global_tilt(tilt, pre_fix_route):
 
 def test_s10_router_is_invariant_for_a_tilted_decentred_beam():
     """Decentre + tilt together -- the case the pre-fix axis metric got most
-    wrong (caustic [1.997, 28.212] mm against a real focus at 1.020 mm)."""
+    wrong (caustic [1.997, 28.212] mm against a real focus at 1.020 mm).
+
+    The premise member is ``'phase_screen'`` (WP-B7b: a single-valued field at a
+    caustic inside the aberration envelope; fidelity 0.9991 vs 0.1251 for
+    ``'fga'`` against a brute-force Rayleigh-Sommerfeld oracle).  This beam's
+    sag-screen estimate is 0.665 rad, inside the 2.0 rad envelope.
+    """
     base = _route(_beam(w=60e-6, dec=80e-6), FAST, Z_FOCUS)
     got = _route(_beam(w=60e-6, dec=80e-6, tilt=0.05), FAST, Z_FOCUS)
-    assert base == 'fga', f'premise: the decentred beam routes to fga, got {base!r}'
+    assert base == 'phase_screen', (
+        f'premise: the decentred single-valued beam routes to phase_screen, '
+        f'got {base!r}')
     assert got == base, (
         f'decentred+tilted routed to {got!r} vs {base!r} untilted '
         f"(pre-fix: 'phase_screen')")
@@ -311,10 +328,26 @@ def test_s10_untilted_regimes_are_unchanged():
     symmetric fixtures (measured: [98.021603, 98.021702] mm slow / exit,
     [1.021056, 1.032698] mm fast / focus, [0.277843, 3.274212] mm
     multi-valued), because a centred beam's chief ray is the axis.
+
+    The two SINGLE-VALUED fast rows read ``'phase_screen'`` since WP-B7b (they
+    read ``'fga'`` before it): at a caustic, inside the sag-screen aberration
+    envelope, ``'fga'`` is the measurably worse member for a single-valued
+    field.  MEASURED against a brute-force Rayleigh-Sommerfeld oracle on an
+    exact conic raytrace (WP-B7b; N-SF11 f = 1.12 mm NA 0.160 singlet at its
+    traced best focus, lambda = 633 nm, oracle converged to 1.1e-06 relative
+    L2): fidelity 0.9991 / intensity-rms 1.540 um for ``'phase_screen'``
+    against 0.1251 / 7.241 um for ``'fga'``, oracle 1.523 um; and
+    ``'phase_screen'`` is closer at every NA from 0.048 to 0.260.  WP-B7
+    measured 0.9965 against 0.3234 on this file's own fixture.
+
+    The MULTI-VALUED row is deliberately unchanged: several local directions
+    cross that region and only ``'fga'``'s phase-space swarm transports them
+    independently, so the multi-valued branch above the caustic gate still
+    answers ``'fga'``.
     """
     assert _route(_beam(w=80e-6), SLOW, 0.0) == 'phase_screen'
-    assert _route(_beam(), FAST, Z_FOCUS) == 'fga'
-    assert _route(_beam(w=60e-6, dec=80e-6), FAST, Z_FOCUS) == 'fga'
+    assert _route(_beam(), FAST, Z_FOCUS) == 'phase_screen'
+    assert _route(_beam(w=60e-6, dec=80e-6), FAST, Z_FOCUS) == 'phase_screen'
     two_beams = _beam(tilt=0.05) + _beam(tilt=-0.05)
     assert _route(two_beams, FAST, Z_FOCUS) == 'fga'
     with warnings.catch_warnings():

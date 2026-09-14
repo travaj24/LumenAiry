@@ -83,6 +83,40 @@ _AIRY_ARG_CAP = 50.0
 # margin over the 15 the physical tail needs.
 _AIRY_TAIL_CELLS = 20.0
 
+# How far past the TWO-BRANCH BAND the fold's zeta(r) = kappa (r_c - r) is
+# carried before the completion is flagged as extrapolated.
+#
+# ``kappa`` is fitted on the band of radii reached by BOTH coalescing branches
+# -- the only radii where the eikonal difference S+ - S- that DEFINES zeta
+# exists.  The bright-side (c0, c1) fit then runs over a band of half-width
+# ``W = l_airy`` inside r_c, and the dark fill runs out to
+# ``_AIRY_TAIL_CELLS * l_airy`` past it; both evaluate zeta at radii the linear
+# fit never saw.  When the two-branch band is much narrower than ``W`` the
+# completion is an extrapolation, and the error it makes is in the ENERGY it
+# writes into the dark tail, not in its shape.
+#
+# MEASURED (WP-B7b, 2026-09-14) against a brute-force Rayleigh-Sommerfeld
+# oracle on an exact conic raytrace, total power of the completed field
+# relative to the oracle's, on a ladder of planes through one caustic
+# (plano-convex R = 2.7 mm, t = 1.0 mm, 1.5 mm aperture, n = 1.5168,
+# lambda = 1.31 um, N = 512, dx = 3.0 um) plus two more singlets -- N-LAK22
+# biconvex R = +/-3.0 mm, t = 0.55 mm, 1.20 mm aperture, lambda = 850 nm,
+# N = 640, dx = 2.10 um at its MARGINAL focus (the widest two-branch band
+# measured), and N-LAK22 biconvex R = +/-6.0 mm, t = 0.90 mm, 1.10 mm
+# aperture, lambda = 1.55 um, N = 320, dx = 3.85 um, z = 4.400 mm (the
+# narrowest):
+#
+#   W / band    0.16    1.9     2.3     3.4     5.4     9.8     453.6
+#   power       0.947   0.975   0.971   1.030   1.049   1.125   1.228
+#
+# i.e. -5.3 % .. +4.9 % up to 5.4 and +12.5 % .. +22.8 % from 9.8 up.  The bar
+# sits in that measured gap.  It does NOT change the returned field or the
+# route: the completion still beats the multibranch it would otherwise fall
+# back to at every one of those planes (fidelity 0.944 / 0.957 / 0.933 /
+# 0.969 / 0.972 / 0.962 / 0.930 against 0.882 / 0.805 / 0.856 / 0.853 / 0.884 /
+# 0.887 / 0.832), so falling back would be a regression.  It only says so.
+_ZETA_EXTRAPOLATION_MAX = 8.0
+
 # Pearcey series (:func:`pearcey`) converges everywhere but SLOWS / overflows
 # for large ``|x|, |y|``; clamp the control coordinates to this box when
 # building the CUSP field (far outside the box geometric optics is exact, so
@@ -213,14 +247,18 @@ def _trace_meridional_fold(prescription, wavelength, output_plane_distance,
     distance ``output_plane_distance`` past the exit vertex (index
     ``output_plane_n``), and returns::
 
-        {ok, reason, r_c, kappa, cphi, n_turn}
+        {ok, reason, r_c, kappa, cphi, n_turn, band}
 
     ``ok`` is True only for exactly ONE interior turning point of ``y_obs(h)``
     (a single fold ring).  ``zeta(r) = kappa (r_c - r)`` (linear fit of
     ``[3/4 |S_A - S_B|]^{2/3}`` over the two-branch band) and
-    ``A(r) = polyval(cphi, r - r_c)`` (quadratic mean-eikonal fit).  ``reason``
-    names the fallback cause when ``ok`` is False."""
-    fail = dict(ok=False, r_c=0.0, kappa=0.0, cphi=None, n_turn=0)
+    ``A(r) = polyval(cphi, r - r_c)`` (quadratic mean-eikonal fit).  ``band`` is
+    the WIDTH of that two-branch band -- the only radii at which the eikonal
+    difference defining ``zeta`` exists, so the interval the linear fit is
+    entitled to speak for; the caller compares its own fit / fill widths
+    against it (see ``_ZETA_EXTRAPOLATION_MAX``).  ``reason`` names the
+    fallback cause when ``ok`` is False."""
+    fail = dict(ok=False, r_c=0.0, kappa=0.0, cphi=None, n_turn=0, band=0.0)
     surfaces = rt.surfaces_from_prescription(prescription)
     xs = np.linspace(launch_radius / n_fan, launch_radius, n_fan)
     rays = rt.RayBundle(
@@ -307,7 +345,7 @@ def _trace_meridional_fold(prescription, wavelength, output_plane_distance,
         return {**fail, 'reason': 'zeta_nonlinear', 'n_turn': n_turn}
     cphi = np.polyfit(rb - r_c, 0.5 * (spa(rb) + spb(rb)), 2)
     return dict(ok=True, reason='fold_ring', r_c=r_c, kappa=kappa,
-                cphi=cphi, n_turn=n_turn)
+                cphi=cphi, n_turn=n_turn, band=float(band))
 
 
 # ==========================================================================
@@ -791,7 +829,49 @@ def apply_real_lens_traced_uniform(
 
     Returns the completed ``(N, N)`` complex field (plus a diagnostics dict when
     ``return_diagnostics`` -- with the resolved ``r_c``, ``kappa``, the fitted
-    Airy coefficients, the fit residual, and ``fell_back`` / ``reason``)."""
+    Airy coefficients, the fit residual, the two-branch band ``zeta_band`` and
+    the ``zeta_extrapolation`` ratio below, and ``fell_back`` / ``reason``).
+
+    Accuracy envelope (MEASURED, WP-B7b 2026-09-14)
+    -----------------------------------------------
+    Against a brute-force Rayleigh-Sommerfeld oracle built on an exact conic
+    raytrace, on a ladder of planes through one caustic of a plano-convex
+    singlet (R = 2.7 mm, t = 1.0 mm, 1.5 mm aperture, n = 1.5168,
+    lambda = 1.31 um, N = 512, dx = 3.0 um) and on two more singlets (N-LAK22
+    biconvex R = +/-3.0 mm, t = 0.55 mm, 1.20 mm aperture, lambda = 850 nm,
+    N = 640, dx = 2.10 um, at its marginal focus; and N-LAK22 biconvex
+    R = +/-6.0 mm, t = 0.90 mm, 1.10 mm aperture, lambda = 1.55 um, N = 320,
+    dx = 3.85 um, z = 4.400 mm), indexed by
+    ``zeta_extrapolation = uniform_fit_halfwidth / zeta_band`` -- how far past
+    the two-branch band the fitted ``zeta(r) = kappa (r_c - r)`` is carried:
+
+    ==================  =====  =====  =====  =====  =====  =====  =====
+    zeta_extrapolation   0.16    1.9    2.3    3.4    5.4    9.8  453.6
+    fidelity            0.944  0.957  0.933  0.969  0.972  0.962  0.930
+    power / oracle      0.947  0.975  0.971  1.030  1.049  1.125  1.228
+    multibranch fid.    0.882  0.805  0.856  0.853  0.884  0.887  0.832
+    ==================  =====  =====  =====  =====  =====  =====  =====
+
+    So the SHAPE is reliable and is the better one at every plane measured (it
+    beats the plain multibranch it would fall back to, by 0.06-0.15 of fidelity,
+    and at the widest-band plane it also beats
+    ``apply_real_lens_traced(amplitude_model='ray_density')``, 0.9435 vs
+    0.9395), while the ABSOLUTE ENERGY the dark tail carries degrades with the
+    extrapolation: within -5.3 % / +4.9 % up to ~5, and +12.5 % / +22.8 % from
+    ~10 up.  Past ``_ZETA_EXTRAPOLATION_MAX`` the call WARNS and says so; it
+    does not fall back, because falling back is measurably worse.  For absolute
+    energy / encircled energy in the tail at a TIGHT fold, read at a plane whose
+    two branches separate further, or use
+    ``apply_real_lens_traced(amplitude_model='ray_density')`` (0.9996 where this
+    completion reads 0.9297, on the narrowest-band plane above),
+    ``apply_real_lens_gbd`` or ``apply_real_lens_fga``.
+
+    The grid matters before any of this does: the fold's Airy layer
+    ``l_airy = 1 / (k^(2/3) kappa)`` must be resolved (the gate is
+    ``l_airy >= 1.2 dx``) or the call falls back.  On a fast singlet at its
+    marginal focus that layer is microns wide, so an aperture-sized grid needs
+    several hundred samples across it -- the 640 x 640 / dx = 2.10 um row above
+    is the same optic and plane that falls back at dx = 4 um."""
     from .._validation import _check_2d_scalar_field
     _check_2d_scalar_field(E_in, 'apply_real_lens_traced_uniform',
                            input_kind='field')
@@ -833,7 +913,8 @@ def apply_real_lens_traced_uniform(
         if return_diagnostics:
             d = dict(mb_diag)
             d.update(fell_back=True, reason=reason, r_c=None, kappa=None,
-                     c0=None, c1=None, fit_residual=None)
+                     c0=None, c1=None, fit_residual=None, zeta_band=None,
+                     zeta_extrapolation=None)
             return out, d
         return out
 
@@ -932,6 +1013,33 @@ def apply_real_lens_traced_uniform(
     bright = (rgrid >= r_c - W) & (rgrid <= r_c - gap)
     if int(bright.sum()) < 24:
         return _fallback('too few bright-band pixels for the fit')
+    # How far past the two-branch band this evaluation carries zeta.  The fit
+    # band is W wide and the dark fill reaches _AIRY_TAIL_CELLS * l_airy; both
+    # read zeta at radii the kappa fit never saw when the two-branch band is
+    # narrower.  Reported always (diagnostics), warned above the measured bar.
+    zeta_band = float(fold.get('band') or 0.0)
+    zeta_extrap = (float(W / zeta_band) if zeta_band > 0.0 else float('inf'))
+    if zeta_extrap > _ZETA_EXTRAPOLATION_MAX:
+        warnings.warn(
+            "apply_real_lens_traced_uniform (also reached via "
+            "apply_real_lens_traced(caustic='uniform')): the fold's "
+            f"zeta(r) = kappa (r_c - r) was fitted on a two-branch band only "
+            f"{zeta_band * 1e9:.3g} nm wide and is being carried across a "
+            f"{W * 1e9:.3g} nm fit band ({zeta_extrap:.0f}x) and a "
+            f"{_AIRY_TAIL_CELLS * l_airy * 1e9:.3g} nm dark fill, so the two "
+            "CFU coefficients and the tail they continue are an EXTRAPOLATION "
+            "of the fold normal form, not a fit to it.  MEASURED against a "
+            "brute-force Rayleigh-Sommerfeld oracle (WP-B7b): the completed "
+            "field's total power runs -5.3 % to +4.9 % of the truth while this "
+            "ratio is under ~5 and +12.5 % to +22.8 % from ~10 up -- the shape "
+            "is still the better one (it beats the plain multibranch at every "
+            "measured plane, which is why this is a warning and not a "
+            "fallback), but absolute energy / encircled energy in the dark "
+            "tail is unreliable here.  Read at a plane where the two branches "
+            "separate further (a caustic ring with a wider two-branch band), "
+            "or use apply_real_lens_traced(amplitude_model='ray_density') / "
+            "apply_real_lens_gbd / apply_real_lens_fga for absolute energy.",
+            RuntimeWarning, stacklevel=3)
     rb = rgrid[bright]
     Eb = E_mb[bright]
     # Basis = the EXACT CFU kernel (reused, no reimplementation), evaluated at
@@ -988,6 +1096,7 @@ def apply_real_lens_traced_uniform(
         d = dict(mb_diag)
         d.update(fell_back=False, reason='fold_ring', r_c=r_c, kappa=kappa,
                  c0=c0, c1=c1, fit_residual=fit_resid, fit_halfwidth=W,
-                 n_turn=fold['n_turn'])
+                 n_turn=fold['n_turn'], zeta_band=zeta_band,
+                 zeta_extrapolation=zeta_extrap)
         return E_out, d
     return E_out
