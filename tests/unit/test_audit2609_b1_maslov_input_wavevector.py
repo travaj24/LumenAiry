@@ -1154,7 +1154,10 @@ def test_verify_b1_the_gate_refuses_a_chart_that_cannot_carry_ds1_dv2(method):
     The failure this pins, MEASURED 2026-09-13 against an exact conic-raytrace
     + Kirchhoff oracle on this fixture and on an independent f = 13.3 mm
     N-SF11 / 1.55 um one, with the tilt driving ``na_proxy`` (and so the pupil
-    box the order-4 chart must span) upwards:
+    box the order-4 chart must span) upwards -- the s1 residuals below are the
+    ones an explicitly over-sized ``input_na`` produces; since the chart is
+    sized from the mean direction plus the spread, a tilt alone no longer
+    reaches them:
 
     ==================  ==========  ==========  ==================
     tilt / lens NA      s1 fit      k1 fit      fidelity, sp / lq
@@ -1174,10 +1177,17 @@ def test_verify_b1_the_gate_refuses_a_chart_that_cannot_carry_ds1_dv2(method):
     """
     good = _field(tilt_x=1.0 * _NA_LENS)
     bad = _field(tilt_x=2.0 * _NA_LENS)
+    # The driver sizes the pupil chart from the MEAN launch direction plus the
+    # SPREAD, so a uniform tilt no longer inflates the box threefold and the
+    # order-4 chart carries it.  The over-sized chart this gate exists for is
+    # therefore ENGINEERED here rather than hoped for (TESTING_STANDARDS rule 3):
+    # ``_BAD_NA`` is the 3-sigma-about-zero angular moment of this very field,
+    # which is what sized the chart before the mean-plus-spread rule.
+    _BAD_NA = 3.0 * 2.0 * _NA_LENS
     _, _, s1_good, k1_good, eng_good, msg_good = _s6_report(
         good, method, centre=_window_on(good))
     _, _, s1_bad, k1_bad, eng_bad, msg_bad = _s6_report(
-        bad, method, centre=_window_on(bad))
+        bad, method, centre=_window_on(bad), input_na=_BAD_NA)
     assert eng_good and not _s6_warnings(msg_good), (
         f'{method}: tilt 1x the lens NA (s1 fit {s1_good:.2e}) is well inside '
         f'every bar and must engage silently; warnings {msg_good}')
@@ -1202,7 +1212,8 @@ def test_verify_b1_the_gate_refuses_a_chart_that_cannot_carry_ds1_dv2(method):
     # landing and the forced saddle does not converge, so both can be the
     # all-zero patch.  What must differ is the DECISION.)
     _, _, _, _, eng_forced, m_forced = _s6_report(
-        bad, method, centre=_window_on(bad), input_wavevector_saddle=True)
+        bad, method, centre=_window_on(bad), input_na=_BAD_NA,
+        input_wavevector_saddle=True)
     assert eng_forced and not _s6_warnings(m_forced), (
         'input_wavevector_saddle=True must override the chart gate')
 

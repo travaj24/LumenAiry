@@ -165,6 +165,41 @@ _SADDLE_FLAT_INPUT_NA = 1e-3
 # the full ladder.
 _K1_FIT_RESIDUAL_MAX = 0.5
 
+# S6 fallback, the SLOPE half of the k1 gate: the largest relative error of the
+# fitted local wavevector's v2-derivative, measured by
+# :func:`_k1_fit_derivative_error`, at which the fitted saddle is still
+# trusted.  The bar above scores the fit's VALUE and the saddle's Newton
+# consumes its two DERIVATIVES; this one scores those, which is the difference
+# between a field the chart resolves and one whose fit is interpolating noise.
+#
+# MEASURED (WP-B7, 2026-09-13) on TWO charts -- the f = 6 mm N-BK7 / 1.0 um one
+# and an f = 14.1 mm N-SF11 / 1.55 um one -- with the field fidelity scored
+# against the EXACT pointwise 'quadrature' on the same chart, engaged against
+# the OPD-only saddle (`input_wavevector_saddle=False`).  Slope error, then
+# stationary_phase fidelity OPD-only -> engaged on each chart:
+#
+#   clean tilt 0.5..4 x lens NA .. 1.2e-10 .. 2.8e-08   0.000 -> at the floor
+#   converging f=+40 / diverging f=-25 mm . 2.0e-06 .. 5.6e-06   engaging wins
+#   speckle 0.002 rad rms on a tilt ...... 4.8e-03 / 9.0e-03   0.000 -> 0.91 / 0.71
+#   speckle 0.010 ........................ 2.4e-02 / 4.5e-02   0.000 -> 0.86 / 0.43
+#   speckle 0.050 ........................ 1.3e-01 / 2.5e-01   0.000 -> 0.31 / 0.11
+#   speckle 0.100 ........................ 2.8e-01 / 5.6e-01   0.000 -> 0.14 / 0.01
+#   hard edge at 0.95 of the pupil ....... 4.3e+00 / 4.2e+00   0.021 -> 0.000 WORSE
+#   hard edge at 0.80 .................... 2.8e+00 / 2.7e+00   0.016 -> 0.000 WORSE
+#   hard edge at 0.60 .................... 3.9e+00 / 3.9e+00   0.038 -> 0.000 WORSE
+#
+# The hard-edged rows are the family this bar exists for: their VALUE residual
+# is 0.08 .. 0.26, comfortably inside the 0.5 bar above, while the fitted
+# wavevector's SLOPE is two decades worse than any speckle row -- because
+# ``_local_direction_cosines`` reports 0 in the dark and the true wavefront in
+# the light, and a degree-4 fit of that step has a huge derivative wherever the
+# step is.  Engaging on them LOSES on both charts.  Every case where engaging
+# wins stays engaged: the bar is the geometric mean of the two-chart bracket
+# (5.6e-01 last win .. 2.7e+00 first loss = 1.24), which also sits 4.3x above
+# the other chart's last win and 2.4x below its first loss.
+# ``input_wavevector_saddle=True`` overrides, as it does the other two bars.
+_K1_DERIV_RESIDUAL_MAX = 1.2
+
 # S6 fallback, the chart half: the largest relative RMS residual of the
 # ENTRANCE-COORDINATE fit ``s1(s2, v2)`` at which the fitted local wavevector
 # is still trusted to place the saddle.  The S6 term is ``k1 . ds1/dv2``, so
@@ -195,6 +230,38 @@ _K1_FIT_RESIDUAL_MAX = 0.5
 # and ``input_na``; ``input_wavevector_saddle=True`` overrides, as it does for
 # the k1 bar.
 _S1_FIT_RESIDUAL_MAX = 2.5e-3
+
+# Pupil-chart sizing: the smallest first angular moment, as a fraction of the
+# second moment about zero, that is read as a real MEAN LAUNCH DIRECTION
+# rather than as round-off.  ``na_input`` is then ``|mean| + 3 sigma_about_mean``
+# instead of ``3 sigma_about_zero``; the two differ by nothing a float64 grid
+# can express when the mean is this far under the spread, so every field whose
+# spectrum is centred -- collimated, diverging, converging, speckled about
+# zero -- keeps the number it always had, bit for bit.
+#
+# MEASURED (WP-B7, 2026-09-13) on the f = 6 mm N-BK7 / 1.0 um chart, as the
+# ratio first moment / second moment, over fields that have NO launch
+# direction and fields that have one:
+#
+#   centred Gaussian (w = 0.15 / 0.40 mm) ....... 1.1e-11 / 9.4e-08
+#   the same, displaced half a pixel / one pixel  3.2e-11 / 7.1e-11
+#   converging f = +40 / diverging f = -25 mm ... 2.3e-11 / 3.4e-11
+#   hard aperture at 0.95 / 0.80 / 0.60 ......... 2.0e-05 / 9.3e-05 / 3.1e-04
+#   speckle 0.05 / 0.30 rad rms, no tilt ........ 4.1e-04 / 1.2e-03
+#   uniform white-noise phase, no tilt .......... 1.5e-02
+#   ---
+#   5 waves of coma ............................. 6.2e-01
+#   uniform tilt 1e-3 rad (``_SADDLE_FLAT_INPUT_NA``) 5.5e-01
+#   uniform tilt half the lens NA ............... 9.98e-01
+#
+# The floor is not exact symmetry: ``fftfreq``'s Nyquist column has no partner
+# to cancel against, a pixel-quantised aperture mask is not centred on an even
+# grid, and a finite noise realisation has a finite mean.  The bar is the
+# geometric mean of the bracket (1.5e-02 largest reading with no launch
+# direction .. 5.5e-01 smallest with one = 9.2e-02).  Below it the sizing is
+# left EXACTLY as it was, and what that discards is bounded: at the bar itself
+# the two rules differ by 2.3 % of a quantity that is already a 3-sigma margin.
+_NA_MEAN_MIN_FRACTION = 0.1
 
 # S6 A/B seam, in the style of ``_QUAD_FACTORIZE`` above.  ``None`` (default)
 # is the decision described at ``_SADDLE_FLAT_INPUT_NA`` and
@@ -1187,6 +1254,61 @@ def _input_phase_terms(s1x_ev, s1y_ev, k1x_ev, k1y_ev, inv_wavelength):
     return g3, g4, a33, a34, a44
 
 
+def _k1_fit_derivative_error(A, mi, poly_order, T1, T2, T3, T4,
+                             u_v2x, u_v2y, coef_k1, k1_rhs,
+                             w_rays, w_tot, k1_pow):
+    """Relative error of the ``k1`` fit's ``v2``-SLOPE over the traced rays.
+
+    The S6 term the saddle carries is ``k1 . ds1/dv2``, and the Newton consumes
+    its ``v2``-derivative in the Hessian, which is where ``dk1/dv2`` enters.  A
+    degree-``poly_order`` fit of a noisy field has a small VALUE residual and an
+    unbounded SLOPE error -- so the value residual
+    (``_K1_FIT_RESIDUAL_MAX``) cannot see the failure that matters.
+
+    The estimate is a Richardson-style pair: refit ``k1`` at
+    ``poly_order - 1``, whose basis is the COLUMN SUBSET of ``A`` with total
+    degree below the cap, and compare the two charts' ``(dk1/du3, dk1/du4)`` at
+    the ray points.  Two fits that agree there have resolved the slope; two that
+    do not are extrapolating it out of noise.  Normalised by the
+    intensity-weighted RMS of ``k1`` itself, so a uniform tilt -- constant
+    ``k1``, zero slope in both fits -- scores 0 rather than 0/0.
+
+    Returns ``+inf`` when the low-order refit is unavailable (``poly_order``
+    at the minimum, or a degenerate weight / signal scale), which the caller
+    reads as "cannot be scored", exactly as it reads an unusable value
+    residual.
+    """
+    if poly_order < 1 or not (w_tot > 0.0 and k1_pow > 0.0):
+        return np.inf
+    cols_lo = [j for j, k in enumerate(mi) if sum(k) <= poly_order - 1]
+    if len(cols_lo) < 2:
+        return np.inf
+    coef_lo = _solve_fit(A[:, cols_lo], k1_rhs)
+    dT3 = _chebyshev_derivative_vandermonde(u_v2x, poly_order)
+    dT4 = _chebyshev_derivative_vandermonde(u_v2y, poly_order)
+    # Accumulate ``d(k1_hi - k1_lo)/du`` term by term rather than materialising
+    # two more (n_rays, M) derivative design matrices beside ``A``, which on a
+    # 16^4-ray order-6 chart is 110 MB each.
+    n = A.shape[0]
+    d3 = np.zeros((n, 2), dtype=np.float64)
+    d4 = np.zeros((n, 2), dtype=np.float64)
+    lo_of = {j: i for i, j in enumerate(cols_lo)}
+    for j, (k1, k2, k3, k4) in enumerate(mi):
+        c = coef_k1[j].copy()
+        if j in lo_of:
+            c = c - coef_lo[lo_of[j]]
+        if not np.any(c):
+            continue
+        t12 = T1[k1] * T2[k2]
+        b3 = t12 * dT3[k3] * T4[k4]
+        b4 = t12 * T3[k3] * dT4[k4]
+        d3 += b3[:, None] * c[None, :]
+        d4 += b4[:, None] * c[None, :]
+    err_pow = float((w_rays * (d3[:, 0] ** 2 + d3[:, 1] ** 2
+                               + d4[:, 0] ** 2 + d4[:, 1] ** 2)).sum())
+    return float(np.sqrt(err_pow / w_tot / k1_pow))
+
+
 def _eval_input_phase_terms(evalf, k1_fit, u1, u2, u3, u4):
     """:func:`_input_phase_terms` with the four fits evaluated by ``evalf``
     (the caller's banded / Numba / CuPy 4-variable Chebyshev kernel).
@@ -1818,14 +1940,19 @@ def apply_real_lens_maslov(
     side reports a launch direction of 0 that the illuminated side contradicts
     -- the fit's intensity-weighted residual exceeds
     ``_K1_FIT_RESIDUAL_MAX``, the OPD-only saddle is kept, and the S6
-    ``RuntimeWarning`` fires naming both measurements.  The term is
+    ``RuntimeWarning`` fires naming both measurements.  That residual scores
+    the fit's VALUE while the Newton also consumes its ``v2``-DERIVATIVE, so a
+    second bar scores the derivative: ``k1`` is refitted one order down and the
+    two charts' ``dk1/dv2`` compared at the ray points, and a relative
+    disagreement above ``_K1_DERIV_RESIDUAL_MAX`` keeps the OPD-only saddle
+    too.  That is what refuses a hard-edged aperture, whose value residual sits
+    inside its own bar.  The term is
     ``k1 . ds1/dv2``, so the same gate also refuses a chart that cannot carry
     the OTHER factor: when the order-``poly_order`` fit to the entrance
     coordinates has relative RMS residual above ``_S1_FIT_RESIDUAL_MAX`` the
     fitted saddle is placed on a ray the chart has itself misplaced, which a
-    larger ``poly_order`` -- or an explicit ``input_na``, since ``na_proxy``
-    sizes the pupil box from the input's angular spectrum and a uniform tilt
-    inflates it threefold -- repairs.  A wavefront steeper
+    larger ``poly_order`` -- or an explicit ``input_na`` -- repairs.
+    A wavefront steeper
     than the grid's own Nyquist angle ``lambda / (2 dx)`` is a DIFFERENT
     failure and this gate does not see it: the phase-difference estimator
     aliases to a wrapped direction that is perfectly smooth (measured
@@ -2326,6 +2453,7 @@ def apply_real_lens_maslov(
     # wavelength * fx in the paraxial regime), unless the caller supplies
     # input_na explicitly (or the field is declared collimated).
     _na_meas = 0.0
+    _na_mean = 0.0
     if not collimated_input:
         _F = np.fft.fft2(E_in)
         _P = np.abs(_F) ** 2
@@ -2337,7 +2465,27 @@ def apply_real_lens_maslov(
         if _Ptot > 0.0:
             _v2 = (wavelength ** 2) * (_FX ** 2 + _FY ** 2)
             _rms = float(np.sqrt(float((_v2 * _P).sum()) / _Ptot))
-            _na_meas = 3.0 * _rms   # ~3-sigma coverage of the spectrum
+            # The chart is a box ABOUT v = 0, so what it must reach is the
+            # MEAN launch direction plus the SPREAD about it -- not the second
+            # moment about zero, which for a uniform tilt theta is theta and
+            # triples to 3 theta below.  A tilt is a change of reference
+            # direction, not an angular spread: measured on the f = 13.3 mm
+            # N-SF11 chart at tilt 2x the lens NA, the moment-about-zero rule
+            # sizes na_proxy 0.368 where 0.158 covers the field, and the
+            # order-4 entrance-coordinate fit over that inflated box degrades
+            # far enough to disengage the S6 saddle (VERIFY-B1 F2).
+            _mx = (wavelength * float((_FX * _P).sum()) / _Ptot)
+            _my = (wavelength * float((_FY * _P).sum()) / _Ptot)
+            _na_mean = float(np.hypot(_mx, _my))
+            # Below the bar the first moment is round-off, not a launch
+            # direction, and the sizing is left EXACTLY as it was -- see
+            # ``_NA_MEAN_MIN_FRACTION``.
+            if _na_mean > _NA_MEAN_MIN_FRACTION * _rms:
+                _spread = float(np.sqrt(
+                    max(_rms * _rms - _na_mean * _na_mean, 0.0)))
+                _na_meas = _na_mean + 3.0 * _spread
+            else:
+                _na_meas = 3.0 * _rms   # ~3-sigma coverage of the spectrum
             del _v2
         del _P, _FX, _FY, _fx, _fy
     if input_na is not None:
@@ -2369,7 +2517,8 @@ def apply_real_lens_maslov(
     else:
         na_input = _na_meas
 
-    # Chart spans the lens acceptance plus the input divergence.
+    # Chart spans the lens acceptance plus the input's own reach about v = 0
+    # (its mean launch direction plus its spread).
     na_proxy = na_lens + na_input
 
     # Clamp to a physical direction cosine (< 1).  A speckled / hard-aperture
@@ -2806,6 +2955,7 @@ def apply_real_lens_maslov(
     _na_wf = 0.0
     _k1_na_rays = 0.0
     _k1_res_rel = 0.0
+    _k1_dres_rel = 0.0
     _s1_res_rel = 0.0
     _s6_mode = (_S6_INPUT_WAVEVECTOR_SADDLE if input_wavevector_saddle is None
                 else input_wavevector_saddle)
@@ -2846,7 +2996,10 @@ def apply_real_lens_maslov(
                                             + _k1_res[:, 1] ** 2)).sum())
             _k1_res_rel = (float(np.sqrt(_k1_res_pow / _w_tot / _k1_pow))
                            if (_w_tot > 0.0 and _k1_pow > 0.0) else np.inf)
-            # FALLBACK CRITERION, part 1 of 2.  The saddle correction is only
+            _k1_dres_rel = _k1_fit_derivative_error(
+                A, mi, poly_order, T1, T2, T3, T4, u_v2x, u_v2y,
+                _coef_k1, _k1_rhs, _w_rays, _w_tot, _k1_pow)
+            # FALLBACK CRITERION, part 1 of 3.  The saddle correction is only
             # as good as the chart's ability to REPRESENT the input's local
             # wavevector: a speckled input, or one cut by a hard-edged
             # aperture (where ``_local_direction_cosines`` reports 0 in the
@@ -2857,7 +3010,13 @@ def apply_real_lens_maslov(
             # intensity-weighted RMS fit residual of (k1x, k1y) as a fraction
             # of their intensity-weighted RMS.
             #
-            # Part 2: the SAME contraction reads the ENTRANCE-COORDINATE fit,
+            # Part 2, ``_k1_dres_rel`` above: that residual is the fit's VALUE
+            # error, and the Newton consumes the fit's v2-DERIVATIVE.  A fit
+            # can have a small value residual and an unbounded slope error --
+            # see :func:`_k1_fit_derivative_error` and the ladder beside
+            # ``_K1_DERIV_RESIDUAL_MAX``.
+            #
+            # Part 3: the SAME contraction reads the ENTRANCE-COORDINATE fit,
             # because the term is k1 . ds1/dv2 -- so the chart has to carry
             # BOTH factors.  ``_s1_res_rel`` is the entrance-coordinate fit's
             # own relative RMS residual over the traced rays; the constant it
@@ -2868,10 +3027,11 @@ def apply_real_lens_maslov(
             _s1_res_rel = (float(np.sqrt(
                 float(np.mean(_s1_res[:, 0] ** 2 + _s1_res[:, 1] ** 2))
                 / _s1_pow)) if _s1_pow > 0.0 else np.inf)
-            # Below both bars, use the fit; above either, keep the OPD-only
+            # Below all three bars, use the fit; above any, keep the OPD-only
             # saddle and say so, which is the honest answer when the term the
             # saddle would be moved by is not a chart-representable field.
             if ((_k1_res_rel <= _K1_FIT_RESIDUAL_MAX
+                 and _k1_dres_rel <= _K1_DERIV_RESIDUAL_MAX
                  and _s1_res_rel <= _S1_FIT_RESIDUAL_MAX) or _s6_mode):
                 _k1_fit = (coef_s1x, coef_s1y, _coef_k1[:, 0], _coef_k1[:, 1],
                            1.0 / float(wavelength))
@@ -2881,6 +3041,7 @@ def apply_real_lens_maslov(
             _progress('integrate', 0.598,
                       f'S6 input-wavevector saddle: ray NA {_k1_na_rays:.4f}, '
                       f's1 chart fit {_s1_res_rel:.2e}, '
+                      f'k1 slope error {_k1_dres_rel:.2e}, '
                       f'k1 fit residual {_k1_res_rel:.2e} '
                       f'({"engaged" if _k1_fit is not None else "refused"})')
     if (_asymptotic and not collimated_input and _k1_fit is None
@@ -2897,6 +3058,16 @@ def apply_real_lens_maslov(
             _why = (f"the wavefront is flat ACROSS THE TRACED APERTURE "
                     f"(ray-sampled NA {_k1_na_rays:.4f}), so nothing was "
                     f"fitted and the saddle of the OPD alone is solved")
+        elif _k1_dres_rel > _K1_DERIV_RESIDUAL_MAX:
+            _why = (f"its local wavevector's SLOPE across the chart could not "
+                    f"be resolved -- refitting (k1x, k1y) one order down and "
+                    f"comparing dk1/dv2 at the ray points gives a relative "
+                    f"error of {_k1_dres_rel:.2f}, above the "
+                    f"{_K1_DERIV_RESIDUAL_MAX:g} bar, and the saddle's Newton "
+                    f"consumes that derivative (a hard-edged aperture does "
+                    f"this: the dark side reports a launch direction of 0 and "
+                    f"the fit's slope across the edge is a fiction) -- so the "
+                    f"saddle of the OPD alone is being solved")
         elif _s1_res_rel > _S1_FIT_RESIDUAL_MAX:
             _why = (f"the CHART cannot carry the other factor of the S6 term "
                     f"-- the order-{poly_order} fit to the entrance "
@@ -2905,8 +3076,8 @@ def apply_real_lens_maslov(
                     f"above the {_S1_FIT_RESIDUAL_MAX:g} bar, so the fitted "
                     f"saddle would be placed on a ray the chart has "
                     f"misplaced (a larger poly_order, or an explicit "
-                    f"input_na that stops na_proxy over-sizing the pupil "
-                    f"box, fixes this) -- so the saddle of the OPD alone is "
+                    f"input_na that sizes the pupil box deliberately, "
+                    f"fixes this) -- so the saddle of the OPD alone is "
                     f"being solved")
         else:
             _why = (f"its local wavevector could not be represented on the "

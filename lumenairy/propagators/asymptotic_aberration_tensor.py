@@ -27,9 +27,11 @@ so existing call sites continue to work unchanged.
 from __future__ import annotations
 
 import math
+import threading
 import warnings
+from collections import OrderedDict
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -462,6 +464,60 @@ def _sigma_grid_n_on_ladder(n_req: int) -> int:
     return n
 
 
+def _fit_fingerprint(fit: CanonicalPolyFit) -> Tuple:
+    """A hashable fingerprint of everything in ``fit`` a propagate reads.
+
+    The coefficient vectors go in as raw bytes of a canonical float64 copy,
+    so two structurally identical fits from separate traces share an entry and
+    a refit never serves the old one.  ``id(fit)`` would be cheaper and wrong:
+    CPython reuses the address of a collected object, so a cache keyed on it
+    can answer for a fit that no longer exists.
+    """
+    def _b(a):
+        return None if a is None else np.ascontiguousarray(
+            np.asarray(a, dtype=np.float64)).tobytes()
+
+    return (int(fit.poly_order), tuple(map(tuple, fit.multi_indices)),
+            _b(fit.coef_phi), _b(fit.coef_s1x), _b(fit.coef_s1y),
+            _b(fit.linear_coeffs_phi), bool(fit.extract_linear_phase),
+            float(fit.s2x_centre), float(fit.s2x_halfrange),
+            float(fit.s2y_centre), float(fit.s2y_halfrange),
+            float(fit.v2x_centre), float(fit.v2x_halfrange),
+            float(fit.v2y_centre), float(fit.v2y_halfrange),
+            float(fit.wavelength))
+
+
+# Cross-call cache of the image-plane waist probe.  The probe is one (rarely
+# two) coarse ``propagate_modal_asymptotic`` calls on a ``_W_O_PROBE_N`` grid
+# -- MEASURED 0.19 s of a 6.6 s default ``aberration_tensor`` on the
+# validation singlet, and repeated verbatim by every call that shares a fit,
+# an image point and a pupil weighting (a merit evaluated over source modes,
+# or an optimiser loop whose step did not move the optic).  Bounded and
+# FIFO-evicted; each entry is one float.
+_W_O_CACHE: 'OrderedDict[Any, Optional[float]]' = OrderedDict()
+_W_O_CACHE_MAX = 64
+_W_O_CACHE_LOCK = threading.Lock()
+
+
+def clear_image_plane_waist_cache() -> None:
+    """Drain the :func:`_measure_image_plane_waist` cross-call cache."""
+    with _W_O_CACHE_LOCK:
+        _W_O_CACHE.clear()
+
+
+try:
+    import sys as _sys
+
+    from .._cache_registry import register_cache_clearer as _register_cache_clearer
+    _this_mod = _sys.modules[__name__]
+    _register_cache_clearer(
+        'image_plane_waist',
+        lambda: getattr(_this_mod, 'clear_image_plane_waist_cache')(),
+    )
+except ImportError:      # pragma: no cover - registry always present in-tree
+    pass
+
+
 def _measure_image_plane_waist(
     fit: CanonicalPolyFit,
     s2x_img: float, s2y_img: float,
@@ -493,10 +549,28 @@ def _measure_image_plane_waist(
 
     Returns ``None`` if the probe cannot produce a finite positive width
     (dead field, degenerate box); the caller then falls back.
+
+    The answer is a pure function of ``(fit, s2_image, source_point,
+    pupil_amplitudes, w_s, w_p, v2_centre, n)`` -- every one of which reaches
+    the probe's ``propagate`` call or its grid -- so it is memoised on exactly
+    that tuple in ``_W_O_CACHE``.  ``propagate`` itself is part of the key by
+    qualified name, because a caller may hand in a different evaluator.
     """
+    _key = (_fit_fingerprint(fit), float(s2x_img), float(s2y_img),
+            float(source_point[0]), float(source_point[1]),
+            tuple(sorted((tuple(k), complex(v))
+                         for k, v in (pupil_amplitudes or {}).items())),
+            float(w_s), float(w_p),
+            float(v2_centre[0]), float(v2_centre[1]), int(n),
+            getattr(propagate, '__qualname__', repr(propagate)))
+    with _W_O_CACHE_LOCK:
+        if _key in _W_O_CACHE:
+            _W_O_CACHE.move_to_end(_key)
+            return _W_O_CACHE[_key]
+
     room = _s2_validity_room(fit, s2x_img, s2y_img)
     if not (math.isfinite(room) and room > 0.0):
-        return None
+        return _w_o_cache_put(_key, None)
     ext = 0.98 * room
     w = None
     for _pass in range(2):
@@ -514,12 +588,12 @@ def _measure_image_plane_waist(
             )
         except (ValueError, RuntimeError, ZeroDivisionError, IndexError,
                 np.linalg.LinAlgError):
-            return None
+            return _w_o_cache_put(_key, None)
         inten = np.abs(np.asarray(U)) ** 2
         inten = np.where(np.isfinite(inten), inten, 0.0)
         tot = float(inten.sum())
         if not (tot > 0.0):
-            return None
+            return _w_o_cache_put(_key, None)
         lx = SX - s2x_img
         ly = SY - s2y_img
         cx = float((inten * lx).sum() / tot)
@@ -527,17 +601,29 @@ def _measure_image_plane_waist(
         var = float(
             (inten * ((lx - cx) ** 2 + (ly - cy) ** 2)).sum() / tot) / 2.0
         if not (math.isfinite(var) and var > 0.0):
-            return None
+            return _w_o_cache_put(_key, None)
         w = 2.0 * math.sqrt(var)
         cell = 2.0 * ext / (n - 1)
         if w >= 3.0 * cell:
-            return w
+            return _w_o_cache_put(_key, w)
         # Under-sampled: the field is far narrower than the validity box.
         ext_next = min(6.0 * w, 0.98 * room)
         if not (ext_next > 0.0) or ext_next >= ext:
-            return w
+            return _w_o_cache_put(_key, w)
         ext = ext_next
-    return w
+    return _w_o_cache_put(_key, w)
+
+
+def _w_o_cache_put(key, value):
+    """Record ``value`` under ``key`` in the bounded waist cache and return
+    it, so every exit of :func:`_measure_image_plane_waist` caches exactly
+    what it returns -- including the ``None`` verdicts, which cost the same
+    probe to reach."""
+    with _W_O_CACHE_LOCK:
+        _W_O_CACHE[key] = value
+        while len(_W_O_CACHE) > _W_O_CACHE_MAX:
+            _W_O_CACHE.popitem(last=False)
+    return value
 
 
 # ---------------------------------------------------------------------------
@@ -1269,9 +1355,17 @@ def aberration_tensor(
             )
             if C_sigma is not None:
                 field = np.asarray(field) * basis_phase
+            # Only the caller's ``output_modes`` are read out of the result,
+            # so only those are built: the (max_p_o, max_ell_o) rectangle the
+            # two maxima span is the enclosing box of a set that is usually
+            # much smaller than it (a (2, 0) / (1, 1) / (0, 3) selection spans
+            # 21 modes and reads 3).  The overlaps are per-mode reductions
+            # against independently-built modes, so this is the same number
+            # for every mode that IS read.
             overlaps = decompose_lg(
                 field, SX_local, SY_local,
                 w=w_o, p_max=max_p_o, ell_max=max_ell_o,
+                only=tuple(tuple(k_out) for k_out in output_modes),
             )
             for io, k_out in enumerate(output_modes):
                 L[io, js] = overlaps.get(k_out, 0.0 + 0.0j)

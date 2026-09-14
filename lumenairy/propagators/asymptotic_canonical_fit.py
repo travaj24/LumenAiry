@@ -58,6 +58,47 @@ __all__ = [
 ]
 
 
+def _basis_and_grad34(K1, K2, K3, K4, max_order,
+                      u1, u2, u3, u4, T12=None):
+    """The three ``(M, *u_shape)`` basis tensors a ``v2``-gradient
+    evaluation needs, built ONCE for any number of coefficient vectors.
+
+    Returns ``(basis_f, basis_d3, basis_d4, T12)`` where ``basis_f`` is the
+    plain tensor-product basis and ``basis_d3`` / ``basis_d4`` are its
+    ``d/du3`` / ``d/du4`` partials.  Contract each against a coefficient
+    vector with ``np.tensordot(c, basis, axes=([0], [0]))`` to get the value
+    and the two partials -- exactly what
+    :func:`~lumenairy.elements.lenses._evaluate_polynomial_4d_and_grad34`
+    returns for ONE coefficient vector, at one third of the tensor work when
+    three vectors share the point set (``s1x``, ``s1y``, ``phi``).
+
+    ``K1``..``K4`` are the per-axis multi-index columns (``int64`` arrays of
+    length ``M``).  ``T12`` is the ``s2``-only factor ``T1[K1] * T2[K2]``; pass
+    a previously built one to reuse it across a sweep that holds ``s2`` fixed
+    and moves only ``v2`` (the Newton loop of
+    :func:`~lumenairy.propagators.asymptotic_maslov._solve_envelope_stationary_batch`),
+    and it is returned so the first call can be the one that builds it.  When
+    ``T12`` is supplied ``u1`` and ``u2`` are not read at all, so a caller that
+    has only the ``v2`` coordinates may pass ``None`` for them.
+
+    Every product is the same expression, on the same inputs, in the same
+    order as the single-vector helper, so each contraction is bit-for-bit what
+    that helper produces.
+    """
+    if T12 is None:
+        T1 = _chebyshev_vandermonde(u1, max_order)
+        T2 = _chebyshev_vandermonde(u2, max_order)
+        T12 = T1[K1] * T2[K2]
+    T3 = _chebyshev_vandermonde(u3, max_order)
+    T4 = _chebyshev_vandermonde(u4, max_order)
+    dT3 = _chebyshev_derivative_vandermonde(u3, max_order)
+    dT4 = _chebyshev_derivative_vandermonde(u4, max_order)
+    basis_f = T12 * T3[K3] * T4[K4]
+    basis_d3 = T12 * dT3[K3] * T4[K4]
+    basis_d4 = T12 * T3[K3] * dT4[K4]
+    return basis_f, basis_d3, basis_d4, T12
+
+
 def aberration_free_reference_fit(fit: "CanonicalPolyFit") -> "CanonicalPolyFit":
     """The aberration-free twin of ``fit``: same geometry, no wavefront error.
 
@@ -175,6 +216,27 @@ class CanonicalPolyFit:
     n_rays: int = 0
     linear_coeffs_phi: Optional[np.ndarray] = None
     extract_linear_phase: bool = False
+
+    # ------------------------------------------------------------------
+    # Basis bookkeeping
+    # ------------------------------------------------------------------
+    def basis_index_columns(self) -> Tuple[np.ndarray, np.ndarray,
+                                           np.ndarray, np.ndarray]:
+        """The four per-axis multi-index columns as ``int64`` arrays.
+
+        ``multi_indices`` is a list of 4-tuples; every basis evaluation needs
+        it as four gather indices.  The conversion is memoised on the instance
+        under ``_K_columns`` -- it depends only on ``multi_indices``, which no
+        consumer mutates, and the Newton loop asks for it once per iteration.
+        The attribute is not a dataclass field, so ``dataclasses.replace``
+        rebuilds it lazily on the copy.
+        """
+        cols = getattr(self, '_K_columns', None)
+        if cols is None:
+            K = np.asarray(self.multi_indices, dtype=np.int64)
+            cols = (K[:, 0], K[:, 1], K[:, 2], K[:, 3])
+            object.__setattr__(self, '_K_columns', cols)
+        return cols
 
     # ------------------------------------------------------------------
     # Coordinate normalisation helpers
@@ -295,6 +357,58 @@ class CanonicalPolyFit:
         invhx = 1.0 / self.v2x_halfrange
         invhy = 1.0 / self.v2y_halfrange
         return phi, du3_phi * invhx, du4_phi * invhy
+
+    def eval_s1_and_phi_with_v2_grad(self, s2x: np.ndarray, s2y: np.ndarray,
+                                      v2x: np.ndarray, v2y: np.ndarray,
+                                      *, include_linear: bool = False,
+                                      return_s2_factor: bool = False
+                                      ) -> Tuple[np.ndarray, ...]:
+        """:meth:`eval_s1_with_v2_grad` and :meth:`eval_phi_with_v2_grad` in
+        one pass over the basis.
+
+        Returns ``(s1x, s1y, dS1x_dv2x, dS1x_dv2y, dS1y_dv2x, dS1y_dv2y,
+        phi, dPhi_dv2x, dPhi_dv2y)`` -- the two methods' returns concatenated,
+        with the same chain-rule normalisation and the same ``include_linear``
+        meaning for ``phi``.  With ``return_s2_factor=True`` the ``(M, *u_shape)``
+        table ``T1[K1] * T2[K2]`` follows as a tenth element, for a caller that
+        also needs the ``s2``-only factor (the Hessian pass).
+
+        The three coefficient vectors ``coef_s1x`` / ``coef_s1y`` / ``coef_phi``
+        share one point set, so they share the ``(M, *u_shape)`` basis tensors
+        :func:`_basis_and_grad34` builds; calling the two methods separately
+        builds those tensors three times over.  Each of the nine outputs is the
+        same ``np.tensordot`` of the same coefficient vector against the same
+        basis tensor that the separate methods compute, so the values are
+        bit-for-bit identical.
+        """
+        u1, u2, u3, u4 = self.to_normalised(s2x, s2y, v2x, v2y)
+        K1, K2, K3, K4 = self.basis_index_columns()
+        basis_f, basis_d3, basis_d4, T12 = _basis_and_grad34(
+            K1, K2, K3, K4, self.poly_order, u1, u2, u3, u4)
+
+        def _contract(coef):
+            c = np.asarray(coef, dtype=np.float64)
+            return (np.tensordot(c, basis_f, axes=([0], [0])),
+                    np.tensordot(c, basis_d3, axes=([0], [0])),
+                    np.tensordot(c, basis_d4, axes=([0], [0])))
+
+        s1x, du3_s1x, du4_s1x = _contract(self.coef_s1x)
+        s1y, du3_s1y, du4_s1y = _contract(self.coef_s1y)
+        phi, du3_phi, du4_phi = _contract(self.coef_phi)
+        if self.linear_coeffs_phi is not None:
+            a0, a1, a2, a3, a4 = self.linear_coeffs_phi
+            phi = phi + (a3 * u3 + a4 * u4)
+            du3_phi = du3_phi + a3
+            du4_phi = du4_phi + a4
+            if include_linear:
+                phi = phi + (a0 + a1 * u1 + a2 * u2)
+        invhx = 1.0 / self.v2x_halfrange
+        invhy = 1.0 / self.v2y_halfrange
+        out = (s1x, s1y,
+               du3_s1x * invhx, du4_s1x * invhy,
+               du3_s1y * invhx, du4_s1y * invhy,
+               phi, du3_phi * invhx, du4_phi * invhy)
+        return out + (T12,) if return_s2_factor else out
 
 
 def fit_canonical_polynomials(

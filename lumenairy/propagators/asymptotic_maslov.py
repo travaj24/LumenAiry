@@ -31,7 +31,7 @@ module globals (test-monkey-patching contract).
 from __future__ import annotations
 
 import math
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -43,7 +43,7 @@ from .._math.chebyshev import (
     chebyshev_second_derivative_vandermonde as _chebyshev_second_derivative_vandermonde,
     chebyshev_vandermonde as _chebyshev_vandermonde,
 )
-from .asymptotic_canonical_fit import CanonicalPolyFit
+from .asymptotic_canonical_fit import CanonicalPolyFit, _basis_and_grad34
 
 # Largest |Re(b_quad)| that ``np.exp`` can take in float64 without
 # overflowing to inf (exp(709.78) is the float64 ceiling).  The batched
@@ -51,6 +51,19 @@ from .asymptotic_canonical_fit import CanonicalPolyFit
 # ``aberration_tensor`` path did not (audit Y5) and overflowed with a bare
 # NumPy warning on inputs the batched path rejects cleanly.
 B_QUAD_EXP_MAX = 700.0
+
+# Newton STOP seam for :func:`_solve_envelope_stationary_batch`.  ``False``
+# (default) stops a pixel only on the ABSOLUTE ``rn < tol`` the solver has
+# always used; ``True`` stops it on the same scale-relative test the returned
+# ``converged`` flag already reports, ``rn < tol * max(r0, 1)``.  The verdict
+# and the stop are separate decisions because the stop MOVES THE ANSWER: a
+# pixel that leaves the active set early keeps the iterate it had, while the
+# absolute test keeps taking Newton steps whose size is round-off.  Measured
+# deviation and the iteration count it buys: the WP-B7 report's Y4 section.
+# Process-global and private, in the style of the other A/B seams in this
+# package; ``_solve_envelope_stationary_batch(scale_relative_stop=)`` takes
+# precedence per call.
+_NEWTON_SCALE_RELATIVE_STOP = False
 
 
 def sym2x2_max_eigenvalue(a, b, d, xp):
@@ -234,12 +247,21 @@ def _maslov_branch_corrected_sqrt(det_M, last_arg_detM=None,
 
 def _phi_v2_hessian_batch(fit: CanonicalPolyFit,
                            s2x: np.ndarray, s2y: np.ndarray,
-                           v2x: np.ndarray, v2y: np.ndarray) -> np.ndarray:
+                           v2x: np.ndarray, v2y: np.ndarray,
+                           T12_rows: Optional[np.ndarray] = None
+                           ) -> np.ndarray:
     """Vectorised ``_phi_v2_hessian`` over arrays of pixels.
 
     Returns an ``(N, 2, 2)`` real array where each ``[k]`` is the same
     Hessian that the scalar ``_phi_v2_hessian`` would return for pixel
     ``k``.
+
+    ``T12_rows`` is the optional ``(M, N)`` table of ``T1[K1] * T2[K2]``
+    rows in ``multi_indices`` order -- the ``s2``-only factor of the basis,
+    which :func:`_compute_M_b_batch` has already built for the value/gradient
+    pass.  Row ``m`` of it IS the ``T1[k1] * T2[k2]`` this loop would compute
+    for the ``m``-th multi-index, so passing it skips two Vandermonde builds
+    and one length-``N`` product per retained term without moving a bit.
 
     Implementation notes
     --------------------
@@ -263,8 +285,9 @@ def _phi_v2_hessian_batch(fit: CanonicalPolyFit,
     u3 = (v2x - fit.v2x_centre) / fit.v2x_halfrange
     u4 = (v2y - fit.v2y_centre) / fit.v2y_halfrange
 
-    T1 = _chebyshev_vandermonde(u1, fit.poly_order)
-    T2 = _chebyshev_vandermonde(u2, fit.poly_order)
+    if T12_rows is None:
+        T1 = _chebyshev_vandermonde(u1, fit.poly_order)
+        T2 = _chebyshev_vandermonde(u2, fit.poly_order)
     T3 = _chebyshev_vandermonde(u3, fit.poly_order)
     T4 = _chebyshev_vandermonde(u4, fit.poly_order)
     dT3 = _chebyshev_derivative_vandermonde(u3, fit.poly_order)
@@ -279,10 +302,11 @@ def _phi_v2_hessian_batch(fit: CanonicalPolyFit,
     # Same accumulation order as the scalar helper.  T1[k1] is a 1-D
     # array of length N (one Chebyshev value per pixel), so the
     # per-term update is a vectorised N-element addition.
-    for c, (k1, k2, k3, k4) in zip(fit.coef_phi, fit.multi_indices):
+    for m, (c, (k1, k2, k3, k4)) in enumerate(
+            zip(fit.coef_phi, fit.multi_indices)):
         if c == 0.0:
             continue
-        T12 = T1[k1] * T2[k2]
+        T12 = T1[k1] * T2[k2] if T12_rows is None else T12_rows[m]
         h33 += c * T12 * d2T3[k3] * T4[k4]
         h34 += c * T12 * dT3[k3] * dT4[k4]
         h44 += c * T12 * T3[k3] * d2T4[k4]
@@ -323,11 +347,16 @@ def _compute_M_b_batch(fit: CanonicalPolyFit,
     s2y = np.asarray(s2y, dtype=np.float64)
     v2x = np.asarray(v2x, dtype=np.float64)
     v2y = np.asarray(v2y, dtype=np.float64)
-    (s1x, s1y, dS1x_dv2x, dS1x_dv2y, dS1y_dv2x, dS1y_dv2y) = (
-        fit.eval_s1_with_v2_grad(s2x, s2y, v2x, v2y)
-    )
-    phi, dPhi_dv2x, dPhi_dv2y = fit.eval_phi_with_v2_grad(
-        s2x, s2y, v2x, v2y, include_linear=False,
+    # ``coef_s1x`` / ``coef_s1y`` / ``coef_phi`` are contracted against the
+    # SAME basis tensors at the same points, so one fused evaluation replaces
+    # the three that ``eval_s1_with_v2_grad`` + ``eval_phi_with_v2_grad`` each
+    # build for themselves.  The nine outputs are bit-for-bit the separate
+    # methods' (same tensordot, same coefficient vector, same basis).
+    (s1x, s1y, dS1x_dv2x, dS1x_dv2y, dS1y_dv2x, dS1y_dv2y,
+     phi, dPhi_dv2x, dPhi_dv2y, T12_rows) = (
+        fit.eval_s1_and_phi_with_v2_grad(
+            s2x, s2y, v2x, v2y, include_linear=False,
+            return_s2_factor=True)
     )
 
     N = s2x.shape[0]
@@ -340,7 +369,7 @@ def _compute_M_b_batch(fit: CanonicalPolyFit,
     g[:, 0] = dPhi_dv2x
     g[:, 1] = dPhi_dv2y
 
-    H_phi = _phi_v2_hessian_batch(fit, s2x, s2y, v2x, v2y)
+    H_phi = _phi_v2_hessian_batch(fit, s2x, s2y, v2x, v2y, T12_rows)
 
     inv_ws2 = 1.0 / (w_s * w_s)
     inv_wp2 = 1.0 / (w_p * w_p)
@@ -578,6 +607,7 @@ def _solve_envelope_stationary_batch(
     v_cx: float, v_cy: float,
     max_iter: int = 12,
     tol: float = 1e-12,
+    scale_relative_stop: Optional[bool] = None,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Vectorised ``solve_envelope_stationary`` over a 1-D batch of
     output pixels.
@@ -626,6 +656,14 @@ def _solve_envelope_stationary_batch(
     ``converged`` is written ``True`` only for genuinely-converged pixels
     (``rn < tol * max(r0, 1)``) and never for stalled or singular ones
     dropped from the active set (P1-NEW-3).
+
+    ``scale_relative_stop`` (default: the module seam
+    ``_NEWTON_SCALE_RELATIVE_STOP``, itself ``False``) opts the STOP test into
+    the same scale-relative form as the verdict, so a pixel that has converged
+    to machine precision leaves the active set instead of taking round-off
+    Newton steps for the rest of ``max_iter``.  It is opt-in because it moves
+    the answer: the retained iterate is the converged one rather than the
+    one twelve round-off steps later.
     """
     s2x = np.asarray(s2x, dtype=np.float64)
     s2y = np.asarray(s2y, dtype=np.float64)
@@ -656,6 +694,23 @@ def _solve_envelope_stationary_batch(
     # (and therefore every returned v2*) keeps the original absolute
     # test bit-for-bit.
     conv_scale = np.ones(N, dtype=np.float64)
+    _stop_relative = (_NEWTON_SCALE_RELATIVE_STOP if scale_relative_stop is None
+                      else bool(scale_relative_stop))
+    # The Newton iterates move v2 only, so the basis's ``s2``-only factor
+    # ``T1[K1] * T2[K2]`` is loop-invariant: build the (M, N) table once and
+    # gather the active columns each sweep instead of rebuilding two
+    # Vandermondes and their outer product per iteration.  ``T12_all[:, idx]``
+    # is bit-for-bit ``T1[K1] * T2[K2]`` evaluated on the subset, because the
+    # Chebyshev recurrence is elementwise in the sample axis.
+    Kc1, Kc2, Kc3, Kc4 = fit.basis_index_columns()
+    u1_all = (s2x - fit.s2x_centre) / fit.s2x_halfrange
+    u2_all = (s2y - fit.s2y_centre) / fit.s2y_halfrange
+    T12_all = (_chebyshev_vandermonde(u1_all, fit.poly_order)[Kc1]
+               * _chebyshev_vandermonde(u2_all, fit.poly_order)[Kc2])
+    coef_s1x = np.asarray(fit.coef_s1x, dtype=np.float64)
+    coef_s1y = np.asarray(fit.coef_s1y, dtype=np.float64)
+    inv_v2xh = 1.0 / fit.v2x_halfrange
+    inv_v2yh = 1.0 / fit.v2y_halfrange
     for it in range(max_iter):
         active = ~finished
         if not np.any(active):
@@ -664,12 +719,19 @@ def _solve_envelope_stationary_batch(
         # once most pixels have converged.
         idx = np.where(active)[0]
         sx = s2x[idx]
-        sy = s2y[idx]
         vx = v2x[idx]
         vy = v2y[idx]
-        (s1x, s1y, dS1x_dv2x, dS1x_dv2y, dS1y_dv2x, dS1y_dv2y) = (
-            fit.eval_s1_with_v2_grad(sx, sy, vx, vy)
-        )
+        u3 = (vx - fit.v2x_centre) / fit.v2x_halfrange
+        u4 = (vy - fit.v2y_centre) / fit.v2y_halfrange
+        basis_f, basis_d3, basis_d4, _ = _basis_and_grad34(
+            Kc1, Kc2, Kc3, Kc4, fit.poly_order, None, None, u3, u4,
+            T12=T12_all[:, idx])
+        s1x = np.tensordot(coef_s1x, basis_f, axes=([0], [0]))
+        s1y = np.tensordot(coef_s1y, basis_f, axes=([0], [0]))
+        dS1x_dv2x = np.tensordot(coef_s1x, basis_d3, axes=([0], [0])) * inv_v2xh
+        dS1x_dv2y = np.tensordot(coef_s1x, basis_d4, axes=([0], [0])) * inv_v2yh
+        dS1y_dv2x = np.tensordot(coef_s1y, basis_d3, axes=([0], [0])) * inv_v2xh
+        dS1y_dv2y = np.tensordot(coef_s1y, basis_d4, axes=([0], [0])) * inv_v2yh
         K = sx.shape[0]
         J = np.empty((K, 2, 2), dtype=np.float64)
         J[:, 0, 0] = dS1x_dv2x
@@ -691,9 +753,12 @@ def _solve_envelope_stationary_batch(
             # Cold-start residual -> the per-pixel scale the verdict uses.
             conv_scale = np.maximum(rn, 1.0)
         # Mark convergence / stall.  Match the scalar logic:
-        #   is_converged = rn < tol
+        #   is_converged = rn < tol         (the absolute test; see
+        #                                    ``scale_relative_stop`` for the
+        #                                    opt-in scale-relative one)
         #   is_stalling  = (it >= 2 and rn > 0.9 * last_norm and last_norm > 1e-300)
-        is_conv = rn < tol
+        is_conv = (rn < tol * conv_scale[idx] if _stop_relative
+                   else rn < tol)
         is_stall = (it >= 2) & (rn > 0.9 * last_norm[idx]) & (last_norm[idx] > 1e-300)
         done = is_conv | is_stall
         # H = inv_ws2 * J^T J + inv_wp2 * I

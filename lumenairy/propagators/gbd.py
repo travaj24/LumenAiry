@@ -1758,13 +1758,61 @@ def _fft_applicable_impl(beamlets, Nx, Ny, dx, dy, centre) -> bool:
     return True
 
 
+# Sigma margin the FFT reconstruction clips its Gaussian kernel at.  It is
+# deliberately wider than the windowed path's ``n_sigma=5`` (which trades
+# accuracy against a per-beamlet box whose AREA grows as n_sigma^2, paid once
+# per beamlet): here ONE kernel serves the whole bundle, so the margin costs
+# almost nothing and is set where the truncation disappears into round-off --
+# exp(-6.5^2) = 4.5e-19, two decades below float64 eps relative to the kernel
+# peak, so the clipped kernel and the full one agree to the accuracy of the
+# transform that consumes them.
+_FFT_KERNEL_N_SIGMA = 6.5
+
+
+def _kernel_half_width(cq: complex, k: float, d: float, N: int) -> int:
+    """Half-width in samples of the FFT reconstruction's Gaussian kernel along
+    one axis: ``ceil(R_cut / d)`` with ``R_cut = n_sigma / sqrt(alpha)`` and
+    ``alpha = 0.5 k Im(conj(Q))`` the amplitude decay coefficient there.
+
+    Clamped to ``N - 1``, the full linear-convolution offset range, so a beam
+    that does not decay inside the grid (or a non-physical ``Q`` with a
+    non-decaying axis, ``alpha <= 0``) simply keeps the unclipped kernel.
+    """
+    alpha = 0.5 * k * float(np.imag(cq))
+    if not (np.isfinite(alpha) and alpha > 0.0):
+        return int(N - 1)
+    r_cut = _FFT_KERNEL_N_SIGMA / float(np.sqrt(alpha))
+    w = float(np.ceil(r_cut / abs(float(d))))
+    if not np.isfinite(w):
+        return int(N - 1)
+    return int(min(max(w, 1.0), float(N - 1)))
+
+
+def _fft_len(n: int) -> int:
+    """Transform length for a linear convolution of true length ``n``: the
+    next 5-smooth length at or above it (``scipy.fft.next_fast_len``).
+
+    Zero-padding a linear convolution PAST its true length leaves the first
+    ``n`` samples -- the ones :func:`_fftconv_same` slices -- mathematically
+    unchanged, so the only effect is the transform's own cost: an awkward
+    length such as 3N-2 (N = 1000 -> 2998 = 2 x 1499, prime) runs the
+    Bluestein / naive fallback instead of a radix kernel.  Falls back to ``n``
+    itself if SciPy is absent, which is correct, just slower.
+    """
+    try:
+        from scipy.fft import next_fast_len
+    except ImportError:      # pragma: no cover - scipy is a hard dependency
+        return int(n)
+    return int(next_fast_len(int(n)))
+
+
 def _fftconv_same(xp: Any, a: np.ndarray, G: np.ndarray) -> np.ndarray:
     """Linear (zero-padded) 2-D convolution of ``a`` with ``G``, returning the
     ``mode='same'`` central slice aligned to ``a`` -- backend-generic via
     ``xp.fft`` (matches ``scipy.signal.fftconvolve(a, G, 'same')`` to ~6e-16)."""
     Ny, Nx = a.shape
     Gy, Gx = G.shape
-    sy, sx = Ny + Gy - 1, Nx + Gx - 1
+    sy, sx = _fft_len(Ny + Gy - 1), _fft_len(Nx + Gx - 1)
     F = xp.fft.ifft2(xp.fft.fft2(a, s=(sy, sx)) * xp.fft.fft2(G, s=(sy, sx)))
     sy0, sx0 = (Gy - 1) // 2, (Gx - 1) // 2
     return F[sy0:sy0 + Ny, sx0:sx0 + Nx]
@@ -1799,6 +1847,21 @@ def _reconstruct_fft(beamlets: BeamletBundle, *, xp: Any, Ny: int, Nx: int,
     identical to the dense sum (~1e-15); the FFT + scatter run entirely on the
     backend (GPU under CuPy, and it is ``jax.grad`` / ``jit`` differentiable
     under JAX).  Applicability is gated by :func:`_fft_reconstruct_applicable`.
+
+    MEMORY (audit S9).  The kernel is clipped to the same bounded support the
+    windowed reconstruction uses, ``+-ceil(R_cut / d)`` per axis with
+    ``R_cut = n_sigma / sqrt(alpha)`` and ``alpha = -0.5 k Im(Q)`` the
+    amplitude decay coefficient of that axis, at :data:`_FFT_KERNEL_N_SIGMA`
+    sigma.  Unclipped the kernel spans the full ``(2Ny-1, 2Nx-1)`` offset range
+    and the linear convolution that consumes it transforms ``(3Ny-2, 3Nx-2)``
+    -- nine times the output grid per array, with several arrays alive at once.
+    A physical beamlet decays long before the grid edge, so the clipped kernel
+    is typically a few tens of samples wide and the transform is
+    ``~(Ny + Gy, Nx + Gx)``.  Nothing is lost with it: ``exp(-n_sigma^2)`` at
+    the default is below float64 round-off relative to the kernel peak, so the
+    dropped tail is smaller than the transform's own error.  A beamlet so wide
+    that ``R_cut`` reaches the grid keeps the full kernel and pays what it
+    always did.
     """
     k = 2.0 * float(np.pi) / wavelength
     cx, cy = centre
@@ -1829,9 +1892,17 @@ def _reconstruct_fft(beamlets: BeamletBundle, *, xp: Any, Ny: int, Nx: int,
     flat = xp.clip(iy, 0, Ny - 1) * Nx + xp.clip(ix, 0, Nx - 1)
     a_grid = _scatter_grid(xp, Ny, Nx, flat, vals)
 
-    # Gaussian kernel over the full linear-convolution offset range, centred.
-    ux = (xp.arange(2 * Nx - 1) - (Nx - 1)) * dx
-    uy = (xp.arange(2 * Ny - 1) - (Ny - 1)) * dy
+    # Gaussian kernel, clipped to its own bounded support (audit S9) and
+    # centred.  ``alpha = 0.5 k Im(conj(Q))`` is the amplitude decay
+    # coefficient of that axis -- the same ``0.5 k lambda`` as
+    # ``_reconstruct_windowed``'s ``alpha_min``, per-axis here because the
+    # applicability gate has already refused a skew ``Q``.  The half-width
+    # never exceeds the full offset range, so a beamlet wider than the grid
+    # keeps the unclipped kernel.
+    Wx = _kernel_half_width(cqx, k, dx, Nx)
+    Wy = _kernel_half_width(cqy, k, dy, Ny)
+    ux = (xp.arange(2 * Wx + 1) - Wx) * dx
+    uy = (xp.arange(2 * Wy + 1) - Wy) * dy
     UX, UY = xp.meshgrid(ux, uy)
     G = xp.exp(1j * k * (0.5 * (cqx * UX * UX + cqy * UY * UY)
                          + L0 * UX + M0 * UY))

@@ -1,11 +1,13 @@
 <!-- lumenairy-history-doc
 module: lumenairy/propagators/asymptotic_maslov.py
-ast_sha256: c95e629aa9aef0308601b2bbb1c4ceebee9381dc8fcb746de3170f6dfbe5d671
-token_sha256: 0859b3655c0db111b9b5a0b92c880468015d2c291d1ba17cc671fa65dc6043ea
+ast_sha256: b62534cbe4794d121f73147d1793fe523d53e17c9243287cafbb885215df8638
+token_sha256: 63033d5ca9812ca0bc5addef717438297dca94a23a9843c9b95ec434da585212
 pre_relocation_lines: 756
 recorded_by: WP-A17 SWEEP-1 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
 re_recorded: 2026-09-12 -- ruff isort combine-as-imports (pyproject.toml, WP-A16 recommendation): aliased import statements from the same module merged into one; the set of bound names is unchanged
+re_recorded: 2026-09-13 -- WP-B7 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, WP-A4 sec. 6 items 3-8 + VERIFY-B1 F1/F2): the Y4 fused basis evaluation and hoisted Newton factor, the aberration_tensor mode/waist caches, the S6 gate's k1-slope statistic and mean-plus-spread chart sizing, the JAX screen's chief-ray displacement term, and the S9 FFT kernel clip
+re_recorded: 2026-09-13 -- WP-B7: Optional type hints on the two new keyword parameters (_phi_v2_hessian_batch's T12_rows, _solve_envelope_stationary_batch's scale_relative_stop)
 -->
 
 # Version history -- `lumenairy/propagators/asymptotic_maslov.py`

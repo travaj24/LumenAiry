@@ -34,7 +34,7 @@ import functools
 import math
 import threading
 from collections import OrderedDict
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -321,6 +321,7 @@ def _lg_mode_conj_stack(X: np.ndarray, Y: np.ndarray, w: float,
                          p_max: int, ell_max: int,
                          cx: float, cy: float,
                          dx: float, dy: float,
+                         only: Optional[Tuple[Tuple[int, int], ...]] = None,
                          ) -> Tuple[Tuple[Tuple[int, int], ...], np.ndarray]:
     """Build / fetch the conjugated LG mode stack used by
     :func:`decompose_lg`.
@@ -329,6 +330,14 @@ def _lg_mode_conj_stack(X: np.ndarray, Y: np.ndarray, w: float,
     ``(p, ell)`` index pairs and ``stack`` is a complex
     ``(N_modes, Ny, Nx)`` array whose first axis is in the same order
     as ``keys``.  Each slice is ``np.conj(LG_{p, ell}(X, Y; w, cx, cy))``.
+
+    ``only`` restricts the enumeration to a subset of the
+    ``(p_max, ell_max)`` rectangle, in the same canonical ``(p, ell)``
+    order; the cache key carries it, so a restricted stack and a full one
+    are separate entries and neither is served for the other.  Each slice is
+    built from the same ``lg_polynomial`` and the same envelope whatever the
+    enumeration, so a mode's samples do not depend on how many of its
+    neighbours were built.
 
     Cache key includes the grid shape, the physical pitch ``(dx, dy)``, the
     three-corner grid fingerprint (:func:`_grid_corner_fingerprint`), all
@@ -347,10 +356,12 @@ def _lg_mode_conj_stack(X: np.ndarray, Y: np.ndarray, w: float,
     Ny = int(X.shape[0])
     Nx = int(X.shape[1])
     dtype_str = str(np.result_type(X.dtype, Y.dtype, np.float64))
+    want = None if only is None else frozenset(
+        (int(p), int(ell)) for (p, ell) in only)
     cache_key = (
         int(p_max), int(ell_max), Ny, Nx,
         float(w), float(cx), float(cy),
-        float(dx), float(dy), dtype_str,
+        float(dx), float(dy), dtype_str, want,
     ) + _grid_corner_fingerprint(X, Y)
     with _LG_MODE_STACK_LOCK:
         cached = _LG_MODE_STACK_CACHE.get(cache_key)
@@ -365,7 +376,8 @@ def _lg_mode_conj_stack(X: np.ndarray, Y: np.ndarray, w: float,
     keys: List[Tuple[int, int]] = []
     for p in range(p_max + 1):
         for ell in range(-ell_max, ell_max + 1):
-            keys.append((p, ell))
+            if want is None or (p, ell) in want:
+                keys.append((p, ell))
     n_modes = len(keys)
     stack = np.empty((n_modes, Ny, Nx), dtype=np.complex128)
     for idx, (p, ell) in enumerate(keys):
@@ -751,7 +763,8 @@ def _meshgrid_axis_step(coord: np.ndarray, name: str, fn_name: str) -> float:
 
 def decompose_lg(field: np.ndarray, x: np.ndarray, y: np.ndarray,
                  w: float, p_max: int, ell_max: int,
-                 cx: float = 0.0, cy: float = 0.0
+                 cx: float = 0.0, cy: float = 0.0,
+                 only: Optional[Sequence[Tuple[int, int]]] = None,
                  ) -> Dict[Tuple[int, int], complex]:
     """Project a complex field onto the Laguerre-Gaussian basis.
 
@@ -781,6 +794,14 @@ def decompose_lg(field: np.ndarray, x: np.ndarray, y: np.ndarray,
         Truncation:  retain p in [0, p_max], ell in [-ell_max, +ell_max].
     cx, cy : float, optional
         Basis centre.
+    only : sequence of (p, ell), optional
+        Return (and BUILD) only these modes, which must lie inside the
+        ``(p_max, ell_max)`` rectangle.  The rectangle holds
+        ``(p_max+1)(2 ell_max+1)`` modes and a caller that wants a named
+        handful -- ``aberration_tensor``'s ``output_modes``, say -- pays for
+        all of them without this.  Each overlap is the same number either
+        way: the modes are built independently of one another and the
+        overlap is a per-mode reduction.
 
     Returns
     -------
@@ -814,6 +835,7 @@ def decompose_lg(field: np.ndarray, x: np.ndarray, y: np.ndarray,
     # envelope ``exp(-(rx^2+ry^2)/w^2)`` 28 times for (p_max=3, ell_max=3).
     keys, modes_conj_stack = _lg_mode_conj_stack(
         X, Y, w, p_max, ell_max, cx, cy, dx, dy,
+        None if only is None else tuple(tuple(k) for k in only),
     )
     # Convert field to complex (cheap if already complex; required by einsum
     # since modes are complex).

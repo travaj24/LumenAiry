@@ -997,3 +997,13 @@ test_gbd test_lenses`.
 ## 7. Changelog
 
 `docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/WP-A4_CHANGELOG.md`
+
+---
+
+## Addendum after WP-B7 (orchestrator, 2026-09-13)
+
+* **Section 6 item 7 is corrected.**  `uniform_fold_airy` and `pearcey` are NOT dead code: `lumenairy/elements/_lens_traced_uniform.py` imports
+  `_fold_airy_eval` and `pearcey` and uses them for `apply_real_lens_traced(caustic='uniform')`, covered by `test_niche_k4_uniform_caustic.py` and
+  `test_niche_r2_pearcey_cusp.py`.  What is unwired is a uniform path for the Maslov `v2` integral; WP-B7 section 6 measured, against a brute-force
+  Rayleigh-Sommerfeld oracle converged to 4.6e-8 at the marginal focus of an f/1.92 singlet, that the saddle costs 0.036 of fidelity against the
+  exact integrator on the same chart, and left the Maslov path as it is with that table published.

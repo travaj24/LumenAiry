@@ -1,10 +1,11 @@
 <!-- lumenairy-history-doc
 module: lumenairy/propagators/asymptotic_modes.py
-ast_sha256: 4305e20e6744d29928121290c9321e4f0863864d7bf7f714907a1e6fbfe9525e
-token_sha256: 8dc7e53fbb11f5b5e0c196a18db49b81d9e3bbbbd19d7edc7180102293a6bce4
+ast_sha256: 33ed7226dd070369cb1de6c67b09c5a7b7c20b60abfbc871aa1c3187e7037fc0
+token_sha256: af617b8c038cfc84cdb47ed4614dc407e3b5d80dda94f5c69c74b47291eb97b1
 pre_relocation_lines: 893
 recorded_by: WP-A17 SWEEP-1 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
+re_recorded: 2026-09-13 -- WP-B7 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, WP-A4 sec. 6 items 3-8 + VERIFY-B1 F1/F2): the Y4 fused basis evaluation and hoisted Newton factor, the aberration_tensor mode/waist caches, the S6 gate's k1-slope statistic and mean-plus-spread chart sizing, the JAX screen's chief-ray displacement term, and the S9 FFT kernel clip
 -->
 
 # Version history -- `lumenairy/propagators/asymptotic_modes.py`

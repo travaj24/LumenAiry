@@ -791,8 +791,18 @@ _COARSE_SUPP_FRAC = 1e-3    # rim direct-trace only where windowed |u0| is >= th
 
 def _is_all_conic(surfaces):
     """True when EVERY surface is a rotationally-symmetric conic (sphere / conic,
-    no aspheric-polynomial / freeform / biconic terms) -- the class the analytic
-    (forward-mode-AD) differential Jacobian handles exactly."""
+    no aspheric-polynomial / freeform / biconic terms) -- the class this module
+    routes to the analytic (forward-mode-AD) differential Jacobian.
+
+    It is a whitelist, and a STRICTER one than the analytic primitive's own
+    guard, which also accepts an even-power aspheric departure (the conic root
+    seeds a differentiated Newton refinement onto ``conic + polynomial``; see
+    :func:`~lumenairy.raytrace.differential.ray_transfer_jacobian_analytic`).
+    An aspheric prescription therefore traces the finite-difference bundle here
+    whatever ``exact_jacobian`` says.  ``jacobian='auto'`` in
+    :mod:`lumenairy.propagators.gbd` reaches the analytic path for that class
+    instead, because it dispatches on the primitive's own
+    ``NotImplementedError`` rather than on a list of surface kinds."""
     for s in surfaces:
         if (getattr(s, 'aspheric_coeffs', None) or getattr(s, 'freeform', None)
                 or getattr(s, 'radius_y', None) is not None
@@ -808,10 +818,10 @@ def _pick_ray_transfer(surfaces, exact):
     surface is a rotationally-symmetric conic -- exact vs the finite-difference
     ~1e-8, pure NumPy, ~1.2x faster on a large aperture AND ~5x lighter (one
     traced ray vs the FD 9-ray bundle, so a large-N full trace fits a memory
-    budget the FD path OOMs -- H4c).  Falls back to the FD primitive for aspheric
-    / freeform / biconic surfaces (which the analytic form does not handle) and
-    when ``exact=False``.  ``exact=None`` (the default) AUTO-selects: analytic for
-    an all-conic prescription, FD otherwise."""
+    budget the FD path OOMs -- H4c).  Falls back to the FD primitive whenever
+    :func:`_is_all_conic` is False -- aspheric, freeform or biconic surfaces --
+    and when ``exact=False``.  ``exact=None`` (the default) AUTO-selects:
+    analytic for an all-conic prescription, FD otherwise."""
     from ..raytrace.differential import (
         ray_transfer_jacobian,
         ray_transfer_jacobian_analytic,
@@ -1687,7 +1697,8 @@ def apply_real_lens_fga(
         lighter (one traced ray vs the FD 9-ray bundle), so an all-conic large-N
         full trace fits a memory budget that the FD path OOMs (H4c).  Pass
         ``True`` to force it (still falls back to FD for aspheric / freeform /
-        biconic, which the analytic form does not handle) or ``False`` to force
+        biconic, which is this dispatcher's whitelist -- see
+        :func:`_is_all_conic`) or ``False`` to force
         the FD Jacobian.  Applies to the full-trace path (``coarse_stride=1``; the
         coarse path uses FD, where the interpolation dominates the accuracy
         budget anyway).

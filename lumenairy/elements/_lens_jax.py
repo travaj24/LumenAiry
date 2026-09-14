@@ -730,6 +730,35 @@ def apply_real_lens_traced_jax(
     return E_out
 
 
+def _local_direction_cosines_jax(E, dx, dy, wavelength, jnp):
+    """Per-pixel local direction cosines ``(ux, uy)`` of a 2-D scalar field,
+    in the array namespace ``jnp``.
+
+    The JAX twin of
+    :func:`lumenairy.elements.lenses_maslov._local_direction_cosines`, and the
+    same estimator: ``u = (1/k0) grad(arg E)`` by the conjugate-product forward
+    difference ``arg(E[i+1] conj(E[i])) / (k0 d)``, with the last column / row
+    repeating its neighbour and a dead pixel set to zero.  No unwrap, so it
+    wraps only at the grid's own Nyquist angle ``lambda / (2 d)``.  A real,
+    non-negative field gives EXACTLY ``(0, 0)``.  Written functionally (a
+    concatenate rather than an indexed write) so it is ``jit`` / ``grad``
+    traceable.
+    """
+    k0 = 2.0 * jnp.pi / float(wavelength)
+    if E.shape[-1] > 1:
+        ux = jnp.angle(E[:, 1:] * jnp.conj(E[:, :-1])) / (k0 * float(dx))
+        ux = jnp.concatenate([ux, ux[:, -1:]], axis=1)
+    else:
+        ux = jnp.zeros(E.shape, dtype=jnp.float64)
+    if E.shape[-2] > 1:
+        uy = jnp.angle(E[1:, :] * jnp.conj(E[:-1, :])) / (k0 * float(dy))
+        uy = jnp.concatenate([uy, uy[-1:, :]], axis=0)
+    else:
+        uy = jnp.zeros(E.shape, dtype=jnp.float64)
+    alive = jnp.abs(E) > 0.0
+    return jnp.where(alive, ux, 0.0), jnp.where(alive, uy, 0.0)
+
+
 def apply_real_lens_maslov_jax(
     E_in: Any,
     *,
@@ -742,6 +771,7 @@ def apply_real_lens_maslov_jax(
     newton_iters: int = 12,
     amplitude: str = 'input',
     bandlimit: bool = True,
+    input_wavevector_saddle: Optional[bool] = None,
 ) -> Any:
     """JAX-traceable ray-traced lens propagator with a det(J)-sign-flip
     caustic phase counter.
@@ -788,6 +818,38 @@ def apply_real_lens_maslov_jax(
 
     evaluated with a ``jax.lax.fori_loop`` over the Chebyshev-fitted
     forward map for JAX traceability.
+
+    **The chief-ray displacement of a non-collimated input.**  The screen's
+    OPL is indexed by the ENTRANCE point ``(xe, ye)`` of the ray that lands on
+    each output pixel, while ``E_in`` is sampled at the OUTPUT pixel itself --
+    two different points, because a ray walks across the element.  For a
+    collimated input the input phase is constant along that walk and the
+    difference is nothing; for a tilted or diverging one the input's own phase
+    has to be re-referenced from the pixel to the entrance point, which to
+    first order is ``k1 . (xe - x)`` with ``k1 = (1/k0) grad arg E_in`` the
+    input's local wavevector.  That term is added here.  Without it the screen
+    UNDER-SHOOTS the chief ray's landing in proportion to the tilt: MEASURED on
+    an f = 14.1 mm N-SF11 singlet at 1.55 um, against an exact conic raytrace
+    of the input's own rays through a readout plane 0.3 mm past the focus,
+    -2.66 % at a quarter of the lens NA, -2.66 % at half, -2.72 % at one --
+    13.1 um at 1x NA, about 1.6 diffraction-spot radii there.
+    ``input_wavevector_saddle`` gates it with the same three values, and the
+    same meaning, as :func:`~lumenairy.elements.apply_real_lens_maslov`'s
+    keyword, so a caller can switch backends without changing which ray the
+    answer is built on -- with the caveat that this path has no stationary-point
+    solve at all, so what the keyword selects here is the displacement term and
+    not a saddle.
+
+    Parameters
+    ----------
+    input_wavevector_saddle : bool, optional
+        ``None`` (default) applies the chief-ray displacement term when the
+        input's measured wavefront spread exceeds
+        ``lenses_maslov._SADDLE_FLAT_INPUT_NA`` and skips it otherwise (a real
+        non-negative ``E_in`` measures EXACTLY zero there, so a collimated
+        input runs the original arithmetic bit for bit).  ``False`` never
+        applies it -- the thin screen's own answer for every input.  ``True``
+        always applies it.
     """
     if not _jax_available():
         raise ImportError(
@@ -981,8 +1043,30 @@ def apply_real_lens_maslov_jax(
     cdtype = _resolve_jax_complex_dtype(E_in.dtype)
     rdtype = _resolve_jax_real_dtype(E_in.dtype)
     k0 = 2.0 * jnp.pi / float(wavelength)
+    # ---- Chief-ray displacement of a non-collimated input ------------
+    # ``opl_map`` is the element's OPL for the ray that ENTERED at (xe, ye);
+    # ``E_in`` below is sampled at the OUTPUT pixel (Xw, Yw).  The input's own
+    # phase belongs at the entrance point, so re-reference it there to first
+    # order: ``arg E_in(xe) - arg E_in(x) = k0 k1 . (xe - x)``.  ``k1`` is the
+    # conjugate-product forward difference of ``arg E_in`` -- EXACTLY zero for
+    # a real non-negative field, which is what makes a collimated input
+    # byte-identical to the plain screen.
+    _k1x, _k1y = _local_direction_cosines_jax(E_in, dx, dy, wavelength, jnp)
+    _phase_walk = k0 * (_k1x * (xe - Xw) + _k1y * (ye - Yw))
+    if input_wavevector_saddle is None:
+        from .lenses_maslov import _SADDLE_FLAT_INPUT_NA
+        _w = jnp.abs(E_in) ** 2
+        _tot = jnp.sum(_w)
+        _na_wf = 3.0 * jnp.sqrt(
+            jnp.where(_tot > 0.0,
+                      jnp.sum(_w * (_k1x ** 2 + _k1y ** 2))
+                      / jnp.where(_tot > 0.0, _tot, 1.0), 0.0))
+        _phase_walk = jnp.where(_na_wf > _SADDLE_FLAT_INPUT_NA,
+                                _phase_walk, 0.0)
+    elif not input_wavevector_saddle:
+        _phase_walk = jnp.zeros_like(_phase_walk)
     valid = jnp.isfinite(opl_map)
-    phase = jnp.where(valid, k0 * opl_map + phase_maslov, 0.0)
+    phase = jnp.where(valid, k0 * opl_map + phase_maslov + _phase_walk, 0.0)
     phase_screen = jnp.exp(1j * phase).astype(cdtype)
 
     if amplitude == 'input':
