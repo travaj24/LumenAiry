@@ -146,7 +146,10 @@ holds no reference to the field, is never cached, and is refused alongside a
 `dy=` / `centroid=` that contradicts the ones frozen into it.
 
 Files: `lumenairy/analysis/psf_mtf_otf.py`, `lumenairy/analysis/__init__.py`.
-Tests: `tests/unit/test_audit2609_b8_analysis_sources.py`.
+Tests: `tests/unit/test_audit2609_b8_analysis_sources.py`.  The new entry point's
+`_check_2d_scalar_field` guard is the package's 70th inventoried call site, declared
+in `tests/unit/test_niche_audit_w4_input_kind.py` (wired at the release close, after
+that file's fail-closed inventory caught it unwired).
 
 ### Performance -- analysis/zernike: the basis build shares one `rho ** k` memo, 1.61-2.27x, bit-identical (A6)
 

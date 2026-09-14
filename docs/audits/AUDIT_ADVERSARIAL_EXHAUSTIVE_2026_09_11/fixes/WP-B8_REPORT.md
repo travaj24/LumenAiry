@@ -558,3 +558,16 @@ default on even non-power-of-two grids); moving the DM cache boundary (§2.4 --
 it moves the phase map); an in-window `'power'` rescale on the MFT path
 (§2.2 -- it is wrong on a sub-field); and `apply_jones_matrix` at 2.00 arrays
 (§2.7 -- it is unreachable, not merely undone).
+
+---
+
+## Addendum (orchestrator, 2026-09-14): the input-kind inventory was not wired
+
+* `encircled_energy_profile` (section 2.6 / audit A6) guards its field through
+  `_check_2d_scalar_field(E, 'encircled_energy_profile', input_kind='field')` -- the package's 70th call site.  The fail-closed
+  inventory `tests/unit/test_niche_audit_w4_input_kind.py` (69 declared rows and a literal count, in both directions) was not updated,
+  so `test_inventory_is_complete_and_exact` and `test_all_sixty_eight_sites_are_wired` have failed since ed40e169.  Neither this
+  package's selection (section 5) nor VERIFY-B8's ran that file; the verification sweep for WP-B11b's attribution edits did.  The row is
+  wired and the literal bumped to 70 in the orchestrator's follow-up commit.  The lesson matches WP-B7's: a package that adds a call to a
+  package-wide inventoried helper must run the inventory that counts it, and the close's full two-lane run is the backstop.
+
