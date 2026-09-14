@@ -198,6 +198,16 @@ _K1_FIT_RESIDUAL_MAX = 0.5
 # (5.6e-01 last win .. 2.7e+00 first loss = 1.24), which also sits 4.3x above
 # the other chart's last win and 2.4x below its first loss.
 # ``input_wavevector_saddle=True`` overrides, as it does the other two bars.
+#
+# RE-MEASURED (VERIFY-B7, 2026-09-14) on a THIRD chart -- f = 5.76 mm N-SF6 at
+# 633 nm, N = 256, dx = 2.0 um, 19 inputs -- the decision is still right
+# two-sided there (no input is admitted and made worse, none refused and made
+# better), but the margin BELOW the bar is thinner: the last input where
+# engaging still wins is a hard edge at 0.80 of the pupil on a CONVERGING
+# carrier, slope 8.99e-01 (fidelity 0.203 -> 0.998), i.e. 1.33x under the bar
+# rather than the 2.1x the two charts above suggested.  That chart cannot
+# tighten the OTHER side: every input it refuses (slope 1.77e+00 and above)
+# scores 0.000 on BOTH arms there, so a loss is not measurable on it.
 _K1_DERIV_RESIDUAL_MAX = 1.2
 
 # S6 fallback, the chart half: the largest relative RMS residual of the
@@ -259,8 +269,26 @@ _S1_FIT_RESIDUAL_MAX = 2.5e-3
 # grid, and a finite noise realisation has a finite mean.  The bar is the
 # geometric mean of the bracket (1.5e-02 largest reading with no launch
 # direction .. 5.5e-01 smallest with one = 9.2e-02).  Below it the sizing is
-# left EXACTLY as it was, and what that discards is bounded: at the bar itself
-# the two rules differ by 2.3 % of a quantity that is already a 3-sigma margin.
+# left EXACTLY as it was.
+#
+# RE-MEASURED (VERIFY-B7, 2026-09-14) on a third chart -- f = 4.94 mm N-LAK22
+# at 1.064 um, N = 192, dx = 2.6 um -- with the ladder widened.  The floor
+# reproduces (largest reading with no launch direction 1.1e-02, a uniform
+# white-noise phase; 10-pixel-displaced Gaussian 5.2e-07, hard aperture at 0.60
+# 4.3e-04, speckle 1.0 rad 6.3e-03, a one-pixel Gaussian 1.1e-03) and the
+# smallest reading WITH a launch direction is 4.2e-01 (a 1 mrad tilt).
+#
+# TWO readings do cross the bar with no launch direction, and both are the
+# grid's ALIASING limit rather than a floor failure: a pi-phase checkerboard
+# and pi stripes on x -- fields whose power sits AT the Nyquist frequency,
+# where ``fftfreq``'s unpaired -1/(2 dx) column carries all of it -- read
+# 5.5e-01.  What that costs is bounded and one-signed: ``m + 3 sqrt(s0^2-m^2)``
+# exceeds ``3 s0`` for every m/s0 below 0.6 and peaks at sqrt(10)/3 = 1.054, so
+# a false positive can only make the chart up to 5.4 % WIDER, never narrower,
+# while the false reading stays under 0.6 of the spread.  At the bar itself the
+# two rules differ by 2.83 % (m = 0.1 s0: 3.08497 s0 against 3 s0) of a
+# quantity that is already a 3-sigma margin -- so a false negative just below
+# the bar is a chart 2.83 % narrow.
 _NA_MEAN_MIN_FRACTION = 0.1
 
 # S6 A/B seam, in the style of ``_QUAD_FACTORIZE`` above.  ``None`` (default)

@@ -1,11 +1,12 @@
 <!-- lumenairy-history-doc
 module: lumenairy/propagators/asymptotic_modes.py
-ast_sha256: 33ed7226dd070369cb1de6c67b09c5a7b7c20b60abfbc871aa1c3187e7037fc0
-token_sha256: af617b8c038cfc84cdb47ed4614dc407e3b5d80dda94f5c69c74b47291eb97b1
+ast_sha256: 0d725ed90561efc3da04f57bf219c99b481ae712d622bd40d7f6417fbd9e1465
+token_sha256: fb4d39658dcd883bcadc2eeed60dd38ffcf1389e735899675aa82646cadc37f2
 pre_relocation_lines: 893
 recorded_by: WP-A17 SWEEP-1 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
 re_recorded: 2026-09-13 -- WP-B7 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, WP-A4 sec. 6 items 3-8 + VERIFY-B1 F1/F2): the Y4 fused basis evaluation and hoisted Newton factor, the aberration_tensor mode/waist caches, the S6 gate's k1-slope statistic and mean-plus-spread chart sizing, the JAX screen's chief-ray displacement term, and the S9 FFT kernel clip
+re_recorded: 2026-09-14 -- VERIFY-B7 (independent re-verification of WP-B7): decompose_lg(only=) / _lg_mode_conj_stack(only=) refuse a requested (p, ell) outside the (p_max, ell_max) rectangle instead of dropping it in silence
 -->
 
 # Version history -- `lumenairy/propagators/asymptotic_modes.py`

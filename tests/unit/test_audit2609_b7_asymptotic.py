@@ -887,3 +887,197 @@ def test_b7_an_aspheric_prescription_reaches_the_analytic_jacobian_via_auto():
     assert inspect.signature(
         apply_prescription_persurface_to_beamlets
     ).parameters['jacobian'].default == 'auto'
+
+
+# ===========================================================================
+# 8.  VERIFY-B7 -- a claim of section 4 that nothing pinned, and two
+#     key-completeness defects of section 3 found by re-deriving it
+# ===========================================================================
+def test_verify_b7_the_fft_transform_length_is_the_5_smooth_one():
+    """``_fftconv_same`` pads each axis to ``scipy.fft.next_fast_len``.
+
+    Part of S9's measured win is the transform LENGTH, not the kernel clip:
+    the natural linear-convolution length ``3N - 2`` is 2 x 191, 2 x 383,
+    2 x 767 for the usual power-of-two grids -- lengths with a large prime
+    factor, which fall off the radix kernels onto Bluestein.  Deleting the
+    padding left all twenty ids above green (VERIFY-B7), so this pins it as an
+    integer property rather than a clock: the chosen length is 5-smooth, never
+    shorter than the true linear length, idempotent, and only a small bump
+    above the awkward one.
+    """
+    def _smooth(n):
+        for p in (2, 3, 5):
+            while n % p == 0:
+                n //= p
+        return n == 1
+
+    for n in (17, 96, 116, 286, 382, 478, 574, 766, 1000, 2998, 4093):
+        m = GBD._fft_len(n)
+        assert m >= n and _smooth(m), (
+            f'_fft_len({n}) = {m}: must be a 5-smooth length at or above n')
+        assert GBD._fft_len(m) == m, 'idempotent on an already-fast length'
+    for N in (128, 256, 512):
+        assert not _smooth(3 * N - 2), (
+            f'premise: the naive length {3 * N - 2} is meant to be the awkward '
+            f'one this padding avoids')
+        assert 3 * N - 2 < GBD._fft_len(3 * N - 2) <= 3 * N + 6, (
+            'the padding must be a small bump above the awkward length')
+
+    # ... and ``_fftconv_same`` must actually ASK for it, once per axis.  A
+    # count, not a clock: reverting the two calls to the naive ``Ny + Gy - 1``
+    # left every other id in this file green (VERIFY-B7).
+    seen = {'n': 0}
+    orig = GBD._fft_len
+
+    def _counted(n, _o=orig):
+        seen['n'] += 1
+        return _o(n)
+
+    GBD._fft_len = _counted
+    try:
+        GBD._fftconv_same(np, np.zeros((8, 8), dtype=np.complex128),
+                          np.ones((3, 3), dtype=np.complex128))
+    finally:
+        GBD._fft_len = orig
+    assert seen['n'] == 2, (
+        f'_fftconv_same called _fft_len {seen["n"]} times; it must size BOTH '
+        f'axes with it')
+
+    # And the padded transform still returns the same 'same'-mode slice as a
+    # direct shift-and-add convolution written out here.
+    rng = np.random.default_rng(17)
+    a = (rng.standard_normal((40, 40))
+         + 1j * rng.standard_normal((40, 40))).astype(np.complex128)
+    G = (rng.standard_normal((21, 21))
+         + 1j * rng.standard_normal((21, 21))).astype(np.complex128)
+    got = GBD._fftconv_same(np, a, G)
+    full = np.zeros((40 + 21 - 1, 40 + 21 - 1), dtype=np.complex128)
+    for iy in range(21):
+        for ix in range(21):
+            full[iy:iy + 40, ix:ix + 40] += G[iy, ix] * a
+    ref = full[10:10 + 40, 10:10 + 40]
+    assert np.linalg.norm(got - ref) / np.linalg.norm(ref) < 1e-13
+
+
+def test_verify_b7_the_waist_cache_tells_two_evaluators_of_one_name_apart():
+    """The ``propagate`` half of the waist-cache key is an IDENTITY.
+
+    ``__qualname__`` alone is not one: two closures from the same factory
+    share ``factory.<locals>.propagate`` and two lambdas share ``<lambda>``,
+    so a key built from it serves one evaluator's width for another -- the
+    collision shape ``lumenairy._cache_registry._clearer_identity`` documents
+    as measured.  Both arms here return DIFFERENT widths by construction, so a
+    false hit shows up in the VALUE and not only in a call count.
+    """
+    from lumenairy.propagators import asymptotic_aberration_tensor as AT
+
+    fit = fit_canonical_polynomials(
+        _singlet(), wavelength=1.31e-6, source_box_half=20e-6,
+        pupil_box_half=0.02, n_field=6, n_pupil=6, poly_order=4)
+    base = dict(fit=fit, s2x_img=fit.s2x_centre, s2y_img=fit.s2y_centre,
+                source_point=(0.0, 0.0),
+                pupil_amplitudes={(0, 0): 1.0 + 0j},
+                w_s=_WS, w_p=_WP,
+                v2_centre=(fit.v2x_centre, fit.v2y_centre))
+
+    def make(narrow):
+        def propagate(*a, **k):
+            U = np.asarray(propagate_modal_asymptotic(*a, **k))
+            if narrow is None:
+                return U
+            SX, SY = k['s2_grid_x'], k['s2_grid_y']
+            cx = 0.5 * (float(SX.min()) + float(SX.max()))
+            cy = 0.5 * (float(SY.min()) + float(SY.max()))
+            return U * np.exp(-((SX - cx) ** 2 + (SY - cy) ** 2)
+                              / (narrow ** 2))
+        return propagate
+
+    wide, tight = make(None), make(3.0e-6)
+    assert wide.__qualname__ == tight.__qualname__, (
+        'premise: the two evaluators must share a __qualname__, or this test '
+        'proves nothing')
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        AT.clear_image_plane_waist_cache()
+        w_wide = AT._measure_image_plane_waist(**base, propagate=wide)
+        w_tight_after = AT._measure_image_plane_waist(**base, propagate=tight)
+        AT.clear_image_plane_waist_cache()
+        w_tight_alone = AT._measure_image_plane_waist(**base, propagate=tight)
+        AT.clear_image_plane_waist_cache()
+    assert w_tight_alone != w_wide, (
+        'premise: the two evaluators must measure different widths')
+    assert w_tight_after == w_tight_alone, (
+        f'the cache served the first evaluator width {w_wide!r} for the '
+        f'second (truly {w_tight_alone!r}): the key does not separate two '
+        f'callables that share a __qualname__')
+
+
+def test_verify_b7_the_waist_cache_key_carries_the_newton_stop_seam():
+    """A process-global seam the probe's evaluator reads is part of the key.
+
+    ``_NEWTON_SCALE_RELATIVE_STOP`` moves ``propagate_modal_asymptotic``'s
+    answer, so it moves the width this probe measures.  Without it in the key
+    an A/B measurement of the seam is ORDER-DEPENDENT: warm the cache with the
+    seam off, flip it, and the stale width comes back.  Asserted on the
+    running build's own numbers, with the premise (that the seam moves the
+    width at all) asserted first.
+    """
+    from lumenairy.propagators import asymptotic_aberration_tensor as AT
+
+    fit = fit_canonical_polynomials(
+        _singlet(), wavelength=1.31e-6, source_box_half=20e-6,
+        pupil_box_half=0.02, n_field=6, n_pupil=6, poly_order=4)
+    base = dict(fit=fit, s2x_img=fit.s2x_centre, s2y_img=fit.s2y_centre,
+                source_point=(0.0, 0.0),
+                pupil_amplitudes={(0, 0): 1.0 + 0j},
+                w_s=_WS, w_p=_WP,
+                v2_centre=(fit.v2x_centre, fit.v2y_centre),
+                propagate=propagate_modal_asymptotic)
+    saved = AM._NEWTON_SCALE_RELATIVE_STOP
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            AT.clear_image_plane_waist_cache()
+            AM._NEWTON_SCALE_RELATIVE_STOP = False
+            w_off = AT._measure_image_plane_waist(**base)
+            AT.clear_image_plane_waist_cache()
+            AM._NEWTON_SCALE_RELATIVE_STOP = True
+            w_on_cold = AT._measure_image_plane_waist(**base)
+            AT.clear_image_plane_waist_cache()
+            AM._NEWTON_SCALE_RELATIVE_STOP = False
+            AT._measure_image_plane_waist(**base)        # warm on the OFF arm
+            AM._NEWTON_SCALE_RELATIVE_STOP = True
+            w_on_warm = AT._measure_image_plane_waist(**base)
+    finally:
+        AM._NEWTON_SCALE_RELATIVE_STOP = saved
+        AT.clear_image_plane_waist_cache()
+    assert w_off is not None and w_on_cold is not None
+    assert w_on_cold != w_off, (
+        f'premise: the seam must move the measured width (it read {w_off!r} '
+        f'both ways), or this test proves nothing')
+    assert w_on_warm == w_on_cold, (
+        f'with the cache warmed on the seam OFF, flipping it returned '
+        f'{w_on_warm!r} instead of {w_on_cold!r}: the seam is not in the key '
+        f'and an A/B measurement of it is order-dependent')
+
+
+def test_verify_b7_decompose_lg_refuses_a_mode_outside_its_rectangle():
+    """``only=`` may name only modes the enumeration will reach.
+
+    A mode outside the ``(p_max, ell_max)`` rectangle is never enumerated, so
+    without a guard it is dropped in silence and the caller reads a structural
+    zero for it -- and ``aberration_tensor``, which fills ``L`` from
+    ``overlaps.get(k_out, 0)``, would write that zero into the tensor for a
+    mode it asked for.  Two-sided: inside the rectangle still works.
+    """
+    n = 24
+    ax = np.linspace(-2e-3, 2e-3, n)
+    X, Y = np.meshgrid(ax, ax, indexing='xy')
+    field = np.exp(-(X ** 2 + Y ** 2) / (1.0e-3 ** 2)).astype(np.complex128)
+    ok = AMD.decompose_lg(field, ax, ax, w=1.0e-3, p_max=1, ell_max=1,
+                          only=[(0, 0), (1, -1)])
+    assert set(ok) == {(0, 0), (1, -1)}
+    for bad in ([(2, 0)], [(0, 2)], [(0, 0), (0, -3)], [(-1, 0)]):
+        with pytest.raises(ValueError, match='outside'):
+            AMD.decompose_lg(field, ax, ax, w=1.0e-3, p_max=1, ell_max=1,
+                             only=bad)

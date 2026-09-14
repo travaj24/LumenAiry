@@ -487,14 +487,63 @@ def _fit_fingerprint(fit: CanonicalPolyFit) -> Tuple:
             float(fit.wavelength))
 
 
+def _callable_identity(fn) -> Tuple:
+    """The ``propagate`` half of the waist-cache key: the OBJECT identity of
+    the evaluator, made safe by the entry that holds it.
+
+    A callable's answer is its code PLUS whatever state it captured, and no
+    structural key can see the second half:
+
+    * ``__qualname__`` alone separates nothing useful -- two closures from one
+      factory share ``factory.<locals>.propagate``, two lambdas share
+      ``<lambda>``, and a :class:`functools.partial` has none at all, so it
+      degrades to a ``repr`` carrying a memory address.
+    * the code object's ``(module, qualname, file, first line)`` -- the shape
+      ``lumenairy._cache_registry._clearer_identity`` uses -- separates two
+      DEFINITIONS but still not two closures over one ``def`` nor two
+      instances of one callable class, as that function's own docstring says.
+
+    So the key is ``id(fn)``, and :func:`_w_o_cache_put` stores ``fn`` itself
+    beside the value.  That is what makes the id sound: the ``id()``-reuse
+    hazard :func:`_fit_fingerprint` exists to avoid needs the keyed object to
+    have been COLLECTED, and every live entry holds a strong reference to its
+    own callable, so no two live entries can share an id.  The cost is 64
+    references at the cache bound; the price is that a caller which rebuilds
+    an equivalent wrapper on every call never hits (correct, just uncached),
+    while the shipped caller -- which passes the module-level
+    ``propagate_modal_asymptotic`` object -- always does.  The qualified name
+    rides along so a dumped key is readable.
+    """
+    return (id(fn), getattr(fn, '__qualname__', type(fn).__name__))
+
+
+def _propagate_seams() -> Tuple:
+    """The process-global A/B seams the probe's ``propagate`` reads.
+
+    ``_measure_image_plane_waist``'s answer is a pure function of its
+    arguments AND of whatever module seams the evaluator consults, so the
+    seams belong in the key: without them an A/B measurement of a seam is
+    order-dependent -- warm the cache with the seam off, flip it, and the
+    stale width comes back.  MEASURED (VERIFY-B7, 2026-09-14) on a
+    N-SF11 / 0.85 um chart: ``_NEWTON_SCALE_RELATIVE_STOP`` moves ``w_o`` from
+    1.4163857683404920e-04 to 1.4163857683413807e-04, 6.3e-11 relative.
+
+    A future seam that ``propagate_modal_asymptotic`` reads must join this
+    tuple, or flipping it must drain the cache.
+    """
+    from . import asymptotic_maslov as _am
+    return (bool(getattr(_am, '_NEWTON_SCALE_RELATIVE_STOP', False)),)
+
+
 # Cross-call cache of the image-plane waist probe.  The probe is one (rarely
 # two) coarse ``propagate_modal_asymptotic`` calls on a ``_W_O_PROBE_N`` grid
 # -- MEASURED 0.19 s of a 6.6 s default ``aberration_tensor`` on the
 # validation singlet, and repeated verbatim by every call that shares a fit,
 # an image point and a pupil weighting (a merit evaluated over source modes,
 # or an optimiser loop whose step did not move the optic).  Bounded and
-# FIFO-evicted; each entry is one float.
-_W_O_CACHE: 'OrderedDict[Any, Optional[float]]' = OrderedDict()
+# FIFO-evicted; each entry is one float beside a reference to the evaluator
+# that produced it (see :func:`_callable_identity`).
+_W_O_CACHE: 'OrderedDict[Any, Tuple[Optional[float], Any]]' = OrderedDict()
 _W_O_CACHE_MAX = 64
 _W_O_CACHE_LOCK = threading.Lock()
 
@@ -552,9 +601,10 @@ def _measure_image_plane_waist(
 
     The answer is a pure function of ``(fit, s2_image, source_point,
     pupil_amplitudes, w_s, w_p, v2_centre, n)`` -- every one of which reaches
-    the probe's ``propagate`` call or its grid -- so it is memoised on exactly
-    that tuple in ``_W_O_CACHE``.  ``propagate`` itself is part of the key by
-    qualified name, because a caller may hand in a different evaluator.
+    the probe's ``propagate`` call or its grid -- plus ``propagate`` itself
+    and the process-global seams it reads, so it is memoised on exactly that
+    tuple in ``_W_O_CACHE``.  ``propagate`` enters by
+    :func:`_callable_identity` and the seams by :func:`_propagate_seams`.
     """
     _key = (_fit_fingerprint(fit), float(s2x_img), float(s2y_img),
             float(source_point[0]), float(source_point[1]),
@@ -562,15 +612,15 @@ def _measure_image_plane_waist(
                          for k, v in (pupil_amplitudes or {}).items())),
             float(w_s), float(w_p),
             float(v2_centre[0]), float(v2_centre[1]), int(n),
-            getattr(propagate, '__qualname__', repr(propagate)))
+            _callable_identity(propagate), _propagate_seams())
     with _W_O_CACHE_LOCK:
         if _key in _W_O_CACHE:
             _W_O_CACHE.move_to_end(_key)
-            return _W_O_CACHE[_key]
+            return _W_O_CACHE[_key][0]
 
     room = _s2_validity_room(fit, s2x_img, s2y_img)
     if not (math.isfinite(room) and room > 0.0):
-        return _w_o_cache_put(_key, None)
+        return _w_o_cache_put(_key, None, propagate)
     ext = 0.98 * room
     w = None
     for _pass in range(2):
@@ -588,12 +638,12 @@ def _measure_image_plane_waist(
             )
         except (ValueError, RuntimeError, ZeroDivisionError, IndexError,
                 np.linalg.LinAlgError):
-            return _w_o_cache_put(_key, None)
+            return _w_o_cache_put(_key, None, propagate)
         inten = np.abs(np.asarray(U)) ** 2
         inten = np.where(np.isfinite(inten), inten, 0.0)
         tot = float(inten.sum())
         if not (tot > 0.0):
-            return _w_o_cache_put(_key, None)
+            return _w_o_cache_put(_key, None, propagate)
         lx = SX - s2x_img
         ly = SY - s2y_img
         cx = float((inten * lx).sum() / tot)
@@ -601,26 +651,30 @@ def _measure_image_plane_waist(
         var = float(
             (inten * ((lx - cx) ** 2 + (ly - cy) ** 2)).sum() / tot) / 2.0
         if not (math.isfinite(var) and var > 0.0):
-            return _w_o_cache_put(_key, None)
+            return _w_o_cache_put(_key, None, propagate)
         w = 2.0 * math.sqrt(var)
         cell = 2.0 * ext / (n - 1)
         if w >= 3.0 * cell:
-            return _w_o_cache_put(_key, w)
+            return _w_o_cache_put(_key, w, propagate)
         # Under-sampled: the field is far narrower than the validity box.
         ext_next = min(6.0 * w, 0.98 * room)
         if not (ext_next > 0.0) or ext_next >= ext:
-            return _w_o_cache_put(_key, w)
+            return _w_o_cache_put(_key, w, propagate)
         ext = ext_next
-    return _w_o_cache_put(_key, w)
+    return _w_o_cache_put(_key, w, propagate)
 
 
-def _w_o_cache_put(key, value):
+def _w_o_cache_put(key, value, fn):
     """Record ``value`` under ``key`` in the bounded waist cache and return
     it, so every exit of :func:`_measure_image_plane_waist` caches exactly
     what it returns -- including the ``None`` verdicts, which cost the same
-    probe to reach."""
+    probe to reach.
+
+    The entry is ``(value, fn)``: holding the evaluator alive is what makes
+    the ``id(fn)`` in the key sound (:func:`_callable_identity`), since an id
+    can only be reused once its object has been collected."""
     with _W_O_CACHE_LOCK:
-        _W_O_CACHE[key] = value
+        _W_O_CACHE[key] = (value, fn)
         while len(_W_O_CACHE) > _W_O_CACHE_MAX:
             _W_O_CACHE.popitem(last=False)
     return value

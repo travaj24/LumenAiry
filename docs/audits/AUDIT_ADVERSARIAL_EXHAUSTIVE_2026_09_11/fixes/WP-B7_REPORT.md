@@ -835,3 +835,20 @@ working tree.
 * **The `'auto'` routing at a caustic** (§8.3) and the **FGA analytic-Jacobian
   whitelist** (§8.2) — both are measured and specified, both red test files
   outside this package.
+
+---
+
+## Addendum after VERIFY-B7 (orchestrator, 2026-09-14)
+
+* **The standing "Not green when I finished" note is superseded**: the section 8.1 patch to `test_audit2609_b1_maslov_input_wavevector.py` was
+  applied inside f64444ec and that file reads 33 / 33 at this commit.
+* **Section 7.2's residual mechanism is corrected** (VERIFY-B7 section 5.1): the residual after the chief-ray displacement term is NOT second order
+  in the walk -- it is the input AMPLITUDE, still sampled at the output pixel while the phase is re-referenced to the entrance point.  The corrected
+  screen reproduces an exact conic trace weighted the way the screen weights its exit pupil to 0.00-0.04 %; the residual has the closed form
+  `-B (A + d C) / (d + B (A + d C))` in the element's ABCD, is exactly zero at the image plane and grows linearly with the readout defocus
+  (predicted +0.44 % / measured +0.45 % at 300 um of defocus on VERIFY-B7's optic; +0.10 % / +0.11 % on this report's).  Resampling the
+  amplitude at the entrance point is the next increment (VERIFY-B7 F1).
+* **Section 7.4's "2.3 %"** for the difference between the two chart-sizing rules at the bar is **2.83 %** (`(0.1 + 3 sqrt(0.99)) / 3 - 1`);
+  the source comment carries the closed form.  VERIFY-B7 also measured the item-10 bar's lower margin at 1.33x on a third chart (a hard edge on a
+  CONVERGING carrier is the class closest to the bar) and re-derived the item-11 floor on 41 fields (1.1e-2 .. 4.2e-1, with a bounded, one-signed
+  Nyquist exception).

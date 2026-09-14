@@ -358,6 +358,18 @@ def _lg_mode_conj_stack(X: np.ndarray, Y: np.ndarray, w: float,
     dtype_str = str(np.result_type(X.dtype, Y.dtype, np.float64))
     want = None if only is None else frozenset(
         (int(p), int(ell)) for (p, ell) in only)
+    if want is not None:
+        # A requested mode outside the (p_max, ell_max) rectangle is never
+        # enumerated below, so without this it would be dropped in silence and
+        # the caller would read a structural zero for it.  Refuse instead.
+        outside = sorted(k for k in want
+                         if not (0 <= k[0] <= int(p_max)
+                                 and abs(k[1]) <= int(ell_max)))
+        if outside:
+            raise ValueError(
+                f"_lg_mode_conj_stack: only= names mode(s) {outside} outside "
+                f"the (p_max={int(p_max)}, ell_max={int(ell_max)}) rectangle; "
+                f"raise p_max / ell_max or drop them.")
     cache_key = (
         int(p_max), int(ell_max), Ny, Nx,
         float(w), float(cx), float(cy),
@@ -796,7 +808,8 @@ def decompose_lg(field: np.ndarray, x: np.ndarray, y: np.ndarray,
         Basis centre.
     only : sequence of (p, ell), optional
         Return (and BUILD) only these modes, which must lie inside the
-        ``(p_max, ell_max)`` rectangle.  The rectangle holds
+        ``(p_max, ell_max)`` rectangle -- one that does not raises
+        ``ValueError`` rather than being dropped in silence.  The rectangle holds
         ``(p_max+1)(2 ell_max+1)`` modes and a caller that wants a named
         handful -- ``aberration_tensor``'s ``output_modes``, say -- pays for
         all of them without this.  Each overlap is the same number either
