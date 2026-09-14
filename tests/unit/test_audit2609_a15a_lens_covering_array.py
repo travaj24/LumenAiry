@@ -460,7 +460,8 @@ def test_the_covering_arrays_really_cover_every_pair():
     """
     for name, factors, rows, excl in (
             ('analytic', ANALYTIC_FACTORS, ANALYTIC_ROWS, ANALYTIC_EXCLUSIONS),
-            ('traced', TRACED_FACTORS, TRACED_ROWS, TRACED_EXCLUSIONS)):
+            ('traced', TRACED_FACTORS, TRACED_ROWS, TRACED_EXCLUSIONS),
+            ('maslov', MASLOV_FACTORS, MASLOV_ROWS, MASLOV_EXCLUSIONS)):
         names = list(factors)
         need = {(i, a, j, b)
                 for i, j in itertools.combinations(range(len(names)), 2)
@@ -646,6 +647,183 @@ def test_the_default_identity_detector_is_not_vacuous():
         'fresnel=True did not change the field at all on this fixture, so the '
         'bit-identity comparison in the two tests above cannot distinguish an '
         'honoured knob from a discarded one.  Pick a different witness.')
+
+
+# ---------------------------------------------------------------------------
+# 3. The MASLOV family (WP-B11a item 10, from WP-B1 request 4)
+#
+# ``apply_real_lens_maslov`` is the third entry point of the family and had no
+# cell in this array at all, so none of its ~25 keyword-only knobs was ever
+# paired against another.  It runs on the SAME diverging fixture as the two
+# arrays above -- the point of a covering array is that the fixture is held
+# fixed while the combination varies.
+#
+# WHAT IS NOT A FACTOR, and why.  ``integration_method`` is the one knob whose
+# levels genuinely change the quadrature, and it is left OUT: MEASURED
+# 2026-09-13 on this fixture, ``'auto'`` returns in 1.5 s and the explicit
+# ``'quadrature'`` in 72.6 s, so a pairwise array over it would put minutes of
+# one entry point's quadrature into the fast lane.  The knob keeps its coverage
+# in the default-identity test below (passing ``'auto'`` explicitly is
+# byte-identical to omitting it), and its levels belong in a slow-lane file.
+# ---------------------------------------------------------------------------
+
+MASLOV_FACTORS: dict[str, list[dict]] = {
+    'fit': [{}, {'poly_order': 6}],
+    'sampling': [{}, {'ray_field_samples': 24, 'ray_pupil_samples': 24}],
+    'linear_phase': [{}, {'extract_linear_phase': False}],
+    'normalize': [{}, {'normalize_output': 'none'}],
+    'output_plane': [{}, {'output_plane_distance': 2.0e-3}],
+    'fold': [{}, {'fold_split': True}],
+    'saddle': [{}, {'input_wavevector_saddle': True}],
+}
+
+# MEASURED 2026-09-13 by running every level of every factor above on this
+# fixture: all 14 return a finite, correctly-shaped field and none raises, so
+# the exclusion table is EMPTY -- and empty because it was measured, not
+# because nobody looked.  ``test_every_declared_exclusion_is_really_refused``
+# has nothing to check here; ``test_the_covering_arrays_really_cover_every_pair``
+# still asserts every pair is reached.
+MASLOV_EXCLUSIONS: dict[tuple, str] = {}
+
+MASLOV_ROWS = _pairwise_rows(MASLOV_FACTORS, MASLOV_EXCLUSIONS)
+
+
+def maslov_base_kwargs(dx: float, prescription: dict) -> dict:
+    return dict(prescription=prescription, wavelength=WAVELENGTH, dx=dx)
+
+
+@pytest.mark.parametrize(
+    'row', MASLOV_ROWS,
+    ids=[_row_label(MASLOV_FACTORS, r) for r in MASLOV_ROWS])
+def test_maslov_covering_array_is_finite_and_loses_no_energy(row):
+    """Pairwise over 9 physics kwargs of ``apply_real_lens_maslov``.
+
+    The energy bar is the array's own (:func:`_assert_sane`), and it means
+    something DIFFERENT on this entry point, which is worth saying: the shipped
+    ``normalize_output='power'`` rescales the output to carry exactly the input
+    power, so on every arm that leaves it alone ``P_out/P_in`` is 1.000000000
+    by construction and the bar is a statement about the RESCALING, not about
+    the physics.  The ``normalize`` factor's second level turns it off, and
+    that is the arm where the bar has teeth -- MEASURED 0.405890451 there
+    (2026-09-13), i.e. the raw Maslov integral on this clipped, diverging
+    fixture loses 59 % and gains nothing.
+    """
+    from lumenairy.elements.lenses_maslov import apply_real_lens_maslov
+    e_in, dx, rx, _ = lens_covering_array_fixture()
+    kw = maslov_base_kwargs(dx, rx)
+    kw.update(_kwargs_for(MASLOV_FACTORS, row))
+    label = _row_label(MASLOV_FACTORS, row)
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        out = apply_real_lens_maslov(e_in, **kw)
+    _assert_sane(_as_field(out), e_in, dx, label, 'apply_real_lens_maslov')
+
+
+# The maslov kwargs whose documented default must be a no-op when passed
+# explicitly.  Excluded for the same reasons as the other two lists: ``dy``
+# (whose default None MEANS "= dx"), the resource knobs (``use_gpu``,
+# ``progress``, ``verbose``, ``chunk_v2``, ``use_numexpr``) and ``roi`` /
+# ``output_subsample`` (output-shaping, not physics).
+_MASLOV_DEFAULT_KNOBS = (
+    'ray_field_samples', 'ray_pupil_samples', 'poly_order', 'n_v2',
+    'output_plane_distance', 'output_plane_n', 'extract_linear_phase',
+    'integration_method', 'stationary_newton_iter', 'stationary_newton_tol',
+    'local_n_samples', 'local_window_sigma', 'levin_tol', 'collimated_input',
+    'input_na', 'input_wavevector_saddle', 'normalize_output', 'fold_split',
+)
+
+
+def test_maslov_kwargs_at_their_default_reproduce_the_bare_call():
+    """18 kwargs of ``apply_real_lens_maslov``, each passed at its signature
+    default, must be byte-identical to omitting it.
+
+    This is where ``integration_method='auto'`` keeps its coverage: the knob
+    whose explicit levels are too slow for this lane is still pinned at its
+    default, which is the arm a caller reaching for a config object
+    (``LensConfig.to_kwargs`` splats every field it holds) actually hits."""
+    e_in, dx, rx, _ = lens_covering_array_fixture()
+    from lumenairy.elements.lenses_maslov import apply_real_lens_maslov
+    _default_identity(apply_real_lens_maslov, maslov_base_kwargs(dx, rx),
+                      _MASLOV_DEFAULT_KNOBS, e_in, 'apply_real_lens_maslov',
+                      min_compared=18)
+
+
+# ---------------------------------------------------------------------------
+# 4. The IN-GLASS GAP LEGS (WP-B11a item 10, from WP-B3b D5)
+# ---------------------------------------------------------------------------
+
+def test_the_in_glass_gap_legs_are_reached_and_only_one_of_them_is_gated():
+    """``wave_propagator`` is a covering-array factor with levels ``{}`` (the
+    ASM default) and ``'rs'``; NEITHER reaches the in-glass ``'sas'`` /
+    ``'fresnel'`` gap legs, so the window-against-period gate those legs carry
+    was never exercised anywhere in the lens matrix.  This is that coverage --
+    and it is a separate test rather than two more factor levels, because
+    MEASURED on this fixture both legs are far outside their kernels' validity
+    and the array's energy bar would have to be conceded to hold them.
+
+    MEASURED 2026-09-13 on the covering-array doublet (N = 64, dx = 112.5 um,
+    lambda = 632.8 nm, gaps 9.0 and 2.5 mm in N-BAF10 / N-SF6HT):
+
+    ======================  ================  ==========================
+    ``wave_propagator``     ``P_out/P_in``    diagnostics emitted
+    ======================  ================  ==========================
+    default (ASM)           0.996170598       none
+    ``'rs'``                0.996170187       none
+    ``'fresnel'``           10396.714211      2 x RuntimeWarning
+    ``'sas'``               10396.710108      NONE
+    ======================  ================  ==========================
+
+    Both gap legs gain FOUR DECADES of power, and the geometry is why: the
+    single-FFT Fresnel kernel's own validity bound is
+    ``max(N dx^2) / lambda_medium = 2.13 m`` against a 9 mm gap, so the chirp is
+    aliased by a factor of 240.  It is not a fixture artefact that a finer grid
+    removes -- the bound FALLS with dx, so at N = 512 the same fixture reads
+    0.142 ('fresnel') and 0.0405 ('sas') of the input power instead, and a
+    validly-sampled in-glass Fresnel leg on a 7.2 mm window would need
+    N ~ 15 000.
+
+    The ASYMMETRY is the finding.  ``'fresnel'`` warns twice -- the
+    under-sampling gate fires and names the bound.  ``'sas'`` returns the same
+    four-decade gain in SILENCE, because its only validity gate is the
+    far-field direction (``z > z_limit``) and this failure is the near one.
+    The assertion below PINS that silence so the day a gate is added this test
+    goes red and the author records the change deliberately; see WP-B11a's
+    report, "requested changes".
+    """
+    e_in, dx, rx, _ = lens_covering_array_fixture()
+    base = analytic_base_kwargs(dx, rx)
+    p_in = _power(e_in, dx)
+    seen = {}
+    for leg in ('fresnel', 'sas'):
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter('always')
+            out = _as_field(apply_real_lens(e_in, wave_propagator=leg, **base))
+        assert out.shape == e_in.shape
+        assert np.all(np.isfinite(out)), (
+            f"wave_propagator={leg!r} returned non-finite samples; the aliased "
+            f"quadrature is wrong, but it must not be NaN.")
+        seen[leg] = (_power(out, dx) / p_in,
+                     [w for w in caught if issubclass(w.category,
+                                                      RuntimeWarning)])
+    # the two legs are the same aliasing, so they must agree closely
+    assert abs(seen['fresnel'][0] - seen['sas'][0]) < 1e-4 * seen['sas'][0], (
+        f"the two in-glass gap legs disagree by more than the aliasing they "
+        f"share: {seen['fresnel'][0]:.6f} against {seen['sas'][0]:.6f}")
+    assert seen['fresnel'][0] > 1e3, (
+        f"the 'fresnel' gap leg no longer gains four decades on this fixture "
+        f"(P_out/P_in = {seen['fresnel'][0]:.6g}).  Either the leg was fixed "
+        f"-- in which case DELETE this assertion and put the two legs back in "
+        f"ANALYTIC_FACTORS['propagator'] where they belong -- or the fixture "
+        f"moved and this test is no longer measuring the gate.")
+    assert seen['fresnel'][1], (
+        "the 'fresnel' gap leg stopped warning about its under-sampled chirp; "
+        "that warning is the only thing standing between a caller and a "
+        "four-decade energy gain.")
+    assert not seen['sas'][1], (
+        "the 'sas' gap leg now emits a RuntimeWarning on this geometry -- the "
+        "gap WP-B11a recorded has been closed.  Update this assertion (and "
+        "the report's requested-changes entry) deliberately rather than "
+        "loosening it.")
 
 
 if __name__ == '__main__':      # pragma: no cover - measurement helper

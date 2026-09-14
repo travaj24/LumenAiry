@@ -1,11 +1,12 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/lenses.py
-ast_sha256: 74cd6f5dbcc60140ee45ff22ed2a1be798efd6b3908140830f688ad01a242fd5
-token_sha256: b3d2074c6d61b3a492b416a6aec8ba46919516c3c0d7d5b88aec470f720c1815
+ast_sha256: d2bd657462245706bbfa3657fe04033f45bea8e6c5a47d399880f7be3442838e
+token_sha256: 64252edc9825ca1f6d6e5fa5bbefb634de20b61a5838fe3c3fe1c8b204b69b5b
 pre_relocation_lines: 1171
 recorded_by: WP-A17 SWEEP-4 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
 re_recorded: 2026-09-12 -- ruff isort combine-as-imports (pyproject.toml, WP-A16 recommendation): aliased import statements from the same module merged into one; the set of bound names is unchanged
+re_recorded: 2026-09-13 -- the grid-versus-aperture bookkeeping moved to the new elements/_lens_kernels.py leaf and is re-exported; _lens_traced reads the leaf, closing its module-level 2-cycle with the lenses facade (WP-B11a item 4)
 -->
 
 # Version history -- `lumenairy/elements/lenses.py`

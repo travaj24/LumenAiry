@@ -26,6 +26,7 @@ from numpy.polynomial.legendre import Legendre
 # Backend detection for the JAX (differentiable) dispatch in pmm_efficiency_1d.
 # Mirrors rcwa's pattern: a JAX input routes to the self-contained jnp twin,
 # while a NumPy input falls through to the original (byte-identical) code.
+from ..._branchcut import band_mask as _band_mask, negate_forward as _negate_forward
 from ...backend import is_jax_array
 
 # Incidence-medium guard shared with the 2-D PMM paths (twod.py / stack2d.py):
@@ -786,6 +787,14 @@ def _fast_geig(A, B):
     return (q2, z) if di is None else (q2, di[:, None] * z)
 
 
+#: THE ON-CUT BAND of the scalar-vertical PMM selector, relative to the
+#: spectrum's largest ``|q|`` floored at a dimensionless 1.0.  1e-8 is the same
+#: factor ``rcwa/_core._CUT_BAND_REL`` carries and was derived against the same
+#: populations; see that constant for the measurement and
+#: :func:`_forward_branch_flip` for what this band decides here.
+_PMM_CUT_BAND_REL = 1e-8
+
+
 def _forward_branch_flip(q, xp=np):
     """Sign-select each modal ``q`` onto the FORWARD (forward-decaying / +z)
     branch -- the ONE noise-robust selector every scalar-vertical PMM generator
@@ -797,19 +806,28 @@ def _forward_branch_flip(q, xp=np):
     near-real (propagating) modes on that noise and spawn dense spurious
     resonances (the v5.14 robustness-audit P1).  Flip ONLY when clearly
     backward: ``Im(q) < -tol`` (evanescent, backward-growing) or, inside the
-    near-real band ``|Im(q)| <= tol``, ``Re(q) < 0``.  ``tol`` is relative to the
-    largest ``|q|`` (floored at 1.0), so the guard scales with the mode spectrum.
+    near-real band ``|Im(q)| <= tol``, ``Re(q) < 0``.  ``tol`` is
+    ``_PMM_CUT_BAND_REL`` times the largest ``|q|`` (floored at 1.0), so the
+    guard scales with the mode spectrum; the band comparison is the library's
+    shared one, :func:`lumenairy._branchcut.band_mask`, and the one-sided leg
+    beside it is this engine's own.
 
-    ``xp`` selects the array module: NumPy (default) materialises ``tol`` as a
-    concrete Python float via ``max(float(...), 1.0)``; passing ``jax.numpy``
-    keeps ``tol`` traced through ``jnp.maximum`` so the derivative w.r.t. the
+    ``xp`` selects the array module: NumPy (default) materialises the scale as
+    a concrete Python float via ``max(float(...), 1.0)``; passing ``jax.numpy``
+    keeps it traced through ``jnp.maximum`` so the derivative w.r.t. the
     incidence angle still flows."""
     if xp is np:
-        tol = 1e-8 * max(float(np.max(np.abs(q))), 1.0)
+        scale = max(float(np.max(np.abs(q))), 1.0)
     else:
-        tol = 1e-8 * xp.maximum(xp.max(xp.abs(q)), 1.0)
-    flip = (q.imag < -tol) | ((xp.abs(q.imag) <= tol) & (q.real < 0.0))
-    return xp.where(flip, -q, q)
+        scale = xp.maximum(xp.max(xp.abs(q)), 1.0)
+    # ``tol`` is the same product :func:`lumenairy._branchcut.band_mask` forms
+    # internally; it is named here because the one-sided ``Im(q) < -tol`` leg
+    # below -- which is this engine's own, not shared -- compares against it.
+    tol = _PMM_CUT_BAND_REL * scale
+    flip = (q.imag < -tol) | (
+        _band_mask(q.imag, scale=scale, band=_PMM_CUT_BAND_REL, xp=xp)
+        & (q.real < 0.0))
+    return _negate_forward(q, flip, xp=xp)
 
 
 

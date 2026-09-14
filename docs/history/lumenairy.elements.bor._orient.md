@@ -1,10 +1,11 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/bor/_orient.py
-ast_sha256: 18e92cacded84a7a6114c42f1a3b6fba0d4c4e15734c62674b9092f92d0b32a9
-token_sha256: 6ee0fd482dd8b0a95eb28d8624eecaa98515fe8bc5a6713eb42dbb20ab50f8e2
+ast_sha256: 9245fb6b3bf3ef3e1cccf19a46bfcce12362f2939331278db29d9c1cba9f6e3f
+token_sha256: 4571967b21f3fabfcf36b0a4e6f22995d3c787ea5ba0c52613c03b174563cae2
 pre_relocation_lines: 296
 recorded_by: WP-A17 SWEEP-2 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
+re_recorded: 2026-09-13 -- the on-cut band comparison and the forward selector moved to the shared lumenairy/_branchcut.py leaf; each engine keeps its own derived scale (bit-identical, WP-B11a item 1)
 -->
 
 # Version history -- `lumenairy/elements/bor/_orient.py`

@@ -904,7 +904,14 @@ def propagate_hfpi(
 
     Internally delegates to :func:`propagate_hfpi_freespace_aperture`
     (which retains its legacy
-    ``(E_in, dx, *, z_to_aperture, ..., wavelength, ...)`` order).
+    ``(E_in, dx, *, z_to_aperture, ..., wavelength, ...)`` order), so every
+    keyword that function takes is reachable through ``**kwargs`` here --
+    including ``sampling='stratified'`` and its ``sampler`` /
+    ``n_strata_xy`` / ``n_strata_dir``, the variance-reduction lever the
+    prescription walk already had and this pair did not.  The default stays
+    ``sampling='uniform'``: this is a Monte-Carlo estimator whose realisation
+    depends on the sampler, so the placement rule is a caller's choice, not a
+    default that moves under them.
 
     Normalisation (v5.46, audit K13 / K18)
     -------------------------------------
@@ -979,6 +986,10 @@ def propagate_hfpi_freespace_aperture(
     on_undersampled: str = 'warn',
     cone_half_angle: float = np.pi / 2 - 1e-6,
     normalisation: str = 'physical',
+    sampling: str = 'uniform',
+    sampler: str = 'jittered',
+    n_strata_xy: Optional[Tuple[int, int]] = None,
+    n_strata_dir: Optional[Tuple[int, int]] = None,
 ) -> np.ndarray:
     """End-to-end three-leg HFPI: source plane -> free space ->
     aperture -> free space -> output plane.
@@ -1006,6 +1017,35 @@ def propagate_hfpi_freespace_aperture(
             recommended.
     normalisation : {'physical', 'legacy'}, default 'physical'
         Forwarded to :func:`accumulate_to_grid`; see K13 there.
+    sampling : {'uniform', 'stratified'}, default 'uniform'
+        How the source-plane paths are placed in the 4-D
+        ``(pixel_x, pixel_y, cos theta, phi)`` cube the Huygens-Fresnel
+        source term integrates over.  ``'uniform'`` draws them
+        independently (:func:`init_paths_from_field`) and is the shipped
+        behaviour of this entry point;  ``'stratified'`` routes to
+        :func:`init_paths_stratified`, which forces one path per
+        equal-measure stratum and so reduces the variance of the estimate
+        at the same path count.
+
+        The DEFAULT IS DELIBERATELY NOT the prescription walk's.  That
+        walk defaults to ``'stratified'``; this pair has returned the
+        uniform draw since it was written, and its output is a
+        Monte-Carlo estimate whose realisation depends on the sampler, so
+        flipping the default here would move every existing caller's
+        numbers.  The keyword is the opt-in;
+        ``propagate_hfpi_through_prescription`` is where the other
+        default lives.
+    sampler : {'jittered', 'sobol'}, default 'jittered'
+        Point placement inside the stratified sampler's cube; see
+        :func:`init_paths_stratified`.  Read only when
+        ``sampling='stratified'``, and REFUSED otherwise rather than
+        silently ignored -- the same contract
+        :func:`propagate_hfpi_through_prescription` carries.
+    n_strata_xy, n_strata_dir : (int, int), optional
+        Per-axis stratum counts for the source pixel and the direction
+        sphere; see :func:`init_paths_stratified`.  Read only when
+        ``sampling='stratified'`` and ``sampler='jittered'``, and refused
+        otherwise for the same reason.
 
     .. note::
        This function uses a non-canonical argument order
@@ -1019,16 +1059,52 @@ def propagate_hfpi_freespace_aperture(
     # was reused; ``RandomState(rng=int)`` rebuilds default_rng(int)
     # so both draws were identical (perfectly correlated init / re-
     # emission).
+    if sampling not in ('uniform', 'stratified'):
+        raise ValueError(
+            f"propagate_hfpi_freespace_aperture: sampling must be 'uniform' "
+            f"(default: independent draws, init_paths_from_field) or "
+            f"'stratified' (one path per equal-measure stratum of the same "
+            f"4-D cube, init_paths_stratified); got {sampling!r}.")
+    if sampler not in ('jittered', 'sobol'):
+        raise ValueError(
+            f"propagate_hfpi_freespace_aperture: sampler must be 'jittered' "
+            f"or 'sobol'; got {sampler!r}.  See init_paths_stratified for "
+            f"what each places where.")
+    _strata = (n_strata_xy is not None) or (n_strata_dir is not None)
+    if sampling != 'stratified' and (sampler != 'jittered' or _strata):
+        # Refuse rather than drop: a caller who asked for a sampler or a
+        # stratum count and got the uniform draw would have no way to tell.
+        raise ValueError(
+            f"propagate_hfpi_freespace_aperture: sampler={sampler!r} / "
+            f"n_strata_xy={n_strata_xy!r} / n_strata_dir={n_strata_dir!r} "
+            f"configure the STRATIFIED sampler's 4-D cube, and this call "
+            f"passes sampling={sampling!r}, which does not use that cube -- "
+            f"the request has no effect and would be silently dropped.  Pass "
+            f"sampling='stratified' with the sampler you want, or drop these "
+            f"keywords.")
     rng_source = _spawn_rng(rng, 0)
     rng_aperture = _spawn_rng(rng, 1)
-    paths = init_paths_from_field(
-        E_in, dx,
-        n_paths=n_paths,
-        wavelength=wavelength,
-        rng=rng_source,
-        cone_half_angle=cone_half_angle,
-        z_input_plane=0.0,
-    )
+    if sampling == 'stratified':
+        paths = init_paths_stratified(
+            E_in, dx,
+            n_paths=n_paths,
+            wavelength=wavelength,
+            rng=rng_source,
+            cone_half_angle=cone_half_angle,
+            z_input_plane=0.0,
+            sampler=sampler,
+            **({} if n_strata_xy is None else {'n_strata_xy': n_strata_xy}),
+            **({} if n_strata_dir is None else {'n_strata_dir': n_strata_dir}),
+        )
+    else:
+        paths = init_paths_from_field(
+            E_in, dx,
+            n_paths=n_paths,
+            wavelength=wavelength,
+            rng=rng_source,
+            cone_half_angle=cone_half_angle,
+            z_input_plane=0.0,
+        )
     paths = propagate_to_plane(paths, z_target=z_to_aperture,
                                 wavelength=wavelength)
     paths = apply_aperture_diffraction(

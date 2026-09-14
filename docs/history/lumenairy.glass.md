@@ -1,10 +1,11 @@
 <!-- lumenairy-history-doc
 module: lumenairy/glass.py
-ast_sha256: 630f81ef4f97e45b0b20250def034268308147a0a82f34cc5a976c98d37c77a7
-token_sha256: c01964bc4d03b8a91a12d0c0f469679eff1ab97998bd5c88080932c3c4cc3acf
+ast_sha256: 2f5b36a9ced1ffadf0bcd2cf242246a0069c1cfec1557909d01f83ec07ccbfe6
+token_sha256: 3fc34871dc0da48032fe574abb7ae899caa1bf26b24959c25e3543303eb89992
 pre_relocation_lines: 2160
 recorded_by: WP-A17 SWEEP-3 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
+re_recorded: 2026-09-13 -- the glass-index memo covers the whole immutable-catalogue resolution (and the live catalogue arm) instead of only the closed-form evaluation: 13.283 -> 0.559 us warm on N-BK7; registry-invalidation generation counter added (WP-B11a item 15)
 -->
 
 

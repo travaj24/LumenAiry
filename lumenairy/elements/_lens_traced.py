@@ -590,7 +590,11 @@ from .._math.chebyshev import (
 )
 from ..glass import get_glass_index
 from ..progress import ProgressScaler, call_progress
-from .lenses import _warn_if_aperture_exceeds_grid
+
+# The leaf, not the ``lenses`` facade: the facade imports this module at module
+# scope, so reaching back into it would make the family's import order
+# load-bearing.  ``lenses`` re-exports the same object.
+from ._lens_kernels import _warn_if_aperture_exceeds_grid
 
 logger = get_logger(__name__)
 

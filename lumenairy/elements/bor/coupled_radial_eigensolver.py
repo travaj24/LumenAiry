@@ -56,47 +56,23 @@ def _fd_grid(Rbig, N):
 
 #: Where the staggered PEC wall is anchored (audit W6-B1).
 #:
-#: ``'rbig'`` (DEFAULT since the W6-B1 flip) -- ``h = Rbig / (N + 0.5)``.  The
-#: outer stencil closes the wall by forcing the tangential field to zero at the
-#: GHOST NODE (index ``N``, radius ``(N + 0.5) h``), so THAT radius is the PEC
-#: wall; this spacing lands it exactly on the ``Rbig`` the caller asked for.
+#: ``'rbig'`` (the DEFAULT) -- ``h = Rbig / (N + 0.5)``.  The outer stencil
+#: closes the wall by forcing the tangential field to zero at the GHOST NODE
+#: (index ``N``, radius ``(N + 0.5) h``), so THAT radius is the PEC wall; this
+#: spacing lands it exactly on the ``Rbig`` the caller asked for, and the
+#: scheme reaches the 2nd order this module documents (p = 1.99).
 #:
 #: ``'ghost'`` (LEGACY ESCAPE HATCH) -- ``h = Rbig / N``, which puts the ghost
 #: node -- and therefore the wall -- at ``Rbig + h/2``: the discretized cavity
-#: is half a cell LARGER than requested.  Retained only to reproduce
-#: pre-flip numbers; it is a KNOWN-DEFECTIVE anchor, not a supported
-#: alternative discretization.
+#: is half a cell LARGER than requested, and the box spectrum converges to
+#: ``j_{m,n} / (Rbig + h/2)`` at FIRST order (p = 0.99).  It is a
+#: KNOWN-DEFECTIVE anchor, not a supported alternative discretization; it
+#: exists so the earlier numbers can be reproduced.
 #:
-#: MEASURED (homogeneous m=1 cylinder, eps=4, Rbig=8, k0=2; gamma vs the
-#: analytic ``{j_{m,n}, j'_{m,n}}/Rbig``).  Under ``'ghost'`` the transverse
-#: wavenumbers converge to ``j/(Rbig + h/2)``, so the error is FIRST order --
-#: p = 0.994 / 0.997 / 0.998 over N = 60 -> 480, a -8.26e-3 relative bias at
-#: N = 60 and still -1.04e-3 at N = 480, with the implied effective radius
-#: matching ``Rbig + h/2`` to 4-5 digits (ratio 0.9999 / 1.0000 / 1.0000 /
-#: 1.0000) -- contradicting the module docstring's "Convergence is 2nd-order in
-#: N (FD)".  Under ``'rbig'``: 6.52e-7 at N = 60, 4.14e-8 at N = 240,
-#: p = 1.99.  FOUR DECADES at identical cost, and BOTH properties that make
-#: this basis worth having are preserved: the exact discrete de Rham identity
-#: (3.6e-15 vs 1.8e-15) and machine-precision cascade energy (1.28e-14 vs
-#: 1.47e-14 on the ring-grating reproducer).
-#:
-#: WHY THE ANCHOR AND NOT THE STENCIL.  The competing antisymmetric-ghost
-#: repair (``Dn2f[N-1,N-1] = -2/h``, ``An2f[N-1,N-1] = 0``) also anchors the
-#: wall on ``Rbig`` and also reaches p = 2.000, but was MEASURED to destroy
-#: both properties: de Rham 1.58e-2 (1.05e-3 relative) and cascade energy
-#: 2.06e-4.  The algebra says why -- for a ghost ``t * f_{N-1}`` the de Rham
-#: residual is exactly ``m t / (r_{N-1} Rbig)``, zero only at ``t = 0`` -- so
-#: the ghost-value-ZERO stencil must stay and the spacing must move.
-#:
-#: FLIP COST (measured, and retuned in the affected gate).  The flip moves
-#: every ``BORStack`` number towards the exact answer.  On the
-#: ``AUDIT_BOR_PROPAGATING_CUTOFF_ENERGY_2026_07_13`` reproducer
-#: (``tests/unit/test_audit_bor_grazing_cutoff.py``, Rbig = 48 um, N = 256,
-#: n = 1.41, lam = 1 um) the cavity shrinks by h/2 = 0.094 um and MEASURES:
-#: incident propagating orders 319 -> 318 (the outermost near-grazing order
-#: belonged to the oversized cavity), fundamental-mode R 0.146135 -> 0.142290,
-#: min q/k0 0.0493 -> 0.0512.  Energy closure is unaffected (6.8e-12).  That
-#: file's pins carry the deliberate-update record.
+#: The convergence tables behind both statements, the rejected
+#: antisymmetric-ghost stencil and what the default costs on the
+#: grazing-cutoff reproducer are in
+#: ``docs/audits/MEASURE_BOR_STAGGERED_WALL_ANCHOR_2026_09_13.md``.
 STAGGERED_WALL_ANCHOR = "rbig"
 
 

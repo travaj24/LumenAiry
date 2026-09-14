@@ -1064,6 +1064,24 @@ def propagate_carrier_referenced(
         ordinary value and no focus split is entered.  For a quadratic carrier
         the two are the same theorem, and on a shared lattice they agree to
         ~4e-12 of peak.  ``gap_kernel`` means the same thing on both.
+
+        WHERE THE COLLINS ONE-STEP READOUT APPLIES.  The freedom has a
+        sampling price, and it is paid by the CHAIN'S EXIT GRID rather than by
+        this leg: a one-step readout's pre-chirp is
+        ``exp(i k A u^2 / (2 B))`` on that grid, so its K1 condition reads
+        ``2 dx (|A| r / |B| + theta) / lambda`` -- the exit pitch must resolve
+        the beam's convergence over the REDUCED final leg ``z_eff = z / A``.
+        A long final leg on a small beam is comfortable (the WP-A6 fixture
+        reads K1 = 0.16); a short one on a wide beam is not (an 8 mm final
+        distance on a 5.4 mm exit beam sampled at 76 um reads K1 = 82), and
+        ``final_distance = 0`` is refused outright because it is the limit of
+        that.  There is no fallback form -- the caller asked for a specific
+        lattice -- so ``on_collins_sampling`` names the reading instead.  The
+        Sziklas readout pays elsewhere: it carries the beam to a standoff
+        plane in the co-moving frame, where only the ENVELOPE has to be
+        sampled, and finishes with a separate zoom whose period then depends
+        on that standoff.  See :func:`_collins_readout` for the full
+        derivation.
     dx_out : float, optional
         ``transport='collins'`` only: the output pitch (m).  Default: the
         co-moving ``|m|*dx``, floored by the pitch at which the output grid

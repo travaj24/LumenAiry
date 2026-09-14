@@ -84,6 +84,30 @@ _KEY_SUB = ("__substrate__",)
 #: Each is a strict superset of the one before it.
 _CASCADES = ("monolithic", "fast", "fused", "tree")
 
+#: Fourier-factorization rules :class:`PMM2DStackHybrid` accepts.
+_FORMULATIONS = ("li", "laurent")
+
+
+def _check_formulation(value):
+    """THE ONE ``formulation`` vocabulary check, shared by
+    :meth:`PMM2DStackHybrid.__init__` and the property setter that mirrors it,
+    so a constructor argument and a later assignment cannot be judged by two
+    different rules.  Returns the value."""
+    if value not in _FORMULATIONS:
+        raise ValueError(
+            f"PMM2DStackHybrid: formulation must be "
+            f"{' or '.join(repr(f) for f in _FORMULATIONS)}, got {value!r}")
+    return value
+
+
+def _check_cascade(value):
+    """THE ONE ``cascade`` vocabulary check; see :func:`_check_formulation`."""
+    if value not in _CASCADES:
+        raise ValueError(
+            f"PMM2DStackHybrid: cascade must be one of "
+            f"{', '.join(repr(c) for c in _CASCADES)}, got {value!r}")
+    return value
+
 #: Share of :func:`lumenairy.memory.get_ram_budget` the TREE reduction's extra
 #: live intermediates may occupy before it refuses and folds sequentially.
 #: The tree's extra set is a transient working set, not a retained cache, so it
@@ -307,14 +331,8 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
             raise ValueError(
                 f"PMM2DStackHybrid: truncation must be 'rectangular' or "
                 f"'circular', got {truncation!r}")
-        if formulation not in ("li", "laurent"):
-            raise ValueError(
-                f"PMM2DStackHybrid: formulation must be 'li' or 'laurent', got "
-                f"{formulation!r}")
-        if cascade not in _CASCADES:
-            raise ValueError(
-                f"PMM2DStackHybrid: cascade must be one of "
-                f"{', '.join(repr(c) for c in _CASCADES)}, got {cascade!r}")
+        _check_formulation(formulation)
+        _check_cascade(cascade)
         self._layers = []          # dicts: kind, thickness, payload (PUBLIC eps)
         self._period_x = float(period_x)
         self._period_y = float(period_x if period_y is None else period_y)
@@ -343,7 +361,7 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
         # eig/S-matrix steps), with a per-layer flip-invariance guard falling
         # back to the full solve.  symmetry=False forces the full solve (the
         # even basis matches it to ~1e-12, not bit-for-bit).
-        self.symmetry = _symmetry_on(symmetry)
+        self.symmetry = symmetry        # the setter resolves through _symmetry_on
         self.max_nodal_dof = int(max_nodal_dof)
         # P2C (2026-08-16) / P2T (2026-08-17): cascade strategy, in increasing
         # order of what it is allowed to move.  Each is a strict superset of
@@ -427,6 +445,46 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
     # Re-deriving the walls from stored FRACTIONS would also work, but it would
     # silently re-shape a user's geometry on attribute assignment; refusing is
     # the convention this class already uses for every other geometry change.
+    # THE THREE VALIDATED MODEL CHOICES, guarded on ASSIGNMENT as well as on
+    # construction.  ``__init__`` refuses an out-of-vocabulary value and then
+    # stored it as a plain attribute, so ``st.formulation = 'fff_nv'`` was
+    # ACCEPTED and the solve read it through an ``== 'li'`` test that a typo
+    # silently fails -- i.e. the stack behaved as ``'laurent'`` and said
+    # nothing.  The caches already key on these attributes correctly, so the
+    # only behaviour change is the refusal; the vocabulary itself is the same
+    # object ``__init__`` uses (``_check_formulation`` / ``_check_cascade`` /
+    # ``_symmetry_on``), so the two cannot drift.
+    @property
+    def formulation(self):
+        """Fourier-factorization rule, ``'li'`` or ``'laurent'``."""
+        return self._formulation
+
+    @formulation.setter
+    def formulation(self, value):
+        self._formulation = _check_formulation(value)
+
+    @property
+    def cascade(self):
+        """Cascade strategy; one of :data:`_CASCADES`."""
+        return self._cascade
+
+    @cascade.setter
+    def cascade(self, value):
+        self._cascade = _check_cascade(value)
+
+    @property
+    def symmetry(self):
+        """Even-parity fold request, RESOLVED to a bool by
+        :func:`~lumenairy.elements.rcwa._core._symmetry_on` -- so
+        ``st.symmetry = 'auto'`` reads back ``True``, exactly as the
+        constructor argument does, and an unknown string raises instead of
+        being stored as a truthy value that reads as "fold on"."""
+        return self._symmetry
+
+    @symmetry.setter
+    def symmetry(self, value):
+        self._symmetry = _symmetry_on(value)
+
     @property
     def period_x(self):
         """x lattice period [m].  Read-only once a layer has been added."""

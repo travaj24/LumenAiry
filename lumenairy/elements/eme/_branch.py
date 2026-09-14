@@ -76,6 +76,7 @@ what is NOT allowed, anywhere, is a dimensioned literal.
 """
 from __future__ import annotations
 
+from ..._branchcut import band_mask as _band_mask
 from ...backend.array import array_namespace
 
 #: THE ON-CUT BAND, relative to the spectrum's top and floored at ``|k0|``.
@@ -156,5 +157,9 @@ def forward_decaying_root(z, *, k0=None, xp=None,
         xp = array_namespace(z)
     tol = cut_band(z, k0=k0, xp=xp, band=band)
     neg = xp.imag(z) < 0.0
-    on_cut = xp.abs(xp.imag(z)) <= tol
+    # :func:`cut_band` returns the PRODUCT ``band * scale`` because its two
+    # one-sided readers (``eme_2d_vector._strip_split_forward``) compare
+    # against it directly, so the shared comparison takes it as the scale with
+    # a unit band -- ``x * 1.0`` is exact, so this is the same comparison.
+    on_cut = _band_mask(xp.imag(z), scale=tol, band=1.0, xp=xp)
     return xp.where(neg, xp.where(on_cut, xp.conj(z), -z), z)

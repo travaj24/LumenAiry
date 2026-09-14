@@ -142,9 +142,13 @@ def _drop_numexpr_out_retention():
 _NUMEXPR_MIN_SIZE = 1 << 20  # 1 Mi elements (~1024 x 1024)
 
 
-# Helpers shared with lenses.py / lenses_maslov.py.
+# Helpers shared with lenses.py / lenses_maslov.py.  The grid-versus-aperture
+# warning comes from the LEAF (``lenses`` re-exports the same object); the two
+# sag builders still come from the facade, which is the remaining half of this
+# module's 2-cycle with it -- see ``docs/lens_configuration.md`` section
+# "Module layout" for the edit that closes it.
+from ._lens_kernels import _warn_if_aperture_exceeds_grid
 from .lenses import (
-    _warn_if_aperture_exceeds_grid,
     surface_sag_biconic,
     surface_sag_general,
 )
@@ -2901,6 +2905,48 @@ def _propagate_through_glass(E: Any, thickness: float, wavelength: float,
     if absorption and n_medium_kappa != 0.0:
         E = E * xp.exp(-k0 * n_medium_kappa * thickness)
     return E
+
+
+def _band_in_halo(r0: int, r1: int, h0: int):
+    """Where absolute rows ``[r0:r1)`` sit inside an array whose first row is
+    the absolute row ``h0`` -- i.e. the band's own slice of its HALO.
+
+    THE ONE definition of that offset.  Every banded surface path builds a
+    quantity on halo rows ``[h0:h1)`` (so a central-difference gradient on the
+    band matches the whole-grid one row for row) and then has to say which
+    rows of it ARE the band; writing ``lo = r0 - h0`` out per site is how the
+    two spellings that already existed -- ``sag_h[lo:lo + (r1 - r0)]`` and a
+    separately-derived ``hi`` -- came to sit in four places.
+    """
+    lo = r0 - h0
+    return lo, lo + (r1 - r0)
+
+
+def _row_bands(n_rows: int, chunk_rows: int, halo: int = 0):
+    """THE ONE row-band schedule the chunked surface paths iterate.
+
+    Yields ``(r0, r1, h0, h1, lo, hi)`` for each band of ``chunk_rows`` rows
+    over ``n_rows``:
+
+    * ``[r0:r1)``  -- the band's absolute rows, the last one short;
+    * ``[h0:h1)``  -- those rows widened by ``halo`` either side and CLIPPED at
+      the true grid edges, which is what keeps the first and last band's
+      one-sided gradient stencils identical to the whole grid's;
+    * ``[lo:hi)``  -- where the band sits inside that halo
+      (:func:`_band_in_halo`).
+
+    A ``halo`` of 0 makes ``h0, h1 == r0, r1`` and ``lo, hi == 0, r1 - r0``, so
+    a path that needs no halo iterates the same generator and ignores the last
+    four values.  The schedule is pure integer arithmetic and is what the
+    banded paths' byte-identity against the whole grid rests on, so it is
+    stated once rather than re-derived per site.
+    """
+    for r0 in range(0, n_rows, chunk_rows):
+        r1 = min(n_rows, r0 + chunk_rows)
+        h0 = max(0, r0 - halo)
+        h1 = min(n_rows, r1 + halo)
+        lo, hi = _band_in_halo(r0, r1, h0)
+        yield r0, r1, h0, h1, lo, hi
 
 
 def _screen_exp(opd: Any, k0: float, xp: Any) -> Any:
@@ -6698,8 +6744,7 @@ def _apply_real_lens_impl(
         keeps ``_obl_p0*`` a pair of floats through a leading plate.  Reproduce
         the reduction without materialising the grid; a powered surface
         short-circuits on the first band."""
-        for _r0 in range(0, Ny, cr):
-            _r1 = min(Ny, _r0 + cr)
+        for _r0, _r1, *_ in _row_bands(Ny, cr):
             _s = _surface_sag_general(
                 _x_sq[None, :] + _y_sq[_r0:_r1, None], R, kc, asph)
             if bool(xp.any(_s)):
@@ -6720,8 +6765,7 @@ def _apply_real_lens_impl(
         correction is estimator-only (``screen_obliquity=False``)."""
         nonlocal _obl_p0x, _obl_p0y, _obl_p0_src, _obl_p0_dst, _obl_p0_pending
         _src_x, _src_y = _obl_p0_src
-        _lo = r0 - _h0
-        _hi = _lo + (r1 - r0)
+        _lo, _hi = _band_in_halo(r0, r1, _h0)
         _ok_h = sag_h
         if bool(xp.any(xp.isnan(sag_h))):
             _ok_h = xp.where(xp.isnan(sag_h), 0.0, sag_h)
@@ -7215,19 +7259,16 @@ def _apply_real_lens_impl(
                 _tf_begin_surface()
             if _obl_here:
                 _obl_begin_surface()
-            for r0 in range(0, Ny, cr):
-                r1 = min(Ny, r0 + cr)
+            for r0, r1, _h0, _h1, _lo, _hi in _row_bands(Ny, cr, _hw):
                 if _obl_here or _tf_here:
                     # sag on a halo: the obliquity gradients need one row
                     # either side (two when the R1 drift term is live); the
                     # tangent-facet screen needs three (two for the remap
-                    # rung) -- see the derivation above ``_tf_sl``.
-                    _h0 = max(0, r0 - _hw)
-                    _h1 = min(Ny, r1 + _hw)
-                    _lo = r0 - _h0
+                    # rung) -- see the derivation above ``_tf_sl``.  ``_hw`` is
+                    # the halo width the generator widened the band by.
                     sag_h = _surface_sag_general(
                         _x_sq[None, :] + _y_sq[_h0:_h1, None], R, kc, asph)
-                    sag_b = sag_h[_lo:_lo + (r1 - r0)]
+                    sag_b = sag_h[_lo:_hi]
                 else:
                     _h_b = (_x_sq[None, :] + _y_sq[r0:r1, None]
                             if h_sq_axis is None else h_sq_axis[r0:r1])
@@ -7355,25 +7396,19 @@ def _apply_real_lens_impl(
                 _tf_begin_surface()
             if _obl_here:
                 _obl_begin_surface()
-            for r0 in range(0, Ny, cr):
-                r1 = min(Ny, r0 + cr)
-                # 1-row halo so central-difference gradients on the band match
-                # the whole-grid np.gradient result exactly; the true array
-                # edges (rows 0 and Ny-1) keep their one-sided stencil in the
-                # first / last band.  ``sag_halo`` built from the axis vectors
-                # is byte-identical to slicing the full-grid sag
-                # (_surface_sag_general is pointwise in h_sq).  v5.35.3: the
-                # halo widens to 2 rows when the R1 drift term is live (it
-                # differentiates a quantity that is itself a gradient); the
-                # band's OWN gradient rows are unchanged either way, since
-                # np.gradient's interior stencil does not know how far the
-                # array extends.
-                _h0 = max(0, r0 - _hw)
-                _h1 = min(Ny, r1 + _hw)
+            # 1-row halo so central-difference gradients on the band match the
+            # whole-grid np.gradient result exactly; the true array edges (rows
+            # 0 and Ny-1) keep their one-sided stencil in the first / last band
+            # because :func:`_row_bands` clips the halo there.  ``sag_halo``
+            # built from the axis vectors is byte-identical to slicing the
+            # full-grid sag (_surface_sag_general is pointwise in h_sq).  The
+            # halo widens to 2 rows when the R1 drift term is live (it
+            # differentiates a quantity that is itself a gradient); the band's
+            # OWN gradient rows are unchanged either way, since np.gradient's
+            # interior stencil does not know how far the array extends.
+            for r0, r1, _h0, _h1, _lo, _hi in _row_bands(Ny, cr, _hw):
                 h_sq_halo = _x_sq[None, :] + _y_sq[_h0:_h1, None]
                 sag_halo = _surface_sag_general(h_sq_halo, R, kc, asph)
-                _lo = r0 - _h0
-                _hi = _lo + (r1 - r0)
                 _dsag_dy_h, _dsag_dx_h = xp.gradient(sag_halo, dy, dx)
                 dsag_dy_b = _dsag_dy_h[_lo:_hi]
                 dsag_dx_b = _dsag_dx_h[_lo:_hi]

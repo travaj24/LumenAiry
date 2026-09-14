@@ -1095,7 +1095,8 @@ class LensConfig:
         return tuple(sorted(out))
 
     def to_kwargs(self, *, entry_point: Optional[str] = None,
-                  include_defaults: bool = False) -> Dict[str, Any]:
+                  include_defaults: bool = False,
+                  strict: bool = False) -> Dict[str, Any]:
         """Flatten back to a keyword mapping.
 
         Parameters
@@ -1111,34 +1112,80 @@ class LensConfig:
             Fields that entry point does not accept are dropped SILENTLY here
             -- unlike a config passed to the call itself, which raises.  That
             is the point of the method: it is the explicit "narrow this to
-            what that function understands" step.
+            what that function understands" step.  Pass ``strict=True`` to get
+            the raise instead.
         include_defaults : bool, default False
             ``False`` (default) emits only the fields that differ from their
             dataclass default -- the REQUESTS, which is what makes
             ``from_kwargs(**to_kwargs())`` a round trip and what makes the
             result safe to splat next to other keywords.  ``True`` emits every
             applicable field.
+        strict : bool, default False
+            Raise instead of dropping, when a field this config actually
+            REQUESTS -- one whose value differs from its dataclass default --
+            is not a keyword of ``entry_point``.
+
+            Silence is the right default for the narrowing step, but it is the
+            wrong answer for the caller who built a config for one engine and
+            is now splatting it into another: the request is gone from the call
+            and the answer comes back computed with the engine's own default,
+            with nothing said.  That is the "knob silently discarded" class the
+            config objects exist to make visible, and this is the switch that
+            turns it into a refusal.  A field left at its default is NOT a
+            request and is dropped either way -- dropping it changes no
+            argument -- so ``strict=True`` is quiet about those, including
+            under ``include_defaults=True``.
+
+            The explicit "yes, drop them" statement remains
+            :meth:`narrowed_to`, which resets the unaccepted fields to their
+            defaults; ``cfg.narrowed_to(ep).to_kwargs(entry_point=ep,
+            strict=True)`` therefore never raises.
 
         Returns
         -------
         dict
+
+        Raises
+        ------
+        ValueError
+            If ``entry_point`` is not a real-lens entry point; if ``strict`` is
+            set without one; or, under ``strict``, if a requested field is not
+            one of that entry point's keywords.
         """
         if entry_point is not None and entry_point not in _GEOMETRY_FOR:
             raise ValueError(
                 f"LensConfig.to_kwargs: entry_point={entry_point!r} is not a "
                 f"real-lens entry point.  Known: {list(ENTRY_POINTS)}.")
+        if strict and entry_point is None:
+            raise ValueError(
+                "LensConfig.to_kwargs: strict=True needs entry_point=...; "
+                "with no entry point every field is emitted under its own "
+                "name, so nothing is narrowed and nothing can be dropped.")
         out: Dict[str, Any] = {}
+        dropped: List[str] = []
         for attr, dcls, table in _GROUPS:
             obj = getattr(self, attr)
             allowed = table[entry_point] if entry_point is not None else None
             for f in fields(dcls):
                 value = getattr(obj, f.name)
-                if not include_defaults and _same(value, f.default):
+                is_request = not _same(value, f.default)
+                if not include_defaults and not is_request:
                     continue
                 if allowed is None:
                     out[f.name] = value
                 elif f.name in allowed:
                     out[allowed[f.name]] = value
+                elif is_request:
+                    dropped.append(f"{f.name}={value!r} ({attr})")
+        if dropped and strict:
+            raise ValueError(
+                f"LensConfig.to_kwargs: entry_point={entry_point!r} has no "
+                f"keyword for {len(dropped)} requested field(s): "
+                f"{', '.join(sorted(dropped))}.  Under strict=True a request "
+                f"that the entry point cannot carry is a refusal, not a "
+                f"silent drop.  Use .narrowed_to({entry_point!r}) to reset "
+                f"them to their defaults on purpose, or drop strict=True to "
+                f"keep the old silent narrowing.")
         return out
 
     def narrowed_to(self, entry_point: str) -> 'LensConfig':

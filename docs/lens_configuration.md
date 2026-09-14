@@ -398,20 +398,28 @@ and the entry point would keep the prescription-dependent ones. Effort ~4 h.
 
 ## Module layout
 
-The lens family carries three genuine module↔module import cycles that execute
+The lens family carries **two** genuine module↔module import cycles that execute
 at import time (audit 2026-09-11, TESTS-ARCH "Import cycles" counted four;
-re-measured 2026-09-12 with a module-level-only AST walk):
+re-measured with a module-level-only AST walk):
 
 ```
 _lens_real   <-> lenses
-_lens_traced <-> lenses
 lenses       <-> lenses_maslov
 ```
 
-The audit's fourth, `_lens_thin <-> lenses`, is **gone**: `_lens_thin` needed
-only `CUPY_AVAILABLE` and the lazy `cp`, and both now come from the leaf
-`lumenairy/backend/_optional.py`. That was the two-line quarter of this item
-and it has landed.
+The audit's `_lens_thin <-> lenses` is **gone**: `_lens_thin` needed only
+`CUPY_AVAILABLE` and the lazy `cp`, and both now come from the leaf
+`lumenairy/backend/_optional.py`. That was the two-line quarter of this item.
+
+`_lens_traced <-> lenses` is **gone** too: that back-edge carried exactly one
+name, `_warn_if_aperture_exceeds_grid`, and the grid-versus-aperture
+bookkeeping now lives in the leaf `elements/_lens_kernels.py`
+(`_collect_semi_diameters`, `check_grid_vs_apertures`,
+`recommend_grid_for_prescription`, `_warn_if_aperture_exceeds_grid`), which
+imports `numpy` and `warnings` and nothing from `lumenairy`. `lenses.py`
+re-exports all four, so every `lenses.check_grid_vs_apertures` and
+`from .lenses import _warn_if_aperture_exceeds_grid` resolves unchanged and the
+objects are identical (`is`).
 
 `lenses.py` is the family's public re-export hub: it imports all eight sibling
 modules at module scope. The remaining back-edges are small and completely
@@ -419,8 +427,7 @@ enumerated:
 
 | back-edge | what it imports from `lenses` |
 |---|---|
-| `_lens_real` | `_warn_if_aperture_exceeds_grid`, `surface_sag_biconic`, `surface_sag_general` |
-| `_lens_traced` | `_warn_if_aperture_exceeds_grid` |
+| `_lens_real` | `surface_sag_biconic`, `surface_sag_general` |
 | `lenses_maslov` | `NUMEXPR_AVAILABLE`, `_ensure_numexpr_loaded`, `_fit_normaliser`, `_multi_indices_total_degree`, `_warn_if_aperture_exceeds_grid` |
 
 `lens_config.py` is deliberately a **leaf**: it imports nothing from
@@ -429,26 +436,45 @@ tuples through an in-function import, cached), so the seven entry points can
 depend on it without adding an edge in the other direction. Adding it created
 no new cycle — verified by the same walk.
 
-### The plan for the four cycles
+### The plan for the two remaining cycles
 
-Extract the shared leaf `elements/_lens_kernels.py` holding exactly the seven
-names above, and repoint the three back-edges at it. `lenses.py` keeps
-re-exporting all eight so every existing `from lumenairy.elements.lenses import
-surface_sag_general` keeps working, and the shell-vs-canonical walker
+Both close the same way the `_lens_traced` one did: move the name into
+`elements/_lens_kernels.py` and repoint the back-edge at the leaf, leaving
+`lenses.py` re-exporting it so every existing `from lumenairy.elements.lenses
+import surface_sag_general` keeps working and the shell-vs-canonical walker
 (`tests/unit/test_v5_2_walker_shell_vs_canonical.py`) sees the same surface.
 
-Not done in this pass, for two reasons, both concrete:
+**`_lens_real <-> lenses`** needs `surface_sag_general` and
+`surface_sag_biconic` to move, and with them the optional-backend plumbing they
+read from module scope: `_get_aspheric_sag_accum_numba`, `_NUMBA_KERNELS`,
+`_load_numba` / `_njit` / `_prange` / `_numba`, `_NUMBA_AVAILABLE`,
+`_is_cupy_array`, `_ensure_cupy_loaded` and the lazy `cp` alias. Two of those
+are live state rather than definitions, which is the whole difficulty:
 
-1. **It cannot be proved bit-identical by relocation alone.**
-   `surface_sag_general` and `surface_sag_biconic` are several hundred lines
-   each with their own accumulated guards; moving them is a large diff whose
-   only defensible gate is the `-k real_lens` slice plus the WP-A2/A3/A4 files,
-   and the audit itself budgets 3 days for it.
-2. **It collides with the history relocation.** WP-A17 part 2 is moving the
-   `v<N>.<N> (audit …)` narrative blocks out of exactly these files (the audit
-   measures −10 500 lines, `_lens_traced.py` 13 228 → ~8 300). Two large
-   mechanical diffs over the same regions in the same round is how a
-   relocation loses a guard.
+* `_NUMBA_AVAILABLE` is **monkeypatched to `False` by the test suite** to reach
+  the pure-NumPy arm on a box that has numba, and `_load_numba` reads it at
+  call time. If it moves, `lenses._NUMBA_AVAILABLE = False` stops being the
+  gate and every such test silently exercises the numba arm instead.
+* `cp` and `_ne` are populated on first use, so a plain
+  `from ._lens_kernels import cp` in `lenses` would bind a **stale `None`**
+  rather than a live view.
+
+The mechanical answer to both is a PEP 562 `__getattr__` on `lenses.py` that
+forwards unknown attributes to `_lens_kernels` (the shape `_lens_thin` already
+uses for its `cp` forward), so `lenses._NUMBA_AVAILABLE = False` reaches the
+leaf and `lenses.cp` stays live. That forward is what the move needs proving,
+not the sag arithmetic, which is pointwise and relocates unchanged. Gate: the
+`-k real_lens` slice plus the WP-A2/A3/A4/A16/B2/B10 files, and the
+44-configuration banded byte-identity matrix.
+
+**`lenses <-> lenses_maslov`** is a one-line edit --
+`lenses_maslov.py:282`'s `from .lenses import (...)` becomes
+`from ._lens_kernels import _warn_if_aperture_exceeds_grid` plus
+`from .lenses import (NUMEXPR_AVAILABLE, _ensure_numexpr_loaded,
+_fit_normaliser, _multi_indices_total_degree)`, and the edge closes entirely
+once those four names follow into the leaf as well. `lenses_maslov.py` is owned
+by another work package in this round, so the edit is written down here rather
+than made.
 
 `lens_config.py` adds no edge of its own to any of this, and
 `tests/unit/test_audit2609_a16_verify_config_and_arch.py::test_lens_config_stays_a_leaf`

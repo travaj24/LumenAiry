@@ -1595,6 +1595,35 @@ def _cached_glass_value(glass_name, wavelength, compute):
     return value
 
 
+#: Monotone counter of the times the library itself has invalidated a glass
+#: resolution -- :func:`_invalidate_glass_name` (a re-pointed registry entry)
+#: and :func:`_clear_glass_caches` (a full drain) both bump it.
+#:
+#: WHAT IT IS FOR.  Downstream caches hold DERIVED glass values -- most of them
+#: ``raytrace.jax_trace._build_jax_prescription``'s compiled prescription,
+#: which folds a whole surface list's indices into one traced object.  Those
+#: caches key on the prescription, not on the glass registry, so a glass that
+#: is re-pointed underneath them keeps serving the old index with nothing said.
+#: Keying on ``(prescription_key, glass_registry_generation())`` makes the
+#: invalidation automatic and costs one integer compare.
+#:
+#: WHAT IT IS NOT.  ``GLASS_REGISTRY`` is a plain dict and a caller may assign
+#: into it directly (the :func:`get_glass_index` docstring's own example does),
+#: which cannot bump a counter.  That is the SAME contract the value cache has
+#: always had -- a direct re-point wants :func:`_invalidate_glass_name` -- and
+#: this counter neither widens nor narrows it.
+_GLASS_GENERATION = 0
+
+
+def glass_registry_generation() -> int:
+    """The current value of the glass-invalidation counter; see
+    :data:`_GLASS_GENERATION` for what does and does not move it.
+
+    Monotone non-decreasing within a process, so a downstream cache can hold
+    the value it was built at and compare."""
+    return _GLASS_GENERATION
+
+
 def _invalidate_glass_name(glass_name):
     """Drop every cached resolution for ``glass_name``: the
     ``_glass_cache`` object (stale ``_FixedIndex`` or a
@@ -1607,10 +1636,14 @@ def _invalidate_glass_name(glass_name):
     performs on overwrite.  The warn-once sets are intentionally left
     alone (a repeated warning is noisier than a stale one is harmful).
     """
+    global _GLASS_GENERATION
     with _GLASS_CACHE_LOCK:
         _glass_cache.pop(glass_name, None)
         for _key in [k for k in _glass_value_cache if k[0] == glass_name]:
             del _glass_value_cache[_key]
+        # Bumped INSIDE the lock, with the drop, so a reader that sees the new
+        # generation cannot still see the old value.
+        _GLASS_GENERATION += 1
 
 
 def _catalogue_page_wavelength_range_m(material):
@@ -1763,6 +1796,39 @@ def get_glass_index(glass_name: str, wavelength: float) -> float:
             return float(n.real)
         return float(n)
 
+    # THE MEMO IS READ HERE, not four branches down, because everything below
+    # this line is a pure function of ``(glass_name, wavelength)`` over an
+    # IMMUTABLE catalogue -- the validity comparison, the sentinel dispatch and
+    # the closed-form evaluation alike -- while the four ``_cached_glass_value``
+    # calls below only ever short-circuited the last of those three.
+    #
+    # MEASURED on this box (20 000 calls each, threads pinned): a WARM
+    # ``get_glass_index('N-BK7', 1.55 um)`` cost 13.283 us against 0.140 us for
+    # ``'air'`` (which returns before this point), and clearing the value cache
+    # before every call cost 13.990 us -- i.e. the evaluation the old memo
+    # saved was 0.7 us of 14, and the other 13.3 us was the walk down to it,
+    # dominated by :func:`_maybe_warn_outside_validity`'s array comparison on a
+    # scalar.  ``trace()`` pays two of these per call.
+    #
+    # This reads the SAME key the four stores below write, so a hit returns the
+    # same float the walk would have produced, and nothing is cached that was
+    # not already cached.  It is also WARNING-NEUTRAL: a hit can only happen
+    # after a miss for the same ``(name, wavelength)`` already ran
+    # ``_maybe_warn_outside_validity``, whose own warn-once set is keyed more
+    # COARSELY (0.1 nm against this key's 1 pm), so every warning this skips
+    # was already suppressed by that set.  ``_clear_glass_caches`` empties both
+    # together, so a cleared cache re-warns exactly as it did.
+    # ``isinstance`` first because it is ~1 us cheaper than ``np.ndim`` on the
+    # Python float every in-tree caller passes, and ``np.float64`` is a float
+    # subclass; the ``np.ndim`` fallback keeps float32 / 0-d arrays scalar.
+    if isinstance(wavelength, (float, int)) or np.ndim(wavelength) == 0:
+        _memo_key = (glass_name, round(float(wavelength) * 1e12))
+        with _GLASS_CACHE_LOCK:
+            _memo_hit = _glass_value_cache.get(_memo_key)
+            if _memo_hit is not None:
+                _glass_value_cache.move_to_end(_memo_key)
+                return _memo_hit
+
     # Validity-range warning.  Emitted before the actual lookup so the caller
     # sees the warning even if the lookup returns successfully.  Skipped for
     # non-physical entries (callables, '__thin_lens__', user-fixed) which are
@@ -1884,10 +1950,26 @@ def get_glass_index(glass_name: str, wavelength: float) -> float:
             shelf=shelf, book=book, page=page)
 
     material = _glass_cache[glass_name]
-    n = material.get_refractive_index(wavelength * 1e9, unit='nm')
-    _require_finite_catalogue_index(
-        'get_glass_index', glass_name, material, wavelength, n)
-    return n
+
+    def _live_catalogue_index():
+        n = material.get_refractive_index(wavelength * 1e9, unit='nm')
+        _require_finite_catalogue_index(
+            'get_glass_index', glass_name, material, wavelength, n)
+        return n
+
+    # MEMOISED like the bundled closed forms, and for the same reason: a
+    # refractiveindex.info page is an immutable table plus an interpolator, and
+    # both of the events that can re-point it -- ``_invalidate_glass_name`` and
+    # ``_clear_glass_caches`` -- already drop this cache alongside the
+    # ``RefractiveIndexMaterial`` itself.  It is the arm that MATTERS: measured
+    # on this box a warm ``get_glass_index('N-BK7', 1.55 um)`` -- a catalogue
+    # name when ``refractiveindex`` is installed -- cost 13.283 us against
+    # 1.687 us for the bundled-Sellmeier ``'N-SF11'``, because only the latter
+    # reached a memo at all.  The refusal on a non-finite interpolation is
+    # inside the memoised body, so a page with no data at this wavelength
+    # raises on every call rather than caching a refusal.
+    return _cached_glass_value(glass_name, wavelength,
+                               _live_catalogue_index)
 
 
 def get_glass_index_complex(glass_name: str,
@@ -2068,6 +2150,7 @@ def _clear_glass_caches() -> None:
     but has no _glass_cache entry").  They are a handful of tiny
     ``_FixedIndex`` objects, so retaining them costs nothing.
     """
+    global _GLASS_GENERATION
     with _GLASS_CACHE_LOCK:
         _glass_value_cache.clear()
         _validity_warned.clear()
@@ -2075,6 +2158,9 @@ def _clear_glass_caches() -> None:
         for _name in [n for n in _glass_cache
                       if GLASS_REGISTRY.get(n) != _USER_FIXED_SENTINEL]:
             del _glass_cache[_name]
+        # A drain invalidates every DERIVED glass value too -- see
+        # :data:`_GLASS_GENERATION`.
+        _GLASS_GENERATION += 1
 
 
 # Canonical v4.16.0 enrollment idiom (late-binding lambda so

@@ -56,21 +56,45 @@ def _gauss(n, dx, w, xc=0.0, yc=0.0):
 
 
 def _abcd_field(xo, w_in, r_beam, z, lam):
-    """Analytic Gaussian at distance ``z``, from the ``q``-parameter definition
-    ``1/q = 1/R - i lam/(pi w^2)``, ``q(z) = q + z``.  Carries the Gouy phase as
-    ``angle(q/q2)`` and the ``w_in/w(z)`` amplitude, so it is a complete field
-    and not just an intensity profile."""
+    """Analytic Gaussian at distance ``z``, in the WHOLE-FUNCTION form
+
+        ``E(r, z) = exp(i k z) / (1 + z/q) * exp(i k r^2 / (2 q(z)))``
+
+    with ``1/q = 1/R + i lam / (pi w^2)`` and ``q(z) = q + z``.
+
+    THE SIGN OF THE IMAGINARY PART IS THE WHOLE POINT.  This library's
+    ``exp(-i omega t)`` convention (``CONVENTIONS.md`` Section 7) pairs a
+    forward-propagating wave with ``exp(+i k z)``, and the complex curvature
+    that goes with it is ``1/q = 1/R + i lam/(pi w^2)``.  Siegman's
+    ``exp(+i omega t)`` pairing takes the conjugate, ``1/q = 1/R - i
+    lam/(pi w^2)``, and carrying the Gouy term separately as
+    ``angle(q/q2)`` on top of THAT gives the Gouy phase the WRONG SIGN in
+    this convention -- a 2 x arctan(z/zR) error, reaching exactly pi across a
+    focus.  Every assertion in this file is piston-free (each compares a
+    normalised field or a width), so nothing here failed; the oracle was
+    simply not the convention it was oracle FOR.  The whole-function form
+    above cannot carry the two halves in different conventions, because there
+    is only one ``q``: the amplitude ``|q/q2| = w_in/w(z)``, the wavefront
+    curvature and the Gouy phase are all the argument of ONE complex number.
+
+    ``wz`` is read back from the same ``q``: ``w(z) = sqrt(lam / (pi *
+    Im(1/q(z))))``, positive by construction here where the old spelling
+    needed a minus sign to undo its own conjugation.
+
+    Returns ``(E, w(z))``.  ``E`` is a complete field -- amplitude, curvature
+    and Gouy phase -- not an intensity profile, and it carries the absolute
+    piston ``exp(i k z)``, which
+    :func:`test_the_gaussian_oracle_carries_this_librarys_phase_convention`
+    pins.
+    """
     kk = 2.0 * np.pi / lam
-    q = 1.0 / (1.0 / r_beam - 1j * lam / (np.pi * w_in ** 2))
+    q = 1.0 / (1.0 / r_beam + 1j * lam / (np.pi * w_in ** 2))
     q2 = q + z
-    inv2 = 1.0 / q2
-    rz = (1.0 / np.real(inv2)) if np.real(inv2) != 0.0 else np.inf
-    wz = float(np.sqrt(-lam / (np.pi * np.imag(inv2))))
+    wz = float(np.sqrt(lam / (np.pi * np.imag(1.0 / q2))))
     xx, yy = np.meshgrid(xo, xo, indexing='xy')
     r2 = xx ** 2 + yy ** 2
-    ph = kk * z + (kk * r2 / (2.0 * rz) if np.isfinite(rz) else 0.0)
-    return ((w_in / wz) * np.exp(-r2 / wz ** 2)
-            * np.exp(1j * (ph + np.angle(q / q2)))), wz
+    return (np.exp(1j * kk * z) / (1.0 + z / q)
+            * np.exp(1j * kk * r2 / (2.0 * q2))), wz
 
 
 def _brute_containment_edge(half, zeta_cf, w_env, c, zr, margin, n=400001):
@@ -1377,3 +1401,74 @@ class TestVerifyC3:
         rel = float(np.linalg.norm(s64.astype(np.complex128) - s128)
                     / np.linalg.norm(s128))
         assert 0.0 < rel < 4.0 * float(np.finfo(np.float32).eps), rel
+
+
+# ===========================================================================
+# The oracle's own convention (WP-B11a item 17)
+# ===========================================================================
+
+def test_the_gaussian_oracle_carries_this_librarys_phase_convention():
+    """ONE ABSOLUTE, PISTON-INCLUDED assertion on :func:`_abcd_field`.
+
+    Every other use of the oracle in this file compares a NORMALISED field or
+    a width, so the Gouy phase's SIGN was invisible: the pre-B11 spelling built
+    ``1/q = 1/R - i lam/(pi w^2)`` -- Siegman's ``exp(+i omega t)`` pairing --
+    and then added ``angle(q/q2)`` on top of it, which in this library's
+    ``exp(-i omega t)`` convention (``CONVENTIONS.md`` Section 7) is the Gouy
+    phase with the wrong sign.  The error is ``2 arctan(z/zR)``, i.e. EXACTLY
+    pi across a focus, and no assertion in the file could see it.
+
+    This is the assertion that can.  For a beam at its own waist the whole
+    field on axis is ``exp(i k z) * exp(-i arctan(z / zR))`` -- the plane-wave
+    piston times a Gouy RETARDATION -- and the transverse profile at radius r
+    carries ``k r^2 / (2 R(z))`` of curvature on top of it.
+
+    MEASURED 2026-09-13 (lam = 1 um, w0 = 200 um, zR = 125.664 mm): the
+    corrected oracle reads an on-axis Gouy of 0.000000 / -0.463648 /
+    -0.785398 / -1.249046 rad at z/zR = 0 / 0.5 / 1 / 3, against
+    ``arctan(z/zR)`` = 0.000000 / +0.463648 / +0.785398 / +1.249046 -- i.e.
+    exactly ``-arctan(z/zR)``, the sign this convention requires and the
+    OPPOSITE of what the old spelling produced.  The widths and the
+    piston-free profiles are unchanged (w(z) identical to all printed digits,
+    normalised-profile difference <= 1.8e-10, which is the round-off between
+    the two algebraic spellings of the same curvature).
+    """
+    lam, w_in = 1.0e-6, 200.0e-6
+    z_r = np.pi * w_in ** 2 / lam
+    k = 2.0 * np.pi / lam
+    on_axis = np.zeros(1)
+    for z_over_zr in (0.0, 0.5, 1.0, 3.0):
+        z = z_over_zr * z_r
+        E, wz = _abcd_field(on_axis, w_in, np.inf, z, lam)
+        # (a) the width is the textbook one
+        assert abs(wz - w_in * np.sqrt(1.0 + z_over_zr ** 2)) <= 1e-12 * w_in
+        # (b) the ABSOLUTE on-axis phase is the piston MINUS the Gouy shift
+        got = complex(E[0, 0])
+        want = np.exp(1j * (k * z - np.arctan(z_over_zr)))
+        # DERIVED bar.  The piston ``k z`` reaches 3.95e+05 rad at z = 3 zR
+        # here, so ``exp(1j k z)`` carries ``eps * k z`` ~ 8.8e-11 rad of
+        # representation error before any physics -- a tighter bar would be
+        # measuring float64, not the convention.  1e-9 is ~11x that and nine
+        # decades below the 2 arctan(z/zR) (0.93 rad at z = 0.5 zR) the wrong
+        # convention produces.
+        assert abs(got / abs(got) - want) <= 1e-9, (
+            f'z = {z_over_zr} zR: on-axis phase {np.angle(got):+.9f} rad '
+            f'against the convention\'s {np.angle(want):+.9f}; the difference '
+            f'{np.angle(got / want):+.9f} rad is the Gouy sign.')
+        # (c) and the sign is not accidentally symmetric: the WRONG convention
+        # differs by exactly 2 arctan(z/zR), which is the falsification arm
+        wrong = np.exp(1j * (k * z + np.arctan(z_over_zr)))
+        if z_over_zr > 0.0:
+            assert abs(got / abs(got) - wrong) > 1e-3, (
+                'the oracle agrees with BOTH sign conventions, so this test '
+                'cannot tell them apart')
+
+    # (d) across a focus the total swing is exactly pi -- the statement the
+    # brief makes, and the reason a piston-free file never noticed
+    far = 1e9 * z_r
+    E_minus, _ = _abcd_field(on_axis, w_in, np.inf, -far, lam)
+    E_plus, _ = _abcd_field(on_axis, w_in, np.inf, +far, lam)
+    gouy = (np.angle(complex(E_plus[0, 0]) * np.exp(-1j * k * far))
+            - np.angle(complex(E_minus[0, 0]) * np.exp(1j * k * far)))
+    assert abs(abs(gouy) - np.pi) < 1e-6, (
+        f'the Gouy swing across a focus is {gouy:+.9f} rad, not +/-pi')

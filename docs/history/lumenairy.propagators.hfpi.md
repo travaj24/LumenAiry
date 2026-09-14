@@ -1,13 +1,14 @@
 <!-- lumenairy-history-doc
 module: lumenairy/propagators/hfpi.py
-ast_sha256: 77ccbef743be1f6dc941b75e2c9a65065604d5fdf3d5aa0f64a864d6c6948dd6
-token_sha256: 0ecb1e2d13032a3cea9c007aabe4449a56b7113c1e1466aac5d0b792d3c32186
+ast_sha256: 53935e9745803d949c9cd88d5b82d05a822ac6ff73d9ef796722f63576b8eeec
+token_sha256: e9f13c9b20c255b1c2f51911dc30a53739e0b5895d04f1b118b681bd0ddf78db
 pre_relocation_lines: 1658
 recorded_by: WP-A17 SWEEP-1 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
 re_recorded: 2026-09-13 -- WP-B3 (audit K13 + K22): propagate_hfpi_through_prescription gains z_output (a closing propagate_to_plane hop in the image-space medium) and normalisation='auto'; init_paths_stratified gains sampler='jittered'|'sobol', with the jittered draw moved verbatim into _jittered_cube_draw beside the new _sobol_cube_draw; every default byte-identical
 re_recorded: 2026-09-13 -- WP-B3: the normalisation selector's refusal message states the free-space-legs half of the 'auto' rule that the docstring already carried
 re_recorded: 2026-09-13 -- VERIFY-WP-B3 (audit K13): normalisation='auto' gains its third condition -- _walk_zero_length_reemission declines the photometric branch where a stop coincides with the plane the paths were last emitted from (which previously raised out of _reemission_measure), the forced-'physical' refusal moves to the walk's own altitude, and the legacy warning names the condition that actually failed instead of always the missing output plane; every array byte-identical
+re_recorded: 2026-09-13 -- WP-B11a: the Collins readout's K1 applicability window stated on the public transport docstring (item 20); PMM2DStackHybrid's formulation/cascade/symmetry refuse an out-of-vocabulary assignment (item 19); sampling= on the free-space HFPI pair (item 12)
 -->
 
 # Version history -- `lumenairy/propagators/hfpi.py`

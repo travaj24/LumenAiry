@@ -1040,10 +1040,22 @@ def _pmm_jones_2d_at(period_x, period_y, x_walls, y_walls, tile_i, eps_sup,
     # also being the slowest.
     sym_pairs = None
     _sym = _symmetry_on(symmetry)
+    # The source-free projected operators, built ONCE for this layer.  Both the
+    # even-fold probe below and the cascade after it need them, and on an
+    # OUT-OF-PLANE or SLANTED cell the probe answers None -- so without the
+    # hoist the whole per-axis projection and ``_proj`` sandwich ran twice for
+    # one layer, on exactly the cells that are most expensive to assemble.
+    # ``_tensor_layer_modes`` only READS this dict (it rebinds its own locals
+    # for the ``keep`` restriction), so one build serves both calls and the
+    # answer is bit-identical by construction.  ``stack2d`` already passes its
+    # ops in this shape.
+    _tops = _tensor_projected_ops(ax, ay, x_walls, y_walls, tile_i, ox, oy,
+                                  formulation)
     if _sym and kt < 1e-12:
         ops = _tensor_layer_modes(
             ax, ay, x_walls, y_walls, tile_i, k0, kx0, ky0, ox, oy, kxv_box,
-            kyv_box, formulation, return_ops=True, slant=slant, keep=keep)
+            kyv_box, formulation, return_ops=True, slant=slant, keep=keep,
+            ops=_tops)
         if ops is not None:                        # in-plane, UNSLANTED only
             from ..rcwa._core import _symmetric_cascade_rt, _tensor_PQ
             GxF, GyF, Cxx, Cxy, Cyx, Cyy, EZZ = ops
@@ -1058,7 +1070,8 @@ def _pmm_jones_2d_at(period_x, period_y, x_walls, y_walls, tile_i, eps_sup,
     if sym_pairs is None:
         modes = _tensor_layer_modes(
             ax, ay, x_walls, y_walls, tile_i, k0, kx0, ky0, ox, oy, kxv_box,
-            kyv_box, formulation, slant=slant, block_eig=_sym, keep=keep)
+            kyv_box, formulation, slant=slant, block_eig=_sym, keep=keep,
+            ops=_tops)
 
         if len(modes) == 3:
             # -- in-plane: symmetric +/-lam cascade (the rcwa_jones_2d tail) --

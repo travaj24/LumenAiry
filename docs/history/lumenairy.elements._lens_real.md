@@ -1,7 +1,7 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/_lens_real.py
-ast_sha256: 298d7d955015dad1c7c8283695acf1a78273d161f5c8f42615632e030d3b9603
-token_sha256: 7ef09bde79a00b72302d26d7a605c5e7c24d1e22cb9380682db3f3de18bb767e
+ast_sha256: 232b4ce941d535b6fb3b8c8951283f0367f69b9638b3d8c734383f6730af39e7
+token_sha256: c1af729ef26832e193d2316da0e5d3260ea9acf0a2555a367835c9c6c559497d
 pre_relocation_lines: 8117
 recorded_by: WP-A17 SWEEP-4 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
@@ -10,6 +10,8 @@ re_recorded: 2026-09-13 -- WP-B2 (audit 2026-09-11 L9): the 2-D displaced remap'
 re_recorded: 2026-09-13 -- WP-B3b (K6): _propagate_through_glass's two resample_field calls gate method= on whether the lens grid's window fits inside one chirp-Z reconstruction period; in glass lam_medium = wavelength/n puts these legs on the spline side far more often than the free-space chain
 re_recorded: 2026-09-13 -- VERIFY-WP-B2 (audit 2026-09-11 L9 re-verification): the 1-D symmetric remap _apply_displaced_remap cuts its carried envelope at the largest centred window the field grid holds, closing the same input-window asymmetry WP-B2 fixed in the 2-D remap and deferred here; _warn_if_remap_lattice_smooths quotes the pitch the trace actually uses (the fan is _DISP_REMAP_2D_FAN_FACTOR wider than the aperture) so the displaced_n_side it names really clears the field-pitch bar
 re_recorded: 2026-09-13 -- VERIFY-B3b V5 (orchestrator): the in-glass 'fresnel' gap leg refuses an anamorphic pitch and a non-square grid, as the 'sas' branch does -- the resample back reads one pitch and one N_out, so the y axis was scaled by the x ratio
+re_recorded: 2026-09-13 -- the row-band schedule the chunked surface paths iterate is one generator (_row_bands / _band_in_halo); four copies of the halo arithmetic removed, 56/56 bit-identical (WP-B11a item 3)
+re_recorded: 2026-09-13 -- the grid-versus-aperture bookkeeping moved to the new elements/_lens_kernels.py leaf and is re-exported; _lens_traced reads the leaf, closing its module-level 2-cycle with the lenses facade (WP-B11a item 4)
 -->
 
 # Version history -- `lumenairy/elements/_lens_real.py`

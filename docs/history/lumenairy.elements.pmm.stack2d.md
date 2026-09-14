@@ -1,11 +1,12 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/pmm/stack2d.py
-ast_sha256: a85203261eeab8f46390a2597c8349df968cb296736cdaabdb72c3e0bd37cf6b
-token_sha256: 37714728e07f83d303f9d86e1839979955151b41b6ff6a4a6408c91fc328e65d
+ast_sha256: e38f338d9030d90f1ac215a5e0db036aa0c5e9f7f101f6f847c036387b63ed45
+token_sha256: 603f4cf16ccfd503e18c59fdd1c49326ee875bf16f2ba15128df235544e09f1e
 pre_relocation_lines: 2261
 recorded_by: WP-A17 SWEEP-2 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
 re_recorded: 2026-09-13 -- WP-B6 (audit 2026-09-11 G10(d)): _geom_cache carries a tensor layer's k0-free projected operators (_tensor_projected_ops) beside the scalar lops, and _geom_key gains the formulation the cached EZZ rule depends on; every operator is bit-identical with and without the cache
+re_recorded: 2026-09-13 -- WP-B11a: the Collins readout's K1 applicability window stated on the public transport docstring (item 20); PMM2DStackHybrid's formulation/cascade/symmetry refuse an out-of-vocabulary assignment (item 19); sampling= on the free-space HFPI pair (item 12)
 -->
 
 # Version history -- `lumenairy/elements/pmm/stack2d.py`

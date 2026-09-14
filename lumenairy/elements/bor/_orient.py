@@ -42,6 +42,7 @@ band, and the two-sided measurement that replaced it, is in
 """
 from __future__ import annotations
 
+from ..._branchcut import band_mask as _band_mask, negate_forward as _negate_forward
 from ...backend.array import array_namespace
 
 #: THE CLASSIFIER BAND.  ``|Im q| <= band * scale`` calls a mode PROPAGATING
@@ -242,9 +243,14 @@ def forward_orient(q, flux, k0, *, xp=None, band=_BOR_CUT_BAND_REL,
     # strictly positive (its floor is 1e-300 times 1e-9, a subnormal but not a
     # zero), so ``|Im q| == 0`` always classifies PROPAGATING.  The vectorized
     # shape is kept.
-    prop = xp.abs(xp.imag(q)) <= band * scale
+    # The band comparison is the shared one
+    # (:func:`lumenairy._branchcut.band_mask`); the SCALE it is taken relative
+    # to stays here, because this engine's ``q`` carries units of inverse
+    # length and floors at ``|k0|`` where the Cartesian engines floor at a
+    # dimensionless 1.0.
+    prop = _band_mask(xp.imag(q), scale=scale, band=band, xp=xp)
     flip = xp.where(prop, flux < 0.0, xp.imag(q) < 0.0)
-    return xp.where(flip, -q, q)
+    return _negate_forward(q, flip, xp=xp)
 
 
 def flux_is_strong(flux, fnrm, *, xp=None, rel=_BOR_FLUX_FALLBACK_REL):
