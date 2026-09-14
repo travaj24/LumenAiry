@@ -450,3 +450,17 @@ and one row in §8's table:
 ## 7. Changelog text
 
 `docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/WP-B2_CHANGELOG.md`
+
+---
+
+## Addendum (orchestrator, 2026-09-14): the K3 remap pins were not restated
+
+* `tests/unit/test_niche_k3_perf.py` pinned the 2-D displaced remap's K3 win -- byte-identity to the pre-K3 two-interpolator
+  Delaunay algorithm at N = 384 / 512, and ONE QHull triangulation where the pre-K3 path built two.  This package replaced that
+  construction with the structured inversion (section 2 / audit L9, a default move with a Migration note), so the three pins have
+  failed since 47bc7a79; neither this package's selection nor VERIFY-B2's ran the file, and the 5.47.0 release gate found them.
+  Restated at the close: the byte-identity pin retires (its oracle is the retired construction; `test_audit2609_b2_*` pin the
+  structured inversion), and the count pin reads ZERO triangulations and ZERO `LinearNDInterpolator`s with the historical reference
+  kept as the spy's control.  The same lesson as the WP-B7 / WP-B8 / WP-B9 follow-ups: a package that retires a construction must
+  grep the tests for its name.
+

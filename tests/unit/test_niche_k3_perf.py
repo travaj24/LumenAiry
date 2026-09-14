@@ -21,7 +21,14 @@ Guarded wins
    (docs/audits/FIX_RUNNER_PINS_2_2026_08_15.md): the old wall-clock bar
    ``t_new < 0.85 * t_old`` and the ``available_memory_bytes`` skip that
    guarded it are both gone -- see
-   ``test_remap_2d_builds_one_triangulation_not_two``.
+   ``test_remap_2d_builds_no_triangulation_since_the_structured_inversion``.
+   5.47.0 (WP-B2, audit L9): the remap no longer triangulates at all -- it
+   inverts the launch->exit map on its own structured grid, a DEFAULT
+   MOVE with a Migration note -- so the byte-identity pin against the
+   pre-K3 two-interpolator algorithm retired (its oracle IS the retired
+   construction; ``tests/unit/test_audit2609_b2_*`` pin the structured
+   inversion) and the count pin below reads ZERO triangulations, with the
+   historical two-interpolator reference kept only as the spy's control.
 
 2. ``apply_real_lens_traced(amplitude_model='ray_density')``: the ray-density
    amplitude upsample reuses the OPL upsample's coarse->full coordinate stack
@@ -158,19 +165,11 @@ def test_two_column_linearnd_equals_separate_columns():
     assert np.array_equal(q[..., 1][fb], qb[fb])
 
 
-@pytest.mark.parametrize('N', [384, 512])
-def test_remap_2d_byte_identical_to_pre_k3_two_interp(N):
-    """The optimized ``_apply_displaced_remap_2d`` is byte-identical to the
-    pre-K3 two-separate-interp algorithm (the shared-Delaunay 2-column interp is
-    an exact refactor)."""
-    dx = 8e-6
-    E_in = _gauss(N, dx, 3e-3)
-    rmap = _synthetic_ray_map(n_side=181, r_max=3.0e-3, dx=dx)
-    new = _apply_displaced_remap_2d(E_in, rmap, _WL, dx, dx)
-    ref = _remap_2d_reference(E_in, rmap, _WL, dx, dx)
-    assert new.shape == ref.shape and new.dtype == ref.dtype
-    assert np.array_equal(new, ref), (
-        f"max abs diff {np.max(np.abs(new - ref)):.3e}")
+# ``test_remap_2d_byte_identical_to_pre_k3_two_interp`` (N = 384 / 512) lived
+# here until 5.47.0.  WP-B2 replaced the Delaunay remap it was byte-identical
+# to with the structured inversion (audit L9, a default move with a Migration
+# note), so the property it pinned no longer exists; the structured inversion
+# is pinned against its own references in ``tests/unit/test_audit2609_b2_*``.
 
 
 def _count_triangulations(fn):
@@ -218,9 +217,18 @@ def _count_triangulations(fn):
     return counts, out
 
 
-def test_remap_2d_builds_one_triangulation_not_two():
-    """The K3 win is ONE Delaunay triangulation where the pre-K3 path built
-    TWO -- a CALL COUNT, not a clock.
+def test_remap_2d_builds_no_triangulation_since_the_structured_inversion():
+    """Since 5.47.0 (WP-B2, audit L9) the 2-D displaced remap builds NO
+    Delaunay triangulation and NO ``LinearNDInterpolator``: it inverts the
+    launch->exit map on its own structured grid.  The K3 win this test used
+    to pin -- ONE triangulation where the pre-K3 path built TWO -- is
+    therefore subsumed; the count is still the invariant (no runner can move
+    it), the historical two-interpolator reference is run alongside as the
+    spy's CONTROL (it must still count two of each, or the spy is blind), and
+    the two outputs are no longer asserted equal -- the move is documented in
+    the 5.47.0 Migration Guide and pinned in ``test_audit2609_b2_*``.
+
+    History of the pin before 5.47.0 follows.
 
     2026-08-15 (docs/audits/FIX_RUNNER_PINS_2_2026_08_15.md).  This test used
     to assert ``t_new < 0.85 * t_old``.  That is a per-build wall-clock fact
@@ -275,21 +283,21 @@ def test_remap_2d_builds_one_triangulation_not_two():
         f"LinearNDInterpolators by construction; counted "
         f"{c_old['linearnd']} -- the spy is not seeing the constructions, "
         f"so the count below proves nothing.")
-    assert c_new['linearnd'] == 1, (
-        f"the optimized remap must build ONE two-column "
-        f"LinearNDInterpolator; counted {c_new['linearnd']}.")
+    assert c_new['linearnd'] == 0, (
+        f"the structured inversion builds no LinearNDInterpolator; counted "
+        f"{c_new['linearnd']} -- a triangulating remap has crept back.")
     assert c_old['delaunay'] == 2, (
         f"pre-K3 = two QHull triangulations of the same scattered points; "
         f"counted {c_old['delaunay']}.")
-    assert c_new['delaunay'] == 1, (
-        f"K3 win 1 is ONE shared QHull triangulation for the amplitude and "
-        f"OPL remaps; counted {c_new['delaunay']} -- the two-column "
-        f"LinearNDInterpolator has stopped sharing its Delaunay.")
+    assert c_new['delaunay'] == 0, (
+        f"the structured inversion builds no QHull triangulation; counted "
+        f"{c_new['delaunay']}.")
 
-    # ... and the two paths are still the same computation at this grid.
+    # ... and the two paths still answer on the same grid; their VALUES
+    # differ by the documented L9 move (Migration Guide, 5.47.0), which
+    # ``test_audit2609_b2_*`` measure -- not asserted equal here.
     assert out_new.shape == out_old.shape and out_new.dtype == out_old.dtype
-    assert np.array_equal(out_new, out_old), (
-        f"max abs diff {np.max(np.abs(out_new - out_old)):.3e}")
+    assert np.all(np.isfinite(out_new))
 
 
 # ===========================================================================

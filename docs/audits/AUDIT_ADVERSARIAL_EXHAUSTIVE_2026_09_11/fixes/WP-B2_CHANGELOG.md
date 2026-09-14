@@ -12,7 +12,7 @@ deferred, §6 item 2).  Files: `lumenairy/elements/_lens_real.py`,
 The 2-D transverse-walk remap carries the input envelope along traced rays, and
 it sampled that envelope at the launch points with
 `map_coordinates(..., mode='constant', cval=0.0)`
-(`_lens_real.py:2573`).  The field axis `(arange(N) - N/2) * dx` runs from
+(`_lens_real.py:2629`).  The field axis `(arange(N) - N/2) * dx` runs from
 `-(N/2) dx` to `+(N/2 - 1) dx` — one whole sample further on the −x side — so a
 ray launched in the band `(x[-1], x[-1] + dx]` sampled off the grid and carried
 NOTHING, while its mirror between `x[0] - dx` and `x[0]` carried the full
@@ -32,7 +32,7 @@ effect presented as a lattice instability:
 | **1025** | 10.06 µm | **yes** | 812 | **6.292e-01** |
 
 The remap now carries the envelope over the largest CENTRED window the caller's
-grid holds — `|x| <= x[-1]`, `|y| <= y[-1]` (`_lens_real.py:2596`) — so a ray on
+grid holds — `|x| <= x[-1]`, `|y| <= y[-1]` (`_lens_real.py:2652`) — so a ray on
 one side of the axis can never carry amplitude its mirror cannot.  Image-plane
 mirror residual of the +d / −d pair, an exact symmetry of the physics:
 
@@ -59,7 +59,7 @@ fan is a REGULAR lattice, so the exit map is a smooth curvilinear grid: it is
 now inverted on that grid — Newton on the bilinear interpolant of `(x_out,
 y_out)` and of its lattice gradients, seeded from the map's own global affine
 part — and the transported amplitude and OPL are read at the launch coordinate
-that comes back (`_lens_real.py:2388` `_remap2d_interp_structured`,
+that comes back (`_lens_real.py:2444` `_remap2d_interp_structured`,
 `:2347` `_remap2d_affine_seed`).
 
 What that buys, measured:
@@ -128,22 +128,29 @@ smoothed to the lattice.  Cost is `displaced_n_side²` rays traced through the
 prescription; accuracy is second order in the pitch.
 
 Validated with the CONVENTIONS.md §2 prefix (`_normalise_displaced_n_side`,
-`_lens_real.py:2119`): a non-integer, a float with a fractional part, a bool, or
+`_lens_real.py:2168`): a non-integer, a float with a fractional part, a bool, or
 anything below the 3-ray structural floor raises rather than being truncated or
 silently accepted.  A call that would DISCARD the setting — any
 `surface_model` other than `'displaced'`, a rotationally symmetric element, or
 `displaced_obliquity='pointwise'` — raises too, naming which of those it was
-(`_check_displaced_support`, `_lens_real.py:4809`).  The routing rule is now a
+(`_check_displaced_support`, `_lens_real.py:4978`).  The routing rule is now a
 single shared predicate `_routes_to_displaced_remap_2d` (`:1558`) so the guard
 and the dispatch cannot drift apart.
 
-Carried as `LensNumerics.displaced_n_side` (`lens_config.py:494`), floored
+Carried as `LensNumerics.displaced_n_side` (`lens_config.py:514`), floored
 against `_lens_real._DISP_REMAP_2D_MIN_N_SIDE` through the existing `_vocab`
 accessor so a config cannot accept a value the call would refuse, and wired
 into `_NUMERICS_FOR['apply_real_lens']` so `from_kwargs` / `to_kwargs` round
 trips.
 
 ---
+
+* Restated at the release close: `tests/unit/test_niche_k3_perf.py` pinned the K3 win of the
+  triangulating remap this entry retires (byte-identity to the pre-K3 two-interpolator algorithm
+  at N = 384 / 512, and one QHull triangulation where the pre-K3 path built two); the
+  byte-identity pin is retired with a note and the count pin now reads zero triangulations and
+  zero `LinearNDInterpolator`s (`test_remap_2d_builds_no_triangulation_since_the_structured_inversion`),
+  the historical reference kept as the spy's control.
 
 ### Changed -- apply_real_lens: the 2-D displaced remap's default launch lattice, 181 → 257 rays (L9)
 
