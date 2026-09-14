@@ -545,3 +545,23 @@ it, in decades of conditioning per degree.
 **B10-D5 -- A26-6 is untouched, and this basis cannot touch it.**  The weighted restriction's strength is
 blind to the skirt's residual MAGNITUDE; that is a statement about ROWS (which samples, at which weight),
 and `fit_basis` changes only COLUMNS.  Recorded here so that the two are not confused later.
+
+---
+
+## Addendum after VERIFY-B10 (orchestrator, 2026-09-13)
+
+* **The decay law in section 6 and B10-D3 does not extrapolate.**  VERIFY-B10 section 8 measured the conditioning advantage's decay at six
+  data-to-disc ratios on this fixture's own lattice: 0.44 / 1.19 / 1.19 / 1.18 / 1.14 / 1.11 decades per degree at `R_data/R_disc` = 2.03 /
+  3.38 / 4.50 / 5.79 / 8.11 / 11.58, against the `2 log10(R_data/R_disc)` law's 0.61 / 1.06 / 1.31 / 1.53 / 1.82 / 2.13.  The rate SATURATES
+  near 1.19 decades per degree from a ratio of about 3.4 upward and then slowly declines; what the ratio moves is the order-6 OFFSET (2.9
+  decades over that span), so the crossover order moves through the offset, not the slope.  The 0.95 measured here at ratio 4.01 stands as a
+  measurement of this fixture; the `(R_data/R_disc)^2`-per-degree mechanism describes low order only and must not be used to compute another
+  geometry's crossover.  Pinned by `test_the_conditioning_advantage_does_not_follow_the_stated_ratio_law`.
+* **Section 11's d7 line.**  `test_niche_d7_decentred_fit.py` pins RATIOS to the on-axis figure by design; the 2.371 / 1.683 urad digits were
+  re-measured independently by VERIFY-B10 (section 4.2) and hold on both bases, character for character.
+* **B10-D1, one sentence for whoever lifts it.**  `_decentred_fit_spectrum` reads `a + b` from `ev._mi` as the total degree -- correct for a
+  Chebyshev `(kx, ky)` and NOT for a Zernike `(n, m)`.  It constructs its own evaluator with no basis keyword today, so it is unreachable from
+  `fit_basis`; it is the first thing that breaks if the deferral is lifted.
+* **The inverse-map cache key now names the basis** (`parity_tag` gained `str(_fit_basis)`, VERIFY-B10 request 12.3, applied at the landing):
+  the two bases did not collide before because `incumbent_fp` hashes what the incumbent answers, but the module's doctrine is that the key
+  errs toward a cold rebuild.

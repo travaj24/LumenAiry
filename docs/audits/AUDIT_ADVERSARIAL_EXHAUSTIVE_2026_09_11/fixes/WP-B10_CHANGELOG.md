@@ -52,9 +52,12 @@ decentred arbiter's concentric trial fit -- also a hard mask -- goes
 every launch sample in the least squares, out to 4.01 fit-disc radii on this
 fixture, and a disc-normalised column grows as `(r/R)^n` out there.  The
 advantage is still large at low degree (**1.70e-10 -> 1.31e-01** at order 6)
-and decays by about 1.2 decades per degree -- `(r/R)^2 = 16` per degree, one
-extra power of the skirt's reach per shell -- until it crosses the square
-basis's roughly flat `~1e-11` near the shipped order 16.  The ladder for both
+and decays by about 1.2 decades per degree (a disc-normalised column gains one
+power of the skirt's reach per shell at low order; the measured rate saturates
+near 1.19 decades per degree from a data-to-disc ratio of about 3.4 upward and
+does NOT scale with that ratio, which moves the low-order offset instead --
+VERIFY-B10 section 8) until it crosses the square basis's roughly flat `~1e-11`
+near the shipped order 16.  The ladder for both
 fixtures is in the report; this is why the basis is opt-in and why the default
 does not move.
 

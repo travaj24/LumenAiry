@@ -8528,6 +8528,21 @@ def apply_real_lens_traced(
         Requires ``newton_fit='polynomial'`` and ``inversion_method='newton'``;
         any other combination raises rather than accepting a knob it would
         ignore.
+
+        WHERE IT REACHES THE RETURNED FIELD.  It is the ENTRANCE-plane fits'
+        basis, so it reaches the returned field exactly where those fits do --
+        which is NOT everywhere.  With the inverse-characteristic model
+        engaged, the default whenever ``ray_subsample > 1``, that model
+        supplies the OPL, the entrance coordinates and ``det J`` per pixel, so
+        the returned field does not depend on this keyword at all (measured
+        ``np.array_equal`` across the two bases at ``ray_subsample`` 8, 4 and
+        2) and what the basis moves there is the CONDITIONING of the forward
+        fits and the residuals the niche-C11 arbiter ranks.  At
+        ``ray_subsample=1``, or with ``inverse_map=False``, the forward fits
+        ARE what the Newton inversion evaluates and the basis reaches the
+        field (measured 2.2e-12 of the field on the same call).  That is the
+        same statement fix D5 / ``FIX_G8_PROBE`` record for the fit's ORDER,
+        and the reason this keyword is not a way to change an answer.
     preserve_input_phase : bool or 'remap', default True
         If True, the input field's phase structure (source tilts,
         MLA / DOE phase modulation, off-axis wavefronts, etc.) is
@@ -12965,8 +12980,12 @@ def apply_real_lens_traced(
             # basis, so without this the two bases COLLIDE in the build cache
             # and the second call inherits the first's G8 verdict -- an
             # acceptance decided by call order.  See ``parity_tag``.
+            # The basis is named in the key as well as hashed through the
+            # incumbent's answers, so the inverse-map cache errs toward a
+            # cold rebuild even if two bases ever answered bit-identically.
             parity_tag=(str(newton_fit), int(_fit_poly_order),
-                        _fit_weights is None, int(MAX_NEWTON_ITERS)),
+                        _fit_weights is None, int(MAX_NEWTON_ITERS),
+                        str(_fit_basis)),
             caller='apply_real_lens_traced', guard_record=_imap_rec)
         if _imap is None:
             _IMAP.report_refusal(_imap_rec, 'apply_real_lens_traced')

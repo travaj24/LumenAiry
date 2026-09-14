@@ -128,6 +128,29 @@ def _fermat_opl(x, y, f_b):
     return f_b - np.sqrt(x * x + y * y + f_b * f_b)
 
 
+def _surface(radius, gb, ga, conic):
+    return {'radius': radius, 'glass_before': gb, 'glass_after': ga,
+            'conic': conic, 'radius_y': None, 'conic_y': None,
+            'aspheric_coeffs': None, 'aspheric_coeffs_y': None}
+
+
+def _prescription():
+    """The same ``K = -n^2`` singlet the oracles above describe, as a
+    prescription the ELEMENT can be driven with."""
+    n = _n_glass()
+    return {'name': 'b10', 'aperture_diameter': _APER,
+            'thicknesses': [_THICK],
+            'surfaces': [_surface(np.inf, 'air', _GLASS, 0.0),
+                         _surface(-(n - 1.0) * _F, _GLASS, 'air', -n * n)]}
+
+
+def _collimated_beam(cx, n, dx):
+    """The fixture's Gaussian, centred at ``cx`` on an ``n`` x ``n`` grid."""
+    x = (np.arange(n) - n // 2) * dx
+    X, Y = np.meshgrid(x, x, indexing='xy')
+    return np.exp(-((X - cx) ** 2 + Y ** 2) / (_W * _W)).astype(np.complex128)
+
+
 # --------------------------------------------------------------------------
 # The ray-fit fixture: the element's own launch lattice, the exact conic map
 # on it, and D1's weighted restriction to a BEAM-CENTRED disc -- built through
@@ -738,3 +761,224 @@ def test_the_entry_point_refuses_the_combinations_that_have_no_meaning():
     with pytest.raises(ValueError, match="inversion_method='newton'"):
         la.apply_real_lens_traced(E, fit_basis='zernike',
                                   inversion_method='fit', **common)
+
+
+# ===========================================================================
+# 6.  VERIFY-WP-B10.  Three properties the sections above leave unpinned:
+#     WHICH disc the entry point normalises the basis to, WHERE the basis
+#     reaches the returned field, and how the conditioning advantage really
+#     scales with the data-to-disc radius ratio.
+# ===========================================================================
+_VERIFY_CALL = dict(wavelength=_WL, dx=20e-6, n_workers=1,
+                    fit_radius_beam_factor=_FRBF, newton_fit='polynomial',
+                    on_undersample='silent', on_noncollimated='silent')
+
+
+def _discs_the_entry_point_builds(**kw):
+    """Every ``(basis, (cx, cy, radius))`` the element constructs in one call.
+
+    Taken from the evaluator itself rather than from a copy of the resolution
+    logic, so the pin is on what the fit was actually normalised to."""
+    seen = []
+    orig = LT._Cheb2DEvaluator.__init__
+
+    def _spy(self, *a, **k):
+        orig(self, *a, **k)
+        seen.append((self.basis, (float(self.cx), float(self.cy),
+                                  float(self.radius))))
+
+    LT._Cheb2DEvaluator.__init__ = _spy
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            la.apply_real_lens_traced(
+                _collimated_beam(_DECENTRE, 128, 20e-6),
+                prescription=_prescription(), beam_centre=(_DECENTRE, 0.0),
+                **dict(_VERIFY_CALL, **kw))
+    finally:
+        LT._Cheb2DEvaluator.__init__ = orig
+    return seen
+
+
+def test_the_entry_point_normalises_the_basis_to_the_beams_own_disc():
+    """WHICH disc ``fit_basis='zernike'`` is orthogonal on, resolved BY THE
+    ELEMENT -- the half of the design that no accuracy pin can see.
+
+    ``_fit_basis_disc_or_raise`` refuses to invent a disc precisely because
+    "the whole content of the basis is WHICH disc it is orthogonal on", and on
+    the off-centre branch that disc is the BEAM's, not the launch lattice's.
+    Nothing above pinned that: the two bases span the same space whichever
+    disc is chosen, so every accuracy assertion in this file stays green with
+    the basis normalised to the wrong circle -- measured below at **6.0e-13 of
+    peak**, i.e. nothing.  What moves is the only thing the basis buys.
+
+    Measured 2026-09-13 on this fixture at the C11 arbiter's own order:
+    the applied fit is normalised to ``(0.6000, 0.0000) mm`` with a radius of
+    0.8830 mm (``_beam_fit_radius``, the measured beam radius times
+    ``fit_radius_beam_factor``), the arbiter's concentric candidate to
+    ``(0, 0)``; normalising the applied fit concentrically instead costs
+    **4.7 decades** of equilibrated Gram rcond (5.930e-02 -> 1.082e-06).  The
+    bars are 0.1 of the disc radius on the centre and 2 decades on the
+    conditioning, against 0 and 4.7 measured."""
+    seen = _discs_the_entry_point_builds(ray_subsample=4, fit_basis='zernike')
+    zern = sorted({d for b, d in seen if b == 'zernike'})
+    assert seen and all(b == 'zernike' for b, _ in seen), (
+        'the opt-in call built a chebyshev evaluator: %r' % (seen,))
+    off = [d for d in zern if abs(d[0] - _DECENTRE) <= 0.1 * d[2]]
+    assert off, (
+        'no fit was normalised to the BEAM\'s disc; the element built %r '
+        'against a beam at %.4f mm -- the off-centre branch either did not '
+        'engage or the basis is normalised to the launch lattice'
+        % (zern, _DECENTRE * 1e3))
+    for _cx, cy, r in off:
+        assert abs(cy) <= 0.1 * r
+        assert 0.5 * _DISC_R <= r <= _DISC_R * 1.001, (
+            'the applied disc radius %.4f mm is not the beam fit radius '
+            '(<= %.4f mm)' % (r * 1e3, _DISC_R * 1e3))
+    assert any(abs(d[0]) <= 1e-12 and abs(d[1]) <= 1e-12 for d in zern), (
+        "the C11 arbiter's concentric candidate was not scored in its own "
+        'disc: %r' % (zern,))
+
+    # ... and the fail-before: the wrong disc is INVISIBLE to the fit and
+    # expensive to the conditioning, which is why this pin is not redundant.
+    xs, x_out, _opl, w, _disc, o = _fit_fixture(order=6)
+    g_beam, g_conc = (_DECENTRE, 0.0, _DISC_R), (0.0, 0.0, _DISC_R)
+    r_beam = _gram_rcond_of(xs, x_out, o, w, g_beam)
+    r_conc = _gram_rcond_of(xs, x_out, o, w, g_conc)
+    ev_b = LT._Cheb2DEvaluator(xs, xs, x_out, order=o, weights=w,
+                               basis='zernike', disc=g_beam)
+    ev_c = LT._Cheb2DEvaluator(xs, xs, x_out, order=o, weights=w,
+                               basis='zernike', disc=g_conc)
+    q = np.linspace(-_DISC_R, _DISC_R, 31) * 0.97
+    QX, QY = np.meshgrid(q + _DECENTRE, q, indexing='ij')
+    fb = np.asarray(ev_b.ev(QX, QY))
+    moved = (float(np.max(np.abs(fb - np.asarray(ev_c.ev(QX, QY)))))
+             / float(np.max(np.abs(fb))))
+    assert moved < 1e-6, (
+        f'the two discs now return different polynomials ({moved:.3e} of '
+        f'peak); this pin\'s premise -- that only the conditioning can see '
+        f'the disc -- no longer holds')
+    assert r_beam > 1e2 * r_conc, (
+        f'normalising to the beam disc no longer conditions the off-centre '
+        f'fit: {r_beam:.3e} against {r_conc:.3e} concentric')
+
+
+def test_the_basis_reaches_the_returned_field_only_where_the_fits_do():
+    """``fit_basis`` is the ENTRANCE-plane fits' basis, so it reaches the
+    returned field exactly where those fits do -- and with the
+    inverse-characteristic model engaged, which is the default for every
+    ``ray_subsample > 1``, they do not reach it at all.
+
+    This is fix D5 / ``FIX_G8_PROBE``'s finding for the fit's ORDER, restated
+    for its BASIS, and it is what stops a reader of the conditioning tables
+    above from concluding that the opt-in changes an answer on a default call.
+    The model's engagement is ASSERTED here rather than assumed (S4): each arm
+    reads the element's own ``_imap_out`` record and the claim is made only
+    about the arm whose gate actually landed where the arm needs it.
+
+    Measured 2026-09-13: at ``ray_subsample=4`` the model engages on both
+    bases and the returned field is ``np.array_equal``; at ``ray_subsample=1``
+    it refuses on both and the two bases differ by 7.9e-11 of the field --
+    non-zero, so the keyword is reaching it, and eleven decades under the
+    field itself, so it is a change of basis and not a change of answer."""
+    out = {}
+    for rs in (4, 1):
+        arm = {}
+        for basis in ('chebyshev', 'zernike'):
+            rec = {}
+            kw = dict(_VERIFY_CALL)
+            if basis != 'chebyshev':
+                kw['fit_basis'] = basis
+            with warnings.catch_warnings():
+                warnings.simplefilter('ignore')
+                arm[basis] = la.apply_real_lens_traced(
+                    _collimated_beam(_DECENTRE, 128, 20e-6),
+                    prescription=_prescription(),
+                    beam_centre=(_DECENTRE, 0.0), ray_subsample=rs,
+                    _imap_out=rec, **kw)
+            arm[basis + '_engaged'] = bool(rec.get('engaged', False))
+        out[rs] = arm
+    assert out[4]['chebyshev_engaged'] and out[4]['zernike_engaged'], (
+        'the inverse-characteristic model refused at ray_subsample=4, so '
+        'this arm cannot say anything about what the model supplies; force '
+        'it or re-derive the fixture')
+    assert np.array_equal(out[4]['chebyshev'], out[4]['zernike']), (
+        'the fit basis reached the returned field while the '
+        'inverse-characteristic model was supplying it; that is a change to '
+        'what the model returns, not a change of basis')
+    assert not (out[1]['chebyshev_engaged'] or out[1]['zernike_engaged']), (
+        'the model engaged at ray_subsample=1, so this arm no longer '
+        'measures the forward fits reaching the field')
+    d = float(np.max(np.abs(out[1]['chebyshev'] - out[1]['zernike'])))
+    peak = float(np.max(np.abs(out[1]['chebyshev'])))
+    assert d > 0.0, (
+        'the opt-in basis changes nothing at ray_subsample=1 either, so it '
+        'reaches the returned field NOWHERE and is inert by construction')
+    assert d < 1e-6 * peak, (
+        f'the two bases return materially different fields at '
+        f'ray_subsample=1: {d:.3e} against a peak of {peak:.3e}')
+
+
+def test_the_conditioning_advantage_does_not_follow_the_stated_ratio_law():
+    """The decay of the disc basis's advantage is NOT
+    ``2 log10(R_data/R_disc)`` decades per degree once the ratio is past
+    about 3 -- it SATURATES, and the ratio moves the OFFSET instead.
+
+    WP-B10_REPORT.md section 6 derives the decay from
+    ``(R_data/R_disc)^2``-per-degree and B10-D3 invites a future author to
+    re-derive the crossover order for another geometry from that law.  It does
+    not extrapolate.  Measured here on this file's own fixture, over orders
+    6 -> 10 and at five disc radii on ONE launch lattice (2026-09-13):
+
+    |R_disc mm|R_data/R_disc|measured dec/deg|2 log10(ratio)|
+    |---|---|---|---|
+    | 2.00 | 2.03 | 0.44 | 0.61 |
+    | 1.20 | 3.38 | **1.19** | 1.06 |
+    | 0.90 | 4.50 | **1.19** | 1.31 |
+    | 0.70 | 5.79 | 1.18 | 1.53 |
+    | 0.50 | 8.11 | **1.14** | 1.82 |
+    | 0.35 | 11.58 | 1.11 | 2.13 |
+
+    So at the report's own ratio the law and the measurement agree to 20 %,
+    and by ratio 11.6 the law over-predicts by 1.9x while the measurement has
+    stopped moving.  What DOES move with the ratio is the order-6 advantage --
+    5.636e-01 down to 6.981e-04, 2.9 decades -- and that is what moves the
+    crossover order.  Both halves are asserted, with the bars derived from the
+    two arms' own spread: 0.3 relative on the slopes (measured 0.07) and 1.5
+    decades on the offset (measured 2.9), against a law that predicts the
+    slopes differ by 2.0x."""
+    xs, x_out, _opl, _w, _disc, _o = _fit_fixture(order=6)
+    X, Y = np.meshgrid(xs, xs, indexing='ij')
+    rr = float(np.max(np.hypot(X - _DECENTRE, Y)))
+    arms = {}
+    for Rd in (1.20e-3, 0.35e-3):
+        geom = (_DECENTRE, 0.0, Rd)
+        d = ((X - _DECENTRE) ** 2 + Y ** 2) <= Rd ** 2
+        assert int(d.sum()) > 200, 'the small disc lost its samples'
+        rc = []
+        for order in (6, 10):
+            w, o = LT._decentred_fit_restriction(d, True, 6, order)
+            assert o == order, 'the step-down capped the arm'
+            rc.append(_gram_rcond_of(xs, x_out, o, w, geom))
+        assert min(rc) > 1e-14, (
+            f'an arm reached the float64 conditioning floor ({min(rc):.3e}); '
+            f'the slope below would be measuring noise')
+        arms[Rd] = (rr / Rd, rc[0],
+                    (np.log10(rc[0]) - np.log10(rc[1])) / 4.0)
+    (ra, o6a, sa), (rb, o6b, sb) = arms[1.20e-3], arms[0.35e-3]
+    assert rb > 3.0 * ra > 9.0, (ra, rb)
+    # the decay is real on both arms ...
+    assert sa > 0.5 and sb > 0.5, arms
+    # ... and it is the SAME decay, where the law says it should have doubled
+    law = (2.0 * np.log10(rb)) / (2.0 * np.log10(ra))
+    assert law > 1.6, f'the two arms no longer separate the law: {law:.2f}x'
+    assert abs(sb / sa - 1.0) < 0.3, (
+        f'the decay slope now tracks the ratio: {sa:.2f} dec/deg at '
+        f'R_data/R_disc = {ra:.2f} against {sb:.2f} at {rb:.2f}.  '
+        f'WP-B10_REPORT.md section 6 / B10-D3 would then be right to '
+        f're-derive a crossover order from (R_data/R_disc)^2 -- re-measure '
+        f'the table in this docstring before trusting either')
+    # what the ratio DOES move is the offset, hence the crossover order
+    assert o6a > 10 ** 1.5 * o6b, (
+        f'the order-6 advantage no longer moves with the ratio: {o6a:.3e} at '
+        f'{ra:.2f} against {o6b:.3e} at {rb:.2f}')

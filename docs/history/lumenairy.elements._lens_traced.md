@@ -1,13 +1,14 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/_lens_traced.py
-ast_sha256: f9bca64240630bc25b693e93bfd560a56fcf3415bde18e425aefe700f4927655
-token_sha256: 0b79248b9e62994e0fd6eef1d9703da77ae7d7f3127ae618553eb4d175c1a6fb
+ast_sha256: d8a3d1f78f3e1945287893e2c01019550008028db90cfc3805134ddee948d690
+token_sha256: c15603bc8f0b7d6ae37ed1ea205799531f54605631b13f2bbefb1ebe77044e01
 pre_relocation_lines: 14898
 recorded_by: WP-A17 SWEEP-4 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
 re_recorded: 2026-09-12 -- ruff isort combine-as-imports (pyproject.toml, WP-A16 recommendation): aliased import statements from the same module merged into one; the set of bound names is unchanged
 re_recorded: 2026-09-13 -- WP-A26: _DECENTRED_FIT_POLY_ORDER re-derived 10 -> 16 against the ray set WP-A1's exact conic intersection produces -- the lowest order that returns the decentred exit slope to the pre-truncation scale on both decentres
 re_recorded: 2026-09-13 -- WP-B10: an opt-in disc-orthogonal design basis for the traced ray fits -- fit_basis='chebyshev' (the default, byte-identical) or 'zernike', orthonormal on the ray-fit disc at the same total degree; the samples, D1's weights, the D7 order and the C11 arbiter are unchanged and only the conditioning of the least-squares solve moves
+re_recorded: 2026-09-13 -- VERIFY-B10 landing: the inverse-map cache key names the fit basis (parity_tag += str(_fit_basis)); the verifier's fit_basis reachability paragraph
 -->
 
 # Version history -- `lumenairy/elements/_lens_traced.py`
