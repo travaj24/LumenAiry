@@ -1931,6 +1931,23 @@ def _apply_displaced_remap(E_in, h_in, h_out, wavelength, dx, dy, opl,
                            mode='constant', cval=0.0)
            + 1j * map_coordinates(F.imag, [cy, cx], order=1,
                                   mode='constant', cval=0.0))
+    # The carried envelope is the input field over the largest CENTRED window
+    # the caller's grid holds: |x| <= x[-1] = (Nx/2 - 1) dx, and the same in y.
+    #
+    # The entrance height this remap reads at is ``X * scale`` with
+    # ``scale = h_in / r_out``, and for a converging element ``scale > 1`` -- so
+    # the read runs off the +x end of the axis ``(arange(N) - N/2) * dx`` while
+    # its MIRROR, one whole sample further out on -x, is still on the grid and
+    # returns the full envelope.  Without this window a rotationally symmetric
+    # element hands a centred, rotationally symmetric input back with a crescent
+    # of exactly-zero pixels on +x only: measured 0.49 and 0.65 of peak against
+    # an exact 0 on the mirror pixel (2026-09-13), ~1000 pixels of a 512**2 and
+    # 640**2 grid.  Cutting at the symmetric window costs the outermost ring of
+    # the input on BOTH sides instead, which is the same price -- and the same
+    # rule -- :func:`_apply_displaced_remap_2d` pays for its launch samples.
+    _win = ((np.abs(X * scale) <= (Nx / 2.0 - 1.0) * dx)
+            & (np.abs(Y * scale) <= (Ny / 2.0 - 1.0) * dy))
+    amp = np.where(_win, amp, 0.0)
     E_out = amp * jac * np.exp(1j * k0 * (opl_of - float(op[0])))
     E_out = np.where(r_out <= ho[-1], E_out, 0.0)
     out_dtype = E_in.dtype if np.iscomplexobj(E_in) else np.complex128
@@ -1971,7 +1988,7 @@ def _apply_displaced_remap(E_in, h_in, h_out, wavelength, dx, dy, opl,
 #:
 #: Everything the exit field knows comes from ``n_side**2`` launched rays, so
 #: the LAUNCH pitch -- not ``dx`` -- sets the transverse resolution of the
-#: result: at 257 the pitch is 39 um across a 10 mm aperture whatever the field
+#: result: at 257 the pitch is 40 um for a 10 mm aperture whatever the field
 #: sampling, and input structure finer than that (a hard stop edge, an
 #: obscuration, an upstream DOE, speckle) is smoothed to the lattice.
 #: :func:`_warn_if_remap_lattice_smooths` says so out loud whenever that is
@@ -1987,13 +2004,18 @@ def _apply_displaced_remap(E_in, h_in, h_out, wavelength, dx, dy, opl,
 #: error over the illuminated core, with the trace cost and the field-grid
 #: interpolation cost it feeds:
 #:
+#: The pitch column is the pitch the TRACE uses,
+#: ``2 * _DISP_REMAP_2D_FAN_FACTOR * r / (n_side - 1)``, not the bare
+#: ``2 * r / (n_side - 1)`` -- the fan is thrown wider than the aperture, so
+#: the two differ by that factor.
+#:
 #: ======  =========  =========  =========  =========  ==================
 #: n_side  pitch um   |E| rms    phase rad  trace s    structured interp s
 #: ======  =========  =========  =========  =========  ==================
-#:    181      55.6    8.7e-04    4.7e-02      0.064   0.17 / 0.62 / 2.45
-#:    257      39.1    4.3e-04    2.4e-02      0.152   0.17 / 0.64 / 2.36
-#:    513      19.5    1.1e-04    5.9e-03      1.055   0.21 / 0.64 / 2.66
-#:   1025       9.8    2.7e-05    1.4e-03      4.661   0.41 / 0.84 / 2.73
+#:    181      57.2    8.7e-04    4.7e-02      0.064   0.17 / 0.62 / 2.45
+#:    257      40.2    4.3e-04    2.4e-02      0.152   0.17 / 0.64 / 2.36
+#:    513      20.1    1.1e-04    5.9e-03      1.055   0.21 / 0.64 / 2.66
+#:   1025      10.1    2.7e-05    1.4e-03      4.661   0.41 / 0.84 / 2.73
 #: ======  =========  =========  =========  =========  ==================
 #:
 #: (interp at N = 512 / 1024 / 2048.)  The error is second order in the launch
@@ -2031,6 +2053,17 @@ _DISP_REMAP_2D_N_SIDE = 257
 #: against the field pitch, which :func:`_warn_if_remap_lattice_smooths`
 #: reports on every call where it binds.
 _DISP_REMAP_2D_MIN_N_SIDE = 3
+
+#: How much wider than the traced aperture the launch fan is thrown, so the
+#: aperture-edge rays have INTERIOR neighbours for the central-difference
+#: Jacobian.  The ``n_side`` rays span ``+-factor * r_aperture``, so the launch
+#: pitch a caller actually gets is ``2 * factor * r_aperture / (n_side - 1)``
+#: -- 3 % coarser than the bare ``2 * r_aperture / (n_side - 1)``.  One
+#: constant, read by :func:`_build_displaced_ray_map_2d` (which throws the fan)
+#: and by :func:`_warn_if_remap_lattice_smooths` (which scores it against the
+#: field pitch), so the pitch the caller is told about is the pitch the trace
+#: uses.
+_DISP_REMAP_2D_FAN_FACTOR = 1.03
 
 #: Sweep cap for the structured inversion's Newton loop.  Points still moving
 #: at the cap keep whatever coordinate they reached and are then judged by the
@@ -2087,6 +2120,12 @@ def _warn_if_remap_lattice_smooths(r_max, dx, dy, n_side):
     costs ``n_side**2`` in the trace and nothing in stability, the structured
     inversion having removed the resolution/reflection-stability trade the
     scattered backend imposed.
+
+    Both the pitch quoted and the lattice named are the ones the TRACE uses:
+    the fan is thrown ``_DISP_REMAP_2D_FAN_FACTOR`` wider than the aperture, so
+    the pitch is ``2 * factor * r / (n_side - 1)`` and ``n_clear`` is derived
+    from it.  Naming an ``n`` that leaves the real pitch above the bar would be
+    a keyword value that does not fix what the message says it fixes.
     """
     try:
         h = min(float(dx), float(dy))
@@ -2095,17 +2134,19 @@ def _warn_if_remap_lattice_smooths(r_max, dx, dy, n_side):
         return
     if not (np.isfinite(h) and h > 0.0 and np.isfinite(r) and r > 0.0):
         return
-    pitch = 2.0 * r / max(int(n_side) - 1, 1)
+    span = 2.0 * r * _DISP_REMAP_2D_FAN_FACTOR
+    pitch = span / max(int(n_side) - 1, 1)
     if pitch <= 2.0 * h:
         return
-    n_clear = int(np.ceil(r / h)) + 1
+    n_clear = int(np.ceil(span / (2.0 * h))) + 1
     import warnings
     warnings.warn(
         f"apply_real_lens: surface_model='displaced' is routing this "
         f"asymmetric element to the 2-D transverse-walk remap, which rebuilds "
         f"the exit field from a {int(n_side)}x{int(n_side)} launch lattice -- "
-        f"a {pitch * 1e6:.2f} um pitch across the {2 * r * 1e3:.3f} mm traced "
-        f"aperture, against a {h * 1e6:.2f} um field pitch.  Input structure "
+        f"a {pitch * 1e6:.2f} um pitch across the {span * 1e3:.3f} mm fan the "
+        f"{2 * r * 1e3:.3f} mm aperture is traced with, against a "
+        f"{h * 1e6:.2f} um field pitch.  Input structure "
         f"finer than the LAUNCH pitch (a hard stop edge, an obscuration, an "
         f"upstream DOE, speckle) is smoothed to that lattice, and the remap "
         f"carries no in-glass diffraction at all.  Pass "
@@ -2146,19 +2187,26 @@ def _normalise_displaced_n_side(n_side, fn_name='apply_real_lens'):
             f"{_DISP_REMAP_2D_MIN_N_SIDE}-ray structural minimum (the "
             f"finite-difference Jacobian needs one central-difference interior "
             f"row and the inversion needs a bilinear cell either side of it).  "
-            f"The launch pitch is 2*r_aperture/(displaced_n_side-1); the call "
-            f"warns whenever it is coarser than twice the field pitch.")
+            f"The launch pitch is "
+            f"2*{_DISP_REMAP_2D_FAN_FACTOR}*r_aperture/(displaced_n_side-1) "
+            f"(the fan is thrown wider than the aperture so the edge rays have "
+            f"interior Jacobian neighbours); the call warns whenever it is "
+            f"coarser than twice the field pitch.")
     return v
 
 
 def _build_displaced_ray_map_2d(surfaces, thicknesses, wavelength, r_max,
                                 n_side=None, dir_fn=None, eik_fn=None,
-                                r_fan_factor=1.03):
+                                r_fan_factor=_DISP_REMAP_2D_FAN_FACTOR):
     """Pointwise 2-D generalisation of :func:`_build_displaced_ray_map` (the P2
     remap) for decentered / tilted / freeform elements (niche N11 / P10).
 
-    ``n_side=None`` (the default) uses ``_DISP_REMAP_2D_N_SIDE``; see that
-    constant for why it is a fixed 181 and what the caller warns about.
+    ``n_side=None`` uses the module default :data:`_DISP_REMAP_2D_N_SIDE`; a
+    caller reaches it as ``apply_real_lens(displaced_n_side=...)``.  See that
+    constant for how the default is chosen, and
+    :func:`_warn_if_remap_lattice_smooths` for what the call warns about.  The
+    ``n_side`` rays span ``+-r_fan_factor * r_max``, so the launch pitch is
+    ``2 * r_fan_factor * r_max / (n_side - 1)``.
 
     Launch a REGULAR square ray grid (side ``n_side``, spanning
     ``+-r_fan_factor*r_max`` so the illuminated aperture disk has interior
@@ -5787,14 +5835,15 @@ def apply_real_lens(
         Side of the SQUARE LAUNCH LATTICE the 2-D transverse-walk remap traces,
         in RAYS; ``None`` uses the module default (257).  The remap is a
         geometric transfer, so this -- not ``dx`` -- sets the transverse
-        resolution of its output: the launch pitch is
-        ``2 * r_aperture / (displaced_n_side - 1)`` across the traced aperture,
-        the fan itself is launched 3 % wider so the edge rays have interior
-        Jacobian neighbours, and input structure finer than that pitch (a hard
-        stop edge, an obscuration, an upstream DOE, speckle) is SMOOTHED to the
-        lattice.  The call warns, naming both pitches and the lattice that
-        would clear the bar, whenever the launch pitch is coarser than twice
-        the field pitch.
+        resolution of its output: the rays span the whole fan, which is thrown
+        3 % wider than the aperture so the edge rays have interior Jacobian
+        neighbours, so the launch pitch is
+        ``2 * 1.03 * r_aperture / (displaced_n_side - 1)`` (40.2 um at the
+        default 257 on a 10 mm aperture), and input structure finer than that
+        pitch (a hard stop edge, an obscuration, an upstream DOE, speckle) is
+        SMOOTHED to the lattice.  The call warns, naming both pitches and the
+        lattice that would clear the bar, whenever the launch pitch is coarser
+        than twice the field pitch.
 
         Cost is ``displaced_n_side**2`` rays traced through the prescription;
         accuracy is second order in the launch pitch (measured 4x per

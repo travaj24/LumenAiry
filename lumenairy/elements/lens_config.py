@@ -427,8 +427,10 @@ class LensNumerics:
         transverse-walk remap of ``surface_model='displaced'`` traces; ``None``
         -> the module default ``_lens_real._DISP_REMAP_2D_N_SIDE``.  The remap
         is a geometric transfer, so this and not ``dx`` sets the transverse
-        resolution of its output (launch pitch
-        ``2 * r_aperture / (displaced_n_side - 1)``); cost is its square.
+        resolution of its output (launch pitch ``2 * fan * r_aperture /
+        (displaced_n_side - 1)``, the fan being thrown
+        ``_lens_real._DISP_REMAP_2D_FAN_FACTOR`` wider than the aperture so the
+        edge rays have interior Jacobian neighbours); cost is its square.
         Floored at ``_lens_real._DISP_REMAP_2D_MIN_N_SIDE``.  The call refuses
         it when it does not route to that remap, so a config that sets it is
         only legal for a decentered / tilted / ``sag_callable`` element.

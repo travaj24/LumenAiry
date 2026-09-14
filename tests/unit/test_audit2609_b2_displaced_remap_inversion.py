@@ -45,7 +45,9 @@ from lumenairy.elements import _lens_real as LR
 from lumenairy.elements._lens_real import (
     _DISP_REMAP_2D_MIN_N_SIDE,
     _DISP_REMAP_2D_N_SIDE,
+    _apply_displaced_remap,
     _apply_displaced_remap_2d,
+    _build_displaced_ray_map,
     _build_displaced_ray_map_2d,
     _normalise_displaced_n_side,
     _remap2d_interp_structured,
@@ -785,6 +787,497 @@ def _ripple_contrast(E, x, band):
     a, xx = a[m], x[m]
     res = a - np.polyval(np.polyfit(xx, a, 6), xx)
     return float(np.sqrt(2.0) * np.std(res) / np.mean(a))
+
+# ===========================================================================
+# 8.  VERIFY-WP-B2 -- the same input window in the 1-D symmetric remap
+#
+# WP-B2 recorded this as deferred on the reading that "it is rotationally
+# symmetric, so no fixture in the suite exercises a mirror pair through it".
+# It does not need a mirror pair: a CENTRED input through a ROTATIONALLY
+# SYMMETRIC element is enough, because the remap reads the input at the
+# ENTRANCE height ``X * scale`` with ``scale = h_in / r_out > 1`` for a
+# converging element -- so the read runs off the +x end of
+# ``(arange(N) - N/2) * dx`` while its mirror, one whole sample further out on
+# -x, is still on the grid and returns the full envelope.
+# ===========================================================================
+
+def _sym_singlet(ap=6e-3):
+    """A ROTATIONALLY SYMMETRIC thick singlet: no decenter, no tilt, no
+    ``sag_callable``, so ``displaced_mode='remap'`` runs the 1-D remap."""
+    return {'wavelength': _WL, 'aperture_diameter': ap, 'surfaces': [
+        {'radius': 42.5e-3, 'thickness': 4.2e-3, 'glass_before': 'air',
+         'glass_after': '_B2A', 'semi_diameter': ap / 2 * 1.2},
+        {'radius': -63.0e-3, 'thickness': 0.0, 'glass_before': '_B2A',
+         'glass_after': 'air', 'semi_diameter': ap / 2 * 1.2}],
+        'thicknesses': [4.2e-3], 'stop_index': 0}
+
+
+def _paired(A):
+    """Drop row/column 0.
+
+    ``x = (arange(N) - N/2) * dx`` puts index 0 at ``-N/2 dx``, whose mirror
+    ``+N/2 dx`` is NOT on the grid -- index 0 is its own partner under
+    :func:`_mirror_x` and therefore carries no symmetry constraint at all.
+    Every mirror claim that reaches the grid edge is scored on the paired part,
+    or it would be scoring the grid convention instead of the model."""
+    return A[1:, 1:]
+
+
+def _remap1d_exit_field(E_in, presc, dx, window):
+    """A FROZEN copy of ``_apply_displaced_remap``'s envelope assembly with the
+    symmetric input window switchable -- the in-process pre-fix path.
+
+    Checked against the shipped function on every run by
+    ``test_the_windowed_1d_arm_reproduces_the_shipped_call_bit_for_bit``, so it
+    cannot drift into testing something the library does not do."""
+    from scipy.ndimage import map_coordinates
+    h_in, h_out, opl = _build_displaced_ray_map(
+        presc['surfaces'], presc['thicknesses'], _WL,
+        presc['aperture_diameter'] / 2.0,
+        carrier_slope=None, eikonal_fn=None)[:3]
+    Ny, Nx = E_in.shape
+    k0 = 2.0 * np.pi / _WL
+    order = np.argsort(h_out)
+    ho, hi, op = (np.asarray(h_out)[order], np.asarray(h_in)[order],
+                  np.asarray(opl)[order])
+    keep = np.concatenate(([True], np.diff(ho) > 0))
+    ho, hi, op = ho[keep], hi[keep], op[keep]
+    X, Y = _axes(Nx, dx)
+    r_out = np.sqrt(X * X + Y * Y)
+    rc = np.clip(r_out, ho[0], ho[-1])
+    hin_of = np.interp(rc, ho, hi)
+    opl_of = np.interp(rc, ho, op)
+    mp = np.interp(rc, ho, np.gradient(ho, hi))
+    mp = np.where(mp <= 1e-12, 1e-12, mp)
+    jac = np.sqrt(np.clip(hin_of, 0.0, None)
+                  / (np.clip(rc, 1e-15, None) * mp))
+    scale = np.where(r_out > 1e-15, hin_of / np.clip(r_out, 1e-15, None), 1.0)
+    cx = (X * scale) / dx + Nx / 2.0
+    cy = (Y * scale) / dx + Ny / 2.0
+    F = _residual_input_field(E_in, None, _WL)
+    amp = (map_coordinates(F.real, [cy, cx], order=1, mode='constant',
+                           cval=0.0)
+           + 1j * map_coordinates(F.imag, [cy, cx], order=1, mode='constant',
+                                  cval=0.0))
+    if window:
+        win = ((np.abs(X * scale) <= (Nx / 2.0 - 1.0) * dx)
+               & (np.abs(Y * scale) <= (Ny / 2.0 - 1.0) * dx))
+        amp = np.where(win, amp, 0.0)
+    E_out = amp * jac * np.exp(1j * k0 * (opl_of - float(op[0])))
+    return np.asarray(np.where(r_out <= ho[-1], E_out, 0.0),
+                      dtype=np.complex128)
+
+
+class TestTheOneDimensionalRemapCarriesTheSameWindow:
+
+    #: N, dx, w0 -- the grid edge must carry real envelope (0.40 and 0.44 of
+    #: peak here) or the fixture cannot see the defect, and the traced exit
+    #: radius must reach past the grid corner so the ``r_out <= ho[-1]`` cut is
+    #: not what zeroes the rim.
+    GRIDS = [(256, 12e-6, 1.6e-3), (320, 10e-6, 1.7e-3)]
+
+    @pytest.mark.parametrize('N,dx,w0', GRIDS)
+    def test_a_symmetric_element_on_a_centred_input_is_mirror_symmetric(
+            self, N, dx, w0):
+        """The whole claim in one line: a rotationally symmetric element and a
+        centred, rotationally symmetric input must not produce a field that
+        differs from its own mirror.
+
+        Bar 1e-12 relative, against a measured 1.0e-16 (2026-09-13) and a
+        pre-fix reading of 3.3e-02 -- four decades of gap below and ten above,
+        so it is a gap and not a tuned number."""
+        p = _sym_singlet()
+        E = np.asarray(_disp(_gauss(N, dx, w0), p, dx,
+                             displaced_mode='remap'))
+        assert float(np.max(np.abs(E))) > 0.1          # the fixture is lit
+        got = float(np.linalg.norm(_paired(np.abs(E))
+                                   - _paired(np.abs(_mirror_x(E))))
+                    / np.linalg.norm(_paired(np.abs(E))))
+        assert got <= 1e-12, got
+
+    @pytest.mark.parametrize('N,dx,w0', GRIDS)
+    def test_a_decentred_input_field_mirrors(self, N, dx, w0):
+        """The mirror-PAIR form the WP-B2 report said no fixture exercises:
+        the element is symmetric, the INPUT is decentred by +-x0."""
+        p = _sym_singlet()
+        X, Y = _axes(N, dx)
+        x0 = 0.45e-3
+
+        def run(sgn):
+            E0 = np.exp(-((X - sgn * x0) ** 2 + Y ** 2) / w0 ** 2
+                        ).astype(np.complex128)
+            return np.asarray(_disp(E0, p, dx, displaced_mode='remap'))
+
+        a, b = np.abs(run(+1)), np.abs(_mirror_x(run(-1)))
+        got = float(np.linalg.norm(_paired(a) - _paired(b))
+                    / np.linalg.norm(_paired(a)))
+        assert got <= 1e-12, got
+
+    def test_fail_before_the_unwindowed_1d_assembly_is_not(self):
+        """FAIL-BEFORE, in process, on the same fixture: without the window the
+        +x rim is dead and its mirror is not.
+
+        Two-sided and RATIO-based -- the windowed arm must be clean on exactly
+        the assembly whose unwindowed twin is broken, so a fixture that stopped
+        reaching the grid edge would fail the second arm rather than silently
+        pass the first."""
+        N, dx, w0 = 256, 12e-6, 1.6e-3
+        p = _sym_singlet()
+        E0 = _gauss(N, dx, w0)
+
+        def resid(window):
+            E = _remap1d_exit_field(E0.copy(), p, dx, window)
+            a, b = np.abs(E), np.abs(_mirror_x(E))
+            return float(np.max(np.abs(_paired(a) - _paired(b)))
+                         / np.max(np.abs(a)))
+
+        bad, good = resid(False), resid(True)
+        assert good <= 1e-12, good
+        assert bad > 1e-2, bad                     # a rim, not a rounding
+        assert bad > 1e9 * max(good, 1e-16), (bad, good)
+
+    def test_the_windowed_1d_arm_reproduces_the_shipped_call_bit_for_bit(self):
+        """The frozen copy must BE the shipped assembly."""
+        N, dx, w0 = 192, 14e-6, 1.3e-3
+        p = _sym_singlet()
+        E0 = _gauss(N, dx, w0)
+        rm = _build_displaced_ray_map(
+            p['surfaces'], p['thicknesses'], _WL,
+            p['aperture_diameter'] / 2.0, carrier_slope=None, eikonal_fn=None)
+        theirs = _apply_displaced_remap(
+            E0.astype(np.complex128).copy(), rm[0], rm[1], _WL, dx, dx, rm[2])
+        mine = _remap1d_exit_field(E0.copy(), p, dx, window=True)
+        assert np.array_equal(mine, np.asarray(theirs))
+
+    def test_the_window_costs_only_the_outermost_ring(self):
+        """The price of the fix, pinned so it cannot grow silently: the window
+        may only zero samples whose ENTRANCE read is outside the grid's largest
+        centred window, i.e. the outer rim, and must leave the illuminated core
+        untouched."""
+        N, dx, w0 = 256, 12e-6, 1.6e-3
+        p = _sym_singlet()
+        E0 = _gauss(N, dx, w0)
+        off = _remap1d_exit_field(E0.copy(), p, dx, window=False)
+        on = _remap1d_exit_field(E0.copy(), p, dx, window=True)
+        X, Y = _axes(N, dx)
+        core = np.hypot(X, Y) <= 0.90 * (N / 2.0 - 1.0) * dx
+        assert np.array_equal(off[core], on[core])
+        moved = np.abs(off - on) > 0
+        assert int(moved.sum()) > 0
+        assert float(np.min(np.hypot(X, Y)[moved])) > 0.90 * (N / 2.0 - 1.0) * dx
+
+
+# ===========================================================================
+# 9.  VERIFY-WP-B2 -- the warning's pitch and the lattice it names are the
+#     TRACE's, not the bare 2 r / (n - 1)
+# ===========================================================================
+
+class TestTheWarningQuotesThePitchTheTraceUses:
+
+    @staticmethod
+    def _dstep(r_max, n_side):
+        """The launch pitch the builder actually throws, read off the builder."""
+        p = _singlet(dec=(0.6e-3, 0.0))
+        return float(_build_displaced_ray_map_2d(
+            p['surfaces'], p['thicknesses'], _WL, r_max, n_side=n_side)[6])
+
+    @pytest.mark.parametrize('n_side', [181, 257, 513])
+    def test_the_quoted_pitch_is_the_pitch_the_trace_uses(self, n_side):
+        """Parse the pitch out of the message and compare it with the ray
+        map's own ``dstep``.  Bar: the two agree to the message's own printed
+        precision (2 decimals of a micron)."""
+        r_max, dx = 5e-3, 4e-6
+        with pytest.warns(RuntimeWarning) as rec:
+            _warn_if_remap_lattice_smooths(r_max, dx, dx, n_side)
+        msg = str(rec[0].message)
+        quoted = float(msg.split('launch lattice -- a ')[1].split(' um')[0])
+        got = self._dstep(r_max, n_side) * 1e6
+        assert abs(quoted - got) <= 0.005, (quoted, got)
+
+    @pytest.mark.parametrize('dx', [8e-6, 4e-6, 2e-6])
+    def test_the_named_lattice_really_clears_the_field_pitch(self, dx):
+        """The message names ``displaced_n_side=n``; the lattice that ``n``
+        actually traces must put the launch pitch at or below twice the field
+        pitch.  Measured on the builder, not on the formula -- naming a value
+        that clears a MIS-STATED bar is the defect class this campaign exists
+        to close."""
+        r_max = 5e-3
+        with pytest.warns(RuntimeWarning) as rec:
+            _warn_if_remap_lattice_smooths(r_max, dx, dx, 181)
+        n = int(str(rec[0].message).split('displaced_n_side=')[1].split()[0])
+        got = self._dstep(r_max, n)
+        assert got <= 2.0 * dx, (n, got, 2.0 * dx)
+        with warnings.catch_warnings():
+            warnings.simplefilter('error')
+            _warn_if_remap_lattice_smooths(r_max, dx, dx, n)
+
+    def test_the_bare_formula_would_not_have_cleared_it(self):
+        """FAIL-BEFORE for the arithmetic: the lattice the bare formula
+        ``ceil(r/h) + 1`` names leaves the REAL pitch above the bar, which is
+        why one constant and not two formulas decides both."""
+        r_max, dx = 5e-3, 8e-6
+        n_bare = int(np.ceil(r_max / dx)) + 1
+        assert self._dstep(r_max, n_bare) > 2.0 * dx, n_bare
+
+    def test_the_fan_factor_is_one_constant(self):
+        """The builder's fan and the warning's pitch must read the SAME
+        constant, or they can drift apart again."""
+        import inspect
+        sig = inspect.signature(_build_displaced_ray_map_2d)
+        assert (sig.parameters['r_fan_factor'].default
+                == LR._DISP_REMAP_2D_FAN_FACTOR)
+        r_max, n = 5e-3, 181
+        want = 2 * r_max * LR._DISP_REMAP_2D_FAN_FACTOR / (n - 1)
+        assert abs(self._dstep(r_max, n) - want) <= 1e-18, want
+
+
+# ===========================================================================
+# 10.  VERIFY-WP-B2 -- the mirror symmetry BELOW the shipped lattice
+#
+# ``displaced_n_side`` is public with a floor of 3, so every lattice from 3 up
+# is a legal call; the shipped sweep starts at 181.
+# ===========================================================================
+
+class TestTheMirrorSymmetryHoldsBelowTheDefaultLattice:
+
+    @staticmethod
+    def _pair(n_side, method, N=256, dx=12e-6, w0=1.4e-3, d=0.5e-3):
+        out = []
+        for sgn in (+1, -1):
+            p = _singlet(dec=(sgn * d, 0.0))
+            with warnings.catch_warnings():
+                warnings.simplefilter('ignore')
+                out.append(np.asarray(_apply_displaced_remap_2d(
+                    _gauss(N, dx, w0), _ray_map(p, n_side), _WL, dx, dx,
+                    interp_method=method)))
+        a, b = np.abs(out[0]), np.abs(_mirror_x(out[1]))
+        return float(np.linalg.norm(_paired(a) - _paired(b))
+                     / np.linalg.norm(_paired(a)))
+
+    @pytest.mark.parametrize('method', ['structured', 'delaunay'])
+    @pytest.mark.parametrize('n_side', [11, 33, 97])
+    def test_a_coarse_lattice_is_as_reflection_stable_as_the_default(
+            self, n_side, method):
+        """Bar derived from THIS build's reading at the shipped default: a
+        coarse lattice may not be more than 1000x less symmetric than the
+        default one.  Measured 2026-09-13 the coarse readings span
+        3.9e-16..8.0e-14, the same order as the default lattice's own, while
+        the failure this catches (the pre-WP-B2 input window) reads 1e-2 --
+        twelve decades above."""
+        base = max(self._pair(_DISP_REMAP_2D_N_SIDE, method), 1e-16)
+        assert base < 1e-10, base
+        got = self._pair(n_side, method)
+        assert got <= 1000.0 * base, (n_side, method, got, base)
+
+
+# ===========================================================================
+# 11.  VERIFY-WP-B2 -- transmitted power against the geometric oracle, on a
+#      fixture whose APERTURE actually binds
+# ===========================================================================
+
+class TestTheTransmittedPowerAgainstTheGeometricOracle:
+    """The remap is a lossless geometric transfer inside the aperture -- the
+    Jacobian factor is exactly the one that makes ``|E|^2 dA`` invariant -- so
+    the exit power IS the input power inside the aperture and inside the
+    carried window.  That is an absolute oracle rather than a backend
+    comparison, and it needs a grid WIDER than the aperture or the aperture
+    never binds (on the shipped fixture the 10 mm aperture is 2.6x the grid, so
+    nothing is cut and ``P <= P_in`` is nearly free)."""
+
+    #: half-width 6.656 mm against a 4 mm aperture radius, and |E| = 0.37 of
+    #: peak at that radius -- the pupil edge is inside the grid AND inside the
+    #: illuminated region, which is what makes both claims below measurable.
+    N, DX, W0, AP = 512, 26e-6, 4.0e-3, 8e-3
+
+    def _setup(self):
+        """``(E_in, prescription, oracle power, the oracle's own floor)``.
+
+        The oracle is a GRID SUM over the pixels inside the aperture and the
+        carried window; its own resolution is the power in the ring the grid
+        cannot assign to either side of the aperture edge (half a pixel
+        diagonal), which is what every bar below is scored against instead of a
+        chosen number.  Measured 2026-09-13 on this fixture: floor 5.8e-03 of
+        the oracle, structured deviation 1.1e-04 / 7.9e-05 at n_side 181 / 257,
+        scattered deviation 1.0e-03 / 9.1e-04 and always NEGATIVE."""
+        X, Y = _axes(self.N, self.DX)
+        E0 = _gauss(self.N, self.DX, self.W0)
+        xw = (self.N / 2.0 - 1.0) * self.DX
+        r = np.hypot(X, Y)
+        keep = (r <= self.AP / 2.0) & (np.abs(X) <= xw) & (np.abs(Y) <= xw)
+        ring = np.abs(r - self.AP / 2.0) <= self.DX * np.sqrt(2.0) / 2.0
+        p = dict(_singlet(dec=(0.3e-3, 0.0)))
+        p['aperture_diameter'] = self.AP
+        return (E0, p, float((np.abs(E0) ** 2)[keep].sum()),
+                float((np.abs(E0) ** 2)[ring].sum()))
+
+    def _fields(self, p, E0, n_side):
+        rm = _ray_map(p, n_side)
+        out = []
+        for method in ('structured', 'delaunay'):
+            with warnings.catch_warnings():
+                warnings.simplefilter('ignore')
+                out.append(np.asarray(_apply_displaced_remap_2d(
+                    E0.copy(), rm, _WL, self.DX, self.DX,
+                    interp_method=method)))
+        return out
+
+    @pytest.mark.parametrize('n_side', [181, 257])
+    def test_the_structured_backend_is_lossless_to_the_oracle(self, n_side):
+        """Three arms, all scored against the oracle's OWN floor:
+
+        * the structured answer sits inside that floor -- it neither loses the
+          rim nor leaks power from beyond the aperture (the cut is on the
+          INVERTED launch coordinate, so a leak would show up here as an
+          EXCESS, and it does not);
+        * the scattered answer is short by more than the structured one's whole
+          deviation, one-sided, which is the hull dropping real power;
+        * so the structured backend is strictly closer to the lossless answer.
+        """
+        E0, p, want, floor = self._setup()
+        s, d = self._fields(p, E0, n_side)
+        ps = float((np.abs(s) ** 2).sum())
+        pd = float((np.abs(d) ** 2).sum())
+        assert abs(ps - want) <= floor, (ps, want, floor)
+        assert pd < want - abs(ps - want), (pd, want, ps)
+        assert abs(ps - want) < abs(pd - want), (ps, pd, want)
+
+    def test_the_scattered_backend_leaves_holes_where_the_aperture_binds(self):
+        """The two-sided form of the hull claim on this fixture."""
+        E0, p, _, _ = self._setup()
+        s, d = self._fields(p, E0, 181)
+        lit = np.abs(s) > 0.2 * np.max(np.abs(s))
+        assert int(np.count_nonzero(d[lit] == 0)) > 0
+        assert int(np.count_nonzero(s[lit] == 0)) == 0
+
+
+def test_interp_method_is_validated():
+    """The private backend selector refuses an unknown name rather than
+    silently taking the default."""
+    p = _singlet(dec=(0.4e-3, 0.0))
+    rm = _ray_map(p, 33)
+    with pytest.raises(ValueError, match='interp_method'):
+        _apply_displaced_remap_2d(_gauss(64, 40e-6, 0.8e-3), rm, _WL,
+                                  40e-6, 40e-6, interp_method='qhull')
+
+# ===========================================================================
+# 12.  VERIFY-WP-B2 -- two pins for claims nothing was enforcing
+#
+# Found by MUTATING the library in the source and re-running this file: with
+# ``_DISP_REMAP_2D_N_SIDE`` put back to 181 all 75 tests stayed green, and with
+# the affine Newton seed replaced by the identity seed all of them did too.  A
+# deliverable no test can distinguish from its own pre-state is not pinned.
+# ===========================================================================
+
+class TestTheDefaultLatticeIsTheOneTheContractNames:
+
+    def test_the_public_docstring_names_the_shipped_default(self):
+        """The keyword's docstring quotes the default as a literal, so the
+        constant and the contract can drift silently.  Build-free: it compares
+        two things inside this build, no measurement and no tolerance."""
+        doc = apply_real_lens.__doc__
+        assert doc is not None
+        block = doc.split('displaced_n_side : int or None')[1][:900]
+        assert f'({_DISP_REMAP_2D_N_SIDE})' in block, (
+            f'apply_real_lens\'s displaced_n_side docstring does not name the '
+            f'shipped default {_DISP_REMAP_2D_N_SIDE}; one of the two moved '
+            f'without the other.')
+
+    def test_the_default_is_above_the_pre_raise_lattice(self):
+        """L9 asked for the launch-lattice ceiling to come UP, and the raise is
+        the deliverable.  Pinned as the direction plus the accuracy it buys --
+        second order in the pitch, so the default must strictly improve on 181
+        against a refined-lattice reference -- rather than as the literal 257,
+        which would refuse a future re-derivation."""
+        assert _DISP_REMAP_2D_N_SIDE > 181
+        N, dx = 192, 16e-6
+        p = _singlet(dec=(0.6e-3, 0.0))
+        E0 = _gauss(N, dx, 1.2e-3)
+
+        def field(n):
+            with warnings.catch_warnings():
+                warnings.simplefilter('ignore')
+                return np.asarray(_apply_displaced_remap_2d(
+                    E0.copy(), _ray_map(p, n), _WL, dx, dx))
+
+        fine = field(1025)
+        core = np.abs(fine) > 0.2 * np.max(np.abs(fine))
+        assert int(core.sum()) > 300, int(core.sum())
+
+        def err(n):
+            g = field(n)[core]
+            return float(np.sqrt(np.mean(
+                np.abs(_depistoned(g, fine[core]) - fine[core]) ** 2)))
+
+        assert err(_DISP_REMAP_2D_N_SIDE) < err(181)
+
+    def test_the_floor_and_the_default_are_consistent(self):
+        assert _DISP_REMAP_2D_MIN_N_SIDE <= _DISP_REMAP_2D_N_SIDE
+        assert _normalise_displaced_n_side(_DISP_REMAP_2D_N_SIDE) == \
+            _DISP_REMAP_2D_N_SIDE
+
+
+class TestTheAffineSeedIsWhyTheLoopIsShort:
+    """What is pinned here is the seed's RESIDUAL advantage, not an operation
+    count.  Measured 2026-09-13 by swapping the seed for the identity in
+    process: the whole ``_apply_displaced_remap_2d`` call costs 20
+    ``map_coordinates`` reads EITHER WAY on the p10 singlet at n_side 181 (two
+    Newton sweeps plus the final check), so the seed's documented "removes a
+    whole sweep" does not reproduce at the shipped residual bar -- Newton
+    squares its error, and both seeds are already inside the bar after two
+    sweeps.  The advantage that does reproduce is the seed residual itself."""
+
+    def test_the_affine_seed_starts_a_whole_newton_step_closer(self):
+        """``_remap2d_affine_seed`` exists because inverting the map's own
+        global affine part starts one SQUARING of the Newton error closer than
+        seeding at the target.  Pinned as the property -- a ratio measured on
+        this build -- not as a sweep count, because the sweep count is bounded
+        from above elsewhere and an identity seed slips under that bound.
+
+        Bar: at least 4x.  Measured 2026-09-13 on the p10 singlet at n_side
+        181, 23x (2.4e-06 m against 5.5e-05 m); the failure it must catch is
+        the seed being removed altogether, which reads 1.0x exactly."""
+        from scipy.ndimage import map_coordinates
+        p = _singlet(dec=(0.6e-3, 0.0))
+        rm = _ray_map(p, 181)
+        X0, Y0, XOf, YOf, dstep = rm[0], rm[1], rm[2], rm[3], float(rm[6])
+        u0, v0 = float(X0[0, 0]), float(Y0[0, 0])
+        n_v, n_u = XOf.shape
+        u_hi, v_hi = u0 + (n_u - 1) * dstep, v0 + (n_v - 1) * dstep
+        N, dx = 192, 16e-6
+        Xg, Yg = _axes(N, dx)
+        Xt, Yt = Xg.ravel(), Yg.ravel()
+        inside = (np.abs(Xt) < 0.8 * abs(u0)) & (np.abs(Yt) < 0.8 * abs(v0))
+        Xt, Yt = Xt[inside], Yt[inside]
+
+        def seed_residual(u, v):
+            u = np.clip(u, u0, u_hi)
+            v = np.clip(v, v0, v_hi)
+            crd = np.stack([(v - v0) / dstep, (u - u0) / dstep])
+            return float(np.median(np.hypot(
+                Xt - map_coordinates(XOf, crd, order=1, mode='nearest'),
+                Yt - map_coordinates(YOf, crd, order=1, mode='nearest'))))
+
+        affine = seed_residual(*LR._remap2d_affine_seed(
+            XOf, YOf, dstep, u0, v0, Xt, Yt))
+        identity = seed_residual(Xt.copy(), Yt.copy())
+        assert affine * 4.0 < identity, (affine, identity)
+
+    def test_a_singular_affine_part_falls_back_to_the_target(self):
+        """The documented fallback: a map whose affine part is singular (a fold
+        collapsing the exit onto a line) must return the target itself, not a
+        non-finite seed."""
+        n = 9
+        ax = np.linspace(-1e-3, 1e-3, n)
+        U, V = np.meshgrid(ax, ax)
+        XOf = np.zeros_like(U)                       # rank-0 affine part
+        YOf = np.zeros_like(U)
+        Xt = np.array([1e-4, -2e-4])
+        Yt = np.array([3e-4, 5e-5])
+        u, v = LR._remap2d_affine_seed(
+            XOf, YOf, float(ax[1] - ax[0]), float(ax[0]), float(ax[0]),
+            Xt, Yt)
+        assert np.all(np.isfinite(u)) and np.all(np.isfinite(v))
+        assert np.array_equal(u, Xt) and np.array_equal(v, Yt)
 
 
 if __name__ == '__main__':

@@ -1,13 +1,14 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/_lens_real.py
-ast_sha256: 8015cba5504c11fe76c7303eeb41399f03816839538c1d0627de3fc95231f320
-token_sha256: e4f2d77780ff4be9f94d16f5acd7ed927da6ff747dd060b23d0dc334c46edc6b
+ast_sha256: 41de528e25b36a2228dd6ac9caef58f40eb470a56c8bd1fb8afae37a6035533f
+token_sha256: 8b06292d68515bf07b0696659888346a1b5a7abd4140371f1b0750d5f575bdaf
 pre_relocation_lines: 8117
 recorded_by: WP-A17 SWEEP-4 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
 re_recorded: 2026-09-12 -- ruff isort combine-as-imports (pyproject.toml, WP-A16 recommendation): aliased import statements from the same module merged into one; the set of bound names is unchanged
 re_recorded: 2026-09-13 -- WP-B2 (audit 2026-09-11 L9): the 2-D displaced remap's launch->exit map is inverted on its own structured launch grid instead of Delaunay-triangulating the scattered exit points (the scattered backend is retained as its oracle); the carried input envelope is cut at the largest centred window the field grid holds, which is what actually made the launch lattice reflection-unstable; the lattice is raised 181 -> 257 and exposed as a validated displaced_n_side keyword
 re_recorded: 2026-09-13 -- WP-B3b (K6): _propagate_through_glass's two resample_field calls gate method= on whether the lens grid's window fits inside one chirp-Z reconstruction period; in glass lam_medium = wavelength/n puts these legs on the spline side far more often than the free-space chain
+re_recorded: 2026-09-13 -- VERIFY-WP-B2 (audit 2026-09-11 L9 re-verification): the 1-D symmetric remap _apply_displaced_remap cuts its carried envelope at the largest centred window the field grid holds, closing the same input-window asymmetry WP-B2 fixed in the 2-D remap and deferred here; _warn_if_remap_lattice_smooths quotes the pitch the trace actually uses (the fan is _DISP_REMAP_2D_FAN_FACTOR wider than the aperture) so the displaced_n_side it names really clears the field-pitch bar
 -->
 
 # Version history -- `lumenairy/elements/_lens_real.py`
@@ -372,3 +373,54 @@ a truncated pupil: the hull ends at the outermost retained exit point, so the
 scattered backend leaves a ring of exactly-zero pixels inside the illuminated
 region (61 to 360 of 3782 sampled core points, lattice-dependent) and loses the
 power in it (0.97720 against 0.98658 of the input at n_side = 181).
+
+---
+
+## VERIFY-WP-B2 (2026-09-13) -- the same window, in the 1-D remap
+
+The WP-B2 pass above recorded the 1-D symmetric remap's identical input-window
+asymmetry as deferred work, on the reading that "it is rotationally symmetric,
+so no fixture in the suite exercises a mirror pair through it".  Re-measured
+independently, the exposure is larger than that: the asymmetry shows up with a
+CENTRED input through a ROTATIONALLY SYMMETRIC element, which is the simplest
+call the path has.
+
+`_apply_displaced_remap` reads the input at the ENTRANCE height
+`X * scale`, `scale = h_in / r_out`.  For a converging element the ray walks
+inward, so `scale > 1` and the read runs off the `+x` end of the axis
+`(arange(N) - N/2) * dx` while its mirror -- one whole sample further out on
+`-x` -- is still on the grid and returns the full envelope.  Measured on a
+symmetric f/5-class singlet (`R = 42.5 / -63 mm`, 4.2 mm of n = 1.5093 glass),
+`displaced_mode='remap'`, before the fix:
+
+| grid | paired mirror relL2 of \|E\| | pixels off by > 1e-9 of peak | worst pixel |
+|---|---|---|---|
+| N = 640, dx = 6.5 um, w0 = 2.4 mm | 3.301e-02 | 1236 | 0.489 of peak against an exact 0 on its mirror |
+| N = 512, dx = 8 um, w0 = 3.0 mm | 4.586e-02 | 988 | 0.650 of peak against an exact 0 on its mirror |
+
+-- a crescent of dead pixels on `+x` only, from a rotationally symmetric system
+on a rotationally symmetric input.  The same rule the 2-D remap uses now
+applies here: the carried envelope is cut at the largest CENTRED window the
+grid holds (`|X * scale| <= x[-1]`, `|Y * scale| <= y[-1]`), and the two
+readings above become 1.18e-16 and 1.01e-16 with zero pixels off.  The price is
+the outermost ring of the input on BOTH sides instead of one side.
+
+The deferral's stated blocker -- that the fix "moves the byte-identity pin"
+`test_niche_p10_...::test_symmetric_remap_is_the_p2_1d_remap_byte_identical` --
+does not hold: that pin compares `apply_real_lens(displaced_mode='remap')`
+against a direct call to `_apply_displaced_remap`, so both sides move together
+and the pin still passes.
+
+## VERIFY-WP-B2 (2026-09-13) -- the launch pitch the caller is told about
+
+`_warn_if_remap_lattice_smooths` scored the launch pitch as
+`2 * r_aperture / (n_side - 1)`, but the fan is thrown
+`_DISP_REMAP_2D_FAN_FACTOR = 1.03` wider than the aperture, so the pitch the
+trace actually uses is 3 % coarser.  The consequence was in the message's own
+advice: at a 10 mm aperture and dx = 8 um it named `displaced_n_side=626`,
+whose real pitch is 16.48 um against the 16.00 um bar the message says that
+value clears (dx = 4 um: it named 1251, real pitch 8.24 um against 8.00 um).
+Both the quoted pitch and the named lattice are now computed from the fan the
+trace throws, and the fan factor is one constant read by the builder and the
+warning, so the same two calls name 645 and 1289 -- lattices whose real pitch
+(15.99 um and 8.00 um) does clear the bar.
