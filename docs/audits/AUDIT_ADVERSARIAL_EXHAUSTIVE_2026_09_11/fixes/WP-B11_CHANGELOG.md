@@ -68,7 +68,7 @@ the grazing-cutoff reproducer's numbers.
 `_lens_real.py` built the band arithmetic -- `r0`, `r1`, the clipped halo
 `[h0:h1)` and the band's own slice `[lo:hi)` inside it -- in four places, in two
 different spellings.  It is now `_row_bands(n_rows, chunk_rows, halo)`
-(`elements/_lens_real.py:2925`) and `_band_in_halo(r0, r1, h0)` (`:2910`), read
+(`elements/_lens_real.py:2929`) and `_band_in_halo(r0, r1, h0)` (`:2910`), read
 by `_band_any_sag` (`:6747`), the obliquity band (`:6768`), the plain chunked
 screen (`:7262`) and the slant/fresnel chunked screen (`:7409`).  The halo is
 clipped at the true grid edges by the generator, which is what keeps the first
@@ -91,7 +91,7 @@ and the exact edit each needs are in `docs/lens_configuration.md` section
 
 ### Added -- `LensConfig.to_kwargs(strict=True)`
 
-`elements/lens_config.py:1099`.  Raises instead of dropping when a field the
+`elements/lens_config.py:1250`.  Raises instead of dropping when a field the
 config actually REQUESTS -- one whose value differs from its dataclass default --
 is not a keyword of the named entry point.  A field left at its default is not a
 request and is still dropped quietly, including under `include_defaults=True`,
@@ -127,7 +127,7 @@ serves both and the answer is bit-identical by construction.
 `__init__` refused an out-of-vocabulary value and then stored it as a plain
 attribute, so `st.formulation = 'fff_nv'` was ACCEPTED and read through an
 `== 'li'` test that a typo silently fails -- the stack behaved as `'laurent'`
-and said nothing.  The three are properties now (`elements/pmm/stack2d.py:458`,
+and said nothing.  The three are properties now (`elements/pmm/stack2d.py:470`,
 `:467`, `:476`) sharing one vocabulary with the constructor
 (`_check_formulation` `:91`, `_check_cascade` `:103`, `_symmetry_on`), and
 `st.symmetry = 'auto'` resolves to `True` on assignment exactly as the
@@ -291,10 +291,10 @@ this family has several to the same source line.  MEASURED: WP-A16's
 configuration objects made each entry point re-enter ITSELF once when a config
 is passed (`return apply_real_lens(E_in, **resolve(...))`), so on a configured
 call every hard-coded level in `_lens_real.py` was one frame short and the
-aperture notice named `_lens_real.py:6130` -- the library's own re-entry line.
+aperture notice named `_lens_real.py` line 6130 (as it then was) -- the library's own re-entry line.
 `prepare_real_lens_traced` attributed all five of its pre-flight notices to
 `_lens_traced.py`, and `apply_real_lens_traced`'s Newton-inversion notice named
-`_lens_traced.py:13340`.
+`_lens_traced.py` line 13340 (as it then was).
 
 `elements/_lens_kernels.py::caller_stacklevel` walks out from the calling frame
 to the first frame outside the `lumenairy` package and returns that depth -- the
@@ -308,8 +308,9 @@ reached the rest of the family: `lenses_maslov.py` (11 sites; it also takes
 back-edge to `lenses` carries four names instead of five), `lenses_gbd.py` (1),
 `_lens_traced_multibranch.py` (4), `_lens_thin.py` (2) and `_lens_imap.py` (1).
 An AST ratchet (`b11::test_no_literal_stacklevel_is_left_in_the_swept_lens_bodies`)
-fails on a literal that creeps back into any of the seven.  `_lens_traced_uniform.py`
-(1 site) and `propagators/carrier.py` are still literal.
+fails on a literal that creeps back into any of the eight -- `_lens_traced_uniform.py`
+(2 sites, once WP-B7b's verifier had landed) completes the lens family.
+`propagators/carrier.py`'s chain is still literal.
 
 The one case that still names non-user code is correct -- on the parallel-amp
 path the call runs in a `ThreadPoolExecutor` worker, so there is no user frame

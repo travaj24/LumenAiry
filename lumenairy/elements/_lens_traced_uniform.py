@@ -65,6 +65,10 @@ from typing import Any, Dict
 import numpy as np
 
 from .. import raytrace as rt
+
+# ``_lens_kernels`` is a leaf (stdlib + numpy only); the helper attributes a
+# notice to the caller's frame on every call path.
+from ._lens_kernels import caller_stacklevel as _caller_stacklevel
 from ._lens_traced_multibranch import apply_real_lens_traced_multibranch
 from .lenses_maslov import _fold_airy_eval, pearcey
 
@@ -927,7 +931,7 @@ def apply_real_lens_traced_uniform(
             "interior caustic); a cusp needs the Pearcey generalisation and a "
             "decentered / astigmatic fold is out of scope -- use "
             "apply_real_lens_gbd / apply_real_lens_fga or single-branch "
-            "ray_density + ASM for those.", RuntimeWarning, stacklevel=3)
+            "ray_density + ASM for those.", RuntimeWarning, _caller_stacklevel())
         out = E_mb.astype(target_cdtype) if E_mb.dtype != target_cdtype else E_mb
         if return_diagnostics:
             d = dict(mb_diag)
@@ -1058,7 +1062,7 @@ def apply_real_lens_traced_uniform(
             "separate further (a caustic ring with a wider two-branch band), "
             "or use apply_real_lens_traced(amplitude_model='ray_density') / "
             "apply_real_lens_gbd / apply_real_lens_fga for absolute energy.",
-            RuntimeWarning, stacklevel=3)
+            RuntimeWarning, _caller_stacklevel())
     rb = rgrid[bright]
     Eb = E_mb[bright]
     # Basis = the EXACT CFU kernel (reused, no reimplementation), evaluated at

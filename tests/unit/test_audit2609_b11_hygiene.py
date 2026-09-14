@@ -1225,16 +1225,17 @@ class TestWarningAttribution:
         warning still fires, it just points at the wrong file.  The tuple
         is every lens body whose warnings were swept onto the helper: the
         analytic and traced bodies, the Maslov (11 sites), GBD (1),
-        multibranch (4), thin (2) and inverse-map (1) modules.  Still
-        outside it: ``_lens_traced_uniform.py`` (1 site) and
-        ``propagators/carrier.py``, recorded in WP-B11 section 4b."""
+        multibranch (4), thin (2), inverse-map (1) and uniform-fold (2)
+        modules -- the whole lens family.  ``propagators/carrier.py``'s
+        chain is outside it, recorded in WP-B11 section 4b."""
         for rel in ('lumenairy/elements/_lens_real.py',
                     'lumenairy/elements/_lens_traced.py',
                     'lumenairy/elements/lenses_maslov.py',
                     'lumenairy/elements/lenses_gbd.py',
                     'lumenairy/elements/_lens_traced_multibranch.py',
                     'lumenairy/elements/_lens_thin.py',
-                    'lumenairy/elements/_lens_imap.py'):
+                    'lumenairy/elements/_lens_imap.py',
+                    'lumenairy/elements/_lens_traced_uniform.py'):
             src = (REPO / rel).read_text(encoding='utf-8')
             tree = ast.parse(src)
             bad = []
