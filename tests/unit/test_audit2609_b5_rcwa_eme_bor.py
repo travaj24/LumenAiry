@@ -753,3 +753,214 @@ def test_d2_two_d_entry_points_still_close(formulation):
             assert abs(tot - 1.0) < 1e-10, (formulation, M, tot)
         totj = np.asarray(R).sum(axis=1) + np.asarray(T).sum(axis=1)
         assert float(np.max(np.abs(totj - 1.0))) < 1e-10, (formulation, M)
+
+
+# ===========================================================================
+# VERIFY-WP-B5 additions: the boundary of D2's re-association, and the
+# ordering of D3's Schur fold
+# ===========================================================================
+
+#: The leaky guided-mode fixture that drives ``I - B11 A22`` near-singular
+#: FROM THE PUBLIC API.  A weakly modulated high-index slab in air whose +-1
+#: diffraction order is EVANESCENT in both half-spaces (``wavelength /
+#: period`` = 1.407 > 1, so total internal reflection at both faces) and
+#: PROPAGATING inside the layer: an eigenvalue of ``B11 A22`` then has modulus
+#: ``1 - O(dn^2)`` with a phase the thickness tunes, so the cavity denominator
+#: can be driven arbitrarily close to singular with ``|X| <= 1`` throughout --
+#: no growing propagator anywhere.
+_GMR = dict(period=0.45e-6, n_groove=2.0, n_substrate=1.0, n_superstrate=1.0,
+            duty_cycle=0.5, wavelength=0.633e-6, formulation="li",
+            n_orders=15)
+
+
+def _gmr_chain(dn, depth, pol):
+    """``(SA, SB, cinc)`` the 1-D solve hands its last star on the leaky
+    guided-mode fixture, or ``None`` when the solve refuses."""
+    import lumenairy.elements.rcwa.oned as _oned
+    cap = []
+    orig = _oned._redheffer_star_rt
+
+    def spy(SA, SB, cinc):
+        cap.append((SA, SB, cinc))
+        return orig(SA, SB, cinc)
+
+    _oned._redheffer_star_rt = spy
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            rcwa_efficiency_1d(n_ridge=2.0 + dn, depth=depth,
+                               polarization=pol, **_GMR)
+    except _rc._EnergyError:
+        return None
+    finally:
+        _oned._redheffer_star_rt = orig
+    return cap[-1] if cap else None
+
+
+def _gmr_gap(dn, depth, pol):
+    """``min |1 - eig(B11 A22)|`` -- exactly zero at the cavity resonance."""
+    chain = _gmr_chain(dn, depth, pol)
+    if chain is None:
+        return 1.0
+    SA, SB, _c = chain
+    ev = np.linalg.eigvals(np.asarray(SB[0]) @ np.asarray(SA[3]))
+    return float(np.min(np.abs(1.0 - ev)))
+
+
+def _gmr_resonance(dn, pol):
+    """The thickness that puts the fixture ON resonance, located at RUNTIME on
+    the running build (a coarse scan, then golden section on the eigenvalue
+    gap) -- the state is engineered, never hoped for."""
+    depths = np.linspace(0.90e-6, 1.50e-6, 121)
+    vals = [_gmr_gap(dn, d, pol) for d in depths]
+    i = int(np.argmin(vals))
+    a, b = depths[max(i - 1, 0)], depths[min(i + 1, len(depths) - 1)]
+    g = (np.sqrt(5.0) - 1.0) / 2.0
+    c, d = b - g * (b - a), a + g * (b - a)
+    fc, fd = _gmr_gap(dn, c, pol), _gmr_gap(dn, d, pol)
+    for _ in range(60):
+        if fc < fd:
+            b, d, fd = d, c, fc
+            c = b - g * (b - a)
+            fc = _gmr_gap(dn, c, pol)
+        else:
+            a, c, fc = c, d, fd
+            d = a + g * (b - a)
+            fd = _gmr_gap(dn, d, pol)
+        if b - a < 1e-19:
+            break
+    return 0.5 * (a + b)
+
+
+def test_d2_a_near_singular_star_denominator_is_reachable_and_neither_form_is_better():
+    """D2's residual risk, stated as the two-sided property it actually has.
+
+    The re-association is neutral only while ``I - B11 A22`` is well
+    conditioned.  A GROWING layer propagator is one way to break that and the
+    branch cut closes it; a HIGH-Q CAVITY RESONANCE is the other, it needs no
+    growing propagator, and it IS reachable from :func:`rcwa_efficiency_1d`
+    alone -- so the 1.7e-15 / 3.1e-15 envelope measured on the
+    well-conditioned entry-point matrix is a statement about that population,
+    not a bound on the entry point.
+
+    ENGINEERED, not hoped for: the resonance is located at runtime by a scan
+    plus golden section on the eigenvalue gap of ``B11 A22``
+    (:func:`_gmr_resonance`), on the running build's own arithmetic.  The
+    premise is ASSERTED, not skipped -- if no rung of the family reaches
+    ``cond`` 1e10 the claim below needs re-deriving and this test says so.
+
+    ORACLE: :func:`_star_oracle`, the defining coupled system solved whole.
+
+    BARS, both derived from the conditioning the fixture reaches:
+
+    * ``cond >= 1e10`` at the worst rung (MEASURED 1.6e12 / 2.4e12 / 6.4e12 /
+      1.8e13 on four of the six rungs, the other two landing at 6.8e03 and
+      4.2e06 -- two to three decades of margin on the four that qualify) with
+      ``max|A22| <= 1`` (MEASURED exactly 1.000000 on every rung -- there is
+      no growing propagator here, which is what makes this the REACHABLE
+      route into the regime);
+    * the star output is then undetermined by MORE than the package's
+      well-conditioned envelope: ``max(|closed - oracle|, |star - oracle|) >
+      1e-9`` (MEASURED 6.5e-06 / 1.9e-05 / 3.3e-04 / 9.7e-04 on those four
+      rungs -- 3.8 to 6.0 decades above the bar, and 9.3 to 11.5 above the
+      3.1e-15 the well-conditioned entry-point matrix moves.  OFF resonance
+      the same six rungs read 6.6e-17 .. 2.9e-16, which is the two-sided
+      contrast);
+    * and it IS the conditioning, not a defect of either association: BOTH
+      sit inside ``50 * cond * eps`` (MEASURED worst 9.7e-04 against an
+      envelope of 1.9e-01, two and a half decades inside), and the two differ
+      from each other (3.0e-07 .. 4.2e-04) by less than either differs from
+      the oracle.
+    """
+    eps = float(np.finfo(np.float64).eps)
+    rows = []
+    for dn in (3e-2, 1e-2, 1e-3):
+        for pol in ("te", "tm"):
+            depth = _gmr_resonance(dn, pol)
+            chain = _gmr_chain(dn, depth, pol)
+            assert chain is not None, (dn, pol, depth)
+            SA, SB, cinc = chain
+            A22, B11 = np.asarray(SA[3]), np.asarray(SB[0])
+            n = A22.shape[0]
+            Md = np.eye(n, dtype=_C) - B11 @ A22
+            cond = float(np.linalg.cond(Md))
+            closed = _redheffer_star_rt(SA, SB, cinc)
+            S = _redheffer_star(SA, SB)
+            star = (S[0] @ cinc, S[2] @ cinc)
+            ref = _star_oracle(SA, SB, cinc)
+            sc = max(float(np.max(np.abs(ref[0]))),
+                     float(np.max(np.abs(ref[1]))))
+
+            def rel(x, y, sc=sc):
+                return max(float(np.max(np.abs(x[0] - y[0]))),
+                           float(np.max(np.abs(x[1] - y[1])))) / sc
+            rows.append((dn, pol, cond, float(np.max(np.abs(A22))),
+                         rel(closed, ref), rel(star, ref)))
+
+    assert all(r[3] <= 1.0 + 1e-12 for r in rows), \
+        f"the fixture grew a propagator -- |X| <= 1 no longer holds: {rows}"
+    hard = [r for r in rows if r[2] >= 1e10]
+    assert hard, (
+        "no rung of the leaky guided-mode family reached cond(I - B11 A22) = "
+        f"1e10, so the premise of D2's residual-risk statement is gone and "
+        f"the bars below need re-deriving: {rows}")
+    worst = max(hard, key=lambda r: max(r[4], r[5]))
+    assert max(worst[4], worst[5]) > 1e-9, (
+        "the near-singular star denominator no longer moves the answer past "
+        f"the well-conditioned envelope -- re-measure D2's residual risk: "
+        f"{worst}")
+    for dn, pol, cond, _a22, dc, ds in hard:
+        envelope = 50.0 * cond * eps
+        assert dc < envelope, ("closed form", dn, pol, cond, dc, envelope)
+        assert ds < envelope, ("assembled star", dn, pol, cond, ds, envelope)
+
+
+def test_d3_the_symmetrisation_is_the_raw_mean_so_the_l3_fold_runs_after_it():
+    """D3's ordering, pinned where it lives.
+
+    :func:`_li_convolutions_2d_tensor_full` must return the mean of the two
+    factorization orders on the RAW ``ehat`` blocks, because its one caller
+    applies the ``l3-`` ``E_z`` fold (Li 2003 Eq. 27) to what it gets back and
+    ALSO feeds the raw cross-blocks to the generalized generator's own
+    ``inv(EZZ)``.  Taking the mean after a per-order fold would hand the
+    caller two quantities from different operators.
+
+    Tolerance-at-0.0 on the nine blocks against the mean recomputed here from
+    :func:`_li_tensor_full_l2l1` and its transposed run (the standing rule for
+    an identity that is exact by construction).
+
+    THE ORDERING IS NOT COSMETIC, and that is asserted rather than assumed:
+    ``Schur(mean)`` and ``mean(Schur)`` of the very same two orders differ by
+    2.37e-05 absolute / 1.69e-05 relative on this cell at M = 3 (2.25e-05 /
+    1.60e-05 at M = 4) -- BAR 1e-8 relative, three decades under the
+    measurement.  Without this test the swap is silent: every other D3 gate
+    stays green under it (the x<->y mirror is a symmetry of BOTH orderings),
+    which is exactly why it is here.
+    """
+    cell = _cell("disk", _SKEW)
+
+    def schur(d):
+        zi = np.linalg.inv(d[(2, 2)])
+        return {(r, s): d[(r, s)] - d[(r, 2)] @ zi @ d[(2, s)]
+                for r in range(2) for s in range(2)}
+
+    for M in (3, 4):
+        orders, _N = _twod._harmonic_orders_2d(M, M)
+        A = _twod._li_tensor_full_l2l1(cell, orders, M, np)
+        epsT = np.transpose(cell, (1, 0, 2, 3))[:, :, _PERM, :][:, :, :, _PERM]
+        Braw = _twod._li_tensor_full_l2l1(epsT, orders[:, ::-1], M, np)
+        B = {(r, s): Braw[(_PERM[r], _PERM[s])]
+             for r in range(3) for s in range(3)}
+        mean = {k: 0.5 * (A[k] + B[k]) for k in A}
+
+        shipped = _twod._li_convolutions_2d_tensor_full(cell, orders, M, M, np)
+        for k in mean:
+            assert float(np.max(np.abs(shipped[k] - mean[k]))) == 0.0, (M, k)
+
+        mt = schur(mean)
+        tm = {k: 0.5 * (schur(A)[k] + schur(B)[k]) for k in schur(A)}
+        scale = max(float(np.max(np.abs(mt[k]))) for k in mt)
+        gap = max(float(np.max(np.abs(mt[k] - tm[k]))) for k in mt) / scale
+        assert gap > 1e-8, (
+            f"M={M}: the two fold orderings agree to {gap:.3e}, so this "
+            f"fixture no longer distinguishes them -- pick one that does")

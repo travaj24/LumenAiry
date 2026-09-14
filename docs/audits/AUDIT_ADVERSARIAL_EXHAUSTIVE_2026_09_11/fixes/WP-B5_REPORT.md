@@ -683,3 +683,31 @@ the brief directs: two of the four sites live in `pmm/`.
 
 **Not reproducible: none.**  Both D2's and D3's defects reproduced on the current HEAD, and
 D1's two sites are exactly where WP-A14 left them.
+
+---
+
+## Addendum after VERIFY-B5 (orchestrator, 2026-09-13)
+
+* **Section 2, "Residual risk, stated exactly" is superseded by this paragraph.**  The closed form is a RE-ASSOCIATION, and it is
+  neutral exactly while `I - B11 A22` is well conditioned.  Where that denominator is near-singular the answer is a difference of terms
+  far larger than the difference, and both formulations carry their own `cond * eps`.  Two things reach that regime.  An exponentially
+  GROWING layer propagator does (`A22` far above 1) and `_sqrt_decay`'s `Re(lam) >= 0` branch keeps it off the public API (`|X| <= 1`
+  always); it IS reachable by monkeypatching that branch, and the two engineered test arms of section 5 do so.  A HIGH-Q CAVITY RESONANCE
+  does it with `|X| <= 1` throughout and IS reachable: on a weakly modulated high-index slab whose `+-1` order is evanescent in both
+  half-spaces, `cond(I - B11 A22)` reaches 1.75e+13 from `rcwa_efficiency_1d` alone, the closed form and the assembled star land 4.2e-04
+  apart and EQUALLY far (9.7e-04 each) from the coupled system solved whole, and the shipped per-order efficiency moves up to 6.4e-06
+  between them (measured by VERIFY-B5 with a double-double reference).  The `<= 1.665e-15 / 3.114e-15` envelope of section 2 is a statement
+  about the well-conditioned population it was measured on, not a bound on the entry points.  Both regimes are documented in
+  `_redheffer_star_rt`'s docstring and gated by
+  `test_audit2609_b5_rcwa_eme_bor.py::test_d2_a_near_singular_star_denominator_is_reachable_and_neither_form_is_better`.
+* **Section 5(a), point 2** reads with this scope: the regime the engineered arm creates -- a layer mode with `Re(lam) < 0` -- is unreachable
+  from the public API; the near-singular denominator it produces is reachable by other means (a cavity resonance) and is documented in
+  `_redheffer_star_rt`, but not with `|A22|` far above 1, which is what makes THAT arm's disagreement O(1).  The conclusion (the fixtures
+  stay; the arms record the refusal) is unaffected.
+* **Section 2, the 382-array movement table**: the row `rcwa_jones_2d (+ out-of-plane) | 84 | 38 | 1.665e-15 | 3.114e-15` covers the
+  `'laurent'` / `'li'` formulations on the out-of-plane cell; `'fff_nv'` on an out-of-plane cell is D3's intended change (1.08e-03 measured)
+  and is covered by the migration note, not by that row.
+* **Section 2, D3 "Residual risk"**: the symmetrisation doubles the operator build, which is 7.7 % of the whole solve at `n_orders` 4 and
+  falls to 2.9 % by 8 -- the eigensolve outgrows it; "measurably more expensive at large `n_orders`" has the direction backwards.
+* **Section 5(c), correction of record**: `threadpoolctl` IS a declared dependency (`pyproject.toml`, `requirements.txt`, `>= 3.1`) and
+  3.6.0 is installed on this box; the skip list reads "threadpoolctl installed: the cap is effective here".  WP-A14's request is closed.

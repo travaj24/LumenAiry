@@ -206,7 +206,9 @@ Tests: `tests/unit/test_audit2609_b5_rcwa_eme_bor.py::test_d1_levinson_lands_out
   `rcwa_jones_2d`, `rcwa_efficiency_2d_shapes` and `PreparedRCWA2D.solve` return values that
   differ from 5.46.0 in the last bits (worst measured 1.7e-15 absolute / 3.1e-15 relative).
   A test that pins one of these to more than ~13 significant figures will need its value
-  re-recorded; nothing else is affected.  `RCWAStack`, `berreman_jones_1d`, `elements/eme`,
+  re-recorded.  The envelope is the well-conditioned population's: at a high-Q cavity
+  resonance, where `I - B11 A22` reaches `cond` 1e13, the two formulations differ by up to
+  6.4e-06 and neither is the better one -- see `_redheffer_star_rt`.  `RCWAStack`, `berreman_jones_1d`, `elements/eme`,
   `elements/bor` and `elements/pmm` are byte-identical.
 * `rcwa_jones_2d(formulation='fff_nv')` on an OUT-OF-PLANE (full 3x3) tensor cell returns a
   different, x<->y-symmetric answer; the change is 2e-04 .. 5e-03 on the Jones matrix of a

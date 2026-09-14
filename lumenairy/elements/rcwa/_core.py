@@ -3400,28 +3400,50 @@ def _redheffer_star_rt(SA, SB, cinc):
 
     NOT bit-identical to assembling the star and multiplying: the same terms
     are summed in a different order (mat-vec instead of mat-mat), which moves
-    the last bits.  Measured against the assembled star over the metallic
-    convergence ladder (Ag and Au, ``n_orders`` 100..400, both polarizations)
-    the largest disagreement is 3.3e-16 absolute / 1.7e-15 relative on a
-    per-order efficiency, and over the whole 1-D + 2-D entry-point matrix
-    (both polarizations, ``'laurent'`` / ``'li'`` / ``'fff_nv'``, normal and
-    oblique) 1.7e-15 absolute / 3.1e-15 relative -- two decades inside the
-    interface inverse's own 1.1e-16..3.2e-16 equilibrated residual on the same
-    fixtures, and three inside the 1.4e-13 closure this package holds.  The
-    library's own instability class (``period`` 10 um, ``dn`` 0.05, the
-    fixture the M1 gate scans) moves 1.1e-15 over 46 rungs.
+    the last bits.  WHILE ``I - B11 A22`` IS WELL CONDITIONED that is the
+    whole of the difference.  Measured against the assembled star over the
+    metallic convergence ladder (Ag and Au, ``n_orders`` 100..400, both
+    polarizations) the largest disagreement is 3.3e-16 absolute / 1.7e-15
+    relative on a per-order efficiency, and over the whole 1-D + 2-D
+    entry-point matrix (both polarizations, ``'laurent'`` / ``'li'`` /
+    ``'fff_nv'``, normal and oblique) 1.7e-15 absolute / 3.1e-15 relative --
+    two decades inside the interface inverse's own 1.1e-16..3.2e-16
+    equilibrated residual on the same fixtures, and three inside the 1.4e-13
+    closure this package holds.  The library's own instability class
+    (``period`` 10 um, ``dn`` 0.05, the fixture the M1 gate scans) moves
+    1.1e-15 over 46 rungs.
 
-    WHERE THE RE-ASSOCIATION IS NOT NEUTRAL, and it is not reachable from the
-    public API: if a LAYER mode carries an exponentially GROWING propagator,
-    ``A22 = X S22 X`` has entries far above 1, ``I - B11 A22`` is
-    near-singular and the answer is a difference of huge terms, so the two
-    associations disagree by O(1) -- both being numbers no build agrees on.
-    :func:`_sqrt_decay`'s ``Re(lam) >= 0`` branch is what makes that
-    unreachable (``|X| <= 1`` always); the one way to observe it is to
-    monkeypatch that branch, and doing so moves the closure of an
-    index-coincident cell from ~6e-03 to ~4e-01, which the gross
-    :func:`_check_energy` tripwire then REFUSES on 2 rungs of 16 instead of
-    warning on 15."""
+    WHERE THE RE-ASSOCIATION IS NOT NEUTRAL is wherever ``I - B11 A22`` --
+    the cavity denominator of the two interfaces -- is NEAR-SINGULAR, because
+    both formulations then compute a difference of terms far larger than
+    their difference and each carries its own ``cond * eps``.  Two routes
+    reach it, and only one of them is closed:
+
+    * an exponentially GROWING layer propagator makes ``A22 = X S22 X`` carry
+      entries far above 1 and the two associations disagree by O(1).
+      :func:`_sqrt_decay`'s ``Re(lam) >= 0`` branch is what keeps that off
+      the public API (``|X| <= 1`` always); the one way to observe it is to
+      monkeypatch that branch, and doing so moves the closure of an
+      index-coincident cell from ~6e-03 to ~4e-01, which the gross
+      :func:`_check_energy` tripwire then REFUSES on 2 rungs of 16 instead of
+      warning on 15.
+    * a HIGH-Q CAVITY RESONANCE does it with ``|X| <= 1`` throughout, and IS
+      reachable: on a weakly modulated high-index slab whose +-1 order is
+      evanescent in both half-spaces (a leaky guided mode), an eigenvalue of
+      ``B11 A22`` has modulus ``1 - O(dn^2)`` and a phase the thickness
+      tunes, so ``cond(I - B11 A22)`` reaches 1.8e13 from
+      :func:`~lumenairy.elements.rcwa.rcwa_efficiency_1d` alone.  There the
+      closed form and the assembled star are measured 4.2e-04 apart on the
+      star's own output -- and EQUALLY far (9.7e-04 each) from the defining
+      coupled system solved whole, so neither association is the better one
+      and the answer is not determined to that precision on any build.  The
+      envelope above is a statement about the well-conditioned population it
+      was measured on, not a bound: on that family the shipped per-order
+      efficiency moves up to 6.4e-06 absolute between the two formulations,
+      and it is already 1.8e-14 on a rung whose lossless closure is 7e-12 --
+      i.e. outside the envelope with no warning of any kind.  Gated by
+      ``test_audit2609_b5_rcwa_eme_bor.py``'s
+      ``test_d2_a_near_singular_star_denominator_is_reachable_...``."""
     A11, A12, A21, A22 = SA
     B11, _B12, B21, _B22 = SB
     xp = array_namespace(A11, B11)
