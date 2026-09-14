@@ -648,3 +648,14 @@ Every duration is indicative only: the box was shared with other engineers
 throughout (their uncommitted `_lens_real.py`, `carrier.py`,
 `lenses_maslov.py`, `_lens_traced.py`, `lens_config.py`, `rcwa/*` edits landed
 during these runs), and no test asserts one.
+
+---
+
+## Orchestrator note (2026-09-13, at this report's landing)
+
+V5 (section 6.1) was applied as requested: `_propagate_through_glass`'s `'fresnel'` branch now refuses an anamorphic pitch and a
+non-square grid with the same shape of message as its `'sas'` sibling.  That removes the one call site V3 (section 5.3) could reach
+with a non-square grid, so the per-axis `min` is unreachable by construction at all three sites; `TestV3ThePerAxisPeriodIsLoadBearing`
+is restated to pin the property on `resample_field` itself (a window between the short and the long period makes the chirp-Z leg warn
+on exactly the short axis; a window inside the short period is silent), to pin the refusal as the reason, and to require every call site
+to keep spelling the general form.  Nothing else in this report changes.

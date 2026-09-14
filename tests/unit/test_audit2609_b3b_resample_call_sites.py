@@ -853,91 +853,85 @@ class TestV1TheFresnelLegStillReportsAWindowLoss:
 
 
 class TestV3ThePerAxisPeriodIsLoadBearing:
-    """VERIFY-B3b V3.  The gate's ``min(E.shape[-2], E.shape[-1])`` is
-    reachable at exactly one of the three call sites -- the in-glass
-    ``'fresnel'`` gap, since ``scalable_angular_spectrum_propagate``
-    refuses a non-square input outright and the chain's own grid is
-    square.  Deleting the ``min`` leaves every other test in this file
-    green, so it needs its own."""
+    """VERIFY-B3b V3, restated after V5.  The gate's
+    ``min(E.shape[-2], E.shape[-1])`` encodes that the SHORTER input extent
+    sets the chirp-Z reconstruction period, because ``resample_field``
+    reads one input pitch for both axes.  V5 made the one call site that
+    could reach it with a non-square grid -- the in-glass ``'fresnel'`` gap
+    -- refuse such a grid outright (its resample-back scaled y by the x
+    ratio), so at the three shipped call sites the ``min`` is now
+    unreachable by construction.  The property itself is therefore pinned
+    where it lives, on ``resample_field``: a window between the short and
+    the long period must make the chirp-Z leg warn on exactly the short
+    axis, and a window inside the short period must not.  The refusal is
+    pinned beside it as the reason the call-site rule is defensive.
+    """
 
-    PLATE = {
-        'surfaces': [{'radius': float('inf'), 'glass_before': 'AIR',
-                      'glass_after': 'N-BK7'},
-                     {'radius': float('inf'), 'glass_before': 'N-BK7',
-                      'glass_after': 'AIR'}],
-        'thicknesses': [1e-3],
-        'aperture_diameter': 5e-4,
-    }
+    # (label, (ny, nx), dx_in/dx_out, the window's relation to the two
+    # periods).  ``N_out = nx`` and ``dx_out = dx`` as the gap leg calls it,
+    # so window = nx*dx, per_short = min(ny, nx)*dx_in, per_x = nx*dx_in.
+    CASES = [
+        ('short_y_between_the_two_periods', (32, 64), 1.5, 'warns_on_y'),
+        ('short_y_between_the_two_periods_b', (48, 64), 1.2, 'warns_on_y'),
+        ('short_y_far_between', (16, 64), 3.0, 'warns_on_y'),
+        ('short_x_binds_and_fits', (64, 32), 1.5, 'silent'),
+    ]
 
-    def _thickness_for(self, nx, dx, ratio):
-        """The gap that puts ``dx_new/dx`` at ``ratio``:
-        ``dx_new = (lambda/n)*t/(nx*dx)``."""
-        from lumenairy.glass import get_glass_index
-        n_glass = float(np.real(get_glass_index('N-BK7', LAM)))
-        return ratio * dx * nx * dx * n_glass / LAM
-
-    def _run(self, shape, ratio, monkeypatch, force=None):
+    @staticmethod
+    def _chirpz(shape, ratio):
+        from lumenairy.propagators.mft import resample_field
         ny, nx = shape
         dx = 2e-6
-        pres = dict(self.PLATE)
-        pres['thicknesses'] = [self._thickness_for(nx, dx, ratio)]
-        spy = _ResampleSpy(force_method=force).install(monkeypatch)
-        E = np.ones((ny, nx), dtype=np.complex128)
+        dx_in = ratio * dx
+        E = np.exp(1j * 0.3 * np.arange(nx))[None, :] * np.ones((ny, 1))
+        E = E.astype(np.complex128)
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter('always')
-            apply_real_lens(E, prescription=pres, wavelength=LAM, dx=dx,
-                            dy=dx, wave_propagator='fresnel')
-        return spy, [str(x.message) for x in w]
-
-    # (label, shape, dx_new/dx, what the per-axis rule must choose).  The
-    # short side sets the period, so a window between ``min*dx_new`` and
-    # ``max*dx_new`` is inside the x period and outside the y one.
-    CASES = [
-        ('short_y_between_the_two_periods', (32, 64), 1.5, 'spline'),
-        ('short_y_between_the_two_periods_b', (48, 64), 1.2, 'spline'),
-        ('short_y_far_between', (16, 64), 3.0, 'spline'),
-        ('short_x_binds_and_fits', (64, 32), 1.5, 'chirpz'),
-    ]
+            resample_field(E, dx_in, dx, N_out=nx, method='chirpz')
+        texts = [str(x.message) for x in w if 'faithful zone' in str(x.message)]
+        window = nx * dx
+        per_short = min(ny, nx) * dx_in
+        per_x = nx * dx_in
+        return texts, window, per_short, per_x
 
     @pytest.mark.parametrize('label,shape,ratio,want',
                              CASES, ids=[c[0] for c in CASES])
     def test_the_shorter_input_extent_sets_the_period(
-            self, label, shape, ratio, want, monkeypatch):
-        spy, _ = self._run(shape, ratio, monkeypatch)
-        assert spy.calls, f'{label} did not reach the gap resample-back'
-        c = spy.calls[0]
-        ny, nx = np.asarray(c['shape'])[-2:]
-        per_short = min(ny, nx) * c['dx_in']
-        per_x = nx * c['dx_in']
-        assert c['method'] == want, (label, c)
-        if want == 'spline':
-            # the fixture is the one the min exists for: inside the x
-            # period, outside the y one, so an x-only gate would have
-            # chosen the other leg
-            assert c['window'] <= per_x * (1.0 + 1e-9), (label, c)
-            assert c['window'] > per_short * (1.0 + 1e-9), (label, c)
+            self, label, shape, ratio, want):
+        texts, window, per_short, per_x = self._chirpz(shape, ratio)
+        if want == 'warns_on_y':
+            # the fixture the min exists for: inside the x period, outside
+            # the y one -- an x-only rule would call this window faithful
+            assert window <= per_x * (1.0 + 1e-9), (label, window, per_x)
+            assert window > per_short * (1.0 + 1e-9), (label, window, per_short)
+            assert texts, (label, 'chirp-Z did not warn on a window the short axis cannot hold')
+            assert ' on y ' in texts[0], texts[0]
         else:
-            # the two-sided arm: the short side BINDS here too, and the
-            # window fits inside it, so the per-axis rule must still say
-            # chirp-Z -- the min is not a blanket veto on non-square
-            assert c['window'] <= per_short * (1.0 + 1e-9), (label, c)
+            # the two-sided arm: the short side binds and the window fits
+            # inside it, so the leg is faithful and must be silent
+            assert window <= per_short * (1.0 + 1e-9), (label, window, per_short)
+            assert not texts, texts
 
-    def test_the_leg_the_min_refuses_is_the_one_that_warns(self,
-                                                           monkeypatch):
-        """The claim the ``min`` exists to keep: on a window the shorter
-        axis cannot hold, forcing the chirp-Z leg makes ``resample_field``
-        emit its own faithful-zone warning -- on the y axis, the one a
-        pitch test cannot see.  The gate picks the spline there and is
-        silent."""
-        spy_gated, texts_gated = self._run((32, 64), 1.5, monkeypatch)
-        assert [c['method'] for c in spy_gated.calls] == ['spline']
-        assert not any('faithful zone' in t for t in texts_gated), \
-            texts_gated
-        spy_forced, texts_forced = self._run((32, 64), 1.5, monkeypatch,
-                                             force='chirpz')
-        hit = [t for t in texts_forced if 'faithful zone' in t]
-        assert hit, texts_forced
-        assert ' on y ' in hit[0], hit[0]
+    def test_the_gap_leg_refuses_the_grid_the_min_was_for(self):
+        """V5: the only call site a non-square grid could reach now refuses
+        it, so the per-axis rule there cannot be exercised end to end; the
+        refusal is the two-sided companion of the pins above."""
+        E = np.ones((32, 64), dtype=np.complex128)
+        with pytest.raises(ValueError,
+                           match=r"wave_propagator='fresnel' assumes a square sample count"):
+            apply_real_lens(E, prescription=TestK6TheChirpZGate.PLATE,
+                            wavelength=LAM, dx=2e-6, dy=2e-6,
+                            wave_propagator='fresnel')
+
+    def test_the_call_sites_still_spell_the_general_form(self):
+        """The defensive rule stays written in the general per-axis form at
+        every site, so a future non-square-capable site inherits it."""
+        from lumenairy.elements import _lens_real
+        from lumenairy.propagators import system
+        for fn in (_lens_real._propagate_through_glass,
+                   system.propagate_through_system):
+            src = inspect.getsource(fn)
+            assert 'min(E.shape[-2], E.shape[-1])' in src, fn.__name__
 
 
 class TestV4TheGateSharesTheResamplersOwnTolerance:
@@ -1057,3 +1051,42 @@ class TestV2TheExactPeriodScaleFactorsDependOnNin:
         doc = resample_field.__doc__
         assert 'x2 needs an EVEN ``N_in``' in doc
         assert 'divisible by 4' in doc
+
+class TestV5TheFresnelGapLegRefusesWhatItCannotResample:
+    """VERIFY-B3b V5, applied by the orchestrator: ``_propagate_through_glass``'s
+    ``'fresnel'`` branch resamples back onto the lens grid through one input
+    pitch and one ``N_out``, so an anamorphic pitch or a non-square grid had
+    its y axis scaled by the x ratio -- measured relL2 0.404 and a power ratio
+    of exactly ``dy/dx`` (1.4999 at dx = 2 um, dy = 3 um) on the pre-fix
+    library, silently -- while the ``'sas'`` sibling refused both.  The two
+    refusals below make the two gap legs consistent; the square isotropic
+    call is the two-sided arm and must still run.
+    """
+
+    PLATE = TestK6TheChirpZGate.PLATE
+
+    def test_an_anamorphic_pitch_is_refused_like_the_sas_sibling(self):
+        E = np.ones((64, 64), dtype=np.complex128)
+        for wp in ('fresnel', 'sas'):
+            with pytest.raises(ValueError,
+                               match=rf"apply_real_lens: wave_propagator='{wp}' assumes a square grid pitch"):
+                apply_real_lens(E, prescription=self.PLATE, wavelength=LAM,
+                                dx=2e-6, dy=3e-6, wave_propagator=wp)
+
+    def test_a_non_square_grid_is_refused(self):
+        E = np.ones((48, 64), dtype=np.complex128)
+        with pytest.raises(ValueError,
+                           match=r"apply_real_lens: wave_propagator='fresnel' assumes a square sample count"):
+            apply_real_lens(E, prescription=self.PLATE, wavelength=LAM,
+                            dx=2e-6, wave_propagator='fresnel')
+
+    def test_the_square_isotropic_call_still_runs(self):
+        E = np.ones((64, 64), dtype=np.complex128)
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            out = apply_real_lens(E, prescription=self.PLATE, wavelength=LAM,
+                                  dx=2e-6, dy=2e-6, wave_propagator='fresnel')
+        field = out[0] if isinstance(out, tuple) else out
+        assert np.shape(field) == (64, 64)
+        assert np.all(np.isfinite(field))
+        assert float(np.sum(np.abs(field) ** 2)) > 0.0

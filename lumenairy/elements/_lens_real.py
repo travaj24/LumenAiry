@@ -2843,6 +2843,33 @@ def _propagate_through_glass(E: Any, thickness: float, wavelength: float,
                         else 'spline'))
     elif wave_propagator == 'fresnel':
         from ..propagators.propagation import fresnel_propagate, resample_field
+        # ``fresnel_propagate`` returns a distinct output pitch per axis
+        # (``lam_medium*t/(Nx*dx)`` against ``lam_medium*t/(Ny*dy)``) and the
+        # resample back onto the lens grid below reads ONE input pitch and
+        # ONE N_out, so an anamorphic pitch or a non-square grid would have
+        # its y axis scaled by the x ratio -- measured relL2 0.404 and a
+        # power ratio of exactly dy/dx on a 1 mm N-BK7 gap at dx = 2 um,
+        # dy = 3 um -- with no diagnostic.  Refuse, exactly as the ``'sas'``
+        # branch above and ``propagate_through_system``'s own
+        # ``_require_square_pitch`` do.
+        if abs(float(dy) - float(dx)) > abs(float(dx)) * 1e-9:
+            raise ValueError(
+                f"apply_real_lens: wave_propagator='fresnel' assumes a square "
+                f"grid pitch, but this call is anamorphic (dx={dx:.6g} m, "
+                f"dy={dy:.6g} m): fresnel_propagate returns a different "
+                f"output pitch per axis and the resample back onto the lens "
+                f"grid reads only one, so the y axis would be scaled by the "
+                f"x ratio.  Use wave_propagator='asm' (or "
+                f"'rayleigh_sommerfeld'), which thread the y-pitch correctly, "
+                f"or resample to an isotropic grid first.")
+        if int(np.shape(E)[-2]) != int(np.shape(E)[-1]):
+            raise ValueError(
+                f"apply_real_lens: wave_propagator='fresnel' assumes a square "
+                f"sample count, but this call is "
+                f"{np.shape(E)[-2]}x{np.shape(E)[-1]}: the resample back onto "
+                f"the lens grid takes a single N_out, so the y extent would "
+                f"be silently replaced by the x one.  Use "
+                f"wave_propagator='asm', which keeps the grid.")
         E, dx_new, _ = fresnel_propagate(E, thickness, lam_medium, dx, dy=dy)
         if abs(dx_new - dx) > dx * 1e-6:
             # K6, same window-vs-period rule and the same in-glass bias

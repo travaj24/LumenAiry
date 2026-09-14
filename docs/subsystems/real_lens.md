@@ -105,7 +105,7 @@ field's actual congruence, the better.  A wildly mismatched pair (a 20-wave-per-
 residual) is aliased, not refused.  The 2-D remap carries **no in-glass diffraction** --
 documented in `displaced_mode`.
 
-The 2-D remap's transverse resolution is the LAUNCH pitch `2 r_aperture / (displaced_n_side - 1)`,
+The 2-D remap's transverse resolution is the LAUNCH pitch `2 * 1.03 * r_aperture / (displaced_n_side - 1)` (the fan is thrown 3 % wider than the aperture),
 not `dx`: it is a geometric transfer, so input structure finer than that pitch is smoothed to
 the lattice, and the call warns (naming the `displaced_n_side` that would clear it) whenever the
 launch pitch is coarser than twice the field pitch.  Default 257 rays a side; the inversion of the
