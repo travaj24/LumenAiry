@@ -691,18 +691,42 @@ def _sphere_normal(x, y, R):
 
     (the second form drops ``z`` by substituting the near-branch sag, and
     is a unit vector identically).  Five array operations, no Python
-    calls, no cancellation -- and it agrees with the JAX twin's
-    ``conic_sag_derivs`` form to fewer ULPs than the generic route does,
-    because it never divides by the small ``h`` near the vertex.
+    calls -- and it agrees with the JAX twin's ``conic_sag_derivs`` form
+    to fewer ULPs than the generic route does near the vertex, because
+    it never divides by the small ``h`` there.
 
-    ``nz`` is NaN outside ``h**2/R**2 < 0.9999``, reproducing the
-    out-of-domain policy of :func:`_surface_sag_derivative` exactly: a
-    ray there carries a NaN normal and is killed as ``RAY_NAN`` by the
-    degenerate-direction guard in :func:`intersection._refract`.  A
-    NOT-FINITE position propagates into all three components (the S11-7
-    policy the shared core ``conic_sag_derivs`` already implements), so
-    such a ray is killed rather than refracting off a fabricated
-    ``(-0, -0, 1)`` axial normal.
+    ACCURACY IS NOT UNIFORM, and neither route dominates.  ``nz`` is
+    ``sqrt(1 - u)`` with ``u = h**2/R**2``, and that subtraction cancels
+    as ``u -> 1``: the relative error of ``nz`` is bounded below by
+    ``eps/2 * u/(1 - u)`` for ANY float64 evaluation, generic or closed
+    form, because the information is not in the inputs.  Measured against
+    a 60-digit ``decimal`` oracle over five radii (VERIFY-WP-B9): both
+    routes agree with the truth to <= 4 ULP up to ``h = 0.95 |R|``;
+    at ``h = 0.99 |R|`` both are ~10 ULP out, at ``0.999 |R|`` ~100 ULP,
+    and at the ``0.99995 |R|`` domain edge ~1e3-6e3 ULP.  Over a 1200-
+    point sweep the closed form is closer at 500 points, the generic
+    route at 178 and they tie at 522 -- so "more accurate" is a mean, not
+    a bound, and the difference above ``0.95 |R|`` is which way the
+    shared cancellation happens to round.
+
+    ``nz`` is NaN outside ``h**2/R**2 < 0.9999``, the same threshold
+    :func:`_surface_sag_derivative` applies, so a ray there carries a NaN
+    normal and is killed as ``RAY_NAN`` by the degenerate-direction guard
+    in :func:`intersection._refract`.  The two gates are evaluated from
+    DIFFERENT expressions, though -- ``(x*x + y*y)/(R*R)`` here against
+    ``(1 + conic) * sqrt(x*x + y*y)**2 / R**2`` there -- which differ by
+    up to 1 ULP, so within about 1 ULP of ``h**2 = 0.9999 R**2`` the two
+    can land on opposite sides of the threshold.  Measured:
+    ``R = 51.68 mm``, ``x = y = 0.036541451242116801 m`` gives
+    ``nz = 1.0000000000005e-2`` and a refracted ray here, ``NaN`` and a
+    ``RAY_NAN`` kill through the generic route.  That band is reachable
+    only under ``sphere_normal='analytic'``; the shipped default is the
+    generic route on both sides.
+
+    A NOT-FINITE position propagates into all three components (the
+    S11-7 policy the shared core ``conic_sag_derivs`` already
+    implements), so such a ray is killed rather than refracting off a
+    fabricated ``(-0, -0, 1)`` axial normal.
     """
     norm = (x * x + y * y) / (R * R)
     valid = norm < 0.9999
@@ -724,9 +748,11 @@ def _surface_normal(x, y, surface, *, analytic_sphere=False):
         pure sphere (:func:`_is_pure_spherical` -- the same predicate the
         intersection fast path selects on).  The default is the generic
         sag-derivative route, which is the arithmetic every caller has
-        always got; the two agree to ~1e-16 and the closed form is the
-        more accurate of the pair, but "more accurate" is still a
-        different last bit, so the switch is explicit.  See
+        always got; the two agree to ~1e-16 over the working aperture and
+        the closed form is closer to the truth at most heights, but not
+        at all of them (see :func:`_sphere_normal` for where the two are
+        both at the conditioning limit of ``sqrt(1 - h^2/R^2)``).  Either
+        way it is a different last bit, so the switch is explicit.  See
         ``trace(sphere_normal=...)``.
     """
     if analytic_sphere and _is_pure_spherical(surface):

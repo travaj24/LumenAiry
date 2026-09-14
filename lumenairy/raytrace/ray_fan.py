@@ -111,10 +111,18 @@ def _trace_fan_set(tracer, bundles, surfaces, wavelength):
     at all -- the same values either way) and the aspheric Newton loop's
     ``if converged.all(): break``, which can run a ray one extra
     iteration when a slower ray shares the bundle.  That extra iteration
-    is a Newton step from an already-converged point (``|dt| < 1e-15``),
-    so it moves ``t`` by at most an ULP; measured over the verification
-    prescriptions the fans are bit-identical on spherical and flat
-    systems and agree to ``<= 1e-18 m`` in ``ey`` on conic ones.
+    is a Newton step from a point the loop already accepted, so the step
+    it takes is the ray's own quadratic-convergence residual, ~``eps |t|``
+    -- an ULP of ``t``, not the loop's ``|dt| < 1e-15`` m ACCEPTANCE
+    bound, which is absolute and would be tens of ULP at ``|t| ~ 0.1 m``.
+    Measured over the verification prescriptions the fans are
+    bit-identical on spherical and flat systems and agree to
+    ``<= 1e-18 m`` in ``ey`` on conic ones; VERIFY-WP-B9 swept 90 more
+    aspheric cases (three departures x three base conics x gaps from
+    0.5 m to 256 m, i.e. across ``|t| = 1e-15/eps = 4.5 m`` where a
+    converged ray's own residual step reaches that absolute bound) and
+    found ``max |dy| = 0`` and identical ``alive`` masks against four
+    separate traces.
 
     ``output_filter='last'`` is passed because the fan analytics read
     only ``image_rays``; it drops one full ``RayBundle.copy()`` per
@@ -135,9 +143,13 @@ def _trace_fan_set(tracer, bundles, surfaces, wavelength):
         wavelength=bundles[0].wavelength,
         alive=np.concatenate([b.alive for b in bundles]),
         opd=np.concatenate([b.opd for b in bundles]),
-        error_code=np.concatenate(
-            [np.zeros(b.n_rays, dtype=np.uint8) if b.error_code is None
-             else b.error_code for b in bundles]),
+        # ``RayBundle.__post_init__`` synthesises ``error_code`` from
+        # ``alive`` whenever a caller omits it (dead -> RAY_TIR, the
+        # "unknown dead" placeholder), so every input already carries
+        # one and concatenating them preserves each ray's own code.  A
+        # ``np.zeros`` stand-in here would relabel such a dead ray
+        # RAY_OK, which is why it is the bundle's array that is read.
+        error_code=np.concatenate([b.error_code for b in bundles]),
     )
     img = tracer(joint, surfaces, wavelength, output_filter='last').image_rays
     return [_bundle_slice(img, slice(int(stop) - cnt, int(stop)))

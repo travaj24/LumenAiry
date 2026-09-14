@@ -944,6 +944,20 @@ def _resolve_semi_diameters(prescription):
 # prescription is rejected on every call, never cached, and the fields it
 # rejects on (mirror / coord-break / biconic / freeform) are absent from
 # every prescription that reaches the key.
+#
+# What is NOT in the key, and why that is correct: the trace WAVELENGTH
+# (``trace_jax`` hands it to the kernel separately -- only the indices it
+# resolves are cached), the LAST thickness (the builder reads
+# ``n_surf - 1`` gaps), and a top-level ``aperture_diameter`` that a
+# per-surface ``semi_diameter`` overrides (the resolved ``semi_ds`` is
+# what is keyed).  Each of those is a value the built object does not
+# depend on; when it does become the resolving value it is in the key.
+#
+# The entry is SHARED, not copied, so a caller that rebinds one of the
+# five ``__slots__`` on a returned ``JaxPrescription`` changes what every
+# later caller gets -- ``__slots__`` blocks NEW attributes, not writes to
+# declared ones.  Treat a returned prescription as read-only; build your
+# own with ``JaxPrescription(...)`` if you need to mutate one.
 _JAX_PRESCRIPTION_CACHE: 'OrderedDict[Any, Any]' = OrderedDict()
 _JAX_PRESCRIPTION_CACHE_MAXSIZE = 32
 _JAX_PRESCRIPTION_CACHE_LOCK = threading.Lock()
@@ -978,13 +992,22 @@ def _build_jax_prescription(prescription, wavelength,
 
     The built object is memoised on that same ``aux`` signature (see the
     cache note above), so a repeated eager call at a FIXED prescription
-    skips the JAX-array leaf conversions.  ``JaxPrescription`` is
-    immutable in this package (``__slots__``, no attribute writes after
-    construction), so callers share one instance safely; a caller that
-    wants a private one should construct it itself.  A prescription
-    whose values are unhashable (a NaN radius keys fine but never hits;
-    an exotic ``aspheric_coeffs`` key type raises) simply skips the
-    cache and builds every time.
+    skips the JAX-array leaf conversions.  The SAME instance is handed to
+    every caller with an equal ``aux``; nothing in this package writes to
+    one, but ``__slots__`` only blocks new attribute NAMES, so a caller
+    that rebinds ``jp.radii`` on a returned object changes what the next
+    caller sees.  Construct your own ``JaxPrescription`` if you need a
+    private one.
+
+    ``aux`` is hashable by construction -- every element is an ``int``,
+    a ``float`` or a tuple of those, built by ``int()`` / ``float()`` /
+    ``tuple()`` here -- so the ``TypeError`` guard around the lookup is
+    defensive only and builds without caching if a future field ever
+    reaches ``aux`` unhashable.  A NaN radius keys and BEHAVES: the same
+    prescription dict re-read hands back the same NaN OBJECT, whose
+    identity satisfies the tuple comparison, so it hits; a freshly
+    created NaN misses and rebuilds.  Either way the built object matches
+    the prescription it was asked for.
     """
     _ensure_jaxprescription_registered()    # lazy pytree reg (audit P2-D)
     if not JAX_AVAILABLE:
@@ -1067,8 +1090,11 @@ def _build_jax_prescription(prescription, wavelength,
             if hit is not None:
                 _JAX_PRESCRIPTION_CACHE.move_to_end(aux)
     except TypeError:
-        # An unhashable value reached ``aux`` (an exotic aspheric power
-        # key).  Build without caching rather than refusing the trace.
+        # Defensive: every element of ``aux`` above is produced by
+        # ``int()`` / ``float()`` / ``tuple()``, so it is hashable today
+        # and this branch does not run.  It is here so that a future
+        # field added to ``aux`` degrades to "build every time" instead
+        # of refusing the trace.
         return _build_jax_leaves(jnp, radii_py, conics_py, thicks_py,
                                  asph_pairs, aux)
     if hit is not None:

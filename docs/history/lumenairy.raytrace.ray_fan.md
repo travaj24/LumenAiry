@@ -1,11 +1,12 @@
 <!-- lumenairy-history-doc
 module: lumenairy/raytrace/ray_fan.py
-ast_sha256: 4addc32887ca4f7478128f1f08636d9259291a0b155c14c43950c887cc952b0b
-token_sha256: cbbb5674e47df7e15beded7d90d93009af77cb88775b7bff11b408cda2656dd1
+ast_sha256: 7b359195858eea6cdb2bbd8d161d5ae001afdbf6b594de662cc37f6656f20c63
+token_sha256: 383eca883fc7e8714f233a1fb82522280063d2aa3a2bfd13c40c9fcd087b405f
 pre_relocation_lines: 1074
 recorded_by: WP-A17 SWEEP-3 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
 re_recorded: 2026-09-13 -- WP-B9 item 3: both ray fans and both OPD fans issue ONE concatenated trace via the new _trace_fan_set / _bundle_slice helpers instead of four; through_focus_rms gains pattern= for the area-uniform pupil
+re_recorded: 2026-09-13 -- VERIFY-WP-B9: _trace_fan_set reads each input bundle's own error_code (the np.zeros stand-in would relabel a dead ray RAY_OK) and names the absolute Newton tolerance
 -->
 
 

@@ -1162,3 +1162,376 @@ def test_b9_i6_jax_backend_agrees_with_the_dual_backend_on_an_asphere():
     assert float(np.max(np.abs(np.asarray(J.jacobian)
                                - A.jacobian))) < 1e-12
     assert float(np.max(np.abs(np.asarray(J.x) - A.x))) < 1e-15
+
+
+# ===========================================================================
+# VERIFY-WP-B9 -- independent adversarial re-verification.
+#
+# Everything below was written by the verifier against its OWN oracles
+# (a 60-digit ``decimal`` normal, ``jax.jacfwd`` through the independent
+# ``trace_jax`` kernel, four separate ``trace()`` calls).  Each pin
+# records a boundary the WP-B9 report states more strongly than the code
+# supports, so the next reader measures instead of re-deriving.
+# ===========================================================================
+
+_VB9_GATE_R = 0.051679999999999997
+_VB9_GATE_XY = 0.036541451242116801
+
+
+def test_vb9_i2_the_two_domain_gates_can_straddle_at_the_knife_edge():
+    """The closed-form normal gates on ``(x*x + y*y)/(R*R) < 0.9999``;
+    the generic route gates on ``(1 + conic) * sqrt(x*x+y*y)**2 / R**2``.
+    Those differ by up to 1 ULP, so a position can sit on opposite sides.
+
+    ORACLE: the two expressions, evaluated here.  MEASURED at the point
+    below -- the generic route returns NaN and ``_refract`` kills the ray
+    ``RAY_NAN``; the closed form returns ``nz = 1.0000000000005e-02`` and
+    the ray refracts.  Confined to ``sphere_normal='analytic'``; the
+    shipped default takes the generic route on both sides, which is why
+    the default byte-identity sweep is unaffected.
+    """
+    R, xy = _VB9_GATE_R, _VB9_GATE_XY
+    x = np.array([xy])
+    y = np.array([xy])
+    norm_analytic = (xy * xy + xy * xy) / (R * R)
+    h = np.sqrt(xy * xy + xy * xy)
+    norm_generic = (1.0 + 0.0) * (h ** 2) / (R ** 2)
+    assert norm_analytic < 0.9999 <= norm_generic, (
+        norm_analytic, norm_generic)
+
+    surf = Surface(radius=R, thickness=0.0, glass_before='air',
+                   glass_after='N-BK7', semi_diameter=np.inf)
+    assert _is_pure_spherical(surf)
+    nz_fast = float(_sphere_normal(x, y, R)[2][0])
+    nz_slow = float(_surface_normal(x, y, surf)[2][0])
+    assert np.isfinite(nz_fast) and abs(nz_fast - 0.01) < 1e-12
+    assert np.isnan(nz_slow)
+
+    # ... and it reaches the public kill decision.
+    z0 = R - np.sqrt(max(R * R - 2.0 * xy * xy, 0.0))
+    codes = {}
+    for mode in ('generic', 'analytic'):
+        rb = la.raytrace.RayBundle(
+            x=x.copy(), y=y.copy(), z=np.array([z0]),
+            L=np.array([0.0]), M=np.array([0.0]), N=np.array([1.0]),
+            wavelength=WL, alive=np.ones(1, dtype=bool), opd=np.zeros(1))
+        _isect._refract(rb, surf, 1.0, 1.5168, sphere_normal=mode)
+        codes[mode] = (bool(rb.alive[0]), int(rb.error_code[0]))
+    assert codes['generic'] == (False, int(RAY_NAN)), codes
+    assert codes['analytic'] == (True, int(RAY_OK)), codes
+
+
+def test_vb9_i2_nz_is_conditioning_limited_above_h_equals_0p95_R():
+    """``nz = sqrt(1 - u)`` with ``u = h^2/R^2`` cancels as ``u -> 1``:
+    the relative error of ``nz`` is bounded below by ``eps/2 * u/(1 - u)``
+    for ANY float64 evaluation, closed form or sag derivative, because
+    the information is not in the inputs.  So the "<= 4 ULP" and "never
+    worse than the generic route" readings hold over the aperture the
+    oracle test samples (``h <= 0.95 |R|``) and NOT beyond it.
+
+    ORACLE: a 60-digit ``decimal`` ``sqrt(1 - u)`` from the EXACT binary
+    values of the float64 inputs; the bar is the same ``4 * 2**-52``
+    absolute (4 ULP of a unit vector) the item-2 oracle test uses.
+
+    MEASURED over R in {51.68, -34.5, 500, -1000, 2} mm: both routes
+    within 2.8e-16 up to ``0.95 |R|``; at ``0.99994 |R|`` -- still inside
+    the ``h^2/R^2 < 0.9999`` domain -- the closed form reaches 1.5e-14
+    (68 ULP) and is 4.3x FURTHER from the truth than the generic route at
+    ``R = -34.5 mm``.  This pin exists because ``WP-B9_REPORT.md``
+    section 6 item 2 proposes dropping the ``valid`` clamp on the grounds
+    that the closed form "is well-conditioned to ``h = |R|``" -- it is
+    not, and neither is the route it replaces.
+    """
+    ctx = decimal.Context(prec=60)
+    D = ctx.create_decimal
+    BAR = 4 * 2.0 ** -52
+
+    def oracle_nz(xv, yv, R):
+        X, Y, RR = D(repr(float(xv))), D(repr(float(yv))), D(repr(float(R)))
+        u = ctx.divide(ctx.add(ctx.multiply(X, X), ctx.multiply(Y, Y)),
+                       ctx.multiply(RR, RR))
+        return float(ctx.subtract(D(1), u).sqrt(ctx))
+
+    def errs(R, f):
+        h = abs(R) * f
+        x = np.array([h / np.sqrt(2.0)])
+        y = np.array([h / np.sqrt(2.0)])
+        surf = Surface(radius=R, thickness=0.0, semi_diameter=np.inf)
+        ref = oracle_nz(x[0], y[0], R)
+        return (abs(float(_sphere_normal(x, y, R)[2][0]) - ref),
+                abs(float(_surface_normal(x, y, surf)[2][0]) - ref))
+
+    radii = (0.05168, -0.0345, 0.5, -1.0, 0.002)
+    # benign regime -- the report's claim, reproduced
+    for R in radii:
+        for f in (0.0, 0.05, 0.2, 0.5, 0.8, 0.95):
+            e_fast, e_slow = errs(R, f)
+            assert e_fast <= BAR and e_slow <= BAR, (R, f, e_fast, e_slow)
+    # conditioning regime -- BOTH routes leave the bar well inside the
+    # surface's own domain, and the closed form is not bounded by the
+    # generic one.
+    worst_fast = max(errs(R, 0.99994)[0] for R in radii)
+    worst_slow = max(errs(R, 0.99994)[1] for R in radii)
+    assert worst_fast > BAR and worst_slow > BAR, (worst_fast, worst_slow)
+    e_fast, e_slow = errs(-0.0345, 0.99994)
+    assert e_fast > 2.0 * e_slow, (e_fast, e_slow)
+
+
+def test_vb9_i3_one_bundle_is_exact_when_a_sub_fan_carries_dead_rays():
+    """ORACLE: four separate ``trace()`` calls, issued here.
+
+    The concatenation must not couple a vignetted / missed ray to its
+    neighbours through the ``np.any`` guards.  Two asymmetric stacks: one
+    whose semi-diameters kill the fan rim, one whose ``R = 9 mm`` sphere
+    the outer fan MISSES (``disc < 0``).
+    """
+    vign = [
+        Surface(radius=0.05168, thickness=0.005, glass_before='air',
+                glass_after='N-BK7', semi_diameter=0.008),
+        Surface(radius=np.inf, thickness=0.0972, glass_before='N-BK7',
+                glass_after='air', semi_diameter=0.006),
+        Surface(radius=np.inf, thickness=0.0, semi_diameter=0.03),
+    ]
+    miss = [
+        Surface(radius=0.009, thickness=0.004, glass_before='air',
+                glass_after='N-BK7', semi_diameter=np.inf),
+        Surface(radius=np.inf, thickness=0.020, glass_before='N-BK7',
+                glass_after='air', semi_diameter=np.inf),
+        Surface(radius=np.inf, thickness=0.0, semi_diameter=np.inf),
+    ]
+    for surfs, semi in ((vign, 0.009), (miss, 0.012)):
+        fy = make_fan('y', semi, 41, 0.0, WL)
+        fx = make_fan('x', semi, 41, 0.0, WL)
+        cy = la.raytrace.make_ray(0, 0, 0, 0, wavelength=WL)
+        cx = la.raytrace.make_ray(0, 0, 0, 0, wavelength=WL)
+        four = [trace(b, surfs, WL).image_rays for b in (cy, cx, fy, fx)]
+        one = _ray_fan_mod._trace_fan_set(trace, (cy, cx, fy, fx), surfs, WL)
+        assert int(np.count_nonzero(~four[2].alive)) > 0, 'no dead ray'
+        for ref, got in zip(four, one):
+            for fld in ('x', 'y', 'z', 'L', 'M', 'N', 'opd', 'alive',
+                        'error_code'):
+                assert (np.asarray(getattr(ref, fld)).tobytes()
+                        == np.asarray(getattr(got, fld)).tobytes()), fld
+
+
+def test_vb9_i3_one_bundle_is_exact_across_the_absolute_newton_tolerance():
+    """The aspheric Newton's acceptance test ``|dt| < 1e-15`` is ABSOLUTE
+    in metres, so it is not scale-free: at ``|t| ~ 1e-15/eps = 4.5 m`` a
+    converged ray's own residual step reaches the bound, which is where
+    an extra iteration forced by a slower bundle-mate could in principle
+    flip ``converged`` and kill the ray.
+
+    ORACLE: four separate traces.  MEASURED ``max |dy| = 0`` and
+    identical ``alive`` masks on both sides of that scale.
+    """
+    for gap in (0.5, 4.5, 16.0):
+        surfs = [
+            Surface(radius=np.inf, thickness=gap, semi_diameter=np.inf),
+            Surface(radius=0.018, conic=-0.9,
+                    aspheric_coeffs={4: -4.0e3, 6: 9.0e6},
+                    thickness=0.005, glass_before='air',
+                    glass_after='N-BK7', semi_diameter=np.inf),
+            Surface(radius=-0.060, aspheric_coeffs={4: 2.0e3},
+                    thickness=0.040, glass_before='N-BK7',
+                    glass_after='air', semi_diameter=np.inf),
+            Surface(radius=np.inf, thickness=0.0, semi_diameter=np.inf),
+        ]
+        cy = la.raytrace.make_ray(0, 0, 0, 0, wavelength=WL)
+        fy = make_fan('y', 0.008, 41, 0.0, WL)
+        fx = make_fan('x', 0.008, 41, 0.0, WL)
+        four = [trace(b, surfs, WL).image_rays for b in (cy, cy, fy, fx)]
+        one = _ray_fan_mod._trace_fan_set(trace, (cy, cy, fy, fx), surfs, WL)
+        for ref, got in zip(four, one):
+            assert np.array_equal(ref.alive, got.alive), gap
+            assert np.asarray(ref.y).tobytes() == np.asarray(got.y).tobytes()
+
+
+def _vb9_presc(**over):
+    p = {
+        'surfaces': [
+            {'radius': 0.05168, 'glass_before': 'air',
+             'glass_after': 'N-BK7'},
+            {'radius': -0.080, 'glass_before': 'N-BK7',
+             'glass_after': 'air'},
+        ],
+        'thicknesses': [0.006, 0.090],
+        'aperture_diameter': 0.008,
+    }
+    p.update(over)
+    return p
+
+
+def test_vb9_i4_the_cached_prescription_is_shared_and_rebindable():
+    """``__slots__`` blocks NEW attribute names, NOT writes to declared
+    ones, so the cached instance is not immutable -- it is shared state.
+
+    This pin is a hazard record, not an endorsement: nothing in the
+    package writes to a returned ``JaxPrescription``, and callers must
+    not either.  The test restores the slot it perturbs.
+    """
+    pytest.importorskip('jax')
+    jt = sys.modules['lumenairy.raytrace.jax_trace']
+    jt.clear_jax_prescription_cache()
+    a = jt._build_jax_prescription(_vb9_presc(), 1.31e-6)
+    b = jt._build_jax_prescription(_vb9_presc(), 1.31e-6)
+    assert a is b, 'the second build must be a cache hit'
+    keep = a.radii
+    try:
+        a.radii = None                      # succeeds -- that is the point
+        assert jt._build_jax_prescription(
+            _vb9_presc(), 1.31e-6).radii is None
+    finally:
+        a.radii = keep
+    with pytest.raises(AttributeError):
+        a.a_brand_new_attribute = 1
+    jt.clear_jax_prescription_cache()
+
+
+def test_vb9_i4_aux_is_hashable_by_construction():
+    """Every element of ``aux`` is produced by ``int()`` / ``float()`` /
+    ``tuple()``, so the ``except TypeError`` fallback around the lookup
+    is defensive only.  Numpy scalars, 0-d arrays and ``bool`` all
+    normalise.
+    """
+    pytest.importorskip('jax')
+    jt = sys.modules['lumenairy.raytrace.jax_trace']
+    for extra in ({'radius': np.float64(0.05168)},
+                  {'radius': np.array(0.05168)},
+                  {'radius': 0.05168, 'conic': False},
+                  {'radius': 0.05168,
+                   'aspheric_coeffs': {np.int64(4): np.float32(1e-6)}}):
+        p = _vb9_presc()
+        p['surfaces'][0].update(extra)
+        jt.clear_jax_prescription_cache()
+        jp = jt._build_jax_prescription(p, 1.31e-6)
+        hash(jp.aux)                         # must not raise
+        assert len(jt._JAX_PRESCRIPTION_CACHE) == 1
+    jt.clear_jax_prescription_cache()
+
+
+def test_vb9_i4_the_key_covers_exactly_what_the_built_object_reads():
+    """Three inputs deliberately do NOT re-key, and must not move the
+    answer either: the trace WAVELENGTH beyond the indices it resolves
+    (``trace_jax`` passes it to the kernel separately), the LAST
+    thickness (the builder reads ``n_surf - 1`` gaps) and a top-level
+    ``aperture_diameter`` that a per-surface ``semi_diameter``
+    overrides.  When ``aperture_diameter`` IS the resolving value it
+    re-keys.
+    """
+    pytest.importorskip('jax')
+    jt = sys.modules['lumenairy.raytrace.jax_trace']
+    jt.clear_jax_prescription_cache()
+    base = jt._build_jax_prescription(_vb9_presc(), 1.31e-6)
+
+    p = _vb9_presc()
+    p['thicknesses'] = [0.006, 0.090 + 1e-3]
+    assert jt._build_jax_prescription(p, 1.31e-6) is base
+
+    wl2 = float(np.nextafter(1.31e-6, np.inf))
+    assert jt._build_jax_prescription(_vb9_presc(), wl2) is base
+
+    p = _vb9_presc()
+    for s in p['surfaces']:
+        s['semi_diameter'] = 0.012
+    jt.clear_jax_prescription_cache()
+    sd = jt._build_jax_prescription(p, 1.31e-6)
+    p2 = dict(p, aperture_diameter=0.006)
+    assert jt._build_jax_prescription(p2, 1.31e-6) is sd, (
+        'a per-surface semi_diameter shadows aperture_diameter')
+
+    jt.clear_jax_prescription_cache()
+    a8 = jt._build_jax_prescription(_vb9_presc(aperture_diameter=0.008),
+                                    1.31e-6)
+    a6 = jt._build_jax_prescription(_vb9_presc(aperture_diameter=0.006),
+                                    1.31e-6)
+    assert a8 is not a6 and a8.aux[2] != a6.aux[2]
+    jt.clear_jax_prescription_cache()
+
+
+def test_vb9_i4_a_nan_radius_hits_on_a_re_read_of_the_same_dict():
+    """A NaN radius does key: ``float(x)`` on a float returns the SAME
+    object, so the tuple comparison short-circuits on identity and the
+    second build of the SAME dict is a hit.  A freshly created NaN is a
+    different object and misses.  Either way the built object matches the
+    prescription asked for -- this pin records which, so the behaviour is
+    not mistaken for a stale hit.
+    """
+    pytest.importorskip('jax')
+    jt = sys.modules['lumenairy.raytrace.jax_trace']
+    p = _vb9_presc()
+    p['surfaces'][0]['radius'] = float('nan')
+    jt.clear_jax_prescription_cache()
+    a = jt._build_jax_prescription(p, 1.31e-6)
+    assert jt._build_jax_prescription(p, 1.31e-6) is a
+    q = _vb9_presc()
+    q['surfaces'][0]['radius'] = float('nan')
+    assert jt._build_jax_prescription(q, 1.31e-6) is not a
+    assert len(jt._JAX_PRESCRIPTION_CACHE) == 2
+    jt.clear_jax_prescription_cache()
+
+
+def test_vb9_i6_aspheric_jacobian_matches_jacfwd_through_trace_jax():
+    """ORACLE: ``jax.jacfwd`` through ``trace_jax`` -- a DIFFERENT
+    intersection kernel (``_intersect_jax``) from ``_adrt_step``, exact
+    to machine precision, so this is not the FD truncation comparison
+    repeated.  BAR 1e-12 absolute on a Jacobian of scale ~3e+1
+    (MEASURED 1.1e-14 .. 5.7e-14 over three aspheric orders).
+    """
+    jax = pytest.importorskip('jax')
+    jax.config.update('jax_enable_x64', True)
+    import jax.numpy as jnp
+    from lumenairy.raytrace.jax_trace import make_jax_ray_state, trace_jax
+
+    for a1 in ({4: -1.0e4}, {4: -1.0e4, 6: 1.0e8},
+               {4: -1.0e4, 6: 1.0e8, 8: -1.0e12}):
+        S = _aspheric_singlet(a1, None, k1=-0.6)[:2]
+        P = {'surfaces': [{'radius': float(s.radius),
+                           'conic': float(s.conic),
+                           'glass_before': s.glass_before,
+                           'glass_after': s.glass_after,
+                           'aspheric_coeffs': dict(s.aspheric_coeffs or {})}
+                          for s in S],
+             'thicknesses': [float(s.thickness) for s in S]}
+
+        def f(v, P=P):
+            ux, uy = v[2], v[3]
+            nrm = jnp.sqrt(1.0 + ux * ux + uy * uy)
+            st = make_jax_ray_state(
+                x=jnp.atleast_1d(v[0]), y=jnp.atleast_1d(v[1]),
+                z=jnp.zeros(1), L=jnp.atleast_1d(ux / nrm),
+                M=jnp.atleast_1d(uy / nrm), N=jnp.atleast_1d(1.0 / nrm),
+                opd=jnp.zeros(1), alive=jnp.ones(1, dtype=bool))
+            o = trace_jax(st, P, WL)
+            return jnp.array([o.x[0], o.y[0], o.L[0] / o.N[0],
+                              o.M[0] / o.N[0]])
+
+        ref = np.array([np.asarray(jax.jacfwd(f)(
+            jnp.array([h, 0.0, 0.0, 0.0], dtype=jnp.float64)))
+            for h in _ASPH_HEIGHTS])
+        z = np.zeros_like(_ASPH_HEIGHTS)
+        got = ray_transfer_jacobian_analytic(
+            _ASPH_HEIGHTS, z, z, z, S, WL).jacobian
+        assert float(np.max(np.abs(got - ref))) < 1e-12, a1
+
+
+def test_vb9_i6_a_zero_aspheric_coefficient_is_a_different_route():
+    """``aspheric_coeffs={4: 0.0}`` is a non-empty dict, so it selects the
+    Newton-refined branch and the numba kernel is excluded -- the surface
+    is arithmetically the base conic but the CODE PATH is not.
+
+    Agreement with the conic path is 3.4e-16 RELATIVE (1.5 ULP), not
+    bit-identical.  Pinned so a caller that spells "no asphere" as a dict
+    of zeros knows it costs the fast path and moves the last bit.
+    """
+    z = np.zeros_like(_ASPH_HEIGHTS)
+    zero = _aspheric_singlet({4: 0.0}, None, k1=-0.6)
+    bare = _aspheric_singlet(None, None, k1=-0.6)
+    Jz = ray_transfer_jacobian_analytic(
+        _ASPH_HEIGHTS, z, z, z, zero, WL).jacobian
+    Jb = ray_transfer_jacobian_analytic(
+        _ASPH_HEIGHTS, z, z, z, bare, WL).jacobian
+    assert Jz.tobytes() != Jb.tobytes()
+    scale = np.maximum(np.abs(Jb), 1e-9)
+    assert float(np.max(np.abs(Jz - Jb) / scale)) < 1e-14
+    assert _diff_mod._adrt_surfaces_numba_eligible(bare) is True
+    assert _diff_mod._adrt_surfaces_numba_eligible(zero) is False
