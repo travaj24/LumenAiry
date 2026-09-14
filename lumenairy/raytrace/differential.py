@@ -51,9 +51,16 @@ class DifferentialTransfer:
         ``B = J[..., 0:2, 2:4]``, ``C = J[..., 2:4, 0:2]``,
         ``D = J[..., 2:4, 2:4]``.
     x, y, ux, uy : ndarray
-        ``(N_rays,)`` base-ray state at the output vertex (unreduced slopes).
+        ``(N_rays,)`` base-ray state ON THE LAST SURFACE -- the intersection
+        point, not the exit-vertex plane -- with unreduced slopes.  The two
+        differ by the last surface's sag along the ray (measured 7.6 waves
+        of OPL and 0.64 um of height at the rim of an N-SF11 R = 1.6 mm
+        biconvex, 0.0 on a flat last surface); a caller that needs the
+        vertex plane applies the same step ``at_exit_vertex()`` does:
+        ``x - sag*ux``, ``y - sag*uy``, ``opd - sag*sqrt(1 + ux^2 + uy^2)``.
     opd : ndarray
-        ``(N_rays,)`` base-ray accumulated optical path length [m] at output.
+        ``(N_rays,)`` base-ray accumulated optical path length [m] to the
+        last surface (see ``x``).
     alive : ndarray of bool
         ``(N_rays,)`` False for rays that vignetted / TIR'd / missed.
     """

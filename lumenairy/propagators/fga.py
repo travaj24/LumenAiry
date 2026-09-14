@@ -3010,10 +3010,32 @@ def _universal_route(E_in, prescription, wavelength, dx, dyg, opd, na_threshold,
             # The deficit is not a sampling deficit -- over fifteen sampling
             # settings 'fga' CONVERGES in n_p (fidelity 0.1412 / 0.1450 /
             # 0.1462 at n_p = 21 / 41 / 61) and is inert in dq_step to four
-            # digits, so the swarm is not under-sampled; it converges to the
-            # wrong field.  WP-B7 measured the same on an N-BK7 f = 1.2 mm
-            # NA 0.145 singlet at 1.0 um: 'fga' 0.3234 (0.3826 at the best of
-            # the same fifteen settings) against 'phase_screen' 0.9965.
+            # digits, so the swarm is not under-sampled.  WP-B7 measured the
+            # same on an N-BK7 f = 1.2 mm NA 0.145 singlet at 1.0 um: 'fga'
+            # 0.3234 (0.3826 at the best of the same fifteen settings) against
+            # 'phase_screen' 0.9965.
+            #
+            # Nor is the deficit a CAUSTIC deficit.  MEASURED (VERIFY-B7b,
+            # 2026-09-14, same oracle): on that fixture 'fga' scores the same
+            # against the truth at every output plane -- 0.0737 at
+            # output_plane_distance = 0 (the exit vertex, no caustic at all),
+            # 0.1019 / 0.1250 / 0.1845 at 0.5 / 1.0 / 1.9 of the focal
+            # distance -- and the deficit disappears entirely when the LAST
+            # surface is FLAT: on an N-LASF9 plano-convex of NA 0.150 at its
+            # own caustic 'fga' reads 0.9998 where 'phase_screen' reads 0.9639.
+            # At fixed focal length, glass, wavelength, aperture, grid and
+            # beam, 'fga' falls 0.9998 -> 0.9656 -> 0.8053 -> 0.5100 -> 0.2326
+            # -> 0.1031 as the last surface's curvature grows 0 -> 0.571 /mm.
+            # The cause is a reference plane: _fga_core traces with
+            # ray_transfer_jacobian, whose base-ray state sits on the last
+            # SURFACE, and then adds the image leg as if it sat on the exit
+            # VERTEX PLANE, so every beamlet carries a spurious phase the size
+            # of that surface's sag -- 7.6 waves at the rim of the fixture
+            # above, 15.0 waves on a strongly bent singlet.  Projecting the
+            # state to the plane restores 'fga' to 0.9998 there.  So this
+            # branch prefers the screen for the class it can, and the choice
+            # is about which member is currently accurate, not about what the
+            # frozen-Gaussian model can represent at a caustic.
             #
             # The H2 aberration gate keeps the other half of the decision: a
             # prescription whose sag-screen estimate is OVER budget still never
@@ -3022,8 +3044,15 @@ def _universal_route(E_in, prescription, wavelength, dx, dyg, opd, na_threshold,
             # model is 58-123 % wrong (the G1 matrix designs read 20 .. 2893 rad
             # against the 2.0 rad budget), and it is outside what the oracle
             # above covers -- its whole NA ladder reads 0.003 .. 0.231 rad.
-            # Force the old route with method='fga' (or caustic_pad_dof=0.0 to
-            # narrow the zone itself).
+            #
+            # method='fga' is the only way to reach the swarm here.
+            # caustic_pad_dof only narrows the ZONE -- inside the narrowed
+            # zone this branch still answers the same way, and outside it the
+            # plane leaves the caustic branch for 'traced' / 'phase_screen'
+            # (measured: caustic_pad_dof=0.0 returns 'phase_screen' at all
+            # three of [zone_near, mid, zone_far] on the plano-convex above,
+            # and 'traced' at a plane the pad alone had brought in) -- so it
+            # is not a route to 'fga'.
             return "fga" if aberrated else "phase_screen"
     # smooth plane: the sub-nm traced OPL, but traced launches rays along the local
     # phase gradient and is valid only for a ~collimated beam.  A single-valued but
@@ -3090,7 +3119,15 @@ def apply_real_lens_universal(
       ``'phase_screen'`` against 0.1251 for ``'fga'``, and ``'phase_screen'`` is
       the closer member at every NA from 0.048 to 0.260 (WP-B7b; WP-B7 measured
       0.9965 against 0.3234 on an N-BK7 f = 1.2 mm NA 0.145 singlet).  Pass
-      ``method='fga'`` to force the frozen-Gaussian member anyway;
+      ``method='fga'`` to force the frozen-Gaussian member anyway.  That
+      ordering is measured on singlets whose LAST surface is curved, which is
+      where ``'fga'`` carries the reference-plane error documented at the
+      routing branch in :func:`_universal_route`; with a FLAT last surface it
+      reverses -- on an N-LASF9 plano-convex at NA 0.150 whose sag-screen
+      estimate is 1.54 rad (inside the 2.0 rad envelope, so this branch picks
+      the screen) the same oracle reads ``'fga'`` 0.9967 and ``'traced'``
+      0.9978 against ``'phase_screen'`` 0.9639, so a caller working near the
+      aberration budget should consider ``method='traced'`` (VERIFY-B7b);
     * ``'traced'`` (:func:`lumenairy.elements.apply_real_lens_traced`) -- HIGH NA,
       smooth, single-valued AND **~collimated**: per-pixel ray-traced OPL, sub-nm,
       no thin-screen ceiling.  A single-valued but **diverging** beam (large

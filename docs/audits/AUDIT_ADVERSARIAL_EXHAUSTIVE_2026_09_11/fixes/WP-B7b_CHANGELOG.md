@@ -64,8 +64,11 @@ rms spot error against the oracle falls from +6.770 / +5.718 / +4.929 / +4.243
 um to -0.000 / +0.018 / +0.058 / +0.112 um.  Wall clock on that fixture falls
 from 7.3 s to 0.7 s.
 
-To get the old route back, force the member: `method='fga'` (or, to narrow the
-caustic zone itself rather than change the member, `caustic_pad_dof=0.0`).
+To get the old route back, force the member: `method='fga'`.  `caustic_pad_dof`
+only narrows the zone -- inside it the route is unchanged and outside it the
+plane leaves the caustic branch for `'traced'` -- so it is not a way back
+(measured by VERIFY-B7b at the near edge, the midpoint and the far edge of the
+unpadded zone).
 
 * `lumenairy/propagators/fga.py` (`_universal_route`'s caustic branch;
   `apply_real_lens_universal`'s member map and split-step note).
@@ -111,8 +114,10 @@ prescription carrying an even-aspheric departure, at `coarse_stride=1`, with
 switch from the finite-difference 9-ray bundle to the exact analytic single-ray
 Jacobian: the differential transfer stops carrying the 2.4e-09 relative FD
 truncation quoted above, and the trace count drops 9N -> N (36009 -> 4001 rays
-on that measurement; 8924 -> 7484 bytes per FGA lattice point, so the chunk
-sizer fits 1.19x more lattice points at a fixed `mem_budget_mb`).  A
+on that measurement; 8924 -> 7484 bytes per FGA lattice point -- a fixed
+1440 B saving, so the chunk sizer fits 1.19x more lattice points at a fixed
+`mem_budget_mb` on that grid and swarm; the ratio depends on `n_p` and reads
+1.003x on VERIFY-B7b's 128^2 configuration).  A
 field-decentred / tilted conic changes from raising `NotImplementedError` to
 completing on the FD primitive.  An all-conic prescription is byte-identical
 (proved: `apply_real_lens_fga` on the A4 conic singlet returns a byte-identical

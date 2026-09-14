@@ -115,6 +115,25 @@ _AIRY_TAIL_CELLS = 20.0
 # back to at every one of those planes (fidelity 0.944 / 0.957 / 0.933 /
 # 0.969 / 0.972 / 0.962 / 0.930 against 0.882 / 0.805 / 0.856 / 0.853 / 0.884 /
 # 0.887 / 0.832), so falling back would be a regression.  It only says so.
+#
+# The bar is a CONSERVATIVE FLAG, not a calibrated 5 % / 10 % boundary: how
+# much energy a given extrapolation costs is optic-dependent.  A second ladder
+# through ONE caustic of a single optic (VERIFY-B7b, 2026-09-14; N-BAF10
+# biconvex R = +/-2.6 mm, t = 0.70 mm, 0.90 mm aperture, lambda = 1.064 um,
+# N = 512, dx = 2.20 um, seven planes z = 1.5654 .. 1.7424 mm, same oracle
+# construction) reads
+#
+#   W / band    0.42    0.74    1.03    3.01    5.65    14.0    27.3    531.5
+#   power       0.989   1.019   0.975   0.986   1.011   1.049   1.045   1.041
+#   fidelity    0.983   0.986   0.985   0.983   0.983   0.976   0.977   0.978
+#
+# -- the same monotone drift with the ratio, but saturating near +5 % instead
+# of running to +23 %, so on that optic every rung including 531.5 is inside
+# the +/-5 % band and the warning above the bar is a false positive for
+# absolute energy.  It still separates the two regimes in the right direction
+# on both ladders, and the completion still beats the multibranch it would
+# fall back to at every one of those planes too (0.976-0.986 against
+# 0.824-0.959).
 _ZETA_EXTRAPOLATION_MAX = 8.0
 
 # Pearcey series (:func:`pearcey`) converges everywhere but SLOWS / overflows

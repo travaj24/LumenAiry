@@ -464,3 +464,35 @@ in this report was taken in an isolated tree, never in the shared one.
   where `zeta`'s own extrapolation exceeds a derived bound would be a real fix,
   but it changes the returned field and needs its own oracle ladder; it is not
   a warning's job.
+
+---
+
+## Addendum after VERIFY-B7b (orchestrator, 2026-09-14)
+
+* **Section 2.4's causal sentence -- "FGA converges, to the wrong field" -- is superseded.**  VERIFY-B7b reproduced every number of
+  sections 2.3-2.4 to four digits from an oracle of a different algorithm, and then showed the deficit is not about the caustic: the same
+  `'fga'` field scores 0.0737 at `output_plane_distance = 0` (no caustic, no focus), the deficit is monotone in the LAST SURFACE's
+  curvature at fixed focal length (0.9998 for R2 = inf down to 0.1031 at R2 = -1.75 mm), and it is removed entirely -- 0.1250 -> 0.9998 at
+  this report's own caustic -- by projecting the differential base-ray state from the last surface to the exit-vertex plane.  The cause is a
+  reference-plane defect: `ray_transfer_jacobian` / `ray_transfer_jacobian_analytic` return the state ON the last surface (7.58 waves of OPL
+  and 0.64 um of height from the vertex plane at the rim of this fixture), while `_fga_core`, `_fga_coarse`, the coarse trace and
+  `_caustic_zone` add the image leg as if it were on the vertex plane, so every beamlet carries a spurious phase of `k * sag(r)`.  The
+  frozen-Gaussian model is not what fails at a real singlet focus.  (VERIFY-B7b sections 3.3 and 8, requests R-1 / R-2.)
+* **The shipped route stands as a mitigation, and its scope is now stated.**  Inside the aberration envelope it replaces 0.1250 by 0.9991 on
+  every lens with a curved last surface; on a FLAT-last-surface singlet near the budget it replaces `fga` 0.9967 / `traced` 0.9978 by
+  `phase_screen` 0.9639 (VERIFY-B7b fixture V at 1.54 rad).  The repair of the reference plane is the next work package; with it in place
+  `'fga'` is the best member at a caustic (0.9998 against the screen's 0.9991) and the route should be re-scored.
+* **Section 7's first bullet is restated: keep the `aberrated` condition.**  The cost measured on the k = 30 conic (0.1228 vs 0.9990) is the
+  reference-plane defect, not the gate: on over-budget lenses the defect does not touch, the gate keeps the BETTER member (fixture V at
+  2.028 rad: `fga` 0.9952 vs `phase_screen` 0.9540; a plano-convex at 2.911 rad: 0.9917 vs 0.8375).  The deciding measurement is the H2 f/5
+  dual-oracle fixture scored AFTER the repair; before it, the reading measures the defect.
+* **Section 2.5's / the changelog's `caustic_pad_dof=0.0` "way back" was wrong**: it narrows the zone, inside which the route is unchanged and
+  outside which the plane leaves the caustic branch for `'traced'`; `method='fga'` is the only way back (byte-identical to the parent).
+* **Section 4.2's 1.19x** is a fixed 1440 B-per-lattice-point saving whose ratio depends on `n_p` (1.003x on a 128^2 configuration).
+* **Section 3's envelope is one fixture's**: on VERIFY-B7b's single-optic ladder the dark tail's energy error saturates near +5 % out to
+  `zeta_extrapolation = 531.5`, so `_ZETA_EXTRAPOLATION_MAX = 8.0` is a conservative flag rather than a calibrated 5 % / 10 % boundary (its
+  comment now says so); "beats `amplitude_model='ray_density'` at the widest-band plane" does not generalise (0.9993 vs 0.976-0.986 there).
+  VERIFY-B7b also found, at `zeta_extrapolation` below ~0.35 on its fixture, a multibranch reconstruction blow-up (94x-6095x in power) that
+  the uniform layer passes through with `fell_back=False` and a healthy `fit_residual` -- its request R-5, owned by
+  `_lens_traced_multibranch.py`, recorded for the next wave.
+
