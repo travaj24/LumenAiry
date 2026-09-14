@@ -60,7 +60,7 @@ medians): **296.5 us per warm call, of which `_build_jax_prescription` was
 Handing `trace_jax` an already-built `JaxPrescription` cost 56.8 us, i.e. the
 prep was 5.2x the work of the call it preceded.
 
-The built `JaxPrescription` is now memoised (`raytrace/jax_trace.py:947`, LRU of
+The built `JaxPrescription` is now memoised (`raytrace/jax_trace.py:961`, LRU of
 32, guarded by its own lock, cleared by `clear_jax_prescription_cache()` at
 `:952` and registered with the central `_cache_registry` so `clear_asm_caches()`
 reaches it).  Leaf construction moved to `_build_jax_leaves` (`:1085`); the
@@ -168,7 +168,7 @@ small.  It gains `pattern={'rings' (default), 'vogel'}` (`raytrace/trace.py:1204
 generator at `:1285`): the Vogel / Fibonacci sunflower `r_i = R sqrt(i/N)`,
 `theta_i = i pi (3 - sqrt(5))`, with `i = 1..N` so the outermost ray sits exactly
 on the rim as the outer ring does.  Threaded through
-`through_focus_rms(pattern=)` (`ray_fan.py:1037`) and
+`through_focus_rms(pattern=)` (`ray_fan.py:1049`) and
 `trace_prescription` / `raytrace_system`'s `ray_pattern='vogel'`.
 
 Measured at the defaults (`num_rings=6`, `rays_per_ring=36`, chief included, 217
@@ -228,6 +228,12 @@ gets the exact analytic Jacobian where it used to get the FD one.  The two agree
 to the FD's own truncation (~1e-8 relative), so this is a strict accuracy
 improvement, but it is a different last 8 digits -- `propagators/gbd.py` and
 `propagators/fga.py` are the two `'auto'` sites.
+* Restated at the release close: the pre-audit pin
+  `tests/unit/test_analytic_ray_transfer.py::test_analytic_rejects_biconic_and_asphere` demanded the
+  refusal this entry removes and had failed since the package landed (no selection of the package or
+  its verifier ran the file); it is now `test_analytic_rejects_biconic` plus
+  `test_analytic_traces_the_even_asphere_against_the_fd_primitive`, a positive pin against the
+  finite-difference primitive on an off-axis ray set.
 
 ### Fixed -- raytrace: two duplicated docstring lines
 

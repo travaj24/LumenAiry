@@ -652,3 +652,14 @@ re-key; the ring-vs-Vogel second moment).
    core, so giving it `out=` means giving it a buffer protocol that the JAX and
    dual backends ignore -- a design question, not a mechanical change.  Effort
    ~4 h, estimated 10-15 % more.
+
+---
+
+## Addendum (orchestrator, 2026-09-14): a pre-audit pin on the aspheric refusal was not restated
+
+* `tests/unit/test_analytic_ray_transfer.py::test_analytic_rejects_biconic_and_asphere` (2026-07) asserted that
+  `ray_transfer_jacobian_analytic` raises `NotImplementedError` on an even-aspheric surface.  This package made the analytic path
+  trace the asphere, so the test has failed since 7592af4a; neither this package's selection nor VERIFY-B9's ran the file, and
+  the release's full fast lane found it.  Restated at the close as `test_analytic_rejects_biconic` (the refusal that remains) and
+  `test_analytic_traces_the_even_asphere_against_the_fd_primitive` (a positive pin against the finite-difference primitive on an
+  off-axis ray set).  The same lesson as WP-B7's and WP-B8's follow-ups: grep the tests for the primitive whose contract moves.

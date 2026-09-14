@@ -148,12 +148,12 @@ def test_analytic_gives_the_same_gbd_field_as_fd():
     assert rel < 1e-6, rel
 
 
-def test_analytic_rejects_biconic_and_asphere():
-    """The analytic path reads only ``radius`` / ``conic`` for a
-    refracting/reflecting surface (rotationally symmetric), so it must REJECT
-    biconic (``radius_y``) and aspheric-polynomial surfaces rather than silently
-    trace them rotationally-symmetric with a wrong off-axis power.  (Coordinate
-    breaks ARE handled -- a separate frame-transform branch.)"""
+def test_analytic_rejects_biconic():
+    """The analytic path is rotationally symmetric -- it reads ``radius`` /
+    ``conic`` and the even-aspheric departure -- so a biconic (``radius_y``)
+    surface must be REFUSED rather than silently traced with a wrong off-axis
+    power.  (Coordinate breaks ARE handled -- a separate frame-transform
+    branch.)"""
     biconic = {'name': 'b', 'aperture_diameter': 16e-3, 'surfaces': [
         {'radius': 50e-3, 'radius_y': 30e-3, 'conic': 0., 'conic_y': 0.,
          'glass_before': 'air', 'glass_after': 'N-BK7', 'semi_diameter': 8e-3}],
@@ -162,13 +162,36 @@ def test_analytic_rejects_biconic_and_asphere():
     z = np.zeros(1)
     with pytest.raises(NotImplementedError):
         ray_transfer_jacobian_analytic(z, z, z, z, surfs, LAM)
+
+
+def test_analytic_traces_the_even_asphere_against_the_fd_primitive():
+    """Since 5.47.0 the analytic path carries the even-aspheric departure
+    (the polynomial's sag enters the intersection and its slope the normal),
+    so an aspheric-polynomial surface is TRACED, not refused -- the refusal
+    of the test above belongs to the biconic alone.  The pin is positive: on
+    an off-axis ray set the analytic Jacobian must agree with the
+    finite-difference primitive to well inside the FD bundle's own truncation
+    (measured 2e-9 relative by two independent verifications; the analytic
+    side is exact), and every base ray must come back alive and finite."""
     asph = {'name': 'a', 'aperture_diameter': 16e-3, 'surfaces': [
         {'radius': 50e-3, 'conic': 0., 'aspheric_coeffs': {4: 1e3},
          'glass_before': 'air', 'glass_after': 'N-BK7', 'semi_diameter': 8e-3}],
         'thicknesses': [0.0]}
-    with pytest.raises(NotImplementedError):
-        ray_transfer_jacobian_analytic(
-            z, z, z, z, surfaces_from_prescription(asph), LAM)
+    surfs = surfaces_from_prescription(asph)
+    x = np.array([0.0, 1.5e-3, -3.0e-3, 5.0e-3])
+    y = np.array([0.0, -2.0e-3, 1.0e-3, 2.5e-3])
+    ux = np.array([0.0, 0.01, -0.02, 0.015])
+    uy = np.array([0.0, 0.005, 0.01, -0.02])
+    ana = ray_transfer_jacobian_analytic(x, y, ux, uy, surfs, LAM)
+    fd = ray_transfer_jacobian(x, y, ux, uy, surfs, LAM)
+    assert np.all(ana.alive) and np.all(fd.alive)
+    assert np.all(np.isfinite(ana.jacobian))
+    scale = float(np.max(np.abs(fd.jacobian)))
+    gap = float(np.max(np.abs(ana.jacobian - fd.jacobian)))
+    assert gap <= 1e-6 * scale, (gap, scale)
+    # and the base ray itself is the same ray
+    for a, b in ((ana.x, fd.x), (ana.y, fd.y), (ana.ux, fd.ux), (ana.uy, fd.uy)):
+        np.testing.assert_allclose(a, b, rtol=1e-9, atol=1e-15)
 
 
 def test_analytic_dead_ray_is_finite_and_masked():
