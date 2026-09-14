@@ -1,13 +1,14 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/lenses_maslov.py
-ast_sha256: 3b307beee739d20597d1f9259e6781448039375358527f669c6b63d731e442fe
-token_sha256: 52617ff504ab0cd1708dd7403fffeb566be6f2f5bc1efaaeab91968df3bcdb40
+ast_sha256: c5340587cdb78f7c156040f19f6fecb4dd7dd16319cd88e7b1f8dddee60da699
+token_sha256: b912676120e05e6cb98a8a586f560ababec939e9564875f9368e1ede80d36b99
 pre_relocation_lines: 4484
 recorded_by: WP-A17 SWEEP-4 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
 re_recorded: 2026-09-12 -- ruff isort combine-as-imports (pyproject.toml, WP-A16 recommendation): aliased import statements from the same module merged into one; the set of bound names is unchanged
 re_recorded: 2026-09-13 -- WP-B1 (audit S6): the two asymptotic evaluators' saddle now carries the input field's fitted local wavevector in its gradient and Hessian, with a flatness gate, a fit-residual fallback and an A/B seam
 re_recorded: 2026-09-13 -- WP-B1 follow-up: input_wavevector_saddle= becomes a per-call keyword now that lens_config.KWARG_ONLY classifies it; the module seam stays as its process default
+re_recorded: 2026-09-13 -- VERIFY-B1: the S6 fallback also gates on the entrance-coordinate fit the k1 term is contracted against (_S1_FIT_RESIDUAL_MAX), and the k1-residual ladder in the source is re-measured
 -->
 
 # Version history -- `lumenairy/elements/lenses_maslov.py`

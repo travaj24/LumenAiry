@@ -1098,3 +1098,197 @@ def test_b1_the_keyword_is_classified_by_lens_config():
         'the documented default is None (auto); a default that disagreed with '
         'the signature is exactly what the A15a default-identity detector and '
         'the A16 table comparison exist to catch')
+
+
+# ===========================================================================
+# 7.  VERIFY-B1 -- the adversarial re-verification's own pins
+# ===========================================================================
+def _s6_report(E, method='stationary_phase', **kw):
+    """``(ray NA, s1 chart fit, k1 fit residual, engaged, messages)`` as the
+    driver itself reports them.  Independent of :func:`_k1_fit_report` so the
+    two parsers cannot fail together."""
+    rec = []
+
+    def prog(phase, frac, note=''):
+        if 'S6 input-wavevector saddle' in str(note):
+            rec.append(str(note))
+    out, msgs = _maslov(E, method, progress=prog, **kw)
+    if not rec:
+        return out, None, None, None, False, msgs
+    s = rec[0]
+
+    def field(name, stop):
+        # ``None`` for a field this build does not report, so the pins that
+        # only need the k1 half stay readable against a build without the
+        # chart half.
+        return (float(s.split(name)[1].split(stop)[0]) if name in s else None)
+    return (out, field('ray NA', ','), field('s1 chart fit', ','),
+            field('k1 fit residual', '('), 'engaged' in s, msgs)
+
+
+def _phase_rms_waves(A, B):
+    """Intensity-weighted RMS of ``arg(A conj(B))`` after removing the best
+    global phase, in WAVES, over the pixels above 1 % of ``B``'s peak."""
+    a, b = np.asarray(A), np.asarray(B)
+    w = np.abs(b) ** 2
+    if not np.isfinite(w).all() or w.max() <= 0.0:
+        return np.inf
+    m = w >= 0.01 * w.max()
+    g = np.vdot(b, a)
+    if abs(g) == 0.0 or not m.any():
+        return np.inf
+    z = (a * np.conj(b) * np.conj(g / abs(g)))[m]
+    return float(np.sqrt((w[m] * np.angle(z) ** 2).sum() / w[m].sum())
+                 / (2.0 * np.pi))
+
+
+_NA_LENS = 0.5 * _APER / 6.0e-3          # this singlet's own NA, 0.05
+
+
+@pytest.mark.parametrize('method', ['stationary_phase', 'local_quadrature'])
+def test_verify_b1_the_gate_refuses_a_chart_that_cannot_carry_ds1_dv2(method):
+    """The S6 term is ``k1 . ds1/dv2``: BOTH factors have to be
+    chart-representable, and a uniform tilt passes the ``k1`` half perfectly
+    (``k1`` is a constant) however badly the chart itself is fitted.
+
+    The failure this pins, MEASURED 2026-09-13 against an exact conic-raytrace
+    + Kirchhoff oracle on this fixture and on an independent f = 13.3 mm
+    N-SF11 / 1.55 um one, with the tilt driving ``na_proxy`` (and so the pupil
+    box the order-4 chart must span) upwards:
+
+    ==================  ==========  ==========  ==================
+    tilt / lens NA      s1 fit      k1 fit      fidelity, sp / lq
+    ==================  ==========  ==========  ==================
+    1.0                 3.3e-04     7.1e-10     0.937 / 0.985
+    1.5                 1.3e-03     1.3e-14     0.932 / 0.984
+    2.0                 4.1e-03     2.6e-14     0.000 / 0.006
+    4.0                 6.7e-03     1.5e-14     0.000 / 0.000
+    ==================  ==========  ==========  ==================
+
+    -- against a collimated floor of 0.931 / 0.984, while the exact pointwise
+    ``'quadrature'`` on the SAME chart is still 0.97 at tilt 2x.  So what
+    fails is the saddle riding on the fit, and the ``k1`` residual cannot see
+    it.  Two-sided: the engaged row must stay engaged and silent, the refused
+    row must warn and name the chart, and ``_S1_FIT_RESIDUAL_MAX`` must sit
+    strictly between the two measured residuals.
+    """
+    good = _field(tilt_x=1.0 * _NA_LENS)
+    bad = _field(tilt_x=2.0 * _NA_LENS)
+    _, _, s1_good, k1_good, eng_good, msg_good = _s6_report(
+        good, method, centre=_window_on(good))
+    _, _, s1_bad, k1_bad, eng_bad, msg_bad = _s6_report(
+        bad, method, centre=_window_on(bad))
+    assert eng_good and not _s6_warnings(msg_good), (
+        f'{method}: tilt 1x the lens NA (s1 fit {s1_good:.2e}) is well inside '
+        f'every bar and must engage silently; warnings {msg_good}')
+    assert not eng_bad, (
+        f'{method}: tilt 2x the lens NA was accepted at s1 fit residual '
+        f'{s1_bad:.2e}; the saddle would be placed on a ray the chart has '
+        f'itself misplaced')
+    assert _s6_warnings(msg_bad), 'the refusal must announce itself'
+    why = _s6_warnings(msg_bad)[0]
+    assert 'poly_order' in why and 'input_na' in why, (
+        f'the warning must name the two remedies that repair the chart; '
+        f'got {why!r}')
+    assert max(k1_good, k1_bad) < LM._K1_FIT_RESIDUAL_MAX, (
+        'premise: the k1 half of the gate is blind to this failure -- both '
+        'rows fit k1 perfectly, which is why the s1 half exists')
+    assert s1_good < LM._S1_FIT_RESIDUAL_MAX < s1_bad, (
+        f'the bar {LM._S1_FIT_RESIDUAL_MAX:g} no longer sits in the measured '
+        f'gap {s1_good:.2e} .. {s1_bad:.2e}')
+    # and the caller can still force it, which is what makes this a policy and
+    # not a wall.  (The two ANSWERS need not differ here: at this tilt the
+    # OPD-only saddle puts the spot outside the window on the input's own
+    # landing and the forced saddle does not converge, so both can be the
+    # all-zero patch.  What must differ is the DECISION.)
+    _, _, _, _, eng_forced, m_forced = _s6_report(
+        bad, method, centre=_window_on(bad), input_wavevector_saddle=True)
+    assert eng_forced and not _s6_warnings(m_forced), (
+        'input_wavevector_saddle=True must override the chart gate')
+
+
+@pytest.mark.parametrize('method', ['stationary_phase', 'local_quadrature'])
+def test_verify_b1_the_input_phase_is_not_double_counted(method):
+    """The deviation from the WP-A4 design: the input phase reaches the answer
+    ONLY through the complex ``E_in`` the integrand samples, never through
+    ``opd_star`` / ``opd_v``.
+
+    Scored as PHASE, not intensity -- a double count is a pure phase error and
+    every centroid / EE pin in this file is blind to it.  The reference is the
+    exact pointwise ``'quadrature'`` on the same chart, which has no saddle;
+    the envelope is the method's OWN collimated phase error, because a
+    leading-order expansion about the right ray is exactly as accurate on a
+    tilted input as on a flat one.
+
+    MEASURED 2026-09-13, intensity-weighted RMS phase difference from
+    ``'quadrature'`` in waves:
+
+    ===================  ==================  ==================
+    input                stationary_phase    local_quadrature
+    ===================  ==================  ==================
+    collimated (floor)   0.0664              0.0271
+    tilt 0.5x lens NA    0.0667              0.0271
+    tilt 1.0x lens NA    0.0641              0.0251
+    WP-A4 design's
+      extra term         0.2801 / 0.2898     (same site, lq)
+    ===================  ==================  ==================
+
+    So the tilted rows sit at 0.97-1.00 of the floor and the defect scale is
+    4.2x it.  The bar is 1.5x the floor -- a factor 2.8 below the defect and
+    1.5 above the measurement.
+    """
+    flat = _field()
+    floor_ref, _ = _maslov(flat, 'quadrature', n_v2=96)
+    floor_got, _ = _maslov(flat, method)
+    floor = _phase_rms_waves(floor_got, floor_ref)
+    assert 0.0 < floor < 0.15, (
+        f'premise: the collimated floor must be a real number, got {floor}')
+    for mult in (0.5, 1.0):
+        E = _field(tilt_x=mult * _NA_LENS)
+        c = _window_on(E)
+        ref, _ = _maslov(E, 'quadrature', centre=c, n_v2=96)
+        got, msgs = _maslov(E, method, centre=c)
+        assert not _s6_warnings(msgs), 'premise: this tilt must engage'
+        ph = _phase_rms_waves(got, ref)
+        assert ph <= 1.5 * floor, (
+            f'{method}: tilt {mult}x the lens NA carries {ph:.4f} waves RMS '
+            f'of phase error against the exact quadrature, above 1.5x the '
+            f'collimated floor {floor:.4f} -- the input phase is being '
+            f'counted twice (fitted into the exponent AND sampled through '
+            f'E_in), or the saddle is on the wrong ray')
+
+
+def test_verify_b1_the_k1_fit_residual_is_the_statistic_it_claims_to_be():
+    """``_K1_FIT_RESIDUAL_MAX`` is compared against the intensity-weighted RMS
+    of ``A @ coef - k1`` over the RMS of ``k1`` itself, so for white phase
+    noise of ``sigma`` radians on a uniform tilt ``theta`` the residual is
+    predictable with no free parameter:
+
+        residual ~ sigma * sqrt(2) / (k0 dx theta)
+
+    (the two axes' forward differences are independent, and a degree-4 chart
+    can fit none of the noise).  Pinned to a factor of 2 either side, which is
+    what separates a calibration drift from the estimator changing meaning.
+
+    MEASURED 2026-09-13 on this fixture at tilt 0.5x the lens NA:
+    sigma = 0.002 / 0.01 / 0.05 rad rms -> 4.7e-03 / 2.3e-02 / 1.1e-01,
+    against 5.6e-03 / 2.8e-02 / 1.4e-01 predicted (ratio 0.83, the bilinear
+    sampling of the noisy grid).  All three sit one to two DECADES below the
+    0.5 bar while the field fidelity against the exact ``'quadrature'`` has
+    already fallen from the collimated floor to 0.66 (sigma = 0.01) and 4e-04
+    (sigma = 0.05): the bar is a statement about the fit's VALUE, and the
+    saddle also consumes its two DERIVATIVES.  See VERIFY_WP-B1.md.
+    """
+    theta = 0.5 * _NA_LENS
+    for sigma in (0.002, 0.01, 0.05):
+        E = _field(tilt_x=theta, speckle=sigma)
+        _, _, _, res, eng, msgs = _s6_report(E, centre=_window_on(E))
+        pred = sigma * np.sqrt(2.0) / (_K0 * _DX * theta)
+        assert 0.5 * pred <= res <= 2.0 * pred, (
+            f'speckle {sigma} rad rms: the driver reports residual '
+            f'{res:.3e}, against {pred:.3e} predicted -- the k1 fit residual '
+            f'no longer means what _K1_FIT_RESIDUAL_MAX is compared against')
+        assert eng and not _s6_warnings(msgs), (
+            f'speckle {sigma} rad rms measures {res:.3e}, far below the '
+            f'{LM._K1_FIT_RESIDUAL_MAX} bar, so it must still engage -- this '
+            f'records how loose that bar is, not that the answer is good')

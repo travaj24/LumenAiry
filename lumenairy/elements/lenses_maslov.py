@@ -138,14 +138,63 @@ _SADDLE_FLAT_INPUT_NA = 1e-3
 #   residual 9.8e-01 (0.3 rad rms speckle) ............. 0.572 -> 0.000 (WORSE)
 #   residual 9.9e-01 (uniform white-noise phase) ....... 0.014 -> 0.009 (WORSE)
 #
-# So the measured turning point sits between residual 0.91 and 0.96, and the
-# bar is placed a factor 1.8 below it.  That deliberately refuses a band
-# (0.5..0.91) in which the fitted saddle would still have helped: the
-# criterion has to be a property of the INPUT -- the library has no oracle at
-# run time -- and "three quarters of the wavevector's power is explained" is
-# the strongest statement the fit itself supports.  The refused band is
-# reachable with ``_S6_INPUT_WAVEVECTOR_SADDLE = True``, and it warns.
+# The bar is placed at 0.5 because engaging a poor fit is still better than
+# the OPD-only saddle whenever the carrier is NOT flat: that saddle then puts
+# the spot on the wrong ray entirely, so the comparison above has almost no
+# turning point to find.  What the bar cannot do is say whether the ANSWER is
+# trustworthy, and it is loose in that sense: it is the fit's VALUE residual,
+# while the saddle also consumes the fit's two DERIVATIVES, whose error is not
+# bounded by it.  MEASURED (VERIFY-B1, 2026-09-13) with this same chart's
+# driver reporting the residual, and the field fidelity taken against the
+# EXACT pointwise 'quadrature' on the same chart rather than against a
+# geometric-optics oracle (which is not a truth for speckle), speckle on a
+# tilted carrier:
+#
+#   speckle 0.002 / 0.005 rad rms -> residual 4.7e-03 / 1.2e-02, fidelity at
+#            the collimated floor;
+#   speckle 0.01 / 0.02 / 0.05 ... -> residual 2.3e-02 / 4.6e-02 / 1.1e-01,
+#            fidelity 0.66 / 0.10 / 4e-04 of the floor's 0.91.
+#
+# So on a tilted carrier the answer is gone two decades below this bar and the
+# bar never fires; the remedy the warning should have named is
+# ``integration_method='quadrature'``.  The hard-edged-aperture and
+# converging / diverging rows above reproduce exactly; only the speckle
+# residuals differ (the values above are ~20x higher than this chart produces
+# for the speckle amplitudes they name).  Changing the bar is a shipped
+# behaviour decision and is left to the owner; the VERIFY-B1 report carries
+# the full ladder.
 _K1_FIT_RESIDUAL_MAX = 0.5
+
+# S6 fallback, the chart half: the largest relative RMS residual of the
+# ENTRANCE-COORDINATE fit ``s1(s2, v2)`` at which the fitted local wavevector
+# is still trusted to place the saddle.  The S6 term is ``k1 . ds1/dv2``, so
+# the chart has to carry BOTH factors; ``_K1_FIT_RESIDUAL_MAX`` above scores
+# only the first, and a uniform tilt passes it perfectly (k1 is a constant)
+# however badly the chart is fitted.
+#
+# MEASURED (VERIFY-B1, 2026-09-13) as this residual against the field fidelity
+# of the two asymptotic evaluators, scored against an exact conic-raytrace +
+# Kirchhoff oracle, over a tilt sweep that drives ``na_proxy`` (and so the
+# pupil box the order-4 chart has to span) upwards -- on the f = 6 mm N-BK7 /
+# 1.0 um chart and on an independent f = 13.3 mm N-SF11 / 1.55 um one:
+#
+#   s1 residual 5.5e-05 .. 1.8e-03 (tilt 0.5 .. 1.5 x the lens NA)
+#            ... fidelity at the collimated floor on both charts
+#   s1 residual 3.3e-03 (f = 13.3 mm, tilt 1.75x) ..... 0.92 -> 0.04 COLLAPSE
+#   s1 residual 4.1e-03 (f = 6 mm, tilt 2x) ........... 0.93 -> 0.00 COLLAPSE
+#   s1 residual 5.8e-03 (f = 13.3 mm, tilt 2x) ........ 0.92 -> 0.08
+#   s1 residual 6.7e-03 (f = 6 mm, tilt 4x) ........... 0.93 -> 0.00
+#
+# and the same chart at ``poly_order=6`` (s1 residual 2.7e-04) returns 0.91.
+# The exact 'quadrature' integrator is still 0.92..0.99 across that whole
+# band, so what fails is the SADDLE riding on the fit, not the chart's use by
+# the pointwise integrators.  The bar is the geometric mean of the bracket
+# 1.8e-03 (last good) .. 3.3e-03 (first collapse), which also sits a factor
+# 1.9 above the other chart's last good row and 1.6 below its first bad one.
+# Above it the OPD-only saddle is kept and the warning names ``poly_order``
+# and ``input_na``; ``input_wavevector_saddle=True`` overrides, as it does for
+# the k1 bar.
+_S1_FIT_RESIDUAL_MAX = 2.5e-3
 
 # S6 A/B seam, in the style of ``_QUAD_FACTORIZE`` above.  ``None`` (default)
 # is the decision described at ``_SADDLE_FLAT_INPUT_NA`` and
@@ -1769,7 +1818,14 @@ def apply_real_lens_maslov(
     side reports a launch direction of 0 that the illuminated side contradicts
     -- the fit's intensity-weighted residual exceeds
     ``_K1_FIT_RESIDUAL_MAX``, the OPD-only saddle is kept, and the S6
-    ``RuntimeWarning`` fires naming both measurements.  A wavefront steeper
+    ``RuntimeWarning`` fires naming both measurements.  The term is
+    ``k1 . ds1/dv2``, so the same gate also refuses a chart that cannot carry
+    the OTHER factor: when the order-``poly_order`` fit to the entrance
+    coordinates has relative RMS residual above ``_S1_FIT_RESIDUAL_MAX`` the
+    fitted saddle is placed on a ray the chart has itself misplaced, which a
+    larger ``poly_order`` -- or an explicit ``input_na``, since ``na_proxy``
+    sizes the pupil box from the input's angular spectrum and a uniform tilt
+    inflates it threefold -- repairs.  A wavefront steeper
     than the grid's own Nyquist angle ``lambda / (2 dx)`` is a DIFFERENT
     failure and this gate does not see it: the phase-difference estimator
     aliases to a wrapped direction that is perfectly smooth (measured
@@ -1791,7 +1847,12 @@ def apply_real_lens_maslov(
     of the INPUT FIELD, not of the optic or the machine, so it cannot travel
     in a config object that is reused across fields.  The module-level
     ``_S6_INPUT_WAVEVECTOR_SADDLE`` sets the process default this keyword
-    overrides.  ``'quadrature'`` and
+    overrides.  An input tilt BELOW the engagement bar (about 3.3e-4 rad,
+    ``_SADDLE_FLAT_INPUT_NA / 3``) is left on the OPD-only saddle and its
+    spot lands ``f * theta`` off the truth with no warning -- measured 4.7 um
+    at f = 13 mm, 35 um at 100 mm and 354 um at 1 m; pass
+    ``input_wavevector_saddle=True`` if your focal length makes that matter.
+    ``'quadrature'`` and
     ``'levin'`` integrate the true integrand pointwise, have no saddle, and
     are untouched by all of this.
 
@@ -2745,6 +2806,7 @@ def apply_real_lens_maslov(
     _na_wf = 0.0
     _k1_na_rays = 0.0
     _k1_res_rel = 0.0
+    _s1_res_rel = 0.0
     _s6_mode = (_S6_INPUT_WAVEVECTOR_SADDLE if input_wavevector_saddle is None
                 else input_wavevector_saddle)
     _asymptotic = integration_method in ('stationary_phase',
@@ -2784,23 +2846,41 @@ def apply_real_lens_maslov(
                                             + _k1_res[:, 1] ** 2)).sum())
             _k1_res_rel = (float(np.sqrt(_k1_res_pow / _w_tot / _k1_pow))
                            if (_w_tot > 0.0 and _k1_pow > 0.0) else np.inf)
-            # FALLBACK CRITERION.  The saddle correction is only as good as
-            # the chart's ability to REPRESENT the input's local wavevector:
-            # a speckled input, or one cut by a hard-edged aperture (where
-            # ``_local_direction_cosines`` reports 0 in the dark and the true
-            # wavefront in the light), is not a degree-``poly_order`` tensor
-            # polynomial of the chart coordinates in any useful sense, and a
-            # saddle placed by a bad fit is a different wrong ray, not a
-            # better one.  Measure it: the intensity-weighted RMS fit residual
-            # of (k1x, k1y) as a fraction of their intensity-weighted RMS.
-            # Below the bar, use the fit; above it, keep the OPD-only saddle
-            # and say so, which is the honest answer when the input's launch
-            # direction is not a chart-representable field.
-            if _k1_res_rel <= _K1_FIT_RESIDUAL_MAX or _s6_mode:
+            # FALLBACK CRITERION, part 1 of 2.  The saddle correction is only
+            # as good as the chart's ability to REPRESENT the input's local
+            # wavevector: a speckled input, or one cut by a hard-edged
+            # aperture (where ``_local_direction_cosines`` reports 0 in the
+            # dark and the true wavefront in the light), is not a
+            # degree-``poly_order`` tensor polynomial of the chart coordinates
+            # in any useful sense, and a saddle placed by a bad fit is a
+            # different wrong ray, not a better one.  Measure it: the
+            # intensity-weighted RMS fit residual of (k1x, k1y) as a fraction
+            # of their intensity-weighted RMS.
+            #
+            # Part 2: the SAME contraction reads the ENTRANCE-COORDINATE fit,
+            # because the term is k1 . ds1/dv2 -- so the chart has to carry
+            # BOTH factors.  ``_s1_res_rel`` is the entrance-coordinate fit's
+            # own relative RMS residual over the traced rays; the constant it
+            # is compared against carries the ladder.
+            _s1_res = A @ np.column_stack([coef_s1x, coef_s1y]) \
+                - np.column_stack([s1x_live, s1y_live])
+            _s1_pow = float(np.mean(s1x_live ** 2 + s1y_live ** 2))
+            _s1_res_rel = (float(np.sqrt(
+                float(np.mean(_s1_res[:, 0] ** 2 + _s1_res[:, 1] ** 2))
+                / _s1_pow)) if _s1_pow > 0.0 else np.inf)
+            # Below both bars, use the fit; above either, keep the OPD-only
+            # saddle and say so, which is the honest answer when the term the
+            # saddle would be moved by is not a chart-representable field.
+            if ((_k1_res_rel <= _K1_FIT_RESIDUAL_MAX
+                 and _s1_res_rel <= _S1_FIT_RESIDUAL_MAX) or _s6_mode):
                 _k1_fit = (coef_s1x, coef_s1y, _coef_k1[:, 0], _coef_k1[:, 1],
                            1.0 / float(wavelength))
+            # The ``k1 fit residual <x> (engaged|refused)`` tail is parsed by
+            # tests/unit/test_audit2609_b1_maslov_input_wavevector.py; new
+            # fields go BEFORE it and do not spell the word "residual".
             _progress('integrate', 0.598,
                       f'S6 input-wavevector saddle: ray NA {_k1_na_rays:.4f}, '
+                      f's1 chart fit {_s1_res_rel:.2e}, '
                       f'k1 fit residual {_k1_res_rel:.2e} '
                       f'({"engaged" if _k1_fit is not None else "refused"})')
     if (_asymptotic and not collimated_input and _k1_fit is None
@@ -2817,6 +2897,17 @@ def apply_real_lens_maslov(
             _why = (f"the wavefront is flat ACROSS THE TRACED APERTURE "
                     f"(ray-sampled NA {_k1_na_rays:.4f}), so nothing was "
                     f"fitted and the saddle of the OPD alone is solved")
+        elif _s1_res_rel > _S1_FIT_RESIDUAL_MAX:
+            _why = (f"the CHART cannot carry the other factor of the S6 term "
+                    f"-- the order-{poly_order} fit to the entrance "
+                    f"coordinates s1(s2, v2), which k1 is contracted "
+                    f"against, has relative RMS residual {_s1_res_rel:.2e}, "
+                    f"above the {_S1_FIT_RESIDUAL_MAX:g} bar, so the fitted "
+                    f"saddle would be placed on a ray the chart has "
+                    f"misplaced (a larger poly_order, or an explicit "
+                    f"input_na that stops na_proxy over-sizing the pupil "
+                    f"box, fixes this) -- so the saddle of the OPD alone is "
+                    f"being solved")
         else:
             _why = (f"its local wavevector could not be represented on the "
                     f"chart -- the intensity-weighted RMS residual of the "

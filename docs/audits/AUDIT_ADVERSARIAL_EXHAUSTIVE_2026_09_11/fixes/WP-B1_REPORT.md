@@ -576,3 +576,18 @@ as §7 item 1 specified.
 `re_recorded:` line for this follow-up.
 
 §6 item 1 is closed; items 2–6 stand.
+
+---
+
+## Addendum after VERIFY-B1 (orchestrator, 2026-09-13)
+
+* **Section 6 item 6 and section 7 item 5 are struck.**  `lumenairy/elements/_lens_jax.py::apply_real_lens_maslov_jax` does NOT carry an
+  OPD-only saddle: it contains no stationary-point solve at all -- it is a thin-OPD geometric phase screen plus a Maslov / Gouy index term, as
+  its own docstring says.  S6 cannot apply to it and `_input_phase_terms` has nothing to feed there.  What VERIFY-B1 section 7 measured instead
+  is a different defect of that path: the thin-screen approximation under-shoots the chief-ray displacement of a tilted input by 2.6 % at half
+  the lens NA and 3.7 % at the lens NA (about 1.6 diffraction-spot radii) on its fixture.  That finding goes to WP-B7 in its own right.
+* **The fallback now scores both factors of the S6 term** (VERIFY-B1 V1): a uniform tilt fits `k1` to 1e-14 while an over-sized pupil chart
+  misplaces the entrance coordinates the term is contracted against, so `_S1_FIT_RESIDUAL_MAX = 2.5e-3` gates the entrance-coordinate fit's
+  relative residual beside the `k1` bar.  `_K1_FIT_RESIDUAL_MAX = 0.5` itself is loose by one to two decades on a tilted carrier and the
+  section 3 speckle ladder it was derived from does not reproduce (VERIFY-B1 section 4.2; the measured column is in the source comment);
+  re-founding that statistic is WP-B7's.
