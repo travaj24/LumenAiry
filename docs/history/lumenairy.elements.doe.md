@@ -1,10 +1,11 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/doe.py
-ast_sha256: 0ce4f48f60ca3bb97cf45bf4b1383e9a0c5f1be527137d087e3713f8e3993cb9
-token_sha256: 845bbf2945a8d26d83acbfe8fa7275b4761810ca7b86c0166a9e04ee261217cf
+ast_sha256: 02873e2fd0767e4f7a521bfcc8dfbd0405879d63ea4f5636c0df928b3b3f16cc
+token_sha256: 3d409a8175caa828f2fb36d8a3c30ec8c028f1ff65973983fe6d309ad01265c7
 pre_relocation_lines: 1258
 recorded_by: WP-A17 SWEEP-2 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
+re_recorded: 2026-09-14 -- WP-B11b item 8: every warning in the two lens bodies asks _lens_kernels.caller_stacklevel for its level, so it names the first frame outside the package whatever wrapper / configuration re-entry reached it; doe.py's zone-plate fill takes T's own dtype.
 -->
 
 # Version history -- `lumenairy/elements/doe.py`

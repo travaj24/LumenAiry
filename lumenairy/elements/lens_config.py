@@ -2,10 +2,16 @@
 lumenairy.elements.lens_config -- configuration objects for the ``apply_real_lens`` family.
 ===========================================================================================
 
-Three frozen dataclasses -- :class:`LensGeometry`, :class:`LensNumerics`,
-:class:`LensResources` -- plus the :class:`LensConfig` triple that holds them,
-so the seven real-lens entry points can be configured by OBJECT instead of by
-28-48 keyword arguments each.
+Four frozen dataclasses -- :class:`LensGeometry`, :class:`LensNumerics`,
+:class:`LensResources`, :class:`LensPhysics` -- plus the :class:`LensConfig`
+group that holds them, so the seven real-lens entry points can be configured
+by OBJECT instead of by 28-48 keyword arguments each.
+
+The four roles: WHAT problem (geometry), HOW it is discretised (numerics),
+WHICH MACHINE runs it (resources), WHICH TERMS the model carries (physics).
+The last is the one the audit's three-way partition did not name; see
+:class:`LensPhysics` for the line it is drawn on and for the settings that
+deliberately stay where they are.
 
 Why
 ---
@@ -41,9 +47,10 @@ What this module deliberately does NOT do
 * **Nothing is deprecated.**  Every existing keyword of every entry point
   still works, unchanged, with the same default.  The config objects are
   purely additive: an entry point called without ``geometry=`` /
-  ``numerics=`` / ``resources=`` / ``config=`` runs byte-for-byte the code it
-  ran before, and the four new parameters cost four ``is not None`` tests.
-* **It does not own every keyword.**  38 of the family's ~110 distinct
+  ``numerics=`` / ``resources=`` / ``physics=`` / ``config=`` runs
+  byte-for-byte the code it ran before, and the new parameters cost one
+  ``is not None`` test each.
+* **It does not own every keyword.**  47 of the family's ~110 distinct
   parameter names are here.  The rest are single-model tuning constants
   (``levin_tol``, ``w0_factor``, ``reexpand_threshold``, ...), private
   diagnostics sinks (``_exit_na_out``, ``_imap_out``, ...), or names whose
@@ -100,6 +107,7 @@ __all__ = [
     'LensGeometry',
     'LensNumerics',
     'LensResources',
+    'LensPhysics',
     'LensConfig',
 ]
 
@@ -204,7 +212,9 @@ def _vocab(name: str) -> Any:
         with _VOCAB_CACHE_LOCK:
             for k in ('_VALID_SURFACE_MODELS', '_VALID_WAVE_PROPAGATORS',
                       '_VALID_REMAP_ORDERS', '_VALID_ACCUMULATOR_STORE',
-                      '_DISP_REMAP_2D_MIN_N_SIDE'):
+                      '_DISP_REMAP_2D_MIN_N_SIDE',
+                      '_VALID_DISPLACED_MODES', '_VALID_DISPLACED_OBLIQUITY',
+                      '_VALID_SCREEN_OBLIQUITY'):
                 _VOCAB_CACHE[k] = getattr(_lr, k)
         return _VOCAB_CACHE[name]
 
@@ -212,7 +222,7 @@ def _vocab(name: str) -> Any:
 def clear_lens_config_vocabulary_cache() -> None:
     """Drop the borrowed enum vocabularies so the next validation re-reads them.
 
-    The cache holds four short tuples of strings/ints -- tens of bytes, not a
+    The cache holds eight short tuples of strings/ints -- tens of bytes, not a
     grid -- so this is not a memory measure.  It exists because the entries are
     BORROWED from ``_lens_real`` at first use: a test (or an
     ``importlib.reload``) that swaps one of those tuples would otherwise be
@@ -688,6 +698,136 @@ class LensResources:
 
 
 # ---------------------------------------------------------------------------
+# LensPhysics
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=True, eq=False)
+class LensPhysics:
+    """WHICH TERMS the model carries -- the physics options of the analytic
+    screen, as opposed to the problem (:class:`LensGeometry`), its
+    discretisation (:class:`LensNumerics`) or the machine
+    (:class:`LensResources`).
+
+    The line against :class:`LensNumerics` is the one that needs stating,
+    because both change the number that comes back.  A ``LensNumerics`` field
+    moves the answer by its own TRUNCATION error -- refine it far enough and
+    the answer stops moving.  A field here moves the answer by a TERM: turning
+    ``fresnel`` on multiplies in the interface transmittances, and no amount of
+    refinement anywhere else produces them.  That is why they are a fourth
+    object rather than more ``LensNumerics`` fields.
+
+    Every field here is a parameter of ``apply_real_lens`` and of no other
+    entry point, which is a fact about the family and not a scoping choice:
+    the traced / Maslov / GBD / FGA models build their screens from a ray
+    trace rather than from the thin-element OPD, so none of these terms exists
+    to be switched on there.  A sibling that later grows one gets an entry in
+    ``_PHYSICS_FOR`` and a ``physics=`` parameter; nothing else changes.
+
+    Attributes
+    ----------
+    fresnel : bool, default False
+        Apply per-surface Fresnel amplitude transmittances (an AMPLITUDE term
+        the default screen omits entirely).  Accepted by: ``apply_real_lens``.
+    slant_correction : bool, default False
+        Replace the paraxial ``(n2-n1)*sag`` screen with the angle-true
+        refraction OPD at each surface.  Accepted by: ``apply_real_lens``.
+    absorption : bool, default False
+        Carry the glasses' bulk absorption (``kappa``) through the in-glass
+        propagation.  Accepted by: ``apply_real_lens``.
+    seidel_correction : bool, default False
+        Add the fitted third-order Seidel residual to the screen.  Accepted
+        by: ``apply_real_lens``.
+    seidel_poly_order : int, default 6
+        Degree of the polynomial the Seidel residual is fitted with.  Only
+        read when ``seidel_correction`` is set -- the entry point adjudicates
+        the pair (that cross-check is why this field could not exist while
+        ``seidel_correction`` was keyword-only).  Accepted by:
+        ``apply_real_lens``.
+    surface_frame : bool, default False
+        Evaluate each screen in the SURFACE's own frame rather than the global
+        one (it changes where the sag is sampled, hence which OPD the screen
+        carries).  Accepted by: ``apply_real_lens``.
+    displaced_mode : str, default 'screen'
+        ``'screen'`` / ``'remap'`` / ``'split'`` -- how the ray-displacement
+        model of ``surface_model='displaced'`` is realised.  Validated against
+        ``_lens_real._VALID_DISPLACED_MODES``.  Legal only under
+        ``surface_model='displaced'``, which the entry point enforces
+        (``_check_displaced_support``); this object deliberately does not
+        re-state that rule, because ``surface_model`` lives on
+        :class:`LensGeometry` and a cross-object check here would be a second,
+        drifting copy of the call's own adjudication.  Accepted by:
+        ``apply_real_lens``.
+    displaced_obliquity : str, default 'auto'
+        ``'auto'`` / ``'meridional'`` / ``'pointwise'`` -- which obliquity
+        factor the displaced model applies.  Validated against
+        ``_lens_real._VALID_DISPLACED_OBLIQUITY``.  Same sub-mode relationship
+        to ``surface_model`` as ``displaced_mode``.  Accepted by:
+        ``apply_real_lens``.
+    screen_obliquity : bool or str, default 'auto'
+        ``True`` / ``False`` / ``'auto'`` -- apply the carrier-aware obliquity
+        factor to the per-surface screen.  ``True`` requires ``carrier=``
+        (a :class:`LensGeometry` field), which the entry point adjudicates
+        against the prescription.  Accepted by: ``apply_real_lens``.
+
+    Not here, and why
+    -----------------
+    ``surface_model`` (:class:`LensGeometry`), ``caustic`` and ``fit_basis``
+    (:class:`LensNumerics`) are physics-model settings by the definition
+    above, but they were already config fields when this class was added.
+    Moving them would change where a working ``LensGeometry(surface_model=...)``
+    lives -- a break for a caller who wrote one -- to buy nothing a caller can
+    use, so they stay and ``docs/lens_configuration.md`` records the three as
+    the partition's known ragged edge.
+
+    ``input_wavevector_saddle`` (``apply_real_lens_maslov``) is NOT here and
+    is not a candidate: it names which stationary point the asymptotic
+    evaluators expand about, and WHICH saddle is the right one is a property
+    of the INPUT FIELD's spectrum, not of the optic.  Every object in this
+    module is designed to be built once and reused across fields; a field-
+    dependent setting inside one would be silently wrong the first time the
+    config outlived the field it was chosen for.  It stays keyword-only, with
+    that reason in ``KWARG_ONLY``.
+    """
+
+    fresnel: bool = False
+    slant_correction: bool = False
+    absorption: bool = False
+    seidel_correction: bool = False
+    seidel_poly_order: int = 6
+    surface_frame: bool = False
+    displaced_mode: str = 'screen'
+    displaced_obliquity: str = 'auto'
+    screen_obliquity: Any = 'auto'
+
+    # Value equality through ``_same`` -- see :func:`_dataclass_eq`.  Declared
+    # on all four so the group compares uniformly.
+    __eq__ = _dataclass_eq
+    __hash__ = _dataclass_hash
+
+    def __post_init__(self) -> None:
+        fn = 'LensPhysics'
+        for name in ('fresnel', 'slant_correction', 'absorption',
+                     'seidel_correction', 'surface_frame'):
+            _require_bool(fn, name, getattr(self, name))
+        _require_positive_int(fn, 'seidel_poly_order', self.seidel_poly_order)
+        _require_choice(fn, 'displaced_mode', self.displaced_mode,
+                        _vocab('_VALID_DISPLACED_MODES'))
+        _require_choice(fn, 'displaced_obliquity', self.displaced_obliquity,
+                        _vocab('_VALID_DISPLACED_OBLIQUITY'))
+        # Identity for the booleans and equality for the string, exactly as
+        # ``_lens_real._check_screen_obliquity_support`` does: ``1`` must not
+        # masquerade as ``True`` here and then be refused by the call, and a
+        # caller-built (non-interned) ``'auto'`` must be accepted.
+        if not (self.screen_obliquity is True
+                or self.screen_obliquity is False
+                or self.screen_obliquity == 'auto'):
+            raise ValueError(
+                f"{fn}: screen_obliquity={self.screen_obliquity!r} is not a "
+                f"valid choice.  Choose from "
+                f"{list(_vocab('_VALID_SCREEN_OBLIQUITY'))}.")
+
+
+# ---------------------------------------------------------------------------
 # The per-entry-point field tables
 # ---------------------------------------------------------------------------
 # ``entry point -> {config field name: the keyword that entry point spells it
@@ -793,12 +933,39 @@ _RESOURCES_FOR: Dict[str, Dict[str, str]] = {
     'apply_real_lens_traced_multibranch': {},
 }
 
+_PHYSICS_FOR: Dict[str, Dict[str, str]] = {
+    # Every field of ``LensPhysics`` is a parameter of ``apply_real_lens``
+    # alone: the ray-traced, Maslov, GBD and FGA models build their screens
+    # from a trace rather than from the thin-element OPD, so none of these
+    # terms has a switch there to map onto.  The empty dicts are load-bearing,
+    # not placeholders -- the resolver reads ``table[entry_point]`` for every
+    # entry point, and an empty one is what turns a physics request handed to
+    # a sibling into the "not a setting X accepts" refusal.
+    'apply_real_lens': {
+        'fresnel': 'fresnel',
+        'slant_correction': 'slant_correction',
+        'absorption': 'absorption',
+        'seidel_correction': 'seidel_correction',
+        'seidel_poly_order': 'seidel_poly_order',
+        'surface_frame': 'surface_frame',
+        'displaced_mode': 'displaced_mode',
+        'displaced_obliquity': 'displaced_obliquity',
+        'screen_obliquity': 'screen_obliquity'},
+    'apply_real_lens_traced': {},
+    'prepare_real_lens_traced': {},
+    'apply_real_lens_maslov': {},
+    'apply_real_lens_gbd': {},
+    'apply_real_lens_fga': {},
+    'apply_real_lens_traced_multibranch': {},
+}
+
 #: ``(attribute on LensConfig, dataclass, per-entry-point table)``, in the
 #: order the resolver applies them.
 _GROUPS: Tuple[Tuple[str, type, Dict[str, Dict[str, str]]], ...] = (
     ('geometry', LensGeometry, _GEOMETRY_FOR),
     ('numerics', LensNumerics, _NUMERICS_FOR),
     ('resources', LensResources, _RESOURCES_FOR),
+    ('physics', LensPhysics, _PHYSICS_FOR),
 )
 
 #: The entry points that accept config objects, in declaration order.
@@ -811,7 +978,7 @@ ENTRY_POINTS: Tuple[str, ...] = tuple(_GEOMETRY_FOR)
 #: forgotten, only classified.
 CONTRACT_PARAMETERS: Tuple[str, ...] = (
     'E_in', 'prescription', 'wavelength', 'dx', 'N',
-    'geometry', 'numerics', 'resources', 'config',
+    'geometry', 'numerics', 'resources', 'physics', 'config',
 )
 
 _PRIVATE_SINK = (
@@ -822,33 +989,9 @@ _MODEL_PRIVATE = (
     "tuning constant of this model only; it has no sibling with the same "
     "name and semantics, so hoisting it would put a one-engine knob in a "
     "family-wide object.")
-_PHYSICS_FLAG = (
-    "analytic-model physics option (it changes which terms the screen "
-    "carries, not the geometry or the discretisation).  Left as a keyword in "
-    "this pass: the audit's partition names three roles and this is a fourth; "
-    "see docs/lens_configuration.md 'Deferred: LensPhysics'.")
 
 KWARG_ONLY: Dict[str, Dict[str, str]] = {
     'apply_real_lens': {
-        'fresnel': _PHYSICS_FLAG,
-        'slant_correction': _PHYSICS_FLAG,
-        'absorption': _PHYSICS_FLAG,
-        'seidel_correction': _PHYSICS_FLAG,
-        'seidel_poly_order':
-            "governs seidel_correction, which is itself keyword-only here; a "
-            "numerics field whose enabling flag is not a field would be "
-            "half-configurable.",
-        'surface_frame': _PHYSICS_FLAG,
-        'displaced_mode':
-            "legal only under surface_model='displaced' and validated against "
-            "it by _check_displaced_support; carrying it as an independent "
-            "field would let a config declare an illegal pair that only the "
-            "call can adjudicate.",
-        'displaced_obliquity':
-            "same as displaced_mode -- a sub-mode of surface_model.",
-        'screen_obliquity':
-            "legal only with carrier=; adjudicated by "
-            "_check_screen_obliquity_support against the prescription.",
         'on_screen_obliquity':
             "policy knob ('warn'/'error'/'silent') for a single call's "
             "diagnostics, not a setting of the optical problem.",
@@ -887,7 +1030,12 @@ KWARG_ONLY: Dict[str, Dict[str, str]] = {
             "asymptotic evaluators expand about (audit S6).  It is a property "
             "of the INPUT FIELD, not of the optic or the machine, so it "
             "cannot travel in a LensGeometry / LensNumerics / LensResources "
-            "that is reused across fields.",
+            "that is reused across fields.  RE-EXAMINED when LensPhysics was "
+            "added and deliberately left here: the fourth object carries which "
+            "TERMS the model evaluates, and this names which stationary point "
+            "of a given field's own phase to expand about -- the same config "
+            "reused on a second field would be silently wrong, which is the "
+            "failure the config objects exist to prevent, not to introduce.",
         'ray_field_samples': _MODEL_PRIVATE,
         'ray_pupil_samples': _MODEL_PRIVATE,
         'poly_order': _MODEL_PRIVATE,
@@ -976,11 +1124,12 @@ KWARG_ONLY: Dict[str, Dict[str, str]] = {
 @dataclass(frozen=True)
 class LensConfig:
     """The :class:`LensGeometry` / :class:`LensNumerics` /
-    :class:`LensResources` triple, so one object configures a whole call.
+    :class:`LensResources` / :class:`LensPhysics` group, so one object
+    configures a whole call.
 
-    ``config=LensConfig(...)`` is interchangeable with passing the three
-    components separately; passing both is allowed and the explicit component
-    REPLACES the config's::
+    ``config=LensConfig(...)`` is interchangeable with passing the components
+    separately; passing both is allowed and the explicit component REPLACES
+    the config's::
 
         base = LensConfig(numerics=LensNumerics(newton_poly_order=8))
         E = apply_real_lens_traced(E_in, prescription=rx, wavelength=lam,
@@ -1001,6 +1150,7 @@ class LensConfig:
     geometry: LensGeometry = field(default_factory=LensGeometry)
     numerics: LensNumerics = field(default_factory=LensNumerics)
     resources: LensResources = field(default_factory=LensResources)
+    physics: LensPhysics = field(default_factory=LensPhysics)
 
     def __post_init__(self) -> None:
         for attr, cls, _ in _GROUPS:
@@ -1082,13 +1232,14 @@ class LensConfig:
                        "docs/lens_configuration.md."))
         return cls(geometry=LensGeometry(**buckets['geometry']),
                    numerics=LensNumerics(**buckets['numerics']),
-                   resources=LensResources(**buckets['resources']))
+                   resources=LensResources(**buckets['resources']),
+                   physics=LensPhysics(**buckets['physics']))
 
     # -- inspection -------------------------------------------------------
 
     @staticmethod
     def field_names() -> Tuple[str, ...]:
-        """Every config field name across the three dataclasses, sorted."""
+        """Every config field name across the four dataclasses, sorted."""
         out: List[str] = []
         for _, dcls, _ in _GROUPS:
             out.extend(f.name for f in fields(dcls))
@@ -1229,10 +1380,13 @@ class LensConfig:
 
 _SIGNATURE_INFO: Dict[int, Dict[str, Any]] = {}
 
-#: The four parameters this module adds to every entry point.  They are
-#: stripped from the forwarded keywords so re-entering the entry point with
-#: the merged mapping terminates instead of recursing.
-_CONFIG_PARAMETERS = ('geometry', 'numerics', 'resources', 'config')
+#: The parameters this module adds to an entry point.  They are stripped from
+#: the forwarded keywords so re-entering the entry point with the merged
+#: mapping terminates instead of recursing.  ``physics`` is on the list even
+#: though only ``apply_real_lens`` declares it: the strip is a set difference
+#: over each signature, so naming a parameter an entry point does not have
+#: costs nothing and an entry point that later grows one needs no edit here.
+_CONFIG_PARAMETERS = ('geometry', 'numerics', 'resources', 'physics', 'config')
 
 
 def _signature_info(fn: Callable[..., Any]) -> Dict[str, Any]:
@@ -1281,13 +1435,20 @@ def resolve_entry_point_kwargs(fn: Callable[..., Any],
                                numerics: Optional[LensNumerics] = None,
                                resources: Optional[LensResources] = None,
                                config: Optional[LensConfig] = None,
+                               physics: Optional[LensPhysics] = None,
                                ) -> Dict[str, Any]:
     """Merge config objects into one entry point's keyword arguments.
 
     Called by each entry point as its second executable statement, ONLY when
-    at least one of the four config parameters is not ``None`` -- so a call
-    that passes none of them never reaches this function and runs exactly the
-    code it ran before the config objects existed.
+    at least one config parameter is not ``None`` -- so a call that passes
+    none of them never reaches this function and runs exactly the code it ran
+    before the config objects existed.
+
+    ``physics`` is keyword-with-default and comes LAST so the six entry points
+    that have no physics-model parameter call this function unchanged; a
+    physics request reaching one of them through ``config=`` still raises,
+    because the resolver walks every group in ``_GROUPS`` whatever the caller
+    passed.
 
     Parameters
     ----------
@@ -1299,7 +1460,7 @@ def resolve_entry_point_kwargs(fn: Callable[..., Any],
         ``locals()`` taken at the top of ``fn``'s body, before any parameter
         has been rebound.  Only the names in ``fn``'s signature are read, so
         stray locals (the lazily imported guard, for instance) are ignored.
-    geometry, numerics, resources, config
+    geometry, numerics, resources, config, physics
         What the caller passed.
 
     Returns
@@ -1334,7 +1495,7 @@ def resolve_entry_point_kwargs(fn: Callable[..., Any],
     chosen: Dict[str, Any] = {}
     for attr, dcls, _ in _GROUPS:
         explicit = {'geometry': geometry, 'numerics': numerics,
-                    'resources': resources}[attr]
+                    'resources': resources, 'physics': physics}[attr]
         if explicit is not None and not isinstance(explicit, dcls):
             raise TypeError(
                 f"{fn_name}: {attr}= must be a {dcls.__name__}, got "
@@ -1387,8 +1548,14 @@ def resolve_entry_point_kwargs(fn: Callable[..., Any],
 def _wants_config(geometry: Optional[LensGeometry],
                   numerics: Optional[LensNumerics],
                   resources: Optional[LensResources],
-                  config: Optional[LensConfig]) -> bool:
-    """True iff any config object was passed.  Spelled once so the four-way
-    test at the top of seven entry points cannot drift apart."""
+                  config: Optional[LensConfig],
+                  physics: Optional[LensPhysics] = None) -> bool:
+    """True iff any config object was passed.  Spelled once so the test at the
+    top of seven entry points cannot drift apart.
+
+    ``physics`` is last and defaults to ``None`` because only
+    ``apply_real_lens`` has a physics-model parameter to pass; the other six
+    call this with four arguments."""
     return (geometry is not None or numerics is not None
-            or resources is not None or config is not None)
+            or resources is not None or config is not None
+            or physics is not None)

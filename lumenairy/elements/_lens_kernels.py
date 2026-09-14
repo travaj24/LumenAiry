@@ -30,10 +30,61 @@ remaining plan and the exact edits.
 """
 from __future__ import annotations
 
+import os
+import sys
 import warnings
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
+
+#: Absolute path of the ``lumenairy`` package directory, with a trailing
+#: separator so a sibling directory whose name merely starts with the same
+#: characters cannot match.  This module is ``lumenairy/elements/_lens_kernels``,
+#: so the package root is two levels up.
+_PACKAGE_ROOT = os.path.dirname(os.path.dirname(
+    os.path.abspath(__file__))) + os.sep
+
+
+def caller_stacklevel(*, _root: str = _PACKAGE_ROOT, _limit: int = 64) -> int:
+    """The ``stacklevel`` that makes a ``warnings.warn`` in the CALLING frame
+    name the nearest frame outside ``lumenairy``.
+
+    Why this is computed rather than written down.  ``stacklevel`` counts
+    frames, so a literal is only right for one call path: a helper that grew a
+    wrapper, an entry point that re-enters itself, or a warning raised from a
+    nested library call all move the user's frame without changing the source
+    line.  Both happen here.  The configuration objects (WP-A16) made every
+    entry point re-enter ITSELF once when a config is passed --
+    ``return apply_real_lens(E_in, **resolve(...))`` -- so on a configured call
+    every hard-coded level in the body was one frame short and named the
+    library's own re-entry line; the split of ``apply_real_lens`` into a public
+    wrapper and ``_apply_real_lens_impl`` did the same thing to the plain path
+    one release earlier.
+
+    Walking the stack is the same rule 3.12's ``skip_file_prefixes=`` applies,
+    written out so it also holds on the 3.10 and 3.11 this package supports.
+    It runs only on a warning path, which is never hot.
+
+    Returns the depth of the first frame whose file is not under the package
+    directory, counted the way ``warnings.warn`` counts (``1`` = the frame that
+    calls ``warn``).  When the whole stack is inside the package -- a lumenairy
+    script, or a warning raised during import -- it returns the outermost
+    in-package depth, which is the closest thing to "the caller" that exists.
+
+    ``_root`` and ``_limit`` are private test seams: the package directory to
+    treat as library code, and the number of frames to walk before giving up.
+    """
+    frame = sys._getframe(1)
+    depth = 0
+    last_inside = 1
+    while frame is not None and depth < _limit:
+        depth += 1
+        name = frame.f_code.co_filename
+        if not os.path.abspath(name).startswith(_root):
+            return depth
+        last_inside = depth
+        frame = frame.f_back
+    return last_inside
 
 
 def _collect_semi_diameters(prescription):
@@ -361,7 +412,7 @@ def recommend_grid_for_prescription(
 def _warn_if_aperture_exceeds_grid(prescription, N, dx, *,
                                     source='apply_real_lens',
                                     safety_factor=1.0,
-                                    stacklevel=3,
+                                    stacklevel=None,
                                     N_y=None, dy=None):
     """Emit a UserWarning if any prescription aperture exceeds the
     simulation grid.  Called at the top of ``apply_real_lens``,
@@ -375,8 +426,14 @@ def _warn_if_aperture_exceeds_grid(prescription, N, dx, *,
     the analytic model used to, describes a semi-extent that exists on neither
     axis.
 
-    Python's default warning filter dedups by ``(module, lineno)`` so
-    repeated calls from the same site only warn once.
+    ``stacklevel=None`` (the default) computes the level with
+    :func:`caller_stacklevel`, so the warning names the first frame outside
+    ``lumenairy`` whatever chain of entry points, wrappers and configuration
+    re-entries reached it.  An explicit integer is still honoured, for a caller
+    that means a specific frame.
+
+    Python's default warning filter dedups by ``(module, lineno)`` of the
+    ATTRIBUTED frame, so repeated calls from the same user site only warn once.
     """
     _ny = N if N_y is None else N_y
     _dy = dx if dy is None else dy
@@ -416,4 +473,8 @@ def _warn_if_aperture_exceeds_grid(prescription, N, dx, *,
         f"N*dx/2 >= max(semi_diameter). "
         f"Affected surfaces: {body}."
     )
+    if stacklevel is None:
+        # Measured from THIS frame, which is the frame that calls ``warn``, so
+        # the two count the same thing and no offset is needed.
+        stacklevel = caller_stacklevel()
     warnings.warn(msg, UserWarning, stacklevel=stacklevel)

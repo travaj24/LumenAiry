@@ -9,7 +9,7 @@ that assertion, plus the structural gates that keep the field tables honest.
 WHAT IT ASSERTS, and why each one is not vacuous:
 
 1. **Every table entry is real.**  For each (entry point, config field) pair in
-   ``lens_config``'s three tables, the keyword it maps to must EXIST on that
+   ``lens_config``'s four tables, the keyword it maps to must EXIST on that
    entry point and its signature default must EQUAL the dataclass default.
    That equality is not decoration -- the whole precedence rule ("a field that
    differs from its default is a request") is only well defined while it
@@ -21,7 +21,7 @@ WHAT IT ASSERTS, and why each one is not vacuous:
    can therefore be *excluded* but not *forgotten* -- which is exactly the
    failure the audit found (a knob nobody noticed had stopped being read).
 3. **The round trips close.**  ``from_kwargs(**to_kwargs()) == cfg`` for a
-   config that sets a field in each of the three groups, and
+   config that sets a field in each of the four groups, and
    ``to_kwargs(entry_point=...)`` renames to that entry point's spelling.
 4. **The precedence rule holds**, including the two refusals: a keyword that
    disagrees with a set field, and a set field the entry point has no
@@ -56,6 +56,7 @@ from lumenairy.elements.lens_config import (
     LensConfig,
     LensGeometry,
     LensNumerics,
+    LensPhysics,
     LensResources,
 )
 from lumenairy.elements.lenses_gbd import apply_real_lens_gbd
@@ -75,6 +76,15 @@ ENTRY_POINTS = {
 }
 
 CONFIG_PARAMS = ('geometry', 'numerics', 'resources', 'config')
+
+#: The FIFTH config parameter.  It is not in ``CONFIG_PARAMS`` because only the
+#: entry points that own at least one field of a group need that group's
+#: parameter, and ``LensPhysics``'s fields exist on ``apply_real_lens`` alone
+#: (the traced / Maslov / GBD / FGA models build their screens from a ray trace,
+#: so none of the analytic screen's model-term switches has a counterpart
+#: there).  ``test_the_physics_parameter_is_declared_exactly_where_it_applies``
+#: below is the gate that keeps those two facts in step, in BOTH directions.
+PHYSICS_PARAM = 'physics'
 
 
 # A tiny biconvex singlet whose aperture FITS the 8 x 8 grid (0.8 mm across at
@@ -251,18 +261,21 @@ def test_every_config_field_is_used_by_at_least_one_entry_point():
 # 2. Round trips
 # ---------------------------------------------------------------------------
 
-def test_from_kwargs_to_kwargs_round_trips_on_all_three_groups():
+def test_from_kwargs_to_kwargs_round_trips_on_all_four_groups():
     cfg = LensConfig.from_kwargs(
         output_plane_distance=2.0e-3,      # geometry
         newton_poly_order=8,               # numerics
         n_workers=3,                       # resources
+        slant_correction=True,             # physics
     )
     assert cfg.geometry.output_plane_distance == 2.0e-3
     assert cfg.numerics.newton_poly_order == 8
     assert cfg.resources.n_workers == 3
+    assert cfg.physics.slant_correction is True
     flat = cfg.to_kwargs()
     assert flat == {'output_plane_distance': 2.0e-3,
-                    'newton_poly_order': 8, 'n_workers': 3}, flat
+                    'newton_poly_order': 8, 'n_workers': 3,
+                    'slant_correction': True}, flat
     assert LensConfig.from_kwargs(**flat) == cfg
 
 
@@ -271,7 +284,8 @@ def test_to_kwargs_emits_only_requests_unless_asked_for_defaults():
     assert cfg.to_kwargs() == {'newton_poly_order': 8}
     everything = cfg.to_kwargs(include_defaults=True)
     n_fields = sum(len(_dataclass_defaults(d)) for _, d, _ in lc._GROUPS)
-    assert len(everything) == n_fields == 40, (
+    # 40 across geometry/numerics/resources + LensPhysics's 9.
+    assert len(everything) == n_fields == 49, (
         f'to_kwargs(include_defaults=True) emitted {len(everything)} of '
         f'{n_fields} fields.')
     assert everything['newton_poly_order'] == 8
@@ -306,7 +320,13 @@ def test_to_kwargs_for_an_entry_point_is_exactly_what_it_accepts(ep):
                                 sag_dtype=np.float32, sag_chunk_rows=16,
                                 accumulator_store='memmap',
                                 scratch_dir='.', progress=print,
-                                verbose=True))
+                                verbose=True),
+        physics=LensPhysics(fresnel=True, slant_correction=True,
+                            absorption=True, seidel_correction=True,
+                            seidel_poly_order=8, surface_frame=True,
+                            displaced_mode='remap',
+                            displaced_obliquity='pointwise',
+                            screen_obliquity=True))
     kw = everything.to_kwargs(entry_point=ep)
     accepted = set(_kwonly(ENTRY_POINTS[ep]))
     assert set(kw) <= accepted, (
@@ -399,6 +419,22 @@ def test_requests_is_to_kwargs():
     (LensResources, dict(sag_chunk_rows=-1), 'sag_chunk_rows'),
     (LensResources, dict(accumulator_store='disk'), 'accumulator_store'),
     (LensResources, dict(scratch_dir=3), 'scratch_dir'),
+    (LensPhysics, dict(fresnel=1), 'fresnel'),
+    (LensPhysics, dict(absorption='yes'), 'absorption'),
+    (LensPhysics, dict(slant_correction=None), 'slant_correction'),
+    (LensPhysics, dict(seidel_correction=1.0), 'seidel_correction'),
+    (LensPhysics, dict(seidel_poly_order=0), 'seidel_poly_order'),
+    (LensPhysics, dict(seidel_poly_order=6.0), 'seidel_poly_order'),
+    (LensPhysics, dict(surface_frame='global'), 'surface_frame'),
+    (LensPhysics, dict(displaced_mode='thin'), 'displaced_mode'),
+    (LensPhysics, dict(displaced_obliquity='sagittal'),
+     'displaced_obliquity'),
+    # 1 and 0 must NOT masquerade as True / False -- the same identity rule
+    # ``_lens_real._check_screen_obliquity_support`` applies, so a config
+    # cannot accept a value the call would refuse.
+    (LensPhysics, dict(screen_obliquity=1), 'screen_obliquity'),
+    (LensPhysics, dict(screen_obliquity=0), 'screen_obliquity'),
+    (LensPhysics, dict(screen_obliquity='on'), 'screen_obliquity'),
 ])
 def test_post_init_refuses_bad_values_with_the_conventions_prefix(
         cls, kwargs, needle):
@@ -436,6 +472,13 @@ def test_post_init_accepts_every_documented_legal_value():
                   accumulator_store='memmap', scratch_dir='.',
                   progress=None, verbose=True)
     LensResources(sag_dtype=np.float64)
+    LensPhysics(fresnel=True, slant_correction=True, absorption=True,
+                seidel_correction=True, seidel_poly_order=12,
+                surface_frame=True, displaced_mode='split',
+                displaced_obliquity='meridional', screen_obliquity=False)
+    LensPhysics(screen_obliquity=True)
+    # a caller-built (non-interned) 'auto' is the documented default value
+    LensPhysics(screen_obliquity=''.join(['au', 'to']))
 
 
 def test_the_dataclasses_are_frozen_and_compare_by_value():
@@ -590,3 +633,96 @@ def test_same_treats_an_unorderable_comparison_as_different():
     assert lc._same(r, r) is True        # identity short-circuits first
     with pytest.raises(RuntimeError):
         lc._same(Broken(), 1)
+
+
+def test_the_group_set_is_the_one_lens_config_declares():
+    """Counter-pin, the same shape as the entry-point one: every walker in
+    this file iterates ``lc._GROUPS``, so a group added there and not here
+    would be tested by the walkers but by none of the explicit tables (the
+    refusal parametrisation, the legal-value counter-pin, the 'everything'
+    fixture), and the file would still pass."""
+    assert [a for a, _, _ in lc._GROUPS] == [
+        'geometry', 'numerics', 'resources', 'physics']
+    assert [d for _, d, _ in lc._GROUPS] == [
+        LensGeometry, LensNumerics, LensResources, LensPhysics]
+    assert set(LensConfig().__dataclass_fields__) == {
+        a for a, _, _ in lc._GROUPS}
+
+
+def test_the_physics_parameter_is_declared_exactly_where_it_applies():
+    """``physics=`` is the one config parameter that is NOT on every entry
+    point, so the rule has to be checkable rather than remembered: an entry
+    point declares it iff ``_PHYSICS_FOR`` gives it at least one field.
+
+    Both directions matter.  Missing where it applies is a ``TypeError``
+    instead of a configuration; present where it does not is a parameter that
+    can only ever raise.
+    """
+    for ep, fn in sorted(ENTRY_POINTS.items()):
+        params = _kwonly(fn)
+        owns_fields = bool(lc._PHYSICS_FOR[ep])
+        assert (PHYSICS_PARAM in params) is owns_fields, (
+            f'{ep}: _PHYSICS_FOR gives it {sorted(lc._PHYSICS_FOR[ep])} but '
+            f'the signature {"has" if PHYSICS_PARAM in params else "has no"} '
+            f'{PHYSICS_PARAM}=.  Declare the parameter when you add the first '
+            f'field, and not before.')
+        if owns_fields:
+            assert params[PHYSICS_PARAM].default is None, (
+                f'{ep}: physics= must default to None -- the "was a config '
+                f'passed?" test is `is not None`.')
+    # not vacuous: at least one entry point on each side of the split
+    owners = [ep for ep in ENTRY_POINTS if lc._PHYSICS_FOR[ep]]
+    assert owners == ['apply_real_lens'], owners
+    assert len(ENTRY_POINTS) > 1
+
+
+def test_a_physics_request_handed_to_a_sibling_raises_and_names_the_owner():
+    """The six entry points with no ``physics=`` parameter still refuse a
+    physics request that reaches them through ``config=``: the resolver walks
+    every group whatever the caller passed, so the empty ``_PHYSICS_FOR``
+    entry is what produces the refusal."""
+    from lumenairy.elements._lens_traced import apply_real_lens_traced
+    e, kwargs = _small_case()
+    with pytest.raises(ValueError) as exc:
+        apply_real_lens_traced(
+            e, config=LensConfig(physics=LensPhysics(fresnel=True)), **kwargs)
+    msg = str(exc.value)
+    assert msg.startswith('apply_real_lens_traced:'), msg[:200]
+    assert 'physics.fresnel' in msg
+    assert 'apply_real_lens' in msg
+    assert 'narrowed_to' in msg
+
+
+def test_a_physics_field_and_its_keyword_are_the_same_setting():
+    """The precedence rule on the new group, both arms: agreeing is accepted
+    and produces the keyword call's own answer; disagreeing raises naming
+    both.  ``fresnel`` is the witness because it multiplies in the interface
+    transmittances, so the two answers are visibly different."""
+    e, kwargs = _small_case()
+    configured = apply_real_lens(e, physics=LensPhysics(fresnel=True),
+                                 **kwargs)
+    keyword = apply_real_lens(e, fresnel=True, **kwargs)
+    plain = apply_real_lens(e, **kwargs)
+    assert np.array_equal(configured, keyword)
+    assert not np.array_equal(configured, plain), (
+        'fresnel=True does not move this fixture, so it cannot witness the '
+        'precedence rule here.  Pick another field.')
+    agreeing = apply_real_lens(e, fresnel=True,
+                               physics=LensPhysics(fresnel=True), **kwargs)
+    assert np.array_equal(agreeing, keyword)
+    with pytest.raises(ValueError) as exc:
+        apply_real_lens(e, seidel_poly_order=8,
+                        physics=LensPhysics(seidel_poly_order=10), **kwargs)
+    msg = str(exc.value)
+    assert msg.startswith('apply_real_lens:'), msg[:200]
+    assert 'seidel_poly_order' in msg and 'must agree' in msg
+
+
+def test_a_default_physics_object_is_indistinguishable_from_none():
+    """What makes the configured path bit-identical for free: a field left at
+    its default is not a request, so ``physics=LensPhysics()`` changes no
+    argument at all."""
+    e, kwargs = _small_case()
+    assert np.array_equal(apply_real_lens(e, physics=LensPhysics(), **kwargs),
+                          apply_real_lens(e, **kwargs))
+    assert LensConfig(physics=LensPhysics()).to_kwargs() == {}

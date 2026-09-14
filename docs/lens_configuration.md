@@ -52,7 +52,7 @@ E_out = la.apply_real_lens_traced(
     n_workers=4, parallel_amp=False)
 ```
 
-The three objects are **frozen dataclasses**: comparable by value, `repr`-able,
+The four objects are **frozen dataclasses**: comparable by value, `repr`-able,
 picklable, and safe to keep in a module-level table of study conditions. They
 are also hashable by value — with the one exception every Python object shares,
 that an instance holding an **ndarray** field (a wavefront `carrier`, an array
@@ -63,7 +63,7 @@ of raising "truth value is ambiguous".
 
 ---
 
-## Why three objects, and where the line is drawn
+## Why four objects, and where the line is drawn
 
 The partition is by **role**, not by which function happens to take the
 keyword:
@@ -82,15 +82,33 @@ keyword:
   one deliberate exception and says so in its docstring: it trades ~1e-7
   relative surface departure for half the dtype-independent memory core, which
   is why it carries an accuracy warning rather than living in `LensNumerics`.
+* **`LensPhysics` — *which terms the model carries*.** The analytic screen's
+  model-term switches: the Fresnel transmittances, bulk absorption, the
+  angle-true refraction OPD, the Seidel residual, the surface frame, and the
+  displaced / obliquity sub-modes. The line against `LensNumerics` is the one
+  that needs stating, because both change the number that comes back: a
+  `LensNumerics` field moves the answer by its own **truncation error** —
+  refine it far enough and the answer stops moving — while a `LensPhysics`
+  field moves it by a **term**, and no amount of refinement anywhere else
+  produces that term.
 
-38 of the family's parameters are fields; the rest stay keyword-only, each for
+47 of the family's parameters are fields; the rest stay keyword-only, each for
 a written reason (tabled below). The gate that keeps this honest is
 `tests/unit/test_audit2609_a16_lens_config_round_trip.py`, which walks the live
-signatures and fails if any parameter is neither a field, nor one of the nine
+signatures and fails if any parameter is neither a field, nor one of the ten
 contract names in `lens_config.CONTRACT_PARAMETERS` (`E_in`, `prescription`,
-`wavelength`, `dx`, `N`, and the four configuration parameters themselves), nor
+`wavelength`, `dx`, `N`, and the five configuration parameters themselves), nor
 a documented exclusion. A parameter can be *excluded*; it cannot be
 *forgotten*.
+
+`physics=` is the one configuration parameter that is **not** on every entry
+point, because every one of its fields is a parameter of `apply_real_lens` and
+of nothing else: the traced / Maslov / GBD / FGA models build their screens
+from a ray trace rather than from the thin-element OPD, so none of these terms
+has a switch there to map onto. A physics request handed to a sibling through
+`config=` still raises, naming `apply_real_lens` as the owner —
+`test_the_physics_parameter_is_declared_exactly_where_it_applies` is the gate
+that keeps the signatures and the field table in step, in both directions.
 
 ---
 
@@ -301,6 +319,46 @@ the config is passed to it un-narrowed.
 | `progress` | None | Y | Y | Y | Y | Y | -- | -- |
 | `verbose` | False | -- | -- | -- | Y | Y | -- | -- |
 
+### `LensPhysics` (9 fields)
+
+Every field is an `apply_real_lens` parameter and nothing else's, so the table
+is one column wide in practice; the rest are kept so the shape matches the
+three above and so a sibling that grows one of these terms has an obvious row
+to fill.
+
+| field | default | analytic | traced | prepare | maslov | gbd | fga | multibranch |
+|---|---|---|---|---|---|---|---|---|
+| `fresnel` | False | Y | -- | -- | -- | -- | -- | -- |
+| `slant_correction` | False | Y | -- | -- | -- | -- | -- | -- |
+| `absorption` | False | Y | -- | -- | -- | -- | -- | -- |
+| `seidel_correction` | False | Y | -- | -- | -- | -- | -- | -- |
+| `seidel_poly_order` | 6 | Y | -- | -- | -- | -- | -- | -- |
+| `surface_frame` | False | Y | -- | -- | -- | -- | -- | -- |
+| `displaced_mode` | `'screen'` | Y | -- | -- | -- | -- | -- | -- |
+| `displaced_obliquity` | `'auto'` | Y | -- | -- | -- | -- | -- | -- |
+| `screen_obliquity` | `'auto'` | Y | -- | -- | -- | -- | -- | -- |
+
+`__post_init__` checks only what each field can be judged on alone: the three
+enums against `_lens_real`'s own live vocabulary tuples, the five flags as
+strict `bool` (so `1` cannot masquerade as `True` here and then be refused by
+the call), and `seidel_poly_order` as a positive `int`. The **cross-field**
+rules stay where they already are and are not restated:
+
+* `slant_correction` and `seidel_correction` replace the *same* per-surface
+  coefficient, and stacking them double-counts the facet obliquity (measured
+  173.5 → 1488.6 nm rms exit OPD on an 8 mm cemented doublet) —
+  `_check_apply_real_lens_kwarg_combination` adjudicates it;
+* every one of these terms is refused under `surface_model='displaced'`, and
+  `displaced_mode` / `displaced_obliquity` are only legal *under* it —
+  `_check_displaced_support` adjudicates that, against the prescription;
+* `screen_obliquity=True` needs `carrier=` — `_check_screen_obliquity_support`.
+
+`surface_model` lives on `LensGeometry` and `caustic` / `fit_basis` on
+`LensNumerics`, so a config can state one half of each pair and the other half
+is checked one level up. Re-checking any of it inside `LensPhysics` would need
+it to see the sibling objects, which a component dataclass deliberately cannot,
+and would be a second copy of a rule that already has an owner.
+
 ---
 
 ## Naming mismatches found while building the partition
@@ -343,23 +401,15 @@ not a refactor — but each is recorded here and encoded in the tables.
 
 | entry point | keyword | why |
 |---|---|---|
-| `analytic` | `absorption` | analytic-model physics option — see "Deferred: `LensPhysics`". |
-| `analytic` | `displaced_mode` | legal only under `surface_model='displaced'` and validated against it by `_check_displaced_support`; an independent field could declare an illegal pair only the call can adjudicate. |
-| `analytic` | `displaced_obliquity` | same — a sub-mode of `surface_model`. |
-| `analytic` | `fresnel` | analytic-model physics option — see "Deferred: `LensPhysics`". |
 | `analytic` | `on_screen_obliquity` | policy knob (`'warn'`/`'error'`/`'silent'`) for one call's diagnostics, not a setting of the optical problem. |
-| `analytic` | `screen_obliquity` | legal only with `carrier=`; adjudicated by `_check_screen_obliquity_support` against the prescription. |
-| `analytic` | `seidel_correction` | analytic-model physics option — see "Deferred: `LensPhysics`". |
-| `analytic` | `seidel_poly_order` | governs `seidel_correction`, which is itself keyword-only; a numerics field whose enabling flag is not a field would be half-configurable. |
-| `analytic` | `slant_correction` | analytic-model physics option — see "Deferred: `LensPhysics`". |
 | `analytic` | `stream_transfer_function` | memory/streaming strategy of the analytic in-glass leg only; no sibling, no family-wide meaning. |
-| `analytic` | `surface_frame` | analytic-model physics option — see "Deferred: `LensPhysics`". |
 | `traced` | `_exit_na_out`, `_remap_launch_out`, `_imap_out` | private diagnostics sinks: underscore-prefixed MUTABLE out-parameters the call writes into. A frozen config must not carry one — sharing a config between two calls would make them share a sink. |
 | `traced` | `on_undersample`, `on_noncollimated`, `on_aperture_beam`, `on_fit_domain_basis`, `on_pool_memory` | per-call diagnostic policy knobs. |
 | `traced` | `preserve_input_phase`, `remap_sampling`, `tilt_aware_rays`, `decentred_fit_poly_order`, `newton_amp_mask_rel`, `newton_mask_dilate_coarse_px`, `fast_analytic_phase` | tuning constants of this model only; no sibling with the same name and semantics. |
 | `traced` | `return_screen` | changes the RETURN TYPE (`field` → `(field, screen)`); a setting that changes what a function returns belongs at the call. |
 | `prepare` | `on_undersample`, `on_noncollimated` | per-call diagnostic policy knobs. |
 | `maslov` | `ray_field_samples`, `ray_pupil_samples`, `poly_order`, `n_v2`, `extract_linear_phase`, `use_numexpr`, `integration_method`, `stationary_newton_iter`, `stationary_newton_tol`, `local_n_samples`, `local_window_sigma`, `levin_tol`, `collimated_input`, `input_na`, `fold_split` | tuning constants of this model only. |
+| `maslov` | `input_wavevector_saddle` | which stationary point the asymptotic evaluators expand about (audit S6). RE-EXAMINED when `LensPhysics` landed and deliberately left keyword-only: **which saddle is the right one is a property of the INPUT FIELD's spectrum, not of the optic**. Every object in this module is designed to be built once and reused across fields; a field-dependent setting inside one would be silently wrong the first time the config outlived the field it was chosen for — the exact failure the config objects exist to prevent. |
 | `maslov` | `chunk_v2` | work-chunk size — see "Naming mismatches" item 5. |
 | `maslov`, `gbd`, `fga` | `normalize_output` | DEFAULT CLASH — see "Naming mismatches" item 4. |
 | `gbd` | `sample_step`, `beamlets_per_aperture`, `waist_factor`, `direction_sampling`, `reexpand`, `reexpand_carrier`, `reexpand_threshold`, `per_surface`, `jacobian`, `window` | beamlet-frame constants of this model only. |
@@ -373,26 +423,42 @@ not a refactor — but each is recorded here and encoded in the tables.
 
 ---
 
-## Deferred: `LensPhysics`
+## `LensPhysics`, and the three settings that did not move
 
-Five `apply_real_lens` keywords — `fresnel`, `absorption`, `slant_correction`,
-`seidel_correction`, `surface_frame` — are *physics-model* options: they change
-which terms the per-surface screen carries. That is a fourth role, and the
-audit's design named three. Rather than push them into the wrong one (they are
-not geometry, and they are certainly not resources), they stay keyword-only in
-this pass.
+`LensPhysics` is the fourth object. It carries the nine `apply_real_lens`
+model-term switches that used to be keyword-only, tabled above. Adding it was
+the mechanical change the deferral predicted — a dataclass, a `_PHYSICS_FOR`
+table, one entry in `_GROUPS`, one component on `LensConfig`, one `physics=`
+parameter — because the resolver, `from_kwargs`, `to_kwargs`, `narrowed_to`
+and every structural test already walked `_GROUPS` rather than the three names.
 
-The design, if it is wanted: a fourth frozen dataclass `LensPhysics` with those
-five fields plus `seidel_poly_order`, added to `LensConfig` as a fourth
-component and to `_GROUPS` — the resolver, `from_kwargs`, `to_kwargs`,
-`narrowed_to` and every test walk over `_GROUPS`, so nothing else changes.
-The work is the docstrings and the validation (the five are mutually
-constrained: `slant_correction` and `seidel_correction` replace the *same*
-per-surface coefficient and stacking them double-counts the facet obliquity —
-measured 173.5 → 1488.6 nm rms exit OPD on an 8 mm cemented doublet — and all
-five are refused under `surface_model='displaced'`). Because those constraints
-are *cross-field*, `LensPhysics.__post_init__` could carry the pairwise ones
-and the entry point would keep the prescription-dependent ones. Effort ~4 h.
+```python
+import lumenairy as la
+
+E_out = la.apply_real_lens(
+    E_in, prescription=rx, wavelength=633e-9, dx=dx,
+    physics=la.LensPhysics(fresnel=True, absorption=True))
+```
+
+is the same call, byte for byte, as passing `fresnel=True, absorption=True`.
+
+Three settings that fit the *role* definition were deliberately **left where
+they are**:
+
+| setting | lives on | why it did not move |
+|---|---|---|
+| `surface_model` | `LensGeometry` | It has been a shipped config field since the objects landed. Moving it would break a caller who wrote `LensGeometry(surface_model='displaced')`, to buy nothing a caller can do that they could not do before. |
+| `caustic` | `LensNumerics` | Same — shipped, and it is genuinely on the line: the through-focus strategy is both a term selection and a discretisation of the branch sum. |
+| `fit_basis` | `LensNumerics` | Same, and this one is on the *numerics* side of the line by its own docstring: Chebyshev and Zernike span the same polynomial space at the same total degree, so it changes the conditioning of the least squares and not the model. |
+
+They are the partition's known ragged edge, recorded here rather than fixed,
+because a field that moves between two shipped objects is a migration and this
+pass ships none.
+
+`input_wavevector_saddle` (`apply_real_lens_maslov`) was re-examined and stays
+keyword-only — see the row in "Deliberately keyword-only" for the reason, which
+is that it is a property of the **input field**, not of the optic, and every
+object here is built to outlive the field it was configured against.
 
 ---
 

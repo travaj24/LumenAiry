@@ -154,6 +154,7 @@ from .elements.lens_config import (
     LensConfig,
     LensGeometry,
     LensNumerics,
+    LensPhysics,
     LensResources,
 )
 from .elements.lenses import (
@@ -1213,6 +1214,7 @@ __all__ = [
     'LensGeometry',
     'LensNumerics',
     'LensResources',
+    'LensPhysics',
     'LensConfig',
     'close_worker_pool',
     'apply_real_lens_gbd',

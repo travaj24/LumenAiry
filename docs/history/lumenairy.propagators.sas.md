@@ -1,10 +1,11 @@
 <!-- lumenairy-history-doc
 module: lumenairy/propagators/sas.py
-ast_sha256: 7dfd8cb64dc9bc63a39c00c6000efe6d17d4fde014e8547649e4fcc3416a43c3
-token_sha256: c02988a4ce37018a88ecb0ef1d7a1ede2eeddbd06eaf3881869ab314979fdc4d
+ast_sha256: 9e2418e8813271e5af722ad2f4234330996a6560f8e017e2b5f15a189bb5a8b7
+token_sha256: f0760f20ec4ea8b53b4588137b836d64f94b9b524858c0d10eda0744867675f2
 pre_relocation_lines: 393
 recorded_by: WP-A17 SWEEP-1 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
+re_recorded: 2026-09-14 -- SAS gains the near-field chirp-sampling guard (z < N dx^2 / lambda), the complement of the paper's far-field z_limit: a RuntimeWarning in fresnel_propagate's K1 shape, values unchanged.
 -->
 
 # Version history -- `lumenairy/propagators/sas.py`

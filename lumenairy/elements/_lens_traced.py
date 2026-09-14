@@ -594,7 +594,10 @@ from ..progress import ProgressScaler, call_progress
 # The leaf, not the ``lenses`` facade: the facade imports this module at module
 # scope, so reaching back into it would make the family's import order
 # load-bearing.  ``lenses`` re-exports the same object.
-from ._lens_kernels import _warn_if_aperture_exceeds_grid
+from ._lens_kernels import (
+    _warn_if_aperture_exceeds_grid,
+    caller_stacklevel as _caller_stacklevel,
+)
 
 logger = get_logger(__name__)
 
@@ -1929,7 +1932,7 @@ def _newton_resolve_workers(requested, n_total, fit_points,
                 f"top-level code of that file in the guard to get the pool "
                 f"back -- the serial result is bit-identical either way, so "
                 f"nothing but wall time changes here.",
-                RuntimeWarning, stacklevel=3)
+                RuntimeWarning, _caller_stacklevel())
         return 1
     if _free_b is None:
         try:
@@ -1984,7 +1987,7 @@ def _newton_resolve_workers(requested, n_total, fit_points,
         f"result is UNCHANGED (the pool path is bit-identical to serial); "
         f"only the wall time is.  Lower n_workers, raise the RAM budget "
         f"(lumenairy.set_max_ram), or free memory to use more.",
-        RuntimeWarning, stacklevel=3)
+        RuntimeWarning, _caller_stacklevel())
     return allowed
 
 
@@ -2921,7 +2924,7 @@ def _warn_det_stepdown(deterministic, why):
         f"run-to-run / thread-count invariance does NOT hold for this fit.  "
         f"Reduce the fit degree, or re-weight, if bit-reproducibility is "
         f"required here.",
-        RuntimeWarning, stacklevel=3)
+        RuntimeWarning, _caller_stacklevel())
 
 
 def _gram_rcond(G):
@@ -3069,7 +3072,7 @@ def _warn_stepdown_domain_blindness(A, b, x_ne, x_qr, A_domain):
         f"3.9e-08 here), widen the fit domain, or set "
         f"lumenairy.elements._lens_traced.LSTSQ_CONDITIONING_STEPDOWN = False "
         f"to pin the normal-equations route explicitly.",
-        RuntimeWarning, stacklevel=3)
+        RuntimeWarning, _caller_stacklevel())
 
 
 def _solve_lstsq_thread_safe(A, b, deterministic=False, score_domain=None):
@@ -4020,7 +4023,7 @@ def _geometric_lens_phase(lens_prescription, wavelength, dx, N):
             f"surface instead of NaN.  The grid reaches past the surface's "
             f"rim -- shrink dx*N, or add a clear aperture -- and the "
             f"fast_analytic_phase reference is not trustworthy there.",
-            RuntimeWarning, stacklevel=2)
+            RuntimeWarning, _caller_stacklevel())
 
     # Also add the bulk glass piston (constant k*n*t_i in each glass)
     # since the full apply_real_lens includes this via the ASM in-glass
@@ -7306,7 +7309,7 @@ def _sample_local_tilts(E_in, wavelength, dx, entrance_x, entrance_y,
             f'explicitly through carrier= / TiltedCarrier, or lower max_sin '
             f'to the limit this grid can carry, so that the clip is at '
             f'least honest.',
-            RuntimeWarning, stacklevel=2)
+            RuntimeWarning, _caller_stacklevel())
 
     # Clip to physical range -- rays with |sin(theta)| > max_sin are
     # unphysical for most lens designs and will overwhelm the Newton
@@ -9727,7 +9730,7 @@ def apply_real_lens_traced(
             "stop is effectively applied at the entrance (index 0).  "
             "For physically-correct stop behaviour on a non-entrance "
             "stop, use apply_real_lens.",
-            RuntimeWarning, stacklevel=2,
+            RuntimeWarning, _caller_stacklevel(),
         )
     else:
         # Decentered entrance stop: warn similarly -- the inner amp
@@ -9747,7 +9750,7 @@ def apply_real_lens_traced(
                         "geometry and will not see the off-axis stop "
                         "correctly.  Use apply_real_lens for "
                         "decentered-stop systems.",
-                        RuntimeWarning, stacklevel=2,
+                        RuntimeWarning, _caller_stacklevel(),
                     )
 
     # ---- form_error: a phase-only feature the RAY model cannot represent ----
@@ -9978,7 +9981,7 @@ def apply_real_lens_traced(
             "carrier already carries the input congruence, so the per-pixel "
             "tilt launch is routed to the carrier-gradient (carrier=) path.  "
             "Drop tilt_aware_rays=True when passing an explicit carrier=.",
-            RuntimeWarning, stacklevel=2)
+            RuntimeWarning, _caller_stacklevel())
     # ``_tilt_aware_launch`` is the EFFECTIVE launch mode after the F3 reroute;
     # the R7 path launches rays along the carrier gradient grad(W) and is guarded
     # OFF only for a genuine per-pixel tilt_aware launch (N5), i.e. when the F3
@@ -10201,7 +10204,7 @@ def apply_real_lens_traced(
                     f"on_noncollimated='warn' if you need them "
                     f"honoured, or call apply_real_lens directly to "
                     f"make the model choice explicit.",
-                    RuntimeWarning, stacklevel=2)
+                    RuntimeWarning, _caller_stacklevel())
                 # Forward the RAW ``sag_chunk_rows``,
                 # matching the four sibling amp-leg call sites -- the
                 # resolver maps the documented force-whole-grid sentinel 0 to
@@ -10228,7 +10231,7 @@ def apply_real_lens_traced(
                     f"to reference the beam's own congruence, or use "
                     f"apply_real_lens.  Set on_noncollimated='delegate' to "
                     f"fall back automatically, or 'off' to silence.",
-                    RuntimeWarning, stacklevel=2)
+                    RuntimeWarning, _caller_stacklevel())
 
     # Reference input for the analytic lens-phase leg: the carrier
     # wavefront exp(i*k0*W) when supplied, else a unit plane wave (legacy
@@ -10733,7 +10736,7 @@ def apply_real_lens_traced(
             f"ray_subsample^2.  Lower ray_subsample (1 gives 0.00035 nm "
             f"without the evaluator), or drop the setting that gates it off, "
             f"if that matters; pass on_undersample='silent' to suppress.",
-            RuntimeWarning, stacklevel=2)
+            RuntimeWarning, _caller_stacklevel())
     #: True when a fit domain must be resolved even though the resolved basis
     #: cannot apply it to its own forward fit.  Scoped to the calls that
     #: actually build the model, so no spline call that does not build one
@@ -10798,7 +10801,7 @@ def apply_real_lens_traced(
         if on_fit_domain_basis == 'error':
             raise ValueError(_fdb_msg)
         import warnings
-        warnings.warn(_fdb_msg, RuntimeWarning, stacklevel=2)
+        warnings.warn(_fdb_msg, RuntimeWarning, _caller_stacklevel())
     _beam_fit_radius = None
     _beam_fit_radius_conc = None
     _w_in_beam = 0.0
@@ -10856,7 +10859,7 @@ def apply_real_lens_traced(
                 f"the beam (no energy is vignetted by that -- only the fit "
                 f"domain changes), or on_aperture_beam='silent' to "
                 f"acknowledge.",
-                RuntimeWarning, stacklevel=2)
+                RuntimeWarning, _caller_stacklevel())
 
     # The RAY-fit disc.  Resolved HERE rather than at the fit site below
     # because niche C6's residual-eikonal freeze has to clear it (see
@@ -10969,7 +10972,7 @@ def apply_real_lens_traced(
                 raise ValueError(msg)
             elif on_undersample == 'warn':
                 import warnings
-                warnings.warn(msg, RuntimeWarning, stacklevel=2)
+                warnings.warn(msg, RuntimeWarning, _caller_stacklevel())
             elif on_undersample != 'silent':
                 raise ValueError(
                     f"on_undersample must be 'error', 'warn', or "
@@ -11070,7 +11073,7 @@ def apply_real_lens_traced(
                             "reference OPD is off by an amount proportional "
                             "to (tilt * aperture); set tilt_aware_rays=True "
                             "for tilt-sensitive analyses.",
-                            RuntimeWarning, stacklevel=3,
+                            RuntimeWarning, _caller_stacklevel(),
                         )
                     else:
                         warnings.warn(
@@ -11084,7 +11087,7 @@ def apply_real_lens_traced(
                             "such fields); pass carrier= (a conjugate, a "
                             "wavefront, or 'auto') to reference the beam's "
                             "congruence, or use apply_real_lens.",
-                            RuntimeWarning, stacklevel=3,
+                            RuntimeWarning, _caller_stacklevel(),
                         )
         except (ValueError, RuntimeError, ZeroDivisionError, IndexError,
                 AttributeError, TypeError):
@@ -11337,7 +11340,7 @@ def apply_real_lens_traced(
                     f'EE50/EE80 stay plausible.  Use a finer grid (dx <= '
                     f'{_dx_need*1e6:.2f} um) for halo-faithful results, or '
                     f'pass on_undersample="silent" to suppress.',
-                    RuntimeWarning, stacklevel=2)
+                    RuntimeWarning, _caller_stacklevel())
 
     # Reshape final.x, final.y, final.opd onto the regular ENTRANCE grid.
     # Dead (vignetted / TIR'd) rays get NaN, which the POLYNOMIAL fit's
@@ -11415,7 +11418,7 @@ def apply_real_lens_traced(
                     f"extrapolation.  newton_fit='polynomial' (the default) "
                     f"handles vignetting natively and is the accurate choice "
                     f"here; pass on_undersample='silent' to suppress.",
-                    RuntimeWarning, stacklevel=2)
+                    RuntimeWarning, _caller_stacklevel())
         else:
             # Only announce vignetting that can REACH the returned field.
             # The launch lattice is a SQUARE of half-width 0.75*aperture, so
@@ -11443,7 +11446,7 @@ def apply_real_lens_traced(
                     f"answer.  Widen semi_diameter / aperture_diameter if "
                     f"that is not what the design does; pass "
                     f"on_undersample='silent' to suppress.",
-                    RuntimeWarning, stacklevel=2)
+                    RuntimeWarning, _caller_stacklevel())
 
     # Reference OPL to on-axis (center of the entrance grid is an
     # exact sample because n_launch is odd).
@@ -11782,7 +11785,7 @@ def apply_real_lens_traced(
                             f"DECENTRED_FIT_PREDICTOR; set it False to fall "
                             f"back to the arbiter, or also "
                             f"DECENTRED_FIT_ARBITER False for the v5.32 gate.",
-                            RuntimeWarning, stacklevel=2)
+                            RuntimeWarning, _caller_stacklevel())
                     _keep_conc = _pred_conc
                 if _keep_conc:
                     # the historical disc reproduces the traced map better
@@ -11865,7 +11868,7 @@ def apply_real_lens_traced(
                 + (f" (the beam is {np.hypot(_bcx, _bcy) * 1e3:.4f} mm off "
                    f"the grid centre, so the disc that must hold it sits off "
                    f"axis too)" if _off_branch else "") + ".",
-                RuntimeWarning, stacklevel=2)
+                RuntimeWarning, _caller_stacklevel())
 
     # T-P2 (audit perf): optional DIRECT inverse-map fit.  Instead of Newton-
     # inverting the forward map per output pixel, fit ``opl`` as a smooth
@@ -12189,7 +12192,7 @@ def apply_real_lens_traced(
                 f"interpolating s=0 FITPACK fit and one NaN sample poisons "
                 f"essentially every coefficient.  Use newton_fit='polynomial' "
                 f"(the default), whose least squares drops dead samples.",
-                RuntimeWarning, stacklevel=3)
+                RuntimeWarning, _caller_stacklevel())
             return
         _warnings.warn(
             f"apply_real_lens_traced Newton inversion: "
@@ -12200,7 +12203,7 @@ def apply_real_lens_traced(
             f"value, which may carry residual error.  Increase "
             f"newton_max_iters if this matters for your tolerance "
             f"budget.",
-            RuntimeWarning, stacklevel=3)
+            RuntimeWarning, _caller_stacklevel())
 
     def _invert_newton(Xw, Yw, sub_progress=None, _want_entrance=False):
         """Run Newton iteration to find (xe, ye) such that (Sx, Sy)
@@ -12595,7 +12598,7 @@ def apply_real_lens_traced(
                     f"has no backend split), to get the pool back; the serial "
                     f"result is bit-identical either way, so nothing but wall "
                     f"time changes here.",
-                    RuntimeWarning, stacklevel=3)
+                    RuntimeWarning, _caller_stacklevel())
             return _invert_newton(Xw, Yw, sub_progress=sub_progress)
         except (BrokenProcessPool, RuntimeError, OSError, EOFError):
             # POOL-INFRASTRUCTURE failures only (v5.30, audit E-L3):
@@ -13365,7 +13368,7 @@ def apply_real_lens_traced(
             "-- this mode does NOT sum the multi-valued ray branches with "
             "the KMAH/Maslov phase.  Use apply_real_lens_gbd or "
             "apply_real_lens_fga for caustic-faithful amplitude.",
-            RuntimeWarning, stacklevel=3)
+            RuntimeWarning, _caller_stacklevel())
 
     ard_map = None
     if _ray_density:
@@ -13645,21 +13648,22 @@ def apply_real_lens_traced(
             if ORIGIN_AMP_SUPPORT_CHECK == 'error':
                 raise NotImplementedError(_oa_msg)
             import warnings as _oa_warn
-            _oa_warn.warn(_oa_msg, RuntimeWarning, stacklevel=3)
+            _oa_warn.warn(_oa_msg, RuntimeWarning, _caller_stacklevel())
 
     def _ray_density_self_checks(E_out):
         """The three post-swap ray-density self-checks (energy, halo,
         retained band) -- whole-grid REDUCTIONS over the finished field,
         shared by the whole-grid swap and the v5.44 band assembly.
 
-        ``stacklevel=3`` on all three (v5.44.1,
-        VERIFY_LENS_BANDED_COMPLEX64_2026_09_10 D1): this is a nested closure,
-        so ``2`` reports ``_lens_traced.py`` -- its own caller -- instead of
-        the caller of ``apply_real_lens_traced``, which is what v5.43.0
-        reported, what ``warnings.filterwarnings(module=...)`` keys on, and
-        what the default filter's per-location dedup registry is indexed by.
-        ``_warn_ray_density_fold`` and ``_origin_amp_support_verdict``, the
-        two sibling closures, already carry ``3``."""
+        All three ask :func:`_caller_stacklevel` for their ``stacklevel``.
+        This is a nested closure, so any literal small enough for a top-level
+        body reports ``_lens_traced.py`` -- the library calling itself --
+        instead of the caller of ``apply_real_lens_traced``, which is what
+        ``warnings.filterwarnings(module=...)`` keys on and what the default
+        filter's per-location dedup registry is indexed by.  The computed
+        level walks out to the first frame outside the package, so it is right
+        from a closure, from the body, and through the configuration objects'
+        self-re-entry alike."""
         # ---- Post-hoc ENERGY SELF-CHECK ------------------------------
         # Two N^2 reductions, negligible against the trace + Newton stages.
         # Reference = the input power the element ADMITS (inside the entrance
@@ -13712,7 +13716,7 @@ def apply_real_lens_traced(
                     f"apply_real_lens_fga there), a ray map running off the "
                     f"grid, or an aperture_diameter wider than the traced "
                     f"pupil.  Lower ray_subsample to check convergence.",
-                    RuntimeWarning, stacklevel=3)
+                    RuntimeWarning, _caller_stacklevel())
         # ---- v5.32: HALO-AMPLITUDE self-check --------------------------
         # The power sum above cannot see a lobe deposited outside the traced
         # pupil (measured: a defect whose total-power signature vanished
@@ -13778,7 +13782,7 @@ def apply_real_lens_traced(
                             f"apply_real_lens_fga); set "
                             f"lumenairy.elements._lens_traced."
                             f"RAY_DENSITY_HALO_CHECK = 'silent' to suppress.",
-                            RuntimeWarning, stacklevel=3)
+                            RuntimeWarning, _caller_stacklevel())
                 del _h_abs
             del _h_far
         # ---- niche C14: the RETAINED-BAND self-check --------------------
@@ -13842,7 +13846,7 @@ def apply_real_lens_traced(
                         f"lumenairy.elements._lens_traced."
                         f"SUPPORT_BAND_CHECK = 'silent' to suppress (that is "
                         f"also the pre-C14 fail-before).",
-                        RuntimeWarning, stacklevel=3)
+                        RuntimeWarning, _caller_stacklevel())
                 del _bd_abs
             del _bd_in, _bd_band
 

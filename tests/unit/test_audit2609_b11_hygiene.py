@@ -1,5 +1,5 @@
-"""WP-B11a -- the hygiene pass, part a: the consolidations and the small
-deferred items, each with the property its refactor was gated on.
+"""WP-B11 -- the hygiene pass: the consolidations and the small deferred
+items, each with the property its refactor was gated on.
 
 Every bar here is DERIVED -- measured on this box, with the falsifying
 alternative measured beside it so the number means something -- and nothing in
@@ -25,10 +25,19 @@ Sections, by the work-package item they close:
 12. ``sampling=`` on the free-space HFPI entry points
 19. ``PMM2DStackHybrid``'s validated attributes refuse an out-of-vocabulary
     assignment after ``__init__``
+
+and, from part b:
+
+3b. the SAS near-field chirp-sampling gate (``sas._warn_sas_chirp_sampling``)
+5b. the ``LensPhysics`` configuration object
+8b. ``doe.py``'s named sentinel, and warning ``stacklevel`` attribution across
+    the lens family
+4b. ``PMM2DStackHybrid.truncation`` joins the guarded attributes
 """
 from __future__ import annotations
 
 import ast
+import os
 import pathlib
 import warnings
 
@@ -681,3 +690,609 @@ class TestStack2DAttributeGuards:
         st.formulation = 'laurent'
         st.cascade = 'monolithic'
         assert (st.formulation, st.cascade) == ('laurent', 'monolithic')
+
+
+# ===========================================================================
+# Item 3 (part b) -- the SAS near-field chirp-sampling gate
+# ===========================================================================
+
+def _sas_window_filling(N, dx, wfrac=0.35, p=4):
+    """A super-Gaussian that FILLS the input window.
+
+    The guard can only know ``(N, dx, lambda)``; the field's own support is
+    invisible to it, so its bound is the worst case it can know -- a field out
+    to the window edge.  This is that field, and it is also the shape a clipped
+    lens aperture presents to the in-glass gap legs.
+    """
+    n = (np.arange(N) - N / 2) * dx
+    r2 = np.add.outer(n ** 2, n ** 2)
+    return np.exp(-(r2 / (wfrac * N * dx) ** 2) ** (p / 2)).astype(complex)
+
+
+def _sas_run(E, z, lam, dx, **kw):
+    from lumenairy.propagators.sas import scalable_angular_spectrum_propagate
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter('always')
+        out, dxo, _ = scalable_angular_spectrum_propagate(E, z, lam, dx, **kw)
+    return out, dxo, [w for w in caught
+                      if issubclass(w.category, RuntimeWarning)]
+
+
+class TestTheSasNearFieldGate:
+    """``scalable_angular_spectrum_propagate``'s third step is a single-FFT
+    Fresnel sum on the INPUT grid, so its quadratic chirp has to be resolved at
+    pitch ``dx`` exactly as ``fresnel_propagate``'s does.  Before WP-B11b the
+    only validity test in the module was the paper's FAR bound ``z > z_limit``;
+    the near direction returned a four-decade energy gain in silence
+    (``test_audit2609_a15a_lens_covering_array`` measures it end to end).
+    """
+
+    LAM = 632.8e-9
+
+    def test_the_bound_is_N_dx2_over_lambda_and_the_edge_is_inclusive(self):
+        """Below ``z_near = N dx^2 / lambda`` the guard fires; at and above it
+        the call is silent.  Both directions, so a guard that fired always --
+        or never -- fails."""
+        N, dx = 64, 2.0e-6
+        z_near = N * dx ** 2 / self.LAM
+        E = _sas_window_filling(N, dx)
+        for frac, want in ((0.05, True), (0.5, True), (1.0 - 1e-9, True),
+                           (1.0, False), (1.0 + 1e-9, False), (3.0, False)):
+            _, _, w = _sas_run(E, frac * z_near, self.LAM, dx)
+            fired = any('UNDER-SAMPLED' in str(x.message) for x in w)
+            assert fired is want, (
+                f'z = {frac} x N*dx^2/lambda: guard '
+                f'{"fired" if fired else "was silent"}, expected '
+                f'{"fired" if want else "silence"} '
+                f'({[str(x.message)[:90] for x in w]})')
+
+    def test_the_bound_does_not_move_with_the_padding_factor(self):
+        """This is the falsifiable half of the derivation.  ``pad`` enlarges
+        the array the chirp is evaluated on, so a bound of ``pad*N*dx^2/lambda``
+        is the obvious alternative; it is WRONG, because the precompensation
+        ``delta_H`` is a band-limited phase filter whose impulse response stays
+        on the input window and the chirp's outer turns multiply zero padding.
+
+        MEASURED (N = 128, dx = 2 um, lambda = 633 nm, window-filling field,
+        oracle = the same kernel at 8x finer input pitch): at z = 0.2 x
+        ``N dx^2/lambda`` the relative field error is 2.24 at pad 2 and 2.30 at
+        pad 4 -- the same ABSOLUTE z breaks both -- and at z = 0.75x it is
+        2.0e-3 and 1.8e-3.  A ``pad``-scaled bound would call pad 4 valid at a
+        z where it is not, and invalid at three z where it is.
+        """
+        N, dx = 64, 2.0e-6
+        z_near = N * dx ** 2 / self.LAM
+        E = _sas_window_filling(N, dx)
+        for frac in (0.3, 0.9, 1.2, 4.0):
+            verdicts = set()
+            for pad in (1, 2, 4):
+                _, _, w = _sas_run(E, frac * z_near, self.LAM, dx, pad=pad)
+                verdicts.add(any('UNDER-SAMPLED' in str(x.message) for x in w))
+            assert len(verdicts) == 1, (
+                f'z = {frac} x N*dx^2/lambda: the guard disagreed across '
+                f'pad in (1, 2, 4) -- it has picked up a pad dependence the '
+                f'measurement says is not there.')
+            assert verdicts == {frac < 1.0}
+
+    def test_the_guard_fires_exactly_where_the_answer_is_wrong(self):
+        """The gate has to be calibrated against the error, not asserted.
+
+        Oracle: the SAME SAS kernel on an 8x finer input pitch over the SAME
+        physical window.  Its own chirp bound is 8x smaller, so it is inside
+        its envelope wherever the coarse run is not, and its output pitch
+        ``lambda z / (pad N dx)`` is IDENTICAL, so the comparison is sample
+        against sample with no interpolation.
+        """
+        N, dx, M = 32, 4.0e-6, 8
+        z_near = N * dx ** 2 / self.LAM
+        Ec = _sas_window_filling(N, dx)
+        Ef = _sas_window_filling(N * M, dx / M)
+        a0 = (N * M - N) // 2
+        seen = {}
+        for frac in (0.1, 2.0):
+            oc, dxo_c, w = _sas_run(Ec, frac * z_near, self.LAM, dx)
+            of, dxo_f, _ = _sas_run(Ef, frac * z_near, self.LAM, dx / M)
+            assert abs(dxo_c - dxo_f) <= 1e-12 * dxo_c
+            ref = of[a0:a0 + N, a0:a0 + N]
+            rel = float(np.linalg.norm(oc - ref) / np.linalg.norm(ref))
+            gain = float(np.sum(np.abs(oc) ** 2) / np.sum(np.abs(ref) ** 2))
+            seen[frac] = (rel, gain,
+                          any('UNDER-SAMPLED' in str(x.message) for x in w))
+        rel_bad, gain_bad, fired_bad = seen[0.1]
+        rel_ok, gain_ok, fired_ok = seen[2.0]
+        assert fired_bad and not fired_ok
+        assert rel_ok < 1e-2, (
+            f'inside the bound the coarse run should track the 8x oracle; '
+            f'got relative error {rel_ok:.4g}')
+        assert rel_bad > 1.0, (
+            f'at 0.1x the bound the aliased quadrature should be wrong by '
+            f'order one or more; got {rel_bad:.4g}.  If this has shrunk the '
+            f'guard is now warning about an accurate answer.')
+        assert gain_bad > 5.0 > 1.05 > gain_ok > 0.95, (
+            f'output power against the oracle: {gain_bad:.4g} below the bound '
+            f'and {gain_ok:.4g} above it -- the energy gain is the symptom '
+            f'the guard exists to name.')
+
+    def test_the_message_names_the_function_the_bound_and_the_way_out(self):
+        N, dx = 64, 2.0e-6
+        E = _sas_window_filling(N, dx)
+        z_near = N * dx ** 2 / self.LAM
+        _, _, w = _sas_run(E, 0.1 * z_near, self.LAM, dx)
+        assert len(w) == 1
+        msg = str(w[0].message)
+        # CONVENTIONS sec. 2: the function name is the first token.
+        assert msg.startswith('scalable_angular_spectrum_propagate: ')
+        assert 'N*dx^2/wavelength' in msg
+        assert f'{z_near:.6g}' in msg
+        assert 'angular_spectrum_propagate' in msg
+        assert 'pad=2' in msg
+
+    def test_the_warning_is_attributed_to_the_caller_not_to_sas_py(self):
+        """``stacklevel`` has to reach the caller's frame, or the warning
+        points a user at library source they did not write (WP-B11b item 8 is
+        the same property swept over the lens family)."""
+        N, dx = 64, 2.0e-6
+        E = _sas_window_filling(N, dx)
+        _, _, w = _sas_run(E, 0.1 * N * dx ** 2 / self.LAM, self.LAM, dx)
+        assert len(w) == 1
+        # the call is made inside ``_sas_run`` in THIS file
+        assert pathlib.Path(w[0].filename).name == pathlib.Path(__file__).name
+
+    def test_the_two_validity_bounds_are_distinguishable_and_bracket_a_window(
+            self):
+        """``z_limit`` bounds ``z`` from above and the new bound from below;
+        the pair is a window, not a contradiction.  MEASURED over eight grids
+        the ratio ``z_limit / z_near`` runs 45.9 (N = 1024, dx = 0.5 um) to
+        5.6e6 (the covering-array doublet's in-glass gap), so the window is
+        never empty on a realistic grid.
+        """
+        N, dx = 64, 2.0e-6
+        E = _sas_window_filling(N, dx)
+        z_near = N * dx ** 2 / self.LAM
+        _, _, near = _sas_run(E, 0.1 * z_near, self.LAM, dx)
+        _, _, far = _sas_run(E, 100.0, self.LAM, dx)
+        _, _, mid = _sas_run(E, 4.0 * z_near, self.LAM, dx)
+        assert [('UNDER-SAMPLED' in str(x.message)) for x in near] == [True]
+        assert [('z_limit' in str(x.message)) for x in far] == [True]
+        assert mid == []
+
+
+# ===========================================================================
+# Item 5 (part b) -- the LensPhysics configuration object
+# ===========================================================================
+
+_PHYS_RX = dict(
+    surfaces=[dict(radius=0.05, glass_before='AIR', glass_after='N-BK7'),
+              dict(radius=-0.05, glass_before='N-BK7', glass_after='AIR')],
+    thicknesses=[3.0e-3], aperture_diameter=4.0e-4)
+
+
+def _phys_case():
+    return (np.ones((8, 8), dtype=np.complex128),
+            dict(prescription=_PHYS_RX, wavelength=633e-9, dx=1e-4))
+
+
+class TestLensPhysics:
+    """The fourth configuration object, and the properties that make it the
+    same object as the other three rather than a look-alike.
+
+    The structural census (table-vs-signature agreement, parameter
+    classification, the refusal parametrisation) lives in
+    ``test_audit2609_a16_lens_config_round_trip.py`` with its three siblings.
+    What is here is the part specific to the fourth role: the line it is drawn
+    on is measurable, and the cross-object rules it deliberately does not
+    restate still fire.
+    """
+
+    def test_the_line_against_lensnumerics_is_measurable_not_asserted(self):
+        """The documented distinction -- a ``LensNumerics`` field moves the
+        answer by its own TRUNCATION error, a ``LensPhysics`` field moves it by
+        a TERM -- has a falsifiable form: refine the numerics knob and the
+        answer converges; refine anything and the physics term does not appear.
+
+        Witness: ``sag_chunk_rows`` (a pure discretisation of the same screen,
+        byte-identical by design) and ``remap_order`` against ``fresnel``.
+        """
+        from lumenairy import LensNumerics, LensPhysics, LensResources
+        from lumenairy.elements._lens_real import apply_real_lens
+        e, kw = _phys_case()
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            plain = apply_real_lens(e, **kw)
+            chunked = apply_real_lens(
+                e, resources=LensResources(sag_chunk_rows=2), **kw)
+            with_term = apply_real_lens(
+                e, physics=LensPhysics(fresnel=True), **kw)
+            term_and_chunked = apply_real_lens(
+                e, physics=LensPhysics(fresnel=True),
+                resources=LensResources(sag_chunk_rows=2), **kw)
+        assert np.array_equal(plain, chunked), (
+            'the discretisation witness moved the answer, so it cannot stand '
+            'for "changes nothing but the truncation error" here')
+        assert not np.array_equal(plain, with_term)
+        # and the term is orthogonal to the discretisation: turning it on
+        # moves the answer by the SAME amount at either chunking.
+        assert np.array_equal(with_term, term_and_chunked)
+        assert float(np.max(np.abs(with_term - plain))) > 1e-3 * float(
+            np.max(np.abs(plain))), (
+            'the fresnel transmittances move this fixture by less than 0.1 % '
+            'of peak, which is too small to distinguish a term from a '
+            'truncation error.  Pick a different witness.')
+
+    def test_a_physics_request_is_refused_where_the_term_does_not_exist(self):
+        """The empty ``_PHYSICS_FOR`` entries are load-bearing: they are what
+        turns a physics request handed to a ray-traced engine into a refusal
+        naming the owner, instead of a silently discarded setting."""
+        from lumenairy.elements import lens_config as lc
+        from lumenairy.elements._lens_traced import apply_real_lens_traced
+        from lumenairy import LensConfig, LensPhysics
+        assert lc._PHYSICS_FOR['apply_real_lens_traced'] == {}
+        e, kw = _phys_case()
+        with pytest.raises(ValueError) as exc:
+            apply_real_lens_traced(
+                e, config=LensConfig(physics=LensPhysics(absorption=True)),
+                **kw)
+        msg = str(exc.value)
+        assert msg.startswith('apply_real_lens_traced:')
+        assert 'physics.absorption' in msg and 'apply_real_lens' in msg
+
+    def test_the_cross_object_rules_still_fire_through_the_config(self):
+        """``LensPhysics.__post_init__`` deliberately checks only what a field
+        can be judged on alone, so the pairs that need a sibling object -- or
+        the prescription -- must still be adjudicated by the call.  Three of
+        them, each through the CONFIG spelling rather than the keyword one, so
+        a config cannot be a way around a guard."""
+        from lumenairy import LensConfig, LensGeometry, LensPhysics
+        from lumenairy.elements._lens_real import apply_real_lens
+        e, kw = _phys_case()
+        # 1. the same per-surface coefficient, twice
+        with pytest.raises(ValueError) as exc:
+            apply_real_lens(e, physics=LensPhysics(slant_correction=True,
+                                                   seidel_correction=True),
+                            **kw)
+        assert 'apply_real_lens:' in str(exc.value)
+        # 2. a model term under surface_model='displaced'
+        with pytest.raises(ValueError) as exc:
+            apply_real_lens(e, config=LensConfig(
+                geometry=LensGeometry(surface_model='displaced'),
+                physics=LensPhysics(fresnel=True)), **kw)
+        assert 'apply_real_lens:' in str(exc.value)
+        # 3. screen_obliquity=True with no carrier
+        with pytest.raises(ValueError) as exc:
+            apply_real_lens(e, physics=LensPhysics(screen_obliquity=True),
+                            **kw)
+        assert 'carrier' in str(exc.value)
+        # ... and the same three built as objects do NOT raise on their own:
+        # the refusal belongs to the call, which is the whole point.
+        LensPhysics(slant_correction=True, seidel_correction=True)
+        LensPhysics(fresnel=True)
+        LensPhysics(screen_obliquity=True)
+
+    def test_narrowed_to_reaches_the_new_group(self):
+        """Every ``_GROUPS`` walker had to pick the fourth group up for free;
+        ``narrowed_to`` is the one whose failure would be silent (it would
+        simply not reset the physics fields, and the next call would raise)."""
+        from lumenairy import LensConfig
+        cfg = LensConfig.from_kwargs(fresnel=True, newton_poly_order=8,
+                                     bandlimit=False)
+        narrowed = cfg.narrowed_to('apply_real_lens_traced')
+        assert narrowed.physics.fresnel is False
+        assert narrowed.to_kwargs() == {'newton_poly_order': 8,
+                                        'bandlimit': False}
+        assert cfg.narrowed_to('apply_real_lens').to_kwargs() == {
+            'fresnel': True, 'bandlimit': False}
+
+    def test_to_kwargs_strict_covers_the_new_group_too(self):
+        """Item 6's refusal (part a) has to see physics requests, or a caller
+        splatting a physics-carrying config into a traced call gets the silent
+        drop back."""
+        from lumenairy import LensConfig
+        cfg = LensConfig.from_kwargs(fresnel=True, bandlimit=False)
+        assert cfg.to_kwargs(entry_point='apply_real_lens_traced') == {
+            'bandlimit': False}
+        with pytest.raises(ValueError) as exc:
+            cfg.to_kwargs(entry_point='apply_real_lens_traced', strict=True)
+        assert 'fresnel' in str(exc.value) and 'physics' in str(exc.value)
+
+    def test_input_wavevector_saddle_is_still_keyword_only_with_the_reason(
+            self):
+        """The decision the work package was asked to make, pinned so that
+        moving it later is a deliberate act with a visible test change."""
+        from lumenairy.elements import lens_config as lc
+        assert 'input_wavevector_saddle' not in lc.LensConfig.field_names()
+        reason = lc.KWARG_ONLY['apply_real_lens_maslov'][
+            'input_wavevector_saddle']
+        assert 'INPUT FIELD' in reason
+        assert 'LensPhysics' in reason, (
+            'the exclusion predates LensPhysics; it must say that it was '
+            're-examined when the fourth object landed, or a later reader '
+            'cannot tell a decision from an oversight.')
+
+    @pytest.mark.parametrize('name', [
+        'surface_model', 'caustic', 'fit_basis'])
+    def test_the_three_settings_that_did_not_move_are_where_they_were(self,
+                                                                      name):
+        """A field that moves between two shipped config objects is a
+        migration.  These three fit the physics role by the definition above
+        and were deliberately left; this is the pin that makes moving one
+        deliberate."""
+        from lumenairy import LensGeometry, LensNumerics, LensPhysics
+        import dataclasses
+        where = {f.name: 'geometry' for f in dataclasses.fields(LensGeometry)}
+        where.update({f.name: 'numerics'
+                      for f in dataclasses.fields(LensNumerics)})
+        where.update({f.name: 'physics'
+                      for f in dataclasses.fields(LensPhysics)})
+        assert where[name] == ('geometry' if name == 'surface_model'
+                               else 'numerics')
+
+
+# ===========================================================================
+# Item 8 (part b) -- the doe.py zero fill, and warning attribution
+# ===========================================================================
+
+class TestTheZonePlateZeroFill:
+    """``create_fresnel_zone_plate``'s outside-the-aperture fill takes ``T``'s
+    own dtype instead of the literal ``0.0 + 0j``.
+
+    WP-A22's structural walk found the site and rated it P3 BY MEASUREMENT --
+    the phase is built from Python float literals, so ``T`` is complex128 on
+    every reachable call and nothing was promoted -- then allowlisted it with
+    the one-line migration written at the entry.  This is that migration, so
+    the allowlist entry is gone and the walk now confirms the site.
+
+    WP-A22's forward-looking half of that rating does NOT survive
+    re-measurement, and this class records the correction: see
+    ``test_what_the_literal_fill_actually_promotes``.
+    """
+
+    @pytest.mark.parametrize('binary,n_zones', [
+        (True, None), (True, 4), (False, None), (False, 4), (False, 1)])
+    def test_the_shipped_answer_is_unchanged(self, binary, n_zones):
+        """The returned transmission and its dtype, on both branches and with
+        the aperture both active and inactive.  ``f = 0.2 mm`` puts 36 zones
+        across this grid, so ``n_zones=4`` really clips."""
+        from lumenairy.elements.doe import create_fresnel_zone_plate
+        T = create_fresnel_zone_plate(48, 2.0e-6, 0.2e-3, 633e-9,
+                                      binary=binary, n_zones=n_zones)
+        assert T.dtype == np.complex128
+        assert np.all(np.isfinite(T))
+        if n_zones is not None:
+            # the aperture is real: something outside it is exactly zero
+            assert np.any(T == 0)
+            assert np.any(T != 0)
+
+    @pytest.mark.parametrize('dt', ['complex64', 'complex128',
+                                    'float32', 'float64'])
+    def test_the_fill_follows_T_dtype_whatever_T_is(self, dt):
+        """The property the migration buys, stated as an invariant rather than
+        as a difference: ``np.zeros((), T.dtype)`` is dtype-preserving for
+        EVERY ``T``, by construction, and does not depend on how the NumPy in
+        use promotes a Python scalar."""
+        T = np.ones((4, 4), dtype=dt)
+        inside = np.ones((4, 4), dtype=bool)
+        inside[0, 0] = False
+        assert np.where(inside, T, np.zeros((), T.dtype)).dtype == T.dtype
+
+    def test_what_the_literal_fill_actually_promotes(self):
+        """MEASURED 2026-09-14 on NumPy 2.4.6 -- and it CORRECTS WP-A22's
+        rationale, which is why it is a test and not a comment.
+
+        That report rated the site P3 today and "P1 the moment the phase is
+        built at a narrower dtype".  Under NEP 50 weak promotion a Python
+        complex scalar does not widen a complex array at all, so a complex64
+        ``T`` would keep complex64 with the literal too; the arm where the
+        literal really does change the dtype is a REAL ``T``, which this entry
+        point's ``exp(1j * phase)`` can never produce.
+
+        ========== =================== ========================
+        T.dtype    literal ``0.0+0j``  ``np.zeros((), T.dtype)``
+        ========== =================== ========================
+        complex64  complex64           complex64
+        complex128 complex128          complex128
+        float32    complex64           float32
+        float64    complex128          float64
+        ========== =================== ========================
+
+        So the migration is worth making because it is explicit and
+        version-independent -- NumPy 1.x decided this by value-based casting
+        and 2.x by weak promotion -- not because a promotion was waiting to
+        happen here.  If this table moves, the reasoning above moves with it.
+        """
+        inside = np.ones((4, 4), dtype=bool)
+        inside[0, 0] = False
+        got = {dt: str(np.where(inside, np.ones((4, 4), dtype=dt),
+                                0.0 + 0j).dtype)
+               for dt in ('complex64', 'complex128', 'float32', 'float64')}
+        assert got == {'complex64': 'complex64', 'complex128': 'complex128',
+                       'float32': 'complex64', 'float64': 'complex128'}, got
+
+    def test_the_dispatcher_pin_no_longer_exempts_the_site(self):
+        import tests.unit.test_v4_14_2_dispatcher_pin_zero_plus_zeroj as pin
+        assert not any(p.endswith('doe.py')
+                       for p, _ in pin._P3_ALLOWLIST), (
+            'the allowlist still exempts doe.py; the migration has landed, so '
+            'the walk should confirm the site rather than skip it.')
+
+
+class TestWarningAttribution:
+    """Every warning the lens bodies raise must name the caller's frame.
+
+    ``stacklevel`` counts frames, so a literal is right for exactly one call
+    path -- and this family has several to the same source line: the public
+    wrapper that owns the accumulator-store context, the configuration
+    objects' self-re-entry, ``apply_real_lens_traced`` reaching
+    ``apply_real_lens`` internally, and nested closures.  MEASURED before the
+    fix: a configured ``apply_real_lens`` call attributed its aperture notice
+    to ``_lens_real.py``'s own re-entry line, and ``prepare_real_lens_traced``
+    attributed all five of its notices to ``_lens_traced.py``.
+    """
+
+    RX = dict(
+        surfaces=[dict(radius=0.05, glass_before='AIR', glass_after='N-BK7'),
+                  dict(radius=-0.05, glass_before='N-BK7',
+                       glass_after='AIR')],
+        thicknesses=[3.0e-3], aperture_diameter=4.0e-3)   # aperture > grid
+
+    def _warned(self, fn, *a, **kw):
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter('always')
+            fn(*a, **kw)
+        return caught
+
+    def test_the_computed_level_is_the_first_frame_outside_the_package(self):
+        """The helper itself, against a hand-built stack of known depth."""
+        from lumenairy.elements._lens_kernels import caller_stacklevel
+
+        def inner():
+            return caller_stacklevel()
+
+        def outer():
+            return inner()
+
+        # Both frames are in THIS file, which is outside lumenairy, so the
+        # first frame outside the package is the immediate one: level 1.
+        assert inner() == 1
+        assert outer() == 1
+        # ... and with the package as the "root", every frame of this file
+        # counts as library code, so it walks to the outermost frame instead
+        # of returning 1.  That is the "no user frame" arm.
+        here = str(pathlib.Path(__file__).parent) + os.sep
+        assert caller_stacklevel(_root=here) > 1
+
+    def test_a_configured_call_still_names_the_callers_frame(self):
+        """The regression the configuration objects introduced: the re-entry
+        ``return apply_real_lens(E_in, **resolve(...))`` adds one frame, which
+        every hard-coded level in the body was short by."""
+        from lumenairy import LensNumerics, LensPhysics
+        from lumenairy.elements._lens_real import apply_real_lens
+        e = np.ones((8, 8), dtype=np.complex128)
+        kw = dict(prescription=self.RX, wavelength=633e-9, dx=1e-4)
+        me = pathlib.Path(__file__).name
+        for label, extra in (('plain', {}),
+                             ('numerics', {'numerics': LensNumerics(
+                                 bandlimit=False)}),
+                             ('physics', {'physics': LensPhysics(
+                                 absorption=True)})):
+            caught = self._warned(apply_real_lens, e, **extra, **kw)
+            got = [w for w in caught if 'aperture(s) exceed' in str(w.message)]
+            assert got, f'{label}: the aperture notice did not fire'
+            for w in got:
+                assert pathlib.Path(w.filename).name == me, (
+                    f'{label}: the notice names {w.filename}:{w.lineno}, not '
+                    f'the caller.  A warning that points at library source '
+                    f'tells the reader where the library called itself.')
+
+    def test_the_traced_entry_points_name_the_callers_frame(self):
+        """Including the notices ``apply_real_lens_traced`` raises through an
+        internal ``apply_real_lens`` call, and ``prepare_real_lens_traced``'s,
+        which the literal levels could not reach at all."""
+        from lumenairy.elements._lens_traced import prepare_real_lens_traced
+        me = pathlib.Path(__file__).name
+        caught = self._warned(prepare_real_lens_traced,
+                              prescription=self.RX, wavelength=633e-9,
+                              dx=1e-5, N=64, ray_subsample=1)
+        got = [w for w in caught if issubclass(w.category,
+                                               (UserWarning, RuntimeWarning))]
+        assert len(got) >= 3, f'expected the pre-flight notices, got {got}'
+        bad = [f'{pathlib.Path(w.filename).name}:{w.lineno}' for w in got
+               if pathlib.Path(w.filename).name != me]
+        assert not bad, (
+            f'{len(bad)} of {len(got)} notices name library source: {bad}')
+
+    def test_no_literal_stacklevel_is_left_in_the_two_lens_bodies(self):
+        """The ratchet.  A literal that creeps back in is right for one call
+        path and wrong for the others, and the failure is silent -- the
+        warning still fires, it just points at the wrong file."""
+        for rel in ('lumenairy/elements/_lens_real.py',
+                    'lumenairy/elements/_lens_traced.py'):
+            src = (REPO / rel).read_text(encoding='utf-8')
+            tree = ast.parse(src)
+            bad = []
+            for node in ast.walk(tree):
+                if not (isinstance(node, ast.Call)
+                        and isinstance(node.func, ast.Attribute)
+                        and node.func.attr == 'warn'):
+                    continue
+                args = list(node.args) + [k.value for k in node.keywords
+                                          if k.arg == 'stacklevel']
+                for a in args:
+                    if isinstance(a, ast.Constant) and isinstance(a.value, int):
+                        bad.append(node.lineno)
+            assert not bad, (
+                f'{rel}: warnings.warn with a LITERAL stacklevel at lines '
+                f'{sorted(set(bad))}.  Use _caller_stacklevel(), which walks '
+                f'out to the first frame outside the package.')
+
+
+# ===========================================================================
+# Item 4 (part b) -- PMM2DStackHybrid.truncation joins the guarded attributes
+# ===========================================================================
+
+class TestStack2DTruncationGuard:
+    """The fourth validated model choice.  Part a guarded ``formulation`` /
+    ``cascade`` / ``symmetry`` and recorded that ``truncation`` had the same
+    unguarded-after-``__init__`` shape; this closes it with the same pattern
+    and the same shared vocabulary."""
+
+    def test_the_constructor_and_the_setter_share_one_vocabulary(self):
+        from lumenairy.elements.pmm.stack2d import (
+            _TRUNCATIONS, PMM2DStackHybrid,
+        )
+        for value in list(_TRUNCATIONS) + ['circle', 'rect', '', None, 0]:
+            by_init = True
+            try:
+                PMM2DStackHybrid(0.7e-6, truncation=value)
+            except ValueError:
+                by_init = False
+            st = PMM2DStackHybrid(0.7e-6)
+            by_set = True
+            try:
+                st.truncation = value
+            except ValueError:
+                by_set = False
+            assert by_init == by_set == (value in _TRUNCATIONS), (
+                f'truncation={value!r}: __init__ '
+                f'{"took" if by_init else "refused"} it, the setter '
+                f'{"took" if by_set else "refused"} it, vocabulary says '
+                f'{value in _TRUNCATIONS}')
+
+    def test_the_refusal_carries_the_conventions_prefix(self):
+        from lumenairy.elements.pmm.stack2d import PMM2DStackHybrid
+        st = PMM2DStackHybrid(0.7e-6)
+        with pytest.raises(ValueError) as exc:
+            st.truncation = 'circle'
+        msg = str(exc.value)
+        assert msg.startswith('PMM2DStackHybrid:')
+        assert 'circle' in msg and 'circular' in msg
+
+    def test_a_legal_reassignment_still_takes_effect(self):
+        """The guard is a refusal, not a freeze -- and the order set really
+        moves, which is what makes a silent typo expensive: it buys back the
+        larger, slower, DIFFERENT rectangular answer with nothing said."""
+        from lumenairy.elements.pmm.stack2d import PMM2DStackHybrid
+        st = PMM2DStackHybrid(0.7e-6, n_orders=5)
+        n = 2 * 5 + 1
+        ox, oy = np.meshgrid(np.arange(-5, 6), np.arange(-5, 6),
+                             indexing='ij')
+        st.truncation = 'circular'
+        assert st.truncation == 'circular'
+        circ = st._order_keep_mask(ox, oy)
+        assert circ is not None
+        kept = int(np.count_nonzero(circ))
+        st.truncation = 'rectangular'
+        assert st.truncation == 'rectangular'
+        assert st._order_keep_mask(ox, oy) is None
+        assert 0 < kept < n * n, (
+            f'the circular truncation kept {kept} of {n * n} orders; if it '
+            f'kept all of them the two settings would be the same answer and '
+            f'this guard would be cosmetic.')
+
+    def test_every_validated_model_choice_is_now_a_property(self):
+        """The census, so a fifth one added as a plain attribute is caught."""
+        from lumenairy.elements.pmm.stack2d import PMM2DStackHybrid
+        for name in ('formulation', 'cascade', 'symmetry', 'truncation'):
+            assert isinstance(getattr(PMM2DStackHybrid, name, None),
+                              property), (
+                f'{name} is not a property, so an out-of-vocabulary '
+                f'assignment after __init__ is accepted silently')

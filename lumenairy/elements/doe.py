@@ -531,12 +531,28 @@ def create_fresnel_zone_plate(
 
     is_even = (zone_index % 2 == 0)
     if binary:
+        # Both branches are literal complex constants, so the array is
+        # complex by construction and there is no operand dtype to preserve:
+        # this is the one shape the dispatcher pin's structural walk
+        # deliberately does not count (WP-A22).
         T = np.where(is_even & inside, 1.0 + 0j, 0.0 + 0j)
     else:
         phase = np.where(is_even, 0.0, np.pi)
         T = np.exp(1j * phase)
         if n_zones is not None:
-            T = np.where(inside, T, 0.0 + 0j)
+            # The outside-the-aperture fill takes ``T``'s OWN dtype, so it is
+            # dtype-preserving by construction rather than by whichever
+            # scalar-promotion rule the installed NumPy uses (1.x decided it
+            # by value-based casting, 2.x by NEP 50 weak promotion).  MEASURED
+            # on NumPy 2.4.6, the literal ``0.0 + 0j`` it replaces keeps
+            # complex64 and complex128 unchanged and turns a REAL array
+            # complex -- and ``T`` here is ``exp(1j * phase)``, always complex
+            # -- so the returned array is bit-identical on every reachable
+            # call.  The dispatcher pin
+            # (``test_v4_14_2_dispatcher_pin_zero_plus_zeroj``) requires this
+            # spelling at any site where the fill's dtype is not fixed by the
+            # two value operands being literals.
+            T = np.where(inside, T, np.zeros((), T.dtype))
     return T
 
 

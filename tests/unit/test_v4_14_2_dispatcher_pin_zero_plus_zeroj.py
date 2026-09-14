@@ -123,25 +123,18 @@ _P3_ALLOWLIST = {
     # path.  v4.15+ Qt-side cleanup may migrate to the dtype-aware
     # sentinel; meanwhile, exempted.
     ('ui/psf_mtf_dock.py', 230),
-    # ``elements/doe.py:539`` -- ``T = np.where(inside, T, 0.0 + 0j)`` in
-    # ``create_fresnel_zone_plate``.  Found 2026-09-12 (WP-A22) by the
-    # structural walk below, which the per-line regex could not see because
-    # the fill is spelled ``0j`` rather than ``0.0j``.
-    #
-    # P3 by MEASUREMENT, not by assumption: on this branch
-    # ``T = np.exp(1j * np.where(is_even, 0.0, np.pi))`` and that phase is
-    # built from PYTHON FLOAT literals, so it is float64 for every input the
-    # entry point accepts -- ``T`` is complex128 unconditionally (measured
-    # complex128 on all four (binary, n_zones) combinations) and the fill is
-    # complex128 too.  Nothing is promoted on any reachable call.
-    #
-    # It is still the wrong spelling, and it would become P1 the moment the
-    # phase is built at a narrower dtype.  The one-line migration is
-    # ``np.where(inside, T, np.zeros((), T.dtype))``; recorded as a request to
-    # that module's owner in WP-A22's report.  Remove this entry when it
-    # lands -- the walk will then confirm it rather than exempt it.
-    ('elements/doe.py', 539),
 }
+# ``elements/doe.py``'s ``create_fresnel_zone_plate`` fill is NOT here any
+# more: WP-A22 found it, measured it P3 (the phase is built from Python float
+# literals, so ``T`` was complex128 on all four (binary, n_zones) combinations
+# and nothing was promoted on any reachable call) and allowlisted it with the
+# one-line migration written out.  WP-B11b applied that migration --
+# ``np.where(inside, T, np.zeros((), T.dtype))`` -- so the walk below now
+# CONFIRMS the site rather than exempting it.  Re-measured at the same time
+# (NumPy 2.4.6, ``b11::TestTheZonePlateZeroFill``): the literal it replaced was
+# ALREADY dtype-preserving for a complex ``T`` under NEP 50 weak promotion, so
+# the migration buys explicitness across NumPy versions rather than closing a
+# promotion that was about to happen.
 
 
 def _literal_or_none(node):

@@ -95,6 +95,7 @@ from .lens_config import (
     LensConfig,
     LensGeometry,
     LensNumerics,
+    LensPhysics,
     LensResources,
 )
 from .lenses import (
@@ -273,7 +274,8 @@ __all__ = [
     'prepare_real_lens_traced', 'PreparedTracedLens', 'TiltedCarrier',
     'prepare_real_lens', 'PreparedAnalyticLens',
     # lens_config -- configuration objects for the apply_real_lens family
-    'LensGeometry', 'LensNumerics', 'LensResources', 'LensConfig',
+    'LensGeometry', 'LensNumerics', 'LensResources', 'LensPhysics',
+    'LensConfig',
     'set_lens_parallel_amp', 'get_lens_parallel_amp',
     'set_lens_sag_dtype', 'get_lens_sag_dtype',
     'set_pointwise_cos_grid_cache_budget',

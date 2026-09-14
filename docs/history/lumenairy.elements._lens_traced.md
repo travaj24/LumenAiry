@@ -1,7 +1,7 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/_lens_traced.py
-ast_sha256: c25473a8e0d6c7a5066ca1f1adb3e3a632b8ad578f601393c966045bb7f9f4d8
-token_sha256: 3f4d980a26e47780e072b16a20b4e10e4045708c5efe3bb5889cd9ea43e82ef2
+ast_sha256: 34c0e87d665b3f8de027419311b7e2119e7fe3abd94c6a58197aa17ab7cb964a
+token_sha256: 4d961c535739c1625cd5c4d0d0b0a31c45c35e83a79a6e139751cef92132cd10
 pre_relocation_lines: 14898
 recorded_by: WP-A17 SWEEP-4 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
@@ -10,6 +10,7 @@ re_recorded: 2026-09-13 -- WP-A26: _DECENTRED_FIT_POLY_ORDER re-derived 10 -> 16
 re_recorded: 2026-09-13 -- WP-B10: an opt-in disc-orthogonal design basis for the traced ray fits -- fit_basis='chebyshev' (the default, byte-identical) or 'zernike', orthonormal on the ray-fit disc at the same total degree; the samples, D1's weights, the D7 order and the C11 arbiter are unchanged and only the conditioning of the least-squares solve moves
 re_recorded: 2026-09-13 -- VERIFY-B10 landing: the inverse-map cache key names the fit basis (parity_tag += str(_fit_basis)); the verifier's fit_basis reachability paragraph
 re_recorded: 2026-09-13 -- the grid-versus-aperture bookkeeping moved to the new elements/_lens_kernels.py leaf and is re-exported; _lens_traced reads the leaf, closing its module-level 2-cycle with the lenses facade (WP-B11a item 4)
+re_recorded: 2026-09-14 -- WP-B11b item 8: every warning in the two lens bodies asks _lens_kernels.caller_stacklevel for its level, so it names the first frame outside the package whatever wrapper / configuration re-entry reached it; doe.py's zone-plate fill takes T's own dtype.
 -->
 
 # Version history -- `lumenairy/elements/_lens_traced.py`

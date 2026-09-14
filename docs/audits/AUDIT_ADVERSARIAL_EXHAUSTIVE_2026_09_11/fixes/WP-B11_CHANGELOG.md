@@ -201,3 +201,150 @@ length in `_collins_readout`'s docstring but nowhere a caller choosing
 `transport=` would read it.  The `transport` parameter now carries the window
 and the two measured readings that bracket it (K1 = 0.16 on the WP-A6 fixture;
 K1 = 82 for an 8 mm final distance on a 5.4 mm exit beam at 76 um).
+
+---
+
+# WP-B11b -- release text for 5.47.0, part b
+
+Part **b** of the hygiene pass.  Three entries below are behaviour changes -- a
+diagnostic and two refusals, each where a silent wrong answer was returned
+before -- and each carries a Migration note.  **No numerical default moves.**
+
+### Added -- the SAS propagator's NEAR-field validity bound
+
+`scalable_angular_spectrum_propagate` bounded `z` from ABOVE only (the paper's
+`z_limit`, past which the band-limit filter eats the components the
+precompensation exists to correct).  Its third step is the same single-FFT
+Fresnel sum `fresnel_propagate` evaluates, on the same input grid, so its
+quadratic chirp `exp(i k x^2 / 2z)` has to be resolved at pitch `dx` in exactly
+the same way -- and below `z_near = N*dx^2/lambda` it is not.
+`propagators/sas.py:38::_warn_sas_chirp_sampling` is that bound, emitted as a
+`RuntimeWarning` in `fresnel._warn_fresnel_chirp_sampling`'s shape.  Values are
+unchanged: 24/24 bit-identical against `c62c2f14` over both sides of the bound,
+three padding factors, `skip_final_phase`, a complex64 input and an end-to-end
+in-glass lens gap.
+
+The derivation is in the function's docstring, with the measurement that fixes
+the constant: the chirp's local spatial frequency at the window edge is
+`(N dx/2)/(lambda z)` against a Nyquist of `1/(2 dx)`.  `pad` does NOT enter it
+-- the precompensation is a band-limited phase filter whose impulse response
+stays on the input window, so the chirp's unresolved outer turns multiply the
+zero padding.  MEASURED on a window-filling super-Gaussian against the same
+kernel at 8x finer input pitch, the relative field error at `z = 0.2 z_near` is
+2.24 at pad 2, 2.30 at pad 4 and 2.26 at pad 1 -- the same ABSOLUTE `z` breaks
+all three -- and the output carries 6.0x the oracle's power there, 23.6x at
+`0.1 z_near` and 85x at `0.05 z_near`.  The two bounds bracket a window that is
+never empty: over eight grids `z_limit / z_near` runs from 45.9 to 5.6e6.
+
+**Migration.**  `wave_propagator='sas'` on an in-glass lens gap now emits
+`RuntimeWarning`s it did not emit before.  On the WP-A15a covering-array doublet
+(N = 64, dx = 112.5 um, 9.0 mm N-BAF10 + 2.5 mm N-SF6HT) that leg returned
+`P_out/P_in = 1.0397e4` in silence; it returns the same `1.0397e4` -- every
+digit unchanged -- with two warnings, one per gap, at 0.0042x and 0.0011x of
+the bound.  The sibling `'fresnel'` leg has warned about the same aliasing since
+the K1 guard landed.  A caller relying on the silence should move to
+`wave_propagator='asm'`, which is exact in this regime, or filter
+`RuntimeWarning` from `lumenairy.propagators.sas`.
+`test_audit2609_a15a_lens_covering_array.py::test_the_in_glass_gap_legs_are_reached_and_only_one_of_them_is_gated`
+pinned that silence deliberately and is restated as
+`..._and_both_of_them_are_gated`, now pinning the symmetry of the two legs and
+the warning COUNT (one per gap).
+
+### Added -- `LensPhysics`, the fourth lens configuration object
+
+`lumenairy.LensPhysics` joins `LensGeometry` / `LensNumerics` / `LensResources`
+and carries the nine `apply_real_lens` model-term switches that were
+keyword-only: `fresnel`, `slant_correction`, `absorption`, `seidel_correction`,
+`seidel_poly_order`, `surface_frame`, `displaced_mode`, `displaced_obliquity`,
+`screen_obliquity`.  `apply_real_lens` gains `physics=`, `LensConfig` gains a
+fourth component, and `from_kwargs` / `to_kwargs` (including part a's
+`strict=`) / `narrowed_to` / `field_names` reach it for free because they all
+walk `_GROUPS`.  Purely additive: every keyword still works with the same
+default, a config whose fields are all at their defaults is indistinguishable
+from passing none, and `physics=LensPhysics(fresnel=True)` is byte-identical to
+`fresnel=True` (9/9 cases; 20/20 bit-identical against `c62c2f14`).
+
+The line against `LensNumerics` is stated and testable: a numerics field moves
+the answer by its own TRUNCATION error, a physics field moves it by a TERM.
+`physics=` is the one configuration parameter that is not on all seven entry
+points, because MEASURED against the live signatures every one of these nine is
+a parameter of `apply_real_lens` and of no sibling -- the traced / Maslov / GBD
+/ FGA models build their screens from a ray trace, so none of these terms has a
+switch there.  A physics request handed to a sibling through `config=` raises
+and names `apply_real_lens` as the owner.
+
+`input_wavevector_saddle` was re-examined and stays keyword-only: which
+stationary point the asymptotic evaluators expand about is a property of the
+INPUT FIELD's spectrum, not of the optic, and every object here is built to
+outlive the field it was configured against.  `surface_model`, `caustic` and
+`fit_basis` fit the physics role but were already shipped config fields; moving
+one is a migration for a caller who wrote `LensGeometry(surface_model=...)`, so
+they stay, and `docs/lens_configuration.md` records the three as the partition's
+known ragged edge.
+
+### Changed -- every warning in the two lens bodies names the caller's frame
+
+`stacklevel` counts frames, so a literal is right for exactly one call path, and
+this family has several to the same source line.  MEASURED: WP-A16's
+configuration objects made each entry point re-enter ITSELF once when a config
+is passed (`return apply_real_lens(E_in, **resolve(...))`), so on a configured
+call every hard-coded level in `_lens_real.py` was one frame short and the
+aperture notice named `_lens_real.py:6130` -- the library's own re-entry line.
+`prepare_real_lens_traced` attributed all five of its pre-flight notices to
+`_lens_traced.py`, and `apply_real_lens_traced`'s Newton-inversion notice named
+`_lens_traced.py:13340`.
+
+`elements/_lens_kernels.py::caller_stacklevel` walks out from the calling frame
+to the first frame outside the `lumenairy` package and returns that depth -- the
+same rule Python 3.12's `warnings.warn(..., skip_file_prefixes=)` applies,
+written out so it also holds on the 3.10 this package supports.  It is now the
+level at 9 sites in `_lens_real.py` (`_WARN_STACKLEVEL` is gone) and 31 in
+`_lens_traced.py`, and the default for `_warn_if_aperture_exceeds_grid`.  Fields
+are unchanged: 20/20 bit-identical.  An AST ratchet
+(`b11::test_no_literal_stacklevel_is_left_in_the_two_lens_bodies`) fails on a
+literal that creeps back in.
+
+The one case that still names non-user code is correct -- on the parallel-amp
+path the call runs in a `ThreadPoolExecutor` worker, so there is no user frame
+on that thread and the outermost one is the honest answer.
+
+**Migration.**  `warnings.filterwarnings(..., module=...)` keys on the
+ATTRIBUTED frame's module, and so does the default filter's per-location dedup
+registry.  A filter written against `lumenairy.elements._lens_real` or
+`lumenairy.elements._lens_traced` to silence one of these notices will no longer
+match; filter on the category and message, or on the calling module, instead.
+Warnings that already named the caller are unaffected.
+
+### Changed -- `doe.create_fresnel_zone_plate`'s outside-the-aperture fill
+
+`np.where(inside, T, 0.0 + 0j)` becomes
+`np.where(inside, T, np.zeros((), T.dtype))` (WP-A22 sec. F5's one-line
+request), and the `('elements/doe.py', 539)` entry is deleted from
+`_P3_ALLOWLIST` in `tests/unit/test_v4_14_2_dispatcher_pin_zero_plus_zeroj.py`,
+so the structural walk confirms the site instead of exempting it.
+Bit-identical on all seven measured arms, dtypes included.
+
+Re-measured while applying it (NumPy 2.4.6), and it CORRECTS WP-A22's
+forward-looking rating: under NEP 50 weak promotion a Python complex scalar does
+not widen a complex array, so a complex64 phase would have kept complex64 with
+the literal too.  The literal only changes the dtype for a REAL `T`, which
+`exp(1j * phase)` cannot produce.  The migration is worth making because it is
+explicit and version-independent -- NumPy 1.x decided this by value-based
+casting, 2.x by weak promotion -- not because a promotion was about to happen.
+The table is pinned in `b11::test_what_the_literal_fill_actually_promotes`.
+
+### Changed -- `PMM2DStackHybrid.truncation` is guarded on assignment
+
+The fourth validated model choice joins `formulation` / `cascade` / `symmetry`
+(part a).  It was validated in `__init__` and a plain attribute afterwards, and
+the solve reads it through `!= "circular"` tests that a typo silently fails, so
+`st.truncation = 'circle'` was accepted and the stack quietly solved the larger
+rectangular full box.  It is now a property sharing one vocabulary with the
+constructor (`_TRUNCATIONS` / `_check_truncation`, called from both, with
+`__init__`'s original message wording preserved).  The caches already key on it
+correctly (`_geom_key` carries it), so the only behaviour change is the refusal:
+8/8 bit-identical over both truncations x both formulations.
+
+**Migration.**  `st.truncation = <anything but 'rectangular' or 'circular'>` now
+raises `ValueError` instead of being stored.  Code that relied on the silent
+acceptance was solving the rectangular box whatever it wrote.

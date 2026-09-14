@@ -87,6 +87,9 @@ _CASCADES = ("monolithic", "fast", "fused", "tree")
 #: Fourier-factorization rules :class:`PMM2DStackHybrid` accepts.
 _FORMULATIONS = ("li", "laurent")
 
+#: Order-set truncations :class:`PMM2DStackHybrid` accepts.
+_TRUNCATIONS = ("rectangular", "circular")
+
 
 def _check_formulation(value):
     """THE ONE ``formulation`` vocabulary check, shared by
@@ -106,6 +109,18 @@ def _check_cascade(value):
         raise ValueError(
             f"PMM2DStackHybrid: cascade must be one of "
             f"{', '.join(repr(c) for c in _CASCADES)}, got {value!r}")
+    return value
+
+
+def _check_truncation(value):
+    """THE ONE ``truncation`` vocabulary check; see :func:`_check_formulation`.
+
+    The message keeps ``__init__``'s original wording so a caller who has been
+    reading it since v5.x sees the same sentence from the setter."""
+    if value not in _TRUNCATIONS:
+        raise ValueError(
+            f"PMM2DStackHybrid: truncation must be 'rectangular' or "
+            f"'circular', got {value!r}")
     return value
 
 #: Share of :func:`lumenairy.memory.get_ram_budget` the TREE reduction's extra
@@ -327,10 +342,7 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
                  symmetry="auto", max_nodal_dof=_MAX_NODAL_DOF,
                  cascade="fast", cache_max_bytes=None, tree_max_bytes=None,
                  truncation="rectangular"):
-        if truncation not in ("rectangular", "circular"):
-            raise ValueError(
-                f"PMM2DStackHybrid: truncation must be 'rectangular' or "
-                f"'circular', got {truncation!r}")
+        _check_truncation(truncation)
         _check_formulation(formulation)
         _check_cascade(cascade)
         self._layers = []          # dicts: kind, thickness, payload (PUBLIC eps)
@@ -445,7 +457,7 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
     # Re-deriving the walls from stored FRACTIONS would also work, but it would
     # silently re-shape a user's geometry on attribute assignment; refusing is
     # the convention this class already uses for every other geometry change.
-    # THE THREE VALIDATED MODEL CHOICES, guarded on ASSIGNMENT as well as on
+    # THE FOUR VALIDATED MODEL CHOICES, guarded on ASSIGNMENT as well as on
     # construction.  ``__init__`` refuses an out-of-vocabulary value and then
     # stored it as a plain attribute, so ``st.formulation = 'fff_nv'`` was
     # ACCEPTED and the solve read it through an ``== 'li'`` test that a typo
@@ -453,7 +465,7 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
     # nothing.  The caches already key on these attributes correctly, so the
     # only behaviour change is the refusal; the vocabulary itself is the same
     # object ``__init__`` uses (``_check_formulation`` / ``_check_cascade`` /
-    # ``_symmetry_on``), so the two cannot drift.
+    # ``_check_truncation`` / ``_symmetry_on``), so the two cannot drift.
     @property
     def formulation(self):
         """Fourier-factorization rule, ``'li'`` or ``'laurent'``."""
@@ -471,6 +483,22 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
     @cascade.setter
     def cascade(self, value):
         self._cascade = _check_cascade(value)
+
+    @property
+    def truncation(self):
+        """Order-set truncation, ``'rectangular'`` or ``'circular'``.
+
+        Guarded on assignment for the same reason ``formulation`` is: the
+        solve reads it through ``!= "circular"`` tests, so a typo silently
+        selected the rectangular full box -- the larger, slower, DIFFERENT
+        answer -- and said nothing.  The layer and mask caches key on it
+        correctly (``_geom_key`` carries it), so the only behaviour change is
+        the refusal."""
+        return self._truncation
+
+    @truncation.setter
+    def truncation(self, value):
+        self._truncation = _check_truncation(value)
 
     @property
     def symmetry(self):

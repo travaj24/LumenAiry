@@ -785,3 +785,644 @@ documented as such in the 5.46.0 release intro.
 * **Item 4's remaining two cycles** -- section 2.4 and
   `docs/lens_configuration.md`, including the PEP 562 forward the
   `_NUMBA_AVAILABLE` monkeypatch and the lazy `cp` / `_ne` slots need.
+
+---
+---
+
+# WP-B11 (Wave 4, last) -- the hygiene pass, **part b**
+
+Branch `audit-fixes-2026-09`, base HEAD `c62c2f14` (part a landed).  Scope from
+the orchestrator, in priority order: the **P1 near-field gate for the in-glass
+`'sas'` gap leg** (part a sec. 2.10's finding), **item 5** (`LensPhysics`),
+**item 8** (the `doe.py` fill and the warning `stacklevel` sweep), the
+**`PMM2DStackHybrid.truncation`** guard, then the deferred list.
+
+WP-B7's files were uncommitted in the tree at launch and are owned by VERIFY-B7
+concurrently (`lenses_maslov.py`, `lenses_gbd.py`, `_lens_jax.py`,
+`propagators/asymptotic*.py`, `fga.py`, `gbd.py`).  **None was opened for
+writing by this work package.**  The edits item 8 needs in two of them are
+written out verbatim in section 5b for the orchestrator to apply after
+VERIFY-B7 lands.
+
+WP-B7 landed mid-package as `f64444ec`.  `git diff --name-only c62c2f14
+f64444ec` touches **none** of this package's modules, so the base above is
+still the correct pre-change library for every gate reported here, and no gate
+was re-run against a moving target.
+
+## How every change in part b was gated
+
+The same harness as part a, re-based: `git archive c62c2f14 lumenairy` extracted
+read-only into `scratchpad/b11b/archive`.  Each probe runs TWICE in a child
+process -- once with cwd and `PYTHONPATH` set to that archive, once with them set
+to the working tree -- asserting `lumenairy.__file__` is under the expected root
+before it computes anything, and the two JSON outputs are compared key by key.
+Never through pytest, and never against the shared working tree's in-place
+modules.  Every hash is SHA-256 over the exact IEEE-754 bytes plus dtype and
+shape.  Every python run carried
+`OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1`, one at a time.
+The working tree carries WP-B7's uncommitted edits, so only the modules this
+package owns are reported.
+
+Harness: `scratchpad/b11b/bi.py` (driver), `probelib.py` (bind + hash),
+`probe_item3_sas.py`, `probe_item5_physics.py`, `probe_item8_stack.py`,
+`probe_item4_stack2d.py`.  Measurement scripts: `m_item3_sasnear.py`,
+`m_item3_sasnear2.py`, `m_item3_window.py`, `m_item5_sigs.py`,
+`m_item8_stack.py`.
+
+---
+
+## 1b. Summary
+
+| # | item | status | files:lines | tests | oracle | measured, before -> after |
+|---|---|---|---|---|---|---|
+| 3b (P1) | the in-glass `'sas'` gap leg has no near-field gate | **done** | `propagators/sas.py:38-110` (new), `:143-158`, `:303-316` | `b11::TestTheSasNearFieldGate` (6); `a15a::test_the_in_glass_gap_legs_are_reached_and_both_of_them_are_gated` (restated) | archive-vs-tree over 9 (N, dx, lambda, z/z_near, pad) cases + dtype / skip-phase arms + the doublet end to end; accuracy oracle = the SAME kernel at 8x finer input pitch | **24/24 bit-identical**; the doublet's `'sas'` leg **1.0397e4 x P_in in silence -> the same 1.0397e4 with 2 RuntimeWarnings**, one per under-sampled gap |
+| 5b | `LensPhysics` | **done** | `lens_config.py:705-826` (new class), `:1-12,49-60,206-216,936-960,975,1150,1153,1232,1260,1441-1520`; `_lens_real.py:150-159,5224,6108-6156`; `lumenairy/__init__.py`; `elements/__init__.py`; `docs/lens_configuration.md` | `b11::TestLensPhysics` (9); the a16 census +17 | archive-vs-tree: 9 keyword spellings, the three shipped groups' resolved calls, both field tables and both default lists | **20/20 bit-identical**; `physics=` == the keyword call on **9/9** cases; config fields **38 -> 47** |
+| 8b | `doe.py`'s zero fill, and warning attribution | **done** | `doe.py:532-556`; `_lens_kernels.py:33-92` (new helper), `:412-416,434-441,476-479`; `_lens_real.py` (9 sites); `_lens_traced.py` (31 sites); `test_v4_14_2_dispatcher_pin_zero_plus_zeroj.py:118-135` | `b11::TestTheZonePlateZeroFill` (8), `b11::TestWarningAttribution` (4) | archive-vs-tree: 7 zone-plate arms with dtypes + 7 lens fields | **20/20 bit-identical**; a configured `apply_real_lens` notice **`_lens_real.py:6130` -> the caller**; `prepare_real_lens_traced` **5 of 5 notices in `_lens_traced.py` -> 5 of 5 at the caller** |
+| 4b | `PMM2DStackHybrid.truncation` | **done** | `pmm/stack2d.py:90-91,115-125,325,477-486,487-501` | `b11::TestStack2DTruncationGuard` (4) | archive-vs-tree: 2 truncations x 2 formulations, the whole solve output + the four attribute reads | **8/8 bit-identical**; `st.truncation = 'circle'` **accepted -> refused** |
+| 5b-NEW | the `lenses <-> lenses_maslov` cycle | **deferred, edit written out** | -- | -- | -- | section 5b.1; `lenses_maslov.py` is WP-B7's |
+| deferred | items 2, 3 (whole grid), 4 (two cycles), 14, 18, 20's table | **not reached** | -- | -- | -- | section 6b |
+
+Three behaviour changes ship -- one diagnostic and two refusals, each where a
+silent wrong answer was returned before -- and each carries a Migration note in
+the changelog: the SAS near-field warning (2b.1), the `truncation` refusal
+(2b.4), and the moved warning ATTRIBUTION (2b.3), which
+`warnings.filterwarnings(module=...)` keys on.  **No numerical default moves.**
+
+---
+
+## 2b. Per item
+
+### 2b.1 The in-glass `'sas'` gap leg's near-field gate -- P1, from part a sec. 2.10
+
+**The finding, restated.**  On the WP-A15a covering-array doublet (N = 64,
+dx = 112.5 um, lambda = 632.8 nm, 9.0 mm of N-BAF10 and 2.5 mm of N-SF6HT)
+`apply_real_lens(wave_propagator='sas')` returned `P_out/P_in = 1.0397e4` with
+NO diagnostic while `'fresnel'` warned twice about the same aliasing.
+`propagators/sas.py`'s only validity test was the paper's FAR bound
+`z > z_limit`; this failure is the near one.
+
+**The derivation.**  SAS's third step is the same single-FFT Fresnel sum
+`fresnel_propagate` evaluates,
+
+```
+E_out(q) ~ sum_m psi(x_m) exp(i k x_m^2 / (2z)) exp(-2 pi i x_m q / (lambda z))
+```
+
+over the INPUT grid `x_m` at pitch `dx`.  The DFT represents the linear,
+output-dependent factor exactly -- it *is* the DFT kernel -- so the sampling
+requirement falls entirely on the quadratic chirp, whose local spatial frequency
+at `x` is `x / (lambda z)`.  The grid resolves at most `1 / (2 dx)`, so the sum
+is a valid quadrature only while `x_max / (lambda z) <= 1 / (2 dx)`.  A
+propagator cannot know the field's own support, so the bound is taken at the
+worst case it can know -- a field filling its input window, `x_max = N dx / 2`:
+
+```
+z  >=  z_near  =  N * dx^2 / lambda
+```
+
+which is exactly `fresnel_propagate`'s K1 bound, and exactly the complement of
+the `Q = lambda |z| / (N dx^2) >= 1` band the dispatcher trips ASM over to SAS
+on.
+
+**`pad` does not enter it, and that is measured rather than assumed.**  Padding
+enlarges the array the chirp is evaluated on, so `pad * N * dx^2 / lambda` is
+the obvious alternative.  It is wrong: the precompensation `delta_H` is a
+band-limited phase filter whose impulse response stays concentrated on the input
+window, so the chirp's outer, unresolved turns multiply the zero padding.
+MEASURED on a window-filling super-Gaussian (N = 128, dx = 2 um,
+lambda = 633 nm, so `z_near` = 0.809 mm), against an oracle that is the SAME SAS
+kernel on an 8x finer input pitch over the same physical window -- its own bound
+is 8x smaller, and its output pitch `lambda z / (pad N dx)` is IDENTICAL, so the
+comparison is sample against sample with no interpolation:
+
+| z / z_near | rel. field error, pad 2 | pad 4 | pad 1 | output power / oracle, pad 2 |
+|---|---|---|---|---|
+| 0.05 | 9.19 | 9.21 | 9.14 | 85.2x |
+| 0.10 | 4.79 | 4.86 | 4.81 | 23.6x |
+| 0.20 | 2.24 | 2.30 | 2.26 | 6.00x |
+| 0.35 | 0.840 | 0.773 | 1.059 | 1.67x |
+| 0.50 | 0.167 | 0.067 | 0.516 | 1.028x |
+| 0.75 | 2.0e-3 | 1.8e-3 | 9.6e-2 | 1.000x |
+| 1.00 | 1.1e-3 | 1.3e-3 | 4.6e-3 | 1.000x |
+| 2.00 | 8.6e-4 | 6.7e-4 | 6.9e-4 | 1.000x |
+
+The three `pad` columns break down at the same ABSOLUTE `z`, which is what says
+the bound is set by `N dx` and not by `pad N dx`.  (`pad = 1` is a little worse
+through the transition because it also suffers circular wraparound, which is
+what `pad` actually buys.)  The residual ~1e-3 above the bound is the oracle's
+own discretisation, not the coarse run's error.
+
+**The guard.**  `propagators/sas.py:38::_warn_sas_chirp_sampling` -- a
+`RuntimeWarning` in exactly `fresnel._warn_fresnel_chirp_sampling`'s shape, with
+the `CONVENTIONS.md` sec. 2 `f"{fn_name}: ..."` prefix, naming the bound, the
+grid, the measured symptom and the way out (`angular_spectrum_propagate`, exact
+in this regime).  It warns and does not raise, because that is what
+`fresnel_propagate` does for K1 and the two legs have to stay comparable.  The
+public docstring now states the validity window at BOTH ends, and
+`verbose=True` prints the near bound beside `z_limit`.
+
+**The window is never empty.**  `z_limit` bounds `z` from above and the new
+bound from below.  Over eight grids the ratio `z_limit / z_near` runs from
+**45.9** (N = 1024, dx = 0.5 um, lambda = 633 nm -- the tightest measured) to
+**5.6e6** (the doublet's in-glass gap), so the pair is a window and not a
+contradiction.
+
+**Measured on the doublet, after:**
+
+| `wave_propagator` | `P_out/P_in` | diagnostics |
+|---|---|---|
+| default (ASM) | 0.996171 | none |
+| `'rs'` | 0.996170 | none |
+| `'fresnel'` | 10396.714211 | 2 x RuntimeWarning |
+| `'sas'` | 10396.710108 | **2 x RuntimeWarning** (was none) |
+
+Every value is unchanged to the digit part a recorded; only the diagnostic
+column moved.  The two gaps sit at 0.00422x and 0.00109x of the bound.
+
+**Gate.**  `probe_item3_sas.py`: 9 (N, dx, lambda, z/z_near, pad) cases spanning
+both sides of the bound, plus `skip_final_phase`, a complex64 input (the kernel
+cache's dtype arm) and the doublet end to end through `apply_real_lens`.
+**24/24 bit-identical**, with the warning census reported separately: silent in
+the archive on all 9 cases, and in the tree firing on exactly the 6 that are
+below the bound.
+
+**The pin part a left behind.**
+`test_the_in_glass_gap_legs_are_reached_and_only_one_of_them_is_gated` pinned
+the SILENCE on purpose, so that closing the gap would go red.  It did.  It is
+restated as `..._and_both_of_them_are_gated`, now pinning the SYMMETRY of the
+two legs and the COUNT (2, one per gap), so a guard that fires once, or on the
+wrong leg, still fails.  Its docstring carries what moved and why.
+
+**Not fixed, and reported instead (section 4b request 1):** both gap legs'
+warnings are attributed to `_lens_real.py`'s own propagator call, because the
+`stacklevel` is a literal inside the propagator and `_propagate_through_glass`
+is its caller.  Making them name the user needs the LENS to re-emit, which is a
+different change in a file the propagators do not own.
+
+### 2b.2 `LensPhysics` -- item 5
+
+**The fourth role.**  WHAT problem (geometry), HOW it is discretised
+(numerics), WHICH MACHINE runs it (resources), **WHICH TERMS the model carries**
+(physics).  The line against `LensNumerics` is the one that needed stating,
+because both change the number that comes back: a `LensNumerics` field moves the
+answer by its own TRUNCATION error -- refine it far enough and the answer stops
+moving -- while a `LensPhysics` field moves it by a TERM, and no amount of
+refinement anywhere else produces that term.
+`b11::test_the_line_against_lensnumerics_is_measurable_not_asserted` puts that
+distinction in falsifiable form (a discretisation witness that is
+byte-identical, a term witness that is not, and the term orthogonal to the
+discretisation).
+
+**The nine fields**, all of them `apply_real_lens` parameters that were
+keyword-only: `fresnel`, `slant_correction`, `absorption`, `seidel_correction`,
+`seidel_poly_order`, `surface_frame`, `displaced_mode`, `displaced_obliquity`,
+`screen_obliquity`.  MEASURED against the live signatures (`m_item5_sigs.py`):
+**every one of them exists on `apply_real_lens` and on no other entry point** --
+the traced / Maslov / GBD / FGA models build their screens from a ray trace
+rather than from the thin-element OPD, so none of these terms has a switch
+there.  That is why `physics=` is the one configuration parameter that is not on
+all seven entry points, and why `_PHYSICS_FOR`'s six empty dicts are
+load-bearing rather than placeholders: they are what turns a physics request
+handed to a sibling through `config=` into the "not a setting X accepts" refusal
+that names the owner.
+`a16::test_the_physics_parameter_is_declared_exactly_where_it_applies` gates
+those two facts against each other in BOTH directions -- missing where it
+applies is a `TypeError` instead of a configuration, present where it does not
+is a parameter that can only raise.
+
+**Validation.**  `__post_init__` checks only what a field can be judged on
+alone: three enums against `_lens_real`'s own live vocabulary tuples (borrowed
+through the existing `_vocab` cache, now eight keys), five strict `bool`s and a
+positive `int`.  `screen_obliquity` uses identity for the booleans and equality
+for the string, exactly as `_check_screen_obliquity_support` does, so `1` cannot
+be accepted here and then refused by the call, and a caller-built (non-interned)
+`'auto'` is accepted.  The CROSS-field rules stay where they are and are NOT
+restated -- `slant_correction` + `seidel_correction` double-counting the facet
+obliquity, every one of these terms being refused under
+`surface_model='displaced'`, `screen_obliquity=True` needing `carrier=` --
+because two of those need a sibling config object and the third needs the
+prescription, and a copy here would drift.
+`b11::test_the_cross_object_rules_still_fire_through_the_config` drives all
+three through the CONFIG spelling, so a config cannot be a way around a guard,
+and asserts that building the same objects alone does NOT raise.
+
+**`input_wavevector_saddle`: the decision the brief asked for, with the
+reason.**  It stays KEYWORD-ONLY.  It names which stationary point the two
+asymptotic evaluators expand about (audit S6), and WHICH saddle is the right one
+is a property of the INPUT FIELD's spectrum, not of the optic.  Every object in
+this module is designed to be built once and reused across fields; a
+field-dependent setting inside one would be silently wrong the first time the
+config outlived the field it was chosen for -- which is the failure the config
+objects exist to prevent, not to introduce.  The `KWARG_ONLY` entry now says it
+was RE-EXAMINED when `LensPhysics` landed, so a later reader can tell a decision
+from an oversight, and
+`b11::test_input_wavevector_saddle_is_still_keyword_only_with_the_reason` pins
+both the exclusion and the presence of that sentence.
+
+**Three settings that fit the role and did NOT move**, recorded rather than
+fixed: `surface_model` (`LensGeometry`), `caustic` and `fit_basis`
+(`LensNumerics`).  All three have been shipped config fields since WP-A16;
+moving one is a migration for a caller who wrote
+`LensGeometry(surface_model='displaced')`, and it buys nothing a caller can do
+that they could not do before.  `fit_basis` is on the numerics side of the line
+by its own docstring anyway (Chebyshev and Zernike span the same polynomial
+space at the same total degree, so it changes the conditioning of the least
+squares and not the model).  They are the partition's known ragged edge;
+`docs/lens_configuration.md` says so in a table and
+`b11::test_the_three_settings_that_did_not_move_are_where_they_were` pins it.
+
+**Wiring.**  `_GROUPS` gains a fourth entry, so the resolver, `from_kwargs`,
+`to_kwargs` (including part a's `strict=`), `narrowed_to`, `field_names` and
+every structural walker picked it up without further edits -- which is exactly
+what the WP-A16 deferral predicted.  `resolve_entry_point_kwargs` and
+`_wants_config` take `physics` LAST with a `None` default, so the six entry
+points that have no physics parameter -- four of them in WP-B7's files -- call
+them completely unchanged.
+
+**Gate.**  `probe_item5_physics.py`: 9 keyword spellings through
+`apply_real_lens` (including `surface_model='displaced'` and a carrier-borne
+`screen_obliquity`), the three shipped config groups' resolved calls, the
+`LensConfig` triple, and the serialised field tables and default lists of all
+three shipped groups.  **20/20 bit-identical.**  The tree run additionally
+asserts in-process that `physics=LensPhysics(...)` lands on the same bytes as
+the equivalent keywords -- **9/9 cases, no mismatches** -- which is the half the
+archive cannot express, because the parameter does not exist there.
+
+**Census.**  `test_audit2609_a16_lens_config_round_trip.py` gains the
+`LensPhysics` column everywhere it walks, 13 refusal rows, the legal-value
+counter-pin, a `_GROUPS` counter-pin (a group added there but not here would be
+walked by every loop and tabled by none, and the file would still pass), and the
+four behaviour tests above: **111 -> 128 tests**, all green.
+
+### 2b.3 `doe.py`'s zero fill, and warning attribution -- item 8
+
+**The fill.**  `elements/doe.py:555` -- `T = np.where(inside, T, 0.0 + 0j)`
+becomes `T = np.where(inside, T, np.zeros((), T.dtype))`, WP-A22 sec. F5's exact
+one-line request, and its `('elements/doe.py', 539)` entry is deleted from
+`_P3_ALLOWLIST` in `test_v4_14_2_dispatcher_pin_zero_plus_zeroj.py`, so the
+structural walk now CONFIRMS the site instead of exempting it.
+
+**A correction to WP-A22's rationale, because it is measured.**  That report
+rated the site P3 today and "P1 the moment the phase is built at a narrower
+dtype".  The second half does not survive re-measurement.  MEASURED on
+NumPy 2.4.6:
+
+| `T.dtype` | literal `0.0 + 0j` | `np.zeros((), T.dtype)` |
+|---|---|---|
+| complex64 | complex64 | complex64 |
+| complex128 | complex128 | complex128 |
+| float32 | complex64 | float32 |
+| float64 | complex128 | float64 |
+
+Under NEP 50 weak promotion a Python complex scalar does not widen a complex
+array at all, so a complex64 phase would have kept complex64 with the literal
+too; the arm where the literal really changes the dtype is a REAL `T`, which
+this entry point's `exp(1j * phase)` can never produce.  The migration is still
+worth making -- it is explicit and version-independent, where NumPy 1.x decided
+this by value-based casting and 2.x by weak promotion -- but not because a
+promotion was about to happen here.  The table is a test
+(`b11::test_what_the_literal_fill_actually_promotes`), so if it moves the
+reasoning moves with it, and the corrected statement is in the allowlist comment
+and in `doe.py`'s own comment.
+
+**Warning attribution: what was measured, and what was wrong.**  `stacklevel`
+counts frames, so a literal is right for exactly one call path -- and this
+family has several to the same source line.  MEASURED (`m_item8_stack.py`, every
+call made from the measurement file so that "the caller" is unambiguous):
+
+| call | notice | attributed to, BEFORE | AFTER |
+|---|---|---|---|
+| `apply_real_lens(...)` | aperture > grid | the caller | the caller |
+| `apply_real_lens(..., numerics=...)` | aperture > grid | **`_lens_real.py:6130`** | the caller |
+| `apply_real_lens(..., physics=...)` | aperture > grid | **`_lens_real.py:6130`** | the caller |
+| `apply_real_lens(..., freeform)` | freeform dropped | the caller | the caller |
+| `apply_real_lens_traced(...)` | aperture > grid (its own) | the caller | the caller |
+| `apply_real_lens_traced(...)` | aperture > grid x2, through its internal `apply_real_lens` | **`_lens_traced.py:10388,10413`** | `concurrent/futures/thread.py:73` (see below) |
+| `apply_real_lens_traced(...)` | Newton-inversion notice | **`_lens_traced.py:13340`** | the caller |
+| `prepare_real_lens_traced(...)` | all five notices | **`_lens_traced.py:15238,10433,10462`** | the caller, 5 of 5 |
+
+The `numerics=` / `physics=` rows are the interesting ones: WP-A16's
+configuration objects made every entry point re-enter ITSELF once when a config
+is passed (`return apply_real_lens(E_in, **resolve(...))`), so on a configured
+call every hard-coded level in the body was one frame short and named the
+library's own re-entry line.  The v5.40 wrapper/impl split had done the same
+thing one release earlier, which is precisely what `_WARN_STACKLEVEL = 3` was
+introduced for; the config objects then broke it again.  A literal cannot be
+right for both.
+
+**The fix.**  `_lens_kernels.caller_stacklevel()` -- walk out from the calling
+frame to the first frame whose file is not under the `lumenairy` package
+directory, and return that depth (counted the way `warnings.warn` counts, so no
+offset is needed when the helper is called from the frame that warns).  It is
+the same rule Python 3.12's `warnings.warn(..., skip_file_prefixes=)` applies,
+written out so it also holds on the 3.10 and 3.11 this package supports
+(`pyproject.toml`: `requires-python = ">=3.10"`), and it runs only on a warning
+path, which is never hot.  Applied at **9 sites in `_lens_real.py`** (the 7 that
+read `_WARN_STACKLEVEL`, which is gone, and the 2 accumulator-store cleanup
+warnings that read `stacklevel=2`) and **31 sites in `_lens_traced.py`**, plus
+`_warn_if_aperture_exceeds_grid`, whose `stacklevel=` now defaults to `None`
+meaning "compute it" and still honours an explicit integer.
+`b11::test_no_literal_stacklevel_is_left_in_the_two_lens_bodies` is the ratchet:
+an AST walk that fails on a `warnings.warn` carrying a literal integer level in
+either file.
+
+**The one row that still names non-user code is correct.**  On the parallel-amp
+path `apply_real_lens` runs inside a `ThreadPoolExecutor` worker, so the stack
+bottoms out in `concurrent/futures/thread.py` -- there IS no user frame on that
+thread, and the outermost frame is the honest answer.  The helper's "whole stack
+inside the package" arm returns the outermost in-package depth for the same
+reason; both arms are tested.
+
+**Gate.**  `probe_item8_stack.py`: 7 `create_fresnel_zone_plate` arms with their
+dtypes (both branches x `n_zones` in {None, 3, 12}, plus an off-centre odd
+grid), and 7 lens fields (analytic plain / warned / chunked / complex64, traced
+plain / warned, and a `PreparedTracedLens` call).  **20/20 bit-identical** -- a
+`stacklevel` is metadata, and no field moved.
+
+**Scope, stated.**  `lenses_maslov.py` (11 sites) and `lenses_gbd.py` (1) are
+WP-B7's; the exact edits are section 5b.  `_lens_jax.py` has no `warnings.warn`
+at all (measured, so item 8's "JAX warning sites" is an empty set).
+`_lens_traced_multibranch.py` (4), `_lens_thin.py` (2), `_lens_imap.py` (1) and
+`_lens_traced_uniform.py` (1) are lens-family files this brief does not name;
+they are section 4b request 2.  `propagators/carrier.py` was restricted by the
+brief to item 20's table and was not swept -- request 3.
+
+### 2b.4 `PMM2DStackHybrid.truncation` -- item 4
+
+Part a guarded `formulation`, `cascade` and `symmetry`, and recorded that
+`truncation` had the same shape: validated in `__init__`, a plain attribute
+afterwards, and read through `!= "circular"` tests that a typo silently fails --
+so `st.truncation = 'circle'` was ACCEPTED and the stack quietly solved the
+larger, slower, DIFFERENT rectangular full box.
+
+It is now a property sharing ONE vocabulary with the constructor:
+`_TRUNCATIONS` and `_check_truncation` (which keeps `__init__`'s original
+message wording, so a caller who has been reading that sentence sees the same
+one from the setter), called from both.
+`b11::test_the_constructor_and_the_setter_share_one_vocabulary` sweeps both
+legal values and five illegal ones through BOTH routes and asserts the two
+verdicts agree with the vocabulary, which is what makes "one definition"
+checkable rather than asserted, and
+`test_every_validated_model_choice_is_now_a_property` is the census that catches
+a fifth one added as a plain attribute.
+
+The caches already key on it correctly (`_geom_key` carries it), so the only
+behaviour change is the refusal.  **Gate:** `probe_item4_stack2d.py` -- a
+patterned Si cell solved at both truncations x both formulations, hashing the
+whole solve output and the four attribute reads: **8/8 bit-identical**.
+
+---
+
+## 3b. Files touched
+
+**Library**
+
+* `lumenairy/propagators/sas.py` -- `_warn_sas_chirp_sampling` (new, with its
+  derivation and measurement table), the call site, the `verbose` line, the
+  public docstring's validity-window paragraph.
+* `lumenairy/elements/lens_config.py` -- `LensPhysics` (new), `_PHYSICS_FOR`,
+  `_GROUPS`, `LensConfig.physics`, `from_kwargs`, `CONTRACT_PARAMETERS`,
+  `_CONFIG_PARAMETERS`, `resolve_entry_point_kwargs(physics=)`,
+  `_wants_config(physics=)`, `_vocab`'s three new keys, `__all__`, the module
+  docstring; nine `KWARG_ONLY` entries removed (they are fields now) and
+  `input_wavevector_saddle`'s reason extended.
+* `lumenairy/elements/_lens_real.py` -- `physics=` on `apply_real_lens` and its
+  docstring, the resolver call, `_WARN_STACKLEVEL` replaced by
+  `_caller_stacklevel()` at 9 sites, the `_lens_kernels` import.
+* `lumenairy/elements/_lens_traced.py` -- 31 literal `stacklevel=` replaced by
+  `_caller_stacklevel()`, the `_lens_kernels` import, one docstring restated.
+* `lumenairy/elements/_lens_kernels.py` -- `caller_stacklevel` (new),
+  `_PACKAGE_ROOT`, and `_warn_if_aperture_exceeds_grid`'s `stacklevel=None`
+  default.
+* `lumenairy/elements/doe.py` -- the zone-plate fill, and a comment on each of
+  the two `np.where` branches saying why only one of them needed it.
+* `lumenairy/elements/pmm/stack2d.py` -- `_TRUNCATIONS`, `_check_truncation`,
+  the `truncation` property, `__init__` calling the shared check.
+* `lumenairy/__init__.py`, `lumenairy/elements/__init__.py` -- `LensPhysics`
+  imported and exported.
+
+**Tests**
+
+* `tests/unit/test_audit2609_b11_hygiene.py` -- `TestTheSasNearFieldGate` (6),
+  `TestLensPhysics` (9), `TestTheZonePlateZeroFill` (8),
+  `TestWarningAttribution` (4), `TestStack2DTruncationGuard` (4), and the module
+  docstring's section list.  **54 -> 82 tests**; nothing weakened or removed.
+* `tests/unit/test_audit2609_a15a_lens_covering_array.py` -- the gap-leg pin
+  restated and renamed `..._and_both_of_them_are_gated`.
+* `tests/unit/test_audit2609_a16_lens_config_round_trip.py` -- the census
+  extended to the fourth group; **111 -> 128 tests**.
+* `tests/unit/test_v4_14_2_dispatcher_pin_zero_plus_zeroj.py` -- the
+  `elements/doe.py` allowlist entry deleted, with the reason and the
+  re-measurement.
+
+**Docs / history**
+
+* `docs/lens_configuration.md` -- four objects rather than three, the
+  `LensPhysics` (9 fields) table and its validation contract, the keyword-only
+  table pruned by nine rows and given the `input_wavevector_saddle` row, and
+  "Deferred: `LensPhysics`" replaced by "`LensPhysics`, and the three settings
+  that did not move".
+* `docs/history/lumenairy.propagators.sas.md`,
+  `lumenairy.elements._lens_real.md`, `lumenairy.elements._lens_traced.md`,
+  `lumenairy.elements.doe.md`, `lumenairy.elements.pmm.stack2d.md` -- all
+  re-recorded in this change with `scripts/record_history_fingerprints.py`.
+  `_lens_kernels.py` has no history document (it is new in part a).
+* This section of `WP-B11_REPORT.md`, and `WP-B11_CHANGELOG.md`.
+
+---
+
+## 3b-2. Tests run
+
+Every run with `OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1`, one
+process at a time.
+
+| slice | result |
+|---|---|
+| `-k "lens_config or a16 or real_lens or lens"` -- the whole lens family | **1100 passed, 19 skipped** |
+| `..._b11_hygiene.py`, `..._a15a_lens_covering_array.py`, `..._a16_lens_config_round_trip.py`, `..._a16_lens_config_bit_identity.py`, `..._a16_verify_config_and_arch.py`, `..._a17_history_lint.py`, `..._a17_history_relocation.py`, `test_v4_14_2_dispatcher_pin_zero_plus_zeroj.py` | **1285 passed** |
+| `-k "sas or lens_config or doe or stack2d"` | **605 passed, 4 skipped** |
+| `-k "real_lens"` | **160 passed, 3 skipped** |
+| `-k "sas or propagat or doe or fresnel or pmm or stack2d or warn"` (the wide sweep) | **3868 passed, 17 skipped, 4 failed -- none of them this package's; see below** |
+| `ruff check` | **All checks passed** |
+| `python scripts/record_history_fingerprints.py --check` | **every history document matches its module** |
+| `python validation/run_all.py` | **ALL 37 files passed** |
+| `validation/elements/test_lenses.py` | **46/46 passed** |
+| `validation/propagators/test_propagation.py` | **46/46 passed** |
+
+**The four failures in the wide sweep, each traced to its owner.**  The tree
+carries other packages' uncommitted work, so every one was re-run against the
+pristine `c62c2f14` checkout (`git archive c62c2f14 lumenairy tests`, run with
+cwd and `PYTHONPATH` set to it, `lumenairy.__file__` asserted):
+
+| failure | at pristine `c62c2f14` | verdict |
+|---|---|---|
+| `test_pmm_m2_window_contract.py::test_halfwidth_2_moves_the_answer_only_inside_the_mortar_band` | **also fails**, identical message (`every cell of both devices was screened out ... screened: [('uncoated ns=3', 10, 0, 2, 0), ...]`) | pre-existing at HEAD |
+| `test_v4_16_0_agent_d_validity_ranges.py::test_validity_warning_is_one_shot_per_pair` | **also fails**, identically, when run after `test_audit_w4_glass_registry_meshgrid.py` (which warms the same `('N-BK7', 200e-9)` pair into `glass._validity_warned`); passes alone in both trees | pre-existing order-dependent state leak, NOT the warning-attribution change -- `glass.py` was not touched here and the one-shot set is its own, not the filter registry |
+| `test_audit_propagation.py::...SolveEnvelopeStationaryBatchContract::test_singular_hessian_pixels_flagged_not_converged` | **passes** | working-tree only: `AttributeError: '_WellPosedFit' object has no attribute 'basis_index_columns'` raised from `asymptotic_maslov.py:705` -- VERIFY-B7's files |
+| `...::test_genuinely_converged_pixel_still_marked_true` | **passes** | same, same traceback |
+
+---
+
+## 4b. Requested changes (for the orchestrator / maintainer)
+
+1. **The in-glass gap legs' warnings name `_lens_real.py`, not the user.**  Both
+   `'sas'` and `'fresnel'` now warn on the covering-array doublet, but the
+   warning's `stacklevel` is a literal inside the propagator and its caller is
+   `_lens_real._propagate_through_glass`, so a user who wrote
+   `apply_real_lens(wave_propagator='sas')` is pointed at library source.
+   Making them name the user needs the LENS to catch and re-emit at its own
+   entry point, which is a design decision about whose diagnostic it is.
+   Owner: `propagators/` plus `_lens_real._propagate_through_glass`.
+2. **The rest of the lens family's `stacklevel` literals.**
+   `_lens_traced_multibranch.py` (4 sites), `_lens_thin.py` (2),
+   `_lens_imap.py` (1) and `_lens_traced_uniform.py` (1) are lens-family modules
+   this brief does not name.  The change is mechanical and identical to
+   section 5b's: import `caller_stacklevel` from the leaf and replace the
+   literal.  The b11 ratchet's file tuple should grow to match.
+3. **`propagators/carrier.py`'s warning chain** was excluded by the brief
+   (carrier.py was scoped to item 20's table only).  Item 8's original text
+   names it; it is unswept.
+4. **`surface_model` / `caustic` / `fit_basis`** fit the `LensPhysics` role and
+   were deliberately left on `LensGeometry` / `LensNumerics` (section 2b.2).
+   Moving one is a migration for a shipped API; it is a maintainer's call.
+5. **WP-A22's forward-looking P3 -> P1 rating for the `doe.py` fill is wrong**
+   under NEP 50 (section 2b.3).  The migration landed anyway; that report's
+   rationale should be read with the corrected table.
+
+---
+
+## 5b. Deferred to the orchestrator -- the exact edits in WP-B7's files
+
+Apply AFTER VERIFY-B7 lands.  Line numbers are RE-DERIVED against the working
+tree at `f64444ec` + VERIFY-B7's in-flight edits (they moved by ~28 lines when
+WP-B7 landed, which is exactly why the ANCHORS below are the text and not the
+numbers -- re-grep before applying).
+
+**None of WP-B7's files was opened for writing by this work package.**
+`git status` shows `lumenairy/elements/lenses_maslov.py` modified; that edit is
+**not mine** -- its added lines are VERIFY-B7's re-measurement prose (dated
+2026-09-14, "RE-MEASURED (VERIFY-B7, 2026-09-14) on a THIRD chart ...") and
+contain no occurrence of `_lens_kernels`, `caller_stacklevel` or `stacklevel`.
+`git diff HEAD -- lumenairy/elements/lenses_maslov.py | grep '^+' | grep -E
+'_lens_kernels|caller_stacklevel|stacklevel'` is empty.
+
+Also re-confirmed: `git diff --name-only c62c2f14 f64444ec` touches none of this
+package's modules, so the `git archive c62c2f14 lumenairy` baseline every gate
+above ran against is still the right pre-change library for them.
+
+### 5b.1 `lumenairy/elements/lenses_maslov.py` -- the import
+
+This is item 5-NEW's one-line change and item 8's prerequisite in the same edit.
+Replace (at `lenses_maslov.py:318-325`, under the comment
+`# Other shared helpers still live in lenses.py.` at line 317):
+
+```python
+from ._lens_real import _normalise_stop_index
+from .lenses import (
+    NUMEXPR_AVAILABLE,
+    _ensure_numexpr_loaded,
+    _fit_normaliser,
+    _multi_indices_total_degree,
+    _warn_if_aperture_exceeds_grid,
+)
+```
+
+with:
+
+```python
+from ._lens_kernels import (
+    _warn_if_aperture_exceeds_grid,
+    caller_stacklevel as _caller_stacklevel,
+)
+from ._lens_real import _normalise_stop_index
+from .lenses import (
+    NUMEXPR_AVAILABLE,
+    _ensure_numexpr_loaded,
+    _fit_normaliser,
+    _multi_indices_total_degree,
+)
+```
+
+`_lens_kernels` is a LEAF (it imports `numpy`, `warnings`, `os` and `sys` and
+nothing from `lumenairy`), so this adds no edge.  The back-edge to `lenses`
+carries **5 -> 4** names; it closes ENTIRELY only when the remaining four
+(`NUMEXPR_AVAILABLE`, `_ensure_numexpr_loaded`, `_fit_normaliser`,
+`_multi_indices_total_degree`) follow into the leaf, which
+`docs/lens_configuration.md` "Module layout" already records.  Gate: the
+a4 / b1 / b7 Maslov fixtures byte-identical, plus
+`tests/unit/test_v5_2_walker_shell_vs_canonical.py`.
+
+### 5b.2 `lumenairy/elements/lenses_maslov.py` -- the 11 warning sites
+
+Each is a `warnings.warn(...)` argument; replace the literal with the computed
+level.  Current lines and spellings:
+
+| line | from | to |
+|---|---|---|
+| 559 | `RuntimeWarning, stacklevel=3)` | `RuntimeWarning, _caller_stacklevel())` |
+| 1602 | `RuntimeWarning, stacklevel=3)` | `RuntimeWarning, _caller_stacklevel())` |
+| 2377 | `RuntimeWarning, stacklevel=2,` | `RuntimeWarning, _caller_stacklevel(),` |
+| 2394 | `RuntimeWarning, stacklevel=2,` | `RuntimeWarning, _caller_stacklevel(),` |
+| 2542 | `RuntimeWarning, stacklevel=2)` | `RuntimeWarning, _caller_stacklevel())` |
+| 2572 | `RuntimeWarning, stacklevel=2)` | `RuntimeWarning, _caller_stacklevel())` |
+| 2824 | `UserWarning, stacklevel=2)` | `UserWarning, _caller_stacklevel())` |
+| 2874 | `RuntimeWarning, stacklevel=2)` | `RuntimeWarning, _caller_stacklevel())` |
+| 3135 | `RuntimeWarning, stacklevel=2)` | `RuntimeWarning, _caller_stacklevel())` |
+| 3240 | `RuntimeWarning, stacklevel=2)` | `RuntimeWarning, _caller_stacklevel())` |
+| 4300 | `RuntimeWarning, stacklevel=2)` | `RuntimeWarning, _caller_stacklevel())` |
+
+Equivalently, once 5b.1 is in place, `re.subn(r'stacklevel=[23]\b',
+'_caller_stacklevel()', src)` -- then CHECK that no hit landed inside a
+docstring.  One did in `_lens_traced.py` (a closure's own
+"``stacklevel=3`` on all three" note, restated by hand); `lenses_maslov.py` has
+no such prose, but the check costs one grep.
+
+### 5b.3 `lumenairy/elements/lenses_gbd.py` -- one site
+
+Add after the existing `from .lens_config import (...)` block (lines 50-57):
+
+```python
+from ._lens_kernels import caller_stacklevel as _caller_stacklevel
+```
+
+and at line 483, in `apply_real_lens_gbd` (unmoved by WP-B7):
+
+```
+-            "it act.", RuntimeWarning, stacklevel=2)
++            "it act.", RuntimeWarning, _caller_stacklevel())
+```
+
+### 5b.4 After applying 5b.1 - 5b.3
+
+* re-record both modules in the same change:
+  `python scripts/record_history_fingerprints.py lumenairy/elements/lenses_maslov.py lumenairy/elements/lenses_gbd.py --reason "..."`;
+* extend `b11::test_no_literal_stacklevel_is_left_in_the_two_lens_bodies`'s
+  file tuple to cover them, so they cannot regress either;
+* `_lens_jax.py` needs NO edit: it contains no `warnings.warn` (measured).
+
+---
+
+## 6b. Items not reached
+
+Taken in the brief's priority order, the budget reached items 3 (the P1), 5, 8
+and 4.  Nothing on the deferred list was started:
+
+* **Item 5-NEW (the `lenses <-> lenses_maslov` cycle)** -- the edit is written
+  out (section 5b.1) but not applied, because the file is WP-B7's.  It reduces
+  the back-edge by one name; it does not close the cycle.
+* **Item 2's remaining `rcwa/_core.py` split** -- not started (part a sec. 2.2
+  carries the per-block hazard list: module-level mutable state, four
+  monkeypatching test files).
+* **Item 3's whole-grid body** -- not started; part a sec. 2.3 records why it is
+  NOT a bit-identical refactor (folding it would move the numexpr gate, the
+  `_ensure_full_grids` path and the fresnel dtype-promotion point).
+* **Item 4's remaining two cycles** -- not started; the PEP 562 forward that the
+  `_NUMBA_AVAILABLE` monkeypatch and the lazy `cp` / `_ne` slots need is written
+  up in `docs/lens_configuration.md`.
+* **Item 14 (direct-matrix MFT)** -- not started.
+* **Item 18 (`_collins_transport` on JAX)** -- not started; part a measured that
+  the brief's skip clause does not apply (jax IS importable here) and that the
+  work is a chain of `xp` plumbing through six helpers, not a signature.
+* **Item 20's near-focus table** -- not started; the fixture is
+  `scratchpad/b11/m_item20_gapkernel.py` and what is missing is the
+  envelope/field bookkeeping, per part a sec. 2.20.

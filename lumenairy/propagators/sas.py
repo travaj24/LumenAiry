@@ -35,6 +35,80 @@ __all__ = [
 ]
 
 
+def _warn_sas_chirp_sampling(N, dx, wavelength, z, pad, fn_name):
+    """Warn when the SAS Fresnel chirp is under-sampled -- the NEAR-field
+    complement of the paper's ``z_limit``.
+
+    SAS's third step is the same single-FFT Fresnel sum
+    ``fresnel_propagate`` evaluates::
+
+        E_out(q) ~ sum_m psi(x_m) exp(i k x_m^2 / (2z))
+                                  exp(-2 pi i x_m q / (lambda z))
+
+    over the INPUT grid ``x_m`` at pitch ``dx``.  The DFT represents the
+    linear, output-dependent factor exactly -- it *is* the DFT kernel -- so
+    the sampling requirement falls entirely on the quadratic chirp, whose
+    local spatial frequency at ``x`` is ``x / (lambda z)``.  The grid resolves
+    at most ``1 / (2 dx)``, so the sum is a valid quadrature only while
+    ``x_max / (lambda z) <= 1 / (2 dx)``.  A propagator cannot know the
+    field's own support, so the bound is taken at the worst case it can know
+    -- a field filling its input window, ``x_max = N dx / 2``::
+
+        z  >=  N * dx^2 / lambda
+
+    which is exactly ``fresnel_propagate``'s K1 bound and the complement of
+    the ``Q = lambda |z| / (N dx^2) >= 1`` band the dispatcher trips ASM over
+    to SAS on.  Below it the sum aliases silently.
+
+    ``pad`` does NOT enter the bound.  Padding enlarges the array the chirp is
+    evaluated on, but the precompensation ``delta_H`` is a band-limited phase
+    filter whose impulse response stays concentrated on the input window, so
+    the chirp's outer, unresolved turns multiply the zero padding.  MEASURED
+    on a window-filling super-Gaussian (N = 128, dx = 2 um, lambda = 633 nm so
+    ``z_near`` = 0.809 mm; oracle = the SAME SAS kernel on an 8x finer input
+    pitch over the same physical window, which lands on the same output pitch
+    and is 8x inside its own bound):
+
+    ==========  ==========================  ==========================
+    z / z_near  relative field error        output power / oracle
+    ==========  ==========================  ==========================
+    0.05        9.19 (pad 2) / 9.21 (pad 4) 85.2x (pad 2) / 85.1 (pad 4)
+    0.10        4.79 / 4.86                 23.6x / 24.8x
+    0.20        2.24 / 2.30                 6.00x / 6.42x
+    0.35        0.840 / 0.773               1.67x / 1.66x
+    0.50        0.167 / 0.067               1.028x / 1.006x
+    0.75        2.0e-3 / 1.8e-3             1.000x
+    1.00        1.1e-3 / 1.3e-3             1.000x
+    ==========  ==========================  ==========================
+
+    The two ``pad`` columns break down at the same ABSOLUTE ``z``, which is
+    what says the bound is set by ``N dx`` and not by ``pad N dx``.
+
+    Emits a ``RuntimeWarning`` in the same style as
+    ``fresnel._warn_fresnel_chirp_sampling`` and the ``z_limit`` guard above
+    it.  Values are unchanged -- this is a diagnostic only.
+    """
+    z_near = float(N) * float(dx) ** 2 / float(wavelength)
+    if z_near <= 0.0 or not (abs(float(z)) < z_near):
+        return
+    import warnings
+    q = abs(float(z)) / z_near
+    warnings.warn(
+        f"{fn_name}: the quadratic Fresnel chirp is UNDER-SAMPLED at this "
+        f"geometry -- z = {float(z):.6g} m is {q:.3g}x the near-field "
+        f"validity bound N*dx^2/wavelength = {z_near:.6g} m "
+        f"(N={int(N)}, dx={float(dx):.4e} m, "
+        f"wavelength={float(wavelength):.4e} m, pad={int(pad)}).  The SAS "
+        f"kernel's third step is a single-FFT Fresnel sum on the input grid, "
+        f"so below this bound it is an aliased quadrature and the result is "
+        f"wrong without being non-finite (measured 6x the input power at "
+        f"z = 0.2x the bound on a window-filling field; the padding factor "
+        f"does not move it).  Use angular_spectrum_propagate, which is exact "
+        f"in this regime, or a finer dx / a longer z so that "
+        f"z >= {z_near:.6g} m.",
+        RuntimeWarning, stacklevel=3)
+
+
 def scalable_angular_spectrum_propagate(
     E_in: np.ndarray,
     z: float,
@@ -60,9 +134,22 @@ def scalable_angular_spectrum_propagate(
     The kernel is exact up to the ASM-vs-Fresnel band-limit cutoff ``W``
     baked into the precompensation; beyond that cutoff the method gracefully
     reduces to a zeroed transfer function (high-NA components are dropped).
-    A closed-form ``z_limit`` from the paper bounds the propagation distance
-    for which the method remains valid at the input sampling; we warn (not
-    raise) when ``z > z_limit`` so the caller can still experiment.
+
+    ``z`` has a validity window at BOTH ends, and each end emits a
+    ``RuntimeWarning`` (never raises, so the caller can still experiment):
+
+    * ``z > z_limit`` -- the closed-form far bound from the paper: the
+      band-limit filter ``W`` kills the ASM-like components the
+      precompensation exists to correct.
+    * ``z < N*dx^2/wavelength`` -- the near bound.  SAS's third step is a
+      single-FFT Fresnel sum on the INPUT grid, so its quadratic chirp
+      ``exp(i k x^2 / 2z)`` must be resolved at pitch ``dx`` exactly as
+      :func:`~lumenairy.propagators.fresnel.fresnel_propagate`'s is; below
+      the bound the sum aliases and the field is wrong without being
+      non-finite (measured 6x the input power at 0.2x the bound on a
+      window-filling field).  The ``pad`` factor does not move this bound --
+      see :func:`_warn_sas_chirp_sampling` for the derivation and the
+      measurement.  Use :func:`angular_spectrum_propagate` in that regime.
 
     Parameters
     ----------
@@ -212,6 +299,21 @@ def scalable_angular_spectrum_propagate(
         if verbose:
             print(f"  SAS: z = {z*1e3:.2f} mm exceeds z_limit = "
                   f"{z_limit*1e3:.2f} mm; accuracy may degrade.")
+
+    # -- the NEAR-field companion to z_limit ---------------------------------
+    # ``z_limit`` bounds the distance from ABOVE (the band-limit filter eats
+    # the components the precompensation corrects).  The chirp-sampling bound
+    # below bounds it from BELOW; together they are the validity window
+    # ``z_near <= z <= z_limit``, which is non-empty on every realistic grid
+    # (z_limit/z_near = 46 at N = 1024, dx = 0.5 um, lambda = 633 nm -- the
+    # tightest of the eight grids measured -- and 5.6e6 on the covering-array
+    # doublet's in-glass gap).
+    _warn_sas_chirp_sampling(N, dx, lam, z, pad,
+                             'scalable_angular_spectrum_propagate')
+    if verbose:
+        z_near = float(N) * float(dx) ** 2 / float(lam)
+        print(f"  SAS: near-field chirp bound N*dx^2/lambda = "
+              f"{z_near*1e3:.4f} mm")
 
     # -- padded grid ---------------------------------------------------------
     L_new = pad * L

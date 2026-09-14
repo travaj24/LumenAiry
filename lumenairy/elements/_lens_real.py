@@ -147,7 +147,10 @@ _NUMEXPR_MIN_SIZE = 1 << 20  # 1 Mi elements (~1024 x 1024)
 # sag builders still come from the facade, which is the remaining half of this
 # module's 2-cycle with it -- see ``docs/lens_configuration.md`` section
 # "Module layout" for the edit that closes it.
-from ._lens_kernels import _warn_if_aperture_exceeds_grid
+from ._lens_kernels import (
+    _warn_if_aperture_exceeds_grid,
+    caller_stacklevel as _caller_stacklevel,
+)
 from .lenses import (
     surface_sag_biconic,
     surface_sag_general,
@@ -167,6 +170,7 @@ from .lens_config import (
     LensConfig,
     LensGeometry,
     LensNumerics,
+    LensPhysics,
     LensResources,
     _wants_config,
     resolve_entry_point_kwargs as _resolve_lens_config,
@@ -2158,7 +2162,7 @@ def _warn_if_remap_lattice_smooths(r_max, dx, dy, n_side):
         f"costs n_side**2), displaced_obliquity='pointwise' for the "
         f"single-plane obliquity screen, which lives on the field grid, or "
         f"apply_real_lens_traced for a per-pixel ray-traced OPL.",
-        RuntimeWarning, _WARN_STACKLEVEL)
+        RuntimeWarning, _caller_stacklevel())
 
 
 def _normalise_displaced_n_side(n_side, fn_name='apply_real_lens'):
@@ -3294,7 +3298,7 @@ def _unfold_mirror_surfaces(prescription: dict,
            if shifted else "")
         + "  Use lumenairy.io.split_prescription_at_mirrors(rx) with "
           "apply_mirror at each fold to carry them.",
-        RuntimeWarning, _WARN_STACKLEVEL)
+        RuntimeWarning, _caller_stacklevel())
     out = dict(prescription)
     out['surfaces'] = new_surfaces
     return out
@@ -4659,14 +4663,19 @@ def _check_screen_obliquity_support(*, carrier, screen_obliquity,
     return screen_obliquity is not False
 
 
-#: ``stacklevel`` every warning raised inside :func:`_apply_real_lens_impl`
-#: uses, so they keep pointing at the USER'S call rather than at library code.
-#: The v5.40 split put ``apply_real_lens`` (which owns the accumulator-store
-#: ``with`` block) between the caller and the body, and a warning that names
-#: ``return _apply_real_lens_impl(...)`` as its origin is useless -- it tells
-#: you where the library called itself.  3 = the impl's own frame, the
-#: wrapper's, then the caller's.
-_WARN_STACKLEVEL = 3
+#: Every warning raised inside :func:`_apply_real_lens_impl` asks
+#: :func:`_caller_stacklevel` for its ``stacklevel``, so it names the USER'S
+#: call rather than library code.  It is computed rather than written down
+#: because the number of library frames between the warning and the caller is
+#: not a property of the warning's source line: the public wrapper that owns
+#: the accumulator-store ``with`` block adds one, the configuration objects'
+#: self-re-entry (``return apply_real_lens(E_in, **resolve(...))``) adds
+#: another on any call that passes one, and ``apply_real_lens_traced`` reaches
+#: this body through two more.  A literal is right for exactly one of those
+#: paths; MEASURED, the previous literal ``3`` named
+#: ``_lens_real.py``'s own re-entry line on every configured call.
+#: :func:`~lumenairy.elements._lens_kernels.caller_stacklevel` carries the
+#: derivation.
 
 
 _VALID_ACCUMULATOR_STORE = ('ram', 'memmap')
@@ -4888,7 +4897,7 @@ class _AccumulatorStore:
         _warnings.warn(                                  # pragma: no cover
             f"apply_real_lens: could not remove the accumulator scratch "
             f"file {path!r}; remove it manually.", RuntimeWarning,
-            stacklevel=2)
+            _caller_stacklevel())
 
     def close(self):
         """Close every mapping and unlink its file.  Idempotent."""
@@ -4920,7 +4929,7 @@ class _AccumulatorStore:
                 _warnings.warn(
                     f"apply_real_lens: could not remove the accumulator "
                     f"scratch directory {self._dir!r}; remove it manually.",
-                    RuntimeWarning, stacklevel=2)
+                    RuntimeWarning, _caller_stacklevel())
             self._dir = None
             self._own_dir = False
 
@@ -5212,6 +5221,7 @@ def apply_real_lens(
     geometry: Optional['LensGeometry'] = None,
     numerics: Optional['LensNumerics'] = None,
     resources: Optional['LensResources'] = None,
+    physics: Optional['LensPhysics'] = None,
     config: Optional['LensConfig'] = None,
 ) -> np.ndarray:
     """
@@ -6091,17 +6101,22 @@ def apply_real_lens(
 
     Configuration objects
     ---------------------
-    geometry, numerics, resources, config : optional
+    geometry, numerics, resources, physics, config : optional
         :class:`~lumenairy.LensGeometry` / :class:`~lumenairy.LensNumerics` /
-        :class:`~lumenairy.LensResources`, or the
-        :class:`~lumenairy.LensConfig` that holds all three, as an alternative
-        to spelling the settings out as keywords.  Purely ADDITIVE: every
-        keyword above still works with the same default, and a call that
-        passes none of the four runs exactly the code it ran before.  A set
-        field and a keyword for the SAME setting must agree or the call
+        :class:`~lumenairy.LensResources` / :class:`~lumenairy.LensPhysics`,
+        or the :class:`~lumenairy.LensConfig` that holds all four, as an
+        alternative to spelling the settings out as keywords.  Purely
+        ADDITIVE: every keyword above still works with the same default, and a
+        call that passes none of the five runs exactly the code it ran before.
+        A set field and a keyword for the SAME setting must agree or the call
         raises; a set field this function has no parameter for also raises
         (``config.narrowed_to('apply_real_lens')`` drops those deliberately).
-        See ``docs/lens_configuration.md``.
+        ``physics=`` carries this function's nine model-term switches
+        (``fresnel``, ``slant_correction``, ``absorption``,
+        ``seidel_correction``, ``seidel_poly_order``, ``surface_frame``,
+        ``displaced_mode``, ``displaced_obliquity``, ``screen_obliquity``) and
+        is the only entry point in the family that has any, so it is the only
+        one with the parameter.  See ``docs/lens_configuration.md``.
 
     All arguments past ``E_in`` are keyword-only (4.7+).  The
     parameter name is ``prescription`` -- the 4.6 alias
@@ -6117,12 +6132,12 @@ def apply_real_lens(
     _check_2d_scalar_field(E_in, 'apply_real_lens', input_kind='field')
     # Config objects, if any, are merged into the keywords and the call is
     # re-entered with them -- so the configured path is the SAME code as the
-    # equivalent keyword call, by construction rather than by review.  Four
+    # equivalent keyword call, by construction rather than by review.  Five
     # ``is not None`` tests when nothing is configured; nothing else changes.
-    if _wants_config(geometry, numerics, resources, config):
+    if _wants_config(geometry, numerics, resources, config, physics):
         return apply_real_lens(E_in, **_resolve_lens_config(
             apply_real_lens, locals(), geometry=geometry, numerics=numerics,
-            resources=resources, config=config))
+            resources=resources, config=config, physics=physics))
     with _AccumulatorStore(accumulator_store, scratch_dir) as _store:
         return _apply_real_lens_impl(
             E_in,
@@ -6310,7 +6325,6 @@ def _apply_real_lens_impl(
         _dy_chk = dx if dy is None else dy
         _warn_if_aperture_exceeds_grid(
             prescription, int(_shape[1]), dx, source='apply_real_lens',
-            stacklevel=_WARN_STACKLEVEL + 1,
             N_y=int(_shape[0]), dy=_dy_chk)
     except (KeyError, ValueError, TypeError, AttributeError, IndexError):
         # Aperture-check failure is informational only.
@@ -7553,7 +7567,7 @@ def _apply_real_lens_impl(
                     "capped and may differ from the true ray path by "
                     "kilo-radians.  Reduce input tilt or check the "
                     "surface profile.",
-                    RuntimeWarning, _WARN_STACKLEVEL,
+                    RuntimeWarning, _caller_stacklevel(),
                 )
             if i < len(surfaces) - 1 and _obl_active and _obl_apply:
                 _obl_gap_advance(i, n2r)
@@ -7681,7 +7695,7 @@ def _apply_real_lens_impl(
                     "the freeform departure is dropped from this "
                     "wave-optics path.  Use apply_real_lens_traced "
                     "for biconic + Forbes Q.",
-                    RuntimeWarning, _WARN_STACKLEVEL,
+                    RuntimeWarning, _caller_stacklevel(),
                 )
                 sag = surface_sag_biconic(
                     Xs, Ys, R_x=R, R_y=R_y,
@@ -7704,7 +7718,7 @@ def _apply_real_lens_impl(
                     "thin-element wave-optics path.  Use "
                     "apply_real_lens_traced (or apply_real_lens_maslov) "
                     "for a raytraced OPD that honours freeform_type.",
-                    RuntimeWarning, _WARN_STACKLEVEL,
+                    RuntimeWarning, _caller_stacklevel(),
                 )
             if R_y is not None:
                 sag = surface_sag_biconic(
@@ -7829,7 +7843,7 @@ def _apply_real_lens_impl(
                     "capped and may differ from the true ray path by "
                     "kilo-radians.  Reduce input tilt or check the "
                     "surface profile.",
-                    RuntimeWarning, _WARN_STACKLEVEL,
+                    RuntimeWarning, _caller_stacklevel(),
                 )
             cos_ti_safe = xp.maximum(cos_ti, 1e-3)
             cos_tt_safe = xp.maximum(cos_tt, 1e-3)
@@ -8451,7 +8465,7 @@ def _apply_real_lens_impl(
             if on_screen_obliquity == 'error':
                 raise ValueError(_msg)
             import warnings
-            warnings.warn(_msg, RuntimeWarning, _WARN_STACKLEVEL)
+            warnings.warn(_msg, RuntimeWarning, _caller_stacklevel())
 
     call_progress(progress, 'apply_real_lens', 1.0, 'done')
     return E

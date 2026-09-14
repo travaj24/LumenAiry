@@ -1,12 +1,13 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/pmm/stack2d.py
-ast_sha256: e38f338d9030d90f1ac215a5e0db036aa0c5e9f7f101f6f847c036387b63ed45
-token_sha256: 603f4cf16ccfd503e18c59fdd1c49326ee875bf16f2ba15128df235544e09f1e
+ast_sha256: 42ed5d704f6e95f29a9f2b2abdaa95dca2bfdaf2da8e5448b467648fab303629
+token_sha256: 739b4a6036051436b3a88fefc24791651a73f08d1fb510f49b248aeece0aac62
 pre_relocation_lines: 2261
 recorded_by: WP-A17 SWEEP-2 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
 re_recorded: 2026-09-13 -- WP-B6 (audit 2026-09-11 G10(d)): _geom_cache carries a tensor layer's k0-free projected operators (_tensor_projected_ops) beside the scalar lops, and _geom_key gains the formulation the cached EZZ rule depends on; every operator is bit-identical with and without the cache
 re_recorded: 2026-09-13 -- WP-B11a: the Collins readout's K1 applicability window stated on the public transport docstring (item 20); PMM2DStackHybrid's formulation/cascade/symmetry refuse an out-of-vocabulary assignment (item 19); sampling= on the free-space HFPI pair (item 12)
+re_recorded: 2026-09-14 -- PMM2DStackHybrid.truncation joins formulation/cascade/symmetry as a guarded property, sharing _check_truncation with __init__.
 -->
 
 # Version history -- `lumenairy/elements/pmm/stack2d.py`

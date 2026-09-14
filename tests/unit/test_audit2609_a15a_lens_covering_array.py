@@ -752,7 +752,7 @@ def test_maslov_kwargs_at_their_default_reproduce_the_bare_call():
 # 4. The IN-GLASS GAP LEGS (WP-B11a item 10, from WP-B3b D5)
 # ---------------------------------------------------------------------------
 
-def test_the_in_glass_gap_legs_are_reached_and_only_one_of_them_is_gated():
+def test_the_in_glass_gap_legs_are_reached_and_both_of_them_are_gated():
     """``wave_propagator`` is a covering-array factor with levels ``{}`` (the
     ASM default) and ``'rs'``; NEITHER reaches the in-glass ``'sas'`` /
     ``'fresnel'`` gap legs, so the window-against-period gate those legs carry
@@ -761,7 +761,7 @@ def test_the_in_glass_gap_legs_are_reached_and_only_one_of_them_is_gated():
     MEASURED on this fixture both legs are far outside their kernels' validity
     and the array's energy bar would have to be conceded to hold them.
 
-    MEASURED 2026-09-13 on the covering-array doublet (N = 64, dx = 112.5 um,
+    MEASURED 2026-09-14 on the covering-array doublet (N = 64, dx = 112.5 um,
     lambda = 632.8 nm, gaps 9.0 and 2.5 mm in N-BAF10 / N-SF6HT):
 
     ======================  ================  ==========================
@@ -770,7 +770,7 @@ def test_the_in_glass_gap_legs_are_reached_and_only_one_of_them_is_gated():
     default (ASM)           0.996170598       none
     ``'rs'``                0.996170187       none
     ``'fresnel'``           10396.714211      2 x RuntimeWarning
-    ``'sas'``               10396.710108      NONE
+    ``'sas'``               10396.710108      2 x RuntimeWarning
     ======================  ================  ==========================
 
     Both gap legs gain FOUR DECADES of power, and the geometry is why: the
@@ -782,13 +782,17 @@ def test_the_in_glass_gap_legs_are_reached_and_only_one_of_them_is_gated():
     validly-sampled in-glass Fresnel leg on a 7.2 mm window would need
     N ~ 15 000.
 
-    The ASYMMETRY is the finding.  ``'fresnel'`` warns twice -- the
-    under-sampling gate fires and names the bound.  ``'sas'`` returns the same
-    four-decade gain in SILENCE, because its only validity gate is the
-    far-field direction (``z > z_limit``) and this failure is the near one.
-    The assertion below PINS that silence so the day a gate is added this test
-    goes red and the author records the change deliberately; see WP-B11a's
-    report, "requested changes".
+    WHAT MOVED, AND WHY THIS TEST'S NAME CHANGED.  WP-B11a measured the ``sas``
+    row at ZERO diagnostics and pinned that silence deliberately, because its
+    only validity gate was the FAR direction (``z > z_limit``) while this
+    failure is the near one.  WP-B11b closed it: ``sas.py`` now carries
+    ``_warn_sas_chirp_sampling``, the same ``z >= N dx^2 / lambda`` bound
+    ``fresnel_propagate`` already applied, derived for the SAS kernel's own
+    third step and measured to be independent of the ``pad`` factor.  The
+    values below are unchanged to every digit WP-B11a recorded -- only the
+    diagnostic column moved -- so this test now pins the SYMMETRY of the two
+    legs instead of the asymmetry, and the count (2, one per gap) is pinned so
+    that a guard firing once, or on the wrong leg, still fails.
     """
     e_in, dx, rx, _ = lens_covering_array_fixture()
     base = analytic_base_kwargs(dx, rx)
@@ -815,15 +819,18 @@ def test_the_in_glass_gap_legs_are_reached_and_only_one_of_them_is_gated():
         f"-- in which case DELETE this assertion and put the two legs back in "
         f"ANALYTIC_FACTORS['propagator'] where they belong -- or the fixture "
         f"moved and this test is no longer measuring the gate.")
-    assert seen['fresnel'][1], (
-        "the 'fresnel' gap leg stopped warning about its under-sampled chirp; "
-        "that warning is the only thing standing between a caller and a "
-        "four-decade energy gain.")
-    assert not seen['sas'][1], (
-        "the 'sas' gap leg now emits a RuntimeWarning on this geometry -- the "
-        "gap WP-B11a recorded has been closed.  Update this assertion (and "
-        "the report's requested-changes entry) deliberately rather than "
-        "loosening it.")
+    for leg in ('fresnel', 'sas'):
+        # one per gap: 9.0 mm of N-BAF10 and 2.5 mm of N-SF6HT, both of them
+        # three decades inside the bound.
+        assert len(seen[leg][1]) == 2, (
+            f"the {leg!r} gap leg emitted {len(seen[leg][1])} RuntimeWarnings, "
+            f"not one per under-sampled gap.  That warning is the only thing "
+            f"standing between a caller and a four-decade energy gain, and "
+            f"the doublet has TWO gaps: "
+            f"{[str(w.message)[:80] for w in seen[leg][1]]}")
+        assert all('UNDER-SAMPLED' in str(w.message) for w in seen[leg][1]), (
+            f"the {leg!r} gap leg warned, but not about the under-sampled "
+            f"chirp: {[str(w.message)[:120] for w in seen[leg][1]]}")
 
 
 if __name__ == '__main__':      # pragma: no cover - measurement helper
