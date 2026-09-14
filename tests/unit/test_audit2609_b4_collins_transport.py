@@ -1105,3 +1105,321 @@ class TestReadoutPeriodDecoupling:
             b = np.asarray(C._collins_focus_readout(
                 env_conv, _R, z, _WL, _DX, _DX, replica_fill='zero', **kw))
         assert np.array_equal(a, b)
+
+
+# ===========================================================================
+# 13.  VERIFY-WP-B4 -- the chirp-Z's OUTPUT PERIOD on a leg
+#
+# A leg has no ``on_replica``, so K3 -- the condition that the returned window
+# fit inside one chirp-Z period -- is the leg's own to dispose of, and it is
+# the condition that actually complements the transfer-function form:
+# ``K3 * K_tf = 2 dx theta / lambda <= 1`` because theta is read from the
+# envelope's own SAMPLED spectrum.  ``K1`` is a weaker statement (``K3 >= K1``
+# on every leg lattice), so selecting on K1 alone left a band where the chirp-Z
+# ran on a window several periods wide.
+# ===========================================================================
+def _leg_k3(N, dx_out, wavelength, B, dx):
+    return N * float(dx_out) / (wavelength * abs(float(B)) / float(dx))
+
+
+def _leg(env, R, z, dx, **kw):
+    d = {}
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        cr = C._collins_carrier_leg(env, R, z, _WL, dx, dx,
+                                    on_collins_sampling='ignore', diag=d,
+                                    **kw)
+    return cr, d
+
+
+class TestLegPeriodCondition:
+    @pytest.mark.parametrize('z', [-30e-3, -20e-3, -12e-3, 12e-3, 20e-3,
+                                   30e-3, 39e-3])
+    def test_a_leg_evaluates_the_form_that_is_SAMPLED_on_its_own_lattice(
+            self, env_conv, z):
+        """Decision, not reading: for each leg, measure K3 on the lattice the
+        leg itself resolved, then require the published form to be the one
+        that condition allows -- ``'tf'`` when the chirp-Z window exceeds one
+        period AND the transfer-function form exists, ``'chirp-z'`` otherwise.
+        When it is ``'tf'`` the returned envelope must BE
+        :func:`_carrier_step_fast`'s, bit for bit, since that is the claim.
+
+        Fail-before on 185d64cd as shipped (2026-09-13, a Gaussian at N = 512 /
+        dx = 7.0312 um): the ``z = -20 mm`` leg reads K1 = 0.7600 (so the
+        chirp-Z was selected) with K3 = 1.7842, and returns
+        ``P_out/P_in = 1.3164`` -- 32 % of the returned power is a wrapped copy
+        -- against relL2 0.5625 to the analytic Gaussian, silently.  The same
+        leg now reads P_out/P_in = 1.000000 and relL2 1.96e-08."""
+        cr, d = _leg(env_conv, _R, z, _DX)
+        dxo = cr.dx if np.isscalar(cr.dx) else cr.dx[0]
+        A = 1.0 + z / _R
+        k3 = _leg_k3(_N, dxo, _WL, z, _DX)
+        tf_exists = bool(A > 0.0 and np.isscalar(cr.R)
+                         and np.isfinite(cr.R))
+        want = 'tf' if (k3 > 1.0 and tf_exists) else 'chirp-z'
+        assert d['collins_form'] == want, (z, k3, d['collins_form'])
+        assert max(d['collins_k3']) == pytest.approx(k3, rel=1e-12)
+        if want == 'tf':
+            sz = C._carrier_step_fast(env_conv, _R, z, _WL, _DX, _DX,
+                                      gap_kernel='auto')
+            assert np.array_equal(np.asarray(cr.env), np.asarray(sz.env))
+            assert cr.dx == sz.dx and cr.R == sz.R
+
+    @pytest.mark.parametrize('z', [-20e-3, 12e-3, 20e-3, 39e-3])
+    def test_a_leg_conserves_power(self, env_conv, z):
+        """Parseval on the lattice the leg chose.  A chirp-Z window wider than
+        one period manufactures power (the replicas are real samples), so this
+        is the sharpest single statement of the defect above: bar 1 % against a
+        measured 0.0002 % here and 31.64 % on 185d64cd at z = -20 mm.  The
+        floor is the grid's own truncation of the Gaussian (this fixture spans
+        6.83 w, so exp(-2*6.83^2) = 1e-40) plus the transform's rounding."""
+        cr, _ = _leg(env_conv, _R, z, _DX)
+        dxo = cr.dx if np.isscalar(cr.dx) else cr.dx[0]
+        p_in = float((np.abs(env_conv) ** 2).sum()) * _DX * _DX
+        p_out = float((np.abs(np.asarray(cr.env)) ** 2).sum()) * dxo * dxo
+        assert p_out / p_in == pytest.approx(1.0, abs=1e-2), (z, p_out / p_in)
+
+    @pytest.mark.parametrize('scale,expect_refusal', [(0.5, False),
+                                                      (2.0, True)])
+    def test_the_period_condition_speaks_on_a_caller_chosen_lattice(
+            self, env_conv, scale, expect_refusal):
+        """The public single-step entry has no ``on_replica`` either, so a
+        ``dx_out`` wide enough to take the window past one period has to be
+        refused rather than returned silently.  The pitch is DERIVED from the
+        running build's own period, so the two arms sit either side of the bar
+        by construction rather than by a remembered number.
+
+        Fail-before (185d64cd, 2026-09-13): ``on_collins_sampling='error'``
+        raised nothing at K3 = 2.03, where the returned field reads relL2
+        2.2374 against the analytic Gaussian."""
+        z = 20e-3
+        period = _WL * abs(z) / _DX
+        dxo = scale * period / _N
+        k3 = _leg_k3(_N, dxo, _WL, z, _DX)
+        assert (k3 > 1.0) is expect_refusal, (k3, expect_refusal)
+        kw = dict(transport='collins', dx_out=dxo, carrier_out=np.inf,
+                  on_collins_sampling='error')
+        if expect_refusal:
+            with pytest.raises(RuntimeError, match=r'K3 \(period\)'):
+                C.propagate_carrier_referenced(env_conv, _R, z, _WL, _DX,
+                                               **kw)
+        else:
+            with warnings.catch_warnings():
+                warnings.simplefilter('error')
+                C.propagate_carrier_referenced(env_conv, _R, z, _WL, _DX,
+                                               **kw)
+
+    def test_the_selection_boundary_is_where_both_forms_hold(self, env_conv):
+        """"The selection cannot introduce a step" is a claim about the
+        boundary, so it is measured AT the boundary -- found by bisection on
+        the running build, not assumed.  Both arms are evaluated on the same
+        co-moving lattice with the same output reference, so their difference
+        IS the step a crossing would introduce.
+
+        Fail-before (185d64cd, 2026-09-13): the boundary sat at K1 = 1
+        (z = 8.0108 mm on this fixture), where the two arms differ by 0.9999 of
+        peak.  It now sits at K3 = 1 (z = 14.9177 mm), where they agree to
+        2.9e-11 / 1.4e-11.  Bar 1e-8: three decades over the measurement and
+        eight under the 1.0 a mis-placed boundary reads."""
+        lo, hi = 5e-3, 39e-3
+        for _ in range(80):
+            mid = 0.5 * (lo + hi)
+            A = 1.0 + mid / _R
+            if _leg_k3(_N, abs(A) * _DX, _WL, mid, _DX) > 1.0:
+                lo = mid
+            else:
+                hi = mid
+        zc = 0.5 * (lo + hi)
+        forms = []
+        for dz in (-2e-6, +2e-6):
+            z = zc + dz
+            A = 1.0 + z / _R
+            _, d = _leg(env_conv, _R, z, _DX, gap_kernel='fresnel')
+            forms.append(d['collins_form'])
+            sz = np.asarray(C._carrier_step_fast(
+                env_conv, _R, z, _WL, _DX, _DX, gap_kernel='fresnel').env)
+            with warnings.catch_warnings():
+                warnings.simplefilter('ignore')
+                co = C._collins_transport(
+                    env_conv, _R, z, _WL, _DX, _DX, dx_out=abs(A) * _DX,
+                    dy_out=abs(A) * _DX, N_out_x=_N, N_out_y=_N,
+                    R_ref=_R + z, gap_kernel='fresnel',
+                    on_collins_sampling='ignore')
+            step = float(np.abs(sz - co).max() / np.abs(sz).max())
+            assert step < 1e-8, (z, step)
+        assert forms == ['tf', 'chirp-z'], forms
+
+    @pytest.mark.parametrize('z', [-30e-3, -6e-3, 2e-3, 8e-3, 20e-3, 39e-3])
+    def test_k3_is_never_below_k1_on_a_leg_lattice(self, env_conv, z):
+        """Why K3 is the condition to select on: the leg's pitch is
+        ``max(|A| dx, 2 r_out/N)``, and at the floor ``K3`` IS ``K1``, so
+        ``K3 >= K1`` identically and selecting on K1 alone can only ever be the
+        weaker test.  An identity, so the bar is rounding."""
+        cr, d = _leg(env_conv, _R, z, _DX)
+        dxo = cr.dx if np.isscalar(cr.dx) else cr.dx[0]
+        k3 = _leg_k3(_N, dxo, _WL, z, _DX)
+        k1 = max(d['collins_k1'])
+        assert k3 >= k1 * (1.0 - 64.0 * EPS), (z, k1, k3)
+        if d['collins_dx_floor_hit']:
+            assert k3 == pytest.approx(k1, rel=1e-9), (z, k1, k3)
+
+    @pytest.mark.parametrize('z', [-30e-3, -6e-3, 2e-3, 8e-3, 20e-3, 39e-3])
+    def test_the_two_conditions_are_exact_complements(self, env_conv, z):
+        """``K3 * K_tf = 2 dx theta / lambda``, and ``theta`` is measured from
+        the envelope's own SAMPLED spectrum so it cannot exceed the grid's
+        Nyquist angle ``lambda/(2 dx)``.  The product is therefore at most 1:
+        at least one of the two evaluations is always representable, and both
+        are at the crossover.  That is what makes the selection a theorem
+        rather than a threshold, and it is what ``K1`` does NOT satisfy
+        (``K1 * K_tf`` carries an extra ``4 |z_eff| theta^2/(N lambda)`` that
+        nothing bounds)."""
+        r_x, r_y, th_x, th_y = C._collins_input_box(env_conv, _DX, _DX, _WL,
+                                                    1e-6)
+        th = max(th_x, th_y)
+        A = 1.0 + z / _R
+        z_eff = z / A
+        k3_geom = _N * _DX ** 2 / (_WL * abs(z_eff))
+        k_tf = 2.0 * abs(z_eff) * th / (_N * _DX)
+        assert th <= _WL / (2.0 * _DX) * (1.0 + 64.0 * EPS), th
+        assert k3_geom * k_tf == pytest.approx(2.0 * _DX * th / _WL, rel=1e-12)
+        assert k3_geom * k_tf <= 1.0 + 64.0 * EPS, (z, k3_geom * k_tf)
+
+    def test_the_leg_publishes_its_period_ratio_and_its_kernel(self,
+                                                               env_conv):
+        """Both quadratures publish the same key set, so a consumer reading a
+        stage does not have to know which one ran to find a reading."""
+        keys = {'collins_form', 'collins_k1', 'collins_k2', 'collins_k3',
+                'collins_kernel', 'collins_flat_reference',
+                'collins_dx_floor_hit'}
+        _, d_tf = _leg(env_conv, _R, 2e-3, _DX)
+        _, d_cz = _leg(env_conv, _R, 39e-3, _DX)
+        assert d_tf['collins_form'] == 'tf' and set(d_tf) == keys
+        assert d_cz['collins_form'] == 'chirp-z' and set(d_cz) == keys
+        assert d_cz['collins_kernel'] in ('exact', 'fresnel')
+        assert d_tf['collins_kernel'] is None
+
+
+# ===========================================================================
+# 14.  VERIFY-WP-B4 -- two claims the package states but does not measure
+# ===========================================================================
+class TestAbsolutePhaseThroughTheFocus:
+    @pytest.mark.parametrize('dz', [-1e-3, -1e-6, 0.0, 1e-6, 1e-3])
+    def test_the_gouy_phase_is_continuous_through_the_geometric_focus(
+            self, env_conv, dz):
+        """ORACLE: ``_abcd_gauss``, compared ABSOLUTELY.  ``A = 1 + z/R``
+        crosses zero at ``z = -R``; the WP's claim is that this is an ordinary
+        value, which is a statement about the PHASE as much as the amplitude.
+        A conjugated Gouy phase, or a branch taken from ``sqrt((1 + z/q)^2)``
+        instead of ``q/q2``, reads 2.0 here on the ``A < 0`` side and 0 on the
+        other -- so the sweep is two-sided by construction.
+
+        ``gap_kernel='fresnel'``, because the ABCD-Fresnel integral IS what
+        this oracle is: the exact-kernel refinement is a different (and, this
+        close to the focus, a large) statement, measured separately in
+        :class:`TestKernelRefinementNearTheFocus`.  Bar 1e-9: measured
+        2026-09-13 the worst cell reads 1.7e-14, and both failure modes it
+        exists for are O(1)."""
+        z = -_R + dz
+        w0 = _WL * abs(_R) / (np.pi * _W)
+        dxo, nout = w0 / 8.0, 128
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            E = np.asarray(C._collins_transport(
+                env_conv, _R, z, _WL, _DX, _DX, dx_out=dxo, dy_out=dxo,
+                N_out_x=nout, N_out_y=nout, R_ref=np.inf,
+                gap_kernel='fresnel', on_collins_sampling='ignore'))
+        T, _ = _abcd_gauss(_grid(nout, dxo), _W, _R, z, _WL)
+        assert _rel_l2(E, T) < 1e-9, (dz, _rel_l2(E, T))
+        # ... and the piston-free reading must not be better by decades, which
+        # is what a global phase error looks like.
+        assert _rel_l2(E, T) < 10.0 * max(_piston_free_rel_l2(E, T), 1e-16)
+
+
+class TestKernelRefinementNearTheFocus:
+    @pytest.mark.parametrize('dz', [1e-6, 1e-5, 1e-4, 1e-3, 5e-3])
+    def test_the_abcd_fresnel_integral_is_exact_right_up_to_the_focus(
+            self, env_conv, dz):
+        """The half of the K4 story that is a property of the transport rather
+        than of the refinement: with the refinement OFF, the Collins quadrature
+        reads the analytic Gaussian at the transform's rounding from 5 mm away
+        down to 1 um from the geometric focus -- 8.9e-15 to 1.7e-14, measured
+        2026-09-13, and INDEPENDENT of N (identical at N = 512, 1024, 2048 and
+        4096 on the same physical extent), which is what says it is the
+        quadrature and not the grid.  Bar 1e-9.
+
+        The companion statement, which is why this one is worth pinning
+        separately: ``K4`` is below 1e-2 on every cell here -- the guard is
+        silent -- while ``gap_kernel='auto'`` departs from the same oracle by
+        up to 2.3e-03, growing linearly in ``|z_eff| = |B/A|`` exactly as the
+        refinement's own dropped quartic ``k |z_eff| theta^4/8`` does.  K4
+        bounds where the refinement WRAPS, not where it helps."""
+        z = -_R + dz
+        w0 = _WL * abs(_R) / (np.pi * _W)
+        dxo, nout = w0 / 8.0, 128
+        st = {}
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            E = np.asarray(C._collins_transport(
+                env_conv, _R, z, _WL, _DX, _DX, dx_out=dxo, dy_out=dxo,
+                N_out_x=nout, N_out_y=nout, R_ref=np.inf,
+                gap_kernel='fresnel', on_collins_sampling='ignore',
+                stats_out=st))
+        T, _ = _abcd_gauss(_grid(nout, dxo), _W, _R, z, _WL)
+        assert _rel_l2(E, T) < 1e-9, (dz, _rel_l2(E, T))
+        assert st['k4'] < 1.0, (dz, st['k4'])
+
+
+class TestTiltedAndDecentredReadout:
+    @pytest.mark.parametrize('L,M,x0,y0', [
+        (0.0, 0.0, 0.0, 0.0),
+        (20e-3, -12e-3, 0.0, 0.0),
+        (46e-3, 0.0, 0.0, 0.0),
+        (0.0, 0.0, 500e-6, -300e-6),
+        (20e-3, -12e-3, 500e-6, -300e-6)])
+    def test_a_tilted_decentred_congruence_through_the_collins_readout(
+            self, L, M, x0, y0):
+        """WP-B4 sec.5 item 7: "no fixture in this package reads a strongly
+        tilted congruence THROUGH the Collins readout against an independent
+        oracle".  This is that fixture.
+
+        ORACLE, written here from Fresnel's shift theorem and nothing else.
+        The input FIELD is ``G(x-x0, y-y0) exp(i k r^2/2R) exp(i k (Lx+My))``;
+        about ``u = x - x0`` that is the ON-AXIS beam times a ramp
+        ``alpha = L + x0/R`` and a constant, and ``f(u-u0) exp(i k alpha u) ->
+        exp(i k alpha (x-u0)) exp(-i k alpha^2 z/2) F(x - u0 - alpha z)``, with
+        ``u0 + alpha z = A x0 + L z``.  Absolute, so the ramp's own piston is in
+        the comparison.  Measured 2026-09-13: 9.0e-15 on axis, 3.1e-14 at
+        L = 46 mrad, 4.6e-13 with a 500/-300 um decentre.  Bar 1e-9, three
+        decades over the worst cell and far under the O(1) a mis-signed
+        ``centre_out`` screen reads."""
+        z = -_R
+        k = 2.0 * np.pi / _WL
+        g = _grid(_N, _DX)
+        env = (np.exp(-(((g - x0)[None, :] ** 2 + (g - y0)[:, None] ** 2)
+                        / _W ** 2))
+               * np.exp(1j * k * (L * g[None, :] + M * g[:, None]))
+               ).astype(np.complex128)
+        A = 1.0 + z / _R
+        cen = (A * x0 + L * z, A * y0 + M * z)
+        w0 = _WL * abs(_R) / (np.pi * _W)
+        dxo, nout = w0 / 8.0, 128
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            E = np.asarray(C._collins_focus_readout(
+                env, _R, z, _WL, _DX, _DX, dx_out=dxo, N_out=nout,
+                centre_out=cen, on_replica='ignore',
+                on_collins_sampling='ignore'))
+        q = 1.0 / (1.0 / _R + 1j * _WL / (np.pi * _W ** 2))
+        q2 = q + z
+        ax, ay = L + x0 / _R, M + y0 / _R
+        gx = _grid(nout, dxo) + cen[0]
+        gy = _grid(nout, dxo) + cen[1]
+        sx, sy = gx - (x0 + ax * z), gy - (y0 + ay * z)
+        T = (np.exp(1j * k * (x0 * x0 / (2 * _R) + L * x0
+                              + y0 * y0 / (2 * _R) + M * y0))
+             * np.exp(1j * k * z) * (q / q2)
+             * np.exp(0.5j * k * (sx[None, :] ** 2 + sy[:, None] ** 2) / q2)
+             * np.exp(1j * k * (ax * (gx - x0)[None, :]
+                                + ay * (gy - y0)[:, None]))
+             * np.exp(-0.5j * k * (ax * ax + ay * ay) * z))
+        assert _rel_l2(E, T) < 1e-9, (L, M, x0, y0, _rel_l2(E, T))

@@ -1081,7 +1081,11 @@ def propagate_carrier_referenced(
     on_collins_sampling : {'error', 'warn', 'ignore'}, default 'warn'
         ``transport='collins'`` only: disposition of the Kelly (Appl. Opt. 53,
         2861 (2014)) sampling conditions for the chirp-Z stage, evaluated on the
-        measured support of this field rather than on the grid geometry.
+        measured support of this field rather than on the grid geometry.  This
+        entry has no ``on_replica``, so the output-PERIOD condition (the
+        chirp-Z repeats with ``lambda |z| / dx`` of the INPUT grid) is weighed
+        here too: a ``dx_out`` wide enough to take the window past one period
+        returns wrapped copies in its outer samples and says so.
 
     Returns
     -------
@@ -1709,7 +1713,12 @@ def _collins_sampling_stats(A, B, C, D, dx, dy, r_x, r_y, th_x, th_y,
     periodic with ``lambda |B| / dx`` -- a function of the input pitch and the
     leg, and of NOTHING on the output side.  A window is faithful iff
     ``2|centre_out| + N_out dx_out <= period`` per axis, the same [V3] geometry
-    :func:`_check_readout_replica` states for the readout.
+    :func:`_check_readout_replica` states for the readout.  Which guard
+    DISPOSES of it depends on the caller: the readout's own ``on_replica``
+    (which also offers ``replica_fill``), or, for a caller that has neither,
+    ``on_collins_sampling`` via :func:`_check_collins_sampling`'s
+    ``check_period``.  Exactly one of the two speaks per call, so they cannot
+    disagree.
     """
     lam = float(wavelength)
     aB = abs(float(B))
@@ -1733,9 +1742,19 @@ def _collins_sampling_stats(A, B, C, D, dx, dy, r_x, r_y, th_x, th_y,
         'tail_frac': float(_COLLINS_TAIL_FRAC)}
 
 
-def _check_collins_sampling(fn, action, st, stacklevel=3):
-    """Dispose of a violated K1 / K2 condition (K3 is the replica guard's, and
-    is disposed of by ``on_replica`` at the readout so the two cannot disagree).
+def _check_collins_sampling(fn, action, st, stacklevel=3, check_period=False):
+    """Dispose of a violated K1 / K2 condition, and of K3 when the caller owns
+    it (``check_period``).
+
+    K3 -- the chirp-Z's own output period -- has TWO owners, and exactly one of
+    them speaks per call so the two can never disagree.  At the readout it
+    belongs to ``on_replica``, which states the same ``[V3]`` geometry on the
+    same period and additionally offers ``replica_fill``; that caller leaves
+    ``check_period`` false.  On a CHAIN LEG (and on the single-step entry,
+    which is the same code) there is no ``on_replica`` argument and no fill, so
+    the condition is disposed of here instead: a window wider than one period
+    returns wrapped copies in the outer samples, and on the co-moving lattice
+    that is not a corner case (``K3 = N dx^2 / (lambda |z_eff|)``).
 
     The bar is 1.0 because the conditions ARE Nyquist: at a ratio of 1 the
     binding content sits exactly at the sample rate, and the tolerance lives in
@@ -1745,6 +1764,7 @@ def _check_collins_sampling(fn, action, st, stacklevel=3):
         return
     k1x, k1y = st['k1']
     k2x, k2y = st['k2']
+    k3x, k3y = st['k3']
     bad = []
     if max(k1x, k1y) > 1.0:
         bad.append(
@@ -1762,6 +1782,13 @@ def _check_collins_sampling(fn, action, st, stacklevel=3):
             f"not resolve the transported envelope, whose angular half-width "
             f"is {_th_out * 1e3:.4f} mrad -- that needs a pitch of "
             f"{_nyq:.6f} wavelengths")
+    if check_period and max(k3x, k3y) > 1.0:
+        bad.append(
+            f"K3 (period) {max(k3x, k3y):.4f}: the chirp-Z sums over the INPUT "
+            f"lattice, so its output repeats with period lambda|B|/dx = "
+            f"{min(st['period']) * 1e6:.4f} um, and the returned window spans "
+            f"{max(k3x, k3y):.4f} of it -- every sample beyond half a period "
+            f"from the window centre is a wrapped copy of one inside it")
     if not bad:
         return
     A, B, C, D = st['abcd']
@@ -1773,8 +1800,9 @@ def _check_collins_sampling(fn, action, st, stacklevel=3):
           f"Kelly, Appl. Opt. 53, 2861 (2014), evaluated on the measured "
           f"{1.0 - st['tail_frac']:.6f}-power support of THIS field rather "
           f"than at the grid edge.  Remedies: a finer input pitch dx (K1 is "
-          f"linear in it), a shorter leg or a carrier closer to the beam's own "
-          f"wavefront (both shrink |A| r/|B|), or a finer dx_out (K2).  Pass "
+          f"linear in it, K3 inversely so), a shorter leg or a carrier closer "
+          f"to the beam's own wavefront (both shrink |A| r/|B|), a finer "
+          f"dx_out (K2), or fewer output samples (K3).  Pass "
           f"on_collins_sampling='warn' / 'ignore' to downgrade.",
         stacklevel=stacklevel)
 
@@ -1830,7 +1858,24 @@ def _collins_kernel_wrap_ratio(z_eff, theta, span):
     leg approaches the carrier's geometric focus, which is exactly where the
     chirp-Z quadrature is used, so this is not a corner case on this transport.
     Same form as the K1/K2 conditions: a measured ratio against the sampling
-    rate itself, with the bar at 1 and no margin."""
+    rate itself, with the bar at 1 and no margin.
+
+    WHAT THIS DOES NOT BOUND.  It is a REPRESENTABILITY condition, not an
+    accuracy one.  The refinement's own dropped quartic is
+    ``k |z_eff| theta^4/8``, and at ``K4 = 1`` (i.e. ``|z_eff| ~ span/theta^3``
+    for small ``theta``) that equals ``k theta span/8`` -- 8.6 rad on a
+    ``w = 0.3 mm`` Gaussian at ``N = 1024``, ``dx = 4 um``, ``lambda = 1.064
+    um``, against the 9.8e-07 rad of paraxiality the leg it refines carries.
+    Measured on that fixture at ``dz`` from the geometric focus, readout
+    lattice ``w0/8 x 128``, relL2 against the analytic Gaussian: at
+    ``dz = 1 um`` (``z_eff = -1600 m``, ``K4 = 9.1e-03``) ``'fresnel'`` reads
+    1.7e-14 and ``'auto'`` 2.3e-03; the ``'auto'`` column falls exactly as
+    ``1/|z_eff|`` (2.3e-04, 2.4e-05, 2.4e-06 at 10 um, 100 um, 1 mm) while K4
+    barely moves.  So near a geometric focus ``gap_kernel='fresnel'`` is the
+    more accurate setting on this transport, and K4 will not say so.  The
+    Sziklas path applies the same refinement over the same ``z_eff``; what is
+    particular here is that this quadrature is the one that operates at small
+    ``A`` by design."""
     th = abs(float(theta))
     if not (th < 1.0) or not np.isfinite(z_eff):
         return float('inf')
@@ -1903,7 +1948,7 @@ def _collins_transport(env, R_in, z, wavelength, dx, dy, *,
                        centre_out=(0.0, 0.0),
                        gap_kernel='auto', tilt=(0.0, 0.0),
                        on_collins_sampling='warn', fn='_collins_transport',
-                       stats_out=None, stacklevel=4):
+                       stats_out=None, stacklevel=4, check_period=False):
     """Evaluate the Collins integral of an ENVELOPE onto a freely chosen output
     lattice; return the envelope referenced to ``R_ref`` there.
 
@@ -1917,7 +1962,13 @@ def _collins_transport(env, R_in, z, wavelength, dx, dy, *,
     :func:`_radial_carrier_phase`, at ``R = B/A``), a separable centred chirp-Z
     (:func:`~lumenairy.propagators._bluestein._bluestein_centred_2d`, which is
     the transform the readouts already run), and a separable post-chirp screen
-    ``exp(i k D x^2/(2B))`` times ``exp(i k B) dx dy/(i lambda B)``."""
+    ``exp(i k D x^2/(2B))`` times ``exp(i k B) dx dy/(i lambda B)``.
+
+    ``check_period`` hands the K3 (output-period) condition to
+    ``on_collins_sampling``.  It belongs to whichever caller owns the window:
+    the readout states the same condition through its own ``on_replica`` (and
+    can fill the replicas), so it leaves this false; the chain leg has no such
+    argument, so it passes it true.  See :func:`_check_collins_sampling`."""
     from ._bluestein import _bluestein_centred_2d
     from .fft_infra import _fft2, _ifft2
 
@@ -2004,7 +2055,8 @@ def _collins_transport(env, R_in, z, wavelength, dx, dy, *,
     if stats_out is not None:
         stats_out.update(st)
     _check_collins_sampling(fn, on_collins_sampling, st,
-                            stacklevel=stacklevel)
+                            stacklevel=stacklevel,
+                            check_period=check_period)
 
     # (1) pre-chirp.  exp(i k A u^2/(2B)) IS the module's carrier screen at
     # R = B/A; A == 0 (the leg lands on the geometric focus) leaves no screen.
@@ -2073,30 +2125,43 @@ def _collins_carrier_leg(env, R, z, wavelength, dx, dy, *,
     name the pitch and leave the reference resolved, or the reverse.
 
     QUADRATURE SELECTION, AND WHY IT IS NOT A TUNED THRESHOLD.  The Collins
-    integral has two sampled evaluations whose validity conditions are exact
-    COMPLEMENTS of each other (Kelly, Appl. Opt. 53, 2861 (2014)):
+    integral has two sampled evaluations, and on the lattice a leg returns they
+    are exact COMPLEMENTS (Kelly, Appl. Opt. 53, 2861 (2014)):
 
-    * the chirp-Z form below samples the pre-chirp on the input lattice, which
-      needs ``K1 = 2 dx (|A| r/|B| + theta)/lambda <= 1``.  With ``r`` at the
-      grid half-width that is ``N dx^2 <= lambda |z_eff|``;
+    * the chirp-Z form below sums over the INPUT lattice, so its output repeats
+      with period ``lambda |B| / dx`` and the returned window has to fit inside
+      one: ``K3 = N d_out / (lambda |B| / dx) <= 1``.  On the co-moving lattice
+      (``d_out = |A| dx``) that is ``N dx^2 <= lambda |z_eff|``;
     * the transfer-function form (:func:`_carrier_step_fast`, the Sziklas
-      evaluation) samples the kernel on the FREQUENCY lattice instead, which
-      needs ``|z_eff| <= N dx^2/lambda`` -- the same inequality reversed.
+      evaluation) samples the kernel on the FREQUENCY lattice instead, so its
+      impulse response has to fit in the grid:
+      ``K_tf = 2 |z_eff| theta / (N dx) <= 1``.
 
-    So every leg satisfies at least one of them, both are satisfied at the
-    crossover ``K1 = 1``, and where both hold the two evaluations agree to
-    ~4e-12 of peak (they are the same theorem).  A leg whose lattice is the
-    co-moving one therefore takes whichever form is SAMPLED, decided by the
-    measured ``K1`` against the Nyquist rate itself.  A leg whose lattice is NOT
-    the co-moving one -- the pitch floor engaged, a flat reference, or a caller
-    override -- has no transfer-function form to fall back to, so it stays on
-    the chirp-Z and ``on_collins_sampling`` speaks if it is under-sampled.
+    ``K3 * K_tf = 2 dx theta / lambda``, and ``theta`` is read from the
+    envelope's own SAMPLED spectrum, so it never exceeds the grid's Nyquist
+    angle ``lambda/(2 dx)``: the product is at most 1, and therefore at least
+    one of the two forms is always representable, with both representable at
+    the crossover.  That is the complementarity, stated on the two conditions
+    that actually bound the two evaluations.  ``K1`` is NOT the other half of
+    this pair -- it bounds the aliasing of the sampled pre-chirp PRODUCT, which
+    is a different (and on a leg always weaker) statement: ``d_out`` is floored
+    at ``2 r_out/N``, so ``K3 >= K1`` on every leg, with equality exactly when
+    the floor is what set the pitch.
+
+    So a leg takes the transfer-function form when the chirp-Z cannot be
+    represented on the lattice this leg would return (``K3 > 1``, or the
+    weaker ``K1 > 1``) AND that form exists -- a scalar carrier, ``A > 0``, the
+    geometric output reference, and no caller override.  Otherwise it stays on
+    the chirp-Z and ``on_collins_sampling`` speaks, K3 included, because a leg
+    has no ``on_replica`` of its own.  Where both forms hold they agree to
+    ~4e-12 of peak: they are the same theorem.
 
     The two regimes are disjoint from the focus apparatus: a landing close
-    enough to trip ``_near_focus_needs_bridge`` has ``|A| < 0.02`` and therefore
-    ``K1 << 1``, so the transfer-function route is never taken there and this
-    transport never enters the near-focus split.  ``collins_form`` is published
-    on the stage so a reader can see which quadrature ran."""
+    enough to trip ``_near_focus_needs_bridge`` has ``|A| < 0.02``, the pitch
+    floor sets the lattice, and ``K3 = K1 << 1`` there, so the
+    transfer-function route is never taken and this transport never enters the
+    near-focus split.  ``collins_form`` is published on the stage so a reader
+    can see which quadrature ran, beside ``collins_k1`` / ``k2`` / ``k3``."""
     env_a = np.asarray(env)
     if z == 0:
         return CarrierReferencedField(
@@ -2130,15 +2195,29 @@ def _collins_carrier_leg(env, R, z, wavelength, dx, dy, *,
 
     k1x = 2.0 * float(dx) * (abs(Ax) * r_x / abs(B) + th_x) / wavelength
     k1y = 2.0 * float(dy) * (abs(Ay) * r_y / abs(B) + th_y) / wavelength
-    co_moving = (dxo == abs(Ax) * float(dx) and dyo == abs(Ay) * float(dy)
-                 and not flat and dx_out is None and dy_out is None
-                 and carrier_out is None)
-    if co_moving and not is_astig and Ax > 0.0 and max(k1x, k1y) > 1.0:
+    # The chirp-Z's output period is set by the INPUT pitch and the leg alone.
+    k3x = Nx * dxo / (wavelength * abs(B) / float(dx))
+    k3y = Ny * dyo / (wavelength * abs(B) / float(dy))
+    # The transfer-function form exists only where it would return the same
+    # triple this leg promises: one scalar carrier (it has no per-axis form),
+    # an un-inverted frame (``m <= 0`` is the split this transport exists to
+    # avoid), the geometric output reference, and a lattice the caller has not
+    # named.  It is NOT required that the resolved pitch already equal the
+    # co-moving one: the floor sits a hair above it for any beam whose measured
+    # support reaches the grid edge (the floor carries the leg's own
+    # ``|B| theta`` on top of ``|A| r``), and letting that hair veto the
+    # fallback is what would leave a 47x under-sampled chirp-Z running on an
+    # ordinary relay leg.
+    tf_available = (not is_astig and Ax > 0.0 and not flat
+                    and dx_out is None and dy_out is None
+                    and carrier_out is None)
+    if tf_available and (max(k1x, k1y) > 1.0 or max(k3x, k3y) > 1.0):
         cr = _carrier_step_fast(env_a, R_x, z, wavelength, dx, dy,
                                 gap_kernel=gap_kernel, tilt=tilt)
         if diag is not None:
             diag.update({'collins_form': 'tf', 'collins_k1': (k1x, k1y),
-                         'collins_k2': (0.0, 0.0),
+                         'collins_k2': (0.0, 0.0), 'collins_k3': (k3x, k3y),
+                         'collins_kernel': None,
                          'collins_flat_reference': False,
                          'collins_dx_floor_hit': False})
         return cr
@@ -2149,10 +2228,12 @@ def _collins_carrier_leg(env, R, z, wavelength, dx, dy, *,
         dx_out=dxo, dy_out=dyo, N_out_x=Nx, N_out_y=Ny, R_ref=R_ref,
         centre_out=(0.0, 0.0), gap_kernel=gap_kernel,
         tilt=tilt, on_collins_sampling=on_collins_sampling, fn=fn,
-        stats_out=st, stacklevel=5)
+        stats_out=st, stacklevel=5, check_period=True)
     if diag is not None:
         diag.update({'collins_form': 'chirp-z',
                      'collins_k1': st.get('k1'), 'collins_k2': st.get('k2'),
+                     'collins_k3': st.get('k3'),
+                     'collins_kernel': st.get('kernel'),
                      'collins_flat_reference': flat,
                      'collins_dx_floor_hit': bool(dxo > abs(Ax) * dx
                                                   or dyo > abs(Ay) * dy)})
@@ -2184,7 +2265,24 @@ def _collins_focus_readout(env, R, z, wavelength, dx, dy, *,
 
     The replica geometry itself is unchanged -- a chirp-Z is periodic -- so the
     same ``on_replica`` guard and ``replica_fill`` the Sziklas readout uses are
-    applied to the same [V3] condition, on this transport's period."""
+    applied to the same [V3] condition, on this transport's period.  That is
+    why this caller leaves ``_collins_transport``'s ``check_period`` false:
+    ``on_replica`` owns K3 here, and a leg -- which has no ``on_replica`` --
+    owns it there.
+
+    WHAT BOUNDS THIS READOUT, AND WHY IT IS THE FINAL LEG THAT SETS IT.  The
+    one step has no co-moving frame to hide in: its pre-chirp is
+    ``exp(i k A u^2/(2 B))`` on the CHAIN'S OWN exit pitch, so K1 reads
+    ``2 dx (|A| r/|B| + theta)/lambda`` with ``r`` the exit beam's radius --
+    i.e. the exit grid must resolve the beam's convergence over the REDUCED
+    final leg ``z_eff = z/A``.  That is easy for a long final leg on a small
+    beam (the WP-A6 fixture reads K1 = 0.16) and impossible for a short one on
+    a wide beam: an 8 mm final distance on a 5.4 mm exit beam sampled at 76 um
+    reads K1 = 82, and ``final_distance = 0`` is the limit of that, which is
+    the case refused above.  The Sziklas readout pays instead by carrying the
+    beam to a standoff plane in the co-moving frame, where only the ENVELOPE
+    has to be sampled.  ``on_collins_sampling`` names the reading, and there is
+    no fallback form here -- the caller asked for a specific lattice."""
     if z == 0.0:
         raise ValueError(
             f"{fn}: transport='collins' has no zero-length form -- the Collins "
@@ -9584,16 +9682,30 @@ def propagate_traced_carrier_chain(
           readout's ``standoff`` / ``on_focus_containment`` keys no longer
           apply (passing one is refused, not ignored).
 
+        What it costs is the readout's own sampling: one step from the exit
+        plane has no co-moving frame, so the CHAIN'S exit pitch has to resolve
+        the exit beam's convergence over the reduced final leg
+        (``K1 = 2 dx (|A| r/|B| + theta)/lambda``).  A long final distance on a
+        small exit beam is comfortable; a SHORT one on a wide exit beam is not,
+        and ``final_distance = 0`` is the limit that this transport refuses
+        outright.  ``on_collins_sampling`` reads it out per call -- weigh it
+        before reading the returned spot.
+
         ``final_leg='exact'`` is unaffected on either setting: the exact leg's
         fine retrace and Bluestein angular-spectrum readout run no carrier
         transport at all, so there is nothing there for ``transport`` to select.
     on_collins_sampling : {'error', 'warn', 'ignore'}, default 'warn'
         Disposition of the Kelly (Appl. Opt. 53, 2861 (2014)) sampling
         conditions for the chirp-Z stage, measured per leg on the field's own
-        support.  Inert unless ``transport='collins'``.  Each leg also publishes
-        its readings on its stage dict as ``collins_k1`` / ``collins_k2``
-        (input- and output-side Nyquist ratios, both <= 1 when sampled),
-        ``collins_flat_reference`` and ``collins_dx_floor_hit``.
+        support.  A leg has no ``on_replica`` of its own, so this disposes of
+        the output-PERIOD condition K3 as well as K1 and K2 (the readout keeps
+        ``on_replica`` for K3; exactly one guard speaks per call).  Inert
+        unless ``transport='collins'``.  Each leg also publishes its readings
+        on its stage dict as ``collins_k1`` / ``collins_k2`` / ``collins_k3``
+        (input-, output- and period-side Nyquist ratios, all <= 1 when
+        sampled), ``collins_kernel`` (which gap kernel the leg resolved to, or
+        ``None`` on the transfer-function form), ``collins_flat_reference`` and
+        ``collins_dx_floor_hit``.
 
     Returns
     -------

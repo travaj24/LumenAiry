@@ -1,7 +1,7 @@
 <!-- lumenairy-history-doc
 module: lumenairy/propagators/carrier.py
-ast_sha256: ed52d13a2cfd5df3c9cec0418345b93a90e6bd112d176aa5d559b45a12c36669
-token_sha256: 7e81bb4b96e2507c381a53fe225d75536a9c6ff77a743109bd964dfa18d57850
+ast_sha256: 4414ba3911c5eaa61e8f6cdde00ec9cec2671f40365368e3efa53cf55de845c7
+token_sha256: ef619d188da16a1fa86e05b8f94fc23482d35979bc243a41b052c07f2b45aa72
 pre_relocation_lines: 11602
 recorded_by: WP-A17 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
@@ -10,6 +10,7 @@ re_recorded: 2026-09-12 -- ruff isort combine-as-imports (pyproject.toml, WP-A16
 re_recorded: 2026-09-13 -- WP-A25: replica_fill={'repeat','zero'} on both focus readouts (what the window holds outside one Bluestein period), _period_out['faithful_samples'] / stage readout_faithful_samples, and the replica refusal's two measured regimes
 re_recorded: 2026-09-13 -- WP-A25: replica_fill on both focus readouts, faithful-window publication, the replica refusal's two regimes; seven placeholder-free f-string prefixes removed from the new message
 re_recorded: 2026-09-13 -- WP-B4: transport='collins' -- the Collins/ABCD-Fresnel carrier transport evaluated by a separable chirp-Z onto a freely chosen output pitch, its Kelly (2014) sampling guard, the complementary-quadrature selection and the Collins focus readout; the default transport is unchanged
+re_recorded: 2026-09-13 -- VERIFY-WP-B4: transport='collins' -- a chain leg weighs the chirp-Z's output-period condition K3 (it has no on_replica of its own) and takes the transfer-function form wherever the chirp-Z is not representable on the lattice the leg returns; collins_k3 and collins_kernel published per stage
 -->
 
 # Version history -- `lumenairy/propagators/carrier.py`
