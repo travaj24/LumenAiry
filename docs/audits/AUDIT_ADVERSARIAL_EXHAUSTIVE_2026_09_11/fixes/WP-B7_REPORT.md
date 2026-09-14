@@ -852,3 +852,15 @@ working tree.
   the source comment carries the closed form.  VERIFY-B7 also measured the item-10 bar's lower margin at 1.33x on a third chart (a hard edge on a
   CONVERGING carrier is the class closest to the bar) and re-derived the item-11 floor on 41 fields (1.1e-2 .. 4.2e-1, with a bounded, one-signed
   Nyquist exception).
+
+* **Section 10's selection missed a file (orchestrator, 2026-09-14).**  The Y4 fusion changed the batched Newton's PRIVATE
+  contract with its `fit` argument: it reads the basis (`basis_index_columns`, centres, half-ranges, `poly_order`, `coef_s1x` /
+  `coef_s1y`) directly and no longer calls `eval_s1_with_v2_grad`.  The two P1-NEW-3 contract tests in
+  `tests/unit/test_audit_propagation.py` passed duck-typed stubs carrying only that method and failed with `AttributeError` from
+  f64444ec on; the `-k "maslov or asymptotic or gbd or fga"` selection of section 10 does not select that file and VERIFY-B7 did not
+  run it either -- WP-B11b's wide sweep did.  The stubs are rebuilt as genuine `CanonicalPolyFit` instances (`poly_order=1`, unit
+  boxes, so the `u3` / `u4` coefficients are the Jacobian and the constant term is `s1` at the cold start -- the same numbers the
+  stubs returned) and a third test checks that construction through the fit's own evaluator.  The lesson for the close: a
+  package that changes a private helper's argument contract must grep the tests for callers of that helper, not only for its name
+  family.
+

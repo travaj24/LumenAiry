@@ -4188,6 +4188,44 @@ class TestAuditFixesV4_14_1_agent_a_ModeStackCacheLocks:
 # ===========================================================================
 
 
+def _affine_canonical_fit(s1x_const, s1y_const, jac):
+    """A genuine ``CanonicalPolyFit`` whose ``s1`` is affine in ``v2``.
+
+    ``_solve_envelope_stationary_batch`` reads the fit's Chebyshev basis
+    directly -- ``basis_index_columns``, the box centres and half-ranges,
+    ``poly_order`` and the two ``s1`` coefficient vectors -- and hoists the
+    ``s2``-only factor out of its Newton loop, so a duck-typed object that
+    offers only ``eval_s1_with_v2_grad`` no longer satisfies it.  With
+    ``poly_order=1`` on unit boxes centred at the origin the total-degree
+    basis is ``1, u1, u2, u3, u4`` with ``u3 = v2x`` and ``u4 = v2y``, so the
+    coefficient on ``u3`` / ``u4`` IS the Jacobian column ``dS1/dv2x`` /
+    ``dS1/dv2y`` and the constant term IS ``s1`` at ``v2 = 0``:
+
+        s1 = (s1x_const, s1y_const) + jac @ (v2x, v2y)
+
+    which is exactly what the two contract tests below engineer.  ``jac`` is
+    ``((dS1x/dv2x, dS1x/dv2y), (dS1y/dv2x, dS1y/dv2y))``.
+    """
+    from lumenairy.propagators.asymptotic_canonical_fit import (
+        CanonicalPolyFit,
+        _multi_indices_total_degree,
+    )
+    mi = _multi_indices_total_degree(4, 1)
+    M = len(mi)
+    const, du3, du4 = mi.index((0, 0, 0, 0)), mi.index((0, 0, 1, 0)), mi.index((0, 0, 0, 1))
+    (jxx, jxy), (jyx, jyy) = jac
+    c_x = np.zeros(M, dtype=np.float64)
+    c_y = np.zeros(M, dtype=np.float64)
+    c_x[const], c_x[du3], c_x[du4] = float(s1x_const), float(jxx), float(jxy)
+    c_y[const], c_y[du3], c_y[du4] = float(s1y_const), float(jyx), float(jyy)
+    return CanonicalPolyFit(
+        poly_order=1, multi_indices=mi,
+        coef_phi=np.zeros(M, dtype=np.float64), coef_s1x=c_x, coef_s1y=c_y,
+        s2x_centre=0.0, s2x_halfrange=1.0, s2y_centre=0.0, s2y_halfrange=1.0,
+        v2x_centre=0.0, v2x_halfrange=1.0, v2y_centre=0.0, v2y_halfrange=1.0,
+        wavelength=1.0e-6)
+
+
 class TestAuditFixesV4_14_1_agent_a_SolveEnvelopeStationaryBatchContract:
     """Pin that pixels which fail (singular Hessian) end with
     ``converged_mask=False`` per the function's docstring.
@@ -4200,7 +4238,7 @@ class TestAuditFixesV4_14_1_agent_a_SolveEnvelopeStationaryBatchContract:
     """
 
     def test_singular_hessian_pixels_flagged_not_converged(self):
-        """Construct a duck-typed fit whose Jacobian is rank-deficient
+        """Construct a fit whose Jacobian is rank-deficient
         ([[1, 0], [0, 0]]) and use ``w_p = 1e300`` (so ``inv_wp2 -> 0``).
 
         Then the Hessian H = inv_ws2 * J^T J = inv_ws2 * [[1,0],[0,0]]
@@ -4211,22 +4249,11 @@ class TestAuditFixesV4_14_1_agent_a_SolveEnvelopeStationaryBatchContract:
         returned ``converged_mask`` is ``False`` for this pixel.
         Pre-v4.14.1 it was wrongly ``True``.
         """
-        # Duck-typed fit:  only needs eval_s1_with_v2_grad.
-        class _DegenerateFit:
-            def eval_s1_with_v2_grad(self, sx, sy, vx, vy):
-                # Constant s1 != source so delta_s1 is nonzero.
-                # J = [[1, 0], [0, 0]] -- rank deficient.
-                K = sx.shape[0]
-                s1x = np.full(K, 0.5e-3, dtype=np.float64)
-                s1y = np.full(K, 0.5e-3, dtype=np.float64)
-                dS1x_dv2x = np.ones(K, dtype=np.float64)
-                dS1x_dv2y = np.zeros(K, dtype=np.float64)
-                dS1y_dv2x = np.zeros(K, dtype=np.float64)
-                dS1y_dv2y = np.zeros(K, dtype=np.float64)
-                return (s1x, s1y, dS1x_dv2x, dS1x_dv2y,
-                        dS1y_dv2x, dS1y_dv2y)
-
-        fit = _DegenerateFit()
+        # Constant s1 != source so delta_s1 is nonzero at the cold start;
+        # J = [[1, 0], [0, 0]] -- rank deficient.  (A genuine
+        # CanonicalPolyFit: the batched Newton reads the basis directly,
+        # see _affine_canonical_fit.)
+        fit = _affine_canonical_fit(0.5e-3, 0.5e-3, ((1.0, 0.0), (0.0, 0.0)))
         # One pixel.  Source at origin so delta_s1 = [0.5e-3, 0.5e-3].
         s2x = np.array([0.0], dtype=np.float64)
         s2y = np.array([0.0], dtype=np.float64)
@@ -4254,22 +4281,11 @@ class TestAuditFixesV4_14_1_agent_a_SolveEnvelopeStationaryBatchContract:
         ``converged_mask=True``.  We use a well-conditioned diagonal
         Jacobian and converge in one step.
         """
-        class _WellPosedFit:
-            def eval_s1_with_v2_grad(self, sx, sy, vx, vy):
-                K = sx.shape[0]
-                # s1 = (src_x, src_y) when v == v_centre => delta_s1 = 0
-                # and starting at v_cx, v_cy => delta_v = 0 too.  Then
-                # residual = 0 at iter 0 and the pixel converges on
-                # the first iteration.
-                s1x = np.zeros(K, dtype=np.float64)
-                s1y = np.zeros(K, dtype=np.float64)
-                dS1x_dv2x = np.ones(K, dtype=np.float64)
-                dS1x_dv2y = np.zeros(K, dtype=np.float64)
-                dS1y_dv2x = np.zeros(K, dtype=np.float64)
-                dS1y_dv2y = np.ones(K, dtype=np.float64)
-                return (s1x, s1y, dS1x_dv2x, dS1x_dv2y,
-                        dS1y_dv2x, dS1y_dv2y)
-        fit = _WellPosedFit()
+        # s1 = (src_x, src_y) when v == v_centre => delta_s1 = 0, and
+        # starting at (v_cx, v_cy) => delta_v = 0 too, so the residual is
+        # 0 at iter 0 and the pixel converges on the first iteration.
+        # J = I is well conditioned.
+        fit = _affine_canonical_fit(0.0, 0.0, ((1.0, 0.0), (0.0, 1.0)))
         s2x = np.array([0.0], dtype=np.float64)
         s2y = np.array([0.0], dtype=np.float64)
         _, _, conv = _solve_envelope_stationary_batch(
@@ -4280,6 +4296,34 @@ class TestAuditFixesV4_14_1_agent_a_SolveEnvelopeStationaryBatchContract:
         assert conv[0] == True, (  # noqa: E712
             'well-posed pixel must still be flagged converged'
         )
+
+    @pytest.mark.parametrize('const,jac', [
+        (0.5e-3, ((1.0, 0.0), (0.0, 0.0))),
+        (0.0, ((1.0, 0.0), (0.0, 1.0))),
+        (-2.0e-4, ((0.3, -1.5), (2.0, 0.7))),
+    ])
+    def test_the_engineered_fits_evaluate_as_documented(self, const, jac):
+        """``_affine_canonical_fit`` builds what its docstring claims: the
+        fit's own public evaluator -- independent of the fused basis path
+        the batched Newton takes -- returns the stated ``s1`` at the cold
+        start and the stated Jacobian everywhere, so the two contract tests
+        above engineer the fit they say they do."""
+        fit = _affine_canonical_fit(const, const, jac)
+        z = np.zeros(3, dtype=np.float64)
+        v = np.array([0.0, 0.25, -0.6], dtype=np.float64)
+        s1x, s1y, jxx, jxy, jyx, jyy = fit.eval_s1_with_v2_grad(z, z, v, -v)
+        (exx, exy), (eyx, eyy) = jac
+        # the evaluator sums the five terms in its own order, so allow a few
+        # ulp of the largest term rather than demanding bit equality
+        np.testing.assert_allclose(s1x, const + exx * v + exy * (-v), rtol=1e-14, atol=1e-16)
+        np.testing.assert_allclose(s1y, const + eyx * v + eyy * (-v), rtol=1e-14, atol=1e-16)
+        for got, want in ((jxx, exx), (jxy, exy), (jyx, eyx), (jyy, eyy)):
+            np.testing.assert_allclose(got, np.full(3, want), rtol=1e-14, atol=1e-15)
+        # and the batched Newton accepts it (the property the stubs lost)
+        _, _, conv = _solve_envelope_stationary_batch(
+            fit, z[:1], z[:1], src_x=0.0, src_y=0.0, w_s=50e-6, w_p=0.02,
+            v_cx=0.0, v_cy=0.0)
+        assert conv.shape == (1,)
 
 
 # ===========================================================================

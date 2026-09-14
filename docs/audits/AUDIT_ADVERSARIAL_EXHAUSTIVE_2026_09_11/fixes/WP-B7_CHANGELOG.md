@@ -174,6 +174,18 @@ columns.
   **26 -> 12** and **144 -> 50**.
 * Tests: `tests/unit/test_audit2609_b7_asymptotic.py` §1 (3 ids), which assert
   `array_equal` and the operation counts -- no wall clock.
+* **Private protocol.**  `_solve_envelope_stationary_batch` now reads the
+  fit's basis directly (`basis_index_columns`, the box centres and
+  half-ranges, `poly_order`, `coef_s1x` / `coef_s1y`) and no longer calls
+  `eval_s1_with_v2_grad` per sweep, so the `fit` argument has to be a
+  `CanonicalPolyFit` as the signature has always said -- a duck-typed
+  object offering only that method raises `AttributeError`.  The two
+  P1-NEW-3 contract tests in `tests/unit/test_audit_propagation.py` were
+  such objects (found by WP-B11b's wide sweep after this package landed);
+  they are rebuilt as genuine order-1 fits on unit boxes, whose
+  coefficient on `u3` / `u4` is the Jacobian column and whose constant
+  term is `s1` at the cold start, and a third test pins that construction
+  through the fit's own evaluator.
 
 ### Added -- `_solve_envelope_stationary_batch(scale_relative_stop=)`, opt-in (audit Y4)
 
