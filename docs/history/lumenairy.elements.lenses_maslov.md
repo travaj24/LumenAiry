@@ -1,7 +1,7 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/lenses_maslov.py
-ast_sha256: d86ece2e632f2400466da495d03c7d0e8da271d16ace291a66059dc2480d1ff0
-token_sha256: da3f4fa3bce6a9e77b4259fe529b269e274d64824f2c0a4e677c0121d64fecf7
+ast_sha256: 26e11eaffbe72753b924e646b419f033f41472172ba103d2ba09205b65fcde04
+token_sha256: c7fe50bcc3853d7e2de93412f9e475c7629aa92d54abbd898a9120ad7b34a1db
 pre_relocation_lines: 4484
 recorded_by: WP-A17 SWEEP-4 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
@@ -11,6 +11,7 @@ re_recorded: 2026-09-13 -- WP-B1 follow-up: input_wavevector_saddle= becomes a p
 re_recorded: 2026-09-13 -- VERIFY-B1: the S6 fallback also gates on the entrance-coordinate fit the k1 term is contracted against (_S1_FIT_RESIDUAL_MAX), and the k1-residual ladder in the source is re-measured
 re_recorded: 2026-09-13 -- WP-B7 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, WP-A4 sec. 6 items 3-8 + VERIFY-B1 F1/F2): the Y4 fused basis evaluation and hoisted Newton factor, the aberration_tensor mode/waist caches, the S6 gate's k1-slope statistic and mean-plus-spread chart sizing, the JAX screen's chief-ray displacement term, and the S9 FFT kernel clip
 re_recorded: 2026-09-13 -- WP-B7: the S6 gate's k1-slope statistic and its initialiser, and the mean-plus-spread pupil-chart sizing
+re_recorded: 2026-09-14 -- WP-B11b section 5b, applied by the orchestrator after VERIFY-B7 landed: the eleven warnings are attributed to the caller's frame through _lens_kernels.caller_stacklevel, and _warn_if_aperture_exceeds_grid is taken from the _lens_kernels leaf (the back-edge to lenses carries four names instead of five)
 -->
 
 # Version history -- `lumenairy/elements/lenses_maslov.py`

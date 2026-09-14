@@ -89,6 +89,10 @@ from typing import Dict
 
 import numpy as np
 
+# ``_lens_kernels`` is a leaf (stdlib + numpy only); the helper attributes
+# the guard's notice to the caller's frame rather than a fixed depth.
+from ._lens_kernels import caller_stacklevel as _caller_stacklevel
+
 __all__ = [
     'InverseCharacteristic',
     'build_inverse_map',
@@ -1926,7 +1930,7 @@ def report_refusal(record, caller='apply_real_lens_traced'):
            _budget_note))
     if action == 'error':
         raise RuntimeError(msg)
-    warnings.warn(msg, RuntimeWarning, stacklevel=3)
+    warnings.warn(msg, RuntimeWarning, _caller_stacklevel())
 
 
 def imap_enabled(inverse_map=None):

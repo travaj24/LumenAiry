@@ -314,14 +314,19 @@ _MZ_POLY_AUTO_MAX = 8
 _MZ_POLY_AUTO_TARGET = 1e-4   # waves RMS -- below this, extra order is wasted
 _MZ_POLY_AUTO_RTOL = 0.10     # stop once an order step improves residual < 10%
 
-# Other shared helpers still live in lenses.py.
+# The aperture-vs-grid notice and the warning attribution helper live in
+# the ``_lens_kernels`` leaf; the other shared helpers still live in
+# lenses.py.
+from ._lens_kernels import (
+    _warn_if_aperture_exceeds_grid,
+    caller_stacklevel as _caller_stacklevel,
+)
 from ._lens_real import _normalise_stop_index
 from .lenses import (
     NUMEXPR_AVAILABLE,
     _ensure_numexpr_loaded,
     _fit_normaliser,
     _multi_indices_total_degree,
-    _warn_if_aperture_exceeds_grid,
 )
 
 # ---------------------------------------------------------------------------
@@ -556,7 +561,7 @@ def _warn_local_window_truncation(in_chart, inbox_flat, n_samples,
         f"the chart (larger aperture / input_na), or use "
         f"integration_method='stationary_phase', which is exact on a "
         f"quadratic chart at any window.",
-        RuntimeWarning, stacklevel=3)
+        RuntimeWarning, _caller_stacklevel())
 
 
 def _v2_oscillation_bound(mi, coef_opd) -> float:
@@ -1599,7 +1604,7 @@ def _solve_fit(A, RHS, gram_factor=None):
                 f"samples exactly there.  Reduce poly_order, widen the chart "
                 f"(larger aperture / input_na), or raise "
                 f"ray_field_samples / ray_pupil_samples.",
-                RuntimeWarning, stacklevel=3)
+                RuntimeWarning, _caller_stacklevel())
         coef, *_ = np.linalg.lstsq(A, RHS, rcond=None)
         return coef
     try:
@@ -2374,7 +2379,7 @@ def apply_real_lens_maslov(
             "entrance aperture; the aperture stop is effectively "
             "applied at the entrance (index 0).  For physically-correct "
             "stop behaviour on a non-entrance stop, use apply_real_lens.",
-            RuntimeWarning, stacklevel=2,
+            RuntimeWarning, _caller_stacklevel(),
         )
     else:
         _surfs_chk = lens_prescription.get('surfaces') or []
@@ -2391,7 +2396,7 @@ def apply_real_lens_maslov(
                         "(h, p) grid and will not see the off-axis stop "
                         "correctly.  Use apply_real_lens for "
                         "decentered-stop systems.",
-                        RuntimeWarning, stacklevel=2,
+                        RuntimeWarning, _caller_stacklevel(),
                     )
 
     aperture_m = lens_prescription.get('aperture_diameter', None)
@@ -2539,7 +2544,7 @@ def apply_real_lens_maslov(
                 f"(~{_na_meas:.4f}); the pupil chart may not cover the "
                 f"field and wide-angle content will be lost.  Omit "
                 f"input_na to auto-size from the field.",
-                RuntimeWarning, stacklevel=2)
+                RuntimeWarning, _caller_stacklevel())
     elif collimated_input:
         na_input = 0.0
     else:
@@ -2569,7 +2574,7 @@ def apply_real_lens_maslov(
             f"aperture-edge content.  Clamping the pupil chart to NA=0.999 "
             f"(the physical horizon).  Pass input_na explicitly to size the "
             f"chart deliberately.",
-            RuntimeWarning, stacklevel=2)
+            RuntimeWarning, _caller_stacklevel())
         na_proxy = 0.999
 
     if verbose:
@@ -2821,7 +2826,7 @@ def apply_real_lens_maslov(
                 f"normalize_output='none' (explicit -- silences this "
                 f"warning), or an explicit scalar factor, or drop roi= for a "
                 f"normalised full grid.",
-                UserWarning, stacklevel=2)
+                UserWarning, _caller_stacklevel())
             normalize_output = 'none'
         _roi_active = True
     s2x_grid, s2y_grid = np.meshgrid(out_axis_x, out_axis_y, indexing='xy')
@@ -2871,7 +2876,7 @@ def apply_real_lens_maslov(
                 f"use apply_real_lens_traced / apply_real_lens_fga; for a "
                 f"plane near focus pass output_plane_distance= and keep this "
                 f"evaluator.",
-                RuntimeWarning, stacklevel=2)
+                RuntimeWarning, _caller_stacklevel())
 
     # A1 (v5.20): auto-resolve the uniform-quadrature v2 sampling when the
     # caller left n_v2 unset.  n_v2 drives ONLY integration_method='quadrature'
@@ -3132,7 +3137,7 @@ def apply_real_lens_maslov(
             f"whose wavefront this chart cannot fit, or pass "
             f"collimated_input=True if the input really is flat and the "
             f"measured spread is aperture-edge content.",
-            RuntimeWarning, stacklevel=2)
+            RuntimeWarning, _caller_stacklevel())
 
     _progress('integrate', 0.60,
               f'method={integration_method}')
@@ -3237,7 +3242,7 @@ def apply_real_lens_maslov(
                 f"n_v2, or use integration_method='local_quadrature' / "
                 f"'stationary_phase' (the correct evaluators at "
                 f"production NA).",
-                RuntimeWarning, stacklevel=2)
+                RuntimeWarning, _caller_stacklevel())
         # N1 + F2 (audit): the (N_out^2, M) Chebyshev design matrix G is used
         # ONLY by the quadrature integrator (its G @ H GEMMs).  The
         # stationary_phase / local_quadrature integrators evaluate the
@@ -4297,7 +4302,7 @@ def _warn_levin_over_tolerance(achieved_bounds, tolerances, n_total,
             "target). These pixels carry a larger-than-requested error; treat "
             "their values as approximate. Consider a coarser levin_tol, or "
             "integration_method='traced_multibranch' for this chart.",
-            RuntimeWarning, stacklevel=2)
+            RuntimeWarning, _caller_stacklevel())
     return n_over
 
 

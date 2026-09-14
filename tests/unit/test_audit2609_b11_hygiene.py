@@ -1200,12 +1200,41 @@ class TestWarningAttribution:
         assert not bad, (
             f'{len(bad)} of {len(got)} notices name library source: {bad}')
 
-    def test_no_literal_stacklevel_is_left_in_the_two_lens_bodies(self):
+    def test_a_body_without_config_re_entry_names_the_caller_too(self):
+        """``_lens_thin.py`` has no configuration re-entry, so its literal
+        ``stacklevel=2`` was RIGHT before the sweep; the computed level has to
+        give the same answer where the literal was correct, not only where it
+        was one frame short.  ``apply_grin_lens`` beyond the quarter pitch is
+        the fixture: one ``UserWarning`` from the thin body, and the frame it
+        names must be this file's call."""
+        from lumenairy.elements._lens_thin import apply_grin_lens
+        me = pathlib.Path(__file__).name
+        e = np.ones((16, 16), dtype=np.complex128)
+        # g*d = 2.0 > pi/2: the single-screen reduction warns
+        caught = self._warned(apply_grin_lens, e, n0=1.5, g=1000.0, d=2e-3,
+                              wavelength=633e-9, dx=2e-6)
+        got = [w for w in caught if 'quarter pitch' in str(w.message)]
+        assert len(got) == 1, f'expected one quarter-pitch notice, got {caught}'
+        assert issubclass(got[0].category, UserWarning)
+        assert pathlib.Path(got[0].filename).name == me, (
+            f'the notice names {got[0].filename}:{got[0].lineno}, not the caller')
+
+    def test_no_literal_stacklevel_is_left_in_the_swept_lens_bodies(self):
         """The ratchet.  A literal that creeps back in is right for one call
         path and wrong for the others, and the failure is silent -- the
-        warning still fires, it just points at the wrong file."""
+        warning still fires, it just points at the wrong file.  The tuple
+        is every lens body whose warnings were swept onto the helper: the
+        analytic and traced bodies, the Maslov (11 sites), GBD (1),
+        multibranch (4), thin (2) and inverse-map (1) modules.  Still
+        outside it: ``_lens_traced_uniform.py`` (1 site) and
+        ``propagators/carrier.py``, recorded in WP-B11 section 4b."""
         for rel in ('lumenairy/elements/_lens_real.py',
-                    'lumenairy/elements/_lens_traced.py'):
+                    'lumenairy/elements/_lens_traced.py',
+                    'lumenairy/elements/lenses_maslov.py',
+                    'lumenairy/elements/lenses_gbd.py',
+                    'lumenairy/elements/_lens_traced_multibranch.py',
+                    'lumenairy/elements/_lens_thin.py',
+                    'lumenairy/elements/_lens_imap.py'):
             src = (REPO / rel).read_text(encoding='utf-8')
             tree = ast.parse(src)
             bad = []

@@ -1122,7 +1122,8 @@ read `_WARN_STACKLEVEL`, which is gone, and the 2 accumulator-store cleanup
 warnings that read `stacklevel=2`) and **31 sites in `_lens_traced.py`**, plus
 `_warn_if_aperture_exceeds_grid`, whose `stacklevel=` now defaults to `None`
 meaning "compute it" and still honours an explicit integer.
-`b11::test_no_literal_stacklevel_is_left_in_the_two_lens_bodies` is the ratchet:
+`b11::test_no_literal_stacklevel_is_left_in_the_swept_lens_bodies` (renamed from
+`..._two_lens_bodies` when the orchestrator widened its tuple) is the ratchet:
 an AST walk that fails on a `warnings.warn` carrying a literal integer level in
 either file.
 
@@ -1397,7 +1398,8 @@ and at line 483, in `apply_real_lens_gbd` (unmoved by WP-B7):
 * re-record both modules in the same change:
   `python scripts/record_history_fingerprints.py lumenairy/elements/lenses_maslov.py lumenairy/elements/lenses_gbd.py --reason "..."`;
 * extend `b11::test_no_literal_stacklevel_is_left_in_the_two_lens_bodies`'s
-  file tuple to cover them, so they cannot regress either;
+  file tuple to cover them, so they cannot regress either (done: renamed
+  `..._swept_lens_bodies`, tuple of seven);
 * `_lens_jax.py` needs NO edit: it contains no `warnings.warn` (measured).
 
 ---

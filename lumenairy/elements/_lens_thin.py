@@ -44,6 +44,11 @@ from ..backend._optional import (
 )
 from ..glass import get_glass_index  # 4.10: was missing, broke apply_axicon
 
+# ``_lens_kernels`` is a leaf (stdlib + numpy only), so this edge keeps the
+# module out of the ``lenses`` cycle; the helper attributes a warning to
+# the caller's frame.
+from ._lens_kernels import caller_stacklevel as _caller_stacklevel
+
 
 def __getattr__(name):
     """PEP 562 module-level __getattr__: route ``cp`` to the shared lazy
@@ -1176,7 +1181,7 @@ def apply_grin_lens(
                 f"focuses at {(np.sin(gd) / gd if gd else 1.0):.4f} x the "
                 f"rod's paraxial focal length.  Drop thin_form to use the "
                 f"exact paraxial power f = 1/(n0*g*sin(g*d)).",
-                UserWarning, stacklevel=2)
+                UserWarning, _caller_stacklevel())
     elif abs(gd) > np.pi / 2:
         warnings.warn(
             f"apply_grin_lens: g*d = {gd:.4g} exceeds the quarter pitch "
@@ -1185,7 +1190,7 @@ def apply_grin_lens(
             f"g*d = pi (where the rod reimages 1:1 inverted, which a screen "
             f"cannot do) and changes sign beyond it.  Model the rod with a "
             f"ray-traced / split-step GRIN element in this regime.",
-            UserWarning, stacklevel=2)
+            UserWarning, _caller_stacklevel())
 
     # v4.13.2 (audit C-P1-6): CuPy dispatch.  See apply_cylindrical_lens
     # above for the shared-lazy-slot resolution rationale.

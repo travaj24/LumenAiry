@@ -44,6 +44,11 @@ from ..propagators.gbd import (
     reconstruct_field_from_beamlets,
 )
 
+# ``_lens_kernels`` is a leaf too: the warning attribution helper walks
+# out to the caller's frame so a notice names the user's line, not this
+# module's.
+from ._lens_kernels import caller_stacklevel as _caller_stacklevel
+
 # Configuration objects (audit 2026-09-11 TESTS-ARCH section 14 item 13).
 # ``lens_config`` is a LEAF -- it imports nothing from lumenairy at module
 # scope -- so this edge is one-way and adds no import cost.
@@ -480,7 +485,7 @@ def apply_real_lens_gbd(
             "transfer); with per_surface=False the beamlets are evolved by a "
             "single whole-system paraxial ABCD, which has no ray Jacobian to "
             "select, so the value is ignored.  Pass per_surface=True to make "
-            "it act.", RuntimeWarning, stacklevel=2)
+            "it act.", RuntimeWarning, _caller_stacklevel())
     # Input angular spread (RMS local tilt) -- gates both the Husimi launch and
     # the P4 re-expansion (a flat / collimated frame is already complete, so
     # re-expansion is skipped there -- byte-identical to 'off' + ~1x cost).

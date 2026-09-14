@@ -57,6 +57,10 @@ import numpy as np
 
 from .. import raytrace as rt
 
+# ``_lens_kernels`` is a leaf too: the warning attribution helper walks
+# out to the caller's frame so a notice names the user's line.
+from ._lens_kernels import caller_stacklevel as _caller_stacklevel
+
 # Configuration objects (audit 2026-09-11 TESTS-ARCH section 14 item 13).
 # ``lens_config`` is a LEAF -- it imports nothing from lumenairy at module
 # scope -- so this edge is one-way and adds no import cost.
@@ -451,7 +455,7 @@ def _kmah_free_leg(g, d_out):
             "leg quadratic under/over-resolves); the branch Maslov index may "
             "carry a residual pi error there.  Validate against the GBD or "
             "Maslov propagator for internal-focus prescriptions.",
-            stacklevel=2)
+            _caller_stacklevel())
     # fill nodes whose FD Jacobian was NaN-contaminated by a dead neighbour
     # (their own ray may be alive and used by adjacent triangles): nearest
     # valid neighbour, iteratively (KMAH is piecewise constant per sheet).
@@ -1112,7 +1116,7 @@ def apply_real_lens_traced_multibranch(
             f"plane is at or near a caustic that the fold-uniform 'ludwig' "
             f"swap cannot regularize; prefer caustic='wave' (the band-limited "
             f"ASM hand-off) or the GBD / Maslov propagators here.",
-            RuntimeWarning, stacklevel=2)
+            RuntimeWarning, _caller_stacklevel())
 
     if p_in_hi > 0.0 and p_out > _ENERGY_BLOWUP_FACTOR * p_in_hi:
         warnings.warn(
@@ -1126,7 +1130,7 @@ def apply_real_lens_traced_multibranch(
             "diverge.  The near-focus field is unphysical here -- use "
             "caustic='wave' (the band-limited ASM hand-off), or the Maslov "
             "('levin') or GBD propagator, at an on-axis point focus.",
-            RuntimeWarning, stacklevel=2)
+            RuntimeWarning, _caller_stacklevel())
     elif p_in > 0.0 and 0.0 < p_out < _ENERGY_COLLAPSE_FACTOR * p_in:
         warnings.warn(
             "apply_real_lens_traced_multibranch: reconstructed grid power is "
@@ -1139,7 +1143,7 @@ def apply_real_lens_traced_multibranch(
             f"Use caustic='uniform' for the fold's Airy tail, or caustic="
             f"'wave' (the band-limited ASM hand-off) / GBD / Maslov for an "
             f"energy-conserving answer.",
-            RuntimeWarning, stacklevel=2)
+            RuntimeWarning, _caller_stacklevel())
 
     if return_diagnostics:
         return E_out, {'kmah': m_grid, 'detJ': detJ, 'n_branch': n_branch,

@@ -282,7 +282,7 @@ one is a migration for a caller who wrote `LensGeometry(surface_model=...)`, so
 they stay, and `docs/lens_configuration.md` records the three as the partition's
 known ragged edge.
 
-### Changed -- every warning in the two lens bodies names the caller's frame
+### Changed -- every warning in the lens family names the caller's frame
 
 `stacklevel` counts frames, so a literal is right for exactly one call path, and
 this family has several to the same source line.  MEASURED: WP-A16's
@@ -300,9 +300,14 @@ same rule Python 3.12's `warnings.warn(..., skip_file_prefixes=)` applies,
 written out so it also holds on the 3.10 this package supports.  It is now the
 level at 9 sites in `_lens_real.py` (`_WARN_STACKLEVEL` is gone) and 31 in
 `_lens_traced.py`, and the default for `_warn_if_aperture_exceeds_grid`.  Fields
-are unchanged: 20/20 bit-identical.  An AST ratchet
-(`b11::test_no_literal_stacklevel_is_left_in_the_two_lens_bodies`) fails on a
-literal that creeps back in.
+are unchanged: 20/20 bit-identical.  Once VERIFY-B7 had landed the same sweep
+reached the rest of the family: `lenses_maslov.py` (11 sites; it also takes
+`_warn_if_aperture_exceeds_grid` from the `_lens_kernels` leaf now, so its
+back-edge to `lenses` carries four names instead of five), `lenses_gbd.py` (1),
+`_lens_traced_multibranch.py` (4), `_lens_thin.py` (2) and `_lens_imap.py` (1).
+An AST ratchet (`b11::test_no_literal_stacklevel_is_left_in_the_swept_lens_bodies`)
+fails on a literal that creeps back into any of the seven.  `_lens_traced_uniform.py`
+(1 site) and `propagators/carrier.py` are still literal.
 
 The one case that still names non-user code is correct -- on the parallel-amp
 path the call runs in a `ThreadPoolExecutor` worker, so there is no user frame

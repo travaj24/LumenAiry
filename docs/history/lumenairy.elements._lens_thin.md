@@ -1,12 +1,13 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/_lens_thin.py
-ast_sha256: 3c29e2404db6f77845ca493ec19350197cd32c7c51457e60556cf95be6a710fb
-token_sha256: 65006ad5ac3c80038a967b778d82a2675f3efc47aeb474ec40e0b3c7771aa74d
+ast_sha256: 53ee06eca3c2a3f6f2c5f5e846e883a88bbd0a57b3be08c3c6db06d81900af9c
+token_sha256: 2bf6ff7067327f7d034e6baa204269b9465d72b38b27f0f8dc63739642339b8d
 pre_relocation_lines: 1431
 recorded_by: WP-A17 SWEEP-2 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
 re_recorded: 2026-09-12 -- CuPy handles taken from backend._optional instead of via .lenses, breaking the _lens_thin <-> lenses module-level 2-cycle; outputs bit-identical (WP-A22 item 8a)
 re_recorded: 2026-09-12 -- ruff isort combine-as-imports (pyproject.toml, WP-A16 recommendation): aliased import statements from the same module merged into one; the set of bound names is unchanged
+re_recorded: 2026-09-14 -- WP-B11b request 4b.2, applied by the orchestrator: the two apply_grin_lens notices hand warnings the computed caller_stacklevel() from the _lens_kernels leaf instead of a literal depth
 -->
 
 # Version history -- `lumenairy/elements/_lens_thin.py`
