@@ -182,7 +182,7 @@ propagators:
 
 **2 of 2** converge, and **16 of 16** over `t ∈ {0.5, 1, 2.5, 5, 9, 20,
 50, 100} mm` on both glasses: on that grid the crossover is a
-`t = N dx^2/lam_medium` = **2137.6 mm** gap.  The direction is not
+`t = N dx^2/lam_medium` = **2133.9 mm** gap (VERIFY-B3b recomputed this from the same inputs; the report's first reading was 2137.6 mm).  The direction is not
 universal, though — the other gap fixture in the verification set
 (`_minimal_prescription`: a 1 mm N-BK7 plate at N = 64, dx = 2 µm, so a
 128 µm window) sits at `dx_new/dx = 1.6320` and takes the chirp-Z leg.

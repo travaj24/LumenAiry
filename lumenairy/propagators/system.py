@@ -368,8 +368,12 @@ def _warn_system_resample_crop(E, dx_new, dx_target, N_out, kernel_name):
     is discarded (by ``map_coordinates(mode='constant', cval=0.0)`` on
     the spline leg, by the chirp-Z leg's window on the other), silently.
     The ``'fresnel'`` leg evaluates onto the chain grid directly and so
-    has no resample to crop; its own faithful-zone diagnostic comes from
-    ``fresnel_propagate_mft``.
+    has no resample to crop; the same physical question -- does the chain
+    window still hold the beam? -- is asked there by
+    ``_warn_system_fresnel_window``, which measures the power the window
+    keeps.  (``fresnel_propagate_mft``'s faithful-zone warning is a
+    different condition: on the chain grid it reduces to
+    ``z < N*dx^2/lambda``, the K1 under-sampled band.)
 
     Measured (grid-filling top-hat of radius 0.42*N*dx, N = 512,
     dx = 2 um, lambda = 633 nm, z = 5 mm, dx_new/dx = 1.5454 for the
@@ -405,6 +409,84 @@ def _warn_system_resample_crop(E, dx_new, dx_target, N_out, kernel_name):
         f"retained window.  The beam has spread past the chain's grid.  "
         f"Use a larger N, a coarser chain pitch, or method='asm' (which "
         f"keeps the pitch and so cannot crop).",
+        RuntimeWarning, stacklevel=3)
+
+
+def _warn_system_fresnel_window(E_before, E_after, dx_target, wavelength, z):
+    """Warn when the chain's own window holds only part of the field the
+    ``'fresnel'`` leg propagated (audit K6).
+
+    That leg evaluates the Fresnel integral directly on the chain grid, so
+    there is no resample and nothing to crop -- but the physical loss the
+    crop used to report is still there.  A beam that has spread past
+    ``N*dx`` is simply not represented, and the step conserves power only
+    while the window holds it.  ``fresnel_propagate_mft``'s own
+    faithful-zone warning does NOT cover this case: its condition is
+    ``N_out*dx_out > lambda*|z|/dx_in``, which at this call site
+    (``dx_out = dx_in = dx``, ``N_out = N``) is ``z < N*dx^2/lambda`` --
+    exactly the K1 under-sampled-chirp band -- while the window loss grows
+    in the OTHER direction, at ``z`` above that bound.  The two conditions
+    are disjoint here, so this diagnostic is the only one that fires when
+    the beam outgrows the grid.
+
+    The ``z > N*dx^2/lambda`` test below keeps that partition exact, and it
+    is the same band ``_warn_system_resample_crop`` covered on this leg
+    (``dx_new = lambda*z/(N*dx) > dx`` is the same inequality).  Below the
+    bound a short window is not a crop at all: the natural grid is FINER
+    than the chain's, so the reconstruction replicates rather than
+    truncates, which is what the faithful-zone warning and the K1
+    under-sampled-chirp warning are already saying.
+
+    Measured (2026-09-13, lambda = 633 nm, dx = 2 um).  Contained
+    Gaussians (``w0 = 0.06*N*dx``) at ``z`` = 1x, 2x and 3x the K1 bound
+    read ``P_out/P_in`` = 1.000000000 for N = 64, 65, 128 and 256 -- worst
+    departure 3.1e-8, four decades below the bar.  Against that: a
+    top-hat of radius 3 px at N = 64 and ``z`` = 30x the bound keeps
+    0.031674 of its power, a Gaussian of ``w0`` = 2.6 px at N = 128 and
+    10x keeps 0.334870 (the same field evaluated on an 8x-wider window
+    conserves 1.000000, so ALL of it is the chain window), and a
+    grid-filling top-hat at N = 512 and 2x keeps 0.995833.  The 1e-6 bar
+    is the one ``_warn_system_resample_crop`` already uses for the same
+    question.
+
+    ``dy`` equals ``dx`` on this leg (``_require_square_pitch``), so the
+    two sums carry the same ``dx*dy`` factor and their ratio is the power
+    ratio.  Both reductions are written with the array's own operators --
+    ``float((abs(E)**2).sum())`` -- rather than through ``np.asarray``, so
+    a CuPy or JAX field reaching this leg reduces on its own backend
+    instead of refusing the implicit conversion.
+
+    Values are unchanged -- diagnostic only.
+    """
+    z_crit = int(E_before.shape[-1]) * float(dx_target) ** 2 \
+        / float(wavelength)
+    # ``z_crit > 0`` as well as the band test: the propagator's own
+    # validation has already refused a non-positive pitch or wavelength,
+    # so this only guards the message's ``z/z_crit`` ratio.
+    if not (z_crit > 0.0 and abs(float(z)) > z_crit):
+        return
+    p_in = float((abs(E_before) ** 2).sum())
+    if not (p_in > 0.0):
+        return
+    p_out = float((abs(E_after) ** 2).sum())
+    if p_out >= p_in * (1.0 - 1e-6):
+        return
+    import warnings
+    n_out = int(E_after.shape[-1])
+    warnings.warn(
+        f"propagate_through_system: the fresnel leg evaluated the integral "
+        f"on the chain window (N={n_out} at dx={float(dx_target):.4e} m, "
+        f"extent {n_out * float(dx_target):.4e} m) and only "
+        f"{100.0 * p_out / p_in:.2f}% of the input power lands inside it.  "
+        f"The beam has spread past the chain's grid: z = {float(z):.6g} m "
+        f"is {abs(float(z)) / z_crit:.3g}x N*dx^2/wavelength = "
+        f"{z_crit:.6g} m, and the Fresnel integral's own scale at this z "
+        f"is lambda*|z|/dx = "
+        f"{float(wavelength) * abs(float(z)) / float(dx_target):.4e} m.  "
+        f"Values outside the window are not cropped from anything -- they "
+        f"were never evaluated.  Use a larger N, a coarser chain pitch, or "
+        f"method='asm' (which keeps the pitch and band-limits instead of "
+        f"windowing).",
         RuntimeWarning, stacklevel=3)
 
 
@@ -824,10 +906,16 @@ def propagate_through_system(E_in: np.ndarray,
                 # ``fresnel_propagate_mft`` carries the same K1
                 # chirp-sampling guard as ``fresnel_propagate`` and adds
                 # its own faithful-zone warning (period
-                # ``lambda*|z|/dx_in``), which is why this leg needs no
+                # ``lambda*|z|/dx_in``), so this leg needs no
                 # ``_warn_system_resample_crop``: there is no resample to
-                # crop.  ``N_out``/``dy_out`` keep the chain's square
-                # sample count and pitch.
+                # crop.  It does still need a WINDOW diagnostic -- the
+                # faithful-zone condition reduces here to
+                # ``z < N*dx^2/lambda``, the K1 band, while a beam
+                # outgrows the chain window at z ABOVE that bound, so the
+                # two never fire on the same geometry;
+                # ``_warn_system_fresnel_window`` covers the second.
+                # ``N_out``/``dy_out`` keep the chain's square sample
+                # count and pitch.
                 if verbose:
                     _dx_natural = wavelength * z / (
                         int(E.shape[-1]) * current_dx)
@@ -835,10 +923,14 @@ def propagate_through_system(E_in: np.ndarray,
                           f"dx={current_dx*1e6:.3f} um "
                           f"(the single-FFT natural grid would be "
                           f"{_dx_natural*1e6:.3f} um)")
+                _E_pre_fresnel = E
                 E = fresnel_propagate_mft(
                     E, z, wavelength, current_dx, current_dx,
                     int(E_in.shape[-1]), dy_in=current_dy,
                     dy_out=current_dx)
+                _warn_system_fresnel_window(
+                    _E_pre_fresnel, E, current_dx, wavelength, z)
+                del _E_pre_fresnel
             elif prop_method == 'sas' and not has_tilt:
                 _require_square_pitch(current_dx, current_dy, 'sas')
                 from .propagation import scalable_angular_spectrum_propagate

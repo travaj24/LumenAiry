@@ -610,11 +610,18 @@ def resample_field(
         drops the sliver it does not cover and a longer one reaches into
         the first replica.  The extent-preserving default
         ``N_out = round(N_in*dx_in/dx_out)`` lands on the period exactly
-        only when ``N_in*dx_in/dx_out`` comes out whole -- x0.5, x1, x2
-        and x4 at any ``N_in``; x1.5 needs an ``N_in`` divisible by 3,
-        x1.25 by 5, x1.7 by 17.  Where it rounds, the window is off by up
-        to half an output pixel and the ratio moves by whatever field
-        sits in that sliver: measured at ``N_in = 128``, carrier
+        only when ``N_in*dx_in/dx_out = N_in/scale`` comes out whole --
+        x0.5 and x1 at any ``N_in``; x2 needs an EVEN ``N_in`` and x4 an
+        ``N_in`` divisible by 4; x1.5 needs an ``N_in`` divisible by 3,
+        x1.25 by 5, x1.7 by 17.  The condition is on ``N_in``, not on the
+        scale factor alone: at ``N_in = 65`` the x2 default rounds to
+        ``N_out = 32``, a 64-``dx_in`` window against a 65-``dx_in``
+        period, and the ratio reads 0.999995 on a contained envelope
+        against 0.995181 on a rim-filling one (2026-09-13), where the same
+        x2 default at ``N_in = 64`` or 128 lands on the period exactly.
+        Where it rounds, the window is off by up to half an output pixel
+        and the ratio moves by whatever field sits in that sliver:
+        measured at ``N_in = 128``, carrier
         0.30 cyc/px (2026-09-13), **0.993922** (x1.25), 0.998015 (x1.5),
         0.998489 (x1.7) and 1.004048 (x3) for a rim-filling Gaussian
         envelope (``w0 = 0.45*N*dx``, 4.4 % of its power outside

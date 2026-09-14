@@ -729,3 +729,331 @@ class TestF6TheUnitMtfIsAPropertyOfTheWindow:
         doc = resample_field.__doc__
         assert 'reconstruction period' in doc
         assert 'N_out*dx_out == N_in*dx_in' in doc
+
+
+# ---------------------------------------------------------------------------
+# 6. VERIFY-B3b -- claims WP-B3b makes that nothing above could falsify
+# ---------------------------------------------------------------------------
+
+class TestV1TheFresnelLegStillReportsAWindowLoss:
+    """VERIFY-B3b V1.  Retiring the resample retired the K6 crop warning
+    with it, and ``fresnel_propagate_mft``'s faithful-zone warning is NOT
+    its replacement: on the chain grid (``dx_out = dx_in = dx``,
+    ``N_out = N``) that warning's condition ``N_out*dx_out >
+    lambda*|z|/dx_in`` reduces to ``z < N*dx^2/lambda`` -- the K1
+    under-sampled band -- while a beam outgrows the chain window at ``z``
+    ABOVE that bound.  The two are disjoint, so without
+    ``_warn_system_fresnel_window`` a chain that returns 3 % of its input
+    power says nothing at all."""
+
+    def test_the_two_conditions_are_disjoint_on_the_chain_grid(self):
+        """The reason a separate diagnostic is needed, stated as
+        arithmetic on the geometry rather than as a claim: across four
+        decades of ``z`` no geometry can trip both."""
+        n, dx = 128, 2e-6
+        z_crit = n * dx ** 2 / LAM
+        both, only_zone, only_window = [], [], []
+        for zf in np.logspace(-2, 2, 41):
+            z = zf * z_crit
+            # what fresnel_propagate_mft tests, with the chain's own
+            # dx_out = dx_in = dx and N_out = N
+            faithful_zone = (n * dx) > (LAM * z / dx) * (1.0 + 1e-9)
+            # where a beam can outgrow the chain window at all: the
+            # single-FFT natural grid is coarser than the chain grid
+            window_can_lose = z > z_crit
+            if faithful_zone and window_can_lose:
+                both.append(zf)
+            elif faithful_zone:
+                only_zone.append(zf)
+            elif window_can_lose:
+                only_window.append(zf)
+        assert both == [], both
+        # two-sided: the partition is not empty on either side, so the
+        # emptiness above is a disjointness result and not a vacuity
+        assert len(only_zone) >= 15 and len(only_window) >= 15, (
+            len(only_zone), len(only_window))
+
+    def test_the_leg_warns_when_the_window_holds_part_of_the_beam(self):
+        """Fail-before: on 908c02d6 this chain is SILENT.
+
+        A Gaussian of ``w0`` = 2.6 px at ``z`` = 10x the K1 bound: the
+        chain window keeps a measured 0.334870 of the input power
+        (2026-09-13) while the SAME field evaluated on an 8x-wider window
+        conserves 1.000000, so every bit of the loss is the window.
+        Both sides are
+        measured here; the bar is that the retained fraction is below
+        0.9 and the wide-window fraction above 0.99, which the library's
+        own 1e-6 trigger sits five decades inside.
+        """
+        n, dx = 128, 2e-6
+        z = 10.0 * n * dx ** 2 / LAM
+        E = _gauss(n, n, dx, wfac=0.02)
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter('always')
+            out, _ = propagate_through_system(
+                E, [{'type': 'propagate', 'z': z}], LAM, dx,
+                method='fresnel')
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            wide = fresnel_propagate_mft(E, z, LAM, dx, dx * 8, n,
+                                         dy_in=dx, dy_out=dx * 8)
+        kept = _power(out, dx) / _power(E, dx)
+        kept_wide = _power(wide, dx * 8) / _power(E, dx)
+        assert kept < 0.9, kept
+        assert kept_wide > 0.99, kept_wide
+        texts = [str(x.message) for x in w]
+        assert not any('faithful zone' in t for t in texts), (
+            "this fixture is ABOVE the K1 bound, so the MFT's own "
+            "faithful-zone warning cannot be the diagnostic here")
+        hit = [t for t in texts if 'the chain window' in t
+               and 'of the input power lands inside it' in t]
+        assert hit, (
+            f"the 'fresnel' leg returned {kept:.6f} of the input power "
+            f"and said nothing: {texts}")
+        # the number it quotes is the number the caller can measure
+        quoted = float(hit[0].split('only ')[1].split('%')[0])
+        assert abs(quoted / 100.0 - kept) < 1e-4, (quoted, kept)
+
+    def test_it_is_silent_where_the_window_holds_the_beam(self):
+        """The other side: a contained Gaussian at 1x, 2x and 3x the
+        bound returns 1.000000000 of its power (worst departure measured
+        3.1e-8 over N = 64, 65, 128, 256 on 2026-09-13, four decades
+        below the library's 1e-6 trigger), so nothing may warn."""
+        for n, zf in ((64, 1.0), (64, 2.0), (65, 1.0), (128, 3.0),
+                      (256, 1.0)):
+            dx = 2e-6
+            E = _gauss(n, n, dx, wfac=0.06)
+            with warnings.catch_warnings(record=True) as w:
+                warnings.simplefilter('always')
+                out, _ = propagate_through_system(
+                    E, [{'type': 'propagate', 'z': zf * n * dx ** 2 / LAM}],
+                    LAM, dx, method='fresnel')
+            kept = _power(out, dx) / _power(E, dx)
+            assert abs(kept - 1.0) < 1e-6, (n, zf, kept)
+            noisy = [str(x.message) for x in w
+                     if 'the chain window' in str(x.message)
+                     or 'faithful zone' in str(x.message)
+                     or 'UNDER-SAMPLED' in str(x.message)]
+            assert noisy == [], (n, zf, noisy)
+
+    def test_the_diagnostic_moves_no_values(self):
+        """It is a diagnostic: the field is bit-for-bit what the leg
+        returns with the warning suppressed."""
+        n, dx = 128, 2e-6
+        E = _gauss(n, n, dx, wfac=0.02)
+        z = 10.0 * n * dx ** 2 / LAM
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            out, _ = propagate_through_system(
+                E, [{'type': 'propagate', 'z': z}], LAM, dx,
+                method='fresnel')
+            direct = fresnel_propagate_mft(E, z, LAM, dx, dx, n,
+                                           dy_in=dx, dy_out=dx)
+        assert np.asarray(out).tobytes() == np.asarray(direct).tobytes()
+
+
+class TestV3ThePerAxisPeriodIsLoadBearing:
+    """VERIFY-B3b V3.  The gate's ``min(E.shape[-2], E.shape[-1])`` is
+    reachable at exactly one of the three call sites -- the in-glass
+    ``'fresnel'`` gap, since ``scalable_angular_spectrum_propagate``
+    refuses a non-square input outright and the chain's own grid is
+    square.  Deleting the ``min`` leaves every other test in this file
+    green, so it needs its own."""
+
+    PLATE = {
+        'surfaces': [{'radius': float('inf'), 'glass_before': 'AIR',
+                      'glass_after': 'N-BK7'},
+                     {'radius': float('inf'), 'glass_before': 'N-BK7',
+                      'glass_after': 'AIR'}],
+        'thicknesses': [1e-3],
+        'aperture_diameter': 5e-4,
+    }
+
+    def _thickness_for(self, nx, dx, ratio):
+        """The gap that puts ``dx_new/dx`` at ``ratio``:
+        ``dx_new = (lambda/n)*t/(nx*dx)``."""
+        from lumenairy.glass import get_glass_index
+        n_glass = float(np.real(get_glass_index('N-BK7', LAM)))
+        return ratio * dx * nx * dx * n_glass / LAM
+
+    def _run(self, shape, ratio, monkeypatch, force=None):
+        ny, nx = shape
+        dx = 2e-6
+        pres = dict(self.PLATE)
+        pres['thicknesses'] = [self._thickness_for(nx, dx, ratio)]
+        spy = _ResampleSpy(force_method=force).install(monkeypatch)
+        E = np.ones((ny, nx), dtype=np.complex128)
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter('always')
+            apply_real_lens(E, prescription=pres, wavelength=LAM, dx=dx,
+                            dy=dx, wave_propagator='fresnel')
+        return spy, [str(x.message) for x in w]
+
+    # (label, shape, dx_new/dx, what the per-axis rule must choose).  The
+    # short side sets the period, so a window between ``min*dx_new`` and
+    # ``max*dx_new`` is inside the x period and outside the y one.
+    CASES = [
+        ('short_y_between_the_two_periods', (32, 64), 1.5, 'spline'),
+        ('short_y_between_the_two_periods_b', (48, 64), 1.2, 'spline'),
+        ('short_y_far_between', (16, 64), 3.0, 'spline'),
+        ('short_x_binds_and_fits', (64, 32), 1.5, 'chirpz'),
+    ]
+
+    @pytest.mark.parametrize('label,shape,ratio,want',
+                             CASES, ids=[c[0] for c in CASES])
+    def test_the_shorter_input_extent_sets_the_period(
+            self, label, shape, ratio, want, monkeypatch):
+        spy, _ = self._run(shape, ratio, monkeypatch)
+        assert spy.calls, f'{label} did not reach the gap resample-back'
+        c = spy.calls[0]
+        ny, nx = np.asarray(c['shape'])[-2:]
+        per_short = min(ny, nx) * c['dx_in']
+        per_x = nx * c['dx_in']
+        assert c['method'] == want, (label, c)
+        if want == 'spline':
+            # the fixture is the one the min exists for: inside the x
+            # period, outside the y one, so an x-only gate would have
+            # chosen the other leg
+            assert c['window'] <= per_x * (1.0 + 1e-9), (label, c)
+            assert c['window'] > per_short * (1.0 + 1e-9), (label, c)
+        else:
+            # the two-sided arm: the short side BINDS here too, and the
+            # window fits inside it, so the per-axis rule must still say
+            # chirp-Z -- the min is not a blanket veto on non-square
+            assert c['window'] <= per_short * (1.0 + 1e-9), (label, c)
+
+    def test_the_leg_the_min_refuses_is_the_one_that_warns(self,
+                                                           monkeypatch):
+        """The claim the ``min`` exists to keep: on a window the shorter
+        axis cannot hold, forcing the chirp-Z leg makes ``resample_field``
+        emit its own faithful-zone warning -- on the y axis, the one a
+        pitch test cannot see.  The gate picks the spline there and is
+        silent."""
+        spy_gated, texts_gated = self._run((32, 64), 1.5, monkeypatch)
+        assert [c['method'] for c in spy_gated.calls] == ['spline']
+        assert not any('faithful zone' in t for t in texts_gated), \
+            texts_gated
+        spy_forced, texts_forced = self._run((32, 64), 1.5, monkeypatch,
+                                             force='chirpz')
+        hit = [t for t in texts_forced if 'faithful zone' in t]
+        assert hit, texts_forced
+        assert ' on y ' in hit[0], hit[0]
+
+
+class TestV4TheGateSharesTheResamplersOwnTolerance:
+    """VERIFY-B3b V4.  ``1e-9`` is not a taste: it is
+    ``_warn_mft_output_window``'s tolerance, and the two must stay equal
+    or the chain will pick a window its own resampler complains about.
+    Neither the call sites' ``1e-6`` no-op guard nor any fixture in this
+    file can reach the boundary, so the correspondence is pinned as two
+    halves -- what the resampler does, and what the source says."""
+
+    def test_the_resamplers_tolerance_is_one_part_in_1e9(self):
+        """Measured on the resampler itself: a window one period wide to
+        within 5e-10 is silent, one 2e-9 over warns.  Both readings on
+        2026-09-13; the flip is a decade wide on each side of 1e-9."""
+        n, dx_in = 64, 1e-6
+        rng = np.random.default_rng(4)
+        E = (rng.standard_normal((n, n))
+             + 1j * rng.standard_normal((n, n))).astype(np.complex128)
+        for delta, want_warn in ((0.0, False), (-2e-9, False),
+                                 (+5e-10, False), (+2e-9, True),
+                                 (+1e-6, True)):
+            with warnings.catch_warnings(record=True) as w:
+                warnings.simplefilter('always')
+                resample_field(E, dx_in, dx_in * (1.0 + delta), N_out=n,
+                               method='chirpz')
+            got = any('faithful zone' in str(x.message) for x in w)
+            assert got == want_warn, (delta, got)
+
+    def test_every_gate_carries_that_same_tolerance(self):
+        """Structural, and the reason the number may not drift: walk each
+        owner function's AST, resolve one level of local naming, and
+        require the ``method=`` selector's test to contain the literal
+        ``1e-9`` the resampler uses."""
+        for fn in (_system.propagate_through_system,
+                   _lens_real._propagate_through_glass):
+            tree = ast.parse(textwrap.dedent(inspect.getsource(fn)))
+            local = {}
+            for node in ast.walk(tree):
+                if (isinstance(node, ast.Assign) and len(node.targets) == 1
+                        and isinstance(node.targets[0], ast.Name)):
+                    local[node.targets[0].id] = node.value
+            found = 0
+            for node in ast.walk(tree):
+                if not (isinstance(node, ast.Call)
+                        and isinstance(node.func, ast.Name)
+                        and node.func.id == 'resample_field'):
+                    continue
+                sel = [kw.value for kw in node.keywords
+                       if kw.arg == 'method']
+                assert sel and isinstance(sel[0], ast.IfExp), fn.__qualname__
+                roots = [sel[0].test] + [
+                    local[n.id] for n in ast.walk(sel[0].test)
+                    if isinstance(n, ast.Name) and n.id in local]
+                consts = [c.value for r in roots for c in ast.walk(r)
+                          if isinstance(c, ast.Constant)
+                          and isinstance(c.value, float)]
+                assert any(abs(v - 1e-9) <= 0.0 for v in consts), (
+                    f"{fn.__qualname__}: the gate's tolerance is {consts}, "
+                    f"not _warn_mft_output_window's 1e-9")
+                found += 1
+            assert found >= 1, fn.__qualname__
+
+
+class TestV2TheExactPeriodScaleFactorsDependOnNin:
+    """VERIFY-B3b V2.  ``N_out = round(N_in*dx_in/dx_out)`` lands on the
+    period when ``N_in/scale`` is whole, which is a condition on ``N_in``
+    as much as on the scale: x2 needs an even ``N_in`` and x4 an ``N_in``
+    divisible by 4."""
+
+    # (scale, the divisor N_in must carry)
+    SCALES = [(0.5, 1), (1.0, 1), (1.25, 5), (1.5, 3), (1.7, 17),
+              (2.0, 2), (3.0, 3), (4.0, 4)]
+
+    @pytest.mark.parametrize('scale,divisor', SCALES,
+                             ids=[f'x{s}' for s, _d in SCALES])
+    def test_the_default_window_is_a_period_iff_Nin_carries_the_divisor(
+            self, scale, divisor):
+        for n_in in (128, 127, 65, 64, 63, 60, 51, 34, 17):
+            n_out = int(round(n_in / scale))
+            if n_out < 1:
+                continue
+            exact = abs(n_out * scale - n_in) < 1e-9 * n_in
+            assert exact == (n_in % divisor == 0), (scale, n_in, n_out)
+
+    def test_an_odd_Nin_does_not_get_an_exact_window_at_x2(self):
+        """Measured, on the resampler (2026-09-13): ``N_in = 65`` at x2
+        rounds to ``N_out = 32``, a 64-``dx_in`` window against a
+        65-``dx_in`` period, and the power ratio reads **0.995181** on a
+        rim-filling envelope, against 0.999907 at ``N_in = 128`` on the
+        same envelope -- where the default DOES land on the period.  Both
+        sides are measured here rather than pinned; the 1e-3 bar sits
+        between them, and the distance between the two readings is the
+        whole content of the claim."""
+        dx = 1e-6
+
+        def carrier(n):
+            x = (np.arange(n) - n / 2.0) * dx
+            xx, yy = np.meshgrid(x, x)
+            env = np.exp(-(xx ** 2 + yy ** 2) / (0.45 * n * dx) ** 2)
+            return (env * np.exp(2j * np.pi * 0.30 * xx / dx)).astype(
+                np.complex128)
+
+        ratios = {}
+        for n_in in (128, 65):
+            E = carrier(n_in)
+            # the arithmetic the claim is about, stated on the fixture
+            assert (abs(n_in / 2.0 - round(n_in / 2.0)) < 1e-12) == (
+                n_in % 2 == 0), n_in
+            with warnings.catch_warnings():
+                warnings.simplefilter('ignore')
+                out, _ = resample_field(E, dx, 2.0 * dx, method='chirpz')
+            ratios[n_in] = _power(out, 2.0 * dx) / _power(E, dx)
+        assert abs(ratios[128] - 1.0) < 1e-3, ratios
+        assert abs(ratios[65] - 1.0) > 1e-3, ratios
+
+    def test_the_docstring_says_the_condition_is_on_Nin(self):
+        doc = resample_field.__doc__
+        assert 'x2 needs an EVEN ``N_in``' in doc
+        assert 'divisible by 4' in doc

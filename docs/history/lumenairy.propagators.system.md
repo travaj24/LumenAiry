@@ -1,11 +1,12 @@
 <!-- lumenairy-history-doc
 module: lumenairy/propagators/system.py
-ast_sha256: 95d5294e6327631770b0753860ac938261132ce8208de355d4218a3d13190885
-token_sha256: 2615ac1e6a132cbe49936d08c1964f5093258017acd3ba308717f25fb6849e34
+ast_sha256: 92c78bf52e3a76f6536c9d898254b83f2cc7ed555e1172c4595cb15f6dd7e729
+token_sha256: 5f4ba024d2310d6b188ce7e463fbd139334111e795b0bb4ee470185df36334c5
 pre_relocation_lines: 1919
 recorded_by: WP-A17 SWEEP-1 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
 re_recorded: 2026-09-13 -- WP-B3b (K6): the 'fresnel' leg evaluates fresnel_propagate_mft straight onto the chain grid instead of propagating to the single-FFT natural grid and resampling back (the crop and the interpolator MTF both go), and the 'sas' leg's surviving resample_field gates method= on whether the chain window fits inside one chirp-Z reconstruction period
+re_recorded: 2026-09-13 -- VERIFY-B3b (K6): the 'fresnel' leg carries _warn_system_fresnel_window -- retiring the resample retired _warn_system_resample_crop with it, and fresnel_propagate_mft's faithful-zone warning is a disjoint condition on the chain grid (it reduces to z < N dx^2/lambda, the K1 band), so a beam that outgrows the chain window above that bound had no diagnostic at all
 -->
 
 # Version history -- `lumenairy/propagators/system.py`
