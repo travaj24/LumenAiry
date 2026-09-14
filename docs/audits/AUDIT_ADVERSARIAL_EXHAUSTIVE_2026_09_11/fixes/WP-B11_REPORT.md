@@ -334,10 +334,15 @@ call, and `edge='gray'` is already reachable by keyword.
 `extract_linear_phase`; `normalize_output`; `output_plane_distance`;
 `fold_split`; `input_wavevector_saddle`) on the SAME diverging, clipped
 fixture the other two arrays use, plus an 18-kwarg default-identity test.
-MEASURED: every level of every factor returns finite and correctly shaped, no
-combination raises (so `MASLOV_EXCLUSIONS` is empty *because it was measured*),
-and all 18 keywords passed at their signature default are **byte-identical** to
-omitting them.
+MEASURED: every level of every factor returns finite and correctly shaped, and
+the FULL pairwise cross-product was then swept -- every (factor_a = i,
+factor_b = j) combination over eight factors, `integration_method`'s five levels
+included -- and **not one of them raises**.  So `MASLOV_EXCLUSIONS` is empty
+*because it was measured over the pairs, not merely over the levels*; the sweep
+is `scratchpad/b11/m_item10_sweep.py`.  All 18 keywords passed at their
+signature default are **byte-identical** to omitting them (24 of them in the
+sweep's wider list, of which 18 are the physics knobs the shipped test
+compares).
 
 `integration_method` is deliberately NOT a factor.  Measured on this fixture,
 `'auto'` returns in 1.5 s and the explicit `'quadrature'` in **72.6 s**; a
@@ -381,6 +386,14 @@ array's one-sided energy bar; they are a dedicated test
 (`test_the_in_glass_gap_legs_are_reached_and_only_one_of_them_is_gated`) that
 pins the facts, including the silence, so the day a gate lands the test goes red
 and the author records the change deliberately.  Requested change below.
+
+**CLOSED by part b.**  That is exactly what happened: WP-B11b's P1 item added
+`propagators/sas.py::_warn_sas_chirp_sampling`, the tripwire went red, and the
+test was RESTATED (now
+`test_the_in_glass_gap_legs_are_reached_and_both_of_them_are_gated`) rather than
+loosened.  The leg still returns 1.0397e4 x P_in on this geometry -- the gate
+diagnoses, it does not repair -- but it no longer does so in silence.  See
+section 2b.1.
 
 ### 2.11 `pmm_jones_2d` assembles the tensor operators once -- item 11
 
@@ -744,20 +757,21 @@ documented as such in the 5.46.0 release intro.
 
 1. **`apply_aperture(edge='gray')` as the default** -- section 2.9 has the case
    and the price.  A numerical-default move; not shipped.
-2. **The in-glass `'sas'` gap leg has no near-field gate** -- section 2.10.
-   `wave_propagator='sas'` returns a 1.04e+04 energy gain on a standard doublet
-   with NO diagnostic, where `'fresnel'` warns twice about the same aliasing.
-   `sas.py:199`'s only validity test is `z > z_limit` (too far); the failure
-   here is the opposite direction.  The two legs cannot re-enter the lens
-   covering array until this is gated.  Owner: whoever owns `propagators/sas.py`
-   and `_lens_real._propagate_through_glass`.
+2. ~~**The in-glass `'sas'` gap leg has no near-field gate**~~ -- **CLOSED by
+   WP-B11b (section 2b.1)**, which added
+   `propagators/sas.py::_warn_sas_chirp_sampling` and restated part a's
+   tripwire.  Kept here so the trail from finding to fix is readable: the leg
+   returned a 1.04e+04 energy gain on a standard doublet with NO diagnostic,
+   where `'fresnel'` warned twice about the same aliasing, because
+   `sas.py`'s only validity test was the FAR bound `z > z_limit` and the
+   failure is the near one.
 3. **The odd-N centring convention** -- section 2.13.  A shared helper can land
    without moving anything; adopting the half-pixel correction at any of the 27
    coordinate-coupled sites moves that site's answer on odd grids and is a
    numerical default.
-4. **`PMM2DStackHybrid.truncation`** has the same unguarded-after-`__init__`
-   shape the other three had (section 2.19).  One line, same pattern, outside
-   this brief's list.
+4. ~~**`PMM2DStackHybrid.truncation`**~~ -- **CLOSED by WP-B11b**, which guarded
+   it on assignment with the same pattern part a gave `formulation` /
+   `cascade` / `symmetry` (section 2.19).
 5. **`lenses_maslov.py:282`** -- the one-line import change that closes the
    `lenses <-> lenses_maslov` cycle, written out in
    `docs/lens_configuration.md`.  WP-B7 owns that file.

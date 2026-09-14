@@ -189,7 +189,9 @@ existing assertions in the file pass unchanged.
 over seven `apply_real_lens_maslov` physics factors on the same diverging
 fixture, an 18-kwarg default-identity test, and a dedicated test for the
 in-glass `'sas'` / `'fresnel'` gap legs, which the array's `propagator` factor
-(`{}` and `'rs'`) never reached.  `integration_method` is deliberately not a
+(`{}` and `'rs'`) never reached.  The exclusion table is empty because the full
+pairwise cross-product was swept and nothing refuses, not because nobody
+looked.  `integration_method` is deliberately not a
 factor: measured, `'auto'` returns in 1.5 s and `'quadrature'` in 72.6 s on this
 fixture, so its levels belong in a slow lane.
 
