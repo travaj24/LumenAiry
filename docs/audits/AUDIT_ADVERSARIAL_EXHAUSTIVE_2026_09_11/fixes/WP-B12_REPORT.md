@@ -2,7 +2,7 @@
 # output plane, and the four `fga.py` sites ask for the exit-vertex one
 
 Wave 5 item A.  Branch `fix/wp-b12-fga-reference-plane`, base `96cb2096` (the
-5.47.0 release commit plus the Wave-5 plan).  Brief:
+5.47.0 release commit plus the Wave-5 plan), commit `d017f3ed`.  Brief:
 `briefs/WP-B12.md`; the finding it acts on is `fixes/VERIFY_WP-B7b.md`
 sections 3.3, 3.5 and 8 (requests R-1 and R-2), and handoff section 4.1.
 
@@ -590,10 +590,13 @@ live under it -- never through pytest, never against a shared tree:
 | N-BAF10 biconvex at the exit vertex | `54179a51ff853adf...` | `7b846080ae11b4af...` | changed |
 | the same, `_caustic_zone` | `[1478.6766505115946, 1492.179217333539] um` | `[1473.3111197389695, 1492.1307011541158] um` | moved |
 
-The head tree is a copy of this worktree's `lumenairy/`, taken after the last
-code edit; this worktree is exclusive to this package (no other agent writes in
-it), and `git archive HEAD lumenairy` is verified against that copy after the
-commit.
+The head side was run twice: first as a copy of this worktree's `lumenairy/`
+taken after the last code edit, then -- after the commit `d017f3ed` -- in a
+`git archive HEAD lumenairy` tree of its own.  The two head trees hash to the
+same 239-file SHA-256 (`c0821dcb1bdb8e21...`, line-ending normalised) and the
+two runs give the same verdict on every row, so the table above is an
+archive-to-archive statement about `96cb2096` against `d017f3ed`, not about a
+working copy.
 
 ### 8.6 Probes
 
