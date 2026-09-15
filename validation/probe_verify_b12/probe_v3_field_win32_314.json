@@ -1,0 +1,490 @@
+{
+ "env": {
+  "platform": "win32",
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "lumenairy_version": "5.47.0",
+  "lumenairy_file": "C:\\tmp\\lum_vb12\\lumenairy\\__init__.py",
+  "numba": "0.65.1",
+  "jax": "0.11.0"
+ },
+ "fixtures": {
+  "asph": {
+   "note": "plano-aspheric singlet, aspheric LAST surface (R=-0.911 mm, k=-0.6, A4=2.0e9, A6=-4.0e16), N-SF10, 780 nm",
+   "flat_last": false,
+   "lam": 7.8e-07,
+   "best_focus_m": 0.00129942882590475,
+   "planes": {
+    "vertex": {
+     "z": 0.0,
+     "oracle_floor": {
+      "src_halved_fidelity": 0.9999999999554076,
+      "grid_halved_fidelity": 1.0
+     },
+     "oracle_mode": {
+      "mode": "radial",
+      "n_src": 1536
+     },
+     "native": {
+      "fidelity": 0.999833504165517,
+      "power": 0.9985496746003383,
+      "sha": "7444cb118be511801402d7365e80497e0f256d9ea0f7296a4f64fe3a50d33539",
+      "seconds": 20.541563749313354
+     },
+     "forced_surface": {
+      "fidelity": 0.10135913110207719,
+      "power": 0.17233114037404096,
+      "sha": "823431fde3f2e56cb2c7f7bce843ed45ac615bfff73fe2e7efc8c470faf449a9",
+      "seconds": 18.41252064704895
+     },
+     "bit_identical": false,
+     "max_abs_diff": 1.1843351801138728
+    },
+    "focus": {
+     "z": 0.00129942882590475,
+     "oracle_floor": {
+      "src_halved_fidelity": 0.9999999999987859,
+      "grid_halved_fidelity": 0.9999999799257471
+     },
+     "oracle_mode": {
+      "mode": "radial",
+      "n_src": 1536
+     },
+     "native": {
+      "fidelity": 0.9998423535098094,
+      "power": 0.9850182176093601,
+      "sha": "5cc596479325842542437d1a527660623e6c2fe8977f0d5c39102f2e1065aa44",
+      "seconds": 19.793333768844604
+     },
+     "forced_surface": {
+      "fidelity": 0.15629888102141656,
+      "power": 0.10372624307796965,
+      "sha": "b0a062d320dea4e8c99c5feb37235a23b5215b3869ba4fd0c9463b1f734e00e8",
+      "seconds": 18.862078428268433
+     },
+     "bit_identical": false,
+     "max_abs_diff": 9.798043590427636
+    }
+   },
+   "caustic_zone": {
+    "native": [
+     0.001279486946069861,
+     0.0013260925714993512
+    ],
+    "forced_surface": [
+     0.0012795300468842856,
+     0.0013307143456563531
+    ]
+   }
+  },
+  "bicon": {
+   "note": "biconic singlet, LAST surface Rx=-0.858 mm / Ry=-1.17 mm, model n=1.67, 1.03 um",
+   "flat_last": false,
+   "lam": 1.03e-06,
+   "best_focus_m": 0.0014367912912482328,
+   "planes": {
+    "vertex": {
+     "z": 0.0,
+     "oracle_floor": {
+      "src_halved_fidelity": 0.9999999999818547,
+      "grid_halved_fidelity": 1.0
+     },
+     "oracle_mode": {
+      "mode": "scattered",
+      "n_src": 768
+     },
+     "native": {
+      "fidelity": 0.999704093862382,
+      "power": 0.9992633962674662,
+      "sha": "0346011a5bf90417cd867bad6fa141358cc99e638084ee3cbac8038b2af8a4de",
+      "seconds": 12.2629075050354
+     },
+     "forced_surface": {
+      "fidelity": 0.12714391678843046,
+      "power": 0.2822633890892823,
+      "sha": "953eac63bbfa727ea5e491b0b26107f4fc9d035817a324539628d00bf6b1b7c0",
+      "seconds": 9.892903804779053
+     },
+     "bit_identical": false,
+     "max_abs_diff": 1.1587621500700587
+    },
+    "focus": {
+     "z": 0.0014367912912482328,
+     "oracle_floor": {
+      "src_halved_fidelity": 0.9999999999996088,
+      "grid_halved_fidelity": 0.9999999904701754
+     },
+     "oracle_mode": {
+      "mode": "scattered",
+      "n_src": 768
+     },
+     "native": {
+      "fidelity": 0.9996863092900699,
+      "power": 0.974194379121024,
+      "sha": "44c7905aae99285ba8207adcc846abe6fd10300cb3390ddb1a5f9cd54dc881e6",
+      "seconds": 12.150412321090698
+     },
+     "forced_surface": {
+      "fidelity": 0.18747628489134585,
+      "power": 0.1744550950414088,
+      "sha": "78ff68523c480c4595e6dff3891fd77f594b0b551edfe29a4fc26544020363aa",
+      "seconds": 9.962419748306274
+     },
+     "bit_identical": false,
+     "max_abs_diff": 4.733550738262436
+    }
+   },
+   "caustic_zone": {
+    "native": [
+     0.001259514155183079,
+     0.0012804064514613958
+    ],
+    "forced_surface": [
+     0.001264562151082475,
+     0.0012804522305035065
+    ]
+   }
+  },
+  "menisc": {
+   "note": "converging meniscus R1=+1.05 mm R2=+5.4 mm, model n=1.78, 1.31 um",
+   "flat_last": false,
+   "lam": 1.31e-06,
+   "best_focus_m": 0.0011800923249589007,
+   "planes": {
+    "vertex": {
+     "z": 0.0,
+     "oracle_floor": {
+      "src_halved_fidelity": 0.999999999992927,
+      "grid_halved_fidelity": 1.0
+     },
+     "oracle_mode": {
+      "mode": "radial",
+      "n_src": 1536
+     },
+     "native": {
+      "fidelity": 0.9991519345341943,
+      "power": 0.9999941246592547,
+      "sha": "04755aedc13eb6a3fd37487b76b87d18f630ab7c0bf91b843a8afb63fba245e4",
+      "seconds": 12.374923467636108
+     },
+     "forced_surface": {
+      "fidelity": 0.8417977344863914,
+      "power": 0.9960224224280205,
+      "sha": "0f7aa71aaea04660b9ad0694390522969c0b06d53b2c3c4a2e63d27b911b8e94",
+      "seconds": 4.59977650642395
+     },
+     "bit_identical": false,
+     "max_abs_diff": 0.4051318449085437
+    },
+    "focus": {
+     "z": 0.0011800923249589007,
+     "oracle_floor": {
+      "src_halved_fidelity": 0.9999999999986899,
+      "grid_halved_fidelity": 0.9999999894827379
+     },
+     "oracle_mode": {
+      "mode": "radial",
+      "n_src": 1536
+     },
+     "native": {
+      "fidelity": 0.9991241372990486,
+      "power": 0.9700352018301527,
+      "sha": "9444054e63a964c0dea3eaf765fc028bc5e2087282425c7c6772b3a186e5ba59",
+      "seconds": 5.5714709758758545
+     },
+     "forced_surface": {
+      "fidelity": 0.833586497547362,
+      "power": 1.0307047324127305,
+      "sha": "3d48ff98299778f9dfe380ec33f7398cb6cca2ab7fac22586706706139cc9b87",
+      "seconds": 4.484785079956055
+     },
+     "bit_identical": false,
+     "max_abs_diff": 3.1204745483595753
+    }
+   },
+   "caustic_zone": {
+    "native": [
+     0.001178170102615572,
+     0.0011812204860893402
+    ],
+    "forced_surface": [
+     0.0011777197760784956,
+     0.0011812163989978611
+    ]
+   }
+  },
+  "doublet": {
+   "note": "cemented doublet R=+1.20/-0.62/-3.00 mm, N-SSK8 + N-SF10, 633 nm",
+   "flat_last": false,
+   "lam": 6.33e-07,
+   "best_focus_m": 0.0014704757206269537,
+   "planes": {
+    "vertex": {
+     "z": 0.0,
+     "oracle_floor": {
+      "src_halved_fidelity": 0.9999999999782178,
+      "grid_halved_fidelity": 1.0
+     },
+     "oracle_mode": {
+      "mode": "radial",
+      "n_src": 1536
+     },
+     "native": {
+      "fidelity": 0.9997596522672434,
+      "power": 0.9989957996012928,
+      "sha": "09805352e37cf1fc8e8a7ceabd051e27e4d7b7d567f894ec3ca881cf1a875a08",
+      "seconds": 2.128021240234375
+     },
+     "forced_surface": {
+      "fidelity": 0.3072171358958165,
+      "power": 0.6982937230533465,
+      "sha": "2d52dc9679448613f8069b6d903d0c3d32f8e52f4ad880ab019c1a75ec1fabfb",
+      "seconds": 1.4548580646514893
+     },
+     "bit_identical": false,
+     "max_abs_diff": 1.0814583689171804
+    },
+    "focus": {
+     "z": 0.0014704757206269537,
+     "oracle_floor": {
+      "src_halved_fidelity": 0.9999999999987506,
+      "grid_halved_fidelity": 0.9999999708208903
+     },
+     "oracle_mode": {
+      "mode": "radial",
+      "n_src": 1536
+     },
+     "native": {
+      "fidelity": 0.9995941958704974,
+      "power": 0.9855183692898519,
+      "sha": "48e31e4c4bd34ff782139d55093bcf40066b0df78e36556aabb7d132b1733cbc",
+      "seconds": 1.8527989387512207
+     },
+     "forced_surface": {
+      "fidelity": 0.3466638911249397,
+      "power": 0.5791330491234051,
+      "sha": "f7238930215bcc85477b5958d0c145abbd88e89e1e420f5462a64d1a8f7e580e",
+      "seconds": 1.5562024116516113
+     },
+     "bit_identical": false,
+     "max_abs_diff": 8.58731815756159
+    }
+   },
+   "caustic_zone": {
+    "native": [
+     0.001469816571322126,
+     0.0014716588058771437
+    ],
+    "forced_surface": [
+     0.0014698253908359124,
+     0.0014726329428306967
+    ]
+   }
+  },
+  "oblique": {
+   "note": "biconvex R=+/-1.40 mm, model n=1.52, 850 nm, input tilted 6 deg in x",
+   "flat_last": false,
+   "lam": 8.5e-07,
+   "best_focus_m": 0.0012331481914193312,
+   "planes": {
+    "vertex": {
+     "z": 0.0,
+     "oracle_floor": {
+      "src_halved_fidelity": 0.9999999999879289,
+      "grid_halved_fidelity": 1.0
+     },
+     "oracle_mode": {
+      "mode": "scattered",
+      "n_src": 768
+     },
+     "native": {
+      "fidelity": 0.9995079580263952,
+      "power": 1.0011520259457076,
+      "sha": "c4734b27babba6f7927fe6c1d71da1010df2ff9957e5db89a24ad71f9d4b039b",
+      "seconds": 31.604336738586426
+     },
+     "forced_surface": {
+      "fidelity": 0.04356575293265285,
+      "power": 0.23574283054464593,
+      "sha": "e916383141563dcf4a4e43c164e6708598327818ed16cba7d8f7b3a4e8fb124f",
+      "seconds": 26.556354999542236
+     },
+     "bit_identical": false,
+     "max_abs_diff": 1.8036746259111287
+    },
+    "focus": {
+     "z": 0.0012331481914193312,
+     "oracle_floor": {
+      "src_halved_fidelity": 0.9999999999995705,
+      "grid_halved_fidelity": 0.9999999735955953
+     },
+     "oracle_mode": {
+      "mode": "scattered",
+      "n_src": 768
+     },
+     "native": {
+      "fidelity": 0.999657777219182,
+      "power": 0.985131491236523,
+      "sha": "93f67ade8de8a9b57ff35ec16a5398da2348ef90628a1c32ed39ca8b81bf4d72",
+      "seconds": 31.186296939849854
+     },
+     "forced_surface": {
+      "fidelity": 0.0835867260877238,
+      "power": 0.19300185694790337,
+      "sha": "ba7d6cb59df35314a8d3cb5f924cd66e1259ee4a0006a512c72c5e3d69e07ac1",
+      "seconds": 25.168140411376953
+     },
+     "bit_identical": false,
+     "max_abs_diff": 8.076111940789179
+    }
+   },
+   "caustic_zone": {
+    "native": [
+     0.001232257998144844,
+     0.0012343543955573462
+    ],
+    "forced_surface": [
+     0.0012306302136295343,
+     0.0012319729903126412
+    ]
+   }
+  },
+  "flat_planoconvex": {
+   "note": "plano-convex, curved FIRST / FLAT last, model n=1.67, 780 nm (CONTROL)",
+   "flat_last": true,
+   "lam": 7.8e-07,
+   "best_focus_m": 0.001161780721158834,
+   "planes": {
+    "vertex": {
+     "z": 0.0,
+     "oracle_floor": {
+      "src_halved_fidelity": 0.9999999999771709,
+      "grid_halved_fidelity": 1.0
+     },
+     "oracle_mode": {
+      "mode": "radial",
+      "n_src": 1536
+     },
+     "native": {
+      "fidelity": 0.9997257203834112,
+      "power": 0.9987363267847639,
+      "sha": "1774ee1433c99cf6ecf7b9907cade08f18bc90ac186cca913a2b6cbc1eb9ed26",
+      "seconds": 2.532212018966675
+     },
+     "forced_surface": {
+      "fidelity": 0.9997257203834112,
+      "power": 0.9987363267847639,
+      "sha": "1774ee1433c99cf6ecf7b9907cade08f18bc90ac186cca913a2b6cbc1eb9ed26",
+      "seconds": 2.795816659927368
+     },
+     "bit_identical": true,
+     "max_abs_diff": 0.0
+    },
+    "focus": {
+     "z": 0.001161780721158834,
+     "oracle_floor": {
+      "src_halved_fidelity": 0.9999999999987677,
+      "grid_halved_fidelity": 0.9999999717593981
+     },
+     "oracle_mode": {
+      "mode": "radial",
+      "n_src": 1536
+     },
+     "native": {
+      "fidelity": 0.9996678164154539,
+      "power": 0.9851329887660945,
+      "sha": "257a90e44409b3cab74cd9aff05783677515cc533dbb588a45ee77363dc7ed3b",
+      "seconds": 2.3110883235931396
+     },
+     "forced_surface": {
+      "fidelity": 0.9996678164154539,
+      "power": 0.9851329887660945,
+      "sha": "257a90e44409b3cab74cd9aff05783677515cc533dbb588a45ee77363dc7ed3b",
+      "seconds": 2.4923255443573
+     },
+     "bit_identical": true,
+     "max_abs_diff": 0.0
+    }
+   },
+   "caustic_zone": {
+    "native": [
+     0.0011594271384417073,
+     0.0011631618198171543
+    ],
+    "forced_surface": [
+     0.0011594271384417073,
+     0.0011631618198171543
+    ]
+   }
+  },
+  "flat_pair": {
+   "note": "air-spaced pair, FLAT last surface, N-SSK8, 1.03 um (CONTROL)",
+   "flat_last": true,
+   "lam": 1.03e-06,
+   "best_focus_m": 0.0009491770102590174,
+   "planes": {
+    "vertex": {
+     "z": 0.0,
+     "oracle_floor": {
+      "src_halved_fidelity": 0.9999999999898082,
+      "grid_halved_fidelity": 1.0
+     },
+     "oracle_mode": {
+      "mode": "radial",
+      "n_src": 1536
+     },
+     "native": {
+      "fidelity": 0.9978328940399834,
+      "power": 0.9986804242597387,
+      "sha": "4f6412c8daa54115a78391f237316759d21e19144fbd8361dc134510f056888c",
+      "seconds": 4.798555612564087
+     },
+     "forced_surface": {
+      "fidelity": 0.9978328940399834,
+      "power": 0.9986804242597387,
+      "sha": "4f6412c8daa54115a78391f237316759d21e19144fbd8361dc134510f056888c",
+      "seconds": 5.381264925003052
+     },
+     "bit_identical": true,
+     "max_abs_diff": 0.0
+    },
+    "focus": {
+     "z": 0.0009491770102590174,
+     "oracle_floor": {
+      "src_halved_fidelity": 0.9999999999986003,
+      "grid_halved_fidelity": 0.9999999664202875
+     },
+     "oracle_mode": {
+      "mode": "radial",
+      "n_src": 1536
+     },
+     "native": {
+      "fidelity": 0.9977932172700936,
+      "power": 0.975786239727867,
+      "sha": "dc3e7eb18718f46d6226250d0910e4530ff51fc4dd5ecef7196c900e5c70496e",
+      "seconds": 4.540936231613159
+     },
+     "forced_surface": {
+      "fidelity": 0.9977932172700936,
+      "power": 0.975786239727867,
+      "sha": "dc3e7eb18718f46d6226250d0910e4530ff51fc4dd5ecef7196c900e5c70496e",
+      "seconds": 5.303077459335327
+     },
+     "bit_identical": true,
+     "max_abs_diff": 0.0
+    }
+   },
+   "caustic_zone": {
+    "native": [
+     0.0009463453684182983,
+     0.0009508378050261715
+    ],
+    "forced_surface": [
+     0.0009463453684182983,
+     0.0009508378050261715
+    ]
+   }
+  }
+ }
+}

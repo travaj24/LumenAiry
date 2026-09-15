@@ -1,0 +1,58 @@
+=== MUTATION: <none: baseline> ===
+14 passed in 16.99s
+=== MUTATION: identity ===
+        over this file's own exact conic trace.  Its error bound is its OWN
+FAILED tests/unit/test_audit2609_b12_fga_reference_plane.py::test_the_two_reference_planes_are_the_trace_s_own_two_planes
+FAILED tests/unit/test_audit2609_b12_fga_reference_plane.py::test_the_two_planes_differ_by_the_last_surface_s_sag_along_the_ray
+FAILED tests/unit/test_audit2609_b12_fga_reference_plane.py::test_the_flat_control_field_is_bit_identical_through_the_public_api
+FAILED tests/unit/test_audit2609_b12_fga_reference_plane.py::test_the_projected_jacobian_is_the_derivative_of_the_projected_map
+FAILED tests/unit/test_audit2609_b12_fga_reference_plane.py::test_per_surface_projection_moves_only_the_last_local_transfer
+FAILED tests/unit/test_audit2609_b12_fga_reference_plane.py::test_an_aspheric_last_surface_projects_with_its_polynomial_departure
+FAILED tests/unit/test_audit2609_b12_fga_reference_plane.py::test_a_mirror_terminated_prescription_projects_with_the_right_sign
+FAILED tests/unit/test_audit2609_b12_fga_reference_plane.py::test_the_caustic_zone_is_measured_from_the_exit_vertex_plane
+FAILED tests/unit/test_audit2609_b12_fga_reference_plane.py::test_fga_reproduces_a_diffraction_oracle_at_a_caustic_on_a_curved_lens
+9 failed, 5 passed in 17.14s
+=== MUTATION: state_only ===
+FAILED tests/unit/test_audit2609_b12_fga_reference_plane.py::test_the_projected_jacobian_is_the_derivative_of_the_projected_map
+FAILED tests/unit/test_audit2609_b12_fga_reference_plane.py::test_per_surface_projection_moves_only_the_last_local_transfer
+2 failed, 12 passed in 18.59s
+=== MUTATION: sign_plus ===
+FAILED tests/unit/test_audit2609_b12_fga_reference_plane.py::test_a_mirror_terminated_prescription_projects_with_the_right_sign
+1 failed, 13 passed in 18.11s
+=== MUTATION: conic_only ===
+FAILED tests/unit/test_audit2609_b12_fga_reference_plane.py::test_an_aspheric_last_surface_projects_with_its_polynomial_departure
+1 failed, 13 passed in 17.08s
+=== MUTATION: biconic_drop ===
+14 passed in 18.27s
+=== MUTATION: field_frame_drop ===
+14 passed in 18.09s
+=== MUTATION: always_flat ===
+        over this file's own exact conic trace.  Its error bound is its OWN
+FAILED tests/unit/test_audit2609_b12_fga_reference_plane.py::test_the_two_reference_planes_are_the_trace_s_own_two_planes
+FAILED tests/unit/test_audit2609_b12_fga_reference_plane.py::test_the_two_planes_differ_by_the_last_surface_s_sag_along_the_ray
+FAILED tests/unit/test_audit2609_b12_fga_reference_plane.py::test_a_flat_last_surface_makes_the_projection_the_identity_bit_for_bit
+FAILED tests/unit/test_audit2609_b12_fga_reference_plane.py::test_the_flat_control_field_is_bit_identical_through_the_public_api
+FAILED tests/unit/test_audit2609_b12_fga_reference_plane.py::test_the_projected_jacobian_is_the_derivative_of_the_projected_map
+FAILED tests/unit/test_audit2609_b12_fga_reference_plane.py::test_per_surface_projection_moves_only_the_last_local_transfer
+FAILED tests/unit/test_audit2609_b12_fga_reference_plane.py::test_an_aspheric_last_surface_projects_with_its_polynomial_departure
+FAILED tests/unit/test_audit2609_b12_fga_reference_plane.py::test_a_mirror_terminated_prescription_projects_with_the_right_sign
+FAILED tests/unit/test_audit2609_b12_fga_reference_plane.py::test_the_caustic_zone_is_measured_from_the_exit_vertex_plane
+FAILED tests/unit/test_audit2609_b12_fga_reference_plane.py::test_fga_reproduces_a_diffraction_oracle_at_a_caustic_on_a_curved_lens
+10 failed, 4 passed in 18.02s
+=== MUTATION: opd_sign ===
+        over this file's own exact conic trace.  Its error bound is its OWN
+FAILED tests/unit/test_audit2609_b12_fga_reference_plane.py::test_the_two_reference_planes_are_the_trace_s_own_two_planes
+FAILED tests/unit/test_audit2609_b12_fga_reference_plane.py::test_the_two_planes_differ_by_the_last_surface_s_sag_along_the_ray
+FAILED tests/unit/test_audit2609_b12_fga_reference_plane.py::test_an_aspheric_last_surface_projects_with_its_polynomial_departure
+FAILED tests/unit/test_audit2609_b12_fga_reference_plane.py::test_a_mirror_terminated_prescription_projects_with_the_right_sign
+FAILED tests/unit/test_audit2609_b12_fga_reference_plane.py::test_fga_reproduces_a_diffraction_oracle_at_a_caustic_on_a_curved_lens
+5 failed, 9 passed in 20.44s
+=== MUTATION: no_sec ===
+FAILED tests/unit/test_audit2609_b12_fga_reference_plane.py::test_the_two_reference_planes_are_the_trace_s_own_two_planes
+FAILED tests/unit/test_audit2609_b12_fga_reference_plane.py::test_the_two_planes_differ_by_the_last_surface_s_sag_along_the_ray
+FAILED tests/unit/test_audit2609_b12_fga_reference_plane.py::test_an_aspheric_last_surface_projects_with_its_polynomial_departure
+FAILED tests/unit/test_audit2609_b12_fga_reference_plane.py::test_a_mirror_terminated_prescription_projects_with_the_right_sign
+4 failed, 10 passed in 19.13s
+=== MUTATION: n_exit_one ===
+14 passed in 18.02s
+DONE

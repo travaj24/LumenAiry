@@ -1,0 +1,41 @@
+=== baseline ===
+4 passed in 8.57s
+=== identity ===
+FAILED tests/unit/test_verify_b12_fga_reference_plane.py::test_a_biconic_last_surface_projects_with_both_axis_branches
+FAILED tests/unit/test_verify_b12_fga_reference_plane.py::test_a_field_frame_decentred_last_surface_projects_in_its_own_frame
+FAILED tests/unit/test_verify_b12_fga_reference_plane.py::test_the_exit_medium_index_is_resolved_from_the_prescription
+FAILED tests/unit/test_verify_b12_fga_reference_plane.py::test_the_two_backends_agree_on_the_exit_vertex_plane_where_both_are_alive
+4 failed in 8.82s
+=== state_only ===
+FAILED tests/unit/test_verify_b12_fga_reference_plane.py::test_the_two_backends_agree_on_the_exit_vertex_plane_where_both_are_alive
+1 failed, 3 passed in 8.42s
+=== sign_plus ===
+4 passed in 8.14s
+=== conic_only ===
+FAILED tests/unit/test_verify_b12_fga_reference_plane.py::test_a_biconic_last_surface_projects_with_both_axis_branches
+1 failed, 3 passed in 8.77s
+=== biconic_drop ===
+FAILED tests/unit/test_verify_b12_fga_reference_plane.py::test_a_biconic_last_surface_projects_with_both_axis_branches
+1 failed, 3 passed in 9.00s
+=== field_frame_drop ===
+FAILED tests/unit/test_verify_b12_fga_reference_plane.py::test_a_field_frame_decentred_last_surface_projects_in_its_own_frame
+1 failed, 3 passed in 8.63s
+=== always_flat ===
+FAILED tests/unit/test_verify_b12_fga_reference_plane.py::test_a_biconic_last_surface_projects_with_both_axis_branches
+FAILED tests/unit/test_verify_b12_fga_reference_plane.py::test_a_field_frame_decentred_last_surface_projects_in_its_own_frame
+FAILED tests/unit/test_verify_b12_fga_reference_plane.py::test_the_exit_medium_index_is_resolved_from_the_prescription
+FAILED tests/unit/test_verify_b12_fga_reference_plane.py::test_the_two_backends_agree_on_the_exit_vertex_plane_where_both_are_alive
+4 failed in 9.03s
+=== opd_sign ===
+FAILED tests/unit/test_verify_b12_fga_reference_plane.py::test_a_biconic_last_surface_projects_with_both_axis_branches
+FAILED tests/unit/test_verify_b12_fga_reference_plane.py::test_a_field_frame_decentred_last_surface_projects_in_its_own_frame
+FAILED tests/unit/test_verify_b12_fga_reference_plane.py::test_the_exit_medium_index_is_resolved_from_the_prescription
+3 failed, 1 passed in 10.24s
+=== no_sec ===
+FAILED tests/unit/test_verify_b12_fga_reference_plane.py::test_a_biconic_last_surface_projects_with_both_axis_branches
+FAILED tests/unit/test_verify_b12_fga_reference_plane.py::test_a_field_frame_decentred_last_surface_projects_in_its_own_frame
+FAILED tests/unit/test_verify_b12_fga_reference_plane.py::test_the_exit_medium_index_is_resolved_from_the_prescription
+3 failed, 1 passed in 9.38s
+=== n_exit_one ===
+FAILED tests/unit/test_verify_b12_fga_reference_plane.py::test_the_exit_medium_index_is_resolved_from_the_prescription
+1 failed, 3 passed in 10.23s

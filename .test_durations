@@ -16198,5 +16198,9 @@
     "tests/unit/test_zcascade.py::test_per_mode_fresnel_sign": 1.7665972000104375,
     "tests/unit/test_zcascade.py::test_roundtrip_interface_identity": 2.1928396000294015,
     "tests/unit/test_zcascade.py::test_same_medium_identity": 2.657165999931749,
-    "tests/unit/test_zcascade.py::test_slab_fabry_perot": 10.370825899939518
+    "tests/unit/test_zcascade.py::test_slab_fabry_perot": 10.370825899939518,
+    "tests/unit/test_verify_b12_fga_reference_plane.py::test_a_biconic_last_surface_projects_with_both_axis_branches": 1.2597244999487884,
+    "tests/unit/test_verify_b12_fga_reference_plane.py::test_a_field_frame_decentred_last_surface_projects_in_its_own_frame": 0.007236699981149286,
+    "tests/unit/test_verify_b12_fga_reference_plane.py::test_the_exit_medium_index_is_resolved_from_the_prescription": 11.936921200016513,
+    "tests/unit/test_verify_b12_fga_reference_plane.py::test_the_two_backends_agree_on_the_exit_vertex_plane_where_both_are_alive": 0.007483799941837788
 }

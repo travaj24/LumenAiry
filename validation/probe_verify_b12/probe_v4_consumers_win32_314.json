@@ -1,0 +1,102 @@
+{
+ "env": {
+  "platform": "win32",
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "lumenairy_version": "5.47.0",
+  "lumenairy_file": "C:\\tmp\\lum_vb12\\lumenairy\\__init__.py",
+  "numba": "0.65.1",
+  "jax": "0.11.0"
+ },
+ "c1_source": {
+  "jac_call": "x, y, ux, uy, surfs, wavelength, per_surface=True",
+  "passes_reference": false,
+  "inline_block_reads": [
+   "conic",
+   "radius"
+  ]
+ },
+ "c2_sag_classes": {
+  "conic": {
+   "max_abs_err_m": 1.6940658945086007e-21,
+   "max_err_waves": 2.1718793519341034e-15,
+   "true_sag_at_worst": -8.564423567738227e-06,
+   "frac_of_sag": 1.9780267534759323e-16,
+   "my_kernel_vs_library": 1.7782397936419968e-19
+  },
+  "even_asphere": {
+   "max_abs_err_m": 3.6094905155584034e-07,
+   "max_err_waves": 0.4627551943023594,
+   "true_sag_at_worst": -8.649189829378016e-06,
+   "frac_of_sag": 0.041732122739384606,
+   "my_kernel_vs_library": 1.7782397936419968e-19
+  },
+  "biconic": {
+   "max_abs_err_m": 9.599165023473393e-07,
+   "max_err_waves": 1.2306621824965887,
+   "true_sag_at_worst": -1.2124845145307637e-05,
+   "frac_of_sag": 0.07916938244104756
+  },
+  "field_decentred": {
+   "max_abs_err_m": 3.0652012998590706e-06,
+   "max_err_waves": 3.9297452562295776,
+   "true_sag_at_worst": -1.2102341754079324e-05,
+   "frac_of_sag": 0.25327340461410175
+  }
+ },
+ "c3_field_cost": {
+  "asph": {
+   "max_phase_err_waves": 0.4559092413248519,
+   "rms_phase_err_waves": 0.22034455622993285,
+   "fidelity_true_vs_inline": 0.97800611609023,
+   "oracle_mode": "radial"
+  },
+  "bicon": {
+   "max_phase_err_waves": 2.4821340094002204,
+   "rms_phase_err_waves": 0.8808452725095042,
+   "fidelity_true_vs_inline": 0.5437112727430221,
+   "oracle_mode": "scattered"
+  },
+  "menisc": {
+   "max_phase_err_waves": 3.404668910872038e-13,
+   "rms_phase_err_waves": 1.4666141955964578e-13,
+   "fidelity_true_vs_inline": 0.9999999999999998,
+   "oracle_mode": "radial"
+  }
+ },
+ "c1_gbd_bit_identity": {
+  "asph": {
+   "sha_native": "0b71a5b1be073276a31e9830fcdf6c3c7b08f899342454d3a42e552cae492ba5",
+   "sha_forced": "0b71a5b1be073276a31e9830fcdf6c3c7b08f899342454d3a42e552cae492ba5",
+   "bit_identical": true,
+   "max_abs_diff": 0.0
+  },
+  "menisc": {
+   "sha_native": "0cdb1e0b2d2d170b794c8ab55cfa8a31f421b40d6f8695811f71197e2d7727dd",
+   "sha_forced": "0cdb1e0b2d2d170b794c8ab55cfa8a31f421b40d6f8695811f71197e2d7727dd",
+   "bit_identical": true,
+   "max_abs_diff": 0.0
+  }
+ },
+ "c3b_gbd_vs_oracle": {
+  "asph": {
+   "fidelity": 0.9747112367836858,
+   "power": 0.9955022395191755,
+   "seconds": 25.615913152694702,
+   "last_surface_class": "even_asphere"
+  },
+  "menisc": {
+   "fidelity": 0.999155828060751,
+   "power": 0.9963720618722048,
+   "seconds": 30.09091830253601,
+   "last_surface_class": "conic"
+  },
+  "doublet": {
+   "fidelity": 0.999758539743133,
+   "power": 0.9963978412354528,
+   "seconds": 27.023824453353882,
+   "last_surface_class": "conic"
+  }
+ }
+}
