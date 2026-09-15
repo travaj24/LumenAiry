@@ -352,6 +352,42 @@ inputs and no entry point moves across the switch, both unconditionally; the obj
 difference and the caller-visible divergence are asserted on the builds whose elision
 asymmetry the test measures for itself, and reported with the reading where it is absent.
 
+### Fixed -- the Maslov vector-normalisation pin's ULP bar is derived at run time, not stated
+
+`test_audit2609_a4_verify_maslov_asymptotic.py::test_s10_vector_normalisation_is_one_joint_scale_for_the_pair`
+asserted `<= 4 ULP` with a docstring origin of "0 ULP for 'power', 1 ULP for 'peak'".  A
+clean process reads 3 and 1 today -- bit-identical archive to archive, so not a package
+regression, but the bar had 1.33x of headroom over its own envelope, the S4 "floor bar"
+shape `docs/TESTING_STANDARDS.md` names.
+
+The stated derivation -- "`(a s)^2 / (b s)^2` is exact up to the rounding of the two
+products" -- accounted for one of the two rounding sources.  Each power is a SUM of
+`N*N = 9216` non-negative terms, and rescaling every term by an exact common factor does
+not make the two reductions round the same way.  The bar is now the sum of both sources,
+taken on the running build: the products contribute at most `6u` relative (three roundings
+per leg, two legs), and the reduction's own rounding is MEASURED by summing the identical
+terms through five different summation trees against `math.fsum`.  Times a documented
+safety factor of 4 -- the derived quantity itself spans 2.1x across the ladder below -- the
+bar lands at 27.3 to 34.0 ULP.
+
+A 16-arm ladder (both builds x `OPENBLAS_CORETYPE` in {HASWELL, NEHALEM, KATMAI,
+SANDYBRIDGE} x 1 and 4 threads, 2026-09-15,
+`validation/probe_wave5_e/e3_maslov_*.json`) reads:
+
+| | envelope |
+|---|---|
+| `'power'` | 0 .. 3 ULP |
+| `'peak'` | 0 .. 3 ULP |
+| the derived reduction term | 1.49 .. 3.17 ULP |
+| the derived bar | 27.3 .. 34.0 ULP |
+| an INDEPENDENT per-leg scale (the pre-fix defect) | 5.16e+08 ULP |
+
+so the bar sits 9.1x to 11.3x above the widest reading and 1.5e+07x below the real signal.
+That signal is no longer quoted: the test reconstructs the pre-fix behaviour from this
+build's own `'none'` output and asserts the separation.  The docstring's stale readings
+(the ratio, and its -6.4376e-08 departure from the input ratio) are re-recorded as
+measured -- 1.7777776632250892 and -6.4436e-08.
+
 ## [5.47.0] — 2026-09-14
 
 This release is the fourth wave of the 2026-09-11 adversarial audit's remediation
