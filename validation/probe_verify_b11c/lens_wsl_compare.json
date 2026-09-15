@@ -1,0 +1,18 @@
+{
+ "tag": "lens_wsl",
+ "python": "/home/travaj/lumvenv/bin/python",
+ "base_tree": "/mnt/c/Users/Tesla/AppData/Local/Temp/claude/C--Users-Tesla/372a2d1f-acbe-4b57-a148-eeae3fe1d729/scratchpad/verify_b11c/base",
+ "branch_tree": "/mnt/c/Users/Tesla/AppData/Local/Temp/claude/C--Users-Tesla/372a2d1f-acbe-4b57-a148-eeae3fe1d729/scratchpad/verify_b11c/branch",
+ "n_keys_base": 106,
+ "n_keys_branch": 106,
+ "n_shared": 106,
+ "n_identical": 106,
+ "differing": [],
+ "only_base": [],
+ "only_branch": [],
+ "seconds": {
+  "base": 254.1,
+  "branch": 228.6
+ },
+ "verdict": "IDENTICAL"
+}
