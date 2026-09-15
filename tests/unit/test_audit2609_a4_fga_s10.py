@@ -97,6 +97,60 @@ def _ray_focal_zone(prescription, tilt=0.0, decentre=0.0, n=121, frac=0.20):
             float(zs[int(np.argmin(spread))]))
 
 
+def _zone_from_a_second_tracer(E, prescription, reference, n_rays=25):
+    """The SAME estimator ``_caustic_zone`` implements, evaluated with a
+    different tracer and on a chosen reference plane.
+
+    Equally-radius-spaced meridional fan over the field's illuminated support,
+    launched along the field's local phase gradient, scored against the chief
+    ray, 5th-95th percentile of the axial crossings ``z = -dx/du``.  The
+    DEFINITION is shared (it is what is being scored); the trace is
+    ``raytrace.trace`` -- the production tracer, a different code path from the
+    ``ray_transfer_jacobian`` differential fan ``_caustic_zone`` uses -- and
+    ``reference`` selects ``image_rays`` (the last SURFACE) or
+    ``at_exit_vertex()`` (the vertex PLANE), which is what this file pins.
+
+    Added 2026-09-14 (WP-B12).
+    """
+    n = E.shape[-1]
+    cx = n // 2
+    xgrid = (np.arange(n) - cx) * DX
+    row = E[E.shape[0] // 2, :]
+    amp = np.abs(row)
+    phase = np.unwrap(np.angle(np.where(amp > 1e-6 * amp.max(), row, 1.0)))
+    slope = np.gradient(phase, DX) / K0
+    xs_h, amp_h, sl_h = xgrid[cx:], amp[cx:], slope[cx:]
+    good = amp_h > 0.05 * amp_h.max()
+    rr = np.linspace(xs_h[good][0], xs_h[good][-1], n_rays)
+    u_in = np.interp(rr, xs_h[good], sl_h[good])
+    w_row = np.where(amp > 0.05 * amp.max(), amp, 0.0)
+    w_tot = float(w_row.sum())
+    x_chief = float(np.sum(w_row * xgrid) / w_tot)
+    u_chief = float(np.sum(w_row * slope) / w_tot)
+    rr_all = np.append(rr, x_chief)
+    u_all = np.append(u_in, u_chief)
+    nz = np.sqrt(np.maximum(1.0 - u_all ** 2, 0.0))
+    m = rr_all.size
+    bundle = rt.RayBundle(x=rr_all.copy(), y=np.zeros(m), z=np.zeros(m),
+                          L=u_all * nz, M=np.zeros(m), N=nz, wavelength=LAM,
+                          alive=np.ones(m, bool), opd=np.zeros(m))
+    surfs = rt.surfaces_from_prescription(prescription)
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        res = rt.trace(bundle, surfs, LAM)
+        out = res.image_rays if reference == 'surface' else res.at_exit_vertex()
+    alive = np.asarray(out.alive, bool)
+    xo = np.asarray(out.x)
+    uo = np.asarray(out.L) / np.asarray(out.N)
+    x_c, u_c = (float(xo[-1]), float(uo[-1])) if alive[-1] else (0.0, 0.0)
+    dxr, dur = xo[:-1] - x_c, uo[:-1] - u_c
+    conv = alive[:-1] & (dxr * dur < 0.0) & (np.abs(dur) > 1e-9)
+    zf = -dxr[conv] / dur[conv]
+    zf = zf[zf > 0.0]
+    assert zf.size >= 3, 'premise: the fan must converge'
+    return float(np.percentile(zf, 5)), float(np.percentile(zf, 95))
+
+
 def _route(E, prescription, opd):
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
@@ -322,28 +376,41 @@ def test_s10_router_is_invariant_for_a_tilted_decentred_beam():
 
 
 def test_s10_untilted_regimes_are_unchanged():
-    """The four regimes the audit found correctly routed must stay that way.
+    """The four regimes the audit found correctly routed must stay that way,
+    and the zone they are routed on is measured from the exit-VERTEX plane.
 
-    ``_caustic_zone`` is BIT-IDENTICAL to the pre-fix value on all three
-    symmetric fixtures (measured: [98.021603, 98.021702] mm slow / exit,
-    [1.021056, 1.032698] mm fast / focus, [0.277843, 3.274212] mm
-    multi-valued), because a centred beam's chief ray is the axis.
+    RESTATED 2026-09-14 (WP-B12).  This test used to pin three literal zone
+    readings as "bit-identical to the pre-fix value".  WP-B12 moved them: the
+    zone is the 5th-95th percentile of the axial crossings ``z = -x/u`` of a
+    meridional fan, and that fan's state used to be read ON the last surface
+    instead of on its vertex plane, so every crossing was short by about the
+    last surface's sag (-0.46 % of the focal distance on the ``FAST`` singlet:
+    the near edge read 1.021056 mm and now reads 1.016346 mm).  A reading was
+    never the property anyway, so the pin is now the DECISION -- which plane
+    the zone is measured from -- asserted against the same estimator evaluated
+    with the production tracer (:func:`_zone_from_a_second_tracer`), two-sided:
+    the last-surface reference must be measurably OUTSIDE the window the
+    exit-vertex one sits inside, so the test cannot pass on a build where the
+    projection did nothing.
 
-    The two SINGLE-VALUED fast rows read ``'phase_screen'`` since WP-B7b (they
-    read ``'fga'`` before it): at a caustic, inside the sag-screen aberration
-    envelope, ``'fga'`` is the measurably worse member for a single-valued
-    field.  MEASURED against a brute-force Rayleigh-Sommerfeld oracle on an
-    exact conic raytrace (WP-B7b; N-SF11 f = 1.12 mm NA 0.160 singlet at its
-    traced best focus, lambda = 633 nm, oracle converged to 1.1e-06 relative
-    L2): fidelity 0.9991 / intensity-rms 1.540 um for ``'phase_screen'``
-    against 0.1251 / 7.241 um for ``'fga'``, oracle 1.523 um; and
-    ``'phase_screen'`` is closer at every NA from 0.048 to 0.260.  WP-B7
-    measured 0.9965 against 0.3234 on this file's own fixture.
+    Bar: 1e-4 relative on each zone edge, asserted UNCONDITIONALLY on all
+    three fixtures.  The two evaluations share the estimator's definition and
+    differ only in tracer and reference plane, so on the right plane they agree
+    far under the bar; the separation being resolved is 4.6e-3 relative on
+    ``FAST`` (46x the bar).  The two-sided half -- that the last-surface
+    reference is a DIFFERENT answer -- is premise-gated per fixture, because
+    ``SLOW`` (R = +/-100 mm at a 0.20 mm aperture, 0.1 um of sag on a 98 mm
+    focal distance) separates the two planes by only 4.3e-07 relative and
+    genuinely cannot discriminate them; the test requires at least two of the
+    three fixtures to discriminate, so it cannot go vacuous.
 
-    The MULTI-VALUED row is deliberately unchanged: several local directions
-    cross that region and only ``'fga'``'s phase-space swarm transports them
-    independently, so the multi-valued branch above the caustic gate still
-    answers ``'fga'``.
+    The routing rows are unchanged: the two single-valued fast rows take
+    ``'phase_screen'`` (WP-B7b's route, which WP-B12 left in place -- with the
+    reference plane repaired that is now a COST choice, ``'fga'`` 0.9998
+    against the screen's 0.9991 at roughly thirty times the cost, rather than
+    the accuracy rescue it was measured as), and the MULTI-VALUED row still
+    takes ``'fga'``: several local directions cross that region and only the
+    phase-space swarm transports them independently.
     """
     assert _route(_beam(w=80e-6), SLOW, 0.0) == 'phase_screen'
     assert _route(_beam(), FAST, Z_FOCUS) == 'phase_screen'
@@ -355,11 +422,25 @@ def test_s10_untilted_regimes_are_unchanged():
         z_slow = _caustic_zone(_beam(w=80e-6), DX, SLOW, LAM)
         z_fast = _caustic_zone(_beam(), DX, FAST, LAM)
         z_mv = _caustic_zone(two_beams, DX, FAST, LAM)
-    for got, want, nm in ((z_slow, (98.021603e-3, 98.021702e-3), 'slow'),
-                          (z_fast, (1.021056e-3, 1.032698e-3), 'fast'),
-                          (z_mv, (0.277843e-3, 3.274212e-3), 'multi-valued')):
-        assert got[0] == pytest.approx(want[0], rel=1e-6), (nm, got)
-        assert got[1] == pytest.approx(want[1], rel=1e-6), (nm, got)
+    cases = ((z_slow, _beam(w=80e-6), SLOW, 'slow'),
+             (z_fast, _beam(), FAST, 'fast'),
+             (z_mv, two_beams, FAST, 'multi-valued'))
+    discriminating = []
+    for got, field, presc, nm in cases:
+        want = _zone_from_a_second_tracer(field, presc, 'exit_vertex')
+        wrong = _zone_from_a_second_tracer(field, presc, 'surface')
+        # unconditional: the zone IS the exit-vertex-referenced one
+        assert got[0] == pytest.approx(want[0], rel=1e-4), (nm, got, want)
+        assert got[1] == pytest.approx(want[1], rel=1e-4), (nm, got, want)
+        # two-sided, premise-gated: only where this optic's sag separates the
+        # two planes by more than the bar can "not the other plane" be claimed
+        sep = abs(wrong[0] - want[0]) / want[0]
+        if sep > 1e-3:
+            discriminating.append((nm, sep))
+            assert abs(got[0] - wrong[0]) / want[0] > 1e-3, (nm, got, wrong)
+    assert len(discriminating) >= 2, (
+        f'fewer than two fixtures separate the two reference planes '
+        f'({discriminating}); the two-sided claim has gone vacuous')
 
 
 # ===========================================================================

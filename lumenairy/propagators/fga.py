@@ -1250,8 +1250,11 @@ def _fga_coarse(u0, dx, dyg, x0, y0, Ny, Nx, k, w0, nsig, Ag, C, kw2, surfs,
     def _trace(qxp, qyp, pxi, pyi, pz):
         uxin = np.full(qxp.shape, pxi / pz)
         uyin = np.full(qxp.shape, pyi / pz)
+        # reference='exit_vertex': the image leg below starts on the last
+        # surface's VERTEX plane, which is where ``z_image`` is measured from.
         dt = ray_transfer_jacobian(qxp.copy(), qyp.copy(), uxin, uyin, surfs,
-                                   wavelength, per_surface=False)
+                                   wavelength, per_surface=False,
+                                   reference='exit_vertex')
         uxo, uyo = dt.ux, dt.uy
         xv = dt.x + z_image * uxo
         yv = dt.y + z_image * uyo
@@ -1447,7 +1450,9 @@ def _fga_through_lens(u0, dx, dyg, prescription, wavelength, w0, z_image,
     Cp = (None if wp is None else
           ((k / (2.0 * np.pi)) ** 2 * (dq_step ** 2 * dx * dyg)) / 2.0 * wp)
 
-    # trace to the LAST SURFACE VERTEX; the image-side leg is added manually.
+    # Trace to the LAST SURFACE VERTEX PLANE (zero its transfer and ask the
+    # differential primitive for reference='exit_vertex'); the image-side leg
+    # is added manually below, and ``z_image`` is measured from that plane.
     surfs = [_copy.copy(s) for s in surfaces_from_prescription(prescription)]
     surfs[-1].thickness = 0.0
     kw2 = k * w0 * w0
@@ -1533,10 +1538,13 @@ def _fga_through_lens(u0, dx, dyg, prescription, wavelength, w0, z_image,
                 uxin = np.full(nqc, pxi / pz_in)
                 uyin = np.full(nqc, pyi / pz_in)
                 dt = ray_transfer_jacobian(qxc.copy(), qyc.copy(), uxin, uyin,
-                                           surfs, wavelength, per_surface=False)
+                                           surfs, wavelength,
+                                           per_surface=False,
+                                           reference='exit_vertex')
                 uxo = dt.ux
                 uyo = dt.uy
-                # manual image-side free-space leg z_image (slope coordinates)
+                # manual image-side free-space leg z_image (slope coordinates),
+                # from the exit-VERTEX plane the transfer above is referenced to
                 xv = dt.x + z_image * uxo
                 yv = dt.y + z_image * uyo
                 opd_tot = dt.opd + z_image * np.sqrt(1.0 + uxo ** 2 + uyo ** 2)
@@ -2170,8 +2178,10 @@ def _fga_vector_through_lens(Ex, Ey, dx, dyg, prescription, wavelength, w0,
                 pz_in = math.sqrt(max(1.0 - pxi * pxi - pyi * pyi, 1e-12))
                 uxin = np.full(nqc, pxi / pz_in)
                 uyin = np.full(nqc, pyi / pz_in)
-                dt = ray_transfer_jacobian(qxc0.copy(), qyc0.copy(), uxin, uyin,
-                                           surfs, wavelength, per_surface=False)
+                dt = ray_transfer_jacobian(qxc0.copy(), qyc0.copy(), uxin,
+                                           uyin, surfs, wavelength,
+                                           per_surface=False,
+                                           reference='exit_vertex')
                 J, jalive = _fresnel_jones_matrix_per_beamlet(
                     qxc0.copy(), qyc0.copy(), uxin, uyin, prescription,
                     wavelength)
@@ -2441,8 +2451,11 @@ def _caustic_zone(E_in, dx, prescription, wavelength, n_rays=25):
     surfs = [_copy.copy(s) for s in surfaces_from_prescription(prescription)]
     surfs[-1].thickness = 0.0
     zeros = np.zeros_like(rr_all)
+    # reference='exit_vertex': ``z = -x/u`` is the crossing measured FROM the
+    # last surface's vertex plane, which is the frame the caustic zone (and the
+    # caller's ``output_plane_distance``) is expressed in.
     dt = ray_transfer_jacobian(rr_all, zeros, u_all, zeros, surfs, wavelength,
-                               per_surface=False)
+                               per_surface=False, reference='exit_vertex')
     alive_all = np.asarray(dt.alive, bool)
     xo, uo, alive = dt.x[:-1], dt.ux[:-1], alive_all[:-1]
     if alive_all[-1]:
@@ -2987,63 +3000,54 @@ def _universal_route(E_in, prescription, wavelength, dx, dyg, opd, na_threshold,
             # aberration envelope takes the thin screen plus the exact angular
             # spectrum, not 'fga'.  What 'fga' uniquely provides at a caustic is
             # the MULTI-VALUED field, and the branch above has already routed
-            # that; for a single-valued one the frozen-Gaussian swarm is the
-            # measurably worse member here.
+            # that.
             #
-            # MEASURED (WP-B7b, 2026-09-14) against a brute-force
-            # Rayleigh-Sommerfeld oracle built on an exact conic raytrace --
-            # N-SF11 biconvex R = +/-1.6 mm, t = 0.60 mm, 0.30 mm aperture,
-            # lambda = 633 nm, N = 256, dx = 1.4 um, w = 80 um, read at the
-            # traced best focus 925.9 um past the exit vertex; the oracle is
-            # converged to 1.1e-06 relative L2 in its own ray quadrature and
-            # 1.2e-14 in its azimuthal one:
+            # This is a COST choice, not an accuracy rescue.  MEASURED
+            # (WP-B12, 2026-09-14) against a brute-force Rayleigh-Sommerfeld
+            # oracle built on an exact conic raytrace -- N-SF11 biconvex
+            # R = +/-1.6 mm, t = 0.60 mm, 0.30 mm aperture, lambda = 633 nm,
+            # w = 80 um, read at the traced best focus 926.0 um past the exit
+            # vertex, on the N = 256 dx = 1.4 um grid:
             #
-            #   member         fidelity   intensity-rms spot
-            #   oracle         1          1.523 um
-            #   phase_screen   0.9991     1.540 um
-            #   fga            0.1251     7.241 um
+            #   member         fidelity   intensity-rms spot   cost
+            #   oracle         1          2.112 um             --
+            #   fga            0.9998     2.011 um             15.74 s
+            #   phase_screen   0.9991     2.178 um              0.53 s
             #
-            # 'phase_screen' is the closer member at EVERY NA of a
-            # 0.048 .. 0.260 sweep on that singlet: its rms spot error grows
-            # 0.016 -> 0.112 um with NA (the thin-screen obliquity ceiling is
-            # real) against 'fga' 13.363 -> 4.243 um, i.e. 38x to 835x wider.
-            # The deficit is not a sampling deficit -- over fifteen sampling
-            # settings 'fga' CONVERGES in n_p (fidelity 0.1412 / 0.1450 /
-            # 0.1462 at n_p = 21 / 41 / 61) and is inert in dq_step to four
-            # digits, so the swarm is not under-sampled.  WP-B7 measured the
-            # same on an N-BK7 f = 1.2 mm NA 0.145 singlet at 1.0 um: 'fga'
-            # 0.3234 (0.3826 at the best of the same fifteen settings) against
-            # 'phase_screen' 0.9965.
+            # so the screen is the seventh digit worse and ~30x cheaper here
+            # (1.61 s against 0.02 s on the N = 192 dx = 1.8 um grid, where the
+            # two fidelities read the same 0.9998 / 0.9991).  The screen is
+            # also the closer member on the intensity rms width.
             #
-            # Nor is the deficit a CAUSTIC deficit.  MEASURED (VERIFY-B7b,
-            # 2026-09-14, same oracle): on that fixture 'fga' scores the same
-            # against the truth at every output plane -- 0.0737 at
-            # output_plane_distance = 0 (the exit vertex, no caustic at all),
-            # 0.1019 / 0.1250 / 0.1845 at 0.5 / 1.0 / 1.9 of the focal
-            # distance -- and the deficit disappears entirely when the LAST
-            # surface is FLAT: on an N-LASF9 plano-convex of NA 0.150 at its
-            # own caustic 'fga' reads 0.9998 where 'phase_screen' reads 0.9639.
-            # At fixed focal length, glass, wavelength, aperture, grid and
-            # beam, 'fga' falls 0.9998 -> 0.9656 -> 0.8053 -> 0.5100 -> 0.2326
-            # -> 0.1031 as the last surface's curvature grows 0 -> 0.571 /mm.
-            # The cause is a reference plane: _fga_core traces with
-            # ray_transfer_jacobian, whose base-ray state sits on the last
-            # SURFACE, and then adds the image leg as if it sat on the exit
-            # VERTEX PLANE, so every beamlet carries a spurious phase the size
-            # of that surface's sag -- 7.6 waves at the rim of the fixture
-            # above, 15.0 waves on a strongly bent singlet.  Projecting the
-            # state to the plane restores 'fga' to 0.9998 there.  So this
-            # branch prefers the screen for the class it can, and the choice
-            # is about which member is currently accurate, not about what the
-            # frozen-Gaussian model can represent at a caustic.
+            # WHY THE ORDERING MOVED.  5.47.0 routed here because 'fga' scored
+            # 0.1251 against the screen's 0.9991 on exactly this fixture.  That
+            # deficit was a reference-plane defect, not an FGA model limit:
+            # ray_transfer_jacobian returned the base-ray state ON the last
+            # SURFACE while this module added the image-side leg as if it were
+            # on the exit VERTEX PLANE, so every beamlet carried a spurious
+            # k * sag(r) -- 7.8 waves at the rim of this singlet, exactly zero
+            # on a flat last surface.  The four sites now ask the primitive for
+            # reference='exit_vertex' (WP-B12) and 'fga' reads 0.9998 at this
+            # caustic and 0.9995 at the exit vertex, where it read 0.0737.
+            #
+            # The route is LEFT WHERE 5.47.0 put it.  Moving it back to 'fga'
+            # buys the seventh digit for ~30x the time on the fixtures above,
+            # and it is a default move on every caustic plane of every
+            # single-valued field -- a maintainer decision (handoff section
+            # 4.7), taken with these numbers rather than in place of them.
             #
             # The H2 aberration gate keeps the other half of the decision: a
             # prescription whose sag-screen estimate is OVER budget still never
             # reaches the thin screen, so it keeps 'fga' here.  That class is
             # the 2026-07-19 displaced / Debye-oracle regime where the analytic
             # model is 58-123 % wrong (the G1 matrix designs read 20 .. 2893 rad
-            # against the 2.0 rad budget), and it is outside what the oracle
-            # above covers -- its whole NA ladder reads 0.003 .. 0.231 rad.
+            # against the 2.0 rad budget).  MEASURED for that class after the
+            # repair (WP-B12): on an N-LASF9 plano-convex at 2.03 rad the gate
+            # keeps 'fga' and 'fga' is the better member; on the f/5 dual-oracle
+            # biconvex itself the caustic cannot be scored against a diffraction
+            # oracle on any tractable grid (its Airy radius is 8.0 um on a
+            # 100 um pitch, so a resolving grid is N ~ 6400 over the 12.8 mm
+            # half-extent the 5 mm beam needs) -- see WP-B12_REPORT.md sec. 6.
             #
             # method='fga' is the only way to reach the swarm here.
             # caustic_pad_dof only narrows the ZONE -- inside the narrowed
@@ -3113,21 +3117,20 @@ def apply_real_lens_universal(
       MULTI-VALUED field (whose several local directions only a phase-space swarm
       transports), or near a caustic with a prescription OUTSIDE the sag-screen
       aberration envelope (where the thin screen is not available).  A
-      single-valued field inside the envelope goes to ``'phase_screen'``:
-      measured against a brute-force Rayleigh-Sommerfeld oracle on an N-SF11
-      f = 1.12 mm NA 0.160 singlet at its focus, fidelity 0.9991 for
-      ``'phase_screen'`` against 0.1251 for ``'fga'``, and ``'phase_screen'`` is
-      the closer member at every NA from 0.048 to 0.260 (WP-B7b; WP-B7 measured
-      0.9965 against 0.3234 on an N-BK7 f = 1.2 mm NA 0.145 singlet).  Pass
-      ``method='fga'`` to force the frozen-Gaussian member anyway.  That
-      ordering is measured on singlets whose LAST surface is curved, which is
-      where ``'fga'`` carries the reference-plane error documented at the
-      routing branch in :func:`_universal_route`; with a FLAT last surface it
-      reverses -- on an N-LASF9 plano-convex at NA 0.150 whose sag-screen
-      estimate is 1.54 rad (inside the 2.0 rad envelope, so this branch picks
-      the screen) the same oracle reads ``'fga'`` 0.9967 and ``'traced'``
-      0.9978 against ``'phase_screen'`` 0.9639, so a caller working near the
-      aberration budget should consider ``method='traced'`` (VERIFY-B7b);
+      single-valued field inside the envelope goes to ``'phase_screen'``
+      because the screen is much the cheaper member there, NOT because it is
+      the more accurate one: measured against a brute-force
+      Rayleigh-Sommerfeld oracle on an N-SF11 f = 1.12 mm NA 0.160 singlet at
+      its focus, fidelity 0.9998 for ``'fga'`` against 0.9991 for
+      ``'phase_screen'`` at roughly thirty times the cost (WP-B12; the
+      0.1251-vs-0.9991 ordering 5.47.0 routed on was the reference-plane defect
+      WP-B12 repaired).  Pass ``method='fga'`` to spend that time and take the
+      seventh digit.  Near the aberration budget the gap widens and changes
+      sign: on an N-LASF9 plano-convex at NA 0.150 whose sag-screen estimate is
+      1.54 rad -- inside the 2.0 rad envelope, so this branch picks the screen
+      -- the same oracle reads ``'fga'`` 0.9967 and ``'traced'`` 0.9978 against
+      ``'phase_screen'`` 0.9639 (VERIFY-B7b), so a caller working there should
+      consider ``method='traced'`` or ``method='fga'``;
     * ``'traced'`` (:func:`lumenairy.elements.apply_real_lens_traced`) -- HIGH NA,
       smooth, single-valued AND **~collimated**: per-pixel ray-traced OPL, sub-nm,
       no thin-screen ceiling.  A single-valued but **diverging** beam (large

@@ -1,0 +1,26 @@
+{
+ "build": {
+  "python": "3.12.3",
+  "numpy": "2.4.6",
+  "scipy": "1.17.1",
+  "platform": "linux"
+ },
+ "version": "5.47.0",
+ "gbd_curved_last_surface": {
+  "sha_as_shipped": "c0d8d8ae8d6c7a0b45aaaf46",
+  "sha_forced_surface": "c0d8d8ae8d6c7a0b45aaaf46",
+  "bit_identical": true
+ },
+ "gbd_inline_sag_vs_shared": {
+  "conic": {
+   "max_sag_gap_m": 1.5500702934753696e-19,
+   "max_sag_gap_waves": 1.4568329825896329e-13,
+   "max_sag_m": 6.947448191153905e-06
+  },
+  "asphere_A4_A6": {
+   "max_sag_gap_m": 1.651316542606953e-05,
+   "max_sag_gap_waves": 15.519892317734518,
+   "max_sag_m": 2.3094671226168583e-05
+  }
+ }
+}

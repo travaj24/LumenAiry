@@ -1,0 +1,370 @@
+{
+ "build": {
+  "python": "3.12.3",
+  "numpy": "2.4.6",
+  "scipy": "1.17.1",
+  "platform": "linux"
+ },
+ "version": "5.47.0",
+ "aberration_max_rad": 2.0,
+ "fixtures": {
+  "b7b_biconvex": {
+   "note": "WP-B7b's N-SF11 R=+/-1.6 mm biconvex, 633 nm",
+   "N": 256,
+   "dx": 1.4e-06,
+   "w0": 8e-05,
+   "lam": 6.33e-07,
+   "system_na": 0.16031884312723918,
+   "sag_screen_aberration_rad": 0.0738309356032954,
+   "tilt_dispersion": 0.0,
+   "over_budget": false,
+   "caustic_zone": [
+    0.0009215859027654794,
+    0.0009355091445437806
+   ],
+   "best_focus_m": 0.0009259516664351796,
+   "airy_radius_m": 2.8637044640280477e-06,
+   "dx_over_airy_radius": 0.48887726285511285,
+   "N_needed_to_resolve": 375.4577378727266,
+   "route_at_caustic": "phase_screen",
+   "route_at_vertex": "traced",
+   "members": {
+    "fga": {
+     "fidelity": 0.9998192098880855,
+     "power_ratio": 1.0008666701846274,
+     "rms_um": 2.0109861060343146,
+     "seconds": 19.019059419631958
+    },
+    "phase_screen": {
+     "fidelity": 0.9991055249284224,
+     "power_ratio": 0.9999847174781366,
+     "rms_um": 2.177863027543721,
+     "seconds": 0.14935755729675293
+    },
+    "traced": {
+     "fidelity": 0.9995770053961511,
+     "power_ratio": 0.9998647140469464,
+     "rms_um": 2.9631298045007206,
+     "seconds": 1.1130061149597168
+    }
+   },
+   "oracle_rms_um": 2.1118544708868425
+  },
+  "b7b_biconvex_testgrid": {
+   "note": "WP-B7b's fixture at the pinned tests' grid",
+   "N": 192,
+   "dx": 1.8e-06,
+   "w0": 8e-05,
+   "lam": 6.33e-07,
+   "system_na": 0.16031884312723918,
+   "sag_screen_aberration_rad": 0.07380888579327352,
+   "tilt_dispersion": 0.0,
+   "over_budget": false,
+   "caustic_zone": [
+    0.000921668644366447,
+    0.000935509880287378
+   ],
+   "best_focus_m": 0.0009259516664351796,
+   "airy_radius_m": 2.8637044640280477e-06,
+   "dx_over_airy_radius": 0.6285564808137165,
+   "N_needed_to_resolve": 362.0485329487007,
+   "route_at_caustic": "phase_screen",
+   "route_at_vertex": "traced",
+   "members": {
+    "fga": {
+     "fidelity": 0.9998176035520131,
+     "power_ratio": 0.9985183337278242,
+     "rms_um": 2.0247041420915126,
+     "seconds": 2.307222843170166
+    },
+    "phase_screen": {
+     "fidelity": 0.9990933979745908,
+     "power_ratio": 1.0000222002218868,
+     "rms_um": 2.221306723337468,
+     "seconds": 0.08042573928833008
+    },
+    "traced": {
+     "fidelity": 0.9996328294555653,
+     "power_ratio": 0.9999885598216863,
+     "rms_um": 2.5345130958669135,
+     "seconds": 0.5287072658538818
+    }
+   },
+   "oracle_rms_um": 2.1201444595203687
+  },
+  "m_biconvex_baf10": {
+   "note": "mine: N-BAF10 biconvex, 1.064 um",
+   "N": 256,
+   "dx": 1.9e-06,
+   "w0": 0.000105,
+   "lam": 1.064e-06,
+   "system_na": 0.13402115602573783,
+   "sag_screen_aberration_rad": 0.06076196013440757,
+   "tilt_dispersion": 0.0,
+   "over_budget": false,
+   "caustic_zone": [
+    0.0014734274937148672,
+    0.001492131738661927
+   ],
+   "best_focus_m": 0.0014792067597852584,
+   "airy_radius_m": 5.544247327493186e-06,
+   "dx_over_airy_radius": 0.34269755437823857,
+   "N_needed_to_resolve": 263.1917217624872,
+   "route_at_caustic": "phase_screen",
+   "route_at_vertex": "traced",
+   "members": {
+    "fga": {
+     "fidelity": 0.9998184110658375,
+     "power_ratio": 0.9784847914501754,
+     "rms_um": 3.9504637218698906,
+     "seconds": 10.54354190826416
+    },
+    "phase_screen": {
+     "fidelity": 0.9994305366268722,
+     "power_ratio": 0.9999316658212924,
+     "rms_um": 4.084018341668618,
+     "seconds": 0.09260368347167969
+    },
+    "traced": {
+     "fidelity": 0.9995676182658692,
+     "power_ratio": 0.9995153632546253,
+     "rms_um": 5.0960242377900755,
+     "seconds": 4.6836864948272705
+    }
+   },
+   "oracle_rms_um": 4.048593475406569
+  },
+  "m_bent_lak22": {
+   "note": "mine: N-LAK22 bent singlet, 1.55 um",
+   "N": 256,
+   "dx": 2.6e-06,
+   "w0": 9e-05,
+   "lam": 1.55e-06,
+   "system_na": 0.14261584718802506,
+   "sag_screen_aberration_rad": 0.046702453975382544,
+   "tilt_dispersion": 0.0,
+   "over_budget": false,
+   "caustic_zone": [
+    0.0012383379329749936,
+    0.0012595407548295504
+   ],
+   "best_focus_m": 0.0012447107183651113,
+   "airy_radius_m": 7.74404146236638e-06,
+   "dx_over_airy_radius": 0.3357420040472649,
+   "N_needed_to_resolve": 257.8498591082994,
+   "route_at_caustic": "phase_screen",
+   "route_at_vertex": "traced",
+   "members": {
+    "fga": {
+     "fidelity": 0.9996952649143717,
+     "power_ratio": 0.9923101520556076,
+     "rms_um": 5.477200582591502,
+     "seconds": 6.199393272399902
+    },
+    "phase_screen": {
+     "fidelity": 0.99907195918448,
+     "power_ratio": 1.000142689564114,
+     "rms_um": 5.799818388335262,
+     "seconds": 0.0287630558013916
+    },
+    "traced": {
+     "fidelity": 0.9989283149696025,
+     "power_ratio": 0.999822927409556,
+     "rms_um": 9.507783318051848,
+     "seconds": 0.3768458366394043
+    }
+   },
+   "oracle_rms_um": 5.612630226150351
+  },
+  "m_meniscus_sf6": {
+   "note": "mine: N-SF6 converging meniscus, 850 nm",
+   "N": 256,
+   "dx": 1.8e-06,
+   "w0": 8.5e-05,
+   "lam": 8.5e-07,
+   "system_na": 0.08269132431481041,
+   "sag_screen_aberration_rad": 0.08792334618268888,
+   "tilt_dispersion": 0.0,
+   "over_budget": false,
+   "caustic_zone": [
+    0.0014936250244429823,
+    0.0014992411021766334
+   ],
+   "best_focus_m": 0.0014953193287288954,
+   "airy_radius_m": 6.081033976535934e-06,
+   "dx_over_airy_radius": 0.2960022928576649,
+   "N_needed_to_resolve": 227.3297609146866,
+   "route_at_caustic": "phase_screen",
+   "route_at_vertex": "phase_screen",
+   "members": {
+    "fga": {
+     "fidelity": 0.9997388083304566,
+     "power_ratio": 0.981632603188131,
+     "rms_um": 4.266936070834756,
+     "seconds": 5.600788593292236
+    },
+    "phase_screen": {
+     "fidelity": 0.9996207512620946,
+     "power_ratio": 0.9999193484919155,
+     "rms_um": 4.4327101227547585,
+     "seconds": 0.06074929237365723
+    },
+    "traced": {
+     "fidelity": 0.9995523667347808,
+     "power_ratio": 0.9997721473568152,
+     "rms_um": 5.073872537475642,
+     "seconds": 0.8565518856048584
+    }
+   },
+   "oracle_rms_um": 4.3729246238610076
+  },
+  "m_flat_last_lasf9": {
+   "note": "mine: N-LASF9 plano-convex, curved side FIRST (flat last surface) -- the control",
+   "N": 256,
+   "dx": 2e-06,
+   "w0": 0.00019,
+   "lam": 8.5e-07,
+   "system_na": 0.1499833460583793,
+   "sag_screen_aberration_rad": 1.403831395254056,
+   "tilt_dispersion": 0.0,
+   "over_budget": false,
+   "caustic_zone": [
+    0.001429207520666257,
+    0.0014462730275843817
+   ],
+   "best_focus_m": 0.0014303422206344027,
+   "airy_radius_m": 3.4347202215175468e-06,
+   "dx_over_airy_radius": 0.5822890573358982,
+   "N_needed_to_resolve": 447.1979960339699,
+   "route_at_caustic": "phase_screen",
+   "route_at_vertex": "traced",
+   "members": {
+    "fga": {
+     "fidelity": 0.9981685311216841,
+     "power_ratio": 1.0091001273421205,
+     "rms_um": 2.14662734785177,
+     "seconds": 2.290026903152466
+    },
+    "phase_screen": {
+     "fidelity": 0.9649627807239788,
+     "power_ratio": 0.9995199767910833,
+     "rms_um": 4.2933061390261384,
+     "seconds": 0.06600117683410645
+    },
+    "traced": {
+     "fidelity": 0.9981426947806075,
+     "power_ratio": 0.9997285684016441,
+     "rms_um": 2.86669526193306,
+     "seconds": 1.208782434463501
+    }
+   },
+   "oracle_rms_um": 3.7108657269732284
+  },
+  "v_planoconvex_w190": {
+   "note": "VERIFY-B7b's fixture V (flat last surface), w0 = 190 um -- inside the aberration envelope",
+   "N": 384,
+   "dx": 1.6e-06,
+   "w0": 0.00019,
+   "lam": 8.5e-07,
+   "system_na": 0.1499833460583793,
+   "sag_screen_aberration_rad": 1.536466559945163,
+   "tilt_dispersion": 0.0,
+   "over_budget": false,
+   "caustic_zone": [
+    0.0014291112403593163,
+    0.001446277438332442
+   ],
+   "best_focus_m": 0.0014303422206344027,
+   "airy_radius_m": 3.4347202215175468e-06,
+   "dx_over_airy_radius": 0.4658312458687186,
+   "N_needed_to_resolve": 536.6375952407639,
+   "route_at_caustic": "phase_screen",
+   "route_at_vertex": "traced",
+   "members": {
+    "fga": {
+     "fidelity": 0.9971734855383304,
+     "power_ratio": 1.0210573102712848,
+     "rms_um": 2.06187417031339,
+     "seconds": 4.618520259857178
+    },
+    "phase_screen": {
+     "fidelity": 0.964568352437076,
+     "power_ratio": 1.0005808121829036,
+     "rms_um": 4.842017659703076,
+     "seconds": 0.07004475593566895
+    },
+    "traced": {
+     "fidelity": 0.9983151815082058,
+     "power_ratio": 1.000546028262687,
+     "rms_um": 3.1042797033002403,
+     "seconds": 1.6702735424041748
+    }
+   },
+   "oracle_rms_um": 3.9363738567483124
+  },
+  "v_planoconvex_w205": {
+   "note": "VERIFY-B7b's fixture V, w0 = 205 um -- OVER the aberration budget",
+   "N": 384,
+   "dx": 1.6e-06,
+   "w0": 0.000205,
+   "lam": 8.5e-07,
+   "system_na": 0.1499833460583793,
+   "sag_screen_aberration_rad": 2.0275841622793287,
+   "tilt_dispersion": 0.0,
+   "over_budget": true,
+   "caustic_zone": [
+    0.0014291139616514521,
+    0.0014462775793718625
+   ],
+   "best_focus_m": 0.00142932979376303,
+   "airy_radius_m": 3.4347202215175468e-06,
+   "dx_over_airy_radius": 0.4658312458687186,
+   "N_needed_to_resolve": 536.6375952407639,
+   "route_at_caustic": "fga",
+   "route_at_vertex": "traced",
+   "members": {
+    "fga": {
+     "fidelity": 0.9958450784662581,
+     "power_ratio": 1.035110952354291,
+     "rms_um": 2.060886407191081,
+     "seconds": 5.27151894569397
+    },
+    "phase_screen": {
+     "fidelity": 0.9549735710696927,
+     "power_ratio": 1.0008751419138975,
+     "rms_um": 5.72178757077977,
+     "seconds": 0.051827192306518555
+    },
+    "traced": {
+     "fidelity": 0.9975356062997961,
+     "power_ratio": 1.000822673542924,
+     "rms_um": 3.386944729270417,
+     "seconds": 2.105686902999878
+    }
+   },
+   "oracle_rms_um": 4.585059591015679
+  },
+  "h2_f5": {
+   "note": "the H2 f/5 dual-oracle biconvex (model glass n = 1.5168)",
+   "N": 256,
+   "dx": 0.0001,
+   "w0": 0.005,
+   "lam": 1.31e-06,
+   "system_na": 0.10170439050995364,
+   "sag_screen_aberration_rad": 20.3551450082049,
+   "tilt_dispersion": 0.0,
+   "over_budget": true,
+   "caustic_zone": [
+    0.048556370367592395,
+    0.04915118474908888
+   ],
+   "best_focus_m": 0.04841236424628845,
+   "airy_radius_m": 8.071118840217367e-06,
+   "dx_over_airy_radius": 12.389855976560849,
+   "N_needed_to_resolve": 9515.409389998731,
+   "route_at_caustic": "fga",
+   "route_at_vertex": "traced",
+   "members": "skipped: caustic not resolvable on this grid"
+  }
+ }
+}

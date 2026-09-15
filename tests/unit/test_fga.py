@@ -9,6 +9,20 @@ Validates :func:`lumenairy.propagators.apply_real_lens_fga`:
   * energy is controllable via the frozen width and closes with ``normalize``.
 
 Requires numba (skipped otherwise).
+
+WP-B12, 2026-09-14 -- the FGA reference plane.  ``fga.py``'s four
+differential-transfer sites now ask for ``reference='exit_vertex'``, so every
+FGA field on a prescription whose LAST surface is curved changes (0.07-0.53
+fidelity against a Rayleigh-Sommerfeld oracle before, 0.999-class after).
+Nothing in this file moved, and that is a property of its fixtures rather than
+luck: ``_singlet`` is plano-convex with the CURVED side FIRST -- its own
+docstring already says "flat exit -> no powered-exit-surface vertex-plane
+ambiguity", which names this defect exactly -- the caustic and sampling tests
+run a FLAT null prescription, and every remaining comparison is FGA against
+FGA (coarse stride against full, analytic Jacobian against finite difference,
+chunked against unchunked, cached against uncached), so both arms move
+together.  Re-measured on both builds after the repair: green, no bar
+restated.
 """
 import numpy as np
 import pytest
