@@ -438,6 +438,7 @@ reading; every invariant is unconditional; no wall-clock assertion.
 | `-k dispatcher_pin` (the whole sweep) | **510 passed, 5 skipped** (320 s) | -- |
 | `-k walker` (the whole sweep) | **118 passed, 6 skipped** (223 s) | -- |
 | `-k census` (the whole sweep) | **45 passed** (567 s) | -- |
+| `b7c` + `niche_k4_uniform_caustic` + `a3_caustic_siblings` + `a3_verify_traced`, re-run on the final bar | **65 passed** (364 s) | `b7c` + `niche_k4_uniform_caustic`: **21 passed** (99 s) |
 | `ruff check lumenairy/ tests/ validation/probe_multibranch_zeta/` (WSL) | -- | **All checks passed** |
 
 The single red, `test_public_api.py::test_installed_metadata_version_matches_source_version`,
@@ -474,6 +475,10 @@ mine to run.
    hand-off and the completion (section 5) bounds the member question; settling
    it needs an oracle whose boundary field is not geometrical -- a direct FDTD or
    BEM solve of the lens, or a measurement.  And no fixture in this study
-   produced a multibranch `power_ratio` between 1.25 and 18.86, so the refusal
-   bar's placement inside that gap rests on the gap's emptiness over 38 planes,
-   not on a rung inside it.
+   produced a bracketed ratio between 1.246 and 5.848, so the refusal bar's
+   placement inside that gap rests on the gap's emptiness over 51 planes on five
+   optics, not on a rung inside it -- and the gap narrowed by a factor of three
+   when the fourth and fifth optics were added, so a sixth could narrow it
+   again.  A verifier should look for an optic that reads between 1.25 and 2.0
+   with a healthy completion (which would push the bar back up) or between 2.0
+   and 5.85 with a broken one (which would push it down).
