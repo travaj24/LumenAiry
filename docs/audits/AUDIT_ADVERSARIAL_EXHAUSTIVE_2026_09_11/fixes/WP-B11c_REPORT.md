@@ -241,8 +241,10 @@ plumbing (`CUPY_AVAILABLE`, `cp`, `_ensure_cupy_loaded`, `_is_cupy_array`;
 `_numba`, `_njit`, `_prange`, `_NUMBA_KERNELS`, `_load_numba`,
 `_get_aspheric_sag_accum_numba`) and the two surface-sag builders
 `surface_sag_general` (with its `_surface_sag_general` alias) and
-`surface_sag_biconic`.  `lumenairy/elements/lenses.py` drops **746 -> 368
-lines** at this item (338 after item 3); `_lens_real` reads the leaf.
+`surface_sag_biconic`.  `lumenairy/elements/lenses.py` drops **746 -> 367
+lines** at this item (346 after item 3; CORRECTED 2026-09-15 by VERIFY-WP-B11c
+D10 from the commits themselves -- the first draft said 368 and 338);
+`_lens_real` reads the leaf.
 
 The sag builders could not move alone: they read the plumbing from module
 scope.  That is why the plumbing came with them, and it is why the leaf's own
@@ -340,8 +342,11 @@ in a hash.
   flat-in-y;
 * 5 keys on the numba gate as a LIVE property: the fast-path answer, the gate
   flipped to `False` THROUGH the facade, the pure-NumPy answer under it (equal
-  to the fast path, bit for bit, which is what proves the flip reached the
-  kernel), `_load_numba()` returning `False`, and the gate read back and
+  to the fast path on THIS coefficient set, which is what proves the flip
+  reached the kernel -- a reading, not a property: numba's LLVM may contract
+  `sag + c*h**k` into an FMA, and VERIFY-WP-B11c D8 measured the two arms
+  differing in the last bits on `{4: 3.1e2, 6: -8.4e6, 8: 1.7e11}` at 64 x 64),
+  `_load_numba()` returning `False`, and the gate read back and
   restored;
 * 5 keys on the facade surface: the numexpr loader, the `AttributeError` for a
   name nobody defines, the gate values, and which names resolve on `lenses` and
@@ -397,7 +402,9 @@ None was edited: the re-export is the point.
 
 ### 3.3 The graph, before and after
 
-Measured by both instruments, on `import lumenairy`:
+Measured by both instruments, on `import lumenairy` for the lens rows and
+through `fromlist=("*",)` for the `rcwa` rows (`rcwa` is PEP 562 lazy; a bare
+`import lumenairy` loads no rcwa module -- VERIFY-WP-B11c D7):
 
 | | at `96cb2096` | after item 2 | after item 3 |
 |---|---|---|---|
@@ -406,7 +413,7 @@ Measured by both instruments, on `import lumenairy`:
 | `lenses_maslov ->` | `_lens_kernels`, `_lens_real`, `lens_config`, `lenses` | `_lens_kernels`, `_lens_real`, `lens_config`, `lenses` | `_lens_kernels`, `_lens_real`, `lens_config` |
 | `_lens_kernels ->` | (nothing in the family) | (nothing in the family) | (nothing in the family) |
 | `rcwa._core ->` | `_geometry` | `_blas`, `_geometry` | `_blas`, `_geometry` |
-| `rcwa._blas ->` | (module does not exist) | (nothing in the package) | (nothing in the package) |
+| `rcwa._blas ->` | (module does not exist) | `lumenairy._knobs` only (VERIFY-WP-B11c D6: `_knobs` imports no package module, so the leaf property holds) | `lumenairy._knobs` only |
 
 The columns are CUMULATIVE, so the two `rcwa` rows change in the "after item 2"
 column only because item 1 landed before it; nothing in items 2 or 3 touches the
@@ -668,11 +675,14 @@ re-anchored`, which doubles as the check that the first run converged.  It takes
 
 ### What could not be measured
 
-* **CuPy.**  Not installed on this box, so the GPU arms of `_is_cupy_array` /
-  `_ensure_cupy_loaded` are exercised only through a substituted module
-  (`test_a_true_cupy_answer_really_binds_the_module_cp`, which fakes a True
-  answer and checks the alias binds) and not against a real device.  That was
-  already true before this package; the move does not change what is reachable.
+* **CuPy** -- CORRECTED 2026-09-15 (VERIFY-WP-B11c D1): this package's first
+  draft said CuPy was not installed on the box.  It is (CuPy 14.0.1 with a
+  working device on the Windows py3.14 build, `lumenairy.backend.CUPY_AVAILABLE`
+  True), and the verifier measured the GPU arms of `_is_cupy_array` /
+  `_ensure_cupy_loaded` and the sag builders' `xp = cp` dispatch: bit-identical
+  base vs branch on the device (`probe_lens.py` keys `D01`-`D08`).  This
+  package's own evidence for those arms remains the substituted-module test
+  (`test_a_true_cupy_answer_really_binds_the_module_cp`).
 * **The pre-refactor `_JAX_EIG_STABLE` hazard, end to end.**  Section 1.4 item 2
   argues from the language (a module `__getattr__` cannot intercept a
   `setattr`) plus the measurement made for `lenses` in item 2, where the same

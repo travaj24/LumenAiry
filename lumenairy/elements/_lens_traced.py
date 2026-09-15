@@ -2635,7 +2635,7 @@ def _det_normal_equations(A, b):
       per-block ``block.T @ block`` under a ``threadpoolctl`` cap was the
       other candidate and is REJECTED here: ``threadpoolctl`` is an optional
       dependency of this library, so on a box without it the cap is inert and
-      the guarantee silently evaporates -- see ``rcwa/_core.py``'s
+      the guarantee silently evaporates -- see ``rcwa/_blas.py``'s
       ``_threadpoolctl_available``.)
     * **A fixed pairwise tree over the blocks.**  Partials are combined by a
       carry-stack that merges two nodes as soon as they reach equal depth,

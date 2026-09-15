@@ -55,7 +55,7 @@ a worker thread works, but two threads overriding the SAME knob at the
 same time race exactly as two threads calling the setter would -- the
 one that exits last wins.  Under a ``ThreadPoolExecutor``, set the knob
 once around the whole parallel section on the submitting thread rather
-than once per worker.  (``elements/rcwa/_core.py::set_blas_threads`` is
+than once per worker.  (``elements/rcwa/_blas.py::set_blas_threads`` is
 the one knob whose REQUEST is thread-local while its APPLICATION is not;
 its registration documents that.)
 
