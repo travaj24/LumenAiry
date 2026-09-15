@@ -13,6 +13,14 @@ Item map (coordinator's numbering -> audit tag):
   5 ray_subsample              -> W9-12
   6 hfpi/asymptotic kwargs     -> W9-10
   7 universal router guard     -> W9-13
+
+WP-B12, 2026-09-14 -- the FGA reference plane.  Every FGA field on a
+curved-last-surface prescription changed with the repair.  This file pins
+dispatcher MECHANISM -- which selector runs, which keyword reaches which
+member, which default is honoured, which unknown key raises -- and its one
+oracle-scored row compares the routed member against the old one on a
+free-space regime, so none of its claims reads an FGA field through a powered
+exit surface.  Re-measured on both builds after the repair: green.
 """
 import inspect
 import warnings

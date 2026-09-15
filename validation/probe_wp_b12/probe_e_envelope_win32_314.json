@@ -1,0 +1,144 @@
+{
+ "build": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "platform": "win32"
+ },
+ "version": "5.47.0",
+ "aberration_max_rad": 2.0,
+ "rungs": [
+  {
+   "w0_m": 6e-05,
+   "system_na": 0.1499833460583793,
+   "sag_screen_aberration_rad": 0.015712017053212984,
+   "over_budget": false,
+   "route_at_caustic": "phase_screen",
+   "best_focus_m": 0.001444263090115778,
+   "members": {
+    "fga": {
+     "fidelity": 0.9995344912748325,
+     "seconds": 43.407301902770996
+    },
+    "phase_screen": {
+     "fidelity": 0.9998840746952469,
+     "seconds": 1.1253376007080078
+    },
+    "traced": {
+     "fidelity": 0.9997170164464719,
+     "seconds": 3.092798948287964
+    }
+   }
+  },
+  {
+   "w0_m": 0.0001,
+   "system_na": 0.1499833460583793,
+   "sag_screen_aberration_rad": 0.12123469191111753,
+   "over_budget": false,
+   "route_at_caustic": "phase_screen",
+   "best_focus_m": 0.0014407195960659735,
+   "members": {
+    "fga": {
+     "fidelity": 0.9999670050931234,
+     "seconds": 8.397629261016846
+    },
+    "phase_screen": {
+     "fidelity": 0.9995330498205773,
+     "seconds": 0.1287832260131836
+    },
+    "traced": {
+     "fidelity": 0.9998072883269891,
+     "seconds": 3.009033441543579
+    }
+   }
+  },
+  {
+   "w0_m": 0.00014,
+   "system_na": 0.1499833460583793,
+   "sag_screen_aberration_rad": 0.46552066863358144,
+   "over_budget": false,
+   "route_at_caustic": "phase_screen",
+   "best_focus_m": 0.0014356574617091097,
+   "members": {
+    "fga": {
+     "fidelity": 0.9998509528687684,
+     "seconds": 19.21768569946289
+    },
+    "phase_screen": {
+     "fidelity": 0.9922952978475125,
+     "seconds": 0.17221593856811523
+    },
+    "traced": {
+     "fidelity": 0.9998439414921535,
+     "seconds": 1.7217533588409424
+    }
+   }
+  },
+  {
+   "w0_m": 0.000165,
+   "system_na": 0.1499833460583793,
+   "sag_screen_aberration_rad": 0.8933893345306482,
+   "over_budget": false,
+   "route_at_caustic": "phase_screen",
+   "best_focus_m": 0.0014326201810949913,
+   "members": {
+    "fga": {
+     "fidelity": 0.9993364079930228,
+     "seconds": 13.36497950553894
+    },
+    "phase_screen": {
+     "fidelity": 0.9802345467543294,
+     "seconds": 0.1488358974456787
+    },
+    "traced": {
+     "fidelity": 0.9993212316753199,
+     "seconds": 3.6583263874053955
+    }
+   }
+  },
+  {
+   "w0_m": 0.00019,
+   "system_na": 0.1499833460583793,
+   "sag_screen_aberration_rad": 1.536466559945163,
+   "over_budget": false,
+   "route_at_caustic": "phase_screen",
+   "best_focus_m": 0.0014303422206344027,
+   "members": {
+    "fga": {
+     "fidelity": 0.9971734855383307,
+     "seconds": 17.831265211105347
+    },
+    "phase_screen": {
+     "fidelity": 0.9645683524370762,
+     "seconds": 0.24211716651916504
+    },
+    "traced": {
+     "fidelity": 0.9983151815082059,
+     "seconds": 6.494655609130859
+    }
+   }
+  },
+  {
+   "w0_m": 0.000205,
+   "system_na": 0.1499833460583793,
+   "sag_screen_aberration_rad": 2.0275841622793287,
+   "over_budget": true,
+   "route_at_caustic": "fga",
+   "best_focus_m": 0.00142932979376303,
+   "members": {
+    "fga": {
+     "fidelity": 0.9958450784662576,
+     "seconds": 13.16183066368103
+    },
+    "phase_screen": {
+     "fidelity": 0.9549735710696925,
+     "seconds": 0.42968249320983887
+    },
+    "traced": {
+     "fidelity": 0.9975356062997963,
+     "seconds": 6.319938898086548
+    }
+   }
+  }
+ ]
+}

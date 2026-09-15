@@ -1,0 +1,214 @@
+{
+ "env": {
+  "platform": "linux",
+  "python": "3.12.3",
+  "numpy": "2.4.6",
+  "scipy": "1.17.1",
+  "lumenairy_version": "5.47.0",
+  "lumenairy_file": "/mnt/c/tmp/lum_vb12/lumenairy/__init__.py",
+  "numba": "0.65.1",
+  "jax": "0.10.2"
+ },
+ "glass": {
+  "N-SF10@6.330e-07": {
+   "mine": 1.7231169035342977,
+   "lib": 1.723116903534298,
+   "diff": 2.220446049250313e-16
+  },
+  "N-SF10@7.800e-07": {
+   "mine": 1.7123323624777618,
+   "lib": 1.7123323624777618,
+   "diff": 0.0
+  },
+  "N-SF10@1.030e-06": {
+   "mine": 1.7029563482052632,
+   "lib": 1.7029563482052632,
+   "diff": 0.0
+  },
+  "N-SF10@1.310e-06": {
+   "mine": 1.6968544538097519,
+   "lib": 1.6968544538097519,
+   "diff": 0.0
+  },
+  "N-SSK8@6.330e-07": {
+   "mine": 1.6151395813350917,
+   "lib": 1.6151395813350917,
+   "diff": 0.0
+  },
+  "N-SSK8@7.800e-07": {
+   "mine": 1.6094867169387257,
+   "lib": 1.6094867169387252,
+   "diff": 4.440892098500626e-16
+  },
+  "N-SSK8@1.030e-06": {
+   "mine": 1.604089392647828,
+   "lib": 1.604089392647828,
+   "diff": 0.0
+  },
+  "N-SSK8@1.310e-06": {
+   "mine": 1.6000450882038442,
+   "lib": 1.600045088203844,
+   "diff": 2.220446049250313e-16
+  }
+ },
+ "fixtures": {
+  "asph": {
+   "note": "plano-aspheric singlet, aspheric LAST surface (R=-0.911 mm, k=-0.6, A4=2.0e9, A6=-4.0e16), N-SF10, 780 nm",
+   "n_exit": 1.0,
+   "lam": 7.8e-07,
+   "semi": 0.000128,
+   "n_alive": 61,
+   "surface_dx": 0.0,
+   "surface_dz": 1.8910010547452255e-19,
+   "surface_dL": 2.7755575615628914e-17,
+   "surface_dN": 2.220446049250313e-16,
+   "surface_dopl": 3.2526065174565133e-19,
+   "vertex_dx": 1.3552527156068805e-20,
+   "vertex_dopl": 2.168404344971009e-19,
+   "vertex_dz": 0.0,
+   "sag_rim": -8.313303368777126e-06,
+   "sag_rim_waves": 10.658081242021956,
+   "slope_vs_cosine": 0.0004059100627048784,
+   "best_focus_m": 0.00129942882590475
+  },
+  "bicon": {
+   "note": "biconic singlet, LAST surface Rx=-0.858 mm / Ry=-1.17 mm, model n=1.67, 1.03 um",
+   "n_exit": 1.0,
+   "lam": 1.03e-06,
+   "semi": 0.000128,
+   "n_alive": 61,
+   "surface_dx": 0.0,
+   "surface_dz": 9.507944832929521e-20,
+   "surface_dL": 4.163336342344337e-17,
+   "surface_dN": 2.220446049250313e-16,
+   "surface_dopl": 2.168404344971009e-19,
+   "vertex_dx": 1.3552527156068805e-20,
+   "vertex_dopl": 2.168404344971009e-19,
+   "vertex_dz": 0.0,
+   "sag_rim": -9.219223591862882e-06,
+   "sag_rim_waves": 8.950702516371729,
+   "slope_vs_cosine": 0.0005000758614645134,
+   "best_focus_m": 0.0014367912912482328
+  },
+  "menisc": {
+   "note": "converging meniscus R1=+1.05 mm R2=+5.4 mm, model n=1.78, 1.31 um",
+   "n_exit": 1.0,
+   "lam": 1.31e-06,
+   "semi": 0.000128,
+   "n_alive": 61,
+   "surface_dx": 2.710505431213761e-20,
+   "surface_dz": 6.946464260873314e-19,
+   "surface_dL": 4.163336342344337e-17,
+   "surface_dN": 5.551115123125783e-16,
+   "surface_dopl": 1.3010426069826053e-18,
+   "vertex_dx": 2.710505431213761e-20,
+   "vertex_dopl": 6.505213034913027e-19,
+   "vertex_dz": 0.0,
+   "sag_rim": 1.4571589733584302e-06,
+   "sag_rim_waves": 1.1123350941667407,
+   "slope_vs_cosine": 0.00025662388993077934,
+   "best_focus_m": 0.0011800923249589007
+  },
+  "doublet": {
+   "note": "cemented doublet R=+1.20/-0.62/-3.00 mm, N-SSK8 + N-SF10, 633 nm",
+   "n_exit": 1.0,
+   "lam": 6.33e-07,
+   "semi": 0.000128,
+   "n_alive": 61,
+   "surface_dx": 4.0657581468206416e-20,
+   "surface_dz": 4.743384504624082e-19,
+   "surface_dL": 5.551115123125783e-17,
+   "surface_dN": 7.771561172376096e-16,
+   "surface_dopl": 8.673617379884035e-19,
+   "vertex_dx": 2.710505431213761e-20,
+   "vertex_dopl": 6.505213034913027e-19,
+   "vertex_dz": 0.0,
+   "sag_rim": -2.623679549062619e-06,
+   "sag_rim_waves": 4.14483341084142,
+   "slope_vs_cosine": 0.00017143695370691603,
+   "best_focus_m": 0.0014704757206269537
+  },
+  "oblique": {
+   "note": "biconvex R=+/-1.40 mm, model n=1.52, 850 nm, input tilted 6 deg in x",
+   "n_exit": 1.0,
+   "lam": 8.5e-07,
+   "semi": 0.000128,
+   "n_alive": 55,
+   "surface_dx": 2.710505431213761e-20,
+   "surface_dz": 2.354751593366955e-19,
+   "surface_dL": 5.551115123125783e-17,
+   "surface_dN": 5.551115123125783e-16,
+   "surface_dopl": 4.336808689942018e-19,
+   "vertex_dx": 2.710505431213761e-20,
+   "vertex_dopl": 4.336808689942018e-19,
+   "vertex_dz": 0.0,
+   "sag_rim": -5.631036489982621e-06,
+   "sag_rim_waves": 6.624748811744261,
+   "slope_vs_cosine": 0.0028703991228918313,
+   "best_focus_m": 0.0012331481914193312
+  },
+  "mirror": {
+   "note": "plate + concave MIRROR R=-2.5 mm as the last surface, 633 nm -- primitive-level only",
+   "n_exit": 1.0,
+   "lam": 6.33e-07,
+   "semi": 0.000128,
+   "n_alive": 61,
+   "surface_dx": 0.0,
+   "surface_dz": 3.2526065174565133e-19,
+   "surface_dL": 5.551115123125783e-17,
+   "surface_dN": 6.661338147750939e-16,
+   "surface_dopl": 3.2526065174565133e-19,
+   "vertex_dx": 2.710505431213761e-20,
+   "vertex_dopl": 6.505213034913027e-19,
+   "vertex_dz": 0.0,
+   "sag_rim": -3.149021987896017e-06,
+   "sag_rim_waves": 4.974758274717246,
+   "slope_vs_cosine": 0.20095840757111683
+  },
+  "flat_planoconvex": {
+   "note": "plano-convex, curved FIRST / FLAT last, model n=1.67, 780 nm (CONTROL)",
+   "n_exit": 1.0,
+   "lam": 7.8e-07,
+   "semi": 0.000128,
+   "n_alive": 61,
+   "surface_dx": 1.3552527156068805e-20,
+   "surface_dz": 0.0,
+   "surface_dL": 1.3877787807814457e-17,
+   "surface_dN": 6.661338147750939e-16,
+   "surface_dopl": 3.2526065174565133e-19,
+   "vertex_dx": 1.3552527156068805e-20,
+   "vertex_dopl": 3.2526065174565133e-19,
+   "vertex_dz": 0.0,
+   "sag_rim": 0.0,
+   "sag_rim_waves": 0.0,
+   "slope_vs_cosine": 0.0003026940875687917,
+   "best_focus_m": 0.001161780721158834
+  },
+  "flat_pair": {
+   "note": "air-spaced pair, FLAT last surface, N-SSK8, 1.03 um (CONTROL)",
+   "n_exit": 1.0,
+   "lam": 1.03e-06,
+   "semi": 0.000128,
+   "n_alive": 61,
+   "surface_dx": 3.3881317890172014e-20,
+   "surface_dz": 0.0,
+   "surface_dL": 2.0816681711721685e-17,
+   "surface_dN": 7.771561172376096e-16,
+   "surface_dopl": 6.505213034913027e-19,
+   "vertex_dx": 3.3881317890172014e-20,
+   "vertex_dopl": 6.505213034913027e-19,
+   "vertex_dz": 0.0,
+   "sag_rim": 0.0,
+   "sag_rim_waves": 0.0,
+   "slope_vs_cosine": 0.0003290087947580428,
+   "best_focus_m": 0.0009491770102590174
+  }
+ },
+ "summary": {
+  "max_surface_dx": 4.0657581468206416e-20,
+  "max_surface_dopl": 1.3010426069826053e-18,
+  "max_vertex_dx": 3.3881317890172014e-20,
+  "max_vertex_dopl": 6.505213034913027e-19,
+  "max_glass_diff": 4.440892098500626e-16
+ }
+}

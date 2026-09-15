@@ -14,18 +14,40 @@ central finite differences.  The complex-beam-parameter propagators consume it:
   Hessian propagation.
 
 Phase space is **unreduced** ``(x, y, ux, uy)`` with slopes ``ux = L/N``,
-``uy = M/N`` (matching ``propagators.gbd.apply_abcd_to_beamlets``), referenced
-to surface **vertex** planes.  The finite-difference Jacobian bakes Snell's law
-and the glass indices in automatically (no reduced ``n*u`` bookkeeping), so the
-on-axis 2x2 meridional block reproduces
-``raytrace.system_abcd_prescription`` to ~1e-8.
+``uy = M/N`` (matching ``propagators.gbd.apply_abcd_to_beamlets``).  The input
+state is referenced to the FIRST surface's vertex plane; the OUTPUT reference
+plane is chosen by the ``reference`` keyword (see below).  The finite-
+difference Jacobian bakes Snell's law and the glass indices in automatically
+(no reduced ``n*u`` bookkeeping), so the on-axis 2x2 meridional block
+reproduces ``raytrace.system_abcd_prescription`` to ~1e-8.
 
-Validated in ``tests/unit/test_gbd_feature_complete.py``.
+The output reference plane
+--------------------------
+``reference='surface'`` (the default) returns the state and the Jacobian ON
+the last surface, i.e. at ``z = sag(rho)`` -- the same plane
+:func:`lumenairy.raytrace.trace` leaves its rays on, and the plane
+:attr:`lumenairy.raytrace.TraceResult.image_rays` reports.
+``reference='exit_vertex'`` returns them on the last surface's VERTEX plane
+``z = 0``, the plane
+:meth:`lumenairy.raytrace.TraceResult.at_exit_vertex` transfers a ray bundle
+to.  The two differ by the last surface's sag along the ray and agree exactly
+only when that surface is flat; on an N-SF11 R = +/-1.6 mm biconvex the
+difference at the rim is 0.66 um of height and 7.8 waves of optical path at
+633 nm.  A consumer that adds an image-side free-space leg of length
+``z_image`` measured from the vertex plane -- which is what a "back focal
+distance" is -- must ask for ``reference='exit_vertex'``; one that composes the
+transfer with a following surface wants the default.
+:func:`_project_to_exit_vertex_plane` is the single implementation of the
+projection for this module's 4x4 state; the ray-bundle-shaped sibling is
+:func:`lumenairy.raytrace.exit_vertex.exit_vertex_transfer`.
+
+Validated in ``tests/unit/test_gbd_feature_complete.py`` and
+``tests/unit/test_audit2609_b12_fga_reference_plane.py``.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List
+from typing import List, Optional
 
 import numpy as np
 
@@ -51,16 +73,22 @@ class DifferentialTransfer:
         ``B = J[..., 0:2, 2:4]``, ``C = J[..., 2:4, 0:2]``,
         ``D = J[..., 2:4, 2:4]``.
     x, y, ux, uy : ndarray
-        ``(N_rays,)`` base-ray state ON THE LAST SURFACE -- the intersection
-        point, not the exit-vertex plane -- with unreduced slopes.  The two
-        differ by the last surface's sag along the ray (measured 7.6 waves
-        of OPL and 0.64 um of height at the rim of an N-SF11 R = 1.6 mm
-        biconvex, 0.0 on a flat last surface); a caller that needs the
-        vertex plane applies the same step ``at_exit_vertex()`` does:
-        ``x - sag*ux``, ``y - sag*uy``, ``opd - sag*sqrt(1 + ux^2 + uy^2)``.
+        ``(N_rays,)`` base-ray state with unreduced slopes, on the plane the
+        producing call's ``reference`` keyword named.  With
+        ``reference='surface'`` (the default) that is the LAST SURFACE -- the
+        intersection point, at ``z = sag(rho)``; with
+        ``reference='exit_vertex'`` it is that surface's vertex plane
+        ``z = 0``.  The two differ by the last surface's sag along the ray
+        (measured 7.8 waves of OPL and 0.66 um of height at the rim of an
+        N-SF11 R = 1.6 mm biconvex at 633 nm, 0.0 on a flat last surface).
+        The projection between them is
+        ``x - sag*ux``, ``y - sag*uy``,
+        ``opd - n_exit*sag*sqrt(1 + ux^2 + uy^2)``, which is the same step
+        :meth:`lumenairy.raytrace.TraceResult.at_exit_vertex` applies to a
+        ray bundle.
     opd : ndarray
         ``(N_rays,)`` base-ray accumulated optical path length [m] to the
-        last surface (see ``x``).
+        same plane as ``x``.
     alive : ndarray of bool
         ``(N_rays,)`` False for rays that vignetted / TIR'd / missed.
     """
@@ -78,6 +106,160 @@ def _slopes_to_dirs(ux, uy):
     return ux * inv, uy * inv, inv
 
 
+def _validate_reference(reference, fn_name):
+    if reference not in ('surface', 'exit_vertex'):
+        raise ValueError(
+            f"{fn_name}: reference must be 'surface' (the state and the "
+            f"Jacobian on the last surface, z = sag(rho) -- the plane "
+            f"raytrace.trace leaves its rays on) or 'exit_vertex' (that "
+            f"surface's vertex plane z = 0, the plane "
+            f"TraceResult.at_exit_vertex transfers to); got "
+            f"{reference!r}.")
+    return reference
+
+
+def _last_surface_sag_vanishes(surface) -> bool:
+    """True when ``surface``'s sag is identically zero, so the exit-vertex
+    projection is the identity and can be skipped BIT-for-bit.
+
+    Structural (a property of the surface), not data-dependent: a flat conic
+    base with no aspheric departure, no biconic y-branch, no freeform and no
+    field-frame decenter / tilt / sag callable.  ``1e15`` is the flat cutoff
+    :func:`lumenairy.raytrace._conic_core.conic_sag` itself uses, so the two
+    agree on what "flat" means.
+    """
+    from .surface import _field_frame_active
+    if _field_frame_active(surface) or getattr(surface, 'freeform', None):
+        return False
+    if (getattr(surface, 'aspheric_coeffs', None)
+            or getattr(surface, 'aspheric_coeffs_y', None)):
+        return False
+    for attr in ('radius', 'radius_y'):
+        R = getattr(surface, attr, None)
+        if R is None:
+            continue
+        R = float(R)
+        if not (np.isinf(R) or abs(R) > 1e15):
+            return False
+    return True
+
+
+def _exit_direction_sign(surfaces) -> float:
+    """Sign of the outgoing ray's ``N`` relative to +z.
+
+    Each MIRROR in the prescription reverses the propagation direction, and
+    the unreduced slope state ``u = L/N`` does not record that sign (``u``
+    flips with ``N``).  The signed vertex-plane transfer parameter
+    ``t = -z/N = -sag * sign(N) * sqrt(1 + ux^2 + uy^2)`` needs it, so it is
+    recovered from the surface list, where it is a deterministic property of
+    the prescription rather than of the data.
+    """
+    s = 1.0
+    for surf in surfaces:
+        if getattr(surf, 'is_mirror', False):
+            s = -s
+    return s
+
+
+def _project_to_exit_vertex_plane(transfer, surfaces, wavelength, n_exit,
+                                  fn_name):
+    """Return ``transfer`` re-referenced from the last surface to its VERTEX
+    plane -- the single implementation of that projection for this module.
+
+    The map is the straight-line transfer of each base ray along its own
+    direction to ``z = 0``,
+    ``t = -sag * sign(N) * sec``, ``sec = sqrt(1 + ux^2 + uy^2)``::
+
+        x_v   = x   - sag * ux
+        y_v   = y   - sag * uy
+        opd_v = opd - n_exit * sign(N) * sag * sec
+
+    -- the same arithmetic
+    :func:`lumenairy.raytrace.exit_vertex.exit_vertex_transfer` applies to a
+    ray bundle (there written as ``t = -z/N`` on the direction cosines).
+
+    The 4x4 Jacobian is projected with it, EXACTLY: the transfer distance is
+    itself a function of where the ray lands, so the composite derivative of
+    the vertex-plane state with respect to the input state is ``P @ J`` with
+
+    .. math::
+        P = \\begin{pmatrix} I - u \\otimes \\nabla s & -s I \\\\
+                            0 & I \\end{pmatrix}
+
+    (``s`` the sag, ``\\nabla s`` its transverse gradient, ``u`` the output
+    slope pair).  Dropping the ``u \\otimes \\nabla s`` and ``-s I`` blocks --
+    projecting the state but leaving the Jacobian on the surface -- is a
+    FIFTH-DECIMAL effect on the reconstructed field (measured 2026-09-14
+    over twelve fixture-and-plane pairs: 1e-05 to 1.6e-05 of fidelity, ten
+    of the twelve in the projection's favour), but it costs nothing (four
+    row updates on an array already in cache) and it is the derivative of
+    the map that was actually applied, so the full ``P`` is used.  It is
+    pinned against an independent finite difference of the vertex-plane
+    state in ``tests/unit/test_audit2609_b12_fga_reference_plane.py``.
+
+    Sag and its gradient come from the package's shared surface kernels
+    (:func:`lumenairy.raytrace.surface._surface_sag_xy` /
+    ``_surface_sag_derivatives_xy`` on NumPy, which cover every surface type
+    the finite-difference tracer supports; :func:`_conic_core.conic_sag` /
+    ``conic_sag_derivs`` on JAX, whose rotationally-symmetric conic +
+    even-aspheric domain is exactly the analytic backend's own).
+
+    A surface whose sag is identically zero short-circuits: the input object
+    is returned unchanged, so a FLAT-last-surface prescription is bit-for-bit
+    what ``reference='surface'`` produces.
+    """
+    last = surfaces[-1]
+    if _last_surface_sag_vanishes(last):
+        return transfer
+    from .exit_vertex import resolve_exit_index
+    n_out = float(resolve_exit_index(surfaces, wavelength, fn_name=fn_name,
+                                     n_exit=n_exit))
+    nz = _exit_direction_sign(surfaces)
+    x, y = transfer.x, transfer.y
+    ux, uy = transfer.ux, transfer.uy
+    is_np = isinstance(x, np.ndarray)
+    if is_np:
+        from .surface import _surface_sag_derivatives_xy, _surface_sag_xy
+        sag = np.asarray(_surface_sag_xy(x, y, last), dtype=np.float64)
+        sx, sy = _surface_sag_derivatives_xy(x, y, last)
+        sx = np.asarray(sx, dtype=np.float64)
+        sy = np.asarray(sy, dtype=np.float64)
+        xp = np
+    else:                       # JAX tracer: the analytic backend's domain
+        import jax.numpy as jnp
+
+        from ._conic_core import conic_sag, conic_sag_derivs
+        items = _adrt_aspheric_items(last)     # the module's shared (p, c) form
+        R = float(getattr(last, 'radius', np.inf) or np.inf)
+        kk = float(getattr(last, 'conic', 0.0) or 0.0)
+        sag = conic_sag(x, y, R, kk, items, xp=jnp)
+        sx, sy = conic_sag_derivs(x, y, R, kk, items, xp=jnp)
+        xp = jnp
+    sec = xp.sqrt(1.0 + ux * ux + uy * uy)
+
+    def _apply_P(j):
+        """``P @ j`` for one ``(N, 4, 4)`` block, written out as four row
+        updates so the two identity rows stay exact."""
+        j0, j1, j2, j3 = j[:, 0, :], j[:, 1, :], j[:, 2, :], j[:, 3, :]
+        e = sag[:, None]
+        row0 = (1.0 - sx * ux)[:, None] * j0 + (-sy * ux)[:, None] * j1 - e * j2
+        row1 = (-sx * uy)[:, None] * j0 + (1.0 - sy * uy)[:, None] * j1 - e * j3
+        return xp.stack([row0, row1, j2, j3], axis=-2)
+
+    jac = transfer.jacobian
+    if jac.ndim == 3:                       # composite input -> output
+        jac_v = _apply_P(jac)
+    else:                                   # per-surface LOCAL transfers:
+        #    only the last one ends on the last surface, so only it moves.
+        jac_v = xp.concatenate(
+            [jac[:-1], _apply_P(jac[-1])[None, ...]], axis=0)
+    if is_np:
+        jac_v = np.nan_to_num(jac_v, nan=0.0, posinf=0.0, neginf=0.0)
+    return DifferentialTransfer(
+        jacobian=jac_v, x=x - sag * ux, y=y - sag * uy, ux=ux, uy=uy,
+        opd=transfer.opd - (n_out * nz) * sag * sec, alive=transfer.alive)
+
+
 def ray_transfer_jacobian(
     x: np.ndarray,
     y: np.ndarray,
@@ -89,6 +271,8 @@ def ray_transfer_jacobian(
     per_surface: bool = False,
     h_pos: float = 1e-6,
     h_slope: float = 5e-5,
+    reference: str = 'surface',
+    n_exit: Optional[float] = None,
 ) -> DifferentialTransfer:
     """Differential ray-transfer Jacobian along each base ray.
 
@@ -114,11 +298,32 @@ def ray_transfer_jacobian(
         Central-FD steps for the position and slope perturbations.  The result
         is insensitive across several decades (the trace is smooth); the
         defaults sit in the truncation-limited regime for mm-scale optics.
+    reference : {'surface', 'exit_vertex'}, default 'surface'
+        Output reference plane.  ``'surface'`` leaves the state and the
+        Jacobian ON the last surface (``z = sag(rho)``), the plane
+        :func:`lumenairy.raytrace.trace` itself stops on -- compose that with
+        a following surface, or with anything that re-intersects.
+        ``'exit_vertex'`` projects both onto the last surface's VERTEX plane
+        (``z = 0``), which is what a caller that adds its own image-side
+        free-space leg of length ``z_image`` needs: ``z_image`` is measured
+        from the vertex plane, so starting the leg on the surface adds a
+        spurious ``k * sag(rho)`` of phase (7.8 waves at the rim of an
+        N-SF11 R = +/-1.6 mm biconvex at 633 nm; exactly zero when the last
+        surface is flat, where the two options are bit-identical).  The
+        projection is :func:`_project_to_exit_vertex_plane`.
+    n_exit : float, optional
+        Refractive index of the medium after the last surface, used by
+        ``reference='exit_vertex'`` for the optical path of the projected
+        segment.  Resolved from ``surfaces[-1].glass_after`` when omitted
+        (:func:`lumenairy.raytrace.exit_vertex.resolve_exit_index`, which
+        raises rather than guessing 1.0 for a name it cannot resolve).
+        Ignored by ``reference='surface'``.
 
     Returns
     -------
     DifferentialTransfer
     """
+    _validate_reference(reference, 'ray_transfer_jacobian')
     x = np.asarray(x, dtype=np.float64)
     y = np.asarray(y, dtype=np.float64)
     ux = np.asarray(ux, dtype=np.float64)
@@ -178,9 +383,14 @@ def ray_transfer_jacobian(
         bx, by, bux, buy, bopd, balive = _state(img)
         alive = np.asarray(balive[:n], bool) & _companion_alive(balive)
         Jc = np.nan_to_num(Jc, nan=0.0, posinf=0.0, neginf=0.0)
-        return DifferentialTransfer(
+        out = DifferentialTransfer(
             jacobian=Jc, x=bx[:n], y=by[:n], ux=bux[:n], uy=buy[:n],
             opd=bopd[:n], alive=alive)
+        if reference == 'exit_vertex':
+            out = _project_to_exit_vertex_plane(
+                out, surfaces, wavelength, n_exit,
+                "ray_transfer_jacobian(reference='exit_vertex')")
+        return out
 
     # per-surface: cumulative J at each surface -> local transfers
     hist = res.ray_history
@@ -193,9 +403,14 @@ def ray_transfer_jacobian(
     final = hist[-1]
     bx, by, bux, buy, bopd, balive = _state(final)
     alive = np.asarray(balive[:n], bool) & _companion_alive(balive)
-    return DifferentialTransfer(
+    out = DifferentialTransfer(
         jacobian=locals_, x=bx[:n], y=by[:n], ux=bux[:n], uy=buy[:n],
         opd=bopd[:n], alive=alive)
+    if reference == 'exit_vertex':
+        out = _project_to_exit_vertex_plane(
+            out, surfaces, wavelength, n_exit,
+            "ray_transfer_jacobian(reference='exit_vertex')")
+    return out
 
 
 def ray_transfer_jacobian_jax(x, y, ux, uy, prescription, wavelength):
@@ -223,7 +438,16 @@ def ray_transfer_jacobian_jax(x, y, ux, uy, prescription, wavelength):
        slope ``u = 0.9`` through a powered lens), because every transfer is
        followed by an intersection.  (The only way to expose the isolated
        paraxial step would be a final transfer with no following surface, which
-       this primitive never emits -- its output is at the last vertex.)
+       this primitive never emits.)
+
+    .. note::
+       Like :func:`ray_transfer_jacobian`'s default, the Jacobian is referenced
+       to the LAST SURFACE (``z = sag(rho)``), not to its vertex plane -- this
+       primitive returns no base-ray state, so there is nothing here for a
+       caller to mistake for a vertex-plane coordinate, and it carries no
+       ``reference`` keyword.  A caller that needs the vertex-plane Jacobian
+       uses :func:`ray_transfer_jacobian_analytic` (whose JAX branch takes the
+       same ``reference='exit_vertex'``).
 
     Returns
     -------
@@ -1061,6 +1285,7 @@ def _adrt_numba(x, y, ux, uy, surfaces, wavelength):
 
 def ray_transfer_jacobian_analytic(
     x, y, ux, uy, surfaces, wavelength, *, per_surface: bool = False,
+    reference: str = 'surface', n_exit: Optional[float] = None,
 ):
     """Analytic (exact) differential ray-transfer Jacobian -- the closed-form /
     autodiff twin of the finite-difference :func:`ray_transfer_jacobian`.
@@ -1084,9 +1309,12 @@ def ray_transfer_jacobian_analytic(
     that path, just a NumPy-native, truncation-free one with a cleaner
     forward-AD structure.)
 
-    Same signature / return (:class:`DifferentialTransfer`) and ``per_surface``
-    semantics as :func:`ray_transfer_jacobian`; agrees with it to the FD
-    truncation floor (~1e-8).  On axis the 2x2 meridional block equals
+    Same signature / return (:class:`DifferentialTransfer`) and
+    ``per_surface`` / ``reference`` / ``n_exit`` semantics as
+    :func:`ray_transfer_jacobian`; agrees with it to the FD truncation floor
+    (~1e-8) on BOTH reference planes -- the two backends share
+    :func:`_project_to_exit_vertex_plane`, so ``reference='exit_vertex'``
+    cannot drift between them.  On axis the 2x2 meridional block equals
     ``system_abcd_prescription`` (exactly for air-to-air prescriptions, where
     the unreduced slope ``u = L/N`` coincides with the reduced ``n*u`` momentum
     at the ``n = 1`` endpoints).  Refracting / reflecting surfaces must be conic
@@ -1110,6 +1338,7 @@ def ray_transfer_jacobian_analytic(
     -------
     DifferentialTransfer
     """
+    _validate_reference(reference, 'ray_transfer_jacobian_analytic')
     from ..backend.array import is_jax_array
     for s in surfaces:
         # _adrt_step reads ``radius`` / ``conic`` / ``aspheric_coeffs`` --
@@ -1152,7 +1381,9 @@ def ray_transfer_jacobian_analytic(
     # BOTH primitives' ``opd``; see ``trace.seed_entrance_eikonal``.
     if is_jax_array(x) or is_jax_array(y) or is_jax_array(ux) \
             or is_jax_array(uy):
-        return _adrt_jax(x, y, ux, uy, surfaces, wavelength, per_surface)
+        return _finish_analytic(
+            _adrt_jax(x, y, ux, uy, surfaces, wavelength, per_surface),
+            surfaces, wavelength, reference, n_exit)
     # B4: the composite all-conic path (the adaptive-FGA exact_jacobian hot
     # spot) runs the numba forward-AD kernel when numba is available -- ULP-
     # identical to the ``_AdrtDual`` result, ~order-of-magnitude faster.  Any
@@ -1176,8 +1407,23 @@ def ray_transfer_jacobian_analytic(
         except ZeroDivisionError:
             dt = None
         if dt is not None:
-            return dt
-    return _adrt_numpy(x, y, ux, uy, surfaces, wavelength, per_surface)
+            return _finish_analytic(dt, surfaces, wavelength, reference,
+                                    n_exit)
+    return _finish_analytic(
+        _adrt_numpy(x, y, ux, uy, surfaces, wavelength, per_surface),
+        surfaces, wavelength, reference, n_exit)
+
+
+def _finish_analytic(dt, surfaces, wavelength, reference, n_exit):
+    """Re-reference an analytic backend's result onto the requested plane.
+
+    One place, so the numba kernel, the ``_AdrtDual`` path and the JAX path
+    cannot disagree about where their state and Jacobian live."""
+    if reference == 'surface':
+        return dt
+    return _project_to_exit_vertex_plane(
+        dt, surfaces, wavelength, n_exit,
+        "ray_transfer_jacobian_analytic(reference='exit_vertex')")
 
 
 def _adrt_jax(x, y, ux, uy, surfaces, wavelength, per_surface):

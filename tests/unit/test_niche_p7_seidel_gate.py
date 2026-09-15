@@ -27,6 +27,16 @@ NA and never reaches this low-NA gate.)
 SAFETY (measured, not asserted from internal estimates): the SA-nulled conic routes
 to displaced AND the displaced field is within ~2% of the diffraction oracle; every
 genuinely-aberrated M1-M6 design routes to a ray member.
+
+WP-B12, 2026-09-14 -- the FGA reference plane.  The repair moves FGA fields on
+a curved last surface and shifts ``_caustic_zone``'s near edge by about the
+last surface's sag (-0.46 % of the focal distance on an f = 1.2 mm singlet).
+Neither reaches this file: ``_seidel_sa_wfe_rad`` and
+``_sag_screen_aberration_rad`` are paraxial marginal-ray quantities computed
+from the prescription, and every routing row here asserts a member CLASS at a
+plane well away from a caustic edge (``'traced'`` / ``'fga'`` / ``'gbd'``
+against the thin screen), so a zone edge moving by half a percent cannot flip
+one.  Re-measured on both builds after the repair: green.
 """
 from __future__ import annotations
 

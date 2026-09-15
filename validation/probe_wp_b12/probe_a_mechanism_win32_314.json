@@ -1,0 +1,532 @@
+{
+ "build": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "platform": "win32"
+ },
+ "fixtures": {
+  "b7b_biconvex": {
+   "note": "WP-B7b's N-SF11 R=+/-1.6 mm biconvex, 633 nm",
+   "glass": "N-SF11",
+   "lam_m": 6.33e-07,
+   "R1": 0.0016,
+   "R2": -0.0016,
+   "t": 0.0006,
+   "semi": 0.00015,
+   "N": 256,
+   "dx": 1.4e-06,
+   "w0": 8e-05,
+   "dn_sellmeier_vs_library": 0.0,
+   "n_rays_alive": 796,
+   "n_exit_oracle": 1.0,
+   "oracle_vs_at_exit_vertex": {
+    "dx_m": 5.421010862427522e-20,
+    "du": 6.938893903907228e-17,
+    "dopl_m": 6.505213034913027e-19
+   },
+   "oracle_vs_image_rays": {
+    "dx_m": 2.710505431213761e-20,
+    "dopl_m": 8.673617379884035e-19
+   },
+   "oracle_vs_ray_transfer_jacobian": {
+    "dx_m": 2.710505431213761e-20,
+    "du": 6.938893903907228e-17,
+    "dopl_m": 8.673617379884035e-19
+   },
+   "slope_vs_cosine_max": 0.0012259457791134465,
+   "defect_fd": {
+    "max_dx_m": 6.615769516985469e-07,
+    "max_dopd_m": 4.928551598494492e-06,
+    "max_dopd_waves": 7.78602148261373,
+    "rim_dopd_waves": 7.78602148261373
+   },
+   "defect_analytic": {
+    "max_dx_m": 6.615769516985469e-07,
+    "max_dopd_m": 4.928551598494492e-06,
+    "max_dopd_waves": 7.78602148261373,
+    "rim_dopd_waves": 7.78602148261373
+   },
+   "repair_fd_vs_at_exit_vertex": {
+    "dx_m": 2.710505431213761e-20,
+    "dopd_m": 2.168404344971009e-19,
+    "bit_identical_to_surface_arm": false
+   },
+   "repair_analytic_vs_at_exit_vertex": {
+    "dx_m": 4.0657581468206416e-20,
+    "dopd_m": 8.673617379884035e-19,
+    "bit_identical_to_surface_arm": false
+   },
+   "repair_fd_vs_analytic_jacobian_rel": 9.890283337163954e-07,
+   "surface_fd_vs_analytic_jacobian_rel": 9.890283337163954e-07,
+   "last_surface_sag_at_rim_m": -4.883946846148463e-06,
+   "last_surface_sag_at_rim_waves": 7.715555839097097,
+   "system_na": 0.16031884312723918,
+   "best_focus_m": 0.0009259516664351796
+  },
+  "b7b_biconvex_testgrid": {
+   "note": "WP-B7b's fixture at the pinned tests' grid",
+   "glass": "N-SF11",
+   "lam_m": 6.33e-07,
+   "R1": 0.0016,
+   "R2": -0.0016,
+   "t": 0.0006,
+   "semi": 0.00015,
+   "N": 192,
+   "dx": 1.8e-06,
+   "w0": 8e-05,
+   "dn_sellmeier_vs_library": 0.0,
+   "n_rays_alive": 796,
+   "n_exit_oracle": 1.0,
+   "oracle_vs_at_exit_vertex": {
+    "dx_m": 5.421010862427522e-20,
+    "du": 6.938893903907228e-17,
+    "dopl_m": 6.505213034913027e-19
+   },
+   "oracle_vs_image_rays": {
+    "dx_m": 2.710505431213761e-20,
+    "dopl_m": 8.673617379884035e-19
+   },
+   "oracle_vs_ray_transfer_jacobian": {
+    "dx_m": 2.710505431213761e-20,
+    "du": 6.938893903907228e-17,
+    "dopl_m": 8.673617379884035e-19
+   },
+   "slope_vs_cosine_max": 0.0012259457791134465,
+   "defect_fd": {
+    "max_dx_m": 6.615769516985469e-07,
+    "max_dopd_m": 4.928551598494492e-06,
+    "max_dopd_waves": 7.78602148261373,
+    "rim_dopd_waves": 7.78602148261373
+   },
+   "defect_analytic": {
+    "max_dx_m": 6.615769516985469e-07,
+    "max_dopd_m": 4.928551598494492e-06,
+    "max_dopd_waves": 7.78602148261373,
+    "rim_dopd_waves": 7.78602148261373
+   },
+   "repair_fd_vs_at_exit_vertex": {
+    "dx_m": 2.710505431213761e-20,
+    "dopd_m": 2.168404344971009e-19,
+    "bit_identical_to_surface_arm": false
+   },
+   "repair_analytic_vs_at_exit_vertex": {
+    "dx_m": 4.0657581468206416e-20,
+    "dopd_m": 8.673617379884035e-19,
+    "bit_identical_to_surface_arm": false
+   },
+   "repair_fd_vs_analytic_jacobian_rel": 9.890283337163954e-07,
+   "surface_fd_vs_analytic_jacobian_rel": 9.890283337163954e-07,
+   "last_surface_sag_at_rim_m": -4.883946846148463e-06,
+   "last_surface_sag_at_rim_waves": 7.715555839097097,
+   "system_na": 0.16031884312723918,
+   "best_focus_m": 0.0009259516664351796
+  },
+  "m_biconvex_baf10": {
+   "note": "mine: N-BAF10 biconvex, 1.064 um",
+   "glass": "N-BAF10",
+   "lam_m": 1.064e-06,
+   "R1": 0.0021,
+   "R2": -0.0021,
+   "t": 0.0007,
+   "semi": 0.0002,
+   "N": 256,
+   "dx": 1.9e-06,
+   "w0": 0.000105,
+   "dn_sellmeier_vs_library": 0.0,
+   "n_rays_alive": 797,
+   "n_exit_oracle": 1.0,
+   "oracle_vs_at_exit_vertex": {
+    "dx_m": 5.421010862427522e-20,
+    "du": 8.326672684688674e-17,
+    "dopl_m": 6.505213034913027e-19
+   },
+   "oracle_vs_image_rays": {
+    "dx_m": 5.421010862427522e-20,
+    "dopl_m": 8.673617379884035e-19
+   },
+   "oracle_vs_ray_transfer_jacobian": {
+    "dx_m": 5.421010862427522e-20,
+    "du": 8.326672684688674e-17,
+    "dopl_m": 8.673617379884035e-19
+   },
+   "slope_vs_cosine_max": 0.0008027009431673532,
+   "defect_fd": {
+    "max_dx_m": 8.406127924665354e-07,
+    "max_dopd_m": 7.203703396722492e-06,
+    "max_dopd_waves": 6.770397929250462,
+    "rim_dopd_waves": 6.770397929250462
+   },
+   "defect_analytic": {
+    "max_dx_m": 8.406127924665626e-07,
+    "max_dopd_m": 7.203703396722709e-06,
+    "max_dopd_waves": 6.770397929250666,
+    "rim_dopd_waves": 6.770397929250666
+   },
+   "repair_fd_vs_at_exit_vertex": {
+    "dx_m": 5.421010862427522e-20,
+    "dopd_m": 4.336808689942018e-19,
+    "bit_identical_to_surface_arm": false
+   },
+   "repair_analytic_vs_at_exit_vertex": {
+    "dx_m": 5.421010862427522e-20,
+    "dopd_m": 8.673617379884035e-19,
+    "bit_identical_to_surface_arm": false
+   },
+   "repair_fd_vs_analytic_jacobian_rel": 4.6958809735495926e-07,
+   "surface_fd_vs_analytic_jacobian_rel": 4.6958809735495926e-07,
+   "last_surface_sag_at_rim_m": -7.154488993708289e-06,
+   "last_surface_sag_at_rim_waves": 6.724143791079218,
+   "system_na": 0.13402115602573783,
+   "best_focus_m": 0.0014792067597852584
+  },
+  "m_bent_lak22": {
+   "note": "mine: N-LAK22 bent singlet, 1.55 um",
+   "glass": "N-LAK22",
+   "lam_m": 1.55e-06,
+   "R1": 0.00205,
+   "R2": -0.0014,
+   "t": 0.00055,
+   "semi": 0.00017,
+   "N": 256,
+   "dx": 2.6e-06,
+   "w0": 9e-05,
+   "dn_sellmeier_vs_library": 0.0,
+   "n_rays_alive": 796,
+   "n_exit_oracle": 1.0,
+   "oracle_vs_at_exit_vertex": {
+    "dx_m": 5.421010862427522e-20,
+    "du": 4.163336342344337e-17,
+    "dopl_m": 4.336808689942018e-19
+   },
+   "oracle_vs_image_rays": {
+    "dx_m": 2.710505431213761e-20,
+    "dopl_m": 6.505213034913027e-19
+   },
+   "oracle_vs_ray_transfer_jacobian": {
+    "dx_m": 2.710505431213761e-20,
+    "du": 4.163336342344337e-17,
+    "dopl_m": 6.505213034913027e-19
+   },
+   "slope_vs_cosine_max": 0.0009078736200865134,
+   "defect_fd": {
+    "max_dx_m": 1.010109807234803e-06,
+    "max_dopd_m": 8.310587579190578e-06,
+    "max_dopd_waves": 5.361669405929405,
+    "rim_dopd_waves": 5.361669405929405
+   },
+   "defect_analytic": {
+    "max_dx_m": 1.010109807234776e-06,
+    "max_dopd_m": 8.310587579190578e-06,
+    "max_dopd_waves": 5.361669405929405,
+    "rim_dopd_waves": 5.361669405929405
+   },
+   "repair_fd_vs_at_exit_vertex": {
+    "dx_m": 2.710505431213761e-20,
+    "dopd_m": 3.2526065174565133e-19,
+    "bit_identical_to_surface_arm": false
+   },
+   "repair_analytic_vs_at_exit_vertex": {
+    "dx_m": 5.421010862427522e-20,
+    "dopd_m": 5.421010862427522e-19,
+    "bit_identical_to_surface_arm": false
+   },
+   "repair_fd_vs_analytic_jacobian_rel": 8.605324041205802e-07,
+   "surface_fd_vs_analytic_jacobian_rel": 8.605324041205802e-07,
+   "last_surface_sag_at_rim_m": -8.248972305004159e-06,
+   "last_surface_sag_at_rim_waves": 5.321917616131715,
+   "system_na": 0.14261584718802506,
+   "best_focus_m": 0.0012447107183651113
+  },
+  "m_meniscus_sf6": {
+   "note": "mine: N-SF6 converging meniscus, 850 nm",
+   "glass": "N-SF6",
+   "lam_m": 8.5e-07,
+   "R1": 0.0013,
+   "R2": 0.009,
+   "t": 0.0006,
+   "semi": 0.00016,
+   "N": 256,
+   "dx": 1.8e-06,
+   "w0": 8.5e-05,
+   "dn_sellmeier_vs_library": 0.0,
+   "n_rays_alive": 796,
+   "n_exit_oracle": 1.0,
+   "oracle_vs_at_exit_vertex": {
+    "dx_m": 5.421010862427522e-20,
+    "du": 4.163336342344337e-17,
+    "dopl_m": 1.5178830414797062e-18
+   },
+   "oracle_vs_image_rays": {
+    "dx_m": 8.131516293641283e-20,
+    "dopl_m": 2.8189256484623115e-18
+   },
+   "oracle_vs_ray_transfer_jacobian": {
+    "dx_m": 8.131516293641283e-20,
+    "du": 4.163336342344337e-17,
+    "dopl_m": 2.8189256484623115e-18
+   },
+   "slope_vs_cosine_max": 0.00030750875073000394,
+   "defect_fd": {
+    "max_dx_m": 7.637064009983303e-08,
+    "max_dopd_m": 8.996679290603198e-07,
+    "max_dopd_waves": 1.0584328577180233,
+    "rim_dopd_waves": 1.0584328577180233
+   },
+   "defect_analytic": {
+    "max_dx_m": 7.637064009983303e-08,
+    "max_dopd_m": 8.996679290598861e-07,
+    "max_dopd_waves": 1.058432857717513,
+    "rim_dopd_waves": 1.058432857717513
+   },
+   "repair_fd_vs_at_exit_vertex": {
+    "dx_m": 1.0842021724855044e-19,
+    "dopd_m": 1.5178830414797062e-18,
+    "bit_identical_to_surface_arm": false
+   },
+   "repair_analytic_vs_at_exit_vertex": {
+    "dx_m": 5.421010862427522e-20,
+    "dopd_m": 1.734723475976807e-18,
+    "bit_identical_to_surface_arm": false
+   },
+   "repair_fd_vs_analytic_jacobian_rel": 3.4032370137055277e-07,
+   "surface_fd_vs_analytic_jacobian_rel": 3.4032370137055277e-07,
+   "last_surface_sag_at_rim_m": 8.964206088162349e-07,
+   "last_surface_sag_at_rim_waves": 1.0546124809602764,
+   "system_na": 0.08269132431481041,
+   "best_focus_m": 0.0014953193287288954
+  },
+  "m_flat_last_lasf9": {
+   "note": "mine: N-LASF9 plano-convex, curved side FIRST (flat last surface) -- the control",
+   "glass": "N-LASF9",
+   "lam_m": 8.5e-07,
+   "R1": 0.00145,
+   "R2": Infinity,
+   "t": 0.00055,
+   "semi": 0.000262,
+   "N": 256,
+   "dx": 2e-06,
+   "w0": 0.00019,
+   "dn_sellmeier_vs_library": 0.0,
+   "n_rays_alive": 798,
+   "n_exit_oracle": 1.0,
+   "oracle_vs_at_exit_vertex": {
+    "dx_m": 5.421010862427522e-20,
+    "du": 5.551115123125783e-17,
+    "dopl_m": 6.505213034913027e-19
+   },
+   "oracle_vs_image_rays": {
+    "dx_m": 5.421010862427522e-20,
+    "dopl_m": 6.505213034913027e-19
+   },
+   "oracle_vs_ray_transfer_jacobian": {
+    "dx_m": 5.421010862427522e-20,
+    "du": 5.551115123125783e-17,
+    "dopl_m": 6.505213034913027e-19
+   },
+   "slope_vs_cosine_max": 0.0017398406324161952,
+   "defect_fd": {
+    "max_dx_m": 0.0,
+    "max_dopd_m": 0.0,
+    "max_dopd_waves": 0.0,
+    "rim_dopd_waves": 0.0
+   },
+   "defect_analytic": {
+    "max_dx_m": 2.710505431213761e-20,
+    "max_dopd_m": 4.336808689942018e-19,
+    "max_dopd_waves": 5.102127870520021e-13,
+    "rim_dopd_waves": 2.5510639352600106e-13
+   },
+   "repair_fd_vs_at_exit_vertex": {
+    "dx_m": 0.0,
+    "dopd_m": 0.0,
+    "bit_identical_to_surface_arm": true
+   },
+   "repair_analytic_vs_at_exit_vertex": {
+    "dx_m": 2.710505431213761e-20,
+    "dopd_m": 4.336808689942018e-19,
+    "bit_identical_to_surface_arm": true
+   },
+   "repair_fd_vs_analytic_jacobian_rel": 3.7244000544435373e-07,
+   "surface_fd_vs_analytic_jacobian_rel": 3.7244000544435373e-07,
+   "last_surface_sag_at_rim_m": 0.0,
+   "last_surface_sag_at_rim_waves": 0.0,
+   "system_na": 0.1499833460583793,
+   "best_focus_m": 0.0014303422206344027
+  },
+  "v_planoconvex_w190": {
+   "note": "VERIFY-B7b's fixture V (flat last surface), w0 = 190 um -- inside the aberration envelope",
+   "glass": "N-LASF9",
+   "lam_m": 8.5e-07,
+   "R1": 0.00145,
+   "R2": Infinity,
+   "t": 0.00055,
+   "semi": 0.000262,
+   "N": 384,
+   "dx": 1.6e-06,
+   "w0": 0.00019,
+   "dn_sellmeier_vs_library": 0.0,
+   "n_rays_alive": 798,
+   "n_exit_oracle": 1.0,
+   "oracle_vs_at_exit_vertex": {
+    "dx_m": 5.421010862427522e-20,
+    "du": 5.551115123125783e-17,
+    "dopl_m": 6.505213034913027e-19
+   },
+   "oracle_vs_image_rays": {
+    "dx_m": 5.421010862427522e-20,
+    "dopl_m": 6.505213034913027e-19
+   },
+   "oracle_vs_ray_transfer_jacobian": {
+    "dx_m": 5.421010862427522e-20,
+    "du": 5.551115123125783e-17,
+    "dopl_m": 6.505213034913027e-19
+   },
+   "slope_vs_cosine_max": 0.0017398406324161952,
+   "defect_fd": {
+    "max_dx_m": 0.0,
+    "max_dopd_m": 0.0,
+    "max_dopd_waves": 0.0,
+    "rim_dopd_waves": 0.0
+   },
+   "defect_analytic": {
+    "max_dx_m": 2.710505431213761e-20,
+    "max_dopd_m": 4.336808689942018e-19,
+    "max_dopd_waves": 5.102127870520021e-13,
+    "rim_dopd_waves": 2.5510639352600106e-13
+   },
+   "repair_fd_vs_at_exit_vertex": {
+    "dx_m": 0.0,
+    "dopd_m": 0.0,
+    "bit_identical_to_surface_arm": true
+   },
+   "repair_analytic_vs_at_exit_vertex": {
+    "dx_m": 2.710505431213761e-20,
+    "dopd_m": 4.336808689942018e-19,
+    "bit_identical_to_surface_arm": true
+   },
+   "repair_fd_vs_analytic_jacobian_rel": 3.7244000544435373e-07,
+   "surface_fd_vs_analytic_jacobian_rel": 3.7244000544435373e-07,
+   "last_surface_sag_at_rim_m": 0.0,
+   "last_surface_sag_at_rim_waves": 0.0,
+   "system_na": 0.1499833460583793,
+   "best_focus_m": 0.0014303422206344027
+  },
+  "v_planoconvex_w205": {
+   "note": "VERIFY-B7b's fixture V, w0 = 205 um -- OVER the aberration budget",
+   "glass": "N-LASF9",
+   "lam_m": 8.5e-07,
+   "R1": 0.00145,
+   "R2": Infinity,
+   "t": 0.00055,
+   "semi": 0.000262,
+   "N": 384,
+   "dx": 1.6e-06,
+   "w0": 0.000205,
+   "dn_sellmeier_vs_library": 0.0,
+   "n_rays_alive": 798,
+   "n_exit_oracle": 1.0,
+   "oracle_vs_at_exit_vertex": {
+    "dx_m": 5.421010862427522e-20,
+    "du": 5.551115123125783e-17,
+    "dopl_m": 6.505213034913027e-19
+   },
+   "oracle_vs_image_rays": {
+    "dx_m": 5.421010862427522e-20,
+    "dopl_m": 6.505213034913027e-19
+   },
+   "oracle_vs_ray_transfer_jacobian": {
+    "dx_m": 5.421010862427522e-20,
+    "du": 5.551115123125783e-17,
+    "dopl_m": 6.505213034913027e-19
+   },
+   "slope_vs_cosine_max": 0.0017398406324161952,
+   "defect_fd": {
+    "max_dx_m": 0.0,
+    "max_dopd_m": 0.0,
+    "max_dopd_waves": 0.0,
+    "rim_dopd_waves": 0.0
+   },
+   "defect_analytic": {
+    "max_dx_m": 2.710505431213761e-20,
+    "max_dopd_m": 4.336808689942018e-19,
+    "max_dopd_waves": 5.102127870520021e-13,
+    "rim_dopd_waves": 2.5510639352600106e-13
+   },
+   "repair_fd_vs_at_exit_vertex": {
+    "dx_m": 0.0,
+    "dopd_m": 0.0,
+    "bit_identical_to_surface_arm": true
+   },
+   "repair_analytic_vs_at_exit_vertex": {
+    "dx_m": 2.710505431213761e-20,
+    "dopd_m": 4.336808689942018e-19,
+    "bit_identical_to_surface_arm": true
+   },
+   "repair_fd_vs_analytic_jacobian_rel": 3.7244000544435373e-07,
+   "surface_fd_vs_analytic_jacobian_rel": 3.7244000544435373e-07,
+   "last_surface_sag_at_rim_m": 0.0,
+   "last_surface_sag_at_rim_waves": 0.0,
+   "system_na": 0.1499833460583793,
+   "best_focus_m": 0.00142932979376303
+  },
+  "h2_f5": {
+   "note": "the H2 f/5 dual-oracle biconvex (model glass n = 1.5168)",
+   "glass": "_B12_N1p5168",
+   "lam_m": 1.31e-06,
+   "R1": 0.05168,
+   "R2": -0.05168,
+   "t": 0.005,
+   "semi": 0.005,
+   "N": 256,
+   "dx": 0.0001,
+   "w0": 0.005,
+   "dn_sellmeier_vs_library": 0.0,
+   "n_rays_alive": 801,
+   "n_exit_oracle": 1.0,
+   "oracle_vs_at_exit_vertex": {
+    "dx_m": 1.734723475976807e-18,
+    "du": 4.163336342344337e-17,
+    "dopl_m": 7.806255641895632e-18
+   },
+   "oracle_vs_image_rays": {
+    "dx_m": 8.673617379884035e-19,
+    "dopl_m": 1.3010426069826053e-17
+   },
+   "oracle_vs_ray_transfer_jacobian": {
+    "dx_m": 8.673617379884035e-19,
+    "du": 4.163336342344337e-17,
+    "dopl_m": 1.3010426069826053e-17
+   },
+   "slope_vs_cosine_max": 0.0004916640019984042,
+   "defect_fd": {
+    "max_dx_m": 2.270961219582885e-05,
+    "max_dopd_m": 0.0002289374137690323,
+    "max_dopd_waves": 174.7613845565132,
+    "rim_dopd_waves": 174.7613845565132
+   },
+   "defect_analytic": {
+    "max_dx_m": 2.270961219582885e-05,
+    "max_dopd_m": 0.00022893741376902796,
+    "max_dopd_waves": 174.7613845565099,
+    "rim_dopd_waves": 174.7613845565099
+   },
+   "repair_fd_vs_at_exit_vertex": {
+    "dx_m": 8.673617379884035e-19,
+    "dopd_m": 7.806255641895632e-18,
+    "bit_identical_to_surface_arm": false
+   },
+   "repair_analytic_vs_at_exit_vertex": {
+    "dx_m": 1.734723475976807e-18,
+    "dopd_m": 7.806255641895632e-18,
+    "bit_identical_to_surface_arm": false
+   },
+   "repair_fd_vs_analytic_jacobian_rel": 6.768250271293942e-10,
+   "surface_fd_vs_analytic_jacobian_rel": 6.768250271293942e-10,
+   "last_surface_sag_at_rim_m": -0.0002278082810987522,
+   "last_surface_sag_at_rim_waves": 173.89945122042155,
+   "system_na": 0.10170439050995364,
+   "best_focus_m": 0.04841236424628845
+  }
+ }
+}

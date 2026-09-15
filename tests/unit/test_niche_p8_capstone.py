@@ -21,6 +21,15 @@ Every piece of the accuracy-niches campaign is oracle-validated in isolation
 
 The oracle is imported directly from ``validation/oracles/`` -- lumenairy-free.
 Unit tests run WITHOUT Zemax.
+
+WP-B12, 2026-09-14 -- the FGA reference plane.  The repair moves FGA fields on
+a curved last surface.  The composed chain here is scored on Debye / Airy
+references and on energy closure, and its members are ``traced``, ``gbd``, the
+thin screen and the carrier leg; ``apply_real_lens_universal`` appears as the
+GATE (its returned method name is asserted), not as an FGA field.
+Re-measured on both builds after the repair: green, including the grid-halving
+focus-metric stability row, which is the one that would have seen a shifted
+caustic zone.
 """
 from __future__ import annotations
 

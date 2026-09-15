@@ -17,6 +17,16 @@ displaced_2026_07_19.md) shows the analytic ``thin`` (phase_screen) model is
 58-123% wrong vs the Debye oracle on the doublet / asphere / meniscus fast
 regime, so routing those AWAY from phase_screen is the correct (accurate)
 outcome.  A false trip only costs speed (the ray members are never wrong).
+
+WP-B12, 2026-09-14 -- the FGA reference plane.  ``fga.py``'s differential
+transfer is now referenced to the exit-vertex plane, which moves FGA FIELDS on
+a curved last surface.  It cannot move anything here:
+``_sag_screen_aberration_rad`` is computed from the prescription's radii,
+conics and aspheric coefficients and the input field's own radius, by a
+paraxial marginal-ray trace -- it never calls the differential transfer -- and
+the two routing rows assert a member CLASS (``'traced'`` or ``'fga'``, i.e.
+not the thin screen), which is a gate decision rather than a field.
+Re-measured on both builds after the repair: green.
 """
 from __future__ import annotations
 

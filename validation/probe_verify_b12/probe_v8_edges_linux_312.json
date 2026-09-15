@@ -1,0 +1,93 @@
+{
+ "env": {
+  "platform": "linux",
+  "python": "3.12.3",
+  "numpy": "2.4.6",
+  "scipy": "1.17.1",
+  "lumenairy_version": "5.47.0",
+  "lumenairy_file": "/mnt/c/tmp/lum_vb12/lumenairy/__init__.py",
+  "numba": "0.65.1",
+  "jax": "0.10.2"
+ },
+ "e1_dead_rays": {
+  "n_rays": 201,
+  "n_dead": 134,
+  "n_alive": 67,
+  "finite_before_dead": 134,
+  "finite_after_dead": 134,
+  "newly_nonfinite": 0,
+  "dead_rays_moved": 0.0,
+  "at_exit_vertex_freezes_dead": true,
+  "alive_flags_unchanged": true
+ },
+ "e2_grazing": {
+  "u=1": {
+   "alive": [
+    false,
+    false
+   ],
+   "finite_x": true,
+   "finite_opd": true,
+   "x": [
+    "0.0002493782507231572",
+    "0.00031337825072315714"
+   ]
+  },
+  "u=10": {
+   "alive": [
+    false,
+    false
+   ],
+   "finite_x": true,
+   "finite_opd": true,
+   "x": [
+    "0.0003927166174483133",
+    "0.0004567166174483133"
+   ]
+  },
+  "u=1000": {
+   "alive": [
+    false,
+    false
+   ],
+   "finite_x": true,
+   "finite_opd": true,
+   "x": [
+    "0.00039568498391409407",
+    "0.00045968498391409405"
+   ]
+  },
+  "u=1e+08": {
+   "alive": [
+    false,
+    false
+   ],
+   "finite_x": false,
+   "finite_opd": false,
+   "x": [
+    "nan",
+    "inf"
+   ]
+  }
+ },
+ "e3_chunking": {
+  "sha_big": "4040e232e6cea6d986a27f4d4acdb75367a857a996592fb1cb143e06a92fe3b4",
+  "sha_tiny": "4a476d6a4d599bcdfc7c4dce862c5ca3931fabeb038eb868674aeb1990a5c5f1",
+  "sha_chunk2": "67e129291c46fa75cb5d1ed81c7cee82476010e7e925d7b59119f5d9232e39d6",
+  "tiny_vs_big": 8.296271088900922e-14,
+  "chunk2_vs_big": 1.5956589415320985e-13,
+  "rel_tiny": 8.40077217245407e-15,
+  "rel_chunk2": 1.6157581025388375e-14
+ },
+ "e4_config_object": {
+  "sha_kw": "4040e232e6cea6d986a27f4d4acdb75367a857a996592fb1cb143e06a92fe3b4",
+  "sha_geometry": "4040e232e6cea6d986a27f4d4acdb75367a857a996592fb1cb143e06a92fe3b4",
+  "bit_identical": true
+ },
+ "e5_complex64": {
+  "dtype_in": "complex64",
+  "dtype_out": "complex128",
+  "projection_changed_the_field": true,
+  "rel_change": 1.000685493523503
+ }
+}

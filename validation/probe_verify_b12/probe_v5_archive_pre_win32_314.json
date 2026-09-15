@@ -1,0 +1,88 @@
+{
+ "tag": "pre_96cb2096_pinned",
+ "lumenairy_file": "C:\\tmp\\lum_vb12_pre\\lumenairy\\__init__.py",
+ "version": "5.47.0",
+ "primitive_has_reference_keyword": false,
+ "fixtures": {
+  "asph": {
+   "flat_last": false,
+   "best_focus_m": "0.00129942882590475",
+   "vertex": {
+    "sha": "823431fde3f2e56cb2c7f7bce843ed45ac615bfff73fe2e7efc8c470faf449a9",
+    "l2": "18.53479157883669"
+   },
+   "focus": {
+    "sha": "b0a062d320dea4e8c99c5feb37235a23b5215b3869ba4fd0c9463b1f734e00e8",
+    "l2": "14.379693535451558"
+   },
+   "caustic_zone": [
+    "0.0012795300468842856",
+    "0.0013307143456563531"
+   ]
+  },
+  "bicon": {
+   "flat_last": false,
+   "best_focus_m": "0.0014367912912482328",
+   "vertex": {
+    "sha": "953eac63bbfa727ea5e491b0b26107f4fc9d035817a324539628d00bf6b1b7c0",
+    "l2": "23.72100487823267"
+   },
+   "focus": {
+    "sha": "78ff68523c480c4595e6dff3891fd77f594b0b551edfe29a4fc26544020363aa",
+    "l2": "18.648630675621796"
+   },
+   "caustic_zone": [
+    "0.001264562151082475",
+    "0.0012804522305035065"
+   ]
+  },
+  "menisc": {
+   "flat_last": false,
+   "best_focus_m": "0.0011800923249589007",
+   "vertex": {
+    "sha": "0f7aa71aaea04660b9ad0694390522969c0b06d53b2c3c4a2e63d27b911b8e94",
+    "l2": "44.559494796303625"
+   },
+   "focus": {
+    "sha": "3d48ff98299778f9dfe380ec33f7398cb6cca2ab7fac22586706706139cc9b87",
+    "l2": "45.328572094802055"
+   },
+   "caustic_zone": [
+    "0.0011777197760784956",
+    "0.0011812163989978611"
+   ]
+  },
+  "flat_planoconvex": {
+   "flat_last": true,
+   "best_focus_m": "0.001161780721158834",
+   "vertex": {
+    "sha": "1774ee1433c99cf6ecf7b9907cade08f18bc90ac186cca913a2b6cbc1eb9ed26",
+    "l2": "44.62017295874584"
+   },
+   "focus": {
+    "sha": "257a90e44409b3cab74cd9aff05783677515cc533dbb588a45ee77363dc7ed3b",
+    "l2": "44.31519716478545"
+   },
+   "caustic_zone": [
+    "0.0011594271384417073",
+    "0.0011631618198171543"
+   ]
+  },
+  "flat_pair": {
+   "flat_last": true,
+   "best_focus_m": "0.0009491770102590174",
+   "vertex": {
+    "sha": "4f6412c8daa54115a78391f237316759d21e19144fbd8361dc134510f056888c",
+    "l2": "44.61891800989775"
+   },
+   "focus": {
+    "sha": "dc3e7eb18718f46d6226250d0910e4530ff51fc4dd5ecef7196c900e5c70496e",
+    "l2": "44.104456967722555"
+   },
+   "caustic_zone": [
+    "0.0009463453684182983",
+    "0.0009508378050261715"
+   ]
+  }
+ }
+}

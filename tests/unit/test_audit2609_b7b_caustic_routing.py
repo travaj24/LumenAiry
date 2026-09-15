@@ -211,13 +211,17 @@ def test_b7b_single_valued_field_at_a_caustic_routes_to_phase_screen():
     envelope, takes ``'phase_screen'`` -- the thin screen plus the exact angular
     spectrum -- and not ``'fga'``.
 
-    WHY (WP-B7 section 2, re-derived here on a second fixture): measured against
-    a brute-force Rayleigh-Sommerfeld oracle on an exact conic raytrace, on an
+    WHY, as of 2026-09-14 (WP-B12): because the thin screen is much the cheaper
+    member there, not because it is the more accurate one.  Measured against a
+    brute-force Rayleigh-Sommerfeld oracle on an exact conic raytrace, on this
     N-SF11 biconvex R = +/-1.6 mm singlet (NA 0.160) at its traced best focus,
-    fidelity 0.9991 for ``'phase_screen'`` against 0.1251 for ``'fga'``, and
-    ``'phase_screen'`` is the closer member at every NA from 0.048 to 0.260.
-    See :func:`test_b7b_phase_screen_is_the_closer_member_at_the_caustic`, which
-    re-measures the decisive pair here rather than trusting this docstring.
+    ``'fga'`` scores 0.9998 and ``'phase_screen'`` 0.9991, at 15.74 s against
+    0.53 s.  (WP-B7b routed here on a 0.1251-vs-0.9991 reading; that deficit
+    was the FGA reference-plane defect WP-B12 repaired.)  See
+    :func:`test_b7b_both_members_reproduce_the_oracle_and_fga_is_the_closer_one`,
+    which re-measures the decisive pair rather than trusting this docstring.
+    Whether the route stays here is a maintainer decision (handoff sec. 4.7);
+    this test pins what the router DOES, which is unchanged by WP-B12.
 
     The premise -- that these planes really are inside the caustic gate and
     really are single-valued and unaberrated -- is asserted, not assumed.
@@ -286,19 +290,38 @@ def test_b7b_aberrated_caustic_keeps_fga_two_sided():
 
 
 @pytest.mark.slow
-def test_b7b_phase_screen_is_the_closer_member_at_the_caustic():
-    """The measurement the route change rests on, re-run here.
+def test_b7b_both_members_reproduce_the_oracle_and_fga_is_the_closer_one():
+    """The measurement the caustic route rests on, re-run here.
+
+    RESTATED 2026-09-14 (WP-B12).  This test used to assert
+    ``fga < 0.5``, because on this fixture ``'fga'`` scored 0.1251 against the
+    screen's 0.9991.  That deficit was a reference-plane defect, not an FGA
+    model limit: the differential transfer returned the base-ray state ON the
+    last surface while ``fga.py`` added the image-side leg as if it were on the
+    exit-vertex plane, so every beamlet carried a spurious ``k * sag(rho)`` --
+    7.79 waves at the rim of THIS singlet.  With the four sites asking for
+    ``reference='exit_vertex'`` the ordering reverses, and the claim worth
+    pinning is not a reading but the DECISION the route should be argued from:
+
+    * both members reproduce the oracle at the caustic (bar 0.99 each);
+    * ``'fga'`` is the closer one, by a margin stated as a RATIO so it carries
+      no per-build constant: its infidelity is under half the screen's.
+
+    MEASURED here and by ``validation/probe_wp_b12/probe_c_route.py``
+    (2026-09-14, both builds): ``'fga'`` 0.9998 (infidelity 1.8e-04),
+    ``'phase_screen'`` 0.9991 (infidelity 8.9e-04), ratio 0.20 against the 0.5
+    bar -- 2.5x of margin, and the same ratio on the N = 192 dx = 1.8 um grid.
+    The route still takes ``'phase_screen'`` here and
+    :func:`test_b7b_single_valued_field_at_a_caustic_routes_to_phase_screen`
+    still pins that: with the accuracy ordering reversed it is a COST choice
+    (0.53 s against 15.74 s on this grid), and whether to move it is a
+    maintainer decision (handoff section 4.7).
 
     Oracle: the brute-force Rayleigh-Sommerfeld sum above, whose error bound is
-    its OWN convergence in the ray quadrature (n_h 451 -> 901 measured here).
-    Both members are read at the same plane by the same dispatcher call.
-
-    The claim is a DECISION with an enormous gap, not a reading: on the WP-B7b
-    fixture the oracle scores ``'phase_screen'`` at 0.9991 and ``'fga'`` at
-    0.1251 (WP-B7: 0.9965 vs 0.3234 on an N-BK7 f = 1.2 mm NA 0.145 singlet),
-    so the bars are 0.9 and 0.5 -- decades clear of the oracle's own
-    convergence, and clear of the 0.32-0.38 WP-B7 measured for FGA at the best
-    of fifteen sampling settings on its own fixture.
+    its OWN convergence in the ray quadrature (n_h 451 -> 901, measured here
+    and asserted below 1e-3).  Both members are read at the same plane by the
+    same dispatcher call.  No wall-clock assertion: the costs above are
+    reported, never asserted.
     """
     pytest.importorskip('numba')
     from lumenairy.propagators.asm import angular_spectrum_propagate
@@ -329,9 +352,14 @@ def test_b7b_phase_screen_is_the_closer_member_at_the_caustic():
             E, prescription=p, wavelength=_LAM, dx=_DX,
             output_plane_distance=z))
     f_ps, f_fga = _fid(orc, ps), _fid(orc, fg)
-    assert f_ps > 0.9, f'phase_screen {f_ps:.4f} (oracle conv {conv:.2e})'
-    assert f_fga < 0.5, f'fga {f_fga:.4f} (oracle conv {conv:.2e})'
-    assert f_ps > 2.0 * f_fga
+    assert f_ps > 0.99, f'phase_screen {f_ps:.6f} (oracle conv {conv:.2e})'
+    assert f_fga > 0.99, f'fga {f_fga:.6f} (oracle conv {conv:.2e})'
+    # the ordering, as a ratio of infidelities so no per-build constant enters
+    ratio = (1.0 - f_fga) / (1.0 - f_ps)
+    assert ratio < 0.5, (
+        f'fga {f_fga:.6f} (infidelity {1 - f_fga:.2e}) is not the closer '
+        f'member against phase_screen {f_ps:.6f} (infidelity {1 - f_ps:.2e}): '
+        f'ratio {ratio:.3f} (oracle convergence {conv:.2e})')
 
 
 # ===========================================================================

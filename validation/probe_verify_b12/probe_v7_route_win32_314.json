@@ -1,0 +1,234 @@
+{
+ "env": {
+  "platform": "win32",
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "lumenairy_version": "5.47.0",
+  "lumenairy_file": "C:\\tmp\\lum_vb12\\lumenairy\\__init__.py",
+  "numba": "0.65.1",
+  "jax": "0.11.0"
+ },
+ "ladder": [
+  {
+   "w0": 3.4e-05,
+   "sag_screen_est_rad": 0.0053823376414456016,
+   "route": "phase_screen",
+   "best_focus_m": 0.0011626924671788023,
+   "budget": 2.0,
+   "members": {
+    "fga": {
+     "fidelity": 0.9979258277230844,
+     "power": 0.986170482081364,
+     "seconds": 22.493629932403564
+    },
+    "phase_screen": {
+     "fidelity": 0.9980096184268655,
+     "power": 1.0000000051336784,
+     "seconds": 0.18570494651794434
+    },
+    "traced": {
+     "fidelity": 0.9979227611796613,
+     "power": 0.9996641034286933,
+     "seconds": 2.6911063194274902
+    }
+   }
+  },
+  {
+   "w0": 4.6e-05,
+   "sag_screen_est_rad": 0.018033772878029132,
+   "route": "phase_screen",
+   "best_focus_m": 0.0011622734008884092,
+   "budget": 2.0,
+   "members": {
+    "fga": {
+     "fidelity": 0.9993355393562603,
+     "power": 0.9858042215991412,
+     "seconds": 2.1441423892974854
+    },
+    "phase_screen": {
+     "fidelity": 0.9994982958924159,
+     "power": 0.9999999965564946,
+     "seconds": 0.0100555419921875
+    },
+    "traced": {
+     "fidelity": 0.9992988296480487,
+     "power": 0.9994832227784187,
+     "seconds": 1.455676555633545
+    }
+   }
+  },
+  {
+   "w0": 5.7e-05,
+   "sag_screen_est_rad": 0.042516043189767455,
+   "route": "phase_screen",
+   "best_focus_m": 0.001161780721158834,
+   "budget": 2.0,
+   "members": {
+    "fga": {
+     "fidelity": 0.9996678164154539,
+     "power": 0.9851329887660945,
+     "seconds": 4.241590738296509
+    },
+    "phase_screen": {
+     "fidelity": 0.9998589431306288,
+     "power": 0.9999992733997768,
+     "seconds": 0.008741617202758789
+    },
+    "traced": {
+     "fidelity": 0.9995651899813808,
+     "power": 0.9993760952483763,
+     "seconds": 1.3399114608764648
+    }
+   }
+  },
+  {
+   "w0": 6.8e-05,
+   "sag_screen_est_rad": 0.08609435857549359,
+   "route": "phase_screen",
+   "best_focus_m": 0.0011612178333488556,
+   "budget": 2.0,
+   "members": {
+    "fga": {
+     "fidelity": 0.9996328680469971,
+     "power": 0.9837918081867357,
+     "seconds": 4.113334655761719
+    },
+    "phase_screen": {
+     "fidelity": 0.9996312315381801,
+     "power": 0.9999898937137592,
+     "seconds": 0.008553504943847656
+    },
+    "traced": {
+     "fidelity": 0.9992789578134386,
+     "power": 0.9993591063196412,
+     "seconds": 2.2734198570251465
+    }
+   }
+  },
+  {
+   "w0": 7.9e-05,
+   "sag_screen_est_rad": 0.15637135356292958,
+   "route": "phase_screen",
+   "best_focus_m": 0.0011606700989877888,
+   "budget": 2.0,
+   "members": {
+    "fga": {
+     "fidelity": 0.9990345539417816,
+     "power": 0.9811194337954968,
+     "seconds": 2.500095844268799
+    },
+    "phase_screen": {
+     "fidelity": 0.9982551732459519,
+     "power": 0.9999533341820592,
+     "seconds": 0.010521173477172852
+    },
+    "traced": {
+     "fidelity": 0.9981239027040354,
+     "power": 0.9994602392990908,
+     "seconds": 0.5500836372375488
+    }
+   }
+  },
+  {
+   "w0": 9e-05,
+   "sag_screen_est_rad": 0.2600183975626395,
+   "route": "phase_screen",
+   "best_focus_m": 0.0011602079132293588,
+   "budget": 2.0,
+   "members": {
+    "fga": {
+     "fidelity": 0.9977261445646362,
+     "power": 0.976979909958634,
+     "seconds": 3.321436643600464
+    },
+    "phase_screen": {
+     "fidelity": 0.9954352790341134,
+     "power": 0.9998794311013582,
+     "seconds": 0.009112119674682617
+    },
+    "traced": {
+     "fidelity": 0.9960797494504441,
+     "power": 0.9995770908483538,
+     "seconds": 1.1632905006408691
+    }
+   }
+  },
+  {
+   "w0": 0.000101,
+   "sag_screen_est_rad": 0.3993720423993551,
+   "route": "phase_screen",
+   "best_focus_m": 0.0011598475114475162,
+   "budget": 2.0,
+   "members": {
+    "fga": {
+     "fidelity": 0.9945891941111795,
+     "power": 1.0378288262562332,
+     "seconds": 1.054112195968628
+    },
+    "phase_screen": {
+     "fidelity": 0.9915281058611047,
+     "power": 0.9997757040306445,
+     "seconds": 0.008466720581054688
+    },
+    "traced": {
+     "fidelity": 0.9933656826311551,
+     "power": 0.9996719946229953,
+     "seconds": 1.8353569507598877
+    }
+   }
+  }
+ ],
+ "curved": [
+  {
+   "w0": 5.7e-05,
+   "sag_screen_est_rad": 0.657763156706099,
+   "route": "phase_screen",
+   "best_focus_m": 0.00129942882590475,
+   "budget": 2.0,
+   "members": {
+    "fga": {
+     "fidelity": 0.9998423535098094,
+     "power": 0.9850182176093601,
+     "seconds": 32.68348956108093
+    },
+    "phase_screen": {
+     "fidelity": 0.9993250171999752,
+     "power": 0.9999976263961413,
+     "seconds": 0.10100245475769043
+    },
+    "traced": {
+     "fidelity": 0.9997088742351076,
+     "power": 0.9992191920357062,
+     "seconds": 1.8053290843963623
+    }
+   },
+   "fixture": "asph"
+  },
+  {
+   "w0": 5.7e-05,
+   "sag_screen_est_rad": 0.02191871758659539,
+   "route": "phase_screen",
+   "best_focus_m": 0.0011800923249589007,
+   "budget": 2.0,
+   "members": {
+    "fga": {
+     "fidelity": 0.9991241372990486,
+     "power": 0.9700352018301527,
+     "seconds": 10.321099281311035
+    },
+    "phase_screen": {
+     "fidelity": 0.9993479966092125,
+     "power": 0.999998821703323,
+     "seconds": 0.03745269775390625
+    },
+    "traced": {
+     "fidelity": 0.9988432329952579,
+     "power": 0.993516070933875,
+     "seconds": 1.186060905456543
+    }
+   },
+   "fixture": "menisc"
+  }
+ ]
+}

@@ -30,6 +30,16 @@ Measured (f/5 biconvex singlet, lambda 1.31um, w0=5mm collimated input, image
   GBD b120 @dx6um:                 15.12 / 54.00 / 63.97   (nails it)
   FGA auto (PRE-FIX) @N2048/dx12:  171.5 / 231.4 / 187.5   (3x wrong halo)
   FGA auto (FIXED)  @N2048/dx12:   r2m within ~1.5x of the oracle
+
+WP-B12, 2026-09-14 -- the FGA reference plane.  The four differential-transfer
+sites in ``fga.py`` now ask for ``reference='exit_vertex'``, which moves every
+FGA field on a curved-last-surface prescription.  No bar here moves with it:
+H4 is a MEMORY model (a byte count against the resolvers' own arithmetic), H5
+is a sampling decision (a p_max ratio and a power floor), and the
+faithfulness pins are FGA-against-FGA -- coarse stride against full, chunked
+against unchunked, analytic Jacobian against finite difference -- so both arms
+of every comparison are re-referenced together and the differences they bound
+are unchanged.  Re-measured on both builds after the repair: green.
 """
 import math
 

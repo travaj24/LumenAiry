@@ -1,0 +1,6 @@
+{
+    "tests/unit/test_verify_b12_fga_reference_plane.py::test_a_biconic_last_surface_projects_with_both_axis_branches": 1.2597244999487884,
+    "tests/unit/test_verify_b12_fga_reference_plane.py::test_a_field_frame_decentred_last_surface_projects_in_its_own_frame": 0.007236699981149286,
+    "tests/unit/test_verify_b12_fga_reference_plane.py::test_the_exit_medium_index_is_resolved_from_the_prescription": 11.936921200016513,
+    "tests/unit/test_verify_b12_fga_reference_plane.py::test_the_two_backends_agree_on_the_exit_vertex_plane_where_both_are_alive": 0.007483799941837788
+}

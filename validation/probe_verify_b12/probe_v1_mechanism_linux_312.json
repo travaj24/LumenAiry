@@ -1,0 +1,328 @@
+{
+ "env": {
+  "platform": "linux",
+  "python": "3.12.3",
+  "numpy": "2.4.6",
+  "scipy": "1.17.1",
+  "lumenairy_version": "5.47.0",
+  "lumenairy_file": "/mnt/c/tmp/lum_vb12/lumenairy/__init__.py",
+  "numba": "0.65.1",
+  "jax": "0.10.2"
+ },
+ "fixtures": {
+  "asph": {
+   "note": "plano-aspheric singlet, aspheric LAST surface (R=-0.911 mm, k=-0.6, A4=2.0e9, A6=-4.0e16), N-SF10, 780 nm",
+   "flat_last": false,
+   "lam": 7.8e-07,
+   "rows": {
+    "fd": {
+     "backend": "fd",
+     "n_rays": 81,
+     "defect_dx": 7.538728083194451e-07,
+     "defect_dopl": 8.182696126953415e-06,
+     "defect_waves": 10.490636060196685,
+     "fixed_dx": 2.710505431213761e-20,
+     "fixed_dy": 0.0,
+     "fixed_dopl": 2.168404344971009e-19,
+     "fixed_waves": 2.7800055704756523e-13,
+     "default_dx": 0.0,
+     "default_dopl": 4.336808689942018e-19,
+     "predicted_waves": 10.4906360601969,
+     "slopes_unchanged": true,
+     "bit_identical": false,
+     "jac_moved": 0.018031832364090894
+    },
+    "analytic": {
+     "backend": "analytic",
+     "n_rays": 81,
+     "defect_dx": 7.538728083194451e-07,
+     "defect_dopl": 8.182696126953415e-06,
+     "defect_waves": 10.490636060196685,
+     "fixed_dx": 2.710505431213761e-20,
+     "fixed_dy": 0.0,
+     "fixed_dopl": 2.168404344971009e-19,
+     "fixed_waves": 2.7800055704756523e-13,
+     "default_dx": 0.0,
+     "default_dopl": 4.336808689942018e-19,
+     "predicted_waves": 10.4906360601969,
+     "slopes_unchanged": true,
+     "bit_identical": false,
+     "jac_moved": 0.018031647476960733
+    }
+   }
+  },
+  "bicon": {
+   "note": "biconic singlet, LAST surface Rx=-0.858 mm / Ry=-1.17 mm, model n=1.67, 1.03 um",
+   "flat_last": false,
+   "lam": 1.03e-06,
+   "rows": {
+    "fd": {
+     "backend": "fd",
+     "n_rays": 81,
+     "defect_dx": 8.957396381093017e-07,
+     "defect_dopl": 9.075353427058118e-06,
+     "defect_waves": 8.811022744716619,
+     "fixed_dx": 1.3552527156068805e-20,
+     "fixed_dy": 0.0,
+     "fixed_dopl": 1.0842021724855044e-19,
+     "fixed_waves": 1.0526234684325284e-13,
+     "default_dx": 0.0,
+     "default_dopl": 2.168404344971009e-19,
+     "predicted_waves": 8.811022744716686,
+     "slopes_unchanged": true,
+     "bit_identical": false,
+     "jac_moved": 0.022056274534133835
+    },
+    "analytic": {
+     "error": "NotImplementedError: ray_transfer_jacobian_analytic handles rotationally-symmetric conic + even-aspheric surfaces (plus coordinate breaks) only; freeforms, biconic (radius_y / conic_y / aspheric_coeffs_y) and field-frame decenter / tilt surfaces are not yet supported -- use ray_transfer_jacobian (FD) for those."
+    }
+   }
+  },
+  "menisc": {
+   "note": "converging meniscus R1=+1.05 mm R2=+5.4 mm, model n=1.78, 1.31 um",
+   "flat_last": false,
+   "lam": 1.31e-06,
+   "rows": {
+    "fd": {
+     "backend": "fd",
+     "n_rays": 81,
+     "defect_dx": 6.389904697006582e-08,
+     "defect_dopl": 8.07680013934723e-07,
+     "defect_waves": 0.6165496289578039,
+     "fixed_dx": 4.0657581468206416e-20,
+     "fixed_dy": 0.0,
+     "fixed_dopl": 1.5178830414797062e-18,
+     "fixed_waves": 1.1586893446409971e-12,
+     "default_dx": 5.421010862427522e-20,
+     "default_dopl": 1.5178830414797062e-18,
+     "predicted_waves": 0.6165496289570969,
+     "slopes_unchanged": true,
+     "bit_identical": false,
+     "jac_moved": 0.0015554809960676153
+    },
+    "analytic": {
+     "backend": "analytic",
+     "n_rays": 81,
+     "defect_dx": 6.389904697003872e-08,
+     "defect_dopl": 8.076800139338557e-07,
+     "defect_waves": 0.6165496289571417,
+     "fixed_dx": 2.710505431213761e-20,
+     "fixed_dy": 0.0,
+     "fixed_dopl": 6.505213034913027e-19,
+     "fixed_waves": 4.965811477032845e-13,
+     "default_dx": 1.3552527156068805e-20,
+     "default_dopl": 1.0842021724855044e-18,
+     "predicted_waves": 0.6165496289570969,
+     "slopes_unchanged": true,
+     "bit_identical": false,
+     "jac_moved": 0.0015554805937332272
+    }
+   }
+  },
+  "doublet": {
+   "note": "cemented doublet R=+1.20/-0.62/-3.00 mm, N-SSK8 + N-SF10, 633 nm",
+   "flat_last": false,
+   "lam": 6.33e-07,
+   "rows": {
+    "fd": {
+     "backend": "fd",
+     "n_rays": 81,
+     "defect_dx": 1.210478961096936e-07,
+     "defect_dopl": 1.7493588879181898e-06,
+     "defect_waves": 2.763600138891295,
+     "fixed_dx": 2.710505431213761e-20,
+     "fixed_dy": 0.0,
+     "fixed_dopl": 6.505213034913027e-19,
+     "fixed_waves": 1.0276797843464496e-12,
+     "default_dx": 2.710505431213761e-20,
+     "default_dopl": 8.673617379884035e-19,
+     "predicted_waves": 2.7636001388915044,
+     "slopes_unchanged": true,
+     "bit_identical": false,
+     "jac_moved": 0.0029418358934053535
+    },
+    "analytic": {
+     "backend": "analytic",
+     "n_rays": 81,
+     "defect_dx": 1.2104789610968005e-07,
+     "defect_dopl": 1.7493588879186235e-06,
+     "defect_waves": 2.7636001388919804,
+     "fixed_dx": 2.710505431213761e-20,
+     "fixed_dy": 0.0,
+     "fixed_dopl": 4.336808689942018e-19,
+     "fixed_waves": 6.851198562309665e-13,
+     "default_dx": 2.710505431213761e-20,
+     "default_dopl": 6.505213034913027e-19,
+     "predicted_waves": 2.7636001388915044,
+     "slopes_unchanged": true,
+     "bit_identical": false,
+     "jac_moved": 0.0029418353827607158
+    }
+   }
+  },
+  "oblique": {
+   "note": "biconvex R=+/-1.40 mm, model n=1.52, 850 nm, input tilted 6 deg in x",
+   "flat_last": false,
+   "lam": 8.5e-07,
+   "rows": {
+    "fd": {
+     "backend": "fd",
+     "n_rays": 74,
+     "defect_dx": 3.108252555611825e-07,
+     "defect_dopl": 5.709449209680205e-06,
+     "defect_waves": 6.7169990702120055,
+     "fixed_dx": 2.710505431213761e-20,
+     "fixed_dy": 0.0,
+     "fixed_dopl": 6.505213034913027e-19,
+     "fixed_waves": 7.653191805780031e-13,
+     "default_dx": 4.0657581468206416e-20,
+     "default_dopl": 7.589415207398531e-19,
+     "predicted_waves": 6.716999070211851,
+     "slopes_unchanged": true,
+     "bit_identical": false,
+     "jac_moved": 0.009054759007237734
+    },
+    "analytic": {
+     "backend": "analytic",
+     "n_rays": 74,
+     "defect_dx": 3.1082525556119605e-07,
+     "defect_dopl": 5.7094492096798795e-06,
+     "defect_waves": 6.716999070211623,
+     "fixed_dx": 4.0657581468206416e-20,
+     "fixed_dy": 0.0,
+     "fixed_dopl": 3.2526065174565133e-19,
+     "fixed_waves": 3.8265959028900157e-13,
+     "default_dx": 2.710505431213761e-20,
+     "default_dopl": 3.2526065174565133e-19,
+     "predicted_waves": 6.716999070211851,
+     "slopes_unchanged": true,
+     "bit_identical": false,
+     "jac_moved": 0.009054756765669802
+    }
+   }
+  },
+  "mirror": {
+   "note": "plate + concave MIRROR R=-2.5 mm as the last surface, 633 nm -- primitive-level only",
+   "flat_last": false,
+   "lam": 6.33e-07,
+   "rows": {
+    "fd": {
+     "backend": "fd",
+     "n_rays": 81,
+     "defect_dx": 3.075704231434622e-07,
+     "defect_dopl": 3.100338670687869e-06,
+     "defect_waves": 4.897849400770725,
+     "fixed_dx": 1.3552527156068805e-20,
+     "fixed_dy": 0.0,
+     "fixed_dopl": 6.505213034913027e-19,
+     "fixed_waves": 1.0276797843464496e-12,
+     "default_dx": 0.0,
+     "default_dopl": 4.336808689942018e-19,
+     "predicted_waves": 4.89784940077072,
+     "slopes_unchanged": true,
+     "bit_identical": false,
+     "jac_moved": 0.0074531283006679105
+    },
+    "analytic": {
+     "backend": "analytic",
+     "n_rays": 81,
+     "defect_dx": 3.075704231434622e-07,
+     "defect_dopl": 3.1003386706877608e-06,
+     "defect_waves": 4.897849400770554,
+     "fixed_dx": 1.3552527156068805e-20,
+     "fixed_dy": 0.0,
+     "fixed_dopl": 4.336808689942018e-19,
+     "fixed_waves": 6.851198562309665e-13,
+     "default_dx": 0.0,
+     "default_dopl": 2.168404344971009e-19,
+     "predicted_waves": 4.89784940077072,
+     "slopes_unchanged": true,
+     "bit_identical": false,
+     "jac_moved": 0.007453127679853289
+    }
+   }
+  },
+  "flat_planoconvex": {
+   "note": "plano-convex, curved FIRST / FLAT last, model n=1.67, 780 nm (CONTROL)",
+   "flat_last": true,
+   "lam": 7.8e-07,
+   "rows": {
+    "fd": {
+     "backend": "fd",
+     "n_rays": 81,
+     "defect_dx": 1.3552527156068805e-20,
+     "defect_dopl": 2.168404344971009e-19,
+     "defect_waves": 2.7800055704756523e-13,
+     "fixed_dx": 1.3552527156068805e-20,
+     "fixed_dy": 0.0,
+     "fixed_dopl": 2.168404344971009e-19,
+     "fixed_waves": 2.7800055704756523e-13,
+     "default_dx": 1.3552527156068805e-20,
+     "default_dopl": 2.168404344971009e-19,
+     "predicted_waves": 0.0,
+     "slopes_unchanged": true,
+     "bit_identical": true,
+     "jac_moved": 0.0
+    },
+    "analytic": {
+     "backend": "analytic",
+     "n_rays": 81,
+     "defect_dx": 1.3552527156068805e-20,
+     "defect_dopl": 4.336808689942018e-19,
+     "defect_waves": 5.560011140951305e-13,
+     "fixed_dx": 1.3552527156068805e-20,
+     "fixed_dy": 0.0,
+     "fixed_dopl": 4.336808689942018e-19,
+     "fixed_waves": 5.560011140951305e-13,
+     "default_dx": 1.3552527156068805e-20,
+     "default_dopl": 4.336808689942018e-19,
+     "predicted_waves": 0.0,
+     "slopes_unchanged": true,
+     "bit_identical": true,
+     "jac_moved": 0.0
+    }
+   }
+  },
+  "flat_pair": {
+   "note": "air-spaced pair, FLAT last surface, N-SSK8, 1.03 um (CONTROL)",
+   "flat_last": true,
+   "lam": 1.03e-06,
+   "rows": {
+    "fd": {
+     "backend": "fd",
+     "n_rays": 81,
+     "defect_dx": 3.3881317890172014e-20,
+     "defect_dopl": 8.673617379884035e-19,
+     "defect_waves": 8.420987747460228e-13,
+     "fixed_dx": 3.3881317890172014e-20,
+     "fixed_dy": 0.0,
+     "fixed_dopl": 8.673617379884035e-19,
+     "fixed_waves": 8.420987747460228e-13,
+     "default_dx": 3.3881317890172014e-20,
+     "default_dopl": 8.673617379884035e-19,
+     "predicted_waves": 0.0,
+     "slopes_unchanged": true,
+     "bit_identical": true,
+     "jac_moved": 0.0
+    },
+    "analytic": {
+     "backend": "analytic",
+     "n_rays": 81,
+     "defect_dx": 2.710505431213761e-20,
+     "defect_dopl": 6.505213034913027e-19,
+     "defect_waves": 6.315740810595171e-13,
+     "fixed_dx": 2.710505431213761e-20,
+     "fixed_dy": 0.0,
+     "fixed_dopl": 6.505213034913027e-19,
+     "fixed_waves": 6.315740810595171e-13,
+     "default_dx": 2.710505431213761e-20,
+     "default_dopl": 6.505213034913027e-19,
+     "predicted_waves": 0.0,
+     "slopes_unchanged": true,
+     "bit_identical": true,
+     "jac_moved": 0.0
+    }
+   }
+  }
+ }
+}
