@@ -28,7 +28,7 @@ Nothing under `lumenairy/` was edited.
 | 3c | the clamp is honoured by the CHUNK COUNT, so surplus workers are idle | **CONFIRMED** (measured; the report only argues it) | on a **16-wide** pool, dispatcher clamp 3 / 5 / 10 gave chunks run 3 / 5 / 10 and **peak concurrent chunks 3 / 5 / 10**, fields byte-identical |
 | 3d | `_POOL_SHUTDOWN_TIMEOUT = 120 s` is 26x the worst healthy teardown (4.592 s at 16 workers) | **CONFIRMED, wider than claimed** | quiet box, teardown through the public `close_worker_pool` after a real dispatch: 2w 0.109-0.169, 4w 0.146-0.180, 8w 0.168-0.297, 16w 0.321-0.379 -- worst **0.379 s**, i.e. **317x**.  The WP's own `probe_p6` re-run today reads worst 0.411 s / 291.9x |
 | 3e | an idle kept-alive worker costs 33.0 MB mean / 48.8 MB peak, "2 % of one working worker" | **RESTATED -- the number is wrong by 2-3x** (defect D3) | that figure comes from workers warmed with `ex.map(abs, ...)`.  Workers in the state the ceiling rule actually leaves behind -- they have served a real Newton chunk -- measure **97.0 MB mean / 98.8 MB max** (N=512) and **99.4 / 99.9 MB** (N=1024).  The WP's own probe re-run today reads 45.7 MiB mean (its report says 33.0).  The conclusion (the trade is cheap against a ~1.7 GB active worker) survives; the quoted number does not |
-| 4a | 13 files, 363 passed / 1 skipped under both capture modes on both builds | see sec. 6 | re-run here |
+| 4a | 13 files, 363 passed / 1 skipped under both capture modes on both builds | **CONFIRMED** | all four arms re-run here: Windows `fd` 300.88 s, Windows `sys` 981.38 s, WSL `fd` 1788.21 s, WSL `sys` 1743.32 s -- **363 passed, 1 skipped** every time, same single skip |
 | 4b | serial == pooled byte-for-byte | **CONFIRMED** | every pooled field I produced -- 9 broken-driver runs, 4 clamp-ladder steps, 12 two-thread dispatches, 6 close-race dispatches, 3 wider-than-clamp dispatches -- equals its `n_workers=1` reference under `np.array_equal`, `max|delta| = 0.0`.  The WP's own 12-field `probe_p8` re-run here reads `all_identical: true`, `worst_delta: 0.0` in 210.3 s |
 | 4c | the 15 new tests cannot hang the suite | **CONFIRMED, with a defect in the failure path** (D1) | pre-fix behaviour injected in memory: unbounded joins -> **3 failed, 12 passed in 118.80 s**; pre-fix rebuild rule -> **3 failed, 12 passed in 13.69 s**; both -> **6 failed, 9 passed in 118.69 s**.  No run hung.  But the three wedge tests report `io.UnsupportedOperation: fileno` instead of their own message, and the thread dump they promise is lost |
 | 5a | the 2026-09-14 fd-capture trigger is not reproducible | **CONFIRMED** | nothing I ran showed a capture-dependent difference |
@@ -318,10 +318,12 @@ tests/unit/test_niche_audit_e_prepared_and_enums.py -q [--capture=sys]`
 | Windows 3.14.6 | default (`fd`) | **363 passed, 1 skipped** | 300.88 s |
 | Windows 3.14.6 | `--capture=sys` | **363 passed, 1 skipped** | 981.38 s |
 | WSL 3.12.3 | default (`fd`) | **363 passed, 1 skipped** | 1788.21 s |
-| WSL 3.12.3 | `--capture=sys` | WSL_SYS | WSL_SYS_T |
+| WSL 3.12.3 | `--capture=sys` | **363 passed, 1 skipped** | 1743.32 s |
 
 The one skip is `test_fix_newton_pool_memory.py:1217` on every arm, with the report's own reason (this BLAS
-reduces identically at every width tried, so the box cannot witness the defect that test is about).
+reduces identically at every width tried, so the box cannot witness the defect that test is about).  Four
+arms, four identical 363/1 readings: claim 4a **CONFIRMED**, and the capture axis moves nothing but wall
+time (WSL 1788.21 s under `fd` against 1743.32 s under `sys`, a 2.5 % difference on a shared box).
 
 ### 6.2 The rest of the gate
 
@@ -329,12 +331,12 @@ reduces identically at every width tried, so the box cannot witness the defect t
 |---|---|---|
 | `pytest tests/unit/test_niche_d8_congruence_workers.py -q` (Windows) | 36 passed | 169.77 s |
 | the same with `--capture=sys` (Windows) | 36 passed | 203.14 s |
-| `pytest tests/unit/test_niche_d8_congruence_workers.py -q` (WSL) | WSL_D8 | WSL_D8_T |
+| `pytest tests/unit/test_niche_d8_congruence_workers.py -q` (WSL) | 36 passed | 186.35 s |
 | `pytest test_audit_except_budget.py test_public_api.py test_v4_16_2_dispatcher_pin_doc_consistency.py test_audit2609_a17_history_lint.py test_audit2609_a23_census_mechanism.py test_v4_14_2_dispatcher_pin_cache_locks.py test_eme_census_determinacy.py -q` | 140 passed, 6 skipped | 291.11 s |
 | `pytest tests/unit -q -k walker` | 118 passed, 6 skipped, 16082 deselected | 218.50 s |
 | `pytest tests/unit/test_audit2609_a15a_durations_staleness.py -q` | 4 passed | 228.34 s |
-| `pytest tests/unit/test_verify_b13_newton_pool.py -q` (this file, Windows) | 3 passed | 55.02 s |
-| `pytest tests/unit/test_verify_b13_newton_pool.py -q` (WSL) | WSL_VERIFY | WSL_VERIFY_T |
+| `pytest tests/unit/test_verify_b13_newton_pool.py -q` (this file, Windows) | 3 passed | 55.02 s (repeat, `-p no:randomly`, 71.99 s) |
+| `pytest tests/unit/test_verify_b13_newton_pool.py -q` (WSL) | 3 passed | 34.96 s (repeat 36.26 s) |
 | `wsl ruff check lumenairy/ tests/ validation/probe_verify_b13/` | All checks passed | -- |
 
 The cache-lock walker reports `_ABANDONED_POOLS_LOCK` on its exemption list with its reason, which is the
@@ -385,14 +387,14 @@ The same demonstration for this verifier's own file, through `VERIFY_B13_PREFIX`
 | id | severity | where | what | reproducer |
 |---|---|---|---|---|
 | D1 | P2 (test quality) | `tests/unit/test_fix_newton_pool_broken_fallback.py:137` | `_thread_dump()` calls `faulthandler.dump_traceback(file=io.StringIO())`, which raises `io.UnsupportedOperation: fileno`.  The helper is only ever called from `_with_deadline`'s failure path, so **every** wedge detection in the file errors with an unrelated exception instead of its own message, and the thread dump -- the single most useful artifact for this defect -- is never produced.  The tests still go red, so the gate works; the diagnostic does not | `VERIFY_B13_PREFIX=joins` (or `validation/probe_verify_b13/vp7_wedge_plugin.py` with `VP7_INJECT=joins`) then run the file: 3 failures, each ending in `io.UnsupportedOperation: fileno` |
-| D2 | P3 (resource) | `lumenairy/elements/_lens_traced.py::_shutdown_pool_bounded` | the expiry path appends the executor to `_ABANDONED_POOLS` and **nothing ever removes it** -- unlike `_abandon_pool`, whose reaper removes in a `finally`.  The list grows monotonically with expiries and pins each dead executor (its `_processes`, its queues) for the life of the process | `vp6_teardown_bar.py --mode expiry --bar 0.05`: two expiries leave `_ABANDONED_POOLS` at length 2 after both shutdowns have completed |
+| D2 | P3 (resource) | `lumenairy/elements/_lens_traced.py::_shutdown_pool_bounded` | the expiry path appends the executor to `_ABANDONED_POOLS` and **nothing ever removes it** -- unlike `_abandon_pool`, whose reaper removes in a `finally`.  The list grows monotonically with expiries and pins each dead executor (its `_processes`, its queues) for the life of the process | `vp6_teardown_bar.py --mode expiry --bar 0.05` leaves `_ABANDONED_POOLS` at length 2 after both shutdowns have completed.  The one-screen contrast: a stub whose join is released AFTER a 0.2 s expiry stays in the list (`still_in_list True`), while a pool sent through `_abandon_pool` is removed (`s2_in_list False`) |
 | D3 | P3 (derivation) | `_lens_traced.py` (`_get_persistent_worker_pool` docstring, "33.0 MB mean / 48.8 MB peak ... 2 % of one working worker") and report sec. 5.2 | the figure is measured on workers warmed with `ex.map(abs, ...)`.  The state the ceiling rule actually leaves behind is a worker that has served a **Newton chunk**: 97.0 MB mean / 98.8 MB max (N=512, 15 workers) and 99.4 / 99.9 MB (N=1024).  The WP's own probe re-run today reads 45.7 MiB mean, not 33.0.  A 16-wide kept pool holds ~1.6 GB, not ~0.5 GB.  The cleanest evidence is a single WSL run in which both states are present at once: workers that served a chunk read 73-76 MB and workers in the same pool that served none read 28-39 MB -- the quoted figure is the never-used state.  The trade is still cheap; the number is not the number | `vp6_teardown_bar.py --mode ladder` vs `validation/probe_newton_pool/probe_p6_teardown_ladder.py` |
 | D4 | P3 (comment drift) | `_lens_traced.py` `_POOL_INFLIGHT` comment ("Chunks currently dispatched") and report sec. 5.2 ("counts chunks dispatched on the cached pool") | the counter is moved **once per dispatch**, not once per chunk.  Nothing depends on the magnitude -- only zero vs non-zero is read -- so this is a comment defect, not a behaviour one | read `_note_pool_inflight` call sites |
 | D7 | P3 (pin blind spot) | `tests/unit/test_fix_newton_pool_broken_fallback.py::test_only_the_bounded_helper_ever_joins_an_executor` | the pin walks for `ast.Call` nodes whose `func.attr == 'shutdown'`.  A joining teardown written as `with ProcessPoolExecutor(...) as ex:` has no such call -- `Executor.__exit__` IS `shutdown(wait=True)` -- so the pin would stay green on exactly the shape that carries the same exposure in `carrier.py::_multi_parallel_results`.  `Executor.shutdown(ex)` (an unbound call) is the same blind spot | read the pin; the sibling module is the live example |
 | D5 | P2 (pre-existing, open) | `_lens_traced.py:12799` | `as_completed` with no timeout: a worker that never comes up hangs the call forever, on both trees | `vp2_broken_drivers.py --mode slowboot` |
 | D6 | P2 (pre-existing, acknowledged) | CPython / `_lens_traced.py` | once the manager thread is wedged the process cannot exit even on the fixed tree.  Measured: the call returned its correct answer in 2.458 s and printed its exit line; the process then had to be SIGKILLed at 200 s, leaving 5 processes for the sweep | `vp2_broken_drivers.py --mode sigign` on WSL, fixed tree |
 
-None of D1-D4 is a correctness defect in the shipped field: every pooled and every fallback field I produced
+None of D1-D4 or D7 is a correctness defect in the shipped field: every pooled and every fallback field I produced
 is byte-identical to its serial reference.
 
 ### Requested changes outside my ownership
