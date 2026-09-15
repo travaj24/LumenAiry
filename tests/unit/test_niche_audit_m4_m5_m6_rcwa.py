@@ -54,6 +54,7 @@ import warnings
 import numpy as np
 import pytest
 
+from lumenairy.elements.rcwa import _blas as _rblas
 from lumenairy.elements.rcwa import _core as _rcore
 from lumenairy.elements.rcwa import rcwa_efficiency_2d
 from lumenairy.elements.rcwa import twod as _twod
@@ -304,9 +305,31 @@ def test_m5_hard_energy_failures_still_advance_the_ladder():
 # M6 -- set_blas_threads warns when it cannot take effect
 # ===========================================================================
 
+# WP-B11c: the cap's mutable state and the three functions that read it live in
+# ``rcwa._blas``, and ``_warn_blas_uncontrollable`` reads BOTH through that
+# module's own globals -- so these tests patch the DEFINITION SITE while still
+# CALLING through ``_core``'s re-export, which is how a user reaches the cap.
+# The negative arms ("no warning") would pass on a box that has threadpoolctl
+# even if the patch stopped landing, so each one states, unconditionally, that
+# the module it patched IS the module the warning path reads out of.
+# ``__globals__ is vars(mod)`` is exact: a function's global namespace IS its
+# defining module's ``__dict__``.
+def _assert_patch_site_is_live():
+    assert _rblas._warn_blas_uncontrollable.__globals__ is vars(_rblas), (
+        "the inert-cap warning no longer reads its state out of rcwa._blas -- "
+        "these tests patch a module the code does not read, so every "
+        "'no warning' arm below is vacuous.  Re-point them at the definition "
+        "site (WP-B11c).")
+    assert _rcore.set_blas_threads is _rblas.set_blas_threads, (
+        "rcwa._core no longer re-exports the SAME set_blas_threads object, so "
+        "calling through _core exercises a different function than the one "
+        "these tests patch state for.")
+
+
 def test_m6_cap_without_threadpoolctl_warns_once(monkeypatch):
-    monkeypatch.setattr(_rcore, "_threadpoolctl_available", lambda: False)
-    monkeypatch.setattr(_rcore, "_BLAS_WARNED_UNCONTROLLABLE", False)
+    _assert_patch_site_is_live()
+    monkeypatch.setattr(_rblas, "_threadpoolctl_available", lambda: False)
+    monkeypatch.setattr(_rblas, "_BLAS_WARNED_UNCONTROLLABLE", False)
     try:
         with pytest.warns(UserWarning, match="threadpoolctl"):
             _rcore.set_blas_threads(2)
@@ -321,20 +344,33 @@ def test_m6_cap_without_threadpoolctl_warns_once(monkeypatch):
 
 
 def test_m6_no_warning_when_a_controller_is_available(monkeypatch):
-    monkeypatch.setattr(_rcore, "_threadpoolctl_available", lambda: True)
-    monkeypatch.setattr(_rcore, "_BLAS_WARNED_UNCONTROLLABLE", False)
+    _assert_patch_site_is_live()
+    probes = []
+
+    def _available():
+        probes.append(1)
+        return True
+
+    monkeypatch.setattr(_rblas, "_threadpoolctl_available", _available)
+    monkeypatch.setattr(_rblas, "_BLAS_WARNED_UNCONTROLLABLE", False)
     try:
         with warnings.catch_warnings(record=True) as wl:
             warnings.simplefilter("always")
             _rcore.set_blas_threads(2)
         assert not wl, [str(w.message) for w in wl]
+        # PROOF OF PATCH: the silence is this stand-in's doing, not the box's.
+        # Without it the arm is green on any machine that HAS threadpoolctl.
+        assert probes, (
+            "set_blas_threads did not consult _threadpoolctl_available -- the "
+            "patch was not read, so 'no warning' proves nothing here.")
     finally:
         _rcore.set_blas_threads(None)
 
 
 def test_m6_clearing_the_cap_never_warns(monkeypatch):
-    monkeypatch.setattr(_rcore, "_threadpoolctl_available", lambda: False)
-    monkeypatch.setattr(_rcore, "_BLAS_WARNED_UNCONTROLLABLE", False)
+    _assert_patch_site_is_live()
+    monkeypatch.setattr(_rblas, "_threadpoolctl_available", lambda: False)
+    monkeypatch.setattr(_rblas, "_BLAS_WARNED_UNCONTROLLABLE", False)
     with warnings.catch_warnings(record=True) as wl:
         warnings.simplefilter("always")
         _rcore.set_blas_threads(None)
@@ -342,8 +378,9 @@ def test_m6_clearing_the_cap_never_warns(monkeypatch):
 
 
 def test_m6_context_manager_shares_the_warning(monkeypatch):
-    monkeypatch.setattr(_rcore, "_threadpoolctl_available", lambda: False)
-    monkeypatch.setattr(_rcore, "_BLAS_WARNED_UNCONTROLLABLE", False)
+    _assert_patch_site_is_live()
+    monkeypatch.setattr(_rblas, "_threadpoolctl_available", lambda: False)
+    monkeypatch.setattr(_rblas, "_BLAS_WARNED_UNCONTROLLABLE", False)
     with pytest.warns(UserWarning, match="threadpoolctl"):
         with _rcore.rcwa_blas_threads(2):
             assert _rcore._get_blas_threads() == 2
@@ -354,8 +391,9 @@ def test_m6_library_internal_per_worker_cap_stays_quiet(monkeypatch):
     """The warning is for a cap the USER asked for.  The library's own
     per-worker caps inside threaded sweeps go through ``_blas_threads_quiet``,
     so an ordinary sweep does not report "your cap is inert"."""
-    monkeypatch.setattr(_rcore, "_threadpoolctl_available", lambda: False)
-    monkeypatch.setattr(_rcore, "_BLAS_WARNED_UNCONTROLLABLE", False)
+    _assert_patch_site_is_live()
+    monkeypatch.setattr(_rblas, "_threadpoolctl_available", lambda: False)
+    monkeypatch.setattr(_rblas, "_BLAS_WARNED_UNCONTROLLABLE", False)
     with warnings.catch_warnings(record=True) as wl:
         warnings.simplefilter("always")
         with _rcore._blas_threads_quiet(1):
@@ -368,8 +406,9 @@ def test_m6_pmm_threaded_sweep_emits_no_blas_warning(monkeypatch):
     """End-to-end on the real consumer: ``solve_vs_wavelength`` caps BLAS per
     worker internally (``blas_per_worker=1`` by default), and must stay
     silent."""
-    monkeypatch.setattr(_rcore, "_threadpoolctl_available", lambda: False)
-    monkeypatch.setattr(_rcore, "_BLAS_WARNED_UNCONTROLLABLE", False)
+    _assert_patch_site_is_live()
+    monkeypatch.setattr(_rblas, "_threadpoolctl_available", lambda: False)
+    monkeypatch.setattr(_rblas, "_BLAS_WARNED_UNCONTROLLABLE", False)
     from lumenairy.elements.pmm import PMMStack
     st = PMMStack(0.5e-6, n_substrate=1.5, degree=8, far_field_orders=5)
     st.add_layer(0.2e-6, segments=[(0.5, 6.25 + 0j), (0.5, 1.0 + 0j)])
