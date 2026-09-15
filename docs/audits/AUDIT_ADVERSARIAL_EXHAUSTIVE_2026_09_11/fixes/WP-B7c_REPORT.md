@@ -214,6 +214,14 @@ warning text now say that.
 The single largest excursion anywhere, D at `zeta_x` = 149.7 with **+30.13 %**,
 is above the bar and warns.
 
+**The ladder is build-independent.**  Seven planes of V re-run on WSL
+py3.12.3 / numpy 2.4.6 in a `git archive` tree of the base
+(`ladder_V_parent_wsl.json`) reproduce the Windows readings to every printed
+digit: fidelity 0.9867 / 0.9872 / 0.9906 / 0.9915 / 0.9914 and power
+1.0512 / 1.0588 / 1.0198 / 0.98353 / 0.99715 at `zeta_x`
+531.5 / 14.0 / 5.65 / 1.03 / 0.385, and 93.47 / 3544.5 at the two blow-up
+planes.  So neither the envelope nor the pathology is a BLAS artefact.
+
 ## 5. Item 4.3 -- the member-selection pass
 
 Five fixtures: WP-B7b's own two (reproduced verbatim -- W1, its fast N-LAK22
@@ -343,21 +351,24 @@ the maintainer: the value is in the diagnostics and the clip is one `min()`.
 
 ## 7. Bit identity, and what moved
 
-Archive-to-archive, both builds: `git archive 96cb2096 lumenairy` extracted to a
-scratch tree against the worktree, each read in a CHILD process with `cwd` and
-`PYTHONPATH` set to the tree and `lumenairy.__file__` ASSERTED to live under it,
-SHA-256 over `ndarray.tobytes()`.  Probe: `validation/probe_multibranch_zeta/bitid.py`;
-JSON: `bitid_{parent,head}_{win,wsl}.json`.
+Archive-to-archive: `git archive 96cb2096 lumenairy` and
+`git archive f6c7eec7 lumenairy` extracted to two scratch trees, each read in a
+CHILD process with `cwd` and `PYTHONPATH` set to its tree and
+`lumenairy.__file__` ASSERTED to live under it, SHA-256 over
+`ndarray.tobytes()`; and the same comparison worktree-side on both builds.
+Probe: `validation/probe_multibranch_zeta/bitid.py`; JSON:
+`bitid_{parent,head}_{win,wsl}.json` and `bitid_head_commit_win.json`.
 
 13 fixtures, spanning the K4 suite's own plano-convex at N = 512 and N = 256 and
 at `output_plane_distance = 0` (a fallback), the branch sum alone, `caustic_band
 = 'plain'`, WP-B7b's fixture F at two planes where `u*` is shorter than the fill,
 and VERIFY-B7b's fixture at four planes:
 
-| build | identical | moved |
+| comparison | identical | moved |
 |---|---|---|
-| Windows py3.14.6 / numpy 2.4.4 | **11 of 13** | 2 |
-| WSL py3.12.3 / numpy 2.4.6 | **11 of 13** | 2 |
+| `96cb2096` archive vs `f6c7eec7` archive, Windows py3.14.6 / numpy 2.4.4 | **11 of 13** | 2 |
+| `96cb2096` archive vs worktree, Windows py3.14.6 / numpy 2.4.4 | **11 of 13** | 2 |
+| `96cb2096` archive vs worktree, WSL py3.12.3 / numpy 2.4.6 | **11 of 13** | 2 |
 
 **Every mover classified.**  Both are the blow-up planes of fixture V:
 
@@ -394,7 +405,7 @@ reading; every invariant is unconditional; no wall-clock assertion.
 
 | run | Windows py3.14.6 / numpy 2.4.4 | WSL py3.12.3 / numpy 2.4.6 |
 |---|---|---|
-| `b7c` + `b7_asymptotic` + `b7b_caustic_routing` + `niche_k4_uniform_caustic` + `pmm2d_staggered_nonuniform` + `niche_audit_w9_dispatch2` | **151 passed** (282 s) | **151 passed** (see section 10) |
+| `b7c` + `b7_asymptotic` + `b7b_caustic_routing` + `niche_k4_uniform_caustic` + `pmm2d_staggered_nonuniform` + `niche_audit_w9_dispatch2` | **151 passed** (282 s) | **151 passed** (783 s) |
 | `a3_caustic_siblings` + `a3_verify_traced` + `niche_k1_kmah_caustic` + `niche_r2_pearcey_cusp` + `niche_r5_gbd_vector_catastrophe` + `niche_audit_w3_elements` + `niche_audit_w4_input_kind` | **373 passed** (499 s) | -- |
 | census / public-API / dispatcher-pin doc-consistency / except-budget / a17 history lint + relocation | **768 passed, 1 failed** | -- |
 | `ruff check lumenairy/ tests/ validation/probe_multibranch_zeta/` (WSL) | -- | **All checks passed** |
