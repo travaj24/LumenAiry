@@ -1,0 +1,133 @@
+{
+ "constructions": 2,
+ "distinct_worker_pids": 23,
+ "ladder": [
+  6,
+  8,
+  4,
+  8
+ ],
+ "lumenairy": "C:\\tmp\\lum_vpool\\lumenairy\\__init__.py",
+ "mode": "sequence",
+ "python": "3.14.6",
+ "ref_sha": "94502cf17757d9f089e59fd4ab6ae30b43827eac37da14cd435bb419d8a67c64",
+ "resolve_calls": [
+  {
+   "answer": 7,
+   "fit_points": 7569,
+   "n_total": 16384,
+   "requested": 8
+  },
+  {
+   "answer": 7,
+   "fit_points": 7569,
+   "n_total": 16384,
+   "requested": 8
+  },
+  {
+   "answer": 8,
+   "fit_points": 7569,
+   "n_total": 16384,
+   "requested": 8
+  },
+  {
+   "answer": 8,
+   "fit_points": 7569,
+   "n_total": 16384,
+   "requested": 8
+  },
+  {
+   "answer": 4,
+   "fit_points": 7569,
+   "n_total": 16384,
+   "requested": 8
+  },
+  {
+   "answer": 4,
+   "fit_points": 7569,
+   "n_total": 16384,
+   "requested": 8
+  },
+  {
+   "answer": 8,
+   "fit_points": 7569,
+   "n_total": 16384,
+   "requested": 8
+  },
+  {
+   "answer": 8,
+   "fit_points": 7569,
+   "n_total": 16384,
+   "requested": 8
+  }
+ ],
+ "rows": [
+  {
+   "built_here": 1,
+   "clamp_answer": 7,
+   "constructed_after": 1,
+   "constructed_before": 0,
+   "engineered_target": 6,
+   "identical_to_serial_ref": true,
+   "live_budget_gb": 28.82,
+   "pool_workers": 7,
+   "ram_budget_gb": 26.84,
+   "seconds": 1.679,
+   "sha": "94502cf17757d9f089e59fd4ab6ae30b43827eac37da14cd435bb419d8a67c64",
+   "step": 0
+  },
+  {
+   "built_here": 1,
+   "clamp_answer": 8,
+   "constructed_after": 2,
+   "constructed_before": 1,
+   "engineered_target": 8,
+   "identical_to_serial_ref": null,
+   "live_budget_gb": 36.37,
+   "pool_workers": 8,
+   "ram_budget_gb": 33.87,
+   "seconds": 1.595,
+   "sha": "dd546cadf9e4eca2313f9295803fec056b80040c36fb31dfc9b83fba0095d443",
+   "step": 1
+  },
+  {
+   "built_here": 0,
+   "clamp_answer": 4,
+   "constructed_after": 2,
+   "constructed_before": 2,
+   "engineered_target": 4,
+   "identical_to_serial_ref": true,
+   "live_budget_gb": 21.28,
+   "pool_workers": 8,
+   "ram_budget_gb": 19.82,
+   "seconds": 0.254,
+   "sha": "94502cf17757d9f089e59fd4ab6ae30b43827eac37da14cd435bb419d8a67c64",
+   "step": 2
+  },
+  {
+   "built_here": 0,
+   "clamp_answer": 8,
+   "constructed_after": 2,
+   "constructed_before": 2,
+   "engineered_target": 8,
+   "identical_to_serial_ref": null,
+   "live_budget_gb": 36.37,
+   "pool_workers": 8,
+   "ram_budget_gb": 33.87,
+   "seconds": 0.212,
+   "sha": "dd546cadf9e4eca2313f9295803fec056b80040c36fb31dfc9b83fba0095d443",
+   "step": 3
+  }
+ ],
+ "shutdown_calls": 2,
+ "shutdown_waits": [
+  {
+   "cancel_futures": false,
+   "wait": true
+  },
+  {
+   "cancel_futures": true,
+   "wait": false
+  }
+ ]
+}

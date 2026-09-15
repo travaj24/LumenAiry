@@ -1,0 +1,12 @@
+{
+ "all_match_serial": true,
+ "closes": 4,
+ "dispatches": 6,
+ "exception": null,
+ "final_inflight": 0,
+ "hung": false,
+ "lumenairy": "/mnt/c/tmp/lum_vpool/lumenairy/__init__.py",
+ "python": "3.12.3",
+ "scenario": "closerace",
+ "seconds": 7.455
+}

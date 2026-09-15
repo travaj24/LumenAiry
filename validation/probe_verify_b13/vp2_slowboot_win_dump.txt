@@ -1,0 +1,31 @@
+{"event": "import", "lumenairy": "C:\\tmp\\lum_vpool\\lumenairy\\__init__.py", "mode": "slowboot", "pid": 73000, "python": "3.14.6", "t": 0.1679, "version": "5.47.0"}
+{"event": "gate", "resolved_workers": 4, "t": 0.1704, "unguarded_main": null}
+{"event": "reference_enter", "t": 0.1705}
+{"event": "reference_exit", "sha": "94502cf17757d9f089e59fd4ab6ae30b43827eac37da14cd435bb419d8a67c64", "t": 2.1335}
+{"event": "dispatch_enter", "t": 2.1354}
+Timeout (0:01:00)!
+Thread 0x000110e4 [QueueFeederThread] (most recent call first):
+  File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\multiprocessing\connection.py", line 303 in _send_bytes
+  File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\multiprocessing\connection.py", line 210 in send_bytes
+  File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\multiprocessing\queues.py", line 264 in _feed
+  File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\threading.py", line 1024 in run
+  File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\threading.py", line 1082 in _bootstrap_inner
+  File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\threading.py", line 1044 in _bootstrap
+
+Thread 0x00013050 [Thread-1] (most recent call first):
+  File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\multiprocessing\connection.py", line 1070 in _exhaustive_wait
+  File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\multiprocessing\connection.py", line 1138 in wait
+  File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\concurrent\futures\process.py", line 416 in wait_result_broken_or_wakeup
+  File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\concurrent\futures\process.py", line 343 in run
+  File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\threading.py", line 1082 in _bootstrap_inner
+  File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\threading.py", line 1044 in _bootstrap
+
+Thread 0x0000cf88 (most recent call first):
+  File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\threading.py", line 369 in wait
+  File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\threading.py", line 670 in wait
+  File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\concurrent\futures\_base.py", line 237 in as_completed
+  File "C:\tmp\lum_vpool\lumenairy\elements\_lens_traced.py", line 12799 in _invert_newton_parallel
+  File "C:\tmp\lum_vpool\lumenairy\elements\_lens_traced.py", line 13421 in apply_real_lens_traced
+  File "C:\tmp\lum_vpool\validation\probe_verify_b13\vp2_broken_drivers.py", line 120 in _traced
+  File "C:\tmp\lum_vpool\validation\probe_verify_b13\vp2_broken_drivers.py", line 255 in main
+  File "C:\tmp\lum_vpool\validation\probe_verify_b13\vp2_broken_drivers.py", line 279 in <module>

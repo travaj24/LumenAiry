@@ -1,0 +1,51 @@
+{
+ "abandoned_len": 2,
+ "bar_used": 0.05,
+ "lumenairy": "C:\\tmp\\lum_vpool\\lumenairy\\__init__.py",
+ "mode": "expiry",
+ "orphan_ladder": [
+  {
+   "at": 0.0,
+   "workers_alive": 6
+  },
+  {
+   "at": 1.0,
+   "workers_alive": 0
+  },
+  {
+   "at": 5.0,
+   "workers_alive": 0
+  },
+  {
+   "at": 30.0,
+   "workers_alive": 0
+  }
+ ],
+ "parent_rss_mb_after": 365.3,
+ "parent_rss_mb_before": 366.0,
+ "python": "3.14.6",
+ "real_close_seconds": 0.053,
+ "real_timeouts_delta": 1,
+ "real_worker_pids": [
+  52148,
+  61004,
+  37236,
+  34920,
+  78796,
+  69860,
+  62220,
+  69108
+ ],
+ "stub_close_seconds": 0.054,
+ "stub_close_threads_alive": [
+  "lumenairy-newton-pool-close"
+ ],
+ "stub_in_abandoned": true,
+ "stub_shutdown_calls": [
+  {
+   "cancel_futures": false,
+   "wait": true
+  }
+ ],
+ "stub_timeouts_delta": 1
+}

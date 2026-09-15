@@ -1,0 +1,26 @@
+{"event": "import", "lumenairy": "/mnt/c/tmp/lum_vpool_pre/lumenairy/__init__.py", "mode": "sigign", "pid": 18, "python": "3.12.3", "t": 0.4755, "version": "5.47.0"}
+{"event": "gate", "resolved_workers": 4, "t": 0.4833, "unguarded_main": null}
+{"event": "reference_enter", "t": 0.4834}
+{"event": "reference_exit", "sha": "3a4ecdf3ffddca82de6f8c427483e7cf1a20505c3bcea5b1654c2dd724cbe0b3", "t": 2.8046}
+{"event": "dispatch_enter", "t": 2.8064}
+{"event": "workers_killed", "feeder_blocked": false, "n": 1, "t": 4.5081}
+Timeout (0:01:30)!
+Thread 0x00007fcfbecc06c0 (most recent call first):
+  File "/usr/lib/python3.12/multiprocessing/popen_fork.py", line 27 in poll
+  File "/usr/lib/python3.12/multiprocessing/popen_fork.py", line 43 in wait
+  File "/usr/lib/python3.12/multiprocessing/process.py", line 149 in join
+  File "/usr/lib/python3.12/concurrent/futures/process.py", line 593 in _join_executor_internals
+  File "/usr/lib/python3.12/concurrent/futures/process.py", line 528 in _terminate_broken
+  File "/usr/lib/python3.12/concurrent/futures/process.py", line 532 in terminate_broken
+  File "/usr/lib/python3.12/concurrent/futures/process.py", line 356 in run
+  File "/usr/lib/python3.12/threading.py", line 1073 in _bootstrap_inner
+  File "/usr/lib/python3.12/threading.py", line 1030 in _bootstrap
+
+Thread 0x00007fcfe6de1080 (most recent call first):
+  File "/usr/lib/python3.12/concurrent/futures/process.py", line 865 in shutdown
+  File "/mnt/c/tmp/lum_vpool_pre/lumenairy/elements/_lens_traced.py", line 1409 in close_worker_pool
+  File "/mnt/c/tmp/lum_vpool_pre/lumenairy/elements/_lens_traced.py", line 12624 in _invert_newton_parallel
+  File "/mnt/c/tmp/lum_vpool_pre/lumenairy/elements/_lens_traced.py", line 13147 in apply_real_lens_traced
+  File "/mnt/c/tmp/lum_vpool/validation/probe_verify_b13/vp2_broken_drivers.py", line 120 in _traced
+  File "/mnt/c/tmp/lum_vpool/validation/probe_verify_b13/vp2_broken_drivers.py", line 260 in main
+  File "/mnt/c/tmp/lum_vpool/validation/probe_verify_b13/vp2_broken_drivers.py", line 284 in <module>

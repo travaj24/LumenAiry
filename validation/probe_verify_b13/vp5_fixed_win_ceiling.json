@@ -1,0 +1,79 @@
+{
+ "constructions": 4,
+ "inflight_after": 0,
+ "lumenairy": "C:\\tmp\\lum_vpool\\lumenairy\\__init__.py",
+ "python": "3.14.6",
+ "rows": [
+  {
+   "asked": 4,
+   "constructions": 1,
+   "is_previous": null,
+   "pool_workers": 4,
+   "step": "build_4"
+  },
+  {
+   "asked": 2,
+   "constructions": 1,
+   "is_previous": true,
+   "pool_workers": 4,
+   "step": "narrower_2_must_not_shrink"
+  },
+  {
+   "asked": 4,
+   "constructions": 1,
+   "is_previous": true,
+   "pool_workers": 4,
+   "step": "same_4"
+  },
+  {
+   "asked": 8,
+   "constructions": 2,
+   "is_previous": null,
+   "pool_workers": 8,
+   "step": "wider_8_idle_must_grow"
+  },
+  {
+   "asked": 16,
+   "constructions": 2,
+   "is_previous": true,
+   "pool_workers": 8,
+   "step": "wider_16_inflight_must_not_rebuild"
+  },
+  {
+   "asked": 16,
+   "constructions": 3,
+   "is_previous": null,
+   "pool_workers": 16,
+   "step": "wider_16_idle_must_rebuild"
+  },
+  {
+   "asked": 1,
+   "constructions": 4,
+   "is_previous": null,
+   "pool_workers": 1,
+   "step": "broken_pool_is_replaced"
+  }
+ ],
+ "scenario": "ceiling",
+ "shutdowns": [
+  [
+   {
+    "cancel_futures": true,
+    "wait": false
+   }
+  ],
+  [
+   {
+    "cancel_futures": true,
+    "wait": false
+   }
+  ],
+  [
+   {
+    "cancel_futures": true,
+    "wait": false
+   }
+  ],
+  []
+ ]
+}

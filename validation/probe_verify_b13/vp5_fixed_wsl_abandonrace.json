@@ -1,0 +1,20 @@
+{
+ "abandoned_len": 1,
+ "close_worker_pool_seconds": 0.015,
+ "dispatch_seconds": 2.279,
+ "final_inflight": 0,
+ "identical": true,
+ "live_threads_named_reaper": [
+  "lumenairy-newton-pool-reaper"
+ ],
+ "lumenairy": "/mnt/c/tmp/lum_vpool/lumenairy/__init__.py",
+ "python": "3.12.3",
+ "reaper_entered_shutdown": true,
+ "reaper_shutdown_args": [
+  {
+   "cancel_futures": true,
+   "wait": false
+  }
+ ],
+ "scenario": "abandonrace"
+}

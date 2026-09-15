@@ -1,0 +1,54 @@
+{
+ "final_inflight": 0,
+ "lumenairy": "C:\\tmp\\lum_vpool\\lumenairy\\__init__.py",
+ "python": "3.14.6",
+ "rows": [
+  {
+   "chunks_run": 3,
+   "clamp_answer": 3,
+   "dispatcher_resolve_calls": [
+    {
+     "answer": 3,
+     "fit_points": 30625
+    }
+   ],
+   "engineered_clamp": 2,
+   "identical": true,
+   "peak_concurrent_chunks": 3,
+   "pool_workers": 16,
+   "workers_that_served_a_chunk": 3
+  },
+  {
+   "chunks_run": 5,
+   "clamp_answer": 5,
+   "dispatcher_resolve_calls": [
+    {
+     "answer": 5,
+     "fit_points": 30625
+    }
+   ],
+   "engineered_clamp": 4,
+   "identical": true,
+   "peak_concurrent_chunks": 5,
+   "pool_workers": 16,
+   "workers_that_served_a_chunk": 5
+  },
+  {
+   "chunks_run": 10,
+   "clamp_answer": 10,
+   "dispatcher_resolve_calls": [
+    {
+     "answer": 10,
+     "fit_points": 30625
+    }
+   ],
+   "engineered_clamp": 8,
+   "identical": true,
+   "peak_concurrent_chunks": 10,
+   "pool_workers": 16,
+   "workers_that_served_a_chunk": 10
+  }
+ ],
+ "scenario": "chunkcap",
+ "wide_pool": 16
+}
