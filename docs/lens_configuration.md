@@ -464,87 +464,125 @@ object here is built to outlive the field it was configured against.
 
 ## Module layout
 
-The lens family carries **two** genuine module↔module import cycles that execute
-at import time (audit 2026-09-11, TESTS-ARCH "Import cycles" counted four;
-re-measured with a module-level-only AST walk):
+The lens family carries **no** module↔module import cycle that executes at
+import time. It carried four when the 2026-09-11 audit's TESTS-ARCH section
+counted them, three when WP-B11 part a re-measured with a module-level-only AST
+walk, and two when part a shipped; WP-B11c closed those two.
 
 ```
-_lens_real   <-> lenses
-lenses       <-> lenses_maslov
+_lens_thin   <-> lenses      closed by backend/_optional.py  (part a)
+_lens_traced <-> lenses      closed by _lens_kernels.py      (part a)
+_lens_real   <-> lenses      closed by _lens_kernels.py      (WP-B11c)
+lenses       <-> lenses_maslov  closed by _lens_kernels.py   (WP-B11c)
 ```
 
-The audit's `_lens_thin <-> lenses` is **gone**: `_lens_thin` needed only
-`CUPY_AVAILABLE` and the lazy `cp`, and both now come from the leaf
-`lumenairy/backend/_optional.py`. That was the two-line quarter of this item.
+Every one of them closed the same way: the names the back-edge carried moved
+into `elements/_lens_kernels.py`, the family's leaf, and `lenses.py` kept
+re-exporting them, so every existing `from lumenairy.elements.lenses import
+surface_sag_general` resolves unchanged — and resolves to the SAME object, which
+`tests/unit/test_audit2609_b11_hygiene.py` and
+`tests/unit/test_audit2609_b11c_structure.py` assert by identity rather than by
+name.
 
-`_lens_traced <-> lenses` is **gone** too: that back-edge carried exactly one
-name, `_warn_if_aperture_exceeds_grid`, and the grid-versus-aperture
-bookkeeping now lives in the leaf `elements/_lens_kernels.py`
-(`_collect_semi_diameters`, `check_grid_vs_apertures`,
-`recommend_grid_for_prescription`, `_warn_if_aperture_exceeds_grid`), which
-imports `numpy` and `warnings` and nothing from `lumenairy`. `lenses.py`
-re-exports all four, so every `lenses.check_grid_vs_apertures` and
-`from .lenses import _warn_if_aperture_exceeds_grid` resolves unchanged and the
-objects are identical (`is`).
+`lenses.py` is still the family's public re-export hub: it imports all eight
+sibling modules at module scope. What changed is that nothing imports it back.
 
-`lenses.py` is the family's public re-export hub: it imports all eight sibling
-modules at module scope. The remaining back-edges are small and completely
-enumerated:
-
-| back-edge | what it imports from `lenses` |
+| edge | what moved into the leaf |
 |---|---|
-| `_lens_real` | `surface_sag_biconic`, `surface_sag_general` |
-| `lenses_maslov` | `NUMEXPR_AVAILABLE`, `_ensure_numexpr_loaded`, `_fit_normaliser`, `_multi_indices_total_degree`, `_warn_if_aperture_exceeds_grid` |
+| `_lens_real` | `surface_sag_general`, `surface_sag_biconic`, and with them the optional-backend plumbing they read from module scope |
+| `lenses_maslov` | `NUMEXPR_AVAILABLE`, `_ensure_numexpr_loaded`, `_fit_normaliser`, `_multi_indices_total_degree` |
 
 `lens_config.py` is deliberately a **leaf**: it imports nothing from
 `lumenairy` at module scope (its validators borrow `_lens_real`'s vocabulary
 tuples through an in-function import, cached), so the seven entry points can
-depend on it without adding an edge in the other direction. Adding it created
-no new cycle — verified by the same walk.
+depend on it without adding an edge in the other direction.
 
-### The plan for the two remaining cycles
+### What the leaf's "leaf" now means
 
-Both close the same way the `_lens_traced` one did: move the name into
-`elements/_lens_kernels.py` and repoint the back-edge at the leaf, leaving
-`lenses.py` re-exporting it so every existing `from lumenairy.elements.lenses
-import surface_sag_general` keeps working and the shell-vs-canonical walker
-(`tests/unit/test_v5_2_walker_shell_vs_canonical.py`) sees the same surface.
+`_lens_kernels.py` used to import nothing from `lumenairy` at all. It now
+imports one module: `lumenairy.backend._optional`, which since WP-A16 is the
+single place the library probes for and lazily loads CuPy and numba. The sag
+builders could not move without it — and re-inlining a sixth hand-copy of that
+probe to preserve the old wording would have undone A16.
 
-**`_lens_real <-> lenses`** needs `surface_sag_general` and
-`surface_sag_biconic` to move, and with them the optional-backend plumbing they
-read from module scope: `_get_aspheric_sag_accum_numba`, `_NUMBA_KERNELS`,
-`_load_numba` / `_njit` / `_prange` / `_numba`, `_NUMBA_AVAILABLE`,
-`_is_cupy_array`, `_ensure_cupy_loaded` and the lazy `cp` alias. Two of those
-are live state rather than definitions, which is the whole difficulty:
+So the property the tests assert is the stronger, transitive one: **nothing
+reachable from `_lens_kernels`, at any depth, imports `lumenairy.elements`**.
+`backend/_optional.py` is itself stdlib-only, so the closure is
+`{backend._optional}` and the leaf cannot be half of a cycle at any depth. The
+walk lives in
+`tests/unit/test_audit2609_b11_hygiene.py::TestTheLensKernelsLeaf` and replaces
+a direct-import check that a one-hop detour through any other subpackage would
+have passed.
 
-* `_NUMBA_AVAILABLE` is **monkeypatched to `False` by the test suite** to reach
-  the pure-NumPy arm on a box that has numba, and `_load_numba` reads it at
-  call time. If it moves, `lenses._NUMBA_AVAILABLE = False` stops being the
-  gate and every such test silently exercises the numba arm instead.
-* `cp` and `_ne` are populated on first use, so a plain
-  `from ._lens_kernels import cp` in `lenses` would bind a **stale `None`**
-  rather than a live view.
+### The live state, and why a PEP 562 `__getattr__` was not enough
 
-The mechanical answer to both is a PEP 562 `__getattr__` on `lenses.py` that
-forwards unknown attributes to `_lens_kernels` (the shape `_lens_thin` already
-uses for its `cp` forward), so `lenses._NUMBA_AVAILABLE = False` reaches the
-leaf and `lenses.cp` stays live. That forward is what the move needs proving,
-not the sag arithmetic, which is pointwise and relocates unchanged. Gate: the
-`-k real_lens` slice plus the WP-A2/A3/A4/A16/B2/B10 files, and the
-44-configuration banded byte-identity matrix.
+Two things in the moved block are not definitions but **state**, and both would
+have been silently broken by a plain re-export:
 
-**`lenses <-> lenses_maslov`** is a one-line edit --
-`lenses_maslov.py:282`'s `from .lenses import (...)` becomes
-`from ._lens_kernels import _warn_if_aperture_exceeds_grid` plus
-`from .lenses import (NUMEXPR_AVAILABLE, _ensure_numexpr_loaded,
-_fit_normaliser, _multi_indices_total_degree)`, and the edge closes entirely
-once those four names follow into the leaf as well. `lenses_maslov.py` is owned
-by another work package in this round, so the edit is written down here rather
-than made.
+* `cp`, `_ne`, `_numba`, `_njit` and `_prange` are `None` until first use and
+  are then rebound. `from ._lens_kernels import cp` in `lenses` would bind the
+  import-time `None` for ever.
+* `_NUMBA_AVAILABLE` and `NUMEXPR_AVAILABLE` are **gates the test suite sets to
+  `False`** to reach the pure-NumPy arm on a box that HAS the accelerator, and
+  the kernels read them at call time. `lenses._NUMBA_AVAILABLE = False` would
+  set an attribute nothing reads — turning every such test into a no-op that
+  passes.
 
-`lens_config.py` adds no edge of its own to any of this, and
-`tests/unit/test_audit2609_a16_verify_config_and_arch.py::test_lens_config_stays_a_leaf`
-keeps it that way.
+The plan recorded here before WP-B11c said a PEP 562 module `__getattr__` on
+`lenses.py` was the mechanical answer to both. **It is the answer to the first
+only.** PEP 562's `__getattr__` is consulted on a failed attribute *lookup*; it
+has no say over `setattr`, and the monkeypatch above is a write. Measured, not
+reasoned about: with `__getattr__` alone, `monkeypatch.setattr(lenses,
+'_NUMBA_AVAILABLE', False)` writes into `lenses.__dict__`, the leaf's global is
+untouched, `_load_numba()` returns `True`, and the test goes green while
+exercising the numba arm — and monkeypatch's undo leaves the shadow attribute
+behind, so every later test in the process reads it too.
+
+`lenses.py` therefore installs a module **type**:
+
+```python
+_LIVE_FORWARD_NAMES = frozenset({
+    'cp', '_ne', 'NUMEXPR_AVAILABLE',
+    '_NUMBA_AVAILABLE', '_numba', '_njit', '_prange', '_NUMBA_KERNELS',
+})
+
+class _LensesFacade(types.ModuleType):
+    def __getattr__(self, name): ...      # read  -> the leaf
+    def __setattr__(self, name, value): ...   # write -> the leaf
+    def __delattr__(self, name): ...          # delete -> the leaf
+
+sys.modules[__name__].__class__ = _LensesFacade
+```
+
+Assigning a module's `__class__` is the documented way to give a module a full
+attribute protocol (PEP 562 names it as the pre-existing alternative it does
+not replace). The forward is two-way and the facade keeps no copy of its own,
+so `lenses.cp` is a live view, `lenses._NUMBA_AVAILABLE = False` reaches the
+kernel, and monkeypatch's save/set/undo cycle leaves nothing behind. A name
+outside the whitelist still raises `AttributeError`, so typos and `hasattr`
+probes behave normally.
+
+`_lens_thin.py` keeps its own one-name `__getattr__` for `cp`; it only ever
+reads.
+
+### How the graph is measured
+
+Twice, by two instruments, because either alone can be fooled:
+
+* **Structurally**, by the module-level-only AST walk WP-B11 part a used — what
+  the source says.
+* **Dynamically**, by `validation/probe_wp_b11c/import_graph.py`, an
+  `__import__` hook in a child process that keeps only calls whose frame is a
+  module body (`f_locals is f_globals`, true in no function, comprehension or
+  class body) — what the interpreter does. This is the only instrument that
+  sees the edge a cycle is actually made of: a module-level `from .lenses
+  import x` whose target is already in `sys.modules` half-initialised executes
+  no loader, so it leaves no trace in `-X importtime` and none in `sys.modules`
+  afterwards.
+
+In-function imports are deliberately not edges. They are how the family breaks
+the cycles it cannot otherwise break, and they do not execute at import time.
+
 
 ---
 

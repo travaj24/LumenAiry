@@ -8,8 +8,11 @@ surface rather than a reading of any number:
    SAME object, and the cap's mutable state is read out of ``_blas``'s own
    globals -- so a test that substitutes it must patch ``_blas``, and a stale
    ``setattr`` on ``_core`` fails loudly instead of binding a shadow attribute.
-2. (lands with its own item.)
-3. (lands with its own item.)
+2. The ``_lens_real <-> lenses`` import cycle is gone, and the two live things
+   the move needed -- a ``lenses._NUMBA_AVAILABLE = False`` monkeypatch that the
+   kernel must still SEE, and the lazily populated ``cp`` / ``_ne`` slots -- work
+   through the forward rather than binding a stale ``None``.
+3. (the ``lenses <-> lenses_maslov`` back-edge lands with its own item.)
 
 The import-graph half of each claim is measured TWICE, by two independent
 instruments, because either alone can be fooled.  Structurally, by the
@@ -271,3 +274,94 @@ def test_the_executed_rcwa_graph_has_the_leaf_edge_and_no_back_edge():
     assert "_blas" in graph["_core"], sorted(graph["_core"])
     assert graph["_blas"] == set(), sorted(graph["_blas"])
     assert _two_cycles(graph) == set(), sorted(_two_cycles(graph))
+
+
+# ===========================================================================
+# 2. the _lens_real <-> lenses cycle
+# ===========================================================================
+
+#: The cycles still open at THIS commit.  Part a measured 3, closed one, and
+#: enumerated the rest; part b took the Maslov back-edge from 5 names to 4.
+#: This item closes ``_lens_real <-> lenses``; the Maslov one closes with its
+#: own item, which tightens this set to empty.
+_OPEN_CYCLES = {('lenses', 'lenses_maslov')}
+
+
+def test_the_lens_family_carries_only_the_cycles_still_open():
+    """A RATCHET stated as an equality, not an upper bound: a cycle that
+    closed must be REMOVED from the set in the same commit, so the set is
+    always the honest inventory rather than a bound nobody revisits."""
+    graph = _family_graph(ELEM, LENS_FAMILY)
+    assert _two_cycles(graph) == _OPEN_CYCLES, sorted(_two_cycles(graph))
+
+
+def test_lens_real_does_not_import_the_hub_at_module_scope():
+    """The specific edge: ``_lens_real`` used to read ``surface_sag_general``
+    and ``surface_sag_biconic`` out of ``lenses``."""
+    assert "lenses" not in _module_level_imports(ELEM / "_lens_real.py",
+                                                 set(LENS_FAMILY))
+
+
+def test_the_executed_lens_graph_agrees_with_the_source():
+    """The dynamic half of the same claim, on the edges that actually execute
+    rather than on the source.  FAILS on the pre-refactor tree, where the
+    recorder reports the ``_lens_real -> lenses`` edge this item removed."""
+    graph = _executed_family_graph("lumenairy.elements.", LENS_FAMILY)
+    assert _two_cycles(graph) == _OPEN_CYCLES, sorted(_two_cycles(graph))
+    assert "lenses" not in graph["_lens_real"], sorted(graph["_lens_real"])
+
+
+def test_the_numba_gate_monkeypatch_still_reaches_the_kernel():
+    """The live-state half of the move.  The suite reaches the pure-NumPy sag
+    arm by setting ``lenses._NUMBA_AVAILABLE = False`` on a box that HAS numba;
+    the kernel reads the flag at call time.  After the move the flag lives in
+    the leaf, so ``lenses`` forwards the write -- and this test proves the
+    kernel SEES it, by making the two arms disagree at the flag rather than by
+    reading a number the build is entitled to move."""
+    from lumenairy.elements import _lens_kernels, lenses
+
+    assert lenses._NUMBA_AVAILABLE is _lens_kernels._NUMBA_AVAILABLE
+    saved = _lens_kernels._NUMBA_AVAILABLE
+    try:
+        lenses._NUMBA_AVAILABLE = False
+        assert _lens_kernels._NUMBA_AVAILABLE is False, (
+            "a write through the lenses facade no longer reaches the kernel's "
+            "own global -- every test that forces the pure-NumPy arm by "
+            "setting lenses._NUMBA_AVAILABLE = False is now silently "
+            "exercising the numba arm instead")
+        assert lenses._NUMBA_AVAILABLE is False
+    finally:
+        _lens_kernels._NUMBA_AVAILABLE = saved
+        lenses.__dict__.pop("_NUMBA_AVAILABLE", None)
+    assert lenses._NUMBA_AVAILABLE is saved
+
+
+def test_the_lazy_backend_slots_forward_live_and_not_a_stale_none():
+    """``cp`` and ``_ne`` are populated on FIRST USE, so a plain
+    ``from ._lens_kernels import cp`` in ``lenses`` would bind whatever the slot
+    held at import time (``None``) forever.  The PEP 562 forward re-reads the
+    leaf on every attribute access; this test proves it by moving the leaf's
+    slot and watching the facade follow."""
+    from lumenairy.elements import _lens_kernels, lenses
+
+    for slot in ("cp", "_ne"):
+        saved = getattr(_lens_kernels, slot)
+        sentinel = object()
+        try:
+            setattr(_lens_kernels, slot, sentinel)
+            assert getattr(lenses, slot) is sentinel, (
+                f"lenses.{slot} is a stale snapshot, not a live view of the "
+                f"leaf's lazily populated slot")
+        finally:
+            setattr(_lens_kernels, slot, saved)
+        assert getattr(lenses, slot) is saved
+
+
+def test_the_module_getattr_still_raises_for_a_name_nobody_defines():
+    """A forward that answers everything hides typos and breaks ``hasattr``
+    probes, so the fallthrough must still raise ``AttributeError``."""
+    from lumenairy.elements import lenses
+
+    with pytest.raises(AttributeError):
+        lenses._this_name_exists_nowhere_at_all
+    assert not hasattr(lenses, "_this_name_exists_nowhere_at_all")

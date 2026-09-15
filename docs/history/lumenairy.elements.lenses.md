@@ -1,12 +1,13 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/lenses.py
-ast_sha256: d2bd657462245706bbfa3657fe04033f45bea8e6c5a47d399880f7be3442838e
-token_sha256: 64252edc9825ca1f6d6e5fa5bbefb634de20b61a5838fe3c3fe1c8b204b69b5b
+ast_sha256: a783c40517e2191a925174246727ce25308a92922777c1ddf675ba3214aa473f
+token_sha256: 98bcd350fcfc4b5f45b7c978f640eb4ed23fb5611d066d3aae1fc3f357cc16d9
 pre_relocation_lines: 1171
 recorded_by: WP-A17 SWEEP-4 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
 re_recorded: 2026-09-12 -- ruff isort combine-as-imports (pyproject.toml, WP-A16 recommendation): aliased import statements from the same module merged into one; the set of bound names is unchanged
 re_recorded: 2026-09-13 -- the grid-versus-aperture bookkeeping moved to the new elements/_lens_kernels.py leaf and is re-exported; _lens_traced reads the leaf, closing its module-level 2-cycle with the lenses facade (WP-B11a item 4)
+re_recorded: 2026-09-14 -- WP-B11c: the optional CuPy / numba / numexpr plumbing and the two surface-sag builders move to the _lens_kernels leaf, closing the _lens_real <-> lenses module-level import cycle; lenses re-exports them and forwards the live slots both ways, _lens_real reads the leaf.  Bit-identical (40/40 archive-to-archive hashes, both builds).
 -->
 
 # Version history -- `lumenairy/elements/lenses.py`

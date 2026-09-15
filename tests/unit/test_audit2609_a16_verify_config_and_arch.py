@@ -61,7 +61,12 @@ import pytest
 
 import lumenairy as la
 from lumenairy.backend import _optional
-from lumenairy.elements import _lens_real, _lens_traced, lenses
+from lumenairy.elements import (
+    _lens_kernels,
+    _lens_real,
+    _lens_traced,
+    lenses,
+)
 from lumenairy.elements import lens_config as lc
 from lumenairy.elements._lens_real import apply_real_lens, prepare_real_lens
 from lumenairy.elements._lens_traced import (
@@ -591,7 +596,15 @@ def test_the_configured_path_emits_the_same_warnings():
 # Architecture: the shared optional-dependency helper
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize('mod', (_lens_real, _lens_traced, lenses),
+# ``lenses`` is not in this tuple since WP-B11c: its copy of the plumbing moved
+# into the ``_lens_kernels`` leaf, which is where ``_is_cupy_array`` now reads
+# ``_optional_is_cupy_array`` and ``_ensure_cupy`` from.  Substituting them on
+# the facade instead would bind attributes the function never reads -- the
+# arm would go green while measuring the UNPATCHED code, which is the exact
+# shape this test exists to catch.  The facade's own obligation (the live
+# two-way forward of ``cp``) is pinned in ``test_audit2609_a16_lens_arch.py``
+# and in ``test_audit2609_b11c_structure.py``.
+@pytest.mark.parametrize('mod', (_lens_real, _lens_traced, _lens_kernels),
                          ids=lambda m: m.__name__.rsplit('.', 1)[-1])
 def test_a_true_cupy_answer_really_binds_the_module_cp(mod, monkeypatch):
     """The dedupe's load-bearing coupling, exercised rather than inspected.
