@@ -10,11 +10,13 @@ Three surfaces:
 * the LIVE forward -- the numba gate written through ``lenses``, read back,
   used by the kernel (the pure-NumPy sag arm) and restored, plus the two
   spellings ``lenses_maslov`` uses;
-* the consumers -- ``apply_real_lens`` (plain, slant + fresnel, aspheric,
-  ``apply_thin_lens`` / ``apply_spherical_lens`` / ``apply_aspheric_lens``,
-  ``apply_real_lens_maslov``, the asymptotic propagator, the traced lens, the
-  freeform sag entry points and ``Surface`` sag, each on a fixture whose field
-  is deterministic.
+* the consumers -- ``apply_thin_lens`` / ``apply_spherical_lens`` /
+  ``apply_aspheric_lens`` / ``apply_cylindrical_lens``; ``apply_real_lens``
+  plain, with slant + fresnel, on an aspheric singlet and in complex64;
+  ``apply_real_lens_maslov`` on two prescriptions; the traced lens; GBD; the
+  freeform XY sag; ``Surface`` sag rotational and biconic; and the three
+  grid-versus-aperture helpers with every warning they emit -- each on a
+  fixture whose field is deterministic.
 
 Run through ``bi.py``; never under pytest.
 """
@@ -88,9 +90,32 @@ R["B4_biconic_per_axis"] = h(LE.surface_sag_biconic(
     aspheric_coeffs_y={4: -2.0e6}))
 R["B5_biconic_flat_y"] = h(LE.surface_sag_biconic(X, Y, 25e-3, np.inf))
 
+R["C1_multi_indices"] = h([LE._multi_indices_total_degree(n, o)
+                           for n in (1, 2, 3, 4) for o in (0, 1, 2, 3, 5)])
+R["C2_fit_normaliser"] = h([LE._fit_normaliser(v) for v in (
+    np.linspace(-3.0, 7.0, 11),
+    np.zeros(5),
+    np.full(4, 2.5),
+    np.array([-1e-9, 1e-9]),
+    np.linspace(0.0, 1.0, 3),
+)])
+R["C3_fit_normaliser_pad"] = h([LE._fit_normaliser(np.linspace(-1, 1, 9), p)
+                                for p in (0.0, 0.05, 0.5)])
+
 # --------------------------------------------------------------------------
 # D. The forward itself
 # --------------------------------------------------------------------------
+# The two spellings the Maslov module uses must answer identically to the
+# facade's -- the re-export contract, asked as a question about ANSWERS.
+R["D1_maslov_spelling_agrees"] = h([
+    LM._fit_normaliser(np.linspace(-3.0, 7.0, 11))
+    == LE._fit_normaliser(np.linspace(-3.0, 7.0, 11)),
+    LM._multi_indices_total_degree(3, 4)
+    == LE._multi_indices_total_degree(3, 4),
+    bool(LM.NUMEXPR_AVAILABLE) == bool(LE.NUMEXPR_AVAILABLE),
+])
+R["D1b_maslov_helpers"] = h([LM._fit_normaliser(np.linspace(-2.0, 5.0, 7)),
+                             LM._multi_indices_total_degree(4, 3)])
 R["D2_gate_values"] = h([bool(LE.NUMEXPR_AVAILABLE),
                          bool(LE._NUMBA_AVAILABLE),
                          bool(LE.CUPY_AVAILABLE)])
@@ -102,6 +127,12 @@ R["D5_public_names_present"] = h(sorted(
                 "NUMEXPR_AVAILABLE", "CUPY_AVAILABLE", "apply_real_lens",
                 "apply_real_lens_maslov", "apply_thin_lens")
     if hasattr(LE, n)))
+R["D5b_dir_surface"] = h(sorted(
+    n for n in dir(LE)
+    if n in ("cp", "_ne", "NUMEXPR_AVAILABLE", "_NUMBA_AVAILABLE", "_numba",
+             "_njit", "_prange", "_NUMBA_KERNELS", "surface_sag_general",
+             "surface_sag_biconic", "_fit_normaliser",
+             "_multi_indices_total_degree")))
 R["D6_toplevel"] = h(sorted(
     n for n in ("NUMEXPR_AVAILABLE", "surface_sag_general", "apply_real_lens")
     if hasattr(L, n)))
@@ -150,6 +181,41 @@ with warnings.catch_warnings():
                                                  n_workers=1))
     R["E12_gbd"] = h(caught(L.apply_real_lens_gbd, E0, prescription=presc,
                             wavelength=WL, dx=DX))
+
+# The exact quantity behind the one order-dependent red of section 4: the
+# vector Maslov wrapper's P_x/P_y under all three normalisations, and the two
+# powers, on WP-A4-VERIFY's own fixture.  Hashed here so the question "did this
+# refactor move it?" is answered by bytes rather than by argument.
+def _vector_fixture():
+    wl, N, dxg = 1.55e-6, 96, 16e-6
+    xs = (np.arange(N) - N // 2) * dxg
+    Xv, Yv = np.meshgrid(xs, xs)
+    amp = np.exp(-(Xv ** 2 + Yv ** 2) / (0.55e-3) ** 2)
+    E_vec = np.stack([(0.8 * amp).astype(np.complex128),
+                      (0.6 * amp).astype(np.complex128)], axis=0)
+    pres = {"surfaces": [
+        {"radius": 8e-3, "conic": 0.0, "glass_before": "air",
+         "glass_after": "N-BK7"},
+        {"radius": -8e-3, "conic": 0.0, "glass_before": "N-BK7",
+         "glass_after": "air"}],
+        "thicknesses": [2.5e-3], "aperture_diameter": 2.4e-3}
+    return E_vec, dict(prescription=pres, wavelength=wl, dx=dxg,
+                       integration_method="quadrature", n_v2=48, poly_order=4)
+
+
+_Ev, _kw = _vector_fixture()
+_vec = {}
+with warnings.catch_warnings():
+    warnings.simplefilter("ignore")
+    for _mode in ("none", "power", "peak"):
+        _o = LM.apply_real_lens_maslov_vector(
+            _Ev.copy(), normalize_output=_mode, **_kw)
+        _px = float(np.sum(np.abs(_o[0]) ** 2))
+        _py = float(np.sum(np.abs(_o[1]) ** 2))
+        _vec[_mode] = (_px / _py, _px + _py)
+R["E13_maslov_vector_ratios"] = h(_vec)
+R["E14_maslov_vector_field"] = h(LM.apply_real_lens_maslov_vector(
+    _Ev.copy(), normalize_output="none", **_kw))
 
 # Freeform + Surface sag read the same two builders through other doors.
 from lumenairy.elements.freeform import (                        # noqa: E402

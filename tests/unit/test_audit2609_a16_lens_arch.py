@@ -181,7 +181,7 @@ def test_the_facade_still_surfaces_the_moved_gates_live(monkeypatch):
     That is the failure mode this test exists for.
     """
     for name in ('cp', '_ne', '_numba', '_njit', '_prange',
-                 '_NUMBA_AVAILABLE', 'NUMEXPR_AVAILABLE'):
+                 '_NUMBA_AVAILABLE', 'NUMEXPR_AVAILABLE', '_NUMBA_KERNELS'):
         assert hasattr(lenses, name), (
             f'lenses lost {name!r}; a caller reading it through the facade '
             f'now raises AttributeError.')

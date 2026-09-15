@@ -12,24 +12,30 @@ initialised one.  Audit ``AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11`` finding H6 /
 WP-A16 addendum 10 counted four such cycles and enumerated what each back-edge
 carries.
 
-This module is the leaf those back-edges can point at instead.  It imports
-``numpy`` and ``warnings`` and nothing from ``lumenairy``, so it can never
-participate in a cycle.  ``lenses`` re-exports every name here, so
+This module is the leaf those back-edges point at instead.  All four are now
+closed.  ``lenses`` re-exports every name here, so
 ``lumenairy.elements.lenses.check_grid_vs_apertures`` and every existing
-``from .lenses import _warn_if_aperture_exceeds_grid`` keep resolving.
+``from .lenses import _warn_if_aperture_exceeds_grid`` keep resolving -- and
+resolve to the same objects.
 
 WHAT IS HERE.  The prescription-to-semi-diameter census, the public grid check,
-the grid recommendation and the warning the entry points emit.  Nothing in it
-is physics: it reads a prescription dict and compares lengths.
+the grid recommendation and the warning the entry points emit; and, since
+WP-B11c, the optional-backend plumbing, the two surface-sag builders and the
+two fitting helpers (see below).  None of it is engine physics: the bookkeeping
+reads a prescription dict and compares lengths, and the sag builders are
+pointwise arithmetic on a radius grid.
 
 WHAT ARRIVED WITH WP-B11c, and why.  ``surface_sag_general`` and
 ``surface_sag_biconic`` -- the whole of the ``_lens_real -> lenses`` back-edge
 -- now live here, which closes that module-level import 2-cycle.  They could
 not travel alone: they read the optional-backend plumbing (the lazy CuPy alias
 ``cp``, the numba gate and its compiled-kernel cache) from module scope, so
-that plumbing came with them.  ``lenses_maslov``'s four remaining names are the
-one back-edge left; ``docs/lens_configuration.md`` section "Module layout"
-carries it.
+that plumbing came with them.  ``lenses_maslov``'s four remaining names --
+``NUMEXPR_AVAILABLE`` and ``_ensure_numexpr_loaded`` (which travelled with the
+plumbing) plus ``_fit_normaliser`` and ``_multi_indices_total_degree`` (below)
+-- followed, which closed the last one.  The family now carries no module-level
+2-cycle at all; ``docs/lens_configuration.md`` section "Module layout" records
+how each of the four closed.
 
 THE LEAF PROPERTY, RESTATED.  This module no longer imports NOTHING from
 ``lumenairy`` -- it imports ``lumenairy.backend._optional``, the one place the
@@ -531,9 +537,12 @@ cp = None  # this module's alias for the cupy module; see _ensure_cupy_loaded
 def _ensure_cupy_loaded():
     """Load CuPy on first use; return True iff it is available.
 
-    Keeps this module's ``cp`` alias populated because the GPU branches here
-    -- and ``_lens_thin``'s PEP 562 ``cp`` forward, which reads
-    ``_lenses_module.cp`` -- resolve the module-level name directly.
+    Keeps this module's ``cp`` alias populated because the GPU branches in the
+    sag builders below resolve the module-level NAME directly, and because
+    ``lenses`` forwards ``cp`` to this slot rather than snapshotting it (a
+    snapshot taken at import time would be ``None`` for ever).  ``_lens_thin``
+    keeps a one-name PEP 562 ``__getattr__`` of its own that asks
+    ``backend._optional.ensure_cupy`` for the same lazily loaded module.
     """
     global cp
     if cp is None:
@@ -606,10 +615,9 @@ def _is_cupy_array(x):
     causing every NumPy array to get routed into the CuPy branch.
 
     ``_lens_thin`` asks ``backend._optional.is_cupy_array`` directly rather
-    than delegating here -- it takes the same answer from the same helper,
-    without the module-level import back into this file that a delegation
-    would need.  The extra short-circuit below is the only difference, and it
-    is about call cost, not about the answer.
+    than delegating here -- it takes the same answer from the same helper.
+    The extra short-circuit below is the only difference, and it is about call
+    cost, not about the answer.
     """
     if not CUPY_AVAILABLE:
         # Local short-circuit, not a delegation: this is the hot per-call
@@ -953,3 +961,36 @@ def surface_sag_biconic(
                       aspheric_coeffs_y if aspheric_coeffs_y is not None
                       else aspheric_coeffs)
     return sag_x + sag_y
+
+
+def _multi_indices_total_degree(n_vars: int, max_order: int):
+    """Enumerate multi-indices k with sum(k) <= max_order, as list of tuples."""
+    out = []
+    def recurse(prefix, remaining, depth):
+        if depth == n_vars:
+            out.append(tuple(prefix))
+            return
+        for k in range(remaining + 1):
+            recurse(prefix + [k], remaining - k, depth + 1)
+    recurse([], max_order, 0)
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Data normalisation helpers
+# ---------------------------------------------------------------------------
+
+def _fit_normaliser(v: np.ndarray, pad: float = 0.05):
+    """Return (center, half_range) such that (v - center)/half_range sits
+    in [-(1-pad), (1-pad)].
+
+    pad leaves a narrow margin so that mild extrapolation by the
+    propagator is still bounded.
+    """
+    vmin = float(np.min(v))
+    vmax = float(np.max(v))
+    center = 0.5 * (vmin + vmax)
+    half = 0.5 * (vmax - vmin) * (1.0 + pad)
+    if half == 0.0:
+        half = 1.0
+    return center, half

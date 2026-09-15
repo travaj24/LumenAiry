@@ -311,22 +311,21 @@ class TestTheLensKernelsLeaf:
             '_lens_traced imports the lenses facade at module scope again; it '
             'must read elements/_lens_kernels.py, which is a leaf')
 
-    def test_the_family_carries_only_the_cycle_still_open(self):
-        """A RATCHET stated as an EQUALITY.  Part a left two
-        (``_lens_real <-> lenses`` and ``lenses <-> lenses_maslov``) with the
-        edit each needed written out in ``docs/lens_configuration.md`` section
-        "Module layout"; WP-B11c made the first.  An equality rather than an
+    def test_the_family_carries_no_module_level_two_cycle(self):
+        """A RATCHET stated as an EQUALITY, and it now reads ZERO.  Part a left
+        two (``_lens_real <-> lenses`` and ``lenses <-> lenses_maslov``) with
+        the edit each needed written out in ``docs/lens_configuration.md``
+        section "Module layout"; WP-B11c made both.  An equality rather than an
         upper bound so that closing one forces this line to be revisited."""
         graph = _module_level_family_edges()
         cycles = {tuple(sorted((a, b))) for a, deps in graph.items()
                   for b in deps if a in graph.get(b, ())}
-        assert cycles == {('lenses', 'lenses_maslov')}, (
+        assert cycles == set(), (
             f"the lens family's module-level 2-cycles read "
-            f'{sorted(cycles)}.  '
-            f"Part a left two; WP-B11c closed ('_lens_real', 'lenses'), and "
-            f"('lenses', 'lenses_maslov') closes with its own item.  This is "
-            f'an EQUALITY, not a bound: a cycle that closes must be removed '
-            f'here in the same commit.')
+            f'{sorted(cycles)}.  The audit counted four, part a re-measured '
+            f'three and closed two, WP-B11c closed the last two, so this '
+            f'reads zero.  It is an EQUALITY, not a bound: a cycle that '
+            f'closes must be removed here in the same commit.')
 
 
 # ===========================================================================

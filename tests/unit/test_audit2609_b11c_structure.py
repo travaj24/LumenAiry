@@ -11,8 +11,11 @@ surface rather than a reading of any number:
 2. The ``_lens_real <-> lenses`` import cycle is gone, and the two live things
    the move needed -- a ``lenses._NUMBA_AVAILABLE = False`` monkeypatch that the
    kernel must still SEE, and the lazily populated ``cp`` / ``_ne`` slots -- work
-   through the forward rather than binding a stale ``None``.
-3. (the ``lenses <-> lenses_maslov`` back-edge lands with its own item.)
+   through the PEP 562 ``__getattr__`` forward rather than binding a stale
+   ``None``.
+3. The ``lenses <-> lenses_maslov`` back-edge is gone: the four names it carried
+   live in the leaf, ``lenses`` re-exports them by identity, and
+   ``lenses_maslov`` no longer imports ``lenses`` at module scope.
 
 The import-graph half of each claim is measured TWICE, by two independent
 instruments, because either alone can be fooled.  Structurally, by the
@@ -280,17 +283,16 @@ def test_the_executed_rcwa_graph_has_the_leaf_edge_and_no_back_edge():
 # 2. the _lens_real <-> lenses cycle
 # ===========================================================================
 
-#: The cycles still open at THIS commit.  Part a measured 3, closed one, and
-#: enumerated the rest; part b took the Maslov back-edge from 5 names to 4.
-#: This item closes ``_lens_real <-> lenses``; the Maslov one closes with its
-#: own item, which tightens this set to empty.
-_OPEN_CYCLES = {('lenses', 'lenses_maslov')}
+#: The cycles still open at THIS commit -- EMPTY, and an equality rather than
+#: an upper bound so that a cycle which closes forces this line to be revisited
+#: in the same commit.  The audit's TESTS-ARCH section counted four; part a
+#: re-measured three and closed two, this package closed the last two.
+_OPEN_CYCLES = set()
 
 
 def test_the_lens_family_carries_only_the_cycles_still_open():
-    """A RATCHET stated as an equality, not an upper bound: a cycle that
-    closed must be REMOVED from the set in the same commit, so the set is
-    always the honest inventory rather than a bound nobody revisits."""
+    """The structural half: what the SOURCE says, by the module-level-only AST
+    walk WP-B11 part a used."""
     graph = _family_graph(ELEM, LENS_FAMILY)
     assert _two_cycles(graph) == _OPEN_CYCLES, sorted(_two_cycles(graph))
 
@@ -303,9 +305,9 @@ def test_lens_real_does_not_import_the_hub_at_module_scope():
 
 
 def test_the_executed_lens_graph_agrees_with_the_source():
-    """The dynamic half of the same claim, on the edges that actually execute
-    rather than on the source.  FAILS on the pre-refactor tree, where the
-    recorder reports the ``_lens_real -> lenses`` edge this item removed."""
+    """The dynamic half of the same claim, on the edges that actually EXECUTE.
+    FAILS on the pre-refactor tree, where the recorder reports the same two
+    pairs the AST walk does."""
     graph = _executed_family_graph("lumenairy.elements.", LENS_FAMILY)
     assert _two_cycles(graph) == _OPEN_CYCLES, sorted(_two_cycles(graph))
     assert "lenses" not in graph["_lens_real"], sorted(graph["_lens_real"])
@@ -365,3 +367,51 @@ def test_the_module_getattr_still_raises_for_a_name_nobody_defines():
     with pytest.raises(AttributeError):
         lenses._this_name_exists_nowhere_at_all
     assert not hasattr(lenses, "_this_name_exists_nowhere_at_all")
+
+
+# ===========================================================================
+# 3. the lenses <-> lenses_maslov back-edge
+# ===========================================================================
+
+MASLOV_MOVED = ("NUMEXPR_AVAILABLE", "_ensure_numexpr_loaded",
+                "_fit_normaliser", "_multi_indices_total_degree")
+
+
+def test_lenses_maslov_does_not_import_the_hub_at_module_scope():
+    assert "lenses" not in _module_level_imports(ELEM / "lenses_maslov.py",
+                                                 set(LENS_FAMILY))
+
+
+def test_the_executed_graph_carries_no_maslov_back_edge():
+    graph = _executed_family_graph("lumenairy.elements.", LENS_FAMILY)
+    assert "lenses" not in graph["lenses_maslov"], \
+        sorted(graph["lenses_maslov"])
+    # ... while the FORWARD edge, which is the hub's whole job, is still there.
+    assert "lenses_maslov" in graph["lenses"], sorted(graph["lenses"])
+
+
+def test_the_four_moved_names_resolve_from_both_ends_and_are_identical():
+    """The re-export contract: every existing ``from ...lenses import
+    _fit_normaliser`` keeps working, and the object is the leaf's."""
+    from lumenairy.elements import _lens_kernels, lenses, lenses_maslov
+
+    for n in MASLOV_MOVED:
+        assert hasattr(_lens_kernels, n), n
+        assert getattr(lenses, n) is getattr(_lens_kernels, n), n
+        assert getattr(lenses_maslov, n) is getattr(_lens_kernels, n), n
+
+
+def test_the_numexpr_gate_is_live_through_the_facade_too():
+    """``NUMEXPR_AVAILABLE`` has the same shape as ``_NUMBA_AVAILABLE``: it is
+    a gate the suite flips, and ``_ensure_numexpr_loaded`` reads it at call
+    time out of the leaf."""
+    from lumenairy.elements import _lens_kernels, lenses
+
+    assert _lens_kernels._ensure_numexpr_loaded.__globals__ is \
+        vars(_lens_kernels)
+    saved = _lens_kernels.NUMEXPR_AVAILABLE
+    try:
+        _lens_kernels.NUMEXPR_AVAILABLE = not saved
+        assert lenses.NUMEXPR_AVAILABLE is (not saved)
+    finally:
+        _lens_kernels.NUMEXPR_AVAILABLE = saved

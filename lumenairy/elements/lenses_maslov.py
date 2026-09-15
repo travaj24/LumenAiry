@@ -314,20 +314,28 @@ _MZ_POLY_AUTO_MAX = 8
 _MZ_POLY_AUTO_TARGET = 1e-4   # waves RMS -- below this, extra order is wasted
 _MZ_POLY_AUTO_RTOL = 0.10     # stop once an order step improves residual < 10%
 
-# The aperture-vs-grid notice and the warning attribution helper live in
-# the ``_lens_kernels`` leaf; the other shared helpers still live in
-# lenses.py.
+# Every shared helper this module reads at import time now comes from the
+# ``_lens_kernels`` leaf: the aperture-vs-grid notice, the warning-attribution
+# helper, and (since WP-B11c) the numexpr gate and the two fitting helpers,
+# which were the last four names of the ``lenses <-> lenses_maslov`` back-edge.
+# ``lenses`` re-exports all of them, so the old spellings still resolve and
+# resolve to the SAME objects; reading them here instead is what closes the
+# cycle.
+#
+# ``NUMEXPR_AVAILABLE`` is imported BY VALUE on purpose: this module reads it
+# only to decide whether to call ``_ensure_numexpr_loaded()``, and the loader
+# re-reads the leaf's live flag, so a test that flips the gate is honoured
+# where it matters.  The gate is flipped on ``_lens_kernels`` (or on
+# ``lenses``, which forwards the write through).
 from ._lens_kernels import (
-    _warn_if_aperture_exceeds_grid,
-    caller_stacklevel as _caller_stacklevel,
-)
-from ._lens_real import _normalise_stop_index
-from .lenses import (
     NUMEXPR_AVAILABLE,
     _ensure_numexpr_loaded,
     _fit_normaliser,
     _multi_indices_total_degree,
+    _warn_if_aperture_exceeds_grid,
+    caller_stacklevel as _caller_stacklevel,
 )
+from ._lens_real import _normalise_stop_index
 
 # ---------------------------------------------------------------------------
 # Van Vleck-Maslov normalisation of the mixed-representation integral.

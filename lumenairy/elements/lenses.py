@@ -40,10 +40,12 @@ from typing import Tuple
 import numpy as np
 
 # The lens-family LEAF: the grid-versus-aperture bookkeeping, the optional
-# CuPy / numba / numexpr plumbing and the two surface-sag builders.  All of it
-# USED to live in this file, and ``_lens_real`` reached back here for the sag
-# builders at module scope -- which is exactly what made that edge an import
-# 2-cycle with this facade (WP-B11c).  Re-exported so every existing
+# CuPy / numba / numexpr plumbing, the two surface-sag builders and the two
+# fitting helpers.  All of it USED to live in this file, and ``_lens_real``
+# (the sag builders) and ``lenses_maslov`` (the numexpr gate and the two
+# fitting helpers) reached back here for it at module scope -- which is exactly
+# what made those two edges import 2-cycles with this facade (WP-B11c).
+# Re-exported so every existing
 # ``from lumenairy.elements.lenses import surface_sag_general`` keeps
 # resolving, to the SAME object.
 from ._lens_kernels import (  # noqa: F401 -- re-export, see the block below
@@ -51,9 +53,11 @@ from ._lens_kernels import (  # noqa: F401 -- re-export, see the block below
     _collect_semi_diameters as _collect_semi_diameters,
     _ensure_cupy_loaded as _ensure_cupy_loaded,
     _ensure_numexpr_loaded as _ensure_numexpr_loaded,
+    _fit_normaliser as _fit_normaliser,
     _get_aspheric_sag_accum_numba as _get_aspheric_sag_accum_numba,
     _is_cupy_array as _is_cupy_array,
     _load_numba as _load_numba,
+    _multi_indices_total_degree as _multi_indices_total_degree,
     _surface_sag_general as _surface_sag_general,
     _warn_if_aperture_exceeds_grid as _warn_if_aperture_exceeds_grid,
     check_grid_vs_apertures as check_grid_vs_apertures,
@@ -112,6 +116,14 @@ class _LensesFacade(_types.ModuleType):
             return
         super().__delattr__(name)
 
+    def __dir__(self):
+        # A module's default ``__dir__`` lists ``__dict__`` only, so without
+        # this the forwarded names would VANISH from ``dir(lenses)`` -- an
+        # observable surface change in a refactor whose contract is that
+        # nothing observable moves.  Introspection therefore sees exactly what
+        # it saw while the names were defined here.
+        return sorted(set(super().__dir__()) | _LIVE_FORWARD_NAMES)
+
 
 _sys.modules[__name__].__class__ = _LensesFacade
 
@@ -145,19 +157,6 @@ from .._math.chebyshev import (  # noqa: F401 -- back-compat alias re-export (v5
     chebyshev_second_derivative_vandermonde as _chebyshev_second_derivative_vandermonde,  # noqa: F401
     chebyshev_vandermonde as _chebyshev_vandermonde,  # noqa: F401
 )
-
-
-def _multi_indices_total_degree(n_vars: int, max_order: int):
-    """Enumerate multi-indices k with sum(k) <= max_order, as list of tuples."""
-    out = []
-    def recurse(prefix, remaining, depth):
-        if depth == n_vars:
-            out.append(tuple(prefix))
-            return
-        for k in range(remaining + 1):
-            recurse(prefix + [k], remaining - k, depth + 1)
-    recurse([], max_order, 0)
-    return out
 
 
 def _evaluate_polynomial_4d(coeffs: np.ndarray,
@@ -249,26 +248,6 @@ def _evaluate_polynomial_4d_and_grad34(coeffs: np.ndarray,
     df3 = np.tensordot(c_arr, basis_d3, axes=([0], [0]))
     df4 = np.tensordot(c_arr, basis_d4, axes=([0], [0]))
     return f, df3, df4
-
-
-# ---------------------------------------------------------------------------
-# Data normalisation helpers
-# ---------------------------------------------------------------------------
-
-def _fit_normaliser(v: np.ndarray, pad: float = 0.05):
-    """Return (center, half_range) such that (v - center)/half_range sits
-    in [-(1-pad), (1-pad)].
-
-    pad leaves a narrow margin so that mild extrapolation by the
-    propagator is still bounded.
-    """
-    vmin = float(np.min(v))
-    vmax = float(np.max(v))
-    center = 0.5 * (vmin + vmax)
-    half = 0.5 * (vmax - vmin) * (1.0 + pad)
-    if half == 0.0:
-        half = 1.0
-    return center, half
 
 
 # ---------------------------------------------------------------------------
