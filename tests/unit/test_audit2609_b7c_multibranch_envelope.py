@@ -17,8 +17,10 @@ What is asserted here:
    and not fallen back (premise-gated: the arm runs only where the running
    build actually reproduces the blow-up; where it does not, the INVARIANT --
    nothing outside the band is ever returned -- is asserted instead);
-3. the two bars are coupled to the constants they were derived against
-   (build-free: constants only);
+3. the two bars are coupled to the constants they were derived against, and
+   are SCOPED to the populations they were measured on -- VERIFY-WP-B7c
+   refuted the envelope one of them was written as, and WP-B7c round 2
+   supplies the arm that decides inside it (build-free: constants only);
 4. the completion is NOT the best member on an aperture-truncated fixture, read
    through ENERGY CONSERVATION, which needs no model: a lossless element cannot
    deliver more power to a plane than it launched.
@@ -41,6 +43,8 @@ from lumenairy.elements._lens_traced_multibranch import (
 )
 from lumenairy.elements._lens_traced_uniform import (
     _AIRY_TAIL_CELLS,
+    _MB_PIXEL_CONTINUITY_MAX,
+    _MB_PIXEL_CONTINUITY_MIN,
     _MB_POWER_RATIO_MAX,
     _MB_POWER_RATIO_MIN,
     _ZETA_EXTRAPOLATION_MAX,
@@ -252,46 +256,92 @@ def test_b7c_the_refusal_band_is_coupled_to_the_constants_it_was_derived_on():
     IS the multibranch's own collapse factor, so the two modules classify the
     same field the same way and the bars cannot drift apart.
 
-    The measured envelope behind the coupling (WP-B7c, 2026-09-14, five optics
-    x 51 fold planes against a direct Rayleigh-Sommerfeld oracle): all 42
-    planes the oracle accepts read a bracketed ratio of 0.816-1.246 (only two
-    of them above 1.0 at all); the smallest broken one reads 5.848, on
-    WP-B7b's own fast singlet one micron past its marginal focus.  The bar
-    sits 1.60x above the largest accepted and 2.92x below the smallest broken
-    reading, in a gap 4.69x wide whose geometric centre is 2.70.
+    RESTATED (WP-B7c round 2, 2026-09-15).  WP-B7c derived this bar on five
+    undercorrected biconvex-or-plano SINGLETS, one grid each, 51 fold planes,
+    and recorded an envelope: accepted 0.816-1.246, smallest broken 5.848,
+    "nothing in between", margins 1.60x / 2.92x in a 4.69x gap.  VERIFY-WP-B7c
+    re-derived it on four optics that study never used and REFUTED the
+    envelope: the largest ACCEPTED reading is 0.9804 (a positive meniscus at
+    z = 2201.74 um, oracle fidelity 0.9798) and the smallest BROKEN one 1.106
+    over all planes the guard can fire on / 1.151 on fold rings -- the two
+    populations OVERLAP, the gap is 1.13x-1.17x, and the interval WP-B7c
+    reported as empty is populated continuously once the planes are stepped
+    finely.
+
+    So the assertions here are no longer an envelope.  What is pinned is the
+    SHAPE of the constraint: this bar has a measured margin BELOW it and none
+    above, which makes it a far-tail tripwire rather than a classifier, and
+    the arm that decides inside it is ``_MB_PIXEL_CONTINUITY_MAX``
+    (see ``test_audit2609_b7c2_pixel_halving_arbiter.py``).  It is left at 2.0
+    deliberately: lowering it toward the measured broken floor of 1.106 would
+    start refusing fields the oracle accepts at 0.9804.
+
+    Build-free: constants and measured literals with stated origins only.
     """
     assert _MB_POWER_RATIO_MAX == _ENERGY_BLOWUP_FACTOR
     assert _MB_POWER_RATIO_MIN == _ENERGY_COLLAPSE_FACTOR
-    # the measured envelope, with its margins -- decision, not reading
-    largest_accepted = 1.246          # fixture D, z = 1725 um, fidelity 0.883
-    smallest_broken = 5.848           # fixture W1, z = 2060 um, fidelity 0.350
-    assert largest_accepted < _MB_POWER_RATIO_MAX < smallest_broken, (
-        f'{_MB_POWER_RATIO_MAX} has left the measured gap '
-        f'[{largest_accepted}, {smallest_broken}]')
-    assert _MB_POWER_RATIO_MAX / largest_accepted > 1.5
-    assert smallest_broken / _MB_POWER_RATIO_MAX > 2.5
+    # measured populations, with their origins
+    wpb7c_largest_accepted = 1.246    # WP-B7c, 5 singlets, 51 planes
+    largest_accepted = 0.9804         # VERIFY-WP-B7c, +4 optics, 71 planes
+    smallest_broken = 1.106           # VERIFY-WP-B7c, doublet z = 5400 um
+    # the populations overlap -- there is NO value of this constant that
+    # separates them, which is the finding, not a tolerance
+    assert largest_accepted < smallest_broken
+    assert smallest_broken / largest_accepted < 1.25, (
+        'the two populations have separated again; if a wider study now '
+        'shows a real gap here, re-derive this bar rather than keeping 2.0')
+    # the ONE margin the bar has, and the one it does not
+    assert _MB_POWER_RATIO_MAX / largest_accepted > 2.0
+    assert _MB_POWER_RATIO_MAX / wpb7c_largest_accepted > 1.5
+    assert smallest_broken < _MB_POWER_RATIO_MAX, (
+        'the smallest broken reading measured is no longer inside the bar; '
+        'the far-tail-tripwire scoping in _MB_POWER_RATIO_MAX should then be '
+        're-derived')
+    # ...and the second arm exists and fires well below it, on a quantity
+    # whose converged value is a fixed 1.0 rather than a moving population
+    assert 1.0 < _MB_PIXEL_CONTINUITY_MAX < _MB_POWER_RATIO_MAX
+    assert _MB_PIXEL_CONTINUITY_MIN == pytest.approx(
+        1.0 / _MB_PIXEL_CONTINUITY_MAX, rel=1e-12)
 
 
-def test_b7c_the_zeta_bar_sits_in_the_measured_transition():
-    """``_ZETA_EXTRAPOLATION_MAX`` re-derived two-sided on THREE optics.
+def test_b7c_the_zeta_bar_is_the_onset_of_a_one_sided_gain():
+    """``_ZETA_EXTRAPOLATION_MAX``, restated on the half of its derivation
+    that survives re-measurement.
 
-    WP-B7c ladders (N-BAF10 biconvex / 1.064 um, N-BK7 plano-convex flat-first
-    / 780 nm, N-SF11 biconvex / 1.55 um; 30 fold planes, completed-field power
-    against the direct Rayleigh-Sommerfeld oracle): BELOW the bar the energy
-    error is SIGNED and centred (-2.2 % .. +4.1 %, 12 of 22 rungs negative,
-    mean +0.57 %); ABOVE it, it is a one-sided GAIN at every rung (+3.6 % ..
-    +30.1 %, 8 of 8 positive, mean +7.88 %).  The last signed rung is 5.65 and
-    the first systematic-gain rung 11.05, and 8.0 is 7.90 = sqrt(5.65 * 11.05)
-    to two figures -- the bar is a calibrated boundary after all, but of
-    +/-4 % against +4 %, not the 5 % / 10 % the pre-WP-B7c docstring claimed.
+    WP-B7c derived it two-sided on three optics: BELOW the bar the completed
+    field's energy error was "signed and centred" (-2.2 % .. +4.1 %, 12 of 22
+    rungs negative, mean +0.57 %), ABOVE it a one-sided GAIN at every rung
+    (+3.6 % .. +30.1 %, 8 of 8 positive), with 5.653 the last signed rung and
+    11.05 the first systematic-gain one.
+
+    VERIFY-WP-B7c re-ran that on four other optics, 30 rungs.  The ABOVE-bar
+    half reproduces: +3.92 % .. +12.43 %, 0 of 13 negative.  The BELOW-bar
+    half does NOT: -1.02 % .. +28.44 %, 1 of 17 negative, and the LARGEST
+    excursion in either study (+28.4 %, at W/band 1.93) is below the bar.  So
+    what the constant marks is the ONSET of a systematic gain, and nothing
+    about the size or sign of the error below it.
+
+    Pinned accordingly: the bar must sit below the first measured
+    systematic-gain rung, with margin; ``last_signed`` is kept only as the
+    provenance of where 8.0 came from, not as the other side of a gap.
     """
-    last_signed = 5.653               # fixture V, z = 1614.60 um, +1.98 %
     first_gain = 11.05                # fixture C, z = 3360.00 um, +4.40 %
-    assert last_signed < _ZETA_EXTRAPOLATION_MAX < first_gain, (
-        f'_ZETA_EXTRAPOLATION_MAX = {_ZETA_EXTRAPOLATION_MAX} has left the '
-        f'measured transition [{last_signed}, {first_gain}]')
-    assert _ZETA_EXTRAPOLATION_MAX / last_signed > 1.4
+    last_signed = 5.653               # fixture V, z = 1614.60 um, +1.98 %
+    assert _ZETA_EXTRAPOLATION_MAX < first_gain, (
+        f'_ZETA_EXTRAPOLATION_MAX = {_ZETA_EXTRAPOLATION_MAX} is no longer '
+        f'below the first measured systematic-gain rung {first_gain}')
     assert first_gain / _ZETA_EXTRAPOLATION_MAX > 1.3
+    # provenance only: 8.0 is sqrt(5.653 * 11.05) = 7.90 to two figures
+    assert last_signed < _ZETA_EXTRAPOLATION_MAX
+    assert _ZETA_EXTRAPOLATION_MAX == pytest.approx(
+        (last_signed * first_gain) ** 0.5, rel=0.02)
+    # the refuted half, recorded so it is not re-introduced: below the bar the
+    # error is NOT bounded by the above-bar excursions
+    largest_below_bar_pct = 28.44     # VERIFY-WP-B7c, F_alt, W/band 1.93
+    largest_above_bar_pct = 12.43     # VERIFY-WP-B7c, M, W/band 14.0
+    assert largest_below_bar_pct > largest_above_bar_pct, (
+        'the below-bar population is bounded by the above-bar one again; if '
+        'that now reproduces, the two-sided reading can be restored')
 
 
 def test_b7c_the_dark_fill_depth_is_not_the_energy_lever():

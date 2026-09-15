@@ -26,14 +26,71 @@ METHOD.
      = the launched power (a lossless element).
 
   3. The DIRECT Rayleigh-Sommerfeld ring integral to the observation plane
-     ``z`` (a rotationally-symmetric field, so the azimuthal integral is the
-     Debye ``J0`` form, exact to O((y rho / R0^2)^2 k) which is < 1e-2 rad here):
+     ``z`` (a rotationally-symmetric field, so the azimuthal integral is taken
+     in the Debye ``J0`` form -- SEE THE NA CEILING BELOW):
          E(rho, z) = (1/(i lambda)) INT E_exit(y) J0(k y rho / R0)
                      (dz'/R0) exp(i k R0) / R0 * 2 pi y dy,
      R0 = sqrt(dz'^2 + y^2 + rho^2), dz' = z - z_exit.  The (1/(i lambda)),
      obliquity ``dz'/R0`` and ring-area ``2 pi y dy`` factors make the integral
      ENERGY-CONSERVING (the metric-only ``debye_oracle_v3`` ring sum drops them;
      the |E|^2 SHAPE, hence r2m / EE, is identical, cross-checked below).
+
+THE NA CEILING (VERIFY-WP-B7c D5; MEASURED, WP-B7c round 2, 2026-09-15).
+
+  This oracle is NOT exact at high NA, and the limit is step 3's azimuthal
+  form, not its sampling.  Writing the exact ring distance as
+  ``R = sqrt(dz'^2 + y^2 + rho^2 - 2 y rho cos phi)`` and expanding,
+
+      R = R0 - (y rho / R0) cos phi - (y^2 rho^2 / (2 R0^3)) cos^2 phi - ...
+
+  the ``J0`` form keeps the linear term and drops the quadratic one.  The
+  dropped phase is
+
+      eps = k y^2 rho^2 / (2 R0^3)                       [radians]
+
+  evaluated at the radius the light actually occupies.  It is NOT small by
+  construction; it grows as the FOURTH power of the numerical aperture.
+
+  Measured against an EXACT azimuthal quadrature of the same integral
+  (``validation/probe_wp_b7c_round2/oracle.py::rs_integral_exact``, which
+  integrates ``phi`` numerically with a node count chosen per radius from the
+  local Bessel argument, converged to 1e-13 under a doubling of that count and
+  to 4e-4 under a doubling of ``n_fan``), inside the radius holding 99.95 % of
+  the field's energy:
+
+    optic (y_max/z)      eps [rad]   rel L2 error   fidelity   power
+    doublet     0.108      0.0009        0.0003      1.00000   1.00008
+    plano-cx    0.133      0.0014        0.0005      1.00000   0.99990
+    air-doublet 0.151      0.0079        0.0029      0.99999   0.99958
+    meniscus    0.200      0.0110        0.0042      0.99996   0.99924
+    conic       0.222      0.0259        0.0111      0.99988   0.99886
+    N-BAF10     0.224      0.0096        0.0036      0.99995   0.99946
+    f/2.0       0.231      0.0328        0.0139      0.99980   0.99880
+    NA 0.33     0.354      0.1769        0.0629      0.99705   0.99670
+    NA 0.33     0.354      0.2388        0.0875      0.99397   0.99611
+    f/1.2       0.452      1.4231        0.5371      0.79403   0.99007
+
+  So the rule of thumb is ``rel L2 ~ 0.37 eps``, holding over three decades of
+  ``eps``, and:
+
+    * BELOW ``y_max/z ~ 0.25`` (``eps <~ 0.04 rad``) the ``J0`` form costs
+      under 1.5 % in relative L2 and under 3e-4 in fidelity.  Every fixture in
+      WP-B7b, VERIFY-B7b, WP-B7c and VERIFY-WP-B7c is here, so no published
+      number is affected;
+    * at ``y_max/z ~ 0.35`` (NA 0.33) it costs 6-9 % in relative L2 and
+      3e-3-6e-3 in fidelity.  That is larger than the fidelity differences
+      such a study reads, so score there with the exact quadrature;
+    * at ``y_max/z ~ 0.45`` (f/1.2) it costs **54 % in relative L2 and a
+      fidelity of 0.794**.  VERIFY-WP-B7c saw the library's own ``uniform``
+      and ``wave`` members disagree with this oracle at fidelity 0.737 / 0.722
+      there and recorded it as a model gap; it is THIS oracle's gap, and the
+      members were closer to the truth than it was.  DO NOT SCORE AGAINST THE
+      ``J0`` FORM ABOVE NA ~0.3.
+
+  The energy closure column of the self-verification below sees the same
+  thing from the other side (0.99999 at ``y_max/z`` 0.108 falling to 0.98990
+  at 0.452), so a run whose ``energy_closure`` has drifted below ~0.995 is
+  already past this ceiling and should say so rather than be believed.
 
 SELF-VERIFICATION (all independent of any lens model):
   * grid convergence -- doubling the fan / rho sampling changes the windowed

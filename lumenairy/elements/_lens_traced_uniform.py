@@ -72,7 +72,9 @@ from ._lens_kernels import caller_stacklevel as _caller_stacklevel
 from ._lens_traced_multibranch import (
     _ENERGY_BLOWUP_FACTOR,
     _ENERGY_COLLAPSE_FACTOR,
-    apply_real_lens_traced_multibranch,
+    _PIXEL_CONTINUITY_MAX,
+    _PIXEL_CONTINUITY_MIN,
+    _multibranch_render,
 )
 from .lenses_maslov import _fold_airy_eval, pearcey
 
@@ -191,16 +193,30 @@ _AIRY_TAIL_CELLS = 20.0
 #   ABOVE it (8 rungs, W/band 11.05 .. 3484) it is a one-sided GAIN at every
 #   rung -- +3.64 % .. +30.1 %, 8 of 8 POSITIVE, mean +7.88 %.
 #
-# So the discriminator is the SIGN, not the magnitude: past the bar the
-# completion stops making a centred error and starts systematically writing
-# energy that is not there.  The last signed rung is 5.65 (+1.98 %, optic 1)
-# and the first systematic-gain rung 11.05 (+4.40 %, optic 2); 8.0 is
-# sqrt(5.65 * 11.05) = 7.90 to two figures, i.e. the shipped bar already sits
-# at the geometric centre of the measured transition on optics WP-B7b never
-# saw.  It is a calibrated boundary of +/-4 % against +4 %, not the 5 % / 10 %
-# one the pre-WP-B7c text claimed and not the "conservative flag" VERIFY-B7b's
-# single optic suggested: VERIFY-B7b's saturation near +5 % is the ABOVE-bar
-# population of one optic, read without the below-bar population beside it.
+# ONLY THE ABOVE-BAR HALF OF THAT SURVIVES RE-DERIVATION, and the constant is
+# documented on that half alone (VERIFY-WP-B7c, 2026-09-14; 30 fold rungs on
+# four optics WP-B7c never used, same oracle, completed-field power against
+# the oracle's):
+#
+#   ABOVE the bar (13 rungs, W/band 10.8 .. 1779): +3.92 % .. +12.43 %, 0 of
+#   13 negative, mean +8.20 % -- the one-sided gain REPRODUCES, mirroring
+#   WP-B7c's 0 of 8;
+#   BELOW the bar (17 rungs, W/band 0.64 .. 7.64): -1.02 % .. +28.44 %, 1 of
+#   17 negative, mean +7.00 % -- NOT signed, NOT centred, and the LARGEST
+#   excursion in either study (+28.4 %, W/band 1.93) is below the bar, not
+#   above it.  Excluding two rungs contaminated by the section-1 quadrature
+#   defect the below-bar range is -1.02 % .. +17.39 %, 1 of 15.
+#
+# So: past 8.0 the completion writes a ONE-SIDED energy GAIN, on seven optics
+# and two builds.  It does NOT follow that below 8.0 the error is small or
+# centred -- it is one-sided there too on four of the seven, and larger.  The
+# bar marks where the gain becomes systematic, and nothing about the
+# below-bar population.  ``sqrt(5.65 * 11.05) = 7.90`` remains the arithmetic
+# that PLACED 8.0 on WP-B7c's three optics, and is recorded as provenance,
+# not as a two-sided calibration: the "last signed rung 5.65" that anchors its
+# lower end is a property of those three optics only.  For absolute energy on
+# EITHER side of the bar, read the ray-to-wave hand-off, which conserved the
+# launched power to better than 1 % at every plane in either study.
 _ZETA_EXTRAPOLATION_MAX = 8.0
 
 # Refusal bar on the MULTIBRANCH field this completion is built on.
@@ -242,26 +258,53 @@ _ZETA_EXTRAPOLATION_MAX = 8.0
 #     read 5.848 / 18.86 / 93.5 / 1683 / 2346 / 2801 / 3201 / 3443 / 3545 and
 #     up.  The smallest of them, 5.848, is WP-B7b's own fast singlet one
 #     micron past its marginal focus (z = 2060 um, fidelity 0.350);
-#   * between 1.246 and 5.848 there is nothing.
+#   * no plane of THAT POPULATION reads between 1.246 and 5.848.
 #
-# The bar is ``_ENERGY_BLOWUP_FACTOR`` itself -- the multibranch's own gain
-# tripwire -- so there is ONE bar on this quantity in the library rather than
-# two that can drift apart, and the completion refuses exactly the fields the
-# branch sum has already declared unphysical (that module derived 2.0 from its
-# own independent measurement: a well-behaved through-focus field stays within
-# ~1.2x and a RESOLVED fold within ~1.18x, which the 1.246 above confirms).
-# Margins: 1.60x above the largest accepted reading, 2.92x below the smallest
-# broken one.  The geometric centre of the measured gap is
-# sqrt(1.246 * 5.848) = 2.70; 2.0 buys 0.3 of a decade less margin above and
-# 0.35 more below, and the shared constant.  Neither margin is decades, and
-# that is stated rather than papered over: the gap the bar sits in is 4.69x
-# wide, measured over 51 planes on five optics and two builds.
+# WHAT THAT POPULATION IS, AND WHAT IT IS NOT (VERIFY-WP-B7c, 2026-09-14,
+# re-derived on four optics WP-B7c never used -- a cemented doublet, a
+# positive meniscus, a convex-first plano-convex at 532 nm and a fast N-LASF9
+# biconvex -- 71 planes, both builds).  The five optics above are all
+# UNDERCORRECTED biconvex-or-plano singlets, each read on one grid.  Widen the
+# population and the two clusters OVERLAP: the largest ACCEPTED reading is
+# 0.9804 (meniscus, z = 2201.74 um, fidelity 0.9798) and the smallest BROKEN
+# one 1.151 on fold rings (fast singlet, z = 1076 um, fidelity 0.858, power
+# 1.284x the oracle's, with ``power_ratio_decision = 'ok'``, ``fell_back =
+# False`` and ``zeta_extrapolation = 1.93``) or 1.106 over every plane the
+# guard can fire on (doublet, z = 5400 um, fidelity 0.837).  The gap is
+# 1.13x-1.17x, not 4.69x, and the interval (1.25, 5.85) is populated
+# CONTINUOUSLY once the planes are stepped finely.  The "empty gap" was an
+# artefact of plane sampling.
+#
+# SO THIS BAR IS A FAR-TAIL TRIPWIRE, NOT A CLASSIFIER.  It has no measured
+# margin above: the smallest broken reading sits 1.74x INSIDE it.  It is left
+# at 2.0 deliberately -- it is the only bar on this quantity in the library
+# (``_ENERGY_BLOWUP_FACTOR`` itself, so the completion refuses exactly the
+# fields the branch sum has already declared unphysical, and the two cannot
+# drift apart), and lowering it toward the measured broken floor of 1.106
+# would start refusing fields the oracle accepts at 0.98.  Its margin BELOW
+# the accepted population is 2.04x and that is the only margin it has.
+# WHAT DECIDES the cases inside it is the second arm,
+# ``_MB_PIXEL_CONTINUITY_MAX`` below -- which reads the quadrature's
+# convergence rather than its energy against a launch, and which does refuse
+# the 1.151 plane above.
 #
 # The ratio is read through the SAME bracket the multibranch's own gain arm
 # uses (``min(power_ratio, power_ratio_triangles)``, i.e. ``p_out / p_in_hi``),
 # so the known false-positive class it was introduced for -- an aperture much
 # wider than the grid, where the node-count denominator alone reads up to 3.3x
-# with the energy conserved to 1 % -- cannot reach this bar either.
+# with the energy conserved to 1 % -- cannot reach this bar either.  The PRICE
+# of that bracket is a detection floor, and it is stated here rather than left
+# implicit (VERIFY-WP-B7c D4): on the very geometry it exists for, the two
+# denominators separate by up to 7.85x (20 planes of the delta audit's D3
+# fixture -- 6 mm aperture on a 1.2 mm grid at ray_subsample=8 -- where
+# ``power_ratio`` reads 2.02-3.76 while ``power_ratio_triangles`` reads
+# 0.45-0.90, and the completion correctly returns).  So on a geometry with
+# that spread, the smallest GAIN this arm can see is not 2.0 but 2.0 times the
+# spread, i.e. up to ~15.7x.  The bracket is still right -- the alternative is
+# spurious refusals on a legitimate geometry -- but a caller reading
+# ``multibranch_power_ratio`` against ``multibranch_power_ratio_bracketed``
+# can see the spread on their own plane, and the pixel-continuity arm below
+# has no such denominator at all.
 _MB_POWER_RATIO_MAX = _ENERGY_BLOWUP_FACTOR
 
 # Lower arm of the same reading, REPORTED but not refused.  A multibranch field
@@ -275,6 +318,78 @@ _MB_POWER_RATIO_MAX = _ENERGY_BLOWUP_FACTOR
 # only.  ``_ENERGY_COLLAPSE_FACTOR`` (0.5, derived there) is reused as the
 # reporting threshold so the two modules classify the same field the same way.
 _MB_POWER_RATIO_MIN = _ENERGY_COLLAPSE_FACTOR
+
+# The PIXEL-HALVING ARBITER's bar -- the SECOND arm of the same decision, and
+# the one that decides the cases the reading above cannot.
+#
+# WHY A SECOND ARM.  ``_MB_POWER_RATIO_MAX`` reads the branch sum's deposited
+# power against the power its launch congruence carries onto the grid.  That
+# denominator makes the reading a mixture: a fold plane legitimately LOSES the
+# dark-side tail the completion exists to add (the accepted population runs
+# down to 0.74), triangles that straddle the grid boundary bias it the other
+# way, and light that leaves the window is not a defect.  Re-derived
+# independently on four optics the WP-B7c study never used
+# (VERIFY-WP-B7c, 2026-09-14), the accepted and broken populations of that
+# reading OVERLAP: largest accepted 0.9804 against smallest broken 1.106
+# (all planes) / 1.151 (fold rings), a gap of 1.13x under a 2.0 bar, with a
+# plane at 1.151 returning a field of oracle fidelity 0.858 and
+# ``power_ratio_decision='ok'``.  A bar on that quantity is a far-tail
+# tripwire, not a classifier, and there is nowhere for it to move: lowering it
+# to 1.10 would start refusing accepted fields at 0.98.
+#
+# WHAT THIS ARM READS INSTEAD is the quadrature's CONVERGENCE IN THE PIXEL --
+# the deposited power of this render over that of the same mapped triangles
+# rasterised at half the pitch on the same window
+# (``_lens_traced_multibranch._PIXEL_CONTINUITY_MAX`` carries the mechanism).
+# Every term that made the reading above a mixture cancels: both renders drop
+# the same dark tail, straddle the same boundary and lose the same off-screen
+# light.  What is left is the pixel-area scaling of a point-sampled quadrature
+# that has stopped being unbiased.
+#
+# WHERE IT IS READ.  On the field this call RETURNS -- the completed fold
+# field where the completion applies, the plain branch sum on every fallback
+# path -- not on the branch sum unconditionally.  The half-pitch render the
+# branch sum already paid for is completed with the SAME fold parameters
+# (``r_c``, ``kappa``, the cone phase and the two fitted CFU coefficients), so
+# the comparison isolates the RASTERISATION and adds no second least-squares
+# fit's noise to it.  Reading the branch sum instead would refuse fields that
+# are right: on VERIFY-B7b's own fixture at z = 1761 um the branch sum reads
+# 1.0636 and the completion built on it reads 1.0020, at oracle fidelity
+# 0.9878.
+#
+# MEASURED (WP-B7c round 2, 2026-09-15) against the direct
+# Rayleigh-Sommerfeld oracle ``validation/oracles/caustic_fold_truth.py`` on
+# EIGHT optics and 82 oracle-scored fold-ring planes; probes, populations and
+# JSON in ``validation/probe_wp_b7c_round2/``:
+#
+#   * the 67 planes RETURNED read 0.9860 .. 1.0221, fidelity 0.9593 .. 0.9985;
+#   * the 15 REFUSED read 1.092 .. 3.998, fidelity 0.0173 .. 0.9302.
+#
+# The two fidelity populations do not overlap, with no accept bar chosen.  The
+# gap in the reading is 1.0683x (1.0221 against 1.092), its geometric centre
+# 1.0564 = 1.06 to three figures, and the margins are 1.037x above the largest
+# returned reading and 1.030x below the smallest refused one.
+#
+# WHAT IT COSTS AND WHAT IT DOES NOT.  One extra rasterisation of the SAME
+# mapped triangles -- never a second ray trace, a second KMAH pass or a second
+# meridional fold trace (measured 1.6x-2.7x of the branch sum alone, and less
+# of the completion, which also pays for a 4000-ray meridional trace and a
+# least-squares fit).  ``apply_real_lens_traced_multibranch`` does not ask for
+# it and is unchanged in cost and in bits.
+#
+# WHAT IT DOES NOT CATCH, measured on the same population: on FALLBACK planes
+# -- where the module has already warned that the completion does not apply
+# and the field returned is the bright-side-only branch sum -- the returned
+# and refused fidelity populations DO overlap (returned down to 0.764,
+# refused up to 0.930), because what is wrong there is the missing dark tail
+# and not the quadrature.  This arm is a detector of ONE failure mode, and a
+# plane it accepts is not thereby certified.
+_MB_PIXEL_CONTINUITY_MAX = _PIXEL_CONTINUITY_MAX
+
+# Lower arm, REPORTED not refused -- the mirror non-convergence, in which the
+# coarse render MISSES deposits the finer one catches.  See the derivation
+# with the upper arm.
+_MB_PIXEL_CONTINUITY_MIN = _PIXEL_CONTINUITY_MIN
 
 # Pearcey series (:func:`pearcey`) converges everywhere but SLOWS / overflows
 # for large ``|x|, |y|``; clamp the control coordinates to this box when
@@ -1067,7 +1182,47 @@ def apply_real_lens_traced_uniform(
     ``l_airy >= 1.2 dx``) or the call falls back.  On a fast singlet at its
     marginal focus that layer is microns wide, so an aperture-sized grid needs
     several hundred samples across it -- the 640 x 640 / dx = 2.10 um row above
-    is the same optic and plane that falls back at dx = 4 um."""
+    is the same optic and plane that falls back at dx = 4 um.
+
+    Two REFUSALS (WP-B7c and its round 2)
+    -------------------------------------
+    This completion keeps the branch sum's bright side verbatim, so a branch
+    sum that is wrong by decades makes it wrong by decades -- and none of the
+    diagnostics above can see it (at such a plane ``fit_residual``,
+    ``zeta_extrapolation`` and ``fell_back`` all read their best values).  Two
+    independent readings are therefore taken and the call RAISES rather than
+    returning such a field:
+
+    * ``multibranch_power_ratio_bracketed`` -- the branch sum's reconstructed
+      grid power over the launch power reaching the grid.  Above
+      ``_MB_POWER_RATIO_MAX`` (2.0, the branch sum's own gain tripwire) the
+      call refuses.  This arm is a FAR-TAIL tripwire, not a classifier: its
+      accepted and broken populations overlap (largest accepted 0.9804 against
+      smallest broken 1.106 measured over nine optics), so it has a margin
+      below and none above;
+    * ``pixel_continuity`` -- the power this call's OWN output deposits, over
+      the power the same mapped triangles deposit when rasterised at HALF the
+      pitch on the same window from the same launch lattice.  A converged
+      point-sampled quadrature deposits the same power at any pitch, so this
+      reads 1 on any optic at any grid; a quadrature that has stopped being
+      unbiased deposits a power proportional to the PIXEL AREA and reads ~4
+      per halving.  Outside ``[1/1.06, 1.06]`` the gain arm refuses and the
+      loss arm reports.  Measured on eight optics and 82 oracle-scored fold
+      planes: the 67 planes returned read 0.9860-1.0221 with oracle fidelity
+      0.9593-0.9985, the 15 refused read 1.092-3.998 with fidelity
+      0.0173-0.9302.
+
+    Both readings, their bands and their decisions are in the diagnostics on
+    every return path.  REFINING THE GRID IS NOT A WORKAROUND for the second:
+    it moves the render toward convergence, but the reading is taken at the
+    caller's own pitch and says whether it has arrived.  At a refused plane use
+    ``apply_real_lens_traced(caustic='wave', amplitude_model='ray_density')``,
+    which scored 0.986-0.999 against the oracle at every plane refused here.
+
+    A plane this passes is not thereby certified: the second reading detects
+    ONE failure mode (the quadrature's convergence in the pixel), and on the
+    FALLBACK route -- where the field returned is the bright-side-only branch
+    sum -- it does not order the returned field's accuracy at all."""
     from .._validation import _check_2d_scalar_field
     _check_2d_scalar_field(E_in, 'apply_real_lens_traced_uniform',
                            input_kind='field')
@@ -1079,13 +1234,27 @@ def apply_real_lens_traced_uniform(
     target_cdtype = E_in.dtype if np.iscomplexobj(E_in) else np.complex128
 
     # 1. bright-side multibranch (finite through the fold via ludwig)
-    E_mb, mb_diag = apply_real_lens_traced_multibranch(
+    # Through the module-private entry rather than the public one, to ask for
+    # the PIXEL-HALVING ARBITER's reading as well: the same mapped triangles
+    # rasterised onto a half-pitch grid over the same window, which costs one
+    # extra rasterisation and no second trace.  The public entry point is
+    # unchanged for every other caller, and this call is otherwise identical
+    # to the one it replaces.
+    E_mb, mb_diag = _multibranch_render(
         E_in, prescription=prescription, wavelength=wavelength, dx=dx,
         output_plane_distance=output_plane_distance,
         output_plane_n=output_plane_n, ray_subsample=ray_subsample,
         min_area_ratio=min_area_ratio, caustic_band=caustic_band,
-        input_carrier=input_carrier, return_diagnostics=True)
+        input_carrier=input_carrier, return_diagnostics=True,
+        pixel_halving_arbiter=True)
     E_mb = np.asarray(E_mb)
+    # The half-pitch RENDER is an internal hand-off, not a diagnostic: it is a
+    # (2N, 2N) complex image, four times the returned field, and a caller who
+    # asked for ``return_diagnostics`` did not ask to be handed that.  Taken
+    # out of the dict here -- so it cannot reach the caller through the
+    # ``dict(mb_diag)`` copies below -- and dropped as soon as the reading is
+    # taken.
+    _mb_half_render = mb_diag.pop('pixel_halved_field', None)
 
     # 1b. the energy DECISION on the field this completion is built on.
     # Read through the multibranch's own gain bracket (the smaller of the two
@@ -1114,20 +1283,134 @@ def apply_real_lens_traced_uniform(
                                          _MB_POWER_RATIO_MAX),
         'power_ratio_decision': _mb_decision,
     }
+    # 1c. the PIXEL-HALVING ARBITER's decision -- the second, independent arm.
+    # ``_mb_bracket`` above is the cheap tripwire (it costs nothing, and it
+    # catches the far tail); this is the one that decides the cases the
+    # tripwire is silent on, because it reads the quadrature's CONVERGENCE
+    # rather than its energy against a launch.  See
+    # ``_lens_traced_multibranch._PIXEL_CONTINUITY_MAX`` for the mechanism and
+    # ``_MB_PIXEL_CONTINUITY_MAX`` below for the bar and its derivation.
+    _mb_cont = mb_diag.get('pixel_continuity')
+    _mb_energy.update({
+        'multibranch_pixel_continuity': (float(_mb_cont)
+                                         if _mb_cont is not None else None),
+        'pixel_continuity_band': (_MB_PIXEL_CONTINUITY_MIN,
+                                  _MB_PIXEL_CONTINUITY_MAX),
+    })
+
+    def _continuity_verdict(c):
+        if c is None:
+            # The reading is of the RETURNED field.  When it could not be
+            # taken -- the fine grid is past the arbiter's entry cap, or the
+            # half-pitch render deposited nothing -- the branch sum's own
+            # verdict cannot stand in for it: refusing on a number this call
+            # is not returning is exactly the mistake round 1 made.  Say it
+            # was not measured.
+            d = mb_diag.get('pixel_continuity_decision') or 'not_measured'
+            return d if d in ('not_requested', 'not_measured')                 else 'not_measured'
+        if c > _MB_PIXEL_CONTINUITY_MAX:
+            return 'not_converged_gain'
+        if c < _MB_PIXEL_CONTINUITY_MIN:
+            return 'not_converged_loss'
+        return 'ok'
+
+    def _arbitrate(c, what):
+        """Record the continuity of the field about to be RETURNED, and
+        refuse if the render it came from has not converged in the pixel.
+
+        Read on the RETURNED field, not on the branch sum, because those are
+        not the same number where the completion applies: the CFU swap
+        rewrites the fold band and the whole dark side, which is exactly where
+        a modest branch-sum excess sits.  Measured (WP-B7c round 2,
+        2026-09-15) on VERIFY-B7b's own fixture at z = 1761 um, one micron
+        before its blow-up window: the BRANCH SUM reads 1.0636 while the
+        COMPLETION reads 1.0020, and the completed field's oracle fidelity is
+        0.9878 with its power 0.994x the oracle's -- deciding on the branch
+        sum's reading there would refuse a field that is right.
+        """
+        d = _continuity_verdict(c)
+        _mb_energy['pixel_continuity'] = (float(c) if c is not None else None)
+        _mb_energy['pixel_continuity_of'] = what
+        _mb_energy['pixel_continuity_decision'] = d
+        if d != 'not_converged_gain':
+            return
+        raise RuntimeError(
+            "apply_real_lens_traced_uniform (also reached via "
+            "apply_real_lens_traced(caustic='uniform')): the field this call "
+            f"would return ({what}) has NOT CONVERGED in the output pixel.  "
+            "Rasterising the same mapped triangles onto a grid of half the "
+            "pitch, over the same physical window and from the same launch "
+            f"lattice, gives {1.0 / c:.4g}x this field's power -- a "
+            f"continuity ratio of {c:.4g}, above the "
+            f"{_MB_PIXEL_CONTINUITY_MAX:g} bar -- with up to "
+            f"{int(mb_diag.get('n_branch_max') or 0)} branches on one pixel "
+            "and a launched-power ratio of "
+            f"{'unavailable' if _mb_bracket is None else f'{_mb_bracket:.4g}x'}"
+            f" (INSIDE that arm's {_MB_POWER_RATIO_MAX:g}x bar, which is why "
+            "this second reading exists).  The branch sum deposits "
+            "dx^2 |E|^2 / ratio wherever a mapped triangle catches a pixel "
+            "CENTRE, which estimates the launched energy without bias only "
+            "while those triangles are spread over many pixels; where a ring "
+            "collapses onto a handful, the written power follows the PIXEL "
+            "area instead of the mapped area and falls ~4x per halving.  A "
+            "converged render reads ~1 here whatever the pitch.  REFINING "
+            "THE GRID IS NOT A WORKAROUND: it moves the render toward "
+            "convergence, but this reading is what says whether it has "
+            "arrived, and it is taken at the caller's own pitch.  Use the "
+            "wave hand-off -- apply_real_lens_traced(caustic='wave', "
+            "output_plane_distance=...), which propagates the traced "
+            "exit-vertex field with the band-limited angular spectrum and is "
+            "exact through folds, cusps and the axial focus alike (measured "
+            "0.986-0.999 fidelity against a direct Rayleigh-Sommerfeld "
+            "oracle at the very planes refused here) -- or "
+            "apply_real_lens_gbd / apply_real_lens_maslov.  Read the ratio "
+            "yourself with apply_real_lens_traced_uniform(..., "
+            "return_diagnostics=True)['pixel_continuity'].")
     if _mb_decision == 'refused_energy_gain':
+        # The MECHANISM sentence is conditioned on this plane's own branch
+        # count, not stated unconditionally.  VERIFY-WP-B7c's D3: on a
+        # cemented doublet at z = 5.422 / 5.460 mm the refusal is CORRECT
+        # (oracle fidelity 0.637 / 0.292) but ``n_branch_max`` reads 1 -- the
+        # ray map is single-valued and there is no ring, so a message that
+        # printed "up to 1 branches on one pixel" in one clause and "a whole
+        # RING of branches coalesces" in the next told the caller something
+        # its own reading contradicted, and could not be used to diagnose
+        # their plane.  Both narratives below are the SAME quadrature defect;
+        # what differs is what compresses the mapped triangles onto too few
+        # pixels.
+        _nbr = int(mb_diag.get('n_branch_max') or 0)
+        _ndeg = int(mb_diag.get('n_triangles_degenerate') or 0)
+        _nfin = int(mb_diag.get('n_triangles_finite') or 0)
+        if _nbr >= 3:
+            _mechanism = (
+                "The output plane is at or near the AXIAL point focus, where "
+                "a whole RING of branches coalesces -- more than the closest "
+                "PAIR the fold-uniform 'ludwig' swap regularizes -- and the "
+                "branch sum's point-sampled quadrature stops conserving "
+                "energy (measured 5.8x to 6097x of the launched power on "
+                "five singlets, with the field's fidelity against a direct "
+                "Rayleigh-Sommerfeld oracle falling from 0.99 to 0.01).")
+        else:
+            _mechanism = (
+                f"The ray map here is NOT multi-valued ({_nbr} branch(es) on "
+                "the busiest pixel), so no ring of branches is coalescing: "
+                "what has failed is the same point-sampled quadrature without "
+                "the coalescence.  The map compresses the mapped triangles "
+                "onto too few pixels for the point sample to stay an unbiased "
+                "estimator of their area "
+                f"({_ndeg} of {_nfin} mapped triangles were also skipped as "
+                "degenerate here), so the deposited power follows the PIXEL "
+                "area instead of the mapped area.  Read "
+                "['pixel_continuity'] to see it directly: a converged render "
+                "deposits the same power at half the pitch.")
         raise RuntimeError(
             "apply_real_lens_traced_uniform (also reached via "
             "apply_real_lens_traced(caustic='uniform')): the multibranch "
             "bright-side field this completion is built on carries "
             f"{_mb_bracket:.4g}x the launched power that reaches this grid, "
             f"above the {_MB_POWER_RATIO_MAX:g}x refusal bar, with up to "
-            f"{int(mb_diag.get('n_branch_max') or 0)} branches on one pixel.  "
-            "The output plane is at or near the AXIAL point focus, where a "
-            "whole RING of branches coalesces and the branch sum's "
-            "point-sampled quadrature stops conserving energy (measured 5.8x "
-            "to 6097x of the launched power on five singlets, with the "
-            "field's fidelity against a direct Rayleigh-Sommerfeld oracle "
-            "falling from 0.99 to 0.01).  This is REFUSED rather than passed "
+            f"{_nbr} branches on one pixel.  "
+            + _mechanism + "  This is REFUSED rather than passed "
             "through or fallen back, because the fallback target is that same "
             "multibranch field and because none of this function's own "
             "diagnostics can see the defect: the bright-side fit residual, "
@@ -1159,6 +1442,10 @@ def apply_real_lens_traced_uniform(
             "decentered / astigmatic fold is out of scope -- use "
             "apply_real_lens_gbd / apply_real_lens_fga or single-branch "
             "ray_density + ASM for those.", RuntimeWarning, _caller_stacklevel())
+        # On this path the field RETURNED is the branch sum itself, so the
+        # arbiter's reading of the branch sum is the reading of the returned
+        # field and needs no second completion.
+        _arbitrate(_mb_cont, 'the plain multibranch field')
         out = E_mb.astype(target_cdtype) if E_mb.dtype != target_cdtype else E_mb
         if return_diagnostics:
             d = dict(mb_diag)
@@ -1198,6 +1485,11 @@ def apply_real_lens_traced_uniform(
             if cusp['ok']:
                 E_cusp = _build_pearcey_cusp_field(E_mb, cusp, dx)
                 if E_cusp is not None and np.all(np.isfinite(E_cusp)):
+                    # the Pearcey field is built ON the branch sum, and there
+                    # is no half-pitch Pearcey to compare it against without a
+                    # second cusp trace, so this path is arbitrated on the
+                    # branch sum's own reading
+                    _arbitrate(_mb_cont, 'the Pearcey cusp field')
                     E_out = E_cusp.astype(target_cdtype)
                     if return_diagnostics:
                         d = dict(mb_diag)
@@ -1334,18 +1626,55 @@ def apply_real_lens_traced_uniform(
     # ~0.6 % of the pixels at N = 2048, while the fill covered 4 193 535 of
     # 4 194 304 (100.0 %) and cost 25.4 s against the multibranch's 0.85 s
     # (93.1 s against 11.9 s at N = 4096).
-    E_out = E_mb.astype(np.complex128, copy=True)
-    dark = (rgrid > r_c) & (rgrid < r_c + _AIRY_TAIL_CELLS * l_airy)
-    rd = rgrid[dark]
-    zd = _zeta(rd)
     # -k0^{2/3} zeta = k0^{2/3} kappa (r - r_c) >= 0 on the dark side; cap it
-    # (belt and braces -- the annulus above already bounds the argument at
+    # (belt and braces -- the annulus below already bounds the argument at
     # ``_AIRY_TAIL_CELLS``, well inside the cap).
     zfloor = -_AIRY_ARG_CAP / (k0 ** (2.0 / 3.0))
-    zd = np.maximum(zd, zfloor)
-    E_out[dark] = _fold_airy_eval(k0, _A(rd), zd, c0, c1)
+
+    def _fill(E_mb_r, rgrid_r):
+        """The dark-side fill, as a function of the OUTPUT sampling alone.
+
+        Factored so the SAME fold parameters (``r_c``, ``kappa``, the cone
+        phase and the two fitted CFU coefficients) can be applied to the
+        half-pitch render for the arbiter below.  Re-using the coarse grid's
+        FIT there is deliberate: it isolates the rasterisation difference,
+        which is what the control measures, instead of adding a second
+        least-squares fit's own noise to the comparison.  Called with
+        ``(N, dx)`` for the returned field, byte-identically to the
+        straight-line code it replaces.
+        """
+        out = E_mb_r.astype(np.complex128, copy=True)
+        dark_r = (rgrid_r > r_c) & (rgrid_r < r_c
+                                    + _AIRY_TAIL_CELLS * l_airy)
+        rd_r = rgrid_r[dark_r]
+        zd_r = np.maximum(_zeta(rd_r), zfloor)
+        out[dark_r] = _fold_airy_eval(k0, _A(rd_r), zd_r, c0, c1)
+        return out
+
+    E_out = _fill(E_mb, rgrid)
     if not np.all(np.isfinite(E_out)):
         return _fallback('non-finite dark-side fill (guarded)')
+
+    # 5b. the PIXEL-HALVING ARBITER, on the field this call is about to
+    # return.  The half-pitch branch-sum render already exists (the arbiter
+    # paid for it inside the branch sum); completing it with the SAME fold
+    # parameters costs one masked ``_fold_airy_eval`` over a thin annulus.
+    _uni_cont = None
+    _E_half = _mb_half_render
+    if _E_half is not None:
+        _N_h, _dx_h = 2 * N, 0.5 * dx
+        _xh = (np.arange(_N_h) - _N_h / 2.0) * _dx_h
+        _Xh, _Yh = np.meshgrid(_xh, _xh)
+        _E_half_full = _fill(np.asarray(_E_half),
+                             np.sqrt(_Xh * _Xh + _Yh * _Yh))
+        _p_half = float(np.sum(np.abs(_E_half_full) ** 2)) * (_dx_h * _dx_h)
+        _p_coarse = float(np.sum(np.abs(E_out) ** 2)) * (dx * dx)
+        if _p_half > 0.0 and _p_coarse > 0.0:
+            _uni_cont = _p_coarse / _p_half
+        del _E_half_full
+    _mb_half_render = None
+    _arbitrate(_uni_cont, 'the completed fold field')
+
     E_out = E_out.astype(target_cdtype)
 
     if return_diagnostics:

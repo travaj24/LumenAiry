@@ -11,15 +11,19 @@ same direct Rayleigh-Sommerfeld oracle
 ``validation/probe_verify_b7c/``), three of those claims do not hold, and the
 tests here pin the decisions that replace them:
 
-1. the ACCEPTED population is not bounded by 1.246.  The completion RETURNS
+1. the ACCEPTED population is not bounded by 1.246.  The completion RETURNED
    fields reading up to 1.83 with ``power_ratio_decision == 'ok'``, and at
-   those planes the field carries 1.8x the launched power while the
-   ray-to-wave hand-off at the same plane carries 1.00x;
-2. the refusal is a property of the OUTPUT GRID, not of the field.  The same
+   those planes the field carried 1.8x the launched power while the
+   ray-to-wave hand-off at the same plane carried 1.00x.  CLOSED by WP-B7c
+   round 2: those planes are now refused on the pixel-continuity arm, and the
+   test pins that decision instead;
+2. the refusal was a property of the OUTPUT GRID, not of the field.  The same
    optic, plane and launch lattice rasterised onto a pixel half the size reads
-   ~1/4 of the ratio, so a plane refused at one grid is accepted at another --
+   ~1/4 of the ratio, so a plane refused at one grid was accepted at another --
    the signature of the point-sampled quadrature WP-B7c correctly diagnosed,
-   carried into the guard built on top of it;
+   carried into the guard built on top of it.  The READING still does this
+   (it is the mechanism, and the test still asserts it); the DECISION no
+   longer does;
 3. the bar's DENOMINATOR has more headroom than the bar.  The reading is
    ``min(power_ratio, power_ratio_triangles)`` and the two denominators
    separate by up to 7.8x on the very geometry that bracket was introduced
@@ -29,12 +33,22 @@ tests here pin the decisions that replace them:
    on two of the four fixtures;
 5. ``zeta_linear_range`` is reported and cannot reach the field (this one
    CONFIRMS WP-B7c);
-6. the refusal fires where no ring coalesces (``n_branch_max == 1``), so its
-   message's mechanism is not conditioned on its own reading.
+6. the refusal fires where no ring coalesces (``n_branch_max == 1``).  Its
+   message's mechanism USED to be unconditional; CLOSED by WP-B7c round 2,
+   which conditions it on the plane's own branch count, and the test pins
+   both arms of that branch.
 
 Every pathology claim is premise-gated on the running build's own readings and
 carries an unconditional invariant on the other arm; no test asserts a
 per-build number.
+
+Three of the six defects above were closed by WP-B7c round 2 (the
+pixel-halving arbiter, ``test_audit2609_b7c2_pixel_halving_arbiter.py``) and
+their tests are restated here as the DECISIONS that replaced them, not
+removed: D1 (a wrong field returned inside the bar), D2 (the decision
+following the grid) and D3 (the message's mechanism sentence).  D4 is
+documented in ``_MB_POWER_RATIO_MAX``'s own comment and still pinned below;
+D5 is recorded in ``validation/oracles/caustic_fold_truth.py``.
 """
 from __future__ import annotations
 
@@ -46,6 +60,7 @@ import pytest
 from lumenairy.elements._lens_traced_multibranch import (
     apply_real_lens_traced_multibranch)
 from lumenairy.elements._lens_traced_uniform import (
+    _MB_PIXEL_CONTINUITY_MAX,
     _MB_POWER_RATIO_MAX,
     _ZETA_EXTRAPOLATION_MAX,
     apply_real_lens_traced_uniform,
@@ -152,58 +167,75 @@ def _uni(fx, z, E=None, dx=None, **kw):
 # 1. the accepted population is not bounded by the pinned ceiling
 # ===========================================================================
 def test_vb7c_an_accepted_field_reads_above_the_pinned_accepted_ceiling():
-    """DECISION: the completion RETURNS fields whose bracketed multibranch
-    reading is above WP-B7c's pinned largest-accepted 1.246, and those fields
-    carry the gain the reading says they do.
+    """VERIFY-WP-B7c's D1, CLOSED by WP-B7c round 2's pixel-halving arbiter.
 
-    Measured 2026-09-14 on the cemented doublet at z = 5.400 .. 5.420 mm (one
-    to two dozen microns before its paraxial focus, where the ray map is still
-    SINGLE-valued -- ``n_branch_max == 1``): the bracketed reading runs
-    1.106 / 1.226 / 1.352 / 1.532 / 1.826, every one of them returned with
+    As originally measured (2026-09-14) the cemented doublet at
+    z = 5.400 .. 5.420 mm returned fields whose bracketed launched-power
+    reading ran 1.106 / 1.226 / 1.352 / 1.532 / 1.826 -- every one above
+    WP-B7c's pinned largest-accepted 1.246 by z = 5.412 mm, every one with
     ``power_ratio_decision == 'ok'``, and the completed field's fidelity
-    against the Rayleigh-Sommerfeld oracle falls 0.837 -> 0.666 across them
-    while its power runs 1.11x -> 1.83x the oracle's.  So WP-B7c's
-    "all 42 accepted planes read 0.816 .. 1.246, and only two exceed 1.0"
-    is a property of its fold-plane population, not of the quantity the bar
-    reads -- the bar's own firing domain is every call.
+    against the Rayleigh-Sommerfeld oracle falling 0.837 -> 0.666 across them
+    while its power ran 1.11x -> 1.83x the oracle's.  That was the R-5 defect
+    class surviving the round-1 fix: a wrong field returned under healthy
+    diagnostics, inside the bar.
 
-    Model-free arm: the gain is measured against the branch sum's OWN
-    ``launched_power`` diagnostic, so nothing here depends on an oracle.
-    Premise-gated; the unconditional invariant is that a returned field's
-    reading never exceeds the bar.
+    The round-2 arbiter reads the CONTINUITY of the field this call returns --
+    its deposited power over that of the same mapped triangles rasterised at
+    half the pitch on the same window -- and refuses these planes on it
+    (1.100 / 1.265 / 1.636 at 5.400 / 5.410 / 5.420 mm, against a 1.06 bar).
+
+    What is pinned here is the decision, two-sided: a plane whose
+    launched-power reading is INSIDE the 2.0 bar and whose continuity is
+    OUTSIDE 1.06 must be refused, and the refusal must name both readings.
+    Premise-gated on this build still producing such a plane; the invariant on
+    the other arm is that a RETURNED field is inside BOTH bands.
     """
-    above = []
+    inside_and_refused = []
     for z in (5400e-6, 5412e-6, 5420e-6):
         br, d, _ = _mb(_Q, z)
         assert br is not None
-        E_out, ud = _uni(_Q, z)
-        # the invariant, on every arm: nothing outside the band is RETURNED
+        try:
+            E_out, ud = _uni(_Q, z)
+        except RuntimeError as exc:
+            msg = str(exc)
+            if 'NOT CONVERGED' not in msg:
+                continue          # refused on the launched-power arm instead
+            assert f'{br:.4g}' in msg, msg[:300]
+            assert 'continuity ratio of' in msg, msg[:300]
+            if br <= _MB_POWER_RATIO_MAX:
+                inside_and_refused.append((z, br, msg))
+            continue
+        # the invariant, on every arm: nothing outside either band is RETURNED
         got = ud.get('multibranch_power_ratio_bracketed')
         assert got is not None and got <= _MB_POWER_RATIO_MAX, (
             f'z={z * 1e6:.0f} um returned a field reading {got:.4g}, '
             f'outside the {_MB_POWER_RATIO_MAX:g} bar')
-        assert ud['power_ratio_decision'] == 'ok', ud['power_ratio_decision']
+        cont = ud.get('pixel_continuity')
+        assert cont is None or cont <= _MB_PIXEL_CONTINUITY_MAX, (
+            f'z={z * 1e6:.0f} um returned a field whose continuity reads '
+            f'{cont:.4g}, outside the {_MB_PIXEL_CONTINUITY_MAX:g} bar')
         p_out = float(np.sum(np.abs(np.asarray(E_out)) ** 2)) * _Q['dx'] ** 2
         gain = p_out / float(d['launched_power'])
-        if br > _WPB7C_LARGEST_ACCEPTED:
-            above.append((z, br, gain))
-    if not above:
-        pytest.skip('no rung of this ladder reads above the pinned ceiling '
-                    'on this build; the invariant arm above ran instead')
-    # the decision: the ceiling is not a ceiling, and the field really gains
-    z, br, gain = max(above, key=lambda t: t[1])
-    assert br > _WPB7C_LARGEST_ACCEPTED
-    assert gain > 1.25, (
-        f'z={z * 1e6:.0f} um reads {br:.4g} but its field only gains '
-        f'{gain:.4g}x -- the reading and the field have decoupled')
+        assert gain <= 1.25, (
+            f'z={z * 1e6:.0f} um returned a field gaining {gain:.4g}x the '
+            f'launched power with both readings inside their bands')
+    if not inside_and_refused:
+        pytest.skip('no rung of this ladder is inside the launched-power bar '
+                    'and outside the continuity bar on this build; the '
+                    'invariant arm above ran instead')
+    z, br, msg = inside_and_refused[0]
+    assert br <= _MB_POWER_RATIO_MAX
+    assert br > 1.0, (
+        f'z={z * 1e6:.0f} um reads {br:.4g}: this rung no longer gains at all')
 
 
 # ===========================================================================
 # 2. the refusal is a property of the OUTPUT GRID
 # ===========================================================================
 def test_vb7c_the_refusal_follows_the_pixel_not_the_field():
-    """DECISION: refine the OUTPUT PIXEL while holding the optic, the plane
-    and the LAUNCH LATTICE fixed and the refusal goes away.
+    """VERIFY-WP-B7c's D2: the READING follows the output pixel -- CONFIRMED,
+    and it is the mechanism -- while the DECISION no longer does, which is
+    WP-B7c round 2's repair.
 
     ``dx -> dx/2`` with ``ray_subsample -> 2 * ray_subsample`` leaves the
     launch pitch ``ray_subsample * dx`` and the physical window unchanged, so
@@ -216,9 +248,15 @@ def test_vb7c_the_refusal_follows_the_pixel_not_the_field():
     i.e. a clean 1/4 per halving, while a HEALTHY plane is invariant
     (0.937 -> 0.937 -> 0.938).
 
-    That CONFIRMS WP-B7c's mechanism and refutes the guard built on it: the
-    plane refused at the shipped grid is accepted one refinement later, so
-    the bar's margins are margins of a grid, not of an optic.
+    Round 1 decided on that reading, so the plane refused at the shipped grid
+    was ACCEPTED one refinement later and a caller who refined their grid to
+    resolve the Airy layer crossed the bar in the direction that removed the
+    guard.  Round 2 decides on the RATIO of two renders one halving apart,
+    which is taken at the caller's own pitch: measured 2026-09-15, the refined
+    grid still reads 1.346 and is still refused.
+
+    Both halves are asserted: the reading must still fall by ~4 (the
+    mechanism), and the decision must survive (the repair).
     """
     z = 1080e-6
     br0, _d0, _ = _mb(_F, z)
@@ -230,13 +268,21 @@ def test_vb7c_the_refusal_follows_the_pixel_not_the_field():
     E2 = _gauss(2 * _F['N'], _F['dx'] / 2.0, _F['w0'])
     br1, _d1, _ = _mb(_F, z, E=E2, dx=_F['dx'] / 2.0, ray_subsample=4)
     assert br1 is not None
+    # the MECHANISM, confirmed: the excess is proportional to the pixel area
     assert br1 < br0 / 1.5, (
         f'refining the pixel did not reduce the reading: {br0:.4g} -> '
         f'{br1:.4g}; the excess is then not proportional to the pixel area')
-    # ...and the same physical plane is now inside the band
+    # ...and the same physical plane is now inside the LAUNCHED-POWER band,
+    # which is exactly why a bar on that quantity followed the grid
     assert br1 <= _MB_POWER_RATIO_MAX, (
-        f'the refined grid still reads {br1:.4g}; the decision is then not '
-        f'grid-dependent on this build')
+        f'the refined grid still reads {br1:.4g} on the launched-power arm; '
+        f'this plane no longer exhibits D2 on this build')
+    # the REPAIR: the decision does not follow it
+    with pytest.raises(RuntimeError) as exc:
+        _uni(_F, z, E=E2, dx=_F['dx'] / 2.0, ray_subsample=4)
+    assert 'NOT CONVERGED' in str(exc.value), (
+        'the refined grid is accepted again: the decision follows the pixel '
+        'once more.\n' + str(exc.value)[:300])
 
 
 # ===========================================================================
@@ -432,7 +478,18 @@ def test_vb7c_the_refusal_fires_with_a_single_valued_ray_map():
         pytest.skip('no refused plane on this build has a single-valued map')
     _z, nbr, msg = single[0]
     assert nbr == 1
-    assert 'RING of branches coalesces' in msg, (
-        'the message no longer states the ring mechanism unconditionally; '
-        'if it is now conditioned on n_branch_max this pin should be '
-        're-derived')
+    # CLOSED (WP-B7c round 2): the mechanism sentence is now conditioned on
+    # this plane's own branch count, so a single-valued map is told what
+    # actually failed -- the same point-sampled quadrature, without any
+    # coalescence -- instead of being told a ring coalesced.
+    assert 'RING of branches coalesces' not in msg, (
+        f'z={_z * 1e6:.0f} um refuses with n_branch_max={nbr} -- a '
+        f'single-valued map -- and the message states the ring mechanism '
+        f'anyway:\n{msg[:400]}')
+    assert 'NOT multi-valued' in msg, msg[:400]
+    assert f'up to {nbr} branches' in msg, msg[:400]
+    # the other side of the branch, so the narrative was not simply deleted:
+    # a genuinely multi-valued refusal still names the ring
+    multi = [h for h in hits if h[1] is not None and h[1] > 2]
+    if multi:
+        assert 'RING of branches coalesces' in multi[0][2], multi[0][2][:400]
