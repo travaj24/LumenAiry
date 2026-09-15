@@ -133,6 +133,17 @@ _LOCK_WITHOUT_CACHE_EXEMPTIONS = frozenset({
     # to module scope made it visible here.  Same build-once-singleton
     # rationale as ``_BLAS_CONTROLLER_LOCK``.
     '_PERSISTENT_POOL_LOCK',
+    # Handoff P1 4.1b: ``_ABANDONED_POOLS_LOCK`` in
+    # ``lumenairy.elements._lens_traced`` guards the LIST of executors handed
+    # to the background reaper (``_ABANDONED_POOLS``) plus the
+    # ``_POOL_SHUTDOWN_TIMEOUTS`` counter -- a short-lived hand-off queue and a
+    # diagnostic, not a keyed cache, so there is nothing to clear and no
+    # entry-clear discipline to apply.  It is a SEPARATE lock from
+    # ``_PERSISTENT_POOL_LOCK`` on purpose: a pool is abandoned both from
+    # inside that lock (the rebuild path) and from outside it (the teardown
+    # path), and re-acquiring a non-reentrant lock would be a deadlock of the
+    # library's own making.
+    '_ABANDONED_POOLS_LOCK',
 })
 
 # Pattern-based exemption: ``_<X>_PATCH_LOCK`` guards an in-place

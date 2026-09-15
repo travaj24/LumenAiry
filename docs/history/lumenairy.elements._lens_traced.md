@@ -1,7 +1,7 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/_lens_traced.py
-ast_sha256: 34c0e87d665b3f8de027419311b7e2119e7fe3abd94c6a58197aa17ab7cb964a
-token_sha256: 4d961c535739c1625cd5c4d0d0b0a31c45c35e83a79a6e139751cef92132cd10
+ast_sha256: d7311816b53819cfddfee0fcb3c46a8a3793109b6a28fe48719ad1daeb35f3df
+token_sha256: 0c64d5598c04fd2131dd19fdade7b5b73b0bd2d397bf6a4bb1327ffcb3a469ad
 pre_relocation_lines: 14898
 recorded_by: WP-A17 SWEEP-4 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
@@ -11,6 +11,7 @@ re_recorded: 2026-09-13 -- WP-B10: an opt-in disc-orthogonal design basis for th
 re_recorded: 2026-09-13 -- VERIFY-B10 landing: the inverse-map cache key names the fit basis (parity_tag += str(_fit_basis)); the verifier's fit_basis reachability paragraph
 re_recorded: 2026-09-13 -- the grid-versus-aperture bookkeeping moved to the new elements/_lens_kernels.py leaf and is re-exported; _lens_traced reads the leaf, closing its module-level 2-cycle with the lenses facade (WP-B11a item 4)
 re_recorded: 2026-09-14 -- WP-B11b item 8: every warning in the two lens bodies asks _lens_kernels.caller_stacklevel for its level, so it names the first frame outside the package whatever wrapper / configuration re-entry reached it; doe.py's zone-plate fill takes T's own dtype.
+re_recorded: 2026-09-14 -- P1 4.1b: the Newton pool's teardown becomes non-blocking (background reaper + bounded close) and the rebuild rule becomes a ceiling with in-flight accounting, so a broken pool reaches the serial fallback instead of wedging
 -->
 
 # Version history -- `lumenairy/elements/_lens_traced.py`

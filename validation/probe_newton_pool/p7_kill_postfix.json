@@ -1,0 +1,8 @@
+{
+ "fallback_seconds": 4.836,
+ "identical": true,
+ "mode": "kill",
+ "ref_sha": "3b968cab1460dd3c9519ff1608105a9c1eed98c521ccca15fc17214e6af7dd38",
+ "sha": "3b968cab1460dd3c9519ff1608105a9c1eed98c521ccca15fc17214e6af7dd38",
+ "shutdown_timeouts": 0
+}

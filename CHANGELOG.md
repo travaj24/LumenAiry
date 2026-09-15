@@ -2,6 +2,88 @@
 
 All notable changes to the core library are documented here.
 
+## [Unreleased]
+
+### Fixed -- lens-traced: a broken Newton worker pool now falls back to serial instead of hanging the process
+
+`apply_real_lens_traced`'s parallel Newton inversion dispatches chunks to a module-level,
+persistent `ProcessPoolExecutor` (spawn) and has always carried a fallback for the case where
+that pool BREAKS -- a worker exits while the executor's queue-feeder thread is mid-write, so
+every pending future fails with `BrokenProcessPool`.  That fallback re-runs the identical
+inversion in process, which is bit-identical to the pooled answer by construction (the payload
+pins the Chebyshev backend and ships the parent's fit), so it costs wall time and moves no
+number.  It was never reached.  The fallback's first action was `close_worker_pool()`, whose
+`_PERSISTENT_POOL.shutdown(wait=True)` enters CPython's
+`_ExecutorManagerThread._terminate_broken`, and that function joins the queue-feeder thread
+(`call_queue.join_thread()`) and every worker process (`p.join()`) with **no timeout**, holding
+the executor's `_shutdown_lock` -- the same lock `shutdown` acquires before it even looks at its
+`wait` argument.  Captured twice with `faulthandler` at the 5.47.0 release gate (2026-09-14,
+python 3.14.6, `docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/handoff/orchestrator_log_2026_09_13-14.md`):
+main thread in `close_worker_pool -> shutdown`, manager thread in `_terminate_broken -> join`,
+feeder in `multiprocessing.connection._send_bytes`.  The process hung forever, mid-computation,
+with the caller's result lost.  Reproduced here archive-to-archive on the pre-fix tree: the
+traced call never returned, and a 180 s deadline caught the main thread in
+`_lens_traced.py` line 12624 (as it then was) inside the dispatcher's own fallback branch.
+
+Because `shutdown` takes that lock *before* reading `wait`, passing `wait=False` is not on its
+own enough -- it blocks in exactly the same place.  The fix is therefore an invariant rather
+than a flag: **no Newton-pool path joins an executor for an unbounded time.**  Two mechanisms
+carry it, and nothing else in `lumenairy/elements/_lens_traced.py` may call `shutdown` directly
+(a new AST pin in `tests/unit/test_fix_newton_pool_broken_fallback.py` enforces that):
+`_abandon_pool` hands a pool that is finished with to a DAEMON reaper thread
+(`shutdown(wait=False, cancel_futures=True)`) and returns at once, which is what a broken pool
+and a replaced pool now get; `_shutdown_pool_bounded` runs the joining shutdown
+`close_worker_pool` promises on a helper thread and joins THAT for at most
+`_POOL_SHUTDOWN_TIMEOUT` (120 s) before abandoning it and returning, recording the event in
+`_POOL_SHUTDOWN_TIMEOUTS`.  `close_worker_pool` also swaps the pool reference out under the
+module lock and tears down OUTSIDE it, so a slow teardown can no longer stall every other
+thread's `_get_persistent_worker_pool`.  Measured on the fixed tree: the same broken-and-wedged
+pool returns the serial answer in 14.584 s, byte-identical to `n_workers=1`, having asked the
+broken executor for exactly one shutdown, `wait=False, cancel_futures=True`; a real spawn pool
+whose workers all die mid-chunk (`os._exit`) returns in 37.479 s, byte-identical, with zero
+bounded-wait expiries.  The bound is not a performance assertion: a healthy
+`close_worker_pool` was measured over a worker ladder at 0.188 s (1 worker) to 4.592 s (16
+workers), three reps each, so 120 s is 26x the worst healthy case and infinitely below the
+unbounded state it guards.
+
+### Fixed -- lens-traced: the persistent Newton pool is no longer rebuilt on almost every dispatch
+
+The pool-breaking cause behind the hang, found by measurement rather than by the race that was
+suspected.  `_get_persistent_worker_pool` rebuilt the pool -- tore it down and respawned every
+worker -- whenever the requested worker count differed from the live pool's, and the requested
+count comes from `_newton_resolve_workers`, which clamps against LIVE free memory and therefore
+answers differently from call to call on a busy box.  MEASURED on one run of
+`tests/unit/test_audit2609_b4_collins_transport.py -k test_both_transports_reproduce_the_audit_s_own_readings`
+(2026-09-14, python 3.14.6, 24 cores): the clamp answered 6, 8, 4, 8 for the SAME two lens
+groups, which the shipped rule turned into four pool constructions and three teardowns -- 26
+spawned worker interpreters for four dispatches, with the outgoing and incoming pools alive at
+the same time, because the teardown did not wait.  The identical run under `--capture=sys`
+answered 5, 8, 5, 8 and also built four, so this is the dispatch pattern and not the
+fd-capture interaction the gate suspected; instrumenting every pool event also showed all four
+dispatches issuing from the MAIN thread, which retires the "two chain arms share the pool"
+hypothesis for this reproducer.
+
+The pool's width is now a CEILING on concurrency rather than a promise about one call: the
+memory clamp is honoured by the CHUNK COUNT, which the dispatcher already derives from its own
+`n_cpu`, so a pool at least as wide as the request already satisfies it and the surplus workers
+simply stay idle.  A request the live pool can serve reuses it; a request for more workers
+rebuilds, but only when nothing is in flight; a pool that has marked itself broken is retired
+and replaced unconditionally.  The same sequence now builds one pool per distinct increase (two
+for 6, 8, 4, 8).  In-flight chunks are counted (`_POOL_INFLIGHT`, moved by
+`_note_pool_inflight` under the pool lock and released in a `finally` on every exit path), so a
+second thread can never tear a pool down under chunks a first thread is waiting on -- which is
+the one way a rebuild could genuinely present as a broken pool.  A microsecond window is left
+open on purpose between being handed an executor and claiming it: closing it would mean
+overriding whatever `_get_persistent_worker_pool` returned, and that function is a substitution
+point the library's own tests rely on, while the window's whole consequence is a bit-identical
+serial fallback.  The cost of keeping a wider pool is the resident set of the idle workers,
+measured at 33.0 MB mean / 48.8 MB peak each against the ~1.7 GB per ACTIVE worker the clamp
+itself models, i.e. 2 % of one working worker; `close_worker_pool()` remains the documented way
+to free them, and is now the only thing that ever makes the pool narrower.  The warm-pool size
+bar reads `_PERSISTENT_POOL_NWORKERS >= n_cpu` instead of `== n_cpu` for the same reason -- a
+pool wide enough to serve the call has no spawn left to amortise, which is the only thing that
+bar is about.
+
 ## [5.47.0] — 2026-09-14
 
 This release is the fourth wave of the 2026-09-11 adversarial audit's remediation

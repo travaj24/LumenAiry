@@ -1,0 +1,13 @@
+{
+ "fallback_seconds": 4.498,
+ "identical": true,
+ "mode": "stub",
+ "ref_sha": "3b968cab1460dd3c9519ff1608105a9c1eed98c521ccca15fc17214e6af7dd38",
+ "sha": "3b968cab1460dd3c9519ff1608105a9c1eed98c521ccca15fc17214e6af7dd38",
+ "shutdown_calls": [
+  {
+   "cancel_futures": true,
+   "wait": false
+  }
+ ]
+}

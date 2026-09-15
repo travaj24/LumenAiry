@@ -1176,31 +1176,239 @@ _PERSISTENT_POOL_LOCK = threading.Lock()
 # interpreter exit.
 _PERSISTENT_POOL_ATEXIT_REGISTERED = False
 
+# ---- TEARDOWN MUST NOT BLOCK THE CALLER (2026-09-14, handoff P1 4.1b) -----
+# A ``ProcessPoolExecutor`` that BREAKS -- a worker exits while the executor's
+# QueueFeederThread is mid-write -- is torn down by CPython's
+# ``_ExecutorManagerThread._terminate_broken``, which
+#
+#   * runs under the executor's ``_shutdown_lock`` (``terminate_broken`` takes
+#     it for the whole body), the SAME lock ``ProcessPoolExecutor.shutdown``
+#     acquires FIRST, before it looks at its ``wait`` argument, and
+#   * inside that lock joins the feeder thread (``call_queue.join_thread()``)
+#     and every worker process (``p.join()``), all without a timeout.
+#
+# So a parent that calls ``shutdown`` on a broken pool can block for an
+# unbounded time no matter what it passes for ``wait``.  MEASURED at the
+# 5.47.0 release gate (2026-09-14, python 3.14.6): a traced-lens call wedged
+# there forever, main thread in ``close_worker_pool -> shutdown``, manager
+# thread in ``_terminate_broken -> join``, feeder in ``connection._send_bytes``
+# -- and the serial fallback the dispatcher intends was never reached.
+#
+# THE INVARIANT this section establishes: **no Newton-pool code path ever
+# joins an executor for an unbounded time.**  Two mechanisms, and nothing else
+# in this module is allowed to call ``shutdown`` directly:
+#
+#   _abandon_pool            hand a pool we are finished with to a DAEMON
+#                            reaper thread and return immediately.  Used for
+#                            a pool that just broke and for the stale pool a
+#                            rebuild replaces.  A daemon thread that blocks on
+#                            the wedged ``_shutdown_lock`` costs nothing: it is
+#                            not joined at interpreter exit.
+#   _shutdown_pool_bounded   the HEALTHY teardown ``close_worker_pool``
+#                            promises -- ``shutdown(wait=True)`` on a helper
+#                            thread, joined for at most
+#                            ``_POOL_SHUTDOWN_TIMEOUT`` seconds, after which
+#                            the pool is abandoned and the caller returns.
+#
+# What this does NOT claim to fix: once CPython's manager thread is wedged,
+# ``threading._shutdown`` still joins it at interpreter exit (the executor
+# registers ``concurrent.futures.process._python_exit`` through
+# ``threading._register_atexit``, and MEASURED here it runs BEFORE this
+# module's ``atexit`` handler -- by which time the executor has already been
+# reaped, so that handler is a no-op on a healthy process).  The fix moves the
+# wedge from the MIDDLE of a computation, where the caller's result is lost, to
+# after the call has returned its (bit-identical, serial) answer.
+#
+# BAR.  ``_POOL_SHUTDOWN_TIMEOUT`` bounds a WAIT; it is not a performance
+# assertion and nothing derives a number from it.  MEASURED here 2026-09-14
+# (Ryzen 9 5950X, python 3.14.6, warm pools, three reps per rung,
+# ``validation/probe_newton_pool/probe_p6_teardown_ladder.py``):
+#
+#     workers      close_worker_pool seconds (3 reps)
+#        1         0.188  0.199  0.201
+#        2         0.483  0.302  0.269
+#        4         0.470  0.299  0.226
+#        8         0.770  1.334  1.022
+#       16         3.723  4.062  4.592
+#
+# -- worst 4.592 s.  The state on the other side is UNBOUNDED (a wedged
+# ``_terminate_broken``), so the bar only needs a comfortable gap above the
+# healthy cost: 120 s is 26x the worst rung measured, which leaves room for a
+# wider pool on a loaded box, and the cost of it being too LOW is only that a
+# slow-but-healthy teardown finishes on the reaper thread instead of inline.
+_POOL_SHUTDOWN_TIMEOUT = 120.0
+# Chunks currently dispatched on ``_PERSISTENT_POOL``.  Read by
+# ``_get_persistent_worker_pool`` so a rebuild can never tear a pool down
+# under a dispatch that is still using it (see the REBUILD RULE there).
+_POOL_INFLIGHT = 0
+# Pools handed to the background reaper, for diagnostics and for tests that
+# want to see that a broken pool was retired rather than joined.  Guarded by
+# its OWN lock: ``_abandon_pool`` is called from inside and outside
+# ``_PERSISTENT_POOL_LOCK``, and a re-entrant acquisition of that lock would
+# be a deadlock of our own making.
+_ABANDONED_POOLS: list = []
+_ABANDONED_POOLS_LOCK = threading.Lock()
+# How many times a bounded teardown gave up and abandoned its pool.  A
+# non-zero value is the signal that the CPython wedge above was hit.
+_POOL_SHUTDOWN_TIMEOUTS = 0
+
+
+def _pool_is_broken(ex) -> bool:
+    """Has the executor marked itself broken?
+
+    ``ProcessPoolExecutor._broken`` is set by ``_terminate_broken`` BEFORE it
+    starts joining, so this is true from the moment the futures are failed --
+    i.e. it is already true when ``future.result()`` raises
+    ``BrokenProcessPool`` in the dispatcher.
+    """
+    return bool(getattr(ex, '_broken', None))
+
+
+def _abandon_pool(ex) -> None:
+    """Retire ``ex`` WITHOUT waiting for it.  Safe to call under any lock.
+
+    The reap runs on a daemon thread, so a ``shutdown`` that blocks on a
+    wedged manager thread blocks only that thread, and the interpreter is not
+    joined to it at exit.
+    """
+    if ex is None:
+        return
+    with _ABANDONED_POOLS_LOCK:
+        _ABANDONED_POOLS.append(ex)
+
+    def _reap():
+        try:
+            # cancel_futures so queued chunks fail fast instead of waiting for
+            # workers that are gone; wait=False so this never joins either.
+            ex.shutdown(wait=False, cancel_futures=True)
+        except (RuntimeError, OSError, ValueError):
+            # Already shut down, pipe gone, or the interpreter is finalising.
+            pass
+        finally:
+            with _ABANDONED_POOLS_LOCK:
+                try:
+                    _ABANDONED_POOLS.remove(ex)
+                except ValueError:
+                    pass
+
+    try:
+        threading.Thread(target=_reap, name='lumenairy-newton-pool-reaper',
+                         daemon=True).start()
+    except RuntimeError:
+        # gh-109047: no new threads once the interpreter is finalising.  Do
+        # the non-blocking half inline; never join anything here.
+        try:
+            ex.shutdown(wait=False, cancel_futures=True)
+        except (RuntimeError, OSError, ValueError):
+            pass
+
+
+def _shutdown_pool_bounded(ex, timeout=None) -> bool:
+    """Shut ``ex`` down, waiting AT MOST ``timeout`` seconds.
+
+    Returns True when the shutdown completed inside the bound.  On a timeout
+    the pool is abandoned to the daemon reaper and ``False`` is returned, so
+    the caller always makes progress.
+    """
+    global _POOL_SHUTDOWN_TIMEOUTS
+    if ex is None:
+        return True
+    if timeout is None:
+        timeout = _POOL_SHUTDOWN_TIMEOUT
+    done = threading.Event()
+
+    def _run():
+        try:
+            ex.shutdown(wait=True)
+        except (RuntimeError, OSError, ValueError):
+            pass
+        finally:
+            done.set()
+
+    try:
+        threading.Thread(target=_run, name='lumenairy-newton-pool-close',
+                         daemon=True).start()
+    except RuntimeError:                      # interpreter finalising
+        _abandon_pool(ex)
+        return False
+    if done.wait(timeout):
+        return True
+    with _ABANDONED_POOLS_LOCK:
+        _POOL_SHUTDOWN_TIMEOUTS += 1
+        _ABANDONED_POOLS.append(ex)
+    return False
+
+
+def _note_pool_inflight(delta: int) -> int:
+    """Move the in-flight chunk count and return it.  Never goes negative."""
+    global _POOL_INFLIGHT
+    with _PERSISTENT_POOL_LOCK:
+        _POOL_INFLIGHT = max(0, _POOL_INFLIGHT + int(delta))
+        return _POOL_INFLIGHT
+
 
 def _get_persistent_worker_pool(n_workers):
     """Return a (possibly newly-created) shared ProcessPoolExecutor.
 
-    Reuses the same pool across calls when the requested ``n_workers``
-    matches the cached pool's size.  Tears down and rebuilds when
-    ``n_workers`` changes.  ``close_worker_pool`` is registered with
-    ``atexit`` EXACTLY ONCE per process for clean shutdown on
-    interpreter exit.
+    THE REBUILD RULE (2026-09-14, handoff P1 4.1b).  The live pool's worker
+    count is a CEILING on concurrency, not a promise about this call: the
+    memory clamp (:func:`_newton_resolve_workers`) is honoured by the CHUNK
+    COUNT, which the dispatcher derives from its own ``n_cpu``, so a pool that
+    is at least as wide as the request already satisfies it -- the extra
+    workers simply stay idle.  Therefore
+
+      * a request the live pool can already serve (``pool >= n_workers``)
+        reuses it, and NEVER shrinks it;
+      * a request for MORE workers rebuilds -- but only when nothing is in
+        flight (``_POOL_INFLIGHT == 0``); while a dispatch is running the
+        live pool is returned as-is, so a second thread can never tear a pool
+        down under chunks the first thread is waiting on;
+      * a pool that has marked itself broken is retired and replaced
+        unconditionally, because it can serve nobody.
+
+    WHY.  As shipped, ANY change of worker count tore the pool down and
+    respawned.  MEASURED on this box, one run of
+    ``test_audit2609_b4_collins_transport.py -k
+    test_both_transports_reproduce_the_audit_s_own_readings`` (2026-09-14,
+    python 3.14.6): ``_newton_resolve_workers`` answered 6, 8, 4, 8 for the
+    SAME two lens groups -- the clamp reads LIVE free memory, so its answer
+    moves between calls on a busy box -- and the shipped rule turned that into
+    four pool constructions and three teardowns, 26 spawned worker
+    interpreters, for four dispatches, with old and new pools alive at the
+    same time (the teardown does not wait).  Identical counts under
+    ``--capture=sys`` (5, 8, 5, 8; four constructions), so this is the
+    dispatch pattern, not a capture interaction.  Under the rule above the
+    same sequence builds at most one pool per INCREASE.
+
+    THE COST of keeping a pool wider than the current call asks for is the
+    resident set of the workers that stay idle: MEASURED 2026-09-14 on this
+    box at 33.0 MB mean / 48.8 MB peak per idle worker (15 warm pools,
+    ``probe_p6_teardown_ladder.py``), against the ~1.7 GB per ACTIVE worker
+    the clamp itself models for a 262 144-point / 279^2-fit dispatch -- i.e.
+    2 % of one working worker.  The pool is therefore never shrunk implicitly;
+    ``close_worker_pool()`` is the documented way to return the process to a
+    cold state and free the workers.  ``close_worker_pool`` is also registered
+    with ``atexit`` EXACTLY ONCE per process.
     """
     global _PERSISTENT_POOL, _PERSISTENT_POOL_NWORKERS
     global _PERSISTENT_POOL_ATEXIT_REGISTERED, _POOL_RESIDENT_PAYLOAD_KEY
+    n_workers = int(n_workers)
+    _stale = None
     with _PERSISTENT_POOL_LOCK:
         if _PERSISTENT_POOL is not None:
-            if _PERSISTENT_POOL_NWORKERS == n_workers:
+            if _pool_is_broken(_PERSISTENT_POOL):
+                _stale = _PERSISTENT_POOL
+                _PERSISTENT_POOL = None
+            elif _PERSISTENT_POOL_NWORKERS >= n_workers:
                 return _PERSISTENT_POOL
-            # n_workers changed: tear down the existing pool.
-            try:
-                _PERSISTENT_POOL.shutdown(wait=False)
-            except (RuntimeError, OSError, BrokenPipeError):
-                # Pool already torn down by atexit / signal handler,
-                # or worker pipe broke under shutdown -- safe to
-                # discard the reference.
-                pass
-            _PERSISTENT_POOL = None
+            elif _POOL_INFLIGHT > 0:
+                # A dispatch is using it.  Serving this call at the narrower
+                # width is a wall-time cost; tearing the pool down under the
+                # other dispatch is a BrokenProcessPool.
+                return _PERSISTENT_POOL
+            else:
+                _stale = _PERSISTENT_POOL
+                _PERSISTENT_POOL = None
         # Force the ``spawn`` start method.  The
         # default on Linux is ``fork``, which inherits the parent's
         # FFT plan caches and threading state -- both of which are
@@ -1230,7 +1438,12 @@ def _get_persistent_worker_pool(n_workers):
             import atexit
             atexit.register(close_worker_pool)
             _PERSISTENT_POOL_ATEXIT_REGISTERED = True
-    return _PERSISTENT_POOL
+        _built = _PERSISTENT_POOL
+    # OUTSIDE the lock, and never joined: the pool we just replaced may be the
+    # wedged one (see the TEARDOWN block above), and the whole point of this
+    # function is that the caller gets an executor back either way.
+    _abandon_pool(_stale)
+    return _built
 
 
 def _newton_cost_class(newton_fit) -> str:
@@ -1385,7 +1598,20 @@ def close_worker_pool() -> None:
     promises, what the pool tests need between scenarios, and the right
     back-off after the pool-infrastructure fallback in
     ``_invert_newton_parallel`` closes a pool that just broke (a pool that
-    failed should not be rebuilt on the very next 65k call).
+    failed should not be rebuilt on the very next 65k call).  It is also the
+    only way the pool is ever made NARROWER -- see the REBUILD RULE on
+    :func:`_get_persistent_worker_pool`.
+
+    NEVER BLOCKS WITHOUT A BOUND (2026-09-14, handoff P1 4.1b).  The pool
+    reference is swapped out under the lock and the teardown happens OUTSIDE
+    it, so a slow or wedged shutdown cannot stall every other thread's
+    ``_get_persistent_worker_pool``.  A pool that has already marked itself
+    broken is handed straight to the background reaper
+    (``shutdown(wait=False, cancel_futures=True)``, never joined), because
+    CPython joins the feeder thread and the worker processes inside
+    ``_terminate_broken`` under the very lock ``shutdown`` needs -- that is the
+    deadlock this fix exists for.  A healthy pool is joined for at most
+    ``_POOL_SHUTDOWN_TIMEOUT`` seconds and then abandoned.
     """
     global _PERSISTENT_POOL, _PERSISTENT_POOL_NWORKERS
     global _POOL_DEFERRED_NWORKERS, _POOL_DEFERRED_SECONDS
@@ -1404,14 +1630,14 @@ def close_worker_pool() -> None:
         _POOL_DEFERRED_SECONDS = 0.0
         _POOL_DEFERRED_POINTS = 0
         _POOL_DEFERRED_COUNT = 0
-        if _PERSISTENT_POOL is not None:
-            try:
-                _PERSISTENT_POOL.shutdown(wait=True)
-            except (RuntimeError, OSError, BrokenPipeError):
-                # Same shutdown-race tolerance as ``_get_pool``.
-                pass
-            _PERSISTENT_POOL = None
-            _PERSISTENT_POOL_NWORKERS = None
+        _dead = _PERSISTENT_POOL
+        _PERSISTENT_POOL = None
+        _PERSISTENT_POOL_NWORKERS = None
+    if _dead is not None:
+        if _pool_is_broken(_dead):
+            _abandon_pool(_dead)
+        else:
+            _shutdown_pool_bounded(_dead)
     _reset_newton_pool_resource_state()
 
 
@@ -12446,8 +12672,12 @@ def apply_real_lens_traced(
             n_cpu = 1
         # A pool that is already up has no spawn left to amortise -- see the
         # measured cold/warm tables at _POOL_MIN_PIXELS.
+        # ``>=`` rather than ``==`` since the REBUILD RULE (handoff P1 4.1b):
+        # a pool at least as wide as this call's clamped count serves it
+        # without a rebuild, so there is no spawn left to amortise -- which is
+        # the only thing the warm bar is about.
         _pool_is_warm = (_PERSISTENT_POOL is not None
-                         and _PERSISTENT_POOL_NWORKERS == n_cpu)
+                         and _PERSISTENT_POOL_NWORKERS >= n_cpu)
         # ...and a process that has ALREADY deferred a pool-sized inversion,
         # and MEASURED it to be slow enough to be worth pooling, is a chain or
         # a sweep whose remaining calls will repay the spawn.  Without this
@@ -12535,8 +12765,29 @@ def apply_real_lens_traced(
         # calls (the dominant overhead for optimisation / tolerancing
         # workflows).  See _get_persistent_worker_pool docstring for
         # details.
+        ex = None
+        _held = False
         try:
             ex = _get_persistent_worker_pool(n_cpu)
+            # Claim the pool for the whole dispatch.  While this is non-zero
+            # no other thread's ``_get_persistent_worker_pool`` may tear the
+            # pool down to rebuild it at a different width -- which would look
+            # to this dispatch exactly like a broken pool.  Released in the
+            # ``finally`` below, on every exit path including the fallbacks.
+            _note_pool_inflight(1)
+            _held = True
+            # RESIDUAL WINDOW, deliberately left open.  A rebuild by another
+            # thread could land in the microseconds between the two lines
+            # above, leaving ``ex`` pointing at the executor that was just
+            # retired; its ``submit`` then raises RuntimeError and this call
+            # takes the serial fallback below -- a bit-identical answer at a
+            # wall-time cost.  Re-reading ``_PERSISTENT_POOL`` here would close
+            # it, but only by OVERRIDING whatever
+            # ``_get_persistent_worker_pool`` returned, and that function is a
+            # substitution point the library's own tests (and any caller with
+            # a wrapped executor) rely on.  A bounded, bit-identical fallback
+            # is the better trade than breaking that contract.
+            #
             # Read the belief AFTER the pool call: that call may have torn the
             # old pool down and built a fresh (empty) one, which resets it.
             _send = (None if _POOL_RESIDENT_PAYLOAD_KEY == _pkey else _pblob)
@@ -12581,6 +12832,13 @@ def apply_real_lens_traced(
             # this fallback bit-identical rather than merely close -- and say
             # so ONCE per process: a chain would otherwise repeat a paragraph
             # per group about a fact that cannot change under it.
+            #
+            # Release the in-flight claim first: the serial re-run below is
+            # the EXPENSIVE part, and holding the claim across it would block
+            # another thread's legitimate pool rebuild for its whole duration.
+            if _held:
+                _note_pool_inflight(-1)
+                _held = False
             if _note_pool_backend_refusal():
                 import warnings
                 warnings.warn(
@@ -12621,8 +12879,24 @@ def apply_real_lens_traced(
             # normally reproduces -- but with a completely different, much
             # more confusing traceback -- or, worse, succeeded serially and
             # hid a genuine parallel-path bug behind a silent 8x slowdown.
+            #
+            # ``close_worker_pool`` is BOUNDED and, on a pool that has already
+            # marked itself broken, does not join it at all (handoff P1 4.1b):
+            # CPython's ``_terminate_broken`` joins the queue-feeder thread and
+            # the worker processes with no timeout, under the same lock
+            # ``shutdown`` takes first, so the shipped ``shutdown(wait=True)``
+            # here wedged the process instead of reaching the serial line
+            # below.  Releasing the in-flight claim BEFORE closing is what lets
+            # that close retire the pool rather than reuse it.
+            if _held:
+                _note_pool_inflight(-1)
+                _held = False
             close_worker_pool()
             return _invert_newton(Xw, Yw, sub_progress=sub_progress)
+        finally:
+            if _held:
+                _note_pool_inflight(-1)
+                _held = False
 
         # The worker returns (opl, n_unconverged); sum the counts and
         # emit the SAME warning the serial path emits.
