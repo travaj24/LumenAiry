@@ -37,9 +37,10 @@ optional CuPy / numba / numexpr plumbing they read from module scope move from
 `lenses_maslov` read the leaf.  `lenses.py` re-exports all of it, by identity, so
 `from lumenairy.elements.lenses import surface_sag_general` and every other
 existing spelling resolve unchanged -- and to the same object.  `lenses.py` drops
-746 to 338 lines.  40 of 40 and then 45 of 45 hashes bit-identical, both builds,
-over the sag ladder, the numba fast path and its pure-NumPy arm, and seventeen
-consumers from `apply_thin_lens` to `apply_real_lens_gbd`.
+746 to 338 lines.  40 of 40 and then 48 of 48 hashes bit-identical, both builds,
+over the sag ladder, the numba fast path and its pure-NumPy arm reached by
+flipping the gate through the facade, and eighteen consumers from
+`apply_thin_lens` to `apply_real_lens_gbd`.
 
 **`lumenairy.elements.lenses` now has a module type.**  Eight names in the leaf
 are live state rather than definitions: `cp`, `_ne`, `_numba`, `_njit`, `_prange`
@@ -75,6 +76,17 @@ surface body into the band generator would move the numexpr gate, the
 behaviour change with a Migration note rather than a hygiene refactor;
 `docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/WP-B11c_REPORT.md`
 section 5 records what it would change.
+
+One test outside this package's ownership went red once while these landed, and
+the entry says what it was rather than leaving it in a log: a four-ULP bar on the
+vector Maslov wrapper's `P_x/P_y`, in
+`tests/unit/test_audit2609_a4_verify_maslov_asymptotic.py`.  Its docstring records
+the measurement it was set from (0 and 1 ULP); a clean process on this box today
+reads 3 and 1, which is one ULP of margin.  The quantity behind it was hashed
+archive-to-archive on both builds for exactly this question and is bit-identical,
+and the identical clean-process reading comes out of the base tree too -- so the
+bar, not the answer, is what moved.  Re-deriving it two-sided belongs to that
+file's owner; it is recorded in the WP-B11c report, not masked.
 
 One housekeeping consequence worth naming: moving code moves line numbers, and
 `CHANGELOG.md` cites source lines.  Twenty-eight `path.py:N` citations in the

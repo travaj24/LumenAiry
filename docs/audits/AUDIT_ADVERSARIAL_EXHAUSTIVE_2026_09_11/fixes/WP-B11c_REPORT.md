@@ -454,13 +454,19 @@ time, with `PYTHONPATH` pinned to this worktree.  "win" is Windows py3.14,
 | item 3: `b11c_structure` + `b11_hygiene` | win | `99 passed` |
 | the FINAL sweep on the completed tree: census / walker / dispatcher-pin / public-API / doc-consistency + `test_audit_except_budget` + the `__all__`-symmetry walker + the history-fingerprint tool (12 files) | win | **`911 passed, 5 skipped`** -- and `test_public_api` green here, which is the other half of the evidence that its earlier red was an ORDER effect |
 | the CHANGELOG walkers on the written block (V18 self-citation, V12 content + changeset, V17 self-citation, doc consistency) | win | `22 passed, 6 skipped` -- the six are the clean "nothing to verify" skips the handoff records for the 5.47.0 block |
-| item 3: the Maslov / asymptotic slice (10 files: a4 asymptotic + maslov-gbd + verify, b1 input-wavevector, w6 asymptotic, v5_21 lens-accuracy + gbd-maslov-perf + maslov-jax-caustic, eh1 upsample, mhs resampling) | win | `1 failed, 245 passed, 2 deselected` -- the one is an order-dependent 4-ULP bar, root-caused below |
+| item 3: the Maslov / asymptotic slice (10 files: a4 asymptotic + maslov-gbd + verify, b1 input-wavevector, w6 asymptotic, v5_21 lens-accuracy + gbd-maslov-perf + maslov-jax-caustic, eh1 upsample, mhs resampling) | win | run 1 `1 failed, 245 passed, 2 deselected`; **run 2 `246 passed`**; the SAME ten files on an isolated `git archive` of the base, same command: `246 passed`.  The one red is a 4-ULP bar with 1 ULP of margin, dissected below |
+| the same slice's verify file among a 10-file lens/Maslov set (b11c, b11, a16 x2, chunked sag, a2 analytic, w4 gaps, the two walkers, a4 verify) | wsl | `440 passed` |
+| the PMM-2D slice from the RUNS list (12 `test_pmm2d*` files + the M2 window contract + per-layer grids) | win | `366 passed` -- including `test_pmm_m2_window_contract.py`, whose T3-1 classification the handoff lists as a known red; it is green on this box today |
 
-**The second red, and why it is not this package's either.**
+**The second red: a bar with one ULP of margin, and the measurement that settles
+whose it is.**
 `tests/unit/test_audit2609_a4_verify_maslov_asymptotic.py::test_s10_vector_normalisation_is_one_joint_scale_for_the_pair`
-failed in the ten-file slice and PASSES on its own (`1 passed in 27.67s`).  It
-was root-caused rather than waved away, and the root cause is a bar, not a
-behaviour:
+failed once in the ten-file slice.
+
+It did not reproduce -- but that is deliberately NOT the argument here.
+"It passed on the re-run" is rerun-to-green, and the house rule is that a flake
+is bad math until measured.  The re-runs are recorded as corroboration; the
+argument is the measurement:
 
 * The bar is `abs(ratios[mode] - r0) <= 4 * np.spacing(r0)` -- FOUR ULP on
   `P_x/P_y` -- and its docstring records the measurement it was set from
@@ -473,6 +479,9 @@ behaviour:
   files that run before it do, without restoring) does NOT move it: still 3 and
   1.  So the trigger is somewhere else in the run's history and was not traced
   further.
+* The same clean-process measurement on the BASE tree, extracted independently,
+  reads the same two numbers: **3 and 1**.  Base and branch are not merely
+  close; they are the same values.
 * **The decisive measurement is that the quantity itself does not move.**
   `E13_maslov_vector_ratios` and `E14_maslov_vector_field` were added to the
   probe for this: `apply_real_lens_maslov_vector` on WP-A4-VERIFY's own
@@ -483,6 +492,14 @@ behaviour:
   both, and the test fails or passes identically on both for any given process
   history.  The red is therefore not this package's, by measurement rather than
   by argument.
+
+The run tallies corroborate that and are recorded for completeness, not relied
+on: run 1 on the branch `1 failed / 245 passed` (on a box carrying 18 concurrent
+python processes, several of them this package's own probes), run 2 on the
+branch `246 passed`, the identical ten files on an isolated `git archive` of the
+base `246 passed`, and the same verify file inside a 440-test WSL run green.
+A bar with one ULP of margin behaves exactly like this; the one thing that would
+be evidence -- the quantity moving -- is measured and does not.
 
 Recorded, not masked, and NOT re-derived here: re-deriving that bar is
 `test_audit2609_a4_verify_maslov_asymptotic.py`'s owner's work, and it needs
