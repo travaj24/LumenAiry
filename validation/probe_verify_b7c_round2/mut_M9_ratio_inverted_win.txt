@@ -1,0 +1,27 @@
+F.....FsFs..FF..............                                             [100%]
+================================== FAILURES ===================================
+E   assert 1.0045704679798224 == 0.9954503261587875 ± 1.0e-12
+      
+      comparison failed
+      Obtained: 1.0045704679798224
+      Expected: 0.9954503261587875 ± 1.0e-12
+C:\tmp\lum_vmb2_mut\tests\unit\test_audit2609_b7c2_pixel_halving_arbiter.py:208: assert 1.0045704679798224 == 0.9954503261587875 ± 1.0e-12
+E   AssertionError: the blown-up plane reads 0.2501; the quadrature identity says ~4 per halving of the pitch
+    assert 2.5 < 0.2501022251106842
+C:\tmp\lum_vmb2_mut\tests\unit\test_audit2609_b7c2_pixel_halving_arbiter.py:386: AssertionError: the blown-up plane reads 0.2501; the quadrature identity says ~4 per halving of the pitch
+E   Failed: DID NOT RAISE <class 'RuntimeError'>
+C:\tmp\lum_vmb2_mut\tests\unit\test_audit2609_b7c2_pixel_halving_arbiter.py:488: Failed: DID NOT RAISE <class 'RuntimeError'>
+E   AssertionError: z=5412 um returned a field gaining 1.352x the launched power with both readings inside their bands
+    assert 1.3518381766765355 <= 1.25
+C:\tmp\lum_vmb2_mut\tests\unit\test_verify_b7c_multibranch.py:219: AssertionError: z=5412 um returned a field gaining 1.352x the launched power with both readings inside their bands
+E   Failed: DID NOT RAISE <class 'RuntimeError'>
+C:\tmp\lum_vmb2_mut\tests\unit\test_verify_b7c_multibranch.py:281: Failed: DID NOT RAISE <class 'RuntimeError'>
+=========================== short test summary info ===========================
+SKIPPED [1] tests\unit\test_audit2609_b7c2_pixel_halving_arbiter.py:435: this build returns the pinned plane; its continuity reads 0.8438, inside the band
+SKIPPED [1] tests\unit\test_audit2609_b7c2_pixel_halving_arbiter.py:545: no plane of this ladder reads below the loss arm on this build
+FAILED tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py::test_b7c2_the_continuity_reading_and_its_decision_reach_the_diagnostics
+FAILED tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py::test_b7c2_a_converged_render_reads_one_and_a_blown_up_one_reads_four
+FAILED tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py::test_b7c2_the_decision_survives_halving_the_output_pixel
+FAILED tests/unit/test_verify_b7c_multibranch.py::test_vb7c_an_accepted_field_reads_above_the_pinned_accepted_ceiling
+FAILED tests/unit/test_verify_b7c_multibranch.py::test_vb7c_the_refusal_follows_the_pixel_not_the_field
+5 failed, 21 passed, 2 skipped in 52.35s

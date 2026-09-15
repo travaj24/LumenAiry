@@ -263,6 +263,222 @@ bar reads `_PERSISTENT_POOL_NWORKERS >= n_cpu` instead of `== n_cpu` for the sam
 pool wide enough to serve the call has no spawn left to amortise, which is the only thing that
 bar is about.
 
+### Fixed -- lens-traced: the multibranch reconstruction blow-up the uniform completion passed through, and the fold envelope's two constants re-derived
+
+`apply_real_lens_traced_uniform` (also `apply_real_lens_traced(caustic='uniform')`) now
+REFUSES a multibranch field whose reconstructed grid power leaves a derived band, instead of
+completing it and reporting its own best-case diagnostics on a field wrong by three decades.
+On VERIFY-B7b's fold fixture (N-BAF10 biconvex R = +-2.6 mm, 1.064 um, N = 512,
+dx = 2.20 um) the planes z = 1762 / 1764 / 1768 um returned fields carrying **93.5x, 3545x
+and 6097x** the launched power while `fell_back` read `False`, `fit_residual` 0.0029-0.0054
+and `zeta_extrapolation` 0.32 -- the best case its docstring records.  Reproduced on two more
+singlets (1683x on an N-BK7 plano-convex at 780 nm, 18.9x on an N-SF11 biconvex at 1.55 um)
+and identically on both builds (py3.14 / numpy 2.4.4 and py3.12 / numpy 2.4.6).
+
+The cause is in `apply_real_lens_traced_multibranch` and is neither a wrong branch nor an
+unclipped Jacobian nor the fold-member ordering: the rasteriser deposits one amplitude per
+pixel CENTRE a mapped triangle covers, which is an unbiased estimator of the launched energy
+only while those triangles are spread over many pixels, and at the axial point focus a whole
+ring collapses onto a handful of them (`n_branch.max()` rises 2 -> 797 across the window).
+Three controls fix the diagnosis: `caustic_band='plain'` reproduces the blow-up to 0.1 %,
+`min_area_ratio` 1e-8 and the 1e-6 default give an identical ratio, and REFINING the launch
+lattice makes it 7.4x worse (`ray_subsample` 2 -> 1: 6097 -> 44878).  Bounding the
+reconstruction would mean a different quadrature and would move every multibranch field near
+a caustic, so the reconstruction is left byte-identical and the refusal lives in the layer
+that was misreporting.  Falling back is not a remedy and was measured not to be: at
+z = 1770 um the completion already fell back and returned a field carrying 6459x the launched
+power, because the fallback target is that same field.
+
+The bar, `_MB_POWER_RATIO_MAX = _ENERGY_BLOWUP_FACTOR = 2.0`, is derived on five optics and
+51 fold planes against the direct Rayleigh-Sommerfeld oracle
+`validation/oracles/caustic_fold_truth.py`: all 42 planes the oracle accepts (completion
+fidelity 0.883-0.999) read a bracketed multibranch ratio of 0.816-1.246, only two of them
+above 1.0 at all, and the smallest broken one (fidelity 0.350, on WP-B7b's own fast singlet
+one micron past its marginal focus) reads 5.848 with nothing between -- 1.60x of margin above
+the largest accepted reading and 2.92x below the smallest broken one, in a gap 4.69x wide
+whose geometric centre is 2.70.  Neither margin is decades and the report says so; the bar IS
+the multibranch's own gain tripwire, so there is one bar on this quantity in the library
+rather than two that can drift apart, and the completion refuses exactly the fields the
+branch sum has already declared unphysical.  The reading is taken
+through the same bracket the multibranch's own gain arm uses, so the wide-aperture geometry
+artefact that bracket exists for cannot reach it, and the coupling to that module's warn bar
+means every refused field has already emitted its `RuntimeWarning`.  The diagnostics now
+carry `multibranch_power_ratio`, `multibranch_power_ratio_bracketed`,
+`multibranch_power_ratio_band` and `power_ratio_decision` on every return path, including the
+fallbacks; the multibranch's own diagnostics gain `n_branch_max`, `launched_power` and
+`launched_power_triangles`.  The loss side is reported, not refused, and the report says why:
+a multibranch field that loses energy is this module's normal input, the measured legitimate
+population runs down to 0.763, and the only pathological low case is already refused inside
+the multibranch.
+
+`_ZETA_EXTRAPOLATION_MAX = 8.0` is re-derived two-sided on the same three optics and holds
+where it stands, but what it separates is a SIGN, not two magnitudes: below the bar the
+completed field's energy error is signed and centred (-2.18 % .. +4.14 %, 12 of 22 rungs
+negative, mean +0.57 %), above it a one-sided gain at every rung (+3.64 % .. +30.13 %, 8 of
+8, mean +7.88 %).  The last signed rung is 5.65 and the first systematic-gain rung 11.05, so
+`sqrt(5.65 * 11.05) = 7.90` -- the shipped bar already sits at the geometric centre of the
+transition on optics WP-B7b never saw.  WP-B7b's "+12.5 % at 9.8" and VERIFY-B7b's
+"saturates near +5 % out to 531" are the same above-bar population on different optics, each
+read without its below-bar half; the constant's comment, the docstring table and the warning
+text now carry both halves.
+
+Two measured results are recorded without a code change.  The member-selection sentence "at
+the widest-band plane it also beats `apply_real_lens_traced(amplitude_model='ray_density')`"
+does not generalise, and neither does its reverse: re-measured on five fixtures including
+WP-B7b's own two, over 42 planes, the completion is the closer member at 10 of 12 planes on
+WP-B7b's fast N-LAK22 singlet (0.9993 against 0.9974 at its marginal focus) and the
+ray-to-wave hand-off is closer at every plane on three other optics (0.9979 against 0.9915),
+with every margin under 0.012 of fidelity and a beam-width sweep at a fixed optic refusing to
+flip it -- so the docstring now records both orderings and the default member is unchanged.
+The same pass scopes a second unqualified sentence: the completion beats the plain
+multibranch at 40 of the 42 planes, not all of them, the two exceptions being W1's
+tightest-band planes (0.9882 against 0.9889 and 0.9906 against 0.9910).  And WP-B7b's
+proposal to clip `_AIRY_TAIL_CELLS` where the extrapolated `zeta` stops describing the tail
+rests on a premise the measurement refuses: more than 94 % of the excess energy is written
+inside 3 Airy lengths, not in the outer annulus (the cumulative dark-side energy ratio is
+flat in depth beyond 3 cells, 2.169 against 2.045 at `zeta_extrapolation` = 14).  The bound
+is derived anyway and REPORTED -- `_trace_meridional_fold` returns the band's own curvature
+and `zeta_linear_range = 0.1 kappa / |q|`, which the completion reports alongside
+`zeta_curvature`, `zeta_linear_resid`, `dark_fill_depth` and `l_airy` -- but it is not
+applied to the fill, because it is anti-conservative by a factor of ~20 against the oracle's
+own dark-side decay and everything it would remove sits below 2e-06 of the ring amplitude.
+The real lever is measured instead: `kappa_eff / kappa` read off the oracle's tail runs
+1.068 -> 0.489 as `zeta_extrapolation` runs 0.42 -> 531, so the linear normal form is good to
+7 % only while the two-branch band is at least ~2 Airy lengths wide.
+
+Behaviour change: only the refused planes move.  Archive-to-archive on both builds, 11 of 13
+fixtures are byte-identical -- including the K4 suite's own plano-convex at two grids and at
+`output_plane_distance = 0`, the multibranch alone at the blow-up plane, and WP-B7b's fixture
+F at two planes where the new `zeta_linear_range` is shorter than the dark fill -- and the
+two movers are exactly the two blow-up planes, which now raise.
+
+Files: `lumenairy/elements/_lens_traced_multibranch.py`,
+`lumenairy/elements/_lens_traced_uniform.py`,
+`tests/unit/test_audit2609_b7c_multibranch_envelope.py` (new, 10 ids),
+`validation/probe_multibranch_zeta/` (probes, oracle driver and JSON for both builds),
+`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/WP-B7c_REPORT.md`.
+
+#### Round 2 -- the PIXEL-HALVING ARBITER, and the claims round 1 could not support
+
+An independent re-derivation on four optics WP-B7c never used (VERIFY-WP-B7c: a cemented
+doublet, a positive meniscus, a convex-first plano-convex at 532 nm and a fast N-LASF9 at
+f/2.0; 71 planes, both builds) CONFIRMED the mechanism above and strengthened it with a
+control WP-B7c had not run -- holding the optic, the plane, the launch lattice and the
+window fixed and halving the OUTPUT PIXEL divides the excess by exactly 4 on a broken plane
+(107 -> 27.3 -> 7.40; 504 -> 127 -> 32.2; 11238 -> 2810 -> 703) while a healthy plane is
+invariant (0.937 -> 0.937 -> 0.938) -- and REFUTED the guard built on it.  The bar's two
+populations OVERLAP once the optic set is widened: the largest ACCEPTED bracketed reading is
+0.9804 and the smallest BROKEN one 1.106 over all planes / 1.151 on fold rings, a gap of
+1.13x-1.17x rather than the reported 4.69x, and the interval reported as empty is populated
+continuously.  A plane reading 1.151 with `power_ratio_decision == 'ok'`, `fell_back ==
+False` and `zeta_extrapolation == 1.93` returned a field of oracle fidelity 0.858 carrying
+1.284x the oracle's power -- the R-5 defect class ("its own diagnostics read their best
+values on a broken field") surviving 1.74x inside the bar.  The decision also followed the
+output GRID: the same physical plane read 2.982 at dx = 1.40 um and 1.420 at dx = 0.70 um,
+so one halving of the pixel removed the guard.
+
+The arbiter makes that control the decision.  `apply_real_lens_traced_uniform` now
+re-rasterises the SAME mapped triangles onto a grid of half the pitch over the same physical
+window, completes that render with the SAME fold parameters, and reads the continuity of the
+field it is about to return:
+
+    pixel_continuity = p_out(dx) / p_out(dx/2)
+
+A converged point-sampled quadrature deposits the same power at any pitch, so this reads 1
+whatever the optic, the plane or the grid; a quadrature that has stopped being unbiased
+deposits a power proportional to the PIXEL AREA and reads ~4 per halving.  Every term that
+made the launched-power ratio a mixture cancels -- both renders drop the same dark-side tail,
+straddle the same grid boundary and lose the same off-screen light -- which is why this
+quantity separates where that one does not.  The reading is taken on the RETURNED field and
+not on the branch sum, because the CFU swap rewrites the fold band and the whole dark side,
+which is exactly where a modest branch-sum excess sits: on VERIFY-B7b's own fixture at
+z = 1761 um the branch sum reads 1.0636 while the completion built on it reads 1.0020 at
+oracle fidelity 0.9878, and deciding on the branch sum there would refuse a field that is
+right.
+
+`_PIXEL_CONTINUITY_MAX = _MB_PIXEL_CONTINUITY_MAX = 1.06` is derived on EIGHT optics --
+VERIFY-B7b's own, VERIFY-WP-B7c's four, and three added here (an AIR-SPACED doublet, a
+CONIC-surfaced N-LAK22, and an N-SF11 at **NA 0.33**, above the 0.12-0.29 envelope every
+published fixture sits in) -- over 82 oracle-scored fold-ring planes on two builds: the 67
+planes the guard RETURNS read 0.9860-1.0221 with oracle fidelity 0.9593-0.9985, and the 15 it
+REFUSES read 1.092-3.998 with fidelity 0.0173-0.9302.  **The two fidelity populations do not
+overlap, and that is said with no accept bar chosen -- the split is the guard's own.**  The
+gap in the reading is 1.0683x, its geometric centre 1.0564 = 1.06 to three figures, and the
+margins are 1.037x above the largest returned reading and 1.030x below the smallest refused
+one.  That is a 7 % gap, not decades, and it is stated rather than papered over; what makes
+it usable where the launched-power bar was not is that the quantity has a FIXED reference --
+a converged quadrature reads exactly 1 -- so the bar is a tolerance on a known value instead
+of a boundary between two moving populations.  The lower arm
+(`1/1.06`) REPORTS and does not refuse, and the asymmetry is physical: the completion keeps
+the branch sum's bright side verbatim, so a bright-side excess reaches the caller, while the
+dark side is exactly what the completion replaces.
+
+Cost: ONE extra rasterisation of the same mapped triangles -- never a second ray trace, a
+second KMAH pass or a second meridional fold trace (1.6x-2.7x of the branch sum alone, less
+of the completion, which also pays for a 4000-ray trace and a least-squares fit).
+`apply_real_lens_traced_multibranch` does not ask for it and is unchanged in cost and in
+bits.  Above `_ARBITER_MAX_FINE_ENTRIES` (7e6 fine-grid entries, i.e. N > 1322) the reading
+is reported as `None` with `pixel_continuity_decision == 'not_measured'` rather than silently
+skipped.  The diagnostics gain `pixel_continuity`, `pixel_continuity_of`,
+`pixel_continuity_band`, `pixel_continuity_decision` and `multibranch_pixel_continuity` on
+the completion, and `pixel_continuity`, `pixel_continuity_band`,
+`pixel_continuity_decision`, `pixel_halved_power`, `pixel_halved_field` and `grid_power` on
+the branch sum.
+
+What this closes, measured: **D1** -- the fast singlet at z = 1076 um now reads a continuity
+of 1.185 and is refused, as are the doublet's z = 5400 / 5410 / 5420 um (1.100 / 1.265 /
+1.636, fidelity 0.837 / 0.772 / 0.666), every one of which round 1 returned.  **D2** -- the
+plane refused at dx = 1.40 um is still refused at dx = 0.70 um (continuity 1.346), where
+round 1 accepted it; the reading still falls by 4 per halving, which is the mechanism, but
+the decision is a ratio of two renders one halving apart and is taken at the caller's own
+pitch.  **D3** -- the refusal's mechanism sentence is conditioned on the plane's own branch
+count, so a single-valued map (`n_branch_max == 1`, the doublet at z = 5.460 mm) is no longer
+told that "a whole RING of branches coalesces" in the clause after the one printing "up to 1
+branches on one pixel".  **D4** -- the gain bracket's price is now stated where the bar is:
+on the geometry it exists for the two denominators separate by up to 7.85x, so that arm's
+detection floor is the bar times that spread, up to ~15.7x; the continuity arm has no such
+denominator.  **D5** -- the shared oracle's Debye `J0` azimuthal form is documented with the
+NA ceiling it has, measured against an EXACT azimuthal quadrature added in
+`validation/probe_wp_b7c_round2/oracle.py`.
+
+Two claims are RESTATED rather than fixed, because the measurement does not support them.
+The launched-power band is no longer described as an envelope with margins on both sides: it
+is a far-tail tripwire with a measured margin below (2.04x) and none above, left at 2.0
+because lowering it toward the measured broken floor of 1.106 would start refusing fields the
+oracle accepts at 0.9804.  And `_ZETA_EXTRAPOLATION_MAX` keeps only the above-bar half of its
+two-sided derivation: the one-sided gain above 8.0 reproduces (0 of 13 rungs negative on four
+more optics, mirroring 0 of 8), but "signed and centred below" does not -- 1 of 17 negative,
+and the largest excursion in either study (+28.4 %) is BELOW the bar.
+
+Behaviour change: only newly refused planes move.  Round-1-tree to round-2-tree over a
+30-fixture matrix in child processes with `lumenairy.__file__` asserted under each tree,
+SHA-256 over `tobytes()`: **26 identical, 0 moved, 4 newly refused**, and all four newly
+refused planes are fields the oracle scores at 0.666-0.858 where the ray-to-wave hand-off at
+the same plane scores 0.998.
+
+The completion now reaches the branch sum through the module-private
+`_multibranch_render` rather than the public `apply_real_lens_traced_multibranch`,
+because it asks for a reading the public signature does not carry -- so
+`apply_real_lens_traced_multibranch` is unchanged for every other caller, in bits and
+in cost.  Five existing tests inject a synthetic multibranch field through that call
+(the cusp and higher-catastrophe routes in `test_niche_r2_pearcey_cusp.py` and
+`test_niche_r5_gbd_vector_catastrophe.py`) and were re-pointed at the new name; the
+completion module deliberately keeps only ONE such name, so patching the wrong one
+raises `AttributeError` instead of silently testing nothing, and that property is
+itself pinned by a test.
+
+Files: `lumenairy/elements/_lens_traced_multibranch.py`,
+`lumenairy/elements/_lens_traced_uniform.py`,
+`tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py` (new, 12 ids),
+`tests/unit/test_niche_r2_pearcey_cusp.py` and
+`tests/unit/test_niche_r5_gbd_vector_catastrophe.py` (the call seam, re-pointed),
+`tests/unit/test_audit2609_b7c_multibranch_envelope.py` (two literal pins restated),
+`tests/unit/test_verify_b7c_multibranch.py` (D1 / D2 / D3 restated as the decisions that
+replaced them), `validation/oracles/caustic_fold_truth.py` (the NA ceiling, stated),
+`validation/probe_wp_b7c_round2/` (probes, the exact-azimuth oracle driver and JSON),
+`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/WP-B7c_ROUND2_REPORT.md`.
+Closes handoff items 4.2 and 4.3.
+
 ## [5.47.0] — 2026-09-14
 
 This release is the fourth wave of the 2026-09-11 adversarial audit's remediation

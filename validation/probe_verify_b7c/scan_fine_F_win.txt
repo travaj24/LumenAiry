@@ -1,0 +1,21 @@
+F z=  1070.00 br=0.9249021367245799 nbr=2 uni=fold Airy scale under-resolved by the grid zx=None
+F z=  1070.50 br=0.9258109442373932 nbr=2 uni=fold Airy scale under-resolved by the grid zx=None
+F z=  1071.00 br=0.9260051840236876 nbr=2 uni=fold Airy scale under-resolved by the grid zx=None
+F z=  1071.50 br=0.9413439232230055 nbr=5 uni=fold Airy scale under-resolved by the grid zx=None
+F z=  1072.00 br=0.9436133224924347 nbr=5 uni=fold Airy scale under-resolved by the grid zx=None
+F z=  1072.50 br=0.9707872628528463 nbr=5 uni=fold Airy scale under-resolved by the grid zx=None
+F z=  1073.00 br=0.9813973911175785 nbr=13 uni=fold Airy scale under-resolved by the grid zx=None
+F z=  1073.50 br=0.9219306521020909 nbr=13 uni=fold Airy scale under-resolved by the grid zx=None
+F z=  1074.00 br=1.0046894375527862 nbr=13 uni=fold Airy scale under-resolved by the grid zx=None
+F z=  1074.50 br=1.0672026124861511 nbr=21 uni=fold Airy scale under-resolved by the grid zx=None
+F z=  1075.00 br=0.9239985505231639 nbr=21 uni=fold Airy scale under-resolved by the grid zx=None
+F z=  1075.50 br=1.1676362976464343 nbr=21 uni=fold Airy scale under-resolved by the grid zx=None
+F z=  1076.00 br=1.0680931752564997 nbr=29 uni=fold Airy scale under-resolved by the grid zx=None
+F z=  1076.50 br=1.0156180878906829 nbr=29 uni=fold Airy scale under-resolved by the grid zx=None
+F z=  1077.00 br=2.007787210841439 nbr=29 uni=RAISE zx=None
+F z=  1077.50 br=1.2288606648768217 nbr=37 uni=fold Airy scale under-resolved by the grid zx=None
+F z=  1078.00 br=1.2617150985906829 nbr=37 uni=fold Airy scale under-resolved by the grid zx=None
+F z=  1078.50 br=4.145804654595472 nbr=45 uni=RAISE zx=None
+F z=  1079.00 br=1.5138241149983187 nbr=45 uni=fold Airy scale under-resolved by the grid zx=None
+F z=  1079.50 br=1.6963092776019502 nbr=45 uni=fold Airy scale under-resolved by the grid zx=None
+F z=  1080.00 br=3.4795079469841297 nbr=53 uni=RAISE zx=None

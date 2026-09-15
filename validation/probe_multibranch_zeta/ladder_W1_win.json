@@ -1,0 +1,280 @@
+{
+ "header": {
+  "lumenairy_file": "C:\\tmp\\lum_mb\\lumenairy\\__init__.py",
+  "version": "5.47.0",
+  "numpy": "2.4.4",
+  "python": "3.14.6",
+  "fixture": "W1",
+  "note": "WP-B7b sec 3.1 fast singlet: N-LAK22 biconvex R=+/-3.0 mm, marginal focus 2058.98 um",
+  "N": 640,
+  "dx": 2.1e-06,
+  "w0": 0.0003,
+  "wavelength": 8.5e-07,
+  "oracle_n_fan": 9000,
+  "oracle_n_rho": 3600,
+  "index_control_delta": {
+   "N-LAK22": 0.0
+  },
+  "P_in_launch_radius": 1.4130647019773396e-07
+ },
+ "rows": [
+  {
+   "z_um": 2020.0,
+   "P_oracle": 1.404619905769084e-07,
+   "P_oracle_over_launched": 0.9940231952618734,
+   "oracle_P_in": 1.4130655224791204e-07,
+   "P_in_grid": 1.4130647019773396e-07,
+   "members": {
+    "uniform": {
+     "seconds": 0.62,
+     "warnings": [],
+     "fidelity": 0.9992068318249225,
+     "P_over_oracle": 1.0099179315407247,
+     "P_over_Pin": 1.0038824321704622
+    },
+    "multibranch": {
+     "seconds": 0.57,
+     "warnings": [],
+     "fidelity": 0.9810290210258279,
+     "P_over_oracle": 0.9693074189699805,
+     "P_over_Pin": 0.9635146172639458
+    },
+    "ray_density": {
+     "seconds": 4.01,
+     "warnings": [
+      "apply_real_lens_traced: the physical aperture (1.200 mm) is 2.00x the beam 1/e^2 diameter (0.600 mm), above the 1.5x aperture:beam ratio beyond which "
+     ],
+     "fidelity": 0.997372015219988,
+     "P_over_oracle": 1.006122401587896,
+     "P_over_Pin": 1.0001095851683215
+    },
+    "wave": {
+     "seconds": 0.52,
+     "warnings": [
+      "apply_real_lens_traced: the physical aperture (1.200 mm) is 2.00x the beam 1/e^2 diameter (0.600 mm), above the 1.5x aperture:beam ratio beyond which "
+     ],
+     "fidelity": 0.9972694272301669,
+     "P_over_oracle": 1.0061347845103503,
+     "P_over_Pin": 1.0001218940876133
+    }
+   },
+   "uniform_diag": {
+    "fell_back": false,
+    "reason": "fold_ring",
+    "r_c": 2.545940926423218e-05,
+    "kappa": 8.989487888643287,
+    "fit_residual": 0.007098222949587308,
+    "fit_halfwidth": 2.9315080195866307e-06,
+    "zeta_band": 1.3139791533050432e-05,
+    "zeta_extrapolation": 0.22310156232030223,
+    "power_ratio": 0.9634086438335824,
+    "power_ratio_triangles": 0.9634415315547664,
+    "n_triangles_finite": 126424,
+    "n_triangles_degenerate": 4,
+    "n_branch_max": 2
+   },
+   "mb_diag": {
+    "power_ratio": 0.9634086438335824,
+    "power_ratio_triangles": 0.9634415315547664,
+    "n_triangles_finite": 126424,
+    "n_triangles_degenerate": 4,
+    "n_branch_max": 2
+   }
+  },
+  {
+   "z_um": 2039.9999999999998,
+   "P_oracle": 1.4062302542434547e-07,
+   "P_oracle_over_launched": 0.9951628087113231,
+   "oracle_P_in": 1.4130655224791204e-07,
+   "P_in_grid": 1.4130647019773396e-07,
+   "members": {
+    "uniform": {
+     "seconds": 0.38,
+     "warnings": [],
+     "fidelity": 0.9993171485155389,
+     "P_over_oracle": 1.0058284054208242,
+     "P_over_Pin": 1.0009636022334782
+    },
+    "multibranch": {
+     "seconds": 0.32,
+     "warnings": [],
+     "fidelity": 0.9745256098410404,
+     "P_over_oracle": 0.9519241197794551,
+     "P_over_Pin": 0.9473200307846955
+    },
+    "ray_density": {
+     "seconds": 0.38,
+     "warnings": [
+      "apply_real_lens_traced: the physical aperture (1.200 mm) is 2.00x the beam 1/e^2 diameter (0.600 mm), above the 1.5x aperture:beam ratio beyond which "
+     ],
+     "fidelity": 0.9973927198546135,
+     "P_over_oracle": 1.0049702377302787,
+     "P_over_Pin": 1.0001095851683215
+    },
+    "wave": {
+     "seconds": 0.75,
+     "warnings": [
+      "apply_real_lens_traced: the physical aperture (1.200 mm) is 2.00x the beam 1/e^2 diameter (0.600 mm), above the 1.5x aperture:beam ratio beyond which "
+     ],
+     "fidelity": 0.9972920371759715,
+     "P_over_oracle": 1.004982606472395,
+     "P_over_Pin": 1.0001218940876133
+    }
+   },
+   "uniform_diag": {
+    "fell_back": false,
+    "reason": "fold_ring",
+    "r_c": 2.2198548953538625e-05,
+    "kappa": 9.156738401812571,
+    "fit_residual": 0.007437808145431126,
+    "fit_halfwidth": 2.8779631656090746e-06,
+    "zeta_band": 1.5106447460630696e-05,
+    "zeta_extrapolation": 0.19051224141939452,
+    "power_ratio": 0.9472158385373591,
+    "power_ratio_triangles": 0.9472611286208846,
+    "n_triangles_finite": 126424,
+    "n_triangles_degenerate": 8,
+    "n_branch_max": 2
+   },
+   "mb_diag": {
+    "power_ratio": 0.9472158385373591,
+    "power_ratio_triangles": 0.9472611286208846,
+    "n_triangles_finite": 126424,
+    "n_triangles_degenerate": 8,
+    "n_branch_max": 2
+   }
+  },
+  {
+   "z_um": 2058.9799999999996,
+   "P_oracle": 1.404945584889768e-07,
+   "P_oracle_over_launched": 0.9942536722747954,
+   "oracle_P_in": 1.4130655224791204e-07,
+   "P_in_grid": 1.4130647019773396e-07,
+   "members": {
+    "uniform": {
+     "seconds": 0.52,
+     "warnings": [],
+     "fidelity": 0.9993140643037384,
+     "P_over_oracle": 1.0074819331988545,
+     "P_over_Pin": 1.0016931934703706
+    },
+    "multibranch": {
+     "seconds": 0.39,
+     "warnings": [],
+     "fidelity": 0.9660215597446496,
+     "P_over_oracle": 0.9366273437572317,
+     "P_over_Pin": 0.9312457168149233
+    },
+    "ray_density": {
+     "seconds": 0.61,
+     "warnings": [
+      "apply_real_lens_traced: the physical aperture (1.200 mm) is 2.00x the beam 1/e^2 diameter (0.600 mm), above the 1.5x aperture:beam ratio beyond which "
+     ],
+     "fidelity": 0.9973932250380325,
+     "P_over_oracle": 1.0058891732959436,
+     "P_over_Pin": 1.0001095851683213
+    },
+    "wave": {
+     "seconds": 0.47,
+     "warnings": [
+      "apply_real_lens_traced: the physical aperture (1.200 mm) is 2.00x the beam 1/e^2 diameter (0.600 mm), above the 1.5x aperture:beam ratio beyond which "
+     ],
+     "fidelity": 0.9972943950532055,
+     "P_over_oracle": 1.0059015533479243,
+     "P_over_Pin": 1.0001218940876133
+    }
+   },
+   "uniform_diag": {
+    "fell_back": false,
+    "reason": "fold_ring",
+    "r_c": 1.9250837369934304e-05,
+    "kappa": 9.344628514572978,
+    "fit_residual": 0.005142046117044698,
+    "fit_halfwidth": 2.820096678689525e-06,
+    "zeta_band": 1.7119648787148256e-05,
+    "zeta_extrapolation": 0.1647286526582587,
+    "power_ratio": 0.9311432925222828,
+    "power_ratio_triangles": 0.9312349173872798,
+    "n_triangles_finite": 126424,
+    "n_triangles_degenerate": 20,
+    "n_branch_max": 2
+   },
+   "mb_diag": {
+    "power_ratio": 0.9311432925222828,
+    "power_ratio_triangles": 0.9312349173872798,
+    "n_triangles_finite": 126424,
+    "n_triangles_degenerate": 20,
+    "n_branch_max": 2
+   }
+  },
+  {
+   "z_um": 2059.9999999999995,
+   "P_oracle": 1.4050605065436715e-07,
+   "P_oracle_over_launched": 0.9943350001764923,
+   "oracle_P_in": 1.4130655224791204e-07,
+   "P_in_grid": 1.4130647019773396e-07,
+   "members": {
+    "uniform": {
+     "seconds": 0.41,
+     "warnings": [
+      "invalid value encountered in subtract",
+      "apply_real_lens_traced_multibranch: reconstructed grid power is 5.85x the launched power that reaches this grid (up to 229 branches coalesce on one pi"
+     ],
+     "fidelity": 0.3499257234258191,
+     "P_over_oracle": 5.947666513289204,
+     "P_over_Pin": 5.913976417513664
+    },
+    "multibranch": {
+     "seconds": 0.39,
+     "warnings": [
+      "invalid value encountered in subtract",
+      "apply_real_lens_traced_multibranch: reconstructed grid power is 5.85x the launched power that reaches this grid (up to 229 branches coalesce on one pi"
+     ],
+     "fidelity": 0.32598950068256194,
+     "P_over_oracle": 5.882221403730453,
+     "P_over_Pin": 5.848902016703319
+    },
+    "ray_density": {
+     "seconds": 0.42,
+     "warnings": [
+      "apply_real_lens_traced: the physical aperture (1.200 mm) is 2.00x the beam 1/e^2 diameter (0.600 mm), above the 1.5x aperture:beam ratio beyond which "
+     ],
+     "fidelity": 0.9973934569735877,
+     "P_over_oracle": 1.005806900363995,
+     "P_over_Pin": 1.0001095851683213
+    },
+    "wave": {
+     "seconds": 0.38,
+     "warnings": [
+      "apply_real_lens_traced: the physical aperture (1.200 mm) is 2.00x the beam 1/e^2 diameter (0.600 mm), above the 1.5x aperture:beam ratio beyond which "
+     ],
+     "fidelity": 0.9972948507446827,
+     "P_over_oracle": 1.0058192794033955,
+     "P_over_Pin": 1.000121894087613
+    }
+   },
+   "uniform_diag": {
+    "fell_back": false,
+    "reason": "fold_ring",
+    "r_c": 1.909658329403717e-05,
+    "kappa": 9.355749460098219,
+    "fit_residual": 0.006184776733863431,
+    "fit_halfwidth": 2.816744500259205e-06,
+    "zeta_band": 1.7231998039403168e-05,
+    "zeta_extrapolation": 0.1634601219091575,
+    "power_ratio": 5.848258717474161,
+    "power_ratio_triangles": 5.848927488267976,
+    "n_triangles_finite": 126424,
+    "n_triangles_degenerate": 24,
+    "n_branch_max": 229
+   },
+   "mb_diag": {
+    "power_ratio": 5.848258717474161,
+    "power_ratio_triangles": 5.848927488267976,
+    "n_triangles_finite": 126424,
+    "n_triangles_degenerate": 24,
+    "n_branch_max": 229
+   }
+  }
+ ]
+}

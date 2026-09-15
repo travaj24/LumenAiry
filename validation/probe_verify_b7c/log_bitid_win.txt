@@ -1,0 +1,89 @@
+WORKER_DONE C:\Users\Tesla\AppData\Local\Temp\claude\C--Users-Tesla\372a2d1f-acbe-4b57-a148-eeae3fe1d729\scratchpad\vb7c\tree_96cb2096\lumenairy\__init__.py
+ 
+WORKER_DONE C:\Users\Tesla\AppData\Local\Temp\claude\C--Users-Tesla\372a2d1f-acbe-4b57-a148-eeae3fe1d729\scratchpad\vb7c\tree_119b8bb6\lumenairy\__init__.py
+ 
+{
+ "n_cases": 32,
+ "n_identical": 29,
+ "n_moved": 3,
+ "identical": [
+  "P_uni_fold",
+  "P_uni_fallback",
+  "P_uni_vertex",
+  "P_mb_fold",
+  "P_mb_blow",
+  "Q_uni_fold",
+  "Q_uni_fallback",
+  "Q_uni_vertex",
+  "Q_mb_fold",
+  "Q_mb_blow",
+  "M_uni_fold",
+  "M_uni_fallback",
+  "M_uni_vertex",
+  "M_mb_fold",
+  "M_mb_blow",
+  "S_uni_fold",
+  "S_uni_fallback",
+  "S_uni_vertex",
+  "S_mb_fold",
+  "S_mb_blow",
+  "P_alt_uni_fold",
+  "Q_alt_uni_fold",
+  "M_alt_uni_fold",
+  "S_alt_uni_fold",
+  "P_mb_plain",
+  "S_uni_c64",
+  "P_uni_gap",
+  "Q_uni_gap",
+  "M_mb_sub4"
+ ],
+ "moved": [
+  {
+   "id": "P_uni_refused",
+   "base_digest": "a258efe1c797354afda62e05b423217c12c018d05d36bfa9bbd8014fc830557e",
+   "head_digest": null,
+   "base_error": null,
+   "head_error": "RuntimeError: apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side field this completion is built on carries 4.49x the launched power that reaches",
+   "base_power": 8.051215864902152e-07,
+   "head_power": null,
+   "base_warnings": 3,
+   "head_warnings": null
+  },
+  {
+   "id": "Q_uni_refused",
+   "base_digest": "2c710d2a0826e1e1ad5d09e01cbd698965e960c82d5c9fc8591d8d90886cccac",
+   "head_digest": null,
+   "base_error": null,
+   "head_error": "RuntimeError: apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side field this completion is built on carries 3.216x the launched power that reache",
+   "base_power": 1.1472710254286546e-06,
+   "head_power": null,
+   "base_warnings": 2,
+   "head_warnings": null
+  },
+  {
+   "id": "P_uni_blow",
+   "base_digest": "d116820addceba19a1493cc3c58da5281cef6cec4f52f5ccbeca374079834828",
+   "head_digest": null,
+   "base_error": null,
+   "head_error": "RuntimeError: apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side field this completion is built on carries 54.94x the launched power that reache",
+   "base_power": 9.85178574201037e-06,
+   "head_power": null,
+   "base_warnings": 3,
+   "head_warnings": null
+  }
+ ],
+ "base": {
+  "sha": "96cb2096",
+  "lumenairy_file": "C:\\Users\\Tesla\\AppData\\Local\\Temp\\claude\\C--Users-Tesla\\372a2d1f-acbe-4b57-a148-eeae3fe1d729\\scratchpad\\vb7c\\tree_96cb2096\\lumenairy\\__init__.py",
+  "lumenairy_version": "5.47.0",
+  "python": "3.14.6",
+  "numpy": "2.4.4"
+ },
+ "head": {
+  "sha": "119b8bb6",
+  "lumenairy_file": "C:\\Users\\Tesla\\AppData\\Local\\Temp\\claude\\C--Users-Tesla\\372a2d1f-acbe-4b57-a148-eeae3fe1d729\\scratchpad\\vb7c\\tree_119b8bb6\\lumenairy\\__init__.py",
+  "lumenairy_version": "5.47.0",
+  "python": "3.14.6",
+  "numpy": "2.4.4"
+ }
+}

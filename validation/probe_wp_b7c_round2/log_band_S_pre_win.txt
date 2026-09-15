@@ -1,0 +1,15 @@
+lumenairy C:\tmp\lum_mb2_pre\lumenairy\__init__.py  arbiter=False  phi=debye
+S      z=  3190.00 br=0.97204992 C=    None/    None nbr=None fid_uni=0.98536 pow_uni=1.088225 fid_wv=0.9861 fold_ring
+S      z=  3200.00 br=0.94900158 C=    None/    None nbr=None fid_uni=0.98541 pow_uni=1.099102 fid_wv=0.9861 fold_ring
+S      z=  3210.00 br=0.93337382 C=    None/    None nbr=None fid_uni=0.98495 pow_uni=1.108841 fid_wv=0.9861 fold_ring
+S      z=  3214.78 br=0.92714162 C=    None/    None nbr=None fid_uni=0.98212 pow_uni=1.108157 fid_wv=0.9861 fold_ring
+S      z=  3220.00 br=0.88554199 C=    None/    None nbr=None fid_uni=0.98061 pow_uni=1.107705 fid_wv=0.9860 fold_ring
+S      z=  3230.00 br=0.86850553 C=    None/    None nbr=None fid_uni=0.95931 pow_uni=1.028451 fid_wv=0.9860 fold_ring
+S      z=  3240.00 br=0.85394367 C=    None/    None nbr=None fid_uni=0.91895 pow_uni=0.882514 fid_wv=0.9860 too few bright-band pixels for the fit
+S      z=  3245.00 br=0.80180461 C=    None/    None nbr=None fid_uni=0.90373 pow_uni=0.828650 fid_wv=0.9859 fold Airy scale under-resolved by the grid
+S      z=  3250.00 br=0.78727639 C=    None/    None nbr=None fid_uni=0.88146 pow_uni=0.813591 fid_wv=0.9859 fold Airy scale under-resolved by the grid
+S      z=  3255.00 br=0.75931535 C=    None/    None nbr=None fid_uni=0.85452 pow_uni=0.784568 fid_wv=0.9859 fold Airy scale under-resolved by the grid
+S      z=  3260.00 br=0.78969618 C=    None/    None nbr=None fid_uni=0.88896 pow_uni=0.815725 fid_wv=0.9859 fold Airy scale under-resolved by the grid
+S      z=  3265.00 br=0.82495233 C=    None/    None nbr=None fid_uni=0.79644 pow_uni=0.851796 fid_wv=0.9858 fold Airy scale under-resolved by the grid
+S      z=  3270.00 br=0.71211993 C=    None/    None nbr=None fid_uni=0.76424 pow_uni=0.734918 fid_wv=0.9859 fold Airy scale under-resolved by the grid
+S      z=  3274.02 br=107.335427 C=    None/    None nbr=None fid_uni=0.42656 pow_uni=110.7209 fid_wv=0.9859 fold Airy scale under-resolved by the grid

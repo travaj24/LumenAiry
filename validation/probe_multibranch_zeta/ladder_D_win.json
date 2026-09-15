@@ -1,0 +1,746 @@
+{
+ "header": {
+  "lumenairy_file": "C:\\tmp\\lum_mb\\lumenairy\\__init__.py",
+  "version": "5.47.0",
+  "numpy": "2.4.4",
+  "python": "3.14.6",
+  "fixture": "D",
+  "note": "N-SF11 biconvex R=+/-3.4 mm, 1.55 um",
+  "N": 512,
+  "dx": 3e-06,
+  "w0": 0.00043,
+  "wavelength": 1.55e-06,
+  "oracle_n_fan": 9000,
+  "oracle_n_rho": 3600,
+  "index_control_delta": {
+   "N-SF11": 0.0
+  },
+  "P_in_launch_radius": 2.835314267741339e-07
+ },
+ "rows": [
+  {
+   "z_um": 1725.0,
+   "P_oracle": 2.8145011617342753e-07,
+   "P_oracle_over_launched": 0.9926305082028253,
+   "oracle_P_in": 2.8353965936730863e-07,
+   "P_in_grid": 2.835314267741339e-07,
+   "members": {
+    "uniform": {
+     "seconds": 1.73,
+     "warnings": [
+      "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the fold's zeta(r) = kappa (r_c - r) was fitted on a two-"
+     ],
+     "fidelity": 0.8827526681861673,
+     "P_over_oracle": 1.301251379482064,
+     "P_over_Pin": 1.2916993226920515
+    },
+    "multibranch": {
+     "seconds": 0.32,
+     "warnings": [],
+     "fidelity": 0.8748974927796261,
+     "P_over_oracle": 1.2593132871328665,
+     "P_over_Pin": 1.2500690840336173
+    },
+    "ray_density": {
+     "seconds": 5.89,
+     "warnings": [],
+     "fidelity": 0.9919543453273617,
+     "P_over_oracle": 1.010893244719791,
+     "P_over_Pin": 1.0034726111401002
+    },
+    "wave": {
+     "seconds": 0.75,
+     "warnings": [],
+     "fidelity": 0.9915948982349283,
+     "P_over_oracle": 1.0107263005287879,
+     "P_over_Pin": 1.0033068924312896
+    }
+   },
+   "uniform_diag": {
+    "fell_back": false,
+    "reason": "fold_ring",
+    "r_c": 7.029392023511806e-05,
+    "kappa": 8.250714063335064,
+    "fit_residual": 0.03188198852530462,
+    "fit_halfwidth": 4.767342456326919e-06,
+    "zeta_band": 3.1848068899665606e-08,
+    "zeta_extrapolation": 149.6901577092787,
+    "power_ratio": 1.246140457450047,
+    "power_ratio_triangles": 1.2474819633729903,
+    "n_triangles_finite": 61784,
+    "n_triangles_degenerate": 4,
+    "n_branch_max": 2
+   },
+   "mb_diag": {
+    "power_ratio": 1.246140457450047,
+    "power_ratio_triangles": 1.2474819633729903,
+    "n_triangles_finite": 61784,
+    "n_triangles_degenerate": 4,
+    "n_branch_max": 2
+   }
+  },
+  {
+   "z_um": 1757.1399999999999,
+   "P_oracle": 2.8138571976112807e-07,
+   "P_oracle_over_launched": 0.9924033921357356,
+   "oracle_P_in": 2.8353965936730863e-07,
+   "P_in_grid": 2.835314267741339e-07,
+   "members": {
+    "uniform": {
+     "seconds": 0.3,
+     "warnings": [
+      "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the fold's zeta(r) = kappa (r_c - r) was fitted on a two-"
+     ],
+     "fidelity": 0.9899306177010905,
+     "P_over_oracle": 1.036387431218849,
+     "P_over_Pin": 1.0285442661607165
+    },
+    "multibranch": {
+     "seconds": 0.18,
+     "warnings": [],
+     "fidelity": 0.9782432461203401,
+     "P_over_oracle": 0.9782368635345979,
+     "P_over_Pin": 0.9708337699080875
+    },
+    "ray_density": {
+     "seconds": 0.36,
+     "warnings": [],
+     "fidelity": 0.9943238476709527,
+     "P_over_oracle": 1.011124592274432,
+     "P_over_Pin": 1.0034726111401002
+    },
+    "wave": {
+     "seconds": 0.25,
+     "warnings": [],
+     "fidelity": 0.9940167145831569,
+     "P_over_oracle": 1.0109576098774853,
+     "P_over_Pin": 1.0033068924312893
+    }
+   },
+   "uniform_diag": {
+    "fell_back": false,
+    "reason": "fold_ring",
+    "r_c": 6.229423546953434e-05,
+    "kappa": 8.360686474135571,
+    "fit_residual": 0.03561466695916521,
+    "fit_halfwidth": 4.704635148182334e-06,
+    "zeta_band": 3.573713482588211e-07,
+    "zeta_extrapolation": 13.164556059416014,
+    "power_ratio": 0.9677827038466968,
+    "power_ratio_triangles": 0.9688266683028965,
+    "n_triangles_finite": 61784,
+    "n_triangles_degenerate": 4,
+    "n_branch_max": 2
+   },
+   "mb_diag": {
+    "power_ratio": 0.9677827038466968,
+    "power_ratio_triangles": 0.9688266683028965,
+    "n_triangles_finite": 61784,
+    "n_triangles_degenerate": 4,
+    "n_branch_max": 2
+   }
+  },
+  {
+   "z_um": 1789.2899999999997,
+   "P_oracle": 2.8191637350582325e-07,
+   "P_oracle_over_launched": 0.9942749248372958,
+   "oracle_P_in": 2.8353965936730863e-07,
+   "P_in_grid": 2.835314267741339e-07,
+   "members": {
+    "uniform": {
+     "seconds": 0.17,
+     "warnings": [],
+     "fidelity": 0.9915822932381929,
+     "P_over_oracle": 1.0111168094894316,
+     "P_over_Pin": 1.0053572803734208
+    },
+    "multibranch": {
+     "seconds": 0.15,
+     "warnings": [],
+     "fidelity": 0.9728162966526657,
+     "P_over_oracle": 0.954858862770124,
+     "P_over_Pin": 0.9494197904787806
+    },
+    "ray_density": {
+     "seconds": 0.36,
+     "warnings": [],
+     "fidelity": 0.9958174623737329,
+     "P_over_oracle": 1.0092213432911563,
+     "P_over_Pin": 1.0034726111401004
+    },
+    "wave": {
+     "seconds": 0.31,
+     "warnings": [],
+     "fidelity": 0.9955660694441499,
+     "P_over_oracle": 1.0090546752066885,
+     "P_over_Pin": 1.0033068924312893
+    }
+   },
+   "uniform_diag": {
+    "fell_back": false,
+    "reason": "fold_ring",
+    "r_c": 5.465096545250012e-05,
+    "kappa": 8.48295937812237,
+    "fit_residual": 0.09492487945596015,
+    "fit_halfwidth": 4.6368227991983e-06,
+    "zeta_band": 1.0418996711409906e-06,
+    "zeta_extrapolation": 4.45035441283947,
+    "power_ratio": 0.9464360227210761,
+    "power_ratio_triangles": 0.947470503215044,
+    "n_triangles_finite": 61784,
+    "n_triangles_degenerate": 8,
+    "n_branch_max": 2
+   },
+   "mb_diag": {
+    "power_ratio": 0.9464360227210761,
+    "power_ratio_triangles": 0.947470503215044,
+    "n_triangles_finite": 61784,
+    "n_triangles_degenerate": 8,
+    "n_branch_max": 2
+   }
+  },
+  {
+   "z_um": 1821.43,
+   "P_oracle": 2.8155279266476495e-07,
+   "P_oracle_over_launched": 0.9929926321172242,
+   "oracle_P_in": 2.8353965936730863e-07,
+   "P_in_grid": 2.835314267741339e-07,
+   "members": {
+    "uniform": {
+     "seconds": 0.19,
+     "warnings": [],
+     "fidelity": 0.9898316081950095,
+     "P_over_oracle": 0.992494031605944,
+     "P_over_Pin": 0.9855678768349422
+    },
+    "multibranch": {
+     "seconds": 0.16,
+     "warnings": [],
+     "fidelity": 0.9650508369407267,
+     "P_over_oracle": 0.9295219466767853,
+     "P_over_Pin": 0.9230352448320306
+    },
+    "ray_density": {
+     "seconds": 0.57,
+     "warnings": [],
+     "fidelity": 0.9967563787240561,
+     "P_over_oracle": 1.0105245928215016,
+     "P_over_Pin": 1.0034726111401002
+    },
+    "wave": {
+     "seconds": 0.25,
+     "warnings": [],
+     "fidelity": 0.9965470153910074,
+     "P_over_oracle": 1.0103577095115988,
+     "P_over_Pin": 1.0033068924312896
+    }
+   },
+   "uniform_diag": {
+    "fell_back": false,
+    "reason": "fold_ring",
+    "r_c": 4.737891003759703e-05,
+    "kappa": 8.620377406272492,
+    "fit_residual": 0.11042013667727678,
+    "fit_halfwidth": 4.562906888569639e-06,
+    "zeta_band": 2.095052301180828e-06,
+    "zeta_extrapolation": 2.1779441429685846,
+    "power_ratio": 0.9201343965135373,
+    "power_ratio_triangles": 0.9211468666305337,
+    "n_triangles_finite": 61784,
+    "n_triangles_degenerate": 8,
+    "n_branch_max": 2
+   },
+   "mb_diag": {
+    "power_ratio": 0.9201343965135373,
+    "power_ratio_triangles": 0.9211468666305337,
+    "n_triangles_finite": 61784,
+    "n_triangles_degenerate": 8,
+    "n_branch_max": 2
+   }
+  },
+  {
+   "z_um": 1853.57,
+   "P_oracle": 2.821156212964518e-07,
+   "P_oracle_over_launched": 0.9949776406093086,
+   "oracle_P_in": 2.8353965936730863e-07,
+   "P_in_grid": 2.835314267741339e-07,
+   "members": {
+    "uniform": {
+     "seconds": 0.17,
+     "warnings": [],
+     "fidelity": 0.9895204311077271,
+     "P_over_oracle": 0.9927066566224837,
+     "P_over_Pin": 0.9877496063999797
+    },
+    "multibranch": {
+     "seconds": 0.14,
+     "warnings": [],
+     "fidelity": 0.9597464530931209,
+     "P_over_oracle": 0.9242983635305414,
+     "P_over_Pin": 0.9196829080200606
+    },
+    "ray_density": {
+     "seconds": 0.41,
+     "warnings": [],
+     "fidelity": 0.997328874296304,
+     "P_over_oracle": 1.0085085677206937,
+     "P_over_Pin": 1.0034726111401002
+    },
+    "wave": {
+     "seconds": 0.35,
+     "warnings": [],
+     "fidelity": 0.9971598407730188,
+     "P_over_oracle": 1.0083420173477073,
+     "P_over_Pin": 1.0033068924312896
+    }
+   },
+   "uniform_diag": {
+    "fell_back": false,
+    "reason": "fold_ring",
+    "r_c": 4.0487576343841325e-05,
+    "kappa": 8.777082835938462,
+    "fit_residual": 0.08097605539176096,
+    "fit_halfwidth": 4.481441064688912e-06,
+    "zeta_band": 3.528926652367995e-06,
+    "zeta_extrapolation": 1.2699161830642631,
+    "power_ratio": 0.9167925951829136,
+    "power_ratio_triangles": 0.91782887997745,
+    "n_triangles_finite": 61784,
+    "n_triangles_degenerate": 12,
+    "n_branch_max": 2
+   },
+   "mb_diag": {
+    "power_ratio": 0.9167925951829136,
+    "power_ratio_triangles": 0.91782887997745,
+    "n_triangles_finite": 61784,
+    "n_triangles_degenerate": 12,
+    "n_branch_max": 2
+   }
+  },
+  {
+   "z_um": 1885.7099999999998,
+   "P_oracle": 2.823380152419104e-07,
+   "P_oracle_over_launched": 0.9957619892466557,
+   "oracle_P_in": 2.8353965936730863e-07,
+   "P_in_grid": 2.835314267741339e-07,
+   "members": {
+    "uniform": {
+     "seconds": 0.17,
+     "warnings": [],
+     "fidelity": 0.9924716012209062,
+     "P_over_oracle": 1.013832102115182,
+     "P_over_Pin": 1.0095647835460608
+    },
+    "multibranch": {
+     "seconds": 0.13,
+     "warnings": [],
+     "fidelity": 0.9503180850335514,
+     "P_over_oracle": 0.9399866050558273,
+     "P_over_Pin": 0.9360301094130962
+    },
+    "ray_density": {
+     "seconds": 0.26,
+     "warnings": [],
+     "fidelity": 0.9977476447920758,
+     "P_over_oracle": 1.0077141787709378,
+     "P_over_Pin": 1.0034726111401002
+    },
+    "wave": {
+     "seconds": 0.29,
+     "warnings": [],
+     "fidelity": 0.9976102841003024,
+     "P_over_oracle": 1.0075477595874918,
+     "P_over_Pin": 1.0033068924312893
+    }
+   },
+   "uniform_diag": {
+    "fell_back": false,
+    "reason": "fold_ring",
+    "r_c": 3.399128809775521e-05,
+    "kappa": 8.959119971208187,
+    "fit_residual": 0.007786711262917737,
+    "fit_halfwidth": 4.390384276084923e-06,
+    "zeta_band": 5.357846451224755e-06,
+    "zeta_extrapolation": 0.8194307761621876,
+    "power_ratio": 0.9330884217753241,
+    "power_ratio_triangles": 0.9341113164183278,
+    "n_triangles_finite": 61784,
+    "n_triangles_degenerate": 4,
+    "n_branch_max": 2
+   },
+   "mb_diag": {
+    "power_ratio": 0.9330884217753241,
+    "power_ratio_triangles": 0.9341113164183278,
+    "n_triangles_finite": 61784,
+    "n_triangles_degenerate": 4,
+    "n_branch_max": 2
+   }
+  },
+  {
+   "z_um": 1917.8599999999997,
+   "P_oracle": 2.8211596879393936e-07,
+   "P_oracle_over_launched": 0.9949788661785582,
+   "oracle_P_in": 2.8353965936730863e-07,
+   "P_in_grid": 2.835314267741339e-07,
+   "members": {
+    "uniform": {
+     "seconds": 0.19,
+     "warnings": [],
+     "fidelity": 0.9929425480536813,
+     "P_over_oracle": 1.0414239761021589,
+     "P_over_Pin": 1.0362249338142857
+    },
+    "multibranch": {
+     "seconds": 0.17,
+     "warnings": [],
+     "fidelity": 0.9448410192281854,
+     "P_over_oracle": 0.9590888307929292,
+     "P_over_Pin": 0.9543008256158426
+    },
+    "ray_density": {
+     "seconds": 0.36,
+     "warnings": [],
+     "fidelity": 0.9979350820952717,
+     "P_over_oracle": 1.0085073254861794,
+     "P_over_Pin": 1.0034726111401002
+    },
+    "wave": {
+     "seconds": 0.21,
+     "warnings": [],
+     "fidelity": 0.9978088437363539,
+     "P_over_oracle": 1.008340775318342,
+     "P_over_Pin": 1.0033068924312896
+    }
+   },
+   "uniform_diag": {
+    "fell_back": false,
+    "reason": "fold_ring",
+    "r_c": 2.7905628461007733e-05,
+    "kappa": 9.17601921825357,
+    "fit_residual": 0.008955044845189102,
+    "fit_halfwidth": 4.286606044907249e-06,
+    "zeta_band": 7.599985154393616e-06,
+    "zeta_extrapolation": 0.5640282129273799,
+    "power_ratio": 0.9513017180944083,
+    "power_ratio_triangles": 0.9523193236176112,
+    "n_triangles_finite": 61784,
+    "n_triangles_degenerate": 0,
+    "n_branch_max": 2
+   },
+   "mb_diag": {
+    "power_ratio": 0.9513017180944083,
+    "power_ratio_triangles": 0.9523193236176112,
+    "n_triangles_finite": 61784,
+    "n_triangles_degenerate": 0,
+    "n_branch_max": 2
+   }
+  },
+  {
+   "z_um": 1950.0,
+   "P_oracle": 2.8199204518020987e-07,
+   "P_oracle_over_launched": 0.9945418069890042,
+   "oracle_P_in": 2.8353965936730863e-07,
+   "P_in_grid": 2.835314267741339e-07,
+   "members": {
+    "uniform": {
+     "seconds": 0.18,
+     "warnings": [],
+     "fidelity": 0.9925539465762633,
+     "P_over_oracle": 0.9925095482091809,
+     "P_over_Pin": 0.987120900651871
+    },
+    "multibranch": {
+     "seconds": 0.14,
+     "warnings": [],
+     "fidelity": 0.9348344181138318,
+     "P_over_oracle": 0.8929403771803247,
+     "P_over_Pin": 0.8880923220749625
+    },
+    "ray_density": {
+     "seconds": 0.34,
+     "warnings": [],
+     "fidelity": 0.9978490347847561,
+     "P_over_oracle": 1.0089505219322603,
+     "P_over_Pin": 1.0034726111401002
+    },
+    "wave": {
+     "seconds": 0.22,
+     "warnings": [],
+     "fidelity": 0.9977421266520202,
+     "P_over_oracle": 1.0087838985726463,
+     "P_over_Pin": 1.0033068924312893
+    }
+   },
+   "uniform_diag": {
+    "fell_back": false,
+    "reason": "fold_ring",
+    "r_c": 2.22559195079799e-05,
+    "kappa": 9.4437762619719,
+    "fit_residual": 0.007019353098516383,
+    "fit_halfwidth": 4.16506896796576e-06,
+    "zeta_band": 1.0275484246308815e-05,
+    "zeta_extrapolation": 0.405340407140612,
+    "power_ratio": 0.8853012898434393,
+    "power_ratio_triangles": 0.8864925570515404,
+    "n_triangles_finite": 61784,
+    "n_triangles_degenerate": 24,
+    "n_branch_max": 2
+   },
+   "mb_diag": {
+    "power_ratio": 0.8853012898434393,
+    "power_ratio_triangles": 0.8864925570515404,
+    "n_triangles_finite": 61784,
+    "n_triangles_degenerate": 24,
+    "n_branch_max": 2
+   }
+  },
+  {
+   "z_um": 1981.9999999999998,
+   "P_oracle": 2.821713652593906e-07,
+   "P_oracle_over_launched": 0.9951742408417531,
+   "oracle_P_in": 2.8353965936730863e-07,
+   "P_in_grid": 2.835314267741339e-07,
+   "members": {
+    "uniform": {
+     "seconds": 0.16,
+     "warnings": [],
+     "fidelity": 0.9924732239312246,
+     "P_over_oracle": 1.0035339737336957,
+     "P_over_Pin": 0.9987201583766423
+    },
+    "multibranch": {
+     "seconds": 0.14,
+     "warnings": [],
+     "fidelity": 0.9123185800687097,
+     "P_over_oracle": 0.8603811366488664,
+     "P_over_Pin": 0.8562540058920372
+    },
+    "ray_density": {
+     "seconds": 0.28,
+     "warnings": [],
+     "fidelity": 0.9980377124499924,
+     "P_over_oracle": 1.008309333244258,
+     "P_over_Pin": 1.0034726111401
+    },
+    "wave": {
+     "seconds": 0.26,
+     "warnings": [],
+     "fidelity": 0.9978638998700256,
+     "P_over_oracle": 1.0081428157738939,
+     "P_over_Pin": 1.0033068924312893
+    }
+   },
+   "uniform_diag": {
+    "fell_back": false,
+    "reason": "fold_ring",
+    "r_c": 1.7089009022625934e-05,
+    "kappa": 9.792101607720515,
+    "fit_residual": 0.004234942996871594,
+    "fit_halfwidth": 4.016908833762329e-06,
+    "zeta_band": 1.3397517676268125e-05,
+    "zeta_extrapolation": 0.2998248579195932,
+    "power_ratio": 0.8535630328147878,
+    "power_ratio_triangles": 0.8546818608678471,
+    "n_triangles_finite": 61784,
+    "n_triangles_degenerate": 16,
+    "n_branch_max": 2
+   },
+   "mb_diag": {
+    "power_ratio": 0.8535630328147878,
+    "power_ratio_triangles": 0.8546818608678471,
+    "n_triangles_finite": 61784,
+    "n_triangles_degenerate": 16,
+    "n_branch_max": 2
+   }
+  },
+  {
+   "z_um": 1986.0,
+   "P_oracle": 2.8219751427722235e-07,
+   "P_oracle_over_launched": 0.9952664643348971,
+   "oracle_P_in": 2.8353965936730863e-07,
+   "P_in_grid": 2.835314267741339e-07,
+   "members": {
+    "uniform": {
+     "seconds": 0.18,
+     "warnings": [],
+     "fidelity": 0.9917173469363891,
+     "P_over_oracle": 1.012782059211847,
+     "P_over_Pin": 1.0080172870636552
+    },
+    "multibranch": {
+     "seconds": 0.15,
+     "warnings": [],
+     "fidelity": 0.920310696526772,
+     "P_over_oracle": 0.8856446935156941,
+     "P_over_Pin": 0.8814780565472812
+    },
+    "ray_density": {
+     "seconds": 0.41,
+     "warnings": [],
+     "fidelity": 0.9980565843127603,
+     "P_over_oracle": 1.0082159011713274,
+     "P_over_Pin": 1.0034726111401002
+    },
+    "wave": {
+     "seconds": 0.34,
+     "warnings": [],
+     "fidelity": 0.9978840824606393,
+     "P_over_oracle": 1.0080493991308233,
+     "P_over_Pin": 1.0033068924312893
+    }
+   },
+   "uniform_diag": {
+    "fell_back": false,
+    "reason": "fold_ring",
+    "r_c": 1.6476930564985714e-05,
+    "kappa": 9.844213933776855,
+    "fit_residual": 0.004186011422634427,
+    "fit_halfwidth": 3.995644519080445e-06,
+    "zeta_band": 1.3821557208042092e-05,
+    "zeta_extrapolation": 0.2890878689671504,
+    "power_ratio": 0.8787078111504335,
+    "power_ratio_triangles": 0.8798127237732157,
+    "n_triangles_finite": 61784,
+    "n_triangles_degenerate": 12,
+    "n_branch_max": 2
+   },
+   "mb_diag": {
+    "power_ratio": 0.8787078111504335,
+    "power_ratio_triangles": 0.8798127237732157,
+    "n_triangles_finite": 61784,
+    "n_triangles_degenerate": 12,
+    "n_branch_max": 2
+   }
+  },
+  {
+   "z_um": 1990.0,
+   "P_oracle": 2.8222365557817793e-07,
+   "P_oracle_over_launched": 0.9953586606118269,
+   "oracle_P_in": 2.8353965936730863e-07,
+   "P_in_grid": 2.835314267741339e-07,
+   "members": {
+    "uniform": {
+     "seconds": 0.54,
+     "warnings": [
+      "invalid value encountered in subtract",
+      "apply_real_lens_traced_multibranch: reconstructed grid power is 18.9x the launched power that reaches this grid (up to 61 branches coalesce on one pix"
+     ],
+     "fidelity": 0.2044361911437582,
+     "P_over_oracle": 19.15385272993411,
+     "P_over_Pin": 19.065506767101056
+    },
+    "multibranch": {
+     "seconds": 0.41,
+     "warnings": [
+      "invalid value encountered in subtract",
+      "apply_real_lens_traced_multibranch: reconstructed grid power is 18.9x the launched power that reaches this grid (up to 61 branches coalesce on one pix"
+     ],
+     "fidelity": 0.17679133155828447,
+     "P_over_oracle": 19.011637774123667,
+     "P_over_Pin": 18.923947768991525
+    },
+    "ray_density": {
+     "seconds": 1.53,
+     "warnings": [],
+     "fidelity": 0.9980737687494101,
+     "P_over_oracle": 1.0081225139772358,
+     "P_over_Pin": 1.0034726111401002
+    },
+    "wave": {
+     "seconds": 1.57,
+     "warnings": [],
+     "fidelity": 0.9979028961530082,
+     "P_over_oracle": 1.007956027359181,
+     "P_over_Pin": 1.0033068924312896
+    }
+   },
+   "uniform_diag": {
+    "fell_back": false,
+    "reason": "fold_ring",
+    "r_c": 1.5872609358684496e-05,
+    "kappa": 9.898850245957162,
+    "fit_residual": 0.0055967398477895156,
+    "fit_halfwidth": 3.973590717287134e-06,
+    "zeta_band": 1.425335399115506e-05,
+    "zeta_extrapolation": 0.27878285488124066,
+    "power_ratio": 18.864474956471863,
+    "power_ratio_triangles": 18.889629452871826,
+    "n_triangles_finite": 61784,
+    "n_triangles_degenerate": 20,
+    "n_branch_max": 61
+   },
+   "mb_diag": {
+    "power_ratio": 18.864474956471863,
+    "power_ratio_triangles": 18.889629452871826,
+    "n_triangles_finite": 61784,
+    "n_triangles_degenerate": 20,
+    "n_branch_max": 61
+   }
+  },
+  {
+   "z_um": 1994.0,
+   "P_oracle": 2.8225062358850395e-07,
+   "P_oracle_over_launched": 0.9954537725633125,
+   "oracle_P_in": 2.8353965936730863e-07,
+   "P_in_grid": 2.835314267741339e-07,
+   "members": {
+    "uniform": {
+     "seconds": 0.17,
+     "warnings": [
+      "invalid value encountered in subtract",
+      "apply_real_lens_traced_multibranch: reconstructed grid power is 2.35e+03x the launched power that reaches this grid (up to 681 branches coalesce on on"
+     ],
+     "fidelity": 0.14839002022842446,
+     "P_over_oracle": 2364.650371477083,
+     "P_over_Pin": 2353.9684807140475
+    },
+    "multibranch": {
+     "seconds": 0.13,
+     "warnings": [
+      "invalid value encountered in subtract",
+      "apply_real_lens_traced_multibranch: reconstructed grid power is 2.35e+03x the launched power that reaches this grid (up to 681 branches coalesce on on"
+     ],
+     "fidelity": 0.14702819300407516,
+     "P_over_oracle": 2364.498697753236,
+     "P_over_Pin": 2353.817492149482
+    },
+    "ray_density": {
+     "seconds": 1.67,
+     "warnings": [],
+     "fidelity": 0.9980896123465304,
+     "P_over_oracle": 1.0080261915740425,
+     "P_over_Pin": 1.0034726111401002
+    },
+    "wave": {
+     "seconds": 1.54,
+     "warnings": [],
+     "fidelity": 0.9979206945644996,
+     "P_over_oracle": 1.0078597208631725,
+     "P_over_Pin": 1.0033068924312896
+    }
+   },
+   "uniform_diag": {
+    "fell_back": false,
+    "reason": "fold_ring",
+    "r_c": 1.5276128524901544e-05,
+    "kappa": 9.956281129949398,
+    "fit_residual": 0.003697744157385371,
+    "fit_halfwidth": 3.9506698269929985e-06,
+    "zeta_band": 1.4692991146786404e-05,
+    "zeta_extrapolation": 0.26888125008208924,
+    "power_ratio": 2346.4200850056354,
+    "power_ratio_triangles": 2349.923226822425,
+    "n_triangles_finite": 61784,
+    "n_triangles_degenerate": 40,
+    "n_branch_max": 681
+   },
+   "mb_diag": {
+    "power_ratio": 2346.4200850056354,
+    "power_ratio_triangles": 2349.923226822425,
+    "n_triangles_finite": 61784,
+    "n_triangles_degenerate": 40,
+    "n_branch_max": 681
+   }
+  }
+ ]
+}

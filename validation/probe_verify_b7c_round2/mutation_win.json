@@ -1,0 +1,68 @@
+[
+ {
+  "returncode": 1,
+  "tail": [
+   "14 failed, 39 passed in 362.44s (0:06:02)"
+  ],
+  "failed_ids": [
+   "test_a4_higher_catastrophe_routes_finite_named",
+   "test_b7c2_a_converged_render_reads_one_and_a_blown_up_one_reads_four",
+   "test_b7c2_a_plane_inside_the_power_ratio_bar_is_refused_on_continuity",
+   "test_b7c2_past_the_entry_cap_the_reading_says_so_and_the_field_returns",
+   "test_b7c2_the_band_is_two_sided_and_the_loss_arm_only_reports",
+   "test_b7c2_the_branch_sum_is_reached_through_exactly_one_seam",
+   "test_b7c2_the_continuity_reading_and_its_decision_reach_the_diagnostics",
+   "test_b7c2_the_decision_survives_halving_the_output_pixel",
+   "test_cusp_fallbacks_finite",
+   "test_uniform_routes_cusp_to_pearcey",
+   "test_vb7c_an_accepted_field_reads_above_the_pinned_accepted_ceiling",
+   "test_vb7c_the_refusal_follows_the_pixel_not_the_field"
+  ],
+  "nbytes": 6308,
+  "id": "M1_alias_bypasses_seam",
+  "doc": "M1 -- an ALIAS that bypasses ``_multibranch_render``: the completion",
+  "files": [
+   "tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py",
+   "tests/unit/test_verify_b7c_multibranch.py",
+   "tests/unit/test_audit2609_b7c_multibranch_envelope.py",
+   "tests/unit/test_niche_r2_pearcey_cusp.py",
+   "tests/unit/test_niche_r5_gbd_vector_catastrophe.py"
+  ],
+  "seconds": 379.8,
+  "caught": true
+ },
+ {
+  "returncode": 0,
+  "tail": [
+   "28 passed in 70.56s (0:01:10)"
+  ],
+  "failed_ids": [],
+  "nbytes": 110,
+  "id": "M2_reads_branch_sum",
+  "doc": "M2 -- the arbiter reads the BRANCH SUM instead of the returned",
+  "files": [
+   "tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py",
+   "tests/unit/test_verify_b7c_multibranch.py",
+   "tests/unit/test_audit2609_b7c_multibranch_envelope.py"
+  ],
+  "seconds": 86.2,
+  "caught": false
+ },
+ {
+  "returncode": 0,
+  "tail": [
+   "26 passed, 2 skipped in 57.81s"
+  ],
+  "failed_ids": [],
+  "nbytes": 482,
+  "id": "M3_bar_1_20",
+  "doc": "M3 -- the bar is loosened from 1.06 to 1.20.",
+  "files": [
+   "tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py",
+   "tests/unit/test_verify_b7c_multibranch.py",
+   "tests/unit/test_audit2609_b7c_multibranch_envelope.py"
+  ],
+  "seconds": 67.0,
+  "caught": false
+ }
+]

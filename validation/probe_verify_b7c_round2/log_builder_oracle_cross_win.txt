@@ -1,0 +1,5 @@
+(fx, z, n_fan=6000, n_rho=2400, phi='debye', n_phi=1.5, rho=None, r_core=None, return_detail=False)
+their j0 vs their exact relL2 0.0046109  fid 0.999990
+their j0   vs my ASM relL2 1.8058  fid 0.999897
+their exact vs my ASM relL2 1.8063  fid 0.999904
+power: their j0 /Pin 0.998613  their exact/Pin 0.999700  my ASM/Pin 0.999773  (Pin 3.55823e-07)

@@ -1,0 +1,13 @@
+lumenairy C:\tmp\lum_mb2\lumenairy\__init__.py  F_alt: fast N-LASF9 biconvex R=+/-2.2 mm stopped to 0.60 mm (f/2.0), 633 nm [grid 640 x 1.40 um]
+z=  1036.000 br=0.973236336 Cmb=1.0082614 Cret=1.0009042 nbr=    2 deg=     4 zx=55.248018 fold_ring
+z=  1048.000 br=0.949435966 Cmb=0.9974832 Cret=0.9984608 nbr=    2 deg=    20 zx=10.803749 fold_ring
+z=  1056.000 br=0.937134616 Cmb=1.0006646 Cret=1.0002329 nbr=    2 deg=    24 zx=5.6705147 fold_ring
+z=  1063.000 br=0.924994866 Cmb=0.9949997 Cret=1.0037669 nbr=    2 deg=    32 zx=3.6549005 fold_ring
+z=  1069.000 br=0.899474826 Cmb=0.9829018 Cret=0.9983068 nbr=    2 deg=    24 zx=2.6610582 fold_ring
+z=  1072.000 br=0.942149510 Cmb=1.0317293 Cret=1.0197815 nbr=    5 deg=    12 zx=2.3056767 fold_ring
+z=  1073.000 br=0.946041731 Cmb=1.0304039 Cret=1.0221232 nbr=   13 deg=    20 zx=2.2023370 fold_ring
+z=  1074.000 br=1.023245657 Cmb=1.0934058 Cret=    1.092 nbr=   21 deg=    20 zx=     None REFUSED:pixel_continuity
+z=  1075.000 br=1.104957836 Cmb=1.1502962 Cret=    1.139 nbr=   29 deg=    16 zx=     None REFUSED:pixel_continuity
+z=  1076.000 br=1.151266947 Cmb=1.1856156 Cret=    1.185 nbr=   37 deg=    20 zx=     None REFUSED:pixel_continuity
+z=  1078.000 br=2.702737751 Cmb=1.9985288 Cret=     None nbr=   49 deg=    36 zx=     None REFUSED:power_ratio
+z=  1080.000 br=2.982435170 Cmb=2.0998526 Cret=     None nbr=   61 deg=    32 zx=     None REFUSED:power_ratio

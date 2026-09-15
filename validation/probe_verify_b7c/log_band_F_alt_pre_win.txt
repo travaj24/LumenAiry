@@ -1,0 +1,14 @@
+F_alt z=  1028.00 br=      0.97427654411234 nbr= None fid_uni=0.986447 pow_uni=1.05247556 fid_wv=0.9972 zx=1779.11435 fold_ring
+F_alt z=  1032.00 br=    0.9717682690425297 nbr= None fid_uni=0.985211 pow_uni=1.03915708 fid_wv=0.9973 zx=160.616209 fold_ring
+F_alt z=  1036.00 br=    0.9732363361564245 nbr= None fid_uni=0.985810 pow_uni=1.05038070 fid_wv=0.9974 zx=55.2480185 fold_ring
+F_alt z=  1040.00 br=    0.9543252605657261 nbr= None fid_uni=0.987573 pow_uni=1.04440653 fid_wv=0.9975 zx=27.5202286 fold_ring
+F_alt z=  1044.00 br=    0.9568931575895376 nbr= None fid_uni=0.987376 pow_uni=1.04470811 fid_wv=0.9975 zx=16.3669813 fold_ring
+F_alt z=  1048.00 br=    0.9494359665367081 nbr= None fid_uni=0.988869 pow_uni=1.04693008 fid_wv=0.9975 zx=10.8037497 fold_ring
+F_alt z=  1052.00 br=    0.9446072244111284 nbr= None fid_uni=0.987227 pow_uni=1.02854838 fid_wv=0.9975 zx=7.63882404 fold_ring
+F_alt z=  1056.00 br=    0.9371346165024595 nbr= None fid_uni=0.989682 pow_uni=1.03923840 fid_wv=0.9975 zx=5.67051471 fold_ring
+F_alt z=  1060.00 br=    0.9207493793847941 nbr= None fid_uni=0.985332 pow_uni=1.01409888 fid_wv=0.9975 zx=4.36487090 fold_ring
+F_alt z=  1064.00 br=    0.9309152752963118 nbr= None fid_uni=0.989319 pow_uni=1.03167766 fid_wv=0.9976 zx=3.45540612 fold_ring
+F_alt z=  1068.00 br=    0.9031081904481413 nbr= None fid_uni=0.985095 pow_uni=1.01567919 fid_wv=0.9976 zx=2.79712257 fold_ring
+F_alt z=  1072.00 br=    0.9421495100586877 nbr= None fid_uni=0.980376 pow_uni=1.04365084 fid_wv=0.9977 zx=2.30567670 fold_ring
+F_alt z=  1076.00 br=    1.1512669472064185 nbr= None fid_uni=0.858037 pow_uni=1.28442546 fid_wv=0.9977 zx=1.92931038 fold_ring
+F_alt z=  1080.00 br=     2.982435170085757 nbr= None fid_uni=0.584134 pow_uni=3.16022093 fid_wv=0.9977 zx=1.63484352 fold_ring

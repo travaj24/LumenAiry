@@ -1,0 +1,59 @@
+F.FF..FFFF..FF...................FF...............FFF                    [100%]
+================================== FAILURES ===================================
+E   assert None == 0.9954503261587875
+     +  where 0.9954503261587875 = float(0.9954503261587875)
+C:\tmp\lum_vmb2_mut\tests\unit\test_audit2609_b7c2_pixel_halving_arbiter.py:204: assert None == 0.9954503261587875
+E   AssertionError: assert 'not_requested' == 'not_measured'
+      
+      - not_measured
+      + not_requested
+C:\tmp\lum_vmb2_mut\tests\unit\test_audit2609_b7c2_pixel_halving_arbiter.py:263: AssertionError: assert 'not_requested' == 'not_measured'
+E   AssertionError: assert False
+     +  where False = hasattr(<module 'lumenairy.elements._lens_traced_uniform' from 'C:\\tmp\\lum_vmb2_mut\\lumenairy\\elements\\_lens_traced_uniform.py'>, '_multibranch_render')
+C:\tmp\lum_vmb2_mut\tests\unit\test_audit2609_b7c2_pixel_halving_arbiter.py:289: AssertionError: assert False
+E   AssertionError: the healthy fold plane is not accepted: not_requested at None
+    assert 'not_requested' == 'ok'
+      
+      - ok
+      + not_requested
+C:\tmp\lum_vmb2_mut\tests\unit\test_audit2609_b7c2_pixel_halving_arbiter.py:373: AssertionError: the healthy fold plane is not accepted: not_requested at None
+E   assert None is not None
+C:\tmp\lum_vmb2_mut\tests\unit\test_audit2609_b7c2_pixel_halving_arbiter.py:433: assert None is not None
+E   Failed: DID NOT RAISE <class 'RuntimeError'>
+C:\tmp\lum_vmb2_mut\tests\unit\test_audit2609_b7c2_pixel_halving_arbiter.py:488: Failed: DID NOT RAISE <class 'RuntimeError'>
+E   AssertionError: assert 'not_requested' == 'not_converged_loss'
+      
+      - not_converged_loss
+      + not_requested
+C:\tmp\lum_vmb2_mut\tests\unit\test_audit2609_b7c2_pixel_halving_arbiter.py:555: AssertionError: assert 'not_requested' == 'not_converged_loss'
+E   AssertionError: z=5412 um returned a field gaining 1.352x the launched power with both readings inside their bands
+    assert 1.3518381766765355 <= 1.25
+C:\tmp\lum_vmb2_mut\tests\unit\test_verify_b7c_multibranch.py:219: AssertionError: z=5412 um returned a field gaining 1.352x the launched power with both readings inside their bands
+E   Failed: DID NOT RAISE <class 'RuntimeError'>
+C:\tmp\lum_vmb2_mut\tests\unit\test_verify_b7c_multibranch.py:281: Failed: DID NOT RAISE <class 'RuntimeError'>
+E   AttributeError: <module 'lumenairy.elements._lens_traced_uniform' from 'C:\\tmp\\lum_vmb2_mut\\lumenairy\\elements\\_lens_traced_uniform.py'> has no attribute '_multibranch_render'
+C:\tmp\lum_vmb2_mut\tests\unit\test_niche_r2_pearcey_cusp.py:482: AttributeError: <module 'lumenairy.elements._lens_traced_uniform' from 'C:\\tmp\\lum_vmb2_mut\\lumenairy\\elements\\_lens_traced_uniform.py'> has no attribute '_multibranch_render'
+E   AttributeError: <module 'lumenairy.elements._lens_traced_uniform' from 'C:\\tmp\\lum_vmb2_mut\\lumenairy\\elements\\_lens_traced_uniform.py'> has no attribute '_multibranch_render'
+C:\tmp\lum_vmb2_mut\tests\unit\test_niche_r2_pearcey_cusp.py:524: AttributeError: <module 'lumenairy.elements._lens_traced_uniform' from 'C:\\tmp\\lum_vmb2_mut\\lumenairy\\elements\\_lens_traced_uniform.py'> has no attribute '_multibranch_render'
+E   AttributeError: <module 'lumenairy.elements._lens_traced_uniform' from 'C:\\tmp\\lum_vmb2_mut\\lumenairy\\elements\\_lens_traced_uniform.py'> has no attribute '_multibranch_render'
+C:\tmp\lum_vmb2_mut\tests\unit\test_niche_r5_gbd_vector_catastrophe.py:392: AttributeError: <module 'lumenairy.elements._lens_traced_uniform' from 'C:\\tmp\\lum_vmb2_mut\\lumenairy\\elements\\_lens_traced_uniform.py'> has no attribute '_multibranch_render'
+E   AttributeError: <module 'lumenairy.elements._lens_traced_uniform' from 'C:\\tmp\\lum_vmb2_mut\\lumenairy\\elements\\_lens_traced_uniform.py'> has no attribute '_multibranch_render'
+C:\tmp\lum_vmb2_mut\tests\unit\test_niche_r5_gbd_vector_catastrophe.py:392: AttributeError: <module 'lumenairy.elements._lens_traced_uniform' from 'C:\\tmp\\lum_vmb2_mut\\lumenairy\\elements\\_lens_traced_uniform.py'> has no attribute '_multibranch_render'
+E   AttributeError: <module 'lumenairy.elements._lens_traced_uniform' from 'C:\\tmp\\lum_vmb2_mut\\lumenairy\\elements\\_lens_traced_uniform.py'> has no attribute '_multibranch_render'
+C:\tmp\lum_vmb2_mut\tests\unit\test_niche_r5_gbd_vector_catastrophe.py:392: AttributeError: <module 'lumenairy.elements._lens_traced_uniform' from 'C:\\tmp\\lum_vmb2_mut\\lumenairy\\elements\\_lens_traced_uniform.py'> has no attribute '_multibranch_render'
+=========================== short test summary info ===========================
+FAILED tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py::test_b7c2_the_continuity_reading_and_its_decision_reach_the_diagnostics
+FAILED tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py::test_b7c2_past_the_entry_cap_the_reading_says_so_and_the_field_returns
+FAILED tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py::test_b7c2_the_branch_sum_is_reached_through_exactly_one_seam
+FAILED tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py::test_b7c2_a_converged_render_reads_one_and_a_blown_up_one_reads_four
+FAILED tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py::test_b7c2_a_plane_inside_the_power_ratio_bar_is_refused_on_continuity
+FAILED tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py::test_b7c2_the_decision_survives_halving_the_output_pixel
+FAILED tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py::test_b7c2_the_band_is_two_sided_and_the_loss_arm_only_reports
+FAILED tests/unit/test_verify_b7c_multibranch.py::test_vb7c_an_accepted_field_reads_above_the_pinned_accepted_ceiling
+FAILED tests/unit/test_verify_b7c_multibranch.py::test_vb7c_the_refusal_follows_the_pixel_not_the_field
+FAILED tests/unit/test_niche_r2_pearcey_cusp.py::test_uniform_routes_cusp_to_pearcey
+FAILED tests/unit/test_niche_r2_pearcey_cusp.py::test_cusp_fallbacks_finite
+FAILED tests/unit/test_niche_r5_gbd_vector_catastrophe.py::test_a4_higher_catastrophe_routes_finite_named[3-swallowtail]
+FAILED tests/unit/test_niche_r5_gbd_vector_catastrophe.py::test_a4_higher_catastrophe_routes_finite_named[4-butterfly]
+FAILED tests/unit/test_niche_r5_gbd_vector_catastrophe.py::test_a4_higher_catastrophe_routes_finite_named[5-non-classifiable]
+14 failed, 39 passed in 362.44s (0:06:02)

@@ -1,0 +1,85 @@
+{
+ "header": {
+  "lumenairy_file": "C:\\tmp\\lum_mb\\lumenairy\\__init__.py",
+  "version": "5.47.0",
+  "numpy": "2.4.4",
+  "python": "3.14.6",
+  "fixture": "V",
+  "z_um": 1683.4,
+  "semi_launch_um": 441.0
+ },
+ "rows": [
+  {
+   "w0_um": 150.0,
+   "semi_over_w0": 2.94,
+   "edge_amplitude": 0.00017625125424738458,
+   "zeta_extrapolation": 1.0259851815903929,
+   "fell_back": false,
+   "uniform": 0.9882013405256835,
+   "ray_density": 0.9999965038951866,
+   "wave": 0.9999955091656467,
+   "winner": "ray_density",
+   "uniform_minus_ray_density": -0.011795163369503037
+  },
+  {
+   "w0_um": 200.0,
+   "semi_over_w0": 2.205,
+   "edge_amplitude": 0.007734805041450207,
+   "zeta_extrapolation": 1.0259851815903929,
+   "fell_back": false,
+   "uniform": 0.9971492535498889,
+   "ray_density": 0.999984100367532,
+   "wave": 0.9999802391823754,
+   "winner": "ray_density",
+   "uniform_minus_ray_density": -0.002834846817643122
+  },
+  {
+   "w0_um": 250.0,
+   "semi_over_w0": 1.764,
+   "edge_amplitude": 0.04452537622922,
+   "zeta_extrapolation": 1.0259851815903929,
+   "fell_back": false,
+   "uniform": 0.9983040098392304,
+   "ray_density": 0.999738058241158,
+   "wave": 0.9997188436044083,
+   "winner": "ray_density",
+   "uniform_minus_ray_density": -0.0014340484019276234
+  },
+  {
+   "w0_um": 300.0,
+   "semi_over_w0": 1.47,
+   "edge_amplitude": 0.11522137512179347,
+   "zeta_extrapolation": 1.0259851815903929,
+   "fell_back": false,
+   "uniform": 0.9950758636130772,
+   "ray_density": 0.9987923124399313,
+   "wave": 0.9987378323069172,
+   "winner": "ray_density",
+   "uniform_minus_ray_density": -0.0037164488268540685
+  },
+  {
+   "w0_um": 330.0,
+   "semi_over_w0": 1.3363636363636364,
+   "edge_amplitude": 0.16765151513950646,
+   "zeta_extrapolation": 1.0259851815903929,
+   "fell_back": false,
+   "uniform": 0.9915115262129417,
+   "ray_density": 0.9978539474287328,
+   "wave": 0.9977745930149398,
+   "winner": "ray_density",
+   "uniform_minus_ray_density": -0.006342421215791094
+  },
+  {
+   "w0_um": 380.0,
+   "semi_over_w0": 1.1605263157894739,
+   "edge_amplitude": 0.2600656110420332,
+   "zeta_extrapolation": 1.0259851815903929,
+   "fell_back": false,
+   "uniform": 0.9841748749743874,
+   "ray_density": 0.9959276090341044,
+   "wave": 0.9958115397023418,
+   "winner": "ray_density",
+   "uniform_minus_ray_density": -0.011752734059716996
+  }
+ ]
+}

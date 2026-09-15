@@ -1,0 +1,14 @@
+.........F..F...............                                             [100%]
+================================== FAILURES ===================================
+E   AssertionError: assert 'not_measured' == 'not_converged_loss'
+      
+      - not_converged_loss
+      + not_measured
+C:\tmp\lum_vmb2_mut\tests\unit\test_audit2609_b7c2_pixel_halving_arbiter.py:555: AssertionError: assert 'not_measured' == 'not_converged_loss'
+E   AssertionError: z=5412 um returned a field gaining 1.352x the launched power with both readings inside their bands
+    assert 1.3518381766765355 <= 1.25
+C:\tmp\lum_vmb2_mut\tests\unit\test_verify_b7c_multibranch.py:219: AssertionError: z=5412 um returned a field gaining 1.352x the launched power with both readings inside their bands
+=========================== short test summary info ===========================
+FAILED tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py::test_b7c2_the_band_is_two_sided_and_the_loss_arm_only_reports
+FAILED tests/unit/test_verify_b7c_multibranch.py::test_vb7c_an_accepted_field_reads_above_the_pinned_accepted_ceiling
+2 failed, 26 passed in 76.09s (0:01:16)

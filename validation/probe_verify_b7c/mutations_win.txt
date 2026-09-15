@@ -1,0 +1,9 @@
+===== mut =====
+....F.                                                                   [100%]
+1 failed, 5 passed in 26.70s
+===== mut_maxbracket =====
+..F..F                                                                   [100%]
+2 failed, 4 passed in 15.06s
+===== mut_bar1 =====
+FF....                                                                   [100%]
+2 failed, 4 passed in 14.52s

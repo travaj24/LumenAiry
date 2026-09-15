@@ -1,0 +1,264 @@
+{
+ "structural": {
+  "W_fold": {
+   "mb_off": {
+    "counts": {
+     "_trace_launch_grid": 1,
+     "_kmah_free_leg": 1,
+     "_trace_meridional_fold": 0
+    },
+    "half_shape": null,
+    "coarse_shape": [
+     512,
+     512
+    ],
+    "continuity": null,
+    "decision": "not_requested"
+   },
+   "mb_on": {
+    "counts": {
+     "_trace_launch_grid": 1,
+     "_kmah_free_leg": 1,
+     "_trace_meridional_fold": 0
+    },
+    "half_shape": [
+     1024,
+     1024
+    ],
+    "coarse_shape": [
+     512,
+     512
+    ],
+    "continuity": 0.9975628652379385,
+    "decision": "ok"
+   },
+   "uni": {
+    "counts": {
+     "_trace_launch_grid": 1,
+     "_kmah_free_leg": 1,
+     "_trace_meridional_fold": 1
+    },
+    "continuity": 0.9975909541268786,
+    "of": "the completed fold field",
+    "leaked_half": false
+   }
+  },
+  "W_vertex": {
+   "mb_off": {
+    "counts": {
+     "_trace_launch_grid": 1,
+     "_kmah_free_leg": 1,
+     "_trace_meridional_fold": 0
+    },
+    "half_shape": null,
+    "coarse_shape": [
+     512,
+     512
+    ],
+    "continuity": null,
+    "decision": "not_requested"
+   },
+   "mb_on": {
+    "counts": {
+     "_trace_launch_grid": 1,
+     "_kmah_free_leg": 1,
+     "_trace_meridional_fold": 0
+    },
+    "half_shape": [
+     1024,
+     1024
+    ],
+    "coarse_shape": [
+     512,
+     512
+    ],
+    "continuity": 1.0001064498163512,
+    "decision": "ok"
+   },
+   "uni": {
+    "counts": {
+     "_trace_launch_grid": 1,
+     "_kmah_free_leg": 1,
+     "_trace_meridional_fold": 1
+    },
+    "continuity": 1.0001064498163512,
+    "of": "the plain multibranch field",
+    "leaked_half": false
+   }
+  },
+  "X_fold": {
+   "mb_off": {
+    "counts": {
+     "_trace_launch_grid": 1,
+     "_kmah_free_leg": 1,
+     "_trace_meridional_fold": 0
+    },
+    "half_shape": null,
+    "coarse_shape": [
+     640,
+     640
+    ],
+    "continuity": null,
+    "decision": "not_requested"
+   },
+   "mb_on": {
+    "counts": {
+     "_trace_launch_grid": 1,
+     "_kmah_free_leg": 1,
+     "_trace_meridional_fold": 0
+    },
+    "half_shape": [
+     1280,
+     1280
+    ],
+    "coarse_shape": [
+     640,
+     640
+    ],
+    "continuity": 0.9988701659366455,
+    "decision": "ok"
+   },
+   "uni": {
+    "counts": {
+     "_trace_launch_grid": 1,
+     "_kmah_free_leg": 1,
+     "_trace_meridional_fold": 1
+    },
+    "continuity": 0.9996699775555237,
+    "of": "the completed fold field",
+    "leaked_half": false
+   }
+  },
+  "Y_fold": {
+   "mb_off": {
+    "counts": {
+     "_trace_launch_grid": 1,
+     "_kmah_free_leg": 1,
+     "_trace_meridional_fold": 0
+    },
+    "half_shape": null,
+    "coarse_shape": [
+     512,
+     512
+    ],
+    "continuity": null,
+    "decision": "not_requested"
+   },
+   "mb_on": {
+    "counts": {
+     "_trace_launch_grid": 1,
+     "_kmah_free_leg": 1,
+     "_trace_meridional_fold": 0
+    },
+    "half_shape": [
+     1024,
+     1024
+    ],
+    "coarse_shape": [
+     512,
+     512
+    ],
+    "continuity": 1.019921937570717,
+    "decision": "ok"
+   },
+   "uni": {
+    "counts": {
+     "_trace_launch_grid": 1,
+     "_kmah_free_leg": 1,
+     "_trace_meridional_fold": 1
+    },
+    "continuity": 1.0080654926973966,
+    "of": "the completed fold field",
+    "leaked_half": false
+   }
+  }
+ },
+ "ref": "C:\\tmp\\lum_vmb2_ref\\lumenairy\\__init__.py",
+ "head": "C:\\tmp\\lum_vmb2\\lumenairy\\__init__.py",
+ "timing": {
+  "W_fold_uni": {
+   "ref_s": 0.40982820000499487,
+   "head_s": 0.5049385000020266,
+   "ratio": 1.2320735859461904,
+   "head_error": null,
+   "ref_error": null
+  },
+  "W_fold_mb": {
+   "ref_s": 0.22919980000006035,
+   "head_s": 0.22789259999990463,
+   "ratio": 0.994296679141276,
+   "head_error": null,
+   "ref_error": null
+  },
+  "W_vertex_uni": {
+   "ref_s": 0.47160580003401265,
+   "head_s": 1.7433616000344045,
+   "ratio": 3.6966500410060092,
+   "head_error": null,
+   "ref_error": null
+  },
+  "W_vertex_mb": {
+   "ref_s": 0.5679481999832205,
+   "head_s": 0.8937648999853991,
+   "ratio": 1.5736732681110785,
+   "head_error": null,
+   "ref_error": null
+  },
+  "X_fold_uni": {
+   "ref_s": 2.191205099981744,
+   "head_s": 3.476299299974926,
+   "ratio": 1.5864782808345457,
+   "head_error": null,
+   "ref_error": null
+  },
+  "X_fold_mb": {
+   "ref_s": 1.2877577999606729,
+   "head_s": 1.7405007999623194,
+   "ratio": 1.351574651705059,
+   "head_error": null,
+   "ref_error": null
+  },
+  "Y_fold_uni": {
+   "ref_s": 0.44354830001248047,
+   "head_s": 0.9742201000335626,
+   "ratio": 2.196423929493474,
+   "head_error": null,
+   "ref_error": null
+  },
+  "Y_fold_mb": {
+   "ref_s": 0.4004021000000648,
+   "head_s": 0.35167240002192557,
+   "ratio": 0.8782980908987956,
+   "head_error": null,
+   "ref_error": null
+  },
+  "Z_fallback_uni": {
+   "ref_s": 0.6323873999645002,
+   "head_s": 1.298289800004568,
+   "ratio": 2.0529975772405473,
+   "head_error": null,
+   "ref_error": null
+  },
+  "Z_fallback_mb": {
+   "ref_s": 0.6388899000012316,
+   "head_s": 0.7526595999952406,
+   "ratio": 1.1780740312122475,
+   "head_error": null,
+   "ref_error": null
+  },
+  "C_far_uni": {
+   "ref_s": 0.367124899988994,
+   "head_s": 0.7646356000332162,
+   "ratio": 2.0827669277026404,
+   "head_error": null,
+   "ref_error": null
+  },
+  "C_far_mb": {
+   "ref_s": 0.2612343999790028,
+   "head_s": 0.3307521999813616,
+   "ratio": 1.2661127325036308,
+   "head_error": null,
+   "ref_error": null
+  }
+ }
+}

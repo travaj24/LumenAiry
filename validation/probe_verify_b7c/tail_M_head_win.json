@@ -1,0 +1,225 @@
+{
+ "lumenairy_file": "C:\\tmp\\lum_vmb\\lumenairy\\__init__.py",
+ "python": "3.14.6",
+ "numpy": "2.4.4",
+ "fixture": "M",
+ "note": "positive MENISCUS N-SF6 R=+1.6/+4.2 mm, t=0.75 mm, 1.10 mm aperture, 2.0 um",
+ "rows": [
+  {
+   "z_um": 2201.74,
+   "reason": "fold_ring",
+   "fell_back": false,
+   "zeta_linear_range": 0.0001582786138333052,
+   "zeta_curvature": 5955.506830387397,
+   "zeta_linear_resid": 3.1379721304010703e-06,
+   "dark_fill_depth": 9.891354841156388e-05,
+   "l_airy": 4.945677420578194e-06,
+   "r_c": 2.7082481918401394e-05,
+   "kappa": 9.426293657884983,
+   "zeta_extrapolation": 155.76671950643654,
+   "fit_halfwidth": 4.945677420578194e-06,
+   "u_star_over_l_airy": 32.00342448028101,
+   "fill_cells": 20.0,
+   "digest": "62cb8367bf2cb6a296d522bbcce49552f66b828391b6e73e72a36e68966064b6",
+   "monkeypatch": {
+    "tiny": {
+     "digest_equal": true,
+     "reported": 1e-12
+    },
+    "huge": {
+     "digest_equal": true,
+     "reported": 1000000.0
+    }
+   },
+   "annulus_ratio": {
+    "1": 2.2375405943286317,
+    "2": 2.1433861372595593,
+    "3": 2.0740128080306826,
+    "5": 2.0260754155384215,
+    "10": 1.9939308909444933,
+    "20": 1.9766322769374984
+   },
+   "excess_inside_3_frac": 1.0997105393634417
+  },
+  {
+   "z_um": 2228.7,
+   "reason": "fold_ring",
+   "fell_back": false,
+   "zeta_linear_range": 0.00012759118810938457,
+   "zeta_curvature": 7505.443379872397,
+   "zeta_linear_resid": 4.250222289546919e-05,
+   "dark_fill_depth": 9.736429255336098e-05,
+   "l_airy": 4.868214627668049e-06,
+   "r_c": 2.2337512961197593e-05,
+   "kappa": 9.57628438125634,
+   "zeta_extrapolation": 14.025099074333621,
+   "fit_halfwidth": 4.868214627668049e-06,
+   "u_star_over_l_airy": 26.209031003734268,
+   "fill_cells": 20.0,
+   "digest": "c8a13188d7186f1b83079578b03eb26bc7af1ac001a6988f2c2571b137f4b698",
+   "monkeypatch": {
+    "tiny": {
+     "digest_equal": true,
+     "reported": 1e-12
+    },
+    "huge": {
+     "digest_equal": true,
+     "reported": 1000000.0
+    }
+   },
+   "annulus_ratio": {
+    "1": 2.1365449795637,
+    "2": 2.077342222424848,
+    "3": 2.026559631757811,
+    "5": 1.9969145744928634,
+    "10": 1.97341912242885,
+    "20": 1.960077929500472
+   },
+   "excess_inside_3_frac": 1.0692461520201069
+  },
+  {
+   "z_um": 2242.17,
+   "reason": "fold_ring",
+   "fell_back": false,
+   "zeta_linear_range": 0.0001134241031796104,
+   "zeta_curvature": 8520.207278834432,
+   "zeta_linear_resid": 8.739263195693916e-05,
+   "dark_fill_depth": 9.648087483429675e-05,
+   "l_airy": 4.824043741714837e-06,
+   "r_c": 2.009612840057288e-05,
+   "kappa": 9.663968695061842,
+   "zeta_extrapolation": 7.608797861251563,
+   "fit_halfwidth": 4.824043741714837e-06,
+   "u_star_over_l_airy": 23.512246002000538,
+   "fill_cells": 20.0,
+   "digest": "a254cc823eb785fa95124aa79c7f3b72639d2e5727c2d02ae4f13ed7b7e7de5d",
+   "monkeypatch": {
+    "tiny": {
+     "digest_equal": true,
+     "reported": 1e-12
+    },
+    "huge": {
+     "digest_equal": true,
+     "reported": 1000000.0
+    }
+   },
+   "annulus_ratio": {
+    "1": 2.1005948831135326,
+    "2": 2.015315689838723,
+    "3": 1.9792415725511412,
+    "5": 1.9523356499081146,
+    "10": 1.9320000639508814,
+    "20": 1.920805615643004
+   },
+   "excess_inside_3_frac": 1.0634617729468678
+  },
+  {
+   "z_um": 2255.65,
+   "reason": "fold_ring",
+   "fell_back": false,
+   "zeta_linear_range": 9.995190870857222e-05,
+   "zeta_curvature": 9767.095754409389,
+   "zeta_linear_resid": 0.0001581138174543304,
+   "dark_fill_depth": 9.550810095191381e-05,
+   "l_airy": 4.7754050475956906e-06,
+   "r_c": 1.794164605840756e-05,
+   "kappa": 9.762398631926105,
+   "zeta_extrapolation": 4.729579255746206,
+   "fit_halfwidth": 4.7754050475956906e-06,
+   "u_star_over_l_airy": 20.930561431411093,
+   "fill_cells": 20.0,
+   "digest": "707bd00719abda3317be6d7ec5c40cb80f9620c1d12e50c8e6eaa08d2602d8e1",
+   "monkeypatch": {
+    "tiny": {
+     "digest_equal": true,
+     "reported": 1e-12
+    },
+    "huge": {
+     "digest_equal": true,
+     "reported": 1000000.0
+    }
+   },
+   "annulus_ratio": {
+    "1": 1.9942803798073896,
+    "2": 1.9948099746490409,
+    "3": 1.9758465245755537,
+    "5": 1.9610465690225725,
+    "10": 1.949137063843578,
+    "20": 1.9415125275977245
+   },
+   "excess_inside_3_frac": 1.0364668509142758
+  },
+  {
+   "z_um": 2269.1299999999997,
+   "reason": "fold_ring",
+   "fell_back": false,
+   "zeta_linear_range": 8.714878656422288e-05,
+   "zeta_curvature": 11329.814909662577,
+   "zeta_linear_resid": 0.00026554187375146647,
+   "dark_fill_depth": 9.443056488982753e-05,
+   "l_airy": 4.7215282444913765e-06,
+   "r_c": 1.587781314536617e-05,
+   "kappa": 9.87379621374334,
+   "zeta_extrapolation": 3.1988258755625023,
+   "fit_halfwidth": 4.7215282444913765e-06,
+   "u_star_over_l_airy": 18.457749705489885,
+   "fill_cells": 20.0,
+   "digest": "e7c92feffc36f932a5c9488db4dd3a0e5ae5edb4de257d97e82c82ad65660674",
+   "monkeypatch": {
+    "tiny": {
+     "digest_equal": true,
+     "reported": 1e-12
+    },
+    "huge": {
+     "digest_equal": true,
+     "reported": 1000000.0
+    }
+   },
+   "annulus_ratio": {
+    "1": 1.4095513674597688,
+    "2": 1.3783086719532442,
+    "3": 1.3490196639152248,
+    "5": 1.3380666972745774,
+    "10": 1.3273369190887865,
+    "20": 1.3215841574022953
+   },
+   "excess_inside_3_frac": 1.085313613501825
+  },
+  {
+   "z_um": 2282.61,
+   "reason": "fold_ring",
+   "fell_back": false,
+   "zeta_linear_range": 7.498319427563784e-05,
+   "zeta_curvature": 13338.005445297826,
+   "zeta_linear_resid": 0.00042664164295734336,
+   "dark_fill_depth": 9.322704516127554e-05,
+   "l_airy": 4.661352258063777e-06,
+   "r_c": 1.3907013240670239e-05,
+   "kappa": 10.001262535542823,
+   "zeta_extrapolation": 2.290160763244103,
+   "fit_halfwidth": 4.661352258063777e-06,
+   "u_star_over_l_airy": 16.086146277815143,
+   "fill_cells": 20.0,
+   "digest": "1c84a0bb9d9e8539a3bab2b26b1d805985cbaf7c61a2f9ff1fe261248d259e71",
+   "monkeypatch": {
+    "tiny": {
+     "digest_equal": true,
+     "reported": 1e-12
+    },
+    "huge": {
+     "digest_equal": true,
+     "reported": 1000000.0
+    }
+   },
+   "annulus_ratio": {
+    "1": 1.0760853073491063,
+    "2": 1.024966908351761,
+    "3": 1.01204483342927,
+    "5": 1.0062933226815003,
+    "10": 1.000936844178488,
+    "20": 0.9971848344269899
+   },
+   "excess_inside_3_frac": -4.2785524037192415
+  }
+ ]
+}

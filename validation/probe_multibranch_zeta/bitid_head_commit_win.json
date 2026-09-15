@@ -1,0 +1,116 @@
+{
+ "tree": "C:\\Users\\Tesla\\AppData\\Local\\Temp\\claude\\C--Users-Tesla\\372a2d1f-acbe-4b57-a148-eeae3fe1d729\\scratchpad\\b7c_head",
+ "lumenairy_file": "C:\\Users\\Tesla\\AppData\\Local\\Temp\\claude\\C--Users-Tesla\\372a2d1f-acbe-4b57-a148-eeae3fe1d729\\scratchpad\\b7c_head\\lumenairy\\__init__.py",
+ "version": "5.47.0",
+ "numpy": "2.4.4",
+ "python": "3.14.6",
+ "cases": {
+  "K4 uniform z=4.3704mm (the K4/a3 suites own fixture)": {
+   "digest": "15d3e11d3118ca64",
+   "shape": [
+    512,
+    512
+   ],
+   "power": 4.620333136881761e-07,
+   "n_warnings": 0
+  },
+  "K4 uniform N=256 (the a3_verify dark-fill fixture)": {
+   "digest": "0bdf98fcef6b0e52",
+   "shape": [
+    256,
+    256
+   ],
+   "power": 5.288878984939997e-07,
+   "n_warnings": 0
+  },
+  "K4 multibranch z=4.3704mm": {
+   "digest": "210715ae8c3f3f97",
+   "shape": [
+    512,
+    512
+   ],
+   "power": 3.669287274016842e-07,
+   "n_warnings": 0
+  },
+  "K4 uniform z=0 (exit vertex, no fold -> fallback)": {
+   "digest": "b61e242a6472e2ff",
+   "shape": [
+    256,
+    256
+   ],
+   "power": 3.8173396947295224e-07,
+   "n_warnings": 1
+  },
+  "V uniform z=1565.4um (zeta_extrapolation 531)": {
+   "digest": "2326d2dd4ed220f3",
+   "shape": [
+    512,
+    512
+   ],
+   "power": 1.738093680417803e-07,
+   "n_warnings": 1
+  },
+  "V uniform z=1683.4um (zeta_extrapolation 1.03)": {
+   "digest": "823e5d9709420002",
+   "shape": [
+    512,
+    512
+   ],
+   "power": 1.6276811630303897e-07,
+   "n_warnings": 0
+  },
+  "V uniform z=1750.0um (the last healthy plane)": {
+   "digest": "b8935847aed4344e",
+   "shape": [
+    512,
+    512
+   ],
+   "power": 1.6512148494763986e-07,
+   "n_warnings": 0
+  },
+  "V uniform z=1764.0um (the blow-up window)": {
+   "raised": "RuntimeError",
+   "message_head": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side"
+  },
+  "V uniform z=1770.0um (blow-up + zeta_nonlinear fallback)": {
+   "raised": "RuntimeError",
+   "message_head": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side"
+  },
+  "V multibranch z=1764.0um (the blow-up, multibranch alone)": {
+   "digest": "8b0497b96fb11401",
+   "shape": [
+    512,
+    512
+   ],
+   "power": 0.0005913659131435992,
+   "n_warnings": 2
+  },
+  "V uniform plain band z=1683.4um": {
+   "digest": "a6fe763390f8e885",
+   "shape": [
+    512,
+    512
+   ],
+   "power": 2.0588238717505078e-07,
+   "n_warnings": 0
+  },
+  "W2 uniform z=4.400mm (WP-B7b fixture F, u* 17.2 < 20 cells)": {
+   "digest": "ebf38f6b550d13f2",
+   "shape": [
+    320,
+    320
+   ],
+   "power": 3.0140950862725835e-07,
+   "n_warnings": 1
+  },
+  "W2 uniform z=4.450mm (u* 14.9 < 20 cells)": {
+   "digest": "0db74fbcfabc5530",
+   "shape": [
+    320,
+    320
+   ],
+   "power": 2.0944016444066028e-07,
+   "n_warnings": 1
+  }
+ }
+}

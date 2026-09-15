@@ -473,7 +473,13 @@ def test_uniform_routes_cusp_to_pearcey(monkeypatch):
         if kw.get('return_diagnostics'):
             return E_mb2d, {'input_carrier': (0.0, 0.0)}
         return E_mb2d
-    monkeypatch.setattr(umod, 'apply_real_lens_traced_multibranch', fake_mb)
+    # The completion reaches the branch sum through the module-private
+    # ``_multibranch_render`` (WP-B7c round 2: it asks for the
+    # pixel-halving reading, which the public signature does not
+    # carry).  That is the ONE seam, so patching the public name here
+    # would silently not take effect -- it raises AttributeError
+    # instead, which is why this line names the private one.
+    monkeypatch.setattr(umod, '_multibranch_render', fake_mb)
     monkeypatch.setattr(umod, '_is_rotationally_symmetric', lambda *a, **k: True)
     monkeypatch.setattr(
         umod, '_trace_meridional_fold',
@@ -509,7 +515,13 @@ def test_cusp_fallbacks_finite(monkeypatch):
         if kw.get('return_diagnostics'):
             return base, {'input_carrier': (0.0, 0.0)}
         return base
-    monkeypatch.setattr(umod, 'apply_real_lens_traced_multibranch', fake_mb)
+    # The completion reaches the branch sum through the module-private
+    # ``_multibranch_render`` (WP-B7c round 2: it asks for the
+    # pixel-halving reading, which the public signature does not
+    # carry).  That is the ONE seam, so patching the public name here
+    # would silently not take effect -- it raises AttributeError
+    # instead, which is why this line names the private one.
+    monkeypatch.setattr(umod, '_multibranch_render', fake_mb)
     monkeypatch.setattr(umod, '_is_rotationally_symmetric', lambda *a, **k: True)
     monkeypatch.setattr(
         umod, '_trace_meridional_fold',

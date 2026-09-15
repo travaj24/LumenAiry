@@ -109,12 +109,51 @@ def _airy(z):
 _EDGE_TOL = 1e-9
 
 # Energy-conservation tripwire (Scope note D5): at a rotationally-symmetric
-# AXIAL point focus a whole RING of branches coalesces, but the fold-uniform
-# 'ludwig' swap regularizes only the CLOSEST PAIR -- the residual ring branches
-# keep their divergent ``1/sqrt|J|`` ART amplitudes, blowing the reconstructed
-# grid power up ~1e5..1e6x (probe: ~1e6x at the BFL plane).  A well-behaved
-# through-focus field stays within ~1.2x of the input aperture power, so a warn
-# above this multiple flags the catastrophe with no false positives.
+# AXIAL point focus a whole RING of branches coalesces, and the reconstructed
+# grid power blows up ~1e5..1e6x (probe: ~1e6x at the BFL plane).  A
+# well-behaved through-focus field stays within ~1.2x of the input aperture
+# power, so a warn above this multiple flags the catastrophe with no false
+# positives.
+#
+# WHAT THE BLOW-UP IS (measured, WP-B7c 2026-09-14; the three controls are in
+# ``validation/probe_multibranch_zeta/probe2_mechanism.py``).  It is the
+# rasteriser's POINT-SAMPLED AREA QUADRATURE losing its unbiasedness, not a
+# wrong branch, not an unclipped Jacobian and not the fold-member ordering:
+#
+#   * a mapped triangle deposits ``|E_in|^2 / ratio`` over EVERY pixel whose
+#     CENTRE it covers.  Near a caustic essentially every mapped triangle is
+#     sub-pixel (median mapped area 1/430 of a pixel on the fixture below, at
+#     every plane including the healthy ones), so the write is a Monte-Carlo
+#     estimator of the area integral: a triangle of mapped area ``A`` catches a
+#     pixel centre with probability ``A/dx^2`` and then deposits
+#     ``dx^2 |E_in|^2 / ratio``, whose expectation is exactly the launched
+#     ``A_tri |E_in|^2``.  That is why the healthy planes conserve energy at
+#     all.  The estimator is unbiased only while the triangles are SPREAD over
+#     many pixels; where a whole RING collapses onto a handful of pixels the
+#     variance becomes the mean;
+#   * ``caustic_band='plain'`` reproduces the blow-up to 0.1 % (6090 against
+#     the 'ludwig' 6097 at z = 1768 um on the fixture below), so the pair swap
+#     is not involved;
+#   * ``min_area_ratio`` 1e-8 and the 1e-6 default give an IDENTICAL ratio
+#     (6096.7), i.e. the clip is inoperative at the default -- the divergent
+#     amplitudes sit at area ratios 1e-6..1e-3 (``1/sqrt|J|`` of 32..1000),
+#     which it admits.  Raising it to 1e-4 cuts the ratio to 93 and to 1e-3 to
+#     0.53, at the cost of skipping 4138 and 52384 of 64336 triangles;
+#   * REFINING the launch lattice makes it WORSE, by 7.4x
+#     (``ray_subsample`` 2 -> 1: 6097 -> 44878; 4 -> 2: 771 -> 6097), the
+#     signature of a quadrature whose written energy scales with the triangle
+#     COUNT instead of with their mapped area.  ``n_branch.max()`` on one pixel
+#     rises 2 -> 97 -> 565 -> 797 across the same four planes.
+#
+# Fixture: N-BAF10 biconvex R = +/-2.6 mm, t = 0.70 mm, 0.90 mm aperture,
+# lambda = 1.064 um, N = 512, dx = 2.20 um, w0 = 330 um, z = 1750..1790 um
+# (VERIFY-B7b section 4.1's own fold fixture); reproduced on two more optics in
+# ``docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/WP-B7c_REPORT.md``.
+# Bounding the reconstruction would mean replacing the point sample by an
+# area-weighted splat -- a different quadrature that moves every multibranch
+# field near a caustic -- so WP-B7c left the reconstruction alone and put the
+# REFUSAL in the uniform completion that builds on it
+# (``_lens_traced_uniform._MB_POWER_RATIO_MAX``).
 _ENERGY_BLOWUP_FACTOR = 2.0
 
 # Lower arm of the same tripwire.  The upper arm alone could only ever see
@@ -133,6 +172,137 @@ _ENERGY_COLLAPSE_FACTOR = 0.5
 # silent too.  A well-behaved through-focus field stays within ~1.2x of the
 # input aperture power and a RESOLVED fold within ~1.18x, so 2.0 keeps the
 # legitimate cases quiet while catching the run-up to the catastrophe.
+
+# ==========================================================================
+# The PIXEL-HALVING ARBITER (WP-B7c round 2).
+#
+# WHAT IT MEASURES.  The rasteriser above deposits ``dx^2 |E_in|^2 / ratio``
+# on every pixel whose CENTRE a mapped triangle covers.  Near a caustic
+# essentially every mapped triangle is sub-pixel, so that write is a
+# Monte-Carlo estimator of the area integral: a triangle of mapped area ``A``
+# catches a pixel centre with probability ``A/dx^2`` and deposits
+# ``dx^2 |E_in|^2 / ratio``, whose EXPECTATION is the launched
+# ``A |E_in|^2`` -- independent of ``dx``.  So a render that has converged
+# deposits the same total power at any pixel pitch, and one that has not
+# deposits a power that scales with the PIXEL AREA.
+#
+# Re-rasterise the SAME mapped triangles onto a HALF-PITCH grid over the same
+# physical window (``_render(2 * N, dx / 2)`` -- the trace, the triangulation
+# and the mapped areas are unchanged, so this costs one rasterisation and no
+# second trace) and take
+#
+#     pixel_continuity = p_out(dx) / p_out(dx / 2).
+#
+# A converged render reads ~1.  A quadrature failure reads ~4 per halving,
+# because its deposited power is proportional to the pixel area.  This is the
+# control VERIFY-WP-B7c ran by hand on four optics: holding optic, plane,
+# launch lattice and window fixed and halving the pixel divides the EXCESS by
+# exactly 4 (S 107 -> 27.3 -> 7.40, M 504 -> 127 -> 32.2, Q 11238 -> 2810 ->
+# 703, F 2.98 -> 1.42 -> 1.04) while a healthy plane is invariant
+# (0.937 -> 0.937 -> 0.938), identically on two builds.
+#
+# WHY IT IS THE RIGHT QUANTITY TO DECIDE ON, where ``power_ratio`` is not.
+# ``power_ratio`` compares the deposited power against the LAUNCHED power, so
+# it mixes the quadrature's failure with everything else that legitimately
+# moves the ratio -- the dark-side tail the branch sum drops (0.76-0.99 on the
+# fold planes measured), the triangles that straddle the grid boundary, light
+# that leaves the window.  That is why its accepted and broken populations
+# OVERLAP: VERIFY-WP-B7c measured a largest accepted reading of 0.9804 against
+# a smallest broken one of 1.106, a gap of 1.13x against a 2.0 bar.  The
+# continuity ratio cancels every one of those terms -- both renders drop the
+# same tail, straddle the same boundary and lose the same off-screen light --
+# and leaves only the pixel-area scaling.
+#
+# WHERE THE READING IS TAKEN.  This module measures the reading on its OWN
+# render, which is the mechanism; the consumer that decides on it takes it on
+# the field IT returns (``_lens_traced_uniform._arbitrate``), because the two
+# are not the same number where the uniform completion applies -- the CFU swap
+# rewrites the fold band and the whole dark side, which is exactly where a
+# modest branch-sum excess sits.  The half-pitch RENDER is therefore handed
+# out in the diagnostics (``pixel_halved_field``) as well as its power, so the
+# consumer can put its own output through the same control.  Measured on
+# VERIFY-B7b's own fixture at z = 1761 um: this render reads 1.0636 while the
+# completion built on it reads 1.0020, and the completed field's oracle
+# fidelity is 0.9878 with its power 0.994x the oracle's.
+#
+# MEASURED (WP-B7c round 2, 2026-09-15), on EIGHT optics -- VERIFY-B7b's own
+# N-BAF10 biconvex, VERIFY-WP-B7c's four (a cemented doublet, a positive
+# meniscus, a convex-first plano-convex at 532 nm, a fast N-LASF9 at f/2.0)
+# and three this round adds (an AIR-SPACED doublet, a CONIC-surfaced N-LAK22,
+# and an N-SF11 at NA 0.33, above the 0.12-0.29 envelope every published
+# fixture sits in) -- over 82 oracle-scored fold-ring planes, with the
+# populations, the probes and their JSON in
+# ``validation/probe_wp_b7c_round2/``:
+#
+#   * the 67 planes the guard RETURNS read 0.9860 .. 1.0221 and their fields
+#     score 0.9593 .. 0.9985 against the oracle;
+#   * the 15 it REFUSES read 1.092 .. 3.998 and their fields score
+#     0.0173 .. 0.9302.
+#
+# The two FIDELITY populations do not overlap, and that statement is made with
+# no accept bar chosen: the split is the guard's own.  Round 1's reading could
+# not do this -- its accepted and broken populations overlap (largest accepted
+# 0.9804 against smallest broken 1.106) -- which is why this second arm
+# exists.
+#
+# THE BAR.  The gap between the largest returned reading (1.0221, the fast
+# singlet at z = 1073 um, fidelity 0.9742) and the smallest refused one
+# (1.092, the same optic at z = 1074 um, fidelity 0.9302) is 1.0683x, whose
+# geometric centre is 1.0564 -- 1.06 to three figures.  Margins: 1.037x above
+# the largest returned reading and 1.030x below the smallest refused one.
+# Neither is decades, and that is stated rather than papered over: this is a
+# 7 % gap, measured on eight optics and two builds, and a ninth optic could
+# narrow it.  What makes it usable where round 1's was not is that it is a
+# gap at all, and that the quantity has a FIXED reference -- a converged
+# quadrature reads 1 exactly, at any pitch, on any optic -- so the bar is a
+# tolerance on a known value rather than a boundary between two moving
+# populations.
+#
+# Upper arm: above this the render has NOT converged in the pixel and the
+# uniform completion built on it REFUSES
+# (``_lens_traced_uniform._MB_PIXEL_CONTINUITY_MAX``).
+_PIXEL_CONTINUITY_MAX = 1.06
+
+# Lower arm of the same reading, REPORTED and not refused.  A reading BELOW
+# its half-pitch value means the coarse render is missing deposits the finer
+# one catches -- the mirror of the same non-convergence, and the one that runs
+# to the identically-zero field at an axial focus (already refused above).
+# Placed symmetrically in the LOG of the ratio, so the band is
+# ``[1/_PIXEL_CONTINUITY_MAX, _PIXEL_CONTINUITY_MAX]`` and neither arm is
+# arbitrary relative to the other.
+#
+# IT DOES NOT REFUSE, and the asymmetry is physical rather than timid: the
+# completion keeps the branch sum's BRIGHT side verbatim, so a bright-side
+# excess reaches the caller's field, while the DARK side is exactly what the
+# completion replaces, so a dark-side deficit does not.  Measured (WP-B7c
+# round 2, 2026-09-15) on the air-spaced doublet at z = 2903 um: the branch
+# sum reads 0.9419 -- 6 % short -- while the completed field's power is
+# 0.997x the oracle's and its fidelity 0.9910.  Over the whole round-2
+# population no fold-ring plane is refused on this arm and none needs to be;
+# the only loss-side readings that correspond to a wrong field are on
+# FALLBACK planes, where the module has already warned that the completion
+# does not apply, and there the nearest returned reading (0.854, oracle
+# fidelity 0.904) and the nearest wrong one (0.726, fidelity 0.837) leave
+# 1.18x on ONE optic -- not a population a bar can be derived on.
+_PIXEL_CONTINUITY_MIN = 1.0 / _PIXEL_CONTINUITY_MAX
+
+# Entry cap on the ARBITER's own render, in array entries of the FINE grid.
+# The fine render allocates one complex128 image of ``(2 N)^2``, and the
+# consumer that completes it allocates one more, so the working set is
+# ``2 x 16 x 4 N^2`` bytes: 67 MB at N = 512, 218 MB at N = 1304 and 1.07 GB
+# at N = 2048 -- the last of which is past the working-set discipline the
+# rasterisation batches below are held to.  7e6 entries puts the cap at
+# N = 1322, which is chosen rather than N = 1024 for a measured reason: the
+# grid refinement VERIFY-WP-B7c's D2 is about (a caller halving dx to resolve
+# the Airy layer) takes a 640-grid fixture to 1280, and a cap that stopped
+# reporting THERE would reproduce the very defect the arbiter closes -- the
+# guard disappearing exactly when the caller refines.
+#
+# Above the cap the reading is reported as ``None`` with
+# ``pixel_continuity_decision='not_measured'`` rather than silently skipped,
+# so a consumer can tell "converged" from "not asked".  Every fold fixture in
+# WP-B7b / VERIFY-B7b / WP-B7c / this round is N = 256 .. 768.
+_ARBITER_MAX_FINE_ENTRIES = 7_000_000
 
 # Entry budget for one rasterisation batch, in array ENTRIES (float64
 # equivalents).  The bucket batch used to be unbounded: at N = 4096 with
@@ -634,6 +804,45 @@ def apply_real_lens_traced_multibranch(
                 apply_real_lens_traced_multibranch, locals(),
                 geometry=geometry, numerics=numerics, resources=resources,
                 config=config))
+    return _multibranch_render(
+        E_in, prescription=prescription, wavelength=wavelength, dx=dx,
+        output_plane_distance=output_plane_distance,
+        output_plane_n=output_plane_n, ray_subsample=ray_subsample,
+        min_area_ratio=min_area_ratio, caustic_band=caustic_band,
+        input_carrier=input_carrier, return_diagnostics=return_diagnostics)
+
+
+def _multibranch_render(
+    E_in: np.ndarray,
+    *,
+    prescription: Dict[str, Any],
+    wavelength: float,
+    dx: float,
+    output_plane_distance: float = 0.0,
+    output_plane_n: float = 1.0,
+    ray_subsample: int = 2,
+    min_area_ratio: float = 1e-6,
+    caustic_band: str = 'ludwig',
+    input_carrier: Any = None,
+    return_diagnostics: bool = False,
+    pixel_halving_arbiter: bool = False,
+) -> Any:
+    """The branch sum itself -- everything past the public entry point's input
+    check and its configuration-object re-dispatch.
+
+    Split out so ONE internal consumer can ask for a reading the public
+    signature does not carry: ``pixel_halving_arbiter`` re-rasterises the same
+    mapped triangles onto a HALF-PITCH grid over the same window and reports
+    the continuity of the deposited power between the two renders
+    (``_PIXEL_CONTINUITY_MAX``).  Keeping it off the public signature keeps
+    ``apply_real_lens_traced_multibranch`` byte- and cost-identical for every
+    caller that does not ask, and keeps the extra render at ONE rasterisation
+    rather than a second trace -- the trace, the triangulation and the mapped
+    areas are the same objects, and only the output sampling changes.
+
+    Every message raised below names the PUBLIC entry point, because that is
+    the function the caller called.
+    """
     E_in = np.asarray(E_in)
     N = E_in.shape[0]
     if E_in.shape[0] != E_in.shape[1]:
@@ -719,13 +928,6 @@ def apply_real_lens_traced_multibranch(
             "apply_real_lens_traced_multibranch: caustic_band must be "
             f"'ludwig' or 'plain', got {caustic_band!r}")
 
-    # per-branch contribution lists (assembled after the loop so the caustic
-    # band can swap coalescing PAIRS for the Ludwig uniform-fold field)
-    br_idx: list = []      # flat pixel index (x-major)
-    br_T: list = []        # branch eikonal OPL [m]
-    br_A: list = []        # COMPLEX branch amplitude incl. its Maslov phase
-    n_branch = np.zeros((N, N), dtype=np.int32)
-
     # triangulate each launch cell into 2 triangles (fixed diagonal), map,
     # rasterize output pixels via barycentric coords (Lambare Fig. 5).
     # VECTORIZED: all per-triangle setup on flat arrays, then rasterization
@@ -765,269 +967,294 @@ def apply_real_lens_traced_multibranch(
     _n_tri = int(area2.size)
     _n_finite = int(finite_tri.sum())
     _n_degenerate = int(_n_finite - int(good.sum()))
-    #: Launch power carried by the triangles that RASTERISE onto this grid --
-    #: the second, independent denominator the energy tripwire brackets with
-    #: (VERIFY-A3).  Filled in the rasteriser block below.
-    _p_in_tri = 0.0
-    if good.any():
-        xmn = np.minimum(np.minimum(x0, x1), x2)[good]
-        xmx = np.maximum(np.maximum(x0, x1), x2)[good]
-        ymn = np.minimum(np.minimum(y0, y1), y2)[good]
-        ymx = np.maximum(np.maximum(y0, y1), y2)[good]
-        pxmin = np.maximum(0, np.floor(xmn / dx + N / 2.0).astype(np.int64))
-        pxmax = np.minimum(N - 1,
-                           np.ceil(xmx / dx + N / 2.0).astype(np.int64))
-        pymin = np.maximum(0, np.floor(ymn / dx + N / 2.0).astype(np.int64))
-        pymax = np.minimum(N - 1,
-                           np.ceil(ymx / dx + N / 2.0).astype(np.int64))
-        keep = (pxmax >= pxmin) & (pymax >= pymin)
 
-        def _g(a):
-            return a[good][keep]
+    def _render(N_r, dx_r):
+        """Rasterise the mapped triangles onto an ``N_r x N_r`` grid of pitch
+        ``dx_r`` over the same physical window, and assemble the coherent
+        branch sum on it.
 
-        x0k, y0k, x1k, y1k, x2k, y2k = (
-            _g(x0), _g(y0), _g(x1), _g(y1), _g(x2), _g(y2))
-        den = _g(area2)
-        amp_J = 1.0 / np.sqrt(_g(ratio))
-        # KMAH: vertices of one branch share m; take the majority (median)
-        mtri = np.stack([m_grid[V0i, V0j], m_grid[V1i, V1j],
-                         m_grid[V2i, V2j]], axis=1).astype(np.int64)
-        m_br = np.sort(mtri, axis=1)[:, 1][good][keep]
-        ph_br = np.exp(-0.5j * np.pi * m_br)
-        T0 = _g(OPL[V0i, V0j])
-        T1 = _g(OPL[V1i, V1j])
-        T2 = _g(OPL[V2i, V2j])
-        # eikonal-gradient transverse components p = n*(L, M) for the
-        # intrapolation below.  In an index-n output space the phase slowness
-        # is n*(L, M), NOT the bare direction cosines (D4); pn = 1 for a
-        # vacuum output plane, so this is byte-identical there.  (The OPL
-        # advance already carries the n factor -- output_plane_n * t above.)
-        # Named ``p0x``/``p0y`` etc., NOT ``L0``/``M0``: those two names are
-        # the INPUT congruence's launch direction cosines, live from the top of
-        # this function, and rebinding them here to per-vertex slowness
-        # components silently shadowed them for the rest of the body.
-        pn = float(output_plane_n)
-        p0x = pn * _g(L[V0i, V0j])
-        p1x = pn * _g(L[V1i, V1j])
-        p2x = pn * _g(L[V2i, V2j])
-        p0y = pn * _g(M[V0i, V0j])
-        p1y = pn * _g(M[V1i, V1j])
-        p2y = pn * _g(M[V2i, V2j])
-        E0 = _g(E_launch[V0i, V0j])
-        E1 = _g(E_launch[V1i, V1j])
-        E2 = _g(E_launch[V2i, V2j])
-        # Launch power of the triangles that reach this grid.  Over the
-        # INTERIOR of the launch lattice this is algebraically the node sum
-        # ``sum |E_launch|^2 h^2`` (each node is shared by six triangles and
-        # each triangle averages three nodes, so the two quadratures agree);
-        # where a triangle STRADDLES the grid boundary it counts the whole
-        # triangle where the node sum counts none of it, so it is an upper
-        # bound on the launched power that lands -- which is exactly what the
-        # gain arm of the tripwire needs to bracket against (see there).
-        _p_in_tri = float(np.sum(
-            (np.abs(E0) ** 2 + np.abs(E1) ** 2 + np.abs(E2) ** 2)
-            * (1.0 / 3.0))) * tri_launch_area
-        pxmin, pxmax = pxmin[keep], pxmax[keep]
-        pymin, pymax = pymin[keep], pymax[keep]
-        nb_flat = n_branch.reshape(-1)
+        Everything above -- the trace, the triangulation, the mapped areas and
+        the degeneracy census -- is a property of the LAUNCH lattice and the
+        optic, so it is computed once and closed over here.  Only the OUTPUT
+        sampling is a parameter, which is what makes the pixel-halving arbiter
+        below cost one rasterisation instead of a second trace.
 
-        # mapped output-plane edge vectors (edge_i opposite vertex_i, on which
-        # the barycentric a_i == 0) -- for the half-open top-left tie-break
-        # below.  e0 = V2 - V1, e1 = V0 - V2, e2 = V1 - V0.
-        e0x, e0y = x2k - x1k, y2k - y1k
-        e1x, e1y = x0k - x2k, y0k - y2k
-        e2x, e2y = x1k - x0k, y1k - y0k
+        Called once with ``(N, dx)`` -- byte-identically to the straight-line
+        code it replaces -- and, when the arbiter is requested, once more with
+        ``(2 * N, dx / 2)``.
+        """
+        # per-branch contribution lists (assembled after the loop so the caustic
+        # band can swap coalescing PAIRS for the Ludwig uniform-fold field)
+        br_idx: list = []      # flat pixel index (x-major)
+        br_T: list = []        # branch eikonal OPL [m]
+        br_A: list = []        # COMPLEX branch amplitude incl. its Maslov phase
+        n_branch = np.zeros((N_r, N_r), dtype=np.int32)
+        #: Launch power carried by the triangles that RASTERISE onto this grid --
+        #: the second, independent denominator the energy tripwire brackets with
+        #: (VERIFY-A3).  Filled in the rasteriser block below.
+        _p_in_tri = 0.0
+        if good.any():
+            xmn = np.minimum(np.minimum(x0, x1), x2)[good]
+            xmx = np.maximum(np.maximum(x0, x1), x2)[good]
+            ymn = np.minimum(np.minimum(y0, y1), y2)[good]
+            ymx = np.maximum(np.maximum(y0, y1), y2)[good]
+            pxmin = np.maximum(0, np.floor(xmn / dx_r + N_r / 2.0).astype(np.int64))
+            pxmax = np.minimum(N_r - 1,
+                               np.ceil(xmx / dx_r + N_r / 2.0).astype(np.int64))
+            pymin = np.maximum(0, np.floor(ymn / dx_r + N_r / 2.0).astype(np.int64))
+            pymax = np.minimum(N_r - 1,
+                               np.ceil(ymx / dx_r + N_r / 2.0).astype(np.int64))
+            keep = (pxmax >= pxmin) & (pymax >= pymin)
 
-        # ---- batched rasterisation ------------------------------------
-        # Triangles are grouped so one NumPy batch covers many of them, and
-        # every intermediate below is ``(n_batch, wx, wy)``.  Two properties
-        # of that grouping are load-bearing, and neither was true before:
-        #
-        # * the box is the triangle's EXACT integer bounding box, not the
-        #   next power of two.  At ``output_plane_distance = 0`` -- the
-        #   DEFAULT -- the map is near-identity, so a 5x5-pixel triangle used
-        #   to be padded to 8x8 and ~60 % of the barycentric arithmetic was
-        #   thrown away by ``vmask``.  Measured on an f/2 singlet at N = 2048
-        #   with default arguments, the exit-vertex call took 144 s against
-        #   0.85 s for the SAME grid near focus, where the triangles compress
-        #   into small boxes.  With the exact box there is no padding, so no
-        #   ``vmask`` either.
-        # * the batch is CHUNKED against a named entry budget.  Nothing used
-        #   to bound ``n_batch * wx * wy``: at N = 4096 the worst bucket held
-        #   1 187 616 triangles at 8x8, i.e. 0.61 GB per temporary and ~15-18
-        #   of them alive at once -- 7.74 GB of traced allocation and 12.2 GB
-        #   RSS for one default-argument call, with no warning and no model in
-        #   ``lumenairy.memory.estimate_lens_memory``.  The budget caps the
-        #   working set at ~``_RASTER_CHUNK_ENTRIES`` float64 per temporary
-        #   regardless of grid or prescription.
-        #
-        # Neither changes the CONTRIBUTION SET -- the same pixels enter with
-        # the same values -- only the order in which ``np.add.at`` sums a
-        # multi-branch pixel, which this module already documents as
-        # order-dependent at the ULP level (see the note above).
-        wxs = (pxmax - pxmin + 1).astype(np.int64)
-        wys = (pymax - pymin + 1).astype(np.int64)
-        for s, wbx, wby, _padded in _raster_batches(wxs, wys):
-            gx = pxmin[s, None, None] + np.arange(wbx, dtype=np.int64)[
-                None, :, None]
-            gy = pymin[s, None, None] + np.arange(wby, dtype=np.int64)[
-                None, None, :]
-            # Only the coalesced (power-of-two) fallback can overshoot the
-            # triangle's clipped box; with the exact box every candidate is a
-            # valid grid index and no mask is needed.
-            vmask = (((gx <= pxmax[s, None, None])
-                      & (gy <= pymax[s, None, None])) if _padded else None)
-            PX = (gx - N / 2.0) * dx
-            PY = (gy - N / 2.0) * dx
-            X0 = x0k[s, None, None]
-            Y0 = y0k[s, None, None]
-            # barycentric coordinates
-            d00x = (x1k - x0k)[s, None, None]
-            d00y = (y1k - y0k)[s, None, None]
-            d01x = (x2k - x0k)[s, None, None]
-            d01y = (y2k - y0k)[s, None, None]
-            wx = PX - X0
-            wy = PY - Y0
-            dn = den[s, None, None]
-            a1 = (wx * d01y - wy * d01x) / dn
-            a2 = (d00x * wy - d00y * wx) / dn
-            a0 = 1.0 - a1 - a2
-            # HALF-OPEN (top-left rule): a pixel strictly inside a triangle has
-            # all a_i > 0; a pixel ON edge_i has a_i == 0.  A closed test
-            # (a_i >= 0) hands every shared mesh edge (cell diagonals) and
-            # shared vertex (up to 6 triangles) to ALL its neighbours, so the
-            # coherent np.add.at below double- (or 6x-) counts them -- spurious
-            # +50%..+400% energy and 2x-amplitude hot pixels.  Instead award an
-            # on-edge pixel to the single triangle whose mapped edge points up
-            # (or is horizontal pointing right): two triangles sharing a
-            # physical edge see it with opposite direction vectors, so exactly
-            # one claims it -- regardless of fold orientation.  At a shared
-            # vertex two coords are ~0 at once, so BOTH incident edges must
-            # win, which resolves the up-to-6 triangle fan to one owner too.
-            # The band |a_i| <= _EDGE_TOL (not exact == 0) is essential: even a
-            # bit-exact identity map lands pixel centres ~1 ULP off the mapped
-            # nodes, so on-edge a_i evaluate to ~1e-14, never exactly 0.  The
-            # band is applied symmetrically (barely-inside +eps and
-            # barely-outside -eps neighbours both enter the tie-break), so the
-            # single-owner property holds with no gaps.  Interior a_i are
-            # O(0.1..1) >> _EDGE_TOL >> the ~1e-14 boundary noise, so genuine
-            # multi-branch overlaps (distinct sheets from non-adjacent
-            # triangles, a_i strictly interior in both) are untouched.
-            e0i = (e0x[s, None, None], e0y[s, None, None])
-            e1i = (e1x[s, None, None], e1y[s, None, None])
-            e2i = (e2x[s, None, None], e2y[s, None, None])
-            inside = (
-                ((a0 > _EDGE_TOL) | ((np.abs(a0) <= _EDGE_TOL) & _top_left(*e0i)))
-                & ((a1 > _EDGE_TOL) | ((np.abs(a1) <= _EDGE_TOL) & _top_left(*e1i)))
-                & ((a2 > _EDGE_TOL) | ((np.abs(a2) <= _EDGE_TOL) & _top_left(*e2i))))
-            if vmask is not None:
-                inside &= vmask
-            if not inside.any():
-                continue
-            # second-order intrapolated OPL (Kraaijpoel eq. 5.7):
-            # T = sum_i a_i [T_i + 1/2 (x - x_i).p_i], p = n*(L, M) (D4)
-            T = (a0 * (T0[s, None, None]
-                       + 0.5 * ((PX - X0) * p0x[s, None, None]
-                                + (PY - Y0) * p0y[s, None, None]))
-                 + a1 * (T1[s, None, None]
-                         + 0.5 * ((PX - x1k[s, None, None])
-                                  * p1x[s, None, None]
-                                  + (PY - y1k[s, None, None])
-                                  * p1y[s, None, None]))
-                 + a2 * (T2[s, None, None]
-                         + 0.5 * ((PX - x2k[s, None, None])
-                                  * p2x[s, None, None]
-                                  + (PY - y2k[s, None, None])
-                                  * p2y[s, None, None])))
-            Ein_tri = (a0 * E0[s, None, None] + a1 * E1[s, None, None]
-                       + a2 * E2[s, None, None])
-            # branch record: complex amplitude WITH its Maslov phase, and
-            # the eikonal separately (needed by the Ludwig pair-swap)
-            flat = (gx * N + gy)[inside]
-            br_idx.append(flat)
-            br_T.append(T[inside])
-            br_A.append((Ein_tri * amp_J[s, None, None]
-                         * ph_br[s, None, None])[inside])
-            np.add.at(nb_flat, flat, 1)
+            def _g(a):
+                return a[good][keep]
 
-    # ---- assemble the coherent branch sum ------------------------------
-    E_flat = np.zeros(N * N, dtype=np.complex128)
-    if br_idx:
-        bi = np.concatenate(br_idx)
-        bT = np.concatenate(br_T)
-        bA = np.concatenate(br_A)
-        plain = bA * np.exp(1j * k0 * bT)
-        np.add.at(E_flat, bi, plain)
-        if caustic_band == 'ludwig':
-            # In the Kravtsov-Orlov caustic band (k|S+ - S-| <= pi between a
-            # coalescing branch pair) the plain two-branch sum is invalid --
-            # swap the pair for the Ludwig uniform fold field (finite exactly
-            # where the branch amplitudes diverge; reduces to the plain sum
-            # outside the band by construction).  Grillo & Cordes eq. 47:
-            # uniform-Airy for the coalescing pair, plain GO for the rest.
+            x0k, y0k, x1k, y1k, x2k, y2k = (
+                _g(x0), _g(y0), _g(x1), _g(y1), _g(x2), _g(y2))
+            den = _g(area2)
+            amp_J = 1.0 / np.sqrt(_g(ratio))
+            # KMAH: vertices of one branch share m; take the majority (median)
+            mtri = np.stack([m_grid[V0i, V0j], m_grid[V1i, V1j],
+                             m_grid[V2i, V2j]], axis=1).astype(np.int64)
+            m_br = np.sort(mtri, axis=1)[:, 1][good][keep]
+            ph_br = np.exp(-0.5j * np.pi * m_br)
+            T0 = _g(OPL[V0i, V0j])
+            T1 = _g(OPL[V1i, V1j])
+            T2 = _g(OPL[V2i, V2j])
+            # eikonal-gradient transverse components p = n*(L, M) for the
+            # intrapolation below.  In an index-n output space the phase slowness
+            # is n*(L, M), NOT the bare direction cosines (D4); pn = 1 for a
+            # vacuum output plane, so this is byte-identical there.  (The OPL
+            # advance already carries the n factor -- output_plane_n * t above.)
+            # Named ``p0x``/``p0y`` etc., NOT ``L0``/``M0``: those two names are
+            # the INPUT congruence's launch direction cosines, live from the top of
+            # this function, and rebinding them here to per-vertex slowness
+            # components silently shadowed them for the rest of the body.
+            pn = float(output_plane_n)
+            p0x = pn * _g(L[V0i, V0j])
+            p1x = pn * _g(L[V1i, V1j])
+            p2x = pn * _g(L[V2i, V2j])
+            p0y = pn * _g(M[V0i, V0j])
+            p1y = pn * _g(M[V1i, V1j])
+            p2y = pn * _g(M[V2i, V2j])
+            E0 = _g(E_launch[V0i, V0j])
+            E1 = _g(E_launch[V1i, V1j])
+            E2 = _g(E_launch[V2i, V2j])
+            # Launch power of the triangles that reach this grid.  Over the
+            # INTERIOR of the launch lattice this is algebraically the node sum
+            # ``sum |E_launch|^2 h^2`` (each node is shared by six triangles and
+            # each triangle averages three nodes, so the two quadratures agree);
+            # where a triangle STRADDLES the grid boundary it counts the whole
+            # triangle where the node sum counts none of it, so it is an upper
+            # bound on the launched power that lands -- which is exactly what the
+            # gain arm of the tripwire needs to bracket against (see there).
+            _p_in_tri = float(np.sum(
+                (np.abs(E0) ** 2 + np.abs(E1) ** 2 + np.abs(E2) ** 2)
+                * (1.0 / 3.0))) * tri_launch_area
+            pxmin, pxmax = pxmin[keep], pxmax[keep]
+            pymin, pymax = pymin[keep], pymax[keep]
+            nb_flat = n_branch.reshape(-1)
+
+            # mapped output-plane edge vectors (edge_i opposite vertex_i, on which
+            # the barycentric a_i == 0) -- for the half-open top-left tie-break
+            # below.  e0 = V2 - V1, e1 = V0 - V2, e2 = V1 - V0.
+            e0x, e0y = x2k - x1k, y2k - y1k
+            e1x, e1y = x0k - x2k, y0k - y2k
+            e2x, e2y = x1k - x0k, y1k - y0k
+
+            # ---- batched rasterisation ------------------------------------
+            # Triangles are grouped so one NumPy batch covers many of them, and
+            # every intermediate below is ``(n_batch, wx, wy)``.  Two properties
+            # of that grouping are load-bearing, and neither was true before:
             #
-            # VECTORISED over pixels.  The per-pixel Python loop this replaces
-            # cost 0.76-1.07 ms for EVERY multi-branch pixel (measured +3.22 s
-            # over 3 004 pixels at N = 2048 and +9.14 s over 12 020 at
-            # N = 4096, i.e. a 1.5 Mpx two-branch ring would have taken ~20
-            # minutes).  Same selection rule, same arithmetic: sort the
-            # branches of each pixel by eikonal, take the closest ADJACENT
-            # pair, and swap it when its split is inside the band.
-            order = np.argsort(bi, kind='stable')
-            bi_s = bi[order]
-            starts = np.flatnonzero(np.r_[True, bi_s[1:] != bi_s[:-1]])
-            ends = np.r_[starts[1:], bi_s.size]
-            band = np.pi / k0
-            multi = (ends - starts) >= 2
-            if multi.any():
-                g_start = starts[multi]
-                g_end = ends[multi]
-                n_g = g_start.size
-                n_max = int((g_end - g_start).max())
-                # Ragged -> padded (n_groups, n_max) of the group members'
-                # positions in ``order``; pad slots take the group's own first
-                # member so the sort never sees a sentinel that could become
-                # the minimum gap.
-                col = np.arange(n_max)[None, :]
-                cnt = (g_end - g_start)[:, None]
-                valid = col < cnt
-                pos = np.where(valid, g_start[:, None] + col, g_start[:, None])
-                sel = order[pos]                      # (n_g, n_max)
-                Ts = np.where(valid, bT[sel], np.inf)
-                o2 = np.argsort(Ts, axis=1, kind='stable')
-                rows = np.arange(n_g)[:, None]
-                sel_s = sel[rows, o2]
-                Ts_s = Ts[rows, o2]
-                # gaps between ADJACENT sorted branches; a gap that touches a
-                # padded slot is +inf and can never be the minimum.
-                dT = Ts_s[:, 1:] - Ts_s[:, :-1]
-                dT = np.where(np.isfinite(dT), dT, np.inf)
-                jmin = np.argmin(dT, axis=1)
-                dmin = dT[np.arange(n_g), jmin]
-                hit = np.isfinite(dmin) & (dmin <= band)
-                if hit.any():
-                    hr = np.nonzero(hit)[0]
-                    jh = jmin[hr]
-                    ia = sel_s[hr, jh]            # lower-S branch  (S-)
-                    ib = sel_s[hr, jh + 1]        # higher-S branch (S+)
-                    Sm = bT[ia]
-                    # floor the eikonal split (removable 0/0 in the g1 term
-                    # exactly at coalescence)
-                    Sp = np.maximum(bT[ib], Sm + 1e-4 * wavelength)
-                    uni = ludwig_fold(k0, Sp, Sm, bA[ib], bA[ia])
-                    # Each group owns one pixel, and a pixel appears in at most
-                    # one group, so these writes do not collide -- but use
-                    # ``np.add.at`` anyway so the accumulation rule is the same
-                    # one the plain sum used.
-                    np.add.at(E_flat, bi_s[g_start[hr]],
-                              uni - (plain[ia] + plain[ib]))
-    E_out = E_flat.reshape(N, N)
+            # * the box is the triangle's EXACT integer bounding box, not the
+            #   next power of two.  At ``output_plane_distance = 0`` -- the
+            #   DEFAULT -- the map is near-identity, so a 5x5-pixel triangle used
+            #   to be padded to 8x8 and ~60 % of the barycentric arithmetic was
+            #   thrown away by ``vmask``.  Measured on an f/2 singlet at N = 2048
+            #   with default arguments, the exit-vertex call took 144 s against
+            #   0.85 s for the SAME grid near focus, where the triangles compress
+            #   into small boxes.  With the exact box there is no padding, so no
+            #   ``vmask`` either.
+            # * the batch is CHUNKED against a named entry budget.  Nothing used
+            #   to bound ``n_batch * wx * wy``: at N = 4096 the worst bucket held
+            #   1 187 616 triangles at 8x8, i.e. 0.61 GB per temporary and ~15-18
+            #   of them alive at once -- 7.74 GB of traced allocation and 12.2 GB
+            #   RSS for one default-argument call, with no warning and no model in
+            #   ``lumenairy.memory.estimate_lens_memory``.  The budget caps the
+            #   working set at ~``_RASTER_CHUNK_ENTRIES`` float64 per temporary
+            #   regardless of grid or prescription.
+            #
+            # Neither changes the CONTRIBUTION SET -- the same pixels enter with
+            # the same values -- only the order in which ``np.add.at`` sums a
+            # multi-branch pixel, which this module already documents as
+            # order-dependent at the ULP level (see the note above).
+            wxs = (pxmax - pxmin + 1).astype(np.int64)
+            wys = (pymax - pymin + 1).astype(np.int64)
+            for s, wbx, wby, _padded in _raster_batches(wxs, wys):
+                gx = pxmin[s, None, None] + np.arange(wbx, dtype=np.int64)[
+                    None, :, None]
+                gy = pymin[s, None, None] + np.arange(wby, dtype=np.int64)[
+                    None, None, :]
+                # Only the coalesced (power-of-two) fallback can overshoot the
+                # triangle's clipped box; with the exact box every candidate is a
+                # valid grid index and no mask is needed.
+                vmask = (((gx <= pxmax[s, None, None])
+                          & (gy <= pymax[s, None, None])) if _padded else None)
+                PX = (gx - N_r / 2.0) * dx_r
+                PY = (gy - N_r / 2.0) * dx_r
+                X0 = x0k[s, None, None]
+                Y0 = y0k[s, None, None]
+                # barycentric coordinates
+                d00x = (x1k - x0k)[s, None, None]
+                d00y = (y1k - y0k)[s, None, None]
+                d01x = (x2k - x0k)[s, None, None]
+                d01y = (y2k - y0k)[s, None, None]
+                wx = PX - X0
+                wy = PY - Y0
+                dn = den[s, None, None]
+                a1 = (wx * d01y - wy * d01x) / dn
+                a2 = (d00x * wy - d00y * wx) / dn
+                a0 = 1.0 - a1 - a2
+                # HALF-OPEN (top-left rule): a pixel strictly inside a triangle has
+                # all a_i > 0; a pixel ON edge_i has a_i == 0.  A closed test
+                # (a_i >= 0) hands every shared mesh edge (cell diagonals) and
+                # shared vertex (up to 6 triangles) to ALL its neighbours, so the
+                # coherent np.add.at below double- (or 6x-) counts them -- spurious
+                # +50%..+400% energy and 2x-amplitude hot pixels.  Instead award an
+                # on-edge pixel to the single triangle whose mapped edge points up
+                # (or is horizontal pointing right): two triangles sharing a
+                # physical edge see it with opposite direction vectors, so exactly
+                # one claims it -- regardless of fold orientation.  At a shared
+                # vertex two coords are ~0 at once, so BOTH incident edges must
+                # win, which resolves the up-to-6 triangle fan to one owner too.
+                # The band |a_i| <= _EDGE_TOL (not exact == 0) is essential: even a
+                # bit-exact identity map lands pixel centres ~1 ULP off the mapped
+                # nodes, so on-edge a_i evaluate to ~1e-14, never exactly 0.  The
+                # band is applied symmetrically (barely-inside +eps and
+                # barely-outside -eps neighbours both enter the tie-break), so the
+                # single-owner property holds with no gaps.  Interior a_i are
+                # O(0.1..1) >> _EDGE_TOL >> the ~1e-14 boundary noise, so genuine
+                # multi-branch overlaps (distinct sheets from non-adjacent
+                # triangles, a_i strictly interior in both) are untouched.
+                e0i = (e0x[s, None, None], e0y[s, None, None])
+                e1i = (e1x[s, None, None], e1y[s, None, None])
+                e2i = (e2x[s, None, None], e2y[s, None, None])
+                inside = (
+                    ((a0 > _EDGE_TOL) | ((np.abs(a0) <= _EDGE_TOL) & _top_left(*e0i)))
+                    & ((a1 > _EDGE_TOL) | ((np.abs(a1) <= _EDGE_TOL) & _top_left(*e1i)))
+                    & ((a2 > _EDGE_TOL) | ((np.abs(a2) <= _EDGE_TOL) & _top_left(*e2i))))
+                if vmask is not None:
+                    inside &= vmask
+                if not inside.any():
+                    continue
+                # second-order intrapolated OPL (Kraaijpoel eq. 5.7):
+                # T = sum_i a_i [T_i + 1/2 (x - x_i).p_i], p = n*(L, M) (D4)
+                T = (a0 * (T0[s, None, None]
+                           + 0.5 * ((PX - X0) * p0x[s, None, None]
+                                    + (PY - Y0) * p0y[s, None, None]))
+                     + a1 * (T1[s, None, None]
+                             + 0.5 * ((PX - x1k[s, None, None])
+                                      * p1x[s, None, None]
+                                      + (PY - y1k[s, None, None])
+                                      * p1y[s, None, None]))
+                     + a2 * (T2[s, None, None]
+                             + 0.5 * ((PX - x2k[s, None, None])
+                                      * p2x[s, None, None]
+                                      + (PY - y2k[s, None, None])
+                                      * p2y[s, None, None])))
+                Ein_tri = (a0 * E0[s, None, None] + a1 * E1[s, None, None]
+                           + a2 * E2[s, None, None])
+                # branch record: complex amplitude WITH its Maslov phase, and
+                # the eikonal separately (needed by the Ludwig pair-swap)
+                flat = (gx * N_r + gy)[inside]
+                br_idx.append(flat)
+                br_T.append(T[inside])
+                br_A.append((Ein_tri * amp_J[s, None, None]
+                             * ph_br[s, None, None])[inside])
+                np.add.at(nb_flat, flat, 1)
 
-    # our accumulation is indexed [x, y]; the library field convention is
-    # E[y, x] -- transpose on return.
-    E_out = E_out.T
-    n_branch = n_branch.T
+        # ---- assemble the coherent branch sum ------------------------------
+        E_flat = np.zeros(N_r * N_r, dtype=np.complex128)
+        if br_idx:
+            bi = np.concatenate(br_idx)
+            bT = np.concatenate(br_T)
+            bA = np.concatenate(br_A)
+            plain = bA * np.exp(1j * k0 * bT)
+            np.add.at(E_flat, bi, plain)
+            if caustic_band == 'ludwig':
+                # In the Kravtsov-Orlov caustic band (k|S+ - S-| <= pi between a
+                # coalescing branch pair) the plain two-branch sum is invalid --
+                # swap the pair for the Ludwig uniform fold field (finite exactly
+                # where the branch amplitudes diverge; reduces to the plain sum
+                # outside the band by construction).  Grillo & Cordes eq. 47:
+                # uniform-Airy for the coalescing pair, plain GO for the rest.
+                #
+                # VECTORISED over pixels.  The per-pixel Python loop this replaces
+                # cost 0.76-1.07 ms for EVERY multi-branch pixel (measured +3.22 s
+                # over 3 004 pixels at N = 2048 and +9.14 s over 12 020 at
+                # N = 4096, i.e. a 1.5 Mpx two-branch ring would have taken ~20
+                # minutes).  Same selection rule, same arithmetic: sort the
+                # branches of each pixel by eikonal, take the closest ADJACENT
+                # pair, and swap it when its split is inside the band.
+                order = np.argsort(bi, kind='stable')
+                bi_s = bi[order]
+                starts = np.flatnonzero(np.r_[True, bi_s[1:] != bi_s[:-1]])
+                ends = np.r_[starts[1:], bi_s.size]
+                band = np.pi / k0
+                multi = (ends - starts) >= 2
+                if multi.any():
+                    g_start = starts[multi]
+                    g_end = ends[multi]
+                    n_g = g_start.size
+                    n_max = int((g_end - g_start).max())
+                    # Ragged -> padded (n_groups, n_max) of the group members'
+                    # positions in ``order``; pad slots take the group's own first
+                    # member so the sort never sees a sentinel that could become
+                    # the minimum gap.
+                    col = np.arange(n_max)[None, :]
+                    cnt = (g_end - g_start)[:, None]
+                    valid = col < cnt
+                    pos = np.where(valid, g_start[:, None] + col, g_start[:, None])
+                    sel = order[pos]                      # (n_g, n_max)
+                    Ts = np.where(valid, bT[sel], np.inf)
+                    o2 = np.argsort(Ts, axis=1, kind='stable')
+                    rows = np.arange(n_g)[:, None]
+                    sel_s = sel[rows, o2]
+                    Ts_s = Ts[rows, o2]
+                    # gaps between ADJACENT sorted branches; a gap that touches a
+                    # padded slot is +inf and can never be the minimum.
+                    dT = Ts_s[:, 1:] - Ts_s[:, :-1]
+                    dT = np.where(np.isfinite(dT), dT, np.inf)
+                    jmin = np.argmin(dT, axis=1)
+                    dmin = dT[np.arange(n_g), jmin]
+                    hit = np.isfinite(dmin) & (dmin <= band)
+                    if hit.any():
+                        hr = np.nonzero(hit)[0]
+                        jh = jmin[hr]
+                        ia = sel_s[hr, jh]            # lower-S branch  (S-)
+                        ib = sel_s[hr, jh + 1]        # higher-S branch (S+)
+                        Sm = bT[ia]
+                        # floor the eikonal split (removable 0/0 in the g1 term
+                        # exactly at coalescence)
+                        Sp = np.maximum(bT[ib], Sm + 1e-4 * wavelength)
+                        uni = ludwig_fold(k0, Sp, Sm, bA[ib], bA[ia])
+                        # Each group owns one pixel, and a pixel appears in at most
+                        # one group, so these writes do not collide -- but use
+                        # ``np.add.at`` anyway so the accumulation rule is the same
+                        # one the plain sum used.
+                        np.add.at(E_flat, bi_s[g_start[hr]],
+                                  uni - (plain[ia] + plain[ib]))
+        E_out = E_flat.reshape(N_r, N_r)
 
+        # our accumulation is indexed [x, y]; the library field convention is
+        # E[y, x] -- transpose on return.
+        E_out = E_out.T
+        n_branch = n_branch.T
+
+        return E_out, n_branch, _p_in_tri
+
+    E_out, n_branch, _p_in_tri = _render(N, dx)
     # ---- axial point-focus catastrophe tripwire (D5 / audit T2) ---------
     # Independent energy oracle: at a rotationally-symmetric on-axis focus a
     # RING of branches coalesces where the fold-uniform 'ludwig' swap
@@ -1072,6 +1299,40 @@ def apply_real_lens_traced_multibranch(
     # blow-up is 1e5x (measured 1.8e+05 at 0.98 BFL on the same fixture) and
     # the audit's silent pre-focus band is 4-8x -- decades outside either.
     p_in_hi = max(p_in, _p_in_tri)
+
+    # ---- the PIXEL-HALVING ARBITER (WP-B7c round 2) ---------------------
+    # Re-rasterise the SAME mapped triangles onto a half-pitch grid over the
+    # same physical window and compare the deposited power.  See
+    # ``_PIXEL_CONTINUITY_MAX`` for what the reading means and why it is the
+    # quantity a refusal can be decided on where ``power_ratio`` is not.
+    # Costs one rasterisation, never a second trace.
+    _continuity = None
+    _p_out_half = None
+    _E_half = None
+    _continuity_decision = 'not_requested'
+    if pixel_halving_arbiter:
+        if 4 * N * N > _ARBITER_MAX_FINE_ENTRIES:
+            _continuity_decision = 'not_measured'
+        elif p_out <= 0.0:
+            # an identically-zero coarse render is refused above; a zero
+            # numerator here would make the ratio meaningless rather than
+            # large, so say so instead of reporting 0.0
+            _continuity_decision = 'not_measured'
+        else:
+            _E_half, _nb_half, _ = _render(2 * N, 0.5 * dx)
+            _p_out_half = float(np.sum(np.abs(_E_half) ** 2)) * (
+                0.25 * dx * dx)
+            if _p_out_half <= 0.0:
+                _continuity_decision = 'not_measured'
+            else:
+                _continuity = p_out / _p_out_half
+                if _continuity > _PIXEL_CONTINUITY_MAX:
+                    _continuity_decision = 'not_converged_gain'
+                elif _continuity < _PIXEL_CONTINUITY_MIN:
+                    _continuity_decision = 'not_converged_loss'
+                else:
+                    _continuity_decision = 'ok'
+            del _nb_half
 
     # TOTAL COLLAPSE.  This is the only outcome of the four that is not merely
     # inaccurate but EMPTY, and before this census it reached the caller as an
@@ -1150,6 +1411,19 @@ def apply_real_lens_traced_multibranch(
                        'input_carrier': (kcx, kcy),
                        'n_triangles': _n_tri, 'n_triangles_finite': _n_finite,
                        'n_triangles_degenerate': _n_degenerate,
+                       # the largest number of mapped triangles that land on
+                       # ONE pixel -- the quadrature statistic the energy
+                       # tripwire's mechanism note is written on (it rises
+                       # 2 -> 797 across the blow-up window), and the number a
+                       # caller needs to tell a two-branch fold from a
+                       # collapsing ring without re-deriving ``n_branch``
+                       'n_branch_max': int(n_branch.max()),
+                       # the two denominators of ``power_ratio`` /
+                       # ``power_ratio_triangles``, in absolute units [W], so a
+                       # consumer can normalise its OWN field against the same
+                       # launched power instead of re-deriving it
+                       'launched_power': p_in,
+                       'launched_power_triangles': _p_in_tri,
                        # reconstructed grid power / launched power reaching
                        # the grid: 1.0 = energy conserved by the branch sum
                        'power_ratio': (p_out / p_in) if p_in > 0.0
@@ -1160,5 +1434,26 @@ def apply_real_lens_traced_multibranch(
                        # straddle the grid boundary
                        'power_ratio_triangles': (
                            (p_out / _p_in_tri) if _p_in_tri > 0.0
-                           else None)}
+                           else None),
+                       # THE PIXEL-HALVING ARBITER (WP-B7c round 2).  The
+                       # deposited power of this render over that of the SAME
+                       # triangles rasterised at half the pitch on the same
+                       # window: ~1 when the point-sampled quadrature has
+                       # converged in the pixel, ~4 per halving when it has
+                       # not.  ``None`` unless the reading was asked for (the
+                       # decision then says which).
+                       'pixel_continuity': _continuity,
+                       'pixel_continuity_band': (_PIXEL_CONTINUITY_MIN,
+                                                 _PIXEL_CONTINUITY_MAX),
+                       'pixel_continuity_decision': _continuity_decision,
+                       'pixel_halved_power': _p_out_half,
+                       # the half-pitch RENDER itself, so a consumer that
+                       # post-processes this field (the uniform completion
+                       # does: it keeps the bright side verbatim and rewrites
+                       # the fold band and the dark tail) can put ITS OWN
+                       # output through the same control instead of deciding
+                       # on a reading of an intermediate it does not return.
+                       # ``None`` unless the arbiter was asked for.
+                       'pixel_halved_field': _E_half,
+                       'grid_power': p_out}
     return E_out

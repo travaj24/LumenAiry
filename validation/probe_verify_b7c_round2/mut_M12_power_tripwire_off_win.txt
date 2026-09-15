@@ -1,0 +1,14 @@
+..........s..ss..s..sssF....                                             [100%]
+================================== FAILURES ===================================
+E   assert 1000000000.0 == 2.0
+C:\tmp\lum_vmb2_mut\tests\unit\test_audit2609_b7c_multibranch_envelope.py:281: assert 1000000000.0 == 2.0
+=========================== short test summary info ===========================
+SKIPPED [1] tests\unit\test_audit2609_b7c2_pixel_halving_arbiter.py:611: this build has no single-valued refused plane on the doublet ladder
+SKIPPED [1] tests\unit\test_verify_b7c_multibranch.py:264: this build does not refuse the coarse-grid plane
+SKIPPED [1] tests\unit\test_verify_b7c_multibranch.py:341: this build does not separate the two denominators across the bar on the D3 geometry
+SKIPPED [1] tests\unit\test_verify_b7c_multibranch.py:475: this build does not refuse either doublet plane
+SKIPPED [1] tests\unit\test_audit2609_b7c_multibranch_envelope.py:196: no rung of the ladder reproduces the blow-up on this build; the invariant arm above ran instead
+SKIPPED [1] tests\unit\test_audit2609_b7c_multibranch_envelope.py:226: no rung of the ladder reproduces the blow-up on this build
+SKIPPED [1] tests\unit\test_audit2609_b7c_multibranch_envelope.py:248: no rung of the ladder reproduces the blow-up on this build
+FAILED tests/unit/test_audit2609_b7c_multibranch_envelope.py::test_b7c_the_refusal_band_is_coupled_to_the_constants_it_was_derived_on
+1 failed, 20 passed, 7 skipped in 57.86s

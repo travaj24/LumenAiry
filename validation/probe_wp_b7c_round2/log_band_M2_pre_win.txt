@@ -1,0 +1,2 @@
+lumenairy C:\tmp\lum_mb2_pre\lumenairy\__init__.py  arbiter=False  phi=debye
+M      z=  2343.00 br=504.386447 C=    None/    None nbr=None fid_uni=0.40159 pow_uni=506.9034 fid_wv=0.9985 fold Airy scale under-resolved by the grid

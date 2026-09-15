@@ -1,0 +1,10 @@
+..F.........................                                             [100%]
+================================== FAILURES ===================================
+E   AssertionError: assert 'ok' == 'not_measured'
+      
+      - not_measured
+      + ok
+C:\tmp\lum_vmb2_mut\tests\unit\test_audit2609_b7c2_pixel_halving_arbiter.py:263: AssertionError: assert 'ok' == 'not_measured'
+=========================== short test summary info ===========================
+FAILED tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py::test_b7c2_past_the_entry_cap_the_reading_says_so_and_the_field_returns
+1 failed, 27 passed in 54.86s

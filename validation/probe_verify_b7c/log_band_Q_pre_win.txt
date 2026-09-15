@@ -1,0 +1,16 @@
+Q z=  5400.00 br=    1.1060261504756423 nbr= None fid_uni=0.836626 pow_uni=1.11016164 fid_wv=0.9989 zx=      None no_fold
+Q z=  5408.00 br=     1.226129906564339 nbr= None fid_uni=0.787073 pow_uni=1.23064319 fid_wv=0.9989 zx=      None no_fold
+Q z=  5412.00 br=    1.3518381766765355 nbr= None fid_uni=0.754684 pow_uni=1.35677401 fid_wv=0.9989 zx=      None no_fold
+Q z=  5416.00 br=      1.53243787043023 nbr= None fid_uni=0.714076 pow_uni=1.53798708 fid_wv=0.9989 zx=      None no_fold
+Q z=  5420.00 br=     1.826033691921777 nbr= None fid_uni=0.666129 pow_uni=1.83259081 fid_wv=0.9989 zx=      None no_fold
+Q z=  5422.00 br=     2.036004568762928 nbr= None fid_uni=0.637035 pow_uni=2.04328477 fid_wv=0.9989 zx=      None no_fold
+Q z=  5426.00 br=     2.717521391002459 nbr= None fid_uni=0.577574 pow_uni=2.72715590 fid_wv=0.9989 zx=      None no_fold
+Q z=  5430.00 br=     4.071152529316967 nbr= None fid_uni=0.510431 pow_uni=4.08546250 fid_wv=0.9989 zx=      None no_fold
+Q z=  5432.00 br=     5.305964388933625 nbr= None fid_uni=0.474674 pow_uni=5.32453438 fid_wv=0.9989 zx=      None no_fold
+Q z=  5436.00 br=    11.061703272834867 nbr= None fid_uni=0.405286 pow_uni=11.1000843 fid_wv=0.9989 zx=      None no_fold
+Q z=  5444.00 br=   0.41395935231663966 nbr= None fid_uni=0.828684 pow_uni=0.41537118 fid_wv=0.9989 zx=      None no_fold
+Q z=  5460.00 br=     3.216132756639941 nbr= None fid_uni=0.291911 pow_uni=3.22674468 fid_wv=0.9989 zx=      None bad_kappa
+Q z=  5466.00 br=    11238.102461237935 nbr= None fid_uni=0.310938 pow_uni=11274.7572 fid_wv=0.9989 zx=      None bad_kappa
+Q z=  5660.00 br=     0.743096551603527 nbr= None fid_uni=0.992805 pow_uni=1.04852106 fid_wv=0.9989 zx=0.63642581 fold_ring
+Q z=  5680.00 br=    0.8230139631471143 nbr= None fid_uni=0.991874 pow_uni=1.04267891 fid_wv=0.9989 zx=0.71829660 fold_ring
+Q z=  5700.00 br=    0.8373115267896253 nbr= None fid_uni=0.988517 pow_uni=1.04127016 fid_wv=0.9989 zx=0.81096586 fold_ring

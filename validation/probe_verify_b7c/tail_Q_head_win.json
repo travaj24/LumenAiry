@@ -1,0 +1,117 @@
+{
+ "lumenairy_file": "C:\\tmp\\lum_vmb\\lumenairy\\__init__.py",
+ "python": "3.14.6",
+ "numpy": "2.4.4",
+ "fixture": "Q",
+ "note": "cemented doublet N-BK7 R=+3.0/-2.0 + N-SF6 -2.0/-6.0, 1.40 mm aperture, 1.31 um",
+ "rows": [
+  {
+   "z_um": 5660.0,
+   "reason": "fold_ring",
+   "fell_back": false,
+   "zeta_linear_range": 4.159046583232724e-05,
+   "zeta_curvature": 15724.41010718827,
+   "zeta_linear_resid": 0.003294190710632695,
+   "dark_fill_depth": 0.00010752830511403226,
+   "l_airy": 5.3764152557016125e-06,
+   "r_c": 1.0397827854643929e-05,
+   "kappa": 6.5398554129651485,
+   "zeta_extrapolation": 0.6364258185625608,
+   "fit_halfwidth": 5.3764152557016125e-06,
+   "u_star_over_l_airy": 7.735724242695193,
+   "fill_cells": 20.0,
+   "digest": "5dc41ade3b5377cac28346c971ebf905ad809ec963681e0d063f416806d43970",
+   "monkeypatch": {
+    "tiny": {
+     "digest_equal": true,
+     "reported": 1e-12
+    },
+    "huge": {
+     "digest_equal": true,
+     "reported": 1000000.0
+    }
+   },
+   "annulus_ratio": {
+    "1": 0.9830821862905762,
+    "2": 0.9675188322566624,
+    "3": 0.9697087793530726,
+    "5": 0.9682534458094137,
+    "10": 0.9656462794488246,
+    "20": 0.9637716075908637
+   },
+   "excess_inside_3_frac": 0.8361182661609985
+  },
+  {
+   "z_um": 5680.0,
+   "reason": "fold_ring",
+   "fell_back": false,
+   "zeta_linear_range": 4.821892603623682e-05,
+   "zeta_curvature": 13209.254907976017,
+   "zeta_linear_resid": 0.00255834019122025,
+   "dark_fill_depth": 0.00011040661447273726,
+   "l_airy": 5.520330723636863e-06,
+   "r_c": 1.1817411840225238e-05,
+   "kappa": 6.369360854014938,
+   "zeta_extrapolation": 0.7182966054860418,
+   "fit_halfwidth": 5.520330723636863e-06,
+   "u_star_over_l_airy": 8.73478935415478,
+   "fill_cells": 20.0,
+   "digest": "36c4150226fdcdbc04b5c02b490bd97e84c485ad232786965715c5090c19739d",
+   "monkeypatch": {
+    "tiny": {
+     "digest_equal": true,
+     "reported": 1e-12
+    },
+    "huge": {
+     "digest_equal": true,
+     "reported": 1000000.0
+    }
+   },
+   "annulus_ratio": {
+    "1": 1.0421354507279508,
+    "2": 1.024110003044711,
+    "3": 1.0221742864255219,
+    "5": 1.02031315205229,
+    "10": 1.0158746623294974,
+    "20": 1.01325806082545
+   },
+   "excess_inside_3_frac": 1.6725135536379807
+  },
+  {
+   "z_um": 5699.999999999999,
+   "reason": "fold_ring",
+   "fell_back": false,
+   "zeta_linear_range": 5.4695317871387175e-05,
+   "zeta_curvature": 11368.161272003794,
+   "zeta_linear_resid": 0.0020320397984482964,
+   "dark_fill_depth": 0.00011309686602332486,
+   "l_airy": 5.654843301166243e-06,
+   "r_c": 1.3287179934523183e-05,
+   "kappa": 6.217851943854407,
+   "zeta_extrapolation": 0.810965867368887,
+   "fit_halfwidth": 5.654843301166243e-06,
+   "u_star_over_l_airy": 9.672295934373095,
+   "fill_cells": 20.0,
+   "digest": "a13d3d11456c366c9ed9169991d04de1d66a341f93f2a6348c618e186ae5510d",
+   "monkeypatch": {
+    "tiny": {
+     "digest_equal": true,
+     "reported": 1e-12
+    },
+    "huge": {
+     "digest_equal": true,
+     "reported": 1000000.0
+    }
+   },
+   "annulus_ratio": {
+    "1": 1.0229405818246178,
+    "2": 1.034489276938451,
+    "3": 1.0360151520761536,
+    "5": 1.0336608520473183,
+    "10": 1.0292021156070426,
+    "20": 1.0262680191901457
+   },
+   "excess_inside_3_frac": 1.3710646324510272
+  }
+ ]
+}

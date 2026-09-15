@@ -1,0 +1,980 @@
+{
+ "summary": {
+  "n_cases": 32,
+  "n_identical": 29,
+  "n_moved": 3,
+  "identical": [
+   "P_uni_fold",
+   "P_uni_fallback",
+   "P_uni_vertex",
+   "P_mb_fold",
+   "P_mb_blow",
+   "Q_uni_fold",
+   "Q_uni_fallback",
+   "Q_uni_vertex",
+   "Q_mb_fold",
+   "Q_mb_blow",
+   "M_uni_fold",
+   "M_uni_fallback",
+   "M_uni_vertex",
+   "M_mb_fold",
+   "M_mb_blow",
+   "S_uni_fold",
+   "S_uni_fallback",
+   "S_uni_vertex",
+   "S_mb_fold",
+   "S_mb_blow",
+   "P_alt_uni_fold",
+   "Q_alt_uni_fold",
+   "M_alt_uni_fold",
+   "S_alt_uni_fold",
+   "P_mb_plain",
+   "S_uni_c64",
+   "P_uni_gap",
+   "Q_uni_gap",
+   "M_mb_sub4"
+  ],
+  "moved": [
+   {
+    "id": "P_uni_refused",
+    "base_digest": "a258efe1c797354afda62e05b423217c12c018d05d36bfa9bbd8014fc830557e",
+    "head_digest": null,
+    "base_error": null,
+    "head_error": "RuntimeError: apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side field this completion is built on carries 4.49x the launched power that reaches",
+    "base_power": 8.051215864902152e-07,
+    "head_power": null,
+    "base_warnings": 3,
+    "head_warnings": null
+   },
+   {
+    "id": "Q_uni_refused",
+    "base_digest": "2c710d2a0826e1e1ad5d09e01cbd698965e960c82d5c9fc8591d8d90886cccac",
+    "head_digest": null,
+    "base_error": null,
+    "head_error": "RuntimeError: apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side field this completion is built on carries 3.216x the launched power that reache",
+    "base_power": 1.1472710254286546e-06,
+    "head_power": null,
+    "base_warnings": 2,
+    "head_warnings": null
+   },
+   {
+    "id": "P_uni_blow",
+    "base_digest": "d116820addceba19a1493cc3c58da5281cef6cec4f52f5ccbeca374079834828",
+    "head_digest": null,
+    "base_error": null,
+    "head_error": "RuntimeError: apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side field this completion is built on carries 54.94x the launched power that reache",
+    "base_power": 9.85178574201037e-06,
+    "head_power": null,
+    "base_warnings": 3,
+    "head_warnings": null
+   }
+  ],
+  "base": {
+   "sha": "96cb2096",
+   "lumenairy_file": "C:\\Users\\Tesla\\AppData\\Local\\Temp\\claude\\C--Users-Tesla\\372a2d1f-acbe-4b57-a148-eeae3fe1d729\\scratchpad\\vb7c\\tree_96cb2096\\lumenairy\\__init__.py",
+   "lumenairy_version": "5.47.0",
+   "python": "3.14.6",
+   "numpy": "2.4.4"
+  },
+  "head": {
+   "sha": "119b8bb6",
+   "lumenairy_file": "C:\\Users\\Tesla\\AppData\\Local\\Temp\\claude\\C--Users-Tesla\\372a2d1f-acbe-4b57-a148-eeae3fe1d729\\scratchpad\\vb7c\\tree_119b8bb6\\lumenairy\\__init__.py",
+   "lumenairy_version": "5.47.0",
+   "python": "3.14.6",
+   "numpy": "2.4.4"
+  }
+ },
+ "base": {
+  "lumenairy_file": "C:\\Users\\Tesla\\AppData\\Local\\Temp\\claude\\C--Users-Tesla\\372a2d1f-acbe-4b57-a148-eeae3fe1d729\\scratchpad\\vb7c\\tree_96cb2096\\lumenairy\\__init__.py",
+  "lumenairy_version": "5.47.0",
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "cases": {
+   "P_uni_fold": {
+    "member": "uniform",
+    "fixture": "P",
+    "z": 0.000888,
+    "digest": "efd8e1952cbaca85d8f5d48eb8cd8ffb77cae756a30de752417bebc566c8ebea",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.7868006996915506e-07,
+    "n_warnings": 0,
+    "error": null
+   },
+   "P_uni_fallback": {
+    "member": "uniform",
+    "fixture": "P",
+    "z": 0.001,
+    "digest": "6cd6fbc17940b8b7ed12f4e9998d68f0d60626a1a1e709c63f6af52dbef94653",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.7073385815269054e-07,
+    "n_warnings": 1,
+    "error": null
+   },
+   "P_uni_vertex": {
+    "member": "uniform",
+    "fixture": "P",
+    "z": 0.0,
+    "digest": "2c57d7c7a1ddb83b53e2edcb20ec22683eea5ae94bda1322ea9dd3c518e1b67b",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.791663103165536e-07,
+    "n_warnings": 1,
+    "error": null
+   },
+   "P_mb_fold": {
+    "member": "multibranch",
+    "fixture": "P",
+    "z": 0.000888,
+    "digest": "d7c61ee408c3818e6993435feb8e3ed1790538ced8b911c3871dbff84155a638",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.7444631087669875e-07,
+    "n_warnings": 0,
+    "error": null
+   },
+   "P_mb_blow": {
+    "member": "multibranch",
+    "fixture": "P",
+    "z": 0.001016,
+    "digest": "d116820addceba19a1493cc3c58da5281cef6cec4f52f5ccbeca374079834828",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 9.85178574201037e-06,
+    "n_warnings": 2,
+    "error": null
+   },
+   "Q_uni_fold": {
+    "member": "uniform",
+    "fixture": "Q",
+    "z": 0.00568,
+    "digest": "36c4150226fdcdbc04b5c02b490bd97e84c485ad232786965715c5090c19739d",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 3.704948244290617e-07,
+    "n_warnings": 0,
+    "error": null
+   },
+   "Q_uni_fallback": {
+    "member": "uniform",
+    "fixture": "Q",
+    "z": 0.0054,
+    "digest": "211f0f49bca7fd83e6a01cfcaa23817c167ee3c74538f60e9fe967bae2801f3f",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 3.9454582625275463e-07,
+    "n_warnings": 1,
+    "error": null
+   },
+   "Q_uni_vertex": {
+    "member": "uniform",
+    "fixture": "Q",
+    "z": 0.0,
+    "digest": "a8f7510e53b4570d6f1abd4f8d97b3dd51ed80dc5f9e4c255dbd9b538b6bfd47",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 3.56467696986606e-07,
+    "n_warnings": 1,
+    "error": null
+   },
+   "Q_mb_fold": {
+    "member": "multibranch",
+    "fixture": "Q",
+    "z": 0.00568,
+    "digest": "ea5e9feb096edaf96018180e9373d54283bc103aade737ad59086aeffd537432",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 2.935886497510028e-07,
+    "n_warnings": 0,
+    "error": null
+   },
+   "Q_mb_blow": {
+    "member": "multibranch",
+    "fixture": "Q",
+    "z": 0.005466,
+    "digest": "6f81c7b5605ab5222f700e1c644f6a5822d24f49a2647a9677684fda03b99366",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 0.004008898360319091,
+    "n_warnings": 1,
+    "error": null
+   },
+   "M_uni_fold": {
+    "member": "uniform",
+    "fixture": "M",
+    "z": 0.00224217,
+    "digest": "a254cc823eb785fa95124aa79c7f3b72639d2e5727c2d02ae4f13ed7b7e7de5d",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 2.612327397154322e-07,
+    "n_warnings": 0,
+    "error": null
+   },
+   "M_uni_fallback": {
+    "member": "uniform",
+    "fixture": "M",
+    "z": 0.00233,
+    "digest": "ae7417e15eb3915315b82d893ab26afd3c88ee99d1974fca488249f597c6ff5d",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.5676905871452964e-07,
+    "n_warnings": 1,
+    "error": null
+   },
+   "M_uni_vertex": {
+    "member": "uniform",
+    "fixture": "M",
+    "z": 0.0,
+    "digest": "db80a915095e9637fbe0135604d49e8d10c7d4ac8a80885b450b11b3180dd238",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 2.340308761268603e-07,
+    "n_warnings": 1,
+    "error": null
+   },
+   "M_mb_fold": {
+    "member": "multibranch",
+    "fixture": "M",
+    "z": 0.00224217,
+    "digest": "2b689448795c0f11e7fd53a00910388cadf219e489907db21f75c6baf7eccec5",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 2.145212336625572e-07,
+    "n_warnings": 0,
+    "error": null
+   },
+   "M_mb_blow": {
+    "member": "multibranch",
+    "fixture": "M",
+    "z": 0.002343,
+    "digest": "5bdad2233745d522d6579a31f50003abf830fb45af20b118e6c4ebb3e6ad9d78",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 0.0001182113035569951,
+    "n_warnings": 2,
+    "error": null
+   },
+   "S_uni_fold": {
+    "member": "uniform",
+    "fixture": "S",
+    "z": 0.00321478,
+    "digest": "f44ebb3aa1cec4406eb6183fec6dfbbfa0b2f97b2b583519837704360560c91e",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.8653026308531611e-07,
+    "n_warnings": 0,
+    "error": null
+   },
+   "S_uni_fallback": {
+    "member": "uniform",
+    "fixture": "S",
+    "z": 0.00325391,
+    "digest": "73465e8e4b48bbdb3c271fabfca3e4962f8d923b9097dca05294424520387461",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.3256723504554573e-07,
+    "n_warnings": 1,
+    "error": null
+   },
+   "S_uni_vertex": {
+    "member": "uniform",
+    "fixture": "S",
+    "z": 0.0,
+    "digest": "d33e286500d2f651234fe2434ef9a22d53ce97196964373ad4121c6d6cb5fd28",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.7004252272335327e-07,
+    "n_warnings": 1,
+    "error": null
+   },
+   "S_mb_fold": {
+    "member": "multibranch",
+    "fixture": "S",
+    "z": 0.00321478,
+    "digest": "97561f714c60babc169c7a7bda970278229db2f6f0835416bee5a39899a10662",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.6126336747752866e-07,
+    "n_warnings": 0,
+    "error": null
+   },
+   "S_mb_blow": {
+    "member": "multibranch",
+    "fixture": "S",
+    "z": 0.00327402,
+    "digest": "9323d06f17d885c4790b4c136039328e8c6c610a01b89062e7e0caac0505cb52",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.8669502240448568e-05,
+    "n_warnings": 2,
+    "error": null
+   },
+   "P_alt_uni_fold": {
+    "member": "uniform",
+    "fixture": "P_alt",
+    "z": 0.000888,
+    "digest": "893f387523b212bc72ef7826b2bd003c9fabcfb4d62aaf8cc7c39771c32d1db7",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "power": 1.7907623517014805e-07,
+    "n_warnings": 0,
+    "error": null
+   },
+   "Q_alt_uni_fold": {
+    "member": "uniform",
+    "fixture": "Q_alt",
+    "z": 0.00568,
+    "digest": "e697572766b24e6fcedf698dcf3ba5a2440be34907e03c5574b005f92e0ca27b",
+    "dtype": "complex128",
+    "shape": [
+     384,
+     384
+    ],
+    "power": 3.636466667955781e-07,
+    "n_warnings": 0,
+    "error": null
+   },
+   "M_alt_uni_fold": {
+    "member": "uniform",
+    "fixture": "M_alt",
+    "z": 0.00224217,
+    "digest": "394280cda440d3e5a7b3a8b3229d7ccb78a0df0975a55ce2bb8f5e8e26a239c9",
+    "dtype": "complex128",
+    "shape": [
+     400,
+     400
+    ],
+    "power": 2.1581770792473501e-07,
+    "n_warnings": 1,
+    "error": null
+   },
+   "S_alt_uni_fold": {
+    "member": "uniform",
+    "fixture": "S_alt",
+    "z": 0.00321478,
+    "digest": "389d7d9848e874f92bd338b38443005865a0bd4dfcbb4b08fc9dbf670df33868",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "power": 1.8798559779328682e-07,
+    "n_warnings": 0,
+    "error": null
+   },
+   "P_mb_plain": {
+    "member": "multibranch",
+    "fixture": "P",
+    "z": 0.000888,
+    "digest": "642dadfae817d3a6834285cc791c1352f75c7a06a0a094985ebb301ee10fbb82",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.8465741548575845e-07,
+    "n_warnings": 0,
+    "error": null
+   },
+   "S_uni_c64": {
+    "member": "uniform",
+    "fixture": "S",
+    "z": 0.00321478,
+    "digest": "b32082887b9648bf491ef2da8961ed3cd052151bf7347920ffc5afde384814ca",
+    "dtype": "complex64",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.8653027343750004e-07,
+    "n_warnings": 0,
+    "error": null
+   },
+   "P_uni_gap": {
+    "member": "uniform",
+    "fixture": "P",
+    "z": 0.0010152,
+    "digest": "5c3a17ef781186f0ec9a24eca24c11f0f2609da33daf5360ea33e8a4bf88cabb",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 2.401996967400023e-07,
+    "n_warnings": 2,
+    "error": null
+   },
+   "Q_uni_gap": {
+    "member": "uniform",
+    "fixture": "Q",
+    "z": 0.00542,
+    "digest": "ee7640c8b62617e65d068d49d5ea775a819cff432e6202f36ed450c24b5de2d5",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 6.513896361626096e-07,
+    "n_warnings": 1,
+    "error": null
+   },
+   "P_uni_refused": {
+    "member": "uniform",
+    "fixture": "P",
+    "z": 0.00101534,
+    "digest": "a258efe1c797354afda62e05b423217c12c018d05d36bfa9bbd8014fc830557e",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 8.051215864902152e-07,
+    "n_warnings": 3,
+    "error": null
+   },
+   "Q_uni_refused": {
+    "member": "uniform",
+    "fixture": "Q",
+    "z": 0.00546,
+    "digest": "2c710d2a0826e1e1ad5d09e01cbd698965e960c82d5c9fc8591d8d90886cccac",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.1472710254286546e-06,
+    "n_warnings": 2,
+    "error": null
+   },
+   "P_uni_blow": {
+    "member": "uniform",
+    "fixture": "P",
+    "z": 0.001016,
+    "digest": "d116820addceba19a1493cc3c58da5281cef6cec4f52f5ccbeca374079834828",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 9.85178574201037e-06,
+    "n_warnings": 3,
+    "error": null
+   },
+   "M_mb_sub4": {
+    "member": "multibranch",
+    "fixture": "M",
+    "z": 0.00224217,
+    "digest": "fd6485b4421920801c36a3dea364282f9972f7a0754aae9fcd50ad6cd5f939c8",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 2.146297855070605e-07,
+    "n_warnings": 0,
+    "error": null
+   }
+  },
+  "sha": "96cb2096"
+ },
+ "head": {
+  "lumenairy_file": "C:\\Users\\Tesla\\AppData\\Local\\Temp\\claude\\C--Users-Tesla\\372a2d1f-acbe-4b57-a148-eeae3fe1d729\\scratchpad\\vb7c\\tree_119b8bb6\\lumenairy\\__init__.py",
+  "lumenairy_version": "5.47.0",
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "cases": {
+   "P_uni_fold": {
+    "member": "uniform",
+    "fixture": "P",
+    "z": 0.000888,
+    "digest": "efd8e1952cbaca85d8f5d48eb8cd8ffb77cae756a30de752417bebc566c8ebea",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.7868006996915506e-07,
+    "n_warnings": 0,
+    "error": null
+   },
+   "P_uni_fallback": {
+    "member": "uniform",
+    "fixture": "P",
+    "z": 0.001,
+    "digest": "6cd6fbc17940b8b7ed12f4e9998d68f0d60626a1a1e709c63f6af52dbef94653",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.7073385815269054e-07,
+    "n_warnings": 1,
+    "error": null
+   },
+   "P_uni_vertex": {
+    "member": "uniform",
+    "fixture": "P",
+    "z": 0.0,
+    "digest": "2c57d7c7a1ddb83b53e2edcb20ec22683eea5ae94bda1322ea9dd3c518e1b67b",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.791663103165536e-07,
+    "n_warnings": 1,
+    "error": null
+   },
+   "P_mb_fold": {
+    "member": "multibranch",
+    "fixture": "P",
+    "z": 0.000888,
+    "digest": "d7c61ee408c3818e6993435feb8e3ed1790538ced8b911c3871dbff84155a638",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.7444631087669875e-07,
+    "n_warnings": 0,
+    "error": null
+   },
+   "P_mb_blow": {
+    "member": "multibranch",
+    "fixture": "P",
+    "z": 0.001016,
+    "digest": "d116820addceba19a1493cc3c58da5281cef6cec4f52f5ccbeca374079834828",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 9.85178574201037e-06,
+    "n_warnings": 2,
+    "error": null
+   },
+   "Q_uni_fold": {
+    "member": "uniform",
+    "fixture": "Q",
+    "z": 0.00568,
+    "digest": "36c4150226fdcdbc04b5c02b490bd97e84c485ad232786965715c5090c19739d",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 3.704948244290617e-07,
+    "n_warnings": 0,
+    "error": null
+   },
+   "Q_uni_fallback": {
+    "member": "uniform",
+    "fixture": "Q",
+    "z": 0.0054,
+    "digest": "211f0f49bca7fd83e6a01cfcaa23817c167ee3c74538f60e9fe967bae2801f3f",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 3.9454582625275463e-07,
+    "n_warnings": 1,
+    "error": null
+   },
+   "Q_uni_vertex": {
+    "member": "uniform",
+    "fixture": "Q",
+    "z": 0.0,
+    "digest": "a8f7510e53b4570d6f1abd4f8d97b3dd51ed80dc5f9e4c255dbd9b538b6bfd47",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 3.56467696986606e-07,
+    "n_warnings": 1,
+    "error": null
+   },
+   "Q_mb_fold": {
+    "member": "multibranch",
+    "fixture": "Q",
+    "z": 0.00568,
+    "digest": "ea5e9feb096edaf96018180e9373d54283bc103aade737ad59086aeffd537432",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 2.935886497510028e-07,
+    "n_warnings": 0,
+    "error": null
+   },
+   "Q_mb_blow": {
+    "member": "multibranch",
+    "fixture": "Q",
+    "z": 0.005466,
+    "digest": "6f81c7b5605ab5222f700e1c644f6a5822d24f49a2647a9677684fda03b99366",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 0.004008898360319091,
+    "n_warnings": 1,
+    "error": null
+   },
+   "M_uni_fold": {
+    "member": "uniform",
+    "fixture": "M",
+    "z": 0.00224217,
+    "digest": "a254cc823eb785fa95124aa79c7f3b72639d2e5727c2d02ae4f13ed7b7e7de5d",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 2.612327397154322e-07,
+    "n_warnings": 0,
+    "error": null
+   },
+   "M_uni_fallback": {
+    "member": "uniform",
+    "fixture": "M",
+    "z": 0.00233,
+    "digest": "ae7417e15eb3915315b82d893ab26afd3c88ee99d1974fca488249f597c6ff5d",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.5676905871452964e-07,
+    "n_warnings": 1,
+    "error": null
+   },
+   "M_uni_vertex": {
+    "member": "uniform",
+    "fixture": "M",
+    "z": 0.0,
+    "digest": "db80a915095e9637fbe0135604d49e8d10c7d4ac8a80885b450b11b3180dd238",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 2.340308761268603e-07,
+    "n_warnings": 1,
+    "error": null
+   },
+   "M_mb_fold": {
+    "member": "multibranch",
+    "fixture": "M",
+    "z": 0.00224217,
+    "digest": "2b689448795c0f11e7fd53a00910388cadf219e489907db21f75c6baf7eccec5",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 2.145212336625572e-07,
+    "n_warnings": 0,
+    "error": null
+   },
+   "M_mb_blow": {
+    "member": "multibranch",
+    "fixture": "M",
+    "z": 0.002343,
+    "digest": "5bdad2233745d522d6579a31f50003abf830fb45af20b118e6c4ebb3e6ad9d78",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 0.0001182113035569951,
+    "n_warnings": 2,
+    "error": null
+   },
+   "S_uni_fold": {
+    "member": "uniform",
+    "fixture": "S",
+    "z": 0.00321478,
+    "digest": "f44ebb3aa1cec4406eb6183fec6dfbbfa0b2f97b2b583519837704360560c91e",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.8653026308531611e-07,
+    "n_warnings": 0,
+    "error": null
+   },
+   "S_uni_fallback": {
+    "member": "uniform",
+    "fixture": "S",
+    "z": 0.00325391,
+    "digest": "73465e8e4b48bbdb3c271fabfca3e4962f8d923b9097dca05294424520387461",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.3256723504554573e-07,
+    "n_warnings": 1,
+    "error": null
+   },
+   "S_uni_vertex": {
+    "member": "uniform",
+    "fixture": "S",
+    "z": 0.0,
+    "digest": "d33e286500d2f651234fe2434ef9a22d53ce97196964373ad4121c6d6cb5fd28",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.7004252272335327e-07,
+    "n_warnings": 1,
+    "error": null
+   },
+   "S_mb_fold": {
+    "member": "multibranch",
+    "fixture": "S",
+    "z": 0.00321478,
+    "digest": "97561f714c60babc169c7a7bda970278229db2f6f0835416bee5a39899a10662",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.6126336747752866e-07,
+    "n_warnings": 0,
+    "error": null
+   },
+   "S_mb_blow": {
+    "member": "multibranch",
+    "fixture": "S",
+    "z": 0.00327402,
+    "digest": "9323d06f17d885c4790b4c136039328e8c6c610a01b89062e7e0caac0505cb52",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.8669502240448568e-05,
+    "n_warnings": 2,
+    "error": null
+   },
+   "P_alt_uni_fold": {
+    "member": "uniform",
+    "fixture": "P_alt",
+    "z": 0.000888,
+    "digest": "893f387523b212bc72ef7826b2bd003c9fabcfb4d62aaf8cc7c39771c32d1db7",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "power": 1.7907623517014805e-07,
+    "n_warnings": 0,
+    "error": null
+   },
+   "Q_alt_uni_fold": {
+    "member": "uniform",
+    "fixture": "Q_alt",
+    "z": 0.00568,
+    "digest": "e697572766b24e6fcedf698dcf3ba5a2440be34907e03c5574b005f92e0ca27b",
+    "dtype": "complex128",
+    "shape": [
+     384,
+     384
+    ],
+    "power": 3.636466667955781e-07,
+    "n_warnings": 0,
+    "error": null
+   },
+   "M_alt_uni_fold": {
+    "member": "uniform",
+    "fixture": "M_alt",
+    "z": 0.00224217,
+    "digest": "394280cda440d3e5a7b3a8b3229d7ccb78a0df0975a55ce2bb8f5e8e26a239c9",
+    "dtype": "complex128",
+    "shape": [
+     400,
+     400
+    ],
+    "power": 2.1581770792473501e-07,
+    "n_warnings": 1,
+    "error": null
+   },
+   "S_alt_uni_fold": {
+    "member": "uniform",
+    "fixture": "S_alt",
+    "z": 0.00321478,
+    "digest": "389d7d9848e874f92bd338b38443005865a0bd4dfcbb4b08fc9dbf670df33868",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "power": 1.8798559779328682e-07,
+    "n_warnings": 0,
+    "error": null
+   },
+   "P_mb_plain": {
+    "member": "multibranch",
+    "fixture": "P",
+    "z": 0.000888,
+    "digest": "642dadfae817d3a6834285cc791c1352f75c7a06a0a094985ebb301ee10fbb82",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.8465741548575845e-07,
+    "n_warnings": 0,
+    "error": null
+   },
+   "S_uni_c64": {
+    "member": "uniform",
+    "fixture": "S",
+    "z": 0.00321478,
+    "digest": "b32082887b9648bf491ef2da8961ed3cd052151bf7347920ffc5afde384814ca",
+    "dtype": "complex64",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.8653027343750004e-07,
+    "n_warnings": 0,
+    "error": null
+   },
+   "P_uni_gap": {
+    "member": "uniform",
+    "fixture": "P",
+    "z": 0.0010152,
+    "digest": "5c3a17ef781186f0ec9a24eca24c11f0f2609da33daf5360ea33e8a4bf88cabb",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 2.401996967400023e-07,
+    "n_warnings": 2,
+    "error": null
+   },
+   "Q_uni_gap": {
+    "member": "uniform",
+    "fixture": "Q",
+    "z": 0.00542,
+    "digest": "ee7640c8b62617e65d068d49d5ea775a819cff432e6202f36ed450c24b5de2d5",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 6.513896361626096e-07,
+    "n_warnings": 1,
+    "error": null
+   },
+   "P_uni_refused": {
+    "member": "uniform",
+    "fixture": "P",
+    "z": 0.00101534,
+    "digest": null,
+    "error": "RuntimeError: apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side field this completion is built on carries 4.49x the launched power that reaches"
+   },
+   "Q_uni_refused": {
+    "member": "uniform",
+    "fixture": "Q",
+    "z": 0.00546,
+    "digest": null,
+    "error": "RuntimeError: apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side field this completion is built on carries 3.216x the launched power that reache"
+   },
+   "P_uni_blow": {
+    "member": "uniform",
+    "fixture": "P",
+    "z": 0.001016,
+    "digest": null,
+    "error": "RuntimeError: apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side field this completion is built on carries 54.94x the launched power that reache"
+   },
+   "M_mb_sub4": {
+    "member": "multibranch",
+    "fixture": "M",
+    "z": 0.00224217,
+    "digest": "fd6485b4421920801c36a3dea364282f9972f7a0754aae9fcd50ad6cd5f939c8",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 2.146297855070605e-07,
+    "n_warnings": 0,
+    "error": null
+   }
+  },
+  "sha": "119b8bb6"
+ }
+}

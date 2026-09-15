@@ -1,0 +1,13 @@
+M z=  2201.74 br=    0.9803806302708074 nbr=    1 fid_uni=0.979751 pow_uni=1.11259007 fid_wv=0.9983 zx=155.766719 fold_ring
+M z=  2215.22 br=    0.9659654703343948 nbr=    1 fid_uni=0.980105 pow_uni=1.12321212 fid_wv=0.9983 zx=33.4406745 fold_ring
+M z=  2228.70 br=    0.9415759600560466 nbr=    2 fid_uni=0.980184 pow_uni=1.12426362 fid_wv=0.9984 zx=14.0250990 fold_ring
+M z=  2242.17 br=    0.9153236587868498 nbr=    2 fid_uni=0.981347 pow_uni=1.12243871 fid_wv=0.9984 zx=7.60879786 fold_ring
+M z=  2255.65 br=    0.8441487172489662 nbr=    1 fid_uni=0.978623 pow_uni=1.17391307 fid_wv=0.9984 zx=4.72957925 fold_ring
+M z=  2269.13 br=    0.8460361637721852 nbr=    2 fid_uni=0.983613 pow_uni=1.04733872 fid_wv=0.9984 zx=3.19882587 fold_ring
+M z=  2282.61 br=    0.7950304034740517 nbr=    2 fid_uni=0.979069 pow_uni=0.98978644 fid_wv=0.9985 zx=2.29016076 fold_ring
+M z=  2330.00 br=    0.6689054782934499 nbr=    2 fid_uni=0.785712 pow_uni=0.67273578 fid_wv=0.9985 zx=      None too few bright-band pixels for the fit
+M z=  2342.24 br=    0.6042781142173169 nbr=    2 fid_uni=0.777821 pow_uni=0.60732018 fid_wv=0.9985 zx=      None fold Airy scale under-resolved by the grid
+M z=  2342.28 br=      4.53342188429604 nbr=    9 fid_uni=    None pow_uni=      None fid_wv=0.9985 zx=      None RAISE
+M z=  2342.32 br=    4.7628601957269145 nbr=    9 fid_uni=    None pow_uni=      None fid_wv=0.9985 zx=      None RAISE
+M z=  2342.36 br=    12.183101272777963 nbr=   17 fid_uni=    None pow_uni=      None fid_wv=0.9985 zx=      None RAISE
+M z=  2343.00 br=    504.38644713349584 nbr=  105 fid_uni=    None pow_uni=      None fid_wv=0.9985 zx=      None RAISE

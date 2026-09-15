@@ -1,0 +1,11 @@
+.......s.s..................Fs....                                       [100%]
+================================== FAILURES ===================================
+E   AssertionError: a plane whose field is BROKEN (fidelity 0.9366 against the hand-off, which is exact through folds) reads 1.0920, INSIDE the 1.2 bar: the guard returns it
+    assert 1.0920112074966073 > 1.2
+C:\tmp\lum_vmb2_mut\tests\unit\test_verify_b7c_round2.py:212: AssertionError: a plane whose field is BROKEN (fidelity 0.9366 against the hand-off, which is exact through folds) reads 1.0920, INSIDE the 1.2 bar: the guard returns it
+=========================== short test summary info ===========================
+SKIPPED [1] tests\unit\test_audit2609_b7c2_pixel_halving_arbiter.py:435: this build returns the pinned plane; its continuity reads 1.1851, inside the band
+SKIPPED [1] tests\unit\test_audit2609_b7c2_pixel_halving_arbiter.py:545: no plane of this ladder reads below the loss arm on this build
+SKIPPED [1] tests\unit\test_verify_b7c_round2.py:260: this build does not straddle the bar at this plane (branch sum 1.0636, completion 1.0021); the unconditional arm above ran instead
+FAILED tests/unit/test_verify_b7c_round2.py::test_vb7c2_the_bar_is_derived_against_the_field_on_both_sides
+1 failed, 30 passed, 3 skipped in 126.94s (0:02:06)

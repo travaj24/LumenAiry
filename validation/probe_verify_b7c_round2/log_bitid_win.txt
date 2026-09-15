@@ -1,0 +1,17 @@
+57 cases
+A C:\tmp\lum_vmb2_ref\lumenairy\__init__.py 5.47.0
+B C:\tmp\lum_vmb2\lumenairy\__init__.py 5.47.0
+{"n": 57, "identical": 44, "moved": 0, "newly_refused": 6, "newly_returned": 0, "both_refused": 7}
+  W_uni_bad both_refused RuntimeError apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic=
+  W_uni_fb NEWLY_REFUSED RuntimeError apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic=
+  X_uni_bad both_refused RuntimeError apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic=
+  X_uni_fb both_refused RuntimeError apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic=
+  Y_uni_bad both_refused RuntimeError apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic=
+  Y_uni_fb NEWLY_REFUSED RuntimeError apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic=
+  Z_uni_bad both_refused RuntimeError apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic=
+  Z_uni_fb NEWLY_REFUSED RuntimeError apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic=
+  Z_uni_edge NEWLY_REFUSED RuntimeError apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic=
+  C_uni_bad NEWLY_REFUSED RuntimeError apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic=
+  BV_uni_1768 both_refused RuntimeError apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic=
+  BF_uni_1076 NEWLY_REFUSED RuntimeError apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic=
+  BF_uni_1080 both_refused RuntimeError apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic=

@@ -1,0 +1,12 @@
+........s....F................F...                                       [100%]
+================================== FAILURES ===================================
+E   Failed: DID NOT RAISE <class 'RuntimeError'>
+C:\tmp\lum_vmb2_mut\tests\unit\test_verify_b7c_multibranch.py:281: Failed: DID NOT RAISE <class 'RuntimeError'>
+E   AssertionError: the arbiter's entry cap no longer covers the largest grid the campaign publishes (N = 768)
+    assert (4 * (768 ** 2)) <= 2000000
+C:\tmp\lum_vmb2_mut\tests\unit\test_verify_b7c_round2.py:303: AssertionError: the arbiter's entry cap no longer covers the largest grid the campaign publishes (N = 768)
+=========================== short test summary info ===========================
+SKIPPED [1] tests\unit\test_audit2609_b7c2_pixel_halving_arbiter.py:475: the refined grid is past the arbiter entry cap on this build, so the reading is not measured there
+FAILED tests/unit/test_verify_b7c_multibranch.py::test_vb7c_the_refusal_follows_the_pixel_not_the_field
+FAILED tests/unit/test_verify_b7c_round2.py::test_vb7c2_the_entry_cap_survives_the_refinement_d2_is_about
+2 failed, 31 passed, 1 skipped in 143.41s (0:02:23)

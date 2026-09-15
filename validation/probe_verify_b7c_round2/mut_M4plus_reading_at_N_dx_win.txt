@@ -1,0 +1,28 @@
+......FsFs..FF..............FF....                                       [100%]
+================================== FAILURES ===================================
+E   AssertionError: the blown-up plane reads 1.0000; the quadrature identity says ~4 per halving of the pitch
+    assert 2.5 < 1.0
+C:\tmp\lum_vmb2_mut\tests\unit\test_audit2609_b7c2_pixel_halving_arbiter.py:386: AssertionError: the blown-up plane reads 1.0000; the quadrature identity says ~4 per halving of the pitch
+E   Failed: DID NOT RAISE <class 'RuntimeError'>
+C:\tmp\lum_vmb2_mut\tests\unit\test_audit2609_b7c2_pixel_halving_arbiter.py:488: Failed: DID NOT RAISE <class 'RuntimeError'>
+E   AssertionError: z=5412 um returned a field gaining 1.352x the launched power with both readings inside their bands
+    assert 1.3518381766765355 <= 1.25
+C:\tmp\lum_vmb2_mut\tests\unit\test_verify_b7c_multibranch.py:219: AssertionError: z=5412 um returned a field gaining 1.352x the launched power with both readings inside their bands
+E   Failed: DID NOT RAISE <class 'RuntimeError'>
+C:\tmp\lum_vmb2_mut\tests\unit\test_verify_b7c_multibranch.py:281: Failed: DID NOT RAISE <class 'RuntimeError'>
+E   AssertionError: a plane whose field is BROKEN (fidelity 0.9366 against the hand-off, which is exact through folds) reads 1.0000, INSIDE the 1.06 bar: the guard returns it
+    assert 1.0 > 1.06
+C:\tmp\lum_vmb2_mut\tests\unit\test_verify_b7c_round2.py:212: AssertionError: a plane whose field is BROKEN (fidelity 0.9366 against the hand-off, which is exact through folds) reads 1.0000, INSIDE the 1.06 bar: the guard returns it
+E   AssertionError: the completion recorded the BRANCH SUM's reading as its own: 1.0 == 1.0.  The CFU swap rewrites the fold band and the whole dark side, so the two are not the same number, and the field this call returns is the completed one
+    assert 1.0 != 1.0
+C:\tmp\lum_vmb2_mut\tests\unit\test_verify_b7c_round2.py:254: AssertionError: the completion recorded the BRANCH SUM's reading as its own: 1.0 == 1.0.  The CFU swap rewrites the fold band and the whole dark side, so the two are not the same number, and the field this call returns is the completed one
+=========================== short test summary info ===========================
+SKIPPED [1] tests\unit\test_audit2609_b7c2_pixel_halving_arbiter.py:435: this build returns the pinned plane; its continuity reads 1.0000, inside the band
+SKIPPED [1] tests\unit\test_audit2609_b7c2_pixel_halving_arbiter.py:545: no plane of this ladder reads below the loss arm on this build
+FAILED tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py::test_b7c2_a_converged_render_reads_one_and_a_blown_up_one_reads_four
+FAILED tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py::test_b7c2_the_decision_survives_halving_the_output_pixel
+FAILED tests/unit/test_verify_b7c_multibranch.py::test_vb7c_an_accepted_field_reads_above_the_pinned_accepted_ceiling
+FAILED tests/unit/test_verify_b7c_multibranch.py::test_vb7c_the_refusal_follows_the_pixel_not_the_field
+FAILED tests/unit/test_verify_b7c_round2.py::test_vb7c2_the_bar_is_derived_against_the_field_on_both_sides
+FAILED tests/unit/test_verify_b7c_round2.py::test_vb7c2_the_reading_is_of_the_returned_field_not_of_the_branch_sum
+6 failed, 26 passed, 2 skipped in 137.64s (0:02:17)

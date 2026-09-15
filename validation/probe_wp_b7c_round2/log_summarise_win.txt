@@ -1,0 +1,159 @@
+fx           z_um     bracket      C_mb     C_ret  fid_uni  pow_uni reason                   decision
+A         2700.00 0.899396298 0.9900236 0.9981807 0.987920 0.986311 fold_ring                return
+A         2720.00 0.898664374 1.0036894 0.9996348 0.988876 0.983764 fold_ring                return
+A         2740.00 0.892993995 1.0088515 0.9989430 0.989048 0.984075 fold_ring                return
+A         2760.00 0.873112215 0.9940952 0.9978881 0.992671 0.976426 fold_ring                return
+A         2780.00 0.883792345 0.9977995 0.9866538 0.991986 0.977301 fold_ring                return
+A         2800.00 0.902906829 1.0171746 0.9967145 0.993158 1.007052 fold_ring                return
+A         2820.00 0.913088613 1.0125431 1.0011062 0.993722 1.032662 fold_ring                return
+A         2840.00 0.901665081 0.9891805 1.0037191 0.994153 1.052874 fold_ring                return
+A         2860.00 0.917295044 1.0142989 0.9940517 0.994471 1.048876 fold_ring                return
+A         2880.00 0.835160949 0.9667902 0.9959612 0.993244 1.027996 fold_ring                return
+A         2900.00 0.821919253 1.0082217 0.9963544 0.991015 1.006455 fold_ring                return
+A         2903.00 0.768991001 0.9418945 0.9921513 0.990980 0.997108 fold_ring                return
+A         2905.00 0.782273327 0.9474521 0.9951964 0.990650 1.001198 fold_ring                return
+A         2907.00 0.812039828 1.0041675 1.0068629 0.989456 1.026933 fold_ring                return
+A         2910.00 17.19833895 3.5037722 3.5037722 0.306246 17.54965 fold_ring                REFUSED:power_ratio
+A         2920.00 5722.102172 3.9982491 3.9982491 0.028184 5768.154 too few bright-band pixe REFUSED:power_ratio
+F_alt     1036.00 0.973236336 1.0082614 1.0009042 0.985810 1.050380 fold_ring                return
+F_alt     1048.00 0.949435966 0.9974832 0.9984608 0.988869 1.046930 fold_ring                return
+F_alt     1056.00 0.937134616 1.0006646 1.0002329 0.989682 1.039238 fold_ring                return
+F_alt     1063.00 0.924994866 0.9949997 1.0037669 0.988851 1.029816 fold_ring                return
+F_alt     1069.00 0.899474826 0.9829018 0.9983068 0.987440 1.022431 fold_ring                return
+F_alt     1072.00 0.942149510 1.0317293 1.0197815 0.980376 1.043650 fold_ring                return
+F_alt     1073.00 0.946041731 1.0304039 1.0221232 0.974199 1.050572 fold_ring                return
+F_alt     1074.00 1.023245657 1.0934058     1.092 0.930233 1.153755 fold_ring                REFUSED:pixel_continuity
+F_alt     1075.00 1.104957836 1.1502962     1.139 0.902607 1.213857 fold_ring                REFUSED:pixel_continuity
+F_alt     1076.00 1.151266947 1.1856156     1.185 0.858037 1.284425 fold_ring                REFUSED:pixel_continuity
+F_alt     1078.00 2.702737751 1.9985288 1.9985288 0.594460 2.858545 fold_ring                REFUSED:power_ratio
+F_alt     1080.00 2.982435170 2.0998526 2.0998526 0.584134 3.160220 fold_ring                REFUSED:power_ratio
+G          860.00 0.996096828 0.9998008 0.9998831 0.998206 1.004968 fold_ring                return
+G          890.00 0.991672267 0.9996003 0.9999323 0.998423 1.003300 fold_ring                return
+G          920.00 0.986148448 0.9995065 1.0001380 0.998316 1.001340 fold_ring                return
+G          935.00 0.984590903 1.0002433 1.0000031 0.998464 1.001730 fold_ring                return
+G          950.00 0.981901168 0.9995635 0.9996241 0.998509 1.003219 fold_ring                return
+G          965.00 0.989183593 1.0069259 1.0087903 0.992353 1.017477 fold_ring                return
+G          972.00 1.177130303 1.1448616     1.142 0.918442 1.205924 fold_ring                REFUSED:pixel_continuity
+G          976.00 1.248006882 1.1949117     1.191 0.871820 1.279216 fold_ring                REFUSED:pixel_continuity
+G          980.00 1.362932005 1.2691288     1.264 0.856587 1.397513 fold_ring                REFUSED:pixel_continuity
+G          988.00 2.033233353 1.6483017 1.6483017 0.685357 2.069236 fold_ring                REFUSED:power_ratio
+G          995.00 2.785269680 1.9626884 1.9626884 0.589487 2.828361 fold_ring                REFUSED:power_ratio
+K         1940.00 0.990853461 0.9992869 1.0006944 0.985133 1.063794 fold_ring                return
+K         1960.00 0.970981250 0.9980633 0.9980182 0.987668 1.056546 fold_ring                return
+K         1980.00 0.952937274 0.9960578 0.9962719 0.987869 1.052678 fold_ring                return
+K         2000.00 0.927995140 0.9981181 0.9985993 0.990183 1.013264 fold_ring                return
+K         2020.00 0.905897278 1.0022707 0.9976236 0.986589 0.986110 fold_ring                return
+K         2040.00 0.877007617 1.0006621 0.9982002 0.986093 0.980754 fold_ring                return
+K         2060.00 0.866669765 1.0004361 1.0028635 0.989298 0.988261 fold_ring                return
+K         2080.00 0.908990624 1.0256489 1.0112834 0.988744 1.019939 fold_ring                return
+K         2100.00 0.887179877 0.9953318 0.9953462 0.992200 1.046921 fold_ring                return
+K         2120.00 0.837722134 0.9738358 0.9958910 0.992244 1.034812 fold_ring                return
+K         2130.00 0.853191282 1.0261375 1.0035948 0.991595 1.021499 fold_ring                return
+K         2133.00 0.782815443 0.9615928 1.0116061 0.991516 1.031085 fold_ring                return
+K         2136.00 0.799130509 0.9739671 1.0024299 0.991632 1.021821 fold_ring                return
+K         2138.00 0.815824946 0.9995338 0.9977545 0.990980 1.010506 fold_ring                return
+K         2140.00 3241.811495 3.9970598 3.9970598 0.017288 3264.658 fold_ring                REFUSED:power_ratio
+M         2195.00 0.988154353 0.9983000 1.0009404 0.979881 1.106706 fold_ring                return
+M         2201.74 0.980380630 0.9868873 0.9921894 0.979751 1.112590 fold_ring                return
+M         2210.00 0.958959074 0.9850232 0.9860242 0.982293 1.085321 fold_ring                return
+M         2225.00 0.947085609 0.9929580 0.9886364 0.980730 1.113610 fold_ring                return
+M         2240.00 0.928981676 1.0061109 1.0050990 0.979339 1.136552 fold_ring                return
+M         2255.00 0.903567139 1.0126215 1.0021517 0.981770 1.133811 fold_ring                return
+M         2270.00 0.837890824 0.9982657 0.9943355 0.982671 0.998743 fold_ring                return
+M         2285.00 0.797896897 1.0126380 1.0126380 0.898680 0.803502 too few bright-band pixe return
+M         2295.00 0.767346038 1.0043644 0.9926345 0.979182 0.971293 fold_ring                return
+M         2300.00 0.800144925 1.0709414     1.071 0.900008 0.805640 too few bright-band pixe REFUSED:pixel_continuity
+M         2305.00 0.748331194 1.0179168 1.0179168 0.871230 0.753386 too few bright-band pixe return
+M         2315.00 0.674407004 0.9451930 0.9451930 0.850364 0.678744 too few bright-band pixe return
+M         2330.00 0.668905478 0.9509338 0.9509338 0.785712 0.672735 too few bright-band pixe return
+M         2343.00 504.3864471 3.9843720 3.9843720 0.401598 506.9034 fold Airy scale under-re REFUSED:power_ratio
+Q         5380.00 1.011152475 1.0144069 1.0144069 0.899444 1.015068 no_fold                  return
+Q         5400.00 1.106026150 1.1004295       1.1 0.836626 1.110161 no_fold                  REFUSED:pixel_continuity
+Q         5410.00 1.288886633 1.2651953     1.265 0.771931 1.293611 no_fold                  REFUSED:pixel_continuity
+Q         5420.00 1.826033691 1.6361017     1.636 0.666129 1.832590 no_fold                  REFUSED:pixel_continuity
+Q         5430.00 4.071152529 2.5273232 2.5273232 0.510431 4.085462 no_fold                  REFUSED:power_ratio
+Q         5440.00 0.449139666 0.7257186 0.7257186 0.837451 0.450684 no_fold                  return
+Q         5460.00 3.216132756 2.7865914 2.7865914 0.291911 3.226744 bad_kappa                REFUSED:power_ratio
+Q         5660.00 0.743096551 0.9724674 1.0034669 0.992805 1.048521 fold_ring                return
+Q         5680.00 0.823013963 1.0276406 0.9987909 0.991874 1.042678 fold_ring                return
+Q         5700.00 0.837311526 1.0370353 1.0039701 0.988517 1.041270 fold_ring                return
+Q         5720.00 0.801749140 0.9956276 0.9965668 0.993021 1.012940 fold_ring                return
+S         3190.00 0.972049926 0.9994546 0.9936131 0.985361 1.088225 fold_ring                return
+S         3200.00 0.949001589 0.9907668 0.9939719 0.985419 1.099102 fold_ring                return
+S         3210.00 0.933373829 1.0038716 0.9972055 0.984956 1.108841 fold_ring                return
+S         3214.78 0.927141620 1.0159185 0.9952780 0.982127 1.108157 fold_ring                return
+S         3220.00 0.885541992 0.9846042 0.9915406 0.980613 1.107705 fold_ring                return
+S         3230.00 0.868505539 1.0022078 0.9981126 0.959316 1.028451 fold_ring                return
+S         3240.00 0.853943674 1.0326473 1.0326473 0.918957 0.882514 too few bright-band pixe return
+S         3245.00 0.801804618 0.8536041 0.8536041 0.903733 0.828650 fold Airy scale under-re return
+S         3250.00 0.787276391 1.0278412 1.0278412 0.881465 0.813591 fold Airy scale under-re return
+S         3255.00 0.759315354 0.9734583 0.9734583 0.854520 0.784568 fold Airy scale under-re return
+S         3260.00 0.789696181 1.0646205     1.065 0.888966 0.815725 fold Airy scale under-re REFUSED:pixel_continuity
+S         3265.00 0.824952334 1.0315191 1.0315191 0.796444 0.851796 fold Airy scale under-re return
+S         3270.00 0.712119930 1.0086264 1.0086264 0.764247 0.734918 fold Airy scale under-re return
+S         3274.02 107.3354279 3.9168520 3.9168520 0.426568 110.7209 fold Airy scale under-re REFUSED:power_ratio
+V         1700.00 0.895864252 0.9819560 0.9924914 0.992303 1.013741 fold_ring                return
+V         1720.00 0.933520392 1.0154921 1.0074268 0.992086 1.060887 fold_ring                return
+V         1740.00 0.850209396 0.9869481 1.0086255 0.991576 1.021544 fold_ring                return
+V         1750.00 0.866151847 1.0373605 1.0004574 0.991354 1.000523 fold_ring                return
+V         1755.00 0.795754812 0.9645956 0.9965353 0.990757 0.990312 fold_ring                return
+V         1758.00 0.825482063 0.9954503 0.9929710 0.989014 0.989325 fold_ring                return
+V         1760.00 0.844765421 1.0190090 0.9867918 0.988239 0.977820 fold_ring                return
+V         1761.00 0.861723846 1.0636048 1.0021337 0.987835 0.993942 fold_ring                return
+V         1762.00 93.47214324 3.8981338 3.8981338 0.259411 94.58652 fold_ring                REFUSED:power_ratio
+V         1764.00 3544.522925 3.9971005 3.9971005 0.189729 3580.382 fold_ring                REFUSED:power_ratio
+V         1768.00 6096.713294 3.9983650 3.9983650 0.168107 6158.961 fold_ring                REFUSED:power_ratio
+
+== FOLD-RING: the guard's own split, no accept bar chosen ==
+   returned  n= 67  C in (0.9860242589360793, 1.022123264556)  fidelity (0.9593167719828021, 0.998509089907888)
+   refused   n= 15  C in (1.092, 3.998365066753978)  fidelity (0.01728829444312709, 0.9302332047826352)
+   (also refused on the launched-power arm alone: 0)
+     worst returned: S z=3230.0 C=0.9981 fid=0.9593 pow=1.0285 fold_ring
+     worst returned: F_alt z=1073.0 C=1.0221 fid=0.9742 pow=1.0506 fold_ring
+     worst returned: M z=2295.0 C=0.9926 fid=0.9792 pow=0.9713 fold_ring
+     worst returned: M z=2240.0 C=1.0051 fid=0.9793 pow=1.1366 fold_ring
+     worst returned: M z=2201.74 C=0.9922 fid=0.9798 pow=1.1126 fold_ring
+     worst returned: M z=2195.0 C=1.0009 fid=0.9799 pow=1.1067 fold_ring
+     best refused  : F_alt z=1074.0 C=1.0920 fid=0.9302 pow=1.1538 fold_ring
+     best refused  : G z=972.0 C=1.1420 fid=0.9184 pow=1.2059 fold_ring
+     best refused  : F_alt z=1075.0 C=1.1390 fid=0.9026 pow=1.2139 fold_ring
+     best refused  : G z=976.0 C=1.1910 fid=0.8718 pow=1.2792 fold_ring
+     best refused  : F_alt z=1076.0 C=1.1850 fid=0.8580 pow=1.2844 fold_ring
+     best refused  : G z=980.0 C=1.2640 fid=0.8566 pow=1.3975 fold_ring
+
+   -- accept bar fid>=0.883: n=70+12  accepted 0.98602..1.142 (G z=972.0 fid=0.9184)  smallest broken gain 1.185 (F_alt z=1076.0 fid=0.8580)  gap 1.0376 centre 1.1633
+      at bar=1.06: refused-broken 12, FALSE refusals 3, misses 0, returned-accepted 67
+         FALSE: F_alt z=1074.0 C=1.0920 fid=0.9302 pow=1.1538 fold_ring
+         FALSE: F_alt z=1075.0 C=1.1390 fid=0.9026 pow=1.2139 fold_ring
+         FALSE: G z=972.0 C=1.1420 fid=0.9184 pow=1.2059 fold_ring
+
+   -- accept bar fid>=0.95: n=67+15  accepted 0.98602..1.02212 (F_alt z=1073.0 fid=0.9742)  smallest broken gain 1.092 (F_alt z=1074.0 fid=0.9302)  gap 1.0683 centre 1.0564
+      at bar=1.06: refused-broken 15, FALSE refusals 0, misses 0, returned-accepted 67
+
+== ALL planes: the guard's own split, no accept bar chosen ==
+   returned  n= 79  C in (0.7257186578379226, 1.0326473641226996)  fidelity (0.7642477769741017, 0.998509089907888)
+   refused   n= 25  C in (1.065, 3.998365066753978)  fidelity (0.01728829444312709, 0.9302332047826352)
+   (also refused on the launched-power arm alone: 0)
+     worst returned: S z=3270.0 C=1.0086 fid=0.7642 pow=0.7349 fold Airy scale under-resolved by the grid
+     worst returned: M z=2330.0 C=0.9509 fid=0.7857 pow=0.6727 too few bright-band pixels for the fit
+     worst returned: S z=3265.0 C=1.0315 fid=0.7964 pow=0.8518 fold Airy scale under-resolved by the grid
+     worst returned: Q z=5440.0 C=0.7257 fid=0.8375 pow=0.4507 no_fold
+     worst returned: M z=2315.0 C=0.9452 fid=0.8504 pow=0.6787 too few bright-band pixels for the fit
+     worst returned: S z=3255.0 C=0.9735 fid=0.8545 pow=0.7846 fold Airy scale under-resolved by the grid
+     best refused  : F_alt z=1074.0 C=1.0920 fid=0.9302 pow=1.1538 fold_ring
+     best refused  : G z=972.0 C=1.1420 fid=0.9184 pow=1.2059 fold_ring
+     best refused  : F_alt z=1075.0 C=1.1390 fid=0.9026 pow=1.2139 fold_ring
+     best refused  : M z=2300.0 C=1.0710 fid=0.9000 pow=0.8056 too few bright-band pixels for the fit
+     best refused  : S z=3260.0 C=1.0650 fid=0.8890 pow=0.8157 fold Airy scale under-resolved by the grid
+     best refused  : G z=976.0 C=1.1910 fid=0.8718 pow=1.2792 fold_ring
+
+   -- accept bar fid>=0.883: n=76+28  accepted 0.85360..1.142 (G z=972.0 fid=0.9184)  smallest broken gain 1.00862 (S z=3270.0 fid=0.7642)  gap None centre None
+      at bar=1.06: refused-broken 20, FALSE refusals 5, misses 8, returned-accepted 71
+         FALSE: F_alt z=1074.0 C=1.0920 fid=0.9302 pow=1.1538 fold_ring
+         FALSE: F_alt z=1075.0 C=1.1390 fid=0.9026 pow=1.2139 fold_ring
+         FALSE: G z=972.0 C=1.1420 fid=0.9184 pow=1.2059 fold_ring
+         FALSE: M z=2300.0 C=1.0710 fid=0.9000 pow=0.8056 too few bright-band pixels for the fit
+         FALSE: S z=3260.0 C=1.0650 fid=0.8890 pow=0.8157 fold Airy scale under-resolved by the grid
+
+   -- accept bar fid>=0.95: n=67+37  accepted 0.98602..1.02212 (F_alt z=1073.0 fid=0.9742)  smallest broken gain 1.00862 (S z=3270.0 fid=0.7642)  gap None centre None
+      at bar=1.06: refused-broken 25, FALSE refusals 0, misses 12, returned-accepted 67
