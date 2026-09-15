@@ -1,0 +1,649 @@
+{
+ "lumenairy_file": "C:\\Users\\Tesla\\AppData\\Local\\Temp\\claude\\C--Users-Tesla\\372a2d1f-acbe-4b57-a148-eeae3fe1d729\\scratchpad\\vb14\\tree_e61c6467\\lumenairy\\__init__.py",
+ "version": "5.47.0",
+ "python": "3.14.6",
+ "numpy": "2.4.4",
+ "probe_file": "C:\\tmp\\lum_vreds\\validation\\probe_verify_b14\\probe_v5_two_caller.py",
+ "package_root": "C:\\Users\\Tesla\\AppData\\Local\\Temp\\claude\\C--Users-Tesla\\372a2d1f-acbe-4b57-a148-eeae3fe1d729\\scratchpad\\vb14\\tree_e61c6467\\lumenairy",
+ "cases": {
+  "carrier.tilt_inert_direct_entry": {
+   "arms": {
+    "direct": {
+     "err": null,
+     "n_all": 1,
+     "n_selected": 1,
+     "misattributed": 0,
+     "rows": [
+      {
+       "file": "probe_v5_two_caller.py",
+       "lineno": 49,
+       "cat": "RuntimeWarning",
+       "in_package": false,
+       "is_probe": true,
+       "msg": "propagate_carrier_referenced: tilt=(0.12, 0.0) is NON-ZERO but INERT on this call -- gap_k"
+      }
+     ]
+    },
+    "deeper1": {
+     "err": null,
+     "n_all": 1,
+     "n_selected": 1,
+     "misattributed": 0,
+     "rows": [
+      {
+       "file": "probe_v5_two_caller.py",
+       "lineno": 74,
+       "cat": "RuntimeWarning",
+       "in_package": false,
+       "is_probe": true,
+       "msg": "propagate_carrier_referenced: tilt=(0.12, 0.0) is NON-ZERO but INERT on this call -- gap_k"
+      }
+     ]
+    },
+    "deeper2": {
+     "err": null,
+     "n_all": 1,
+     "n_selected": 1,
+     "misattributed": 0,
+     "rows": [
+      {
+       "file": "probe_v5_two_caller.py",
+       "lineno": 74,
+       "cat": "RuntimeWarning",
+       "in_package": false,
+       "is_probe": true,
+       "msg": "propagate_carrier_referenced: tilt=(0.12, 0.0) is NON-ZERO but INERT on this call -- gap_k"
+      }
+     ]
+    }
+   }
+  },
+  "carrier.tilt_inert_via_focus_readout": {
+   "arms": {
+    "direct": {
+     "err": null,
+     "n_all": 1,
+     "n_selected": 1,
+     "misattributed": 0,
+     "rows": [
+      {
+       "file": "probe_v5_two_caller.py",
+       "lineno": 49,
+       "cat": "RuntimeWarning",
+       "in_package": false,
+       "is_probe": true,
+       "msg": "propagate_carrier_referenced: tilt=(0.12, 0.0) is NON-ZERO but INERT on this call -- gap_k"
+      }
+     ]
+    },
+    "deeper1": {
+     "err": null,
+     "n_all": 1,
+     "n_selected": 1,
+     "misattributed": 0,
+     "rows": [
+      {
+       "file": "probe_v5_two_caller.py",
+       "lineno": 74,
+       "cat": "RuntimeWarning",
+       "in_package": false,
+       "is_probe": true,
+       "msg": "propagate_carrier_referenced: tilt=(0.12, 0.0) is NON-ZERO but INERT on this call -- gap_k"
+      }
+     ]
+    },
+    "deeper2": {
+     "err": null,
+     "n_all": 1,
+     "n_selected": 1,
+     "misattributed": 0,
+     "rows": [
+      {
+       "file": "probe_v5_two_caller.py",
+       "lineno": 74,
+       "cat": "RuntimeWarning",
+       "in_package": false,
+       "is_probe": true,
+       "msg": "propagate_carrier_referenced: tilt=(0.12, 0.0) is NON-ZERO but INERT on this call -- gap_k"
+      }
+     ]
+    }
+   }
+  },
+  "carrier.fit_radius_aliased": {
+   "arms": {
+    "direct": {
+     "err": null,
+     "n_all": 0,
+     "n_selected": 0,
+     "misattributed": 0,
+     "rows": []
+    },
+    "deeper1": {
+     "err": null,
+     "n_all": 0,
+     "n_selected": 0,
+     "misattributed": 0,
+     "rows": []
+    },
+    "deeper2": {
+     "err": null,
+     "n_all": 0,
+     "n_selected": 0,
+     "misattributed": 0,
+     "rows": []
+    }
+   }
+  },
+  "carrier.focus_containment": {
+   "arms": {
+    "direct": {
+     "err": null,
+     "n_all": 0,
+     "n_selected": 0,
+     "misattributed": 0,
+     "rows": []
+    },
+    "deeper1": {
+     "err": null,
+     "n_all": 0,
+     "n_selected": 0,
+     "misattributed": 0,
+     "rows": []
+    },
+    "deeper2": {
+     "err": null,
+     "n_all": 0,
+     "n_selected": 0,
+     "misattributed": 0,
+     "rows": []
+    }
+   }
+  },
+  "carrier.replica": {
+   "arms": {
+    "direct": {
+     "err": null,
+     "n_all": 3,
+     "n_selected": 3,
+     "misattributed": 1,
+     "rows": [
+      {
+       "file": "probe_v5_two_caller.py",
+       "lineno": 49,
+       "cat": "RuntimeWarning",
+       "in_package": false,
+       "is_probe": true,
+       "msg": "carrier_referenced_focus_readout: the requested readout REACHES OUTSIDE one Bluestein peri"
+      },
+      {
+       "file": "carrier.py",
+       "lineno": 4039,
+       "cat": "UserWarning",
+       "in_package": true,
+       "is_probe": false,
+       "msg": "angular_spectrum_propagate_mft: the requested output window leaves the faithful zone of th"
+      },
+      {
+       "file": "probe_v5_two_caller.py",
+       "lineno": 49,
+       "cat": "RuntimeWarning",
+       "in_package": false,
+       "is_probe": true,
+       "msg": "carrier_referenced_focus_readout: the readout window holds 1112.7614 of the stop plane's p"
+      }
+     ]
+    },
+    "deeper1": {
+     "err": null,
+     "n_all": 3,
+     "n_selected": 3,
+     "misattributed": 1,
+     "rows": [
+      {
+       "file": "probe_v5_two_caller.py",
+       "lineno": 74,
+       "cat": "RuntimeWarning",
+       "in_package": false,
+       "is_probe": true,
+       "msg": "carrier_referenced_focus_readout: the requested readout REACHES OUTSIDE one Bluestein peri"
+      },
+      {
+       "file": "carrier.py",
+       "lineno": 4039,
+       "cat": "UserWarning",
+       "in_package": true,
+       "is_probe": false,
+       "msg": "angular_spectrum_propagate_mft: the requested output window leaves the faithful zone of th"
+      },
+      {
+       "file": "probe_v5_two_caller.py",
+       "lineno": 74,
+       "cat": "RuntimeWarning",
+       "in_package": false,
+       "is_probe": true,
+       "msg": "carrier_referenced_focus_readout: the readout window holds 1112.7614 of the stop plane's p"
+      }
+     ]
+    },
+    "deeper2": {
+     "err": null,
+     "n_all": 3,
+     "n_selected": 3,
+     "misattributed": 1,
+     "rows": [
+      {
+       "file": "probe_v5_two_caller.py",
+       "lineno": 74,
+       "cat": "RuntimeWarning",
+       "in_package": false,
+       "is_probe": true,
+       "msg": "carrier_referenced_focus_readout: the requested readout REACHES OUTSIDE one Bluestein peri"
+      },
+      {
+       "file": "carrier.py",
+       "lineno": 4039,
+       "cat": "UserWarning",
+       "in_package": true,
+       "is_probe": false,
+       "msg": "angular_spectrum_propagate_mft: the requested output window leaves the faithful zone of th"
+      },
+      {
+       "file": "probe_v5_two_caller.py",
+       "lineno": 74,
+       "cat": "RuntimeWarning",
+       "in_package": false,
+       "is_probe": true,
+       "msg": "carrier_referenced_focus_readout: the readout window holds 1112.7614 of the stop plane's p"
+      }
+     ]
+    }
+   }
+  },
+  "carrier.collins_sampling": {
+   "arms": {
+    "direct": {
+     "err": null,
+     "n_all": 0,
+     "n_selected": 0,
+     "misattributed": 0,
+     "rows": []
+    },
+    "deeper1": {
+     "err": null,
+     "n_all": 0,
+     "n_selected": 0,
+     "misattributed": 0,
+     "rows": []
+    },
+    "deeper2": {
+     "err": null,
+     "n_all": 0,
+     "n_selected": 0,
+     "misattributed": 0,
+     "rows": []
+    }
+   }
+  },
+  "carrier.exact_focus_readout": {
+   "arms": {
+    "direct": {
+     "err": null,
+     "n_all": 3,
+     "n_selected": 3,
+     "misattributed": 1,
+     "rows": [
+      {
+       "file": "probe_v5_two_caller.py",
+       "lineno": 49,
+       "cat": "RuntimeWarning",
+       "in_package": false,
+       "is_probe": true,
+       "msg": "carrier_referenced_exact_focus_readout: the readout's internal fine grid is COUNT-LIMITED "
+      },
+      {
+       "file": "probe_v5_two_caller.py",
+       "lineno": 49,
+       "cat": "RuntimeWarning",
+       "in_package": false,
+       "is_probe": true,
+       "msg": "carrier_referenced_exact_focus_readout: the requested readout REACHES OUTSIDE one Bluestei"
+      },
+      {
+       "file": "carrier.py",
+       "lineno": 6757,
+       "cat": "UserWarning",
+       "in_package": true,
+       "is_probe": false,
+       "msg": "angular_spectrum_propagate_mft: the requested output window leaves the faithful zone of th"
+      }
+     ]
+    },
+    "deeper1": {
+     "err": null,
+     "n_all": 3,
+     "n_selected": 3,
+     "misattributed": 1,
+     "rows": [
+      {
+       "file": "probe_v5_two_caller.py",
+       "lineno": 74,
+       "cat": "RuntimeWarning",
+       "in_package": false,
+       "is_probe": true,
+       "msg": "carrier_referenced_exact_focus_readout: the readout's internal fine grid is COUNT-LIMITED "
+      },
+      {
+       "file": "probe_v5_two_caller.py",
+       "lineno": 74,
+       "cat": "RuntimeWarning",
+       "in_package": false,
+       "is_probe": true,
+       "msg": "carrier_referenced_exact_focus_readout: the requested readout REACHES OUTSIDE one Bluestei"
+      },
+      {
+       "file": "carrier.py",
+       "lineno": 6757,
+       "cat": "UserWarning",
+       "in_package": true,
+       "is_probe": false,
+       "msg": "angular_spectrum_propagate_mft: the requested output window leaves the faithful zone of th"
+      }
+     ]
+    },
+    "deeper2": {
+     "err": null,
+     "n_all": 3,
+     "n_selected": 3,
+     "misattributed": 1,
+     "rows": [
+      {
+       "file": "probe_v5_two_caller.py",
+       "lineno": 74,
+       "cat": "RuntimeWarning",
+       "in_package": false,
+       "is_probe": true,
+       "msg": "carrier_referenced_exact_focus_readout: the readout's internal fine grid is COUNT-LIMITED "
+      },
+      {
+       "file": "probe_v5_two_caller.py",
+       "lineno": 74,
+       "cat": "RuntimeWarning",
+       "in_package": false,
+       "is_probe": true,
+       "msg": "carrier_referenced_exact_focus_readout: the requested readout REACHES OUTSIDE one Bluestei"
+      },
+      {
+       "file": "carrier.py",
+       "lineno": 6757,
+       "cat": "UserWarning",
+       "in_package": true,
+       "is_probe": false,
+       "msg": "angular_spectrum_propagate_mft: the requested output window leaves the faithful zone of th"
+      }
+     ]
+    }
+   }
+  },
+  "carrier_field.setattr_deprecation": {
+   "arms": {
+    "direct": {
+     "err": null,
+     "n_all": 1,
+     "n_selected": 1,
+     "misattributed": 0,
+     "rows": [
+      {
+       "file": "probe_v5_two_caller.py",
+       "lineno": 138,
+       "cat": "DeprecationWarning",
+       "in_package": false,
+       "is_probe": true,
+       "msg": "CarrierField.wavelength: assigning to a built CarrierField is deprecated since v5.46 and w"
+      }
+     ]
+    },
+    "deeper1": {
+     "err": null,
+     "n_all": 1,
+     "n_selected": 1,
+     "misattributed": 0,
+     "rows": [
+      {
+       "file": "probe_v5_two_caller.py",
+       "lineno": 138,
+       "cat": "DeprecationWarning",
+       "in_package": false,
+       "is_probe": true,
+       "msg": "CarrierField.wavelength: assigning to a built CarrierField is deprecated since v5.46 and w"
+      }
+     ]
+    },
+    "deeper2": {
+     "err": null,
+     "n_all": 1,
+     "n_selected": 1,
+     "misattributed": 0,
+     "rows": [
+      {
+       "file": "probe_v5_two_caller.py",
+       "lineno": 138,
+       "cat": "DeprecationWarning",
+       "in_package": false,
+       "is_probe": true,
+       "msg": "CarrierField.wavelength: assigning to a built CarrierField is deprecated since v5.46 and w"
+      }
+     ]
+    }
+   }
+  },
+  "carrier_field.re_reference_guards": {
+   "arms": {
+    "direct": {
+     "err": null,
+     "n_all": 1,
+     "n_selected": 1,
+     "misattributed": 0,
+     "rows": [
+      {
+       "file": "probe_v5_two_caller.py",
+       "lineno": 49,
+       "cat": "RuntimeWarning",
+       "in_package": false,
+       "is_probe": true,
+       "msg": "re_reference: the target grid's pitch 8.0000 um cannot hold the carrier difference.  The b"
+      }
+     ]
+    },
+    "deeper1": {
+     "err": null,
+     "n_all": 1,
+     "n_selected": 1,
+     "misattributed": 0,
+     "rows": [
+      {
+       "file": "probe_v5_two_caller.py",
+       "lineno": 74,
+       "cat": "RuntimeWarning",
+       "in_package": false,
+       "is_probe": true,
+       "msg": "re_reference: the target grid's pitch 8.0000 um cannot hold the carrier difference.  The b"
+      }
+     ]
+    },
+    "deeper2": {
+     "err": null,
+     "n_all": 1,
+     "n_selected": 1,
+     "misattributed": 0,
+     "rows": [
+      {
+       "file": "probe_v5_two_caller.py",
+       "lineno": 74,
+       "cat": "RuntimeWarning",
+       "in_package": false,
+       "is_probe": true,
+       "msg": "re_reference: the target grid's pitch 8.0000 um cannot hold the carrier difference.  The b"
+      }
+     ]
+    }
+   }
+  },
+  "system.tilted_method": {
+   "arms": {
+    "direct": {
+     "err": null,
+     "n_all": 0,
+     "n_selected": 0,
+     "misattributed": 0,
+     "rows": []
+    },
+    "deeper1": {
+     "err": null,
+     "n_all": 0,
+     "n_selected": 0,
+     "misattributed": 0,
+     "rows": []
+    },
+    "deeper2": {
+     "err": null,
+     "n_all": 0,
+     "n_selected": 0,
+     "misattributed": 0,
+     "rows": []
+    }
+   }
+  },
+  "system.fresnel_leg": {
+   "arms": {
+    "direct": {
+     "err": null,
+     "n_all": 1,
+     "n_selected": 1,
+     "misattributed": 0,
+     "rows": [
+      {
+       "file": "probe_v5_two_caller.py",
+       "lineno": 49,
+       "cat": "RuntimeWarning",
+       "in_package": false,
+       "is_probe": true,
+       "msg": "propagate_through_system: the fresnel leg evaluated the integral on the chain window (N=64"
+      }
+     ]
+    },
+    "deeper1": {
+     "err": null,
+     "n_all": 1,
+     "n_selected": 1,
+     "misattributed": 0,
+     "rows": [
+      {
+       "file": "probe_v5_two_caller.py",
+       "lineno": 74,
+       "cat": "RuntimeWarning",
+       "in_package": false,
+       "is_probe": true,
+       "msg": "propagate_through_system: the fresnel leg evaluated the integral on the chain window (N=64"
+      }
+     ]
+    },
+    "deeper2": {
+     "err": null,
+     "n_all": 1,
+     "n_selected": 1,
+     "misattributed": 0,
+     "rows": [
+      {
+       "file": "probe_v5_two_caller.py",
+       "lineno": 74,
+       "cat": "RuntimeWarning",
+       "in_package": false,
+       "is_probe": true,
+       "msg": "propagate_through_system: the fresnel leg evaluated the integral on the chain window (N=64"
+      }
+     ]
+    }
+   }
+  },
+  "system.fresnel_leg_long": {
+   "arms": {
+    "direct": {
+     "err": null,
+     "n_all": 1,
+     "n_selected": 1,
+     "misattributed": 0,
+     "rows": [
+      {
+       "file": "probe_v5_two_caller.py",
+       "lineno": 49,
+       "cat": "RuntimeWarning",
+       "in_package": false,
+       "is_probe": true,
+       "msg": "propagate_through_system: the fresnel leg evaluated the integral on the chain window (N=12"
+      }
+     ]
+    },
+    "deeper1": {
+     "err": null,
+     "n_all": 1,
+     "n_selected": 1,
+     "misattributed": 0,
+     "rows": [
+      {
+       "file": "probe_v5_two_caller.py",
+       "lineno": 74,
+       "cat": "RuntimeWarning",
+       "in_package": false,
+       "is_probe": true,
+       "msg": "propagate_through_system: the fresnel leg evaluated the integral on the chain window (N=12"
+      }
+     ]
+    },
+    "deeper2": {
+     "err": null,
+     "n_all": 1,
+     "n_selected": 1,
+     "misattributed": 0,
+     "rows": [
+      {
+       "file": "probe_v5_two_caller.py",
+       "lineno": 74,
+       "cat": "RuntimeWarning",
+       "in_package": false,
+       "is_probe": true,
+       "msg": "propagate_through_system: the fresnel leg evaluated the integral on the chain window (N=12"
+      }
+     ]
+    }
+   }
+  },
+  "system.prescription_doe": {
+   "arms": {
+    "direct": {
+     "err": "AttributeError: 'list' object has no attribute 'keys'",
+     "n_all": 0,
+     "n_selected": 0,
+     "misattributed": 0,
+     "rows": []
+    },
+    "deeper1": {
+     "err": "AttributeError: 'list' object has no attribute 'keys'",
+     "n_all": 0,
+     "n_selected": 0,
+     "misattributed": 0,
+     "rows": []
+    },
+    "deeper2": {
+     "err": "AttributeError: 'list' object has no attribute 'keys'",
+     "n_all": 0,
+     "n_selected": 0,
+     "misattributed": 0,
+     "rows": []
+    }
+   }
+  }
+ },
+ "total_selected": 36,
+ "total_misattributed": 6
+}

@@ -1,0 +1,354 @@
+{
+ "lumenairy_file": "/mnt/c/tmp/lum_vreds/lumenairy/__init__.py",
+ "python": "3.12.3",
+ "numpy": "2.4.6",
+ "platform": "linux",
+ "pyfftw_available": true,
+ "fftw_min_size": 256,
+ "fftw_threads": 8,
+ "rows": [
+  {
+   "n": 128,
+   "tilt": [
+    0.0,
+    0.0
+   ],
+   "mode": "shipped",
+   "bit_equal": true,
+   "absmax": 0.0,
+   "rel": 0.0,
+   "n_fft_calls_step": 1,
+   "n_ifft_calls_step": 1,
+   "n_fft_calls_oracle": 1,
+   "n_ifft_calls_oracle": 1,
+   "fft_operand_identical": true,
+   "fft_result_identical": true,
+   "ifft_operand_identical": true,
+   "ifft_result_identical": true
+  },
+  {
+   "n": 128,
+   "tilt": [
+    0.03,
+    -0.02
+   ],
+   "mode": "shipped",
+   "bit_equal": true,
+   "absmax": 0.0,
+   "rel": 0.0,
+   "n_fft_calls_step": 1,
+   "n_ifft_calls_step": 1,
+   "n_fft_calls_oracle": 1,
+   "n_ifft_calls_oracle": 1,
+   "fft_operand_identical": true,
+   "fft_result_identical": true,
+   "ifft_operand_identical": true,
+   "ifft_result_identical": true
+  },
+  {
+   "n": 256,
+   "tilt": [
+    0.0,
+    0.0
+   ],
+   "mode": "shipped",
+   "bit_equal": false,
+   "absmax": 1.4475537224895361e-15,
+   "rel": 2.884943325919448e-16,
+   "n_fft_calls_step": 1,
+   "n_ifft_calls_step": 1,
+   "n_fft_calls_oracle": 1,
+   "n_ifft_calls_oracle": 1,
+   "fft_operand_identical": true,
+   "fft_result_identical": true,
+   "ifft_operand_identical": false,
+   "ifft_result_identical": false
+  },
+  {
+   "n": 256,
+   "tilt": [
+    0.03,
+    -0.02
+   ],
+   "mode": "shipped",
+   "bit_equal": false,
+   "absmax": 1.7979101253009106e-15,
+   "rel": 3.7274857074494724e-16,
+   "n_fft_calls_step": 1,
+   "n_ifft_calls_step": 1,
+   "n_fft_calls_oracle": 1,
+   "n_ifft_calls_oracle": 1,
+   "fft_operand_identical": true,
+   "fft_result_identical": true,
+   "ifft_operand_identical": false,
+   "ifft_result_identical": false
+  },
+  {
+   "n": 512,
+   "tilt": [
+    0.0,
+    0.0
+   ],
+   "mode": "shipped",
+   "bit_equal": false,
+   "absmax": 1.790180836524724e-15,
+   "rel": 3.5177345736426284e-16,
+   "n_fft_calls_step": 1,
+   "n_ifft_calls_step": 1,
+   "n_fft_calls_oracle": 1,
+   "n_ifft_calls_oracle": 1,
+   "fft_operand_identical": true,
+   "fft_result_identical": true,
+   "ifft_operand_identical": false,
+   "ifft_result_identical": false
+  },
+  {
+   "n": 512,
+   "tilt": [
+    0.03,
+    -0.02
+   ],
+   "mode": "shipped",
+   "bit_equal": false,
+   "absmax": 1.897149936107019e-15,
+   "rel": 3.9281321377248025e-16,
+   "n_fft_calls_step": 1,
+   "n_ifft_calls_step": 1,
+   "n_fft_calls_oracle": 1,
+   "n_ifft_calls_oracle": 1,
+   "fft_operand_identical": true,
+   "fft_result_identical": true,
+   "ifft_operand_identical": false,
+   "ifft_result_identical": false
+  },
+  {
+   "n": 128,
+   "tilt": [
+    0.0,
+    0.0
+   ],
+   "mode": "single_buf",
+   "bit_equal": true,
+   "absmax": 0.0,
+   "rel": 0.0,
+   "n_fft_calls_step": 1,
+   "n_ifft_calls_step": 1,
+   "n_fft_calls_oracle": 1,
+   "n_ifft_calls_oracle": 1,
+   "fft_operand_identical": true,
+   "fft_result_identical": true,
+   "ifft_operand_identical": true,
+   "ifft_result_identical": true
+  },
+  {
+   "n": 128,
+   "tilt": [
+    0.03,
+    -0.02
+   ],
+   "mode": "single_buf",
+   "bit_equal": true,
+   "absmax": 0.0,
+   "rel": 0.0,
+   "n_fft_calls_step": 1,
+   "n_ifft_calls_step": 1,
+   "n_fft_calls_oracle": 1,
+   "n_ifft_calls_oracle": 1,
+   "fft_operand_identical": true,
+   "fft_result_identical": true,
+   "ifft_operand_identical": true,
+   "ifft_result_identical": true
+  },
+  {
+   "n": 256,
+   "tilt": [
+    0.0,
+    0.0
+   ],
+   "mode": "single_buf",
+   "bit_equal": true,
+   "absmax": 0.0,
+   "rel": 0.0,
+   "n_fft_calls_step": 1,
+   "n_ifft_calls_step": 1,
+   "n_fft_calls_oracle": 1,
+   "n_ifft_calls_oracle": 1,
+   "fft_operand_identical": true,
+   "fft_result_identical": true,
+   "ifft_operand_identical": true,
+   "ifft_result_identical": true
+  },
+  {
+   "n": 256,
+   "tilt": [
+    0.03,
+    -0.02
+   ],
+   "mode": "single_buf",
+   "bit_equal": true,
+   "absmax": 0.0,
+   "rel": 0.0,
+   "n_fft_calls_step": 1,
+   "n_ifft_calls_step": 1,
+   "n_fft_calls_oracle": 1,
+   "n_ifft_calls_oracle": 1,
+   "fft_operand_identical": true,
+   "fft_result_identical": true,
+   "ifft_operand_identical": true,
+   "ifft_result_identical": true
+  },
+  {
+   "n": 512,
+   "tilt": [
+    0.0,
+    0.0
+   ],
+   "mode": "single_buf",
+   "bit_equal": true,
+   "absmax": 0.0,
+   "rel": 0.0,
+   "n_fft_calls_step": 1,
+   "n_ifft_calls_step": 1,
+   "n_fft_calls_oracle": 1,
+   "n_ifft_calls_oracle": 1,
+   "fft_operand_identical": true,
+   "fft_result_identical": true,
+   "ifft_operand_identical": true,
+   "ifft_result_identical": true
+  },
+  {
+   "n": 512,
+   "tilt": [
+    0.03,
+    -0.02
+   ],
+   "mode": "single_buf",
+   "bit_equal": true,
+   "absmax": 0.0,
+   "rel": 0.0,
+   "n_fft_calls_step": 1,
+   "n_ifft_calls_step": 1,
+   "n_fft_calls_oracle": 1,
+   "n_ifft_calls_oracle": 1,
+   "fft_operand_identical": true,
+   "fft_result_identical": true,
+   "ifft_operand_identical": true,
+   "ifft_result_identical": true
+  },
+  {
+   "n": 128,
+   "tilt": [
+    0.0,
+    0.0
+   ],
+   "mode": "no_pyfftw",
+   "bit_equal": true,
+   "absmax": 0.0,
+   "rel": 0.0,
+   "n_fft_calls_step": 1,
+   "n_ifft_calls_step": 1,
+   "n_fft_calls_oracle": 1,
+   "n_ifft_calls_oracle": 1,
+   "fft_operand_identical": true,
+   "fft_result_identical": true,
+   "ifft_operand_identical": true,
+   "ifft_result_identical": true
+  },
+  {
+   "n": 128,
+   "tilt": [
+    0.03,
+    -0.02
+   ],
+   "mode": "no_pyfftw",
+   "bit_equal": true,
+   "absmax": 0.0,
+   "rel": 0.0,
+   "n_fft_calls_step": 1,
+   "n_ifft_calls_step": 1,
+   "n_fft_calls_oracle": 1,
+   "n_ifft_calls_oracle": 1,
+   "fft_operand_identical": true,
+   "fft_result_identical": true,
+   "ifft_operand_identical": true,
+   "ifft_result_identical": true
+  },
+  {
+   "n": 256,
+   "tilt": [
+    0.0,
+    0.0
+   ],
+   "mode": "no_pyfftw",
+   "bit_equal": true,
+   "absmax": 0.0,
+   "rel": 0.0,
+   "n_fft_calls_step": 1,
+   "n_ifft_calls_step": 1,
+   "n_fft_calls_oracle": 1,
+   "n_ifft_calls_oracle": 1,
+   "fft_operand_identical": true,
+   "fft_result_identical": true,
+   "ifft_operand_identical": true,
+   "ifft_result_identical": true
+  },
+  {
+   "n": 256,
+   "tilt": [
+    0.03,
+    -0.02
+   ],
+   "mode": "no_pyfftw",
+   "bit_equal": true,
+   "absmax": 0.0,
+   "rel": 0.0,
+   "n_fft_calls_step": 1,
+   "n_ifft_calls_step": 1,
+   "n_fft_calls_oracle": 1,
+   "n_ifft_calls_oracle": 1,
+   "fft_operand_identical": true,
+   "fft_result_identical": true,
+   "ifft_operand_identical": true,
+   "ifft_result_identical": true
+  },
+  {
+   "n": 512,
+   "tilt": [
+    0.0,
+    0.0
+   ],
+   "mode": "no_pyfftw",
+   "bit_equal": true,
+   "absmax": 0.0,
+   "rel": 0.0,
+   "n_fft_calls_step": 1,
+   "n_ifft_calls_step": 1,
+   "n_fft_calls_oracle": 1,
+   "n_ifft_calls_oracle": 1,
+   "fft_operand_identical": true,
+   "fft_result_identical": true,
+   "ifft_operand_identical": true,
+   "ifft_result_identical": true
+  },
+  {
+   "n": 512,
+   "tilt": [
+    0.03,
+    -0.02
+   ],
+   "mode": "no_pyfftw",
+   "bit_equal": true,
+   "absmax": 0.0,
+   "rel": 0.0,
+   "n_fft_calls_step": 1,
+   "n_ifft_calls_step": 1,
+   "n_fft_calls_oracle": 1,
+   "n_ifft_calls_oracle": 1,
+   "fft_operand_identical": true,
+   "fft_result_identical": true,
+   "ifft_operand_identical": true,
+   "ifft_result_identical": true
+  }
+ ],
+ "pyfftw_version": "0.15.1"
+}

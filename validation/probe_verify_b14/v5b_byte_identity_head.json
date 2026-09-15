@@ -1,0 +1,101 @@
+{
+ "lumenairy_file": "C:\\Users\\Tesla\\AppData\\Local\\Temp\\claude\\C--Users-Tesla\\372a2d1f-acbe-4b57-a148-eeae3fe1d729\\scratchpad\\vb14\\tree_e61c6467\\lumenairy\\__init__.py",
+ "version": "5.47.0",
+ "python": "3.14.6",
+ "numpy": "2.4.4",
+ "cases": {
+  "carrier.propagate_referenced_asm": {
+   "md5": "6f94f855e7046f0c3b2f274bd0d0bd00",
+   "shape": [
+    64,
+    64
+   ],
+   "dtype": "complex128"
+  },
+  "carrier.propagate_referenced_fresnel_tilt": {
+   "md5": "e6fed88c004251331c59b2dd35e578c9",
+   "shape": [
+    64,
+    64
+   ],
+   "dtype": "complex128"
+  },
+  "carrier.propagate_referenced_noisy": {
+   "md5": "8c0fc30fcab20edf85b904100f1ddf53",
+   "shape": [
+    64,
+    64
+   ],
+   "dtype": "complex128"
+  },
+  "carrier.referenced_envelope": {
+   "md5": "f862e534b7534d0cde9572e222115630",
+   "shape": [
+    64,
+    64
+   ],
+   "dtype": "complex128"
+  },
+  "carrier.focus_readout": {
+   "md5": "a833623a6b1bcbcf39dc801a0992b989",
+   "shape": [
+    32,
+    32
+   ],
+   "dtype": "complex128"
+  },
+  "carrier.focus_readout_replica_warn": {
+   "md5": "0874e6143debe151f24a7d102cb29240",
+   "shape": [
+    256,
+    256
+   ],
+   "dtype": "complex128"
+  },
+  "carrier.exact_focus_readout": {
+   "md5": "33e8194ed38999860d6e35bc843eafe4",
+   "shape": [
+    256,
+    256
+   ],
+   "dtype": "complex128"
+  },
+  "carrier.fit_radius": {
+   "md5": "e2215aeae85aa9c925f4cad681c36ca7",
+   "shape": [],
+   "dtype": "float64"
+  },
+  "carrier_field.re_reference": {
+   "md5": "64575350f3c3477d7bf84a3e522b3707",
+   "shape": [
+    64,
+    64
+   ],
+   "dtype": "complex128"
+  },
+  "system.asm_leg": {
+   "md5": "33310cf2672212366f27e85dd46f6282",
+   "shape": [
+    64,
+    64
+   ],
+   "dtype": "complex128"
+  },
+  "system.fresnel_leg": {
+   "md5": "a4a742053758d98faa63f9b8ae21c915",
+   "shape": [
+    64,
+    64
+   ],
+   "dtype": "complex128"
+  },
+  "system.lens_then_leg": {
+   "md5": "c25da9b356541f4705e9e95b18ae2f31",
+   "shape": [
+    64,
+    64
+   ],
+   "dtype": "complex128"
+  }
+ }
+}

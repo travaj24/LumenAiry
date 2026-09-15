@@ -1,0 +1,220 @@
+{
+ "lumenairy_file": "C:\\Users\\Tesla\\AppData\\Local\\Temp\\claude\\C--Users-Tesla\\372a2d1f-acbe-4b57-a148-eeae3fe1d729\\scratchpad\\vb14\\tree_e61c6467\\lumenairy\\__init__.py",
+ "version": "5.47.0",
+ "python": "3.14.6",
+ "numpy": "2.4.4",
+ "shipped_default": "legacy",
+ "legacy_const": 16.0,
+ "measured_const": 128.0,
+ "windowed_const": 32.0,
+ "analytic_bytes_per_cell_col": 72.0,
+ "rows": [
+  {
+   "N": 64,
+   "beamlets": 512,
+   "budget_mb": 512.0,
+   "mode": "legacy",
+   "chunk": 512,
+   "peak_mb": 196.48232,
+   "overrun": 0.38375453125,
+   "B_per_cell_col": 93.69007110595703
+  },
+  {
+   "N": 64,
+   "beamlets": 512,
+   "budget_mb": 512.0,
+   "mode": "measured",
+   "chunk": 512,
+   "peak_mb": 151.128866,
+   "overrun": 0.29517356640625,
+   "B_per_cell_col": 72.06385898590088
+  },
+  {
+   "N": 64,
+   "beamlets": 512,
+   "budget_mb": 64.0,
+   "mode": "legacy",
+   "chunk": 512,
+   "peak_mb": 151.128834,
+   "overrun": 2.36138803125,
+   "B_per_cell_col": 72.06384372711182
+  },
+  {
+   "N": 64,
+   "beamlets": 512,
+   "budget_mb": 64.0,
+   "mode": "measured",
+   "chunk": 122,
+   "peak_mb": 48.304482,
+   "overrun": 0.75475753125,
+   "B_per_cell_col": 96.66464283427254
+  },
+  {
+   "N": 128,
+   "beamlets": 1024,
+   "budget_mb": 512.0,
+   "mode": "legacy",
+   "chunk": 1024,
+   "peak_mb": 1208.48765,
+   "overrun": 2.36032744140625,
+   "B_per_cell_col": 72.0314770936966
+  },
+  {
+   "N": 128,
+   "beamlets": 1024,
+   "budget_mb": 512.0,
+   "mode": "measured",
+   "chunk": 244,
+   "peak_mb": 384.701746,
+   "overrun": 0.75137059765625,
+   "B_per_cell_col": 96.23086547851562
+  },
+  {
+   "N": 192,
+   "beamlets": 512,
+   "budget_mb": 512.0,
+   "mode": "legacy",
+   "chunk": 512,
+   "peak_mb": 1360.138978,
+   "overrun": 2.65652144140625,
+   "B_per_cell_col": 72.06275611453586
+  },
+  {
+   "N": 192,
+   "beamlets": 512,
+   "budget_mb": 512.0,
+   "mode": "measured",
+   "chunk": 108,
+   "peak_mb": 384.112946,
+   "overrun": 0.75022059765625,
+   "B_per_cell_col": 96.47898632410623
+  },
+  {
+   "N": 192,
+   "beamlets": 512,
+   "budget_mb": 64.0,
+   "mode": "legacy",
+   "chunk": 108,
+   "peak_mb": 384.11285,
+   "overrun": 6.00176328125,
+   "B_per_cell_col": 96.4789622114519
+  },
+  {
+   "N": 192,
+   "beamlets": 512,
+   "budget_mb": 64.0,
+   "mode": "measured",
+   "chunk": 13,
+   "peak_mb": 47.913234,
+   "overrun": 0.74864428125,
+   "B_per_cell_col": 99.97920422676282
+  },
+  {
+   "N": 256,
+   "beamlets": 512,
+   "budget_mb": 64.0,
+   "mode": "legacy",
+   "chunk": 61,
+   "peak_mb": 387.062994,
+   "overrun": 6.04785928125,
+   "B_per_cell_col": 96.82151769419185
+  },
+  {
+   "N": 256,
+   "beamlets": 512,
+   "budget_mb": 64.0,
+   "mode": "measured",
+   "chunk": 7,
+   "peak_mb": 47.324434,
+   "overrun": 0.73944428125,
+   "B_per_cell_col": 103.15907941545758
+  },
+  {
+   "N": 256,
+   "beamlets": 1024,
+   "budget_mb": 512.0,
+   "mode": "legacy",
+   "chunk": 488,
+   "peak_mb": 3073.514738,
+   "overrun": 6.00295847265625,
+   "B_per_cell_col": 96.10269071235031
+  },
+  {
+   "N": 256,
+   "beamlets": 1024,
+   "budget_mb": 512.0,
+   "mode": "measured",
+   "chunk": 61,
+   "peak_mb": 387.063058,
+   "overrun": 0.75598253515625,
+   "B_per_cell_col": 96.82153370341317
+  },
+  {
+   "N": 256,
+   "beamlets": 1024,
+   "budget_mb": 16.0,
+   "mode": "legacy",
+   "chunk": 15,
+   "peak_mb": 97.656018,
+   "overrun": 6.103501125,
+   "B_per_cell_col": 99.34083862304688
+  },
+  {
+   "N": 256,
+   "beamlets": 1024,
+   "budget_mb": 16.0,
+   "mode": "measured",
+   "chunk": 1,
+   "peak_mb": 9.575698,
+   "overrun": 0.598481125,
+   "B_per_cell_col": 146.11355590820312
+  },
+  {
+   "N": 256,
+   "beamlets": 512,
+   "budget_mb": 4.0,
+   "mode": "legacy",
+   "chunk": 3,
+   "peak_mb": 22.158546,
+   "overrun": 5.5396365,
+   "B_per_cell_col": 112.70419311523438
+  },
+  {
+   "N": 256,
+   "beamlets": 512,
+   "budget_mb": 4.0,
+   "mode": "measured",
+   "chunk": 1,
+   "peak_mb": 9.575698,
+   "overrun": 2.3939245,
+   "B_per_cell_col": 146.11355590820312
+  },
+  {
+   "N": 256,
+   "beamlets": 512,
+   "budget_mb": 1.0,
+   "mode": "legacy",
+   "chunk": 1,
+   "peak_mb": 9.575634,
+   "overrun": 9.575634,
+   "B_per_cell_col": 146.11257934570312
+  },
+  {
+   "N": 256,
+   "beamlets": 512,
+   "budget_mb": 1.0,
+   "mode": "measured",
+   "chunk": 1,
+   "peak_mb": 9.575698,
+   "overrun": 9.575698,
+   "B_per_cell_col": 146.11355590820312
+  }
+ ],
+ "identity": {
+  "equal_bytes": false,
+  "rel": 2.117089433990483e-17,
+  "legacy_peak_mb": 3073.514722,
+  "measured_peak_mb": 387.063026
+ },
+ "unknown_is_legacy": true
+}

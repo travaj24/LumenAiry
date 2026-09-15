@@ -1,0 +1,73 @@
+{
+ "numpy": "2.4.6",
+ "python": "3.12.3",
+ "platform": "linux",
+ "rows": [
+  {
+   "n": 64,
+   "md5_both": "c5171051cfbf0fd62a2a6287ec41532b",
+   "md5_named": "c5171051cfbf0fd62a2a6287ec41532b",
+   "md5_left": "c5171051cfbf0fd62a2a6287ec41532b",
+   "md5_right": "c5171051cfbf0fd62a2a6287ec41532b",
+   "both_eq_named": true,
+   "left_eq_named": true,
+   "right_eq_named": true,
+   "right_vs_named_rel": 0.0,
+   "right_vs_named_ndiff": 0,
+   "nvals": 8192
+  },
+  {
+   "n": 128,
+   "md5_both": "8ccaea741045229e460ba6ca3e5e71f8",
+   "md5_named": "8ccaea741045229e460ba6ca3e5e71f8",
+   "md5_left": "8ccaea741045229e460ba6ca3e5e71f8",
+   "md5_right": "115345fa50a4f795c82f5f975b39f686",
+   "both_eq_named": true,
+   "left_eq_named": true,
+   "right_eq_named": false,
+   "right_vs_named_rel": 1.0180603332349013e-16,
+   "right_vs_named_ndiff": 5426,
+   "nvals": 32768
+  },
+  {
+   "n": 256,
+   "md5_both": "338ef162b9b584e3fa1fbaa84fb2cc96",
+   "md5_named": "338ef162b9b584e3fa1fbaa84fb2cc96",
+   "md5_left": "338ef162b9b584e3fa1fbaa84fb2cc96",
+   "md5_right": "b182d6ca679b1ba6c95369c1c51a3ed0",
+   "both_eq_named": true,
+   "left_eq_named": true,
+   "right_eq_named": false,
+   "right_vs_named_rel": 9.650878096823596e-17,
+   "right_vs_named_ndiff": 21698,
+   "nvals": 131072
+  },
+  {
+   "n": 512,
+   "md5_both": "6653ff1e34c93de11aa7927cd9b23e36",
+   "md5_named": "6653ff1e34c93de11aa7927cd9b23e36",
+   "md5_left": "6653ff1e34c93de11aa7927cd9b23e36",
+   "md5_right": "7ae182848cd359096d30db0b8b4642d2",
+   "both_eq_named": true,
+   "left_eq_named": true,
+   "right_eq_named": false,
+   "right_vs_named_rel": 1.7760122759024755e-16,
+   "right_vs_named_ndiff": 86794,
+   "nvals": 524288
+  },
+  {
+   "n": 1024,
+   "md5_both": "a2f8e3145646e1e12872dee409fdc7be",
+   "md5_named": "a2f8e3145646e1e12872dee409fdc7be",
+   "md5_left": "a2f8e3145646e1e12872dee409fdc7be",
+   "md5_right": "6fdedeeba52003ba00074a3952f38a9a",
+   "both_eq_named": true,
+   "left_eq_named": true,
+   "right_eq_named": false,
+   "right_vs_named_rel": 1.7872757359526966e-16,
+   "right_vs_named_ndiff": 345396,
+   "nvals": 2097152
+  }
+ ],
+ "elision_changes_bits": true
+}

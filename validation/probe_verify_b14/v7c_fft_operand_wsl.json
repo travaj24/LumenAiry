@@ -1,0 +1,273 @@
+{
+ "lumenairy_file": "/mnt/c/tmp/lum_vreds/lumenairy/__init__.py",
+ "python": "3.12.3",
+ "numpy": "2.4.6",
+ "platform": "linux",
+ "pyfftw_available": true,
+ "rows": [
+  {
+   "n": 256,
+   "tilt": [
+    0.0,
+    0.0
+   ],
+   "mode": "shipped",
+   "fwd_bit_equal": true,
+   "fwd_reldiff": 0.0,
+   "operand_bit_equal": false,
+   "operand_reldiff": 9.950771762931792e-17,
+   "operand_ndiff": 21694,
+   "operand_nvals": 131072,
+   "H_bit_equal": false,
+   "H_reldiff": 4.577566798522237e-16,
+   "H_abs1_max_dev": 4.440892098500626e-16,
+   "H_abs2_max_dev": 4.440892098500626e-16,
+   "o1_is_f1_times_h1": false,
+   "o2_is_f2_times_h2": false,
+   "o1_vs_f1h2": 2.995578982882973e-16,
+   "o2_vs_f2h1": 2.346884826522504e-16
+  },
+  {
+   "n": 256,
+   "tilt": [
+    0.03,
+    -0.02
+   ],
+   "mode": "shipped",
+   "fwd_bit_equal": true,
+   "fwd_reldiff": 0.0,
+   "operand_bit_equal": false,
+   "operand_reldiff": 9.95077176293179e-17,
+   "operand_ndiff": 21670,
+   "operand_nvals": 131072,
+   "H_bit_equal": false,
+   "H_reldiff": 4.553442605056512e-16,
+   "H_abs1_max_dev": 4.440892098500626e-16,
+   "H_abs2_max_dev": 5.551115123125783e-16,
+   "o1_is_f1_times_h1": false,
+   "o2_is_f2_times_h2": false,
+   "o1_vs_f1h2": 2.2250602090500905e-16,
+   "o2_vs_f2h1": 3.026409081355552e-16
+  },
+  {
+   "n": 512,
+   "tilt": [
+    0.0,
+    0.0
+   ],
+   "mode": "shipped",
+   "fwd_bit_equal": true,
+   "fwd_reldiff": 0.0,
+   "operand_bit_equal": false,
+   "operand_reldiff": 1.7289550620428892e-16,
+   "operand_ndiff": 86750,
+   "operand_nvals": 524288,
+   "H_bit_equal": false,
+   "H_reldiff": 4.518280359883027e-16,
+   "H_abs1_max_dev": 5.551115123125783e-16,
+   "H_abs2_max_dev": 5.551115123125783e-16,
+   "o1_is_f1_times_h1": false,
+   "o2_is_f2_times_h2": false,
+   "o1_vs_f1h2": 2.7337179840666315e-16,
+   "o2_vs_f2h1": 2.7337179840666315e-16
+  },
+  {
+   "n": 512,
+   "tilt": [
+    0.03,
+    -0.02
+   ],
+   "mode": "shipped",
+   "fwd_bit_equal": true,
+   "fwd_reldiff": 0.0,
+   "operand_bit_equal": false,
+   "operand_reldiff": 1.7289550620428892e-16,
+   "operand_ndiff": 86580,
+   "operand_nvals": 524288,
+   "H_bit_equal": false,
+   "H_reldiff": 4.710277376051326e-16,
+   "H_abs1_max_dev": 5.551115123125783e-16,
+   "H_abs2_max_dev": 5.551115123125783e-16,
+   "o1_is_f1_times_h1": false,
+   "o2_is_f2_times_h2": false,
+   "o1_vs_f1h2": 2.7337179840666315e-16,
+   "o2_vs_f2h1": 3.4579101240857783e-16
+  },
+  {
+   "n": 256,
+   "tilt": [
+    0.0,
+    0.0
+   ],
+   "mode": "single_buf",
+   "fwd_bit_equal": true,
+   "fwd_reldiff": 0.0,
+   "operand_bit_equal": true,
+   "operand_reldiff": 0.0,
+   "operand_ndiff": 0,
+   "operand_nvals": 131072,
+   "H_bit_equal": true,
+   "H_reldiff": 0.0,
+   "H_abs1_max_dev": 4.440892098500626e-16,
+   "H_abs2_max_dev": 4.440892098500626e-16,
+   "o1_is_f1_times_h1": false,
+   "o2_is_f2_times_h2": false,
+   "o1_vs_f1h2": 2.487692940732948e-16,
+   "o2_vs_f2h1": 2.487692940732948e-16
+  },
+  {
+   "n": 256,
+   "tilt": [
+    0.03,
+    -0.02
+   ],
+   "mode": "single_buf",
+   "fwd_bit_equal": true,
+   "fwd_reldiff": 0.0,
+   "operand_bit_equal": true,
+   "operand_reldiff": 0.0,
+   "operand_ndiff": 0,
+   "operand_nvals": 131072,
+   "H_bit_equal": true,
+   "H_reldiff": 0.0,
+   "H_abs1_max_dev": 4.440892098500626e-16,
+   "H_abs2_max_dev": 4.440892098500626e-16,
+   "o1_is_f1_times_h1": false,
+   "o2_is_f2_times_h2": false,
+   "o1_vs_f1h2": 2.2250602090500905e-16,
+   "o2_vs_f2h1": 2.2250602090500905e-16
+  },
+  {
+   "n": 512,
+   "tilt": [
+    0.0,
+    0.0
+   ],
+   "mode": "single_buf",
+   "fwd_bit_equal": true,
+   "fwd_reldiff": 0.0,
+   "operand_bit_equal": true,
+   "operand_reldiff": 0.0,
+   "operand_ndiff": 0,
+   "operand_nvals": 524288,
+   "H_bit_equal": true,
+   "H_reldiff": 0.0,
+   "H_abs1_max_dev": 5.551115123125783e-16,
+   "H_abs2_max_dev": 5.551115123125783e-16,
+   "o1_is_f1_times_h1": false,
+   "o2_is_f2_times_h2": false,
+   "o1_vs_f1h2": 1.9330305243851332e-16,
+   "o2_vs_f2h1": 1.9330305243851332e-16
+  },
+  {
+   "n": 512,
+   "tilt": [
+    0.03,
+    -0.02
+   ],
+   "mode": "single_buf",
+   "fwd_bit_equal": true,
+   "fwd_reldiff": 0.0,
+   "operand_bit_equal": true,
+   "operand_reldiff": 0.0,
+   "operand_ndiff": 0,
+   "operand_nvals": 524288,
+   "H_bit_equal": true,
+   "H_reldiff": 0.0,
+   "H_abs1_max_dev": 5.551115123125783e-16,
+   "H_abs2_max_dev": 5.551115123125783e-16,
+   "o1_is_f1_times_h1": false,
+   "o2_is_f2_times_h2": false,
+   "o1_vs_f1h2": 2.44511169747467e-16,
+   "o2_vs_f2h1": 2.44511169747467e-16
+  },
+  {
+   "n": 256,
+   "tilt": [
+    0.0,
+    0.0
+   ],
+   "mode": "no_pyfftw",
+   "fwd_bit_equal": true,
+   "fwd_reldiff": 0.0,
+   "operand_bit_equal": true,
+   "operand_reldiff": 0.0,
+   "operand_ndiff": 0,
+   "operand_nvals": 131072,
+   "H_bit_equal": true,
+   "H_reldiff": 0.0,
+   "H_abs1_max_dev": 4.440892098500626e-16,
+   "H_abs2_max_dev": 4.440892098500626e-16,
+   "o1_is_f1_times_h1": false,
+   "o2_is_f2_times_h2": false,
+   "o1_vs_f1h2": 2.4876929407329485e-16,
+   "o2_vs_f2h1": 2.4876929407329485e-16
+  },
+  {
+   "n": 256,
+   "tilt": [
+    0.03,
+    -0.02
+   ],
+   "mode": "no_pyfftw",
+   "fwd_bit_equal": true,
+   "fwd_reldiff": 0.0,
+   "operand_bit_equal": true,
+   "operand_reldiff": 0.0,
+   "operand_ndiff": 0,
+   "operand_nvals": 131072,
+   "H_bit_equal": true,
+   "H_reldiff": 0.0,
+   "H_abs1_max_dev": 4.440892098500626e-16,
+   "H_abs2_max_dev": 4.440892098500626e-16,
+   "o1_is_f1_times_h1": false,
+   "o2_is_f2_times_h2": false,
+   "o1_vs_f1h2": 2.9955789828829733e-16,
+   "o2_vs_f2h1": 2.9955789828829733e-16
+  },
+  {
+   "n": 512,
+   "tilt": [
+    0.0,
+    0.0
+   ],
+   "mode": "no_pyfftw",
+   "fwd_bit_equal": true,
+   "fwd_reldiff": 0.0,
+   "operand_bit_equal": true,
+   "operand_reldiff": 0.0,
+   "operand_ndiff": 0,
+   "operand_nvals": 524288,
+   "H_bit_equal": true,
+   "H_reldiff": 0.0,
+   "H_abs1_max_dev": 5.551115123125783e-16,
+   "H_abs2_max_dev": 5.551115123125783e-16,
+   "o1_is_f1_times_h1": false,
+   "o2_is_f2_times_h2": false,
+   "o1_vs_f1h2": 2.4451116974746693e-16,
+   "o2_vs_f2h1": 2.4451116974746693e-16
+  },
+  {
+   "n": 512,
+   "tilt": [
+    0.03,
+    -0.02
+   ],
+   "mode": "no_pyfftw",
+   "fwd_bit_equal": true,
+   "fwd_reldiff": 0.0,
+   "operand_bit_equal": true,
+   "operand_reldiff": 0.0,
+   "operand_ndiff": 0,
+   "operand_nvals": 524288,
+   "H_bit_equal": true,
+   "H_reldiff": 0.0,
+   "H_abs1_max_dev": 5.551115123125783e-16,
+   "H_abs2_max_dev": 5.551115123125783e-16,
+   "o1_is_f1_times_h1": false,
+   "o2_is_f2_times_h2": false,
+   "o1_vs_f1h2": 2.4451116974746693e-16,
+   "o2_vs_f2h1": 2.4451116974746693e-16
+  }
+ ]
+}
