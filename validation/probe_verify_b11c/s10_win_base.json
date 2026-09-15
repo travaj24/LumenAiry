@@ -1,0 +1,75 @@
+{
+ "tree": "C:\\Users\\Tesla\\AppData\\Local\\Temp\\claude\\C--Users-Tesla\\372a2d1f-acbe-4b57-a148-eeae3fe1d729\\scratchpad\\verify_b11c\\base",
+ "jax_first": false,
+ "python": "3.14.6",
+ "numpy": "2.4.4",
+ "bar_ulp": 4.0,
+ "n_cases": 12,
+ "power_ulp_min": 0.0,
+ "power_ulp_max": 3.0,
+ "peak_ulp_min": 0.0,
+ "peak_ulp_max": 2.0,
+ "cases_over_bar": [],
+ "rows": {
+  "exact_test_fixture": {
+   "r0": "1.7777776632250892",
+   "power_ulp": 3.0,
+   "peak_ulp": 1.0
+  },
+  "amp_0.9_0.5": {
+   "r0": "3.2399994868577213",
+   "power_ulp": 0.0,
+   "peak_ulp": 1.0
+  },
+  "amp_0.6_0.8": {
+   "r0": "0.56250003624519",
+   "power_ulp": 1.0,
+   "peak_ulp": 1.0
+  },
+  "amp_0.99_0.14": {
+   "r0": "50.00494680090235",
+   "power_ulp": 2.0,
+   "peak_ulp": 2.0
+  },
+  "N_112": {
+   "r0": "1.777777649447341",
+   "power_ulp": 0.0,
+   "peak_ulp": 0.0
+  },
+  "N_128": {
+   "r0": "1.777777647590859",
+   "power_ulp": 0.0,
+   "peak_ulp": 1.0
+  },
+  "N_80": {
+   "r0": "1.7777776679971395",
+   "power_ulp": 2.0,
+   "peak_ulp": 0.0
+  },
+  "n_v2_40": {
+   "r0": "1.7777777004633457",
+   "power_ulp": 3.0,
+   "peak_ulp": 2.0
+  },
+  "n_v2_56": {
+   "r0": "1.7777776604462434",
+   "power_ulp": 2.0,
+   "peak_ulp": 0.0
+  },
+  "poly_order_5": {
+   "r0": "1.7777776762950546",
+   "power_ulp": 0.0,
+   "peak_ulp": 0.0
+  },
+  "waist_0.50mm": {
+   "r0": "1.777777707275564",
+   "power_ulp": 1.0,
+   "peak_ulp": 1.0
+  },
+  "waist_0.60mm": {
+   "r0": "1.7777776100724751",
+   "power_ulp": 1.0,
+   "peak_ulp": 0.0
+  }
+ }
+}

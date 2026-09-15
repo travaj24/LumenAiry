@@ -52,15 +52,31 @@ import pytest
 import lumenairy as la
 from lumenairy import _knobs
 from lumenairy.backend import _optional
-from lumenairy.elements import _lens_imap, _lens_real, _lens_traced, lenses
+from lumenairy.elements import (
+    _lens_imap,
+    _lens_kernels,
+    _lens_real,
+    _lens_traced,
+    lenses,
+)
 from lumenairy.elements import _lens_traced_multibranch as _mb
 from lumenairy.propagators import fga
 
 REPO = pathlib.Path(la.__file__).resolve().parent
 
-#: The five modules addendum 8 names, and which helpers each must still expose.
-_CUPY_CONSUMERS = (_lens_real, _lens_traced, lenses)
-_NUMBA_CONSUMERS = (_lens_traced, lenses, _lens_imap)
+#: The modules addendum 8 names, and which helpers each must still expose.
+#:
+#: WP-B11c moved ``lenses``'s OWN copy of this plumbing -- the lazy ``cp``
+#: alias, ``_is_cupy_array``, the numba gate and its loader -- into the
+#: ``_lens_kernels`` leaf, because the two surface-sag builders that read it
+#: had to move there to close the ``_lens_real <-> lenses`` import cycle.  The
+#: property addendum 8 pins did not weaken and did not go away; it changed
+#: address, so the tuples name the leaf.  What ``lenses`` owes instead -- that
+#: all three names still resolve on the facade, LIVE in both directions -- is
+#: :func:`test_the_facade_still_surfaces_the_moved_gates_live` below, which is
+#: strictly more than the old parametrisation asserted (it covers the WRITE).
+_CUPY_CONSUMERS = (_lens_real, _lens_traced, _lens_kernels)
+_NUMBA_CONSUMERS = (_lens_traced, _lens_kernels, _lens_imap)
 
 
 # ---------------------------------------------------------------------------
@@ -149,6 +165,43 @@ def test_numba_gate_stays_a_module_attribute_that_monkeypatch_reaches(
         f'{mod.__name__}._load_numba() ignored a monkeypatched '
         f'_NUMBA_AVAILABLE=False, so every test that fakes an absent '
         f'accelerator on this module is now vacuous.')
+
+
+def test_the_facade_still_surfaces_the_moved_gates_live(monkeypatch):
+    """``lenses`` no longer DEFINES the cupy / numba plumbing (WP-B11c moved it
+    to the ``_lens_kernels`` leaf), but every caller that reads it through the
+    facade must still see the live value -- and, because the suite's spelling
+    for "pretend the accelerator is absent" is a WRITE, a write through the
+    facade must reach the code that reads it.
+
+    A plain ``from ._lens_kernels import cp`` in ``lenses`` would satisfy
+    neither half: ``cp`` is ``None`` until first use, so the re-export would
+    bind ``None`` for ever, and ``lenses._NUMBA_AVAILABLE = False`` would set
+    an attribute nothing reads -- turning every such test into a silent no-op.
+    That is the failure mode this test exists for.
+    """
+    for name in ('cp', '_ne', '_numba', '_njit', '_prange',
+                 '_NUMBA_AVAILABLE', 'NUMEXPR_AVAILABLE', '_NUMBA_KERNELS'):
+        assert hasattr(lenses, name), (
+            f'lenses lost {name!r}; a caller reading it through the facade '
+            f'now raises AttributeError.')
+        assert getattr(lenses, name) is getattr(_lens_kernels, name), (
+            f'lenses.{name} is a stale import-time snapshot, not a live view '
+            f'of the leaf.')
+        # ... and the facade keeps no copy of its own, which is what makes
+        # the read live rather than accidentally-equal.
+        assert name not in vars(lenses), (
+            f'lenses carries its own {name!r}; the forward is being shadowed.')
+
+    sentinel = object()
+    monkeypatch.setattr(lenses, 'cp', sentinel)
+    assert _lens_kernels.cp is sentinel, (
+        'a write through the lenses facade did not reach the leaf; every test '
+        'that fakes an absent accelerator on lenses is now vacuous.')
+    monkeypatch.undo()
+    assert _lens_kernels.cp is None
+    assert 'cp' not in vars(lenses), (
+        "monkeypatch's undo left a shadow attribute on the facade")
 
 
 def test_load_numba_returns_true_and_binds_the_handles_when_available():

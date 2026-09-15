@@ -1,0 +1,40 @@
+{
+ "tag": "surface_wsl",
+ "python": "/home/travaj/lumvenv/bin/python",
+ "base_tree": "/mnt/c/Users/Tesla/AppData/Local/Temp/claude/C--Users-Tesla/372a2d1f-acbe-4b57-a148-eeae3fe1d729/scratchpad/verify_b11c/base",
+ "branch_tree": "/mnt/c/Users/Tesla/AppData/Local/Temp/claude/C--Users-Tesla/372a2d1f-acbe-4b57-a148-eeae3fe1d729/scratchpad/verify_b11c/branch",
+ "n_keys_base": 30,
+ "n_keys_branch": 30,
+ "n_shared": 30,
+ "n_identical": 9,
+ "differing": [
+  "B__blas_limit",
+  "B__blas_threads_quiet",
+  "B__get_blas_threads",
+  "B__with_blas_limit",
+  "B_rcwa_blas_threads",
+  "B_set_blas_threads",
+  "L__ensure_cupy_loaded",
+  "L__ensure_numexpr_loaded",
+  "L__fit_normaliser",
+  "L__get_aspheric_sag_accum_numba",
+  "L__is_cupy_array",
+  "L__load_numba",
+  "L__multi_indices_total_degree",
+  "L__surface_sag_general",
+  "L_surface_sag_biconic",
+  "L_surface_sag_general",
+  "M_lenses_type",
+  "T_rcwa_blas_threads",
+  "T_set_blas_threads",
+  "T_surface_sag_biconic",
+  "T_surface_sag_general"
+ ],
+ "only_base": [],
+ "only_branch": [],
+ "seconds": {
+  "base": 0.3,
+  "branch": 0.3
+ },
+ "verdict": "DIFFERS"
+}

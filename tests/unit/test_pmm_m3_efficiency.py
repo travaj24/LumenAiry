@@ -1436,7 +1436,7 @@ def test_pmm_sweep_applies_exactly_one_blas_cap(grids):
     BLAS at the full environment pool and took down a pytest-xdist worker)."""
     import contextlib
 
-    from lumenairy.elements.rcwa import _core as _rc_core
+    from lumenairy.elements.rcwa import _blas as _rc_core
     real = _rc_core._get_blas_controller()
     calls = []
 
@@ -1472,7 +1472,7 @@ def test_pmm2d_hybrid_sweep_applies_exactly_one_blas_cap():
     import contextlib
 
     from lumenairy.elements.pmm.stack2d import PMM2DStackHybrid
-    from lumenairy.elements.rcwa import _core as _rc_core
+    from lumenairy.elements.rcwa import _blas as _rc_core
     real = _rc_core._get_blas_controller()
     calls = []
 

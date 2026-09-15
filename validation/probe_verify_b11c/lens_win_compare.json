@@ -1,0 +1,18 @@
+{
+ "tag": "lens_win",
+ "python": "C:\\Users\\Tesla\\AppData\\Local\\Programs\\Python\\Python314\\python.exe",
+ "base_tree": "C:\\Users\\Tesla\\AppData\\Local\\Temp\\claude\\C--Users-Tesla\\372a2d1f-acbe-4b57-a148-eeae3fe1d729\\scratchpad\\verify_b11c\\base",
+ "branch_tree": "C:\\Users\\Tesla\\AppData\\Local\\Temp\\claude\\C--Users-Tesla\\372a2d1f-acbe-4b57-a148-eeae3fe1d729\\scratchpad\\verify_b11c\\branch",
+ "n_keys_base": 112,
+ "n_keys_branch": 112,
+ "n_shared": 112,
+ "n_identical": 112,
+ "differing": [],
+ "only_base": [],
+ "only_branch": [],
+ "seconds": {
+  "base": 321.3,
+  "branch": 213.2
+ },
+ "verdict": "IDENTICAL"
+}

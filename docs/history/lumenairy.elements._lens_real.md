@@ -1,7 +1,7 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/_lens_real.py
-ast_sha256: 78c106c88ebba4c7de44092921427d5db501abe18b8e794ca5f6e9e292ec5f02
-token_sha256: fc3749c8f2023b8fc67df3cf3381fc0a0f760ac8eef92c4df09588ee241e66ed
+ast_sha256: 326a2456d333ad493b3ad0dd241032afd9b8b1c6291c0b4491059853424ed8e9
+token_sha256: b2d7c83232a371ae7b35daf49efcbb33b342d8877583d1299c345506a99e6e2c
 pre_relocation_lines: 8117
 recorded_by: WP-A17 SWEEP-4 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
@@ -15,6 +15,8 @@ re_recorded: 2026-09-13 -- the grid-versus-aperture bookkeeping moved to the new
 re_recorded: 2026-09-14 -- apply_real_lens gains physics=LensPhysics, the fourth configuration object: the nine analytic-screen model-term switches become config fields, purely additive.
 re_recorded: 2026-09-14 -- WP-B11b item 8: every warning in the two lens bodies asks _lens_kernels.caller_stacklevel for its level, so it names the first frame outside the package whatever wrapper / configuration re-entry reached it; doe.py's zone-plate fill takes T's own dtype.
 re_recorded: 2026-09-14 -- Wave-5 item D (CI run 34914295323): DIGEST-SCHEME change, not a code change -- token_fingerprint now feeds an f-string to the digest as ONE STRING record holding its exact source text instead of the running tokenizer's FSTRING_START/FSTRING_MIDDLE/FSTRING_END run, so the recorded value is a property of the file rather than of the interpreter that read it; PEP 701 made CPython 3.12 tokenize f-strings differently from 3.11, these digests were recorded on 3.12+, and all five py3.11 CI shards read a different token_sha256 for byte-identical sources (110 of 123 documents, measured).  The module source is unchanged and ast_sha256 is unchanged.
+re_recorded: 2026-09-14 -- WP-B11c: the optional CuPy / numba / numexpr plumbing and the two surface-sag builders move to the _lens_kernels leaf, closing the _lens_real <-> lenses module-level import cycle; lenses re-exports them and forwards the live slots both ways, _lens_real reads the leaf.  Bit-identical (40/40 archive-to-archive hashes, both builds).
+re_recorded: 2026-09-15 -- merge of verify/wp-b11c into wave5/audit-leftovers: the WP-B11c moves and the Wave-5 item D digest-scheme change land in one tree (both sides' re_recorded lines kept)
 -->
 
 # Version history -- `lumenairy/elements/_lens_real.py`

@@ -48,8 +48,16 @@ import pytest
 def _install_stub_threadpoolctl(monkeypatch):
     """Inject a fake ``threadpoolctl`` whose ``ThreadpoolController`` counts
     its own constructions, and reset the module-level controller cache so the
-    fake is the one that gets built.  Returns (build_count, limit_calls)."""
-    from lumenairy.elements.rcwa import _core
+    fake is the one that gets built.  Returns (build_count, limit_calls).
+
+    PATCHED AT THE DEFINITION SITE.  The controller cache and its "no
+    controller" latch live in ``rcwa._blas`` (WP-B11c), and
+    ``_get_blas_controller`` reads BOTH through that module's own globals, so
+    substituting them on ``rcwa._core`` -- which does not re-export them --
+    would not be read by anything.  ``build_count`` below is the proof the
+    patch lands: a fake that is never constructed reads 0.
+    """
+    from lumenairy.elements.rcwa import _blas as _core
 
     build_count = {"n": 0}
     limit_calls = []
@@ -125,8 +133,12 @@ def test_blas_limit_noop_without_cap_builds_no_controller(monkeypatch):
 def test_blas_controller_unavailable_falls_back_cleanly(monkeypatch):
     """When threadpoolctl lacks ThreadpoolController (< 3.0) the helper must
     latch unavailable and _blas_limit must still yield a usable context (the
-    legacy fallback), never raise."""
-    from lumenairy.elements.rcwa import _core
+    legacy fallback), never raise.
+
+    Patched at the definition site (``rcwa._blas``) for the reason given in
+    ``_install_stub_threadpoolctl``; the latch assertion below is this test's
+    own proof that the patch was read."""
+    from lumenairy.elements.rcwa import _blas as _core
 
     # A threadpoolctl with neither symbol -> ImportError on both paths.
     empty_mod = types.ModuleType("threadpoolctl")

@@ -271,6 +271,101 @@ every probe and its per-arm JSON is under `validation/probe_known_reds/`.
   one error `mypy --strict` reported; neither the whitelist nor an `ignore` was
   touched.
 
+### Changed -- WP-B11c (Wave 5.3): the structural half of the hygiene items WP-B11 did not reach
+
+Three refactors, each bit-identical by contract and proved so archive-to-archive
+on both builds.  No public answer moves; what moves is where a name is defined,
+and -- for the names that are live mutable state rather than definitions -- where
+a test has to substitute it.
+
+**The RCWA BLAS-thread cap is its own module.**  `lumenairy/elements/rcwa/_blas.py`
+holds the whole opt-in cap: `set_blas_threads`, `rcwa_blas_threads`,
+`_blas_threads_quiet`, `_blas_limit`, `_with_blas_limit`, `_get_blas_threads`,
+`_BLAS_STATE` and the controller cache.  It is a leaf (standard library plus
+`lumenairy._knobs`), and `rcwa/_core.py` re-exports the seven names its `__all__`
+publishes, as the SAME objects, so every import path -- `lumenairy.set_blas_threads`,
+`lumenairy.elements.rcwa.rcwa_blas_threads`, `from ._core import _with_blas_limit` --
+resolves unchanged.  `rcwa/_core.py` drops 4967 to 4764 lines.  The cap's five
+module-level mutable names and the three functions that read them at call time
+stay in `_blas` and are deliberately NOT re-exported, because that is where the
+code reads them: a test that substitutes one must patch `rcwa._blas`, and a stale
+`setattr` on `rcwa/_core.py`'s module raises `AttributeError` instead of binding a
+shadow attribute nothing reads.  The four test files that substitute the cap's
+state were re-pointed, and the three arms whose claim is "no warning" -- vacuous on
+a box that has `threadpoolctl` if the patch stopped landing -- gained a proof of
+patch.  43 of 43 hashes bit-identical, both builds.
+
+**The lens family carries no module-level import cycle.**  The 2026-09-11 audit's
+TESTS-ARCH section counted four; WP-B11 part a re-measured three and closed two;
+these are the last two.  `surface_sag_general`, `surface_sag_biconic` and the
+optional CuPy / numba / numexpr plumbing they read from module scope move from
+`elements/lenses.py` into the `elements/_lens_kernels.py` leaf, and so do
+`_fit_normaliser` and `_multi_indices_total_degree`; `_lens_real` and
+`lenses_maslov` read the leaf.  `lenses.py` re-exports all of it, by identity, so
+`from lumenairy.elements.lenses import surface_sag_general` and every other
+existing spelling resolve unchanged -- and to the same object.  `lenses.py` drops
+746 to 338 lines.  40 of 40 and then 48 of 48 hashes bit-identical, both builds,
+over the sag ladder, the numba fast path and its pure-NumPy arm reached by
+flipping the gate through the facade, and eighteen consumers from
+`apply_thin_lens` to `apply_real_lens_gbd`.
+
+**`lumenairy.elements.lenses` now has a module type.**  Eight names in the leaf
+are live state rather than definitions: `cp`, `_ne`, `_numba`, `_njit`, `_prange`
+and `_NUMBA_KERNELS` are populated on first use, and `_NUMBA_AVAILABLE` /
+`NUMEXPR_AVAILABLE` are gates read at call time.  A plain re-export would bind
+`None` for ever on the first six and would make a write to either gate a silent
+no-op.  A PEP 562 `__getattr__` fixes the read and not the write -- it is consulted
+on a failed lookup and has no say over `setattr` -- so `lenses` assigns its module
+object a `ModuleType` subclass that forwards those eight names to
+`_lens_kernels` on read, write and delete.  `lenses.cp` is a live view,
+`lenses._NUMBA_AVAILABLE = False` reaches the kernel, and the facade keeps no copy
+of its own, so a `monkeypatch` save/set/undo cycle leaves nothing behind.  Any
+other name still raises `AttributeError`.
+
+The import graph is measured by two independent instruments -- the module-level-only
+AST walk part a used, and `validation/probe_wp_b11c/import_graph.py`, an
+`__import__` hook that records what the interpreter actually executes.  The second
+is not redundant: a module-level `from .lenses import x` whose target is already
+half-initialised in `sys.modules` executes no loader, so it leaves no trace in
+`-X importtime` or in `sys.modules`, and it is exactly the edge a cycle is made of.
+Both agree, before and after.
+
+Also in this package: `docs/lens_configuration.md` section "Module layout" is
+rewritten (its recorded plan said a PEP 562 `__getattr__` would carry the
+`_NUMBA_AVAILABLE` monkeypatch; measurement says it carries the read only), the
+`_lens_kernels` leaf test is restated as the transitive property -- nothing
+reachable from the leaf, at any depth, imports `lumenairy.elements` -- which is
+strictly stronger than the direct-import check it replaces, and the lens-family
+cycle ratchet becomes an equality at zero rather than an upper bound.  One item of
+the handoff's 4.5 list is deliberately NOT done: folding `_lens_real`'s whole-grid
+surface body into the band generator would move the numexpr gate, the
+`_ensure_full_grids` allocation and the Fresnel dtype-promotion point, so it is a
+behaviour change with a Migration note rather than a hygiene refactor;
+`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/WP-B11c_REPORT.md`
+section 5 records what it would change.
+
+One test outside this package's ownership went red once while these landed, and
+the entry says what it was rather than leaving it in a log: a four-ULP bar on the
+vector Maslov wrapper's `P_x/P_y`, in
+`tests/unit/test_audit2609_a4_verify_maslov_asymptotic.py`.  Its docstring records
+the measurement it was set from (0 and 1 ULP); a clean process on this box today
+reads 3 and 1, which is one ULP of margin.  The quantity behind it was hashed
+archive-to-archive on both builds for exactly this question and is bit-identical,
+and the identical clean-process reading comes out of the base tree too -- so the
+bar, not the answer, is what moved.  Re-deriving it two-sided belongs to that
+file's owner; it is recorded in the WP-B11c report, not masked.
+
+One housekeeping consequence worth naming: moving code moves line numbers, and
+`CHANGELOG.md` cites source lines.  Twenty-eight `path.py:N` citations in the
+5.47.0 block are re-anchored here -- by CONTENT (the line each number named at
+`96cb2096`, located in the tree as it is now, with a context check to break
+ties), not by arithmetic -- and one of them follows its line into the module it
+moved to.  The V18 walker refuses a citation that lands on a TRIVIAL line, so it
+caught two of the twelve `_lens_real.py` shifts and would have passed the other
+ten while they pointed one line off; content-matching is what finds those.  The
+tool is `validation/probe_wp_b11c/reanchor_citations.py` and it sources its
+"before" numbers from `git show`, never from the working copy, so a second run
+is a no-op rather than a second shift.
 
 ## [5.47.0] — 2026-09-14
 
@@ -615,7 +710,7 @@ engagement bar, and `'quadrature'` / `'levin'` never reach it and pay nothing.
 The 2-D transverse-walk remap carries the input envelope along traced rays, and
 it sampled that envelope at the launch points with
 `map_coordinates(..., mode='constant', cval=0.0)`
-(`_lens_real.py:2629`).  The field axis `(arange(N) - N/2) * dx` runs from
+(`_lens_real.py:2628`).  The field axis `(arange(N) - N/2) * dx` runs from
 `-(N/2) dx` to `+(N/2 - 1) dx` — one whole sample further on the −x side — so a
 ray launched in the band `(x[-1], x[-1] + dx]` sampled off the grid and carried
 NOTHING, while its mirror between `x[0] - dx` and `x[0]` carried the full
@@ -635,7 +730,7 @@ effect presented as a lattice instability:
 | **1025** | 10.06 µm | **yes** | 812 | **6.292e-01** |
 
 The remap now carries the envelope over the largest CENTRED window the caller's
-grid holds — `|x| <= x[-1]`, `|y| <= y[-1]` (`_lens_real.py:2652`) — so a ray on
+grid holds — `|x| <= x[-1]`, `|y| <= y[-1]` (`_lens_real.py:2651`) — so a ray on
 one side of the axis can never carry amplitude its mirror cannot.  Image-plane
 mirror residual of the +d / −d pair, an exact symmetry of the physics:
 
@@ -662,7 +757,7 @@ fan is a REGULAR lattice, so the exit map is a smooth curvilinear grid: it is
 now inverted on that grid — Newton on the bilinear interpolant of `(x_out,
 y_out)` and of its lattice gradients, seeded from the map's own global affine
 part — and the transported amplitude and OPL are read at the launch coordinate
-that comes back (`_lens_real.py:2444` `_remap2d_interp_structured`,
+that comes back (`_lens_real.py:2443` `_remap2d_interp_structured`,
 `:2347` `_remap2d_affine_seed`).
 
 What that buys, measured:
@@ -731,12 +826,12 @@ smoothed to the lattice.  Cost is `displaced_n_side²` rays traced through the
 prescription; accuracy is second order in the pitch.
 
 Validated with the CONVENTIONS.md §2 prefix (`_normalise_displaced_n_side`,
-`_lens_real.py:2168`): a non-integer, a float with a fractional part, a bool, or
+`_lens_real.py:2167`): a non-integer, a float with a fractional part, a bool, or
 anything below the 3-ray structural floor raises rather than being truncated or
 silently accepted.  A call that would DISCARD the setting — any
 `surface_model` other than `'displaced'`, a rotationally symmetric element, or
 `displaced_obliquity='pointwise'` — raises too, naming which of those it was
-(`_check_displaced_support`, `_lens_real.py:4978`).  The routing rule is now a
+(`_check_displaced_support`, `_lens_real.py:4977`).  The routing rule is now a
 single shared predicate `_routes_to_displaced_remap_2d` (`:1558`) so the guard
 and the dispatch cannot drift apart.
 
@@ -893,7 +988,7 @@ by `pytest tests/unit -k real_lens`, the WP-A2 a2 suites and
 
 The 1-D symmetric exit-plane remap carries the input envelope by reading it at
 each exit point's ENTRANCE height, `X * scale` with `scale = h_in / r_out`
-(`_lens_real.py:1926`).  A converging element walks the ray inward, so
+(`_lens_real.py:1925`).  A converging element walks the ray inward, so
 `scale > 1` and that read runs off the **+x** end of the field axis
 `(arange(N) - N/2) * dx` while its mirror -- one whole sample further out on
 -x -- is still on the grid.  `map_coordinates(mode='constant')` returns `cval`
@@ -912,7 +1007,7 @@ of n = 1.5093 glass) was enough.
 
 The remap now carries the envelope over the largest CENTRED window the caller's
 grid holds -- `|X * scale| <= x[-1]`, `|Y * scale| <= y[-1]`
-(`_lens_real.py:1956`) -- and the same two readings are **1.18e-16** and
+(`_lens_real.py:1955`) -- and the same two readings are **1.18e-16** and
 **1.01e-16** with zero pixels off.  With the input field itself decentred by
 +-0.45 mm, the +d / -d pair mirrors to 1.16e-16 (was 3.56e-02).
 
@@ -956,7 +1051,7 @@ fixes is the exact defect class this campaign exists to close -- and is the one
 WP-B2's own §2.6 says it removed a prototype warning to avoid.
 
 The fan factor is now one module constant, `_DISP_REMAP_2D_FAN_FACTOR = 1.03`
-(`_lens_real.py:2074`), read by `_build_displaced_ray_map_2d` (which throws the
+(`_lens_real.py:2073`), read by `_build_displaced_ray_map_2d` (which throws the
 fan) and by `_warn_if_remap_lattice_smooths` (which scores it against the field
 pitch), so the two cannot drift apart again.  The same two calls now name
 **645** and **1289**, whose real pitches are 15.99 um and 8.00 um.  The message
@@ -1625,8 +1720,8 @@ interpolant and the historical cubic spline:
     method=('chirpz' if N_out * dx_out <= N_in * dx_in else 'spline')
 ```
 
-per axis (`lumenairy/propagators/system.py:974`,
-`lumenairy/elements/_lens_real.py:2970` and `:2889`).  The chirp-Z leg
+per axis (`lumenairy/propagators/system.py:972`,
+`lumenairy/elements/_lens_real.py:2969` and `:2889`).  The chirp-Z leg
 has unit MTF at every frequency the grid represents, but its
 reconstruction is **periodic** with period `N_in*dx_in`, so a window
 wider than one period returns replicas rather than the zeros the spline
@@ -1664,8 +1759,8 @@ dx = 112.500 um, lambda = 632.8 nm) **both** gaps sit at `dx_new/dx` =
 1 mm N-BK7 plate at dx = 2 um sits at 1.6320 and takes the chirp-Z leg.
 Both directions occur in the shipped suite.
 
-Files: `lumenairy/propagators/system.py:955-980`,
-`lumenairy/elements/_lens_real.py:2906-2976`, `:2882-2895`.
+Files: `lumenairy/propagators/system.py:953-978`,
+`lumenairy/elements/_lens_real.py:2905-2976`, `:2882-2895`.
 Tests: `tests/unit/test_audit2609_b3b_resample_call_sites.py::TestK6TheChirpZGate`
 (11), `::TestK6ByteIdentityWhereTheGateSelectsTheSpline` (7),
 `::TestK6TheImprovementWhereTheGateSelectsChirpZ` (2).
@@ -3141,7 +3236,7 @@ fast path cannot fire there (both `A22` and `B11` are non-zero), so it was assem
 `2N x 2N` blocks -- twelve matrix products and TWO `_guarded_inverse` calls -- to use two of
 them on one or two columns.
 
-New `_redheffer_star_rt` (`lumenairy/elements/rcwa/_core.py:3191`) computes those two
+New `_redheffer_star_rt` (`lumenairy/elements/rcwa/_core.py:2988`) computes those two
 products directly.  With `D = (I - B11 A22)^-1`, `u = A21 c` and `z = D B11 u`, the
 push-through identity `(I - A22 B11)^-1 = I + A22 D B11` removes the second inverse
 outright and the star reduces to
@@ -3153,7 +3248,7 @@ outright and the star reduces to
 `rcwa/oned.py:1153` (`rcwa_jones_1d` / `rcwa_jones_1d_segments`, both polarizations in one
 block), `rcwa/twod.py:1253` (`rcwa_efficiency_2d`), `rcwa/twod.py:1377` (`PreparedRCWA2D.solve`),
 `rcwa/twod.py:2035` (`rcwa_jones_2d`, in-plane and full-3x3), `rcwa/twod.py:2418`
-(`rcwa_efficiency_2d_shapes`) and `rcwa/_core.py:2741` (`_symmetric_solve_rt`, the single-layer
+(`rcwa_efficiency_2d_shapes`) and `rcwa/_core.py:2538` (`_symmetric_solve_rt`, the single-layer
 even-parity fold).
 
 Measured on the 1-D metallic ladder (Ag `n = 0.135 + 3.99j` at 633 nm, period 1 um, depth
@@ -3202,12 +3297,12 @@ inverse was ever the refusing one (`rcond_refuse` is armed only on
 shortcuts are taken on the same concrete tests as before -- a chain that paid no star
 inverse still pays none.
 
-DELIBERATELY NOT APPLIED to `rcwa/_core.py:2780` `_symmetric_cascade_rt`: `elements/pmm/stack2d.py`
+DELIBERATELY NOT APPLIED to `rcwa/_core.py:2577` `_symmetric_cascade_rt`: `elements/pmm/stack2d.py`
 and `pmm/twod_jones.py` fold their own cascades through it, and closing its last star on the
 sources would move the PMM engines' last bits from inside the RCWA package.  Pinned by a
 test.
 
-Files: `lumenairy/elements/rcwa/_core.py:3191` (new `_redheffer_star_rt`), `:2893`,
+Files: `lumenairy/elements/rcwa/_core.py:2988` (new `_redheffer_star_rt`), `:2893`,
 `:5067` (`__all__`); `rcwa/oned.py:41,:721,:756,:1153`; `rcwa/twod.py:38,:1253,:1377,:2035,:2418`.
 Tests: `tests/unit/test_audit2609_b5_rcwa_eme_bor.py::test_d2_closed_form_matches_the_independent_star_oracle`,
 `::test_d2_closed_form_matches_the_oracle_on_the_metallic_chain`,
@@ -4032,7 +4127,7 @@ raises.  Ask for `N_psf >= N_pupil`, or use `method='mft'`, which samples exactl
 The RCWA, EME, PMM and BOR engines each resolve a square root's sign with a band
 relative to their own spectrum, and the comparison itself was written out four
 times.  It is now one function, `band_mask(r, *, scale, band, xp=None)`
-(`lumenairy/_branchcut.py:63`), called from `rcwa/_core.py:1607`,
+(`lumenairy/_branchcut.py:63`), called from `rcwa/_core.py:1404`,
 `eme/_branch.py:164`, `pmm/_core.py:828` and `bor/_orient.py:251`.  Each engine
 keeps its own derived SCALE, because the four are different quantities: the
 Cartesian engines floor the spectrum's top at a dimensionless 1.0 while the EME
@@ -4062,12 +4157,12 @@ with a flag.
 function, the exact pair-overlap test, the unit-disk hit tests and the
 y-invariance test -- numpy and nothing else from the library, so it cannot be
 half of an import cycle.  `_core` re-exports all of them
-(`rcwa/_core.py:130`), so `_core._shapes_overlap` and
+(`rcwa/_core.py:142`), so `_core._shapes_overlap` and
 `rcwa._shape_support` resolve exactly as before and `__all__` is unchanged.
 `_core.py` 5119 -> 4967 lines, and its module docstring now carries the section
 map and says why `__all__` lists 95 names of which 90 are private.
 
-`_validate_shapes` deliberately STAYS in `_core` (`rcwa/_core.py:2204`): it is
+`_validate_shapes` deliberately STAYS in `_core` (`rcwa/_core.py:2001`): it is
 policy rather than geometry, and it must resolve `_shapes_overlap` through
 `_core`'s own globals, which is where
 `test_niche_audit_w9_overlap_exact.py::test_w9d_the_predicate_counter_sees_a_pair_that_needs_it`
@@ -4088,7 +4183,7 @@ the grazing-cutoff reproducer's numbers.
 `_lens_real.py` built the band arithmetic -- `r0`, `r1`, the clipped halo
 `[h0:h1)` and the band's own slice `[lo:hi)` inside it -- in four places, in two
 different spellings.  It is now `_row_bands(n_rows, chunk_rows, halo)`
-(`elements/_lens_real.py:2929`) and `_band_in_halo(r0, r1, h0)` (`:2910`), read
+(`elements/_lens_real.py:2928`) and `_band_in_halo(r0, r1, h0)` (`:2910`), read
 by `_band_any_sag` (`:6747`), the obliquity band (`:6768`), the plain chunked
 screen (`:7262`) and the slant/fresnel chunked screen (`:7409`).  The halo is
 clipped at the true grid edges by the generator, which is what keeps the first
@@ -4102,7 +4197,7 @@ The grid-versus-aperture bookkeeping (`_collect_semi_diameters`,
 `_warn_if_aperture_exceeds_grid`) moved out of the `lenses` facade into a leaf
 that imports `numpy` and `warnings` and nothing from `lumenairy`
 (`elements/_lens_kernels.py`).  `lenses` re-exports all four
-(`elements/lenses.py:56`) -- the same objects, by identity -- and
+(`elements/lenses.py:51`) -- the same objects, by identity -- and
 `_lens_traced.py:597` now reads the leaf instead of reaching back into the
 facade, which closes the `_lens_traced <-> lenses` module-level 2-cycle
 outright.  The family's module-level 2-cycle count is 3 -> 2; the remaining two
@@ -10274,7 +10369,7 @@ retained per-layer partial S-matrices are not linear in the field, so averaging 
 defined) and says so in its warning.  To restore silence,
 `warnings.filterwarnings('ignore', category=lumenairy.elements.rcwa.WoodNudgeWarning)`.
 
-Files: `lumenairy/elements/rcwa/_core.py:1651-1962` (the warning category, the narrow symmetric
+Files: `lumenairy/elements/rcwa/_core.py:1448-1962` (the warning category, the narrow symmetric
 bracket `_WOOD_PAIR_STEP_REL`, the `_WoodAnomaly` control-flow signal, the `_wood_symmetric`
 decorator and the result combiner), `lumenairy/elements/rcwa/oned.py:603, :1365, :1575`, `lumenairy/elements/rcwa/twod.py:1093, :1297, :1813, :2313`,
 `lumenairy/elements/rcwa/stack.py:642, :647, :2982`.
@@ -10377,7 +10472,7 @@ measured: `inv()` of a 163x163 complex matrix 2.29 s unpinned vs 0.0057 s at one
 The dependency declaration itself is requested from the tests/CI work package (exact line in
 `WP-A14_REPORT.md` section 5).
 
-Files: `lumenairy/elements/rcwa/_core.py:249-263`.
+Files: `lumenairy/elements/rcwa/_blas.py:135-263`.
 
 ### Fixed -- RCWA / EME: documentation-vs-behaviour and aliasing hygiene (H6)
 
@@ -10409,7 +10504,7 @@ Files: `lumenairy/elements/rcwa/_core.py:249-263`.
   against).  Bit-identical at `kx0 = ky0 = 0`.
 
 Files: `lumenairy/elements/rcwa/stack.py:736-745, :2337-2353`;
-`lumenairy/elements/rcwa/_core.py:932-1026, :1801-1831 (docstring)`; `lumenairy/elements/rcwa/oned.py:761`; `lumenairy/elements/rcwa/twod.py:1235, :1480, :2025, :2389`;
+`lumenairy/elements/rcwa/_core.py:729-1026, :1801-1831 (docstring)`; `lumenairy/elements/rcwa/oned.py:761`; `lumenairy/elements/rcwa/twod.py:1235, :1480, :2025, :2389`;
 `lumenairy/elements/eme/eme_2d.py:90-96, :451-455`.
 Tests: `tests/unit/test_audit2609_a14_rcwa_eme_bor.py::test_h6_per_order_amplitudes_hands_out_copies`,
 `::test_h6_passive_media_predicate`, `::test_h6_passive_bound_is_armed_on_a_lossy_cell`.
@@ -10432,7 +10527,7 @@ Inert on every population the band was derived against: the worst `|Re r| / |r|`
 flipped there is 2.0751e-03, so `Im^2 / Re^2 > 2e5`, five decades clear of the new edge.
 All RCWA / PMM branch-cut, even-sector and round-2/3 verification gates pass unchanged.
 
-Files: `lumenairy/elements/rcwa/_core.py:1564-1578` and the docstring's PRICE paragraph.
+Files: `lumenairy/elements/rcwa/_core.py:1361-1578` and the docstring's PRICE paragraph.
 Tests: `tests/unit/test_audit2609_a14_rcwa_eme_bor.py::test_g11_near_zero_evanescent_mode_is_not_flipped`,
 `::test_g11_scale_relative_band_cannot_flip_an_evanescent_mode`,
 `::test_g11_genuine_on_cut_propagating_mode_still_flips`.
@@ -19560,17 +19655,17 @@ W8's guard decided every curved pair by scanning the support functions over
 4096 directions, which UNDER-estimates the separating-axis maximum by up to
 ~2e-7 of a period.  That approximation lived INSIDE the predicate, so the
 guard's blindness was the entanglement of two unrelated numbers.
-`_shapes_overlap` (`lumenairy/elements/rcwa/_core.py:1072`) is now exact algebra: rect/rect by interval
+`_shapes_overlap` (`lumenairy/elements/rcwa/_core.py:869`) is now exact algebra: rect/rect by interval
 overlap, disk/disk by centre distance, rect/ellipse by axis-scaling the ellipse
 to the UNIT DISK (which keeps the rectangle axis-aligned), and ellipse/ellipse
 by axis-scaling the first to the unit disk — reducing every curved pair to
-POINT-ELLIPSE distance (`_point_ellipse_distance`, `lumenairy/elements/rcwa/_core.py:1020`: the distance
+POINT-ELLIPSE distance (`_point_ellipse_distance`, `lumenairy/elements/rcwa/_core.py:817`: the distance
 quartic as a BRACKETED monotone root, a proven bracket and a fixed 64 bisections,
 never an unbracketed iteration).  Shapes are axis-aligned throughout — the shape
 dicts carry no rotation entry and neither do the form factors that read them.
 
 What remains is ONE explicit, named, one-sided tolerance,
-`_OVERLAP_SLACK_FRAC = 1e-6` (`lumenairy/elements/rcwa/_core.py:998`), overridable per call via
+`_OVERLAP_SLACK_FRAC = 1e-6` (`lumenairy/elements/rcwa/_core.py:795`), overridable per call via
 `tol_frac`.  Its VALUE is unchanged: it is a deliberate forgiveness for layouts
 whose centres came out of float arithmetic, not blindness.
 
@@ -28383,7 +28478,7 @@ appeared as F841 unused-variable false positives.
 
 v5.2.1 refactors all 4 affected calls in `lenses_maslov.py` to pass
 the variables explicitly via `local_dict={'name': value, ...}`,
-matching the canonical pattern already used at `_lens_real.py:882`.
+matching the canonical pattern already used at `_lens_real.py:881`.
 Variable names now appear in the surrounding code's AST; ruff /
 mypy / IDEs see the usage; no `# noqa: F841` needed; no
 performance loss (`local_dict=` is the recommended numexpr API
@@ -28601,7 +28696,7 @@ new `MCF` top-level alias).
   AUDIT_V4_13_1 Part 6.1 deferred to v5.2.1).
 * **Shared Chebyshev helpers extracted to `lumenairy/_math/chebyshev.py`**
   (ROADMAP v5.1 architecture / housekeeping).  The 3 NumPy
-  helpers from `elements/lenses.py:722-810` plus the
+  helpers from `elements/lenses.py:322-810` plus the
   xp-dispatched twin from `asymptotic_jax_twin.py:65` are now
   in a single `chebyshev_vandermonde(u, max_k, xp=None)`
   signature.  6 consumer sites updated (lenses, lenses_maslov,
@@ -32063,7 +32158,7 @@ p_max, ell_max` but different `dx` return distinct mode stacks.
   just `lumenairy_context()` as v4.14.0 had).  Same lazy-import
   pattern.  CHANGELOG claim from v4.14.0 now matches code.
 * **Final `0+0j`/`1+0j` literal sweep**: 2 sites caught by the
-  audit — `lenses_maslov.py:448` (in `sample_E_bilinear`) and
+  audit — `lenses_maslov.py:456` (in `sample_E_bilinear`) and
   `_lens_thin.py:173` (aplanatic branch, actually `1.0+0.0j` not
   `0.0+0.0j` — replaced with `xp.ones((), dtype=...)`).
 * **`fiber_mode` added** to

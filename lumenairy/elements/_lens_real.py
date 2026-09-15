@@ -142,16 +142,15 @@ def _drop_numexpr_out_retention():
 _NUMEXPR_MIN_SIZE = 1 << 20  # 1 Mi elements (~1024 x 1024)
 
 
-# Helpers shared with lenses.py / lenses_maslov.py.  The grid-versus-aperture
-# warning comes from the LEAF (``lenses`` re-exports the same object); the two
-# sag builders still come from the facade, which is the remaining half of this
-# module's 2-cycle with it -- see ``docs/lens_configuration.md`` section
-# "Module layout" for the edit that closes it.
+# Helpers shared with lenses.py / lenses_maslov.py.  ALL of them come from the
+# LEAF (``lenses`` re-exports the same objects, so every existing
+# ``from .lenses import surface_sag_general`` still resolves, and resolves to
+# THIS function).  The sag builders moved there in WP-B11c, which closed this
+# module's 2-cycle with the facade -- see ``docs/lens_configuration.md``
+# section "Module layout".
 from ._lens_kernels import (
     _warn_if_aperture_exceeds_grid,
     caller_stacklevel as _caller_stacklevel,
-)
-from .lenses import (
     surface_sag_biconic,
     surface_sag_general,
 )

@@ -136,7 +136,7 @@ def test_threaded_sweep_applies_exactly_one_blas_cap():
     """
     import contextlib
 
-    from lumenairy.elements.rcwa import _core
+    from lumenairy.elements.rcwa import _blas as _core
     real = _core._get_blas_controller()          # None without threadpoolctl
     calls = []
 

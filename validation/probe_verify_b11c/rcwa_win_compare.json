@@ -1,0 +1,18 @@
+{
+ "tag": "rcwa_win",
+ "python": "C:\\Users\\Tesla\\AppData\\Local\\Programs\\Python\\Python314\\python.exe",
+ "base_tree": "C:\\Users\\Tesla\\AppData\\Local\\Temp\\claude\\C--Users-Tesla\\372a2d1f-acbe-4b57-a148-eeae3fe1d729\\scratchpad\\verify_b11c\\base",
+ "branch_tree": "C:\\Users\\Tesla\\AppData\\Local\\Temp\\claude\\C--Users-Tesla\\372a2d1f-acbe-4b57-a148-eeae3fe1d729\\scratchpad\\verify_b11c\\branch",
+ "n_keys_base": 55,
+ "n_keys_branch": 55,
+ "n_shared": 55,
+ "n_identical": 55,
+ "differing": [],
+ "only_base": [],
+ "only_branch": [],
+ "seconds": {
+  "base": 21.2,
+  "branch": 7.0
+ },
+ "verdict": "IDENTICAL"
+}

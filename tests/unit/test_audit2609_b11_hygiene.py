@@ -240,23 +240,58 @@ def _module_level_family_edges():
 
 class TestTheLensKernelsLeaf:
 
-    def test_the_leaf_imports_nothing_from_lumenairy(self):
+    def test_nothing_the_leaf_can_reach_imports_the_elements_family(self):
         """What makes it a leaf, and therefore what makes it impossible for it
         to be half of a cycle.  Checked on the SOURCE, at module scope AND in
         function bodies, because a deferred import would still be a dependency
-        -- just a later one."""
-        src = (REPO / 'lumenairy' / 'elements' / '_lens_kernels.py').read_text(
-            encoding='utf-8')
-        tree = ast.parse(src)
-        for node in ast.walk(tree):
-            if isinstance(node, ast.ImportFrom):
-                assert node.level == 0 and not (
-                    node.module or '').startswith('lumenairy'), (
-                    f'_lens_kernels imports {node.module!r} (level '
-                    f'{node.level}) -- it must stay a leaf')
-            if isinstance(node, ast.Import):
-                for a in node.names:
-                    assert not a.name.startswith('lumenairy'), a.name
+        -- just a later one.
+
+        RESTATED BY WP-B11c, and strengthened.  The leaf no longer imports
+        NOTHING from ``lumenairy``: closing the ``_lens_real <-> lenses`` cycle
+        moved the two surface-sag builders here, and they read the optional
+        CuPy / numba plumbing, which since WP-A16 lives in the ONE shared place
+        (``lumenairy.backend._optional``).  Re-inlining a sixth copy of that
+        probe to keep the old wording would undo A16 -- so the wording follows
+        the property that was always the point: no import reachable FROM this
+        module, at any depth, may reach ``lumenairy.elements``.  That is
+        strictly stronger than the direct-import check it replaces, which
+        would have passed a one-hop detour through any other subpackage.
+        """
+        root = REPO / 'lumenairy'
+        seen, pending, edges = set(), ['lumenairy.elements._lens_kernels'], {}
+        while pending:
+            mod = pending.pop()
+            if mod in seen:
+                continue
+            seen.add(mod)
+            path = root.joinpath(*mod.split('.')[1:]).with_suffix('.py')
+            if not path.exists():
+                path = root.joinpath(*mod.split('.')[1:], '__init__.py')
+            if not path.exists():
+                continue
+            out = set()
+            tree = ast.parse(path.read_text(encoding='utf-8'))
+            for node in ast.walk(tree):
+                if isinstance(node, ast.ImportFrom):
+                    if node.level:
+                        parts = mod.split('.')[:-1]
+                        base = '.'.join(parts[:len(parts) - node.level + 1])
+                        out.add(f'{base}.{node.module}' if node.module
+                                else base)
+                    elif (node.module or '').startswith('lumenairy'):
+                        out.add(node.module)
+                elif isinstance(node, ast.Import):
+                    out |= {a.name for a in node.names
+                            if a.name.startswith('lumenairy')}
+            edges[mod] = sorted(out)
+            pending += [m for m in out if m not in seen]
+        reachable = seen - {'lumenairy.elements._lens_kernels'}
+        offenders = sorted(m for m in reachable
+                           if m.startswith('lumenairy.elements'))
+        assert offenders == [], (
+            f'_lens_kernels can reach {offenders} -- a module in the very '
+            f'family it exists to keep acyclic.  Closure walked: '
+            f'{sorted(reachable)}')
 
     def test_the_facade_re_exports_the_same_objects(self):
         """Not "a function of the same name": the SAME object, so a caller
@@ -276,16 +311,21 @@ class TestTheLensKernelsLeaf:
             '_lens_traced imports the lenses facade at module scope again; it '
             'must read elements/_lens_kernels.py, which is a leaf')
 
-    def test_the_family_cycle_count_does_not_grow(self):
-        """A RATCHET, not a bar.  The two that remain are enumerated in
-        ``docs/lens_configuration.md`` section "Module layout" with the edit
-        each needs; this fails if a new one appears."""
+    def test_the_family_carries_no_module_level_two_cycle(self):
+        """A RATCHET stated as an EQUALITY, and it now reads ZERO.  Part a left
+        two (``_lens_real <-> lenses`` and ``lenses <-> lenses_maslov``) with
+        the edit each needed written out in ``docs/lens_configuration.md``
+        section "Module layout"; WP-B11c made both.  An equality rather than an
+        upper bound so that closing one forces this line to be revisited."""
         graph = _module_level_family_edges()
         cycles = {tuple(sorted((a, b))) for a, deps in graph.items()
                   for b in deps if a in graph.get(b, ())}
-        assert cycles <= {('_lens_real', 'lenses'), ('lenses', 'lenses_maslov')}, (
-            f'a new module-level 2-cycle appeared in the lens family: '
-            f'{sorted(cycles)}')
+        assert cycles == set(), (
+            f"the lens family's module-level 2-cycles read "
+            f'{sorted(cycles)}.  The audit counted four, part a re-measured '
+            f'three and closed two, WP-B11c closed the last two, so this '
+            f'reads zero.  It is an EQUALITY, not a bound: a cycle that '
+            f'closes must be removed here in the same commit.')
 
 
 # ===========================================================================

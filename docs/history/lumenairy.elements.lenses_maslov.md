@@ -1,7 +1,7 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/lenses_maslov.py
-ast_sha256: a926508d25ae8a3e780f4517b4f935c84f0f71048db2253f979afbbea701f756
-token_sha256: 033957a1058e8991148ccf58a90a3f16a6b879665155321bceb3b1900ba1d368
+ast_sha256: b47b80d914f300e47b24b4126114a08ff8d4ddc7878413a7c32527d059a1688b
+token_sha256: ffb2727d6ffb6885bb4f93813704299438b6ae2be1301e34788d8b75d69041cc
 pre_relocation_lines: 4484
 recorded_by: WP-A17 SWEEP-4 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
@@ -13,7 +13,9 @@ re_recorded: 2026-09-13 -- WP-B7 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11,
 re_recorded: 2026-09-13 -- WP-B7: the S6 gate's k1-slope statistic and its initialiser, and the mean-plus-spread pupil-chart sizing
 re_recorded: 2026-09-14 -- WP-B11b section 5b, applied by the orchestrator after VERIFY-B7 landed: the eleven warnings are attributed to the caller's frame through _lens_kernels.caller_stacklevel, and _warn_if_aperture_exceeds_grid is taken from the _lens_kernels leaf (the back-edge to lenses carries four names instead of five)
 re_recorded: 2026-09-14 -- Wave-5 item D (CI run 34914295323): DIGEST-SCHEME change, not a code change -- token_fingerprint now feeds an f-string to the digest as ONE STRING record holding its exact source text instead of the running tokenizer's FSTRING_START/FSTRING_MIDDLE/FSTRING_END run, so the recorded value is a property of the file rather than of the interpreter that read it; PEP 701 made CPython 3.12 tokenize f-strings differently from 3.11, these digests were recorded on 3.12+, and all five py3.11 CI shards read a different token_sha256 for byte-identical sources (110 of 123 documents, measured).  The module source is unchanged and ast_sha256 is unchanged.
+re_recorded: 2026-09-14 -- WP-B11c: _fit_normaliser and _multi_indices_total_degree move to the _lens_kernels leaf and lenses_maslov reads all four of the back-edge's names there, closing the last module-level 2-cycle in the lens family; lenses re-exports both.  Bit-identical (45/45 archive-to-archive hashes, both builds).
 re_recorded: 2026-09-15 -- 5.47.0 CI hardening: the input-NA sizing arithmetic extracted into _measured_input_na (one implementation) so the chart-sizing gate compares the driver's own float
+re_recorded: 2026-09-15 -- merge of verify/wp-b11c into wave5/audit-leftovers: the WP-B11c moves and the Wave-5 item D digest-scheme change land in one tree (both sides' re_recorded lines kept)
 -->
 
 # Version history -- `lumenairy/elements/lenses_maslov.py`
