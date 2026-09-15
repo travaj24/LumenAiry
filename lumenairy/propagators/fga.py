@@ -1175,6 +1175,85 @@ def _resolve_nq_chunk(Nq, Np, use_sep, cw, mem_budget_mb, fn, cfull_mult=1.0,
     return None if nqc >= Nq else nqc
 
 
+#: Wavefront budget the FGA image leg's missing exit index is allowed to spend
+#: before the prescription is refused (audit 2026-09-11 WAVE5-E, from
+#: VERIFY-WP-B12 open item O-3).  One milliwave: the FGA family's own validated
+#: fidelity sits at 0.997-0.999, so a systematic, pupil-varying OPL error of a
+#: milliwave is the smallest thing this propagator's own oracles could see.
+_FGA_IMAGE_LEG_WAVE_BUDGET = 1.0e-3
+
+#: Floor on the resolved-index tolerance -- the noise in ``resolve_exit_index``
+#: itself.  ``get_glass_index('air', lambda)`` returns EXACTLY 1.0 on this
+#: registry at every wavelength measured, so any departure above a few ULP is a
+#: real medium and not a resolution artefact.
+_FGA_EXIT_INDEX_NOISE_FLOOR = 1.0e-12
+
+
+def _require_non_immersed_exit(surfs, wavelength, z_image, fn_name):
+    """Refuse a prescription whose exit medium is not air, and return ``n_exit``.
+
+    WHY.  Every FGA transport re-references its trace to the last surface's
+    VERTEX plane (``reference='exit_vertex'``) and then adds the image-side
+    free-space leg by hand::
+
+        opd_tot = dt.opd + z_image * sqrt(1 + ux^2 + uy^2)
+
+    ``dt.opd`` is correct in any medium -- the projection resolves ``n_exit``
+    and weights the sag term with it
+    (:func:`lumenairy.raytrace.differential._project_to_exit_vertex_plane`) --
+    but the leg above does not, so it silently assumes the exit medium has
+    index 1.  Every FGA fixture in the suite ends in air, so the asymmetry is
+    unreachable today; VERIFY-WP-B12 open item O-3 asks that it be REFUSED
+    rather than served silently, which is what this does.
+
+    THE TOLERANCE IS DERIVED, not chosen.  In a medium of index ``n`` the leg's
+    optical path is ``n * z_image * sec``, so omitting ``n`` costs
+    ``|n - 1| * z_image * sec`` of OPL and, with ``sec >= 1``, at least
+    ``|n - 1| * |z_image| / wavelength`` waves of wavefront.  The prescription
+    is refused when that lower bound reaches
+    :data:`_FGA_IMAGE_LEG_WAVE_BUDGET`, i.e. when
+
+        ``|n - 1| > waves_budget * wavelength / max(|z_image|, wavelength)``
+
+    The ``max(..., wavelength)`` clamp is what makes a zero-length leg
+    (``_caustic_zone``, or ``output_plane_distance=0``) still refuse a real
+    immersion medium: the tolerance then floors at the budget itself, 1e-3 --
+    which is 3.6x the air-vs-vacuum index difference at STP (2.77e-4, so a
+    caller who registers a real air index is NOT refused) and ~500x below any
+    immersion medium (water 1.33, oil 1.52).
+
+    An exit medium the glass registry cannot resolve is NOT this guard's
+    diagnostic: with a FLAT last surface the projection short-circuits and
+    never resolves the index at all, so raising here would refuse a
+    prescription the propagator serves correctly today.  That case returns
+    ``None`` and leaves the pre-existing behaviour exactly as it was.
+    """
+    from ..raytrace.exit_vertex import resolve_exit_index
+    try:
+        n_exit = float(resolve_exit_index(surfs, wavelength, fn_name=fn_name))
+    except ValueError:
+        return None
+    lam = abs(float(wavelength))
+    tol = max(_FGA_EXIT_INDEX_NOISE_FLOOR,
+              _FGA_IMAGE_LEG_WAVE_BUDGET * lam
+              / max(abs(float(z_image)), lam))
+    if abs(n_exit - 1.0) > tol:
+        waves = abs(n_exit - 1.0) * max(abs(float(z_image)), lam) / lam
+        raise NotImplementedError(
+            f"{fn_name}: the prescription's exit medium has refractive index "
+            f"{n_exit!r} (surfaces[-1].glass_after), i.e. the optic is "
+            f"IMMERSED.  This propagator adds its image-side leg as "
+            f"opd += z_image*sqrt(1+ux^2+uy^2), which carries no exit index, "
+            f"so the returned phase would be wrong by at least {waves:.3g} "
+            f"waves at z_image={z_image!r} m (tolerance "
+            f"{tol:.3g}, {_FGA_IMAGE_LEG_WAVE_BUDGET:g} waves).  Refusing "
+            f"rather than serving it silently.  Terminate the prescription in "
+            f"air -- add the immersion medium as an explicit last element -- "
+            f"or use a propagator that carries the exit index through the "
+            f"image leg.")
+    return n_exit
+
+
 def _fga_coarse(u0, dx, dyg, x0, y0, Ny, Nx, k, w0, nsig, Ag, C, kw2, surfs,
                 wavelength, z_image, dq_step, px, py, n_p, Np,
                 use_sep, cw, nq_chunk, coarse_stride, cache_trace=False, Cp=None):
@@ -1246,6 +1325,9 @@ def _fga_coarse(u0, dx, dyg, x0, y0, Ny, Nx, k, w0, nsig, Ag, C, kw2, surfs,
                                             mode='constant'), 0.0))
     supp2d = amp[np.ix_(jj, ii)] > _COARSE_SUPP_FRAC * float(amp.max() + 1e-300)
     pv = px[:n_p]
+
+    # WAVE5-E / VERIFY-WP-B12 O-3: the image leg below carries no exit index.
+    _require_non_immersed_exit(surfs, wavelength, z_image, '_fga_coarse')
 
     def _trace(qxp, qyp, pxi, pyi, pz):
         uxin = np.full(qxp.shape, pxi / pz)
@@ -1455,6 +1537,9 @@ def _fga_through_lens(u0, dx, dyg, prescription, wavelength, w0, z_image,
     # is added manually below, and ``z_image`` is measured from that plane.
     surfs = [_copy.copy(s) for s in surfaces_from_prescription(prescription)]
     surfs[-1].thickness = 0.0
+    # WAVE5-E / VERIFY-WP-B12 O-3: the image leg below carries no exit index.
+    _require_non_immersed_exit(surfs, wavelength, z_image,
+                               'apply_real_lens_fga')
     kw2 = k * w0 * w0
     ray_transfer_jacobian = _pick_ray_transfer(surfs, exact_jacobian)  # lever #1
     from ..raytrace.differential import (
@@ -2099,6 +2184,9 @@ def _fga_vector_through_lens(Ex, Ey, dx, dyg, prescription, wavelength, w0,
 
     surfs = [_copy.copy(s) for s in surfaces_from_prescription(prescription)]
     surfs[-1].thickness = 0.0
+    # WAVE5-E / VERIFY-WP-B12 O-3: the image leg below carries no exit index.
+    _require_non_immersed_exit(surfs, wavelength, z_image,
+                               'apply_real_lens_fga_vector')
     kw2 = k * w0 * w0
 
     cw = Np if (chunk is None or int(chunk) <= 0) else min(int(chunk), Np)
@@ -2450,6 +2538,12 @@ def _caustic_zone(E_in, dx, prescription, wavelength, n_rays=25):
     u_all = np.append(u_in, u_chief_in)
     surfs = [_copy.copy(s) for s in surfaces_from_prescription(prescription)]
     surfs[-1].thickness = 0.0
+    # WAVE5-E / VERIFY-WP-B12 O-3.  This routine adds no image leg of its own
+    # (``z = -x/u`` is a geometric crossing), but the distance it returns IS
+    # the ``output_plane_distance`` the three transports then run their
+    # index-free leg over, so an immersed exit is refused here too -- with a
+    # zero leg length, i.e. at the tolerance's 1e-3 floor.
+    _require_non_immersed_exit(surfs, wavelength, 0.0, '_caustic_zone')
     zeros = np.zeros_like(rr_all)
     # reference='exit_vertex': ``z = -x/u`` is the crossing measured FROM the
     # last surface's vertex plane, which is the frame the caustic zone (and the

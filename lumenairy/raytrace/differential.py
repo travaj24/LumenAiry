@@ -207,6 +207,23 @@ def _project_to_exit_vertex_plane(transfer, surfaces, wavelength, n_exit,
     A surface whose sag is identically zero short-circuits: the input object
     is returned unchanged, so a FLAT-last-surface prescription is bit-for-bit
     what ``reference='surface'`` produces.
+
+    DEAD RAYS ARE FROZEN, not projected (audit 2026-09-11 WAVE5-E, from
+    VERIFY-WP-B12 open item O-1).  A vignetted / TIR'd / missed ray never
+    reached the last surface, so there is no sag to walk back along and no
+    exit-medium path to subtract: ``lumenairy.raytrace.exit_vertex``'s
+    ``exit_vertex_transfer`` is explicit that such a ray keeps its position,
+    direction and OPL "exactly".  This projection used to apply its arithmetic
+    to every row, which moved a dead ray's ``opd`` by up to 1.96e-05 m (18.4
+    waves at 1.06 um) on a fan clipped at the last surface -- unobservable
+    today only because all four ``fga.py`` consumers zero the dead beamlets
+    before the reconstruction, i.e. a divergence between the module's two
+    vertex-plane operators that the next consumer would not know about.  Every
+    field the map touches is now ``where(alive, projected, original)``:
+    ``x``, ``y``, ``opd`` and the Jacobian rows.  ``ux`` / ``uy`` are a
+    passthrough of the map (a transfer is not a refraction), so they are
+    identical on both arms by construction and need no mask.  ALIVE rows are
+    bit-for-bit what they were before the mask existed.
     """
     last = surfaces[-1]
     if _last_surface_sag_vanishes(last):
@@ -249,15 +266,27 @@ def _project_to_exit_vertex_plane(transfer, surfaces, wavelength, n_exit,
     jac = transfer.jacobian
     if jac.ndim == 3:                       # composite input -> output
         jac_v = _apply_P(jac)
+        jac_mask_shape = (slice(None), None, None)
     else:                                   # per-surface LOCAL transfers:
         #    only the last one ends on the last surface, so only it moves.
         jac_v = xp.concatenate(
             [jac[:-1], _apply_P(jac[-1])[None, ...]], axis=0)
+        jac_mask_shape = (None, slice(None), None, None)
     if is_np:
         jac_v = np.nan_to_num(jac_v, nan=0.0, posinf=0.0, neginf=0.0)
+    # Freeze the rays that never reached the surface -- see the docstring.
+    # ``alive`` is broadcast to each field's own rank rather than reshaped, so
+    # the composite and per-surface Jacobian layouts take the SAME mask.
+    alive = xp.asarray(transfer.alive, dtype=bool)
+    jac_v = xp.where(alive[jac_mask_shape], jac_v, jac)
     return DifferentialTransfer(
-        jacobian=jac_v, x=x - sag * ux, y=y - sag * uy, ux=ux, uy=uy,
-        opd=transfer.opd - (n_out * nz) * sag * sec, alive=transfer.alive)
+        jacobian=jac_v,
+        x=xp.where(alive, x - sag * ux, x),
+        y=xp.where(alive, y - sag * uy, y),
+        ux=ux, uy=uy,
+        opd=xp.where(alive,
+                     transfer.opd - (n_out * nz) * sag * sec, transfer.opd),
+        alive=transfer.alive)
 
 
 def ray_transfer_jacobian(

@@ -388,6 +388,55 @@ build's own `'none'` output and asserts the separation.  The docstring's stale r
 (the ratio, and its -6.4376e-08 departure from the input ratio) are re-recorded as
 measured -- 1.7777776632250892 and -6.4436e-08.
 
+### Fixed -- the exit-vertex projection freezes dead rays, and the FGA image leg refuses an immersed exit
+
+Both are VERIFY-WP-B12's open items, and neither moves a live bit.
+
+**The projection applied its arithmetic to every row (O-1).**
+`lumenairy.raytrace.exit_vertex.exit_vertex_transfer` is explicit that a vignetted ray
+keeps its position, direction and OPL "exactly", because it never reached the vertex plane.
+`differential._project_to_exit_vertex_plane` -- the one implementation the finite-difference
+backend, the numba kernel, the `_AdrtDual` NumPy path and the JAX path all reach -- did not
+mask, so a dead ray's `opd` walked back along a sag it never touched.  Measured on a fan
+clipped at the last surface, over the eight VERIFY-WP-B12 fixture classes x three backends,
+both builds (`validation/probe_wave5_e/e5_prepost_*.json`):
+
+| | before | after |
+|---|---|---|
+| dead-row `opd` drift | 1.37e-05 .. 1.87e-04 m (17 of 30 cells) | **0.0, all 30** |
+| dead-row Jacobian drift | 1.37e-05 .. **1.53e+300** (the analytic backend's dead rows extrapolate) | **0.0, all 30** |
+| ALIVE rows | -- | **byte-identical, 30 of 30 cells, both builds** |
+
+`x`, `y`, `opd` and the Jacobian rows are now `where(alive, projected, original)`; `ux` and
+`uy` are a passthrough of the map (a transfer is not a refraction) and are identical on both
+arms by construction.  It was unobservable through `fga.py` only because all four consumers
+zero the dead beamlets first -- a divergence between the module's two vertex-plane operators
+that the next consumer would not have known about.
+
+**The FGA image leg carried no exit index (O-3).**  Each transport asks the projection for
+`reference='exit_vertex'` -- which resolves `n_exit` and weights its sag term with it -- and
+then adds the image-side free-space leg by hand as
+`opd += z_image * sqrt(1 + ux^2 + uy^2)`, with no index.  In a medium of index `n` that
+omits `|n-1| * z_image * sec` of optical path, at least `|n-1| * |z_image| / lambda` waves.
+Every FGA fixture ends in air (`get_glass_index('air', lambda)` is exactly 1.0 on this
+registry at every wavelength measured), so it is unreachable today; it is now REFUSED with a
+named error at all four sites -- `_fga_through_lens`, `_fga_coarse`,
+`_fga_vector_through_lens` and `_caustic_zone` -- rather than served silently.
+
+The tolerance is derived from the wavefront it protects, not chosen:
+`|n - 1| > waves_budget * lambda / max(|z_image|, lambda)` with a one-milliwave budget, so
+a longer leg tightens it in proportion and a zero-length leg (`_caustic_zone`, or
+`output_plane_distance = 0`) floors it at the budget itself -- 3.6x the air-vs-vacuum index
+difference at STP, so a caller who registers a real air index is not refused, and ~500x
+below the weakest immersion medium.
+
+`tests/unit/test_wave5_e_exit_vertex_dead_rays.py` pins both two-sided: the freeze is
+bit-exact on dead rows AND the live rows still move (a freeze that froze everything would
+pass the first arm and be a disabled projection); the JAX twin of the primitive is
+bit-identical to the NumPy one on all six surface classes; the guard fires on a synthetic
+immersed-exit prescription at each of the four sites AND does not fire on the
+air-terminated control.  29 ids, 62 s.
+
 ## [5.47.0] — 2026-09-14
 
 This release is the fourth wave of the 2026-09-11 adversarial audit's remediation
