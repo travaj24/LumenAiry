@@ -1,0 +1,84 @@
+=== P 1015.0 1015.5 26 ===
+P z=  1015.00 br=0.9377302223708474 nbr=2 uni=fold Airy scale under-resolved by the grid zx=None
+P z=  1015.02 br=0.9376226194323627 nbr=2 uni=fold Airy scale under-resolved by the grid zx=None
+P z=  1015.04 br=0.9373875637380961 nbr=2 uni=fold Airy scale under-resolved by the grid zx=None
+P z=  1015.06 br=0.9373098585441934 nbr=2 uni=fold Airy scale under-resolved by the grid zx=None
+P z=  1015.08 br=0.9378854550324199 nbr=2 uni=fold Airy scale under-resolved by the grid zx=None
+P z=  1015.10 br=0.938899529220831 nbr=2 uni=fold Airy scale under-resolved by the grid zx=None
+P z=  1015.12 br=0.9385570713651553 nbr=2 uni=fold Airy scale under-resolved by the grid zx=None
+P z=  1015.14 br=0.9771516621027249 nbr=9 uni=fold Airy scale under-resolved by the grid zx=None
+P z=  1015.16 br=0.978272934112941 nbr=9 uni=fold Airy scale under-resolved by the grid zx=None
+P z=  1015.18 br=1.0798403988239076 nbr=17 uni=fold Airy scale under-resolved by the grid zx=None
+P z=  1015.20 br=1.3396218245144 nbr=25 uni=fold Airy scale under-resolved by the grid zx=None
+P z=  1015.22 br=1.7714451112033929 nbr=33 uni=fold Airy scale under-resolved by the grid zx=None
+P z=  1015.24 br=1.7865086645768342 nbr=33 uni=fold Airy scale under-resolved by the grid zx=None
+P z=  1015.26 br=1.8018112342374937 nbr=33 uni=fold Airy scale under-resolved by the grid zx=None
+P z=  1015.28 br=1.8182178281864048 nbr=33 uni=fold Airy scale under-resolved by the grid zx=None
+P z=  1015.30 br=2.2471302647234603 nbr=41 uni=RAISE zx=None
+P z=  1015.32 br=3.8140016777995664 nbr=65 uni=RAISE zx=None
+P z=  1015.34 br=4.49025732874845 nbr=73 uni=RAISE zx=None
+P z=  1015.36 br=4.547952409074049 nbr=73 uni=RAISE zx=None
+P z=  1015.38 br=6.078613533691469 nbr=89 uni=RAISE zx=None
+P z=  1015.40 br=6.159786165079165 nbr=89 uni=RAISE zx=None
+P z=  1015.42 br=6.24408727607966 nbr=89 uni=RAISE zx=None
+P z=  1015.44 br=7.205082480377319 nbr=97 uni=RAISE zx=None
+P z=  1015.46 br=11.109746281348379 nbr=121 uni=RAISE zx=None
+P z=  1015.48 br=11.285763559538022 nbr=121 uni=RAISE zx=None
+P z=  1015.50 br=12.671277528472935 nbr=129 uni=RAISE zx=None
+=== M 2342.0 2343.0 26 ===
+M z=  2342.00 br=0.6048514587014939 nbr=2 uni=fold Airy scale under-resolved by the grid zx=None
+M z=  2342.04 br=0.6047597450792818 nbr=2 uni=fold Airy scale under-resolved by the grid zx=None
+M z=  2342.08 br=0.604666495766299 nbr=2 uni=fold Airy scale under-resolved by the grid zx=None
+M z=  2342.12 br=0.6045717094203754 nbr=2 uni=fold Airy scale under-resolved by the grid zx=None
+M z=  2342.16 br=0.604475384659001 nbr=2 uni=fold Airy scale under-resolved by the grid zx=None
+M z=  2342.20 br=0.6043775200728687 nbr=2 uni=fold Airy scale under-resolved by the grid zx=None
+M z=  2342.24 br=0.6042781142173169 nbr=2 uni=fold Airy scale under-resolved by the grid zx=None
+M z=  2342.28 br=4.53342188429604 nbr=9 uni=RAISE zx=None
+M z=  2342.32 br=4.7628601957269145 nbr=9 uni=RAISE zx=None
+M z=  2342.36 br=12.183101272777963 nbr=17 uni=RAISE zx=None
+M z=  2342.40 br=23.50570054977891 nbr=25 uni=RAISE zx=None
+M z=  2342.44 br=61.283913463921806 nbr=41 uni=RAISE zx=None
+M z=  2342.48 br=64.19190258180288 nbr=41 uni=RAISE zx=None
+M z=  2342.52 br=67.64773233797258 nbr=41 uni=RAISE zx=None
+M z=  2342.56 br=97.3823437443748 nbr=49 uni=RAISE zx=None
+M z=  2342.60 br=103.62623429793771 nbr=49 uni=RAISE zx=None
+M z=  2342.64 br=111.63756953595507 nbr=49 uni=RAISE zx=None
+M z=  2342.68 br=122.8096349707138 nbr=49 uni=RAISE zx=None
+M z=  2342.72 br=141.03031899170406 nbr=49 uni=RAISE zx=None
+M z=  2342.76 br=145.4395425238463 nbr=57 uni=RAISE zx=None
+M z=  2342.80 br=249.25958152333612 nbr=81 uni=RAISE zx=None
+M z=  2342.84 br=308.99115417510905 nbr=89 uni=RAISE zx=None
+M z=  2342.88 br=323.3097802512884 nbr=89 uni=RAISE zx=None
+M z=  2342.92 br=393.50038257226305 nbr=97 uni=RAISE zx=None
+M z=  2342.96 br=416.7987731763446 nbr=97 uni=RAISE zx=None
+M z=  2343.00 br=504.38644713349584 nbr=105 uni=RAISE zx=None
+=== S 3273.5 3274.2 29 ===
+S z=  3273.50 br=0.7009592312890726 nbr=2 uni=fold Airy scale under-resolved by the grid zx=None
+S z=  3273.52 br=0.7007584699963436 nbr=2 uni=fold Airy scale under-resolved by the grid zx=None
+S z=  3273.55 br=0.700296218686906 nbr=2 uni=fold Airy scale under-resolved by the grid zx=None
+S z=  3273.57 br=0.6998318641710464 nbr=2 uni=fold Airy scale under-resolved by the grid zx=None
+S z=  3273.60 br=0.6993654049592318 nbr=2 uni=fold Airy scale under-resolved by the grid zx=None
+S z=  3273.62 br=0.698896839482268 nbr=2 uni=fold Airy scale under-resolved by the grid zx=None
+S z=  3273.65 br=0.6984261660659578 nbr=2 uni=fold Airy scale under-resolved by the grid zx=None
+S z=  3273.68 br=0.6979533829722773 nbr=2 uni=fold Airy scale under-resolved by the grid zx=None
+S z=  3273.70 br=0.6974784883279791 nbr=2 uni=fold Airy scale under-resolved by the grid zx=None
+S z=  3273.72 br=0.6970014802285143 nbr=2 uni=fold Airy scale under-resolved by the grid zx=None
+S z=  3273.75 br=0.6979540508273372 nbr=2 uni=fold Airy scale under-resolved by the grid zx=None
+S z=  3273.78 br=0.6974737558670036 nbr=2 uni=fold Airy scale under-resolved by the grid zx=None
+S z=  3273.80 br=0.6969912844679786 nbr=2 uni=fold Airy scale under-resolved by the grid zx=None
+S z=  3273.82 br=0.6965066348660697 nbr=2 uni=fold Airy scale under-resolved by the grid zx=None
+S z=  3273.85 br=0.696019805179293 nbr=2 uni=fold Airy scale under-resolved by the grid zx=None
+S z=  3273.88 br=0.6955307934127519 nbr=2 uni=fold Airy scale under-resolved by the grid zx=None
+S z=  3273.90 br=0.6936072087747903 nbr=2 uni=fold Airy scale under-resolved by the grid zx=None
+S z=  3273.92 br=0.6931053671862842 nbr=2 uni=fold Airy scale under-resolved by the grid zx=None
+S z=  3273.95 br=0.6928518902657141 nbr=2 uni=fold Airy scale under-resolved by the grid zx=None
+S z=  3273.97 br=13.520362961284437 nbr=13 uni=RAISE zx=None
+S z=  3274.00 br=13.335631235582099 nbr=13 uni=RAISE zx=None
+S z=  3274.02 br=663.2341780872855 nbr=85 uni=RAISE zx=None
+S z=  3274.05 br=1326.5249857436606 nbr=117 uni=RAISE zx=None
+S z=  3274.07 br=1849.6041387802397 nbr=137 uni=RAISE zx=None
+S z=  3274.10 br=2766.150007433022 nbr=165 uni=RAISE zx=None
+S z=  3274.12 br=3161.633971246353 nbr=173 uni=RAISE zx=None
+S z=  3274.15 br=6320.937948473979 nbr=237 uni=RAISE zx=None
+S z=  3274.17 br=5862.22741355949 nbr=229 uni=RAISE zx=None
+S z=  3274.20 br=9400.15645964007 nbr=277 uni=RAISE zx=None

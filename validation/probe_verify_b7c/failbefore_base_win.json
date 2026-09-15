@@ -1,0 +1,113 @@
+{
+ "lumenairy_file": "C:\\Users\\Tesla\\AppData\\Local\\Temp\\claude\\C--Users-Tesla\\372a2d1f-acbe-4b57-a148-eeae3fe1d729\\scratchpad\\vb7c\\tree_96cb2096\\lumenairy\\__init__.py",
+ "rows": [
+  {
+   "fixture": "P",
+   "z_um": 1015.34,
+   "returned_a_field": true,
+   "grid_power_W": 8.051215864902152e-07,
+   "power_ratio": 4.49025732874845,
+   "fell_back": true,
+   "reason": "fold Airy scale under-resolved by the grid",
+   "fit_residual": null,
+   "zeta_extrapolation": null,
+   "has_power_ratio_decision": false,
+   "has_multibranch_power_ratio": false,
+   "has_n_branch_max": false,
+   "n_warnings": 5,
+   "warnings": [
+    "invalid value encountered in subtract",
+    "apply_real_lens_traced_multibranch: reconstructed grid power is 4.49x the launch",
+    "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic=",
+    "invalid value encountered in subtract",
+    "apply_real_lens_traced_multibranch: reconstructed grid power is 4.49x the launch"
+   ]
+  },
+  {
+   "fixture": "P",
+   "z_um": 1016.0,
+   "returned_a_field": true,
+   "grid_power_W": 9.85178574201037e-06,
+   "power_ratio": 54.94456225197631,
+   "fell_back": true,
+   "reason": "fold Airy scale under-resolved by the grid",
+   "fit_residual": null,
+   "zeta_extrapolation": null,
+   "has_power_ratio_decision": false,
+   "has_multibranch_power_ratio": false,
+   "has_n_branch_max": false,
+   "n_warnings": 5,
+   "warnings": [
+    "invalid value encountered in subtract",
+    "apply_real_lens_traced_multibranch: reconstructed grid power is 54.9x the launch",
+    "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic=",
+    "invalid value encountered in subtract",
+    "apply_real_lens_traced_multibranch: reconstructed grid power is 54.9x the launch"
+   ]
+  },
+  {
+   "fixture": "Q",
+   "z_um": 5460.0,
+   "returned_a_field": true,
+   "grid_power_W": 1.1472710254286546e-06,
+   "power_ratio": 3.216132756639941,
+   "fell_back": true,
+   "reason": "bad_kappa",
+   "fit_residual": null,
+   "zeta_extrapolation": null,
+   "has_power_ratio_decision": false,
+   "has_multibranch_power_ratio": false,
+   "has_n_branch_max": false,
+   "n_warnings": 3,
+   "warnings": [
+    "apply_real_lens_traced_multibranch: reconstructed grid power is 3.22x the launch",
+    "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic=",
+    "apply_real_lens_traced_multibranch: reconstructed grid power is 3.22x the launch"
+   ]
+  },
+  {
+   "fixture": "M",
+   "z_um": 2343.0,
+   "returned_a_field": true,
+   "grid_power_W": 0.0001182113035569951,
+   "power_ratio": 504.38644713349584,
+   "fell_back": true,
+   "reason": "fold Airy scale under-resolved by the grid",
+   "fit_residual": null,
+   "zeta_extrapolation": null,
+   "has_power_ratio_decision": false,
+   "has_multibranch_power_ratio": false,
+   "has_n_branch_max": false,
+   "n_warnings": 5,
+   "warnings": [
+    "invalid value encountered in subtract",
+    "apply_real_lens_traced_multibranch: reconstructed grid power is 504x the launche",
+    "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic=",
+    "invalid value encountered in subtract",
+    "apply_real_lens_traced_multibranch: reconstructed grid power is 504x the launche"
+   ]
+  },
+  {
+   "fixture": "S",
+   "z_um": 3274.02,
+   "returned_a_field": true,
+   "grid_power_W": 1.8669502240448568e-05,
+   "power_ratio": 107.33542796780999,
+   "fell_back": true,
+   "reason": "fold Airy scale under-resolved by the grid",
+   "fit_residual": null,
+   "zeta_extrapolation": null,
+   "has_power_ratio_decision": false,
+   "has_multibranch_power_ratio": false,
+   "has_n_branch_max": false,
+   "n_warnings": 5,
+   "warnings": [
+    "invalid value encountered in subtract",
+    "apply_real_lens_traced_multibranch: reconstructed grid power is 107x the launche",
+    "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic=",
+    "invalid value encountered in subtract",
+    "apply_real_lens_traced_multibranch: reconstructed grid power is 107x the launche"
+   ]
+  }
+ ]
+}

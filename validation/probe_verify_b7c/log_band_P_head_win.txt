@@ -1,0 +1,17 @@
+P z=   840.00 br=       0.9922524152762 nbr=    2 fid_uni=0.608028 pow_uni=1.05574851 fid_wv=0.6797 zx=0.88359050 fold_ring
+P z=   856.00 br=    0.9906976537350827 nbr=    2 fid_uni=0.652550 pow_uni=1.05847577 fid_wv=0.6979 zx=0.63769778 fold_ring
+P z=   872.00 br=    0.9801309875608017 nbr=    2 fid_uni=0.721826 pow_uni=1.04636355 fid_wv=0.7119 zx=0.48022815 fold_ring
+P z=   888.00 br=    0.9729074950057208 nbr=    2 fid_uni=0.791146 pow_uni=1.04316904 fid_wv=0.7221 zx=0.37341729 fold_ring
+P z=   904.00 br=    0.9757390602708569 nbr=    2 fid_uni=0.857105 pow_uni=1.04931702 fid_wv=0.7298 zx=0.29768292 fold_ring
+P z=   920.00 br=    0.9709237663456377 nbr=    2 fid_uni=0.906463 pow_uni=1.04129766 fid_wv=0.7351 zx=0.24205082 fold_ring
+P z=   960.00 br=    0.9698062790144067 nbr=    2 fid_uni=0.940040 pow_uni=1.01319062 fid_wv=0.7415 zx=      None fold Airy scale under-resolved by the grid
+P z=  1000.00 br=    0.9522027116148303 nbr=    2 fid_uni=0.961959 pow_uni=0.98921177 fid_wv=0.7440 zx=      None fold Airy scale under-resolved by the grid
+P z=  1015.00 br=    0.9377302223708474 nbr=    2 fid_uni=0.958595 pow_uni=0.96662372 fid_wv=0.7433 zx=      None fold Airy scale under-resolved by the grid
+P z=  1015.18 br=    1.0798403988239076 nbr=   17 fid_uni=0.902076 pow_uni=1.11161019 fid_wv=0.7434 zx=      None fold Airy scale under-resolved by the grid
+P z=  1015.20 br=       1.3396218245144 nbr=   25 fid_uni=0.814730 pow_uni=1.37883326 fid_wv=0.7434 zx=      None fold Airy scale under-resolved by the grid
+P z=  1015.24 br=    1.7865086645768342 nbr=   33 fid_uni=0.711519 pow_uni=1.83826891 fid_wv=0.7434 zx=      None fold Airy scale under-resolved by the grid
+P z=  1015.28 br=    1.8182178281864048 nbr=   33 fid_uni=0.706872 pow_uni=1.87036293 fid_wv=0.7434 zx=      None fold Airy scale under-resolved by the grid
+P z=  1015.30 br=    2.2471302647234603 nbr=   41 fid_uni=    None pow_uni=      None fid_wv=0.7434 zx=      None RAISE
+P z=  1015.34 br=      4.49025732874845 nbr=   73 fid_uni=    None pow_uni=      None fid_wv=0.7435 zx=      None RAISE
+P z=  1015.38 br=     6.078613533691469 nbr=   89 fid_uni=    None pow_uni=      None fid_wv=0.7435 zx=      None RAISE
+P z=  1016.00 br=     54.94456225197631 nbr=  245 fid_uni=    None pow_uni=      None fid_wv=0.7436 zx=      None RAISE

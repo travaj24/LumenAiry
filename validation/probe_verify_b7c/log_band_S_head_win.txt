@@ -1,0 +1,11 @@
+S z=  3188.70 br=    0.9561896727148501 nbr=    1 fid_uni=0.986344 pow_uni=1.07935150 fid_wv=0.9861 zx=246.117002 fold_ring
+S z=  3195.22 br=    0.9716213727804281 nbr=    1 fid_uni=0.979120 pow_uni=1.11940968 fid_wv=0.9861 zx=53.0525504 fold_ring
+S z=  3201.74 br=     0.970824204802218 nbr=    1 fid_uni=0.985102 pow_uni=1.10687889 fid_wv=0.9861 zx=22.2474921 fold_ring
+S z=  3208.26 br=    0.9324003253974256 nbr=    1 fid_uni=0.984102 pow_uni=1.12162172 fid_wv=0.9861 zx=12.0560345 fold_ring
+S z=  3214.78 br=    0.9271416206388834 nbr=    2 fid_uni=0.982127 pow_uni=1.10815770 fid_wv=0.9861 zx=7.49008429 fold_ring
+S z=  3221.30 br=    0.8545954556681877 nbr=    1 fid_uni=0.984426 pow_uni=1.14105480 fid_wv=0.9860 zx=5.06546658 fold_ring
+S z=  3227.83 br=    0.8943979767184882 nbr=    2 fid_uni=0.961811 pow_uni=1.01813841 fid_wv=0.9860 zx=3.62710526 fold_ring
+S z=  3253.91 br=     0.762160700634904 nbr=    2 fid_uni=0.846841 pow_uni=0.78754405 fid_wv=0.9859 zx=      None fold Airy scale under-resolved by the grid
+S z=  3273.95 br=    0.6928518902657141 nbr=    2 fid_uni=0.799130 pow_uni=0.71471115 fid_wv=0.9859 zx=      None fold Airy scale under-resolved by the grid
+S z=  3273.97 br=     4.417433092939696 nbr=    5 fid_uni=    None pow_uni=      None fid_wv=0.9859 zx=      None RAISE
+S z=  3274.02 br=    107.33542796780999 nbr=   37 fid_uni=    None pow_uni=      None fid_wv=0.9859 zx=      None RAISE

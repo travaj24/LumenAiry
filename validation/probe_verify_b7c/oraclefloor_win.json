@@ -1,0 +1,66 @@
+{
+ "python": "3.14.6",
+ "numpy": "2.4.4",
+ "rows": [
+  {
+   "fixture": "S",
+   "z_um": 3214.78,
+   "note": "N-SK16 plano-convex R=+2.4 mm CONVEX side first, t=0.85 mm, 1.00 mm aperture, 532 nm",
+   "n_fan_6000_to_12000_relL2": 0.00019681683128897336,
+   "n_rho_2400_to_4800_relL2": 0.002412696614172493,
+   "both_relL2": 0.00241054318183355,
+   "energy_closure": 0.999622669424284,
+   "rms_radius_um": 6.353831088082638,
+   "debye_J0_phase_error_rad": 0.0017228519450663922,
+   "NA_marginal": 0.15242100548093493
+  },
+  {
+   "fixture": "M",
+   "z_um": 2242.17,
+   "note": "positive MENISCUS N-SF6 R=+1.6/+4.2 mm, t=0.75 mm, 1.10 mm aperture, 2.0 um",
+   "n_fan_6000_to_12000_relL2": 0.00022886458187964577,
+   "n_rho_2400_to_4800_relL2": 0.0021637237382815975,
+   "both_relL2": 0.0021642947220241334,
+   "energy_closure": 0.9991644745893237,
+   "rms_radius_um": 16.810263644869273,
+   "debye_J0_phase_error_rad": 0.011440390392254937,
+   "NA_marginal": 0.24039212013362055
+  },
+  {
+   "fixture": "Q",
+   "z_um": 5680.0,
+   "note": "cemented doublet N-BK7 R=+3.0/-2.0 + N-SF6 -2.0/-6.0, 1.40 mm aperture, 1.31 um",
+   "n_fan_6000_to_12000_relL2": 0.00017326264216942124,
+   "n_rho_2400_to_4800_relL2": 0.00085091576129814,
+   "both_relL2": 0.0008606880684618068,
+   "energy_closure": 0.9997765113456064,
+   "rms_radius_um": 12.604092496095245,
+   "debye_J0_phase_error_rad": 0.0009783741388135951,
+   "NA_marginal": 0.12077464788732394
+  },
+  {
+   "fixture": "F_alt",
+   "z_um": 1056.0,
+   "note": "fast N-LASF9 biconvex R=+/-2.2 mm stopped to 0.60 mm (f/2.0), 633 nm [grid 640 x 1.40 um]",
+   "n_fan_6000_to_12000_relL2": 0.00031488848331822316,
+   "n_rho_2400_to_4800_relL2": 0.006951208383998813,
+   "both_relL2": 0.006947387452045032,
+   "energy_closure": 0.99868101386279,
+   "rms_radius_um": 11.658165945551904,
+   "debye_J0_phase_error_rad": 0.049511893406351044,
+   "NA_marginal": 0.27840909090909094
+  },
+  {
+   "fixture": "P",
+   "z_um": 888.0,
+   "note": "fast N-LASF9 biconvex R=+/-2.2 mm, t=0.80 mm, 1.00 mm aperture, 633 nm",
+   "n_fan_6000_to_12000_relL2": 0.0003010200294365129,
+   "n_rho_2400_to_4800_relL2": 0.01943613977782021,
+   "both_relL2": 0.019426845551195768,
+   "energy_closure": 0.9898859465253905,
+   "rms_radius_um": 40.268664554433094,
+   "debye_J0_phase_error_rad": 2.759522120412739,
+   "NA_marginal": 0.5518018018018018
+  }
+ ]
+}

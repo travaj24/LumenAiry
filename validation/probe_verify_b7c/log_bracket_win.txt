@@ -1,0 +1,21 @@
+bar=2.0  blind rows=20  max denominator spread=7.849
+  d3_48px_far z=96.0000 mm  power_ratio=3.757 triangles=0.4787 bracket=0.4787 nbr=1 mb_warned=False uni=energy_loss/no_fold
+  d3_48px_far z=98.0000 mm  power_ratio=3.562 triangles=0.4539 bracket=0.4539 nbr=1 mb_warned=False uni=energy_loss/no_fold
+  d3_48px_far z=100.0000 mm  power_ratio=3.382 triangles=0.8983 bracket=0.8983 nbr=1 mb_warned=False uni=ok/no_fold
+  d3_48px_far z=102.0000 mm  power_ratio=3.216 triangles=0.854 bracket=0.854 nbr=1 mb_warned=False uni=ok/no_fold
+  d3_48px_far z=104.0000 mm  power_ratio=3.061 triangles=0.8129 bracket=0.8129 nbr=1 mb_warned=False uni=ok/no_fold
+  d3_48px_far z=106.0000 mm  power_ratio=2.917 triangles=0.7748 bracket=0.7748 nbr=1 mb_warned=False uni=ok/no_fold
+  d3_48px_far z=108.0000 mm  power_ratio=2.783 triangles=0.7392 bracket=0.7392 nbr=1 mb_warned=False uni=ok/no_fold
+  d3_48px_far z=110.0000 mm  power_ratio=2.658 triangles=0.706 bracket=0.706 nbr=1 mb_warned=False uni=ok/no_fold
+  d3_48px_far z=112.0000 mm  power_ratio=2.542 triangles=0.675 bracket=0.675 nbr=1 mb_warned=False uni=ok/no_fold
+  d3_48px_far z=114.0000 mm  power_ratio=2.433 triangles=0.6461 bracket=0.6461 nbr=1 mb_warned=False uni=ok/no_fold
+  d3_48px_far z=116.0000 mm  power_ratio=2.33 triangles=0.6189 bracket=0.6189 nbr=1 mb_warned=False uni=ok/no_fold
+  d3_48px_far z=118.0000 mm  power_ratio=2.234 triangles=0.5934 bracket=0.5934 nbr=1 mb_warned=False uni=ok/no_fold
+  d3_48px_far z=120.0000 mm  power_ratio=2.144 triangles=0.5695 bracket=0.5695 nbr=1 mb_warned=False uni=ok/no_fold
+  d3_48px_far z=122.0000 mm  power_ratio=2.059 triangles=0.5469 bracket=0.5469 nbr=1 mb_warned=False uni=ok/no_fold
+  d3_32px_far z=90.0000 mm  power_ratio=2.021 triangles=0.5368 bracket=0.5368 nbr=1 mb_warned=False uni=ok/no_fold
+  d3_64px_far z=120.0000 mm  power_ratio=3.754 triangles=0.4783 bracket=0.4783 nbr=1 mb_warned=False uni=energy_loss/no_fold
+  d3_64px_far z=122.5000 mm  power_ratio=3.571 triangles=0.455 bracket=0.455 nbr=1 mb_warned=False uni=energy_loss/no_fold
+  d3_64px_far z=125.0000 mm  power_ratio=3.401 triangles=0.9034 bracket=0.9034 nbr=1 mb_warned=False uni=ok/no_fold
+  d3_64px_far z=127.5000 mm  power_ratio=3.243 triangles=0.8614 bracket=0.8614 nbr=1 mb_warned=False uni=ok/no_fold
+  d3_64px_far z=130.0000 mm  power_ratio=3.096 triangles=0.8223 bracket=0.8223 nbr=1 mb_warned=False uni=ok/no_fold
