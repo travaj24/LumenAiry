@@ -222,7 +222,25 @@ pytest tests/unit/test_audit_w4_glass_registry_meshgrid.py \
    AssertionError: Out-of-range warning must be one-shot per (glass, wavelength)
    pair; got 0 warnings.  assert 0 == 1
 ```
-Green in the reverse order and green alone.
+**CORRECTED 2026-09-14 (WAVE5-E, from VERIFY-WP-B14 D2).**  "Green in the
+reverse order and green alone" -- as this section first read -- is wrong.  The
+pin is red whenever ANY earlier call in the process has memoised the
+`('N-BK7', 200e-9)` pair, and this file's own first test,
+`test_validity_warning_emitted_outside_range`, evaluates exactly that pair.
+Re-measured on the PRE tree `96cb2096`, Windows py3.14.6 / numpy 2.4.4,
+`-p no:randomly`:
+
+```
+the validity file ALONE                      1 failed,  7 passed
+meshgrid FIRST, then validity                1 failed, 23 passed
+validity FIRST, then meshgrid                1 failed, 23 passed
+this file's own first test + the failing id  1 failed,  1 passed
+the failing id in isolation                  1 passed
+```
+
+So it was intra-file self-poisoning, not an inter-file order dependence.  The
+root cause below and the fix are unchanged and are in fact STRONGER than this
+reproduction claimed.
 
 ### 3.2 Root cause -- a PARTIAL reset of coupled state, in the test
 

@@ -114,8 +114,14 @@ every probe and its per-arm JSON is under `validation/probe_known_reds/`.
   challenged.  (4 failed / 24 passed -> 28 passed.)
 
 - **The glass-validity one-shot pin was a partial reset of coupled state.**
-  `test_validity_warning_is_one_shot_per_pair` was red only when it ran after
-  `test_audit_w4_glass_registry_meshgrid.py`.  The state that leaks is not the warn-once
+  `test_validity_warning_is_one_shot_per_pair` was red whenever any earlier call in the
+  process had memoised the `('N-BK7', 200e-9)` pair -- including this file's own first
+  test, `test_validity_warning_emitted_outside_range`, so it was red ALONE
+  (`1 failed, 7 passed` on `96cb2096`) and red in both orders against
+  `test_audit_w4_glass_registry_meshgrid.py` (`1 failed, 23 passed` each way); only the
+  single id in isolation was green.  (Re-measured 2026-09-14; the entry first published
+  here said "only when it ran after the meshgrid file", which was the right conclusion
+  from the wrong reproduction.)  The state that leaks is not the warn-once
   set the test's fixture was clearing: `get_glass_index` memoises the whole
   (name, wavelength) evaluation and returns on a hit BEFORE it reaches the validity
   warning, which the memo's own rationale says is warning-neutral only because
@@ -271,6 +277,32 @@ every probe and its per-arm JSON is under `validation/probe_known_reds/`.
   one error `mypy --strict` reported; neither the whitelist nor an `ignore` was
   touched.
 
+### Changed -- two published claims about the 5.47.0 known-red fixes are corrected against their own re-measurement
+
+Neither is a behaviour change; both are numbers that did not reproduce.
+
+**The glass-validity one-shot pin was not order-dependent against another file.**
+`test_validity_warning_is_one_shot_per_pair` was published here, in the WP-B14 report and
+in the fixture's own docstring as red "only when it ran after
+`tests/unit/test_audit_w4_glass_registry_meshgrid.py`".  Re-measured on the PRE tree
+(`96cb2096`, Windows py3.14.6 / numpy 2.4.4, `-p no:randomly`): it is red **alone**
+(`1 failed, 7 passed`), red with the meshgrid file first and red with it last
+(`1 failed, 23 passed` each way), and red with nothing but this file's own first test
+before it (`1 failed, 1 passed`); the single id in isolation is the only green selection.
+The poisoner is `test_validity_warning_emitted_outside_range`, which memoises the same
+`('N-BK7', 200e-9)` pair.  Right conclusion, wrong reproduction -- and the fix is in fact
+STRONGER than the published claim, because it covers intra-file self-poisoning too.
+
+**`DENSE_MEM_BUDGET_ACCOUNTING = 'measured'` bounds the budget only above one beamlet
+column.**  `gbd.py`'s module note stated the repair without that scope.  Re-measured on
+both builds at N = 256 with 1024 beamlets: 512 MB reads 0.84x (Windows) / 0.76x (WSL) and
+16 MB reads 0.60x / 0.56x -- bounded -- while **4 MB reads 2.39x / 2.23x and 1 MB reads
+9.58x / 8.92x**, because the chunk floors at 1 and the fixed ~48 B/cell term is outside the
+chunk arithmetic entirely.  The one-column floor is
+`Ny*Nx*(48 + _DENSE_CELL_BYTES_MEASURED)` bytes, 11.53 MB at N = 256, and no accounting
+constant can put the loop under a budget below it.  The note now carries the scope, both
+builds' readings and a pointer to the two-sided pin
+(`test_verify_b14_known_reds.py::test_the_measured_accounting_bounds_the_budget_only_above_one_column`).
 
 ## [5.47.0] — 2026-09-14
 

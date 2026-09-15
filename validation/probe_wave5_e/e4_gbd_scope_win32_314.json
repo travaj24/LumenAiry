@@ -1,0 +1,51 @@
+{
+ "lumenairy_file": "C:\\tmp\\lum_e\\lumenairy\\__init__.py",
+ "version": "5.47.0",
+ "python": "3.14.6",
+ "numpy": "2.4.4",
+ "platform": "win32",
+ "shipped_default": "legacy",
+ "N": 256,
+ "n_beamlets": 1024,
+ "legacy_const": 16.0,
+ "measured_const": 128.0,
+ "fixed_term_bytes_per_cell": 48.0,
+ "rows": [
+  {
+   "budget_mb": 512.0,
+   "chunk": 61,
+   "peak_bytes": 432420388,
+   "peak_mb": 432.420388,
+   "ratio": 0.8445710703125,
+   "above_one_column": true
+  },
+  {
+   "budget_mb": 16.0,
+   "chunk": 1,
+   "peak_bytes": 9575666,
+   "peak_mb": 9.575666,
+   "ratio": 0.598479125,
+   "above_one_column": true
+  },
+  {
+   "budget_mb": 4.0,
+   "chunk": 1,
+   "peak_bytes": 9575714,
+   "peak_mb": 9.575714,
+   "ratio": 2.3939285,
+   "above_one_column": false
+  },
+  {
+   "budget_mb": 1.0,
+   "chunk": 1,
+   "peak_bytes": 9575778,
+   "peak_mb": 9.575778,
+   "ratio": 9.575778,
+   "above_one_column": false
+  }
+ ],
+ "one_column_floor_mb": 11.534336,
+ "ratio_4mb": 2.3939285,
+ "ratio_1mb": 9.575778,
+ "bound_only_above_one_column": true
+}
