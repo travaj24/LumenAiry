@@ -27,10 +27,11 @@ base `96cb2096`.
 | 3 | the mechanism | **the rasteriser's point-sampled area quadrature**, not a wrong branch, not an unclipped Jacobian, not the fold-member ordering (section 2, three controls) |
 | 4 | the fix | the completion **REFUSES** outside a derived band and carries the reading and the decision in its diagnostics (section 3); the branch sum's reconstruction is left byte-identical |
 | 5 | `_ZETA_EXTRAPOLATION_MAX = 8.0` re-derived two-sided on three optics | **CONFIRMED where it stands**, but as a SIGN boundary, not the 5 % / 10 % magnitude one: 8.0 is `sqrt(5.65 * 11.05) = 7.90` to two figures (section 4) |
-| 6 | the member-selection pass | **both published orderings reproduce, on their own fixtures**; neither generalises; margins under 0.012 of fidelity; the docstring is restated and the default is NOT changed (section 5) |
+| 6 | the member-selection pass | **both published orderings reproduce, on their own fixtures** (completion closer at 10 of 42 planes, all on WP-B7b's); neither generalises, nor does "it beats the plain multibranch" (40 of 42); margins under 0.012 of fidelity; the docstring is restated and the default is NOT changed (section 5) |
 | 7 | `zeta(r)` beyond the two-branch band | **measured**: the linear normal form is good to 7 % only while the band is >~2 `l_airy` wide, and 20-50 % slow beyond that.  A second fold parameter is the repair; recommended, not implemented (section 6) |
 | 8 | clipping `_AIRY_TAIL_CELLS` | **premise measured and REFUSED**: >94 % of the excess energy is written inside 3 Airy lengths, not in the outer annulus.  The bound is derived and reported as a diagnostic; the fill is not clipped (section 6) |
 | 9 | bit identity | **11 of 13 fixtures byte-identical on both builds**; the 2 movers are exactly the two blow-up planes, which now raise (section 7) |
+| 10 | the bar's value | `_MB_POWER_RATIO_MAX = _ENERGY_BLOWUP_FACTOR = 2.0` -- one shared bar; margins 1.60x / 2.92x in a 4.69x gap (section 3.1) |
 
 ## 2. Item 4.2 -- the mechanism of the `1/sqrt|J|` blow-up
 
@@ -133,24 +134,39 @@ node-count denominator alone reads up to 3.3x with the energy conserved to 1 %
 
 ### 3.1 The derivation of `_MB_POWER_RATIO_MAX`
 
-Three optics, 38 oracle-scored fold planes, `zeta_extrapolation` 0.27 .. 3484.
+**Five** optics -- the three of section 2 plus WP-B7b's own two N-LAK22
+singlets -- 51 oracle-scored fold planes, `zeta_extrapolation` 0.16 .. 3484.
 Classified by the completion's fidelity against the oracle, which is bimodal
-with nothing in between (accepted 0.883-0.995; broken 0.012-0.259):
+with nothing in between (accepted 0.883-0.999; broken 0.012-0.350):
 
-| population | n | multibranch `power_ratio` |
+| population | n | bracketed multibranch ratio |
 |---|---|---|
-| **accepted** (oracle fidelity 0.883 .. 0.995) | 30 | **0.816 .. 1.246** |
-| **broken** (oracle fidelity 0.012 .. 0.259) | 8 | **18.86**, then 93.5 / 1683 / 2346 / 2801 / 3201 / 3443 / 3545 / 6097 |
+| **accepted** (oracle fidelity 0.883 .. 0.999) | 42 | **0.816 .. 1.246**, and only TWO of the 42 exceed 1.0 at all (1.001 and 1.246) |
+| **broken** (oracle fidelity 0.012 .. 0.350) | 9 | **5.848**, then 18.86 / 93.5 / 1683 / 2346 / 2801 / 3201 / 3443 / 3545 |
 
 Finer plane scans without oracle scoring extend the accepted population down to
-0.763 and add no rung between 1.25 and 18.86.
+0.763 and add nothing above 1.25.  The smallest broken reading is **WP-B7b's
+own fast singlet one micron past its marginal focus** (W1, z = 2060 um,
+fidelity 0.350) -- a rung the three-optic study did not have, and the reason
+this bar is not the 4.0 a three-optic derivation would have produced.
 
-`sqrt(1.246 * 18.86) = 4.85`.  The shipped bar is
-`_MB_POWER_RATIO_MAX = 2 * _ENERGY_BLOWUP_FACTOR = 4.0`, the nearest value that
-keeps it coupled to the branch sum's own warn bar.  **Margins: 3.2x above the
-largest accepted reading, 4.7x below the smallest broken one.**  The coupling
-also guarantees the refusal is never the first diagnostic -- every refused field
-has already emitted the branch sum's own `RuntimeWarning`.
+The shipped bar is `_MB_POWER_RATIO_MAX = _ENERGY_BLOWUP_FACTOR = 2.0` -- the
+branch sum's OWN gain tripwire -- so there is one bar on this quantity in the
+library rather than two that can drift apart, and the completion refuses
+exactly the fields the branch sum has already declared unphysical.  That
+module derived 2.0 independently ("a well-behaved through-focus field stays
+within ~1.2x and a RESOLVED fold within ~1.18x"), which the 1.246 measured here
+confirms.  **Margins: 1.60x above the largest accepted reading, 2.92x below the
+smallest broken one, in a gap 4.69x wide whose geometric centre is
+`sqrt(1.246 * 5.848) = 2.70`.**  Neither margin is decades, and that is stated
+rather than papered over; 2.70 would trade 0.3 of a decade above for 0.35
+below and give up the shared constant.  The coupling also guarantees the
+refusal is never the first diagnostic -- every refused field has already
+emitted the branch sum's own `RuntimeWarning`.
+
+Moving the bar from 4.0 to 2.0 moves **no measured field**: none of the 51
+planes reads a bracketed ratio in (2.0, 4.0], and the 13-fixture bit-identity
+matrix of section 7 is unchanged between the two values.
 
 ### 3.2 The lower arm is REPORTED, not refused -- and why
 
@@ -167,7 +183,8 @@ classify the same field the same way.
 ### 3.3 Scored against the oracle and against energy
 
 At the refused planes the completion's fidelity against the oracle is **0.259 /
-0.190 / 0.168** (V), **0.063 / 0.029 / 0.012** (C), **0.204 / 0.148** (D), and
+0.190 / 0.168** (V), **0.063 / 0.029 / 0.012** (C), **0.204 / 0.148** (D),
+**0.350** (W1), and
 its power is **94 / 3570 / 6140** and **1689 / 2811 / 3454** and **19.2 / 2365**
 times the oracle's.  At the same planes the hand-off reads **0.9981-0.9991** and
 conserves the launched power to within 1 %.  Every arm of the refusal therefore
@@ -235,15 +252,24 @@ mine (C, D).  Members scored against the oracle at each plane.
 
 | fixture | planes | completion | hand-off (`ray_density`) | winner |
 |---|---|---|---|---|
-| **W1** (WP-B7b's) `zeta_x` 0.165 | 1 | **0.9993** | 0.9974 | completion |
-| **W1** `zeta_x` 0.19 .. 8.57 | 6 | 0.9927 .. 0.9993 | 0.9923 .. 0.9974 | completion (6 of 6) |
+| **W1** (WP-B7b's) `zeta_x` 0.165 (its marginal focus) | 1 | **0.9993** | 0.9974 | completion |
+| **W1** `zeta_x` 0.19 .. 8.57 | 9 | 0.9927 .. 0.9993 | 0.9923 .. 0.9974 | completion (9 of 9) |
 | **W1** `zeta_x` 23.1, 173 | 2 | 0.9906, 0.9882 | 0.9908, 0.9888 | hand-off, by 0.0002 / 0.0006 |
 | **V** (VERIFY-B7b's) `zeta_x` 0.38 .. 531 | 9 | 0.9867 .. 0.9923 | 0.9963 .. 0.9981 | hand-off (9 of 9) |
 | **C** `zeta_x` 0.39 .. 3484 | 11 | 0.9901 .. 0.9949 | 0.9988 .. 0.9991 | hand-off (11 of 11) |
-| **D** `zeta_x` 0.28 .. 150 | 9 | 0.8828 .. 0.9929 | 0.9920 .. 0.9981 | hand-off (9 of 9) |
+| **D** `zeta_x` 0.28 .. 150 | 10 | 0.8828 .. 0.9929 | 0.9920 .. 0.9981 | hand-off (10 of 10) |
 
-So the discriminator is the OPTIC, and both margins are small: the completion
-wins by 0.0004-0.0019 on W1 and loses by 0.005-0.012 on V / C / D.
+Over all 42 accepted planes the completion is the closer member at **10**, all
+of them on W1.  So the discriminator is the OPTIC, and both margins are small:
+the completion wins by 0.0004-0.0019 on W1 and loses by 0.005-0.012 on
+V / C / D.
+
+**One more ordering that does not generalise, found in the same pass.**  "The
+completion beats the plain multibranch it would fall back to at every plane"
+holds at 40 of the 42, and the two exceptions are again W1's tightest-band
+planes: 0.9882 against the branch sum's 0.9889 at `zeta_x` = 173, and 0.9906
+against 0.9910 at 23.1.  The margins are 0.0004-0.0007, but the statement is
+now scoped rather than universal in the docstring.
 
 **The obvious candidate discriminator is refuted.**  W1's semi-aperture is
 2.0 w0 and V / C / D's are 1.34-1.50 w0, so aperture truncation was the natural
@@ -269,10 +295,10 @@ planes, while the completion above the bar did not.
 Leave `caustic='uniform'` as it is.  Restate the docstring, which is done: the
 unscoped sentence "at the widest-band plane it also beats
 `apply_real_lens_traced(amplitude_model='ray_density')`" is replaced by the
-measurement above, with both orderings, their margins, the refuted
-discriminator, and the advice to read the ranking on one's own prescription.
-What IS general on every fixture measured, and is stated as such, is that the
-completion beats the plain branch sum, and that the hand-off conserves energy
+measurement above, with both orderings, their counts and margins, the refuted
+discriminator, the two planes where the plain branch sum wins, and the advice
+to read the ranking on one's own prescription.  What IS general on every
+fixture measured, and is stated as such, is that the hand-off conserves energy
 where the completion above the bar does not.
 
 ## 6. Item 4.3 -- `zeta(r)` beyond the band, and the `_AIRY_TAIL_CELLS` clip
@@ -408,6 +434,10 @@ reading; every invariant is unconditional; no wall-clock assertion.
 | `b7c` + `b7_asymptotic` + `b7b_caustic_routing` + `niche_k4_uniform_caustic` + `pmm2d_staggered_nonuniform` + `niche_audit_w9_dispatch2` | **151 passed** (282 s) | **151 passed** (783 s) |
 | `a3_caustic_siblings` + `a3_verify_traced` + `niche_k1_kmah_caustic` + `niche_r2_pearcey_cusp` + `niche_r5_gbd_vector_catastrophe` + `niche_audit_w3_elements` + `niche_audit_w4_input_kind` | **373 passed** (499 s) | -- |
 | census / public-API / dispatcher-pin doc-consistency / except-budget / a17 history lint + relocation | **768 passed, 1 failed** | -- |
+| `a16` lens-config bit-identity + round-trip + verify, `v5_21` delta audit + lens accuracy, `walker_dy_threading` | **200 passed** (394 s) | -- |
+| `-k dispatcher_pin` (the whole sweep) | **510 passed, 5 skipped** (320 s) | -- |
+| `-k walker` (the whole sweep) | **118 passed, 6 skipped** (223 s) | -- |
+| `-k census` (the whole sweep) | **45 passed** (567 s) | -- |
 | `ruff check lumenairy/ tests/ validation/probe_multibranch_zeta/` (WSL) | -- | **All checks passed** |
 
 The single red, `test_public_api.py::test_installed_metadata_version_matches_source_version`,

@@ -199,14 +199,14 @@ def test_b7c_a_blown_up_multibranch_is_refused_not_passed_through():
 
 def test_b7c_the_refusal_is_never_the_first_diagnostic():
     """Every refused field has already tripped the multibranch's own energy
-    warning, because the refusal bar is twice that module's warn bar.  So the
+    warning, because the refusal bar IS that module's warn bar.  So the
     refusal can never be the first the caller hears of the problem, and a
     caller who suppressed the warning still cannot get the field silently.
 
     Premise-gated on the same ladder; the CONSTANT relationship below is
     unconditional.
     """
-    assert _MB_POWER_RATIO_MAX > _ENERGY_BLOWUP_FACTOR
+    assert _MB_POWER_RATIO_MAX >= _ENERGY_BLOWUP_FACTOR
     E = _gauss()
     seen = False
     for z in _BLOWUP_LADDER:
@@ -248,26 +248,28 @@ def test_b7c_the_public_caustic_uniform_entry_point_refuses_too():
 # 3. the bars -- build-free, constants only
 # ===========================================================================
 def test_b7c_the_refusal_band_is_coupled_to_the_constants_it_was_derived_on():
-    """The refusal bar is ``2 * _ENERGY_BLOWUP_FACTOR`` and the reporting floor
+    """The refusal bar IS ``_ENERGY_BLOWUP_FACTOR`` and the reporting floor
     IS the multibranch's own collapse factor, so the two modules classify the
     same field the same way and the bars cannot drift apart.
 
-    The measured envelope behind the coupling (WP-B7c, 2026-09-14, three optics
-    x 40 fold planes against a direct Rayleigh-Sommerfeld oracle): every plane
-    the oracle accepts read 0.816-1.246; the smallest broken one reads 18.86.
-    The bar sits 3.2x above the largest accepted and 4.7x below the smallest
-    broken reading.
+    The measured envelope behind the coupling (WP-B7c, 2026-09-14, five optics
+    x 51 fold planes against a direct Rayleigh-Sommerfeld oracle): all 42
+    planes the oracle accepts read a bracketed ratio of 0.816-1.246 (only two
+    of them above 1.0 at all); the smallest broken one reads 5.848, on
+    WP-B7b's own fast singlet one micron past its marginal focus.  The bar
+    sits 1.60x above the largest accepted and 2.92x below the smallest broken
+    reading, in a gap 4.69x wide whose geometric centre is 2.70.
     """
-    assert _MB_POWER_RATIO_MAX == 2.0 * _ENERGY_BLOWUP_FACTOR
+    assert _MB_POWER_RATIO_MAX == _ENERGY_BLOWUP_FACTOR
     assert _MB_POWER_RATIO_MIN == _ENERGY_COLLAPSE_FACTOR
     # the measured envelope, with its margins -- decision, not reading
-    largest_accepted = 1.246          # fixture D, z = 1725 um
-    smallest_broken = 18.86           # fixture D, z = 1990 um
+    largest_accepted = 1.246          # fixture D, z = 1725 um, fidelity 0.883
+    smallest_broken = 5.848           # fixture W1, z = 2060 um, fidelity 0.350
     assert largest_accepted < _MB_POWER_RATIO_MAX < smallest_broken, (
         f'{_MB_POWER_RATIO_MAX} has left the measured gap '
         f'[{largest_accepted}, {smallest_broken}]')
-    assert _MB_POWER_RATIO_MAX / largest_accepted > 3.0
-    assert smallest_broken / _MB_POWER_RATIO_MAX > 4.0
+    assert _MB_POWER_RATIO_MAX / largest_accepted > 1.5
+    assert smallest_broken / _MB_POWER_RATIO_MAX > 2.5
 
 
 def test_b7c_the_zeta_bar_sits_in_the_measured_transition():

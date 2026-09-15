@@ -227,37 +227,42 @@ _ZETA_EXTRAPOLATION_MAX = 8.0
 # returns a field carrying 6459x the launched power).
 #
 # MEASURED (WP-B7c, 2026-09-14) against the direct Rayleigh-Sommerfeld oracle
-# ``validation/oracles/caustic_fold_truth.py`` on THREE optics -- N-BAF10
+# ``validation/oracles/caustic_fold_truth.py`` on FIVE optics -- N-BAF10
 # biconvex R = +/-2.6 mm / 1.064 um / N = 512 / dx = 2.20 um (VERIFY-B7b's own
 # fold fixture), N-BK7 plano-convex R = -2.0 mm flat-side-first / 780 nm /
-# N = 512 / dx = 2.00 um, and N-SF11 biconvex R = +/-3.4 mm / 1.55 um /
-# N = 512 / dx = 3.00 um -- over 40 fold planes spanning
-# ``zeta_extrapolation`` 0.27 to 3484:
+# N = 512 / dx = 2.00 um, N-SF11 biconvex R = +/-3.4 mm / 1.55 um / N = 512 /
+# dx = 3.00 um, and WP-B7b's own two N-LAK22 singlets -- over 51 fold planes
+# spanning ``zeta_extrapolation`` 0.16 to 3484:
 #
-#   * all 30 planes the oracle accepts (completed-field fidelity 0.883-0.995)
-#     read a multibranch ``power_ratio`` in 0.816 .. 1.246;
-#   * the smallest ratio at which the completion is broken is 18.86 (fixture D,
-#     z = 1990 um), where the fidelity falls to 0.204 and below (0.012-0.259
-#     over the 8 broken planes);
-#   * between them there is nothing: the next rung up is 93.5 and then
-#     1683 / 2346 / 2801 / 3201 / 3443 / 3545 / 6097.  Finer scans without
-#     oracle scoring extend the accepted population down to 0.763 and add no
-#     rung between 1.25 and 18.86.
+#   * all 42 planes the oracle accepts (completed-field fidelity 0.883-0.999)
+#     read a bracketed ratio in 0.816 .. 1.246, and only TWO of the 42 exceed
+#     1.0 at all (1.001 and 1.246).  Finer scans without oracle scoring extend
+#     that population down to 0.763 and add nothing above 1.25;
+#   * the 9 planes where the completion is broken (fidelity 0.012 .. 0.350)
+#     read 5.848 / 18.86 / 93.5 / 1683 / 2346 / 2801 / 3201 / 3443 / 3545 and
+#     up.  The smallest of them, 5.848, is WP-B7b's own fast singlet one
+#     micron past its marginal focus (z = 2060 um, fidelity 0.350);
+#   * between 1.246 and 5.848 there is nothing.
 #
-# The bar is the geometric mean of the two measured envelopes, rounded to the
-# multibranch's own tripwire: sqrt(1.246 * 18.86) = 4.85, and
-# ``2 * _ENERGY_BLOWUP_FACTOR`` = 4.0 is the nearest value that keeps the two
-# constants coupled.  Margins: 3.2x above the largest accepted ratio, 4.7x
-# below the smallest broken one.  Coupling it to the multibranch's own warn bar
-# also makes the refusal never fire silently -- every refused field has already
-# emitted that module's RuntimeWarning.
+# The bar is ``_ENERGY_BLOWUP_FACTOR`` itself -- the multibranch's own gain
+# tripwire -- so there is ONE bar on this quantity in the library rather than
+# two that can drift apart, and the completion refuses exactly the fields the
+# branch sum has already declared unphysical (that module derived 2.0 from its
+# own independent measurement: a well-behaved through-focus field stays within
+# ~1.2x and a RESOLVED fold within ~1.18x, which the 1.246 above confirms).
+# Margins: 1.60x above the largest accepted reading, 2.92x below the smallest
+# broken one.  The geometric centre of the measured gap is
+# sqrt(1.246 * 5.848) = 2.70; 2.0 buys 0.3 of a decade less margin above and
+# 0.35 more below, and the shared constant.  Neither margin is decades, and
+# that is stated rather than papered over: the gap the bar sits in is 4.69x
+# wide, measured over 51 planes on five optics and two builds.
 #
 # The ratio is read through the SAME bracket the multibranch's own gain arm
 # uses (``min(power_ratio, power_ratio_triangles)``, i.e. ``p_out / p_in_hi``),
 # so the known false-positive class it was introduced for -- an aperture much
 # wider than the grid, where the node-count denominator alone reads up to 3.3x
 # with the energy conserved to 1 % -- cannot reach this bar either.
-_MB_POWER_RATIO_MAX = 2.0 * _ENERGY_BLOWUP_FACTOR
+_MB_POWER_RATIO_MAX = _ENERGY_BLOWUP_FACTOR
 
 # Lower arm of the same reading, REPORTED but not refused.  A multibranch field
 # that loses energy is the NORMAL input to this module: the dark-side Airy tail
@@ -1039,19 +1044,23 @@ def apply_real_lens_traced_uniform(
     30 planes.
 
     Which member is CLOSEST is optic-dependent, and the two published readings
-    both reproduce (WP-B7c measured five fixtures, including WP-B7b's own two
-    and VERIFY-B7b's).  On WP-B7b's fast N-LAK22 singlet the completion is the
-    closer member at 7 of 9 planes (0.9993 against the hand-off's 0.9974 at its
-    marginal focus); on VERIFY-B7b's N-BAF10 biconvex and on two optics of
-    WP-B7c's the hand-off is closer at every plane (0.9979 against 0.9915 at
-    ``zeta_extrapolation`` = 1.03).  Both margins are under 0.012 of fidelity,
-    and neither ordering generalises -- a beam-width sweep at a fixed optic and
-    plane (0.15 .. 0.38 mm, aperture truncation 1.8e-04 .. 0.26 of the rim
-    amplitude) does not flip it, so the aperture:beam ratio is not the
-    discriminator either.  Read the member ranking on your own prescription
-    before relying on it; what IS general on every fixture measured is that the
-    completion beats the plain multibranch, and that the hand-off conserves
-    energy where the completion above the bar does not.
+    both reproduce (WP-B7c measured five fixtures -- WP-B7b's own two,
+    VERIFY-B7b's and two more -- over 42 planes).  On WP-B7b's fast N-LAK22
+    singlet the completion is the closer member at 10 of 12 planes (0.9993
+    against the hand-off's 0.9974 at its marginal focus); on VERIFY-B7b's
+    N-BAF10 biconvex and on two optics of WP-B7c's the hand-off is closer at
+    every plane (0.9979 against 0.9915 at ``zeta_extrapolation`` = 1.03).
+    Overall 10 of 42.  Both margins are under 0.012 of fidelity, and neither
+    ordering generalises -- a beam-width sweep at a fixed optic and plane
+    (0.15 .. 0.38 mm, aperture truncation 1.8e-04 .. 0.26 of the rim amplitude)
+    does not flip it, so the aperture:beam ratio is not the discriminator
+    either.  Read the member ranking on your own prescription before relying on
+    it.  The completion beats the plain multibranch at 40 of those 42 planes;
+    the two exceptions are the tightest-band planes of WP-B7b's own singlet
+    (0.9882 against 0.9889 at ``zeta_extrapolation`` = 173, and 0.9906 against
+    0.9910 at 23.1), so even that ordering is not universal.  What IS general
+    on every fixture measured is that the hand-off conserves energy where the
+    completion above the bar does not.
 
     The grid matters before any of this does: the fold's Airy layer
     ``l_airy = 1 / (k^(2/3) kappa)`` must be resolved (the gate is
@@ -1115,10 +1124,10 @@ def apply_real_lens_traced_uniform(
             f"{int(mb_diag.get('n_branch_max') or 0)} branches on one pixel.  "
             "The output plane is at or near the AXIAL point focus, where a "
             "whole RING of branches coalesces and the branch sum's "
-            "point-sampled quadrature stops conserving energy (measured 94x "
-            "to 6097x of the launched power on three singlets, with the "
+            "point-sampled quadrature stops conserving energy (measured 5.8x "
+            "to 6097x of the launched power on five singlets, with the "
             "field's fidelity against a direct Rayleigh-Sommerfeld oracle "
-            "falling from 0.99 to 0.19).  This is REFUSED rather than passed "
+            "falling from 0.99 to 0.01).  This is REFUSED rather than passed "
             "through or fallen back, because the fallback target is that same "
             "multibranch field and because none of this function's own "
             "diagnostics can see the defect: the bright-side fit residual, "

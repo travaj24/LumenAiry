@@ -30,12 +30,17 @@ that was misreporting.  Falling back is not a remedy and was measured not to be:
 z = 1770 um the completion already fell back and returned a field carrying 6459x the launched
 power, because the fallback target is that same field.
 
-The bar, `_MB_POWER_RATIO_MAX = 2 * _ENERGY_BLOWUP_FACTOR = 4.0`, is derived on three optics
-and 38 fold planes against the direct Rayleigh-Sommerfeld oracle
-`validation/oracles/caustic_fold_truth.py`: all 30 planes the oracle accepts (completion
-fidelity 0.883-0.995) read a multibranch `power_ratio` of 0.816-1.246, the smallest broken
-one (fidelity 0.204) reads 18.86, and nothing lies between -- 3.2x of margin above the
-largest accepted reading and 4.7x below the smallest broken one.  The reading is taken
+The bar, `_MB_POWER_RATIO_MAX = _ENERGY_BLOWUP_FACTOR = 2.0`, is derived on five optics and
+51 fold planes against the direct Rayleigh-Sommerfeld oracle
+`validation/oracles/caustic_fold_truth.py`: all 42 planes the oracle accepts (completion
+fidelity 0.883-0.999) read a bracketed multibranch ratio of 0.816-1.246, only two of them
+above 1.0 at all, and the smallest broken one (fidelity 0.350, on WP-B7b's own fast singlet
+one micron past its marginal focus) reads 5.848 with nothing between -- 1.60x of margin above
+the largest accepted reading and 2.92x below the smallest broken one, in a gap 4.69x wide
+whose geometric centre is 2.70.  Neither margin is decades and the report says so; the bar IS
+the multibranch's own gain tripwire, so there is one bar on this quantity in the library
+rather than two that can drift apart, and the completion refuses exactly the fields the
+branch sum has already declared unphysical.  The reading is taken
 through the same bracket the multibranch's own gain arm uses, so the wide-aperture geometry
 artefact that bracket exists for cannot reach it, and the coupling to that module's warn bar
 means every refused field has already emitted its `RuntimeWarning`.  The diagnostics now
@@ -61,11 +66,14 @@ text now carry both halves.
 Two measured results are recorded without a code change.  The member-selection sentence "at
 the widest-band plane it also beats `apply_real_lens_traced(amplitude_model='ray_density')`"
 does not generalise, and neither does its reverse: re-measured on five fixtures including
-WP-B7b's own two, the completion is the closer member at 7 of 9 planes on WP-B7b's fast
-N-LAK22 singlet (0.9993 against 0.9974 at its marginal focus) and the ray-to-wave hand-off is
-closer at every plane on three other optics (0.9979 against 0.9915), with every margin under
-0.012 of fidelity and a beam-width sweep at a fixed optic refusing to flip it -- so the
-docstring now records both orderings and the default member is unchanged.  And WP-B7b's
+WP-B7b's own two, over 42 planes, the completion is the closer member at 10 of 12 planes on
+WP-B7b's fast N-LAK22 singlet (0.9993 against 0.9974 at its marginal focus) and the
+ray-to-wave hand-off is closer at every plane on three other optics (0.9979 against 0.9915),
+with every margin under 0.012 of fidelity and a beam-width sweep at a fixed optic refusing to
+flip it -- so the docstring now records both orderings and the default member is unchanged.
+The same pass scopes a second unqualified sentence: the completion beats the plain
+multibranch at 40 of the 42 planes, not all of them, the two exceptions being W1's
+tightest-band planes (0.9882 against 0.9889 and 0.9906 against 0.9910).  And WP-B7b's
 proposal to clip `_AIRY_TAIL_CELLS` where the extrapolated `zeta` stops describing the tail
 rests on a premise the measurement refuses: more than 94 % of the excess energy is written
 inside 3 Airy lengths, not in the outer annulus (the cumulative dark-side energy ratio is
