@@ -39,7 +39,7 @@ line, treat every in-code claim as a hypothesis, and substantiate each suspected
 INDEPENDENT oracle (analytic formula, brute-force integral, an oracle ray tracer written in the scratch script, energy /
 symmetry / convergence checks).  The orchestrator then re-derived and re-measured the highest-impact claims on its own fixtures
 before accepting them.  Findings that could not be substantiated are listed separately as suspicions.  Nothing in the
-repository was modified by the audit itself (the remediation that followed is tracked under `docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/`, and the per-finding outcome table is `docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/RESOLUTION_STATUS.md`).  All reproduction scripts are preserved under
+repository was modified by the audit itself (the remediation that followed is tracked under `docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/`, the per-finding outcome table is `docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/RESOLUTION_STATUS.md`, and the state of the work after the second remediation release, 5.47.0, is handed over in `docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/HANDOFF_2026_09_14.md` -- open items by priority, the method, the release procedure).  All reproduction scripts are preserved under
 `docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/repro/` (`<PARTITION>/*.py`, `orch/*.py`); each partition's full report is
 `docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/<PARTITION>.md`.
 

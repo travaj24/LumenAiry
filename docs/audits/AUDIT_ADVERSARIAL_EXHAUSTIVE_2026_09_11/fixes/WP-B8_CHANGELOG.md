@@ -24,7 +24,7 @@ written out as its own two axis passes so the padded input can be released
 between them, and ownership of the padded array is handed over explicitly
 (`psf_mtf_otf.py:84` `_centred_fft2_take`) so the caller's name cannot keep it
 alive across the transform.  `|amp|^2` is then built through one real buffer
-and both normalisations are applied in place (`psf_mtf_otf.py:422`
+and both normalisations are applied in place (`psf_mtf_otf.py:451`
 `_scaled`).
 
 Measured (interleaved medians, `tracemalloc` peak, `OPENBLAS_NUM_THREADS=1`,
@@ -66,7 +66,7 @@ Tests: `tests/unit/test_audit2609_b8_analysis_sources.py` (108 on this item).
 ### Added -- analysis/psf: `compute_psf(method='mft', dx_psf=...)`, the Soummer matrix Fourier transform (audit §15.9)
 
 `compute_psf` gains a keyword-only `method='fft' | 'mft'` and, for `'mft'`, a
-`dx_psf=` focal-plane pitch (`lumenairy/analysis/psf_mtf_otf.py:151`,
+`dx_psf=` focal-plane pitch (`lumenairy/analysis/psf_mtf_otf.py:161`,
 `:439`).  The `'mft'` path routes the Fraunhofer integral through
 `lumenairy.propagators.fraunhofer_propagate_mft` (Soummer *et al.*,
 *Opt. Express* **15** (2007) 15935), which samples directly onto whatever
@@ -122,7 +122,7 @@ Tests: `tests/unit/test_audit2609_b8_analysis_sources.py`.
 `encircled_energy_curve` and `encircled_energy_radius` each build the same
 sorted cumulative-energy profile, so a caller wanting BOTH -- the ordinary
 spec-sheet pattern -- pays for two identical full-grid `argsort` passes.  The
-construction is now a public value (`lumenairy/analysis/psf_mtf_otf.py:741`
+construction is now a public value (`lumenairy/analysis/psf_mtf_otf.py:770`
 `encircled_energy_profile(E, dx, *, dy=None, centroid=None) ->
 (r_sorted, p_cum, r_max)`) and both functions accept it as `profile=`.
 
@@ -158,7 +158,7 @@ re-ran `np.power(rho, k)` -- a libm `pow` per pixel -- for every term.  The
 first 21 modes ask for 34 such calls over 6 distinct exponents.  The build now
 shares one `{k: rho ** k}` memo and one hoisted `rho <= 1` mask across the
 modes, and accumulates each radial sum through one reused buffer
-(`lumenairy/analysis/zernike.py:97`, `:240`, `:435`).
+(`lumenairy/analysis/zernike.py:105`, `:240`, `:435`).
 
 | N | modes | before | after | |
 |---|---|---|---|---|
@@ -200,7 +200,7 @@ at all -- the worst relative error over every `(n, m)`:
 
 `_zernike_radial` now hands orders `n >= 22` to the Kintner (*Opt. Acta* **23**
 (1976) 679) recurrence in `n` at fixed `m`
-(`lumenairy/analysis/zernike.py:115`).  22 is where the sum first passes 1e-9,
+(`lumenairy/analysis/zernike.py:123`).  22 is where the sum first passes 1e-9,
 i.e. where it stops answering the question; `_ZERNIKE_RECURRENCE_MIN_N`
 carries that table.  **Below it nothing moves** -- every mode any shipped
 table (this module names modes to n = 8), any docstring, or any realistic
@@ -245,7 +245,7 @@ Tests: `tests/unit/test_audit2609_b8_analysis_sources.py`.
 
 `_schell_phase_realizations` gains `generator='fft' | 'modes'` and
 `n_pseudo_modes=`, forwarded by `create_gaussian_schell_source` and
-`create_schell_model_source` (`lumenairy/sources/core.py:2135`, `:2183`,
+`create_schell_model_source` (`lumenairy/sources/core.py:2153`, `:2183`,
 `:2456`, `:2646`).  The default stays `'fft'` and is byte-identical.
 
 A stationary field with Gaussian correlation `exp(-|d|^2 / (2 sigma^2))` is
@@ -275,7 +275,7 @@ estimate priced the FFT at `N` while the anti-wrap pad actually runs it at
 (18.7 ms at M = 256, 37.9 at 512, 69.3 at 1024 against the FFT's 154).
 
 `M` defaults to the coherence-cell census `(Lx/sigma_g) * (Ly/sigma_g)`
-(`sources/core.py:2117`), clamped into `[128, 4096]`.  Both constants are
+(`sources/core.py:2129`), clamped into `[128, 4096]`.  Both constants are
 derived, not chosen: for a random-phasor sum the intensity obeys
 `E[I^2]/E[I]^2 = 2 - 1/M` **exactly**, against 2 for the circular-Gaussian
 field the Schell model assumes, so M modes leave a contrast error of exactly

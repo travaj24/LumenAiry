@@ -20,7 +20,7 @@ it by 2.2e-12 -- a change of basis, not a change of answer.
 
 That is fix D5 / `FIX_G8_PROBE`'s finding for the fit's ORDER, restated for its
 BASIS, and it is now stated on the parameter itself
-(`lumenairy/elements/_lens_traced.py:8532`).  Documentation only: no behaviour
+(`lumenairy/elements/_lens_traced.py:8539`).  Documentation only: no behaviour
 moves, and `scripts/record_history_fingerprints.py --check` is OK without a
 re-record, because both fingerprints drop docstrings.
 

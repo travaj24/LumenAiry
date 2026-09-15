@@ -12,7 +12,7 @@ plane the paths were last emitted from makes that zero for every path -- so `'au
 that ended at this surface ...`, a message naming a function the caller never invoked and offering
 `init_paths_from_field` as the remedy. Two ordinary layouts reach it: a flat apertured surface at
 `object_distance = 0`, and a stop placed at a surface (two surfaces at zero thickness). Both work again
-and return the legacy sum with a warning. `lumenairy/propagators/hfpi.py:1141`
+and return the legacy sum with a warning. `lumenairy/propagators/hfpi.py:1217`
 (`_walk_zero_length_reemission`, which reads the axial gaps from the prescription before the walk starts),
 `:1688` (the diffractor list resolved above the estimator decision so both can use it), `:1713`
 (`'auto'`'s third condition), `:1718` (forcing `'physical'` there still refuses -- there is no factor to
@@ -32,7 +32,7 @@ want the field on>`". A caller who had passed `z_output` through a powered presc
 had. The warning is now assembled from the answers the estimator was resolved on and states the reasons
 that applied -- a missing output plane, an element with power (with the 4879x measurement), a
 zero-length re-emission (with the surface index) -- or, for an explicit `normalisation='legacy'`, that it
-was asked for. `lumenairy/propagators/hfpi.py:1888`. The `NOT photometric` phrase every existing matcher
+was asked for. `lumenairy/propagators/hfpi.py:2040`. The `NOT photometric` phrase every existing matcher
 uses is unchanged, and the returned field is untouched. **Migration note:** this warning's text moved in
 5.47.0 and moves again here; a caller filtering on the pre-5.47 wording (`since v5.46`, `Pass
 normalisation='physical' if your surface list ends`) or on 5.47.0's (`Pass z_output=<the plane you want

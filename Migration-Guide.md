@@ -7,10 +7,11 @@ migration recipe -- "I bumped from v4.X to v4.Y, what do I change?".
 
 ## Versions covered
 
-v4.13 through v5.46.  Sections are in version order; the newest is
-[5.46.0 -- adversarial audit remediation](#5460----adversarial-audit-remediation-2026-09-11)
-at the end of this file, which is the largest single batch of
-behaviour changes the library has shipped.
+v4.13 through v5.47.  Sections are in version order; the newest is
+[5.47.0 -- adversarial audit remediation, Wave 4 (2026-09-14)](#5470----adversarial-audit-remediation-wave-4-2026-09-14)
+at the end of this file; the 5.46.0 section before it is the largest single
+batch of behaviour changes the library has shipped, and 5.47.0 is the wave that
+implemented what it deferred.
 
 Only behavior shifts that **require user code changes** or **change
 numerical answers** are listed.  Pure additions (new functions, new
@@ -1540,3 +1541,236 @@ For the `apply_real_lens` family specifically, the living contract is
     [`docs/subsystems/real_lens.md`](docs/subsystems/real_lens.md) section 4
     now both state the per-mm form.  Nothing computational changed -- only the
     claim about it.
+
+---
+
+---
+
+---
+
+## 5.47.0 -- adversarial audit remediation, Wave 4 (2026-09-14)
+
+Wave 4 implements the performance and feature designs 5.46.0 deferred with a written plan
+(the `WP-B*` reports under
+[`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/`](docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/))
+and closes the two findings 5.46.0 left partially fixed; thirteen work packages, each with an
+independent verifier.  Almost everything is opt-in behind a
+new keyword whose default reproduces 5.46.0 byte for byte.  The exceptions are listed first,
+each with the finding ID, what changed, and the way back where one exists.
+
+### Defaults that move
+
+**Maslov lens, non-collimated input (S6; `apply_real_lens_maslov`).**  For a non-collimated
+input with `integration_method` of `'stationary_phase'`, `'local_quadrature'`, or `'auto'`
+where it resolves to `'stationary_phase'`, the returned field changes: the asymptotic saddle
+now expands about the input field's local wavevector instead of the OPD-only stationary
+point.  That is the fix.  Way back: `input_wavevector_saddle=False` on the call (the module
+seam `lumenairy.elements.lenses_maslov._S6_INPUT_WAVEVECTOR_SADDLE` sets a process default).
+`collimated_input=True` also pins the old saddle but re-sizes the pupil chart as well, so it
+is not a way back to the old numbers.  `'quadrature'` and `'levin'` have no saddle and are
+byte-identical.  Collimated inputs are unchanged everywhere.
+
+**Analytic lens, displaced remap (L9; `apply_real_lens` with `surface_model='displaced'` on a
+decentred, tilted or `sag_callable` element -- the default routing for such elements).**  The
+returned field changes for three reasons, in decreasing size: the default launch lattice
+moved from 181 to 257 rays a side (observables move about 1e-4 relative on a smooth input;
+up to 0.38 of the peak on an input that was already aliasing at 181, where the cure is
+`conjugate=`, not a lattice); the exit field is rebuilt by inverting the launch-to-exit map
+instead of triangulating it (differences O(h^2) in the launch pitch; the pupil rim now lands
+on the aperture rather than on the hull, so a truncated pupil gains back about 1 % of
+transmitted power); and the carried envelope is cut at the grid's largest centred window,
+which makes the answer mirror-symmetric at the cost of one input rim row and column.  Way
+back for the lattice only: `displaced_n_side=181` (also `LensNumerics.displaced_n_side`).
+The inversion and the window have no way back; the old answer was asymmetric by construction.
+`apply_real_lens_traced`, `apply_real_lens_maslov`, the pointwise obliquity screen, the
+meridional LUT path, the 1-D symmetric remap and every `'thin'` / `'tangent_facet'` /
+`'tangent_facet_remap'` call are unchanged.
+
+**RCWA, out-of-plane `fff_nv` (H3; `rcwa_jones_2d(formulation='fff_nv')` on a full 3x3 tensor
+cell).**  The operator is now symmetrised over the two Li-2003 factorisation orders, as the
+in-plane operator already was.  Numbers change by up to the spurious form birefringence a
+single order manufactured (2e-4 to 5e-3 of the Jones scale on the audit's cells).  No way
+back; the old answer broke the cell's own mirror symmetry.  In-plane cells are unchanged.
+
+**The Fresnel leg of `propagate_through_system` (K6; `method='fresnel'` and per-element
+`{'method': 'fresnel'}`).**  The leg now evaluates the Fresnel integral directly onto the chain
+grid through the matrix Fourier transform instead of propagating onto the single-FFT natural grid
+and cubic-interpolating back (which cropped the field outside `N dx`, paid the interpolator's MTF,
+and on a non-square sample count scaled the y axis by the x ratio).  Against an explicit
+double-sum oracle the leg reads 5e-16 to 5e-14 where it read 1e-4 to 4e-1.  Size of the move:
+7e-15 where the natural grid already equalled the chain grid, about 1e-4 on a contained field,
+about 1e-1 on a grid-filling one, 2.5e-1 on a non-square input.  A pinned `'fresnel'` chain result
+must be re-baselined; there is no way back (the old answer was the cropped, interpolated one).
+The leg's K6 crop warning is replaced by a window-loss warning of the same class that fires only
+above the chirp-sampling bound `z = N dx^2 / lambda` (below it the matrix Fourier transform's own
+faithful-zone warning covers the replica case); its under-sampled-chirp warning and its `z <= 0`
+refusal are now prefixed by `fresnel_propagate_mft`.  The `'sas'` chain leg and the analytic lens's
+in-glass `'sas'` / `'fresnel'` gap legs keep their resample-back and gate its method on window
+against period: they move only where the requested window fits inside one chirp-Z reconstruction
+period (in practice where the pitch coarsens), gaining a unit MTF there, and are byte-identical
+everywhere else.
+
+**Analytic lens, the 1-D symmetric displaced remap (L9 follow-up; `apply_real_lens` with
+`surface_model='displaced'`, `displaced_mode='remap'` on a rotationally symmetric element).**  The
+remap read the input at the entrance height through an interpolator that returns zero outside the
+grid, so on a converging element the +x rim came back as a crescent of exact zeros while its -x
+mirror carried the full envelope (paired mirror error 3-5 % of the field, worst pixel 0.65 of the
+peak against an exact zero) -- pre-existing, on a CENTRED input, not only a decentred one.  The
+read now uses the same centred window the 2-D remap uses; the answer is mirror-symmetric to 1e-16
+at the price of the outermost input ring on both sides.  No way back.  The lattice-smoothing warning
+now quotes the pitch the trace actually uses (the fan is thrown 3 % wider than the aperture) and
+names a `displaced_n_side` that clears its own bar.
+
+**Maslov propagator, non-collimated inputs (three Wave-4 corrections in `apply_real_lens_maslov` and its
+JAX sibling).**  The pupil chart is sized from the input's MEAN launch direction plus its angular spread
+instead of the second angular moment about zero, so a tilted input no longer inflates the chart threefold:
+tilted inputs return a different (better) field -- at twice the lens NA fidelity against the exact integrator
+goes from 0.000 to 0.91 -- and collimated, converging, diverging, speckled-about-zero and hard-apertured
+inputs are byte-identical; to reproduce a 5.46 number on a tilted input pass the old sizing explicitly,
+`input_na = 3 * sqrt(<v^2>)` of that field's own angular spectrum.  The S6 fallback additionally scores the
+fitted wavevector's SLOPE error (`_K1_DERIV_RESIDUAL_MAX = 1.2`, derived on two charts) beside its value, so a
+hard-edged or heavily speckled input above the bar now falls back to the OPD-only saddle with a warning that
+names `integration_method='quadrature'` as the remedy, where it used to return an answer whose fidelity was
+0.000; `input_wavevector_saddle=True` forces the previous behaviour.  `apply_real_lens_maslov_jax` carries the chief-ray displacement of a non-collimated input (its thin
+screen landed a tilted input 2.7 % short; now 0.2 %), byte-identical on a collimated input;
+`input_wavevector_saddle=False` restores the old screen.
+
+**Universal dispatcher, a single-valued field at a caustic (WP-B7b; `apply_real_lens_universal(method='auto')`
+at an `output_plane_distance` inside the caustic zone, when the field is single-valued AND the prescription is
+inside the sag-screen aberration envelope).**  Those calls now route to `apply_real_lens` + exact angular
+spectrum (`'phase_screen'`) instead of `apply_real_lens_fga`, because FGA converges to the WRONG field at a real
+singlet focus: against a brute-force Rayleigh-Sommerfeld oracle on an exact conic raytrace its fidelity is
+0.13-0.15 under fifteen sampling settings where the screen reaches 0.999, and the screen is closer at every NA
+from 0.048 to 0.26 (rms spot error 7.2 um -> 0.02 um on the measured fixture; wall clock 7.3 s -> 0.7 s).  A
+MULTI-VALUED field still routes to FGA, and so does an over-budget prescription (the H2 gate's own dual-oracle
+measurement forbids the screen there; whether that condition should stay is escalated with the fixture that
+decides it).  `apply_real_lens_auto` is not affected.  Way back: `method='fga'` (`caustic_pad_dof` only
+narrows the zone; inside it the route is unchanged, so it is not a way back).  VERIFY-B7b traced the
+FGA deficit itself to a reference-plane defect in the FGA transfer (the differential base-ray state is left
+on the last surface while the image leg is added from the exit-vertex plane, a spurious phase of k times
+the last surface's sag); with that repaired FGA scores 0.9998 at the same caustic, so this route is a
+mitigation and the repair is the next work package.
+
+**FGA on an even-aspheric prescription (WP-B7b; `apply_real_lens_fga`, `apply_real_lens_fga_vector`,
+`apply_real_lens_universal(method='fga')` at `coarse_stride=1` with `exact_jacobian` at its `None` default or
+`True`).**  The analytic-Jacobian predicate is now the analytic primitive's own domain, so an aspheric departure
+takes the exact single-ray Jacobian instead of the finite-difference 9-ray bundle (the differential transfer
+loses a 2.4e-9 relative FD truncation; trace count 9N -> N), and a field-decentred / tilted / sag-callable conic
+FALLS BACK to FD where it raised `NotImplementedError`.  All-conic prescriptions are byte-identical.  Way back on
+an asphere: `exact_jacobian=False`.
+
+### Values that move in the last bits (no signature change)
+
+* The single-layer RCWA entry points (`rcwa_efficiency_1d`, `rcwa_jones_1d`,
+  `rcwa_jones_1d_segments`, `rcwa_efficiency_2d`, `rcwa_jones_2d`, `rcwa_efficiency_2d_shapes`,
+  `PreparedRCWA2D.solve`) compute the two transmitted / reflected amplitude products through a
+  closed form with one star inverse instead of two.  Worst measured movement 1.7e-15 absolute
+  / 3.1e-15 relative; a test pinning one of them to more than about 13 significant figures
+  needs its value re-recorded.  `RCWAStack`, `berreman_jones_1d`, EME and BOR are
+  byte-identical.
+* Zernike radial polynomials with `n >= 22` (`j >= 253`, beyond every shipped table) are
+  evaluated by the Kintner recurrence instead of the alternating factorial sum, whose own
+  error had reached 1.5e-9 at `n = 22` and 3e-3 at `n = 40`.  Every `n < 22` value is
+  bit-identical.
+* `jacobian='auto'` in the GBD propagator with an ASPHERIC prescription now receives the exact
+  analytic ray-transfer Jacobian instead of the finite-difference fallback (the two agree to
+  about 1e-8 relative; the analytic side is exact).  FGA's predicate followed in WP-B7b -- see
+  "Defaults that move" above, since there it also changes a raise into a fallback.
+
+### Calls that now refuse instead of answering
+
+* `compute_psf(method='fft', N_psf=<less than the pupil size>)` raises.  It returned an
+  `N_pupil x N_pupil` array while reporting the `N_psf` pitch (and mis-scaled `normalize='power'`
+  by `(N_pupil/N_psf)^2`).  Ask for `N_psf >= N_pupil`, or use `method='mft'`, which samples
+  exactly `N_psf` points.
+* The Schell factories with `generator='modes'` refuse a zero, negative, NaN or infinite
+  `coherence_length` (the `'fft'` generator's behaviour is unchanged).
+* `apply_real_lens(wave_propagator='fresnel')` refuses an anamorphic pitch (`dy != dx`) and a non-square
+  grid, as its `'sas'` sibling already did: the in-glass gap leg's resample-back reads one input pitch, so
+  it scaled the y axis by the x ratio (a 40 % field error and a power ratio of exactly `dy/dx`), silently.
+  Use `wave_propagator='asm'` (or `'rayleigh_sommerfeld'`) on such grids.
+* `PMM2DStackHybrid.formulation`, `.cascade`, `.symmetry` and `.truncation` refuse an out-of-vocabulary
+  assignment after construction (they were validated only in the constructor; `st.formulation = 'fff_nv'`
+  silently behaved as `'laurent'` and `st.truncation = 'circle'` quietly solved the rectangular box).  `LensConfig.to_kwargs(strict=True)` is a new opt-in that raises where a requested field would
+  be dropped; the default keeps dropping silently.
+* `create_gaussian_beam(geometry_dtype=np.float32)` with a NumPy-scalar centre now actually runs
+  its geometry in single precision (it silently promoted back to float64 before), so that opt-in
+  call returns different values: within 1.2e-7 of the peak on axis and 3.2e-7 off axis of the
+  float64 answer.
+
+### Warning text
+
+* The HFPI prescription walk's legacy-normalisation warning was rewritten (it now names the
+  condition that failed).  A caller filtering on the 5.46 wording should match on
+  `NOT photometric`.
+* `scalable_angular_spectrum_propagate` (and so `apply_real_lens(wave_propagator='sas')` on an
+  in-glass gap) emits a `RuntimeWarning` below its NEW near-field bound `z >= N dx^2 / lambda_medium`,
+  where its Fresnel-sum step aliases the quadratic chirp exactly as `fresnel_propagate` does (the
+  `'fresnel'` leg has warned there since the K1 guard).  Values are unchanged to the last bit; a
+  caller who relied on the silence was getting an aliased answer (measured 6x to 85x the true power
+  at 0.2 to 0.05 of the bound) and should move to `wave_propagator='asm'`, or filter
+  `RuntimeWarning` from `lumenairy.propagators.sas`.
+* `apply_real_lens_traced_uniform` (`caustic='uniform'`) emits a `RuntimeWarning` when the fold's `zeta` is
+  extrapolated more than `_ZETA_EXTRAPOLATION_MAX = 8.0` times past the two-branch band it was fitted on
+  (the returned field is unchanged; measured, the dark tail's energy is within 5 % below ~5x and +12.5 % /
+  +22.8 % at 9.8x / 454x).  The two-branch band width and the extrapolation ratio join the
+  diagnostics.  At such a fold
+  `amplitude_model='ray_density'` is the better member; at a well-resolved fold with a wide band the uniform
+  completion remains the best of the four.
+* Every warning raised inside the lens family (`apply_real_lens`, `apply_real_lens_traced`,
+  `prepare_real_lens_traced`, the Maslov, GBD, thin, image-map and multibranch bodies) is now
+  attributed to the CALLER's frame -- the first frame outside `lumenairy` -- instead of a fixed
+  depth that was one frame short on every configured (`config=`) call.  `warnings.filterwarnings(...,
+  module=...)` keys on the attributed module, so a filter written against
+  `lumenairy.elements._lens_real` or `..._lens_traced` no longer matches; filter on the category and
+  message, or on the calling module.
+
+### Opt-in additions, default byte-identical
+
+Propagators: `propagate_hfpi_through_prescription(z_output=, normalisation='auto')` (K13),
+`sampler='sobol'` (K22), `rayleigh_sommerfeld_propagate(kernel='spatial-integrated')` (K9; four
+to five decades worse on a sampled smooth field, so only for cell-constant inputs),
+`resample_field(method='chirpz')` (K6; its docstring now states that the unit MTF holds when
+`N_out dx_out == N_in dx_in`).
+Carrier chain: `propagate_traced_carrier_chain(transport='collins', on_collins_sampling=)` (and the
+`propagate_traced_carrier_chain_multi` and `propagate_carrier_referenced` entry points; `dx_out` / `carrier_out` on the single step) --
+the Collins / ABCD-Fresnel integral evaluated by a chirp-Z onto a freely chosen output pitch, so a
+focus readout needs no standoff plane and no replica handling; it selects the transfer-function
+quadrature wherever that one is sampled, so on ordinary legs it is the shipped arithmetic
+bit for bit (each stage's diagnostics record which form ran).  `gap_kernel='exact'` is refused, not
+downgraded, on a Collins leg whose exact-kernel refinement cannot be represented.
+Analysis: `compute_psf(method='mft', dx_psf=)`, `encircled_energy_profile` and the `profile=`
+keyword on the curve and radius functions, `create_gaussian_beam(geometry_dtype=)`, the
+Schell factories' `generator='modes'` / `n_pseudo_modes=`.
+Lenses: `input_wavevector_saddle=` (Maslov), `displaced_n_side=` / `LensNumerics.displaced_n_side`
+(analytic), `fit_basis='zernike'` / `LensNumerics.fit_basis` (traced; a change of basis inside one
+polynomial span cannot move the fitted map, so this buys conditioning only -- the concentric branch's
+Gram goes from numerically singular to the identity, the decentred branch's advantage decays 0.95
+decades per degree and is gone by the shipped order 16).
+Ray tracing: `trace(sphere_normal='analytic')` (1.13x, within 4 ULP of a 60-digit oracle),
+`trace(renormalize='exit')`, `make_rings(pattern='vogel')` / `ray_pattern='vogel'` /
+`through_focus_rms(pattern=)`, the built `JaxPrescription` cache
+(`lumenairy.raytrace.jax_trace.clear_jax_prescription_cache`).
+PMM: the 2-D tensor operator cache (bit-identical; one assembly per geometry).
+Asymptotic family: `_solve_envelope_stationary_batch(scale_relative_stop=)` (off by default: it moves the
+field by 9e-11); the batched kernels evaluate one Chebyshev basis per sweep (1.7-2.4x, byte-identical);
+`aberration_tensor` builds only the modes it reads and memoises its waist probe (1.6x, byte-identical); the
+GBD FFT reconstruction clips its kernel to the beamlets' support (37.7x -> 6.1x the output grid in memory,
+agreement 1e-15 with the windowed sum).
+Hygiene: `LensConfig.to_kwargs(strict=True)`; `propagate_hfpi_freespace_aperture(sampling='stratified' | 'uniform',
+sampler=)`, default uniform byte-identical; `glass.glass_registry_generation()`; `get_glass_index` memoised over
+the whole catalogue resolution (24x on a catalogue name, bit-identical); one branch-band leaf for the four modal
+engines and one row-band schedule for the chunked lens surfaces (bit-identical, kernel census unmoved);
+`lumenairy.LensPhysics` (the nine `apply_real_lens` model-term switches: `fresnel`, `slant_correction`,
+`absorption`, `seidel_correction`, `seidel_poly_order`, `surface_frame`, `displaced_mode`,
+`displaced_obliquity`, `screen_obliquity`) with `apply_real_lens(physics=)` and `LensConfig.physics`, purely
+additive and byte-identical to the keywords (`from_kwargs` / `to_kwargs` / `narrowed_to` reach it; a physics
+request handed to a sibling entry point through `config=` raises and names `apply_real_lens` as the owner);
+`PMM2DStackHybrid.truncation` as a validated property; `doe.create_fresnel_zone_plate`'s outside-the-aperture
+fill written in the transmission's own dtype (bit-identical on every measured arm).
+
+Measured and NOT shipped: the Gegenbauer nodal basis for the PMM wall corner (a Galerkin
+no-op on the fixed polynomial space; the wall-corner cure is the hp mesh), Levinson solves for
+the RCWA Toeplitz inverses (12 to 20 times slower and two decades less accurate than the
+shipped inverse), the chessboard FFT-shift identity (bit-identical only on power-of-two
+grids).

@@ -15,7 +15,7 @@ No default moved, in either item; there is no Migration note.
 sweep, but `_tensor_layer_modes` rebuilt the per-axis projections
 (`_axis_projection` + `pinv`) and the `_proj` sandwiches at **every wavelength
 and every angle**, where the scalar branch cached them (finding **G10(d)**, P2;
-`lumenairy/elements/pmm/twod_jones.py:149`, `lumenairy/elements/pmm/stack2d.py:1101`).
+`lumenairy/elements/pmm/twod_jones.py:149`, `lumenairy/elements/pmm/stack2d.py:1187`).
 
 The source-free half of the assembly is now
 `twod_jones._tensor_projected_ops(ax, ay, x_walls, y_walls, tile_i, ox, oy,
@@ -35,7 +35,7 @@ handed one, it rebuilds `GxF`/`GyF` from `kind` with the same expression in the
 same order (`lumenairy/elements/pmm/twod_jones.py:413`) and goes straight to the
 circular restriction, the fold gate, the block-eig gauge and the eig.
 `PMM2DStackHybrid` caches it beside the scalar `lops`
-(`lumenairy/elements/pmm/stack2d.py:1103`), on the FULL order box so one entry
+(`lumenairy/elements/pmm/stack2d.py:1189`), on the FULL order box so one entry
 serves both truncations (`keep` is applied at use, as `_restrict_lops` already
 did for the scalar branch).
 
@@ -77,7 +77,7 @@ non-vacuity guard that feeds a deliberately perturbed build through and
 requires the perturbation to come out the other side.
 
 One key change came with it: `_geom_key` now carries `formulation`
-(`lumenairy/elements/pmm/stack2d.py:523`).  The cached scalar `lops` never
+(`lumenairy/elements/pmm/stack2d.py:609`).  The cached scalar `lops` never
 depended on it (they carry every rule's operator side by side and the caller
 routes), but the cached tensor operators do -- `EZZ` is `inv([[1/e_zz]])` under
 `'li'` and the direct `[[e_zz]]` otherwise -- and `formulation` is a plain public
@@ -129,7 +129,7 @@ lossless cell/polarization rows, which moves which degree `stabilize=True` -- th
 default on `pmm_efficiency_1d` -- returns.  Nothing in the family is exponential.
 
 `_gll_nodes_weights`'s docstring now carries that reasoning and those numbers
-(`lumenairy/elements/pmm/_core.py:356`), so the next reader of the two functions
+(`lumenairy/elements/pmm/_core.py:357`), so the next reader of the two functions
 the audit named finds the measurement rather than the proposal; the full rate
 ladder is in `fixes/WP-B6_REPORT.md` §2.1.  The recommendation for the corner is
 unchanged from WP-A12 §6 item 4: a genuine hp mesh (geometric grading with a

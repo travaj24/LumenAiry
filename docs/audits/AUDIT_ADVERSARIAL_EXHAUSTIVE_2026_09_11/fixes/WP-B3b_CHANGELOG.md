@@ -24,7 +24,7 @@ hardest on exactly this field because the single-FFT Fresnel output's
 residual chirp sits at Nyquist at the grid edge by construction.
 
 The leg now calls `fresnel_propagate_mft` with the chain's own pitch and
-sample count (`lumenairy/propagators/system.py:838`).  That is the same
+sample count (`lumenairy/propagators/system.py:927`).  That is the same
 Fresnel integral, sampled where the chain wants it, so neither error
 exists.  Refereed against the Fresnel integral written out as an explicit
 double sum over the input samples -- no FFT, no Bluestein, no library
@@ -54,7 +54,7 @@ rescaled by the **x** ratio -- wrong by `Nx/Ny`, with no diagnostic.
 Because there is no resample left to crop, the leg no longer calls
 `_warn_system_resample_crop` (`system.py:359`); the `'sas'` leg still
 does, unchanged.  `fresnel_propagate_mft` carries the same K1
-chirp-sampling guard (`lumenairy/propagators/mft.py:965`) plus its own
+chirp-sampling guard (`lumenairy/propagators/mft.py:972`) plus its own
 faithful-zone warning with period `lambda*|z|/dx_in`, so no diagnostic
 is lost -- see Migration for the two messages whose wording moves.
 
@@ -95,8 +95,8 @@ interpolant and the historical cubic spline:
     method=('chirpz' if N_out * dx_out <= N_in * dx_in else 'spline')
 ```
 
-per axis (`lumenairy/propagators/system.py:880`,
-`lumenairy/elements/_lens_real.py:2789` and `:2806`).  The chirp-Z leg
+per axis (`lumenairy/propagators/system.py:972`,
+`lumenairy/elements/_lens_real.py:2970` and `:2889`).  The chirp-Z leg
 has unit MTF at every frequency the grid represents, but its
 reconstruction is **periodic** with period `N_in*dx_in`, so a window
 wider than one period returns replicas rather than the zeros the spline
@@ -134,8 +134,8 @@ dx = 112.500 um, lambda = 632.8 nm) **both** gaps sit at `dx_new/dx` =
 1 mm N-BK7 plate at dx = 2 um sits at 1.6320 and takes the chirp-Z leg.
 Both directions occur in the shipped suite.
 
-Files: `lumenairy/propagators/system.py:861-886`,
-`lumenairy/elements/_lens_real.py:2767-2795`, `:2799-2812`.
+Files: `lumenairy/propagators/system.py:953-978`,
+`lumenairy/elements/_lens_real.py:2906-2976`, `:2882-2895`.
 Tests: `tests/unit/test_audit2609_b3b_resample_call_sites.py::TestK6TheChirpZGate`
 (11), `::TestK6ByteIdentityWhereTheGateSelectsTheSpline` (7),
 `::TestK6TheImprovementWhereTheGateSelectsChirpZ` (2).
@@ -176,7 +176,7 @@ with a 0.30 cyc/px carrier, **0.993922** (x1.25), 0.998015 (x1.5),
 for a contained one.  With an exact-period `N_out` the reading is 1 to
 -1.1e-16 .. +6.7e-16.
 
-Docstring only: `lumenairy/propagators/mft.py:605-623`.  The module's
+Docstring only: `lumenairy/propagators/mft.py:605-630`.  The module's
 AST and token fingerprints are unchanged, which is
 `scripts/record_history_fingerprints.py --check` confirming it.
 Tests: `tests/unit/test_audit2609_b3b_resample_call_sites.py::TestF6TheUnitMtfIsAPropertyOfTheWindow`
@@ -194,4 +194,4 @@ message and the function's docstring say so.  Behaviour is unchanged --
 the JAX path is still ASM-only and still refuses both, and an
 `method='asm'` JAX chain is byte-identical.
 
-Files: `lumenairy/propagators/system.py:1771-1783`, `:1638-1646`.
+Files: `lumenairy/propagators/system.py:1863-1875`, `:1730-1738`.

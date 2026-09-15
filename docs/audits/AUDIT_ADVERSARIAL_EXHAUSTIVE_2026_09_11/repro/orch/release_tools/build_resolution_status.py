@@ -27,7 +27,7 @@ FIX = AUD / "fixes"
 HERE = pathlib.Path(__file__).resolve().parent
 
 ID_RE = re.compile(r"\b([A-Z]{1,2}\d{1,2})[a-z]?\b")
-WP_LABEL_RE = re.compile(r"A\d{1,2}[ab]?")
+WP_LABEL_RE = re.compile(r"[AB]\d{1,2}[ab]?")
 SEV_RE = re.compile(r"\bP[0-3]\b")
 STATUS_WORDS = [
     ("regression", "REGRESSION"), ("not fixed", "NOT FIXED"), ("not started", "not started"),
@@ -47,8 +47,8 @@ def cells(line: str) -> list[str]:
 def ids_in(cell: str) -> list[str]:
     """Finding IDs in a table cell.  Work-package labels (WP-A2, VERIFY-A13, A15b, A10..A19) are stripped first;
     the analysis partition's own findings are A1..A7, so single-digit A-tokens are kept."""
-    cell = re.sub(r"(?:WP|VERIFY)-A\d{1,2}[ab]?", " ", cell)
-    cell = re.sub(r"A\d{2}[ab]?", " ", cell)
+    cell = re.sub(r"\b(?:WP|VERIFY)-[AB]\d{1,2}[ab]?\b", " ", cell)
+    cell = re.sub(r"\bA\d{2}[ab]?\b", " ", cell)
     return [t for t in ID_RE.findall(cell) if not SEV_RE.fullmatch(t)]
 
 
@@ -97,16 +97,20 @@ def parse_wp_reports() -> dict[str, list[tuple[str, str, str]]]:
     """ID -> [(WP, status, first-cell text)] from every WP-*_REPORT.md summary table."""
     claims: dict[str, list[tuple[str, str, str]]] = defaultdict(list)
     for f in sorted(FIX.glob("WP-*_REPORT.md")):
-        wp = re.match(r"WP-(A\d+[ab]?(?:_SWEEP\d)?)_REPORT", f.name).group(1)
+        wp = re.match(r"WP-([AB]\d+[ab]?(?:_SWEEP\d)?)_REPORT", f.name).group(1)
         for line in f.read_text(encoding="utf-8", errors="replace").splitlines():
             if not line.startswith("|"):
                 continue
             c = cells(line)
             if len(c) < 3 or "coordinator" in c[0].lower():
                 continue
+            k = 0
             fids = ids_in(c[0])
-            if not fids or c[0].lower().startswith(("id", "#", "---")):
+            if not fids and re.fullmatch(r"\d+[a-z]?", c[0].strip("* ")) and len(c) > 3:
+                k, fids = 1, ids_in(c[1])
+            if not fids or c[k].lower().startswith(("id", "#", "---")):
                 continue
+            c = c[k:]
             labels = {lab for _, lab in STATUS_WORDS}
             # The status cell is column 2 in most packages, column 3 where column 2 carries the severity or
             # a one-line description (WP-A5, WP-A11).
@@ -123,7 +127,7 @@ def parse_wp_reports() -> dict[str, list[tuple[str, str, str]]]:
 def parse_verify_reports() -> dict[str, list[tuple[str, str]]]:
     verdicts: dict[str, list[tuple[str, str]]] = defaultdict(list)
     for f in sorted(FIX.glob("VERIFY_WP-*.md")):
-        wp = re.match(r"VERIFY_WP-(A\d+[ab]?)", f.name).group(1)
+        wp = re.match(r"VERIFY_WP-([AB]\d+[ab]?)", f.name).group(1)
         for line in f.read_text(encoding="utf-8", errors="replace").splitlines():
             if not line.startswith("|"):
                 continue
@@ -151,7 +155,7 @@ def commits_by_wp() -> dict[str, list[str]]:
     by: dict[str, list[str]] = defaultdict(list)
     for line in out.splitlines():
         h, _, subj = line.partition("|")
-        for m in re.finditer(r"\b(?:WP-|VERIFY-)?(A\d+[ab]?)\b", subj):
+        for m in re.finditer(r"\b(?:WP-|VERIFY-)?([AB]\d+[ab]?)\b", subj):
             if re.search(r"\b(WP|VERIFY)-" + re.escape(m.group(1)) + r"\b", subj):
                 by[m.group(1)].append(h)
     return by
@@ -171,7 +175,7 @@ def build() -> tuple[str, dict]:
               for k, v in raw_claims.items() if re.match(r"[A-Z]+", k).group(0) in prefixes}
     claims = {k: v for k, v in claims.items() if v}
     verdicts = parse_verify_reports()
-    verified_wps = {re.match(r"VERIFY_WP-(A\d+[ab]?)", f.name).group(1) for f in FIX.glob("VERIFY_WP-*.md")}
+    verified_wps = {re.match(r"VERIFY_WP-([AB]\d+[ab]?)", f.name).group(1) for f in FIX.glob("VERIFY_WP-*.md")}
     commits = commits_by_wp()
     rows, gaps, counts = [], [], defaultdict(int)
     for fid, f in findings.items():
@@ -186,8 +190,11 @@ def build() -> tuple[str, dict]:
             gaps.append(fid)
             counts["unclaimed"] += 1
         else:
-            key = "fixed" if all(st.startswith(("fixed", "added", "mostly", "verified")) for _, st, _ in cl) else \
-                  "partial/deferred" if any(st.startswith(("partial", "deferred", "not started", "not done")) for _, st, _ in cl) else "other"
+            # A later wave that re-addresses a finding supersedes the earlier wave's claim (WP-B1 closes S6 after WP-A4's partial).
+            wave = max(wp[0] for wp, _, _ in cl)
+            latest = [c for c in cl if c[0][0] == wave]
+            key = "fixed" if all(st.startswith(("fixed", "added", "mostly", "verified")) for _, st, _ in latest) else \
+                  "partial/deferred" if any(st.startswith(("partial", "deferred", "not started", "not done")) for _, st, _ in latest) else "other"
             counts[key] += 1
         counts["verifier:" + (verdict or "none")] += 1
         rows.append(f"| {fid} | {f['sev']}{' ✔' if f['auditor_verified'] else ''} | {f['section'].split(' ', 1)[0]} | "
@@ -200,7 +207,8 @@ def build() -> tuple[str, dict]:
         f"`AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11.md`, the work-package reports (`fixes/WP-*_REPORT.md`), the "
         f"independent verification reports (`fixes/VERIFY_WP-*.md`) and the commit log of branch `audit-fixes-2026-09`.",
         "",
-        "Status is the work package's own summary-table cell; verdict is the strictest cell the verifier gave that ID "
+        "Status is the work package's own summary-table cell (every wave's claim is listed; the counts use the latest wave's, "
+        "so a Wave-4 package that closes a finding left partial in Wave 3 counts it as fixed); verdict is the strictest cell the verifier gave that ID "
         "(a verifier's NOT FIXED / REGRESSION rows were followed by a ruled follow-up — see the report's Follow-up section).",
         "",
         "## Counts", "",

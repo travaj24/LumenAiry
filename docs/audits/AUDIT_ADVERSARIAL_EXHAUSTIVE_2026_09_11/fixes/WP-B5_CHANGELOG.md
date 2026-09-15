@@ -13,7 +13,7 @@ fast path cannot fire there (both `A22` and `B11` are non-zero), so it was assem
 `2N x 2N` blocks -- twelve matrix products and TWO `_guarded_inverse` calls -- to use two of
 them on one or two columns.
 
-New `_redheffer_star_rt` (`lumenairy/elements/rcwa/_core.py:3343`) computes those two
+New `_redheffer_star_rt` (`lumenairy/elements/rcwa/_core.py:3191`) computes those two
 products directly.  With `D = (I - B11 A22)^-1`, `u = A21 c` and `z = D B11 u`, the
 push-through identity `(I - A22 B11)^-1 = I + A22 D B11` removes the second inverse
 outright and the star reduces to
@@ -21,11 +21,11 @@ outright and the star reduces to
     S11 c = A11 c + A12 z        S21 c = B21 (u + A22 z)
 
 -- seven mat-vecs, ONE `2N` product and ONE inverse.  Wired at
-`oned.py:721` (planar TE/TM fast path), `oned.py:756` (the 2N path of `rcwa_efficiency_1d`),
-`oned.py:1153` (`rcwa_jones_1d` / `rcwa_jones_1d_segments`, both polarizations in one
-block), `twod.py:1253` (`rcwa_efficiency_2d`), `twod.py:1377` (`PreparedRCWA2D.solve`),
-`twod.py:2035` (`rcwa_jones_2d`, in-plane and full-3x3), `twod.py:2418`
-(`rcwa_efficiency_2d_shapes`) and `_core.py:2893` (`_symmetric_solve_rt`, the single-layer
+`rcwa/oned.py:721` (planar TE/TM fast path), `rcwa/oned.py:756` (the 2N path of `rcwa_efficiency_1d`),
+`rcwa/oned.py:1153` (`rcwa_jones_1d` / `rcwa_jones_1d_segments`, both polarizations in one
+block), `rcwa/twod.py:1253` (`rcwa_efficiency_2d`), `rcwa/twod.py:1377` (`PreparedRCWA2D.solve`),
+`rcwa/twod.py:2035` (`rcwa_jones_2d`, in-plane and full-3x3), `rcwa/twod.py:2418`
+(`rcwa_efficiency_2d_shapes`) and `rcwa/_core.py:2741` (`_symmetric_solve_rt`, the single-layer
 even-parity fold).
 
 Measured on the 1-D metallic ladder (Ag `n = 0.135 + 3.99j` at 633 nm, period 1 um, depth
@@ -74,13 +74,13 @@ inverse was ever the refusing one (`rcond_refuse` is armed only on
 shortcuts are taken on the same concrete tests as before -- a chain that paid no star
 inverse still pays none.
 
-DELIBERATELY NOT APPLIED to `_core.py:2932` `_symmetric_cascade_rt`: `elements/pmm/stack2d.py`
+DELIBERATELY NOT APPLIED to `rcwa/_core.py:2780` `_symmetric_cascade_rt`: `elements/pmm/stack2d.py`
 and `pmm/twod_jones.py` fold their own cascades through it, and closing its last star on the
 sources would move the PMM engines' last bits from inside the RCWA package.  Pinned by a
 test.
 
-Files: `lumenairy/elements/rcwa/_core.py:3343` (new `_redheffer_star_rt`), `:2893`,
-`:5067` (`__all__`); `oned.py:41,:721,:756,:1153`; `twod.py:38,:1253,:1377,:2035,:2418`.
+Files: `lumenairy/elements/rcwa/_core.py:3191` (new `_redheffer_star_rt`), `:2893`,
+`:5067` (`__all__`); `rcwa/oned.py:41,:721,:756,:1153`; `rcwa/twod.py:38,:1253,:1377,:2035,:2418`.
 Tests: `tests/unit/test_audit2609_b5_rcwa_eme_bor.py::test_d2_closed_form_matches_the_independent_star_oracle`,
 `::test_d2_closed_form_matches_the_oracle_on_the_metallic_chain`,
 `::test_d2_a_single_layer_solve_records_one_star_inverse_not_two`,
@@ -101,12 +101,12 @@ difference, and mirroring any cell did not mirror its Jones matrix.
 
 `_li_convolutions_2d_tensor_full` (`lumenairy/elements/rcwa/twod.py:542`) now returns the
 mean of the two orders, with the single order split out as `_li_tensor_full_l2l1`
-(`twod.py:585`) and still reachable through `symmetrize=False`.  The 3x3 transpose is the
+(`rcwa/twod.py:585`) and still reachable through `symmetrize=False`.  The 3x3 transpose is the
 in-plane argument with the component permutation `(x, y, z) -> (y, x, z)`: `exx<->eyy`,
 `exy<->eyx`, `exz<->eyz`, `ezx<->ezy`, `ezz` alone, the pixel grid transposed and the
 order-label columns swapped, so that `T P L2L1(eps) P T = L1L2(P eps^T P)` and the nine
 blocks come back in the same retained-order basis.  The mean is taken on the RAW `ehat`
-blocks, which puts the caller's `l3-` `E_z` fold after it (`twod.py:1977`) -- the mean of
+blocks, which puts the caller's `l3-` `E_z` fold after it (`rcwa/twod.py:1977`) -- the mean of
 two Schur complements is not the Schur complement of the mean.
 
 Measured on a uniaxial pillar (`n_o = 2.0`, `n_e = 2.6`, director polar 40 deg) in air,
@@ -155,7 +155,7 @@ Tests: `tests/unit/test_audit2609_b5_rcwa_eme_bor.py::test_d3_offplane_fff_nv_ke
 
 WP-A14 deferred a Levinson / Gohberg-Semencul route for the two genuinely Toeplitz inverses
 of the 1-D solve -- `inv([[1/eps]])` (`lumenairy/elements/rcwa/oned.py:135`) and
-`inv([[eps]])` in the planar TM fast path (`oned.py:708`) -- and named a cheaper 80 %:
+`inv([[eps]])` in the planar TM fast path (`rcwa/oned.py:708`) -- and named a cheaper 80 %:
 `scipy.linalg.solve_toeplitz` wherever the inverse is immediately multiplied.  Both sites
 were measured against that route and both KEEP the explicit inverse.  Nothing in the
 library changed; what follows is the evidence, so the decision is re-openable rather than

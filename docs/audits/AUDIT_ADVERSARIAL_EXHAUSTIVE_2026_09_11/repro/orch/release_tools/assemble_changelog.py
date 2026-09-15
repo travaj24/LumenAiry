@@ -24,6 +24,34 @@ HERE = pathlib.Path(__file__).resolve().parent
 
 # Release-block order: the apply_real_lens family first (the audit's focus), then the rest of the physics,
 # then infrastructure, packaging and documentation.
+ORDER_547 = [
+    ("B1", "Maslov: the asymptotic saddle follows the input field's local wavevector (S6 proper)"),
+    ("VERIFY_WP-B1", "Maslov S6: verifier follow-ups"),
+    ("B2", "Analytic lens: the 2-D displaced remap -- symmetric window, structured inversion, displaced_n_side (L9)"),
+    ("VERIFY_WP-B2", "Analytic remap: verifier follow-ups"),
+    ("B10", "Traced lens: a disc-orthogonal (Zernike) fit basis, opt-in"),
+    ("VERIFY_WP-B10", "Traced lens fit basis: verifier follow-ups"),
+    ("B3", "Propagator kernels: HFPI output plane and Sobol sampler, the pixel-integrated RS kernel, the chirp-Z resampler"),
+    ("VERIFY_WP-B3", "Propagator kernels: verifier follow-ups"),
+    ("B3b", "Propagator call sites: the Fresnel and SAS legs of system.py and the analytic lens gaps"),
+    ("VERIFY_WP-B3b", "Propagator call sites: verifier follow-ups"),
+    ("B4", "Traced-carrier chain: Collins / ABCD-Fresnel transport with a Bluestein output grid"),
+    ("VERIFY_WP-B4", "Carrier transport: verifier follow-ups"),
+    ("B7", "Asymptotic family: Y4 performance, FGA routing, the uniform asymptotics, GBD kernel clipping"),
+    ("VERIFY_WP-B7", "Asymptotic family: verifier follow-ups"),
+    ("B7b", "FGA / uniform asymptotics: the caustic route, the fold envelope, the analytic-Jacobian predicate"),
+    ("VERIFY_WP-B7b", "FGA / uniform asymptotics: verifier follow-ups"),
+    ("B9", "Ray tracing: the performance items and the aspheric analytic Jacobian"),
+    ("VERIFY_WP-B9", "Ray tracing: verifier follow-ups"),
+    ("B5", "RCWA / EME / BOR: Toeplitz solves, the two-interface closed form, off-plane fff_nv symmetrisation"),
+    ("VERIFY_WP-B5", "RCWA / EME / BOR: verifier follow-ups"),
+    ("B6", "PMM: the k0-free tensor operator cache; the Gegenbauer basis measured and not shipped"),
+    ("VERIFY_WP-B6", "PMM: verifier follow-ups"),
+    ("B8", "Analysis and sources: PSF memory and MFT sampling, encircled-energy profile, Zernike recurrence, Gori pseudo-modes"),
+    ("VERIFY_WP-B8", "Analysis and sources: verifier follow-ups"),
+    ("B11", "Hygiene pass: consolidations and the small deferred items"),
+]
+
 ORDER = [
     ("A2", "Analytic `apply_real_lens` and its displaced-model siblings"),
     ("A3", "Traced lens family (`apply_real_lens_traced`, caustic siblings)"),
@@ -125,7 +153,8 @@ def assemble(version: str, date: str, intro: str | None) -> tuple[str, list[str]
     parts = [f"## [{version}] — {date}", ""]
     if intro:
         parts += [intro.rstrip(), ""]
-    for wp, area in ORDER:
+    order = ORDER_547 if str(version).startswith('5.47') else ORDER
+    for wp, area in order:
         f = FIX / (f"{wp}_CHANGELOG.md" if wp.startswith("VERIFY_") else f"WP-{wp}_CHANGELOG.md")
         if not f.exists():
             notes.append(f"missing: {f.name} ({area})")

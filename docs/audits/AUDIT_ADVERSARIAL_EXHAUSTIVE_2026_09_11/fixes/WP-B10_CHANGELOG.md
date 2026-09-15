@@ -15,7 +15,7 @@ branch, concentric otherwise), at the same total degree.
 **What it changes is the conditioning of the solve, and nothing else.**  The
 Zernike set of total degree `<= order` and the tensor-Chebyshev total-degree
 set are two bases of the SAME space -- `(order+1)(order+2)/2` terms either way,
-verified by rank and by projection (`_lens_traced.py:3756`) -- so the same
+verified by rank and by projection (`_lens_traced.py:3763`) -- so the same
 samples with the same weights minimise the same residual over the same space
 and return the same polynomial.  Measured end to end on niche D7's `K = -n^2`
 Fermat singlet against its analytic decentre-invariant oracle, the decentred

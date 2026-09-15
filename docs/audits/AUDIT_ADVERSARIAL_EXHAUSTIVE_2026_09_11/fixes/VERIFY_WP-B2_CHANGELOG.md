@@ -12,7 +12,7 @@ independent re-verification of WP-B2 (`VERIFY_WP-B2.md`).  Files:
 
 The 1-D symmetric exit-plane remap carries the input envelope by reading it at
 each exit point's ENTRANCE height, `X * scale` with `scale = h_in / r_out`
-(`_lens_real.py:1918`).  A converging element walks the ray inward, so
+(`_lens_real.py:1926`).  A converging element walks the ray inward, so
 `scale > 1` and that read runs off the **+x** end of the field axis
 `(arange(N) - N/2) * dx` while its mirror -- one whole sample further out on
 -x -- is still on the grid.  `map_coordinates(mode='constant')` returns `cval`
@@ -31,7 +31,7 @@ of n = 1.5093 glass) was enough.
 
 The remap now carries the envelope over the largest CENTRED window the caller's
 grid holds -- `|X * scale| <= x[-1]`, `|Y * scale| <= y[-1]`
-(`_lens_real.py:1948`) -- and the same two readings are **1.18e-16** and
+(`_lens_real.py:1956`) -- and the same two readings are **1.18e-16** and
 **1.01e-16** with zero pixels off.  With the input field itself decentred by
 +-0.45 mm, the +d / -d pair mirrors to 1.16e-16 (was 3.56e-02).
 
@@ -75,7 +75,7 @@ fixes is the exact defect class this campaign exists to close -- and is the one
 WP-B2's own §2.6 says it removed a prototype warning to avoid.
 
 The fan factor is now one module constant, `_DISP_REMAP_2D_FAN_FACTOR = 1.03`
-(`_lens_real.py:2066`), read by `_build_displaced_ray_map_2d` (which throws the
+(`_lens_real.py:2074`), read by `_build_displaced_ray_map_2d` (which throws the
 fan) and by `_warn_if_remap_lattice_smooths` (which scores it against the field
 pitch), so the two cannot drift apart again.  The same two calls now name
 **645** and **1289**, whose real pitches are 15.99 um and 8.00 um.  The message
@@ -94,7 +94,7 @@ before (i.e. marginally more often).  No output field moves.
 comment (including its pitch column: 55.6 / 39.1 / 19.5 / 9.8 um ->
 **57.2 / 40.2 / 20.1 / 10.1 um**), `_normalise_displaced_n_side`'s refusal
 message and `LensNumerics.displaced_n_side`'s docstring
-(`lens_config.py:430`) all stated the pitch as `2 * r_aperture / (n - 1)`.  All
+(`lens_config.py:440`) all stated the pitch as `2 * r_aperture / (n - 1)`.  All
 now state `2 * 1.03 * r_aperture / (n - 1)` and say why the factor is there.
 `_build_displaced_ray_map_2d`'s docstring no longer describes the default as
 "a fixed 181".

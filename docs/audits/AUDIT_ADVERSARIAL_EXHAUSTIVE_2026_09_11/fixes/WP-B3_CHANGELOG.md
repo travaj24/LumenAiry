@@ -22,12 +22,12 @@ photometric amplitude at all, and said so in a `RuntimeWarning`.
 
 `z_output` (new, `float | None`, default `None` = today's behaviour)
 closes the walk with a `propagate_to_plane` hop to that plane
-(`hfpi.py:1790–1803`). The hop is taken in the medium the prescription
+(`hfpi.py:1941–1954`). The hop is taken in the medium the prescription
 puts after its last surface (`glass_after`, so an immersed image space is
 handled; a `'MIRROR'` marker resolves to the surface's own
 `glass_before`, which is what reflection does to the medium, and folds
 the direction instead). `normalisation` gains `'auto'` and becomes the
-default (`hfpi.py:1456`): it resolves to `'physical'` when the walk has
+default (`hfpi.py:1572`): it resolves to `'physical'` when the walk has
 both an output plane to close on AND legs that are free space, and to
 `'legacy'` — with the existing warning — otherwise.
 
@@ -59,7 +59,7 @@ know. Measured through a 19.41 mm N-BK7 thin singlet (object 60 mm,
 image plane and **13.9×** at half that distance, while the spot metrics
 stay in the right ballpark (r50 15.9 µm against 17.9 µm, r84 25.3 µm
 against 31.9 µm). So `'auto'` refuses to pick `'physical'` there
-(`_walk_legs_are_free_space`, `hfpi.py:1075`), and forcing it warns with
+(`_walk_legs_are_free_space`, `hfpi.py:1151`), and forcing it warns with
 those numbers — shape is usable, absolute scale is not.
 
 Cost: the closing hop is one `propagate_to_plane`, measured 1.19–1.32× a
@@ -84,11 +84,11 @@ default spelling changed from `'legacy'` to `'auto'`, which resolves to
 ### Added -- propagators/hfpi: `sampler='sobol'` for the stratified HFPI source draw (K22, P2)
 
 `init_paths_stratified` gains `sampler` (`{'jittered', 'sobol'}`, default
-`'jittered'` = unchanged; `hfpi.py:1314`), threaded through
-`propagate_hfpi_through_prescription` (`hfpi.py:1453`). `'sobol'` places
+`'jittered'` = unchanged; `hfpi.py:1430`), threaded through
+`propagate_hfpi_through_prescription` (`hfpi.py:1569`). `'sobol'` places
 `n_paths` scrambled Sobol points in the same 4-D
 `(pixel_x, pixel_y, cos theta, phi)` cube the jittered sampler
-stratifies (`_sobol_cube_draw`, `hfpi.py:1141`), with the Owen scramble
+stratifies (`_sobol_cube_draw`, `hfpi.py:1257`), with the Owen scramble
 seeded from `rng` so the bundle stays a pure function of it. `n_paths` is
 honoured **exactly** — a low-discrepancy sequence has no stratification
 grid to round the count onto, so 1000 paths means 1000 paths where the
@@ -112,7 +112,8 @@ exponent to within 0.02):
 Fitted over the last five points, `err ~ N^-p` gives **p = 0.537
 (jittered) and p = 0.557 (sobol)** — both Monte-Carlo, neither the
 `O(N^-1)` a smooth integrand would give. The error ratio between the two
-samplers at matched path count is **1.00–1.13×** in Sobol's favour. The
+samplers at matched path count is **≈1.0–1.1×** in Sobol's favour and
+fixture-dependent (1.00–1.13× on this fixture, 1.00–1.06× on VERIFY-B3's second one). The
 16× error ratio, measured over five independent three-seed groups, is
 4.349–4.533 (jittered) and 4.628–4.719 (sobol) against the 4.0 that
 `O(N^-1/2)` predicts and the 16.0 that `O(N^-1)` would. The integrand has
@@ -131,7 +132,7 @@ ratio).
 
 **Migration.** None — the default is the jittered sampler and its draws
 are byte-identical (the existing block moved verbatim into
-`_jittered_cube_draw`, `hfpi.py:1196`). `sampler='sobol'` with an
+`_jittered_cube_draw`, `hfpi.py:1312`). `sampler='sobol'` with an
 explicit `n_strata_xy` / `n_strata_dir` raises rather than ignoring them,
 and a non-power-of-two `n_paths` warns, because a Sobol sequence is
 balanced only on its `2**m` prefixes.
@@ -273,7 +274,7 @@ reconstruction is **periodic** with period `N_in*dx_in`, so an output
 window wider than the input extent returns replicas rather than the
 zeros the spline pads with — measured power ratio exactly 4.000000 for a
 2× window, where the spline gives 1.000000. That case now warns, reusing
-the MFT family's faithful-zone diagnostic (`mft.py:742`), which grew a
+the MFT family's faithful-zone diagnostic (`mft.py:769`), which grew a
 per-axis `N_out_y` for the non-square extent-preserving default
 (`mft.py:95`). And neither leg anti-aliases on down-sampling.
 
