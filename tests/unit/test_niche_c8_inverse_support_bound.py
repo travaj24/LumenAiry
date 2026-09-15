@@ -95,7 +95,30 @@ _BASE_KW = dict(wavelength=_WL, amplitude_model='ray_density',
                 preserve_input_phase='remap', remap_sampling='full',
                 parallel_amp=False, on_undersample='silent',
                 on_noncollimated='silent', on_aperture_beam='silent',
-                ray_subsample=4, fit_radius_beam_factor=2.0)
+                ray_subsample=4, fit_radius_beam_factor=2.0,
+                # 2026-09-14.  The STIMULUS is stated, not inherited.  These
+                # fixtures manufacture their lobe with the order-10 decentred
+                # ray fit this file was calibrated against; WP-A26 (bbb6c02d)
+                # re-derived the library default ``_DECENTRED_FIT_POLY_ORDER``
+                # 10 -> 16 for a different reason (the exit-slope error off
+                # axis, niche D7) and at 16 the fit no longer extrapolates far
+                # enough to manufacture anything: the halo beyond 3 w reads
+                # 1.522e-04 instead of 4.595e-02 and the fail-before arm stops
+                # proving anything.  Measured ladder on the _GHOST fixture
+                # (validation/probe_known_reds/probe_c8_fit_order.py, halo
+                # beyond 3 w with the C8 bound off / on):
+                #
+                #   order      6         8        10        12        14  16
+                #   unbound  1.463e-4  1.463e-4  4.595e-2  1.463e-4  1.533e-4  1.522e-4
+                #   bounded  1.463e-4  1.463e-4  8.913e-4  1.463e-4  1.533e-4  1.522e-4
+                #
+                # so the defect class is reachable at 10 and at 10 only on this
+                # geometry -- which is why the order is a stated parameter of
+                # the fixture rather than a default to be inherited.  Pinning
+                # it also makes every cell of this file one comparison at one
+                # fit order.  The library default is NOT what is under test
+                # here; the support bound and the halo self-check are.
+                decentred_fit_poly_order=10)
 
 
 def _call(spec, bound=True, feather=None, launch=True, guard=False,

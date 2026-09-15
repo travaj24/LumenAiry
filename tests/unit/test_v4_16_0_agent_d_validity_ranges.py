@@ -45,9 +45,31 @@ def _reset_validity_warned():
     """Reset the warn-once memo between tests so each test starts
     from a clean slate (otherwise the second test sees the first
     test's warned-state and skips its own warning).
+
+    2026-09-14.  This drains through ``clear_asm_caches()`` -- the library's
+    own registered drain -- rather than clearing ``_validity_warned`` alone,
+    because the warn-once set is NOT the only state that decides whether a
+    validity warning is emitted.  ``get_glass_index`` memoises the whole
+    ``(name, wavelength)`` evaluation in ``_glass_value_cache`` and returns on
+    a hit BEFORE it reaches ``_maybe_warn_outside_validity``
+    (``lumenairy/glass.py``, the value-memo block above the validity call).
+    That is warning-neutral by construction ONLY while the two are emptied
+    together, which is exactly what the memo's own rationale says and what
+    ``_clear_glass_caches`` does.  Clearing one of the pair produces a state
+    the library's design excludes: the warn-once set says "not yet warned"
+    while the value cache answers before the warning site is reached.
+
+    That is what made ``test_validity_warning_is_one_shot_per_pair`` red only
+    when it ran AFTER ``tests/unit/test_audit_w4_glass_registry_meshgrid.py``
+    -- that file calls ``get_glass_index('N-BK7', 200e-9)``, leaving the pair
+    memoised, and this file's partial reset did not drop it, so the five calls
+    here produced 0 warnings instead of 1.  Order-dependent, and shared mutable
+    state, not a warning defect.
     """
+    la.clear_asm_caches()
     _validity_warned.clear()
     yield
+    la.clear_asm_caches()
     _validity_warned.clear()
 
 
