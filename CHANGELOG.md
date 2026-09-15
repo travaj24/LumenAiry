@@ -452,6 +452,48 @@ bit-identical to the NumPy one on all six surface classes; the guard fires on a 
 immersed-exit prescription at each of the four sites AND does not fire on the
 air-terminated control.  29 ids, 62 s.
 
+### Added -- a durable fail-before for the C8 inverse-support bound at the SHIPPED decentred-fit order
+
+The c7 / c8 halo fixtures state `decentred_fit_poly_order=10` -- the pre-WP-A26 default -- so
+nothing exercised the order the library ships.  VERIFY-WP-B14 F1 measured that the defect
+class IS still reachable at the default (301x and 3164x on the 768^2 `_GHOST` geometry) and
+declined to turn it into a test: a 27-cell neighbourhood around the strongest cell reads
+ratio 1.00 in 23 of 27, and the sweep cost ~14 min.
+
+A 432-cell sweep over `alpha` x `cx` x `z` x `fit_radius_beam_factor` at `n = 256` and
+`n = 512`, plus four fine scans, confirms there is **no monotone geometry parameter**:
+
+| axis | reading |
+|---|---|
+| `fit_radius_beam_factor` 1.25 / 1.50 / 2.00 / 2.50 | 1.0 / 1793.9 / 1.0 / 1.3 |
+| `cx` 1.30 .. 1.70 mm in 0.10 mm steps | 3.5 / 1.0 / 1793.9 / 1.0 / 170.7 |
+| `alpha` 3.45 / 3.50 / 3.55 | 1.0 / 1793.9 / 1.0 |
+| `n` 128 / 192 / 256 / 512 / 768 | 1.0 / 1.0 / 12.9 / 490.9 / 1.0 |
+
+Whether the order-16 fit's extrapolated inverse folds back into the bright beam is a chaotic
+function of which traced samples the ray grid happens to contain.  The parameter the effect
+IS monotone in is the **halo annulus radius**, and it is monotone for a reason: the bound
+zeroes exit pixels with no traced ray behind them, so the further out the annulus the larger
+the fraction of it outside the traced footprint.
+
+`tests/unit/test_wave5_e_c8_default_order.py` pins that ladder.  Of the 216 cells swept at
+`n = 256`, 47 trip in three or more annuli; the one it uses is the one that also trips at
+`n = 512`, i.e. the cheapest sampling at which the stimulus survives a doubling.  Suppression
+`on/off` per annulus, identical to the printed digits on both builds:
+
+| r > | 2.0 w | 2.5 w | 3.0 w | 3.5 w | 4.0 w | 4.5 w | 5.0 w |
+|---|---|---|---|---|---|---|---|
+| n = 256 | 0.596 | 0.596 | 7.7e-2 | 9.0e-3 | 9.0e-3 | 2.4e-5 | 1.8e-7 |
+| n = 512 | 0.216 | 2.3e-2 | 2.0e-3 | 1.7e-4 | 1.3e-5 | 1.0e-6 | 7.5e-8 |
+
+Five of seven rungs clear 10x at 256 and seven of seven at 512, both monotone, for ~2 s of
+element calls instead of ~14 min.  Four ids, 12 s (Windows) / 19 s (WSL).  Nothing states a
+fit order: the calls run at whatever `_DECENTRED_FIT_POLY_ORDER` ships.  The premise gate
+first re-runs the published order-10 `_GHOST` control -- which must still read 51.5x, as it
+does here and in three of VERIFY-WP-B14's `git archive` trees -- so "the fit default moved"
+and "the bound is dead" cannot be confused: the first skips with every candidate's reading,
+the second is a hard failure.
+
 ## [5.47.0] — 2026-09-14
 
 This release is the fourth wave of the 2026-09-11 adversarial audit's remediation
