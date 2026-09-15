@@ -1,7 +1,7 @@
 <!-- lumenairy-history-doc
 module: lumenairy/propagators/hfpi.py
 ast_sha256: 53935e9745803d949c9cd88d5b82d05a822ac6ff73d9ef796722f63576b8eeec
-token_sha256: e9f13c9b20c255b1c2f51911dc30a53739e0b5895d04f1b118b681bd0ddf78db
+token_sha256: e53eef070698133990d9db8d93f7602db62494c1fbe8bba57fa0f0fed9cdf22e
 pre_relocation_lines: 1658
 recorded_by: WP-A17 SWEEP-1 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
@@ -9,6 +9,7 @@ re_recorded: 2026-09-13 -- WP-B3 (audit K13 + K22): propagate_hfpi_through_presc
 re_recorded: 2026-09-13 -- WP-B3: the normalisation selector's refusal message states the free-space-legs half of the 'auto' rule that the docstring already carried
 re_recorded: 2026-09-13 -- VERIFY-WP-B3 (audit K13): normalisation='auto' gains its third condition -- _walk_zero_length_reemission declines the photometric branch where a stop coincides with the plane the paths were last emitted from (which previously raised out of _reemission_measure), the forced-'physical' refusal moves to the walk's own altitude, and the legacy warning names the condition that actually failed instead of always the missing output plane; every array byte-identical
 re_recorded: 2026-09-13 -- WP-B11a: the Collins readout's K1 applicability window stated on the public transport docstring (item 20); PMM2DStackHybrid's formulation/cascade/symmetry refuse an out-of-vocabulary assignment (item 19); sampling= on the free-space HFPI pair (item 12)
+re_recorded: 2026-09-14 -- Wave-5 item D (CI run 34914295323): DIGEST-SCHEME change, not a code change -- token_fingerprint now feeds an f-string to the digest as ONE STRING record holding its exact source text instead of the running tokenizer's FSTRING_START/FSTRING_MIDDLE/FSTRING_END run, so the recorded value is a property of the file rather than of the interpreter that read it; PEP 701 made CPython 3.12 tokenize f-strings differently from 3.11, these digests were recorded on 3.12+, and all five py3.11 CI shards read a different token_sha256 for byte-identical sources (110 of 123 documents, measured).  The module source is unchanged and ast_sha256 is unchanged.
 -->
 
 # Version history -- `lumenairy/propagators/hfpi.py`

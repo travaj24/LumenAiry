@@ -1,10 +1,11 @@
 <!-- lumenairy-history-doc
 module: lumenairy/raytrace/seidel.py
 ast_sha256: 7984f9551684714d0f80cb0edbfd4a68c7b6be9d917d2c8389ad3883a44ede30
-token_sha256: c5fd346826c05552072d63ca6dcbbbf618efce1e53c5f8c72819636eddf2fd58
+token_sha256: a5c9624ce3ced523dab34d5007303b8e7ce6b48f141a12eb07ccb3c53097cbca
 pre_relocation_lines: 1913
 recorded_by: WP-A17 SWEEP-3 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
+re_recorded: 2026-09-14 -- Wave-5 item D (CI run 34914295323): DIGEST-SCHEME change, not a code change -- token_fingerprint now feeds an f-string to the digest as ONE STRING record holding its exact source text instead of the running tokenizer's FSTRING_START/FSTRING_MIDDLE/FSTRING_END run, so the recorded value is a property of the file rather than of the interpreter that read it; PEP 701 made CPython 3.12 tokenize f-strings differently from 3.11, these digests were recorded on 3.12+, and all five py3.11 CI shards read a different token_sha256 for byte-identical sources (110 of 123 documents, measured).  The module source is unchanged and ast_sha256 is unchanged.
 -->
 
 

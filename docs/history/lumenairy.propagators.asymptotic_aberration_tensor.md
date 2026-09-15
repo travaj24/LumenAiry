@@ -1,13 +1,14 @@
 <!-- lumenairy-history-doc
 module: lumenairy/propagators/asymptotic_aberration_tensor.py
 ast_sha256: d0d36ad937c22892b8db10d496eab14ac16f046789172cc70b066c7827a93dcb
-token_sha256: 3d40b412c8b63680954940a2557f82c8d8adc36bb705134f013e9c55837ca527
+token_sha256: b76c52b040b0dd8570e71a468791f22ee376cc67945ac355ab23d57cfb564e95
 pre_relocation_lines: 1376
 recorded_by: WP-A17 SWEEP-1 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
 re_recorded: 2026-09-12 -- ruff isort combine-as-imports (pyproject.toml, WP-A16 recommendation): aliased import statements from the same module merged into one; the set of bound names is unchanged
 re_recorded: 2026-09-13 -- WP-B7 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, WP-A4 sec. 6 items 3-8 + VERIFY-B1 F1/F2): the Y4 fused basis evaluation and hoisted Newton factor, the aberration_tensor mode/waist caches, the S6 gate's k1-slope statistic and mean-plus-spread chart sizing, the JAX screen's chief-ray displacement term, and the S9 FFT kernel clip
 re_recorded: 2026-09-14 -- VERIFY-B7 (independent re-verification of WP-B7): the image-plane-waist cache keys its evaluator by object identity held alive by the entry (a __qualname__ served one evaluator's width for another's) and carries the _NEWTON_SCALE_RELATIVE_STOP seam, which moves the width it measures
+re_recorded: 2026-09-14 -- Wave-5 item D (CI run 34914295323): DIGEST-SCHEME change, not a code change -- token_fingerprint now feeds an f-string to the digest as ONE STRING record holding its exact source text instead of the running tokenizer's FSTRING_START/FSTRING_MIDDLE/FSTRING_END run, so the recorded value is a property of the file rather than of the interpreter that read it; PEP 701 made CPython 3.12 tokenize f-strings differently from 3.11, these digests were recorded on 3.12+, and all five py3.11 CI shards read a different token_sha256 for byte-identical sources (110 of 123 documents, measured).  The module source is unchanged and ast_sha256 is unchanged.
 -->
 
 # Version history -- `lumenairy/propagators/asymptotic_aberration_tensor.py`

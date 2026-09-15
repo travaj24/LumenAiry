@@ -1227,6 +1227,7 @@ matches the oracle element-by-element to <= 7.3e-15 relative.
 
 import functools
 import math
+import re
 import warnings
 
 import numpy as np
@@ -2063,9 +2064,11 @@ def test_w3_t3b_lg_merit_responds_to_a_curvature_change():
     ctx_a, ctx_b = _Ctx(), _Ctx()
     ctx_a.prescription = _singlet_t3b(51.5e-3)
     ctx_b.prescription = _singlet_t3b(60.0e-3)
+    with warnings.catch_warnings(record=True) as rec_a:
+        warnings.simplefilter('always')
+        val_a = merit.evaluate(ctx_a)
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
-        val_a = merit.evaluate(ctx_a)
         val_b = merit.evaluate(ctx_b)
     assert math.isfinite(val_a) and math.isfinite(val_b)
     assert val_a > 0.0 and val_b > 0.0
@@ -2114,13 +2117,75 @@ def test_w3_t3b_lg_merit_responds_to_a_curvature_change():
     # test claims -- but they are NOT Strehl-normalised here.  The real fix
     # is a saddle-local reference, deferred to Wave 4 (VERIFY-A4 O-3b).
     #
-    # MEASURED now: val_a = 2.2006679213e+09, val_b = 9.9881936194e+04,
-    # response 9.999546e-01 (was 4.1232e-01).  The 2e-2 relative tolerance
-    # is UNCHANGED and still covers the same three sources it was derived
-    # for (in-process 0.0 spread, 3.1e-3 cross-platform, 1.4e-2 for a
-    # one-rung sigma-ladder shift).
-    assert abs(val_a - 2.2006679213e+09) < 2e-2 * 2.2006679213e+09
-    assert abs(val_b - 9.9881936194e+04) < 2e-2 * 9.9881936194e+04
+    # v5.47 RE-DERIVED (CI run 34914295323 read
+    # ``assert 1720734869.5248818 < (0.02 * 2200667921.3)`` -- val_a off the
+    # frozen number by 78 %, not by a margin).  Root cause, measured, NOT a
+    # rerun-to-green:
+    #
+    # ``val_a`` is ``|L_(2,0)|^2 / |L_ref(0,0)|^2`` and on THIS fixture the
+    # denominator is COLLAPSED -- the note above already says so, and the
+    # library says so itself: ``LGAberrationMerit`` raises a RuntimeWarning
+    # here because the aberration-free twin zeroes 4.206e+05 waves of
+    # cubic-and-higher pupil phase and its coupling reads
+    # ``|L(0,0)/L_ref(0,0)|^2 = 1.19e+09`` (design a) against the [0, 1] a
+    # Strehl would live in.  A ratio to a collapsed reference has no stable
+    # SCALE, and the kernel ladder proves it (validation/probe_known_reds/
+    # probe_w3_t3b.py, thread count irrelevant, in-process spread 0.0):
+    #
+    #   OPENBLAS_CORETYPE   val_a         val_b        response   coupling_a
+    #   HASWELL / WSL       2.0163e+09    9.9871e+04   0.9999505  1.188e+09
+    #   NEHALEM             5.3872e+09    9.9932e+04   0.9999815  3.549e+09
+    #   KATMAI              5.4278e+09    1.0004e+05   0.9999816  3.576e+09
+    #   SANDYBRIDGE         5.4278e+09    1.0004e+05   0.9999816  3.576e+09
+    #   CI Linux            {4.80e+08 or 3.92e+09}  (the assert message only
+    #                        gives |val_a - ref|, so either sign; both are
+    #                        inside the band below)
+    #
+    # i.e. val_a swings 2.7x across BLAS kernels on ONE box while val_b holds
+    # to 1.6e-3 and the response to 3.2e-05.  So:
+    #
+    #   * the response and val_b keep their bars -- they are the physics and
+    #     they are stable on every arm measured;
+    #   * val_a gets a DERIVED TWO-SIDED band instead of a 2 % pin.  The lower
+    #     side, 1e+08, is 4.8x under the lowest number CI's message can mean
+    #     (4.80e+08) and 20x under the lowest ladder rung (2.0163e+09); the
+    #     upper side, 1e+11, is 18x over the highest (5.4278e+09).  The
+    #     smallest rescale it must still catch is nine decades away: dropping
+    #     the reference normalisation is ``1/ref_sq`` = 1.6e+09, and the Y2
+    #     Van Vleck factor is ``1/(lambda^2 |det J|)`` = 1.49e+13.  MEASURED
+    #     mutations: reference normalisation removed -> 1.24e+00, Y2 factor
+    #     undone -> 1.35e-04, Y2 applied twice -> 3.01e+22, all outside;
+    #   * the collapse itself becomes a POSITIVE pin (the warning must fire
+    #     and name a coupling far outside [0, 1]), so the band cannot quietly
+    #     become a band on a Strehl.
+    #
+    # The library-side fix is a saddle-local reference, deferred to Wave 4
+    # (VERIFY-A4 O-3b); until it lands, val_a's SCALE is not a measurement.
+    assert 1e8 < val_a < 1e11, (
+        f'val_a = {val_a:.6e} left the measured order-of-magnitude band '
+        f'[1e8, 1e11] (kernel ladder 2.0163e+09 .. 5.4278e+09)')
+    assert abs(val_b - 9.9881936194e+04) < 2e-2 * 9.9881936194e+04, (
+        f'val_b = {val_b:.6e} vs frozen 9.9881936194e+04 '
+        f'(rel {abs(val_b - 9.9881936194e+04) / 9.9881936194e+04:.3e}, bar '
+        f'2e-2, kernel-ladder spread 1.6e-3)')
+    # The reference IS collapsed on this chart -- that is the premise the
+    # band above rests on, so it is measured, not assumed.
+    _collapse = [w for w in rec_a
+                 if 'NOT Strehl-normalised' in str(w.message)]
+    assert _collapse, (
+        'LGAberrationMerit did not warn about the collapsed aberration-free '
+        'reference on R1 = 51.5 mm; if the reference now behaves, val_a is a '
+        'measurable quantity again and this band must be re-derived as a '
+        'relative pin')
+    _m = re.search(r'\|L\(0,0\)/L_ref\(0,0\)\|\^2 = ([0-9.e+-]+)',
+                   str(_collapse[0].message))
+    assert _m is not None, (
+        f'the collapse warning no longer names its coupling; this test reads '
+        f'the number out of it: {_collapse[0].message}')
+    _cpl = float(_m.group(1))
+    assert _cpl > 1e8, (
+        f'reference coupling {_cpl:.3e} is far smaller than the 1.19e+09 .. '
+        f'3.58e+09 measured across the kernel ladder')
     # The RESPONSE is the physics.  It was 2.892e-1 .. 4.040e-1 across
     # n >= 128 on the pre-v5.46 scale; the reference normalisation amplifies
     # it (the two designs' references collapse by different amounts on this
@@ -2302,10 +2367,48 @@ def test_w3_t3b_sigma_overlaps_still_match_the_oracle_at_the_default():
 # every relative tolerance below is the one it was.
 _Y2_FROZEN_T3B_OLD = ((51.5e-3, 1.544807582649e+01 + 3.188059447022e+00j),
                       (60.0e-3, -6.570638987023e+00 - 1.439184599267e+01j))
+
 _Y2_FROZEN_T3B = ((51.5e-3, 1.0116441690e-04,
                    1.2310011487876e+07 - 5.9649449469122e+07j),
                   (60.0e-3, 1.0086220541e-04,
                    -5.5405030010922e+07 + 2.5295326982543e+07j))
+
+# v5.47 -- ONE bar for the frozen closed-form ``L(0, 0)``, read by BOTH pins
+# on it (``test_w3_t3b_pure_lg00_default_is_bit_for_bit_unchanged`` and
+# ``test_w4_t1_pure_lg00_has_no_sigma_grid_and_is_unchanged``).  Derived once,
+# here, because both tests measure the SAME quantity through the same chain.
+#
+# WHY IT CANNOT BE 1e-8.  ``L`` is a saddle-point amplitude and this fixture
+# is taken at a finite ``object_distance`` with a wide pupil box, so the
+# stationary phase is ``|Phi| = 9.8883e+05 rad`` on both designs: one ULP on a
+# fit coefficient reaches ``L`` amplified by ``eps*|Phi| = 2.196e-10``
+# relative.  The coefficients come out of ``fit_canonical_polynomials``, a
+# LAPACK least-squares solve, and ``md5(coef_phi)`` differs on every
+# ``OPENBLAS_CORETYPE`` rung (thread count is irrelevant, t1 == t4).
+#
+# MEASURED ``rel(L, frozen)`` at R1 = 51.5 mm (validation/probe_known_reds/
+# probe_w3_t3b.py plus the two CI reds of run 34914295323):
+#
+#   HASWELL      1.838e-09      NEHALEM      6.653e-09
+#   KATMAI       7.518e-09      SANDYBRIDGE  1.223e-08
+#   Linux/WSL    4.398e-09      CI Linux     8.190e-09  (py3.12 and py3.14
+#                                                        read the same digits)
+#
+# R1 = 60 mm runs 1.087e-09 .. 2.743e-09.  Worst arm = 1.223e-08 = 56 x
+# eps*|Phi|, which is what a quartic 2-D fit over a 6x6x6x6 ray grid costs.
+# The old 1e-8 was BELOW that: SANDYBRIDGE t1/t4 went red on it in the kernel
+# ladder, and CI read 8.190e-09, i.e. 82 % of the bar.
+#
+# TWO-SIDED.  1e-6 is 82x over the worst arm measured and six decades under
+# the smallest change to the closed-form path either pin exists to catch --
+# measured mutations: the Y2 ``-1j`` rotation dropped is rel 1.414, ``+1j``
+# for ``-1j`` is 2.0, and routing the (0, 0) channel through the SIGMA branch
+# instead of the closed form (the defect the W4-T1 pin exists for) reads
+# 1.656e-01 - 1.935e+00j against 1.231e+07 - 5.965e+07j -- SEVEN decades of
+# magnitude, rel 1.0.  A x(1+1e-5) perturbation is caught (1e-5 > 1e-6);
+# x(1+1e-7) is not, which is the round-off band this bar deliberately
+# admits.
+_Y2_L00_REL_BAR = 1e-6
 
 
 def _y2_scale_factor(res):
@@ -2320,27 +2423,81 @@ def test_w3_t3b_pure_lg00_default_is_bit_for_bit_unchanged():
     ``sqrt(2/(pi w_o^2))`` normalisation of a point sample, and it is the
     cross-backend contract of ``aberration_tensor_lg00_jax``.  WITHIN-
     process bit-identity vs 7ea2eb9 and e1fd64a was proven by hex-diff at
-    fix time; the frozen Windows values themselves drift 8.9e-11 relative
-    on CI Linux (eigensolve ulps through the fit, measured on 74cf31b),
-    so the cross-platform pin is rel 1e-8 -- any actual change to the
-    closed-form path moves these by orders more."""
+    fix time.
+
+    HOW FAR ``L`` MOVES BETWEEN ARMS, AND WHY (restated 2026-09-14 after CI
+    run 34914295323 read ``rel 8.190e-09`` against the 1e-10 bar below on BOTH
+    the py3.14 and the py3.12-jax job -- the same digits, so this is a
+    DETERMINISTIC platform difference, not run-to-run noise).
+
+    The chain is ``fit_canonical_polynomials`` (a least-squares solve, i.e.
+    LAPACK) -> ``solve_envelope_stationary`` -> ``aberration_tensor``.  This
+    fixture is taken at a finite ``object_distance`` with a wide pupil box, so
+    the stationary phase at the saddle is ``|Phi| = 9.8883e+05 rad`` on BOTH
+    designs: one ULP on a fit coefficient reaches ``L`` amplified by ``|Phi|``,
+    i.e. ``eps*|Phi| = 2.196e-10`` relative per ULP.  And the fit coefficients
+    DO move with the BLAS kernel -- ``md5(coef_phi)`` differs on all four
+    ``OPENBLAS_CORETYPE`` rungs (thread count is irrelevant; t1 == t4).
+    MEASURED ``rel(L, frozen)`` at R1 = 51.5 mm (``validation/
+    probe_known_reds/probe_w3_t3b.py``):
+
+        HASWELL 1.838e-09   NEHALEM 6.653e-09   KATMAI  7.518e-09
+        SANDYBRIDGE 1.223e-08   Linux/WSL 4.398e-09   CI Linux 8.190e-09
+
+    (R1 = 60 mm: 1.087e-09 .. 2.743e-09.)  The worst arm is 56x ``eps*|Phi|``,
+    which is what a least-squares solve of a quartic 2-D polynomial over a
+    6x6x6x6 ray grid costs.  So the 1e-8 that stood here was ALSO unsustainable
+    -- SANDYBRIDGE reads 1.223e-08 -- and the 1e-10 on the derivation check
+    below could never hold off the arm the constants were baked on.
+
+    TWO CLAIMS, BOTH UNCONDITIONAL, WITH THE PIN'S PURPOSE INTACT.
+
+    1.  THE DERIVATION.  ``_Y2_FROZEN_T3B`` must BE ``_Y2_FROZEN_T3B_OLD``
+        carried through ``(-1j)/(lambda sqrt|det J|)``.  That is arithmetic
+        between two FROZEN literals and the measured ``sqrt|det J|``, and it
+        carries none of the amplified drift above: measured 3.35e-14
+        (WSL) / 3.47e-14 (HASWELL) / 6.69e-14 (R1 = 60) / 2.1e-13 (CI) /
+        9.86e-13 (KATMAI, SANDYBRIDGE).  BAR 1e-11: 10x over the worst arm,
+        and eleven decades under the smallest error it exists to catch --
+        measured mutations are ``+1j`` for ``-1j`` (rel 2.0), no rotation at
+        all (rel 1.414), ``|det J|`` for ``sqrt|det J|`` (rel 0.802) and a
+        dropped ``1/lambda`` (rel 7.63e+05).
+
+    2.  THE MEASUREMENT.  ``L`` must still BE that number on the running arm,
+        to ``_Y2_L00_REL_BAR``.  That bar (1e-6) is derived ONCE beside the
+        constant and shared with
+        ``test_w4_t1_pure_lg00_has_no_sigma_grid_and_is_unchanged``, which
+        pins the same ``L(0, 0)`` and which went red on the SANDYBRIDGE rung
+        of the kernel ladder under the old 1e-8.  In short: 82x over the
+        worst arm measured (1.223e-08), 4.6e+03 x the per-ULP amplification
+        ``eps*|Phi|``, and six decades under the smallest change to the
+        closed-form path either pin guards.  A two-sided bar on a quantity
+        whose conditioning is 1e+06, not a byte pin on one box.
+    """
     for (R1, w_want, want), (_R1o, old) in zip(_Y2_FROZEN_T3B,
                                                _Y2_FROZEN_T3B_OLD):
         res = _tensor_t3b(R1, ((0, 0),))
         # the default IS the legacy pupil-scale formula, exactly
         assert res.w_o == _legacy_w_o(R1)
+        # measured 2.32e-11 .. 2.46e-11 across the eight-rung kernel ladder
+        # and WSL, against this 1e-6 -- the waist is NOT phase-amplified.
         assert abs(res.w_o - w_want) < 1e-6 * w_want
         got = complex(res.L[0, 0])
-        assert abs(got - want) / abs(want) < 1e-8, f'{got!r} != {want!r}'
-        # ... and the frozen constant IS the pre-Y2 one carried through the
-        # Van Vleck factor, so the re-pin is a derivation and not a re-bake.
+        # claim 1: the re-pin is a DERIVATION, frozen-to-frozen.
         factor, _sq, _ = _y2_scale_factor(res)
         pred = old * factor
-        assert abs(got - pred) / abs(pred) < 1e-10, (
+        assert abs(want - pred) / abs(pred) < 1e-11, (
             f'R1={R1}: the frozen value {want!r} must be the pre-Y2 '
-            f'{old!r} times (-1j)/(lambda sqrt|det J|); predicted {pred!r}, '
-            f'measured {got!r} (rel {abs(got - pred) / abs(pred):.3e}, '
-            f'measured 3.6e-14 / 1.8e-13)')
+            f'{old!r} times (-1j)/(lambda sqrt|det J|); predicted {pred!r} '
+            f'(rel {abs(want - pred) / abs(pred):.3e}, bar 1e-11, worst arm '
+            f'measured 9.86e-13)')
+        # claim 2: the running arm still reads that number.  The bar and its
+        # derivation live at ``_Y2_L00_REL_BAR`` -- one bar, both pins.
+        rel = abs(got - want) / abs(want)
+        assert rel < _Y2_L00_REL_BAR, (
+            f'R1={R1}: measured {got!r} != frozen {want!r} (rel {rel:.3e}, '
+            f'bar {_Y2_L00_REL_BAR:.0e}, worst arm measured 1.223e-08 = 56 x '
+            f'eps*|Phi| with |Phi| = 9.8883e+05 rad)')
 
 
 def test_w3_t3b_explicit_w_o_is_honoured_verbatim_on_both_branches():
@@ -2867,14 +3024,26 @@ def test_w4_t1_pure_lg00_has_no_sigma_grid_and_is_unchanged():
     adaptive default cannot touch it -- and its value stays the W3-T3b
     frozen one (cross-backend contract of ``aberration_tensor_lg00_jax``)."""
     # v5.46 (audit Y2 + VERIFY-A4 O-9): the frozen constants moved by the
-    # Van Vleck factor -- see the derivation beside ``_Y2_FROZEN_T3B``.  The
-    # rel 1e-8 bar is unchanged.
+    # Van Vleck factor -- see the derivation beside ``_Y2_FROZEN_T3B``.
+    #
+    # v5.47: the exact-value bar moves 1e-8 -> ``_Y2_L00_REL_BAR`` (1e-6),
+    # derived ONCE beside that constant and shared with
+    # ``test_w3_t3b_pure_lg00_default_is_bit_for_bit_unchanged``, which pins
+    # the same ``L(0, 0)``.  This test is where the old bar went red first:
+    # the OPENBLAS_CORETYPE = SANDYBRIDGE rung of the kernel ladder read
+    # (12310012.217167536-59649449.318518646j), rel 1.223e-08 against 1e-8,
+    # while the other seven rungs passed -- a decision that classifies by
+    # BLAS build, which is the definition of a bar set below the noise it
+    # sits in rather than above it.
     for R1, _w_want, want in _Y2_FROZEN_T3B:
         res = _tensor_w4(R1, ((0, 0),))
         assert res.sigma_grid_n is None
         assert res.sigma_curvature is None
         got = complex(res.L[0, 0])
-        assert abs(got - want) / abs(want) < 1e-8, f'{got!r} != {want!r}'
+        rel = abs(got - want) / abs(want)
+        assert rel < _Y2_L00_REL_BAR, (
+            f'R1={R1}: {got!r} != frozen {want!r} (rel {rel:.3e}, bar '
+            f'{_Y2_L00_REL_BAR:.0e}, worst arm measured 1.223e-08)')
 
 
 # ---------------------------------------------------------------------------

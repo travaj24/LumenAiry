@@ -1,11 +1,12 @@
 <!-- lumenairy-history-doc
 module: lumenairy/propagators/rs.py
 ast_sha256: 286d131880517ae59a7cbe28858ffe2565d6168f2b171497e65639d6633f40c0
-token_sha256: f4f42229338bc79fe0aa579212dc7ff32d07f96c4ac3545809c5d06f7c3e026c
+token_sha256: 4b001712255c30f25b05118dd5f816d90ed1d1881f80c6c2d34dbfe432de2e7b
 pre_relocation_lines: 773
 recorded_by: WP-A17 SWEEP-1 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
 re_recorded: 2026-09-13 -- WP-B3 (audit K9 second half): kernel='spatial-integrated' -- the RS-I Green's function integrated over each pixel (Shen & Wang 2006) via a folded 6-node tensor Gauss-Legendre rule, its own H-cache tag, and the alias guard widened to both spatial kernels; 'auto' and 'spatial' byte-identical
+re_recorded: 2026-09-14 -- Wave-5 item D (CI run 34914295323): DIGEST-SCHEME change, not a code change -- token_fingerprint now feeds an f-string to the digest as ONE STRING record holding its exact source text instead of the running tokenizer's FSTRING_START/FSTRING_MIDDLE/FSTRING_END run, so the recorded value is a property of the file rather than of the interpreter that read it; PEP 701 made CPython 3.12 tokenize f-strings differently from 3.11, these digests were recorded on 3.12+, and all five py3.11 CI shards read a different token_sha256 for byte-identical sources (110 of 123 documents, measured).  The module source is unchanged and ast_sha256 is unchanged.
 -->
 
 # Version history -- `lumenairy/propagators/rs.py`

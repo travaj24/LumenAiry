@@ -1,12 +1,13 @@
 <!-- lumenairy-history-doc
 module: lumenairy/analysis/ao.py
 ast_sha256: 6bcc87d232028496574c2537323a36c2f502ebb045e9474fc98d2fbbb06aacb6
-token_sha256: 460674be97d21d55eca6f2b61efa126119fa2f4b10d39e6986dfa75c95778450
+token_sha256: 12af9a0c3573f66a293c0f62b8753e5f9839a90285f0a740d921969477e041b0
 pre_relocation_lines: 1355
 recorded_by: WP-A17 SWEEP-1 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
 re_recorded: 2026-09-12 -- ruff isort combine-as-imports (pyproject.toml, WP-A16 recommendation): aliased import statements from the same module merged into one; the set of bound names is unchanged
 re_recorded: 2026-09-13 -- WP-B8 (audit A6.3): the banded influence-function construction is hoisted out of fit_phase into DeformableMirror._banded_IF_apply, the dense meshgrids become broadcast views (S3-7, bit-identical), and an eager IF stack above half the 'auto' ceiling warns once at construction; the cache decision boundary itself is unmoved
+re_recorded: 2026-09-14 -- Wave-5 item D (CI run 34914295323): DIGEST-SCHEME change, not a code change -- token_fingerprint now feeds an f-string to the digest as ONE STRING record holding its exact source text instead of the running tokenizer's FSTRING_START/FSTRING_MIDDLE/FSTRING_END run, so the recorded value is a property of the file rather than of the interpreter that read it; PEP 701 made CPython 3.12 tokenize f-strings differently from 3.11, these digests were recorded on 3.12+, and all five py3.11 CI shards read a different token_sha256 for byte-identical sources (110 of 123 documents, measured).  The module source is unchanged and ast_sha256 is unchanged.
 -->
 
 # Version history -- `lumenairy/analysis/ao.py`

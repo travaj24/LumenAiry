@@ -1,11 +1,12 @@
 <!-- lumenairy-history-doc
 module: lumenairy/glass.py
 ast_sha256: 2f5b36a9ced1ffadf0bcd2cf242246a0069c1cfec1557909d01f83ec07ccbfe6
-token_sha256: 3fc34871dc0da48032fe574abb7ae899caa1bf26b24959c25e3543303eb89992
+token_sha256: c1cf2dcda509d6b8c578e078b6ba69b7cd0a4c046951a33c95c8078b50b5d9f1
 pre_relocation_lines: 2160
 recorded_by: WP-A17 SWEEP-3 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
 re_recorded: 2026-09-13 -- the glass-index memo covers the whole immutable-catalogue resolution (and the live catalogue arm) instead of only the closed-form evaluation: 13.283 -> 0.559 us warm on N-BK7; registry-invalidation generation counter added (WP-B11a item 15)
+re_recorded: 2026-09-14 -- Wave-5 item D (CI run 34914295323): DIGEST-SCHEME change, not a code change -- token_fingerprint now feeds an f-string to the digest as ONE STRING record holding its exact source text instead of the running tokenizer's FSTRING_START/FSTRING_MIDDLE/FSTRING_END run, so the recorded value is a property of the file rather than of the interpreter that read it; PEP 701 made CPython 3.12 tokenize f-strings differently from 3.11, these digests were recorded on 3.12+, and all five py3.11 CI shards read a different token_sha256 for byte-identical sources (110 of 123 documents, measured).  The module source is unchanged and ast_sha256 is unchanged.
 -->
 
 

@@ -10,12 +10,51 @@ from __future__ import annotations
 import ast
 import os
 import re
-import tomllib
+
+import pytest
+
+# ``tomllib`` is stdlib from Python 3.11.  On 3.10 -- the documented floor
+# (``requires-python = ">=3.10"``) AND a live leg of the unit-tests matrix
+# this very file pins below -- it does not exist, and the ``tomli`` backport
+# supplies the same ``load(fp)`` API; the ``unit`` job installs it
+# (``pip install tomli`` in the Install-dependencies step).
+#
+# MEASURED on CI run 34914295323 (5.47.0): the unconditional ``import
+# tomllib`` here raised ModuleNotFoundError at COLLECTION on every one of the
+# five 3.10 shards, and pytest answers a collection error with ``Interrupted:
+# 1 error during collection`` -- so each shard reported ``18 skipped, 12 578
+# deselected, 1 error`` and ran ZERO of its ~2 900 selected tests.  One
+# missing stdlib module in one test file took the entire 3.10 lane, not just
+# this file's eleven gates.  Hence the fallback, and hence the fact that
+# nothing below imports ``tomllib`` at module scope again.
+try:
+    import tomllib                                  # Python 3.11+ stdlib
+    _TOML_SKIP_REASON = None
+except ModuleNotFoundError:            # pragma: no cover -- Python 3.10 only
+    try:
+        import tomli as tomllib  # type: ignore[no-redef]
+        _TOML_SKIP_REASON = None
+    except ModuleNotFoundError:        # pragma: no cover -- neither present
+        tomllib = None  # type: ignore[assignment]
+        _TOML_SKIP_REASON = (
+            'no TOML parser: `tomllib` is Python 3.11+ stdlib and the `tomli` '
+            '3.10 backport is not installed, so the four pyproject-reading '
+            'gates in this file cannot be evaluated on this interpreter '
+            '(`pip install tomli`).  The other seven gates -- .gitignore, '
+            'MANIFEST.in, scripts/ hygiene and the two subprocess-stdio '
+            'walkers -- do not need a parser and still ran.')
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 
 
 def _pyproject() -> dict:
+    # Premise-gated, NOT module-gated: only the four gates that read
+    # pyproject.toml depend on a parser being importable, so a missing
+    # backport must not take the seven that do not.  Where `tomli` IS
+    # installed -- which is the CI 3.10 leg -- this branch never fires and
+    # all eleven gates run.
+    if tomllib is None:                # pragma: no cover -- neither present
+        pytest.skip(_TOML_SKIP_REASON)
     with open(os.path.join(REPO_ROOT, 'pyproject.toml'), 'rb') as fh:
         return tomllib.load(fh)
 

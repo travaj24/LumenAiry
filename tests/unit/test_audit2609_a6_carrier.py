@@ -425,14 +425,45 @@ class TestC2FitRadiusCentre:
         ``'auto'`` now projects whatever the snap did.
 
         The property that survives, and is the one worth pinning: the
-        projection costs a CENTRED field a couple of ulp and nothing more --
-        on a centred beam the weighted mean slope and ``sum(w x)`` are both
-        round-off, so their product is too.  BAR 4 ulp: measured 0 ulp on
-        'increment' (exactly equal at all four radii) and 1-2 ulp on
-        'gradient'.  A genuine centring error is ``1 + 2 x0^2/w^2`` -- 50 % at
-        half a waist, 15 decades up.  ``'origin'`` remains the byte-identity
-        escape hatch and is pinned against the PRE-FIX estimator in
-        ``test_audit2609_a6_verify_carrier.py``."""
+        projection costs a CENTRED field a few ulp and nothing more -- on a
+        centred beam the weighted mean slope and ``sum(w x)`` are both
+        round-off, so their product is too.
+
+        WHY THERE IS NO EXACT-EQUALITY CLAUSE ANY MORE (restated 2026-09-14
+        after CI run 34914295323 read ``('increment', 0.05,
+        0.05000000000000001, 0.05)`` on py3.14 Linux).  The projection is not
+        the only thing that differs between the two branches.
+        ``_fit_carrier_inv``'s 'increment' arm evaluates the moment as
+        ``sum(xm * (wgt*slope))`` when it projects and as
+        ``sum((wgt*xm) * slope)`` when it does not -- a different ASSOCIATION
+        of the same three factors, which ``carrier.py``'s own comment there
+        says "moves the answer by a few ulp".  Floating-point multiplication
+        is commutative but NOT associative, so byte equality was never an
+        invariant of this pair; whether the last bit survives the reduction is
+        a property of the build.  MEASURED (``validation/probe_known_reds/
+        probe_c2_centre_ulp.py``, which recomputes ``_tilt_free_moment``'s own
+        inputs from the same primitives): the projection correction is 3e-21
+        to 2e-19 ULP of the moment it corrects, i.e. it cannot move ANY bit;
+        the whole difference is the re-association, which reads
+
+            arm                              gradient          increment
+            Windows x {HASWELL, NEHALEM,      0 / 2 / 4 ulp     0 / 0 / 0 ulp
+              KATMAI, SANDYBRIDGE} x {1, 4}
+            Linux (WSL, numpy 2.4.6)          1 / 2 / 4 ulp     1 / 0 / 2 ulp
+            CI Linux py3.14                   <= 4 ulp (green)  1 ulp (red)
+
+        at R = 50 mm / -20 mm / 1e9 m.  The ulp distance grows with |R|
+        because ``num`` is a moment that cancels toward zero as the wavefront
+        flattens, not because the fit degrades.
+
+        BAR 16 ulp, both estimators, unconditional: 4x over the worst arm
+        measured (4 ulp) and 14 decades under the defect it guards -- a
+        genuine centring error is ``1 + 2 x0^2/w^2``, 50 % at half a waist,
+        i.e. ~2e15 ulp.  ``'origin'`` remains the byte-identity escape hatch
+        and is pinned against the PRE-FIX estimator in
+        ``test_audit2609_a6_verify_carrier.py``, which is where a byte claim
+        about this function belongs."""
+        bar = 16.0
         for est in ('gradient', 'increment'):
             for r in (50e-3, -20e-3, 1e9, np.inf):
                 g = (np.arange(self.N) - self.N / 2) * self.DX
@@ -447,9 +478,8 @@ class TestC2FitRadiusCentre:
                 if np.isinf(r):
                     assert a == b == np.inf, (est, r, a, b)
                     continue
-                assert abs(a - b) <= 4.0 * np.spacing(abs(b)), (est, r, a, b)
-                if est == 'increment':
-                    assert a == b, (est, r, a, b)   # exactly, on this branch
+                assert abs(a - b) <= bar * np.spacing(abs(b)), (
+                    est, r, a, b, abs(a - b) / np.spacing(abs(b)))
             # ... and the astigmatic pair too
             e = self._decentred_parabola(0.0)
             for u, v in zip(C.carrier_referenced_fit_radius(
@@ -459,7 +489,8 @@ class TestC2FitRadiusCentre:
                                 e, LAM, self.DX, astigmatic=True,
                                 estimator=est, on_aliased='silent',
                                 centre='origin')):
-                assert abs(u - v) <= 4.0 * np.spacing(abs(v)), (est, u, v)
+                assert abs(u - v) <= bar * np.spacing(abs(v)), (
+                    est, u, v, abs(u - v) / np.spacing(abs(v)))
 
     @pytest.mark.parametrize('stride', [1, 2, 4, 8])
     def test_the_diagnostic_stride_does_not_move_the_fit(self, stride):
@@ -760,13 +791,76 @@ class TestC4TransferFunction:
         """The untilted fast path re-associates by ADDITION and MULTIPLICATION
         only, both commutative to the bit in IEEE-754, and ``cos``/``sin`` into
         ``H.real``/``H.imag`` is what ``np.exp`` of a pure-imaginary argument
-        computes.  So the bar is not a tolerance: it is EQUALITY of the raw
-        bytes, measured 0.000e+00 at every shape and both tilts."""
+        computes.  So the KERNEL bar is not a tolerance: it is EQUALITY of the
+        raw bytes.
+
+        WHAT THE BYTE CLAIM COVERS, AND WHAT IT DOES NOT (restated 2026-09-14
+        after CI run 34914295323 reds ``[tilt0-256]`` / ``[tilt1-256]``).  The
+        C4 change is the ``phase`` build and the ``cos``/``sin`` kernel.  The
+        FFT PAIR is COMMON to both routes and is not what changed -- and it is
+        not byte-reproducible between two call sites on every build:
+
+          * pyFFTW hands each plan key a TWO-BUFFER ping-pong
+            (``fft_infra._build_plan_entry``), so the step takes one slot and
+            the oracle the next.  MEASURED on Linux (WSL, numpy 2.4.6, pyFFTW
+            0.15.1) at ``n >= FFTW_MIN_SIZE`` (= 256, which is exactly the
+            first parameter CI fails at): the two routes differ by max|d|
+            1.448e-15 (n=256, tilt0), 1.798e-15 (n=256, tilt1), 1.790e-15 /
+            1.897e-15 (n=512) -- 2.9e-16 to 3.9e-16 relative, ~1 ulp, on 79 %
+            of the doubles.  Identical at 1, 2 and 8 FFTW threads, under
+            ESTIMATE and MEASURE alike, and identical across repeats; ABSENT
+            at every n with ``USE_PYFFTW = False`` or with
+            ``set_fft_double_buffer(False)`` (one buffer, one plan, and the
+            dispatchers hand back a private copy instead of the live slot).
+            NEITHER route is the "right" one -- both sit 2.5e-15 to 3.1e-15
+            from the pocketfft answer, i.e. they are two pyFFTW roundings of
+            the same transform.  Windows (numpy 2.4.4, same pyFFTW 0.15.1)
+            shows 0.000e+00 at every shape and in all three modes.  That is a
+            reproducibility defect in
+            ``lumenairy/propagators/fft_infra.py`` -- whose own
+            ``set_fft_double_buffer`` docstring claims "values are
+            byte-identical either way" -- NOT in this kernel.  Evidence:
+            ``validation/probe_known_reds/probe_c4_double_buffer.py``.
+
+        So the byte claim is made where the change lives, on a transport that
+        IS a pure function of its input (the ping-pong disabled for the
+        duration), and it is made UNCONDITIONALLY on every arm and every
+        shape: measured 0.000e+00 on all eight Windows ladder rungs and on
+        Linux/WSL, both tilts.  On the SHIPPED dispatch the two routes are
+        pinned by a DERIVED relative bar instead, 1e-13: 250x over the worst
+        arm measured above (3.9e-16) and nine decades under the 1e-4 relative
+        gap between this exact kernel and the Fresnel kernel it replaced
+        (``_exact_envelope_tf_step``'s own note), i.e. far under the smallest
+        kernel error the pin exists to catch."""
+        from lumenairy.propagators import fft_infra as _fi
         rng = np.random.default_rng(11)
         e = rng.standard_normal((n, n)) + 1j * rng.standard_normal((n, n))
+
+        # 1. the byte claim, on a transport that is a pure function of its
+        #    input.  Restored in ``finally``; the setter clears the plan cache
+        #    on the way in and on the way out.
+        prev_db = _fi.get_fft_double_buffer()
+        try:
+            _fi.set_fft_double_buffer(False)
+            got1 = C._exact_envelope_tf_step(e, 5e-3, LAM, 2e-6, 2e-6,
+                                             tilt=tilt)
+            orc1 = self._tf_oracle(e, 5e-3, 2e-6, 2e-6, tilt)
+        finally:
+            _fi.set_fft_double_buffer(prev_db)
+        assert np.array_equal(got1.view(np.float64), orc1.view(np.float64)), (
+            f'n={n} tilt={tilt}: the C4 kernel is NOT byte-identical to the '
+            f'whole-grid oracle on a single-buffer transport, max|d| = '
+            f'{float(np.abs(got1 - orc1).max()):.3e} -- the phase build or '
+            f'the cos/sin kernel moved, not the FFT')
+
+        # 2. and on the SHIPPED dispatch, a derived relative bar.
         got = C._exact_envelope_tf_step(e, 5e-3, LAM, 2e-6, 2e-6, tilt=tilt)
         orc = self._tf_oracle(e, 5e-3, 2e-6, 2e-6, tilt)
-        assert np.array_equal(got.view(np.float64), orc.view(np.float64))
+        scale = float(np.abs(orc).max())
+        rel = float(np.abs(got - orc).max()) / scale
+        assert rel < 1e-13, (
+            f'n={n} tilt={tilt}: shipped-dispatch routes disagree by rel '
+            f'{rel:.3e} (worst arm measured 3.9e-16, bar 1e-13)')
 
     def test_the_tf_step_allocates_fewer_grids(self):
         """Measured 4.00 -> 2.00 complex128 full grids of tracemalloc peak at

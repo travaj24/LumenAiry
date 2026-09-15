@@ -1,12 +1,14 @@
 <!-- lumenairy-history-doc
 module: lumenairy/propagators/asymptotic_modes.py
-ast_sha256: 0d725ed90561efc3da04f57bf219c99b481ae712d622bd40d7f6417fbd9e1465
-token_sha256: fb4d39658dcd883bcadc2eeed60dd38ffcf1389e735899675aa82646cadc37f2
+ast_sha256: 2b30d7e695e59940d14e50b69ee122a86eea55e938339751363df6c35fd89e6f
+token_sha256: e2a9f6c50b43d8388a0928fb0f14e483694b3411a3c062e5cfdad8cd60d929b3
 pre_relocation_lines: 893
 recorded_by: WP-A17 SWEEP-1 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
 re_recorded: 2026-09-13 -- WP-B7 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, WP-A4 sec. 6 items 3-8 + VERIFY-B1 F1/F2): the Y4 fused basis evaluation and hoisted Newton factor, the aberration_tensor mode/waist caches, the S6 gate's k1-slope statistic and mean-plus-spread chart sizing, the JAX screen's chief-ray displacement term, and the S9 FFT kernel clip
 re_recorded: 2026-09-14 -- VERIFY-B7 (independent re-verification of WP-B7): decompose_lg(only=) / _lg_mode_conj_stack(only=) refuse a requested (p, ell) outside the (p_max, ell_max) rectangle instead of dropping it in silence
+re_recorded: 2026-09-14 -- Wave-5 item D (CI run 34914295323): DIGEST-SCHEME change, not a code change -- token_fingerprint now feeds an f-string to the digest as ONE STRING record holding its exact source text instead of the running tokenizer's FSTRING_START/FSTRING_MIDDLE/FSTRING_END run, so the recorded value is a property of the file rather than of the interpreter that read it; PEP 701 made CPython 3.12 tokenize f-strings differently from 3.11, these digests were recorded on 3.12+, and all five py3.11 CI shards read a different token_sha256 for byte-identical sources (110 of 123 documents, measured).  The module source is unchanged and ast_sha256 is unchanged.
+re_recorded: 2026-09-14 -- mypy --strict: decompose_lg normalised only= with tuple(k), whose tuple(iterable) return type is variable-length tuple[int, ...] and so discarded the pair-ness _lg_mode_conj_stack declares and unpacks; the call site now builds (int(p), int(ell)) pairs by unpacking. Behaviour preserved -- measured bit-identical coefficients (0.000e+00 relative difference) for tuple / list / numpy-int inputs, and a wrong-length entry still raises the same ValueError, one frame earlier.
 -->
 
 # Version history -- `lumenairy/propagators/asymptotic_modes.py`

@@ -363,17 +363,80 @@ def test_d2_the_multi_layer_even_fold_still_assembles_its_star():
 _D3 = dict(period=0.5e-6, depth=0.3e-6, wl=0.633e-6, S=96)
 _PERM = [1, 0, 2]
 _P2 = np.array([[0.0, 1.0], [1.0, 0.0]])
-#: A uniaxial pillar in AIR (n_o = 2.0, n_e = 2.6): the contrast the
-#: factorization-order artefact scales with.  ``phi = 45 deg`` puts the
-#: director in the x = y plane, so the cell is its own x<->y mirror.
-_DIAG = uniaxial_tensor(2.0, 2.6, np.deg2rad(40.0), phi=np.deg2rad(45.0))
-_SKEW = uniaxial_tensor(2.0, 2.6, np.deg2rad(40.0), phi=np.deg2rad(20.0))
 
 
 def _mirror(cell):
     """The x<->y mirror image of a tensor cell: pixel grid transposed AND the
     component labels permuted ``(x, y, z) -> (y, x, z)``."""
     return np.transpose(cell, (1, 0, 2, 3))[:, :, _PERM, :][:, :, :, _PERM]
+
+
+def _mirror3(tensor):
+    """The x<->y mirror of a single ``(3, 3)`` tensor (component labels only --
+    there is no grid to transpose)."""
+    return tensor[_PERM, :][:, _PERM]
+
+
+def _mirror_exact(tensor):
+    """``tensor`` averaged with its own x<->y mirror, which makes the result
+    its own mirror BIT-FOR-BIT on every IEEE-754 platform.
+
+    The average is needed because :func:`uniaxial_tensor` builds the x and y
+    legs from DIFFERENT expressions in ``cos(phi)`` and ``sin(phi)``
+    (``R = Rz(phi) @ Ry(theta)`` then ``R eps R^T``), so at ``phi = 45 deg``
+    the fixture's mirror symmetry is only as exact as the platform libm's
+    ``sin(pi/4) == cos(pi/4)``.  MEASURED: the MSVC libm returns both as
+    ``0x3fe6a09e667f3bcd`` and the raw tensor is its own mirror exactly, while
+    glibc returns ``sin`` one ULP low (``0x3fe6a09e667f3bcc``) and the raw
+    tensor's ``exz``/``eyz`` and ``ezx``/``ezy`` pairs then differ by
+    3.33e-16 -- which is what red the exact ``array_equal`` precondition of
+    :func:`test_d3_offplane_fff_nv_keeps_the_cells_own_mirror` on the Linux
+    arms of CI run 34914295323 (py3.13 ``disk``, py3.14 ``square``) while it
+    stayed green on Windows.
+
+    Why this is exact and not another tolerance: IEEE-754 addition is
+    commutative and multiplication by 0.5 is exact, so
+    ``P ((t + P t P) / 2) P == (P t P + t) / 2 == (t + P t P) / 2`` bit for
+    bit, with no appeal to the libm at all.  The averaging is therefore a
+    DERIVED construction, not a measured one, and the test keeps its
+    ``np.array_equal`` precondition.
+    """
+    out = 0.5 * (tensor + _mirror3(tensor))
+    assert np.array_equal(out, _mirror3(out))      # exact, by commutativity
+    return out
+
+
+#: A uniaxial pillar in AIR (n_o = 2.0, n_e = 2.6): the contrast the
+#: factorization-order artefact scales with.  ``phi = 45 deg`` puts the
+#: director in the x = y plane, so the cell is its own x<->y mirror --
+#: analytically exactly, and NUMERICALLY exactly once :func:`_mirror_exact`
+#: has removed the libm's 1-ULP ``sin`` / ``cos`` disagreement (below).
+_DIAG_RAW = uniaxial_tensor(2.0, 2.6, np.deg2rad(40.0), phi=np.deg2rad(45.0))
+_DIAG = _mirror_exact(_DIAG_RAW)
+_SKEW = uniaxial_tensor(2.0, 2.6, np.deg2rad(40.0), phi=np.deg2rad(20.0))
+
+#: How far ``_DIAG_RAW`` may sit from its own mirror before the averaging
+#: above stops being a round-off repair and starts MANUFACTURING a symmetry
+#: the fixture does not have.  DERIVED as 8 ULP of the tensor's own scale,
+#: ``8 * eps * max|_DIAG_RAW| = 8 * 2.220e-16 * 5.6196 = 9.98e-15``.
+#:
+#: Two-sided, both sides measured (``validation/probe_known_reds/
+#: probe_d3_mirror.py``, ``probe_d3_sensitivity.py``):
+#:   * ABOVE every measured round-off reading -- 0.0 on the MSVC libm and
+#:     3.33e-16 on glibc, i.e. 30x margin over the worst;
+#:   * BELOW any real change of the fixture by >= 6 decades: moving the
+#:     director off the x = y plane by a MILLIONTH of a degree already puts
+#:     3.98e-08 here (and 3.98e-05 at a thousandth of a degree, 3.98e-03 at a
+#:     hundredth), so no director the fixture could plausibly acquire hides
+#:     under this bar;
+#:   * below what would corrupt the reading the test actually makes: a
+#:     fixture mirror defect ``delta`` induces ``|Jxx - Jyy| = 0.074 delta``
+#:     (square) / ``0.018 delta`` (disk), measured over
+#:     ``delta = 1e-14 .. 1e-06``, and the two slopes are identical on every
+#:     kernel of the ladder and on WSL, so 1e-14 here is <= 7.4e-16 on the
+#:     Jones matrix -- under this path's own arithmetic floor (1.4e-15 ..
+#:     7.5e-15 over the same arms) and two decades under ``_D3_SYM_BAR``.
+_D3_FIXTURE_ROUNDOFF_BAR = 1e-14
 
 
 def _cell(kind, tilt, back=1.0 + 0j):
@@ -444,7 +507,31 @@ def test_d3_offplane_fff_nv_keeps_the_cells_own_mirror(kind, pre_fix_floor):
     3.32e-04 and 2.35e-03 at M = 6 -- on a Jones matrix whose own scale is
     0.11 .. 0.23, i.e. 0.4 % .. 4 % of spurious form birefringence on a cell
     that has NONE.
+
+    The fixture's own precondition is asserted TWICE, and both halves are
+    unconditional:
+
+    * the cell is its own mirror BIT-FOR-BIT (``np.array_equal``), which
+      :func:`_mirror_exact` makes true BY CONSTRUCTION on every IEEE-754
+      platform rather than by luck of the libm -- see that function for the
+      1-ULP ``sin(pi/4)`` / ``cos(pi/4)`` disagreement that made this
+      precondition a per-platform coin toss: green on Windows, red on the
+      Linux arms of CI run 34914295323 (py3.13 ``disk``, py3.14 ``square``,
+      both "fixture is not its own x<->y mirror");
+    * the averaging that makes it true moved the tensor by ROUND-OFF and not
+      by structure, bounded by ``_D3_FIXTURE_ROUNDOFF_BAR`` -- so a fixture
+      whose director really left the x = y plane is REJECTED here instead of
+      being silently symmetrised into a cell the mirror gate below would then
+      pass on.  MEASURED raw defect: 0.0 (MSVC libm) / 3.33e-16 (glibc);
+      a director off the plane by 1e-06 deg puts 3.98e-08 here.
     """
+    raw_defect = float(np.max(np.abs(_DIAG_RAW - _mirror3(_DIAG_RAW))))
+    assert raw_defect < _D3_FIXTURE_ROUNDOFF_BAR, (
+        f"the D3 director tensor sits {raw_defect:.3e} from its own x<->y "
+        f"mirror, which is structure rather than the <= "
+        f"{_D3_FIXTURE_ROUNDOFF_BAR:.1e} of libm round-off _mirror_exact is "
+        f"allowed to repair -- phi is no longer 45 deg, or the component "
+        f"permutation changed")
     cell = _cell(kind, _DIAG)
     assert np.array_equal(cell, _mirror(cell)), \
         "fixture is not its own x<->y mirror"

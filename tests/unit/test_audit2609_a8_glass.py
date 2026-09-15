@@ -27,6 +27,7 @@ Oracles used
 """
 from __future__ import annotations
 
+import importlib.util
 import warnings
 
 import numpy as np
@@ -211,6 +212,39 @@ def _tuple_registered_names():
         if isinstance(entry, tuple) and entry[0] != '__user__')
 
 
+# Measured here rather than read off the module under test.  CI runs WITHOUT
+# the glass extra on purpose (.github/workflows/unit-tests.yml drops
+# ``[all,dev]`` and names validate.yml as the harness for the optional paths),
+# so "refractiveindex absent" is a SUPPORTED configuration that carries half of
+# this section's coverage.  It is asserted as a fact below, never skipped on
+# (TESTING_STANDARDS rule 4: "Never ``pytest.skip`` on a resource check -- two
+# skips silently removed five tests from the gate on exactly the runners that
+# mattered"), matching this file's E1 pattern one section up.
+_HAS_REFRACTIVEINDEX = importlib.util.find_spec('refractiveindex') is not None
+
+
+def _real_index_needs_the_package(name):
+    """True when ``name``'s REAL index cannot be resolved on this install.
+
+    This is the E2 contract's boundary, not an escape hatch.  The module
+    docstring's Dependencies section: "When missing, the module falls back to
+    the bundled Sellmeier coefficients ... Only the tuple-style entries that
+    lack a Sellmeier fallback will raise."  ``get_glass_index`` repeats it in
+    its own Raises block, and ``get_glass_index_complex`` inherits it by
+    documenting the "same resolution order" -- its own promise is about the
+    EXTINCTION ("the extinction is looked up via the database when available
+    and falls back to ``kappa = 0`` otherwise"), which presupposes a real
+    index for the kappa to be attached to.
+
+    Measured on this registry 2026-09-14: of 49 tuple entries exactly one
+    qualifies, ``SILICON`` (``('main', 'Si', 'Li-293K')``, no Sellmeier and no
+    polynomial row), and only when the package is absent.
+    """
+    return (not _HAS_REFRACTIVEINDEX
+            and name not in G.SELLMEIER_COEFFICIENTS
+            and name not in G.POLYNOMIAL_COEFFICIENTS)
+
+
 @pytest.mark.parametrize('wavelength', [1.31e-6, 1.55e-6])
 def test_e2_complex_index_never_raises_for_a_catalogue_glass(wavelength):
     """Pre-fix, 7 of 44 tuple-registered glasses raised
@@ -218,18 +252,55 @@ def test_e2_complex_index_never_raises_for_a_catalogue_glass(wavelength):
     four fused-silica aliases, i.e. every ``main``-shelf window material.
     The class subclasses ``Exception`` directly, so it was not in the
     caught tuple.  The documented contract is a warn-once plus kappa = 0.
+
+    Scope of "never raises".  What may not leak an exception is the
+    EXTINCTION lookup.  A tuple entry with no bundled row still raises the
+    documented ``ImportError`` on a minimal install -- there is no real index
+    for a kappa to be attached to, and fabricating one is the silent-wrong
+    shape E2's own second arm (``n + nan*j``) was raised to kill.  That arm is
+    asserted here too, and it is the arm CI runs: the exempt set must be
+    exactly the computed one, every exemption must be an ``ImportError``
+    naming both remediations, and the premise -- that the real index really is
+    unobtainable -- is re-measured rather than assumed.
     """
-    raised = []
+    raised, exempt = [], []
     for name in _tuple_registered_names():
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
             try:
                 G.get_glass_index_complex(name, wavelength)
+            except ImportError as exc:
+                bucket = (exempt if _real_index_needs_the_package(name)
+                          else raised)
+                bucket.append((name, 'ImportError', str(exc)))
             except Exception as exc:            # noqa: BLE001 - that is the pin
-                raised.append((name, type(exc).__name__))
-    assert raised == [], (
-        f"get_glass_index_complex raised for {raised} instead of falling "
-        f"back to kappa = 0")
+                raised.append((name, type(exc).__name__, str(exc)))
+    assert not raised, (
+        "get_glass_index_complex raised for "
+        + ", ".join(f"{n} ({k}: {m.splitlines()[0][:80]})"
+                    for n, k, m in raised)
+        + " instead of falling back to kappa = 0")
+    # Two-sided on the exemption: it must be exactly the computed set, so a
+    # future registry row that quietly loses its bundled fallback fails here
+    # instead of being waved through.
+    assert [n for n, _, _ in exempt] == [
+        n for n in _tuple_registered_names()
+        if _real_index_needs_the_package(n)], (
+        f"exempted {[n for n, _, _ in exempt]}; expected exactly the tuple "
+        f"entries with no bundled row on this install")
+    for name, _, msg in exempt:
+        # The refusal must be the actionable one, not a bare ImportError.
+        assert 'pip install' in msg and 'SELLMEIER_COEFFICIENTS' in msg, msg
+        # Premise, re-measured rather than assumed: the real index really is
+        # unobtainable here, so there was nothing for a kappa to attach to.
+        with pytest.raises(ImportError):
+            G.get_glass_index(name, wavelength)
+    # Hard failure for "this test measured nothing at all".  Measured
+    # 2026-09-14: 49 tuple entries, 49 swept with the package and 48 without.
+    n_swept = len(_tuple_registered_names()) - len(exempt)
+    assert n_swept >= 40, (
+        f"only {n_swept} catalogue glasses were exercised; the sweep has "
+        f"gone blind")
 
 
 @pytest.mark.parametrize('wavelength', [1.31e-6, 1.55e-6])
@@ -238,9 +309,19 @@ def test_e2_extinction_is_finite_and_non_negative(wavelength):
     NaN rather than raising, so ``kappa is None`` was not the only "no data"
     signal: E-BAK1 and E-LAK04 returned ``n + nan*j`` at 1.31 um, which
     poisons every downstream absorption product silently.
+
+    Holds on both installs.  Without the package the sweep runs over the 48
+    tuple entries that have a bundled row -- every one of which must come back
+    ``n + 0j``, the documented fallback -- and the one entry whose real index
+    cannot resolve at all is covered by
+    ``test_e2_complex_index_never_raises_for_a_catalogue_glass``, which
+    asserts its documented ``ImportError`` rather than skipping it.
     """
-    bad = []
+    bad, exempt = [], []
     for name in _tuple_registered_names():
+        if _real_index_needs_the_package(name):
+            exempt.append(name)
+            continue
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
             nc = G.get_glass_index_complex(name, wavelength)
@@ -248,10 +329,33 @@ def test_e2_extinction_is_finite_and_non_negative(wavelength):
                 and nc.imag >= 0.0):
             bad.append((name, nc))
     assert bad == [], f"non-finite or negative kappa: {bad}"
+    # Measured 2026-09-14: 0 exemptions with the package, 1 (SILICON) without.
+    assert len(exempt) <= 1, exempt
+    assert not (exempt and _HAS_REFRACTIVEINDEX), (
+        f"{exempt} were exempted although refractiveindex is installed")
+    n_swept = len(_tuple_registered_names()) - len(exempt)
+    assert n_swept >= 40, (
+        f"only {n_swept} catalogue glasses were exercised; the sweep has "
+        f"gone blind")
 
 
 @pytest.mark.parametrize('name', ['CaF2', 'FUSED_SILICA', 'MgF2', 'SILICON'])
 def test_e2_missing_kappa_warns_once_and_returns_zero(name):
+    """The warn-once itself, on four ``main``-shelf window materials.
+
+    ``SILICON`` is the only one of the four with no bundled Sellmeier or
+    polynomial row, so on a minimal install it has no real index to carry a
+    kappa and takes the documented ``ImportError`` instead of this path; the
+    other three run the full warn-once body on BOTH installs.  Asserted, not
+    skipped (TESTING_STANDARDS rule 4) -- a blanket skip here would have
+    deleted the three that do exercise the fallback, which is precisely the
+    behaviour a minimal install relies on.
+    """
+    if _real_index_needs_the_package(name):
+        with pytest.raises(ImportError,
+                           match=r"requires the 'refractiveindex' package"):
+            G.get_glass_index_complex(name, 1.31e-6)
+        return
     G._kappa_warned.clear()
     with warnings.catch_warnings(record=True) as rec:
         warnings.simplefilter('always')
@@ -271,9 +375,29 @@ def test_e2_pages_that_do_carry_k_keep_their_value_and_sign():
     tabulated-k interpolation, re-measured 2026-09-12; the bar is 1e-4
     relative, a decade above float noise and decades below any sign flip or
     silent zeroing.
+
+    The real half is unconditional: N-BK7's bundled Sellmeier row and its
+    ``specs/SCHOTT-optical/N-BK7`` page agree to the last bit here -- both
+    installs return 1.5006520430195947 at 1.55 um (measured 2026-09-14) --
+    so the optional package changes only the kappa.  Without it the kappa is
+    the documented fallback, exactly 0.0 and announced by the warn-once, and
+    that arm is asserted rather than skipped (TESTING_STANDARDS rule 4).
     """
-    nc = G.get_glass_index_complex('N-BK7', 1.55e-6)
-    assert abs(nc.real - 1.5006520) < 1e-6
+    G._kappa_warned.clear()
+    with warnings.catch_warnings(record=True) as rec:
+        warnings.simplefilter('always')
+        nc = G.get_glass_index_complex('N-BK7', 1.55e-6)
+    assert abs(nc.real - 1.5006520) < 1e-6, nc
+    announced = [w for w in rec if issubclass(w.category, RuntimeWarning)
+                 and 'extinction' in str(w.message)]
+    if not _HAS_REFRACTIVEINDEX:
+        assert nc.imag == 0.0, nc
+        assert len(announced) == 1, (
+            f"the kappa = 0 fallback must announce itself exactly once, got "
+            f"{len(announced)}")
+        return
+    assert not announced, 'N-BK7 carries k; the fallback must not fire'
+    assert nc.imag > 0.0, nc
     assert abs(nc.imag / 1.4361318e-7 - 1.0) < 1e-4, nc
 
 

@@ -18,12 +18,25 @@ executes.  Two independent fingerprints pin that:
   says nothing about them; it is the check that catches a moved, deleted,
   reordered or re-spelled *statement*.
 * **token fingerprint** -- the ``tokenize`` stream reduced to NAME / OP /
-  NUMBER / STRING (and the 3.12+ f-string token trio), with COMMENT tokens and
-  the STRING tokens belonging to those same string-statements dropped.  This is
-  the check that catches what the AST normalises away: the *spelling* of a
-  literal (``1e3`` vs ``1000.0``, ``'a'`` vs ``"a"``, an implicit
-  concatenation), and it re-checks statement identity through a completely
-  different front end.
+  NUMBER / STRING, with COMMENT tokens and the STRING tokens belonging to those
+  same string-statements dropped.  This is the check that catches what the AST
+  normalises away: the *spelling* of a literal (``1e3`` vs ``1000.0``, ``'a'``
+  vs ``"a"``, an implicit concatenation), and it re-checks statement identity
+  through a completely different front end.
+
+  An f-string is fed in as ONE ``STRING`` record carrying its exact source
+  text, ``f"`` prefix and closing quote included, rather than as whatever run
+  of tokens the running tokenizer happens to split it into.  That is not a
+  weakening -- the source text is the most literal reading of "spelling" there
+  is, finer than the token run, which normalises ``{{`` to ``{`` in
+  FSTRING_MIDDLE and says nothing about the spacing inside a replacement
+  field.  It is what makes the digest a property of the FILE rather than of the
+  interpreter: PEP 701 (CPython 3.12) replaced the single pre-3.12 ``STRING``
+  token for an f-string with an ``FSTRING_START`` / ``FSTRING_MIDDLE`` /
+  ``FSTRING_END`` run whose replacement fields tokenise as ordinary NAME / OP /
+  NUMBER, so a stream-shaped digest reads one value below 3.12 and another at
+  or above it for the same bytes.  Collapsing the run reads the same value on
+  both.
 
 Both fingerprints were recorded from the PRE-relocation file and are stored in
 the header of the module's history document, so this test compares today's
@@ -74,10 +87,17 @@ HISTORY_DIR = REPO_ROOT / "docs" / "history"
 #: token categories that carry meaning for the interpreter.  COMMENT, NL,
 #: NEWLINE, INDENT, DEDENT, ENCODING and ENDMARKER are all excluded: the first
 #: is what WP-A17 removes, the rest move whenever a block of prose is deleted.
-_MEANING_TOKENS = frozenset({
-    "NAME", "OP", "NUMBER", "STRING",
-    "FSTRING_START", "FSTRING_MIDDLE", "FSTRING_END",
-})
+_MEANING_TOKENS = frozenset({"NAME", "OP", "NUMBER", "STRING"})
+
+#: The token names that open and close a 3.12+ f-string (and a 3.14+ t-string).
+#: Everything between an opening token and its matching close -- the literal
+#: chunks AND the tokenised replacement-field expressions -- is replaced by one
+#: synthetic ``STRING`` record holding the construct's source text, which is
+#: exactly what a pre-3.12 tokenizer emitted for the same bytes.  Named as
+#: strings rather than ``tokenize.FSTRING_START`` because the attributes do not
+#: exist below 3.12, where the sets are simply never hit.
+_FSTRING_OPEN = frozenset({"FSTRING_START", "TSTRING_START"})
+_FSTRING_CLOSE = frozenset({"FSTRING_END", "TSTRING_END"})
 
 _MISSING = object()
 
@@ -157,22 +177,80 @@ def ast_fingerprint(source: str) -> str:
     return hashlib.sha256(_normalise(tree).encode("utf-8")).hexdigest()
 
 
-def token_fingerprint(source: str) -> str:
-    """SHA-256 of the meaning-carrying token stream, comments and docstrings
-    dropped."""
+def _source_span(lines: list[str], start: tuple[int, int],
+                 end: tuple[int, int]) -> str:
+    """The source text between two ``(row, col)`` token positions.
+
+    Rows are 1-based and columns are character offsets into the decoded line,
+    which is what :func:`tokenize.generate_tokens` reports for a ``str``
+    source.
+    """
+    (first_row, first_col), (last_row, last_col) = start, end
+    if first_row == last_row:
+        return lines[first_row - 1][first_col:last_col]
+    out = [lines[first_row - 1][first_col:]]
+    out.extend(lines[first_row:last_row - 1])
+    out.append(lines[last_row - 1][:last_col])
+    return "".join(out)
+
+
+def _token_records(source: str) -> list[str]:
+    """The meaning-carrying token stream as ``"<name>\\x1f<text>"`` records.
+
+    Comments never appear (they are not a meaning token) and the STRING tokens
+    of string-*statements* are dropped, so a docstring shortened or deleted by
+    a history move is invisible here.
+
+    An f-string contributes exactly one ``STRING`` record spelling it the way
+    the file does.  ``depth`` counts nesting because 3.12 allows an f-string
+    inside a replacement field of another one: only the OUTERMOST run closes
+    the record, which is again what a pre-3.12 tokenizer did with the same
+    bytes (below 3.12 a nested f-string had to use the other quote character,
+    and the whole thing was still one ``STRING`` token).
+    """
     spans = _string_statement_lines(ast.parse(source))
-    parts: list[str] = []
+    lines = source.splitlines(keepends=True)
+
+    def _is_statement(row: int) -> bool:
+        return any(lo <= row <= hi for lo, hi in spans)
+
+    records: list[str] = []
+    depth = 0
+    opened: tuple[int, int] | None = None
     readline = io.StringIO(source).readline
     for tok in tokenize.generate_tokens(readline):
         name = tokenize.tok_name[tok.type]
+        if name in _FSTRING_OPEN:
+            if depth == 0:
+                opened = tok.start
+            depth += 1
+            continue
+        if depth:
+            # Inside an f-string: every token until the matching close belongs
+            # to the one record built below, including the NAME/OP tokens of a
+            # replacement field.
+            if name in _FSTRING_CLOSE:
+                depth -= 1
+                if depth == 0 and opened is not None:
+                    if not _is_statement(opened[0]):
+                        records.append(
+                            "STRING\x1f"
+                            + _source_span(lines, opened, tok.end))
+                    opened = None
+            continue
         if name not in _MEANING_TOKENS:
             continue
-        if name.startswith(("STRING", "FSTRING")):
-            row = tok.start[0]
-            if any(lo <= row <= hi for lo, hi in spans):
-                continue
-        parts.append(f"{name}\x1f{tok.string}")
-    return hashlib.sha256("\x00".join(parts).encode("utf-8")).hexdigest()
+        if name == "STRING" and _is_statement(tok.start[0]):
+            continue
+        records.append(f"{name}\x1f{tok.string}")
+    return records
+
+
+def token_fingerprint(source: str) -> str:
+    """SHA-256 of the meaning-carrying token stream, comments and docstrings
+    dropped."""
+    return hashlib.sha256(
+        "\x00".join(_token_records(source)).encode("utf-8")).hexdigest()
 
 
 # ---------------------------------------------------------------------------
@@ -475,3 +553,114 @@ def test_the_fingerprints_are_actually_sensitive(name, md, header):
     assert ast_fingerprint(respelled) == ast_ref, (
         f"the AST fingerprint moved on a value-preserving re-spelling "
         f"({kind}); the mutation is not testing what this assertion claims")
+
+
+# ---------------------------------------------------------------------------
+# the digest is a property of the FILE, not of the interpreter that reads it
+# ---------------------------------------------------------------------------
+#: One f-string, spelled one way.  Every case below is measured against it.
+_FSTRING_SAMPLE = 'a = f"x{v}y"\n'
+
+
+def test_an_f_string_reaches_the_digest_as_one_record_holding_its_source():
+    """The version-independence invariant, stated on the records themselves.
+
+    CPython 3.12 (PEP 701) stopped emitting one ``STRING`` token per f-string
+    and started emitting ``FSTRING_START`` / ``FSTRING_MIDDLE`` /
+    ``FSTRING_END`` around replacement fields tokenised as ordinary NAME / OP /
+    NUMBER.  A digest taken over that run therefore reads one value below 3.12
+    and a different one at or above it for identical bytes -- which is a
+    decision that moves with the interpreter, and so a defect in the digest and
+    not in the file it is reading.
+
+    This asserts the fix at the layer the defect lives at: whatever the running
+    tokenizer does with an f-string, exactly one record reaches the digest and
+    it holds the construct's source text.  The expectation is spelled out in
+    full rather than compared against a hash, so a reader can see that the
+    ``f"`` prefix and the closing quote are inside the record.
+    """
+    assert _token_records(_FSTRING_SAMPLE) == [
+        "NAME\x1fa", "OP\x1f=", 'STRING\x1ff"x{v}y"']
+
+
+def test_a_nested_f_string_collapses_to_a_single_outermost_record():
+    """Only the outermost run closes the record.
+
+    3.12 allows an f-string inside another one's replacement field; below 3.12
+    the same text (with the inner quote switched, as here) was legal and was
+    one ``STRING`` token.  Counting nesting is what keeps those two readings
+    equal.
+    """
+    source = "a = f\"{f'{v}'}\"\n"
+    assert _token_records(source) == [
+        "NAME\x1fa", "OP\x1f=", "STRING\x1ff\"{f'{v}'}\""]
+
+
+def test_a_multi_line_f_string_records_its_whole_source_text():
+    """The record is built from source positions, not by re-joining token
+    strings: ``FSTRING_MIDDLE`` reports ``{{`` as ``{``, so a record assembled
+    from token text would lose the distinction between an escaped brace and a
+    replacement field."""
+    source = 'a = f"""x{v}\ny{{z}}\n"""\n'
+    assert _token_records(source) == [
+        "NAME\x1fa", "OP\x1f=", 'STRING\x1ff"""x{v}\ny{{z}}\n"""']
+
+
+@pytest.mark.parametrize("variant,what", [
+    ("a = f'x{v}y'\n", "quote character"),
+    ('a = F"x{v}y"\n', "prefix case"),
+    ('a = f"x{ v }y"\n', "spacing inside the replacement field"),
+    ('a = f"x{v!r}y"\n', "a conversion added"),
+    ('a = f"x{v:>3}y"\n', "a format spec added"),
+    ('a = "x" f"{v}" "y"\n', "split into an implicit concatenation"),
+])
+def test_an_f_string_re_spelled_moves_the_token_fingerprint(variant, what):
+    """Falsifiability for the collapse.
+
+    Collapsing a token run to one record is only sound if the record is still
+    finer-grained than the AST -- otherwise the token fingerprint would have
+    stopped adding anything over ``ast_fingerprint`` for the 110 of 123
+    registered modules that contain an f-string (measured), and the file would
+    keep claiming two independent checks while running one.
+    """
+    assert token_fingerprint(variant) != token_fingerprint(_FSTRING_SAMPLE), (
+        f"an f-string re-spelled ({what}) left the token fingerprint where it "
+        f"was; the digest no longer sees the spelling of an f-string")
+
+
+@pytest.mark.parametrize("variant,what", [
+    ("a = f'x{v}y'\n", "quote character"),
+    ('a = F"x{v}y"\n', "prefix case"),
+    ('a = f"x{ v }y"\n', "spacing inside the replacement field"),
+])
+def test_those_re_spellings_are_invisible_to_the_ast_fingerprint(variant, what):
+    """The other half of the asymmetry: these three produce the same value and
+    the same tree, so only the token fingerprint can see them.  If one of them
+    ever moved the AST fingerprint too, the case above would stop being
+    evidence that the token check is independent."""
+    assert ast_fingerprint(variant) == ast_fingerprint(_FSTRING_SAMPLE), (
+        f"the AST fingerprint moved on an f-string re-spelling ({what}); the "
+        f"pair of assertions above no longer isolates the token check")
+
+
+def test_no_registered_module_feeds_a_tokenizer_specific_record_to_the_digest():
+    """A sweep rather than a per-module case: this is one statement about the
+    record vocabulary, and a failure names every module that breaks it.
+
+    If a future construct tokenises into version-specific token types the way
+    f-strings did, this is what notices before the recorded digests are pinned
+    to whichever interpreter happened to record them."""
+    offenders = {}
+    for _name, _md, header in _REGISTRY:
+        src = (REPO_ROOT / header["module"]).read_text(encoding="utf-8")
+        bad = sorted({
+            record.split("\x1f", 1)[0] for record in _token_records(src)
+            if record.split("\x1f", 1)[0] not in _MEANING_TOKENS
+        })
+        if bad:
+            offenders[header["module"]] = bad
+    assert not offenders, (
+        f"records outside {sorted(_MEANING_TOKENS)} reached the token digest: "
+        f"{offenders}.  Those token names are what the running CPython chose "
+        f"to call the construct, so the recorded digest would become a "
+        f"property of the recording interpreter.")

@@ -1,13 +1,14 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/pmm/stack2d.py
 ast_sha256: 42ed5d704f6e95f29a9f2b2abdaa95dca2bfdaf2da8e5448b467648fab303629
-token_sha256: 739b4a6036051436b3a88fefc24791651a73f08d1fb510f49b248aeece0aac62
+token_sha256: 82d70f6773b8beb2eb40602b3b24d98e164f97386fc951f3979fd10424be2831
 pre_relocation_lines: 2261
 recorded_by: WP-A17 SWEEP-2 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
 re_recorded: 2026-09-13 -- WP-B6 (audit 2026-09-11 G10(d)): _geom_cache carries a tensor layer's k0-free projected operators (_tensor_projected_ops) beside the scalar lops, and _geom_key gains the formulation the cached EZZ rule depends on; every operator is bit-identical with and without the cache
 re_recorded: 2026-09-13 -- WP-B11a: the Collins readout's K1 applicability window stated on the public transport docstring (item 20); PMM2DStackHybrid's formulation/cascade/symmetry refuse an out-of-vocabulary assignment (item 19); sampling= on the free-space HFPI pair (item 12)
 re_recorded: 2026-09-14 -- PMM2DStackHybrid.truncation joins formulation/cascade/symmetry as a guarded property, sharing _check_truncation with __init__.
+re_recorded: 2026-09-14 -- Wave-5 item D (CI run 34914295323): DIGEST-SCHEME change, not a code change -- token_fingerprint now feeds an f-string to the digest as ONE STRING record holding its exact source text instead of the running tokenizer's FSTRING_START/FSTRING_MIDDLE/FSTRING_END run, so the recorded value is a property of the file rather than of the interpreter that read it; PEP 701 made CPython 3.12 tokenize f-strings differently from 3.11, these digests were recorded on 3.12+, and all five py3.11 CI shards read a different token_sha256 for byte-identical sources (110 of 123 documents, measured).  The module source is unchanged and ast_sha256 is unchanged.
 -->
 
 # Version history -- `lumenairy/elements/pmm/stack2d.py`

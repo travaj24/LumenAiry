@@ -846,9 +846,24 @@ def decompose_lg(field: np.ndarray, x: np.ndarray, y: np.ndarray,
     # all overlaps to a single ``einsum`` reduction.  Pre-v4.14.0 each
     # mode rebuilt the (Ny, Nx) array, recomputing the shared Gaussian
     # envelope ``exp(-(rx^2+ry^2)/w^2)`` 28 times for (p_max=3, ell_max=3).
+    #
+    # ``only`` is normalised HERE into exactly-two-element ``(int, int)``
+    # pairs, which is both what :func:`_lg_mode_conj_stack` declares and what
+    # it consumes (``for (p, ell) in only``, and the same unpack when it
+    # builds ``want``).  The pair is unpacked by name rather than re-wrapped
+    # with ``tuple(k)`` because ``tuple(iterable)`` is variable-length --
+    # ``tuple(k)`` of a ``(p, ell)`` pair types as ``tuple[int, ...]``, so the
+    # pair-ness the callee's signature rests on was being discarded at the
+    # call site even though the runtime value is always a 2-tuple.  The
+    # normalisation the re-wrap existed for is kept: a caller handing in
+    # ``[[0, 1]]`` or numpy integer scalars still arrives as hashable
+    # ``(int, int)``, which is what the ``frozenset`` and the cache key need.
+    # A wrong-length entry still raises ``ValueError`` -- one frame earlier
+    # than before, with the same "values to unpack" message.
     keys, modes_conj_stack = _lg_mode_conj_stack(
         X, Y, w, p_max, ell_max, cx, cy, dx, dy,
-        None if only is None else tuple(tuple(k) for k in only),
+        None if only is None
+        else tuple((int(p), int(ell)) for (p, ell) in only),
     )
     # Convert field to complex (cheap if already complex; required by einsum
     # since modes are complex).

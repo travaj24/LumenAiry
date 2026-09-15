@@ -151,16 +151,65 @@ jobs:
         # many-small-solve files, i.e. a blanket pin here is not a free win and
         # needs a real CI-hardware A/B first.
         #
-        # 2026-09-12 (audit 2026-09-11, V5/V7): ``--maxfail`` 50 -> 10.  At 50
-        # per shard across 5 shards x 5 pythons the gate tolerated up to 1 250
-        # failures before any job aborted, which is not an early-abort budget,
-        # it is no budget.  10 is still enough to show a PATTERN (one shard's
-        # first ten failures name the class) while a catastrophic break --
-        # a bad merge, a missing dependency -- stops the matrix in minutes
-        # instead of burning 45 of them per job.
+        # ``--maxfail`` is 50 per shard.  2026-09-14: 10 -> 50, reverting the
+        # 2026-09-12 change (audit 2026-09-11, V5/V7).  That change argued that
+        # "50 per shard across 5 shards x 5 pythons tolerated up to 1 250
+        # failures before any job aborted, which is not an early-abort budget".
+        # The arithmetic sums the whole matrix, but nothing waits on the matrix
+        # sum -- what bounds a JOB's wall clock is that job's own budget, and a
+        # catastrophically broken job reaches 50 in its first minutes exactly as
+        # it reaches 10.  The early-abort property the lower cap was bought for
+        # therefore survives the revert.
+        #
+        # What the lower cap cost, MEASURED on run 34914295323 (the 5.47.0
+        # commit): every one of the five py3.11 shards stopped at exactly
+        # ``10 failed`` (178-223 passed, 2 933-2 934 selected), so each shard
+        # executed 188-233 of ~2 933 tests -- 6.4-7.9 % -- and more than 92 % of
+        # the 3.11 lane never ran at all.  49 of those 50 failures are ONE
+        # parametrised gate, ``test_audit2609_a17_history_relocation.py::
+        # test_the_module_token_stream_is_unchanged_since_the_history_move``,
+        # which has 123 cases; the same case ids PASS on the other interpreters
+        # (``[lumenairy.algebra.primitives]``: FAILED on 3.11 shard 1, PASSED on
+        # 3.12 shard 1 and 3.13 shard 1 of the same run).  All the run could say
+        # was that at least 49 of the 123 were red on 3.11 and nothing at all
+        # about the other 74: the 3.11 failure set was a LOWER BOUND, and the
+        # census of what was actually broken on 3.11 was unknowable from the
+        # artifacts.  That is the failure mode 50 exists to prevent.
+        #
+        # The true number is now known, because the class was root-caused in the
+        # same wave: the token digest was taken over the running interpreter's
+        # tokenizer output, and PEP 701 made CPython 3.12 emit
+        # FSTRING_START/MIDDLE/END where 3.11 emits one STRING token, so every
+        # fingerprinted module containing an f-string read a different digest on
+        # 3.11.  MEASURED over the 123 history documents: 110 of the 123 modules
+        # contain at least one f-string and 13 do not.  So 110 cases were red on
+        # 3.11 and the run reported 49 -- 45 % of the class.  Spread over 5
+        # shards that is ~22 per shard: a 50-per-shard budget enumerates the
+        # class whole in ONE run, while 10 truncates each shard at the same
+        # 45 % and turns the enumeration into one CI round-trip per ten
+        # findings, for a class that a single run should have named outright.
+        #
+        # The cap costs a healthy lane nothing either way: on the same run the
+        # 3.12 shards reported 3 and 2 failures, 3.13 reported 4 / 2 / 4 and
+        # 3.14 reported 8 and 1 -- all below 10, so the cap never fired there.
+        # It fires precisely on the lane that has a systematic class, which is
+        # the lane whose census is worth having.  Both sides of the trade, then:
+        # a catastrophic break (a bad merge, a missing dependency, an
+        # ImportError storm) must still abort the job in minutes rather than
+        # burn the 45-minute step cap, and a systematic per-interpreter failure
+        # class must be allowed to enumerate itself in a single run.  50 is
+        # where both hold -- far below the ~2 900 tests a shard selects, so a
+        # broken job still dies early, and comfortably above the ~25-per-shard
+        # size of the largest real failure class this repo has produced, so that
+        # class is reported whole.
+        #
+        # This is a FAILURE budget, not an error budget: a collection error
+        # aborts the shard on its own (``Interrupted: 1 error during
+        # collection``) whatever ``--maxfail`` says, which is how the same run's
+        # five 3.10 shards reported ``18 skipped, 1 error`` and ran nothing.
         run: |
           python -m pytest tests/unit -m "not integration and not slow" --tb=short \
-            -p no:cacheprovider --maxfail=10 -v \
+            -p no:cacheprovider --maxfail=50 -v \
             --splits 5 --group ${{ matrix.shard }} \
             --splitting-algorithm least_duration \
             --durations-path .test_durations 2>&1 \
@@ -517,7 +566,7 @@ jobs:
           fi
 
   slow-tests:
-    name: Slow tests shard ${{ matrix.shard }}/5 (eig-heavy + the > 2 min/file lane)
+    name: Slow tests shard ${{ matrix.shard }}/8 (eig-heavy + the > 2 min/file lane)
     runs-on: ubuntu-latest
     # v5.15.0: the graduated EME mode-solver convergence tests
     # (tests/unit/test_eme_*.py) and the RCWA FFF-NV slow test are eig-heavy
@@ -537,12 +586,57 @@ jobs:
     # 23.8 min per shard on 5 shards, 45-min step cap); slow 3 573.9 s ->
     # 5 914.9 s, which is 32.9 min per shard on 3 (OVER the 30-min step cap)
     # and 19.7 min on 5.  So the shard count moves, not the cap.
+    #
+    # 2026-09-14: 5 -> 8 shards, AND the step cap 30 -> 45 min with the job cap
+    # 35 -> 50.  Both, because neither alone clears the lane -- the arithmetic
+    # is below.  Run 34914295323 killed ALL FIVE slow shards at the 1 800 s
+    # step cap: each ran 1 847-1 863 s and the log ends mid-test with no
+    # summary line, shard 2 at ``[ 65%]`` of its selection and shard 5 at
+    # ``[ 98%]`` (both artefacts read directly).
+    #
+    # Where the 2026-09-12 sizing went wrong.  It recorded a 5 914.9 s lane,
+    # 19.7 min per shard on 5.  RE-MEASURED 2026-09-14 from the same committed
+    # ``.test_durations`` against today's slow collection (935 selected ids):
+    # the lane is 9 630.0 s, +62.8 % since that note, because later waves kept
+    # moving files across the 2 min/file bar without re-running the sum.  At
+    # ``--splits 5`` pytest-split balances that to 1 926.0 s per shard -- and
+    # 1 926.0 s is already 126 s OVER the 1 800 s step cap.  The lane was
+    # therefore predicted to time out on every shard before the run started;
+    # it was not a runner-speed accident.
+    #
+    # Two separate factors, so two separate fixes:
+    #   * SIZE.  9 630.0 s / 8 = 1 203.8 s per shard (20.1 min).  Coverage is
+    #     not the issue -- all 935 slow-selected ids have a ``.test_durations``
+    #     entry (100.0 %, measured), so ``least_duration`` balances the lane
+    #     to +-0.0 % and the split count is the only lever on per-shard size.
+    #   * RUNNER SCALE.  The recorded seconds do not predict the runner's wall
+    #     clock uniformly.  Shard 5 reached 98 % in ~1 855 s, i.e. ~1 893 s
+    #     extrapolated against a 1 926.0 s budget (0.98x).  Shard 2 reached
+    #     only 65 % in the same ~1 855 s, i.e. ~2 854 s extrapolated (1.48x).
+    #     Size the lane on the WORST observed factor, not the mean.
+    # Combining them: 8 splits at 1.48x is 1 203.8 x 1.48 = ~1 782 s, which
+    # against the old 1 800 s cap is a 1 % margin -- not a margin.  The cap
+    # raise alone is worse: 5 splits at 1.48x is 1 926.0 x 1.48 = ~2 850 s,
+    # still over a 2 700 s cap.  8 splits AND a 2 700 s cap give ~1 782 s
+    # against 2 700 s, 34 % headroom, which is the same class of headroom the
+    # fast lane carries.  The 0.98-1.48x spread itself is unexplained and is
+    # the next thing to measure (the fast lane's ``.test_durations`` note
+    # records one candidate: the file was captured with BLAS unpinned, while
+    # this lane pins OMP/OPENBLAS/MKL to 1 thread in its ``env`` block, so
+    # eig-bound entries are on a different scale here than where they were
+    # timed).  Until that is closed the worst-factor sizing is what holds.
+    #
+    # ``--splits`` below and this ``shard:`` list MUST stay equal: pytest-split
+    # partitions the selection into exactly ``--splits`` groups, so a matrix
+    # shorter than ``--splits`` silently never runs the trailing groups.
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4, 5]
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
     # v5.24.3: 25 -> 35 (matches the raised 30min slow step cap + buffer).
-    timeout-minutes: 35
+    # 2026-09-14: 35 -> 50, tracking the step cap 30 -> 45 with the same
+    # ~5 min of checkout/install/upload overhead outside the pytest step.
+    timeout-minutes: 50
     steps:
       - uses: actions/checkout@v4
         with:
@@ -560,7 +654,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[fft,perf,numba,hdf5,zarr,dev]"
 
-      - name: Run slow tests (shard ${{ matrix.shard }}/5)
+      - name: Run slow tests (shard ${{ matrix.shard }}/8)
         shell: bash
         # v5.18.1: pin BLAS to a single thread.  The eig-heavy EME vector
         # convergence tests (test_eme_2d_vector) resolve near-threshold modes
@@ -579,17 +673,21 @@ jobs:
           VECLIB_MAXIMUM_THREADS: '1'
         run: |
           # pytest-split --splits/--group distributes the slow tests across the
-          # 5 shard jobs, balanced by the committed .test_durations; each shard
-          # runs its subset serially.
+          # 8 shard jobs, balanced by the committed .test_durations; each shard
+          # runs its subset serially.  KEEP --splits EQUAL TO THE LENGTH OF THE
+          # matrix `shard:` LIST ABOVE -- a shorter matrix drops the trailing
+          # groups without any error.
           python -m pytest tests/unit -m "slow and not integration" --tb=short \
             -p no:cacheprovider -v \
-            --splits 5 --group ${{ matrix.shard }} \
+            --splits 8 --group ${{ matrix.shard }} \
             --splitting-algorithm least_duration \
             --durations-path .test_durations 2>&1 \
             | tee slow_test_output.txt
           exit ${PIPESTATUS[0]}
         # v5.24.3: 20 -> 30 (headroom for the eig-heavy shards + infra stalls).
-        timeout-minutes: 30
+        # 2026-09-14: 30 -> 45.  See the shard-count comment on the job for the
+        # arithmetic: 8 splits alone lands at ~1 782 s against a 1 800 s cap.
+        timeout-minutes: 45
 
       - name: Upload slow-test log on failure
         if: failure()

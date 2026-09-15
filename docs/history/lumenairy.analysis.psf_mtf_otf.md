@@ -1,13 +1,14 @@
 <!-- lumenairy-history-doc
 module: lumenairy/analysis/psf_mtf_otf.py
 ast_sha256: c1d4a88c11c9b8568843802bf31ed78a33c3cbfb44dd18843b5a2697694663b9
-token_sha256: 673e79189b55866955d5fb7d41d7637aa9bc077caa84202dab5d9e796955a536
+token_sha256: 03c3fda1975898a08e1b16774f29630c2f365072df68802de3bd5182c211b9e4
 pre_relocation_lines: 1579
 recorded_by: WP-A17 SWEEP-1 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
 re_recorded: 2026-09-13 -- WP-B8 (audit A6.1 / sec. 15.9): the centred transform does both fftshifts as in-place quadrant exchanges and splits fft2 into its two axis passes (4.00 -> 2.00 full padded grids, bit-identical); compute_psf gains method='fft'|'mft' with dx_psf= for the Soummer matrix Fourier transform; encircled_energy_profile is exposed and accepted as profile= on the curve and the radius (A6.2)
 re_recorded: 2026-09-13 -- VERIFY-WP-B8: _centred_fft2 copies with order='K' so a Fortran-ordered PSF keeps its layout through compute_otf/compute_mtf; _resolve_ee_profile validates a supplied profile's length against E.size and its two endpoints, the O(1) checks both docstrings already promised
 re_recorded: 2026-09-13 -- VERIFY-B8 landing: compute_psf(method='fft') refuses N_psf < N_pupil (orchestrator ruling); the verifier's memory-order copy, profile validation and docstring corrections
+re_recorded: 2026-09-14 -- Wave-5 item D (CI run 34914295323): DIGEST-SCHEME change, not a code change -- token_fingerprint now feeds an f-string to the digest as ONE STRING record holding its exact source text instead of the running tokenizer's FSTRING_START/FSTRING_MIDDLE/FSTRING_END run, so the recorded value is a property of the file rather than of the interpreter that read it; PEP 701 made CPython 3.12 tokenize f-strings differently from 3.11, these digests were recorded on 3.12+, and all five py3.11 CI shards read a different token_sha256 for byte-identical sources (110 of 123 documents, measured).  The module source is unchanged and ast_sha256 is unchanged.
 -->
 
 # Version history -- `lumenairy/analysis/psf_mtf_otf.py`

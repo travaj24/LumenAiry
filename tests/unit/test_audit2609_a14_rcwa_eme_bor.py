@@ -612,11 +612,57 @@ def test_h4_bor_pencil_eigh_accuracy(m, bc, zeros_fn):
     formed ``M^-1 A``.
 
     ORACLE: the Bessel zeros ``j_{m,n}`` / ``j'_{m,n}`` (scipy special
-    functions, floor ~1e-15 relative).  BAR 1e-12 relative.  MEASURED after:
-    1.19e-13 / 9.26e-14 / 1.38e-14 (m = 0/1/3 Dirichlet) and 1.74e-13 /
-    3.81e-14 (m = 1/3 Neumann) at degree 8, 12 elements -- 1 decade inside the
-    bar and 1-2 decades BETTER than the pre-fix 3.11e-13 / 1.78e-13 /
-    5.42e-14 / 7.04e-13 / 1.83e-13 the audit measured on the same fixture.
+    functions, floor ~1e-15 relative).
+
+    THE BAR IS DERIVED FROM THE PENCIL, NOT FROM ONE ARM'S READING.  At
+    degree 8 / 12 elements the spectral-element TRUNCATION error for the six
+    lowest modes is already below round-off -- refining to degree 12 / 24
+    elements makes the reading WORSE, not better (4.84e-12 vs 2.76e-13 at
+    m = 0), because the residual is pure eigensolve arithmetic and grows with
+    the pencil's top eigenvalue.  For a symmetric-definite pencil reduced by
+    Cholesky, LAPACK's backward-error result bounds the ABSOLUTE eigenvalue
+    error by ``p(n) eps lam_max``, so the RELATIVE error on ``sqrt(lam_i)`` is
+    bounded by ``p(n) eps lam_max / (2 lam_i)``, worst at the SMALLEST
+    eigenvalue.  The bar below takes ``p(n) = 2`` -- i.e.
+    ``eps * lam_max / lam_min`` -- and ``lam_max`` is read off the solver's
+    own full spectrum, with the value pinned to its mesh-determined range so
+    a broken solve cannot inflate its own bar.
+
+    MEASURED (``validation/probe_known_reds/probe_h4_pencil.py``,
+    ``_mutations.py``).  Bars from the rule: 1.84e-11 (m = 0 D), 7.24e-12
+    (m = 1 D), 2.71e-12 (m = 3 D), 3.15e-11 (m = 1 N), 6.24e-12 (m = 3 N),
+    with ``lam_max`` = 4.787e5 .. 4.959e5 and ``lam_min`` = 3.39 .. 40.7.
+
+    Kernel ladder for the arm that red CI, ``m = 0`` Dirichlet
+    (``OPENBLAS_CORETYPE`` x threads, this box, py3.14 / numpy 2.4.4 /
+    OpenBLAS 0.3.31; t1 and t4 agree to every digit at this size)::
+
+        HASWELL      2.758e-13      KATMAI        9.924e-13
+        NEHALEM      8.882e-14      SANDYBRIDGE   5.732e-13
+
+    i.e. an 11x swing on ONE machine from the BLAS kernel alone, with KATMAI
+    landing 0.8 % under the old 1e-12 bar -- and CI run 34914295323 read
+    1.326e-12 on py3.13 Linux and went red, while py3.11 and py3.12 passed on
+    the same source.  WSL (py3.12, numpy 2.4.6) reads 2.758e-13, bit-identical
+    to the Windows HASWELL arm -- same kernel, same answer, which is the
+    control that says the swing above is the KERNEL and not the OS.  The worst
+    reading anywhere is therefore CI's 1.326e-12, 13.9x inside the bar.
+
+    FAIL-BEFORE, measured by mutating the discretisation through the public
+    API: degree 8 -> 5 puts 1.94e-09 .. 1.40e-08 here (2-4 decades outside the
+    bar, every fixture); degree 8 -> 6 puts 7.04e-12 .. 8.63e-11 (outside on
+    4 of the 5); the ``m^2`` axis term dropped puts 0.372 .. 1.0 and the
+    boundary condition swapped 0.341 .. 1.08 -- 11 decades outside.  Coarser
+    quadrature (``nq_extra`` 10 -> 0) leaves the accuracy inside the bar but
+    moves ``lam_max`` from 4.8e5 to ~7e7, which is what the ``lam_max`` pin
+    catches; one step further (``nq_extra`` -2) makes the mass matrix
+    indefinite and ``eigh`` raises.
+
+    And at the bar's OWN scale, with the mesh left alone so only the answer
+    moves: a cylinder radius wrong by 1e-10 relative puts 1.001e-10 here and
+    is caught on all five fixtures; 1e-11 is caught on three of the five (the
+    bar's edge, as derived); 1e-12 is not caught and must not be, because it
+    is under the arithmetic these eigenvalues carry.
 
     The SHAPE of the spectrum is asserted two-sidedly alongside the accuracy
     bar (VERIFY-A14 V7 -- the previous ``np.all(np.isreal(ev))`` could not fail,
@@ -633,12 +679,30 @@ def test_h4_bor_pencil_eigh_accuracy(m, bc, zeros_fn):
     """
     from scipy.special import jn_zeros, jnp_zeros
     ref = (jn_zeros(m, 6) if zeros_fn == "jn" else jnp_zeros(m, 6))
-    ev = radial_spectrum(m, 1.0, 8, 12, bc=bc, n_low=6)
-    rel = np.max(np.abs(np.sqrt(np.abs(ev)) / ref - 1.0))
-    assert rel < 1e-12, rel
-    ev = np.asarray(ev)
-    assert ev.dtype.kind == "f", ev.dtype      # real, not a .real truncation
-    assert np.all(ev > 0.0), ev                # SPD pencil -> positive spectrum
+    # ``n_low`` slices the sorted spectrum, so this one solve returns the WHOLE
+    # pencil: the six lowest for the accuracy claim and the top eigenvalue for
+    # the bar the theory above sets.
+    spec = np.asarray(radial_spectrum(m, 1.0, 8, 12, bc=bc, n_low=10 ** 6))
+    ev = spec[:6]
+    rel = float(np.max(np.abs(np.sqrt(np.abs(ev)) / ref - 1.0)))
+    lam_max, lam_min = float(spec[-1]), float(spec[0])
+    # The premise of the bar: lam_max is a property of the MESH (degree 8, 12
+    # uniform elements on R = 1), measured 4.787e5 .. 4.959e5 over the five
+    # fixtures and identical to 5 digits on every kernel of the ladder.  Pin it
+    # so a degraded solve cannot widen its own bar -- and so under-integration,
+    # which leaves the six low modes accurate but blows lam_max up by two
+    # decades, is caught here instead of passing silently.
+    assert 4.0e5 < lam_max < 6.0e5, (
+        f"the pencil's top eigenvalue is {lam_max:.4e}, outside the "
+        f"4.0e5 .. 6.0e5 this mesh produces -- the discretisation changed, so "
+        f"the arithmetic bar below is no longer the one that was derived")
+    bar = 2.0 * float(np.finfo(float).eps) * lam_max / (2.0 * lam_min)
+    assert rel < bar, (
+        f"relative error against the Bessel zeros is {rel:.3e}, outside the "
+        f"{bar:.3e} that eps*lam_max/lam_min allows for this pencil "
+        f"(lam_max={lam_max:.4e}, lam_min={lam_min:.4f})")
+    assert spec.dtype.kind == "f", spec.dtype   # real, not a .real truncation
+    assert np.all(spec > 0.0), spec[:8]         # SPD pencil -> positive
     assert np.all(np.diff(ev) > 1.0), np.diff(ev)   # ascending, gap >> 1e-13
 
 

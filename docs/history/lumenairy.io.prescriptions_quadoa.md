@@ -1,10 +1,11 @@
 <!-- lumenairy-history-doc
 module: lumenairy/io/prescriptions_quadoa.py
 ast_sha256: 3118a33a2c664cb7241ec2f54985fb641e718959f806a6c7751812ce1d9e6d16
-token_sha256: 07ad35fa73ae137c50e0379dd175cb946170e4cbb1b833cbdaf79ec0b9a1178d
+token_sha256: 9c92f6d765fbd4222190344f293d5d61e0b4e32087beef2da1cdaf8502ad9a9e
 pre_relocation_lines: 440
 recorded_by: WP-A17 SWEEP-3 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
+re_recorded: 2026-09-14 -- Wave-5 item D (CI run 34914295323): DIGEST-SCHEME change, not a code change -- token_fingerprint now feeds an f-string to the digest as ONE STRING record holding its exact source text instead of the running tokenizer's FSTRING_START/FSTRING_MIDDLE/FSTRING_END run, so the recorded value is a property of the file rather than of the interpreter that read it; PEP 701 made CPython 3.12 tokenize f-strings differently from 3.11, these digests were recorded on 3.12+, and all five py3.11 CI shards read a different token_sha256 for byte-identical sources (110 of 123 documents, measured).  The module source is unchanged and ast_sha256 is unchanged.
 -->
 
 

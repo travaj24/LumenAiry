@@ -1,11 +1,12 @@
 <!-- lumenairy-history-doc
 module: lumenairy/memory.py
 ast_sha256: 612185192dbdeae32399a706200242280309ab2e019a0fb1d7486a047e66ccce
-token_sha256: 08eee71fb38557ecab384aa6bb88e2f465837bc3cab6b19e34f53302946c3244
+token_sha256: eda33a203ba19a297df231248741b9d631c4442156f39a2809e2a7f741f33492
 pre_relocation_lines: 1332
 recorded_by: WP-A17 SWEEP-4 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
 re_recorded: 2026-09-12 -- _ASM_FIRST_CALL_FIXED_BYTES 40 -> 53 MiB: the first-use scipy.fft import (13.06 MiB) now lands inside the measured first call; cold fixed term re-measured at 49.61 MiB
+re_recorded: 2026-09-14 -- Wave-5 item D (CI run 34914295323): DIGEST-SCHEME change, not a code change -- token_fingerprint now feeds an f-string to the digest as ONE STRING record holding its exact source text instead of the running tokenizer's FSTRING_START/FSTRING_MIDDLE/FSTRING_END run, so the recorded value is a property of the file rather than of the interpreter that read it; PEP 701 made CPython 3.12 tokenize f-strings differently from 3.11, these digests were recorded on 3.12+, and all five py3.11 CI shards read a different token_sha256 for byte-identical sources (110 of 123 documents, measured).  The module source is unchanged and ast_sha256 is unchanged.
 -->
 
 # Version history -- `lumenairy/memory.py`

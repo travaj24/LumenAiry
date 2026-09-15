@@ -1,11 +1,12 @@
 <!-- lumenairy-history-doc
 module: lumenairy/propagators/mft.py
 ast_sha256: 0f8c96a6815238955619bd4c543e8e12ffed6b947bff6b1cb3110b3c38bd5b7d
-token_sha256: 658b62322c934c19bf189fcab67aa6ee10d7341ed79cf7e5713b45bd82edcfa4
+token_sha256: 8cb4155677b9b6fb7f9d30c8fd9aa9f6a7af334b91fb4d40bbe06e5386a40e8b
 pre_relocation_lines: 1073
 recorded_by: WP-A17 SWEEP-1 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
 re_recorded: 2026-09-13 -- WP-B3 (audit K6 second half): resample_field gains method='chirpz', the band-limited interpolant evaluated through _bluestein_centred_2d, with the replica guard _warn_mft_output_window taught a per-axis N_out_y; the default 'spline' leg and all three MFT propagators byte-identical
+re_recorded: 2026-09-14 -- Wave-5 item D (CI run 34914295323): DIGEST-SCHEME change, not a code change -- token_fingerprint now feeds an f-string to the digest as ONE STRING record holding its exact source text instead of the running tokenizer's FSTRING_START/FSTRING_MIDDLE/FSTRING_END run, so the recorded value is a property of the file rather than of the interpreter that read it; PEP 701 made CPython 3.12 tokenize f-strings differently from 3.11, these digests were recorded on 3.12+, and all five py3.11 CI shards read a different token_sha256 for byte-identical sources (110 of 123 documents, measured).  The module source is unchanged and ast_sha256 is unchanged.
 -->
 
 # Version history -- `lumenairy/propagators/mft.py`

@@ -1,13 +1,14 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/_lens_thin.py
 ast_sha256: 53ee06eca3c2a3f6f2c5f5e846e883a88bbd0a57b3be08c3c6db06d81900af9c
-token_sha256: 2bf6ff7067327f7d034e6baa204269b9465d72b38b27f0f8dc63739642339b8d
+token_sha256: 0f6af9ed4d84f71b2738d4f4d3ca2a9e15acfeb66ef45abab59e2e7c3afa6060
 pre_relocation_lines: 1431
 recorded_by: WP-A17 SWEEP-2 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
 re_recorded: 2026-09-12 -- CuPy handles taken from backend._optional instead of via .lenses, breaking the _lens_thin <-> lenses module-level 2-cycle; outputs bit-identical (WP-A22 item 8a)
 re_recorded: 2026-09-12 -- ruff isort combine-as-imports (pyproject.toml, WP-A16 recommendation): aliased import statements from the same module merged into one; the set of bound names is unchanged
 re_recorded: 2026-09-14 -- WP-B11b request 4b.2, applied by the orchestrator: the two apply_grin_lens notices hand warnings the computed caller_stacklevel() from the _lens_kernels leaf instead of a literal depth
+re_recorded: 2026-09-14 -- Wave-5 item D (CI run 34914295323): DIGEST-SCHEME change, not a code change -- token_fingerprint now feeds an f-string to the digest as ONE STRING record holding its exact source text instead of the running tokenizer's FSTRING_START/FSTRING_MIDDLE/FSTRING_END run, so the recorded value is a property of the file rather than of the interpreter that read it; PEP 701 made CPython 3.12 tokenize f-strings differently from 3.11, these digests were recorded on 3.12+, and all five py3.11 CI shards read a different token_sha256 for byte-identical sources (110 of 123 documents, measured).  The module source is unchanged and ast_sha256 is unchanged.
 -->
 
 # Version history -- `lumenairy/elements/_lens_thin.py`

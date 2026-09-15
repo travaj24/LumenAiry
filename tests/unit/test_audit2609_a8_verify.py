@@ -265,7 +265,38 @@ def test_verify_a8_e2_out_of_range_catalogue_lookup_refuses_instead_of_nan():
     3.4150 at 10 um), and the other catalogue-dispatched glasses must be
     untouched.  Exact-value assertions where the quantity is a lookup; no
     bar is meaningful.
+
+    Without the optional package this guard is unreachable by construction --
+    WP-A8's changelog: "Only the live-catalogue (tuple-registered) path can
+    produce it; the bundled Sellmeier and polynomial evaluators are closed
+    forms with their own guards and are untouched" -- and ``SILICON`` is the
+    one tuple entry with no bundled row, so it takes ``get_glass_index``'s
+    documented ``ImportError`` first.  Per this module's own rule (no
+    ``pytest.skip``; TESTING_STANDARDS rule 4) the absence is asserted as a
+    fact instead: the refusal is the actionable ImportError, the guard is
+    still wired into the tuple path, and the other catalogue names still
+    resolve from their bundled rows.
     """
+    if importlib.util.find_spec('refractiveindex') is None:
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            for wl in (0.633e-6, 1.064e-6, 20e-6):
+                with pytest.raises(
+                        ImportError,
+                        match=r"requires the 'refractiveindex' package"):
+                    get_glass_index('SILICON', wl)
+                with pytest.raises(ImportError, match=r"'SILICON'"):
+                    glass_mod.get_glass_index_complex('SILICON', wl)
+            # the guard itself is still wired into the tuple path, so this
+            # arm is not zero-coverage of the fix under test
+            assert '_require_finite_catalogue_index(' in inspect.getsource(
+                glass_mod.get_glass_index)
+            # every other catalogue-dispatched glass resolves from its
+            # bundled row and is unaffected
+            for name, wl in (('N-BK7', 587.5618e-9), ('CaF2', 1.064e-6),
+                             ('MgF2', 1.55e-6), ('SiO2', 633e-9)):
+                assert np.isfinite(float(get_glass_index(name, wl))), name
+        return
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
         for wl in (0.633e-6, 1.064e-6, 20e-6):

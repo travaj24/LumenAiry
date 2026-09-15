@@ -505,6 +505,21 @@ def test_z3_gaussian_beam_peak_over_output(dtype, bar):
     assert peak_old / out_bytes > bar        # the bar really separates them
 
 
+#: Grid the warm-up call runs on, in pixels.  DERIVED, not chosen: at 64 it is
+#: below the size at which ``apply_real_lens`` takes its deferred-import branch,
+#: so ~11.2 MB of one-time module imports (9.55 MB of bytecode at
+#: ``<frozen importlib._bootstrap_external>``, plus dask / jinja2 / pathlib /
+#: inspect objects) landed INSIDE the measured region on Windows, where those
+#: modules are not already resident -- 0.45 MB of the same line on Linux, which
+#: is why the bar below held there and read 0.81 here.  At 256 the warm-up takes
+#: the same branch and the measured peak is BYTE-IDENTICAL on the two arms.
+#: The branch threshold is BRACKETED, not guessed: warming at 128 still leaves
+#: the Windows reading contaminated (peak 60.8 MB, ratio 0.81), warming at 256
+#: does not (46.5 MB, ratio 1.064, the same byte as Linux), so it lies in
+#: (128, 256] and 256 is the first power of two above it.
+_Z3_LENS_WARM_N = 256
+
+
 def test_z3_estimate_lens_memory_real_bounds_apply_real_lens():
     """``lens_model='real'`` is the DOCUMENTED model for ``apply_real_lens``;
     it under-predicted the measured peak by 1.6x (default parallel_amp=True)
@@ -513,12 +528,33 @@ def test_z3_estimate_lens_memory_real_bounds_apply_real_lens():
 
     Bar: the estimate must BOUND the measurement (>= 1.0, the fail-safe
     direction) and not by more than 1.6x (an estimate that over-reserves by
-    more than that stops being useful).  Measured 2026-09-12 at N = 512 /
-    1024 / 2048 and both complex dtypes: 1.06-1.07.  The measured peak is
-    pure N^2 with 1.4 % spread across those grids, so the reading has no
-    per-build knife edge; a future reduction of ``apply_real_lens``'s own
-    peak moves the ratio UP (still fail-safe) and is what the upper bar is
-    there to surface.
+    more than that stops being useful).  Neither bar is moved here; what is
+    fixed is the MEASUREMENT, which was picking up allocations that are not
+    ``apply_real_lens``'s working set at all (see ``_Z3_LENS_WARM_N``).
+
+    MEASURED after, in FRESH processes, one (N, dtype) each, on Windows
+    py3.14 / numpy 2.4.4 AND WSL py3.12 / numpy 2.4.6 -- every number below is
+    byte-identical on the two arms, which is the point::
+
+        N     dtype       estimate   first call   est/peak   retained
+        512   complex128    49.5 MB     46.5 MB     1.064     6.09 grids
+        1024  complex128   198.0 MB    159.8 MB     1.239     6.02 grids
+        512   complex64     33.8 MB     31.5 MB     1.072     6.01 grids
+        1024  complex64    135.1 MB    102.1 MB     1.323     6.04 grids
+
+    so the gate's own row (512, complex128) sits 6.4 % above the fail-safe
+    bar and 33 % below the upper one, and the worst row of the four is still
+    21 % inside the upper bar.
+
+    The RETAINED column is asserted too, as the premise that the reading is
+    clean: the call keeps the N-sized FFT and ASM caches it built
+    (``propagators/fft_infra.py`` 4 complex grids, ``propagators/asm.py`` 1 + 1)
+    and nothing else, 6.01 .. 6.09 grids on every row and both arms.  With the
+    old 64-pixel warm-up the same reading is 8.38 grids on Windows under
+    pytest and 9.49 standalone -- the deferred imports -- so this guard
+    catches exactly the contamination that red this test, two-sided: 15 %
+    above the worst clean reading (6.09) and 16 % below the lowest
+    contaminated one (8.38).
     """
     N, dt = 512, np.complex128
     wl, dx = 633e-9, 30e-3 / N
@@ -528,16 +564,23 @@ def test_z3_estimate_lens_memory_real_bounds_apply_real_lens():
     E = np.ascontiguousarray(E)
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
-        la.apply_real_lens(E[:64, :64].copy(), prescription=rx,
-                           wavelength=wl, dx=dx)          # warm the caches
+        la.apply_real_lens(E[:_Z3_LENS_WARM_N, :_Z3_LENS_WARM_N].copy(),
+                           prescription=rx, wavelength=wl, dx=dx)
     gc.collect()
     tracemalloc.start()
     tracemalloc.reset_peak()
     out = la.apply_real_lens(E, prescription=rx, wavelength=wl, dx=dx)
-    _, peak = tracemalloc.get_traced_memory()
+    retained, peak = tracemalloc.get_traced_memory()
     tracemalloc.stop()
     del out
     gc.collect()
+    held = retained / float(N * N * 16)
+    assert 5.5 < held < 7.0, (
+        f"the measured call retained {held:.2f} full complex grids, not the "
+        f"6.0 of N-sized FFT/ASM cache it builds -- something else is being "
+        f"allocated inside the measured region (with a 64-pixel warm-up this "
+        f"reads 9.49 on Windows: deferred module imports), so the peak below "
+        f"is not apply_real_lens's working set")
     est = la.estimate_lens_memory(N, dt, lens_model='real')
     ratio = est / peak
     assert 1.0 <= ratio <= 1.6, (
@@ -668,33 +711,155 @@ def test_z3_stokes_and_dop_are_bit_identical(dtype):
         assert np.array_equal(d_new, d_old, equal_nan=True)
 
 
-def test_z3_stokes_and_dop_peak_arrays():
-    """Peak, in full-grid REAL arrays (N*N*8 B), measured 2026-09-12 at
-    N = 2048: stokes 7.00 -> 6.00, dop 8.25 -> 6.00 (both pre-fix arms are
-    measured in this same test).  Bar 6.5: above the post-fix reading by 8 %
-    and below both pre-fix readings by 7 % / 21 %.  tracemalloc peaks of
-    straight-line NumPy are exact allocation counts with no cross-build
-    spread.  6.00 is the floor for a bit-identical implementation: the four
-    outputs plus the one complex cross-term the exact S2/S3 need."""
-    N = 1024
+#: How far above a whole number of full grids a tracemalloc peak may sit.
+#: DERIVED, two-sided: the reading is an EXACT allocation count in units of one
+#: full grid plus tracemalloc's own bookkeeping, and that bookkeeping measured
+#: 624 .. 2984 B over 5 repeats on each of two arms (Windows py3.14 /
+#: numpy 2.4.4 and WSL py3.12 / numpy 2.4.6), i.e. at most 3.6e-04 grids at
+#: N = 1024.  0.05 is two decades above that spread and 1.3 decades below the
+#: 1.0 that separates one allocation count from the next -- so it can absorb
+#: any bookkeeping and can never absorb an array.
+_Z3_PEAK_SLACK = 0.05
+
+
+def _z3_peak_units(fn, unit):
+    """Peak transient of ``fn()`` in units of one full-grid REAL array."""
+    gc.collect()
+    tracemalloc.start()
+    tracemalloc.reset_peak()
+    res = fn()
+    _, peak = tracemalloc.get_traced_memory()
+    tracemalloc.stop()
+    del res
+    gc.collect()
+    return peak / unit
+
+
+def _numpy_elides_binary_temporaries(field, unit):
+    """MEASURED premise: does this build rewrite ``Ex * conj(Ey)`` into the
+    ``conj`` temporary's own buffer instead of allocating a second array?
+
+    NumPy's ``temp_elide.c`` does exactly that when an operand is an
+    unreferenced temporary, but only where the optimisation is compiled in (it
+    needs ``backtrace()``) and only when its stack walk can confirm the
+    temporary came from the interpreter.  Both are BUILD properties: measured
+    ACTIVE on WSL (py3.12, numpy 2.4.6) and on the py3.11 and py3.14 Linux
+    runners of CI run 34914295323, INACTIVE on Windows (py3.14, numpy 2.4.4).
+    So the peak of an expression written with a free temporary is a per-build
+    quantity and has to be read on the running arm, never assumed from it.
+
+    Returns ``(free, held)`` in full-grid REAL arrays.  A complex grid is two
+    of those, so ``conj(Ey)`` plus the product is 4.00 unelided and 2.00
+    elided.  ``held`` binds the temporary to a name, which lifts its reference
+    count to 2 and puts elision out of reach on every build: it is 4.00
+    everywhere, and is asserted, so a reading of "no elision here" can never
+    come from an instrument that measured nothing at all.  ``free`` is 4.00
+    where elision is unavailable and 2.00 where it is.  MEASURED: 4.000 /
+    4.000 on Windows, 2.000 / 4.000 on WSL.
+    """
+    free = _z3_peak_units(lambda: field.Ex * np.conj(field.Ey), unit)
+
+    def _held():
+        c = np.conj(field.Ey)             # named -> refcount 2 -> not elidable
+        return field.Ex * c
+
+    held = _z3_peak_units(_held, unit)
+    assert 3.9 < held < 4.1, (
+        f"the elision instrument read {held:.3f} full grids for a conj plus a "
+        f"complex product that must cost exactly 4.00 -- it is not measuring "
+        f"what it claims, so no premise can be drawn from it")
+    return free, held
+
+
+def _z3_peaks(N=1024):
+    """The four peak readings, in full-grid REAL arrays, with the field."""
     unit = N * N * 8
     f = _pathological_field(N, np.complex128)
     f = JonesField(np.nan_to_num(f.Ex, posinf=3.0),
                    np.nan_to_num(f.Ey, posinf=3.0), 1e-6, 1e-6)
-    peaks = {}
-    for tag, fn in (('stokes_new', stokes_parameters), ('stokes_old', _old_stokes),
-                    ('dop_new', degree_of_polarization), ('dop_old', _old_dop)):
-        gc.collect()
-        tracemalloc.start()
-        tracemalloc.reset_peak()
-        res = fn(f)
-        _, peak = tracemalloc.get_traced_memory()
-        tracemalloc.stop()
-        del res
-        gc.collect()
-        peaks[tag] = peak / unit
-    assert peaks['stokes_new'] < 6.5 < peaks['stokes_old'], peaks
-    assert peaks['dop_new'] < 6.5 < peaks['dop_old'], peaks
+    peaks = {tag: _z3_peak_units(lambda fn=fn: fn(f), unit)
+             for tag, fn in (('stokes_new', stokes_parameters),
+                             ('stokes_old', _old_stokes),
+                             ('dop_new', degree_of_polarization),
+                             ('dop_old', _old_dop))}
+    return f, unit, peaks
+
+
+def test_z3_stokes_and_dop_peak_arrays():
+    """The UNCONDITIONAL half of the peak-array claim, in full-grid REAL
+    arrays (N*N*8 B).
+
+    6.00 is the derived FLOOR for a bit-identical Stokes implementation: the
+    four outputs, plus the one complex cross term (2 real grids) the exact
+    S2 / S3 need while S3 is being written.  Both shipped functions sit ON
+    that floor, and the DOP costs no more than the ``stokes_parameters`` call
+    inside it, which is the whole content of the in-place accumulation.  The
+    pre-fix DOP does not: it holds 8.25.
+
+    Every claim here holds on both arms of the two-arm ladder -- Windows
+    py3.14 / numpy 2.4.4 (no temporary elision) and WSL py3.12 / numpy 2.4.6
+    (elision active) -- and on every CI runner, because none of them can be
+    reached by eliding a temporary.  MEASURED, 5 repeats per arm::
+
+        stokes_new  6.000237 .. 6.000345 (Win)  6.000234 .. 6.000333 (WSL)
+        dop_new     6.000237             (Win)  6.000234             (WSL)
+        dop_old     8.250353 .. 8.250356 (Win)  8.250346 .. 8.250349 (WSL)
+
+    The one reading that IS build-dependent -- the pre-fix Stokes form's
+    seventh grid -- is premise-gated in
+    :func:`test_z3_the_pre_fix_stokes_form_holds_a_seventh_grid`.
+    """
+    _f, _unit, peaks = _z3_peaks()
+    # the four outputs + the complex cross term, and not one array more
+    assert 6.0 <= peaks['stokes_new'] < 6.0 + _Z3_PEAK_SLACK, peaks
+    assert 6.0 <= peaks['dop_new'] < 6.0 + _Z3_PEAK_SLACK, peaks
+    # the DOP accumulates over the very arrays its own Stokes call returned
+    assert peaks['dop_new'] <= peaks['stokes_new'] + _Z3_PEAK_SLACK, peaks
+    # ... which the pre-fix DOP did not: 2.25 grids of avoidable transient
+    assert peaks['dop_old'] > 6.5, peaks
+    assert peaks['dop_old'] - peaks['dop_new'] > 2.0, peaks
+    # and no arm may make the shipped Stokes form the more expensive one
+    assert peaks['stokes_new'] <= peaks['stokes_old'] + _Z3_PEAK_SLACK, peaks
+
+
+def test_z3_the_pre_fix_stokes_form_holds_a_seventh_grid():
+    """PREMISE-GATED (TESTING_STANDARDS S3).  The pathology the shipped Stokes
+    form removed -- the second full-grid COMPLEX temporary that
+    ``Ex * conj(Ey)``, written twice, costs -- is observable only on a build
+    where NumPy does not elide that temporary away.
+
+    The premise is measured on the running arm by
+    :func:`_numpy_elides_binary_temporaries`, never assumed from the platform.
+    Where it holds, the pre-fix form peaks at 7.00 grids against the shipped
+    form's 6.00 (Windows py3.14 / numpy 2.4.4: 7.000074 vs 6.000237).  Where
+    NumPy elides, the pre-fix form is rewritten into the same 6.00 and there
+    is no seventh grid to see: WSL py3.12 / numpy 2.4.6 and the py3.11 and
+    py3.14 Linux runners of CI run 34914295323 all read 6.000234, which is
+    what red this gate's previous ``6.5 < stokes_old`` form.  That arm asserts
+    the collapse explicitly and then skips WITH the reading, so it can never
+    pass silently.
+
+    The DOP half of the claim needs no gate and is asserted unconditionally in
+    the test above: 8.25 -> 6.00 on every arm measured.
+    """
+    f, unit, peaks = _z3_peaks()
+    free, held = _numpy_elides_binary_temporaries(f, unit)
+    if free < held - 1.0:                  # a whole complex grid saved
+        assert 6.0 <= peaks['stokes_old'] < 6.0 + _Z3_PEAK_SLACK, (
+            f"NumPy elided the pre-fix form's complex temporary, so it must "
+            f"land on the same 6.00-grid floor as the shipped one, but it "
+            f"read {peaks['stokes_old']:.6f}: {peaks}")
+        pytest.skip(
+            f"premise absent on this arm: NumPy's temporary elision is ACTIVE "
+            f"(Ex*conj(Ey) peaks at {free:.3f} full grids free, {held:.3f} "
+            f"with the temporary name-bound), so the pre-fix Stokes form "
+            f"allocates no seventh grid -- measured stokes_old="
+            f"{peaks['stokes_old']:.6f} against stokes_new="
+            f"{peaks['stokes_new']:.6f}, both on the 6.00 floor")
+    assert 7.0 <= peaks['stokes_old'] < 7.0 + _Z3_PEAK_SLACK, (
+        f"elision is inactive here (free={free:.3f}, held={held:.3f}), so the "
+        f"pre-fix form must hold its seventh grid: {peaks}")
+    assert peaks['stokes_old'] - peaks['stokes_new'] > 0.95, peaks
 
 
 # ===========================================================================

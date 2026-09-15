@@ -1,11 +1,12 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/polarization.py
 ast_sha256: 1a97668f3a64829e0933ed70903aa573791daba90007637fdc6a914612112fb6
-token_sha256: fa8663125aa74b26120413665a639dc9a75c2a19ac19dc4fa159e3d2da0d5b1c
+token_sha256: dcd372620dcbffb9916ae5644b6d2331ec3e4508831ee8c736fa56ec0e5e4adf
 pre_relocation_lines: 1838
 recorded_by: WP-A17 SWEEP-2 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
 re_recorded: 2026-09-13 -- WP-B8 (audit Z3 / WP-A11 sec. 6.3): apply_jones_matrix's 2x2 mix moves into _jones_mix_2x2 and accumulates through one shared scratch buffer (4.00 -> 3.00 full-grid complex arrays, the floor), bit-identical and gated on the dtypes already agreeing so a mixed-precision JonesField keeps the original expressions
+re_recorded: 2026-09-14 -- Wave-5 item D (CI run 34914295323): DIGEST-SCHEME change, not a code change -- token_fingerprint now feeds an f-string to the digest as ONE STRING record holding its exact source text instead of the running tokenizer's FSTRING_START/FSTRING_MIDDLE/FSTRING_END run, so the recorded value is a property of the file rather than of the interpreter that read it; PEP 701 made CPython 3.12 tokenize f-strings differently from 3.11, these digests were recorded on 3.12+, and all five py3.11 CI shards read a different token_sha256 for byte-identical sources (110 of 123 documents, measured).  The module source is unchanged and ast_sha256 is unchanged.
 -->
 
 # Version history -- `lumenairy/elements/polarization.py`

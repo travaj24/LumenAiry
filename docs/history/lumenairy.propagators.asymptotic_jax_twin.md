@@ -1,11 +1,12 @@
 <!-- lumenairy-history-doc
 module: lumenairy/propagators/asymptotic_jax_twin.py
 ast_sha256: 6c9e1419f0baf53eb77fadd98d9498d4032747a96d3868e52719a5cd0c947ccb
-token_sha256: c0a2a51c17f5c048f73a247fa37d7970a2dbe4da8a0e70ba7b1848ffa09cd64a
+token_sha256: 6f938a27998a7bdad9322b3f498963ed9f62ddde2327d3477a4de420981e9382
 pre_relocation_lines: 1216
 recorded_by: WP-A17 SWEEP-1 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
 re_recorded: 2026-09-12 -- P1-NEW-4: safe_bquad and safe_phi take dtype-matched zeros((), x.dtype) fills instead of the 0.0+0.0j literal, which promoted the real phi_star to complex (WP-A22 follow-up)
+re_recorded: 2026-09-14 -- Wave-5 item D (CI run 34914295323): DIGEST-SCHEME change, not a code change -- token_fingerprint now feeds an f-string to the digest as ONE STRING record holding its exact source text instead of the running tokenizer's FSTRING_START/FSTRING_MIDDLE/FSTRING_END run, so the recorded value is a property of the file rather than of the interpreter that read it; PEP 701 made CPython 3.12 tokenize f-strings differently from 3.11, these digests were recorded on 3.12+, and all five py3.11 CI shards read a different token_sha256 for byte-identical sources (110 of 123 documents, measured).  The module source is unchanged and ast_sha256 is unchanged.
 -->
 
 # Version history -- `lumenairy/propagators/asymptotic_jax_twin.py`

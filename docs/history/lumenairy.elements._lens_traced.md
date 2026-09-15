@@ -1,7 +1,7 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/_lens_traced.py
 ast_sha256: 34c0e87d665b3f8de027419311b7e2119e7fe3abd94c6a58197aa17ab7cb964a
-token_sha256: 4d961c535739c1625cd5c4d0d0b0a31c45c35e83a79a6e139751cef92132cd10
+token_sha256: ff4d5d10d38e2c1694a1e0e5fa9ff65d73a7bf011dc7785baf0903b331fc8326
 pre_relocation_lines: 14898
 recorded_by: WP-A17 SWEEP-4 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
@@ -11,6 +11,7 @@ re_recorded: 2026-09-13 -- WP-B10: an opt-in disc-orthogonal design basis for th
 re_recorded: 2026-09-13 -- VERIFY-B10 landing: the inverse-map cache key names the fit basis (parity_tag += str(_fit_basis)); the verifier's fit_basis reachability paragraph
 re_recorded: 2026-09-13 -- the grid-versus-aperture bookkeeping moved to the new elements/_lens_kernels.py leaf and is re-exported; _lens_traced reads the leaf, closing its module-level 2-cycle with the lenses facade (WP-B11a item 4)
 re_recorded: 2026-09-14 -- WP-B11b item 8: every warning in the two lens bodies asks _lens_kernels.caller_stacklevel for its level, so it names the first frame outside the package whatever wrapper / configuration re-entry reached it; doe.py's zone-plate fill takes T's own dtype.
+re_recorded: 2026-09-14 -- Wave-5 item D (CI run 34914295323): DIGEST-SCHEME change, not a code change -- token_fingerprint now feeds an f-string to the digest as ONE STRING record holding its exact source text instead of the running tokenizer's FSTRING_START/FSTRING_MIDDLE/FSTRING_END run, so the recorded value is a property of the file rather than of the interpreter that read it; PEP 701 made CPython 3.12 tokenize f-strings differently from 3.11, these digests were recorded on 3.12+, and all five py3.11 CI shards read a different token_sha256 for byte-identical sources (110 of 123 documents, measured).  The module source is unchanged and ast_sha256 is unchanged.
 -->
 
 # Version history -- `lumenairy/elements/_lens_traced.py`

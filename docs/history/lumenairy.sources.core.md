@@ -1,13 +1,14 @@
 <!-- lumenairy-history-doc
 module: lumenairy/sources/core.py
 ast_sha256: c33e35b501a566495da64aa629afb16fe1067485f32ca36711451f46a20b3c5e
-token_sha256: 577d27a4fd10c862fa27bc97e2656531369090b8dd1728a29a91b5af608477e4
+token_sha256: 5c4e00a95c48fc48a66da1a5833a6fc3eee0bf8502ffdb83c4094c258008a08c
 pre_relocation_lines: 3381
 recorded_by: WP-A17 SWEEP-1 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
 re_recorded: 2026-09-12 -- ruff isort combine-as-imports (pyproject.toml, WP-A16 recommendation): aliased import statements from the same module merged into one; the set of bound names is unchanged
 re_recorded: 2026-09-13 -- WP-B8 (audit Z3 / WP-A11 sec. 6.1-6.2): _schell_phase_realizations gains generator='fft'|'modes' with Gori pseudo-modes and an n_pseudo_modes heuristic, forwarded by create_gaussian_schell_source and create_schell_model_source; create_gaussian_beam gains the geometry_dtype= opt-in.  Both defaults are byte-identical
 re_recorded: 2026-09-13 -- VERIFY-WP-B8: create_gaussian_beam(geometry_dtype=float32) coerces the centre to a Python float so NEP 50 cannot promote the exponent back to float64; generator='modes' refuses a non-finite or non-positive coherence_length and _gori_mode_count guards before the divide
+re_recorded: 2026-09-14 -- Wave-5 item D (CI run 34914295323): DIGEST-SCHEME change, not a code change -- token_fingerprint now feeds an f-string to the digest as ONE STRING record holding its exact source text instead of the running tokenizer's FSTRING_START/FSTRING_MIDDLE/FSTRING_END run, so the recorded value is a property of the file rather than of the interpreter that read it; PEP 701 made CPython 3.12 tokenize f-strings differently from 3.11, these digests were recorded on 3.12+, and all five py3.11 CI shards read a different token_sha256 for byte-identical sources (110 of 123 documents, measured).  The module source is unchanged and ast_sha256 is unchanged.
 -->
 
 # Version history -- `lumenairy/sources/core.py`
