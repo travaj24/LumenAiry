@@ -69,7 +69,11 @@ from .. import raytrace as rt
 # ``_lens_kernels`` is a leaf (stdlib + numpy only); the helper attributes a
 # notice to the caller's frame on every call path.
 from ._lens_kernels import caller_stacklevel as _caller_stacklevel
-from ._lens_traced_multibranch import apply_real_lens_traced_multibranch
+from ._lens_traced_multibranch import (
+    _ENERGY_BLOWUP_FACTOR,
+    _ENERGY_COLLAPSE_FACTOR,
+    apply_real_lens_traced_multibranch,
+)
 from .lenses_maslov import _fold_airy_eval, pearcey
 
 __all__ = ['apply_real_lens_traced_uniform']
@@ -85,6 +89,39 @@ _AIRY_ARG_CAP = 50.0
 # double-precision resolution of any field this module returns -- so filling
 # past that writes zeros in an expensive way.  20 leaves four decades of
 # margin over the 15 the physical tail needs.
+#
+# WP-B7b section 7 proposed clipping this where the extrapolated ``zeta`` no
+# longer describes the tail, on the premise that the completion's energy error
+# is written into the OUTER part of the annulus.  MEASURED (WP-B7c,
+# 2026-09-14, the direct Rayleigh-Sommerfeld oracle, seven planes of the
+# N-BAF10 fixture), the premise does not hold.  Cumulative dark-side energy of
+# the completed field against the oracle's in the same annulus, by fill depth
+# in Airy lengths:
+#
+#   W/band      1 cell   3 cells   20 cells
+#   531.5        2.321     1.995      1.840
+#    14.0        2.438     2.169      2.045
+#     5.65       1.535     1.383      1.324
+#     3.01       1.231     1.134      1.097
+#     1.03       0.937     0.892      0.877
+#     0.42       0.928     0.946      0.936
+#
+# -- flat in depth to within 6 % beyond 3 cells, so more than 94 % of the
+# excess is written INSIDE 3 Airy lengths, where the tail is physical (``Ai``
+# is still 1e-3 of the ring there) and clipping it would trade an energy error
+# for a shape error.  The depth is not the lever.  The lever is the
+# extrapolated ``zeta`` itself: the effective decay constant read off the
+# ORACLE's own dark side, ``kappa_eff``, runs 1.068 / 0.803 / 0.654 / 0.603 /
+# 0.558 / 0.489 of the fitted ``kappa`` as W/band runs 0.42 / 1.03 / 3.01 /
+# 5.65 / 14.0 / 531.5 -- the linear normal form is good to 7 % only while the
+# two-branch band is at least ~2 Airy lengths wide, and 20-50 % slow beyond
+# that.  A second fold parameter (or a two-plane fit) is the repair; a shallower
+# fill is not.  ``zeta_linear_range`` in the diagnostics reports the band's own
+# curvature bound for a caller who wants to see it (see
+# ``_trace_meridional_fold``); it is NOT applied to the fill, because on the
+# five optics measured it ranges over 6.9 .. 144 Airy lengths and, where it is
+# shorter than this constant, everything it would remove is below 2e-6 of the
+# ring amplitude.
 _AIRY_TAIL_CELLS = 20.0
 
 # How far past the TWO-BRANCH BAND the fold's zeta(r) = kappa (r_c - r) is
@@ -135,10 +172,104 @@ _AIRY_TAIL_CELLS = 20.0
 # of running to +23 %, so on that optic every rung including 531.5 is inside
 # the +/-5 % band and the warning above the bar is a false positive for
 # absolute energy.  It still separates the two regimes in the right direction
-# on both ladders, and the completion still beats the multibranch it would
-# fall back to at every one of those planes too (0.976-0.986 against
-# 0.824-0.959).
+# on both ladders.
+#
+# RE-DERIVED TWO-SIDED (WP-B7c, 2026-09-14) on THREE optics and 30 fold planes
+# against the same direct Rayleigh-Sommerfeld oracle
+# (``validation/oracles/caustic_fold_truth.py``; the probes and their JSON are
+# in ``validation/probe_multibranch_zeta/``): N-BAF10 biconvex R = +/-2.6 mm,
+# t = 0.70 mm, 0.90 mm aperture, lambda = 1.064 um, N = 512, dx = 2.20 um;
+# N-BK7 plano-convex R = -2.0 mm with the FLAT side first, t = 0.80 mm,
+# 0.90 mm aperture, 780 nm, N = 512, dx = 2.00 um; N-SF11 biconvex
+# R = +/-3.4 mm, t = 0.90 mm, 1.20 mm aperture, 1.55 um, N = 512, dx = 3.00 um.
+# The bar is confirmed where it stands, but what it separates is not what the
+# 5 % / 10 % reading above says:
+#
+#   BELOW the bar (22 rungs, W/band 0.29 .. 5.65) the energy error is SIGNED
+#   and centred -- -2.18 % .. +4.14 %, 12 of the 22 rungs NEGATIVE, mean
+#   +0.57 %;
+#   ABOVE it (8 rungs, W/band 11.05 .. 3484) it is a one-sided GAIN at every
+#   rung -- +3.64 % .. +30.1 %, 8 of 8 POSITIVE, mean +7.88 %.
+#
+# So the discriminator is the SIGN, not the magnitude: past the bar the
+# completion stops making a centred error and starts systematically writing
+# energy that is not there.  The last signed rung is 5.65 (+1.98 %, optic 1)
+# and the first systematic-gain rung 11.05 (+4.40 %, optic 2); 8.0 is
+# sqrt(5.65 * 11.05) = 7.90 to two figures, i.e. the shipped bar already sits
+# at the geometric centre of the measured transition on optics WP-B7b never
+# saw.  It is a calibrated boundary of +/-4 % against +4 %, not the 5 % / 10 %
+# one the pre-WP-B7c text claimed and not the "conservative flag" VERIFY-B7b's
+# single optic suggested: VERIFY-B7b's saturation near +5 % is the ABOVE-bar
+# population of one optic, read without the below-bar population beside it.
 _ZETA_EXTRAPOLATION_MAX = 8.0
+
+# Refusal bar on the MULTIBRANCH field this completion is built on.
+#
+# The completion runs ``apply_real_lens_traced_multibranch`` first and keeps its
+# bright side verbatim, so a multibranch field that is wrong by decades makes
+# the completion wrong by decades -- and NONE of this module's own diagnostics
+# can see it: at the planes below the bright-side CFU fit residual reads
+# 0.0029-0.0070 (healthy), ``zeta_extrapolation`` reads 0.27-0.38 (the best
+# case the docstring's own table records) and ``fell_back`` reads False, on a
+# field carrying up to 6097x the launched power.  That is the defect VERIFY-B7b
+# recorded as R-5.
+#
+# WHAT GOES WRONG is in the multibranch rasteriser, not here: its point-sampled
+# area quadrature is an unbiased estimator of the launched energy only while
+# the mapped triangles are spread over many pixels, and near the AXIAL point
+# focus a whole ring collapses onto a handful of them
+# (``_lens_traced_multibranch._ENERGY_BLOWUP_FACTOR`` carries the mechanism and
+# its three controls).  Bounding the reconstruction would mean a different
+# quadrature and would move every multibranch field near a caustic, so this
+# module REFUSES instead: falling back is not a remedy, because the fallback
+# target IS the blown-up multibranch field (measured: at z = 1770 um on the
+# fixture below the module already falls back with reason='zeta_nonlinear' and
+# returns a field carrying 6459x the launched power).
+#
+# MEASURED (WP-B7c, 2026-09-14) against the direct Rayleigh-Sommerfeld oracle
+# ``validation/oracles/caustic_fold_truth.py`` on THREE optics -- N-BAF10
+# biconvex R = +/-2.6 mm / 1.064 um / N = 512 / dx = 2.20 um (VERIFY-B7b's own
+# fold fixture), N-BK7 plano-convex R = -2.0 mm flat-side-first / 780 nm /
+# N = 512 / dx = 2.00 um, and N-SF11 biconvex R = +/-3.4 mm / 1.55 um /
+# N = 512 / dx = 3.00 um -- over 40 fold planes spanning
+# ``zeta_extrapolation`` 0.27 to 3484:
+#
+#   * all 30 planes the oracle accepts (completed-field fidelity 0.883-0.995)
+#     read a multibranch ``power_ratio`` in 0.816 .. 1.246;
+#   * the smallest ratio at which the completion is broken is 18.86 (fixture D,
+#     z = 1990 um), where the fidelity falls to 0.204 and below (0.012-0.259
+#     over the 8 broken planes);
+#   * between them there is nothing: the next rung up is 93.5 and then
+#     1683 / 2346 / 2801 / 3201 / 3443 / 3545 / 6097.  Finer scans without
+#     oracle scoring extend the accepted population down to 0.763 and add no
+#     rung between 1.25 and 18.86.
+#
+# The bar is the geometric mean of the two measured envelopes, rounded to the
+# multibranch's own tripwire: sqrt(1.246 * 18.86) = 4.85, and
+# ``2 * _ENERGY_BLOWUP_FACTOR`` = 4.0 is the nearest value that keeps the two
+# constants coupled.  Margins: 3.2x above the largest accepted ratio, 4.7x
+# below the smallest broken one.  Coupling it to the multibranch's own warn bar
+# also makes the refusal never fire silently -- every refused field has already
+# emitted that module's RuntimeWarning.
+#
+# The ratio is read through the SAME bracket the multibranch's own gain arm
+# uses (``min(power_ratio, power_ratio_triangles)``, i.e. ``p_out / p_in_hi``),
+# so the known false-positive class it was introduced for -- an aperture much
+# wider than the grid, where the node-count denominator alone reads up to 3.3x
+# with the energy conserved to 1 % -- cannot reach this bar either.
+_MB_POWER_RATIO_MAX = 2.0 * _ENERGY_BLOWUP_FACTOR
+
+# Lower arm of the same reading, REPORTED but not refused.  A multibranch field
+# that loses energy is the NORMAL input to this module: the dark-side Airy tail
+# it exists to add is exactly what the branch sum drops, and the measured
+# legitimate population runs down to 0.78 (fixture V, z = 1754 um, completion
+# fidelity 0.991) against the module's own documented 0.887.  There is no
+# measured pathological counterpart on the loss side -- the one that exists,
+# the total collapse to an identically zero field, is already REFUSED inside
+# the multibranch -- so a refusal here would be a bar with a gap on one side
+# only.  ``_ENERGY_COLLAPSE_FACTOR`` (0.5, derived there) is reused as the
+# reporting threshold so the two modules classify the same field the same way.
+_MB_POWER_RATIO_MIN = _ENERGY_COLLAPSE_FACTOR
 
 # Pearcey series (:func:`pearcey`) converges everywhere but SLOWS / overflows
 # for large ``|x|, |y|``; clamp the control coordinates to this box when
@@ -366,9 +497,22 @@ def _trace_meridional_fold(prescription, wavelength, output_plane_distance,
     resid = float(np.max(np.abs(zpred - zeta)) / (np.max(zeta) + 1e-300))
     if resid > 0.15:
         return {**fail, 'reason': 'zeta_nonlinear', 'n_turn': n_turn}
+    # The band's OWN curvature, as a range over which the linear normal form is
+    # entitled to speak.  Re-fitting the same 256 samples with
+    # ``zeta = kappa u + q u^2`` gives the radius at which the quadratic term
+    # reaches 10 % of the linear one, ``u* = 0.1 kappa / |q|``.  Reported only
+    # (``zeta_linear_range``): it is measured ON the band and so is itself an
+    # extrapolation, and against the oracle's dark side it is ANTI-conservative
+    # -- see the ``_AIRY_TAIL_CELLS`` note, where the fill is deliberately left
+    # unclipped.  Costs one extra 2nd-degree polyfit over 256 points per call.
+    qfit = np.polyfit(u, zeta, 2)
+    q = float(qfit[0])
+    u_star = float(0.1 * kappa / abs(q)) if q != 0.0 else float('inf')
     cphi = np.polyfit(rb - r_c, 0.5 * (spa(rb) + spb(rb)), 2)
     return dict(ok=True, reason='fold_ring', r_c=r_c, kappa=kappa,
-                cphi=cphi, n_turn=n_turn, band=float(band))
+                cphi=cphi, n_turn=n_turn, band=float(band),
+                zeta_linear_resid=resid, zeta_curvature=q,
+                zeta_linear_range=u_star)
 
 
 # ==========================================================================
@@ -876,18 +1020,38 @@ def apply_real_lens_traced_uniform(
     ==================  =====  =====  =====  =====  =====  =====  =====
 
     So the SHAPE is reliable and is the better one at every plane measured (it
-    beats the plain multibranch it would fall back to, by 0.06-0.15 of fidelity,
-    and at the widest-band plane it also beats
-    ``apply_real_lens_traced(amplitude_model='ray_density')``, 0.9435 vs
-    0.9395), while the ABSOLUTE ENERGY the dark tail carries degrades with the
-    extrapolation: within -5.3 % / +4.9 % up to ~5, and +12.5 % / +22.8 % from
-    ~10 up.  Past ``_ZETA_EXTRAPOLATION_MAX`` the call WARNS and says so; it
-    does not fall back, because falling back is measurably worse.  For absolute
-    energy / encircled energy in the tail at a TIGHT fold, read at a plane whose
-    two branches separate further, or use
-    ``apply_real_lens_traced(amplitude_model='ray_density')`` (0.9996 where this
-    completion reads 0.9297, on the narrowest-band plane above),
-    ``apply_real_lens_gbd`` or ``apply_real_lens_fga``.
+    beats the plain multibranch it would fall back to, by 0.06-0.15 of
+    fidelity), while the ABSOLUTE ENERGY the dark tail carries degrades with
+    the extrapolation.  Past ``_ZETA_EXTRAPOLATION_MAX`` the call WARNS and
+    says so; it does not fall back, because falling back is measurably worse.
+
+    Re-measured on three more optics (WP-B7c, 2026-09-14; same oracle, 30 fold
+    planes, ``zeta_extrapolation`` 0.27 .. 3484) the ENERGY envelope is
+    two-sided in SIGN rather than in magnitude: below the bar the error is
+    signed and centred (-2.2 % .. +4.1 %, 12 of 22 rungs negative, mean
+    +0.57 %), above it a one-sided GAIN at every rung (+3.6 % .. +30.1 %, 8 of
+    8 positive, mean +7.88 %).  The +12.5 % / +22.8 % figures above are WP-B7b's
+    three singlets; other optics saturate near +5 %.  For absolute energy /
+    encircled energy above the bar, read at a plane whose two branches separate
+    further, or use the ray-to-wave hand-off
+    ``apply_real_lens_traced(caustic='wave', amplitude_model='ray_density')``,
+    which conserved the launched power to better than 1 % at every one of those
+    30 planes.
+
+    Which member is CLOSEST is optic-dependent, and the two published readings
+    both reproduce (WP-B7c measured five fixtures, including WP-B7b's own two
+    and VERIFY-B7b's).  On WP-B7b's fast N-LAK22 singlet the completion is the
+    closer member at 7 of 9 planes (0.9993 against the hand-off's 0.9974 at its
+    marginal focus); on VERIFY-B7b's N-BAF10 biconvex and on two optics of
+    WP-B7c's the hand-off is closer at every plane (0.9979 against 0.9915 at
+    ``zeta_extrapolation`` = 1.03).  Both margins are under 0.012 of fidelity,
+    and neither ordering generalises -- a beam-width sweep at a fixed optic and
+    plane (0.15 .. 0.38 mm, aperture truncation 1.8e-04 .. 0.26 of the rim
+    amplitude) does not flip it, so the aperture:beam ratio is not the
+    discriminator either.  Read the member ranking on your own prescription
+    before relying on it; what IS general on every fixture measured is that the
+    completion beats the plain multibranch, and that the hand-off conserves
+    energy where the completion above the bar does not.
 
     The grid matters before any of this does: the fold's Airy layer
     ``l_airy = 1 / (k^(2/3) kappa)`` must be resolved (the gate is
@@ -914,6 +1078,60 @@ def apply_real_lens_traced_uniform(
         input_carrier=input_carrier, return_diagnostics=True)
     E_mb = np.asarray(E_mb)
 
+    # 1b. the energy DECISION on the field this completion is built on.
+    # Read through the multibranch's own gain bracket (the smaller of the two
+    # ratios, i.e. the larger denominator) so the wide-aperture geometry
+    # artefact that bracket exists for cannot reach the bar.  Recorded in the
+    # diagnostics on EVERY return path below -- including the fallbacks, which
+    # return the multibranch field itself.
+    _mb_pr = mb_diag.get('power_ratio')
+    _mb_prt = mb_diag.get('power_ratio_triangles')
+    _mb_ratios = [float(v) for v in (_mb_pr, _mb_prt)
+                  if v is not None and np.isfinite(v)]
+    _mb_bracket = min(_mb_ratios) if _mb_ratios else None
+    if _mb_bracket is None:
+        _mb_decision = 'no_launched_power'
+    elif _mb_bracket > _MB_POWER_RATIO_MAX:
+        _mb_decision = 'refused_energy_gain'
+    elif _mb_bracket < _MB_POWER_RATIO_MIN:
+        _mb_decision = 'energy_loss'
+    else:
+        _mb_decision = 'ok'
+    _mb_energy = {
+        'multibranch_power_ratio': (float(_mb_pr) if _mb_pr is not None
+                                    else None),
+        'multibranch_power_ratio_bracketed': _mb_bracket,
+        'multibranch_power_ratio_band': (_MB_POWER_RATIO_MIN,
+                                         _MB_POWER_RATIO_MAX),
+        'power_ratio_decision': _mb_decision,
+    }
+    if _mb_decision == 'refused_energy_gain':
+        raise RuntimeError(
+            "apply_real_lens_traced_uniform (also reached via "
+            "apply_real_lens_traced(caustic='uniform')): the multibranch "
+            "bright-side field this completion is built on carries "
+            f"{_mb_bracket:.4g}x the launched power that reaches this grid, "
+            f"above the {_MB_POWER_RATIO_MAX:g}x refusal bar, with up to "
+            f"{int(mb_diag.get('n_branch_max') or 0)} branches on one pixel.  "
+            "The output plane is at or near the AXIAL point focus, where a "
+            "whole RING of branches coalesces and the branch sum's "
+            "point-sampled quadrature stops conserving energy (measured 94x "
+            "to 6097x of the launched power on three singlets, with the "
+            "field's fidelity against a direct Rayleigh-Sommerfeld oracle "
+            "falling from 0.99 to 0.19).  This is REFUSED rather than passed "
+            "through or fallen back, because the fallback target is that same "
+            "multibranch field and because none of this function's own "
+            "diagnostics can see the defect: the bright-side fit residual, "
+            "zeta_extrapolation and fell_back all read their best values "
+            "there.  Use the wave hand-off -- apply_real_lens_traced("
+            "caustic='wave', output_plane_distance=...), which propagates the "
+            "traced exit-vertex field with the band-limited angular spectrum "
+            "and is exact through folds, cusps and the axial focus alike "
+            "(measured 0.998 fidelity at the very planes refused here) -- or "
+            "apply_real_lens_gbd / apply_real_lens_maslov.  Read the ratio "
+            "yourself with apply_real_lens_traced_multibranch(..., "
+            "return_diagnostics=True)['power_ratio'].")
+
     def _fallback(reason):
         # Name THIS function first.  A message naming only
         # ``apply_real_lens_traced(caustic='uniform')`` covers one of the
@@ -935,6 +1153,7 @@ def apply_real_lens_traced_uniform(
         out = E_mb.astype(target_cdtype) if E_mb.dtype != target_cdtype else E_mb
         if return_diagnostics:
             d = dict(mb_diag)
+            d.update(_mb_energy)
             d.update(fell_back=True, reason=reason, r_c=None, kappa=None,
                      c0=None, c1=None, fit_residual=None, zeta_band=None,
                      zeta_extrapolation=None)
@@ -973,6 +1192,7 @@ def apply_real_lens_traced_uniform(
                     E_out = E_cusp.astype(target_cdtype)
                     if return_diagnostics:
                         d = dict(mb_diag)
+                        d.update(_mb_energy)
                         d.update(fell_back=False, reason='cusp_ring',
                                  r_c=None, kappa=None, c0=None, c1=None,
                                  fit_residual=None, cusp_r1=cusp['r1'],
@@ -1052,16 +1272,20 @@ def apply_real_lens_traced_uniform(
             f"{_AIRY_TAIL_CELLS * l_airy * 1e9:.3g} nm dark fill, so the two "
             "CFU coefficients and the tail they continue are an EXTRAPOLATION "
             "of the fold normal form, not a fit to it.  MEASURED against a "
-            "brute-force Rayleigh-Sommerfeld oracle (WP-B7b): the completed "
-            "field's total power runs -5.3 % to +4.9 % of the truth while this "
-            "ratio is under ~5 and +12.5 % to +22.8 % from ~10 up -- the shape "
-            "is still the better one (it beats the plain multibranch at every "
-            "measured plane, which is why this is a warning and not a "
-            "fallback), but absolute energy / encircled energy in the dark "
-            "tail is unreliable here.  Read at a plane where the two branches "
-            "separate further (a caustic ring with a wider two-branch band), "
-            "or use apply_real_lens_traced(amplitude_model='ray_density') / "
-            "apply_real_lens_gbd / apply_real_lens_fga for absolute energy.",
+            "brute-force Rayleigh-Sommerfeld oracle on four optics (WP-B7b, "
+            "WP-B7c): below this bar the completed field's total power error "
+            "is signed and centred on the truth (-2.2 % to +4.1 %, 12 of 22 "
+            "planes low); above it, it is a one-sided GAIN at every plane "
+            "measured (+3.6 % to +30.1 %, 8 of 8) -- the shape is still the "
+            "better one (it beats the plain multibranch at every measured "
+            "plane, which is why this is a warning and not a fallback), but "
+            "absolute energy / encircled energy in the dark tail is "
+            "unreliable here.  Read at a plane where the two branches separate "
+            "further (a caustic ring with a wider two-branch band), or use "
+            "apply_real_lens_traced(caustic='wave', amplitude_model="
+            "'ray_density') -- which conserved the launched power to better "
+            "than 1 % at every one of those planes -- or apply_real_lens_gbd / "
+            "apply_real_lens_fga for absolute energy.",
             RuntimeWarning, _caller_stacklevel())
     rb = rgrid[bright]
     Eb = E_mb[bright]
@@ -1117,9 +1341,20 @@ def apply_real_lens_traced_uniform(
 
     if return_diagnostics:
         d = dict(mb_diag)
+        d.update(_mb_energy)
         d.update(fell_back=False, reason='fold_ring', r_c=r_c, kappa=kappa,
                  c0=c0, c1=c1, fit_residual=fit_resid, fit_halfwidth=W,
                  n_turn=fold['n_turn'], zeta_band=zeta_band,
-                 zeta_extrapolation=zeta_extrap)
+                 zeta_extrapolation=zeta_extrap,
+                 # the linear zeta's own curvature bound and the depth the
+                 # dark tail was actually filled to, both in metres, so a
+                 # caller can see whether the fill outran the normal form on
+                 # THEIR optic (it does on WP-B7b's fixture F: 17.2 l_airy
+                 # against the 20 the fill covers)
+                 zeta_curvature=fold.get('zeta_curvature'),
+                 zeta_linear_range=fold.get('zeta_linear_range'),
+                 zeta_linear_resid=fold.get('zeta_linear_resid'),
+                 dark_fill_depth=float(_AIRY_TAIL_CELLS * l_airy),
+                 l_airy=float(l_airy))
         return E_out, d
     return E_out

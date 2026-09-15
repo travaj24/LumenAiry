@@ -2,6 +2,96 @@
 
 All notable changes to the core library are documented here.
 
+## [Unreleased]
+
+### Fixed -- lens-traced: the multibranch reconstruction blow-up the uniform completion passed through, and the fold envelope's two constants re-derived
+
+`apply_real_lens_traced_uniform` (also `apply_real_lens_traced(caustic='uniform')`) now
+REFUSES a multibranch field whose reconstructed grid power leaves a derived band, instead of
+completing it and reporting its own best-case diagnostics on a field wrong by three decades.
+On VERIFY-B7b's fold fixture (N-BAF10 biconvex R = +-2.6 mm, 1.064 um, N = 512,
+dx = 2.20 um) the planes z = 1762 / 1764 / 1768 um returned fields carrying **93.5x, 3545x
+and 6097x** the launched power while `fell_back` read `False`, `fit_residual` 0.0029-0.0054
+and `zeta_extrapolation` 0.32 -- the best case its docstring records.  Reproduced on two more
+singlets (1683x on an N-BK7 plano-convex at 780 nm, 18.9x on an N-SF11 biconvex at 1.55 um)
+and identically on both builds (py3.14 / numpy 2.4.4 and py3.12 / numpy 2.4.6).
+
+The cause is in `apply_real_lens_traced_multibranch` and is neither a wrong branch nor an
+unclipped Jacobian nor the fold-member ordering: the rasteriser deposits one amplitude per
+pixel CENTRE a mapped triangle covers, which is an unbiased estimator of the launched energy
+only while those triangles are spread over many pixels, and at the axial point focus a whole
+ring collapses onto a handful of them (`n_branch.max()` rises 2 -> 797 across the window).
+Three controls fix the diagnosis: `caustic_band='plain'` reproduces the blow-up to 0.1 %,
+`min_area_ratio` 1e-8 and the 1e-6 default give an identical ratio, and REFINING the launch
+lattice makes it 7.4x worse (`ray_subsample` 2 -> 1: 6097 -> 44878).  Bounding the
+reconstruction would mean a different quadrature and would move every multibranch field near
+a caustic, so the reconstruction is left byte-identical and the refusal lives in the layer
+that was misreporting.  Falling back is not a remedy and was measured not to be: at
+z = 1770 um the completion already fell back and returned a field carrying 6459x the launched
+power, because the fallback target is that same field.
+
+The bar, `_MB_POWER_RATIO_MAX = 2 * _ENERGY_BLOWUP_FACTOR = 4.0`, is derived on three optics
+and 38 fold planes against the direct Rayleigh-Sommerfeld oracle
+`validation/oracles/caustic_fold_truth.py`: all 30 planes the oracle accepts (completion
+fidelity 0.883-0.995) read a multibranch `power_ratio` of 0.816-1.246, the smallest broken
+one (fidelity 0.204) reads 18.86, and nothing lies between -- 3.2x of margin above the
+largest accepted reading and 4.7x below the smallest broken one.  The reading is taken
+through the same bracket the multibranch's own gain arm uses, so the wide-aperture geometry
+artefact that bracket exists for cannot reach it, and the coupling to that module's warn bar
+means every refused field has already emitted its `RuntimeWarning`.  The diagnostics now
+carry `multibranch_power_ratio`, `multibranch_power_ratio_bracketed`,
+`multibranch_power_ratio_band` and `power_ratio_decision` on every return path, including the
+fallbacks; the multibranch's own diagnostics gain `n_branch_max`, `launched_power` and
+`launched_power_triangles`.  The loss side is reported, not refused, and the report says why:
+a multibranch field that loses energy is this module's normal input, the measured legitimate
+population runs down to 0.763, and the only pathological low case is already refused inside
+the multibranch.
+
+`_ZETA_EXTRAPOLATION_MAX = 8.0` is re-derived two-sided on the same three optics and holds
+where it stands, but what it separates is a SIGN, not two magnitudes: below the bar the
+completed field's energy error is signed and centred (-2.18 % .. +4.14 %, 12 of 22 rungs
+negative, mean +0.57 %), above it a one-sided gain at every rung (+3.64 % .. +30.13 %, 8 of
+8, mean +7.88 %).  The last signed rung is 5.65 and the first systematic-gain rung 11.05, so
+`sqrt(5.65 * 11.05) = 7.90` -- the shipped bar already sits at the geometric centre of the
+transition on optics WP-B7b never saw.  WP-B7b's "+12.5 % at 9.8" and VERIFY-B7b's
+"saturates near +5 % out to 531" are the same above-bar population on different optics, each
+read without its below-bar half; the constant's comment, the docstring table and the warning
+text now carry both halves.
+
+Two measured results are recorded without a code change.  The member-selection sentence "at
+the widest-band plane it also beats `apply_real_lens_traced(amplitude_model='ray_density')`"
+does not generalise, and neither does its reverse: re-measured on five fixtures including
+WP-B7b's own two, the completion is the closer member at 7 of 9 planes on WP-B7b's fast
+N-LAK22 singlet (0.9993 against 0.9974 at its marginal focus) and the ray-to-wave hand-off is
+closer at every plane on three other optics (0.9979 against 0.9915), with every margin under
+0.012 of fidelity and a beam-width sweep at a fixed optic refusing to flip it -- so the
+docstring now records both orderings and the default member is unchanged.  And WP-B7b's
+proposal to clip `_AIRY_TAIL_CELLS` where the extrapolated `zeta` stops describing the tail
+rests on a premise the measurement refuses: more than 94 % of the excess energy is written
+inside 3 Airy lengths, not in the outer annulus (the cumulative dark-side energy ratio is
+flat in depth beyond 3 cells, 2.169 against 2.045 at `zeta_extrapolation` = 14).  The bound
+is derived anyway and REPORTED -- `_trace_meridional_fold` returns the band's own curvature
+and `zeta_linear_range = 0.1 kappa / |q|`, which the completion reports alongside
+`zeta_curvature`, `zeta_linear_resid`, `dark_fill_depth` and `l_airy` -- but it is not
+applied to the fill, because it is anti-conservative by a factor of ~20 against the oracle's
+own dark-side decay and everything it would remove sits below 2e-06 of the ring amplitude.
+The real lever is measured instead: `kappa_eff / kappa` read off the oracle's tail runs
+1.068 -> 0.489 as `zeta_extrapolation` runs 0.42 -> 531, so the linear normal form is good to
+7 % only while the two-branch band is at least ~2 Airy lengths wide.
+
+Behaviour change: only the refused planes move.  Archive-to-archive on both builds, 11 of 13
+fixtures are byte-identical -- including the K4 suite's own plano-convex at two grids and at
+`output_plane_distance = 0`, the multibranch alone at the blow-up plane, and WP-B7b's fixture
+F at two planes where the new `zeta_linear_range` is shorter than the dark fill -- and the
+two movers are exactly the two blow-up planes, which now raise.
+
+Files: `lumenairy/elements/_lens_traced_multibranch.py`,
+`lumenairy/elements/_lens_traced_uniform.py`,
+`tests/unit/test_audit2609_b7c_multibranch_envelope.py` (new, 10 ids),
+`validation/probe_multibranch_zeta/` (probes, oracle driver and JSON for both builds),
+`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/WP-B7c_REPORT.md`.
+Closes handoff items 4.2 and 4.3.
+
 ## [5.47.0] — 2026-09-14
 
 This release is the fourth wave of the 2026-09-11 adversarial audit's remediation

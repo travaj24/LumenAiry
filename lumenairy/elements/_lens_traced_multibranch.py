@@ -109,12 +109,51 @@ def _airy(z):
 _EDGE_TOL = 1e-9
 
 # Energy-conservation tripwire (Scope note D5): at a rotationally-symmetric
-# AXIAL point focus a whole RING of branches coalesces, but the fold-uniform
-# 'ludwig' swap regularizes only the CLOSEST PAIR -- the residual ring branches
-# keep their divergent ``1/sqrt|J|`` ART amplitudes, blowing the reconstructed
-# grid power up ~1e5..1e6x (probe: ~1e6x at the BFL plane).  A well-behaved
-# through-focus field stays within ~1.2x of the input aperture power, so a warn
-# above this multiple flags the catastrophe with no false positives.
+# AXIAL point focus a whole RING of branches coalesces, and the reconstructed
+# grid power blows up ~1e5..1e6x (probe: ~1e6x at the BFL plane).  A
+# well-behaved through-focus field stays within ~1.2x of the input aperture
+# power, so a warn above this multiple flags the catastrophe with no false
+# positives.
+#
+# WHAT THE BLOW-UP IS (measured, WP-B7c 2026-09-14; the three controls are in
+# ``validation/probe_multibranch_zeta/probe2_mechanism.py``).  It is the
+# rasteriser's POINT-SAMPLED AREA QUADRATURE losing its unbiasedness, not a
+# wrong branch, not an unclipped Jacobian and not the fold-member ordering:
+#
+#   * a mapped triangle deposits ``|E_in|^2 / ratio`` over EVERY pixel whose
+#     CENTRE it covers.  Near a caustic essentially every mapped triangle is
+#     sub-pixel (median mapped area 1/430 of a pixel on the fixture below, at
+#     every plane including the healthy ones), so the write is a Monte-Carlo
+#     estimator of the area integral: a triangle of mapped area ``A`` catches a
+#     pixel centre with probability ``A/dx^2`` and then deposits
+#     ``dx^2 |E_in|^2 / ratio``, whose expectation is exactly the launched
+#     ``A_tri |E_in|^2``.  That is why the healthy planes conserve energy at
+#     all.  The estimator is unbiased only while the triangles are SPREAD over
+#     many pixels; where a whole RING collapses onto a handful of pixels the
+#     variance becomes the mean;
+#   * ``caustic_band='plain'`` reproduces the blow-up to 0.1 % (6090 against
+#     the 'ludwig' 6097 at z = 1768 um on the fixture below), so the pair swap
+#     is not involved;
+#   * ``min_area_ratio`` 1e-8 and the 1e-6 default give an IDENTICAL ratio
+#     (6096.7), i.e. the clip is inoperative at the default -- the divergent
+#     amplitudes sit at area ratios 1e-6..1e-3 (``1/sqrt|J|`` of 32..1000),
+#     which it admits.  Raising it to 1e-4 cuts the ratio to 93 and to 1e-3 to
+#     0.53, at the cost of skipping 4138 and 52384 of 64336 triangles;
+#   * REFINING the launch lattice makes it WORSE, by 7.4x
+#     (``ray_subsample`` 2 -> 1: 6097 -> 44878; 4 -> 2: 771 -> 6097), the
+#     signature of a quadrature whose written energy scales with the triangle
+#     COUNT instead of with their mapped area.  ``n_branch.max()`` on one pixel
+#     rises 2 -> 97 -> 565 -> 797 across the same four planes.
+#
+# Fixture: N-BAF10 biconvex R = +/-2.6 mm, t = 0.70 mm, 0.90 mm aperture,
+# lambda = 1.064 um, N = 512, dx = 2.20 um, w0 = 330 um, z = 1750..1790 um
+# (VERIFY-B7b section 4.1's own fold fixture); reproduced on two more optics in
+# ``docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/WP-B7c_REPORT.md``.
+# Bounding the reconstruction would mean replacing the point sample by an
+# area-weighted splat -- a different quadrature that moves every multibranch
+# field near a caustic -- so WP-B7c left the reconstruction alone and put the
+# REFUSAL in the uniform completion that builds on it
+# (``_lens_traced_uniform._MB_POWER_RATIO_MAX``).
 _ENERGY_BLOWUP_FACTOR = 2.0
 
 # Lower arm of the same tripwire.  The upper arm alone could only ever see
@@ -1150,6 +1189,19 @@ def apply_real_lens_traced_multibranch(
                        'input_carrier': (kcx, kcy),
                        'n_triangles': _n_tri, 'n_triangles_finite': _n_finite,
                        'n_triangles_degenerate': _n_degenerate,
+                       # the largest number of mapped triangles that land on
+                       # ONE pixel -- the quadrature statistic the energy
+                       # tripwire's mechanism note is written on (it rises
+                       # 2 -> 797 across the blow-up window), and the number a
+                       # caller needs to tell a two-branch fold from a
+                       # collapsing ring without re-deriving ``n_branch``
+                       'n_branch_max': int(n_branch.max()),
+                       # the two denominators of ``power_ratio`` /
+                       # ``power_ratio_triangles``, in absolute units [W], so a
+                       # consumer can normalise its OWN field against the same
+                       # launched power instead of re-deriving it
+                       'launched_power': p_in,
+                       'launched_power_triangles': _p_in_tri,
                        # reconstructed grid power / launched power reaching
                        # the grid: 1.0 = energy conserved by the branch sum
                        'power_ratio': (p_out / p_in) if p_in > 0.0
