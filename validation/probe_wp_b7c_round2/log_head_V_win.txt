@@ -1,0 +1,12 @@
+lumenairy C:\tmp\lum_mb2\lumenairy\__init__.py  V: VERIFY-B7b's N-BAF10 biconvex R=+/-2.6 mm, t=0.70 mm, 0.90 mm aperture, 1.064 um
+z=  1700.000 br=0.895864252 Cmb=0.9819560 Cret=0.9924914 nbr=    2 deg=     8 zx=0.7780523 fold_ring
+z=  1720.000 br=0.933520392 Cmb=1.0154921 Cret=1.0074268 nbr=    2 deg=    20 zx=0.5763755 fold_ring
+z=  1740.000 br=0.850209396 Cmb=0.9869481 Cret=1.0086255 nbr=    2 deg=    16 zx=0.4382412 fold_ring
+z=  1750.000 br=0.866151847 Cmb=1.0373605 Cret=1.0004574 nbr=    2 deg=    16 zx=0.3847832 fold_ring
+z=  1755.000 br=0.795754812 Cmb=0.9645956 Cret=0.9965353 nbr=    2 deg=     4 zx=0.3609977 fold_ring
+z=  1758.000 br=0.825482063 Cmb=0.9954503 Cret=0.9929710 nbr=    2 deg=     8 zx=0.3475451 fold_ring
+z=  1760.000 br=0.844765421 Cmb=1.0190090 Cret=0.9867918 nbr=    2 deg=    32 zx=0.3388923 fold_ring
+z=  1761.000 br=0.861723846 Cmb=1.0636048 Cret=1.0021337 nbr=    2 deg=    24 zx=0.3346562 fold_ring
+z=  1762.000 br=93.47214324 Cmb=3.8981338 Cret=     None nbr=   97 deg=    28 zx=     None REFUSED:power_ratio
+z=  1764.000 br=3544.522925 Cmb=3.9971005 Cret=     None nbr=  565 deg=    40 zx=     None REFUSED:power_ratio
+z=  1768.000 br=6096.713294 Cmb=3.9983650 Cret=     None nbr=  797 deg=    32 zx=     None REFUSED:power_ratio

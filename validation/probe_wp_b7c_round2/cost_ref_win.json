@@ -1,0 +1,64 @@
+{
+ "tree": "C:\\tmp\\lum_mb2_ref",
+ "lumenairy_file": "C:\\tmp\\lum_mb2_ref\\lumenairy\\__init__.py",
+ "python": "3.14.6",
+ "numpy": "2.4.4",
+ "rows": [
+  {
+   "fixture": "V",
+   "z_um": 1758.0,
+   "N": 512,
+   "t_uniform_s": 0.3186343000270426,
+   "t_multibranch_s": 0.3501877000089735
+  },
+  {
+   "fixture": "V",
+   "z_um": 0.0,
+   "N": 512,
+   "t_uniform_s": 0.5577280999859795,
+   "t_multibranch_s": 0.4756955000339076
+  },
+  {
+   "fixture": "S",
+   "z_um": 3214.78,
+   "N": 512,
+   "t_uniform_s": 0.929975499981083,
+   "t_multibranch_s": 0.860702299978584
+  },
+  {
+   "fixture": "F_alt",
+   "z_um": 1063.0,
+   "N": 640,
+   "t_uniform_s": 0.5263548000366427,
+   "t_multibranch_s": 0.2723742999951355
+  },
+  {
+   "fixture": "G",
+   "z_um": 950.0,
+   "N": 768,
+   "t_uniform_s": 1.4837272999575362,
+   "t_multibranch_s": 0.6036931999842636
+  },
+  {
+   "fixture": "A",
+   "z_um": 2800.0,
+   "N": 512,
+   "t_uniform_s": 0.26376770000206307,
+   "t_multibranch_s": 0.2807747999904677
+  },
+  {
+   "fixture": "K",
+   "z_um": 2000.0,
+   "N": 512,
+   "t_uniform_s": 0.3891847999766469,
+   "t_multibranch_s": 0.34569960000226274
+  },
+  {
+   "fixture": "Q",
+   "z_um": 5680.0,
+   "N": 512,
+   "t_uniform_s": 0.5836080000153743,
+   "t_multibranch_s": 0.4977729999809526
+  }
+ ]
+}

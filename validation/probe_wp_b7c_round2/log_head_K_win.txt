@@ -1,0 +1,16 @@
+lumenairy C:\tmp\lum_mb2\lumenairy\__init__.py  K: N-LAK22 biconvex R=+/-3.0 mm with CONIC k1=-0.55 on surface 1, t=0.70 mm, 1.00 mm aperture, 1.31 um
+z=  1940.000 br=0.990853461 Cmb=0.9992869 Cret=1.0006944 nbr=    2 deg=     4 zx=314.70710 fold_ring
+z=  1960.000 br=0.970981250 Cmb=0.9980633 Cret=0.9980182 nbr=    2 deg=    20 zx=28.429931 fold_ring
+z=  1980.000 br=0.952937274 Cmb=0.9960578 Cret=0.9962719 nbr=    2 deg=    12 zx=9.6746544 fold_ring
+z=  2000.000 br=0.927995140 Cmb=0.9981181 Cret=0.9985993 nbr=    2 deg=     0 zx=4.7552694 fold_ring
+z=  2020.000 br=0.905897278 Cmb=1.0022707 Cret=0.9976236 nbr=    2 deg=     8 zx=2.7851491 fold_ring
+z=  2040.000 br=0.877007617 Cmb=1.0006621 Cret=0.9982002 nbr=    2 deg=    28 zx=1.8069100 fold_ring
+z=  2060.000 br=0.866669765 Cmb=1.0004361 Cret=1.0028635 nbr=    2 deg=    28 zx=1.2527075 fold_ring
+z=  2080.000 br=0.908990624 Cmb=1.0256489 Cret=1.0112834 nbr=    2 deg=    20 zx=0.9091680 fold_ring
+z=  2100.000 br=0.887179877 Cmb=0.9953318 Cret=0.9953462 nbr=    2 deg=    44 zx=0.6816270 fold_ring
+z=  2120.000 br=0.837722134 Cmb=0.9738358 Cret=0.9958910 nbr=    2 deg=    12 zx=0.5228180 fold_ring
+z=  2130.000 br=0.853191282 Cmb=1.0261375 Cret=1.0035948 nbr=    2 deg=    44 zx=0.4606021 fold_ring
+z=  2133.000 br=0.782815443 Cmb=0.9615928 Cret=1.0116061 nbr=    2 deg=    44 zx=0.4436632 fold_ring
+z=  2136.000 br=0.799130509 Cmb=0.9739671 Cret=1.0024299 nbr=    2 deg=    48 zx=0.4274294 fold_ring
+z=  2138.000 br=0.815824946 Cmb=0.9995338 Cret=0.9977545 nbr=    2 deg=    56 zx=0.4169754 fold_ring
+z=  2140.000 br=3241.811495 Cmb=3.9970598 Cret=     None nbr=  453 deg=    48 zx=     None REFUSED:power_ratio

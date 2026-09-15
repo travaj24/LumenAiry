@@ -1,0 +1,15 @@
+lumenairy C:\tmp\lum_mb2_pre\lumenairy\__init__.py  arbiter=False  phi=debye
+M      z=  2195.00 br=0.98815435 C=    None/    None nbr=None fid_uni=0.97988 pow_uni=1.106706 fid_wv=0.9983 fold_ring
+M      z=  2201.74 br=0.98038063 C=    None/    None nbr=None fid_uni=0.97975 pow_uni=1.112590 fid_wv=0.9983 fold_ring
+M      z=  2210.00 br=0.95895907 C=    None/    None nbr=None fid_uni=0.98229 pow_uni=1.085321 fid_wv=0.9983 fold_ring
+M      z=  2225.00 br=0.94708560 C=    None/    None nbr=None fid_uni=0.98073 pow_uni=1.113610 fid_wv=0.9984 fold_ring
+M      z=  2240.00 br=0.92898167 C=    None/    None nbr=None fid_uni=0.97933 pow_uni=1.136552 fid_wv=0.9984 fold_ring
+M      z=  2255.00 br=0.90356713 C=    None/    None nbr=None fid_uni=0.98177 pow_uni=1.133811 fid_wv=0.9984 fold_ring
+M      z=  2270.00 br=0.83789082 C=    None/    None nbr=None fid_uni=0.98267 pow_uni=0.998743 fid_wv=0.9984 fold_ring
+M      z=  2285.00 br=0.79789689 C=    None/    None nbr=None fid_uni=0.89868 pow_uni=0.803502 fid_wv=0.9985 too few bright-band pixels for the fit
+M      z=  2295.00 br=0.76734603 C=    None/    None nbr=None fid_uni=0.97918 pow_uni=0.971293 fid_wv=0.9985 fold_ring
+M      z=  2300.00 br=0.80014492 C=    None/    None nbr=None fid_uni=0.90000 pow_uni=0.805640 fid_wv=0.9985 too few bright-band pixels for the fit
+M      z=  2305.00 br=0.74833119 C=    None/    None nbr=None fid_uni=0.87123 pow_uni=0.753386 fid_wv=0.9985 too few bright-band pixels for the fit
+M      z=  2315.00 br=0.67440700 C=    None/    None nbr=None fid_uni=0.85036 pow_uni=0.678744 fid_wv=0.9985 too few bright-band pixels for the fit
+M      z=  2330.00 br=0.66890547 C=    None/    None nbr=None fid_uni=0.78571 pow_uni=0.672735 fid_wv=0.9985 too few bright-band pixels for the fit
+M      z=  2343.00 br=504.386447 C=    None/    None nbr=None fid_uni=0.40159 pow_uni=506.9034 fid_wv=0.9985 fold Airy scale under-resolved by the grid

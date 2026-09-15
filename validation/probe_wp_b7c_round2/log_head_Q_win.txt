@@ -1,0 +1,12 @@
+lumenairy C:\tmp\lum_mb2\lumenairy\__init__.py  Q: cemented doublet N-BK7 R=+3.0/-2.0 + N-SF6 -2.0/-6.0, 1.40 mm aperture, 1.31 um
+z=  5380.000 br=1.011152475 Cmb=1.0144069 Cret=1.0144069 nbr=    1 deg=     0 zx=     None no_fold
+z=  5400.000 br=1.106026150 Cmb=1.1004295 Cret=      1.1 nbr=    1 deg=     0 zx=     None REFUSED:pixel_continuity
+z=  5410.000 br=1.288886633 Cmb=1.2651953 Cret=    1.265 nbr=    1 deg=     0 zx=     None REFUSED:pixel_continuity
+z=  5420.000 br=1.826033691 Cmb=1.6361017 Cret=    1.636 nbr=    1 deg=     0 zx=     None REFUSED:pixel_continuity
+z=  5430.000 br=4.071152529 Cmb=2.5273232 Cret=     None nbr=    1 deg=     0 zx=     None REFUSED:power_ratio
+z=  5440.000 br=0.449139666 Cmb=0.7257186 Cret=0.7257186 nbr=    1 deg=   718 zx=     None no_fold
+z=  5460.000 br=3.216132756 Cmb=2.7865914 Cret=     None nbr=    1 deg=  3350 zx=     None REFUSED:power_ratio
+z=  5660.000 br=0.743096551 Cmb=0.9724674 Cret=1.0034669 nbr=    2 deg=   124 zx=0.6364258 fold_ring
+z=  5680.000 br=0.823013963 Cmb=1.0276406 Cret=0.9987909 nbr=    2 deg=    80 zx=0.7182966 fold_ring
+z=  5700.000 br=0.837311526 Cmb=1.0370353 Cret=1.0039701 nbr=    2 deg=    88 zx=0.8109658 fold_ring
+z=  5720.000 br=0.801749140 Cmb=0.9956276 Cret=0.9965668 nbr=    2 deg=    52 zx=0.9166353 fold_ring

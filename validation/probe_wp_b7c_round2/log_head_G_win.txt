@@ -1,0 +1,12 @@
+lumenairy C:\tmp\lum_mb2\lumenairy\__init__.py  G: fast N-SF11 biconvex R=+/-2.0 mm, t=0.85 mm, stopped to 0.85 mm (NA ~ 0.33), 850 nm
+z=   860.000 br=0.996096828 Cmb=0.9998008 Cret=0.9998831 nbr=    2 deg=    20 zx=565.76456 fold_ring
+z=   890.000 br=0.991672267 Cmb=0.9996003 Cret=0.9999323 nbr=    2 deg=     8 zx=7.8718329 fold_ring
+z=   920.000 br=0.986148448 Cmb=0.9995065 Cret=1.0001380 nbr=    2 deg=    12 zx=2.1680706 fold_ring
+z=   935.000 br=0.984590903 Cmb=1.0002433 Cret=1.0000031 nbr=    2 deg=     8 zx=1.4030231 fold_ring
+z=   950.000 br=0.981901168 Cmb=0.9995635 Cret=0.9996241 nbr=    2 deg=     8 zx=0.9759623 fold_ring
+z=   965.000 br=0.989183593 Cmb=1.0069259 Cret=1.0087903 nbr=   65 deg=    12 zx=0.7139131 fold_ring
+z=   972.000 br=1.177130303 Cmb=1.1448616 Cret=    1.142 nbr=  237 deg=    12 zx=     None REFUSED:pixel_continuity
+z=   976.000 br=1.248006882 Cmb=1.1949117 Cret=    1.191 nbr=  261 deg=    12 zx=     None REFUSED:pixel_continuity
+z=   980.000 br=1.362932005 Cmb=1.2691288 Cret=    1.264 nbr=  285 deg=     8 zx=     None REFUSED:pixel_continuity
+z=   988.000 br=2.033233353 Cmb=1.6483017 Cret=     None nbr=  333 deg=    24 zx=     None REFUSED:power_ratio
+z=   995.000 br=2.785269680 Cmb=1.9626884 Cret=     None nbr=  381 deg=    44 zx=     None REFUSED:power_ratio

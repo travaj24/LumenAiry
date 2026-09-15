@@ -1,0 +1,326 @@
+{
+ "tree": "C:\\tmp\\lum_mb2",
+ "lumenairy_file": "C:\\tmp\\lum_mb2\\lumenairy\\__init__.py",
+ "python": "3.14.6",
+ "numpy": "2.4.4",
+ "rows": [
+  {
+   "tag": "S_mb_healthy",
+   "ok": true,
+   "sha256": "97561f714c60babc169c7a7bda970278229db2f6f0835416bee5a39899a10662",
+   "power": 1.6126336747752866e-07,
+   "dtype": "complex128",
+   "n_warnings": 0,
+   "power_ratio": 0.9271416206388834,
+   "decision": null,
+   "continuity": null,
+   "continuity_decision": null
+  },
+  {
+   "tag": "S_uni_healthy",
+   "ok": true,
+   "sha256": "f44ebb3aa1cec4406eb6183fec6dfbbfa0b2f97b2b583519837704360560c91e",
+   "power": 1.8653026308531611e-07,
+   "dtype": "complex128",
+   "n_warnings": 0,
+   "power_ratio": 0.9271416206388834,
+   "decision": "ok",
+   "continuity": null,
+   "continuity_decision": null
+  },
+  {
+   "tag": "S_mb_blow",
+   "ok": true,
+   "sha256": "9323d06f17d885c4790b4c136039328e8c6c610a01b89062e7e0caac0505cb52",
+   "power": 1.8669502240448568e-05,
+   "dtype": "complex128",
+   "n_warnings": 2,
+   "power_ratio": 107.33542796780999,
+   "decision": null,
+   "continuity": null,
+   "continuity_decision": null
+  },
+  {
+   "tag": "S_uni_blow",
+   "ok": false,
+   "error": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side field this completion is built on carries 107.3x the launched power that reaches this grid, above the 2x refusal bar, with up to 37 branches on one pixel.  The output plane is at "
+  },
+  {
+   "tag": "S_uni_vertex",
+   "ok": true,
+   "sha256": "d33e286500d2f651234fe2434ef9a22d53ce97196964373ad4121c6d6cb5fd28",
+   "power": 1.7004252272335327e-07,
+   "dtype": "complex128",
+   "n_warnings": 1,
+   "power_ratio": 0.9997650512933371,
+   "decision": "ok",
+   "continuity": null,
+   "continuity_decision": null
+  },
+  {
+   "tag": "S_mb_vertex",
+   "ok": true,
+   "sha256": "d33e286500d2f651234fe2434ef9a22d53ce97196964373ad4121c6d6cb5fd28",
+   "power": 1.7004252272335327e-07,
+   "dtype": "complex128",
+   "n_warnings": 0,
+   "power_ratio": 0.9997650512933371,
+   "decision": null,
+   "continuity": null,
+   "continuity_decision": null
+  },
+  {
+   "tag": "S_uni_plain",
+   "ok": true,
+   "sha256": "b78e1c3cfa39976b79113dc63377f05ddee630d7ee68acb229bf9ec719b468a0",
+   "power": 1.9896645774446623e-07,
+   "dtype": "complex128",
+   "n_warnings": 0,
+   "power_ratio": 0.9986402743704675,
+   "decision": "ok",
+   "continuity": null,
+   "continuity_decision": null
+  },
+  {
+   "tag": "S_uni_sub4",
+   "ok": true,
+   "sha256": "0674caf1d0ea6170d48f1696b03defa39c95feba0ff9328255b5f0a4352f22dd",
+   "power": 1.8620252046407667e-07,
+   "dtype": "complex128",
+   "n_warnings": 0,
+   "power_ratio": 0.9256742781946723,
+   "decision": "ok",
+   "continuity": null,
+   "continuity_decision": null
+  },
+  {
+   "tag": "S_alt_uni",
+   "ok": true,
+   "sha256": "389d7d9848e874f92bd338b38443005865a0bd4dfcbb4b08fc9dbf670df33868",
+   "power": 1.8798559779328682e-07,
+   "dtype": "complex128",
+   "n_warnings": 0,
+   "power_ratio": 0.9047061034118941,
+   "decision": "ok",
+   "continuity": null,
+   "continuity_decision": null
+  },
+  {
+   "tag": "M_uni_healthy",
+   "ok": true,
+   "sha256": "62cb8367bf2cb6a296d522bbcce49552f66b828391b6e73e72a36e68966064b6",
+   "power": 2.587476301430233e-07,
+   "dtype": "complex128",
+   "n_warnings": 1,
+   "power_ratio": 0.9803806302708074,
+   "decision": "ok",
+   "continuity": null,
+   "continuity_decision": null
+  },
+  {
+   "tag": "M_mb_healthy",
+   "ok": true,
+   "sha256": "e6e037b0a9643fc2f2a21b65b46d3bf4083d5c5361e1a4c25e5933e0e35ea447",
+   "power": 2.297684106005875e-07,
+   "dtype": "complex128",
+   "n_warnings": 0,
+   "power_ratio": 0.9803806302708074,
+   "decision": null,
+   "continuity": null,
+   "continuity_decision": null
+  },
+  {
+   "tag": "M_uni_fallback",
+   "ok": true,
+   "sha256": "ae7417e15eb3915315b82d893ab26afd3c88ee99d1974fca488249f597c6ff5d",
+   "power": 1.5676905871452964e-07,
+   "dtype": "complex128",
+   "n_warnings": 1,
+   "power_ratio": 0.6689054782934499,
+   "decision": "ok",
+   "continuity": null,
+   "continuity_decision": null
+  },
+  {
+   "tag": "M_uni_blow",
+   "ok": false,
+   "error": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side field this completion is built on carries 504.4x the launched power that reaches this grid, above the 2x refusal bar, with up to 105 branches on one pixel.  The output plane is at"
+  },
+  {
+   "tag": "M_alt_uni",
+   "ok": true,
+   "sha256": "3fbc3f11d83c486f86fe3e2667bf85e3df67dcb8a99b274e61eed872ca85c75a",
+   "power": 2.3111425576602262e-07,
+   "dtype": "complex128",
+   "n_warnings": 1,
+   "power_ratio": 0.9861019641961039,
+   "decision": "ok",
+   "continuity": null,
+   "continuity_decision": null
+  },
+  {
+   "tag": "Q_uni_healthy",
+   "ok": true,
+   "sha256": "36c4150226fdcdbc04b5c02b490bd97e84c485ad232786965715c5090c19739d",
+   "power": 3.704948244290617e-07,
+   "dtype": "complex128",
+   "n_warnings": 0,
+   "power_ratio": 0.8230139631471143,
+   "decision": "ok",
+   "continuity": null,
+   "continuity_decision": null
+  },
+  {
+   "tag": "Q_uni_gap",
+   "ok": true,
+   "sha256": "0d8440031885b1bff5577b8e495f2ec33d6d12d140666ccf728972a5f4746717",
+   "power": 3.945458262527679e-07,
+   "dtype": "complex128",
+   "n_warnings": 1,
+   "power_ratio": 1.1060261504756423,
+   "decision": "ok",
+   "continuity": null,
+   "continuity_decision": null
+  },
+  {
+   "tag": "Q_uni_gap2",
+   "ok": true,
+   "sha256": "a5eed5adf4a108639c34e7aeeced023b22d8cff1cb9115c111a99433f9d9dafe",
+   "power": 4.822328207588117e-07,
+   "dtype": "complex128",
+   "n_warnings": 1,
+   "power_ratio": 1.3518381766765355,
+   "decision": "ok",
+   "continuity": null,
+   "continuity_decision": null
+  },
+  {
+   "tag": "Q_uni_gap3",
+   "ok": true,
+   "sha256": "32eb7de9c6f1749195c0859c667540ddcbad4da25567ec07e3de8813ad75082b",
+   "power": 6.513896361626181e-07,
+   "dtype": "complex128",
+   "n_warnings": 1,
+   "power_ratio": 1.826033691921777,
+   "decision": "ok",
+   "continuity": null,
+   "continuity_decision": null
+  },
+  {
+   "tag": "Q_uni_refused",
+   "ok": false,
+   "error": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side field this completion is built on carries 3.216x the launched power that reaches this grid, above the 2x refusal bar, with up to 1 branches on one pixel.  The output plane is at o"
+  },
+  {
+   "tag": "Q_mb_refused",
+   "ok": true,
+   "sha256": "2c710d2a0826e1e1ad5d09e01cbd698965e960c82d5c9fc8591d8d90886cccac",
+   "power": 1.1472710254286546e-06,
+   "dtype": "complex128",
+   "n_warnings": 1,
+   "power_ratio": 3.216132756639941,
+   "decision": null,
+   "continuity": null,
+   "continuity_decision": null
+  },
+  {
+   "tag": "Q_alt_uni",
+   "ok": true,
+   "sha256": "e697572766b24e6fcedf698dcf3ba5a2440be34907e03c5574b005f92e0ca27b",
+   "power": 3.636466667955781e-07,
+   "dtype": "complex128",
+   "n_warnings": 0,
+   "power_ratio": 0.7737341826686663,
+   "decision": "ok",
+   "continuity": null,
+   "continuity_decision": null
+  },
+  {
+   "tag": "F_uni_healthy",
+   "ok": true,
+   "sha256": "d7bbaead6ef974f325acdd00a18d1688022cddb07f6752c9e25261f4a69c867b",
+   "power": 7.580069274848261e-08,
+   "dtype": "complex128",
+   "n_warnings": 0,
+   "power_ratio": 0.9371346165024595,
+   "decision": "ok",
+   "continuity": null,
+   "continuity_decision": null
+  },
+  {
+   "tag": "F_uni_d1",
+   "ok": true,
+   "sha256": "f6509dd12d8ed4efbe2b80ae649d123edbc40be213a586e19c6afc3f52e6bd68",
+   "power": 9.351536835227329e-08,
+   "dtype": "complex128",
+   "n_warnings": 1,
+   "power_ratio": 1.1512669472064185,
+   "decision": "ok",
+   "continuity": null,
+   "continuity_decision": null
+  },
+  {
+   "tag": "F_uni_refused",
+   "ok": false,
+   "error": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side field this completion is built on carries 2.982x the launched power that reaches this grid, above the 2x refusal bar, with up to 61 branches on one pixel.  The output plane is at "
+  },
+  {
+   "tag": "F_mb_refused",
+   "ok": true,
+   "sha256": "55394867fa8c511b97fd97c554338d0cb640bd43f7c9116c84738bf4aca7d339",
+   "power": 2.2347216383156884e-07,
+   "dtype": "complex128",
+   "n_warnings": 2,
+   "power_ratio": 2.982435170085757,
+   "decision": null,
+   "continuity": null,
+   "continuity_decision": null
+  },
+  {
+   "tag": "F_uni_c64",
+   "ok": true,
+   "sha256": "6bc0f660fbd5e02fa3f398926202c107b5b667839036670ae5400020618696b7",
+   "power": 7.580068781249999e-08,
+   "dtype": "complex64",
+   "n_warnings": 0,
+   "power_ratio": 0.937134615913298,
+   "decision": "ok",
+   "continuity": null,
+   "continuity_decision": null
+  },
+  {
+   "tag": "P_uni_healthy",
+   "ok": true,
+   "sha256": "efd8e1952cbaca85d8f5d48eb8cd8ffb77cae756a30de752417bebc566c8ebea",
+   "power": 1.7868006996915506e-07,
+   "dtype": "complex128",
+   "n_warnings": 0,
+   "power_ratio": 0.9729074950057208,
+   "decision": "ok",
+   "continuity": null,
+   "continuity_decision": null
+  },
+  {
+   "tag": "P_uni_refused",
+   "ok": false,
+   "error": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side field this completion is built on carries 4.49x the launched power that reaches this grid, above the 2x refusal bar, with up to 73 branches on one pixel.  The output plane is at o"
+  },
+  {
+   "tag": "P_uni_blow",
+   "ok": false,
+   "error": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side field this completion is built on carries 54.94x the launched power that reaches this grid, above the 2x refusal bar, with up to 245 branches on one pixel.  The output plane is at"
+  },
+  {
+   "tag": "P_alt_uni",
+   "ok": true,
+   "sha256": "893f387523b212bc72ef7826b2bd003c9fabcfb4d62aaf8cc7c39771c32d1db7",
+   "power": 1.7907623517014805e-07,
+   "dtype": "complex128",
+   "n_warnings": 0,
+   "power_ratio": 0.9735400039451269,
+   "decision": "ok",
+   "continuity": null,
+   "continuity_decision": null
+  }
+ ]
+}

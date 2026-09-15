@@ -1,0 +1,17 @@
+lumenairy C:\tmp\lum_mb2\lumenairy\__init__.py  A: AIR-SPACED doublet N-BK7 +3.2/-3.2 (t=0.80) | gap 0.35 | N-SF11 -12.0/+30.0 (t=0.55), 1.20 mm aperture, 1.064 um
+z=  2700.000 br=0.899396298 Cmb=0.9900236 Cret=0.9981807 nbr=    2 deg=     8 zx=2.4134084 fold_ring
+z=  2720.000 br=0.898664374 Cmb=1.0036894 Cret=0.9996348 nbr=    2 deg=     0 zx=1.8933411 fold_ring
+z=  2740.000 br=0.892993995 Cmb=1.0088515 Cret=0.9989430 nbr=    2 deg=    12 zx=1.5199639 fold_ring
+z=  2760.000 br=0.873112215 Cmb=0.9940952 Cret=0.9978881 nbr=    2 deg=     4 zx=1.2430168 fold_ring
+z=  2780.000 br=0.883792345 Cmb=0.9977995 Cret=0.9866538 nbr=    2 deg=    16 zx=1.0320028 fold_ring
+z=  2800.000 br=0.902906829 Cmb=1.0171746 Cret=0.9967145 nbr=    2 deg=    32 zx=0.8675520 fold_ring
+z=  2820.000 br=0.913088613 Cmb=1.0125431 Cret=1.0011062 nbr=    2 deg=    28 zx=0.7368808 fold_ring
+z=  2840.000 br=0.901665081 Cmb=0.9891805 Cret=1.0037191 nbr=    2 deg=    12 zx=0.6312738 fold_ring
+z=  2860.000 br=0.917295044 Cmb=1.0142989 Cret=0.9940517 nbr=    2 deg=    32 zx=0.5446148 fold_ring
+z=  2880.000 br=0.835160949 Cmb=0.9667902 Cret=0.9959612 nbr=    2 deg=    24 zx=0.4724966 fold_ring
+z=  2900.000 br=0.821919253 Cmb=1.0082217 Cret=0.9963544 nbr=    2 deg=    28 zx=0.4116560 fold_ring
+z=  2903.000 br=0.768991001 Cmb=0.9418945 Cret=0.9921513 nbr=    2 deg=    32 zx=0.4033406 fold_ring
+z=  2905.000 br=0.782273327 Cmb=0.9474521 Cret=0.9951964 nbr=    2 deg=    28 zx=0.3979026 fold_ring
+z=  2907.000 br=0.812039828 Cmb=1.0041675 Cret=1.0068629 nbr=    2 deg=    16 zx=0.3925466 fold_ring
+z=  2910.000 br=17.19833895 Cmb=3.5037722 Cret=     None nbr=   45 deg=    24 zx=     None REFUSED:power_ratio
+z=  2920.000 br=5722.102172 Cmb=3.9982491 Cret=     None nbr=  781 deg=    60 zx=     None REFUSED:power_ratio

@@ -1,0 +1,4 @@
+lumenairy C:\tmp\lum_mb2_pre\lumenairy\__init__.py  arbiter=False  phi=debye
+V      z=  1762.00 br=93.4721432 C=    None/    None nbr=None fid_uni=0.25941 pow_uni=94.58652 fid_wv=0.9982 fold_ring
+V      z=  1764.00 br=3544.52292 C=    None/    None nbr=None fid_uni=0.18972 pow_uni=3580.382 fid_wv=0.9982 fold_ring
+V      z=  1768.00 br=6096.71329 C=    None/    None nbr=None fid_uni=0.16810 pow_uni=6158.961 fid_wv=0.9982 fold_ring

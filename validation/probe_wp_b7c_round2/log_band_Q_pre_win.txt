@@ -1,0 +1,12 @@
+lumenairy C:\tmp\lum_mb2_pre\lumenairy\__init__.py  arbiter=False  phi=debye
+Q      z=  5380.00 br=1.01115247 C=    None/    None nbr=None fid_uni=0.89944 pow_uni=1.015068 fid_wv=0.9989 no_fold
+Q      z=  5400.00 br=1.10602615 C=    None/    None nbr=None fid_uni=0.83662 pow_uni=1.110161 fid_wv=0.9989 no_fold
+Q      z=  5410.00 br=1.28888663 C=    None/    None nbr=None fid_uni=0.77193 pow_uni=1.293611 fid_wv=0.9989 no_fold
+Q      z=  5420.00 br=1.82603369 C=    None/    None nbr=None fid_uni=0.66612 pow_uni=1.832590 fid_wv=0.9989 no_fold
+Q      z=  5430.00 br=4.07115252 C=    None/    None nbr=None fid_uni=0.51043 pow_uni=4.085462 fid_wv=0.9989 no_fold
+Q      z=  5440.00 br=0.44913966 C=    None/    None nbr=None fid_uni=0.83745 pow_uni=0.450684 fid_wv=0.9989 no_fold
+Q      z=  5460.00 br=3.21613275 C=    None/    None nbr=None fid_uni=0.29191 pow_uni=3.226744 fid_wv=0.9989 bad_kappa
+Q      z=  5660.00 br=0.74309655 C=    None/    None nbr=None fid_uni=0.99280 pow_uni=1.048521 fid_wv=0.9989 fold_ring
+Q      z=  5680.00 br=0.82301396 C=    None/    None nbr=None fid_uni=0.99187 pow_uni=1.042678 fid_wv=0.9989 fold_ring
+Q      z=  5700.00 br=0.83731152 C=    None/    None nbr=None fid_uni=0.98851 pow_uni=1.041270 fid_wv=0.9989 fold_ring
+Q      z=  5720.00 br=0.80174914 C=    None/    None nbr=None fid_uni=0.99302 pow_uni=1.012940 fid_wv=0.9989 fold_ring

@@ -1,0 +1,14 @@
+........................................................................ [ 15%]
+........................................................................ [ 30%]
+........................................................................ [ 45%]
+........................................................................ [ 60%]
+........................................................................ [ 76%]
+........................................................................ [ 91%]
+.........................................                                [100%]
+============================== warnings summary ===============================
+tests/unit/test_v5_21_lens_accuracy_extensions.py::test_maslov_auto_rejects_bad_poly_order
+  C:\tmp\lum_mb2\tests\unit\test_v5_21_lens_accuracy_extensions.py:113: UserWarning: apply_real_lens_maslov: 1 prescription aperture(s) exceed the simulation grid (N=32, dx=5.000 um, semi=0.080 mm). Largest is system aperture_diameter with semi_diameter=3.000 mm (+2.920 mm beyond the grid); the field will be truncated at the grid edge during propagation, silently dropping energy the real lens would have transmitted. Consider increasing N or dx so N*dx/2 >= max(semi_diameter). Affected surfaces: system aperture_diameter=3.00mm.
+    apply_real_lens_maslov(E, prescription=_singlet(2e-3), wavelength=LAM,
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+473 passed, 2 deselected, 1 warning in 297.85s (0:04:57)

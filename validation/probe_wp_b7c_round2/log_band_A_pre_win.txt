@@ -1,0 +1,14 @@
+lumenairy C:\tmp\lum_mb2_pre\lumenairy\__init__.py  arbiter=False  phi=debye
+A      z=  2700.00 br=0.89939629 C=    None/    None nbr=None fid_uni=0.98792 pow_uni=0.986311 fid_wv=0.9984 fold_ring
+A      z=  2720.00 br=0.89866437 C=    None/    None nbr=None fid_uni=0.98887 pow_uni=0.983764 fid_wv=0.9984 fold_ring
+A      z=  2740.00 br=0.89299399 C=    None/    None nbr=None fid_uni=0.98904 pow_uni=0.984075 fid_wv=0.9984 fold_ring
+A      z=  2760.00 br=0.87311221 C=    None/    None nbr=None fid_uni=0.99267 pow_uni=0.976426 fid_wv=0.9984 fold_ring
+A      z=  2780.00 br=0.88379234 C=    None/    None nbr=None fid_uni=0.99198 pow_uni=0.977301 fid_wv=0.9984 fold_ring
+A      z=  2800.00 br=0.90290682 C=    None/    None nbr=None fid_uni=0.99315 pow_uni=1.007052 fid_wv=0.9985 fold_ring
+A      z=  2820.00 br=0.91308861 C=    None/    None nbr=None fid_uni=0.99372 pow_uni=1.032662 fid_wv=0.9985 fold_ring
+A      z=  2840.00 br=0.90166508 C=    None/    None nbr=None fid_uni=0.99415 pow_uni=1.052874 fid_wv=0.9985 fold_ring
+A      z=  2860.00 br=0.91729504 C=    None/    None nbr=None fid_uni=0.99447 pow_uni=1.048876 fid_wv=0.9985 fold_ring
+A      z=  2880.00 br=0.83516094 C=    None/    None nbr=None fid_uni=0.99324 pow_uni=1.027996 fid_wv=0.9985 fold_ring
+A      z=  2900.00 br=0.82191925 C=    None/    None nbr=None fid_uni=0.99101 pow_uni=1.006455 fid_wv=0.9985 fold_ring
+A      z=  2910.00 br=17.1983389 C=    None/    None nbr=None fid_uni=0.30624 pow_uni=17.54965 fid_wv=0.9985 fold_ring
+A      z=  2920.00 br=5722.10217 C=    None/    None nbr=None fid_uni=0.02818 pow_uni=5768.154 fid_wv=0.9985 too few bright-band pixels for the fit
