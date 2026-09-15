@@ -1,0 +1,36 @@
+{
+ "lumenairy_file": "C:\\Users\\Tesla\\AppData\\Local\\Temp\\claude\\C--Users-Tesla\\372a2d1f-acbe-4b57-a148-eeae3fe1d729\\scratchpad\\vb14\\tree_96cb2096\\lumenairy\\__init__.py",
+ "version": "5.47.0",
+ "python": "3.14.6",
+ "steps": [
+  {
+   "label": "cold_5_calls",
+   "warnings_seen": 1,
+   "value_cache": 1,
+   "warned": 1
+  },
+  {
+   "label": "after_partial_reset",
+   "warnings_seen": 0,
+   "value_cache": 1,
+   "warned": 0
+  },
+  {
+   "label": "after_full_drain",
+   "warnings_seen": 1,
+   "value_cache_after_drain_was": 0,
+   "warned": 1
+  },
+  {
+   "label": "clear_asm_caches_empties_both",
+   "before": [
+    1,
+    1
+   ],
+   "after": [
+    0,
+    0
+   ]
+  }
+ ]
+}

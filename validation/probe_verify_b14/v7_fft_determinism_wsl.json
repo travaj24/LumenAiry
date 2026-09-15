@@ -1,0 +1,515 @@
+{
+ "lumenairy_file": "/mnt/c/tmp/lum_vreds/lumenairy/__init__.py",
+ "version": "5.47.0",
+ "python": "3.12.3",
+ "numpy": "2.4.6",
+ "platform": "linux",
+ "pyfftw_available": true,
+ "use_pyfftw": true,
+ "fftw_min_size": 256,
+ "fftw_threads": 8,
+ "modes": {
+  "shipped": [
+   {
+    "n": 128,
+    "roundtrip_pattern": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "roundtrip_distinct": 1,
+    "fft_pattern": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "fft_distinct": 1,
+    "ifft_pattern": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "ifft_distinct": 1,
+    "max_rel_spread": 0.0,
+    "frac_doubles_differing": 0.0,
+    "slots": []
+   },
+   {
+    "n": 256,
+    "roundtrip_pattern": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "roundtrip_distinct": 1,
+    "fft_pattern": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "fft_distinct": 1,
+    "ifft_pattern": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "ifft_distinct": 1,
+    "max_rel_spread": 0.0,
+    "frac_doubles_differing": 0.0,
+    "slots": [
+     {
+      "key": "('fwd', (256, 256), '<c16', 8)",
+      "n_slots": 2,
+      "flag": "FFTW_ESTIMATE",
+      "idx": 1,
+      "calls": 21,
+      "buf_addr_mod64": [
+       32,
+       32
+      ],
+      "buf_addr_mod4096": [
+       800,
+       864
+      ],
+      "plan_ids": [
+       139880234319360,
+       139880139326416
+      ]
+     },
+     {
+      "key": "('inv', (256, 256), '<c16', 8)",
+      "n_slots": 2,
+      "flag": "FFTW_ESTIMATE",
+      "idx": 0,
+      "calls": 20,
+      "buf_addr_mod64": [
+       32,
+       0
+      ],
+      "buf_addr_mod4096": [
+       928,
+       960
+      ],
+      "plan_ids": [
+       139880139326720,
+       139880139327024
+      ]
+     }
+    ]
+   },
+   {
+    "n": 512,
+    "roundtrip_pattern": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "roundtrip_distinct": 1,
+    "fft_pattern": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "fft_distinct": 1,
+    "ifft_pattern": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "ifft_distinct": 1,
+    "max_rel_spread": 0.0,
+    "frac_doubles_differing": 0.0,
+    "slots": [
+     {
+      "key": "('fwd', (512, 512), '<c16', 8)",
+      "n_slots": 2,
+      "flag": "FFTW_ESTIMATE",
+      "idx": 1,
+      "calls": 21,
+      "buf_addr_mod64": [
+       32,
+       0
+      ],
+      "buf_addr_mod4096": [
+       1056,
+       1088
+      ],
+      "plan_ids": [
+       139880139327328,
+       139880139327632
+      ]
+     },
+     {
+      "key": "('inv', (512, 512), '<c16', 8)",
+      "n_slots": 2,
+      "flag": "FFTW_ESTIMATE",
+      "idx": 0,
+      "calls": 20,
+      "buf_addr_mod64": [
+       0,
+       0
+      ],
+      "buf_addr_mod4096": [
+       1152,
+       1216
+      ],
+      "plan_ids": [
+       139880139327936,
+       139880139328240
+      ]
+     }
+    ]
+   }
+  ],
+  "double_buffer_off": [
+   {
+    "n": 128,
+    "roundtrip_pattern": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "roundtrip_distinct": 1,
+    "fft_pattern": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "fft_distinct": 1,
+    "ifft_pattern": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "ifft_distinct": 1,
+    "max_rel_spread": 0.0,
+    "frac_doubles_differing": 0.0,
+    "slots": []
+   },
+   {
+    "n": 256,
+    "roundtrip_pattern": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "roundtrip_distinct": 1,
+    "fft_pattern": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "fft_distinct": 1,
+    "ifft_pattern": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "ifft_distinct": 1,
+    "max_rel_spread": 0.0,
+    "frac_doubles_differing": 0.0,
+    "slots": [
+     {
+      "key": "('fwd', (256, 256), '<c16', 8)",
+      "n_slots": 1,
+      "flag": "FFTW_ESTIMATE",
+      "idx": 0,
+      "calls": 21,
+      "buf_addr_mod64": [
+       0
+      ],
+      "buf_addr_mod4096": [
+       832
+      ],
+      "plan_ids": [
+       139880234319360
+      ]
+     },
+     {
+      "key": "('inv', (256, 256), '<c16', 8)",
+      "n_slots": 1,
+      "flag": "FFTW_ESTIMATE",
+      "idx": 0,
+      "calls": 20,
+      "buf_addr_mod64": [
+       0
+      ],
+      "buf_addr_mod4096": [
+       896
+      ],
+      "plan_ids": [
+       139880139327936
+      ]
+     }
+    ]
+   },
+   {
+    "n": 512,
+    "roundtrip_pattern": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "roundtrip_distinct": 1,
+    "fft_pattern": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "fft_distinct": 1,
+    "ifft_pattern": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "ifft_distinct": 1,
+    "max_rel_spread": 0.0,
+    "frac_doubles_differing": 0.0,
+    "slots": [
+     {
+      "key": "('fwd', (512, 512), '<c16', 8)",
+      "n_slots": 1,
+      "flag": "FFTW_ESTIMATE",
+      "idx": 0,
+      "calls": 21,
+      "buf_addr_mod64": [
+       0
+      ],
+      "buf_addr_mod4096": [
+       960
+      ],
+      "plan_ids": [
+       139880139328240
+      ]
+     },
+     {
+      "key": "('inv', (512, 512), '<c16', 8)",
+      "n_slots": 1,
+      "flag": "FFTW_ESTIMATE",
+      "idx": 0,
+      "calls": 20,
+      "buf_addr_mod64": [
+       0
+      ],
+      "buf_addr_mod4096": [
+       1024
+      ],
+      "plan_ids": [
+       139880139327328
+      ]
+     }
+    ]
+   }
+  ],
+  "no_pyfftw": [
+   {
+    "n": 128,
+    "roundtrip_pattern": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "roundtrip_distinct": 1,
+    "fft_pattern": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "fft_distinct": 1,
+    "ifft_pattern": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "ifft_distinct": 1,
+    "max_rel_spread": 0.0,
+    "frac_doubles_differing": 0.0,
+    "slots": []
+   },
+   {
+    "n": 256,
+    "roundtrip_pattern": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "roundtrip_distinct": 1,
+    "fft_pattern": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "fft_distinct": 1,
+    "ifft_pattern": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "ifft_distinct": 1,
+    "max_rel_spread": 0.0,
+    "frac_doubles_differing": 0.0,
+    "slots": []
+   },
+   {
+    "n": 512,
+    "roundtrip_pattern": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "roundtrip_distinct": 1,
+    "fft_pattern": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "fft_distinct": 1,
+    "ifft_pattern": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "ifft_distinct": 1,
+    "max_rel_spread": 0.0,
+    "frac_doubles_differing": 0.0,
+    "slots": []
+   }
+  ]
+ },
+ "pyfftw_version": "0.15.1"
+}

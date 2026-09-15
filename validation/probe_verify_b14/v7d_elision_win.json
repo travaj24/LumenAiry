@@ -1,0 +1,73 @@
+{
+ "numpy": "2.4.4",
+ "python": "3.14.6",
+ "platform": "win32",
+ "rows": [
+  {
+   "n": 64,
+   "md5_both": "5d3a6b84ec0a9f60cf439404733099d4",
+   "md5_named": "5d3a6b84ec0a9f60cf439404733099d4",
+   "md5_left": "5d3a6b84ec0a9f60cf439404733099d4",
+   "md5_right": "5d3a6b84ec0a9f60cf439404733099d4",
+   "both_eq_named": true,
+   "left_eq_named": true,
+   "right_eq_named": true,
+   "right_vs_named_rel": 0.0,
+   "right_vs_named_ndiff": 0,
+   "nvals": 8192
+  },
+  {
+   "n": 128,
+   "md5_both": "e2f8ab944ded8b1319240d912cfc67bf",
+   "md5_named": "e2f8ab944ded8b1319240d912cfc67bf",
+   "md5_left": "e2f8ab944ded8b1319240d912cfc67bf",
+   "md5_right": "e2f8ab944ded8b1319240d912cfc67bf",
+   "both_eq_named": true,
+   "left_eq_named": true,
+   "right_eq_named": true,
+   "right_vs_named_rel": 0.0,
+   "right_vs_named_ndiff": 0,
+   "nvals": 32768
+  },
+  {
+   "n": 256,
+   "md5_both": "26c20a8eeaa9702cc772a492d9307d2b",
+   "md5_named": "26c20a8eeaa9702cc772a492d9307d2b",
+   "md5_left": "26c20a8eeaa9702cc772a492d9307d2b",
+   "md5_right": "26c20a8eeaa9702cc772a492d9307d2b",
+   "both_eq_named": true,
+   "left_eq_named": true,
+   "right_eq_named": true,
+   "right_vs_named_rel": 0.0,
+   "right_vs_named_ndiff": 0,
+   "nvals": 131072
+  },
+  {
+   "n": 512,
+   "md5_both": "a526b95bd66d84e99cae905362c4eeef",
+   "md5_named": "a526b95bd66d84e99cae905362c4eeef",
+   "md5_left": "a526b95bd66d84e99cae905362c4eeef",
+   "md5_right": "a526b95bd66d84e99cae905362c4eeef",
+   "both_eq_named": true,
+   "left_eq_named": true,
+   "right_eq_named": true,
+   "right_vs_named_rel": 0.0,
+   "right_vs_named_ndiff": 0,
+   "nvals": 524288
+  },
+  {
+   "n": 1024,
+   "md5_both": "ef868e6096fafa7ff76c63d87ff1433a",
+   "md5_named": "ef868e6096fafa7ff76c63d87ff1433a",
+   "md5_left": "ef868e6096fafa7ff76c63d87ff1433a",
+   "md5_right": "ef868e6096fafa7ff76c63d87ff1433a",
+   "both_eq_named": true,
+   "left_eq_named": true,
+   "right_eq_named": true,
+   "right_vs_named_rel": 0.0,
+   "right_vs_named_ndiff": 0,
+   "nvals": 2097152
+  }
+ ],
+ "elision_changes_bits": false
+}

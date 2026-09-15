@@ -1,0 +1,42 @@
+{
+ "lumenairy_file": "C:\\Users\\Tesla\\AppData\\Local\\Temp\\claude\\C--Users-Tesla\\372a2d1f-acbe-4b57-a148-eeae3fe1d729\\scratchpad\\vb14\\tree_4bf26c5e\\lumenairy\\__init__.py",
+ "version": "5.47.0",
+ "python": "3.14.6",
+ "numpy": "2.4.4",
+ "fixture": "GHOST",
+ "spec": {
+  "n": 768,
+  "dx": 2.5e-05,
+  "w": 0.0015,
+  "rc": -0.15,
+  "alpha": 5.0,
+  "r1": 0.15,
+  "r2": -0.15,
+  "th": 0.004,
+  "z": 0.006,
+  "ap": 0.018
+ },
+ "cx": 0.0,
+ "rows": [
+  {
+   "order": null,
+   "off": 0.00015217194665917584,
+   "off_repr": "0.00015217194665917584",
+   "off_msgs": 2,
+   "off_peak": 1.1189053022360576,
+   "off_pow": 5644.867938410414,
+   "on": 0.00015217194665917584,
+   "on_repr": "0.00015217194665917584",
+   "on_msgs": 2,
+   "on_peak": 1.1189053022360576,
+   "on_pow": 5644.867938410414,
+   "guard_off": 0.0,
+   "guard_off_repr": "0.0",
+   "guard_off_msgs": 0,
+   "guard_off_peak": 1.1190877352997084,
+   "guard_off_pow": 5653.697159975673,
+   "ratio": 1.0
+  }
+ ],
+ "default_order": 16
+}

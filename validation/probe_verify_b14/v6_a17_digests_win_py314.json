@@ -1,0 +1,860 @@
+{
+ "python": "3.14.6",
+ "root": "C:\\tmp\\lum_vreds",
+ "n_registered": 123,
+ "modules": {
+  "lumenairy/propagators/carrier.py": {
+   "ast": "6ec0c193f027bd6fc28e94c50315601623fbc7ee8cd6406e50cfd736690cbf39",
+   "token": "e7ec80f9c31b500e676398670b8fed92afc956ec43a1fda68cdab0039d49306f",
+   "ast_recorded": "6ec0c193f027bd6fc28e94c50315601623fbc7ee8cd6406e50cfd736690cbf39",
+   "token_recorded": "e7ec80f9c31b500e676398670b8fed92afc956ec43a1fda68cdab0039d49306f"
+  },
+  "lumenairy/propagators/carrier_field.py": {
+   "ast": "0a679837c2c42230b9d60e9595a7a1b9026f4d304e9800c06ef200bd7830f046",
+   "token": "6b2e5819357c065f477a06379e3f4c782d1cc3947afef2ae15a2f1700b8b5205",
+   "ast_recorded": "0a679837c2c42230b9d60e9595a7a1b9026f4d304e9800c06ef200bd7830f046",
+   "token_recorded": "6b2e5819357c065f477a06379e3f4c782d1cc3947afef2ae15a2f1700b8b5205"
+  },
+  "lumenairy/propagators/fft_infra.py": {
+   "ast": "bd5002a4bb2ed943962b9bac214eb699c952d4d55eb715f4d96c4e9401ee6eab",
+   "token": "7d774b9205d74fb96fbf02ea5440d0c6baec13bcdf8e3836bf809ddf1663c8ca",
+   "ast_recorded": "bd5002a4bb2ed943962b9bac214eb699c952d4d55eb715f4d96c4e9401ee6eab",
+   "token_recorded": "7d774b9205d74fb96fbf02ea5440d0c6baec13bcdf8e3836bf809ddf1663c8ca"
+  },
+  "lumenairy/_cache_registry.py": {
+   "ast": "eb9e6e03f453f48298d048f643cff0340d6795c35b870a8efa715ac57b200ffc",
+   "token": "a9722cc34783cbd489bab60fe64e54f7439943733c59fe64ceff01c538f20e69",
+   "ast_recorded": "eb9e6e03f453f48298d048f643cff0340d6795c35b870a8efa715ac57b200ffc",
+   "token_recorded": "a9722cc34783cbd489bab60fe64e54f7439943733c59fe64ceff01c538f20e69"
+  },
+  "lumenairy/_context.py": {
+   "ast": "7f580564d74cad6444ebbeb5d6a2ada18ea5bae4056b4ee3c1d6d8ee531ff0b9",
+   "token": "401ffd6d0ee935d94eb8e7bf65d38bb809dbce894b80946eec3df461f9bfaf42",
+   "ast_recorded": "7f580564d74cad6444ebbeb5d6a2ada18ea5bae4056b4ee3c1d6d8ee531ff0b9",
+   "token_recorded": "401ffd6d0ee935d94eb8e7bf65d38bb809dbce894b80946eec3df461f9bfaf42"
+  },
+  "lumenairy/_deprecation.py": {
+   "ast": "de1c52354641ed24fbb08c622ba620b05187b22e9e8aa2e8375d50170724d3c9",
+   "token": "5f7feeb45778e60bffba2c9730451d5dc7a1844ec1687c306ff60a3eb70cbc03",
+   "ast_recorded": "de1c52354641ed24fbb08c622ba620b05187b22e9e8aa2e8375d50170724d3c9",
+   "token_recorded": "5f7feeb45778e60bffba2c9730451d5dc7a1844ec1687c306ff60a3eb70cbc03"
+  },
+  "lumenairy/_math/chebyshev.py": {
+   "ast": "469a8bddcdde98c07c16d415a43da80f5fa465314f1e9b0ebaafc474f11a23bd",
+   "token": "cfad968fe14458e96720b37b5f0a226a4fb769e84b13d7c20414bd72a5e88243",
+   "ast_recorded": "469a8bddcdde98c07c16d415a43da80f5fa465314f1e9b0ebaafc474f11a23bd",
+   "token_recorded": "cfad968fe14458e96720b37b5f0a226a4fb769e84b13d7c20414bd72a5e88243"
+  },
+  "lumenairy/_validation.py": {
+   "ast": "c833dde82cd90c8dc16b1a824e12d853c03d4a05039b85fab8326dd837a250bf",
+   "token": "870b280ee382544fb070511190d9eabca746a78c871516ecd8c08cf42410a2cb",
+   "ast_recorded": "c833dde82cd90c8dc16b1a824e12d853c03d4a05039b85fab8326dd837a250bf",
+   "token_recorded": "870b280ee382544fb070511190d9eabca746a78c871516ecd8c08cf42410a2cb"
+  },
+  "lumenairy/algebra/from_prescription.py": {
+   "ast": "807eb930f7d40fb1afe4df0437dfa385eaf726bece15f0e4f62481637e37e2f6",
+   "token": "4f21ae1c890b3dd14f0ac0ab4a44d78e64b6965f611f746210ee5e2f2aed4644",
+   "ast_recorded": "807eb930f7d40fb1afe4df0437dfa385eaf726bece15f0e4f62481637e37e2f6",
+   "token_recorded": "4f21ae1c890b3dd14f0ac0ab4a44d78e64b6965f611f746210ee5e2f2aed4644"
+  },
+  "lumenairy/algebra/primitives.py": {
+   "ast": "64f2ab776747b4c8387c7d030dfd9542f254d465a952b8e4315fffcd7d73f47e",
+   "token": "4c5b67597fe87d1bca8bdf5d3f39de943598a20a3dedd2405daa448fb3d03eed",
+   "ast_recorded": "64f2ab776747b4c8387c7d030dfd9542f254d465a952b8e4315fffcd7d73f47e",
+   "token_recorded": "4c5b67597fe87d1bca8bdf5d3f39de943598a20a3dedd2405daa448fb3d03eed"
+  },
+  "lumenairy/analysis/aberration.py": {
+   "ast": "133288c6c06ef11506ed06c18fdf5646c4ad5d7d316047c54736c2ebb919e683",
+   "token": "c6dd3926e49b1cc52474c63afe148d5c97719f3503d9da60416cfdee1eaf5815",
+   "ast_recorded": "133288c6c06ef11506ed06c18fdf5646c4ad5d7d316047c54736c2ebb919e683",
+   "token_recorded": "c6dd3926e49b1cc52474c63afe148d5c97719f3503d9da60416cfdee1eaf5815"
+  },
+  "lumenairy/analysis/ao.py": {
+   "ast": "6bcc87d232028496574c2537323a36c2f502ebb045e9474fc98d2fbbb06aacb6",
+   "token": "12af9a0c3573f66a293c0f62b8753e5f9839a90285f0a740d921969477e041b0",
+   "ast_recorded": "6bcc87d232028496574c2537323a36c2f502ebb045e9474fc98d2fbbb06aacb6",
+   "token_recorded": "12af9a0c3573f66a293c0f62b8753e5f9839a90285f0a740d921969477e041b0"
+  },
+  "lumenairy/analysis/beam_stats.py": {
+   "ast": "456c3f8947d79f92503122d1d48bd31a32d7a13d3b56aaa8674708cffa77f30c",
+   "token": "d117b12853e09585abdd022098dd24038d5377568ab2ac58a3383a9f57efdb9a",
+   "ast_recorded": "456c3f8947d79f92503122d1d48bd31a32d7a13d3b56aaa8674708cffa77f30c",
+   "token_recorded": "d117b12853e09585abdd022098dd24038d5377568ab2ac58a3383a9f57efdb9a"
+  },
+  "lumenairy/analysis/coherence.py": {
+   "ast": "b73d888f0f6b9b03418b78cdb71fc8077961a65d4fdd307db683e7af6c638e34",
+   "token": "318c055ce37a74011a1dba5c51c2f13690321ec2ac4a2367bcef54296f90044d",
+   "ast_recorded": "b73d888f0f6b9b03418b78cdb71fc8077961a65d4fdd307db683e7af6c638e34",
+   "token_recorded": "318c055ce37a74011a1dba5c51c2f13690321ec2ac4a2367bcef54296f90044d"
+  },
+  "lumenairy/analysis/coronagraph.py": {
+   "ast": "4b42c372c877bc466ca4d20a69b10ba89ca2a2dc92087fdb04a9ada8d6fd8c42",
+   "token": "8258869ad177346369967aedd2c3d54d19930aa1c9d9a17de9197cb0f44d80dd",
+   "ast_recorded": "4b42c372c877bc466ca4d20a69b10ba89ca2a2dc92087fdb04a9ada8d6fd8c42",
+   "token_recorded": "8258869ad177346369967aedd2c3d54d19930aa1c9d9a17de9197cb0f44d80dd"
+  },
+  "lumenairy/analysis/detector.py": {
+   "ast": "3cbadf0e6352825613b1de677453fc9c24df1ab4e3f18583eb907c6a75a730cc",
+   "token": "57210402c83251b0b69ea99869be73cf8bba33801fe64b6421485da2f06be3c0",
+   "ast_recorded": "3cbadf0e6352825613b1de677453fc9c24df1ab4e3f18583eb907c6a75a730cc",
+   "token_recorded": "57210402c83251b0b69ea99869be73cf8bba33801fe64b6421485da2f06be3c0"
+  },
+  "lumenairy/analysis/field.py": {
+   "ast": "5a5694bf8c0911c66a9e0841fc8bfcd6609ea116bd6744f6d4fd5a4587583f9c",
+   "token": "d5abafd08bbcd174c35b879eb67aed42f051c0210754b24ee95b5b73ff7cea64",
+   "ast_recorded": "5a5694bf8c0911c66a9e0841fc8bfcd6609ea116bd6744f6d4fd5a4587583f9c",
+   "token_recorded": "d5abafd08bbcd174c35b879eb67aed42f051c0210754b24ee95b5b73ff7cea64"
+  },
+  "lumenairy/analysis/ghost.py": {
+   "ast": "21444e785f8d6c2c5012ee24406b46ae5ba8774f6edc3516f5ada67faa176818",
+   "token": "82b248194fc5b5445cbd58f7cc4869a2f358337512b19b84787d1d1cf0544db5",
+   "ast_recorded": "21444e785f8d6c2c5012ee24406b46ae5ba8774f6edc3516f5ada67faa176818",
+   "token_recorded": "82b248194fc5b5445cbd58f7cc4869a2f358337512b19b84787d1d1cf0544db5"
+  },
+  "lumenairy/analysis/image_plane_wfe.py": {
+   "ast": "616b1e19368c283998733524172b87f925b5deef1177501f571530d5c0945e45",
+   "token": "753438baf7178741f5be636dd1281ea01afd8721786ef00cd8cd035c06308af1",
+   "ast_recorded": "616b1e19368c283998733524172b87f925b5deef1177501f571530d5c0945e45",
+   "token_recorded": "753438baf7178741f5be636dd1281ea01afd8721786ef00cd8cd035c06308af1"
+  },
+  "lumenairy/analysis/interferometry.py": {
+   "ast": "0ed47b7c6111489ae64d46b9932ddc551ccb7e6404f25c090ac09732b0678045",
+   "token": "7e2ba761a79c6e197a0ab7076cff5c98894b422a78809fc9d481d193073befdf",
+   "ast_recorded": "0ed47b7c6111489ae64d46b9932ddc551ccb7e6404f25c090ac09732b0678045",
+   "token_recorded": "7e2ba761a79c6e197a0ab7076cff5c98894b422a78809fc9d481d193073befdf"
+  },
+  "lumenairy/analysis/opd.py": {
+   "ast": "7f684df0c053dbe2152be4c7a81cab8eeeb02309d1d3513b207547fafd48832b",
+   "token": "f6210cb89df57125a5b7dd39af8301222ae1402ce8135a90193453ae7bdea362",
+   "ast_recorded": "7f684df0c053dbe2152be4c7a81cab8eeeb02309d1d3513b207547fafd48832b",
+   "token_recorded": "f6210cb89df57125a5b7dd39af8301222ae1402ce8135a90193453ae7bdea362"
+  },
+  "lumenairy/analysis/phase_retrieval.py": {
+   "ast": "e9a4bb26daae96d6440a83423fba33f47bd8d6bcaa754673c07290e7e5c14db7",
+   "token": "4fa0427c2131f00488ae74e65de3318a56c375887cba5ef3370e00ac1df1c696",
+   "ast_recorded": "e9a4bb26daae96d6440a83423fba33f47bd8d6bcaa754673c07290e7e5c14db7",
+   "token_recorded": "4fa0427c2131f00488ae74e65de3318a56c375887cba5ef3370e00ac1df1c696"
+  },
+  "lumenairy/analysis/psf_mtf_otf.py": {
+   "ast": "c1d4a88c11c9b8568843802bf31ed78a33c3cbfb44dd18843b5a2697694663b9",
+   "token": "03c3fda1975898a08e1b16774f29630c2f365072df68802de3bd5182c211b9e4",
+   "ast_recorded": "c1d4a88c11c9b8568843802bf31ed78a33c3cbfb44dd18843b5a2697694663b9",
+   "token_recorded": "03c3fda1975898a08e1b16774f29630c2f365072df68802de3bd5182c211b9e4"
+  },
+  "lumenairy/analysis/strehl.py": {
+   "ast": "2d243f0c01da7bdb4b0b0cfff3efc9e0d677829ab2c4b38b601352d522e9ceca",
+   "token": "08c30fb61bc081065bba8938f160925acc19d1f3ae427753d7e6c861f61f57e8",
+   "ast_recorded": "2d243f0c01da7bdb4b0b0cfff3efc9e0d677829ab2c4b38b601352d522e9ceca",
+   "token_recorded": "08c30fb61bc081065bba8938f160925acc19d1f3ae427753d7e6c861f61f57e8"
+  },
+  "lumenairy/analysis/through_focus.py": {
+   "ast": "9e8a789cd2c3ec59c4589c351df78b8119590e8df3713e4663f6f5f9c358289b",
+   "token": "1a6863b512f60642f4140377ea76625e8469bd1bca2cd31bdb602e561a042fea",
+   "ast_recorded": "9e8a789cd2c3ec59c4589c351df78b8119590e8df3713e4663f6f5f9c358289b",
+   "token_recorded": "1a6863b512f60642f4140377ea76625e8469bd1bca2cd31bdb602e561a042fea"
+  },
+  "lumenairy/analysis/zernike.py": {
+   "ast": "658f5e715e0433f5467c4879f54f207d5a38434ed66b3543df2f7a7de61a3db9",
+   "token": "d332be98206165bdf08c9ff3588f52476d37e584c6c49f98e04d754ce7546d8a",
+   "ast_recorded": "658f5e715e0433f5467c4879f54f207d5a38434ed66b3543df2f7a7de61a3db9",
+   "token_recorded": "d332be98206165bdf08c9ff3588f52476d37e584c6c49f98e04d754ce7546d8a"
+  },
+  "lumenairy/backend/fft.py": {
+   "ast": "df8331594011ee7a56c05409f667b0da0c395fbaf6b02609ccfbef01f861bc17",
+   "token": "eaf7382315b336ea13c0e458e9b304a8efe1c686f3784426d44f92ac50546a5a",
+   "ast_recorded": "df8331594011ee7a56c05409f667b0da0c395fbaf6b02609ccfbef01f861bc17",
+   "token_recorded": "eaf7382315b336ea13c0e458e9b304a8efe1c686f3784426d44f92ac50546a5a"
+  },
+  "lumenairy/cache.py": {
+   "ast": "a9893b7c5a149ffc0ebeed2824a6bb977bc61d35d4c3297fc54aa7175beeb9f5",
+   "token": "fbd00cd03e208445d633a192a6028aa41f6372799813c4bbe0696a968e618653",
+   "ast_recorded": "a9893b7c5a149ffc0ebeed2824a6bb977bc61d35d4c3297fc54aa7175beeb9f5",
+   "token_recorded": "fbd00cd03e208445d633a192a6028aa41f6372799813c4bbe0696a968e618653"
+  },
+  "lumenairy/elements/_berreman_jax.py": {
+   "ast": "627458e44b53c31ee8bbd8e92622811dfdfbda678a5335172b033035aaa6c9a3",
+   "token": "318284efaf15d663498c82261a30b778e5e9994ad7c2c1e90046cb8c12ee6500",
+   "ast_recorded": "627458e44b53c31ee8bbd8e92622811dfdfbda678a5335172b033035aaa6c9a3",
+   "token_recorded": "318284efaf15d663498c82261a30b778e5e9994ad7c2c1e90046cb8c12ee6500"
+  },
+  "lumenairy/elements/_lens_jax.py": {
+   "ast": "31f68294c61090e11b7e7b9c1aafe4fd4809878dcbcb36087aed126d4f3334d6",
+   "token": "d3fc21e7f0bcc84397330d6d5a21ee2ae89547ec3c563cb167a1632b4fc2a258",
+   "ast_recorded": "31f68294c61090e11b7e7b9c1aafe4fd4809878dcbcb36087aed126d4f3334d6",
+   "token_recorded": "d3fc21e7f0bcc84397330d6d5a21ee2ae89547ec3c563cb167a1632b4fc2a258"
+  },
+  "lumenairy/elements/_lens_real.py": {
+   "ast": "78c106c88ebba4c7de44092921427d5db501abe18b8e794ca5f6e9e292ec5f02",
+   "token": "fc3749c8f2023b8fc67df3cf3381fc0a0f760ac8eef92c4df09588ee241e66ed",
+   "ast_recorded": "78c106c88ebba4c7de44092921427d5db501abe18b8e794ca5f6e9e292ec5f02",
+   "token_recorded": "fc3749c8f2023b8fc67df3cf3381fc0a0f760ac8eef92c4df09588ee241e66ed"
+  },
+  "lumenairy/elements/_lens_thin.py": {
+   "ast": "53ee06eca3c2a3f6f2c5f5e846e883a88bbd0a57b3be08c3c6db06d81900af9c",
+   "token": "0f6af9ed4d84f71b2738d4f4d3ca2a9e15acfeb66ef45abab59e2e7c3afa6060",
+   "ast_recorded": "53ee06eca3c2a3f6f2c5f5e846e883a88bbd0a57b3be08c3c6db06d81900af9c",
+   "token_recorded": "0f6af9ed4d84f71b2738d4f4d3ca2a9e15acfeb66ef45abab59e2e7c3afa6060"
+  },
+  "lumenairy/elements/_lens_traced.py": {
+   "ast": "34c0e87d665b3f8de027419311b7e2119e7fe3abd94c6a58197aa17ab7cb964a",
+   "token": "ff4d5d10d38e2c1694a1e0e5fa9ff65d73a7bf011dc7785baf0903b331fc8326",
+   "ast_recorded": "34c0e87d665b3f8de027419311b7e2119e7fe3abd94c6a58197aa17ab7cb964a",
+   "token_recorded": "ff4d5d10d38e2c1694a1e0e5fa9ff65d73a7bf011dc7785baf0903b331fc8326"
+  },
+  "lumenairy/elements/berreman.py": {
+   "ast": "6fbc34d8597f3841a3ad5f331915d33bdb63c8ffabea8a655a0d606899553de4",
+   "token": "0635ee1d19e7272898f4139022f1affc648408f29716f7767917f3835230e1c2",
+   "ast_recorded": "6fbc34d8597f3841a3ad5f331915d33bdb63c8ffabea8a655a0d606899553de4",
+   "token_recorded": "0635ee1d19e7272898f4139022f1affc648408f29716f7767917f3835230e1c2"
+  },
+  "lumenairy/elements/bor/_jax_bor.py": {
+   "ast": "5379d6ad83a711ff9116676b4e012cbdda9192a16f84d99e1ded6d89396cb7c9",
+   "token": "adb26cd73305d5b02a328f92e19bb71611c023541b9736bb626a0f1c05a600b4",
+   "ast_recorded": "5379d6ad83a711ff9116676b4e012cbdda9192a16f84d99e1ded6d89396cb7c9",
+   "token_recorded": "adb26cd73305d5b02a328f92e19bb71611c023541b9736bb626a0f1c05a600b4"
+  },
+  "lumenairy/elements/bor/_orient.py": {
+   "ast": "9245fb6b3bf3ef3e1cccf19a46bfcce12362f2939331278db29d9c1cba9f6e3f",
+   "token": "4571967b21f3fabfcf36b0a4e6f22995d3c787ea5ba0c52613c03b174563cae2",
+   "ast_recorded": "9245fb6b3bf3ef3e1cccf19a46bfcce12362f2939331278db29d9c1cba9f6e3f",
+   "token_recorded": "4571967b21f3fabfcf36b0a4e6f22995d3c787ea5ba0c52613c03b174563cae2"
+  },
+  "lumenairy/elements/bor/_sem_contract.py": {
+   "ast": "6dea7b84f8d4ef0c84a06b7b30c986d9fd9f9616ec123240c8d8db35da2ef054",
+   "token": "dddb7fb977382766b8591d59b0e71313d67d15d345d1928f5ba56ccec23f157a",
+   "ast_recorded": "6dea7b84f8d4ef0c84a06b7b30c986d9fd9f9616ec123240c8d8db35da2ef054",
+   "token_recorded": "dddb7fb977382766b8591d59b0e71313d67d15d345d1928f5ba56ccec23f157a"
+  },
+  "lumenairy/elements/bor/bor_solve.py": {
+   "ast": "f8fdde67bce6974d1bab6a8e9e637d78b031f361214ef86071e3cc042a99730b",
+   "token": "2664f44cafc4bc8de5558e4c2c6f986c382907104f19674999cb20fcdaa7491b",
+   "ast_recorded": "f8fdde67bce6974d1bab6a8e9e637d78b031f361214ef86071e3cc042a99730b",
+   "token_recorded": "2664f44cafc4bc8de5558e4c2c6f986c382907104f19674999cb20fcdaa7491b"
+  },
+  "lumenairy/elements/bor/bor_stack.py": {
+   "ast": "6fbc5434ec50b0349770400fa695a05dcecff912e54da9b72c8db874c5425d7e",
+   "token": "b7aa5366eb19f51bfd0bcd249ef1a177b6f70c352e553c528b6e71be5251d0c1",
+   "ast_recorded": "6fbc5434ec50b0349770400fa695a05dcecff912e54da9b72c8db874c5425d7e",
+   "token_recorded": "b7aa5366eb19f51bfd0bcd249ef1a177b6f70c352e553c528b6e71be5251d0c1"
+  },
+  "lumenairy/elements/bor/coupled_radial_eigensolver.py": {
+   "ast": "4970550710109548a8e60c6d5adbcc2b819f058a25a881ad2101999ce8d7b960",
+   "token": "e1f9448017be5b5e0134e70fca30832ecc75de904a04c8b26a5bf7a774a4a6b0",
+   "ast_recorded": "4970550710109548a8e60c6d5adbcc2b819f058a25a881ad2101999ce8d7b960",
+   "token_recorded": "e1f9448017be5b5e0134e70fca30832ecc75de904a04c8b26a5bf7a774a4a6b0"
+  },
+  "lumenairy/elements/bor/farfield.py": {
+   "ast": "a5f1b4a82b63c19d8e623b1d69cb57bc1f42db296a0b71d6433c3de75e9c1a93",
+   "token": "e6be8bae93b7c9d398bd0fa6e3bb3b4d295a6a39ce4fea8df5f2d1938af469c4",
+   "ast_recorded": "a5f1b4a82b63c19d8e623b1d69cb57bc1f42db296a0b71d6433c3de75e9c1a93",
+   "token_recorded": "e6be8bae93b7c9d398bd0fa6e3bb3b4d295a6a39ce4fea8df5f2d1938af469c4"
+  },
+  "lumenairy/elements/bor/radial_eigensolver.py": {
+   "ast": "660b4065f1f6116e5e64d201f99c673d8acfdd336a6c6a2cc993beba0738db24",
+   "token": "0fc6fedce71e8a2e1b909cf46dc809dbe9b7dc2d39843e9cb1ca10770eb342c8",
+   "ast_recorded": "660b4065f1f6116e5e64d201f99c673d8acfdd336a6c6a2cc993beba0738db24",
+   "token_recorded": "0fc6fedce71e8a2e1b909cf46dc809dbe9b7dc2d39843e9cb1ca10770eb342c8"
+  },
+  "lumenairy/elements/bor/zcascade.py": {
+   "ast": "93dafad6ad97775ca9da0b9aa8cb1a839982a0feea73a4e830de4e301e97994b",
+   "token": "76e5b104ff674104fb4d735f5145a40ecbd7ae8104e3587f2dbe260200dc6532",
+   "ast_recorded": "93dafad6ad97775ca9da0b9aa8cb1a839982a0feea73a4e830de4e301e97994b",
+   "token_recorded": "76e5b104ff674104fb4d735f5145a40ecbd7ae8104e3587f2dbe260200dc6532"
+  },
+  "lumenairy/elements/bsdf.py": {
+   "ast": "cfe811076550f82fe31d6992761b5f3eed0f51f721dc4ca93bc2be249d816370",
+   "token": "02afa7393d5c23072d7393f9b6bc039bff7323d7cf1fd94c5ed8ceb37f4ad1b3",
+   "ast_recorded": "cfe811076550f82fe31d6992761b5f3eed0f51f721dc4ca93bc2be249d816370",
+   "token_recorded": "02afa7393d5c23072d7393f9b6bc039bff7323d7cf1fd94c5ed8ceb37f4ad1b3"
+  },
+  "lumenairy/elements/coatings.py": {
+   "ast": "8d3b29ce1e4a354976fbeae0b7c41a5e2171d1f96176d408e01cbd3ef3008413",
+   "token": "472061099a6e2c6f0d22e09223caf8241956ef6ff99bd6b5cd4f29dd1edbb32c",
+   "ast_recorded": "8d3b29ce1e4a354976fbeae0b7c41a5e2171d1f96176d408e01cbd3ef3008413",
+   "token_recorded": "472061099a6e2c6f0d22e09223caf8241956ef6ff99bd6b5cd4f29dd1edbb32c"
+  },
+  "lumenairy/elements/doe.py": {
+   "ast": "02873e2fd0767e4f7a521bfcc8dfbd0405879d63ea4f5636c0df928b3b3f16cc",
+   "token": "60f46a965c1c2293c637de6302997658e3a296bd13adfbaef47184f9dd7094b9",
+   "ast_recorded": "02873e2fd0767e4f7a521bfcc8dfbd0405879d63ea4f5636c0df928b3b3f16cc",
+   "token_recorded": "60f46a965c1c2293c637de6302997658e3a296bd13adfbaef47184f9dd7094b9"
+  },
+  "lumenairy/elements/elements.py": {
+   "ast": "f01f30d190caac4c2a6d995d4eb52033a8935800826dc36a4bb59fa5beafcd14",
+   "token": "5f071d0df7e0abb8daab0f0f8d8d51c29f07dc885aba4687762992f19be443de",
+   "ast_recorded": "f01f30d190caac4c2a6d995d4eb52033a8935800826dc36a4bb59fa5beafcd14",
+   "token_recorded": "5f071d0df7e0abb8daab0f0f8d8d51c29f07dc885aba4687762992f19be443de"
+  },
+  "lumenairy/elements/eme/_branch.py": {
+   "ast": "b5f5e0175ecca61567149ff1f73564c1fa9e72541c6ccd37ef67bc5d6dd63401",
+   "token": "ea411656d86c31d12f988318afea0fa3e144c362818625a472f7c4444be2da91",
+   "ast_recorded": "b5f5e0175ecca61567149ff1f73564c1fa9e72541c6ccd37ef67bc5d6dd63401",
+   "token_recorded": "ea411656d86c31d12f988318afea0fa3e144c362818625a472f7c4444be2da91"
+  },
+  "lumenairy/elements/eme/eme_2d.py": {
+   "ast": "d29860b978f3916ae627112a7a8d9781852425d03d61cba1af4352ab50993299",
+   "token": "14056e90aff720848bf7da9a7026453e8d426993abcbe6bd3eac8f6c52db3cd5",
+   "ast_recorded": "d29860b978f3916ae627112a7a8d9781852425d03d61cba1af4352ab50993299",
+   "token_recorded": "14056e90aff720848bf7da9a7026453e8d426993abcbe6bd3eac8f6c52db3cd5"
+  },
+  "lumenairy/elements/eme/eme_2d_vector.py": {
+   "ast": "8377da84ed9c9bf14e2cc667a550d1339d7b91617ab0bc930c5cdfe9ee2ee5e5",
+   "token": "88df6d7edbb97001e572b47abd49999afa4fc28f89a1917f7fd023c6e7c5c67e",
+   "ast_recorded": "8377da84ed9c9bf14e2cc667a550d1339d7b91617ab0bc930c5cdfe9ee2ee5e5",
+   "token_recorded": "88df6d7edbb97001e572b47abd49999afa4fc28f89a1917f7fd023c6e7c5c67e"
+  },
+  "lumenairy/elements/eme/eme_diffraction.py": {
+   "ast": "9acc98446b594cb8358f8b3f3671fd1b6886535e19da46d99f000006560d0467",
+   "token": "927ed8c4ad8268b05e745a14648b71b33a07de0ef7fd3b8405440944c686ffc3",
+   "ast_recorded": "9acc98446b594cb8358f8b3f3671fd1b6886535e19da46d99f000006560d0467",
+   "token_recorded": "927ed8c4ad8268b05e745a14648b71b33a07de0ef7fd3b8405440944c686ffc3"
+  },
+  "lumenairy/elements/lenses.py": {
+   "ast": "d2bd657462245706bbfa3657fe04033f45bea8e6c5a47d399880f7be3442838e",
+   "token": "cd7f9d30e69d42e301fc1655e3fba1707058d52343e31982f2817fa9921b4213",
+   "ast_recorded": "d2bd657462245706bbfa3657fe04033f45bea8e6c5a47d399880f7be3442838e",
+   "token_recorded": "cd7f9d30e69d42e301fc1655e3fba1707058d52343e31982f2817fa9921b4213"
+  },
+  "lumenairy/elements/lenses_maslov.py": {
+   "ast": "26e11eaffbe72753b924e646b419f033f41472172ba103d2ba09205b65fcde04",
+   "token": "03ef6f4a5dd6d1ba762b4745880b1df6328920a16646375a78a34020281180f9",
+   "ast_recorded": "26e11eaffbe72753b924e646b419f033f41472172ba103d2ba09205b65fcde04",
+   "token_recorded": "03ef6f4a5dd6d1ba762b4745880b1df6328920a16646375a78a34020281180f9"
+  },
+  "lumenairy/elements/pmm/_core.py": {
+   "ast": "09fb0f3b4ddaaa7576bd2b403325821a5c03df6dfc78826a42a63c7522ffc755",
+   "token": "467a3ba9ad7afb9a27282d13545236a7c56e83f7be9d05e736636f0f346e043a",
+   "ast_recorded": "09fb0f3b4ddaaa7576bd2b403325821a5c03df6dfc78826a42a63c7522ffc755",
+   "token_recorded": "467a3ba9ad7afb9a27282d13545236a7c56e83f7be9d05e736636f0f346e043a"
+  },
+  "lumenairy/elements/pmm/conical.py": {
+   "ast": "dd5305a98365e8d9312a0bd763b30d27af3d20f7314f5cca5991b24a8428f6ec",
+   "token": "10d850e5b6d1220f425203d2de7538274780affd6f5de2ad9697d6cfaab5e6f1",
+   "ast_recorded": "dd5305a98365e8d9312a0bd763b30d27af3d20f7314f5cca5991b24a8428f6ec",
+   "token_recorded": "10d850e5b6d1220f425203d2de7538274780affd6f5de2ad9697d6cfaab5e6f1"
+  },
+  "lumenairy/elements/pmm/oned.py": {
+   "ast": "535a5f73a140596da713c48865892410f3c3c3a3b66fe005804d9c02b655ebff",
+   "token": "2c44d68dd138f78ddb6c9d84e371ea732152649791438123c651d01b49dad569",
+   "ast_recorded": "535a5f73a140596da713c48865892410f3c3c3a3b66fe005804d9c02b655ebff",
+   "token_recorded": "2c44d68dd138f78ddb6c9d84e371ea732152649791438123c651d01b49dad569"
+  },
+  "lumenairy/elements/pmm/stack.py": {
+   "ast": "9c0cea3a2b7cd1d95113832f54bf3904330b751af37cc354bafcae64fb66b37a",
+   "token": "c47fee5c5e5f1e963cd53899b7c7bfa04571036a08e720396fd8ad14098d4ac4",
+   "ast_recorded": "9c0cea3a2b7cd1d95113832f54bf3904330b751af37cc354bafcae64fb66b37a",
+   "token_recorded": "c47fee5c5e5f1e963cd53899b7c7bfa04571036a08e720396fd8ad14098d4ac4"
+  },
+  "lumenairy/elements/pmm/stack2d.py": {
+   "ast": "42ed5d704f6e95f29a9f2b2abdaa95dca2bfdaf2da8e5448b467648fab303629",
+   "token": "82d70f6773b8beb2eb40602b3b24d98e164f97386fc951f3979fd10424be2831",
+   "ast_recorded": "42ed5d704f6e95f29a9f2b2abdaa95dca2bfdaf2da8e5448b467648fab303629",
+   "token_recorded": "82d70f6773b8beb2eb40602b3b24d98e164f97386fc951f3979fd10424be2831"
+  },
+  "lumenairy/elements/pmm/stack2d_pure.py": {
+   "ast": "f87cd4e43438e60f24d69ec66ef9e66955762a00987023af1dcfe8fd3afb900a",
+   "token": "099b8f246d8109e5f24d43b7a1960d47b15b543676afd18fe2c842fcd8c270cf",
+   "ast_recorded": "f87cd4e43438e60f24d69ec66ef9e66955762a00987023af1dcfe8fd3afb900a",
+   "token_recorded": "099b8f246d8109e5f24d43b7a1960d47b15b543676afd18fe2c842fcd8c270cf"
+  },
+  "lumenairy/elements/pmm/twod.py": {
+   "ast": "4620d14d47bffcecfe7441dbdb41c78c427681d3b279ff9a3f6cd97515162ca8",
+   "token": "0cdd42d52119f92f38febcf31b2b3a6d793293a6b20ce4b5e78a870f55854c4a",
+   "ast_recorded": "4620d14d47bffcecfe7441dbdb41c78c427681d3b279ff9a3f6cd97515162ca8",
+   "token_recorded": "0cdd42d52119f92f38febcf31b2b3a6d793293a6b20ce4b5e78a870f55854c4a"
+  },
+  "lumenairy/elements/polarization.py": {
+   "ast": "1a97668f3a64829e0933ed70903aa573791daba90007637fdc6a914612112fb6",
+   "token": "dcd372620dcbffb9916ae5644b6d2331ec3e4508831ee8c736fa56ec0e5e4adf",
+   "ast_recorded": "1a97668f3a64829e0933ed70903aa573791daba90007637fdc6a914612112fb6",
+   "token_recorded": "dcd372620dcbffb9916ae5644b6d2331ec3e4508831ee8c736fa56ec0e5e4adf"
+  },
+  "lumenairy/elements/rcwa/stack.py": {
+   "ast": "8d711be52b2b11b235608870b89c36fda8bb3ab38d9c4c0be29347c4f7cdb4d7",
+   "token": "da9e678b4bd03d2798478718ef8baaac426553a9f496bc95dbeb2afbb08a66dc",
+   "ast_recorded": "8d711be52b2b11b235608870b89c36fda8bb3ab38d9c4c0be29347c4f7cdb4d7",
+   "token_recorded": "da9e678b4bd03d2798478718ef8baaac426553a9f496bc95dbeb2afbb08a66dc"
+  },
+  "lumenairy/elements/segment_geometry.py": {
+   "ast": "85027c1fbcabddfdad159b7024faa061fed78946c6ce6a16ab8ddf2732093918",
+   "token": "bb8716288057ef9ec2464a6d136e85322671148df47115fc82efa7cba3cb9f84",
+   "ast_recorded": "85027c1fbcabddfdad159b7024faa061fed78946c6ce6a16ab8ddf2732093918",
+   "token_recorded": "bb8716288057ef9ec2464a6d136e85322671148df47115fc82efa7cba3cb9f84"
+  },
+  "lumenairy/glass.py": {
+   "ast": "2f5b36a9ced1ffadf0bcd2cf242246a0069c1cfec1557909d01f83ec07ccbfe6",
+   "token": "c1cf2dcda509d6b8c578e078b6ba69b7cd0a4c046951a33c95c8078b50b5d9f1",
+   "ast_recorded": "2f5b36a9ced1ffadf0bcd2cf242246a0069c1cfec1557909d01f83ec07ccbfe6",
+   "token_recorded": "c1cf2dcda509d6b8c578e078b6ba69b7cd0a4c046951a33c95c8078b50b5d9f1"
+  },
+  "lumenairy/io/codegen.py": {
+   "ast": "42cd063faa6ad18a81e035a4589414bf9e4a01f00e6c3b878d07663cd7dd814f",
+   "token": "0af715c0e4b3597f00611d9c3645ecb6f87bc049ac4607c2b9dabfb4ead1a036",
+   "ast_recorded": "42cd063faa6ad18a81e035a4589414bf9e4a01f00e6c3b878d07663cd7dd814f",
+   "token_recorded": "0af715c0e4b3597f00611d9c3645ecb6f87bc049ac4607c2b9dabfb4ead1a036"
+  },
+  "lumenairy/io/prescriptions_builders.py": {
+   "ast": "d8936ee9103c6a8118c622db5af8c1c8ab14d67a99447e38ca28373c7aac4972",
+   "token": "20b73a3dd30df06e477ff2205ac62088f9b50debe114e53270a525c3bce0bc91",
+   "ast_recorded": "d8936ee9103c6a8118c622db5af8c1c8ab14d67a99447e38ca28373c7aac4972",
+   "token_recorded": "20b73a3dd30df06e477ff2205ac62088f9b50debe114e53270a525c3bce0bc91"
+  },
+  "lumenairy/io/prescriptions_quadoa.py": {
+   "ast": "3118a33a2c664cb7241ec2f54985fb641e718959f806a6c7751812ce1d9e6d16",
+   "token": "9c92f6d765fbd4222190344f293d5d61e0b4e32087beef2da1cdaf8502ad9a9e",
+   "ast_recorded": "3118a33a2c664cb7241ec2f54985fb641e718959f806a6c7751812ce1d9e6d16",
+   "token_recorded": "9c92f6d765fbd4222190344f293d5d61e0b4e32087beef2da1cdaf8502ad9a9e"
+  },
+  "lumenairy/io/prescriptions_transforms.py": {
+   "ast": "c2e8ccfe5cc46cfccd83523d32daea6c348298c95e52c3230ac1e285cf18457c",
+   "token": "0eae45ff4534f78cc8b063dd3b0ecc1db542f77a2c430638217b1e09bbfa34f8",
+   "ast_recorded": "c2e8ccfe5cc46cfccd83523d32daea6c348298c95e52c3230ac1e285cf18457c",
+   "token_recorded": "0eae45ff4534f78cc8b063dd3b0ecc1db542f77a2c430638217b1e09bbfa34f8"
+  },
+  "lumenairy/io/prescriptions_zemax.py": {
+   "ast": "f7024711a11c4cb8eaae610eaac39d9beaf2b226def1be3db87931696317e538",
+   "token": "a73a0c91fb74138dc46ddf96bf5984f0619c39b0b98c0acbd655bf22770294bf",
+   "ast_recorded": "f7024711a11c4cb8eaae610eaac39d9beaf2b226def1be3db87931696317e538",
+   "token_recorded": "a73a0c91fb74138dc46ddf96bf5984f0619c39b0b98c0acbd655bf22770294bf"
+  },
+  "lumenairy/io/storage.py": {
+   "ast": "dfd2c16e28614204ea52d48e1ff32a83280518beb16b25ebbd29d8d16094317e",
+   "token": "f70dca9dbcacb2908c0dd68e238ebda914bf00207ab05c891b90ef6ad2f77378",
+   "ast_recorded": "dfd2c16e28614204ea52d48e1ff32a83280518beb16b25ebbd29d8d16094317e",
+   "token_recorded": "f70dca9dbcacb2908c0dd68e238ebda914bf00207ab05c891b90ef6ad2f77378"
+  },
+  "lumenairy/memory.py": {
+   "ast": "612185192dbdeae32399a706200242280309ab2e019a0fb1d7486a047e66ccce",
+   "token": "eda33a203ba19a297df231248741b9d631c4442156f39a2809e2a7f741f33492",
+   "ast_recorded": "612185192dbdeae32399a706200242280309ab2e019a0fb1d7486a047e66ccce",
+   "token_recorded": "eda33a203ba19a297df231248741b9d631c4442156f39a2809e2a7f741f33492"
+  },
+  "lumenairy/optimize/_merit_jit.py": {
+   "ast": "3e1d1b9c131e1ffb4f9c5759e440fdf57bcc2be8d99b720ecc71597c9dbbd7c1",
+   "token": "74c1120f2e99e60380770f2617bf6d3806ea6fe9863052020a1a45409a03f327",
+   "ast_recorded": "3e1d1b9c131e1ffb4f9c5759e440fdf57bcc2be8d99b720ecc71597c9dbbd7c1",
+   "token_recorded": "74c1120f2e99e60380770f2617bf6d3806ea6fe9863052020a1a45409a03f327"
+  },
+  "lumenairy/optimize/context.py": {
+   "ast": "13e850f4b689f3a92332efb9b27f922c2342feb6599ea3b9c9a4f711bfd7c541",
+   "token": "5b35469bc6d5e5b25b9b676829d68b4278995cae377a976261059270c1728602",
+   "ast_recorded": "13e850f4b689f3a92332efb9b27f922c2342feb6599ea3b9c9a4f711bfd7c541",
+   "token_recorded": "5b35469bc6d5e5b25b9b676829d68b4278995cae377a976261059270c1728602"
+  },
+  "lumenairy/optimize/driver.py": {
+   "ast": "12007fb56de1eb90c27b13035eeca2a53e9939133007a51385e3d6ed329cc68c",
+   "token": "de421ff68f357403f20a35e3fb33e9ceddae106260bfd7d4d32b7d68eee8a5b5",
+   "ast_recorded": "12007fb56de1eb90c27b13035eeca2a53e9939133007a51385e3d6ed329cc68c",
+   "token_recorded": "de421ff68f357403f20a35e3fb33e9ceddae106260bfd7d4d32b7d68eee8a5b5"
+  },
+  "lumenairy/optimize/jax_merits.py": {
+   "ast": "3821a4fe12c45154d28f3530632572cc83c5c24f82b84b46f589405f701ef277",
+   "token": "0b871f7853d721c1293d01bb6a8f1dc722b0f969127fa6ddc45ac81d196c04a5",
+   "ast_recorded": "3821a4fe12c45154d28f3530632572cc83c5c24f82b84b46f589405f701ef277",
+   "token_recorded": "0b871f7853d721c1293d01bb6a8f1dc722b0f969127fa6ddc45ac81d196c04a5"
+  },
+  "lumenairy/optimize/merit_terms.py": {
+   "ast": "5193e38d3913a76ea592de50f0078fbeebd6afbf45e7a82fa7ab430d13c29409",
+   "token": "9367c850e66293a96f63b0a1d7afdb7d75d858e57d8f6a484fd1ae382da26193",
+   "ast_recorded": "5193e38d3913a76ea592de50f0078fbeebd6afbf45e7a82fa7ab430d13c29409",
+   "token_recorded": "9367c850e66293a96f63b0a1d7afdb7d75d858e57d8f6a484fd1ae382da26193"
+  },
+  "lumenairy/optimize/multi_objective.py": {
+   "ast": "d2d728362820929922a0d49c5ba884d3eb458cb29c93553613011aaa13fe2116",
+   "token": "d34d113ea118c295bd3ca814b4f36b6fdf78e4306a31bc9e29e9342dde329da1",
+   "ast_recorded": "d2d728362820929922a0d49c5ba884d3eb458cb29c93553613011aaa13fe2116",
+   "token_recorded": "d34d113ea118c295bd3ca814b4f36b6fdf78e4306a31bc9e29e9342dde329da1"
+  },
+  "lumenairy/optimize/multiconfig.py": {
+   "ast": "df08d2bc34706cb8d65d8e9ab245eed31250a3f8f7a017b74cab37cfc9846e90",
+   "token": "71585a9634f25d3a5eb58f97b2548c2ba450763cf3e293ed669cfc1a6869531e",
+   "ast_recorded": "df08d2bc34706cb8d65d8e9ab245eed31250a3f8f7a017b74cab37cfc9846e90",
+   "token_recorded": "71585a9634f25d3a5eb58f97b2548c2ba450763cf3e293ed669cfc1a6869531e"
+  },
+  "lumenairy/optimize/parameterizations.py": {
+   "ast": "2125df6287c984b5ae3d094a3eb211e5782dddc9e2ff783aa96783f12fa04835",
+   "token": "4dfc25977fa26c296e20d9470ded47f31b5b04ff2bd2420afddedbdfe6196c35",
+   "ast_recorded": "2125df6287c984b5ae3d094a3eb211e5782dddc9e2ff783aa96783f12fa04835",
+   "token_recorded": "4dfc25977fa26c296e20d9470ded47f31b5b04ff2bd2420afddedbdfe6196c35"
+  },
+  "lumenairy/optimize/wrapper_merits.py": {
+   "ast": "c09c446059138b4520ae70f1820fe4ef535150c2cf5c4854780408409dc5daff",
+   "token": "f02b6848a299656c09dab72b180aa5318c94ae6d2e07c9dc26cd0e41acd6a031",
+   "ast_recorded": "c09c446059138b4520ae70f1820fe4ef535150c2cf5c4854780408409dc5daff",
+   "token_recorded": "f02b6848a299656c09dab72b180aa5318c94ae6d2e07c9dc26cd0e41acd6a031"
+  },
+  "lumenairy/propagators/asm.py": {
+   "ast": "5443d15c195cc9292768294fba219459559fdd111f3fef21f64d04498e7b29fb",
+   "token": "bc5af5987f7df18b3af767c4ff0746be1e88c5cd01ff58253a2926b23359024e",
+   "ast_recorded": "5443d15c195cc9292768294fba219459559fdd111f3fef21f64d04498e7b29fb",
+   "token_recorded": "bc5af5987f7df18b3af767c4ff0746be1e88c5cd01ff58253a2926b23359024e"
+  },
+  "lumenairy/propagators/asymptotic.py": {
+   "ast": "24449fce106838b55c226094d5d8dc1e624f49c77bc87bbd17045cd6d56561d7",
+   "token": "104d0cfc28a774041c20e871ffeb6293ae3ffaedcbef5343a0a1b5be034d93ec",
+   "ast_recorded": "24449fce106838b55c226094d5d8dc1e624f49c77bc87bbd17045cd6d56561d7",
+   "token_recorded": "104d0cfc28a774041c20e871ffeb6293ae3ffaedcbef5343a0a1b5be034d93ec"
+  },
+  "lumenairy/propagators/asymptotic_aberration_tensor.py": {
+   "ast": "d0d36ad937c22892b8db10d496eab14ac16f046789172cc70b066c7827a93dcb",
+   "token": "b76c52b040b0dd8570e71a468791f22ee376cc67945ac355ab23d57cfb564e95",
+   "ast_recorded": "d0d36ad937c22892b8db10d496eab14ac16f046789172cc70b066c7827a93dcb",
+   "token_recorded": "b76c52b040b0dd8570e71a468791f22ee376cc67945ac355ab23d57cfb564e95"
+  },
+  "lumenairy/propagators/asymptotic_canonical_fit.py": {
+   "ast": "d36204f01b8a593b77b15b74aa7896a6ca75a1c216660afef977a747526d7219",
+   "token": "41483e997938afdb82919c9b30534e8de3fd94f702db606a0ae99f7696f7a0db",
+   "ast_recorded": "d36204f01b8a593b77b15b74aa7896a6ca75a1c216660afef977a747526d7219",
+   "token_recorded": "41483e997938afdb82919c9b30534e8de3fd94f702db606a0ae99f7696f7a0db"
+  },
+  "lumenairy/propagators/asymptotic_jax_twin.py": {
+   "ast": "6c9e1419f0baf53eb77fadd98d9498d4032747a96d3868e52719a5cd0c947ccb",
+   "token": "6f938a27998a7bdad9322b3f498963ed9f62ddde2327d3477a4de420981e9382",
+   "ast_recorded": "6c9e1419f0baf53eb77fadd98d9498d4032747a96d3868e52719a5cd0c947ccb",
+   "token_recorded": "6f938a27998a7bdad9322b3f498963ed9f62ddde2327d3477a4de420981e9382"
+  },
+  "lumenairy/propagators/asymptotic_maslov.py": {
+   "ast": "b62534cbe4794d121f73147d1793fe523d53e17c9243287cafbb885215df8638",
+   "token": "d2ae3314a1d5dceab27552905ce1174df10a48594f7030cdbb4fc0f3740bbd15",
+   "ast_recorded": "b62534cbe4794d121f73147d1793fe523d53e17c9243287cafbb885215df8638",
+   "token_recorded": "d2ae3314a1d5dceab27552905ce1174df10a48594f7030cdbb4fc0f3740bbd15"
+  },
+  "lumenairy/propagators/asymptotic_modes.py": {
+   "ast": "2b30d7e695e59940d14e50b69ee122a86eea55e938339751363df6c35fd89e6f",
+   "token": "e2a9f6c50b43d8388a0928fb0f14e483694b3411a3c062e5cfdad8cd60d929b3",
+   "ast_recorded": "2b30d7e695e59940d14e50b69ee122a86eea55e938339751363df6c35fd89e6f",
+   "token_recorded": "e2a9f6c50b43d8388a0928fb0f14e483694b3411a3c062e5cfdad8cd60d929b3"
+  },
+  "lumenairy/propagators/dispatch.py": {
+   "ast": "49e2718d8cae3a8ab540e9870fe9e5f0cc76e2d43988b4b0a4e50a3c96b3add2",
+   "token": "371f80cf0f655ec6456872ea7403c0badd2c0ab9d95ca205f41953fbb01485e0",
+   "ast_recorded": "49e2718d8cae3a8ab540e9870fe9e5f0cc76e2d43988b4b0a4e50a3c96b3add2",
+   "token_recorded": "371f80cf0f655ec6456872ea7403c0badd2c0ab9d95ca205f41953fbb01485e0"
+  },
+  "lumenairy/propagators/ensemble.py": {
+   "ast": "ca6b386818504085a9fc0b305b2765933f1f12721f2ffd0d4fe21abff0af4569",
+   "token": "d6c93fb6b56c90536ac0177760bc631640e01299058f0b896abd221dbc0ba5a2",
+   "ast_recorded": "ca6b386818504085a9fc0b305b2765933f1f12721f2ffd0d4fe21abff0af4569",
+   "token_recorded": "d6c93fb6b56c90536ac0177760bc631640e01299058f0b896abd221dbc0ba5a2"
+  },
+  "lumenairy/propagators/fresnel.py": {
+   "ast": "f91e2a541c81d45798c2a0edb4abe725282fcc138e7a76ffd7296f0b94f77753",
+   "token": "3fc098d5b1c43a290551f72dc2abd0b93e91bf41c3210c1584531c74303baeb2",
+   "ast_recorded": "f91e2a541c81d45798c2a0edb4abe725282fcc138e7a76ffd7296f0b94f77753",
+   "token_recorded": "3fc098d5b1c43a290551f72dc2abd0b93e91bf41c3210c1584531c74303baeb2"
+  },
+  "lumenairy/propagators/gbd.py": {
+   "ast": "775d4193443b5f4c04db3d41b377d20896db5050a3ba0127193745a8b4b10f01",
+   "token": "bc6ec716e2f5fbe17fcd3b21101c02e01bba7f88fb59ffe5e6e31eec32f969fc",
+   "ast_recorded": "775d4193443b5f4c04db3d41b377d20896db5050a3ba0127193745a8b4b10f01",
+   "token_recorded": "bc6ec716e2f5fbe17fcd3b21101c02e01bba7f88fb59ffe5e6e31eec32f969fc"
+  },
+  "lumenairy/propagators/hf.py": {
+   "ast": "f6d5d2e97c686e003e8c57c46c87f91ebdb5167c08e328b44b6bc83624447026",
+   "token": "5bc8fed3ad1b4e29e9642b52c8213b74ad2e2e96aac7e093d9314378beef37a0",
+   "ast_recorded": "f6d5d2e97c686e003e8c57c46c87f91ebdb5167c08e328b44b6bc83624447026",
+   "token_recorded": "5bc8fed3ad1b4e29e9642b52c8213b74ad2e2e96aac7e093d9314378beef37a0"
+  },
+  "lumenairy/propagators/hfpi.py": {
+   "ast": "53935e9745803d949c9cd88d5b82d05a822ac6ff73d9ef796722f63576b8eeec",
+   "token": "e53eef070698133990d9db8d93f7602db62494c1fbe8bba57fa0f0fed9cdf22e",
+   "ast_recorded": "53935e9745803d949c9cd88d5b82d05a822ac6ff73d9ef796722f63576b8eeec",
+   "token_recorded": "e53eef070698133990d9db8d93f7602db62494c1fbe8bba57fa0f0fed9cdf22e"
+  },
+  "lumenairy/propagators/mft.py": {
+   "ast": "0f8c96a6815238955619bd4c543e8e12ffed6b947bff6b1cb3110b3c38bd5b7d",
+   "token": "8cb4155677b9b6fb7f9d30c8fd9aa9f6a7af334b91fb4d40bbe06e5386a40e8b",
+   "ast_recorded": "0f8c96a6815238955619bd4c543e8e12ffed6b947bff6b1cb3110b3c38bd5b7d",
+   "token_recorded": "8cb4155677b9b6fb7f9d30c8fd9aa9f6a7af334b91fb4d40bbe06e5386a40e8b"
+  },
+  "lumenairy/propagators/mhs.py": {
+   "ast": "bf7b57878e8216a12a8afa19bd13549b62ecd1bef5edc74ad489f426e4d29503",
+   "token": "ffd074cf5028f3b371aac0c0c20c262702f7fbe4cea4039b2acbd59a9229e178",
+   "ast_recorded": "bf7b57878e8216a12a8afa19bd13549b62ecd1bef5edc74ad489f426e4d29503",
+   "token_recorded": "ffd074cf5028f3b371aac0c0c20c262702f7fbe4cea4039b2acbd59a9229e178"
+  },
+  "lumenairy/propagators/result.py": {
+   "ast": "e4fcfd3f52f667a8ee804286fadb57d03f77a948f57ad75690f5ab89d148ff59",
+   "token": "b5508063ad8eaf07883892568245d46908576e7a07895a672331ed6932fbf9d1",
+   "ast_recorded": "e4fcfd3f52f667a8ee804286fadb57d03f77a948f57ad75690f5ab89d148ff59",
+   "token_recorded": "b5508063ad8eaf07883892568245d46908576e7a07895a672331ed6932fbf9d1"
+  },
+  "lumenairy/propagators/rs.py": {
+   "ast": "286d131880517ae59a7cbe28858ffe2565d6168f2b171497e65639d6633f40c0",
+   "token": "4b001712255c30f25b05118dd5f816d90ed1d1881f80c6c2d34dbfe432de2e7b",
+   "ast_recorded": "286d131880517ae59a7cbe28858ffe2565d6168f2b171497e65639d6633f40c0",
+   "token_recorded": "4b001712255c30f25b05118dd5f816d90ed1d1881f80c6c2d34dbfe432de2e7b"
+  },
+  "lumenairy/propagators/sas.py": {
+   "ast": "9e2418e8813271e5af722ad2f4234330996a6560f8e017e2b5f15a189bb5a8b7",
+   "token": "373ceb831de963b19b8ce42488786b4403929582ed3f110500fd55b17916347d",
+   "ast_recorded": "9e2418e8813271e5af722ad2f4234330996a6560f8e017e2b5f15a189bb5a8b7",
+   "token_recorded": "373ceb831de963b19b8ce42488786b4403929582ed3f110500fd55b17916347d"
+  },
+  "lumenairy/propagators/subaperture.py": {
+   "ast": "d1030e6626743f3fb86f6da6a9a7414ef56eef1ba336c2c4c104d1a1ff0d22b8",
+   "token": "bd4166da9c7f79307fe37fac94257ab3a35a8d527d154c3b78848d1eaa1cb922",
+   "ast_recorded": "d1030e6626743f3fb86f6da6a9a7414ef56eef1ba336c2c4c104d1a1ff0d22b8",
+   "token_recorded": "bd4166da9c7f79307fe37fac94257ab3a35a8d527d154c3b78848d1eaa1cb922"
+  },
+  "lumenairy/propagators/system.py": {
+   "ast": "6b5fbcc3d28590001bfd9ee129b5d6e464f80842865274490fa08992150660dd",
+   "token": "02f88bf42cbc995d4233b2c406ed26673c4f2f51ba5cadccc0a1b362467305e0",
+   "ast_recorded": "6b5fbcc3d28590001bfd9ee129b5d6e464f80842865274490fa08992150660dd",
+   "token_recorded": "02f88bf42cbc995d4233b2c406ed26673c4f2f51ba5cadccc0a1b362467305e0"
+  },
+  "lumenairy/propagators/vector_diffraction.py": {
+   "ast": "e6eaebabe033bc939822b64b2ddf535dbcd820eb2dc100e84ed919de6d945323",
+   "token": "acb719cdf0f7b3874e78b0dfca42998fa327c7e3709e3a6805763e0ee0419c27",
+   "ast_recorded": "e6eaebabe033bc939822b64b2ddf535dbcd820eb2dc100e84ed919de6d945323",
+   "token_recorded": "acb719cdf0f7b3874e78b0dfca42998fa327c7e3709e3a6805763e0ee0419c27"
+  },
+  "lumenairy/propagators/vectorial_hfpi.py": {
+   "ast": "df3e28e6c26dc290a30dfcd566f811cb648f488e5c891ee9575776995ae65417",
+   "token": "5e1bfea1132ffa2bda9014ead15c95c8ab91d831fcc1367893881365d66b11dc",
+   "ast_recorded": "df3e28e6c26dc290a30dfcd566f811cb648f488e5c891ee9575776995ae65417",
+   "token_recorded": "5e1bfea1132ffa2bda9014ead15c95c8ab91d831fcc1367893881365d66b11dc"
+  },
+  "lumenairy/raytrace/bundles.py": {
+   "ast": "1e558e7d45fe3f5f03acb73df77f3d8884c39af932cf8c08e2dbeea86fd37411",
+   "token": "06931463d3f6f7c415ab14583d46dac63ea6af2c4160df99e2cef046fcb57f82",
+   "ast_recorded": "1e558e7d45fe3f5f03acb73df77f3d8884c39af932cf8c08e2dbeea86fd37411",
+   "token_recorded": "06931463d3f6f7c415ab14583d46dac63ea6af2c4160df99e2cef046fcb57f82"
+  },
+  "lumenairy/raytrace/differential.py": {
+   "ast": "124a4c02f3a5db2e9d423ab3a8937d72f454a1850495a866ea20129f67039b27",
+   "token": "3aaf95c898d1ee3244b7b8e87ad17b3d3b1bda5b54ddb741dc8b779cbaa12863",
+   "ast_recorded": "124a4c02f3a5db2e9d423ab3a8937d72f454a1850495a866ea20129f67039b27",
+   "token_recorded": "3aaf95c898d1ee3244b7b8e87ad17b3d3b1bda5b54ddb741dc8b779cbaa12863"
+  },
+  "lumenairy/raytrace/from_field.py": {
+   "ast": "3adb4d02e5387f5ae39423f234654218350619a5fbdee72e9f201149b39b6dbd",
+   "token": "679f349a9d171d15891e23b553a790b8311f613e4bb6a47e08f56a935dcc945e",
+   "ast_recorded": "3adb4d02e5387f5ae39423f234654218350619a5fbdee72e9f201149b39b6dbd",
+   "token_recorded": "679f349a9d171d15891e23b553a790b8311f613e4bb6a47e08f56a935dcc945e"
+  },
+  "lumenairy/raytrace/intersection.py": {
+   "ast": "b32fdebb8c9727704f04a4419ee320e16f4a77189dc9a0eb78d31d2136070507",
+   "token": "86d4cc94de36f85b23ff3f146da712b7e7808d508eb93a4e5744a668508febe4",
+   "ast_recorded": "b32fdebb8c9727704f04a4419ee320e16f4a77189dc9a0eb78d31d2136070507",
+   "token_recorded": "86d4cc94de36f85b23ff3f146da712b7e7808d508eb93a4e5744a668508febe4"
+  },
+  "lumenairy/raytrace/jax_trace.py": {
+   "ast": "28147c2954849ca39828847f34cef62559b9d18394c2196358f686de5343dd78",
+   "token": "18469a977cae843b311705ffbd58ae439965fe6b1da8e4490b6dc61c4b9f241d",
+   "ast_recorded": "28147c2954849ca39828847f34cef62559b9d18394c2196358f686de5343dd78",
+   "token_recorded": "18469a977cae843b311705ffbd58ae439965fe6b1da8e4490b6dc61c4b9f241d"
+  },
+  "lumenairy/raytrace/layout.py": {
+   "ast": "9ec337cda3725e080b5b62bd88b1ffaf80c0444a867ee37dda55d3f5fe503c31",
+   "token": "ed32dcd4d1857e026a71efa41440650b25002e56d7ecee6c2234dc76c4a7232a",
+   "ast_recorded": "9ec337cda3725e080b5b62bd88b1ffaf80c0444a867ee37dda55d3f5fe503c31",
+   "token_recorded": "ed32dcd4d1857e026a71efa41440650b25002e56d7ecee6c2234dc76c4a7232a"
+  },
+  "lumenairy/raytrace/paraxial.py": {
+   "ast": "9065a4a64c9b653df35955a0f88143ea0056713f36fa6dc08aaa6974cfce18a4",
+   "token": "d680af7d9577f8a2670edf41f919d6ec96b9a1464dcd2a53a96c49a605c9304a",
+   "ast_recorded": "9065a4a64c9b653df35955a0f88143ea0056713f36fa6dc08aaa6974cfce18a4",
+   "token_recorded": "d680af7d9577f8a2670edf41f919d6ec96b9a1464dcd2a53a96c49a605c9304a"
+  },
+  "lumenairy/raytrace/ray_fan.py": {
+   "ast": "7b359195858eea6cdb2bbd8d161d5ae001afdbf6b594de662cc37f6656f20c63",
+   "token": "e1e2f1ac9becc1bea99679a4dc168df2ac7bd7963b025e2e0232c5a0104c745e",
+   "ast_recorded": "7b359195858eea6cdb2bbd8d161d5ae001afdbf6b594de662cc37f6656f20c63",
+   "token_recorded": "e1e2f1ac9becc1bea99679a4dc168df2ac7bd7963b025e2e0232c5a0104c745e"
+  },
+  "lumenairy/raytrace/seidel.py": {
+   "ast": "7984f9551684714d0f80cb0edbfd4a68c7b6be9d917d2c8389ad3883a44ede30",
+   "token": "a5c9624ce3ced523dab34d5007303b8e7ce6b48f141a12eb07ccb3c53097cbca",
+   "ast_recorded": "7984f9551684714d0f80cb0edbfd4a68c7b6be9d917d2c8389ad3883a44ede30",
+   "token_recorded": "a5c9624ce3ced523dab34d5007303b8e7ce6b48f141a12eb07ccb3c53097cbca"
+  },
+  "lumenairy/raytrace/seidel_analysis.py": {
+   "ast": "e23d3ab2c0ed41719d8e1f8a3da3f3615acc645d82f0b57e25fc7896bde27061",
+   "token": "662f13f5d518cbe015bd0f087512e90807e48a884eb20fb56f37756998ee9e6b",
+   "ast_recorded": "e23d3ab2c0ed41719d8e1f8a3da3f3615acc645d82f0b57e25fc7896bde27061",
+   "token_recorded": "662f13f5d518cbe015bd0f087512e90807e48a884eb20fb56f37756998ee9e6b"
+  },
+  "lumenairy/raytrace/surface.py": {
+   "ast": "296c0892a536d44ebea0803b96b1523870ccf553cf62c5d4b75992fed0737388",
+   "token": "d65270f03a000ae51ff2382388a6231e57f9fcd0299988b61dc7116c58cadb12",
+   "ast_recorded": "296c0892a536d44ebea0803b96b1523870ccf553cf62c5d4b75992fed0737388",
+   "token_recorded": "d65270f03a000ae51ff2382388a6231e57f9fcd0299988b61dc7116c58cadb12"
+  },
+  "lumenairy/raytrace/trace.py": {
+   "ast": "4d2dbbe0b6ed2f29bf4a6cf566c1e45282d479055dee7cf2f673a4fdb9a94dde",
+   "token": "bb412439d66904e77cd75fb0c873aeeb7c558ec9da2df220f9939eae2a20d5b4",
+   "ast_recorded": "4d2dbbe0b6ed2f29bf4a6cf566c1e45282d479055dee7cf2f673a4fdb9a94dde",
+   "token_recorded": "bb412439d66904e77cd75fb0c873aeeb7c558ec9da2df220f9939eae2a20d5b4"
+  },
+  "lumenairy/raytrace/world_trace.py": {
+   "ast": "fe602817e7621d3c428b3a2b04634a222493acbdef909960724aee7eeeb500e9",
+   "token": "4b0c581295fefe4ac72873974e8824a9dbc49d0028746a0045d67c81c3b9b8d6",
+   "ast_recorded": "fe602817e7621d3c428b3a2b04634a222493acbdef909960724aee7eeeb500e9",
+   "token_recorded": "4b0c581295fefe4ac72873974e8824a9dbc49d0028746a0045d67c81c3b9b8d6"
+  },
+  "lumenairy/sources/core.py": {
+   "ast": "c33e35b501a566495da64aa629afb16fe1067485f32ca36711451f46a20b3c5e",
+   "token": "5c4e00a95c48fc48a66da1a5833a6fc3eee0bf8502ffdb83c4094c258008a08c",
+   "ast_recorded": "c33e35b501a566495da64aa629afb16fe1067485f32ca36711451f46a20b3c5e",
+   "token_recorded": "5c4e00a95c48fc48a66da1a5833a6fc3eee0bf8502ffdb83c4094c258008a08c"
+  },
+  "lumenairy/ui/coherence_dock.py": {
+   "ast": "26889acadd9714b4409aaecd70144091a148adc61ec26417b90cd3b482deda55",
+   "token": "52ba746acd1da7dc6fd8c05b40ce471c08eb373d178a24e467f7f3d7034a2b18",
+   "ast_recorded": "26889acadd9714b4409aaecd70144091a148adc61ec26417b90cd3b482deda55",
+   "token_recorded": "52ba746acd1da7dc6fd8c05b40ce471c08eb373d178a24e467f7f3d7034a2b18"
+  },
+  "lumenairy/ui/layout_2d.py": {
+   "ast": "8a9349f9b0e778cfb12c3a92ffb5db432aab947e9ff97129d824125a2be97997",
+   "token": "f31a272f4efbaa7f8ea3c4c4c4519e92cd7d0e8caa5b14ed8214e914c4123363",
+   "ast_recorded": "8a9349f9b0e778cfb12c3a92ffb5db432aab947e9ff97129d824125a2be97997",
+   "token_recorded": "f31a272f4efbaa7f8ea3c4c4c4519e92cd7d0e8caa5b14ed8214e914c4123363"
+  },
+  "lumenairy/ui/main_window.py": {
+   "ast": "9a5bb39141721e20b1b39ec110a6dea18462f505402161ca2d0e710ee3eaf9e3",
+   "token": "91263ec5ee8ffc91686d12b041e62cf0cd3535f9a67b40ada428d496520c714c",
+   "ast_recorded": "9a5bb39141721e20b1b39ec110a6dea18462f505402161ca2d0e710ee3eaf9e3",
+   "token_recorded": "91263ec5ee8ffc91686d12b041e62cf0cd3535f9a67b40ada428d496520c714c"
+  },
+  "lumenairy/ui/model.py": {
+   "ast": "fd10117de41fa3cdcaba8b6248f6d5d0ef059d204763d4e1e42ac3cc75ed6848",
+   "token": "e017cbbd70cf7b9b6ebc88e38118815309feecc73f2c787a799738941ab4178f",
+   "ast_recorded": "fd10117de41fa3cdcaba8b6248f6d5d0ef059d204763d4e1e42ac3cc75ed6848",
+   "token_recorded": "e017cbbd70cf7b9b6ebc88e38118815309feecc73f2c787a799738941ab4178f"
+  },
+  "lumenairy/ui/optimizer_dock.py": {
+   "ast": "efbdd1913076d309f6e46d6258f7e3d67175162a7cbd88d9bf13eefacd8cf425",
+   "token": "eb895bcd12050ae81c882f4f5ffb303ac769e05124a4a0b8605f716b0c384cb2",
+   "ast_recorded": "efbdd1913076d309f6e46d6258f7e3d67175162a7cbd88d9bf13eefacd8cf425",
+   "token_recorded": "eb895bcd12050ae81c882f4f5ffb303ac769e05124a4a0b8605f716b0c384cb2"
+  },
+  "lumenairy/ui/waveoptics_dock.py": {
+   "ast": "68bd80bfc918099c4021a37c06cf1556790270e2770af4dac06b9e2632b4a658",
+   "token": "7308e1330d678b208acab5e6da88cdbe2335cfc771d018b4ca56b78e7f0d455f",
+   "ast_recorded": "68bd80bfc918099c4021a37c06cf1556790270e2770af4dac06b9e2632b4a658",
+   "token_recorded": "7308e1330d678b208acab5e6da88cdbe2335cfc771d018b4ca56b78e7f0d455f"
+  },
+  "lumenairy/user_library.py": {
+   "ast": "fb41a8208a1e2d3965e5eabf24e216a0dc47e5361ccc24ce33d11caa21293107",
+   "token": "9ba44e1fa0235a480d91285b98aa0b61dcf0b138541d78c043885bbb1a1ee9e5",
+   "ast_recorded": "fb41a8208a1e2d3965e5eabf24e216a0dc47e5361ccc24ce33d11caa21293107",
+   "token_recorded": "9ba44e1fa0235a480d91285b98aa0b61dcf0b138541d78c043885bbb1a1ee9e5"
+  }
+ },
+ "ast_mismatch": [],
+ "token_mismatch": [],
+ "fstring_route_mismatch": [
+  "lumenairy/propagators/carrier.py: ast=212 tok=971",
+  "lumenairy/propagators/carrier_field.py: ast=26 tok=133",
+  "lumenairy/propagators/fft_infra.py: ast=26 tok=61",
+  "lumenairy/_cache_registry.py: ast=6 tok=19",
+  "lumenairy/_deprecation.py: ast=13 tok=33",
+  "lumenairy/_math/chebyshev.py: ast=5 tok=20",
+  "lumenairy/_validation.py: ast=6 tok=53",
+  "lumenairy/algebra/from_prescription.py: ast=2 tok=4",
+  "lumenairy/algebra/primitives.py: ast=18 tok=42",
+  "lumenairy/analysis/aberration.py: ast=15 tok=33",
+  "lumenairy/analysis/ao.py: ast=27 tok=51",
+  "lumenairy/analysis/beam_stats.py: ast=5 tok=8",
+  "lumenairy/analysis/coronagraph.py: ast=2 tok=3",
+  "lumenairy/analysis/detector.py: ast=9 tok=22",
+  "lumenairy/analysis/field.py: ast=5 tok=19",
+  "lumenairy/analysis/ghost.py: ast=11 tok=26",
+  "lumenairy/analysis/image_plane_wfe.py: ast=10 tok=29",
+  "lumenairy/analysis/interferometry.py: ast=4 tok=6",
+  "lumenairy/analysis/opd.py: ast=34 tok=71",
+  "lumenairy/analysis/phase_retrieval.py: ast=3 tok=6",
+  "lumenairy/analysis/psf_mtf_otf.py: ast=29 tok=78",
+  "lumenairy/analysis/strehl.py: ast=10 tok=21",
+  "lumenairy/analysis/through_focus.py: ast=41 tok=60",
+  "lumenairy/analysis/zernike.py: ast=8 tok=14",
+  "lumenairy/cache.py: ast=5 tok=9",
+  "lumenairy/elements/_berreman_jax.py: ast=2 tok=4",
+  "lumenairy/elements/_lens_jax.py: ast=9 tok=45",
+  "lumenairy/elements/_lens_real.py: ast=77 tok=325",
+  "lumenairy/elements/_lens_thin.py: ast=11 tok=35",
+  "lumenairy/elements/_lens_traced.py: ast=112 tok=588",
+  "lumenairy/elements/berreman.py: ast=10 tok=19",
+  "lumenairy/elements/bor/bor_solve.py: ast=1 tok=1",
+  "lumenairy/elements/bor/bor_stack.py: ast=18 tok=25",
+  "lumenairy/elements/bor/coupled_radial_eigensolver.py: ast=8 tok=46",
+  "lumenairy/elements/bor/farfield.py: ast=2 tok=9",
+  "lumenairy/elements/bor/radial_eigensolver.py: ast=2 tok=4",
+  "lumenairy/elements/bsdf.py: ast=8 tok=28",
+  "lumenairy/elements/coatings.py: ast=6 tok=28",
+  "lumenairy/elements/doe.py: ast=24 tok=35",
+  "lumenairy/elements/elements.py: ast=11 tok=23",
+  "lumenairy/elements/eme/eme_2d.py: ast=2 tok=4",
+  "lumenairy/elements/eme/eme_2d_vector.py: ast=5 tok=9",
+  "lumenairy/elements/eme/eme_diffraction.py: ast=2 tok=3",
+  "lumenairy/elements/lenses.py: ast=1 tok=3",
+  "lumenairy/elements/lenses_maslov.py: ast=64 tok=230",
+  "lumenairy/elements/pmm/_core.py: ast=36 tok=125",
+  "lumenairy/elements/pmm/conical.py: ast=3 tok=7",
+  "lumenairy/elements/pmm/oned.py: ast=10 tok=16",
+  "lumenairy/elements/pmm/stack.py: ast=46 tok=191",
+  "lumenairy/elements/pmm/stack2d.py: ast=15 tok=42",
+  "lumenairy/elements/pmm/stack2d_pure.py: ast=29 tok=117",
+  "lumenairy/elements/pmm/twod.py: ast=22 tok=72",
+  "lumenairy/elements/polarization.py: ast=21 tok=81",
+  "lumenairy/elements/rcwa/stack.py: ast=32 tok=93",
+  "lumenairy/elements/segment_geometry.py: ast=5 tok=29",
+  "lumenairy/glass.py: ast=40 tok=176",
+  "lumenairy/io/codegen.py: ast=79 tok=147",
+  "lumenairy/io/prescriptions_builders.py: ast=13 tok=28",
+  "lumenairy/io/prescriptions_quadoa.py: ast=8 tok=13",
+  "lumenairy/io/prescriptions_transforms.py: ast=10 tok=29",
+  "lumenairy/io/prescriptions_zemax.py: ast=87 tok=209",
+  "lumenairy/io/storage.py: ast=41 tok=60",
+  "lumenairy/memory.py: ast=17 tok=37",
+  "lumenairy/optimize/context.py: ast=4 tok=27",
+  "lumenairy/optimize/driver.py: ast=21 tok=77",
+  "lumenairy/optimize/jax_merits.py: ast=6 tok=34",
+  "lumenairy/optimize/merit_terms.py: ast=12 tok=36",
+  "lumenairy/optimize/multi_objective.py: ast=14 tok=38",
+  "lumenairy/optimize/multiconfig.py: ast=8 tok=21",
+  "lumenairy/optimize/parameterizations.py: ast=12 tok=26",
+  "lumenairy/optimize/wrapper_merits.py: ast=3 tok=7",
+  "lumenairy/propagators/asm.py: ast=9 tok=13",
+  "lumenairy/propagators/asymptotic.py: ast=6 tok=28",
+  "lumenairy/propagators/asymptotic_aberration_tensor.py: ast=2 tok=22",
+  "lumenairy/propagators/asymptotic_canonical_fit.py: ast=9 tok=34",
+  "lumenairy/propagators/asymptotic_jax_twin.py: ast=7 tok=15",
+  "lumenairy/propagators/asymptotic_modes.py: ast=11 tok=18",
+  "lumenairy/propagators/dispatch.py: ast=22 tok=101",
+  "lumenairy/propagators/ensemble.py: ast=7 tok=32",
+  "lumenairy/propagators/fresnel.py: ast=3 tok=19",
+  "lumenairy/propagators/gbd.py: ast=16 tok=34",
+  "lumenairy/propagators/hf.py: ast=9 tok=52",
+  "lumenairy/propagators/hfpi.py: ast=26 tok=137",
+  "lumenairy/propagators/mft.py: ast=14 tok=53",
+  "lumenairy/propagators/mhs.py: ast=10 tok=34",
+  "lumenairy/propagators/result.py: ast=5 tok=8",
+  "lumenairy/propagators/rs.py: ast=15 tok=60",
+  "lumenairy/propagators/sas.py: ast=13 tok=38",
+  "lumenairy/propagators/subaperture.py: ast=5 tok=12",
+  "lumenairy/propagators/system.py: ast=33 tok=127",
+  "lumenairy/propagators/vector_diffraction.py: ast=5 tok=37",
+  "lumenairy/propagators/vectorial_hfpi.py: ast=4 tok=9",
+  "lumenairy/raytrace/from_field.py: ast=10 tok=22",
+  "lumenairy/raytrace/jax_trace.py: ast=1 tok=4",
+  "lumenairy/raytrace/layout.py: ast=22 tok=27",
+  "lumenairy/raytrace/ray_fan.py: ast=13 tok=33",
+  "lumenairy/raytrace/seidel.py: ast=20 tok=31",
+  "lumenairy/raytrace/seidel_analysis.py: ast=1 tok=2",
+  "lumenairy/raytrace/trace.py: ast=39 tok=65",
+  "lumenairy/raytrace/world_trace.py: ast=3 tok=5",
+  "lumenairy/sources/core.py: ast=77 tok=219",
+  "lumenairy/ui/coherence_dock.py: ast=17 tok=30",
+  "lumenairy/ui/layout_2d.py: ast=2 tok=2",
+  "lumenairy/ui/main_window.py: ast=92 tok=107",
+  "lumenairy/ui/model.py: ast=44 tok=64",
+  "lumenairy/ui/optimizer_dock.py: ast=53 tok=82",
+  "lumenairy/ui/waveoptics_dock.py: ast=80 tok=120",
+  "lumenairy/user_library.py: ast=45 tok=114"
+ ],
+ "n_with_fstrings": 110,
+ "n_fstring_nodes": 2254,
+ "digest_of_all_fingerprints": "b9af7d83175a807faf8aeeee5cf1563d7cbc126168d2227a84b80ba52e4a3f83"
+}

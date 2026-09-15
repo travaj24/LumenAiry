@@ -1,0 +1,10 @@
+{
+ "state": "warm",
+ "held_grids": 1.000908374786377,
+ "peak_mb": 25.18813,
+ "est_mb": 49.492787,
+ "est_over_peak": 1.9649250261928932,
+ "retain_guard_5p5_7p0": false,
+ "claim_1p0_1p6": false,
+ "lumenairy_file": "/mnt/c/tmp/lum_vreds/lumenairy/__init__.py"
+}
