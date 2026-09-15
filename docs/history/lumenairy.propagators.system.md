@@ -1,12 +1,14 @@
 <!-- lumenairy-history-doc
 module: lumenairy/propagators/system.py
-ast_sha256: 92c78bf52e3a76f6536c9d898254b83f2cc7ed555e1172c4595cb15f6dd7e729
-token_sha256: 5f4ba024d2310d6b188ce7e463fbd139334111e795b0bb4ee470185df36334c5
+ast_sha256: 6b5fbcc3d28590001bfd9ee129b5d6e464f80842865274490fa08992150660dd
+token_sha256: 02f88bf42cbc995d4233b2c406ed26673c4f2f51ba5cadccc0a1b362467305e0
 pre_relocation_lines: 1919
 recorded_by: WP-A17 SWEEP-1 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
 re_recorded: 2026-09-13 -- WP-B3b (K6): the 'fresnel' leg evaluates fresnel_propagate_mft straight onto the chain grid instead of propagating to the single-FFT natural grid and resampling back (the crop and the interpolator MTF both go), and the 'sas' leg's surviving resample_field gates method= on whether the chain window fits inside one chirp-Z reconstruction period
 re_recorded: 2026-09-13 -- VERIFY-B3b (K6): the 'fresnel' leg carries _warn_system_fresnel_window -- retiring the resample retired _warn_system_resample_crop with it, and fresnel_propagate_mft's faithful-zone warning is a disjoint condition on the chain grid (it reduces to z < N dx^2/lambda, the K1 band), so a beam that outgrows the chain window above that bound had no diagnostic at all
+re_recorded: 2026-09-14 -- Wave-5 item D (CI run 34914295323): DIGEST-SCHEME change, not a code change -- token_fingerprint now feeds an f-string to the digest as ONE STRING record holding its exact source text instead of the running tokenizer's FSTRING_START/FSTRING_MIDDLE/FSTRING_END run, so the recorded value is a property of the file rather than of the interpreter that read it; PEP 701 made CPython 3.12 tokenize f-strings differently from 3.11, these digests were recorded on 3.12+, and all five py3.11 CI shards read a different token_sha256 for byte-identical sources (110 of 123 documents, measured).  The module source is unchanged and ast_sha256 is unchanged.
+re_recorded: 2026-09-14 -- Wave 5 item D (handoff 4.4): the six warnings.warn literal stacklevels are swept onto lumenairy.elements._lens_kernels.caller_stacklevel().  The system chain reaches its guard sites from propagate_through_system and from evaluate, i.e. at two library depths, so a literal is right for at most one of them.  No physics changed.
 -->
 
 # Version history -- `lumenairy/propagators/system.py`

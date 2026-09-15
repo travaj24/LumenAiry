@@ -121,6 +121,7 @@ from typing import Any, Dict, Iterable, List, NamedTuple, Optional, Sequence, Tu
 
 import numpy as np
 
+from ..elements._lens_kernels import caller_stacklevel as _caller_stacklevel
 from .carrier import (
     _check_guard_action,
     _envelope_amp_radius,
@@ -754,7 +755,7 @@ class CarrierField:
                 f"fresh CarrierField); for in-place accumulation use "
                 f"np.add(acc.envelope, other, out=acc.envelope), which is the "
                 f"same arithmetic bit for bit and needs no rebind.",
-                DeprecationWarning, stacklevel=2)
+                DeprecationWarning, stacklevel=_caller_stacklevel())
         object.__setattr__(self, name, value)
 
     # -- basic accessors --------------------------------------------------
@@ -1416,7 +1417,7 @@ def re_reference(field: CarrierField, to_carrier: CarrierSpec,
             f"target N (or lower its dx), move the target carrier closer to "
             f"this field's own, or pass on_nyquist='warn' if the aliased "
             f"skirt is genuinely below your bar.",
-            exc=ValueError, stacklevel=3)
+            exc=ValueError, stacklevel=None)
 
     # ---- containment ----------------------------------------------------
     reach_x = abs(src.centre[0] - target_grid.origin[0]) + r_sup
@@ -1439,7 +1440,7 @@ def re_reference(field: CarrierField, to_carrier: CarrierSpec,
             f"so the overhang does not simply vanish: it wraps to the "
             f"opposite edge.  Grow N_out, or accept the recorded loss "
             f"(power_lost in the returned report).",
-            exc=ValueError, stacklevel=3)
+            exc=ValueError, stacklevel=None)
 
     # ---- (2) resample the ENVELOPE --------------------------------------
     p_in = field.power()

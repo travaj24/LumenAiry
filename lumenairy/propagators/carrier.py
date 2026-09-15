@@ -149,6 +149,7 @@ from typing import Callable, NamedTuple, Optional, Tuple, Union
 
 import numpy as np
 
+from ..elements._lens_kernels import caller_stacklevel as _caller_stacklevel
 from .fresnel import fresnel_tf_propagate
 
 __all__ = [
@@ -759,7 +760,7 @@ def _warn_paraxial_kernel_drops_tilt(gap_kernel, tilt, R_carrier, fn):
         f"obliquity piston are bookkept by the CALLER (the chain applies "
         f"both), so they are unaffected -- what is lost is the envelope's own "
         f"tilt-dependent diffraction.",
-        RuntimeWarning, stacklevel=3)
+        RuntimeWarning, stacklevel=_caller_stacklevel())
 
 
 def _envelope_tf_step(E_env, z_eff, wavelength, dx, dy, tilt, gap_kernel,
@@ -1760,7 +1761,8 @@ def _collins_sampling_stats(A, B, C, D, dx, dy, r_x, r_y, th_x, th_y,
         'tail_frac': float(_COLLINS_TAIL_FRAC)}
 
 
-def _check_collins_sampling(fn, action, st, stacklevel=3, check_period=False):
+def _check_collins_sampling(fn, action, st, stacklevel=None,
+                            check_period=False):
     """Dispose of a violated K1 / K2 condition, and of K3 when the caller owns
     it (``check_period``).
 
@@ -1966,7 +1968,7 @@ def _collins_transport(env, R_in, z, wavelength, dx, dy, *,
                        centre_out=(0.0, 0.0),
                        gap_kernel='auto', tilt=(0.0, 0.0),
                        on_collins_sampling='warn', fn='_collins_transport',
-                       stats_out=None, stacklevel=4, check_period=False):
+                       stats_out=None, stacklevel=None, check_period=False):
     """Evaluate the Collins integral of an ENVELOPE onto a freely chosen output
     lattice; return the envelope referenced to ``R_ref`` there.
 
@@ -2246,7 +2248,7 @@ def _collins_carrier_leg(env, R, z, wavelength, dx, dy, *,
         dx_out=dxo, dy_out=dyo, N_out_x=Nx, N_out_y=Ny, R_ref=R_ref,
         centre_out=(0.0, 0.0), gap_kernel=gap_kernel,
         tilt=tilt, on_collins_sampling=on_collins_sampling, fn=fn,
-        stats_out=st, stacklevel=5, check_period=True)
+        stats_out=st, stacklevel=None, check_period=True)
     if diag is not None:
         diag.update({'collins_form': 'chirp-z',
                      'collins_k1': st.get('k1'), 'collins_k2': st.get('k2'),
@@ -2319,14 +2321,14 @@ def _collins_focus_readout(env, R, z, wavelength, dx, dy, *,
                 f"dx_in = {min(float(dx), float(dy)) * 1e6:.4f} um and it is "
                 f"set by the input grid and the leg alone -- there is no "
                 f"standoff to lengthen and no hand-off accuracy to trade"),
-        stacklevel=3)
+        stacklevel=None)
     E_out = _collins_transport(
         env, R, z, wavelength, dx, dy,
         dx_out=float(dx_out), dy_out=float(dx_out),
         N_out_x=int(N_out), N_out_y=int(N_out), R_ref=np.inf,
         centre_out=centre_out, gap_kernel=gap_kernel, tilt=tilt,
         on_collins_sampling=on_collins_sampling, fn=fn,
-        stats_out=_period_out, stacklevel=4)
+        stats_out=_period_out, stacklevel=None)
     return _fill_readout_replicas(E_out, period, dx_out, N_out, centre_out,
                                   fill=replica_fill, out=_period_out)
 
@@ -3395,7 +3397,7 @@ def carrier_referenced_fit_radius(
                 f"field to a known carrier first (carrier_referenced_envelope) "
                 f"and fit only the residual.  Pass on_aliased='silent' to "
                 f"acknowledge.",
-                RuntimeWarning, stacklevel=2)
+                RuntimeWarning, stacklevel=_caller_stacklevel())
     if astigmatic:
         ix = _fit_carrier_inv(E_full, wavelength, dx, dy, axis=1,
                               estimator=estimator, centre=_cen,
@@ -3997,7 +3999,7 @@ def carrier_referenced_focus_readout(
     _check_focus_containment(
         'carrier_referenced_focus_readout', on_focus_containment,
         env_s, dx_s, env, R, z, z_stop, wavelength, dx, _w_env, _cen_in,
-        standoff, inv_env=_inv_env, out=_period_out, stacklevel=3)
+        standoff, inv_env=_inv_env, out=_period_out, stacklevel=None)
     # Host-side reduction on ANY backend: ``np.asarray`` raises on a CuPy
     # device array (implicit transfer is blocked), so use the same
     # ``to_numpy`` pull the sibling measurements do.
@@ -4033,7 +4035,7 @@ def carrier_referenced_focus_readout(
         remedy=(f", or pass standoff >= {_need:.6e} m (currently "
                 f"{standoff:.6e} m -- the period is LINEAR in it, so this "
                 f"buys window at the price of hand-off accuracy)"),
-        stacklevel=2)
+        stacklevel=None)
     E_out = angular_spectrum_propagate_mft(
         E_stop, z - z_stop, wavelength, dx_s, dx_out, int(N_out),
         centre_out=centre_out, bandlimit=bandlimit)
@@ -4067,7 +4069,7 @@ def carrier_referenced_focus_readout(
                 f"and pass replica_fill='zero' so the unmeasurable part comes "
                 f"back as zeros, or restore on_replica='error'.  Pass "
                 f"on_focus_containment='ignore' to silence.",
-                stacklevel=2)
+                stacklevel=None)
     return E_out
 
 
@@ -4305,7 +4307,7 @@ def _beam_containment_standoff(env, R, z, wavelength, dx, w_env, centre, half,
 
 def _check_focus_containment(fn, action, env_stop, dx_stop, env_in, R, z,
                              z_stop, wavelength, dx, w_env, centre_in,
-                             standoff, inv_env=None, out=None, stacklevel=3):
+                             standoff, inv_env=None, out=None, stacklevel=None):
     """Two-sided containment check on the readout's stop plane (finding C1).
 
     The carrier is a pure phase, so ``|env| == |E|`` and the beam that landed
@@ -4527,7 +4529,7 @@ def _small_extent_focus_standoff_f(env, R, z, wavelength, dx, ext, f_floor,
 
 
 def _check_readout_replica(fn, period, dx_out, N_out, on_replica,
-                           centre_out=(0.0, 0.0), remedy='', stacklevel=3):
+                           centre_out=(0.0, 0.0), remedy='', stacklevel=None):
     """REFUSE (or, opt-in, warn about) a readout window that reaches outside
     one Bluestein period OF THE FIELD'S OWN ORIGIN -- fix D3, 2026-08-06;
     geometry corrected for ``centre_out`` (defect V3), 2026-08-06.
@@ -5197,7 +5199,7 @@ def _sphere_parab_conversion(shape, dx, wavelength, R, sign, w_beam=None,
             f"field (the PARAXIAL focus readout) will alias beyond that "
             f"radius.  Refine the pitch (it enters as d^(-1/3), so this is "
             f"expensive) or lower the carrier NA if that path is used.",
-            RuntimeWarning, stacklevel=3)
+            RuntimeWarning, stacklevel=_caller_stacklevel())
     if SPHERE_PARAB_CONVERSION_EXACT:
         if _phasor_c64(dtype):
             # v5.44: same expression on row slices, stored complex64.
@@ -5409,23 +5411,37 @@ def _crop_about_centre(env, dx, x0, y0, n_crop, where):
 _GUARD_ACTIONS = ('error', 'warn', 'ignore')
 
 
-def _guard_dispose(action, msg, exc=RuntimeError, stacklevel=3):
+def _guard_dispose(action, msg, exc=RuntimeError, stacklevel=None):
     """Apply an ``'error'`` / ``'warn'`` / ``'ignore'`` disposition to a
     detected fault.  ``'warn'`` emits a ``RuntimeWarning``; ``'error'`` raises
     ``exc``; ``'ignore'`` is silent.
 
-    ``stacklevel`` is counted FROM THE CALLING GUARD SITE (this helper's own
-    frame is added internally), so a guard that used to call
-    ``warnings.warn(..., stacklevel=3)`` inline keeps pointing at the same
-    frame when it is converted to ``_guard_dispose(..., stacklevel=3)``."""
+    ``stacklevel`` defaults to ``None``, which COMPUTES the level with
+    :func:`~lumenairy.elements._lens_kernels.caller_stacklevel` -- the depth
+    of the first frame outside the package, measured from this helper's own
+    frame.  That is what makes the attribution independent of how deep the
+    guard site sits: the same guard reached directly, through a chain leg or
+    through a re-entrant entry point names the USER'S frame either way,
+    where a literal is right for one of those and silently wrong for the
+    others (2026-09-14; the lens family was swept onto the same helper by
+    WP-B11).
+
+    An explicit integer is still honoured, and is still counted FROM THE
+    CALLING GUARD SITE (this helper's own frame is added internally), so an
+    existing ``_guard_dispose(..., stacklevel=3)`` keeps pointing exactly
+    where it did.  Nothing outside this module passes one today; the seam
+    is kept for a caller that genuinely wants a fixed frame.
+    """
     if action == 'error':
         raise exc(msg)
     if action == 'warn':
         import warnings
-        warnings.warn(msg, RuntimeWarning, stacklevel=int(stacklevel) + 1)
+        level = (_caller_stacklevel() if stacklevel is None
+                 else int(stacklevel) + 1)
+        warnings.warn(msg, RuntimeWarning, stacklevel=level)
 
 
-def _warn_undeduped(msg, stacklevel=3, category=RuntimeWarning):
+def _warn_undeduped(msg, stacklevel=None, category=RuntimeWarning):
     """Emit ``msg`` attributed to ``stacklevel``'s frame, WITHOUT the
     once-per-location dedup CPython's ``'default'`` filter action applies.
 
@@ -5476,12 +5492,17 @@ def _warn_undeduped(msg, stacklevel=3, category=RuntimeWarning):
     silently drops results."""
     import sys
     import warnings
+    # ``stacklevel`` is counted from THIS helper's CALLER (1 = the
+    # caller), one frame in from ``caller_stacklevel``'s own counting
+    # (1 = this frame), so the computed default is its reading minus one.
+    if stacklevel is None:
+        stacklevel = max(1, _caller_stacklevel() - 1)
     try:
         frame = sys._getframe(int(stacklevel))
     except ValueError:                                     # pragma: no cover
         # Shallower stack than the caller assumed: attribute it to this
         # module rather than losing the warning entirely.
-        warnings.warn(msg, category, stacklevel=2)
+        warnings.warn(msg, category, stacklevel=_caller_stacklevel())
         return
     g = frame.f_globals
     lineno = frame.f_lineno
@@ -6590,7 +6611,7 @@ def carrier_referenced_exact_focus_readout(
                 f"congruence.  Pass on_readout_window='warn' to accept the "
                 f"truncated window, 'ignore' to skip the measurement "
                 f"entirely, or raise readout_window_tol.",
-                stacklevel=2)
+                stacklevel=None)
     if N_fine is None:
         N_fine = int(2 ** int(np.ceil(np.log2(max(win / dx_fine, n_crop)))))
     N_fine = int(N_fine)
@@ -6642,7 +6663,7 @@ def carrier_referenced_exact_focus_readout(
               f"alone decide.  Pass on_n_fine_cap='error' to make this fatal "
               f"in batch production, 'ignore' to accept the capped grid "
               f"silently.",
-            exc=MemoryError, stacklevel=2)
+            exc=MemoryError, stacklevel=None)
         N_fine = int(n_fine_cap)
     # P2 memory budget: cap the fine grid to what the RAM budget can hold and
     # SAY SO (the pre-v5.29 path died with a MemoryError at 32768^2 = 16 GiB per
@@ -6728,7 +6749,7 @@ def carrier_referenced_exact_focus_readout(
                    f"centre = ({_co[0]:.6e}, {_co[1]:.6e}) m; centring the "
                    f"window on the chief ray costs no period at all"
                    if _dec else "")),
-        stacklevel=2)
+        stacklevel=None)
     # The same window bookkeeping as the paraxial readout: the fine crop grid's
     # own period bounds what this transform can report, and the offset the fill
     # must weigh is the same RESIDUAL ``_co`` the guard weighed.
@@ -7179,7 +7200,7 @@ def _check_tilt_fits(env, dx, x_c, y_c, where):
             f"({half * 1e3:.4f} mm).  The band-limited chief-ray shift is "
             f"periodic, so the skirt is wrapping round to the opposite edge; "
             f"raise N for this order.",
-            RuntimeWarning, stacklevel=3)
+            RuntimeWarning, stacklevel=_caller_stacklevel())
 
 
 # Chief-ray offset, in beam amplitude radii, above which a decentred traced
@@ -7734,7 +7755,7 @@ def _check_gap_paraxial(w_in, R_in, z, m, wavelength, where, action, sag_tol,
             f"put the long gap in a slower space (the drop goes as NA^4); (3) "
             f"propagate that leg with an exact ASM step outside the chain.  "
             f"on_gap_paraxial='error' makes this fatal, 'ignore' silences it.",
-            stacklevel=3)
+            stacklevel=None)
     elif na > _GAP_NA_TOL:
         _guard_dispose(
             action,
@@ -7755,7 +7776,7 @@ def _check_gap_paraxial(w_in, R_in, z, m, wavelength, where, action, sag_tol,
             f"leg around an explicit exact ASM step; or treat the returned "
             f"image metrics as indicative.  on_gap_paraxial='error' makes "
             f"this fatal, 'ignore' silences it.",
-            stacklevel=3)
+            stacklevel=None)
     # ---- arm C (Stage 1): the FRAME arm, on the DIRECTLY MEASURED envelope ---
     # Arms A/B above are both computed from the CARRIER geometry (the dropped
     # hand-off quartic; the carrier NA w/|R|).  Arm B's NA is a PROXY for the
@@ -7815,7 +7836,7 @@ def _check_gap_paraxial(w_in, R_in, z, m, wavelength, where, action, sag_tol,
                 f"on_gap_paraxial so silencing an uncalibrated frame tripwire "
                 f"does not also silence the two calibrated carrier-geometry "
                 f"arms.",
-                stacklevel=3)
+                stacklevel=None)
     return stats
 
 
@@ -7947,7 +7968,7 @@ def _check_decentred_fit(w, x_c, y_c, where, action, frac):
         f"built to be right to 0.36 urad by construction.  Pass "
         f"on_decentred_fit='error' to refuse instead, 'ignore' to silence, or "
         f"raise decentre_fit_frac if your design tolerates more.",
-        stacklevel=3)
+        stacklevel=None)
     return ratio
 
 
@@ -8501,7 +8522,7 @@ def _fine_trace_group_exit(env, R_in, cur_dx, presc, wavelength, ray_subsample,
             f"for this order and accept the paraxial readout.  Pass "
             f"on_tilt_exact_grid='warn' to run anyway with the outer NA "
             f"discarded, 'ignore' to silence this entirely.",
-            stacklevel=2)
+            stacklevel=None)
     elif dx_fine > nyquist_dx:
         import warnings
         warnings.warn(
@@ -8512,7 +8533,7 @@ def _fine_trace_group_exit(env, R_in, cur_dx, presc, wavelength, ray_subsample,
             f"discards outer-NA content.  Raise n_fine_cap or shrink "
             f"window_factor (currently {window_factor}) via the "
             f"focus_readout dict if the full NA is needed.",
-            RuntimeWarning, stacklevel=2)
+            RuntimeWarning, stacklevel=_caller_stacklevel())
 
     if not _tilted:
         env_f = _fourier_upsample_crop(env, n_crop, n_fine)
@@ -8632,7 +8653,7 @@ def _fine_trace_group_exit(env, R_in, cur_dx, presc, wavelength, ray_subsample,
             f"is warn-only by default; pass on_rs_fine_clamp='error' for the "
             f"STRICT mode that refuses the degenerate corner, or 'ignore' to "
             f"silence it.",
-            stacklevel=2)
+            stacklevel=None)
     # Independent backstop: cap the resulting Newton/Cheb ray-fit grid size
     # even if the pitch-preserving rs_fine would still be too dense (e.g.
     # the chain-level ray_subsample was itself already very fine relative to
@@ -8659,7 +8680,7 @@ def _fine_trace_group_exit(env, R_in, cur_dx, presc, wavelength, ray_subsample,
                 f"quality on this leg is reduced; lower window_factor / "
                 f"na_exact_threshold, or raise max_fine_launch_points, if "
                 f"you need finer sampling and can afford the memory.",
-                RuntimeWarning, stacklevel=2)
+                RuntimeWarning, stacklevel=_caller_stacklevel())
             rs_fine = rs_needed
 
     _na_diag: dict = {}
@@ -8717,7 +8738,7 @@ def _fine_trace_group_exit(env, R_in, cur_dx, presc, wavelength, ray_subsample,
                 f"final_leg='paraxial' for this order.  Pass "
                 f"on_tilt_exact_grid='warn' to accept the aliased outer NA, "
                 f"'ignore' to silence this entirely.",
-                stacklevel=2)
+                stacklevel=None)
     return np.asarray(E_exit), float(dx_fine)
 
 
@@ -10222,7 +10243,7 @@ def propagate_traced_carrier_chain(
                     f"na_exact_threshold clear of the design.  "
                     f"on_na_proximity='error' makes this fatal, 'ignore' "
                     f"silences it.",
-                    stacklevel=2)
+                    stacklevel=None)
         if do_exact and _trailing_doe:
             raise NotImplementedError(
                 f"{_fn}: the EXACT high-NA final leg (final_leg="
@@ -11109,7 +11130,7 @@ def _multi_dispose(action, msg, exc=RuntimeError):
     Thin alias for :func:`_guard_dispose` (niche D3 unified the guard-policy
     vocabulary across this module); ``stacklevel=3`` reproduces the frame this
     helper reported before that merge."""
-    _guard_dispose(action, msg, exc, stacklevel=3)
+    _guard_dispose(action, msg, exc, stacklevel=None)
 
 
 # ``readout_tile='auto'``'s PERIOD-PROBE window, in pixels.  The Bluestein
@@ -11415,7 +11436,7 @@ def _multi_resolve_workers(requested, K, shape0, min_free_gb, fn,
             f"available with a {min_free_gb:.0f} GB reserve; running "
             f"{allowed} worker(s) instead.  Lower congruence_workers, raise "
             f"the RAM budget, or reduce the grid to use more.",
-            RuntimeWarning, stacklevel=3)
+            RuntimeWarning, stacklevel=_caller_stacklevel())
         return allowed
     return requested
 
@@ -11493,7 +11514,7 @@ def _multi_parallel_results(n_cw, specs, groups_k, chief, window, n_tile,
             f"instead (identical result, no speed-up).  To use workers, "
             f"register such a material as a module-level function (picklable "
             f"by reference) rather than a lambda.",
-            RuntimeWarning, stacklevel=3)
+            RuntimeWarning, stacklevel=_caller_stacklevel())
         return None
     # Deduplicate the input fields BY IDENTITY: the fan case hands the same
     # post-DOE envelope to every congruence, so this turns K pickles of a
@@ -11620,7 +11641,7 @@ def _multi_parallel_results(n_cw, specs, groups_k, chief, window, n_tile,
         for text, cat in out[k][2]:
             warnings.warn(f"[{specs[k][3]}] {text}",
                           RuntimeWarning if cat == 'RuntimeWarning'
-                          else UserWarning, stacklevel=3)
+                          else UserWarning, stacklevel=_caller_stacklevel())
     return [_MultiPreResult(out[k][0], out[k][1]) for k in range(K)]
 
 
@@ -12184,7 +12205,7 @@ def propagate_traced_carrier_chain_multi(
                 f"({centre[0] * 1e3:.4f}, {centre[1] * 1e3:.4f}) mm, "
                 f"half-extent {half * 1e3:.4f} mm).  Its contribution will be "
                 f"clipped away; raise N_out or move centre_out.",
-                RuntimeWarning, stacklevel=2)
+                RuntimeWarning, stacklevel=_caller_stacklevel())
         chief.append((x_pred, y_pred, L_out, M_out))
 
     def _window(k, n_win):
@@ -12304,7 +12325,7 @@ def propagate_traced_carrier_chain_multi(
             raise MemoryError(msg)
         if on_mem_budget == 'warn':
             import warnings
-            warnings.warn(msg, RuntimeWarning, stacklevel=3)
+            warnings.warn(msg, RuntimeWarning, stacklevel=_caller_stacklevel())
 
     # ---- 'auto' PASS 0: size ONE window from the SHORTEST period over ALL K -
     # An adversarial pass killed the first cut of this, which sized the shared
@@ -12352,7 +12373,7 @@ def propagate_traced_carrier_chain_multi(
                     f"halves the chain runs, {2 * K} -> {K}), or "
                     f"readout_tile=None with on_replica='ignore' for the "
                     f"historical (replica-contaminated) full-grid readout.",
-                    RuntimeWarning, stacklevel=2)
+                    RuntimeWarning, stacklevel=_caller_stacklevel())
                 n_tile = n_safe
         if n_tile != n_probe:
             _mem_check(n_tile)
@@ -12418,7 +12439,7 @@ def propagate_traced_carrier_chain_multi(
                         f"congruences.  (The period is expected to be "
                         f"window-independent, so this path indicates a "
                         f"library bug -- please report it.)",
-                        RuntimeWarning, stacklevel=2)
+                        RuntimeWarning, stacklevel=_caller_stacklevel())
                     n_tile = n_safe
                     restart = True
                     break

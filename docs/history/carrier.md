@@ -1,7 +1,7 @@
 <!-- lumenairy-history-doc
 module: lumenairy/propagators/carrier.py
-ast_sha256: 4414ba3911c5eaa61e8f6cdde00ec9cec2671f40365368e3efa53cf55de845c7
-token_sha256: ef619d188da16a1fa86e05b8f94fc23482d35979bc243a41b052c07f2b45aa72
+ast_sha256: 6ec0c193f027bd6fc28e94c50315601623fbc7ee8cd6406e50cfd736690cbf39
+token_sha256: e7ec80f9c31b500e676398670b8fed92afc956ec43a1fda68cdab0039d49306f
 pre_relocation_lines: 11602
 recorded_by: WP-A17 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
@@ -11,6 +11,8 @@ re_recorded: 2026-09-13 -- WP-A25: replica_fill={'repeat','zero'} on both focus 
 re_recorded: 2026-09-13 -- WP-A25: replica_fill on both focus readouts, faithful-window publication, the replica refusal's two regimes; seven placeholder-free f-string prefixes removed from the new message
 re_recorded: 2026-09-13 -- WP-B4: transport='collins' -- the Collins/ABCD-Fresnel carrier transport evaluated by a separable chirp-Z onto a freely chosen output pitch, its Kelly (2014) sampling guard, the complementary-quadrature selection and the Collins focus readout; the default transport is unchanged
 re_recorded: 2026-09-13 -- VERIFY-WP-B4: transport='collins' -- a chain leg weighs the chirp-Z's output-period condition K3 (it has no on_replica of its own) and takes the transfer-function form wherever the chirp-Z is not representable on the lattice the leg returns; collins_k3 and collins_kernel published per stage
+re_recorded: 2026-09-14 -- Wave-5 item D (CI run 34914295323): DIGEST-SCHEME change, not a code change -- token_fingerprint now feeds an f-string to the digest as ONE STRING record holding its exact source text instead of the running tokenizer's FSTRING_START/FSTRING_MIDDLE/FSTRING_END run, so the recorded value is a property of the file rather than of the interpreter that read it; PEP 701 made CPython 3.12 tokenize f-strings differently from 3.11, these digests were recorded on 3.12+, and all five py3.11 CI shards read a different token_sha256 for byte-identical sources (110 of 123 documents, measured).  The module source is unchanged and ast_sha256 is unchanged.
+re_recorded: 2026-09-14 -- Wave 5 item D (handoff 4.4): the warning chain is swept onto lumenairy.elements._lens_kernels.caller_stacklevel().  Every warnings.warn literal stacklevel and every threaded literal below it is retargeted to the computed level, which walks out to the first frame outside the package, so the attribution no longer depends on how deep the warn site sits.  MEASURED before the sweep (validation/probe_known_reds/probe_carrier_attribution.py): the tilt-inert notice named the caller when propagate_carrier_referenced was called directly and named library source when the identical site was reached through carrier_referenced_focus_readout -- 2 of 4 emissions misattributed, 0 of 4 after.  No physics changed.
 -->
 
 # Version history -- `lumenairy/propagators/carrier.py`

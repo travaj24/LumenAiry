@@ -19,6 +19,8 @@ from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Sequence,
 
 import numpy as np
 
+from ..elements._lens_kernels import caller_stacklevel as _caller_stacklevel
+
 if TYPE_CHECKING:
     # v5.0.1 (audit P1-NEW-V4-1): TYPE_CHECKING guard for forward references
     # to ``Source`` and ``PropagationResult`` in ``evaluate(...)``.  Both
@@ -409,7 +411,7 @@ def _warn_system_resample_crop(E, dx_new, dx_target, N_out, kernel_name):
         f"retained window.  The beam has spread past the chain's grid.  "
         f"Use a larger N, a coarser chain pitch, or method='asm' (which "
         f"keeps the pitch and so cannot crop).",
-        RuntimeWarning, stacklevel=3)
+        RuntimeWarning, stacklevel=_caller_stacklevel())
 
 
 def _warn_system_fresnel_window(E_before, E_after, dx_target, wavelength, z):
@@ -487,7 +489,7 @@ def _warn_system_fresnel_window(E_before, E_after, dx_target, wavelength, z):
         f"were never evaluated.  Use a larger N, a coarser chain pitch, or "
         f"method='asm' (which keeps the pitch and band-limits instead of "
         f"windowing).",
-        RuntimeWarning, stacklevel=3)
+        RuntimeWarning, stacklevel=_caller_stacklevel())
 
 
 def propagate_through_system(E_in: np.ndarray,
@@ -1129,7 +1131,7 @@ def propagate_through_system(E_in: np.ndarray,
                     f"'tilt_y': ..., 'method': ...}} instead: it validates "
                     f"'method' and, for an untilted leg, honours it.  Drop "
                     f"the 'method' key to silence this warning.",
-                    UserWarning, stacklevel=2)
+                    UserWarning, stacklevel=_caller_stacklevel())
             E = angular_spectrum_propagate_tilted(
                 E, elem['z'], wavelength, current_dx, current_dy,
                 tilt_x=elem.get('tilt_x', 0),
@@ -1289,14 +1291,14 @@ def evaluate(
                 "but currently does not resample the exit-plane field.  "
                 f"Got output_grid={target_shape!r}, source.E.shape="
                 f"{out_shape!r}.",
-                RuntimeWarning, stacklevel=2,
+                RuntimeWarning, stacklevel=_caller_stacklevel(),
             )
     if output_dx is not None and float(output_dx) != float(source.dx):
         warnings.warn(
             "lumenairy.propagators.system.evaluate: output_dx resampling is "
             "reserved for a future release; the kwarg is accepted but "
             "currently does not resample the exit-plane field.",
-            RuntimeWarning, stacklevel=2,
+            RuntimeWarning, stacklevel=_caller_stacklevel(),
         )
 
     # Build the element list from the prescription.  Accept both
@@ -1427,7 +1429,7 @@ def _prescription_to_elements(
                     f"its phase is DROPPED -- the result omits this element.  "
                     f"Use propagate_through_system with a 'mask' element "
                     f"carrying the DOE phase for an exact result.",
-                    stacklevel=2)
+                    stacklevel=_caller_stacklevel())
                 continue
             else:
                 raise ValueError(
