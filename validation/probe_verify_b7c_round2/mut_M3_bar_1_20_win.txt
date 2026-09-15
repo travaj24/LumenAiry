@@ -1,0 +1,5 @@
+.......s.s..................                                             [100%]
+=========================== short test summary info ===========================
+SKIPPED [1] tests\unit\test_audit2609_b7c2_pixel_halving_arbiter.py:435: this build returns the pinned plane; its continuity reads 1.1851, inside the band
+SKIPPED [1] tests\unit\test_audit2609_b7c2_pixel_halving_arbiter.py:545: no plane of this ladder reads below the loss arm on this build
+26 passed, 2 skipped in 57.81s

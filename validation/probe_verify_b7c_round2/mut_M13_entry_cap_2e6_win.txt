@@ -1,0 +1,8 @@
+........s....F..............                                             [100%]
+================================== FAILURES ===================================
+E   Failed: DID NOT RAISE <class 'RuntimeError'>
+C:\tmp\lum_vmb2_mut\tests\unit\test_verify_b7c_multibranch.py:281: Failed: DID NOT RAISE <class 'RuntimeError'>
+=========================== short test summary info ===========================
+SKIPPED [1] tests\unit\test_audit2609_b7c2_pixel_halving_arbiter.py:475: the refined grid is past the arbiter entry cap on this build, so the reading is not measured there
+FAILED tests/unit/test_verify_b7c_multibranch.py::test_vb7c_the_refusal_follows_the_pixel_not_the_field
+1 failed, 26 passed, 1 skipped in 148.60s (0:02:28)

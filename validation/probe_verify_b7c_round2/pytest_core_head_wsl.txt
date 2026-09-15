@@ -1,0 +1,11 @@
+..................................                                       [100%]
+============================= slowest 8 durations ==============================
+27.05s call     tests/unit/test_verify_b7c_round2.py::test_vb7c2_the_bar_is_derived_against_the_field_on_both_sides
+7.81s call     tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py::test_b7c2_the_decision_survives_halving_the_output_pixel
+6.62s call     tests/unit/test_verify_b7c_multibranch.py::test_vb7c_zeta_linear_range_is_reported_and_never_applied
+6.51s call     tests/unit/test_verify_b7c_multibranch.py::test_vb7c_the_refusal_follows_the_pixel_not_the_field
+5.91s call     tests/unit/test_verify_b7c_multibranch.py::test_vb7c_an_accepted_field_reads_above_the_pinned_accepted_ceiling
+5.47s call     tests/unit/test_verify_b7c_multibranch.py::test_vb7c_the_zeta_bar_does_not_order_the_energy_error
+4.80s call     tests/unit/test_verify_b7c_round2.py::test_vb7c2_the_reading_is_of_the_returned_field_not_of_the_branch_sum
+4.42s call     tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py::test_b7c2_the_band_is_two_sided_and_the_loss_arm_only_reports
+34 passed in 102.12s (0:01:42)

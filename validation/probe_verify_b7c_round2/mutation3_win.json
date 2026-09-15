@@ -1,0 +1,21 @@
+[
+ {
+  "returncode": 1,
+  "tail": [
+   "1 failed, 26 passed, 1 skipped in 148.60s (0:02:28)"
+  ],
+  "failed_ids": [
+   "test_vb7c_the_refusal_follows_the_pixel_not_the_field"
+  ],
+  "nbytes": 729,
+  "id": "M13_entry_cap_2e6",
+  "doc": "M13 -- the entry cap is lowered to 2e6 entries, which keeps every",
+  "files": [
+   "tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py",
+   "tests/unit/test_verify_b7c_multibranch.py",
+   "tests/unit/test_audit2609_b7c_multibranch_envelope.py"
+  ],
+  "seconds": 189.6,
+  "caught": true
+ }
+]

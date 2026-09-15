@@ -1,0 +1,10 @@
+......                                                                   [100%]
+============================ slowest 10 durations =============================
+44.05s call     tests/unit/test_verify_b7c_round2.py::test_vb7c2_the_bar_is_derived_against_the_field_on_both_sides
+5.25s call     tests/unit/test_verify_b7c_round2.py::test_vb7c2_the_reading_is_of_the_returned_field_not_of_the_branch_sum
+2.13s call     tests/unit/test_verify_b7c_round2.py::test_vb7c2_the_entry_cap_survives_the_refinement_d2_is_about
+1.14s call     tests/unit/test_verify_b7c_round2.py::test_vb7c2_a_fallback_plane_is_arbitrated_on_the_field_it_returns
+0.76s call     tests/unit/test_verify_b7c_round2.py::test_vb7c2_an_unmeasurable_reading_is_never_reported_as_ok
+
+(5 durations < 0.005s hidden.  Use -vv to show these durations.)
+6 passed in 53.99s

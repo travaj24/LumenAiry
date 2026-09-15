@@ -1,0 +1,31 @@
+{"id": "M1_alias_bypasses_seam", "caught": true, "tail": ["14 failed, 39 passed in 362.44s (0:06:02)"], "failed_ids": ["test_a4_higher_catastrophe_routes_finite_named", "test_b7c2_a_converged_render_reads_one_and_a_blown_up_one_reads_four", "test_b7c2_a_plane_inside_the_power_ratio_bar_is_refused_on_continuity", "test_b7c2_past_the_entry_cap_the_reading_says_so_and_the_field_returns", "test_b7c2_the_band_is_two_sided_and_the_loss_arm_only_reports", "test_b7c2_the_branch_sum_is_reached_through_exactly_one_seam", "test_b7c2_the_continuity_reading_and_its_decision_reach_the_diagnostics", "test_b7c2_the_decision_survives_halving_the_output_pixel", "test_cusp_fallbacks_finite", "test_uniform_routes_cusp_to_pearcey", "test_vb7c_an_accepted_field_reads_above_the_pinned_accepted_ceiling", "test_vb7c_the_refusal_follows_the_pixel_not_the_field"], "seconds": 379.8}
+{"id": "M2_reads_branch_sum", "caught": false, "tail": ["28 passed in 70.56s (0:01:10)"], "failed_ids": [], "seconds": 86.2}
+{"id": "M3_bar_1_20", "caught": false, "tail": ["26 passed, 2 skipped in 57.81s"], "failed_ids": [], "seconds": 67.0}
+Traceback (most recent call last):
+  File "C:\tmp\lum_vmb2\validation\probe_verify_b7c_round2\vmutate.py", line 229, in <module>
+    main()
+    ~~~~^^
+  File "C:\tmp\lum_vmb2\validation\probe_verify_b7c_round2\vmutate.py", line 199, in main
+    restore()
+    ~~~~~~~^^
+  File "C:\tmp\lum_vmb2\validation\probe_verify_b7c_round2\vmutate.py", line 167, in restore
+    subprocess.run(['git', '-C', MUT_TREE, 'checkout', '--', 'lumenairy/'],
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                   check=True, capture_output=True)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\subprocess.py", line 578, in run
+    raise CalledProcessError(retcode, process.args,
+                             output=stdout, stderr=stderr)
+subprocess.CalledProcessError: Command '['git', '-C', 'C:\\tmp\\lum_vmb2_mut', 'checkout', '--', 'lumenairy/']' returned non-zero exit status 128.
+{"id": "M4_reading_at_N_dx", "caught": true, "tail": ["4 failed, 22 passed, 2 skipped in 74.74s (0:01:14)"], "failed_ids": ["test_b7c2_a_converged_render_reads_one_and_a_blown_up_one_reads_four", "test_b7c2_the_decision_survives_halving_the_output_pixel", "test_vb7c_an_accepted_field_reads_above_the_pinned_accepted_ceiling", "test_vb7c_the_refusal_follows_the_pixel_not_the_field"], "seconds": 94.3}
+{"id": "M5_loss_arm_refuses", "caught": true, "tail": ["1 failed, 27 passed in 95.69s (0:01:35)"], "failed_ids": ["test_b7c2_the_band_is_two_sided_and_the_loss_arm_only_reports"], "seconds": 111.5}
+{"id": "M6_band_asymmetric", "caught": true, "tail": ["      comparison failed", "      comparison failed", "2 failed, 26 passed in 91.23s (0:01:31)"], "failed_ids": ["test_b7c2_the_band_is_two_sided_and_the_loss_arm_only_reports", "test_b7c_the_refusal_band_is_coupled_to_the_constants_it_was_derived_on"], "seconds": 104.3}
+{"id": "M7_entry_cap_1e6", "caught": true, "tail": ["6 failed, 20 passed, 2 skipped in 62.91s (0:01:02)"], "failed_ids": ["test_b7c2_a_converged_render_reads_one_and_a_blown_up_one_reads_four", "test_b7c2_a_plane_inside_the_power_ratio_bar_is_refused_on_continuity", "test_b7c2_past_the_entry_cap_the_reading_says_so_and_the_field_returns", "test_b7c2_the_continuity_reading_and_its_decision_reach_the_diagnostics", "test_vb7c_an_accepted_field_reads_above_the_pinned_accepted_ceiling", "test_vb7c_the_refusal_follows_the_pixel_not_the_field"], "seconds": 80.4}
+{"id": "M8_arbiter_not_requested", "caught": true, "tail": ["9 failed, 19 passed in 44.33s"], "failed_ids": ["test_b7c2_a_converged_render_reads_one_and_a_blown_up_one_reads_four", "test_b7c2_a_plane_inside_the_power_ratio_bar_is_refused_on_continuity", "test_b7c2_past_the_entry_cap_the_reading_says_so_and_the_field_returns", "test_b7c2_the_band_is_two_sided_and_the_loss_arm_only_reports", "test_b7c2_the_branch_sum_is_reached_through_exactly_one_seam", "test_b7c2_the_continuity_reading_and_its_decision_reach_the_diagnostics", "test_b7c2_the_decision_survives_halving_the_output_pixel", "test_vb7c_an_accepted_field_reads_above_the_pinned_accepted_ceiling", "test_vb7c_the_refusal_follows_the_pixel_not_the_field"], "seconds": 55.7}
+{"id": "M9_ratio_inverted", "caught": true, "tail": ["      comparison failed", "5 failed, 21 passed, 2 skipped in 52.35s"], "failed_ids": ["test_b7c2_a_converged_render_reads_one_and_a_blown_up_one_reads_four", "test_b7c2_the_continuity_reading_and_its_decision_reach_the_diagnostics", "test_b7c2_the_decision_survives_halving_the_output_pixel", "test_vb7c_an_accepted_field_reads_above_the_pinned_accepted_ceiling", "test_vb7c_the_refusal_follows_the_pixel_not_the_field"], "seconds": 62.5}
+{"id": "M10_fallback_not_arbitrated", "caught": true, "tail": ["2 failed, 26 passed in 76.09s (0:01:16)"], "failed_ids": ["test_b7c2_the_band_is_two_sided_and_the_loss_arm_only_reports", "test_vb7c_an_accepted_field_reads_above_the_pinned_accepted_ceiling"], "seconds": 98.9}
+{"id": "M11_unmeasured_becomes_ok", "caught": true, "tail": ["1 failed, 27 passed in 54.86s"], "failed_ids": ["test_b7c2_past_the_entry_cap_the_reading_says_so_and_the_field_returns"], "seconds": 66.6}
+{"id": "M12_power_tripwire_off", "caught": true, "tail": ["1 failed, 20 passed, 7 skipped in 57.86s"], "failed_ids": ["test_b7c_the_refusal_band_is_coupled_to_the_constants_it_was_derived_on"], "seconds": 67.3}
+DONE mutation2_win.json
+{"id": "M13_entry_cap_2e6", "caught": true, "tail": ["1 failed, 26 passed, 1 skipped in 148.60s (0:02:28)"], "failed_ids": ["test_vb7c_the_refusal_follows_the_pixel_not_the_field"], "seconds": 189.6}
+DONE mutation3_win.json
