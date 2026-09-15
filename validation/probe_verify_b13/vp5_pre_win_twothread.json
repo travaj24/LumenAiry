@@ -1,0 +1,14 @@
+{
+ "a_all_match_serial": true,
+ "a_count": 6,
+ "b_all_match_serial": true,
+ "b_count": 6,
+ "exceptions": {},
+ "final_inflight": null,
+ "hung_threads": [],
+ "lumenairy": "C:\\tmp\\lum_vpool_pre\\lumenairy\\__init__.py",
+ "pool_workers": null,
+ "python": "3.14.6",
+ "scenario": "twothread",
+ "seconds": 8.107
+}

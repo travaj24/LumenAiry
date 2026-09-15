@@ -1,0 +1,9 @@
+{
+ "constructions": 1,
+ "exceptions": 100,
+ "final_inflight": 0,
+ "lumenairy": "C:\\tmp\\lum_vpool\\lumenairy\\__init__.py",
+ "python": "3.14.6",
+ "reps": 100,
+ "scenario": "leak"
+}

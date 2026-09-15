@@ -1,0 +1,8 @@
+{"event": "import", "lumenairy": "/mnt/c/tmp/lum_vpool/lumenairy/__init__.py", "mode": "sigign", "pid": 37, "python": "3.12.3", "t": 0.7309, "version": "5.47.0"}
+{"event": "gate", "resolved_workers": 4, "t": 0.7356, "unguarded_main": null}
+{"event": "reference_enter", "t": 0.7357}
+{"event": "reference_exit", "sha": "3a4ecdf3ffddca82de6f8c427483e7cf1a20505c3bcea5b1654c2dd724cbe0b3", "t": 5.3085}
+{"event": "dispatch_enter", "t": 5.3104}
+{"event": "workers_killed", "feeder_blocked": false, "n": 1, "t": 7.2087}
+{"N": 256, "abandoned": 1, "call_seconds": 2.458, "event": "dispatch_returned", "feeder_was_blocked_in_send_bytes": false, "fit": "spline", "identical": true, "inflight": 0, "killed_pids": [41], "lumenairy": "/mnt/c/tmp/lum_vpool/lumenairy/__init__.py", "max_abs_delta": 0.0, "mode": "sigign", "pool_engaged": true, "pool_getter_calls": [4], "pool_is_none_after": true, "python": "3.12.3", "ref_sha": "3a4ecdf3ffddca82de6f8c427483e7cf1a20505c3bcea5b1654c2dd724cbe0b3", "rs": 2, "sha": "3a4ecdf3ffddca82de6f8c427483e7cf1a20505c3bcea5b1654c2dd724cbe0b3", "shutdown_timeouts": 0, "t": 7.7701, "workers": 4}
+{"event": "exiting", "t": 7.7708}

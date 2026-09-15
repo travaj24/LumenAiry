@@ -1,0 +1,38 @@
+{
+ "lumenairy": "C:\\tmp\\lum_vpool\\lumenairy\\__init__.py",
+ "mode": "memalloc",
+ "python": "3.14.6",
+ "reads": [
+  {
+   "available_gb": 87.03,
+   "clamp_answer": 6,
+   "tag": "before"
+  },
+  {
+   "available_gb": 78.81,
+   "clamp_answer": 5,
+   "tag": "alloc_8gb"
+  },
+  {
+   "available_gb": 69.58,
+   "clamp_answer": 4,
+   "tag": "alloc_16gb"
+  },
+  {
+   "available_gb": 61.87,
+   "clamp_answer": 4,
+   "tag": "alloc_24gb"
+  },
+  {
+   "available_gb": 61.88,
+   "clamp_answer": 4,
+   "tag": "alloc_24gb"
+  },
+  {
+   "available_gb": 86.09,
+   "clamp_answer": 5,
+   "tag": "after_free"
+  }
+ ],
+ "requested_gb": 24.0
+}

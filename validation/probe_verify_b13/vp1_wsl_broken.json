@@ -1,0 +1,30 @@
+{
+ "arm": "broken",
+ "broken": {
+  "blocked": true,
+  "blocked_for": 20.0,
+  "executor_broken_flag": true,
+  "join_saw_broken_true": true,
+  "manager_entered_join": true,
+  "shutdown_wait_false_cancel_true_seconds": 20.004
+ },
+ "process_py": "/usr/lib/python3.12/concurrent/futures/process.py",
+ "python": "3.12.3",
+ "source": {
+  "join_internals_has_join_thread": true,
+  "join_internals_has_p_join": true,
+  "join_internals_line": 578,
+  "join_thread_has_timeout": false,
+  "p_join_has_timeout": false,
+  "shutdown_first_stmt": "with self._shutdown_lock:",
+  "shutdown_line": 864,
+  "shutdown_takes_lock_first": true,
+  "terminate_broken_body": [
+   "with self.shutdown_lock:",
+   "self._terminate_broken(cause)"
+  ],
+  "terminate_broken_calls_join_internals": true,
+  "terminate_broken_holds_lock": true,
+  "terminate_broken_line": 530
+ }
+}

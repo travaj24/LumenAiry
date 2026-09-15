@@ -1,0 +1,341 @@
+{
+ "bar": 120.0,
+ "idle_worker_mb_max": 75.7,
+ "idle_worker_mb_mean": 61.7,
+ "lumenairy": "/mnt/c/tmp/lum_vpool/lumenairy/__init__.py",
+ "margin_x": 53.6,
+ "mode": "ladder",
+ "post_chunk_worker_mb_max": 75.7,
+ "post_chunk_worker_mb_mean": 61.6,
+ "python": "3.12.3",
+ "rows": [
+  {
+   "rep": 0,
+   "skipped": true,
+   "workers": 1
+  },
+  {
+   "rep": 1,
+   "skipped": true,
+   "workers": 1
+  },
+  {
+   "rep": 2,
+   "skipped": true,
+   "workers": 1
+  },
+  {
+   "close_seconds": 0.381,
+   "pool_workers": 2,
+   "rep": 0,
+   "rss_after_chunk_mb": [
+    75.7,
+    38.7
+   ],
+   "rss_idle_mb": [
+    75.7,
+    38.7
+   ],
+   "timeouts": 0,
+   "workers": 2
+  },
+  {
+   "close_seconds": 0.246,
+   "pool_workers": 2,
+   "rep": 1,
+   "rss_after_chunk_mb": [
+    73.7,
+    73.7
+   ],
+   "rss_idle_mb": [
+    73.7,
+    73.7
+   ],
+   "timeouts": 0,
+   "workers": 2
+  },
+  {
+   "close_seconds": 0.638,
+   "pool_workers": 2,
+   "rep": 2,
+   "rss_after_chunk_mb": [
+    73.7,
+    73.7
+   ],
+   "rss_idle_mb": [
+    73.7,
+    73.7
+   ],
+   "timeouts": 0,
+   "workers": 2
+  },
+  {
+   "close_seconds": 0.38,
+   "pool_workers": 4,
+   "rep": 0,
+   "rss_after_chunk_mb": [
+    38.6,
+    38.7,
+    74.0,
+    35.2
+   ],
+   "rss_idle_mb": [
+    38.7,
+    38.7,
+    74.0,
+    38.7
+   ],
+   "timeouts": 0,
+   "workers": 4
+  },
+  {
+   "close_seconds": 1.098,
+   "pool_workers": 4,
+   "rep": 1,
+   "rss_after_chunk_mb": [
+    73.3,
+    74.5,
+    73.3,
+    73.3
+   ],
+   "rss_idle_mb": [
+    73.3,
+    74.5,
+    73.3,
+    73.3
+   ],
+   "timeouts": 0,
+   "workers": 4
+  },
+  {
+   "close_seconds": 0.891,
+   "pool_workers": 4,
+   "rep": 2,
+   "rss_after_chunk_mb": [
+    74.5,
+    73.3,
+    73.3,
+    73.3
+   ],
+   "rss_idle_mb": [
+    74.5,
+    73.3,
+    73.3,
+    73.3
+   ],
+   "timeouts": 0,
+   "workers": 4
+  },
+  {
+   "close_seconds": 1.037,
+   "pool_workers": 8,
+   "rep": 0,
+   "rss_after_chunk_mb": [
+    75.4,
+    38.7,
+    75.1,
+    73.1,
+    73.1,
+    73.1,
+    73.1,
+    38.7
+   ],
+   "rss_idle_mb": [
+    75.4,
+    38.7,
+    75.1,
+    73.1,
+    73.1,
+    73.1,
+    73.1,
+    38.7
+   ],
+   "timeouts": 0,
+   "workers": 8
+  },
+  {
+   "close_seconds": 0.939,
+   "pool_workers": 8,
+   "rep": 1,
+   "rss_after_chunk_mb": [
+    38.7,
+    73.9,
+    73.1,
+    73.9,
+    38.7,
+    75.1,
+    38.7,
+    73.1
+   ],
+   "rss_idle_mb": [
+    38.7,
+    73.9,
+    73.1,
+    73.9,
+    38.7,
+    75.1,
+    38.7,
+    73.1
+   ],
+   "timeouts": 0,
+   "workers": 8
+  },
+  {
+   "close_seconds": 2.24,
+   "pool_workers": 8,
+   "rep": 2,
+   "rss_after_chunk_mb": [
+    28.5,
+    28.4,
+    73.9,
+    28.4,
+    75.4,
+    75.5,
+    28.5,
+    74.6
+   ],
+   "rss_idle_mb": [
+    28.5,
+    28.4,
+    73.9,
+    28.4,
+    75.4,
+    75.5,
+    28.5,
+    74.6
+   ],
+   "timeouts": 0,
+   "workers": 8
+  },
+  {
+   "close_seconds": 1.008,
+   "pool_workers": 16,
+   "rep": 0,
+   "rss_after_chunk_mb": [
+    73.8,
+    73.1,
+    73.1,
+    75.5,
+    73.1,
+    73.1,
+    73.1,
+    38.7,
+    38.7,
+    75.5,
+    38.7,
+    75.5,
+    38.7,
+    73.1,
+    38.7,
+    73.1
+   ],
+   "rss_idle_mb": [
+    73.8,
+    73.1,
+    73.1,
+    75.5,
+    73.1,
+    73.1,
+    73.1,
+    38.7,
+    38.7,
+    75.5,
+    38.7,
+    75.5,
+    38.7,
+    73.1,
+    38.7,
+    73.1
+   ],
+   "timeouts": 0,
+   "workers": 16
+  },
+  {
+   "close_seconds": 1.032,
+   "pool_workers": 16,
+   "rep": 1,
+   "rss_after_chunk_mb": [
+    75.5,
+    75.5,
+    73.1,
+    73.8,
+    38.7,
+    73.8,
+    38.7,
+    73.1,
+    38.7,
+    38.7,
+    73.1,
+    38.7,
+    38.7,
+    73.1,
+    38.7,
+    38.7
+   ],
+   "rss_idle_mb": [
+    75.5,
+    75.5,
+    73.1,
+    73.8,
+    38.7,
+    73.8,
+    38.7,
+    73.1,
+    38.7,
+    38.7,
+    73.1,
+    38.7,
+    38.7,
+    73.1,
+    38.7,
+    38.7
+   ],
+   "timeouts": 0,
+   "workers": 16
+  },
+  {
+   "close_seconds": 1.834,
+   "pool_workers": 16,
+   "rep": 2,
+   "rss_after_chunk_mb": [
+    75.5,
+    73.1,
+    75.5,
+    73.1,
+    73.1,
+    73.1,
+    38.7,
+    38.7,
+    38.7,
+    73.1,
+    73.1,
+    73.1,
+    73.1,
+    73.1,
+    73.8,
+    38.7
+   ],
+   "rss_idle_mb": [
+    75.5,
+    73.1,
+    75.5,
+    73.1,
+    73.1,
+    73.1,
+    38.7,
+    38.7,
+    38.7,
+    73.1,
+    73.1,
+    73.1,
+    73.1,
+    73.1,
+    73.8,
+    38.7
+   ],
+   "timeouts": 0,
+   "workers": 16
+  }
+ ],
+ "worst_close_seconds": 2.24
+}

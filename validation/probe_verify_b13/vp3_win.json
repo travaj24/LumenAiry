@@ -1,0 +1,211 @@
+{
+ "pid": 61804,
+ "python": "3.14.6",
+ "pythonpath": "C:/tmp/lum_vpool",
+ "rungs": [
+  {
+   "answer_seconds": [
+    0.136
+   ],
+   "distinct_pids": 1,
+   "shutdown_included": false,
+   "stage": "spawn",
+   "total_seconds": 0.136,
+   "worker_inner_seconds": [],
+   "workers": 1
+  },
+  {
+   "answer_seconds": [
+    0.142,
+    0.142
+   ],
+   "distinct_pids": 1,
+   "shutdown_included": false,
+   "stage": "spawn",
+   "total_seconds": 0.142,
+   "worker_inner_seconds": [],
+   "workers": 2
+  },
+  {
+   "answer_seconds": [
+    0.152,
+    0.152,
+    0.152,
+    0.152
+   ],
+   "distinct_pids": 1,
+   "shutdown_included": false,
+   "stage": "spawn",
+   "total_seconds": 0.152,
+   "worker_inner_seconds": [],
+   "workers": 4
+  },
+  {
+   "answer_seconds": [
+    0.168,
+    0.168,
+    0.168,
+    0.168,
+    0.168,
+    0.168,
+    0.168,
+    0.168
+   ],
+   "distinct_pids": 1,
+   "shutdown_included": false,
+   "stage": "spawn",
+   "total_seconds": 0.168,
+   "worker_inner_seconds": [],
+   "workers": 8
+  },
+  {
+   "answer_seconds": [
+    0.397
+   ],
+   "distinct_pids": 1,
+   "shutdown_included": false,
+   "stage": "import",
+   "total_seconds": 0.397,
+   "worker_inner_seconds": [
+    0.253
+   ],
+   "workers": 1
+  },
+  {
+   "answer_seconds": [
+    0.399,
+    0.418
+   ],
+   "distinct_pids": 2,
+   "shutdown_included": false,
+   "stage": "import",
+   "total_seconds": 0.418,
+   "worker_inner_seconds": [
+    0.266,
+    0.272
+   ],
+   "workers": 2
+  },
+  {
+   "answer_seconds": [
+    0.463,
+    0.477,
+    0.477,
+    0.489
+   ],
+   "distinct_pids": 4,
+   "shutdown_included": false,
+   "stage": "import",
+   "total_seconds": 0.489,
+   "worker_inner_seconds": [
+    0.305,
+    0.31,
+    0.315,
+    0.315
+   ],
+   "workers": 4
+  },
+  {
+   "answer_seconds": [
+    0.508,
+    0.508,
+    0.514,
+    0.518,
+    0.53,
+    0.53,
+    0.535,
+    0.538
+   ],
+   "distinct_pids": 8,
+   "shutdown_included": false,
+   "stage": "import",
+   "total_seconds": 0.538,
+   "worker_inner_seconds": [
+    0.303,
+    0.307,
+    0.31,
+    0.317,
+    0.321,
+    0.322,
+    0.326,
+    0.326
+   ],
+   "workers": 8
+  },
+  {
+   "answer_seconds": [
+    0.966
+   ],
+   "distinct_pids": 1,
+   "shutdown_included": false,
+   "stage": "chunk",
+   "total_seconds": 0.966,
+   "worker_inner_seconds": [
+    0.833
+   ],
+   "workers": 1
+  },
+  {
+   "answer_seconds": [
+    1.087,
+    1.105
+   ],
+   "distinct_pids": 2,
+   "shutdown_included": false,
+   "stage": "chunk",
+   "total_seconds": 1.105,
+   "worker_inner_seconds": [
+    0.93,
+    0.958
+   ],
+   "workers": 2
+  },
+  {
+   "answer_seconds": [
+    1.261,
+    1.272,
+    1.279,
+    1.283
+   ],
+   "distinct_pids": 4,
+   "shutdown_included": false,
+   "stage": "chunk",
+   "total_seconds": 1.283,
+   "worker_inner_seconds": [
+    1.081,
+    1.103,
+    1.114,
+    1.116
+   ],
+   "workers": 4
+  },
+  {
+   "answer_seconds": [
+    1.333,
+    1.355,
+    1.384,
+    1.384,
+    1.384,
+    1.392,
+    1.393,
+    1.4
+   ],
+   "distinct_pids": 8,
+   "shutdown_included": false,
+   "stage": "chunk",
+   "total_seconds": 1.4,
+   "worker_inner_seconds": [
+    1.132,
+    1.161,
+    1.167,
+    1.17,
+    1.172,
+    1.172,
+    1.188,
+    1.218
+   ],
+   "workers": 8
+  }
+ ],
+ "sys_path0": "C:\\tmp\\lum_vpool\\validation\\probe_verify_b13"
+}

@@ -1,0 +1,68 @@
+{
+ "bar": 120.0,
+ "idle_worker_mb_max": 99.9,
+ "idle_worker_mb_mean": 99.4,
+ "lumenairy": "C:\\tmp\\lum_vpool\\lumenairy\\__init__.py",
+ "margin_x": 424.0,
+ "mode": "ladder",
+ "post_chunk_worker_mb_max": 99.9,
+ "post_chunk_worker_mb_mean": 99.4,
+ "python": "3.14.6",
+ "rows": [
+  {
+   "close_seconds": 0.283,
+   "pool_workers": 8,
+   "rep": 0,
+   "rss_after_chunk_mb": [
+    99.9,
+    99.3,
+    99.0,
+    99.6,
+    99.3,
+    99.2,
+    98.8,
+    99.6
+   ],
+   "rss_idle_mb": [
+    99.9,
+    99.3,
+    99.0,
+    99.6,
+    99.3,
+    99.2,
+    98.8,
+    99.6
+   ],
+   "timeouts": 0,
+   "workers": 8
+  },
+  {
+   "close_seconds": 0.258,
+   "pool_workers": 8,
+   "rep": 1,
+   "rss_after_chunk_mb": [
+    99.7,
+    99.1,
+    99.9,
+    99.7,
+    98.8,
+    98.8,
+    99.7,
+    99.8
+   ],
+   "rss_idle_mb": [
+    99.7,
+    99.1,
+    99.9,
+    99.7,
+    98.8,
+    98.8,
+    99.7,
+    99.8
+   ],
+   "timeouts": 0,
+   "workers": 8
+  }
+ ],
+ "worst_close_seconds": 0.283
+}
