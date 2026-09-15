@@ -324,25 +324,37 @@ def test_the_numba_gate_monkeypatch_still_reaches_the_kernel():
 
     assert lenses._NUMBA_AVAILABLE is _lens_kernels._NUMBA_AVAILABLE
     saved = _lens_kernels._NUMBA_AVAILABLE
+    saved_numba = _lens_kernels._numba
     try:
         lenses._NUMBA_AVAILABLE = False
+        lenses._numba = None
         assert _lens_kernels._NUMBA_AVAILABLE is False, (
             "a write through the lenses facade no longer reaches the kernel's "
             "own global -- every test that forces the pure-NumPy arm by "
             "setting lenses._NUMBA_AVAILABLE = False is now silently "
             "exercising the numba arm instead")
         assert lenses._NUMBA_AVAILABLE is False
+        # ... and the loader, which is what the sag kernel actually asks,
+        # honours it.  This is the half that makes the title true: the
+        # forward reaching the leaf's global would be worth nothing if the
+        # code read the flag from somewhere else.  A boolean about the gate,
+        # not a number a build is entitled to move.
+        assert _lens_kernels._load_numba() is False, (
+            "_load_numba ignored the gate written through the facade")
     finally:
         _lens_kernels._NUMBA_AVAILABLE = saved
+        _lens_kernels._numba = saved_numba
         lenses.__dict__.pop("_NUMBA_AVAILABLE", None)
+        lenses.__dict__.pop("_numba", None)
     assert lenses._NUMBA_AVAILABLE is saved
+    assert lenses._numba is saved_numba
 
 
 def test_the_lazy_backend_slots_forward_live_and_not_a_stale_none():
     """``cp`` and ``_ne`` are populated on FIRST USE, so a plain
     ``from ._lens_kernels import cp`` in ``lenses`` would bind whatever the slot
-    held at import time (``None``) forever.  The PEP 562 forward re-reads the
-    leaf on every attribute access; this test proves it by moving the leaf's
+    held at import time (``None``) forever.  The facade's module type re-reads
+    the leaf on every attribute access; this test proves it by moving the leaf's
     slot and watching the facade follow."""
     from lumenairy.elements import _lens_kernels, lenses
 
