@@ -291,6 +291,54 @@ _S1_FIT_RESIDUAL_MAX = 2.5e-3
 # the bar is a chart 2.83 % narrow.
 _NA_MEAN_MIN_FRACTION = 0.1
 
+
+def _measured_input_na(E_in, wavelength, dx, dy, N):
+    """The driver's input-side NA sizing statistic, ``(na_meas, na_mean)``.
+
+    Measured from the second moment of the field's angular spectrum (one
+    FFT; direction cosine ``v = wavelength * f`` in the paraxial regime).
+    The chart is a box ABOUT ``v = 0``, so what it must reach is the MEAN
+    launch direction plus the SPREAD about it -- not the second moment about
+    zero, which for a uniform tilt ``theta`` is ``theta`` and triples to
+    ``3 theta``.  A tilt is a change of reference direction, not an angular
+    spread: measured on the f = 13.3 mm N-SF11 chart at tilt 2x the lens NA,
+    the moment-about-zero rule sizes ``na_proxy`` 0.368 where 0.158 covers the
+    field, and the order-4 entrance-coordinate fit over that inflated box
+    degrades far enough to disengage the S6 saddle (VERIFY-B1 F2).  Below
+    ``_NA_MEAN_MIN_FRACTION`` the first moment is round-off, not a launch
+    direction, and the sizing is left EXACTLY as it was.
+
+    This is the ONE implementation of the statistic (v5.47.0 CI hardening):
+    :func:`apply_real_lens_maslov` calls it, and the gates that pin the chart
+    sizing call it too, so the number a gate compares against is the number
+    the driver used, bit for bit, on every kernel.  Returns ``(0.0, 0.0)``
+    on a field with no energy.
+    """
+    _F = np.fft.fft2(E_in)
+    _P = np.abs(_F) ** 2
+    del _F
+    _fx = np.fft.fftfreq(N, d=dx)
+    _fy = np.fft.fftfreq(N, d=dy)   # v5.20: anamorphic y-axis pitch
+    _FX, _FY = np.meshgrid(_fx, _fy, indexing='xy')
+    _Ptot = float(_P.sum())
+    na_meas = 0.0
+    na_mean = 0.0
+    if _Ptot > 0.0:
+        _v2 = (wavelength ** 2) * (_FX ** 2 + _FY ** 2)
+        _rms = float(np.sqrt(float((_v2 * _P).sum()) / _Ptot))
+        _mx = (wavelength * float((_FX * _P).sum()) / _Ptot)
+        _my = (wavelength * float((_FY * _P).sum()) / _Ptot)
+        na_mean = float(np.hypot(_mx, _my))
+        if na_mean > _NA_MEAN_MIN_FRACTION * _rms:
+            _spread = float(np.sqrt(
+                max(_rms * _rms - na_mean * na_mean, 0.0)))
+            na_meas = na_mean + 3.0 * _spread
+        else:
+            na_meas = 3.0 * _rms   # ~3-sigma coverage of the spectrum
+        del _v2
+    del _P, _FX, _FY, _fx, _fy
+    return na_meas, na_mean
+
 # S6 A/B seam, in the style of ``_QUAD_FACTORIZE`` above.  ``None`` (default)
 # is the decision described at ``_SADDLE_FLAT_INPUT_NA`` and
 # ``_K1_FIT_RESIDUAL_MAX``; ``False`` always solves ``grad_v2 OPD = 0`` -- the
@@ -2488,39 +2536,13 @@ def apply_real_lens_maslov(
     _na_meas = 0.0
     _na_mean = 0.0
     if not collimated_input:
-        _F = np.fft.fft2(E_in)
-        _P = np.abs(_F) ** 2
-        del _F
-        _fx = np.fft.fftfreq(N, d=dx)
-        _fy = np.fft.fftfreq(N, d=dy)   # v5.20: anamorphic y-axis pitch
-        _FX, _FY = np.meshgrid(_fx, _fy, indexing='xy')
-        _Ptot = float(_P.sum())
-        if _Ptot > 0.0:
-            _v2 = (wavelength ** 2) * (_FX ** 2 + _FY ** 2)
-            _rms = float(np.sqrt(float((_v2 * _P).sum()) / _Ptot))
-            # The chart is a box ABOUT v = 0, so what it must reach is the
-            # MEAN launch direction plus the SPREAD about it -- not the second
-            # moment about zero, which for a uniform tilt theta is theta and
-            # triples to 3 theta below.  A tilt is a change of reference
-            # direction, not an angular spread: measured on the f = 13.3 mm
-            # N-SF11 chart at tilt 2x the lens NA, the moment-about-zero rule
-            # sizes na_proxy 0.368 where 0.158 covers the field, and the
-            # order-4 entrance-coordinate fit over that inflated box degrades
-            # far enough to disengage the S6 saddle (VERIFY-B1 F2).
-            _mx = (wavelength * float((_FX * _P).sum()) / _Ptot)
-            _my = (wavelength * float((_FY * _P).sum()) / _Ptot)
-            _na_mean = float(np.hypot(_mx, _my))
-            # Below the bar the first moment is round-off, not a launch
-            # direction, and the sizing is left EXACTLY as it was -- see
-            # ``_NA_MEAN_MIN_FRACTION``.
-            if _na_mean > _NA_MEAN_MIN_FRACTION * _rms:
-                _spread = float(np.sqrt(
-                    max(_rms * _rms - _na_mean * _na_mean, 0.0)))
-                _na_meas = _na_mean + 3.0 * _spread
-            else:
-                _na_meas = 3.0 * _rms   # ~3-sigma coverage of the spectrum
-            del _v2
-        del _P, _FX, _FY, _fx, _fy
+        # v5.47.0 CI hardening (2026-09-15): the sizing arithmetic lives in
+        # ``_measured_input_na`` so a gate can ask the driver's OWN number
+        # instead of recomputing it -- ``mean + 3 sigma`` is one float64
+        # whose last bit depends on the reduction order, and the chart NA
+        # scales every launch direction, so a test that recomputed it
+        # bit-for-bit held on two kernels and failed on a third.
+        _na_meas, _na_mean = _measured_input_na(E_in, wavelength, dx, dy, N)
     if input_na is not None:
         na_input = float(input_na)
         # Explicit input_na must be a finite, non-negative direction cosine.

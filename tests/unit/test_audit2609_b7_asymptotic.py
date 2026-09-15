@@ -623,8 +623,19 @@ def test_b7_a_uniform_tilt_sizes_the_chart_to_the_tilt_not_to_three_times_it():
         f'{m0:.4f} against mean-plus-spread {m1:.4f}')
     # Full-grid readout: a tilted beam lands ~f*theta off axis, so a window
     # centred on zero would compare two all-zero patches and prove nothing.
+    # RESTATED 2026-09-15 (5.47.0 CI hardening): ``want`` was built from THIS
+    # file's recomputation of ``mean + 3 sigma``, which matched the driver's
+    # float64 bit for bit on two kernels and not on the runner's (a 1-ULP
+    # difference in the NA moves the whole field, as the next test records).
+    # The gate now asks the driver's own statistic, ``_measured_input_na``,
+    # so the bit-equality below holds by construction on every kernel; the
+    # file's own moments still carry the premises above and are checked to
+    # agree with the driver's to a reduction-order tolerance.
+    m1_lib, mean_lib = LM._measured_input_na(E, _LAM_A, _DX_A, _DX_A, _N_A)
+    assert abs(m1_lib - m1) <= 1e-9 * m1, (m1_lib, m1)
+    assert abs(mean_lib - mean) <= 1e-9 * mean, (mean_lib, mean)
     auto = _maslov_a(E, roi=None)
-    want = _maslov_a(E, roi=None, input_na=m1)
+    want = _maslov_a(E, roi=None, input_na=m1_lib)
     other = _maslov_a(E, roi=None, input_na=m0)
     assert np.any(np.abs(auto) > 0.0), 'premise: the readout must see the spot'
     assert np.array_equal(auto, want), (

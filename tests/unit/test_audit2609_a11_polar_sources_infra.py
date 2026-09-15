@@ -566,6 +566,13 @@ def test_z3_estimate_lens_memory_real_bounds_apply_real_lens():
         warnings.simplefilter('ignore')
         la.apply_real_lens(E[:_Z3_LENS_WARM_N, :_Z3_LENS_WARM_N].copy(),
                            prescription=rx, wavelength=wl, dx=dx)
+    # RESTATED 2026-09-15 (VERIFY-WP-B14 D1): the RETAINED premise below is a
+    # statement about what the MEASURED call retains, not about the process
+    # history -- run after a test that warmed the ASM caches on this grid the
+    # measured call retained 1.00 grids (est/peak 1.965) and both bars failed.
+    # Draining the caches after the warm-up makes the reading a property of
+    # the call again (cold 6.09 / drained 6.01 grids, both bars hold).
+    la.clear_asm_caches()
     gc.collect()
     tracemalloc.start()
     tracemalloc.reset_peak()
