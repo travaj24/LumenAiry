@@ -1,0 +1,27 @@
+{
+ "platform": "linux",
+ "python": "3.12.3",
+ "numpy": "2.4.6",
+ "N": 1024,
+ "warmN": 256,
+ "dtype": "complex64",
+ "env": {
+  "OPENBLAS_CORETYPE": null,
+  "OMP_NUM_THREADS": "1"
+ },
+ "est_bytes": 135056588.0,
+ "complex_grid_bytes": 8388608,
+ "peaks": [
+  102087035.0,
+  59799690.0,
+  59799641.0
+ ],
+ "retained": [
+  50681051.0,
+  8393706.0,
+  8393657.0
+ ],
+ "ratio_est_over_first": 1.3229553390398692,
+ "retained_first_in_complex_grids": 6.041652083396912,
+ "first_over_steady": 1.7071506027069667
+}

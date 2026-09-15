@@ -1,0 +1,94 @@
+fix(tests): known reds -- the c7/c8 stimulus was a stale pin on WP-A26, T3-1's ladder premise is measured then gated, the glass one-shot pin was a partial reset of coupled state, and the dense-GBD budget is bounded
+
+Handoff 4.6, all four root-caused by measurement rather than masked.  Probes and
+per-arm JSON in validation/probe_known_reds/; the report is
+docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/WP-B14_KNOWN_REDS_REPORT.md.
+
+c7 / c8 -- NOT box state.  The handoff recorded four halo ids as failing "on this
+box" with the cause untraced.  They fail on the Linux CI runners of run
+34914295323 too, agreeing with this box to twelve significant figures
+(1.5217194665917948e-04 against ...7584e-04), and they bisect, in git-archive
+trees imported in child processes with lumenairy.__file__ asserted, to bbb6c02d
+(WP-A26), which re-derived _DECENTRED_FIT_POLY_ORDER 10 -> 16 for niche D7 and
+did not restate the two fixtures that depended on the old default.  At bbb6c02d^
+and at v5.45.1 the manufactured halo beyond 3 w reads 4.594672922387141e-02
+bound-off and 8.913411901995892e-04 bound-on, bit for bit, matching the
+fixtures' own documented 4.593e-02 -> 8.911e-04 and "51.5x".  Two wrong answers
+were ruled out first by measurement: the C6 fit guard still reaches the code
+(guard on vs off differs by max|dE| = 7.010e-02), and the G8 inverse-map refusal
+that fires on those cells is a passenger (the field is bit-identical with the
+inverse map forced off).  Walking the order on the _GHOST fixture, the defect
+class is reachable at order 10 and at order 10 only: 1.463e-04 at 6, 8 and 12,
+4.595e-02 at 10, 1.533e-04 at 14, 1.522e-04 at 16.  So the STIMULUS is now stated
+by the fixtures (decentred_fit_poly_order=10 in _BASE_KW, with the ladder in the
+comment) rather than inherited, exactly as test_pmm_m2_window_contract already
+states its min_feature.  No bar is loosened; the fail-before assertion stays
+hard; WP-A26's order-16 default is not challenged.  4 failed / 24 passed -> 28
+passed on Windows, and inside 162 passed / 1 skipped under WSL py3.12.
+
+T3-1 -- reproduced under the mandated kernel ladder: green on seven of eight arms
+and red on SANDYBRIDGE at four threads, where the flux cut's growth census
+screens the degree-10 halfwidth-2 cell.  The message overstated its own case: on
+that arm the uncoated device's degree 6 and 8 cells passed the screen and their
+contract assertions ran and held (|dJ| 1.298e-04 against a degree residual
+1.232e-03, and 3.123e-05 against 4.849e-04 -- the ratios 0.105 and 0.064 the
+test's own docstring records).  Which cell round-off classifies is, in the
+module's words, a per-build, per-thread-count fact.  The comparative contract is
+asserted unconditionally on every cell that passes the screen; the decay claim is
+now asserted over whatever rungs were measured (>= 2) instead of only over a
+complete three-rung ladder, so the failing arm carries a claim it previously
+dropped; measuring NOTHING at all is still a hard failure; and only the existence
+of a complete ladder is premise-gated, skipping with the measured cells and the
+full screened census in the message.  7 pass / 1 skip-with-reading.
+
+The glass-validity one-shot pin -- the leaking state is not the warn-once set the
+autouse fixture was clearing.  get_glass_index memoises the whole (name,
+wavelength) evaluation and returns on a hit BEFORE it reaches
+_maybe_warn_outside_validity; the memo's own rationale says that is
+warning-neutral only because clear_asm_caches() empties both together.  The
+fixture cleared one of the pair, producing the state the library's design
+excludes, so after test_audit_w4_glass_registry_meshgrid memoised ('N-BK7',
+200 nm) the five calls here produced 0 warnings instead of 1.  The fixture now
+drains through the library's registered drain.  24 passed in both orders and 8
+alone.
+
+The interpreter crash (handoff section 1) -- BOUNDED, not closed.  The dense
+reconstruct_field_from_beamlets loop sized its chunk from 16 bytes per output
+cell per beamlet-column, a figure whose comment claimed to cover three float64
+buffers and one complex128.  Measured with tracemalloc over a 64/128/192/256
+grid ladder at 512 and 64 MB budgets and 512 / 1024 beamlets, the live peak is
+72.0 to 96.8 bytes per cell-column: the loop overruns its own mem_budget_mb by
+1.2x to 6.0x, saturating at 6.0x = 96/16, and a 512 MB budget peaked at 3 073 MB.
+The sibling windowed path does this accounting correctly
+(_WINDOWED_CELL_BYTES = 32.0 against ~26 measured), which is the in-repo
+precedent for the fix.  Correcting the constant moves the chunk boundary, hence
+the summation order, hence the output bytes on a default path, so it ships behind
+DENSE_MEM_BUDGET_ACCOUNTING, defaulting to 'legacy' and byte-identical;
+'measured' puts the same cell at 387 MB, under the budget, and the two arms
+differ by 2.1e-17 relative.  An unrecognised value falls to 'legacy'.  NO fault
+was reproduced -- what is established is that the transient is up to six times
+what the caller asked for.  Whether the default flips is reserved for the
+maintainer.
+
+New tests/unit/test_wave5_gbd_dense_mem_budget.py (5): the default is 'legacy'
+and the honest constant clears every measurement; the overrun is a measured
+fail-before at a 3.0x bar (half the 6.0x measured, three times the repaired
+state); 'measured' is under budget at a 1.0x bar (measured 0.76x); the two arms
+differ only by round-off at a 1e-12 bar (measured 2.1e-17); an unknown value is
+byte-identical to 'legacy'.
+
+Runs: c7 + c8 28 passed; the T3-1 id on the eight-arm ladder 7 passed / 1 skipped;
+validity ranges 24 passed after the meshgrid file, 24 reversed, 8 alone;
+test_wave5_gbd_dense_mem_budget 5 passed; the seven affected files 162 passed /
+1 skipped under WSL py3.12 (the skip is a pre-existing importorskip for the glass
+extra); history fingerprints re-recorded for lumenairy.propagators.gbd and
+--check green; WSL ruff clean.
+
+Files: tests/unit/test_niche_c7_ray_density_halo_check.py,
+tests/unit/test_niche_c8_inverse_support_bound.py,
+tests/unit/test_pmm_m2_window_contract.py,
+tests/unit/test_v4_16_0_agent_d_validity_ranges.py, lumenairy/propagators/gbd.py,
+tests/unit/test_wave5_gbd_dense_mem_budget.py (new),
+docs/history/lumenairy.propagators.gbd.md.
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>

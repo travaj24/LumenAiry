@@ -1,0 +1,494 @@
+{
+ "N-BK7_1.55um": {
+  "imag_hex": "0x0.0p+0",
+  "real_hex": "0x1.802abb7771dacp+0",
+  "repr": "(1.5006520430195947+0j)"
+ },
+ "arm": "blocked",
+ "complex_hex_all": {
+  "CaF2@1.31e-06": [
+   "0x1.6d5a7b340f0f3p+0",
+   "0x0.0p+0"
+  ],
+  "CaF2@1.55e-06": [
+   "0x1.6d0fee281f9cbp+0",
+   "0x0.0p+0"
+  ],
+  "D-LAK52@1.31e-06": [
+   "0x1.b5be3682764abp+0",
+   "0x0.0p+0"
+  ],
+  "D-LAK52@1.55e-06": [
+   "0x1.b4b756ea31f59p+0",
+   "0x0.0p+0"
+  ],
+  "D-ZK3@1.31e-06": [
+   "0x1.92d8b3bdd4c4dp+0",
+   "0x0.0p+0"
+  ],
+  "D-ZK3@1.55e-06": [
+   "0x1.91fe79c07b4cap+0",
+   "0x0.0p+0"
+  ],
+  "E-BAK1@1.31e-06": [
+   "0x1.8e5c32c0ff349p+0",
+   "0x0.0p+0"
+  ],
+  "E-BAK1@1.55e-06": [
+   "0x1.8d4ed68a35143p+0",
+   "0x0.0p+0"
+  ],
+  "E-F2@1.31e-06": [
+   "0x1.98f285bd8678dp+0",
+   "0x0.0p+0"
+  ],
+  "E-F2@1.55e-06": [
+   "0x1.980cc5dc702bbp+0",
+   "0x0.0p+0"
+  ],
+  "E-LAK04@1.31e-06": [
+   "0x1.a24745cec07cfp+0",
+   "0x0.0p+0"
+  ],
+  "E-LAK04@1.55e-06": [
+   "0x1.a17f022efac69p+0",
+   "0x0.0p+0"
+  ],
+  "E-LAK7@1.31e-06": [
+   "0x1.a26febfb38140p+0",
+   "0x0.0p+0"
+  ],
+  "E-LAK7@1.55e-06": [
+   "0x1.a195828e9b2d0p+0",
+   "0x0.0p+0"
+  ],
+  "E-LASF016@1.31e-06": [
+   "0x1.bfeedfeca252bp+0",
+   "0x0.0p+0"
+  ],
+  "E-LASF016@1.55e-06": [
+   "0x1.bee45d60c60bep+0",
+   "0x0.0p+0"
+  ],
+  "E-SK16@1.31e-06": [
+   "0x1.9ac074ccdeecep+0",
+   "0x0.0p+0"
+  ],
+  "E-SK16@1.55e-06": [
+   "0x1.99ee5069dd9f0p+0",
+   "0x0.0p+0"
+  ],
+  "F1-CDGM@1.31e-06": [
+   "0x1.9531fce6ad01ap+0",
+   "0x0.0p+0"
+  ],
+  "F1-CDGM@1.55e-06": [
+   "0x1.94759435a1aa9p+0",
+   "0x0.0p+0"
+  ],
+  "F2-CDGM@1.31e-06": [
+   "0x1.976fcbb001e0ep+0",
+   "0x0.0p+0"
+  ],
+  "F2-CDGM@1.55e-06": [
+   "0x1.96b1550e63a55p+0",
+   "0x0.0p+0"
+  ],
+  "FUSED_SILICA@1.31e-06": [
+   "0x1.7261c48b99be9p+0",
+   "0x0.0p+0"
+  ],
+  "FUSED_SILICA@1.55e-06": [
+   "0x1.71ab8835ddf27p+0",
+   "0x0.0p+0"
+  ],
+  "F_SILICA@1.31e-06": [
+   "0x1.7261c48b99be9p+0",
+   "0x0.0p+0"
+  ],
+  "F_SILICA@1.55e-06": [
+   "0x1.71ab8835ddf27p+0",
+   "0x0.0p+0"
+  ],
+  "H-K9L@1.31e-06": [
+   "0x1.80f186afafd74p+0",
+   "0x0.0p+0"
+  ],
+  "H-K9L@1.55e-06": [
+   "0x1.80351f6282d14p+0",
+   "0x0.0p+0"
+  ],
+  "H-LAK52@1.31e-06": [
+   "0x1.b56f62a281111p+0",
+   "0x0.0p+0"
+  ],
+  "H-LAK52@1.55e-06": [
+   "0x1.b4655b8463af0p+0",
+   "0x0.0p+0"
+  ],
+  "H-LAK53A@1.31e-06": [
+   "0x1.bbc23ea70d6c4p+0",
+   "0x0.0p+0"
+  ],
+  "H-LAK53A@1.55e-06": [
+   "0x1.bab6e307a1ad6p+0",
+   "0x0.0p+0"
+  ],
+  "H-ZF12@1.31e-06": [
+   "0x1.ba2056430e58fp+0",
+   "0x0.0p+0"
+  ],
+  "H-ZF12@1.55e-06": [
+   "0x1.b8fcacdb1035bp+0",
+   "0x0.0p+0"
+  ],
+  "H-ZF52A@1.31e-06": [
+   "0x1.ce0052d634af0p+0",
+   "0x0.0p+0"
+  ],
+  "H-ZF52A@1.55e-06": [
+   "0x1.ccbda88917393p+0",
+   "0x0.0p+0"
+  ],
+  "H-ZK7@1.31e-06": [
+   "0x1.98f4c05a99c72p+0",
+   "0x0.0p+0"
+  ],
+  "H-ZK7@1.55e-06": [
+   "0x1.9829ebfd91870p+0",
+   "0x0.0p+0"
+  ],
+  "H-ZK9B@1.31e-06": [
+   "0x1.9abca541de34ap+0",
+   "0x0.0p+0"
+  ],
+  "H-ZK9B@1.55e-06": [
+   "0x1.99e96d091a121p+0",
+   "0x0.0p+0"
+  ],
+  "H-ZLAF52A@1.31e-06": [
+   "0x1.c79b0bb7fa37dp+0",
+   "0x0.0p+0"
+  ],
+  "H-ZLAF52A@1.55e-06": [
+   "0x1.c6952d02b557ep+0",
+   "0x0.0p+0"
+  ],
+  "J-BASF7@1.31e-06": [
+   "0x1.adc5f0e9677f9p+0",
+   "0x0.0p+0"
+  ],
+  "J-BASF7@1.55e-06": [
+   "0x1.ace6fb55e0c7ap+0",
+   "0x0.0p+0"
+  ],
+  "J-FK01A@1.31e-06": [
+   "0x1.7cd8248b68ebdp+0",
+   "0x0.0p+0"
+  ],
+  "J-FK01A@1.55e-06": [
+   "0x1.7c62e2d4d029bp+0",
+   "0x0.0p+0"
+  ],
+  "J-LAK7@1.31e-06": [
+   "0x1.a2633b4fd197ep+0",
+   "0x0.0p+0"
+  ],
+  "J-LAK7@1.55e-06": [
+   "0x1.a17e6cb422c90p+0",
+   "0x0.0p+0"
+  ],
+  "J-LASF09A@1.31e-06": [
+   "0x1.ca96576b5396ep+0",
+   "0x0.0p+0"
+  ],
+  "J-LASF09A@1.55e-06": [
+   "0x1.c989fba2259e2p+0",
+   "0x0.0p+0"
+  ],
+  "K-BK7@1.31e-06": [
+   "0x1.80ced37958e54p+0",
+   "0x0.0p+0"
+  ],
+  "K-BK7@1.55e-06": [
+   "0x1.8011562ebebb1p+0",
+   "0x0.0p+0"
+  ],
+  "K-FK5@1.31e-06": [
+   "0x1.79c512decba5bp+0",
+   "0x0.0p+0"
+  ],
+  "K-FK5@1.55e-06": [
+   "0x1.790f1e7b3995bp+0",
+   "0x0.0p+0"
+  ],
+  "K-LAFN3@1.31e-06": [
+   "0x1.ae0f2f7a6913ep+0",
+   "0x0.0p+0"
+  ],
+  "K-LAFN3@1.55e-06": [
+   "0x1.ad3f244cab930p+0",
+   "0x0.0p+0"
+  ],
+  "K-LAK10@1.31e-06": [
+   "0x1.b31a54b3ece51p+0",
+   "0x0.0p+0"
+  ],
+  "K-LAK10@1.55e-06": [
+   "0x1.b238597b4c21bp+0",
+   "0x0.0p+0"
+  ],
+  "K-LASFN10@1.31e-06": [
+   "0x1.ca25e2e549bdcp+0",
+   "0x0.0p+0"
+  ],
+  "K-LASFN10@1.55e-06": [
+   "0x1.c908f524f47dap+0",
+   "0x0.0p+0"
+  ],
+  "K-PBK40@1.31e-06": [
+   "0x1.810bc914764d3p+0",
+   "0x0.0p+0"
+  ],
+  "K-PBK40@1.55e-06": [
+   "0x1.80445c74c061fp+0",
+   "0x0.0p+0"
+  ],
+  "K-PFK90@1.31e-06": [
+   "0x1.73700773755a9p+0",
+   "0x0.0p+0"
+  ],
+  "K-PFK90@1.55e-06": [
+   "0x1.730bc74b29388p+0",
+   "0x0.0p+0"
+  ],
+  "K-PSKN2@1.31e-06": [
+   "0x1.9a5a2598684b6p+0",
+   "0x0.0p+0"
+  ],
+  "K-PSKN2@1.55e-06": [
+   "0x1.9997636451a96p+0",
+   "0x0.0p+0"
+  ],
+  "K-SK4@1.31e-06": [
+   "0x1.98dad05a6aa48p+0",
+   "0x0.0p+0"
+  ],
+  "K-SK4@1.55e-06": [
+   "0x1.981cbc440624ap+0",
+   "0x0.0p+0"
+  ],
+  "K-VC78@1.31e-06": [
+   "0x1.a6bebc86d6bc6p+0",
+   "0x0.0p+0"
+  ],
+  "K-VC78@1.55e-06": [
+   "0x1.a5dc4957bdaf1p+0",
+   "0x0.0p+0"
+  ],
+  "MgF2@1.31e-06": [
+   "0x1.5f2fc9076df21p+0",
+   "0x0.0p+0"
+  ],
+  "MgF2@1.55e-06": [
+   "0x1.5eda517b3b74ep+0",
+   "0x0.0p+0"
+  ],
+  "N-BAF10@1.31e-06": [
+   "0x1.a670f41614dd7p+0",
+   "0x0.0p+0"
+  ],
+  "N-BAF10@1.55e-06": [
+   "0x1.a599035a377a7p+0",
+   "0x0.0p+0"
+  ],
+  "N-BK7@1.31e-06": [
+   "0x1.80eacf2d8fc34p+0",
+   "0x0.0p+0"
+  ],
+  "N-BK7@1.55e-06": [
+   "0x1.802abb7771dacp+0",
+   "0x0.0p+0"
+  ],
+  "N-LAK22@1.31e-06": [
+   "0x1.a246810d87b6cp+0",
+   "0x0.0p+0"
+  ],
+  "N-LAK22@1.55e-06": [
+   "0x1.a1778d0c71c69p+0",
+   "0x0.0p+0"
+  ],
+  "N-LASF9@1.31e-06": [
+   "0x1.d1449a960e983p+0",
+   "0x0.0p+0"
+  ],
+  "N-LASF9@1.55e-06": [
+   "0x1.d034c07e62754p+0",
+   "0x0.0p+0"
+  ],
+  "N-SF2@1.31e-06": [
+   "0x1.9f72b2b4c5bbfp+0",
+   "0x0.0p+0"
+  ],
+  "N-SF2@1.55e-06": [
+   "0x1.9e7fbf7b558d3p+0",
+   "0x0.0p+0"
+  ],
+  "N-SF6@1.31e-06": [
+   "0x1.c46c5c5153e81p+0",
+   "0x0.0p+0"
+  ],
+  "N-SF6@1.55e-06": [
+   "0x1.c3409249b57cdp+0",
+   "0x0.0p+0"
+  ],
+  "N-SF6HT@1.31e-06": [
+   "0x1.c46c5c5153e81p+0",
+   "0x0.0p+0"
+  ],
+  "N-SF6HT@1.55e-06": [
+   "0x1.c3409249b57cdp+0",
+   "0x0.0p+0"
+  ],
+  "N-SSK8@1.31e-06": [
+   "0x1.999c8e0df6008p+0",
+   "0x0.0p+0"
+  ],
+  "N-SSK8@1.55e-06": [
+   "0x1.98d3283a83278p+0",
+   "0x0.0p+0"
+  ],
+  "S-LAH64@1.31e-06": [
+   "0x1.c39bedee3308ep+0",
+   "0x0.0p+0"
+  ],
+  "S-LAH64@1.55e-06": [
+   "0x1.c288f22880297p+0",
+   "0x0.0p+0"
+  ],
+  "S-LAH79@1.31e-06": [
+   "0x1.f5c3779a79880p+0",
+   "0x0.0p+0"
+  ],
+  "S-LAH79@1.55e-06": [
+   "0x1.f46b62b38fd98p+0",
+   "0x0.0p+0"
+  ],
+  "SILICA@1.31e-06": [
+   "0x1.7261c48b99be9p+0",
+   "0x0.0p+0"
+  ],
+  "SILICA@1.55e-06": [
+   "0x1.71ab8835ddf27p+0",
+   "0x0.0p+0"
+  ],
+  "SILICON@1.31e-06": [
+   "RAISED",
+   "ImportError"
+  ],
+  "SILICON@1.55e-06": [
+   "RAISED",
+   "ImportError"
+  ],
+  "SiO2@1.31e-06": [
+   "0x1.7261c48b99be9p+0",
+   "0x0.0p+0"
+  ],
+  "SiO2@1.55e-06": [
+   "0x1.71ab8835ddf27p+0",
+   "0x0.0p+0"
+  ]
+ },
+ "complex_raises": {
+  "1.31e-06": [
+   [
+    "SILICON",
+    "ImportError",
+    "Glass 'SILICON' requires the 'refractiveindex' package for live lookup, but it is not installed.  Either install it (`pi"
+   ]
+  ],
+  "1.55e-06": [
+   [
+    "SILICON",
+    "ImportError",
+    "Glass 'SILICON' requires the 'refractiveindex' package for live lookup, but it is not installed.  Either install it (`pi"
+   ]
+  ]
+ },
+ "lumenairy_file": "C:\\tmp\\lum_reds\\lumenairy\\glass.py",
+ "n_nonfinite_or_negative_kappa": {
+  "1.31e-06": [],
+  "1.55e-06": []
+ },
+ "n_tuple_registered": 49,
+ "n_with_nonzero_kappa": {
+  "1.31e-06": 0,
+  "1.55e-06": 0
+ },
+ "python": "3.14.6",
+ "real_index_raises_1.31um": [
+  [
+   "SILICON",
+   "ImportError"
+  ]
+ ],
+ "refractiveindex_available": false,
+ "silicon_out_of_range": {
+  "get_glass_index@1.064e-06": [
+   "ImportError",
+   "Glass 'SILICON' requires the 'refractiveindex' package for live lookup, but it is not inst"
+  ],
+  "get_glass_index@2e-05": [
+   "ImportError",
+   "Glass 'SILICON' requires the 'refractiveindex' package for live lookup, but it is not inst"
+  ],
+  "get_glass_index@6.33e-07": [
+   "ImportError",
+   "Glass 'SILICON' requires the 'refractiveindex' package for live lookup, but it is not inst"
+  ],
+  "get_glass_index_complex@1.064e-06": [
+   "ImportError",
+   "Glass 'SILICON' requires the 'refractiveindex' package for live lookup, but it is not inst"
+  ],
+  "get_glass_index_complex@2e-05": [
+   "ImportError",
+   "Glass 'SILICON' requires the 'refractiveindex' package for live lookup, but it is not inst"
+  ],
+  "get_glass_index_complex@6.33e-07": [
+   "ImportError",
+   "Glass 'SILICON' requires the 'refractiveindex' package for live lookup, but it is not inst"
+  ]
+ },
+ "tuple_without_bundled_row": [
+  "SILICON"
+ ],
+ "warn_once": {
+  "CaF2": {
+   "identical": true,
+   "kappa": 0.0,
+   "n_real": 1.4271618845078222,
+   "n_warnings": 1
+  },
+  "FUSED_SILICA": {
+   "identical": true,
+   "kappa": 0.0,
+   "n_real": 1.4468043175527276,
+   "n_warnings": 1
+  },
+  "MgF2": {
+   "identical": true,
+   "kappa": 0.0,
+   "n_real": 1.3718228953493468,
+   "n_warnings": 1
+  },
+  "N-BK7": {
+   "identical": true,
+   "kappa": 0.0,
+   "n_real": 1.5035829054102239,
+   "n_warnings": 1
+  },
+  "SILICON": {
+   "raised": "ImportError"
+  }
+ }
+}

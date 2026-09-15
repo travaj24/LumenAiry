@@ -1,0 +1,480 @@
+{
+ "N-BK7_1.55um": {
+  "imag_hex": "0x1.34682e80f98f3p-23",
+  "real_hex": "0x1.802abb7771dacp+0",
+  "repr": "(1.5006520430195947+1.4361318181818187e-07j)"
+ },
+ "arm": "present",
+ "complex_hex_all": {
+  "CaF2@1.31e-06": [
+   "0x1.6d5cf5592164dp+0",
+   "0x0.0p+0"
+  ],
+  "CaF2@1.55e-06": [
+   "0x1.6d1267cee7596p+0",
+   "0x0.0p+0"
+  ],
+  "D-LAK52@1.31e-06": [
+   "0x1.b5be3682764abp+0",
+   "0x1.d01587a89489ep-26"
+  ],
+  "D-LAK52@1.55e-06": [
+   "0x1.b4b756ea31f5ap+0",
+   "0x1.90a7647707f57p-25"
+  ],
+  "D-ZK3@1.31e-06": [
+   "0x1.92d8b3bdd4c4dp+0",
+   "0x1.480c4221944eap-24"
+  ],
+  "D-ZK3@1.55e-06": [
+   "0x1.91fe79c07b4cap+0",
+   "0x1.28b3e99a87f77p-24"
+  ],
+  "E-BAK1@1.31e-06": [
+   "0x1.8e5c32c0ff349p+0",
+   "0x0.0p+0"
+  ],
+  "E-BAK1@1.55e-06": [
+   "0x1.8d4ed68a35143p+0",
+   "0x0.0p+0"
+  ],
+  "E-F2@1.31e-06": [
+   "0x1.98f285bd8678dp+0",
+   "0x1.665c20aaf527ep-27"
+  ],
+  "E-F2@1.55e-06": [
+   "0x1.980cc5dc702bbp+0",
+   "0x1.a806628cfd0cap-27"
+  ],
+  "E-LAK04@1.31e-06": [
+   "0x1.a24745cec07cfp+0",
+   "0x0.0p+0"
+  ],
+  "E-LAK04@1.55e-06": [
+   "0x1.a17f022efac69p+0",
+   "0x0.0p+0"
+  ],
+  "E-LAK7@1.31e-06": [
+   "0x1.a26febfb38140p+0",
+   "0x1.efc900d505b57p-26"
+  ],
+  "E-LAK7@1.55e-06": [
+   "0x1.a195828e9b2d0p+0",
+   "0x1.796169ef568b8p-24"
+  ],
+  "E-LASF016@1.31e-06": [
+   "0x1.bfeedfeca252bp+0",
+   "0x1.665c20aaf527ep-27"
+  ],
+  "E-LASF016@1.55e-06": [
+   "0x1.bee45d60c60bep+0",
+   "0x1.a806628cfd0cap-27"
+  ],
+  "E-SK16@1.31e-06": [
+   "0x1.9ac074ccdeecep+0",
+   "0x1.665c20aaf527ep-27"
+  ],
+  "E-SK16@1.55e-06": [
+   "0x1.99ee5069dd9f0p+0",
+   "0x1.a806628cfd0cap-27"
+  ],
+  "F1-CDGM@1.31e-06": [
+   "0x1.9531fce6ad01ap+0",
+   "0x1.66e894480521bp-25"
+  ],
+  "F1-CDGM@1.55e-06": [
+   "0x1.94759435a1aa9p+0",
+   "0x1.b64553dd3688dp-23"
+  ],
+  "F2-CDGM@1.31e-06": [
+   "0x1.976fcbb001e0ep+0",
+   "0x1.d01587a89489ep-26"
+  ],
+  "F2-CDGM@1.55e-06": [
+   "0x1.96b1550e63a55p+0",
+   "0x1.0989b7fcfe1eep-23"
+  ],
+  "FUSED_SILICA@1.31e-06": [
+   "0x1.7261c48b99be9p+0",
+   "0x0.0p+0"
+  ],
+  "FUSED_SILICA@1.55e-06": [
+   "0x1.71ab8835ddf28p+0",
+   "0x0.0p+0"
+  ],
+  "F_SILICA@1.31e-06": [
+   "0x1.7261c48b99be9p+0",
+   "0x0.0p+0"
+  ],
+  "F_SILICA@1.55e-06": [
+   "0x1.71ab8835ddf28p+0",
+   "0x0.0p+0"
+  ],
+  "H-K9L@1.31e-06": [
+   "0x1.80f186afafd74p+0",
+   "0x1.5f9edf7793a8bp-23"
+  ],
+  "H-K9L@1.55e-06": [
+   "0x1.80351f6282d14p+0",
+   "0x1.a3c624b14a186p-23"
+  ],
+  "H-LAK52@1.31e-06": [
+   "0x1.b56f62a281111p+0",
+   "0x1.668c8cd366297p-26"
+  ],
+  "H-LAK52@1.55e-06": [
+   "0x1.b4655b8463af0p+0",
+   "0x1.78ab2b752053ep-25"
+  ],
+  "H-LAK53A@1.31e-06": [
+   "0x1.bbc23ea70d6c4p+0",
+   "0x1.668c8cd366297p-26"
+  ],
+  "H-LAK53A@1.55e-06": [
+   "0x1.bab6e307a1ad7p+0",
+   "0x1.a83b295980965p-26"
+  ],
+  "H-ZF12@1.31e-06": [
+   "0x1.ba2056430e58fp+0",
+   "0x1.668c8cd366297p-26"
+  ],
+  "H-ZF12@1.55e-06": [
+   "0x1.b8fcacdb1035bp+0",
+   "0x1.a83b295980965p-26"
+  ],
+  "H-ZF52A@1.31e-06": [
+   "0x1.ce0052d634af0p+0",
+   "0x1.668c8cd366297p-26"
+  ],
+  "H-ZF52A@1.55e-06": [
+   "0x1.ccbda88917393p+0",
+   "0x1.a83b295980965p-26"
+  ],
+  "H-ZK7@1.31e-06": [
+   "0x1.98f4c05a99c72p+0",
+   "0x1.2d72fb99b3d2ep-24"
+  ],
+  "H-ZK7@1.55e-06": [
+   "0x1.9829ebfd91870p+0",
+   "0x1.e6e8e26c18449p-25"
+  ],
+  "H-ZK9B@1.31e-06": [
+   "0x1.9abca541de34ap+0",
+   "0x1.b2b3e17d86b34p-24"
+  ],
+  "H-ZK9B@1.55e-06": [
+   "0x1.99e96d091a122p+0",
+   "0x1.13cbc3c9272abp-23"
+  ],
+  "H-ZLAF52A@1.31e-06": [
+   "0x1.c79b0bb7fa37dp+0",
+   "0x1.d01587a89489ep-26"
+  ],
+  "H-ZLAF52A@1.55e-06": [
+   "0x1.c6952d02b557ep+0",
+   "0x1.90a7647707f57p-25"
+  ],
+  "J-BASF7@1.31e-06": [
+   "0x1.adc5f0e9677f9p+0",
+   "0x1.41dd9f0cb89bep-25"
+  ],
+  "J-BASF7@1.55e-06": [
+   "0x1.ace6fb55e0c7ap+0",
+   "0x1.a2bdb5f5ec5e4p-24"
+  ],
+  "J-FK01A@1.31e-06": [
+   "0x1.7cd8248b68ebdp+0",
+   "0x1.665c20aaf527ep-27"
+  ],
+  "J-FK01A@1.55e-06": [
+   "0x1.7c62e2d4d029bp+0",
+   "0x1.784ecf8f3a22dp-26"
+  ],
+  "J-LAK7@1.31e-06": [
+   "0x1.a2633b4fd197ep+0",
+   "0x1.02d77f6391670p-24"
+  ],
+  "J-LAK7@1.55e-06": [
+   "0x1.a17e6cb422c90p+0",
+   "0x1.f038136f2c086p-24"
+  ],
+  "J-LASF09A@1.31e-06": [
+   "0x1.ca96576b5396ep+0",
+   "0x1.1d5b9b86c2778p-24"
+  ],
+  "J-LASF09A@1.55e-06": [
+   "0x1.c989fba2259e2p+0",
+   "0x1.279bf309a632bp-23"
+  ],
+  "K-BK7@1.31e-06": [
+   "0x1.80ced37958e54p+0",
+   "0x1.26add150af991p-24"
+  ],
+  "K-BK7@1.55e-06": [
+   "0x1.8011562ebebb1p+0",
+   "0x1.cc498fc773614p-23"
+  ],
+  "K-FK5@1.31e-06": [
+   "0x1.79c512decba5bp+0",
+   "0x1.53a94a5047ab1p-23"
+  ],
+  "K-FK5@1.55e-06": [
+   "0x1.790f1e7b3995bp+0",
+   "0x1.383033a1d5b9fp-22"
+  ],
+  "K-LAFN3@1.31e-06": [
+   "0x1.ae0f2f7a6913ep+0",
+   "0x1.668b07e0e7ce3p-26"
+  ],
+  "K-LAFN3@1.55e-06": [
+   "0x1.ad3f244cab930p+0",
+   "0x1.beff3b9c75b16p-25"
+  ],
+  "K-LAK10@1.31e-06": [
+   "0x1.b31a54b3ece51p+0",
+   "0x1.094a48cd1e52bp-24"
+  ],
+  "K-LAK10@1.55e-06": [
+   "0x1.b238597b4c21bp+0",
+   "0x1.369df2030e5c2p-23"
+  ],
+  "K-LASFN10@1.31e-06": [
+   "0x1.ca25e2e549bdcp+0",
+   "0x1.49688b2b1829fp-22"
+  ],
+  "K-LASFN10@1.55e-06": [
+   "0x1.c908f524f47dap+0",
+   "0x1.d151a3b6ddbaep-22"
+  ],
+  "K-PBK40@1.31e-06": [
+   "0x1.810bc914764d3p+0",
+   "0x1.668b07e0e7ce3p-26"
+  ],
+  "K-PBK40@1.55e-06": [
+   "0x1.80445c74c061fp+0",
+   "0x1.a83b99f08a378p-26"
+  ],
+  "K-PFK90@1.31e-06": [
+   "0x1.73700773755a9p+0",
+   "0x1.668b07e0e7ce3p-26"
+  ],
+  "K-PFK90@1.55e-06": [
+   "0x1.730bc74b29388p+0",
+   "0x1.a83b99f08a378p-26"
+  ],
+  "K-PSKN2@1.31e-06": [
+   "0x1.9a5a2598684b6p+0",
+   "0x1.668b07e0e7ce3p-26"
+  ],
+  "K-PSKN2@1.55e-06": [
+   "0x1.9997636451a96p+0",
+   "0x1.b1129dbc96ba0p-25"
+  ],
+  "K-SK4@1.31e-06": [
+   "0x1.98dad05a6aa48p+0",
+   "0x1.668b07e0e7ce3p-26"
+  ],
+  "K-SK4@1.55e-06": [
+   "0x1.981cbc440624ap+0",
+   "0x1.25895a4034d41p-24"
+  ],
+  "K-VC78@1.31e-06": [
+   "0x1.a6bebc86d6bc6p+0",
+   "0x1.62a9927158d7ap-25"
+  ],
+  "K-VC78@1.55e-06": [
+   "0x1.a5dc4957bdaf1p+0",
+   "0x1.c5994acc41646p-24"
+  ],
+  "MgF2@1.31e-06": [
+   "0x1.5f2fc8a6208ddp+0",
+   "0x0.0p+0"
+  ],
+  "MgF2@1.55e-06": [
+   "0x1.5eda50f24ea07p+0",
+   "0x0.0p+0"
+  ],
+  "N-BAF10@1.31e-06": [
+   "0x1.a670f41614dd7p+0",
+   "0x1.099954c87fde9p-24"
+  ],
+  "N-BAF10@1.55e-06": [
+   "0x1.a599035a377a6p+0",
+   "0x1.f97306bf732b4p-24"
+  ],
+  "N-BK7@1.31e-06": [
+   "0x1.80eacf2d8fc34p+0",
+   "0x1.ea506f407e039p-25"
+  ],
+  "N-BK7@1.55e-06": [
+   "0x1.802abb7771dacp+0",
+   "0x1.34682e80f98f3p-23"
+  ],
+  "N-LAK22@1.31e-06": [
+   "0x1.a246810d87b6cp+0",
+   "0x1.20548e11cbc4cp-24"
+  ],
+  "N-LAK22@1.55e-06": [
+   "0x1.a1778d0c71c69p+0",
+   "0x1.1e92ea0c5f973p-23"
+  ],
+  "N-LASF9@1.31e-06": [
+   "0x1.d1449a960e983p+0",
+   "0x1.8b605c971268cp-25"
+  ],
+  "N-LASF9@1.55e-06": [
+   "0x1.d034c07e62754p+0",
+   "0x1.80e96eb427fa8p-24"
+  ],
+  "N-SF2@1.31e-06": [
+   "0x1.9f72b2b4c5bbfp+0",
+   "0x1.8fac0f7a3b734p-25"
+  ],
+  "N-SF2@1.55e-06": [
+   "0x1.9e7fbf7b558d3p+0",
+   "0x1.9ae26110af2b1p-24"
+  ],
+  "N-SF6@1.31e-06": [
+   "0x1.c46c5c5153e81p+0",
+   "0x1.12b218c8abfc8p-24"
+  ],
+  "N-SF6@1.55e-06": [
+   "0x1.c3409249b57cdp+0",
+   "0x1.3a66fffb8fb95p-23"
+  ],
+  "N-SF6HT@1.31e-06": [
+   "0x1.c46c5c5153e81p+0",
+   "0x1.ea506f407e039p-25"
+  ],
+  "N-SF6HT@1.55e-06": [
+   "0x1.c3409249b57cdp+0",
+   "0x1.1eeddfb49b81bp-23"
+  ],
+  "N-SSK8@1.31e-06": [
+   "0x1.999c8e0df6009p+0",
+   "0x1.106da5f394bbcp-24"
+  ],
+  "N-SSK8@1.55e-06": [
+   "0x1.98d3283a83279p+0",
+   "0x1.0a2d7bc452a51p-23"
+  ],
+  "S-LAH64@1.31e-06": [
+   "0x1.c39bedee3308ep+0",
+   "0x1.9bc7ad6462e76p-25"
+  ],
+  "S-LAH64@1.55e-06": [
+   "0x1.c288f22880297p+0",
+   "0x1.5c1185966d7eep-24"
+  ],
+  "S-LAH79@1.31e-06": [
+   "0x1.f5c3779a79880p+0",
+   "0x1.668c8cd366297p-26"
+  ],
+  "S-LAH79@1.55e-06": [
+   "0x1.f46b62b38fd98p+0",
+   "0x1.265a7aca97a5bp-25"
+  ],
+  "SILICA@1.31e-06": [
+   "0x1.7261c48b99be9p+0",
+   "0x0.0p+0"
+  ],
+  "SILICA@1.55e-06": [
+   "0x1.71ab8835ddf28p+0",
+   "0x0.0p+0"
+  ],
+  "SILICON@1.31e-06": [
+   "0x1.c009d495182aap+1",
+   "0x0.0p+0"
+  ],
+  "SILICON@1.55e-06": [
+   "0x1.bce3bcd35a858p+1",
+   "0x0.0p+0"
+  ],
+  "SiO2@1.31e-06": [
+   "0x1.7261c48b99be9p+0",
+   "0x0.0p+0"
+  ],
+  "SiO2@1.55e-06": [
+   "0x1.71ab8835ddf28p+0",
+   "0x0.0p+0"
+  ]
+ },
+ "complex_raises": {
+  "1.31e-06": [],
+  "1.55e-06": []
+ },
+ "lumenairy_file": "C:\\tmp\\lum_reds\\lumenairy\\glass.py",
+ "n_nonfinite_or_negative_kappa": {
+  "1.31e-06": [],
+  "1.55e-06": []
+ },
+ "n_tuple_registered": 49,
+ "n_with_nonzero_kappa": {
+  "1.31e-06": 40,
+  "1.55e-06": 40
+ },
+ "python": "3.14.6",
+ "real_index_raises_1.31um": [],
+ "refractiveindex_available": true,
+ "silicon_out_of_range": {
+  "get_glass_index@1.064e-06": [
+   "ValueError",
+   "get_glass_index: the refractiveindex.info page for 'SILICON' has no data at 1.0640e-06 m; "
+  ],
+  "get_glass_index@2e-05": [
+   "ValueError",
+   "get_glass_index: the refractiveindex.info page for 'SILICON' has no data at 2.0000e-05 m; "
+  ],
+  "get_glass_index@6.33e-07": [
+   "ValueError",
+   "get_glass_index: the refractiveindex.info page for 'SILICON' has no data at 6.3300e-07 m; "
+  ],
+  "get_glass_index_complex@1.064e-06": [
+   "ValueError",
+   "get_glass_index: the refractiveindex.info page for 'SILICON' has no data at 1.0640e-06 m; "
+  ],
+  "get_glass_index_complex@2e-05": [
+   "ValueError",
+   "get_glass_index: the refractiveindex.info page for 'SILICON' has no data at 2.0000e-05 m; "
+  ],
+  "get_glass_index_complex@6.33e-07": [
+   "ValueError",
+   "get_glass_index: the refractiveindex.info page for 'SILICON' has no data at 6.3300e-07 m; "
+  ]
+ },
+ "tuple_without_bundled_row": [
+  "SILICON"
+ ],
+ "warn_once": {
+  "CaF2": {
+   "identical": true,
+   "kappa": 0.0,
+   "n_real": 1.4271996824840187,
+   "n_warnings": 1
+  },
+  "FUSED_SILICA": {
+   "identical": true,
+   "kappa": 0.0,
+   "n_real": 1.4468043175527276,
+   "n_warnings": 1
+  },
+  "MgF2": {
+   "identical": true,
+   "kappa": 0.0,
+   "n_real": 1.371822872694387,
+   "n_warnings": 1
+  },
+  "N-BK7": {
+   "identical": true,
+   "kappa": 5.7080085106382974e-08,
+   "n_real": 1.5035829054102239,
+   "n_warnings": 0
+  },
+  "SILICON": {
+   "identical": true,
+   "kappa": 0.0,
+   "n_real": 3.5003,
+   "n_warnings": 1
+  }
+ }
+}

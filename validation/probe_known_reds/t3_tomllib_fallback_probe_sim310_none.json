@@ -1,0 +1,35 @@
+{
+  "arm": "sim310_none",
+  "python": "3.14.6",
+  "blocked": [
+    "tomllib",
+    "tomli"
+  ],
+  "pytest_argv": [
+    "C:\\Users\\Tesla\\AppData\\Local\\Programs\\Python\\Python314\\python.exe",
+    "-m",
+    "pytest",
+    "tests/unit/test_audit2609_a15a_packaging.py",
+    "--capture=sys",
+    "-q",
+    "-p",
+    "no:cacheprovider",
+    "-rs",
+    "-p",
+    "t3_block_tomllib"
+  ],
+  "returncode": 0,
+  "toml_parser_resolution": {
+    "resolved": null,
+    "file": null,
+    "first_error": "import of tomllib halted; None in sys.modules | import of tomli halted; None in sys.modules",
+    "python": "3.14.6"
+  },
+  "collection_error": false,
+  "tail": [
+    "s.sss......                                                              [100%]",
+    "=========================== short test summary info ===========================",
+    "SKIPPED [4] tests\\unit\\test_audit2609_a15a_packaging.py:57: no TOML parser: `tomllib` is Python 3.11+ stdlib and the `tomli` 3.10 backport is not installed, so the four pyproject-reading gates in this file cannot be evaluated on this interpreter (`pip install tomli`).  The other seven gates -- .gitignore, MANIFEST.in, scripts/ hygiene and the two subprocess-stdio walkers -- do not need a parser and still ran.",
+    "7 passed, 4 skipped in 1.03s"
+  ]
+}

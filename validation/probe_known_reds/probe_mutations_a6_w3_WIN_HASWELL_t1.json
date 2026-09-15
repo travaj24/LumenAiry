@@ -1,0 +1,209 @@
+{
+ "env": {
+  "arm": "WIN_HASWELL_t1",
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "platform": "win32",
+  "OPENBLAS_CORETYPE": ""
+ },
+ "c2_m3": [
+  {
+   "estimator": "gradient",
+   "decentre_waists": 0.0,
+   "a": 0.05001230198616675,
+   "b": 0.05001230198616674,
+   "ulp": 1.0,
+   "passes_bar_16": true
+  },
+  {
+   "estimator": "gradient",
+   "decentre_waists": 0.5,
+   "a": 0.050012301986166754,
+   "b": 0.07501845297925012,
+   "ulp": 1801883076710730.0,
+   "passes_bar_16": false
+  },
+  {
+   "estimator": "gradient",
+   "decentre_waists": 1.0,
+   "a": 0.05001230198616674,
+   "b": 0.1500369059585006,
+   "ulp": 3603766153421474.0,
+   "passes_bar_16": false
+  },
+  {
+   "estimator": "gradient",
+   "decentre_waists": 2.0,
+   "a": 0.050012301979580606,
+   "b": 0.4501107208508097,
+   "ulp": 7207532360559968.0,
+   "passes_bar_16": false
+  },
+  {
+   "estimator": "increment",
+   "decentre_waists": 0.0,
+   "a": 0.05,
+   "b": 0.05,
+   "ulp": 0.0,
+   "passes_bar_16": true
+  },
+  {
+   "estimator": "increment",
+   "decentre_waists": 0.5,
+   "a": 0.05,
+   "b": 0.07499999999999998,
+   "ulp": 1801439850948197.0,
+   "passes_bar_16": false
+  },
+  {
+   "estimator": "increment",
+   "decentre_waists": 1.0,
+   "a": 0.05,
+   "b": 0.15000000000000047,
+   "ulp": 3602879701896413.5,
+   "passes_bar_16": false
+  },
+  {
+   "estimator": "increment",
+   "decentre_waists": 2.0,
+   "a": 0.05,
+   "b": 0.4500000034648332,
+   "ulp": 7205759466209680.0,
+   "passes_bar_16": false
+  }
+ ],
+ "w3_m4": [
+  {
+   "R1": 0.0515,
+   "variant": "shipped -1j/(lam*sqrt|detJ|)",
+   "rel": 3.467291485825396e-14,
+   "passes_bar_1e_11": true
+  },
+  {
+   "R1": 0.0515,
+   "variant": "M4a +1j not -1j",
+   "rel": 2.0000000000000235,
+   "passes_bar_1e_11": false
+  },
+  {
+   "R1": 0.0515,
+   "variant": "M4b |detJ| not sqrt|detJ|",
+   "rel": 0.802304557712044,
+   "passes_bar_1e_11": false
+  },
+  {
+   "R1": 0.0515,
+   "variant": "M4c 1/lambda dropped",
+   "rel": 763357.7786259723,
+   "passes_bar_1e_11": false
+  },
+  {
+   "R1": 0.0515,
+   "variant": "M4d no rotation",
+   "rel": 1.4142135623731298,
+   "passes_bar_1e_11": false
+  },
+  {
+   "R1": 0.06,
+   "variant": "shipped -1j/(lam*sqrt|detJ|)",
+   "rel": 6.676268952239563e-14,
+   "passes_bar_1e_11": true
+  },
+  {
+   "R1": 0.06,
+   "variant": "M4a +1j not -1j",
+   "rel": 2.0000000000000475,
+   "passes_bar_1e_11": false
+  },
+  {
+   "R1": 0.06,
+   "variant": "M4b |detJ| not sqrt|detJ|",
+   "rel": 0.801712191528955,
+   "passes_bar_1e_11": false
+  },
+  {
+   "R1": 0.06,
+   "variant": "M4c 1/lambda dropped",
+   "rel": 763357.7786259903,
+   "passes_bar_1e_11": false
+  },
+  {
+   "R1": 0.06,
+   "variant": "M4d no rotation",
+   "rel": 1.414213562373162,
+   "passes_bar_1e_11": false
+  }
+ ],
+ "w3_m5": [
+  {
+   "R1": 0.0515,
+   "variant": "shipped",
+   "rel": 1.8375973227963866e-09,
+   "passes_bar_1e_6": true
+  },
+  {
+   "R1": 0.0515,
+   "variant": "M5a x(1+1e-5)",
+   "rel": 9.999999676768845e-06,
+   "passes_bar_1e_6": false
+  },
+  {
+   "R1": 0.0515,
+   "variant": "M5b x(1+1e-7)",
+   "rel": 1.0001639036073826e-07,
+   "passes_bar_1e_6": true
+  },
+  {
+   "R1": 0.0515,
+   "variant": "M5c x(-1j)",
+   "rel": 1.4142135636721245,
+   "passes_bar_1e_6": false
+  },
+  {
+   "R1": 0.06,
+   "variant": "shipped",
+   "rel": 2.268565095208826e-09,
+   "passes_bar_1e_6": true
+  },
+  {
+   "R1": 0.06,
+   "variant": "M5a x(1+1e-5)",
+   "rel": 1.0000000477135224e-05,
+   "passes_bar_1e_6": false
+  },
+  {
+   "R1": 0.06,
+   "variant": "M5b x(1+1e-7)",
+   "rel": 1.0002594836858449e-07,
+   "passes_bar_1e_6": true
+  },
+  {
+   "R1": 0.06,
+   "variant": "M5c x(-1j)",
+   "rel": 1.4142135607691328,
+   "passes_bar_1e_6": false
+  }
+ ],
+ "w3_m6": [
+  {
+   "variant": "shipped",
+   "val": 2016298885.741549,
+   "in_band": true
+  },
+  {
+   "variant": "M6a reference normalisation off",
+   "val": 1.2420401136167942,
+   "in_band": false
+  },
+  {
+   "variant": "M6b Y2 Van Vleck factor undone",
+   "val": 0.0001352355765568431,
+   "in_band": false
+  },
+  {
+   "variant": "M6c Y2 factor applied twice",
+   "val": 3.0062068725930198e+22,
+   "in_band": false
+  }
+ ]
+}

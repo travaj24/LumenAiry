@@ -1,0 +1,291 @@
+{
+ "env": {
+  "arm": "WSL",
+  "python": "3.12.3",
+  "numpy": "2.4.6",
+  "platform": "linux",
+  "PYFFTW_AVAILABLE": true,
+  "FFTW_MIN_SIZE": 256,
+  "FFTW_THREADS": 8,
+  "planner": "FFTW_ESTIMATE",
+  "OPENBLAS_CORETYPE": ""
+ },
+ "rows": [
+  {
+   "n": 128,
+   "tilt": [
+    0.0,
+    0.0
+   ],
+   "mode": "shipped",
+   "bit_equal": true,
+   "absmax": 0.0,
+   "rel": 0.0,
+   "ndiff": 0,
+   "nvals": 32768
+  },
+  {
+   "n": 128,
+   "tilt": [
+    0.03,
+    -0.02
+   ],
+   "mode": "shipped",
+   "bit_equal": true,
+   "absmax": 0.0,
+   "rel": 0.0,
+   "ndiff": 0,
+   "nvals": 32768
+  },
+  {
+   "n": 256,
+   "tilt": [
+    0.0,
+    0.0
+   ],
+   "mode": "shipped",
+   "bit_equal": false,
+   "absmax": 1.4475537224895361e-15,
+   "rel": 2.884943325919448e-16,
+   "ndiff": 103849,
+   "nvals": 131072
+  },
+  {
+   "n": 256,
+   "tilt": [
+    0.03,
+    -0.02
+   ],
+   "mode": "shipped",
+   "bit_equal": false,
+   "absmax": 1.7979101253009106e-15,
+   "rel": 3.7274857074494724e-16,
+   "ndiff": 103967,
+   "nvals": 131072
+  },
+  {
+   "n": 512,
+   "tilt": [
+    0.0,
+    0.0
+   ],
+   "mode": "shipped",
+   "bit_equal": false,
+   "absmax": 1.790180836524724e-15,
+   "rel": 3.5177345736426284e-16,
+   "ndiff": 422745,
+   "nvals": 524288
+  },
+  {
+   "n": 512,
+   "tilt": [
+    0.03,
+    -0.02
+   ],
+   "mode": "shipped",
+   "bit_equal": false,
+   "absmax": 1.897149936107019e-15,
+   "rel": 3.9281321377248025e-16,
+   "ndiff": 423143,
+   "nvals": 524288
+  },
+  {
+   "n": 128,
+   "tilt": [
+    0.0,
+    0.0
+   ],
+   "mode": "single_buf",
+   "bit_equal": true,
+   "absmax": 0.0,
+   "rel": 0.0,
+   "ndiff": 0,
+   "nvals": 32768
+  },
+  {
+   "n": 128,
+   "tilt": [
+    0.03,
+    -0.02
+   ],
+   "mode": "single_buf",
+   "bit_equal": true,
+   "absmax": 0.0,
+   "rel": 0.0,
+   "ndiff": 0,
+   "nvals": 32768
+  },
+  {
+   "n": 256,
+   "tilt": [
+    0.0,
+    0.0
+   ],
+   "mode": "single_buf",
+   "bit_equal": true,
+   "absmax": 0.0,
+   "rel": 0.0,
+   "ndiff": 0,
+   "nvals": 131072
+  },
+  {
+   "n": 256,
+   "tilt": [
+    0.03,
+    -0.02
+   ],
+   "mode": "single_buf",
+   "bit_equal": true,
+   "absmax": 0.0,
+   "rel": 0.0,
+   "ndiff": 0,
+   "nvals": 131072
+  },
+  {
+   "n": 512,
+   "tilt": [
+    0.0,
+    0.0
+   ],
+   "mode": "single_buf",
+   "bit_equal": true,
+   "absmax": 0.0,
+   "rel": 0.0,
+   "ndiff": 0,
+   "nvals": 524288
+  },
+  {
+   "n": 512,
+   "tilt": [
+    0.03,
+    -0.02
+   ],
+   "mode": "single_buf",
+   "bit_equal": true,
+   "absmax": 0.0,
+   "rel": 0.0,
+   "ndiff": 0,
+   "nvals": 524288
+  },
+  {
+   "n": 128,
+   "tilt": [
+    0.0,
+    0.0
+   ],
+   "mode": "no_pyfftw",
+   "bit_equal": true,
+   "absmax": 0.0,
+   "rel": 0.0,
+   "ndiff": 0,
+   "nvals": 32768
+  },
+  {
+   "n": 128,
+   "tilt": [
+    0.03,
+    -0.02
+   ],
+   "mode": "no_pyfftw",
+   "bit_equal": true,
+   "absmax": 0.0,
+   "rel": 0.0,
+   "ndiff": 0,
+   "nvals": 32768
+  },
+  {
+   "n": 256,
+   "tilt": [
+    0.0,
+    0.0
+   ],
+   "mode": "no_pyfftw",
+   "bit_equal": true,
+   "absmax": 0.0,
+   "rel": 0.0,
+   "ndiff": 0,
+   "nvals": 131072
+  },
+  {
+   "n": 256,
+   "tilt": [
+    0.03,
+    -0.02
+   ],
+   "mode": "no_pyfftw",
+   "bit_equal": true,
+   "absmax": 0.0,
+   "rel": 0.0,
+   "ndiff": 0,
+   "nvals": 131072
+  },
+  {
+   "n": 512,
+   "tilt": [
+    0.0,
+    0.0
+   ],
+   "mode": "no_pyfftw",
+   "bit_equal": true,
+   "absmax": 0.0,
+   "rel": 0.0,
+   "ndiff": 0,
+   "nvals": 524288
+  },
+  {
+   "n": 512,
+   "tilt": [
+    0.03,
+    -0.02
+   ],
+   "mode": "no_pyfftw",
+   "bit_equal": true,
+   "absmax": 0.0,
+   "rel": 0.0,
+   "ndiff": 0,
+   "nvals": 524288
+  }
+ ],
+ "vs_pocketfft": [
+  {
+   "n": 256,
+   "tilt": [
+    0.0,
+    0.0
+   ],
+   "step_vs_pocketfft": 2.7560601772572486e-15,
+   "oracle_vs_pocketfft": 2.482534153247273e-15,
+   "step_vs_oracle": 1.4475537224895361e-15
+  },
+  {
+   "n": 256,
+   "tilt": [
+    0.03,
+    -0.02
+   ],
+   "step_vs_pocketfft": 2.7012892057857034e-15,
+   "oracle_vs_pocketfft": 2.6852712547870858e-15,
+   "step_vs_oracle": 1.7979101253009106e-15
+  },
+  {
+   "n": 512,
+   "tilt": [
+    0.0,
+    0.0
+   ],
+   "step_vs_pocketfft": 2.8435583831733384e-15,
+   "oracle_vs_pocketfft": 2.809215289030219e-15,
+   "step_vs_oracle": 1.790180836524724e-15
+  },
+  {
+   "n": 512,
+   "tilt": [
+    0.03,
+    -0.02
+   ],
+   "step_vs_pocketfft": 3.0832434554370496e-15,
+   "oracle_vs_pocketfft": 2.8951074449790722e-15,
+   "step_vs_oracle": 1.897149936107019e-15
+  }
+ ]
+}

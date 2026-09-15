@@ -1,0 +1,617 @@
+{
+ "carrier": {
+  "ast": "4414ba3911c5eaa61e8f6cdde00ec9cec2671f40365368e3efa53cf55de845c7",
+  "module": "lumenairy/propagators/carrier.py",
+  "token": "ef619d188da16a1fa86e05b8f94fc23482d35979bc243a41b052c07f2b45aa72"
+ },
+ "carrier_field": {
+  "ast": "16233890b8ee9a9d3379683c207ac4db9b8274c9e937f0fd6782384764dbefee",
+  "module": "lumenairy/propagators/carrier_field.py",
+  "token": "26df03fde3e5b505d0991d563f507bc4e8b3d3e175d9bc03c95d40d07228af24"
+ },
+ "fft_infra": {
+  "ast": "bd5002a4bb2ed943962b9bac214eb699c952d4d55eb715f4d96c4e9401ee6eab",
+  "module": "lumenairy/propagators/fft_infra.py",
+  "token": "5a24405d51265962a660e4d2ce29457a6327702551f184e910387661e7011c40"
+ },
+ "lumenairy._cache_registry": {
+  "ast": "eb9e6e03f453f48298d048f643cff0340d6795c35b870a8efa715ac57b200ffc",
+  "module": "lumenairy/_cache_registry.py",
+  "token": "fbc60950124a791909ffb12caba7a191beede4b8f6578733117045b82f68d66a"
+ },
+ "lumenairy._context": {
+  "ast": "7f580564d74cad6444ebbeb5d6a2ada18ea5bae4056b4ee3c1d6d8ee531ff0b9",
+  "module": "lumenairy/_context.py",
+  "token": "401ffd6d0ee935d94eb8e7bf65d38bb809dbce894b80946eec3df461f9bfaf42"
+ },
+ "lumenairy._deprecation": {
+  "ast": "de1c52354641ed24fbb08c622ba620b05187b22e9e8aa2e8375d50170724d3c9",
+  "module": "lumenairy/_deprecation.py",
+  "token": "666c07a310a048a73ee24c2c416b683476ab999c9c465b56eaf9f86b18e95bba"
+ },
+ "lumenairy._math.chebyshev": {
+  "ast": "469a8bddcdde98c07c16d415a43da80f5fa465314f1e9b0ebaafc474f11a23bd",
+  "module": "lumenairy/_math/chebyshev.py",
+  "token": "93554473df8f6030a9080d4100c9e1b1760e3fe054c47434dc91ee456511fb37"
+ },
+ "lumenairy._validation": {
+  "ast": "c833dde82cd90c8dc16b1a824e12d853c03d4a05039b85fab8326dd837a250bf",
+  "module": "lumenairy/_validation.py",
+  "token": "6712f57a993bd273cb66c0b9a054cd975fe5deccd87eb56de62778b53e94b070"
+ },
+ "lumenairy.algebra.from_prescription": {
+  "ast": "807eb930f7d40fb1afe4df0437dfa385eaf726bece15f0e4f62481637e37e2f6",
+  "module": "lumenairy/algebra/from_prescription.py",
+  "token": "fc41ad1333c0e1f0d52f31ebfcf882bb39ac4d758eae5657f45686c83e3f81dc"
+ },
+ "lumenairy.algebra.primitives": {
+  "ast": "64f2ab776747b4c8387c7d030dfd9542f254d465a952b8e4315fffcd7d73f47e",
+  "module": "lumenairy/algebra/primitives.py",
+  "token": "c3fe0bf95ce274d5243649a9e9c6dd882de09eda5f1707984eb96851b3816414"
+ },
+ "lumenairy.analysis.aberration": {
+  "ast": "133288c6c06ef11506ed06c18fdf5646c4ad5d7d316047c54736c2ebb919e683",
+  "module": "lumenairy/analysis/aberration.py",
+  "token": "599e3d02058e714872c088d89e32e48763c2129aa3536c8552871dd440c55d63"
+ },
+ "lumenairy.analysis.ao": {
+  "ast": "6bcc87d232028496574c2537323a36c2f502ebb045e9474fc98d2fbbb06aacb6",
+  "module": "lumenairy/analysis/ao.py",
+  "token": "460674be97d21d55eca6f2b61efa126119fa2f4b10d39e6986dfa75c95778450"
+ },
+ "lumenairy.analysis.beam_stats": {
+  "ast": "456c3f8947d79f92503122d1d48bd31a32d7a13d3b56aaa8674708cffa77f30c",
+  "module": "lumenairy/analysis/beam_stats.py",
+  "token": "36213881473012758847f462ccbf3017d519e949e046507ab4bda241ab5d800e"
+ },
+ "lumenairy.analysis.coherence": {
+  "ast": "b73d888f0f6b9b03418b78cdb71fc8077961a65d4fdd307db683e7af6c638e34",
+  "module": "lumenairy/analysis/coherence.py",
+  "token": "318c055ce37a74011a1dba5c51c2f13690321ec2ac4a2367bcef54296f90044d"
+ },
+ "lumenairy.analysis.coronagraph": {
+  "ast": "4b42c372c877bc466ca4d20a69b10ba89ca2a2dc92087fdb04a9ada8d6fd8c42",
+  "module": "lumenairy/analysis/coronagraph.py",
+  "token": "cc16013d5e4249cef0c4052694b7d39868b1031b65cdfc86533b0971554a3719"
+ },
+ "lumenairy.analysis.detector": {
+  "ast": "3cbadf0e6352825613b1de677453fc9c24df1ab4e3f18583eb907c6a75a730cc",
+  "module": "lumenairy/analysis/detector.py",
+  "token": "527f2f702a1484a937a788b28728ce38fa360c9bf8be183223c83781170b584a"
+ },
+ "lumenairy.analysis.field": {
+  "ast": "5a5694bf8c0911c66a9e0841fc8bfcd6609ea116bd6744f6d4fd5a4587583f9c",
+  "module": "lumenairy/analysis/field.py",
+  "token": "a0ece4df0e20841a508b292357e79c6e0f7cbca3a315dc78c466874e5cd3ea07"
+ },
+ "lumenairy.analysis.ghost": {
+  "ast": "21444e785f8d6c2c5012ee24406b46ae5ba8774f6edc3516f5ada67faa176818",
+  "module": "lumenairy/analysis/ghost.py",
+  "token": "e01553574d5730c8ef61cf85ef454c22216f92ed0264c02f0db608f999053961"
+ },
+ "lumenairy.analysis.image_plane_wfe": {
+  "ast": "616b1e19368c283998733524172b87f925b5deef1177501f571530d5c0945e45",
+  "module": "lumenairy/analysis/image_plane_wfe.py",
+  "token": "797bac1b3f89da781879d75d8a24680da39fe49a608b334ae0104893e9d7f941"
+ },
+ "lumenairy.analysis.interferometry": {
+  "ast": "0ed47b7c6111489ae64d46b9932ddc551ccb7e6404f25c090ac09732b0678045",
+  "module": "lumenairy/analysis/interferometry.py",
+  "token": "9fb9f86f5caeaf9270e758d3ba721bbadcc18b875b94d460541c6b3748efbf15"
+ },
+ "lumenairy.analysis.opd": {
+  "ast": "7f684df0c053dbe2152be4c7a81cab8eeeb02309d1d3513b207547fafd48832b",
+  "module": "lumenairy/analysis/opd.py",
+  "token": "6823f40239948aa918b5d107e59684a59007e1aa78ed1f2e3508e3753cf079fc"
+ },
+ "lumenairy.analysis.phase_retrieval": {
+  "ast": "e9a4bb26daae96d6440a83423fba33f47bd8d6bcaa754673c07290e7e5c14db7",
+  "module": "lumenairy/analysis/phase_retrieval.py",
+  "token": "354319b21a0d5e42f54f37404872c83ecdc8e073435825d8ab9c23d04587e88c"
+ },
+ "lumenairy.analysis.psf_mtf_otf": {
+  "ast": "c1d4a88c11c9b8568843802bf31ed78a33c3cbfb44dd18843b5a2697694663b9",
+  "module": "lumenairy/analysis/psf_mtf_otf.py",
+  "token": "673e79189b55866955d5fb7d41d7637aa9bc077caa84202dab5d9e796955a536"
+ },
+ "lumenairy.analysis.strehl": {
+  "ast": "2d243f0c01da7bdb4b0b0cfff3efc9e0d677829ab2c4b38b601352d522e9ceca",
+  "module": "lumenairy/analysis/strehl.py",
+  "token": "7a2f5316b75ef0658ec60d2b867bc863f70e5c7859d43e4831639a09f9e21594"
+ },
+ "lumenairy.analysis.through_focus": {
+  "ast": "9e8a789cd2c3ec59c4589c351df78b8119590e8df3713e4663f6f5f9c358289b",
+  "module": "lumenairy/analysis/through_focus.py",
+  "token": "00ad9b40602f84e97ff74cd482b8b71c7c8da7a0371c08f440e082c62c0995aa"
+ },
+ "lumenairy.analysis.zernike": {
+  "ast": "658f5e715e0433f5467c4879f54f207d5a38434ed66b3543df2f7a7de61a3db9",
+  "module": "lumenairy/analysis/zernike.py",
+  "token": "8640108bea4a0a353ef4ab8289e5070ca84f8ed51bcd75a5abbdabe3af6200c5"
+ },
+ "lumenairy.backend.fft": {
+  "ast": "df8331594011ee7a56c05409f667b0da0c395fbaf6b02609ccfbef01f861bc17",
+  "module": "lumenairy/backend/fft.py",
+  "token": "eaf7382315b336ea13c0e458e9b304a8efe1c686f3784426d44f92ac50546a5a"
+ },
+ "lumenairy.cache": {
+  "ast": "a9893b7c5a149ffc0ebeed2824a6bb977bc61d35d4c3297fc54aa7175beeb9f5",
+  "module": "lumenairy/cache.py",
+  "token": "7eb0f5e5a9610bc11bfd3f18ab61f010c2cf021c1244ffae2335d65400821139"
+ },
+ "lumenairy.elements._berreman_jax": {
+  "ast": "627458e44b53c31ee8bbd8e92622811dfdfbda678a5335172b033035aaa6c9a3",
+  "module": "lumenairy/elements/_berreman_jax.py",
+  "token": "64653d665913a043977de506be7a82a9a59f61e12693ca51310545d19dbbcdc0"
+ },
+ "lumenairy.elements._lens_jax": {
+  "ast": "31f68294c61090e11b7e7b9c1aafe4fd4809878dcbcb36087aed126d4f3334d6",
+  "module": "lumenairy/elements/_lens_jax.py",
+  "token": "2c31b2db8f3bbe7c7ec4077e68e38722b0504dff736ed662b117d8b41ea99103"
+ },
+ "lumenairy.elements._lens_real": {
+  "ast": "78c106c88ebba4c7de44092921427d5db501abe18b8e794ca5f6e9e292ec5f02",
+  "module": "lumenairy/elements/_lens_real.py",
+  "token": "a89f4581bf67954d704bfd01361abddd5aa996919d5cf50b1a019b3826dc9fab"
+ },
+ "lumenairy.elements._lens_thin": {
+  "ast": "53ee06eca3c2a3f6f2c5f5e846e883a88bbd0a57b3be08c3c6db06d81900af9c",
+  "module": "lumenairy/elements/_lens_thin.py",
+  "token": "2bf6ff7067327f7d034e6baa204269b9465d72b38b27f0f8dc63739642339b8d"
+ },
+ "lumenairy.elements._lens_traced": {
+  "ast": "34c0e87d665b3f8de027419311b7e2119e7fe3abd94c6a58197aa17ab7cb964a",
+  "module": "lumenairy/elements/_lens_traced.py",
+  "token": "4d961c535739c1625cd5c4d0d0b0a31c45c35e83a79a6e139751cef92132cd10"
+ },
+ "lumenairy.elements.berreman": {
+  "ast": "6fbc34d8597f3841a3ad5f331915d33bdb63c8ffabea8a655a0d606899553de4",
+  "module": "lumenairy/elements/berreman.py",
+  "token": "1e239e73cf88e262a9b9ef5b84c8d242081cac076d304acf0c1fbd3ea2617d79"
+ },
+ "lumenairy.elements.bor._jax_bor": {
+  "ast": "5379d6ad83a711ff9116676b4e012cbdda9192a16f84d99e1ded6d89396cb7c9",
+  "module": "lumenairy/elements/bor/_jax_bor.py",
+  "token": "adb26cd73305d5b02a328f92e19bb71611c023541b9736bb626a0f1c05a600b4"
+ },
+ "lumenairy.elements.bor._orient": {
+  "ast": "9245fb6b3bf3ef3e1cccf19a46bfcce12362f2939331278db29d9c1cba9f6e3f",
+  "module": "lumenairy/elements/bor/_orient.py",
+  "token": "4571967b21f3fabfcf36b0a4e6f22995d3c787ea5ba0c52613c03b174563cae2"
+ },
+ "lumenairy.elements.bor._sem_contract": {
+  "ast": "6dea7b84f8d4ef0c84a06b7b30c986d9fd9f9616ec123240c8d8db35da2ef054",
+  "module": "lumenairy/elements/bor/_sem_contract.py",
+  "token": "dddb7fb977382766b8591d59b0e71313d67d15d345d1928f5ba56ccec23f157a"
+ },
+ "lumenairy.elements.bor.bor_solve": {
+  "ast": "f8fdde67bce6974d1bab6a8e9e637d78b031f361214ef86071e3cc042a99730b",
+  "module": "lumenairy/elements/bor/bor_solve.py",
+  "token": "92ed5caeb6960abb886d91668fd4636eb7e3d710e19d1462f00bd65c0a69b9b8"
+ },
+ "lumenairy.elements.bor.bor_stack": {
+  "ast": "6fbc5434ec50b0349770400fa695a05dcecff912e54da9b72c8db874c5425d7e",
+  "module": "lumenairy/elements/bor/bor_stack.py",
+  "token": "63e2a92215dbd93b0658e7d9659db1788326365720afe58cd2016c27fc377b4c"
+ },
+ "lumenairy.elements.bor.coupled_radial_eigensolver": {
+  "ast": "4970550710109548a8e60c6d5adbcc2b819f058a25a881ad2101999ce8d7b960",
+  "module": "lumenairy/elements/bor/coupled_radial_eigensolver.py",
+  "token": "a7f5e14b4d04b62b100f988c72d7a9a2e5503087757427e2bb1467d3101a918a"
+ },
+ "lumenairy.elements.bor.farfield": {
+  "ast": "a5f1b4a82b63c19d8e623b1d69cb57bc1f42db296a0b71d6433c3de75e9c1a93",
+  "module": "lumenairy/elements/bor/farfield.py",
+  "token": "353b1cd2353ef86c8717ea6f6131c8421ba4e9e9d432c595aa157323908acb63"
+ },
+ "lumenairy.elements.bor.radial_eigensolver": {
+  "ast": "660b4065f1f6116e5e64d201f99c673d8acfdd336a6c6a2cc993beba0738db24",
+  "module": "lumenairy/elements/bor/radial_eigensolver.py",
+  "token": "0fcebde377c6d4ff1a4d553978ad5368c7676cbe3cf584f468f45233c28fd796"
+ },
+ "lumenairy.elements.bor.zcascade": {
+  "ast": "93dafad6ad97775ca9da0b9aa8cb1a839982a0feea73a4e830de4e301e97994b",
+  "module": "lumenairy/elements/bor/zcascade.py",
+  "token": "76e5b104ff674104fb4d735f5145a40ecbd7ae8104e3587f2dbe260200dc6532"
+ },
+ "lumenairy.elements.bsdf": {
+  "ast": "cfe811076550f82fe31d6992761b5f3eed0f51f721dc4ca93bc2be249d816370",
+  "module": "lumenairy/elements/bsdf.py",
+  "token": "bd897d07a2841772569117a8c4e7e65430c7b66a2948bd1b0f2107b84921e23f"
+ },
+ "lumenairy.elements.coatings": {
+  "ast": "8d3b29ce1e4a354976fbeae0b7c41a5e2171d1f96176d408e01cbd3ef3008413",
+  "module": "lumenairy/elements/coatings.py",
+  "token": "8444a18c1708aeea66a582cdbcdb221cc3ad41de4a50618dcfce3239a177ac53"
+ },
+ "lumenairy.elements.doe": {
+  "ast": "02873e2fd0767e4f7a521bfcc8dfbd0405879d63ea4f5636c0df928b3b3f16cc",
+  "module": "lumenairy/elements/doe.py",
+  "token": "3d409a8175caa828f2fb36d8a3c30ec8c028f1ff65973983fe6d309ad01265c7"
+ },
+ "lumenairy.elements.elements": {
+  "ast": "f01f30d190caac4c2a6d995d4eb52033a8935800826dc36a4bb59fa5beafcd14",
+  "module": "lumenairy/elements/elements.py",
+  "token": "97a15d750201c3c80017ea22e7f509305d41a32532ea73596d3f2ec08b38ac21"
+ },
+ "lumenairy.elements.eme._branch": {
+  "ast": "b5f5e0175ecca61567149ff1f73564c1fa9e72541c6ccd37ef67bc5d6dd63401",
+  "module": "lumenairy/elements/eme/_branch.py",
+  "token": "ea411656d86c31d12f988318afea0fa3e144c362818625a472f7c4444be2da91"
+ },
+ "lumenairy.elements.eme.eme_2d": {
+  "ast": "d29860b978f3916ae627112a7a8d9781852425d03d61cba1af4352ab50993299",
+  "module": "lumenairy/elements/eme/eme_2d.py",
+  "token": "f6c86f480a7584f9c6dd2f29cd2d02d0e760cce49f83ed05e14c4dfb18861c0a"
+ },
+ "lumenairy.elements.eme.eme_2d_vector": {
+  "ast": "8377da84ed9c9bf14e2cc667a550d1339d7b91617ab0bc930c5cdfe9ee2ee5e5",
+  "module": "lumenairy/elements/eme/eme_2d_vector.py",
+  "token": "fcc3ade488dc4b652f67affbcf9040cf1179f3d544ac69218a1209bd0b6e1745"
+ },
+ "lumenairy.elements.eme.eme_diffraction": {
+  "ast": "9acc98446b594cb8358f8b3f3671fd1b6886535e19da46d99f000006560d0467",
+  "module": "lumenairy/elements/eme/eme_diffraction.py",
+  "token": "fa23038e05adcedf6eb1a58707dc4fd7e42ab5464b8b873d5aeaedbfde3866f3"
+ },
+ "lumenairy.elements.lenses": {
+  "ast": "d2bd657462245706bbfa3657fe04033f45bea8e6c5a47d399880f7be3442838e",
+  "module": "lumenairy/elements/lenses.py",
+  "token": "64252edc9825ca1f6d6e5fa5bbefb634de20b61a5838fe3c3fe1c8b204b69b5b"
+ },
+ "lumenairy.elements.lenses_maslov": {
+  "ast": "26e11eaffbe72753b924e646b419f033f41472172ba103d2ba09205b65fcde04",
+  "module": "lumenairy/elements/lenses_maslov.py",
+  "token": "c7fe50bcc3853d7e2de93412f9e475c7629aa92d54abbd898a9120ad7b34a1db"
+ },
+ "lumenairy.elements.pmm._core": {
+  "ast": "09fb0f3b4ddaaa7576bd2b403325821a5c03df6dfc78826a42a63c7522ffc755",
+  "module": "lumenairy/elements/pmm/_core.py",
+  "token": "82706da61a037113d285100d763e554bfcc4a8757ed80a36f52a40198c50a516"
+ },
+ "lumenairy.elements.pmm.conical": {
+  "ast": "dd5305a98365e8d9312a0bd763b30d27af3d20f7314f5cca5991b24a8428f6ec",
+  "module": "lumenairy/elements/pmm/conical.py",
+  "token": "604b62fd1c455133f9d3727d39f8ef339cc2f1e2a9a51c399d436c04a43babd4"
+ },
+ "lumenairy.elements.pmm.oned": {
+  "ast": "535a5f73a140596da713c48865892410f3c3c3a3b66fe005804d9c02b655ebff",
+  "module": "lumenairy/elements/pmm/oned.py",
+  "token": "7cf6a20a0cc588f1f36499eb6997ff482191646ea0b921a2fda9c380c6472831"
+ },
+ "lumenairy.elements.pmm.stack": {
+  "ast": "9c0cea3a2b7cd1d95113832f54bf3904330b751af37cc354bafcae64fb66b37a",
+  "module": "lumenairy/elements/pmm/stack.py",
+  "token": "d3d0dea91c4b129671c180e076dbc5845c76b7790f9442bd8f9dbbca9a8bb762"
+ },
+ "lumenairy.elements.pmm.stack2d": {
+  "ast": "42ed5d704f6e95f29a9f2b2abdaa95dca2bfdaf2da8e5448b467648fab303629",
+  "module": "lumenairy/elements/pmm/stack2d.py",
+  "token": "739b4a6036051436b3a88fefc24791651a73f08d1fb510f49b248aeece0aac62"
+ },
+ "lumenairy.elements.pmm.stack2d_pure": {
+  "ast": "f87cd4e43438e60f24d69ec66ef9e66955762a00987023af1dcfe8fd3afb900a",
+  "module": "lumenairy/elements/pmm/stack2d_pure.py",
+  "token": "25863f2052ec45717bcf8c1682712251de5daf15d8cc4241e13345c4477ff7a7"
+ },
+ "lumenairy.elements.pmm.twod": {
+  "ast": "4620d14d47bffcecfe7441dbdb41c78c427681d3b279ff9a3f6cd97515162ca8",
+  "module": "lumenairy/elements/pmm/twod.py",
+  "token": "666adcd158721f2b2a4c491df99bd49d875e68de29f51231ce459fffda61ccc4"
+ },
+ "lumenairy.elements.polarization": {
+  "ast": "1a97668f3a64829e0933ed70903aa573791daba90007637fdc6a914612112fb6",
+  "module": "lumenairy/elements/polarization.py",
+  "token": "fa8663125aa74b26120413665a639dc9a75c2a19ac19dc4fa159e3d2da0d5b1c"
+ },
+ "lumenairy.elements.rcwa.stack": {
+  "ast": "8d711be52b2b11b235608870b89c36fda8bb3ab38d9c4c0be29347c4f7cdb4d7",
+  "module": "lumenairy/elements/rcwa/stack.py",
+  "token": "450ffb77577a61f1ceebc4d50f5776360fbb1a9ce4189cbdfa8f60c81c96b2c5"
+ },
+ "lumenairy.elements.segment_geometry": {
+  "ast": "85027c1fbcabddfdad159b7024faa061fed78946c6ce6a16ab8ddf2732093918",
+  "module": "lumenairy/elements/segment_geometry.py",
+  "token": "3c6aba27608a91d6510d99b86f9dc51554ab78a2036b7d19ff716c6a327bcbae"
+ },
+ "lumenairy.glass": {
+  "ast": "2f5b36a9ced1ffadf0bcd2cf242246a0069c1cfec1557909d01f83ec07ccbfe6",
+  "module": "lumenairy/glass.py",
+  "token": "3fc34871dc0da48032fe574abb7ae899caa1bf26b24959c25e3543303eb89992"
+ },
+ "lumenairy.io.codegen": {
+  "ast": "42cd063faa6ad18a81e035a4589414bf9e4a01f00e6c3b878d07663cd7dd814f",
+  "module": "lumenairy/io/codegen.py",
+  "token": "7ac006d6aaed67d9a4f76d1fd86e28f0a586fcca2e259137eb68ec25abe510cc"
+ },
+ "lumenairy.io.prescriptions_builders": {
+  "ast": "d8936ee9103c6a8118c622db5af8c1c8ab14d67a99447e38ca28373c7aac4972",
+  "module": "lumenairy/io/prescriptions_builders.py",
+  "token": "b53193614552828f43a0468ebd9136b77219fe8d40af60bd802364c14db77bf6"
+ },
+ "lumenairy.io.prescriptions_quadoa": {
+  "ast": "3118a33a2c664cb7241ec2f54985fb641e718959f806a6c7751812ce1d9e6d16",
+  "module": "lumenairy/io/prescriptions_quadoa.py",
+  "token": "07ad35fa73ae137c50e0379dd175cb946170e4cbb1b833cbdaf79ec0b9a1178d"
+ },
+ "lumenairy.io.prescriptions_transforms": {
+  "ast": "c2e8ccfe5cc46cfccd83523d32daea6c348298c95e52c3230ac1e285cf18457c",
+  "module": "lumenairy/io/prescriptions_transforms.py",
+  "token": "8d4e112cc86638e7e64c2544695a190237ebd3e3b011aafdf37144967bdae383"
+ },
+ "lumenairy.io.prescriptions_zemax": {
+  "ast": "f7024711a11c4cb8eaae610eaac39d9beaf2b226def1be3db87931696317e538",
+  "module": "lumenairy/io/prescriptions_zemax.py",
+  "token": "1e20cdee5a3e898103b722ae369ab8661da51f270db63bd6083c8d5baa9fd20f"
+ },
+ "lumenairy.io.storage": {
+  "ast": "dfd2c16e28614204ea52d48e1ff32a83280518beb16b25ebbd29d8d16094317e",
+  "module": "lumenairy/io/storage.py",
+  "token": "710af62cf557d6fb839e3f57f4342223ca955b064e02306e442427133c370068"
+ },
+ "lumenairy.memory": {
+  "ast": "612185192dbdeae32399a706200242280309ab2e019a0fb1d7486a047e66ccce",
+  "module": "lumenairy/memory.py",
+  "token": "08eee71fb38557ecab384aa6bb88e2f465837bc3cab6b19e34f53302946c3244"
+ },
+ "lumenairy.optimize._merit_jit": {
+  "ast": "3e1d1b9c131e1ffb4f9c5759e440fdf57bcc2be8d99b720ecc71597c9dbbd7c1",
+  "module": "lumenairy/optimize/_merit_jit.py",
+  "token": "74c1120f2e99e60380770f2617bf6d3806ea6fe9863052020a1a45409a03f327"
+ },
+ "lumenairy.optimize.context": {
+  "ast": "13e850f4b689f3a92332efb9b27f922c2342feb6599ea3b9c9a4f711bfd7c541",
+  "module": "lumenairy/optimize/context.py",
+  "token": "08e5e91a0e0ac5f837b738ba84d2b83dbf5159aefcb2da5445c6b2053fe8cc32"
+ },
+ "lumenairy.optimize.driver": {
+  "ast": "12007fb56de1eb90c27b13035eeca2a53e9939133007a51385e3d6ed329cc68c",
+  "module": "lumenairy/optimize/driver.py",
+  "token": "d4d34e8b2e3b7a11dd662b170b12c34b2ff2f3515a2aa5b292f00d6b3a9e95f8"
+ },
+ "lumenairy.optimize.jax_merits": {
+  "ast": "3821a4fe12c45154d28f3530632572cc83c5c24f82b84b46f589405f701ef277",
+  "module": "lumenairy/optimize/jax_merits.py",
+  "token": "79bd8f915b30a1af69b1b6531b973d0af1bb50c49606bac6ee15d75c9d384b71"
+ },
+ "lumenairy.optimize.merit_terms": {
+  "ast": "5193e38d3913a76ea592de50f0078fbeebd6afbf45e7a82fa7ab430d13c29409",
+  "module": "lumenairy/optimize/merit_terms.py",
+  "token": "48a5fc081c98b73a6a5ee079d48ad80c0e6d66811a0411e62d718cab6d28fa2c"
+ },
+ "lumenairy.optimize.multi_objective": {
+  "ast": "d2d728362820929922a0d49c5ba884d3eb458cb29c93553613011aaa13fe2116",
+  "module": "lumenairy/optimize/multi_objective.py",
+  "token": "cbeeaf989d1e374dfde2da370901af0a6d7fc66e59302f03e052dae060821fc3"
+ },
+ "lumenairy.optimize.multiconfig": {
+  "ast": "df08d2bc34706cb8d65d8e9ab245eed31250a3f8f7a017b74cab37cfc9846e90",
+  "module": "lumenairy/optimize/multiconfig.py",
+  "token": "3d276d334b842777026e047c3a23c699a1032f9fd821e9220fb293e17991b83e"
+ },
+ "lumenairy.optimize.parameterizations": {
+  "ast": "2125df6287c984b5ae3d094a3eb211e5782dddc9e2ff783aa96783f12fa04835",
+  "module": "lumenairy/optimize/parameterizations.py",
+  "token": "52a7cf64fe9fd1e93dd8c8594c4c494d6115c72b24029c7660f06640e987e39b"
+ },
+ "lumenairy.optimize.wrapper_merits": {
+  "ast": "c09c446059138b4520ae70f1820fe4ef535150c2cf5c4854780408409dc5daff",
+  "module": "lumenairy/optimize/wrapper_merits.py",
+  "token": "69b4b870ccae2a65b1bd1e7e977691b1cb88f1394f3357fac8c1a20a7c2ca278"
+ },
+ "lumenairy.propagators.asm": {
+  "ast": "5443d15c195cc9292768294fba219459559fdd111f3fef21f64d04498e7b29fb",
+  "module": "lumenairy/propagators/asm.py",
+  "token": "a8262a4d4b4a7fe68d6ffa25b5c6825b5a7ffb7a2b73c2f4a690e9e2347f1cd8"
+ },
+ "lumenairy.propagators.asymptotic": {
+  "ast": "24449fce106838b55c226094d5d8dc1e624f49c77bc87bbd17045cd6d56561d7",
+  "module": "lumenairy/propagators/asymptotic.py",
+  "token": "2a5d7180a0e478970cd2884db2a2eb1e2f7599f6fb0ddd1d43f5c6ee4fb4e6f4"
+ },
+ "lumenairy.propagators.asymptotic_aberration_tensor": {
+  "ast": "d0d36ad937c22892b8db10d496eab14ac16f046789172cc70b066c7827a93dcb",
+  "module": "lumenairy/propagators/asymptotic_aberration_tensor.py",
+  "token": "3d40b412c8b63680954940a2557f82c8d8adc36bb705134f013e9c55837ca527"
+ },
+ "lumenairy.propagators.asymptotic_canonical_fit": {
+  "ast": "d36204f01b8a593b77b15b74aa7896a6ca75a1c216660afef977a747526d7219",
+  "module": "lumenairy/propagators/asymptotic_canonical_fit.py",
+  "token": "27f528cd966695b45c11da59135966e5ad9344560e7e58c63a73a1363e5a7b93"
+ },
+ "lumenairy.propagators.asymptotic_jax_twin": {
+  "ast": "6c9e1419f0baf53eb77fadd98d9498d4032747a96d3868e52719a5cd0c947ccb",
+  "module": "lumenairy/propagators/asymptotic_jax_twin.py",
+  "token": "c0a2a51c17f5c048f73a247fa37d7970a2dbe4da8a0e70ba7b1848ffa09cd64a"
+ },
+ "lumenairy.propagators.asymptotic_maslov": {
+  "ast": "b62534cbe4794d121f73147d1793fe523d53e17c9243287cafbb885215df8638",
+  "module": "lumenairy/propagators/asymptotic_maslov.py",
+  "token": "63033d5ca9812ca0bc5addef717438297dca94a23a9843c9b95ec434da585212"
+ },
+ "lumenairy.propagators.asymptotic_modes": {
+  "ast": "0d725ed90561efc3da04f57bf219c99b481ae712d622bd40d7f6417fbd9e1465",
+  "module": "lumenairy/propagators/asymptotic_modes.py",
+  "token": "fb4d39658dcd883bcadc2eeed60dd38ffcf1389e735899675aa82646cadc37f2"
+ },
+ "lumenairy.propagators.dispatch": {
+  "ast": "49e2718d8cae3a8ab540e9870fe9e5f0cc76e2d43988b4b0a4e50a3c96b3add2",
+  "module": "lumenairy/propagators/dispatch.py",
+  "token": "82667cdd472e30f98dcf6e5a2907c87073edee8feb9f523d87e84f3d826b1da6"
+ },
+ "lumenairy.propagators.ensemble": {
+  "ast": "ca6b386818504085a9fc0b305b2765933f1f12721f2ffd0d4fe21abff0af4569",
+  "module": "lumenairy/propagators/ensemble.py",
+  "token": "67de87dc46dea0538497807274f70a3c01fb8ea2a597df14cd4af4882bde66b4"
+ },
+ "lumenairy.propagators.fresnel": {
+  "ast": "f91e2a541c81d45798c2a0edb4abe725282fcc138e7a76ffd7296f0b94f77753",
+  "module": "lumenairy/propagators/fresnel.py",
+  "token": "9a4daa9697c7ef0c86fec5d7990566ff0de218dc6f17bba2fab9b12e425c8dd0"
+ },
+ "lumenairy.propagators.gbd": {
+  "ast": "5586dc864b5f2ea80343794f46af768909df54bc9c2d7e134affeca1c7f65795",
+  "module": "lumenairy/propagators/gbd.py",
+  "token": "3bee863602381dd74eb9378990b5e594235f1aca2dd170ec525480c40b4dd802"
+ },
+ "lumenairy.propagators.hf": {
+  "ast": "f6d5d2e97c686e003e8c57c46c87f91ebdb5167c08e328b44b6bc83624447026",
+  "module": "lumenairy/propagators/hf.py",
+  "token": "75d2e2418b9bffd92a1707f741cd90cbf2e649dd4a5bdec9c680f16695283f6e"
+ },
+ "lumenairy.propagators.hfpi": {
+  "ast": "53935e9745803d949c9cd88d5b82d05a822ac6ff73d9ef796722f63576b8eeec",
+  "module": "lumenairy/propagators/hfpi.py",
+  "token": "e9f13c9b20c255b1c2f51911dc30a53739e0b5895d04f1b118b681bd0ddf78db"
+ },
+ "lumenairy.propagators.mft": {
+  "ast": "0f8c96a6815238955619bd4c543e8e12ffed6b947bff6b1cb3110b3c38bd5b7d",
+  "module": "lumenairy/propagators/mft.py",
+  "token": "658b62322c934c19bf189fcab67aa6ee10d7341ed79cf7e5713b45bd82edcfa4"
+ },
+ "lumenairy.propagators.mhs": {
+  "ast": "bf7b57878e8216a12a8afa19bd13549b62ecd1bef5edc74ad489f426e4d29503",
+  "module": "lumenairy/propagators/mhs.py",
+  "token": "32aed24747af4dfb0beab107f92d067f0afd3f92b2cb1ad4e8a08b6d87a3f8c1"
+ },
+ "lumenairy.propagators.result": {
+  "ast": "e4fcfd3f52f667a8ee804286fadb57d03f77a948f57ad75690f5ab89d148ff59",
+  "module": "lumenairy/propagators/result.py",
+  "token": "e06d3b7e55f1b1fd58715ee977a3216ea75e37e1ad55b2aa25e44f2f5649791b"
+ },
+ "lumenairy.propagators.rs": {
+  "ast": "286d131880517ae59a7cbe28858ffe2565d6168f2b171497e65639d6633f40c0",
+  "module": "lumenairy/propagators/rs.py",
+  "token": "f4f42229338bc79fe0aa579212dc7ff32d07f96c4ac3545809c5d06f7c3e026c"
+ },
+ "lumenairy.propagators.sas": {
+  "ast": "9e2418e8813271e5af722ad2f4234330996a6560f8e017e2b5f15a189bb5a8b7",
+  "module": "lumenairy/propagators/sas.py",
+  "token": "f0760f20ec4ea8b53b4588137b836d64f94b9b524858c0d10eda0744867675f2"
+ },
+ "lumenairy.propagators.subaperture": {
+  "ast": "d1030e6626743f3fb86f6da6a9a7414ef56eef1ba336c2c4c104d1a1ff0d22b8",
+  "module": "lumenairy/propagators/subaperture.py",
+  "token": "f3e300a780f2f3e7627e2fa4eeb2136b4f8ab3d06b1ba6e58ce0ffafdaf800f3"
+ },
+ "lumenairy.propagators.system": {
+  "ast": "92c78bf52e3a76f6536c9d898254b83f2cc7ed555e1172c4595cb15f6dd7e729",
+  "module": "lumenairy/propagators/system.py",
+  "token": "5f4ba024d2310d6b188ce7e463fbd139334111e795b0bb4ee470185df36334c5"
+ },
+ "lumenairy.propagators.vector_diffraction": {
+  "ast": "e6eaebabe033bc939822b64b2ddf535dbcd820eb2dc100e84ed919de6d945323",
+  "module": "lumenairy/propagators/vector_diffraction.py",
+  "token": "5879805f6bb4095d6a444d7ff188926ea771f6c0d5d80a19c4fdf537f2a0eee0"
+ },
+ "lumenairy.propagators.vectorial_hfpi": {
+  "ast": "df3e28e6c26dc290a30dfcd566f811cb648f488e5c891ee9575776995ae65417",
+  "module": "lumenairy/propagators/vectorial_hfpi.py",
+  "token": "27baa04c0fdb573b52a619304d273ede2a0a41914835e77ebe8aab86502e1fdb"
+ },
+ "lumenairy.raytrace.bundles": {
+  "ast": "1e558e7d45fe3f5f03acb73df77f3d8884c39af932cf8c08e2dbeea86fd37411",
+  "module": "lumenairy/raytrace/bundles.py",
+  "token": "06931463d3f6f7c415ab14583d46dac63ea6af2c4160df99e2cef046fcb57f82"
+ },
+ "lumenairy.raytrace.differential": {
+  "ast": "124a4c02f3a5db2e9d423ab3a8937d72f454a1850495a866ea20129f67039b27",
+  "module": "lumenairy/raytrace/differential.py",
+  "token": "3aaf95c898d1ee3244b7b8e87ad17b3d3b1bda5b54ddb741dc8b779cbaa12863"
+ },
+ "lumenairy.raytrace.from_field": {
+  "ast": "3adb4d02e5387f5ae39423f234654218350619a5fbdee72e9f201149b39b6dbd",
+  "module": "lumenairy/raytrace/from_field.py",
+  "token": "17d8eeccc024675619a25f4666b3c46ed9b71b91f07c162a7aa03cbfb84497ff"
+ },
+ "lumenairy.raytrace.intersection": {
+  "ast": "b32fdebb8c9727704f04a4419ee320e16f4a77189dc9a0eb78d31d2136070507",
+  "module": "lumenairy/raytrace/intersection.py",
+  "token": "86d4cc94de36f85b23ff3f146da712b7e7808d508eb93a4e5744a668508febe4"
+ },
+ "lumenairy.raytrace.jax_trace": {
+  "ast": "28147c2954849ca39828847f34cef62559b9d18394c2196358f686de5343dd78",
+  "module": "lumenairy/raytrace/jax_trace.py",
+  "token": "774792f9aae7f960d33e89d6330ba0e3683b5818fe1448338d1a489fdee81f9e"
+ },
+ "lumenairy.raytrace.layout": {
+  "ast": "9ec337cda3725e080b5b62bd88b1ffaf80c0444a867ee37dda55d3f5fe503c31",
+  "module": "lumenairy/raytrace/layout.py",
+  "token": "78dd068b25b8998243594f8deb170065d3ff82df0676faf664bd691703973db1"
+ },
+ "lumenairy.raytrace.paraxial": {
+  "ast": "9065a4a64c9b653df35955a0f88143ea0056713f36fa6dc08aaa6974cfce18a4",
+  "module": "lumenairy/raytrace/paraxial.py",
+  "token": "d680af7d9577f8a2670edf41f919d6ec96b9a1464dcd2a53a96c49a605c9304a"
+ },
+ "lumenairy.raytrace.ray_fan": {
+  "ast": "7b359195858eea6cdb2bbd8d161d5ae001afdbf6b594de662cc37f6656f20c63",
+  "module": "lumenairy/raytrace/ray_fan.py",
+  "token": "383eca883fc7e8714f233a1fb82522280063d2aa3a2bfd13c40c9fcd087b405f"
+ },
+ "lumenairy.raytrace.seidel": {
+  "ast": "7984f9551684714d0f80cb0edbfd4a68c7b6be9d917d2c8389ad3883a44ede30",
+  "module": "lumenairy/raytrace/seidel.py",
+  "token": "c5fd346826c05552072d63ca6dcbbbf618efce1e53c5f8c72819636eddf2fd58"
+ },
+ "lumenairy.raytrace.seidel_analysis": {
+  "ast": "e23d3ab2c0ed41719d8e1f8a3da3f3615acc645d82f0b57e25fc7896bde27061",
+  "module": "lumenairy/raytrace/seidel_analysis.py",
+  "token": "77e23f4ceb2c1460d15fe35db6435d8e5f2b80b1eac97e290e39449c33299f0d"
+ },
+ "lumenairy.raytrace.surface": {
+  "ast": "296c0892a536d44ebea0803b96b1523870ccf553cf62c5d4b75992fed0737388",
+  "module": "lumenairy/raytrace/surface.py",
+  "token": "23b3dfb373d0419ad7be53469de1e4733d8b7545b081153b7d2443857d8f6ff5"
+ },
+ "lumenairy.raytrace.trace": {
+  "ast": "4d2dbbe0b6ed2f29bf4a6cf566c1e45282d479055dee7cf2f673a4fdb9a94dde",
+  "module": "lumenairy/raytrace/trace.py",
+  "token": "648519993a143e9e97039348d0042bacc2b98b2b4aa9d8772d8e400b79b618a5"
+ },
+ "lumenairy.raytrace.world_trace": {
+  "ast": "fe602817e7621d3c428b3a2b04634a222493acbdef909960724aee7eeeb500e9",
+  "module": "lumenairy/raytrace/world_trace.py",
+  "token": "84adcb4ca47803a8e2fbe1b45c990371f61a042be037140de714db1bb0fb3a0d"
+ },
+ "lumenairy.sources.core": {
+  "ast": "c33e35b501a566495da64aa629afb16fe1067485f32ca36711451f46a20b3c5e",
+  "module": "lumenairy/sources/core.py",
+  "token": "577d27a4fd10c862fa27bc97e2656531369090b8dd1728a29a91b5af608477e4"
+ },
+ "lumenairy.ui.coherence_dock": {
+  "ast": "26889acadd9714b4409aaecd70144091a148adc61ec26417b90cd3b482deda55",
+  "module": "lumenairy/ui/coherence_dock.py",
+  "token": "9a901e7fd43133db70ad430addaf10083caa3fb6728ad4261fd92f35bb40d976"
+ },
+ "lumenairy.ui.layout_2d": {
+  "ast": "8a9349f9b0e778cfb12c3a92ffb5db432aab947e9ff97129d824125a2be97997",
+  "module": "lumenairy/ui/layout_2d.py",
+  "token": "a8ded8e98085b9612d2542cfbc36fc02e5e57335e6d1ec482ebac54cd6553fc2"
+ },
+ "lumenairy.ui.main_window": {
+  "ast": "9a5bb39141721e20b1b39ec110a6dea18462f505402161ca2d0e710ee3eaf9e3",
+  "module": "lumenairy/ui/main_window.py",
+  "token": "85eb8476f87a78baf94c3c633b99e070776e422a1a3b9c3a29439bb71d565e93"
+ },
+ "lumenairy.ui.model": {
+  "ast": "fd10117de41fa3cdcaba8b6248f6d5d0ef059d204763d4e1e42ac3cc75ed6848",
+  "module": "lumenairy/ui/model.py",
+  "token": "c89923ffe3b4d8e6f9c1c51c4af35b9c3b35104f08abb4e449e4b76c45cc5622"
+ },
+ "lumenairy.ui.optimizer_dock": {
+  "ast": "efbdd1913076d309f6e46d6258f7e3d67175162a7cbd88d9bf13eefacd8cf425",
+  "module": "lumenairy/ui/optimizer_dock.py",
+  "token": "7707016d1f04620a89254114b57c204eabcbb508e1c6236431724f8673efc773"
+ },
+ "lumenairy.ui.waveoptics_dock": {
+  "ast": "68bd80bfc918099c4021a37c06cf1556790270e2770af4dac06b9e2632b4a658",
+  "module": "lumenairy/ui/waveoptics_dock.py",
+  "token": "b73b2c2cbc3af6a1ff83bfe3ceb2167b2c02c88f1da28245ad11acc5ebe244d6"
+ },
+ "lumenairy.user_library": {
+  "ast": "fb41a8208a1e2d3965e5eabf24e216a0dc47e5361ccc24ce33d11caa21293107",
+  "module": "lumenairy/user_library.py",
+  "token": "11d57554edd8b2ec12bfa2ea452f0c3f098c1f7834bc2505324504cab502e8f1"
+ }
+}

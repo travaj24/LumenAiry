@@ -1,0 +1,32 @@
+{
+  "arm": "sim310_tomli",
+  "python": "3.14.6",
+  "blocked": [
+    "tomllib"
+  ],
+  "pytest_argv": [
+    "C:\\Users\\Tesla\\AppData\\Local\\Programs\\Python\\Python314\\python.exe",
+    "-m",
+    "pytest",
+    "tests/unit/test_audit2609_a15a_packaging.py",
+    "--capture=sys",
+    "-q",
+    "-p",
+    "no:cacheprovider",
+    "-rs",
+    "-p",
+    "t3_block_tomllib"
+  ],
+  "returncode": 0,
+  "toml_parser_resolution": {
+    "resolved": "tomli",
+    "file": "C:\\Users\\Tesla\\AppData\\Local\\Temp\\claude\\C--Users-Tesla\\372a2d1f-acbe-4b57-a148-eeae3fe1d729\\scratchpad\\tomli_target\\tomli\\__init__.cp314-win_amd64.pyd",
+    "first_error": "import of tomllib halted; None in sys.modules",
+    "python": "3.14.6"
+  },
+  "collection_error": false,
+  "tail": [
+    "...........                                                              [100%]",
+    "11 passed in 2.57s"
+  ]
+}

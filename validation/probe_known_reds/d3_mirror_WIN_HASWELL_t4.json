@@ -1,0 +1,57 @@
+{
+ "python": "3.14.6",
+ "numpy": "2.4.4",
+ "lumenairy_file": "C:\\tmp\\lum_reds\\lumenairy\\__init__.py",
+ "env": {
+  "OPENBLAS_CORETYPE": "HASWELL",
+  "OMP_NUM_THREADS": "4",
+  "OPENBLAS_NUM_THREADS": "4",
+  "MKL_NUM_THREADS": "4"
+ },
+ "deg2rad45": "3fe921fb54442d18",
+ "cos45_bits": "3fe6a09e667f3bcd",
+ "sin45_bits": "3fe6a09e667f3bcd",
+ "cos45_eq_sin45": true,
+ "cos45_minus_sin45": 0.0,
+ "DIAG": [
+  [
+   "(4.570182757409818+0j)",
+   "(0.5701827574098178+0j)",
+   "(0.9609826516416263+0j)"
+  ],
+  [
+   "(0.5701827574098178+0j)",
+   "(4.570182757409818+0j)",
+   "(0.9609826516416263+0j)"
+  ],
+  [
+   "(0.9609826516416261+0j)",
+   "(0.9609826516416261+0j)",
+   "(5.619634485180364+0j)"
+  ]
+ ],
+ "DIAG_mirror_defect_max": 0.0,
+ "DIAG_mirror_defect_components": {},
+ "DIAG_scale": 5.619634485180364,
+ "DIAG_is_own_mirror": true,
+ "DIAGsym_is_own_mirror": true,
+ "DIAGsym_shift_from_DIAG": 0.0,
+ "cells": {
+  "square": {
+   "n_pixels_in_mask": 1369,
+   "mask_is_own_transpose": true,
+   "defect_max": 0.0,
+   "is_own_mirror": true,
+   "sym_defect_max": 0.0,
+   "sym_is_own_mirror": true
+  },
+  "disk": {
+   "n_pixels_in_mask": 1804,
+   "mask_is_own_transpose": true,
+   "defect_max": 0.0,
+   "is_own_mirror": true,
+   "sym_defect_max": 0.0,
+   "sym_is_own_mirror": true
+  }
+ }
+}

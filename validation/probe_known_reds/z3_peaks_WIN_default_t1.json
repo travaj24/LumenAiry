@@ -1,0 +1,99 @@
+{
+ "python": "3.14.6",
+ "numpy": "2.4.4",
+ "platform": "win32",
+ "N": 1024,
+ "unit_bytes": 8388608,
+ "lumenairy_file": "C:\\tmp\\lum_reds\\lumenairy\\__init__.py",
+ "env": {
+  "OPENBLAS_CORETYPE": null,
+  "OMP_NUM_THREADS": "1",
+  "OPENBLAS_NUM_THREADS": "1",
+  "MKL_NUM_THREADS": "1"
+ },
+ "runs": [
+  {
+   "stokes_new": 50334544,
+   "stokes_old": 58720880,
+   "dop_new": 50333632,
+   "dop_old": 69209000
+  },
+  {
+   "stokes_new": 50333632,
+   "stokes_old": 58720880,
+   "dop_new": 50333632,
+   "dop_old": 69208976
+  },
+  {
+   "stokes_new": 50333632,
+   "stokes_old": 58720880,
+   "dop_new": 50333632,
+   "dop_old": 69208976
+  },
+  {
+   "stokes_new": 50333632,
+   "stokes_old": 58720880,
+   "dop_new": 50333632,
+   "dop_old": 69208976
+  },
+  {
+   "stokes_new": 50333632,
+   "stokes_old": 58720880,
+   "dop_new": 50333632,
+   "dop_old": 69208976
+  }
+ ],
+ "bytes": {
+  "stokes_new": [
+   50333632,
+   50334544
+  ],
+  "stokes_old": [
+   58720880
+  ],
+  "dop_new": [
+   50333632
+  ],
+  "dop_old": [
+   69208976,
+   69209000
+  ]
+ },
+ "units": {
+  "stokes_new": [
+   6.000236511230469,
+   6.000345230102539
+  ],
+  "stokes_old": [
+   7.00007438659668
+  ],
+  "dop_new": [
+   6.000236511230469
+  ],
+  "dop_old": [
+   8.25035285949707,
+   8.25035572052002
+  ]
+ },
+ "overhead_bytes": {
+  "stokes_new": [
+   1984.0,
+   2896.0
+  ],
+  "stokes_old": [
+   624.0
+  ],
+  "dop_new": [
+   1984.0
+  ],
+  "dop_old": [
+   2960.0,
+   2984.0
+  ]
+ },
+ "elision": {
+  "peak_units_elidable_pattern": 4.00003719329834,
+  "peak_units_name_bound_pattern": 4.00003719329834,
+  "active": false
+ }
+}

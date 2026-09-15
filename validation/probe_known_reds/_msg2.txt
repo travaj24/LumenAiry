@@ -1,0 +1,87 @@
+refactor(carrier): sweep the carrier / system / carrier_field warning chain onto caller_stacklevel(), and extend the b11 ratchet to it
+
+Handoff 4.4, the mechanical part.  Every lens-family body was swept onto
+lumenairy.elements._lens_kernels.caller_stacklevel() by WP-B11; the propagator
+chain was recorded as outside that sweep and is now inside it.  No behaviour
+changes except where a warning pointed at library source and now points at the
+caller.
+
+THE FAIL-BEFORE, MEASURED.  validation/probe_known_reds/probe_carrier_attribution.py
+wraps warnings.warn and, for every warning raised from inside the package,
+computes from the LIVE STACK both the frame the call's own stacklevel actually
+names and the first frame outside the package -- so it needs no guess about how
+deep any entry point is.  The decisive pair is ONE warn site reached at two
+library depths: the gap_kernel='fresnel' tilt-inert notice, reached directly
+through propagate_carrier_referenced (stacklevel=3 names the caller, correct)
+and reached through carrier_referenced_focus_readout, which forwards gap_kernel
+and tilt into the same entry point one library frame deeper (stacklevel=3 names
+carrier.py itself).  2 of 4 emissions misattributed before, 0 of 4 after.
+
+THE SWEEP.  carrier.py: 14 literal warnings.warn stacklevels plus 21 threaded
+literals below them -- the signature defaults and call sites of _guard_dispose,
+_warn_undeduped, _check_collins_sampling, _collins_transport,
+_check_focus_containment and _check_readout_replica.  system.py: 6 (its chain
+reaches the same guards from propagate_through_system and from evaluate, i.e.
+at two depths).  carrier_field.py: 1 plus 2 threaded (it reports through
+carrier._guard_dispose from its own entry points).  All now 0.
+
+The three warning helpers take stacklevel=None meaning "compute it"; an explicit
+integer keeps exactly its old meaning and is still counted from the calling
+guard site, so nothing outside these modules changes -- _lens_real.py and
+carrier_field.py call _guard_dispose without a level, and
+test_niche_c14_encapsulation.py passes _warn_undeduped(..., stacklevel=1) and
+still gets the frame it pinned.  _warn_undeduped counts from its own CALLER
+rather than its own frame, one frame in from caller_stacklevel's counting, so
+its computed default is that reading minus one; the offset is stated in the
+code.  _lens_kernels imports nothing from lumenairy, so no import cycle is
+introduced (verified by importing the three modules in a pinned child process).
+
+WHY THREE MODULES AND NOT NINETEEN.  A static reachability screen
+(validation/probe_known_reds/probe_stacklevel_reachability.py) flags every
+propagator module, which is a possibility test rather than a measurement.  The
+three swept are the ones where multi-depth reach is the documented shape AND was
+measured.  The other sixteen are recorded with their census
+(validation/probe_known_reds/stacklevel_census_base.json: 23 literals in
+io/prescriptions_zemax.py, 9 in sources/core.py, 9 in user_library.py, 8 in
+elements/pmm/stack.py, 8 in optimize/driver.py, 8 in propagators/gbd.py, ...)
+as open work, because each needs its own two-caller measurement first and doing
+that blind is not a mechanical change.
+
+THE RATCHET.  test_audit2609_b11_hygiene.py: the literal-stacklevel scanner is
+factored into one _literal_stacklevel_lines helper (one implementation per
+kernel); test_no_literal_stacklevel_is_left_in_the_swept_lens_bodies keeps its
+id and its eight files; a new sibling covers the three chain modules with the
+measurement and the scope reasoning in its docstring; and a new
+test_the_same_warn_site_names_the_caller_at_two_depths is the two-caller
+instrument above as a test -- the same warn site reached directly and one
+library frame deeper must name the caller's file in both arms.
+
+NOT TAKEN, reserved for the maintainer (handoff 4.4's second bullet and the 4.7
+list): whose diagnostic the in-glass gap-leg warnings are.  The
+wave_propagator='sas' / 'fresnel' notices on apply_real_lens name _lens_real.py
+because the propagator warns and its caller is the lens; making them name the
+user needs the lens to catch and re-emit at its own entry point, which is a
+decision about ownership of the diagnostic, not a substitution.  Deliberately
+untouched.
+
+Runs: test_audit2609_b11_hygiene.py 85 passed (was 82); the files that pin the
+swept helpers directly -- test_niche_c14_encapsulation.py (explicit
+stacklevel=1), test_fix_grid_intent_override_2026_08_10.py (the _guard_dispose
+route), test_carrier_referenced.py and test_carrier_field.py -- 109 passed;
+the census / walker / dispatcher-pin / public-API / doc-consistency sweep plus
+test_audit_except_budget.py and test_niche_audit_w4_input_kind.py 864 passed /
+11 skipped with one pre-existing environmental failure
+(test_public_api.py::test_installed_metadata_version_matches_source_version
+reads the box's stale editable-install metadata, 3.7.8 against 5.47.0, and
+reproduces identically on a pristine archive of the base commit); WSL ruff
+clean; history fingerprints re-recorded for carrier, carrier_field and
+lumenairy.propagators.system and --check green; the V18 walker reads 107 of 107
+after the 13 citations this branch moved were re-anchored against 96cb2096 with
+the repository's own reanchor_since.py.
+
+Files: lumenairy/propagators/carrier.py, lumenairy/propagators/system.py,
+lumenairy/propagators/carrier_field.py, tests/unit/test_audit2609_b11_hygiene.py,
+docs/history/carrier.md, docs/history/carrier_field.md,
+docs/history/lumenairy.propagators.system.md.
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>

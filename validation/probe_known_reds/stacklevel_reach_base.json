@@ -1,0 +1,822 @@
+{
+ "rows": [
+  {
+   "file": "lumenairy/propagators/gbd.py",
+   "n_literal": 8,
+   "n_multi_depth": 8,
+   "sites": [
+    {
+     "line": 180,
+     "stacklevel": 3,
+     "enclosing": "_warn_if_tilted_no_dirsample",
+     "reachable_from": [
+      "lumenairy/elements/lenses_gbd.py",
+      "lumenairy/optimize/driver.py",
+      "lumenairy/propagators/dispatch.py",
+      "lumenairy/propagators/gbd.py (same module)",
+      "lumenairy/propagators/mhs.py",
+      "lumenairy/ui/waveoptics_dock.py"
+     ],
+     "multi_depth": true
+    },
+    {
+     "line": 227,
+     "stacklevel": 3,
+     "enclosing": "_resolve_output_shape",
+     "reachable_from": [
+      "lumenairy/elements/lenses_gbd.py",
+      "lumenairy/optimize/driver.py",
+      "lumenairy/propagators/dispatch.py",
+      "lumenairy/propagators/gbd.py (same module)",
+      "lumenairy/propagators/hf.py",
+      "lumenairy/propagators/hfpi.py"
+     ],
+     "multi_depth": true
+    },
+    {
+     "line": 364,
+     "stacklevel": 3,
+     "enclosing": "_guard_tensor_freespace_branch",
+     "reachable_from": [
+      "lumenairy/elements/lenses_gbd.py",
+      "lumenairy/optimize/driver.py",
+      "lumenairy/propagators/dispatch.py",
+      "lumenairy/propagators/gbd.py (same module)",
+      "lumenairy/propagators/mhs.py",
+      "lumenairy/ui/waveoptics_dock.py"
+     ],
+     "multi_depth": true
+    },
+    {
+     "line": 1478,
+     "stacklevel": 2,
+     "enclosing": "_env_mem_budget_mb",
+     "reachable_from": [
+      "lumenairy/elements/lenses_gbd.py",
+      "lumenairy/optimize/driver.py",
+      "lumenairy/propagators/carrier.py",
+      "lumenairy/propagators/dispatch.py",
+      "lumenairy/propagators/fga.py",
+      "lumenairy/propagators/gbd.py (same module)"
+     ],
+     "multi_depth": true
+    },
+    {
+     "line": 3787,
+     "stacklevel": 2,
+     "enclosing": "propagate_gbd_through_prescription",
+     "reachable_from": [
+      "lumenairy/elements/lenses_gbd.py",
+      "lumenairy/optimize/driver.py",
+      "lumenairy/propagators/dispatch.py",
+      "lumenairy/propagators/gbd.py (same module)",
+      "lumenairy/ui/waveoptics_dock.py"
+     ],
+     "multi_depth": true
+    },
+    {
+     "line": 1328,
+     "stacklevel": 2,
+     "enclosing": "reconstruct_field_from_beamlets",
+     "reachable_from": [
+      "lumenairy/elements/lenses_gbd.py",
+      "lumenairy/optimize/driver.py",
+      "lumenairy/propagators/dispatch.py",
+      "lumenairy/propagators/gbd.py (same module)",
+      "lumenairy/propagators/mhs.py",
+      "lumenairy/ui/waveoptics_dock.py"
+     ],
+     "multi_depth": true
+    },
+    {
+     "line": 1472,
+     "stacklevel": 2,
+     "enclosing": "_env_mem_budget_mb",
+     "reachable_from": [
+      "lumenairy/elements/lenses_gbd.py",
+      "lumenairy/optimize/driver.py",
+      "lumenairy/propagators/carrier.py",
+      "lumenairy/propagators/dispatch.py",
+      "lumenairy/propagators/fga.py",
+      "lumenairy/propagators/gbd.py (same module)"
+     ],
+     "multi_depth": true
+    },
+    {
+     "line": 3872,
+     "stacklevel": 2,
+     "enclosing": "propagate_gbd_through_prescription",
+     "reachable_from": [
+      "lumenairy/elements/lenses_gbd.py",
+      "lumenairy/optimize/driver.py",
+      "lumenairy/propagators/dispatch.py",
+      "lumenairy/propagators/gbd.py (same module)",
+      "lumenairy/ui/waveoptics_dock.py"
+     ],
+     "multi_depth": true
+    }
+   ]
+  },
+  {
+   "file": "lumenairy/propagators/hfpi.py",
+   "n_literal": 6,
+   "n_multi_depth": 6,
+   "sites": [
+    {
+     "line": 670,
+     "stacklevel": 3,
+     "enclosing": "_check_landed",
+     "reachable_from": [
+      "lumenairy/optimize/driver.py",
+      "lumenairy/propagators/dispatch.py",
+      "lumenairy/propagators/hfpi.py (same module)",
+      "lumenairy/propagators/vectorial_hfpi.py",
+      "lumenairy/ui/waveoptics_dock.py"
+     ],
+     "multi_depth": true
+    },
+    {
+     "line": 78,
+     "stacklevel": 3,
+     "enclosing": "_resolve_output_shape",
+     "reachable_from": [
+      "lumenairy/optimize/driver.py",
+      "lumenairy/propagators/dispatch.py",
+      "lumenairy/propagators/gbd.py",
+      "lumenairy/propagators/hf.py",
+      "lumenairy/propagators/hfpi.py (same module)",
+      "lumenairy/propagators/vectorial_hfpi.py"
+     ],
+     "multi_depth": true
+    },
+    {
+     "line": 1285,
+     "stacklevel": 3,
+     "enclosing": "_sobol_cube_draw",
+     "reachable_from": [
+      "lumenairy/optimize/driver.py",
+      "lumenairy/propagators/dispatch.py",
+      "lumenairy/propagators/hfpi.py (same module)",
+      "lumenairy/ui/waveoptics_dock.py"
+     ],
+     "multi_depth": true
+    },
+    {
+     "line": 1992,
+     "stacklevel": 2,
+     "enclosing": "propagate_hfpi_through_prescription",
+     "reachable_from": [
+      "lumenairy/optimize/driver.py",
+      "lumenairy/propagators/dispatch.py",
+      "lumenairy/ui/waveoptics_dock.py"
+     ],
+     "multi_depth": true
+    },
+    {
+     "line": 147,
+     "stacklevel": 2,
+     "enclosing": "_spawn_rng",
+     "reachable_from": [
+      "lumenairy/optimize/driver.py",
+      "lumenairy/propagators/dispatch.py",
+      "lumenairy/propagators/hfpi.py (same module)",
+      "lumenairy/propagators/vectorial_hfpi.py",
+      "lumenairy/ui/waveoptics_dock.py"
+     ],
+     "multi_depth": true
+    },
+    {
+     "line": 1809,
+     "stacklevel": 2,
+     "enclosing": "propagate_hfpi_through_prescription",
+     "reachable_from": [
+      "lumenairy/optimize/driver.py",
+      "lumenairy/propagators/dispatch.py",
+      "lumenairy/ui/waveoptics_dock.py"
+     ],
+     "multi_depth": true
+    }
+   ]
+  },
+  {
+   "file": "lumenairy/propagators/system.py",
+   "n_literal": 6,
+   "n_multi_depth": 6,
+   "sites": [
+    {
+     "line": 402,
+     "stacklevel": 3,
+     "enclosing": "_warn_system_resample_crop",
+     "reachable_from": [
+      "lumenairy/analysis/ghost.py",
+      "lumenairy/elements/_lens_real.py",
+      "lumenairy/elements/bsdf.py",
+      "lumenairy/elements/lenses_maslov.py",
+      "lumenairy/optimize/driver.py",
+      "lumenairy/optimize/merit_terms.py"
+     ],
+     "multi_depth": true
+    },
+    {
+     "line": 476,
+     "stacklevel": 3,
+     "enclosing": "_warn_system_fresnel_window",
+     "reachable_from": [
+      "lumenairy/analysis/ghost.py",
+      "lumenairy/elements/_lens_real.py",
+      "lumenairy/elements/bsdf.py",
+      "lumenairy/elements/lenses_maslov.py",
+      "lumenairy/optimize/driver.py",
+      "lumenairy/optimize/merit_terms.py"
+     ],
+     "multi_depth": true
+    },
+    {
+     "line": 1295,
+     "stacklevel": 2,
+     "enclosing": "evaluate",
+     "reachable_from": [
+      "lumenairy/analysis/ghost.py",
+      "lumenairy/elements/_lens_real.py",
+      "lumenairy/elements/bsdf.py",
+      "lumenairy/elements/lenses_maslov.py",
+      "lumenairy/optimize/driver.py",
+      "lumenairy/optimize/merit_terms.py"
+     ],
+     "multi_depth": true
+    },
+    {
+     "line": 1286,
+     "stacklevel": 2,
+     "enclosing": "evaluate",
+     "reachable_from": [
+      "lumenairy/analysis/ghost.py",
+      "lumenairy/elements/_lens_real.py",
+      "lumenairy/elements/bsdf.py",
+      "lumenairy/elements/lenses_maslov.py",
+      "lumenairy/optimize/driver.py",
+      "lumenairy/optimize/merit_terms.py"
+     ],
+     "multi_depth": true
+    },
+    {
+     "line": 1424,
+     "stacklevel": 2,
+     "enclosing": "_prescription_to_elements",
+     "reachable_from": [
+      "lumenairy/analysis/ghost.py",
+      "lumenairy/elements/_lens_real.py",
+      "lumenairy/elements/bsdf.py",
+      "lumenairy/elements/lenses_maslov.py",
+      "lumenairy/optimize/driver.py",
+      "lumenairy/optimize/merit_terms.py"
+     ],
+     "multi_depth": true
+    },
+    {
+     "line": 1120,
+     "stacklevel": 2,
+     "enclosing": "propagate_through_system",
+     "reachable_from": [
+      "lumenairy/analysis/ghost.py",
+      "lumenairy/elements/_lens_real.py",
+      "lumenairy/elements/bsdf.py",
+      "lumenairy/elements/lenses_maslov.py",
+      "lumenairy/optimize/driver.py",
+      "lumenairy/optimize/merit_terms.py"
+     ],
+     "multi_depth": true
+    }
+   ]
+  },
+  {
+   "file": "lumenairy/propagators/fft_infra.py",
+   "n_literal": 4,
+   "n_multi_depth": 4,
+   "sites": [
+    {
+     "line": 2128,
+     "stacklevel": 3,
+     "enclosing": "_handle_pyfftw_failure",
+     "reachable_from": [
+      "lumenairy/analysis/phase_retrieval.py",
+      "lumenairy/analysis/through_focus.py",
+      "lumenairy/backend/fft.py",
+      "lumenairy/propagators/asm.py",
+      "lumenairy/propagators/carrier.py",
+      "lumenairy/propagators/fft_infra.py (same module)"
+     ],
+     "multi_depth": true
+    },
+    {
+     "line": 615,
+     "stacklevel": 2,
+     "enclosing": "_resolve_jax_complex_dtype",
+     "reachable_from": [
+      "lumenairy/analysis/phase_retrieval.py",
+      "lumenairy/analysis/through_focus.py",
+      "lumenairy/elements/_lens_jax.py",
+      "lumenairy/propagators/system.py"
+     ],
+     "multi_depth": true
+    },
+    {
+     "line": 658,
+     "stacklevel": 2,
+     "enclosing": "_resolve_jax_real_dtype",
+     "reachable_from": [
+      "lumenairy/analysis/phase_retrieval.py",
+      "lumenairy/elements/_lens_jax.py"
+     ],
+     "multi_depth": true
+    },
+    {
+     "line": 2493,
+     "stacklevel": 3,
+     "enclosing": "_validate_propagator_inputs",
+     "reachable_from": [
+      "lumenairy/propagators/asm.py",
+      "lumenairy/propagators/fresnel.py",
+      "lumenairy/propagators/mft.py",
+      "lumenairy/propagators/rs.py",
+      "lumenairy/propagators/sas.py"
+     ],
+     "multi_depth": true
+    }
+   ]
+  },
+  {
+   "file": "lumenairy/propagators/fga.py",
+   "n_literal": 5,
+   "n_multi_depth": 4,
+   "sites": [
+    {
+     "line": 1087,
+     "stacklevel": 2,
+     "enclosing": "_env_mem_budget_mb",
+     "reachable_from": [
+      "lumenairy/propagators/carrier.py",
+      "lumenairy/propagators/fga.py (same module)",
+      "lumenairy/propagators/gbd.py"
+     ],
+     "multi_depth": true
+    },
+    {
+     "line": 1008,
+     "stacklevel": 2,
+     "enclosing": "_resolve_sampling",
+     "reachable_from": [
+      "lumenairy/propagators/fga.py (same module)"
+     ],
+     "multi_depth": true
+    },
+    {
+     "line": 1081,
+     "stacklevel": 2,
+     "enclosing": "_env_mem_budget_mb",
+     "reachable_from": [
+      "lumenairy/propagators/carrier.py",
+      "lumenairy/propagators/fga.py (same module)",
+      "lumenairy/propagators/gbd.py"
+     ],
+     "multi_depth": true
+    },
+    {
+     "line": 1054,
+     "stacklevel": 2,
+     "enclosing": "_resolve_sampling",
+     "reachable_from": [
+      "lumenairy/propagators/fga.py (same module)"
+     ],
+     "multi_depth": true
+    },
+    {
+     "line": 3275,
+     "stacklevel": 2,
+     "enclosing": "apply_real_lens_universal",
+     "reachable_from": [],
+     "multi_depth": false
+    }
+   ]
+  },
+  {
+   "file": "lumenairy/propagators/asymptotic_aberration_tensor.py",
+   "n_literal": 3,
+   "n_multi_depth": 3,
+   "sites": [
+    {
+     "line": 1028,
+     "stacklevel": 2,
+     "enclosing": "aberration_tensor",
+     "reachable_from": [
+      "lumenairy/analysis/aberration.py",
+      "lumenairy/optimize/merit_terms.py"
+     ],
+     "multi_depth": true
+    },
+    {
+     "line": 1341,
+     "stacklevel": 2,
+     "enclosing": "aberration_tensor",
+     "reachable_from": [
+      "lumenairy/analysis/aberration.py",
+      "lumenairy/optimize/merit_terms.py"
+     ],
+     "multi_depth": true
+    },
+    {
+     "line": 1380,
+     "stacklevel": 2,
+     "enclosing": "aberration_tensor",
+     "reachable_from": [
+      "lumenairy/analysis/aberration.py",
+      "lumenairy/optimize/merit_terms.py"
+     ],
+     "multi_depth": true
+    }
+   ]
+  },
+  {
+   "file": "lumenairy/propagators/asymptotic_canonical_fit.py",
+   "n_literal": 3,
+   "n_multi_depth": 3,
+   "sites": [
+    {
+     "line": 685,
+     "stacklevel": 2,
+     "enclosing": "fit_canonical_polynomials",
+     "reachable_from": [
+      "lumenairy/analysis/aberration.py",
+      "lumenairy/optimize/driver.py",
+      "lumenairy/optimize/merit_terms.py",
+      "lumenairy/propagators/asymptotic_canonical_fit.py (same module)",
+      "lumenairy/propagators/dispatch.py",
+      "lumenairy/propagators/hf.py"
+     ],
+     "multi_depth": true
+    },
+    {
+     "line": 1262,
+     "stacklevel": 2,
+     "enclosing": "propagate_hf_chebyshev_quadrature",
+     "reachable_from": [
+      "lumenairy/propagators/hf.py"
+     ],
+     "multi_depth": true
+    },
+    {
+     "line": 1240,
+     "stacklevel": 2,
+     "enclosing": "propagate_hf_chebyshev_quadrature",
+     "reachable_from": [
+      "lumenairy/propagators/hf.py"
+     ],
+     "multi_depth": true
+    }
+   ]
+  },
+  {
+   "file": "lumenairy/propagators/hf.py",
+   "n_literal": 4,
+   "n_multi_depth": 3,
+   "sites": [
+    {
+     "line": 88,
+     "stacklevel": 3,
+     "enclosing": "_resolve_output_shape",
+     "reachable_from": [
+      "lumenairy/optimize/driver.py",
+      "lumenairy/propagators/dispatch.py",
+      "lumenairy/propagators/gbd.py",
+      "lumenairy/propagators/hf.py (same module)",
+      "lumenairy/propagators/hfpi.py",
+      "lumenairy/propagators/vectorial_hfpi.py"
+     ],
+     "multi_depth": true
+    },
+    {
+     "line": 188,
+     "stacklevel": 3,
+     "enclosing": "_resample_preserving_window_power",
+     "reachable_from": [
+      "lumenairy/propagators/dispatch.py",
+      "lumenairy/propagators/hf.py (same module)",
+      "lumenairy/propagators/mhs.py"
+     ],
+     "multi_depth": true
+    },
+    {
+     "line": 649,
+     "stacklevel": 2,
+     "enclosing": "propagate_huygens_fresnel_with_opl_callable",
+     "reachable_from": [],
+     "multi_depth": false
+    },
+    {
+     "line": 961,
+     "stacklevel": 2,
+     "enclosing": "propagate_huygens_fresnel_through_prescription",
+     "reachable_from": [
+      "lumenairy/optimize/driver.py",
+      "lumenairy/propagators/dispatch.py",
+      "lumenairy/ui/waveoptics_dock.py"
+     ],
+     "multi_depth": true
+    }
+   ]
+  },
+  {
+   "file": "lumenairy/propagators/vector_diffraction.py",
+   "n_literal": 3,
+   "n_multi_depth": 3,
+   "sites": [
+    {
+     "line": 255,
+     "stacklevel": 2,
+     "enclosing": "richards_wolf_focus",
+     "reachable_from": [
+      "lumenairy/propagators/vector_diffraction.py (same module)",
+      "lumenairy/ui/richards_wolf_dock.py"
+     ],
+     "multi_depth": true
+    },
+    {
+     "line": 167,
+     "stacklevel": 2,
+     "enclosing": "richards_wolf_focus",
+     "reachable_from": [
+      "lumenairy/propagators/vector_diffraction.py (same module)",
+      "lumenairy/ui/richards_wolf_dock.py"
+     ],
+     "multi_depth": true
+    },
+    {
+     "line": 319,
+     "stacklevel": 2,
+     "enclosing": "richards_wolf_focus",
+     "reachable_from": [
+      "lumenairy/propagators/vector_diffraction.py (same module)",
+      "lumenairy/ui/richards_wolf_dock.py"
+     ],
+     "multi_depth": true
+    }
+   ]
+  },
+  {
+   "file": "lumenairy/propagators/asymptotic.py",
+   "n_literal": 2,
+   "n_multi_depth": 2,
+   "sites": [
+    {
+     "line": 305,
+     "stacklevel": 3,
+     "enclosing": "_warn_dropped_pixels",
+     "reachable_from": [
+      "lumenairy/optimize/driver.py",
+      "lumenairy/propagators/asymptotic.py (same module)",
+      "lumenairy/propagators/asymptotic_aberration_tensor.py",
+      "lumenairy/propagators/dispatch.py",
+      "lumenairy/propagators/hf.py",
+      "lumenairy/propagators/subaperture.py"
+     ],
+     "multi_depth": true
+    },
+    {
+     "line": 725,
+     "stacklevel": 2,
+     "enclosing": "propagate_modal_asymptotic",
+     "reachable_from": [
+      "lumenairy/optimize/driver.py",
+      "lumenairy/propagators/asymptotic_aberration_tensor.py",
+      "lumenairy/propagators/dispatch.py",
+      "lumenairy/propagators/hf.py",
+      "lumenairy/propagators/subaperture.py"
+     ],
+     "multi_depth": true
+    }
+   ]
+  },
+  {
+   "file": "lumenairy/propagators/dispatch.py",
+   "n_literal": 2,
+   "n_multi_depth": 2,
+   "sites": [
+    {
+     "line": 384,
+     "stacklevel": 2,
+     "enclosing": "propagate",
+     "reachable_from": [
+      "lumenairy/algebra/primitives.py",
+      "lumenairy/propagators/asymptotic_aberration_tensor.py",
+      "lumenairy/propagators/mhs.py",
+      "lumenairy/sources/core.py"
+     ],
+     "multi_depth": true
+    },
+    {
+     "line": 1318,
+     "stacklevel": 3,
+     "enclosing": "_select_asm_variant",
+     "reachable_from": [
+      "lumenairy/propagators/dispatch.py (same module)"
+     ],
+     "multi_depth": true
+    }
+   ]
+  },
+  {
+   "file": "lumenairy/propagators/sas.py",
+   "n_literal": 2,
+   "n_multi_depth": 2,
+   "sites": [
+    {
+     "line": 96,
+     "stacklevel": 3,
+     "enclosing": "_warn_sas_chirp_sampling",
+     "reachable_from": [
+      "lumenairy/elements/_lens_real.py",
+      "lumenairy/elements/polarization.py",
+      "lumenairy/propagators/dispatch.py",
+      "lumenairy/propagators/sas.py (same module)",
+      "lumenairy/propagators/system.py",
+      "lumenairy/ui/waveoptics_dock.py"
+     ],
+     "multi_depth": true
+    },
+    {
+     "line": 293,
+     "stacklevel": 2,
+     "enclosing": "scalable_angular_spectrum_propagate",
+     "reachable_from": [
+      "lumenairy/elements/_lens_real.py",
+      "lumenairy/elements/polarization.py",
+      "lumenairy/propagators/dispatch.py",
+      "lumenairy/propagators/system.py",
+      "lumenairy/ui/waveoptics_dock.py"
+     ],
+     "multi_depth": true
+    }
+   ]
+  },
+  {
+   "file": "lumenairy/propagators/subaperture.py",
+   "n_literal": 2,
+   "n_multi_depth": 2,
+   "sites": [
+    {
+     "line": 418,
+     "stacklevel": 2,
+     "enclosing": "propagate_subaperture_asymptotic",
+     "reachable_from": [
+      "lumenairy/ui/waveoptics_dock.py"
+     ],
+     "multi_depth": true
+    },
+    {
+     "line": 542,
+     "stacklevel": 2,
+     "enclosing": "propagate_subaperture_asymptotic",
+     "reachable_from": [
+      "lumenairy/ui/waveoptics_dock.py"
+     ],
+     "multi_depth": true
+    }
+   ]
+  },
+  {
+   "file": "lumenairy/propagators/_bluestein.py",
+   "n_literal": 1,
+   "n_multi_depth": 1,
+   "sites": [
+    {
+     "line": 360,
+     "stacklevel": 2,
+     "enclosing": "_bluestein_2d",
+     "reachable_from": [
+      "lumenairy/propagators/_bluestein.py (same module)",
+      "lumenairy/propagators/carrier.py",
+      "lumenairy/propagators/mft.py"
+     ],
+     "multi_depth": true
+    }
+   ]
+  },
+  {
+   "file": "lumenairy/propagators/carrier_field.py",
+   "n_literal": 1,
+   "n_multi_depth": 1,
+   "sites": [
+    {
+     "line": 743,
+     "stacklevel": 2,
+     "enclosing": "__setattr__",
+     "reachable_from": [
+      "lumenairy/backend/scipy.py",
+      "lumenairy/propagators/asymptotic_canonical_fit.py",
+      "lumenairy/propagators/carrier_field.py (same module)"
+     ],
+     "multi_depth": true
+    }
+   ]
+  },
+  {
+   "file": "lumenairy/propagators/fresnel.py",
+   "n_literal": 1,
+   "n_multi_depth": 1,
+   "sites": [
+    {
+     "line": 82,
+     "stacklevel": 3,
+     "enclosing": "_warn_fresnel_chirp_sampling",
+     "reachable_from": [
+      "lumenairy/elements/_lens_real.py",
+      "lumenairy/elements/polarization.py",
+      "lumenairy/propagators/dispatch.py",
+      "lumenairy/propagators/fresnel.py (same module)",
+      "lumenairy/propagators/mft.py",
+      "lumenairy/ui/waveoptics_dock.py"
+     ],
+     "multi_depth": true
+    }
+   ]
+  },
+  {
+   "file": "lumenairy/propagators/mft.py",
+   "n_literal": 1,
+   "n_multi_depth": 1,
+   "sites": [
+    {
+     "line": 146,
+     "stacklevel": 3,
+     "enclosing": "_warn_mft_output_window",
+     "reachable_from": [
+      "lumenairy/analysis/psf_mtf_otf.py",
+      "lumenairy/elements/_lens_real.py",
+      "lumenairy/propagators/carrier.py",
+      "lumenairy/propagators/carrier_field.py",
+      "lumenairy/propagators/dispatch.py",
+      "lumenairy/propagators/hf.py"
+     ],
+     "multi_depth": true
+    }
+   ]
+  },
+  {
+   "file": "lumenairy/propagators/mhs.py",
+   "n_literal": 1,
+   "n_multi_depth": 1,
+   "sites": [
+    {
+     "line": 682,
+     "stacklevel": 2,
+     "enclosing": "_prop",
+     "reachable_from": [
+      "lumenairy/elements/eme/eme_2d.py"
+     ],
+     "multi_depth": true
+    }
+   ]
+  },
+  {
+   "file": "lumenairy/propagators/rs.py",
+   "n_literal": 1,
+   "n_multi_depth": 1,
+   "sites": [
+    {
+     "line": 189,
+     "stacklevel": 3,
+     "enclosing": "_warn_rs_transfer_wraparound",
+     "reachable_from": [
+      "lumenairy/elements/_lens_real.py",
+      "lumenairy/propagators/dispatch.py",
+      "lumenairy/propagators/hf.py",
+      "lumenairy/propagators/rs.py (same module)",
+      "lumenairy/ui/waveoptics_dock.py"
+     ],
+     "multi_depth": true
+    }
+   ]
+  }
+ ],
+ "covered_by_rationale": [
+  "lumenairy/propagators/gbd.py",
+  "lumenairy/propagators/hfpi.py",
+  "lumenairy/propagators/system.py",
+  "lumenairy/propagators/fft_infra.py",
+  "lumenairy/propagators/fga.py",
+  "lumenairy/propagators/asymptotic_aberration_tensor.py",
+  "lumenairy/propagators/asymptotic_canonical_fit.py",
+  "lumenairy/propagators/hf.py",
+  "lumenairy/propagators/vector_diffraction.py",
+  "lumenairy/propagators/asymptotic.py",
+  "lumenairy/propagators/dispatch.py",
+  "lumenairy/propagators/sas.py",
+  "lumenairy/propagators/subaperture.py",
+  "lumenairy/propagators/_bluestein.py",
+  "lumenairy/propagators/carrier_field.py",
+  "lumenairy/propagators/fresnel.py",
+  "lumenairy/propagators/mft.py",
+  "lumenairy/propagators/mhs.py",
+  "lumenairy/propagators/rs.py"
+ ]
+}

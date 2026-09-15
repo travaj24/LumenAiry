@@ -1,0 +1,136 @@
+{
+ "lumenairy_file": "C:\\tmp\\lum_reds\\lumenairy\\__init__.py",
+ "version": "5.47.0",
+ "package_root": "C:\\tmp\\lum_reds\\lumenairy",
+ "probe_file": "probe_carrier_attribution.py",
+ "env": {
+  "OPENBLAS_CORETYPE": null,
+  "OPENBLAS_NUM_THREADS": "1"
+ },
+ "cells": {
+  "tilt_inert_fresnel": {
+   "error_direct": null,
+   "error_wrapped": null,
+   "n_direct": 1,
+   "n_wrapped": 1,
+   "direct": [
+    {
+     "warn_site": "carrier.py",
+     "warn_line": 748,
+     "stacklevel": 3,
+     "named_file": "probe_carrier_attribution.py",
+     "named_line": 111,
+     "truth_file": "probe_carrier_attribution.py",
+     "truth_line": 111,
+     "truth_stacklevel": 3,
+     "named_is_library": false,
+     "message": "propagate_carrier_referenced: tilt=(0.12, 0.0) is NON-ZERO but INERT on this call -- gap_k",
+     "arm": "tilt_inert_fresnel:direct"
+    }
+   ],
+   "wrapped": [
+    {
+     "warn_site": "carrier.py",
+     "warn_line": 748,
+     "stacklevel": 3,
+     "named_file": "probe_carrier_attribution.py",
+     "named_line": 121,
+     "truth_file": "probe_carrier_attribution.py",
+     "truth_line": 121,
+     "truth_stacklevel": 3,
+     "named_is_library": false,
+     "message": "propagate_carrier_referenced: tilt=(0.12, 0.0) is NON-ZERO but INERT on this call -- gap_k",
+     "arm": "tilt_inert_fresnel:wrapped"
+    }
+   ],
+   "misattributed_direct": [],
+   "misattributed_wrapped": []
+  },
+  "tilt_inert_sas": {
+   "error_direct": "ValueError: propagate_carrier_referenced: gap_kernel must be one of ['auto', 'exact', 'fresnel'] (case-sensitive strings), got 'sas'.  'auto' (the default) resolves to 'exact' on every backend; 'exact' is the non-paraxial, tilt-aware transfer function; 'fresnel' is the legacy PARAXIAL Sziklas-Siegman kernel.  There is deliberately no fallback: an unrecognised value used to select 'fresnel' silently, so a typo ('exsct', 'EXACT') turned an exact run paraxial with nothing raised or warned.",
+   "error_wrapped": "ValueError: propagate_carrier_referenced: gap_kernel must be one of ['auto', 'exact', 'fresnel'] (case-sensitive strings), got 'sas'.  'auto' (the default) resolves to 'exact' on every backend; 'exact' is the non-paraxial, tilt-aware transfer function; 'fresnel' is the legacy PARAXIAL Sziklas-Siegman kernel.  There is deliberately no fallback: an unrecognised value used to select 'fresnel' silently, so a typo ('exsct', 'EXACT') turned an exact run paraxial with nothing raised or warned.",
+   "n_direct": 0,
+   "n_wrapped": 0,
+   "direct": [],
+   "wrapped": [],
+   "misattributed_direct": [],
+   "misattributed_wrapped": []
+  },
+  "collins_long_leg": {
+   "error_direct": null,
+   "error_wrapped": null,
+   "n_direct": 0,
+   "n_wrapped": 0,
+   "direct": [],
+   "wrapped": [],
+   "misattributed_direct": [],
+   "misattributed_wrapped": []
+  },
+  "sziklas_long_leg": {
+   "error_direct": null,
+   "error_wrapped": null,
+   "n_direct": 0,
+   "n_wrapped": 0,
+   "direct": [],
+   "wrapped": [],
+   "misattributed_direct": [],
+   "misattributed_wrapped": []
+  },
+  "coarse_grid": {
+   "error_direct": null,
+   "error_wrapped": null,
+   "n_direct": 0,
+   "n_wrapped": 0,
+   "direct": [],
+   "wrapped": [],
+   "misattributed_direct": [],
+   "misattributed_wrapped": []
+  },
+  "tilt_inert_via_focus_readout": {
+   "error_direct": null,
+   "error_wrapped": null,
+   "n_direct": 1,
+   "n_wrapped": 1,
+   "direct": [
+    {
+     "warn_site": "carrier.py",
+     "warn_line": 748,
+     "stacklevel": 4,
+     "named_file": "probe_carrier_attribution.py",
+     "named_line": 111,
+     "truth_file": "probe_carrier_attribution.py",
+     "truth_line": 111,
+     "truth_stacklevel": 4,
+     "named_is_library": false,
+     "message": "propagate_carrier_referenced: tilt=(0.12, 0.0) is NON-ZERO but INERT on this call -- gap_k",
+     "arm": "tilt_inert_via_focus_readout:direct"
+    }
+   ],
+   "wrapped": [
+    {
+     "warn_site": "carrier.py",
+     "warn_line": 748,
+     "stacklevel": 4,
+     "named_file": "probe_carrier_attribution.py",
+     "named_line": 121,
+     "truth_file": "probe_carrier_attribution.py",
+     "truth_line": 121,
+     "truth_stacklevel": 4,
+     "named_is_library": false,
+     "message": "propagate_carrier_referenced: tilt=(0.12, 0.0) is NON-ZERO but INERT on this call -- gap_k",
+     "arm": "tilt_inert_via_focus_readout:wrapped"
+    }
+   ],
+   "misattributed_direct": [],
+   "misattributed_wrapped": []
+  }
+ },
+ "carrier_warnings_seen": 4,
+ "carrier_sites_seen": [
+  748
+ ],
+ "carrier_misattributed": [],
+ "carrier_misattributed_lines": [],
+ "all_warnings_seen": 4,
+ "all_misattributed_lines": []
+}

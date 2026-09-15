@@ -1,0 +1,925 @@
+{
+ "repo": "C:\\tmp\\lum_reds",
+ "rows": [
+  {
+   "file": "lumenairy/io/prescriptions_zemax.py",
+   "n_literal": 23,
+   "n_computed": 0,
+   "literal_lines": [
+    44,
+    51,
+    220,
+    244,
+    307,
+    446,
+    462,
+    637,
+    815,
+    1042,
+    1067,
+    1221,
+    1239,
+    1309,
+    1396,
+    1580,
+    1679,
+    1788,
+    1900,
+    1952,
+    2228,
+    2251,
+    2292
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/propagators/carrier.py",
+   "n_literal": 14,
+   "n_computed": 1,
+   "literal_lines": [
+    747,
+    3386,
+    5184,
+    5484,
+    7175,
+    8507,
+    8652,
+    11410,
+    11486,
+    11621,
+    12180,
+    12307,
+    12337,
+    12412
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/sources/core.py",
+   "n_literal": 9,
+   "n_computed": 0,
+   "literal_lines": [
+    165,
+    1035,
+    1117,
+    1148,
+    1463,
+    2371,
+    2385,
+    2411,
+    2442
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/user_library.py",
+   "n_literal": 9,
+   "n_computed": 0,
+   "literal_lines": [
+    131,
+    514,
+    539,
+    628,
+    823,
+    859,
+    917,
+    1236,
+    1261
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/elements/pmm/stack.py",
+   "n_literal": 8,
+   "n_computed": 0,
+   "literal_lines": [
+    1398,
+    1400,
+    1434,
+    1442,
+    1536,
+    3754,
+    3818,
+    4879
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/optimize/driver.py",
+   "n_literal": 8,
+   "n_computed": 0,
+   "literal_lines": [
+    590,
+    715,
+    1079,
+    1241,
+    1298,
+    1434,
+    1452,
+    1557
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/propagators/gbd.py",
+   "n_literal": 8,
+   "n_computed": 0,
+   "literal_lines": [
+    180,
+    227,
+    364,
+    1328,
+    1472,
+    1478,
+    3787,
+    3872
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/elements/rcwa/_core.py",
+   "n_literal": 7,
+   "n_computed": 0,
+   "literal_lines": [
+    211,
+    1127,
+    1138,
+    1662,
+    1792,
+    1895,
+    3560
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/elements/pmm/_core.py",
+   "n_literal": 6,
+   "n_computed": 0,
+   "literal_lines": [
+    147,
+    1755,
+    3284,
+    3333,
+    3341,
+    4798
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/io/prescriptions_code_v.py",
+   "n_literal": 6,
+   "n_computed": 0,
+   "literal_lines": [
+    111,
+    324,
+    481,
+    567,
+    747,
+    880
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/propagators/hfpi.py",
+   "n_literal": 6,
+   "n_computed": 0,
+   "literal_lines": [
+    78,
+    147,
+    670,
+    1285,
+    1809,
+    1992
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/propagators/system.py",
+   "n_literal": 6,
+   "n_computed": 0,
+   "literal_lines": [
+    402,
+    476,
+    1120,
+    1286,
+    1295,
+    1424
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/elements/rcwa/stack.py",
+   "n_literal": 5,
+   "n_computed": 2,
+   "literal_lines": [
+    589,
+    889,
+    2571,
+    2886,
+    3206
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/propagators/fga.py",
+   "n_literal": 5,
+   "n_computed": 0,
+   "literal_lines": [
+    1008,
+    1054,
+    1081,
+    1087,
+    3275
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/analysis/opd.py",
+   "n_literal": 4,
+   "n_computed": 0,
+   "literal_lines": [
+    1026,
+    1189,
+    1229,
+    1241
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/elements/rcwa/oned.py",
+   "n_literal": 4,
+   "n_computed": 0,
+   "literal_lines": [
+    315,
+    665,
+    913,
+    1847
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/glass.py",
+   "n_literal": 4,
+   "n_computed": 0,
+   "literal_lines": [
+    528,
+    534,
+    995,
+    2102
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/propagators/fft_infra.py",
+   "n_literal": 4,
+   "n_computed": 0,
+   "literal_lines": [
+    615,
+    658,
+    2128,
+    2493
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/propagators/hf.py",
+   "n_literal": 4,
+   "n_computed": 0,
+   "literal_lines": [
+    88,
+    188,
+    649,
+    961
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/analysis/phase_retrieval.py",
+   "n_literal": 3,
+   "n_computed": 0,
+   "literal_lines": [
+    148,
+    345,
+    525
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/analysis/psf_mtf_otf.py",
+   "n_literal": 3,
+   "n_computed": 0,
+   "literal_lines": [
+    503,
+    1814,
+    1827
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/elements/bor/coupled_radial_eigensolver.py",
+   "n_literal": 3,
+   "n_computed": 0,
+   "literal_lines": [
+    213,
+    668,
+    680
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/elements/coatings.py",
+   "n_literal": 3,
+   "n_computed": 0,
+   "literal_lines": [
+    847,
+    862,
+    882
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/elements/rcwa/twod.py",
+   "n_literal": 3,
+   "n_computed": 0,
+   "literal_lines": [
+    753,
+    798,
+    1596
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/optimize/wrapper_merits.py",
+   "n_literal": 3,
+   "n_computed": 0,
+   "literal_lines": [
+    542,
+    599,
+    669
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/propagators/asymptotic_aberration_tensor.py",
+   "n_literal": 3,
+   "n_computed": 0,
+   "literal_lines": [
+    1028,
+    1341,
+    1380
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/propagators/asymptotic_canonical_fit.py",
+   "n_literal": 3,
+   "n_computed": 0,
+   "literal_lines": [
+    685,
+    1240,
+    1262
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/propagators/vector_diffraction.py",
+   "n_literal": 3,
+   "n_computed": 0,
+   "literal_lines": [
+    167,
+    255,
+    319
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/_cache_registry.py",
+   "n_literal": 2,
+   "n_computed": 0,
+   "literal_lines": [
+    180,
+    260
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/analysis/aberration.py",
+   "n_literal": 2,
+   "n_computed": 0,
+   "literal_lines": [
+    134,
+    600
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/elements/bor/_sem_contract.py",
+   "n_literal": 2,
+   "n_computed": 0,
+   "literal_lines": [
+    519,
+    537
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/elements/bor/bor_solve.py",
+   "n_literal": 2,
+   "n_computed": 0,
+   "literal_lines": [
+    562,
+    661
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/elements/bor/sem_radial.py",
+   "n_literal": 2,
+   "n_computed": 0,
+   "literal_lines": [
+    171,
+    342
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/elements/eme/eme_2d_vector.py",
+   "n_literal": 2,
+   "n_computed": 0,
+   "literal_lines": [
+    566,
+    1259
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/elements/emt.py",
+   "n_literal": 2,
+   "n_computed": 0,
+   "literal_lines": [
+    61,
+    72
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/elements/pmm/stack2d.py",
+   "n_literal": 2,
+   "n_computed": 0,
+   "literal_lines": [
+    1467,
+    2367
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/elements/pmm/stack2d_pure.py",
+   "n_literal": 2,
+   "n_computed": 0,
+   "literal_lines": [
+    510,
+    1349
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/elements/pmm/twod.py",
+   "n_literal": 2,
+   "n_computed": 0,
+   "literal_lines": [
+    298,
+    369
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/elements/pmm/twod_staggered.py",
+   "n_literal": 2,
+   "n_computed": 1,
+   "literal_lines": [
+    1273,
+    3602
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/elements/polarization.py",
+   "n_literal": 2,
+   "n_computed": 0,
+   "literal_lines": [
+    478,
+    1847
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/elements/segment_geometry.py",
+   "n_literal": 2,
+   "n_computed": 0,
+   "literal_lines": [
+    351,
+    374
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/elements/thin_grating.py",
+   "n_literal": 2,
+   "n_computed": 0,
+   "literal_lines": [
+    77,
+    88
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/io/codegen.py",
+   "n_literal": 2,
+   "n_computed": 0,
+   "literal_lines": [
+    88,
+    507
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/io/prescriptions_quadoa.py",
+   "n_literal": 2,
+   "n_computed": 0,
+   "literal_lines": [
+    290,
+    423
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/io/prescriptions_transforms.py",
+   "n_literal": 2,
+   "n_computed": 0,
+   "literal_lines": [
+    74,
+    538
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/optimize/jax_merits.py",
+   "n_literal": 2,
+   "n_computed": 0,
+   "literal_lines": [
+    61,
+    468
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/optimize/merit_terms.py",
+   "n_literal": 2,
+   "n_computed": 0,
+   "literal_lines": [
+    1120,
+    1351
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/propagators/asymptotic.py",
+   "n_literal": 2,
+   "n_computed": 0,
+   "literal_lines": [
+    305,
+    725
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/propagators/dispatch.py",
+   "n_literal": 2,
+   "n_computed": 0,
+   "literal_lines": [
+    384,
+    1318
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/propagators/sas.py",
+   "n_literal": 2,
+   "n_computed": 0,
+   "literal_lines": [
+    96,
+    293
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/propagators/subaperture.py",
+   "n_literal": 2,
+   "n_computed": 0,
+   "literal_lines": [
+    418,
+    542
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/raytrace/ray_fan.py",
+   "n_literal": 2,
+   "n_computed": 0,
+   "literal_lines": [
+    343,
+    1135
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/raytrace/seidel.py",
+   "n_literal": 2,
+   "n_computed": 0,
+   "literal_lines": [
+    1066,
+    1519
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/raytrace/trace.py",
+   "n_literal": 2,
+   "n_computed": 0,
+   "literal_lines": [
+    893,
+    906
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/_math/chebyshev.py",
+   "n_literal": 1,
+   "n_computed": 0,
+   "literal_lines": [
+    425
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/algebra/primitives.py",
+   "n_literal": 1,
+   "n_computed": 0,
+   "literal_lines": [
+    265
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/analysis/ao.py",
+   "n_literal": 1,
+   "n_computed": 0,
+   "literal_lines": [
+    195
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/analysis/coronagraph.py",
+   "n_literal": 1,
+   "n_computed": 0,
+   "literal_lines": [
+    148
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/analysis/field.py",
+   "n_literal": 1,
+   "n_computed": 0,
+   "literal_lines": [
+    1328
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/analysis/image_plane_wfe.py",
+   "n_literal": 1,
+   "n_computed": 0,
+   "literal_lines": [
+    237
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/analysis/plotting.py",
+   "n_literal": 1,
+   "n_computed": 0,
+   "literal_lines": [
+    2366
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/analysis/through_focus.py",
+   "n_literal": 1,
+   "n_computed": 0,
+   "literal_lines": [
+    1900
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/elements/bor/farfield.py",
+   "n_literal": 1,
+   "n_computed": 0,
+   "literal_lines": [
+    71
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/elements/bsdf.py",
+   "n_literal": 1,
+   "n_computed": 0,
+   "literal_lines": [
+    286
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/elements/doe.py",
+   "n_literal": 1,
+   "n_computed": 0,
+   "literal_lines": [
+    1213
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/elements/eme/_jax_modes.py",
+   "n_literal": 1,
+   "n_computed": 0,
+   "literal_lines": [
+    170
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/elements/eme/eme_2d.py",
+   "n_literal": 1,
+   "n_computed": 0,
+   "literal_lines": [
+    424
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/elements/eme/eme_diffraction.py",
+   "n_literal": 1,
+   "n_computed": 0,
+   "literal_lines": [
+    65
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/io/prescriptions_builders.py",
+   "n_literal": 1,
+   "n_computed": 0,
+   "literal_lines": [
+    578
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/io/storage.py",
+   "n_literal": 1,
+   "n_computed": 0,
+   "literal_lines": [
+    1841
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/optimize/context.py",
+   "n_literal": 1,
+   "n_computed": 0,
+   "literal_lines": [
+    508
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/optimize/multi_objective.py",
+   "n_literal": 1,
+   "n_computed": 0,
+   "literal_lines": [
+    267
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/optimize/multiconfig.py",
+   "n_literal": 1,
+   "n_computed": 0,
+   "literal_lines": [
+    76
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/propagators/_bluestein.py",
+   "n_literal": 1,
+   "n_computed": 0,
+   "literal_lines": [
+    360
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/propagators/carrier_field.py",
+   "n_literal": 1,
+   "n_computed": 0,
+   "literal_lines": [
+    743
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/propagators/fresnel.py",
+   "n_literal": 1,
+   "n_computed": 0,
+   "literal_lines": [
+    82
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/propagators/mft.py",
+   "n_literal": 1,
+   "n_computed": 0,
+   "literal_lines": [
+    146
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/propagators/mhs.py",
+   "n_literal": 1,
+   "n_computed": 0,
+   "literal_lines": [
+    682
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/propagators/rs.py",
+   "n_literal": 1,
+   "n_computed": 0,
+   "literal_lines": [
+    189
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/raytrace/from_field.py",
+   "n_literal": 1,
+   "n_computed": 0,
+   "literal_lines": [
+    399
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/raytrace/paraxial.py",
+   "n_literal": 1,
+   "n_computed": 0,
+   "literal_lines": [
+    121
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/raytrace/seidel_analysis.py",
+   "n_literal": 1,
+   "n_computed": 0,
+   "literal_lines": [
+    376
+   ],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/_deprecation.py",
+   "n_literal": 0,
+   "n_computed": 1,
+   "literal_lines": [],
+   "swept_by_b11_ratchet": false
+  },
+  {
+   "file": "lumenairy/elements/_lens_kernels.py",
+   "n_literal": 0,
+   "n_computed": 1,
+   "literal_lines": [],
+   "swept_by_b11_ratchet": false
+  }
+ ],
+ "total_literal": 247,
+ "total_computed": 6,
+ "literal_still_in_swept_files": []
+}

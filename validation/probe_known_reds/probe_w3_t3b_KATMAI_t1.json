@@ -1,0 +1,111 @@
+{
+ "env": {
+  "arm": "KATMAI_t1",
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "platform": "win32",
+  "lumenairy_file": "C:\\tmp\\lum_reds\\lumenairy\\__init__.py",
+  "OPENBLAS_CORETYPE": "KATMAI",
+  "OMP_NUM_THREADS": "1",
+  "threadpool": [
+   {
+    "user_api": "blas",
+    "internal_api": "openblas",
+    "num_threads": 1,
+    "prefix": "libscipy_openblas",
+    "filepath": "C:\\Users\\Tesla\\AppData\\Local\\Programs\\Python\\Python314\\Lib\\site-packages\\numpy.libs\\libscipy_openblas64_-63c857e738469261263c764a36be9436.dll",
+    "version": "0.3.31.188.0",
+    "threading_layer": "pthreads",
+    "architecture": "Katmai"
+   }
+  ],
+  "scipy": "1.17.1"
+ },
+ "rows": [
+  {
+   "R1": 0.0515,
+   "coef_phi_hash": "370251b39a18d57a",
+   "coef_s1x_hash": "c3690110cf5700bb",
+   "coef_s1y_hash": "f4f97a116db3b386",
+   "coef_phi_absmax": 1067803.0455982895,
+   "coef_phi_l2": 1917429.281070248,
+   "res_phi_rms_waves": 0.0002755386447869651,
+   "s2x_centre": 4.336808689942018e-19,
+   "s2y_centre": 4.336808689942018e-19,
+   "v_star": [
+    3.5465013515696386e-14,
+    5.272895328133549e-15
+   ],
+   "phi_stationary_waves": 157377.627185367,
+   "phi_stationary_rad": 988832.7948098845,
+   "eps_times_phi": 2.1956498726047535e-10,
+   "w_o": 0.00010116441689751346,
+   "legacy_w_o": 0.00010116441689751346,
+   "w_o_equals_legacy": true,
+   "w_o_rel_frozen": 2.457929374927998e-11,
+   "L00_re": 12310011.936294192,
+   "L00_im": -59649449.37648288,
+   "L00_abs": 60906429.91334576,
+   "van_vleck_weight": [
+    -0.0,
+    -150912.5513649935
+   ],
+   "sqrt_detJ": 0.19769544228814148,
+   "rel_got_want": 7.517882959736698e-09,
+   "rel_got_pred": 7.517857431122235e-09,
+   "rel_want_pred": 9.859678922657757e-13,
+   "pred_re": 12310011.487865381,
+   "pred_im": -59649449.469062895
+  },
+  {
+   "R1": 0.06,
+   "coef_phi_hash": "28abad3c71024c46",
+   "coef_s1x_hash": "9c4790b77dd53322",
+   "coef_s1y_hash": "d7bbe8613db9b882",
+   "coef_phi_absmax": 259519.18764869453,
+   "coef_phi_l2": 467773.5496224752,
+   "res_phi_rms_waves": 0.00017789603803443333,
+   "s2x_centre": 4.336808689942018e-19,
+   "s2y_centre": 4.336808689942018e-19,
+   "v_star": [
+    -2.8924743048928114e-15,
+    -6.267949397481459e-16
+   ],
+   "phi_stationary_waves": 157377.62666156783,
+   "phi_stationary_rad": 988832.7915187574,
+   "eps_times_phi": 2.1956498652969833e-10,
+   "w_o": 0.00010086220541233769,
+   "legacy_w_o": 0.00010086220541233769,
+   "w_o_equals_legacy": true,
+   "w_o_rel_frozen": 2.3177055787892713e-11,
+   "L00_re": -55405030.04167233,
+   "L00_im": 25295326.915373545,
+   "L00_abs": 60906246.95114807,
+   "van_vleck_weight": [
+    -0.0,
+    -151364.7392907445
+   ],
+   "sqrt_detJ": 0.1982878084708753,
+   "rel_got_want": 1.2129078229121641e-09,
+   "rel_got_pred": 1.2128602124753967e-09,
+   "rel_want_pred": 7.632815125608406e-13,
+   "pred_re": -55405030.0109654,
+   "pred_im": 25295326.982559662
+  }
+ ],
+ "merit": {
+  "val_a": 5427849363.847496,
+  "val_b": 100037.05712946867,
+  "val_a_repeat": 5427849363.847496,
+  "in_process_spread": 0.0,
+  "response": 0.9999815696696014,
+  "rel_a_frozen": 1.4664554389655953,
+  "rel_b_frozen": 0.001553042936286119,
+  "cpl00_a": 3576000000.0,
+  "cpl00_b": 76830.0,
+  "waves_removed_a": 420600.0,
+  "waves_removed_b": 99960.0,
+  "chan_ratio_a": 1.5178549675188748,
+  "chan_ratio_b": 1.3020572319337325
+ }
+}

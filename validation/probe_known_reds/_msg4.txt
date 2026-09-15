@@ -1,0 +1,50 @@
+docs(audit): WP-B14 report, the [Unreleased] CHANGELOG block, the probe archive and the .test_durations top-up
+
+The written record for Wave 5 item D, landing after the three code commits it
+describes (4aafb282, 9352c43a, b6497d0b).
+
+docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/WP-B14_KNOWN_REDS_REPORT.md
+-- per red: the reproduction command, the root cause with numbers, the layer the
+fix went in and why that layer, the evidence per arm, and the proving tail.
+Sections 1-4 are the four handoff 4.6 reds, 5 is the warning-attribution sweep
+and the decision reserved for the maintainer, 6 is the CI matrix (including two
+findings the brief did not ask for: a second BLAS-build classification the
+wave's own ladder caught behind --maxfail, and the fft_infra ping-pong
+reproducibility defect, named and handed on), 7 is the runs and 8 is what could
+not be established.  No `path.py:N` citation is written anywhere in it, so it
+adds nothing for the V18 walker to chase.
+
+CHANGELOG.md gains a `## [Unreleased]` block above `## [5.47.0]` -- the file had
+none and there is exactly one now.  The changelog walkers read the topmost
+VERSIONED block, which is untouched, and they continue to decline cleanly.  The
+13 source-line citations that drifted because THIS branch moved lines in
+carrier.py and system.py were re-anchored against the base commit 96cb2096 with
+the repository's own reanchor_since.py (content matching, not arithmetic); the
+V18 walker then reads 107 of 107 with 0 drift.
+
+validation/probe_known_reds/ -- 191 files: every probe written for this package
+with its per-arm JSON, the kernel-ladder drivers and their logs, the three
+in-tree copies of the release tools re-pointed at this worktree, the brief the
+sub-agents worked from, and the commit messages.  The bisection harness
+(at_commit.sh + probe_c8_guard_reach.py) is the one worth keeping: it runs a
+probe against the `lumenairy` tree of an arbitrary commit in a git-archive
+directory, in a child process with PYTHONPATH set to that directory and
+lumenairy.__file__ asserted under it, which is what turned "fails on this box,
+cause untraced" into "bbb6c02d, and here is the order ladder".
+
+.test_durations topped up with --store-durations over the five files this branch
+added ids to (1221 passed): 16 208 entries against 16 207 collected ids, 7
+missing (0.04 %), and all seven are in files this branch never touched
+(test_v5_14_5_viewer_polarization 4, test_v4_14_2_dispatcher_pin_cache_locks 2,
+test_niche_k3_perf 1 -- the last two were already recorded as missing at 5.47.0).
+Eight stale entries remain, unchanged from the release.  The file is JSON-valid.
+
+Final walker state on this tree: check_source_line_citations.py ok=107 drift=0;
+record_history_fingerprints.py --check "OK: every history document matches its
+module"; check_doc_identifiers.py OK; WSL ruff over lumenairy/ and tests/ "All
+checks passed!".
+
+Files: docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/WP-B14_KNOWN_REDS_REPORT.md,
+CHANGELOG.md, .test_durations, validation/probe_known_reds/ (191 files).
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>

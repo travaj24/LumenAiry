@@ -1,0 +1,39 @@
+{
+ "lumenairy_file": "C:\\tmp\\lum_reds\\lumenairy\\__init__.py",
+ "TRACED_INVERSE_MAP_default": true,
+ "INVERSE_MAP_GUARD_default": "warn",
+ "env": {
+  "OPENBLAS_CORETYPE": null,
+  "OPENBLAS_NUM_THREADS": "1"
+ },
+ "cells": {
+  "guard=False,inverse_map=True": {
+   "halo_3w": 0.0,
+   "peak": 1.1190877352997084,
+   "power": 5653.697159975673,
+   "g8_refused": false,
+   "g8_msg": null
+  },
+  "guard=False,inverse_map=False": {
+   "halo_3w": 0.0001593794316678686,
+   "peak": 1.11909449410425,
+   "power": 5644.868118791155,
+   "g8_refused": false,
+   "g8_msg": null
+  },
+  "guard=True,inverse_map=True": {
+   "halo_3w": 0.00015217194665917584,
+   "peak": 1.1189053022360576,
+   "power": 5644.867938410414,
+   "g8_refused": true,
+   "g8_msg": "apply_real_lens_traced: the inverse-characteristic per-pixel evaluator refused to build -- guard G8: off-lattice entrance-position error 1.0523e-07 m against the incumbent Newton path's 7.4904e-08 on the same samples (1.40x, bar 1.00x).  The call KEEPS the shipped coarse-Newton + map_coordinates upsample path unchanged (refuse, never degrade).  That is a DIFFERENT ANSWER, not a slower one: the inc"
+  },
+  "guard=True,inverse_map=False": {
+   "halo_3w": 0.00015217194665917584,
+   "peak": 1.1189053022360576,
+   "power": 5644.867938410414,
+   "g8_refused": false,
+   "g8_msg": null
+  }
+ }
+}

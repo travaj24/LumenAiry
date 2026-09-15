@@ -1,0 +1,291 @@
+{
+ "env": {
+  "arm": "WIN_HASWELL_t1",
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "platform": "win32",
+  "PYFFTW_AVAILABLE": true,
+  "FFTW_MIN_SIZE": 256,
+  "FFTW_THREADS": 8,
+  "planner": "FFTW_ESTIMATE",
+  "OPENBLAS_CORETYPE": ""
+ },
+ "rows": [
+  {
+   "n": 128,
+   "tilt": [
+    0.0,
+    0.0
+   ],
+   "mode": "shipped",
+   "bit_equal": true,
+   "absmax": 0.0,
+   "rel": 0.0,
+   "ndiff": 0,
+   "nvals": 32768
+  },
+  {
+   "n": 128,
+   "tilt": [
+    0.03,
+    -0.02
+   ],
+   "mode": "shipped",
+   "bit_equal": true,
+   "absmax": 0.0,
+   "rel": 0.0,
+   "ndiff": 0,
+   "nvals": 32768
+  },
+  {
+   "n": 256,
+   "tilt": [
+    0.0,
+    0.0
+   ],
+   "mode": "shipped",
+   "bit_equal": true,
+   "absmax": 0.0,
+   "rel": 0.0,
+   "ndiff": 0,
+   "nvals": 131072
+  },
+  {
+   "n": 256,
+   "tilt": [
+    0.03,
+    -0.02
+   ],
+   "mode": "shipped",
+   "bit_equal": true,
+   "absmax": 0.0,
+   "rel": 0.0,
+   "ndiff": 0,
+   "nvals": 131072
+  },
+  {
+   "n": 512,
+   "tilt": [
+    0.0,
+    0.0
+   ],
+   "mode": "shipped",
+   "bit_equal": true,
+   "absmax": 0.0,
+   "rel": 0.0,
+   "ndiff": 0,
+   "nvals": 524288
+  },
+  {
+   "n": 512,
+   "tilt": [
+    0.03,
+    -0.02
+   ],
+   "mode": "shipped",
+   "bit_equal": true,
+   "absmax": 0.0,
+   "rel": 0.0,
+   "ndiff": 0,
+   "nvals": 524288
+  },
+  {
+   "n": 128,
+   "tilt": [
+    0.0,
+    0.0
+   ],
+   "mode": "single_buf",
+   "bit_equal": true,
+   "absmax": 0.0,
+   "rel": 0.0,
+   "ndiff": 0,
+   "nvals": 32768
+  },
+  {
+   "n": 128,
+   "tilt": [
+    0.03,
+    -0.02
+   ],
+   "mode": "single_buf",
+   "bit_equal": true,
+   "absmax": 0.0,
+   "rel": 0.0,
+   "ndiff": 0,
+   "nvals": 32768
+  },
+  {
+   "n": 256,
+   "tilt": [
+    0.0,
+    0.0
+   ],
+   "mode": "single_buf",
+   "bit_equal": true,
+   "absmax": 0.0,
+   "rel": 0.0,
+   "ndiff": 0,
+   "nvals": 131072
+  },
+  {
+   "n": 256,
+   "tilt": [
+    0.03,
+    -0.02
+   ],
+   "mode": "single_buf",
+   "bit_equal": true,
+   "absmax": 0.0,
+   "rel": 0.0,
+   "ndiff": 0,
+   "nvals": 131072
+  },
+  {
+   "n": 512,
+   "tilt": [
+    0.0,
+    0.0
+   ],
+   "mode": "single_buf",
+   "bit_equal": true,
+   "absmax": 0.0,
+   "rel": 0.0,
+   "ndiff": 0,
+   "nvals": 524288
+  },
+  {
+   "n": 512,
+   "tilt": [
+    0.03,
+    -0.02
+   ],
+   "mode": "single_buf",
+   "bit_equal": true,
+   "absmax": 0.0,
+   "rel": 0.0,
+   "ndiff": 0,
+   "nvals": 524288
+  },
+  {
+   "n": 128,
+   "tilt": [
+    0.0,
+    0.0
+   ],
+   "mode": "no_pyfftw",
+   "bit_equal": true,
+   "absmax": 0.0,
+   "rel": 0.0,
+   "ndiff": 0,
+   "nvals": 32768
+  },
+  {
+   "n": 128,
+   "tilt": [
+    0.03,
+    -0.02
+   ],
+   "mode": "no_pyfftw",
+   "bit_equal": true,
+   "absmax": 0.0,
+   "rel": 0.0,
+   "ndiff": 0,
+   "nvals": 32768
+  },
+  {
+   "n": 256,
+   "tilt": [
+    0.0,
+    0.0
+   ],
+   "mode": "no_pyfftw",
+   "bit_equal": true,
+   "absmax": 0.0,
+   "rel": 0.0,
+   "ndiff": 0,
+   "nvals": 131072
+  },
+  {
+   "n": 256,
+   "tilt": [
+    0.03,
+    -0.02
+   ],
+   "mode": "no_pyfftw",
+   "bit_equal": true,
+   "absmax": 0.0,
+   "rel": 0.0,
+   "ndiff": 0,
+   "nvals": 131072
+  },
+  {
+   "n": 512,
+   "tilt": [
+    0.0,
+    0.0
+   ],
+   "mode": "no_pyfftw",
+   "bit_equal": true,
+   "absmax": 0.0,
+   "rel": 0.0,
+   "ndiff": 0,
+   "nvals": 524288
+  },
+  {
+   "n": 512,
+   "tilt": [
+    0.03,
+    -0.02
+   ],
+   "mode": "no_pyfftw",
+   "bit_equal": true,
+   "absmax": 0.0,
+   "rel": 0.0,
+   "ndiff": 0,
+   "nvals": 524288
+  }
+ ],
+ "vs_pocketfft": [
+  {
+   "n": 256,
+   "tilt": [
+    0.0,
+    0.0
+   ],
+   "step_vs_pocketfft": 2.9142032672361675e-15,
+   "oracle_vs_pocketfft": 2.9142032672361675e-15,
+   "step_vs_oracle": 0.0
+  },
+  {
+   "n": 256,
+   "tilt": [
+    0.03,
+    -0.02
+   ],
+   "step_vs_pocketfft": 2.696865187951366e-15,
+   "oracle_vs_pocketfft": 2.696865187951366e-15,
+   "step_vs_oracle": 0.0
+  },
+  {
+   "n": 512,
+   "tilt": [
+    0.0,
+    0.0
+   ],
+   "step_vs_pocketfft": 2.7755575615628914e-15,
+   "oracle_vs_pocketfft": 2.7755575615628914e-15,
+   "step_vs_oracle": 0.0
+  },
+  {
+   "n": 512,
+   "tilt": [
+    0.03,
+    -0.02
+   ],
+   "step_vs_pocketfft": 2.888714119299626e-15,
+   "oracle_vs_pocketfft": 2.888714119299626e-15,
+   "step_vs_oracle": 0.0
+  }
+ ]
+}

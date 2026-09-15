@@ -1,0 +1,485 @@
+{
+ "env": {
+  "arm": "WIN_HASWELL_t1",
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "platform": "win32",
+  "PYFFTW_AVAILABLE": true,
+  "FFTW_MIN_SIZE": 256,
+  "FFTW_THREADS": 8,
+  "SCIPY_FFT_WORKERS": -1,
+  "planner": "FFTW_ESTIMATE",
+  "double_buffer": true,
+  "OPENBLAS_CORETYPE": ""
+ },
+ "rows": [
+  {
+   "n": 128,
+   "tilt": [
+    0.0,
+    0.0
+   ],
+   "use_pyfftw": true,
+   "step_calls": [
+    "fwd",
+    "inv"
+   ],
+   "orac_calls": [
+    "fwd",
+    "inv"
+   ],
+   "fwd_in_equal": true,
+   "fwd_in_ulp": 0.0,
+   "fwd_in_absmax": 0.0,
+   "fwd_out_equal": true,
+   "fwd_out_ulp": 0.0,
+   "fwd_out_absmax": 0.0,
+   "fwd_step_outbuf": 2722831501120,
+   "fwd_orac_outbuf": 2722833467344,
+   "fwd_same_outbuf": false,
+   "inv_in_equal": true,
+   "inv_in_ulp": 0.0,
+   "inv_in_absmax": 0.0,
+   "inv_out_equal": true,
+   "inv_out_ulp": 0.0,
+   "inv_out_absmax": 0.0,
+   "inv_step_outbuf": 2722831501120,
+   "inv_orac_outbuf": 2722833467344,
+   "inv_same_outbuf": false,
+   "ifft2_replay_equal": true,
+   "ifft2_replay_matches_step": true,
+   "final_equal": true,
+   "final_ulp": 0.0,
+   "final_absmax": 0.0
+  },
+  {
+   "n": 128,
+   "tilt": [
+    0.03,
+    -0.02
+   ],
+   "use_pyfftw": true,
+   "step_calls": [
+    "fwd",
+    "inv"
+   ],
+   "orac_calls": [
+    "fwd",
+    "inv"
+   ],
+   "fwd_in_equal": true,
+   "fwd_in_ulp": 0.0,
+   "fwd_in_absmax": 0.0,
+   "fwd_out_equal": true,
+   "fwd_out_ulp": 0.0,
+   "fwd_out_absmax": 0.0,
+   "fwd_step_outbuf": 2722832287632,
+   "fwd_orac_outbuf": 2722832025472,
+   "fwd_same_outbuf": false,
+   "inv_in_equal": true,
+   "inv_in_ulp": 0.0,
+   "inv_in_absmax": 0.0,
+   "inv_out_equal": true,
+   "inv_out_ulp": 0.0,
+   "inv_out_absmax": 0.0,
+   "inv_step_outbuf": 2722832287632,
+   "inv_orac_outbuf": 2722832025472,
+   "inv_same_outbuf": false,
+   "ifft2_replay_equal": true,
+   "ifft2_replay_matches_step": true,
+   "final_equal": true,
+   "final_ulp": 0.0,
+   "final_absmax": 0.0
+  },
+  {
+   "n": 256,
+   "tilt": [
+    0.0,
+    0.0
+   ],
+   "use_pyfftw": true,
+   "step_calls": [
+    "fwd",
+    "inv"
+   ],
+   "orac_calls": [
+    "fwd",
+    "inv"
+   ],
+   "fwd_in_equal": true,
+   "fwd_in_ulp": 0.0,
+   "fwd_in_absmax": 0.0,
+   "fwd_out_equal": true,
+   "fwd_out_ulp": 0.0,
+   "fwd_out_absmax": 0.0,
+   "fwd_step_outbuf": 2722879209536,
+   "fwd_orac_outbuf": 2722880311360,
+   "fwd_same_outbuf": false,
+   "inv_in_equal": true,
+   "inv_in_ulp": 0.0,
+   "inv_in_absmax": 0.0,
+   "inv_out_equal": true,
+   "inv_out_ulp": 0.0,
+   "inv_out_absmax": 0.0,
+   "inv_step_outbuf": 2722886914112,
+   "inv_orac_outbuf": 2722888044608,
+   "inv_same_outbuf": false,
+   "ifft2_replay_equal": true,
+   "ifft2_replay_matches_step": true,
+   "final_equal": true,
+   "final_ulp": 0.0,
+   "final_absmax": 0.0
+  },
+  {
+   "n": 256,
+   "tilt": [
+    0.03,
+    -0.02
+   ],
+   "use_pyfftw": true,
+   "step_calls": [
+    "fwd",
+    "inv"
+   ],
+   "orac_calls": [
+    "fwd",
+    "inv"
+   ],
+   "fwd_in_equal": true,
+   "fwd_in_ulp": 0.0,
+   "fwd_in_absmax": 0.0,
+   "fwd_out_equal": true,
+   "fwd_out_ulp": 0.0,
+   "fwd_out_absmax": 0.0,
+   "fwd_step_outbuf": 2722879209536,
+   "fwd_orac_outbuf": 2722880311360,
+   "fwd_same_outbuf": false,
+   "inv_in_equal": true,
+   "inv_in_ulp": 0.0,
+   "inv_in_absmax": 0.0,
+   "inv_out_equal": true,
+   "inv_out_ulp": 0.0,
+   "inv_out_absmax": 0.0,
+   "inv_step_outbuf": 2722886914112,
+   "inv_orac_outbuf": 2722888044608,
+   "inv_same_outbuf": false,
+   "ifft2_replay_equal": true,
+   "ifft2_replay_matches_step": true,
+   "final_equal": true,
+   "final_ulp": 0.0,
+   "final_absmax": 0.0
+  },
+  {
+   "n": 512,
+   "tilt": [
+    0.0,
+    0.0
+   ],
+   "use_pyfftw": true,
+   "step_calls": [
+    "fwd",
+    "inv"
+   ],
+   "orac_calls": [
+    "fwd",
+    "inv"
+   ],
+   "fwd_in_equal": true,
+   "fwd_in_ulp": 0.0,
+   "fwd_in_absmax": 0.0,
+   "fwd_out_equal": true,
+   "fwd_out_ulp": 0.0,
+   "fwd_out_absmax": 0.0,
+   "fwd_step_outbuf": 2722916528192,
+   "fwd_orac_outbuf": 2722920820800,
+   "fwd_same_outbuf": false,
+   "inv_in_equal": true,
+   "inv_in_ulp": 0.0,
+   "inv_in_absmax": 0.0,
+   "inv_out_equal": true,
+   "inv_out_ulp": 0.0,
+   "inv_out_absmax": 0.0,
+   "inv_step_outbuf": 2722938015808,
+   "inv_orac_outbuf": 2722942242880,
+   "inv_same_outbuf": false,
+   "ifft2_replay_equal": true,
+   "ifft2_replay_matches_step": true,
+   "final_equal": true,
+   "final_ulp": 0.0,
+   "final_absmax": 0.0
+  },
+  {
+   "n": 512,
+   "tilt": [
+    0.03,
+    -0.02
+   ],
+   "use_pyfftw": true,
+   "step_calls": [
+    "fwd",
+    "inv"
+   ],
+   "orac_calls": [
+    "fwd",
+    "inv"
+   ],
+   "fwd_in_equal": true,
+   "fwd_in_ulp": 0.0,
+   "fwd_in_absmax": 0.0,
+   "fwd_out_equal": true,
+   "fwd_out_ulp": 0.0,
+   "fwd_out_absmax": 0.0,
+   "fwd_step_outbuf": 2722916528192,
+   "fwd_orac_outbuf": 2722920820800,
+   "fwd_same_outbuf": false,
+   "inv_in_equal": true,
+   "inv_in_ulp": 0.0,
+   "inv_in_absmax": 0.0,
+   "inv_out_equal": true,
+   "inv_out_ulp": 0.0,
+   "inv_out_absmax": 0.0,
+   "inv_step_outbuf": 2722938015808,
+   "inv_orac_outbuf": 2722942242880,
+   "inv_same_outbuf": false,
+   "ifft2_replay_equal": true,
+   "ifft2_replay_matches_step": true,
+   "final_equal": true,
+   "final_ulp": 0.0,
+   "final_absmax": 0.0
+  },
+  {
+   "n": 128,
+   "tilt": [
+    0.0,
+    0.0
+   ],
+   "use_pyfftw": false,
+   "step_calls": [
+    "fwd",
+    "inv"
+   ],
+   "orac_calls": [
+    "fwd",
+    "inv"
+   ],
+   "fwd_in_equal": true,
+   "fwd_in_ulp": 0.0,
+   "fwd_in_absmax": 0.0,
+   "fwd_out_equal": true,
+   "fwd_out_ulp": 0.0,
+   "fwd_out_absmax": 0.0,
+   "fwd_step_outbuf": 2722892021936,
+   "fwd_orac_outbuf": 2722891366528,
+   "fwd_same_outbuf": false,
+   "inv_in_equal": true,
+   "inv_in_ulp": 0.0,
+   "inv_in_absmax": 0.0,
+   "inv_out_equal": true,
+   "inv_out_ulp": 0.0,
+   "inv_out_absmax": 0.0,
+   "inv_step_outbuf": 2722892021936,
+   "inv_orac_outbuf": 2722891366528,
+   "inv_same_outbuf": false,
+   "ifft2_replay_equal": true,
+   "ifft2_replay_matches_step": true,
+   "final_equal": true,
+   "final_ulp": 0.0,
+   "final_absmax": 0.0
+  },
+  {
+   "n": 128,
+   "tilt": [
+    0.03,
+    -0.02
+   ],
+   "use_pyfftw": false,
+   "step_calls": [
+    "fwd",
+    "inv"
+   ],
+   "orac_calls": [
+    "fwd",
+    "inv"
+   ],
+   "fwd_in_equal": true,
+   "fwd_in_ulp": 0.0,
+   "fwd_in_absmax": 0.0,
+   "fwd_out_equal": true,
+   "fwd_out_ulp": 0.0,
+   "fwd_out_absmax": 0.0,
+   "fwd_step_outbuf": 2722892546288,
+   "fwd_orac_outbuf": 2722892284128,
+   "fwd_same_outbuf": false,
+   "inv_in_equal": true,
+   "inv_in_ulp": 0.0,
+   "inv_in_absmax": 0.0,
+   "inv_out_equal": true,
+   "inv_out_ulp": 0.0,
+   "inv_out_absmax": 0.0,
+   "inv_step_outbuf": 2722892546288,
+   "inv_orac_outbuf": 2722892284128,
+   "inv_same_outbuf": false,
+   "ifft2_replay_equal": true,
+   "ifft2_replay_matches_step": true,
+   "final_equal": true,
+   "final_ulp": 0.0,
+   "final_absmax": 0.0
+  },
+  {
+   "n": 256,
+   "tilt": [
+    0.0,
+    0.0
+   ],
+   "use_pyfftw": false,
+   "step_calls": [
+    "fwd",
+    "inv"
+   ],
+   "orac_calls": [
+    "fwd",
+    "inv"
+   ],
+   "fwd_in_equal": true,
+   "fwd_in_ulp": 0.0,
+   "fwd_in_absmax": 0.0,
+   "fwd_out_equal": true,
+   "fwd_out_ulp": 0.0,
+   "fwd_out_absmax": 0.0,
+   "fwd_step_outbuf": 2722883563584,
+   "fwd_orac_outbuf": 2722866245696,
+   "fwd_same_outbuf": false,
+   "inv_in_equal": true,
+   "inv_in_ulp": 0.0,
+   "inv_in_absmax": 0.0,
+   "inv_out_equal": true,
+   "inv_out_ulp": 0.0,
+   "inv_out_absmax": 0.0,
+   "inv_step_outbuf": 2722883522624,
+   "inv_orac_outbuf": 2722866212928,
+   "inv_same_outbuf": false,
+   "ifft2_replay_equal": true,
+   "ifft2_replay_matches_step": true,
+   "final_equal": true,
+   "final_ulp": 0.0,
+   "final_absmax": 0.0
+  },
+  {
+   "n": 256,
+   "tilt": [
+    0.03,
+    -0.02
+   ],
+   "use_pyfftw": false,
+   "step_calls": [
+    "fwd",
+    "inv"
+   ],
+   "orac_calls": [
+    "fwd",
+    "inv"
+   ],
+   "fwd_in_equal": true,
+   "fwd_in_ulp": 0.0,
+   "fwd_in_absmax": 0.0,
+   "fwd_out_equal": true,
+   "fwd_out_ulp": 0.0,
+   "fwd_out_absmax": 0.0,
+   "fwd_step_outbuf": 2722883547200,
+   "fwd_orac_outbuf": 2722866208832,
+   "fwd_same_outbuf": false,
+   "inv_in_equal": true,
+   "inv_in_ulp": 0.0,
+   "inv_in_absmax": 0.0,
+   "inv_out_equal": true,
+   "inv_out_ulp": 0.0,
+   "inv_out_absmax": 0.0,
+   "inv_step_outbuf": 2722883510336,
+   "inv_orac_outbuf": 2722866253888,
+   "inv_same_outbuf": false,
+   "ifft2_replay_equal": true,
+   "ifft2_replay_matches_step": true,
+   "final_equal": true,
+   "final_ulp": 0.0,
+   "final_absmax": 0.0
+  },
+  {
+   "n": 512,
+   "tilt": [
+    0.0,
+    0.0
+   ],
+   "use_pyfftw": false,
+   "step_calls": [
+    "fwd",
+    "inv"
+   ],
+   "orac_calls": [
+    "fwd",
+    "inv"
+   ],
+   "fwd_in_equal": true,
+   "fwd_in_ulp": 0.0,
+   "fwd_in_absmax": 0.0,
+   "fwd_out_equal": true,
+   "fwd_out_ulp": 0.0,
+   "fwd_out_absmax": 0.0,
+   "fwd_step_outbuf": 2722925097024,
+   "fwd_orac_outbuf": 2722963484736,
+   "fwd_same_outbuf": false,
+   "inv_in_equal": true,
+   "inv_in_ulp": 0.0,
+   "inv_in_absmax": 0.0,
+   "inv_out_equal": true,
+   "inv_out_ulp": 0.0,
+   "inv_out_absmax": 0.0,
+   "inv_step_outbuf": 2722925064256,
+   "inv_orac_outbuf": 2722963484736,
+   "inv_same_outbuf": false,
+   "ifft2_replay_equal": true,
+   "ifft2_replay_matches_step": true,
+   "final_equal": true,
+   "final_ulp": 0.0,
+   "final_absmax": 0.0
+  },
+  {
+   "n": 512,
+   "tilt": [
+    0.03,
+    -0.02
+   ],
+   "use_pyfftw": false,
+   "step_calls": [
+    "fwd",
+    "inv"
+   ],
+   "orac_calls": [
+    "fwd",
+    "inv"
+   ],
+   "fwd_in_equal": true,
+   "fwd_in_ulp": 0.0,
+   "fwd_in_absmax": 0.0,
+   "fwd_out_equal": true,
+   "fwd_out_ulp": 0.0,
+   "fwd_out_absmax": 0.0,
+   "fwd_step_outbuf": 2722931535936,
+   "fwd_orac_outbuf": 2722927239232,
+   "fwd_same_outbuf": false,
+   "inv_in_equal": true,
+   "inv_in_ulp": 0.0,
+   "inv_in_absmax": 0.0,
+   "inv_out_equal": true,
+   "inv_out_ulp": 0.0,
+   "inv_out_absmax": 0.0,
+   "inv_step_outbuf": 2722931511360,
+   "inv_orac_outbuf": 2722927247424,
+   "inv_same_outbuf": false,
+   "ifft2_replay_equal": true,
+   "ifft2_replay_matches_step": true,
+   "final_equal": true,
+   "final_ulp": 0.0,
+   "final_absmax": 0.0
+  }
+ ]
+}

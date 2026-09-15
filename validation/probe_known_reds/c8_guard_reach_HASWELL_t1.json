@@ -1,0 +1,52 @@
+{
+ "lumenairy_file": "C:\\tmp\\lum_reds\\lumenairy\\__init__.py",
+ "version": "5.47.0",
+ "numpy": "2.4.4",
+ "env": {
+  "OPENBLAS_CORETYPE": null,
+  "OPENBLAS_NUM_THREADS": "1",
+  "OMP_NUM_THREADS": "1",
+  "MKL_NUM_THREADS": "1",
+  "NUMBA_DISABLE_JIT": null
+ },
+ "flag_defaults": {
+  "REMAP_STATIONARY_PHASE_LAUNCH": true,
+  "REMAP_STATIONARY_PHASE_FIT_GUARD": false,
+  "REMAP_INVERSE_SUPPORT_BOUND": true
+ },
+ "cells": {
+  "guard=False,bound=False": {
+   "halo_3w": 0.0,
+   "peak": 1.1190877352997084,
+   "power": 5653.697159975673,
+   "warnings": []
+  },
+  "guard=False,bound=True": {
+   "halo_3w": 0.0,
+   "peak": 1.1190877352997084,
+   "power": 5653.672504897389,
+   "warnings": []
+  },
+  "guard=True,bound=False": {
+   "halo_3w": 0.00015217194665917584,
+   "peak": 1.1189053022360576,
+   "power": 5644.867938410414,
+   "warnings": [
+    "apply_real_lens_traced: the inverse-characteristic per-pixel evaluator refused to build -- guard G8: off-lattice entrance-position error 1.0523e-07 m against the incumbent Newton path's 7.4904e-08 on the same samples (1.40x, bar 1.00x).  The call KEEPS the shipped coarse-Newton + map_coordinates upsample path unchanged (refuse, never degrade).  That is a DIFFERENT ANSWER, not a slower one: the incumbent's coarse-lattice upsample carries 6.0e-3..1.08e-2 waves rms of core wavefront error against the exact-trace oracle where this model carries ~2e-12, and on design 121 the two differ by 0.8 % in peak and 3.350 vs 3.450 um in banner FWHM.  Set lumenairy.elements._lens_imap.INVERSE_MAP_GUARD = 'silent' to stop reporting it, or TRACED_INVERSE_MAP = False to stop attempting the build at all (that is the fail-before switch and it is byte-identical to this outcome).",
+    "apply_real_lens_traced: running the Newton inversion SERIAL instead of on 24 workers, because this process's __main__ (C:\\tmp\\lum_reds\\validation\\probe_known_reds\\probe_c8_guard_reach.py) has no top-level `if __name__ == '__main__':` guard.  multiprocessing's spawn workers RE-EXECUTE the whole __main__ module body before serving their chunk, so each worker would re-run your entire program: MEASURED on design 121, 22.1 GB committed per worker (~177 GB across 8) against 1.9 GB of actual chunk, which took a 227.5 GB-commit box to 0.0 GB free.  Wrap the top-level code of that file in the guard to get the pool back -- the serial result is bit-identical either way, so nothing but wall time changes here."
+   ]
+  },
+  "guard=True,bound=True": {
+   "halo_3w": 0.00015217194665917584,
+   "peak": 1.1189053022360576,
+   "power": 5644.867938410414,
+   "warnings": [
+    "apply_real_lens_traced: the inverse-characteristic per-pixel evaluator refused to build -- guard G8: off-lattice entrance-position error 1.0523e-07 m against the incumbent Newton path's 7.4904e-08 on the same samples (1.40x, bar 1.00x).  The call KEEPS the shipped coarse-Newton + map_coordinates upsample path unchanged (refuse, never degrade).  That is a DIFFERENT ANSWER, not a slower one: the incumbent's coarse-lattice upsample carries 6.0e-3..1.08e-2 waves rms of core wavefront error against the exact-trace oracle where this model carries ~2e-12, and on design 121 the two differ by 0.8 % in peak and 3.350 vs 3.450 um in banner FWHM.  Set lumenairy.elements._lens_imap.INVERSE_MAP_GUARD = 'silent' to stop reporting it, or TRACED_INVERSE_MAP = False to stop attempting the build at all (that is the fail-before switch and it is byte-identical to this outcome)."
+   ]
+  }
+ },
+ "guard_on_equals_guard_off_bitwise": false,
+ "guard_max_abs_diff": 0.07009533300659677,
+ "bound_on_equals_off_bitwise": false,
+ "bound_max_abs_diff": 5.815038371528334e-12
+}

@@ -1,0 +1,233 @@
+fix(ci): the 5.47.0 matrix -- the py3.10 collection abort, the py3.11 token digest (PEP 701), the glass-extra tests, six platform bit pins, --maxfail and the slow lane
+
+Run 34914295323 on the 5.47.0 commit: 34 jobs, 30 red.  Every class below was
+root-caused by measurement before a bar moved, and in four of them the cause was
+not rounding at all.  Downloaded job logs were the evidence; probes and per-arm
+JSON are in validation/probe_known_reds/; the report is
+docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/WP-B14_KNOWN_REDS_REPORT.md
+section 6.
+
+PY3.10 -- THE WHOLE LANE TESTED NOTHING.  test_audit2609_a15a_packaging.py
+imported tomllib unconditionally; it is 3.11+ stdlib, the workflow installs the
+tomli backport for exactly this reason, and pytest turns any collection error
+into Interrupted -- so each of the five 3.10 shards ran 0 of its ~2 910 selected
+ids and reported "18 skipped, 12 579 deselected, 1 error".  The import takes the
+standard fallback.  The no-parser case is premise-gated inside the one helper
+that needs a parser rather than skipped at module scope: only 4 of the file's 11
+gates read pyproject.toml, and a module-level skip would have silently dropped
+the other 7.  No 3.10 interpreter exists on this box, so it is proved on three
+simulated arms (tomllib blocked from pytest_collection, which raises the same
+ModuleNotFoundError class): backport present 11 passed, neither present 7 passed
+/ 4 skipped with rc=0 and no collection error, native 11 passed.  Reported and
+NOT edited: test_g08_s4_20_packaging_ui.py has the same bare import inside a
+broad except with a text-scan fallback, so on 3.10 it silently degrades a parsed
+check to a substring match even where tomli IS installed.
+
+PY3.11 -- THE HISTORY TOKEN DIGEST WAS INTERPRETER-DEPENDENT.  49 distinct ids
+of test_the_module_token_stream_is_unchanged_since_the_history_move failed on
+every 3.11 shard and none on 3.12 / 3.13 / 3.14, while the sibling AST gate was
+123/123 green on 3.11 -- so the module sources are identical on every arm and
+what moved with the interpreter is the digest's own definition.  PEP 701 landed
+in 3.12: f"a{b}c" tokenises as seven records there and as one STRING before it.
+110 of the 123 registered modules contain an f-string (3 445 JoinedStr nodes)
+and 13 do not; the 7 ids that PASSED on 3.11 are exactly the 13 and the 49 that
+failed are all in the 110, both directions clean -- so the true size of the class
+is 110, not the 49 the --maxfail abort showed.  The digest now collapses each
+FSTRING_START..FSTRING_END run to one record carrying the literal's exact SOURCE
+SLICE.  That is version-stable AND strictly finer than the token run, which
+normalises {{ to { and says nothing about spacing inside a replacement field, so
+the literal-spelling claim the gate exists for is kept rather than traded away
+for a skip -- and it is newly proved by six falsifiability cases (quote
+character, prefix case, spacing inside {...}, a conversion, a format spec, an
+implicit concatenation), three of which are shown INVISIBLE to the AST
+fingerprint, which is what keeps the two fingerprints independent.  A
+registry-wide sweep asserts that no tokenizer-specific record name ever reaches
+the digest, which is the guard that catches the next PEP 701.  Established
+without a 3.11 interpreter on the box: the actual 3.11-computed digests were
+recovered from the 49 CI failure blocks, and the new scheme reproduces 49 of 49
+of them bit for bit on 3.12.3, 3.13.13 and 3.14.6 alike, leaving no residual for
+any other tokenizer difference.  110 of 123 history documents re-recorded BY THE
+RECORDER, each exactly +2/-1 lines; ast_sha256 moved on 0 of 123, the arithmetic
+proof that no code changed.  The recorder and the gate were confirmed to share
+ONE implementation of the digest.
+
+THE a8 GLASS TESTS -- THE LIBRARY WAS RIGHT.  CI deliberately omits the glass
+extra.  lumenairy/glass.py is byte-identical to the base commit and is NOT in
+this commit: of 49 tuple-registered glasses exactly one (SILICON) has no bundled
+Sellmeier row, and its ImportError comes from the REAL index, not the extinction
+path -- get_glass_index_complex reaches kappa only after the real index, so
+"falling back to kappa = 0" there would mean FABRICATING a real index, which is
+the silent-wrong shape WP-A8's own E2 arm exists to kill.  The module docstring
+says so ("Only the tuple-style entries that lack a Sellmeier fallback will
+raise"), and a sibling test in the same family REQUIRES the complex entry point
+to raise ValueError out of page range, so "never raises" was never literal.
+pytest.importorskip was ruled out for all of them by docs/TESTING_STANDARDS.md
+rule 4, which both files already cite; each test asserts the documented
+no-package fact as a two-sided partition instead -- the exempt set must EQUAL the
+independently computed "tuple entry with no bundled row on this install" set,
+each exemption must be an ImportError naming both remediations, the premise is
+re-measured and a hard floor keeps the sweep from shrinking.  The warns-once test
+is split PER PARAMETER so the three glasses that do exercise the fallback still
+run on both installs, and the k-sign test is split by half, its real-index half
+being bit-identical on both installs.  Since refractiveindex IS installed here,
+its absence was made a FIXTURE (a blocker over importlib.util.find_spec plus
+sys.modules), and against a pristine archive tree that fixture reproduces exactly
+the seven CI ids and nothing else.  64 passed / 0 skipped on both arms.
+
+SIX PLATFORM BIT PINS.  (1) The off-plane fff_nv fixture's exact mirror
+precondition failed on Linux and passed on Windows because uniaxial_tensor builds
+its x and y legs from different expressions in cos(phi) and sin(phi), so at
+phi = 45 deg the symmetry is only as exact as the platform libm: MSVC returns
+sin(pi/4) and cos(pi/4) as the same bits, glibc returns sin one ULP low and the
+exz/eyz and ezx/ezy pairs then differ by 3.33e-16.  Repaired in the CONSTRUCTION
+-- the fixture is averaged with its own mirror, exact on every IEEE-754 platform
+because addition is commutative and multiplication by 0.5 is exact -- so the
+array_equal pin is KEPT, with a derived 8-ULP guard bounding how far the raw
+tensor may sit from its mirror before the averaging would be manufacturing a
+symmetry rather than repairing round-off.  (2) The BOR pencil's 1e-12 residual
+bar was one arm's reading; it is re-derived from LAPACK's backward-error result
+for a Cholesky-reduced symmetric-definite pencil (p(n) eps lam_max / 2 lam_i,
+worst at the smallest eigenvalue, lam_max read off the solver's own spectrum and
+pinned to its mesh-determined range so a broken solve cannot inflate its own
+bar), after measuring an 11x swing on ONE machine from the BLAS kernel alone
+(HASWELL 2.758e-13, NEHALEM 8.882e-14, KATMAI 9.924e-13, SANDYBRIDGE 5.732e-13;
+CI read 1.326e-12) with WSL bit-identical to the Windows HASWELL arm as the
+control that isolates it to the kernel rather than the OS.  (3) The carrier
+transfer-function "bit-identical" pin was comparing two different ASSOCIATIONS of
+the same three factors -- sum(xm * (wgt*slope)) against sum((wgt*xm) * slope) --
+so byte equality was never an invariant of that pair; measured, the projection
+correction is 3e-21 to 2e-19 ULP of the moment it corrects and cannot move any
+bit, and the whole difference is the re-association, 0-4 ULP across the eight-arm
+ladder.  Bar 16 ULP, unconditional, 4x over the worst arm and 14 decades under
+the defect it guards.  (4,5) Two peak-array budgets moved because NumPy's
+temp_elide rewrite of a*X + b*Y / Ex*conj(Ey) into an unreferenced temporary's
+own buffer is a BUILD property -- it needs backtrace() and a stack walk -- and it
+does NOT follow the operating system: on this run the add form was elided on the
+py3.14 Linux runner and not on py3.12 or py3.13, while the conj form was elided
+on py3.11.  Each file now MEASURES its own elision premise on the running arm,
+with a companion arm that binds the temporary to a name (lifting its refcount out
+of elision's reach) asserted at the un-elided count, so "no elision here" can
+never come from an instrument that measured nothing.  The slack above a whole
+number of grids is derived two-sided from tracemalloc's own bookkeeping (448 to
+7 712 B over 9 repeats on two arms, at most 4.6e-04 grids): 0.05, two decades
+above that spread and 1.3 decades below the 1.0 that separates one allocation
+count from the next.  (6) A lens-memory pre-flight pin read 0.88 against a
+fail-safe bar of 1.0 -- neither load nor a real under-reservation: the test warmed
+on a 64x64 block, BELOW the grid size at which apply_real_lens takes a
+deferred-import branch, so ~11.2 MB of one-time imports landed inside the measured
+region (16.78 MB fft_infra, 9.55 MB importlib._bootstrap_external, 4.19 + 4.19 MB
+asm).  The Windows-minus-Linux excess is 13.7 MB and is exactly constant across N
+and dtype, i.e. bytecode and not lens arithmetic.  Warming above the threshold
+makes all four (N, dtype) cells byte-identical on Windows py3.14 and WSL py3.12
+(est/peak 1.064 / 1.239 / 1.072 / 1.323) with BOTH bars unchanged, plus a new
+unconditional guard that the measured call must retain 5.5-7.0 complex grids
+(clean 6.01-6.09, contaminated 8.38 and 9.49).  And the w3 optimiser merit whose
+aberration-free reference is COLLAPSED swings 2.7x across BLAS kernels while its
+response holds to 3.2e-05, so its SCALE is not a measurement: the physics pins
+keep their bars, the scale gets a derived order-of-magnitude band (4.8x under the
+lowest reading, 18x over the highest, the smallest rescale it must catch nine
+decades away), and the collapse becomes a POSITIVE pin so the band cannot quietly
+become a band on a Strehl.  The library-side repair is VERIFY-A4 O-3b and is not
+taken here.
+
+--maxfail 10 -> 50.  At 10 every py3.11 shard stopped after executing 6.4-7.9 %
+of its selection, so more than 92 % of the lane never ran and the census of what
+was broken on 3.11 was unknowable from the artefacts.  The 2026-09-12 argument
+("50 across 5 shards x 5 pythons tolerated 1 250 failures") sums the MATRIX, but
+nothing waits on the matrix sum: a job's wall clock is bounded by its own budget,
+and a catastrophically broken job reaches 50 in its first minutes exactly as it
+reaches 10, so the early-abort property survives.  The cap never fired on the
+healthy lanes (3 / 2 / 4 / 2 / 4 / 8 / 1).  It is a FAILURE budget, not an error
+budget -- a collection error aborts regardless, which is the 3.10 mechanism
+above, and the comment now says so.
+
+THE SLOW LANE.  All five shards hit the 30-minute step cap, and it was
+predictable before the run started.  NOT a durations gap: coverage of the slow
+selection measured 935 of 935 ids, zero missing, and .test_durations is
+untouched.  The lane now totals 9 630.0 s against the 5 914.9 s last recorded
+(+62.8 %, from later waves moving files over the two-minute bar without re-running
+the sum), which least_duration balances to 1 926.0 s per shard against an 1 800 s
+cap.  Both changes are needed and the arithmetic is in the comment: at 8 splits
+the per-shard budget is 1 203.8 s, the runners scale recorded seconds by 0.98x to
+1.48x, so sizing on the worst factor gives ~1 782 s -- a 1 % margin under the old
+cap, 34 % headroom under the new.  Shipped as --splits 5 -> 8 with the shard list
+in step, the slow step cap 30 -> 45 min and the job cap 35 -> 50, with an explicit
+"--splits must equal the length of the shard: list" warning at both sites.  Open
+and flagged for an owner: the 0.98-1.48x spread itself, whose leading candidate is
+that .test_durations was captured with BLAS unpinned while the slow lane pins one
+thread in its env block.
+
+MYPY STRICT, one error, fixed at the expression and not the whitelist.
+decompose_lg normalised its `only` argument with tuple(tuple(k) for k in only);
+tuple(iterable) types as tuple[_T_co, ...], so the constructor widened
+tuple[int, int] to tuple[int, ...] at the call site and destroyed the length
+information the callee genuinely requires (it unpacks for (p, ell) in only,
+twice).  Unpacking by name keeps the normalisation a caller handing [[0, 1]] or
+numpy scalars relies on, keeps the loud failure one frame earlier, and types
+exactly.  Before: 1 error in 1 file (33 checked).  After: Success, on Windows
+py3.14 and WSL py3.12, with the coefficients proved bit-identical against the
+full decomposition for tuple, list and numpy-scalar inputs.  Reported and NOT
+edited: the identical re-wrap in asymptotic_aberration_tensor.py, invisible today
+because that module is outside the whitelist.
+
+Runs: a15a_packaging 11 passed on Windows and WSL and on three simulated 3.10
+arms; a17 relocation + lint 757 passed on Windows py3.14 and on WSL py3.12, with
+record_history_fingerprints.py --check green and 123/123 on a third interpreter;
+a8_glass + a8_verify 64 passed / 0 skipped with the package present and with it
+blocked; the five workflow readers plus test_audit_except_budget.py 30 passed;
+mypy Success on both arms; the bit-pin files on the four-coretype x two-thread
+ladder and under WSL; WSL ruff clean over lumenairy/ and tests/.
+
+Files: .github/workflows/unit-tests.yml, lumenairy/propagators/asymptotic_modes.py,
+tests/unit/test_audit2609_a15a_packaging.py,
+tests/unit/test_audit2609_a17_history_relocation.py,
+tests/unit/test_audit2609_a8_glass.py, tests/unit/test_audit2609_a8_verify.py,
+tests/unit/test_audit2609_a11_polar_sources_infra.py,
+tests/unit/test_audit2609_a14_rcwa_eme_bor.py,
+tests/unit/test_audit2609_b5_rcwa_eme_bor.py,
+tests/unit/test_audit2609_b8_analysis_sources.py,
+tests/unit/test_audit2609_a6_carrier.py, tests/unit/test_niche_audit_w3_oracles.py,
+and the 106 history documents re-recorded for the digest-scheme change (the other four landed with their own code changes in the two preceding commits).
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+
+ALSO FOUND, by this wave's own kernel ladder rather than by CI, and fixed:
+test_niche_audit_w3_oracles.py::test_w4_t1_pure_lg00_has_no_sigma_grid_and_is_unchanged
+classifies by BLAS build too -- six arms 181 passed, SANDYBRIDGE at one AND at
+four threads 1 failed, on an exact-equality pin against the SAME frozen L(0,0)
+literal as the briefed sibling, reading rel 1.223e-08 against its own 1e-8.
+L(0,0) is a saddle amplitude with a stationary phase of |Phi| = 9.8883e+05 rad,
+so ONE ULP on a fit coefficient reaches the answer as eps |Phi| = 2.196e-10, and
+md5(coef_phi) differs on every OPENBLAS_CORETYPE rung: HASWELL 1.838e-09,
+NEHALEM 6.653e-09, KATMAI 7.518e-09, SANDYBRIDGE 1.223e-08, WSL 4.398e-09, CI
+8.190e-09 (identical digits on py3.14 and on the py3.12 JAX job, i.e.
+deterministic per build).  The constants were baked on one arm; the test was red
+on Windows at 5.47.0 AND at the commit that introduced the pin.  Both tests now
+read ONE shared bar derived once beside the constant (_Y2_L00_REL_BAR = 1e-6,
+82x over the worst arm), with the DERIVATION -- want == old * (-1j) /
+(lambda sqrt|det J|) -- kept as a separate frozen-to-frozen claim at 1e-11 where
+the worst arm reads 9.86e-13.  It was invisible to CI (hidden behind --maxfail)
+and invisible on the default local arm, which is the argument for the ladder.
+
+AND A LIBRARY DEFECT, named and NOT fixed, handed to the owner of
+lumenairy/propagators/fft_infra.py: with the shipped pyFFTW two-buffer ping-pong
+ON, _ifft2(_fft2(E) * H) is not a function of its input values alone -- two call
+sites with bit-identical E and bit-identical H return results that differ.
+Measured on WSL (numpy 2.4.6, pyFFTW 0.15.1) at n >= FFTW_MIN_SIZE only: 1.448e-15
+to 1.897e-15 at n = 256 and 512 with the ping-pong on (79 % of doubles differ at
+n = 256), exactly 0 with set_fft_double_buffer(False) and 0 with USE_PYFFTW off;
+identical at 1, 2 and 8 FFTW threads and under both planner efforts; Windows
+reads 0 in all three modes on all eight rungs.  Neither route is the right one
+(both sit 2.5e-15 to 3.1e-15 from pocketfft), so it is a reproducibility defect,
+not an accuracy one, and the physics is unaffected at ~1 ULP -- but it
+CONTRADICTS set_fft_double_buffer's own docstring, which promises the values are
+byte-identical either way.  Not fixed because the ping-pong is a documented
+256 MB - 1 GB per call saving with its own tests and the mechanism below the A/B
+was not established (slot-plan parity, buffer stability across an intervening
+allocation, operand and output alignment swept 0/16/32/48 mod 64, thread count
+and planner effort each test clean in isolation).  Reproducer:
+validation/probe_known_reds/probe_c4_double_buffer.py.  The a6 test was fixed
+without waiting for it: the byte claim now runs against the oracle with the
+ping-pong off, restored in a finally, unconditionally on every arm and shape,
+measured 0.000e+00, plus a second unconditional claim on the shipped dispatch at
+a derived 1e-13 relative bar.

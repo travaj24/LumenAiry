@@ -1,0 +1,285 @@
+{
+ "env": {
+  "arm": "NEHALEM_t4",
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "platform": "win32",
+  "lumenairy_file": "C:\\tmp\\lum_reds\\lumenairy\\__init__.py",
+  "OPENBLAS_CORETYPE": "NEHALEM",
+  "OMP_NUM_THREADS": "4",
+  "threadpool": [
+   {
+    "user_api": "blas",
+    "internal_api": "openblas",
+    "num_threads": 4,
+    "prefix": "libscipy_openblas",
+    "filepath": "C:\\Users\\Tesla\\AppData\\Local\\Programs\\Python\\Python314\\Lib\\site-packages\\numpy.libs\\libscipy_openblas64_-63c857e738469261263c764a36be9436.dll",
+    "version": "0.3.31.188.0",
+    "threading_layer": "pthreads",
+    "architecture": "Nehalem"
+   }
+  ]
+ },
+ "rows": [
+  {
+   "kind": "isotropic",
+   "estimator": "gradient",
+   "r": 0.05,
+   "a": 0.05001230198616674,
+   "b": 0.05001230198616674,
+   "a_is_inf": false,
+   "b_is_inf": false,
+   "equal": true,
+   "ulp": 0.0,
+   "rel": 0.0,
+   "terms": {
+    "x": {
+     "num_c": 941.5244927164135,
+     "tot": 3926.990816987242,
+     "mom": 1.4247947102510852e-10,
+     "sum_w_C": -4.998754322335218e-19,
+     "corr": -1.813653010213063e-32,
+     "corr_over_ulp": 1.5953060587841658e-19,
+     "corr_rel": 1.9262940308440112e-35
+    },
+    "y": {
+     "num_c": 941.5244927164134,
+     "tot": 3926.990816987242,
+     "mom": 0.0,
+     "sum_w_C": 0.0,
+     "corr": 0.0,
+     "corr_over_ulp": 0.0,
+     "corr_rel": 0.0
+    }
+   }
+  },
+  {
+   "kind": "isotropic",
+   "estimator": "gradient",
+   "r": -0.02,
+   "a": -0.020009753560091173,
+   "b": -0.020009753560091166,
+   "a_is_inf": false,
+   "b_is_inf": false,
+   "equal": false,
+   "ulp": 2.0,
+   "rel": 3.467755803722959e-16,
+   "terms": {
+    "x": {
+     "num_c": -2353.2427381325124,
+     "tot": 3926.990816987242,
+     "mom": 1.4011636648437423e-10,
+     "sum_w_C": 4.3259713677323476e-19,
+     "corr": 1.543521280824183e-32,
+     "corr_over_ulp": 3.394239191971788e-20,
+     "corr_rel": 6.559124801757984e-36
+    },
+    "y": {
+     "num_c": -2353.2427381325124,
+     "tot": 3926.990816987242,
+     "mom": 0.0,
+     "sum_w_C": 0.0,
+     "corr": 0.0,
+     "corr_over_ulp": 0.0,
+     "corr_rel": 0.0
+    }
+   }
+  },
+  {
+   "kind": "isotropic",
+   "estimator": "gradient",
+   "r": 1000000000.0,
+   "a": 1000200020.0013337,
+   "b": 1000200020.0013332,
+   "a_is_inf": false,
+   "b_is_inf": false,
+   "equal": false,
+   "ulp": 4.0,
+   "rel": 4.767418003075919e-16,
+   "terms": {
+    "x": {
+     "num_c": 4.707839063734767e-08,
+     "tot": 3926.990816987242,
+     "mom": -7.756290059930183e-21,
+     "sum_w_C": -5.0210477129592775e-20,
+     "corr": 9.91718704764869e-44,
+     "corr_over_ulp": 1.4986429349812845e-20,
+     "corr_rel": 2.1065263517698298e-36
+    },
+    "y": {
+     "num_c": 4.707839063734767e-08,
+     "tot": 3926.990816987242,
+     "mom": -1.0842021724855044e-19,
+     "sum_w_C": 0.0,
+     "corr": -0.0,
+     "corr_over_ulp": 0.0,
+     "corr_rel": 0.0
+    }
+   }
+  },
+  {
+   "kind": "isotropic",
+   "estimator": "gradient",
+   "r": null,
+   "a": null,
+   "b": null,
+   "a_is_inf": true,
+   "b_is_inf": true,
+   "equal": true,
+   "ulp": 0.0,
+   "rel": 0.0,
+   "terms": {
+    "x": {
+     "num_c": 0.0,
+     "tot": 3926.990816987242,
+     "mom": 0.0,
+     "sum_w_C": -5.0210477129592775e-20,
+     "corr": -0.0,
+     "corr_over_ulp": Infinity,
+     "corr_rel": Infinity
+    },
+    "y": {
+     "num_c": 0.0,
+     "tot": 3926.990816987242,
+     "mom": 0.0,
+     "sum_w_C": 0.0,
+     "corr": 0.0,
+     "corr_over_ulp": Infinity,
+     "corr_rel": Infinity
+    }
+   }
+  },
+  {
+   "kind": "astigmatic",
+   "estimator": "gradient",
+   "axis": 0,
+   "a": 0.050012301986166754,
+   "b": 0.050012301986166754,
+   "equal": true,
+   "ulp": 0.0,
+   "rel": 0.0
+  },
+  {
+   "kind": "astigmatic",
+   "estimator": "gradient",
+   "axis": 1,
+   "a": 0.05001230198616675,
+   "b": 0.05001230198616675,
+   "equal": true,
+   "ulp": 0.0,
+   "rel": 0.0
+  },
+  {
+   "kind": "isotropic",
+   "estimator": "increment",
+   "r": 0.05,
+   "a": 0.05,
+   "b": 0.05,
+   "a_is_inf": false,
+   "b_is_inf": false,
+   "equal": true,
+   "ulp": 0.0,
+   "rel": 0.0,
+   "terms": {
+    "x": {
+     "num_c": 1883.7006603471245,
+     "tot": 7853.196314345667,
+     "mom": -7.366574721853065e-12,
+     "sum_w_C": -7.790685063680588e-19,
+     "corr": 7.307936967167167e-34,
+     "corr_over_ulp": 3.2140646681817506e-21,
+     "corr_rel": 3.879563839947094e-37
+    }
+   }
+  },
+  {
+   "kind": "isotropic",
+   "estimator": "increment",
+   "r": -0.02,
+   "a": -0.02,
+   "b": -0.02,
+   "a_is_inf": false,
+   "b_is_inf": false,
+   "equal": true,
+   "ulp": 0.0,
+   "rel": 0.0,
+   "terms": {
+    "x": {
+     "num_c": -4709.251650867811,
+     "tot": 7853.196314345667,
+     "mom": 9.612368599646894e-11,
+     "sum_w_C": -1.4209157185526949e-18,
+     "corr": -1.7392110281020846e-32,
+     "corr_over_ulp": 1.9122827485544935e-20,
+     "corr_rel": 3.6931792077443694e-36
+    }
+   }
+  },
+  {
+   "kind": "isotropic",
+   "estimator": "increment",
+   "r": 1000000000.0,
+   "a": 1000000000.0000001,
+   "b": 1000000000.0000001,
+   "a_is_inf": false,
+   "b_is_inf": false,
+   "equal": true,
+   "ulp": 0.0,
+   "rel": 0.0,
+   "terms": {
+    "x": {
+     "num_c": 9.418503301735624e-08,
+     "tot": 7853.196314345667,
+     "mom": -1.8513757387037484e-20,
+     "sum_w_C": 6.874003664353983e-19,
+     "corr": -1.620532978234353e-42,
+     "corr_over_ulp": 1.2244400993278133e-19,
+     "corr_rel": 1.720584392570871e-35
+    }
+   }
+  },
+  {
+   "kind": "isotropic",
+   "estimator": "increment",
+   "r": null,
+   "a": null,
+   "b": null,
+   "a_is_inf": true,
+   "b_is_inf": true,
+   "equal": true,
+   "ulp": 0.0,
+   "rel": 0.0,
+   "terms": {
+    "x": {
+     "num_c": 0.0,
+     "tot": 7853.196314345667,
+     "mom": 0.0,
+     "sum_w_C": 6.874003664353983e-19,
+     "corr": 0.0,
+     "corr_over_ulp": Infinity,
+     "corr_rel": Infinity
+    }
+   }
+  },
+  {
+   "kind": "astigmatic",
+   "estimator": "increment",
+   "axis": 0,
+   "a": 0.05,
+   "b": 0.05,
+   "equal": true,
+   "ulp": 0.0,
+   "rel": 0.0
+  },
+  {
+   "kind": "astigmatic",
+   "estimator": "increment",
+   "axis": 1,
+   "a": 0.05,
+   "b": 0.05,
+   "equal": true,
+   "ulp": 0.0,
+   "rel": 0.0
+  }
+ ]
+}

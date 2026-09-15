@@ -1,0 +1,284 @@
+{
+ "python": "3.14.6",
+ "numpy": "2.4.4",
+ "env": {
+  "OPENBLAS_CORETYPE": null,
+  "OMP_NUM_THREADS": "1"
+ },
+ "baseline": {
+  "0-dirichlet-jn": {
+   "rel": 2.757793993168889e-13,
+   "lam_max": 479759.68837671174,
+   "lam_min": 5.783185962943826,
+   "derived_bar": 1.8420305199789377e-11,
+   "margin": 66.7936228935767
+  },
+  "1-dirichlet-jn": {
+   "rel": 8.926193117986259e-14,
+   "lam_max": 478668.83923685626,
+   "lam_min": 14.681970642123423,
+   "derived_bar": 7.239207589295328e-12,
+   "margin": 81.10072786469678
+  },
+  "3-dirichlet-jn": {
+   "rel": 2.731148640577885e-14,
+   "lam_max": 495933.6120480248,
+   "lam_min": 40.706465818199845,
+   "derived_bar": 2.705206181446808e-12,
+   "margin": 99.05012642865209
+  },
+  "1-neumann-jnp": {
+   "rel": 1.9750867608081535e-13,
+   "lam_max": 480764.1545978515,
+   "lam_min": 3.3899577166705503,
+   "derived_bar": 3.149038887559998e-11,
+   "margin": 159.438002929628
+  },
+  "3-neumann-jnp": {
+   "rel": 5.007105841059456e-14,
+   "lam_max": 495934.0371810154,
+   "lam_min": 17.649988519748383,
+   "derived_bar": 6.2390679309237425e-12,
+   "margin": 124.60427498380211
+  }
+ },
+ "mutations": {
+  "degree7": {
+   "0-dirichlet-jn": {
+    "rel": 1.4432899320127035e-13,
+    "derived_bar": 1.1836145359406833e-11,
+    "caught": false
+   },
+   "1-dirichlet-jn": {
+    "rel": 7.216449660063518e-14,
+    "derived_bar": 4.648285157028994e-12,
+    "caught": false
+   },
+   "3-dirichlet-jn": {
+    "rel": 3.6615155352137663e-13,
+    "derived_bar": 1.7550451495482084e-12,
+    "caught": false
+   },
+   "1-neumann-jnp": {
+    "rel": 1.0380585280245214e-12,
+    "derived_bar": 2.023053862100383e-11,
+    "caught": false
+   },
+   "3-neumann-jnp": {
+    "rel": 1.3233858453531866e-13,
+    "derived_bar": 4.0476917141400236e-12,
+    "caught": false
+   }
+  },
+  "degree6": {
+   "0-dirichlet-jn": {
+    "rel": 8.005374141362154e-12,
+    "derived_bar": 7.2000266597966426e-12,
+    "caught": true
+   },
+   "1-dirichlet-jn": {
+    "rel": 2.082445327289406e-11,
+    "derived_bar": 2.824359027635078e-12,
+    "caught": true
+   },
+   "3-dirichlet-jn": {
+    "rel": 8.631895198618622e-11,
+    "derived_bar": 1.0816023998080318e-12,
+    "caught": true
+   },
+   "1-neumann-jnp": {
+    "rel": 7.0385919315185674e-12,
+    "derived_bar": 1.2300552930878532e-11,
+    "caught": false
+   },
+   "3-neumann-jnp": {
+    "rel": 3.292988104419692e-11,
+    "derived_bar": 2.4945182310697115e-12,
+    "caught": true
+   }
+  },
+  "degree5": {
+   "0-dirichlet-jn": {
+    "rel": 2.0277601819884694e-09,
+    "derived_bar": 4.08208640021554e-12,
+    "caught": true
+   },
+   "1-dirichlet-jn": {
+    "rel": 4.486916838075672e-09,
+    "derived_bar": 1.598078144594569e-12,
+    "caught": true
+   },
+   "3-dirichlet-jn": {
+    "rel": 1.395731774600506e-08,
+    "derived_bar": 6.243689942206114e-13,
+    "caught": true
+   },
+   "1-neumann-jnp": {
+    "rel": 1.941797389548583e-09,
+    "derived_bar": 6.96605285701138e-12,
+    "caught": true
+   },
+   "3-neumann-jnp": {
+    "rel": 6.6407288557002175e-09,
+    "derived_bar": 1.4399928241576703e-12,
+    "caught": true
+   }
+  },
+  "n_el11": {
+   "0-dirichlet-jn": {
+    "rel": 4.796163466380676e-14,
+    "derived_bar": 1.547032004884952e-11,
+    "caught": false
+   },
+   "1-dirichlet-jn": {
+    "rel": 2.036149027162537e-13,
+    "derived_bar": 6.077593061350285e-12,
+    "caught": false
+   },
+   "3-dirichlet-jn": {
+    "rel": 3.441691376337985e-14,
+    "derived_bar": 2.2731228622206985e-12,
+    "caught": false
+   },
+   "1-neumann-jnp": {
+    "rel": 4.75175454539567e-13,
+    "derived_bar": 2.645941323680752e-11,
+    "caught": false
+   },
+   "3-neumann-jnp": {
+    "rel": 1.0014211682118912e-13,
+    "derived_bar": 5.2425548637684674e-12,
+    "caught": false
+   }
+  },
+  "n_el8": {
+   "0-dirichlet-jn": {
+    "rel": 4.851674617611934e-13,
+    "derived_bar": 8.158689366715312e-12,
+    "caught": false
+   },
+   "1-dirichlet-jn": {
+    "rel": 1.1457501614131615e-13,
+    "derived_bar": 3.198849369671406e-12,
+    "caught": false
+   },
+   "3-dirichlet-jn": {
+    "rel": 8.750777880095484e-13,
+    "derived_bar": 1.2022781188465965e-12,
+    "caught": false
+   },
+   "1-neumann-jnp": {
+    "rel": 2.3869795029440866e-13,
+    "derived_bar": 1.3991283821132374e-11,
+    "caught": false
+   },
+   "3-neumann-jnp": {
+    "rel": 2.1471713296250527e-13,
+    "derived_bar": 2.7730182949947443e-12,
+    "caught": false
+   }
+  },
+  "n_el6": {
+   "0-dirichlet-jn": {
+    "rel": 2.1611601397353297e-12,
+    "derived_bar": 4.566068785955424e-12,
+    "caught": false
+   },
+   "1-dirichlet-jn": {
+    "rel": 7.014389069581739e-13,
+    "derived_bar": 1.7848521084559487e-12,
+    "caught": false
+   },
+   "3-dirichlet-jn": {
+    "rel": 6.759837134495683e-11,
+    "derived_bar": 6.761246138993609e-13,
+    "caught": true
+   },
+   "1-neumann-jnp": {
+    "rel": 2.9964919434632975e-12,
+    "derived_bar": 7.866511938545415e-12,
+    "caught": false
+   },
+   "3-neumann-jnp": {
+    "rel": 3.1388225352202426e-11,
+    "derived_bar": 1.5602720497929808e-12,
+    "caught": true
+   }
+  },
+  "nq_extra0": {
+   "0-dirichlet-jn": {
+    "rel": 4.248823515240474e-13,
+    "derived_bar": 2.8496708836755757e-09,
+    "caught": false
+   },
+   "1-dirichlet-jn": {
+    "rel": 1.0884626533425035e-12,
+    "derived_bar": 1.0586385624951181e-09,
+    "caught": false
+   },
+   "3-dirichlet-jn": {
+    "rel": 2.0161650127192843e-13,
+    "derived_bar": 3.8261773876198543e-10,
+    "caught": false
+   },
+   "1-neumann-jnp": {
+    "rel": 2.0539570044775246e-11,
+    "derived_bar": 2.9991699520732323e-07,
+    "caught": false
+   },
+   "3-neumann-jnp": {
+    "rel": 6.160627563644994e-13,
+    "derived_bar": 5.7634844845203134e-08,
+    "caught": false
+   }
+  },
+  "nq_extra_minus2": {
+   "0-dirichlet-jn": {
+    "error": "LinAlgError('The leading minor of order 8 of B is not positive definite. The factorization of B could not be completed and no eigenvalues or eigenvectors were computed.')"
+   },
+   "1-dirichlet-jn": {
+    "error": "LinAlgError('The leading minor of order 14 of B is not positive definite. The factorization of B could not be completed and no eigenvalues or eigenvectors were computed.')"
+   },
+   "3-dirichlet-jn": {
+    "error": "LinAlgError('The leading minor of order 14 of B is not positive definite. The factorization of B could not be completed and no eigenvalues or eigenvectors were computed.')"
+   },
+   "1-neumann-jnp": {
+    "error": "LinAlgError('The leading minor of order 14 of B is not positive definite. The factorization of B could not be completed and no eigenvalues or eigenvectors were computed.')"
+   },
+   "3-neumann-jnp": {
+    "error": "LinAlgError('The leading minor of order 14 of B is not positive definite. The factorization of B could not be completed and no eigenvalues or eigenvectors were computed.')"
+   }
+  },
+  "m2_term_dropped(=m=0 spectrum)": {
+   "1-dirichlet-jn": {
+    "rel": 0.3723877624240255
+   },
+   "3-dirichlet-jn": {
+    "rel": 0.623077659011835
+   },
+   "1-neumann-jnp": {
+    "rel": 0.9999987439427354
+   },
+   "3-neumann-jnp": {
+    "rel": 0.9999994495290985
+   }
+  },
+  "bc_swapped": {
+   "0-dirichlet-jn": {
+    "rel": 0.9999990383367905
+   },
+   "1-dirichlet-jn": {
+    "rel": 0.5194871956105276
+   },
+   "3-dirichlet-jn": {
+    "rel": 0.34152314475055234
+   },
+   "1-neumann-jnp": {
+    "rel": 1.0811099951235672
+   },
+   "3-neumann-jnp": {
+    "rel": 0.5186562625973137
+   }
+  }
+ }
+}

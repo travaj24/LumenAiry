@@ -1,0 +1,15 @@
+{
+ "platform": "win32",
+ "python": "3.14.6",
+ "N": 512,
+ "warmN": 128,
+ "dtype": "complex128",
+ "est_bytes": 49492787.0,
+ "peaks_bytes": [
+  60832049.0,
+  25188770.0,
+  25188770.0
+ ],
+ "ratio_est_over_first": 0.8135972372063285,
+ "ratio_est_over_steady": 1.9648751010867145
+}

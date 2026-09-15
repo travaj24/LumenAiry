@@ -1,0 +1,497 @@
+{
+ "env": {
+  "arm": "WSL",
+  "python": "3.12.3",
+  "numpy": "2.4.6",
+  "platform": "linux",
+  "PYFFTW_AVAILABLE": true,
+  "FFTW_MIN_SIZE": 256,
+  "FFTW_THREADS": 8,
+  "planner": "FFTW_ESTIMATE",
+  "OPENBLAS_CORETYPE": "",
+  "pyfftw": "0.15.1",
+  "simd_alignment": 32
+ },
+ "rows": [
+  {
+   "n": 256,
+   "threads": 1,
+   "fwd_n_bufs": 2,
+   "fwd_align": [
+    {
+     "16": 0,
+     "32": 0,
+     "64": 0,
+     "128": 64
+    },
+    {
+     "16": 0,
+     "32": 0,
+     "64": 32,
+     "128": 96
+    }
+   ],
+   "fwd_flag": "FFTW_ESTIMATE",
+   "fwd_slot_bit_equal": true,
+   "fwd_slot_ulp": 0.0,
+   "fwd_slot_absmax": 0.0,
+   "fwd_misaligned_align": {
+    "16": 0,
+    "32": 16,
+    "64": 16,
+    "128": 16
+   },
+   "fwd_misaligned_bit_equal": true,
+   "fwd_misaligned_ulp": 0.0,
+   "fwd_misaligned_absmax": 0.0,
+   "inv_n_bufs": 2,
+   "inv_align": [
+    {
+     "16": 0,
+     "32": 0,
+     "64": 32,
+     "128": 32
+    },
+    {
+     "16": 0,
+     "32": 0,
+     "64": 0,
+     "128": 64
+    }
+   ],
+   "inv_flag": "FFTW_ESTIMATE",
+   "inv_slot_bit_equal": true,
+   "inv_slot_ulp": 0.0,
+   "inv_slot_absmax": 0.0,
+   "inv_misaligned_align": {
+    "16": 0,
+    "32": 16,
+    "64": 16,
+    "128": 16
+   },
+   "inv_misaligned_bit_equal": true,
+   "inv_misaligned_ulp": 0.0,
+   "inv_misaligned_absmax": 0.0
+  },
+  {
+   "n": 384,
+   "threads": 1,
+   "fwd_n_bufs": 2,
+   "fwd_align": [
+    {
+     "16": 0,
+     "32": 0,
+     "64": 0,
+     "128": 64
+    },
+    {
+     "16": 0,
+     "32": 0,
+     "64": 32,
+     "128": 96
+    }
+   ],
+   "fwd_flag": "FFTW_ESTIMATE",
+   "fwd_slot_bit_equal": true,
+   "fwd_slot_ulp": 0.0,
+   "fwd_slot_absmax": 0.0,
+   "fwd_misaligned_align": {
+    "16": 0,
+    "32": 16,
+    "64": 16,
+    "128": 16
+   },
+   "fwd_misaligned_bit_equal": true,
+   "fwd_misaligned_ulp": 0.0,
+   "fwd_misaligned_absmax": 0.0,
+   "inv_n_bufs": 2,
+   "inv_align": [
+    {
+     "16": 0,
+     "32": 0,
+     "64": 32,
+     "128": 32
+    },
+    {
+     "16": 0,
+     "32": 0,
+     "64": 0,
+     "128": 64
+    }
+   ],
+   "inv_flag": "FFTW_ESTIMATE",
+   "inv_slot_bit_equal": true,
+   "inv_slot_ulp": 0.0,
+   "inv_slot_absmax": 0.0,
+   "inv_misaligned_align": {
+    "16": 0,
+    "32": 16,
+    "64": 16,
+    "128": 16
+   },
+   "inv_misaligned_bit_equal": true,
+   "inv_misaligned_ulp": 0.0,
+   "inv_misaligned_absmax": 0.0
+  },
+  {
+   "n": 512,
+   "threads": 1,
+   "fwd_n_bufs": 2,
+   "fwd_align": [
+    {
+     "16": 0,
+     "32": 0,
+     "64": 0,
+     "128": 64
+    },
+    {
+     "16": 0,
+     "32": 0,
+     "64": 0,
+     "128": 0
+    }
+   ],
+   "fwd_flag": "FFTW_ESTIMATE",
+   "fwd_slot_bit_equal": true,
+   "fwd_slot_ulp": 0.0,
+   "fwd_slot_absmax": 0.0,
+   "fwd_misaligned_align": {
+    "16": 0,
+    "32": 16,
+    "64": 16,
+    "128": 16
+   },
+   "fwd_misaligned_bit_equal": true,
+   "fwd_misaligned_ulp": 0.0,
+   "fwd_misaligned_absmax": 0.0,
+   "inv_n_bufs": 2,
+   "inv_align": [
+    {
+     "16": 0,
+     "32": 0,
+     "64": 32,
+     "128": 32
+    },
+    {
+     "16": 0,
+     "32": 0,
+     "64": 32,
+     "128": 96
+    }
+   ],
+   "inv_flag": "FFTW_ESTIMATE",
+   "inv_slot_bit_equal": true,
+   "inv_slot_ulp": 0.0,
+   "inv_slot_absmax": 0.0,
+   "inv_misaligned_align": {
+    "16": 0,
+    "32": 16,
+    "64": 16,
+    "128": 16
+   },
+   "inv_misaligned_bit_equal": true,
+   "inv_misaligned_ulp": 0.0,
+   "inv_misaligned_absmax": 0.0
+  },
+  {
+   "n": 1024,
+   "threads": 1,
+   "fwd_n_bufs": 2,
+   "fwd_align": [
+    {
+     "16": 0,
+     "32": 0,
+     "64": 0,
+     "128": 64
+    },
+    {
+     "16": 0,
+     "32": 0,
+     "64": 32,
+     "128": 96
+    }
+   ],
+   "fwd_flag": "FFTW_ESTIMATE",
+   "fwd_slot_bit_equal": true,
+   "fwd_slot_ulp": 0.0,
+   "fwd_slot_absmax": 0.0,
+   "fwd_misaligned_align": {
+    "16": 0,
+    "32": 16,
+    "64": 16,
+    "128": 16
+   },
+   "fwd_misaligned_bit_equal": true,
+   "fwd_misaligned_ulp": 0.0,
+   "fwd_misaligned_absmax": 0.0,
+   "inv_n_bufs": 2,
+   "inv_align": [
+    {
+     "16": 0,
+     "32": 0,
+     "64": 32,
+     "128": 32
+    },
+    {
+     "16": 0,
+     "32": 0,
+     "64": 0,
+     "128": 64
+    }
+   ],
+   "inv_flag": "FFTW_ESTIMATE",
+   "inv_slot_bit_equal": true,
+   "inv_slot_ulp": 0.0,
+   "inv_slot_absmax": 0.0,
+   "inv_misaligned_align": {
+    "16": 0,
+    "32": 16,
+    "64": 16,
+    "128": 16
+   },
+   "inv_misaligned_bit_equal": true,
+   "inv_misaligned_ulp": 0.0,
+   "inv_misaligned_absmax": 0.0
+  },
+  {
+   "n": 256,
+   "threads": 8,
+   "fwd_n_bufs": 2,
+   "fwd_align": [
+    {
+     "16": 0,
+     "32": 0,
+     "64": 32,
+     "128": 96
+    },
+    {
+     "16": 0,
+     "32": 0,
+     "64": 0,
+     "128": 0
+    }
+   ],
+   "fwd_flag": "FFTW_ESTIMATE",
+   "fwd_slot_bit_equal": true,
+   "fwd_slot_ulp": 0.0,
+   "fwd_slot_absmax": 0.0,
+   "fwd_misaligned_align": {
+    "16": 0,
+    "32": 16,
+    "64": 16,
+    "128": 16
+   },
+   "fwd_misaligned_bit_equal": true,
+   "fwd_misaligned_ulp": 0.0,
+   "fwd_misaligned_absmax": 0.0,
+   "inv_n_bufs": 2,
+   "inv_align": [
+    {
+     "16": 0,
+     "32": 0,
+     "64": 0,
+     "128": 64
+    },
+    {
+     "16": 0,
+     "32": 0,
+     "64": 32,
+     "128": 96
+    }
+   ],
+   "inv_flag": "FFTW_ESTIMATE",
+   "inv_slot_bit_equal": true,
+   "inv_slot_ulp": 0.0,
+   "inv_slot_absmax": 0.0,
+   "inv_misaligned_align": {
+    "16": 0,
+    "32": 16,
+    "64": 16,
+    "128": 16
+   },
+   "inv_misaligned_bit_equal": true,
+   "inv_misaligned_ulp": 0.0,
+   "inv_misaligned_absmax": 0.0
+  },
+  {
+   "n": 384,
+   "threads": 8,
+   "fwd_n_bufs": 2,
+   "fwd_align": [
+    {
+     "16": 0,
+     "32": 0,
+     "64": 32,
+     "128": 96
+    },
+    {
+     "16": 0,
+     "32": 0,
+     "64": 0,
+     "128": 0
+    }
+   ],
+   "fwd_flag": "FFTW_ESTIMATE",
+   "fwd_slot_bit_equal": true,
+   "fwd_slot_ulp": 0.0,
+   "fwd_slot_absmax": 0.0,
+   "fwd_misaligned_align": {
+    "16": 0,
+    "32": 16,
+    "64": 16,
+    "128": 16
+   },
+   "fwd_misaligned_bit_equal": true,
+   "fwd_misaligned_ulp": 0.0,
+   "fwd_misaligned_absmax": 0.0,
+   "inv_n_bufs": 2,
+   "inv_align": [
+    {
+     "16": 0,
+     "32": 0,
+     "64": 0,
+     "128": 64
+    },
+    {
+     "16": 0,
+     "32": 0,
+     "64": 32,
+     "128": 96
+    }
+   ],
+   "inv_flag": "FFTW_ESTIMATE",
+   "inv_slot_bit_equal": true,
+   "inv_slot_ulp": 0.0,
+   "inv_slot_absmax": 0.0,
+   "inv_misaligned_align": {
+    "16": 0,
+    "32": 16,
+    "64": 16,
+    "128": 16
+   },
+   "inv_misaligned_bit_equal": true,
+   "inv_misaligned_ulp": 0.0,
+   "inv_misaligned_absmax": 0.0
+  },
+  {
+   "n": 512,
+   "threads": 8,
+   "fwd_n_bufs": 2,
+   "fwd_align": [
+    {
+     "16": 0,
+     "32": 0,
+     "64": 32,
+     "128": 96
+    },
+    {
+     "16": 0,
+     "32": 0,
+     "64": 0,
+     "128": 0
+    }
+   ],
+   "fwd_flag": "FFTW_ESTIMATE",
+   "fwd_slot_bit_equal": true,
+   "fwd_slot_ulp": 0.0,
+   "fwd_slot_absmax": 0.0,
+   "fwd_misaligned_align": {
+    "16": 0,
+    "32": 16,
+    "64": 16,
+    "128": 16
+   },
+   "fwd_misaligned_bit_equal": true,
+   "fwd_misaligned_ulp": 0.0,
+   "fwd_misaligned_absmax": 0.0,
+   "inv_n_bufs": 2,
+   "inv_align": [
+    {
+     "16": 0,
+     "32": 0,
+     "64": 0,
+     "128": 64
+    },
+    {
+     "16": 0,
+     "32": 0,
+     "64": 32,
+     "128": 96
+    }
+   ],
+   "inv_flag": "FFTW_ESTIMATE",
+   "inv_slot_bit_equal": true,
+   "inv_slot_ulp": 0.0,
+   "inv_slot_absmax": 0.0,
+   "inv_misaligned_align": {
+    "16": 0,
+    "32": 16,
+    "64": 16,
+    "128": 16
+   },
+   "inv_misaligned_bit_equal": true,
+   "inv_misaligned_ulp": 0.0,
+   "inv_misaligned_absmax": 0.0
+  },
+  {
+   "n": 1024,
+   "threads": 8,
+   "fwd_n_bufs": 2,
+   "fwd_align": [
+    {
+     "16": 0,
+     "32": 0,
+     "64": 32,
+     "128": 96
+    },
+    {
+     "16": 0,
+     "32": 0,
+     "64": 0,
+     "128": 0
+    }
+   ],
+   "fwd_flag": "FFTW_ESTIMATE",
+   "fwd_slot_bit_equal": true,
+   "fwd_slot_ulp": 0.0,
+   "fwd_slot_absmax": 0.0,
+   "fwd_misaligned_align": {
+    "16": 0,
+    "32": 16,
+    "64": 16,
+    "128": 16
+   },
+   "fwd_misaligned_bit_equal": true,
+   "fwd_misaligned_ulp": 0.0,
+   "fwd_misaligned_absmax": 0.0,
+   "inv_n_bufs": 2,
+   "inv_align": [
+    {
+     "16": 0,
+     "32": 0,
+     "64": 0,
+     "128": 64
+    },
+    {
+     "16": 0,
+     "32": 0,
+     "64": 32,
+     "128": 96
+    }
+   ],
+   "inv_flag": "FFTW_ESTIMATE",
+   "inv_slot_bit_equal": true,
+   "inv_slot_ulp": 0.0,
+   "inv_slot_absmax": 0.0,
+   "inv_misaligned_align": {
+    "16": 0,
+    "32": 16,
+    "64": 16,
+    "128": 16
+   },
+   "inv_misaligned_bit_equal": true,
+   "inv_misaligned_ulp": 0.0,
+   "inv_misaligned_absmax": 0.0
+  }
+ ]
+}

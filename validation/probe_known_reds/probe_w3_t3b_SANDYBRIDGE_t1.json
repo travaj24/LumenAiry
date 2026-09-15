@@ -1,0 +1,111 @@
+{
+ "env": {
+  "arm": "SANDYBRIDGE_t1",
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "platform": "win32",
+  "lumenairy_file": "C:\\tmp\\lum_reds\\lumenairy\\__init__.py",
+  "OPENBLAS_CORETYPE": "SANDYBRIDGE",
+  "OMP_NUM_THREADS": "1",
+  "threadpool": [
+   {
+    "user_api": "blas",
+    "internal_api": "openblas",
+    "num_threads": 1,
+    "prefix": "libscipy_openblas",
+    "filepath": "C:\\Users\\Tesla\\AppData\\Local\\Programs\\Python\\Python314\\Lib\\site-packages\\numpy.libs\\libscipy_openblas64_-63c857e738469261263c764a36be9436.dll",
+    "version": "0.3.31.188.0",
+    "threading_layer": "pthreads",
+    "architecture": "Sandybridge"
+   }
+  ],
+  "scipy": "1.17.1"
+ },
+ "rows": [
+  {
+   "R1": 0.0515,
+   "coef_phi_hash": "b178464971d5c214",
+   "coef_s1x_hash": "2fe9eaff320e40bf",
+   "coef_s1y_hash": "7688877b28e48592",
+   "coef_phi_absmax": 1067803.0456030115,
+   "coef_phi_l2": 1917429.2810784844,
+   "res_phi_rms_waves": 0.0002755386376551745,
+   "s2x_centre": 4.336808689942018e-19,
+   "s2y_centre": 4.336808689942018e-19,
+   "v_star": [
+    3.5438964878795935e-14,
+    5.296681846566422e-15
+   ],
+   "phi_stationary_waves": 157377.62718536775,
+   "phi_stationary_rad": 988832.7948098893,
+   "eps_times_phi": 2.1956498726047641e-10,
+   "w_o": 0.0001011644168975133,
+   "legacy_w_o": 0.0001011644168975133,
+   "w_o_equals_legacy": true,
+   "w_o_rel_frozen": 2.4580767368199407e-11,
+   "L00_re": 12310012.217167536,
+   "L00_im": -59649449.318518646,
+   "L00_abs": 60906429.91334608,
+   "van_vleck_weight": [
+    -0.0,
+    -150912.55136499347
+   ],
+   "sqrt_detJ": 0.19769544228814145,
+   "rel_got_want": 1.2226615023995956e-08,
+   "rel_got_pred": 1.222658955040278e-08,
+   "rel_want_pred": 9.859678922657757e-13,
+   "pred_re": 12310011.487865381,
+   "pred_im": -59649449.469062895
+  },
+  {
+   "R1": 0.06,
+   "coef_phi_hash": "461fbea7e34ff8cb",
+   "coef_s1x_hash": "531476fa4cba1e38",
+   "coef_s1y_hash": "8e7cf0b5a5b464e5",
+   "coef_phi_absmax": 259519.18764879013,
+   "coef_phi_l2": 467773.5496211279,
+   "res_phi_rms_waves": 0.0001778960434568807,
+   "s2x_centre": 4.336808689942018e-19,
+   "s2y_centre": 4.336808689942018e-19,
+   "v_star": [
+    -2.890293105746687e-15,
+    -6.301225365850269e-16
+   ],
+   "phi_stationary_waves": 157377.6266615678,
+   "phi_stationary_rad": 988832.7915187571,
+   "eps_times_phi": 2.1956498652969827e-10,
+   "w_o": 0.00010086220541233762,
+   "legacy_w_o": 0.00010086220541233762,
+   "w_o_equals_legacy": true,
+   "w_o_rel_frozen": 2.3176383954122028e-11,
+   "L00_re": -55405030.03849328,
+   "L00_im": 25295326.922336295,
+   "L00_abs": 60906246.951147914,
+   "van_vleck_weight": [
+    -0.0,
+    -151364.73929074453
+   ],
+   "sqrt_detJ": 0.19828780847087532,
+   "rel_got_want": 1.0872366689159646e-09,
+   "rel_got_pred": 1.0871889970205638e-09,
+   "rel_want_pred": 7.632815125608406e-13,
+   "pred_re": -55405030.0109654,
+   "pred_im": 25295326.982559662
+  }
+ ],
+ "merit": {
+  "val_a": 5427840774.640322,
+  "val_b": 100037.05079145488,
+  "val_a_repeat": 5427840774.640322,
+  "in_process_spread": 0.0,
+  "response": 0.9999815696416042,
+  "rel_a_frozen": 1.4664515359654693,
+  "rel_b_frozen": 0.0015529794812307938,
+  "cpl00_a": 3576000000.0,
+  "cpl00_b": 76830.0,
+  "waves_removed_a": 420600.0,
+  "waves_removed_b": 99960.0,
+  "chan_ratio_a": 1.5178525656153026,
+  "chan_ratio_b": 1.3020571494397355
+ }
+}

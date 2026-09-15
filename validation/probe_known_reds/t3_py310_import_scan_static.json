@@ -1,0 +1,40 @@
+{
+  "module_scope_new_stdlib": [
+    {
+      "file": "tests/unit/test_audit2609_a15a_packaging.py",
+      "line": 31,
+      "module": "tomllib",
+      "since": "3.11",
+      "guarded": true
+    },
+    {
+      "file": "tests/unit/test_v4_16_2_dispatcher_pin_doc_consistency.py",
+      "line": 64,
+      "module": "tomllib",
+      "since": "3.11",
+      "guarded": true
+    },
+    {
+      "file": "scripts/check_dep_metadata.py",
+      "line": 70,
+      "module": "tomllib",
+      "since": "3.11",
+      "guarded": true
+    }
+  ],
+  "nested_new_stdlib": [
+    {
+      "file": "tests/unit/test_g08_s4_20_packaging_ui.py",
+      "line": 30,
+      "module": "tomllib",
+      "since": "3.11",
+      "guarded": false
+    }
+  ],
+  "py310_syntax_reject": [],
+  "exception_group": [
+    "tests/unit/test_audit2609_a16_lens_arch.py"
+  ],
+  "files_scanned": 625,
+  "scanner_python": "3.14.6"
+}

@@ -1,0 +1,134 @@
+{
+  "collect_rc": 0,
+  "collect_tail": [
+    "tests/unit/test_zcascade.py::test_energy_conservation_slab",
+    "",
+    "935/16200 tests collected (15265 deselected) in 29.05s"
+  ],
+  "selected": 935,
+  "durations_entries_total": 16186,
+  "selected_with_entry": 935,
+  "selected_missing_entry": 0,
+  "coverage_pct": 100.0,
+  "avg_known_duration_s": 10.2995,
+  "lane_total_s": 9630.0,
+  "missing_by_file": [],
+  "heaviest_files_s": [
+    [
+      "tests/unit/test_audit_dynameta_consumer_api_2.py",
+      1464.6
+    ],
+    [
+      "tests/unit/test_fix_bor_multilayer_guards.py",
+      514.7
+    ],
+    [
+      "tests/unit/test_niche_d2_chain_multi.py",
+      450.3
+    ],
+    [
+      "tests/unit/test_coupled_eigensolver.py",
+      405.4
+    ],
+    [
+      "tests/unit/test_eme_2d_vector.py",
+      364.8
+    ],
+    [
+      "tests/unit/test_v5_21_maslov_jax_caustic.py",
+      342.8
+    ],
+    [
+      "tests/unit/test_v5_6_rcwa_convergence.py",
+      326.1
+    ],
+    [
+      "tests/unit/test_niche_d7_decentred_fit.py",
+      267.0
+    ],
+    [
+      "tests/unit/test_v5_14_0_pmm2d_cell.py",
+      258.2
+    ],
+    [
+      "tests/unit/test_niche_d3_guards.py",
+      225.5
+    ],
+    [
+      "tests/unit/test_fga_h4_h5.py",
+      224.7
+    ],
+    [
+      "tests/unit/test_niche_p9_decenter_tilt.py",
+      224.1
+    ],
+    [
+      "tests/unit/test_fga.py",
+      209.2
+    ],
+    [
+      "tests/unit/test_audit2609_b4_collins_transport.py",
+      205.4
+    ],
+    [
+      "tests/unit/test_niche_r3_gbd_mem_lstsq.py",
+      202.7
+    ]
+  ],
+  "splits": {
+    "3": {
+      "per_shard_s": [
+        3210.0,
+        3210.0,
+        3210.0
+      ],
+      "max_s": 3210.0,
+      "ideal_s": 3210.0,
+      "imbalance_pct": -0.0
+    },
+    "5": {
+      "per_shard_s": [
+        1926.0,
+        1926.0,
+        1926.0,
+        1926.0,
+        1926.0
+      ],
+      "max_s": 1926.0,
+      "ideal_s": 1926.0,
+      "imbalance_pct": -0.0
+    },
+    "8": {
+      "per_shard_s": [
+        1203.8,
+        1203.8,
+        1203.8,
+        1203.8,
+        1203.8,
+        1203.8,
+        1203.8,
+        1203.8
+      ],
+      "max_s": 1203.8,
+      "ideal_s": 1203.8,
+      "imbalance_pct": 0.0
+    },
+    "10": {
+      "per_shard_s": [
+        963.0,
+        963.0,
+        963.0,
+        963.0,
+        963.0,
+        963.0,
+        963.0,
+        963.0,
+        963.0,
+        963.0
+      ],
+      "max_s": 963.0,
+      "ideal_s": 963.0,
+      "imbalance_pct": -0.0
+    }
+  }
+}

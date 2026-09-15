@@ -1,0 +1,74 @@
+{
+ "env": {
+  "arm": "WIN_HASWELL_t1",
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "platform": "win32"
+ },
+ "rows": [
+  {
+   "n": 63,
+   "numpy_copy_equal": true,
+   "offset_view_equal": true,
+   "offset_addr_mod64": 48,
+   "ref_addr_mod64": 48,
+   "pyfftw_buf_equal": true,
+   "pyfftw_addr_mod64": 32,
+   "simd_alignment": 32,
+   "slot_addr_mod64": [
+    32,
+    32
+   ],
+   "slot_products_equal": true,
+   "slot0_matches_ref": true
+  },
+  {
+   "n": 128,
+   "numpy_copy_equal": true,
+   "offset_view_equal": true,
+   "offset_addr_mod64": 16,
+   "ref_addr_mod64": 0,
+   "pyfftw_buf_equal": true,
+   "pyfftw_addr_mod64": 32,
+   "simd_alignment": 32,
+   "slot_addr_mod64": [
+    0,
+    0
+   ],
+   "slot_products_equal": true,
+   "slot0_matches_ref": true
+  },
+  {
+   "n": 256,
+   "numpy_copy_equal": true,
+   "offset_view_equal": true,
+   "offset_addr_mod64": 16,
+   "ref_addr_mod64": 0,
+   "pyfftw_buf_equal": true,
+   "pyfftw_addr_mod64": 0,
+   "simd_alignment": 32,
+   "slot_addr_mod64": [
+    0,
+    0
+   ],
+   "slot_products_equal": true,
+   "slot0_matches_ref": true
+  },
+  {
+   "n": 512,
+   "numpy_copy_equal": true,
+   "offset_view_equal": true,
+   "offset_addr_mod64": 16,
+   "ref_addr_mod64": 0,
+   "pyfftw_buf_equal": true,
+   "pyfftw_addr_mod64": 0,
+   "simd_alignment": 32,
+   "slot_addr_mod64": [
+    0,
+    0
+   ],
+   "slot_products_equal": true,
+   "slot0_matches_ref": true
+  }
+ ]
+}

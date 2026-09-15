@@ -1,0 +1,161 @@
+{
+ "lumenairy_file": "C:\\tmp\\lum_reds\\lumenairy\\__init__.py",
+ "version": "5.47.0",
+ "declared_bytes_per_cell_col": 16.0,
+ "windowed_sibling_constant": 32.0,
+ "rows": [
+  {
+   "N": 64,
+   "n_beamlets": 512,
+   "chunk_requested": 2048,
+   "budget_mb": 512.0,
+   "effective_chunk": 512,
+   "peak_bytes": 196483030,
+   "peak_mb": 196.48,
+   "budget_overrun_x": 0.384,
+   "bytes_per_cell_col": 93.69,
+   "out_nonzero": true
+  },
+  {
+   "N": 64,
+   "n_beamlets": 512,
+   "chunk_requested": 2048,
+   "budget_mb": 64.0,
+   "effective_chunk": 512,
+   "peak_bytes": 151128890,
+   "peak_mb": 151.13,
+   "budget_overrun_x": 2.361,
+   "bytes_per_cell_col": 72.06,
+   "out_nonzero": true
+  },
+  {
+   "N": 64,
+   "n_beamlets": 1024,
+   "chunk_requested": 4096,
+   "budget_mb": 512.0,
+   "effective_chunk": 1024,
+   "peak_bytes": 302123858,
+   "peak_mb": 302.12,
+   "budget_overrun_x": 0.59,
+   "bytes_per_cell_col": 72.03,
+   "out_nonzero": true
+  },
+  {
+   "N": 128,
+   "n_beamlets": 512,
+   "chunk_requested": 2048,
+   "budget_mb": 512.0,
+   "effective_chunk": 512,
+   "peak_bytes": 604507986,
+   "peak_mb": 604.51,
+   "budget_overrun_x": 1.181,
+   "bytes_per_cell_col": 72.06,
+   "out_nonzero": true
+  },
+  {
+   "N": 128,
+   "n_beamlets": 512,
+   "chunk_requested": 2048,
+   "budget_mb": 64.0,
+   "effective_chunk": 244,
+   "peak_bytes": 384701794,
+   "peak_mb": 384.7,
+   "budget_overrun_x": 6.011,
+   "bytes_per_cell_col": 96.23,
+   "out_nonzero": true
+  },
+  {
+   "N": 128,
+   "n_beamlets": 1024,
+   "chunk_requested": 4096,
+   "budget_mb": 512.0,
+   "effective_chunk": 1024,
+   "peak_bytes": 1208487730,
+   "peak_mb": 1208.49,
+   "budget_overrun_x": 2.36,
+   "bytes_per_cell_col": 72.03,
+   "out_nonzero": true
+  },
+  {
+   "N": 192,
+   "n_beamlets": 512,
+   "chunk_requested": 2048,
+   "budget_mb": 512.0,
+   "effective_chunk": 512,
+   "peak_bytes": 1360139090,
+   "peak_mb": 1360.14,
+   "budget_overrun_x": 2.657,
+   "bytes_per_cell_col": 72.06,
+   "out_nonzero": true
+  },
+  {
+   "N": 192,
+   "n_beamlets": 512,
+   "chunk_requested": 2048,
+   "budget_mb": 64.0,
+   "effective_chunk": 108,
+   "peak_bytes": 384112978,
+   "peak_mb": 384.11,
+   "budget_overrun_x": 6.002,
+   "bytes_per_cell_col": 96.48,
+   "out_nonzero": true
+  },
+  {
+   "N": 192,
+   "n_beamlets": 1024,
+   "chunk_requested": 4096,
+   "budget_mb": 512.0,
+   "effective_chunk": 868,
+   "peak_bytes": 2305037106,
+   "peak_mb": 2305.04,
+   "budget_overrun_x": 4.502,
+   "bytes_per_cell_col": 72.04,
+   "out_nonzero": true
+  },
+  {
+   "N": 256,
+   "n_beamlets": 512,
+   "chunk_requested": 2048,
+   "budget_mb": 512.0,
+   "effective_chunk": 488,
+   "peak_bytes": 2304775986,
+   "peak_mb": 2304.78,
+   "budget_overrun_x": 4.502,
+   "bytes_per_cell_col": 72.07,
+   "out_nonzero": true
+  },
+  {
+   "N": 256,
+   "n_beamlets": 512,
+   "chunk_requested": 2048,
+   "budget_mb": 64.0,
+   "effective_chunk": 61,
+   "peak_bytes": 387063090,
+   "peak_mb": 387.06,
+   "budget_overrun_x": 6.048,
+   "bytes_per_cell_col": 96.82,
+   "out_nonzero": true
+  },
+  {
+   "N": 256,
+   "n_beamlets": 1024,
+   "chunk_requested": 4096,
+   "budget_mb": 512.0,
+   "effective_chunk": 488,
+   "peak_bytes": 3073514802,
+   "peak_mb": 3073.51,
+   "budget_overrun_x": 6.003,
+   "bytes_per_cell_col": 96.1,
+   "out_nonzero": true
+  }
+ ],
+ "measured_bytes_per_cell_col": {
+  "min": 72.03,
+  "max": 96.82
+ },
+ "max_budget_overrun_x": 6.048,
+ "env": {
+  "OPENBLAS_CORETYPE": null,
+  "OPENBLAS_NUM_THREADS": "1"
+ }
+}

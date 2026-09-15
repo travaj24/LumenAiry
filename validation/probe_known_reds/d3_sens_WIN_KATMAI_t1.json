@@ -1,0 +1,84 @@
+{
+ "python": "3.14.6",
+ "numpy": "2.4.4",
+ "env": {
+  "OPENBLAS_CORETYPE": "KATMAI",
+  "OMP_NUM_THREADS": "1"
+ },
+ "raw_defect_at_45deg": 0.0,
+ "tensor_scale": 5.619634485180363,
+ "defect_vs_dphi_deg": {
+  "+1e-06deg": 3.980626583910407e-08,
+  "+1e-05deg": 3.980626583910407e-07,
+  "+0.0001deg": 3.980626581245872e-06,
+  "+0.001deg": 3.980626581068236e-05,
+  "+0.01deg": 0.00039806265011232966,
+  "+0.1deg": 0.003980618498177435,
+  "+1.0deg": 0.03979818252409384,
+  "+5.0deg": 0.19802239352264017
+ },
+ "defect_with_identity_perm": 0.0,
+ "defect_xz_vs_zx(non-symmetric tensor)": 0.0,
+ "jones_sensitivity": {
+  "square": {
+   "base_abs_J00_minus_J11": 1.4789451098132695e-15,
+   "base_abs_J01_minus_J10": 2.256858574971791e-15,
+   "jones_scale": 0.22633671859623256,
+   "delta=1e-14": {
+    "fixture_defect": 9.769962616701378e-15,
+    "dJ_diag": 5.411714487971857e-15,
+    "dJ_offdiag": 6.684687081957073e-15
+   },
+   "delta=1e-12": {
+    "fixture_defect": 1.000088900582341e-12,
+    "dJ_diag": 7.651903627934357e-14,
+    "dJ_offdiag": 1.4587693936335745e-15
+   },
+   "delta=1e-10": {
+    "fixture_defect": 1.000000082740371e-10,
+    "dJ_diag": 7.430759053622688e-12,
+    "dJ_offdiag": 4.722773751620927e-15
+   },
+   "delta=1e-08": {
+    "fixture_defect": 9.99999993922529e-09,
+    "dJ_diag": 7.431508790231071e-10,
+    "dJ_offdiag": 2.4796450715809353e-15
+   },
+   "delta=1e-06": {
+    "fixture_defect": 1.000000000139778e-06,
+    "dJ_diag": 7.43144656835425e-08,
+    "dJ_offdiag": 3.3567056146920655e-15
+   }
+  },
+  "disk": {
+   "base_abs_J00_minus_J11": 2.8994282552341735e-15,
+   "base_abs_J01_minus_J10": 2.0559746579803675e-15,
+   "jones_scale": 0.11209671908078199,
+   "delta=1e-14": {
+    "fixture_defect": 9.769962616701378e-15,
+    "dJ_diag": 2.878336497009893e-15,
+    "dJ_offdiag": 3.713079968463762e-15
+   },
+   "delta=1e-12": {
+    "fixture_defect": 1.000088900582341e-12,
+    "dJ_diag": 1.928115357265483e-14,
+    "dJ_offdiag": 2.475705216402143e-15
+   },
+   "delta=1e-10": {
+    "fixture_defect": 1.000000082740371e-10,
+    "dJ_diag": 1.7717559731011e-12,
+    "dJ_offdiag": 7.155918321862309e-16
+   },
+   "delta=1e-08": {
+    "fixture_defect": 9.99999993922529e-09,
+    "dJ_diag": 1.7705914444483207e-10,
+    "dJ_offdiag": 2.1348378527326396e-16
+   },
+   "delta=1e-06": {
+    "fixture_defect": 1.000000000139778e-06,
+    "dJ_diag": 1.7705787053512982e-08,
+    "dJ_offdiag": 1.0209919826949093e-15
+   }
+  }
+ }
+}

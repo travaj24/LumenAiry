@@ -1,0 +1,5 @@
+0-dirichlet-jn         rel=9.924e-13 argmax=0 pred=1.047e-06 pred_lmax=8.842e-10 refined=9.420e-12 n=96 condM=8.573e+03 lam_max=4.7976e+05
+1-dirichlet-jn         rel=6.151e-14 argmax=0 pred=1.768e-08 pred_lmax=3.439e-10 refined=6.120e-13 n=95 condM=3.712e+02 lam_max=4.7867e+05
+3-dirichlet-jn         rel=4.863e-14 argmax=1 pred=6.376e-09 pred_lmax=1.285e-10 refined=6.007e-13 n=95 condM=3.712e+02 lam_max=4.9593e+05
+1-neumann-jnp          rel=1.956e-13 argmax=0 pred=7.738e-08 pred_lmax=1.512e-09 refined=3.009e-12 n=96 condM=3.712e+02 lam_max=4.8076e+05
+3-neumann-jnp          rel=1.749e-13 argmax=0 pred=1.486e-08 pred_lmax=2.995e-10 refined=7.400e-13 n=96 condM=3.712e+02 lam_max=4.9593e+05

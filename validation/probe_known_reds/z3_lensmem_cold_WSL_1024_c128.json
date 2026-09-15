@@ -1,0 +1,25 @@
+{
+ "python": "3.12.3",
+ "numpy": "2.4.6",
+ "platform": "linux",
+ "lumenairy_file": "/mnt/c/tmp/lum_reds/lumenairy/__init__.py",
+ "N": 1024,
+ "dtype": "complex128",
+ "env": {
+  "OPENBLAS_CORETYPE": null,
+  "OMP_NUM_THREADS": "1",
+  "OPENBLAS_NUM_THREADS": "1",
+  "MKL_NUM_THREADS": "1"
+ },
+ "est_bytes": 197971148.0,
+ "peaks_bytes": [
+  160376530.0,
+  75528602.0,
+  75528602.0
+ ],
+ "peak_cold": 160376530.0,
+ "peak_steady": 75528602.0,
+ "ratio_est_over_cold": 1.2344147114294093,
+ "ratio_est_over_steady": 2.621141431957128,
+ "cold_over_steady": 2.1233880378191032
+}

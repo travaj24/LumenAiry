@@ -2,6 +2,192 @@
 
 All notable changes to the core library are documented here.
 
+## [Unreleased]
+
+Wave 5 item D of the 2026-09-11 adversarial audit's remediation
+(`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/PLAN_WAVE5_LEFTOVERS_2026_09_14.md`):
+the four reds the 5.47.0 gate carried, the CI matrix that release turned red, and the
+mechanical half of the warning-attribution work.  The report is
+`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/WP-B14_KNOWN_REDS_REPORT.md`;
+every probe and its per-arm JSON is under `validation/probe_known_reds/`.
+
+### Fixed
+
+- **The c7 / c8 halo pins were a real regression, not box state.**  The 5.47.0 handoff
+  recorded four ids in `tests/unit/test_niche_c7_ray_density_halo_check.py` and
+  `tests/unit/test_niche_c8_inverse_support_bound.py` as failing "on this box" with the
+  cause untraced.  They fail on the Linux CI runners too, agreeing with this box to twelve
+  significant figures (1.5217194665917948e-04 against 1.5217194665917584e-04), and they
+  bisect to one commit: WP-A26, which re-derived the decentred ray fit's order from 10 to
+  16 for niche D7 and did not restate the two fixtures that depended on the old default.
+  The fixtures' manufactured lobe is reachable at order 10 and at order 10 only on this
+  geometry -- measured beyond three beam radii, with the C8 support bound off: 1.463e-04
+  at order 6, 8 and 12, **4.595e-02 at order 10**, 1.533e-04 at 14, 1.522e-04 at 16.  The
+  stimulus is now STATED by the fixtures (`decentred_fit_poly_order=10`) instead of
+  inherited from a default that moved, the same way the M2 window contract already states
+  its `min_feature`; at 10 the fixtures reproduce their own documented readings exactly,
+  including the 51.5x the support bound's docstring quotes.  No bar was loosened and the
+  fail-before assertion stays a hard assertion.  WP-A26's order-16 default is not
+  challenged.  (4 failed / 24 passed -> 28 passed.)
+
+- **The glass-validity one-shot pin was a partial reset of coupled state.**
+  `test_validity_warning_is_one_shot_per_pair` was red only when it ran after
+  `test_audit_w4_glass_registry_meshgrid.py`.  The state that leaks is not the warn-once
+  set the test's fixture was clearing: `get_glass_index` memoises the whole
+  (name, wavelength) evaluation and returns on a hit BEFORE it reaches the validity
+  warning, which the memo's own rationale says is warning-neutral only because
+  `clear_asm_caches()` empties both together.  The fixture cleared one of the pair,
+  producing exactly the state the library's design excludes.  It now drains through the
+  library's registered drain.  Green in both orders and alone.
+
+- **`test_pmm_m2_window_contract`'s T3-1 no longer classifies an outcome by the BLAS
+  build.**  Reproduced under the kernel ladder: green on seven of eight arms, red on
+  SANDYBRIDGE at four threads, where the flux cut's growth census screens the degree-10
+  halfwidth-2 cell.  Which cell round-off classifies that way is, in the module's own
+  words, a per-build, per-thread-count fact.  The window contract is now asserted
+  unconditionally on every cell that passes the screen; the spectral-decay claim is
+  asserted over whatever rungs were measured rather than only over a complete ladder (so
+  the failing arm now carries a decay claim it previously dropped); measuring NOTHING is
+  still a hard failure; and only the existence of a complete three-rung ladder -- the one
+  reading that moves with the build -- is premise-gated, skipping with the measured cells
+  and the full screened census in the message.
+
+### Changed
+
+- `lumenairy.propagators.carrier`, `lumenairy.propagators.system` and
+  `lumenairy.propagators.carrier_field` join the warning-attribution sweep: 21 literal
+  `warnings.warn` stacklevels and 23 threaded literals below them are retargeted to
+  `lumenairy.elements._lens_kernels.caller_stacklevel()`, which walks out to the first
+  frame outside the package and is therefore correct at every call depth.  MEASURED
+  before the sweep with a two-caller instrument: the tilt-inert notice named the caller
+  when `propagate_carrier_referenced` was called directly and named library source when
+  the identical warn site was reached one frame deeper through
+  `carrier_referenced_focus_readout` -- 2 of 4 emissions misattributed, 0 of 4 after.  The
+  three warning helpers take `stacklevel=None` meaning "compute it"; an explicit integer
+  keeps exactly its old meaning, so external callers are unaffected.  The b11 ratchet
+  gains a sibling over the three chain modules and the two-caller fixture as a test.  The
+  remaining sixteen propagator modules that a static screen flags are recorded with their
+  census as open work, not swept blind: each needs its own measurement first.
+
+### Added
+
+- `lumenairy.propagators.gbd.DENSE_MEM_BUDGET_ACCOUNTING` (`'legacy'`, the default and
+  byte-identical, or `'measured'`).  The dense beamlet reconstruction sized its chunk from
+  16 bytes per output cell per beamlet-column, a figure whose comment claimed to cover
+  three float64 buffers and one complex128.  Measured with `tracemalloc` over a
+  64/128/192/256 grid ladder at 512 and 64 MB budgets: the live peak is **72.0 to 96.8
+  bytes** per cell-column, so the loop overruns its own `mem_budget_mb` by 1.2x to 6.0x,
+  saturating at 6.0x once the chunk is the binding constraint -- a 512 MB budget peaked at
+  **3 073 MB**.  With `'measured'` the same cell peaks at 387 MB, under the budget, and the
+  two arms differ by 2.1e-17 relative, which is summation-order round-off and nothing else.
+  It is opt-in because correcting the constant moves the chunk boundary and therefore the
+  output bytes on a default path; **whether it becomes the default is a decision reserved
+  for the maintainer**.  Without flipping it, `window=5.0` (whose accounting is correct) or
+  dividing `mem_budget_mb` by six are the mitigations.  This BOUNDS, and does not close,
+  the access-violation crash the 5.47.0 handoff recorded in this path: no fault was
+  reproduced, but the transient is up to six times the size the caller asked for.
+
+### Fixed -- the CI matrix (run 34914295323 on the 5.47.0 commit: 34 jobs, 30 red)
+
+- **The whole Python 3.10 lane was aborting at collection and testing nothing.**
+  `tests/unit/test_audit2609_a15a_packaging.py` imported `tomllib` unconditionally;
+  it is 3.11+ stdlib, CI installs the `tomli` backport for exactly this reason, and
+  pytest turns any collection error into `Interrupted` -- so each of the five 3.10
+  shards ran **0 of its ~2 910 selected ids** and reported `18 skipped, 1 error`.
+  The import takes the standard fallback, and the no-parser case is premise-gated
+  inside the one helper that needs a parser rather than skipped at module scope:
+  only 4 of the file's 11 gates read `pyproject.toml`, and a module-level skip would
+  have silently dropped the other 7.  Proved on three arms by making `tomllib`
+  unimportable in a child process -- with the backport present 11 passed, with
+  neither 7 passed / 4 skipped and no collection error.
+
+- **The history token-stream gate was interpreter-dependent (PEP 701).**  49
+  distinct ids of `test_the_module_token_stream_is_unchanged_since_the_history_move`
+  failed on every 3.11 shard and none on 3.12 / 3.13 / 3.14, while the sibling AST
+  gate was 123/123 green on 3.11 -- so the module sources were identical on every
+  arm and what moved with the interpreter was the digest's own definition.  CPython
+  3.12 tokenises `f"a{b}c"` as seven records (`FSTRING_START` / `FSTRING_MIDDLE` /
+  ... / `FSTRING_END`) where 3.11 emits one `STRING`; **110 of the 123 registered
+  modules contain an f-string and 13 do not**, and the 7 ids that passed on 3.11 are
+  exactly the 13.  The digest now collapses each f-string run to one record carrying
+  the literal's exact SOURCE SLICE, which is version-stable and strictly FINER than
+  the token run (which normalises `{{` to `{` and says nothing about spacing inside
+  a replacement field), so the literal-spelling claim the gate exists for is kept
+  and is newly proved by six falsifiability cases.  Established without a 3.11
+  interpreter on the box: the new scheme reproduces, bit for bit on 3.12, 3.13 and
+  3.14, **49 of 49** of the digests CPython 3.11 itself computed on the runners.
+  110 of 123 history documents re-recorded by the recorder; `ast_sha256` moved on
+  0 of 123, which is the arithmetic proof that no code changed.
+
+- **The `a8` glass tests asserted a package-dependent fact unconditionally.**  CI
+  deliberately omits the glass extra.  The suspected library contract violation is
+  not one -- `lumenairy/glass.py` is unchanged: of 49 tuple-registered glasses
+  exactly one (`SILICON`) has no bundled Sellmeier row, and its `ImportError` comes
+  from the REAL index, not the extinction path, so "falling back to kappa = 0" there
+  would mean fabricating a real index -- the silent-wrong shape the same audit
+  finding exists to kill.  Each test now asserts the documented no-package fact as a
+  two-sided partition (the exempt set must EQUAL the independently computed "tuple
+  entry with no bundled row on this install" set), never `pytest.importorskip`,
+  which `docs/TESTING_STANDARDS.md` rule 4 forbids on a resource check.  64 passed
+  and 0 skipped with the package present AND with it blocked by a fixture.
+
+- **Six platform / kernel bit pins, root-caused before any bar moved -- and in
+  three of them the cause was not rounding.**  The off-plane `fff_nv` fixture's
+  exact mirror precondition failed on Linux because `sin(pi/4)` and `cos(pi/4)`
+  differ by one ULP under glibc and not under MSVC; it is repaired in the
+  CONSTRUCTION (the fixture is averaged with its own mirror, which is exact on every
+  IEEE-754 platform) so the `array_equal` pin is kept.  The BOR pencil's 1e-12
+  residual bar was one arm's reading and is re-derived from LAPACK's backward-error
+  result for a Cholesky-reduced symmetric-definite pencil, with an 11x kernel swing
+  measured on one machine and a WSL control that isolates it to the kernel rather
+  than the OS.  The carrier transfer-function "bit-identical" pin was comparing two
+  different ASSOCIATIONS of the same three factors -- `sum(xm * (wgt*slope))` against
+  `sum((wgt*xm) * slope)` -- so byte equality was never an invariant of the pair;
+  the projection correction itself is 3e-21 to 2e-19 ULP and cannot move a bit.  Two
+  peak-array budgets moved because NumPy's temporary-elision rewrite is a BUILD
+  property (it needs `backtrace()`), which does not follow the operating system --
+  measured on the running arm with a companion arm that puts elision out of reach,
+  so "no elision here" can never come from an instrument that measured nothing.  A
+  lens-memory pre-flight bar read 0.88 against a fail-safe 1.0 because the test
+  warmed on a grid BELOW the deferred-import threshold, putting ~11.2 MB of one-time
+  imports inside the measured region; warming above it makes all four cells
+  byte-identical on both arms with both bars unchanged.  And an optimiser merit
+  whose aberration-free reference is COLLAPSED swings 2.7x across BLAS kernels, so
+  its scale is not a measurement: the physics pins keep their bars, the scale gets a
+  derived order-of-magnitude band, and the collapse becomes a positive pin.
+
+### Changed -- CI configuration
+
+- `--maxfail` per unit shard 10 -> **50**.  At 10, every py3.11 shard of the run
+  stopped after executing 6.4-7.9 % of its selection, so more than 92 % of the lane
+  never ran and the census of what was broken on 3.11 was unknowable from the
+  artefacts: 49 of the 50 failures were one 123-case gate whose true size, measured
+  independently, is 110.  The early-abort property the lower cap was bought for
+  survives, because a job's wall clock is bounded by its OWN budget and a
+  catastrophically broken job reaches 50 in its first minutes exactly as it reaches
+  10; the cap never fired on the healthy lanes (3 / 2 / 4 / 2 / 4 / 8 / 1 failures).
+- The slow lane is **8 shards** (was 5), with the step cap 30 -> 45 minutes and the
+  job cap 35 -> 50.  All five slow shards timed out on the run, and it was
+  predictable before it started: the lane now totals 9 630.0 s against the 5 914.9 s
+  last recorded (+62.8 %, from later waves moving files over the two-minute bar
+  without re-running the sum), which `least_duration` balances to 1 926.0 s per
+  shard against an 1 800 s cap.  `.test_durations` was NOT the problem and is
+  untouched -- coverage of the slow selection measured 935 of 935 ids, zero gap.
+  Both changes are needed: at 8 splits and the runners' worst measured scale factor
+  the per-shard cost is ~1 782 s, which is a 1 % margin under the old cap and 34 %
+  headroom under the new one.
+
+### Fixed -- typing
+
+- `lumenairy.propagators.asymptotic_modes.decompose_lg` normalised its `only`
+  argument with `tuple(tuple(k) for k in only)`, and `tuple(iterable)` types as
+  `tuple[_T_co, ...]` -- so the constructor widened `tuple[int, int]` to
+  `tuple[int, ...]` at the call site and destroyed the length information the callee
+  genuinely requires (it unpacks `for (p, ell) in only`).  Unpacking by name instead
+  keeps the normalisation, keeps the loud failure one frame earlier, and clears the
+  one error `mypy --strict` reported; neither the whitelist nor an `ignore` was
+  touched.
+
 ## [5.47.0] — 2026-09-14
 
 This release is the fourth wave of the 2026-09-11 adversarial audit's remediation
@@ -1284,7 +1470,7 @@ hardest on exactly this field because the single-FFT Fresnel output's
 residual chirp sits at Nyquist at the grid edge by construction.
 
 The leg now calls `fresnel_propagate_mft` with the chain's own pitch and
-sample count (`lumenairy/propagators/system.py:927`).  That is the same
+sample count (`lumenairy/propagators/system.py:929`).  That is the same
 Fresnel integral, sampled where the chain wants it, so neither error
 exists.  Refereed against the Fresnel integral written out as an explicit
 double sum over the input samples -- no FFT, no Bluestein, no library
@@ -1312,13 +1498,13 @@ reads a single input pitch, so a grid with `Ny != Nx` had its y axis
 rescaled by the **x** ratio -- wrong by `Nx/Ny`, with no diagnostic.
 
 Because there is no resample left to crop, the leg no longer calls
-`_warn_system_resample_crop` (`system.py:359`); the `'sas'` leg still
+`_warn_system_resample_crop` (`system.py:361`); the `'sas'` leg still
 does, unchanged.  `fresnel_propagate_mft` carries the same K1
 chirp-sampling guard (`lumenairy/propagators/mft.py:972`) plus its own
 faithful-zone warning with period `lambda*|z|/dx_in`, so no diagnostic
 is lost -- see Migration for the two messages whose wording moves.
 
-Files: `lumenairy/propagators/system.py:53`, `:806-841`, `:359-383`,
+Files: `lumenairy/propagators/system.py:55`, `:806-841`, `:359-383`,
 `:160-173`, `:452-459`, `:1638-1646`, `:1771-1783`.
 Tests: `tests/unit/test_audit2609_b3b_resample_call_sites.py::TestK6FresnelLegEvaluatesOntoTheChainGrid`
 (12 tests).
@@ -1355,7 +1541,7 @@ interpolant and the historical cubic spline:
     method=('chirpz' if N_out * dx_out <= N_in * dx_in else 'spline')
 ```
 
-per axis (`lumenairy/propagators/system.py:972`,
+per axis (`lumenairy/propagators/system.py:974`,
 `lumenairy/elements/_lens_real.py:2970` and `:2889`).  The chirp-Z leg
 has unit MTF at every frequency the grid represents, but its
 reconstruction is **periodic** with period `N_in*dx_in`, so a window
@@ -1394,7 +1580,7 @@ dx = 112.500 um, lambda = 632.8 nm) **both** gaps sit at `dx_new/dx` =
 1 mm N-BK7 plate at dx = 2 um sits at 1.6320 and takes the chirp-Z leg.
 Both directions occur in the shipped suite.
 
-Files: `lumenairy/propagators/system.py:953-978`,
+Files: `lumenairy/propagators/system.py:955-980`,
 `lumenairy/elements/_lens_real.py:2906-2976`, `:2882-2895`.
 Tests: `tests/unit/test_audit2609_b3b_resample_call_sites.py::TestK6TheChirpZGate`
 (11), `::TestK6ByteIdentityWhereTheGateSelectsTheSpline` (7),
@@ -1460,7 +1646,7 @@ Files: `lumenairy/propagators/system.py:1863-1875`, `:1730-1738`.
 ### Fixed -- a `method='fresnel'` chain step warns again when the chain window holds only part of the beam (K6)
 
 WP-B3b retired the `'fresnel'` leg's resample, and the K6 crop warning
-went with it (`_warn_system_resample_crop`, `system.py:359`).  Its
+went with it (`_warn_system_resample_crop`, `system.py:361`).  Its
 changelog recorded that `fresnel_propagate_mft`'s own faithful-zone
 warning takes over, so no diagnostic is lost.  It does not: on the chain
 grid the two conditions are **disjoint**.  `fresnel_propagate_mft` warns
@@ -1493,7 +1679,7 @@ own replica regime at that pitch, so they bound the loss rather than
 measure it.)
 
 The leg now calls `_warn_system_fresnel_window`
-(`lumenairy/propagators/system.py:415`, called at `:928`), which measures
+(`lumenairy/propagators/system.py:417`, called at `:928`), which measures
 the power the chain window keeps and raises the same `RuntimeWarning`
 class, at the same `1e-6` retained-power bar, as
 `_warn_system_resample_crop` -- naming the retained percentage, `z`
@@ -1517,7 +1703,7 @@ three-element, lens+aperture, anamorphic, tilted element, tilted chain),
 and every guard text.  Exactly one warning record changes, and it is the
 probe where 5.46.0 emitted the crop warning.
 
-`_warn_system_resample_crop`'s docstring (`system.py:359`) and the
+`_warn_system_resample_crop`'s docstring (`system.py:361`) and the
 `'fresnel'` leg's comment now say which of the three diagnostics covers
 which condition, instead of describing one as the other's replacement.
 
@@ -1613,7 +1799,7 @@ C1 and the WP-A25 replica regime).
 
 `'collins'` evaluates the same integral in the form Collins (1970, *JOSA* **60**,
 1168) gives for an arbitrary ABCD system, factored as chirp x chirp-Z x chirp
-(`lumenairy/propagators/carrier.py:1964` `_collins_transport`).  In this
+(`lumenairy/propagators/carrier.py:1966` `_collins_transport`).  In this
 library's `exp(-i omega t)` / `exp(+i k z)` convention (CONVENTIONS sec. 7 -- the
 complex conjugate of the form printed in Collins' paper, which uses the opposite
 time convention):
@@ -1622,7 +1808,7 @@ time convention):
                * integral u_in(u) exp(i k (A u^2 - 2 u x + D x^2)/(2 B)) du
 
 with the envelope-to-envelope system "attach the input carrier, fly `z`, remove
-the chosen output carrier" (`carrier.py:1563`):
+the chosen output carrier" (`carrier.py:1564`):
 
     A = 1 + z/R_in = m,   B = z,   C = 1/R_in - A/R_ref,   D = 1 - z/R_ref
 
@@ -1631,7 +1817,7 @@ so `det = AD - BC = 1` for every choice of `R_ref` (pinned as an identity over
 forward leg, converging or not: the carrier's sign lives in `A`, which shrinks to
 zero and past it as a leg crosses the geometric focus, and the transform carries
 `A <= 0` natively.  The three stages are the module's own separable screen
-(`_radial_carrier_phase`'s per-axis factor, `carrier.py:1625`), the separable
+(`_radial_carrier_phase`'s per-axis factor, `carrier.py:1626`), the separable
 centred Bluestein the readouts already run (`_bluestein_centred_2d`), and a
 second separable screen.  At `R_ref = R + z` and `dx_out = m*dx` the result is
 term for term `_carrier_step_fast` -- measured agreement 7.6e-12 and 3.2e-12 of
@@ -1640,7 +1826,7 @@ peak at two well-sampled legs, on both `gap_kernel` settings.
 What the free pitch buys, measured:
 
 * **the image-plane readout is one step.**  `transport='collins'` lands the
-  target plane directly on the caller's `(dx_out, N_out)` (`carrier.py:2264`),
+  target plane directly on the caller's `(dx_out, N_out)` (`carrier.py:2266`),
   with no standoff plane, no beam-containment resolution and no near-focus
   bridge.  Against an analytic Gaussian-ABCD oracle carrying the absolute piston
   and Gouy phase, over NA 0.03-0.45 x grid extents 1.5-10 beam radii (30 cells),
@@ -1665,7 +1851,7 @@ What the free pitch buys, measured:
 * **a near-focus gap leg no longer splits.**  The output pitch is the co-moving
   `|A| dx` floored by `2(|A| r + |B| theta)/N`, the ABCD image of the envelope's
   measured phase-space box, so it carries the leg's own diffraction and cannot
-  follow `A` to zero (`carrier.py:1828`); and where referencing to the
+  follow `A` to zero (`carrier.py:1830`); and where referencing to the
   collapsing ray sphere `R + z` would need more samples than the grid has, the
   output is referenced FLAT instead, which is the physical statement that the
   wavefront is flat at the waist.  Measured 0.1 mm before a 40 mm focus: pitch
@@ -1677,7 +1863,7 @@ What the free pitch buys, measured:
 
 **The sampling guard** (`on_collins_sampling={'error','warn','ignore'}`, default
 `'warn'`) is written against Kelly, *Appl. Opt.* **53**, 2861 (2014) rather than
-against a geometric margin (`carrier.py:1699`, `:1736`).  Three conditions, each
+against a geometric margin (`carrier.py:1700`, `:1736`).  Three conditions, each
 a ratio against the Nyquist rate itself with the bar at 1 and no margin,
 evaluated on the field's own measured `1 - 1e-6`-power support in BOTH domains
 rather than at the grid edge:
@@ -1693,7 +1879,7 @@ rather than at the grid edge:
   EXISTING `on_replica` on this transport's period, so the two guards cannot
   disagree.
 
-The tolerance is the one number `_COLLINS_TAIL_FRAC = 1e-6` (`carrier.py:1540`),
+The tolerance is the one number `_COLLINS_TAIL_FRAC = 1e-6` (`carrier.py:1541`),
 the power allowed outside the support radii the ratios are formed from, so the
 aliased power is bounded by it and the field error by its square root.  Stated
 fail-before, as a ladder over four grids at A = 0.9, B = 3 mm: at K1 = 49.694 /
@@ -1702,7 +1888,7 @@ Gaussian by relL2 1.13e+02 / 5.52e+01 / 2.74e+01 / 1.33e+01 -- tracking K1, whic
 is what says it is the aliasing -- while the complementary quadrature sits at
 6.28e-11 on every grid.
 
-**Quadrature selection, and why it is not a threshold** (`carrier.py:2125`).  The
+**Quadrature selection, and why it is not a threshold** (`carrier.py:2127`).  The
 chirp-Z form needs `K1 <= 1`, which with `r` at the grid half-width is
 `N dx^2 <= lambda |z_eff|`; the transfer-function form (`_carrier_step_fast`)
 samples the kernel on the frequency lattice instead and needs the same
@@ -1719,12 +1905,12 @@ enough to trip `_near_focus_needs_bridge` has `|A| < 0.02` and therefore
 
 `gap_kernel` keeps its meaning on this transport: the Collins stage IS the
 ABCD-Fresnel integral, and `'exact'` pre-applies the diagonal exact/Fresnel
-kernel ratio on the input grid (`carrier.py:1904`), which is an exact operator
+kernel ratio on the input grid (`carrier.py:1906`), which is an exact operator
 identity because both kernels are diagonal in the same basis.  That refinement
 lives on the REDUCED frame `z_eff = B/A`, which is unbounded as a leg approaches
 the geometric focus, so it is applied only where its own group delay
 `|z_eff| theta (1/sqrt(1-theta^2) - 1)` fits inside the grid it is applied on
-(`carrier.py:1866`); an explicit `gap_kernel='exact'` there is REFUSED rather
+(`carrier.py:1868`); an explicit `gap_kernel='exact'` there is REFUSED rather
 than silently downgraded, and `'auto'` takes the ABCD-Fresnel integral and
 records `collins_kernel='fresnel'`.  Applying it anyway leaves the core right and
 destroys the halo: measured against a direct summation of the same integral on
@@ -6716,10 +6902,10 @@ budget uses to decide where the spot IS.
 
 `carrier_referenced_focus_readout` and `carrier_referenced_exact_focus_readout`
 take `replica_fill={'repeat', 'zero'}`, default `'repeat'`
-(`lumenairy/propagators/carrier.py:3841`), reachable through
+(`lumenairy/propagators/carrier.py:3843`), reachable through
 `propagate_traced_carrier_chain`'s `focus_readout` dict and
 `propagate_traced_carrier_chain_multi`'s `output_grid`
-(`lumenairy/propagators/carrier.py:9531`, `:9805`).  `'zero'` blanks the part
+(`lumenairy/propagators/carrier.py:9552`, `:9805`).  `'zero'` blanks the part
 of the window that lies outside one period; `'repeat'` is the historical
 answer and stays the default, because a caller deliberately reading the
 periodic reconstruction needs it -- the multi-congruence chain's `K == 1`
@@ -6799,7 +6985,7 @@ it already carried are unchanged.
 `_period_out['faithful_samples']` on both public readouts, on either fill, and
 `readout_faithful_samples` on the chain's stage dict beside `readout_period` /
 `readout_containment` / `readout_window_energy`
-(`lumenairy/propagators/carrier.py:3917`, `:3529`): the `(nx, ny)` samples per
+(`lumenairy/propagators/carrier.py:3919`, `:3529`): the `(nx, ny)` samples per
 axis that lie inside one period.  `(N_out, N_out)` whenever the window is
 faithful; `(249, 249)` of 512 on the battery cell above.  The number was
 already computed inside the refusal message, where a waiving caller never saw
@@ -12020,7 +12206,7 @@ re-litigated.
 
 ### Fixed -- propagators: `propagate_through_system` forwards `subharmonics` to the turbulence screen
 
-`system.py:1007` now passes `subharmonics=elem.get('subharmonics', 0)` to
+`system.py:1009` now passes `subharmonics=elem.get('subharmonics', 0)` to
 `generate_turbulence_screen`, and the element-dict documentation lists the key. WP-A8 added the
 Lane subharmonic levels (audit section 5, E3) but the element chain was the one caller that could
 not reach them, so `{'type': 'turbulence', ..., 'subharmonics': 3}` was silently discarded -- the
@@ -28911,7 +29097,7 @@ xfail), up from 2858 at v5.0.0; **+31 net** (A=4, B=6, C=21).
   `lumenairy/analysis/detector.py:82-100` still documented the
   removed `cosmic_ray_rate` kwarg as "Retained for back-compat"
   -- not retained.  Replaced with v5.0 removal note + migration
-  recipe.  (b) `lumenairy/propagators/system.py:582` docstring
+  recipe.  (b) `lumenairy/propagators/system.py:584` docstring
   example said `>>> result = la.system.evaluate(rx, src)` --
   `la.system` no longer exists.  Now `la.evaluate(...)`.
 * **`[tool.mypy]` config preparation** (audit P2-NEW-V4-2).
@@ -28953,7 +29139,7 @@ xfail), up from 2858 at v5.0.0; **+31 net** (A=4, B=6, C=21).
   `test_v4_16_2_dispatcher_pin_doc_consistency.py:51-52, :68`.
   Library is 3.10+ at v5.0; comments updated.
 * **Unreachable post-raise tuple-return block removed** in
-  `lumenairy/propagators/system.py:932-935` (P3-NEW-F1-3).
+  `lumenairy/propagators/system.py:934-937` (P3-NEW-F1-3).
   `_reject_legacy(...)` always raises, so the subsequent tuple
   return was unreachable.
 * **Stale "one-shot deprecation warning" comment refreshed** at
