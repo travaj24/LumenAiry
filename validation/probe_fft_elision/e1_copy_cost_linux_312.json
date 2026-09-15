@@ -1,0 +1,131 @@
+{
+ "lumenairy_file": "/mnt/c/tmp/lum_e/lumenairy/__init__.py",
+ "python": "3.12.3",
+ "numpy": "2.4.6",
+ "platform": "linux",
+ "pyfftw_available": true,
+ "use_pyfftw": true,
+ "fftw_min_size": 256,
+ "threads_env": {
+  "OMP_NUM_THREADS": "1",
+  "OPENBLAS_NUM_THREADS": "1",
+  "MKL_NUM_THREADS": "1"
+ },
+ "rows": [
+  {
+   "n": 512,
+   "asm_pingpong_best_s": 0.018358799999999897,
+   "asm_pingpong_median_s": 0.019212599999999913,
+   "asm_pingpong_md5": "b996fc765cc0b1d75b8373697b61b71b",
+   "asm_copy_best_s": 0.016063199999999833,
+   "asm_copy_median_s": 0.019718400000000136,
+   "asm_copy_md5": "b996fc765cc0b1d75b8373697b61b71b",
+   "asm_copy_overhead_frac": -0.12504085234329462,
+   "asm_values_identical": true,
+   "fresnel_pingpong_best_s": 0.02970229999999985,
+   "fresnel_pingpong_median_s": 0.03312930000000014,
+   "fresnel_pingpong_md5": "3ea985f3415008b444c96de5c7fdb104",
+   "fresnel_copy_best_s": 0.0287913999999998,
+   "fresnel_copy_median_s": 0.031493400000000005,
+   "fresnel_copy_md5": "3ea985f3415008b444c96de5c7fdb104",
+   "fresnel_copy_overhead_frac": -0.030667658733500518,
+   "fresnel_values_identical": true
+  },
+  {
+   "n": 1024,
+   "asm_pingpong_best_s": 0.08277259999999975,
+   "asm_pingpong_median_s": 0.08455609999999991,
+   "asm_pingpong_md5": "d6eecc8b7822ce9e00c1e2ae7a21a091",
+   "asm_copy_best_s": 0.08347900000000053,
+   "asm_copy_median_s": 0.08684220000000042,
+   "asm_copy_md5": "d6eecc8b7822ce9e00c1e2ae7a21a091",
+   "asm_copy_overhead_frac": 0.008534225093820602,
+   "asm_values_identical": true,
+   "fresnel_pingpong_best_s": 0.15414139999999943,
+   "fresnel_pingpong_median_s": 0.1591579999999997,
+   "fresnel_pingpong_md5": "6dd0feb2d77a84ebe7b8ee7bd62b5666",
+   "fresnel_copy_best_s": 0.15595789999999976,
+   "fresnel_copy_median_s": 0.15913779999999988,
+   "fresnel_copy_md5": "6dd0feb2d77a84ebe7b8ee7bd62b5666",
+   "fresnel_copy_overhead_frac": 0.011784634108684224,
+   "fresnel_values_identical": true
+  },
+  {
+   "n": 2048,
+   "asm_pingpong_best_s": 0.4636344999999995,
+   "asm_pingpong_median_s": 0.49209059999999916,
+   "asm_pingpong_md5": "a3f2742b74e63eb9ab2c05c65bc11cc2",
+   "asm_copy_best_s": 0.5238411999999997,
+   "asm_copy_median_s": 0.5414303999999994,
+   "asm_copy_md5": "a3f2742b74e63eb9ab2c05c65bc11cc2",
+   "asm_copy_overhead_frac": 0.12985811021397292,
+   "asm_values_identical": true,
+   "fresnel_pingpong_best_s": 1.111790499999998,
+   "fresnel_pingpong_median_s": 1.1317322999999995,
+   "fresnel_pingpong_md5": "fd632e43a4940670fbaab894fd08adf5",
+   "fresnel_copy_best_s": 1.1551140000000046,
+   "fresnel_copy_median_s": 1.1911197000000016,
+   "fresnel_copy_md5": "fd632e43a4940670fbaab894fd08adf5",
+   "fresnel_copy_overhead_frac": 0.0389673234300948,
+   "fresnel_values_identical": true
+  }
+ ],
+ "raw_copy": [
+  {
+   "n": 512,
+   "copy_best_s": 8.240000000014902e-05,
+   "fft2_best_s": 0.008110400000000073,
+   "copy_frac_of_fft2": 0.01015979483134596,
+   "nbytes": 4194304
+  },
+  {
+   "n": 1024,
+   "copy_best_s": 0.0015620000000007295,
+   "fft2_best_s": 0.03671570000000024,
+   "copy_frac_of_fft2": 0.042543108261607954,
+   "nbytes": 16777216
+  },
+  {
+   "n": 2048,
+   "copy_best_s": 0.05584860000000447,
+   "fft2_best_s": 0.1600870000000043,
+   "copy_frac_of_fft2": 0.34886405517001984,
+   "nbytes": 67108864
+  }
+ ],
+ "elision": [
+  {
+   "n": 128,
+   "right_eq_named": false,
+   "left_eq_named": true,
+   "right_vs_named_rel": 1.0180603332349013e-16,
+   "right_vs_named_ndiff": 5426,
+   "nvals": 32768
+  },
+  {
+   "n": 256,
+   "right_eq_named": false,
+   "left_eq_named": true,
+   "right_vs_named_rel": 9.650878096823596e-17,
+   "right_vs_named_ndiff": 21698,
+   "nvals": 131072
+  },
+  {
+   "n": 512,
+   "right_eq_named": false,
+   "left_eq_named": true,
+   "right_vs_named_rel": 1.7760122759024755e-16,
+   "right_vs_named_ndiff": 86794,
+   "nvals": 524288
+  },
+  {
+   "n": 1024,
+   "right_eq_named": false,
+   "left_eq_named": true,
+   "right_vs_named_rel": 1.7872757359526966e-16,
+   "right_vs_named_ndiff": 345396,
+   "nvals": 2097152
+  }
+ ],
+ "elision_changes_bits": true
+}

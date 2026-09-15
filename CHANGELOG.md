@@ -304,6 +304,54 @@ constant can put the loop under a budget below it.  The note now carries the sco
 builds' readings and a pointer to the two-sided pin
 (`test_verify_b14_known_reds.py::test_the_measured_accounting_bounds_the_budget_only_above_one_column`).
 
+### Changed -- `set_fft_double_buffer`'s byte-identity claim is scoped to what it covers
+
+`fft_double_buffer`'s registered doc said "values are byte-identical either way".  That is
+true of the TRANSFORM's values and false of a downstream NumPy expression on the returned
+array, on some builds.  The accurate statement, now in the knob's doc, in
+`set_fft_double_buffer`'s own docstring and in the `_PYFFTW_DOUBLE_BUFFER` module note, is:
+**the transform's values are byte-identical either way; the object handed back is a live
+workspace view in one mode and a private copy in the other, which NumPy's temporary elision
+can distinguish.**
+
+The mechanism, established by the independent re-verification of WP-B14 and re-measured
+here: `temp_elide` claims an operand only when it is an unreferenced, NumPy-OWNED temporary,
+so the ping-pong's non-owning workspace view is never elidable while `buf.copy()` is -- and
+on the manylinux numpy 2.4.6 wheel a RIGHT-elided `complex128` multiply does not give the
+same last bits as the named form (rel 1.0e-16 to 1.8e-16 over 16-17 % of the doubles, at
+n >= 128).  The Windows wheel of numpy **2.4.4 and 2.4.6 alike** shows no difference, so the
+axis is the wheel and not the release; `validation/probe_fft_elision/` carries the
+lumenairy-free five-line reproducer and a ready-to-file draft issue for NumPy.
+
+`_fft2` / `_ifft2` **are** functions of their inputs -- six identical evaluations give one
+byte image, in every mode, at every shape, on both builds -- so this is not the FFT
+determinism defect it was first raised as.
+
+**The dispatchers were NOT changed to return a private copy**, on the measurement:
+
+| | Windows py3.14.6 / numpy 2.4.4 | WSL py3.12.3 / numpy 2.4.6 |
+|---|---|---|
+| `angular_spectrum_propagate` 512^2 | +22.1 % | (noise) |
+| the same, 1024^2 | +19.0 % | +0.9 % |
+| the same, 2048^2 | +18.6 % | +13.0 % |
+| one `buf.copy()` / one forward transform | 0.30 - 0.42 | 0.01 - 0.35 |
+| lumenairy entry points that move across the switch | **0 of 12** | **0 of 12** |
+
+Every in-library site that multiplies a dispatcher result NAMES the other operand
+(`asm.py:919/922/1391`, `carrier.py:1401/7126`, `fresnel.py:216` are all `_fft2(...) * H`),
+so nothing is elided with the ping-pong on and only the LEFT operand is with it off -- and
+left-elided equals named on every build measured.  Four entry points x three shapes x both
+builds are byte-identical across the switch, so privatising every transform would cost
+13-22 % of the ASM hot path to remove a difference no lumenairy output exhibits.  A CALLER
+who writes `_fft2(E) * np.exp(1j*P)` -- right operand a fresh temporary -- is exposed, at
+rel 3.4e-16 to 4.0e-16 on the Linux build and 0.0 on the Windows one; the remedy for such a
+caller is to name the operand or to call `set_fft_double_buffer(False)`.
+
+Pinned by `tests/unit/test_wave5_e_fft_elision.py`: the transforms are functions of their
+inputs and no entry point moves across the switch, both unconditionally; the object-kind
+difference and the caller-visible divergence are asserted on the builds whose elision
+asymmetry the test measures for itself, and reported with the reading where it is absent.
+
 ## [5.47.0] — 2026-09-14
 
 This release is the fourth wave of the 2026-09-11 adversarial audit's remediation
