@@ -194,7 +194,10 @@ are the right blocks is pinned against an INDEPENDENT finite difference of the
 vertex-plane state in
 `test_the_projected_jacobian_is_the_derivative_of_the_projected_map`: with a
 per-row normalisation and a measured step ladder, the projected Jacobian matches
-the FD reference at 2.1e-10 where the un-projected one sits at 2.1e-05.
+the FD reference at 1.4648e-07 where the un-projected one sits at 1.4393e-02
+(ladder 3.5014e-07, bar 3.5014e-06; RE-RECORDED 2026-09-15 by VERIFY-WP-B12
+D-1 on both builds, bit identical -- the 2.1e-10 / 2.1e-05 first published here
+did not reproduce; the conclusion, 411x against the bar, stands).
 
 What it buys in the FIELD is a fifth-decimal effect, measured on both planes of
 every fixture (`probe_b_ladder`, the `proj_state` vs `proj_state_jac` arms):

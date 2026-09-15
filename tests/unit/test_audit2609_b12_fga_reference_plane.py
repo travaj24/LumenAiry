@@ -420,8 +420,10 @@ def test_the_projected_jacobian_is_the_derivative_of_the_projected_map():
     projected Jacobian must match it to a tolerance derived from that ladder
     (10x the step-halving change), and the UN-projected Jacobian must NOT --
     the second half is what makes the first non-vacuous.  MEASURED
-    (2026-09-14): projected residual 3.4e-06, un-projected 7.3e-04, ladder
-    1.1e-06.
+    (2026-09-15, py3.14/numpy 2.4.4 and py3.12/numpy 2.4.6, bit identical;
+    VERIFY-WP-B12 D-1 re-recorded the 2026-09-14 figures, which did not
+    reproduce): projected residual 1.4648e-07, un-projected 1.4393e-02,
+    ladder 3.5014e-07 (bar 3.5014e-06).
     """
     presc = _biconvex()
     surfs = _surfs(presc)
@@ -481,15 +483,24 @@ def test_the_two_backends_agree_on_both_reference_planes_to_one_floor():
     gap between them, because both route through the one shared projection.
 
     The claim is a RATIO, so it carries no per-build constant: the two
-    discrepancies must agree within a factor of two.  MEASURED (2026-09-14,
-    both builds): 4.696e-07 on both planes, ratio 1.000000.
+    discrepancies must agree within a factor of two.  MEASURED (2026-09-15,
+    both builds, bit identical): 4.68293e-07 on both planes, ratio 1.000000.
+
+    RESTATED 2026-09-15 (VERIFY-WP-B12 D-3): the mask is the intersection of
+    the two backends' own ``alive`` flags, not the base ray's.  The FD
+    backend additionally kills a ray whose nine-ray companion bundle
+    vignettes, and the outermost ray of this fan is one; masking on the base
+    ray alone read that dead companion (97.05, both builds) and the recorded
+    4.696e-07 was the reading with it removed.
     """
     presc = _biconvex()
-    surfs, h, z, _img, ex = _fan(presc)
-    ok = np.asarray(ex.alive, bool)
+    surfs, h, z, _img, _ex = _fan(presc)
     d = _both(presc, h, z, surfs)
     r = {}
     for ref in ('surface', 'exit_vertex'):
+        ok = (np.asarray(d[('fd', ref)].alive, bool)
+              & np.asarray(d[('analytic', ref)].alive, bool))
+        assert ok.sum() >= 2, ok.sum()
         a = np.asarray(d[('fd', ref)].jacobian)[ok]
         b = np.asarray(d[('analytic', ref)].jacobian)[ok]
         r[ref] = float(np.abs(a - b).max()) / float(np.abs(b).max())
