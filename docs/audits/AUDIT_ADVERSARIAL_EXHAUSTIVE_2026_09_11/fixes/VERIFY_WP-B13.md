@@ -323,7 +323,10 @@ tests/unit/test_niche_audit_e_prepared_and_enums.py -q [--capture=sys]`
 The one skip is `test_fix_newton_pool_memory.py:1217` on every arm, with the report's own reason (this BLAS
 reduces identically at every width tried, so the box cannot witness the defect that test is about).  Four
 arms, four identical 363/1 readings: claim 4a **CONFIRMED**, and the capture axis moves nothing but wall
-time (WSL 1788.21 s under `fd` against 1743.32 s under `sys`, a 2.5 % difference on a shared box).
+time (WSL 1788.21 s under `fd` against 1743.32 s under `sys`, a 2.5 % difference on a shared box).  A fifth
+run (Windows, default capture, started while the WSL arms were still going) was **terminated by me at 59 %
+of its collection** to free the box; every test it had reached was passing, and it is recorded as an
+incomplete repeat rather than as a result.
 
 ### 6.2 The rest of the gate
 
