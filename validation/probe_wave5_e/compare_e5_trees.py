@@ -40,6 +40,8 @@ def main():
             'pre_dead_djac': p.get('dead_djac', p.get('jax_dead_djac')),
             'post_dead_djac': q.get('dead_djac', q.get('jax_dead_djac')),
             'n_dead': q['n_dead'], 'n_alive': q['n_alive'],
+            'freeze_set_empty': q.get('freeze_set_empty'),
+            'n_companion_only_dead': q.get('n_companion_only_dead'),
         }
         res['rows'].append(row)
         print('%-18s %-9s alive state/jac identical %-5s/%-5s  dead opd '
@@ -52,17 +54,22 @@ def main():
     res['n_cells'] = len(live)
     res['all_alive_bits_identical'] = bool(live) and all(
         r['alive_state_md5_same'] and r['alive_jac_md5_same'] for r in live)
-    res['all_post_frozen'] = bool(live) and all(
-        r['post_dead_frozen'] for r in live)
-    res['n_pre_unfrozen'] = sum(1 for r in live if not r['pre_dead_frozen'])
+    scored = [r for r in live if not r.get('freeze_set_empty')]
+    res['n_cells_vacuous'] = len(live) - len(scored)
+    res['all_post_frozen'] = bool(scored) and all(
+        r['post_dead_frozen'] for r in scored)
+    res['n_pre_unfrozen'] = sum(1 for r in scored
+                                if not r['pre_dead_frozen'])
     res['max_pre_dead_dopd'] = max((r['pre_dead_dopd'] for r in live),
                                    default=None)
     res['max_pre_dead_djac'] = max((r['pre_dead_djac'] for r in live),
                                    default=None)
-    print('CELLS %d   ALIVE BITS IDENTICAL %s   ALL POST FROZEN %s   '
-          'PRE UNFROZEN %d   max pre dead opd drift %.3e'
-          % (res['n_cells'], res['all_alive_bits_identical'],
-             res['all_post_frozen'], res['n_pre_unfrozen'],
+    print('CELLS %d (%d scored, %d vacuous)   ALIVE BITS IDENTICAL %s   '
+          'ALL POST FROZEN %s   PRE UNFROZEN %d of %d   '
+          'max pre dead opd drift %.3e'
+          % (res['n_cells'], len(scored), res['n_cells_vacuous'],
+             res['all_alive_bits_identical'], res['all_post_frozen'],
+             res['n_pre_unfrozen'], len(scored),
              res['max_pre_dead_dopd']), flush=True)
     if out_path:
         with open(out_path, 'w', encoding='cp1252') as fh:

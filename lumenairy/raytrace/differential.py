@@ -162,7 +162,7 @@ def _exit_direction_sign(surfaces) -> float:
 
 
 def _project_to_exit_vertex_plane(transfer, surfaces, wavelength, n_exit,
-                                  fn_name):
+                                  fn_name, reached_surface=None):
     """Return ``transfer`` re-referenced from the last surface to its VERTEX
     plane -- the single implementation of that projection for this module.
 
@@ -214,16 +214,30 @@ def _project_to_exit_vertex_plane(transfer, surfaces, wavelength, n_exit,
     exit-medium path to subtract: ``lumenairy.raytrace.exit_vertex``'s
     ``exit_vertex_transfer`` is explicit that such a ray keeps its position,
     direction and OPL "exactly".  This projection used to apply its arithmetic
-    to every row, which moved a dead ray's ``opd`` by up to 1.96e-05 m (18.4
-    waves at 1.06 um) on a fan clipped at the last surface -- unobservable
-    today only because all four ``fga.py`` consumers zero the dead beamlets
-    before the reconstruction, i.e. a divergence between the module's two
-    vertex-plane operators that the next consumer would not know about.  Every
-    field the map touches is now ``where(alive, projected, original)``:
-    ``x``, ``y``, ``opd`` and the Jacobian rows.  ``ux`` / ``uy`` are a
-    passthrough of the map (a transfer is not a refraction), so they are
-    identical on both arms by construction and need no mask.  ALIVE rows are
-    bit-for-bit what they were before the mask existed.
+    to every row, which moved a dead ray's ``opd`` by up to 1.87e-04 m on a fan
+    clipped at the last surface -- unobservable today only because all four
+    ``fga.py`` consumers zero the dead beamlets before the reconstruction, i.e.
+    a divergence between the module's two vertex-plane operators that the next
+    consumer would not know about.  Every field the map touches is now
+    ``where(reached, projected, original)``: ``x``, ``y``, ``opd`` and the
+    Jacobian rows.  ``ux`` / ``uy`` are a passthrough of the map (a transfer is
+    not a refraction), so they are identical on both arms by construction and
+    need no mask.  RAYS THAT REACHED THE SURFACE are bit-for-bit what they were
+    before the mask existed.
+
+    ``reached_surface`` is the mask of rays that REACHED the last surface,
+    which is not always ``transfer.alive``.  The finite-difference backend's
+    ``alive`` is ``base_alive & companion_alive`` -- it also drops a ray whose
+    9-ray FD companion bundle vignettes even though the BASE ray landed
+    (VERIFY-WP-B12 open item O-4).  Such a ray's Jacobian is meaningless but
+    its state is not: it did reach the vertex plane, and
+    ``TraceResult.at_exit_vertex()`` projects it.  Freezing it would put this
+    operator back out of step with that one -- in the other direction -- so
+    ``ray_transfer_jacobian`` passes the BASE ray's own alive here and the
+    analytic backends, which trace one ray and have no companions, let it
+    default to ``transfer.alive``.  Measured on the WP-B12 biconvex fan: 1 ray
+    of 121 is companion-dead-but-base-alive, and on it the projected state
+    agrees with ``at_exit_vertex`` to 4.3e-19 m.
     """
     last = surfaces[-1]
     if _last_surface_sag_vanishes(last):
@@ -275,16 +289,18 @@ def _project_to_exit_vertex_plane(transfer, surfaces, wavelength, n_exit,
     if is_np:
         jac_v = np.nan_to_num(jac_v, nan=0.0, posinf=0.0, neginf=0.0)
     # Freeze the rays that never reached the surface -- see the docstring.
-    # ``alive`` is broadcast to each field's own rank rather than reshaped, so
-    # the composite and per-surface Jacobian layouts take the SAME mask.
-    alive = xp.asarray(transfer.alive, dtype=bool)
-    jac_v = xp.where(alive[jac_mask_shape], jac_v, jac)
+    # The mask is broadcast to each field's own rank rather than reshaped, so
+    # the composite and per-surface Jacobian layouts take the SAME one.
+    reached = xp.asarray(
+        transfer.alive if reached_surface is None else reached_surface,
+        dtype=bool)
+    jac_v = xp.where(reached[jac_mask_shape], jac_v, jac)
     return DifferentialTransfer(
         jacobian=jac_v,
-        x=xp.where(alive, x - sag * ux, x),
-        y=xp.where(alive, y - sag * uy, y),
+        x=xp.where(reached, x - sag * ux, x),
+        y=xp.where(reached, y - sag * uy, y),
         ux=ux, uy=uy,
-        opd=xp.where(alive,
+        opd=xp.where(reached,
                      transfer.opd - (n_out * nz) * sag * sec, transfer.opd),
         alive=transfer.alive)
 
@@ -418,7 +434,8 @@ def ray_transfer_jacobian(
         if reference == 'exit_vertex':
             out = _project_to_exit_vertex_plane(
                 out, surfaces, wavelength, n_exit,
-                "ray_transfer_jacobian(reference='exit_vertex')")
+                "ray_transfer_jacobian(reference='exit_vertex')",
+                reached_surface=np.asarray(balive[:n], bool))
         return out
 
     # per-surface: cumulative J at each surface -> local transfers
@@ -438,7 +455,8 @@ def ray_transfer_jacobian(
     if reference == 'exit_vertex':
         out = _project_to_exit_vertex_plane(
             out, surfaces, wavelength, n_exit,
-            "ray_transfer_jacobian(reference='exit_vertex')")
+            "ray_transfer_jacobian(reference='exit_vertex')",
+            reached_surface=np.asarray(balive[:n], bool))
     return out
 
 

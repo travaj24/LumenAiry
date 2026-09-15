@@ -1,13 +1,14 @@
 <!-- lumenairy-history-doc
 module: lumenairy/raytrace/differential.py
-ast_sha256: da63e6c0c950388076f2be1e5c8f37fa735f15176e882771ed2f170fa179e5a3
-token_sha256: de25ac784f7318c1f3f92997d0452e17155d5b572798f6de185fcd369b9182ca
+ast_sha256: f272449de482a26222bebaaf938fa2fbb2386064ca49080dd1211733e17f7334
+token_sha256: 89d9757e32c39257684241f20770fde85ae0a599b62ac7ec9027b401b25f61a5
 pre_relocation_lines: 1078
 recorded_by: WP-A17 SWEEP-3 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
 re_recorded: 2026-09-13 -- WP-B9 item 6: _adrt_step handles even-power aspheres (conic seed + 6-step differentiated Newton in _adrt_aspheric_intersect, polynomial gradient in the normal); the analytic Jacobian no longer raises for aspheric_coeffs; the numba kernel is excluded for aspheres
 re_recorded: 2026-09-14 -- WP-B12: ray_transfer_jacobian / _analytic take reference='surface'|'exit_vertex'; one shared projection (_project_to_exit_vertex_plane) re-references the base-ray state AND the 4x4 Jacobian onto the last surface's vertex plane, with a structural flat-surface short-circuit so a flat last surface stays bit-identical
 re_recorded: 2026-09-15 -- WAVE5-E: _project_to_exit_vertex_plane freezes DEAD rays instead of projecting them (VERIFY-WP-B12 O-1); alive rows bit-identical
+re_recorded: 2026-09-15 -- WAVE5-E round 2: the freeze keys on REACHED THE SURFACE (reached_surface=), not on the FD backend's conflated base&companion alive -- a companion-dead but base-alive ray did reach the vertex plane and at_exit_vertex projects it
 -->
 
 

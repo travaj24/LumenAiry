@@ -105,7 +105,28 @@ def _one(fx, backend):
     sx, sy, sux, suy, sopd, sj = _states(srf)
     vx, vy, vux, vuy, vopd, vj = _states(vtx)
     alive = np.asarray(srf.alive, dtype=bool)
-    dead = ~alive
+    # The freeze set is REACHED THE LAST SURFACE, taken from the production
+    # ray-bundle trace -- NOT the differential's ``alive``, which on the FD
+    # backend is ``base_alive & companion_alive`` and so also drops rays whose
+    # 9-ray companion bundle vignettes while the base ray landed
+    # (VERIFY-WP-B12 O-4).  Those rays DID reach the vertex plane and
+    # ``at_exit_vertex`` projects them.
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        n_ = n
+        nz_ = 1.0 / np.sqrt(1.0 + z ** 2 + z ** 2)
+        bnd = rt.RayBundle(x=h.copy(), y=z.copy(), z=z.copy(),
+                           L=z.copy(), M=z.copy(), N=nz_,
+                           wavelength=fx.lam, alive=np.ones(n_, bool),
+                           opd=z.copy())
+        res0 = rt.trace(bnd, surfs, fx.lam)
+    reached = np.asarray(res0.image_rays.alive, dtype=bool)
+    # The rows the freeze claim is ABOUT: the bundle trace says they never
+    # reached the last surface AND this backend marks them dead.  The JAX path
+    # of ``ray_transfer_jacobian_analytic`` reports every ray alive whatever
+    # the aperture, so its set is EMPTY and the claim is vacuous there -- which
+    # the probe records rather than scoring as a failure.
+    dead = (~reached) & (~np.asarray(srf.alive, dtype=bool))
 
     def _dmax(a, b, m):
         if not m.any():
@@ -116,6 +137,11 @@ def _one(fx, backend):
     row = {
         'fixture': fx.key, 'backend': backend, 'n_rays': n,
         'n_dead': int(dead.sum()), 'n_alive': int(alive.sum()),
+        'n_reached': int(reached.sum()),
+        'n_missed': int((~reached).sum()),
+        'n_backend_dead': int((~alive).sum()),
+        'n_companion_only_dead': int((reached & ~alive).sum()),
+        'freeze_set_empty': bool(not dead.any()),
         'flat_last_surface': bool(fx.flat_last),
         # D1 -- how far the projection moves a DEAD row
         'dead_dx': _dmax(vx, sx, dead),
@@ -127,11 +153,12 @@ def _one(fx, backend):
             (float(np.nanmax(np.abs(vj[dead] - sj[dead])))
              if dead.any() else 0.0)),
         # D3 -- the ALIVE rows' bits
-        'alive_md5_state': _md5(vx[alive], vy[alive], vux[alive], vuy[alive],
-                                vopd[alive]),
-        'alive_md5_jac': _md5(vj[alive]),
-        'alive_moves_from_surface': _dmax(vx, sx, alive),
-        'alive_moves_opd': _dmax(vopd, sopd, alive),
+        'alive_md5_state': _md5(vx[reached], vy[reached], vux[reached],
+                                vuy[reached], vopd[reached]),
+        'alive_md5_jac': _md5(vj[..., reached, :, :] if vj.ndim == 4
+                              else vj[reached]),
+        'alive_moves_from_surface': _dmax(vx, sx, reached),
+        'alive_moves_opd': _dmax(vopd, sopd, reached),
         # D4 -- the non-finite census on the frozen rows
         'dead_nonfinite_state_surface': int(np.count_nonzero(
             ~np.isfinite(sx[dead]) | ~np.isfinite(sopd[dead]))),
@@ -181,6 +208,7 @@ def _jax_twin(fx):
     """
     import jax.numpy as jnp
 
+    from lumenairy import raytrace as rt
     from lumenairy.raytrace import surfaces_from_prescription
     from lumenairy.raytrace.differential import (
         DifferentialTransfer,
@@ -196,6 +224,14 @@ def _jax_twin(fx):
         srf = ray_transfer_jacobian(h.copy(), z.copy(), z.copy(), z.copy(),
                                     surfs, fx.lam, reference='surface')
     alive = np.asarray(srf.alive, dtype=bool)
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        nz_ = 1.0 / np.sqrt(1.0 + z ** 2 + z ** 2)
+        bnd = rt.RayBundle(x=h.copy(), y=z.copy(), z=z.copy(), L=z.copy(),
+                           M=z.copy(), N=nz_, wavelength=fx.lam,
+                           alive=np.ones(n, bool), opd=z.copy())
+        res0 = rt.trace(bnd, surfs, fx.lam)
+    reached = np.asarray(res0.image_rays.alive, dtype=bool)
     fn = "probe_e5_jax_twin"
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
@@ -206,9 +242,14 @@ def _jax_twin(fx):
             uy=jnp.asarray(srf.uy), opd=jnp.asarray(srf.opd),
             alive=jnp.asarray(alive))
         jx_out = _project_to_exit_vertex_plane(jx_in, surfs, fx.lam, None, fn)
-    dead = ~alive
+    dead = (~reached) & (~alive)
     row = {'fixture': fx.key, 'backend': 'jax_twin', 'n_rays': n,
            'n_dead': int(dead.sum()), 'n_alive': int(alive.sum()),
+           'n_reached': int(reached.sum()),
+           'n_missed': int((~reached).sum()),
+           'n_backend_dead': int((~alive).sum()),
+           'n_companion_only_dead': int((reached & ~alive).sum()),
+           'freeze_set_empty': bool(not dead.any()),
            'flat_last_surface': bool(fx.flat_last)}
     for name in ('x', 'y', 'opd'):
         a = np.asarray(getattr(np_out, name), dtype=np.float64)
@@ -238,12 +279,12 @@ def _jax_twin(fx):
     row['twin_identical'] = bool(row['twin_state_identical']
                                  and row['twin_djac'] == 0.0)
     row['alive_md5_state'] = _md5(
-        np.asarray(jx_out.x, dtype=np.float64)[alive],
-        np.asarray(jx_out.y, dtype=np.float64)[alive],
-        np.asarray(jx_out.ux, dtype=np.float64)[alive],
-        np.asarray(jx_out.uy, dtype=np.float64)[alive],
-        np.asarray(jx_out.opd, dtype=np.float64)[alive])
-    row['alive_md5_jac'] = _md5(jb[alive])
+        np.asarray(jx_out.x, dtype=np.float64)[reached],
+        np.asarray(jx_out.y, dtype=np.float64)[reached],
+        np.asarray(jx_out.ux, dtype=np.float64)[reached],
+        np.asarray(jx_out.uy, dtype=np.float64)[reached],
+        np.asarray(jx_out.opd, dtype=np.float64)[reached])
+    row['alive_md5_jac'] = _md5(jb[reached])
     return row
 
 
@@ -292,7 +333,10 @@ def main():
                      row.get('twin_state_identical', '-'),
                      row['alive_md5_state'][:12]), flush=True)
     ok = [r for r in res['rows'] if 'err' not in r]
-    res['all_dead_frozen'] = bool(ok) and all(r['dead_frozen'] for r in ok)
+    scored = [r for r in ok if not r.get('freeze_set_empty')]
+    res['n_cells_vacuous'] = len(ok) - len(scored)
+    res['all_dead_frozen'] = bool(scored) and all(
+        r['dead_frozen'] for r in scored)
     tw = [r for r in ok if r['backend'] == 'jax_twin']
     res['all_jax_twins_state_identical'] = bool(tw) and all(
         r['twin_state_identical'] for r in tw)
@@ -302,7 +346,8 @@ def main():
                                    default=None)
     res['n_cells'] = len(ok)
     print('ALL DEAD ROWS FROZEN:', res['all_dead_frozen'],
-          '(%d cells)' % len(ok), flush=True)
+          '(%d scored cells, %d vacuous -- the backend marks nothing dead)'
+          % (len(scored), res['n_cells_vacuous']), flush=True)
     print('ALL JAX TWIN STATES BIT-IDENTICAL TO NUMPY:',
           res['all_jax_twins_state_identical'],
           ' (Jacobians within %.2f ULP)' % (res['max_twin_djac_ulp'] or 0.0),

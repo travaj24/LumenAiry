@@ -403,15 +403,30 @@ both builds (`validation/probe_wave5_e/e5_prepost_*.json`):
 
 | | before | after |
 |---|---|---|
-| dead-row `opd` drift | 1.37e-05 .. 1.87e-04 m (17 of 30 cells) | **0.0, all 30** |
-| dead-row Jacobian drift | 1.37e-05 .. **1.53e+300** (the analytic backend's dead rows extrapolate) | **0.0, all 30** |
-| ALIVE rows | -- | **byte-identical, 30 of 30 cells, both builds** |
+| missed-row `opd` drift | 1.37e-05 .. 1.87e-04 m (17 of 23 scored cells) | **0.0, all 23** |
+| missed-row Jacobian drift | 1.37e-05 .. **1.53e+300** (the analytic backend's rows extrapolate) | **0.0, all 23** |
+| rows that REACHED the surface | -- | **byte-identical, 30 of 30 cells, both builds** |
 
-`x`, `y`, `opd` and the Jacobian rows are now `where(alive, projected, original)`; `ux` and
-`uy` are a passthrough of the map (a transfer is not a refraction) and are identical on both
-arms by construction.  It was unobservable through `fga.py` only because all four consumers
-zero the dead beamlets first -- a divergence between the module's two vertex-plane operators
-that the next consumer would not have known about.
+(30 cells = 8 fixtures x up to 4 backend arms; 7 are vacuous because the JAX path of
+`ray_transfer_jacobian_analytic` reports every ray alive whatever the aperture, so it marks
+nothing for the freeze to act on -- recorded rather than scored.)
+
+`x`, `y`, `opd` and the Jacobian rows are now `where(reached, projected, original)`; `ux`
+and `uy` are a passthrough of the map (a transfer is not a refraction) and are identical on
+both arms by construction.  It was unobservable through `fga.py` only because all four
+consumers zero the dead beamlets first -- a divergence between the module's two
+vertex-plane operators that the next consumer would not have known about.
+
+The mask is REACHED THE LAST SURFACE, which is not always `alive`.  The finite-difference
+backend's `alive` is `base_alive & companion_alive`: it also drops a ray whose 9-ray FD
+companion bundle vignettes while the BASE ray landed (VERIFY-WP-B12 open item O-4).  Such
+a ray's Jacobian is meaningless but its state is not -- it did reach the vertex plane, and
+`TraceResult.at_exit_vertex()` projects it -- so freezing it would have put the two
+operators out of step in the other direction, and would have moved eight existing WP-B12
+pins.  `ray_transfer_jacobian` therefore passes the base ray's own alive; the analytic
+backends trace one ray, have no companions, and let it default to `alive`.  Measured on the
+WP-B12 biconvex fan: 1 ray of 121 is companion-dead-but-base-alive, and its projected state
+agrees with `at_exit_vertex` to 4.3e-19 m.
 
 **The FGA image leg carried no exit index (O-3).**  Each transport asks the projection for
 `reference='exit_vertex'` -- which resolves `n_exit` and weights its sag term with it -- and

@@ -132,6 +132,29 @@ def _arr(v):
     return np.asarray(v, dtype=np.float64)
 
 
+def _bundle_trace(name):
+    """The production ray-bundle trace of the same fan.
+
+    ``image_rays.alive`` here is the ground truth for REACHED THE LAST SURFACE
+    -- the condition ``exit_vertex_transfer`` freezes on -- and is NOT the same
+    set as a ``DifferentialTransfer``'s ``alive`` on the finite-difference
+    backend, which also drops a ray whose 9-ray FD companion bundle vignettes
+    while the base ray landed (VERIFY-WP-B12 open item O-4).
+    """
+    surfs = _surfs(_class_presc(name))
+    h, y, ux, uy = _fan(name)
+    n = _N_RAYS
+    nz = 1.0 / np.sqrt(1.0 + ux ** 2 + uy ** 2)
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        b = rt.RayBundle(x=h.copy(), y=y.copy(), z=np.zeros(n),
+                         L=ux * nz, M=uy * nz, N=nz, wavelength=_LAM,
+                         alive=np.ones(n, bool), opd=np.zeros(n))
+        res = rt.trace(b, surfs, _LAM)
+        ev = res.at_exit_vertex()
+    return res, res.image_rays, ev
+
+
 # ===========================================================================
 # O-1.  The projection is the identity on dead rows
 # ===========================================================================
@@ -156,50 +179,55 @@ def test_the_projection_freezes_dead_rays_and_moves_live_ones(name, backend):
             _transfers(name, backend)
         return
     _surfaces, srf, vtx = _transfers(name, backend)
-    alive = np.asarray(srf.alive, dtype=bool)
-    dead = ~alive
+    _res, img, _ev = _bundle_trace(name)
+    reached = np.asarray(img.alive, dtype=bool)
+    missed = ~reached
+    usable = np.asarray(srf.alive, dtype=bool)
 
-    assert dead.sum() >= _N_RAYS // 4, (
+    assert missed.sum() >= _N_RAYS // 4, (
         f'premise: the {name} fan at {_OVER}x the clear aperture must vignette '
         f'at least a quarter of its {_N_RAYS} rays for this test to say '
-        f'anything; only {int(dead.sum())} died.  Widen the fan or shrink the '
-        f'aperture -- do not skip.')
-    assert alive.sum() >= 8, (
-        f'premise: the {name} fan must also keep live rays (got '
-        f'{int(alive.sum())}), else the live-motion arm is vacuous.')
-    assert np.array_equal(alive, np.asarray(vtx.alive, dtype=bool)), (
+        f'anything; only {int(missed.sum())} missed the last surface.  Widen '
+        f'the fan or shrink the aperture -- do not skip.')
+    assert (reached & usable).sum() >= 8, (
+        f'premise: the {name} fan must also keep rays that reached the surface '
+        f'(got {int((reached & usable).sum())}), else the motion arm below is '
+        f'vacuous.')
+    assert np.array_equal(usable, np.asarray(vtx.alive, dtype=bool)), (
         'the projection must not change any ray\'s alive flag')
 
     for field in ('x', 'y', 'ux', 'uy', 'opd'):
-        a = _arr(getattr(srf, field))[dead]
-        b = _arr(getattr(vtx, field))[dead]
+        a = _arr(getattr(srf, field))[missed]
+        b = _arr(getattr(vtx, field))[missed]
         same = np.array_equal(a.view(np.uint64), b.view(np.uint64))
         assert same, (
-            f'{name}/{backend}: the projection moved DEAD rays\' {field} by up '
-            f'to {float(np.nanmax(np.abs(a - b))):.3e}.  A vignetted ray never '
-            f'reached the last surface, so exit_vertex_transfer freezes it '
-            f'"exactly" and this operator must agree.')
-    ja = _arr(srf.jacobian)[dead]
-    jb = _arr(vtx.jacobian)[dead]
+            f'{name}/{backend}: the projection moved rays that NEVER REACHED '
+            f'the last surface -- {field} by up to '
+            f'{float(np.nanmax(np.abs(a - b))):.3e}.  exit_vertex_transfer '
+            f'freezes such a ray "exactly" and this operator must agree.')
+    ja = _arr(srf.jacobian)[missed]
+    jb = _arr(vtx.jacobian)[missed]
     assert np.array_equal(ja.view(np.uint64), jb.view(np.uint64)), (
-        f'{name}/{backend}: the projection moved DEAD rays\' Jacobian rows by '
-        f'up to {float(np.nanmax(np.abs(ja - jb))):.3e}')
+        f'{name}/{backend}: the projection moved the Jacobian rows of rays '
+        f'that never reached the surface, by up to '
+        f'{float(np.nanmax(np.abs(ja - jb))):.3e}')
 
-    # -- the other side: the LIVE rows must still be projected ---------------
+    # -- the other side: the rows that DID reach must still be projected -----
+    m = reached
     if name == 'flat':
-        assert np.array_equal(_arr(srf.opd)[alive], _arr(vtx.opd)[alive]), (
+        assert np.array_equal(_arr(srf.opd)[m], _arr(vtx.opd)[m]), (
             'a FLAT last surface has no sag, so the projection must be the '
-            'identity on live rows too (the short-circuit)')
+            'identity on every row (the short-circuit)')
         return
-    d_opd = float(np.nanmax(np.abs(_arr(srf.opd)[alive]
-                                   - _arr(vtx.opd)[alive])))
-    d_x = float(np.nanmax(np.abs(_arr(srf.x)[alive] - _arr(vtx.x)[alive])))
+    d_opd = float(np.nanmax(np.abs(_arr(srf.opd)[m] - _arr(vtx.opd)[m])))
+    d_x = float(np.nanmax(np.abs(_arr(srf.x)[m] - _arr(vtx.x)[m])))
     assert d_opd > 100.0 * _LAM * np.finfo(float).eps, (
-        f'{name}/{backend}: the projection must still MOVE live rays; their '
-        f'opd moved only {d_opd:.3e} m.  A freeze that froze everything would '
-        f'pass the arms above and be a disabled projection.')
+        f'{name}/{backend}: the projection must still MOVE the rays that '
+        f'reached the surface; their opd moved only {d_opd:.3e} m.  A freeze '
+        f'that froze everything would pass the arms above and be a disabled '
+        f'projection.')
     assert d_x > 0.0, (
-        f'{name}/{backend}: live rays\' x did not move ({d_x:.3e} m)')
+        f'{name}/{backend}: reached rays\' x did not move ({d_x:.3e} m)')
 
 
 @pytest.mark.parametrize('name', sorted(_CLASSES))
@@ -212,33 +240,43 @@ def test_the_frozen_dead_state_is_the_ray_bundle_operators_own(name):
     bundle operator leaves behind -- on the same clipped fan.  Measured on both
     operators here rather than assumed of either.
     """
-    surfs, srf, vtx = _transfers(name, 'fd')
-    h, y, ux, uy = _fan(name)
-    n = _N_RAYS
-    nz = 1.0 / np.sqrt(1.0 + ux ** 2 + uy ** 2)
-    with warnings.catch_warnings():
-        warnings.simplefilter('ignore')
-        b = rt.RayBundle(x=h.copy(), y=y.copy(), z=np.zeros(n),
-                         L=ux * nz, M=uy * nz, N=nz, wavelength=_LAM,
-                         alive=np.ones(n, bool), opd=np.zeros(n))
-        res = rt.trace(b, surfs, _LAM)
-        ev = res.at_exit_vertex()
-    img = res.image_rays
-    bdead = ~np.asarray(img.alive, dtype=bool)
-    assert bdead.sum() > 0, (
+    _surfs_, srf, vtx = _transfers(name, 'fd')
+    _res, img, ev = _bundle_trace(name)
+    reached = np.asarray(img.alive, dtype=bool)
+    missed = ~reached
+    assert missed.sum() > 0, (
         f'premise: the {name} bundle trace must vignette some rays; none did')
+
+    # the reference operator freezes exactly the rays that missed
     for field in ('x', 'y', 'opd'):
-        a = _arr(getattr(img, field))[bdead]
-        c = _arr(getattr(ev, field))[bdead]
+        a = _arr(getattr(img, field))[missed]
+        c = _arr(getattr(ev, field))[missed]
         assert np.array_equal(a.view(np.uint64), c.view(np.uint64)), (
-            f'{name}: at_exit_vertex moved a DEAD ray\'s {field} -- the '
-            f'reference this file holds the differential projection to is '
-            f'itself broken')
-    dead = ~np.asarray(srf.alive, dtype=bool)
-    assert np.array_equal(_arr(vtx.opd)[dead].view(np.uint64),
-                          _arr(srf.opd)[dead].view(np.uint64)), (
+            f'{name}: at_exit_vertex moved a ray that never reached the '
+            f'surface ({field}) -- the reference this file holds the '
+            f'differential projection to is itself broken')
+
+    # and so does the differential one, on the SAME set
+    assert np.array_equal(_arr(vtx.opd)[missed].view(np.uint64),
+                          _arr(srf.opd)[missed].view(np.uint64)), (
         f'{name}: the differential projection and the bundle operator must '
-        f'freeze dead rays the same way')
+        f'freeze the same set of rays')
+
+    # THE SET MATTERS.  The FD backend's ``alive`` is
+    # ``base_alive & companion_alive``, so it drops rays whose FD companion
+    # bundle vignettes even though the base ray landed (VERIFY-WP-B12 O-4).
+    # Those rays DID reach the vertex plane and at_exit_vertex projects them;
+    # freezing them would put the two operators out of step in the other
+    # direction.  Where such a ray exists, the projected state must agree with
+    # at_exit_vertex -- measured 4.3e-19 m on the WP-B12 biconvex fan.
+    companion_only = reached & ~np.asarray(srf.alive, dtype=bool)
+    if companion_only.any():
+        d = float(np.nanmax(np.abs(_arr(vtx.opd)[companion_only]
+                                   - _arr(ev.opd)[companion_only])))
+        assert d < 1e-12, (
+            f'{name}: {int(companion_only.sum())} ray(s) are '
+            f'companion-dead-but-base-alive; their state must still be '
+            f'PROJECTED and agree with at_exit_vertex, got {d:.3e} m')
 
 
 def test_the_jax_twin_of_the_projection_is_the_same_map():
@@ -276,6 +314,8 @@ def test_the_jax_twin_of_the_projection_is_the_same_map():
                     ux=jnp.asarray(srf.ux), uy=jnp.asarray(srf.uy),
                     opd=jnp.asarray(srf.opd), alive=jnp.asarray(alive)),
                 surfs, _LAM, None, 'wave5e_twin')
+        # both arms default ``reached_surface`` to ``alive`` here, so the
+        # comparison is of the two namespaces and nothing else.
         for field in ('x', 'y', 'ux', 'uy', 'opd'):
             a = _arr(getattr(np_out, field))
             b = _arr(getattr(jx_out, field))

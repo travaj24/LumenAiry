@@ -17,7 +17,9 @@
    "pre_dead_djac": 0.00016718276028297285,
    "post_dead_djac": 0.0,
    "n_dead": 134,
-   "n_alive": 67
+   "n_alive": 67,
+   "freeze_set_empty": false,
+   "n_companion_only_dead": 0
   },
   {
    "fixture": "asph",
@@ -31,7 +33,9 @@
    "pre_dead_djac": 1.5283594617214873e+300,
    "post_dead_djac": 0.0,
    "n_dead": 134,
-   "n_alive": 67
+   "n_alive": 67,
+   "freeze_set_empty": false,
+   "n_companion_only_dead": 0
   },
   {
    "fixture": "asph",
@@ -45,7 +49,9 @@
    "pre_dead_djac": 0.0,
    "post_dead_djac": 0.0,
    "n_dead": 0,
-   "n_alive": 201
+   "n_alive": 201,
+   "freeze_set_empty": true,
+   "n_companion_only_dead": 0
   },
   {
    "fixture": "asph",
@@ -59,7 +65,9 @@
    "pre_dead_djac": 0.00016718276028297285,
    "post_dead_djac": 0.0,
    "n_dead": 134,
-   "n_alive": 67
+   "n_alive": 67,
+   "freeze_set_empty": false,
+   "n_companion_only_dead": 0
   },
   {
    "fixture": "bicon",
@@ -73,7 +81,9 @@
    "pre_dead_djac": 9.072690650590388e-05,
    "post_dead_djac": 0.0,
    "n_dead": 134,
-   "n_alive": 67
+   "n_alive": 67,
+   "freeze_set_empty": false,
+   "n_companion_only_dead": 0
   },
   {
    "fixture": "bicon",
@@ -101,7 +111,9 @@
    "pre_dead_djac": 9.072690650590388e-05,
    "post_dead_djac": 0.0,
    "n_dead": 134,
-   "n_alive": 67
+   "n_alive": 67,
+   "freeze_set_empty": false,
+   "n_companion_only_dead": 0
   },
   {
    "fixture": "menisc",
@@ -115,7 +127,9 @@
    "pre_dead_djac": 1.3670637623428811e-05,
    "post_dead_djac": 0.0,
    "n_dead": 134,
-   "n_alive": 67
+   "n_alive": 67,
+   "freeze_set_empty": false,
+   "n_companion_only_dead": 0
   },
   {
    "fixture": "menisc",
@@ -129,7 +143,9 @@
    "pre_dead_djac": 0.017706610787983523,
    "post_dead_djac": 0.0,
    "n_dead": 134,
-   "n_alive": 67
+   "n_alive": 67,
+   "freeze_set_empty": false,
+   "n_companion_only_dead": 0
   },
   {
    "fixture": "menisc",
@@ -143,7 +159,9 @@
    "pre_dead_djac": 0.0,
    "post_dead_djac": 0.0,
    "n_dead": 0,
-   "n_alive": 201
+   "n_alive": 201,
+   "freeze_set_empty": true,
+   "n_companion_only_dead": 0
   },
   {
    "fixture": "menisc",
@@ -157,7 +175,9 @@
    "pre_dead_djac": 1.3670637623428811e-05,
    "post_dead_djac": 0.0,
    "n_dead": 134,
-   "n_alive": 67
+   "n_alive": 67,
+   "freeze_set_empty": false,
+   "n_companion_only_dead": 0
   },
   {
    "fixture": "doublet",
@@ -171,7 +191,9 @@
    "pre_dead_djac": 2.467749647202111e-05,
    "post_dead_djac": 0.0,
    "n_dead": 134,
-   "n_alive": 67
+   "n_alive": 67,
+   "freeze_set_empty": false,
+   "n_companion_only_dead": 0
   },
   {
    "fixture": "doublet",
@@ -185,7 +207,9 @@
    "pre_dead_djac": 0.03079276361137251,
    "post_dead_djac": 0.0,
    "n_dead": 134,
-   "n_alive": 67
+   "n_alive": 67,
+   "freeze_set_empty": false,
+   "n_companion_only_dead": 0
   },
   {
    "fixture": "doublet",
@@ -199,7 +223,9 @@
    "pre_dead_djac": 0.0,
    "post_dead_djac": 0.0,
    "n_dead": 0,
-   "n_alive": 201
+   "n_alive": 201,
+   "freeze_set_empty": true,
+   "n_companion_only_dead": 0
   },
   {
    "fixture": "doublet",
@@ -213,7 +239,9 @@
    "pre_dead_djac": 2.467749647202111e-05,
    "post_dead_djac": 0.0,
    "n_dead": 134,
-   "n_alive": 67
+   "n_alive": 67,
+   "freeze_set_empty": false,
+   "n_companion_only_dead": 0
   },
   {
    "fixture": "oblique",
@@ -227,7 +255,9 @@
    "pre_dead_djac": 5.369245712578734e-05,
    "post_dead_djac": 0.0,
    "n_dead": 134,
-   "n_alive": 67
+   "n_alive": 67,
+   "freeze_set_empty": false,
+   "n_companion_only_dead": 0
   },
   {
    "fixture": "oblique",
@@ -241,7 +271,9 @@
    "pre_dead_djac": 0.11002136058826817,
    "post_dead_djac": 0.0,
    "n_dead": 134,
-   "n_alive": 67
+   "n_alive": 67,
+   "freeze_set_empty": false,
+   "n_companion_only_dead": 0
   },
   {
    "fixture": "oblique",
@@ -255,7 +287,9 @@
    "pre_dead_djac": 0.0,
    "post_dead_djac": 0.0,
    "n_dead": 0,
-   "n_alive": 201
+   "n_alive": 201,
+   "freeze_set_empty": true,
+   "n_companion_only_dead": 0
   },
   {
    "fixture": "oblique",
@@ -269,7 +303,9 @@
    "pre_dead_djac": 5.369245712578734e-05,
    "post_dead_djac": 0.0,
    "n_dead": 134,
-   "n_alive": 67
+   "n_alive": 67,
+   "freeze_set_empty": false,
+   "n_companion_only_dead": 0
   },
   {
    "fixture": "mirror",
@@ -283,7 +319,9 @@
    "pre_dead_djac": 0.0759793729573437,
    "post_dead_djac": 0.0,
    "n_dead": 134,
-   "n_alive": 67
+   "n_alive": 67,
+   "freeze_set_empty": false,
+   "n_companion_only_dead": 0
   },
   {
    "fixture": "mirror",
@@ -297,7 +335,9 @@
    "pre_dead_djac": 0.07597936421242002,
    "post_dead_djac": 0.0,
    "n_dead": 134,
-   "n_alive": 67
+   "n_alive": 67,
+   "freeze_set_empty": false,
+   "n_companion_only_dead": 0
   },
   {
    "fixture": "mirror",
@@ -311,7 +351,9 @@
    "pre_dead_djac": 0.0,
    "post_dead_djac": 0.0,
    "n_dead": 0,
-   "n_alive": 201
+   "n_alive": 201,
+   "freeze_set_empty": true,
+   "n_companion_only_dead": 0
   },
   {
    "fixture": "mirror",
@@ -325,7 +367,9 @@
    "pre_dead_djac": 0.0759793729573437,
    "post_dead_djac": 0.0,
    "n_dead": 134,
-   "n_alive": 67
+   "n_alive": 67,
+   "freeze_set_empty": false,
+   "n_companion_only_dead": 0
   },
   {
    "fixture": "flat_planoconvex",
@@ -339,7 +383,9 @@
    "pre_dead_djac": 0.0,
    "post_dead_djac": 0.0,
    "n_dead": 134,
-   "n_alive": 67
+   "n_alive": 67,
+   "freeze_set_empty": false,
+   "n_companion_only_dead": 0
   },
   {
    "fixture": "flat_planoconvex",
@@ -353,7 +399,9 @@
    "pre_dead_djac": 0.0,
    "post_dead_djac": 0.0,
    "n_dead": 134,
-   "n_alive": 67
+   "n_alive": 67,
+   "freeze_set_empty": false,
+   "n_companion_only_dead": 0
   },
   {
    "fixture": "flat_planoconvex",
@@ -367,7 +415,9 @@
    "pre_dead_djac": 0.0,
    "post_dead_djac": 0.0,
    "n_dead": 0,
-   "n_alive": 201
+   "n_alive": 201,
+   "freeze_set_empty": true,
+   "n_companion_only_dead": 0
   },
   {
    "fixture": "flat_planoconvex",
@@ -381,7 +431,9 @@
    "pre_dead_djac": 0.0,
    "post_dead_djac": 0.0,
    "n_dead": 134,
-   "n_alive": 67
+   "n_alive": 67,
+   "freeze_set_empty": false,
+   "n_companion_only_dead": 0
   },
   {
    "fixture": "flat_pair",
@@ -395,7 +447,9 @@
    "pre_dead_djac": 0.0,
    "post_dead_djac": 0.0,
    "n_dead": 134,
-   "n_alive": 67
+   "n_alive": 67,
+   "freeze_set_empty": false,
+   "n_companion_only_dead": 0
   },
   {
    "fixture": "flat_pair",
@@ -409,7 +463,9 @@
    "pre_dead_djac": 0.0,
    "post_dead_djac": 0.0,
    "n_dead": 134,
-   "n_alive": 67
+   "n_alive": 67,
+   "freeze_set_empty": false,
+   "n_companion_only_dead": 0
   },
   {
    "fixture": "flat_pair",
@@ -423,7 +479,9 @@
    "pre_dead_djac": 0.0,
    "post_dead_djac": 0.0,
    "n_dead": 0,
-   "n_alive": 201
+   "n_alive": 201,
+   "freeze_set_empty": true,
+   "n_companion_only_dead": 0
   },
   {
    "fixture": "flat_pair",
@@ -437,11 +495,14 @@
    "pre_dead_djac": 0.0,
    "post_dead_djac": 0.0,
    "n_dead": 134,
-   "n_alive": 67
+   "n_alive": 67,
+   "freeze_set_empty": false,
+   "n_companion_only_dead": 0
   }
  ],
  "n_cells": 30,
  "all_alive_bits_identical": true,
+ "n_cells_vacuous": 7,
  "all_post_frozen": true,
  "n_pre_unfrozen": 17,
  "max_pre_dead_dopd": 0.00018713807648118065,
