@@ -282,7 +282,21 @@ def test_set_low_memory_aggressive_dtype_roundtrip():
 def test_set_low_memory_restores_user_customizations():
     """audit P3-46: priors are captured from the LIVE getters (auto-promote
     was hardcoded True) and set_low_memory(False) restores the captured
-    values, not shipped defaults."""
+    values, not shipped defaults.
+
+    PREMISE, asserted as a fact (5.47.1): no enable is on record when this
+    test starts.  Release run 34939783790 (py3.13, shard 6/8) read
+    ``8 == 16`` here because an earlier test in the shard had undone
+    ``set_low_memory(True)`` through ``_knobs.restore()``, which left the
+    macro's stash in place; a shard that also held this file's round-trip
+    test consumed the stale stash first and passed.  The stash is now a
+    registered knob, so ``restore()`` clears it; if it is ever set here
+    again the message names the leak instead of a bare number.
+    """
+    assert m._LOW_MEMORY_PRIOR is None, (
+        'an earlier test in this process left set_low_memory(True) on '
+        f'record (stash {m._LOW_MEMORY_PRIOR!r}); it must be undone by '
+        'set_low_memory(False) or lumenairy._knobs.restore()')
     la.set_fft_auto_promote(False)      # e.g. byte-reproducibility pin
     la.set_fft_plan_cache_size(16)
     try:
@@ -300,6 +314,41 @@ def test_set_low_memory_restores_user_customizations():
         # planner into the rest of the worker.
         la.set_fft_auto_promote(False)
         la.set_fft_plan_cache_size(8)
+
+
+def test_registry_restore_undoes_the_low_memory_macro_including_its_stash():
+    """DECISION (5.47.1, release run 34939783790 shard 6/8): undoing
+    ``set_low_memory(True)`` through ``lumenairy._knobs.restore()`` must leave
+    NO enable on record, so that a fresh enable/disable cycle afterwards
+    restores the caller's own live values.
+
+    Fail-before (pre-fix tree, both builds): ``restore()`` put the four knobs
+    back but left ``memory._LOW_MEMORY_PRIOR`` set to the first-enable
+    snapshot (plan cache 8); the next enable kept it and the next disable
+    restored 8 over the caller's 16 -- the shard-dependent ``8 == 16`` the
+    release verification read.  Two-sided: the stash IS set while the macro
+    is on (the macro still stashes), and is None after ``restore()``."""
+    from lumenairy import _knobs
+    assert m._LOW_MEMORY_PRIOR is None, m._LOW_MEMORY_PRIOR
+    assert 'low_memory_prior' in _knobs.knobs()
+    state = _knobs.snapshot()
+    try:
+        la.set_low_memory(True)
+        assert m._LOW_MEMORY_PRIOR is not None
+        assert la.get_fft_plan_cache_size() == 2
+        _knobs.restore(state)
+        assert m._LOW_MEMORY_PRIOR is None, (
+            'restore() left the low-memory stash in place')
+        assert la.get_fft_plan_cache_size() == state['fft_plan_cache_size']
+        la.set_fft_plan_cache_size(16)
+        la.set_low_memory(True)
+        assert la.get_fft_plan_cache_size() == 2
+        la.set_low_memory(False)
+        assert la.get_fft_plan_cache_size() == 16, (
+            'the disable restored a stale stash instead of the live value')
+    finally:
+        la.set_low_memory(False)   # idempotent: no stash -> shipped defaults
+        _knobs.restore(state)
 
 
 def test_set_low_memory_repeated_enable_keeps_first_prior():

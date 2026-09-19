@@ -211,13 +211,22 @@ jobs:
   # fast matrix covers the interpreter axis), single-threaded BLAS for the
   # eig-heavy convergence tests, balanced by the same ``.test_durations``.
   verify-slow:
-    name: Verify tag -- slow lane, shard ${{ matrix.shard }}/5
+    name: Verify tag -- slow lane, shard ${{ matrix.shard }}/8
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    # 2026-09-15 (5.47.1): 5 -> 8 shards and a 45-min step cap, mirroring
+    # unit-tests.yml's slow-tests job (Wave-5 item D resized THAT lane after
+    # run 34914295323 killed all five slow shards at 1 800 s, but this lane
+    # was not resized with it).  On the v5.47.0 tag (run 34939783790) the
+    # 5-shard slow lane's shard 1 timed out at the 30-min step cap while the
+    # same commit's 8-shard main-matrix slow shards ran 1 263-1 428 s; the
+    # publish run therefore never reached the build/upload jobs.  ``shard:``
+    # and ``--splits`` below MUST stay equal (pytest-split never runs the
+    # trailing groups of a matrix shorter than ``--splits``).
+    timeout-minutes: 50
     strategy:
       fail-fast: true
       matrix:
-        shard: [1, 2, 3, 4, 5]
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -235,7 +244,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[fft,perf,numba,hdf5,zarr,dev]"
 
-      - name: Run slow tests (release tag verification, shard ${{ matrix.shard }}/5)
+      - name: Run slow tests (release tag verification, shard ${{ matrix.shard }}/8)
         env:
           # Same rationale as unit-tests.yml's slow job: the eig-heavy EME
           # vector convergence tests resolve near-threshold modes whose
@@ -248,10 +257,10 @@ jobs:
         run: |
           python -m pytest tests/unit -m "slow and not integration" --tb=short \
             -p no:cacheprovider --maxfail=10 \
-            --splits 5 --group ${{ matrix.shard }} \
+            --splits 8 --group ${{ matrix.shard }} \
             --splitting-algorithm least_duration \
             --durations-path .test_durations
-        timeout-minutes: 30
+        timeout-minutes: 45
 
   build:
     name: Build sdist + wheel

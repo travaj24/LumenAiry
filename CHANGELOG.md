@@ -4,6 +4,56 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+## [5.47.1] — 2026-09-15
+
+The publish verification of the `v5.47.0` tag (run 34939783790) stopped before the
+build and upload jobs, so 5.47.0 exists as a GitHub release but was never published
+to PyPI.  5.47.1 is 5.47.0 plus the two repairs that run needed; no solver answer
+moves.  A caller upgrading from 5.45.1 gets everything the `## [5.47.0]` and
+`## [5.46.0]` blocks below describe.
+
+### Fixed -- memory: `lumenairy._knobs.restore()` now undoes `set_low_memory(True)` completely, so one test's low-memory stash cannot decide a later test's disable
+
+`set_low_memory(True)` stashes the FIRST-enable snapshot in `memory._LOW_MEMORY_PRIOR`
+(so a repeated enable cannot overwrite the true prior with low-memory values) and
+`set_low_memory(False)` restores and clears it.  The knob registry's `restore()` put
+the four knobs the macro flips back but knew nothing of the stash, so a caller who
+undid the macro through `restore()` left the stash in place; the NEXT
+`set_low_memory(True)` in the process kept that stale stash and the next
+`set_low_memory(False)` restored ITS values over the caller's live ones.
+
+That is what the release verification read: on the py3.13 fast-lane shard 6/8,
+`tests/unit/test_audit2609_a16_lens_arch.py::test_set_low_memory_is_now_fully_covered_by_snapshot_restore`
+(which undoes the macro through `restore()`) ran before
+`tests/unit/test_memory_guardrail.py::test_set_low_memory_restores_user_customizations`,
+which set the plan cache to 16, enabled, disabled and read **8** (`assert 8 == 16`).
+The same commit's five-shard main matrix was green because there the guardrail file's
+own round-trip test sat in the same shard and consumed the stale stash first.  A
+decision that moves with the shard composition is a defect, not a flake.
+
+* The stash is now the registered knob **`low_memory_prior`** (getter returns a copy
+  or `None`, setter assigns), so `snapshot()` records it and `restore()` clears it.
+  `lumenairy.override(...)`, the suite's autouse restore fixture and every caller of
+  `restore()` therefore undo the macro completely.  `set_low_memory` itself is
+  unchanged.
+* `test_memory_guardrail.py::test_set_low_memory_restores_user_customizations` asserts
+  its premise as a fact (no enable on record) with a message that names the leak;
+  the a16 test asserts the stash is set while the macro is on and `None` after
+  `restore()`; the new
+  `test_memory_guardrail.py::test_registry_restore_undoes_the_low_memory_macro_including_its_stash`
+  is the fail-before (`8 == 16` on the pre-fix tree, reproduced locally by running
+  the two ids above in one process).
+
+### Fixed -- CI: the publish workflow's slow lane is sized like the main workflow's (8 shards, 45-minute step cap)
+
+Wave-5 item D resized `unit-tests.yml`'s slow lane from 5 to 8 shards with a 45-minute
+step cap after run 34914295323 killed all five slow shards at 1 800 s, but
+`publish.yml`'s `verify-slow` job kept 5 shards and the 30-minute cap.  On the
+`v5.47.0` tag its shard 1 timed out at 30 minutes while the same commit's 8-shard
+main-matrix slow shards ran 1 263-1 428 s, and `fail-fast` cancelled the rest.  The
+job now mirrors the main lane: `shard: [1..8]`, `--splits 8`, step cap 45 min, job cap
+50 min, with the sizing arithmetic in the workflow comment.
+
 ## [5.47.0] — 2026-09-14
 
 This release is the fourth wave of the 2026-09-11 adversarial audit's remediation
