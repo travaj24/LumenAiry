@@ -461,11 +461,17 @@ Recommendation 1 (D5, medium confidence): bound the BOOTSTRAP instead.  One
 sentinel task ahead of the chunks with its own timeout, proposed at 600 s (ten
 times the loudest healthy reading on record, a 45 to 56 s cold call on a loaded
 box; 1600x to 1900x the measured cold sentinel).  Healthy cost 0.7 ms per
-dispatch; a `TimeoutError` is an `OSError`, which the existing infrastructure
-clause already routes to the bit-identical serial rung.  What it does NOT close:
-a pool that answers the sentinel and then wedges on a later chunk.  That
-residual is the maintainer's to accept or to close with a per-chunk deadline
-(which is a default that changes the failure mode on every traced-lens call).
+dispatch (0.06 % of a warm N = 1024 dispatch on Windows, 2.1 % on WSL under
+load, per the verification).  CORRECTED by VERIFY-WP-B13-FOLLOWUPS: the
+timeout class is an `OSError` only from Python 3.11; on 3.10, which this
+library supports and CI runs, the pre-3.11 class escapes the existing
+infrastructure clause, so any sentinel must name the timeout class in that
+clause explicitly.  What the sentinel does NOT close, measured on both builds:
+a pool that answers the sentinel and then wedges on a later chunk still runs
+past any deadline.  That residual is the maintainer's to accept or to close
+with a per-chunk deadline (which is a default that changes the failure mode on
+every traced-lens call).  A release note written from the shipped state must
+say: on a wedged pool the computation is saved and the process is not.
 
 Recommendation 2 (D6, the shape is not what was expected): daemonising the
 reaper thread through `atexit` was prototyped and measured on a natural WSL
