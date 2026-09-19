@@ -1,0 +1,67 @@
+{
+ "root": "C:\\tmp\\lum_ve",
+ "py_files_walked": 236,
+ "n_product_sites": 7,
+ "n_named": 7,
+ "n_constant": 0,
+ "n_unnamed": 0,
+ "unnamed": [],
+ "all_sites": [
+  {
+   "file": "lumenairy/propagators/asm.py",
+   "line": 1391,
+   "dispatcher": "_fft2",
+   "dispatcher_side": "left",
+   "other_operand_kind": "NAMED",
+   "src": "_fft2(np.fft.ifftshift(E_demod)) * H"
+  },
+  {
+   "file": "lumenairy/propagators/asm.py",
+   "line": 1147,
+   "dispatcher": "_fft2_nd",
+   "dispatcher_side": "left",
+   "other_operand_kind": "NAMED",
+   "src": "_fft2_nd(xp.fft.ifftshift(E_stack, axes=(-2, -1))) * H[None, :, :]"
+  },
+  {
+   "file": "lumenairy/propagators/asm.py",
+   "line": 922,
+   "dispatcher": "_fft2",
+   "dispatcher_side": "left",
+   "other_operand_kind": "NAMED",
+   "src": "_fft2(np.fft.ifftshift(E_in)) * H"
+  },
+  {
+   "file": "lumenairy/propagators/asm.py",
+   "line": 919,
+   "dispatcher": "_fft2",
+   "dispatcher_side": "left",
+   "other_operand_kind": "NAMED",
+   "src": "_fft2(E_in) * H"
+  },
+  {
+   "file": "lumenairy/propagators/carrier.py",
+   "line": 1401,
+   "dispatcher": "_fft2",
+   "dispatcher_side": "left",
+   "other_operand_kind": "NAMED",
+   "src": "_fft2(E) * H"
+  },
+  {
+   "file": "lumenairy/propagators/carrier.py",
+   "line": 7126,
+   "dispatcher": "_fft2",
+   "dispatcher_side": "left",
+   "other_operand_kind": "NAMED",
+   "src": "_fft2(_e) * ramp"
+  },
+  {
+   "file": "lumenairy/propagators/fresnel.py",
+   "line": 216,
+   "dispatcher": "_fft2",
+   "dispatcher_side": "left",
+   "other_operand_kind": "NAMED",
+   "src": "_fft2(np.ascontiguousarray(E_in, dtype=np.complex128)) * H"
+  }
+ ]
+}

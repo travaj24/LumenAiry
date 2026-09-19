@@ -1,0 +1,127 @@
+{
+ "lumenairy_file": "/mnt/c/tmp/lum_ve/lumenairy/__init__.py",
+ "python": "3.12.3",
+ "platform": "linux",
+ "numpy": "2.4.6",
+ "fftw_min_size": 256,
+ "cells": [
+  {
+   "n": 256,
+   "entry": "angular_spectrum_propagate",
+   "digest_on": "bc7f9a965ad9e0c2",
+   "digest_off": "bc7f9a965ad9e0c2",
+   "identical": true
+  },
+  {
+   "n": 256,
+   "entry": "angular_spectrum_propagate(bandlimit=False)",
+   "digest_on": "1b10d8e3a2d4cab2",
+   "digest_off": "1b10d8e3a2d4cab2",
+   "identical": true
+  },
+  {
+   "n": 256,
+   "entry": "fresnel_propagate",
+   "digest_on": "8dd2d20a5a84fac6",
+   "digest_off": "8dd2d20a5a84fac6",
+   "identical": true
+  },
+  {
+   "n": 256,
+   "entry": "carrier._exact_envelope_tf_step",
+   "digest_on": "688670a41927414a",
+   "digest_off": "688670a41927414a",
+   "identical": true
+  },
+  {
+   "n": 512,
+   "entry": "angular_spectrum_propagate",
+   "digest_on": "5877ab4cab8021b6",
+   "digest_off": "5877ab4cab8021b6",
+   "identical": true
+  },
+  {
+   "n": 512,
+   "entry": "angular_spectrum_propagate(bandlimit=False)",
+   "digest_on": "ddb6271b64c10ca3",
+   "digest_off": "ddb6271b64c10ca3",
+   "identical": true
+  },
+  {
+   "n": 512,
+   "entry": "fresnel_propagate",
+   "digest_on": "ae16f148bd27571c",
+   "digest_off": "ae16f148bd27571c",
+   "identical": true
+  },
+  {
+   "n": 512,
+   "entry": "carrier._exact_envelope_tf_step",
+   "digest_on": "e5c6d52971e0e164",
+   "digest_off": "e5c6d52971e0e164",
+   "identical": true
+  },
+  {
+   "n": 1024,
+   "entry": "angular_spectrum_propagate",
+   "digest_on": "df6fdb59bd6c27ee",
+   "digest_off": "df6fdb59bd6c27ee",
+   "identical": true
+  },
+  {
+   "n": 1024,
+   "entry": "angular_spectrum_propagate(bandlimit=False)",
+   "digest_on": "b3d1ada4066db78f",
+   "digest_off": "b3d1ada4066db78f",
+   "identical": true
+  },
+  {
+   "n": 1024,
+   "entry": "fresnel_propagate",
+   "digest_on": "4286a3873c33d6f5",
+   "digest_off": "4286a3873c33d6f5",
+   "identical": true
+  },
+  {
+   "n": 1024,
+   "entry": "carrier._exact_envelope_tf_step",
+   "digest_on": "33b6ce000d033235",
+   "digest_off": "33b6ce000d033235",
+   "identical": true
+  }
+ ],
+ "caller": [
+  {
+   "owndata": false,
+   "rel_elided_vs_named": 3.2770002906014907e-16,
+   "n_differ_doubles": 104212,
+   "n_doubles": 131072,
+   "rel_explicit_vs_named": 0.0,
+   "explicit_matches_named": true,
+   "elided_matches_named": false,
+   "n": 256
+  },
+  {
+   "owndata": false,
+   "rel_elided_vs_named": 3.797910673734641e-16,
+   "n_differ_doubles": 425215,
+   "n_doubles": 524288,
+   "rel_explicit_vs_named": 0.0,
+   "explicit_matches_named": true,
+   "elided_matches_named": false,
+   "n": 512
+  },
+  {
+   "owndata": false,
+   "rel_elided_vs_named": 3.915480814938695e-16,
+   "n_differ_doubles": 1727262,
+   "n_doubles": 2097152,
+   "rel_explicit_vs_named": 0.0,
+   "explicit_matches_named": true,
+   "elided_matches_named": false,
+   "n": 1024
+  }
+ ],
+ "n_cells": 12,
+ "n_identical": 12
+}

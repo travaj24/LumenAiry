@@ -1,0 +1,36 @@
+### mutation matrix  (linux_312)  root=/mnt/c/tmp/lum_ve_mut2
+== identity
+45 passed in 77.17s (0:01:17)
+== e5_unfreeze [tests/unit/test_wave5_e_exit_vertex_dead_rays.py]
+9 failed, 20 passed in 41.04s
+== e5_unfreeze [tests/unit/test_audit2609_b12_fga_reference_plane.py tests/unit/test_verify_b12_fga_reference_plane.py]
+18 passed in 60.81s (0:01:00)
+== e5_freeze_everything [tests/unit/test_wave5_e_exit_vertex_dead_rays.py]
+14 failed, 15 passed in 40.38s
+== e5_round1_alive [tests/unit/test_wave5_e_exit_vertex_dead_rays.py]
+5 failed, 24 passed in 37.56s
+== e5_round1_alive [tests/unit/test_audit2609_b12_fga_reference_plane.py tests/unit/test_verify_b12_fga_reference_plane.py]
+7 failed, 11 passed in 59.59s
+== e5_tol_drop_z [tests/unit/test_wave5_e_exit_vertex_dead_rays.py]
+29 passed in 45.94s
+== e5_guard_off_at_coarse [tests/unit/test_wave5_e_exit_vertex_dead_rays.py]
+29 passed in 41.89s
+== e1_unnamed_right_operand [tests/unit/test_wave5_e_fft_elision.py]
+2 failed, 10 passed, 2 warnings in 7.07s
+== e1_privatise_dispatchers [tests/unit/test_wave5_e_fft_elision.py]
+1 failed, 11 passed in 7.54s
+== e1_drop_scope_sentence [tests/unit/test_wave5_e_fft_elision.py]
+1 failed, 11 passed in 6.92s
+== e2_bound_disabled [tests/unit/test_wave5_e_c8_default_order.py]
+4 failed in 168.55s (0:02:48)
+== e2_annuli_reversed [tests/unit/test_wave5_e_c8_default_order.py]
+2 failed, 2 passed in 37.42s
+== e2_stimulus_dead [tests/unit/test_wave5_e_c8_default_order.py]
+4 skipped in 175.99s (0:02:55)
+== e2_stimulus_dead,e2_control_weak [tests/unit/test_wave5_e_c8_default_order.py]
+4 failed in 134.97s (0:02:14)
+reverted 5 files
+== e5_guard_off_at_through_lens [tests/unit/test_wave5_e_exit_vertex_dead_rays.py]
+1 failed, 28 passed in 40.86s
+== e5_guard_off_at_coarse,e5_guard_off_at_through_lens [tests/unit/test_wave5_e_exit_vertex_dead_rays.py]
+2 failed, 27 passed in 44.81s

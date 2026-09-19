@@ -1,0 +1,60 @@
+{
+ "lumenairy_file": "/mnt/c/tmp/lum_ve/lumenairy/__init__.py",
+ "python": "3.12.3",
+ "platform": "linux",
+ "numpy": "2.4.6",
+ "coretype": "KATMAI",
+ "threads": {
+  "OMP_NUM_THREADS": "4",
+  "OPENBLAS_NUM_THREADS": "4",
+  "MKL_NUM_THREADS": "4"
+ },
+ "threadpools": [
+  {
+   "prefix": "libscipy_openblas",
+   "arch": "Katmai",
+   "threads": 4,
+   "version": "0.3.31.188.0"
+  }
+ ],
+ "results": [
+  {
+   "fixture": "pinned",
+   "r_none": 1.7777776632517497,
+   "r_power": 1.77777766325175,
+   "r_peak": 1.7777776632517495,
+   "ulp": 2.220446049250313e-16,
+   "r_in": 1.777777777777778,
+   "dev_from_input": -6.442089084401914e-08,
+   "delta_power_ulp": 1.0,
+   "delta_peak_ulp": 1.0,
+   "products_ulp": 5.333332989755249,
+   "reduction_ulp": 3.173042088590851,
+   "bar_ulp": 34.0255003133844,
+   "indep_ulp": 515779373.0,
+   "indep_over_bar": 15158612.459758926,
+   "bar_over_widest_reading": 34.0255003133844,
+   "power_total": 1693.2769789255067,
+   "none_over_power": 28.461185742344483
+  },
+  {
+   "fixture": "mine",
+   "r_none": 6.317747924281458,
+   "r_power": 6.31774792428146,
+   "r_peak": 6.317747924281459,
+   "ulp": 8.881784197001252e-16,
+   "r_in": 6.317750182615048,
+   "dev_from_input": -3.574585135668329e-07,
+   "delta_power_ulp": 2.0,
+   "delta_peak_ulp": 1.0,
+   "products_ulp": 4.7383109432110935,
+   "reduction_ulp": 2.106026895776004,
+   "bar_ulp": 27.37735135594839,
+   "indep_ulp": 2542657580.0,
+   "indep_over_bar": 92874491.28812625,
+   "bar_over_widest_reading": 13.688675677974196,
+   "power_total": 1647.996801570544,
+   "none_over_power": 61.82467354945806
+  }
+ ]
+}
