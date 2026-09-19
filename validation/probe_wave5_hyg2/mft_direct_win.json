@@ -1,0 +1,2220 @@
+{
+ "env": {
+  "FFTW_THREADS": 8,
+  "PYFFTW_AVAILABLE": true,
+  "SCIPY_FFT_WORKERS": -1,
+  "USE_PYFFTW": true,
+  "USE_SCIPY_FFT": true,
+  "build": "WIN-py3.14",
+  "extend": true,
+  "get_fft_threads": 8,
+  "lumenairy": "5.47.0",
+  "lumenairy_file": "C:\\tmp\\lum_hyg2\\lumenairy\\__init__.py",
+  "numpy": "2.4.4",
+  "platform": "win32",
+  "python": "3.14.6",
+  "quick": false,
+  "registered_cache_clearers": 22,
+  "reps": 5,
+  "scipy": "1.17.1",
+  "threads_env": {
+   "MKL_NUM_THREADS": "1",
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1"
+  },
+  "tree": "C:\\tmp\\lum_hyg2"
+ },
+ "extension": [
+  {
+   "M": 1024,
+   "N": 1024,
+   "analytic_bytes": 419430400,
+   "method": "bluestein",
+   "seconds_cold": 0.39004269998986274,
+   "tracemalloc_peak_bytes_cold": 553893791
+  },
+  {
+   "M": 1024,
+   "N": 1024,
+   "analytic_bytes": 100663296,
+   "method": "separable",
+   "seconds_cold": 0.3596589000080712,
+   "tracemalloc_peak_bytes_cold": 84004768
+  },
+  {
+   "M": 1024,
+   "N": 1024,
+   "analytic_bytes": 75497472,
+   "method": "direct",
+   "seconds_cold": 0.596493199991528,
+   "tracemalloc_peak_bytes_cold": 67111696
+  },
+  {
+   "M": 512,
+   "N": 2048,
+   "analytic_bytes": 696254464,
+   "method": "bluestein",
+   "seconds_cold": 0.7370828000130132,
+   "tracemalloc_peak_bytes_cold": 906272671
+  },
+  {
+   "M": 512,
+   "N": 2048,
+   "analytic_bytes": 251658240,
+   "method": "separable",
+   "seconds_cold": 0.35174580005696043,
+   "tracemalloc_peak_bytes_cold": 167919296
+  },
+  {
+   "M": 512,
+   "N": 2048,
+   "analytic_bytes": 62914560,
+   "method": "direct",
+   "seconds_cold": 0.7090988999698311,
+   "tracemalloc_peak_bytes_cold": 58743128
+  },
+  {
+   "M": 1024,
+   "N": 2048,
+   "analytic_bytes": 973078528,
+   "method": "bluestein",
+   "seconds_cold": 0.8743751000147313,
+   "tracemalloc_peak_bytes_cold": 1275428767
+  },
+  {
+   "M": 1024,
+   "N": 2048,
+   "analytic_bytes": 301989888,
+   "method": "separable",
+   "seconds_cold": 0.4840818999800831,
+   "tracemalloc_peak_bytes_cold": 201502400
+  },
+  {
+   "M": 1024,
+   "N": 2048,
+   "analytic_bytes": 134217728,
+   "method": "direct",
+   "seconds_cold": 1.427554699999746,
+   "tracemalloc_peak_bytes_cold": 117467480
+  },
+  {
+   "M": 1448,
+   "N": 1448,
+   "analytic_bytes": 843136000,
+   "method": "bluestein",
+   "seconds_cold": 1.5587398000061512,
+   "tracemalloc_peak_bytes_cold": 1113340063
+  },
+  {
+   "M": 1448,
+   "N": 1448,
+   "analytic_bytes": 201839616,
+   "method": "separable",
+   "seconds_cold": 0.5898700000252575,
+   "tracemalloc_peak_bytes_cold": 168273440
+  },
+  {
+   "M": 1448,
+   "N": 1448,
+   "analytic_bytes": 150962688,
+   "method": "direct",
+   "seconds_cold": 1.4957174000446685,
+   "tracemalloc_peak_bytes_cold": 134191888
+  }
+ ],
+ "phase_budget": {
+  "budget_1e12": {
+   "alpha": 1736111111.1111112,
+   "bluestein_rel_L2_vs_ref": 0.0001916965004687394,
+   "bluestein_warned": [],
+   "direct_rel_L2_vs_ref": 3.6520919166711195e-16,
+   "direct_warned": [],
+   "phase_budget": 1000000000000.0
+  },
+  "budget_1e15": {
+   "alpha": 1736111111111.111,
+   "bluestein_rel_L2_vs_ref": 0.24661331023528574,
+   "bluestein_warned": [],
+   "direct_rel_L2_vs_ref": 3.5173883019189075e-16,
+   "direct_warned": [],
+   "phase_budget": 1000000000000000.0
+  },
+  "budget_1e17": {
+   "alpha": 173611111111111.12,
+   "bluestein_rel_L2_vs_ref": 1.5571109805759944,
+   "bluestein_warned": [
+    "Bluestein chirp phase argument ~1.0e+17 approaches float64 precision limit (1e15"
+   ],
+   "direct_rel_L2_vs_ref": 3.656999898288029e-16,
+   "direct_warned": [],
+   "phase_budget": 1e+17
+  },
+  "nominal": {
+   "alpha": 0.015625,
+   "bluestein_rel_L2_vs_ref": 1.9719170163540865e-15,
+   "bluestein_warned": [],
+   "direct_rel_L2_vs_ref": 3.7338326014400633e-16,
+   "direct_warned": [],
+   "phase_budget": 9.0
+  }
+ },
+ "shapes": [
+  {
+   "M": 32,
+   "N": 64,
+   "analytic_bytes": 950272,
+   "max_abs_rel_vs_bluestein": 0.0,
+   "method": "bluestein",
+   "rel_L2_vs_bluestein": 0.0,
+   "seconds_cold": 0.0008504000143148005,
+   "seconds_cold_all": [
+    0.0008504000143148005,
+    0.001046599994879216,
+    0.0011896999785676599,
+    0.0010717999539338052,
+    0.0009253000025637448
+   ],
+   "seconds_warm": 0.0003662999952211976,
+   "seconds_warm_all": [
+    0.0004346999921835959,
+    0.00040690001333132386,
+    0.0003727999865077436,
+    0.0003662999952211976,
+    0.00036720000207424164
+   ],
+   "tracemalloc_peak_bytes_cold": 1116813,
+   "tracemalloc_peak_bytes_warm": 817749
+  },
+  {
+   "M": 32,
+   "N": 64,
+   "analytic_bytes": 294912,
+   "max_abs_rel_vs_bluestein": 5.835077179011277e-16,
+   "method": "separable",
+   "rel_L2_vs_bluestein": 5.817670802872483e-16,
+   "seconds_cold": 0.0005557999829761684,
+   "seconds_cold_all": [
+    0.000672800000756979,
+    0.0006142000202089548,
+    0.0005557999829761684,
+    0.0005624999757856131,
+    0.0006443000165745616
+   ],
+   "seconds_warm": 0.0003723000409081578,
+   "seconds_warm_all": [
+    0.0003874000394716859,
+    0.0003768999595195055,
+    0.000375300005543977,
+    0.00037919997703284025,
+    0.0003723000409081578
+   ],
+   "tracemalloc_peak_bytes_cold": 239072,
+   "tracemalloc_peak_bytes_warm": 237264
+  },
+  {
+   "M": 32,
+   "N": 64,
+   "analytic_bytes": 131072,
+   "max_abs_rel_vs_bluestein": 1.3113319404705425e-15,
+   "method": "direct",
+   "rel_L2_vs_bluestein": 1.360382415989047e-15,
+   "seconds_cold": 0.00034909998066723347,
+   "seconds_cold_all": [
+    0.0005740000051446259,
+    0.00037080002948641777,
+    0.0004414000432007015,
+    0.0005306000239215791,
+    0.00034909998066723347
+   ],
+   "seconds_warm": 0.0002657999866642058,
+   "seconds_warm_all": [
+    0.0061713000177405775,
+    0.0003774000215344131,
+    0.00028709997422993183,
+    0.0002832000027410686,
+    0.0002657999866642058
+   ],
+   "tracemalloc_peak_bytes_cold": 118840,
+   "tracemalloc_peak_bytes_warm": 117848
+  },
+  {
+   "M": 64,
+   "N": 64,
+   "analytic_bytes": 1638400,
+   "max_abs_rel_vs_bluestein": 0.0,
+   "method": "bluestein",
+   "rel_L2_vs_bluestein": 0.0,
+   "seconds_cold": 0.0016537999617867172,
+   "seconds_cold_all": [
+    0.0024773000041022897,
+    0.004108899971470237,
+    0.002355500007979572,
+    0.0016537999617867172,
+    0.0018838000250980258
+   ],
+   "seconds_warm": 0.0005230000242590904,
+   "seconds_warm_all": [
+    0.00058970000827685,
+    0.0005453000194393098,
+    0.0005230000242590904,
+    0.000547699979506433,
+    0.000548899988643825
+   ],
+   "tracemalloc_peak_bytes_cold": 1923213,
+   "tracemalloc_peak_bytes_warm": 1394821
+  },
+  {
+   "M": 64,
+   "N": 64,
+   "analytic_bytes": 393216,
+   "max_abs_rel_vs_bluestein": 4.536936085318912e-16,
+   "method": "separable",
+   "rel_L2_vs_bluestein": 5.545890060826644e-16,
+   "seconds_cold": 0.0005715999868698418,
+   "seconds_cold_all": [
+    0.0008376000332646072,
+    0.0005715999868698418,
+    0.0008096999954432249,
+    0.0010170000023208559,
+    0.0008064999710768461
+   ],
+   "seconds_warm": 0.0005390999722294509,
+   "seconds_warm_all": [
+    0.0011704000062309206,
+    0.0005609000218100846,
+    0.0005390999722294509,
+    0.0005936000379733741,
+    0.0005413000471889973
+   ],
+   "tracemalloc_peak_bytes_cold": 405240,
+   "tracemalloc_peak_bytes_warm": 403216
+  },
+  {
+   "M": 64,
+   "N": 64,
+   "analytic_bytes": 294912,
+   "max_abs_rel_vs_bluestein": 2.584077534083014e-15,
+   "method": "direct",
+   "rel_L2_vs_bluestein": 1.8633753310594914e-15,
+   "seconds_cold": 0.0005747999530285597,
+   "seconds_cold_all": [
+    0.0008331999997608364,
+    0.0008672000258229673,
+    0.0006813000072725117,
+    0.0005747999530285597,
+    0.0006568999961018562
+   ],
+   "seconds_warm": 0.0004973000031895936,
+   "seconds_warm_all": [
+    0.0005185999907553196,
+    0.0005122000002302229,
+    0.0005774999735876918,
+    0.0005252999835647643,
+    0.0004973000031895936
+   ],
+   "tracemalloc_peak_bytes_cold": 264872,
+   "tracemalloc_peak_bytes_warm": 263752
+  },
+  {
+   "M": 128,
+   "N": 64,
+   "analytic_bytes": 3604480,
+   "max_abs_rel_vs_bluestein": 0.0,
+   "method": "bluestein",
+   "rel_L2_vs_bluestein": 0.0,
+   "seconds_cold": 0.0037662999820895493,
+   "seconds_cold_all": [
+    0.011520000000018626,
+    0.019771499966736883,
+    0.0037662999820895493,
+    0.023359999991953373,
+    0.01634830003604293
+   ],
+   "seconds_warm": 0.0025813999818637967,
+   "seconds_warm_all": [
+    0.0027230000123381615,
+    0.002702699974179268,
+    0.0029178999830037355,
+    0.0025813999818637967,
+    0.006798200018238276
+   ],
+   "tracemalloc_peak_bytes_cold": 4290805,
+   "tracemalloc_peak_bytes_warm": 3107005
+  },
+  {
+   "M": 128,
+   "N": 64,
+   "analytic_bytes": 1179648,
+   "max_abs_rel_vs_bluestein": 5.437353451604935e-16,
+   "method": "separable",
+   "rel_L2_vs_bluestein": 6.022804017530953e-16,
+   "seconds_cold": 0.001581299991812557,
+   "seconds_cold_all": [
+    0.020359800022561103,
+    0.001581299991812557,
+    0.0018714999896474183,
+    0.0025880999746732414,
+    0.0023721999605186284
+   ],
+   "seconds_warm": 0.0009549999958835542,
+   "seconds_warm_all": [
+    0.0010916999890469015,
+    0.0009549999958835542,
+    0.0010328000062145293,
+    0.0010334000107832253,
+    0.0009831999777816236
+   ],
+   "tracemalloc_peak_bytes_cold": 1064184,
+   "tracemalloc_peak_bytes_warm": 1062160
+  },
+  {
+   "M": 128,
+   "N": 64,
+   "analytic_bytes": 720896,
+   "max_abs_rel_vs_bluestein": 9.058131487823618e-15,
+   "method": "direct",
+   "rel_L2_vs_bluestein": 4.816210689508164e-15,
+   "seconds_cold": 0.0011907999869436026,
+   "seconds_cold_all": [
+    0.001696400053333491,
+    0.0014746999950148165,
+    0.0013088000123389065,
+    0.0012221999932080507,
+    0.0011907999869436026
+   ],
+   "seconds_warm": 0.0009436000254936516,
+   "seconds_warm_all": [
+    0.0010408999514766037,
+    0.0010116000194102526,
+    0.0009561000042594969,
+    0.0009436000254936516,
+    0.0009495000122115016
+   ],
+   "tracemalloc_peak_bytes_cold": 658088,
+   "tracemalloc_peak_bytes_warm": 656968
+  },
+  {
+   "M": 256,
+   "N": 64,
+   "analytic_bytes": 9895936,
+   "max_abs_rel_vs_bluestein": 0.0,
+   "method": "bluestein",
+   "rel_L2_vs_bluestein": 0.0,
+   "seconds_cold": 0.012179799959994853,
+   "seconds_cold_all": [
+    0.012842900003306568,
+    0.016894000000320375,
+    0.012179799959994853,
+    0.012303699972108006,
+    0.015052100003231317
+   ],
+   "seconds_warm": 0.005714699975214899,
+   "seconds_warm_all": [
+    0.006293000013101846,
+    0.005714699975214899,
+    0.007148600008804351,
+    0.007047299994155765,
+    0.005881399963982403
+   ],
+   "tracemalloc_peak_bytes_cold": 13815767,
+   "tracemalloc_peak_bytes_warm": 5611149
+  },
+  {
+   "M": 256,
+   "N": 64,
+   "analytic_bytes": 3932160,
+   "max_abs_rel_vs_bluestein": 7.519488281562995e-16,
+   "method": "separable",
+   "rel_L2_vs_bluestein": 7.375477216920694e-16,
+   "seconds_cold": 0.003303400008007884,
+   "seconds_cold_all": [
+    0.005547499982640147,
+    0.003303400008007884,
+    0.004550300014670938,
+    0.004279299988411367,
+    0.003673099970910698
+   ],
+   "seconds_warm": 0.0034187999553978443,
+   "seconds_warm_all": [
+    0.0034187999553978443,
+    0.003729899995960295,
+    0.003828899993095547,
+    0.003954700019676238,
+    0.00412319996394217
+   ],
+   "tracemalloc_peak_bytes_cold": 2906392,
+   "tracemalloc_peak_bytes_warm": 2904336
+  },
+  {
+   "M": 256,
+   "N": 64,
+   "analytic_bytes": 1966080,
+   "max_abs_rel_vs_bluestein": 6.200754216818823e-14,
+   "method": "direct",
+   "rel_L2_vs_bluestein": 2.2989346014707106e-14,
+   "seconds_cold": 0.0021087999921292067,
+   "seconds_cold_all": [
+    0.0021087999921292067,
+    0.0030401999829337,
+    0.00318100000731647,
+    0.002899100014474243,
+    0.002242600021418184
+   ],
+   "seconds_warm": 0.0024105000193230808,
+   "seconds_warm_all": [
+    0.0024105000193230808,
+    0.002712499990593642,
+    0.002766299992799759,
+    0.002682299993466586,
+    0.0027911000070162117
+   ],
+   "tracemalloc_peak_bytes_cold": 1837736,
+   "tracemalloc_peak_bytes_warm": 1836616
+  },
+  {
+   "M": 512,
+   "N": 64,
+   "analytic_bytes": 31916032,
+   "max_abs_rel_vs_bluestein": 0.0,
+   "method": "bluestein",
+   "rel_L2_vs_bluestein": 0.0,
+   "seconds_cold": 0.02337810001336038,
+   "seconds_cold_all": [
+    0.035673499980475754,
+    0.030915700015611947,
+    0.024409900011960417,
+    0.02337810001336038,
+    0.02685399999609217
+   ],
+   "seconds_warm": 0.014807300001848489,
+   "seconds_warm_all": [
+    0.014807300001848489,
+    0.020876599999610335,
+    0.019920999999158084,
+    0.019100399978924543,
+    0.016733900003600866
+   ],
+   "tracemalloc_peak_bytes_cold": 45826007,
+   "tracemalloc_peak_bytes_warm": 19271309
+  },
+  {
+   "M": 512,
+   "N": 64,
+   "analytic_bytes": 14155776,
+   "max_abs_rel_vs_bluestein": 7.950241228852529e-16,
+   "method": "separable",
+   "rel_L2_vs_bluestein": 7.86010687074406e-16,
+   "seconds_cold": 0.010496300004888326,
+   "seconds_cold_all": [
+    0.016701499989721924,
+    0.013529199990443885,
+    0.010496300004888326,
+    0.01220249995822087,
+    0.01574800000526011
+   ],
+   "seconds_warm": 0.012650699994992465,
+   "seconds_warm_all": [
+    0.012650699994992465,
+    0.014277200039941818,
+    0.017788600001949817,
+    0.014657899970188737,
+    0.020967999997083098
+   ],
+   "tracemalloc_peak_bytes_cold": 9997632,
+   "tracemalloc_peak_bytes_warm": 9995576
+  },
+  {
+   "M": 512,
+   "N": 64,
+   "analytic_bytes": 6029312,
+   "max_abs_rel_vs_bluestein": 2.065852391834641e-13,
+   "method": "direct",
+   "rel_L2_vs_bluestein": 9.340578193120836e-14,
+   "seconds_cold": 0.006396599987056106,
+   "seconds_cold_all": [
+    0.011453000013716519,
+    0.006396599987056106,
+    0.008189600019250065,
+    0.009212800010573119,
+    0.007747399969957769
+   ],
+   "seconds_warm": 0.0067903000162914395,
+   "seconds_warm_all": [
+    0.007386699959170073,
+    0.0067903000162914395,
+    0.007017900003120303,
+    0.00796080002328381,
+    0.00791630003368482
+   ],
+   "tracemalloc_peak_bytes_cold": 5769896,
+   "tracemalloc_peak_bytes_warm": 5768776
+  },
+  {
+   "M": 32,
+   "N": 128,
+   "analytic_bytes": 2719744,
+   "max_abs_rel_vs_bluestein": 0.0,
+   "method": "bluestein",
+   "rel_L2_vs_bluestein": 0.0,
+   "seconds_cold": 0.002203000010922551,
+   "seconds_cold_all": [
+    0.0029767999658361077,
+    0.004557200009003282,
+    0.0029762000194750726,
+    0.002203000010922551,
+    0.0034474999993108213
+   ],
+   "seconds_warm": 0.0009230999858118594,
+   "seconds_warm_all": [
+    0.0010759999859146774,
+    0.0009592000278644264,
+    0.0009360000258311629,
+    0.0009256000048480928,
+    0.0009230999858118594
+   ],
+   "tracemalloc_peak_bytes_cold": 3155597,
+   "tracemalloc_peak_bytes_warm": 2332293
+  },
+  {
+   "M": 32,
+   "N": 128,
+   "analytic_bytes": 983040,
+   "max_abs_rel_vs_bluestein": 6.932388024306032e-16,
+   "method": "separable",
+   "rel_L2_vs_bluestein": 5.955991537257777e-16,
+   "seconds_cold": 0.001112000027205795,
+   "seconds_cold_all": [
+    0.0012730999733321369,
+    0.001768499962054193,
+    0.001112000027205795,
+    0.0013627999578602612,
+    0.0013110999716445804
+   ],
+   "seconds_warm": 0.000549200049135834,
+   "seconds_warm_all": [
+    0.0008270000107586384,
+    0.0008256000000983477,
+    0.0007509000133723021,
+    0.002169500046875328,
+    0.000549200049135834
+   ],
+   "tracemalloc_peak_bytes_cold": 734176,
+   "tracemalloc_peak_bytes_warm": 732368
+  },
+  {
+   "M": 32,
+   "N": 128,
+   "analytic_bytes": 245760,
+   "max_abs_rel_vs_bluestein": 4.8595945240185534e-15,
+   "method": "direct",
+   "rel_L2_vs_bluestein": 4.599437047229731e-15,
+   "seconds_cold": 0.000519900000654161,
+   "seconds_cold_all": [
+    0.000519900000654161,
+    0.0010294999810867012,
+    0.0008008999866433442,
+    0.0008352000149898231,
+    0.0006957000005058944
+   ],
+   "seconds_warm": 0.0005048000020906329,
+   "seconds_warm_all": [
+    0.0005135000101290643,
+    0.0005136000108905137,
+    0.0005132000078447163,
+    0.0005067000165581703,
+    0.0005048000020906329
+   ],
+   "tracemalloc_peak_bytes_cold": 234040,
+   "tracemalloc_peak_bytes_warm": 233048
+  },
+  {
+   "M": 64,
+   "N": 128,
+   "analytic_bytes": 3801088,
+   "max_abs_rel_vs_bluestein": 0.0,
+   "method": "bluestein",
+   "rel_L2_vs_bluestein": 0.0,
+   "seconds_cold": 0.005413600010797381,
+   "seconds_cold_all": [
+    0.005800099985208362,
+    0.015854199999012053,
+    0.00723170000128448,
+    0.014898199995514005,
+    0.005413600010797381
+   ],
+   "seconds_warm": 0.0030809000018052757,
+   "seconds_warm_all": [
+    0.0030809000018052757,
+    0.014937100000679493,
+    0.004789200029335916,
+    0.003926499979570508,
+    0.0035912999883294106
+   ],
+   "tracemalloc_peak_bytes_cold": 4420749,
+   "tracemalloc_peak_bytes_warm": 3236997
+  },
+  {
+   "M": 64,
+   "N": 128,
+   "analytic_bytes": 1179648,
+   "max_abs_rel_vs_bluestein": 7.383478656569114e-16,
+   "method": "separable",
+   "rel_L2_vs_bluestein": 6.250641247120691e-16,
+   "seconds_cold": 0.0012583999778144062,
+   "seconds_cold_all": [
+    0.0017061999533325434,
+    0.001998899970203638,
+    0.016460099956020713,
+    0.0012583999778144062,
+    0.0013078000047244132
+   ],
+   "seconds_warm": 0.0008287999662570655,
+   "seconds_warm_all": [
+    0.0009691000450402498,
+    0.0009539000457152724,
+    0.0009056000271812081,
+    0.0008767999825067818,
+    0.0008287999662570655
+   ],
+   "tracemalloc_peak_bytes_cold": 801816,
+   "tracemalloc_peak_bytes_warm": 799792
+  },
+  {
+   "M": 64,
+   "N": 128,
+   "analytic_bytes": 524288,
+   "max_abs_rel_vs_bluestein": 6.009553767969135e-15,
+   "method": "direct",
+   "rel_L2_vs_bluestein": 5.045903483886609e-15,
+   "seconds_cold": 0.001115799997933209,
+   "seconds_cold_all": [
+    0.0013322000158950686,
+    0.001115799997933209,
+    0.004611800017300993,
+    0.0014489000313915312,
+    0.002211799961514771
+   ],
+   "seconds_warm": 0.0010628000018186867,
+   "seconds_warm_all": [
+    0.0013906999956816435,
+    0.0013303000014275312,
+    0.0013829999952577055,
+    0.0010628000018186867,
+    0.0012233000015839934
+   ],
+   "tracemalloc_peak_bytes_cold": 463672,
+   "tracemalloc_peak_bytes_warm": 462680
+  },
+  {
+   "M": 128,
+   "N": 128,
+   "analytic_bytes": 6553600,
+   "max_abs_rel_vs_bluestein": 0.0,
+   "method": "bluestein",
+   "rel_L2_vs_bluestein": 0.0,
+   "seconds_cold": 0.0066704999771900475,
+   "seconds_cold_all": [
+    0.01813510002102703,
+    0.010186699975747615,
+    0.019425000005867332,
+    0.0066704999771900475,
+    0.016367999953217804
+   ],
+   "seconds_warm": 0.0050546000129543245,
+   "seconds_warm_all": [
+    0.0050546000129543245,
+    0.00852360000135377,
+    0.005875100032426417,
+    0.005988100019749254,
+    0.010739400051534176
+   ],
+   "tracemalloc_peak_bytes_cold": 8694975,
+   "tracemalloc_peak_bytes_warm": 3440413
+  },
+  {
+   "M": 128,
+   "N": 128,
+   "analytic_bytes": 1572864,
+   "max_abs_rel_vs_bluestein": 7.918727763773404e-16,
+   "method": "separable",
+   "rel_L2_vs_bluestein": 6.983386696046662e-16,
+   "seconds_cold": 0.001547000021673739,
+   "seconds_cold_all": [
+    0.002701599965803325,
+    0.001547000021673739,
+    0.0023407000117003918,
+    0.002298199979122728,
+    0.0021477999980561435
+   ],
+   "seconds_warm": 0.0012188999680802226,
+   "seconds_warm_all": [
+    0.001324900018516928,
+    0.0013158000074326992,
+    0.0012623999500647187,
+    0.0012263000244274735,
+    0.0012188999680802226
+   ],
+   "tracemalloc_peak_bytes_cold": 1329912,
+   "tracemalloc_peak_bytes_warm": 1327888
+  },
+  {
+   "M": 128,
+   "N": 128,
+   "analytic_bytes": 1179648,
+   "max_abs_rel_vs_bluestein": 1.626499524576645e-14,
+   "method": "direct",
+   "rel_L2_vs_bluestein": 7.364980514427358e-15,
+   "seconds_cold": 0.002202400006353855,
+   "seconds_cold_all": [
+    0.0026826999965123832,
+    0.013986899983137846,
+    0.002578600018750876,
+    0.0022204999695532024,
+    0.002202400006353855
+   ],
+   "seconds_warm": 0.00179280003067106,
+   "seconds_warm_all": [
+    0.0018500000005587935,
+    0.0018380999681539834,
+    0.0018085999763570726,
+    0.00179280003067106,
+    0.0019397999858483672
+   ],
+   "tracemalloc_peak_bytes_cold": 1051304,
+   "tracemalloc_peak_bytes_warm": 1050184
+  },
+  {
+   "M": 256,
+   "N": 128,
+   "analytic_bytes": 14417920,
+   "max_abs_rel_vs_bluestein": 0.0,
+   "method": "bluestein",
+   "rel_L2_vs_bluestein": 0.0,
+   "seconds_cold": 0.011008899949956685,
+   "seconds_cold_all": [
+    0.01274189999094233,
+    0.024395500018727034,
+    0.011110300023574382,
+    0.01744020002661273,
+    0.011008899949956685
+   ],
+   "seconds_warm": 0.004591999982949346,
+   "seconds_warm_all": [
+    0.004591999982949346,
+    0.004992100002709776,
+    0.006146799947600812,
+    0.008317300002090633,
+    0.005027599981985986
+   ],
+   "tracemalloc_peak_bytes_cold": 19195743,
+   "tracemalloc_peak_bytes_warm": 7386909
+  },
+  {
+   "M": 256,
+   "N": 128,
+   "analytic_bytes": 4718592,
+   "max_abs_rel_vs_bluestein": 8.849312852442812e-16,
+   "method": "separable",
+   "rel_L2_vs_bluestein": 7.776752398441611e-16,
+   "seconds_cold": 0.004173399996943772,
+   "seconds_cold_all": [
+    0.004875799990259111,
+    0.005129900004249066,
+    0.004739099997095764,
+    0.01223059999756515,
+    0.004173399996943772
+   ],
+   "seconds_warm": 0.0033001999836415052,
+   "seconds_warm_all": [
+    0.005479599989484996,
+    0.00342989998171106,
+    0.0033001999836415052,
+    0.009024999977555126,
+    0.003387400007341057
+   ],
+   "tracemalloc_peak_bytes_cold": 3695424,
+   "tracemalloc_peak_bytes_warm": 3693368
+  },
+  {
+   "M": 256,
+   "N": 128,
+   "analytic_bytes": 2883584,
+   "max_abs_rel_vs_bluestein": 5.695740485524973e-14,
+   "method": "direct",
+   "rel_L2_vs_bluestein": 2.3170348752006792e-14,
+   "seconds_cold": 0.005887299950700253,
+   "seconds_cold_all": [
+    0.007648399972822517,
+    0.006722699967212975,
+    0.006600400025490671,
+    0.006154500006232411,
+    0.005887299950700253
+   ],
+   "seconds_warm": 0.005453000019770116,
+   "seconds_warm_all": [
+    0.0056779999868012965,
+    0.005654300039168447,
+    0.005672900006175041,
+    0.005453000019770116,
+    0.005889000021852553
+   ],
+   "tracemalloc_peak_bytes_cold": 2624168,
+   "tracemalloc_peak_bytes_warm": 2623048
+  },
+  {
+   "M": 512,
+   "N": 128,
+   "analytic_bytes": 39583744,
+   "max_abs_rel_vs_bluestein": 0.0,
+   "method": "bluestein",
+   "rel_L2_vs_bluestein": 0.0,
+   "seconds_cold": 0.029086399998050183,
+   "seconds_cold_all": [
+    0.03184389998205006,
+    0.029086399998050183,
+    0.031019099988043308,
+    0.036009900039061904,
+    0.03450399998109788
+   ],
+   "seconds_warm": 0.021371699986048043,
+   "seconds_warm_all": [
+    0.028277100005652755,
+    0.023633900040294975,
+    0.021371699986048043,
+    0.024096400011330843,
+    0.02429649996338412
+   ],
+   "tracemalloc_peak_bytes_cold": 54746071,
+   "tracemalloc_peak_bytes_warm": 21965453
+  },
+  {
+   "M": 512,
+   "N": 128,
+   "analytic_bytes": 15728640,
+   "max_abs_rel_vs_bluestein": 8.882913555867607e-16,
+   "method": "separable",
+   "rel_L2_vs_bluestein": 7.523022159972779e-16,
+   "seconds_cold": 0.01910360000329092,
+   "seconds_cold_all": [
+    0.01910360000329092,
+    0.02079420001246035,
+    0.02143290004460141,
+    0.019623300002422184,
+    0.02297799999359995
+   ],
+   "seconds_warm": 0.016245399951003492,
+   "seconds_warm_all": [
+    0.018387500022072345,
+    0.016245399951003492,
+    0.020362499984912574,
+    0.016291199950501323,
+    0.024162899993825704
+   ],
+   "tracemalloc_peak_bytes_cold": 11574080,
+   "tracemalloc_peak_bytes_warm": 11572024
+  },
+  {
+   "M": 512,
+   "N": 128,
+   "analytic_bytes": 7864320,
+   "max_abs_rel_vs_bluestein": 3.004417466947379e-13,
+   "method": "direct",
+   "rel_L2_vs_bluestein": 8.983652479876112e-14,
+   "seconds_cold": 0.01857780001591891,
+   "seconds_cold_all": [
+    0.021854399994481355,
+    0.01857780001591891,
+    0.03304860001662746,
+    0.02028470003278926,
+    0.02195889997528866
+   ],
+   "seconds_warm": 0.01549600000726059,
+   "seconds_warm_all": [
+    0.023596499988343567,
+    0.02365099999587983,
+    0.026179399981629103,
+    0.01549600000726059,
+    0.019959299999754876
+   ],
+   "tracemalloc_peak_bytes_cold": 7342760,
+   "tracemalloc_peak_bytes_warm": 7341640
+  },
+  {
+   "M": 32,
+   "N": 256,
+   "analytic_bytes": 9011200,
+   "max_abs_rel_vs_bluestein": 0.0,
+   "method": "bluestein",
+   "rel_L2_vs_bluestein": 0.0,
+   "seconds_cold": 0.008251999970525503,
+   "seconds_cold_all": [
+    0.008316099992953241,
+    0.008251999970525503,
+    0.014353399979881942,
+    0.008718900033272803,
+    0.008310000004712492
+   ],
+   "seconds_warm": 0.002919199992902577,
+   "seconds_warm_all": [
+    0.0031776000396348536,
+    0.0031589000136591494,
+    0.0033144999761134386,
+    0.002919199992902577,
+    0.0076496999827213585
+   ],
+   "tracemalloc_peak_bytes_cold": 11713887,
+   "tracemalloc_peak_bytes_warm": 5065963
+  },
+  {
+   "M": 32,
+   "N": 256,
+   "analytic_bytes": 3538944,
+   "max_abs_rel_vs_bluestein": 9.152598414646225e-16,
+   "method": "separable",
+   "rel_L2_vs_bluestein": 8.240220962167201e-16,
+   "seconds_cold": 0.0029423999949358404,
+   "seconds_cold_all": [
+    0.0032254999969154596,
+    0.00863029999891296,
+    0.0029423999949358404,
+    0.0042038000538013875,
+    0.0036904000444337726
+   ],
+   "seconds_warm": 0.0027495999820530415,
+   "seconds_warm_all": [
+    0.00289060000795871,
+    0.0030289999558590353,
+    0.0027495999820530415,
+    0.003047600039280951,
+    0.002883800014387816
+   ],
+   "tracemalloc_peak_bytes_cold": 2379808,
+   "tracemalloc_peak_bytes_warm": 2377936
+  },
+  {
+   "M": 32,
+   "N": 256,
+   "analytic_bytes": 475136,
+   "max_abs_rel_vs_bluestein": 2.4886169345639835e-14,
+   "method": "direct",
+   "rel_L2_vs_bluestein": 2.3859584039085165e-14,
+   "seconds_cold": 0.001369300007354468,
+   "seconds_cold_all": [
+    0.0016311000217683613,
+    0.00164899998344481,
+    0.001559399999678135,
+    0.0016003999626263976,
+    0.001369300007354468
+   ],
+   "seconds_warm": 0.0009657000191509724,
+   "seconds_warm_all": [
+    0.001047800004016608,
+    0.0009657000191509724,
+    0.0010012999991886318,
+    0.0011331000132486224,
+    0.0011795999598689377
+   ],
+   "tracemalloc_peak_bytes_cold": 464440,
+   "tracemalloc_peak_bytes_warm": 463448
+  },
+  {
+   "M": 64,
+   "N": 256,
+   "analytic_bytes": 10878976,
+   "max_abs_rel_vs_bluestein": 0.0,
+   "method": "bluestein",
+   "rel_L2_vs_bluestein": 0.0,
+   "seconds_cold": 0.007518599973991513,
+   "seconds_cold_all": [
+    0.011177100008353591,
+    0.019384299986995757,
+    0.017379600030835718,
+    0.008930600015446544,
+    0.007518599973991513
+   ],
+   "seconds_warm": 0.0036960000288672745,
+   "seconds_warm_all": [
+    0.0036960000288672745,
+    0.0041868999833241105,
+    0.004083999956492335,
+    0.011149000027216971,
+    0.003704700036905706
+   ],
+   "tracemalloc_peak_bytes_cold": 14207839,
+   "tracemalloc_peak_bytes_warm": 6003435
+  },
+  {
+   "M": 64,
+   "N": 256,
+   "analytic_bytes": 3932160,
+   "max_abs_rel_vs_bluestein": 8.090273546862334e-16,
+   "method": "separable",
+   "rel_L2_vs_bluestein": 7.284587957704153e-16,
+   "seconds_cold": 0.003045200021006167,
+   "seconds_cold_all": [
+    0.0041584999999031425,
+    0.003208200039807707,
+    0.003045200021006167,
+    0.003111800004262477,
+    0.0030589000089094043
+   ],
+   "seconds_warm": 0.002356500015594065,
+   "seconds_warm_all": [
+    0.0029147000168450177,
+    0.0024283999809995294,
+    0.002356500015594065,
+    0.002931700029876083,
+    0.010064299975056201
+   ],
+   "tracemalloc_peak_bytes_cold": 2643040,
+   "tracemalloc_peak_bytes_warm": 2640984
+  },
+  {
+   "M": 64,
+   "N": 256,
+   "analytic_bytes": 983040,
+   "max_abs_rel_vs_bluestein": 2.120693592116502e-14,
+   "method": "direct",
+   "rel_L2_vs_bluestein": 2.2810762080300816e-14,
+   "seconds_cold": 0.0021775999921374023,
+   "seconds_cold_all": [
+    0.0027746999985538423,
+    0.002455200010444969,
+    0.0021775999921374023,
+    0.007410999969579279,
+    0.0025573999737389386
+   ],
+   "seconds_warm": 0.002145599981304258,
+   "seconds_warm_all": [
+    0.002145599981304258,
+    0.0023170000058598816,
+    0.0023164000012911856,
+    0.002270099997986108,
+    0.004266800009645522
+   ],
+   "tracemalloc_peak_bytes_cold": 922296,
+   "tracemalloc_peak_bytes_warm": 921304
+  },
+  {
+   "M": 128,
+   "N": 256,
+   "analytic_bytes": 15204352,
+   "max_abs_rel_vs_bluestein": 0.0,
+   "method": "bluestein",
+   "rel_L2_vs_bluestein": 0.0,
+   "seconds_cold": 0.009944300050847232,
+   "seconds_cold_all": [
+    0.019862999964971095,
+    0.012956900056451559,
+    0.009944300050847232,
+    0.018786400032695383,
+    0.020372400002088398
+   ],
+   "seconds_warm": 0.005773899960331619,
+   "seconds_warm_all": [
+    0.01640150003368035,
+    0.006281799986027181,
+    0.005773899960331619,
+    0.009725600015372038,
+    0.006494700035545975
+   ],
+   "tracemalloc_peak_bytes_cold": 19982175,
+   "tracemalloc_peak_bytes_warm": 8173341
+  },
+  {
+   "M": 128,
+   "N": 256,
+   "analytic_bytes": 4718592,
+   "max_abs_rel_vs_bluestein": 8.917256486959183e-16,
+   "method": "separable",
+   "rel_L2_vs_bluestein": 7.971488598265978e-16,
+   "seconds_cold": 0.006080400024075061,
+   "seconds_cold_all": [
+    0.006158200034406036,
+    0.007411700033117086,
+    0.006504699995275587,
+    0.006889000011142343,
+    0.006080400024075061
+   ],
+   "seconds_warm": 0.005101399961858988,
+   "seconds_warm_all": [
+    0.005101399961858988,
+    0.010119699989445508,
+    0.006265299976803362,
+    0.005984400049783289,
+    0.01180249999742955
+   ],
+   "tracemalloc_peak_bytes_cold": 3170912,
+   "tracemalloc_peak_bytes_warm": 3168856
+  },
+  {
+   "M": 128,
+   "N": 256,
+   "analytic_bytes": 2097152,
+   "max_abs_rel_vs_bluestein": 2.366119061024757e-14,
+   "method": "direct",
+   "rel_L2_vs_bluestein": 2.2784110840221026e-14,
+   "seconds_cold": 0.004837199987377971,
+   "seconds_cold_all": [
+    0.006180100026540458,
+    0.004837199987377971,
+    0.005867799976840615,
+    0.005544000014197081,
+    0.008737600001040846
+   ],
+   "seconds_warm": 0.004302699991967529,
+   "seconds_warm_all": [
+    0.004302699991967529,
+    0.004311600001528859,
+    0.006492800021078438,
+    0.010567799967247993,
+    0.01063939998857677
+   ],
+   "tracemalloc_peak_bytes_cold": 1840312,
+   "tracemalloc_peak_bytes_warm": 1839320
+  },
+  {
+   "M": 256,
+   "N": 256,
+   "analytic_bytes": 26214400,
+   "max_abs_rel_vs_bluestein": 0.0,
+   "method": "bluestein",
+   "rel_L2_vs_bluestein": 0.0,
+   "seconds_cold": 0.02473390003433451,
+   "seconds_cold_all": [
+    0.032135399989783764,
+    0.02737690001958981,
+    0.04882200004067272,
+    0.02916380000533536,
+    0.02473390003433451
+   ],
+   "seconds_warm": 0.011274699994828552,
+   "seconds_warm_all": [
+    0.021675399970263243,
+    0.01979109999956563,
+    0.011274699994828552,
+    0.05480709997937083,
+    0.01638200000161305
+   ],
+   "tracemalloc_peak_bytes_cold": 34676575,
+   "tracemalloc_peak_bytes_warm": 13692701
+  },
+  {
+   "M": 256,
+   "N": 256,
+   "analytic_bytes": 6291456,
+   "max_abs_rel_vs_bluestein": 8.071821856575234e-16,
+   "method": "separable",
+   "rel_L2_vs_bluestein": 7.243473199101081e-16,
+   "seconds_cold": 0.009507999988272786,
+   "seconds_cold_all": [
+    0.009507999988272786,
+    0.01338790002046153,
+    0.013860100007150322,
+    0.012974600016605109,
+    0.01938799995696172
+   ],
+   "seconds_warm": 0.011490200005937368,
+   "seconds_warm_all": [
+    0.011623500031419098,
+    0.013022099970839918,
+    0.014219100004993379,
+    0.011490200005937368,
+    0.01346039999043569
+   ],
+   "tracemalloc_peak_bytes_cold": 5275456,
+   "tracemalloc_peak_bytes_warm": 5273400
+  },
+  {
+   "M": 256,
+   "N": 256,
+   "analytic_bytes": 4718592,
+   "max_abs_rel_vs_bluestein": 7.715171407772759e-14,
+   "method": "direct",
+   "rel_L2_vs_bluestein": 3.356358142956195e-14,
+   "seconds_cold": 0.01221880002412945,
+   "seconds_cold_all": [
+    0.01221880002412945,
+    0.014222600031644106,
+    0.01449589995900169,
+    0.01652740000281483,
+    0.012810999993234873
+   ],
+   "seconds_warm": 0.011032500013243407,
+   "seconds_warm_all": [
+    0.015325299988035113,
+    0.016138800012413412,
+    0.011032500013243407,
+    0.015311499999370426,
+    0.01625889999559149
+   ],
+   "tracemalloc_peak_bytes_cold": 4197032,
+   "tracemalloc_peak_bytes_warm": 4195912
+  },
+  {
+   "M": 512,
+   "N": 256,
+   "analytic_bytes": 57671680,
+   "max_abs_rel_vs_bluestein": 0.0,
+   "method": "bluestein",
+   "rel_L2_vs_bluestein": 0.0,
+   "seconds_cold": 0.07472440000856295,
+   "seconds_cold_all": [
+    0.08532439998816699,
+    0.08135210000909865,
+    0.07472440000856295,
+    0.08091820002300665,
+    0.09189100004732609
+   ],
+   "seconds_warm": 0.042370300041511655,
+   "seconds_warm_all": [
+    0.04333539999788627,
+    0.042370300041511655,
+    0.06032899999991059,
+    0.04651519999606535,
+    0.04803800000809133
+   ],
+   "tracemalloc_peak_bytes_cold": 76648287,
+   "tracemalloc_peak_bytes_warm": 29450013
+  },
+  {
+   "M": 512,
+   "N": 256,
+   "analytic_bytes": 18874368,
+   "max_abs_rel_vs_bluestein": 8.5671883426398e-16,
+   "method": "separable",
+   "rel_L2_vs_bluestein": 8.161346866427821e-16,
+   "seconds_cold": 0.02767919999314472,
+   "seconds_cold_all": [
+    0.03321960003813729,
+    0.044484300015028566,
+    0.0441387000028044,
+    0.02767919999314472,
+    0.032541099993977696
+   ],
+   "seconds_warm": 0.027389499999117106,
+   "seconds_warm_all": [
+    0.027389499999117106,
+    0.027850700018461794,
+    0.03191799996420741,
+    0.03002760000526905,
+    0.034054099989589304
+   ],
+   "tracemalloc_peak_bytes_cold": 14726976,
+   "tracemalloc_peak_bytes_warm": 14724920
+  },
+  {
+   "M": 512,
+   "N": 256,
+   "analytic_bytes": 11534336,
+   "max_abs_rel_vs_bluestein": 2.385623392421479e-13,
+   "method": "direct",
+   "rel_L2_vs_bluestein": 9.100929586090588e-14,
+   "seconds_cold": 0.030131200037430972,
+   "seconds_cold_all": [
+    0.031857999972999096,
+    0.03398850001394749,
+    0.03037440002663061,
+    0.030131200037430972,
+    0.03582500002812594
+   ],
+   "seconds_warm": 0.03045579994795844,
+   "seconds_warm_all": [
+    0.030893900024238974,
+    0.03045579994795844,
+    0.0371508999960497,
+    0.03217689995653927,
+    0.03450100001646206
+   ],
+   "tracemalloc_peak_bytes_cold": 10488488,
+   "tracemalloc_peak_bytes_warm": 10487368
+  },
+  {
+   "M": 32,
+   "N": 512,
+   "analytic_bytes": 33234304,
+   "max_abs_rel_vs_bluestein": 0.0,
+   "method": "bluestein",
+   "rel_L2_vs_bluestein": 0.0,
+   "seconds_cold": 0.018579100025817752,
+   "seconds_cold_all": [
+    0.019062000035773963,
+    0.02043740003136918,
+    0.018579100025817752,
+    0.025189400010276586,
+    0.019128700019791722
+   ],
+   "seconds_warm": 0.011610899993684143,
+   "seconds_warm_all": [
+    0.01257000002078712,
+    0.016114899946842343,
+    0.013471700018271804,
+    0.011610899993684143,
+    0.0179643000010401
+   ],
+   "tracemalloc_peak_bytes_cold": 42991903,
+   "tracemalloc_peak_bytes_warm": 18779485
+  },
+  {
+   "M": 32,
+   "N": 512,
+   "analytic_bytes": 13516800,
+   "max_abs_rel_vs_bluestein": 7.981372967355286e-16,
+   "method": "separable",
+   "rel_L2_vs_bluestein": 8.480125549284932e-16,
+   "seconds_cold": 0.016784600040409714,
+   "seconds_cold_all": [
+    0.018516100011765957,
+    0.01899119996232912,
+    0.016784600040409714,
+    0.019579800020437688,
+    0.01925630000187084
+   ],
+   "seconds_warm": 0.010678099992219359,
+   "seconds_warm_all": [
+    0.017295300029218197,
+    0.017339699959848076,
+    0.010678099992219359,
+    0.01607399998465553,
+    0.014888299978338182
+   ],
+   "tracemalloc_peak_bytes_cold": 9045632,
+   "tracemalloc_peak_bytes_warm": 9043480
+  },
+  {
+   "M": 32,
+   "N": 512,
+   "analytic_bytes": 933888,
+   "max_abs_rel_vs_bluestein": 1.0171295456122676e-13,
+   "method": "direct",
+   "rel_L2_vs_bluestein": 9.554946362709329e-14,
+   "seconds_cold": 0.003987199976108968,
+   "seconds_cold_all": [
+    0.004007000010460615,
+    0.00700209999922663,
+    0.003987199976108968,
+    0.005052399996202439,
+    0.0048254000139422715
+   ],
+   "seconds_warm": 0.0029574999934993684,
+   "seconds_warm_all": [
+    0.003381499962415546,
+    0.0036198999732732773,
+    0.0033307999838143587,
+    0.003137699968647212,
+    0.0029574999934993684
+   ],
+   "tracemalloc_peak_bytes_cold": 924248,
+   "tracemalloc_peak_bytes_warm": 923096
+  },
+  {
+   "M": 64,
+   "N": 512,
+   "analytic_bytes": 36044800,
+   "max_abs_rel_vs_bluestein": 0.0,
+   "method": "bluestein",
+   "rel_L2_vs_bluestein": 0.0,
+   "seconds_cold": 0.021259000001009554,
+   "seconds_cold_all": [
+    0.02244779997272417,
+    0.025128999957814813,
+    0.03158509999047965,
+    0.021980200021062046,
+    0.021259000001009554
+   ],
+   "seconds_warm": 0.015272899996489286,
+   "seconds_warm_all": [
+    0.024854699964635074,
+    0.01691419997951016,
+    0.02230549999512732,
+    0.015272899996489286,
+    0.02171610004734248
+   ],
+   "tracemalloc_peak_bytes_cold": 46742431,
+   "tracemalloc_peak_bytes_warm": 20187933
+  },
+  {
+   "M": 64,
+   "N": 512,
+   "analytic_bytes": 14155776,
+   "max_abs_rel_vs_bluestein": 8.400785848172009e-16,
+   "method": "separable",
+   "rel_L2_vs_bluestein": 7.918834236115121e-16,
+   "seconds_cold": 0.01677200000267476,
+   "seconds_cold_all": [
+    0.02078369999071583,
+    0.01679859997238964,
+    0.021286599978338927,
+    0.01677200000267476,
+    0.024844200001098216
+   ],
+   "seconds_warm": 0.02528060000622645,
+   "seconds_warm_all": [
+    0.027689899958204478,
+    0.028216500009875745,
+    0.030982600001152605,
+    0.02528060000622645,
+    0.02950150001561269
+   ],
+   "tracemalloc_peak_bytes_cold": 9473216,
+   "tracemalloc_peak_bytes_warm": 9471064
+  },
+  {
+   "M": 64,
+   "N": 512,
+   "analytic_bytes": 1900544,
+   "max_abs_rel_vs_bluestein": 9.492149478259269e-14,
+   "method": "direct",
+   "rel_L2_vs_bluestein": 9.332156941495682e-14,
+   "seconds_cold": 0.006858099950477481,
+   "seconds_cold_all": [
+    0.0075443999958224595,
+    0.011682900018058717,
+    0.006997400021646172,
+    0.006858099950477481,
+    0.007057500013615936
+   ],
+   "seconds_warm": 0.005446699971798807,
+   "seconds_warm_all": [
+    0.005446699971798807,
+    0.005724799993913621,
+    0.005713899969123304,
+    0.00987650000024587,
+    0.006086600013077259
+   ],
+   "tracemalloc_peak_bytes_cold": 1842008,
+   "tracemalloc_peak_bytes_warm": 1840856
+  },
+  {
+   "M": 128,
+   "N": 512,
+   "analytic_bytes": 43515904,
+   "max_abs_rel_vs_bluestein": 0.0,
+   "method": "bluestein",
+   "rel_L2_vs_bluestein": 0.0,
+   "seconds_cold": 0.030404400022234768,
+   "seconds_cold_all": [
+    0.058300400036387146,
+    0.051825899980030954,
+    0.050390099990181625,
+    0.030404400022234768,
+    0.05827879998832941
+   ],
+   "seconds_warm": 0.01934699999401346,
+   "seconds_warm_all": [
+    0.022896200011018664,
+    0.025540999951772392,
+    0.02638160000788048,
+    0.021836299973074347,
+    0.01934699999401346
+   ],
+   "tracemalloc_peak_bytes_cold": 56711071,
+   "tracemalloc_peak_bytes_warm": 23930653
+  },
+  {
+   "M": 128,
+   "N": 512,
+   "analytic_bytes": 15728640,
+   "max_abs_rel_vs_bluestein": 7.782508657797679e-16,
+   "method": "separable",
+   "rel_L2_vs_bluestein": 7.642616229471722e-16,
+   "seconds_cold": 0.01954980002483353,
+   "seconds_cold_all": [
+    0.01954980002483353,
+    0.020722699991893023,
+    0.02314409997779876,
+    0.02488809998612851,
+    0.024039399984758347
+   ],
+   "seconds_warm": 0.021091500006150454,
+   "seconds_warm_all": [
+    0.026586699998006225,
+    0.023958300007507205,
+    0.021091500006150454,
+    0.028011699963826686,
+    0.026982299983501434
+   ],
+   "tracemalloc_peak_bytes_cold": 10525376,
+   "tracemalloc_peak_bytes_warm": 10523224
+  },
+  {
+   "M": 128,
+   "N": 512,
+   "analytic_bytes": 3932160,
+   "max_abs_rel_vs_bluestein": 8.896113917593552e-14,
+   "method": "direct",
+   "rel_L2_vs_bluestein": 8.880827408285134e-14,
+   "seconds_cold": 0.01441439997870475,
+   "seconds_cold_all": [
+    0.026078400027472526,
+    0.01831579999998212,
+    0.02147900004638359,
+    0.018092099984642118,
+    0.01441439997870475
+   ],
+   "seconds_warm": 0.017051399976480752,
+   "seconds_warm_all": [
+    0.017051399976480752,
+    0.017145699996035546,
+    0.019145700032822788,
+    0.01944040000671521,
+    0.020099000015761703
+   ],
+   "tracemalloc_peak_bytes_cold": 3677528,
+   "tracemalloc_peak_bytes_warm": 3676376
+  },
+  {
+   "M": 256,
+   "N": 512,
+   "analytic_bytes": 60817408,
+   "max_abs_rel_vs_bluestein": 0.0,
+   "method": "bluestein",
+   "rel_L2_vs_bluestein": 0.0,
+   "seconds_cold": 0.06791090004844591,
+   "seconds_cold_all": [
+    0.07949670002562925,
+    0.06791090004844591,
+    0.08567970001604408,
+    0.08277379994979128,
+    0.0806622999953106
+   ],
+   "seconds_warm": 0.05543619999662042,
+   "seconds_warm_all": [
+    0.0664845000137575,
+    0.05543619999662042,
+    0.060650400002487004,
+    0.05705669999588281,
+    0.059355199977289885
+   ],
+   "tracemalloc_peak_bytes_cold": 79794079,
+   "tracemalloc_peak_bytes_warm": 32595741
+  },
+  {
+   "M": 256,
+   "N": 512,
+   "analytic_bytes": 18874368,
+   "max_abs_rel_vs_bluestein": 8.046589102300378e-16,
+   "method": "separable",
+   "rel_L2_vs_bluestein": 8.090810936470015e-16,
+   "seconds_cold": 0.029614700004458427,
+   "seconds_cold_all": [
+    0.037818800017703325,
+    0.0391677999868989,
+    0.03558720002183691,
+    0.033080299966968596,
+    0.029614700004458427
+   ],
+   "seconds_warm": 0.02582280000206083,
+   "seconds_warm_all": [
+    0.028359999996609986,
+    0.02694859995972365,
+    0.02582280000206083,
+    0.027175899944268167,
+    0.028655999980401248
+   ],
+   "tracemalloc_peak_bytes_cold": 12629696,
+   "tracemalloc_peak_bytes_warm": 12627544
+  },
+  {
+   "M": 256,
+   "N": 512,
+   "analytic_bytes": 8388608,
+   "max_abs_rel_vs_bluestein": 1.047233633908037e-13,
+   "method": "direct",
+   "rel_L2_vs_bluestein": 9.112941383802802e-14,
+   "seconds_cold": 0.03589970001485199,
+   "seconds_cold_all": [
+    0.042303700000047684,
+    0.03589970001485199,
+    0.036818699969444424,
+    0.03646480001043528,
+    0.03743710002163425
+   ],
+   "seconds_warm": 0.03274940000846982,
+   "seconds_warm_all": [
+    0.03274940000846982,
+    0.03371139999944717,
+    0.045707999961450696,
+    0.03781309997430071,
+    0.035381399968173355
+   ],
+   "tracemalloc_peak_bytes_cold": 7348568,
+   "tracemalloc_peak_bytes_warm": 7347416
+  },
+  {
+   "M": 512,
+   "N": 512,
+   "analytic_bytes": 104857600,
+   "max_abs_rel_vs_bluestein": 0.0,
+   "method": "bluestein",
+   "rel_L2_vs_bluestein": 0.0,
+   "seconds_cold": 0.09823010000400245,
+   "seconds_cold_all": [
+    0.12655719998292625,
+    0.10042069997871295,
+    0.1427415999933146,
+    0.09823010000400245,
+    0.1218778999755159
+   ],
+   "seconds_warm": 0.06453249999321997,
+   "seconds_warm_all": [
+    0.09431150002637878,
+    0.09249449998605996,
+    0.06453249999321997,
+    0.0771437999792397,
+    0.087986099999398
+   ],
+   "tracemalloc_peak_bytes_cold": 138543007,
+   "tracemalloc_peak_bytes_warm": 54644509
+  },
+  {
+   "M": 512,
+   "N": 512,
+   "analytic_bytes": 25165824,
+   "max_abs_rel_vs_bluestein": 7.65366565011042e-16,
+   "method": "separable",
+   "rel_L2_vs_bluestein": 7.350319816837977e-16,
+   "seconds_cold": 0.05379579996224493,
+   "seconds_cold_all": [
+    0.05698699998902157,
+    0.056898800015915185,
+    0.059031000011600554,
+    0.05379579996224493,
+    0.06144409999251366
+   ],
+   "seconds_warm": 0.052062800037674606,
+   "seconds_warm_all": [
+    0.052062800037674606,
+    0.06301799998618662,
+    0.05429899995215237,
+    0.06118840002454817,
+    0.08968129998538643
+   ],
+   "tracemalloc_peak_bytes_cold": 21032864,
+   "tracemalloc_peak_bytes_warm": 21030712
+  },
+  {
+   "M": 512,
+   "N": 512,
+   "analytic_bytes": 18874368,
+   "max_abs_rel_vs_bluestein": 2.9727835544839517e-13,
+   "method": "direct",
+   "rel_L2_vs_bluestein": 1.3211489377369895e-13,
+   "seconds_cold": 0.0734960000263527,
+   "seconds_cold_all": [
+    0.0763998000184074,
+    0.0734960000263527,
+    0.07521179999457672,
+    0.07786829996621236,
+    0.07557460002135485
+   ],
+   "seconds_warm": 0.06413529999554157,
+   "seconds_warm_all": [
+    0.06413529999554157,
+    0.07295999996131286,
+    0.07571300002746284,
+    0.07832269999198616,
+    0.07598379999399185
+   ],
+   "tracemalloc_peak_bytes_cold": 16780072,
+   "tracemalloc_peak_bytes_warm": 16778824
+  },
+  {
+   "M": 32,
+   "N": 1024,
+   "analytic_bytes": 123830272,
+   "max_abs_rel_vs_bluestein": 0.0,
+   "method": "bluestein",
+   "rel_L2_vs_bluestein": 0.0,
+   "seconds_cold": 0.09999180003069341,
+   "seconds_cold_all": [
+    0.09999180003069341,
+    0.17681049997918308,
+    0.15234309999505058,
+    0.1761187000083737,
+    0.12699760001851246
+   ],
+   "seconds_warm": 0.06418120005400851,
+   "seconds_warm_all": [
+    0.06418120005400851,
+    0.06622500001685694,
+    0.06807420001132414,
+    0.07151169999269769,
+    0.09003820002544671
+   ],
+   "tracemalloc_peak_bytes_cold": 159649183,
+   "tracemalloc_peak_bytes_warm": 70425885
+  },
+  {
+   "M": 32,
+   "N": 1024,
+   "analytic_bytes": 51904512,
+   "max_abs_rel_vs_bluestein": 9.21146343785544e-16,
+   "method": "separable",
+   "rel_L2_vs_bluestein": 8.332907826071632e-16,
+   "seconds_cold": 0.038141600030940026,
+   "seconds_cold_all": [
+    0.04062089999206364,
+    0.038141600030940026,
+    0.047530799987725914,
+    0.04355810000561178,
+    0.048854399996344
+   ],
+   "seconds_warm": 0.05015530000673607,
+   "seconds_warm_all": [
+    0.06136660004267469,
+    0.05776140000671148,
+    0.0720376999815926,
+    0.06880760000785813,
+    0.05015530000673607
+   ],
+   "tracemalloc_peak_bytes_cold": 34665920,
+   "tracemalloc_peak_bytes_warm": 34663768
+  },
+  {
+   "M": 32,
+   "N": 1024,
+   "analytic_bytes": 1851392,
+   "max_abs_rel_vs_bluestein": 4.0558453036640133e-13,
+   "method": "direct",
+   "rel_L2_vs_bluestein": 3.731595901300709e-13,
+   "seconds_cold": 0.010941900021862239,
+   "seconds_cold_all": [
+    0.011383299948647618,
+    0.010941900021862239,
+    0.013006799970753491,
+    0.013130099978297949,
+    0.011853699979837984
+   ],
+   "seconds_warm": 0.010993700008839369,
+   "seconds_warm_all": [
+    0.013116399990394711,
+    0.01307520002592355,
+    0.012052199977915734,
+    0.010993700008839369,
+    0.012546399957500398
+   ],
+   "tracemalloc_peak_bytes_cold": 1845848,
+   "tracemalloc_peak_bytes_warm": 1844696
+  },
+  {
+   "M": 64,
+   "N": 1024,
+   "analytic_bytes": 130625632,
+   "max_abs_rel_vs_bluestein": 0.0,
+   "method": "bluestein",
+   "rel_L2_vs_bluestein": 0.0,
+   "seconds_cold": 0.06200810003792867,
+   "seconds_cold_all": [
+    0.06695860001491383,
+    0.06235929997637868,
+    0.06200810003792867,
+    0.07602449995465577,
+    0.07748149998951703
+   ],
+   "seconds_warm": 0.04449410003144294,
+   "seconds_warm_all": [
+    0.051385900005698204,
+    0.04449410003144294,
+    0.0446465999702923,
+    0.045573700044769794,
+    0.07603850000305101
+   ],
+   "tracemalloc_peak_bytes_cold": 168713311,
+   "tracemalloc_peak_bytes_warm": 73827213
+  },
+  {
+   "M": 64,
+   "N": 1024,
+   "analytic_bytes": 53526528,
+   "max_abs_rel_vs_bluestein": 1.008128734075804e-15,
+   "method": "separable",
+   "rel_L2_vs_bluestein": 8.809996592494779e-16,
+   "seconds_cold": 0.04537710000295192,
+   "seconds_cold_all": [
+    0.04753179999534041,
+    0.052785800013225526,
+    0.04729100002441555,
+    0.04904710000846535,
+    0.04537710000295192
+   ],
+   "seconds_warm": 0.04691690002800897,
+   "seconds_warm_all": [
+    0.04890660004457459,
+    0.04789490002440289,
+    0.04691690002800897,
+    0.0569819999509491,
+    0.05121020000660792
+   ],
+   "tracemalloc_peak_bytes_cold": 35749088,
+   "tracemalloc_peak_bytes_warm": 35746936
+  },
+  {
+   "M": 64,
+   "N": 1024,
+   "analytic_bytes": 3735552,
+   "max_abs_rel_vs_bluestein": 4.139597002345095e-13,
+   "method": "direct",
+   "rel_L2_vs_bluestein": 3.760665788978303e-13,
+   "seconds_cold": 0.01956169999903068,
+   "seconds_cold_all": [
+    0.0201987000182271,
+    0.01956169999903068,
+    0.021583400026429445,
+    0.02331600000616163,
+    0.023491400002967566
+   ],
+   "seconds_warm": 0.019712300039827824,
+   "seconds_warm_all": [
+    0.02387030003592372,
+    0.020041099982336164,
+    0.02061800000956282,
+    0.019712300039827824,
+    0.021152500004973263
+   ],
+   "tracemalloc_peak_bytes_cold": 3681112,
+   "tracemalloc_peak_bytes_warm": 3679960
+  },
+  {
+   "M": 128,
+   "N": 1024,
+   "analytic_bytes": 144179200,
+   "max_abs_rel_vs_bluestein": 0.0,
+   "method": "bluestein",
+   "rel_L2_vs_bluestein": 0.0,
+   "seconds_cold": 0.0941774999955669,
+   "seconds_cold_all": [
+    0.0941774999955669,
+    0.09845459996722639,
+    0.09969020000426099,
+    0.16957790002925321,
+    0.14879999996628612
+   ],
+   "seconds_warm": 0.0734142999863252,
+   "seconds_warm_all": [
+    0.08452560001751408,
+    0.07644079998135567,
+    0.0839900000137277,
+    0.07608800003072247,
+    0.0734142999863252
+   ],
+   "tracemalloc_peak_bytes_cold": 186791839,
+   "tracemalloc_peak_bytes_warm": 80611101
+  },
+  {
+   "M": 128,
+   "N": 1024,
+   "analytic_bytes": 56623104,
+   "max_abs_rel_vs_bluestein": 1.0097582980714427e-15,
+   "method": "separable",
+   "rel_L2_vs_bluestein": 8.444307538324363e-16,
+   "seconds_cold": 0.05495309998514131,
+   "seconds_cold_all": [
+    0.0631998999742791,
+    0.07118440000340343,
+    0.07952349999686703,
+    0.06464460003189743,
+    0.05495309998514131
+   ],
+   "seconds_warm": 0.05944300000555813,
+   "seconds_warm_all": [
+    0.06837709998944774,
+    0.06901849998394027,
+    0.07658350002020597,
+    0.0687980999937281,
+    0.05944300000555813
+   ],
+   "tracemalloc_peak_bytes_cold": 37817024,
+   "tracemalloc_peak_bytes_warm": 37814872
+  },
+  {
+   "M": 128,
+   "N": 1024,
+   "analytic_bytes": 7602176,
+   "max_abs_rel_vs_bluestein": 3.9627856934484927e-13,
+   "method": "direct",
+   "rel_L2_vs_bluestein": 3.665179757428057e-13,
+   "seconds_cold": 0.040515400003641844,
+   "seconds_cold_all": [
+    0.05004570004530251,
+    0.04519039997830987,
+    0.045090299972798675,
+    0.04212309996364638,
+    0.040515400003641844
+   ],
+   "seconds_warm": 0.041153699974529445,
+   "seconds_warm_all": [
+    0.04204380000010133,
+    0.043219299986958504,
+    0.04116900003282353,
+    0.041153699974529445,
+    0.04157040000427514
+   ],
+   "tracemalloc_peak_bytes_cold": 7351640,
+   "tracemalloc_peak_bytes_warm": 7350488
+  },
+  {
+   "M": 256,
+   "N": 1024,
+   "analytic_bytes": 174063616,
+   "max_abs_rel_vs_bluestein": 0.0,
+   "method": "bluestein",
+   "rel_L2_vs_bluestein": 0.0,
+   "seconds_cold": 0.16560649999883026,
+   "seconds_cold_all": [
+    0.19794029998593032,
+    0.1737339999526739,
+    0.16560649999883026,
+    0.20025140000507236,
+    0.2176447000238113
+   ],
+   "seconds_warm": 0.12674790003802627,
+   "seconds_warm_all": [
+    0.12674790003802627,
+    0.18579000001773238,
+    0.15133810002589598,
+    0.13796099997125566,
+    0.1358961000223644
+   ],
+   "tracemalloc_peak_bytes_cold": 226652063,
+   "tracemalloc_peak_bytes_warm": 95567645
+  },
+  {
+   "M": 256,
+   "N": 1024,
+   "analytic_bytes": 62914560,
+   "max_abs_rel_vs_bluestein": 8.854684932376839e-16,
+   "method": "separable",
+   "rel_L2_vs_bluestein": 8.290206815241079e-16,
+   "seconds_cold": 0.10517080000136048,
+   "seconds_cold_all": [
+    0.10517080000136048,
+    0.12805060000391677,
+    0.11686519999057055,
+    0.13239420001627877,
+    0.11762650002492592
+   ],
+   "seconds_warm": 0.06677919998764992,
+   "seconds_warm_all": [
+    0.0983478999696672,
+    0.10665779997361824,
+    0.08310639997944236,
+    0.06677919998764992,
+    0.07260259997565299
+   ],
+   "tracemalloc_peak_bytes_cold": 42018496,
+   "tracemalloc_peak_bytes_warm": 42016344
+  },
+  {
+   "M": 256,
+   "N": 1024,
+   "analytic_bytes": 15728640,
+   "max_abs_rel_vs_bluestein": 3.5957019619834986e-13,
+   "method": "direct",
+   "rel_L2_vs_bluestein": 3.489676376747324e-13,
+   "seconds_cold": 0.09634379995986819,
+   "seconds_cold_all": [
+    0.15362100000493228,
+    0.14808110002195463,
+    0.09968789998674765,
+    0.09634379995986819,
+    0.10739590000594035
+   ],
+   "seconds_warm": 0.09466130001237616,
+   "seconds_warm_all": [
+    0.12104429997270927,
+    0.10886899998877198,
+    0.10897020000265911,
+    0.09645169996656477,
+    0.09466130001237616
+   ],
+   "tracemalloc_peak_bytes_cold": 14692696,
+   "tracemalloc_peak_bytes_warm": 14691544
+  },
+  {
+   "M": 512,
+   "N": 1024,
+   "analytic_bytes": 243269632,
+   "max_abs_rel_vs_bluestein": 0.0,
+   "method": "bluestein",
+   "rel_L2_vs_bluestein": 0.0,
+   "seconds_cold": 0.17479189997538924,
+   "seconds_cold_all": [
+    0.19161999999778345,
+    0.1887350000324659,
+    0.17712819995358586,
+    0.17479189997538924,
+    0.21842809999361634
+   ],
+   "seconds_warm": 0.13106529996730387,
+   "seconds_warm_all": [
+    0.13106529996730387,
+    0.13791170000331476,
+    0.13242899999022484,
+    0.14448770001763478,
+    0.16545040003256872
+   ],
+   "tracemalloc_peak_bytes_cold": 318955423,
+   "tracemalloc_peak_bytes_warm": 130199325
+  },
+  {
+   "M": 512,
+   "N": 1024,
+   "analytic_bytes": 75497472,
+   "max_abs_rel_vs_bluestein": 8.402058040681796e-16,
+   "method": "separable",
+   "rel_L2_vs_bluestein": 8.447917446995247e-16,
+   "seconds_cold": 0.1292736999457702,
+   "seconds_cold_all": [
+    0.13334499998018146,
+    0.13088009995408356,
+    0.1292736999457702,
+    0.16630320000695065,
+    0.18099300004541874
+   ],
+   "seconds_warm": 0.10566749999998137,
+   "seconds_warm_all": [
+    0.12441460002446547,
+    0.12392550002550706,
+    0.1155371000058949,
+    0.10566749999998137,
+    0.11316990002524108
+   ],
+   "tracemalloc_peak_bytes_cold": 50421440,
+   "tracemalloc_peak_bytes_warm": 50419288
+  },
+  {
+   "M": 512,
+   "N": 1024,
+   "analytic_bytes": 33554432,
+   "max_abs_rel_vs_bluestein": 4.494045113564494e-13,
+   "method": "direct",
+   "rel_L2_vs_bluestein": 3.529624957236315e-13,
+   "seconds_cold": 0.17186660005245358,
+   "seconds_cold_all": [
+    0.19495610002195463,
+    0.19169200002215803,
+    0.2067687000380829,
+    0.19210759998532012,
+    0.17186660005245358
+   ],
+   "seconds_warm": 0.19742360000964254,
+   "seconds_warm_all": [
+    0.20196159998886287,
+    0.19742360000964254,
+    0.2331319999648258,
+    0.22379459999501705,
+    0.21051500004250556
+   ],
+   "tracemalloc_peak_bytes_cold": 29374808,
+   "tracemalloc_peak_bytes_warm": 29373656
+  }
+ ],
+ "tolerance": {
+  "N16_M8": {
+   "L": 24,
+   "M": 8,
+   "N": 16,
+   "alpha": 0.015625,
+   "bluestein_bar_abs": 2.7446237784437276e-12,
+   "bluestein_max_abs_rel_vs_ref": 8.837793742822436e-16,
+   "bluestein_max_abs_vs_ref": 2.9727452448432886e-14,
+   "bluestein_rel_L2_vs_ref": 8.375736764145637e-16,
+   "bluestein_vs_direct_bar_abs": 3.2708490550122397e-12,
+   "bluestein_vs_direct_max_abs": 3.084742237080508e-14,
+   "bluestein_vs_direct_rel_L2": 7.983583388082043e-16,
+   "bluestein_vs_separable_bar_abs": 4.136096845711281e-12,
+   "bluestein_vs_separable_max_abs": 2.5137175360052498e-14,
+   "bluestein_vs_separable_rel_L2": 6.680591597146898e-16,
+   "direct_bar_abs": 1.879375987744686e-12,
+   "direct_max_abs_rel_vs_ref": 3.8081851303619306e-16,
+   "direct_max_abs_vs_ref": 1.2809491335957509e-14,
+   "direct_rel_L2_vs_ref": 3.4227911604977263e-16,
+   "eps": 2.220446049250313e-16,
+   "g_chirp": 27.509775004326936,
+   "g_dense": 16.0,
+   "g_pairwise": 9.0,
+   "kappa_max": 118.75996482678929,
+   "kappa_median": 22.240829964625703,
+   "n_terms": 256,
+   "separable_bar_abs": 2.7446237784437276e-12,
+   "separable_max_abs_rel_vs_ref": 7.689255847343671e-16,
+   "separable_max_abs_vs_ref": 2.58641459868177e-14,
+   "separable_rel_L2_vs_ref": 6.993200529348264e-16,
+   "separable_vs_direct_bar_abs": 3.2708490550122397e-12,
+   "separable_vs_direct_max_abs": 2.774758085844075e-14,
+   "separable_vs_direct_rel_L2": 7.095294754744545e-16,
+   "sum_abs_E": 338.55827992384104
+  },
+  "N32_M16": {
+   "L": 48,
+   "M": 16,
+   "N": 32,
+   "alpha": 0.015625,
+   "bluestein_bar_abs": 1.2663137724657113e-11,
+   "bluestein_max_abs_rel_vs_ref": 2.8808916641329388e-15,
+   "bluestein_max_abs_vs_ref": 2.929642751054232e-13,
+   "bluestein_rel_L2_vs_ref": 2.243742277703179e-15,
+   "bluestein_vs_direct_bar_abs": 1.8637688083358047e-11,
+   "bluestein_vs_direct_max_abs": 3.044781331747377e-13,
+   "bluestein_vs_direct_rel_L2": 2.2723950124249e-15,
+   "bluestein_vs_separable_bar_abs": 1.9067222692579916e-11,
+   "bluestein_vs_separable_max_abs": 5.709267256288867e-14,
+   "bluestein_vs_separable_rel_L2": 4.877368525510854e-16,
+   "direct_bar_abs": 1.2233603115435245e-11,
+   "direct_max_abs_rel_vs_ref": 5.687159487964096e-16,
+   "direct_max_abs_vs_ref": 5.783398860650275e-14,
+   "direct_rel_L2_vs_ref": 3.9230487167562196e-16,
+   "eps": 2.220446049250313e-16,
+   "g_chirp": 33.50977500432694,
+   "g_dense": 32.0,
+   "g_pairwise": 11.0,
+   "kappa_max": 343.76231517397963,
+   "kappa_median": 30.765814843113628,
+   "n_terms": 1024,
+   "separable_bar_abs": 1.2663137724657113e-11,
+   "separable_max_abs_rel_vs_ref": 2.8177088825164316e-15,
+   "separable_max_abs_vs_ref": 2.865390776410835e-13,
+   "separable_rel_L2_vs_ref": 2.2671644576065687e-15,
+   "separable_vs_direct_bar_abs": 1.8637688083358047e-11,
+   "separable_vs_direct_max_abs": 2.9952557992427834e-13,
+   "separable_vs_direct_rel_L2": 2.298008811614595e-15,
+   "sum_abs_E": 1281.2848937691329
+  },
+  "N48_M24": {
+   "L": 72,
+   "M": 24,
+   "N": 48,
+   "alpha": 0.015625,
+   "bluestein_bar_abs": 3.1873444022251934e-11,
+   "bluestein_max_abs_rel_vs_ref": 6.583763646771104e-15,
+   "bluestein_max_abs_vs_ref": 1.0790486895092964e-12,
+   "bluestein_rel_L2_vs_ref": 6.036666421410148e-15,
+   "bluestein_vs_direct_bar_abs": 5.509035962351043e-11,
+   "bluestein_vs_direct_max_abs": 1.0550782067458117e-12,
+   "bluestein_vs_direct_rel_L2": 6.0286222861096616e-15,
+   "bluestein_vs_separable_bar_abs": 4.7975326213081204e-11,
+   "bluestein_vs_separable_max_abs": 1.0545038321407553e-13,
+   "bluestein_vs_separable_rel_L2": 5.489230479654477e-16,
+   "direct_bar_abs": 3.898847743268115e-11,
+   "direct_max_abs_rel_vs_ref": 6.131099885772199e-16,
+   "direct_max_abs_vs_ref": 1.0048591735576161e-13,
+   "direct_rel_L2_vs_ref": 4.807377904001193e-16,
+   "eps": 2.220446049250313e-16,
+   "g_chirp": 37.01955000865387,
+   "g_dense": 48.0,
+   "g_pairwise": 12.169925001442312,
+   "kappa_max": 821.4740539566207,
+   "kappa_median": 50.30659446384496,
+   "n_terms": 2304,
+   "separable_bar_abs": 3.1873444022251934e-11,
+   "separable_max_abs_rel_vs_ref": 6.3540501948360226e-15,
+   "separable_max_abs_vs_ref": 1.0413997074722862e-12,
+   "separable_rel_L2_vs_ref": 6.033935620009571e-15,
+   "separable_vs_direct_bar_abs": 5.509035962351043e-11,
+   "separable_vs_direct_max_abs": 1.0290013687393579e-12,
+   "separable_vs_direct_rel_L2": 6.027439697948867e-15,
+   "sum_abs_E": 2918.210259250894
+  }
+ }
+}

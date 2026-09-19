@@ -38,7 +38,13 @@ Bluestein's identity ``n*k = (n^2 + k^2 - (n-k)^2) / 2`` lets us write
 The convolution is computed with two zero-padded 2-D FFTs, giving total
 cost ``O((N + M) \\log (N + M))`` per axis, where ``N = N_in`` and
 ``M = N_out``.  This is dramatically faster than a direct matrix-Fourier
-transform (``O(N^2 M^2)``) for typical focal-zoom workflows.
+transform for typical focal-zoom workflows.  ``O(N^2 M^2)`` is the cost of the
+UNFACTORED four-index sum; the transform is separable, so the dense route
+(:func:`_direct_matrix_2d`, shipped since 5.48.0 as the opt-in ``method=
+'direct'``) evaluates it as two matrix products at ``O(M N^2 + M^2 N)``.  The
+measured time and memory crossover is tabulated in
+``docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/
+WAVE5_HYGIENE2_REPORT.md``.
 
 Backends
 --------
@@ -232,6 +238,162 @@ def _bluestein_2d_separable(E, alpha_x, alpha_y, N_out_y, N_out_x, *,
     return F
 
 
+#: The three routes :func:`_bluestein_2d` can take through the SAME sum.
+#: ``'bluestein'`` is the shipped default and is what every caller took before
+#: the direct route existed; ``'separable'`` is the two-pass chirp-Z the
+#: ``separable=True`` flag has selected since v5.33.2; ``'direct'`` is the
+#: dense matrix-Fourier transform below.
+_SUM_METHODS = ('bluestein', 'separable', 'direct')
+
+
+def _direct_matrix_2d(
+    E,
+    alpha_x: float,
+    alpha_y: float,
+    N_out_y: int,
+    N_out_x: int,
+    *,
+    sign: int,
+    xp,
+    target_cdtype=None,
+    n_centre_in_x: float = 0.0,
+    n_centre_in_y: float = 0.0,
+    k_centre_out_x: float = 0.0,
+    k_centre_out_y: float = 0.0,
+):
+    """The direct matrix-Fourier transform: the SAME sum as
+    :func:`_bluestein_2d` / :func:`_bluestein_centred_2d`, evaluated as two
+    dense matrix products instead of a chirp-Z reduction.
+
+    Computes::
+
+        F[ky, kx] = sum_{ny, nx} E[ny, nx]
+                    * exp(sign*2*pi*j * alpha_x * (nx - cIx) * (kx - cOx))
+                    * exp(sign*2*pi*j * alpha_y * (ny - cIy) * (ky - cOy))
+
+    which factors exactly as ``F = Wy . E . Wx^T`` with
+    ``Wx[kx, nx] = exp(sign*2*pi*j*alpha_x*(nx - cIx)*(kx - cOx))`` and ``Wy``
+    its y counterpart.  The non-centred primitive's convention is the case
+    ``cIx = cIy = cOx = cOy = 0``, so this one function serves both.
+
+    WHY IT EXISTS.  The module docstring and
+    :func:`~lumenairy.propagators.mft.fresnel_propagate_mft`'s Notes have named
+    the direct matrix-Fourier transform as the chirp-Z reduction's alternative
+    since the MFT propagators were written, without shipping it.  Two things
+    make it worth having as an OPT-IN rather than only as prose:
+
+    * **Memory.**  The chirp-Z route pads to ``L = next_fast_len(N + M - 1)``
+      per axis and holds several ``L``-sized working arrays; the dense route
+      holds ``Mx*Nx + My*Ny`` kernel entries, one intermediate and the output,
+      and no padding at all.  Below the crossover the dense route is the SMALLER
+      one -- see ``docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/
+      WAVE5_HYGIENE2_REPORT.md`` for the measured table.
+    * **Accuracy.**  The dense route reduces its phase argument modulo one turn
+      before calling ``exp`` (below), so it does not spend float64 mantissa on
+      a phase of ``pi*alpha*N^2`` radians the way the chirp signals do.  It is
+      therefore the natural reference for the two chirp-Z reductions, and the
+      report derives their agreement bar against it.
+
+    It is NOT the default anywhere and nothing in the library selects it
+    automatically: at the shapes the MFT propagators are written for the
+    chirp-Z route wins on time by one to three orders of magnitude, and a
+    threshold-automatic switch would move answers on existing fixtures (the
+    three routes agree to round-off, not bit for bit).  See the report's
+    maintainer-decision paragraph.
+
+    Parameters
+    ----------
+    E : ndarray, complex 2-D
+        Input of shape ``(Ny_in, Nx_in)`` in the ``xp`` namespace.
+    alpha_x, alpha_y : float
+        Sampling-rate parameters, as in :func:`_bluestein_2d`.
+    N_out_y, N_out_x : int
+        Output grid size.
+    sign : int
+        ``+1`` (inverse FT) or ``-1`` (forward FT).
+    xp : module
+        Array namespace -- ``numpy``, ``cupy`` or ``jax.numpy``.  The dense
+        products run through ``xp.matmul``, so the whole evaluation stays on
+        the caller's device / tracer.
+    target_cdtype : numpy dtype, optional
+        Complex dtype of the output.  Inferred from ``E`` when ``None``.
+    n_centre_in_x, n_centre_in_y, k_centre_out_x, k_centre_out_y : float
+        Input / output index centres.  Default ``0.0`` -- i.e. the
+        non-centred convention of :func:`_bluestein_2d`.
+
+    Returns
+    -------
+    F : ndarray, complex, shape ``(N_out_y, N_out_x)``.
+
+    Notes
+    -----
+    **Phase construction.**  ``t = alpha*(n - cI)*(k - cO)`` is formed in
+    float64 and then reduced by ``t - rint(t)``, which is EXACT for
+    ``|t| <= 2**52`` (``rint(t)`` is an integer and the difference is a
+    multiple of ``ulp(t)``, so no bit is lost in the subtraction).  Only the
+    fractional turn reaches ``exp``, so the ``pi*alpha*N^2`` phase-budget
+    warning :func:`_bluestein_2d` carries does not apply to this route.  The
+    irreducible error is the two roundings in forming ``t`` itself, amplified
+    by ``2*pi``.
+
+    **Association order.**  The two products are taken in whichever order costs
+    fewer multiply-adds, decided from the four grid sizes ALONE (a pure
+    function of the shapes, so the same call always associates the same way):
+    ``(Wy . E) . Wx^T`` costs ``My*Ny*Nx + My*Nx*Mx`` and ``Wy . (E . Wx^T)``
+    costs ``Ny*Nx*Mx + My*Ny*Mx``.  The two orders differ in the last bits of
+    the answer, which is the same statement the ``separable`` route carries.
+
+    **Cost.**  ``O(My*Ny*Nx + My*Nx*Mx)`` multiply-adds -- ``O(N^3)`` for a
+    square ``N = M`` grid, against the chirp-Z route's
+    ``O(L^2 log L)``.  The module docstring's ``O(N^2 M^2)`` describes the
+    UNFACTORED four-index sum; the transform is separable, so the dense route
+    never has to pay that.
+    """
+    if sign not in (+1, -1):
+        raise ValueError(f"sign must be +1 or -1, got {sign}")
+
+    Ny_in, Nx_in = E.shape
+    N_out_y = int(N_out_y)
+    N_out_x = int(N_out_x)
+    if N_out_y < 1 or N_out_x < 1:
+        raise ValueError(
+            f"N_out must be positive, got ({N_out_y}, {N_out_x})")
+
+    if target_cdtype is None:
+        target_cdtype = np.dtype(E.dtype) if xp.iscomplexobj(E) \
+            else np.dtype(np.complex128)
+    target_cdtype = np.dtype(target_cdtype)
+
+    def _kernel(alpha, n_in, n_out, c_in, c_out):
+        n = np.arange(int(n_in), dtype=np.float64) - float(c_in)
+        k = np.arange(int(n_out), dtype=np.float64) - float(c_out)
+        t = float(alpha) * k[:, None] * n[None, :]
+        # Exact for |t| <= 2**52: rint(t) is an integer and t - rint(t) is a
+        # multiple of ulp(t).  See the Notes.
+        t = t - np.rint(t)
+        W = np.exp(1j * sign * 2.0 * np.pi * t)
+        return W.astype(target_cdtype, copy=False)
+
+    Wx_np = _kernel(alpha_x, Nx_in, N_out_x, n_centre_in_x, k_centre_out_x)
+    Wy_np = _kernel(alpha_y, Ny_in, N_out_y, n_centre_in_y, k_centre_out_y)
+    if xp is np:
+        Wx, Wy = Wx_np, Wy_np
+    else:
+        Wx, Wy = xp.asarray(Wx_np), xp.asarray(Wy_np)
+    del Wx_np, Wy_np
+
+    A = E if E.dtype == target_cdtype else E.astype(target_cdtype)
+    cost_y_first = N_out_y * Ny_in * Nx_in + N_out_y * Nx_in * N_out_x
+    cost_x_first = Ny_in * Nx_in * N_out_x + N_out_y * Ny_in * N_out_x
+    if cost_y_first <= cost_x_first:
+        F = xp.matmul(xp.matmul(Wy, A), Wx.T)
+    else:
+        F = xp.matmul(Wy, xp.matmul(A, Wx.T))
+    if F.dtype != target_cdtype:
+        F = F.astype(target_cdtype)
+    return F
+
+
 def _bluestein_2d(
     E,
     alpha_x: float,
@@ -245,6 +407,7 @@ def _bluestein_2d(
     ifft2,
     target_cdtype=None,
     separable: bool = False,
+    method: str = 'auto',
 ):
     """2-D Bluestein chirp-Z transform.
 
@@ -317,6 +480,19 @@ def _bluestein_2d(
         why it is opt-in here and why the one shipped consumer
         (:func:`~lumenairy.propagators.carrier.carrier_referenced_exact_focus_readout`)
         carries its own default-ON switch with the 2-D path one flag away.
+    method : {'auto', 'bluestein', 'separable', 'direct'}, default 'auto'
+        Which route through the SAME sum to take.  ``'auto'`` (the default, and
+        the ONLY value any shipped caller passes unless it is asked for
+        another) reproduces the pre-5.48 dispatch exactly: the separable
+        two-pass route when ``separable=True`` and ``xp is numpy``, the 2-D
+        convolution otherwise.  ``'bluestein'`` and ``'separable'`` name those
+        two arms explicitly (``'separable'`` still falls back to the 2-D arm
+        off NumPy, for the reason the ``separable`` entry gives).  ``'direct'``
+        takes :func:`_direct_matrix_2d`, the dense matrix-Fourier transform --
+        opt-in only; see that function's docstring and the measured crossover
+        table in ``docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/
+        WAVE5_HYGIENE2_REPORT.md``.  The three routes agree to round-off, NOT
+        bit for bit.
 
     Returns
     -------
@@ -335,6 +511,10 @@ def _bluestein_2d(
     """
     if sign not in (+1, -1):
         raise ValueError(f"sign must be +1 or -1, got {sign}")
+    if method not in ('auto',) + _SUM_METHODS:
+        raise ValueError(
+            f"method must be one of {('auto',) + _SUM_METHODS}, got "
+            f"{method!r}")
 
     Ny_in, Nx_in = E.shape
     N_out_y = int(N_out_y)
@@ -347,6 +527,17 @@ def _bluestein_2d(
         target_cdtype = np.dtype(E.dtype) if xp.iscomplexobj(E) \
             else np.dtype(np.complex128)
     target_cdtype = np.dtype(target_cdtype)
+
+    # ----- 0a) direct route (opt-in) ----------------------------------------
+    # Taken BEFORE the chirp phase-budget guard below, deliberately: that
+    # warning is a statement about the chirp signals' float64 phase, and this
+    # route has none -- it reduces its argument modulo one turn.  Warning here
+    # would be a false positive on the one route the warning's own advice
+    # ("fall back to a regular FFT propagator") is the alternative to.
+    if method == 'direct':
+        return _direct_matrix_2d(
+            E, alpha_x, alpha_y, N_out_y, N_out_x,
+            sign=sign, xp=xp, target_cdtype=target_cdtype)
 
     # Numerical-precision guard.  The chirp signal exp(sign*pi*j*alpha*n^2)
     # has phase up to pi * |alpha| * N_max^2.  float64 gives ~16 decimal
@@ -367,7 +558,8 @@ def _bluestein_2d(
     # Same sum, two 1-D passes, ``(N_in x L)`` instead of ``L^2``.  Taken
     # AFTER the precision guard above so both routes warn identically, and
     # only on NumPy (see the ``separable`` docstring entry).
-    if separable and xp is np:
+    if (separable if method == 'auto' else method == 'separable') \
+            and xp is np:
         return _bluestein_2d_separable(
             E, alpha_x, alpha_y, N_out_y, N_out_x,
             sign=sign, target_cdtype=target_cdtype)
@@ -494,6 +686,7 @@ def _bluestein_centred_2d(
     ifft2,
     target_cdtype=None,
     separable: bool = False,
+    method: str = 'auto',
 ):
     """2-D Bluestein with centred input AND output index conventions.
 
@@ -535,12 +728,23 @@ def _bluestein_centred_2d(
         Same as :func:`_bluestein_2d`.  The centring corrections are
         themselves separable (a pre-chirp in ``n``, a post-chirp in ``k`` and
         a constant), so ``separable`` changes only the core primitive.
+    method : {'auto', 'bluestein', 'separable', 'direct'}, default 'auto'
+        Same as :func:`_bluestein_2d`, with one difference that matters:
+        ``'direct'`` does NOT go through the pre-chirp / post-chirp / constant
+        decomposition above, because :func:`_direct_matrix_2d` takes the index
+        centres themselves and builds the centred kernel in one step.  The
+        decomposition and the one-step build are the same sum; they are not the
+        same bits, which is why ``'direct'`` is opt-in here as well.
 
     Returns
     -------
     F : ndarray, complex 2-D, shape ``(N_out_y, N_out_x)``.
     """
     Ny_in, Nx_in = E.shape
+    if method not in ('auto',) + _SUM_METHODS:
+        raise ValueError(
+            f"method must be one of {('auto',) + _SUM_METHODS}, got "
+            f"{method!r}")
     if n_centre_in_x is None:
         n_centre_in_x = Nx_in / 2.0
     if n_centre_in_y is None:
@@ -554,6 +758,14 @@ def _bluestein_centred_2d(
         target_cdtype = np.dtype(E.dtype) if xp.iscomplexobj(E) \
             else np.dtype(np.complex128)
     target_cdtype = np.dtype(target_cdtype)
+
+    # Opt-in dense route: the centred kernel in one build, no decomposition.
+    if method == 'direct':
+        return _direct_matrix_2d(
+            E, alpha_x, alpha_y, N_out_y, N_out_x,
+            sign=sign, xp=xp, target_cdtype=target_cdtype,
+            n_centre_in_x=n_centre_in_x, n_centre_in_y=n_centre_in_y,
+            k_centre_out_x=k_centre_out_x, k_centre_out_y=k_centre_out_y)
 
     n_x = np.arange(Nx_in, dtype=np.float64)
     n_y = np.arange(Ny_in, dtype=np.float64)
@@ -597,10 +809,11 @@ def _bluestein_centred_2d(
     F_core = _bluestein_2d(
         E_mod, alpha_x, alpha_y, N_out_y, N_out_x,
         sign=sign, xp=xp, fft2=fft2, ifft2=ifft2,
-        target_cdtype=target_cdtype, separable=separable,
+        target_cdtype=target_cdtype, separable=separable, method=method,
     )
     F = F_core * (post_y[:, None] * post_x[None, :]) * const_c
     return F
 
 
-__all__ = ['_bluestein_2d', '_bluestein_centred_2d']
+__all__ = ['_bluestein_2d', '_bluestein_centred_2d',
+           '_direct_matrix_2d']

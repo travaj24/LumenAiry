@@ -1,0 +1,21 @@
+{
+ "tag": "mftbit_win",
+ "python": "C:\\Users\\Tesla\\AppData\\Local\\Programs\\Python\\Python314\\python.exe",
+ "base_tree": "C:\\tmp\\hyg2_arch\\base",
+ "branch_tree": "C:\\tmp\\hyg2_arch\\branch",
+ "expect_differ_prefixes": [],
+ "n_keys_base": 179,
+ "n_keys_branch": 179,
+ "n_shared": 179,
+ "n_identical": 179,
+ "n_differ_expected": 0,
+ "differ_unexpected": [],
+ "expected_to_differ_but_identical": [],
+ "only_base": [],
+ "only_branch": [],
+ "seconds": {
+  "base": 3.7,
+  "branch": 8.5
+ },
+ "verdict": "IDENTICAL"
+}

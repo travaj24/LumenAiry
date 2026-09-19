@@ -191,6 +191,7 @@ def angular_spectrum_propagate_mft(
     centre_out: Tuple[float, float] = (0.0, 0.0),
     bandlimit: bool = True,
     use_gpu: bool = False,
+    method: str = 'auto',
     _bluestein_separable: bool = False,
 ) -> np.ndarray:
     """Exact Angular Spectrum Method propagation onto an arbitrary
@@ -237,6 +238,42 @@ def angular_spectrum_propagate_mft(
         exact limit; being the larger of the two it never over-filters.
         See :func:`~lumenairy.propagators.fft_infra._get_or_make_bandlimit`.
     use_gpu : bool, default False
+    method : {'auto', 'direct'}, default 'auto'
+        Which route through the transform's own sum to take (5.48.0).
+        ``'auto'`` is the shipped default and is the chirp-Z (Bluestein)
+        reduction this propagator has always taken -- byte for byte, on
+        every backend, proved archive-to-archive against 5.47.0 over 179
+        fixtures on two builds.  ``'direct'`` takes the dense
+        matrix-Fourier transform
+        (:func:`~lumenairy.propagators._bluestein._direct_matrix_2d`): two
+        matrix products, ``O(M N^2 + M^2 N)`` multiply-adds, no zero-padding
+        and no chirp signal to spend float64 mantissa on.
+
+        WHEN IT IS THE BETTER ROUTE.  For MEMORY, always at these shapes:
+        the chirp-Z route pads each axis to
+        ``L = next_fast_len(N + M - 1)`` and holds several ``L^2`` working
+        arrays, while the dense route holds two ``M x N`` kernels, one
+        intermediate and the output.  MEASURED peak, ``N = 1024``,
+        ``M = 32``: **1.8 MB against 159.6 MB**; at ``M = 512``,
+        29.4 MB against 319.0 MB.  For ACCURACY, when the chirp phase
+        budget ``alpha * N_max^2`` is large: the dense route reduces its
+        phase argument modulo one turn and is exact where the chirp signals
+        are not (measured ``1.9e-04`` relative error on the chirp route at a
+        budget of 1e12, ``3.7e-16`` on the dense one).  For TIME, only
+        below the crossover -- roughly ``M <= N/4`` on Windows py3.14, where at
+        ``M >= N/2`` with ``N >= 512`` the separable chirp-Z route is 1.2x to
+        3.0x faster.  The TIME crossover is PER-BUILD: on WSL py3.12, where
+        scipy's pocketfft drives the separable route's 1-D passes with its own
+        worker pool, it sits nearer ``M = N/16``.  The MEMORY ordering is not
+        -- the dense route is the smaller at every shape on both builds.
+
+        The two routes agree to round-off, NOT bit for bit: they are
+        different association orders over the same sum, and the report's
+        derived bar is ``(g_a + g_b) * eps * sum|E|`` with the two
+        summations' growth factors.  Nothing in the library selects
+        ``'direct'`` automatically; see the crossover table and the
+        maintainer-decision paragraph in
+        ``docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/WAVE5_HYGIENE2_REPORT.md``.
 
     Returns
     -------
@@ -477,6 +514,7 @@ def angular_spectrum_propagate_mft(
         sign=+1, xp=xp, fft2=fft2, ifft2=ifft2,
         target_cdtype=target_cdtype,
         separable=bool(_bluestein_separable),
+        method=method,
     )
 
     norm = target_cdtype.type(1.0 / (Nx_in * Ny_in))
@@ -822,6 +860,7 @@ def fresnel_propagate_mft(
     dy_out: Optional[float] = None,
     centre_out: Tuple[float, float] = (0.0, 0.0),
     use_gpu: bool = False,
+    method: str = 'auto',
 ) -> np.ndarray:
     """Fresnel propagation onto an arbitrary user-specified output grid.
 
@@ -867,6 +906,42 @@ def fresnel_propagate_mft(
         Route through CuPy if available.  Auto-detected from ``E_in``
         (CuPy / JAX arrays use their native backend regardless of this
         flag).
+    method : {'auto', 'direct'}, default 'auto'
+        Which route through the transform's own sum to take (5.48.0).
+        ``'auto'`` is the shipped default and is the chirp-Z (Bluestein)
+        reduction this propagator has always taken -- byte for byte, on
+        every backend, proved archive-to-archive against 5.47.0 over 179
+        fixtures on two builds.  ``'direct'`` takes the dense
+        matrix-Fourier transform
+        (:func:`~lumenairy.propagators._bluestein._direct_matrix_2d`): two
+        matrix products, ``O(M N^2 + M^2 N)`` multiply-adds, no zero-padding
+        and no chirp signal to spend float64 mantissa on.
+
+        WHEN IT IS THE BETTER ROUTE.  For MEMORY, always at these shapes:
+        the chirp-Z route pads each axis to
+        ``L = next_fast_len(N + M - 1)`` and holds several ``L^2`` working
+        arrays, while the dense route holds two ``M x N`` kernels, one
+        intermediate and the output.  MEASURED peak, ``N = 1024``,
+        ``M = 32``: **1.8 MB against 159.6 MB**; at ``M = 512``,
+        29.4 MB against 319.0 MB.  For ACCURACY, when the chirp phase
+        budget ``alpha * N_max^2`` is large: the dense route reduces its
+        phase argument modulo one turn and is exact where the chirp signals
+        are not (measured ``1.9e-04`` relative error on the chirp route at a
+        budget of 1e12, ``3.7e-16`` on the dense one).  For TIME, only
+        below the crossover -- roughly ``M <= N/4`` on Windows py3.14, where at
+        ``M >= N/2`` with ``N >= 512`` the separable chirp-Z route is 1.2x to
+        3.0x faster.  The TIME crossover is PER-BUILD: on WSL py3.12, where
+        scipy's pocketfft drives the separable route's 1-D passes with its own
+        worker pool, it sits nearer ``M = N/16``.  The MEMORY ordering is not
+        -- the dense route is the smaller at every shape on both builds.
+
+        The two routes agree to round-off, NOT bit for bit: they are
+        different association orders over the same sum, and the report's
+        derived bar is ``(g_a + g_b) * eps * sum|E|`` with the two
+        summations' growth factors.  Nothing in the library selects
+        ``'direct'`` automatically; see the crossover table and the
+        maintainer-decision paragraph in
+        ``docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/WAVE5_HYGIENE2_REPORT.md``.
 
     Returns
     -------
@@ -876,9 +951,12 @@ def fresnel_propagate_mft(
     Notes
     -----
     Algorithm: O((N + M) log (N + M)) per axis via Bluestein's chirp-Z
-    transform with two zero-padded 2-D FFTs.  Substantially faster than
-    a direct matrix-Fourier transform (O(N^2 M^2)) for typical
-    focal-zoom workflows.
+    transform with two zero-padded 2-D FFTs.  ``O(N^2 M^2)`` is the cost of
+    the UNFACTORED four-index sum a direct matrix-Fourier transform is
+    sometimes quoted at; the transform is separable, so the dense route
+    ``method='direct'`` (5.48.0) pays ``O(M N^2 + M^2 N)`` instead and is
+    the faster of the two below the measured crossover as well as always
+    the smaller in memory.  See the ``method`` parameter.
 
     Sampling: the same Fresnel-number heuristic as :func:`fresnel_propagate`
     applies to ``dx_in`` and ``z`` (no new validity restriction comes
@@ -1036,6 +1114,7 @@ def fresnel_propagate_mft(
         k_centre_out_y=kc_y,
         sign=-1, xp=xp, fft2=fft2, ifft2=ifft2,
         target_cdtype=target_cdtype,
+        method=method,
     )
 
     # ----- 3) output-plane quadratic phase + carrier prefactor + area -------
@@ -1061,6 +1140,7 @@ def fraunhofer_propagate_mft(
     dy_out: Optional[float] = None,
     centre_out: Tuple[float, float] = (0.0, 0.0),
     use_gpu: bool = False,
+    method: str = 'auto',
 ) -> np.ndarray:
     """Fraunhofer (far-field) propagation onto an arbitrary user-specified
     output grid.
@@ -1096,6 +1176,42 @@ def fraunhofer_propagate_mft(
         an off-axis point (e.g. an exoplanet location relative to a
         stellar chief image).
     use_gpu : bool, default False
+    method : {'auto', 'direct'}, default 'auto'
+        Which route through the transform's own sum to take (5.48.0).
+        ``'auto'`` is the shipped default and is the chirp-Z (Bluestein)
+        reduction this propagator has always taken -- byte for byte, on
+        every backend, proved archive-to-archive against 5.47.0 over 179
+        fixtures on two builds.  ``'direct'`` takes the dense
+        matrix-Fourier transform
+        (:func:`~lumenairy.propagators._bluestein._direct_matrix_2d`): two
+        matrix products, ``O(M N^2 + M^2 N)`` multiply-adds, no zero-padding
+        and no chirp signal to spend float64 mantissa on.
+
+        WHEN IT IS THE BETTER ROUTE.  For MEMORY, always at these shapes:
+        the chirp-Z route pads each axis to
+        ``L = next_fast_len(N + M - 1)`` and holds several ``L^2`` working
+        arrays, while the dense route holds two ``M x N`` kernels, one
+        intermediate and the output.  MEASURED peak, ``N = 1024``,
+        ``M = 32``: **1.8 MB against 159.6 MB**; at ``M = 512``,
+        29.4 MB against 319.0 MB.  For ACCURACY, when the chirp phase
+        budget ``alpha * N_max^2`` is large: the dense route reduces its
+        phase argument modulo one turn and is exact where the chirp signals
+        are not (measured ``1.9e-04`` relative error on the chirp route at a
+        budget of 1e12, ``3.7e-16`` on the dense one).  For TIME, only
+        below the crossover -- roughly ``M <= N/4`` on Windows py3.14, where at
+        ``M >= N/2`` with ``N >= 512`` the separable chirp-Z route is 1.2x to
+        3.0x faster.  The TIME crossover is PER-BUILD: on WSL py3.12, where
+        scipy's pocketfft drives the separable route's 1-D passes with its own
+        worker pool, it sits nearer ``M = N/16``.  The MEMORY ordering is not
+        -- the dense route is the smaller at every shape on both builds.
+
+        The two routes agree to round-off, NOT bit for bit: they are
+        different association orders over the same sum, and the report's
+        derived bar is ``(g_a + g_b) * eps * sum|E|`` with the two
+        summations' growth factors.  Nothing in the library selects
+        ``'direct'`` automatically; see the crossover table and the
+        maintainer-decision paragraph in
+        ``docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/WAVE5_HYGIENE2_REPORT.md``.
 
     Returns
     -------
@@ -1223,6 +1339,7 @@ def fraunhofer_propagate_mft(
         k_centre_out_y=kc_y,
         sign=-1, xp=xp, fft2=fft2, ifft2=ifft2,
         target_cdtype=target_cdtype,
+        method=method,
     )
 
     quad_out = _to_xp(np.exp(1j * k / (2.0 * z) * (X_out_np**2 + Y_out_np**2)))
