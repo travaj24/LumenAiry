@@ -286,6 +286,101 @@ _PIXEL_CONTINUITY_MAX = 1.06
 # 1.18x on ONE optic -- not a population a bar can be derived on.
 _PIXEL_CONTINUITY_MIN = 1.0 / _PIXEL_CONTINUITY_MAX
 
+# WHERE THE HALF-PITCH RENDER'S PIXEL CENTRES SIT (WP-B7c round 3, E5).
+#
+# THE CONVENTION IS NESTING.  A render of ``N_r`` pixels at pitch ``dx_r``
+# puts its centres on ``(j - N_r/2) dx_r``, which is the library's own
+# sampling convention (and the one the odd-N centring item of the audit's
+# handoff 4.6 is about).  Applied at ``(2N, dx/2)`` it puts fine pixel ``2j``
+# EXACTLY on coarse pixel ``j``'s centre, so the fine lattice CONTAINS the
+# coarse one and the half-pitch render re-samples the same points plus three
+# interleaved sub-lattices.  ``half_pitch_centres`` below is the single
+# definition of it: the branch sum's own fine render and the consumer's
+# half-pitch completion both take their geometry from there, so the two
+# halves of the ratio cannot be taken on different lattices.
+#
+# WHAT NESTING BUYS, and why the alternative was measured and rejected.
+# Nesting is what makes the reading's two calibration points hold:
+#
+#   * ``~4 per halving`` when the quadrature has stopped being unbiased.  A
+#     mapped triangle that catches a coarse centre catches the COINCIDENT
+#     fine centre too, so ``p_out(dx/2) >= p_out(dx)/4`` always and the
+#     reading is bounded by 4 in the collapse limit -- which is the identity
+#     VERIFY-WP-B7c measured by hand on four optics (S 107 -> 27.3 -> 7.40,
+#     M 504 -> 127 -> 32.2, Q 11238 -> 2810 -> 703, F 2.98 -> 1.42 -> 1.04);
+#   * a LOW-VARIANCE ratio.  The two renders are point-sampled estimators of
+#     the same area integral; nested lattices make them positively
+#     correlated, so the ratio's sampling noise is far below either
+#     estimator's own.
+#
+# The alternative -- offsetting the fine lattice by half a fine pixel so the
+# two Voronoi HULLS coincide exactly -- was built and measured this round
+# (``validation/probe_wp_b7c_round3/r3ab.py``, ``ab_win.json``).  It is
+# strictly worse: with no shared sample points a collapsed triangle can catch
+# a coarse centre and NO fine centre, so the bounded ``~4`` becomes unbounded
+# (measured 7343.9 at VERIFY-B7b's own blow-up plane, where the nested
+# lattice reads 3.998), the ratio's variance rises (the branch sum at that
+# fixture's z = 1761 um moves from 1.0636 to 1.0180 and the completion from
+# 1.0021 to 0.9797, on a field whose oracle fidelity is unchanged at 0.9879),
+# and the module's own shipped gate refuses it.  The report has the
+# populations.
+#
+# WHAT NESTING COSTS, and it is stated rather than papered over.  The two
+# lattices have the same WIDTH but not the same Voronoi hull: the coarse hull
+# is ``[-(N+1) dx/2, (N-1) dx/2]`` and the fine one
+# ``[-(2N+1) dx/4, (2N-1) dx/4]``, so the fine lattice's centres reach half a
+# coarse pixel further out on the ``+x`` and ``+y`` edges and start a quarter
+# of a coarse pixel short on the other two.  Where light reaches the window
+# edge the two integrals are therefore not over the identical rectangle, and
+# a converged render reads 1 to O(1/N) rather than exactly.  Round 2 stated
+# that reference as "1 exactly, on any optic, at any plane, at any grid"; it
+# is not exact, and section 4 of ``WP-B7c_ROUND3_REPORT.md`` carries the
+# measured distribution of what it does read (round 2's verification measured
+# 0.999529 .. 1.000207 on one slow optic's eight planes; round 3 measures the
+# spread over the whole population).  The bar below clears that spread by
+# decades, which is what makes it a tolerance on a known value; it is not a
+# tolerance on an EXACT value.
+#
+# The constant is kept as a named knob rather than inlined so that the
+# alternative stays measurable from a probe without editing the library, and
+# so that a change of convention has to change a line that carries this
+# derivation.
+_HALF_PITCH_CENTRE_OFFSET = 0.0
+
+
+def _render_centre_origin(N_r, N_coarse):
+    """Origin of a render's pixel-centre lattice, in pixels of that render.
+
+    Pixel ``j`` of a render of ``N_r`` pixels at pitch ``dx_r`` has its centre
+    at ``(j - origin) * dx_r``.  ``N_r/2`` for the caller's own grid -- the
+    library's sampling convention -- and ``N_r/2 - _HALF_PITCH_CENTRE_OFFSET``
+    for the arbiter's HALF-PITCH render, which at the shipped offset of zero
+    is the same rule and therefore NESTS the fine lattice on the coarse one.
+    See ``_HALF_PITCH_CENTRE_OFFSET`` for why nesting is the convention, what
+    it costs, and what the alternative measured.
+
+    One definition, two callers: ``_multibranch_render._render`` and
+    ``half_pitch_centres``.
+    """
+    if int(N_r) == int(N_coarse):
+        return N_r / 2.0
+    return N_r / 2.0 - _HALF_PITCH_CENTRE_OFFSET
+
+
+def half_pitch_centres(N, dx):
+    """The 1-D pixel-centre lattice of the arbiter's half-pitch render.
+
+    A consumer that completes ``pixel_halved_field`` (the uniform fold
+    completion does) must evaluate its completion on the SAME lattice the
+    branch sum rasterised onto, or the two halves of the reading are taken on
+    different geometry.  This is that lattice, and it is the only place it is
+    written down -- the completion used to rebuild it inline, which is a seam
+    the two could drift apart at.
+    """
+    return ((np.arange(2 * int(N)) - _render_centre_origin(2 * int(N), int(N)))
+            * (0.5 * float(dx)))
+
+
 # Entry cap on the ARBITER's own render, in array entries of the FINE grid.
 # The fine render allocates one complex128 image of ``(2 N)^2``, and the
 # consumer that completes it allocates one more, so the working set is
@@ -982,7 +1077,18 @@ def _multibranch_render(
         Called once with ``(N, dx)`` -- byte-identically to the straight-line
         code it replaces -- and, when the arbiter is requested, once more with
         ``(2 * N, dx / 2)``.
+
+        The pixel-centre lattice comes from ``_render_centre_origin`` rather
+        than from ``N_r / 2`` written here, so that the half-pitch render and
+        the consumer's half-pitch completion take their geometry from ONE
+        definition (WP-B7c round 3, E5).  At the shipped offset the two
+        lattices NEST -- fine pixel ``2j`` sits exactly on coarse pixel ``j``
+        -- which is what bounds the reading at ~4 in the collapse limit and
+        keeps the ratio's sampling noise below either render's own; see
+        ``_HALF_PITCH_CENTRE_OFFSET`` for the derivation and for what nesting
+        costs at the window edge.
         """
+        _org = _render_centre_origin(N_r, N)
         # per-branch contribution lists (assembled after the loop so the caustic
         # band can swap coalescing PAIRS for the Ludwig uniform-fold field)
         br_idx: list = []      # flat pixel index (x-major)
@@ -998,12 +1104,12 @@ def _multibranch_render(
             xmx = np.maximum(np.maximum(x0, x1), x2)[good]
             ymn = np.minimum(np.minimum(y0, y1), y2)[good]
             ymx = np.maximum(np.maximum(y0, y1), y2)[good]
-            pxmin = np.maximum(0, np.floor(xmn / dx_r + N_r / 2.0).astype(np.int64))
+            pxmin = np.maximum(0, np.floor(xmn / dx_r + _org).astype(np.int64))
             pxmax = np.minimum(N_r - 1,
-                               np.ceil(xmx / dx_r + N_r / 2.0).astype(np.int64))
-            pymin = np.maximum(0, np.floor(ymn / dx_r + N_r / 2.0).astype(np.int64))
+                               np.ceil(xmx / dx_r + _org).astype(np.int64))
+            pymin = np.maximum(0, np.floor(ymn / dx_r + _org).astype(np.int64))
             pymax = np.minimum(N_r - 1,
-                               np.ceil(ymx / dx_r + N_r / 2.0).astype(np.int64))
+                               np.ceil(ymx / dx_r + _org).astype(np.int64))
             keep = (pxmax >= pxmin) & (pymax >= pymin)
 
             def _g(a):
@@ -1101,8 +1207,8 @@ def _multibranch_render(
                 # valid grid index and no mask is needed.
                 vmask = (((gx <= pxmax[s, None, None])
                           & (gy <= pymax[s, None, None])) if _padded else None)
-                PX = (gx - N_r / 2.0) * dx_r
-                PY = (gy - N_r / 2.0) * dx_r
+                PX = (gx - _org) * dx_r
+                PY = (gy - _org) * dx_r
                 X0 = x0k[s, None, None]
                 Y0 = y0k[s, None, None]
                 # barycentric coordinates
@@ -1454,6 +1560,14 @@ def _multibranch_render(
                        # output through the same control instead of deciding
                        # on a reading of an intermediate it does not return.
                        # ``None`` unless the arbiter was asked for.
+                       #
+                       # ITS SAMPLING IS ``half_pitch_centres(N, dx)``, and
+                       # a consumer that completes this array must evaluate
+                       # its completion on that lattice rather than on one it
+                       # rebuilds (WP-B7c round 3, E5).  At the shipped
+                       # convention that lattice NESTS on the caller's -- fine
+                       # pixel ``2j`` is coarse pixel ``j`` -- which is what
+                       # the ~4-per-halving identity rests on.
                        'pixel_halved_field': _E_half,
                        'grid_power': p_out}
     return E_out

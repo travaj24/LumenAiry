@@ -75,6 +75,7 @@ from ._lens_traced_multibranch import (
     _PIXEL_CONTINUITY_MAX,
     _PIXEL_CONTINUITY_MIN,
     _multibranch_render,
+    half_pitch_centres,
 )
 from .lenses_maslov import _fold_airy_eval, pearcey
 
@@ -390,6 +391,51 @@ _MB_PIXEL_CONTINUITY_MAX = _PIXEL_CONTINUITY_MAX
 # coarse render MISSES deposits the finer one catches.  See the derivation
 # with the upper arm.
 _MB_PIXEL_CONTINUITY_MIN = _PIXEL_CONTINUITY_MIN
+
+# WHAT THE READING BUYS, PER ROUTE (WP-B7c round 3, E4 / E7).
+#
+# ``pixel_continuity_of`` says which field the number was measured on.  That
+# is not the same question as what the number CERTIFIES, and round 2 published
+# only the first: on the Pearcey cusp route the label named the cusp field
+# while the number was the branch sum's (E4), and on the FALLBACK route the
+# reading was of the returned field but the dominant error there is the dark
+# side the completion did not build, which this arm cannot see (E7 -- a plane
+# returned at oracle fidelity 0.4639 with ``pixel_continuity`` 1.00201, the
+# launched-power bracket 1.005, both decisions ``'ok'`` and no warning).
+#
+# ``pixel_continuity_scope`` is the second question, as an enum a consumer can
+# branch on, with ``pixel_continuity_scope_note`` carrying the same statement
+# in words.  MEASURED on the round-3 population (642 oracle-scored planes, 16
+# optics; ``validation/probe_wp_b7c_round3/fallback_win.json``): on the
+# fallback route NOTHING already in these diagnostics orders the returned
+# field's fidelity -- see ``WP-B7c_ROUND3_REPORT.md`` section 7 for the
+# candidates tried and what each one's best threshold achieves -- so the
+# honest thing the module can do there is say that the field is unarbitrated
+# for accuracy, which is what this key does.
+_PIXEL_CONTINUITY_SCOPES = {
+    'returned_field': (
+        'the reading is of the field this call returns, and the dark side '
+        'has been completed, so it arbitrates the quadrature of the whole '
+        'returned field'),
+    'returned_field_quadrature_only': (
+        'the reading is of the field this call returns, but this is a '
+        'FALLBACK: the uniform completion declined and the returned field is '
+        'the bright-side-only branch sum, so the dark-side tail is absent '
+        'and NOT arbitrated.  This arm sees the quadrature and nothing else; '
+        'on the round-3 fallback population it returns fields down to oracle '
+        'fidelity 0.46 with every diagnostic at its nominal value'),
+    'underlying_branch_sum': (
+        'the reading is NOT of the field this call returns: it is of the '
+        'branch sum that field is built on.  There is no half-pitch Pearcey '
+        'cusp field to compare against without a second cusp trace, so the '
+        "cusp route carries the branch sum's reading, which the module's "
+        "own claim-2 measurement shows can differ from the returned field's "
+        "(1.0636 against 1.0020 on VERIFY-B7b's fixture)"),
+}
+
+#: what the Pearcey cusp route's reading is OF.  Named rather than written
+#: at the call site so the label and the scope cannot drift apart.
+_PEARCEY_READING_OF = 'the branch sum the Pearcey cusp field is built on'
 
 # Pearcey series (:func:`pearcey`) converges everywhere but SLOWS / overflows
 # for large ``|x|, |y|``; clamp the control coordinates to this box when
@@ -1222,7 +1268,25 @@ def apply_real_lens_traced_uniform(
     A plane this passes is not thereby certified: the second reading detects
     ONE failure mode (the quadrature's convergence in the pixel), and on the
     FALLBACK route -- where the field returned is the bright-side-only branch
-    sum -- it does not order the returned field's accuracy at all."""
+    sum -- it does not order the returned field's accuracy at all.  That is
+    not left for the caller to infer: ``pixel_continuity_of`` names the field
+    the number was measured on and ``pixel_continuity_scope`` says what it
+    buys on THIS route --
+
+    * ``'returned_field'``            the fold-ring completion: the dark side
+                                      is built and the reading is of the whole
+                                      returned field;
+    * ``'returned_field_quadrature_only'``  a FALLBACK: the reading is of the
+                                      returned field, but that field is the
+                                      bright-side-only branch sum and the
+                                      absent dark tail is NOT arbitrated;
+    * ``'underlying_branch_sum'``     the Pearcey cusp route: the number is of
+                                      the branch sum the cusp field is built
+                                      on and not of the returned field, which
+                                      has no half-pitch counterpart to compare
+                                      against.
+
+    ``pixel_continuity_scope_note`` carries the same statement in words."""
     from .._validation import _check_2d_scalar_field
     _check_2d_scalar_field(E_in, 'apply_real_lens_traced_uniform',
                            input_kind='field')
@@ -1296,6 +1360,12 @@ def apply_real_lens_traced_uniform(
                                          if _mb_cont is not None else None),
         'pixel_continuity_band': (_MB_PIXEL_CONTINUITY_MIN,
                                   _MB_PIXEL_CONTINUITY_MAX),
+        # placed here rather than only in ``_arbitrate`` so the keys exist on
+        # every dict this function builds, and a consumer that branches on
+        # the scope never has to guess what a missing key meant
+        'pixel_continuity_of': None,
+        'pixel_continuity_scope': None,
+        'pixel_continuity_scope_note': None,
     })
 
     def _continuity_verdict(c):
@@ -1314,7 +1384,7 @@ def apply_real_lens_traced_uniform(
             return 'not_converged_loss'
         return 'ok'
 
-    def _arbitrate(c, what):
+    def _arbitrate(c, what, scope):
         """Record the continuity of the field about to be RETURNED, and
         refuse if the render it came from has not converged in the pixel.
 
@@ -1327,17 +1397,30 @@ def apply_real_lens_traced_uniform(
         COMPLETION reads 1.0020, and the completed field's oracle fidelity is
         0.9878 with its power 0.994x the oracle's -- deciding on the branch
         sum's reading there would refuse a field that is right.
+
+        ``what`` names the field the number is a reading OF; ``scope`` says
+        what that buys on THIS route, and the two are not the same question
+        (WP-B7c round 3, E4 / E7).  See ``_PIXEL_CONTINUITY_SCOPES``.
         """
+        if scope not in _PIXEL_CONTINUITY_SCOPES:
+            raise AssertionError(
+                f'apply_real_lens_traced_uniform: unknown continuity scope '
+                f'{scope!r}; expected one of '
+                f'{sorted(_PIXEL_CONTINUITY_SCOPES)}')
         d = _continuity_verdict(c)
         _mb_energy['pixel_continuity'] = (float(c) if c is not None else None)
         _mb_energy['pixel_continuity_of'] = what
+        _mb_energy['pixel_continuity_scope'] = scope
+        _mb_energy['pixel_continuity_scope_note'] = (
+            _PIXEL_CONTINUITY_SCOPES[scope])
         _mb_energy['pixel_continuity_decision'] = d
         if d != 'not_converged_gain':
             return
         raise RuntimeError(
             "apply_real_lens_traced_uniform (also reached via "
-            "apply_real_lens_traced(caustic='uniform')): the field this call "
-            f"would return ({what}) has NOT CONVERGED in the output pixel.  "
+            "apply_real_lens_traced(caustic='uniform')): the reading this "
+            f"call decides on -- taken on {what} -- has NOT CONVERGED in the "
+            "output pixel.  "
             "Rasterising the same mapped triangles onto a grid of half the "
             "pitch, over the same physical window and from the same launch "
             f"lattice, gives {1.0 / c:.4g}x this field's power -- a "
@@ -1445,7 +1528,8 @@ def apply_real_lens_traced_uniform(
         # On this path the field RETURNED is the branch sum itself, so the
         # arbiter's reading of the branch sum is the reading of the returned
         # field and needs no second completion.
-        _arbitrate(_mb_cont, 'the plain multibranch field')
+        _arbitrate(_mb_cont, 'the plain multibranch field',
+                   'returned_field_quadrature_only')
         out = E_mb.astype(target_cdtype) if E_mb.dtype != target_cdtype else E_mb
         if return_diagnostics:
             d = dict(mb_diag)
@@ -1489,7 +1573,8 @@ def apply_real_lens_traced_uniform(
                     # is no half-pitch Pearcey to compare it against without a
                     # second cusp trace, so this path is arbitrated on the
                     # branch sum's own reading
-                    _arbitrate(_mb_cont, 'the Pearcey cusp field')
+                    _arbitrate(_mb_cont, _PEARCEY_READING_OF,
+                               'underlying_branch_sum')
                     E_out = E_cusp.astype(target_cdtype)
                     if return_diagnostics:
                         d = dict(mb_diag)
@@ -1663,7 +1748,16 @@ def apply_real_lens_traced_uniform(
     _E_half = _mb_half_render
     if _E_half is not None:
         _N_h, _dx_h = 2 * N, 0.5 * dx
-        _xh = (np.arange(_N_h) - _N_h / 2.0) * _dx_h
+        # The SAME lattice the branch sum rasterised the half-pitch render
+        # onto, taken from the one definition rather than rebuilt here
+        # (WP-B7c round 3, E5).  Rebuilt inline this was a seam the two could
+        # drift apart at, and the reading is a ratio of two integrals: if the
+        # completion is evaluated at radii the render does not have, the two
+        # halves are taken on different geometry.  See
+        # ``_lens_traced_multibranch._HALF_PITCH_CENTRE_OFFSET`` for the
+        # convention (the fine lattice NESTS on the coarse one) and for what
+        # that costs at the window edge.
+        _xh = half_pitch_centres(N, dx)
         _Xh, _Yh = np.meshgrid(_xh, _xh)
         _E_half_full = _fill(np.asarray(_E_half),
                              np.sqrt(_Xh * _Xh + _Yh * _Yh))
@@ -1673,7 +1767,7 @@ def apply_real_lens_traced_uniform(
             _uni_cont = _p_coarse / _p_half
         del _E_half_full
     _mb_half_render = None
-    _arbitrate(_uni_cont, 'the completed fold field')
+    _arbitrate(_uni_cont, 'the completed fold field', 'returned_field')
 
     E_out = E_out.astype(target_cdtype)
 
