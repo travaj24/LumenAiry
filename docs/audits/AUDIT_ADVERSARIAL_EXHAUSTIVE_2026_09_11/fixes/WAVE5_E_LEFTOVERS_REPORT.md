@@ -494,8 +494,16 @@ inside the WSL run below.  Every claim two-sided:
   surface classes;
 * the guard fires at each of the four sites on a synthetic immersed-exit
   prescription AND does not fire on the air-terminated control;
-* the tolerance's derivation is pinned (scales as `lambda / z_image`, floors at
-  the budget, sits above STP air and below water) rather than its number.
+* the tolerance's derivation is pinned rather than its number, and (corrected
+  2026-09-19, VERIFY-WAVE5-E D3) it is pinned out of the LIBRARY's one
+  definition, `fga._immersed_exit_tolerance`: the guard is bisected through
+  that helper at six image distances and required to refuse at 1.01x its
+  return and serve at 0.99x, and the physics the number encodes -- the
+  boundary index error costs exactly the one-milliwave budget over that leg --
+  is asserted on the helper's own value, so a formula that dropped the leg's
+  length fails instead of moving both sides together.  The zero-leg floor and
+  the real-leg decision (STP air served at a zero leg, refused over 0.35 mm)
+  are both asserted.
 
 ---
 

@@ -1189,6 +1189,38 @@ _FGA_IMAGE_LEG_WAVE_BUDGET = 1.0e-3
 _FGA_EXIT_INDEX_NOISE_FLOOR = 1.0e-12
 
 
+def _immersed_exit_tolerance(wavelength, z_image,
+                             waves=_FGA_IMAGE_LEG_WAVE_BUDGET):
+    """The largest ``|n_exit - 1|`` the index-free image leg may carry.
+
+    THE ONE DEFINITION of the O-3 tolerance.  All four guard sites --
+    :func:`_fga_through_lens`, :func:`_fga_coarse`,
+    :func:`_fga_vector_through_lens` and :func:`_caustic_zone` -- reach it
+    through :func:`_require_non_immersed_exit`, and the pins read it from
+    here rather than restating the arithmetic, so the derivation cannot
+    change underneath a test that merely resembles it (VERIFY-WAVE5-E D3:
+    rewriting this formula to drop ``z_image`` entirely left all 29 ids of
+    ``tests/unit/test_wave5_e_exit_vertex_dead_rays.py`` green, because the
+    pin asserted properties of its own local copy).
+
+    DERIVATION.  Omitting the exit index from ``opd += z_image * sec`` costs
+    ``|n - 1| * z_image * sec`` of optical path and therefore at least
+    ``|n - 1| * |z_image| / wavelength`` waves of wavefront (``sec >= 1``).
+    Setting that lower bound equal to ``waves`` and solving for ``|n - 1|``
+    gives the expression below; the ``max(..., wavelength)`` clamp keeps a
+    zero-length leg (``_caustic_zone``) at the budget itself rather than at
+    infinity, and :data:`_FGA_EXIT_INDEX_NOISE_FLOOR` keeps an arbitrarily
+    long leg above the noise of ``resolve_exit_index``.
+
+    The returned value is TIGHT at a real image leg, not a near-unity
+    courtesy: see :func:`_require_non_immersed_exit` for what it refuses.
+    """
+    lam = abs(float(wavelength))
+    return max(_FGA_EXIT_INDEX_NOISE_FLOOR,
+               float(waves) * lam
+               / max(abs(float(z_image)), lam))
+
+
 def _require_non_immersed_exit(surfs, wavelength, z_image, fn_name):
     """Refuse a prescription whose exit medium is not air, and return ``n_exit``.
 
@@ -1214,6 +1246,11 @@ def _require_non_immersed_exit(surfs, wavelength, z_image, fn_name):
     :data:`_FGA_IMAGE_LEG_WAVE_BUDGET`, i.e. when
 
         ``|n - 1| > waves_budget * wavelength / max(|z_image|, wavelength)``
+
+    which is computed in exactly one place,
+    :func:`_immersed_exit_tolerance`.  All four guard sites reach it through
+    this function, and the pins ASK that helper for the number instead of
+    restating the arithmetic beside it.
 
     The ``max(..., wavelength)`` clamp is what makes a zero-length leg
     (``_caustic_zone``, or ``output_plane_distance=0``) still refuse a real
@@ -1251,9 +1288,7 @@ def _require_non_immersed_exit(surfs, wavelength, z_image, fn_name):
     except ValueError:
         return None
     lam = abs(float(wavelength))
-    tol = max(_FGA_EXIT_INDEX_NOISE_FLOOR,
-              _FGA_IMAGE_LEG_WAVE_BUDGET * lam
-              / max(abs(float(z_image)), lam))
+    tol = _immersed_exit_tolerance(wavelength, z_image)
     if abs(n_exit - 1.0) > tol:
         waves = abs(n_exit - 1.0) * max(abs(float(z_image)), lam) / lam
         raise NotImplementedError(

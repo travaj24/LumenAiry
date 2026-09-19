@@ -48,6 +48,7 @@ from lumenairy.raytrace.differential import (
     ray_transfer_jacobian,
     ray_transfer_jacobian_analytic,
 )
+from lumenairy.raytrace import exit_vertex as _ev_mod
 from lumenairy.raytrace.exit_vertex import resolve_exit_index
 
 _LAM = 1.03e-6
@@ -443,9 +444,40 @@ def test_an_air_terminated_prescription_is_not_refused(site):
         raise
 
 
-def test_the_guard_tolerance_is_the_wavefront_it_protects():
+def _refuses(monkeypatch, n_exit, z_image, surfs=None):
+    """Does the REAL guard refuse this exit index at this image leg?
+
+    ``resolve_exit_index`` is monkeypatched so the index is a free variable --
+    the registry resolves air to exactly 1.0 and glass to ~1.6 and nothing in
+    between, so there is no prescription that puts a chosen ``n_exit`` into
+    the guard.  Everything else is the shipped call.
+    """
+    surfs = _surfs(_air_presc()) if surfs is None else surfs
+    monkeypatch.setattr(_ev_mod, 'resolve_exit_index',
+                        lambda *a, **k: float(n_exit), raising=True)
+    try:
+        _fga._require_non_immersed_exit(surfs, _LAM, z_image, 'wave5e_tol')
+        return False
+    except NotImplementedError:
+        return True
+
+
+def test_the_guard_tolerance_is_the_wavefront_it_protects(monkeypatch):
     """The tolerance is DERIVED, and this pins the derivation rather than a
-    number.
+    number -- READ OUT OF THE LIBRARY, not restated here.
+
+    THE DURABILITY POINT (VERIFY-WAVE5-E D3).  This id used to define its own
+    ``tol(z)`` inside the test and then assert four properties of that local
+    copy.  It read two module constants but never the formula, so it could not
+    see the library's formula move: measured 2026-09-19, rewriting the guard's
+    tolerance from ``waves*lam/max(|z|,lam)`` to ``waves*lam/lam`` -- deleting
+    the image leg from the derivation entirely -- left all 29 ids of this file
+    GREEN on both builds.  The tolerance now has ONE definition,
+    ``fga._immersed_exit_tolerance``, which every guard site reaches through
+    ``_require_non_immersed_exit``; this id ASKS it for the number, proves the
+    GUARD's boundary is that number by bisecting the guard itself, and then
+    asserts the PHYSICS the number is supposed to encode -- which is what the
+    mutation above breaks.
 
     ``_require_non_immersed_exit`` refuses when
     ``|n - 1| > waves * lambda / max(|z_image|, lambda)``, i.e. exactly when
@@ -476,25 +508,81 @@ def test_the_guard_tolerance_is_the_wavefront_it_protects():
     """
     waves = _fga._FGA_IMAGE_LEG_WAVE_BUDGET
     lam = _LAM
+    tol = _fga._immersed_exit_tolerance          # THE LIBRARY'S OWN number
 
-    def tol(z):
-        return max(_fga._FGA_EXIT_INDEX_NOISE_FLOOR,
-                   waves * lam / max(abs(z), lam))
+    # ---- 1.  the GUARD's boundary IS the helper's number ------------------
+    # Bisected through the shipped guard, so a helper that stopped being the
+    # thing the guard uses is caught here and not assumed away.
+    surfs = _surfs(_air_presc())
+    for z in (0.0, lam, 1.0e-5, 3.5e-4, 1.0e-3, 1.0e-2):
+        want = tol(lam, z)
+        assert _refuses(monkeypatch, 1.0 + 1.0, z, surfs), (
+            f'premise: the guard must refuse n_exit = 2.0 at z_image={z!r}')
+        assert not _refuses(monkeypatch, 1.0, z, surfs), (
+            f'premise: the guard must NOT refuse an exactly-unity exit index '
+            f'at z_image={z!r}')
+        lo, hi = 0.0, 1.0
+        for _ in range(60):
+            mid = 0.5 * (lo + hi)
+            if _refuses(monkeypatch, 1.0 + mid, z, surfs):
+                hi = mid
+            else:
+                lo = mid
+        assert abs(hi - want) <= 1e-9 * want, (
+            f'at z_image={z!r} the guard refuses from |n-1| > {hi!r}, but '
+            f'fga._immersed_exit_tolerance -- the ONE definition all four '
+            f'sites reach -- returns {want!r}.  The guard must BE the helper, '
+            f'not merely resemble it.')
+        # two-sided about the helper's own return, at every leg
+        assert _refuses(monkeypatch, 1.0 + 1.01 * want, z, surfs), (
+            f'1.01x the returned tolerance ({want!r}) must be refused at '
+            f'z_image={z!r}')
+        assert not _refuses(monkeypatch, 1.0 + 0.99 * want, z, surfs), (
+            f'0.99x the returned tolerance ({want!r}) must be served at '
+            f'z_image={z!r}')
 
-    assert tol(0.0) == pytest.approx(waves), (
+    # ---- 2.  the PHYSICS the number encodes -------------------------------
+    # At the boundary the OPL the leg omits costs EXACTLY the wave budget:
+    # |n-1| * z / lambda == waves.  This is the statement the formula exists
+    # to make, and it is asserted on the library's value, so a formula that
+    # dropped the leg's length fails here rather than moving both sides.
+    for z in (1.0e-5, 3.5e-4, 1.0e-3, 1.0e-2):
+        cost = tol(lam, z) * z / lam
+        assert cost == pytest.approx(waves, rel=1e-9), (
+            f'the boundary index error at z_image={z!r} costs {cost!r} waves '
+            f'of wavefront, but the budget it is derived from is {waves!r}.  '
+            f'The tolerance must be the index error that spends exactly the '
+            f'budget over THAT leg.')
+    assert tol(lam, 0.0) == pytest.approx(waves), (
         'at a zero-length leg the tolerance must floor at the wave budget')
-    assert tol(1.0e-3) == pytest.approx(waves * lam / 1.0e-3), (
-        'the tolerance must scale as lambda / z_image')
-    assert tol(2.0e-3) < tol(1.0e-3), (
-        'a longer leg must tighten the tolerance')
+    assert tol(lam, 2.0e-3) < tol(lam, 1.0e-3) < tol(lam, 1.0e-5), (
+        f'a longer leg must tighten the tolerance strictly; got '
+        f'{tol(lam, 1.0e-5)!r} / {tol(lam, 1.0e-3)!r} / {tol(lam, 2.0e-3)!r}')
+    assert tol(lam, 0.0, waves=2.0 * waves) == pytest.approx(2.0 * waves), (
+        'the helper must carry its wave budget as a parameter, so a caller '
+        'or a pin can price a different budget without copying the formula')
+
+    # ---- 3.  the two ends the budget is chosen between --------------------
     stp_air_minus_vacuum = 2.77e-4
-    assert tol(0.0) > 3.0 * stp_air_minus_vacuum, (
-        f'the ZERO-LEG floor ({tol(0.0):.3e}) must sit above the air-vs-vacuum '
-        f'index difference at STP ({stp_air_minus_vacuum:.3e}), so that '
-        f'_caustic_zone\'s zero leg is not decided by round-off.  (This is '
-        f'the floor only: at a real image leg the boundary is tighter and a '
-        f'registered STP air index IS refused -- see the docstring.)')
-    assert tol(0.0) < 0.1 * (1.33 - 1.0), (
-        f'the zero-leg floor ({tol(0.0):.3e}) must sit far below the weakest '
-        f'immersion medium (water, n = 1.33), else the guard misses what it '
-        f'exists for')
+    assert tol(lam, 0.0) > 3.0 * stp_air_minus_vacuum, (
+        f'the ZERO-LEG floor ({tol(lam, 0.0):.3e}) must sit above the '
+        f'air-vs-vacuum index difference at STP '
+        f'({stp_air_minus_vacuum:.3e}), so that _caustic_zone\'s zero leg is '
+        f'not decided by round-off')
+    assert tol(lam, 0.0) < 0.1 * (1.33 - 1.0), (
+        f'the zero-leg floor ({tol(lam, 0.0):.3e}) must sit far below the '
+        f'weakest immersion medium (water, n = 1.33), else the guard misses '
+        f'what it exists for')
+    # ...and what that means at a REAL leg, as a DECISION (VERIFY-WAVE5-E D1):
+    # a registered STP air index is SERVED at a zero leg and REFUSED at the
+    # fixture's own 0.35 mm one, because 2.77e-4 over 0.35 mm is 63
+    # milliwaves against a budget of one.
+    stp_air = 1.0 + stp_air_minus_vacuum
+    assert not _refuses(monkeypatch, stp_air, 0.0, surfs), (
+        'a registered STP air index must be served at a ZERO-length leg, '
+        'where it costs no wavefront at all')
+    assert _refuses(monkeypatch, stp_air, 3.5e-4, surfs), (
+        'a registered STP air index must be REFUSED over a 0.35 mm image '
+        'leg, where the index-free leg is wrong by 63 milliwaves against a '
+        'one-milliwave budget.  This guard is a near-unity-exit-index guard, '
+        'not only an immersion guard.')

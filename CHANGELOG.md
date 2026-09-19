@@ -461,7 +461,16 @@ bit-exact on dead rows AND the live rows still move (a freeze that froze everyth
 pass the first arm and be a disabled projection); the JAX twin of the primitive is
 bit-identical to the NumPy one on all six surface classes; the guard fires on a synthetic
 immersed-exit prescription at each of the four sites AND does not fire on the
-air-terminated control.  29 ids, 62 s.
+air-terminated control.
+
+The tolerance has ONE definition, `fga._immersed_exit_tolerance(wavelength, z_image, waves=)`,
+which every guard site reaches through `_require_non_immersed_exit` and which the pin ASKS
+for the number instead of restating the arithmetic beside it: the pin bisects the shipped
+guard at six image distances, requires the boundary to be that helper's return, requires
+1.01x of it to be refused and 0.99x served, and asserts the physics the number encodes (the
+boundary index error costs exactly the one-milliwave budget over that leg).  Before this,
+rewriting the guard's tolerance to drop `z_image` entirely left all 29 ids green on both
+builds; it now fails a named id on both.
 
 ### Added -- a durable fail-before for the C8 inverse-support bound at the SHIPPED decentred-fit order
 
