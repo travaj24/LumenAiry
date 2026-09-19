@@ -367,21 +367,38 @@ def test_set_low_memory_is_now_fully_covered_by_snapshot_restore():
     registered itself.  ``lens_parallel_amp`` was the last of the four not
     restorable, so the macro is now completely undone by restore()."""
     macro_knobs = ('fft_plan_cache_size', 'fft_double_buffer',
-                   'fft_auto_promote', 'lens_parallel_amp')
+                   'fft_auto_promote', 'lens_parallel_amp',
+                   'low_memory_prior')
     registered = set(_knobs.knobs())
     missing = [k for k in macro_knobs if k not in registered]
     assert not missing, (
         f'set_low_memory flips {missing}, which snapshot/restore cannot put '
         f'back -- a test that calls it leaks into every later test.')
+    from lumenairy import memory as _memory
+    # 5.47.1 (release run 34939783790, shard 6/8): restoring the four knobs
+    # while leaving the macro's own first-enable stash in place made the
+    # NEXT set_low_memory(True) keep the stale stash and the next disable
+    # restore it (plan cache 8) over the caller's live values (16) -- in
+    # whichever later test shared this process.  The stash is now the
+    # registered knob 'low_memory_prior', so restore() clears it.
     state = _knobs.snapshot()
+    assert state['low_memory_prior'] is None, (
+        'an earlier test left set_low_memory(True) on record; the macro '
+        'must be undone by set_low_memory(False) or _knobs.restore().')
     try:
         la.set_low_memory(True)
         assert _lens_traced.get_lens_parallel_amp() is False, (
             'set_low_memory(True) no longer flips lens_parallel_amp; this '
             'test is pinning the wrong macro.')
+        assert _memory._LOW_MEMORY_PRIOR is not None, (
+            'set_low_memory(True) no longer stashes its prior')
     finally:
         _knobs.restore(state)
     assert _lens_traced.get_lens_parallel_amp() is True
+    assert _memory._LOW_MEMORY_PRIOR is None, (
+        'restore() put the four knobs back but left the low-memory stash '
+        'in place -- the next enable/disable cycle in this process would '
+        'restore stale values')
 
 
 # ---------------------------------------------------------------------------

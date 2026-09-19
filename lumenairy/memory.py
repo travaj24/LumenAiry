@@ -1300,6 +1300,37 @@ def set_low_memory(enabled: bool = True, *, aggressive: bool = False) -> Dict[st
     return prior
 
 
+def _get_low_memory_prior() -> Optional[Dict[str, Any]]:
+    """The snapshot ``set_low_memory(True)`` stashed for ``set_low_memory(False)``
+    to put back (``None`` when no enable is on record), as a COPY.
+
+    Registered as the knob ``'low_memory_prior'`` so that
+    :func:`lumenairy._knobs.snapshot` / :func:`~lumenairy._knobs.restore` undo
+    the low-memory macro COMPLETELY.  5.47.1: ``restore()`` put the four knobs
+    the macro flips back but left this stash in place, so the NEXT
+    ``set_low_memory(True)`` kept the stale first-enable snapshot (the
+    ``_LOW_MEMORY_PRIOR is None`` branch below never ran) and the next
+    ``set_low_memory(False)`` restored ITS values over the caller's live ones
+    (plan cache 8 restored where the caller had set 16).  Which tests shared a
+    process decided the outcome (release run 34939783790, shard 6/8)."""
+    return None if _LOW_MEMORY_PRIOR is None else dict(_LOW_MEMORY_PRIOR)
+
+
+def _set_low_memory_prior(value: Optional[Dict[str, Any]]) -> None:
+    """Setter half of the ``'low_memory_prior'`` knob (see the getter)."""
+    global _LOW_MEMORY_PRIOR
+    _LOW_MEMORY_PRIOR = None if value is None else dict(value)
+
+
+_register_knob(
+    'low_memory_prior',
+    getter=_get_low_memory_prior, setter=_set_low_memory_prior,
+    doc="INTERNAL: the knob snapshot set_low_memory(True) stashed for "
+        "set_low_memory(False) to restore; None when no enable is on record.  "
+        "Registered so snapshot()/restore() undo the low-memory macro "
+        "completely instead of leaving a stale stash behind (5.47.1).")
+
+
 __all__ = [
     'get_ram_budget', 'set_max_ram', 'get_max_ram',
     'available_memory_bytes', 'total_memory_bytes', 'memory_info',
