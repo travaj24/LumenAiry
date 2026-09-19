@@ -50,11 +50,13 @@ from __future__ import annotations
 
 import ast
 import faulthandler
+import inspect
 import json
 import os
 import subprocess
 import sys
 import tempfile
+import textwrap
 import threading
 import time
 import warnings
@@ -1287,7 +1289,31 @@ def test_the_in_flight_counter_is_one_claim_per_dispatch_not_per_chunk():
        dispatch rather than tracking the chunks;
     3. every comparison against ``_POOL_INFLIGHT`` in the module is against
        zero -- the moment one is not, the magnitude has acquired a meaning
-       and the counter, not the comment, is what has to change.
+       and the counter, not the comment, is what has to change;
+    4. and no call site CONSUMES ``_note_pool_inflight``'s return value,
+       which is the other route the magnitude has out of the module.
+
+    RESTATED 2026-09-19 (VERIFY-WP-B13-FOLLOWUPS defects VD7 and VD8), in
+    both directions it was wrong in:
+
+    * VD7, a MISS.  Fact 3 walked ``ast.Compare`` nodes only, and the
+      magnitude does not have to travel through one:
+      ``_note_pool_inflight`` ends ``return _POOL_INFLIGHT``, so
+      ``if _note_pool_inflight(0) > 1:`` is a magnitude read that no Compare
+      on the Name can see, and the pin stayed green on it (driven,
+      ``vf6_d4_readers.py::branch_d4_check`` shape 5).  Fact 4 closes that
+      route by requiring every call site to be an expression STATEMENT, i.e.
+      the returned count is discarded.  MEASURED 2026-09-19, grep + AST over
+      all of ``lumenairy/`` on both builds: 4 call sites, 1 claim and 3
+      releases, 0 of them consuming the value.
+    * VD8, a FALSE FAILURE.  The non-zero operands were read from
+      ``node.comparators`` alone, so ``0 < _POOL_INFLIGHT`` -- the same
+      zero-vs-non-zero decision with the operands swapped -- put the Name
+      itself in the "something other than zero" bucket and failed the pin
+      (same driver, shape 2).  The operands are now read from
+      ``[node.left, *node.comparators]`` MINUS the ``_POOL_INFLIGHT`` node,
+      so the pin is about the decision rather than about which side of the
+      operator the counter was written on.
     """
     import ast
     import inspect
@@ -1309,13 +1335,19 @@ def test_the_in_flight_counter_is_one_claim_per_dispatch_not_per_chunk():
     for node in ast.walk(tree):
         if not isinstance(node, ast.Compare):
             continue
-        names = [n.id for n in [node.left, *node.comparators]
-                 if isinstance(n, ast.Name)]
-        if '_POOL_INFLIGHT' not in names:
+        operands = [node.left, *node.comparators]
+        if not any(isinstance(n, ast.Name) and n.id == '_POOL_INFLIGHT'
+                   for n in operands):
             continue
-        others = [c for c in node.comparators
-                  if not (isinstance(c, ast.Constant) and c.value == 0)]
-        comparisons.append((node.lineno, bool(others)))
+        # BOTH compare orders are the same decision: read the OTHER operands
+        # from the whole list minus the counter's own node, never from
+        # ``comparators`` alone (VD8 -- ``0 < _POOL_INFLIGHT`` false-failed).
+        others = [x for x in operands
+                  if not (isinstance(x, ast.Name)
+                          and x.id == '_POOL_INFLIGHT')]
+        non_zero = not all(isinstance(x, ast.Constant) and x.value == 0
+                           for x in others)
+        comparisons.append((node.lineno, non_zero))
     assert comparisons, (
         'nothing compares _POOL_INFLIGHT any more -- the rebuild rule has '
         'lost the guard that keeps a rebuild off a live pool')
@@ -1325,3 +1357,184 @@ def test_the_in_flight_counter_is_one_claim_per_dispatch_not_per_chunk():
         f'other than zero.  Its magnitude is a count of DISPATCHES, not of '
         f'chunks; a consumer that needs chunks has to change the counter '
         f'(and its comment), not read this one')
+
+    # 4. the OTHER route out of the module: ``_note_pool_inflight`` returns
+    #    the count, so a call site that uses the returned value is a
+    #    magnitude read no Compare above can see (VD7).
+    calls = [n for n in ast.walk(tree)
+             if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
+             and n.func.id == '_note_pool_inflight']
+    discarded = [n for n in ast.walk(tree)
+                 if isinstance(n, ast.Expr) and isinstance(n.value, ast.Call)
+                 and isinstance(n.value.func, ast.Name)
+                 and n.value.func.id == '_note_pool_inflight']
+    assert calls, (
+        'nothing calls _note_pool_inflight any more; the rebuild rule has '
+        'lost the claim that keeps a rebuild off a live pool')
+    assert len(discarded) == len(calls), (
+        f'{len(calls) - len(discarded)} of {len(calls)} _note_pool_inflight '
+        f'call sites (lines {[n.lineno for n in calls]}) CONSUME the return '
+        f'value.  That value is the magnitude of a DISPATCH count, and the '
+        f'D4 decision -- fix the comment, not the counter -- is only sound '
+        f'while nothing reads it; a consumer that needs a chunk count has to '
+        f'change the counter, not read this one')
+
+
+# ===========================================================================
+# D5 / VD3 -- what the dispatcher's infrastructure clause actually reaches
+# ===========================================================================
+class _PreThreeElevenError(Exception):
+    """CPython < 3.11's ``concurrent.futures._base.Error``."""
+
+
+class _PreThreeElevenTimeoutError(_PreThreeElevenError):
+    """CPython < 3.11's ``concurrent.futures.TimeoutError``.
+
+    Before gh-90315 ("concurrent.futures.TimeoutError and
+    asyncio.TimeoutError are now aliases of TimeoutError", Python 3.11) this
+    class derived from ``concurrent.futures._base.Error(Exception)`` and had
+    NOTHING to do with ``OSError``.  Reconstructed here rather than imported,
+    because no 3.10 interpreter is installed on this box -- the shape that
+    matters is the MRO, and the MRO is what an ``except`` tuple matches on.
+    """
+
+
+class _RaisingPool:
+    """A stub executor whose ``submit`` raises a chosen exception.
+
+    Installed through the same substitution point every other test in this
+    file uses, so what is exercised is the shipped dispatcher and the shipped
+    ``except (BrokenProcessPool, RuntimeError, OSError, EOFError)`` tuple.
+    """
+
+    _broken = None
+
+    def __init__(self, exc):
+        self._exc = exc
+        self.shutdown_calls = []
+
+    def submit(self, fn, *a, **kw):
+        raise self._exc
+
+    def shutdown(self, wait=True, **kw):
+        self.shutdown_calls.append(bool(wait))
+
+
+def test_the_infrastructure_clause_reaches_an_oserror_timeout_and_no_other(
+        monkeypatch, _forced_pool_bars, serial_reference):
+    """What the shipped dispatcher does with each timeout MRO, driven.
+
+    VERIFY-WP-B13-FOLLOWUPS defect VD3.  The follow-ups report recommended
+    bounding the pool BOOTSTRAP and argued the fallback was already right
+    because "``TimeoutError`` is an ``OSError`` subclass, so it lands in the
+    dispatcher's existing infrastructure clause".  That is true of the
+    BUILTIN on every supported interpreter (PEP 3151), and true of
+    ``concurrent.futures.TimeoutError`` only from Python 3.11, where
+    gh-90315 made it an alias of the builtin.  ``pyproject.toml`` declares
+    ``requires-python = ">=3.10"`` and CI runs 3.10, so on a supported
+    interpreter the pre-3.11 class -- whose MRO is
+    ``TimeoutError -> Error -> Exception`` -- walks straight past
+    ``(BrokenProcessPool, RuntimeError, OSError, EOFError)``.
+
+    THIS TEST ASSERTS THE OUTCOME THE CODE SHIPS, not the outcome a future
+    bar would need.  Nothing in ``_invert_newton_parallel`` asks for a
+    timeout today -- neither ``as_completed`` nor ``Future.result`` is given
+    one, which the last block below re-reads from the source -- so no path
+    inside the ``try`` can raise either timeout class, the escape is
+    unreachable, and adding ``concurrent.futures.TimeoutError`` to the tuple
+    would be a no-op on 3.11+ (it IS ``OSError`` there) while on 3.10 it
+    would newly swallow a WORKER-raised timeout into a silent serial re-run
+    -- exactly what the tuple's own comment refuses to do for ``ValueError``,
+    ``ImportError`` and ``MemoryError``.  The tuple is therefore left as it
+    is, and the requirement recorded for whoever adds the bar: naming the
+    timeout class is the FIRST line of that change, and
+    ``test_verify_b13_followups.py::``
+    ``test_a_timeout_on_the_dispatch_must_name_its_own_exception_class``
+    turns red the day a ``timeout=`` lands without it.
+
+    MEASURED 2026-09-19 through this same reproducer on Windows 3.14.6 and
+    WSL 3.12.3 (``validation/probe_verify_b13_followups/vf5_d5_timing.py::``
+    ``measure_clause_reach``, re-driven here): builtin MRO -> serial,
+    byte-identical; pre-3.11 MRO -> escapes to the caller.
+    """
+    import concurrent.futures as cf
+
+    # The premise, MEASURED on the running build rather than assumed: the
+    # builtin is an OSError everywhere, and whether cf.TimeoutError IS the
+    # builtin is exactly the 3.11 boundary this defect is about.
+    measured = {
+        'python': tuple(sys.version_info[:2]),
+        'builtin_TimeoutError_is_OSError': issubclass(TimeoutError, OSError),
+        'cf_TimeoutError_is_builtin': cf.TimeoutError is TimeoutError,
+        'cf_TimeoutError_is_OSError': issubclass(cf.TimeoutError, OSError),
+        'pre_3_11_mro': [c.__name__
+                         for c in _PreThreeElevenTimeoutError.__mro__],
+    }
+    assert measured['builtin_TimeoutError_is_OSError'], measured
+    assert not issubclass(_PreThreeElevenTimeoutError, OSError), (
+        f'the reconstructed pre-3.11 class is an OSError, so it no longer '
+        f'models the MRO the defect is about: {measured}')
+
+    cases = [
+        ('builtin TimeoutError', TimeoutError('engineered'), True),
+        ('concurrent.futures.TimeoutError on this build',
+         cf.TimeoutError('engineered'),
+         measured['cf_TimeoutError_is_OSError']),
+        ('pre-3.11 concurrent.futures.TimeoutError MRO',
+         _PreThreeElevenTimeoutError('engineered'), False),
+        ('OSError (control)', OSError('engineered'), True),
+        ('ValueError (control)', ValueError('engineered'), False),
+    ]
+    rows = []
+    for label, exc, want_caught in cases:
+        pool = _RaisingPool(exc)
+        with monkeypatch.context() as mp:
+            _install_pool(mp, pool)
+            try:
+                got = _traced(4)
+                caught, escaped = True, None
+            except BaseException as raised:            # noqa: BLE001
+                caught, escaped = False, type(raised).__name__
+                got = None
+        identical = (None if got is None
+                     else bool(np.array_equal(got, serial_reference)))
+        rows.append({'case': label, 'want_caught': want_caught,
+                     'caught': caught, 'escaped_as': escaped,
+                     'identical_to_serial': identical,
+                     'mro': [c.__name__ for c in type(exc).__mro__]})
+        verb = 'took the serial fallback' if caught else 'escaped'
+        assert caught == want_caught, (
+            f'{label}: the dispatcher {verb}, which is not what the shipped '
+            f'except (BrokenProcessPool, RuntimeError, OSError, EOFError) '
+            f'tuple says it should do.  This build measures {measured}; '
+            f'rows so far: {rows}')
+        if caught:
+            assert identical, (
+                f'{label} took the serial fallback but the answer moved -- '
+                f'the fallback exists because the two paths are '
+                f'bit-identical, max|delta| = '
+                f'{np.abs(got - serial_reference).max():.3e}')
+
+    # And the reason the escape above is unreachable today: the dispatcher
+    # never asks for a timeout, so nothing inside its try can raise one.
+    src = inspect.getsource(la.apply_real_lens_traced)
+    i = src.index('def _invert_newton_parallel')
+    j = src.index('\n    def ', i + 1)
+    tree = ast.parse(textwrap.dedent(src[i:j]))
+    timed = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        name = getattr(node.func, 'id', None) or getattr(
+            node.func, 'attr', None)
+        if name in ('as_completed', 'result', 'wait') and any(
+                kw.arg == 'timeout' for kw in node.keywords):
+            timed.append((name, node.lineno))
+    assert timed == [], (
+        f'the dispatcher now asks for a timeout at {timed}, so a timeout '
+        f'class CAN be raised inside the try block.  The infrastructure '
+        f'clause has to name that class explicitly before this ships: on '
+        f'Python 3.10 -- inside this package requires-python -- '
+        f'concurrent.futures.TimeoutError is not an OSError and would reach '
+        f'the caller instead of the bit-identical serial rung.  Measured '
+        f'MROs on this build: {measured}')
