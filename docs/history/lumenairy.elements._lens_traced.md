@@ -1,7 +1,7 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/_lens_traced.py
-ast_sha256: f862be88e4aae76bfc9f148f019cb92ba24e37cae06271ecf6988bc863f33176
-token_sha256: bd59ae2d532b968c8c08749af52c0cdb14681c28a95aa87efd7ba7664680359c
+ast_sha256: ca6c3cf827ecc9229dcab29606531d0cee59e4f5b93591d00b006186de70c604
+token_sha256: ea23a6cd51a697a4785051665fc728a428b8c03ccef1d357b37cb2d24b8ad3c5
 pre_relocation_lines: 14898
 recorded_by: WP-A17 SWEEP-4 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
@@ -15,6 +15,7 @@ re_recorded: 2026-09-14 -- Wave-5 item D (CI run 34914295323): DIGEST-SCHEME cha
 re_recorded: 2026-09-14 -- P1 4.1b: the Newton pool's teardown becomes non-blocking (background reaper + bounded close) and the rebuild rule becomes a ceiling with in-flight accounting, so a broken pool reaches the serial fallback instead of wedging
 re_recorded: 2026-09-15 -- P1 4.1b follow-up: the dispatcher's post-claim re-read of the cached pool is removed -- it overrode whatever _get_persistent_worker_pool returned, which broke the H2 executor-spy pins; the microsecond window it closed costs only a bit-identical serial fallback
 re_recorded: 2026-09-15 -- merge of verify/wp-b13 into wave5/audit-leftovers: the WP-B13 pool repair and the wave-5 comment edits land in one tree (both sides' re_recorded lines kept)
+re_recorded: 2026-09-19 -- WP-B13 follow-ups D2/D3/D4: _shutdown_pool_bounded drops its executor from _ABANDONED_POOLS when the teardown returns (census, not ledger, with the expiry boundary ordered); _get_persistent_worker_pool's idle-worker footprint re-measured in the state the ceiling rule leaves behind; _POOL_INFLIGHT documented as a DISPATCH count
 -->
 
 # Version history -- `lumenairy/elements/_lens_traced.py`

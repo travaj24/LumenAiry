@@ -1237,9 +1237,19 @@ _PERSISTENT_POOL_ATEXIT_REGISTERED = False
 # wider pool on a loaded box, and the cost of it being too LOW is only that a
 # slow-but-healthy teardown finishes on the reaper thread instead of inline.
 _POOL_SHUTDOWN_TIMEOUT = 120.0
-# Chunks currently dispatched on ``_PERSISTENT_POOL``.  Read by
+# DISPATCHES currently in flight on ``_PERSISTENT_POOL`` -- not chunks
+# (corrected 2026-09-15, VERIFY-WP-B13 defect D4: this comment said "chunks",
+# and ``_note_pool_inflight`` is moved ONCE per dispatch by
+# ``_invert_newton_parallel``, whatever the chunk count).  Read by
 # ``_get_persistent_worker_pool`` so a rebuild can never tear a pool down
 # under a dispatch that is still using it (see the REBUILD RULE there).
+#
+# THE COUNTER STAYS A DISPATCH COUNT.  Every consumer reads only ZERO vs
+# NON-ZERO -- ``_get_persistent_worker_pool``'s ``elif _POOL_INFLIGHT > 0``
+# is the single library reader, and the tests and probes that touch it assert
+# it returns to 0 -- so the magnitude carries no meaning and a chunk-level
+# counter would buy nothing while adding two lock acquisitions per chunk.
+# The comment was the defect, not the counter.
 _POOL_INFLIGHT = 0
 # Pools whose teardown is still OUTSTANDING, for diagnostics and for tests
 # that want to see that a broken pool was retired rather than joined.  A
@@ -1379,7 +1389,11 @@ def _shutdown_pool_bounded(ex, timeout=None) -> bool:
 
 
 def _note_pool_inflight(delta: int) -> int:
-    """Move the in-flight chunk count and return it.  Never goes negative."""
+    """Move the in-flight DISPATCH count and return it.
+
+    One dispatch, one claim -- see ``_POOL_INFLIGHT``.  Never goes negative,
+    so a double release cannot wedge the rebuild rule shut.
+    """
     global _POOL_INFLIGHT
     with _PERSISTENT_POOL_LOCK:
         _POOL_INFLIGHT = max(0, _POOL_INFLIGHT + int(delta))

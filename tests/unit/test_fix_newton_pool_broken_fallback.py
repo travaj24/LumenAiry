@@ -1103,3 +1103,62 @@ def test_the_census_survives_the_helper_first_lock_order(monkeypatch):
         'reported as an expiry')
     assert LT._POOL_SHUTDOWN_TIMEOUTS == before_timeouts, (
         'a completed teardown was counted as a bounded-wait expiry')
+
+
+# ===========================================================================
+# 9.  What _POOL_INFLIGHT counts (VERIFY-WP-B13 defect D4)
+# ===========================================================================
+
+def test_the_in_flight_counter_is_one_claim_per_dispatch_not_per_chunk():
+    """The counter's comment said "chunks"; the counter counts DISPATCHES.
+
+    VERIFY-WP-B13 D4.  The decision taken here was to fix the COMMENT rather
+    than the counter, and the reason is the set of consumers: every read in
+    the library and in its tests and probes is a zero-vs-non-zero read, so
+    the magnitude carries no meaning and a per-chunk counter would only add
+    two lock acquisitions per chunk.  This test pins the three facts that
+    decision rests on, so the corrected comment cannot drift back:
+
+    1. the dispatcher takes its claim exactly ONCE;
+    2. it takes it BEFORE it submits anything, so the claim covers the whole
+       dispatch rather than tracking the chunks;
+    3. every comparison against ``_POOL_INFLIGHT`` in the module is against
+       zero -- the moment one is not, the magnitude has acquired a meaning
+       and the counter, not the comment, is what has to change.
+    """
+    import ast
+    import inspect
+
+    src = inspect.getsource(la.apply_real_lens_traced)
+    i = src.index('def _invert_newton_parallel')
+    j = src.index('\n    def ', i + 1)
+    body = src[i:j]
+    assert body.count('_note_pool_inflight(1)') == 1, (
+        f'the dispatcher claims the pool '
+        f'{body.count("_note_pool_inflight(1)")} times; the claim is one per '
+        f'DISPATCH, which is what _POOL_INFLIGHT counts')
+    assert body.index('_note_pool_inflight(1)') < body.index('ex.submit('), (
+        'the claim is taken after the first submit, so it no longer covers '
+        'the whole dispatch')
+
+    tree = ast.parse(_module_source())
+    comparisons = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Compare):
+            continue
+        names = [n.id for n in [node.left, *node.comparators]
+                 if isinstance(n, ast.Name)]
+        if '_POOL_INFLIGHT' not in names:
+            continue
+        others = [c for c in node.comparators
+                  if not (isinstance(c, ast.Constant) and c.value == 0)]
+        comparisons.append((node.lineno, bool(others)))
+    assert comparisons, (
+        'nothing compares _POOL_INFLIGHT any more -- the rebuild rule has '
+        'lost the guard that keeps a rebuild off a live pool')
+    against_non_zero = [ln for ln, non_zero in comparisons if non_zero]
+    assert against_non_zero == [], (
+        f'lines {against_non_zero} compare _POOL_INFLIGHT against something '
+        f'other than zero.  Its magnitude is a count of DISPATCHES, not of '
+        f'chunks; a consumer that needs chunks has to change the counter '
+        f'(and its comment), not read this one')
