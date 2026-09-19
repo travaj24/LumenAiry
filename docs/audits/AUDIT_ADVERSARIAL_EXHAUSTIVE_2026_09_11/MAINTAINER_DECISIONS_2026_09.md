@@ -370,19 +370,65 @@ reproducer and the issue draft are under `validation/probe_fft_elision/`
 filed.  Recommendation (medium confidence): file it, with the wheel-not-version
 finding, since it affects any NumPy user on that wheel and the draft is ready.
 
-### 4.2 PENDING: the direct-matrix MFT branch, opt-in or threshold-automatic (Wave 5 hygiene item 14)
+### 4.2 MEASURED, verification in flight: the direct-matrix MFT branch, opt-in or threshold-automatic (Wave 5 hygiene item 14)
 
-Being measured: the memory and wall-time crossover between the direct O(N^2 M^2)
-matrix transform and the separable reduction over N x M grids on both builds,
-and the tolerance between the two.  It ships opt-in; the decision is whether a
-measured threshold should select it automatically.
+What it is.  The matrix-Fourier-transform propagators reduce a 2-D transform
+either separably (two 1-D passes) or through a chirp-Z transform; the docstrings
+described a third, direct, `O(N^2 M^2)` route.  Hygiene part 2 measured that the
+direct sum is separable too, so the dense route is two matrix products at
+`O(M N^2 + M^2 N)`, and shipped it as ONE `xp`-parametrised implementation behind
+`method=` on the three public MFT entry points, opt-in, with the shipped default
+byte-identical (179 of 179 keys, both builds, archive to archive).
 
-### 4.3 PENDING: the near-focus exact-kernel table (Wave 5 hygiene item 20; informs 1.5)
+Measured (WAVE5_HYGIENE2_REPORT.md, both builds): against a pairwise-summed
+float64 reference every route sits 1.5 to 2.6 decades inside a derived bar, and
+the dense route is the most accurate by 2.4x to 12.6x.  Memory, which is
+build-free: `dense < separable < chirp-Z` at all 29 shapes tried (at N = 1024,
+M = 32: 1.8 MB, 34.7 MB, 159.6 MB).  Time, which is NOT build-free: the
+crossover differs about four-fold between the two builds (Windows roughly
+M below N/4, WSL nearer N/16, because scipy's pocketfft drives the separable
+passes through its own worker pool on Linux).  The dense route needs no FFT, so
+it also runs on CuPy on the build box despite its broken cuFFT (3.8e-16 against
+NumPy).
 
-Being measured: `gap_kernel` x transport x distance-to-focus on the WP-B11
-fixture (converging Gaussian, f = 20 mm, w0 = 15.9 um, 1 um to 5 mm short of
-focus) against the analytic Gaussian, both builds, once the carrier-envelope
-bookkeeping is validated on a case with a known answer.
+Decision owed: whether a threshold should select the dense route automatically.
+Recommendation (medium confidence): not yet.  A memory-based threshold is
+build-free and defensible; a time-based one is not, and either moves answers
+in the last bits on every grid it captures (a Migration note).  A second,
+smaller finding is also the maintainer's: the chirp-Z route's phase-budget
+warning fires at `alpha N^2 > 1e15`, three decades after the route's error has
+become visible (1.9e-4 at 1e12, 0.25 at 1e15, silent at both); moving it
+changes warning behaviour, so it is recorded and not moved.
+
+### 4.3 MEASURED, verification in flight: the near-focus exact-kernel table (Wave 5 hygiene item 20; informs 1.5)
+
+Measured on the WP-B11 fixture (converging Gaussian, f = 20 mm, w0 = 15.9 um,
+1 um to 5 mm short of focus, against the analytic Gaussian, both builds
+agreeing to 1.5e-5 at worst), once the carrier-envelope bookkeeping was
+validated on cases with known answers (collimated 5.6e-12 against a derived
+floor of 1.6e-10; converging at 5 mm 4.8e-13 through both readout spellings;
+a deliberately double-applied carrier 1.35, twelve decades away):
+`transport='collins'` with `gap_kernel='fresnel'` holds the oracle floor from
+5 mm all the way to 1 um short of focus; the shipped `'sziklas'` reads 7.3e-4
+within 100 um because its auto-split bridge engages there.
+
+The finding that changes item 1.5's framing: the dropped quartic that governs
+the exact-kernel refinement is `k |z_eff| theta^4 / 8` in the ENVELOPE's angle,
+not the beam's.  On this fixture the two differ 25-fold, so the beam-angle
+estimate is 4e5 too large.  Fitted over 205x in `z_eff` and 5.3x in theta the
+departure is `1.22 * k |z_eff| theta_env^4 / 8` (slopes 0.9999985 and 3.9997),
+with the same constant recovered on a collimated leg through the other
+transport.  On this fixture `gap_kernel='auto'` resolves to `'exact'` at every
+rung (its wrap guard reads 2e-5 against a bar of 1) and the departure peaks at
+4.7e-6, so the automatic fallback VERIFY-B4 F3 proposed would fire five decades
+too eagerly if keyed on the beam angle.
+
+What is not yet reconciled: VERIFY-B4 F3 measured 2.35e-3 for `'auto'` one
+micron from focus on ITS fixture (w = 0.3 mm, N = 1024, dx 4 um, lambda
+1.064 um).  The two fixtures differ, and the verification now in flight
+rebuilds both.  Hygiene part 2's recommendation is NO CHANGE to
+`gap_kernel='auto'`; item 1.5 stays open until both fixtures have been read
+side by side.
 
 ### 4.4 PENDING: the Newton worker pool's join timeout and the interpreter-exit hang (WP-B13 follow-ups)
 
