@@ -49,11 +49,11 @@ close_worker_pool -> shutdown``.  On this tree the same probe returns in
 from __future__ import annotations
 
 import faulthandler
-import io
 import json
 import os
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import warnings
@@ -135,9 +135,21 @@ def serial_reference():
 
 
 def _thread_dump() -> str:
-    buf = io.StringIO()
-    faulthandler.dump_traceback(file=buf, all_threads=True)
-    return buf.getvalue()
+    """Every thread's stack, as text.
+
+    ``faulthandler.dump_traceback`` writes through the file's ``fileno()``,
+    so an ``io.StringIO`` raises ``io.UnsupportedOperation: fileno`` instead
+    of producing a dump -- and because this helper is only ever called from
+    ``_with_deadline``'s failure path, that turned every wedge detection in
+    this file into an unrelated exception with no thread dump attached
+    (VERIFY-WP-B13 defect D1, 2026-09-15).  A real temporary file has a real
+    descriptor.  ``test_the_wedge_report_carries_the_stack_of_the_wedged_frame``
+    is the behavioural pin.
+    """
+    with tempfile.TemporaryFile('w+') as fh:
+        faulthandler.dump_traceback(file=fh, all_threads=True)
+        fh.seek(0)
+        return fh.read()
 
 
 def _with_deadline(fn, seconds, what):
@@ -805,3 +817,80 @@ def test_the_broken_pool_branch_still_backs_off_the_promotion():
     k = body.index('except (BrokenProcessPool')
     assert 'close_worker_pool()' in body[k:], (
         'the pool-infrastructure fallback no longer drops the cached pool')
+
+
+# ===========================================================================
+# 7.  The wedge REPORT itself (VERIFY-WP-B13 defect D1)
+# ===========================================================================
+
+def _b13_wedged_frame_for_the_dump(gate):
+    """A uniquely named frame that parks forever.
+
+    Module level on purpose: the dump has to name a frame that exists nowhere
+    else in the tree, so matching it is a decision ("the report reached the
+    wedged call") and not a substring coincidence.
+    """
+    gate.wait()
+
+
+def test_the_wedge_report_carries_the_stack_of_the_wedged_frame():
+    """A wedge detection must report ITS OWN message and a real thread dump.
+
+    Every test in this file that can catch a wedge catches it through
+    ``_with_deadline``, whose failure message is the only artifact a
+    maintainer gets: the library call is on a daemon thread that is still
+    stuck, so the stack is not in the traceback.  Shipped, ``_thread_dump``
+    wrote to an ``io.StringIO``; ``faulthandler.dump_traceback`` writes
+    through ``fileno()``, so the dump raised instead of being produced and
+    all three wedge tests reported ``io.UnsupportedOperation: fileno`` with
+    no stack at all (VERIFY-WP-B13 D1, reproduced with the pre-fix behaviour
+    injected: 3 failed, each ending in that exception).
+
+    The wedge here is ENGINEERED rather than hoped for: a daemon thread parks
+    in a uniquely named module-level frame and the deadline is 1 s, so this
+    test costs a second and asserts a decision -- the report names the frame
+    that is stuck.
+    """
+    import io
+
+    gate = threading.Event()
+    try:
+        with pytest.raises(pytest.fail.Exception) as err:
+            _with_deadline(lambda: _b13_wedged_frame_for_the_dump(gate),
+                           1.0, 'an ENGINEERED wedge')
+    finally:
+        gate.set()
+    msg = str(err.value)
+
+    # The premise, MEASURED on this build rather than quoted from the defect
+    # report: what the shipped helper's sink does when faulthandler asks it
+    # for a descriptor.  Reported, not asserted -- a CPython that grew a
+    # StringIO path would not make the fix wrong, only redundant.
+    try:
+        faulthandler.dump_traceback(file=io.StringIO(), all_threads=True)
+        premise = 'io.StringIO accepted the dump on this build'
+    except Exception as exc:                      # noqa: BLE001 -- reported
+        premise = f'io.StringIO raised {type(exc).__name__}: {exc}'
+
+    assert 'an ENGINEERED wedge did not return within' in msg, (
+        f'the wedge report lost _with_deadline\'s own message; that is D1 '
+        f'(the dump helper raised before the message was built).  '
+        f'Premise on this build: {premise}.  Got:\n{msg}')
+    assert 'Thread dump:' in msg and '_b13_wedged_frame_for_the_dump' in msg, (
+        f'the wedge report does not name the frame that is actually stuck, '
+        f'so the one artifact a maintainer gets from a wedge is useless.  '
+        f'Premise on this build: {premise}.  Got:\n{msg}')
+
+
+def test_the_dump_helper_writes_through_a_real_descriptor():
+    """The durable form of D1, independent of the deadline machinery.
+
+    ``_thread_dump`` is called from exactly one place and only when something
+    has already gone wrong, so a defect in it is invisible until the day it
+    matters.  Call it directly and require that it produced this very frame.
+    """
+    dump = _thread_dump()
+    assert 'test_the_dump_helper_writes_through_a_real_descriptor' in dump, (
+        'the thread dump does not contain the calling frame, so it is not a '
+        'thread dump; faulthandler needs a file with a real fileno()')
+
