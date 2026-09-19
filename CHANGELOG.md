@@ -10,6 +10,126 @@ section 4 left, built to the plan in `PLAN_WAVE5_LEFTOVERS_2026_09_14.md`.
 Entries are added as each item lands; the release text is assembled at the
 close.
 
+### Changed -- lens-traced (WP-B7c round 3): the pixel-halving arbiter's half-pitch lattice gets ONE definition and a stated convention, the Pearcey route stops calling the branch sum's reading the cusp field's, a fallback says its dark tail is unarbitrated, and the bar is re-derived on 1196 planes over sixteen optics
+
+**No field and no reading moves.**  Archive to archive over a 157-case matrix
+on seventeen optics, a child process per tree with `lumenairy.__file__`
+asserted under each and `LUMENAIRY_MEM_BUDGET_MB` pinned, SHA-256 over
+`tobytes()`: **116 identical, 0 moved, 0 newly refused, 0 newly returned, 41
+refused on both**.  What changes is one seam, two labels, and what the
+constants claim.
+
+**The half-pitch lattice.**  The branch sum's own fine render and the uniform
+completion's half-pitch fill placed their pixel centres by two COPIES of the
+same expression -- a seam the two could drift apart at silently, because the
+reading is a ratio of two integrals and nothing compared the geometry they are
+taken on.  Both now call `_lens_traced_multibranch.half_pitch_centres`, and
+the convention that function implements is written down where the constant is:
+fine pixel `2j` sits exactly on coarse pixel `j`, so the fine lattice CONTAINS
+the coarse one.  Nesting is what bounds the reading at ~4 in the collapse
+limit -- a triangle that catches a coarse centre catches the coincident fine
+centre too -- which is the `~4 per halving` identity the whole diagnosis rests
+on, and it is what keeps the ratio's noise (rms 1.5e-4 over 102 converged
+planes) below either render's own.  The alternative the round-2 verification
+asked for, offsetting the fine lattice so the two Voronoi HULLS coincide, was
+built and measured and is strictly worse: the bounded ~4 becomes unbounded
+(**7343.9** at VERIFY-B7b's own blow-up plane, where the nested lattice reads
+3.998) and the module's own shipped gate refuses it.  What nesting costs is
+now stated: the hulls differ by a quarter of a coarse pixel at the edges, so a
+converged render reads 1 to O(1/N) -- measured 1.4e-3 on a window too small to
+hold the field and 1.2e-4 on every larger one -- and not exactly, where round
+2 published "1 exactly, on any optic, at any plane, at any grid".
+
+**Two labels.**  The Pearcey cusp route recorded `pixel_continuity_of = 'the
+Pearcey cusp field'` while the number was the branch sum's -- by the module's
+own argument the reading that "would refuse fields that are right" -- and now
+names the branch sum.  And `pixel_continuity_of` says which field the number
+was measured on, which is not the same question as what it BUYS: a new
+`pixel_continuity_scope` answers the second as an enum (`'returned_field'`,
+`'returned_field_quadrature_only'` on a fallback, `'underlying_branch_sum'` on
+the cusp route) with `pixel_continuity_scope_note` carrying it in words.  An
+unknown scope raises rather than reaching a caller with the key absent.
+
+**The bar, re-derived.**  1196 oracle-scored planes over sixteen prescriptions
+and twenty-one (prescription, grid) pairs -- round 2's eight, the f/1.2 optic
+round 2 excluded for its oracle's sake, the five its verification added, and
+three new (a true even-ASPHERE with a non-monotone focal locus, a
+CONCAVE-FIRST meniscus, a plano-convex at **NA 0.41**) -- scored against a
+band-limited angular spectrum at full radius, itself bracketed by an exact
+azimuthal quadrature at the output grid's own pixels (0.00068-0.00738 in
+relative L2, 0.999973-1.000000 in fidelity).  Two of round 2's statements do
+not survive it:
+
+* **the two FIDELITY populations OVERLAP.**  Round 2's strongest claim was
+  that they do not, with no accept bar chosen; at 367 fold-ring planes it
+  closes -- worst RETURNED 0.9421 (the NA 0.41 plano-convex, reading 1.0133,
+  carrying 1.27x the oracle's energy) against best REFUSED 0.9520.  So "right"
+  and "wrong" can no longer be read off the guard's own split, and the accept
+  criterion is a maintainer decision;
+* **the bar's MARGIN is a reading of the z ladder.**  The reading is not
+  smooth in z near a fold onset, so refining the ladder keeps finding readings
+  closer to the bar: scanning the SAME optics three times at 10-30x
+  refinement, the fold-ring gap reads 1.371x at 468 planes, 1.032x at 882 and
+  **1.0045x** at 1196, with no floor.  Round 2's "7 % gap" and its
+  verification's "3.8 %" are both readings of their ladders.
+
+The bar is **kept at 1.06**: its two-sided margin here is 1.00047x, below the
+1 % that would call for re-centring, and the geometric centre of the gap it
+sits in over all 1196 planes is **1.0600253** -- 1.06 to three figures IS the
+derived centre.  Its derivation is now a COST and not a gap: at an accept
+criterion of fidelity 0.95 it costs **1 false refusal and 2 misses** over 367
+fold-ring planes, where 1.04 costs five times the false refusals for the same
+misses, 1.08 costs three times the misses for the same false refusals, and a
+bar derived from the converged reading's own spread costs 9-61 false refusals
+(that spread is 5.9e-4, while the reading's spread on healthy FOLD planes is
+36x larger -- the fixed reference does not hold where the guard works).
+
+**The fallback route.**  Over the **437 fallback planes the shipped bars
+RETURN**, 224 score below oracle fidelity 0.95 and the range reaches 0.5358;
+round 2 quoted "returned down to 0.764" from a population a fifth the size.  A
+reading that ORDERS that population exists and is already reported: the LOSS
+side of the continuity reading flags 161 planes and every one of them is
+wrong, with zero false alarms, and the launched-power bracket below 0.889
+flags 215 with none false and only 9 wrong ones missed.  Their bars are set
+for the fold-ring route, where the completion replaces the dark side -- an
+argument that is false on the fallback route, where the deficit reaches the
+caller verbatim.  Thirteen returned planes are left that nothing sees, the
+worst at fidelity 0.5358 with every reading nominal.  **Making a loss arm
+refuse there is a behaviour change and is left as a maintainer decision**; the
+cost table is in the report.
+
+**The oracle.**  `validation/oracles/caustic_fold_truth.py` loses the rule
+`rel L2 ~ 0.37 eps`: it was fitted inside the 99.95 %-energy core, outside
+which the two compared fields are identical by construction while the dropped
+quadratic term is largest.  At round 2's own doublet row the rule predicts
+3.2e-4, the published table reads 0.0003, and a full-radius pointwise
+measurement gives **0.0563**.  The envelope is restated in FIDELITY, which is
+what the studies read (5e-4 .. 4.5e-3 below `y_max/z` 0.21, 3.65e-2 at 0.461),
+and the "DO NOT SCORE ABOVE NA ~0.3" conclusion is unchanged and
+strengthened.  The table's ENERGY-CLOSURE column is confirmed against the
+round-2 verification, which read it 0.9972 / 0.9741 from its own 256-radius
+radial reconstruction -- that loses energy on both arms equally.
+
+Tests: `tests/unit/test_wp_b7c_round3.py` (8 ids, 7.1 s win / 12.7 s wsl).
+The lattice is pinned by the nesting identity (exact, on integers and halves),
+by provenance and by a two-sided arm that the constant reaches the fine render
+but never the returned field; the scope two-sided on one optic with both
+premises ASSERTED rather than skipped; the bar against the converged
+population's own spread, measured on the running build.  An 18-mutation matrix
+-- the round-2 verification's thirteen and five of this round's -- against the
+whole five-file gate catches 18 of 18 on both builds.
+
+Files: `lumenairy/elements/_lens_traced_multibranch.py`,
+`lumenairy/elements/_lens_traced_uniform.py`,
+`validation/oracles/caustic_fold_truth.py`,
+`tests/unit/test_wp_b7c_round3.py` (new, 8 ids),
+`validation/probe_wp_b7c_round3/` (probes, the aspheric-capable oracle and
+JSON),
+`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/WP-B7c_ROUND3_REPORT.md`,
+with dated corrected paragraphs in `WP-B7c_ROUND2_REPORT.md` and
+`VERIFY_WP-B7c_ROUND2.md`.  Closes the round-2 verification's E1, E4, E5, E6
+and E7.
+
 ### Fixed -- FGA: the frozen-Gaussian swarm's image-side leg starts at the exit-vertex plane, not on the last surface
 
 `lumenairy.raytrace.ray_transfer_jacobian` and
