@@ -430,18 +430,56 @@ rebuilds both.  Hygiene part 2's recommendation is NO CHANGE to
 `gap_kernel='auto'`; item 1.5 stays open until both fixtures have been read
 side by side.
 
-### 4.4 PENDING: the Newton worker pool's join timeout and the interpreter-exit hang (WP-B13 follow-ups)
+### 4.4 MEASURED, verification in flight: the Newton worker pool's join timeout and the interpreter-exit hang (WP-B13 follow-ups)
 
-VERIFY-B13 confirmed that the pool's broken-pool fallback now reaches the
-serial path (byte-identical, 2.5 s where the old tree hung forever) and that
-two exposures remain: the healthy path's `as_completed` has no timeout (so a
-pool that never answers wedges the caller; `carrier.py::_multi_parallel_results`
-has the same shape), and a wedged manager thread still hangs the PROCESS at
-interpreter exit even though the computation completes.  Being measured: the
-slowest chunk time on a traced-lens ladder (to derive a timeout rule), and an
-`atexit` reaper behind a switch defaulting off.  Decision owed: whether a join
-timeout becomes a default (it moves the failure mode from "hang" to "raise
-after T seconds" on every traced-lens call).
+What it is.  `apply_real_lens_traced` runs its Newton inversion chunks on a
+persistent process pool.  VERIFY-B13 confirmed that a BROKEN pool now falls back
+to the serial path (byte-identical, 2.5 s where the old tree hung forever) and
+left two exposures: on the healthy path `as_completed` has no timeout, so a
+pool that never answers wedges the caller (`carrier.py::_multi_parallel_results`
+has the same shape, and the extended AST pin now detects it as a premise); and
+a wedged manager thread still hangs the PROCESS at interpreter exit even though
+the computation completed.
+
+Measured (WP-B13_FOLLOWUPS_REPORT.md, both builds, 8 workers, every rung
+byte-identical to the serial reference):
+
+| quantity | Windows | WSL |
+|---|---|---|
+| cold first chunk / slowest chunk / total, N = 1024 | 1.41 / 1.94 / 2.01 s | 1.34 / 2.40 / 2.42 s |
+| warm total, N = 1024 | 1.50 s | 1.40 s |
+| spawn bootstrap, all 8 workers, concurrent | 1.18 s (spread 0.05 s) | 0.84 s (spread 0.02 s) |
+| sentinel round-trip, cold / warm | 0.37 s / 0.7 ms | 0.32 s / 0.4 ms |
+
+Why no fixed `as_completed` timeout is derivable: CPython's `timeout=` there is an
+absolute deadline on the whole iteration, so it bounds the total dispatch, which
+scales with the field (the module sizes the Newton path up to N = 32768) while
+the pathology does not; a rule of 10x the worst cold chunk plus bootstrap gives
+20 to 25 s from a ladder that stops at 1024, an extrapolation.
+
+Recommendation 1 (D5, medium confidence): bound the BOOTSTRAP instead.  One
+sentinel task ahead of the chunks with its own timeout, proposed at 600 s (ten
+times the loudest healthy reading on record, a 45 to 56 s cold call on a loaded
+box; 1600x to 1900x the measured cold sentinel).  Healthy cost 0.7 ms per
+dispatch; a `TimeoutError` is an `OSError`, which the existing infrastructure
+clause already routes to the bit-identical serial rung.  What it does NOT close:
+a pool that answers the sentinel and then wedges on a later chunk.  That
+residual is the maintainer's to accept or to close with a per-chunk deadline
+(which is a default that changes the failure mode on every traced-lens call).
+
+Recommendation 2 (D6, the shape is not what was expected): daemonising the
+reaper thread through `atexit` was prototyped and measured on a natural WSL
+wedge (surviving workers ignoring SIGTERM): control exits in 0.47 s; with the
+wedge the process hangs 57 s to a SIGKILL whether the prototype is off or on,
+because the prototype only moves the blocking join one layer down (from
+`threading._shutdown` to `multiprocessing.util._exit_function`).  The one arm
+that exits (0.38 s) is the one that kills the surviving workers.  So closing
+the exit hang means an escalation in the reaper: a grace period (the existing
+120 s shutdown bound, already derived at 53x to 317x the healthy worst), then
+killing the executor's remaining processes.  This library has never killed a
+worker; that is a policy decision.  Nothing implementing it ships; the
+prototype lives in the probe behind a switch defaulting off.  Windows could
+not be measured (the `sigign` wedge is POSIX-only by construction).
 
 ### 4.5 PENDING: the multibranch arbiter's bar and the accept criterion (WP-B7c round 3)
 
