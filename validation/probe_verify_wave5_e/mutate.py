@@ -43,6 +43,19 @@ MUTATIONS = {
         "    _require_non_immersed_exit(surfs, wavelength, z_image,\n"
         "                               'apply_real_lens_fga')",
         "    pass  # _require_non_immersed_exit disabled (mutation)"),
+    # The two arms VERIFY-WAVE5-E D9's fix needs: with a per-CALL-SITE
+    # reachability pin in place, each site's deletion must redden its OWN id
+    # and no other, so all four deletions are mutable here.
+    'e5_guard_off_at_vector': (
+        'lumenairy/propagators/fga.py',
+        "    _require_non_immersed_exit(surfs, wavelength, z_image,\n"
+        "                               'apply_real_lens_fga_vector')",
+        "    pass  # _require_non_immersed_exit disabled (mutation)"),
+    'e5_guard_off_at_caustic': (
+        'lumenairy/propagators/fga.py',
+        "    _require_non_immersed_exit(surfs, wavelength, 0.0, "
+        "'_caustic_zone')",
+        "    pass  # _require_non_immersed_exit disabled (mutation)"),
     # ---- E1 -----------------------------------------------------------
     'e1_unnamed_right_operand': (
         'lumenairy/propagators/asm.py',

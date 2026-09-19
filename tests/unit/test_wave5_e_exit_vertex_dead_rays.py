@@ -382,7 +382,18 @@ def test_the_immersed_exit_premise_is_reachable():
 @pytest.mark.parametrize('site', ['through_lens', 'coarse', 'vector',
                                   'caustic_zone'])
 def test_every_fga_site_refuses_an_immersed_exit(site):
-    """FAIL-BEFORE, at each of the four sites VERIFY-WP-B12 enumerates.
+    """FAIL-BEFORE, at each of the four ENTRY PATHS VERIFY-WP-B12 enumerates.
+
+    SCOPE (corrected 2026-09-19, VERIFY-WAVE5-E D9).  These four are entry
+    PATHS, not four guard call sites: ``coarse`` here is
+    ``apply_real_lens_fga(coarse_stride=3)``, which reaches ``_fga_coarse``
+    only from inside ``_fga_through_lens``, whose own guard has already run.
+    Measured by mutation: deleting the guard from ``_fga_coarse`` alone leaves
+    all 29 ids of this file green.  The per-CALL-SITE claim is
+    :func:`test_every_guard_call_site_is_independently_reachable` below, which
+    enters each site through the entry point that reaches THAT site's guard
+    first; this id stays because it is the caller-visible statement (the four
+    public paths refuse an immersed prescription end to end).
 
     The image leg is ``opd += z_image * sqrt(1 + ux^2 + uy^2)`` -- no exit
     index -- while the projection that produced ``dt.opd`` resolved one.  In a
@@ -409,6 +420,79 @@ def test_every_fga_site_refuses_an_immersed_exit(site):
                     np.stack([E, E * 0.5]), **kw)
         else:
             _fga._caustic_zone(E, 6.0e-6, presc, _LAM)
+
+
+def _enter_fga_coarse(surfs, z_image):
+    """Enter ``_fga_coarse`` DIRECTLY, which is the only way to reach its own
+    guard: every in-library caller goes through ``_fga_through_lens``
+    (``fga.py``'s coarse branch), whose guard runs first.
+
+    The arguments are the smallest ones that carry the function's pre-guard
+    block -- a 16x16 launch amplitude, unit position stride, a 2-cell coarse
+    stride and a single momentum -- because the guard is what is under test
+    and nothing after it is reached.  ``nsig * w0 / dx`` is kept at 1 cell so
+    the support filter's window fits the grid.
+    """
+    n = 16
+    dx = 6.0e-6
+    u0 = np.ones((n, n), dtype=np.complex128)
+    px = np.zeros(2)
+    return _fga._fga_coarse(
+        u0, dx, dx, -(n // 2) * dx, -(n // 2) * dx, n, n,
+        2.0 * np.pi / _LAM, dx, 1.0, 1.0, 1.0, 1.0,
+        surfs, _LAM, z_image, 1, px, px.copy(), 1, 1,
+        False, 1, None, 2)
+
+
+@pytest.mark.parametrize('site', ['through_lens', 'coarse', 'vector',
+                                  'caustic_zone'])
+def test_every_guard_call_site_is_independently_reachable(site):
+    """EACH of the FOUR ``_require_non_immersed_exit`` CALL SITES, reached
+    through the entry point that hits THAT site's guard first.
+
+    WHY THIS EXISTS (VERIFY-WAVE5-E D9).  The entry-path pin above is
+    satisfied at the ``coarse`` arm by ``_fga_through_lens``'s guard, so the
+    ``_fga_coarse`` call site was pinned by nothing at all.  Measured by
+    mutation on both builds, before this id existed:
+
+        guard deleted from _fga_coarse          ->  29 passed  (invisible)
+        guard deleted from _fga_through_lens    ->   1 failed, 28 passed
+        guard deleted from BOTH                 ->   2 failed, 27 passed
+
+    ``_fga_coarse`` is a module-level function a future caller can enter
+    directly -- which is exactly what this arm does -- so its guard is not
+    decoration, and now each site's deletion reddens its OWN id and no other.
+
+    ``_caustic_zone`` is likewise entered directly (the file already did so),
+    at the tolerance's zero-leg floor, because it adds no image leg of its own
+    but returns the distance the other three then run their index-free leg
+    over.
+    """
+    presc = _immersed_presc()
+    surfs = _surfs(presc)
+    E = _E()
+    z_image = 0.30e-3
+    kw = dict(prescription=presc, wavelength=_LAM, dx=6.0e-6,
+              output_plane_distance=z_image)
+    with pytest.raises(NotImplementedError, match='IMMERSED') as exc:
+        if site == 'through_lens':
+            la.apply_real_lens_fga(E, **kw)
+        elif site == 'coarse':
+            _enter_fga_coarse(surfs, z_image)
+        elif site == 'vector':
+            la.apply_real_lens_fga_vector(np.stack([E, E * 0.5]), **kw)
+        else:
+            _fga._caustic_zone(E, 6.0e-6, presc, _LAM)
+    # the message names the site that refused, so an arm satisfied by ANOTHER
+    # site's guard (the D9 defect) cannot pass unnoticed
+    want = {'through_lens': 'apply_real_lens_fga',
+            'coarse': '_fga_coarse',
+            'vector': 'apply_real_lens_fga_vector',
+            'caustic_zone': '_caustic_zone'}[site]
+    assert str(exc.value).startswith(want + ':'), (
+        f'the {site!r} arm must be refused by the guard AT {want}, not by '
+        f'another site\'s guard upstream of it; the message reads '
+        f'{str(exc.value)[:90]!r}')
 
 
 @pytest.mark.parametrize('site', ['through_lens', 'coarse', 'vector',
