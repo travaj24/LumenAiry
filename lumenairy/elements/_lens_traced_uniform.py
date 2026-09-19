@@ -358,18 +358,28 @@ _MB_POWER_RATIO_MIN = _ENERGY_COLLAPSE_FACTOR
 # 1.0636 and the completion built on it reads 1.0020, at oracle fidelity
 # 0.9878.
 #
-# MEASURED (WP-B7c round 2, 2026-09-15) against the direct
-# Rayleigh-Sommerfeld oracle ``validation/oracles/caustic_fold_truth.py`` on
-# EIGHT optics and 82 oracle-scored fold-ring planes; probes, populations and
-# JSON in ``validation/probe_wp_b7c_round2/``:
+# RE-MEASURED (WP-B7c round 3, 2026-09-19) against a band-limited ANGULAR
+# SPECTRUM at full radius, on **1196 oracle-scored planes over sixteen
+# prescriptions** -- round 2's eight, the f/1.2 optic round 2 excluded, the
+# five its verification added, and three new (a true even-ASPHERE, a
+# CONCAVE-FIRST meniscus, a plano-convex at NA 0.41).  Probes, populations
+# and JSON in ``validation/probe_wp_b7c_round3/``; the derivation lives with
+# ``_lens_traced_multibranch._PIXEL_CONTINUITY_MAX`` and the tables in
+# ``WP-B7c_ROUND3_REPORT.md``:
 #
-#   * the 67 planes RETURNED read 0.9860 .. 1.0221, fidelity 0.9593 .. 0.9985;
-#   * the 15 REFUSED read 1.092 .. 3.998, fidelity 0.0173 .. 0.9302.
+#   * the 229 fold-ring planes RETURNED read 0.8724 .. 1.0595, fidelity
+#     0.9421 .. 0.9985;
+#   * the 138 REFUSED read 1.0643 .. 3.9988, fidelity 0.0018 .. 0.9520.
 #
-# The two fidelity populations do not overlap, with no accept bar chosen.  The
-# gap in the reading is 1.0683x (1.0221 against 1.092), its geometric centre
-# 1.0564 = 1.06 to three figures, and the margins are 1.037x above the largest
-# returned reading and 1.030x below the smallest refused one.
+# Round 2's two statements about this bar do NOT survive that population and
+# are corrected there: the two fidelity populations OVERLAP at sixteen optics
+# (worst returned 0.9421 against best refused 0.9520), and the bar's margin
+# is a property of the z ladder rather than of the quantity -- refining the
+# same optics' ladders 30x and then 10x takes the fold-ring gap from 1.371x
+# to 1.032x to 1.0045x with no sign of a floor.  The bar is KEPT at 1.06,
+# which is the geometric centre of its own gap (1.0600253) on the round-3
+# population, and it is derived there from what it COSTS: on the fold ring,
+# 1 false refusal and 2 misses at an accept criterion of fidelity 0.95.
 #
 # WHAT IT COSTS AND WHAT IT DOES NOT.  One extra rasterisation of the SAME
 # mapped triangles -- never a second ray trace, a second KMAH pass or a second
@@ -378,13 +388,19 @@ _MB_POWER_RATIO_MIN = _ENERGY_COLLAPSE_FACTOR
 # least-squares fit).  ``apply_real_lens_traced_multibranch`` does not ask for
 # it and is unchanged in cost and in bits.
 #
-# WHAT IT DOES NOT CATCH, measured on the same population: on FALLBACK planes
-# -- where the module has already warned that the completion does not apply
-# and the field returned is the bright-side-only branch sum -- the returned
-# and refused fidelity populations DO overlap (returned down to 0.764,
-# refused up to 0.930), because what is wrong there is the missing dark tail
-# and not the quadrature.  This arm is a detector of ONE failure mode, and a
-# plane it accepts is not thereby certified.
+# WHAT IT DOES NOT CATCH.  On FALLBACK planes -- where the module has already
+# warned that the completion does not apply and the field returned is the
+# bright-side-only branch sum -- the returned and refused fidelity
+# populations DO overlap, because what is wrong there is the missing dark
+# tail and not the quadrature.  Measured (WP-B7c round 3, 2026-09-19) on the
+# **437 fallback planes the shipped bars RETURN**: fidelity 0.5358 .. 0.9999,
+# with 224 of them below 0.95 -- round 2 quoted "returned down to 0.764" from
+# a population a fifth the size.  This arm is a detector of ONE failure mode,
+# and a plane it accepts is not thereby certified.  What DOES order that
+# population is the LOSS side of this reading and of the launched-power
+# bracket; see ``_lens_traced_multibranch._PIXEL_CONTINUITY_MIN`` for the
+# confusion table and ``_PIXEL_CONTINUITY_SCOPES`` below for what a caller is
+# told.
 _MB_PIXEL_CONTINUITY_MAX = _PIXEL_CONTINUITY_MAX
 
 # Lower arm, REPORTED not refused -- the mirror non-convergence, in which the
@@ -421,9 +437,15 @@ _PIXEL_CONTINUITY_SCOPES = {
         'the reading is of the field this call returns, but this is a '
         'FALLBACK: the uniform completion declined and the returned field is '
         'the bright-side-only branch sum, so the dark-side tail is absent '
-        'and NOT arbitrated.  This arm sees the quadrature and nothing else; '
-        'on the round-3 fallback population it returns fields down to oracle '
-        'fidelity 0.46 with every diagnostic at its nominal value'),
+        'and NOT arbitrated.  This arm sees the quadrature and nothing else. '
+        'On this route the LOSS sides DO order accuracy, and their bars are '
+        'set for the fold-ring route where a dark deficit does not reach the '
+        'caller: over 437 returned fallback planes, pixel_continuity below '
+        '1/1.06 flags 161 planes and every one scores under oracle fidelity '
+        '0.95 with no false alarm, and multibranch_power_ratio_bracketed '
+        'below 0.889 flags 215 with none false and only 9 wrong ones missed. '
+        'Thirteen wrong planes are left that nothing sees, the worst at '
+        'fidelity 0.536 with every reading nominal'),
     'underlying_branch_sum': (
         'the reading is NOT of the field this call returns: it is of the '
         'branch sum that field is built on.  There is no half-pitch Pearcey '
@@ -1250,13 +1272,15 @@ def apply_real_lens_traced_uniform(
       the power the same mapped triangles deposit when rasterised at HALF the
       pitch on the same window from the same launch lattice.  A converged
       point-sampled quadrature deposits the same power at any pitch, so this
-      reads 1 on any optic at any grid; a quadrature that has stopped being
-      unbiased deposits a power proportional to the PIXEL AREA and reads ~4
-      per halving.  Outside ``[1/1.06, 1.06]`` the gain arm refuses and the
-      loss arm reports.  Measured on eight optics and 82 oracle-scored fold
-      planes: the 67 planes returned read 0.9860-1.0221 with oracle fidelity
-      0.9593-0.9985, the 15 refused read 1.092-3.998 with fidelity
-      0.0173-0.9302.
+      reads 1 on any optic at any grid TO O(1/N) -- measured 0.99941-1.00044
+      over 102 planes far from every caustic -- while a quadrature that has
+      stopped being unbiased deposits a power proportional to the PIXEL AREA
+      and reads ~4 per halving.  Outside ``[1/1.06, 1.06]`` the gain arm
+      refuses and the loss arm reports.  Measured on sixteen optics and 367
+      oracle-scored fold planes: the 229 returned read 0.8724-1.0595 with
+      oracle fidelity 0.9421-0.9985, the 138 refused read 1.0643-3.9988 with
+      fidelity 0.0018-0.9520 -- so the two fidelity populations OVERLAP, and
+      which of them is "right" is an accept criterion the caller chooses.
 
     Both readings, their bands and their decisions are in the diagnostics on
     every return path.  REFINING THE GRID IS NOT A WORKAROUND for the second:

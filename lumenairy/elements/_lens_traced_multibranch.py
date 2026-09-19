@@ -245,18 +245,85 @@ _ENERGY_COLLAPSE_FACTOR = 0.5
 # 0.9804 against smallest broken 1.106) -- which is why this second arm
 # exists.
 #
-# THE BAR.  The gap between the largest returned reading (1.0221, the fast
-# singlet at z = 1073 um, fidelity 0.9742) and the smallest refused one
-# (1.092, the same optic at z = 1074 um, fidelity 0.9302) is 1.0683x, whose
-# geometric centre is 1.0564 -- 1.06 to three figures.  Margins: 1.037x above
-# the largest returned reading and 1.030x below the smallest refused one.
-# Neither is decades, and that is stated rather than papered over: this is a
-# 7 % gap, measured on eight optics and two builds, and a ninth optic could
-# narrow it.  What makes it usable where round 1's was not is that it is a
-# gap at all, and that the quantity has a FIXED reference -- a converged
-# quadrature reads 1 exactly, at any pitch, on any optic -- so the bar is a
-# tolerance on a known value rather than a boundary between two moving
-# populations.
+# RE-MEASURED (WP-B7c round 3, 2026-09-19) on **1196 oracle-scored planes**
+# over SIXTEEN prescriptions and twenty-one (prescription, grid) pairs --
+# round 2's eight, the f/1.2 optic round 2 EXCLUDED for its oracle's sake,
+# the five the round-2 verification added (including an N-SF10 at NA 0.387),
+# and three new: a true even-ASPHERE with a non-monotone focal locus, a
+# CONCAVE-FIRST positive meniscus, and a plano-convex at **NA 0.41**.  367 of
+# those planes take the completion route.  Scored against a band-limited
+# ANGULAR SPECTRUM at full radius, itself bracketed by an exact azimuthal
+# quadrature of the Rayleigh-Sommerfeld integral evaluated at the output
+# grid's own pixels (agreement 2e-3 .. 7e-3 in relative L2 and 2e-6 .. 3e-5 in
+# fidelity, each arm converged a decade below that).  Populations, probes and
+# JSON in ``validation/probe_wp_b7c_round3/``; the tables are in
+# ``WP-B7c_ROUND3_REPORT.md``.
+#
+#   * the 229 fold-ring planes the guard RETURNS read 0.8724 .. 1.0595 and
+#     their fields score 0.9421 .. 0.9985 against the oracle;
+#   * the 138 it REFUSES read 1.0643 .. 3.9988 and their fields score
+#     0.0018 .. 0.9520.
+#
+# TWO THINGS ROUND 2 CLAIMED DO NOT SURVIVE THIS POPULATION, and they are the
+# reason this block is rewritten rather than extended.
+#
+# (1) The two FIDELITY populations OVERLAP.  Round 2's strongest statement was
+# that they do not, with no accept bar chosen; the round-2 verification
+# narrowed the separation from (0.9593, 0.9302) to (0.9747, 0.9578) on 124
+# planes, and at 367 it closes: the worst RETURNED fold-ring field scores
+# 0.9421 (the NA 0.41 plano-convex at z = 2069.3 um, reading 1.0133, carrying
+# 1.27x the oracle's energy) against a best REFUSED of 0.9520 (a plano-first
+# N-BAK4 at z = 4929.0 um, reading 1.0812).  The guard's own split therefore
+# no longer separates right fields from wrong ones without an accept
+# criterion, and choosing that criterion is a maintainer decision.
+#
+# (2) The bar's MARGIN is a property of the z ladder, not of the quantity.
+# The reading is not smooth in z near a fold onset (the round-2 verification
+# measured 1.0002 -> 1.1810 -> 0.9989 over 20 nm of defocus), so refining the
+# ladder keeps finding readings closer to the bar.  Measured here by scanning
+# the SAME optics three times, each ladder ~10-30x finer than the last:
+#
+#     planes    fold-ring gap    two-sided margin (fold / all planes)
+#      468         1.371x          1.040x / 1.013x
+#      882         1.032x          1.012x / 1.0008x
+#     1196         1.0045x         1.00047x / 1.00047x
+#
+# The "7 % gap" of round 2 and the "3.8 %" of its verification are both
+# readings of their ladders.  There is no sign of a floor, so no margin
+# statement can be made about this bar at all -- which is why the derivation
+# below is a COST and not a gap.
+#
+# THE BAR IS KEPT AT 1.06, and it is derived rather than inherited.  The
+# two-sided margin at 1.06 on this population is 1.00047x, below the 1 % that
+# would call for re-centring; the geometric centre of the gap it sits in is
+# **1.0600253** over all 1196 planes -- i.e. 1.06 to three figures IS the
+# derived centre, and the constant does not move.  (The fold-ring-only centre
+# is 1.0619; moving there changes no fold-ring decision and returns one more
+# wrong field over all planes.)  What the bar costs, by fidelity band:
+#
+#   fold ring, accept at 0.95:   1 false refusal,   2 misses   (of 367)
+#   fold ring, accept at 0.883: 22 false refusals,  0 misses
+#   all planes, accept at 0.95:  1 false refusal, 226 misses   (of 1196)
+#
+# and every alternative measured is worse on one axis or both: 1.04 costs 5
+# false refusals on the fold ring for no fewer misses, 1.08 costs 4 more
+# misses for no fewer false refusals, and a bar derived from the CONVERGED
+# reading's own spread (below) costs 9-61 false refusals.
+#
+# THE FIXED REFERENCE IS NOT EXACT, and it does not hold where the guard
+# works.  Round 2 argued that a converged quadrature "reads 1 exactly, on any
+# optic, at any plane, at any grid", which is what would make this bar a
+# tolerance on a known value.  Measured on 102 planes over all seventeen
+# optics chosen by a GEOMETRIC criterion (at least a quarter of the paraxial
+# focal distance short of the interior fold, so no reading selects the planes
+# its own spread is measured on): **0.99941 .. 1.00044**, rms 1.5e-4.  The
+# residue is the window-edge term ``_HALF_PITCH_CENTRE_OFFSET`` documents --
+# it reads 1.4e-3 on a window too small to contain the field and 1.2e-4 on
+# every larger one.  But on HEALTHY FOLD planes the same reading spreads by
+# up to 2.1e-2, 36x more, because a collapsing ring is exactly where a
+# point-sampled estimator is noisiest.  So the reference is a tolerance on a
+# known value only far from the caustic, and the bar has to clear the
+# near-caustic spread, not the far-field one.
 #
 # Upper arm: above this the render has NOT converged in the pixel and the
 # uniform completion built on it REFUSES
@@ -271,19 +338,43 @@ _PIXEL_CONTINUITY_MAX = 1.06
 # ``[1/_PIXEL_CONTINUITY_MAX, _PIXEL_CONTINUITY_MAX]`` and neither arm is
 # arbitrary relative to the other.
 #
-# IT DOES NOT REFUSE, and the asymmetry is physical rather than timid: the
-# completion keeps the branch sum's BRIGHT side verbatim, so a bright-side
-# excess reaches the caller's field, while the DARK side is exactly what the
-# completion replaces, so a dark-side deficit does not.  Measured (WP-B7c
-# round 2, 2026-09-15) on the air-spaced doublet at z = 2903 um: the branch
-# sum reads 0.9419 -- 6 % short -- while the completed field's power is
-# 0.997x the oracle's and its fidelity 0.9910.  Over the whole round-2
-# population no fold-ring plane is refused on this arm and none needs to be;
-# the only loss-side readings that correspond to a wrong field are on
-# FALLBACK planes, where the module has already warned that the completion
-# does not apply, and there the nearest returned reading (0.854, oracle
-# fidelity 0.904) and the nearest wrong one (0.726, fidelity 0.837) leave
-# 1.18x on ONE optic -- not a population a bar can be derived on.
+# IT DOES NOT REFUSE, and on the FOLD-RING route the asymmetry is physical
+# rather than timid: the completion keeps the branch sum's BRIGHT side
+# verbatim, so a bright-side excess reaches the caller's field, while the DARK
+# side is exactly what the completion replaces, so a dark-side deficit does
+# not.  Measured (WP-B7c round 2, 2026-09-15) on the air-spaced doublet at
+# z = 2903 um: the branch sum reads 0.9419 -- 6 % short -- while the completed
+# field's power is 0.997x the oracle's and its fidelity 0.9910.  Over the
+# round-3 population no fold-ring plane needs refusing on this arm either.
+#
+# THAT JUSTIFICATION IS FALSE ON THE FALLBACK ROUTE, and round 2 had too
+# small a sample to see it: there the completion DECLINED, the returned field
+# IS the bright-side-only branch sum, and a dark-side deficit reaches the
+# caller verbatim.  Round 2 saw one optic's worth of that ("the nearest
+# returned reading 0.854 ... not a population a bar can be derived on");
+# WP-B7c round 3 measures it on **437 fallback planes the shipped bars
+# RETURN**, over sixteen optics, of which 224 score below oracle fidelity
+# 0.95:
+#
+#   this arm  (reading < 1/1.06)     flags 161, EVERY ONE of them wrong,
+#                                    ZERO false alarms, 63 wrong ones missed
+#   the launched-power bracket's
+#   loss side (< 0.5, the shipped
+#   ``_MB_POWER_RATIO_MIN``)         flags  47, every one wrong, 0 false
+#   the same at a tighter 0.889      flags 215, every one wrong, 0 false,
+#                                    only 9 wrong ones missed
+#
+# So a reading that orders the fallback route's accuracy DOES exist and is
+# already reported -- it is this arm and the bracket's loss side, whose bars
+# are set for a route where a dark deficit does not reach the caller.  After
+# both, and after the fallback ``reason``, THIRTEEN returned planes remain
+# that nothing sees, the worst at fidelity 0.5358 with every reading nominal
+# (the slow control at z = 22.74 mm: this reading 0.98722, the bracket
+# 0.9883).  Making either arm refuse on the fallback route is a behaviour
+# change with a Migration cost and is left as a maintainer decision; the cost
+# table is in ``WP-B7c_ROUND3_REPORT.md`` section 7, and
+# ``_lens_traced_uniform._PIXEL_CONTINUITY_SCOPES`` is where a caller is told
+# that this route is the one where the loss arms mean something.
 _PIXEL_CONTINUITY_MIN = 1.0 / _PIXEL_CONTINUITY_MAX
 
 # WHERE THE HALF-PITCH RENDER'S PIXEL CENTRES SIT (WP-B7c round 3, E5).
