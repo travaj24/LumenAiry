@@ -70,16 +70,44 @@ THE NA CEILING (VERIFY-WP-B7c D5; MEASURED, WP-B7c round 2, 2026-09-15).
     NA 0.33     0.354      0.2388        0.0875      0.99397   0.99611
     f/1.2       0.452      1.4231        0.5371      0.79403   0.99007
 
-  So the rule of thumb is ``rel L2 ~ 0.37 eps``, holding over three decades of
-  ``eps``, and:
+  CORRECTED (WP-B7c round 3, 2026-09-19).  The table above and the rule that
+  followed it are measured INSIDE the 99.95 %-energy core, outside which the
+  two compared fields are identical BY CONSTRUCTION -- while the dropped
+  quadratic term grows with ``rho`` and is largest exactly there.  Re-measured
+  with the exact azimuth applied at EVERY radius, pointwise at a
+  radius-stratified importance-weighted sample of the output grid's own pixels
+  (no radial reconstruction on either side; ``r3oraclefloor.py``,
+  ``validation/probe_wp_b7c_round3/oraclefloor_*_win.json``):
 
-    * BELOW ``y_max/z ~ 0.25`` (``eps <~ 0.04 rad``) the ``J0`` form costs
-      under 1.5 % in relative L2 and under 3e-4 in fidelity.  Every fixture in
-      WP-B7b, VERIFY-B7b, WP-B7c and VERIFY-WP-B7c is here, so no published
-      number is affected;
-    * at ``y_max/z ~ 0.35`` (NA 0.33) it costs 6-9 % in relative L2 and
-      3e-3-6e-3 in fidelity.  That is larger than the fidelity differences
-      such a study reads, so score there with the exact quadrature;
+    optic (y_max/z)      eps [rad]   rel L2 FULL   rel L2 CORE   fidelity
+    doublet     0.108      0.00085       0.0563        0.0054      0.99842
+    plano-first 0.109      0.0015        0.0952        0.0112      0.99551
+    plano-cx    0.133      0.0014        0.0833        0.0057      0.99656
+    meniscus    0.200      0.011         0.0787        0.0268      0.99701
+    oblate-conic 0.209     0.026         0.0341        0.0165      0.99950
+    NA 0.33     0.354      0.239         0.1535        0.1519      0.99226
+    NA 0.387    0.461      0.716         0.3276        0.3268      0.96345
+
+  so ``rel L2 ~ 0.37 eps`` DOES NOT HOLD at full radius: at the doublet row it
+  predicts 3.2e-4 against a measured 0.0563, and over three decades of ``eps``
+  the full-radius error moves by a factor of ten and is not even monotone in
+  ``eps``.  The rule is deleted rather than refitted, because the quantity it
+  was fitted to (a core-confined relative L2) is not the quantity a caller
+  scoring a whole field reads.
+
+  What DOES hold, and is what the studies actually use:
+
+    * BELOW ``y_max/z ~ 0.25`` the ``J0`` form costs 5e-4 .. 4.5e-3 in
+      FIDELITY (round 3, full radius; the "under 3e-4" of the previous
+      revision was the core-confined figure, and the "under 1.5 % in relative
+      L2" was wrong by a factor of 4-60 for the same reason).  Every fixture
+      in WP-B7b, VERIFY-B7b, WP-B7c and VERIFY-WP-B7c is here, and the
+      fidelity differences those studies read are 0.04-0.9, so no published
+      FIDELITY is affected;
+    * at ``y_max/z ~ 0.35`` (NA 0.33) it costs 15 % in relative L2 at full
+      radius and 7.7e-3 in fidelity.  That is larger than the fidelity
+      differences such a study reads, so score there with the exact quadrature
+      or with a band-limited angular spectrum;
     * at ``y_max/z ~ 0.45`` (f/1.2) it costs **54 % in relative L2 and a
       fidelity of 0.794**.  VERIFY-WP-B7c saw the library's own ``uniform``
       and ``wave`` members disagree with this oracle at fidelity 0.737 / 0.722
@@ -90,7 +118,20 @@ THE NA CEILING (VERIFY-WP-B7c D5; MEASURED, WP-B7c round 2, 2026-09-15).
   The energy closure column of the self-verification below sees the same
   thing from the other side (0.99999 at ``y_max/z`` 0.108 falling to 0.98990
   at 0.452), so a run whose ``energy_closure`` has drifted below ~0.995 is
-  already past this ceiling and should say so rather than be believed.
+  already past this ceiling and should say so rather than be believed.  That
+  column is CONFIRMED by round 3 from a well-resolved radial profile
+  (0.99992 at 0.108, 0.99913 at 0.200, 0.99616 at 0.354, 0.99222 at 0.461);
+  VERIFY_WP-B7c_ROUND2's E6 reported 0.9972 / 0.9741 at the first two and
+  could not reconcile them, and the difference was that verification's own
+  256-radius reconstruction, which loses energy on BOTH arms equally (0.894
+  on each).
+
+  Round 3 also bounds the ALTERNATIVE arm the later studies score with.  A
+  band-limited angular spectrum of the same traced exit field agrees with the
+  exact azimuthal quadrature, pointwise on the same pixel sample, to
+  0.00068 .. 0.00738 in relative L2 and 0.999973 .. 1.000000 in fidelity over
+  ``y_max/z`` 0.108-0.461 -- i.e. it has no NA ceiling in this range, which is
+  why WP-B7c round 3 scores with it rather than with the ``J0`` form.
 
 SELF-VERIFICATION (all independent of any lens model):
   * grid convergence -- doubling the fan / rho sampling changes the windowed
