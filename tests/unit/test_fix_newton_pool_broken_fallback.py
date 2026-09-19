@@ -48,6 +48,7 @@ close_worker_pool -> shutdown``.  On this tree the same probe returns in
 """
 from __future__ import annotations
 
+import ast
 import faulthandler
 import json
 import os
@@ -744,16 +745,57 @@ def _module_source():
     return inspect.getsource(LT)
 
 
-def test_only_the_bounded_helper_ever_joins_an_executor():
-    """The durable form of the invariant.
+def _last_name(node):
+    """The trailing identifier of a ``Name`` / ``Attribute``, else None."""
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Attribute):
+        return node.attr
+    return None
 
-    Bit-identity cannot see a join, and a wedge only shows up on a box under
-    load, so the guard has to be structural: ``shutdown(wait=True)`` may
-    appear in exactly one place -- the helper that runs it on another thread
-    and joins THAT with a timeout.
+
+def _executor_class_name(node):
+    """The executor class a CALL constructs, or None.
+
+    ``ProcessPoolExecutor(...)``, ``futures.ProcessPoolExecutor(...)`` and
+    ``cf.ThreadPoolExecutor(...)`` all answer; anything else does not.
     """
-    import ast
-    src = _module_source()
+    if not isinstance(node, ast.Call):
+        return None
+    name = _last_name(node.func)
+    return name if name and name.endswith('Executor') else None
+
+
+def _unbounded_executor_joins(src, exempt=('_shutdown_pool_bounded',)):
+    """Every site in ``src`` that joins an executor without a bound.
+
+    TWO SHAPES, because one of them has no ``shutdown`` call in it at all:
+
+    ``x.shutdown(...)``
+        with ``wait`` absent, or present and not the constant ``False``.
+        ``wait`` is read from the keywords AND from the positional slot, so
+        ``ex.shutdown(False)`` is correctly NOT an offender and
+        ``Executor.shutdown(ex, True)`` -- the unbound form, whose first
+        positional is ``self`` -- correctly is.
+    ``with ProcessPoolExecutor(...) as ex:``
+        ``Executor.__exit__`` IS ``shutdown(wait=True)``, so the block's exit
+        joins the feeder thread and every worker process with no timeout.
+        The shipped pin saw only the first shape and was therefore blind to
+        exactly the form the sibling pool uses (VERIFY-WP-B13 defect D7).
+
+    Scope is PROCESS pools.  The exposure is CPython's
+    ``_ExecutorManagerThread._terminate_broken``, which holds the executor's
+    ``_shutdown_lock`` across an untimed ``call_queue.join_thread()`` and an
+    untimed ``p.join()`` per worker; ``ThreadPoolExecutor`` has no such
+    machinery and its ``__exit__`` joins work that its own ``result()`` calls
+    have already collected.  Thread-pool ``with`` blocks are returned
+    separately as ``informational`` rather than silently dropped, so the
+    reading is visible in the failure message instead of being an
+    undocumented exemption.
+
+    Returns ``(offenders, informational)``, each a sorted list of
+    ``'owner:lineno:shape'``.
+    """
     tree = ast.parse(src)
     # Innermost enclosing function of every node, so a match is attributed to
     # the closure that makes it rather than to the whole 8000-line public
@@ -767,25 +809,146 @@ def test_only_the_bounded_helper_ever_joins_an_executor():
                 if child is not parent:
                     owner[child] = parent.name
                     enclosing.setdefault(child, set()).add(parent.name)
-    offenders = []
+
+    def _exempt(node):
+        return bool(set(exempt) & enclosing.get(node, set()))
+
+    offenders, info = [], []
     for node in ast.walk(tree):
-        if not (isinstance(node, ast.Call)
+        if (isinstance(node, ast.Call)
                 and isinstance(node.func, ast.Attribute)
                 and node.func.attr == 'shutdown'):
+            # ``Executor.shutdown(ex, wait)`` puts ``self`` first.
+            unbound = _executor_class_name(
+                ast.Call(func=node.func.value, args=[], keywords=[])) \
+                if isinstance(node.func.value,
+                              (ast.Name, ast.Attribute)) else None
+            slot = 1 if unbound else 0
+            waits = [kw.value for kw in node.keywords if kw.arg == 'wait']
+            if len(node.args) > slot:
+                waits.append(node.args[slot])
+            joining = (not waits) or any(
+                not (isinstance(v, ast.Constant) and v.value is False)
+                for v in waits)
+            if joining and not _exempt(node):
+                offenders.append(
+                    f'{owner.get(node)}:{node.lineno}:shutdown')
             continue
-        waits = [kw.value for kw in node.keywords if kw.arg == 'wait']
-        joining = (not waits) or any(
-            not (isinstance(v, ast.Constant) and v.value is False)
-            for v in waits)
-        if joining and '_shutdown_pool_bounded' not in enclosing.get(
-                node, set()):
-            offenders.append(f'{owner.get(node)}:{node.lineno}')
+        if isinstance(node, (ast.With, ast.AsyncWith)):
+            for item in node.items:
+                cls = _executor_class_name(item.context_expr)
+                if cls is None:
+                    continue
+                where = f'{owner.get(node)}:{node.lineno}:with {cls}'
+                if 'Process' not in cls:
+                    info.append(where)
+                elif not _exempt(node):
+                    offenders.append(where)
+    return sorted(offenders), sorted(info)
+
+
+def test_only_the_bounded_helper_ever_joins_an_executor():
+    """The durable form of the invariant.
+
+    Bit-identity cannot see a join, and a wedge only shows up on a box under
+    load, so the guard has to be structural: an unbounded join of a process
+    pool may appear in exactly one place -- the helper that runs it on
+    another thread and joins THAT with a timeout.
+
+    The detector is ``_unbounded_executor_joins``, which sees the ``with``
+    form as well as the ``shutdown`` call.  Its positive control is
+    ``test_the_join_detector_sees_the_with_form`` and its live example is
+    ``test_the_sibling_process_pool_still_carries_an_unbounded_join``; a pin
+    whose detector is never shown finding anything is a pin that can go blind
+    without going red.
+    """
+    offenders, info = _unbounded_executor_joins(_module_source())
     assert offenders == [], (
-        f'{offenders} call shutdown(wait=True) directly.  CPython joins the '
+        f'{offenders} join a process pool with no bound.  CPython joins the '
         f'queue-feeder thread and every worker process inside '
         f'_terminate_broken, under the same lock shutdown takes first, so a '
-        f'direct joining shutdown can wedge forever; route it through '
-        f'_shutdown_pool_bounded')
+        f'direct joining shutdown -- or a `with ProcessPoolExecutor(...)` '
+        f'block, whose __exit__ IS shutdown(wait=True) -- can wedge forever; '
+        f'route it through _shutdown_pool_bounded.  Thread-pool blocks seen '
+        f'and deliberately out of scope: {info}')
+
+
+def test_the_join_detector_sees_the_with_form():
+    """The positive control, on synthetic source.
+
+    The shipped pin walked only for ``ast.Call`` nodes whose ``func.attr``
+    was ``shutdown``, so a teardown written as a ``with`` block -- which has
+    no such call anywhere -- passed it (VERIFY-WP-B13 D7).  This is that
+    blind spot stated as a decision, on source this test owns, so it stays
+    meaningful however the two real modules evolve.
+    """
+    src = (
+        'def teardown_with(n):\n'
+        '    with ProcessPoolExecutor(max_workers=n) as ex:\n'
+        '        ex.submit(abs, -1)\n'
+        'def teardown_call(ex):\n'
+        '    ex.shutdown(wait=True)\n'
+        'def teardown_unbound(ex):\n'
+        '    Executor.shutdown(ex, True)\n'
+        'def retire(ex):\n'
+        '    ex.shutdown(wait=False, cancel_futures=True)\n'
+        'def retire_positional(ex):\n'
+        '    ex.shutdown(False)\n'
+        'def threads(n):\n'
+        '    with ThreadPoolExecutor(max_workers=n) as tp:\n'
+        '        tp.submit(abs, -1)\n')
+    offenders, info = _unbounded_executor_joins(src, exempt=())
+    shapes = sorted(o.split(':', 1)[0] for o in offenders)
+    assert shapes == ['teardown_call', 'teardown_unbound', 'teardown_with'], (
+        f'the detector reported {offenders}.  It must see all three joining '
+        f'shapes -- the `with` block, the bound call and the unbound call -- '
+        f'and must NOT report a non-joining shutdown written either with a '
+        f'keyword or positionally')
+    assert [i.split(':', 1)[0] for i in info] == ['threads'], (
+        f'thread-pool blocks must be reported as informational, not dropped '
+        f'and not counted: {info}')
+
+
+def test_the_sibling_process_pool_still_carries_an_unbounded_join():
+    """PREMISE GATE, and the record of an OPEN defect.
+
+    `lumenairy.propagators.carrier._multi_parallel_results` runs its own
+    spawn pool as ``with ProcessPoolExecutor(...) as ex:``, i.e.
+    ``shutdown(wait=True)`` on exit, and therefore carries the identical
+    unbounded-join exposure that WP-B13 removed from the Newton pool.  That
+    is VERIFY-WP-B13 D5, a MAINTAINER DECISION deliberately left open here
+    (see `WP-B13_FOLLOWUPS_REPORT.md`): it is a different pool with a
+    different failure policy and it belongs in its own work package.
+
+    This test therefore asserts that the extended detector DETECTS it.  Two
+    things ride on that.  It is the fail-before for the `with` extension --
+    without it the detector reports nothing on this module, which is exactly
+    how the shipped pin stayed green on the shape.  And it is the record:
+    the pin must not be made green by quietly editing `carrier.py`.
+
+    WHEN THIS GOES RED because the sibling pool was repaired, that is the
+    right outcome and not a broken test: delete this test, move the open-defect
+    note out of the report, and rely on
+    ``test_the_join_detector_sees_the_with_form`` for the positive control.
+    """
+    import inspect
+
+    from lumenairy.propagators import carrier as CA
+    offenders, info = _unbounded_executor_joins(inspect.getsource(CA),
+                                                exempt=())
+    owners = {o.split(':', 1)[0] for o in offenders}
+    assert '_multi_parallel_results' in owners, (
+        f'the detector no longer reports an unbounded executor join in '
+        f'carrier._multi_parallel_results.  Either the sibling pool was '
+        f'repaired -- in which case say so and retire this test, and take '
+        f'the open D5 note out of the WP-B13 follow-ups report -- or the '
+        f'detector has gone blind to the `with ProcessPoolExecutor(...)` '
+        f'shape, which is the whole of defect D7.  Offenders seen: '
+        f'{offenders}; informational: {info}')
+    assert any(o.startswith('_multi_parallel_results:')
+               and ':with ProcessPoolExecutor' in o for o in offenders), (
+        f'the site is reported, but not as the `with` shape the sibling '
+        f'module actually uses: {offenders}')
 
 
 def test_the_dispatcher_releases_its_claim_on_every_exit_path():
