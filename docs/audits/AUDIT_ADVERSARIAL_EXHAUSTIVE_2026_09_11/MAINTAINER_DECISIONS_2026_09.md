@@ -340,18 +340,35 @@ box, or accept it as untested.
 
 ## 4. Items still being measured (to be filled in before the 5.48.0 tag)
 
-### 4.1 PENDING: the FFT double buffer's returned object, and the NumPy elision report (Wave 5 item E1)
+### 4.1 MEASURED, verification in flight: the FFT double buffer's returned object, and the NumPy elision report (Wave 5 item E1)
 
 VERIFY-B14 sec. 3 established the mechanism: with the pyFFTW ping-pong on,
 `_fft2` returns a non-owning view of its workspace, so in `_fft2(E) * H` NumPy's
-temporary elision claims the RIGHT operand, and on the Linux NumPy 2.4.6 build
-a right-elided complex128 multiply moves the last bits (16 to 17 % of the
+temporary elision claims the RIGHT operand, and on the Linux NumPy build a
+right-elided complex128 multiply moves the last bits (16 to 17 % of the
 doubles, relative 1e-16 to 1.8e-16).  The transforms themselves are functions
-of their inputs.  Being measured: whether the dispatchers should return a
-private copy at the affected shapes (cost: one N^2 complex copy per transform on
-the propagator hot path) or only the docstring is scoped; and a lumenairy-free
-reproducer plus an issue draft for NumPy.  Decision owed: whether to file the
-upstream report (the draft will be under `validation/probe_fft_elision/`).
+of their inputs.
+
+Measured by item E (WAVE5_E_LEFTOVERS_REPORT.md, both builds): returning a
+private copy would cost 18.6 % to 22.1 % on `angular_spectrum_propagate` at
+512^2 to 2048^2 (Windows) and 13 % (WSL), one copy being 0.30 to 0.42 of a
+forward transform, and would buy NOTHING inside the library: every in-library
+product site names its operand, so four entry points x three shapes x two
+builds are byte-identical across the switch (12 of 12).  What moves is a
+CALLER who spells the elided form, by 3.4e-16 to 4.0e-16 relative on the Linux
+wheel and exactly 0 on Windows.  The remedy shipped is therefore the scoped
+contract (VERIFY-B14 D4's sentence, verbatim, in the knob doc, the setter
+docstring and the module note), not a copy.  Two facts for the upstream
+report: the effect is a property of the WHEEL (NumPy 2.4.6 in a clean Windows
+venv is unaffected), and the explicit `np.multiply(a, b, out=b)` matches the
+named form while only the elided spelling moves, which is what makes it an
+elision defect rather than in-place complex rounding.
+
+Decision owed: whether to file the NumPy report.  The lumenairy-free
+reproducer and the issue draft are under `validation/probe_fft_elision/`
+(`numpy_elision_reproducer.py`, `NUMPY_ISSUE_DRAFT.md`); nothing has been
+filed.  Recommendation (medium confidence): file it, with the wheel-not-version
+finding, since it affects any NumPy user on that wheel and the draft is ready.
 
 ### 4.2 PENDING: the direct-matrix MFT branch, opt-in or threshold-automatic (Wave 5 hygiene item 14)
 
