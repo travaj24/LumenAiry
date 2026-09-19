@@ -90,13 +90,75 @@ _LIVE_FORWARD_NAMES = frozenset({
     '_NUMBA_AVAILABLE', '_numba', '_njit', '_prange', '_NUMBA_KERNELS',
 })
 
+# THE OTHER HALF, and the one the first half's design note did not finish
+# (VERIFY-WP-B11c defect D3).
+#
+# These eight are not state.  They are DEFINITIONS -- a constant and seven
+# functions -- and the re-export above binds each of them to the SAME object
+# the leaf holds, which is right for reading and is what keeps
+# ``from .lenses import _warn_if_aperture_exceeds_grid`` resolving.
+#
+# What the re-export cannot carry is a WRITE.  Every one of them is read at
+# CALL TIME out of ``_lens_kernels``'s globals by the code that moved with
+# them, so ``monkeypatch.setattr(lenses, '_is_cupy_array', fake)`` binds a
+# shadow in THIS module's dict that the kernel never looks at.  At the commit
+# before the move that same line DID change ``surface_sag_general``'s
+# behaviour, because the kernel lived here -- so the move turned a working
+# substitution into a silent no-op, which is precisely the failure mode
+# ``rcwa/_blas.py``'s half of WP-B11c was arranged to make LOUD (there the
+# name is absent from ``_core``, so ``monkeypatch.setattr`` raises).
+#
+# This module cannot be loud the same way: the name has to stay readable.  So
+# it is loud on the WRITE instead.  ``lenses.<one of these> = x`` and ``del
+# lenses.<one of these>`` raise ``AttributeError`` naming ``_lens_kernels`` as
+# the address to patch.  Reading is untouched -- same object, same dict entry,
+# same ``import *`` surface, same ``dir()``.
+#
+# WHY NOT FORWARD THE WRITE, as the live half does?  Because forwarding a write
+# while the read still comes from this module's dict ALIASES: ``lenses.X``
+# would keep returning the original while ``_lens_kernels.X`` held the fake.
+# Removing the re-export to fix that (making all eight live forwards) was
+# measured and rejected: ``CUPY_AVAILABLE`` is the one public name among the
+# eight, and taking it out of ``lenses.__dict__`` removes it from ``from
+# lumenairy.elements.lenses import *`` -- a public-surface change in a
+# durability fix.  Refusing the write costs nothing observable and says the
+# same thing.
+#
+# The set and its message live INSIDE ``_LensesFacade`` (below), not at module
+# scope: ``dir(lenses)`` is a bit-identity key of WP-B11c's own verification,
+# and a module-level name -- private or not -- would grow it.  A class
+# attribute of the module's TYPE does not appear in a module's ``__dir__``.
+
 _KERNELS = _sys.modules[__package__ + '._lens_kernels']
 
 
 class _LensesFacade(_types.ModuleType):
     """``lumenairy.elements.lenses``'s own module type: everything a plain
     module does, plus a two-way forward of ``_LIVE_FORWARD_NAMES`` to
-    ``_lens_kernels``."""
+    ``_lens_kernels``, and a refusal of any WRITE to the eight names the leaf
+    owns (see the block above ``_KERNELS``)."""
+
+    #: The eight leaf-owned re-exports.  A class attribute, not a module-level
+    #: constant, so ``dir(lenses)`` does not move (see the comment above).
+    _LEAF_OWNED_NAMES = frozenset({
+        'CUPY_AVAILABLE', '_is_cupy_array', '_ensure_cupy_loaded',
+        '_load_numba', '_get_aspheric_sag_accum_numba',
+        '_ensure_numexpr_loaded', '_collect_semi_diameters',
+        '_warn_if_aperture_exceeds_grid',
+    })
+
+    @staticmethod
+    def _leaf_owned_refusal(name, verb):
+        """The message both refusing paths raise.  One text, one address."""
+        return (
+            f"lumenairy.elements.lenses.{name} is a re-export of "
+            f"{_KERNELS.__name__}.{name}, and the code that reads it reads it "
+            f"out of {_KERNELS.__name__}'s globals at call time -- so {verb} "
+            f"it HERE would bind a shadow that nothing looks at.  This is "
+            f"refused rather than accepted silently (VERIFY-WP-B11c D3): the "
+            f"same statement against {_KERNELS.__name__} does what you mean.  "
+            f"Reading lumenairy.elements.lenses.{name} is unaffected and "
+            f"returns the same object.")
 
     def __getattr__(self, name):
         if name in _LIVE_FORWARD_NAMES:
@@ -108,12 +170,18 @@ class _LensesFacade(_types.ModuleType):
         if name in _LIVE_FORWARD_NAMES:
             setattr(_KERNELS, name, value)
             return
+        if name in type(self)._LEAF_OWNED_NAMES:
+            raise AttributeError(
+                type(self)._leaf_owned_refusal(name, 'rebinding'))
         super().__setattr__(name, value)
 
     def __delattr__(self, name):
         if name in _LIVE_FORWARD_NAMES:
             delattr(_KERNELS, name)
             return
+        if name in type(self)._LEAF_OWNED_NAMES:
+            raise AttributeError(
+                type(self)._leaf_owned_refusal(name, 'deleting'))
         super().__delattr__(name)
 
     def __dir__(self):
@@ -121,7 +189,10 @@ class _LensesFacade(_types.ModuleType):
         # this the forwarded names would VANISH from ``dir(lenses)`` -- an
         # observable surface change in a refactor whose contract is that
         # nothing observable moves.  Introspection therefore sees exactly what
-        # it saw while the names were defined here.
+        # it saw while the names were defined here.  ``_LEAF_OWNED_NAMES`` is
+        # NOT unioned in: those eight are real entries in this module's dict
+        # already, so adding them would be a no-op that reads as if it were
+        # not.
         return sorted(set(super().__dir__()) | _LIVE_FORWARD_NAMES)
 
 

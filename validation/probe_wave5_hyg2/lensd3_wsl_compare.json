@@ -1,0 +1,24 @@
+{
+ "tag": "lensd3_wsl",
+ "python": "/home/travaj/lumvenv/bin/python",
+ "base_tree": "/mnt/c/tmp/hyg2_arch/base",
+ "branch_tree": "/mnt/c/tmp/hyg2_arch/branch",
+ "expect_differ_prefixes": [
+  "D3-write-",
+  "D3-delete-"
+ ],
+ "n_keys_base": 131,
+ "n_keys_branch": 131,
+ "n_shared": 131,
+ "n_identical": 99,
+ "n_differ_expected": 32,
+ "differ_unexpected": [],
+ "expected_to_differ_but_identical": [],
+ "only_base": [],
+ "only_branch": [],
+ "seconds": {
+  "base": 2.2,
+  "branch": 3.2
+ },
+ "verdict": "IDENTICAL"
+}

@@ -1,7 +1,7 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/lenses.py
-ast_sha256: 858e813c36a8474a763bf705361c08f62e8ff6d0db74ab6aae4314475b46eac1
-token_sha256: 48778f22e1366f6421d063f2c3fb3fa89c370e9f38530ad420dff5f8dd076d1c
+ast_sha256: d5156dc3df889e4a5bc3b36ee4181cea1c00fda89d0e99502f370d2c77e0f75f
+token_sha256: 11dd1b2ca0cf3b1b17561dc2c18a6711f2124daa3a6eab7635216c2490096a1f
 pre_relocation_lines: 1171
 recorded_by: WP-A17 SWEEP-4 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
@@ -12,6 +12,7 @@ re_recorded: 2026-09-14 -- WP-B11c: the optional CuPy / numba / numexpr plumbing
 re_recorded: 2026-09-14 -- WP-B11c: _fit_normaliser and _multi_indices_total_degree move to the _lens_kernels leaf and lenses_maslov reads all four of the back-edge's names there, closing the last module-level 2-cycle in the lens family; lenses re-exports both.  Bit-identical (45/45 archive-to-archive hashes, both builds).
 re_recorded: 2026-09-14 -- WP-B11c: the facade's module type gains __dir__ so the forwarded live names stay visible to introspection, as they were while they were defined here.
 re_recorded: 2026-09-15 -- merge of verify/wp-b11c into wave5/audit-leftovers: the WP-B11c moves and the Wave-5 item D digest-scheme change land in one tree (both sides' re_recorded lines kept)
+re_recorded: 2026-09-19 -- H2-4 (VERIFY-WP-B11c D3): _LensesFacade refuses a write or delete of the eight leaf-owned re-exports instead of binding a silent shadow; reads, dir() and import * unchanged
 -->
 
 # Version history -- `lumenairy/elements/lenses.py`
