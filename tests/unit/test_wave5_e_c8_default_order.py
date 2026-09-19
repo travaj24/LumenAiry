@@ -50,10 +50,14 @@ e2_radius_nstable_win32_314.json``):
     n=256   0.596   0.596   7.7e-2  9.0e-3  9.0e-3  2.4e-5  1.8e-7
     n=512   0.216   2.3e-2  2.0e-3  1.7e-4  1.3e-5  1.0e-6  7.5e-8
 
-so five of the seven rungs clear 10x at 256 and seven of seven do at 512, both
-monotone, and the 256^2 pair costs ~2 s against the ~14 min the 768^2 sweep
-took.  The geometry is the ``_GHOST`` optic re-sampled onto 256 cells over the
-same 19.2 mm physical extent.
+so five of the seven rungs clear 10x at 256 and **six of seven** do at 512 (the
+2.0 w rung reads 0.216, i.e. 4.63x, which is below this file's own ``_TRIP``;
+corrected 2026-09-19, VERIFY-WAVE5-E D5 -- the sentence used to say seven of
+seven and contradicted the table printed three lines above it).  All seven
+rungs are monotone at both samplings.  The pin requires
+:data:`_REQUIRED_TRIPS` of them, not seven, and the 256^2 pair costs ~2 s
+against the ~14 min the 768^2 sweep took.  The geometry is the ``_GHOST``
+optic re-sampled onto 256 cells over the same 19.2 mm physical extent.
 
 NOTHING HERE STATES A FIT ORDER.  The calls run at whatever
 ``lumenairy.elements._lens_traced._DECENTRED_FIT_POLY_ORDER`` ships, which is
@@ -100,16 +104,32 @@ _CANDIDATES = (
 )
 
 #: The ladder's free parameter: the inner radius of the halo annulus, in input
-#: beam widths.  Seven rungs; >= 3 must trip for the pin to be a ladder.
+#: beam widths.  Seven rungs; :data:`_REQUIRED_TRIPS` must trip for the pin to
+#: be a ladder.
 _FACTORS = (2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0)
 
+#: HOW MANY of the seven rungs the pin actually requires -- ONE number, read
+#: by the stimulus gate and by the two fail-before assertions alike, so the
+#: premise and the claim cannot drift apart (VERIFY-WAVE5-E D5).  Three, not
+#: seven: a single cell is the S1/S5 shape ``docs/TESTING_STANDARDS.md``
+#: forbids, and the measured ladders clear the bar in 5 of 7 rungs at n = 256
+#: and 6 of 7 at n = 512, so three leaves two rungs of margin at the sampling
+#: the pin runs at and three at the doubling.
+_REQUIRED_TRIPS = 3
+
 #: THE BAR.  A rung TRIPS when the bound removes a factor of 10 of amplitude
-#: from the annulus.  Gap below: where the bound is inert the two fields are
-#: BIT-IDENTICAL, so the inert reading is exactly 1.0 and not 1.0000001 -- every
-#: one of the 385 inert cells of the 432-cell sweep reads exactly 1.0.  Gap
-#: above: the weakest tripping rung of the cell this file selects reads 12.9x at
-#: n = 256 and 490.9x at n = 512.  So the bar sits one decade above an exact
-#: identity and 1.3x to 49x below the signal.
+#: from the annulus.  Gap below: where the bound is inert the annulus MAXIMUM
+#: is an untouched pixel, so the inert reading is exactly 1.0 and not
+#: 1.0000001 -- every one of the 385 inert cells of the 432-cell sweep reads
+#: exactly 1.0.  (Corrected 2026-09-19, VERIFY-WAVE5-E D7: this used to say
+#: "the two FIELDS are BIT-IDENTICAL", which is not what an inert cell reads
+#: -- an inert cell of the verifier's own, alpha = 3.0, cx = 1.40 mm,
+#: z = 12 mm, frbf = 2.0, n = 256, moved total power by 3e-16 relative on
+#: Windows and 3.3e-14 on WSL while all four annuli still read exactly 1.0.
+#: The weaker statement about the maximum is the true one, and it is the one
+#: the bar rests on.)  Gap above: the weakest tripping rung of the cell this
+#: file selects reads 12.9x at n = 256 and 490.9x at n = 512.  So the bar sits
+#: one decade above an exact identity and 1.3x to 49x below the signal.
 _TRIP = 10.0
 
 #: The published order-10 control on the ``_GHOST`` geometry: the bound removes
@@ -217,7 +237,15 @@ def _evaluate(cand, n=_N):
     Foff = _call(s, bound=False, cx=cand['cx'], frbf=cand['frbf'])
     Fon = _call(s, bound=True, cx=cand['cx'], frbf=cand['frbf'])
     rows = _ladder(Foff, Fon, s, cand['cx'])
-    trips = [r for r in rows if r[3] > 0.0 and (1.0 / r[3]) >= _TRIP]
+    # A rung the bound empties COMPLETELY reads suppression exactly 0.0, which
+    # is the strongest evidence the ladder can produce -- not a miss.  The old
+    # predicate (``r[3] > 0.0 and 1.0 / r[3] >= _TRIP``) discarded it, while
+    # ``_fmt`` and ``_require`` both read the same 0.0 as ``inf``; the file
+    # contradicted itself and a live stimulus could be turned into a skip
+    # (VERIFY-WAVE5-E D4; measured: at n = 256 the 6.50 w and 6.75 w rungs of
+    # a wider sweep read on == 0.0 exactly).  ``sup <= 1/_TRIP`` is the same
+    # predicate ``_fmt``/``_require`` use, and it counts total removal.
+    trips = [r for r in rows if r[3] <= 1.0 / _TRIP]
     return s, Foff, Fon, rows, trips
 
 
@@ -240,7 +268,7 @@ def stimulus():
     for cand in _CANDIDATES:
         s, Foff, Fon, rows, trips = _evaluate(cand)
         readings.append((cand, rows, len(trips)))
-        if len(trips) >= 3:
+        if len(trips) >= _REQUIRED_TRIPS:
             return {'cand': cand, 's': s, 'Foff': Foff, 'Fon': Fon,
                     'rows': rows, 'trips': trips, 'readings': readings}
     return {'cand': None, 'readings': readings}
@@ -299,12 +327,13 @@ def test_the_bound_removes_manufactured_light_at_the_shipped_fit_order(
     """
     _require(stimulus)
     rows, trips, cand = stimulus['rows'], stimulus['trips'], stimulus['cand']
-    assert len(trips) >= 3, (
-        'the default-order ladder must trip in at least 3 annuli, not 1 -- a '
+    assert len(trips) >= _REQUIRED_TRIPS, (
+        'the default-order ladder must trip in at least %d annuli, not 1 -- a '
         'single cell is the shape TESTING_STANDARDS forbids.  Got %d of %d at '
         'alpha=%.2f cx=%.3f mm z=%.1f mm frbf=%.2f, n=%d:\n  %s'
-        % (len(trips), len(rows), cand['alpha'], cand['cx'] * 1e3,
-           cand['z'] * 1e3, cand['frbf'], stimulus['s']['n'], _fmt(rows)))
+        % (_REQUIRED_TRIPS, len(trips), len(rows), cand['alpha'],
+           cand['cx'] * 1e3, cand['z'] * 1e3, cand['frbf'],
+           stimulus['s']['n'], _fmt(rows)))
 
 
 def test_the_suppression_is_monotone_in_the_annulus_radius(stimulus):
@@ -325,7 +354,8 @@ def test_the_suppression_is_monotone_in_the_annulus_radius(stimulus):
     _require(stimulus)
     rows = stimulus['rows']
     sup = [r[3] for r in rows]
-    assert len(sup) >= 3, f'the ladder needs >= 3 rungs; got {len(sup)}'
+    assert len(sup) >= _REQUIRED_TRIPS, (
+        f'the ladder needs >= {_REQUIRED_TRIPS} rungs; got {len(sup)}')
     # One part in 1e9 of slack -- the round-off of a ratio of two amplitudes
     # read from the same pair of fields, far below the decade a rung moves by.
     bad = [i for i in range(len(sup) - 1) if sup[i + 1] > sup[i] * (1 + 1e-9)]
@@ -368,8 +398,10 @@ def test_the_stimulus_survives_a_doubling_of_the_sampling(stimulus):
     ``n = 256``) that trip in three or more annuli, because it is the one that
     ALSO trips at ``n = 512``.  That doubling is the durability statement: the
     stimulus is a property of the optic and not of one sampling.  Measured:
-    ratio 12.9x at 256 and 490.9x at 512 beyond three beam widths, with 5 and 7
-    monotone rungs.  Below 256 (128, 192) and at 768 the same cell is inert,
+    ratio 12.9x at 256 and 490.9x at 512 beyond three beam widths, with 5 of 7
+    rungs clearing the bar at 256 and 6 of 7 at 512 (the 2.0 w rung reads
+    4.63x at 512 -- corrected 2026-09-19, VERIFY-WAVE5-E D5), all seven
+    monotone at both.  Below 256 (128, 192) and at 768 the same cell is inert,
     which is the chaotic ``n`` dependence this file's header documents -- so
     256 is the SMALLEST sampling that survives a doubling, not merely a
     sampling that works.
@@ -390,10 +422,11 @@ def test_the_stimulus_survives_a_doubling_of_the_sampling(stimulus):
             % (cand['alpha'], cand['cx'] * 1e3, cand['z'] * 1e3,
                cand['frbf']))
     _s2, _off2, _on2, rows2, trips2 = _evaluate(cand, n=2 * _N)
-    assert len(trips2) >= 3, (
-        'the stimulus must survive the sampling doubling %d -> %d: at least 3 '
-        'annuli must still trip at >= %gx.  Got %d of %d:\n  %s'
-        % (_N, 2 * _N, _TRIP, len(trips2), len(rows2), _fmt(rows2)))
+    assert len(trips2) >= _REQUIRED_TRIPS, (
+        'the stimulus must survive the sampling doubling %d -> %d: at least '
+        '%d annuli must still trip at >= %gx.  Got %d of %d:\n  %s'
+        % (_N, 2 * _N, _REQUIRED_TRIPS, _TRIP, len(trips2), len(rows2),
+           _fmt(rows2)))
     sup2 = [r[3] for r in rows2]
     bad = [i for i in range(len(sup2) - 1)
            if sup2[i + 1] > sup2[i] * (1 + 1e-9)]
