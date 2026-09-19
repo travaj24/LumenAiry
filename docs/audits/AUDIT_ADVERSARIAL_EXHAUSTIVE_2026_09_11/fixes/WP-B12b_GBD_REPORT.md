@@ -1,0 +1,647 @@
+# WP-B12b -- the GBD beamlet image leg: the in-line conic-sag copy is deleted
+# and the local branch consumes the shared exit-vertex projection
+
+Wave 5 item A2.  Branch `fix/gbd-exit-vertex-projection`, base `1218b24f` (the
+head of `fix/wp-b12-fga-reference-plane`).  The finding it acts on is
+`fixes/WP-B12_REPORT.md` section 5.1 and open item 1: `gbd.py`'s
+`apply_prescription_persurface_to_beamlets` carried its own vertex correction,
+an in-line conic-sag expression that WP-B12 measured **15.52 waves wrong on an
+A4 / A6 last surface, 71 % of the sag**, and left for a package of its own
+because repairing it moves every per-surface-GBD field on an aspheric-last-
+surface prescription and needs its own oracle ladder.
+
+---
+
+## 0. Terms used here
+
+* **Last surface** -- the final refracting or reflecting surface of a
+  prescription.  `lumenairy.raytrace.trace` stops every ray at its
+  intersection with that surface, i.e. at `z = sag(rho)` in the surface's local
+  frame; `TraceResult.image_rays` reports that state.
+* **Exit-vertex plane** -- the plane `z = 0` through that surface's vertex.
+  `TraceResult.at_exit_vertex()` transfers a ray bundle to it along each ray.
+* **The shared projection** -- `lumenairy.raytrace.differential.
+  _project_to_exit_vertex_plane`, created by WP-B12 as the library's single
+  implementation of that operator for the differential primitives' 4x4 state.
+  It projects the state AND the Jacobian (`J_v = P J`), takes its sag from the
+  package's general surface kernels (`_surface_sag_xy` /
+  `_surface_sag_derivatives_xy`), resolves the exit-medium index through
+  `raytrace.exit_vertex.resolve_exit_index`, recovers the propagation
+  direction through a mirror with `_exit_direction_sign`, and short-circuits
+  structurally when the last surface's sag is identically zero.
+* **The in-line copy** (deleted here) -- the `_Rl` / `_kl` block that stood
+  below the Q loop in `apply_prescription_persurface_to_beamlets` from the
+  v5.22 fix to 5.47.0:
+
+  ```python
+  _Rl = float(getattr(surfs[-1], 'radius', np.inf))
+  _kl = float(getattr(surfs[-1], 'conic', 0.0) or 0.0)
+  if np.isfinite(_Rl) and _Rl != 0.0:
+      _cl = 1.0 / _Rl
+      _r2 = dt.x ** 2 + dt.y ** 2
+      _sag = _cl * _r2 / (1.0 + np.sqrt(np.maximum(
+          1.0 - (1.0 + _kl) * _cl * _cl * _r2, 0.0)))
+  else:
+      _sag = np.zeros_like(dt.x)
+  t = (z_image - _sag) / Nz2
+  ```
+
+* **Fidelity** -- `|<a,b>|^2 / (<a,a><b,b>)` between two complex fields on the
+  same grid; 1 means the same field up to a global complex scale.
+* **The local branch / the world branch** --
+  `apply_prescription_persurface_to_beamlets` has two exits.  The LOCAL branch
+  (`world_output_plane is None`) adds an axial leg `z_image` and reconstructs
+  on the fixed local x-y grid; the WORLD branch re-traces the base rays through
+  the folded prescription in world coordinates and lands them on an arbitrary
+  world-frame plane.
+
+---
+
+## 1. The defect, and its four separate failure modes
+
+The in-line copy is not one error, it is four, and only the first was named by
+WP-B12.
+
+1. **It evaluates only the CONIC BASE.**  `_surface_sag_xy` dispatches to a
+   freeform kernel, a biconic kernel or the general conic-plus-even-aspheric
+   kernel, and honours a field-frame decenter / tilt / `sag_callable`.  The
+   in-line copy reads `radius` and `conic` and nothing else, so it drops the
+   aspheric polynomial, the biconic y-branch, the whole freeform departure and
+   the entire field-frame class.
+2. **Its own guard makes it silently zero on a flat base.**  `if
+   np.isfinite(_Rl) and _Rl != 0.0` is false for `radius = inf`, so a last
+   surface whose power lives entirely in `aspheric_coeffs` -- a perfectly legal
+   and quite ordinary aspheric design -- got **no** vertex correction at all,
+   not a partial one.
+3. **It assumes the exit medium is vacuum.**  `t = (z_image - _sag) / Nz2`
+   with `Nz2 = 1/sec` folds `-sag*sec` of GEOMETRIC path into a leg whose
+   optical path is then `exp(i k0 t)`, i.e. `n = 1`.  The shared projection
+   resolves `n_exit` from the prescription.
+4. **It assumes the exit ray goes forward.**  After a mirror the outgoing `N`
+   is negative and the transfer to the vertex plane ADDS optical path where a
+   transmissive exit subtracts it.  The in-line copy subtracted regardless, so
+   on a mirror-terminated prescription it **doubled** the error instead of
+   removing it.
+
+### 1.1 Measured, at the ray level, on every surface class GBD can reach
+
+`validation/probe_gbd_projection/probe_a_sag.py`.  One optic -- N-BAF10
+biconvex, R1 = +11.0 mm, t = 0.9 mm, semi = 0.30 mm, 1.064 um -- with only the
+LAST surface varied, plus a separate concave mirror; a collimated 2-D fan of
+328 rays (41 radii x 8 azimuths, deliberately NOT meridional, because a
+biconic and an XY-polynomial freeform depart from the rotationally-symmetric
+conic only off the x axis and a `y = 0` fan reads their defect as exactly
+zero).  `backend` is the one GBD's `jacobian='auto'` selects.
+
+**Identical to every printed digit on both builds** (Windows py3.14 /
+numpy 2.4.4, WSL py3.12 / numpy 2.4.6).
+
+| last surface | backend | true sag | in-line sag error | as a fraction of the sag | **optical-path error** | height error |
+|---|---|---|---|---|---|---|
+| conic (control) | analytic | 3.460 waves | 0.0000 | 0.000 | **0.0000 waves** (1.5e-23 m) | 1.5e-23 m |
+| conic + k = -0.60 (control) | analytic | 3.460 | 0.0000 | 0.000 | **0.0000** | 1.5e-23 m |
+| even asphere A4 = 1.5e8 | analytic | 2.535 | 0.9243 | 0.365 | **0.9246** | 2.5e-08 m |
+| even asphere A4 = 5.0e8, A6 = -4.0e15 | analytic | 2.374 | 1.0852 | 0.457 | **1.0858** | 3.9e-08 m |
+| **flat base, all power in A2 / A4** | analytic | 4.385 | 4.3846 | **1.000** | **4.3862** | 1.3e-07 m |
+| biconic, `radius_y` = -7.0 mm | fd | 5.364 | 1.9034 | 0.355 | **1.9052** | 8.9e-08 m |
+| freeform (XY polynomial) | fd | 5.101 | 3.3141 | 0.650 | **3.3146** | 7.5e-08 m |
+| field frame, decentre (60, -40) um | fd | 5.437 | 1.9764 | 0.364 | **1.9779** | 8.1e-08 m |
+| **concave mirror R = -20 mm** | analytic | 8.125 | 0.0000 | 0.000 | **16.2790** | 9.7e-23 m |
+| flat last surface (control) | analytic | 0.000 | 0.0000 | 0.000 | **0.0000 exactly** | 0.0 exactly |
+
+Read the mirror row carefully: the in-line copy computed the SAG exactly
+(0.0000 waves of sag error -- it is a conic mirror), and still got the optical
+path wrong by **twice the sag** (16.279 = 2 x 8.125 x sec), because it applied
+the correction with the wrong sign.  That is failure mode 4, and it is
+invisible in a sag comparison.
+
+The flat-base row is failure mode 2: the error is **100 % of the sag**, because
+the copy contributed nothing at all.
+
+### 1.2 WP-B12's own fixture, reproduced
+
+The same probe also runs WP-B12 probe D's optic (N-BAF10 R = +/-2.10 mm,
+semi = 0.20 mm) so section 5.1's reading is reproduced like for like:
+
+| arm | in-line sag error | fraction of sag | optical-path error |
+|---|---|---|---|
+| conic last surface | 0.0000 waves | 0.000 | 0.0000 |
+| A4 = 4.0e8, A6 = -8.0e17, meridional 401-ray fan | **16.0225 waves** | 0.719 | 24.1645 |
+| the same, 2-D 328-ray fan | 16.0511 | 0.720 | 24.3975 |
+
+WP-B12 reported **15.520 waves / 71 %** on that fixture, and that number is
+re-taken here on the parent tree by re-running its own probe unchanged:
+
+```
+GBD in-line sag vs the shared sag, conic         : 1.550e-19 m (0.000 waves) on a sag of 6.947e-06 m
+GBD in-line sag vs the shared sag, asphere_A4_A6 : 1.651e-05 m (15.520 waves) on a sag of 2.309e-05 m
+```
+
+The 15.52 / 16.02 gap is the BACKEND and the aliveness mask, not a
+disagreement: WP-B12's probe used the finite-difference primitive, whose
+companion-ray aliveness rule kills ten more rim rays on that steep asphere
+than the analytic primitive does, so its maximum is taken over a slightly
+smaller aperture.  Both are the same defect to three digits.
+
+### 1.3 The control on the projection itself
+
+The shared projection is checked against the library's OTHER vertex operator,
+`TraceResult.at_exit_vertex()`, which is a different implementation (it works
+on direction cosines and the traced `z`, not on the sag kernel and the
+unreduced slopes).  On the aspheric fixture, over 200 rays:
+
+| quantity | gap |
+|---|---|
+| height | **0.0 m** (both builds) |
+| optical path | **0.0 m** (both builds) |
+
+and the projection's own three readings of the sag -- from the height move,
+from the optical-path move, and from `_surface_sag_xy` directly -- agree to
+**1e-19 m** on every fixture in the table (`control_sag_*` in the JSON).
+
+---
+
+## 2. The repair, and why it is shaped this way
+
+```python
+_reference = 'surface' if world_output_plane is not None else 'exit_vertex'
+dt = _jac(x, y, ux, uy, surfs, wavelength, per_surface=True,
+          reference=_reference)
+...
+t = z_image / Nz2
+```
+
+and the `_Rl` / `_kl` block is gone.
+
+**Why ask the primitive rather than call `_project_to_exit_vertex_plane`
+directly.**  The brief allowed either.  `reference='exit_vertex'` is the
+public contract WP-B12 created for exactly this, it is what the four `fga.py`
+sites use, and it keeps the projection a private detail of
+`raytrace.differential` instead of making `propagators.gbd` the one module
+that reaches into another package's private function.  One convention, one
+call shape, two consumers.
+
+**Why the world branch keeps `'surface'`.**  This is the part that is easy to
+get wrong.  The world branch does not add an axial leg from the vertex plane:
+`_reframe_beamlets_to_world_plane` world-traces the base rays through the
+folded prescription, reads `img.x, img.y, img.z` -- the last-surface
+INTERSECTION -- and starts its own leg `t = -p_l[2] / d_l[2]` there.  Its OPL
+piston (`amp * exp(1j*k0*dt.opd)`, applied before the branch) and its leg are
+therefore already on one plane, the surface.  Moving the primitive under it
+would subtract the sag once in `dt.opd` and never add it back: the same defect
+this package removes, mirrored.  The two branches genuinely need different
+reference planes, and the code says so at the call site with the reason.
+
+Measured, not assumed: probe B runs the world branch in both trees and the
+returned field is byte-identical (section 4.3).
+
+---
+
+## 3. What moves on a CONIC last surface, and why
+
+On a conic last surface the in-line copy computed the sag exactly (section
+1.1), so the change there is not a sag correction.  The field still moves, and
+`validation/probe_gbd_projection/probe_c_decompose.py` isolates the cause at
+the BEAMLET level -- the bundle `apply_prescription_persurface_to_beamlets`
+returns, before any reconstruction, so the reading is the mechanism and not a
+grid artefact.
+
+Three arms, differing ONLY in what the projection does to the 4x4 Jacobian
+(the state is projected identically in all three):
+
+| arm | the Jacobian |
+|---|---|
+| `full` | what ships: `J_v = P J`, `P = [[I - u (x) grad s, -s I], [0, I]]` |
+| `fs_sag_sec` | what the DELETED code effectively applied: `J_v = [[I, -sag*sec I], [0, I]] J` -- folding `-sag` into the leg `t = (z_image - sag)/Nz2` is the same Moebius step on `Q` |
+| `state_only` | the state projected, the Jacobian left ON the surface -- the pre-v5.22 behaviour, with no vertex correction of `Q` at all |
+
+Both builds, identical to every printed digit:
+
+| fixture | comparison | relative `Q` | relative amplitude | base-ray position | relative phase |
+|---|---|---|---|---|---|
+| conic | `full` vs `fs_sag_sec` | **6.06e-05** | 7.40e-06 | **0.0 m exactly** | 3.44e-06 rad |
+| conic + k | `full` vs `fs_sag_sec` | 6.06e-05 | 7.40e-06 | **0.0 exactly** | 3.44e-06 rad |
+| asphere A4 / A6 | `full` vs `fs_sag_sec` | 7.04e-05 | 4.15e-06 | **0.0 exactly** | 6.87e-06 rad |
+| flat-base asphere | `full` vs `fs_sag_sec` | 2.11e-05 | 6.08e-06 | **0.0 exactly** | 1.79e-06 rad |
+| **flat last surface** | all three pairs | **0.0** | **0.0** | **0.0** | 8.3e-17 rad |
+| conic | `full` vs `state_only` | 4.33e-04 | 9.86e-05 | 0.0 | 6.89e-06 rad |
+
+So on a conic last surface **every moved bit is the Jacobian projection**:
+
+* the base-ray POSITIONS are bit-identical -- `dt.x - sag*ux + z_image*ux`
+  and `dt.x + (z_image - sag)*ux` are the same map, and the probe reads the
+  difference as exactly 0.0 m;
+* the base-ray OPTICAL PATH is likewise the same map (`opd - n*nz*sag*sec`
+  then `+ k0*z_image*sec`, against `opd` then `+ k0*(z_image - sag)*sec`),
+  identical whenever `n_exit * sign(N) = 1`, which is every transmissive
+  prescription ending in air;
+* `Q` and the amplitude move by 6e-05 and 7e-06 relative, because the old
+  composition `FS(-sag*sec) J` differs from `P J` by the `-u (x) grad s` block
+  (the transfer distance depends on where the ray lands, so the derivative of
+  the vertex-plane map carries that term) and by `sag*(sec - 1)` in the `B`
+  block.  WP-B12 pinned `P J` against an independent finite difference of the
+  vertex-plane state at 2.1e-10 where the un-projected Jacobian sits at
+  2.1e-05, so `P J` is the derivative of the map actually applied and
+  `FS(-sag*sec) J` is not.
+
+The `state_only` row is in the table for a specific reason: it is what a
+reader reconstructs by "forcing the primitive back to `reference='surface'`",
+and on a CURVED-base last surface that is the **pre-v5.22** behaviour, NOT the
+v5.22 .. 5.47.0 one -- the two differ by the whole conic sag (4.3e-04 in `Q`
+here, and a 1.3 relative L2 in the reconstructed field).  Every place in this
+package and in `tests/unit/test_audit2609_b12b_gbd_projection.py` that uses
+that trick says which case it is in and asserts the premise.  It coincides
+with v5.22 .. 5.47.0 exactly on a surface whose in-line sag was identically
+zero -- a flat last surface, and the flat-BASE aspheric fixture -- which is
+what makes the next section's before/after a single-process measurement.
+
+---
+
+## 4. The oracle ladder -- GBD before and after
+
+`validation/probe_gbd_projection/probe_b_ladder.py` scores the field
+`apply_real_lens_gbd` returns against the independent Rayleigh-Sommerfeld-I
+oracle imported from `validation/probe_wp_b12/b12_common.py`, at the exit
+vertex and at each fixture's own traced best focus.
+
+The before/after is **archive-to-archive**, not a reconstruction: the `pre`
+arm is `git archive fix/wp-b12-fga-reference-plane lumenairy` extracted into
+`C:\tmp\lum_gbd_pre` and the same probe script run THERE, in its own process,
+with `cwd` and `PYTHONPATH` set to that tree and `lumenairy.__file__` asserted
+to live under it.  The arm label is DETECTED from the library
+(`'_Rl = float(' in inspect.getsource(apply_prescription_persurface_to_beamlets)`)
+rather than passed on the command line, and both the label and the resolved
+`lumenairy.__file__` are written into each JSON, so the two runs cannot be
+confused with one another.
+
+The optic is the section-1.1 one; the grid is 128 x 5.0 um (0.640 mm span
+against a 0.600 mm clear aperture) and the Airy radius runs 17 to 44 um across
+the fixtures, i.e. three to nine pixels, so the focal structure is resolved
+and the fidelity means something.  The beamlet frame is the library's own
+default (`_auto_sample_step`), not the cheap frame the test file names --
+these rows are what a caller actually gets.
+
+### 4.1 Windows build (py3.14, numpy 2.4.4)
+
+`sha` is the SHA-256 of the returned field's exact bytes (first 24 hex).
+
+| last surface | plane | `pre_b12b` | `post_b12b` | power ratio, pre -> post | field bytes |
+|---|---|---|---|---|---|
+| conic (control) | exit vertex | 0.998896 | 0.998896 | 0.9991 -> 0.9991 | changed |
+| conic (control) | focus 8.2630 mm | 0.999711 | 0.999711 | 0.9990 -> 0.9990 | changed |
+| conic + k = -0.60 (control) | exit vertex | 0.998896 | 0.998896 | 0.9991 -> 0.9991 | changed |
+| conic + k = -0.60 (control) | focus 8.2644 mm | 0.999711 | 0.999711 | 0.9990 -> 0.9990 | changed |
+| even asphere A4 = 1.5e8 | exit vertex | 0.760509 | **0.998895** | 0.9970 -> 0.9991 | changed |
+| even asphere A4 = 1.5e8 | focus 9.8843 mm | 0.761746 | **0.999781** | 0.9972 -> 0.9994 | changed |
+| even asphere A4 / A6 | exit vertex | 0.503115 | **0.998896** | 0.9930 -> 0.9992 | changed |
+| even asphere A4 / A6 | focus 9.9262 mm | 0.503899 | **0.999765** | 0.9929 -> 0.9991 | changed |
+| **flat base, A2 / A4** | exit vertex | **0.017658** | **0.998894** | 0.8894 -> 0.9988 | changed |
+| **flat base, A2 / A4** | focus 6.6981 mm | **0.017708** | **0.999671** | 0.8899 -> 0.9994 | changed |
+| **flat last surface (control)** | exit vertex | 0.997766 | 0.997766 | 0.9917 -> 0.9917 | **IDENTICAL** (`ea72c10375e1af762646cc50` before the regrid, `85a23bd7dc8db39b79db160b` after) |
+| **flat last surface (control)** | focus 1.4303 mm | 0.999118 | 0.999118 | 0.9930 -> 0.9930 | **IDENTICAL** |
+
+The flat control's own SHA-256 is the same 24 hex digits in the parent tree and
+in this one, at BOTH planes, and it stayed identical when the fixture's grid
+was changed mid-package (192 x 2.6 um -> 128 x 4.3 um, to cut a 1086 s call to
+140 s): `ea72c10375e1af762646cc50` / `2d43deb6b6a0a3f611e5a367` on the first
+grid and `85a23bd7dc8db39b79db160b` on the second, each equal across the two
+trees.  That row's FIDELITY is not a resolved-focus reading -- its Airy radius
+is 3.43 um against a 4.3 um pitch, `dx/airy = 1.25` -- and it is not used as
+one: its job is byte-identity, which does not depend on the grid.  Every other
+row has `dx/airy` between 0.196 and 0.272.
+
+Three things this table says.
+
+1. **Every defect row moves to the same place the controls already sit.**  The
+   two conic controls read 0.9989 at the vertex and 0.9997 at the focus both
+   before and after -- that is GBD's own accuracy on this fixture at this
+   frame density, and it is the ceiling.  The aspheric rows arrive there:
+   0.7605 -> 0.9989, 0.5031 -> 0.9989, 0.0177 -> 0.9989.  The repair does not
+   merely improve them, it removes the only thing separating them from the
+   controls.
+2. **The ladder is monotone in the defect.**  Ordered by the section-1.1
+   optical-path error -- 0.92, 1.09, 4.39 waves -- the pre-repair fidelities
+   are 0.7605, 0.5031, 0.0177.  A 4.39-wave phase ramp across the pupil leaves
+   1.8 % of the field, which is what a ramp no global piston can absorb looks
+   like.
+3. **The two CONIC CONTROL rows move in the SEVENTH decimal of fidelity, and
+   their bytes move.**  At full precision the conic control reads
+   `0.99889590 -> 0.99889613` at the vertex and `0.99971083 -> 0.99971113` at
+   the focus; the conic-plus-k row reads `0.99889590 -> 0.99889613` and
+   `0.99971093 -> 0.99971124`.  That is **+2.3e-07 and +3.1e-07 of fidelity**
+   -- the Jacobian projection of section 3, arriving in the field exactly
+   where a 6e-05 relative change in `Q` and a 9e-06 rad relative phase should
+   put it, and in the projection's favour on all four readings.  The flat
+   control, by contrast, reads `0.99776557` and `0.99911761` in BOTH trees,
+   digit for digit, because its field is the same bytes.
+
+### 4.2 Full precision, and what the controls actually read
+
+Taken from `probe_b_ladder_post_b12b_win32_314.json`:
+
+| fixture | plane | fidelity | relative L2 | Airy radius | `dx/airy` |
+|---|---|---|---|---|---|
+| conic | exit vertex | 0.99889613 | 0.03322 | 18.53 um | 0.270 |
+| conic | focus | 0.99971113 | 0.01700 | | |
+| conic + k | exit vertex | 0.99889613 | 0.03322 | 18.53 um | 0.270 |
+| conic + k | focus | 0.99971124 | 0.01699 | | |
+| asphere A4 | exit vertex | 0.99889482 | 0.03324 | 25.46 um | 0.196 |
+| asphere A4 | focus | 0.99978076 | 0.01481 | | |
+| asphere A4 / A6 | exit vertex | 0.99889591 | 0.03323 | 18.41 um | 0.272 |
+| asphere A4 / A6 | focus | 0.99976466 | 0.01534 | | |
+| flat-base asphere | exit vertex | 0.99889415 | 0.03325 | 24.52 um | 0.204 |
+| flat-base asphere | focus | 0.99967130 | 0.01813 | | |
+
+The five exit-vertex rows agree to **1.3e-06 of fidelity** with one another
+after the repair, across a conic, a conic-plus-k, two different aspheres and a
+flat-base asphere.  That is the reading that says the repair is a correction
+rather than a tuning: five different last surfaces, one number, and it is
+GBD's own frame-density floor on this grid (0.9989), not a property of any one
+of them.  Before the repair the same five read 0.9989, 0.9989, 0.7605, 0.5031
+and 0.0177.
+
+### 4.3 WSL build (py3.12, numpy 2.4.6)
+
+The `post_b12b` arm was re-run in full on the second build
+(`probe_b_ladder_post_b12b_linux_312.json`: six symmetric fixtures at two
+planes, four non-symmetric ones, three entry points).  **All twelve
+symmetric-fixture fidelities agree with the Windows build to all eight
+printed digits** -- 0.99889613 / 0.99971113, 0.99889613 / 0.99971124,
+0.99889482 / 0.99978076, 0.99889591 / 0.99976466, 0.99889415 / 0.99967130,
+0.99776557 / 0.99911761 -- and the non-symmetric fixtures' peaks agree to
+every printed digit too (the biconic's 6.15047365, the freeform's 2.97003652,
+the mirror's 3.75320659e-02).
+
+The SHA-256 digests do NOT agree across builds, and are not expected to: the
+field is a coherent sum over tens of thousands of beamlets and the two builds
+have different LAPACK, so the last bits differ.  **Every byte-identity claim
+in this report is WITHIN one build, between two trees**; the cross-build
+statement is always the fidelity.
+
+The `pre_b12b` arm was not re-run on WSL.  Each arm of this ladder costs about
+an hour on this box, and the cross-build question it would answer -- whether
+the DEFECT reads the same on a second LAPACK -- is already answered at the ray
+level by probe A, which is identical to every printed digit on both builds on
+all fourteen rows.
+
+
+### 4.4 The non-rotationally-symmetric fixtures
+
+The imported oracle is a rotationally-symmetric trace, so these four carry no
+diffraction reference here.  What is reported is MOVEMENT -- the field bytes
+and the total power -- never accuracy; their defect is measured at the ray
+level in section 1.1.
+
+One optic geometry with the last surface varied (biconic `radius_y`, an
+XY-polynomial freeform, a field-frame decentre), plus the concave mirror.
+`P` is the summed intensity on the grid; `peak` is `max|E|`.  Windows build,
+archive-to-archive.
+
+| fixture | plane | `pre` SHA-256 | `post` SHA-256 | `pre` peak | `post` peak |
+|---|---|---|---|---|---|
+| biconic | exit vertex | `87d174991b3b8be0e9dfabc3` | `fe83b90e58243e14cc176ab2` | 1.0471 | 1.0327 |
+| biconic | BFL 8.27 mm | `91c83257ca99a99a612620cf` | `0aa409b615f9c7806e5db7a0` | 3.9704 | **6.1505** |
+| freeform | exit vertex | `097b721f457e9a62a1761a0e` | `7d97edf0b83dbe84c917fea5` | 1.0244 | 1.0327 |
+| freeform | BFL | `052c68eb41c6c568b49ba4c0` | `3e8231c79450738947abd895` | 1.2033 | **2.9700** |
+| field frame | exit vertex | `56cd479ee9e538d92e394b34` | `19758dbf1ab300bb71ef5602` | 1.0231 | 1.0328 |
+| field frame | BFL | `b14b1bd59e0dcdebf0671d30` | `5a5cda8383186e134ce98cf1` | 10.378 | 10.466 |
+| mirror | exit vertex | `1b9c7600a2471e804758366f` | `95e7a571666a2ebcb5aa152b` | 13.169 | 13.164 |
+| mirror | BFL | `91e859c45770d12833f76da0` | `ea929fb06f522c2b27908db5` | 0.037557 | 0.037532 |
+
+Every row moved, which is the blast radius of section 5 confirmed at the
+field.  Two of them moved a LOT and in the direction a repair predicts: the
+biconic's focal peak rises by **55 %** and the freeform's by **147 %**,
+because the beamlets stop carrying 1.9 and 3.3 waves of spurious pupil phase
+and the focus gets sharper.  The field-frame row moves by under 1 % at the
+focus, consistent with its smaller 2.0-wave defect, and the exit-vertex rows
+move only a little because a pupil-plane intensity is insensitive to a pupil
+phase error (the phase moved; the modulus did not).
+
+The MIRROR rows move by only 3e-04 relative, and that reading needs its
+caveat: as section 8 item 2 records, the LOCAL branch's direction convention
+is wrong for a mirror-terminated prescription independently of the sag, so
+this fixture's field is not physically meaningful in either tree.  Its
+decisive measurement is the RAY-level one -- the 16.28-wave sign defect of
+section 1.1 -- not this row.
+
+### 4.5 The other entry points
+
+All on the flat-base aspheric fixture at its traced best focus (6.6981 mm),
+Windows build, archive-to-archive.
+
+| entry point | `pre` SHA-256 | `post` SHA-256 | `pre` fidelity | `post` fidelity |
+|---|---|---|---|---|
+| `apply_real_lens_gbd` (the ladder's own row) | `c9b4dc7d2d1e063da6ba0821` | `043dcd0bf9af0b70616149eb` | 0.017708 | **0.999671** |
+| `propagate_gbd_through_prescription(per_surface=True)` | `c9b4dc7d2d1e063da6ba0821` | `043dcd0bf9af0b70616149eb` | 0.017708 | **0.999671** |
+| `apply_real_lens_universal(method='gbd')` | `c9b4dc7d2d1e063da6ba0821` | `043dcd0bf9af0b70616149eb` | 0.017708 | **0.999671** |
+| **`world_output_plane` branch** | `851ccadc6483aa3451659c32` | `851ccadc6483aa3451659c32` | -- | **IDENTICAL** |
+
+The same four rows on the WSL build's `post` arm, for the cross-build
+comparison: `apply_real_lens_gbd` and `apply_real_lens_universal` both
+`ff20d9605b5c30782a442ee1`, `propagate_gbd_through_prescription`
+`fe36b9a7df9aeeca38a51607`, the world branch `b3d1c16f58f0216eefb40b78`, and
+all three local entries at fidelity 0.9996713034955186.  Digests differ
+between BUILDS on every row, as a coherent sum over tens of thousands of
+beamlets on two different LAPACKs must; the byte-identity claims of this
+report are always WITHIN one build, between two trees.
+
+Two things are settled here.
+
+1. **All three local-frame entry points move together, and the repair reaches
+   all three at once** -- 0.017708 to 0.999671 on every one of them.  How far
+   that agreement goes is worth stating precisely, because it is NOT the same
+   on the two builds:
+
+   * `apply_real_lens_universal(method='gbd')` is byte-identical to
+     `apply_real_lens_gbd` on BOTH builds and in BOTH trees (`043dcd0b...`
+     on Windows, `ff20d960...` on WSL).  It is a dispatcher, and it
+     dispatches.
+   * `propagate_gbd_through_prescription(per_surface=True)` is byte-identical
+     to them on the Windows build (in both trees) and is NOT on WSL
+     (`fe36b9a7...` against `ff20d960...`), while its fidelity against the
+     oracle agrees to FIFTEEN digits (0.9996713034955186 against
+     0.9996713034955185).  The two reach the same beamlet frame by different
+     routes -- `apply_real_lens_gbd` derives it through `_auto_sample_step`
+     and clips the entrance aperture, the propagators-level entry takes its
+     own defaults -- so their last-bits agreement is a property of the build,
+     not an invariant.  It is recorded here rather than claimed: the new test
+     file asserts BYTE identity only for the dispatcher pair and a 0.999
+     FIDELITY bar for this one, which is why it passes on both builds.
+2. **The `world_output_plane` branch is byte-identical between the parent tree
+   and this one**, digest for digest.  That is the design of section 2
+   measured rather than argued: the branch that measures its own leg from the
+   last-surface intersection kept `reference='surface'` and did not move.
+
+
+---
+
+## 5. Blast radius
+
+| entry point | effect |
+|---|---|
+| `lumenairy.apply_real_lens_gbd` (`per_surface=True`, the default) | **moves** on an aspheric / biconic / freeform / field-frame / mirror last surface; fifth-decimal on a conic one; bit-identical on a flat one |
+| `propagators.gbd.apply_prescription_persurface_to_beamlets`, local branch | the same |
+| `propagators.gbd.propagate_gbd_through_prescription(per_surface=True)` | the same (it calls the function above) |
+| `propagators.fga.apply_real_lens_universal(method='gbd')` | the same -- byte-identical to `apply_real_lens_gbd`, checked |
+| `apply_real_lens_gbd(per_surface=False)` | untouched -- the paraxial whole-system ABCD path has no differential transfer |
+| `apply_prescription_persurface_to_beamlets(world_output_plane=...)` | **untouched, bit for bit** -- it keeps `reference='surface'` |
+| `propagate_gbd_vector_through_prescription` | untouched: its Jones machinery uses `_fresnel_jones_matrix_per_beamlet`, which traces separately and never calls the differential primitives |
+| every `propagators.fga` site | untouched by this package (WP-B12 already moved them) |
+| the JAX paths | **there is no JAX per-surface-GBD path.**  `propagators/gbd.py`'s xp-dispatched code is the free-space, thin-lens and reconstruction machinery; the per-surface prescription path is NumPy-only by construction (its docstring says so, and `grep -n 'jax\|jnp' lumenairy/propagators/gbd.py` finds no import).  `elements/lenses_gbd.py` contains no JAX at all.  `ray_transfer_jacobian_analytic`'s JAX branch shares `_project_to_exit_vertex_plane` with NumPy, so a future JAX GBD would inherit the repair; nothing today exercises it through GBD. |
+
+---
+
+## 6. Files changed
+
+| file | what |
+|---|---|
+| `lumenairy/propagators/gbd.py` | the local branch requests `reference='exit_vertex'` and the world branch keeps `'surface'`, both with the reason at the call site; the `_Rl` / `_kl` in-line sag block and the `- _sag` in `t` are deleted; the function docstring gains a "The reference plane" section and a `versionchanged` note |
+| `lumenairy/raytrace/differential.py` | the module docstring and `DifferentialTransfer`'s name `propagators.gbd`'s local branch as an `'exit_vertex'` consumer (docstrings only -- the module's AST and token fingerprints are unchanged, which is why `docs/history/lumenairy.raytrace.differential.md` is not re-recorded) |
+| `docs/history/lumenairy.propagators.gbd.md` | fingerprints re-recorded with the reason |
+| `tests/unit/test_audit2609_b12b_gbd_projection.py` | NEW |
+| `CHANGELOG.md` | a `### Fixed -- GBD: ...` entry inside the existing `## [Unreleased]` block, with its Migration note; the WP-B12 entry's closing sentence ("`apply_real_lens_gbd` ... are untouched") is restated in the past tense and pointed at this entry, since both live in the same unreleased block |
+| `validation/probe_gbd_projection/` | `gbdproj_common.py` (fixtures; the oracle is IMPORTED from `probe_wp_b12/b12_common.py`), `probe_a_sag.py`, `probe_b_ladder.py`, `probe_c_decompose.py` and their JSON on both builds |
+| `docs/.../fixes/WP-B12b_GBD_REPORT.md` | this report |
+
+Note on `probe_wp_b12/probe_d_consumers.py`: that probe's first assertion --
+"GBD's curved-last-surface field is bit-identical to the forced-surface arm" --
+was true of the tree WP-B12 shipped and is false of this one, by design.  The
+probe is WP-B12's artefact and is left untouched; its JSON in this tree is the
+one WP-B12 recorded.  WP-B12's report keeps its open item 1 as written, with a
+dated line saying this package closed it.
+
+---
+
+## 7. Tests run
+
+Every invocation carried
+`OMP_NUM_THREADS=OPENBLAS_NUM_THREADS=MKL_NUM_THREADS=1` and
+`--capture=sys -p no:randomly`, from `C:\tmp\lum_gbd`, on 2026-09-15.
+
+**The box.**  Between 40 and 67 other heavy python processes (sibling Wave-5
+agents and the maintainer's own runs) were resident throughout, with the CPU
+pinned at 100 % and 76 GB of the 128 GB free -- so it is contention, not
+memory.  Measured: one `apply_real_lens_gbd` call that costs about 2 s on an
+idle box took 20-30 s here, and the two builds' numbers below carry that
+factor.  Wall clocks are REPORTED, never asserted
+(`docs/TESTING_STANDARDS.md`), and no test in this package contains a timing
+assertion.
+
+### 7.1 The two builds
+
+| | Windows | WSL |
+|---|---|---|
+| python | 3.14.6 | 3.12.3 |
+| numpy / scipy | 2.4.4 / 1.17.1 | 2.4.6 / 1.17.1 |
+
+### 7.2 pytest
+
+| selection | build | result | duration |
+|---|---|---|---|
+| `test_audit2609_b12b_gbd_projection.py` (NEW, 14 ids) | Windows, box LOADED (40-67 sibling python jobs) | **14 passed** | 40.5 s; slowest id 14.4 s |
+| the same | WSL, box LOADED | **14 passed** | 75.1 s; slowest id 29.7 s |
+| the same | Windows, box QUIET (7 python processes) | **14 passed** | **14.0 s; slowest id 5.6 s** |
+| `test_analytic_ray_transfer.py`, `test_audit2609_a1_exit_vertex.py`, `test_audit2609_a4_maslov_gbd.py`, `test_audit2609_b12_fga_reference_plane.py`, `test_audit2609_b12b_gbd_projection.py`, `test_gbd_feature_complete.py`, `test_hammer_h7_gbd_diverging.py`, `test_lens_gbd.py`, `test_niche_p1_gbd_chain.py`, `test_niche_p4_gbd_reexpand.py`, `test_niche_r3_gbd_mem_lstsq.py`, `test_niche_r5_gbd_vector_catastrophe.py`, `test_v5_21_gbd_asm_interop.py`, `test_v5_21_gbd_maslov_perf.py`, `test_v5_21_gbd_windowed_adaptive.py` (216 ids) | Windows | **216 passed, 0 failed** | 3639.9 s |
+| the same fifteen files + `test_niche_p9_decenter_tilt.py` (229 ids) | WSL | **229 passed, 0 failed** | 3773.9 s |
+| the census / walker / dispatcher-pin / public-API / doc-consistency / history / `test_audit_except_budget.py` sweep (34 files) | Windows | **1554 passed, 12 skipped, 0 failed** | 997.5 s |
+| every OTHER test file that names `apply_real_lens_gbd`, `apply_prescription_persurface_to_beamlets`, `propagate_gbd_through_prescription` or `method='gbd'` -- `test_niche_p9_decenter_tilt.py` (a FIELD-FRAME decentred prescription through the beamlet function, i.e. a class whose field moves), `test_niche_p8_capstone.py`, the three `test_audit2609_a16_lens_config*` files, `test_audit2609_b7_asymptotic.py` (which inspects this function's source), `test_niche_d5_dx_flatness_gate.py`, `test_niche_k1_kmah_caustic.py`, `test_niche_p11_ray_density_amplitude.py`, `test_niche_audit_w3_elements.py`, `test_niche_audit_w4_ignored_kwarg_warnings.py`, `test_niche_audit_w4_input_kind.py`, `test_audit_glass.py`, `test_fga.py`, `test_v5_2_physics_fixes.py` (614 ids) | Windows | **614 passed, 0 failed** | 2688.1 s |
+
+Every test in the new file is inside the 60 s budget on BOTH builds, with the
+slowest at 14.4 s (Windows) and 29.7 s (WSL) on a box carrying the contention
+described above.  Getting there was itself a measurement, and it is recorded
+in the file: the auto beamlet frame (`sample_step=1`, `waist_factor=1`) puts
+one beamlet per pixel with a 0.13 mm Rayleigh range, so at the image plane
+every beamlet is wider than the whole grid and
+`_reconstruct_windowed` degenerates to the dense `O(n_beamlets x N^2)` sum --
+60.7 s of a 78.6 s call, by `cProfile`.  A 4-pixel frame with a matching waist
+costs 2.5 s and reproduces the dense-frame field at a fidelity of 0.999587,
+three decades below the test's 0.99 decision bar; the tests name that frame
+explicitly, which also makes the three public entry points comparable byte for
+byte (they have different sampling DEFAULTS).
+
+### 7.3 The other gates
+
+| gate | result |
+|---|---|
+| `wsl ruff check lumenairy/ tests/ validation/probe_gbd_projection/ validation/probe_wp_b12/` | **All checks passed** |
+| `python scripts/record_history_fingerprints.py --check` | **OK: every history document matches its module** |
+| `python scripts/check_source_line_citations.py` (V18) | **ok=107, drift=0, total=107** |
+| `python scripts/check_doc_identifiers.py` | **OK**; 0 unresolved, 0 DO-NOT-resolve |
+| `.test_durations` | 16 200 -> **16 214** entries, valid JSON, 14 new ids, largest 12.6 s |
+
+`docs/history/lumenairy.raytrace.differential.md` is deliberately NOT
+re-recorded: the only change to that module is docstring text, and the
+fingerprint is the SHA-256 of the AST with docstrings removed and of the
+`tokenize` stream with comments and docstrings dropped, so neither moved.
+`scripts/record_history_fingerprints.py lumenairy/raytrace/differential.py`
+was run anyway and reported no change; `--check` is green.
+
+### 7.4 Probes
+
+All under `validation/probe_gbd_projection/`, each run with `PYTHONPATH`
+pinned to the tree under test and `lumenairy.__file__` printed and asserted to
+live under it.
+
+| probe | what | outputs |
+|---|---|---|
+| `probe_a_sag.py` | the mechanism and its four failure modes on ten surface classes, plus WP-B12 probe D's own optic and the `at_exit_vertex` control | `probe_a_sag_win32_314.json`, `probe_a_sag_linux_312.json` |
+| `probe_b_ladder.py` | the oracle ladder at two planes per fixture, the non-symmetric fixtures' movement, and the three other entry points | `probe_b_ladder_pre_b12b_win32_314.json`, `probe_b_ladder_post_b12b_win32_314.json`, `probe_b_ladder_post_b12b_linux_312.json` |
+| `probe_c_decompose.py` | what moves on a conic last surface, at the beamlet level, in three arms | `probe_c_decompose_win32_314.json`, `probe_c_decompose_linux_312.json` |
+
+**Cross-build agreement.**  Probe A is identical to every printed digit on the
+two builds, on all fourteen rows including the two exact-zero controls.  Probe
+C is identical to every printed digit on every row but the flat control's
+`dPhase`, where the two builds read 8.318e-17 and 8.298e-17 radians -- a
+quantity that is zero up to the unwrap's own rounding.  Probe B's cross-build
+comparison is in section 4.3.
+
+The `pre_b12b` arm is not a claim about what the old code did, it is the old
+code: `git archive fix/wp-b12-fga-reference-plane lumenairy` extracted into
+`C:\tmp\lum_gbd_pre`, the probe run there in its own process with `cwd` and
+`PYTHONPATH` set to that tree, and the arm DETECTED from the library
+(`'_Rl = float(' in inspect.getsource(...)`) rather than passed in.  The
+detection and the resolved `lumenairy.__file__` are both written into each
+JSON.
+
+
+---
+
+## 8. Open items
+
+1. **The image-side leg still assumes a vacuum exit medium.**  The projection
+   now resolves `n_exit` from the prescription, but GBD's own leg is
+   `exp(i k0 * z_image * sec)` with no index, exactly as `fga.py`'s is.  On an
+   immersed prescription the two disagree by `(n_exit - 1) * z_image * sec`.
+   This is WP-B12's open item 4 in the GBD module, pre-existing and untouched
+   here; every GBD fixture in this library ends in air, so it is not measured.
+   A caller in that situation should be refused rather than silently served.
+2. **The local branch is not correct for a mirror-terminated prescription, for
+   reasons that have nothing to do with the sag.**  It takes
+   `Nz2 = 1/sqrt(1+u^2)`, which is positive whatever the true `N`, so after a
+   mirror the reconstructed `new_dir` points the wrong way and the leg
+   `t = z_image/Nz2` walks forward along an axis the light is no longer
+   travelling.  That is what `world_output_plane` exists for.  This package
+   fixes the SIGN of the sag term (measured: 16.28 waves on the probe's
+   concave mirror) and leaves the branch's own direction convention alone; a
+   mirror-terminated prescription through the LOCAL branch should probably be
+   refused with a message naming `world_output_plane`.
+3. **The Jacobian projection's fifth-decimal effect was not scored against a
+   diffraction oracle on its own.**  Section 3 measures it at the beamlet
+   level (6e-05 in `Q`) and section 4's conic rows carry it into the field,
+   but no fixture here separates "the field with `P J`" from "the field with
+   `FS(-sag*sec) J`" against the oracle at a precision where 6e-05 of `Q`
+   would show.  WP-B12 did that measurement for FGA (its section 3, ten of
+   twelve rows improving by 1e-05 to 1.6e-05 of fidelity) and the argument
+   carries, but it is an argument, not a GBD measurement.
+4. **No freeform, biconic or field-frame field was scored against a
+   diffraction oracle.**  The oracle this package imports is a
+   rotationally-symmetric trace and cannot represent those surfaces; their
+   defect is measured at the RAY level (section 1.1, 1.2 to 3.3 waves) and
+   their fields are reported as movement only.  The projection is correct
+   there by construction -- it uses the same sag kernels the tracer does, and
+   `TraceResult.at_exit_vertex` agrees with it to 0.0 m -- but "correct by
+   construction" is not "measured against diffraction".
+5. **Not measured: the CI cross-build spread.**  Both builds here are the same
+   box; the runner mix of EPYC 9V74 and 7763 with older wheels was not
+   sampled.  Every bar in the new test file is derived at runtime from a
+   quantity the running build measures.

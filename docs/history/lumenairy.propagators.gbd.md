@@ -1,11 +1,12 @@
 <!-- lumenairy-history-doc
 module: lumenairy/propagators/gbd.py
-ast_sha256: 5586dc864b5f2ea80343794f46af768909df54bc9c2d7e134affeca1c7f65795
-token_sha256: 3bee863602381dd74eb9378990b5e594235f1aca2dd170ec525480c40b4dd802
+ast_sha256: 904b6049fccac757a99dab51e0b1b0cd102efd5e07b1bfb4566f902f06c9bd45
+token_sha256: c087abfe470aeabdc6465480dcd92fec96b8ec114e32be2b9cd88b33505d8375
 pre_relocation_lines: 3845
 recorded_by: WP-A17 SWEEP-4 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
 re_recorded: 2026-09-13 -- WP-B7 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, WP-A4 sec. 6 items 3-8 + VERIFY-B1 F1/F2): the Y4 fused basis evaluation and hoisted Newton factor, the aberration_tensor mode/waist caches, the S6 gate's k1-slope statistic and mean-plus-spread chart sizing, the JAX screen's chief-ray displacement term, and the S9 FFT kernel clip
+re_recorded: 2026-09-15 -- WP-B12b: the per-surface beamlet image leg consumes the shared exit-vertex projection (reference='exit_vertex') and the in-line conic-sag copy is deleted
 -->
 
 # Version history -- `lumenairy/propagators/gbd.py`

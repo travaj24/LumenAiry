@@ -36,7 +36,14 @@ difference at the rim is 0.66 um of height and 7.8 waves of optical path at
 633 nm.  A consumer that adds an image-side free-space leg of length
 ``z_image`` measured from the vertex plane -- which is what a "back focal
 distance" is -- must ask for ``reference='exit_vertex'``; one that composes the
-transfer with a following surface wants the default.
+transfer with a following surface wants the default.  The library's
+``'exit_vertex'`` consumers are ``propagators.fga`` (``_fga_core``,
+``_fga_coarse``'s two paths and ``_caustic_zone``) and
+``propagators.gbd.apply_prescription_persurface_to_beamlets`` on its local-
+frame branch (WP-B12b, 2026-09-15 -- it previously carried an in-line
+conic-sag copy of this projection); that function's ``world_output_plane``
+branch measures its own leg from the last-surface intersection and keeps the
+default.
 :func:`_project_to_exit_vertex_plane` is the single implementation of the
 projection for this module's 4x4 state; the ray-bundle-shaped sibling is
 :func:`lumenairy.raytrace.exit_vertex.exit_vertex_transfer`.
@@ -85,7 +92,10 @@ class DifferentialTransfer:
         ``x - sag*ux``, ``y - sag*uy``,
         ``opd - n_exit*sag*sqrt(1 + ux^2 + uy^2)``, which is the same step
         :meth:`lumenairy.raytrace.TraceResult.at_exit_vertex` applies to a
-        ray bundle.
+        ray bundle.  Every consumer that adds an image-side free-space leg
+        asks for ``'exit_vertex'``: the four ``propagators.fga`` sites and
+        ``propagators.gbd.apply_prescription_persurface_to_beamlets``'s
+        local-frame branch.
     opd : ndarray
         ``(N_rays,)`` base-ray accumulated optical path length [m] to the
         same plane as ``x``.

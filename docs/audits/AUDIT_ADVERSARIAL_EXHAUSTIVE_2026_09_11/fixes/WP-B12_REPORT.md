@@ -633,6 +633,19 @@ inside a cross-build spread.
    per-surface GBD fields on every aspheric-last-surface prescription (a
    correction) and is not bit-identical even on a conic one (different order of
    operations), so it needs its own package, oracle ladder and Migration note.
+
+   **CLOSED 2026-09-15 by WP-B12b** (`fixes/WP-B12b_GBD_REPORT.md`), which
+   found three more failure modes in the same copy beyond the aspheric one:
+   its `np.isfinite(_Rl)` guard made it read EXACTLY zero on a flat-base
+   aspheric surface (100 % of the sag), it evaluated the x-branch radius on
+   both axes of a biconic and dropped every freeform and field-frame
+   departure, and it applied `-sag` with the sign of a forward-going ray, so
+   on a mirror-terminated prescription it doubled the error rather than
+   removing it (measured 16.28 waves).  Section 5's row for
+   `gbd.apply_prescription_persurface_to_beamlets` -- "unchanged, bit for
+   bit" -- is true of the tree THIS package shipped and no longer true of the
+   branch, by design; the world-frame branch of that function is the part
+   that stays on `'surface'`.
 2. **The caustic route and `_ABERRATION_MAX_RAD`** -- section 6.4, three
    measured recommendations left for the maintainer (handoff 4.7): keep the
    `aberrated` condition; keep the screen inside the low-estimate class as a

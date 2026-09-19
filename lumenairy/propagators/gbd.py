@@ -3415,6 +3415,38 @@ def apply_prescription_persurface_to_beamlets(
     :func:`reconstruct_field_from_beamlets`.  Dead beamlets (vignette / TIR /
     miss) are dropped.
 
+    The reference plane
+    -------------------
+    ``z_image`` is measured from the last surface's VERTEX plane (``z = 0``),
+    which is what a back focal distance is, so the local branch asks the
+    differential primitive for ``reference='exit_vertex'`` and the projection
+    is the package's single implementation
+    (:func:`lumenairy.raytrace.differential._project_to_exit_vertex_plane`,
+    the same one ``propagators.fga`` uses).  That projection takes its sag
+    from the shared surface kernels, so it is exact on every surface class the
+    tracer supports -- conic, even asphere, biconic, freeform and
+    field-frame decenter / tilt -- resolves the exit-medium index from the
+    prescription, carries the mirror propagation sign, and projects the
+    Jacobian as well as the state (``J_v = P J``), so ``Q`` and the base ray
+    land on the same plane.  A flat last surface short-circuits structurally
+    and is bit-for-bit what 5.47.0 produced.
+
+    The ``world_output_plane`` branch keeps ``reference='surface'``: it
+    world-traces the base rays itself and measures its own leg from the
+    last-surface INTERSECTION, so its piston and its leg are already on one
+    plane.  It is unchanged, bit for bit, by WP-B12b.
+
+    .. versionchanged:: 5.48.0
+       v5.22 to 5.47.0 folded ``-sag`` into the image leg from an in-line
+       conic-sag copy that dropped the aspheric departure, the biconic
+       y-branch, freeforms and the field-frame class (measured 15.5 waves of
+       optical path, 71 % of the sag, on an A4 / A6 last surface).  Fields on
+       an ASPHERIC / biconic / freeform / field-frame last surface move; a
+       conic last surface moves only by the Jacobian projection and floating-
+       point reassociation; a flat one is bit-identical.  See
+       ``docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/``
+       ``WP-B12b_GBD_REPORT.md``.
+
     Parameters
     ----------
     beamlets : BeamletBundle
@@ -3422,8 +3454,8 @@ def apply_prescription_persurface_to_beamlets(
     prescription : dict
     wavelength : float
     z_image : float, optional
-        Axial distance from the last surface vertex to the output/image plane
-        [m].  Defaults to the system back focal length
+        Axial distance from the last surface VERTEX plane to the output/image
+        plane [m].  Defaults to the system back focal length
         (``system_abcd_prescription`` BFL).
     """
     import copy as _copy
@@ -3481,11 +3513,28 @@ def apply_prescription_persurface_to_beamlets(
     ux = (dr[:, 0] / Nz).astype(np.float64)
     uy = (dr[:, 1] / Nz).astype(np.float64)
 
+    # WP-B12b (2026-09-15): ask the primitive for the reference plane this
+    # branch actually measures its image leg from -- ONE projection, the
+    # package's shared :func:`lumenairy.raytrace.differential.
+    # _project_to_exit_vertex_plane`, instead of the in-line conic-sag copy
+    # this function carried from v5.22 to 5.47.0 (see the block below the Q
+    # loop, now deleted).  The local branch adds ``z_image`` measured from the
+    # last surface's VERTEX plane -- that is what a back focal distance is --
+    # so it needs ``'exit_vertex'``.  The WORLD branch keeps the default
+    # ``'surface'``: it world-traces the base rays itself and starts its own
+    # leg ``t = -p_l[2]/d_l[2]`` at the last-surface INTERSECTION (``img.z``),
+    # so its OPL piston and its leg are already on the same plane and moving
+    # the primitive under it would double-count the sag -- exactly the defect
+    # being repaired, mirrored.  Measured in
+    # ``validation/probe_gbd_projection/``: the world branch is bit-identical
+    # across this change, the local one moves on any curved last surface.
+    _reference = 'surface' if world_output_plane is not None else 'exit_vertex'
     dt = None
     _jac_err = None
     for _jac in _jac_candidates:
         try:
-            dt = _jac(x, y, ux, uy, surfs, wavelength, per_surface=True)
+            dt = _jac(x, y, ux, uy, surfs, wavelength, per_surface=True,
+                      reference=_reference)
             break
         except NotImplementedError as _e:
             _jac_err = _e            # analytic unsupported here -> try next (FD)
@@ -3537,27 +3586,17 @@ def apply_prescription_persurface_to_beamlets(
     Lx = dt.ux * inv
     My = dt.uy * inv
     Nz2 = inv
-    # v5.22 FIX (per-surface GBD OPL piston): the differential trace leaves the
-    # bundle at the last-surface INTERSECTION (z = sag(r)), not the vertex plane
-    # -- dt.opd / dt.x / dt.y are all referenced there.  The image-side leg below
-    # assumes the vertex plane (z = 0), so a POWERED last surface injects a
-    # spurious sag(r) of defocus into the OPL piston (measured as ~2x the exit
-    # wavefront curvature for a curved exit surface; the error vanishes only when
-    # the last surface happens to be planar).  Every OTHER consumer of the
-    # ray-transfer OPL applies the same SIGNED (not abs) `-sag/N` vertex
-    # correction -- see _lens_traced.py (`-final.z / final.N`) and _lens_jax.py;
-    # this path was the sole omission.  Fold -sag(r) into the leg length so the
-    # piston, transverse position and Q are all referenced to the vertex plane.
-    _Rl = float(getattr(surfs[-1], 'radius', np.inf))
-    _kl = float(getattr(surfs[-1], 'conic', 0.0) or 0.0)
-    if np.isfinite(_Rl) and _Rl != 0.0:
-        _cl = 1.0 / _Rl
-        _r2 = dt.x ** 2 + dt.y ** 2
-        _sag = _cl * _r2 / (1.0 + np.sqrt(np.maximum(
-            1.0 - (1.0 + _kl) * _cl * _cl * _r2, 0.0)))
-    else:
-        _sag = np.zeros_like(dt.x)
-    t = (z_image - _sag) / Nz2
+    # ``dt`` is already ON the last surface's vertex plane (the
+    # ``reference='exit_vertex'`` above), so this leg is the bare ``z_image``.
+    # v5.22 to 5.47.0 instead folded ``-sag`` into the leg here, from an
+    # in-line conic-sag copy (``_Rl`` / ``_kl``) that evaluated only the conic
+    # BASE of the last surface: it was exact on a conic one and dropped the
+    # even-aspheric departure, the biconic y-branch, every freeform and the
+    # whole field-frame class, and it hard-assumed a forward-propagating exit
+    # ray in air.  Measured (WP-B12 section 5.1, reproduced in
+    # ``validation/probe_gbd_projection/probe_a_sag.py``): 15.5 waves of
+    # optical path wrong on an A4 / A6 last surface, i.e. 71 % of the sag.
+    t = z_image / Nz2
     Q, amp = _freespace_tensor_moebius_np(Q, amp, t, k0)   # shared (S2-14)
     new_pos = np.stack([dt.x + t * Lx, dt.y + t * My,
                         np.zeros_like(dt.x)], axis=-1)
