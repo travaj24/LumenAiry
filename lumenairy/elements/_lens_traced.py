@@ -1241,11 +1241,17 @@ _POOL_SHUTDOWN_TIMEOUT = 120.0
 # ``_get_persistent_worker_pool`` so a rebuild can never tear a pool down
 # under a dispatch that is still using it (see the REBUILD RULE there).
 _POOL_INFLIGHT = 0
-# Pools handed to the background reaper, for diagnostics and for tests that
-# want to see that a broken pool was retired rather than joined.  Guarded by
-# its OWN lock: ``_abandon_pool`` is called from inside and outside
-# ``_PERSISTENT_POOL_LOCK``, and a re-entrant acquisition of that lock would
-# be a deadlock of our own making.
+# Pools whose teardown is still OUTSTANDING, for diagnostics and for tests
+# that want to see that a broken pool was retired rather than joined.  A
+# CENSUS, not a ledger: both mechanisms take their entry back out when their
+# shutdown returns, so a quiescent process reads an EMPTY list however many
+# pools it has retired (VERIFY-WP-B13 D2 -- the bounded path used to leave
+# every expired executor here forever, pinning its ``_processes`` and its
+# queues).  The count of teardowns that OVERRAN is
+# ``_POOL_SHUTDOWN_TIMEOUTS``, which is monotone; read that, not ``len()``.
+# Guarded by its OWN lock: ``_abandon_pool`` is called from inside and
+# outside ``_PERSISTENT_POOL_LOCK``, and a re-entrant acquisition of that
+# lock would be a deadlock of our own making.
 _ABANDONED_POOLS: list = []
 _ABANDONED_POOLS_LOCK = threading.Lock()
 # How many times a bounded teardown gave up and abandoned its pool.  A
@@ -1309,6 +1315,25 @@ def _shutdown_pool_bounded(ex, timeout=None) -> bool:
     Returns True when the shutdown completed inside the bound.  On a timeout
     the pool is abandoned to the daemon reaper and ``False`` is returned, so
     the caller always makes progress.
+
+    ``_ABANDONED_POOLS`` IS A CENSUS OF PENDING TEARDOWNS, NOT A LEDGER
+    (VERIFY-WP-B13 defect D2, 2026-09-15).  As shipped, the expiry path
+    appended the executor and nothing ever removed it -- unlike
+    :func:`_abandon_pool`, whose reaper removes in a ``finally`` -- so the
+    list grew by one per expiry and pinned each dead executor (its
+    ``_processes``, its queues) for the life of the process.  The helper
+    thread now removes its own entry when its ``shutdown`` finally returns.
+    The count of expiries that HAPPENED is ``_POOL_SHUTDOWN_TIMEOUTS``, which
+    is monotone and is what a diagnostic should read.
+
+    The removal is ordered against the expiry rather than written as a bare
+    ``finally``: the helper may return in the same instant the caller's wait
+    expires, and a ``remove`` that ran BEFORE the caller's ``append`` would
+    leave exactly the entry it was meant to drop.  So the helper sets ``done``
+    first and only then takes ``_ABANDONED_POOLS_LOCK``, and the caller
+    re-reads ``done`` under that same lock before appending.  Either order of
+    arrival therefore ends with the list empty, and the race window costs the
+    caller one extra ``is_set``.
     """
     global _POOL_SHUTDOWN_TIMEOUTS
     if ex is None:
@@ -1323,7 +1348,16 @@ def _shutdown_pool_bounded(ex, timeout=None) -> bool:
         except (RuntimeError, OSError, ValueError):
             pass
         finally:
+            # Announce completion BEFORE taking the lock -- see the ordering
+            # note in the docstring.
             done.set()
+            with _ABANDONED_POOLS_LOCK:
+                try:
+                    _ABANDONED_POOLS.remove(ex)
+                except ValueError:
+                    # The caller's wait has not expired, so it was never
+                    # added.  Nothing to drop.
+                    pass
 
     try:
         threading.Thread(target=_run, name='lumenairy-newton-pool-close',
@@ -1334,6 +1368,11 @@ def _shutdown_pool_bounded(ex, timeout=None) -> bool:
     if done.wait(timeout):
         return True
     with _ABANDONED_POOLS_LOCK:
+        if done.is_set():
+            # It landed inside the window between the wait expiring and this
+            # lock: the teardown COMPLETED, so it is not an expiry and there
+            # is nothing to abandon.
+            return True
         _POOL_SHUTDOWN_TIMEOUTS += 1
         _ABANDONED_POOLS.append(ex)
     return False

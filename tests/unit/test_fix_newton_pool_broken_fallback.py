@@ -894,3 +894,212 @@ def test_the_dump_helper_writes_through_a_real_descriptor():
         'the thread dump does not contain the calling frame, so it is not a '
         'thread dump; faulthandler needs a file with a real fileno()')
 
+
+# ===========================================================================
+# 8.  The abandoned-pool census (VERIFY-WP-B13 defect D2)
+# ===========================================================================
+
+def _settle(pred, seconds=15.0):
+    """Wait (bounded) for a background thread to make ``pred`` true."""
+    end = time.monotonic() + seconds
+    while time.monotonic() < end:
+        if pred():
+            return True
+        time.sleep(0.005)
+    return pred()
+
+
+def test_an_expired_bounded_teardown_releases_its_executor_when_it_finishes():
+    """``_ABANDONED_POOLS`` is a census of PENDING teardowns, not a ledger.
+
+    The expiry path hands the executor to the list so a diagnostic can see
+    that a teardown is still outstanding.  As shipped nothing ever took it
+    back out -- unlike ``_abandon_pool``, whose reaper removes in a
+    ``finally`` -- so the list grew by one per expiry and pinned each dead
+    executor's ``_processes`` and queues for the life of the process
+    (VERIFY-WP-B13 D2, measured: length 2 after both shutdowns had in fact
+    completed).
+
+    Both sides are asserted, because only the pair is a fix: while the
+    teardown is outstanding the entry must be THERE (otherwise the census is
+    useless), and once it completes the entry must be GONE.  The number of
+    expiries that happened is carried by ``_POOL_SHUTDOWN_TIMEOUTS``, which
+    is monotone and is asserted to stay so.
+    """
+    before_len = len(LT._ABANDONED_POOLS)
+    before_timeouts = LT._POOL_SHUTDOWN_TIMEOUTS
+    pool = _WedgedBrokenPool(broken=False)
+    try:
+        ok = LT._shutdown_pool_bounded(pool, 0.25)
+        assert ok is False, (
+            'a shutdown that never returns must report the expiry')
+        assert LT._POOL_SHUTDOWN_TIMEOUTS == before_timeouts + 1
+        assert len(LT._ABANDONED_POOLS) == before_len + 1, (
+            'an outstanding teardown is not in the census, so nothing can '
+            'see that this process is holding a dead executor')
+        assert pool in LT._ABANDONED_POOLS
+    finally:
+        pool.release()
+    assert _settle(lambda: pool not in LT._ABANDONED_POOLS), (
+        'the teardown completed and the executor is STILL in '
+        '_ABANDONED_POOLS; the list grows by one per expiry and pins every '
+        'dead executor for the life of the process (D2)')
+    assert len(LT._ABANDONED_POOLS) == before_len, (
+        f'the census did not return to its prior length: '
+        f'{len(LT._ABANDONED_POOLS)} vs {before_len}')
+    assert LT._POOL_SHUTDOWN_TIMEOUTS == before_timeouts + 1, (
+        'the count of expiries must stay monotone -- it is the diagnostic '
+        'the census is NOT')
+
+
+def test_repeated_expiries_do_not_grow_the_census():
+    """The defect's own shape: 'the list grows monotonically with expiries'.
+
+    Three driven expiries, each released in turn.  The count of expiries
+    grows by three; the census ends where it started.  Under the shipped
+    behaviour the census ends three longer, which is the fail-before.
+    """
+    before_len = len(LT._ABANDONED_POOLS)
+    before_timeouts = LT._POOL_SHUTDOWN_TIMEOUTS
+    pools = []
+    try:
+        for _ in range(3):
+            p = _WedgedBrokenPool(broken=False)
+            pools.append(p)
+            assert LT._shutdown_pool_bounded(p, 0.1) is False
+        assert len(LT._ABANDONED_POOLS) == before_len + 3
+    finally:
+        for p in pools:
+            p.release()
+    assert _settle(lambda: len(LT._ABANDONED_POOLS) == before_len), (
+        f'three expiries left {len(LT._ABANDONED_POOLS) - before_len} '
+        f'executors pinned after every one of them had completed')
+    assert LT._POOL_SHUTDOWN_TIMEOUTS == before_timeouts + 3
+
+
+def test_a_teardown_landing_exactly_on_the_expiry_leaves_nothing_behind():
+    """The ordering the one-line fix does not cover.
+
+    The helper can return in the same instant the caller's wait expires.  A
+    bare ``finally: remove`` would then run BEFORE the caller's ``append``
+    and leave exactly the entry it was meant to drop.  The interleaving is
+    ENGINEERED here rather than waited for: the test holds
+    ``_ABANDONED_POOLS_LOCK``, lets the bounded wait expire, releases the
+    executor's join, and only then drops the lock -- so both the caller and
+    the helper are queued on it and either may win.  Both orders are legal;
+    the decision asserted is that both end with the census where it started.
+    """
+    before_len = len(LT._ABANDONED_POOLS)
+    orders = []
+    for _ in range(8):
+        pool = _WedgedBrokenPool(broken=False)
+        box = {}
+
+        def _call(_p=pool, _b=box):
+            _b['ret'] = LT._shutdown_pool_bounded(_p, 0.05)
+
+        t = threading.Thread(target=_call, daemon=True)
+        with LT._ABANDONED_POOLS_LOCK:
+            t.start()
+            time.sleep(0.25)            # the 0.05 s bound has expired
+            pool.release()              # the join returns; both queue on us
+            time.sleep(0.05)
+        t.join(15.0)
+        assert not t.is_alive(), 'the bounded teardown did not return'
+        orders.append(box.get('ret'))
+        assert _settle(lambda _p=pool: _p not in LT._ABANDONED_POOLS), (
+            'a teardown that completed on the expiry boundary stayed in the '
+            'census -- the race the ordering note in _shutdown_pool_bounded '
+            'is about')
+    assert len(LT._ABANDONED_POOLS) == before_len, (
+        f'eight boundary races left {len(LT._ABANDONED_POOLS) - before_len} '
+        f'executors pinned')
+    assert set(orders) <= {True, False}, orders
+
+
+class _HelperFirstLock:
+    """The census lock, made to admit the teardown HELPER before the caller.
+
+    ``threading.Lock`` makes no fairness promise, so the adverse arrival order
+    cannot be produced by sleeping and hoping.  This wrapper produces it by
+    construction: the ``lumenairy-newton-pool-close`` thread is let through
+    immediately, and any other thread waits until that helper has finished its
+    critical section.  It is installed through the module attribute, which is
+    the same substitution point the library's own tests use.
+    """
+
+    def __init__(self, real):
+        self._real = real
+        self._helper_done = threading.Event()
+
+    @staticmethod
+    def _is_helper():
+        return threading.current_thread().name == 'lumenairy-newton-pool-close'
+
+    def acquire(self, *a, **kw):
+        if not self._is_helper():
+            self._helper_done.wait(20.0)
+        return self._real.acquire(*a, **kw)
+
+    def release(self):
+        helper = self._is_helper()
+        out = self._real.release()
+        if helper:
+            self._helper_done.set()
+        return out
+
+    def __enter__(self):
+        self.acquire()
+        return self
+
+    def __exit__(self, *exc):
+        self.release()
+        return False
+
+
+def test_the_census_survives_the_helper_first_lock_order(monkeypatch):
+    """Why the repair is not the one-line ``finally: remove``.
+
+    Two threads reach the census at the boundary: the caller, whose bounded
+    wait has expired and which wants to ADD the executor, and the helper,
+    whose ``shutdown`` has just returned and which wants to REMOVE it.  If the
+    helper's removal is allowed to run before the caller's append -- which is
+    what a bare ``finally: remove`` ahead of ``done.set()`` permits -- the
+    remove finds nothing, the append then runs, and the census keeps exactly
+    the entry the repair was meant to drop.
+
+    The shipped helper therefore publishes ``done`` BEFORE it takes the lock
+    and the caller re-reads ``done`` under it, so this order ends with no
+    append at all.  MEASURED both ways on 2026-09-15 (Windows 3.14.6 and WSL
+    3.12.3): this test passes as shipped and fails with the one-line form
+    injected (``FU_INJECT=d2one``, ``validation/probe_wp_b13_followups/``).
+    """
+    before_len = len(LT._ABANDONED_POOLS)
+    before_timeouts = LT._POOL_SHUTDOWN_TIMEOUTS
+    monkeypatch.setattr(LT, '_ABANDONED_POOLS_LOCK',
+                        _HelperFirstLock(threading.Lock()))
+    pool = _WedgedBrokenPool(broken=False)
+    box = {}
+
+    def _call():
+        box['ret'] = LT._shutdown_pool_bounded(pool, 0.05)
+
+    t = threading.Thread(target=_call, daemon=True)
+    t.start()
+    time.sleep(0.30)                    # the 0.05 s bound has expired
+    pool.release()                      # now the helper reaches the census
+    t.join(20.0)
+    assert not t.is_alive(), (
+        'the bounded teardown never returned under the helper-first order')
+    assert _settle(lambda: pool not in LT._ABANDONED_POOLS), (
+        'the executor is pinned in the census under the helper-first arrival '
+        'order: the helper removed nothing and the caller then added it')
+    assert len(LT._ABANDONED_POOLS) == before_len, (
+        f'census length {len(LT._ABANDONED_POOLS)}, was {before_len}')
+    # The teardown DID complete, so this is not an expiry and must not be
+    # counted as one -- the counter is the durable diagnostic.
+    assert box['ret'] is True, (
+        'a teardown that completed before the caller reached the census was '
+        'reported as an expiry')
+    assert LT._POOL_SHUTDOWN_TIMEOUTS == before_timeouts, (
+        'a completed teardown was counted as a bounded-wait expiry')
