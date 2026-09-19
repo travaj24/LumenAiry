@@ -442,11 +442,36 @@ chosen**:
 
 so a longer leg tightens it in proportion, and a zero-length leg
 (`_caustic_zone`, or `output_plane_distance = 0`) floors it at the budget
-itself -- **3.6x** the air-vs-vacuum index difference at STP (2.77e-4, so a
-caller who registers a real air index is not refused) and **~500x** below the
-weakest immersion medium.  `get_glass_index('air', lambda)` returns **exactly
-1.0** on this registry at every wavelength measured (633, 780, 1030, 1060, 1310,
-1550 nm), so the air control sits exactly at the tolerance's origin.
+itself -- **~500x** below the weakest immersion medium.
+`get_glass_index('air', lambda)` returns **exactly 1.0** on this registry at
+every wavelength measured (633, 780, 1030, 1060, 1310, 1550 nm), so the air
+control sits exactly at the tolerance's origin.
+
+**THE FLOOR IS NOT THE TOLERANCE** (corrected 2026-09-19, VERIFY-WAVE5-E D1).
+This section previously read "3.6x the air-vs-vacuum index difference at STP
+(2.77e-4, so a caller who registers a real air index is not refused)".  That
+margin exists ONLY at a zero-length leg.  Bisecting the guard itself on both
+builds gives the boundary exactly `waves * lambda / max(|z_image|, lambda)`:
+
+| `z_image` | boundary on `\|n - 1\|` | STP air (n - 1 = 2.77e-4) |
+|---|---|---|
+| 0 | 1.00e-03 | not refused (3.6x margin) |
+| 1.55e-6 m (= lambda) | 1.00e-03 | not refused |
+| 1e-5 m | 1.55e-04 | **refused** |
+| 3.5e-4 m (the fixture's own leg) | 4.43e-06 | **refused, by 63x** |
+| 1e-2 m | 1.55e-07 | **refused, by 1800x** |
+
+So at **every image distance the FGA actually runs**, a real air index is
+refused.  The BEHAVIOUR is right under the one-milliwave budget -- the
+un-indexed leg would be wrong by `|n - 1| * z_image` = 97 nm, about 0.1 wave,
+at 0.35 mm -- so the guard is not changed; what was wrong was the sentence, and
+it was wrong in the direction that matters, because it told a reader the guard
+would not refuse a real air index.  The guard is a **near-unity-exit-index**
+guard, not only an immersion guard, and its message now says so.  Nothing
+served today is affected (air resolves to exactly 1.0).  The way out for a
+caller who really does register a purge gas or an index-matching fluid at
+n = 1.0001 is the open follow-up in section 11.1, "carry `n_exit` in the FGA
+image leg", not a looser tolerance.
 
 An exit medium the registry cannot resolve is NOT this guard's diagnostic and
 returns `None`: with a FLAT last surface the projection short-circuits and never
@@ -566,3 +591,50 @@ Nothing was pushed and nothing was filed externally.
    E5's 30 probe cells vacuous.
 5. **A full CI matrix.**  The gates here are the library-touching ones and the
    sweep; a matrix run on the merge is the authority on the CI classes.
+
+---
+
+## 11. Pre-merge follow-ups (VERIFY-WAVE5-E)
+
+The independent re-verification
+(`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/VERIFY_WAVE5_E.md`,
+`b082ecd6` on `verify/wave5-item-e`) returned SHIP with two defects to fix
+before the merge (D1, D3), one to FILE and not fix (D2, pre-existing), and six
+P3 corrections (D4-D9).  This section records what each edit was and how it was
+PROVED, on both builds.  Branch `fix/wave5-item-e-followups`, worktree
+`C:/tmp/lum_e2`; pinning as section 0 (`OMP_NUM_THREADS=OPENBLAS_NUM_THREADS=
+MKL_NUM_THREADS=1` on the command line, `PYTHONPATH` pinned to this tree,
+pytest `--capture=sys -p no:randomly`, every tail grepped).
+
+### 11.1 Open items carried forward (HANDOFF)
+
+**(a) Carry `n_exit` in the FGA image leg.**  The O-3 guard REFUSES what the
+image leg cannot represent; the leg itself is still index-free
+(`opd += z_image * sqrt(1 + ux^2 + uy^2)`), while the projection that produced
+`dt.opd` resolved `n_exit` and weighted its sag term with it.  Measured
+2026-09-19 by bisecting the guard on both builds (VERIFY-WAVE5-E sec. 6.3, and
+now `test_the_guard_tolerance_is_the_wavefront_it_protects` /
+`test_verify_wave5_e.py::test_the_immersed_exit_guards_boundary_is_the_guards_own_derivation`):
+the refusal boundary is `waves * lambda / max(|z_image|, lambda)` exactly, so
+
+| `z_image` | boundary on `\|n - 1\|` | STP air (2.77e-4) is refused by |
+|---|---|---|
+| 0 / 1.55e-6 m | 1.00e-03 | not refused (3.6x margin) |
+| 1e-5 m | 1.55e-04 | 1.8x |
+| 3.5e-4 m | 4.43e-06 | **63x** |
+| 1e-2 m | 1.55e-07 | **1800x** |
+
+i.e. a caller who registers a real air index is refused at every image distance
+the FGA actually runs.  The refusal is correct under the one-milliwave budget
+(the omitted OPL is `|n - 1| * z_image` = 97 nm ~ 0.1 wave at 0.35 mm), so the
+way out is not a looser tolerance: it is to carry the index, after which the
+guard is needed only where the projection itself cannot resolve an exit medium.
+Scope: `_fga_through_lens`, `_fga_coarse`, `_fga_vector_through_lens` (three
+image legs) and the `at_exit_vertex`-referenced `opd` they add to; no fixture
+in the suite exercises it, because `get_glass_index('air', lambda)` is exactly
+1.0 on this registry, so the work needs an immersed-exit ORACLE (a
+prescription terminated in the medium as an explicit last element) before it
+can be graded.
+
+**(b) The JAX analytic backend reports no vignetting.**  See 11.10 (D2) --
+pre-existing, FILED and pinned, deliberately not fixed here.

@@ -441,9 +441,20 @@ named error at all four sites -- `_fga_through_lens`, `_fga_coarse`,
 The tolerance is derived from the wavefront it protects, not chosen:
 `|n - 1| > waves_budget * lambda / max(|z_image|, lambda)` with a one-milliwave budget, so
 a longer leg tightens it in proportion and a zero-length leg (`_caustic_zone`, or
-`output_plane_distance = 0`) floors it at the budget itself -- 3.6x the air-vs-vacuum index
-difference at STP, so a caller who registers a real air index is not refused, and ~500x
-below the weakest immersion medium.
+`output_plane_distance = 0`) floors it at the budget itself, ~500x below the weakest
+immersion medium.
+
+**The floor is not the tolerance.**  At a real image leg the boundary is
+`waves_budget * lambda / |z_image|` and it is tight: measured by bisecting the guard on both
+builds, an exit medium registered as REAL AIR (n - 1 = 2.77e-4 at STP) is refused at
+`z_image = 1e-5 m` and beyond -- by 63x at 0.35 mm and by 1800x at 10 mm -- i.e. at every
+image distance the FGA actually runs.  That is the budget working as derived (the un-indexed
+leg would be wrong by 97 nm, ~0.1 wave, over 0.35 mm of real air), so this is a
+near-unity-exit-index guard and not only an immersion guard, and its message says so.
+`get_glass_index('air', lambda)` is exactly 1.0 on this registry at every wavelength
+measured, so no prescription served today is affected; a caller who really does register a
+purge gas or an index-matching fluid needs the open follow-up "carry `n_exit` in the FGA
+image leg", not a looser tolerance.
 
 `tests/unit/test_wave5_e_exit_vertex_dead_rays.py` pins both two-sided: the freeze is
 bit-exact on dead rows AND the live rows still move (a freeze that froze everything would

@@ -455,9 +455,24 @@ def test_the_guard_tolerance_is_the_wavefront_it_protects():
       * a longer leg tightens the tolerance in proportion -- the same index
         error costs more waves over more distance;
       * at a zero-length leg the tolerance floors at the budget itself, which
-        is 3.6x the air-vs-vacuum index difference at STP (2.77e-4) and ~500x
-        below any immersion medium, so neither a caller who registers a real
-        air index nor ``_caustic_zone``'s zero leg is decided by round-off.
+        is ~500x below any immersion medium, so ``_caustic_zone``'s zero leg
+        is not decided by round-off.
+
+    WHAT THE BOUNDARY IS, AND WHAT IT IMPLIES (corrected 2026-09-19,
+    VERIFY-WAVE5-E D1).  This docstring used to add "which is 3.6x the
+    air-vs-vacuum index difference at STP (2.77e-4), so a caller who registers
+    a real air index is NOT refused".  That margin exists ONLY at a
+    zero-length leg.  The boundary is ``waves * lambda / max(|z|, lambda)``
+    exactly, so at ``z = 0.35 mm`` (the fixture's own image leg) it is 4.4e-06
+    and STP air is refused by **63x**, and at ``z = 10 mm`` by **1800x** --
+    i.e. at every image distance the FGA actually runs.  That is the budget
+    working as derived (real air over 0.35 mm costs 63 milliwaves against a
+    budget of one), so the guard is right and is not changed; it is simply a
+    NEAR-UNITY-EXIT-INDEX guard rather than only an immersion guard.
+    ``get_glass_index('air', lambda)`` is exactly 1.0 on this registry, so
+    nothing served today is affected, and the way out for a caller who does
+    register a purge gas or an index-matching fluid is the open follow-up
+    "carry ``n_exit`` in the FGA image leg", not a looser tolerance.
     """
     waves = _fga._FGA_IMAGE_LEG_WAVE_BUDGET
     lam = _LAM
@@ -474,9 +489,11 @@ def test_the_guard_tolerance_is_the_wavefront_it_protects():
         'a longer leg must tighten the tolerance')
     stp_air_minus_vacuum = 2.77e-4
     assert tol(0.0) > 3.0 * stp_air_minus_vacuum, (
-        f'the zero-leg floor ({tol(0.0):.3e}) must sit above the air-vs-vacuum '
-        f'index difference at STP ({stp_air_minus_vacuum:.3e}), else a caller '
-        f'who registers a real air index is refused')
+        f'the ZERO-LEG floor ({tol(0.0):.3e}) must sit above the air-vs-vacuum '
+        f'index difference at STP ({stp_air_minus_vacuum:.3e}), so that '
+        f'_caustic_zone\'s zero leg is not decided by round-off.  (This is '
+        f'the floor only: at a real image leg the boundary is tighter and a '
+        f'registered STP air index IS refused -- see the docstring.)')
     assert tol(0.0) < 0.1 * (1.33 - 1.0), (
         f'the zero-leg floor ({tol(0.0):.3e}) must sit far below the weakest '
         f'immersion medium (water, n = 1.33), else the guard misses what it '

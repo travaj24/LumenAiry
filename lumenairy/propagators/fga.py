@@ -1217,10 +1217,27 @@ def _require_non_immersed_exit(surfs, wavelength, z_image, fn_name):
 
     The ``max(..., wavelength)`` clamp is what makes a zero-length leg
     (``_caustic_zone``, or ``output_plane_distance=0``) still refuse a real
-    immersion medium: the tolerance then floors at the budget itself, 1e-3 --
-    which is 3.6x the air-vs-vacuum index difference at STP (2.77e-4, so a
-    caller who registers a real air index is NOT refused) and ~500x below any
-    immersion medium (water 1.33, oil 1.52).
+    immersion medium: the tolerance then floors at the budget itself, 1e-3,
+    which is ~500x below any immersion medium (water 1.33, oil 1.52).
+
+    THE FLOOR IS NOT THE TOLERANCE.  At a real image leg the tolerance is
+    ``waves_budget * wavelength / |z_image|``, and it is TIGHT: at
+    ``z_image = 0.35 mm``, ``lambda = 1.55 um`` it is 4.4e-06, so an exit
+    medium registered as REAL AIR (n - 1 = 2.77e-4 at STP) is refused by 63x
+    -- and at ``z_image = 10 mm`` by 1800x (measured 2026-09-19 by bisecting
+    this guard on both builds, VERIFY-WAVE5-E sec. 6.3 / D1).  The zero-leg
+    floor's 3.6x margin over STP air therefore exists ONLY at a zero-length
+    leg: at every image distance the FGA actually runs, a real air index IS
+    refused.  That is the wave budget working as derived -- real air over a
+    0.35 mm leg costs 63 milliwaves, not one -- but it means this guard
+    refuses any near-unity exit medium and not only immersion.
+    ``get_glass_index('air', lambda)`` returns EXACTLY 1.0 on this registry at
+    every wavelength measured, so no prescription served today is affected.
+    The way out for a caller who really does want a purge gas, a registered
+    air index or an index-matching fluid at n = 1.0001 is not a looser
+    tolerance but the open follow-up "carry ``n_exit`` in the FGA image leg"
+    (the leg becomes ``opd += n_exit * z_image * sec``), after which this
+    guard is needed only for the cases the projection itself cannot resolve.
 
     An exit medium the glass registry cannot resolve is NOT this guard's
     diagnostic: with a FLAT last surface the projection short-circuits and
@@ -1242,7 +1259,9 @@ def _require_non_immersed_exit(surfs, wavelength, z_image, fn_name):
         raise NotImplementedError(
             f"{fn_name}: the prescription's exit medium has refractive index "
             f"{n_exit!r} (surfaces[-1].glass_after), i.e. the optic is "
-            f"IMMERSED.  This propagator adds its image-side leg as "
+            f"IMMERSED (or, at a long image leg, merely has an exit index "
+            f"far enough from 1 to spend the wavefront budget over that "
+            f"leg).  This propagator adds its image-side leg as "
             f"opd += z_image*sqrt(1+ux^2+uy^2), which carries no exit index, "
             f"so the returned phase would be wrong by at least {waves:.3g} "
             f"waves at z_image={z_image!r} m (tolerance "
