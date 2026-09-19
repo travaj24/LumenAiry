@@ -1,0 +1,282 @@
+{
+ "python": "3.14.6 (tags/v3.14.6:c63aec6, Jun 10 2026, 10:26:10) [MSC v.1944 64 bit (AMD64)]",
+ "platform": "win32",
+ "lumenairy_file": "C:\\tmp\\lum_vpool2\\lumenairy\\__init__.py",
+ "workers": 8,
+ "load_at_start": {
+  "cpu_percent_1s": 100.0,
+  "n_cpu": 24,
+  "mem_available_GB": 58.03
+ },
+ "as_completed_semantics": {
+  "resolved_every_seconds": 0.4,
+  "timeout": 1.0,
+  "results_yielded_before_raise": 2,
+  "exception": "TimeoutError",
+  "elapsed_seconds": 1.012,
+  "timeout_is_absolute_deadline_for_the_whole_iteration": true,
+  "cf_TimeoutError_is_builtin_TimeoutError": true,
+  "cf_TimeoutError_mro": [
+   "TimeoutError",
+   "OSError",
+   "Exception",
+   "BaseException",
+   "object"
+  ],
+  "cf_TimeoutError_is_OSError_subclass": true
+ },
+ "clause_reach": [
+  {
+   "exception": "builtin TimeoutError",
+   "mro": [
+    "TimeoutError",
+    "OSError",
+    "Exception",
+    "BaseException",
+    "object"
+   ],
+   "fell_back_to_serial": true,
+   "identical_to_serial": true,
+   "escaped_as": null
+  },
+  {
+   "exception": "concurrent.futures.TimeoutError (this build)",
+   "mro": [
+    "TimeoutError",
+    "OSError",
+    "Exception",
+    "BaseException",
+    "object"
+   ],
+   "fell_back_to_serial": true,
+   "identical_to_serial": true,
+   "escaped_as": null
+  },
+  {
+   "exception": "pre-3.11 cf.TimeoutError MRO",
+   "mro": [
+    "_PreThreeEleven_TimeoutError",
+    "Exception",
+    "BaseException",
+    "object"
+   ],
+   "fell_back_to_serial": false,
+   "identical_to_serial": null,
+   "escaped_as": "_PreThreeEleven_TimeoutError: t"
+  },
+  {
+   "exception": "OSError (control, must be caught)",
+   "mro": [
+    "OSError",
+    "Exception",
+    "BaseException",
+    "object"
+   ],
+   "fell_back_to_serial": true,
+   "identical_to_serial": true,
+   "escaped_as": null
+  },
+  {
+   "exception": "ValueError (control, must NOT be caught)",
+   "mro": [
+    "ValueError",
+    "Exception",
+    "BaseException",
+    "object"
+   ],
+   "fell_back_to_serial": false,
+   "identical_to_serial": null,
+   "escaped_as": "ValueError: v"
+  }
+ ],
+ "residual_exposure": {
+  "deadline_seconds": 20.0,
+  "submits_seen": 4,
+  "sentinel_answered": true,
+  "still_running_at_deadline": true,
+  "elapsed_seconds": 20.01,
+  "outcome": "HUNG -- a sentinel bar does NOT close this"
+ },
+ "bootstrap": {
+  "workers": 8,
+  "rendezvous": "localhost socket (no Manager)",
+  "construct_seconds": 0.0052,
+  "all_ready_seconds": 20.3571,
+  "ready_spread_seconds": 10.0725,
+  "accepted_connections": 8,
+  "distinct_pids": 8,
+  "all_workers_participated": true
+ },
+ "sentinel": {
+  "cold_seconds": 2.3753,
+  "warm_worst_seconds": 0.001708,
+  "warm_all_seconds": [
+   0.001708,
+   0.001331,
+   0.000662,
+   0.000544,
+   0.000601
+  ]
+ },
+ "timing": [
+  {
+   "N": 256,
+   "cold": true,
+   "wall_seconds": 14.015,
+   "pool_engaged": true,
+   "chunks_submitted": 8,
+   "arrivals_seen": 8,
+   "progress_channel_live": true,
+   "first_arrival_seconds": 9.898,
+   "total_seconds": 13.715,
+   "largest_inter_arrival_gap_seconds": 9.898,
+   "arrival_gaps_seconds": [
+    9.898,
+    2.068,
+    0.631,
+    0.217,
+    0.036,
+    0.16,
+    0.589,
+    0.117
+   ],
+   "xcheck_slowest_chunk_seconds": 13.472,
+   "xcheck_total_seconds": 13.715,
+   "identical_to_serial": true,
+   "max_abs_delta": 0.0
+  },
+  {
+   "N": 256,
+   "cold": false,
+   "wall_seconds": 0.3,
+   "pool_engaged": true,
+   "chunks_submitted": 8,
+   "arrivals_seen": 8,
+   "progress_channel_live": true,
+   "first_arrival_seconds": 0.031,
+   "total_seconds": 0.07,
+   "largest_inter_arrival_gap_seconds": 0.031,
+   "arrival_gaps_seconds": [
+    0.031,
+    0.005,
+    0.001,
+    0.003,
+    0.002,
+    0.003,
+    0.012,
+    0.013
+   ],
+   "xcheck_slowest_chunk_seconds": 0.069,
+   "xcheck_total_seconds": 0.07,
+   "identical_to_serial": true,
+   "max_abs_delta": 0.0
+  },
+  {
+   "N": 512,
+   "cold": true,
+   "wall_seconds": 7.222,
+   "pool_engaged": true,
+   "chunks_submitted": 8,
+   "arrivals_seen": 8,
+   "progress_channel_live": true,
+   "first_arrival_seconds": 5.475,
+   "total_seconds": 6.344,
+   "largest_inter_arrival_gap_seconds": 5.475,
+   "arrival_gaps_seconds": [
+    5.475,
+    0.093,
+    0.099,
+    0.122,
+    0.076,
+    0.009,
+    0.191,
+    0.278
+   ],
+   "xcheck_slowest_chunk_seconds": 6.195,
+   "xcheck_total_seconds": 6.343,
+   "identical_to_serial": true,
+   "max_abs_delta": 0.0
+  },
+  {
+   "N": 512,
+   "cold": false,
+   "wall_seconds": 1.265,
+   "pool_engaged": true,
+   "chunks_submitted": 8,
+   "arrivals_seen": 8,
+   "progress_channel_live": true,
+   "first_arrival_seconds": 0.118,
+   "total_seconds": 0.337,
+   "largest_inter_arrival_gap_seconds": 0.118,
+   "arrival_gaps_seconds": [
+    0.118,
+    0.024,
+    0.093,
+    0.013,
+    0.005,
+    0.016,
+    0.011,
+    0.057
+   ],
+   "xcheck_slowest_chunk_seconds": 0.337,
+   "xcheck_total_seconds": 0.337,
+   "identical_to_serial": true,
+   "max_abs_delta": 0.0
+  },
+  {
+   "N": 1024,
+   "cold": true,
+   "wall_seconds": 14.795,
+   "pool_engaged": true,
+   "chunks_submitted": 8,
+   "arrivals_seen": 8,
+   "progress_channel_live": true,
+   "first_arrival_seconds": 7.139,
+   "total_seconds": 11.526,
+   "largest_inter_arrival_gap_seconds": 7.139,
+   "arrival_gaps_seconds": [
+    7.139,
+    1.893,
+    0.306,
+    0.21,
+    0.438,
+    0.214,
+    0.633,
+    0.693
+   ],
+   "xcheck_slowest_chunk_seconds": 11.429,
+   "xcheck_total_seconds": 11.526,
+   "identical_to_serial": true,
+   "max_abs_delta": 0.0
+  },
+  {
+   "N": 1024,
+   "cold": false,
+   "wall_seconds": 6.05,
+   "pool_engaged": true,
+   "chunks_submitted": 8,
+   "arrivals_seen": 8,
+   "progress_channel_live": true,
+   "first_arrival_seconds": 0.988,
+   "total_seconds": 2.664,
+   "largest_inter_arrival_gap_seconds": 0.988,
+   "arrival_gaps_seconds": [
+    0.988,
+    0.181,
+    0.079,
+    0.176,
+    0.042,
+    0.164,
+    0.629,
+    0.404
+   ],
+   "xcheck_slowest_chunk_seconds": 2.663,
+   "xcheck_total_seconds": 2.664,
+   "identical_to_serial": true,
+   "max_abs_delta": 0.0
+  }
+ ],
+ "load_at_end": {
+  "cpu_percent_1s": 100.0
+ }
+}

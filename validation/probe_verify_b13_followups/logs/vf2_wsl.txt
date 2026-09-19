@@ -1,0 +1,109 @@
+Exception in thread lumenairy-newton-pool-close:
+Traceback (most recent call last):
+Exception in thread lumenairy-newton-pool-close:
+Traceback (most recent call last):
+  File "/usr/lib/python3.12/threading.py", line 1073, in _bootstrap_inner
+Exception in thread lumenairy-newton-pool-close:
+Traceback (most recent call last):
+  File "/usr/lib/python3.12/threading.py", line 1073, in _bootstrap_inner
+  File "/usr/lib/python3.12/threading.py", line 1073, in _bootstrap_inner
+    self.run()
+    self.run()
+  File "/usr/lib/python3.12/threading.py", line 1010, in run
+  File "/usr/lib/python3.12/threading.py", line 1010, in run
+    self._target(*self._args, **self._kwargs)
+    self._target(*self._args, **self._kwargs)
+  File "/mnt/c/tmp/lum_vpool2/validation/probe_verify_b13_followups/vf2_d2_census.py", line 138, in _run
+  File "/mnt/c/tmp/lum_vpool2/validation/probe_verify_b13_followups/vf2_d2_census.py", line 138, in _run
+    ex.shutdown(wait=True)
+  File "/mnt/c/tmp/lum_vpool2/validation/probe_verify_b13_followups/vf2_d2_census.py", line 68, in shutdown
+    ex.shutdown(wait=True)
+  File "/mnt/c/tmp/lum_vpool2/validation/probe_verify_b13_followups/vf2_d2_census.py", line 68, in shutdown
+    raise self._raise('engineered: the helper did not catch this')
+_Uncatchabhelper_crash [{"raised_by_helper": "_Uncatchable", "census_while_outstanding": 3, "census_after": 0, "returns_to_empty": true}, {"raised_by_helper": "KeyboardInterrupt", "census_while_outstanding": 3, "census_after": 0, "returns_to_empty": true}, {"raised_by_helper": "MemoryError", "census_while_outstanding": 3, "census_after": 0, "returns_to_empty": true}]
+double_abandon {"reps": 4, "leaks": 0, "premature_removals_of_the_reapers_entry": 0, "note": "a premature removal means the bounded helper dropped an entry it never added -- the census then under-reports a teardown that is still outstanding"}
+boundary {"reps": 8, "leaks": 0, "returns": {"False": 2, "True": 6}}
+uncond_remove {"reps": 6, "reapers_entry_dropped_by_the_bounded_helper": 6, "bounded_teardown_returned_in_bound": true, "severity": "the census UNDER-reports an outstanding teardown; no library path passes one executor to both mechanisms today, so this is latent", "suggested_edit": "have the caller record, under _ABANDONED_POOLS_LOCK, that it appended, and have the helper remove only then"}
+real_library [
+ {
+  "order": "helper",
+  "reps": 4,
+  "leaked": 0,
+  "returns": [
+   "True"
+  ],
+  "census_len_before": 0,
+  "census_len_after": 0,
+  "timeouts_before": 0,
+  "timeouts_after": 0
+ },
+ {
+  "order": "caller",
+  "reps": 4,
+  "leaked": 0,
+  "returns": [
+   "False"
+  ],
+  "census_len_before": 0,
+  "census_len_after": 0,
+  "timeouts_before": 0,
+  "timeouts_after": 4
+ }
+]
+VERDICT {
+ "pre_leaks_on_a_plain_expiry": true,
+ "oneline_leaks_under_helper_first": true,
+ "shipped_leaks_under_either_order": false,
+ "shipped_real_library_leaks": false,
+ "shipped_survives_helper_crash": true,
+ "shipped_boundary_leaks": 0,
+ "shipped_premature_removal_on_double_abandon": 0,
+ "shipped_unconditional_remove_drops_a_foreign_entry": 6
+}
+wrote validation/probe_verify_b13_followups/vf2_wsl.json
+e helper did not catch this')
+KeyboardInterrupt: engineered: the helper did not catch this
+Exception in thread lumenairy-newton-pool-close:
+Traceback (most recent call last):
+  File "/usr/lib/python3.12/threading.py", line 1073, in _bootstrap_inner
+    self.run()
+  File "/usr/lib/python3.12/threading.py", line 1010, in run
+    self._target(*self._args, **self._kwargs)
+  File "/mnt/c/tmp/lum_vpool2/validation/probe_verify_b13_followups/vf2_d2_census.py", line 138, in _run
+    ex.shutdown(wait=True)
+  File "/mnt/c/tmp/lum_vpool2/validation/probe_verify_b13_followups/vf2_d2_census.py", line 68, in shutdown
+    raise self._raise('engineered: the helper did not catch this')
+KeyboardInterrupt: engineered: the helper did not catch this
+Exception in thread lumenairy-newton-pool-close:
+Exception in thread lumenairy-newton-pool-close:
+Traceback (most recent call last):
+  File "/usr/lib/python3.12/threading.py", line 1073, in _bootstrap_inner
+Traceback (most recent call last):
+  File "/usr/lib/python3.12/threading.py", line 1073, in _bootstrap_inner
+Exception in thread lumenairy-newton-pool-close:
+    self.run()
+Traceback (most recent call last):
+  File "/usr/lib/python3.12/threading.py", line 1010, in run
+  File "/usr/lib/python3.12/threading.py", line 1073, in _bootstrap_inner
+    self.run()
+  File "/usr/lib/python3.12/threading.py", line 1010, in run
+    self.run()
+  File "/usr/lib/python3.12/threading.py", line 1010, in run
+    self._target(*self._args, **self._kwargs)
+  File "/mnt/c/tmp/lum_vpool2/validation/probe_verify_b13_followups/vf2_d2_census.py", line 138, in _run
+    self._target(*self._args, **self._kwargs)
+  File "/mnt/c/tmp/lum_vpool2/validation/probe_verify_b13_followups/vf2_d2_census.py", line 138, in _run
+    self._target(*self._args, **self._kwargs)
+  File "/mnt/c/tmp/lum_vpool2/validation/probe_verify_b13_followups/vf2_d2_census.py", line 138, in _run
+    ex.shutdown(wait=True)
+  File "/mnt/c/tmp/lum_vpool2/validation/probe_verify_b13_followups/vf2_d2_census.py", line 68, in shutdown
+    ex.shutdown(wait=True)
+    ex.shutdown(wait=True)
+  File "/mnt/c/tmp/lum_vpool2/validation/probe_verify_b13_followups/vf2_d2_census.py", line 68, in shutdown
+  File "/mnt/c/tmp/lum_vpool2/validation/probe_verify_b13_followups/vf2_d2_census.py", line 68, in shutdown
+    raise self._raise('engineered: the helper did not catch this')
+MemoryError: engineered: the helper did not catch this
+    raise self._raise('engineered: the helper did not catch this')
+MemoryError: engineered: the helper did not catch this
+    raise self._raise('engineered: the helper did not catch this')
+MemoryError: engineered: the helper did not catch this

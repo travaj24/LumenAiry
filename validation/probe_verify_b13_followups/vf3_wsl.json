@@ -1,0 +1,116 @@
+{
+ "python": "3.12.3 (main, Mar 23 2026, 19:04:32) [GCC 13.3.0]",
+ "platform": "linux",
+ "lumenairy_file": "/mnt/c/tmp/lum_vpool2/lumenairy/__init__.py",
+ "rendezvous": "localhost socket (no Manager)",
+ "pool_width": 12,
+ "dispatch_workers": 4,
+ "load_at_start": {
+  "cpu_percent_1s": 94.5,
+  "mem_available_GB": 63.77
+ },
+ "rungs": [
+  {
+   "N": 256,
+   "pool_width": 12,
+   "dispatch_workers": 4,
+   "pool_reused_for_the_dispatch": true,
+   "processes_after_construct": 0,
+   "processes_after_dispatch": 4,
+   "processes_after_labelling": 12,
+   "surplus_workers_before_any_submit": 0,
+   "live_workers": 4,
+   "labelled_workers": 12,
+   "accepted_connections": 12,
+   "label_coverage_complete": true,
+   "served_pids": 4,
+   "never_served_pids": 8,
+   "served_after_dispatch": {
+    "n": 4,
+    "mean_MB": 69.3,
+    "max_MB": 69.3,
+    "min_MB": 69.29
+   },
+   "never_served_after_dispatch": {
+    "n": 0
+   },
+   "served_after_labelling": {
+    "n": 4,
+    "mean_MB": 69.43,
+    "max_MB": 69.44,
+    "min_MB": 69.42
+   },
+   "never_served_after_labelling": {
+    "n": 8,
+    "mean_MB": 37.28,
+    "max_MB": 37.29,
+    "min_MB": 37.27
+   },
+   "all_before_dispatch": {
+    "n": 0
+   },
+   "identical_to_serial": true,
+   "max_abs_delta": 0.0,
+   "abandoned_pools_len": 0,
+   "shutdown_timeouts": 0
+  },
+  {
+   "N": 1024,
+   "pool_width": 12,
+   "dispatch_workers": 4,
+   "pool_reused_for_the_dispatch": true,
+   "processes_after_construct": 0,
+   "processes_after_dispatch": 4,
+   "processes_after_labelling": 12,
+   "surplus_workers_before_any_submit": 0,
+   "live_workers": 4,
+   "labelled_workers": 12,
+   "accepted_connections": 12,
+   "label_coverage_complete": true,
+   "served_pids": 4,
+   "never_served_pids": 8,
+   "served_after_dispatch": {
+    "n": 4,
+    "mean_MB": 72.85,
+    "max_MB": 72.86,
+    "min_MB": 72.84
+   },
+   "never_served_after_dispatch": {
+    "n": 0
+   },
+   "served_after_labelling": {
+    "n": 4,
+    "mean_MB": 72.99,
+    "max_MB": 72.99,
+    "min_MB": 72.98
+   },
+   "never_served_after_labelling": {
+    "n": 8,
+    "mean_MB": 37.29,
+    "max_MB": 37.31,
+    "min_MB": 37.28
+   },
+   "all_before_dispatch": {
+    "n": 0
+   },
+   "identical_to_serial": true,
+   "max_abs_delta": 0.0,
+   "abandoned_pools_len": 0,
+   "shutdown_timeouts": 0
+  }
+ ],
+ "summary": {
+  "worst_served_MB": 72.99,
+  "never_served_mean_MB_range": [
+   37.28,
+   37.29
+  ],
+  "sixteen_wide_served_pool_GB": 1.14,
+  "fraction_of_a_1p7GB_active_worker_percent": 4.2,
+  "every_rung_label_coverage_complete": true,
+  "every_rung_identical_to_serial": true,
+  "census_empty_on_every_rung": true,
+  "a_wider_pool_holds_no_processes_until_submitted_to": true,
+  "processes_after_dispatch_equals_dispatch_width": true
+ }
+}

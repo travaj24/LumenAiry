@@ -1,0 +1,182 @@
+{
+ "python": "3.12.3 (main, Mar 23 2026, 19:04:32) [GCC 13.3.0]",
+ "platform": "linux",
+ "lumenairy_file": "/mnt/c/tmp/lum_vpool2/lumenairy/__init__.py",
+ "rows": [
+  {
+   "mutation": "(none)",
+   "wall_seconds": 51.1,
+   "driver_timed_out": false,
+   "pytest_timeout_plugin": false,
+   "pytest_actually_ran": true,
+   "failed_tests": [],
+   "n_failed": 0,
+   "caught": null,
+   "summary": "24 passed, 11 deselected, 2 warnings in 46.29s",
+   "stdout_tail": ""
+  },
+  {
+   "mutation": "m1_dump_stringio",
+   "wall_seconds": 49.9,
+   "driver_timed_out": false,
+   "pytest_timeout_plugin": false,
+   "pytest_actually_ran": true,
+   "failed_tests": [
+    "test_the_dump_helper_reaches_a_thread_that_is_not_the_caller",
+    "test_the_dump_helper_writes_through_a_real_descriptor",
+    "test_the_wedge_report_carries_the_stack_of_the_wedged_frame",
+    "test_the_wedge_report_names_a_frame_the_branch_pin_never_parks_in"
+   ],
+   "n_failed": 4,
+   "caught": true,
+   "summary": "4 failed, 20 passed, 11 deselected, 2 warnings in 45.54s",
+   "stdout_tail": ""
+  },
+  {
+   "mutation": "m2_census_neverdrop",
+   "wall_seconds": 170.1,
+   "driver_timed_out": false,
+   "pytest_timeout_plugin": false,
+   "pytest_actually_ran": true,
+   "failed_tests": [
+    "test_a_helper_that_raises_an_uncaught_class_still_publishes_and_clears[BaseException]",
+    "test_a_helper_that_raises_an_uncaught_class_still_publishes_and_clears[MemoryError]",
+    "test_a_teardown_landing_exactly_on_the_expiry_leaves_nothing_behind",
+    "test_an_expired_bounded_teardown_releases_its_executor_when_it_finishes",
+    "test_repeated_expiries_do_not_grow_the_census",
+    "test_the_census_survives_the_caller_first_lock_order",
+    "test_the_census_survives_the_helper_first_lock_order"
+   ],
+   "n_failed": 7,
+   "caught": true,
+   "summary": "7 failed, 17 passed, 11 deselected, 2 warnings in 165.56s (0:02:45)",
+   "stdout_tail": ""
+  },
+  {
+   "mutation": "m3_census_oneline",
+   "wall_seconds": 63.8,
+   "driver_timed_out": false,
+   "pytest_timeout_plugin": false,
+   "pytest_actually_ran": true,
+   "failed_tests": [
+    "test_the_census_survives_the_helper_first_lock_order"
+   ],
+   "n_failed": 1,
+   "caught": true,
+   "summary": "1 failed, 23 passed, 11 deselected, 2 warnings in 59.84s",
+   "stdout_tail": ""
+  },
+  {
+   "mutation": "m4_census_noappend",
+   "wall_seconds": 63.5,
+   "driver_timed_out": false,
+   "pytest_timeout_plugin": false,
+   "pytest_actually_ran": true,
+   "failed_tests": [
+    "test_a_helper_that_raises_an_uncaught_class_still_publishes_and_clears[BaseException]",
+    "test_a_helper_that_raises_an_uncaught_class_still_publishes_and_clears[MemoryError]",
+    "test_an_expired_bounded_teardown_releases_its_executor_when_it_finishes",
+    "test_repeated_expiries_do_not_grow_the_census",
+    "test_the_census_survives_the_caller_first_lock_order",
+    "test_the_census_survives_the_helper_first_lock_order"
+   ],
+   "n_failed": 6,
+   "caught": true,
+   "summary": "6 failed, 18 passed, 11 deselected, 2 warnings in 58.03s",
+   "stdout_tail": ""
+  },
+  {
+   "mutation": "m5_detector_calls",
+   "wall_seconds": 53.0,
+   "driver_timed_out": false,
+   "pytest_timeout_plugin": false,
+   "pytest_actually_ran": true,
+   "failed_tests": [
+    "test_the_join_detector_sees_the_with_form",
+    "test_the_sibling_process_pool_still_carries_an_unbounded_join"
+   ],
+   "n_failed": 2,
+   "caught": true,
+   "summary": "2 failed, 22 passed, 11 deselected, 2 warnings in 47.09s",
+   "stdout_tail": ""
+  },
+  {
+   "mutation": "m6_detector_nowait",
+   "wall_seconds": 48.3,
+   "driver_timed_out": false,
+   "pytest_timeout_plugin": false,
+   "pytest_actually_ran": true,
+   "failed_tests": [
+    "test_only_the_bounded_helper_ever_joins_an_executor",
+    "test_the_join_detector_sees_the_with_form"
+   ],
+   "n_failed": 2,
+   "caught": true,
+   "summary": "2 failed, 22 passed, 11 deselected, 2 warnings in 43.68s",
+   "stdout_tail": ""
+  },
+  {
+   "mutation": "m7_inflight_perchunk",
+   "wall_seconds": 45.2,
+   "driver_timed_out": false,
+   "pytest_timeout_plugin": false,
+   "pytest_actually_ran": true,
+   "failed_tests": [
+    "test_the_in_flight_counter_cannot_go_negative_or_leak"
+   ],
+   "n_failed": 1,
+   "caught": true,
+   "summary": "1 failed, 23 passed, 11 deselected, 2 warnings in 41.03s",
+   "stdout_tail": ""
+  },
+  {
+   "mutation": "m8_inflight_never",
+   "wall_seconds": 42.0,
+   "driver_timed_out": false,
+   "pytest_timeout_plugin": false,
+   "pytest_actually_ran": true,
+   "failed_tests": [
+    "test_the_in_flight_counter_cannot_go_negative_or_leak"
+   ],
+   "n_failed": 1,
+   "caught": true,
+   "summary": "1 failed, 23 passed, 11 deselected, 2 warnings in 38.39s",
+   "stdout_tail": ""
+  },
+  {
+   "mutation": "m9_helper_no_finally",
+   "wall_seconds": 88.0,
+   "driver_timed_out": false,
+   "pytest_timeout_plugin": false,
+   "pytest_actually_ran": true,
+   "failed_tests": [
+    "test_a_helper_that_raises_an_uncaught_class_still_publishes_and_clears[BaseException]",
+    "test_a_helper_that_raises_an_uncaught_class_still_publishes_and_clears[MemoryError]",
+    "test_the_census_survives_the_helper_first_lock_order"
+   ],
+   "n_failed": 3,
+   "caught": true,
+   "summary": "3 failed, 21 passed, 11 deselected, 2 warnings in 84.36s (0:01:24)",
+   "stdout_tail": ""
+  },
+  {
+   "mutation": "m10_lazy_eager",
+   "wall_seconds": 41.7,
+   "driver_timed_out": false,
+   "pytest_timeout_plugin": false,
+   "pytest_actually_ran": true,
+   "failed_tests": [
+    "test_a_pool_wider_than_the_dispatch_holds_no_surplus_processes"
+   ],
+   "n_failed": 1,
+   "caught": true,
+   "summary": "1 failed, 23 passed, 11 deselected, 2 warnings in 37.75s",
+   "stdout_tail": ""
+  }
+ ],
+ "uncaught": [],
+ "errored": [],
+ "hung": [],
+ "pytest_timeout_plugin": false,
+ "baseline_clean": true
+}

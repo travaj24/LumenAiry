@@ -1,0 +1,200 @@
+lumenairy.__file__ = C:\tmp\lum_vpool2\lumenairy\__init__.py
+plain_expiry [
+ {
+  "impl": "pre",
+  "reps": 3,
+  "census_while_outstanding": 3,
+  "census_after_completion": 3,
+  "timeouts_counted": 3,
+  "returns_to_empty": false
+ },
+ {
+  "impl": "oneline",
+  "reps": 3,
+  "census_while_outstanding": 3,
+  "census_after_completion": 0,
+  "timeouts_counted": 3,
+  "returns_to_empty": true
+ },
+ {
+  "impl": "shipped",
+  "reps": 3,
+  "census_while_outstanding": 3,
+  "census_after_completion": 0,
+  "timeouts_counted": 3,
+  "returns_to_empty": true
+ }
+]
+race {"impl": "pre", "order": "helper", "reps": 8, "leaked": 8, "leak_rate": 1.0, "returns": ["False"], "errors": []}
+race {"impl": "pre", "order": "caller", "reps": 8, "leaked": 8, "leak_rate": 1.0, "returns": ["False"], "errors": []}
+race {"impl": "oneline", "order": "helper", "reps": 8, "leaked": 8, "leak_rate": 1.0, "returns": ["False"], "errors": []}
+race {"impl": "oneline", "order": "caller", "reps": 8, "leaked": 0, "leak_rate": 0.0, "returns": ["False"], "errors": []}
+race {"impl": "shipped", "order": "helper", "reps": 8, "leaked": 0, "leak_rate": 0.0, "returns": ["True"], "errors": []}
+race {"impl": "shipped", "order": "caller", "reps": 8, "leaked": 0, "leak_rate": 0.0, "returns": ["False"], "errors": []}
+Exception in thread lumenairy-newton-pool-close:
+Exception in thread lumenairy-newton-pool-close:
+Exception in thread lumenairy-newton-pool-close:
+Traceback (most recent call last):
+Traceback (most recent call last):
+Traceback (most recent call last):
+  File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\threading.py", line 1082, in _bootstrap_inner
+    self._context.run(self.run)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^
+  File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\threading.py", line 1082, in _bootstrap_inner
+    self._context.run(self.run)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^
+  File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\threading.py", line 1082, in _bootstrap_inner
+    self._context.run(self.run)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^
+  File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\threading.py", line 1024, in run
+    self._target(*self._args, **self._kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\threading.py", line 1024, in run
+    self._target(*self._args, **self._kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\tmp\lum_vpool2\validation\probe_verify_b13_followups\vf2_d2_census.py", line 138, in _run
+    ex.shutdown(wait=True)
+    ~~~~~~~~~~~^^^^^^^^^^^
+  File "C:\tmp\lum_vpool2\validation\probe_verify_b13_followups\vf2_d2_census.py", line 68, in shutdown
+    raise self._raise('engineered: the helper did not catch this')
+  File "C:\tmp\lum_vpool2\validation\probe_verify_b13_followups\vf2_d2_census.py", line 138, in _run
+    ex.shutdown(wait=True)
+    ~~~~~~~~~~~^^^^^^^^^^^
+_Uncatchable: engineered: the helper did not catch this
+  File "C:\tmp\lum_vpool2\validation\probe_verify_b13_followups\vf2_d2_census.py", line 68, in shutdown
+    raise self._raise('engineered: the helper did not catch this')
+_Uncatchable: engineered: the helper did not catch this
+  File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\threading.py", line 1024, in run
+    self._target(*self._args, **self._kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\tmp\lum_vpool2\validation\probe_verify_b13_followups\vf2_d2_census.py", line 138, in _run
+    ex.shutdown(wait=True)
+    ~~~~~~~~~~~^^^^^^^^^^^
+  File "C:\tmp\lum_vpool2\validation\probe_verify_b13_followups\vf2_d2_census.py", line 68, in shutdown
+    raise self._raise('engineered: the helper did not catch this')
+_Uncatchable: engineered: the helper did not catch this
+Exception in thread lumenairy-newton-pool-close:
+Exception in thread lumenairy-newton-pool-close:
+Exception in thread lumenairy-newton-pool-close:
+Traceback (most recent call last):
+Traceback (most recent call last):
+Traceback (most recent call last):
+  File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\threading.py", line 1082, in _bootstrap_inner
+    self._context.run(self.run)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^
+  File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\threading.py", line 1082, in _bootstrap_inner
+    self._context.run(self.run)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^
+  File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\threading.py", line 1024, in run
+    self._target(*self._args, **self._kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\threading.py", line 1024, in run
+    self._target(*self._args, **self._kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\tmp\lum_vpool2\validation\probe_verify_b13_followups\vf2_d2_census.py", line 138, in _run
+    ex.shutdown(wait=True)
+    ~~~~~~~~~~~^^^^^^^^^^^
+  File "C:\tmp\lum_vpool2\validation\probe_verify_b13_followups\vf2_d2_census.py", line 138, in _run
+    ex.shutdown(wait=True)
+    ~~~~~~~~~~~^^^^^^^^^^^
+  File "C:\tmp\lum_vpool2\validation\probe_verify_b13_followups\vf2_d2_census.py", line 68, in shutdown
+    raise self._raise('engineered: the helper did not catch this')
+  File "C:\tmp\lum_vpool2\validation\probe_verify_b13_followups\vf2_d2_census.py", line 68, in shutdown
+    raise self._raise('engineered: the helper did not catch this')
+KeyboardInterrupt: engineered: the helper did not catch this
+KeyboardInterrupt: engineered: the helper did not catch this
+  File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\threading.py", line 1082, in _bootstrap_inner
+    self._context.run(self.run)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^
+  File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\threading.py", line 1024, in run
+    self._target(*self._args, **self._kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\tmp\lum_vpool2\validation\probe_verify_b13_followups\vf2_d2_census.py", line 138, in _run
+    ex.shutdown(wait=True)
+    ~~~~~~~~~~~^^^^^^^^^^^
+  File "C:\tmp\lum_vpool2\validation\probe_verify_b13_followups\vf2_d2_census.py", line 68, in shutdown
+    raise self._raise('engineered: the helper did not catch this')
+KeyboardInterrupt: engineered: the helper did not catch this
+Exception in thread lumenairy-newton-pool-close:
+Exception in thread lumenairy-newton-pool-close:
+Exception in thread lumenairy-newton-pool-close:
+Traceback (most recent call last):
+Traceback (most recent call last):
+Traceback (most recent call last):
+  File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\threading.py", line 1082, in _bootstrap_inner
+    self._context.run(self.run)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^
+  File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\threading.py", line 1082, in _bootstrap_inner
+    self._context.run(self.run)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^
+  File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\threading.py", line 1024, in run
+    self._target(*self._args, **self._kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\threading.py", line 1024, in run
+    self._target(*self._args, **self._kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\tmp\lum_vpool2\validation\probe_verify_b13_followups\vf2_d2_census.py", line 138, in _run
+    ex.shutdown(wait=True)
+    ~~~~~~~~~~~^^^^^^^^^^^
+  File "C:\tmp\lum_vpool2\validation\probe_verify_b13_followups\vf2_d2_census.py", line 138, in _run
+    ex.shutdown(wait=True)
+    ~~~~~~~~~~~^^^^^^^^^^^
+  File "C:\tmp\lum_vpool2\validation\probe_verify_b13_followups\vf2_d2_census.py", line 68, in shutdown
+    raise self._raise('engineered: the helper did not catch this')
+  File "C:\tmp\lum_vpool2\validation\probe_verify_b13_followups\vf2_d2_census.py", line 68, in shutdown
+    raise self._raise('engineered: the helper did not catch this')
+MemoryError: engineered: the helper did not catch this
+MemoryError: engineered: the helper did not catch this
+  File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\threading.py", line 1082, in _bootstrap_inner
+    self._context.run(self.run)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^
+  File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\threading.py", line 1024, in run
+    self._target(*self._args, **self._kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\tmp\lum_vpool2\validation\probe_verify_b13_followups\vf2_d2_census.py", line 138, in _run
+    ex.shutdown(wait=True)
+    ~~~~~~~~~~~^^^^^^^^^^^
+  File "C:\tmp\lum_vpool2\validation\probe_verify_b13_followups\vf2_d2_census.py", line 68, in shutdown
+    raise self._raise('engineered: the helper did not catch this')
+MemoryError: engineered: the helper did not catch this
+helper_crash [{"raised_by_helper": "_Uncatchable", "census_while_outstanding": 3, "census_after": 0, "returns_to_empty": true}, {"raised_by_helper": "KeyboardInterrupt", "census_while_outstanding": 3, "census_after": 0, "returns_to_empty": true}, {"raised_by_helper": "MemoryError", "census_while_outstanding": 3, "census_after": 0, "returns_to_empty": true}]
+double_abandon {"reps": 4, "leaks": 0, "premature_removals_of_the_reapers_entry": 0, "note": "a premature removal means the bounded helper dropped an entry it never added -- the census then under-reports a teardown that is still outstanding"}
+boundary {"reps": 8, "leaks": 0, "returns": {"False": 1, "True": 7}}
+uncond_remove {"reps": 6, "reapers_entry_dropped_by_the_bounded_helper": 6, "bounded_teardown_returned_in_bound": true, "severity": "the census UNDER-reports an outstanding teardown; no library path passes one executor to both mechanisms today, so this is latent", "suggested_edit": "have the caller record, under _ABANDONED_POOLS_LOCK, that it appended, and have the helper remove only then"}
+real_library [
+ {
+  "order": "helper",
+  "reps": 4,
+  "leaked": 0,
+  "returns": [
+   "True"
+  ],
+  "census_len_before": 0,
+  "census_len_after": 0,
+  "timeouts_before": 0,
+  "timeouts_after": 0
+ },
+ {
+  "order": "caller",
+  "reps": 4,
+  "leaked": 0,
+  "returns": [
+   "False"
+  ],
+  "census_len_before": 0,
+  "census_len_after": 0,
+  "timeouts_before": 0,
+  "timeouts_after": 4
+ }
+]
+VERDICT {
+ "pre_leaks_on_a_plain_expiry": true,
+ "oneline_leaks_under_helper_first": true,
+ "shipped_leaks_under_either_order": false,
+ "shipped_real_library_leaks": false,
+ "shipped_survives_helper_crash": true,
+ "shipped_boundary_leaks": 0,
+ "shipped_premature_removal_on_double_abandon": 0,
+ "shipped_unconditional_remove_drops_a_foreign_entry": 6
+}
+wrote validation/probe_verify_b13_followups/vf2_win.json

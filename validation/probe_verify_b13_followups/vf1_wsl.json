@@ -1,0 +1,46 @@
+{
+ "python": "3.12.3 (main, Mar 23 2026, 19:04:32) [GCC 13.3.0]",
+ "platform": "linux",
+ "lumenairy_file": "/mnt/c/tmp/lum_vpool2/lumenairy/__init__.py",
+ "stringio_premise": {
+  "raises": true,
+  "exception": "UnsupportedOperation",
+  "message": "fileno"
+ },
+ "helper_direct": {
+  "chars": 867,
+  "names_this_frame": true,
+  "thread_headers": 2,
+  "names_the_side_thread_frame": true,
+  "covers_more_than_one_thread": true
+ },
+ "arm_fixed": {
+  "arm": "fixed (branch tempfile helper)",
+  "outcome": "failed",
+  "exception_type": "Failed",
+  "carries_with_deadline_message": true,
+  "carries_thread_dump_header": true,
+  "names_the_parked_frame": true,
+  "names_the_deadline_thread": false,
+  "message_head": "Failed: a VF1 engineered wedge did not return within 1 s -- this is the wedge P1 4.1b is about, not slowness (the same call returns in seconds on a healthy tree).  Thread dump:\nThread 0x00007fd5e7ad06c0 (most recent call first):\n  File \"/usr/lib/python3.12/threading.py\", line 355 in wait\n  File \"/usr/lib/python3.12/queue.py\", line 171 in get\n  File \"/mnt/c/tmp/lum_vpool2/validation/probe_verify_b1",
+  "message_tail": " _bootstrap\n\nCurrent thread 0x00007fd5eeb01080 (most recent call first):\n  File \"/mnt/c/tmp/lum_vpool2/tests/unit/test_fix_newton_pool_broken_fallback.py\", line 151 in _thread_dump\n  File \"/mnt/c/tmp/lum_vpool2/tests/unit/test_fix_newton_pool_broken_fallback.py\", line 179 in _with_deadline\n  File \"/mnt/c/tmp/lum_vpool2/validation/probe_verify_b13_followups/vf1_d1_dump.py\", line 72 in _arm\n  File \"/mnt/c/tmp/lum_vpool2/validation/probe_verify_b13_followups/vf1_d1_dump.py\", line 140 in main\n  File \"/mnt/c/tmp/lum_vpool2/validation/probe_verify_b13_followups/vf1_d1_dump.py\", line 176 in <module>\n"
+ },
+ "arm_shipped": {
+  "arm": "shipped (io.StringIO helper)",
+  "outcome": "failed",
+  "exception_type": "UnsupportedOperation",
+  "carries_with_deadline_message": false,
+  "carries_thread_dump_header": false,
+  "names_the_parked_frame": false,
+  "names_the_deadline_thread": false,
+  "message_head": "UnsupportedOperation: fileno",
+  "message_tail": "UnsupportedOperation: fileno"
+ },
+ "verdict": {
+  "fixed_arm_reports_its_own_message": true,
+  "fixed_arm_names_the_wedged_frame": true,
+  "shipped_arm_loses_the_message": true,
+  "shipped_arm_raises_unsupported_operation": true,
+  "dump_covers_all_threads": true
+ }
+}

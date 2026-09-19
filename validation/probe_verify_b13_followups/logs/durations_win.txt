@@ -1,0 +1,84 @@
+...................................                                      [100%]
+============================== warnings summary ===============================
+tests/unit/test_verify_b13_followups.py::test_a_helper_that_raises_an_uncaught_class_still_publishes_and_clears[BaseException]
+  C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\_pytest\threadexception.py:58: PytestUnhandledThreadExceptionWarning: Exception in thread lumenairy-newton-pool-close
+  
+  Traceback (most recent call last):
+    File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\threading.py", line 1082, in _bootstrap_inner
+      self._context.run(self.run)
+      ~~~~~~~~~~~~~~~~~^^^^^^^^^^
+    File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\threading.py", line 1024, in run
+      self._target(*self._args, **self._kwargs)
+      ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    File "C:\tmp\lum_vpool2\lumenairy\elements\_lens_traced.py", line 1357, in _run
+      ex.shutdown(wait=True)
+      ~~~~~~~~~~~^^^^^^^^^^^
+    File "C:\tmp\lum_vpool2\tests\unit\test_verify_b13_followups.py", line 230, in shutdown
+      raise self._raise('engineered: the helper does not catch this')
+  tests.unit.test_verify_b13_followups._VB13Uncaught: engineered: the helper does not catch this
+  
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+    warnings.warn(pytest.PytestUnhandledThreadExceptionWarning(msg))
+
+tests/unit/test_verify_b13_followups.py::test_a_helper_that_raises_an_uncaught_class_still_publishes_and_clears[BaseException]
+  C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\_pytest\threadexception.py:58: PytestUnhandledThreadExceptionWarning: Exception in thread lumenairy-newton-pool-close
+  
+  Traceback (most recent call last):
+    File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\threading.py", line 1082, in _bootstrap_inner
+      self._context.run(self.run)
+      ~~~~~~~~~~~~~~~~~^^^^^^^^^^
+    File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\threading.py", line 1024, in run
+      self._target(*self._args, **self._kwargs)
+      ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    File "C:\tmp\lum_vpool2\lumenairy\elements\_lens_traced.py", line 1357, in _run
+      ex.shutdown(wait=True)
+      ~~~~~~~~~~~^^^^^^^^^^^
+    File "C:\tmp\lum_vpool2\tests\unit\test_verify_b13_followups.py", line 230, in shutdown
+      raise self._raise('engineered: the helper does not catch this')
+  MemoryError: engineered: the helper does not catch this
+  
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+    warnings.warn(pytest.PytestUnhandledThreadExceptionWarning(msg))
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+============================== slowest durations ==============================
+32.06s call     tests/unit/test_fix_newton_pool_broken_fallback.py::test_the_traced_chain_completes_under_either_pytest_capture[fd]
+30.97s call     tests/unit/test_fix_newton_pool_broken_fallback.py::test_the_traced_chain_completes_under_either_pytest_capture[sys]
+29.18s call     tests/unit/test_verify_b13_followups.py::test_a_pool_wider_than_the_dispatch_holds_no_surplus_processes
+19.03s call     tests/unit/test_verify_b13_followups.py::test_a_bootstrap_bar_would_not_bound_a_chunk_that_wedges_later
+13.39s call     tests/unit/test_fix_newton_pool_broken_fallback.py::test_a_real_worker_dying_mid_flight_still_returns_the_serial_answer
+12.46s setup    tests/unit/test_fix_newton_pool_broken_fallback.py::test_a_broken_pool_reaches_the_serial_fallback_without_joining_it
+6.43s call     tests/unit/test_fix_newton_pool_broken_fallback.py::test_a_forced_rebuild_during_a_live_dispatch_does_not_break_it
+5.60s call     tests/unit/test_verify_b13_followups.py::test_no_module_uses_an_executor_teardown_the_join_detector_cannot_see
+2.73s call     tests/unit/test_fix_newton_pool_broken_fallback.py::test_a_teardown_landing_exactly_on_the_expiry_leaves_nothing_behind
+2.61s call     tests/unit/test_verify_b13_followups.py::test_the_wedge_report_names_a_frame_the_branch_pin_never_parks_in
+2.46s call     tests/unit/test_fix_newton_pool_broken_fallback.py::test_only_the_bounded_helper_ever_joins_an_executor
+1.61s call     tests/unit/test_fix_newton_pool_broken_fallback.py::test_the_sibling_process_pool_still_carries_an_unbounded_join
+1.32s call     tests/unit/test_verify_b13_followups.py::test_nothing_consumes_the_in_flight_counters_magnitude
+1.18s teardown tests/unit/test_fix_newton_pool_broken_fallback.py::test_a_forced_rebuild_during_a_live_dispatch_does_not_break_it
+1.05s call     tests/unit/test_fix_newton_pool_broken_fallback.py::test_close_worker_pool_is_bounded_even_on_a_pool_it_may_join
+1.04s call     tests/unit/test_fix_newton_pool_broken_fallback.py::test_the_wedge_report_carries_the_stack_of_the_wedged_frame
+0.96s call     tests/unit/test_verify_b13_followups.py::test_a_timeout_on_the_dispatch_must_name_its_own_exception_class
+0.78s call     tests/unit/test_fix_newton_pool_broken_fallback.py::test_the_in_flight_counter_is_one_claim_per_dispatch_not_per_chunk
+0.78s call     tests/unit/test_verify_b13_followups.py::test_one_executor_never_reaches_both_teardown_mechanisms
+0.68s call     tests/unit/test_fix_newton_pool_broken_fallback.py::test_n_workers_1_never_touches_the_pool
+0.41s call     tests/unit/test_fix_newton_pool_broken_fallback.py::test_repeated_expiries_do_not_grow_the_census
+0.37s call     tests/unit/test_fix_newton_pool_broken_fallback.py::test_a_broken_pool_reaches_the_serial_fallback_without_joining_it
+0.31s call     tests/unit/test_fix_newton_pool_broken_fallback.py::test_the_census_survives_the_helper_first_lock_order
+0.30s call     tests/unit/test_verify_b13_followups.py::test_the_census_survives_the_caller_first_lock_order
+0.29s call     tests/unit/test_fix_newton_pool_broken_fallback.py::test_an_expired_bounded_teardown_releases_its_executor_when_it_finishes
+0.25s call     tests/unit/test_verify_b13_followups.py::test_the_dump_helper_reaches_a_thread_that_is_not_the_caller
+0.22s call     tests/unit/test_verify_b13_followups.py::test_a_helper_that_raises_an_uncaught_class_still_publishes_and_clears[BaseException]
+0.22s call     tests/unit/test_verify_b13_followups.py::test_a_helper_that_raises_an_uncaught_class_still_publishes_and_clears[MemoryError]
+0.05s call     tests/unit/test_fix_newton_pool_broken_fallback.py::test_the_dispatcher_releases_its_claim_on_every_exit_path
+0.04s call     tests/unit/test_fix_newton_pool_broken_fallback.py::test_the_broken_pool_branch_still_backs_off_the_promotion
+0.03s setup    tests/unit/test_verify_b13_followups.py::test_a_pool_wider_than_the_dispatch_holds_no_surplus_processes
+0.02s call     tests/unit/test_fix_newton_pool_broken_fallback.py::test_a_moving_worker_clamp_no_longer_rebuilds_the_pool_every_call
+0.01s call     tests/unit/test_fix_newton_pool_broken_fallback.py::test_the_dump_helper_writes_through_a_real_descriptor
+0.01s setup    tests/unit/test_fix_newton_pool_broken_fallback.py::test_the_traced_chain_completes_under_either_pytest_capture[sys]
+0.01s setup    tests/unit/test_fix_newton_pool_broken_fallback.py::test_the_traced_chain_completes_under_either_pytest_capture[fd]
+
+(70 durations < 0.005s hidden.  Use -vv to show these durations.)
+35 passed, 2 warnings in 170.00s (0:02:49)
