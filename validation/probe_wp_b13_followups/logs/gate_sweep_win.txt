@@ -1,0 +1,20 @@
+........................................................................ [  8%]
+..........ss.........s.s...........s..s................................. [ 16%]
+........................................................................ [ 24%]
+........................................................................ [ 32%]
+........................................................................ [ 40%]
+........................................................................ [ 48%]
+........................................................................ [ 56%]
+........................................................................ [ 64%]
+........................................................................ [ 72%]
+........................................................................ [ 80%]
+........................................................................ [ 88%]
+........................................................................ [ 96%]
+..................................                                       [100%]
+=========================== short test summary info ===========================
+SKIPPED [2] tests\unit\test_v4_14_2_dispatcher_pin_cache_locks.py:426: _REGISTRY_LOCK is on the exemption list -- it guards an operation or non-cache state and is allowed to exist without a paired cache.
+SKIPPED [1] tests\unit\test_v4_14_2_dispatcher_pin_cache_locks.py:426: _ABANDONED_POOLS_LOCK is on the exemption list -- it guards an operation or non-cache state and is allowed to exist without a paired cache.
+SKIPPED [1] tests\unit\test_v4_14_2_dispatcher_pin_cache_locks.py:426: _PERSISTENT_POOL_LOCK is on the exemption list -- it guards an operation or non-cache state and is allowed to exist without a paired cache.
+SKIPPED [1] tests\unit\test_v4_14_2_dispatcher_pin_cache_locks.py:426: _BLAS_CONTROLLER_LOCK is on the exemption list -- it guards an operation or non-cache state and is allowed to exist without a paired cache.
+SKIPPED [1] tests\unit\test_v4_14_2_dispatcher_pin_cache_locks.py:433: _ZARR_MKDIR_PATCH_LOCK matches ``_<X>_PATCH_LOCK`` -- guards a monkey-patch operation, not a cache.  Documented exemption per AUDIT_V4_14_1 spec.
+892 passed, 6 skipped in 246.46s (0:04:06)

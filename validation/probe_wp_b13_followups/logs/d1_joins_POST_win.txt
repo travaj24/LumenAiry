@@ -1,0 +1,348 @@
+
+FU: injected pre-fix behaviour ['joins'] into C:\tmp\lum_pool2\lumenairy\elements\_lens_traced.py; threads=1
+FFF..........FF..                                                        [100%]
+================================== FAILURES ===================================
+______ test_a_broken_pool_reaches_the_serial_fallback_without_joining_it ______
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x000002B4A31AFCE0>
+_forced_pool_bars = None
+serial_reference = array([[0.+0.j, 0.+0.j, 0.+0.j, ..., 0.+0.j, 0.+0.j, 0.+0.j],
+       [0.+0.j, 0.+0.j, 0.+0.j, ..., 0.+0.j, 0.+0.j, 0.+...j, ..., 0.+0.j, 0.+0.j, 0.+0.j],
+       [0.+0.j, 0.+0.j, 0.+0.j, ..., 0.+0.j, 0.+0.j, 0.+0.j]],
+      shape=(256, 256))
+
+    def test_a_broken_pool_reaches_the_serial_fallback_without_joining_it(
+            monkeypatch, _forced_pool_bars, serial_reference):
+        """THE DEFECT, stated as a decision rather than a reading.
+    
+        With a pool that is broken AND whose joining shutdown never returns, the
+        traced call must still produce the serial answer.  Pre-fix the call never
+        returned at all (fail-before on ``96cb2096``, in this module's docstring);
+        the only thing that can make it return is the library declining to join a
+        broken executor.
+    
+        The second assertion is what makes the first durable: the ONLY shutdown
+        the library is allowed to ask of a broken pool is a non-joining one.
+        """
+        pool = _WedgedBrokenPool(broken=True)
+        _install_pool(monkeypatch, pool)
+        try:
+>           got = _with_deadline(lambda: _traced(4), 45.0,
+                                 'the traced call on a broken, wedged pool')
+
+tests\unit\test_fix_newton_pool_broken_fallback.py:250: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+fn = <function test_a_broken_pool_reaches_the_serial_fallback_without_joining_it.<locals>.<lambda> at 0x000002B49DEBEA30>
+seconds = 45.0, what = 'the traced call on a broken, wedged pool'
+
+    def _with_deadline(fn, seconds, what):
+        """Run ``fn()`` on a daemon thread; FAIL (never hang) if it overruns.
+    
+        Returns ``fn``'s value.  A daemon thread is used on purpose: if the call
+        really is wedged, the test fails immediately and the stuck thread cannot
+        hold the interpreter open at exit.
+        """
+        box = {}
+    
+        def _target():
+            try:
+                box['value'] = fn()
+            except BaseException as exc:            # noqa: BLE001 -- reported
+                box['exc'] = exc
+    
+        t = threading.Thread(target=_target, name='deadline-' + what, daemon=True)
+        t0 = time.monotonic()
+        t.start()
+        t.join(seconds)
+        if t.is_alive():
+>           pytest.fail(
+                f'{what} did not return within {seconds:.0f} s -- this is the '
+                f'wedge P1 4.1b is about, not slowness (the same call returns in '
+                f'seconds on a healthy tree).  Thread dump:\n{_thread_dump()}')
+E           Failed: the traced call on a broken, wedged pool did not return within 45 s -- this is the wedge P1 4.1b is about, not slowness (the same call returns in seconds on a healthy tree).  Thread dump:
+E           Thread 0x000101f4 [deadline-the traced call on a broken, wedged pool] (most recent call first):
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\threading.py", line 369 in wait
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\threading.py", line 670 in wait
+E             File "C:\tmp\lum_pool2\tests\unit\test_fix_newton_pool_broken_fallback.py", line 217 in shutdown
+E             File "C:\tmp\lum_pool2\validation\probe_verify_b13\vp7_wedge_plugin.py", line 30 in _abandon_pool
+E             File "C:\tmp\lum_pool2\lumenairy\elements\_lens_traced.py", line 1638 in close_worker_pool
+E             File "C:\tmp\lum_pool2\lumenairy\elements\_lens_traced.py", line 12894 in _invert_newton_parallel
+E             File "C:\tmp\lum_pool2\lumenairy\elements\_lens_traced.py", line 13421 in apply_real_lens_traced
+E             File "C:\tmp\lum_pool2\tests\unit\test_fix_newton_pool_broken_fallback.py", line 101 in _traced
+E             File "C:\tmp\lum_pool2\tests\unit\test_fix_newton_pool_broken_fallback.py", line 250 in <lambda>
+E             File "C:\tmp\lum_pool2\tests\unit\test_fix_newton_pool_broken_fallback.py", line 166 in _target
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\threading.py", line 1024 in run
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\threading.py", line 1082 in _bootstrap_inner
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\threading.py", line 1044 in _bootstrap
+E           
+E           Current thread 0x0000e9bc (most recent call first):
+E             File "C:\tmp\lum_pool2\tests\unit\test_fix_newton_pool_broken_fallback.py", line 150 in _thread_dump
+E             File "C:\tmp\lum_pool2\tests\unit\test_fix_newton_pool_broken_fallback.py", line 178 in _with_deadline
+E             File "C:\tmp\lum_pool2\tests\unit\test_fix_newton_pool_broken_fallback.py", line 250 in test_a_broken_pool_reaches_the_serial_fallback_without_joining_it
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\_pytest\python.py", line 166 in pytest_pyfunc_call
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pluggy\_callers.py", line 121 in _multicall
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pluggy\_manager.py", line 120 in _hookexec
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pluggy\_hooks.py", line 512 in __call__
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\_pytest\python.py", line 1720 in runtest
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\_pytest\runner.py", line 179 in pytest_runtest_call
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pluggy\_callers.py", line 121 in _multicall
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pluggy\_manager.py", line 120 in _hookexec
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pluggy\_hooks.py", line 512 in __call__
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\_pytest\runner.py", line 245 in <lambda>
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\_pytest\runner.py", line 353 in from_call
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\_pytest\runner.py", line 244 in call_and_report
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\_pytest\runner.py", line 137 in runtestprotocol
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\_pytest\runner.py", line 118 in pytest_runtest_protocol
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pluggy\_callers.py", line 121 in _multicall
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pluggy\_manager.py", line 120 in _hookexec
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pluggy\_hooks.py", line 512 in __call__
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\_pytest\main.py", line 396 in pytest_runtestloop
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pluggy\_callers.py", line 121 in _multicall
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pluggy\_manager.py", line 120 in _hookexec
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pluggy\_hooks.py", line 512 in __call__
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\_pytest\main.py", line 372 in _main
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\_pytest\main.py", line 318 in wrap_session
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\_pytest\main.py", line 365 in pytest_cmdline_main
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pluggy\_callers.py", line 121 in _multicall
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pluggy\_manager.py", line 120 in _hookexec
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pluggy\_hooks.py", line 512 in __call__
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\_pytest\config\__init__.py", line 199 in main
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\_pytest\config\__init__.py", line 223 in console_main
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pytest\__main__.py", line 9 in <module>
+E             File "<frozen runpy>", line 88 in _run_code
+E             File "<frozen runpy>", line 203 in _run_module_as_main
+
+tests\unit\test_fix_newton_pool_broken_fallback.py:175: Failed
+______________ test_close_worker_pool_never_joins_a_broken_pool _______________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x000002B49DC5DCD0>
+
+    def test_close_worker_pool_never_joins_a_broken_pool(monkeypatch):
+        """The same rule at the public entry point.
+    
+        ``close_worker_pool`` is documented as the return-to-cold call and is the
+        process's ``atexit`` handler; on a broken pool it must retire the
+        executor rather than join it, and must still leave the module cold.
+        """
+        pool = _WedgedBrokenPool(broken=True)
+        _install_pool(monkeypatch, pool, n_workers=3)
+        try:
+>           _with_deadline(LT.close_worker_pool, 30.0,
+                           'close_worker_pool on a broken pool')
+
+tests\unit\test_fix_newton_pool_broken_fallback.py:277: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+fn = <function close_worker_pool at 0x000002B49D927B60>, seconds = 30.0
+what = 'close_worker_pool on a broken pool'
+
+    def _with_deadline(fn, seconds, what):
+        """Run ``fn()`` on a daemon thread; FAIL (never hang) if it overruns.
+    
+        Returns ``fn``'s value.  A daemon thread is used on purpose: if the call
+        really is wedged, the test fails immediately and the stuck thread cannot
+        hold the interpreter open at exit.
+        """
+        box = {}
+    
+        def _target():
+            try:
+                box['value'] = fn()
+            except BaseException as exc:            # noqa: BLE001 -- reported
+                box['exc'] = exc
+    
+        t = threading.Thread(target=_target, name='deadline-' + what, daemon=True)
+        t0 = time.monotonic()
+        t.start()
+        t.join(seconds)
+        if t.is_alive():
+>           pytest.fail(
+                f'{what} did not return within {seconds:.0f} s -- this is the '
+                f'wedge P1 4.1b is about, not slowness (the same call returns in '
+                f'seconds on a healthy tree).  Thread dump:\n{_thread_dump()}')
+E           Failed: close_worker_pool on a broken pool did not return within 30 s -- this is the wedge P1 4.1b is about, not slowness (the same call returns in seconds on a healthy tree).  Thread dump:
+E           Thread 0x00010d80 [deadline-close_worker_pool on a broken pool] (most recent call first):
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\threading.py", line 369 in wait
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\threading.py", line 670 in wait
+E             File "C:\tmp\lum_pool2\tests\unit\test_fix_newton_pool_broken_fallback.py", line 217 in shutdown
+E             File "C:\tmp\lum_pool2\validation\probe_verify_b13\vp7_wedge_plugin.py", line 30 in _abandon_pool
+E             File "C:\tmp\lum_pool2\lumenairy\elements\_lens_traced.py", line 1638 in close_worker_pool
+E             File "C:\tmp\lum_pool2\tests\unit\test_fix_newton_pool_broken_fallback.py", line 166 in _target
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\threading.py", line 1024 in run
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\threading.py", line 1082 in _bootstrap_inner
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\threading.py", line 1044 in _bootstrap
+E           
+E           Current thread 0x0000e9bc (most recent call first):
+E             File "C:\tmp\lum_pool2\tests\unit\test_fix_newton_pool_broken_fallback.py", line 150 in _thread_dump
+E             File "C:\tmp\lum_pool2\tests\unit\test_fix_newton_pool_broken_fallback.py", line 178 in _with_deadline
+E             File "C:\tmp\lum_pool2\tests\unit\test_fix_newton_pool_broken_fallback.py", line 277 in test_close_worker_pool_never_joins_a_broken_pool
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\_pytest\python.py", line 166 in pytest_pyfunc_call
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pluggy\_callers.py", line 121 in _multicall
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pluggy\_manager.py", line 120 in _hookexec
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pluggy\_hooks.py", line 512 in __call__
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\_pytest\python.py", line 1720 in runtest
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\_pytest\runner.py", line 179 in pytest_runtest_call
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pluggy\_callers.py", line 121 in _multicall
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pluggy\_manager.py", line 120 in _hookexec
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pluggy\_hooks.py", line 512 in __call__
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\_pytest\runner.py", line 245 in <lambda>
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\_pytest\runner.py", line 353 in from_call
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\_pytest\runner.py", line 244 in call_and_report
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\_pytest\runner.py", line 137 in runtestprotocol
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\_pytest\runner.py", line 118 in pytest_runtest_protocol
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pluggy\_callers.py", line 121 in _multicall
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pluggy\_manager.py", line 120 in _hookexec
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pluggy\_hooks.py", line 512 in __call__
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\_pytest\main.py", line 396 in pytest_runtestloop
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pluggy\_callers.py", line 121 in _multicall
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pluggy\_manager.py", line 120 in _hookexec
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pluggy\_hooks.py", line 512 in __call__
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\_pytest\main.py", line 372 in _main
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\_pytest\main.py", line 318 in wrap_session
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\_pytest\main.py", line 365 in pytest_cmdline_main
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pluggy\_callers.py", line 121 in _multicall
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pluggy\_manager.py", line 120 in _hookexec
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pluggy\_hooks.py", line 512 in __call__
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\_pytest\config\__init__.py", line 199 in main
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\_pytest\config\__init__.py", line 223 in console_main
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pytest\__main__.py", line 9 in <module>
+E             File "<frozen runpy>", line 88 in _run_code
+E             File "<frozen runpy>", line 203 in _run_module_as_main
+
+tests\unit\test_fix_newton_pool_broken_fallback.py:175: Failed
+________ test_close_worker_pool_is_bounded_even_on_a_pool_it_may_join _________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x000002B4A3217D10>
+
+    def test_close_worker_pool_is_bounded_even_on_a_pool_it_may_join(monkeypatch):
+        """The other side of the same bar.
+    
+        A pool that has NOT marked itself broken is joined -- that is what
+        ``close_worker_pool`` promises -- but only for ``_POOL_SHUTDOWN_TIMEOUT``
+        seconds, after which it is abandoned to the reaper and the caller
+        returns.  The bound is shortened here so the test is a second long
+        instead of two minutes; the shipped value is derived from a measured
+        ladder in the module comment (worst healthy close 4.592 s at 16 workers,
+        2026-09-14).
+        """
+        monkeypatch.setattr(LT, '_POOL_SHUTDOWN_TIMEOUT', 1.0)
+        before = LT._POOL_SHUTDOWN_TIMEOUTS
+        pool = _WedgedBrokenPool(broken=False)
+        _install_pool(monkeypatch, pool, n_workers=2)
+        try:
+>           _with_deadline(LT.close_worker_pool, 30.0,
+                           'close_worker_pool on a wedged (unbroken) pool')
+
+tests\unit\test_fix_newton_pool_broken_fallback.py:305: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+fn = <function close_worker_pool at 0x000002B49D927B60>, seconds = 30.0
+what = 'close_worker_pool on a wedged (unbroken) pool'
+
+    def _with_deadline(fn, seconds, what):
+        """Run ``fn()`` on a daemon thread; FAIL (never hang) if it overruns.
+    
+        Returns ``fn``'s value.  A daemon thread is used on purpose: if the call
+        really is wedged, the test fails immediately and the stuck thread cannot
+        hold the interpreter open at exit.
+        """
+        box = {}
+    
+        def _target():
+            try:
+                box['value'] = fn()
+            except BaseException as exc:            # noqa: BLE001 -- reported
+                box['exc'] = exc
+    
+        t = threading.Thread(target=_target, name='deadline-' + what, daemon=True)
+        t0 = time.monotonic()
+        t.start()
+        t.join(seconds)
+        if t.is_alive():
+>           pytest.fail(
+                f'{what} did not return within {seconds:.0f} s -- this is the '
+                f'wedge P1 4.1b is about, not slowness (the same call returns in '
+                f'seconds on a healthy tree).  Thread dump:\n{_thread_dump()}')
+E           Failed: close_worker_pool on a wedged (unbroken) pool did not return within 30 s -- this is the wedge P1 4.1b is about, not slowness (the same call returns in seconds on a healthy tree).  Thread dump:
+E           Thread 0x00012098 [deadline-close_worker_pool on a wedged (unbroken) pool] (most recent call first):
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\threading.py", line 369 in wait
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\threading.py", line 670 in wait
+E             File "C:\tmp\lum_pool2\tests\unit\test_fix_newton_pool_broken_fallback.py", line 217 in shutdown
+E             File "C:\tmp\lum_pool2\validation\probe_verify_b13\vp7_wedge_plugin.py", line 38 in _shutdown_pool_bounded
+E             File "C:\tmp\lum_pool2\lumenairy\elements\_lens_traced.py", line 1640 in close_worker_pool
+E             File "C:\tmp\lum_pool2\tests\unit\test_fix_newton_pool_broken_fallback.py", line 166 in _target
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\threading.py", line 1024 in run
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\threading.py", line 1082 in _bootstrap_inner
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\threading.py", line 1044 in _bootstrap
+E           
+E           Current thread 0x0000e9bc (most recent call first):
+E             File "C:\tmp\lum_pool2\tests\unit\test_fix_newton_pool_broken_fallback.py", line 150 in _thread_dump
+E             File "C:\tmp\lum_pool2\tests\unit\test_fix_newton_pool_broken_fallback.py", line 178 in _with_deadline
+E             File "C:\tmp\lum_pool2\tests\unit\test_fix_newton_pool_broken_fallback.py", line 305 in test_close_worker_pool_is_bounded_even_on_a_pool_it_may_join
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\_pytest\python.py", line 166 in pytest_pyfunc_call
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pluggy\_callers.py", line 121 in _multicall
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pluggy\_manager.py", line 120 in _hookexec
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pluggy\_hooks.py", line 512 in __call__
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\_pytest\python.py", line 1720 in runtest
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\_pytest\runner.py", line 179 in pytest_runtest_call
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pluggy\_callers.py", line 121 in _multicall
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pluggy\_manager.py", line 120 in _hookexec
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pluggy\_hooks.py", line 512 in __call__
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\_pytest\runner.py", line 245 in <lambda>
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\_pytest\runner.py", line 353 in from_call
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\_pytest\runner.py", line 244 in call_and_report
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\_pytest\runner.py", line 137 in runtestprotocol
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\_pytest\runner.py", line 118 in pytest_runtest_protocol
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pluggy\_callers.py", line 121 in _multicall
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pluggy\_manager.py", line 120 in _hookexec
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pluggy\_hooks.py", line 512 in __call__
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\_pytest\main.py", line 396 in pytest_runtestloop
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pluggy\_callers.py", line 121 in _multicall
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pluggy\_manager.py", line 120 in _hookexec
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pluggy\_hooks.py", line 512 in __call__
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\_pytest\main.py", line 372 in _main
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\_pytest\main.py", line 318 in wrap_session
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\_pytest\main.py", line 365 in pytest_cmdline_main
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pluggy\_callers.py", line 121 in _multicall
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pluggy\_manager.py", line 120 in _hookexec
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pluggy\_hooks.py", line 512 in __call__
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\_pytest\config\__init__.py", line 199 in main
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\_pytest\config\__init__.py", line 223 in console_main
+E             File "C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pytest\__main__.py", line 9 in <module>
+E             File "<frozen runpy>", line 88 in _run_code
+E             File "<frozen runpy>", line 203 in _run_module_as_main
+
+tests\unit\test_fix_newton_pool_broken_fallback.py:175: Failed
+__________ test_the_dispatcher_releases_its_claim_on_every_exit_path __________
+
+    def test_the_dispatcher_releases_its_claim_on_every_exit_path():
+        """The claim is what keeps a rebuild off a live pool; a path that forgets
+        to release it would wedge the rule shut for the rest of the process."""
+        import inspect
+        src = inspect.getsource(la.apply_real_lens_traced)
+>       i = src.index('def _invert_newton_parallel')
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       ValueError: substring not found
+
+tests\unit\test_fix_newton_pool_broken_fallback.py:796: ValueError
+__________ test_the_broken_pool_branch_still_backs_off_the_promotion __________
+
+    def test_the_broken_pool_branch_still_backs_off_the_promotion():
+        """A pool that just failed must not be rebuilt by the very next call: the
+        dispatcher's back-off is ``close_worker_pool``, which clears the
+        second-call promotion as well as the executor."""
+        import inspect
+        src = inspect.getsource(la.apply_real_lens_traced)
+>       i = src.index('def _invert_newton_parallel')
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       ValueError: substring not found
+
+tests\unit\test_fix_newton_pool_broken_fallback.py:814: ValueError
+=========================== short test summary info ===========================
+FAILED tests/unit/test_fix_newton_pool_broken_fallback.py::test_a_broken_pool_reaches_the_serial_fallback_without_joining_it
+FAILED tests/unit/test_fix_newton_pool_broken_fallback.py::test_close_worker_pool_never_joins_a_broken_pool
+FAILED tests/unit/test_fix_newton_pool_broken_fallback.py::test_close_worker_pool_is_bounded_even_on_a_pool_it_may_join
+FAILED tests/unit/test_fix_newton_pool_broken_fallback.py::test_the_dispatcher_releases_its_claim_on_every_exit_path
+FAILED tests/unit/test_fix_newton_pool_broken_fallback.py::test_the_broken_pool_branch_still_backs_off_the_promotion
+5 failed, 12 passed in 138.51s (0:02:18)

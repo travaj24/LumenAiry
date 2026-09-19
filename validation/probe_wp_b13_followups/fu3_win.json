@@ -1,0 +1,172 @@
+{
+ "lumenairy": "C:\\tmp\\lum_pool2\\lumenairy\\__init__.py",
+ "python": "3.14.6 (tags/v3.14.6:c63aec6, Jun 10 2026, 10:26:10) [MSC v.1944 64 bit (AMD64)]",
+ "numpy": "2.4.4",
+ "platform": "win32",
+ "workers": 8,
+ "rungs": [
+  {
+   "N": 256,
+   "workers": 8,
+   "cold_call_seconds": 3.076,
+   "cold": {
+    "chunks": 8,
+    "per_chunk_seconds": [
+     0.985,
+     0.991,
+     0.996,
+     1.001,
+     1.004,
+     1.007,
+     1.007,
+     1.019
+    ],
+    "slowest_chunk_seconds": 1.019,
+    "median_chunk_seconds": 1.004,
+    "first_result_seconds": 1.005,
+    "total_seconds": 1.069
+   },
+   "warm_call_seconds": 0.123,
+   "warm": {
+    "chunks": 8,
+    "per_chunk_seconds": [
+     0.012,
+     0.012,
+     0.013,
+     0.014,
+     0.015,
+     0.018,
+     0.025,
+     0.029
+    ],
+    "slowest_chunk_seconds": 0.029,
+    "median_chunk_seconds": 0.015,
+    "first_result_seconds": 0.012,
+    "total_seconds": 0.03
+   },
+   "cold_identical": true,
+   "warm_identical": true,
+   "max_delta": 0.0,
+   "pool_engaged": true
+  },
+  {
+   "N": 512,
+   "workers": 8,
+   "cold_call_seconds": 1.568,
+   "cold": {
+    "chunks": 8,
+    "per_chunk_seconds": [
+     1.046,
+     1.061,
+     1.064,
+     1.075,
+     1.078,
+     1.092,
+     1.118,
+     1.139
+    ],
+    "slowest_chunk_seconds": 1.139,
+    "median_chunk_seconds": 1.078,
+    "first_result_seconds": 1.065,
+    "total_seconds": 1.194
+   },
+   "warm_call_seconds": 0.47,
+   "warm": {
+    "chunks": 8,
+    "per_chunk_seconds": [
+     0.065,
+     0.071,
+     0.075,
+     0.085,
+     0.089,
+     0.099,
+     0.133,
+     0.154
+    ],
+    "slowest_chunk_seconds": 0.154,
+    "median_chunk_seconds": 0.089,
+    "first_result_seconds": 0.065,
+    "total_seconds": 0.154
+   },
+   "cold_identical": true,
+   "warm_identical": true,
+   "max_delta": 0.0,
+   "pool_engaged": true
+  },
+  {
+   "N": 1024,
+   "workers": 8,
+   "cold_call_seconds": 3.426,
+   "cold": {
+    "chunks": 8,
+    "per_chunk_seconds": [
+     1.388,
+     1.427,
+     1.444,
+     1.473,
+     1.494,
+     1.584,
+     1.83,
+     1.935
+    ],
+    "slowest_chunk_seconds": 1.935,
+    "median_chunk_seconds": 1.494,
+    "first_result_seconds": 1.411,
+    "total_seconds": 2.006
+   },
+   "warm_call_seconds": 2.937,
+   "warm": {
+    "chunks": 8,
+    "per_chunk_seconds": [
+     0.484,
+     0.582,
+     0.638,
+     0.641,
+     0.753,
+     0.777,
+     1.26,
+     1.502
+    ],
+    "slowest_chunk_seconds": 1.502,
+    "median_chunk_seconds": 0.753,
+    "first_result_seconds": 0.484,
+    "total_seconds": 1.502
+   },
+   "cold_identical": true,
+   "warm_identical": true,
+   "max_delta": 0.0,
+   "pool_engaged": true
+  }
+ ],
+ "bootstrap": {
+  "workers": 8,
+  "construct_seconds": 0.013,
+  "all_ready_seconds": 1.179,
+  "first_ready_seconds": 1.123,
+  "last_ready_seconds": 1.177,
+  "ready_spread_seconds": 0.054,
+  "distinct_pids": 8
+ },
+ "sentinel": {
+  "workers": 8,
+  "cold_seconds": 0.3708,
+  "warm_seconds": [
+   0.0004,
+   0.0005,
+   0.0005,
+   0.0006,
+   0.0007
+  ],
+  "warm_worst_seconds": 0.0007
+ },
+ "derived": {
+  "worst_cold_first_result_seconds": 1.411,
+  "worst_cold_slowest_chunk_seconds": 1.935,
+  "worst_cold_total_seconds": 2.006,
+  "bootstrap_all_ready_seconds": 1.179,
+  "rule_10x_chunk_plus_bootstrap": 20.53,
+  "rule_100x_first_result_plus_bootstrap": 142.28,
+  "sentinel_cold_seconds": 0.3708,
+  "sentinel_warm_worst_seconds": 0.0007
+ }
+}

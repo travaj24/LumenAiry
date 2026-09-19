@@ -1,0 +1,273 @@
+{
+ "python": "3.12.3 (main, Mar 23 2026, 19:04:32) [GCC 13.3.0]",
+ "platform": "linux",
+ "runs": [
+  {
+   "mode": "control",
+   "daemonise": "off",
+   "deadline_seconds": 60.0,
+   "dispatch": {
+    "abandoned_len": 0,
+    "call_seconds": 0.949,
+    "daemonise": "off",
+    "daemonise_record": [],
+    "event": "dispatch_returned",
+    "identical": true,
+    "inflight": 0,
+    "max_delta": 0.0,
+    "mode": "control",
+    "shutdown_timeouts": 0,
+    "t": 2.5107,
+    "workers": 4
+   },
+   "t_dispatch_returned": 2.568,
+   "t_exiting": 2.569,
+   "exited_on_its_own": true,
+   "returncode": 0,
+   "t_process_gone": 3.043,
+   "exit_hang_seconds": 0.474,
+   "lines": [
+    "{\"daemonise\": \"off\", \"event\": \"import\", \"lumenairy\": \"/mnt/c/tmp/lum_pool2/lumenairy/__init__.py\", \"mode\": \"control\", \"pid\": 1891, \"python\": \"3.12.3\", \"t\": 0.3289}",
+    "{\"event\": \"reference_done\", \"t\": 1.5609}",
+    "{\"event\": \"dispatch_enter\", \"t\": 1.5609}",
+    "{\"abandoned_len\": 0, \"call_seconds\": 0.949, \"daemonise\": \"off\", \"daemonise_record\": [], \"event\": \"dispatch_returned\", \"identical\": true, \"inflight\": 0, \"max_delta\": 0.0, \"mode\": \"control\", \"shutdown_timeouts\": 0, \"t\": 2.5107, \"workers\": 4}",
+    "{\"event\": \"exiting\", \"t\": 2.511}"
+   ],
+   "thread_dump": []
+  },
+  {
+   "mode": "sigign",
+   "daemonise": "off",
+   "deadline_seconds": 60.0,
+   "dispatch": {
+    "abandoned_len": 1,
+    "call_seconds": 1.282,
+    "daemonise": "off",
+    "daemonise_record": [],
+    "event": "dispatch_returned",
+    "identical": true,
+    "inflight": 0,
+    "max_delta": 0.0,
+    "mode": "sigign",
+    "shutdown_timeouts": 0,
+    "t": 2.7514,
+    "victim_pid": 1906,
+    "workers": 4,
+    "workers_at_kill": 4
+   },
+   "t_dispatch_returned": 2.824,
+   "t_exiting": 2.825,
+   "exited_on_its_own": false,
+   "returncode": null,
+   "t_process_gone": 60.012,
+   "exit_hang_seconds": 57.187,
+   "lines": [
+    "  File \"/usr/lib/python3.12/threading.py\", line 1073 in _bootstrap_inner",
+    "  File \"/usr/lib/python3.12/threading.py\", line 1030 in _bootstrap",
+    "",
+    "Thread 0x00007fffe25d1080 (most recent call first):",
+    "  File \"/usr/lib/python3.12/threading.py\", line 1167 in _wait_for_tstate_lock",
+    "  File \"/usr/lib/python3.12/threading.py\", line 1147 in join",
+    "  File \"/usr/lib/python3.12/concurrent/futures/process.py\", line 102 in _python_exit",
+    "  File \"/usr/lib/python3.12/threading.py\", line 1592 in _shutdown"
+   ],
+   "thread_dump": [
+    "Timeout (0:00:24)!",
+    "Thread 0x00007fffbf4d06c0 (most recent call first):",
+    "  File \"/usr/lib/python3.12/concurrent/futures/process.py\", line 865 in shutdown",
+    "  File \"/mnt/c/tmp/lum_pool2/lumenairy/elements/_lens_traced.py\", line 1299 in _reap",
+    "  File \"/usr/lib/python3.12/threading.py\", line 1010 in run",
+    "  File \"/usr/lib/python3.12/threading.py\", line 1073 in _bootstrap_inner",
+    "  File \"/usr/lib/python3.12/threading.py\", line 1030 in _bootstrap",
+    "",
+    "Thread 0x00007fffbecc06c0 (most recent call first):",
+    "  File \"/usr/lib/python3.12/multiprocessing/popen_fork.py\", line 27 in poll",
+    "  File \"/usr/lib/python3.12/multiprocessing/popen_fork.py\", line 43 in wait",
+    "  File \"/usr/lib/python3.12/multiprocessing/process.py\", line 149 in join",
+    "  File \"/usr/lib/python3.12/concurrent/futures/process.py\", line 593 in _join_executor_internals",
+    "  File \"/usr/lib/python3.12/concurrent/futures/process.py\", line 528 in _terminate_broken",
+    "  File \"/usr/lib/python3.12/concurrent/futures/process.py\", line 532 in terminate_broken",
+    "  File \"/usr/lib/python3.12/concurrent/futures/process.py\", line 356 in run",
+    "  File \"/usr/lib/python3.12/threading.py\", line 1073 in _bootstrap_inner",
+    "  File \"/usr/lib/python3.12/threading.py\", line 1030 in _bootstrap",
+    "",
+    "Thread 0x00007fffe25d1080 (most recent call first):",
+    "  File \"/usr/lib/python3.12/threading.py\", line 1167 in _wait_for_tstate_lock",
+    "  File \"/usr/lib/python3.12/threading.py\", line 1147 in join",
+    "  File \"/usr/lib/python3.12/concurrent/futures/process.py\", line 102 in _python_exit",
+    "  File \"/usr/lib/python3.12/threading.py\", line 1592 in _shutdown"
+   ]
+  },
+  {
+   "mode": "sigign",
+   "daemonise": "on",
+   "deadline_seconds": 60.0,
+   "dispatch": {
+    "abandoned_len": 1,
+    "call_seconds": 1.282,
+    "daemonise": "on",
+    "daemonise_record": [
+     {
+      "daemonised": false,
+      "errors": [],
+      "shutdown_lock_discarded": false,
+      "threads_wakeups_popped": false
+     },
+     {
+      "daemonised": true,
+      "errors": [],
+      "shutdown_lock_discarded": true,
+      "threads_wakeups_popped": true
+     }
+    ],
+    "event": "dispatch_returned",
+    "identical": true,
+    "inflight": 0,
+    "max_delta": 0.0,
+    "mode": "sigign",
+    "shutdown_timeouts": 0,
+    "t": 2.9801,
+    "victim_pid": 1918,
+    "workers": 4,
+    "workers_at_kill": 4
+   },
+   "t_dispatch_returned": 3.032,
+   "t_exiting": 3.032,
+   "exited_on_its_own": false,
+   "returncode": null,
+   "t_process_gone": 60.012,
+   "exit_hang_seconds": 56.98,
+   "lines": [
+    "  File \"/usr/lib/python3.12/threading.py\", line 1073 in _bootstrap_inner",
+    "  File \"/usr/lib/python3.12/threading.py\", line 1030 in _bootstrap",
+    "",
+    "Thread 0x00007f2d9da61080 (most recent call first):",
+    "  File \"/usr/lib/python3.12/multiprocessing/popen_fork.py\", line 27 in poll",
+    "  File \"/usr/lib/python3.12/multiprocessing/popen_fork.py\", line 43 in wait",
+    "  File \"/usr/lib/python3.12/multiprocessing/process.py\", line 149 in join",
+    "  File \"/usr/lib/python3.12/multiprocessing/util.py\", line 360 in _exit_function"
+   ],
+   "thread_dump": [
+    "Timeout (0:00:24)!",
+    "Thread 0x00007f2d7a9406c0 (most recent call first):",
+    "  File \"/usr/lib/python3.12/concurrent/futures/process.py\", line 865 in shutdown",
+    "  File \"/mnt/c/tmp/lum_pool2/lumenairy/elements/_lens_traced.py\", line 1299 in _reap",
+    "  File \"/usr/lib/python3.12/threading.py\", line 1010 in run",
+    "  File \"/usr/lib/python3.12/threading.py\", line 1073 in _bootstrap_inner",
+    "  File \"/usr/lib/python3.12/threading.py\", line 1030 in _bootstrap",
+    "",
+    "Thread 0x00007f2d7a1306c0 (most recent call first):",
+    "  File \"/usr/lib/python3.12/multiprocessing/popen_fork.py\", line 27 in poll",
+    "  File \"/usr/lib/python3.12/multiprocessing/popen_fork.py\", line 43 in wait",
+    "  File \"/usr/lib/python3.12/multiprocessing/process.py\", line 149 in join",
+    "  File \"/usr/lib/python3.12/concurrent/futures/process.py\", line 593 in _join_executor_internals",
+    "  File \"/usr/lib/python3.12/concurrent/futures/process.py\", line 528 in _terminate_broken",
+    "  File \"/usr/lib/python3.12/concurrent/futures/process.py\", line 532 in terminate_broken",
+    "  File \"/usr/lib/python3.12/concurrent/futures/process.py\", line 356 in run",
+    "  File \"/usr/lib/python3.12/threading.py\", line 1073 in _bootstrap_inner",
+    "  File \"/usr/lib/python3.12/threading.py\", line 1030 in _bootstrap",
+    "",
+    "Thread 0x00007f2d9da61080 (most recent call first):",
+    "  File \"/usr/lib/python3.12/multiprocessing/popen_fork.py\", line 27 in poll",
+    "  File \"/usr/lib/python3.12/multiprocessing/popen_fork.py\", line 43 in wait",
+    "  File \"/usr/lib/python3.12/multiprocessing/process.py\", line 149 in join",
+    "  File \"/usr/lib/python3.12/multiprocessing/util.py\", line 360 in _exit_function"
+   ]
+  },
+  {
+   "mode": "sigign",
+   "daemonise": "kill",
+   "deadline_seconds": 60.0,
+   "dispatch": {
+    "abandoned_len": 1,
+    "call_seconds": 1.302,
+    "daemonise": "kill",
+    "daemonise_record": [],
+    "event": "dispatch_returned",
+    "identical": true,
+    "inflight": 0,
+    "killed_children": [
+     1979,
+     1980,
+     1978
+    ],
+    "max_delta": 0.0,
+    "mode": "sigign",
+    "shutdown_timeouts": 0,
+    "t": 2.9979,
+    "victim_pid": 1975,
+    "workers": 4,
+    "workers_at_kill": 4
+   },
+   "t_dispatch_returned": 3.063,
+   "t_exiting": 3.063,
+   "exited_on_its_own": true,
+   "returncode": 0,
+   "t_process_gone": 3.443,
+   "exit_hang_seconds": 0.38,
+   "lines": [
+    "{\"daemonise\": \"kill\", \"event\": \"import\", \"lumenairy\": \"/mnt/c/tmp/lum_pool2/lumenairy/__init__.py\", \"mode\": \"sigign\", \"pid\": 1971, \"python\": \"3.12.3\", \"t\": 0.3024}",
+    "{\"event\": \"reference_done\", \"t\": 1.6941}",
+    "{\"event\": \"dispatch_enter\", \"t\": 1.6948}",
+    "{\"event\": \"worker_killed\", \"of\": 4, \"pid\": 1975, \"t\": 2.8461}",
+    "{\"abandoned_len\": 1, \"call_seconds\": 1.302, \"daemonise\": \"kill\", \"daemonise_record\": [], \"event\": \"dispatch_returned\", \"identical\": true, \"inflight\": 0, \"killed_children\": [1979, 1980, 1978], \"max_delta\": 0.0, \"mode\": \"sigign\", \"shutdown_timeouts\": 0, \"t\": 2.9979, \"victim_pid\": 1975, \"workers\": 4, \"workers_at_kill\": 4}",
+    "{\"event\": \"exiting\", \"t\": 2.9984}"
+   ],
+   "thread_dump": []
+  },
+  {
+   "mode": "sigign",
+   "daemonise": "both",
+   "deadline_seconds": 60.0,
+   "dispatch": {
+    "abandoned_len": 1,
+    "call_seconds": 1.269,
+    "daemonise": "both",
+    "daemonise_record": [
+     {
+      "daemonised": false,
+      "errors": [],
+      "shutdown_lock_discarded": false,
+      "threads_wakeups_popped": false
+     },
+     {
+      "daemonised": true,
+      "errors": [],
+      "shutdown_lock_discarded": true,
+      "threads_wakeups_popped": true
+     }
+    ],
+    "event": "dispatch_returned",
+    "identical": true,
+    "inflight": 0,
+    "killed_children": [
+     1991,
+     1990,
+     1992
+    ],
+    "max_delta": 0.0,
+    "mode": "sigign",
+    "shutdown_timeouts": 0,
+    "t": 2.9361,
+    "victim_pid": 1987,
+    "workers": 4,
+    "workers_at_kill": 4
+   },
+   "t_dispatch_returned": 2.994,
+   "t_exiting": 2.995,
+   "exited_on_its_own": true,
+   "returncode": 0,
+   "t_process_gone": 3.439,
+   "exit_hang_seconds": 0.444,
+   "lines": [
+    "{\"daemonise\": \"both\", \"event\": \"import\", \"lumenairy\": \"/mnt/c/tmp/lum_pool2/lumenairy/__init__.py\", \"mode\": \"sigign\", \"pid\": 1983, \"python\": \"3.12.3\", \"t\": 0.3298}",
+    "{\"event\": \"reference_done\", \"t\": 1.6659}",
+    "{\"event\": \"dispatch_enter\", \"t\": 1.6665}",
+    "{\"event\": \"worker_killed\", \"of\": 4, \"pid\": 1987, \"t\": 2.8218}",
+    "{\"abandoned_len\": 1, \"call_seconds\": 1.269, \"daemonise\": \"both\", \"daemonise_record\": [{\"daemonised\": false, \"errors\": [], \"shutdown_lock_discarded\": false, \"threads_wakeups_popped\": false}, {\"daemonised\": true, \"errors\": [], \"shutdown_lock_discarded\": true, \"threads_wakeups_popped\": true}], \"event\": \"dispatch_returned\", \"identical\": true, \"inflight\": 0, \"killed_children\": [1991, 1990, 1992], \"max_delta\": 0.0, \"mode\": \"sigign\", \"shutdown_timeouts\": 0, \"t\": 2.9361, \"victim_pid\": 1987, \"workers\": 4, \"workers_at_kill\": 4}",
+    "{\"event\": \"exiting\", \"t\": 2.9365}"
+   ],
+   "thread_dump": []
+  }
+ ]
+}

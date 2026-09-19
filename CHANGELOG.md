@@ -269,6 +269,117 @@ bar reads `_PERSISTENT_POOL_NWORKERS >= n_cpu` instead of `== n_cpu` for the sam
 pool wide enough to serve the call has no spawn left to amortise, which is the only thing that
 bar is about.
 
+### Fixed -- lens-traced: the five follow-ups the WP-B13 verification left, and the two it left open
+
+Closes defects D1, D2, D3, D4 and D7 of
+`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/VERIFY_WP-B13.md`.  The report is
+`WP-B13_FOLLOWUPS_REPORT.md` in the same directory; every probe and its per-build JSON is under
+`validation/probe_wp_b13_followups/`.  Two builds throughout, Windows python 3.14.6 and WSL
+python 3.12.3.  No field moved: every pooled field produced in this package equals its
+`n_workers=1` reference under `np.array_equal`, `max|delta| = 0.0`.
+
+- **An expired bounded teardown no longer pins its executor for the life of the process.**
+  `_shutdown_pool_bounded`'s expiry path appended the executor to `_ABANDONED_POOLS` and nothing
+  ever took it back out, unlike `_abandon_pool`, whose daemon reaper removes in a `finally`.  The
+  list grew by one per expiry and held each dead executor, its `_processes` and its queues,
+  forever.  `_ABANDONED_POOLS` is now a CENSUS OF PENDING TEARDOWNS rather than a ledger: both
+  mechanisms take their entry back out when their `shutdown` returns, so a quiescent process reads
+  an empty list however many pools it has retired, and the monotone count of teardowns that
+  overran stays in `_POOL_SHUTDOWN_TIMEOUTS`, which is what a diagnostic should read.  The removal
+  is ORDERED against the expiry rather than written as a bare `finally`: the helper can reach the
+  census in the same instant the caller's bounded wait expires, and a `remove` that ran before the
+  caller's `append` would leave exactly the entry it was meant to drop -- so the helper publishes
+  `done` before it takes `_ABANDONED_POOLS_LOCK`, and the caller re-reads `done` under that lock
+  before appending (finding it set, it reports the teardown as completed rather than as an expiry,
+  which it is).  Four pins, all engineered rather than sampled, including one that produces the
+  adverse arrival order BY CONSTRUCTION with a census lock that admits the teardown helper first,
+  because `threading.Lock` makes no fairness promise.  Measured with each earlier behaviour
+  re-injected in memory: the shipped version fails three of the four, and the one-line repair the
+  verification asked for fails the helper-first order.
+
+- **The idle-worker footprint is re-derived in the state the ceiling rule actually leaves behind.**
+  `_get_persistent_worker_pool`'s docstring justified never shrinking the pool with "33.0 MB mean /
+  48.8 MB peak per idle worker ... 2 % of one working worker".  That figure was measured on workers
+  warmed with `ex.map(abs, ...)`, which is neither state this rule produces.  Re-measured with both
+  reachable states present in ONE pool (a 12-wide pool serving a 4-worker dispatch; resident sets
+  read parent-side with psutil, each worker labelled by its own `_WORKER_PAYLOADS`, every worker
+  forced to take exactly one labelling task by a Manager Barrier so the labelling is complete by
+  construction): a worker that has SERVED a Newton chunk reads 98.7 / 98.8 / 100.8 MB mean at
+  N = 256 / 512 / 1024 on Windows (worst 101.6 MB) and 73.2 / 74.1 / 76.9 MB on WSL; a worker in the
+  same pool that served none reads 52.2 MB / 39.2 MB.  So the worst kept worker is ~102 MB, a
+  16-wide kept pool holds ~1.6 GB rather than ~0.5 GB, and the fraction of the ~1.7 GB ACTIVE worker
+  the clamp models is 6 %, not 2 %.  The trade the rule rests on is unchanged -- the alternative was
+  measured at 26 spawned interpreters for four dispatches -- but the number was wrong by 2-3x and
+  the state it was taken in was not named.  The docstring now names both states and carries the
+  ladder; the earlier entry above and the WP-B13 report's section 5.2 carry the correction with the
+  old figure quoted.
+
+- **`_POOL_INFLIGHT`'s comment said "chunks"; the counter counts DISPATCHES.**  Fixed the comment
+  and not the counter, by reading the consumers: `_get_persistent_worker_pool`'s
+  `elif _POOL_INFLIGHT > 0` is the only library reader and is a zero-vs-non-zero test, and every
+  test and probe that touches it asserts only that it returns to 0.  A per-chunk counter would buy
+  nothing and would add two lock acquisitions per chunk.  A new pin fixes the three facts that
+  decision rests on -- one claim per dispatch, taken before the first `submit`, and every
+  comparison against the counter made against zero.
+
+- **The AST pin that forbids unbounded executor joins now sees `with ProcessPoolExecutor(...)`.**
+  It walked for `ast.Call` nodes whose `func.attr == 'shutdown'`; a teardown written as a `with`
+  block contains no such call -- `Executor.__exit__` IS `shutdown(wait=True)` -- so it stayed green
+  on exactly the shape `lumenairy.propagators.carrier._multi_parallel_results` uses.  The sweep is
+  now a named helper that sees both shapes, reads `wait` from the positional slot as well as the
+  keywords, scopes itself to PROCESS pools (a `ThreadPoolExecutor` has no `_terminate_broken`, and
+  thread-pool blocks are reported as informational rather than silently exempted), and is backed by
+  a synthetic positive control so it cannot go blind without going red.
+
+- **The wedge tests now report their own message and a real thread dump.**
+  `tests/unit/test_fix_newton_pool_broken_fallback.py::_thread_dump` passed an `io.StringIO` to
+  `faulthandler.dump_traceback`, which writes through `fileno()`, so every wedge detection in the
+  file raised `io.UnsupportedOperation: fileno` and lost the thread dump -- the one artifact a
+  maintainer gets, since the wedged library call is still parked on a daemon thread and is absent
+  from the traceback.  It writes to a real temporary file now, pinned behaviourally by an engineered
+  wedge whose report must name the frame that is stuck.
+
+**STILL OPEN, and deliberately so -- two maintainer decisions, now measured.**  Neither default is
+moved here and `carrier.py` is not edited; the numbers are in the follow-ups report.
+
+- **`as_completed` in `_invert_newton_parallel` still has no timeout**, so a pool whose workers
+  never come up hangs the call forever (reproducible on demand,
+  `validation/probe_verify_b13/vp2_broken_drivers.py --mode slowboot`).  A single `timeout=` on
+  `as_completed` is an absolute deadline on the WHOLE iteration, so it bounds the total dispatch --
+  a quantity that scales with the field while the pathology does not, and no fixed value is
+  derivable (10x the worst cold chunk plus the bootstrap gives 20.5 s on Windows / 24.8 s on WSL
+  from an N <= 1024 ladder, which would abort a legitimate N = 32768 dispatch).  The report
+  recommends bounding the BOOTSTRAP instead -- one trivial sentinel submitted ahead of the chunks,
+  with its own timeout -- and derives 600 s from the loudest healthy reading on record (the WP's own
+  45-56 s cold call on a loaded box) times ten.  Its cost on the healthy path is one round-trip,
+  measured at 0.0007 s (Windows) / 0.0004 s (WSL) on a warm pool, and `TimeoutError` is an `OSError`
+  subclass so it already lands in the dispatcher's infrastructure clause and takes the bit-identical
+  serial rung.  `carrier._multi_parallel_results` carries the identical exposure through its `with
+  ProcessPoolExecutor(...)` block and belongs in the same package; the extended AST pin asserts that
+  it is detected today rather than being made green by editing it.
+
+- **A wedged manager thread still hangs interpreter EXIT, and the candidate repair is not the one
+  that was expected.**  Measured on the natural WSL wedge (one worker SIGKILLed while the survivors
+  ignore SIGTERM): the traced call returns its correct, byte-identical answer in 1.282 s and prints
+  its exit line at t = 2.825 s, and the process then never terminates -- SIGKILLed at the 60 s
+  deadline, a **57.2 s hang against a 0.47 s exit** on the same script with nothing broken.  The
+  repair the verification pointed at -- `atexit` plus `_abandon_pool` daemonising the reaper -- was
+  prototyped behind a switch defaulting OFF and **does not close it**: with all three of its steps
+  confirmed applied (drop the executor from `concurrent.futures.process._threads_wakeups`, set the
+  manager thread's `_daemonic`, discard its `_tstate_lock` from `threading._shutdown_locks`, which
+  step two does not do because the lock was added at start time while the thread was still
+  non-daemon), the hang is 56.98 s.  Thread dumps taken after the exit line say why: the prototype
+  does remove the `concurrent.futures.process._python_exit` join it targets, and the interpreter
+  then blocks on the NEXT unbounded join one layer down, `multiprocessing.util._exit_function`'s
+  `for p in active_children(): p.join()` -- the surviving workers themselves.  The arm that DOES
+  close it removes the workers: SIGKILLing them after the answer is in exits in **0.380 s**, with no
+  prototype at all, because that also releases the manager thread's own `p.join()`.  So the repair,
+  if it is taken, is an escalation in `_abandon_pool`'s reaper -- grace period, then kill the
+  executor's remaining processes -- and it is a policy change (this library has never killed a
+  worker), which is why it is a maintainer decision and not a defect fix.  Until it is taken, the
+  release note should say out loud what ships: on a wedged pool the computation is saved but the
+  process is not.
+
 ## [5.47.0] — 2026-09-14
 
 This release is the fourth wave of the 2026-09-11 adversarial audit's remediation
