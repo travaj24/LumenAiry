@@ -255,10 +255,16 @@ the one way a rebuild could genuinely present as a broken pool.  A microsecond w
 open on purpose between being handed an executor and claiming it: closing it would mean
 overriding whatever `_get_persistent_worker_pool` returned, and that function is a substitution
 point the library's own tests rely on, while the window's whole consequence is a bit-identical
-serial fallback.  The cost of keeping a wider pool is the resident set of the idle workers,
-measured at 33.0 MB mean / 48.8 MB peak each against the ~1.7 GB per ACTIVE worker the clamp
-itself models, i.e. 2 % of one working worker; `close_worker_pool()` remains the documented way
-to free them, and is now the only thing that ever makes the pool narrower.  The warm-pool size
+serial fallback.  The cost of keeping a wider pool is the resident set of the idle workers, and it
+depends on the state they were left in: a worker that has SERVED a Newton chunk measures
+98.7-100.8 MB mean (worst 101.6 MB) on Windows 3.14.6 and 73.2-76.9 MB on WSL 3.12.3, while a
+worker in the same pool that served none measures 52.2 MB / 39.2 MB (2026-09-15, N = 256 / 512 /
+1024, `validation/probe_wp_b13_followups/fu1_worker_footprint.py`).  Against the ~1.7 GB per
+ACTIVE worker the clamp itself models that is 6 % of one working worker, so a 16-wide kept pool
+holds about 1.6 GB.  (This entry first quoted 33.0 MB mean / 48.8 MB peak and "2 %"; that figure
+was measured on workers warmed with `ex.map(abs, ...)`, which is neither state the rule
+produces -- see the WP-B13 follow-ups entry below.)  `close_worker_pool()` remains the documented
+way to free them, and is now the only thing that ever makes the pool narrower.  The warm-pool size
 bar reads `_PERSISTENT_POOL_NWORKERS >= n_cpu` instead of `== n_cpu` for the same reason -- a
 pool wide enough to serve the call has no spawn left to amortise, which is the only thing that
 bar is about.

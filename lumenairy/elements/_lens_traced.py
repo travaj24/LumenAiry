@@ -1420,14 +1420,43 @@ def _get_persistent_worker_pool(n_workers):
     same sequence builds at most one pool per INCREASE.
 
     THE COST of keeping a pool wider than the current call asks for is the
-    resident set of the workers that stay idle: MEASURED 2026-09-14 on this
-    box at 33.0 MB mean / 48.8 MB peak per idle worker (15 warm pools,
-    ``probe_p6_teardown_ladder.py``), against the ~1.7 GB per ACTIVE worker
-    the clamp itself models for a 262 144-point / 279^2-fit dispatch -- i.e.
-    2 % of one working worker.  The pool is therefore never shrunk implicitly;
-    ``close_worker_pool()`` is the documented way to return the process to a
-    cold state and free the workers.  ``close_worker_pool`` is also registered
-    with ``atexit`` EXACTLY ONCE per process.
+    resident set of the workers that stay idle, and THAT COST DEPENDS ON THE
+    STATE THE WORKER IS LEFT IN.  Two states, both of them reachable and both
+    of them left behind by the rule above:
+
+      * a worker that has SERVED a Newton chunk -- it holds an entry in
+        ``_WORKER_PAYLOADS`` and whatever scipy/numpy brought in with it;
+      * a worker that has only run ``_newton_pool_init`` and never been given
+        a chunk, which is what the SURPLUS of a pool wider than the clamp is.
+
+    MEASURED 2026-09-15 (``validation/probe_wp_b13_followups/``
+    ``fu1_worker_footprint.py``; a 12-wide pool, a 4-worker dispatch, so both
+    states are present in the SAME pool, resident sets read parent-side with
+    ``psutil`` and each worker labelled by its own ``_WORKER_PAYLOADS``):
+
+        build                 N      served (mean/max)   never-served
+        Windows 3.14.6       256     98.7 / 99.0 MB      52.2 / 52.4 MB
+        (Ryzen 9 5950X)      512     98.8 / 100.1 MB     52.2 / 52.3 MB
+                            1024    100.8 / 101.6 MB     52.3 / 52.5 MB
+        WSL 3.12.3           256     73.2 / 73.2 MB      39.3 / 39.3 MB
+                             512     74.1 / 75.0 MB      39.2 / 39.3 MB
+                            1024     76.9 / 76.9 MB      39.2 / 39.3 MB
+
+    So the worst kept worker is ~102 MB, not the 33.0 MB this docstring
+    carried until 2026-09-15 -- that figure was taken on workers warmed with
+    ``ex.map(abs, ...)``, which is neither of the two states above
+    (VERIFY-WP-B13 defect D3).  A 16-wide pool of workers that have all served
+    a chunk therefore holds about 1.6 GB, not 0.5 GB.
+
+    The TRADE is unchanged, and it is the trade and not the number that the
+    rule rests on: ~102 MB is 6 % of the ~1.7 GB per ACTIVE worker the clamp
+    itself models for a 262 144-point / 279^2-fit dispatch, and the
+    alternative -- respawning on every clamp wobble -- was measured at 26
+    spawned interpreters for four dispatches.  The pool is therefore never
+    shrunk implicitly; ``close_worker_pool()`` is the documented way to
+    return the process to a cold state and free the workers.
+    ``close_worker_pool`` is also registered with ``atexit`` EXACTLY ONCE per
+    process.
     """
     global _PERSISTENT_POOL, _PERSISTENT_POOL_NWORKERS
     global _PERSISTENT_POOL_ATEXIT_REGISTERED, _POOL_RESIDENT_PAYLOAD_KEY

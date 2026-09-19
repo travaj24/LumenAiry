@@ -312,15 +312,29 @@ that is set by the CHUNK COUNT, which the dispatcher derives from its own `n_cpu
 (`np.array_split(np.arange(n_total), n_cpu)`, unchanged).  Concurrent chunk memory is
 `min(pool_workers, n_chunks) x bytes_per_chunk`, which for `pool_workers >= n_chunks` is
 exactly what the clamp allowed for `n_chunks` workers and for `pool_workers < n_chunks`
-is less.  The surplus workers stay idle; their cost is their resident set, measured at
-**33.0 MB mean / 48.8 MB peak** each (15 warm pools, `probe_p6_teardown_ladder.py`)
-against the **~1.7 GB per ACTIVE worker** the clamp itself models for a
-262 144-point / 279^2-fit dispatch -- 2 % of one working worker.
+is less.  The surplus workers stay idle; their cost is their resident set.
+
+> **CORRECTED 2026-09-15 (VERIFY-WP-B13 defect D3).**  This paragraph read
+> "**33.0 MB mean / 48.8 MB peak** each (15 warm pools, `probe_p6_teardown_ladder.py`)
+> ... 2 % of one working worker".  That figure was measured on workers warmed with
+> `ex.map(abs, ...)`, which is not a state this rule produces.  Re-measured on both
+> builds with the two reachable states separated inside ONE pool
+> (`validation/probe_wp_b13_followups/fu1_worker_footprint.py`, a 12-wide pool serving a
+> 4-worker dispatch, each worker labelled by its own `_WORKER_PAYLOADS`): a worker that
+> has **served a Newton chunk** reads **98.7 / 98.8 / 100.8 MB mean** at N = 256 / 512 /
+> 1024 on Windows 3.14.6 (worst 101.6 MB) and **73.2 / 74.1 / 76.9 MB** on WSL 3.12.3
+> (worst 76.9 MB); a worker in the same pool that **served none** reads **52.2 MB**
+> (Windows) / **39.2 MB** (WSL).  Against the **~1.7 GB per ACTIVE worker** the clamp
+> models for a 262 144-point / 279^2-fit dispatch that is **6 %**, not 2 %, and a
+> 16-wide kept pool holds about **1.6 GB**, not 0.5 GB.  The trade the rule rests on is
+> unchanged; the number is not the number.
 
 Effect on the measured sequence: 6, 8, 4, 8 built four pools before and builds **two**
 now (6, then 8; the 4 is served by the live 8).
 
-Concurrency: `_POOL_INFLIGHT` counts chunks dispatched on the cached pool, moved by
+Concurrency: `_POOL_INFLIGHT` counts DISPATCHES in flight on the cached pool (corrected
+2026-09-15, VERIFY-WP-B13 defect D4: this said "chunks", and the counter is moved once
+per dispatch, not once per chunk), moved by
 `_note_pool_inflight` under the pool lock, taken by the dispatcher immediately after it
 is handed an executor and released in a `finally` on every exit path (and early, by
 hand, before either fallback's long serial re-run).  While it is non-zero a wider
