@@ -16,7 +16,9 @@ Builds: Windows py3.14.6 / numpy 2.4.4 and WSL py3.12.3 / numpy 2.4.6, every
 probe on both, every probe in a child process with `LUMENAIRY_ROOT` on
 `sys.path` and `lumenairy.__file__` asserted inside it, all with
 `OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1` on the command
-line.
+line.  Nothing here claims cross-build identity: every byte-identity
+comparison is archive-to-archive on the SAME build, and every restated bar is
+derived on the running build.
 
 ---
 
@@ -24,34 +26,34 @@ line.
 
 1. **Both B9 reports' explanation of the two knife-edge pins is measurably
    wrong, in both cases.**  Neither pin's quantity is bimodal and neither has
-   a saddle-basin flip in it.  The ModalAsymptotic arms are at the
+   a saddle-basin flip in it.  The ModalAsymptotic arms sit at the
    *cancellation floor* of a field whose conditioning this build can measure
-   (`kappa = 6.24e+06`, so `eps * kappa = 1.39e-09`, and the two routines sit
-   at 7.3x to 9.0x it).  The `w6_a2` root is *genuinely off centre*: a
-   60-digit `decimal` Newton on the same polynomial system reproduces the
-   library's answer to 4.5e-22, and the offset is `H^-1 r(v_c)` where
-   `r(v_c)` is the least-squares fit's own asymmetry, resolved eight decades
-   above its rounding floor.  `1e-15` was a bound on how asymmetric a fit
-   happened to come out.  Both pins are now decisions with bars the running
-   build derives, and are green under all four default combinations on both
-   builds.
-2. **`sphere_normal='analytic'` is the better route over the working aperture
+   (`kappa = 6.24e+06`, so `eps * kappa = 1.39e-09`, and the two routines read
+   7.3x to 9.0x it).  The `w6_a2` root is *genuinely off centre*: a 60-digit
+   `decimal` Newton on the same polynomial system reproduces the library's
+   answer to 4.5e-22, and the offset is `H^-1 r(v_c)` where `r(v_c)` is the
+   least-squares fit's own asymmetry, resolved eight decades above its
+   rounding floor.  `1e-15` was a bound on how asymmetric a fit happened to
+   come out.  Both pins are now decisions with bars the running build derives,
+   green under all four default combinations on both builds.
+2. **`sphere_normal='analytic'` is the better route over the working aperture,
    and is now the default.**  1.75 ULP against a 60-digit oracle out to
    `h = 0.95 |R|` (generic: 2.00 Windows, 2.25 WSL), never worse there by more
    than 1 ULP at any of 672 points, unit to 1.5 ULP by construction.  Above
-   `0.95 |R|` neither route dominates -- that is stated in the code, in the
-   CHANGELOG and in an arm of the test file, because it is the honest half of
-   the claim.
-3. **Timing: 1.08x to 1.44x, and the measurement's own resolution is +-7 %.**
-   The controls (prescriptions with no pure sphere, where the switch cannot
-   change anything) read 0.93x to 1.03x.  The box carried other agents' load
-   throughout: 67 % to 100 % CPU, 10 to 21 concurrent python processes.  The
-   contention-immune number is the profile share of the normal block:
-   16.1 % -> 9.8 % (Windows), 19.6 % -> 10.4 % (WSL).
+   `0.95 |R|` neither route dominates -- stated in the code, in the CHANGELOG
+   and in an arm of the test file, because it is the honest half of the claim.
+3. **Timing: 1.08x to 1.44x, and the measurement's own resolution is about
+   +-7 %.**  The controls (prescriptions with no pure sphere, where the switch
+   cannot change anything) read 0.93x to 1.03x.  The box carried other agents'
+   load throughout: 67 % to 100 % CPU, 10 to 21 concurrent python processes.
+   The contention-immune number is the profile share of the normal block:
+   16.081 % -> 9.844 % (Windows), 19.632 % -> 10.443 % (WSL).
 4. **`renormalize='exit'` is NOT measurable as a speed-up on either build.**
-   Range 0.93x to 1.13x, median 1.00x (Windows) and 0.99x (WSL) -- inside the
-   same +-7 % resolution the controls set.  WP-B9's 1.03x-1.10x does not
-   reproduce here.  See section 4 for what was done about it.
+   0.95x to 1.13x, medians 1.00x (Windows) and 0.99x (WSL) -- inside the same
+   resolution the controls set.  WP-B9's 1.03x-1.10x does not reproduce; it
+   is not refuted either, it is simply smaller than this method can see.  The
+   default moved on the ledger's structural argument and this report, the
+   CHANGELOG and the Migration note all say so.
 5. **Vignetting: one rim band moves, nothing else.**  A directed `nextafter`
    walk constructs the straddle point VERIFY-B9 3.3 predicted and it reaches
    `_refract`'s `alive` flag and `trace`'s error code.  360 000 traced rays
@@ -60,10 +62,15 @@ line.
    fixture's vignetting count changes, so there is no moved vignetting fixture
    to re-pin -- and the Migration note names the band anyway.
 6. **The JAX tracer has no such switches and never did.**  It has always used
-   a closed-form sphere normal and has no per-surface rescale to hoist, so
-   this flip moves the CPU tracer TOWARD it.  CPU/JAX parity is 3.5e-18 m in
-   position and 3.1e-17 m in OPL under ALL FOUR CPU settings, identical to the
-   last digit, with the alive masks equal, on both builds.
+   a closed-form sphere normal and has no per-surface rescale to hoist, so the
+   flip moves the CPU tracer TOWARD it.  CPU/JAX parity is 3.469e-18 m in
+   position and 3.123e-17 m in OPL under ALL FOUR CPU settings, identical to
+   the last digit, with alive masks equal, on both builds.
+7. **One documented bound was a reading and is exceeded.**  The pre-5.49.0
+   `trace` docstring promised `| |d| - 1 | <= 1e-15` on the intermediate
+   history bundles under `'exit'`.  Measured 1.8e-15 at 13 surfaces -- about
+   `0.6 * n_surfaces * eps` -- so it is exceeded by the eighth surface.  The
+   docstring now carries the derived form and the new test asserts it.
 
 ---
 
@@ -90,31 +97,30 @@ coin".  The measurements are in `validation/probe_c2_analytic_normal/`.
 | `eps * kappa` | 1.3866e-09 | 1.3866e-09 |
 | reading / floor | 7.4x | 8.0x |
 
-So the quantity is continuous and dense, not bimodal; the two implementations
+The quantity is continuous and dense, not bimodal: the two implementations
 differ by a handful of roundings on a field that amplifies its own inputs by
 six decades.  `max|new - cold_ref|` and `max|new - warm_ref|` agree to five
-figures, i.e. the two references are themselves at the same floor (2.93e-09
-apart), so the warm/cold distinction the pin's history is about does not
-produce the reading either.
+figures (the two references are 2.93e-09 apart), so the warm/cold distinction
+the pin's history is about does not produce the reading either.
 
 **`w6_a2` (`w6a2_oracle.py`, `w6a2_asymmetry.py`, `w6a2_resolution.py`).**
 
 | measurement | Windows | WSL |
 |---|---|---|
-| `|v2*|` at the fit centre, four default combinations | 4.97e-16 .. 8.64e-16 | 4.09e-16 .. 6.40e-16 |
+| `abs(v2*)` at the fit centre, four default combinations | 4.97e-16 .. 8.64e-16 | 4.09e-16 .. 6.40e-16 |
 | 60-digit `decimal` Newton on the same polynomial system | agrees to **3.1e-22** | agrees to **4.5e-22** |
 | oracle self-consistency, two independent starts | 1.0e-65 | 4.1e-66 |
-| `|r(v_c)|` in float64 | 4.84e-08 .. 8.42e-08 | 4.40e-08 .. 8.71e-08 |
+| `abs(r(v_c))` in float64 | 4.84e-08 .. 8.42e-08 | 4.40e-08 .. 8.71e-08 |
 | the same at 60 digits, relative agreement | 3.3e-07 | 8.8e-07 |
 | `sigma_min(H)` | 9.7413e+07 | 9.7413e+07 |
-| `|offset|` vs the single Newton step `H^-1 r(v_c)` | **9.9e-32** | 0 .. 9.9e-32 |
+| offset vs the single Newton step `H^-1 r(v_c)` | **9.9e-32** | 0 .. 9.9e-32 |
 | scalar solver's spread over 45 independent Newton starts | 2.1e-21 | 1.8e-21 |
 
 The solver finds the same point from every start in the basin to 2e-21, and
-that point is 5e-16 from the origin -- five decades apart, so the offset is not
-solver noise.  It is the root of the computed system, and the computed system's
-root is not at the centre because the *fitted coefficients* are not symmetric.
-`1e-15` bounded that asymmetry.
+that point is ~5e-16 from the origin -- five decades apart, so the offset is
+not solver noise.  It is the root of the computed system, and that root is not
+at the centre because the FITTED coefficients are not symmetric.  `1e-15`
+bounded that asymmetry.
 
 ### 1.2 The restatements
 
@@ -125,14 +131,14 @@ is linear (so it is conditioning and not a threshold), asserts `kappa > 1e3`
 `bar = 100 * eps * kappa`.  `_assert_at_conditioning_floor` asserts the reading
 is under the bar AND that an injected drift -- sized from the measured `kappa`
 to land two decades above it -- is still refused.  That is the fail-before
-demonstration on the running build.
+demonstration, on the running build, in the test.
 
 `tests/unit/test_niche_audit_w6_asymptotic.py` -- two decisions: the returned
 expansion point equals the model's own one-Newton-step root from the pupil
 centre (bar `4 eps x half-range = 4.49e-18`, the float64 resolution of `v2` on
 its own scale; reading 0 to 9.9e-32), and that root is the pupil centre at the
 fit's own resolution (reading 2.2e-14 to 4.4e-14 of the normalised box against
-a 1e-10 decision bar, with the derived `|r|/sigma_min(H)` bound asserted
+a 1e-10 decision bar, with the derived `abs(r)/sigma_min(H)` bound asserted
 alongside and the premise that `r(v_c)` is resolved asserted separately).
 
 ### 1.3 Green under either default -- the gate WP-B9's order required
@@ -154,26 +160,26 @@ forgetting that silently reports the first combination's number four times).
 | WSL | exit/generic | PASS | PASS | PASS | 1.0789e-08 | 1.3862e-07 | 12.8x |
 | WSL | exit/analytic | PASS | PASS | PASS | 1.0146e-08 | 1.3862e-07 | 13.7x |
 
-Note the first row: at the SHIPPED defaults this box reads 1.0331e-08, i.e. the
+Note the first row: at the SHIPPED defaults this box read 1.0331e-08, i.e. the
 pre-WP-B9 `1e-8` bar was already red here, independent of any default.  That is
 what "a coin" looks like from the other side.
 
 ---
 
-## 2. Item 2 -- the `sphere_normal` flip
+## 2. Item 2 -- the `sphere_normal` flip (commit `4c29ec44`)
 
 ### 2.1 The oracle ladder, on WP-C2's own sphere set
 
 `sphere_oracle.py`: eight radii of both signs (2 mm, 34.5 mm, 51.5 mm, 80 mm,
-120 mm, 500 mm, 1 m), eleven heights from the vertex to `0.99994 |R|`, six
-azimuths, each set evaluated twice -- once refracting, once with the surface
-declared a MIRROR -- 1056 points per build.
+120 mm, 500 mm, 1 m, both signs), eleven heights from the vertex to
+`0.99994 |R|`, six azimuths, each set evaluated twice -- once refracting, once
+with the surface declared a MIRROR -- 1056 points per build.
 
 | quantity | Windows | WSL |
 |---|---|---|
-| closed form, worst ULP out to `h = 0.95 |R|` (672 points) | **1.75** | **1.75** |
+| closed form, worst ULP out to `h = 0.95 R` (672 points) | **1.75** | **1.75** |
 | generic route, same | 2.00 | 2.25 |
-| points where the closed form is worse by > 1 ULP, `h <= 0.95 |R|` | **0** | 0 |
+| points where the closed form is worse by > 1 ULP there | **0** | 0 |
 | closed form, worst ULP over the whole set | 57.47 | 57.47 |
 | generic route, same | 76.30 | 76.30 |
 | unit-vector defect of the closed form, worst | 1.0 ULP | 1.5 ULP |
@@ -183,15 +189,15 @@ declared a MIRROR -- 1056 points per build.
 
 Per height (Windows, worst over radii and azimuths):
 
-| `h/|R|` | 0 | 0.05 | 0.5 | 0.95 | 0.99 | 0.999 | 0.9999 | 0.99994 |
+| `h/R` | 0 | 0.05 | 0.5 | 0.95 | 0.99 | 0.999 | 0.9999 | 0.99994 |
 |---|---|---|---|---|---|---|---|---|
 | closed form, ULP | 0.00 | 0.03 | 0.50 | 1.75 | 5.38 | 13.06 | 47.55 | 57.47 |
 | generic, ULP | 0.00 | 0.50 | 1.00 | 2.00 | 8.88 | 17.34 | 58.32 | 76.30 |
 
-At 22 of the 1056 points (all at `h >= 0.999 |R|`) the closed form rounds
-WORSE, by up to 35 ULP.  That is VERIFY-B9 3.2's finding reproduced: above
-`0.95 |R|` both routes are at the conditioning limit of `sqrt(1 - u)` and
-neither dominates point by point.
+At 22 of the 1056 points (all at `h >= 0.999 R`) the closed form rounds WORSE,
+by up to 35 ULP.  That is VERIFY-B9 3.2 reproduced: above `0.95 R` both routes
+are at the conditioning limit of `sqrt(1 - u)` and neither dominates point by
+point.
 
 ### 2.2 Timing
 
@@ -202,7 +208,7 @@ ticks at 15.6 ms, so an unbatched 0.25 s trace is quantised at 6 % and the
 no-sphere CONTROLS read a 20 % "speed-up" off one tick -- the batching is not
 optional.
 
-Windows (CPU time; load recorded at 67 % -> 100 % CPU, 10 python processes):
+Windows (CPU time; load 67 % -> 100 % CPU, 10 python processes):
 
 | prescription | surfaces | generic | analytic | speed-up |
 |---|---|---|---|---|
@@ -210,7 +216,7 @@ Windows (CPU time; load recorded at 67 % -> 100 % CPU, 10 python processes):
 | Cooke-like triplet | 6 | 0.0523 s | 0.0477 s | 1.098x |
 | Cassegrain, 2 spherical mirrors | 3 | 0.0227 s | 0.0180 s | 1.261x |
 | conic, no sphere (CONTROL) | 3 | 0.0336 s | 0.0336 s | 1.000x |
-| aspheric, no sphere (CONTROL) | 3 | -- | -- | contention spike, discarded |
+| aspheric, no sphere (CONTROL) | 3 | 0.2102 s | 0.1266 s | 1.660x -- contention spike |
 
 WSL (CPU time; controls 0.975x and 1.014x):
 
@@ -221,22 +227,22 @@ WSL (CPU time; controls 0.975x and 1.014x):
 | Cassegrain, 2 spherical mirrors | 0.0492 s | 0.0414 s | 1.189x |
 
 **Range: 1.08x to 1.44x; medians 1.12x (Windows) and 1.19x (WSL).**  The
-controls set the resolution at +-7 %, and one aspheric-control sample on
-Windows read 1.66x on a run where the same arm's absolute time quadrupled --
-a contention spike, reported rather than averaged away.  The structural
-measure, which contention cannot move because both arms are profiled under it:
-the normal block's share of `trace`'s own tottime falls from **16.081 % to
-9.844 %** (Windows) and **19.632 % to 10.443 %** (WSL).
+controls set the resolution at about +-7 %, and the one aspheric-control
+sample that read 1.66x did so on a run where that arm's own absolute time
+quadrupled -- a contention spike, reported rather than averaged away.  The
+structural measure, which contention cannot move because both arms are
+profiled under it: the normal block's share of `trace`'s own tottime falls
+from **16.081 % to 9.844 %** (Windows) and **19.632 % to 10.443 %** (WSL).
 
 ### 2.3 Vignetting
 
 `vignetting.py`.
 
 * **The straddle exists.**  A directed `nextafter` walk over eight radii and
-  six azimuths, 60 steps each side of `h = |R| sqrt(0.9999)`, finds it:
+  six azimuths, 60 steps each side of `h = R sqrt(0.9999)`, finds it:
   `R = -0.12 m`, `x = 0.0544288129262979`, `y = 0.10693953582952408`,
-  `h/|R| = 0.9999499987499374`.  There the closed form's gate says VALID and
-  the generic route's says out of domain.
+  `h/R = 0.9999499987499374`.  There the closed form's gate says VALID and the
+  generic route's says out of domain.
 * **It reaches the answer.**  Through `_refract`: `alive=False, code=4`
   (`RAY_NAN`) generic against `alive=True, code=0, L=0.3381, N=0.6667`
   analytic.  Through the public `trace` on a two-surface stack with the
@@ -244,12 +250,12 @@ the normal block's share of `trace`'s own tottime falls from **16.081 % to
   (`RAY_TIR`) analytic -- dead either way there, but for an honest physical
   reason instead of an arithmetic fault.
 * **Nothing that is not aimed at it lands in it.**  360 000 rays over twelve
-  combinations: a sphere with its clear aperture opened to `0.99999 |R|`; the
+  combinations: a sphere with its clear aperture opened to `0.99999 R`; the
   seven-surface spherical stack at 0, 3 and 8 degrees; the two-mirror
-  Cassegrain at 0 and 2 degrees; and three shipped builders
-  (`make_singlet` 20/-20, `make_singlet` 51.5/inf, `make_doublet`
-  51.7/-34.5/-120) at 0 and 5 degrees.  **Zero** alive flags moved, **zero**
-  error codes moved, on both builds.
+  Cassegrain at 0 and 2 degrees; and three shipped builders (`make_singlet`
+  20/-20, `make_singlet` 51.5/inf, `make_doublet` 51.7/-34.5/-120) at 0 and 5
+  degrees.  **Zero** alive flags moved, **zero** error codes moved, on both
+  builds.
 
 **So no shipped fixture's vignetting count changes, and there is no moved
 vignetting fixture to re-pin.**  The Migration note names the band anyway,
@@ -257,14 +263,82 @@ because the change is real even though no current fixture samples it.
 
 ### 2.4 The clamp
 
-Unchanged, per the ledger.  `test_c2_the_domain_clamp_stays_where_the_ledger_left_it`
-LOCATES the threshold by 80-step bisection on the running build (so a change to
-the expression, not only to the literal, is caught) and asserts a ray at
-`0.99995 |R|` still dies `RAY_NAN` through the generic route.
+Unchanged, per the ledger.
+`test_c2_the_domain_clamp_stays_where_the_ledger_left_it` LOCATES the threshold
+by 80-step bisection on the running build (so a change to the expression, not
+only to the literal, is caught) and asserts a ray at `0.99995 R` still dies
+`RAY_NAN` through the generic route.
 
 ---
 
-## 3. Item 4 -- the JAX tracer
+## 3. Item 3 -- the `renormalize` flip (commit `44151397`)
+
+### 3.1 The ladder
+
+`renorm_ladder.py`: spherical and conic stacks of 3, 5, 7, 9, 11 and 13
+surfaces built from one repeated cemented pair, 4000 rays each, traced both
+ways under BOTH normal routes so the two switches' effects are never confused.
+Identical to the last digit on Windows and WSL.
+
+| quantity | value |
+|---|---|
+| `max abs(dx)` between the two modes | 6.592e-17 m |
+| `max abs(dopd)` | 1.665e-16 m |
+| `max abs(dL)` | 7.216e-16 |
+| `alive` masks equal on every rung | yes |
+| error codes equal on every rung | yes |
+| difference / derived `n_surfaces * eps * abs(t)` envelope | 0.109 .. 0.386 |
+| `_normalize_directions` calls, `'surface'` / `'exit'` | 0 / 1 |
+
+The ratio to the envelope is 0.189 at 3 surfaces, peaks at 0.386 at 7, and
+FALLS to 0.109 by 13, so the drift does not accumulate with surface count --
+the envelope grows faster than the difference does.  That is the claim the
+hoist rests on, and it is a ladder rather than a reading.
+
+The call count has a trap in it: `trace` imports `_normalize_directions` BY
+NAME, so a probe that patches `intersection._normalize_directions` sees
+nothing and reports 0 under both settings -- which looks exactly like a pass.
+The probe and the test both patch in `trace`'s own namespace.
+
+### 3.2 One documented bound was a reading, and it is exceeded
+
+The pre-5.49.0 docstring promised `abs(abs(d) - 1) <= 1e-15` on the
+INTERMEDIATE history bundles under `'exit'`.  Measured on the same ladder:
+
+| surfaces | 3 | 5 | 7 | 9 | 11 | 13 |
+|---|---|---|---|---|---|---|
+| history, worst | 6.7e-16 | 8.9e-16 | 1.2e-15 | 1.3e-15 | 1.3e-15 | **1.8e-15** |
+| final bundle | 2.2e-16 | 2.2e-16 | 2.2e-16 | 2.2e-16 | 2.2e-16 | 2.2e-16 |
+
+so `1e-15` is exceeded by the eighth surface.  It is about
+`0.6 * n_surfaces * eps`.  Making `'exit'` the default makes this contract
+load-bearing for every history consumer, so the docstring now carries the
+`n_surfaces * eps` form with both measurements, and the test asserts the
+envelope, asserts the drift GROWS with surface count (so the envelope is the
+right shape and not an accident), and asserts the final bundle is unit to
+4 eps regardless.
+
+### 3.3 Timing -- the claimed speed-up does not reproduce
+
+| build | range over five prescriptions (CPU) | median | wall range |
+|---|---|---|---|
+| Windows | 0.986x .. 1.095x | 1.000x | 0.90x .. 1.15x |
+| WSL | 0.951x .. 1.125x | 0.987x | 0.98x .. 1.16x |
+
+WP-B9 reported 1.03x-1.10x.  The method's resolution here is about +-7 %, so
+an effect of that size is not resolvable on this box under this load: the
+reading neither confirms nor refutes WP-B9's, it is not evidence.  Unlike
+`sphere_normal`, the hoist applies to EVERY prescription, so there is no
+control arm available for it -- which is itself worth recording.
+
+The default moved anyway, on the ledger's structural argument (one rescale
+instead of N, with the per-surface fault diagnosis unmoved).  The CHANGELOG
+and the Migration note both say so in those words, so that a maintainer who
+weighs the accounting differently can revert one commit.
+
+---
+
+## 4. Item 4 -- the JAX tracer
 
 `jax_trace` has **neither switch**, and the reason is structural rather than an
 oversight:
@@ -280,7 +354,7 @@ oversight:
 So the CPU flip moves the CPU tracer TOWARD the JAX one.  `jax_parity.py`, four
 prescriptions x two field angles x five CPU settings, both builds:
 
-| CPU setting | worst `|dx|` | worst `|dopd|` | alive masks equal |
+| CPU setting | worst `abs(dx)` | worst `abs(dopd)` | alive masks equal |
 |---|---|---|---|
 | generic / surface | 3.469e-18 m | 3.123e-17 m | yes |
 | analytic / surface | 3.469e-18 m | 3.123e-17 m | yes |
@@ -290,12 +364,23 @@ prescriptions x two field angles x five CPU settings, both builds:
 
 Identical to the last digit on both builds: the parity floor is set by the JAX
 Newton's own intersection arithmetic, not by the normal route, so the flip
-moves no parity pin.  The default arm is byte-equal to the explicit
-`analytic` arm, which is the same claim the signature makes, asked from a call.
+moves no parity pin.  The default arm is byte-equal to the `analytic / exit`
+arm and different from `generic / surface`, which is the signature's claim
+asked from a call.
+
+Note the two closed forms are not the same arithmetic -- NumPy substitutes the
+near-branch sag, JAX uses the intersection's own `z` -- so the agreement above
+is a measurement, not an identity.
 
 ---
 
-## 5. Item 6 -- byte identity, archive to archive
+## 5. Item 5 -- blast radius, measured
+
+See section 5.1 for the run and 5.2 for the classification.
+
+---
+
+## 6. Item 6 -- byte identity, archive to archive
 
 `byte_identity.py`, run four times (two roots x two modes) per build.  Source
 of truth: `git archive 49ddf4bd` extracted read-only into the scratchpad; each
@@ -316,20 +401,97 @@ Chebyshev Vandermondes, the glass indices).
 
 | claim | Windows | WSL |
 |---|---|---|
-| both old keywords passed explicitly | **938 / 1008 identical** | 938 / 1008 |
+| both old keywords passed explicitly | **934 / 1008 identical** | **935 / 1008** |
 | ... of which direct `trace` / `trace_world` arrays | **all identical, 0 moved** | 0 moved |
-| ... the 70 that moved | `trace_prescription` 25, `refocus` 25, `ray_fan_data` 8, `opd_fan_data` 8, `spot_rms` 3, `through_focus` 1 | same |
+| ... the 73-74 that moved | `trace_prescription` 27, `refocus` 26, `ray_fan_data` 8, `opd_fan_data` 8, `spot_rms` 4, `through_focus` 1 | same, less `through_focus` |
 | non-trace fixtures, no keyword | **7 / 7 identical** | 7 / 7 |
-| defaults vs defaults (the full blast radius) | 547 / 1008; 461 moved | 547 / 1008; 461 moved |
-| ... worst absolute / relative move | 1.796e-11 / 3.366e-13 | same |
+| defaults vs defaults (the full blast radius) | 413 / 1008; 595 moved | 414 / 1008; 594 moved |
+| ... worst absolute / relative move | 2.363e-11 / 3.366e-13 | same |
 
-The 70 exceptions are **the finding**: `trace_prescription`, `raytrace_system`,
-`ray_fan_data`, `opd_fan_data`, `through_focus_rms` and the result-consuming
-`spot_rms` / `spot_geo_radius` / `refocus` all trace internally and expose no
-`sphere_normal` keyword, so there is no one-keyword way back through them.
-Threading the two keywords through five public functions is an API expansion
-the ledger did not ask for, so it is documented in the Migration note and
-raised as a follow-up (section 8) rather than done here.
+The 73-74 exceptions are **the finding**: `trace_prescription`,
+`raytrace_system`, `ray_fan_data`, `opd_fan_data`, `through_focus_rms` and the
+result-consuming `spot_rms` / `spot_geo_radius` / `refocus` all trace
+internally and expose neither keyword, so there is no one-keyword way back
+through them.  Threading two keywords through five public functions is an API
+expansion the ledger did not ask for, so it is documented in the Migration note
+and raised as a follow-up (section 8) rather than done here.
+
+---
+
+## 7. Item 7 -- the tests
+
+`tests/unit/test_c2_analytic_normal_default.py`, 19 tests, whole file 1.2 s --
+every test three orders of magnitude inside the 60 s budget.
+
+| test | what it decides |
+|---|---|
+| `..._defaults_are_what_the_ledger_decided_from_the_signature` | both defaults, and the private helpers' NON-movement, from `inspect.signature` |
+| `..._defaults_are_what_a_call_actually_takes` | the same asked from a call: the `_surface_normal` spy sees `analytic_sphere=True` at every surface, and `_normalize_directions` runs exactly once (a revert that keeps the signature fails here and not above) |
+| `..._way_back_is_the_pre_5_49_0_arithmetic_exactly` | `'generic'` / `'surface'` forced against a `_surface_normal` that ignores the keyword: byte-identical on three stacks |
+| `..._control_without_a_sphere_is_byte_identical_either_way` | the switch is confined to what the predicate selects |
+| `..._closed_form_is_the_better_route_over_the_aperture` (x5 radii) | the 60-digit oracle decision, two-sided (generic measured alongside), bar 4 ULP |
+| `..._closed_form_is_a_unit_vector_by_construction` | the identity `abs(n)^2 = 1`, bar 4 ULP |
+| `..._above_0p95_R_neither_route_dominates_and_the_test_says_so` | the honest other half: BOTH routes must leave the 4 ULP band before the clamp |
+| `..._domain_clamp_stays_where_the_ledger_left_it` | the threshold LOCATED by bisection on the running build, plus the `RAY_NAN` kill |
+| `..._rim_band_is_the_one_discontinuous_difference` | the straddle point CONSTRUCTED by a directed `nextafter` walk and shown to reach `alive` |
+| `..._no_bundle_that_is_not_aimed_at_the_rim_band_lands_in_it` | and nothing else moves |
+| `..._spherical_mirror_reflects_about_the_outward_normal` | the sign, against the oracle's law of reflection |
+| `..._predicate_is_what_selects_the_closed_form` | the accepted set, six surface kinds |
+| `..._history_bundles_are_not_unit_under_the_new_default` | the `n_surfaces * eps` drift contract, derived and laddered, with the way back restoring the old one |
+| `..._exit_hoist_does_not_accumulate_with_surface_count` | the envelope claim, as a ladder |
+| `..._mutation_matrix_is_stated_and_each_arm_is_named` | the table below, asserted so the names cannot rot |
+
+**Mutation matrix.**
+
+| mutation | caught by |
+|---|---|
+| either default silently reverted (signature) | `..._defaults_are_what_the_ledger_decided_from_the_signature` |
+| either default reverted inside the loop only | `..._defaults_are_what_a_call_actually_takes` |
+| `'generic'` / `'surface'` stop being the old arithmetic | `..._way_back_is_the_pre_5_49_0_arithmetic_exactly` |
+| the closed form loses accuracy | `..._closed_form_is_the_better_route_over_the_aperture` |
+| it stops being a unit vector | `..._closed_form_is_a_unit_vector_by_construction` |
+| the `0.9999` domain clamp moves or goes | `..._domain_clamp_stays_where_the_ledger_left_it` |
+| the rim band stops being the only difference | `..._no_bundle_that_is_not_aimed_at_the_rim_band_lands_in_it` |
+| the normal's SIGN flips (mirror) | `..._spherical_mirror_reflects_about_the_outward_normal` |
+| the selection predicate widens or narrows | `..._predicate_is_what_selects_the_closed_form` |
+| the exit rescale runs twice, or not at all | `..._defaults_are_what_a_call_actually_takes` |
+| the history drift contract changes shape | `..._history_bundles_are_not_unit_under_the_new_default` |
+| the hoist starts accumulating with surfaces | `..._exit_hoist_does_not_accumulate_with_surface_count` |
+
+---
+
+## 8. Requested changes outside this work package's ownership
+
+1. **The six entry points with no way back.**  `trace_prescription`,
+   `raytrace_system`, `ray_fan_data`, `opd_fan_data`, `through_focus_rms` and
+   the result-consuming `spot_rms` / `spot_geo_radius` / `refocus` trace
+   internally and expose neither `sphere_normal` nor `renormalize`, so a caller
+   who needs the pre-5.49.0 arithmetic through them has to drop to `trace`.
+   Threading two keywords through five public signatures is an API expansion
+   the ledger did not ask for, so it is documented rather than done.  Measured:
+   exactly those 73-74 of 1008 recorded arrays move with the old keywords
+   passed.  Owner: whoever owns `raytrace/trace.py`'s public consumers.
+2. **`analysis.ghost` now uses a different normal from `trace`.**  It calls
+   `_refract` / `_reflect` directly, and those keep
+   `sphere_normal='generic'` -- the right default for a caller that owns its
+   own loop -- so the ghost path and the main trace no longer agree in the
+   last bit on a spherical prescription.  Nothing measured moves (ghost's
+   recorded arrays are byte-identical either way).  The fix, if it is wanted,
+   is one keyword at `ghost.py:934,955`.  Owner: `analysis/ghost.py`.
+3. **WP-B9's and VERIFY-B9's account of the two knife-edge pins should be
+   corrected in place.**  Both documents state a mechanism -- a saddle-basin
+   flip on a bimodal quantity -- that is measurably not present in either pin
+   (section 1).  The numbers in both reports reproduce; the explanation does
+   not, and anyone reading them for a future default flip will reach for the
+   wrong tool.
+4. **`scripts/reanchor_citations.py` had no path for a cited line whose
+   CONTENT changed** (as opposed to one that moved).  A default flip is
+   exactly that case, and the tool correctly said "NEEDS A HUMAN".  The
+   human's answer is now written down as an explicit `EDITED_IN_PLACE` map
+   naming each base coordinate, its new coordinate and the release that edited
+   it, guarded so the override refuses unless the current line still begins
+   with the same leading token.  Whoever owns the citation gate should decide
+   whether that shape is what they want long-term.
 
 ---
 
@@ -338,14 +500,18 @@ raised as a follow-up (section 8) rather than done here.
 1. **A clean absolute timing number.**  The box carried another agent's work
    for the whole work package (67 % to 100 % CPU, 10 to 21 concurrent python
    processes, recorded in every `timing_*.json`).  The controls bound the
-   method at +-7 % and one control sample spiked to 1.66x.  The speed-up
+   method at about +-7 % and one control sample spiked to 1.66x.  The speed-up
    RANGE and the profile SHARE are sound; a single number is not available
    from this box today.
-2. **Whether the rim band matters to any real design.**  It is about 1 ULP of
+2. **Whether `renormalize='exit'` is faster at all.**  Its claimed effect
+   (1.03x-1.10x) is smaller than this method's resolution, and unlike
+   `sphere_normal` it has no control arm, so nothing here settles it either
+   way.
+3. **Whether the rim band matters to any real design.**  It is about 1 ULP of
    `h` wide, so sampling cannot find it -- 360 000 rays found none -- and the
    only evidence that it is reachable at all is a directed `nextafter` walk.
    Whether a user's prescription works rays there is not something this work
    package can answer; the Migration note tells them how to find out.
-3. **Cross-build identity.**  Deliberately not claimed anywhere: every byte
+4. **Cross-build identity.**  Deliberately not claimed anywhere: every byte
    identity comparison is archive-to-archive on the SAME build, and every bar
    in the restated pins is derived on the running build.

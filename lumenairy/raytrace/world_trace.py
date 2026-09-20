@@ -121,21 +121,21 @@ def trace_world(
     surface_diffraction : dict or None
         Same {surface_index: (mx, my, period_x_m, period_y_m)}
         spec accepted by :func:`trace`.
-    renormalize : ``'exit'`` (default since 5.49.0) | ``'surface'``
-        Identical semantics to :func:`trace`, including the 5.49.0
-        default change: where the direction cosines are rescaled to unit
+    renormalize : ``'exit'`` (the default) | ``'surface'``
+        Identical semantics to :func:`trace`, including the default
+        change that shipped with it: where the direction cosines are rescaled to unit
         length.  ``'exit'`` rescales once, on the bundle leaving the
         last surface -- in that surface's LOCAL frame, which is the
         frame the history records, so the returned ``image_rays`` is
         unit-length there, while the INTERMEDIATE history bundles carry
         up to ``n_surfaces * eps`` of drift.  ``'surface'`` is the
-        pre-5.49.0 arithmetic and is byte-identical to it; see
+        arithmetic it replaced and is byte-identical to it; see
         :func:`trace` for the ladder, the corrected drift bound and the
         timing that did not reproduce.
-    sphere_normal : ``'analytic'`` (default since 5.49.0) | ``'generic'``
-        Identical semantics to :func:`trace`, including the 5.49.0
-        default change: which route computes the surface normal at a
-        pure sphere.  ``'generic'`` is the pre-5.49.0 arithmetic and is
+    sphere_normal : ``'analytic'`` (the default) | ``'generic'``
+        Identical semantics to :func:`trace`, including the default
+        change that shipped with it: which route computes the surface normal at a
+        pure sphere.  ``'generic'`` is the arithmetic it replaced and is
         byte-identical to it.  See :func:`trace` for the oracle ladder,
         the timing range and the rim band the two domain gates straddle.
 

@@ -111,7 +111,7 @@ def trace(
         (``L_new**2 + M_new**2 > 1``) are flagged
         ``alive=False`` with ``error_code=RAY_EVANESCENT``.  See also
         :func:`apply_doe_phase_traced`.
-    renormalize : ``'exit'`` (default since 5.49.0) | ``'surface'``
+    renormalize : ``'exit'`` (the default) | ``'surface'``
         Where the refracted / reflected direction cosines are rescaled
         to unit length.
 
@@ -125,11 +125,11 @@ def trace(
           collapsed direction is still attributed to the surface that
           produced it.
         * ``'surface'`` -- after every refraction and reflection, as the
-          trace did before 5.49.0, and byte-identical to it.
+          trace did before this default moved, and byte-identical to it.
 
-        **The default moved in 5.49.0** (WP-C2, alongside
-        ``sphere_normal``).  Pass ``renormalize='surface'`` for the
-        pre-5.49.0 arithmetic.
+        **THIS DEFAULT MOVED** (WP-C2, alongside ``sphere_normal``; the
+        CHANGELOG entry carries the release number).  Pass
+        ``renormalize='surface'`` for the arithmetic it replaced.
 
         NOT BIT-IDENTICAL: the surviving drift enters the next surface's
         ray-sphere quadratic, which assumes ``a = |d|**2 = 1``.
@@ -159,11 +159,12 @@ def trace(
         ``n_surfaces * eps`` -- measured 6.7e-16 on a 3-surface stack
         rising to **1.8e-15 on a 13-surface stack** (about 0.6
         ``n_surfaces * eps``; the "<= 1e-15" this docstring carried
-        before 5.49.0 was a reading from a short stack, not a bound).
+        before this default moved was a reading from a short stack, not
+        a bound).
         The final bundle is unit to 2.2e-16 on every rung.  A consumer
         that reads HISTORY direction cosines as exactly unit should pass
         ``renormalize='surface'``.
-    sphere_normal : ``'analytic'`` (default since 5.49.0) | ``'generic'``
+    sphere_normal : ``'analytic'`` (the default) | ``'generic'``
         Which route computes the surface normal at a PURE SPHERE
         (:func:`surface._is_pure_spherical`: finite radius, no conic,
         aspheric, biconic, freeform or field-frame extension).
@@ -178,12 +179,12 @@ def trace(
           guard, two divisions by ``h``, a second ``sqrt`` inside
           ``_surface_sag_derivative`` and the normalising ``sqrt`` + three
           divisions of ``_surface_normal``.  The arithmetic callers got
-          before 5.49.0, and byte-identical to it.
+          before this default moved, and byte-identical to it.
 
-        **The default moved in 5.49.0** (WP-C2; the maintainer's
-        decision is section 1.3 of
+        **THIS DEFAULT MOVED** (WP-C2; the CHANGELOG entry carries the
+        release number, and the maintainer's decision is section 1.3 of
         ``docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/MAINTAINER_DECISIONS_2026_09.md``).
-        Pass ``sphere_normal='generic'`` for the pre-5.49.0 arithmetic,
+        Pass ``sphere_normal='generic'`` for the arithmetic it replaced,
         which is byte-identical to what 5.48.1 produced.
 
         WHY.  Against a 60-digit ``decimal`` oracle over 1056 points
@@ -216,7 +217,7 @@ def trace(
         ``nextafter`` walk finds such points; 360 000 traced rays over
         twelve prescription and field-angle combinations, three of them
         shipped fixtures, move ZERO ``alive`` flags and ZERO error codes.
-        See ``renormalize`` for the other 5.49.0 default change.
+        See ``renormalize`` for the other default this work package moved.
 
     Returns
     -------

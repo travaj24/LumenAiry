@@ -4646,7 +4646,7 @@ remove ~1e-16 of rounding drift.  `trace` and `trace_world` gain
 `world_trace.py:82`); `_refract` / `_reflect` gain the matching
 `renormalize: bool = True` (`intersection.py:541`, `:646`), and the single-pass
 form is `intersection._normalize_directions` (`:520`), applied once to the
-bundle leaving the last surface (`trace.py:283`, `:394`, `world_trace.py:250`).
+bundle leaving the last surface (`trace.py:284`, `:395`, `world_trace.py:250`).
 
 The degenerate-direction DIAGNOSIS is not hoisted: the per-surface
 `|d| < 1e-30 or not finite -> RAY_NAN + killed` test runs in both modes, because
@@ -4714,7 +4714,7 @@ restating those pins; see the WP-B9 report.
 
 `make_rings` is equal-radius / equal-count, so the pupil areal sampling density
 falls off as `~1/r` and every unweighted `spot_rms` built on it is centre-biased
-small.  It gains `pattern={'rings' (default), 'vogel'}` (`raytrace/trace.py:1257`,
+small.  It gains `pattern={'rings' (default), 'vogel'}` (`raytrace/trace.py:1258`,
 generator at `:1285`): the Vogel / Fibonacci sunflower `r_i = R sqrt(i/N)`,
 `theta_i = i pi (3 - sqrt(5))`, with `i = 1..N` so the outermost ray sits exactly
 on the rim as the outer ring does.  Threaded through
