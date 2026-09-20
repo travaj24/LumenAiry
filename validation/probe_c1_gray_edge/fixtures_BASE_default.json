@@ -1,0 +1,270 @@
+{
+  "aperture": {
+    "algebra_aperture_operator": {
+      "dtype": "complex128",
+      "nbytes": 262144,
+      "sha256": "387bcc150806c5f51112817e1584f12c602527d783cc7112a4cdbacba2aeb8ca",
+      "shape": [
+        128,
+        128
+      ]
+    },
+    "ap_annular": {
+      "dtype": "complex128",
+      "nbytes": 262144,
+      "sha256": "158b78bb8051e701b92c2b35d99120fd0e7ddde2825b83d8d2e940b188efd3b6",
+      "shape": [
+        128,
+        128
+      ]
+    },
+    "ap_circular": {
+      "dtype": "complex128",
+      "nbytes": 262144,
+      "sha256": "387bcc150806c5f51112817e1584f12c602527d783cc7112a4cdbacba2aeb8ca",
+      "shape": [
+        128,
+        128
+      ]
+    },
+    "ap_complex64": {
+      "dtype": "complex64",
+      "nbytes": 32768,
+      "sha256": "c7435600dbba0bf2707c44a1b0fa9bd0ba6fa346d9f04963921bd422207e66df",
+      "shape": [
+        64,
+        64
+      ]
+    },
+    "ap_decentred_anamorphic": {
+      "dtype": "complex128",
+      "nbytes": 262144,
+      "sha256": "223b1ee3c18e82d170d838a8a395aa5153a372b82110d4faf55c0f817b2e86ac",
+      "shape": [
+        128,
+        128
+      ]
+    },
+    "ap_rectangular": {
+      "dtype": "complex128",
+      "nbytes": 262144,
+      "sha256": "1ab12405b84e6d83f56e6e44814c16be3b00b8cb75014d3431d5500c56cef20e",
+      "shape": [
+        128,
+        128
+      ]
+    },
+    "cupy_apply_aperture": {
+      "dtype": "complex128",
+      "nbytes": 65536,
+      "sha256": "8869b07d6f920ef5646d5ca4c37e40d27095a0431ca47fda13b85fd4249d4d45",
+      "shape": [
+        64,
+        64
+      ]
+    },
+    "hf_quadrature_of_apertured_field": {
+      "dtype": "complex128",
+      "nbytes": 32,
+      "sha256": "3e7a6162244f36a51c60ee29df2b61173af86ee1a5231eaacfc59d4eae196921",
+      "shape": [
+        1,
+        2
+      ]
+    },
+    "jax_apply_aperture": {
+      "dtype": "complex128",
+      "nbytes": 65536,
+      "sha256": "8869b07d6f920ef5646d5ca4c37e40d27095a0431ca47fda13b85fd4249d4d45",
+      "shape": [
+        64,
+        64
+      ]
+    },
+    "jones_field_apply_aperture": {
+      "dtype": "complex128",
+      "nbytes": 524288,
+      "sha256": "531ce30f9a544653b28b643e1f98f0ccd42f2bd4010a3b84288b8b0a0751cba0",
+      "shape": [
+        32768
+      ]
+    },
+    "lyot_stop": {
+      "dtype": "complex128",
+      "nbytes": 262144,
+      "sha256": "06fc0ef5761e989c10cb209e977520c3c548986262466bdf38272e7e58161027",
+      "shape": [
+        128,
+        128
+      ]
+    },
+    "rs_spatial_of_apertured_field": {
+      "dtype": "complex128",
+      "nbytes": 1048576,
+      "sha256": "04d1a6e8460db93b9b7b2e4b132298d34fb41ce401d4cdc0e3d088aa1394eac9",
+      "shape": [
+        256,
+        256
+      ]
+    },
+    "system_aperture_element": {
+      "dtype": "complex128",
+      "nbytes": 262144,
+      "sha256": "387bcc150806c5f51112817e1584f12c602527d783cc7112a4cdbacba2aeb8ca",
+      "shape": [
+        128,
+        128
+      ]
+    }
+  },
+  "arm": "default",
+  "lumenairy_file": "C:\\tmp\\lum_c1_base\\lumenairy\\__init__.py",
+  "numpy": "2.4.4",
+  "plain": {
+    "apodized_pupil": {
+      "dtype": "complex128",
+      "nbytes": 262144,
+      "sha256": "a4c1cf3813aaa24ba57edd2541757888e91d73d11013e8d1ff3dcc9a71b3fa07",
+      "shape": [
+        128,
+        128
+      ]
+    },
+    "asm_propagate": {
+      "dtype": "complex128",
+      "nbytes": 262144,
+      "sha256": "b7086b7956df07e1d8f8226abd700aadcc801d746ac9788f55d1c7de5d4e651d",
+      "shape": [
+        128,
+        128
+      ]
+    },
+    "axicon": {
+      "dtype": "complex128",
+      "nbytes": 262144,
+      "sha256": "0c33d8b12e9ca1c849b275635d3457f2e5bfc2ee309d0cf3f9343db62449a08d",
+      "shape": [
+        128,
+        128
+      ]
+    },
+    "gaussian_aperture": {
+      "dtype": "complex128",
+      "nbytes": 262144,
+      "sha256": "5b3dec2b5c9d4106ddce6c9d2e6283a365982eb696430e5b05d5174f0258ae1f",
+      "shape": [
+        128,
+        128
+      ]
+    },
+    "hf_freespace": {
+      "dtype": "complex128",
+      "nbytes": 65536,
+      "sha256": "24ec2531b11dd9572ed7732c0ab00be50e089ad59e9161fe2d36c93e206e4e9f",
+      "shape": [
+        64,
+        64
+      ]
+    },
+    "mirror_with_aperture_diameter": {
+      "dtype": "complex128",
+      "nbytes": 262144,
+      "sha256": "512d960aa969d4445aca47a338af9dcf5dc282dde80d8e2e13a4310d6da494d5",
+      "shape": [
+        128,
+        128
+      ]
+    },
+    "pmm_efficiency_1d": {
+      "dtype": "float64",
+      "nbytes": 336,
+      "sha256": "6828bf150616ed33647283f5d7545626852db35cd347789b07ea9e7a7e31ede8",
+      "shape": [
+        42
+      ]
+    },
+    "rcwa_efficiency_1d": {
+      "dtype": "float64",
+      "nbytes": 240,
+      "sha256": "52651e1d55a10741291172240ed45dc00b64b81161955316547201486cc7d4b9",
+      "shape": [
+        30
+      ]
+    },
+    "real_lens_thin": {
+      "dtype": "complex128",
+      "nbytes": 262144,
+      "sha256": "e2347ee9d32832b31619fd0c3d04d31bbbed1c043fa8330ae7f8d69f5773a578",
+      "shape": [
+        128,
+        128
+      ]
+    },
+    "rs_spatial_gaussian": {
+      "dtype": "complex128",
+      "nbytes": 262144,
+      "sha256": "5c28d1cafc91e111e820765d99a79d1d02f0b1dba5484f25f49852db0b6084cf",
+      "shape": [
+        128,
+        128
+      ]
+    },
+    "rs_transfer_propagate": {
+      "dtype": "complex128",
+      "nbytes": 262144,
+      "sha256": "09a6b680c6996648175fbd0016e3be4fb92a94ab1201b819e191b244edf4a69e",
+      "shape": [
+        128,
+        128
+      ]
+    },
+    "thin_grating_efficiency": {
+      "dtype": "float64",
+      "nbytes": 176,
+      "sha256": "00da4141fd1e34cc2556066beb5296651a78317c49af7c9434dc8088781e9ba4",
+      "shape": [
+        22
+      ]
+    },
+    "thin_lens": {
+      "dtype": "complex128",
+      "nbytes": 262144,
+      "sha256": "6314c7a995ae271ee38b6118c72e2ac7303cbc3b465e883cb7f82001f5e481fc",
+      "shape": [
+        128,
+        128
+      ]
+    },
+    "turbulence_screen": {
+      "dtype": "float64",
+      "nbytes": 32768,
+      "sha256": "e72f3bbab571f8e698a05ea6e669b09c606b12bfefda8e25ca0cc6a9deb9c44d",
+      "shape": [
+        64,
+        64
+      ]
+    },
+    "zernike_aberration": {
+      "dtype": "complex128",
+      "nbytes": 262144,
+      "sha256": "444772512abe1e534d33a871dd066000062bfa532eabef68d899e9490d66f4fb",
+      "shape": [
+        128,
+        128
+      ]
+    },
+    "zernike_basis": {
+      "dtype": "float64",
+      "nbytes": 225040,
+      "sha256": "bc1c8f195ed751462ed78d52b14da954e1c125b3f4455a2eaa6d3e64523f0a60",
+      "shape": [
+        2813,
+        10
+      ]
+    }
+  },
+  "platform": "Windows-11-10.0.26200-SP0",
+  "python": "3.14.6",
+  "tag": "BASE",
+  "unavailable": []
+}
