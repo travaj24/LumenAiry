@@ -1,0 +1,139 @@
+{
+ "baseline": {
+  "WIN-py3.14": "14 passed",
+  "WSL-py3.12": "14 passed"
+ },
+ "mutation_arms": {
+  "m1_auto_resolves_to_fresnel_unconditionally": {
+   "WIN": "2 failed, 12 passed",
+   "WSL": "2 failed, 12 passed",
+   "failing_ids": [
+    "test_auto_and_exact_are_the_same_row_everywhere_on_the_ladder",
+    "test_the_kernel_gate_never_fires_on_this_fixture"
+   ],
+   "patch": "_collins_transport L2128: if _kernel_asked == 'auto': _kernel_asked = 'fresnel'",
+   "verdict": "CAUGHT (fails)"
+  },
+  "m2_k4_gate_always_fires": {
+   "WIN": "6 failed, 8 passed",
+   "WSL": "6 failed, 8 passed",
+   "failing_ids": [
+    "test_auto_and_exact_are_the_same_row_everywhere_on_the_ladder",
+    "test_the_kernel_gate_never_fires_on_this_fixture",
+    "test_the_exact_kernels_departure_falls_monotonically_away_from_the_focus",
+    "test_the_departure_is_linear_in_the_reduced_distance",
+    "test_the_departure_is_quartic_in_the_envelopes_own_angle",
+    "test_the_measured_departure_is_the_quartic_times_one_constant"
+   ],
+   "patch": "_collins_transport L2186+: k4 = 2.0",
+   "verdict": "CAUGHT (fails)"
+  },
+  "m3_exact_kernel_correction_z_eff_sign_flipped": {
+   "WIN": "14 passed",
+   "WSL": "14 passed",
+   "evidence": {
+    "every magnitude the file reads is invariant": "|e^{i phi} - 1| is even in phi, so relL2 vs the oracle, the exact-vs-fresnel departure, the monotonicity, both power-law slopes and C are all unchanged to 1e-6",
+    "exact_field_digest_changes": true,
+    "intensity_weighted_mean_arg(exact/fresnel) at d=1um": {
+     "base": -1.926583e-06,
+     "m3": 1.926587e-06
+    }
+   },
+   "failing_ids": [],
+   "mutation_is_live": true,
+   "package_wide_check": {
+    "base_WIN": "126 passed in 577s",
+    "conclusion": "the m3 blindness is FILE-LOCAL to test_wave5_h2_near_focus_table.py, not package-wide; the proposed sign assert is defence in depth, not the only guard",
+    "failing_ids": [
+     "TestSameTheorem::test_collins_on_the_co_moving_lattice_is_the_sziklas_step[auto-0.012]",
+     "TestSameTheorem::test_collins_on_the_co_moving_lattice_is_the_sziklas_step[auto-0.02]"
+    ],
+    "file": "tests/unit/test_audit2609_b4_collins_transport.py (126 ids)",
+    "m3_WIN": "2 failed, 124 passed in 869s",
+    "measured_departures": {
+     "bar": 1e-09,
+     "z=12mm": 8.187570496458685e-08,
+     "z=20mm": 1.876023029895677e-07
+    },
+    "why_it_catches_it": "tests/unit/test_audit2609_b4_collins_transport.py:323-349 cross-checks the Collins 'auto' output against the SZIKLAS 'auto' output on the co-moving lattice at 1e-9 of peak.  m3 mutates only the Collins copy of the exact kernel (carrier.py:2029); the Sziklas copy (_exact_envelope_tf_step, carrier.py:1441) is untouched, so the two implementations of one kernel disagree and the cell fails.  A cross-IMPLEMENTATION agreement test is sign-sensitive where a magnitude-against-a-paraxial-oracle test is not."
+   },
+   "patch": "_collins_exact_kernel_correction L2029: phase *= -z_eff",
+   "verdict": "NOT CAUGHT by this file (passes 14/14) -- durability gap in the file; CAUGHT package-wide by test_audit2609_b4_collins_transport.py (2 ids)"
+  },
+  "m4_carrier_applied_twice_on_the_output": {
+   "WIN": "3 failed, 11 passed",
+   "WSL": "3 failed, 11 passed",
+   "failing_ids": [
+    "test_both_spellings_of_the_output_reference_give_the_same_field",
+    "test_the_sziklas_transport_reproduces_the_oracle_far_from_focus",
+    "test_the_sziklas_transport_loses_the_focus_and_the_collins_one_does_not"
+   ],
+   "note": "the carrier_out=inf rows are R = inf, where a doubled carrier is a no-op, so only the finite-carrier ids can see this arm -- and three do",
+   "patch": "carrier.py tail: propagate_carrier_referenced wrapper re-applies carrier_referenced_reconstruct to the returned envelope",
+   "verdict": "CAUGHT (fails)"
+  }
+ },
+ "numeric_constants": {
+  "derived_at_runtime_bars": [
+   "_floor_bar() = 10*(eps k |z| + exp(-(N dx/2)^2/w^2)) (L95-L112; used L175, 232-234, 265, 336, 605)",
+   "predicted quartic K|z|theta^4/8 (L192, L544, L559)",
+   "the gate's own bar k4 < 1.0 (L379)",
+   "polyfit slopes (L452, L500)"
+  ],
+  "no_expected_value_is_pinned": true,
+  "pinned_dimensionless_margins": [
+   "0.5 < ratio < 2.0 (L198)",
+   "1e-3 spelling agreement (L238)",
+   "wrong > 0.1 (L289)",
+   "ratio > 1e10 (L292)",
+   "k4 < 1e-3 (L380)",
+   "theta_env < theta_beam/5 (L384)",
+   "span > 100.0 (L404, L449)",
+   "worst < 1e-3 (L455)",
+   "|slope-1| < 1e-3 (L458)",
+   "span > 4.0 (L499)",
+   "worst < 1e-2 (L503)",
+   "|slope-4| < 0.05 (L506)",
+   "0.5 < C < 3.0 (L561)",
+   "|dC|/C < 0.05 (L562)",
+   "dx > 10 m dx (L599)",
+   "1e6 (L614, L618)"
+  ],
+  "pinned_fixture_inputs": [
+   "W0=15.915e-6 (L47)",
+   "THETA=20.0e-3 (L48)",
+   "F=20.0e-3 (L51)",
+   "N_IN=512 (L53)",
+   "DX_IN=8e-6 (L54)"
+  ],
+  "pinned_policy_constants": [
+   "WINDOW_WIDTHS=6.0 (L59)",
+   "w/8.0 (L90)",
+   "lam|R|/(4.0 w) (L91)",
+   "decades=10.0 (L95)",
+   "dx = 10.0*w_out/N (L158,187,550)",
+   "D_LADDER 5 rungs (L302)",
+   "scale ladder 0.25..1.4 (L484)"
+  ],
+  "pinned_quoted_cross_checks": [
+   "LAM ~ 1.0e-6 rel 1e-4 (L138)",
+   "ZR ~ 795.77e-6 rel 1e-4 (L139)"
+  ],
+  "premise_gated_ids": [
+   "test_the_kernel_gate_never_fires_on_this_fixture (L380,L384)",
+   "test_the_exact_kernels_departure_falls_monotonically (L404)",
+   "test_the_departure_is_linear_in_the_reduced_distance (L449)",
+   "test_the_departure_is_quartic_in_the_envelopes_own_angle (L499)",
+   "test_the_sziklas_transport_loses_the_focus (L599, L606)"
+  ],
+  "total_numeric_literals": 141,
+  "two_sided_asserts": [
+   "L198",
+   "L458",
+   "L506",
+   "L561",
+   "L562"
+  ]
+ },
+ "subject": "tests/unit/test_wave5_h2_near_focus_table.py (commit 2d6eef9c)"
+}

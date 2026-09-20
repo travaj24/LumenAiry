@@ -1,0 +1,3786 @@
+{
+ "win": {
+  "architecture_reported": {
+   "HASWELL/t1": "Haswell",
+   "HASWELL/t4": "Haswell",
+   "KATMAI/t1": "Katmai",
+   "KATMAI/t4": "Katmai",
+   "NEHALEM/t1": "Nehalem",
+   "NEHALEM/t4": "Nehalem",
+   "SANDYBRIDGE/t1": "Sandybridge",
+   "SANDYBRIDGE/t4": "Sandybridge"
+  },
+  "num_threads_reported": {
+   "HASWELL/t1": 1,
+   "HASWELL/t4": 4,
+   "KATMAI/t1": 1,
+   "KATMAI/t4": 4,
+   "NEHALEM/t1": 1,
+   "NEHALEM/t4": 4,
+   "SANDYBRIDGE/t1": 1,
+   "SANDYBRIDGE/t4": 4
+  },
+  "rungs": [
+   "HASWELL/t1",
+   "HASWELL/t4",
+   "KATMAI/t1",
+   "KATMAI/t4",
+   "NEHALEM/t1",
+   "NEHALEM/t4",
+   "SANDYBRIDGE/t1",
+   "SANDYBRIDGE/t4"
+  ],
+  "table": {
+   "B1.16x16->8x8.sign-1": {
+    "bar_both": {
+     "by_rung": {
+      "HASWELL/t1": 4.331551901973166e-12,
+      "HASWELL/t4": 4.331551901973166e-12,
+      "KATMAI/t1": 4.331551901973166e-12,
+      "KATMAI/t4": 4.331551901973166e-12,
+      "NEHALEM/t1": 4.331551901973166e-12,
+      "NEHALEM/t4": 4.331551901973166e-12,
+      "SANDYBRIDGE/t1": 4.331551901973166e-12,
+      "SANDYBRIDGE/t4": 4.331551901973166e-12
+     },
+     "max": 4.331551901973166e-12,
+     "min": 4.331551901973166e-12,
+     "spread": 0.0
+    },
+    "bar_chirp": {
+     "by_rung": {
+      "HASWELL/t1": 2.571038267486428e-12,
+      "HASWELL/t4": 2.571038267486428e-12,
+      "KATMAI/t1": 2.571038267486428e-12,
+      "KATMAI/t4": 2.571038267486428e-12,
+      "NEHALEM/t1": 2.571038267486428e-12,
+      "NEHALEM/t4": 2.571038267486428e-12,
+      "SANDYBRIDGE/t1": 2.571038267486428e-12,
+      "SANDYBRIDGE/t4": 2.571038267486428e-12
+     },
+     "max": 2.571038267486428e-12,
+     "min": 2.571038267486428e-12,
+     "spread": 0.0
+    },
+    "bar_dense": {
+     "by_rung": {
+      "HASWELL/t1": 1.7605136344867384e-12,
+      "HASWELL/t4": 1.7605136344867384e-12,
+      "KATMAI/t1": 1.7605136344867384e-12,
+      "KATMAI/t4": 1.7605136344867384e-12,
+      "NEHALEM/t1": 1.7605136344867384e-12,
+      "NEHALEM/t4": 1.7605136344867384e-12,
+      "SANDYBRIDGE/t1": 1.7605136344867384e-12,
+      "SANDYBRIDGE/t4": 1.7605136344867384e-12
+     },
+     "max": 1.7605136344867384e-12,
+     "min": 1.7605136344867384e-12,
+     "spread": 0.0
+    },
+    "err_bluestein": {
+     "by_rung": {
+      "HASWELL/t1": 3.0315391380987954e-14,
+      "HASWELL/t4": 3.0315391380987954e-14,
+      "KATMAI/t1": 3.0315391380987954e-14,
+      "KATMAI/t4": 3.0315391380987954e-14,
+      "NEHALEM/t1": 3.0315391380987954e-14,
+      "NEHALEM/t4": 3.0315391380987954e-14,
+      "SANDYBRIDGE/t1": 3.0315391380987954e-14,
+      "SANDYBRIDGE/t4": 3.0315391380987954e-14
+     },
+     "max": 3.0315391380987954e-14,
+     "min": 3.0315391380987954e-14,
+     "spread": 0.0
+    },
+    "err_direct": {
+     "by_rung": {
+      "HASWELL/t1": 2.5618982671915017e-14,
+      "HASWELL/t4": 2.5618982671915017e-14,
+      "KATMAI/t1": 2.2469334198890888e-14,
+      "KATMAI/t4": 2.2469334198890888e-14,
+      "NEHALEM/t1": 2.2469334198890888e-14,
+      "NEHALEM/t4": 2.2469334198890888e-14,
+      "SANDYBRIDGE/t1": 2.2469334198890888e-14,
+      "SANDYBRIDGE/t4": 2.2469334198890888e-14
+     },
+     "max": 2.5618982671915017e-14,
+     "min": 2.2469334198890888e-14,
+     "spread": 3.1496484730241295e-15
+    },
+    "err_separable": {
+     "by_rung": {
+      "HASWELL/t1": 3.021112489366642e-14,
+      "HASWELL/t4": 3.021112489366642e-14,
+      "KATMAI/t1": 3.021112489366642e-14,
+      "KATMAI/t4": 3.021112489366642e-14,
+      "NEHALEM/t1": 3.021112489366642e-14,
+      "NEHALEM/t4": 3.021112489366642e-14,
+      "SANDYBRIDGE/t1": 3.021112489366642e-14,
+      "SANDYBRIDGE/t4": 3.021112489366642e-14
+     },
+     "max": 3.021112489366642e-14,
+     "min": 3.021112489366642e-14,
+     "spread": 0.0
+    },
+    "pair_bluestein_vs_direct": {
+     "by_rung": {
+      "HASWELL/t1": 3.696359138182859e-14,
+      "HASWELL/t4": 3.696359138182859e-14,
+      "KATMAI/t1": 2.3515771187863035e-14,
+      "KATMAI/t4": 2.3515771187863035e-14,
+      "NEHALEM/t1": 2.3515771187863035e-14,
+      "NEHALEM/t4": 2.3515771187863035e-14,
+      "SANDYBRIDGE/t1": 2.3515771187863035e-14,
+      "SANDYBRIDGE/t4": 2.3515771187863035e-14
+     },
+     "max": 3.696359138182859e-14,
+     "min": 2.3515771187863035e-14,
+     "spread": 1.3447820193965552e-14
+    },
+    "pair_separable_vs_direct": {
+     "by_rung": {
+      "HASWELL/t1": 3.019806626980426e-14,
+      "HASWELL/t4": 3.019806626980426e-14,
+      "KATMAI/t1": 2.4868995751603507e-14,
+      "KATMAI/t4": 2.4868995751603507e-14,
+      "NEHALEM/t1": 2.4868995751603507e-14,
+      "NEHALEM/t4": 2.4868995751603507e-14,
+      "SANDYBRIDGE/t1": 2.4868995751603507e-14,
+      "SANDYBRIDGE/t4": 2.4868995751603507e-14
+     },
+     "max": 3.019806626980426e-14,
+     "min": 2.4868995751603507e-14,
+     "spread": 5.329070518200751e-15
+    },
+    "sha_bluestein": {
+     "by_rung": {
+      "HASWELL/t1": "d42b6147e3bb25662caadbdac79b817c3a10e808376e5b20dd6963c015cbf965",
+      "HASWELL/t4": "d42b6147e3bb25662caadbdac79b817c3a10e808376e5b20dd6963c015cbf965",
+      "KATMAI/t1": "d42b6147e3bb25662caadbdac79b817c3a10e808376e5b20dd6963c015cbf965",
+      "KATMAI/t4": "d42b6147e3bb25662caadbdac79b817c3a10e808376e5b20dd6963c015cbf965",
+      "NEHALEM/t1": "d42b6147e3bb25662caadbdac79b817c3a10e808376e5b20dd6963c015cbf965",
+      "NEHALEM/t4": "d42b6147e3bb25662caadbdac79b817c3a10e808376e5b20dd6963c015cbf965",
+      "SANDYBRIDGE/t1": "d42b6147e3bb25662caadbdac79b817c3a10e808376e5b20dd6963c015cbf965",
+      "SANDYBRIDGE/t4": "d42b6147e3bb25662caadbdac79b817c3a10e808376e5b20dd6963c015cbf965"
+     },
+     "distinct": 1
+    },
+    "sha_direct": {
+     "by_rung": {
+      "HASWELL/t1": "37487dc16c36fa616765027867fc5d400d35cb270f60f6e802d626ebe6bdbb3f",
+      "HASWELL/t4": "37487dc16c36fa616765027867fc5d400d35cb270f60f6e802d626ebe6bdbb3f",
+      "KATMAI/t1": "a49dc4e717f288fe0160ea4dc2348a7541290f0a7c1b2b06470ef21de067fffd",
+      "KATMAI/t4": "a49dc4e717f288fe0160ea4dc2348a7541290f0a7c1b2b06470ef21de067fffd",
+      "NEHALEM/t1": "a49dc4e717f288fe0160ea4dc2348a7541290f0a7c1b2b06470ef21de067fffd",
+      "NEHALEM/t4": "a49dc4e717f288fe0160ea4dc2348a7541290f0a7c1b2b06470ef21de067fffd",
+      "SANDYBRIDGE/t1": "a49dc4e717f288fe0160ea4dc2348a7541290f0a7c1b2b06470ef21de067fffd",
+      "SANDYBRIDGE/t4": "a49dc4e717f288fe0160ea4dc2348a7541290f0a7c1b2b06470ef21de067fffd"
+     },
+     "distinct": 2
+    },
+    "sha_separable": {
+     "by_rung": {
+      "HASWELL/t1": "be08c902d026fd297da362df408b35de52df72008091da3e891ab5a4198f003e",
+      "HASWELL/t4": "be08c902d026fd297da362df408b35de52df72008091da3e891ab5a4198f003e",
+      "KATMAI/t1": "be08c902d026fd297da362df408b35de52df72008091da3e891ab5a4198f003e",
+      "KATMAI/t4": "be08c902d026fd297da362df408b35de52df72008091da3e891ab5a4198f003e",
+      "NEHALEM/t1": "be08c902d026fd297da362df408b35de52df72008091da3e891ab5a4198f003e",
+      "NEHALEM/t4": "be08c902d026fd297da362df408b35de52df72008091da3e891ab5a4198f003e",
+      "SANDYBRIDGE/t1": "be08c902d026fd297da362df408b35de52df72008091da3e891ab5a4198f003e",
+      "SANDYBRIDGE/t4": "be08c902d026fd297da362df408b35de52df72008091da3e891ab5a4198f003e"
+     },
+     "distinct": 1
+    }
+   },
+   "B1.16x16->8x8.sign1": {
+    "bar_both": {
+     "by_rung": {
+      "HASWELL/t1": 4.331551901973166e-12,
+      "HASWELL/t4": 4.331551901973166e-12,
+      "KATMAI/t1": 4.331551901973166e-12,
+      "KATMAI/t4": 4.331551901973166e-12,
+      "NEHALEM/t1": 4.331551901973166e-12,
+      "NEHALEM/t4": 4.331551901973166e-12,
+      "SANDYBRIDGE/t1": 4.331551901973166e-12,
+      "SANDYBRIDGE/t4": 4.331551901973166e-12
+     },
+     "max": 4.331551901973166e-12,
+     "min": 4.331551901973166e-12,
+     "spread": 0.0
+    },
+    "bar_chirp": {
+     "by_rung": {
+      "HASWELL/t1": 2.571038267486428e-12,
+      "HASWELL/t4": 2.571038267486428e-12,
+      "KATMAI/t1": 2.571038267486428e-12,
+      "KATMAI/t4": 2.571038267486428e-12,
+      "NEHALEM/t1": 2.571038267486428e-12,
+      "NEHALEM/t4": 2.571038267486428e-12,
+      "SANDYBRIDGE/t1": 2.571038267486428e-12,
+      "SANDYBRIDGE/t4": 2.571038267486428e-12
+     },
+     "max": 2.571038267486428e-12,
+     "min": 2.571038267486428e-12,
+     "spread": 0.0
+    },
+    "bar_dense": {
+     "by_rung": {
+      "HASWELL/t1": 1.7605136344867384e-12,
+      "HASWELL/t4": 1.7605136344867384e-12,
+      "KATMAI/t1": 1.7605136344867384e-12,
+      "KATMAI/t4": 1.7605136344867384e-12,
+      "NEHALEM/t1": 1.7605136344867384e-12,
+      "NEHALEM/t4": 1.7605136344867384e-12,
+      "SANDYBRIDGE/t1": 1.7605136344867384e-12,
+      "SANDYBRIDGE/t4": 1.7605136344867384e-12
+     },
+     "max": 1.7605136344867384e-12,
+     "min": 1.7605136344867384e-12,
+     "spread": 0.0
+    },
+    "err_bluestein": {
+     "by_rung": {
+      "HASWELL/t1": 3.04614123074787e-14,
+      "HASWELL/t4": 3.04614123074787e-14,
+      "KATMAI/t1": 3.04614123074787e-14,
+      "KATMAI/t4": 3.04614123074787e-14,
+      "NEHALEM/t1": 3.04614123074787e-14,
+      "NEHALEM/t4": 3.04614123074787e-14,
+      "SANDYBRIDGE/t1": 3.04614123074787e-14,
+      "SANDYBRIDGE/t4": 3.04614123074787e-14
+     },
+     "max": 3.04614123074787e-14,
+     "min": 3.04614123074787e-14,
+     "spread": 0.0
+    },
+    "err_direct": {
+     "by_rung": {
+      "HASWELL/t1": 1.6091724337024826e-14,
+      "HASWELL/t4": 1.6091724337024826e-14,
+      "KATMAI/t1": 1.9131948672901813e-14,
+      "KATMAI/t4": 1.9131948672901813e-14,
+      "NEHALEM/t1": 1.9131948672901813e-14,
+      "NEHALEM/t4": 1.9131948672901813e-14,
+      "SANDYBRIDGE/t1": 1.9131948672901813e-14,
+      "SANDYBRIDGE/t4": 1.9131948672901813e-14
+     },
+     "max": 1.9131948672901813e-14,
+     "min": 1.6091724337024826e-14,
+     "spread": 3.0402243358769865e-15
+    },
+    "err_separable": {
+     "by_rung": {
+      "HASWELL/t1": 3.1238132782840776e-14,
+      "HASWELL/t4": 3.1238132782840776e-14,
+      "KATMAI/t1": 3.1238132782840776e-14,
+      "KATMAI/t4": 3.1238132782840776e-14,
+      "NEHALEM/t1": 3.1238132782840776e-14,
+      "NEHALEM/t4": 3.1238132782840776e-14,
+      "SANDYBRIDGE/t1": 3.1238132782840776e-14,
+      "SANDYBRIDGE/t4": 3.1238132782840776e-14
+     },
+     "max": 3.1238132782840776e-14,
+     "min": 3.1238132782840776e-14,
+     "spread": 0.0
+    },
+    "pair_bluestein_vs_direct": {
+     "by_rung": {
+      "HASWELL/t1": 3.5013413865546287e-14,
+      "HASWELL/t4": 3.5013413865546287e-14,
+      "KATMAI/t1": 3.1112403226249784e-14,
+      "KATMAI/t4": 3.1112403226249784e-14,
+      "NEHALEM/t1": 3.1112403226249784e-14,
+      "NEHALEM/t4": 3.1112403226249784e-14,
+      "SANDYBRIDGE/t1": 3.1112403226249784e-14,
+      "SANDYBRIDGE/t4": 3.1112403226249784e-14
+     },
+     "max": 3.5013413865546287e-14,
+     "min": 3.1112403226249784e-14,
+     "spread": 3.901010639296502e-15
+    },
+    "pair_separable_vs_direct": {
+     "by_rung": {
+      "HASWELL/t1": 2.893063117941767e-14,
+      "HASWELL/t4": 2.893063117941767e-14,
+      "KATMAI/t1": 3.277321202239695e-14,
+      "KATMAI/t4": 3.277321202239695e-14,
+      "NEHALEM/t1": 3.277321202239695e-14,
+      "NEHALEM/t4": 3.277321202239695e-14,
+      "SANDYBRIDGE/t1": 3.277321202239695e-14,
+      "SANDYBRIDGE/t4": 3.277321202239695e-14
+     },
+     "max": 3.277321202239695e-14,
+     "min": 2.893063117941767e-14,
+     "spread": 3.842580842979283e-15
+    },
+    "sha_bluestein": {
+     "by_rung": {
+      "HASWELL/t1": "f3b5a2108e3523db951954e40d466f8ff4622b3783a8376b98f6ad31d2997c16",
+      "HASWELL/t4": "f3b5a2108e3523db951954e40d466f8ff4622b3783a8376b98f6ad31d2997c16",
+      "KATMAI/t1": "f3b5a2108e3523db951954e40d466f8ff4622b3783a8376b98f6ad31d2997c16",
+      "KATMAI/t4": "f3b5a2108e3523db951954e40d466f8ff4622b3783a8376b98f6ad31d2997c16",
+      "NEHALEM/t1": "f3b5a2108e3523db951954e40d466f8ff4622b3783a8376b98f6ad31d2997c16",
+      "NEHALEM/t4": "f3b5a2108e3523db951954e40d466f8ff4622b3783a8376b98f6ad31d2997c16",
+      "SANDYBRIDGE/t1": "f3b5a2108e3523db951954e40d466f8ff4622b3783a8376b98f6ad31d2997c16",
+      "SANDYBRIDGE/t4": "f3b5a2108e3523db951954e40d466f8ff4622b3783a8376b98f6ad31d2997c16"
+     },
+     "distinct": 1
+    },
+    "sha_direct": {
+     "by_rung": {
+      "HASWELL/t1": "918d3ad292cd9481fe338d4c22e4194926efc0d0ddaf59dd0cd2a2593ee24185",
+      "HASWELL/t4": "918d3ad292cd9481fe338d4c22e4194926efc0d0ddaf59dd0cd2a2593ee24185",
+      "KATMAI/t1": "3465058e6937048692706826938ab3316e3bcbfd36eb5081fa64a3668fd4ddac",
+      "KATMAI/t4": "3465058e6937048692706826938ab3316e3bcbfd36eb5081fa64a3668fd4ddac",
+      "NEHALEM/t1": "3465058e6937048692706826938ab3316e3bcbfd36eb5081fa64a3668fd4ddac",
+      "NEHALEM/t4": "3465058e6937048692706826938ab3316e3bcbfd36eb5081fa64a3668fd4ddac",
+      "SANDYBRIDGE/t1": "3465058e6937048692706826938ab3316e3bcbfd36eb5081fa64a3668fd4ddac",
+      "SANDYBRIDGE/t4": "3465058e6937048692706826938ab3316e3bcbfd36eb5081fa64a3668fd4ddac"
+     },
+     "distinct": 2
+    },
+    "sha_separable": {
+     "by_rung": {
+      "HASWELL/t1": "76d9d5697804fa41bcf4c05539ccefabf1b25108ba299bf078862314aba6077a",
+      "HASWELL/t4": "76d9d5697804fa41bcf4c05539ccefabf1b25108ba299bf078862314aba6077a",
+      "KATMAI/t1": "76d9d5697804fa41bcf4c05539ccefabf1b25108ba299bf078862314aba6077a",
+      "KATMAI/t4": "76d9d5697804fa41bcf4c05539ccefabf1b25108ba299bf078862314aba6077a",
+      "NEHALEM/t1": "76d9d5697804fa41bcf4c05539ccefabf1b25108ba299bf078862314aba6077a",
+      "NEHALEM/t4": "76d9d5697804fa41bcf4c05539ccefabf1b25108ba299bf078862314aba6077a",
+      "SANDYBRIDGE/t1": "76d9d5697804fa41bcf4c05539ccefabf1b25108ba299bf078862314aba6077a",
+      "SANDYBRIDGE/t4": "76d9d5697804fa41bcf4c05539ccefabf1b25108ba299bf078862314aba6077a"
+     },
+     "distinct": 1
+    }
+   },
+   "B1.17x9->5x23.sign-1": {
+    "bar_both": {
+     "by_rung": {
+      "HASWELL/t1": 2.711841649297771e-12,
+      "HASWELL/t4": 2.711841649297771e-12,
+      "KATMAI/t1": 2.711841649297771e-12,
+      "KATMAI/t4": 2.711841649297771e-12,
+      "NEHALEM/t1": 2.711841649297771e-12,
+      "NEHALEM/t4": 2.711841649297771e-12,
+      "SANDYBRIDGE/t1": 2.711841649297771e-12,
+      "SANDYBRIDGE/t4": 2.711841649297771e-12
+     },
+     "max": 2.711841649297771e-12,
+     "min": 2.711841649297771e-12,
+     "spread": 0.0
+    },
+    "bar_chirp": {
+     "by_rung": {
+      "HASWELL/t1": 1.7816750375606733e-12,
+      "HASWELL/t4": 1.7816750375606733e-12,
+      "KATMAI/t1": 1.7816750375606733e-12,
+      "KATMAI/t4": 1.7816750375606733e-12,
+      "NEHALEM/t1": 1.7816750375606733e-12,
+      "NEHALEM/t4": 1.7816750375606733e-12,
+      "SANDYBRIDGE/t1": 1.7816750375606733e-12,
+      "SANDYBRIDGE/t4": 1.7816750375606733e-12
+     },
+     "max": 1.7816750375606733e-12,
+     "min": 1.7816750375606733e-12,
+     "spread": 0.0
+    },
+    "bar_dense": {
+     "by_rung": {
+      "HASWELL/t1": 9.301666117370979e-13,
+      "HASWELL/t4": 9.301666117370979e-13,
+      "KATMAI/t1": 9.301666117370979e-13,
+      "KATMAI/t4": 9.301666117370979e-13,
+      "NEHALEM/t1": 9.301666117370979e-13,
+      "NEHALEM/t4": 9.301666117370979e-13,
+      "SANDYBRIDGE/t1": 9.301666117370979e-13,
+      "SANDYBRIDGE/t4": 9.301666117370979e-13
+     },
+     "max": 9.301666117370979e-13,
+     "min": 9.301666117370979e-13,
+     "spread": 0.0
+    },
+    "err_bluestein": {
+     "by_rung": {
+      "HASWELL/t1": 6.179066904694994e-14,
+      "HASWELL/t4": 6.179066904694994e-14,
+      "KATMAI/t1": 6.179066904694994e-14,
+      "KATMAI/t4": 6.179066904694994e-14,
+      "NEHALEM/t1": 6.179066904694994e-14,
+      "NEHALEM/t4": 6.179066904694994e-14,
+      "SANDYBRIDGE/t1": 6.179066904694994e-14,
+      "SANDYBRIDGE/t4": 6.179066904694994e-14
+     },
+     "max": 6.179066904694994e-14,
+     "min": 6.179066904694994e-14,
+     "spread": 0.0
+    },
+    "err_direct": {
+     "by_rung": {
+      "HASWELL/t1": 1.0658141036401503e-14,
+      "HASWELL/t4": 1.0658141036401503e-14,
+      "KATMAI/t1": 1.0805156823142814e-14,
+      "KATMAI/t4": 1.0805156823142814e-14,
+      "NEHALEM/t1": 1.0805156823142814e-14,
+      "NEHALEM/t4": 1.0805156823142814e-14,
+      "SANDYBRIDGE/t1": 1.0805156823142814e-14,
+      "SANDYBRIDGE/t4": 1.0805156823142814e-14
+     },
+     "max": 1.0805156823142814e-14,
+     "min": 1.0658141036401503e-14,
+     "spread": 1.470157867413108e-16
+    },
+    "err_separable": {
+     "by_rung": {
+      "HASWELL/t1": 6.247626556568155e-14,
+      "HASWELL/t4": 6.247626556568155e-14,
+      "KATMAI/t1": 6.247626556568155e-14,
+      "KATMAI/t4": 6.247626556568155e-14,
+      "NEHALEM/t1": 6.247626556568155e-14,
+      "NEHALEM/t4": 6.247626556568155e-14,
+      "SANDYBRIDGE/t1": 6.247626556568155e-14,
+      "SANDYBRIDGE/t4": 6.247626556568155e-14
+     },
+     "max": 6.247626556568155e-14,
+     "min": 6.247626556568155e-14,
+     "spread": 0.0
+    },
+    "pair_bluestein_vs_direct": {
+     "by_rung": {
+      "HASWELL/t1": 6.102632492251517e-14,
+      "HASWELL/t4": 6.102632492251517e-14,
+      "KATMAI/t1": 6.021995421044064e-14,
+      "KATMAI/t4": 6.021995421044064e-14,
+      "NEHALEM/t1": 6.021995421044064e-14,
+      "NEHALEM/t4": 6.021995421044064e-14,
+      "SANDYBRIDGE/t1": 6.021995421044064e-14,
+      "SANDYBRIDGE/t4": 6.021995421044064e-14
+     },
+     "max": 6.102632492251517e-14,
+     "min": 6.021995421044064e-14,
+     "spread": 8.06370712074531e-16
+    },
+    "pair_separable_vs_direct": {
+     "by_rung": {
+      "HASWELL/t1": 6.151557333184169e-14,
+      "HASWELL/t4": 6.151557333184169e-14,
+      "KATMAI/t1": 6.066980289865166e-14,
+      "KATMAI/t4": 6.066980289865166e-14,
+      "NEHALEM/t1": 6.066980289865166e-14,
+      "NEHALEM/t4": 6.066980289865166e-14,
+      "SANDYBRIDGE/t1": 6.066980289865166e-14,
+      "SANDYBRIDGE/t4": 6.066980289865166e-14
+     },
+     "max": 6.151557333184169e-14,
+     "min": 6.066980289865166e-14,
+     "spread": 8.45770433190037e-16
+    },
+    "sha_bluestein": {
+     "by_rung": {
+      "HASWELL/t1": "d774960790653b5343ee95d45f0dd9b3cfdd3e26cc2df28a3bfa49bd6dc4e76c",
+      "HASWELL/t4": "d774960790653b5343ee95d45f0dd9b3cfdd3e26cc2df28a3bfa49bd6dc4e76c",
+      "KATMAI/t1": "d774960790653b5343ee95d45f0dd9b3cfdd3e26cc2df28a3bfa49bd6dc4e76c",
+      "KATMAI/t4": "d774960790653b5343ee95d45f0dd9b3cfdd3e26cc2df28a3bfa49bd6dc4e76c",
+      "NEHALEM/t1": "d774960790653b5343ee95d45f0dd9b3cfdd3e26cc2df28a3bfa49bd6dc4e76c",
+      "NEHALEM/t4": "d774960790653b5343ee95d45f0dd9b3cfdd3e26cc2df28a3bfa49bd6dc4e76c",
+      "SANDYBRIDGE/t1": "d774960790653b5343ee95d45f0dd9b3cfdd3e26cc2df28a3bfa49bd6dc4e76c",
+      "SANDYBRIDGE/t4": "d774960790653b5343ee95d45f0dd9b3cfdd3e26cc2df28a3bfa49bd6dc4e76c"
+     },
+     "distinct": 1
+    },
+    "sha_direct": {
+     "by_rung": {
+      "HASWELL/t1": "e040c044d0a73391ed72b4a0f7b7d665c03ade1d059cc9707453dd968ecda00b",
+      "HASWELL/t4": "e040c044d0a73391ed72b4a0f7b7d665c03ade1d059cc9707453dd968ecda00b",
+      "KATMAI/t1": "398faf47de8d5c3de8e2c596c4525f93d80a6c8c808b25b54a48512a961ada8c",
+      "KATMAI/t4": "398faf47de8d5c3de8e2c596c4525f93d80a6c8c808b25b54a48512a961ada8c",
+      "NEHALEM/t1": "cadf434f7ced7153cc8ea98b8a83f03506de4ed318badf2b2b928f298c4dc108",
+      "NEHALEM/t4": "cadf434f7ced7153cc8ea98b8a83f03506de4ed318badf2b2b928f298c4dc108",
+      "SANDYBRIDGE/t1": "cadf434f7ced7153cc8ea98b8a83f03506de4ed318badf2b2b928f298c4dc108",
+      "SANDYBRIDGE/t4": "cadf434f7ced7153cc8ea98b8a83f03506de4ed318badf2b2b928f298c4dc108"
+     },
+     "distinct": 3
+    },
+    "sha_separable": {
+     "by_rung": {
+      "HASWELL/t1": "9b75dec9fb3aee5e76c1d972979b22cbaedd632d8d46cdeac081228e9505d485",
+      "HASWELL/t4": "9b75dec9fb3aee5e76c1d972979b22cbaedd632d8d46cdeac081228e9505d485",
+      "KATMAI/t1": "9b75dec9fb3aee5e76c1d972979b22cbaedd632d8d46cdeac081228e9505d485",
+      "KATMAI/t4": "9b75dec9fb3aee5e76c1d972979b22cbaedd632d8d46cdeac081228e9505d485",
+      "NEHALEM/t1": "9b75dec9fb3aee5e76c1d972979b22cbaedd632d8d46cdeac081228e9505d485",
+      "NEHALEM/t4": "9b75dec9fb3aee5e76c1d972979b22cbaedd632d8d46cdeac081228e9505d485",
+      "SANDYBRIDGE/t1": "9b75dec9fb3aee5e76c1d972979b22cbaedd632d8d46cdeac081228e9505d485",
+      "SANDYBRIDGE/t4": "9b75dec9fb3aee5e76c1d972979b22cbaedd632d8d46cdeac081228e9505d485"
+     },
+     "distinct": 1
+    }
+   },
+   "B1.17x9->5x23.sign1": {
+    "bar_both": {
+     "by_rung": {
+      "HASWELL/t1": 2.711841649297771e-12,
+      "HASWELL/t4": 2.711841649297771e-12,
+      "KATMAI/t1": 2.711841649297771e-12,
+      "KATMAI/t4": 2.711841649297771e-12,
+      "NEHALEM/t1": 2.711841649297771e-12,
+      "NEHALEM/t4": 2.711841649297771e-12,
+      "SANDYBRIDGE/t1": 2.711841649297771e-12,
+      "SANDYBRIDGE/t4": 2.711841649297771e-12
+     },
+     "max": 2.711841649297771e-12,
+     "min": 2.711841649297771e-12,
+     "spread": 0.0
+    },
+    "bar_chirp": {
+     "by_rung": {
+      "HASWELL/t1": 1.7816750375606733e-12,
+      "HASWELL/t4": 1.7816750375606733e-12,
+      "KATMAI/t1": 1.7816750375606733e-12,
+      "KATMAI/t4": 1.7816750375606733e-12,
+      "NEHALEM/t1": 1.7816750375606733e-12,
+      "NEHALEM/t4": 1.7816750375606733e-12,
+      "SANDYBRIDGE/t1": 1.7816750375606733e-12,
+      "SANDYBRIDGE/t4": 1.7816750375606733e-12
+     },
+     "max": 1.7816750375606733e-12,
+     "min": 1.7816750375606733e-12,
+     "spread": 0.0
+    },
+    "bar_dense": {
+     "by_rung": {
+      "HASWELL/t1": 9.301666117370979e-13,
+      "HASWELL/t4": 9.301666117370979e-13,
+      "KATMAI/t1": 9.301666117370979e-13,
+      "KATMAI/t4": 9.301666117370979e-13,
+      "NEHALEM/t1": 9.301666117370979e-13,
+      "NEHALEM/t4": 9.301666117370979e-13,
+      "SANDYBRIDGE/t1": 9.301666117370979e-13,
+      "SANDYBRIDGE/t4": 9.301666117370979e-13
+     },
+     "max": 9.301666117370979e-13,
+     "min": 9.301666117370979e-13,
+     "spread": 0.0
+    },
+    "err_bluestein": {
+     "by_rung": {
+      "HASWELL/t1": 8.691904790839364e-14,
+      "HASWELL/t4": 8.691904790839364e-14,
+      "KATMAI/t1": 8.691904790839364e-14,
+      "KATMAI/t4": 8.691904790839364e-14,
+      "NEHALEM/t1": 8.691904790839364e-14,
+      "NEHALEM/t4": 8.691904790839364e-14,
+      "SANDYBRIDGE/t1": 8.691904790839364e-14,
+      "SANDYBRIDGE/t4": 8.691904790839364e-14
+     },
+     "max": 8.691904790839364e-14,
+     "min": 8.691904790839364e-14,
+     "spread": 0.0
+    },
+    "err_direct": {
+     "by_rung": {
+      "HASWELL/t1": 8.188600426433447e-15,
+      "HASWELL/t4": 8.188600426433447e-15,
+      "KATMAI/t1": 1.0048591735576161e-14,
+      "KATMAI/t4": 1.0048591735576161e-14,
+      "NEHALEM/t1": 9.565974336450906e-15,
+      "NEHALEM/t4": 9.565974336450906e-15,
+      "SANDYBRIDGE/t1": 9.565974336450906e-15,
+      "SANDYBRIDGE/t4": 9.565974336450906e-15
+     },
+     "max": 1.0048591735576161e-14,
+     "min": 8.188600426433447e-15,
+     "spread": 1.8599913091427143e-15
+    },
+    "err_separable": {
+     "by_rung": {
+      "HASWELL/t1": 7.406044743317242e-14,
+      "HASWELL/t4": 7.406044743317242e-14,
+      "KATMAI/t1": 7.406044743317242e-14,
+      "KATMAI/t4": 7.406044743317242e-14,
+      "NEHALEM/t1": 7.406044743317242e-14,
+      "NEHALEM/t4": 7.406044743317242e-14,
+      "SANDYBRIDGE/t1": 7.406044743317242e-14,
+      "SANDYBRIDGE/t4": 7.406044743317242e-14
+     },
+     "max": 7.406044743317242e-14,
+     "min": 7.406044743317242e-14,
+     "spread": 0.0
+    },
+    "pair_bluestein_vs_direct": {
+     "by_rung": {
+      "HASWELL/t1": 8.280567002434699e-14,
+      "HASWELL/t4": 8.280567002434699e-14,
+      "KATMAI/t1": 8.280567002434699e-14,
+      "KATMAI/t4": 8.280567002434699e-14,
+      "NEHALEM/t1": 8.280567002434699e-14,
+      "NEHALEM/t4": 8.280567002434699e-14,
+      "SANDYBRIDGE/t1": 8.280567002434699e-14,
+      "SANDYBRIDGE/t4": 8.280567002434699e-14
+     },
+     "max": 8.280567002434699e-14,
+     "min": 8.280567002434699e-14,
+     "spread": 0.0
+    },
+    "pair_separable_vs_direct": {
+     "by_rung": {
+      "HASWELL/t1": 6.99803436660041e-14,
+      "HASWELL/t4": 6.99803436660041e-14,
+      "KATMAI/t1": 6.99803436660041e-14,
+      "KATMAI/t4": 6.99803436660041e-14,
+      "NEHALEM/t1": 6.99803436660041e-14,
+      "NEHALEM/t4": 6.99803436660041e-14,
+      "SANDYBRIDGE/t1": 6.99803436660041e-14,
+      "SANDYBRIDGE/t4": 6.99803436660041e-14
+     },
+     "max": 6.99803436660041e-14,
+     "min": 6.99803436660041e-14,
+     "spread": 0.0
+    },
+    "sha_bluestein": {
+     "by_rung": {
+      "HASWELL/t1": "3c213a22636730c560be33343586954fe3d2e43fae56308e0a3d4e77ed141b6d",
+      "HASWELL/t4": "3c213a22636730c560be33343586954fe3d2e43fae56308e0a3d4e77ed141b6d",
+      "KATMAI/t1": "3c213a22636730c560be33343586954fe3d2e43fae56308e0a3d4e77ed141b6d",
+      "KATMAI/t4": "3c213a22636730c560be33343586954fe3d2e43fae56308e0a3d4e77ed141b6d",
+      "NEHALEM/t1": "3c213a22636730c560be33343586954fe3d2e43fae56308e0a3d4e77ed141b6d",
+      "NEHALEM/t4": "3c213a22636730c560be33343586954fe3d2e43fae56308e0a3d4e77ed141b6d",
+      "SANDYBRIDGE/t1": "3c213a22636730c560be33343586954fe3d2e43fae56308e0a3d4e77ed141b6d",
+      "SANDYBRIDGE/t4": "3c213a22636730c560be33343586954fe3d2e43fae56308e0a3d4e77ed141b6d"
+     },
+     "distinct": 1
+    },
+    "sha_direct": {
+     "by_rung": {
+      "HASWELL/t1": "21003ad20c87e311d6959b3967a070712c3083e237cf4b55735f7e4a512e9628",
+      "HASWELL/t4": "21003ad20c87e311d6959b3967a070712c3083e237cf4b55735f7e4a512e9628",
+      "KATMAI/t1": "0d08e4b3f57cd9e7a0e2e55f4b3a220b6e9488b57d13a9a2721d931fd963ee79",
+      "KATMAI/t4": "0d08e4b3f57cd9e7a0e2e55f4b3a220b6e9488b57d13a9a2721d931fd963ee79",
+      "NEHALEM/t1": "986980e8973b1d378221ebc188dac55378a82cabf36044005812dfdeec3fbb42",
+      "NEHALEM/t4": "986980e8973b1d378221ebc188dac55378a82cabf36044005812dfdeec3fbb42",
+      "SANDYBRIDGE/t1": "986980e8973b1d378221ebc188dac55378a82cabf36044005812dfdeec3fbb42",
+      "SANDYBRIDGE/t4": "986980e8973b1d378221ebc188dac55378a82cabf36044005812dfdeec3fbb42"
+     },
+     "distinct": 3
+    },
+    "sha_separable": {
+     "by_rung": {
+      "HASWELL/t1": "3911ed3a2b6a7d46d1452454185e7247c091303b9b7160bcf58fdf12d2260c0c",
+      "HASWELL/t4": "3911ed3a2b6a7d46d1452454185e7247c091303b9b7160bcf58fdf12d2260c0c",
+      "KATMAI/t1": "3911ed3a2b6a7d46d1452454185e7247c091303b9b7160bcf58fdf12d2260c0c",
+      "KATMAI/t4": "3911ed3a2b6a7d46d1452454185e7247c091303b9b7160bcf58fdf12d2260c0c",
+      "NEHALEM/t1": "3911ed3a2b6a7d46d1452454185e7247c091303b9b7160bcf58fdf12d2260c0c",
+      "NEHALEM/t4": "3911ed3a2b6a7d46d1452454185e7247c091303b9b7160bcf58fdf12d2260c0c",
+      "SANDYBRIDGE/t1": "3911ed3a2b6a7d46d1452454185e7247c091303b9b7160bcf58fdf12d2260c0c",
+      "SANDYBRIDGE/t4": "3911ed3a2b6a7d46d1452454185e7247c091303b9b7160bcf58fdf12d2260c0c"
+     },
+     "distinct": 1
+    }
+   },
+   "B1.32x24->16x20.sign-1": {
+    "bar_both": {
+     "by_rung": {
+      "HASWELL/t1": 1.7756708646088344e-11,
+      "HASWELL/t4": 1.7756708646088344e-11,
+      "KATMAI/t1": 1.7756708646088344e-11,
+      "KATMAI/t4": 1.7756708646088344e-11,
+      "NEHALEM/t1": 1.7756708646088344e-11,
+      "NEHALEM/t4": 1.7756708646088344e-11,
+      "SANDYBRIDGE/t1": 1.7756708646088344e-11,
+      "SANDYBRIDGE/t4": 1.7756708646088344e-11
+     },
+     "max": 1.7756708646088344e-11,
+     "min": 1.7756708646088344e-11,
+     "spread": 0.0
+    },
+    "bar_chirp": {
+     "by_rung": {
+      "HASWELL/t1": 9.603901773486614e-12,
+      "HASWELL/t4": 9.603901773486614e-12,
+      "KATMAI/t1": 9.603901773486614e-12,
+      "KATMAI/t4": 9.603901773486614e-12,
+      "NEHALEM/t1": 9.603901773486614e-12,
+      "NEHALEM/t4": 9.603901773486614e-12,
+      "SANDYBRIDGE/t1": 9.603901773486614e-12,
+      "SANDYBRIDGE/t4": 9.603901773486614e-12
+     },
+     "max": 9.603901773486614e-12,
+     "min": 9.603901773486614e-12,
+     "spread": 0.0
+    },
+    "bar_dense": {
+     "by_rung": {
+      "HASWELL/t1": 8.15280687260173e-12,
+      "HASWELL/t4": 8.15280687260173e-12,
+      "KATMAI/t1": 8.15280687260173e-12,
+      "KATMAI/t4": 8.15280687260173e-12,
+      "NEHALEM/t1": 8.15280687260173e-12,
+      "NEHALEM/t4": 8.15280687260173e-12,
+      "SANDYBRIDGE/t1": 8.15280687260173e-12,
+      "SANDYBRIDGE/t4": 8.15280687260173e-12
+     },
+     "max": 8.15280687260173e-12,
+     "min": 8.15280687260173e-12,
+     "spread": 0.0
+    },
+    "err_bluestein": {
+     "by_rung": {
+      "HASWELL/t1": 2.3266884355213253e-13,
+      "HASWELL/t4": 2.3266884355213253e-13,
+      "KATMAI/t1": 2.3266884355213253e-13,
+      "KATMAI/t4": 2.3266884355213253e-13,
+      "NEHALEM/t1": 2.3266884355213253e-13,
+      "NEHALEM/t4": 2.3266884355213253e-13,
+      "SANDYBRIDGE/t1": 2.3266884355213253e-13,
+      "SANDYBRIDGE/t4": 2.3266884355213253e-13
+     },
+     "max": 2.3266884355213253e-13,
+     "min": 2.3266884355213253e-13,
+     "spread": 0.0
+    },
+    "err_direct": {
+     "by_rung": {
+      "HASWELL/t1": 4.4938668397781776e-14,
+      "HASWELL/t4": 4.4938668397781776e-14,
+      "KATMAI/t1": 3.1776437161565096e-14,
+      "KATMAI/t4": 3.1776437161565096e-14,
+      "NEHALEM/t1": 3.1776437161565096e-14,
+      "NEHALEM/t4": 3.1776437161565096e-14,
+      "SANDYBRIDGE/t1": 3.1776437161565096e-14,
+      "SANDYBRIDGE/t4": 3.1776437161565096e-14
+     },
+     "max": 4.4938668397781776e-14,
+     "min": 3.1776437161565096e-14,
+     "spread": 1.316223123621668e-14
+    },
+    "err_separable": {
+     "by_rung": {
+      "HASWELL/t1": 2.51214793389404e-13,
+      "HASWELL/t4": 2.51214793389404e-13,
+      "KATMAI/t1": 2.51214793389404e-13,
+      "KATMAI/t4": 2.51214793389404e-13,
+      "NEHALEM/t1": 2.51214793389404e-13,
+      "NEHALEM/t4": 2.51214793389404e-13,
+      "SANDYBRIDGE/t1": 2.51214793389404e-13,
+      "SANDYBRIDGE/t4": 2.51214793389404e-13
+     },
+     "max": 2.51214793389404e-13,
+     "min": 2.51214793389404e-13,
+     "spread": 0.0
+    },
+    "pair_bluestein_vs_direct": {
+     "by_rung": {
+      "HASWELL/t1": 2.352315015805125e-13,
+      "HASWELL/t4": 2.352315015805125e-13,
+      "KATMAI/t1": 2.352315015805125e-13,
+      "KATMAI/t4": 2.352315015805125e-13,
+      "NEHALEM/t1": 2.352315015805125e-13,
+      "NEHALEM/t4": 2.352315015805125e-13,
+      "SANDYBRIDGE/t1": 2.352315015805125e-13,
+      "SANDYBRIDGE/t4": 2.352315015805125e-13
+     },
+     "max": 2.352315015805125e-13,
+     "min": 2.352315015805125e-13,
+     "spread": 0.0
+    },
+    "pair_separable_vs_direct": {
+     "by_rung": {
+      "HASWELL/t1": 2.574675893923972e-13,
+      "HASWELL/t4": 2.574675893923972e-13,
+      "KATMAI/t1": 2.574675893923972e-13,
+      "KATMAI/t4": 2.574675893923972e-13,
+      "NEHALEM/t1": 2.574675893923972e-13,
+      "NEHALEM/t4": 2.574675893923972e-13,
+      "SANDYBRIDGE/t1": 2.574675893923972e-13,
+      "SANDYBRIDGE/t4": 2.574675893923972e-13
+     },
+     "max": 2.574675893923972e-13,
+     "min": 2.574675893923972e-13,
+     "spread": 0.0
+    },
+    "sha_bluestein": {
+     "by_rung": {
+      "HASWELL/t1": "1d2f060ebfc79e291163b853e68411c3943d6d105fd8c8fe96085a088ae334d4",
+      "HASWELL/t4": "1d2f060ebfc79e291163b853e68411c3943d6d105fd8c8fe96085a088ae334d4",
+      "KATMAI/t1": "1d2f060ebfc79e291163b853e68411c3943d6d105fd8c8fe96085a088ae334d4",
+      "KATMAI/t4": "1d2f060ebfc79e291163b853e68411c3943d6d105fd8c8fe96085a088ae334d4",
+      "NEHALEM/t1": "1d2f060ebfc79e291163b853e68411c3943d6d105fd8c8fe96085a088ae334d4",
+      "NEHALEM/t4": "1d2f060ebfc79e291163b853e68411c3943d6d105fd8c8fe96085a088ae334d4",
+      "SANDYBRIDGE/t1": "1d2f060ebfc79e291163b853e68411c3943d6d105fd8c8fe96085a088ae334d4",
+      "SANDYBRIDGE/t4": "1d2f060ebfc79e291163b853e68411c3943d6d105fd8c8fe96085a088ae334d4"
+     },
+     "distinct": 1
+    },
+    "sha_direct": {
+     "by_rung": {
+      "HASWELL/t1": "a4b7962c729cba71b573368b7b37ae3a5b4c55e029a594e617c244042fb10586",
+      "HASWELL/t4": "a4b7962c729cba71b573368b7b37ae3a5b4c55e029a594e617c244042fb10586",
+      "KATMAI/t1": "b0e6838831923f57d79461fcf1107f9e17cb103f26ab0162d228620e1e8abc73",
+      "KATMAI/t4": "b0e6838831923f57d79461fcf1107f9e17cb103f26ab0162d228620e1e8abc73",
+      "NEHALEM/t1": "b0e6838831923f57d79461fcf1107f9e17cb103f26ab0162d228620e1e8abc73",
+      "NEHALEM/t4": "b0e6838831923f57d79461fcf1107f9e17cb103f26ab0162d228620e1e8abc73",
+      "SANDYBRIDGE/t1": "b0e6838831923f57d79461fcf1107f9e17cb103f26ab0162d228620e1e8abc73",
+      "SANDYBRIDGE/t4": "b0e6838831923f57d79461fcf1107f9e17cb103f26ab0162d228620e1e8abc73"
+     },
+     "distinct": 2
+    },
+    "sha_separable": {
+     "by_rung": {
+      "HASWELL/t1": "660185d86707f21ac41c884564a973316f89ae34ff2bcfa1a5259d6e791fd5a8",
+      "HASWELL/t4": "660185d86707f21ac41c884564a973316f89ae34ff2bcfa1a5259d6e791fd5a8",
+      "KATMAI/t1": "660185d86707f21ac41c884564a973316f89ae34ff2bcfa1a5259d6e791fd5a8",
+      "KATMAI/t4": "660185d86707f21ac41c884564a973316f89ae34ff2bcfa1a5259d6e791fd5a8",
+      "NEHALEM/t1": "660185d86707f21ac41c884564a973316f89ae34ff2bcfa1a5259d6e791fd5a8",
+      "NEHALEM/t4": "660185d86707f21ac41c884564a973316f89ae34ff2bcfa1a5259d6e791fd5a8",
+      "SANDYBRIDGE/t1": "660185d86707f21ac41c884564a973316f89ae34ff2bcfa1a5259d6e791fd5a8",
+      "SANDYBRIDGE/t4": "660185d86707f21ac41c884564a973316f89ae34ff2bcfa1a5259d6e791fd5a8"
+     },
+     "distinct": 1
+    }
+   },
+   "B1.32x24->16x20.sign1": {
+    "bar_both": {
+     "by_rung": {
+      "HASWELL/t1": 1.7756708646088344e-11,
+      "HASWELL/t4": 1.7756708646088344e-11,
+      "KATMAI/t1": 1.7756708646088344e-11,
+      "KATMAI/t4": 1.7756708646088344e-11,
+      "NEHALEM/t1": 1.7756708646088344e-11,
+      "NEHALEM/t4": 1.7756708646088344e-11,
+      "SANDYBRIDGE/t1": 1.7756708646088344e-11,
+      "SANDYBRIDGE/t4": 1.7756708646088344e-11
+     },
+     "max": 1.7756708646088344e-11,
+     "min": 1.7756708646088344e-11,
+     "spread": 0.0
+    },
+    "bar_chirp": {
+     "by_rung": {
+      "HASWELL/t1": 9.603901773486614e-12,
+      "HASWELL/t4": 9.603901773486614e-12,
+      "KATMAI/t1": 9.603901773486614e-12,
+      "KATMAI/t4": 9.603901773486614e-12,
+      "NEHALEM/t1": 9.603901773486614e-12,
+      "NEHALEM/t4": 9.603901773486614e-12,
+      "SANDYBRIDGE/t1": 9.603901773486614e-12,
+      "SANDYBRIDGE/t4": 9.603901773486614e-12
+     },
+     "max": 9.603901773486614e-12,
+     "min": 9.603901773486614e-12,
+     "spread": 0.0
+    },
+    "bar_dense": {
+     "by_rung": {
+      "HASWELL/t1": 8.15280687260173e-12,
+      "HASWELL/t4": 8.15280687260173e-12,
+      "KATMAI/t1": 8.15280687260173e-12,
+      "KATMAI/t4": 8.15280687260173e-12,
+      "NEHALEM/t1": 8.15280687260173e-12,
+      "NEHALEM/t4": 8.15280687260173e-12,
+      "SANDYBRIDGE/t1": 8.15280687260173e-12,
+      "SANDYBRIDGE/t4": 8.15280687260173e-12
+     },
+     "max": 8.15280687260173e-12,
+     "min": 8.15280687260173e-12,
+     "spread": 0.0
+    },
+    "err_bluestein": {
+     "by_rung": {
+      "HASWELL/t1": 3.1036975184181237e-13,
+      "HASWELL/t4": 3.1036975184181237e-13,
+      "KATMAI/t1": 3.1036975184181237e-13,
+      "KATMAI/t4": 3.1036975184181237e-13,
+      "NEHALEM/t1": 3.1036975184181237e-13,
+      "NEHALEM/t4": 3.1036975184181237e-13,
+      "SANDYBRIDGE/t1": 3.1036975184181237e-13,
+      "SANDYBRIDGE/t4": 3.1036975184181237e-13
+     },
+     "max": 3.1036975184181237e-13,
+     "min": 3.1036975184181237e-13,
+     "spread": 0.0
+    },
+    "err_direct": {
+     "by_rung": {
+      "HASWELL/t1": 4.271574971572196e-14,
+      "HASWELL/t4": 4.271574971572196e-14,
+      "KATMAI/t1": 3.553823728406968e-14,
+      "KATMAI/t4": 3.553823728406968e-14,
+      "NEHALEM/t1": 3.553823728406968e-14,
+      "NEHALEM/t4": 3.553823728406968e-14,
+      "SANDYBRIDGE/t1": 3.553823728406968e-14,
+      "SANDYBRIDGE/t4": 3.553823728406968e-14
+     },
+     "max": 4.271574971572196e-14,
+     "min": 3.553823728406968e-14,
+     "spread": 7.17751243165228e-15
+    },
+    "err_separable": {
+     "by_rung": {
+      "HASWELL/t1": 3.124785372878291e-13,
+      "HASWELL/t4": 3.124785372878291e-13,
+      "KATMAI/t1": 3.124785372878291e-13,
+      "KATMAI/t4": 3.124785372878291e-13,
+      "NEHALEM/t1": 3.124785372878291e-13,
+      "NEHALEM/t4": 3.124785372878291e-13,
+      "SANDYBRIDGE/t1": 3.124785372878291e-13,
+      "SANDYBRIDGE/t4": 3.124785372878291e-13
+     },
+     "max": 3.124785372878291e-13,
+     "min": 3.124785372878291e-13,
+     "spread": 0.0
+    },
+    "pair_bluestein_vs_direct": {
+     "by_rung": {
+      "HASWELL/t1": 3.061021589917917e-13,
+      "HASWELL/t4": 3.061021589917917e-13,
+      "KATMAI/t1": 3.078086077769262e-13,
+      "KATMAI/t4": 3.078086077769262e-13,
+      "NEHALEM/t1": 3.078086077769262e-13,
+      "NEHALEM/t4": 3.078086077769262e-13,
+      "SANDYBRIDGE/t1": 3.078086077769262e-13,
+      "SANDYBRIDGE/t4": 3.078086077769262e-13
+     },
+     "max": 3.078086077769262e-13,
+     "min": 3.061021589917917e-13,
+     "spread": 1.7064487851345365e-15
+    },
+    "pair_separable_vs_direct": {
+     "by_rung": {
+      "HASWELL/t1": 3.08432025383896e-13,
+      "HASWELL/t4": 3.08432025383896e-13,
+      "KATMAI/t1": 3.100493346392353e-13,
+      "KATMAI/t4": 3.100493346392353e-13,
+      "NEHALEM/t1": 3.100493346392353e-13,
+      "NEHALEM/t4": 3.100493346392353e-13,
+      "SANDYBRIDGE/t1": 3.100493346392353e-13,
+      "SANDYBRIDGE/t4": 3.100493346392353e-13
+     },
+     "max": 3.100493346392353e-13,
+     "min": 3.08432025383896e-13,
+     "spread": 1.617309255339276e-15
+    },
+    "sha_bluestein": {
+     "by_rung": {
+      "HASWELL/t1": "83c17da6d6f9130d4a3489d5540b1ff1c6bcff2b56b9a02d2d937b8fe8ccb03e",
+      "HASWELL/t4": "83c17da6d6f9130d4a3489d5540b1ff1c6bcff2b56b9a02d2d937b8fe8ccb03e",
+      "KATMAI/t1": "83c17da6d6f9130d4a3489d5540b1ff1c6bcff2b56b9a02d2d937b8fe8ccb03e",
+      "KATMAI/t4": "83c17da6d6f9130d4a3489d5540b1ff1c6bcff2b56b9a02d2d937b8fe8ccb03e",
+      "NEHALEM/t1": "83c17da6d6f9130d4a3489d5540b1ff1c6bcff2b56b9a02d2d937b8fe8ccb03e",
+      "NEHALEM/t4": "83c17da6d6f9130d4a3489d5540b1ff1c6bcff2b56b9a02d2d937b8fe8ccb03e",
+      "SANDYBRIDGE/t1": "83c17da6d6f9130d4a3489d5540b1ff1c6bcff2b56b9a02d2d937b8fe8ccb03e",
+      "SANDYBRIDGE/t4": "83c17da6d6f9130d4a3489d5540b1ff1c6bcff2b56b9a02d2d937b8fe8ccb03e"
+     },
+     "distinct": 1
+    },
+    "sha_direct": {
+     "by_rung": {
+      "HASWELL/t1": "04297e7605d3a19cf1d002aafc9ed3aa29a42d5532d4b0358753a606b4ee5598",
+      "HASWELL/t4": "04297e7605d3a19cf1d002aafc9ed3aa29a42d5532d4b0358753a606b4ee5598",
+      "KATMAI/t1": "c66bec652b186dbde0379c283b43e6a948862f1c0bfa91a92e7653334bfa65d5",
+      "KATMAI/t4": "c66bec652b186dbde0379c283b43e6a948862f1c0bfa91a92e7653334bfa65d5",
+      "NEHALEM/t1": "c66bec652b186dbde0379c283b43e6a948862f1c0bfa91a92e7653334bfa65d5",
+      "NEHALEM/t4": "c66bec652b186dbde0379c283b43e6a948862f1c0bfa91a92e7653334bfa65d5",
+      "SANDYBRIDGE/t1": "c66bec652b186dbde0379c283b43e6a948862f1c0bfa91a92e7653334bfa65d5",
+      "SANDYBRIDGE/t4": "c66bec652b186dbde0379c283b43e6a948862f1c0bfa91a92e7653334bfa65d5"
+     },
+     "distinct": 2
+    },
+    "sha_separable": {
+     "by_rung": {
+      "HASWELL/t1": "2dedf2c4ff0784ee7897b494b9d70d4b7dcf1f5c853697b68da6d197cb62f45e",
+      "HASWELL/t4": "2dedf2c4ff0784ee7897b494b9d70d4b7dcf1f5c853697b68da6d197cb62f45e",
+      "KATMAI/t1": "2dedf2c4ff0784ee7897b494b9d70d4b7dcf1f5c853697b68da6d197cb62f45e",
+      "KATMAI/t4": "2dedf2c4ff0784ee7897b494b9d70d4b7dcf1f5c853697b68da6d197cb62f45e",
+      "NEHALEM/t1": "2dedf2c4ff0784ee7897b494b9d70d4b7dcf1f5c853697b68da6d197cb62f45e",
+      "NEHALEM/t4": "2dedf2c4ff0784ee7897b494b9d70d4b7dcf1f5c853697b68da6d197cb62f45e",
+      "SANDYBRIDGE/t1": "2dedf2c4ff0784ee7897b494b9d70d4b7dcf1f5c853697b68da6d197cb62f45e",
+      "SANDYBRIDGE/t4": "2dedf2c4ff0784ee7897b494b9d70d4b7dcf1f5c853697b68da6d197cb62f45e"
+     },
+     "distinct": 1
+    }
+   },
+   "B2.centred": {
+    "bar_chirp": {
+     "by_rung": {
+      "HASWELL/t1": 5.380937983916719e-12,
+      "HASWELL/t4": 5.380937983916719e-12,
+      "KATMAI/t1": 5.380937983916719e-12,
+      "KATMAI/t4": 5.380937983916719e-12,
+      "NEHALEM/t1": 5.380937983916719e-12,
+      "NEHALEM/t4": 5.380937983916719e-12,
+      "SANDYBRIDGE/t1": 5.380937983916719e-12,
+      "SANDYBRIDGE/t4": 5.380937983916719e-12
+     },
+     "max": 5.380937983916719e-12,
+     "min": 5.380937983916719e-12,
+     "spread": 0.0
+    },
+    "bar_dense": {
+     "by_rung": {
+      "HASWELL/t1": 4.208159164978919e-12,
+      "HASWELL/t4": 4.208159164978919e-12,
+      "KATMAI/t1": 4.208159164978919e-12,
+      "KATMAI/t4": 4.208159164978919e-12,
+      "NEHALEM/t1": 4.208159164978919e-12,
+      "NEHALEM/t4": 4.208159164978919e-12,
+      "SANDYBRIDGE/t1": 4.208159164978919e-12,
+      "SANDYBRIDGE/t4": 4.208159164978919e-12
+     },
+     "max": 4.208159164978919e-12,
+     "min": 4.208159164978919e-12,
+     "spread": 0.0
+    },
+    "err_chirp": {
+     "by_rung": {
+      "HASWELL/t1": 9.816782585657168e-14,
+      "HASWELL/t4": 9.816782585657168e-14,
+      "KATMAI/t1": 9.816782585657168e-14,
+      "KATMAI/t4": 9.816782585657168e-14,
+      "NEHALEM/t1": 9.816782585657168e-14,
+      "NEHALEM/t4": 9.816782585657168e-14,
+      "SANDYBRIDGE/t1": 9.816782585657168e-14,
+      "SANDYBRIDGE/t4": 9.816782585657168e-14
+     },
+     "max": 9.816782585657168e-14,
+     "min": 9.816782585657168e-14,
+     "spread": 0.0
+    },
+    "err_dense": {
+     "by_rung": {
+      "HASWELL/t1": 2.1482170038296686e-14,
+      "HASWELL/t4": 2.1482170038296686e-14,
+      "KATMAI/t1": 2.1610313646285627e-14,
+      "KATMAI/t4": 2.1610313646285627e-14,
+      "NEHALEM/t1": 2.1610313646285627e-14,
+      "NEHALEM/t4": 2.1610313646285627e-14,
+      "SANDYBRIDGE/t1": 2.1610313646285627e-14,
+      "SANDYBRIDGE/t4": 2.1610313646285627e-14
+     },
+     "max": 2.1610313646285627e-14,
+     "min": 2.1482170038296686e-14,
+     "spread": 1.28143607988941e-16
+    },
+    "sha_chirp": {
+     "by_rung": {
+      "HASWELL/t1": "0da3e11e72f1ee8ab915ef08c70597ddc9bfc851a96f170682e7615ab25ffd48",
+      "HASWELL/t4": "0da3e11e72f1ee8ab915ef08c70597ddc9bfc851a96f170682e7615ab25ffd48",
+      "KATMAI/t1": "0da3e11e72f1ee8ab915ef08c70597ddc9bfc851a96f170682e7615ab25ffd48",
+      "KATMAI/t4": "0da3e11e72f1ee8ab915ef08c70597ddc9bfc851a96f170682e7615ab25ffd48",
+      "NEHALEM/t1": "0da3e11e72f1ee8ab915ef08c70597ddc9bfc851a96f170682e7615ab25ffd48",
+      "NEHALEM/t4": "0da3e11e72f1ee8ab915ef08c70597ddc9bfc851a96f170682e7615ab25ffd48",
+      "SANDYBRIDGE/t1": "0da3e11e72f1ee8ab915ef08c70597ddc9bfc851a96f170682e7615ab25ffd48",
+      "SANDYBRIDGE/t4": "0da3e11e72f1ee8ab915ef08c70597ddc9bfc851a96f170682e7615ab25ffd48"
+     },
+     "distinct": 1
+    },
+    "sha_dense": {
+     "by_rung": {
+      "HASWELL/t1": "72ee8be1c39a6bfb6cf6510c93657e0d7cdbd3eff4eae00a287fd289176b7075",
+      "HASWELL/t4": "72ee8be1c39a6bfb6cf6510c93657e0d7cdbd3eff4eae00a287fd289176b7075",
+      "KATMAI/t1": "ae9955b6b45d65106658b85fa3a9d0d21a91cd41a3698653e4f96b8a99aa6c78",
+      "KATMAI/t4": "ae9955b6b45d65106658b85fa3a9d0d21a91cd41a3698653e4f96b8a99aa6c78",
+      "NEHALEM/t1": "ae9955b6b45d65106658b85fa3a9d0d21a91cd41a3698653e4f96b8a99aa6c78",
+      "NEHALEM/t4": "ae9955b6b45d65106658b85fa3a9d0d21a91cd41a3698653e4f96b8a99aa6c78",
+      "SANDYBRIDGE/t1": "ae9955b6b45d65106658b85fa3a9d0d21a91cd41a3698653e4f96b8a99aa6c78",
+      "SANDYBRIDGE/t4": "ae9955b6b45d65106658b85fa3a9d0d21a91cd41a3698653e4f96b8a99aa6c78"
+     },
+     "distinct": 2
+    }
+   },
+   "B3.both_conventions": {
+    "bit_equal": {
+     "by_rung": {
+      "HASWELL/t1": true,
+      "HASWELL/t4": true,
+      "KATMAI/t1": true,
+      "KATMAI/t4": true,
+      "NEHALEM/t1": true,
+      "NEHALEM/t4": true,
+      "SANDYBRIDGE/t1": true,
+      "SANDYBRIDGE/t4": true
+     },
+     "distinct": 1
+    },
+    "sha": {
+     "by_rung": {
+      "HASWELL/t1": "cf8d909b7480ae7328fec6654b30b0d8792193c01997aa7b06b09cca9a233780",
+      "HASWELL/t4": "cf8d909b7480ae7328fec6654b30b0d8792193c01997aa7b06b09cca9a233780",
+      "KATMAI/t1": "97e98e0ef2f0d29749970e4757f455602b0c0f1cf370a65b1e196f51f4e82945",
+      "KATMAI/t4": "97e98e0ef2f0d29749970e4757f455602b0c0f1cf370a65b1e196f51f4e82945",
+      "NEHALEM/t1": "fdc128660919e7de9479f0334f192d079f02c1f00dbf06165e6435e07c31154c",
+      "NEHALEM/t4": "fdc128660919e7de9479f0334f192d079f02c1f00dbf06165e6435e07c31154c",
+      "SANDYBRIDGE/t1": "fdc128660919e7de9479f0334f192d079f02c1f00dbf06165e6435e07c31154c",
+      "SANDYBRIDGE/t4": "fdc128660919e7de9479f0334f192d079f02c1f00dbf06165e6435e07c31154c"
+     },
+     "distinct": 3
+    }
+   },
+   "B4.angular_spectrum_propagate_mft": {
+    "bar": {
+     "by_rung": {
+      "HASWELL/t1": 4.601589888937335e-12,
+      "HASWELL/t4": 4.601589888937335e-12,
+      "KATMAI/t1": 4.601589888937335e-12,
+      "KATMAI/t4": 4.601589888937335e-12,
+      "NEHALEM/t1": 4.601589888937335e-12,
+      "NEHALEM/t4": 4.601589888937335e-12,
+      "SANDYBRIDGE/t1": 4.601589888937335e-12,
+      "SANDYBRIDGE/t4": 4.601589888937335e-12
+     },
+     "max": 4.601589888937335e-12,
+     "min": 4.601589888937335e-12,
+     "spread": 0.0
+    },
+    "power_bar": {
+     "by_rung": {
+      "HASWELL/t1": 1e-12,
+      "HASWELL/t4": 1e-12,
+      "KATMAI/t1": 1e-12,
+      "KATMAI/t4": 1e-12,
+      "NEHALEM/t1": 1e-12,
+      "NEHALEM/t4": 1e-12,
+      "SANDYBRIDGE/t1": 1e-12,
+      "SANDYBRIDGE/t4": 1e-12
+     },
+     "max": 1e-12,
+     "min": 1e-12,
+     "spread": 0.0
+    },
+    "power_rel": {
+     "by_rung": {
+      "HASWELL/t1": 6.792699212637371e-16,
+      "HASWELL/t4": 6.792699212637371e-16,
+      "KATMAI/t1": 6.792699212637371e-16,
+      "KATMAI/t4": 6.792699212637371e-16,
+      "NEHALEM/t1": 6.792699212637371e-16,
+      "NEHALEM/t4": 6.792699212637371e-16,
+      "SANDYBRIDGE/t1": 6.792699212637371e-16,
+      "SANDYBRIDGE/t4": 6.792699212637371e-16
+     },
+     "max": 6.792699212637371e-16,
+     "min": 6.792699212637371e-16,
+     "spread": 0.0
+    },
+    "rel": {
+     "by_rung": {
+      "HASWELL/t1": 4.646725986721415e-14,
+      "HASWELL/t4": 4.646725986721415e-14,
+      "KATMAI/t1": 4.672457577264823e-14,
+      "KATMAI/t4": 4.672457577264823e-14,
+      "NEHALEM/t1": 4.672457577264823e-14,
+      "NEHALEM/t4": 4.672457577264823e-14,
+      "SANDYBRIDGE/t1": 4.672457577264823e-14,
+      "SANDYBRIDGE/t4": 4.672457577264823e-14
+     },
+     "max": 4.672457577264823e-14,
+     "min": 4.646725986721415e-14,
+     "spread": 2.573159054340754e-16
+    },
+    "sha_default": {
+     "by_rung": {
+      "HASWELL/t1": "0f9c522137d27b0d04bb08d551b006ecae8ec19eb2e045a303ca5808e3794383",
+      "HASWELL/t4": "0f9c522137d27b0d04bb08d551b006ecae8ec19eb2e045a303ca5808e3794383",
+      "KATMAI/t1": "0f9c522137d27b0d04bb08d551b006ecae8ec19eb2e045a303ca5808e3794383",
+      "KATMAI/t4": "0f9c522137d27b0d04bb08d551b006ecae8ec19eb2e045a303ca5808e3794383",
+      "NEHALEM/t1": "0f9c522137d27b0d04bb08d551b006ecae8ec19eb2e045a303ca5808e3794383",
+      "NEHALEM/t4": "0f9c522137d27b0d04bb08d551b006ecae8ec19eb2e045a303ca5808e3794383",
+      "SANDYBRIDGE/t1": "0f9c522137d27b0d04bb08d551b006ecae8ec19eb2e045a303ca5808e3794383",
+      "SANDYBRIDGE/t4": "0f9c522137d27b0d04bb08d551b006ecae8ec19eb2e045a303ca5808e3794383"
+     },
+     "distinct": 1
+    },
+    "sha_direct": {
+     "by_rung": {
+      "HASWELL/t1": "f34c0f169331060c9f11448df4ad24aebc297983d75c930ab5193f1b7a89b2ca",
+      "HASWELL/t4": "4b2b60ceb69981afed0f0325db251bfb86cd5c37d61f0aeedc95842b1a62adc6",
+      "KATMAI/t1": "19a2cfded046bfe97a63925fea28e91d1afd3b7edd35ffd6a301720d840132ed",
+      "KATMAI/t4": "19a2cfded046bfe97a63925fea28e91d1afd3b7edd35ffd6a301720d840132ed",
+      "NEHALEM/t1": "19a2cfded046bfe97a63925fea28e91d1afd3b7edd35ffd6a301720d840132ed",
+      "NEHALEM/t4": "19a2cfded046bfe97a63925fea28e91d1afd3b7edd35ffd6a301720d840132ed",
+      "SANDYBRIDGE/t1": "19a2cfded046bfe97a63925fea28e91d1afd3b7edd35ffd6a301720d840132ed",
+      "SANDYBRIDGE/t4": "19a2cfded046bfe97a63925fea28e91d1afd3b7edd35ffd6a301720d840132ed"
+     },
+     "distinct": 3
+    }
+   },
+   "B4.fraunhofer_propagate_mft": {
+    "bar": {
+     "by_rung": {
+      "HASWELL/t1": 4.601589888937335e-12,
+      "HASWELL/t4": 4.601589888937335e-12,
+      "KATMAI/t1": 4.601589888937335e-12,
+      "KATMAI/t4": 4.601589888937335e-12,
+      "NEHALEM/t1": 4.601589888937335e-12,
+      "NEHALEM/t4": 4.601589888937335e-12,
+      "SANDYBRIDGE/t1": 4.601589888937335e-12,
+      "SANDYBRIDGE/t4": 4.601589888937335e-12
+     },
+     "max": 4.601589888937335e-12,
+     "min": 4.601589888937335e-12,
+     "spread": 0.0
+    },
+    "power_bar": {
+     "by_rung": {
+      "HASWELL/t1": 1e-12,
+      "HASWELL/t4": 1e-12,
+      "KATMAI/t1": 1e-12,
+      "KATMAI/t4": 1e-12,
+      "NEHALEM/t1": 1e-12,
+      "NEHALEM/t4": 1e-12,
+      "SANDYBRIDGE/t1": 1e-12,
+      "SANDYBRIDGE/t4": 1e-12
+     },
+     "max": 1e-12,
+     "min": 1e-12,
+     "spread": 0.0
+    },
+    "power_rel": {
+     "by_rung": {
+      "HASWELL/t1": 3.752651820262634e-16,
+      "HASWELL/t4": 1.876325910131317e-16,
+      "KATMAI/t1": 1.876325910131317e-16,
+      "KATMAI/t4": 1.876325910131317e-16,
+      "NEHALEM/t1": 1.876325910131317e-16,
+      "NEHALEM/t4": 1.876325910131317e-16,
+      "SANDYBRIDGE/t1": 1.876325910131317e-16,
+      "SANDYBRIDGE/t4": 1.876325910131317e-16
+     },
+     "max": 3.752651820262634e-16,
+     "min": 1.876325910131317e-16,
+     "spread": 1.876325910131317e-16
+    },
+    "rel": {
+     "by_rung": {
+      "HASWELL/t1": 8.696556863451057e-15,
+      "HASWELL/t4": 8.696556863451057e-15,
+      "KATMAI/t1": 8.710671795625713e-15,
+      "KATMAI/t4": 8.710671795625713e-15,
+      "NEHALEM/t1": 8.710671795625713e-15,
+      "NEHALEM/t4": 8.710671795625713e-15,
+      "SANDYBRIDGE/t1": 8.710671795625713e-15,
+      "SANDYBRIDGE/t4": 8.710671795625713e-15
+     },
+     "max": 8.710671795625713e-15,
+     "min": 8.696556863451057e-15,
+     "spread": 1.4114932174656453e-17
+    },
+    "sha_default": {
+     "by_rung": {
+      "HASWELL/t1": "81688e8434cf8b65ea9ff8666d48045ca6e3407a6fd15e832854679ef9dafdb7",
+      "HASWELL/t4": "81688e8434cf8b65ea9ff8666d48045ca6e3407a6fd15e832854679ef9dafdb7",
+      "KATMAI/t1": "81688e8434cf8b65ea9ff8666d48045ca6e3407a6fd15e832854679ef9dafdb7",
+      "KATMAI/t4": "81688e8434cf8b65ea9ff8666d48045ca6e3407a6fd15e832854679ef9dafdb7",
+      "NEHALEM/t1": "81688e8434cf8b65ea9ff8666d48045ca6e3407a6fd15e832854679ef9dafdb7",
+      "NEHALEM/t4": "81688e8434cf8b65ea9ff8666d48045ca6e3407a6fd15e832854679ef9dafdb7",
+      "SANDYBRIDGE/t1": "81688e8434cf8b65ea9ff8666d48045ca6e3407a6fd15e832854679ef9dafdb7",
+      "SANDYBRIDGE/t4": "81688e8434cf8b65ea9ff8666d48045ca6e3407a6fd15e832854679ef9dafdb7"
+     },
+     "distinct": 1
+    },
+    "sha_direct": {
+     "by_rung": {
+      "HASWELL/t1": "f9ec51bcf59bce39d3408fbf19e325ef371bd59de5551844dea581af534ed90a",
+      "HASWELL/t4": "265a441ebe3a3e5200e7779adebee6fc755d39c02a1b76e6a7f5bb2619094896",
+      "KATMAI/t1": "3831786ef8230447707988c453071c2d4c17bdfde19ae821c978b36057de95bd",
+      "KATMAI/t4": "3831786ef8230447707988c453071c2d4c17bdfde19ae821c978b36057de95bd",
+      "NEHALEM/t1": "3831786ef8230447707988c453071c2d4c17bdfde19ae821c978b36057de95bd",
+      "NEHALEM/t4": "3831786ef8230447707988c453071c2d4c17bdfde19ae821c978b36057de95bd",
+      "SANDYBRIDGE/t1": "3831786ef8230447707988c453071c2d4c17bdfde19ae821c978b36057de95bd",
+      "SANDYBRIDGE/t4": "3831786ef8230447707988c453071c2d4c17bdfde19ae821c978b36057de95bd"
+     },
+     "distinct": 3
+    }
+   },
+   "B4.fresnel_propagate_mft": {
+    "bar": {
+     "by_rung": {
+      "HASWELL/t1": 4.601589888937335e-12,
+      "HASWELL/t4": 4.601589888937335e-12,
+      "KATMAI/t1": 4.601589888937335e-12,
+      "KATMAI/t4": 4.601589888937335e-12,
+      "NEHALEM/t1": 4.601589888937335e-12,
+      "NEHALEM/t4": 4.601589888937335e-12,
+      "SANDYBRIDGE/t1": 4.601589888937335e-12,
+      "SANDYBRIDGE/t4": 4.601589888937335e-12
+     },
+     "max": 4.601589888937335e-12,
+     "min": 4.601589888937335e-12,
+     "spread": 0.0
+    },
+    "power_bar": {
+     "by_rung": {
+      "HASWELL/t1": 1e-12,
+      "HASWELL/t4": 1e-12,
+      "KATMAI/t1": 1e-12,
+      "KATMAI/t4": 1e-12,
+      "NEHALEM/t1": 1e-12,
+      "NEHALEM/t4": 1e-12,
+      "SANDYBRIDGE/t1": 1e-12,
+      "SANDYBRIDGE/t4": 1e-12
+     },
+     "max": 1e-12,
+     "min": 1e-12,
+     "spread": 0.0
+    },
+    "power_rel": {
+     "by_rung": {
+      "HASWELL/t1": 1.8763259101313172e-16,
+      "HASWELL/t4": 1.8763259101313172e-16,
+      "KATMAI/t1": 1.8763259101313172e-16,
+      "KATMAI/t4": 1.8763259101313172e-16,
+      "NEHALEM/t1": 1.8763259101313172e-16,
+      "NEHALEM/t4": 1.8763259101313172e-16,
+      "SANDYBRIDGE/t1": 1.8763259101313172e-16,
+      "SANDYBRIDGE/t4": 1.8763259101313172e-16
+     },
+     "max": 1.8763259101313172e-16,
+     "min": 1.8763259101313172e-16,
+     "spread": 0.0
+    },
+    "rel": {
+     "by_rung": {
+      "HASWELL/t1": 8.886226692162782e-15,
+      "HASWELL/t4": 8.752046787039933e-15,
+      "KATMAI/t1": 8.752046787039933e-15,
+      "KATMAI/t4": 8.752046787039933e-15,
+      "NEHALEM/t1": 8.752046787039933e-15,
+      "NEHALEM/t4": 8.752046787039933e-15,
+      "SANDYBRIDGE/t1": 8.752046787039933e-15,
+      "SANDYBRIDGE/t4": 8.752046787039933e-15
+     },
+     "max": 8.886226692162782e-15,
+     "min": 8.752046787039933e-15,
+     "spread": 1.3417990512284868e-16
+    },
+    "sha_default": {
+     "by_rung": {
+      "HASWELL/t1": "a7788f4fcd9638e0abb1c7a6befe0caed54881597b746811cfb2290fcba9aefb",
+      "HASWELL/t4": "a7788f4fcd9638e0abb1c7a6befe0caed54881597b746811cfb2290fcba9aefb",
+      "KATMAI/t1": "a7788f4fcd9638e0abb1c7a6befe0caed54881597b746811cfb2290fcba9aefb",
+      "KATMAI/t4": "a7788f4fcd9638e0abb1c7a6befe0caed54881597b746811cfb2290fcba9aefb",
+      "NEHALEM/t1": "a7788f4fcd9638e0abb1c7a6befe0caed54881597b746811cfb2290fcba9aefb",
+      "NEHALEM/t4": "a7788f4fcd9638e0abb1c7a6befe0caed54881597b746811cfb2290fcba9aefb",
+      "SANDYBRIDGE/t1": "a7788f4fcd9638e0abb1c7a6befe0caed54881597b746811cfb2290fcba9aefb",
+      "SANDYBRIDGE/t4": "a7788f4fcd9638e0abb1c7a6befe0caed54881597b746811cfb2290fcba9aefb"
+     },
+     "distinct": 1
+    },
+    "sha_direct": {
+     "by_rung": {
+      "HASWELL/t1": "5d684f7ae23d5c555f738afa5451a1d54b1722777ca00f37f40aec2f0c8b73e8",
+      "HASWELL/t4": "d4c8e11f331e203578368c5300d59c8d85c70888fc8173f58e088ae194299e91",
+      "KATMAI/t1": "7bf9ad55bbf78b2b408043ceddbfec4fa30edc13712ec437fc44502adaca6377",
+      "KATMAI/t4": "7bf9ad55bbf78b2b408043ceddbfec4fa30edc13712ec437fc44502adaca6377",
+      "NEHALEM/t1": "7bf9ad55bbf78b2b408043ceddbfec4fa30edc13712ec437fc44502adaca6377",
+      "NEHALEM/t4": "7bf9ad55bbf78b2b408043ceddbfec4fa30edc13712ec437fc44502adaca6377",
+      "SANDYBRIDGE/t1": "7bf9ad55bbf78b2b408043ceddbfec4fa30edc13712ec437fc44502adaca6377",
+      "SANDYBRIDGE/t4": "7bf9ad55bbf78b2b408043ceddbfec4fa30edc13712ec437fc44502adaca6377"
+     },
+     "distinct": 3
+    }
+   },
+   "B5.association": {
+    "cheaper_ne_dearer": {
+     "by_rung": {
+      "HASWELL/t1": true,
+      "HASWELL/t4": true,
+      "KATMAI/t1": true,
+      "KATMAI/t4": true,
+      "NEHALEM/t1": true,
+      "NEHALEM/t4": true,
+      "SANDYBRIDGE/t1": true,
+      "SANDYBRIDGE/t4": true
+     },
+     "distinct": 1
+    },
+    "matches_cheaper": {
+     "by_rung": {
+      "HASWELL/t1": true,
+      "HASWELL/t4": true,
+      "KATMAI/t1": true,
+      "KATMAI/t4": true,
+      "NEHALEM/t1": true,
+      "NEHALEM/t4": true,
+      "SANDYBRIDGE/t1": true,
+      "SANDYBRIDGE/t4": true
+     },
+     "distinct": 1
+    },
+    "max_abs_cheaper_minus_dearer": {
+     "by_rung": {
+      "HASWELL/t1": 4.3220627292571254e-14,
+      "HASWELL/t4": 4.3220627292571254e-14,
+      "KATMAI/t1": 4.266955553143359e-14,
+      "KATMAI/t4": 4.266955553143359e-14,
+      "NEHALEM/t1": 4.266955553143359e-14,
+      "NEHALEM/t4": 4.266955553143359e-14,
+      "SANDYBRIDGE/t1": 4.266955553143359e-14,
+      "SANDYBRIDGE/t4": 4.266955553143359e-14
+     },
+     "max": 4.3220627292571254e-14,
+     "min": 4.266955553143359e-14,
+     "spread": 5.510717611376615e-16
+    },
+    "runs_reproducible": {
+     "by_rung": {
+      "HASWELL/t1": true,
+      "HASWELL/t4": true,
+      "KATMAI/t1": true,
+      "KATMAI/t4": true,
+      "NEHALEM/t1": true,
+      "NEHALEM/t4": true,
+      "SANDYBRIDGE/t1": true,
+      "SANDYBRIDGE/t4": true
+     },
+     "distinct": 1
+    },
+    "sha_cheaper": {
+     "by_rung": {
+      "HASWELL/t1": "40d008a6513ab186022e09d251ef6fcb078bc77879801bcd2e6daca797d4f212",
+      "HASWELL/t4": "40d008a6513ab186022e09d251ef6fcb078bc77879801bcd2e6daca797d4f212",
+      "KATMAI/t1": "093b4924f5d877d8e366516d215883e0a0f0fb7cfcd283c253f3f60fcc4a3362",
+      "KATMAI/t4": "093b4924f5d877d8e366516d215883e0a0f0fb7cfcd283c253f3f60fcc4a3362",
+      "NEHALEM/t1": "093b4924f5d877d8e366516d215883e0a0f0fb7cfcd283c253f3f60fcc4a3362",
+      "NEHALEM/t4": "093b4924f5d877d8e366516d215883e0a0f0fb7cfcd283c253f3f60fcc4a3362",
+      "SANDYBRIDGE/t1": "093b4924f5d877d8e366516d215883e0a0f0fb7cfcd283c253f3f60fcc4a3362",
+      "SANDYBRIDGE/t4": "093b4924f5d877d8e366516d215883e0a0f0fb7cfcd283c253f3f60fcc4a3362"
+     },
+     "distinct": 2
+    },
+    "sha_dearer": {
+     "by_rung": {
+      "HASWELL/t1": "7fd19ef645ad7f07a1defa2c066219a5f4a7311a3f9d04677a12e57bdc949805",
+      "HASWELL/t4": "7fd19ef645ad7f07a1defa2c066219a5f4a7311a3f9d04677a12e57bdc949805",
+      "KATMAI/t1": "d5108bc32e84c670b5003d36b0bccc916234f161bcfda71c85fcd9b7c8af04ff",
+      "KATMAI/t4": "d5108bc32e84c670b5003d36b0bccc916234f161bcfda71c85fcd9b7c8af04ff",
+      "NEHALEM/t1": "d5108bc32e84c670b5003d36b0bccc916234f161bcfda71c85fcd9b7c8af04ff",
+      "NEHALEM/t4": "d5108bc32e84c670b5003d36b0bccc916234f161bcfda71c85fcd9b7c8af04ff",
+      "SANDYBRIDGE/t1": "d5108bc32e84c670b5003d36b0bccc916234f161bcfda71c85fcd9b7c8af04ff",
+      "SANDYBRIDGE/t4": "d5108bc32e84c670b5003d36b0bccc916234f161bcfda71c85fcd9b7c8af04ff"
+     },
+     "distinct": 2
+    },
+    "sha_run0": {
+     "by_rung": {
+      "HASWELL/t1": "40d008a6513ab186022e09d251ef6fcb078bc77879801bcd2e6daca797d4f212",
+      "HASWELL/t4": "40d008a6513ab186022e09d251ef6fcb078bc77879801bcd2e6daca797d4f212",
+      "KATMAI/t1": "093b4924f5d877d8e366516d215883e0a0f0fb7cfcd283c253f3f60fcc4a3362",
+      "KATMAI/t4": "093b4924f5d877d8e366516d215883e0a0f0fb7cfcd283c253f3f60fcc4a3362",
+      "NEHALEM/t1": "093b4924f5d877d8e366516d215883e0a0f0fb7cfcd283c253f3f60fcc4a3362",
+      "NEHALEM/t4": "093b4924f5d877d8e366516d215883e0a0f0fb7cfcd283c253f3f60fcc4a3362",
+      "SANDYBRIDGE/t1": "093b4924f5d877d8e366516d215883e0a0f0fb7cfcd283c253f3f60fcc4a3362",
+      "SANDYBRIDGE/t4": "093b4924f5d877d8e366516d215883e0a0f0fb7cfcd283c253f3f60fcc4a3362"
+     },
+     "distinct": 2
+    }
+   },
+   "B6.phase_guard": {
+    "bar_dense": {
+     "by_rung": {
+      "HASWELL/t1": 5.507061909623992e-12,
+      "HASWELL/t4": 5.507061909623992e-12,
+      "KATMAI/t1": 5.507061909623992e-12,
+      "KATMAI/t4": 5.507061909623992e-12,
+      "NEHALEM/t1": 5.507061909623992e-12,
+      "NEHALEM/t4": 5.507061909623992e-12,
+      "SANDYBRIDGE/t1": 5.507061909623992e-12,
+      "SANDYBRIDGE/t4": 5.507061909623992e-12
+     },
+     "max": 5.507061909623992e-12,
+     "min": 5.507061909623992e-12,
+     "spread": 0.0
+    },
+    "err_dense": {
+     "by_rung": {
+      "HASWELL/t1": 2.4424906541753444e-14,
+      "HASWELL/t4": 2.4424906541753444e-14,
+      "KATMAI/t1": 2.2469334198890888e-14,
+      "KATMAI/t4": 2.2469334198890888e-14,
+      "NEHALEM/t1": 2.2469334198890888e-14,
+      "NEHALEM/t4": 2.2469334198890888e-14,
+      "SANDYBRIDGE/t1": 2.2469334198890888e-14,
+      "SANDYBRIDGE/t4": 2.2469334198890888e-14
+     },
+     "max": 2.4424906541753444e-14,
+     "min": 2.2469334198890888e-14,
+     "spread": 1.955572342862556e-15
+    },
+    "rel_chirp": {
+     "by_rung": {
+      "HASWELL/t1": 1.5571109805759944,
+      "HASWELL/t4": 1.5571109805759944,
+      "KATMAI/t1": 1.5571109805759946,
+      "KATMAI/t4": 1.5571109805759946,
+      "NEHALEM/t1": 1.5571109805759944,
+      "NEHALEM/t4": 1.5571109805759944,
+      "SANDYBRIDGE/t1": 1.5571109805759944,
+      "SANDYBRIDGE/t4": 1.5571109805759944
+     },
+     "max": 1.5571109805759946,
+     "min": 1.5571109805759944,
+     "spread": 2.220446049250313e-16
+    },
+    "sha_dense": {
+     "by_rung": {
+      "HASWELL/t1": "6181831efac29d80b28337d46006aa21058cffeb2cc5b5f51e2ebc4b8939edd4",
+      "HASWELL/t4": "6181831efac29d80b28337d46006aa21058cffeb2cc5b5f51e2ebc4b8939edd4",
+      "KATMAI/t1": "386057fa082ff379f2d64adb510ef43b06323a3c577200ff22a8da868634cfc4",
+      "KATMAI/t4": "386057fa082ff379f2d64adb510ef43b06323a3c577200ff22a8da868634cfc4",
+      "NEHALEM/t1": "386057fa082ff379f2d64adb510ef43b06323a3c577200ff22a8da868634cfc4",
+      "NEHALEM/t4": "386057fa082ff379f2d64adb510ef43b06323a3c577200ff22a8da868634cfc4",
+      "SANDYBRIDGE/t1": "386057fa082ff379f2d64adb510ef43b06323a3c577200ff22a8da868634cfc4",
+      "SANDYBRIDGE/t4": "386057fa082ff379f2d64adb510ef43b06323a3c577200ff22a8da868634cfc4"
+     },
+     "distinct": 2
+    },
+    "warned": {
+     "by_rung": {
+      "HASWELL/t1": [
+       "Bluestein chirp phase argument ~1.0e+17 approaches float64 p"
+      ],
+      "HASWELL/t4": [
+       "Bluestein chirp phase argument ~1.0e+17 approaches float64 p"
+      ],
+      "KATMAI/t1": [
+       "Bluestein chirp phase argument ~1.0e+17 approaches float64 p"
+      ],
+      "KATMAI/t4": [
+       "Bluestein chirp phase argument ~1.0e+17 approaches float64 p"
+      ],
+      "NEHALEM/t1": [
+       "Bluestein chirp phase argument ~1.0e+17 approaches float64 p"
+      ],
+      "NEHALEM/t4": [
+       "Bluestein chirp phase argument ~1.0e+17 approaches float64 p"
+      ],
+      "SANDYBRIDGE/t1": [
+       "Bluestein chirp phase argument ~1.0e+17 approaches float64 p"
+      ],
+      "SANDYBRIDGE/t4": [
+       "Bluestein chirp phase argument ~1.0e+17 approaches float64 p"
+      ]
+     },
+     "distinct": 1
+    }
+   },
+   "B7.dtype": {
+    "c64": {
+     "by_rung": {
+      "HASWELL/t1": "complex64",
+      "HASWELL/t4": "complex64",
+      "KATMAI/t1": "complex64",
+      "KATMAI/t4": "complex64",
+      "NEHALEM/t1": "complex64",
+      "NEHALEM/t4": "complex64",
+      "SANDYBRIDGE/t1": "complex64",
+      "SANDYBRIDGE/t4": "complex64"
+     },
+     "distinct": 1
+    },
+    "sha_c64_as_c128": {
+     "by_rung": {
+      "HASWELL/t1": "e974645568f14d3892330187ef60512221919216f519b5c31dc47a608f3068a8",
+      "HASWELL/t4": "e974645568f14d3892330187ef60512221919216f519b5c31dc47a608f3068a8",
+      "KATMAI/t1": "14d6db24db594746d4e6f264eaa1c376cce80bcdfa7e32b8e41d1fc68fcf014c",
+      "KATMAI/t4": "14d6db24db594746d4e6f264eaa1c376cce80bcdfa7e32b8e41d1fc68fcf014c",
+      "NEHALEM/t1": "14d6db24db594746d4e6f264eaa1c376cce80bcdfa7e32b8e41d1fc68fcf014c",
+      "NEHALEM/t4": "14d6db24db594746d4e6f264eaa1c376cce80bcdfa7e32b8e41d1fc68fcf014c",
+      "SANDYBRIDGE/t1": "14d6db24db594746d4e6f264eaa1c376cce80bcdfa7e32b8e41d1fc68fcf014c",
+      "SANDYBRIDGE/t4": "14d6db24db594746d4e6f264eaa1c376cce80bcdfa7e32b8e41d1fc68fcf014c"
+     },
+     "distinct": 2
+    }
+   },
+   "raw.128x128->64x64": {
+    "max_abs": {
+     "by_rung": {
+      "HASWELL/t1": 520.8930962991861,
+      "HASWELL/t4": 520.8930962991861,
+      "KATMAI/t1": 520.8930962991865,
+      "KATMAI/t4": 520.8930962991865,
+      "NEHALEM/t1": 520.8930962991865,
+      "NEHALEM/t4": 520.8930962991865,
+      "SANDYBRIDGE/t1": 520.8930962991865,
+      "SANDYBRIDGE/t4": 520.8930962991865
+     },
+     "max": 520.8930962991865,
+     "min": 520.8930962991861,
+     "spread": 3.410605131648481e-13
+    },
+    "sha256": {
+     "by_rung": {
+      "HASWELL/t1": "2c31bbbb5e82efc7f4f0a07dde40633ee2e6141e036b77ff4696c74af96662c8",
+      "HASWELL/t4": "af4716468d84ef177c152482630b34a7e63bf58c9369cb7c0b69c1bf3e88fdae",
+      "KATMAI/t1": "f74729de54dbe813d4c7ce72e04b1de786e6954a2be2b84da29cc63a84023c3d",
+      "KATMAI/t4": "f74729de54dbe813d4c7ce72e04b1de786e6954a2be2b84da29cc63a84023c3d",
+      "NEHALEM/t1": "f74729de54dbe813d4c7ce72e04b1de786e6954a2be2b84da29cc63a84023c3d",
+      "NEHALEM/t4": "f74729de54dbe813d4c7ce72e04b1de786e6954a2be2b84da29cc63a84023c3d",
+      "SANDYBRIDGE/t1": "f74729de54dbe813d4c7ce72e04b1de786e6954a2be2b84da29cc63a84023c3d",
+      "SANDYBRIDGE/t4": "f74729de54dbe813d4c7ce72e04b1de786e6954a2be2b84da29cc63a84023c3d"
+     },
+     "distinct": 3
+    },
+    "sum_im": {
+     "by_rung": {
+      "HASWELL/t1": 768.4017760226288,
+      "HASWELL/t4": 768.4017760226288,
+      "KATMAI/t1": 768.4017760226238,
+      "KATMAI/t4": 768.4017760226238,
+      "NEHALEM/t1": 768.4017760226238,
+      "NEHALEM/t4": 768.4017760226238,
+      "SANDYBRIDGE/t1": 768.4017760226238,
+      "SANDYBRIDGE/t4": 768.4017760226238
+     },
+     "max": 768.4017760226288,
+     "min": 768.4017760226238,
+     "spread": 5.002220859751105e-12
+    },
+    "sum_re": {
+     "by_rung": {
+      "HASWELL/t1": -15822.565570251692,
+      "HASWELL/t4": -15822.565570251694,
+      "KATMAI/t1": -15822.565570251692,
+      "KATMAI/t4": -15822.565570251692,
+      "NEHALEM/t1": -15822.565570251692,
+      "NEHALEM/t4": -15822.565570251692,
+      "SANDYBRIDGE/t1": -15822.565570251692,
+      "SANDYBRIDGE/t4": -15822.565570251692
+     },
+     "max": -15822.565570251692,
+     "min": -15822.565570251694,
+     "spread": 1.8189894035458565e-12
+    }
+   },
+   "raw.16x16->8x8": {
+    "max_abs": {
+     "by_rung": {
+      "HASWELL/t1": 47.930923278764425,
+      "HASWELL/t4": 47.930923278764425,
+      "KATMAI/t1": 47.930923278764425,
+      "KATMAI/t4": 47.930923278764425,
+      "NEHALEM/t1": 47.930923278764425,
+      "NEHALEM/t4": 47.930923278764425,
+      "SANDYBRIDGE/t1": 47.930923278764425,
+      "SANDYBRIDGE/t4": 47.930923278764425
+     },
+     "max": 47.930923278764425,
+     "min": 47.930923278764425,
+     "spread": 0.0
+    },
+    "sha256": {
+     "by_rung": {
+      "HASWELL/t1": "37487dc16c36fa616765027867fc5d400d35cb270f60f6e802d626ebe6bdbb3f",
+      "HASWELL/t4": "37487dc16c36fa616765027867fc5d400d35cb270f60f6e802d626ebe6bdbb3f",
+      "KATMAI/t1": "a49dc4e717f288fe0160ea4dc2348a7541290f0a7c1b2b06470ef21de067fffd",
+      "KATMAI/t4": "a49dc4e717f288fe0160ea4dc2348a7541290f0a7c1b2b06470ef21de067fffd",
+      "NEHALEM/t1": "a49dc4e717f288fe0160ea4dc2348a7541290f0a7c1b2b06470ef21de067fffd",
+      "NEHALEM/t4": "a49dc4e717f288fe0160ea4dc2348a7541290f0a7c1b2b06470ef21de067fffd",
+      "SANDYBRIDGE/t1": "a49dc4e717f288fe0160ea4dc2348a7541290f0a7c1b2b06470ef21de067fffd",
+      "SANDYBRIDGE/t4": "a49dc4e717f288fe0160ea4dc2348a7541290f0a7c1b2b06470ef21de067fffd"
+     },
+     "distinct": 2
+    },
+    "sum_im": {
+     "by_rung": {
+      "HASWELL/t1": -268.246248836089,
+      "HASWELL/t4": -268.246248836089,
+      "KATMAI/t1": -268.2462488360892,
+      "KATMAI/t4": -268.2462488360892,
+      "NEHALEM/t1": -268.2462488360892,
+      "NEHALEM/t4": -268.2462488360892,
+      "SANDYBRIDGE/t1": -268.2462488360892,
+      "SANDYBRIDGE/t4": -268.2462488360892
+     },
+     "max": -268.246248836089,
+     "min": -268.2462488360892,
+     "spread": 1.7053025658242404e-13
+    },
+    "sum_re": {
+     "by_rung": {
+      "HASWELL/t1": -17.95532298130484,
+      "HASWELL/t4": -17.95532298130484,
+      "KATMAI/t1": -17.955322981304768,
+      "KATMAI/t4": -17.955322981304768,
+      "NEHALEM/t1": -17.955322981304768,
+      "NEHALEM/t4": -17.955322981304768,
+      "SANDYBRIDGE/t1": -17.955322981304768,
+      "SANDYBRIDGE/t4": -17.955322981304768
+     },
+     "max": -17.955322981304768,
+     "min": -17.95532298130484,
+     "spread": 7.105427357601002e-14
+    }
+   },
+   "raw.256x256->64x64": {
+    "max_abs": {
+     "by_rung": {
+      "HASWELL/t1": 1183.7771758647157,
+      "HASWELL/t4": 1183.7771758647157,
+      "KATMAI/t1": 1183.7771758647157,
+      "KATMAI/t4": 1183.7771758647157,
+      "NEHALEM/t1": 1183.7771758647157,
+      "NEHALEM/t4": 1183.7771758647157,
+      "SANDYBRIDGE/t1": 1183.7771758647157,
+      "SANDYBRIDGE/t4": 1183.7771758647157
+     },
+     "max": 1183.7771758647157,
+     "min": 1183.7771758647157,
+     "spread": 0.0
+    },
+    "sha256": {
+     "by_rung": {
+      "HASWELL/t1": "d05205e2ddf972f39334b7b7f26a230c0e978632f5dc6a6a41b7c65943912402",
+      "HASWELL/t4": "dc34c3cb00c7c37db36a2c86e31a221e71dc9485fe9c17ebf055850b78055e78",
+      "KATMAI/t1": "8c68ed8c34d08314d7a1d67c13631cc8f07bf0e67ca43b752937aafa6869fe81",
+      "KATMAI/t4": "8c68ed8c34d08314d7a1d67c13631cc8f07bf0e67ca43b752937aafa6869fe81",
+      "NEHALEM/t1": "b664a71be22585de12c272e3905af546c28886e2f5a48b69f6da3cb1dd092b6b",
+      "NEHALEM/t4": "b664a71be22585de12c272e3905af546c28886e2f5a48b69f6da3cb1dd092b6b",
+      "SANDYBRIDGE/t1": "8c68ed8c34d08314d7a1d67c13631cc8f07bf0e67ca43b752937aafa6869fe81",
+      "SANDYBRIDGE/t4": "8c68ed8c34d08314d7a1d67c13631cc8f07bf0e67ca43b752937aafa6869fe81"
+     },
+     "distinct": 4
+    },
+    "sum_im": {
+     "by_rung": {
+      "HASWELL/t1": 2660.1861705604224,
+      "HASWELL/t4": 2660.186170560427,
+      "KATMAI/t1": 2660.1861705604288,
+      "KATMAI/t4": 2660.1861705604288,
+      "NEHALEM/t1": 2660.186170560457,
+      "NEHALEM/t4": 2660.186170560457,
+      "SANDYBRIDGE/t1": 2660.1861705604288,
+      "SANDYBRIDGE/t4": 2660.1861705604288
+     },
+     "max": 2660.186170560457,
+     "min": 2660.1861705604224,
+     "spread": 3.456079866737127e-11
+    },
+    "sum_re": {
+     "by_rung": {
+      "HASWELL/t1": -5324.15422135177,
+      "HASWELL/t4": -5324.154221351773,
+      "KATMAI/t1": -5324.154221351777,
+      "KATMAI/t4": -5324.154221351777,
+      "NEHALEM/t1": -5324.154221351772,
+      "NEHALEM/t4": -5324.154221351772,
+      "SANDYBRIDGE/t1": -5324.154221351777,
+      "SANDYBRIDGE/t4": -5324.154221351777
+     },
+     "max": -5324.15422135177,
+     "min": -5324.154221351777,
+     "spread": 7.275957614183426e-12
+    }
+   },
+   "raw.32x24->16x20": {
+    "max_abs": {
+     "by_rung": {
+      "HASWELL/t1": 90.72946170866702,
+      "HASWELL/t4": 90.72946170866702,
+      "KATMAI/t1": 90.729461708667,
+      "KATMAI/t4": 90.729461708667,
+      "NEHALEM/t1": 90.729461708667,
+      "NEHALEM/t4": 90.729461708667,
+      "SANDYBRIDGE/t1": 90.729461708667,
+      "SANDYBRIDGE/t4": 90.729461708667
+     },
+     "max": 90.72946170866702,
+     "min": 90.729461708667,
+     "spread": 1.4210854715202004e-14
+    },
+    "sha256": {
+     "by_rung": {
+      "HASWELL/t1": "a4b7962c729cba71b573368b7b37ae3a5b4c55e029a594e617c244042fb10586",
+      "HASWELL/t4": "a4b7962c729cba71b573368b7b37ae3a5b4c55e029a594e617c244042fb10586",
+      "KATMAI/t1": "b0e6838831923f57d79461fcf1107f9e17cb103f26ab0162d228620e1e8abc73",
+      "KATMAI/t4": "b0e6838831923f57d79461fcf1107f9e17cb103f26ab0162d228620e1e8abc73",
+      "NEHALEM/t1": "b0e6838831923f57d79461fcf1107f9e17cb103f26ab0162d228620e1e8abc73",
+      "NEHALEM/t4": "b0e6838831923f57d79461fcf1107f9e17cb103f26ab0162d228620e1e8abc73",
+      "SANDYBRIDGE/t1": "b0e6838831923f57d79461fcf1107f9e17cb103f26ab0162d228620e1e8abc73",
+      "SANDYBRIDGE/t4": "b0e6838831923f57d79461fcf1107f9e17cb103f26ab0162d228620e1e8abc73"
+     },
+     "distinct": 2
+    },
+    "sum_im": {
+     "by_rung": {
+      "HASWELL/t1": -906.2465922675207,
+      "HASWELL/t4": -906.2465922675207,
+      "KATMAI/t1": -906.2465922675207,
+      "KATMAI/t4": -906.2465922675207,
+      "NEHALEM/t1": -906.2465922675207,
+      "NEHALEM/t4": -906.2465922675207,
+      "SANDYBRIDGE/t1": -906.2465922675207,
+      "SANDYBRIDGE/t4": -906.2465922675207
+     },
+     "max": -906.2465922675207,
+     "min": -906.2465922675207,
+     "spread": 0.0
+    },
+    "sum_re": {
+     "by_rung": {
+      "HASWELL/t1": 587.0421998342201,
+      "HASWELL/t4": 587.0421998342201,
+      "KATMAI/t1": 587.0421998342198,
+      "KATMAI/t4": 587.0421998342198,
+      "NEHALEM/t1": 587.0421998342198,
+      "NEHALEM/t4": 587.0421998342198,
+      "SANDYBRIDGE/t1": 587.0421998342198,
+      "SANDYBRIDGE/t4": 587.0421998342198
+     },
+     "max": 587.0421998342201,
+     "min": 587.0421998342198,
+     "spread": 3.410605131648481e-13
+    }
+   },
+   "raw.48x12->40x6": {
+    "max_abs": {
+     "by_rung": {
+      "HASWELL/t1": 83.92433435805876,
+      "HASWELL/t4": 83.92433435805876,
+      "KATMAI/t1": 83.92433435805879,
+      "KATMAI/t4": 83.92433435805879,
+      "NEHALEM/t1": 83.92433435805879,
+      "NEHALEM/t4": 83.92433435805879,
+      "SANDYBRIDGE/t1": 83.92433435805879,
+      "SANDYBRIDGE/t4": 83.92433435805879
+     },
+     "max": 83.92433435805879,
+     "min": 83.92433435805876,
+     "spread": 2.842170943040401e-14
+    },
+    "sha256": {
+     "by_rung": {
+      "HASWELL/t1": "40d008a6513ab186022e09d251ef6fcb078bc77879801bcd2e6daca797d4f212",
+      "HASWELL/t4": "40d008a6513ab186022e09d251ef6fcb078bc77879801bcd2e6daca797d4f212",
+      "KATMAI/t1": "093b4924f5d877d8e366516d215883e0a0f0fb7cfcd283c253f3f60fcc4a3362",
+      "KATMAI/t4": "093b4924f5d877d8e366516d215883e0a0f0fb7cfcd283c253f3f60fcc4a3362",
+      "NEHALEM/t1": "093b4924f5d877d8e366516d215883e0a0f0fb7cfcd283c253f3f60fcc4a3362",
+      "NEHALEM/t4": "093b4924f5d877d8e366516d215883e0a0f0fb7cfcd283c253f3f60fcc4a3362",
+      "SANDYBRIDGE/t1": "093b4924f5d877d8e366516d215883e0a0f0fb7cfcd283c253f3f60fcc4a3362",
+      "SANDYBRIDGE/t4": "093b4924f5d877d8e366516d215883e0a0f0fb7cfcd283c253f3f60fcc4a3362"
+     },
+     "distinct": 2
+    },
+    "sum_im": {
+     "by_rung": {
+      "HASWELL/t1": -449.3206587148894,
+      "HASWELL/t4": -449.3206587148894,
+      "KATMAI/t1": -449.32065871488936,
+      "KATMAI/t4": -449.32065871488936,
+      "NEHALEM/t1": -449.32065871488936,
+      "NEHALEM/t4": -449.32065871488936,
+      "SANDYBRIDGE/t1": -449.32065871488936,
+      "SANDYBRIDGE/t4": -449.32065871488936
+     },
+     "max": -449.32065871488936,
+     "min": -449.3206587148894,
+     "spread": 5.684341886080802e-14
+    },
+    "sum_re": {
+     "by_rung": {
+      "HASWELL/t1": -180.02145262909028,
+      "HASWELL/t4": -180.02145262909028,
+      "KATMAI/t1": -180.02145262909,
+      "KATMAI/t4": -180.02145262909,
+      "NEHALEM/t1": -180.02145262909,
+      "NEHALEM/t4": -180.02145262909,
+      "SANDYBRIDGE/t1": -180.02145262909,
+      "SANDYBRIDGE/t4": -180.02145262909
+     },
+     "max": -180.02145262909,
+     "min": -180.02145262909028,
+     "spread": 2.8421709430404007e-13
+    }
+   }
+  }
+ },
+ "wsl": {
+  "architecture_reported": {
+   "HASWELL/t1": "Haswell",
+   "HASWELL/t4": "Haswell",
+   "KATMAI/t1": "Katmai",
+   "KATMAI/t4": "Katmai",
+   "NEHALEM/t1": "Nehalem",
+   "NEHALEM/t4": "Nehalem",
+   "SANDYBRIDGE/t1": "Sandybridge",
+   "SANDYBRIDGE/t4": "Sandybridge"
+  },
+  "num_threads_reported": {
+   "HASWELL/t1": 1,
+   "HASWELL/t4": 4,
+   "KATMAI/t1": 1,
+   "KATMAI/t4": 4,
+   "NEHALEM/t1": 1,
+   "NEHALEM/t4": 4,
+   "SANDYBRIDGE/t1": 1,
+   "SANDYBRIDGE/t4": 4
+  },
+  "rungs": [
+   "HASWELL/t1",
+   "HASWELL/t4",
+   "KATMAI/t1",
+   "KATMAI/t4",
+   "NEHALEM/t1",
+   "NEHALEM/t4",
+   "SANDYBRIDGE/t1",
+   "SANDYBRIDGE/t4"
+  ],
+  "table": {
+   "B1.16x16->8x8.sign-1": {
+    "bar_both": {
+     "by_rung": {
+      "HASWELL/t1": 4.331551901973166e-12,
+      "HASWELL/t4": 4.331551901973166e-12,
+      "KATMAI/t1": 4.331551901973166e-12,
+      "KATMAI/t4": 4.331551901973166e-12,
+      "NEHALEM/t1": 4.331551901973166e-12,
+      "NEHALEM/t4": 4.331551901973166e-12,
+      "SANDYBRIDGE/t1": 4.331551901973166e-12,
+      "SANDYBRIDGE/t4": 4.331551901973166e-12
+     },
+     "max": 4.331551901973166e-12,
+     "min": 4.331551901973166e-12,
+     "spread": 0.0
+    },
+    "bar_chirp": {
+     "by_rung": {
+      "HASWELL/t1": 2.571038267486428e-12,
+      "HASWELL/t4": 2.571038267486428e-12,
+      "KATMAI/t1": 2.571038267486428e-12,
+      "KATMAI/t4": 2.571038267486428e-12,
+      "NEHALEM/t1": 2.571038267486428e-12,
+      "NEHALEM/t4": 2.571038267486428e-12,
+      "SANDYBRIDGE/t1": 2.571038267486428e-12,
+      "SANDYBRIDGE/t4": 2.571038267486428e-12
+     },
+     "max": 2.571038267486428e-12,
+     "min": 2.571038267486428e-12,
+     "spread": 0.0
+    },
+    "bar_dense": {
+     "by_rung": {
+      "HASWELL/t1": 1.7605136344867384e-12,
+      "HASWELL/t4": 1.7605136344867384e-12,
+      "KATMAI/t1": 1.7605136344867384e-12,
+      "KATMAI/t4": 1.7605136344867384e-12,
+      "NEHALEM/t1": 1.7605136344867384e-12,
+      "NEHALEM/t4": 1.7605136344867384e-12,
+      "SANDYBRIDGE/t1": 1.7605136344867384e-12,
+      "SANDYBRIDGE/t4": 1.7605136344867384e-12
+     },
+     "max": 1.7605136344867384e-12,
+     "min": 1.7605136344867384e-12,
+     "spread": 0.0
+    },
+    "err_bluestein": {
+     "by_rung": {
+      "HASWELL/t1": 2.4932356353023623e-14,
+      "HASWELL/t4": 2.4932356353023623e-14,
+      "KATMAI/t1": 2.4932356353023623e-14,
+      "KATMAI/t4": 2.4932356353023623e-14,
+      "NEHALEM/t1": 2.4932356353023623e-14,
+      "NEHALEM/t4": 2.4932356353023623e-14,
+      "SANDYBRIDGE/t1": 2.4932356353023623e-14,
+      "SANDYBRIDGE/t4": 2.4932356353023623e-14
+     },
+     "max": 2.4932356353023623e-14,
+     "min": 2.4932356353023623e-14,
+     "spread": 0.0
+    },
+    "err_direct": {
+     "by_rung": {
+      "HASWELL/t1": 2.3832327871173822e-14,
+      "HASWELL/t4": 2.3832327871173822e-14,
+      "KATMAI/t1": 2.2469334198890888e-14,
+      "KATMAI/t4": 2.2469334198890888e-14,
+      "NEHALEM/t1": 2.2469334198890888e-14,
+      "NEHALEM/t4": 2.2469334198890888e-14,
+      "SANDYBRIDGE/t1": 2.2469334198890888e-14,
+      "SANDYBRIDGE/t4": 2.2469334198890888e-14
+     },
+     "max": 2.3832327871173822e-14,
+     "min": 2.2469334198890888e-14,
+     "spread": 1.362993672282934e-15
+    },
+    "err_separable": {
+     "by_rung": {
+      "HASWELL/t1": 3.468447607305094e-14,
+      "HASWELL/t4": 3.468447607305094e-14,
+      "KATMAI/t1": 3.468447607305094e-14,
+      "KATMAI/t4": 3.468447607305094e-14,
+      "NEHALEM/t1": 3.468447607305094e-14,
+      "NEHALEM/t4": 3.468447607305094e-14,
+      "SANDYBRIDGE/t1": 3.468447607305094e-14,
+      "SANDYBRIDGE/t4": 3.468447607305094e-14
+     },
+     "max": 3.468447607305094e-14,
+     "min": 3.468447607305094e-14,
+     "spread": 0.0
+    },
+    "pair_bluestein_vs_direct": {
+     "by_rung": {
+      "HASWELL/t1": 3.412270059808006e-14,
+      "HASWELL/t4": 3.412270059808006e-14,
+      "KATMAI/t1": 2.75764738977458e-14,
+      "KATMAI/t4": 2.75764738977458e-14,
+      "NEHALEM/t1": 2.75764738977458e-14,
+      "NEHALEM/t4": 2.75764738977458e-14,
+      "SANDYBRIDGE/t1": 2.75764738977458e-14,
+      "SANDYBRIDGE/t4": 2.75764738977458e-14
+     },
+     "max": 3.412270059808006e-14,
+     "min": 2.75764738977458e-14,
+     "spread": 6.546226700334261e-15
+    },
+    "pair_separable_vs_direct": {
+     "by_rung": {
+      "HASWELL/t1": 3.257326998510068e-14,
+      "HASWELL/t4": 3.257326998510068e-14,
+      "KATMAI/t1": 3.257326998510068e-14,
+      "KATMAI/t4": 3.257326998510068e-14,
+      "NEHALEM/t1": 3.257326998510068e-14,
+      "NEHALEM/t4": 3.257326998510068e-14,
+      "SANDYBRIDGE/t1": 3.257326998510068e-14,
+      "SANDYBRIDGE/t4": 3.257326998510068e-14
+     },
+     "max": 3.257326998510068e-14,
+     "min": 3.257326998510068e-14,
+     "spread": 0.0
+    },
+    "sha_bluestein": {
+     "by_rung": {
+      "HASWELL/t1": "2d4411b3e54074b16a404c92ca45460a940f18c4e52b637d8277364bb0b916c6",
+      "HASWELL/t4": "2d4411b3e54074b16a404c92ca45460a940f18c4e52b637d8277364bb0b916c6",
+      "KATMAI/t1": "2d4411b3e54074b16a404c92ca45460a940f18c4e52b637d8277364bb0b916c6",
+      "KATMAI/t4": "2d4411b3e54074b16a404c92ca45460a940f18c4e52b637d8277364bb0b916c6",
+      "NEHALEM/t1": "2d4411b3e54074b16a404c92ca45460a940f18c4e52b637d8277364bb0b916c6",
+      "NEHALEM/t4": "2d4411b3e54074b16a404c92ca45460a940f18c4e52b637d8277364bb0b916c6",
+      "SANDYBRIDGE/t1": "2d4411b3e54074b16a404c92ca45460a940f18c4e52b637d8277364bb0b916c6",
+      "SANDYBRIDGE/t4": "2d4411b3e54074b16a404c92ca45460a940f18c4e52b637d8277364bb0b916c6"
+     },
+     "distinct": 1
+    },
+    "sha_direct": {
+     "by_rung": {
+      "HASWELL/t1": "684612e700e169f988c271c034ebda2a5321840681b30550be933725acacfa7e",
+      "HASWELL/t4": "684612e700e169f988c271c034ebda2a5321840681b30550be933725acacfa7e",
+      "KATMAI/t1": "9b4c155b6130a77bac11bd00f5374e551f9386cbbd7d568d12de6bfdb4a1fc15",
+      "KATMAI/t4": "9b4c155b6130a77bac11bd00f5374e551f9386cbbd7d568d12de6bfdb4a1fc15",
+      "NEHALEM/t1": "9b4c155b6130a77bac11bd00f5374e551f9386cbbd7d568d12de6bfdb4a1fc15",
+      "NEHALEM/t4": "9b4c155b6130a77bac11bd00f5374e551f9386cbbd7d568d12de6bfdb4a1fc15",
+      "SANDYBRIDGE/t1": "9b4c155b6130a77bac11bd00f5374e551f9386cbbd7d568d12de6bfdb4a1fc15",
+      "SANDYBRIDGE/t4": "9b4c155b6130a77bac11bd00f5374e551f9386cbbd7d568d12de6bfdb4a1fc15"
+     },
+     "distinct": 2
+    },
+    "sha_separable": {
+     "by_rung": {
+      "HASWELL/t1": "07f2b70d3398ea27928b0af94bf6041f3ca486f21150465adb1c38e3cab86c67",
+      "HASWELL/t4": "07f2b70d3398ea27928b0af94bf6041f3ca486f21150465adb1c38e3cab86c67",
+      "KATMAI/t1": "07f2b70d3398ea27928b0af94bf6041f3ca486f21150465adb1c38e3cab86c67",
+      "KATMAI/t4": "07f2b70d3398ea27928b0af94bf6041f3ca486f21150465adb1c38e3cab86c67",
+      "NEHALEM/t1": "07f2b70d3398ea27928b0af94bf6041f3ca486f21150465adb1c38e3cab86c67",
+      "NEHALEM/t4": "07f2b70d3398ea27928b0af94bf6041f3ca486f21150465adb1c38e3cab86c67",
+      "SANDYBRIDGE/t1": "07f2b70d3398ea27928b0af94bf6041f3ca486f21150465adb1c38e3cab86c67",
+      "SANDYBRIDGE/t4": "07f2b70d3398ea27928b0af94bf6041f3ca486f21150465adb1c38e3cab86c67"
+     },
+     "distinct": 1
+    }
+   },
+   "B1.16x16->8x8.sign1": {
+    "bar_both": {
+     "by_rung": {
+      "HASWELL/t1": 4.331551901973166e-12,
+      "HASWELL/t4": 4.331551901973166e-12,
+      "KATMAI/t1": 4.331551901973166e-12,
+      "KATMAI/t4": 4.331551901973166e-12,
+      "NEHALEM/t1": 4.331551901973166e-12,
+      "NEHALEM/t4": 4.331551901973166e-12,
+      "SANDYBRIDGE/t1": 4.331551901973166e-12,
+      "SANDYBRIDGE/t4": 4.331551901973166e-12
+     },
+     "max": 4.331551901973166e-12,
+     "min": 4.331551901973166e-12,
+     "spread": 0.0
+    },
+    "bar_chirp": {
+     "by_rung": {
+      "HASWELL/t1": 2.571038267486428e-12,
+      "HASWELL/t4": 2.571038267486428e-12,
+      "KATMAI/t1": 2.571038267486428e-12,
+      "KATMAI/t4": 2.571038267486428e-12,
+      "NEHALEM/t1": 2.571038267486428e-12,
+      "NEHALEM/t4": 2.571038267486428e-12,
+      "SANDYBRIDGE/t1": 2.571038267486428e-12,
+      "SANDYBRIDGE/t4": 2.571038267486428e-12
+     },
+     "max": 2.571038267486428e-12,
+     "min": 2.571038267486428e-12,
+     "spread": 0.0
+    },
+    "bar_dense": {
+     "by_rung": {
+      "HASWELL/t1": 1.7605136344867384e-12,
+      "HASWELL/t4": 1.7605136344867384e-12,
+      "KATMAI/t1": 1.7605136344867384e-12,
+      "KATMAI/t4": 1.7605136344867384e-12,
+      "NEHALEM/t1": 1.7605136344867384e-12,
+      "NEHALEM/t4": 1.7605136344867384e-12,
+      "SANDYBRIDGE/t1": 1.7605136344867384e-12,
+      "SANDYBRIDGE/t4": 1.7605136344867384e-12
+     },
+     "max": 1.7605136344867384e-12,
+     "min": 1.7605136344867384e-12,
+     "spread": 0.0
+    },
+    "err_bluestein": {
+     "by_rung": {
+      "HASWELL/t1": 2.9531932455029164e-14,
+      "HASWELL/t4": 2.9531932455029164e-14,
+      "KATMAI/t1": 2.9531932455029164e-14,
+      "KATMAI/t4": 2.9531932455029164e-14,
+      "NEHALEM/t1": 2.9531932455029164e-14,
+      "NEHALEM/t4": 2.9531932455029164e-14,
+      "SANDYBRIDGE/t1": 2.9531932455029164e-14,
+      "SANDYBRIDGE/t4": 2.9531932455029164e-14
+     },
+     "max": 2.9531932455029164e-14,
+     "min": 2.9531932455029164e-14,
+     "spread": 0.0
+    },
+    "err_direct": {
+     "by_rung": {
+      "HASWELL/t1": 1.699765591301329e-14,
+      "HASWELL/t4": 1.699765591301329e-14,
+      "KATMAI/t1": 1.882016329483446e-14,
+      "KATMAI/t4": 1.882016329483446e-14,
+      "NEHALEM/t1": 1.882016329483446e-14,
+      "NEHALEM/t4": 1.882016329483446e-14,
+      "SANDYBRIDGE/t1": 1.882016329483446e-14,
+      "SANDYBRIDGE/t4": 1.882016329483446e-14
+     },
+     "max": 1.882016329483446e-14,
+     "min": 1.699765591301329e-14,
+     "spread": 1.8225073818211724e-15
+    },
+    "err_separable": {
+     "by_rung": {
+      "HASWELL/t1": 2.5011331388797805e-14,
+      "HASWELL/t4": 2.5011331388797805e-14,
+      "KATMAI/t1": 2.5011331388797805e-14,
+      "KATMAI/t4": 2.5011331388797805e-14,
+      "NEHALEM/t1": 2.5011331388797805e-14,
+      "NEHALEM/t4": 2.5011331388797805e-14,
+      "SANDYBRIDGE/t1": 2.5011331388797805e-14,
+      "SANDYBRIDGE/t4": 2.5011331388797805e-14
+     },
+     "max": 2.5011331388797805e-14,
+     "min": 2.5011331388797805e-14,
+     "spread": 0.0
+    },
+    "pair_bluestein_vs_direct": {
+     "by_rung": {
+      "HASWELL/t1": 3.277321202239695e-14,
+      "HASWELL/t4": 3.277321202239695e-14,
+      "KATMAI/t1": 3.32748491248911e-14,
+      "KATMAI/t4": 3.32748491248911e-14,
+      "NEHALEM/t1": 3.32748491248911e-14,
+      "NEHALEM/t4": 3.32748491248911e-14,
+      "SANDYBRIDGE/t1": 3.32748491248911e-14,
+      "SANDYBRIDGE/t4": 3.32748491248911e-14
+     },
+     "max": 3.32748491248911e-14,
+     "min": 3.277321202239695e-14,
+     "spread": 5.016371024941476e-16
+    },
+    "pair_separable_vs_direct": {
+     "by_rung": {
+      "HASWELL/t1": 2.7918522134327526e-14,
+      "HASWELL/t4": 2.7918522134327526e-14,
+      "KATMAI/t1": 3.004830460828072e-14,
+      "KATMAI/t4": 3.004830460828072e-14,
+      "NEHALEM/t1": 3.004830460828072e-14,
+      "NEHALEM/t4": 3.004830460828072e-14,
+      "SANDYBRIDGE/t1": 3.004830460828072e-14,
+      "SANDYBRIDGE/t4": 3.004830460828072e-14
+     },
+     "max": 3.004830460828072e-14,
+     "min": 2.7918522134327526e-14,
+     "spread": 2.1297824739531958e-15
+    },
+    "sha_bluestein": {
+     "by_rung": {
+      "HASWELL/t1": "543380238b5cdbaa4a63295c3070b95eaedf7228c1dbcc2953112c6195aec367",
+      "HASWELL/t4": "543380238b5cdbaa4a63295c3070b95eaedf7228c1dbcc2953112c6195aec367",
+      "KATMAI/t1": "543380238b5cdbaa4a63295c3070b95eaedf7228c1dbcc2953112c6195aec367",
+      "KATMAI/t4": "543380238b5cdbaa4a63295c3070b95eaedf7228c1dbcc2953112c6195aec367",
+      "NEHALEM/t1": "543380238b5cdbaa4a63295c3070b95eaedf7228c1dbcc2953112c6195aec367",
+      "NEHALEM/t4": "543380238b5cdbaa4a63295c3070b95eaedf7228c1dbcc2953112c6195aec367",
+      "SANDYBRIDGE/t1": "543380238b5cdbaa4a63295c3070b95eaedf7228c1dbcc2953112c6195aec367",
+      "SANDYBRIDGE/t4": "543380238b5cdbaa4a63295c3070b95eaedf7228c1dbcc2953112c6195aec367"
+     },
+     "distinct": 1
+    },
+    "sha_direct": {
+     "by_rung": {
+      "HASWELL/t1": "da70000cb29cc16dbfd4ee271c01db22d1d1ab9e495596aca7b2ea045afef24b",
+      "HASWELL/t4": "da70000cb29cc16dbfd4ee271c01db22d1d1ab9e495596aca7b2ea045afef24b",
+      "KATMAI/t1": "47db83fcd34754c80b016de8fdc8609ee284c090f600ae8b534c39f38cecbada",
+      "KATMAI/t4": "47db83fcd34754c80b016de8fdc8609ee284c090f600ae8b534c39f38cecbada",
+      "NEHALEM/t1": "47db83fcd34754c80b016de8fdc8609ee284c090f600ae8b534c39f38cecbada",
+      "NEHALEM/t4": "47db83fcd34754c80b016de8fdc8609ee284c090f600ae8b534c39f38cecbada",
+      "SANDYBRIDGE/t1": "47db83fcd34754c80b016de8fdc8609ee284c090f600ae8b534c39f38cecbada",
+      "SANDYBRIDGE/t4": "47db83fcd34754c80b016de8fdc8609ee284c090f600ae8b534c39f38cecbada"
+     },
+     "distinct": 2
+    },
+    "sha_separable": {
+     "by_rung": {
+      "HASWELL/t1": "711aee678e48a767df04b39e79a8470445455a2fa4b6ae132d3393c231ab43d2",
+      "HASWELL/t4": "711aee678e48a767df04b39e79a8470445455a2fa4b6ae132d3393c231ab43d2",
+      "KATMAI/t1": "711aee678e48a767df04b39e79a8470445455a2fa4b6ae132d3393c231ab43d2",
+      "KATMAI/t4": "711aee678e48a767df04b39e79a8470445455a2fa4b6ae132d3393c231ab43d2",
+      "NEHALEM/t1": "711aee678e48a767df04b39e79a8470445455a2fa4b6ae132d3393c231ab43d2",
+      "NEHALEM/t4": "711aee678e48a767df04b39e79a8470445455a2fa4b6ae132d3393c231ab43d2",
+      "SANDYBRIDGE/t1": "711aee678e48a767df04b39e79a8470445455a2fa4b6ae132d3393c231ab43d2",
+      "SANDYBRIDGE/t4": "711aee678e48a767df04b39e79a8470445455a2fa4b6ae132d3393c231ab43d2"
+     },
+     "distinct": 1
+    }
+   },
+   "B1.17x9->5x23.sign-1": {
+    "bar_both": {
+     "by_rung": {
+      "HASWELL/t1": 2.711841649297771e-12,
+      "HASWELL/t4": 2.711841649297771e-12,
+      "KATMAI/t1": 2.711841649297771e-12,
+      "KATMAI/t4": 2.711841649297771e-12,
+      "NEHALEM/t1": 2.711841649297771e-12,
+      "NEHALEM/t4": 2.711841649297771e-12,
+      "SANDYBRIDGE/t1": 2.711841649297771e-12,
+      "SANDYBRIDGE/t4": 2.711841649297771e-12
+     },
+     "max": 2.711841649297771e-12,
+     "min": 2.711841649297771e-12,
+     "spread": 0.0
+    },
+    "bar_chirp": {
+     "by_rung": {
+      "HASWELL/t1": 1.7816750375606733e-12,
+      "HASWELL/t4": 1.7816750375606733e-12,
+      "KATMAI/t1": 1.7816750375606733e-12,
+      "KATMAI/t4": 1.7816750375606733e-12,
+      "NEHALEM/t1": 1.7816750375606733e-12,
+      "NEHALEM/t4": 1.7816750375606733e-12,
+      "SANDYBRIDGE/t1": 1.7816750375606733e-12,
+      "SANDYBRIDGE/t4": 1.7816750375606733e-12
+     },
+     "max": 1.7816750375606733e-12,
+     "min": 1.7816750375606733e-12,
+     "spread": 0.0
+    },
+    "bar_dense": {
+     "by_rung": {
+      "HASWELL/t1": 9.301666117370979e-13,
+      "HASWELL/t4": 9.301666117370979e-13,
+      "KATMAI/t1": 9.301666117370979e-13,
+      "KATMAI/t4": 9.301666117370979e-13,
+      "NEHALEM/t1": 9.301666117370979e-13,
+      "NEHALEM/t4": 9.301666117370979e-13,
+      "SANDYBRIDGE/t1": 9.301666117370979e-13,
+      "SANDYBRIDGE/t4": 9.301666117370979e-13
+     },
+     "max": 9.301666117370979e-13,
+     "min": 9.301666117370979e-13,
+     "spread": 0.0
+    },
+    "err_bluestein": {
+     "by_rung": {
+      "HASWELL/t1": 5.709958074520724e-14,
+      "HASWELL/t4": 5.709958074520724e-14,
+      "KATMAI/t1": 5.709958074520724e-14,
+      "KATMAI/t4": 5.709958074520724e-14,
+      "NEHALEM/t1": 5.709958074520724e-14,
+      "NEHALEM/t4": 5.709958074520724e-14,
+      "SANDYBRIDGE/t1": 5.709958074520724e-14,
+      "SANDYBRIDGE/t4": 5.709958074520724e-14
+     },
+     "max": 5.709958074520724e-14,
+     "min": 5.709958074520724e-14,
+     "spread": 0.0
+    },
+    "err_direct": {
+     "by_rung": {
+      "HASWELL/t1": 1.0658141036401503e-14,
+      "HASWELL/t4": 1.0658141036401503e-14,
+      "KATMAI/t1": 1.2505665694398903e-14,
+      "KATMAI/t4": 1.2505665694398903e-14,
+      "NEHALEM/t1": 1.2505665694398903e-14,
+      "NEHALEM/t4": 1.2505665694398903e-14,
+      "SANDYBRIDGE/t1": 1.2505665694398903e-14,
+      "SANDYBRIDGE/t4": 1.2505665694398903e-14
+     },
+     "max": 1.2505665694398903e-14,
+     "min": 1.0658141036401503e-14,
+     "spread": 1.8475246579973997e-15
+    },
+    "err_separable": {
+     "by_rung": {
+      "HASWELL/t1": 6.094386234073804e-14,
+      "HASWELL/t4": 6.094386234073804e-14,
+      "KATMAI/t1": 6.094386234073804e-14,
+      "KATMAI/t4": 6.094386234073804e-14,
+      "NEHALEM/t1": 6.094386234073804e-14,
+      "NEHALEM/t4": 6.094386234073804e-14,
+      "SANDYBRIDGE/t1": 6.094386234073804e-14,
+      "SANDYBRIDGE/t4": 6.094386234073804e-14
+     },
+     "max": 6.094386234073804e-14,
+     "min": 6.094386234073804e-14,
+     "spread": 0.0
+    },
+    "pair_bluestein_vs_direct": {
+     "by_rung": {
+      "HASWELL/t1": 5.368155071132312e-14,
+      "HASWELL/t4": 5.368155071132312e-14,
+      "KATMAI/t1": 5.368155071132312e-14,
+      "KATMAI/t4": 5.368155071132312e-14,
+      "NEHALEM/t1": 5.368155071132312e-14,
+      "NEHALEM/t4": 5.368155071132312e-14,
+      "SANDYBRIDGE/t1": 5.368155071132312e-14,
+      "SANDYBRIDGE/t4": 5.368155071132312e-14
+     },
+     "max": 5.368155071132312e-14,
+     "min": 5.368155071132312e-14,
+     "spread": 0.0
+    },
+    "pair_separable_vs_direct": {
+     "by_rung": {
+      "HASWELL/t1": 6.204547701064548e-14,
+      "HASWELL/t4": 6.204547701064548e-14,
+      "KATMAI/t1": 6.135506694409735e-14,
+      "KATMAI/t4": 6.135506694409735e-14,
+      "NEHALEM/t1": 6.135506694409735e-14,
+      "NEHALEM/t4": 6.135506694409735e-14,
+      "SANDYBRIDGE/t1": 6.135506694409735e-14,
+      "SANDYBRIDGE/t4": 6.135506694409735e-14
+     },
+     "max": 6.204547701064548e-14,
+     "min": 6.135506694409735e-14,
+     "spread": 6.904100665481262e-16
+    },
+    "sha_bluestein": {
+     "by_rung": {
+      "HASWELL/t1": "a38605e9567d89cf6cd012440fbdb1063ee519a1909cacd69b515b3983ce6089",
+      "HASWELL/t4": "a38605e9567d89cf6cd012440fbdb1063ee519a1909cacd69b515b3983ce6089",
+      "KATMAI/t1": "a38605e9567d89cf6cd012440fbdb1063ee519a1909cacd69b515b3983ce6089",
+      "KATMAI/t4": "a38605e9567d89cf6cd012440fbdb1063ee519a1909cacd69b515b3983ce6089",
+      "NEHALEM/t1": "a38605e9567d89cf6cd012440fbdb1063ee519a1909cacd69b515b3983ce6089",
+      "NEHALEM/t4": "a38605e9567d89cf6cd012440fbdb1063ee519a1909cacd69b515b3983ce6089",
+      "SANDYBRIDGE/t1": "a38605e9567d89cf6cd012440fbdb1063ee519a1909cacd69b515b3983ce6089",
+      "SANDYBRIDGE/t4": "a38605e9567d89cf6cd012440fbdb1063ee519a1909cacd69b515b3983ce6089"
+     },
+     "distinct": 1
+    },
+    "sha_direct": {
+     "by_rung": {
+      "HASWELL/t1": "9dab3ca10dfa66a67f9f1b7e876b583543b044662394c7b8e52b658d02660776",
+      "HASWELL/t4": "9dab3ca10dfa66a67f9f1b7e876b583543b044662394c7b8e52b658d02660776",
+      "KATMAI/t1": "54590426e2e91a88032fa634235afb358051df926b29d324fef983cc27cd8452",
+      "KATMAI/t4": "54590426e2e91a88032fa634235afb358051df926b29d324fef983cc27cd8452",
+      "NEHALEM/t1": "b586dc8e27d5e50f4dda01a945c8cccbb24bb46574b1803682afddaebca9776b",
+      "NEHALEM/t4": "b586dc8e27d5e50f4dda01a945c8cccbb24bb46574b1803682afddaebca9776b",
+      "SANDYBRIDGE/t1": "b586dc8e27d5e50f4dda01a945c8cccbb24bb46574b1803682afddaebca9776b",
+      "SANDYBRIDGE/t4": "b586dc8e27d5e50f4dda01a945c8cccbb24bb46574b1803682afddaebca9776b"
+     },
+     "distinct": 3
+    },
+    "sha_separable": {
+     "by_rung": {
+      "HASWELL/t1": "f4817bdf24d99ec12a76fc9e94b4c3aabd73a19b35a4d37d99ab468e4a128264",
+      "HASWELL/t4": "f4817bdf24d99ec12a76fc9e94b4c3aabd73a19b35a4d37d99ab468e4a128264",
+      "KATMAI/t1": "f4817bdf24d99ec12a76fc9e94b4c3aabd73a19b35a4d37d99ab468e4a128264",
+      "KATMAI/t4": "f4817bdf24d99ec12a76fc9e94b4c3aabd73a19b35a4d37d99ab468e4a128264",
+      "NEHALEM/t1": "f4817bdf24d99ec12a76fc9e94b4c3aabd73a19b35a4d37d99ab468e4a128264",
+      "NEHALEM/t4": "f4817bdf24d99ec12a76fc9e94b4c3aabd73a19b35a4d37d99ab468e4a128264",
+      "SANDYBRIDGE/t1": "f4817bdf24d99ec12a76fc9e94b4c3aabd73a19b35a4d37d99ab468e4a128264",
+      "SANDYBRIDGE/t4": "f4817bdf24d99ec12a76fc9e94b4c3aabd73a19b35a4d37d99ab468e4a128264"
+     },
+     "distinct": 1
+    }
+   },
+   "B1.17x9->5x23.sign1": {
+    "bar_both": {
+     "by_rung": {
+      "HASWELL/t1": 2.711841649297771e-12,
+      "HASWELL/t4": 2.711841649297771e-12,
+      "KATMAI/t1": 2.711841649297771e-12,
+      "KATMAI/t4": 2.711841649297771e-12,
+      "NEHALEM/t1": 2.711841649297771e-12,
+      "NEHALEM/t4": 2.711841649297771e-12,
+      "SANDYBRIDGE/t1": 2.711841649297771e-12,
+      "SANDYBRIDGE/t4": 2.711841649297771e-12
+     },
+     "max": 2.711841649297771e-12,
+     "min": 2.711841649297771e-12,
+     "spread": 0.0
+    },
+    "bar_chirp": {
+     "by_rung": {
+      "HASWELL/t1": 1.7816750375606733e-12,
+      "HASWELL/t4": 1.7816750375606733e-12,
+      "KATMAI/t1": 1.7816750375606733e-12,
+      "KATMAI/t4": 1.7816750375606733e-12,
+      "NEHALEM/t1": 1.7816750375606733e-12,
+      "NEHALEM/t4": 1.7816750375606733e-12,
+      "SANDYBRIDGE/t1": 1.7816750375606733e-12,
+      "SANDYBRIDGE/t4": 1.7816750375606733e-12
+     },
+     "max": 1.7816750375606733e-12,
+     "min": 1.7816750375606733e-12,
+     "spread": 0.0
+    },
+    "bar_dense": {
+     "by_rung": {
+      "HASWELL/t1": 9.301666117370979e-13,
+      "HASWELL/t4": 9.301666117370979e-13,
+      "KATMAI/t1": 9.301666117370979e-13,
+      "KATMAI/t4": 9.301666117370979e-13,
+      "NEHALEM/t1": 9.301666117370979e-13,
+      "NEHALEM/t4": 9.301666117370979e-13,
+      "SANDYBRIDGE/t1": 9.301666117370979e-13,
+      "SANDYBRIDGE/t4": 9.301666117370979e-13
+     },
+     "max": 9.301666117370979e-13,
+     "min": 9.301666117370979e-13,
+     "spread": 0.0
+    },
+    "err_bluestein": {
+     "by_rung": {
+      "HASWELL/t1": 9.137884154312972e-14,
+      "HASWELL/t4": 9.137884154312972e-14,
+      "KATMAI/t1": 9.137884154312972e-14,
+      "KATMAI/t4": 9.137884154312972e-14,
+      "NEHALEM/t1": 9.137884154312972e-14,
+      "NEHALEM/t4": 9.137884154312972e-14,
+      "SANDYBRIDGE/t1": 9.137884154312972e-14,
+      "SANDYBRIDGE/t4": 9.137884154312972e-14
+     },
+     "max": 9.137884154312972e-14,
+     "min": 9.137884154312972e-14,
+     "spread": 0.0
+    },
+    "err_direct": {
+     "by_rung": {
+      "HASWELL/t1": 1.1234667099445444e-14,
+      "HASWELL/t4": 1.1234667099445444e-14,
+      "KATMAI/t1": 1.0805156823142814e-14,
+      "KATMAI/t4": 1.0805156823142814e-14,
+      "NEHALEM/t1": 1.0048591735576161e-14,
+      "NEHALEM/t4": 1.0048591735576161e-14,
+      "SANDYBRIDGE/t1": 1.0048591735576161e-14,
+      "SANDYBRIDGE/t4": 1.0048591735576161e-14
+     },
+     "max": 1.1234667099445444e-14,
+     "min": 1.0048591735576161e-14,
+     "spread": 1.1860753638692829e-15
+    },
+    "err_separable": {
+     "by_rung": {
+      "HASWELL/t1": 7.706707309486327e-14,
+      "HASWELL/t4": 7.706707309486327e-14,
+      "KATMAI/t1": 7.706707309486327e-14,
+      "KATMAI/t4": 7.706707309486327e-14,
+      "NEHALEM/t1": 7.706707309486327e-14,
+      "NEHALEM/t4": 7.706707309486327e-14,
+      "SANDYBRIDGE/t1": 7.706707309486327e-14,
+      "SANDYBRIDGE/t4": 7.706707309486327e-14
+     },
+     "max": 7.706707309486327e-14,
+     "min": 7.706707309486327e-14,
+     "spread": 0.0
+    },
+    "pair_bluestein_vs_direct": {
+     "by_rung": {
+      "HASWELL/t1": 8.670095481510583e-14,
+      "HASWELL/t4": 8.670095481510583e-14,
+      "KATMAI/t1": 8.670095481510583e-14,
+      "KATMAI/t4": 8.670095481510583e-14,
+      "NEHALEM/t1": 8.670095481510583e-14,
+      "NEHALEM/t4": 8.670095481510583e-14,
+      "SANDYBRIDGE/t1": 8.670095481510583e-14,
+      "SANDYBRIDGE/t4": 8.670095481510583e-14
+     },
+     "max": 8.670095481510583e-14,
+     "min": 8.670095481510583e-14,
+     "spread": 0.0
+    },
+    "pair_separable_vs_direct": {
+     "by_rung": {
+      "HASWELL/t1": 7.2379729700882e-14,
+      "HASWELL/t4": 7.2379729700882e-14,
+      "KATMAI/t1": 7.2379729700882e-14,
+      "KATMAI/t4": 7.2379729700882e-14,
+      "NEHALEM/t1": 7.2379729700882e-14,
+      "NEHALEM/t4": 7.2379729700882e-14,
+      "SANDYBRIDGE/t1": 7.2379729700882e-14,
+      "SANDYBRIDGE/t4": 7.2379729700882e-14
+     },
+     "max": 7.2379729700882e-14,
+     "min": 7.2379729700882e-14,
+     "spread": 0.0
+    },
+    "sha_bluestein": {
+     "by_rung": {
+      "HASWELL/t1": "98d75bd8f6da5722151bb05bf7057696c9c969e48dae6b6c78de9a700ec2263c",
+      "HASWELL/t4": "98d75bd8f6da5722151bb05bf7057696c9c969e48dae6b6c78de9a700ec2263c",
+      "KATMAI/t1": "98d75bd8f6da5722151bb05bf7057696c9c969e48dae6b6c78de9a700ec2263c",
+      "KATMAI/t4": "98d75bd8f6da5722151bb05bf7057696c9c969e48dae6b6c78de9a700ec2263c",
+      "NEHALEM/t1": "98d75bd8f6da5722151bb05bf7057696c9c969e48dae6b6c78de9a700ec2263c",
+      "NEHALEM/t4": "98d75bd8f6da5722151bb05bf7057696c9c969e48dae6b6c78de9a700ec2263c",
+      "SANDYBRIDGE/t1": "98d75bd8f6da5722151bb05bf7057696c9c969e48dae6b6c78de9a700ec2263c",
+      "SANDYBRIDGE/t4": "98d75bd8f6da5722151bb05bf7057696c9c969e48dae6b6c78de9a700ec2263c"
+     },
+     "distinct": 1
+    },
+    "sha_direct": {
+     "by_rung": {
+      "HASWELL/t1": "1168a9912fedf8f38978f7ee35576c75d6e3374ef78ad4da2d5f716b19fcec99",
+      "HASWELL/t4": "1168a9912fedf8f38978f7ee35576c75d6e3374ef78ad4da2d5f716b19fcec99",
+      "KATMAI/t1": "58a9c08c424a80c5a2a0beaba7dac38027c5b78446950949d904391853505362",
+      "KATMAI/t4": "58a9c08c424a80c5a2a0beaba7dac38027c5b78446950949d904391853505362",
+      "NEHALEM/t1": "8f6c67ba4c4294e27b750d3ebd1f053532814e6b85373e3c65fb124314220f6b",
+      "NEHALEM/t4": "8f6c67ba4c4294e27b750d3ebd1f053532814e6b85373e3c65fb124314220f6b",
+      "SANDYBRIDGE/t1": "8f6c67ba4c4294e27b750d3ebd1f053532814e6b85373e3c65fb124314220f6b",
+      "SANDYBRIDGE/t4": "8f6c67ba4c4294e27b750d3ebd1f053532814e6b85373e3c65fb124314220f6b"
+     },
+     "distinct": 3
+    },
+    "sha_separable": {
+     "by_rung": {
+      "HASWELL/t1": "34394611eed7244f3e9179755c90430f573a10208fbd89da6bdb45d685ceda6c",
+      "HASWELL/t4": "34394611eed7244f3e9179755c90430f573a10208fbd89da6bdb45d685ceda6c",
+      "KATMAI/t1": "34394611eed7244f3e9179755c90430f573a10208fbd89da6bdb45d685ceda6c",
+      "KATMAI/t4": "34394611eed7244f3e9179755c90430f573a10208fbd89da6bdb45d685ceda6c",
+      "NEHALEM/t1": "34394611eed7244f3e9179755c90430f573a10208fbd89da6bdb45d685ceda6c",
+      "NEHALEM/t4": "34394611eed7244f3e9179755c90430f573a10208fbd89da6bdb45d685ceda6c",
+      "SANDYBRIDGE/t1": "34394611eed7244f3e9179755c90430f573a10208fbd89da6bdb45d685ceda6c",
+      "SANDYBRIDGE/t4": "34394611eed7244f3e9179755c90430f573a10208fbd89da6bdb45d685ceda6c"
+     },
+     "distinct": 1
+    }
+   },
+   "B1.32x24->16x20.sign-1": {
+    "bar_both": {
+     "by_rung": {
+      "HASWELL/t1": 1.7756708646088344e-11,
+      "HASWELL/t4": 1.7756708646088344e-11,
+      "KATMAI/t1": 1.7756708646088344e-11,
+      "KATMAI/t4": 1.7756708646088344e-11,
+      "NEHALEM/t1": 1.7756708646088344e-11,
+      "NEHALEM/t4": 1.7756708646088344e-11,
+      "SANDYBRIDGE/t1": 1.7756708646088344e-11,
+      "SANDYBRIDGE/t4": 1.7756708646088344e-11
+     },
+     "max": 1.7756708646088344e-11,
+     "min": 1.7756708646088344e-11,
+     "spread": 0.0
+    },
+    "bar_chirp": {
+     "by_rung": {
+      "HASWELL/t1": 9.603901773486614e-12,
+      "HASWELL/t4": 9.603901773486614e-12,
+      "KATMAI/t1": 9.603901773486614e-12,
+      "KATMAI/t4": 9.603901773486614e-12,
+      "NEHALEM/t1": 9.603901773486614e-12,
+      "NEHALEM/t4": 9.603901773486614e-12,
+      "SANDYBRIDGE/t1": 9.603901773486614e-12,
+      "SANDYBRIDGE/t4": 9.603901773486614e-12
+     },
+     "max": 9.603901773486614e-12,
+     "min": 9.603901773486614e-12,
+     "spread": 0.0
+    },
+    "bar_dense": {
+     "by_rung": {
+      "HASWELL/t1": 8.15280687260173e-12,
+      "HASWELL/t4": 8.15280687260173e-12,
+      "KATMAI/t1": 8.15280687260173e-12,
+      "KATMAI/t4": 8.15280687260173e-12,
+      "NEHALEM/t1": 8.15280687260173e-12,
+      "NEHALEM/t4": 8.15280687260173e-12,
+      "SANDYBRIDGE/t1": 8.15280687260173e-12,
+      "SANDYBRIDGE/t4": 8.15280687260173e-12
+     },
+     "max": 8.15280687260173e-12,
+     "min": 8.15280687260173e-12,
+     "spread": 0.0
+    },
+    "err_bluestein": {
+     "by_rung": {
+      "HASWELL/t1": 2.2914314707516465e-13,
+      "HASWELL/t4": 2.2914314707516465e-13,
+      "KATMAI/t1": 2.2914314707516465e-13,
+      "KATMAI/t4": 2.2914314707516465e-13,
+      "NEHALEM/t1": 2.2914314707516465e-13,
+      "NEHALEM/t4": 2.2914314707516465e-13,
+      "SANDYBRIDGE/t1": 2.2914314707516465e-13,
+      "SANDYBRIDGE/t4": 2.2914314707516465e-13
+     },
+     "max": 2.2914314707516465e-13,
+     "min": 2.2914314707516465e-13,
+     "spread": 0.0
+    },
+    "err_direct": {
+     "by_rung": {
+      "HASWELL/t1": 4.5496934130773415e-14,
+      "HASWELL/t4": 4.5496934130773415e-14,
+      "KATMAI/t1": 3.552713678800501e-14,
+      "KATMAI/t4": 3.552713678800501e-14,
+      "NEHALEM/t1": 3.552713678800501e-14,
+      "NEHALEM/t4": 3.552713678800501e-14,
+      "SANDYBRIDGE/t1": 3.552713678800501e-14,
+      "SANDYBRIDGE/t4": 3.552713678800501e-14
+     },
+     "max": 4.5496934130773415e-14,
+     "min": 3.552713678800501e-14,
+     "spread": 9.969797342768406e-15
+    },
+    "err_separable": {
+     "by_rung": {
+      "HASWELL/t1": 2.51214793389404e-13,
+      "HASWELL/t4": 2.51214793389404e-13,
+      "KATMAI/t1": 2.51214793389404e-13,
+      "KATMAI/t4": 2.51214793389404e-13,
+      "NEHALEM/t1": 2.51214793389404e-13,
+      "NEHALEM/t4": 2.51214793389404e-13,
+      "SANDYBRIDGE/t1": 2.51214793389404e-13,
+      "SANDYBRIDGE/t4": 2.51214793389404e-13
+     },
+     "max": 2.51214793389404e-13,
+     "min": 2.51214793389404e-13,
+     "spread": 0.0
+    },
+    "pair_bluestein_vs_direct": {
+     "by_rung": {
+      "HASWELL/t1": 2.3533879075442877e-13,
+      "HASWELL/t4": 2.3533879075442877e-13,
+      "KATMAI/t1": 2.2570219718813562e-13,
+      "KATMAI/t4": 2.2570219718813562e-13,
+      "NEHALEM/t1": 2.2570219718813562e-13,
+      "NEHALEM/t4": 2.2570219718813562e-13,
+      "SANDYBRIDGE/t1": 2.2570219718813562e-13,
+      "SANDYBRIDGE/t4": 2.2570219718813562e-13
+     },
+     "max": 2.3533879075442877e-13,
+     "min": 2.2570219718813562e-13,
+     "spread": 9.636593566293152e-15
+    },
+    "pair_separable_vs_direct": {
+     "by_rung": {
+      "HASWELL/t1": 2.637635701783919e-13,
+      "HASWELL/t4": 2.637635701783919e-13,
+      "KATMAI/t1": 2.5421149729252077e-13,
+      "KATMAI/t4": 2.5421149729252077e-13,
+      "NEHALEM/t1": 2.5421149729252077e-13,
+      "NEHALEM/t4": 2.5421149729252077e-13,
+      "SANDYBRIDGE/t1": 2.5421149729252077e-13,
+      "SANDYBRIDGE/t4": 2.5421149729252077e-13
+     },
+     "max": 2.637635701783919e-13,
+     "min": 2.5421149729252077e-13,
+     "spread": 9.552072885871132e-15
+    },
+    "sha_bluestein": {
+     "by_rung": {
+      "HASWELL/t1": "15ff37da17ec7ecafe14c720c8d9d482ed92d2f0c55005c97412217509aaa3ba",
+      "HASWELL/t4": "15ff37da17ec7ecafe14c720c8d9d482ed92d2f0c55005c97412217509aaa3ba",
+      "KATMAI/t1": "15ff37da17ec7ecafe14c720c8d9d482ed92d2f0c55005c97412217509aaa3ba",
+      "KATMAI/t4": "15ff37da17ec7ecafe14c720c8d9d482ed92d2f0c55005c97412217509aaa3ba",
+      "NEHALEM/t1": "15ff37da17ec7ecafe14c720c8d9d482ed92d2f0c55005c97412217509aaa3ba",
+      "NEHALEM/t4": "15ff37da17ec7ecafe14c720c8d9d482ed92d2f0c55005c97412217509aaa3ba",
+      "SANDYBRIDGE/t1": "15ff37da17ec7ecafe14c720c8d9d482ed92d2f0c55005c97412217509aaa3ba",
+      "SANDYBRIDGE/t4": "15ff37da17ec7ecafe14c720c8d9d482ed92d2f0c55005c97412217509aaa3ba"
+     },
+     "distinct": 1
+    },
+    "sha_direct": {
+     "by_rung": {
+      "HASWELL/t1": "2591afe5a7858890ad591f0308eb06a6971c08a9da1ac81aa2d726c9b8b8d2a8",
+      "HASWELL/t4": "2591afe5a7858890ad591f0308eb06a6971c08a9da1ac81aa2d726c9b8b8d2a8",
+      "KATMAI/t1": "2fef135e970c004ac12e68ef96e8c21dfef52d07cd3fc129eac1ad32db65a267",
+      "KATMAI/t4": "2fef135e970c004ac12e68ef96e8c21dfef52d07cd3fc129eac1ad32db65a267",
+      "NEHALEM/t1": "2fef135e970c004ac12e68ef96e8c21dfef52d07cd3fc129eac1ad32db65a267",
+      "NEHALEM/t4": "2fef135e970c004ac12e68ef96e8c21dfef52d07cd3fc129eac1ad32db65a267",
+      "SANDYBRIDGE/t1": "2fef135e970c004ac12e68ef96e8c21dfef52d07cd3fc129eac1ad32db65a267",
+      "SANDYBRIDGE/t4": "2fef135e970c004ac12e68ef96e8c21dfef52d07cd3fc129eac1ad32db65a267"
+     },
+     "distinct": 2
+    },
+    "sha_separable": {
+     "by_rung": {
+      "HASWELL/t1": "3f6c61f9c88b9bd8eb2e14e5372d43eeb2d22b1ac66e45969d49666431911f95",
+      "HASWELL/t4": "3f6c61f9c88b9bd8eb2e14e5372d43eeb2d22b1ac66e45969d49666431911f95",
+      "KATMAI/t1": "3f6c61f9c88b9bd8eb2e14e5372d43eeb2d22b1ac66e45969d49666431911f95",
+      "KATMAI/t4": "3f6c61f9c88b9bd8eb2e14e5372d43eeb2d22b1ac66e45969d49666431911f95",
+      "NEHALEM/t1": "3f6c61f9c88b9bd8eb2e14e5372d43eeb2d22b1ac66e45969d49666431911f95",
+      "NEHALEM/t4": "3f6c61f9c88b9bd8eb2e14e5372d43eeb2d22b1ac66e45969d49666431911f95",
+      "SANDYBRIDGE/t1": "3f6c61f9c88b9bd8eb2e14e5372d43eeb2d22b1ac66e45969d49666431911f95",
+      "SANDYBRIDGE/t4": "3f6c61f9c88b9bd8eb2e14e5372d43eeb2d22b1ac66e45969d49666431911f95"
+     },
+     "distinct": 1
+    }
+   },
+   "B1.32x24->16x20.sign1": {
+    "bar_both": {
+     "by_rung": {
+      "HASWELL/t1": 1.7756708646088344e-11,
+      "HASWELL/t4": 1.7756708646088344e-11,
+      "KATMAI/t1": 1.7756708646088344e-11,
+      "KATMAI/t4": 1.7756708646088344e-11,
+      "NEHALEM/t1": 1.7756708646088344e-11,
+      "NEHALEM/t4": 1.7756708646088344e-11,
+      "SANDYBRIDGE/t1": 1.7756708646088344e-11,
+      "SANDYBRIDGE/t4": 1.7756708646088344e-11
+     },
+     "max": 1.7756708646088344e-11,
+     "min": 1.7756708646088344e-11,
+     "spread": 0.0
+    },
+    "bar_chirp": {
+     "by_rung": {
+      "HASWELL/t1": 9.603901773486614e-12,
+      "HASWELL/t4": 9.603901773486614e-12,
+      "KATMAI/t1": 9.603901773486614e-12,
+      "KATMAI/t4": 9.603901773486614e-12,
+      "NEHALEM/t1": 9.603901773486614e-12,
+      "NEHALEM/t4": 9.603901773486614e-12,
+      "SANDYBRIDGE/t1": 9.603901773486614e-12,
+      "SANDYBRIDGE/t4": 9.603901773486614e-12
+     },
+     "max": 9.603901773486614e-12,
+     "min": 9.603901773486614e-12,
+     "spread": 0.0
+    },
+    "bar_dense": {
+     "by_rung": {
+      "HASWELL/t1": 8.15280687260173e-12,
+      "HASWELL/t4": 8.15280687260173e-12,
+      "KATMAI/t1": 8.15280687260173e-12,
+      "KATMAI/t4": 8.15280687260173e-12,
+      "NEHALEM/t1": 8.15280687260173e-12,
+      "NEHALEM/t4": 8.15280687260173e-12,
+      "SANDYBRIDGE/t1": 8.15280687260173e-12,
+      "SANDYBRIDGE/t4": 8.15280687260173e-12
+     },
+     "max": 8.15280687260173e-12,
+     "min": 8.15280687260173e-12,
+     "spread": 0.0
+    },
+    "err_bluestein": {
+     "by_rung": {
+      "HASWELL/t1": 3.160318045517284e-13,
+      "HASWELL/t4": 3.160318045517284e-13,
+      "KATMAI/t1": 3.160318045517284e-13,
+      "KATMAI/t4": 3.160318045517284e-13,
+      "NEHALEM/t1": 3.160318045517284e-13,
+      "NEHALEM/t4": 3.160318045517284e-13,
+      "SANDYBRIDGE/t1": 3.160318045517284e-13,
+      "SANDYBRIDGE/t4": 3.160318045517284e-13
+     },
+     "max": 3.160318045517284e-13,
+     "min": 3.160318045517284e-13,
+     "spread": 0.0
+    },
+    "err_direct": {
+     "by_rung": {
+      "HASWELL/t1": 3.552713678800501e-14,
+      "HASWELL/t4": 3.552713678800501e-14,
+      "KATMAI/t1": 3.337471495267141e-14,
+      "KATMAI/t4": 3.337471495267141e-14,
+      "NEHALEM/t1": 3.337471495267141e-14,
+      "NEHALEM/t4": 3.337471495267141e-14,
+      "SANDYBRIDGE/t1": 3.337471495267141e-14,
+      "SANDYBRIDGE/t4": 3.337471495267141e-14
+     },
+     "max": 3.552713678800501e-14,
+     "min": 3.337471495267141e-14,
+     "spread": 2.152421835333599e-15
+    },
+    "err_separable": {
+     "by_rung": {
+      "HASWELL/t1": 3.112023065662804e-13,
+      "HASWELL/t4": 3.112023065662804e-13,
+      "KATMAI/t1": 3.112023065662804e-13,
+      "KATMAI/t4": 3.112023065662804e-13,
+      "NEHALEM/t1": 3.112023065662804e-13,
+      "NEHALEM/t4": 3.112023065662804e-13,
+      "SANDYBRIDGE/t1": 3.112023065662804e-13,
+      "SANDYBRIDGE/t4": 3.112023065662804e-13
+     },
+     "max": 3.112023065662804e-13,
+     "min": 3.112023065662804e-13,
+     "spread": 0.0
+    },
+    "pair_bluestein_vs_direct": {
+     "by_rung": {
+      "HASWELL/t1": 3.085867243611494e-13,
+      "HASWELL/t4": 3.085867243611494e-13,
+      "KATMAI/t1": 3.0941260390879683e-13,
+      "KATMAI/t4": 3.0941260390879683e-13,
+      "NEHALEM/t1": 3.0941260390879683e-13,
+      "NEHALEM/t4": 3.0941260390879683e-13,
+      "SANDYBRIDGE/t1": 3.0941260390879683e-13,
+      "SANDYBRIDGE/t4": 3.0941260390879683e-13
+     },
+     "max": 3.0941260390879683e-13,
+     "min": 3.085867243611494e-13,
+     "spread": 8.258795476474085e-16
+    },
+    "pair_separable_vs_direct": {
+     "by_rung": {
+      "HASWELL/t1": 3.0363883245707445e-13,
+      "HASWELL/t4": 3.0363883245707445e-13,
+      "KATMAI/t1": 3.044781331747377e-13,
+      "KATMAI/t4": 3.044781331747377e-13,
+      "NEHALEM/t1": 3.044781331747377e-13,
+      "NEHALEM/t4": 3.044781331747377e-13,
+      "SANDYBRIDGE/t1": 3.044781331747377e-13,
+      "SANDYBRIDGE/t4": 3.044781331747377e-13
+     },
+     "max": 3.044781331747377e-13,
+     "min": 3.0363883245707445e-13,
+     "spread": 8.393007176632669e-16
+    },
+    "sha_bluestein": {
+     "by_rung": {
+      "HASWELL/t1": "31e05cad64b17b243eb83e6ba6a933e1926f30cf09929f0f5fce27ce6c433f54",
+      "HASWELL/t4": "31e05cad64b17b243eb83e6ba6a933e1926f30cf09929f0f5fce27ce6c433f54",
+      "KATMAI/t1": "31e05cad64b17b243eb83e6ba6a933e1926f30cf09929f0f5fce27ce6c433f54",
+      "KATMAI/t4": "31e05cad64b17b243eb83e6ba6a933e1926f30cf09929f0f5fce27ce6c433f54",
+      "NEHALEM/t1": "31e05cad64b17b243eb83e6ba6a933e1926f30cf09929f0f5fce27ce6c433f54",
+      "NEHALEM/t4": "31e05cad64b17b243eb83e6ba6a933e1926f30cf09929f0f5fce27ce6c433f54",
+      "SANDYBRIDGE/t1": "31e05cad64b17b243eb83e6ba6a933e1926f30cf09929f0f5fce27ce6c433f54",
+      "SANDYBRIDGE/t4": "31e05cad64b17b243eb83e6ba6a933e1926f30cf09929f0f5fce27ce6c433f54"
+     },
+     "distinct": 1
+    },
+    "sha_direct": {
+     "by_rung": {
+      "HASWELL/t1": "46d776acc79e2c21cb05ed37698ee4fc7f79715a040c8f10fc86d6de6d1e5da3",
+      "HASWELL/t4": "46d776acc79e2c21cb05ed37698ee4fc7f79715a040c8f10fc86d6de6d1e5da3",
+      "KATMAI/t1": "4cfb671c1470d9e0dc760b5da6c059c14bbe6c2c9e6893790d1a0963e8382839",
+      "KATMAI/t4": "4cfb671c1470d9e0dc760b5da6c059c14bbe6c2c9e6893790d1a0963e8382839",
+      "NEHALEM/t1": "4cfb671c1470d9e0dc760b5da6c059c14bbe6c2c9e6893790d1a0963e8382839",
+      "NEHALEM/t4": "4cfb671c1470d9e0dc760b5da6c059c14bbe6c2c9e6893790d1a0963e8382839",
+      "SANDYBRIDGE/t1": "4cfb671c1470d9e0dc760b5da6c059c14bbe6c2c9e6893790d1a0963e8382839",
+      "SANDYBRIDGE/t4": "4cfb671c1470d9e0dc760b5da6c059c14bbe6c2c9e6893790d1a0963e8382839"
+     },
+     "distinct": 2
+    },
+    "sha_separable": {
+     "by_rung": {
+      "HASWELL/t1": "2dd70fad8b614927d0204c6c4d3ec770f51748224f68dd6d19bbd0ce97f8d967",
+      "HASWELL/t4": "2dd70fad8b614927d0204c6c4d3ec770f51748224f68dd6d19bbd0ce97f8d967",
+      "KATMAI/t1": "2dd70fad8b614927d0204c6c4d3ec770f51748224f68dd6d19bbd0ce97f8d967",
+      "KATMAI/t4": "2dd70fad8b614927d0204c6c4d3ec770f51748224f68dd6d19bbd0ce97f8d967",
+      "NEHALEM/t1": "2dd70fad8b614927d0204c6c4d3ec770f51748224f68dd6d19bbd0ce97f8d967",
+      "NEHALEM/t4": "2dd70fad8b614927d0204c6c4d3ec770f51748224f68dd6d19bbd0ce97f8d967",
+      "SANDYBRIDGE/t1": "2dd70fad8b614927d0204c6c4d3ec770f51748224f68dd6d19bbd0ce97f8d967",
+      "SANDYBRIDGE/t4": "2dd70fad8b614927d0204c6c4d3ec770f51748224f68dd6d19bbd0ce97f8d967"
+     },
+     "distinct": 1
+    }
+   },
+   "B2.centred": {
+    "bar_chirp": {
+     "by_rung": {
+      "HASWELL/t1": 5.380937983916719e-12,
+      "HASWELL/t4": 5.380937983916719e-12,
+      "KATMAI/t1": 5.380937983916719e-12,
+      "KATMAI/t4": 5.380937983916719e-12,
+      "NEHALEM/t1": 5.380937983916719e-12,
+      "NEHALEM/t4": 5.380937983916719e-12,
+      "SANDYBRIDGE/t1": 5.380937983916719e-12,
+      "SANDYBRIDGE/t4": 5.380937983916719e-12
+     },
+     "max": 5.380937983916719e-12,
+     "min": 5.380937983916719e-12,
+     "spread": 0.0
+    },
+    "bar_dense": {
+     "by_rung": {
+      "HASWELL/t1": 4.208159164978919e-12,
+      "HASWELL/t4": 4.208159164978919e-12,
+      "KATMAI/t1": 4.208159164978919e-12,
+      "KATMAI/t4": 4.208159164978919e-12,
+      "NEHALEM/t1": 4.208159164978919e-12,
+      "NEHALEM/t4": 4.208159164978919e-12,
+      "SANDYBRIDGE/t1": 4.208159164978919e-12,
+      "SANDYBRIDGE/t4": 4.208159164978919e-12
+     },
+     "max": 4.208159164978919e-12,
+     "min": 4.208159164978919e-12,
+     "spread": 0.0
+    },
+    "err_chirp": {
+     "by_rung": {
+      "HASWELL/t1": 9.298341530198968e-14,
+      "HASWELL/t4": 9.298341530198968e-14,
+      "KATMAI/t1": 9.298341530198968e-14,
+      "KATMAI/t4": 9.298341530198968e-14,
+      "NEHALEM/t1": 9.298341530198968e-14,
+      "NEHALEM/t4": 9.298341530198968e-14,
+      "SANDYBRIDGE/t1": 9.298341530198968e-14,
+      "SANDYBRIDGE/t4": 9.298341530198968e-14
+     },
+     "max": 9.298341530198968e-14,
+     "min": 9.298341530198968e-14,
+     "spread": 0.0
+    },
+    "err_dense": {
+     "by_rung": {
+      "HASWELL/t1": 2.1482170038296686e-14,
+      "HASWELL/t4": 2.1482170038296686e-14,
+      "KATMAI/t1": 2.1390168887322673e-14,
+      "KATMAI/t4": 2.1390168887322673e-14,
+      "NEHALEM/t1": 2.1390168887322673e-14,
+      "NEHALEM/t4": 2.1390168887322673e-14,
+      "SANDYBRIDGE/t1": 2.1390168887322673e-14,
+      "SANDYBRIDGE/t4": 2.1390168887322673e-14
+     },
+     "max": 2.1482170038296686e-14,
+     "min": 2.1390168887322673e-14,
+     "spread": 9.200115097401337e-17
+    },
+    "sha_chirp": {
+     "by_rung": {
+      "HASWELL/t1": "732caeac454c554665b4140e12792ce42d1fd447140a9858fd987d01c0f3b5e4",
+      "HASWELL/t4": "732caeac454c554665b4140e12792ce42d1fd447140a9858fd987d01c0f3b5e4",
+      "KATMAI/t1": "732caeac454c554665b4140e12792ce42d1fd447140a9858fd987d01c0f3b5e4",
+      "KATMAI/t4": "732caeac454c554665b4140e12792ce42d1fd447140a9858fd987d01c0f3b5e4",
+      "NEHALEM/t1": "732caeac454c554665b4140e12792ce42d1fd447140a9858fd987d01c0f3b5e4",
+      "NEHALEM/t4": "732caeac454c554665b4140e12792ce42d1fd447140a9858fd987d01c0f3b5e4",
+      "SANDYBRIDGE/t1": "732caeac454c554665b4140e12792ce42d1fd447140a9858fd987d01c0f3b5e4",
+      "SANDYBRIDGE/t4": "732caeac454c554665b4140e12792ce42d1fd447140a9858fd987d01c0f3b5e4"
+     },
+     "distinct": 1
+    },
+    "sha_dense": {
+     "by_rung": {
+      "HASWELL/t1": "035e266c1f0f94f514dcfabe585511504faa92cd983e7acd8c5e1e551b95002d",
+      "HASWELL/t4": "035e266c1f0f94f514dcfabe585511504faa92cd983e7acd8c5e1e551b95002d",
+      "KATMAI/t1": "1df42d6a80bb4d72f79b12f2063d3001ae4ec3b2226e88eac4d685cef7b43fb7",
+      "KATMAI/t4": "1df42d6a80bb4d72f79b12f2063d3001ae4ec3b2226e88eac4d685cef7b43fb7",
+      "NEHALEM/t1": "1df42d6a80bb4d72f79b12f2063d3001ae4ec3b2226e88eac4d685cef7b43fb7",
+      "NEHALEM/t4": "1df42d6a80bb4d72f79b12f2063d3001ae4ec3b2226e88eac4d685cef7b43fb7",
+      "SANDYBRIDGE/t1": "1df42d6a80bb4d72f79b12f2063d3001ae4ec3b2226e88eac4d685cef7b43fb7",
+      "SANDYBRIDGE/t4": "1df42d6a80bb4d72f79b12f2063d3001ae4ec3b2226e88eac4d685cef7b43fb7"
+     },
+     "distinct": 2
+    }
+   },
+   "B3.both_conventions": {
+    "bit_equal": {
+     "by_rung": {
+      "HASWELL/t1": true,
+      "HASWELL/t4": true,
+      "KATMAI/t1": true,
+      "KATMAI/t4": true,
+      "NEHALEM/t1": true,
+      "NEHALEM/t4": true,
+      "SANDYBRIDGE/t1": true,
+      "SANDYBRIDGE/t4": true
+     },
+     "distinct": 1
+    },
+    "sha": {
+     "by_rung": {
+      "HASWELL/t1": "50e5e11052b394f6f89173d5d39db02d1ac0a074de4cae487ad50d451ae3ff13",
+      "HASWELL/t4": "50e5e11052b394f6f89173d5d39db02d1ac0a074de4cae487ad50d451ae3ff13",
+      "KATMAI/t1": "dbf405156db67fb8ef2021a1d7c76043e5774c6a0155a63573835e6ea88d8526",
+      "KATMAI/t4": "dbf405156db67fb8ef2021a1d7c76043e5774c6a0155a63573835e6ea88d8526",
+      "NEHALEM/t1": "dac3b5b8c9827078308470bd1feda7650b317d2a5c679379ce474edc3abba45d",
+      "NEHALEM/t4": "dac3b5b8c9827078308470bd1feda7650b317d2a5c679379ce474edc3abba45d",
+      "SANDYBRIDGE/t1": "dac3b5b8c9827078308470bd1feda7650b317d2a5c679379ce474edc3abba45d",
+      "SANDYBRIDGE/t4": "dac3b5b8c9827078308470bd1feda7650b317d2a5c679379ce474edc3abba45d"
+     },
+     "distinct": 3
+    }
+   },
+   "B4.angular_spectrum_propagate_mft": {
+    "bar": {
+     "by_rung": {
+      "HASWELL/t1": 4.601589888937335e-12,
+      "HASWELL/t4": 4.601589888937335e-12,
+      "KATMAI/t1": 4.601589888937335e-12,
+      "KATMAI/t4": 4.601589888937335e-12,
+      "NEHALEM/t1": 4.601589888937335e-12,
+      "NEHALEM/t4": 4.601589888937335e-12,
+      "SANDYBRIDGE/t1": 4.601589888937335e-12,
+      "SANDYBRIDGE/t4": 4.601589888937335e-12
+     },
+     "max": 4.601589888937335e-12,
+     "min": 4.601589888937335e-12,
+     "spread": 0.0
+    },
+    "power_bar": {
+     "by_rung": {
+      "HASWELL/t1": 1e-12,
+      "HASWELL/t4": 1e-12,
+      "KATMAI/t1": 1e-12,
+      "KATMAI/t4": 1e-12,
+      "NEHALEM/t1": 1e-12,
+      "NEHALEM/t4": 1e-12,
+      "SANDYBRIDGE/t1": 1e-12,
+      "SANDYBRIDGE/t4": 1e-12
+     },
+     "max": 1e-12,
+     "min": 1e-12,
+     "spread": 0.0
+    },
+    "power_rel": {
+     "by_rung": {
+      "HASWELL/t1": 6.792699212637371e-16,
+      "HASWELL/t4": 6.792699212637371e-16,
+      "KATMAI/t1": 6.792699212637371e-16,
+      "KATMAI/t4": 6.792699212637371e-16,
+      "NEHALEM/t1": 6.792699212637371e-16,
+      "NEHALEM/t4": 6.792699212637371e-16,
+      "SANDYBRIDGE/t1": 6.792699212637371e-16,
+      "SANDYBRIDGE/t4": 6.792699212637371e-16
+     },
+     "max": 6.792699212637371e-16,
+     "min": 6.792699212637371e-16,
+     "spread": 0.0
+    },
+    "rel": {
+     "by_rung": {
+      "HASWELL/t1": 4.6585980198438237e-14,
+      "HASWELL/t4": 4.6585980198438237e-14,
+      "KATMAI/t1": 4.684106358355889e-14,
+      "KATMAI/t4": 4.684106358355889e-14,
+      "NEHALEM/t1": 4.684106358355889e-14,
+      "NEHALEM/t4": 4.684106358355889e-14,
+      "SANDYBRIDGE/t1": 4.684106358355889e-14,
+      "SANDYBRIDGE/t4": 4.684106358355889e-14
+     },
+     "max": 4.684106358355889e-14,
+     "min": 4.6585980198438237e-14,
+     "spread": 2.5508338512065586e-16
+    },
+    "sha_default": {
+     "by_rung": {
+      "HASWELL/t1": "84bb10445b3963ebe92964a6d06d141c0a8f92fdad571c257f436db72341030d",
+      "HASWELL/t4": "84bb10445b3963ebe92964a6d06d141c0a8f92fdad571c257f436db72341030d",
+      "KATMAI/t1": "84bb10445b3963ebe92964a6d06d141c0a8f92fdad571c257f436db72341030d",
+      "KATMAI/t4": "84bb10445b3963ebe92964a6d06d141c0a8f92fdad571c257f436db72341030d",
+      "NEHALEM/t1": "84bb10445b3963ebe92964a6d06d141c0a8f92fdad571c257f436db72341030d",
+      "NEHALEM/t4": "84bb10445b3963ebe92964a6d06d141c0a8f92fdad571c257f436db72341030d",
+      "SANDYBRIDGE/t1": "84bb10445b3963ebe92964a6d06d141c0a8f92fdad571c257f436db72341030d",
+      "SANDYBRIDGE/t4": "84bb10445b3963ebe92964a6d06d141c0a8f92fdad571c257f436db72341030d"
+     },
+     "distinct": 1
+    },
+    "sha_direct": {
+     "by_rung": {
+      "HASWELL/t1": "2fa6f98e5bfd79f1f601f94bc78de4411149207a52eba4bec35618fb428bca89",
+      "HASWELL/t4": "966b0441b6ab3a41bf370a7b0d1321a74dce2a8d68f3ba4f8b7465d070280c7d",
+      "KATMAI/t1": "5662d4c01d7b47fd0397b4a8434d35d501c6f76dec4f360809a99fdb09de5622",
+      "KATMAI/t4": "5662d4c01d7b47fd0397b4a8434d35d501c6f76dec4f360809a99fdb09de5622",
+      "NEHALEM/t1": "5662d4c01d7b47fd0397b4a8434d35d501c6f76dec4f360809a99fdb09de5622",
+      "NEHALEM/t4": "5662d4c01d7b47fd0397b4a8434d35d501c6f76dec4f360809a99fdb09de5622",
+      "SANDYBRIDGE/t1": "5662d4c01d7b47fd0397b4a8434d35d501c6f76dec4f360809a99fdb09de5622",
+      "SANDYBRIDGE/t4": "5662d4c01d7b47fd0397b4a8434d35d501c6f76dec4f360809a99fdb09de5622"
+     },
+     "distinct": 3
+    }
+   },
+   "B4.fraunhofer_propagate_mft": {
+    "bar": {
+     "by_rung": {
+      "HASWELL/t1": 4.601589888937335e-12,
+      "HASWELL/t4": 4.601589888937335e-12,
+      "KATMAI/t1": 4.601589888937335e-12,
+      "KATMAI/t4": 4.601589888937335e-12,
+      "NEHALEM/t1": 4.601589888937335e-12,
+      "NEHALEM/t4": 4.601589888937335e-12,
+      "SANDYBRIDGE/t1": 4.601589888937335e-12,
+      "SANDYBRIDGE/t4": 4.601589888937335e-12
+     },
+     "max": 4.601589888937335e-12,
+     "min": 4.601589888937335e-12,
+     "spread": 0.0
+    },
+    "power_bar": {
+     "by_rung": {
+      "HASWELL/t1": 1e-12,
+      "HASWELL/t4": 1e-12,
+      "KATMAI/t1": 1e-12,
+      "KATMAI/t4": 1e-12,
+      "NEHALEM/t1": 1e-12,
+      "NEHALEM/t4": 1e-12,
+      "SANDYBRIDGE/t1": 1e-12,
+      "SANDYBRIDGE/t4": 1e-12
+     },
+     "max": 1e-12,
+     "min": 1e-12,
+     "spread": 0.0
+    },
+    "power_rel": {
+     "by_rung": {
+      "HASWELL/t1": 1.8763259101313172e-16,
+      "HASWELL/t4": 1.8763259101313172e-16,
+      "KATMAI/t1": 0.0,
+      "KATMAI/t4": 0.0,
+      "NEHALEM/t1": 0.0,
+      "NEHALEM/t4": 0.0,
+      "SANDYBRIDGE/t1": 0.0,
+      "SANDYBRIDGE/t4": 0.0
+     },
+     "max": 1.8763259101313172e-16,
+     "min": 0.0,
+     "spread": 1.8763259101313172e-16
+    },
+    "rel": {
+     "by_rung": {
+      "HASWELL/t1": 8.598443048875138e-15,
+      "HASWELL/t4": 8.598443048875138e-15,
+      "KATMAI/t1": 8.609152063568916e-15,
+      "KATMAI/t4": 8.609152063568916e-15,
+      "NEHALEM/t1": 8.609152063568916e-15,
+      "NEHALEM/t4": 8.609152063568916e-15,
+      "SANDYBRIDGE/t1": 8.609152063568916e-15,
+      "SANDYBRIDGE/t4": 8.609152063568916e-15
+     },
+     "max": 8.609152063568916e-15,
+     "min": 8.598443048875138e-15,
+     "spread": 1.0709014693777519e-17
+    },
+    "sha_default": {
+     "by_rung": {
+      "HASWELL/t1": "e5c2560df589c765c70f82bf988106fcad7efe808f0c88a4dca78984b0692d6c",
+      "HASWELL/t4": "e5c2560df589c765c70f82bf988106fcad7efe808f0c88a4dca78984b0692d6c",
+      "KATMAI/t1": "e5c2560df589c765c70f82bf988106fcad7efe808f0c88a4dca78984b0692d6c",
+      "KATMAI/t4": "e5c2560df589c765c70f82bf988106fcad7efe808f0c88a4dca78984b0692d6c",
+      "NEHALEM/t1": "e5c2560df589c765c70f82bf988106fcad7efe808f0c88a4dca78984b0692d6c",
+      "NEHALEM/t4": "e5c2560df589c765c70f82bf988106fcad7efe808f0c88a4dca78984b0692d6c",
+      "SANDYBRIDGE/t1": "e5c2560df589c765c70f82bf988106fcad7efe808f0c88a4dca78984b0692d6c",
+      "SANDYBRIDGE/t4": "e5c2560df589c765c70f82bf988106fcad7efe808f0c88a4dca78984b0692d6c"
+     },
+     "distinct": 1
+    },
+    "sha_direct": {
+     "by_rung": {
+      "HASWELL/t1": "7dedccd0c02ad75c981c50b8c006d4aae18a3a0d60e92d368646a710cf82e9a0",
+      "HASWELL/t4": "47365d62609351ebddf4dda1d1bf0732f2b4934ecf0a4258858d55aa3028be39",
+      "KATMAI/t1": "c3a7f769f9cd7b36bbb806b2358fe128a1c70dc259bae4394ff9f064a2b37359",
+      "KATMAI/t4": "c3a7f769f9cd7b36bbb806b2358fe128a1c70dc259bae4394ff9f064a2b37359",
+      "NEHALEM/t1": "c3a7f769f9cd7b36bbb806b2358fe128a1c70dc259bae4394ff9f064a2b37359",
+      "NEHALEM/t4": "c3a7f769f9cd7b36bbb806b2358fe128a1c70dc259bae4394ff9f064a2b37359",
+      "SANDYBRIDGE/t1": "c3a7f769f9cd7b36bbb806b2358fe128a1c70dc259bae4394ff9f064a2b37359",
+      "SANDYBRIDGE/t4": "c3a7f769f9cd7b36bbb806b2358fe128a1c70dc259bae4394ff9f064a2b37359"
+     },
+     "distinct": 3
+    }
+   },
+   "B4.fresnel_propagate_mft": {
+    "bar": {
+     "by_rung": {
+      "HASWELL/t1": 4.601589888937335e-12,
+      "HASWELL/t4": 4.601589888937335e-12,
+      "KATMAI/t1": 4.601589888937335e-12,
+      "KATMAI/t4": 4.601589888937335e-12,
+      "NEHALEM/t1": 4.601589888937335e-12,
+      "NEHALEM/t4": 4.601589888937335e-12,
+      "SANDYBRIDGE/t1": 4.601589888937335e-12,
+      "SANDYBRIDGE/t4": 4.601589888937335e-12
+     },
+     "max": 4.601589888937335e-12,
+     "min": 4.601589888937335e-12,
+     "spread": 0.0
+    },
+    "power_bar": {
+     "by_rung": {
+      "HASWELL/t1": 1e-12,
+      "HASWELL/t4": 1e-12,
+      "KATMAI/t1": 1e-12,
+      "KATMAI/t4": 1e-12,
+      "NEHALEM/t1": 1e-12,
+      "NEHALEM/t4": 1e-12,
+      "SANDYBRIDGE/t1": 1e-12,
+      "SANDYBRIDGE/t4": 1e-12
+     },
+     "max": 1e-12,
+     "min": 1e-12,
+     "spread": 0.0
+    },
+    "power_rel": {
+     "by_rung": {
+      "HASWELL/t1": 1.8763259101313172e-16,
+      "HASWELL/t4": 1.8763259101313172e-16,
+      "KATMAI/t1": 1.8763259101313172e-16,
+      "KATMAI/t4": 1.8763259101313172e-16,
+      "NEHALEM/t1": 1.8763259101313172e-16,
+      "NEHALEM/t4": 1.8763259101313172e-16,
+      "SANDYBRIDGE/t1": 1.8763259101313172e-16,
+      "SANDYBRIDGE/t4": 1.8763259101313172e-16
+     },
+     "max": 1.8763259101313172e-16,
+     "min": 1.8763259101313172e-16,
+     "spread": 0.0
+    },
+    "rel": {
+     "by_rung": {
+      "HASWELL/t1": 8.886226692162782e-15,
+      "HASWELL/t4": 8.752046787039933e-15,
+      "KATMAI/t1": 8.752046787039933e-15,
+      "KATMAI/t4": 8.752046787039933e-15,
+      "NEHALEM/t1": 8.752046787039933e-15,
+      "NEHALEM/t4": 8.752046787039933e-15,
+      "SANDYBRIDGE/t1": 8.752046787039933e-15,
+      "SANDYBRIDGE/t4": 8.752046787039933e-15
+     },
+     "max": 8.886226692162782e-15,
+     "min": 8.752046787039933e-15,
+     "spread": 1.3417990512284868e-16
+    },
+    "sha_default": {
+     "by_rung": {
+      "HASWELL/t1": "88407f6463c917f65e55f5f8a7a921903df075c0144ff0d875058ae8be62d055",
+      "HASWELL/t4": "88407f6463c917f65e55f5f8a7a921903df075c0144ff0d875058ae8be62d055",
+      "KATMAI/t1": "88407f6463c917f65e55f5f8a7a921903df075c0144ff0d875058ae8be62d055",
+      "KATMAI/t4": "88407f6463c917f65e55f5f8a7a921903df075c0144ff0d875058ae8be62d055",
+      "NEHALEM/t1": "88407f6463c917f65e55f5f8a7a921903df075c0144ff0d875058ae8be62d055",
+      "NEHALEM/t4": "88407f6463c917f65e55f5f8a7a921903df075c0144ff0d875058ae8be62d055",
+      "SANDYBRIDGE/t1": "88407f6463c917f65e55f5f8a7a921903df075c0144ff0d875058ae8be62d055",
+      "SANDYBRIDGE/t4": "88407f6463c917f65e55f5f8a7a921903df075c0144ff0d875058ae8be62d055"
+     },
+     "distinct": 1
+    },
+    "sha_direct": {
+     "by_rung": {
+      "HASWELL/t1": "c055781e1ba84676fcf654824f6ea94ee097d36e65d05370cae14c7349e6041b",
+      "HASWELL/t4": "a96b4653b28ee1728d60f9dcda52d75339b92370ad1c47563369a0169b2be042",
+      "KATMAI/t1": "47954be710388d881fc315fc35ab0dfd404bf93461fe7b0e78a76b0679acf157",
+      "KATMAI/t4": "47954be710388d881fc315fc35ab0dfd404bf93461fe7b0e78a76b0679acf157",
+      "NEHALEM/t1": "47954be710388d881fc315fc35ab0dfd404bf93461fe7b0e78a76b0679acf157",
+      "NEHALEM/t4": "47954be710388d881fc315fc35ab0dfd404bf93461fe7b0e78a76b0679acf157",
+      "SANDYBRIDGE/t1": "47954be710388d881fc315fc35ab0dfd404bf93461fe7b0e78a76b0679acf157",
+      "SANDYBRIDGE/t4": "47954be710388d881fc315fc35ab0dfd404bf93461fe7b0e78a76b0679acf157"
+     },
+     "distinct": 3
+    }
+   },
+   "B5.association": {
+    "cheaper_ne_dearer": {
+     "by_rung": {
+      "HASWELL/t1": true,
+      "HASWELL/t4": true,
+      "KATMAI/t1": true,
+      "KATMAI/t4": true,
+      "NEHALEM/t1": true,
+      "NEHALEM/t4": true,
+      "SANDYBRIDGE/t1": true,
+      "SANDYBRIDGE/t4": true
+     },
+     "distinct": 1
+    },
+    "matches_cheaper": {
+     "by_rung": {
+      "HASWELL/t1": true,
+      "HASWELL/t4": true,
+      "KATMAI/t1": true,
+      "KATMAI/t4": true,
+      "NEHALEM/t1": true,
+      "NEHALEM/t4": true,
+      "SANDYBRIDGE/t1": true,
+      "SANDYBRIDGE/t4": true
+     },
+     "distinct": 1
+    },
+    "max_abs_cheaper_minus_dearer": {
+     "by_rung": {
+      "HASWELL/t1": 4.3220627292571254e-14,
+      "HASWELL/t4": 4.3220627292571254e-14,
+      "KATMAI/t1": 3.351623381340333e-14,
+      "KATMAI/t4": 3.351623381340333e-14,
+      "NEHALEM/t1": 3.351623381340333e-14,
+      "NEHALEM/t4": 3.351623381340333e-14,
+      "SANDYBRIDGE/t1": 3.351623381340333e-14,
+      "SANDYBRIDGE/t4": 3.351623381340333e-14
+     },
+     "max": 4.3220627292571254e-14,
+     "min": 3.351623381340333e-14,
+     "spread": 9.704393479167925e-15
+    },
+    "runs_reproducible": {
+     "by_rung": {
+      "HASWELL/t1": true,
+      "HASWELL/t4": true,
+      "KATMAI/t1": true,
+      "KATMAI/t4": true,
+      "NEHALEM/t1": true,
+      "NEHALEM/t4": true,
+      "SANDYBRIDGE/t1": true,
+      "SANDYBRIDGE/t4": true
+     },
+     "distinct": 1
+    },
+    "sha_cheaper": {
+     "by_rung": {
+      "HASWELL/t1": "c00407ff525b0b4171487531d79f835aa3e394f2a797880a793d2c9d163a1e8a",
+      "HASWELL/t4": "c00407ff525b0b4171487531d79f835aa3e394f2a797880a793d2c9d163a1e8a",
+      "KATMAI/t1": "eb48b9447f722c0eb6461ad95f4ad1c87fba6f79edf8af9430cf22c2f5d92ba9",
+      "KATMAI/t4": "eb48b9447f722c0eb6461ad95f4ad1c87fba6f79edf8af9430cf22c2f5d92ba9",
+      "NEHALEM/t1": "eb48b9447f722c0eb6461ad95f4ad1c87fba6f79edf8af9430cf22c2f5d92ba9",
+      "NEHALEM/t4": "eb48b9447f722c0eb6461ad95f4ad1c87fba6f79edf8af9430cf22c2f5d92ba9",
+      "SANDYBRIDGE/t1": "eb48b9447f722c0eb6461ad95f4ad1c87fba6f79edf8af9430cf22c2f5d92ba9",
+      "SANDYBRIDGE/t4": "eb48b9447f722c0eb6461ad95f4ad1c87fba6f79edf8af9430cf22c2f5d92ba9"
+     },
+     "distinct": 2
+    },
+    "sha_dearer": {
+     "by_rung": {
+      "HASWELL/t1": "1a934223967ef6de966bac4db76f0f6ea26589e33fe8e0d89789c14bf70ca73d",
+      "HASWELL/t4": "1a934223967ef6de966bac4db76f0f6ea26589e33fe8e0d89789c14bf70ca73d",
+      "KATMAI/t1": "3fb31ff53cb67b821e0a7320eada24a77397c39a57a9e7f8aeb3bcdac48ae07b",
+      "KATMAI/t4": "3fb31ff53cb67b821e0a7320eada24a77397c39a57a9e7f8aeb3bcdac48ae07b",
+      "NEHALEM/t1": "3fb31ff53cb67b821e0a7320eada24a77397c39a57a9e7f8aeb3bcdac48ae07b",
+      "NEHALEM/t4": "3fb31ff53cb67b821e0a7320eada24a77397c39a57a9e7f8aeb3bcdac48ae07b",
+      "SANDYBRIDGE/t1": "3fb31ff53cb67b821e0a7320eada24a77397c39a57a9e7f8aeb3bcdac48ae07b",
+      "SANDYBRIDGE/t4": "3fb31ff53cb67b821e0a7320eada24a77397c39a57a9e7f8aeb3bcdac48ae07b"
+     },
+     "distinct": 2
+    },
+    "sha_run0": {
+     "by_rung": {
+      "HASWELL/t1": "c00407ff525b0b4171487531d79f835aa3e394f2a797880a793d2c9d163a1e8a",
+      "HASWELL/t4": "c00407ff525b0b4171487531d79f835aa3e394f2a797880a793d2c9d163a1e8a",
+      "KATMAI/t1": "eb48b9447f722c0eb6461ad95f4ad1c87fba6f79edf8af9430cf22c2f5d92ba9",
+      "KATMAI/t4": "eb48b9447f722c0eb6461ad95f4ad1c87fba6f79edf8af9430cf22c2f5d92ba9",
+      "NEHALEM/t1": "eb48b9447f722c0eb6461ad95f4ad1c87fba6f79edf8af9430cf22c2f5d92ba9",
+      "NEHALEM/t4": "eb48b9447f722c0eb6461ad95f4ad1c87fba6f79edf8af9430cf22c2f5d92ba9",
+      "SANDYBRIDGE/t1": "eb48b9447f722c0eb6461ad95f4ad1c87fba6f79edf8af9430cf22c2f5d92ba9",
+      "SANDYBRIDGE/t4": "eb48b9447f722c0eb6461ad95f4ad1c87fba6f79edf8af9430cf22c2f5d92ba9"
+     },
+     "distinct": 2
+    }
+   },
+   "B6.phase_guard": {
+    "bar_dense": {
+     "by_rung": {
+      "HASWELL/t1": 5.507061909623992e-12,
+      "HASWELL/t4": 5.507061909623992e-12,
+      "KATMAI/t1": 5.507061909623992e-12,
+      "KATMAI/t4": 5.507061909623992e-12,
+      "NEHALEM/t1": 5.507061909623992e-12,
+      "NEHALEM/t4": 5.507061909623992e-12,
+      "SANDYBRIDGE/t1": 5.507061909623992e-12,
+      "SANDYBRIDGE/t4": 5.507061909623992e-12
+     },
+     "max": 5.507061909623992e-12,
+     "min": 5.507061909623992e-12,
+     "spread": 0.0
+    },
+    "err_dense": {
+     "by_rung": {
+      "HASWELL/t1": 2.4585863186506193e-14,
+      "HASWELL/t4": 2.4585863186506193e-14,
+      "KATMAI/t1": 2.2469334198890888e-14,
+      "KATMAI/t4": 2.2469334198890888e-14,
+      "NEHALEM/t1": 2.2469334198890888e-14,
+      "NEHALEM/t4": 2.2469334198890888e-14,
+      "SANDYBRIDGE/t1": 2.2469334198890888e-14,
+      "SANDYBRIDGE/t4": 2.2469334198890888e-14
+     },
+     "max": 2.4585863186506193e-14,
+     "min": 2.2469334198890888e-14,
+     "spread": 2.116528987615305e-15
+    },
+    "rel_chirp": {
+     "by_rung": {
+      "HASWELL/t1": 1.5571109805759944,
+      "HASWELL/t4": 1.5571109805759944,
+      "KATMAI/t1": 1.5571109805759946,
+      "KATMAI/t4": 1.5571109805759946,
+      "NEHALEM/t1": 1.5571109805759944,
+      "NEHALEM/t4": 1.5571109805759944,
+      "SANDYBRIDGE/t1": 1.5571109805759944,
+      "SANDYBRIDGE/t4": 1.5571109805759944
+     },
+     "max": 1.5571109805759946,
+     "min": 1.5571109805759944,
+     "spread": 2.220446049250313e-16
+    },
+    "sha_dense": {
+     "by_rung": {
+      "HASWELL/t1": "ac513b6c7423135824b90f103bc8349af5a14d08dde032e08bafa0178c9aa0e0",
+      "HASWELL/t4": "ac513b6c7423135824b90f103bc8349af5a14d08dde032e08bafa0178c9aa0e0",
+      "KATMAI/t1": "40e48befc430ae1d2b880244b09a0ab1a74fd25c6fe874bdde9272fe6bbbbc28",
+      "KATMAI/t4": "40e48befc430ae1d2b880244b09a0ab1a74fd25c6fe874bdde9272fe6bbbbc28",
+      "NEHALEM/t1": "40e48befc430ae1d2b880244b09a0ab1a74fd25c6fe874bdde9272fe6bbbbc28",
+      "NEHALEM/t4": "40e48befc430ae1d2b880244b09a0ab1a74fd25c6fe874bdde9272fe6bbbbc28",
+      "SANDYBRIDGE/t1": "40e48befc430ae1d2b880244b09a0ab1a74fd25c6fe874bdde9272fe6bbbbc28",
+      "SANDYBRIDGE/t4": "40e48befc430ae1d2b880244b09a0ab1a74fd25c6fe874bdde9272fe6bbbbc28"
+     },
+     "distinct": 2
+    },
+    "warned": {
+     "by_rung": {
+      "HASWELL/t1": [
+       "Bluestein chirp phase argument ~1.0e+17 approaches float64 p"
+      ],
+      "HASWELL/t4": [
+       "Bluestein chirp phase argument ~1.0e+17 approaches float64 p"
+      ],
+      "KATMAI/t1": [
+       "Bluestein chirp phase argument ~1.0e+17 approaches float64 p"
+      ],
+      "KATMAI/t4": [
+       "Bluestein chirp phase argument ~1.0e+17 approaches float64 p"
+      ],
+      "NEHALEM/t1": [
+       "Bluestein chirp phase argument ~1.0e+17 approaches float64 p"
+      ],
+      "NEHALEM/t4": [
+       "Bluestein chirp phase argument ~1.0e+17 approaches float64 p"
+      ],
+      "SANDYBRIDGE/t1": [
+       "Bluestein chirp phase argument ~1.0e+17 approaches float64 p"
+      ],
+      "SANDYBRIDGE/t4": [
+       "Bluestein chirp phase argument ~1.0e+17 approaches float64 p"
+      ]
+     },
+     "distinct": 1
+    }
+   },
+   "B7.dtype": {
+    "c64": {
+     "by_rung": {
+      "HASWELL/t1": "complex64",
+      "HASWELL/t4": "complex64",
+      "KATMAI/t1": "complex64",
+      "KATMAI/t4": "complex64",
+      "NEHALEM/t1": "complex64",
+      "NEHALEM/t4": "complex64",
+      "SANDYBRIDGE/t1": "complex64",
+      "SANDYBRIDGE/t4": "complex64"
+     },
+     "distinct": 1
+    },
+    "sha_c64_as_c128": {
+     "by_rung": {
+      "HASWELL/t1": "e974645568f14d3892330187ef60512221919216f519b5c31dc47a608f3068a8",
+      "HASWELL/t4": "e974645568f14d3892330187ef60512221919216f519b5c31dc47a608f3068a8",
+      "KATMAI/t1": "14d6db24db594746d4e6f264eaa1c376cce80bcdfa7e32b8e41d1fc68fcf014c",
+      "KATMAI/t4": "14d6db24db594746d4e6f264eaa1c376cce80bcdfa7e32b8e41d1fc68fcf014c",
+      "NEHALEM/t1": "14d6db24db594746d4e6f264eaa1c376cce80bcdfa7e32b8e41d1fc68fcf014c",
+      "NEHALEM/t4": "14d6db24db594746d4e6f264eaa1c376cce80bcdfa7e32b8e41d1fc68fcf014c",
+      "SANDYBRIDGE/t1": "14d6db24db594746d4e6f264eaa1c376cce80bcdfa7e32b8e41d1fc68fcf014c",
+      "SANDYBRIDGE/t4": "14d6db24db594746d4e6f264eaa1c376cce80bcdfa7e32b8e41d1fc68fcf014c"
+     },
+     "distinct": 2
+    }
+   },
+   "raw.128x128->64x64": {
+    "max_abs": {
+     "by_rung": {
+      "HASWELL/t1": 520.8930962991861,
+      "HASWELL/t4": 520.8930962991861,
+      "KATMAI/t1": 520.8930962991865,
+      "KATMAI/t4": 520.8930962991865,
+      "NEHALEM/t1": 520.8930962991865,
+      "NEHALEM/t4": 520.8930962991865,
+      "SANDYBRIDGE/t1": 520.8930962991865,
+      "SANDYBRIDGE/t4": 520.8930962991865
+     },
+     "max": 520.8930962991865,
+     "min": 520.8930962991861,
+     "spread": 3.410605131648481e-13
+    },
+    "sha256": {
+     "by_rung": {
+      "HASWELL/t1": "49d14407b9e4aad00ab7c49e61a2cb8424f4a48a1a692b136602fd7b773a7b16",
+      "HASWELL/t4": "f820603ab6704b4f077e7610f077223617dc77ea6f849c5e8a2ee7172ad32903",
+      "KATMAI/t1": "ba6105f03b443e4b7eb50f99e449f9e96116bd2605b599f82b61aa499f4d1dfd",
+      "KATMAI/t4": "ba6105f03b443e4b7eb50f99e449f9e96116bd2605b599f82b61aa499f4d1dfd",
+      "NEHALEM/t1": "ba6105f03b443e4b7eb50f99e449f9e96116bd2605b599f82b61aa499f4d1dfd",
+      "NEHALEM/t4": "ba6105f03b443e4b7eb50f99e449f9e96116bd2605b599f82b61aa499f4d1dfd",
+      "SANDYBRIDGE/t1": "ba6105f03b443e4b7eb50f99e449f9e96116bd2605b599f82b61aa499f4d1dfd",
+      "SANDYBRIDGE/t4": "ba6105f03b443e4b7eb50f99e449f9e96116bd2605b599f82b61aa499f4d1dfd"
+     },
+     "distinct": 3
+    },
+    "sum_im": {
+     "by_rung": {
+      "HASWELL/t1": 768.4017760226234,
+      "HASWELL/t4": 768.401776022622,
+      "KATMAI/t1": 768.4017760226222,
+      "KATMAI/t4": 768.4017760226222,
+      "NEHALEM/t1": 768.4017760226222,
+      "NEHALEM/t4": 768.4017760226222,
+      "SANDYBRIDGE/t1": 768.4017760226222,
+      "SANDYBRIDGE/t4": 768.4017760226222
+     },
+     "max": 768.4017760226234,
+     "min": 768.401776022622,
+     "spread": 1.3642420526593924e-12
+    },
+    "sum_re": {
+     "by_rung": {
+      "HASWELL/t1": -15822.565570251692,
+      "HASWELL/t4": -15822.565570251696,
+      "KATMAI/t1": -15822.565570251694,
+      "KATMAI/t4": -15822.565570251694,
+      "NEHALEM/t1": -15822.565570251694,
+      "NEHALEM/t4": -15822.565570251694,
+      "SANDYBRIDGE/t1": -15822.565570251694,
+      "SANDYBRIDGE/t4": -15822.565570251694
+     },
+     "max": -15822.565570251692,
+     "min": -15822.565570251696,
+     "spread": 3.637978807091713e-12
+    }
+   },
+   "raw.16x16->8x8": {
+    "max_abs": {
+     "by_rung": {
+      "HASWELL/t1": 47.930923278764425,
+      "HASWELL/t4": 47.930923278764425,
+      "KATMAI/t1": 47.930923278764425,
+      "KATMAI/t4": 47.930923278764425,
+      "NEHALEM/t1": 47.930923278764425,
+      "NEHALEM/t4": 47.930923278764425,
+      "SANDYBRIDGE/t1": 47.930923278764425,
+      "SANDYBRIDGE/t4": 47.930923278764425
+     },
+     "max": 47.930923278764425,
+     "min": 47.930923278764425,
+     "spread": 0.0
+    },
+    "sha256": {
+     "by_rung": {
+      "HASWELL/t1": "684612e700e169f988c271c034ebda2a5321840681b30550be933725acacfa7e",
+      "HASWELL/t4": "684612e700e169f988c271c034ebda2a5321840681b30550be933725acacfa7e",
+      "KATMAI/t1": "9b4c155b6130a77bac11bd00f5374e551f9386cbbd7d568d12de6bfdb4a1fc15",
+      "KATMAI/t4": "9b4c155b6130a77bac11bd00f5374e551f9386cbbd7d568d12de6bfdb4a1fc15",
+      "NEHALEM/t1": "9b4c155b6130a77bac11bd00f5374e551f9386cbbd7d568d12de6bfdb4a1fc15",
+      "NEHALEM/t4": "9b4c155b6130a77bac11bd00f5374e551f9386cbbd7d568d12de6bfdb4a1fc15",
+      "SANDYBRIDGE/t1": "9b4c155b6130a77bac11bd00f5374e551f9386cbbd7d568d12de6bfdb4a1fc15",
+      "SANDYBRIDGE/t4": "9b4c155b6130a77bac11bd00f5374e551f9386cbbd7d568d12de6bfdb4a1fc15"
+     },
+     "distinct": 2
+    },
+    "sum_im": {
+     "by_rung": {
+      "HASWELL/t1": -268.2462488360891,
+      "HASWELL/t4": -268.2462488360891,
+      "KATMAI/t1": -268.24624883608914,
+      "KATMAI/t4": -268.24624883608914,
+      "NEHALEM/t1": -268.24624883608914,
+      "NEHALEM/t4": -268.24624883608914,
+      "SANDYBRIDGE/t1": -268.24624883608914,
+      "SANDYBRIDGE/t4": -268.24624883608914
+     },
+     "max": -268.2462488360891,
+     "min": -268.24624883608914,
+     "spread": 5.684341886080802e-14
+    },
+    "sum_re": {
+     "by_rung": {
+      "HASWELL/t1": -17.955322981304818,
+      "HASWELL/t4": -17.955322981304818,
+      "KATMAI/t1": -17.95532298130479,
+      "KATMAI/t4": -17.95532298130479,
+      "NEHALEM/t1": -17.95532298130479,
+      "NEHALEM/t4": -17.95532298130479,
+      "SANDYBRIDGE/t1": -17.95532298130479,
+      "SANDYBRIDGE/t4": -17.95532298130479
+     },
+     "max": -17.95532298130479,
+     "min": -17.955322981304818,
+     "spread": 2.842170943040401e-14
+    }
+   },
+   "raw.256x256->64x64": {
+    "max_abs": {
+     "by_rung": {
+      "HASWELL/t1": 1183.7771758647157,
+      "HASWELL/t4": 1183.7771758647157,
+      "KATMAI/t1": 1183.7771758647157,
+      "KATMAI/t4": 1183.7771758647157,
+      "NEHALEM/t1": 1183.7771758647157,
+      "NEHALEM/t4": 1183.7771758647157,
+      "SANDYBRIDGE/t1": 1183.7771758647157,
+      "SANDYBRIDGE/t4": 1183.7771758647157
+     },
+     "max": 1183.7771758647157,
+     "min": 1183.7771758647157,
+     "spread": 0.0
+    },
+    "sha256": {
+     "by_rung": {
+      "HASWELL/t1": "1ce8cc24ff2d37e9b7971fcf778d4c6c6fec30c86f0a26e9bdf3af39837141d4",
+      "HASWELL/t4": "cc4a2e59f59df661f1d85d32886c06ba276c3e70be1af9badbd308fdc215c6d2",
+      "KATMAI/t1": "33f7b5880a8b79b764b4fdb4d7a55ee2df7f393a25651751137c8cc6afff4df9",
+      "KATMAI/t4": "33f7b5880a8b79b764b4fdb4d7a55ee2df7f393a25651751137c8cc6afff4df9",
+      "NEHALEM/t1": "86eb265157dc184a2ca589216ea839e41cbbb009c5b4815945a92cc22d09a84f",
+      "NEHALEM/t4": "86eb265157dc184a2ca589216ea839e41cbbb009c5b4815945a92cc22d09a84f",
+      "SANDYBRIDGE/t1": "33f7b5880a8b79b764b4fdb4d7a55ee2df7f393a25651751137c8cc6afff4df9",
+      "SANDYBRIDGE/t4": "33f7b5880a8b79b764b4fdb4d7a55ee2df7f393a25651751137c8cc6afff4df9"
+     },
+     "distinct": 4
+    },
+    "sum_im": {
+     "by_rung": {
+      "HASWELL/t1": 2660.1861705604197,
+      "HASWELL/t4": 2660.1861705604288,
+      "KATMAI/t1": 2660.186170560438,
+      "KATMAI/t4": 2660.186170560438,
+      "NEHALEM/t1": 2660.1861705604433,
+      "NEHALEM/t4": 2660.1861705604433,
+      "SANDYBRIDGE/t1": 2660.186170560438,
+      "SANDYBRIDGE/t4": 2660.186170560438
+     },
+     "max": 2660.1861705604433,
+     "min": 2660.1861705604197,
+     "spread": 2.3646862246096134e-11
+    },
+    "sum_re": {
+     "by_rung": {
+      "HASWELL/t1": -5324.154221351766,
+      "HASWELL/t4": -5324.154221351775,
+      "KATMAI/t1": -5324.15422135177,
+      "KATMAI/t4": -5324.15422135177,
+      "NEHALEM/t1": -5324.1542213517705,
+      "NEHALEM/t4": -5324.1542213517705,
+      "SANDYBRIDGE/t1": -5324.15422135177,
+      "SANDYBRIDGE/t4": -5324.15422135177
+     },
+     "max": -5324.154221351766,
+     "min": -5324.154221351775,
+     "spread": 9.094947017729282e-12
+    }
+   },
+   "raw.32x24->16x20": {
+    "max_abs": {
+     "by_rung": {
+      "HASWELL/t1": 90.72946170866702,
+      "HASWELL/t4": 90.72946170866702,
+      "KATMAI/t1": 90.72946170866699,
+      "KATMAI/t4": 90.72946170866699,
+      "NEHALEM/t1": 90.72946170866699,
+      "NEHALEM/t4": 90.72946170866699,
+      "SANDYBRIDGE/t1": 90.72946170866699,
+      "SANDYBRIDGE/t4": 90.72946170866699
+     },
+     "max": 90.72946170866702,
+     "min": 90.72946170866699,
+     "spread": 2.842170943040401e-14
+    },
+    "sha256": {
+     "by_rung": {
+      "HASWELL/t1": "2591afe5a7858890ad591f0308eb06a6971c08a9da1ac81aa2d726c9b8b8d2a8",
+      "HASWELL/t4": "2591afe5a7858890ad591f0308eb06a6971c08a9da1ac81aa2d726c9b8b8d2a8",
+      "KATMAI/t1": "2fef135e970c004ac12e68ef96e8c21dfef52d07cd3fc129eac1ad32db65a267",
+      "KATMAI/t4": "2fef135e970c004ac12e68ef96e8c21dfef52d07cd3fc129eac1ad32db65a267",
+      "NEHALEM/t1": "2fef135e970c004ac12e68ef96e8c21dfef52d07cd3fc129eac1ad32db65a267",
+      "NEHALEM/t4": "2fef135e970c004ac12e68ef96e8c21dfef52d07cd3fc129eac1ad32db65a267",
+      "SANDYBRIDGE/t1": "2fef135e970c004ac12e68ef96e8c21dfef52d07cd3fc129eac1ad32db65a267",
+      "SANDYBRIDGE/t4": "2fef135e970c004ac12e68ef96e8c21dfef52d07cd3fc129eac1ad32db65a267"
+     },
+     "distinct": 2
+    },
+    "sum_im": {
+     "by_rung": {
+      "HASWELL/t1": -906.2465922675203,
+      "HASWELL/t4": -906.2465922675203,
+      "KATMAI/t1": -906.2465922675208,
+      "KATMAI/t4": -906.2465922675208,
+      "NEHALEM/t1": -906.2465922675208,
+      "NEHALEM/t4": -906.2465922675208,
+      "SANDYBRIDGE/t1": -906.2465922675208,
+      "SANDYBRIDGE/t4": -906.2465922675208
+     },
+     "max": -906.2465922675203,
+     "min": -906.2465922675208,
+     "spread": 4.547473508864641e-13
+    },
+    "sum_re": {
+     "by_rung": {
+      "HASWELL/t1": 587.0421998342201,
+      "HASWELL/t4": 587.0421998342201,
+      "KATMAI/t1": 587.0421998342199,
+      "KATMAI/t4": 587.0421998342199,
+      "NEHALEM/t1": 587.0421998342199,
+      "NEHALEM/t4": 587.0421998342199,
+      "SANDYBRIDGE/t1": 587.0421998342199,
+      "SANDYBRIDGE/t4": 587.0421998342199
+     },
+     "max": 587.0421998342201,
+     "min": 587.0421998342199,
+     "spread": 2.2737367544323206e-13
+    }
+   },
+   "raw.48x12->40x6": {
+    "max_abs": {
+     "by_rung": {
+      "HASWELL/t1": 83.92433435805876,
+      "HASWELL/t4": 83.92433435805876,
+      "KATMAI/t1": 83.92433435805879,
+      "KATMAI/t4": 83.92433435805879,
+      "NEHALEM/t1": 83.92433435805879,
+      "NEHALEM/t4": 83.92433435805879,
+      "SANDYBRIDGE/t1": 83.92433435805879,
+      "SANDYBRIDGE/t4": 83.92433435805879
+     },
+     "max": 83.92433435805879,
+     "min": 83.92433435805876,
+     "spread": 2.842170943040401e-14
+    },
+    "sha256": {
+     "by_rung": {
+      "HASWELL/t1": "c00407ff525b0b4171487531d79f835aa3e394f2a797880a793d2c9d163a1e8a",
+      "HASWELL/t4": "c00407ff525b0b4171487531d79f835aa3e394f2a797880a793d2c9d163a1e8a",
+      "KATMAI/t1": "eb48b9447f722c0eb6461ad95f4ad1c87fba6f79edf8af9430cf22c2f5d92ba9",
+      "KATMAI/t4": "eb48b9447f722c0eb6461ad95f4ad1c87fba6f79edf8af9430cf22c2f5d92ba9",
+      "NEHALEM/t1": "eb48b9447f722c0eb6461ad95f4ad1c87fba6f79edf8af9430cf22c2f5d92ba9",
+      "NEHALEM/t4": "eb48b9447f722c0eb6461ad95f4ad1c87fba6f79edf8af9430cf22c2f5d92ba9",
+      "SANDYBRIDGE/t1": "eb48b9447f722c0eb6461ad95f4ad1c87fba6f79edf8af9430cf22c2f5d92ba9",
+      "SANDYBRIDGE/t4": "eb48b9447f722c0eb6461ad95f4ad1c87fba6f79edf8af9430cf22c2f5d92ba9"
+     },
+     "distinct": 2
+    },
+    "sum_im": {
+     "by_rung": {
+      "HASWELL/t1": -449.3206587148895,
+      "HASWELL/t4": -449.3206587148895,
+      "KATMAI/t1": -449.32065871488936,
+      "KATMAI/t4": -449.32065871488936,
+      "NEHALEM/t1": -449.32065871488936,
+      "NEHALEM/t4": -449.32065871488936,
+      "SANDYBRIDGE/t1": -449.32065871488936,
+      "SANDYBRIDGE/t4": -449.32065871488936
+     },
+     "max": -449.32065871488936,
+     "min": -449.3206587148895,
+     "spread": 1.1368683772161603e-13
+    },
+    "sum_re": {
+     "by_rung": {
+      "HASWELL/t1": -180.02145262909022,
+      "HASWELL/t4": -180.02145262909022,
+      "KATMAI/t1": -180.0214526290899,
+      "KATMAI/t4": -180.0214526290899,
+      "NEHALEM/t1": -180.0214526290899,
+      "NEHALEM/t4": -180.0214526290899,
+      "SANDYBRIDGE/t1": -180.0214526290899,
+      "SANDYBRIDGE/t4": -180.0214526290899
+     },
+     "max": -180.0214526290899,
+     "min": -180.02145262909022,
+     "spread": 3.126388037344441e-13
+    }
+   }
+  }
+ }
+}

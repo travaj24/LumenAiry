@@ -1,0 +1,345 @@
+{
+ "build": "WIN-py3.14",
+ "del_msgs": {
+  "CUPY_AVAILABLE": [
+   "raised",
+   "AttributeError",
+   "lumenairy.elements.lenses.CUPY_AVAILABLE is a re-export of lumenairy.elements._lens_kernels.CUPY_AVAILABLE, and the code that reads it reads it out of lumenairy.elements._lens_kernels's globals at call time -- so deleting it HERE would bind a shadow that nothing looks at.  This is refused rather than accepted silently (VERIFY-WP-B11c D3): the same statement against lumenairy.elements._lens_kernels does what you mean.  Reading lumenairy.elements.lenses.CUPY_AVAILABLE is unaffected and returns the same object."
+  ],
+  "_collect_semi_diameters": [
+   "raised",
+   "AttributeError",
+   "lumenairy.elements.lenses._collect_semi_diameters is a re-export of lumenairy.elements._lens_kernels._collect_semi_diameters, and the code that reads it reads it out of lumenairy.elements._lens_kernels's globals at call time -- so deleting it HERE would bind a shadow that nothing looks at.  This is refused rather than accepted silently (VERIFY-WP-B11c D3): the same statement against lumenairy.elements._lens_kernels does what you mean.  Reading lumenairy.elements.lenses._collect_semi_diameters is unaffected and returns the same object."
+  ],
+  "_ensure_cupy_loaded": [
+   "raised",
+   "AttributeError",
+   "lumenairy.elements.lenses._ensure_cupy_loaded is a re-export of lumenairy.elements._lens_kernels._ensure_cupy_loaded, and the code that reads it reads it out of lumenairy.elements._lens_kernels's globals at call time -- so deleting it HERE would bind a shadow that nothing looks at.  This is refused rather than accepted silently (VERIFY-WP-B11c D3): the same statement against lumenairy.elements._lens_kernels does what you mean.  Reading lumenairy.elements.lenses._ensure_cupy_loaded is unaffected and returns the same object."
+  ],
+  "_ensure_numexpr_loaded": [
+   "raised",
+   "AttributeError",
+   "lumenairy.elements.lenses._ensure_numexpr_loaded is a re-export of lumenairy.elements._lens_kernels._ensure_numexpr_loaded, and the code that reads it reads it out of lumenairy.elements._lens_kernels's globals at call time -- so deleting it HERE would bind a shadow that nothing looks at.  This is refused rather than accepted silently (VERIFY-WP-B11c D3): the same statement against lumenairy.elements._lens_kernels does what you mean.  Reading lumenairy.elements.lenses._ensure_numexpr_loaded is unaffected and returns the same object."
+  ],
+  "_get_aspheric_sag_accum_numba": [
+   "raised",
+   "AttributeError",
+   "lumenairy.elements.lenses._get_aspheric_sag_accum_numba is a re-export of lumenairy.elements._lens_kernels._get_aspheric_sag_accum_numba, and the code that reads it reads it out of lumenairy.elements._lens_kernels's globals at call time -- so deleting it HERE would bind a shadow that nothing looks at.  This is refused rather than accepted silently (VERIFY-WP-B11c D3): the same statement against lumenairy.elements._lens_kernels does what you mean.  Reading lumenairy.elements.lenses._get_aspheric_sag_accum_numba is unaffected and returns the same object."
+  ],
+  "_is_cupy_array": [
+   "raised",
+   "AttributeError",
+   "lumenairy.elements.lenses._is_cupy_array is a re-export of lumenairy.elements._lens_kernels._is_cupy_array, and the code that reads it reads it out of lumenairy.elements._lens_kernels's globals at call time -- so deleting it HERE would bind a shadow that nothing looks at.  This is refused rather than accepted silently (VERIFY-WP-B11c D3): the same statement against lumenairy.elements._lens_kernels does what you mean.  Reading lumenairy.elements.lenses._is_cupy_array is unaffected and returns the same object."
+  ],
+  "_load_numba": [
+   "raised",
+   "AttributeError",
+   "lumenairy.elements.lenses._load_numba is a re-export of lumenairy.elements._lens_kernels._load_numba, and the code that reads it reads it out of lumenairy.elements._lens_kernels's globals at call time -- so deleting it HERE would bind a shadow that nothing looks at.  This is refused rather than accepted silently (VERIFY-WP-B11c D3): the same statement against lumenairy.elements._lens_kernels does what you mean.  Reading lumenairy.elements.lenses._load_numba is unaffected and returns the same object."
+  ],
+  "_warn_if_aperture_exceeds_grid": [
+   "raised",
+   "AttributeError",
+   "lumenairy.elements.lenses._warn_if_aperture_exceeds_grid is a re-export of lumenairy.elements._lens_kernels._warn_if_aperture_exceeds_grid, and the code that reads it reads it out of lumenairy.elements._lens_kernels's globals at call time -- so deleting it HERE would bind a shadow that nothing looks at.  This is refused rather than accepted silently (VERIFY-WP-B11c D3): the same statement against lumenairy.elements._lens_kernels does what you mean.  Reading lumenairy.elements.lenses._warn_if_aperture_exceeds_grid is unaffected and returns the same object."
+  ]
+ },
+ "dir_list": [
+  "CUPY_AVAILABLE",
+  "NUMEXPR_AVAILABLE",
+  "PreparedAnalyticLens",
+  "PreparedTracedLens",
+  "TiltedCarrier",
+  "Tuple",
+  "_KERNELS",
+  "_LIVE_FORWARD_NAMES",
+  "_LensesFacade",
+  "_NUMBA_AVAILABLE",
+  "_NUMBA_KERNELS",
+  "__builtins__",
+  "__cached__",
+  "__doc__",
+  "__file__",
+  "__loader__",
+  "__name__",
+  "__package__",
+  "__spec__",
+  "_chebyshev_derivative_vandermonde",
+  "_chebyshev_second_derivative_vandermonde",
+  "_chebyshev_vandermonde",
+  "_collect_semi_diameters",
+  "_ensure_cupy_loaded",
+  "_ensure_numexpr_loaded",
+  "_evaluate_polynomial_4d",
+  "_evaluate_polynomial_4d_and_grad34",
+  "_fit_normaliser",
+  "_get_aspheric_sag_accum_numba",
+  "_is_cupy_array",
+  "_load_numba",
+  "_multi_indices_total_degree",
+  "_ne",
+  "_njit",
+  "_numba",
+  "_prange",
+  "_surface_sag_general",
+  "_sys",
+  "_types",
+  "_warn_if_aperture_exceeds_grid",
+  "annotations",
+  "apply_aspheric_lens",
+  "apply_axicon",
+  "apply_cylindrical_lens",
+  "apply_grin_lens",
+  "apply_real_lens",
+  "apply_real_lens_gbd",
+  "apply_real_lens_maslov",
+  "apply_real_lens_maslov_jax",
+  "apply_real_lens_traced",
+  "apply_real_lens_traced_jax",
+  "apply_real_lens_traced_multi",
+  "apply_real_lens_traced_multibranch",
+  "apply_real_lens_traced_segmented",
+  "apply_real_lens_traced_uniform",
+  "apply_spherical_lens",
+  "apply_thin_lens",
+  "check_grid_vs_apertures",
+  "clear_pointwise_cos_grid_cache",
+  "close_worker_pool",
+  "cp",
+  "get_lens_parallel_amp",
+  "get_lens_sag_dtype",
+  "get_pointwise_cos_grid_cache_budget",
+  "lens_sag_float32_opd_error",
+  "np",
+  "prepare_real_lens",
+  "prepare_real_lens_traced",
+  "recommend_grid_for_prescription",
+  "set_lens_parallel_amp",
+  "set_lens_sag_dtype",
+  "set_pointwise_cos_grid_cache_budget",
+  "surface_sag_biconic",
+  "surface_sag_general"
+ ],
+ "leafwrite": {
+  "CUPY_AVAILABLE": [
+   [
+    "ok",
+    "None"
+   ],
+   true,
+   true
+  ],
+  "_collect_semi_diameters": [
+   [
+    "ok",
+    "None"
+   ],
+   true,
+   true
+  ],
+  "_ensure_cupy_loaded": [
+   [
+    "ok",
+    "None"
+   ],
+   true,
+   true
+  ],
+  "_ensure_numexpr_loaded": [
+   [
+    "ok",
+    "None"
+   ],
+   true,
+   true
+  ],
+  "_get_aspheric_sag_accum_numba": [
+   [
+    "ok",
+    "None"
+   ],
+   true,
+   true
+  ],
+  "_is_cupy_array": [
+   [
+    "ok",
+    "None"
+   ],
+   true,
+   true
+  ],
+  "_load_numba": [
+   [
+    "ok",
+    "None"
+   ],
+   true,
+   true
+  ],
+  "_warn_if_aperture_exceeds_grid": [
+   [
+    "ok",
+    "None"
+   ],
+   true,
+   true
+  ]
+ },
+ "python": "3.14.6 (tags/v3.14.6:c63aec6, Jun 10 2026, 10:26:10) [MSC v.1944 64 bit (AMD64)]",
+ "star_list": [
+  "CUPY_AVAILABLE",
+  "PreparedAnalyticLens",
+  "PreparedTracedLens",
+  "TiltedCarrier",
+  "Tuple",
+  "annotations",
+  "apply_aspheric_lens",
+  "apply_axicon",
+  "apply_cylindrical_lens",
+  "apply_grin_lens",
+  "apply_real_lens",
+  "apply_real_lens_gbd",
+  "apply_real_lens_maslov",
+  "apply_real_lens_maslov_jax",
+  "apply_real_lens_traced",
+  "apply_real_lens_traced_jax",
+  "apply_real_lens_traced_multi",
+  "apply_real_lens_traced_multibranch",
+  "apply_real_lens_traced_segmented",
+  "apply_real_lens_traced_uniform",
+  "apply_spherical_lens",
+  "apply_thin_lens",
+  "check_grid_vs_apertures",
+  "clear_pointwise_cos_grid_cache",
+  "close_worker_pool",
+  "get_lens_parallel_amp",
+  "get_lens_sag_dtype",
+  "get_pointwise_cos_grid_cache_budget",
+  "lens_sag_float32_opd_error",
+  "np",
+  "prepare_real_lens",
+  "prepare_real_lens_traced",
+  "recommend_grid_for_prescription",
+  "set_lens_parallel_amp",
+  "set_lens_sag_dtype",
+  "set_pointwise_cos_grid_cache_budget",
+  "surface_sag_biconic",
+  "surface_sag_general"
+ ],
+ "tree": "C:\\tmp\\vhyg2_arch\\branch",
+ "type_mro": [
+  "_LensesFacade",
+  "module",
+  "object"
+ ],
+ "type_name": "_LensesFacade",
+ "vars_keys": [
+  "CUPY_AVAILABLE",
+  "PreparedAnalyticLens",
+  "PreparedTracedLens",
+  "TiltedCarrier",
+  "Tuple",
+  "_KERNELS",
+  "_LIVE_FORWARD_NAMES",
+  "_LensesFacade",
+  "__builtins__",
+  "__cached__",
+  "__doc__",
+  "__file__",
+  "__loader__",
+  "__name__",
+  "__package__",
+  "__spec__",
+  "_chebyshev_derivative_vandermonde",
+  "_chebyshev_second_derivative_vandermonde",
+  "_chebyshev_vandermonde",
+  "_collect_semi_diameters",
+  "_ensure_cupy_loaded",
+  "_ensure_numexpr_loaded",
+  "_evaluate_polynomial_4d",
+  "_evaluate_polynomial_4d_and_grad34",
+  "_fit_normaliser",
+  "_get_aspheric_sag_accum_numba",
+  "_is_cupy_array",
+  "_load_numba",
+  "_multi_indices_total_degree",
+  "_surface_sag_general",
+  "_sys",
+  "_types",
+  "_warn_if_aperture_exceeds_grid",
+  "annotations",
+  "apply_aspheric_lens",
+  "apply_axicon",
+  "apply_cylindrical_lens",
+  "apply_grin_lens",
+  "apply_real_lens",
+  "apply_real_lens_gbd",
+  "apply_real_lens_maslov",
+  "apply_real_lens_maslov_jax",
+  "apply_real_lens_traced",
+  "apply_real_lens_traced_jax",
+  "apply_real_lens_traced_multi",
+  "apply_real_lens_traced_multibranch",
+  "apply_real_lens_traced_segmented",
+  "apply_real_lens_traced_uniform",
+  "apply_spherical_lens",
+  "apply_thin_lens",
+  "check_grid_vs_apertures",
+  "clear_pointwise_cos_grid_cache",
+  "close_worker_pool",
+  "get_lens_parallel_amp",
+  "get_lens_sag_dtype",
+  "get_pointwise_cos_grid_cache_budget",
+  "lens_sag_float32_opd_error",
+  "np",
+  "prepare_real_lens",
+  "prepare_real_lens_traced",
+  "recommend_grid_for_prescription",
+  "set_lens_parallel_amp",
+  "set_lens_sag_dtype",
+  "set_pointwise_cos_grid_cache_budget",
+  "surface_sag_biconic",
+  "surface_sag_general"
+ ],
+ "write_msgs": {
+  "CUPY_AVAILABLE": [
+   "raised",
+   "AttributeError",
+   "lumenairy.elements.lenses.CUPY_AVAILABLE is a re-export of lumenairy.elements._lens_kernels.CUPY_AVAILABLE, and the code that reads it reads it out of lumenairy.elements._lens_kernels's globals at call time -- so rebinding it HERE would bind a shadow that nothing looks at.  This is refused rather than accepted silently (VERIFY-WP-B11c D3): the same statement against lumenairy.elements._lens_kernels does what you mean.  Reading lumenairy.elements.lenses.CUPY_AVAILABLE is unaffected and returns the same object."
+  ],
+  "_collect_semi_diameters": [
+   "raised",
+   "AttributeError",
+   "lumenairy.elements.lenses._collect_semi_diameters is a re-export of lumenairy.elements._lens_kernels._collect_semi_diameters, and the code that reads it reads it out of lumenairy.elements._lens_kernels's globals at call time -- so rebinding it HERE would bind a shadow that nothing looks at.  This is refused rather than accepted silently (VERIFY-WP-B11c D3): the same statement against lumenairy.elements._lens_kernels does what you mean.  Reading lumenairy.elements.lenses._collect_semi_diameters is unaffected and returns the same object."
+  ],
+  "_ensure_cupy_loaded": [
+   "raised",
+   "AttributeError",
+   "lumenairy.elements.lenses._ensure_cupy_loaded is a re-export of lumenairy.elements._lens_kernels._ensure_cupy_loaded, and the code that reads it reads it out of lumenairy.elements._lens_kernels's globals at call time -- so rebinding it HERE would bind a shadow that nothing looks at.  This is refused rather than accepted silently (VERIFY-WP-B11c D3): the same statement against lumenairy.elements._lens_kernels does what you mean.  Reading lumenairy.elements.lenses._ensure_cupy_loaded is unaffected and returns the same object."
+  ],
+  "_ensure_numexpr_loaded": [
+   "raised",
+   "AttributeError",
+   "lumenairy.elements.lenses._ensure_numexpr_loaded is a re-export of lumenairy.elements._lens_kernels._ensure_numexpr_loaded, and the code that reads it reads it out of lumenairy.elements._lens_kernels's globals at call time -- so rebinding it HERE would bind a shadow that nothing looks at.  This is refused rather than accepted silently (VERIFY-WP-B11c D3): the same statement against lumenairy.elements._lens_kernels does what you mean.  Reading lumenairy.elements.lenses._ensure_numexpr_loaded is unaffected and returns the same object."
+  ],
+  "_get_aspheric_sag_accum_numba": [
+   "raised",
+   "AttributeError",
+   "lumenairy.elements.lenses._get_aspheric_sag_accum_numba is a re-export of lumenairy.elements._lens_kernels._get_aspheric_sag_accum_numba, and the code that reads it reads it out of lumenairy.elements._lens_kernels's globals at call time -- so rebinding it HERE would bind a shadow that nothing looks at.  This is refused rather than accepted silently (VERIFY-WP-B11c D3): the same statement against lumenairy.elements._lens_kernels does what you mean.  Reading lumenairy.elements.lenses._get_aspheric_sag_accum_numba is unaffected and returns the same object."
+  ],
+  "_is_cupy_array": [
+   "raised",
+   "AttributeError",
+   "lumenairy.elements.lenses._is_cupy_array is a re-export of lumenairy.elements._lens_kernels._is_cupy_array, and the code that reads it reads it out of lumenairy.elements._lens_kernels's globals at call time -- so rebinding it HERE would bind a shadow that nothing looks at.  This is refused rather than accepted silently (VERIFY-WP-B11c D3): the same statement against lumenairy.elements._lens_kernels does what you mean.  Reading lumenairy.elements.lenses._is_cupy_array is unaffected and returns the same object."
+  ],
+  "_load_numba": [
+   "raised",
+   "AttributeError",
+   "lumenairy.elements.lenses._load_numba is a re-export of lumenairy.elements._lens_kernels._load_numba, and the code that reads it reads it out of lumenairy.elements._lens_kernels's globals at call time -- so rebinding it HERE would bind a shadow that nothing looks at.  This is refused rather than accepted silently (VERIFY-WP-B11c D3): the same statement against lumenairy.elements._lens_kernels does what you mean.  Reading lumenairy.elements.lenses._load_numba is unaffected and returns the same object."
+  ],
+  "_warn_if_aperture_exceeds_grid": [
+   "raised",
+   "AttributeError",
+   "lumenairy.elements.lenses._warn_if_aperture_exceeds_grid is a re-export of lumenairy.elements._lens_kernels._warn_if_aperture_exceeds_grid, and the code that reads it reads it out of lumenairy.elements._lens_kernels's globals at call time -- so rebinding it HERE would bind a shadow that nothing looks at.  This is refused rather than accepted silently (VERIFY-WP-B11c D3): the same statement against lumenairy.elements._lens_kernels does what you mean.  Reading lumenairy.elements.lenses._warn_if_aperture_exceeds_grid is unaffected and returns the same object."
+  ]
+ }
+}

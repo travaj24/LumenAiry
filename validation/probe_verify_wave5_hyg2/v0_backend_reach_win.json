@@ -1,0 +1,82 @@
+{
+ "build": "WIN-py3.14",
+ "cupy_present": true,
+ "rows": [
+  {
+   "case": "_collins_transport  [numpy]",
+   "in": "ndarray",
+   "module": "numpy",
+   "out": "ndarray",
+   "outcome": "ok"
+  },
+  {
+   "case": "public transport='collins'  [numpy]",
+   "in": "ndarray",
+   "module": "numpy",
+   "out": "ndarray",
+   "outcome": "ok"
+  },
+  {
+   "case": "public default transport (sziklas)  [numpy]",
+   "in": "ndarray",
+   "module": "numpy",
+   "out": "ndarray",
+   "outcome": "ok"
+  },
+  {
+   "case": "_collins_transport  [jax-eager]",
+   "in": "ArrayImpl",
+   "module": "jaxlib._jax",
+   "out": "ArrayImpl",
+   "outcome": "ok"
+  },
+  {
+   "case": "public transport='collins'  [jax-eager]",
+   "in": "ArrayImpl",
+   "module": "numpy",
+   "out": "ndarray",
+   "outcome": "ok"
+  },
+  {
+   "case": "public default transport (sziklas)  [jax-eager]",
+   "in": "ArrayImpl",
+   "module": "jaxlib._jax",
+   "out": "ArrayImpl",
+   "outcome": "ok"
+  },
+  {
+   "case": "_collins_transport  [cupy]",
+   "frames": [
+    "carrier.py:2181:_collins_transport",
+    "fft_infra.py:2186:_fft2"
+   ],
+   "in": "ndarray",
+   "msg": "DLL load failed while importing cufft: The specified module could not be found.",
+   "outcome": "raised",
+   "type": "ImportError"
+  },
+  {
+   "case": "public transport='collins'  [cupy]",
+   "frames": [
+    "carrier.py:1269:propagate_carrier_referenced",
+    "carrier.py:2337:_collins_carrier_leg"
+   ],
+   "in": "ndarray",
+   "msg": "Implicit conversion to a NumPy array is not allowed. Please use `.get()` to construct a NumPy array explicitly.",
+   "outcome": "raised",
+   "type": "TypeError"
+  },
+  {
+   "case": "public default transport (sziklas)  [cupy]",
+   "frames": [
+    "carrier.py:1512:_carrier_step_fast",
+    "carrier.py:849:_envelope_tf_step",
+    "carrier.py:689:_fresnel_tf_2d_xp"
+   ],
+   "in": "ndarray",
+   "msg": "DLL load failed while importing cufft: The specified module could not be found.",
+   "outcome": "raised",
+   "type": "ImportError"
+  }
+ ]
+}

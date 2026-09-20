@@ -1,0 +1,260 @@
+{
+ "a_matrix": {
+  "gk=auto|ocs=error|stats=None": {
+   "grad": "ValueError: _collins_transport: the envelope is a JAX Tracer (inside jax.jit / jax.grad), which has no concrete entries to",
+   "jit": "ValueError: _collins_transport: the envelope is a JAX Tracer (inside jax.jit / jax.grad), which has no concrete entries to"
+  },
+  "gk=auto|ocs=error|stats=dict": {
+   "grad": "ValueError: _collins_transport: the envelope is a JAX Tracer (inside jax.jit / jax.grad), which has no concrete entries to",
+   "jit": "ValueError: _collins_transport: the envelope is a JAX Tracer (inside jax.jit / jax.grad), which has no concrete entries to"
+  },
+  "gk=auto|ocs=ignore|stats=None": {
+   "grad": "ValueError: _collins_transport: the envelope is a JAX Tracer (inside jax.jit / jax.grad), which has no concrete entries to",
+   "jit": "ValueError: _collins_transport: the envelope is a JAX Tracer (inside jax.jit / jax.grad), which has no concrete entries to"
+  },
+  "gk=auto|ocs=ignore|stats=dict": {
+   "grad": "ValueError: _collins_transport: the envelope is a JAX Tracer (inside jax.jit / jax.grad), which has no concrete entries to",
+   "jit": "ValueError: _collins_transport: the envelope is a JAX Tracer (inside jax.jit / jax.grad), which has no concrete entries to"
+  },
+  "gk=auto|ocs=warn|stats=None": {
+   "grad": "ValueError: _collins_transport: the envelope is a JAX Tracer (inside jax.jit / jax.grad), which has no concrete entries to",
+   "jit": "ValueError: _collins_transport: the envelope is a JAX Tracer (inside jax.jit / jax.grad), which has no concrete entries to"
+  },
+  "gk=auto|ocs=warn|stats=dict": {
+   "grad": "ValueError: _collins_transport: the envelope is a JAX Tracer (inside jax.jit / jax.grad), which has no concrete entries to",
+   "jit": "ValueError: _collins_transport: the envelope is a JAX Tracer (inside jax.jit / jax.grad), which has no concrete entries to"
+  },
+  "gk=exact|ocs=error|stats=None": {
+   "grad": "ValueError: _collins_transport: the envelope is a JAX Tracer (inside jax.jit / jax.grad), which has no concrete entries to",
+   "jit": "ValueError: _collins_transport: the envelope is a JAX Tracer (inside jax.jit / jax.grad), which has no concrete entries to"
+  },
+  "gk=exact|ocs=error|stats=dict": {
+   "grad": "ValueError: _collins_transport: the envelope is a JAX Tracer (inside jax.jit / jax.grad), which has no concrete entries to",
+   "jit": "ValueError: _collins_transport: the envelope is a JAX Tracer (inside jax.jit / jax.grad), which has no concrete entries to"
+  },
+  "gk=exact|ocs=ignore|stats=None": {
+   "grad": "ValueError: _collins_transport: the envelope is a JAX Tracer (inside jax.jit / jax.grad), which has no concrete entries to",
+   "jit": "ValueError: _collins_transport: the envelope is a JAX Tracer (inside jax.jit / jax.grad), which has no concrete entries to"
+  },
+  "gk=exact|ocs=ignore|stats=dict": {
+   "grad": "ValueError: _collins_transport: the envelope is a JAX Tracer (inside jax.jit / jax.grad), which has no concrete entries to",
+   "jit": "ValueError: _collins_transport: the envelope is a JAX Tracer (inside jax.jit / jax.grad), which has no concrete entries to"
+  },
+  "gk=exact|ocs=warn|stats=None": {
+   "grad": "ValueError: _collins_transport: the envelope is a JAX Tracer (inside jax.jit / jax.grad), which has no concrete entries to",
+   "jit": "ValueError: _collins_transport: the envelope is a JAX Tracer (inside jax.jit / jax.grad), which has no concrete entries to"
+  },
+  "gk=exact|ocs=warn|stats=dict": {
+   "grad": "ValueError: _collins_transport: the envelope is a JAX Tracer (inside jax.jit / jax.grad), which has no concrete entries to",
+   "jit": "ValueError: _collins_transport: the envelope is a JAX Tracer (inside jax.jit / jax.grad), which has no concrete entries to"
+  },
+  "gk=fresnel|ocs=error|stats=None": {
+   "grad": "ValueError: _collins_transport: the envelope is a JAX Tracer (inside jax.jit / jax.grad), which has no concrete entries to",
+   "jit": "ValueError: _collins_transport: the envelope is a JAX Tracer (inside jax.jit / jax.grad), which has no concrete entries to"
+  },
+  "gk=fresnel|ocs=error|stats=dict": {
+   "grad": "ValueError: _collins_transport: the envelope is a JAX Tracer (inside jax.jit / jax.grad), which has no concrete entries to",
+   "jit": "ValueError: _collins_transport: the envelope is a JAX Tracer (inside jax.jit / jax.grad), which has no concrete entries to"
+  },
+  "gk=fresnel|ocs=ignore|stats=None": {
+   "grad": "RAN",
+   "jit": "RAN"
+  },
+  "gk=fresnel|ocs=ignore|stats=dict": {
+   "grad": "ValueError: _collins_transport: the envelope is a JAX Tracer (inside jax.jit / jax.grad), which has no concrete entries to",
+   "jit": "ValueError: _collins_transport: the envelope is a JAX Tracer (inside jax.jit / jax.grad), which has no concrete entries to"
+  },
+  "gk=fresnel|ocs=warn|stats=None": {
+   "grad": "ValueError: _collins_transport: the envelope is a JAX Tracer (inside jax.jit / jax.grad), which has no concrete entries to",
+   "jit": "ValueError: _collins_transport: the envelope is a JAX Tracer (inside jax.jit / jax.grad), which has no concrete entries to"
+  },
+  "gk=fresnel|ocs=warn|stats=dict": {
+   "grad": "ValueError: _collins_transport: the envelope is a JAX Tracer (inside jax.jit / jax.grad), which has no concrete entries to",
+   "jit": "ValueError: _collins_transport: the envelope is a JAX Tracer (inside jax.jit / jax.grad), which has no concrete entries to"
+  }
+ },
+ "a_ran_cells": [
+  "gk=fresnel|ocs=ignore|stats=None"
+ ],
+ "b_messages": {
+  "auto|ignore": {
+   "msg": "_collins_transport: the envelope is a JAX Tracer (inside jax.jit / jax.grad), which has no concrete entries to measure, and this call asks for 1 decision(s) that are taken by measuring it -- gap_kernel='auto' resolves by MEASURING the envelope's angular half-width (the k4 wrap ratio over the reduced frame z_eff = B/A); pass gap_kernel='fresnel' to take the ABCD-Fresnel integral, which is what the Collins stage is.  Every other stage of the transport is trace-safe.",
+   "names_fresnel": true,
+   "names_ignore": false,
+   "raised": true,
+   "says_Tracer": true,
+   "says_trace_safe": true,
+   "type": "ValueError"
+  },
+  "auto|warn": {
+   "msg": "_collins_transport: the envelope is a JAX Tracer (inside jax.jit / jax.grad), which has no concrete entries to measure, and this call asks for 2 decision(s) that are taken by measuring it -- gap_kernel='auto' resolves by MEASURING the envelope's angular half-width (the k4 wrap ratio over the reduced frame z_eff = B/A); pass gap_kernel='fresnel' to take the ABCD-Fresnel integral, which is what the Collins stage is; on_collins_sampling='warn' evaluates the Kelly K1/K2/K3 conditions on the envelope's MEASURED support box; pass on_collins_sampling='ignore' to run the transport unguarded, having checked the conditions on a concrete array first.  Every other stage of the transport is trace-safe.",
+   "names_fresnel": true,
+   "names_ignore": true,
+   "raised": true,
+   "says_Tracer": true,
+   "says_trace_safe": true,
+   "type": "ValueError"
+  },
+  "exact|error": {
+   "msg": "_collins_transport: the envelope is a JAX Tracer (inside jax.jit / jax.grad), which has no concrete entries to measure, and this call asks for 2 decision(s) that are taken by measuring it -- gap_kernel='exact' resolves by MEASURING the envelope's angular half-width (the k4 wrap ratio over the reduced frame z_eff = B/A); pass gap_kernel='fresnel' to take the ABCD-Fresnel integral, which is what the Collins stage is; on_collins_sampling='error' evaluates the Kelly K1/K2/K3 conditions on the envelope's MEASURED support box; pass on_collins_sampling='ignore' to run the transport unguarded, having checked the conditions on a concrete array first.  Every other stage of the transport is trace-safe.",
+   "names_fresnel": true,
+   "names_ignore": true,
+   "raised": true,
+   "says_Tracer": true,
+   "says_trace_safe": true,
+   "type": "ValueError"
+  },
+  "fresnel|warn": {
+   "msg": "_collins_transport: the envelope is a JAX Tracer (inside jax.jit / jax.grad), which has no concrete entries to measure, and this call asks for 1 decision(s) that are taken by measuring it -- on_collins_sampling='warn' evaluates the Kelly K1/K2/K3 conditions on the envelope's MEASURED support box; pass on_collins_sampling='ignore' to run the transport unguarded, having checked the conditions on a concrete array first.  Every other stage of the transport is trace-safe.",
+   "names_fresnel": false,
+   "names_ignore": true,
+   "raised": true,
+   "says_Tracer": true,
+   "says_trace_safe": true,
+   "type": "ValueError"
+  }
+ },
+ "build": "WSL-py3.12",
+ "c_eager_cupy": {
+  "available": false,
+  "error": "ModuleNotFoundError: No module named 'cupy'",
+  "ran": false
+ },
+ "c_eager_jax": {
+  "is_tracer": false,
+  "k4": 4.827656600192726e-05,
+  "kernel": "exact",
+  "out_shape": [
+   64,
+   64
+  ],
+  "out_type": "ArrayImpl",
+  "stats_keys": [
+   "abcd",
+   "k1",
+   "k2",
+   "k3",
+   "k4",
+   "kernel",
+   "period",
+   "r_x",
+   "r_y",
+   "tail_frac",
+   "theta_out_x",
+   "theta_out_y",
+   "theta_x",
+   "theta_y",
+   "worst"
+  ],
+  "worst": 5.083010752688173
+ },
+ "c_eager_jax_warnings": [
+  [
+   "RuntimeWarning",
+   "_collins_transport: the Collins chirp-Z stage is under-sampled -- K2 (output) 5.0830: the requested output pitch does not resolve the transported envelope, whos"
+  ]
+ ],
+ "d_jnp_still_usable": 3.0,
+ "d_partial_state": {
+  "cache_after": {
+   "h_fft_cache_bytes": 0,
+   "h_fft_cache_hits": 0,
+   "h_fft_cache_len": 0,
+   "warning_filters": 10,
+   "warning_filters_repr": "[('always', None, <class 'scipy.special._sf_error.SpecialFunctionWarning'>, None, 0), ('ignore', re.compile('numpy.ndarray size changed', re.IGNORECASE), <class 'Warning'>, None, 0), ('ignore', re.compile('numpy.ufunc size changed', re.IGNORECASE), <class 'Warning'>, None, 0), ('ignore', re.compile('numpy.dtype size changed', re.IGNORECASE), <class 'Warning'>, None, 0), ('always', None, <class 'nu"
+  },
+  "cache_before": {
+   "h_fft_cache_bytes": 0,
+   "h_fft_cache_hits": 0,
+   "h_fft_cache_len": 0,
+   "warning_filters": 10,
+   "warning_filters_repr": "[('always', None, <class 'scipy.special._sf_error.SpecialFunctionWarning'>, None, 0), ('ignore', re.compile('numpy.ndarray size changed', re.IGNORECASE), <class 'Warning'>, None, 0), ('ignore', re.compile('numpy.ufunc size changed', re.IGNORECASE), <class 'Warning'>, None, 0), ('ignore', re.compile('numpy.dtype size changed', re.IGNORECASE), <class 'Warning'>, None, 0), ('always', None, <class 'nu"
+  },
+  "cache_unchanged": true,
+  "exception": {
+   "args_types": [
+    "str"
+   ],
+   "cause_chain": [
+    "ValueError"
+   ],
+   "has_jax_wrapper": false,
+   "is_ValueError": true,
+   "raised": true,
+   "type": "ValueError"
+  },
+  "stats_out_after": {
+   "SENTINEL": 1
+  },
+  "stats_out_untouched": true,
+  "warning_filters_unchanged": true
+ },
+ "d_subsequent_grad": {
+  "finite": true,
+  "max_abs": 2.0000000009560868,
+  "ok": true
+ },
+ "e_hunt": {
+  "e1_measurement_helpers_reached_under_trace": {
+   "angle": 0,
+   "check": 0,
+   "space": 0,
+   "stats": 0
+  },
+  "e2_astigmatic_auto_under_grad": {
+   "max_abs_grad": 1.9999999996351843,
+   "refused": false
+  },
+  "e2_eager_astigmatic_kernel": "fresnel",
+  "e2b_astig_auto_warn": {
+   "n_decisions": "1 d",
+   "names_gap_kernel": false,
+   "names_ocs": true,
+   "type": "ValueError"
+  },
+  "e3_traced_env_and_R_in": "ConcretizationTypeError: Abstract tracer value encountered where concrete value is expected: traced array with shape float64[]\nThe problem arose with the `float` function. If trying to ",
+  "e3_traced_env_and_dx": "ConcretizationTypeError: Abstract tracer value encountered where concrete value is expected: traced array with shape float64[]\nThe problem arose with the `float` function. If trying to ",
+  "e3_traced_env_and_z": "ConcretizationTypeError: Abstract tracer value encountered where concrete value is expected: traced array with shape float64[]\nThe problem arose with the `float` function. If trying to ",
+  "e3_traced_scalar_R_in": {
+   "mentions_Tracer_refusal": false,
+   "mentions_collins": false,
+   "msg": "Abstract tracer value encountered where concrete value is expected: traced array with shape float64[]\nThe problem arose with the `float` function. If trying to convert the data type of a value, try using `x.astype(float)` or `jnp.array(x, float)` instead.\n\nSee",
+   "refused": true,
+   "type": "ConcretizationTypeError"
+  },
+  "e3_traced_scalar_dx": {
+   "mentions_Tracer_refusal": false,
+   "mentions_collins": false,
+   "msg": "The numpy.ndarray conversion method __array__() was called on traced array with shape float64[96]\nSee https://docs.jax.dev/en/latest/errors.html#jax.errors.TracerArrayConversionError",
+   "refused": true,
+   "type": "TracerArrayConversionError"
+  },
+  "e3_traced_scalar_z": {
+   "mentions_Tracer_refusal": false,
+   "mentions_collins": false,
+   "msg": "Abstract tracer value encountered where concrete value is expected: traced array with shape float64[]\nThe problem arose with the `float` function. If trying to convert the data type of a value, try using `x.astype(float)` or `jnp.array(x, float)` instead.\n\nSee",
+   "refused": true,
+   "type": "ConcretizationTypeError"
+  },
+  "e4_jit_argument": "ValueError: _collins_transport: the envelope is a JAX Tracer (inside jax.jit / jax.grad), which has no concrete entries to measure, ",
+  "e4_jit_closed_over_constant": "TracerArrayConversionError: The numpy.ndarray conversion method __array__() was called on traced array with shape complex128[96,96]\nThe error occurred while tracing the function f_closed a",
+  "e5_linearize": "ValueError: _collins_transport: the envelope is a JAX Tracer (inside jax.jit / jax.grad), which has no concrete entries to",
+  "e5_vjp": "ValueError: _collins_transport: the envelope is a JAX Tracer (inside jax.jit / jax.grad), which has no concrete entries to",
+  "e5_vmap": "ValueError: _collins_transport: the envelope is a JAX Tracer (inside jax.jit / jax.grad), which has no concrete entries to",
+  "e6_public_entry": {
+   "bitwise_equal_to_numpy_arm": true,
+   "cupy_through_public_entry": "ModuleNotFoundError: No module named 'cupy'",
+   "grad_gives_designed_refusal": false,
+   "grad_through_focus_readout": {
+    "max_abs": 14.889430702244427,
+    "ok": true
+   },
+   "grad_through_public_entry": "TracerArrayConversionError: The numpy.ndarray conversion method __array__() was called on traced array with shape complex128[96,96]\nSee https://docs.jax.dev/en/latest/errors.html#jax.errors.TracerArrayConversionError",
+   "jax_in_returns_module": "numpy",
+   "jax_in_returns_type": "ndarray",
+   "numpy_in_returns_type": "ndarray"
+  }
+ },
+ "jax_version": "0.10.2",
+ "tree": "/mnt/c/tmp/lum_vhyg2"
+}

@@ -1,0 +1,51 @@
+{
+ "build": "WSL-py3.12",
+ "hits": [
+  {
+   "class": "OTHER",
+   "detail": "",
+   "file": "tests/unit/test_audit2609_a16_verify_config_and_arch.py",
+   "kind": "call:monkeypatch.setattr",
+   "line": 620,
+   "name": "CUPY_AVAILABLE",
+   "target_as_written": "mod",
+   "target_resolved": "mod"
+  },
+  {
+   "class": "OTHER",
+   "detail": "",
+   "file": "tests/unit/test_rcwa.py",
+   "kind": "call:monkeypatch.setattr",
+   "line": 900,
+   "name": "CUPY_AVAILABLE",
+   "target_as_written": "_rc",
+   "target_resolved": "lumenairy.elements.rcwa._core"
+  },
+  {
+   "class": "LEAF",
+   "detail": "",
+   "file": "tests/unit/test_verify_b11c_structure.py",
+   "kind": "Assign",
+   "line": 645,
+   "name": "_get_aspheric_sag_accum_numba",
+   "target_as_written": "_lens_kernels",
+   "target_resolved": "lumenairy.elements._lens_kernels"
+  },
+  {
+   "class": "LEAF",
+   "detail": "",
+   "file": "tests/unit/test_verify_b11c_structure.py",
+   "kind": "Assign",
+   "line": 663,
+   "name": "_get_aspheric_sag_accum_numba",
+   "target_as_written": "_lens_kernels",
+   "target_resolved": "lumenairy.elements._lens_kernels"
+  }
+ ],
+ "n_facade": 0,
+ "n_hits": 4,
+ "n_leaf": 2,
+ "n_other": 2,
+ "n_unresolved": 0,
+ "tree": "/mnt/c/tmp/vhyg2_arch/branch"
+}

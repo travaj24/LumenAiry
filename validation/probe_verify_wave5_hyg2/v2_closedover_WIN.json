@@ -1,0 +1,66 @@
+{
+ "build": "WIN-py3.14",
+ "jax_version": "0.11.0",
+ "jit_argument": {
+  "auto|ignore|argument": {
+   "is_designed_refusal": true,
+   "ran": false,
+   "type": "ValueError"
+  },
+  "auto|warn|argument": {
+   "is_designed_refusal": true,
+   "ran": false,
+   "type": "ValueError"
+  },
+  "fresnel|ignore|argument": {
+   "ran": true
+  },
+  "fresnel|warn|argument": {
+   "is_designed_refusal": true,
+   "ran": false,
+   "type": "ValueError"
+  }
+ },
+ "jit_closed_over": {
+  "auto|ignore|closed_jax_const": {
+   "is_designed_refusal": false,
+   "msg": "The numpy.ndarray conversion method __array__() was called on traced array with shape complex128[96,96]\nThe error occurred while tracing the function f at C:\\tmp\\lum_vhyg2\\validation\\probe_verify_wave",
+   "ran": false,
+   "type": "TracerArrayConversionError"
+  },
+  "auto|ignore|closed_numpy_const": {
+   "ran": true,
+   "rel_vs_eager": 0.0
+  },
+  "auto|warn|closed_jax_const": {
+   "is_designed_refusal": false,
+   "msg": "The numpy.ndarray conversion method __array__() was called on traced array with shape complex128[96,96]\nThe error occurred while tracing the function f at C:\\tmp\\lum_vhyg2\\validation\\probe_verify_wave",
+   "ran": false,
+   "type": "TracerArrayConversionError"
+  },
+  "auto|warn|closed_numpy_const": {
+   "ran": true,
+   "rel_vs_eager": 0.0
+  },
+  "fresnel|ignore|closed_jax_const": {
+   "is_designed_refusal": false,
+   "msg": "The numpy.ndarray conversion method __array__() was called on traced array with shape complex128[96,96]\nThe error occurred while tracing the function f at C:\\tmp\\lum_vhyg2\\validation\\probe_verify_wave",
+   "ran": false,
+   "type": "TracerArrayConversionError"
+  },
+  "fresnel|ignore|closed_numpy_const": {
+   "ran": true,
+   "rel_vs_eager": 0.0
+  },
+  "fresnel|warn|closed_jax_const": {
+   "is_designed_refusal": false,
+   "msg": "The numpy.ndarray conversion method __array__() was called on traced array with shape complex128[96,96]\nThe error occurred while tracing the function f at C:\\tmp\\lum_vhyg2\\validation\\probe_verify_wave",
+   "ran": false,
+   "type": "TracerArrayConversionError"
+  },
+  "fresnel|warn|closed_numpy_const": {
+   "ran": true,
+   "rel_vs_eager": 0.0
+  }
+ }
+}

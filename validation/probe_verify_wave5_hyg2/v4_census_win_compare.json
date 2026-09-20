@@ -1,0 +1,17 @@
+{
+ "VERDICT": "PASS",
+ "base_file": "validation/probe_verify_wave5_hyg2/v4_census_win_base.json",
+ "branch_file": "validation/probe_verify_wave5_hyg2/v4_census_win_branch.json",
+ "expected_declared": 32,
+ "expected_differ_and_did": 32,
+ "expected_differ_but_identical": 0,
+ "expected_differ_but_identical_keys": [],
+ "identical": 83,
+ "keys": 115,
+ "only_base": 0,
+ "only_base_keys": [],
+ "only_branch": 0,
+ "only_branch_keys": [],
+ "unexpected_differ": 0,
+ "unexpected_differ_keys": []
+}

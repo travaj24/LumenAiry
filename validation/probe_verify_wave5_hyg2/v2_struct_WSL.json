@@ -1,0 +1,163 @@
+{
+ "a_carrier_backend_suffixed": [],
+ "a_carrier_function_count": 139,
+ "a_carrier_names_containing_xp": [
+  "_exact_tf_2d_xp",
+  "_fresnel_tf_2d_xp"
+ ],
+ "b_all_imports_count": 98,
+ "b_backend_flavoured_imports": [
+  "..backend::is_jax_array  (line 467)"
+ ],
+ "b_jax_imports_any": [
+  "..backend::is_jax_array  (line 467)",
+  "jax  (line 497)",
+  "jax.numpy  (line 537)"
+ ],
+ "build": "WSL-py3.12",
+ "c_backend_suffixed_siblings_of_collins_chain": [],
+ "c_collins_helpers": [
+  "_collins_angle_support",
+  "_collins_axis_chirp",
+  "_collins_carrier_leg",
+  "_collins_containment_radius",
+  "_collins_envelope_abcd",
+  "_collins_exact_kernel_correction",
+  "_collins_focus_readout",
+  "_collins_input_box",
+  "_collins_kernel_wrap_ratio",
+  "_collins_leg_output_axis",
+  "_collins_power_marginals",
+  "_collins_sampling_stats",
+  "_collins_space_support",
+  "_collins_transport"
+ ],
+ "c_flavour_pairs": {
+  "_adrt": [
+   "_adrt_jax  lumenairy/raytrace/differential.py:1429",
+   "_adrt_numpy  lumenairy/raytrace/differential.py:863"
+  ],
+  "_get": [
+   "_get_cupy  lumenairy/backend/array.py:67",
+   "_get_jax  lumenairy/backend/array.py:77",
+   "_get_jnp  lumenairy/backend/array.py:87"
+  ],
+  "_opd6": [
+   "_opd6_cupy  lumenairy/elements/lenses_maslov.py:1217",
+   "_opd6_numpy  lumenairy/elements/lenses_maslov.py:785"
+  ]
+ },
+ "c_package_backend_suffixed": [
+  "_adrt_jax  lumenairy/raytrace/differential.py:1429",
+  "_adrt_numpy  lumenairy/raytrace/differential.py:863",
+  "_amp_callback_numpy  lumenairy/elements/_lens_jax.py:263",
+  "_amplitudes_jax  lumenairy/elements/_berreman_jax.py:227",
+  "_apply_aperture_jax  lumenairy/raytrace/jax_trace.py:462",
+  "_apply_doe_kick_jax  lumenairy/raytrace/jax_trace.py:481",
+  "_asm_jax  lumenairy/optimize/jax_merits.py:647",
+  "_berreman_jones_1d_jax  lumenairy/elements/_berreman_jax.py:540",
+  "_berreman_stack_solve_jax  lumenairy/elements/_berreman_jax.py:565",
+  "_cheb_T_recurrence_jax  lumenairy/elements/_lens_jax.py:117",
+  "_cheb_Tprime_recurrence_jax  lumenairy/elements/_lens_jax.py:132",
+  "_cheb_eval_value_grad_jax  lumenairy/elements/_lens_jax.py:192",
+  "_cheb_fit_2d_jax  lumenairy/elements/_lens_jax.py:157",
+  "_delta_jax  lumenairy/elements/_berreman_jax.py:31",
+  "_flux_jax  lumenairy/elements/_berreman_jax.py:89",
+  "_freespace_tensor_moebius_np  lumenairy/propagators/gbd.py:373",
+  "_get_cheb4d_cupy  lumenairy/elements/lenses_maslov.py:1208",
+  "_get_cupy  lumenairy/backend/array.py:67",
+  "_get_jax  lumenairy/backend/array.py:77",
+  "_get_jnp  lumenairy/backend/array.py:87",
+  "_integrate_local_quadrature_cupy  lumenairy/elements/lenses_maslov.py:5055",
+  "_integrate_quadrature_cupy  lumenairy/elements/lenses_maslov.py:4006",
+  "_integrate_stationary_phase_cupy  lumenairy/elements/lenses_maslov.py:4976",
+  "_internal_field_jax  lumenairy/elements/_berreman_jax.py:272",
+  "_intersect_jax  lumenairy/raytrace/jax_trace.py:213",
+  "_is_jax  lumenairy/elements/bor/bor_stack.py:491",
+  "_jpmm_fourier_projection_jax  lumenairy/elements/pmm/_core.py:3667",
+  "_layer_M_gen_jax  lumenairy/elements/_berreman_jax.py:366",
+  "_layer_absorption_jax  lumenairy/elements/_berreman_jax.py:247",
+  "_layer_modes_jax  lumenairy/elements/_berreman_jax.py:64",
+  "_lg00_sigma_overlap_jax  lumenairy/optimize/jax_merits.py:237",
+  "_local_direction_cosines_jax  lumenairy/elements/_lens_jax.py:733",
+  "_modal_field_lg00_pixel_jax  lumenairy/propagators/asymptotic_jax_twin.py:479",
+  "_newton_invert_2d_jax  lumenairy/elements/_lens_jax.py:224",
+  "_normaliser_jax  lumenairy/propagators/asymptotic_jax_twin.py:1090",
+  "_offplane_solve_jax  lumenairy/elements/_berreman_jax.py:414",
+  "_opd6_cupy  lumenairy/elements/lenses_maslov.py:1217",
+  "_opd6_numpy  lumenairy/elements/lenses_maslov.py:785",
+  "_opd_vd3_numpy  lumenairy/elements/lenses_maslov.py:836",
+  "_opd_vd9_numpy  lumenairy/elements/lenses_maslov.py:982",
+  "_pmm_efficiency_1d_jax  lumenairy/elements/pmm/_core.py:4015",
+  "_pmm_efficiency_2d_cell_jax  lumenairy/elements/pmm/_jax_twod.py:308",
+  "_pmm_efficiency_2d_jax  lumenairy/elements/pmm/_jax_twod.py:341",
+  "_pmm_jones_1d_jax  lumenairy/elements/pmm/_core.py:4518",
+  "_pmm_jones_2d_cell_jax  lumenairy/elements/pmm/_jax_twod_jones.py:89",
+  "_pmm_stack2d_solve_jax  lumenairy/elements/pmm/_jax_stack2d.py:106",
+  "_pmm_stack_solve_jax  lumenairy/elements/pmm/_jax_stack.py:245",
+  "_proj_sandwich_jnp  lumenairy/elements/pmm/_jax_twod.py:158",
+  "_ref_2d_modes_jax  lumenairy/elements/eme/_jax_modes.py:204",
+  "_ref_2d_modes_vector_jax  lumenairy/elements/eme/_jax_modes.py:222",
+  "_refract_jax  lumenairy/raytrace/jax_trace.py:398",
+  "_sag_derivatives_jax  lumenairy/raytrace/jax_trace.py:188",
+  "_sag_value_jax  lumenairy/raytrace/jax_trace.py:161",
+  "_select_forward_flux_jax  lumenairy/elements/rcwa/_core.py:3839",
+  "_solve_jax  lumenairy/elements/_berreman_jax.py:94",
+  "_tensor_is_offplane_jax  lumenairy/elements/_berreman_jax.py:331",
+  "_tensor_is_traced_jax  lumenairy/elements/_berreman_jax.py:348",
+  "_transfer_jax  lumenairy/raytrace/jax_trace.py:587",
+  "aberration_tensor_lg00_jax  lumenairy/propagators/asymptotic_jax_twin.py:317",
+  "apply_real_lens_maslov_jax  lumenairy/elements/_lens_jax.py:762",
+  "apply_real_lens_traced_jax  lumenairy/elements/_lens_jax.py:375",
+  "cheb_vand_jax  lumenairy/propagators/asymptotic_jax_twin.py:1128",
+  "coating_reflectance_jax  lumenairy/elements/coatings.py:396",
+  "ensure_cupy  lumenairy/backend/_optional.py:72",
+  "error_reduction_jax  lumenairy/analysis/phase_retrieval.py:888",
+  "exit_vertex_transfer_jax  lumenairy/raytrace/jax_trace.py:1469",
+  "fit_canonical_polynomials_jax  lumenairy/propagators/asymptotic_jax_twin.py:922",
+  "gerchberg_saxton_jax  lumenairy/analysis/phase_retrieval.py:745",
+  "hybrid_input_output_jax  lumenairy/analysis/phase_retrieval.py:974",
+  "make_lg_aberration_merit_jax  lumenairy/optimize/jax_merits.py:297",
+  "monte_carlo_tolerancing_jax  lumenairy/analysis/through_focus.py:1436",
+  "pmm_efficiency_1d_jax  lumenairy/elements/pmm/oned.py:540",
+  "propagate_modal_asymptotic_lg00_jax  lumenairy/propagators/asymptotic_jax_twin.py:545",
+  "propagate_through_system_jax  lumenairy/propagators/system.py:1718",
+  "ray_transfer_jacobian_jax  lumenairy/raytrace/differential.py:416",
+  "rcwa_efficiency_1d_jax  lumenairy/elements/rcwa/oned.py:1798",
+  "through_focus_scan_jax  lumenairy/analysis/through_focus.py:1227",
+  "to_numpy  lumenairy/backend/array.py:203",
+  "trace_jax  lumenairy/raytrace/jax_trace.py:1332"
+ ],
+ "c_package_backend_suffixed_count": 79,
+ "c_package_function_count": 4523,
+ "d_candidate_gate_files": [
+  {
+   "file": "tests/unit/test_audit2609_a23_census_mechanism.py",
+   "hits": [
+    "filename"
+   ]
+  },
+  {
+   "file": "tests/unit/test_eme_census_determinacy.py",
+   "hits": [
+    "filename"
+   ]
+  },
+  {
+   "file": "tests/unit/test_wave5_h2_collins_jax.py",
+   "hits": [
+    "ONE implementation",
+    "backend suffix",
+    "per-backend copy",
+    "per-flavour"
+   ]
+  },
+  {
+   "file": "tests/unit/test_wave5_h2_mft_direct.py",
+   "hits": [
+    "ONE implementation"
+   ]
+  }
+ ],
+ "tree": "/mnt/c/tmp/lum_vhyg2"
+}

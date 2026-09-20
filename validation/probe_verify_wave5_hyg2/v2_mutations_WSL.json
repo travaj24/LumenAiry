@@ -1,0 +1,71 @@
+{
+ "arms": {
+  "m0": {
+   "description": "control -- unmutated copy",
+   "detects_mutation": false,
+   "error_ids": [],
+   "failed_ids": [],
+   "n_errors": 0,
+   "n_failed": 0,
+   "returncode": 0,
+   "summary": "21 passed in 4.26s"
+  },
+  "m1": {
+   "description": "_collins_axis_chirp: bld hardcoded to np inside the body",
+   "detects_mutation": false,
+   "error_ids": [],
+   "failed_ids": [],
+   "n_errors": 0,
+   "n_failed": 0,
+   "returncode": 0,
+   "summary": "21 passed in 7.27s"
+  },
+  "m2": {
+   "description": "traced refusal removed (falls into the measuring branch)",
+   "detects_mutation": true,
+   "error_ids": [],
+   "failed_ids": [
+    "tests/unit/test_wave5_h2_collins_jax.py::test_a_traced_envelope_refuses_the_decisions_it_cannot_measure[kw0-gap_kernel]",
+    "tests/unit/test_wave5_h2_collins_jax.py::test_a_traced_envelope_refuses_the_decisions_it_cannot_measure[kw1-on_collins_sampling]",
+    "tests/unit/test_wave5_h2_collins_jax.py::test_a_traced_envelope_refuses_the_decisions_it_cannot_measure[kw2-gap_kernel]",
+    "tests/unit/test_wave5_h2_collins_jax.py::test_jax_grad_through_the_collins_transport_matches_a_central_difference",
+    "tests/unit/test_wave5_h2_collins_jax.py::test_jit_of_the_transport_matches_the_eager_traced_call",
+    "tests/unit/test_wave5_h2_collins_jax.py::test_stats_out_is_refused_under_a_trace",
+    "tests/unit/test_wave5_h2_collins_jax.py::test_the_gradient_is_not_trivially_zero_or_constant"
+   ],
+   "n_errors": 0,
+   "n_failed": 7,
+   "returncode": 1,
+   "summary": "7 failed, 14 passed in 11.88s"
+  },
+  "m3": {
+   "description": "_fft2_pair returns wrappers (breaks the `is` identity)",
+   "detects_mutation": true,
+   "error_ids": [],
+   "failed_ids": [
+    "tests/unit/test_wave5_h2_collins_jax.py::test_the_fft_pair_is_the_librarys_own_dispatcher_not_a_second_copy"
+   ],
+   "n_errors": 0,
+   "n_failed": 1,
+   "returncode": 1,
+   "summary": "1 failed, 20 passed in 10.17s"
+  },
+  "m4": {
+   "description": "_as_c_order always xp.asarray (drops NumPy contiguity)",
+   "detects_mutation": false,
+   "error_ids": [],
+   "failed_ids": [],
+   "n_errors": 0,
+   "n_failed": 0,
+   "returncode": 0,
+   "summary": "21 passed in 12.14s"
+  }
+ },
+ "build": "WSL-py3.12",
+ "control_green": true,
+ "mutant_root": "/mnt/c/Users/Tesla/AppData/Local/Temp/claude/C--Users-Tesla/372a2d1f-acbe-4b57-a148-eeae3fe1d729/scratchpad/v2mut",
+ "undetected_arms": [
+  "m1",
+  "m4"
+ ]
+}

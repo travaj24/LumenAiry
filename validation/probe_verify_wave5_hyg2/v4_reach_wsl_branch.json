@@ -1,0 +1,50 @@
+{
+ "build": "WSL-py3.12",
+ "facade_patch": {
+  "fake_calls_during_sag": 0,
+  "leaf_still_real": true,
+  "sag_ran": "ok",
+  "setattr": [
+   "raised",
+   "AttributeError",
+   "lumenairy.elements.lenses._is_cupy_array is a re-export of lumenairy.elements._lens_kernels._is_cupy_array, and the code that reads it reads it out of lumenairy"
+  ],
+  "shell_dict_entry_now": "<function _is_cupy_array at 0x7f2b7edb1bc0>"
+ },
+ "idempotent_self_assign": {
+  "CUPY_AVAILABLE": [
+   "raised",
+   "AttributeError",
+   "lumenairy.elements.lenses.CUPY_AVAILABLE is a re-export of lumenairy.elements._lens_kernels.CUPY_AVAILABLE, and the code that reads it reads it out of lumenairy"
+  ],
+  "_is_cupy_array": [
+   "raised",
+   "AttributeError",
+   "lumenairy.elements.lenses._is_cupy_array is a re-export of lumenairy.elements._lens_kernels._is_cupy_array, and the code that reads it reads it out of lumenairy"
+  ],
+  "_warn_if_aperture_exceeds_grid": [
+   "raised",
+   "AttributeError",
+   "lumenairy.elements.lenses._warn_if_aperture_exceeds_grid is a re-export of lumenairy.elements._lens_kernels._warn_if_aperture_exceeds_grid, and the code that re"
+  ]
+ },
+ "leaf_patch": {
+  "facade_read_during_patch_is_fake": false,
+  "facade_read_during_patch_is_real": true,
+  "fake_calls_during_sag": 1,
+  "sag_ran": "ok"
+ },
+ "restore_cycle_on_facade": {
+  "restore": [
+   "raised",
+   "AttributeError",
+   "lumenairy.elements.lenses._is_cupy_array is a re-export of lumenairy.elements._lens_kernels._is_cupy_array, and the code that reads it reads it out of lumenairy"
+  ],
+  "set": [
+   "raised",
+   "AttributeError",
+   "lumenairy.elements.lenses._is_cupy_array is a re-export of lumenairy.elements._lens_kernels._is_cupy_array, and the code that reads it reads it out of lumenairy"
+  ]
+ },
+ "tree": "/mnt/c/tmp/vhyg2_arch/branch"
+}

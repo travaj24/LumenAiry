@@ -1,0 +1,133 @@
+{
+ "all_hold": true,
+ "build": "WIN-py3.14",
+ "exceptions": [],
+ "n_shapes": 9,
+ "registered_clearers": [
+  "asm_local",
+  "beam_stats_meshgrid",
+  "bluestein_h_fft",
+  "byte_budgeted_lru",
+  "displaced_cos_luts",
+  "fga_coarse_trace",
+  "glass_caches",
+  "image_plane_waist",
+  "inverse_map",
+  "jax_ift_solver",
+  "jax_prescription",
+  "lens_config_vocabulary",
+  "lens_traced_main_guard",
+  "lg_mode_stack",
+  "lg_polynomial_items",
+  "maslov_local_window",
+  "phase_retrieval_kernels",
+  "propagate_system_jax",
+  "through_focus_scan_jax",
+  "trace_jax",
+  "wrapper_merit_meshgrid",
+  "zernike_basis"
+ ],
+ "rows": [
+  {
+   "M": 256,
+   "N": 128,
+   "chirpz2d_MB": 19.197037,
+   "dense_MB": 2.624192,
+   "margin_dense_vs_separable": 1.4082452808331098,
+   "margin_separable_vs_chirpz": 5.1946978302835936,
+   "ordering_holds": true,
+   "separable_MB": 3.695506
+  },
+  {
+   "M": 512,
+   "N": 128,
+   "chirpz2d_MB": 54.745687,
+   "dense_MB": 7.34208,
+   "margin_dense_vs_separable": 1.5763216963040445,
+   "margin_separable_vs_chirpz": 4.730270152106367,
+   "ordering_holds": true,
+   "separable_MB": 11.57348
+  },
+  {
+   "M": 1024,
+   "N": 128,
+   "chirpz2d_MB": 182.729303,
+   "dense_MB": 23.07072,
+   "margin_dense_vs_separable": 1.7300588798268974,
+   "margin_separable_vs_chirpz": 4.578109388194089,
+   "ordering_holds": true,
+   "separable_MB": 39.913704
+  },
+  {
+   "M": 512,
+   "N": 256,
+   "chirpz2d_MB": 76.647903,
+   "dense_MB": 10.487808,
+   "margin_dense_vs_separable": 1.4041424099297013,
+   "margin_separable_vs_chirpz": 5.204804155482652,
+   "ordering_holds": true,
+   "separable_MB": 14.726376
+  },
+  {
+   "M": 1024,
+   "N": 256,
+   "chirpz2d_MB": 218.395223,
+   "dense_MB": 29.362176,
+   "margin_dense_vs_separable": 1.5738727265990093,
+   "margin_separable_vs_chirpz": 4.725908268460312,
+   "ordering_holds": true,
+   "separable_MB": 46.212328
+  },
+  {
+   "M": 2048,
+   "N": 256,
+   "chirpz2d_MB": 730.215287,
+   "dense_MB": 92.276744,
+   "margin_dense_vs_separable": 1.7286682763752481,
+   "margin_separable_vs_chirpz": 4.577696508961991,
+   "ordering_holds": true,
+   "separable_MB": 159.51588
+  },
+  {
+   "M": 512,
+   "N": 64,
+   "chirpz2d_MB": 45.825623,
+   "dense_MB": 5.769216,
+   "margin_dense_vs_separable": 1.7328233160276891,
+   "margin_separable_vs_chirpz": 4.5839228082895,
+   "ordering_holds": true,
+   "separable_MB": 9.997032
+  },
+  {
+   "M": 1024,
+   "N": 64,
+   "chirpz2d_MB": 166.713095,
+   "dense_MB": 19.924992,
+   "margin_dense_vs_separable": 1.8467857854096004,
+   "margin_separable_vs_chirpz": 4.530592850671867,
+   "ordering_holds": true,
+   "separable_MB": 36.797192
+  },
+  {
+   "M": 2048,
+   "N": 512,
+   "chirpz2d_MB": 872.850071,
+   "dense_MB": 117.442696,
+   "margin_dense_vs_separable": 1.5726489793796967,
+   "margin_separable_vs_chirpz": 4.72587077295434,
+   "ordering_holds": true,
+   "separable_MB": 184.696136
+  }
+ ],
+ "tree": "C:/tmp/vhyg2_arch/branch",
+ "worst_margin_shape": {
+  "M": 512,
+  "N": 256,
+  "chirpz2d_MB": 76.647903,
+  "dense_MB": 10.487808,
+  "margin_dense_vs_separable": 1.4041424099297013,
+  "margin_separable_vs_chirpz": 5.204804155482652,
+  "ordering_holds": true,
+  "separable_MB": 14.726376
+ }
+}

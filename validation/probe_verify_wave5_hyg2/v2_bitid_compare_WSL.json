@@ -1,0 +1,14 @@
+{
+ "base_build": "6c462c0a35f77082b4621bd5f4be777daace0a282078032b6ee8d39bbc54d0f0",
+ "base_file": "validation/probe_verify_wave5_hyg2/v2_bitid_base_WSL.json",
+ "branch_build": "6c462c0a35f77082b4621bd5f4be777daace0a282078032b6ee8d39bbc54d0f0",
+ "branch_file": "validation/probe_verify_wave5_hyg2/v2_bitid_branch_WSL.json",
+ "compared": 93,
+ "differing": 0,
+ "differing_keys": [],
+ "identical": 93,
+ "keys_base": 93,
+ "keys_branch": 93,
+ "only_base": [],
+ "only_branch": []
+}

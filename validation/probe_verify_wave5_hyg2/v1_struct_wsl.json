@@ -1,0 +1,199 @@
+{
+ "SUM_METHODS": [
+  "bluestein",
+  "separable",
+  "direct"
+ ],
+ "build": "WSL-py3.12",
+ "jax": {
+  "bit_identical": false,
+  "dtype": "complex128",
+  "jit_rel_L2": 3.6147802990216125e-16,
+  "rel_L2": 3.6147802990216125e-16,
+  "version": "0.10.2"
+ },
+ "primitive_gate": {
+  "' direct'": {
+   "b2d": "ValueError: method must be one of ('auto', 'bluestein', 'separable', 'direct'), go",
+   "bc2d": "ValueError: method must be one of ('auto', 'bluestein', 'separable', 'direct'), go"
+  },
+  "''": {
+   "b2d": "ValueError: method must be one of ('auto', 'bluestein', 'separable', 'direct'), go",
+   "bc2d": "ValueError: method must be one of ('auto', 'bluestein', 'separable', 'direct'), go"
+  },
+  "'AUTO'": {
+   "b2d": "ValueError: method must be one of ('auto', 'bluestein', 'separable', 'direct'), go",
+   "bc2d": "ValueError: method must be one of ('auto', 'bluestein', 'separable', 'direct'), go"
+  },
+  "'DIRECT'": {
+   "b2d": "ValueError: method must be one of ('auto', 'bluestein', 'separable', 'direct'), go",
+   "bc2d": "ValueError: method must be one of ('auto', 'bluestein', 'separable', 'direct'), go"
+  },
+  "'Direct'": {
+   "b2d": "ValueError: method must be one of ('auto', 'bluestein', 'separable', 'direct'), go",
+   "bc2d": "ValueError: method must be one of ('auto', 'bluestein', 'separable', 'direct'), go"
+  },
+  "'auto '": {
+   "b2d": "ValueError: method must be one of ('auto', 'bluestein', 'separable', 'direct'), go",
+   "bc2d": "ValueError: method must be one of ('auto', 'bluestein', 'separable', 'direct'), go"
+  },
+  "'dense'": {
+   "b2d": "ValueError: method must be one of ('auto', 'bluestein', 'separable', 'direct'), go",
+   "bc2d": "ValueError: method must be one of ('auto', 'bluestein', 'separable', 'direct'), go"
+  },
+  "'direct '": {
+   "b2d": "ValueError: method must be one of ('auto', 'bluestein', 'separable', 'direct'), go",
+   "bc2d": "ValueError: method must be one of ('auto', 'bluestein', 'separable', 'direct'), go"
+  },
+  "'directt'": {
+   "b2d": "ValueError: method must be one of ('auto', 'bluestein', 'separable', 'direct'), go",
+   "bc2d": "ValueError: method must be one of ('auto', 'bluestein', 'separable', 'direct'), go"
+  },
+  "('direct',)": {
+   "b2d": "ValueError: method must be one of ('auto', 'bluestein', 'separable', 'direct'), go",
+   "bc2d": "ValueError: method must be one of ('auto', 'bluestein', 'separable', 'direct'), go"
+  },
+  "1": {
+   "b2d": "ValueError: method must be one of ('auto', 'bluestein', 'separable', 'direct'), go",
+   "bc2d": "ValueError: method must be one of ('auto', 'bluestein', 'separable', 'direct'), go"
+  },
+  "3.0": {
+   "b2d": "ValueError: method must be one of ('auto', 'bluestein', 'separable', 'direct'), go",
+   "bc2d": "ValueError: method must be one of ('auto', 'bluestein', 'separable', 'direct'), go"
+  },
+  "None": {
+   "b2d": "ValueError: method must be one of ('auto', 'bluestein', 'separable', 'direct'), go",
+   "bc2d": "ValueError: method must be one of ('auto', 'bluestein', 'separable', 'direct'), go"
+  },
+  "b'direct'": {
+   "b2d": "ValueError: method must be one of ('auto', 'bluestein', 'separable', 'direct'), go",
+   "bc2d": "ValueError: method must be one of ('auto', 'bluestein', 'separable', 'direct'), go"
+  }
+ },
+ "public_gate": {
+  "angular_spectrum_propagate_mft": {
+   "''": "ValueError: method must be one of ('auto', 'bluestein', 'separable', 'di | warnings_first=['UserWarning']",
+   "'Direct'": "ValueError: method must be one of ('auto', 'bluestein', 'separable', 'di | warnings_first=['UserWarning']",
+   "'auto '": "ValueError: method must be one of ('auto', 'bluestein', 'separable', 'di | warnings_first=['UserWarning']",
+   "'dense'": "ValueError: method must be one of ('auto', 'bluestein', 'separable', 'di | warnings_first=['UserWarning']",
+   "1": "ValueError: method must be one of ('auto', 'bluestein', 'separable', 'di | warnings_first=['UserWarning']",
+   "None": "ValueError: method must be one of ('auto', 'bluestein', 'separable', 'di | warnings_first=['UserWarning']"
+  },
+  "fraunhofer_propagate_mft": {
+   "''": "ValueError: method must be one of ('auto', 'bluestein', 'separable', 'di | warnings_first=[]",
+   "'Direct'": "ValueError: method must be one of ('auto', 'bluestein', 'separable', 'di | warnings_first=[]",
+   "'auto '": "ValueError: method must be one of ('auto', 'bluestein', 'separable', 'di | warnings_first=[]",
+   "'dense'": "ValueError: method must be one of ('auto', 'bluestein', 'separable', 'di | warnings_first=[]",
+   "1": "ValueError: method must be one of ('auto', 'bluestein', 'separable', 'di | warnings_first=[]",
+   "None": "ValueError: method must be one of ('auto', 'bluestein', 'separable', 'di | warnings_first=[]"
+  },
+  "fresnel_propagate_mft": {
+   "''": "ValueError: method must be one of ('auto', 'bluestein', 'separable', 'di | warnings_first=[]",
+   "'Direct'": "ValueError: method must be one of ('auto', 'bluestein', 'separable', 'di | warnings_first=[]",
+   "'auto '": "ValueError: method must be one of ('auto', 'bluestein', 'separable', 'di | warnings_first=[]",
+   "'dense'": "ValueError: method must be one of ('auto', 'bluestein', 'separable', 'di | warnings_first=[]",
+   "1": "ValueError: method must be one of ('auto', 'bluestein', 'separable', 'di | warnings_first=[]",
+   "None": "ValueError: method must be one of ('auto', 'bluestein', 'separable', 'di | warnings_first=[]"
+  }
+ },
+ "public_gate_cost": {
+  "angular_spectrum_propagate_mft": {
+   "fraction_of_valid_work_done": 0.6747509192059664,
+   "peak_MB_on_invalid_method": 25.714435,
+   "peak_MB_on_valid_call": 38.109522
+  },
+  "fraunhofer_propagate_mft": {
+   "fraction_of_valid_work_done": 0.0028898670467536664,
+   "peak_MB_on_invalid_method": 0.070746,
+   "peak_MB_on_valid_call": 24.480711
+  },
+  "fresnel_propagate_mft": {
+   "fraction_of_valid_work_done": 0.197303635020742,
+   "peak_MB_on_invalid_method": 12.67074,
+   "peak_MB_on_valid_call": 64.219496
+  }
+ },
+ "spy_bluestein_2d": [
+  {
+   "kw": {
+    "sign": -1,
+    "target_cdtype": "Complex128DType",
+    "xp": "module"
+   },
+   "n_pos": 5
+  }
+ ],
+ "spy_bluestein_centred_2d": [
+  {
+   "kw": {
+    "k_centre_out_x": 1.5,
+    "k_centre_out_y": -0.75,
+    "n_centre_in_x": 3.5,
+    "n_centre_in_y": 2.25,
+    "sign": -1,
+    "target_cdtype": "Complex128DType",
+    "xp": "module"
+   },
+   "n_pos": 5
+  }
+ ],
+ "spy_centred_defaults": [
+  {
+   "kw": {
+    "k_centre_out_x": 5.0,
+    "k_centre_out_y": 6.0,
+    "n_centre_in_x": 12.0,
+    "n_centre_in_y": 10.0,
+    "sign": -1,
+    "target_cdtype": "Complex128DType",
+    "xp": "module"
+   },
+   "n_pos": 5
+  }
+ ],
+ "spy_chirp_arms_calls": 0,
+ "tree": "/mnt/c/tmp/vhyg2_arch/branch",
+ "validation_order": {
+  "b2d.listE_method_bogus": "ValueError: method must be one of ('auto', 'bluestein', 'separable', 'direct'), got 'bogus'",
+  "b2d.listE_method_direct": "AttributeError: 'list' object has no attribute 'shape'",
+  "b2d.nout0_method_bogus": "ValueError: method must be one of ('auto', 'bluestein', 'separable', 'direct'), got 'bogus'",
+  "b2d.sign0_method_bogus": "ValueError: sign must be +1 or -1, got 0",
+  "b2d.warnbudget_method_bogus": "ValueError with [] emitted first",
+  "bc2d.listE_method_bogus": "AttributeError: 'list' object has no attribute 'shape'",
+  "bc2d.listE_method_direct": "AttributeError: 'list' object has no attribute 'shape'",
+  "bc2d.nout0_method_bogus": "ValueError: method must be one of ('auto', 'bluestein', 'separable', 'direct'), got 'bogus'",
+  "bc2d.sign0_method_bogus": "ValueError: method must be one of ('auto', 'bluestein', 'separable', 'direct'), got 'bogus'"
+ },
+ "vocabulary_round_trip": {
+  "auto": [
+   "(4, 4)",
+   "(4, 4)"
+  ],
+  "bluestein": [
+   "(4, 4)",
+   "(4, 4)"
+  ],
+  "direct": [
+   "(4, 4)",
+   "(4, 4)"
+  ],
+  "separable": [
+   "(4, 4)",
+   "(4, 4)"
+  ]
+ },
+ "zero_centre_bit_identity": {
+  "17x9->5x23.sign1": {
+   "bit_identical": true,
+   "max_abs_diff": 0.0
+  },
+  "20x24->12x10.sign-1": {
+   "bit_identical": true,
+   "max_abs_diff": 0.0
+  },
+  "32x32->16x16.sign-1": {
+   "bit_identical": true,
+   "max_abs_diff": 0.0
+  }
+ }
+}

@@ -1,0 +1,180 @@
+{
+ "ast": {
+  "leaf_bare_calls": [
+   [
+    "_collect_semi_diameters",
+    228
+   ],
+   [
+    "_ensure_cupy_loaded",
+    629
+   ],
+   [
+    "_load_numba",
+    644
+   ],
+   [
+    "_is_cupy_array",
+    715
+   ],
+   [
+    "_is_cupy_array",
+    910
+   ],
+   [
+    "_get_aspheric_sag_accum_numba",
+    795
+   ]
+  ],
+  "leaf_bare_calls_n": 6,
+  "leaf_bare_loads": [
+   [
+    "_collect_semi_diameters",
+    228
+   ],
+   [
+    "CUPY_AVAILABLE",
+    622
+   ],
+   [
+    "_ensure_cupy_loaded",
+    629
+   ],
+   [
+    "_load_numba",
+    644
+   ],
+   [
+    "_is_cupy_array",
+    715
+   ],
+   [
+    "_is_cupy_array",
+    910
+   ],
+   [
+    "_get_aspheric_sag_accum_numba",
+    795
+   ]
+  ],
+  "leaf_bare_loads_n": 7,
+  "lenses_attribute_hits": [],
+  "lenses_bare_calls": [],
+  "lenses_bare_calls_n": 0,
+  "lenses_bare_name_loads": [],
+  "lenses_bare_name_loads_n": 0,
+  "lenses_bare_stores": [],
+  "lenses_globals_subscripts": [],
+  "lenses_has_dunder_all": false
+ },
+ "build": "WSL-py3.12",
+ "col_i_byvalue": {
+  "bare_name_call": [
+   "ok",
+   "'leaf-helper'"
+  ],
+  "bare_name_read": [
+   "ok",
+   "True"
+  ],
+  "getattr_FLAG": [
+   "ok",
+   "True"
+  ],
+  "import_star_names": [
+   "FLAG",
+   "helper",
+   "reads_bare_flag",
+   "uses_bare_name"
+  ],
+  "in_dir_FLAG": true,
+  "in_dir_helper": true,
+  "in_import_star_FLAG": true,
+  "in_import_star_helper": true,
+  "in_vars_FLAG": true,
+  "in_vars_helper": true,
+  "shell_reads_after_write": [
+   "ok",
+   "'SUBSTITUTE'"
+  ],
+  "write_attempt": [
+   "ok",
+   "None"
+  ],
+  "write_reaches_leaf": false
+ },
+ "col_ii_getattr_nouniondir": {
+  "bare_name_call": [
+   "raised",
+   "NameError",
+   "name 'helper' is not defined"
+  ],
+  "bare_name_read": [
+   "raised",
+   "NameError",
+   "name 'FLAG' is not defined"
+  ],
+  "getattr_FLAG": [
+   "ok",
+   "True"
+  ],
+  "import_star_names": [
+   "UNION_DIR",
+   "reads_bare_flag",
+   "uses_bare_name"
+  ],
+  "in_dir_FLAG": false,
+  "in_dir_helper": false,
+  "in_import_star_FLAG": false,
+  "in_import_star_helper": false,
+  "in_vars_FLAG": false,
+  "in_vars_helper": false,
+  "shell_reads_after_write": [
+   "ok",
+   "'SUBSTITUTE'"
+  ],
+  "write_attempt": [
+   "ok",
+   "None"
+  ],
+  "write_reaches_leaf": true
+ },
+ "col_ii_getattr_uniondir": {
+  "bare_name_call": [
+   "raised",
+   "NameError",
+   "name 'helper' is not defined"
+  ],
+  "bare_name_read": [
+   "raised",
+   "NameError",
+   "name 'FLAG' is not defined"
+  ],
+  "getattr_FLAG": [
+   "ok",
+   "True"
+  ],
+  "import_star_names": [
+   "UNION_DIR",
+   "reads_bare_flag",
+   "uses_bare_name"
+  ],
+  "in_dir_FLAG": true,
+  "in_dir_helper": true,
+  "in_import_star_FLAG": false,
+  "in_import_star_helper": false,
+  "in_vars_FLAG": false,
+  "in_vars_helper": false,
+  "shell_reads_after_write": [
+   "ok",
+   "'SUBSTITUTE'"
+  ],
+  "write_attempt": [
+   "ok",
+   "None"
+  ],
+  "write_reaches_leaf": true
+ },
+ "python": "3.12.3 (main, Mar 23 2026, 19:04:32) [GCC 13.3.0]",
+ "tree": "/mnt/c/tmp/vhyg2_arch/branch"
+}
