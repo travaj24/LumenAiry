@@ -1,0 +1,21 @@
+{
+ "tag": "mftbit_wsl",
+ "python": "/home/travaj/lumvenv/bin/python",
+ "base_tree": "/mnt/c/tmp/hyg2_arch/base",
+ "branch_tree": "/mnt/c/tmp/hyg2_arch/branch",
+ "expect_differ_prefixes": [],
+ "n_keys_base": 179,
+ "n_keys_branch": 179,
+ "n_shared": 179,
+ "n_identical": 179,
+ "n_differ_expected": 0,
+ "differ_unexpected": [],
+ "expected_to_differ_but_identical": [],
+ "only_base": [],
+ "only_branch": [],
+ "seconds": {
+  "base": 2.4,
+  "branch": 2.8
+ },
+ "verdict": "IDENTICAL"
+}

@@ -1,0 +1,107 @@
+{
+ "stream": "v1 -- independent adversarial verification of 2796d551 (H2-1 direct-matrix MFT opt-in)",
+ "subject_files": [
+  "lumenairy/propagators/_bluestein.py",
+  "lumenairy/propagators/mft.py",
+  "tests/unit/test_wave5_h2_mft_direct.py"
+ ],
+ "trees": {
+  "base": "C:/tmp/vhyg2_arch/base  (f4f18851, no `method=` anywhere in _bluestein.py or the three MFT entry points)",
+  "branch": "C:/tmp/vhyg2_arch/branch  (b86fe31f; byte-identical to the worktree for the three subject files)"
+ },
+ "builds": {
+  "WIN-py3.14": "numpy 2.4.4, libscipy_openblas64_ 0.3.31.188.0, DYNAMIC_ARCH (OPENBLAS_CORETYPE honoured)",
+  "WSL-py3.12": "numpy 2.4.6, libscipy_openblas64_ 0.3.31.188.0, DYNAMIC_ARCH (OPENBLAS_CORETYPE honoured)"
+ },
+ "verdicts": {
+  "1_bit_identity_of_the_default": {
+   "verdict": "CONFIRMED",
+   "keys": 91,
+   "LEG_identical_win": 70,
+   "LEG_identical_wsl": 70,
+   "LEG_differing": 0,
+   "only_base": 0,
+   "only_branch": 0,
+   "NEW_keys_differing": 21,
+   "note": "all 21 NEW:: keys differ only because the base tree raises TypeError on the unknown `method=` keyword; branch method='auto' reproduces the BASE tree's keyword-free bytes on all three propagators, both builds"
+  },
+  "2_tolerance_rederivation": {
+   "verdict": "CONFIRMED-WITH-CAVEAT",
+   "sqrt_n_vs_rigorous": "g_author = sqrt(Nx*Ny) EQUALS the rigorous two-product Higham bound (Nx+Ny)/2 exactly for a SQUARE input grid (ratio 1.0000 at every case measured); for a rectangular input AM-GM makes it strictly SMALLER (0.9515 at 17x9, 0.80 at 48x12, 0.1245 at 1024x4), i.e. a TIGHTER bar, never a laxer one",
+   "bar_crossed": false,
+   "margin_trend": "dense route's margin WIDENS with n (2.08 -> 3.04 decades, WIN); the chirp routes' margin narrows (1.81 -> 1.13). The report's prose 'the margin narrowing with n' is true only of the chirp routes."
+  },
+  "3_blas_kernel_ladder": {
+   "verdict": "CONFIRMED-WITH-CAVEAT",
+   "coretype_honoured": true,
+   "distinct_digests_over_8_rungs": {"16x16": 2, "48x12": 2, "128x128": 3, "256x256": 4},
+   "max_relative_value_spread": 1.25e-15,
+   "thread_count_moves_bits": "yes at 128x128 and 256x256 on HASWELL (t1 != t4); no at 16x16 / 48x12",
+   "cross_build_same_rung_bit_equal": false,
+   "worst_assertion_margin_across_ladder_decades": 1.83,
+   "blas_spread_as_fraction_of_tightest_bar": "<= 0.31 %",
+   "pytest_across_ladder": "29 passed on all 8 rungs x 2 builds"
+  },
+  "4_memory_ordering": {
+   "verdict": "CONFIRMED",
+   "shapes": 29,
+   "all_hold_win": true,
+   "all_hold_wsl": true,
+   "exceptions": 0,
+   "worst_margin_shape": "N=1024 M=1024, separable/dense = 1.2517",
+   "extended_outside_the_box": "holds to M = 16N (64->1024) and M = 8N (256->2048)"
+  },
+  "5_cupy_dense_route": {
+   "verdict": "CONFIRMED-WITH-CAVEAT",
+   "rel_L2_numpy_vs_cupy": [2.80e-16, 4.45e-16, 5.31e-16],
+   "author_value": 3.79e-16,
+   "cufft_broken": true,
+   "chirp_route_on_cupy": "ImportError: DLL load failed while importing cufft",
+   "kernels_built_on_host": true
+  },
+  "6_one_xp_parametrised_implementation": {
+   "verdict": "CONFIRMED-WITH-CAVEAT",
+   "both_primitives_dispatch": true,
+   "chirp_arms_never_call_it": true,
+   "zero_centre_bit_identical": true,
+   "second_dense_implementation_found": false,
+   "caveat": "xp-parametrised only for the two matmuls; the kernel builder is NumPy-only and host-side"
+  },
+  "7_phase_budget_warning_defect": {
+   "verdict": "CONFIRMED (and worse than reported)",
+   "law": "chirp-Z relative L2 ~= eps * phase_budget",
+   "first_budget_that_warns": 3.16e15,
+   "first_budget_with_relL2_gt_1e-8": 1e8,
+   "first_budget_with_relL2_gt_1e-6": 1e10,
+   "first_budget_with_relL2_gt_1e-4": 1e12,
+   "relL2_at_1e12": 1.917e-4,
+   "relL2_at_1e15": 2.466e-1,
+   "relL2_at_1e17": 1.557,
+   "dense_relL2_at_every_budget": "3.0e-16 .. 3.5e-16, never warns",
+   "proposed_threshold": "1e-6 / eps = 4.5e9",
+   "guard_lines": "lumenairy/propagators/_bluestein.py:542-555 (+ docstring 500-510)"
+  },
+  "8_vocabulary_gate": {
+   "verdict": "CONFIRMED-WITH-CAVEAT",
+   "bad_values_tried": 14,
+   "all_raise_on_both_primitives": true,
+   "all_raise_on_all_three_public_entry_points": true,
+   "public_entry_points_validate_themselves": false,
+   "no_raise_path_found": false,
+   "caveats": [
+    "_bluestein_2d validates `sign` BEFORE `method`; _bluestein_centred_2d validates `method` first -- the two primitives disagree on which error a caller sees",
+    "_bluestein_centred_2d reads `E.shape` BEFORE the method check, so a non-array E masks the vocabulary error with AttributeError",
+    "public entry points refuse only by pass-through, after O(N^2) setup: peak traced work already done at the refusal is 0.29 % (fraunhofer), 16.6-19.7 % (fresnel), 67.5 % (ASM) of a valid call; ASM also emits a UserWarning before raising"
+   ]
+  },
+  "9_mutation_arms": {
+   "verdict": "ALL FOUR CAUGHT on both builds",
+   "m1_separable_instead_of_dense": 3,
+   "m2_no_rint_reduction": 2,
+   "m3_always_y_first": 2,
+   "m3b_always_y_first_shape_preserved": 1,
+   "m4_centres_not_passed": 4,
+   "control": "29 passed"
+  }
+ }
+}

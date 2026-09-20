@@ -1,0 +1,25 @@
+{
+ "cupy": {
+  "outcome": "absent"
+ },
+ "eager_jax": {
+  "module": "jaxlib",
+  "outcome": "ok",
+  "type": "ArrayImpl"
+ },
+ "jax_version": "0.10.2",
+ "jax_vs_numpy_bitwise_equal": false,
+ "jax_vs_numpy_rel": 4.125094605706173e-16,
+ "numpy": {
+  "module": "numpy",
+  "outcome": "ok",
+  "type": "ndarray"
+ },
+ "traced": {
+  "msg": "propagate_carrier_referenced: the envelope is a JAX Tracer (inside jax.jit / jax.grad).  This leg resolves its OUTPUT LATTICE and its QUADRATURE by measuring the envelope's own phase-space box -- the support radii r_x/r_",
+  "outcome": "raised",
+  "type": "ValueError"
+ },
+ "tree": "/mnt/c/tmp/r2_arch/branch",
+ "version": "5.47.0"
+}

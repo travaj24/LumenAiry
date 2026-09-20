@@ -23,6 +23,7 @@ unchanged: all 708 names are still checked on every run.
 from __future__ import annotations
 
 import importlib.metadata
+import pathlib
 import re
 
 import lumenairy as la
@@ -172,3 +173,138 @@ def test_phantom_name_in_dunder_all_would_be_caught():
             "test or fixture is mutating __all__ behind our back.")
         la.__all__.remove(phantom)
         assert phantom not in la.__all__
+
+
+# ===========================================================================
+# No library docstring may claim a version the package has not shipped
+# (VERIFY-WAVE5-HYGIENE2 V-D15, 2026-09-19)
+# ===========================================================================
+
+#: Contexts in which a FORWARD version is legitimate: a deprecation horizon is
+#: a scheduled future, not a claimed shipping history.
+_FORWARD_VERSION_CONTEXTS = (
+    'version_removed', 'version_added', 'NEXT_REMOVAL_VERSION',
+    '_FROZEN_IN', 'resolve_removal_version', 'removal', 'horizon',
+)
+
+#: Files whose whole job is versioning.
+_VERSION_OWNING_FILES = ('__init__.py', '_deprecation.py')
+
+#: WHAT COUNTS AS A VERSION TOKEN, and why it is not just ``\d+\.\d+``.
+#: The library is full of ordinary decimals on the same major number -- a
+#: 5.92 inner-scale coefficient, a 5.53 GB memory reading, a cond() of 5.196 --
+#: and a bare two-component match reads every one of them as a release.  So a
+#: token qualifies only when it CANNOT be a float: three dotted components
+#: (``5.48.0``), or a ``v`` prefix (``v5.48``).  MEASURED on this tree: 1181
+#: tokens qualify across ``lumenairy/``, 0 of them forward -- the instrument
+#: is live, not vacuous.  The one shape it cannot see is a bare two-component
+#: ``5.48`` with no ``v``, which is why the seven sites this gate was written
+#: for were reworded rather than renumbered.
+_VER3 = re.compile(r'(?<![\w.])v?(\d+)\.(\d+)\.(\d+)(?![\w.])')
+_VER2 = re.compile(r'(?<![\w.])v(\d+)\.(\d+)(?![\w.])')
+
+
+def _version_tuple(text):
+    m = re.match(r'^(\d+)\.(\d+)(?:\.(\d+))?', str(text))
+    return (int(m.group(1)), int(m.group(2)), int(m.group(3) or 0))
+
+
+def _forward_version_tokens(line, here):
+    """Every version token on ``line`` that is LATER than ``here``."""
+    out = []
+    for rx in (_VER3, _VER2):
+        for m in rx.finditer(line):
+            g = m.groups()
+            tok = (int(g[0]), int(g[1]), int(g[2]) if len(g) > 2 and g[2]
+                   else 0)
+            if tok[0] == here[0] and tok > here:
+                out.append(m.group(0))
+    return out
+
+
+def test_no_shipped_source_claims_a_version_the_package_has_not_reached():
+    """A library docstring may record history; it may not predict a release.
+
+    MEASURED 2026-09-19 (VERIFY-WAVE5-HYGIENE2 V-D15): seven shipped
+    docstrings in ``propagators/`` read ``5.48.0`` -- "shipped since 5.48.0 as
+    the opt-in", "BACKENDS (5.48.0)" and four ``(5.48.0)`` tails -- while
+    ``lumenairy.__init__`` read ``5.47.0`` and the four CHANGELOG entries sat
+    under ``## [Unreleased]``.  Nothing caught it, and the number was not even
+    safe: ``PLAN_WAVE5_LEFTOVERS_2026_09_14.md`` already showed the next
+    removal version slipping 5.48 -> 5.50, so the docstrings could have
+    shipped naming a release that never existed.
+
+    THE REPOSITORY'S OWN PRACTICE IS THE BAR, and it was measured rather than
+    assumed: for each of the last five releases, mentions of the version being
+    released inside ``lumenairy/**/*.py`` at the release commit's PARENT were
+    0, 0, 0, 1 (a numeric table cell, a false positive) and 0, and the release
+    commit itself touches exactly ONE library file -- ``lumenairy/__init__.py``
+    -- to bump ``__version__``.  So the neutral form is to describe the change
+    and let the CHANGELOG carry the number; the number is stamped afterwards,
+    at the commit that makes it true.
+
+    DEPRECATION HORIZONS ARE EXEMPT, and that is the whole reason the check is
+    contextual rather than a grep: ``version_removed='5.48'`` and
+    ``_CARRIER_FIELD_FROZEN_IN = '5.48'`` are scheduled futures that the
+    deprecation machinery reads, not claims about what has shipped.
+    """
+    root = pathlib.Path(la.__file__).parent
+    here = _version_tuple(la.__version__)
+    offenders = []
+    for path in sorted(root.rglob('*.py')):
+        if '__pycache__' in path.parts:
+            continue
+        if path.name in _VERSION_OWNING_FILES:
+            continue
+        for lineno, line in enumerate(
+                path.read_text(encoding='cp1252', errors='replace')
+                .splitlines(), start=1):
+            if any(ctx in line for ctx in _FORWARD_VERSION_CONTEXTS):
+                continue
+            for tok in _forward_version_tokens(line, here):
+                offenders.append(
+                    f"{path.relative_to(root.parent).as_posix()}:{lineno} "
+                    f"names {tok} -- {line.strip()[:70]!r}")
+    assert not offenders, (
+        f"{len(offenders)} shipped source line(s) name a version later than "
+        f"lumenairy.__version__ = {la.__version__}.  A docstring that says a "
+        f"feature 'shipped since X' before X exists is a claim the tree "
+        f"cannot support, and the number is not safe either -- release "
+        f"numbering moves.  Describe the change and let the CHANGELOG carry "
+        f"the version; stamp the number at the release commit, the way "
+        f"__init__.py is stamped.  Deprecation horizons "
+        f"({', '.join(_FORWARD_VERSION_CONTEXTS[:3])}, ...) are exempt.\n"
+        + '\n'.join('  ' + o for o in offenders[:20]))
+
+
+def test_the_version_gate_would_see_a_forward_claim():
+    """Falsification arm: the scanner is not passing because it stopped
+    looking.
+
+    A synthetic source line naming ``<major>.<minor+9>`` must be reported, and
+    the same line inside a deprecation-horizon context must NOT be.  Both
+    directions, so neither the detection nor the exemption can rot silently.
+    """
+    here = _version_tuple(la.__version__)
+    forward = f"{here[0]}.{here[1] + 9}.0"
+    for line in (f'    """Shipped since {forward} as the opt-in."""',
+                 f'    BACKENDS ({forward}).  The transport runs on',
+                 f'    # the v{here[0]}.{here[1] + 9} dispatch'):
+        assert _forward_version_tokens(line, here), (
+            f"the version scanner does not see a forward claim in {line!r}")
+    exempt = f"        version_removed='{forward}',"
+    assert any(ctx in exempt for ctx in _FORWARD_VERSION_CONTEXTS), (
+        "a deprecation horizon is no longer exempt; every scheduled removal "
+        "in the library would be reported as a false claim")
+    # ... a PAST version is history, not a claim ...
+    past = f"    # RE-MEASURED in {here[0]}.{max(here[1] - 1, 0)}.0"
+    assert not _forward_version_tokens(past, here), (
+        f"the scanner reads the historical {past!r} as a forward claim")
+    # ... and an ordinary decimal on the same major number is not a version.
+    for benign in ('peak 5.529e+03 -> 5.486e+03',
+                   'max|dc| 5.484e-15',
+                   'kappa_m = 5.92/l0, kappa = 2*pi*f',
+                   'cond(Hsup) = 5.196 on'):
+        assert not _forward_version_tokens(benign, here), (
+            f"the scanner reads {benign!r} as a forward version claim; it "
+            f"would fire on ordinary numerics")

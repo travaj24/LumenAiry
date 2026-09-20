@@ -1,0 +1,63 @@
+{
+ "build": "WSL-py3.12",
+ "rows": {
+  "0.0001": {
+   "auto_digest": "df3f47d259a12e428a21b18b055d90adb697703fc41b2260402de60444641e44",
+   "auto_k4": 5.506861475168618e-06,
+   "auto_kernel_resolved": "exact",
+   "auto_rel": 1.1643663170760709e-06,
+   "exact_digest": "df3f47d259a12e428a21b18b055d90adb697703fc41b2260402de60444641e44",
+   "exact_k4": 5.506861475168618e-06,
+   "exact_kernel_resolved": "exact",
+   "exact_minus_fresnel_relL2": 1.1643663175667272e-06,
+   "exact_rel": 1.1643663170760709e-06,
+   "fresnel_digest": "81baa63164075079fb9e1306f8f1350f845d73acd3b2e3954580e7d98c7d697a",
+   "fresnel_k4": 5.506861475168618e-06,
+   "fresnel_kernel_resolved": "fresnel",
+   "fresnel_rel": 9.810764153256603e-13,
+   "mean_signed_correction_phase": 4.755593003935802e-07,
+   "sziklas_R": -0.0001316609031250006,
+   "sziklas_dx": 1.9097999999999995e-06,
+   "sziklas_env_digest": "b11b01d97ed8111b5065d2f1bde4239e38ef816bc6bb43af84df1b8439946108"
+  },
+  "0.005": {
+   "auto_digest": "bc4c324c67874efc0239e5b566598a06de75112c3013fc4d5580511d584a9700",
+   "auto_k4": 1.0861449798403423e-07,
+   "auto_kernel_resolved": "exact",
+   "auto_rel": 2.2965520228233598e-08,
+   "exact_digest": "bc4c324c67874efc0239e5b566598a06de75112c3013fc4d5580511d584a9700",
+   "exact_k4": 1.0861449798403423e-07,
+   "exact_kernel_resolved": "exact",
+   "exact_minus_fresnel_relL2": 2.2965519646107263e-08,
+   "exact_rel": 2.2965520228233598e-08,
+   "fresnel_digest": "87da2396e6f9f2e01b13cb5605e5387780dbae41b8a2fbd5297b6fb4a1908b7b",
+   "fresnel_k4": 1.0861449798403423e-07,
+   "fresnel_kernel_resolved": "fresnel",
+   "fresnel_rel": 4.80102297601129e-13,
+   "mean_signed_correction_phase": 9.379680914665015e-09,
+   "sziklas_R": -0.005031660903125002,
+   "sziklas_dx": 2.0094832585110493e-06,
+   "sziklas_env_digest": "e4d2fc727966016db80fb5638d3e630fe0209fc17f586a1ba6fa82fb48b0f868"
+  },
+  "1e-06": {
+   "auto_digest": "b0b0621d78bbd6c6d70aa39e8cf0a110439a2b66a7ba7f11decc56fc7e9ee6ed",
+   "auto_k4": 2.2309405442592168e-05,
+   "auto_kernel_resolved": "exact",
+   "auto_rel": 4.717080942827669e-06,
+   "exact_digest": "b0b0621d78bbd6c6d70aa39e8cf0a110439a2b66a7ba7f11decc56fc7e9ee6ed",
+   "exact_k4": 2.2309405442592168e-05,
+   "exact_kernel_resolved": "exact",
+   "exact_minus_fresnel_relL2": 4.717080942758551e-06,
+   "exact_rel": 4.717080942827669e-06,
+   "fresnel_digest": "e2d310ae42c6562b234fa65b92cca03fd9fc5f1df82caa5815fdb660b050b7bb",
+   "fresnel_k4": 2.2309405442592168e-05,
+   "fresnel_kernel_resolved": "fresnel",
+   "fresnel_rel": 9.786845221723372e-13,
+   "mean_signed_correction_phase": 1.9265865398593593e-06,
+   "sziklas_R": -3.2660903125002194e-05,
+   "sziklas_dx": 1.9097999999999995e-06,
+   "sziklas_env_digest": "3010969eaf130283a454659ddb12b3f259210d4b481e2e0475aefef8811c2934"
+  }
+ },
+ "tree": "/mnt/c/Users/Tesla/AppData/Local/Temp/claude/C--Users-Tesla/372a2d1f-acbe-4b57-a148-eeae3fe1d729/scratchpad/mut/m3"
+}

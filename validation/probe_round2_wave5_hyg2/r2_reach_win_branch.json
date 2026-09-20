@@ -1,0 +1,28 @@
+{
+ "cupy": {
+  "msg": "DLL load failed while importing cufft: The specified module could not be found.",
+  "outcome": "raised",
+  "type": "ImportError"
+ },
+ "cupy_version": "14.0.1",
+ "eager_jax": {
+  "module": "jaxlib",
+  "outcome": "ok",
+  "type": "ArrayImpl"
+ },
+ "jax_version": "0.11.0",
+ "jax_vs_numpy_bitwise_equal": false,
+ "jax_vs_numpy_rel": 4.1308721369426163e-16,
+ "numpy": {
+  "module": "numpy",
+  "outcome": "ok",
+  "type": "ndarray"
+ },
+ "traced": {
+  "msg": "propagate_carrier_referenced: the envelope is a JAX Tracer (inside jax.jit / jax.grad).  This leg resolves its OUTPUT LATTICE and its QUADRATURE by measuring the envelope's own phase-space box -- the support radii r_x/r_",
+  "outcome": "raised",
+  "type": "ValueError"
+ },
+ "tree": "C:/tmp/r2_arch/branch",
+ "version": "5.47.0"
+}

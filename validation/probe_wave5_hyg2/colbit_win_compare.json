@@ -1,0 +1,21 @@
+{
+ "tag": "colbit_win",
+ "python": "C:\\Users\\Tesla\\AppData\\Local\\Programs\\Python\\Python314\\python.exe",
+ "base_tree": "C:\\tmp\\hyg2_arch\\base",
+ "branch_tree": "C:\\tmp\\hyg2_arch\\branch",
+ "expect_differ_prefixes": [],
+ "n_keys_base": 84,
+ "n_keys_branch": 84,
+ "n_shared": 84,
+ "n_identical": 84,
+ "n_differ_expected": 0,
+ "differ_unexpected": [],
+ "expected_to_differ_but_identical": [],
+ "only_base": [],
+ "only_branch": [],
+ "seconds": {
+  "base": 4.0,
+  "branch": 3.9
+ },
+ "verdict": "IDENTICAL"
+}

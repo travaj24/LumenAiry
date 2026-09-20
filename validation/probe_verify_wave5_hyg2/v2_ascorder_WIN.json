@@ -1,0 +1,129 @@
+{
+ "build": "WIN-py3.14",
+ "cupy": {
+  "as_c_order_c_contiguous": true,
+  "as_c_order_dtype": "complex128",
+  "c_contiguous": true,
+  "dtype_kwarg_accepted": true,
+  "has_ascontiguousarray": true,
+  "matches_cupy_asnumpy": true,
+  "result_dtype": "complex128",
+  "signature": "(a, dtype=None)",
+  "version": "14.0.1"
+ },
+ "jax_as_c_order": {
+  "dtype": "complex128",
+  "took_asarray_branch": true,
+  "type": "ArrayImpl"
+ },
+ "jax_transposed_ok": "complex128",
+ "jax_version": "0.11.0",
+ "jnp_dir_matches": [],
+ "jnp_has_asarray": true,
+ "jnp_has_ascontiguousarray": false,
+ "numpy_all_byte_identical": true,
+ "numpy_byte_identity": {
+  "c64->complex128": {
+   "byte_identical": true,
+   "c_contiguous": true,
+   "dtype_ok": true,
+   "is_same_object_as_input": false
+  },
+  "c64->complex64": {
+   "byte_identical": true,
+   "c_contiguous": true,
+   "dtype_ok": true,
+   "is_same_object_as_input": true
+  },
+  "c_contiguous_c128->complex128": {
+   "byte_identical": true,
+   "c_contiguous": true,
+   "dtype_ok": true,
+   "is_same_object_as_input": true
+  },
+  "c_contiguous_c128->complex64": {
+   "byte_identical": true,
+   "c_contiguous": true,
+   "dtype_ok": true,
+   "is_same_object_as_input": false
+  },
+  "f_order_c128->complex128": {
+   "byte_identical": true,
+   "c_contiguous": true,
+   "dtype_ok": true,
+   "is_same_object_as_input": false
+  },
+  "f_order_c128->complex64": {
+   "byte_identical": true,
+   "c_contiguous": true,
+   "dtype_ok": true,
+   "is_same_object_as_input": false
+  },
+  "int32->complex128": {
+   "byte_identical": true,
+   "c_contiguous": true,
+   "dtype_ok": true,
+   "is_same_object_as_input": false
+  },
+  "int32->complex64": {
+   "byte_identical": true,
+   "c_contiguous": true,
+   "dtype_ok": true,
+   "is_same_object_as_input": false
+  },
+  "real_f64->complex128": {
+   "byte_identical": true,
+   "c_contiguous": true,
+   "dtype_ok": true,
+   "is_same_object_as_input": false
+  },
+  "real_f64->complex64": {
+   "byte_identical": true,
+   "c_contiguous": true,
+   "dtype_ok": true,
+   "is_same_object_as_input": false
+  },
+  "scalar_like->complex128": {
+   "byte_identical": true,
+   "c_contiguous": true,
+   "dtype_ok": true,
+   "is_same_object_as_input": false
+  },
+  "scalar_like->complex64": {
+   "byte_identical": true,
+   "c_contiguous": true,
+   "dtype_ok": true,
+   "is_same_object_as_input": false
+  },
+  "sliced_c128->complex128": {
+   "byte_identical": true,
+   "c_contiguous": true,
+   "dtype_ok": true,
+   "is_same_object_as_input": false
+  },
+  "sliced_c128->complex64": {
+   "byte_identical": true,
+   "c_contiguous": true,
+   "dtype_ok": true,
+   "is_same_object_as_input": false
+  },
+  "transposed_c128->complex128": {
+   "byte_identical": true,
+   "c_contiguous": true,
+   "dtype_ok": true,
+   "is_same_object_as_input": false
+  },
+  "transposed_c128->complex64": {
+   "byte_identical": true,
+   "c_contiguous": true,
+   "dtype_ok": true,
+   "is_same_object_as_input": false
+  }
+ },
+ "source_sites": [
+  "503: def _as_c_order(a, dtype, xp):",
+  "2181: S = fft2(_as_c_order(env_a, np.complex128, xp))",
+  "2244: _as_c_order(g, cdt, xp), alpha_x, alpha_y,"
+ ],
+ "tree": "C:/tmp/lum_vhyg2"
+}

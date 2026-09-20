@@ -1,0 +1,114 @@
+{
+ "build": "WIN-py3.14",
+ "class_after_reload": "_LensesFacade",
+ "class_before": "_LensesFacade",
+ "class_object_is_same": false,
+ "dir_len_after_reload": 74,
+ "eight_readable_after_reload": {
+  "CUPY_AVAILABLE": "ok",
+  "_collect_semi_diameters": "ok",
+  "_ensure_cupy_loaded": "ok",
+  "_ensure_numexpr_loaded": "ok",
+  "_get_aspheric_sag_accum_numba": "ok",
+  "_is_cupy_array": "ok",
+  "_load_numba": "ok",
+  "_warn_if_aperture_exceeds_grid": "ok"
+ },
+ "eight_refused_after_reload": {
+  "CUPY_AVAILABLE": [
+   "raised",
+   "AttributeError",
+   "lumenairy.elements.lenses.CUPY_AVAILABLE is a re-export of lumenairy.elements._lens_kernels.CUPY_AVAILABLE, and the code that reads it reads it out of lumenairy.elements._lens_kernels's globals at call time -- so rebinding it HERE would bind a shadow that nothing looks at.  This is refused rather th"
+  ],
+  "_collect_semi_diameters": [
+   "raised",
+   "AttributeError",
+   "lumenairy.elements.lenses._collect_semi_diameters is a re-export of lumenairy.elements._lens_kernels._collect_semi_diameters, and the code that reads it reads it out of lumenairy.elements._lens_kernels's globals at call time -- so rebinding it HERE would bind a shadow that nothing looks at.  This is"
+  ],
+  "_ensure_cupy_loaded": [
+   "raised",
+   "AttributeError",
+   "lumenairy.elements.lenses._ensure_cupy_loaded is a re-export of lumenairy.elements._lens_kernels._ensure_cupy_loaded, and the code that reads it reads it out of lumenairy.elements._lens_kernels's globals at call time -- so rebinding it HERE would bind a shadow that nothing looks at.  This is refused"
+  ],
+  "_ensure_numexpr_loaded": [
+   "raised",
+   "AttributeError",
+   "lumenairy.elements.lenses._ensure_numexpr_loaded is a re-export of lumenairy.elements._lens_kernels._ensure_numexpr_loaded, and the code that reads it reads it out of lumenairy.elements._lens_kernels's globals at call time -- so rebinding it HERE would bind a shadow that nothing looks at.  This is r"
+  ],
+  "_get_aspheric_sag_accum_numba": [
+   "raised",
+   "AttributeError",
+   "lumenairy.elements.lenses._get_aspheric_sag_accum_numba is a re-export of lumenairy.elements._lens_kernels._get_aspheric_sag_accum_numba, and the code that reads it reads it out of lumenairy.elements._lens_kernels's globals at call time -- so rebinding it HERE would bind a shadow that nothing looks "
+  ],
+  "_is_cupy_array": [
+   "raised",
+   "AttributeError",
+   "lumenairy.elements.lenses._is_cupy_array is a re-export of lumenairy.elements._lens_kernels._is_cupy_array, and the code that reads it reads it out of lumenairy.elements._lens_kernels's globals at call time -- so rebinding it HERE would bind a shadow that nothing looks at.  This is refused rather th"
+  ],
+  "_load_numba": [
+   "raised",
+   "AttributeError",
+   "lumenairy.elements.lenses._load_numba is a re-export of lumenairy.elements._lens_kernels._load_numba, and the code that reads it reads it out of lumenairy.elements._lens_kernels's globals at call time -- so rebinding it HERE would bind a shadow that nothing looks at.  This is refused rather than acc"
+  ],
+  "_warn_if_aperture_exceeds_grid": [
+   "raised",
+   "AttributeError",
+   "lumenairy.elements.lenses._warn_if_aperture_exceeds_grid is a re-export of lumenairy.elements._lens_kernels._warn_if_aperture_exceeds_grid, and the code that reads it reads it out of lumenairy.elements._lens_kernels's globals at call time -- so rebinding it HERE would bind a shadow that nothing look"
+  ]
+ },
+ "eight_seen_during_reload": [],
+ "fresh_subprocess": {
+  "rc": 0,
+  "stderr": "",
+  "stdout": "IMPORT-OK _LensesFacade 74 True\nWRITE-REFUSED"
+ },
+ "lenses_is_leaf_after_leaf_reload": {
+  "CUPY_AVAILABLE": true,
+  "_collect_semi_diameters": false,
+  "_ensure_cupy_loaded": false,
+  "_ensure_numexpr_loaded": false,
+  "_get_aspheric_sag_accum_numba": false,
+  "_is_cupy_array": false,
+  "_load_numba": false,
+  "_warn_if_aperture_exceeds_grid": false
+ },
+ "lenses_read_after_leaf_reload": {
+  "CUPY_AVAILABLE": "ok",
+  "_collect_semi_diameters": "ok",
+  "_ensure_cupy_loaded": "ok",
+  "_ensure_numexpr_loaded": "ok",
+  "_get_aspheric_sag_accum_numba": "ok",
+  "_is_cupy_array": "ok",
+  "_load_numba": "ok",
+  "_warn_if_aperture_exceeds_grid": "ok"
+ },
+ "refusal_still_live": [
+  "raised",
+  "AttributeError",
+  "lumenairy.elements.lenses.CUPY_AVAILABLE is a re-export of lumenairy.elements._lens_kernels.CUPY_AVAILABLE, and the code that reads it reads it out of lumenairy.elements._lens_kernels's globals at call time -- so rebinding it HERE would bind a shadow that nothing looks at.  This is refused rather th"
+ ],
+ "reload_kernels": [
+  "ok",
+  "<module 'lumenairy.elements._lens_kernels' from 'C:\\\\tmp\\\\vhyg2_arch\\\\branch\\\\lumenairy\\\\elements\\\\_lens_kernels.py'>"
+ ],
+ "reload_lenses": [
+  "ok",
+  "<module 'lumenairy.elements.lenses' from 'C:\\\\tmp\\\\vhyg2_arch\\\\branch\\\\lumenairy\\\\elements\\\\lenses.py'>"
+ ],
+ "reload_lenses_again_after_leaf_reload": [
+  "ok",
+  "<module 'lumenairy.elements.lenses' from 'C:\\\\tmp\\\\vhyg2_arch\\\\branch\\\\lumenairy\\\\elements\\\\lenses.py'>"
+ ],
+ "setattr_count_during_reload": 8,
+ "setattr_names_during_reload": [
+  "__spec__",
+  "__name__",
+  "__loader__",
+  "__package__",
+  "__spec__",
+  "__file__",
+  "__cached__",
+  "__class__"
+ ],
+ "tree": "C:\\tmp\\vhyg2_arch\\branch"
+}

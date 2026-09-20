@@ -1,0 +1,44 @@
+{
+ "build": "WSL-py3.12",
+ "facade_patch": {
+  "fake_calls_during_sag": 0,
+  "leaf_still_real": true,
+  "sag_ran": "ok",
+  "setattr": [
+   "ok",
+   "None"
+  ],
+  "shell_dict_entry_now": "<function main.<locals>.fake at 0x7f6346dbafc0>"
+ },
+ "idempotent_self_assign": {
+  "CUPY_AVAILABLE": [
+   "ok",
+   "None"
+  ],
+  "_is_cupy_array": [
+   "ok",
+   "None"
+  ],
+  "_warn_if_aperture_exceeds_grid": [
+   "ok",
+   "None"
+  ]
+ },
+ "leaf_patch": {
+  "facade_read_during_patch_is_fake": false,
+  "facade_read_during_patch_is_real": true,
+  "fake_calls_during_sag": 1,
+  "sag_ran": "ok"
+ },
+ "restore_cycle_on_facade": {
+  "restore": [
+   "ok",
+   "None"
+  ],
+  "set": [
+   "ok",
+   "None"
+  ]
+ },
+ "tree": "/mnt/c/tmp/vhyg2_arch/base"
+}

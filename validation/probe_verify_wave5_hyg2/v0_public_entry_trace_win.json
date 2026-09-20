@@ -1,0 +1,104 @@
+{
+ "build": "WIN-py3.14",
+ "rows": [
+  {
+   "case": "private, jit, defaults",
+   "lumenairy_frames": [
+    "carrier.py:2163:_collins_transport"
+   ],
+   "msg": "_collins_transport: the envelope is a JAX Tracer (inside jax.jit / jax.grad), which has no concrete entries to measure, and this call asks for 2 decision(s) that are taken by measuring it -- gap_kernel='auto' resolves by MEASURING the envelope's angular half-width (the k4 wrap ratio over the reduced frame z_eff = B/A); pass gap_kernel='fresnel' to take the ABCD-Fresnel integral, which is what the Collins stage is; on_collins_sampling='warn' evaluates the Kelly K1/K2/K3 conditions on the envelope's MEASURED support box; pass on_collins_sampling='ignore' to run the transport unguarded, having checked the conditions on a concrete array first.  Every other stage of the transport is trace-safe.",
+   "names_fresnel": true,
+   "names_gap_kernel": true,
+   "names_ignore": true,
+   "names_on_collins_sampling": true,
+   "outcome": "raised",
+   "type": "ValueError"
+  },
+  {
+   "case": "private, jit, gap=fresnel + sampling=ignore",
+   "outcome": "ok",
+   "type": "ArrayImpl"
+  },
+  {
+   "case": "public, jit, transport='collins', defaults",
+   "lumenairy_frames": [
+    "carrier.py:1269:propagate_carrier_referenced",
+    "carrier.py:2337:_collins_carrier_leg"
+   ],
+   "msg": "The numpy.ndarray conversion method __array__() was called on traced array with shape complex128[64,64]\nThe error occurred while tracing the function f at C:\\tmp\\lum_vhyg2\\validation\\probe_verify_wave5_hyg2\\v0_public_entry_trace.py:75 for jit. This concrete value was not available in Python because it depends on the value of the argument e.\nSee https://docs.jax.dev/en/latest/errors.html#jax.errors.TracerArrayConversionError",
+   "names_fresnel": false,
+   "names_gap_kernel": false,
+   "names_ignore": false,
+   "names_on_collins_sampling": false,
+   "outcome": "raised",
+   "type": "TracerArrayConversionError"
+  },
+  {
+   "case": "public, jit, transport='collins', fresnel+ignore",
+   "lumenairy_frames": [
+    "carrier.py:1269:propagate_carrier_referenced",
+    "carrier.py:2337:_collins_carrier_leg"
+   ],
+   "msg": "The numpy.ndarray conversion method __array__() was called on traced array with shape complex128[64,64]\nThe error occurred while tracing the function f at C:\\tmp\\lum_vhyg2\\validation\\probe_verify_wave5_hyg2\\v0_public_entry_trace.py:75 for jit. This concrete value was not available in Python because it depends on the value of the argument e.\nSee https://docs.jax.dev/en/latest/errors.html#jax.errors.TracerArrayConversionError",
+   "names_fresnel": false,
+   "names_gap_kernel": false,
+   "names_ignore": false,
+   "names_on_collins_sampling": false,
+   "outcome": "raised",
+   "type": "TracerArrayConversionError"
+  },
+  {
+   "case": "public, jit, transport='collins', fresnel+ignore+carrier_out=inf",
+   "lumenairy_frames": [
+    "carrier.py:1269:propagate_carrier_referenced",
+    "carrier.py:2337:_collins_carrier_leg"
+   ],
+   "msg": "The numpy.ndarray conversion method __array__() was called on traced array with shape complex128[64,64]\nThe error occurred while tracing the function f at C:\\tmp\\lum_vhyg2\\validation\\probe_verify_wave5_hyg2\\v0_public_entry_trace.py:75 for jit. This concrete value was not available in Python because it depends on the value of the argument e.\nSee https://docs.jax.dev/en/latest/errors.html#jax.errors.TracerArrayConversionError",
+   "names_fresnel": false,
+   "names_gap_kernel": false,
+   "names_ignore": false,
+   "names_on_collins_sampling": false,
+   "outcome": "raised",
+   "type": "TracerArrayConversionError"
+  },
+  {
+   "case": "public, grad, transport='collins', fresnel+ignore",
+   "lumenairy_frames": [
+    "carrier.py:1269:propagate_carrier_referenced",
+    "carrier.py:2337:_collins_carrier_leg"
+   ],
+   "msg": "The numpy.ndarray conversion method __array__() was called on traced array with shape complex128[64,64]\nSee https://docs.jax.dev/en/latest/errors.html#jax.errors.TracerArrayConversionError",
+   "names_fresnel": false,
+   "names_gap_kernel": false,
+   "names_ignore": false,
+   "names_on_collins_sampling": false,
+   "outcome": "raised",
+   "type": "TracerArrayConversionError"
+  },
+  {
+   "case": "public, jit, default transport (sziklas), defaults",
+   "outcome": "ok",
+   "type": "ArrayImpl"
+  },
+  {
+   "case": "private, grad wrt z (concrete envelope)",
+   "lumenairy_frames": [
+    "carrier.py:2100:_collins_transport",
+    "carrier.py:1638:_collins_envelope_abcd"
+   ],
+   "msg": "Abstract tracer value encountered where concrete value is expected: traced array with shape float64[]\nThe problem arose with the `float` function. If trying to convert the data type of a value, try using `x.astype(float)` or `jnp.array(x, float)` instead.\n\nSee https://docs.jax.dev/en/latest/errors.html#jax.errors.ConcretizationTypeError",
+   "names_fresnel": false,
+   "names_gap_kernel": false,
+   "names_ignore": false,
+   "names_on_collins_sampling": false,
+   "outcome": "raised",
+   "type": "ConcretizationTypeError"
+  },
+  {
+   "case": "a working grad AFTER a refusing one",
+   "grad_max": 2.0004808334549145,
+   "recovered": true,
+   "refusal_type": "ValueError"
+  }
+ ]
+}

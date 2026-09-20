@@ -1,0 +1,208 @@
+{
+ "blas": {
+  "env_CORETYPE": "HASWELL",
+  "env_OPENBLAS_NUM_THREADS": "1",
+  "numpy_blas": {
+   "detection method": "pkgconfig",
+   "found": true,
+   "include directory": "C:/Users/runneradmin/AppData/Local/Temp/cibw-run-ucojyb64/cp314-win_amd64/build/venv/Lib/site-packages/scipy_openblas64/include",
+   "lib directory": "C:/Users/runneradmin/AppData/Local/Temp/cibw-run-ucojyb64/cp314-win_amd64/build/venv/Lib/site-packages/scipy_openblas64/lib",
+   "name": "scipy-openblas",
+   "openblas configuration": "OpenBLAS 0.3.31.188.0  USE64BITINT DYNAMIC_ARCH NO_AFFINITY Haswell MAX_THREADS=24",
+   "pc file directory": "D:/a/numpy-release/numpy-release/.openblas",
+   "version": "0.3.31.188.0"
+  },
+  "threadpool": [
+   {
+    "architecture": "Haswell",
+    "filepath": "C:\\Users\\Tesla\\AppData\\Local\\Programs\\Python\\Python314\\Lib\\site-packages\\numpy.libs\\libscipy_openblas64_-63c857e738469261263c764a36be9436.dll",
+    "internal_api": "openblas",
+    "num_threads": 1,
+    "prefix": "libscipy_openblas",
+    "threading_layer": "pthreads",
+    "user_api": "blas",
+    "version": "0.3.31.188.0"
+   },
+   {
+    "architecture": "Haswell",
+    "filepath": "C:\\Users\\Tesla\\AppData\\Local\\Programs\\Python\\Python314\\Lib\\site-packages\\scipy.libs\\libscipy_openblas-64eda39e79589aedb16f58e5547eb599.dll",
+    "internal_api": "openblas",
+    "num_threads": 1,
+    "prefix": "libscipy_openblas",
+    "threading_layer": "pthreads",
+    "user_api": "blas",
+    "version": "0.3.30"
+   }
+  ]
+ },
+ "build": "WIN-py3.14",
+ "rows": {
+  "B1.16x16->8x8.sign-1": {
+   "bar_both": 4.331551901973166e-12,
+   "bar_chirp": 2.571038267486428e-12,
+   "bar_dense": 1.7605136344867384e-12,
+   "err_bluestein": 3.0315391380987954e-14,
+   "err_direct": 2.5618982671915017e-14,
+   "err_separable": 3.021112489366642e-14,
+   "pair_bluestein_vs_direct": 3.696359138182859e-14,
+   "pair_separable_vs_direct": 3.019806626980426e-14,
+   "sha_bluestein": "d42b6147e3bb25662caadbdac79b817c3a10e808376e5b20dd6963c015cbf965",
+   "sha_direct": "37487dc16c36fa616765027867fc5d400d35cb270f60f6e802d626ebe6bdbb3f",
+   "sha_separable": "be08c902d026fd297da362df408b35de52df72008091da3e891ab5a4198f003e"
+  },
+  "B1.16x16->8x8.sign1": {
+   "bar_both": 4.331551901973166e-12,
+   "bar_chirp": 2.571038267486428e-12,
+   "bar_dense": 1.7605136344867384e-12,
+   "err_bluestein": 3.04614123074787e-14,
+   "err_direct": 1.6091724337024826e-14,
+   "err_separable": 3.1238132782840776e-14,
+   "pair_bluestein_vs_direct": 3.5013413865546287e-14,
+   "pair_separable_vs_direct": 2.893063117941767e-14,
+   "sha_bluestein": "f3b5a2108e3523db951954e40d466f8ff4622b3783a8376b98f6ad31d2997c16",
+   "sha_direct": "918d3ad292cd9481fe338d4c22e4194926efc0d0ddaf59dd0cd2a2593ee24185",
+   "sha_separable": "76d9d5697804fa41bcf4c05539ccefabf1b25108ba299bf078862314aba6077a"
+  },
+  "B1.17x9->5x23.sign-1": {
+   "bar_both": 2.711841649297771e-12,
+   "bar_chirp": 1.7816750375606733e-12,
+   "bar_dense": 9.301666117370979e-13,
+   "err_bluestein": 6.179066904694994e-14,
+   "err_direct": 1.0658141036401503e-14,
+   "err_separable": 6.247626556568155e-14,
+   "pair_bluestein_vs_direct": 6.102632492251517e-14,
+   "pair_separable_vs_direct": 6.151557333184169e-14,
+   "sha_bluestein": "d774960790653b5343ee95d45f0dd9b3cfdd3e26cc2df28a3bfa49bd6dc4e76c",
+   "sha_direct": "e040c044d0a73391ed72b4a0f7b7d665c03ade1d059cc9707453dd968ecda00b",
+   "sha_separable": "9b75dec9fb3aee5e76c1d972979b22cbaedd632d8d46cdeac081228e9505d485"
+  },
+  "B1.17x9->5x23.sign1": {
+   "bar_both": 2.711841649297771e-12,
+   "bar_chirp": 1.7816750375606733e-12,
+   "bar_dense": 9.301666117370979e-13,
+   "err_bluestein": 8.691904790839364e-14,
+   "err_direct": 8.188600426433447e-15,
+   "err_separable": 7.406044743317242e-14,
+   "pair_bluestein_vs_direct": 8.280567002434699e-14,
+   "pair_separable_vs_direct": 6.99803436660041e-14,
+   "sha_bluestein": "3c213a22636730c560be33343586954fe3d2e43fae56308e0a3d4e77ed141b6d",
+   "sha_direct": "21003ad20c87e311d6959b3967a070712c3083e237cf4b55735f7e4a512e9628",
+   "sha_separable": "3911ed3a2b6a7d46d1452454185e7247c091303b9b7160bcf58fdf12d2260c0c"
+  },
+  "B1.32x24->16x20.sign-1": {
+   "bar_both": 1.7756708646088344e-11,
+   "bar_chirp": 9.603901773486614e-12,
+   "bar_dense": 8.15280687260173e-12,
+   "err_bluestein": 2.3266884355213253e-13,
+   "err_direct": 4.4938668397781776e-14,
+   "err_separable": 2.51214793389404e-13,
+   "pair_bluestein_vs_direct": 2.352315015805125e-13,
+   "pair_separable_vs_direct": 2.574675893923972e-13,
+   "sha_bluestein": "1d2f060ebfc79e291163b853e68411c3943d6d105fd8c8fe96085a088ae334d4",
+   "sha_direct": "a4b7962c729cba71b573368b7b37ae3a5b4c55e029a594e617c244042fb10586",
+   "sha_separable": "660185d86707f21ac41c884564a973316f89ae34ff2bcfa1a5259d6e791fd5a8"
+  },
+  "B1.32x24->16x20.sign1": {
+   "bar_both": 1.7756708646088344e-11,
+   "bar_chirp": 9.603901773486614e-12,
+   "bar_dense": 8.15280687260173e-12,
+   "err_bluestein": 3.1036975184181237e-13,
+   "err_direct": 4.271574971572196e-14,
+   "err_separable": 3.124785372878291e-13,
+   "pair_bluestein_vs_direct": 3.061021589917917e-13,
+   "pair_separable_vs_direct": 3.08432025383896e-13,
+   "sha_bluestein": "83c17da6d6f9130d4a3489d5540b1ff1c6bcff2b56b9a02d2d937b8fe8ccb03e",
+   "sha_direct": "04297e7605d3a19cf1d002aafc9ed3aa29a42d5532d4b0358753a606b4ee5598",
+   "sha_separable": "2dedf2c4ff0784ee7897b494b9d70d4b7dcf1f5c853697b68da6d197cb62f45e"
+  },
+  "B2.centred": {
+   "bar_chirp": 5.380937983916719e-12,
+   "bar_dense": 4.208159164978919e-12,
+   "err_chirp": 9.816782585657168e-14,
+   "err_dense": 2.1482170038296686e-14,
+   "sha_chirp": "0da3e11e72f1ee8ab915ef08c70597ddc9bfc851a96f170682e7615ab25ffd48",
+   "sha_dense": "72ee8be1c39a6bfb6cf6510c93657e0d7cdbd3eff4eae00a287fd289176b7075"
+  },
+  "B3.both_conventions": {
+   "bit_equal": true,
+   "sha": "cf8d909b7480ae7328fec6654b30b0d8792193c01997aa7b06b09cca9a233780"
+  },
+  "B4.angular_spectrum_propagate_mft": {
+   "bar": 4.601589888937335e-12,
+   "power_bar": 1e-12,
+   "power_rel": 6.792699212637371e-16,
+   "rel": 4.646725986721415e-14,
+   "sha_default": "0f9c522137d27b0d04bb08d551b006ecae8ec19eb2e045a303ca5808e3794383",
+   "sha_direct": "f34c0f169331060c9f11448df4ad24aebc297983d75c930ab5193f1b7a89b2ca"
+  },
+  "B4.fraunhofer_propagate_mft": {
+   "bar": 4.601589888937335e-12,
+   "power_bar": 1e-12,
+   "power_rel": 3.752651820262634e-16,
+   "rel": 8.696556863451057e-15,
+   "sha_default": "81688e8434cf8b65ea9ff8666d48045ca6e3407a6fd15e832854679ef9dafdb7",
+   "sha_direct": "f9ec51bcf59bce39d3408fbf19e325ef371bd59de5551844dea581af534ed90a"
+  },
+  "B4.fresnel_propagate_mft": {
+   "bar": 4.601589888937335e-12,
+   "power_bar": 1e-12,
+   "power_rel": 1.8763259101313172e-16,
+   "rel": 8.886226692162782e-15,
+   "sha_default": "a7788f4fcd9638e0abb1c7a6befe0caed54881597b746811cfb2290fcba9aefb",
+   "sha_direct": "5d684f7ae23d5c555f738afa5451a1d54b1722777ca00f37f40aec2f0c8b73e8"
+  },
+  "B5.association": {
+   "cheaper_ne_dearer": true,
+   "matches_cheaper": true,
+   "max_abs_cheaper_minus_dearer": 4.3220627292571254e-14,
+   "runs_reproducible": true,
+   "sha_cheaper": "40d008a6513ab186022e09d251ef6fcb078bc77879801bcd2e6daca797d4f212",
+   "sha_dearer": "7fd19ef645ad7f07a1defa2c066219a5f4a7311a3f9d04677a12e57bdc949805",
+   "sha_run0": "40d008a6513ab186022e09d251ef6fcb078bc77879801bcd2e6daca797d4f212"
+  },
+  "B6.phase_guard": {
+   "bar_dense": 5.507061909623992e-12,
+   "err_dense": 2.4424906541753444e-14,
+   "rel_chirp": 1.5571109805759944,
+   "sha_dense": "6181831efac29d80b28337d46006aa21058cffeb2cc5b5f51e2ebc4b8939edd4",
+   "warned": [
+    "Bluestein chirp phase argument ~1.0e+17 approaches float64 p"
+   ]
+  },
+  "B7.dtype": {
+   "c64": "complex64",
+   "sha_c64_as_c128": "e974645568f14d3892330187ef60512221919216f519b5c31dc47a608f3068a8"
+  },
+  "raw.128x128->64x64": {
+   "max_abs": 520.8930962991861,
+   "sha256": "2c31bbbb5e82efc7f4f0a07dde40633ee2e6141e036b77ff4696c74af96662c8",
+   "sum_im": 768.4017760226288,
+   "sum_re": -15822.565570251692
+  },
+  "raw.16x16->8x8": {
+   "max_abs": 47.930923278764425,
+   "sha256": "37487dc16c36fa616765027867fc5d400d35cb270f60f6e802d626ebe6bdbb3f",
+   "sum_im": -268.246248836089,
+   "sum_re": -17.95532298130484
+  },
+  "raw.256x256->64x64": {
+   "max_abs": 1183.7771758647157,
+   "sha256": "d05205e2ddf972f39334b7b7f26a230c0e978632f5dc6a6a41b7c65943912402",
+   "sum_im": 2660.1861705604224,
+   "sum_re": -5324.15422135177
+  },
+  "raw.32x24->16x20": {
+   "max_abs": 90.72946170866702,
+   "sha256": "a4b7962c729cba71b573368b7b37ae3a5b4c55e029a594e617c244042fb10586",
+   "sum_im": -906.2465922675207,
+   "sum_re": 587.0421998342201
+  },
+  "raw.48x12->40x6": {
+   "max_abs": 83.92433435805876,
+   "sha256": "40d008a6513ab186022e09d251ef6fcb078bc77879801bcd2e6daca797d4f212",
+   "sum_im": -449.3206587148894,
+   "sum_re": -180.02145262909028
+  }
+ },
+ "tree": "C:/tmp/vhyg2_arch/branch"
+}

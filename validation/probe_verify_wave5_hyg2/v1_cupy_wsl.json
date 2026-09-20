@@ -1,0 +1,22 @@
+{
+ "body_matmul_count": 4,
+ "body_mentions": {
+  "exp": true,
+  "fft": false,
+  "matmul": true,
+  "next_fast_len": false,
+  "pad(": false,
+  "rint": true
+ },
+ "build": "WSL-py3.12",
+ "cupy": "unavailable: ModuleNotFoundError: No module named 'cupy'",
+ "host_build_then_asarray": true,
+ "kernel_source": "def _kernel(alpha, n_in, n_out, c_in, c_out):\n        n = np.arange(int(n_in), dtype=np.float64) - float(c_in)\n        k = np.arange(int(n_out), dtype=np.float64) - float(c_out)\n        t = float(alpha) * k[:, None] * n[None, :]\n        # Exact for |t| <= 2**52: rint(t) is an integer and t - rint(t) is a\n        # multiple of ulp(t).  See the Notes.\n        t = t - np.rint(t)\n        W = np.exp(1j * sign * 2.0 * np.pi * t)\n        return W.astype(target_cdtype, copy=False)\n",
+ "kernel_uses_np_arange": true,
+ "kernel_uses_np_exp": true,
+ "kernel_uses_xp": false,
+ "sig_has_fft2": false,
+ "sig_has_ifft2": false,
+ "signature": "(E, alpha_x: 'float', alpha_y: 'float', N_out_y: 'int', N_out_x: 'int', *, sign: 'int', xp, target_cdtype=None, n_centre_in_x: 'float' = 0.0, n_centre_in_y: 'float' = 0.0, k_centre_out_x: 'float' = 0.0, k_centre_out_y: 'float' = 0.0)",
+ "tree": "/mnt/c/tmp/vhyg2_arch/branch"
+}

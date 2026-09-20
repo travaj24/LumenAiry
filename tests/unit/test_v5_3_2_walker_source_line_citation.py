@@ -532,3 +532,200 @@ def test_v18_bare_return_flagged_as_trivial():
     assert module._is_trivial_line('return None') is False
     assert module._is_trivial_line('return foo(bar)') is False
     assert module._is_trivial_line('    return x + 1') is False
+
+
+# ===========================================================================
+# V18.5 -- the CONTENT check V18 deliberately does not make (V-D2, 2026-09-19)
+# ===========================================================================
+#
+# V18 asks "is the cited line non-trivial?".  It does NOT ask "is it the RIGHT
+# line", and its own docstring says so ("NECESSARY-BUT-NOT-SUFFICIENT").  That
+# gap is not theoretical.  MEASURED 2026-09-19 on ``refactor/wave5-hygiene-2``
+# (VERIFY-WAVE5-HYGIENE2 V-D2): V18 read ``ok=107 drift=0 total=107``, rc=0 on
+# both builds, while SIXTEEN citations in the 5.47.0 block named the wrong
+# line -- fifteen never re-anchored after H2-1/H2-2/H2-3 moved lines in
+# ``mft.py`` and ``carrier.py``, and one (``mft.py:611-620``) re-anchored BY
+# HAND with a ``+34`` shift where its content had moved ``+38``, so the
+# sentence's own reading sat two lines outside its cited range.  Every one of
+# the sixteen landed on some other real line, which is exactly what V18 passes.
+#
+# ``scripts/reanchor_citations.py`` makes the content statement: it takes the
+# line a citation named at a BASE commit, finds that line's CONTENT in the tree
+# as it is now, and reports any citation that does not name it.  These three
+# ids run it over the 5.47.0 block, assert the tool covers the files that block
+# cites, and prove on a synthetic pair that the content check sees a drift V18
+# passes.
+
+_REANCHOR = _REPO_ROOT / 'scripts' / 'reanchor_citations.py'
+#: The commit the 5.47.0 block's citations were written against -- the base of
+#: the Wave 5 hygiene-2 work.  Not a moving target: a block's citations are
+#: anchored once, against the tree whose line numbers they quoted.
+_V547_BASE = 'f4f18851'
+_V547_BLOCK = '[5.47.0]'
+
+
+def _load_reanchor_module(name):
+    """Import ``scripts/reanchor_citations.py`` by path, like V18's own."""
+    spec = importlib.util.spec_from_file_location(name, _REANCHOR)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _base_changelog_or_fail(module):
+    """``git show <base>:CHANGELOG.md``, with the two failure modes separated.
+
+    A gate that cannot reach its base commit has NOT verified anything, so it
+    fails rather than skips (TESTING_STANDARDS S3 -- "never ``pytest.skip`` on
+    a resource check"; a skipped citation gate is how V-D2 shipped).  But the
+    reader is owed the difference between "a citation is wrong" and "git
+    cannot see this repository from here", so the two say different things.
+
+    MEASURED 2026-09-19: running this suite from WSL against a WINDOWS git
+    worktree, ``git rev-parse --git-dir`` itself fails -- the worktree's
+    ``.git`` file holds ``gitdir: D:/.../.git/worktrees/<name>``, a path that
+    does not exist under WSL.  The same condition already makes
+    ``test_v16_synthetic_fabrication_is_caught`` red on that lane, on the base
+    tree as well as on this one, so it is an environment fact and not a
+    finding.  On a CI clone and on Windows, both resolve.
+    """
+    probe = subprocess.run(['git', 'rev-parse', '--git-dir'], cwd=_REPO_ROOT,
+                           capture_output=True, text=True, encoding='utf-8')
+    if probe.returncode != 0 or 'not a git repository' in (probe.stderr or ''):
+        pytest.fail(
+            f"ENVIRONMENT, not a citation finding: git cannot resolve this "
+            f"repository from {_REPO_ROOT} ({(probe.stderr or '').strip()[:160]}).  "
+            f"This is the WSL-against-a-Windows-worktree condition that also "
+            f"makes test_v16_synthetic_fabrication_is_caught red on that lane, "
+            f"on the base tree too.  The citation content gate cannot run "
+            f"without the base commit, and it does not skip.")
+    before = subprocess.run(
+        ['git', 'show', f'{_V547_BASE}:CHANGELOG.md'],
+        cwd=_REPO_ROOT, capture_output=True, text=True, encoding='utf-8')
+    if before.returncode != 0 or not before.stdout:
+        pytest.fail(
+            f"git show {_V547_BASE}:CHANGELOG.md failed (rc="
+            f"{before.returncode}).  The content check needs the base tree; a "
+            f"clone that cannot reach it must FAIL here rather than skip -- a "
+            f"skipped citation gate is how V-D2 shipped.")
+    return before.stdout
+
+
+def test_v18_5_companion_reanchor_tool_exists_and_covers_the_cited_files():
+    """The content checker is a repo tool, and its coverage is the whole point.
+
+    It lived in ``validation/probe_wp_b11c/`` where nothing ran it, and its
+    ``OWNED`` map named four lens / rcwa files, so on a branch that moved
+    ``mft.py`` and ``carrier.py`` it printed ``0 re-anchored`` -- a green that
+    meant nothing.  Its home and its coverage are both part of the fix, so
+    both are asserted.
+    """
+    assert _REANCHOR.is_file(), (
+        f'{_REANCHOR.name} is missing from scripts/.  V18 alone cannot tell a '
+        f'right citation from a wrong one that lands on a non-trivial line; '
+        f'this tool is the half that can.')
+    src = _REANCHOR.read_text(encoding='utf-8')
+    ast.parse(src)
+    module = _load_reanchor_module('_reanchor_v18_5a')
+    # Every file the 5.47.0 block cites by a source line must be OWNED, or the
+    # check cannot see it.  Derived from the block itself, not listed here.
+    base_text = _base_changelog_or_fail(module)
+    lo, hi = module._block_span(base_text, _V547_BLOCK)
+    cited = {t.rsplit(':', 1)[0]
+             for t in module.CITE_RE.findall(base_text[lo:hi])
+             if not t.startswith('`')}
+    # Only tails that name a real shipped module: a citation into a test file,
+    # a script or a doc is outside this tool's remit.  The tail is kept whole
+    # -- ``rcwa/_core.py`` and ``pmm/oned.py`` are only resolvable WITH their
+    # path fragment, and that fragment is what the CHANGELOG already writes.
+    uncovered = sorted(
+        t for t in cited
+        if module.owner_of(t) is None
+        and any((_REPO_ROOT / 'lumenairy').rglob(t.rsplit('/', 1)[-1])))
+    assert not uncovered, (
+        f"the 5.47.0 block cites {uncovered} by source line, and "
+        f"reanchor_citations.py's OWNED map does not cover them, so those "
+        f"citations cannot be content-checked at all.  That blindness is the "
+        f"mechanical root cause of V-D2 -- the tool reported '0 re-anchored' "
+        f"on a branch with fifteen stale citations because none of the files "
+        f"it had moved were in the map.")
+
+
+def test_v18_5_the_5_47_0_block_citations_name_the_right_lines():
+    """Every owned ``path.py:N`` in the 5.47.0 block names the CONTENT its
+    base commit's citation named.
+
+    Two-sided by construction: the tool reports a citation that is stale
+    (``changed``) AND one whose anchor it cannot find at all (``notes``), and
+    this asserts both are empty.  Nothing here pins a line NUMBER -- every
+    number is derived from ``git show`` of the base commit and from the
+    working tree, so ordinary evolution of either file moves the expectation
+    with it.
+
+    PREMISE first, so a tool that silently stopped looking cannot pass: the
+    block must still contain owned citations to check.
+    """
+    if not _REANCHOR.is_file():
+        pytest.fail('scripts/reanchor_citations.py is missing; see '
+                    'test_v18_5_companion_reanchor_tool_exists_and_covers'
+                    '_the_cited_files')
+    module = _load_reanchor_module('_reanchor_v18_5b')
+    base_text = _base_changelog_or_fail(module)
+    lo, hi = module._block_span(base_text, _V547_BLOCK)
+    owned_cites = [t for t in module.CITE_RE.findall(base_text[lo:hi])
+                   if not t.startswith('`')
+                   and module.owner_of(t.rsplit(':', 1)[0])]
+    assert len(owned_cites) >= 10, (
+        f'PREMISE FAILED: only {len(owned_cites)} owned source-line citations '
+        f'found in the {_V547_BLOCK} block at {_V547_BASE}.  MEASURED '
+        f'2026-09-19: 19.  A collapse toward zero means the tool stopped '
+        f'recognising the citation spelling, and the assertion below would be '
+        f'vacuously green.')
+
+    _txt, changed, notes = module.reanchor(base=_V547_BASE, block=_V547_BLOCK)
+    assert not changed and not notes, (
+        f'{len(changed)} citation(s) in the {_V547_BLOCK} CHANGELOG block do '
+        f'not name the line whose CONTENT they named at {_V547_BASE}, and '
+        f'{len(notes)} could not be anchored at all.  V18 passes all of these '
+        f'-- every one lands on some other real line -- which is the blind '
+        f'spot this gate exists for.\n'
+        + '\n'.join('  ' + c for c in changed + notes)
+        + f'\n\nFix: python scripts/reanchor_citations.py --base {_V547_BASE} '
+          f'--block "{_V547_BLOCK}"   (content-based and idempotent; '
+          f'--check writes nothing).')
+
+
+def test_v18_5_the_content_check_sees_a_drift_v18_passes():
+    """Falsification arm: a citation drifted onto a DIFFERENT non-trivial line.
+
+    Without this, the id above could be green because the checker had quietly
+    stopped checking.  A synthetic base / current pair is built in memory --
+    one inserted comment line above a definition -- and two things are
+    asserted: V18's own triviality rule accepts the drifted-to line (so this
+    really is inside V18's blind spot), and the content locator follows the
+    definition to its new line.
+    """
+    if not _REANCHOR.is_file():
+        pytest.fail('scripts/reanchor_citations.py is missing')
+    module = _load_reanchor_module('_reanchor_v18_5c')
+    v18 = _load_script_module()
+    base_src = ['def alpha():', '    return 1', '', 'def beta():',
+                '    return 2']
+    now_src = ['# a comment the refactor inserted above alpha'] + base_src
+    # The citation named ``def alpha():`` at base line 1.  After the insertion
+    # line 1 holds a comment, which V18 reads as a perfectly good anchor.
+    if v18 is not None:
+        assert v18._is_trivial_line(now_src[0]) is False, (
+            "the synthetic drift target must be a line V18 ACCEPTS, otherwise "
+            "this arm proves nothing about V18's blind spot.")
+    ctx = [None, None, base_src[0], base_src[1], base_src[2]]
+    assert module.locate(base_src[0], ctx, now_src, prefer=1) == (2, 'unique'), (
+        f'the content locator did not follow the definition it was given: got '
+        f'{module.locate(base_src[0], ctx, now_src, prefer=1)!r}, expected '
+        f'(2, "unique").  A locator that returned the cited number unchanged '
+        f'would make the 5.47.0 gate vacuous.')
+    # And the unchanged direction: content still at its cited line is NOT a
+    # drift, however many twins it has elsewhere in the file (the
+    # ``rcwa/_core.py:1578`` / ``:1667`` pair that used to read "ambiguous").
+    twin = base_src + base_src
+    assert module.locate(base_src[0], ctx, twin, prefer=1) == (1, 'unchanged')

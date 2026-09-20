@@ -1,0 +1,141 @@
+{
+ "a_cache_key_source": [
+  "637:     # custom), and keying on anything else would pin device arrays in a",
+  "638:     # module-global or return results from a different transform.",
+  "639:     global _H_FFT_CACHE_HITS",
+  "640:     H_FFT = None",
+  "641:     cache_key = None",
+  "642:     if xp is np:",
+  "643:         from .fft_infra import _fft2 as _default_np_fft2",
+  "644:         if fft2 is _default_np_fft2:",
+  "645:             cache_key = (float(alpha_x), float(alpha_y), Nx_in, Ny_in,",
+  "646:                          N_out_x, N_out_y, sign, str(target_cdtype))",
+  "647:             with _H_FFT_CACHE_LOCK:",
+  "648:                 cached = _H_FFT_CACHE.get(cache_key)",
+  "649:                 if cached is not None:",
+  "650:                     _H_FFT_CACHE.move_to_end(cache_key)",
+  "651:                     _H_FFT_CACHE_HITS += 1",
+  "652:                     H_FFT = np.copy(cached)",
+  "653:     if H_FFT is None:",
+  "654:         h_2d = h_y[:, None] * h_x[None, :]",
+  "655:         H_FFT = fft2(h_2d)",
+  "656:         if cache_key is not None:"
+ ],
+ "a_key_condition_lineno": [
+  644
+ ],
+ "a_separable_gate_lineno": [
+  561
+ ],
+ "b_backend_fft2_is_distinct_object": true,
+ "b_jax_pair": {
+  "fft2_is_jnp_fft_fft2": true,
+  "ifft2_is_jnp_fft_ifft2": true
+ },
+ "b_numpy_pair_is_fft_infra": {
+  "fft2_is__fft2": true,
+  "fft2_is_backend_fft2": false,
+  "ifft2_is__ifft2": true
+ },
+ "b_value_bit_equal": true,
+ "build": "WIN-py3.14",
+ "c2_primitive": {
+  "answers_identical_raw_vs_wrapper": true,
+  "backend_fft2_wrapper": {
+   "after": [
+    0,
+    0,
+    0
+   ],
+   "answers_bit_equal_across_repeats": true,
+   "before": [
+    0,
+    0,
+    0
+   ],
+   "bytes_retained": 0,
+   "cache_engaged": false,
+   "entries_stored": 0,
+   "hits_gained": 0
+  },
+  "local_lambda_wrapper": {
+   "after": [
+    0,
+    0,
+    0
+   ],
+   "answers_bit_equal_across_repeats": true,
+   "before": [
+    0,
+    0,
+    0
+   ],
+   "bytes_retained": 0,
+   "cache_engaged": false,
+   "entries_stored": 0,
+   "hits_gained": 0
+  },
+  "raw_fft_infra": {
+   "after": [
+    1,
+    2,
+    589824
+   ],
+   "answers_bit_equal_across_repeats": true,
+   "before": [
+    0,
+    0,
+    0
+   ],
+   "bytes_retained": 589824,
+   "cache_engaged": true,
+   "entries_stored": 1,
+   "hits_gained": 2
+  }
+ },
+ "c3_cache_state_after_timing": [
+  0,
+  0,
+  0
+ ],
+ "c3_timing_raw_callable_s": {
+  "cold": 0.022393799968995154,
+  "warm": 0.023247099947184324
+ },
+ "c3_timing_wrapper_s": {
+  "cold": 0.028337800002191216,
+  "warm": 0.03055789996869862
+ },
+ "c_collins_leg_as_shipped": {
+  "after": [
+   0,
+   0,
+   0
+  ],
+  "before": [
+   0,
+   0,
+   0
+  ],
+  "cache_engaged": false,
+  "entries_stored": 0,
+  "hits_gained": 0
+ },
+ "c_collins_leg_separable_off": {
+  "after": [
+   1,
+   2,
+   589824
+  ],
+  "before": [
+   0,
+   0,
+   0
+  ],
+  "cache_engaged": true,
+  "entries_stored": 1,
+  "hits_gained": 2
+ },
+ "c_shipped_separable_flag": true,
+ "tree": "C:/tmp/lum_vhyg2"
+}

@@ -483,6 +483,70 @@ def _is_complex(x):
     return np.issubdtype(x.dtype, np.complexfloating)
 
 
+def _is_traced(x):
+    """True when ``x`` is a JAX **Tracer** -- a value that exists only inside
+    an enclosing ``jax.jit`` / ``jax.grad`` trace and therefore has no
+    concrete entries to measure.
+
+    Typed, not a concretisation ``try``: ``jax.core.Tracer`` is importable
+    wherever a tracer can exist, so the non-``ui`` broad-except budget
+    (``tests/unit/test_audit_except_budget.py``) does not sanction the
+    catch-everything idiom here.  Same shape, and the same reason, as
+    ``elements/pmm/stack.py::_is_traced_output``."""
+    try:
+        import jax
+    except ImportError:                              # pragma: no cover
+        return False
+    return isinstance(x, jax.core.Tracer)
+
+
+def _as_c_order(a, dtype, xp):
+    """``xp.ascontiguousarray(a, dtype=dtype)`` where the namespace HAS that
+    function, ``xp.asarray`` where it does not.
+
+    ``jax.numpy`` has no ``ascontiguousarray`` at all -- a JAX array exposes no
+    strides for a caller to make contiguous, so ``asarray`` IS the contiguous
+    form there.  NumPy and CuPy keep the historical call, which is why the
+    NumPy path is byte-identical through every site that used to spell it
+    ``np.ascontiguousarray``."""
+    fn = getattr(xp, 'ascontiguousarray', None)
+    if fn is None:
+        return xp.asarray(a, dtype=dtype)
+    return fn(a, dtype=dtype)
+
+
+def _fft2_pair(xp, is_jax):
+    """The ``(fft2, ifft2)`` pair for a field's backend, returned as the
+    CALLABLES themselves.
+
+    This is :func:`lumenairy.backend.fft2`'s dispatch, not a second copy of it:
+    JAX arrays take ``jax.numpy.fft``, everything else takes
+    ``fft_infra._fft2`` / ``_ifft2``, which is the library's one pyFFTW >
+    scipy.fft > numpy.fft > CuPy chain.  The reason the callables are handed
+    back rather than the wrappers called is
+    :func:`~lumenairy.propagators._bluestein._bluestein_2d`'s chirp-kernel
+    cache, which is keyed on ``fft2 is fft_infra._fft2`` -- routing the NumPy
+    path through ``backend.fft2`` would make that test false.  MEASURED
+    2026-09-19 (VERIFY-WAVE5-HYGIENE2 V-D9): with the shipped
+    ``_EXACT_READOUT_SEPARABLE_BLUESTEIN = True`` a Collins leg takes the
+    SEPARABLE route inside ``_bluestein_2d``, which never reaches that cache at
+    all -- 0 entries and 0 hits over three legs, both builds -- so the cache is
+    off for every Collins leg today, and the identity is what keeps it
+    available to the ``separable=False`` route and to every other caller of the
+    2-D arm.  (A wrapper does turn it off where it is live: 1 entry / 2 hits
+    becomes 0 / 0, worth 3.3x of wall time on WSL.)
+
+    (:mod:`lumenairy.propagators.mft` writes the same three-arm dispatch inline
+    at four call sites.  Folding those into this helper is a separate change:
+    they also choose ``use_gpu`` and copy the field across devices, which this
+    one deliberately does not.)"""
+    if is_jax:
+        import jax.numpy as _jnp
+        return _jnp.fft.fft2, _jnp.fft.ifft2
+    from .fft_infra import _fft2, _ifft2
+    return _fft2, _ifft2
+
+
 def _cdtype_of(x):
     """Target complex dtype for a field: its own dtype if complex, else the
     library default complex dtype."""
@@ -540,6 +604,118 @@ def _freq_1d_bld(N, d, bld):
     return 2.0 * np.pi * f
 
 
+def _evanescent_tilt_message(fn, L, M, s2):
+    """The ONE refusal for a non-propagating carrier direction.
+
+    Two phrasings ship and both are reproduced verbatim, because an
+    archive-to-archive bit-identity probe folds an exception's MESSAGE into
+    its digest and one of the three call sites is digested through its
+    evanescent-tilt refusal.  ``_exact_tf_2d_xp`` names the tilt itself; the
+    two envelope-side callers name themselves.  One guard, one place to change
+    it -- the point of the consolidation below."""
+    if fn == '_exact_tf_2d_xp':
+        return (f"carrier tilt (L, M) = ({L}, {M}) has |s|^2 = {s2} >= 1: "
+                f"that is an evanescent (non-propagating) carrier direction.")
+    return (f"{fn}: |tilt|^2 = {s2!r} must be < 1 (direction cosines).")
+
+
+def _exact_dispersion_phase(qx, qy, k, tilt, bld, fn):
+    r"""``sqrt(k^2 - |k s + q|^2) - k N + (s.q)/N`` on ``bld``, as a full grid.
+
+    THE ONE PLACE the non-paraxial dispersion is written in this module.  It
+    returns only the ``q``-DEPENDENT remainder: callers multiply by their own
+    reduced distance and add their own piston (``k z``) or subtract their own
+    paraxial term (``|q|^2/(2k)``).
+
+    THE EXPANSION.  With the carrier's transverse direction cosines
+    ``s = (L, M)`` and ``N = sqrt(1 - |s|^2)``::
+
+        sqrt(k^2 - |k s + q|^2)
+            = k N - (s.q)/N - |q|^2/(2 k N) - (s.q)^2/(2 k N^3) + ...
+
+    The ``q = 0`` value ``k N`` and the linear term ``(s.q)/N`` are subtracted
+    here because every caller already owns them -- the piston
+    ``exp(i k z (1/N - 1))`` and the chief-ray advance ``x_c += L z / N`` are
+    applied outside -- so what is left is the diffraction operator and
+    nothing else.  At ``s = 0`` this collapses to ``sqrt(k^2 - |q|^2) - k``.
+    ``k^2 - |k s + q|^2 < 0`` is clamped to zero (a pure band limit, no growing
+    exponentials), which is what the library's band-limited ASM also does.
+
+    WHY IT IS ONE FUNCTION (VERIFY-WAVE5-HYGIENE2 V-D22).  This radical, this
+    tilt algebra and this ``|s|^2 < 1`` guard were transcribed THREE times in
+    this module -- in :func:`_exact_tf_2d_xp` (``xp``-parametrised), in
+    :func:`_exact_envelope_tf_step` (NumPy-only, and written twice inside
+    itself), and in :func:`_collins_exact_kernel_correction` -- under three
+    different error prefixes.  They are one kernel with two uses: the first two
+    add the piston ``k z``, the third subtracts the paraxial ``|q|^2/(2k)``
+    instead.  H2-2 parametrised one of the three and left the others, so the
+    module carried an ``xp`` copy, a ``bld`` copy and a NumPy-only copy of one
+    radical.  A sign mutation of one copy was caught in 2026-09 ONLY because
+    another copy disagreed with it -- an agreement test between two
+    transcriptions, which consolidating removes -- which is why the sign is now
+    pinned directly, in
+    ``tests/unit/test_wave5_h2_near_focus_table.py``.  The single-definition
+    census is ``test_the_exact_dispersion_is_written_once``, in the H2-2
+    backend test file beside it.
+
+    BUILD COST.  The ``L == M == 0`` NumPy arm below is the in-place fast path
+    :func:`_exact_envelope_tf_step` profiled and kept: at ``N = 2048`` this
+    build, not the FFT pair, was 60 % of an exact step (tottime 0.711 s of a
+    1.181 s cumtime) and the step peaked at 4.00 complex128 full grids.  Writing
+    the radical through ``out=`` rather than as a whole-grid expression is an
+    in-place re-association by addition and multiplication only -- both
+    commutative to the bit in IEEE-754 -- so it is BIT-identical to the general
+    arm, not merely close; that was verified at every shipped shape when the
+    fast path was written, and it is why routing all three sites through this
+    one function moves no bytes.  ``lin`` is skipped at zero tilt for the same
+    reason: ``0.0 * q`` is a grid of signed zeros and ``x + (-0.0) == x`` for
+    every ``x`` including both zeros.
+
+    Parameters
+    ----------
+    qx, qy : 1-D float64 arrays on ``bld``
+        The angular-frequency axes, in the caller's OWN layout (natural for the
+        Collins correction and the envelope step, ``ifftshift``-ed for
+        :func:`_exact_tf_2d_xp`).  They are taken rather than built because the
+        two layouts are not bit-identical to each other and each site's is part
+        of its byte-identity contract.
+    k : float
+        ``2 pi / wavelength``.
+    tilt : (L, M)
+        Carrier transverse direction cosines.
+    bld : module
+        The FIELD-INDEPENDENT build namespace (``np`` for a JAX field, the
+        device namespace for CuPy) -- never ``jax.numpy``, which is why the
+        ``out=`` forms below are always available.
+    fn : str
+        The caller's name, for the refusal message.
+    """
+    L, M = float(tilt[0]), float(tilt[1])
+    s2 = L * L + M * M
+    if not (s2 < 1.0):
+        raise ValueError(_evanescent_tilt_message(fn, L, M, s2))
+    Nz = float(np.sqrt(1.0 - s2))
+    root0 = float(np.sqrt(max(k * k * (1.0 - s2), 0.0)))         # = k*N
+    if bld is np and L == 0.0 and M == 0.0:
+        ny, nx = int(qy.shape[0]), int(qx.shape[0])
+        phase = np.empty((ny, nx), dtype=np.float64)
+        np.add((qx * qx)[None, :], (qy * qy)[:, None], out=phase)
+        np.subtract(k * k, phase, out=phase)
+        np.maximum(phase, 0.0, out=phase)
+        np.sqrt(phase, out=phase)
+        phase -= root0
+        return phase
+    ax = k * L + qx[None, :]
+    ay = k * M + qy[:, None]
+    rad = k * k - (ax * ax + ay * ay)
+    bld.maximum(rad, 0.0, out=rad)
+    phase = bld.sqrt(rad)
+    phase -= root0
+    if L or M:
+        phase += (L * qx[None, :] + M * qy[:, None]) / Nz         # (s.q)/N
+    return phase
+
+
 def _exact_tf_2d_xp(E, z, wavelength, dx, dy, tilt, xp, is_jax, bld):
     """Backend (CuPy / JAX) EXACT, tilt-aware envelope transfer-function step --
     the ``xp`` analogue of :func:`_exact_envelope_tf_step`.
@@ -555,29 +731,18 @@ def _exact_tf_2d_xp(E, z, wavelength, dx, dy, tilt, xp, is_jax, bld):
     Built natural-layout on ``bld`` in float64 then moved to the device by
     :func:`_tf_phase_to_H`, exactly as :func:`_fresnel_tf_2d_xp` does -- which
     also gives the complex64 ``mod 2*pi`` phase folding for free (important
-    here, since ``k z`` is large and the exact root carries full precision)."""
+    here, since ``k z`` is large and the exact root carries full precision).
+
+    The radical, the tilt algebra and the ``|s|^2 < 1`` refusal are
+    :func:`_exact_dispersion_phase` -- the module's ONE non-paraxial
+    dispersion.  This function's share is the piston ``k z`` and the reduced
+    distance."""
     Ny, Nx = E.shape
     k = 2.0 * np.pi / wavelength
-    L, M = float(tilt[0]), float(tilt[1])
-    s2 = L * L + M * M
-    if not (s2 < 1.0):
-        raise ValueError(
-            f"carrier tilt (L, M) = ({L}, {M}) has |s|^2 = {s2} >= 1: that is "
-            "an evanescent (non-propagating) carrier direction.")
-    Nz = float(np.sqrt(1.0 - s2))
     kx = bld.fft.ifftshift(_freq_1d_bld(Nx, dx, bld))
     ky = bld.fft.ifftshift(_freq_1d_bld(Ny, dy, bld))
-    KX = kx[None, :]
-    KY = ky[:, None]
-    ax = k * L + KX
-    ay = k * M + KY
-    rad = k * k - (ax * ax + ay * ay)
-    # evanescent band -> clamp rather than NaN, matching the NumPy path
-    rad = bld.maximum(rad, 0.0)
-    root = bld.sqrt(rad)
-    root0 = float(np.sqrt(max(k * k * (1.0 - s2), 0.0)))
-    lin = (L * KX + M * KY) / Nz
-    arg = (k * z) + z * (root - root0 + lin)
+    arg = (k * z) + z * _exact_dispersion_phase(kx, ky, k, tilt, bld,
+                                                '_exact_tf_2d_xp')
     H = _tf_phase_to_H(arg, _cdtype_of(E), xp, is_jax, bld)
     out = xp.fft.ifft2(xp.fft.fft2(E) * H)
     if _is_complex(E) and out.dtype != E.dtype:
@@ -1339,7 +1504,7 @@ def _exact_envelope_tf_step(E_env, z_eff, wavelength, dx, dy, tilt=(0.0, 0.0)):
     band-limit, no growing exponentials), which is also what the library's
     band-limited ASM does.
 
-    BUILD COST, and why the two shortcuts below are BIT-IDENTICAL rather than
+    BUILD COST, and why the two shortcuts are BIT-IDENTICAL rather than
     "close enough".  Profiled at N = 2048 this build -- not the FFT pair --
     was 60 % of the step (tottime 0.711 s of a 1.181 s cumtime against 0.223 /
     0.208 s for the two transforms) and the step peaked at 4.00 complex128
@@ -1350,14 +1515,14 @@ def _exact_envelope_tf_step(E_env, z_eff, wavelength, dx, dy, tilt=(0.0, 0.0)):
       ``cos + i sin`` through the same libm calls, so the values are equal to
       the last bit (measured max difference exactly 0.0), and it never
       materialises the complex128 ``1j*phase`` temporary: 4.00 -> 2.50 grids.
-    * on the UNTILTED path (``L == M == 0``, the default), ``ax == KX`` and
-      ``ay == KY`` identically and ``lin`` is a whole grid of exact zeros, so
-      ``kx^2[None,:] + ky^2[:,None]`` is the same sum of the same two operands
-      as ``ax*ax + ay*ay`` and the remaining arithmetic is an in-place
-      re-association by addition/multiplication ONLY (both commutative to the
-      bit in IEEE-754).  2.50 -> 1.50 grids and a further ~1.35x, again at
-      exactly 0.0 difference -- verified against the whole-grid expression at
-      every shipped shape in the regression test.
+    * the UNTILTED in-place radical, 2.50 -> 1.50 grids and a further ~1.35x.
+      That arm now lives INSIDE :func:`_exact_dispersion_phase` and serves all
+      three of this module's exact-kernel sites; the argument for why it is
+      bit-identical is given there.
+
+    The radical itself is :func:`_exact_dispersion_phase` (V-D22) -- one
+    implementation, not the three transcriptions this module used to carry.
+    What is left here is the reduced distance and the ``k z_eff`` piston.
     """
     from .fft_infra import _fft2, _ifft2
     E = np.ascontiguousarray(E_env, dtype=np.complex128)
@@ -1366,34 +1531,10 @@ def _exact_envelope_tf_step(E_env, z_eff, wavelength, dx, dy, tilt=(0.0, 0.0)):
     # kx, ky in natural FFT layout (rad/m)
     kx = 2.0 * np.pi * np.fft.fftfreq(nx, d=dx)
     ky = 2.0 * np.pi * np.fft.fftfreq(ny, d=(dy if dy else dx))
-    L, M = float(tilt[0]), float(tilt[1])
-    s2 = L * L + M * M
-    if not (s2 < 1.0):
-        raise ValueError(
-            f"_exact_envelope_tf_step: |tilt|^2 = {s2!r} must be < 1 (direction "
-            f"cosines).")
-    Nz = float(np.sqrt(1.0 - s2))
-    root0 = float(np.sqrt(max(k * k * (1.0 - s2), 0.0)))     # = k*N
-    if L == 0.0 and M == 0.0:
-        phase = np.empty((ny, nx), dtype=np.float64)
-        np.add((kx * kx)[None, :], (ky * ky)[:, None], out=phase)
-        np.subtract(k * k, phase, out=phase)
-        np.maximum(phase, 0.0, out=phase)
-        np.sqrt(phase, out=phase)
-        phase -= root0
-        phase *= z_eff
-        phase += k * z_eff
-    else:
-        KX = kx[None, :]
-        KY = ky[:, None]
-        # |k s + q|^2
-        ax = k * L + KX
-        ay = k * M + KY
-        rad = k * k - (ax * ax + ay * ay)
-        np.maximum(rad, 0.0, out=rad)
-        root = np.sqrt(rad)
-        lin = (L * KX + M * KY) / Nz                         # (s.q)/N
-        phase = (k * z_eff) + z_eff * (root - root0 + lin)
+    phase = _exact_dispersion_phase(kx, ky, k, tilt, np,
+                                    '_exact_envelope_tf_step')
+    phase *= z_eff
+    phase += k * z_eff
     H = np.empty((ny, nx), dtype=np.complex128)
     np.cos(phase, out=H.real)
     np.sin(phase, out=H.imag)
@@ -1540,6 +1681,98 @@ _TRANSPORTS = ('sziklas', 'collins')
 #: NOT a geometric margin -- the radii are read from the field on every call.
 _COLLINS_TAIL_FRAC = 1e-6
 
+#: MAINTAINER SWITCH, DEFAULT OFF: an ACCURACY-keyed fallback for
+#: ``gap_kernel='auto'`` near a geometric focus.  ``None`` is the shipped
+#: value and reproduces 5.47.0's behaviour exactly -- the condition below is
+#: not evaluated at all, so nothing measured, nothing allocated, no byte
+#: moved.  Setting it to a float (the measurement below says ``1e-4``) ARMS
+#: the rule with that ``tau``.  One line.
+#:
+#: WHAT IT WOULD DO, AND WHY IT IS NOT ON.  The existing ``k4`` gate bounds
+#: REPRESENTABILITY -- whether the exact kernel's impulse response wraps the
+#: reduced frame -- and it is the right gate for what it bounds.  It does not
+#: bound ACCURACY, and near a geometric focus the two part company: MEASURED
+#: 2026-09-19 across three fixtures and two builds, ``k4`` sits 4.65 decades
+#: below its bar of 1 where the exact kernel's departure from the paraxial
+#: oracle is 4.7e-06, and still 2 decades below it where that departure is
+#: 2.3e-03.  The departure obeys ONE law on all four readings,
+#:
+#:     departure_relL2 = sqrt(3/2) * k |z_eff| theta_env^4 / 8
+#:
+#: with ``theta_env`` the ENVELOPE's own ``1/e^2`` half-angle (not the beam's;
+#: the refinement is applied to the envelope, and the quartic makes the
+#: difference a factor of 4.0e+05 on the hygiene-2 fixture).  The constant is
+#: ``sqrt(<u^8>) = sqrt(3/2) = 1.224745`` exactly, the RMS moment of a quartic
+#: phase over a 2-D circular Gaussian; it predicts VERIFY-B4 F3's 2.3497e-03
+#: to a ratio of 1.00002 and the 498x between the two fixtures to four digits.
+#:
+#: TWO REASONS IT IS THE MAINTAINER'S DECISION AND NOT THIS PACKAGE'S.  The
+#: oracle is PARAXIAL, so it can say how far the exact kernel departs from the
+#: paraxial truth and cannot say which kernel is more physical -- on a leg
+#: where the exact kernel IS the better physics, this rule trades accuracy for
+#: agreement with an oracle.  And it MOVES ANSWERS on any leg it fires on,
+#: which needs a Migration note.  The chain's own
+#: :data:`_GAP_ENV_PHI_TOL_DEFAULT` = 0.3 is NOT a usable ``tau`` here: it
+#: would need ``z_eff > 9.8e+05 m`` to trip on the hygiene-2 fixture, i.e.
+#: never.  ``tau`` has to be set from the accuracy actually wanted, and
+#: ``tests/unit/test_wave5_h2_near_focus_table.py`` measures what ``1e-4``
+#: buys: the hygiene-2 ladder stays INERT (worst departure 4.7e-06) and
+#: VERIFY-B4 F3's 1 um and 10 um rungs fall back (2.3e-03 and 2.3e-04).
+_GAP_KERNEL_ACCURACY_TAU = None
+
+#: ``sqrt(<u^8>)`` under the spectral weight ``exp(-2 u^2)`` of a 2-D circular
+#: Gaussian -- the RMS-vs-peak moment of a quartic phase, and the constant of
+#: the departure law above.  ``sqrt(3/2)``; the same integral in 1-D gives
+#: ``sqrt(105/256) = 0.6404``, which is why the number is not universal and is
+#: written with its geometry.
+_QUARTIC_RMS_MOMENT = 1.2247448713915890
+
+
+def _collins_envelope_half_angle(spectrum, dx, dy, wavelength):
+    """The envelope's analytic ``1/e^2`` angular half-width, from its own
+    sampled angular spectrum.
+
+    For a Gaussian envelope the angular INTENSITY is
+    ``exp(-2 theta^2 / theta_0^2)``, whose second moment is
+    ``<theta^2> = theta_0^2 / 4``.  So ``theta_0 = 2 sqrt(<theta^2>)``, read
+    from the same power marginals the containment radii are read from -- a
+    measurement, not a fitted width, and exact for the Gaussian the law was
+    derived on.
+
+    This is NOT the measured CONTAINMENT half-width
+    (:func:`_collins_angle_support`), and the difference is the whole point of
+    the law: on the hygiene-2 fixture the containment radius reads
+    1.9531e-03 rad against an analytic 7.9512e-04 rad, and the departure is
+    QUARTIC in the angle, so using the wrong one is a factor of 36.
+    """
+    Ny, Nx = np.shape(spectrum)[-2], np.shape(spectrum)[-1]
+    Sx, Sy = _collins_power_marginals(spectrum)
+    out = []
+    for S, n, d in ((Sx, Nx, dx), (Sy, Ny, dy if dy else dx)):
+        f = np.fft.fftfreq(int(n), d=float(d))
+        tot = float(S.sum())
+        if not (tot > 0.0):
+            out.append(0.0)
+            continue
+        m2 = float((S * (f * f)).sum() / tot) * float(wavelength) ** 2
+        out.append(2.0 * float(np.sqrt(max(m2, 0.0))))
+    return out[0], out[1]
+
+
+def _collins_exact_kernel_departure(z_eff, theta_env, wavelength):
+    """``sqrt(3/2) k |z_eff| theta_env^4 / 8`` -- the measured departure law.
+
+    What the exact-kernel refinement CHANGES, relative, against the paraxial
+    kernel.  Derived and re-measured on three fixtures and two builds; see
+    :data:`_GAP_KERNEL_ACCURACY_TAU` for the readings and for why the rule it
+    feeds is off by default.
+    """
+    if not np.isfinite(z_eff):
+        return float('inf')
+    k = 2.0 * np.pi / float(wavelength)
+    th = abs(float(theta_env))
+    return float(_QUARTIC_RMS_MOMENT * k * abs(float(z_eff)) * th ** 4 / 8.0)
+
 
 def _check_transport(value, fn):
     """Validate a ``transport`` argument strictly and return it unchanged.
@@ -1623,7 +1856,8 @@ def _collins_containment_radius(P, coord, centre, frac):
     return float(d[order[min(i, d.size - 1)]])
 
 
-def _collins_axis_chirp(n, d, wavelength, R, offset=0.0, dtype=None):
+def _collins_axis_chirp(n, d, wavelength, R, offset=0.0, dtype=None,
+                        bld=np):
     """``exp(i k (u - offset)^2/(2R))`` on one centred axis, ``u = (i - n/2) d``.
 
     This is the per-axis factor :func:`_radial_carrier_phase` builds inside its
@@ -1631,12 +1865,19 @@ def _collins_axis_chirp(n, d, wavelength, R, offset=0.0, dtype=None):
     separable but NOT isotropic: the two axes carry different ``A`` and ``D``
     under an astigmatic carrier, and the output screen lives on a different
     lattice from the input one.  A complex64 ``dtype`` narrows the float64 build
-    once, exactly as the banded whole-grid builder does."""
-    u = (np.arange(int(n), dtype=np.float64) - int(n) / 2) * float(d)
+    once, exactly as the banded whole-grid builder does.
+
+    FIELD-INDEPENDENT, so it is built on ``bld`` and moved to the device by the
+    caller's :func:`_to_dev` -- host NumPy for a JAX field (the module's
+    standing S2-3 contract: ``k u^2 / 2R`` reaches ~1e5 rad and must not be
+    formed in float32), the device namespace for CuPy.  ``bld=np`` reproduces
+    the historical build verbatim, which is why the NumPy path is byte-identical
+    through this function."""
+    u = (bld.arange(int(n), dtype=np.float64) - int(n) / 2) * float(d)
     if offset:
         u = u - float(offset)
     k = 2.0 * np.pi / wavelength
-    ph = np.exp(1j * k * (u * u) / (2.0 * float(R)))
+    ph = bld.exp(1j * k * (u * u) / (2.0 * float(R)))
     if dtype is not None and np.dtype(dtype) != np.dtype(np.complex128):
         ph = ph.astype(dtype)
     return ph
@@ -1690,8 +1931,16 @@ def _collins_input_box(env, dx, dy, wavelength, frac, spectrum=None):
     marginals -- so no isotropic (and needlessly conservative) radial bound is
     taken."""
     if spectrum is None:
-        from .fft_infra import _fft2
-        spectrum = _fft2(np.ascontiguousarray(env, dtype=np.complex128))
+        # The field's OWN transform, not a host one: an inline
+        # ``_fft2(np.ascontiguousarray(env, ...))`` here demoted an eager JAX
+        # array to NumPy and raised a bare TypeError on CuPy, at the one site
+        # the public ``transport='collins'`` leg reaches (V-D3).  The
+        # MEASUREMENT that follows is still host-side, through
+        # ``to_numpy`` -- that is deliberate and is what keeps the NumPy
+        # summation order, and therefore the bit-identity contract, intact.
+        xp, is_jax, _bld = _backend_of(env)
+        fft2, _ifft2 = _fft2_pair(xp, is_jax)
+        spectrum = fft2(_as_c_order(env, np.complex128, xp))
     r_x, r_y = _collins_space_support(env, dx, dy, frac)
     th_x, th_y = _collins_angle_support(spectrum, dx, dy, wavelength, frac)
     return r_x, r_y, th_x, th_y
@@ -1903,7 +2152,8 @@ def _collins_kernel_wrap_ratio(z_eff, theta, span):
     return float(2.0 * delay / float(span)) if span > 0 else float('inf')
 
 
-def _collins_exact_kernel_correction(spectrum, z_eff, wavelength, dx, dy, tilt):
+def _collins_exact_kernel_correction(spectrum, z_eff, wavelength, dx, dy,
+                                    tilt, xp=np, is_jax=False, bld=np):
     """Pre-apply the diagonal EXACT/Fresnel kernel ratio on the input grid, so
     that ``gap_kernel='exact'`` means the same thing on this transport as on the
     Sziklas one.
@@ -1929,38 +2179,37 @@ def _collins_exact_kernel_correction(spectrum, z_eff, wavelength, dx, dy, tilt):
     ``spectrum`` is the caller's forward transform of the envelope; the
     corrected envelope is returned.  ``z_eff = B/A`` is the reduced-frame
     distance the refinement is defined on, so the caller must first check that
-    it is representable (:func:`_collins_kernel_wrap_ratio`)."""
-    from .fft_infra import _ifft2
+    it is representable (:func:`_collins_kernel_wrap_ratio`).
+
+    BACKENDS.  ``(xp, is_jax, bld)`` is the module's standing triple
+    (:func:`_backend_of`): the diagonal correction is FIELD-INDEPENDENT, so it
+    is built on ``bld`` in float64 and moved onto the device by
+    :func:`_tf_phase_to_H` -- the same builder ``_exact_tf_2d_xp`` and
+    ``_fresnel_tf_2d_xp`` use, so there is ONE ``exp(i*phase)`` implementation
+    in this module and not a NumPy one beside a device one.  The defaults
+    ``(np, False, np)`` reproduce the historical NumPy build verbatim, which is
+    what keeps every existing fixture byte-identical."""
     ny, nx = spectrum.shape[-2], spectrum.shape[-1]
     k = 2.0 * np.pi / wavelength
-    qx = 2.0 * np.pi * np.fft.fftfreq(nx, d=dx)
-    qy = 2.0 * np.pi * np.fft.fftfreq(ny, d=(dy if dy else dx))
-    L, M = float(tilt[0]), float(tilt[1])
-    s2 = L * L + M * M
-    if not (s2 < 1.0):
-        raise ValueError(
-            f"_collins_exact_kernel_correction: |tilt|^2 = {s2!r} must be < 1 "
-            f"(direction cosines).")
-    Nz = float(np.sqrt(1.0 - s2))
-    root0 = float(np.sqrt(max(k * k * (1.0 - s2), 0.0)))
-    ax = k * L + qx[None, :]
-    ay = k * M + qy[:, None]
-    rad = k * k - (ax * ax + ay * ay)
-    np.maximum(rad, 0.0, out=rad)
-    phase = np.sqrt(rad)
-    phase -= root0
-    if L or M:
-        phase += (L * qx[None, :] + M * qy[:, None]) / Nz
+    qx = 2.0 * np.pi * bld.fft.fftfreq(nx, d=dx)
+    qy = 2.0 * np.pi * bld.fft.fftfreq(ny, d=(dy if dy else dx))
+    # The radical and the tilt algebra are the module's ONE non-paraxial
+    # dispersion (V-D22); this function's share is the PARAXIAL subtraction
+    # below -- which is the only thing that makes this a kernel RATIO rather
+    # than a kernel -- and the reduced distance.
+    phase = _exact_dispersion_phase(qx, qy, k, tilt, bld,
+                                    '_collins_exact_kernel_correction')
     phase += ((qx * qx)[None, :] + (qy * qy)[:, None]) / (2.0 * k)
     phase *= z_eff
-    corr = np.empty((ny, nx), dtype=np.complex128)
-    np.cos(phase, out=corr.real)
-    np.sin(phase, out=corr.imag)
+    corr = _tf_phase_to_H(phase, np.complex128, xp, is_jax, bld)
     del phase
-    out = _ifft2(spectrum * corr)
-    # Same ownership contract as _exact_envelope_tf_step: _ifft2 hands back the
-    # cache-owned ping-pong buffer, so the copy is REQUIRED.
-    return out.copy()
+    _, ifft2 = _fft2_pair(xp, is_jax)
+    out = ifft2(spectrum * corr)
+    # Same ownership contract as _exact_envelope_tf_step: on the NumPy path
+    # _ifft2 hands back the cache-owned ping-pong buffer, so the copy is
+    # REQUIRED.  JAX and CuPy return fresh arrays and jnp values are immutable,
+    # so the copy is dead weight there.
+    return out.copy() if xp is np else out
 
 
 def _collins_transport(env, R_in, z, wavelength, dx, dy, *,
@@ -1988,9 +2237,84 @@ def _collins_transport(env, R_in, z, wavelength, dx, dy, *,
     ``on_collins_sampling``.  It belongs to whichever caller owns the window:
     the readout states the same condition through its own ``on_replica`` (and
     can fill the replicas), so it leaves this false; the chain leg has no such
-    argument, so it passes it true.  See :func:`_check_collins_sampling`."""
+    argument, so it passes it true.  See :func:`_check_collins_sampling`.
+
+    BACKENDS.  The transport runs in the FIELD'S OWN namespace on
+    NumPy, CuPy and JAX, selected by :func:`_backend_of` exactly as every other
+    leg in this module is.  There is no ``_jax`` twin: the three stages, the
+    exact-kernel refinement and the chirp builders are one implementation each,
+    parametrised by ``(xp, is_jax, bld)``, and the FFT pair comes from
+    :func:`_fft2_pair` -- the library's one backend FFT dispatcher.  The NumPy
+    path is byte-identical to 5.47.0 (``bld is xp is np`` reproduces every
+    historical expression verbatim; measured archive-to-archive, see the
+    WAVE5_HYGIENE2 report).
+
+    UNDER A JAX TRACE (``jax.jit`` / ``jax.grad``) the transport is available,
+    but the two DATA-DEPENDENT decisions in it are not, and it says so rather
+    than taking them silently:
+
+    * the ``gap_kernel`` resolution reads the envelope's own measured angular
+      half-width to decide whether the exact-kernel refinement can be applied
+      at all (``k4``), and
+    * the Kelly sampling guard reads the envelope's measured support box.
+
+    A Tracer has no entries to measure, so under a trace this function REFUSES
+    unless the caller has taken both decisions itself -- ``gap_kernel='fresnel'``
+    (the ABCD-Fresnel integral, which is what the Collins stage IS) and
+    ``on_collins_sampling='ignore'``.  Silently defaulting to the paraxial arm
+    would be the same silent-no-op shape the ``gap_kernel`` vocabulary gate
+    exists to remove, and a conservative grid-edge guard would refuse legs whose
+    measured departure from the analytic ABCD field is 5.6e-08 of peak (the
+    reading :func:`_collins_sampling_stats` records).  Eager JAX and CuPy
+    arrays measure normally and take both decisions as NumPy does.
+
+    One EXCEPTION to "refuses unless ``gap_kernel='fresnel'``", because the
+    code is narrower than the rule and the difference is worth naming (V-D11,
+    MEASURED 2026-09-19).  An ASTIGMATIC carrier has no exact-kernel arm at all
+    -- the kernel clause is guarded by ``Ax == Ay``, since
+    ``sqrt(k^2 - qx^2 - qy^2)`` does not separate and the two axes have
+    different ``B/A`` -- so ``gap_kernel='auto'`` takes no MEASURED decision
+    there and IS accepted under a trace (max|grad| = 1.9999999996 through
+    ``jax.grad``).  It is numerically benign: the eager path resolves that same
+    configuration to ``'fresnel'`` too.  Explicit ``'exact'`` is refused
+    earlier, by the astigmatic gate above.
+
+    TWO TRACED SHAPES THAT ARE NOT THE ENVELOPE, and are refused by name rather
+    than by whatever JAX raises first:
+
+    * a traced SCALAR (``z``, ``R_in``, ``dx``, ...).  The leg's ABCD entries,
+      its output lattice and its chirp screens are built from these as PYTHON
+      floats, so only the ENVELOPE may be traced here.  Until 2026-09-19 a
+      ``jax.grad`` w.r.t. ``z`` raised ``ConcretizationTypeError ... The
+      problem arose with the 'float' function`` from ``float(z)`` inside
+      :func:`_collins_envelope_abcd`, and w.r.t. ``dx`` a
+      ``TracerArrayConversionError`` -- neither naming Collins, the transport,
+      or a remedy (V-D13).
+    * a CONCRETE ``jax.numpy`` envelope CLOSED OVER by a jitted function.
+      ``_is_traced`` is correctly False for it, so the measuring branch runs --
+      but inside a jit trace every ``jax.numpy`` operation is STAGED, so the
+      measurement transform's output is a Tracer and
+      ``_collins_power_marginals``'s ``to_numpy`` raised
+      ``TracerArrayConversionError``, for all four spellings including the
+      otherwise-allowed ``fresnel``/``ignore`` (V-D12).  A closed-over NumPy
+      constant runs fine, and so does passing the envelope as an ARGUMENT of
+      the traced function, which is what the message says to do.
+      (``jax.core.trace_state_clean`` is not available on either jax version
+      here, so the value-level check on the transform's OUTPUT is the portable
+      form.)"""
     from ._bluestein import _bluestein_centred_2d
-    from .fft_infra import _fft2, _ifft2
+
+    # V-D13.  Only the ENVELOPE may be traced here.  Refused by name, before
+    # anything concretises one of these behind a float() or an asarray().
+    for _nm, _v in (('R_in', R_in), ('z', z), ('wavelength', wavelength),
+                    ('dx', dx), ('dy', dy), ('R_ref', R_ref)):
+        if _is_traced(_v):
+            raise ValueError(
+                f"{fn}: {_nm} is a JAX Tracer.  The leg's ABCD entries, its "
+                f"output lattice and its chirp screens are built from these "
+                f"as PYTHON floats, so only the ENVELOPE may be traced here.  "
+                f"Differentiate with respect to the field, or rebuild the "
+                f"call at each concrete {_nm}.")
 
     R_ix, R_iy, _ = _parse_carrier(R_in, fn)
     R_rx, R_ry, _ = _parse_carrier(R_ref, fn)
@@ -2002,8 +2326,14 @@ def _collins_transport(env, R_in, z, wavelength, dx, dy, *,
             f"leg); the transport is the identity there, so the caller should "
             f"short-circuit z == 0 rather than reach this.")
     k = 2.0 * np.pi / wavelength
-    env_a = np.asarray(env)
-    cdt = env_a.dtype if np.iscomplexobj(env_a) else np.dtype(np.complex128)
+    xp, is_jax, bld = _backend_of(env)
+    fft2, ifft2 = _fft2_pair(xp, is_jax)
+    env_a = xp.asarray(env)
+    # Captured BEFORE the exact-kernel arm rebinds ``env_a``: the final cast
+    # below restores the CALLER's dtype, not the corrected envelope's.
+    in_is_complex = _is_complex(env_a)
+    in_dtype = env_a.dtype
+    cdt = in_dtype if in_is_complex else np.dtype(np.complex128)
     Ny, Nx = env_a.shape[-2], env_a.shape[-1]
 
     # gap_kernel: the Collins stage is the ABCD-FRESNEL integral, so 'fresnel'
@@ -2026,67 +2356,139 @@ def _collins_transport(env, R_in, z, wavelength, dx, dy, *,
             f"is no single kernel to apply.  Pass gap_kernel='auto' (or "
             f"'fresnel') to accept the ABCD-Fresnel integral as it stands, or "
             f"use a scalar carrier.")
-    # MEASURE FIRST.  The exact-kernel refinement is defined on the reduced
-    # frame z_eff = B/A, which is unbounded as a leg approaches the carrier's
-    # geometric focus -- the regime this quadrature exists for -- so whether it
-    # can be applied at all is decided from the envelope's own measured angular
-    # half-width, not assumed.  The refinement is a pure phase in q, so it
-    # leaves the angular marginals (and therefore theta) exactly as they are;
-    # only the spatial support moves, and that is re-measured after it.
-    S = _fft2(np.ascontiguousarray(env_a, dtype=np.complex128))
-    th_x, th_y = _collins_angle_support(S, dx, dy, wavelength,
-                                        _COLLINS_TAIL_FRAC)
-    z_eff = (B / Ax) if Ax != 0.0 else float('inf')
-    k4 = _collins_kernel_wrap_ratio(z_eff, max(th_x, th_y),
-                                    min(Nx * float(dx), Ny * float(dy)))
-    kernel = 'fresnel'
-    if _kernel_asked != 'fresnel' and Ax == Ay:
-        if k4 <= 1.0:
-            kernel = 'exact'
-        elif _kernel_asked == 'exact':
+    # UNDER A TRACE, the two data-dependent decisions below cannot be taken;
+    # the caller must have taken them.  Refused, not defaulted -- see the
+    # docstring's BACKENDS paragraph for why each of the two alternatives
+    # (silent 'fresnel', or a conservative grid-edge guard) is worse.
+    if _is_traced(env_a):
+        _blocked = []
+        if _kernel_asked != 'fresnel' and Ax == Ay:
+            _blocked.append(
+                f"gap_kernel={_kernel_asked!r} resolves by MEASURING the "
+                f"envelope's angular half-width (the k4 wrap ratio over the "
+                f"reduced frame z_eff = B/A); pass gap_kernel='fresnel' to "
+                f"take the ABCD-Fresnel integral, which is what the Collins "
+                f"stage is")
+        if on_collins_sampling != 'ignore':
+            _blocked.append(
+                f"on_collins_sampling={on_collins_sampling!r} evaluates the "
+                f"Kelly K1/K2/K3 conditions on the envelope's MEASURED support "
+                f"box; pass on_collins_sampling='ignore' to run the transport "
+                f"unguarded, having checked the conditions on a concrete array "
+                f"first")
+        if stats_out is not None:
+            _blocked.append(
+                "stats_out= asks for the measured sampling statistics, which "
+                "do not exist for a traced array; pass stats_out=None")
+        if _blocked:
             raise ValueError(
-                f"{fn}: gap_kernel='exact' cannot be honoured on this leg.  "
-                f"The exact kernel enters a carrier transport as a refinement "
-                f"over the REDUCED frame z_eff = B/A = {z_eff:.6e} m, and at "
-                f"the envelope's measured angular half-width "
-                f"{max(th_x, th_y) * 1e3:.4f} mrad its impulse response sits "
-                f"{k4:.4g} grid half-widths away -- so applying it would WRAP "
-                f"rather than refine.  This is the geometry the Collins "
-                f"quadrature exists for (A -> 0 at the carrier's geometric "
-                f"focus, where the reduced frame degenerates while the "
-                f"ABCD-Fresnel integral itself stays accurate to k B "
-                f"theta^4/8 of the beam's own angle).  Pass gap_kernel='auto' "
-                f"to take the ABCD-Fresnel integral here, or 'fresnel' to take "
-                f"it everywhere.")
-    if kernel == 'exact':
-        env_a = _collins_exact_kernel_correction(
-            S, z_eff, wavelength, dx, dy, tilt)
-        if cdt != np.complex128:
-            env_a = env_a.astype(cdt)
-    del S
+                f"{fn}: the envelope is a JAX Tracer (inside jax.jit / "
+                f"jax.grad), which has no concrete entries to measure, and "
+                f"this call asks for {len(_blocked)} decision(s) that are "
+                f"taken by measuring it -- " + "; ".join(_blocked) + ".  "
+                "Every other stage of the transport is trace-safe.")
+        # Nothing to bind: every quantity the measurement block produces
+        # (z_eff, k4, the support box, the stats dict, the resolved kernel) is
+        # consumed inside that block, and the three stages below read only the
+        # ABCD entries, the pitches and the dtype.
+    else:
+        # MEASURE FIRST.  The exact-kernel refinement is defined on the reduced
+        # frame z_eff = B/A, which is unbounded as a leg approaches the carrier's
+        # geometric focus -- the regime this quadrature exists for -- so whether it
+        # can be applied at all is decided from the envelope's own measured angular
+        # half-width, not assumed.  The refinement is a pure phase in q, so it
+        # leaves the angular marginals (and therefore theta) exactly as they are;
+        # only the spatial support moves, and that is re-measured after it.
+        S = fft2(_as_c_order(env_a, np.complex128, xp))
+        # V-D12.  ``env_a`` is concrete, so ``_is_traced`` above was correctly
+        # False -- but a CLOSED-OVER jnp constant inside a jit/grad trace has
+        # every jax.numpy operation STAGED, so this transform's output IS a
+        # Tracer and the two measured decisions cannot be taken on it.  The
+        # check is on the OUTPUT because there is no portable trace-state
+        # predicate on either jax version here.
+        if _is_traced(S):
+            raise ValueError(
+                f"{fn}: the envelope is a concrete array, but an enclosing "
+                f"jax.jit / jax.grad trace STAGES every jax.numpy operation, "
+                f"so this measurement transform's output is a Tracer and the "
+                f"two measured decisions cannot be taken on it.  Pass the "
+                f"envelope as an ARGUMENT of the traced function -- then "
+                f"gap_kernel='fresnel' with on_collins_sampling='ignore' runs "
+                f"and every other spelling is refused by name -- or move the "
+                f"call outside the trace.")
+        th_x, th_y = _collins_angle_support(S, dx, dy, wavelength,
+                                            _COLLINS_TAIL_FRAC)
+        z_eff = (B / Ax) if Ax != 0.0 else float('inf')
+        k4 = _collins_kernel_wrap_ratio(z_eff, max(th_x, th_y),
+                                        min(Nx * float(dx), Ny * float(dy)))
+        kernel = 'fresnel'
+        if _kernel_asked != 'fresnel' and Ax == Ay:
+            if k4 <= 1.0:
+                kernel = 'exact'
+            elif _kernel_asked == 'exact':
+                raise ValueError(
+                    f"{fn}: gap_kernel='exact' cannot be honoured on this leg.  "
+                    f"The exact kernel enters a carrier transport as a refinement "
+                    f"over the REDUCED frame z_eff = B/A = {z_eff:.6e} m, and at "
+                    f"the envelope's measured angular half-width "
+                    f"{max(th_x, th_y) * 1e3:.4f} mrad its impulse response sits "
+                    f"{k4:.4g} grid half-widths away -- so applying it would WRAP "
+                    f"rather than refine.  This is the geometry the Collins "
+                    f"quadrature exists for (A -> 0 at the carrier's geometric "
+                    f"focus, where the reduced frame degenerates while the "
+                    f"ABCD-Fresnel integral itself stays accurate to k B "
+                    f"theta^4/8 of the beam's own angle).  Pass gap_kernel='auto' "
+                    f"to take the ABCD-Fresnel integral here, or 'fresnel' to take "
+                    f"it everywhere.")
+        # ACCURACY-KEYED FALLBACK, OFF BY DEFAULT.  See
+        # :data:`_GAP_KERNEL_ACCURACY_TAU`: with the shipped ``None`` nothing
+        # below is evaluated and the leg is 5.47.0 to the byte.  Only 'auto'
+        # falls back; an EXPLICIT 'exact' is honoured, because the caller has
+        # asked for the refinement and silently replacing it is the D4 shape
+        # the vocabulary gate exists to remove.
+        dep = None
+        if (kernel == 'exact' and _GAP_KERNEL_ACCURACY_TAU is not None):
+            th_ex, th_ey = _collins_envelope_half_angle(S, dx, dy, wavelength)
+            dep = _collins_exact_kernel_departure(
+                z_eff, max(th_ex, th_ey), wavelength)
+            if dep > float(_GAP_KERNEL_ACCURACY_TAU) \
+                    and _kernel_asked != 'exact':
+                kernel = 'fresnel'
+        if kernel == 'exact':
+            env_a = _collins_exact_kernel_correction(
+                S, z_eff, wavelength, dx, dy, tilt, xp, is_jax, bld)
+            if cdt != np.complex128:
+                env_a = env_a.astype(cdt)
+        del S
 
-    r_x, r_y = _collins_space_support(env_a, dx, dy, _COLLINS_TAIL_FRAC)
-    st = _collins_sampling_stats(
-        max(abs(Ax), abs(Ay)), B, max(abs(Cx), abs(Cy)),
-        max(abs(Dx), abs(Dy)), dx, dy, r_x, r_y, th_x, th_y,
-        dx_out, dy_out, N_out_x, N_out_y, centre_out, wavelength)
-    st['k4'] = k4
-    st['kernel'] = kernel
-    if stats_out is not None:
-        stats_out.update(st)
-    _check_collins_sampling(fn, on_collins_sampling, st,
-                            stacklevel=stacklevel,
-                            check_period=check_period)
+        r_x, r_y = _collins_space_support(env_a, dx, dy, _COLLINS_TAIL_FRAC)
+        st = _collins_sampling_stats(
+            max(abs(Ax), abs(Ay)), B, max(abs(Cx), abs(Cy)),
+            max(abs(Dx), abs(Dy)), dx, dy, r_x, r_y, th_x, th_y,
+            dx_out, dy_out, N_out_x, N_out_y, centre_out, wavelength)
+        st['k4'] = k4
+        st['kernel'] = kernel
+        # Published only when the accuracy rule is ARMED, so the shipped
+        # stats dict is unchanged (it is a bit-identity key).
+        if dep is not None:
+            st['kernel_departure'] = dep
+        if stats_out is not None:
+            stats_out.update(st)
+        _check_collins_sampling(fn, on_collins_sampling, st,
+                                stacklevel=stacklevel,
+                                check_period=check_period)
 
     # (1) pre-chirp.  exp(i k A u^2/(2B)) IS the module's carrier screen at
     # R = B/A; A == 0 (the leg lands on the geometric focus) leaves no screen.
     g = env_a
     if Ax != 0.0:
-        g = g * _collins_axis_chirp(Nx, dx, wavelength, B / Ax,
-                                    dtype=cdt)[None, :]
+        g = g * _to_dev(_collins_axis_chirp(Nx, dx, wavelength, B / Ax,
+                                            dtype=cdt, bld=bld),
+                        xp, is_jax)[None, :]
     if Ay != 0.0:
-        g = g * _collins_axis_chirp(Ny, dy, wavelength, B / Ay,
-                                    dtype=cdt)[:, None]
+        g = g * _to_dev(_collins_axis_chirp(Ny, dy, wavelength, B / Ay,
+                                            dtype=cdt, bld=bld),
+                        xp, is_jax)[:, None]
 
     # (2) chirp-Z.  sum g(u) exp(-i k u x/B) du with u = (n - N/2) dx and
     # x = (j - N_out/2) dx_out + centre_out; the output offset rides on the
@@ -2094,11 +2496,11 @@ def _collins_transport(env, R_in, z, wavelength, dx, dy, *,
     alpha_x = float(dx) * float(dx_out) / (wavelength * B)
     alpha_y = float(dy) * float(dy_out) / (wavelength * B)
     G = _bluestein_centred_2d(
-        np.ascontiguousarray(g, dtype=cdt), alpha_x, alpha_y,
+        _as_c_order(g, cdt, xp), alpha_x, alpha_y,
         int(N_out_y), int(N_out_x),
         k_centre_out_x=N_out_x / 2.0 - float(centre_out[0]) / float(dx_out),
         k_centre_out_y=N_out_y / 2.0 - float(centre_out[1]) / float(dy_out),
-        sign=-1, xp=np, fft2=_fft2, ifft2=_ifft2,
+        sign=-1, xp=xp, fft2=fft2, ifft2=ifft2,
         target_cdtype=cdt, separable=bool(_EXACT_READOUT_SEPARABLE_BLUESTEIN))
     del g
 
@@ -2107,20 +2509,25 @@ def _collins_transport(env, R_in, z, wavelength, dx, dy, *,
     # in the PHYSICAL output coordinate, so the window offset enters with the
     # opposite sign to the builder's own ``offset``.
     if Dx != 0.0:
-        G = G * _collins_axis_chirp(
+        G = G * _to_dev(_collins_axis_chirp(
             int(N_out_x), dx_out, wavelength, B / Dx,
-            offset=-float(centre_out[0]), dtype=cdt)[None, :]
+            offset=-float(centre_out[0]), dtype=cdt, bld=bld),
+            xp, is_jax)[None, :]
     if Dy != 0.0:
-        G = G * _collins_axis_chirp(
+        G = G * _to_dev(_collins_axis_chirp(
             int(N_out_y), dy_out, wavelength, B / Dy,
-            offset=-float(centre_out[1]), dtype=cdt)[:, None]
+            offset=-float(centre_out[1]), dtype=cdt, bld=bld),
+            xp, is_jax)[:, None]
     # complex(...): a WEAK Python scalar, so a complex64 envelope is not
     # promoted by the prefactor (the same NEP 50 reason _carrier_step_fast
     # gives for its own piston).
     G = complex(np.exp(1j * k * B) * float(dx) * float(dy)
                 / (1j * wavelength * B)) * G
-    if np.iscomplexobj(env) and G.dtype != np.asarray(env).dtype:
-        G = G.astype(np.asarray(env).dtype)
+    # ``in_dtype`` / ``in_is_complex`` were read from the caller's OWN array at
+    # the top; ``np.asarray(env)`` here would copy a device array to the host
+    # just to read a dtype, and would concretise a Tracer.
+    if in_is_complex and G.dtype != in_dtype:
+        G = G.astype(in_dtype)
     return G
 
 
@@ -2181,8 +2588,41 @@ def _collins_carrier_leg(env, R, z, wavelength, dx, dy, *,
     floor sets the lattice, and ``K3 = K1 << 1`` there, so the
     transfer-function route is never taken and this transport never enters the
     near-focus split.  ``collins_form`` is published on the stage so a reader
-    can see which quadrature ran, beside ``collins_k1`` / ``k2`` / ``k3``."""
-    env_a = np.asarray(env)
+    can see which quadrature ran, beside ``collins_k1`` / ``k2`` / ``k3``.
+
+    BACKENDS.  The leg runs in the FIELD'S OWN namespace, resolved by the same
+    :func:`_backend_of` triple :func:`_collins_transport` uses, so the port is
+    reachable from ``propagate_carrier_referenced(transport='collins')`` and
+    not only from the private transport.  Until this change the line read
+    ``env_a = np.asarray(env)``: an eager JAX array was silently demoted to
+    host NumPy (bitwise equal to the NumPy arm, so no test could see it), a
+    CuPy array raised a bare ``TypeError: Implicit conversion to a NumPy array
+    is not allowed`` naming neither the leg nor the transport, and a Tracer
+    raised a raw ``TracerArrayConversionError`` even when the caller had
+    passed BOTH of the transport's documented ways out.  MEASURED 2026-09-19
+    (VERIFY-WAVE5-HYGIENE2 V-D3).
+
+    UNDER A TRACE this leg REFUSES, and unlike :func:`_collins_transport` it
+    has no spelling that makes it run: the leg RESOLVES its own output lattice
+    and its own quadrature from the envelope's measured phase-space box, so
+    there are three measured decisions here, not two, and the third has no
+    caller-supplied alternative.  The message says which call to use instead.
+    """
+    xp, _is_jax, _bld = _backend_of(env)
+    if _is_traced(env):
+        raise ValueError(
+            f"{fn}: the envelope is a JAX Tracer (inside jax.jit / jax.grad).  "
+            f"This leg resolves its OUTPUT LATTICE and its QUADRATURE by "
+            f"measuring the envelope's own phase-space box -- the support "
+            f"radii r_x/r_y and the angular half-widths th_x/th_y -- and a "
+            f"Tracer has no entries to measure, so unlike _collins_transport "
+            f"there is no spelling of this call that takes those decisions for "
+            f"it.  Call _collins_transport directly with an explicit "
+            f"(dx_out, dy_out, N_out_x, N_out_y, R_ref), gap_kernel='fresnel' "
+            f"and on_collins_sampling='ignore', having checked the Kelly "
+            f"conditions on a concrete array first -- or move this call "
+            f"outside the trace.")
+    env_a = xp.asarray(env)
     if z == 0:
         return CarrierReferencedField(
             env_a.copy(), R, (dx if dy == dx else (dx, dy)))

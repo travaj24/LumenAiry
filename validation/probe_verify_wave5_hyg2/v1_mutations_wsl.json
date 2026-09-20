@@ -1,0 +1,86 @@
+{
+ "control": {
+  "failed_ids": [],
+  "grep_tail": [
+   "29 passed, 4 warnings in 6.50s"
+  ],
+  "n_failed": 0,
+  "returncode": 0,
+  "summary_line": "29 passed, 4 warnings in 6.50s"
+ },
+ "m1_separable_instead_of_dense": {
+  "failed_ids": [
+   "tests/unit/test_wave5_h2_mft_direct.py::test_the_association_order_is_a_function_of_the_shapes_alone",
+   "tests/unit/test_wave5_h2_mft_direct.py::test_the_chirp_phase_guard_fires_on_the_chirp_route_and_not_the_dense_one",
+   "tests/unit/test_wave5_h2_mft_direct.py::test_the_dense_route_uses_no_fft_at_all"
+  ],
+  "grep_tail": [
+   "FAILED tests/unit/test_wave5_h2_mft_direct.py::test_the_chirp_phase_guard_fires_on_the_chirp_route_and_not_the_dense_one",
+   "FAILED tests/unit/test_wave5_h2_mft_direct.py::test_the_association_order_is_a_function_of_the_shapes_alone",
+   "FAILED tests/unit/test_wave5_h2_mft_direct.py::test_the_dense_route_uses_no_fft_at_all",
+   "3 failed, 26 passed, 4 warnings in 5.37s"
+  ],
+  "n_failed": 3,
+  "returncode": 1,
+  "summary_line": "3 failed, 26 passed, 4 warnings in 5.37s"
+ },
+ "m2_no_rint_reduction": {
+  "failed_ids": [
+   "tests/unit/test_wave5_h2_mft_direct.py::test_the_association_order_is_a_function_of_the_shapes_alone",
+   "tests/unit/test_wave5_h2_mft_direct.py::test_the_chirp_phase_guard_fires_on_the_chirp_route_and_not_the_dense_one"
+  ],
+  "grep_tail": [
+   "FAILED tests/unit/test_wave5_h2_mft_direct.py::test_the_chirp_phase_guard_fires_on_the_chirp_route_and_not_the_dense_one",
+   "FAILED tests/unit/test_wave5_h2_mft_direct.py::test_the_association_order_is_a_function_of_the_shapes_alone",
+   "2 failed, 27 passed, 4 warnings in 3.37s"
+  ],
+  "n_failed": 2,
+  "returncode": 1,
+  "summary_line": "2 failed, 27 passed, 4 warnings in 3.37s"
+ },
+ "m3_always_y_first": {
+  "failed_ids": [
+   "tests/unit/test_wave5_h2_mft_direct.py::test_the_association_order_is_a_function_of_the_shapes_alone",
+   "tests/unit/test_wave5_h2_mft_direct.py::test_the_dense_route_uses_no_fft_at_all"
+  ],
+  "grep_tail": [
+   "FAILED tests/unit/test_wave5_h2_mft_direct.py::test_the_association_order_is_a_function_of_the_shapes_alone",
+   "FAILED tests/unit/test_wave5_h2_mft_direct.py::test_the_dense_route_uses_no_fft_at_all",
+   "2 failed, 27 passed, 4 warnings in 2.63s"
+  ],
+  "n_failed": 2,
+  "returncode": 1,
+  "summary_line": "2 failed, 27 passed, 4 warnings in 2.63s"
+ },
+ "m3b_always_y_first_shape_preserved": {
+  "failed_ids": [
+   "tests/unit/test_wave5_h2_mft_direct.py::test_the_association_order_is_a_function_of_the_shapes_alone"
+  ],
+  "grep_tail": [
+   "FAILED tests/unit/test_wave5_h2_mft_direct.py::test_the_association_order_is_a_function_of_the_shapes_alone",
+   "1 failed, 28 passed, 4 warnings in 1.76s"
+  ],
+  "n_failed": 1,
+  "returncode": 1,
+  "summary_line": "1 failed, 28 passed, 4 warnings in 1.76s"
+ },
+ "m4_centres_not_passed": {
+  "failed_ids": [
+   "tests/unit/test_wave5_h2_mft_direct.py::test_the_centred_primitive_is_the_same_sum_on_the_dense_route",
+   "tests/unit/test_wave5_h2_mft_direct.py::test_the_direct_route_reaches_the_same_physics[angular_spectrum_propagate_mft]",
+   "tests/unit/test_wave5_h2_mft_direct.py::test_the_direct_route_reaches_the_same_physics[fraunhofer_propagate_mft]",
+   "tests/unit/test_wave5_h2_mft_direct.py::test_the_direct_route_reaches_the_same_physics[fresnel_propagate_mft]"
+  ],
+  "grep_tail": [
+   "  /mnt/c/Users/Tesla/AppData/Local/Temp/claude/C--Users-Tesla/372a2d1f-acbe-4b57-a148-eeae3fe1d729/scratchpad/mut_m4_centres_not_passed/tests/unit/test_wave5_h2_mft_direct.py:257: UserWarning: angular_spectrum_propagate_mft: the requested output window leaves the faithful zone of the discrete transform on x and y -- x: 2*|centre_out_x| + N_out*dx_out = 2 * 0.000000e+00 + 64 * 2.472656e-05 = 1.582500e-03 m vs period 5.120000e-04 m (3.091x); y: 2*|centre_out_y| + N_out*dy_out = 2 * 0.000000e+00 + 64 * 2.472656e-05 = 1.582500e-03 m vs period 5.120000e-04 m (3.091x).  The period is N_in*d_in (the input cell, since the Bluestein step inverts the input spectrum) (= 5.120000e-04, 5.120000e-04 m here) and the reconstruction is periodic in the ABSOLUTE output coordinate, so the faithful zone is centred on the transform origin, not on centre_out; an off-origin window spends the period budget at weight two.  Samples outside it are PERIODIC REPLICAS of the field, not new information, so a broad or structured field will alias into the outer part of the window.  Reduce N_out*d_out or |centre_out| until 2*|centre_out| + N_out*d_out <= period, or use a propagator whose natural grid already spans the region you need.",
+   "FAILED tests/unit/test_wave5_h2_mft_direct.py::test_the_centred_primitive_is_the_same_sum_on_the_dense_route",
+   "FAILED tests/unit/test_wave5_h2_mft_direct.py::test_the_direct_route_reaches_the_same_physics[fresnel_propagate_mft]",
+   "FAILED tests/unit/test_wave5_h2_mft_direct.py::test_the_direct_route_reaches_the_same_physics[fraunhofer_propagate_mft]",
+   "FAILED tests/unit/test_wave5_h2_mft_direct.py::test_the_direct_route_reaches_the_same_physics[angular_spectrum_propagate_mft]",
+   "4 failed, 25 passed, 4 warnings in 1.97s"
+  ],
+  "n_failed": 4,
+  "returncode": 1,
+  "summary_line": "4 failed, 25 passed, 4 warnings in 1.97s"
+ }
+}

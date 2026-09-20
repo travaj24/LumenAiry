@@ -1,0 +1,182 @@
+{
+ "PHASOR_BAND_BYTES": 32000000.0,
+ "band_arithmetic": {
+  "nx=1024": {
+   "bands_at_ny=nx": 1,
+   "rows_per_band": 3906
+  },
+  "nx=2048": {
+   "bands_at_ny=nx": 2,
+   "rows_per_band": 1953
+  },
+  "nx=256": {
+   "bands_at_ny=nx": 1,
+   "rows_per_band": 15625
+  },
+  "nx=4096": {
+   "bands_at_ny=nx": 5,
+   "rows_per_band": 976
+  },
+  "nx=48": {
+   "bands_at_ny=nx": 1,
+   "rows_per_band": 83333
+  },
+  "nx=64": {
+   "bands_at_ny=nx": 1,
+   "rows_per_band": 62500
+  },
+  "nx=8192": {
+   "bands_at_ny=nx": 17,
+   "rows_per_band": 488
+  }
+ },
+ "build": "WSL-py3.12",
+ "f1_bands": 1,
+ "f1_gauss_64_one_band": {
+  "Px": {
+   "bit_identical": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "max_ulp": 0
+  },
+  "Py": {
+   "bit_identical": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "max_ulp": 0
+  }
+ },
+ "f1_random_wide_dynamic_64": {
+  "Px": {
+   "bit_identical": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "max_ulp": 0
+  },
+  "Py": {
+   "bit_identical": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "max_ulp": 0
+  }
+ },
+ "f1_spectrum_64": {
+  "Px": {
+   "bit_identical": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "max_ulp": 0
+  },
+  "Py": {
+   "bit_identical": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "max_ulp": 0
+  }
+ },
+ "f2_bands": 4,
+ "f2_multiband_4096": {
+  "Px": {
+   "bit_identical": false,
+   "max_abs": 0.2890625,
+   "max_rel": 5.738049059090945e-15,
+   "max_ulp": 37
+  },
+  "Py": {
+   "bit_identical": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "max_ulp": 0
+  }
+ },
+ "f2_rows_per_band": 976,
+ "f2_shape": [
+  2935,
+  4096
+ ],
+ "f3_forced_4row_bands_64": {
+  "Px": {
+   "bit_identical": false,
+   "max_abs": 32.0,
+   "max_rel": 1.1737922012748443e-15,
+   "max_ulp": 6
+  },
+  "Py": {
+   "bit_identical": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "max_ulp": 0
+  }
+ },
+ "f3_forced_4row_bands_gauss": {
+  "Px": {
+   "bit_identical": false,
+   "max_abs": 5.329070518200751e-15,
+   "max_rel": 6.888441605838797e-16,
+   "max_ulp": 5
+  },
+  "Py": {
+   "bit_identical": true,
+   "max_abs": 0.0,
+   "max_rel": 0.0,
+   "max_ulp": 0
+  }
+ },
+ "f3_rows_per_band": 4,
+ "f4_support_4row_bands": [
+  0.000248,
+  0.000256
+ ],
+ "f4_support_identical": true,
+ "f4_support_shipped": [
+  0.000248,
+  0.000256
+ ],
+ "stats_all_python_scalars": true,
+ "stats_array_input": {
+  "msg": "The truth value of an array with more than one element is ambiguous. Use a.any() or a.all()",
+  "raised": true,
+  "type": "ValueError"
+ },
+ "stats_bare_calls": [
+  "abs",
+  "float",
+  "max"
+ ],
+ "stats_np_attribute_uses": [],
+ "stats_param_kinds": {
+  "A": "POSITIONAL_OR_KEYWORD",
+  "B": "POSITIONAL_OR_KEYWORD",
+  "C": "POSITIONAL_OR_KEYWORD",
+  "D": "POSITIONAL_OR_KEYWORD",
+  "N_out_x": "POSITIONAL_OR_KEYWORD",
+  "N_out_y": "POSITIONAL_OR_KEYWORD",
+  "centre_out": "POSITIONAL_OR_KEYWORD",
+  "dx": "POSITIONAL_OR_KEYWORD",
+  "dx_out": "POSITIONAL_OR_KEYWORD",
+  "dy": "POSITIONAL_OR_KEYWORD",
+  "dy_out": "POSITIONAL_OR_KEYWORD",
+  "r_x": "POSITIONAL_OR_KEYWORD",
+  "r_y": "POSITIONAL_OR_KEYWORD",
+  "th_x": "POSITIONAL_OR_KEYWORD",
+  "th_y": "POSITIONAL_OR_KEYWORD",
+  "wavelength": "POSITIONAL_OR_KEYWORD"
+ },
+ "stats_return_types": {
+  "abcd": "tuple",
+  "k1": "tuple",
+  "k2": "tuple",
+  "k3": "tuple",
+  "period": "tuple",
+  "r_x": "float",
+  "r_y": "float",
+  "tail_frac": "float",
+  "theta_out_x": "float",
+  "theta_out_y": "float",
+  "theta_x": "float",
+  "theta_y": "float",
+  "worst": "float"
+ },
+ "stats_signature": "(A, B, C, D, dx, dy, r_x, r_y, th_x, th_y, dx_out, dy_out, N_out_x, N_out_y, centre_out, wavelength)",
+ "tree": "/mnt/c/tmp/lum_vhyg2"
+}

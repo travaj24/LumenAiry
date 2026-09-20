@@ -1,0 +1,56 @@
+{
+ "body_matmul_count": 4,
+ "body_mentions": {
+  "exp": true,
+  "fft": false,
+  "matmul": true,
+  "next_fast_len": false,
+  "pad(": false,
+  "rint": true
+ },
+ "build": "WIN-py3.14",
+ "cufft_error": "ImportError: DLL load failed while importing cufft: The specified module could not be found.",
+ "cufft_works": false,
+ "cupy": {
+  "128x96->48x64": {
+   "bit_identical": false,
+   "dtype_cupy": "complex128",
+   "dtype_numpy": "complex128",
+   "max_abs": 2.9844413933250606e-13,
+   "rel_L2": 5.308893832056968e-16,
+   "rel_max": 6.945129386862367e-16
+  },
+  "16x16->8x8": {
+   "bit_identical": false,
+   "dtype_cupy": "complex128",
+   "dtype_numpy": "complex128",
+   "max_abs": 1.7763568394002505e-14,
+   "rel_L2": 2.8034238084754284e-16,
+   "rel_max": 4.318091948732885e-16
+  },
+  "64x64->32x32": {
+   "bit_identical": false,
+   "dtype_cupy": "complex128",
+   "dtype_numpy": "complex128",
+   "max_abs": 1.648474460313335e-13,
+   "rel_L2": 4.450607497948009e-16,
+   "rel_max": 6.764722913599754e-16
+  },
+  "centred.32->16": {
+   "note": "fft2/ifft2 passed as None -- the dense route must not use them",
+   "rel_L2": 3.5558358322376277e-16
+  },
+  "chirp_on_cupy": "ImportError: DLL load failed while importing cufft: The specified module could not be found."
+ },
+ "cupy_device": "b'NVIDIA GeForce RTX 4070 Ti'",
+ "cupy_version": "14.0.1",
+ "host_build_then_asarray": true,
+ "kernel_source": "def _kernel(alpha, n_in, n_out, c_in, c_out):\n        n = np.arange(int(n_in), dtype=np.float64) - float(c_in)\n        k = np.arange(int(n_out), dtype=np.float64) - float(c_out)\n        t = float(alpha) * k[:, None] * n[None, :]\n        # Exact for |t| <= 2**52: rint(t) is an integer and t - rint(t) is a\n        # multiple of ulp(t).  See the Notes.\n        t = t - np.rint(t)\n        W = np.exp(1j * sign * 2.0 * np.pi * t)\n        return W.astype(target_cdtype, copy=False)\n",
+ "kernel_uses_np_arange": true,
+ "kernel_uses_np_exp": true,
+ "kernel_uses_xp": false,
+ "sig_has_fft2": false,
+ "sig_has_ifft2": false,
+ "signature": "(E, alpha_x: 'float', alpha_y: 'float', N_out_y: 'int', N_out_x: 'int', *, sign: 'int', xp, target_cdtype=None, n_centre_in_x: 'float' = 0.0, n_centre_in_y: 'float' = 0.0, k_centre_out_x: 'float' = 0.0, k_centre_out_y: 'float' = 0.0)",
+ "tree": "C:/tmp/vhyg2_arch/branch"
+}

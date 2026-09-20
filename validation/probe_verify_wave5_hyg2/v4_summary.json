@@ -1,0 +1,345 @@
+{
+ "A1_option_A_counterfactual": {
+  "ast_walk_lenses_py": {
+   "attribute_hits": 0,
+   "bare_calls_of_the_eight": 0,
+   "bare_name_loads_of_the_eight": 0,
+   "globals_subscripts": 0,
+   "near_miss_bare_calls_in__lens_kernels_py": 6,
+   "near_miss_bare_loads_in__lens_kernels_py": 7
+  },
+  "caveat": "the author's 'in dir(): True' for option A is a property of the __dir__ override, not of __getattr__; with no union it is False",
+  "py312_vs_py314": "identical in every row",
+  "table_rows_measured_on_own_synthetic_modules": {
+   "bare_name_in_module_function": {
+    "by_value": "works",
+    "getattr_only": "NameError"
+   },
+   "in_dir": {
+    "by_value": true,
+    "getattr_only_with_dir_union": true,
+    "getattr_only_without_dir_union": false
+   },
+   "in_import_star": {
+    "by_value": true,
+    "getattr_only": false
+   },
+   "in_vars": {
+    "by_value": true,
+    "getattr_only": false
+   },
+   "write_reaches_leaf": {
+    "by_value": false,
+    "getattr_only": true
+   }
+  },
+  "verdict": "CONFIRMED-WITH-CAVEAT"
+ },
+ "A2_key_census": {
+  "WIN-py3.14": {
+   "expected_differ_and_did": 32,
+   "expected_differ_but_identical": 0,
+   "identical": 83,
+   "only_base": 0,
+   "only_branch": 0,
+   "unexpected_differ": 0
+  },
+  "WSL-py3.12": {
+   "expected_differ_and_did": 32,
+   "expected_differ_but_identical": 0,
+   "identical": 83,
+   "only_base": 0,
+   "only_branch": 0,
+   "unexpected_differ": 0
+  },
+  "keys": 115,
+  "the_32": "the eight leaf-owned names x {write, read-after-write, delete, read-after-delete}",
+  "verdict": "CONFIRMED (agrees in KIND)"
+ },
+ "A3_the_refusal": {
+  "AttributeError_on_all_eight_write_and_delete": true,
+  "caveat": "while _lens_kernels.X is patched, lenses.X still reads the ORIGINAL object (by-value alias); pre-existing on BOTH trees, unchanged by the branch",
+  "dir_identical_base_vs_branch": true,
+  "dir_len": 74,
+  "import_star_identical_base_vs_branch": true,
+  "import_star_len": 38,
+  "message_names__lens_kernels": true,
+  "nothing_moved_on_either_module": true,
+  "redirected_leaf_statement_reaches_the_code": true,
+  "type_and_mro": [
+   "_LensesFacade",
+   "module",
+   "object"
+  ],
+  "vars_keys_identical": true,
+  "vars_len": 66,
+  "verdict": "CONFIRMED"
+ },
+ "A4_breakage": {
+  "conftest_hits": 0,
+  "facade_write_sites_found": 0,
+  "leaf_write_sites": [
+   "tests/unit/test_verify_b11c_structure.py:645",
+   "tests/unit/test_verify_b11c_structure.py:663"
+  ],
+  "leaf_write_sites_found": 2,
+  "other_module_sites": [
+   "tests/unit/test_audit2609_a16_verify_config_and_arch.py:620",
+   "tests/unit/test_rcwa.py:900"
+  ],
+  "string_target_monkeypatch_or_mock_hits": 0,
+  "verdict": "CONFIRMED -- NO BREAKAGE, no shipping blocker"
+ },
+ "A5_reload": {
+  "eight_seen_during_reload": 0,
+  "fresh_subprocess_import": "rc=0, type _LensesFacade, dir 74, WRITE-REFUSED on branch / WRITE-OK on base",
+  "idempotent_self_assignment_raises_on_branch": true,
+  "mechanism": "module-body STORE_NAME writes module.__dict__ directly and never reaches __setattr__; importlib only setattrs dunders, none of which is refused",
+  "reload__lens_kernels": "ok",
+  "reload_lenses": "ok on both trees, both builds",
+  "reload_lenses_again_after_leaf_reload": "ok",
+  "setattr_calls_during_reload": 8,
+  "setattr_names_during_reload": [
+   "__spec__",
+   "__name__",
+   "__loader__",
+   "__package__",
+   "__spec__",
+   "__file__",
+   "__cached__",
+   "__class__"
+  ],
+  "such_sites_found_in_repo": 0,
+  "try_finally_restore_through_the_facade_raises": true,
+  "verdict": "CONFIRMED"
+ },
+ "A6_mutations": {
+  "baseline": {
+   "WIN-py3.14": "57 passed",
+   "WSL-py3.12": "57 passed"
+  },
+  "m1_remove_both_refusal_blocks": {
+   "WIN": "17 failed / 40 passed",
+   "WSL": "17 failed / 40 passed",
+   "detected": true
+  },
+  "m2_refuse_setattr_only": {
+   "WIN": "9 failed / 48 passed",
+   "WSL": "9 failed / 48 passed",
+   "detected": true
+  },
+  "m3_drop__lens_kernels_from_the_message": {
+   "WIN": "16 failed / 41 passed",
+   "WSL": "16 failed / 41 passed",
+   "detected": true
+  },
+  "m4_union__LEAF_OWNED_NAMES_into___dir__": {
+   "WIN": "57 passed",
+   "WSL": "57 passed",
+   "detected": false,
+   "dir_listing_byte_identical_with_and_without": true,
+   "note": "a GENUINE no-op -- dir(lenses) is identical, so no test can or should fail"
+  }
+ },
+ "B1_B2_citations": {
+  "block": "CHANGELOG.md ## [5.47.0], lines 565-4669",
+  "citations_into_the_four_files_this_branch_moved": 19,
+  "note_wsl": "WSL git cannot resolve this Windows worktree's gitdir pointer, so the WSL arm reads the two extracted archive trees instead; identical table",
+  "re_anchored_correctly": [
+   {
+    "content": "method: str = 'spline',",
+    "doc": "CHANGELOG.md:1709",
+    "now": "mft.py:588",
+    "verdict": "PASS",
+    "was": "mft.py:550"
+   },
+   {
+    "content": "_COLLINS_TAIL_FRAC = 1e-6",
+    "doc": "CHANGELOG.md:2256",
+    "now": "carrier.py:1598",
+    "verdict": "PASS",
+    "was": "carrier.py:1541"
+   }
+  ],
+  "re_anchored_to_the_wrong_line": [
+   {
+    "doc": "CHANGELOG.md:2105",
+    "now": "lumenairy/propagators/mft.py:645-654",
+    "offset_applied": 34,
+    "offset_required": 38,
+    "should_be": "lumenairy/propagators/mft.py:649-658",
+    "verdict": "WRONG-CONTENT",
+    "was": "lumenairy/propagators/mft.py:611-620",
+    "why": "the reading the citing sentence points at (0.999995 / 0.995181) is at HEAD 657-658, outside the cited range"
+   }
+  ],
+  "reproduced_on": [
+   "WIN-py3.14 via git show",
+   "WIN-py3.14 via extracted trees",
+   "WSL-py3.12 via extracted trees"
+  ],
+  "root_cause": "validation/probe_wp_b11c/reanchor_citations.py's OWNED map covers only _lens_real.py / lenses.py / lenses_maslov.py / rcwa/_core.py and sources from 96cb2096, so it cannot see mft.py or carrier.py; it reports '0 re-anchored' on this branch",
+  "stale_not_re_anchored": [
+   {
+    "cite": "mft.py:489",
+    "doc": "CHANGELOG.md:1711",
+    "names": "_resample_field_chirpz",
+    "should_be": 527
+   },
+   {
+    "cite": "mft.py:769",
+    "doc": "CHANGELOG.md:1737",
+    "names": "if method == 'chirpz':",
+    "should_be": 807
+   },
+   {
+    "cite": "lumenairy/propagators/mft.py:972",
+    "doc": "CHANGELOG.md:1877",
+    "should_be": 1050
+   },
+   {
+    "cite": "lumenairy/propagators/mft.py:605-630",
+    "doc": "CHANGELOG.md:1999",
+    "should_be": "643-668"
+   },
+   {
+    "cite": "lumenairy/propagators/carrier.py:1966",
+    "doc": "CHANGELOG.md:2176",
+    "names": "_collins_transport",
+    "should_be": 2041
+   },
+   {
+    "cite": "carrier.py:1564",
+    "doc": "CHANGELOG.md:2185",
+    "names": "_collins_envelope_abcd",
+    "should_be": 1621
+   },
+   {
+    "cite": "carrier.py:1626",
+    "doc": "CHANGELOG.md:2194",
+    "names": "_collins_axis_chirp (signature changed in H2-2)",
+    "should_be": 1683
+   },
+   {
+    "cite": "carrier.py:2266",
+    "doc": "CHANGELOG.md:2203",
+    "names": "_collins_focus_readout",
+    "should_be": 2418
+   },
+   {
+    "cite": "carrier.py:1830",
+    "doc": "CHANGELOG.md:2228",
+    "names": "_collins_leg_output_axis",
+    "should_be": 1895
+   },
+   {
+    "cite": "carrier.py:1700",
+    "doc": "CHANGELOG.md:2240",
+    "names": "_collins_sampling_stats",
+    "should_be": 1765
+   },
+   {
+    "cite": ":1736",
+    "doc": "CHANGELOG.md:2240",
+    "names": "bare sibling of the previous",
+    "should_be": 1801
+   },
+   {
+    "cite": "carrier.py:2127",
+    "doc": "CHANGELOG.md:2265",
+    "names": "_collins_carrier_leg",
+    "should_be": 2279
+   },
+   {
+    "cite": "carrier.py:1906",
+    "doc": "CHANGELOG.md:2282",
+    "names": "_collins_exact_kernel_correction (signature changed in H2-2)",
+    "should_be": 1971
+   },
+   {
+    "cite": "carrier.py:1868",
+    "doc": "CHANGELOG.md:2287",
+    "names": "_collins_kernel_wrap_ratio",
+    "should_be": 1933
+   },
+   {
+    "cite": "propagators/carrier.py:1068",
+    "doc": "CHANGELOG.md:4510",
+    "names": "WHERE THE COLLINS ONE-STEP READOUT APPLIES",
+    "should_be": 1125
+   }
+  ],
+  "tally_both_builds": {
+   "BASE-TEXT-GONE-AT-HEAD (signature changed, def moved anyway)": 2,
+   "RE-ANCHORED-CORRECTLY": 2,
+   "RE-ANCHORED-TO-WRONG-LINE": 1,
+   "STALE-NOT-RE-ANCHORED": 11,
+   "TRIVIAL-BASE-LINE (paragraph moved 1069->1126)": 1,
+   "UNMOVED-AND-CORRECT": 2,
+   "defective_total": "15 (14 backticked + the bare `:1736` sibling at CHANGELOG.md:2240)",
+   "total": 19
+  },
+  "unmoved_and_still_correct": [
+   "CHANGELOG.md:1739 mft.py:95",
+   "CHANGELOG.md:4395 elements/lenses.py:51"
+  ],
+  "verdict": "REFUTED for the block as a whole; 2 of the 3 named are right"
+ },
+ "B3_walker": {
+  "WSL-py3.12": {
+   "pytest four walkers": "1 failed, 19 passed, 4 skipped -- test_v5_2_3_walker_changelog_content.py's V16 self-test needs `git diff v5.1.0..v5.1.1`, which WSL cannot run in this Windows worktree (rc=2); ENVIRONMENT, not a branch red (green on WIN)",
+   "scripts/check_source_line_citations.py": "ok=107 drift=0 total=107, rc=0"
+  },
+  "note": "V18 reports OK for all 15 stale citations because each lands on a NON-TRIVIAL line -- exactly the blind spot reanchor_citations.py's own docstring names",
+  "pytest tests/unit/test_v5_3_2_walker_source_line_citation.py + test_v5_3_walker_changelog_self_citation.py + test_v5_2_3_walker_changelog_content.py + test_v4_16_2_dispatcher_pin_doc_consistency.py": "20 passed, 4 skipped",
+  "scripts/check_doc_identifiers.py": "OK, 621/621 resolve, rc=0",
+  "scripts/check_source_line_citations.py": "auditing v5.47.0 block; found 107 citation(s); summary: ok=107 drift=0 total=107; rc=0",
+  "validation/probe_wp_b11c/reanchor_citations.py --check": "0 re-anchored (--check: nothing written)"
+ },
+ "B4_5_48_0_in_unreleased_docstrings": {
+  "changelog_entries_sit_under": "## [Unreleased]",
+  "enforcing_test_found": null,
+  "lumenairy___version__": "5.47.0",
+  "mentions_introduced_by_the_branch": [
+   "lumenairy/propagators/_bluestein.py:43  'shipped since 5.48.0 as the opt-in method='",
+   "lumenairy/propagators/_bluestein.py:486 'reproduces the pre-5.48 dispatch exactly'",
+   "lumenairy/propagators/carrier.py:2068   'BACKENDS (5.48.0).'",
+   "lumenairy/propagators/mft.py:242        'Which route ... (5.48.0).'",
+   "lumenairy/propagators/mft.py:910        'Which route ... (5.48.0).'",
+   "lumenairy/propagators/mft.py:957        \"method='direct' (5.48.0) pays ...\"",
+   "lumenairy/propagators/mft.py:1180       'Which route ... (5.48.0).'",
+   "CHANGELOG.md:385                        \"the pre-5.48 dispatch\"",
+   "docs/audits/.../WAVE5_HYGIENE2_REPORT.md:79 'the pre-5.48 dispatch exactly'",
+   "tests/unit/test_verify_b11c_structure.py:22",
+   "tests/unit/test_verify_b11c_structure.py:31",
+   "tests/unit/test_verify_b11c_structure.py:562",
+   "tests/unit/test_wave5_h2_collins_jax.py:3",
+   "tests/unit/test_wave5_h2_mft_direct.py:6",
+   "tests/unit/test_wave5_h2_mft_direct.py:203"
+  ],
+  "mitigating_evidence": "docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/PLAN_WAVE5_LEFTOVERS_2026_09_14.md:37 names 5.48.0 as the next release",
+  "repo_practice_measured": {
+   "library .py mentions of the upcoming version present at the release commit's PARENT": {
+    "5.43.0": 0,
+    "5.44.0": "1 (false positive: a numeric table cell)",
+    "5.45.0": 0,
+    "5.46.0": 0,
+    "5.47.0": 0
+   },
+   "note": "those are scheduled deprecation HORIZONS, a different category from a claimed shipping history",
+   "only forward-version references in the library at BASE": [
+    "lumenairy/propagators/carrier_field.py:651 _CARRIER_FIELD_FROZEN_IN = '5.48'",
+    "lumenairy/propagators/gbd.py:2129,2150,2168 version_removed='5.48'"
+   ],
+   "release commit 4bf26c5e touched exactly one library file": "lumenairy/__init__.py (the version string); it does NOT stamp version numbers into docstrings"
+  },
+  "verdict": "DEFECT (documentation accuracy), low severity, no automated gate"
+ },
+ "base": "f4f18851",
+ "branch": "b86fe31f",
+ "builds": [
+  "WIN-py3.14",
+  "WSL-py3.12"
+ ],
+ "campaign": "INDEPENDENT adversarial verification of verify/wave5-hygiene-2, SUBJECT A (H2-4 / a985ac2c lens-facade refusal) and SUBJECT B (citations)"
+}

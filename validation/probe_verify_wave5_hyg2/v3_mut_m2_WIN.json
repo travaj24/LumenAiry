@@ -1,0 +1,48 @@
+{
+ "build": "WIN-py3.14",
+ "rows": {
+  "0.0001": {
+   "auto_digest": "82b52d598f063f9b9897d6a87374ab64acdf452f71ec165496c75a8316ce96d3",
+   "auto_k4": 2.0,
+   "auto_kernel_resolved": "fresnel",
+   "auto_rel": 9.810908426251003e-13,
+   "exact": "RAISED ValueError: _collins_transport: gap_kernel='exact' cannot be honoured on this leg.  The exact kernel enters a carrier transport as a refinement over the",
+   "fresnel_digest": "82b52d598f063f9b9897d6a87374ab64acdf452f71ec165496c75a8316ce96d3",
+   "fresnel_k4": 2.0,
+   "fresnel_kernel_resolved": "fresnel",
+   "fresnel_rel": 9.810908426251003e-13,
+   "sziklas_R": -0.0001316609031250006,
+   "sziklas_dx": 1.9097999999999995e-06,
+   "sziklas_env_digest": "9d41e78b95b150b3d343462931727f5df984bcbbdc0c3525ed230f348e4e2279"
+  },
+  "0.005": {
+   "auto_digest": "d731a31a4373124a56a0a21252b1995b3e429ad3d7e1cbbcc1e4459f499ee012",
+   "auto_k4": 2.0,
+   "auto_kernel_resolved": "fresnel",
+   "auto_rel": 4.800964902900711e-13,
+   "exact": "RAISED ValueError: _collins_transport: gap_kernel='exact' cannot be honoured on this leg.  The exact kernel enters a carrier transport as a refinement over the",
+   "fresnel_digest": "d731a31a4373124a56a0a21252b1995b3e429ad3d7e1cbbcc1e4459f499ee012",
+   "fresnel_k4": 2.0,
+   "fresnel_kernel_resolved": "fresnel",
+   "fresnel_rel": 4.800964902900711e-13,
+   "sziklas_R": -0.005031660903125002,
+   "sziklas_dx": 2.0094832585110493e-06,
+   "sziklas_env_digest": "3a7b3340ca8da2ee89963a8ade55658afe08f59720435c417637800efbdab7e2"
+  },
+  "1e-06": {
+   "auto_digest": "c4adc7619478074df6dc62621eb3b02037c5c8be50e0a6cfc629fb10d5419714",
+   "auto_k4": 2.0,
+   "auto_kernel_resolved": "fresnel",
+   "auto_rel": 9.786845352663933e-13,
+   "exact": "RAISED ValueError: _collins_transport: gap_kernel='exact' cannot be honoured on this leg.  The exact kernel enters a carrier transport as a refinement over the",
+   "fresnel_digest": "c4adc7619478074df6dc62621eb3b02037c5c8be50e0a6cfc629fb10d5419714",
+   "fresnel_k4": 2.0,
+   "fresnel_kernel_resolved": "fresnel",
+   "fresnel_rel": 9.786845352663933e-13,
+   "sziklas_R": -3.2660903125002194e-05,
+   "sziklas_dx": 1.9097999999999995e-06,
+   "sziklas_env_digest": "bcb71e27ed38473683482dd8424607366c7d557eb247e2b1f4e52e281af7bd89"
+  }
+ },
+ "tree": "C:\\Users\\Tesla\\AppData\\Local\\Temp\\claude\\C--Users-Tesla\\372a2d1f-acbe-4b57-a148-eeae3fe1d729\\scratchpad\\mut\\m2"
+}

@@ -18,16 +18,40 @@ What each group closes, and why the WP's own file does not already close it:
    ``sys.modules[...]`` are not seen, and ``tests/integration`` is not walked at
    all.  Those are the forms a future patch is most likely to arrive in.
 
-2. **The lens side has the opposite failure mode from the BLAS side, and it is
-   not fenced.**  WP-B11c's stated principle is that a patch target which moved
-   should fail LOUDLY: the cap's state is deliberately absent from ``_core``, so
-   a stale ``setattr`` raises.  On the lens side, every moved name is
-   re-exported into ``lenses`` with ``X as X``, so a stale
-   ``monkeypatch.setattr(lenses, '_is_cupy_array', fake)`` SUCCEEDS, binds a
-   shadow in ``lenses.__dict__``, and is read by nothing -- the silent no-op the
-   WP set out to avoid.  Only eight names are live-forwarded; the other
-   call-time-read names are not.  No test in the suite does this today, which is
-   why nothing is red; the inventory below keeps it that way.
+2. **The lens side had the opposite failure mode from the BLAS side, and it
+   is now fenced (defect D3, CLOSED in 5.48.0).**  WP-B11c's stated principle
+   is that a patch target which moved should fail LOUDLY: the cap's state is
+   deliberately absent from ``_core``, so a stale ``setattr`` raises.  On the
+   lens side every moved name is re-exported into ``lenses`` with ``X as X``,
+   so at 5.47.0 a stale ``monkeypatch.setattr(lenses, '_is_cupy_array',
+   fake)`` SUCCEEDED, bound a shadow in ``lenses.__dict__``, and was read by
+   nothing -- the silent no-op the WP set out to avoid, arriving with the
+   opposite failure mode from the one it fenced.
+
+   5.48.0 makes the lens side loud the only way a module that must stay
+   READABLE can be: on the WRITE.  ``_LensesFacade.__setattr__`` and
+   ``__delattr__`` refuse the eight leaf-owned names with an ``AttributeError``
+   naming ``_lens_kernels`` as the address to patch; reading is untouched --
+   the same object, the same dict entry, the same ``import *`` surface and the
+   same ``dir()``.
+
+   The alternative -- making all eight LIVE FORWARDS, so the patch WORKS -- was
+   measured and rejected, and the measurement is in
+   ``validation/probe_wave5_hyg2/probe_lens_d3.py``'s ``option_A`` section on
+   synthetic modules with no lumenairy import: a name served only by a module
+   ``__getattr__`` is absent from ``from ... import *`` (which reads
+   ``__dict__`` and consults neither ``__getattr__`` nor ``__dir__``), and
+   ``CUPY_AVAILABLE`` is the one public name among the eight -- so that fix
+   would be a public-surface change inside a durability fix.  It also lays a
+   trap: a module's own functions read their globals by ``LOAD_GLOBAL``, which
+   does not consult ``__getattr__``, so any future code in ``lenses.py``
+   calling one of the eight by bare name would raise ``NameError`` (measured:
+   it does).  Today there are zero such sites, which is what made option A
+   possible at all; refusing the write costs nothing observable and says the
+   same thing.
+
+   The inventory below stays, because it catches the patch one level earlier
+   than the refusal does -- at collection time, naming the file and the line.
 
 3. **The closure walk behind the restated leaf property mis-resolves a package
    ``__init__``.**  ``test_audit2609_b11_hygiene.py``'s walker computes a
@@ -395,13 +419,10 @@ def test_the_names_lenses_re_exports_by_value_are_read_out_of_the_leaf():
     """The asymmetry this verification found, pinned rather than argued.
 
     Eight names are live-forwarded.  These eight are NOT: they are re-exported
-    with ``X as X``, so ``lenses.<name>`` resolves -- and a
-    ``monkeypatch.setattr(lenses, <name>, fake)`` therefore SUCCEEDS and binds
-    a shadow that the kernel, which reads the leaf's globals, never sees.  At
-    the base commit the same line DID change the kernel's behaviour, because
-    the kernel lived in ``lenses``.  The property asserted here is the factual
-    half: each one is read out of the leaf's namespace, so ``lenses`` is the
-    wrong place to substitute it.
+    with ``X as X``, so ``lenses.<name>`` resolves.  The property asserted here
+    is the factual half: each one is read out of the LEAF's namespace, so
+    ``lenses`` is the wrong place to substitute it -- which is why the write is
+    refused (the decision below).
     """
     for name in LEAF_READ_BY_VALUE:
         assert hasattr(_lens_kernels, name), name
@@ -415,13 +436,135 @@ def test_the_names_lenses_re_exports_by_value_are_read_out_of_the_leaf():
                 f"{name} does not read its globals out of the leaf")
 
 
+@pytest.mark.parametrize("name", LEAF_READ_BY_VALUE)
+def test_a_stale_write_to_a_leaf_owned_name_is_refused_loudly(name):
+    """D3, CLOSED: the decision, for every one of the eight.
+
+    The BLAS half of WP-B11c is loud because the name is ABSENT from ``_core``,
+    so ``monkeypatch.setattr`` raises ``AttributeError`` before it can bind
+    anything.  ``lenses`` cannot be loud that way -- the name has to stay
+    readable -- so it is loud on the WRITE instead, with the same exception
+    type and the leaf named in the message.
+
+    Four claims per name, and the last two are what make this a decision rather
+    than a reading:
+
+    1. the write raises ``AttributeError``;
+    2. the message names ``_lens_kernels``, so the reader is told where to go;
+    3. NOTHING moved -- neither module carries a shadow afterwards, and
+       ``lenses.<name>`` is still the leaf's object;
+    4. the same statement against the LEAF succeeds and is visible through the
+       facade, so the refusal is a redirection and not a prohibition.
+    """
+    before = getattr(_lens_kernels, name)
+    assert vars(lenses)[name] is before
+
+    with pytest.raises(AttributeError) as exc:
+        setattr(lenses, name, "SUBSTITUTE")
+    assert "_lens_kernels" in str(exc.value), str(exc.value)
+    assert name in str(exc.value)
+
+    assert vars(lenses)[name] is before, (
+        f"the refused write still bound a shadow for {name}")
+    assert getattr(lenses, name) is before
+    assert getattr(_lens_kernels, name) is before
+
+    # the redirection actually works
+    try:
+        setattr(_lens_kernels, name, "SUBSTITUTE")
+        assert getattr(_lens_kernels, name) == "SUBSTITUTE"
+    finally:
+        setattr(_lens_kernels, name, before)
+    assert getattr(lenses, name) is before
+
+
+@pytest.mark.parametrize("name", LEAF_READ_BY_VALUE)
+def test_a_stale_delete_of_a_leaf_owned_name_is_refused_loudly(name):
+    """``del`` is the other half, and at 5.47.0 it was the worse half: it
+    removed the re-export outright, after which ``lenses.<name>`` raised
+    ``AttributeError`` for the rest of the process (the first run of
+    ``validation/probe_wave5_hyg2/probe_lens_d3.py`` against the base tree died
+    at exactly that point).  Refused, with the same message."""
+    before = getattr(_lens_kernels, name)
+    with pytest.raises(AttributeError) as exc:
+        delattr(lenses, name)
+    assert "_lens_kernels" in str(exc.value)
+    assert name in vars(lenses)
+    assert getattr(lenses, name) is before
+
+
+def test_the_refusal_does_not_touch_any_other_name_on_the_facade():
+    """The falsification arm: a ``__setattr__`` that refused everything would
+    pass every test above and break the module.
+
+    A name that is neither leaf-owned nor live-forwarded must still assign,
+    read back and delete exactly as on a plain module; and the eight LIVE
+    forwards must still forward their writes to the leaf.
+    """
+    assert not hasattr(lenses, "_hyg2_probe_name")
+    lenses._hyg2_probe_name = 17
+    try:
+        assert lenses._hyg2_probe_name == 17
+        assert vars(lenses)["_hyg2_probe_name"] == 17
+    finally:
+        del lenses._hyg2_probe_name
+    assert not hasattr(lenses, "_hyg2_probe_name")
+
+    for name in LIVE_FORWARD:
+        saved = getattr(_lens_kernels, name)
+        try:
+            setattr(lenses, name, "LIVE-SENTINEL")
+            assert getattr(_lens_kernels, name) == "LIVE-SENTINEL", (
+                f"{name} is live-forwarded; the write must reach the leaf")
+            assert name not in vars(lenses)
+        finally:
+            setattr(_lens_kernels, name, saved)
+
+
+def test_the_two_halves_of_wp_b11c_now_refuse_a_stale_patch_the_same_way():
+    """The symmetry claim, stated once: BOTH moved families raise
+    ``AttributeError`` on a stale substitution, and neither leaves a shadow.
+
+    The BLAS side raises because the name is gone from ``_core``; the lens side
+    raises because the write is refused.  Different mechanisms, one observable
+    contract -- which is the contract a test author actually relies on.
+    """
+    from lumenairy.elements.rcwa import _blas, _core
+    blas_moved = [n for n in ("_BLAS_CONTROLLER", "_blas_threads",
+                              "set_blas_threads")
+                  if hasattr(_blas, n) and not hasattr(_core, n)]
+    assert blas_moved, (
+        "no BLAS name is absent from rcwa._core any more; the symmetry this "
+        "test asserts has lost one of its two halves")
+    for n in blas_moved:
+        with pytest.raises(AttributeError):
+            setattr_checked(_core, n, "SUBSTITUTE")
+    for n in LEAF_READ_BY_VALUE:
+        with pytest.raises(AttributeError):
+            setattr(lenses, n, "SUBSTITUTE")
+        assert vars(lenses)[n] is getattr(_lens_kernels, n)
+
+
+def setattr_checked(mod, name, value):
+    """``monkeypatch.setattr``'s own precondition, spelled out: it refuses to
+    create a NEW attribute, which is exactly what makes a moved BLAS name loud.
+    Plain ``setattr`` on a module would silently create one, so a test that
+    used it would not be testing what a monkeypatching test file does."""
+    if not hasattr(mod, name):
+        raise AttributeError(
+            f"{mod.__name__!r} has no attribute {name!r}")
+    setattr(mod, name, value)
+
+
 def test_no_test_file_substitutes_a_by_value_reexport_on_the_lenses_facade():
     """Fail-closed inventory, the lens counterpart of the BLAS one.
 
-    A patch of one of these names on ``lenses`` is the silent no-op WP-B11c's
-    design note says it set out to avoid -- and unlike the BLAS state it cannot
-    announce itself, because the re-export makes the ``setattr`` succeed.  No
-    file does this today; this names the first one that tries.
+    Since 5.48.0 such a patch RAISES (the decisions above), so this inventory
+    is no longer the only thing standing between the suite and a silent no-op.
+    It stays because it catches the site one level earlier and in a more useful
+    form: at collection time, naming the file and the line, rather than as an
+    ``AttributeError`` inside whichever test happened to run it.  No file does
+    this today; this names the first one that tries.
     """
     offenders = []
     for path in sorted(TESTS.rglob("test_*.py")):

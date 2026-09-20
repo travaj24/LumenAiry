@@ -1,0 +1,65 @@
+{
+ "authors_fixture": {
+  "bar_x6": 1.6111833685725109e-15,
+  "jax_vs_numpy": {
+   "auto": 9.658314924991982e-16,
+   "fresnel": 8.271056330096264e-16
+  },
+  "single_fft_spread": 2.6853056142875183e-16
+ },
+ "auto_k4": 3.8848497995964146e-05,
+ "auto_resolved_kernel": "exact",
+ "bar": {
+  "auto": 7.105427357601002e-15,
+  "exact": 7.105427357601002e-15,
+  "fresnel": 7.105427357601002e-15
+ },
+ "build": "WIN-py3.14",
+ "c64_jax_dtype": "complex64",
+ "c64_numpy_dtype": "complex64",
+ "chain_depth": {
+  "auto": 5.0,
+  "exact": 5.0,
+  "fresnel": 4.0
+ },
+ "fixture": {
+  "N": 96,
+  "R_in": -0.028,
+  "R_ref": -0.0215,
+  "dx": 5.5e-06,
+  "w": 4.1e-05,
+  "wavelength": 1.064e-06,
+  "z": 0.0023
+ },
+ "inside_bar": {
+  "auto": true,
+  "exact": true,
+  "fresnel": true
+ },
+ "jax_version": "0.11.0",
+ "jax_vs_numpy": {
+  "auto": 1.0543037596683125e-15,
+  "exact": 1.0543037596683125e-15,
+  "fresnel": 8.301378554317307e-16
+ },
+ "jax_vs_numpy_astigmatic": 8.575706281171133e-16,
+ "jax_vs_numpy_tilted_exact": 1.0824568326941773e-15,
+ "kelly_worst": 0.6167782616479085,
+ "numpy_version": "2.4.4",
+ "public_entry_R_equal": true,
+ "public_entry_dx_equal": true,
+ "public_entry_rel": 0.0,
+ "separable_flag": true,
+ "signal_exact_vs_fresnel": 1.1873294222650615e-05,
+ "signal_z_nudge_1e-6": 0.013581715395768761,
+ "single_fft_spread": 3.249754757915877e-16,
+ "single_fft_spread_128": 3.396547998398696e-16,
+ "single_ifft_spread": 3.2574615139032457e-16,
+ "tree": "C:/tmp/lum_vhyg2",
+ "two_sided": {
+  "auto": true,
+  "exact": true,
+  "fresnel": true
+ },
+ "x64": true
+}

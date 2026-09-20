@@ -1,0 +1,21 @@
+{
+ "tag": "colbit_wsl",
+ "python": "/home/travaj/lumvenv/bin/python",
+ "base_tree": "/mnt/c/tmp/hyg2_arch/base",
+ "branch_tree": "/mnt/c/tmp/hyg2_arch/branch",
+ "expect_differ_prefixes": [],
+ "n_keys_base": 84,
+ "n_keys_branch": 84,
+ "n_shared": 84,
+ "n_identical": 84,
+ "n_differ_expected": 0,
+ "differ_unexpected": [],
+ "expected_to_differ_but_identical": [],
+ "only_base": [],
+ "only_branch": [],
+ "seconds": {
+  "base": 1.6,
+  "branch": 2.1
+ },
+ "verdict": "IDENTICAL"
+}

@@ -130,6 +130,126 @@ with dated corrected paragraphs in `WP-B7c_ROUND2_REPORT.md` and
 `VERIFY_WP-B7c_ROUND2.md`.  Closes the round-2 verification's E1, E4, E5, E6
 and E7.
 
+### Fixed -- Wave 5 hygiene 2, Round 2 (VERIFY-WAVE5-HYGIENE2): the two shipping blockers, the port's public leg, and one kernel where there were three
+
+The independent verification of the four hygiene-2 packages
+(`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/VERIFY_WAVE5_HYGIENE2.md`)
+raised 22 findings.  All 22 are closed or answered here.  **No shipped default
+moves: 245 of 245 fixture keys are byte-identical archive-to-archive against
+`112c3049` on BOTH builds**, with 199 of those same 245 keys differing between
+the two builds as the sensitivity control that makes the first number mean
+something.
+
+**The two blockers.**  `.test_durations` gained the 121 ids the branch's four
+new test files add, timed serially in one process with BLAS pinned on the
+command line and SPLICED (121 insertions, 0 deletions, JSON re-parsed) rather
+than regenerated, so the other 16 265 weights stay on one scale;
+`tests/unit/test_audit2609_a15a_durations_staleness.py` reads 4 passed on both
+builds where the branch read 1 failed.  And **sixteen** source-line citations
+in the 5.47.0 CHANGELOG block are re-anchored BY CONTENT -- fifteen that no one
+had re-anchored after H2-1/H2-2/H2-3 moved lines in `mft.py` and `carrier.py`,
+and one (`mft.py:611-620`) that had been shifted `+34` by hand where its
+content moved `+38`, leaving the sentence's own reading two lines outside its
+cited range.  V18 passes every one of the sixteen, because each lands on some
+other real line; that is the blind spot `reanchor_citations.py`'s own docstring
+names, and it is now gated by three ids in
+`tests/unit/test_v5_3_2_walker_source_line_citation.py`.  The tool itself moved
+to `scripts/reanchor_citations.py`, takes `--base` and `--block` as parameters
+(it was frozen at `96cb2096` and could not see this branch's base at all), and
+resolves any citation tail naming exactly one module under `lumenairy/` instead
+of consulting a hand-kept list -- 19 citations covered before, all 107 now.
+
+**The JAX port reaches the public leg** (`propagate_carrier_referenced(
+transport='collins')`).  `_collins_carrier_leg` opened with
+`env_a = np.asarray(env)`, so an eager JAX array was demoted to host NumPy and
+came back BITWISE equal to the NumPy arm -- the measured JAX-vs-NumPy
+difference through the public leg was exactly `0.0` on base, which is why no
+value test could see it, and why the shipped parity test for that arm was
+comparing NumPy to NumPy.  A CuPy array raised a bare `TypeError` naming
+neither the leg nor the transport; a trace raised a raw
+`TracerArrayConversionError` even with both documented ways out passed.  The
+leg now resolves `(xp, is_jax, bld)` with the same `_backend_of` the transport
+uses, `_collins_input_box` takes its own forward transform through
+`_fft2_pair` / `_as_c_order`, and a trace is refused with a designed
+`ValueError` that names the call which CAN be traced -- this leg has a third
+measured decision (its own output lattice and quadrature) with no caller-side
+alternative, so unlike `_collins_transport` there is no spelling of it that
+runs.
+
+**One exact-dispersion kernel where there were three.**  `_exact_tf_2d_xp`,
+`_exact_envelope_tf_step` (NumPy-only, and written twice inside itself) and
+`_collins_exact_kernel_correction` each transcribed
+`sqrt(k^2 - |k s + q|^2) - k N + (s.q)/N` with the same `|s|^2 < 1` guard under
+three different error prefixes.  They are one kernel with two uses -- the first
+two add the piston `k z`, the third subtracts the paraxial `|q|^2/(2k)` -- and
+they are now `carrier.py::_exact_dispersion_phase`, with the in-place NumPy
+fast path inside it serving all three sites instead of one.  The consolidation
+REMOVES a guard, which is why the replacement lands with it: the only thing
+that caught a conjugated exact kernel was an AGREEMENT test between two of
+those transcriptions, and with one kernel both transports move together --
+measured, `test_audit2609_b4_collins_transport.py::TestSameTheorem` reads 9
+passed under a negated kernel.  The near-focus file now pins the SIGN directly,
+on the two moments of the same quartic: the intensity-weighted mean of
+`arg(exact/fresnel)` must be negative (the exact kernel RETARDS) and must equal
+the derived `-k z_eff theta_env^4/16`.
+
+**The chirp phase-budget warning** fired at `alpha*N_max^2 > 1e15`, where the
+chirp-Z routes are already 25 % wrong.  Against a `math.fsum` correctly-rounded
+reference the error is LINEAR in the budget (`rel ~ eps*budget`, measured over
+11 decades at two geometries on both builds) -- there is no cliff to sit just
+below -- so the threshold is read off the law at the accuracy wanted:
+`1e-6/eps = 4.5036e9`, the budget that still leaves six significant figures
+(measured `5.32e-07` there).  **This is a change in warning behaviour, not a
+change of answer**: no route's arithmetic moves, and a caller between the old
+and new thresholds now hears about an error they were already paying.  Shipped
+callers stay silent -- at the natural MFT grids `alpha = zoom/N`, so
+`budget = zoom*N` is of order 1e4 -- which is asserted rather than asserted to
+be obvious.
+
+**Bars re-derived from what the build can measure.**  The gradient check's
+`eps^(2/3)` floor does not apply to its own merit (`_collins_transport` is
+linear in the envelope, so `P''' == 0` and there is no truncation branch; the
+model was ~4.7 decades loose) and is replaced by the cancellation branch
+itself, per rung, with `P''' == 0` measured by its `eps/h^3` scaling and a
+genuinely cubic control merit proving the ladder can still see a truncation arm
+when one exists.  The `corr > 1 - 1e-6` pin -- undressed, 0.50 decades from
+firing, and 7x over on a 17 % change of the fixture's width -- is replaced by
+the leg's own measured departure from a scaled isometry, `1 - corr ~ r^2/2`.
+And `b4::TestGateCTwoGroupChain::test_the_two_transports_agree_on_this_chain`
+is split from an `np.array_equal` conditioned on a measured `K1` straddling 1
+into a premise (every leg on the transfer-function side, with a margin) and a
+claim against a derived re-association bar.
+
+**Also**: three traced shapes are refused by name instead of by whatever JAX
+raises first (a traced scalar, a concrete `jax.numpy` constant closed over by a
+jitted function, and the astigmatic `'auto'` case where the rule was stated
+more strictly than the code enforces); `_bluestein_centred_2d` validates
+`sign` and `method` before it reads `E.shape`, so both primitives report the
+same first error; the three public MFT docstrings are widened to the vocabulary
+the code accepts; seven docstrings that named a release which does not exist
+are neutralised and a gate added; and the probe harness's cross-drive tree
+guard, the lens facade's refusal sentence and eight report readings that did
+not survive re-measurement are corrected.
+
+**The maintainer question -- should `gap_kernel='auto'` fall back near a focus?
+-- is answered with numbers and NOT shipped.**  The accuracy-keyed condition is
+in the source behind `carrier._GAP_KERNEL_ACCURACY_TAU = None`: one line to
+arm, and not evaluated at all while it is `None`.  The law it is keyed on,
+`departure = sqrt(3/2) k |z_eff| theta_env^4 / 8` with the ENVELOPE's analytic
+`1/e^2` half-angle, predicts what the refinement changes to four significant
+figures on two fixtures 498x apart (VERIFY-B4 F3's `2.3496e-03` at one micron
+from focus, and `4.7162e-06` on the hygiene-2 ladder).  At `tau = 1e-4` the
+hygiene-2 ladder stays inert and F3's 1 um and 10 um rungs fall back.  It stays
+off because the oracle is PARAXIAL -- it can say how far the exact kernel
+departs from the paraxial truth and not which kernel is more physical -- and
+because arming it moves answers on any leg it fires on, which needs a Migration
+note.
+
+Full per-finding detail, with the measurements and the archive-to-archive
+counts, is the "Round 2 (VERIFY-WAVE5-HYGIENE2)" addendum to
+`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/WAVE5_HYGIENE2_REPORT.md`;
+probes and JSON are in `validation/probe_round2_wave5_hyg2/`.
+
 ### Fixed -- FGA: the frozen-Gaussian swarm's image-side leg starts at the exit-vertex plane, not on the last surface
 
 `lumenairy.raytrace.ray_transfer_jacobian` and
@@ -301,9 +421,212 @@ ties), not by arithmetic -- and one of them follows its line into the module it
 moved to.  The V18 walker refuses a citation that lands on a TRIVIAL line, so it
 caught two of the twelve `_lens_real.py` shifts and would have passed the other
 ten while they pointed one line off; content-matching is what finds those.  The
-tool is `validation/probe_wp_b11c/reanchor_citations.py` and it sources its
+tool is `scripts/reanchor_citations.py` (promoted out of
+`validation/probe_wp_b11c/` in the Round 2 entry below) and it sources its
 "before" numbers from `git show`, never from the working copy, so a second run
 is a no-op rather than a second shift.
+
+### Added -- Wave 5 hygiene 2 (H2-1, audit item 14): the direct matrix-Fourier transform the MFT propagators have always named, as an opt-in
+
+`lumenairy/propagators/mft.py`'s Notes and `lumenairy/propagators/_bluestein.py`'s
+module docstring have both named "a direct matrix-Fourier transform (`O(N^2 M^2)`)"
+as the chirp-Z reduction's alternative since the MFT propagators were written,
+without shipping one and without measuring where the two cross.  Both are now
+addressed, and the quoted complexity was wrong in the direction that mattered:
+`O(N^2 M^2)` is the cost of the UNFACTORED four-index sum, but the transform is
+separable, so the dense route is two matrix products at `O(M N^2 + M^2 N)`.
+
+`_bluestein._direct_matrix_2d` is that route -- ONE `xp`-parametrised
+implementation serving both index conventions (the non-centred primitive's is the
+centred one at zero centres), reached through a new `method=` selector on
+`_bluestein_2d` / `_bluestein_centred_2d` and on the three public entry points
+`fresnel_propagate_mft`, `fraunhofer_propagate_mft` and
+`angular_spectrum_propagate_mft`.  The default `method='auto'` is the pre-5.48
+dispatch exactly: **179 of 179 fixtures byte-identical archive-to-archive against
+5.47.0, on both builds.**
+
+Where it wins, measured (`validation/probe_wave5_hyg2/mft_direct_{win,wsl}.json`,
+`N` in {64,128,256,512,1024} x `M` in {32,64,128,256,512} plus four shapes beyond
+that box):
+
+| | chirp-Z 2-D | chirp-Z separable | dense |
+|---|---|---|---|
+| peak bytes, `N`=1024 `M`=32 | 159.6 MB | 34.7 MB | **1.8 MB** |
+| peak bytes, `N`=1024 `M`=512 | 319.0 MB | 50.4 MB | **29.4 MB** |
+| best-of-5 s, `N`=1024 `M`=32 | 0.1000 | 0.0381 | **0.0109** |
+| best-of-5 s, `N`=1024 `M`=512 | 0.1748 | **0.1293** | 0.1719 |
+| best-of-5 s, `N`=1448 `M`=1448 | 1.5587 | **0.5899** | 1.4957 |
+
+The dense route is the smaller in memory at **every** shape measured (the chirp-Z
+route pads each axis to `L = next_fast_len(N + M - 1)` and holds several `L^2`
+working arrays; the dense route holds two `M x N` kernels, one intermediate and
+the output, and pads nothing), and the faster one below a time crossover at about
+`M = N/4`.  It is also the more accurate: it reduces its phase argument modulo one
+turn before calling `exp`, so `_bluestein_2d`'s `alpha * N_max^2` phase budget does
+not apply to it -- at a budget of 1e12 the chirp route reads `1.9e-04` relative
+against an independently summed reference and the dense route `3.7e-16`.
+
+It needs no transform at all -- two matrix products -- so it runs wherever
+`xp.matmul` does: measured returning complex128 agreeing with the NumPy route to
+`3.79e-16` under CuPy on a box whose cuFFT DLL is broken.
+
+The three routes agree to round-off, NOT bit for bit -- they are different
+association orders over the same sum.  The tolerance is DERIVED rather than
+observed: each output point is a sum of `n` unit-modulus-kernel terms, so two
+routes with summation growth factors `g_a`, `g_b` agree to
+`(g_a + g_b) * eps * sum|E|`.  Measured against a pairwise-summed float64
+reference at `N` = 16/32/48: dense `3.4e-16 .. 4.8e-16`, chirp-Z
+`8.4e-16 .. 6.0e-15`, against bars of `1.9e-12 .. 5.5e-11`.
+
+Nothing selects the dense route automatically.  A threshold-automatic switch would
+move answers on existing fixtures at round-off, so it is a maintainer decision and
+the measured crossover table is in
+`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/WAVE5_HYGIENE2_REPORT.md`
+for it to be taken from.  Also recorded there, unfixed because changing it moves
+warning behaviour: `_bluestein_2d`'s phase-budget warning fires at
+`alpha * N_max^2 > 1e15`, three decades after the chirp route has already lost
+four digits (`1.9e-04` at 1e12, `2.5e-01` at 1e15 -- silent at both).
+
+### Changed -- Wave 5 hygiene 2 (H2-2, audit item 18): `_collins_transport` runs on the field's own backend
+
+The Collins / ABCD-Fresnel carrier transport was NumPy-only, not by design but by
+plumbing: it called `np.asarray` / `np.ascontiguousarray(..., dtype=np.complex128)`
+and then `_fft2`, `_collins_angle_support`, `_collins_exact_kernel_correction`,
+`_collins_space_support`, `_collins_sampling_stats` and `_bluestein_centred_2d`,
+none of which took an `xp`.  It now runs on NumPy, CuPy and JAX, selected by the
+array the caller passes, exactly as every other leg in the module is -- and so
+does the PUBLIC leg above it.  (The first spelling of this entry claimed the
+second half without it being true: `_collins_carrier_leg` still opened with
+`env_a = np.asarray(env)`, so `propagate_carrier_referenced(transport='collins')`
+demoted an eager JAX array to host NumPy, raised a bare `TypeError` on CuPy and a
+raw `TracerArrayConversionError` under a trace.  Measured and corrected in the
+Round 2 entry below; the demotion was BITWISE equal to the NumPy arm, which is
+why no test could see it.)
+
+There is no `_jax` twin of anything.  The chain is threaded with the module's own
+`(xp, is_jax, bld)` triple (`_backend_of`), its own device-move helper (`_to_dev`)
+and its own `exp(i*phase)` builder (`_tf_phase_to_H`, already shared by
+`_exact_tf_2d_xp` and `_fresnel_tf_2d_xp`), so the exact-kernel correction is ONE
+implementation and not a NumPy one beside a device one.  Two small helpers are
+new: `_fft2_pair`, which IS `lumenairy.backend.fft2`'s dispatch returned as the
+callables themselves (identity matters -- `_bluestein_2d` keys its chirp-kernel
+cache on `fft2 is fft_infra._fft2`, so routing the NumPy path through a wrapper
+would silently disable that cache for every Collins leg), and `_as_c_order`, because
+`jax.numpy` has no `ascontiguousarray`.  Three helpers of the chain needed no
+change at all and the report says why: `_collins_power_marginals` already routes
+through `to_numpy`, so the two support measurements were backend-agnostic before
+this package, and `_collins_sampling_stats` takes only Python floats.
+
+The NumPy path is untouched: **84 of 84 fixtures byte-identical
+archive-to-archive against 5.47.0, on both builds**, covering the direct entry with
+`transport='collins'` at four leg geometries x three `gap_kernel` values x three
+output-reference spellings, the astigmatic arm, complex64, tilt, the guard's three
+dispositions, both focus readouts and the helper chain called directly.  JAX agrees
+with NumPy to a bar MEASURED on the running build from the two backends' own FFT
+spread at the fixture's shape, not from a remembered residual.
+
+`jax.grad` and `jax.jit` work through the transport, and where they cannot the
+function says so instead of guessing.  Two decisions in it are taken by MEASURING
+the envelope -- the `gap_kernel` resolution reads the envelope's angular half-width
+to decide whether the exact-kernel refinement can be applied at all (`k4`), and the
+Kelly sampling guard reads its support box -- and a Tracer has no entries to
+measure.  Under a trace the transport therefore REFUSES unless the caller has taken
+both itself (`gap_kernel='fresnel'`, `on_collins_sampling='ignore'`), with both
+spellings named in the message.  Silently defaulting to the paraxial arm would be
+the same shape as the `gap_kernel` typo-falls-through defect D4 that the vocabulary
+gate exists to remove, and a conservative grid-edge guard would refuse legs whose
+measured departure from the analytic ABCD field is 5.6e-08 of peak.  An EAGER JAX
+or CuPy array is not a Tracer and measures normally.
+
+### Fixed -- Wave 5 hygiene 2 (H2-4, VERIFY-WP-B11c D3): a stale patch of a moved lens name is loud instead of silent
+
+WP-B11c's stated principle is that a patch target which moved should fail LOUDLY,
+and its BLAS half is: the cap's state is absent from `rcwa/_core.py`, so
+`monkeypatch.setattr(_core, '_BLAS_CONTROLLER', ...)` raises before it can bind
+anything.  Its lens half arrived with the opposite failure mode.  Eight names moved
+to `elements/_lens_kernels.py` are re-exported into `lenses` by value -- correct for
+reading, and what keeps `from lumenairy.elements.lenses import
+_warn_if_aperture_exceeds_grid` resolving -- but every one of them is read at CALL
+TIME out of the leaf's globals, so at 5.47.0 a
+`monkeypatch.setattr(lenses, '_is_cupy_array', fake)` SUCCEEDED, bound a shadow in
+`lenses.__dict__` and reached nothing.  At the commit before the move the same line
+DID change `surface_sag_general`'s behaviour.  `del lenses.CUPY_AVAILABLE` was
+worse: it removed the re-export outright, after which the name raised
+`AttributeError` for the rest of the process.
+
+`lenses` cannot be loud the BLAS way -- the name has to stay readable -- so it is
+loud on the WRITE.  `_LensesFacade.__setattr__` and `__delattr__` refuse
+`CUPY_AVAILABLE`, `_is_cupy_array`, `_ensure_cupy_loaded`, `_load_numba`,
+`_get_aspheric_sag_accum_numba`, `_ensure_numexpr_loaded`,
+`_collect_semi_diameters` and `_warn_if_aperture_exceeds_grid` with an
+`AttributeError` naming `_lens_kernels` as the address that works.  Reading is
+untouched: the same object, the same dict entry, the same `import *` surface, the
+same `dir()` -- **99 of 99 unrelated probe keys byte-identical
+archive-to-archive on both builds, and exactly the 32 write/delete keys moved.**
+
+The alternative -- making all eight LIVE FORWARDS so the patch WORKS -- was measured
+and rejected, on synthetic modules with no lumenairy import
+(`validation/probe_wave5_hyg2/probe_lens_d3.py`, section `option_A`).  A name served
+only by a module `__getattr__` is absent from `from ... import *`, which reads
+`__dict__` and consults neither `__getattr__` nor `__dir__`; `CUPY_AVAILABLE` is the
+one public name among the eight, so that fix would be a public-surface change inside
+a durability fix.  It also lays a trap: a module's own functions read their globals
+by `LOAD_GLOBAL`, which does not consult `__getattr__`, so any future code in
+`lenses.py` calling one of the eight by bare name would raise `NameError` (measured:
+it does).  There are zero such sites today, which is what made the option possible
+at all; refusing the write costs nothing observable and says the same thing.
+
+The refusing set and its message live INSIDE `_LensesFacade` as a class attribute
+and a staticmethod rather than at module scope, because `dir(lenses)` is a
+bit-identity key of WP-B11c's own verification and a module-level name -- private or
+not -- would have grown it.
+
+### Added -- Wave 5 hygiene 2 (H2-3, audit item 20): the near-focus exact-kernel table, and the envelope bookkeeping it needed
+
+WP-B11 section 2.20 built the fixture (a converging Gaussian carrier, `f` = 20 mm,
+`w0` = 15.915 um, `theta` = 20.0 mrad, evaluated 1 um .. 5 mm short of the geometric
+focus) and computed the dropped quartic, but could not publish a table:
+`propagate_carrier_referenced` takes and returns an ENVELOPE referenced to a
+carrier, and two spellings of the reference bookkeeping gave O(1) residuals and then
+a `ValueError`.  No library default moves here; what lands is the measurement, its
+tests and the maintainer decision it was owed.
+
+**The bookkeeping, validated first on cases with a known answer.**  The input
+envelope of this fixture is EXACTLY the real Gaussian `exp(-r^2/w_in^2)`, because
+`1/q = 1/R + i lambda/(pi w^2)` splits into a carrier and an amplitude with no cross
+term -- so the carrier handed to the propagator is the beam's own wavefront and
+nothing has to be fitted.  Against the whole-function `q` oracle in this library's
+convention (WP-B11 section 2.17, piston included): a collimated Gaussian on the
+paraxial kernel reads `5.6e-12` against a derived floor bar of `1.6e-10`; the
+converging fixture 5 mm from focus reads `4.80e-13` through `carrier_out=inf` and
+`4.80e-13` through the reconstruct spelling (the two agree to all printed digits),
+and `1.76e-11` on the Sziklas transport, against bars of `1.2e-03` and `2.7e-10`.
+Applying the carrier twice -- one of the spellings that produced the O(1) residuals
+-- reads `1.35`, twelve decades away.
+
+**The table.**  `gap_kernel` in {auto, fresnel, exact} x {sziklas, collins} x the
+distance-to-focus ladder, both builds agreeing to 1.5e-05 relative at worst.  The
+publishable rows: on `transport='collins'` with `gap_kernel='fresnel'` the residual
+against the analytic Gaussian holds the oracle floor (`4.8e-13 .. 9.8e-13`) all the
+way from 5 mm to 1 um short of the focus, while the Sziklas transport -- whose
+auto-split bridge engages there -- reads `7.3e-04` at 1 um and `1.8e-11` at 5 mm.
+
+**The correction to the framing, and the maintainer decision it changes.**  The
+quartic that matters to a carrier-referenced leg is `k |z_eff| theta_env^4 / 8`,
+where `theta_env` is the ENVELOPE's half-angle -- not the beam's.  On this fixture
+the two differ by 25x, so the quartic differs by `4.0e+05`.  Measured: the exact
+kernel's departure from the paraxial answer is
+`departure_relL2 = 1.2248 * k |z_eff| theta_env^4 / 8`, with the exponents FITTED
+(1.0000 in `z_eff` over two decades, worst deviation `1.3e-06`; 3.99970 in
+`theta_env` over a 5.3x span, worst deviation `1.9e-04`) and the SAME constant
+1.2248 recovered on a collimated leg through the other transport.  It peaks at
+`4.7e-06` one micron from the focus, and `gap_kernel='auto'` resolves to `'exact'`
+at every rung because the gate it is judged by (`k4`, the wrap ratio of the exact
+kernel's impulse response) reads `2.2e-05` there -- four decades below its bar of 1.
+So VERIFY-B4 F3's question is a question about changing behaviour, not about
+ratifying it, and a fallback rule keyed on the BEAM's angle would fire five decades
+too eagerly.  The recommendation, the derived threshold form and the table are in
+the report's H2-3; no default moves.
 
 ### Fixed -- lens-traced: a broken Newton worker pool now falls back to serial instead of hanging the process
 
@@ -2479,9 +2802,9 @@ its docstring rated at "< 0.1 %", and the single-FFT Fresnel output
 chirp sits at exactly Nyquist at the grid edge by construction.
 
 `method` (new, `{'spline', 'chirpz'}`, keyword-only, default `'spline'`;
-`mft.py:550`) adds the band-limited alternative: transform to the centred
+`mft.py:600`) adds the band-limited alternative: transform to the centred
 spectrum and inverse-transform it straight onto the output grid with
-`_bluestein_centred_2d` (`_resample_field_chirpz`, `mft.py:489`), which
+`_bluestein_centred_2d` (`_resample_field_chirpz`, `mft.py:539`), which
 is the trigonometric (Dirichlet-kernel) interpolant of the samples. Its
 MTF is exactly 1 at every frequency the input grid represents. Measured
 on the same Gaussian-times-carrier fixture K6 used (power ratio after
@@ -2507,7 +2830,7 @@ reconstruction is **periodic** with period `N_in*dx_in`, so an output
 window wider than the input extent returns replicas rather than the
 zeros the spline pads with — measured power ratio exactly 4.000000 for a
 2× window, where the spline gives 1.000000. That case now warns, reusing
-the MFT family's faithful-zone diagnostic (`mft.py:769`), which grew a
+the MFT family's faithful-zone diagnostic (`mft.py:819`), which grew a
 per-axis `N_out_y` for the non-square extent-preserving default
 (`mft.py:95`). And neither leg anti-aliases on down-sampling.
 
@@ -2647,7 +2970,7 @@ rescaled by the **x** ratio -- wrong by `Nx/Ny`, with no diagnostic.
 Because there is no resample left to crop, the leg no longer calls
 `_warn_system_resample_crop` (`system.py:361`); the `'sas'` leg still
 does, unchanged.  `fresnel_propagate_mft` carries the same K1
-chirp-sampling guard (`lumenairy/propagators/mft.py:972`) plus its own
+chirp-sampling guard (`lumenairy/propagators/mft.py:1074`) plus its own
 faithful-zone warning with period `lambda*|z|/dx_in`, so no diagnostic
 is lost -- see Migration for the two messages whose wording moves.
 
@@ -2769,7 +3092,7 @@ with a 0.30 cyc/px carrier, **0.993922** (x1.25), 0.998015 (x1.5),
 for a contained one.  With an exact-period `N_out` the reading is 1 to
 -1.1e-16 .. +6.7e-16.
 
-Docstring only: `lumenairy/propagators/mft.py:605-630`.  The module's
+Docstring only: `lumenairy/propagators/mft.py:655-680`.  The module's
 AST and token fingerprints are unchanged, which is
 `scripts/record_history_fingerprints.py --check` confirming it.
 Tests: `tests/unit/test_audit2609_b3b_resample_call_sites.py::TestF6TheUnitMtfIsAPropertyOfTheWindow`
@@ -2875,7 +3198,7 @@ where the default lands on the period exactly.  The fixture the paragraph quotes
 exact, which is why it read as true.
 
 Corrected in place with that reading added
-(`lumenairy/propagators/mft.py:611-620`).  Docstring only:
+(`lumenairy/propagators/mft.py:661-670`).  Docstring only:
 `scripts/record_history_fingerprints.py --check` reports
 `lumenairy.propagators.mft` OK.
 
@@ -2946,7 +3269,7 @@ C1 and the WP-A25 replica regime).
 
 `'collins'` evaluates the same integral in the form Collins (1970, *JOSA* **60**,
 1168) gives for an arbitrary ABCD system, factored as chirp x chirp-Z x chirp
-(`lumenairy/propagators/carrier.py:1966` `_collins_transport`).  In this
+(`lumenairy/propagators/carrier.py:2215` `_collins_transport`).  In this
 library's `exp(-i omega t)` / `exp(+i k z)` convention (CONVENTIONS sec. 7 -- the
 complex conjugate of the form printed in Collins' paper, which uses the opposite
 time convention):
@@ -2955,7 +3278,7 @@ time convention):
                * integral u_in(u) exp(i k (A u^2 - 2 u x + D x^2)/(2 B)) du
 
 with the envelope-to-envelope system "attach the input carrier, fly `z`, remove
-the chosen output carrier" (`carrier.py:1564`):
+the chosen output carrier" (`carrier.py:1797`):
 
     A = 1 + z/R_in = m,   B = z,   C = 1/R_in - A/R_ref,   D = 1 - z/R_ref
 
@@ -2964,7 +3287,7 @@ so `det = AD - BC = 1` for every choice of `R_ref` (pinned as an identity over
 forward leg, converging or not: the carrier's sign lives in `A`, which shrinks to
 zero and past it as a leg crosses the geometric focus, and the transform carries
 `A <= 0` natively.  The three stages are the module's own separable screen
-(`_radial_carrier_phase`'s per-axis factor, `carrier.py:1626`), the separable
+(`_radial_carrier_phase`'s per-axis factor, `carrier.py:1859`), the separable
 centred Bluestein the readouts already run (`_bluestein_centred_2d`), and a
 second separable screen.  At `R_ref = R + z` and `dx_out = m*dx` the result is
 term for term `_carrier_step_fast` -- measured agreement 7.6e-12 and 3.2e-12 of
@@ -2973,7 +3296,7 @@ peak at two well-sampled legs, on both `gap_kernel` settings.
 What the free pitch buys, measured:
 
 * **the image-plane readout is one step.**  `transport='collins'` lands the
-  target plane directly on the caller's `(dx_out, N_out)` (`carrier.py:2266`),
+  target plane directly on the caller's `(dx_out, N_out)` (`carrier.py:2706`),
   with no standoff plane, no beam-containment resolution and no near-focus
   bridge.  Against an analytic Gaussian-ABCD oracle carrying the absolute piston
   and Gouy phase, over NA 0.03-0.45 x grid extents 1.5-10 beam radii (30 cells),
@@ -2998,7 +3321,7 @@ What the free pitch buys, measured:
 * **a near-focus gap leg no longer splits.**  The output pitch is the co-moving
   `|A| dx` floored by `2(|A| r + |B| theta)/N`, the ABCD image of the envelope's
   measured phase-space box, so it carries the leg's own diffraction and cannot
-  follow `A` to zero (`carrier.py:1830`); and where referencing to the
+  follow `A` to zero (`carrier.py:2079`); and where referencing to the
   collapsing ray sphere `R + z` would need more samples than the grid has, the
   output is referenced FLAT instead, which is the physical statement that the
   wavefront is flat at the waist.  Measured 0.1 mm before a 40 mm focus: pitch
@@ -3010,7 +3333,7 @@ What the free pitch buys, measured:
 
 **The sampling guard** (`on_collins_sampling={'error','warn','ignore'}`, default
 `'warn'`) is written against Kelly, *Appl. Opt.* **53**, 2861 (2014) rather than
-against a geometric margin (`carrier.py:1700`, `:1736`).  Three conditions, each
+against a geometric margin (`carrier.py:1949`, `:1985`).  Three conditions, each
 a ratio against the Nyquist rate itself with the bar at 1 and no margin,
 evaluated on the field's own measured `1 - 1e-6`-power support in BOTH domains
 rather than at the grid edge:
@@ -3026,7 +3349,7 @@ rather than at the grid edge:
   EXISTING `on_replica` on this transport's period, so the two guards cannot
   disagree.
 
-The tolerance is the one number `_COLLINS_TAIL_FRAC = 1e-6` (`carrier.py:1541`),
+The tolerance is the one number `_COLLINS_TAIL_FRAC = 1e-6` (`carrier.py:1682`),
 the power allowed outside the support radii the ratios are formed from, so the
 aliased power is bounded by it and the field error by its square root.  Stated
 fail-before, as a ladder over four grids at A = 0.9, B = 3 mm: at K1 = 49.694 /
@@ -3035,7 +3358,7 @@ Gaussian by relL2 1.13e+02 / 5.52e+01 / 2.74e+01 / 1.33e+01 -- tracking K1, whic
 is what says it is the aliasing -- while the complementary quadrature sits at
 6.28e-11 on every grid.
 
-**Quadrature selection, and why it is not a threshold** (`carrier.py:2127`).  The
+**Quadrature selection, and why it is not a threshold** (`carrier.py:2534`).  The
 chirp-Z form needs `K1 <= 1`, which with `r` at the grid half-width is
 `N dx^2 <= lambda |z_eff|`; the transfer-function form (`_carrier_step_fast`)
 samples the kernel on the frequency lattice instead and needs the same
@@ -3052,12 +3375,12 @@ enough to trip `_near_focus_needs_bridge` has `|A| < 0.02` and therefore
 
 `gap_kernel` keeps its meaning on this transport: the Collins stage IS the
 ABCD-Fresnel integral, and `'exact'` pre-applies the diagonal exact/Fresnel
-kernel ratio on the input grid (`carrier.py:1906`), which is an exact operator
+kernel ratio on the input grid (`carrier.py:2155`), which is an exact operator
 identity because both kernels are diagonal in the same basis.  That refinement
 lives on the REDUCED frame `z_eff = B/A`, which is unbounded as a leg approaches
 the geometric focus, so it is applied only where its own group delay
 `|z_eff| theta (1/sqrt(1-theta^2) - 1)` fits inside the grid it is applied on
-(`carrier.py:1868`); an explicit `gap_kernel='exact'` there is REFUSED rather
+(`carrier.py:2117`); an explicit `gap_kernel='exact'` there is REFUSED rather
 than silently downgraded, and `'auto'` takes the ABCD-Fresnel integral and
 records `collins_kernel='fresnel'`.  Applying it anyway leaves the core right and
 destroys the halo: measured against a direct summation of the same integral on
@@ -5280,7 +5603,7 @@ fixture, so its levels belong in a slow lane.
 
 ### Changed -- the Collins one-step readout's applicability window is on the public docstring
 
-`propagators/carrier.py:1068`.  The K1 condition
+`propagators/carrier.py:1233`.  The K1 condition
 `2 dx (|A| r/|B| + theta)/lambda` on the CHAIN'S OWN exit pitch was derived at
 length in `_collins_readout`'s docstring but nowhere a caller choosing
 `transport=` would read it.  The `transport` parameter now carries the window
