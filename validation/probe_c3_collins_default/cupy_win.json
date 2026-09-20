@@ -1,0 +1,93 @@
+{
+ "build": "WIN-py3.14",
+ "carrier_file": "C:\\tmp\\lum_c3\\lumenairy\\propagators\\carrier.py",
+ "device_helpers": [
+  {
+   "R": -0.05,
+   "dx": 8e-06,
+   "helper": "_collins_axis_chirp",
+   "max_abs": 1.1102230246251565e-16,
+   "n": 64,
+   "rel": 3.671717528720129e-17,
+   "ulps_of_one": 0.5
+  },
+  {
+   "R": -0.02,
+   "dx": 4e-06,
+   "helper": "_collins_axis_chirp",
+   "max_abs": 1.5700924586837752e-16,
+   "n": 256,
+   "rel": 4.21106133638121e-17,
+   "ulps_of_one": 0.7071067811865476
+  },
+  {
+   "R": -0.04,
+   "dx": 3.5e-06,
+   "helper": "_collins_axis_chirp",
+   "max_abs": 1.5700924586837752e-16,
+   "n": 512,
+   "rel": 4.4191447474048536e-17,
+   "ulps_of_one": 0.7071067811865476
+  },
+  {
+   "helper": "_tf_phase_to_H",
+   "max_abs": 1.5700924586837752e-16,
+   "n": 512,
+   "rel": 4.595131619722836e-17
+  },
+  {
+   "helper": "_exact_dispersion_phase",
+   "max_abs": 0.0,
+   "rel": 0.0,
+   "tilt": [
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "helper": "_exact_dispersion_phase",
+   "max_abs": 0.0,
+   "rel": 0.0,
+   "tilt": [
+    0.02,
+    -0.01
+   ]
+  },
+  {
+   "device": [
+    0.000144,
+    0.000144
+   ],
+   "helper": "_collins_space_support",
+   "host": [
+    0.000144,
+    0.000144
+   ]
+  },
+  {
+   "bld": "cupy",
+   "bld_is_xp": true,
+   "helper": "_backend_of",
+   "is_jax": false,
+   "xp": "cupy"
+  }
+ ],
+ "premise": {
+  "cupy_importable": true,
+  "elementwise_error": null,
+  "elementwise_ok": true,
+  "fft_error": "ImportError: DLL load failed while importing cufft: The specified module could not be found.",
+  "fft_ok": false,
+  "n_devices": 1,
+  "version": "14.0.1"
+ },
+ "public_leg": {
+  "demoted_to_host": false,
+  "error": "DLL load failed while importing cufft: The specified module could not be found.",
+  "error_type": "ImportError",
+  "fft_premise_ok": false,
+  "outcome": "raised",
+  "reached_device_transform": true
+ },
+ "tree": "C:\\tmp\\lum_c3"
+}
