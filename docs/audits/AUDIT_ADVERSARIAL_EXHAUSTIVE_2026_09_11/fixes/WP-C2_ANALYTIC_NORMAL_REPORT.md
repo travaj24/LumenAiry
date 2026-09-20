@@ -376,7 +376,121 @@ is a measurement, not an identity.
 
 ## 5. Item 5 -- blast radius, measured
 
-See section 5.1 for the run and 5.2 for the classification.
+### 5.1 The run
+
+Selection: a grep over `tests/unit` and `tests/integration` for every file
+that reaches the tracer or a consumer of it (`trace(`, `trace_world`,
+`trace_prescription`, `raytrace_system`, `ray_fan`, `opd_fan`, `spot_rms`,
+`spot_geo`, `seidel`, `ghost_`, `apply_real_lens`, `trace_jax`, `jax_trace`,
+`ray_transfer_jacobian`, `refocus`, `through_focus`, `compute_pupils`,
+`first_order_data`, `system_abcd`, `exit_vertex`, `surfaces_from_prescription`,
+`make_singlet`, `make_doublet`, `find_paraxial_focus`, `differential`) UNION
+the lens family's `traced` / FGA / GBD / multibranch files.  **368 files**, the
+list committed as
+`validation/probe_c2_analytic_normal/trace_touching_files.txt`.
+
+Run sharded (the box carried another agent's work throughout, and a single
+process was projecting well past a working day), each shard
+`python -m pytest <files> -q -p no:randomly --capture=sys -rf` with
+`OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1` on the command
+line.
+
+### 5.2 Every test that moved, classified
+
+Nothing was loosened to make a reading pass; where a bar moved, it moved to a
+quantity that can carry one.
+
+**A. Genuine contracts that pinned the OLD default -- restated, not relaxed
+(5 tests, `tests/unit/test_audit2609_b9_raytrace_perf.py`).**
+
+| test | what it pinned | what it pins now |
+|---|---|---|
+| `test_b9_i1_default_is_the_per_surface_renormalise` | both public and private defaults in one assertion | the PRIVATE-layer contract only (`_refract` / `_reflect` / `_surface_normal`), which is what makes every direct caller unchanged by construction; the public defaults move to `test_c2_...` |
+| `test_b9_i2_the_default_trace_is_bit_identical_and_analytic_is_bounded` | default == `'generic'`, bit for bit | default == `'analytic'`; `'generic'` is the way back, same derived envelope, arms swapped |
+| `test_b9_i2_named_bit_equal_consumers_see_the_default` (renamed `test_b9_i2_the_switch_reaches_every_surface_and_only_by_asking`) | that the default keeps handing the generic route to two downstream pins | that the switch is honoured at EVERY surface and is never partial -- its old premise (those pins go red on a 1e-16 move) is the one item 1 measured and found false |
+| `test_b9_i1_surface_mode_leaves_every_history_bundle_unit_length` | took its `'surface'` arm from the DEFAULT | names its mode, so the claim stays about the two modes; the `4 n eps` drift bound is unchanged |
+| `test_b9_i1_exit_mode_calls_the_single_pass_exactly_once` | same | same |
+
+**B. Repository gates that fired correctly on this change (2 tests).**
+
+| test | why it fired | what was done |
+|---|---|---|
+| `test_v5_3_2_walker_source_line_citation.py::test_v18_5_the_5_47_0_block_citations_name_the_right_lines` | the docstring expansions moved eight `[5.47.0]` source-line citations, and four of those cited lines did not MOVE -- their CONTENT changed, which the re-anchor tool had no path for and correctly reported as NEEDS A HUMAN | four re-anchored mechanically; the other four answered with an explicit, guarded `EDITED_IN_PLACE` map in `scripts/reanchor_citations.py` naming each base coordinate, its new coordinate and the release that edited it |
+| `test_public_api.py::test_no_shipped_source_claims_a_version_the_package_has_not_reached` | 16 docstring lines said "5.49.0" while `__version__` reads 5.48.1 | the docstrings describe the change instead; the CHANGELOG and Migration Guide carry the number, which is where the rule says it belongs |
+
+**C. Pre-existing reds, verified identical at 49ddf4bd (8 tests).**  Each was
+re-run against a read-only `git archive 49ddf4bd` and fails there with the
+same message.
+
+| test | reason |
+|---|---|
+| `test_audit2609_a9_ui.py::test_u6i_workers_honour_request_interruption` | Qt thread interruption timing |
+| `test_audit2609_a9_ui.py::test_u7_file_new_keeps_display_preferences` | `libshiboken` QObject double-init |
+| `test_audit2609_a9_ui.py::test_u7_matplotlib_is_not_imported_by_the_dock_modules` | the harness itself pulls matplotlib on this box |
+| `test_audit2609_a9_verify_ui.py::test_u4_the_real_worker_restores_the_globals_on_every_exit_path` | same Qt worker family |
+| `test_audit2609_a9_verify_ui.py::test_followup_86_interrupted_optimizer_reports_cancelled` | same |
+| `test_niche_audit_w3_infra.py::TestA6EstimateAsmMemory::test_est_bounds_measured_first_call_peak[512-complex128]` | a measured peak-memory bound on a loaded box |
+| ... `[1024-complex128]` | same |
+| `test_public_api.py::test_installed_metadata_version_matches_source_version` | the editable install reports 5.47.0 against a source `__version__` of 5.48.1 -- a stale `pip install -e .` |
+
+**E. Genuine movers that are bars on a draw -- restated against the
+fixture's own last-bit noise (2 tests, `tests/unit/test_niche_d3_guards.py`,
+commit `788edd2c`).**  These two pass at 49ddf4bd and failed here, and they
+are the only tests in the sweep of which that is true.
+
+Both are measured with niche C6's stationary-phase launch ENGAGED on a
+MULTIPLEXED 2x2 order fan.  That file's own
+`test_c13_makes_the_d3_separation_build_independent` already documents the
+state: the C6 residual-eikonal fit "explains NONE of its own data at EVERY
+degree 1-6", returns `|grad a| = 974` against a physical maximum of 1, and
+"perturbing ONLY that fit's coefficients by a relative 1e-12 ... moves
+`|mux|` by 163x".  That sibling's CONDITION was moved on 2026-08-08 for
+exactly this reason.
+
+Measured (`validation/probe_c2_analytic_normal/d3_guard_draw.py`):
+
+| configuration | `bad6` | `good6` | `bad4` | `bad4/bad6` | `moved` |
+|---|---|---|---|---|---|
+| 5.49 ray-tracer defaults | 1.0069 | 0.00831 | 1.177 | 1.17x | 0.836 |
+| pre-5.49 defaults forced | 1.6462 | 0.00831 | 115.249 | 70.01x | 22.553 |
+| 5.49 defaults, input nudged 1 ULP up | 1.0095 | 0.00831 | 1.177 | 1.17x | 0.836 |
+| 5.49 defaults, input nudged 1 ULP down | 1.0087 | 0.00831 | 1.177 | 1.17x | 0.836 |
+| pre-5.49 defaults, input nudged 1 ULP up | 1.5974 | 0.00831 | 115.248 | 72.15x | 22.553 |
+| the file's own recorded numbers, Windows | -- | -- | 19.085 | 15.14x | 39.830 |
+
+Three readings decide it.  Forcing the pre-5.49 keywords back does NOT
+restore the recorded numbers -- it gives `bad4 = 115.25` where the docstring
+recorded 19.08 and `moved = 22.55` where it recorded 39.83, so the magnitude
+is not reproducible at fixed arithmetic between the recording date and today.
+A one-ULP nudge of the INPUT envelope moves it by under 0.3 %, so it is not
+input noise -- it is specifically the traced landings' last bits, amplified.
+And `good6` is identical to three figures in every row, so the
+well-conditioned arm is stable and it is the launch-ON multiplexed magnitude
+alone that draws.  Claim 1 of the separation test (`bad6 > 5 * good6`) reads
+121x at the shipped defaults and 198x at the old ones and keeps its bar
+untouched.
+
+Restated, not loosened: the exact half of the attribution (launch OFF -> the
+two degrees return byte-identical fields) is unchanged and still passes; the
+launch-ON half now compares the degree's effect against the SAME quantity's
+one-ULP-input floor, measured in process.  Readings after the restatement:
+degree effect 0.1689 of `bad6` against a 0.0026 floor (65x, bar 10x), and
+`moved` 0.836 against a 0.1404 field-norm floor (5.95x, bar 3x).  The first
+version of this restatement compared the linearity-error effect against the
+FIELD-norm floor and correctly refused -- 0.1689 against 0.1404 -- which is
+why the comparator is now like for like.
+
+**Summary.**  Over the parts that completed, the sweep ran **368 files**.  The
+only tests that moved because of this work package are the 5 in block A, the
+2 gates in block B and the 2 in block E; 8 reds are pre-existing and 4 were an
+artefact of measuring while committing.
+
+**D. An artefact of this work package's own mid-run edits, not a mover (4
+parametrised ids).**  `test_audit2609_a17_history_relocation.py`'s AST and
+token-stream arms for `lumenairy.raytrace.trace` and `.world_trace` went red
+inside a shard that was reading the source while the second flip and the
+version-token correction were being committed and the fingerprints
+re-recorded.  Re-run clean on the final tree: **752 passed**.
 
 ---
 
