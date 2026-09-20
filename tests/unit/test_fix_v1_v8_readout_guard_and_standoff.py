@@ -72,12 +72,20 @@ def _period(env, dx):
     return min(po['period'])
 
 
-def _read(env, dx, dx_out, N_out, centre_out=(0.0, 0.0), on_replica='error'):
+def _read(env, dx, dx_out, N_out, centre_out=(0.0, 0.0), on_replica='error',
+          replica_fill='zero'):
+    """``replica_fill`` is a parameter of this helper because the V3
+    demonstrations below are demonstrations OF the replicas.  Since 5.49.0 the
+    readout's default is ``'zero'``, which blanks them -- so an id that has to
+    SHOW a replica asks for ``'repeat'`` explicitly and says why.  The helper's
+    own default tracks the library's, so every id that is not about the
+    replicas exercises the shipped path."""
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
         return C.carrier_referenced_focus_readout(
             env, -_RMAG, _RMAG, _WL, dx, dx_out=dx_out, N_out=N_out,
-            centre_out=centre_out, on_replica=on_replica)
+            centre_out=centre_out, on_replica=on_replica,
+            replica_fill=replica_fill)
 
 
 def _refuses(fn, *a, **kw):
@@ -97,9 +105,20 @@ class TestV3ReplicaGuardSeesCentreOut:
         """The exact configuration VERIFY_D1_D11 S2.2 measured: window 0.77
         periods (well under the old bar, so the old guard was silent BY
         CONSTRUCTION) placed one whole period off axis.  With the guard
-        waived the readout still returns a bit-identical copy of the on-axis
-        peak -- that is the ghost, reproduced here as the fail-before -- and
-        the fixed guard must REFUSE it."""
+        waived AND ``replica_fill='repeat'`` the readout still returns a
+        bit-identical copy of the on-axis peak -- that is the ghost,
+        reproduced here as the fail-before -- and the fixed guard must REFUSE
+        it.
+
+        WHY THE FILL IS NAMED HERE (5.49.0).  ``replica_fill`` now defaults to
+        ``'zero'``, so the waived readout comes back blanked outside one
+        period and the ghost is not there to see.  That is the point of the
+        new default and it does not weaken this demonstration: the REFUSAL,
+        which is what this id asserts, is unchanged and is taken before any
+        fill runs.  ``'repeat'`` is the opt-in that reproduces what a waiving
+        caller got through 5.48.x, and it is what makes the fail-before arm
+        below a statement about the transform rather than about a knob.
+        """
         env, dx, w0 = _build(0.10, 3.0)
         per = _period(env, dx)
         dx_out, N_out = w0 / 12.0, 96
@@ -107,9 +126,19 @@ class TestV3ReplicaGuardSeesCentreOut:
         assert win < per, "fixture must sit UNDER the old width-only bar"
         assert win / per < 0.85
 
-        # fail-before, with the guard explicitly waived: a full-amplitude ghost
-        on_axis = _read(env, dx, dx_out, N_out, (0.0, 0.0), 'ignore')
-        ghost = _read(env, dx, dx_out, N_out, (per, 0.0), 'ignore')
+        # fail-before, guard waived and the replicas asked for: a
+        # full-amplitude ghost
+        on_axis = _read(env, dx, dx_out, N_out, (0.0, 0.0), 'ignore',
+                        replica_fill='repeat')
+        ghost = _read(env, dx, dx_out, N_out, (per, 0.0), 'ignore',
+                      replica_fill='repeat')
+        # ... and the SHIPPED default returns zeros there instead, which is
+        # the two-sided half of the same demonstration
+        ghost_default = _read(env, dx, dx_out, N_out, (per, 0.0), 'ignore')
+        assert float(np.max(np.abs(ghost_default))) == 0.0, (
+            "the default fill no longer blanks a window one whole period off "
+            "the chief ray; the 5.49.0 decision was that a readout does not "
+            "return copies it never measured")
         assert np.max(np.abs(ghost)) == pytest.approx(
             np.max(np.abs(on_axis)), rel=1e-12), (
             "one period off axis must reproduce the on-axis peak exactly -- "
@@ -245,9 +274,12 @@ def chain_fixture():
                 tkw=dict(on_undersample='silent', on_noncollimated='silent'))
 
 
-def _chain(fx, L, centre_out, on_replica='error', n_out=128):
+def _chain(fx, L, centre_out, on_replica='error', n_out=128,
+           replica_fill=None):
     fr = {'dx_out': 0.5e-6, 'N_out': n_out, 'centre_out': centre_out,
           'on_replica': on_replica}
+    if replica_fill is not None:
+        fr['replica_fill'] = replica_fill
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
         return C.propagate_traced_carrier_chain(
@@ -277,13 +309,42 @@ class TestV3ChainScope:
 
     def test_a_walking_chief_ray_gives_a_full_amplitude_ghost(
             self, chain_fixture):
-        """Fail-before on the chain, guard waived: a window one WHOLE period
-        from the chief ray returns a bit-identical copy of the real spot."""
+        """Fail-before on the chain, guard waived and the replicas asked for:
+        a window one WHOLE period from the chief ray returns a bit-identical
+        copy of the real spot.
+
+        WHY THE FILL IS NAMED HERE (5.49.0).  This is a demonstration OF the
+        periodic copies, so it now asks for them: ``replica_fill='repeat'`` is
+        the opt-in that reproduces 5.48.x.  The default moved to ``'zero'``
+        because a readout should not hand back a full-amplitude image of the
+        core laid down where the field is weak -- it wins every max / argmax /
+        centroid / encircled-energy reduction taken over the window, which is
+        exactly what this id demonstrates.  The demonstration is not weakened:
+        the second arm asserts the same geometry under the default and shows
+        the ghost is GONE, so the id now pins both the failure mode and the
+        fix for it, and the refusal that guards the whole thing (the sibling
+        id below) is untouched by either fill.
+        """
         x_c, per = _chain_state(chain_fixture, 0.046)
-        true_ = _chain(chain_fixture, 0.046, (x_c, 0.0), 'ignore')
-        ghost = _chain(chain_fixture, 0.046, (x_c + per, 0.0), 'ignore')
+        true_ = _chain(chain_fixture, 0.046, (x_c, 0.0), 'ignore',
+                       replica_fill='repeat')
+        ghost = _chain(chain_fixture, 0.046, (x_c + per, 0.0), 'ignore',
+                       replica_fill='repeat')
         assert np.max(np.abs(ghost.field)) == pytest.approx(
             np.max(np.abs(true_.field)), rel=1e-12)
+        # two-sided: under the shipped default the same window is blank
+        ghost_default = _chain(chain_fixture, 0.046, (x_c + per, 0.0),
+                               'ignore')
+        assert float(np.max(np.abs(ghost_default.field))) == 0.0, (
+            "the chain's readout no longer blanks a window one whole period "
+            "off the chief ray under the default fill")
+        # and the real spot is untouched by the default: the faithful window
+        # is returned by identity, so the fill costs the measurement nothing
+        true_default = _chain(chain_fixture, 0.046, (x_c, 0.0), 'ignore')
+        assert np.array_equal(np.asarray(true_default.field),
+                              np.asarray(true_.field)), (
+            "the default fill moved the ON-CHIEF-RAY window, which sits "
+            "inside one period and must be returned by identity")
 
     def test_the_chain_now_refuses_the_ghost_and_keeps_the_real_window(
             self, chain_fixture):

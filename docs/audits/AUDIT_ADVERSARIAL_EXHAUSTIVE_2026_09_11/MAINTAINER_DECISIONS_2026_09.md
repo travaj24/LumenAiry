@@ -57,22 +57,67 @@ correction itself becomes the error.  The plain Fresnel kernel has no such
 term and is at machine precision there.  `gap_kernel='auto'` today always
 picks the exact kernel.
 
-When it matters.  Only for a leg that lands within about 100 micrometres of
-a geometric focus, and only through the exact kernel.  Everywhere else the
-two kernels agree to rounding.
+When it matters.  CORRECTED 2026-09-20 (VERIFY-WP-C5 D6, WP-C5 round 2): not
+"only within about 100 micrometres of a geometric focus".  The condition the
+switch tests is the distance from the leg's reference plane TIMES the
+envelope's angular half-width TO THE FOURTH POWER, so a WIDE envelope trips
+it just as a short distance does.  The everyday wide-envelope case is a relay
+whose carrier is mismatched to its beam: the mismatch leaves a residual lens
+on the envelope, the envelope's angle grows, and the switch fires on a leg
+that is nowhere near a focus.  Measured on both builds: one 1.55 um relay
+read out a quarter of the way to its focus -- 9.00 mm from the reference
+plane and 48.6 Rayleigh ranges short of the beam's own focus -- falls back
+with a 0.80 mm input beam and does not with a 0.40 mm one, the same leg
+either way, because the departure goes as the angle to the fourth (a ratio of
+15.40 for an angle ratio of 1.98).  The one leg in the library's own test
+suite that this flip moves is of that kind, 2.00 mm from its reference plane.
+Legs where neither quantity is large are untouched, and the two kernels agree
+to rounding there.
 
-What "yes" changes.  A switch already ships, turned off
-(`carrier._GAP_KERNEL_ACCURACY_TAU = None`).  Setting it to `1e-4` makes
+What it cannot settle, in plain language.  The switch was chosen against a
+PARAXIAL yardstick, which can say how big the exact kernel's extra term is
+but not which kernel is closer to the truth.  On the one suite leg it moves,
+that was settled afterwards against a yardstick that is NOT paraxial
+(VERIFY-WP-C5): the plain kernel lands 8.212599e-02 from the true field and
+the refined one 8.222558e-02, so the switch moves that leg the right way.
+Read the sizes as well as the order.  Both kernels are 8.2e-02 from the true
+field there, because the extra term corrects the ENVELOPE's angle while what
+makes that leg non-paraxial is the BEAM's own NA.  The switch is arbitrating
+one ten-thousandth of an eight-hundredth-scale modelling error: it is the
+right call and it is not the thing that makes such a leg accurate.  A leg
+that is genuinely non-paraxial needs a non-paraxial propagator, not a
+different kernel.
+
+Merge consequence, for whoever lands WP-C3 (the `transport='collins'`
+default, ledger 1.2).  Every leg that moves from `'sziklas'` to `'collins'`
+becomes a leg this switch can see, and the independent verification measured
+how many: forcing `'collins'` over the same 27 carrier / traced-chain files
+takes the legs the switch sees from 167 to 284 and the legs it MOVES from 24
+to 96 -- four times the blast radius -- across nine test ids none of which is
+near a focus.  Two things follow.  First, C3's archive-to-archive comparison
+has to be run TWICE, once with `carrier._GAP_KERNEL_ACCURACY_TAU = 1e-4` and
+once with it set to `None`, and both reported: otherwise the transport change
+and the kernel change land in the same digests and neither can be read.
+Second, five of the nine ids are in `test_niche_d3_guards.py`, and what they
+score is a numerical SEPARATION between two routes -- a kernel change on both
+sides of such a comparison can move the separation without moving either
+side's correctness, so those bars have to be RE-DERIVED rather than
+re-recorded.  The full table and id list are in
+`fixes/WP-C5_THREE_DEFAULTS_REPORT.md`, "Round 2 (VERIFY-WP-C5)", under
+"Merge note for WP-C3".
+
+What "yes" changes.  A switch already shipped, turned off
+(`carrier._GAP_KERNEL_ACCURACY_TAU = None`); as decided on 2026-09-20 it now
+ships at `1e-4`, with `None` the one-line opt-out.  Setting it to `1e-4` makes
 `'auto'` fall back to the plain kernel when the predicted correction error
 exceeds one part in ten thousand.  Measured: on the fixture that reaches
 the focus, the error one micrometre short of it drops from 2.4e-3 to 1.7e-14;
 on a fixture that never gets within a millimetre nothing changes.  Explicit
 `gap_kernel='exact'` is still honoured.
 
-What it costs.  Nothing in speed.  Any field computed within that band of a
-focus moves (it gets more accurate).  The oracle used is paraxial, so it
-measures the size of the correction error but cannot say which kernel is
-the more physical one in that band.
+What it costs.  Nothing in speed.  Any field computed inside that band moves
+(it gets more accurate by the paraxial yardstick).  See "What it cannot
+settle" above for how far that statement reaches.
 
 Recommendation: turn it on (`1e-4`).  Confidence medium-high.
 

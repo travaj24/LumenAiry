@@ -1,0 +1,229 @@
+{
+ "_env": {
+  "lumenairy_file": "/mnt/c/tmp/lum_c5/lumenairy/__init__.py",
+  "numpy": "2.4.6",
+  "platform": "Linux-4.4.0-26100-Microsoft-x86_64-with-glibc2.39",
+  "python": "3.12.3",
+  "threads": {
+   "LUMENAIRY_MEM_BUDGET_MB": "2048",
+   "MKL_NUM_THREADS": "1",
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1"
+  }
+ },
+ "digests": {
+  "exact/default": "2e8eaf49276c34962149e45b51ca129b112d948c9e6e1c7dfb4f12fc87f716b3",
+  "exact/repeat": "91cf1a2168697085df37f4004b43bc1e1c312e9fb68a4b945a4553480f0f8d89",
+  "exact/zero": "2e8eaf49276c34962149e45b51ca129b112d948c9e6e1c7dfb4f12fc87f716b3",
+  "exact_faithful/default": "815d178eda7a664fc67bf99a05e93c494587d695042d14ca707ffec9cf5bc513",
+  "exact_faithful/repeat": "815d178eda7a664fc67bf99a05e93c494587d695042d14ca707ffec9cf5bc513",
+  "exact_faithful/zero": "815d178eda7a664fc67bf99a05e93c494587d695042d14ca707ffec9cf5bc513",
+  "faithful/default": "b49774fa8a20da999c7f6ef0f6399d1878c9bd1b4297941e9b8c69a2e2e0900b",
+  "faithful/repeat": "b49774fa8a20da999c7f6ef0f6399d1878c9bd1b4297941e9b8c69a2e2e0900b",
+  "faithful/zero": "b49774fa8a20da999c7f6ef0f6399d1878c9bd1b4297941e9b8c69a2e2e0900b",
+  "offaxis/repeat": "5873e1749b84d9940d29f95fa6e83fb84ebaebb2d68efdef5058b10994ed69f9",
+  "offaxis/zero": "a990711dfacbe06967b5fbf1314e8871d0260c6968b6cc18e1920dce464ffe98",
+  "oversized/1.10/default": "79cd71598cfac7afdee13d8a5202667772e588dff5753e05cc7ffbf15d491e52",
+  "oversized/1.10/repeat": "637341f4ef6c3ab40c0daf3b42fd0ff9c40612a3bdaf369c39c4ef062a134e75",
+  "oversized/1.10/zero": "79cd71598cfac7afdee13d8a5202667772e588dff5753e05cc7ffbf15d491e52",
+  "oversized/1.60/default": "4f0f6794713feda1d619c1d6f1d1e7ed5e44d5bbf5d96c6cef4c912e14326cb5",
+  "oversized/1.60/repeat": "9b86068506562ab4301e29cb1a7a8e85f811f96cb758ba2b4f307870307363c5",
+  "oversized/1.60/zero": "4f0f6794713feda1d619c1d6f1d1e7ed5e44d5bbf5d96c6cef4c912e14326cb5",
+  "oversized/2.20/default": "398ac18d23790f3704721063ed02b002d2abe6ab319483d01936b479599f9247",
+  "oversized/2.20/repeat": "1349fdfafcbdbec849b2e03f205565d8b54d8b53e9988ef567e5457d8ea07ea2",
+  "oversized/2.20/zero": "398ac18d23790f3704721063ed02b002d2abe6ab319483d01936b479599f9247"
+ },
+ "exact_readout": {
+  "default_equals_zero": true,
+  "faithful_samples": [
+   2401,
+   2401
+  ],
+  "faithful_x": 2401,
+  "faithful_y": 2401,
+  "inside_byte_identical": true,
+  "n_inside": 5764801,
+  "n_outside": 11012415,
+  "outside_max_abs_repeat": 0.018629424577581287,
+  "outside_max_abs_zero": 0.0,
+  "published_fill": "zero"
+ },
+ "faithful": {
+  "default": {
+   "digest": "b49774fa8a20da999c7f6ef0f6399d1878c9bd1b4297941e9b8c69a2e2e0900b",
+   "published_fill": "zero"
+  },
+  "identity_short_circuit": true,
+  "repeat": {
+   "digest": "b49774fa8a20da999c7f6ef0f6399d1878c9bd1b4297941e9b8c69a2e2e0900b",
+   "faithful_samples": [
+    32,
+    32
+   ],
+   "published_fill": "repeat"
+  },
+  "window_over_period": 0.13904915054316425,
+  "zero": {
+   "digest": "b49774fa8a20da999c7f6ef0f6399d1878c9bd1b4297941e9b8c69a2e2e0900b",
+   "faithful_samples": [
+    32,
+    32
+   ],
+   "published_fill": "zero"
+  }
+ },
+ "off_axis": {
+  "faithful_samples": [
+   161,
+   161
+  ],
+  "faithful_x": 161,
+  "faithful_y": 161,
+  "inside_byte_identical": true,
+  "n_inside": 25921,
+  "n_outside": 39615,
+  "outside_max_abs_repeat": 36.460493165788066,
+  "outside_max_abs_zero": 0.0
+ },
+ "oversized": {
+  "1.10": {
+   "default_equals_repeat": false,
+   "default_equals_zero": true,
+   "expected_faithful_x": 233,
+   "faithful_samples": [
+    233,
+    233
+   ],
+   "faithful_x": 233,
+   "faithful_y": 233,
+   "inside_byte_identical": true,
+   "n_inside": 54289,
+   "n_outside": 11247,
+   "outside_max_abs_repeat": 0.0463784194350612,
+   "outside_max_abs_zero": 0.0,
+   "published_fill": {
+    "repeat": "repeat",
+    "zero": "zero"
+   },
+   "reported_period": [
+    0.0003897116581600901,
+    0.0003897116581600901
+   ]
+  },
+  "1.60": {
+   "default_equals_repeat": false,
+   "default_equals_zero": true,
+   "expected_faithful_x": 161,
+   "faithful_samples": [
+    161,
+    161
+   ],
+   "faithful_x": 161,
+   "faithful_y": 161,
+   "inside_byte_identical": true,
+   "n_inside": 25921,
+   "n_outside": 39615,
+   "outside_max_abs_repeat": 0.08508188203761292,
+   "outside_max_abs_zero": 0.0,
+   "published_fill": {
+    "repeat": "repeat",
+    "zero": "zero"
+   },
+   "reported_period": [
+    0.0003897116581600901,
+    0.0003897116581600901
+   ]
+  },
+  "2.20": {
+   "default_equals_repeat": false,
+   "default_equals_zero": true,
+   "expected_faithful_x": 117,
+   "faithful_samples": [
+    117,
+    117
+   ],
+   "faithful_x": 117,
+   "faithful_y": 117,
+   "inside_byte_identical": true,
+   "n_inside": 13689,
+   "n_outside": 51847,
+   "outside_max_abs_repeat": 36.18176328713803,
+   "outside_max_abs_zero": 0.0,
+   "published_fill": {
+    "repeat": "repeat",
+    "zero": "zero"
+   },
+   "reported_period": [
+    0.0003897116581600901,
+    0.0003897116581600901
+   ]
+  }
+ },
+ "refusal_matrix": [
+  {
+   "fill": "repeat",
+   "ratio": 0.5,
+   "verdict": "served"
+  },
+  {
+   "fill": "zero",
+   "ratio": 0.5,
+   "verdict": "served"
+  },
+  {
+   "fill": "repeat",
+   "ratio": 0.98,
+   "verdict": "served"
+  },
+  {
+   "fill": "zero",
+   "ratio": 0.98,
+   "verdict": "served"
+  },
+  {
+   "fill": "repeat",
+   "ratio": 1.0,
+   "verdict": "served"
+  },
+  {
+   "fill": "zero",
+   "ratio": 1.0,
+   "verdict": "served"
+  },
+  {
+   "fill": "repeat",
+   "ratio": 1.02,
+   "verdict": "refused:ALIASES"
+  },
+  {
+   "fill": "zero",
+   "ratio": 1.02,
+   "verdict": "refused:ALIASES"
+  },
+  {
+   "fill": "repeat",
+   "ratio": 1.6,
+   "verdict": "refused:ALIASES"
+  },
+  {
+   "fill": "zero",
+   "ratio": 1.6,
+   "verdict": "refused:ALIASES"
+  },
+  {
+   "fill": "repeat",
+   "ratio": 2.2,
+   "verdict": "refused:ALIASES"
+  },
+  {
+   "fill": "zero",
+   "ratio": 2.2,
+   "verdict": "refused:ALIASES"
+  }
+ ],
+ "signature_defaults": {
+  "_collins_focus_readout": "zero",
+  "carrier_referenced_exact_focus_readout": "zero",
+  "carrier_referenced_focus_readout": "zero"
+ }
+}

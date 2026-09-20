@@ -1,0 +1,59 @@
+{
+ "_stamp": {
+  "lumenairy_file": "/mnt/c/tmp/lum_c5b/lumenairy/__init__.py",
+  "lumenairy_version": "5.48.1",
+  "mem_budget_mb_env": null,
+  "mkl": "1",
+  "numpy": "2.4.6",
+  "omp": "1",
+  "openblas": "1",
+  "platform": "Linux-4.4.0-26100-Microsoft-x86_64-with-glibc2.39",
+  "python": "3.12.3 (main, Mar 23 2026, 19:04:32) [GCC 13.3.0]"
+ },
+ "periodicity": {
+  "collins/off_0.30p": {
+   "closed_form_max_abs_error": 7.17370313202487e-09,
+   "closed_form_n_pairs": 377,
+   "complex_resid": 0.006957743226102468,
+   "dx_out": 4.84375e-05,
+   "modulus_resid": 2.0130222288574176e-14,
+   "peak": 29.037556977551684,
+   "period": 0.007749999999999999,
+   "pi_lambda_z_over_dx2_in_pi": 1549.9999999999998,
+   "shift": 160
+  },
+  "collins/on_axis": {
+   "complex_resid": 0.00013878096437466787,
+   "dx_out": 4.84375e-05,
+   "modulus_resid": 1.2358097861069762e-14,
+   "peak": 29.037556977551677,
+   "period": 0.007749999999999999,
+   "shift": 160
+  },
+  "exact/on_axis": {
+   "complex_resid": 1.766366640368936e-13,
+   "dx_out": 5e-08,
+   "modulus_resid": 1.7181046935929508e-13,
+   "peak": 8.855915340196415,
+   "period": 0.00011999999999999999,
+   "shift": 2400,
+   "shift_in_periods": 1.0
+  },
+  "sziklas/off_0.30p": {
+   "complex_resid": 1.1325205556365857e-13,
+   "dx_out": 3.848688775343308e-06,
+   "modulus_resid": 1.9518979707601475e-14,
+   "peak": 28.963930968209002,
+   "period": 0.0006157902040549293,
+   "shift": 160
+  },
+  "sziklas/on_axis": {
+   "complex_resid": 1.4516540490048235e-14,
+   "dx_out": 3.848688775343308e-06,
+   "modulus_resid": 1.4512442267534516e-14,
+   "peak": 28.963930968209,
+   "period": 0.0006157902040549293,
+   "shift": 160
+  }
+ }
+}

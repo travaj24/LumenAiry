@@ -1291,6 +1291,15 @@ def reconstruct_field_from_beamlets(
     The same budget caps the windowed (``window``) path's per-tile beamlet
     stack (B3); the ``LUMENAIRY_MEM_BUDGET_MB`` environment variable, if set, is
     a HARD CEILING on it for a memory-constrained host.
+
+    HOW HONESTLY the dense path counts is
+    :data:`DENSE_MEM_BUDGET_ACCOUNTING`, ``'measured'`` by default (the
+    5.48.x ``'legacy'`` arithmetic under-counted the loop's live peak about
+    six-fold, so the budget was not a bound; ``'legacy'`` is still selectable
+    and byte-identical to those releases).  The budget cannot be met at all
+    below :func:`_dense_budget_floor_bytes`, where the chunk has already
+    floored at one beamlet column; the dense path WARNS there rather than
+    exceeding the budget silently.
     """
     xp = array_namespace(beamlets.positions)
     cx, cy = centre
@@ -1336,15 +1345,42 @@ def reconstruct_field_from_beamlets(
     # v5.21: auto-shrink chunk_beamlets to the memory budget.  Never grows the
     # chunk (so small-N default runs stay byte-identical); only shrinks when a
     # chunk would blow the budget.  Which per-cell cost is used is
-    # :data:`DENSE_MEM_BUDGET_ACCOUNTING` -- see its note for the measurement
-    # and for why the honest figure is not yet the default.
+    # :data:`DENSE_MEM_BUDGET_ACCOUNTING`, 'measured' by default.
     if mem_budget_mb and mem_budget_mb > 0:
-        _cell_bytes = (_DENSE_CELL_BYTES_MEASURED
-                       if DENSE_MEM_BUDGET_ACCOUNTING == 'measured'
-                       else _DENSE_CELL_BYTES_LEGACY)
+        _cell_bytes = _dense_cell_bytes()
         _bytes_per_col = Ny * Nx * _cell_bytes
         _max_chunk = max(1, int(mem_budget_mb * 1e6 / max(1.0, _bytes_per_col)))
         chunk_beamlets = min(chunk_beamlets, _max_chunk)
+        # LOUD WHERE THE BUDGET CANNOT BE A BOUND.  Below one beamlet column
+        # the chunk arithmetic has nothing left to give and the whole-grid
+        # arrays are outside it entirely, so the request cannot be met however
+        # the constant is set.  Say so, with the floor and both mitigations --
+        # see :data:`DENSE_MEM_BUDGET_ACCOUNTING` for why this warns rather
+        # than raises, and why only the mode that claims a bound speaks.
+        if DENSE_MEM_BUDGET_ACCOUNTING == 'measured':
+            _floor = _dense_budget_floor_bytes(Ny, Nx)
+            if mem_budget_mb * 1e6 < _floor:
+                warnings.warn(
+                    f"reconstruct_field_from_beamlets: the dense "
+                    f"(window=None) path CANNOT meet mem_budget_mb="
+                    f"{float(mem_budget_mb):.6g} MB on this "
+                    f"{Ny}x{Nx} grid.  Its chunk already floors at ONE "
+                    f"beamlet column, and one column plus the whole-grid "
+                    f"arrays that live outside the chunk costs "
+                    f"{_floor / 1e6:.6g} MB "
+                    f"({_DENSE_FIXED_CELL_BYTES:.0f} + "
+                    f"{_cell_bytes:.0f} B per output cell) -- "
+                    f"{_floor / (float(mem_budget_mb) * 1e6):.3g}x what was "
+                    f"asked for.  The budget is honoured at or above that "
+                    f"floor and is a statement of intent below it.  Either "
+                    f"raise mem_budget_mb to {_floor / 1e6:.6g} MB, or pass "
+                    f"window=5.0 for the bounded-support scatter-add, whose "
+                    f"accounting has no one-column floor here (it changes the "
+                    f"returned field by its own ~1e-11 truncation, which is "
+                    f"why it is not applied for you).  "
+                    f"lumenairy.propagators.gbd."
+                    f"_dense_budget_floor_bytes(Ny, Nx) publishes the number.",
+                    RuntimeWarning, stacklevel=2)
 
     ix = xp.arange(Nx, dtype=beamlets.positions.dtype)
     iy = xp.arange(Ny, dtype=beamlets.positions.dtype)
@@ -1518,57 +1554,148 @@ _DENSE_CELL_BYTES_LEGACY = 16.0
 #: for nothing: at 128 the chunk is 8x smaller than at 16.
 _DENSE_CELL_BYTES_MEASURED = 128.0
 
-#: ``'legacy'`` (default) or ``'measured'``.  Which of the two constants above
-#: the dense chunk sizing uses.
+#: Bytes per OUTPUT CELL the dense loop holds live OUTSIDE the chunk
+#: arithmetic, and therefore the part of its peak no accounting constant can
+#: shrink.  This is the term VERIFY-WP-B14 D3 named ("a fixed ~48 B/cell term
+#: sits outside the chunk arithmetic") and it is what makes the budget
+#: unmeetable below one beamlet column.
 #:
-#: WHY THIS IS A SWITCH AND NOT A REPAIR IN PLACE.  The constant sets the chunk
-#: boundary, the chunk boundary sets the order the per-chunk ``einsum``
-#: reductions are summed in, and floating-point addition is not associative --
-#: so correcting it MOVES THE OUTPUT BYTES on a default path.  Under the house
-#: rule, a default moves only with a Migration note and a measurement beside it,
-#: and everything else ships opt-in behind a switch whose default reproduces the
-#: previous release exactly.  ``'legacy'`` does that.
+#: MEASURED 2026-09-20 (``validation/probe_c5_three_defaults/``, both builds)
+#: by fitting the loop's ``tracemalloc`` peak against the chunk over a
+#: 1/2/4/8/16/32 ladder at a budget far too large to bind, so the fit reads
+#: the loop's own arithmetic and not the budget's::
 #:
-#: WHAT THE DEFECT COSTS TODAY.  ``mem_budget_mb`` does not bound this loop, so
-#: a caller who sets it to fit a machine can still be handed a multi-gigabyte
-#: transient (measured 3 073 MB against a 512 MB request).  Handoff section 5
-#: records a long pytest run on the maintainer's box dying twice with
-#: ``Windows fatal exception: access violation``, once inside this dense path,
-#: "which passes alone in 30 s" -- the signature of an allocation that only
-#: fails beside other heavy jobs.  This measurement BOUNDS that: the transient
-#: is up to 6x what was asked for.  It does not prove the fault, and no fault
-#: was reproduced here.
+#:     peak / (Ny Nx)  =  fixed  +  c * chunk
 #:
-#: THE SCOPE OF THE REPAIR (audit 2026-09-11 WAVE5-E, from VERIFY-WP-B14 D3).
-#: ``'measured'`` makes the budget a bound only ABOVE ONE BEAMLET COLUMN: at
-#: N = 256 a 4 MB budget reads 2.39x and a 1 MB budget 9.58x, because the chunk
-#: floors at 1 and the fixed ~48 B/cell term is outside the chunk arithmetic.
-#: Re-measured 2026-09-15 on both builds, N = 256, 1024 beamlets, ``'measured'``
-#: mode (``validation/probe_wave5_e/e4_gbd_scope_*.json``):
+#:                  Windows py3.14.6 / numpy 2.4.4   WSL py3.12.3 / numpy 2.4.6
+#:     N = 512   fixed 48.551  c 96.000  dev 5.8e-07  fixed 48.047  c 88.000  dev 1.2e-06
+#:     N = 256   fixed 50.114  c 96.000  dev 7.0e-06  fixed 48.098  c 88.000  dev 4.8e-06
 #:
-#:                 Windows py3.14.6 / numpy 2.4.4   WSL py3.12.3 / numpy 2.4.6
-#:     512 MB      chunk 61, 432.4 MB, 0.84x        chunk 61, 389.6 MB, 0.76x
-#:      16 MB      chunk  1,   9.6 MB, 0.60x        chunk  1,   8.9 MB, 0.56x
-#:       4 MB      chunk  1,   9.6 MB, 2.39x        chunk  1,   8.9 MB, 2.23x
-#:       1 MB      chunk  1,   9.6 MB, 9.58x        chunk  1,   8.9 MB, 8.92x
+#: Windows' two ``fixed`` readings differ by 1.56 B/cell, which at N = 256 is
+#: 102 KB -- a grid-INDEPENDENT offset divided by a smaller cell count, not a
+#: second per-cell term.  48.0-48.6 B/cell is the per-cell figure on both
+#: builds, and N = 512 is the cell that reads it cleanly.
 #:
-#: The two builds' ``tracemalloc`` peaks differ by ~7 % (the allocator's own
-#: bookkeeping), so the 2.39 / 9.58 figures are the Windows readings and the
-#: bound below one column is the build-free statement: both builds are under 1x
-#: at 512 and 16 MB and over 2x at 4 MB.
+#: ``c`` IS BUILD-DEPENDENT (96 against 88 -- one 8-byte-per-cell temporary
+#: the two numpy versions differ over), which is why the constant below is 128
+#: and not either reading: it has to sit above the LARGER of them.
+#: (Windows' ``c`` is the same constant the B14 ladder read as "72.0 to 96.8",
+#: saturating at 96.0 once the chunk binds -- two independent measurements of
+#: one constant on one build.)  Of the ~48, 32 B/cell is structural (``Xg``
+#: and ``Yg`` at 8 B each and the ``out`` accumulator at 16 B, all whole-grid
+#: and all outside the loop); the remaining ~16 B/cell is one grid-sized
+#: complex128 temporary the per-chunk reduction leaves live.  The constant is the measurement rounded DOWN to
+#: 48.0, because the margin that makes the floor an upper bound is carried by
+#: ``_DENSE_CELL_BYTES_MEASURED``: the floor as a whole reads 1.205x the
+#: measured one-column peak at N = 256 (11.534 MB against 9.576) and 1.218x at
+#: N = 512 (46.137 against 37.893) on Windows, 1.293x and 1.294x on WSL.
+_DENSE_FIXED_CELL_BYTES = 48.0
+
+#: ``'measured'`` (the DEFAULT) or ``'legacy'``.  Which of the
+#: two constants above the dense chunk sizing uses.
 #:
-#: The one-column floor is ``Ny*Nx*(48 + _DENSE_CELL_BYTES_MEASURED)`` bytes
-#: (11.53 MB at N = 256), and no accounting constant can put the loop under a
-#: budget below it -- the chunk cannot go under 1.  Pinned two-sided by
-#: ``tests/unit/test_verify_b14_known_reds.py::
-#: test_the_measured_accounting_bounds_the_budget_only_above_one_column``.
+#: THE MAINTAINER'S DECISION, 2026-09-20 (ledger item 1.8): the budget is
+#: counted accurately.  ``'legacy'`` stays selectable and reproduces 5.48.x to
+#: the byte; the two differ only in the order the per-chunk reductions are
+#: summed in (measured relative spread 2.1e-17 at N = 256 and 1.8e-18 at
+#: N = 512), because the constant sets the chunk boundary, the chunk boundary
+#: sets the summation order, and floating-point addition is not associative.
 #:
-#: MITIGATION WITHOUT FLIPPING THE SWITCH: pass ``window=5.0`` (the bounded-
-#: support scatter-add, whose own accounting IS correct), or divide
-#: ``mem_budget_mb`` by 6.
+#: WHAT THE OLD DEFAULT COST.  ``mem_budget_mb`` did not bound this loop, so a
+#: caller who set it to fit a machine could still be handed a multi-gigabyte
+#: transient.  MEASURED 2026-09-20, 1024 beamlets, ``mem_budget_mb=512``:
+#: ``'legacy'`` peaks at 3 074 MB on a 256^2 grid (6.00x the budget) and
+#: 3 083 MB on 512^2 (6.02x); ``'measured'`` peaks at 387 MB (0.756x) and
+#: 390 MB (0.762x).  WSL reads the same story one notch lower (5.50x / 5.52x
+#: against 0.693x / 0.700x), so the build-free statement is "over 5x before,
+#: under 0.8x after", on both.  Handoff section 5 records a long pytest run on the
+#: maintainer's box dying twice with ``Windows fatal exception: access
+#: violation``, once inside this dense path, "which passes alone in 30 s" --
+#: the signature of an allocation that only fails beside other heavy jobs.
+#: The measurement BOUNDS that at 6x; it does not prove the fault, and no
+#: fault was reproduced.
 #:
-#: THE FLIP IS A DECISION RESERVED FOR THE MAINTAINER (handoff 4.7 list).
-DENSE_MEM_BUDGET_ACCOUNTING = 'legacy'
+#: WHERE THE BUDGET CANNOT BE A BOUND, AND WHAT HAPPENS THERE (VERIFY-WP-B14
+#: D3).  The chunk floors at ONE beamlet column and
+#: :data:`_DENSE_FIXED_CELL_BYTES` sits outside the chunk arithmetic
+#: altogether, so below :func:`_dense_budget_floor_bytes` no accounting
+#: constant can meet the request.  That regime is no longer silent: under
+#: ``'measured'`` the dense path emits a ``RuntimeWarning`` naming the floor,
+#: the budget and the two mitigations.  It WARNS rather than raises, measured:
+#: at the shipped ``mem_budget_mb=512`` default the floor binds from
+#: ``Ny*Nx >= 2.909e+06`` cells, i.e. any square grid from N = 1706 up (the
+#: floor reads 511.6364 MB at N = 1705 and 512.2367 MB at N = 1706, so it
+#: binds AT 1706), so a refusal would turn a call that completes today into
+#: a hard error on a DEFAULT path -- and the one mitigation that keeps the
+#: grid (``window=5.0``) changes the returned field by its own ~1e-11
+#: truncation, so the library cannot apply it on the caller's behalf.  The
+#: honest move is to run and say so.  Under ``'legacy'`` nothing is emitted:
+#: that mode's arithmetic never claimed to bound the loop, and a caller who
+#: selects it has opted out.
+#:
+#: MITIGATIONS: pass ``window=5.0`` (the bounded-support scatter-add, whose own
+#: accounting IS correct and whose chunk has no one-column floor at this size),
+#: or raise ``mem_budget_mb`` to the floor this module publishes.
+DENSE_MEM_BUDGET_ACCOUNTING = 'measured'
+
+#: The accepted spellings of :data:`DENSE_MEM_BUDGET_ACCOUNTING`.
+_DENSE_MEM_BUDGET_ACCOUNTINGS = frozenset({'measured', 'legacy'})
+
+
+def _dense_cell_bytes(accounting=None):
+    """The per (cell x beamlet-column) constant the dense chunk sizing uses,
+    validated.
+
+    A typo must NOT fall through to a mode.  Through 5.48.x an unrecognised
+    value silently selected ``'legacy'``, which was harmless while ``'legacy'``
+    was the default; now it would silently restore the six-fold under-count
+    that the default exists to remove, which is the silent-downgrade shape the
+    carrier module's ``gap_kernel`` / ``replica_fill`` vocabulary gates were
+    added to close.  Refused by name instead.
+    """
+    mode = (DENSE_MEM_BUDGET_ACCOUNTING if accounting is None else accounting)
+    if mode not in _DENSE_MEM_BUDGET_ACCOUNTINGS:
+        raise ValueError(
+            f"lumenairy.propagators.gbd.DENSE_MEM_BUDGET_ACCOUNTING must be "
+            f"one of {sorted(_DENSE_MEM_BUDGET_ACCOUNTINGS)!r} "
+            f"(case-sensitive strings), got {mode!r}.  'measured' (the "
+            f"default) sizes the dense chunk from the loop's measured "
+            f"footprint, {_DENSE_CELL_BYTES_MEASURED:.0f} B per cell-column; "
+            f"'legacy' uses the {_DENSE_CELL_BYTES_LEGACY:.0f} B shipped "
+            f"through 5.48.x, which under-counts by about six-fold and is kept "
+            f"only for byte-identity with those releases.")
+    return (_DENSE_CELL_BYTES_MEASURED if mode == 'measured'
+            else _DENSE_CELL_BYTES_LEGACY)
+
+
+def _dense_budget_floor_bytes(Ny, Nx):
+    """The smallest peak the dense reconstruction loop can have on an
+    ``Ny x Nx`` output grid -- and therefore the smallest ``mem_budget_mb``
+    that can be honoured there.
+
+    ``Ny*Nx*(_DENSE_FIXED_CELL_BYTES + _DENSE_CELL_BYTES_MEASURED)``: the chunk
+    cannot go below ONE beamlet column, so one column's cost plus the
+    whole-grid arrays that live outside the chunk is a floor no accounting
+    constant can lower.  11.534 MB at N = 256, 46.137 MB at N = 512.
+
+    IT DOES NOT TAKE THE ACCOUNTING MODE, deliberately.  This is what the LOOP
+    costs, not what an accounting believes it costs: ``'legacy'``'s 16 B per
+    cell-column would put the "floor" at 4.19 MB on a 256-square grid where
+    the loop measurably cannot go below 9.58 MB, which would be the same
+    under-count wearing a new name.  One number, one meaning; the mode decides
+    the CHUNK, not the floor.
+
+    MEASURED 2026-09-20 on both builds against the loop's own ``tracemalloc``
+    peak at ``chunk = 1``: the published floor is 1.205x that peak at N = 256
+    (9.576 MB measured) and 1.218x at N = 512 (37.893 MB) on Windows, 1.293x
+    and 1.294x on WSL -- an UPPER bound on the one-column peak on BOTH builds,
+    which is what makes "a budget at or above the floor is honoured" a true
+    statement rather than a hopeful one.  Swept from 1.0x to 12x the floor the
+    peak never reaches the budget: worst 0.917 (Windows, N = 256) and 0.849
+    (WSL), both at 1.5x the floor, settling to ``c``/128 as the budget grows.
+    """
+    return float(Ny) * float(Nx) * (_DENSE_FIXED_CELL_BYTES
+                                    + _DENSE_CELL_BYTES_MEASURED)
 
 
 def _reconstruct_windowed(

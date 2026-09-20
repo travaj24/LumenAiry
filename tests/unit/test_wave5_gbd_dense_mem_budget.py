@@ -26,9 +26,12 @@ correctly (``_WINDOWED_CELL_BYTES = 32.0``, with a written per-array tally of
 
 WHAT IS PINNED HERE.
 
-  1. The default is ``'legacy'`` and is BYTE-IDENTICAL -- correcting the
+  1. The default was ``'legacy'`` -- byte-identical, because correcting the
      constant moves the chunk boundary, hence the summation order of the
-     per-chunk reductions, hence the output bytes, so it ships opt-in.
+     per-chunk reductions, hence the output bytes -- and became ``'measured'``
+     in 5.49.0 (WP-C5 item 2, ledger 1.8).  What this file pins is unchanged
+     in substance: both modes exist, ``'legacy'`` still reproduces 5.48.x, and
+     the arm that read the shipped value now reads the new one.
   2. The overrun is REAL and is not a fixture artefact: with the legacy
      accounting the measured peak exceeds the requested budget by a wide,
      stated factor.  This is the fail-before arm, asserted rather than assumed.
@@ -103,11 +106,20 @@ def _run(mode, bundle, budget_mb=_BUDGET_MB, N=_N):
     return np.asarray(out), int(peak - base)
 
 
-def test_the_shipped_default_is_the_legacy_accounting():
-    """The switch exists; its default is the state that reproduces the
-    previous release.  A correction that silently moved a default path's bytes
-    would be the wrong shape for this defect, however right the arithmetic."""
-    assert G.DENSE_MEM_BUDGET_ACCOUNTING == 'legacy'
+def test_the_shipped_default_is_the_measured_accounting():
+    """The switch exists, and since 5.49.0 its default is the HONEST
+    accounting.
+
+    It shipped as ``'legacy'`` deliberately: a correction that silently moved
+    a default path's bytes would have been the wrong shape for this defect,
+    however right the arithmetic.  The maintainer took the decision on
+    2026-09-20 with the Migration note it needs, and ``'legacy'`` stays
+    selectable and byte-identical to 5.48.x -- which is what keeps the rest of
+    this file's claims (the fail-before arm below, in particular) live rather
+    than historical.
+    """
+    assert G.DENSE_MEM_BUDGET_ACCOUNTING == 'measured'
+    assert 'legacy' in G._DENSE_MEM_BUDGET_ACCOUNTINGS
     assert G._DENSE_CELL_BYTES_LEGACY == 16.0
     # The honest constant must be above every measurement on the ladder
     # (96.8 B/cell-col) and is carried with the same margin the windowed
@@ -161,12 +173,19 @@ def test_the_two_accountings_differ_only_by_summation_order(
         f"the chunk boundary moved.")
 
 
-def test_an_unknown_accounting_is_treated_as_legacy(_restore_accounting):
-    """The switch is read, not validated, at a hot site, so an unrecognised
-    value must fall to the SHIPPED behaviour rather than to the new one: a
-    typo must not silently move a user's bytes."""
+def test_an_unknown_accounting_is_refused_by_name(_restore_accounting):
+    """RESTATED for the 5.49.0 default.  While ``'legacy'`` was the default,
+    an unrecognised value falling through to it was the conservative choice
+    and this id asserted exactly that.  With ``'measured'`` the default the
+    same fall-through would silently restore the six-fold under-count the
+    default exists to remove -- the same silent-downgrade shape the carrier
+    module's ``gap_kernel`` and ``replica_fill`` gates were added to close --
+    so the typo is refused by name instead, and the message carries the whole
+    vocabulary so a caller can act on it."""
     b = _bundle(n=128)
-    a, _ = _run('legacy', b, N=64)
     G.DENSE_MEM_BUDGET_ACCOUNTING = 'not-a-mode'
-    c, _ = _run('not-a-mode', b, N=64)
-    assert np.array_equal(a, c)
+    with pytest.raises(ValueError) as ei:
+        _run('not-a-mode', b, N=64)
+    msg = str(ei.value)
+    assert 'DENSE_MEM_BUDGET_ACCOUNTING' in msg
+    assert "'legacy'" in msg and "'measured'" in msg and 'not-a-mode' in msg

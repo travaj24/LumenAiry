@@ -1708,17 +1708,26 @@ _TRANSPORTS = ('sziklas', 'collins')
 #: NOT a geometric margin -- the radii are read from the field on every call.
 _COLLINS_TAIL_FRAC = 1e-6
 
-#: MAINTAINER SWITCH, DEFAULT OFF: an ACCURACY-keyed fallback for
-#: ``gap_kernel='auto'`` near a geometric focus.  ``None`` is the shipped
-#: value and reproduces 5.47.0's behaviour exactly -- the condition below is
-#: not evaluated at all, so nothing measured, nothing allocated, no byte
-#: moved.  Setting it to a float (the measurement below says ``1e-4``) ARMS
-#: the rule with that ``tau``.  One line.
+#: The ACCURACY-keyed fallback for ``gap_kernel='auto'``, ARMED by default
+#: with ``tau = 1e-4`` (the maintainer's decision of 2026-09-20 on ledger
+#: items 1.5 / 4.3; the CHANGELOG carries the release it shipped in).  It
+#: fires inside a band in ``k |z_eff| theta_env^4`` -- the KERNEL-DEPARTURE
+#: BAND, named for the criterion rather than for a distance, because the
+#: envelope's angle enters at the fourth power and a wide envelope trips it
+#: on a leg that is nowhere near a focus (VERIFY-WP-C5 D6; see "THE BAND IT
+#: FIRES IN" below).  ``'auto'`` drops to ``'fresnel'`` on a leg whose
+#: PREDICTED exact-kernel departure exceeds
+#: ``tau``; an EXPLICIT ``gap_kernel='exact'`` is still honoured, and setting
+#: this back to ``None`` restores 5.48.x bit for bit -- the condition is then
+#: not evaluated at all, so nothing is measured, nothing allocated and no byte
+#: moved.  One line either way.
 #:
-#: WHAT IT WOULD DO, AND WHY IT IS NOT ON.  The existing ``k4`` gate bounds
+#: WHAT IT DOES, AND WHY THE DEFAULT MOVED.  The existing ``k4`` gate bounds
 #: REPRESENTABILITY -- whether the exact kernel's impulse response wraps the
 #: reduced frame -- and it is the right gate for what it bounds.  It does not
-#: bound ACCURACY, and near a geometric focus the two part company: MEASURED
+#: bound ACCURACY, and wherever ``k |z_eff| theta_env^4`` is large -- near a
+#: geometric focus at a fixed envelope angle, and on a wide envelope at a
+#: fixed distance -- the two part company: MEASURED
 #: 2026-09-19 across three fixtures and two builds, ``k4`` sits 4.65 decades
 #: below its bar of 1 where the exact kernel's departure from the paraxial
 #: oracle is 4.7e-06, and still 2 decades below it where that departure is
@@ -1733,19 +1742,61 @@ _COLLINS_TAIL_FRAC = 1e-6
 #: phase over a 2-D circular Gaussian; it predicts VERIFY-B4 F3's 2.3497e-03
 #: to a ratio of 1.00002 and the 498x between the two fixtures to four digits.
 #:
-#: TWO REASONS IT IS THE MAINTAINER'S DECISION AND NOT THIS PACKAGE'S.  The
-#: oracle is PARAXIAL, so it can say how far the exact kernel departs from the
-#: paraxial truth and cannot say which kernel is more physical -- on a leg
-#: where the exact kernel IS the better physics, this rule trades accuracy for
-#: agreement with an oracle.  And it MOVES ANSWERS on any leg it fires on,
-#: which needs a Migration note.  The chain's own
+#: WHAT ``tau = 1e-4`` BUYS, AND THE BAND IT FIRES IN.  ``tau`` is a
+#: RELATIVE-L2 budget on the field, a tenth of a per-mille.  The departure is
+#: linear in ``|z_eff|`` and QUARTIC in ``theta_env``, so the rule is a band
+#: in ``k |z_eff| theta_env^4`` -- near-focus at a FIXED envelope angle,
+#: wide-envelope at a FIXED distance -- and not a distance to a focus.  It
+#: fires exactly where ``|z_eff| > 8 tau / (sqrt(3/2) k theta_env^4)``.
+#: Measured 2026-09-20 on both builds
+#: (``validation/probe_c5_three_defaults/``): the hygiene-2 ladder
+#: is INERT at every one of its nine rungs (worst departure 4.72e-06, 1.3
+#: decades under tau) because its carrier focus sits 31.66 um beyond the waist
+#: the ladder walks to; VERIFY-B4 F3's ladder, which does approach ``A = 0``,
+#: falls back inside 23.5 um of its focus and keeps the exact kernel outside
+#: it (2.35e-03 at 1 um and 2.35e-04 at 10 um are over tau; 2.34e-05 at 100 um
+#: is under).  On the F3 fixture the fallback replaces a 2.35e-03 relative
+#: departure from the analytic Gaussian with 1.7e-14.
+#:
+#: AND THE OTHER HALF OF THE BAND, which the two fixtures above cannot show
+#: because both hold the envelope's angle fixed and walk the distance.  On a
+#: carrier MISMATCHED to its beam the envelope keeps a residual lens, so
+#: ``theta_env`` grows while the leg stays where it is.  Measured 2026-09-20
+#: on both builds (``validation/probe_c5_round2/``, and pinned by
+#: ``tests/unit/test_c5_three_defaults.py::
+#: test_a_wide_envelope_leg_far_from_any_focus_falls_back``): on ONE leg --
+#: one carrier, one readout plane, ``z_eff`` 7.777778e-03 m, 9.00 mm from
+#: that carrier's ``A = 0`` plane and 48.6 Rayleigh ranges short of the
+#: beam's own focus -- a 0.80 mm input beam (``theta_env`` 1.715395e-02 rad)
+#: reads a departure of 4.179416e-04 and FALLS BACK, while a 0.40 mm beam on
+#: the same leg (8.659722e-03 rad) reads 2.714408e-05 and keeps the exact
+#: kernel.  The ratio is 15.40, which is 1.9809^4: the quartic, with the
+#: distance factored out.  The one leg in the library's own test suite that
+#: this rule moves is of that kind, not of the near-focus kind
+#: (``test_audit2609_b4_collins_transport.py``'s ``mismatch_matrix``,
+#: ``|z_eff|`` 0.180 m, ``theta_env`` 5.5712e-03 rad, departure 1.2733e-04,
+#: 2.00 mm from its ``A = 0`` plane).
+#:
+#: THE CAVEAT, BOTH WAYS.  The oracle that measured the law is PARAXIAL, so it
+#: can say how far the exact kernel departs from the paraxial truth and cannot
+#: say which kernel is more physical.  On a leg where the exact kernel IS the
+#: better physics this rule trades accuracy for agreement with the paraxial
+#: oracle -- which is why an explicit ``gap_kernel='exact'`` is never
+#: overridden and why ``None`` stays one assignment away.  Scored ONCE against
+#: an oracle that is not paraxial (VERIFY-WP-C5, a closed-form angular
+#: spectrum with the exact transfer function): on the ``mismatch_matrix``
+#: leg the plain kernel reads 8.212599e-02 relative L2 from the true scalar
+#: field and the refined one 8.222558e-02, so the rule moves that leg TOWARD
+#: the truth -- but both sit 8.2e-02 away, because the refinement lives in
+#: the reduced frame on the ENVELOPE's angle while the leg's own
+#: non-paraxiality is set by the BEAM's NA.  At that fixture's NA the rule is
+#: arbitrating 1e-04 of an 8e-02 modelling error, which is the honest size of
+#: the decision and not an argument for either kernel.  The chain's own
 #: :data:`_GAP_ENV_PHI_TOL_DEFAULT` = 0.3 is NOT a usable ``tau`` here: it
 #: would need ``z_eff > 9.8e+05 m`` to trip on the hygiene-2 fixture, i.e.
-#: never.  ``tau`` has to be set from the accuracy actually wanted, and
-#: ``tests/unit/test_wave5_h2_near_focus_table.py`` measures what ``1e-4``
-#: buys: the hygiene-2 ladder stays INERT (worst departure 4.7e-06) and
-#: VERIFY-B4 F3's 1 um and 10 um rungs fall back (2.3e-03 and 2.3e-04).
-_GAP_KERNEL_ACCURACY_TAU = None
+#: never.  ``tests/unit/test_wave5_h2_near_focus_table.py`` and
+#: ``tests/unit/test_c5_three_defaults.py`` measure both sides of the band.
+_GAP_KERNEL_ACCURACY_TAU = 1e-4
 
 #: ``sqrt(<u^8>)`` under the spectral weight ``exp(-2 u^2)`` of a 2-D circular
 #: Gaussian -- the RMS-vs-peak moment of a quartic phase, and the constant of
@@ -1791,8 +1842,8 @@ def _collins_exact_kernel_departure(z_eff, theta_env, wavelength):
 
     What the exact-kernel refinement CHANGES, relative, against the paraxial
     kernel.  Derived and re-measured on three fixtures and two builds; see
-    :data:`_GAP_KERNEL_ACCURACY_TAU` for the readings and for why the rule it
-    feeds is off by default.
+    :data:`_GAP_KERNEL_ACCURACY_TAU` for the readings, for the band the rule
+    it feeds fires in, and for the caveat that goes with it.
     """
     if not np.isfinite(z_eff):
         return float('inf')
@@ -2468,12 +2519,14 @@ def _collins_transport(env, R_in, z, wavelength, dx, dy, *,
                     f"theta^4/8 of the beam's own angle).  Pass gap_kernel='auto' "
                     f"to take the ABCD-Fresnel integral here, or 'fresnel' to take "
                     f"it everywhere.")
-        # ACCURACY-KEYED FALLBACK, OFF BY DEFAULT.  See
-        # :data:`_GAP_KERNEL_ACCURACY_TAU`: with the shipped ``None`` nothing
-        # below is evaluated and the leg is 5.47.0 to the byte.  Only 'auto'
-        # falls back; an EXPLICIT 'exact' is honoured, because the caller has
-        # asked for the refinement and silently replacing it is the D4 shape
-        # the vocabulary gate exists to remove.
+        # ACCURACY-KEYED FALLBACK, ARMED BY DEFAULT.  See
+        # :data:`_GAP_KERNEL_ACCURACY_TAU`: setting it back to ``None``
+        # leaves nothing below evaluated and the leg is 5.48.x to the byte.
+        # Only 'auto' falls back; an EXPLICIT 'exact' is honoured, because
+        # the caller has asked for the refinement and silently replacing it
+        # is the D4 shape the vocabulary gate exists to remove.  The band it
+        # fires in is a band in ``k |z_eff| theta_env^4``, not a distance to
+        # a focus (VERIFY-WP-C5 D6).
         dep = None
         if (kernel == 'exact' and _GAP_KERNEL_ACCURACY_TAU is not None):
             th_ex, th_ey = _collins_envelope_half_angle(S, dx, dy, wavelength)
@@ -2740,7 +2793,7 @@ def _collins_carrier_leg(env, R, z, wavelength, dx, dy, *,
 def _collins_focus_readout(env, R, z, wavelength, dx, dy, *,
                            dx_out, N_out, centre_out=(0.0, 0.0),
                            gap_kernel='auto', tilt=(0.0, 0.0),
-                           on_replica='error', replica_fill='repeat',
+                           on_replica='error', replica_fill='zero',
                            on_collins_sampling='warn',
                            fn='_collins_focus_readout', _period_out=None,
                            mft_method=None):
@@ -4182,7 +4235,7 @@ def carrier_referenced_focus_readout(
     gap_kernel: str = 'auto',
     tilt: Tuple[float, float] = (0.0, 0.0),
     on_replica: str = 'error',
-    replica_fill: str = 'repeat',
+    replica_fill: str = 'zero',
     on_focus_containment: str = 'error',
     mft_method: Optional[str] = None,
     _period_out: Optional[dict] = None,
@@ -4290,19 +4343,25 @@ def carrier_referenced_focus_readout(
         :func:`_check_readout_replica` for the derivation and the measured
         degradation, and ``replica_fill`` for keeping the window without the
         replicas.
-    replica_fill : {'repeat', 'zero'}, default 'repeat'
+    replica_fill : {'zero', 'repeat'}, default 'zero'
         What the readout WRITES outside one period, when ``on_replica`` has
-        let such a window through.  ``'repeat'`` leaves the periodic replicas
-        the transform produces -- the historical answer, and the one a caller
-        deliberately reading the periodic reconstruction needs.  ``'zero'``
-        blanks them, so a window-wide reduction sees measurement and zeros
-        instead of measurement and copies: on the battery cell above that is
-        the difference between 20.50 um / 49.5 % and 18.50 um / 99.70 %, the
+        let such a window through.  ``'zero'`` (the default) blanks the
+        region, so a window-wide reduction sees measurement and zeros instead
+        of measurement and copies: on the battery cell above that is the
+        difference between 20.50 um / 49.5 % and 18.50 um / 99.70 %, the
         latter matching this readout at any standoff long enough to cover the
-        window.  Both settings return the requested shape and are
+        window.  ``'repeat'`` leaves the periodic replicas the
+        transform produces -- the 5.48.x answer bit for bit, and the one a
+        caller deliberately reading the periodic reconstruction needs.
+
+        Both settings return the requested shape, take the same leg and are
         BIT-IDENTICAL inside one period (a faithful window is returned by
-        identity on either); ``_period_out``'s ``'faithful_samples'`` says how
-        many samples per axis that is.  See :func:`_fill_readout_replicas`.
+        IDENTITY on either -- the same object, so every window the guard
+        would pass is untouched); ``_period_out``'s ``'faithful_samples'``
+        says how many samples per axis that is and ``'replica_fill'`` says
+        which fill was applied.  Neither setting changes whether an oversized
+        window is refused: ``on_replica`` decides that, first.  See
+        :func:`_fill_readout_replicas`.
     on_focus_containment : {'error', 'warn', 'ignore'}, default 'error'
         What to do when the beam DOES NOT FIT the co-moving grid at the stop
         plane -- the failure mode the replica guard above cannot see, because
@@ -4553,9 +4612,10 @@ def carrier_referenced_focus_readout(
                 f"is periodic REPLICAS folded into the window -- energy the "
                 f"transform created, not signal it measured.  Lengthen the "
                 f"standoff (the period is linear in it: >= {_need:.6e} m "
-                f"covers this window), narrow N_out*dx_out, keep the window "
-                f"and pass replica_fill='zero' so the unmeasurable part comes "
-                f"back as zeros, or restore on_replica='error'.  Pass "
+                f"covers this window), narrow N_out*dx_out, drop the "
+                f"explicit replica_fill='repeat' so the unmeasurable part "
+                f"comes back as zeros (the default), or restore "
+                f"on_replica='error'.  Pass "
                 f"on_focus_containment='ignore' to silence.",
                 stacklevel=None)
     return E_out
@@ -4947,11 +5007,15 @@ def _publish_readout_containment(stage, pd):
     the stop plane's) and ``readout_faithful_samples`` (the ``(nx, ny)``
     samples per axis of the returned window that lie inside one Bluestein
     period and therefore carry measurement -- ``(N_out, N_out)`` unless the
-    requested window reached outside it).  See ``on_focus_containment``."""
+    requested window reached outside it) and ``readout_replica_fill`` (which
+    fill the readout applied to the part outside it -- ``'zero'`` by default,
+    ``'repeat'`` when the caller asked for the periodic reconstruction).  See
+    ``on_focus_containment``."""
     for _k, _s in (('containment', 'readout_containment'),
                    ('containment_model', 'readout_containment_model'),
                    ('window_energy_frac', 'readout_window_energy'),
-                   ('faithful_samples', 'readout_faithful_samples')):
+                   ('faithful_samples', 'readout_faithful_samples'),
+                   ('replica_fill', 'readout_replica_fill')):
         if _k in pd:
             stage[_s] = pd[_k]
 
@@ -5094,10 +5158,13 @@ def _check_readout_replica(fn, period, dx_out, N_out, on_replica,
     through-focus scan still reads the truth (18.50 um FWHM, 99.70 % encircled
     energy inside two waists) and at 2.063 it reads the replica in the window's
     corner (20.50 um, 49.5 %).  A caller who wants the window anyway can have
-    the replicas blanked with ``replica_fill='zero'``
-    (:func:`_fill_readout_replicas`), which on that cell restores 18.50 um and
-    99.70 %; the faithful part is bit-identical either way.  Until this guard
-    the only thing that fired was a downstream ``UserWarning`` from
+    the replicas blanked, which is what the default ``replica_fill='zero'``
+    does (:func:`_fill_readout_replicas`) -- on that cell it restores 18.50 um
+    and 99.70 % -- and a caller who wants the periodic reconstruction itself
+    asks for ``replica_fill='repeat'``; the faithful part is bit-identical
+    either way, and this guard's decision does not depend on the fill.
+    Until this guard the only thing that fired was a downstream
+    ``UserWarning`` from
     ``angular_spectrum_propagate_mft``, which any upstream
     ``filterwarnings('ignore')`` removes; the module's own ``on_replica`` note
     in :func:`propagate_traced_carrier_chain_multi` already says that is the
@@ -5236,21 +5303,31 @@ def _check_readout_replica(fn, period, dx_out, N_out, on_replica,
            f"period, so NO window is faithful at this offset: bring "
            f"centre_out inside +/-{0.5 * p_min:.6e} m of the field origin")
         + (remedy or "") +
-        ", or keep the window and pass replica_fill='zero' to have the "
-        "unmeasurable part returned as ZERO instead of as replicas (the "
-        "faithful part is bit-identical either way, and _period_out's "
-        "'faithful_samples' says how many samples that is).  "
-        "on_replica='warn' accepts the replicas with a RuntimeWarning, "
+        ", or keep the window and WAIVE this guard: the unmeasurable part "
+        "then comes back as ZERO under the default replica_fill='zero' "
+        "(the faithful part is bit-identical either way, and _period_out's "
+        "'faithful_samples' says how many samples that is), or as the "
+        "REPLICAS themselves under replica_fill='repeat' if the periodic "
+        "reconstruction is what you are looking at.  "
+        "on_replica='warn' accepts the window with a RuntimeWarning, "
         "'ignore' silences the check entirely.",
         stacklevel=stacklevel)
 
 
 #: Accepted ``replica_fill`` values -- what a readout writes in the part of a
 #: requested window that lies outside one Bluestein period of the field's own
-#: origin.  ``'repeat'`` leaves the periodic copies the transform produces
-#: (the historical answer, and the one the multi-congruence chain's own
-#: field-of-view contract and the V3 ghost fixtures are written against);
-#: ``'zero'`` writes zeros there instead.
+#: origin.  ``'zero'`` (the DEFAULT) writes zeros there, so a window-wide
+#: reduction sees measurement and zeros rather than measurement and
+#: full-amplitude copies of the core; ``'repeat'`` leaves the periodic
+#: copies the transform produces, which is what a caller deliberately reading
+#: the periodic reconstruction needs -- the multi-congruence chain's own
+#: field-of-view demonstration and the V3 ghost fixtures are written against
+#: it, and it is the 5.48.x answer bit for bit.
+#:
+#: NEITHER SETTING TOUCHES A FAITHFUL WINDOW, and neither decides whether an
+#: oversized window is SERVED: :func:`_check_readout_replica` refuses one
+#: before either fill is reached, so ``replica_fill`` only says what a WAIVED
+#: readout contains (:func:`_fill_readout_replicas` states the geometry).
 _REPLICA_FILLS = frozenset({'repeat', 'zero'})
 
 
@@ -5271,7 +5348,18 @@ def _fill_readout_replicas(E_out, period, dx_out, N_out,
     Both public readouts finish on
     :func:`~lumenairy.propagators.mft.angular_spectrum_propagate_mft`, whose
     reconstruction obeys ``E(u + period) == E(u)`` identically in ABSOLUTE
-    output coordinates.  Only ``|u| <= period/2`` about that origin carries
+    output coordinates (measured 1.5e-14 and 1.8e-13).
+    :func:`_collins_focus_readout` shares the GEOMETRY and not that last
+    statement: its post-chirp is quadratic in the absolute output coordinate,
+    so there ``E(u + period) = exp(i[2 pi u/dx_in + pi lambda z/dx_in^2])
+    E(u)`` -- the MODULUS is periodic to 2.0e-14 and the complex field only
+    where ``u/dx_in`` is an integer (measured 2026-09-20 on both builds over
+    377 sample pairs, worst 7.2e-09; VERIFY-WP-C5 D5,
+    ``validation/probe_c5_round2/``).  What this function is about is
+    unaffected: the mask is field-independent and built from the period
+    alone, and "a replica is a full-amplitude image of the core" -- the
+    statement every reduction the fill protects depends on -- is the MODULUS
+    statement.  Only ``|u| <= period/2`` about that origin carries
     measurement; every sample beyond it repeats a point the transform already
     evaluated, whatever the field, the NA, the leg and the window
     (:func:`_check_readout_replica` derives the geometry and states the bar).
@@ -5306,13 +5394,20 @@ def _fill_readout_replicas(E_out, period, dx_out, N_out,
     1536 um agree to the digit), i.e. three independent geometries with no
     replicas in them.
 
-    ``'repeat'`` is the default because the replicas are load-bearing where a
-    caller is deliberately looking at the periodic reconstruction itself: the
-    multi-congruence chain's ``K == 1`` field-of-view contract requires the
-    whole requested grid live (`readout_tile='auto'` is a SIZING convenience,
-    not a blanking one), and the V3 off-axis ghost fixtures exist to show that
-    a window one whole period off the chief ray returns a full-amplitude copy.
-    Blanking is therefore something a caller asks for, per call.
+    ``'zero'`` IS THE DEFAULT, AND WHAT THAT DOES NOT CHANGE.  The
+    maintainer's decision of 2026-09-20 is that a readout should not hand back
+    copies it did not measure, so the blanking is on by default.  It changes
+    only what a WAIVED oversized window CONTAINS: the replica refusal is
+    unchanged (``on_replica='error'`` still refuses such a window, and the
+    refusal is taken before this function runs), the leg is unchanged, the
+    faithful region is returned by identity, and ``'repeat'`` reproduces
+    5.48.x to the bit.  ``'repeat'`` stays because the replicas are
+    load-bearing where a caller is deliberately looking at the periodic
+    reconstruction itself: the multi-congruence chain's ``K == 1``
+    field-of-view demonstration reads the whole requested grid
+    (`readout_tile='auto'` is a SIZING convenience, not a blanking one), and
+    the V3 off-axis ghost fixtures exist to show that a window one whole
+    period off the chief ray returns a full-amplitude copy.
 
     Neither fill moves the leg: the standoff stays the accuracy-optimal one
     :func:`_default_focus_standoff` resolves from the beam, for the reason
@@ -5341,6 +5436,13 @@ def _fill_readout_replicas(E_out, period, dx_out, N_out,
     nx, ny = int(keep_x.sum()), int(keep_y.sum())
     if out is not None:
         out['faithful_samples'] = (nx, ny)
+        # WHICH fill was applied, beside how much of the window it governs.
+        # A caller reading ``faithful_samples`` < N_out learns that part of
+        # the window is not measurement; this says what it holds.  Published
+        # on BOTH settings and whether or not the region is empty, so the two
+        # keys are read together and neither has to be inferred from the
+        # other.
+        out['replica_fill'] = str(fill)
     if fill != 'zero' or (nx == n and ny == n):
         return E_out                    # every sample is a measurement
     xp, is_jax, bld = _backend_of(E_out)
@@ -6679,7 +6781,7 @@ def carrier_referenced_exact_focus_readout(
     on_readout_window: str = 'error',
     readout_window_tol: float = 1e-4,
     on_replica: str = 'error',
-    replica_fill: str = 'repeat',
+    replica_fill: str = 'zero',
     mft_method: Optional[str] = None,
     _period_out: Optional[dict] = None,
 ) -> np.ndarray:
@@ -6844,10 +6946,12 @@ def carrier_referenced_exact_focus_readout(
         peak or a width found by an argmax is no longer safe either.  See
         :func:`_check_readout_replica`, and ``replica_fill`` for keeping the
         window without the replicas.
-    replica_fill : {'repeat', 'zero'}, default 'repeat'
+    replica_fill : {'zero', 'repeat'}, default 'zero'
         What to write outside one period when ``on_replica`` has let such a
-        window through: the periodic replicas the transform produces
-        (``'repeat'``, the historical answer) or zeros (``'zero'``).  Both
+        window through: zeros (``'zero'``, the default) or the
+        periodic replicas the transform produces (``'repeat'``, the 5.48.x
+        answer bit for bit).  Neither decides whether such a window is served
+        -- ``on_replica`` does, before either is reached.  Both
         return the requested shape and are bit-identical inside one period;
         ``_period_out['faithful_samples']`` says how many samples per axis
         that is.  See :func:`_fill_readout_replicas`.

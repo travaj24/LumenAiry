@@ -116,20 +116,25 @@ def _n_out_for(window, dx_out):
 
 
 def _read(n, dz=0.0, dx_out=0.05e-6, n_out=None, standoff=None, ext=_EXT,
-          on_replica='error'):
+          on_replica='error', replica_fill='zero'):
     """Read out on the SHIPPED default leg unless a test pins one.
 
     ``n_out`` defaults to the largest window that fits inside one Bluestein
     period at the leg actually used -- i.e. the test asks the propagator for
     what it can deliver instead of quietly reading replicas.  A 1/e^2 radius
     of a 1.5 um waist needs ~4 waists of window; the period supplies 5.2.
+
+    ``replica_fill`` tracks the library's own default (``'zero'`` since
+    5.49.0) and is a parameter because one id below is a demonstration OF the
+    replicas and has to ask for them by name.
     """
     env, dx = _pupil(n, ext)
     if n_out is None:
         n_out = _n_out_for(_period(n, ext, dz, standoff), dx_out)
     return np.asarray(carrier_referenced_focus_readout(
         env, -_Z, _Z + dz, _WL, dx, dx_out=dx_out, N_out=int(n_out),
-        standoff=standoff, on_replica=on_replica))
+        standoff=standoff, on_replica=on_replica,
+        replica_fill=replica_fill))
 
 
 def _oracle_focal_line(n, ext, xo):
@@ -257,16 +262,28 @@ def test_an_oversized_readout_window_is_refused_by_default():
 
 
 def test_the_refused_window_really_would_have_been_corrupt():
-    """... and the refusal is worth having: with it explicitly waived, the
-    core still reads correctly while the wing metric does not.
+    """... and the refusal is worth having: with it explicitly waived AND the
+    replicas asked for, the core still reads correctly while the wing metric
+    does not.
 
     That asymmetry is the whole reason this is an error rather than a
     warning -- a spot budget that checks a width or a peak cannot detect the
     failure, so a silent one is a plausible-looking wrong answer.
+
+    WHY ``replica_fill='repeat'`` IS NAMED HERE (5.49.0).  The corrupt wing IS
+    the replicas, so an id that measures it has to ask for them.  The default
+    moved to ``'zero'`` for exactly the reason this id demonstrates: the
+    wing-weighted metric read off a waived window was garbage, and blanking
+    the part the transform never measured is what makes it read the beam
+    again.  Nothing about the refusal changed -- it still fires on the same
+    geometry, before any fill runs -- and the second arm below asserts that
+    the same waived window under the SHIPPED default gives back the faithful
+    wing metric, which is the fix this demonstration motivates.
     """
     dxo = 0.40e-6
     I_bad = np.abs(_read(2048, dz=_DZ_BEST, dx_out=dxo, n_out=512,
-                         on_replica='ignore')) ** 2
+                         on_replica='ignore',
+                         replica_fill='repeat')) ** 2
     I_good = np.abs(_read(2048, dz=_DZ_BEST, dx_out=0.05e-6)) ** 2
     core_bad = _e2_radius(I_bad, dxo)
     wing_bad = _second_moment_radius(I_bad, dxo)
@@ -281,6 +298,17 @@ def test_the_refused_window_really_would_have_been_corrupt():
     assert wing_bad > 5.0 * wing_good, (
         f'expected the oversized window to wreck the wing metric: '
         f'2sigma {wing_bad * 1e6:.2f} um vs {wing_good * 1e6:.2f} um')
+    # ... and the SHIPPED default on the same waived window reads the beam
+    # again, because what it blanks is precisely the part the transform never
+    # measured.  Bar: within 2x of the faithful reading, against the 5x+ the
+    # replicas cost -- the two arms are on opposite sides of the same number.
+    I_def = np.abs(_read(2048, dz=_DZ_BEST, dx_out=dxo, n_out=512,
+                         on_replica='ignore')) ** 2
+    wing_def = _second_moment_radius(I_def, dxo)
+    assert wing_def < 2.0 * wing_good, (
+        f'the default fill no longer recovers the wing metric: 2sigma '
+        f'{wing_def * 1e6:.2f} um against a faithful {wing_good * 1e6:.2f} '
+        f'um and a replica-laden {wing_bad * 1e6:.2f} um')
 
 
 def test_the_exact_readout_guards_the_same_way_on_its_own_period():

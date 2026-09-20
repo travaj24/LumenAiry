@@ -1,0 +1,137 @@
+{
+ "_env": {
+  "lumenairy_file": "C:\\tmp\\c5_arch\\base\\lumenairy\\__init__.py",
+  "numpy": "2.4.4",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "python": "3.14.6",
+  "threads": {
+   "LUMENAIRY_MEM_BUDGET_MB": "2048",
+   "MKL_NUM_THREADS": "1",
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1"
+  }
+ },
+ "at_the_default_budget": {
+  "legacy/N256/512MB": {
+   "peak_bytes": 3073514906,
+   "peak_over_budget": 6.00295880078125
+  },
+  "legacy/N512/512MB": {
+   "peak_bytes": 3082957923,
+   "peak_over_budget": 6.021402193359375
+  },
+  "measured/N256/512MB": {
+   "peak_bytes": 387063234,
+   "peak_over_budget": 0.75598287890625
+  },
+  "measured/N512/512MB": {
+   "peak_bytes": 390214747,
+   "peak_over_budget": 0.762138177734375
+  }
+ },
+ "cell_bytes": {
+  "fixed": null,
+  "legacy": 16.0,
+  "measured": 128.0,
+  "windowed": 32.0
+ },
+ "digests": {
+  "legacy/N128/512MB": "07e90d77b9dc4837caf808f20fd2620d473a25492835beb7141019b1ea628ce3",
+  "legacy/N128/64MB": "610c6ebba01369a565bef7d56ee04656cc832a9c1dee3d0cbd1f8a455c29b5f6",
+  "legacy/N128/8MB": "cc70f7abbb70ea57c211100e7b90c3ab537f9ec99eb889bf6d547b4717dfea22",
+  "legacy/N256/512MB": "a3707fcbf4e737482d3387775fb2c8c5abfaec29c84ae2b846aed76c5a7453e3",
+  "legacy/N256/64MB": "b296efd22f0b27ab6372698dbf3ae4348c01a3b63afd6f78dc6709337cda9210",
+  "legacy/N256/8MB": "cea75853d832a477b0d1d3260703b1ba213a4c9b3a5ce7ef87cf2c6b27e0a28a",
+  "legacy/N512/512MB": "c5e11eb6e2c99fa4713739b535fcf2763df254e54be96f417895f67a7b2f8567",
+  "legacy/N64/512MB": "338d00003a0a461277d7f235583a9bb08bca93a78f9c927bf5d455b787b8d2ee",
+  "legacy/N64/64MB": "cc1e30b06ad12746a524c37cb89c7b1ea2cf462fe22643ae623442c87a427ffc",
+  "legacy/N64/8MB": "ea815c299f9fafd3b560ba6df9e342c477447ac79c84416c239b019c17ee976e",
+  "measured/N128/512MB": "610c6ebba01369a565bef7d56ee04656cc832a9c1dee3d0cbd1f8a455c29b5f6",
+  "measured/N128/64MB": "cc70f7abbb70ea57c211100e7b90c3ab537f9ec99eb889bf6d547b4717dfea22",
+  "measured/N128/8MB": "6e21266ffd4c7544e1460d9a40ce6cdd60a56362500b96dbc23862b48df798c0",
+  "measured/N256/512MB": "b296efd22f0b27ab6372698dbf3ae4348c01a3b63afd6f78dc6709337cda9210",
+  "measured/N256/64MB": "cea75853d832a477b0d1d3260703b1ba213a4c9b3a5ce7ef87cf2c6b27e0a28a",
+  "measured/N256/8MB": "b729c4c870a58e7b57469921ffe3d7ee4d2ae82a547387c622a517f3ae80890e",
+  "measured/N512/512MB": "5249cf5b0039dbcee85d93b418515493f1b301c2f7aefb82e07ea887a4e34f5d",
+  "measured/N64/512MB": "cc1e30b06ad12746a524c37cb89c7b1ea2cf462fe22643ae623442c87a427ffc",
+  "measured/N64/64MB": "ea815c299f9fafd3b560ba6df9e342c477447ac79c84416c239b019c17ee976e",
+  "measured/N64/8MB": "68634b8b93aecfb46fb84eddc2bbd38847c534c35507764b587687e455c2749f",
+  "repeat/legacy/N256/37MB": "bfc587d815bd875cf265df83be312850c0a35c6de65023c33f539629563d28a0",
+  "repeat/measured/N256/37MB": "7e07c146673b430d1a294daa4da338c240fd7afaddcd33bb4e14d67773039bf9",
+  "windowed/N128": "ea7324afed1e8483eb1154c6f7cb30178a3877a4d9875453747b4f7c5b8414fc",
+  "windowed/N256": "fc41e6acc8bf67488a13b4fb9b4dbba8d1a3afab7530f36aa5ae43d813b54f66"
+ },
+ "fit": {
+  "256": {
+   "bytes_per_cell": [
+    146.11257934570312,
+    242.11453247070312,
+    434.1135559082031,
+    818.1139221191406,
+    1586.1139221191406,
+    3122.1139221191406
+   ],
+   "chunks": [
+    1,
+    2,
+    4,
+    8,
+    16,
+    32
+   ],
+   "fixed_b_per_cell": 50.11359052515749,
+   "per_col_b_per_cell": 96.00001414176327,
+   "worst_rel_dev": 7.017337057704762e-06
+  },
+  "512": {
+   "bytes_per_cell": [
+    144.55057907104492,
+    240.55076217651367,
+    432.55060958862305,
+    816.5505790710449,
+    1584.5503616333008,
+    3120.5504875183105
+   ],
+   "chunks": [
+    1,
+    2,
+    4,
+    8,
+    16,
+    32
+   ],
+   "fixed_b_per_cell": 48.55063659516185,
+   "per_col_b_per_cell": 95.99999300774392,
+   "worst_rel_dev": 5.801929817736759e-07
+  }
+ },
+ "floor": {
+  "256": {
+   "empirical_bytes": 9575701.19545132,
+   "library_bytes": null,
+   "library_over_empirical": null
+  },
+  "512": {
+   "empirical_bytes": 37893080.24662413,
+   "library_bytes": null,
+   "library_over_empirical": null
+  }
+ },
+ "legacy_vs_measured": {
+  "256": {
+   "identical": false,
+   "rel_max_abs_diff": 2.117089433990483e-17
+  },
+  "512": {
+   "identical": false,
+   "rel_max_abs_diff": 1.8239679785747488e-18
+  }
+ },
+ "repeat_run_identical": {
+  "legacy": true,
+  "measured": true
+ },
+ "shipped_default": "legacy",
+ "two_sided": {},
+ "unknown_mode": "accepted"
+}

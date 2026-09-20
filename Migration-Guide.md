@@ -1777,9 +1777,6 @@ the RCWA Toeplitz inverses (12 to 20 times slower and two decades less accurate 
 shipped inverse), the chessboard FFT-shift identity (bit-identical only on power-of-two
 grids).
 
-
----
-
 ## 5.48.0 -- adversarial audit remediation, Wave 5 (2026-09-20)
 
 Wave 5 finishes the 2026-09-11 audit's handoff: the open work items, the hygiene the
@@ -1937,6 +1934,16 @@ workspace view in one mode and a private copy in the other, which a downstream N
 temporary elision can distinguish on some builds.  The Maslov vector-normalisation ULP bar and the
 C8 inverse-support bound are re-derived at run time; two published claims about the 5.47.0
 known-red fixes are corrected against their own re-measurement.
+
+---
+
+## 5.49.0 -- the default flips (2026-09-20)
+
+Eight settings the 2026-09-11 audit measured and left switchable become the
+defaults their measurements supported (the maintainer decisions of 2026-09-20,
+recorded in `docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/MAINTAINER_DECISIONS_2026_09.md`).
+Each subsection below is one work package: what moved, who is affected, and the
+one-keyword way back where one exists.
 
 ---
 
@@ -2311,4 +2318,194 @@ multiplied by a boolean mask, so a blocked pixel came back as a SIGNED zero
 NumPy chain, and it left a non-finite field non-finite outside the stop.  Both
 routes now select rather than scale.  There is no way back to the signed zeros,
 and no reason to want one.
+
+### `gap_kernel='auto'` now falls back to `'fresnel'` inside a band in `k |z_eff| theta_env^4`
+
+**What moved.**  `lumenairy.propagators.carrier._GAP_KERNEL_ACCURACY_TAU`
+defaults to `1e-4` instead of `None`.  On a Collins carrier leg, `'auto'` now
+compares the exact-kernel refinement's PREDICTED departure from the paraxial
+truth, `sqrt(3/2) * k * |z_eff| * theta_env^4 / 8`, against that tolerance, and
+takes the paraxial kernel above it.  `theta_env` is the ENVELOPE's analytic
+`1/e^2` half-angle, not the beam's.
+
+**Who is affected.**  Legs for which `k |z_eff| theta_env^4` is large -- a
+NEAR-FOCUS condition at a fixed envelope angle (`z_eff = B/A` grows without
+bound as a leg approaches the carrier's `A = 0` plane) and a WIDE-ENVELOPE
+condition at a fixed distance, because `theta_env` enters at the FOURTH power.
+Both happen in practice: a carrier mismatched to its beam leaves a residual
+lens on the envelope and makes `theta_env` large on a leg that is nowhere near
+a focus.  The threshold is closed form --
+`|z_eff| > 8 tau / (sqrt(3/2) k theta_env^4)` -- so a design can be checked
+without running anything, and `theta_env` is `2 sqrt(<theta^2>)` of the
+ENVELOPE's own sampled spectrum, not the beam's angle.  Measured: on the
+VERIFY-B4 F3 fixture (`w = 0.3 mm`, `lambda = 1.064 um`, `theta_env`
+1.13e-03 rad) the rule fires within **23.5 um** of the focus and nowhere else;
+on the Wave-5 hygiene-2 fixture within **1.54 um** of that carrier's `A = 0`
+plane, which its published ladder never reaches; and on a 0.90-mismatched
+NA-0.05 relay (`theta_env` 5.57e-03 rad) it fires **2.00 mm** from the `A = 0`
+plane -- the one leg in the library's own test suite that this flip moves.
+
+To see that the second condition is not the first in disguise: hold the LEG
+fixed and move only the envelope.  On one 1.55 um relay (carrier `0.70 R0`,
+`R0 = -20 mm`, readout a quarter of the way to the focus, so `z_eff` is
+7.777778e-03 m, the plane sits 9.00 mm from `A = 0` and the beam is still 48.6
+Rayleigh ranges short of its own focus), a 0.80 mm input beam gives
+`theta_env` 1.715395e-02 rad and a departure of 4.179416e-04 and FALLS BACK,
+while a 0.40 mm beam on the same leg gives 8.659722e-03 rad and 2.714408e-05
+and keeps the exact kernel.  The departure ratio is 15.40, which is the angle
+ratio 1.9809 to the fourth: the distance cancels.  (Measured 2026-09-20,
+identical on both builds; `validation/probe_c5_round2/` and
+`tests/unit/test_c5_three_defaults.py::test_a_wide_envelope_leg_far_from_any_focus_falls_back`.)
+
+Entry points that can reach such a leg:
+`propagate_carrier_referenced`, `propagate_traced_carrier_chain`,
+`propagate_traced_carrier_chain_multi` and
+`carrier_referenced_focus_readout`, each with `transport='collins'`.
+
+**What it buys.**  On the two F3 rungs inside the band the relative L2 against
+the analytic Gaussian goes from 2.3496e-03 to 1.4568e-14 (1 um) and from
+2.3490e-04 to 1.1822e-14 (10 um).  The k4 wrap guard (the stats key of the same name) does not
+fire at either
+-- it bounds representability, not accuracy.
+
+**Recipe -- keep 5.48.x exactly:**
+
+```python
+import lumenairy.propagators.carrier as _carrier
+_carrier._GAP_KERNEL_ACCURACY_TAU = None      # the rule is not evaluated at all
+```
+
+**Recipe -- keep the exact kernel on one leg:** pass `gap_kernel='exact'`.  An
+explicit `'exact'` is honoured over `tau`; only `'auto'` falls back.
+
+**Caveat, stated both ways.**  The oracle behind the law is paraxial.  It
+measures how far the exact kernel departs from the paraxial truth; it cannot
+say which kernel is the more physical.  On a leg where the exact kernel is the
+better physics this rule trades accuracy for agreement with that oracle, which
+is why the opt-out is one line and an explicit request is never overridden.
+
+On the ONE leg in the library's own suite that this flip moves, the question
+was settled against an oracle that is not paraxial: the plain kernel reads
+8.212599e-02 relative L2 from the exact scalar field and the refined one
+8.222558e-02, so the rule moves that leg toward the truth.  Read the sizes
+too.  Both kernels sit 8.2e-02 from the true field, because the refinement
+lives in the reduced frame on the ENVELOPE's angle while the leg's own
+non-paraxiality is set by the BEAM's NA -- at that fixture's NA (0.05) the
+rule is arbitrating 1e-04 of an 8e-02 modelling error.  If your leg is
+genuinely non-paraxial, neither kernel is the fix; a non-paraxial propagator
+is.
+
+### The dense GBD reconstruction counts its memory honestly
+
+**What moved.**  `lumenairy.propagators.gbd.DENSE_MEM_BUDGET_ACCOUNTING`
+defaults to `'measured'` instead of `'legacy'`.  The dense (`window=None`)
+reconstruction sizes its beamlet chunk from `mem_budget_mb` using a per-cell
+cost that was six times too small, so the budget was never a bound: measured at
+`mem_budget_mb=512` with 1024 beamlets, the loop peaked at 3 074 MB on a
+256-square grid (6.00x) and now peaks at 387 MB (0.756x).
+
+**Who is affected.**  Any dense reconstruction whose `mem_budget_mb` actually
+binds the chunk.  The returned field moves in the LAST BITS only (measured
+2.1e-17 relative at N = 256, 1.8e-18 at N = 512), because the chunk boundary
+sets the order the per-chunk reductions are summed in.  The windowed
+(`window=5.0`) path, the FFT path and any call whose chunk was never bound are
+untouched.  Entry points: `reconstruct_field_from_beamlets`,
+`frame_completeness`, and `apply_real_lens_gbd` and its element family through
+their own `mem_budget_mb`.
+
+**New: the budget has a published floor, and below it the path is loud.**  The
+chunk cannot go below one beamlet column, so
+`lumenairy.propagators.gbd._dense_budget_floor_bytes(Ny, Nx)` --
+`Ny*Nx*(48 + 128)` bytes, 11.534 MB at N = 256 and 46.137 MB at N = 512 -- is
+the smallest budget that can be honoured.  Ask for less and the dense path now
+emits a `RuntimeWarning` naming the floor and the two mitigations instead of
+exceeding the request silently.  It warns rather than raises because at the
+shipped `mem_budget_mb=512.0` default the floor binds on any square grid from
+N = 1706 up -- it reads 511.6364 MB at N = 1705 and 512.2367 MB at N = 1706,
+so 1706 is the first square grid that binds -- and refusing would break calls
+that complete today.
+
+**Recipe -- keep 5.48.x exactly:**
+
+```python
+import lumenairy.propagators.gbd as _gbd
+_gbd.DENSE_MEM_BUDGET_ACCOUNTING = 'legacy'   # byte-identical to 5.48.x
+```
+
+**Recipe -- if the floor notice fires:** raise `mem_budget_mb` to the floor the
+message quotes, or pass `window=5.0` to `reconstruct_field_from_beamlets` for
+the bounded-support scatter-add, whose accounting has no one-column floor at
+these sizes.  `window=5.0` changes the returned field by its own truncation
+(tail `exp(-25)`, about 1e-11), which is why it is not applied for you.
+
+**Also:** an unrecognised `DENSE_MEM_BUDGET_ACCOUNTING` now raises instead of
+falling through to `'legacy'`.  A typo would otherwise silently restore the
+six-fold under-count the new default exists to remove.  The check runs only
+where the budget arithmetic runs, so a caller who never passes `mem_budget_mb`
+is unaffected.
+
+### The focus readouts blank the periodic replicas by default
+
+**What moved.**  `replica_fill` defaults to `'zero'` instead of `'repeat'` on
+`carrier_referenced_focus_readout`,
+`carrier_referenced_exact_focus_readout` and the private Collins readout the
+traced chain uses on `transport='collins'`.  A readout window wider than one
+period of the transform behind it is filled, outside that period, with periodic
+copies of the field -- `E(u + period) == E(u)` identically on the two readouts
+that finish on `angular_spectrum_propagate_mft`, and identically in MODULUS,
+up to a known phase, on the Collins one -- and those samples were never
+measured.  The default now writes zeros there.
+
+**Who is affected.**  Only a call that BOTH reaches outside one period AND has
+the replica refusal waived.  At the shipped `on_replica='error'` such a request
+raises, as it has since 5.44; the fill only decides what a waived readout
+contains, and it does not change what is refused.  The public entry points that
+can reach that state:
+
+* `carrier_referenced_focus_readout(..., on_replica='warn' | 'ignore')`
+* `carrier_referenced_exact_focus_readout(..., on_replica='warn' | 'ignore')`
+* `propagate_traced_carrier_chain(..., focus_readout={... 'on_replica': ...})`
+* `propagate_traced_carrier_chain_multi(..., output_grid={...},
+  on_replica=...)`
+
+Nothing else in the package calls those readouts.
+
+**What does NOT change.**  The requested window size, the output pitch,
+`centre_out`, the readout's leg and its standoff; the samples INSIDE one period
+(bit-identical either way); and a window that fits inside one period, which is
+returned by identity -- the same object -- on either setting.  The replica
+REFUSAL is unchanged cell for cell over a ladder from 0.50 to 2.20 periods, and
+it is taken before any fill runs.
+
+**What does change, and why that is the point.**  A window-wide reduction that
+was scoring a replica -- an argmax, a centroid, an encircled energy at large
+radius, a returned-window power ratio -- moves to the beam.  On the P2 design
+battery's unclipped doublet cell the same call goes from 20.50 um FWHM / 49.5 %
+encircled energy inside two waists / 5.70x the stop plane's power to 18.50 um /
+99.70 % / 0.99873x -- which is also what this readout returns at any standoff
+long enough for one period to cover the window, i.e. three independent
+geometries with no replicas in them agreeing to the digit.
+
+**Recipe -- keep 5.48.x exactly:**
+
+```python
+F = la.carrier_referenced_focus_readout(..., on_replica='ignore',
+                                        replica_fill='repeat')
+
+res = la.propagate_traced_carrier_chain(
+    ..., focus_readout=dict(dx_out=..., N_out=...,
+                            on_replica='ignore', replica_fill='repeat'))
+```
+
+**How to tell what you were given.**  `_period_out['faithful_samples']` is the
+`(nx, ny)` samples per axis that carry measurement, and
+`_period_out['replica_fill']` (new) names the fill that was applied.  The
+traced chain publishes both per stage under the keys
+readout_faithful_samples and readout_replica_fill.
+
+**This is not the 2026-08-06 shrink-and-zero defect.**  That one silently
+re-sized a requested 2.87 mm window down to 1.29 mm and returned zeros over the
+rest; it was refused then and is refused now.  The window and the returned grid
+keep the size the caller asked for, and the part that is blanked is exactly the
+part the transform never evaluated, reported in the result rather than assumed.
 

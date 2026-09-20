@@ -1,0 +1,13 @@
+{
+ "base_file": "C:\\tmp\\c5_arch\\base\\lumenairy\\__init__.py",
+ "base_python": "3.14.6",
+ "head_file": "C:\\tmp\\lum_c5\\lumenairy\\__init__.py",
+ "head_python": "3.14.6",
+ "moved": [],
+ "n_identical": 24,
+ "n_keys_base": 24,
+ "n_keys_head": 24,
+ "n_moved": 0,
+ "only_in_base": [],
+ "only_in_head": []
+}

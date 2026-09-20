@@ -24,8 +24,10 @@ WHY EACH ONE EXISTS, in one line:
        gated only by a token census;
 * D-5  the cross-backend bar reduces to its ``32 * eps`` floor on both
        builds, so it is not today a function of the two backends it names;
-* D-6  ``_GAP_KERNEL_ACCURACY_TAU = None`` is asserted by reading the constant
-       and by the absence of a stats key, never by the rule not RUNNING.
+* D-6  the ``_GAP_KERNEL_ACCURACY_TAU`` opt-out is asserted by reading the
+       constant and by the absence of a stats key, never by the rule not
+       RUNNING (the constant itself became ``1e-4`` by default in 5.49.0; the
+       gate this id supplies is about ``None``, which is now the opt-out).
 """
 from __future__ import annotations
 
@@ -315,7 +317,7 @@ def test_the_evanescent_carrier_refusal_is_gated_by_behaviour():
 def test_the_accuracy_rule_is_never_executed_while_tau_is_none(monkeypatch):
     """``_GAP_KERNEL_ACCURACY_TAU is None`` means the rule does not RUN.
 
-    The shipped id reads the constant and asserts that ``stats_out`` has not
+    The sibling ids read the constant and assert that ``stats_out`` has not
     grown a ``kernel_departure`` key.  Both are consequences; neither says the
     rule was not evaluated, and a future edit that measured the half-angle and
     then discarded it would satisfy both while paying for a full-grid FFT
@@ -327,9 +329,17 @@ def test_the_accuracy_rule_is_never_executed_while_tau_is_none(monkeypatch):
     rule's four source lines are absent from a ``sys.settrace`` line trace of
     the same legs while the guard line that short-circuits them IS present --
     which is what makes the trace live rather than vacuous.
+
+    WP-C5 (2026-09-20) made ``1e-4`` the SHIPPED value, so ``None`` is now the
+    OPT-OUT and is set here explicitly.  The claim this id makes is unchanged
+    and is now the one that matters most: the opt-out has to cost nothing, or
+    "restores 5.48.x bit for bit" would be false in runtime as well as in
+    bytes.  The default itself is pinned in
+    ``tests/unit/test_c5_three_defaults.py`` and in
+    ``test_wave5_h2_near_focus_table.py``.
     """
-    assert CA._GAP_KERNEL_ACCURACY_TAU is None, (
-        "the accuracy-keyed fallback is ARMED in the shipped module")
+    monkeypatch.setattr(CA, '_GAP_KERNEL_ACCURACY_TAU', None)
+    assert CA._GAP_KERNEL_ACCURACY_TAU is None
 
     calls = []
 

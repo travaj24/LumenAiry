@@ -1,0 +1,52 @@
+{
+ "N": 2048,
+ "_stamp": {
+  "lumenairy_file": "/mnt/c/tmp/lum_c5b/lumenairy/__init__.py",
+  "lumenairy_version": "5.48.1",
+  "mem_budget_mb_env": null,
+  "mkl": "1",
+  "numpy": "2.4.6",
+  "omp": "1",
+  "openblas": "1",
+  "platform": "Linux-4.4.0-26100-Microsoft-x86_64-with-glibc2.39",
+  "python": "3.12.3 (main, Mar 23 2026, 19:04:32) [GCC 13.3.0]"
+ },
+ "default_mem_budget_mb": 512.0,
+ "first_binding_square_grid": 1706,
+ "floor_at_1705_mb": 511.6364,
+ "floor_at_1706_mb": 512.236736,
+ "floor_at_N_mb": 738.197504,
+ "floor_bytes_per_cell": 176.0,
+ "legacy": {
+  "accounting": "legacy",
+  "completes": true,
+  "finite": true,
+  "floor_notices": 0,
+  "notice": null,
+  "peak_abs_field": 2.077862372683529e+48,
+  "rss_delta_mb": 2783.830016,
+  "rss_peak_mb": 2892.726272,
+  "shape": [
+   2048,
+   2048
+  ]
+ },
+ "measured": {
+  "accounting": "measured",
+  "completes": true,
+  "finite": true,
+  "floor_notices": 1,
+  "notice": "reconstruct_field_from_beamlets: the dense (window=None) path CANNOT meet mem_budget_mb=512 MB on this 2048x2048 grid.  Its chunk already floors at ONE beamlet column, and one column plus the whole-grid arrays that live outside the chunk costs 738.198 MB (48 + 128 B per output cell) -- 1.44x what was asked for.  The budget is honoured at or above that floor and is a statement of intent below it.  Either raise mem_budget_mb to 738.198 MB, or pass window=5.0 for the bounded-support scatter-add, whose accounting has no one-column floor here (it changes the returned field by its own ~1e-11 truncation, which is why it is not applied for you).  lumenairy.propagators.gbd._dense_budget_floor_bytes(Ny, Nx) publishes the number.",
+  "peak_abs_field": 2.0778623726835292e+48,
+  "rss_delta_mb": 639.213568,
+  "rss_peak_mb": 678.99392,
+  "shape": [
+   2048,
+   2048
+  ]
+ },
+ "n_beamlets": 48,
+ "n_star": 1705.6057308448835,
+ "ratio_legacy_over_measured": 4.2603124811485795,
+ "shipped_accounting": "measured"
+}

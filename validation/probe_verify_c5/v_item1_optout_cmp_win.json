@@ -1,0 +1,23 @@
+{
+ "a": "validation/probe_verify_c5/v_item1_base_win.json",
+ "a_stamp": "C:\\tmp\\vc5_arch\\base\\lumenairy\\__init__.py",
+ "b": "validation/probe_verify_c5/v_item1_head_win.json",
+ "b_stamp": "C:\\tmp\\lum_vc5\\lumenairy\\__init__.py",
+ "identical": [
+  "b4/0.9",
+  "b4/0.95",
+  "f3/0.0001",
+  "f3/0.001",
+  "f3/0.005",
+  "f3/1e-05",
+  "f3/1e-06",
+  "h2/0.0001",
+  "h2/1e-05",
+  "h2/1e-06"
+ ],
+ "moved": [],
+ "n_identical": 10,
+ "n_moved": 0,
+ "only_in_a": [],
+ "only_in_b": []
+}

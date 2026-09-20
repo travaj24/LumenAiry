@@ -1,0 +1,43 @@
+{
+ "_stamp": {
+  "lumenairy_file": "C:\\tmp\\lum_c5b\\lumenairy\\__init__.py",
+  "lumenairy_version": "5.48.1",
+  "mem_budget_mb_env": null,
+  "mkl": "1",
+  "numpy": "2.4.4",
+  "omp": "1",
+  "openblas": "1",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "python": "3.14.6 (tags/v3.14.6:c63aec6, Jun 10 2026, 10:26:10) [MSC v.1944 64 bit (AMD64)]"
+ },
+ "many_small_blocks/cold": {
+  "block_mb": 2.0,
+  "rss_base_mb": 33.570816,
+  "rss_delta_mb": 1.888256,
+  "rss_peak_mb": 35.459072,
+  "transient_mb": 200
+ },
+ "many_small_blocks/cold_over_warm": 0.9294354838709676,
+ "many_small_blocks/warm": {
+  "block_mb": 2.0,
+  "rss_base_mb": 33.574912,
+  "rss_delta_mb": 2.031616,
+  "rss_peak_mb": 35.606528,
+  "transient_mb": 200
+ },
+ "one_big_block/cold": {
+  "block_mb": 200.0,
+  "rss_base_mb": 33.374208,
+  "rss_delta_mb": 200.204288,
+  "rss_peak_mb": 233.578496,
+  "transient_mb": 200
+ },
+ "one_big_block/cold_over_warm": 1.0008600212957655,
+ "one_big_block/warm": {
+  "block_mb": 200.0,
+  "rss_base_mb": 33.562624,
+  "rss_delta_mb": 200.032256,
+  "rss_peak_mb": 233.59488,
+  "transient_mb": 200
+ }
+}

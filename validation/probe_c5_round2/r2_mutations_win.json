@@ -1,0 +1,168 @@
+{
+ "control": {
+  "caught": [],
+  "n_caught": 0,
+  "rc": 0,
+  "summary": "48 passed in 151.01s (0:02:31)"
+ },
+ "mutations": {
+  "item1_tau_disarmed": {
+   "caught": [
+    "test_a_wide_envelope_leg_far_from_any_focus_falls_back",
+    "test_an_explicit_exact_is_never_overridden_by_tau",
+    "test_an_explicit_exact_survives_the_band_on_the_wide_angle_leg",
+    "test_on_the_wide_angle_leg_the_fallback_is_not_a_step_away_from_physics",
+    "test_the_closed_form_band_holds_on_a_third_fixture",
+    "test_the_fallback_replaces_the_departure_with_the_oracle_floor",
+    "test_the_kernel_switch_ships_armed_at_the_decided_tau",
+    "test_the_rule_fires_on_a_leg_that_is_near_no_focus_at_all",
+    "test_the_rule_fires_only_inside_the_band_the_law_predicts",
+    "test_the_rule_is_a_band_in_k_z_theta4_and_not_a_distance_to_a_focus"
+   ],
+   "n_caught": 10,
+   "n_sites_mutated": 1,
+   "rc": 1,
+   "summary": "10 failed, 38 passed in 137.00s (0:02:17)"
+  },
+  "item1_wrong_angle": {
+   "caught": [
+    "test_a_wide_envelope_leg_far_from_any_focus_falls_back",
+    "test_the_closed_form_band_holds_on_a_third_fixture",
+    "test_the_rule_fires_on_a_leg_that_is_near_no_focus_at_all",
+    "test_the_rule_fires_only_inside_the_band_the_law_predicts",
+    "test_the_rule_is_a_band_in_k_z_theta4_and_not_a_distance_to_a_focus"
+   ],
+   "n_caught": 5,
+   "n_sites_mutated": 1,
+   "rc": 1,
+   "summary": "5 failed, 43 passed in 171.26s (0:02:51)"
+  },
+  "item2_default_reverted": {
+   "caught": [
+    "test_the_default_budget_binds_at_N_1706_and_the_call_still_completes",
+    "test_the_dense_accounting_ships_measured_and_legacy_stays_reachable"
+   ],
+   "n_caught": 2,
+   "n_sites_mutated": 1,
+   "rc": 1,
+   "summary": "2 failed, 46 passed in 143.89s (0:02:23)"
+  },
+  "item2_floor_forgets_fixed_term": {
+   "caught": [
+    "test_a_budget_above_the_floor_bounds_the_loop",
+    "test_a_floor_that_forgot_its_fixed_term_would_be_caught",
+    "test_the_default_budget_binds_at_N_1706_and_the_call_still_completes",
+    "test_the_published_floor_is_an_upper_bound_on_the_one_column_peak"
+   ],
+   "n_caught": 4,
+   "n_sites_mutated": 1,
+   "rc": 1,
+   "summary": "4 failed, 44 passed in 130.35s (0:02:10)"
+  },
+  "item2_notice_suppressed": {
+   "caught": [
+    "test_a_budget_below_the_floor_is_loud_and_names_the_floor",
+    "test_the_default_budget_binds_at_N_1706_and_the_call_still_completes"
+   ],
+   "n_caught": 2,
+   "n_sites_mutated": 1,
+   "rc": 1,
+   "summary": "2 failed, 46 passed in 141.39s (0:02:21)"
+  },
+  "item2_unknown_mode_falls_through": {
+   "caught": [
+    "test_an_unknown_accounting_is_refused_by_name"
+   ],
+   "n_caught": 1,
+   "n_sites_mutated": 1,
+   "rc": 1,
+   "summary": "1 failed, 47 passed in 155.77s (0:02:35)"
+  },
+  "item3_default_reverted": {
+   "caught": [
+    "test_repeat_reproduces_the_previous_release_on_the_exact_readout",
+    "test_the_default_zeroes_outside_the_reported_period_and_nothing_else[1.1]",
+    "test_the_default_zeroes_outside_the_reported_period_and_nothing_else[1.6]",
+    "test_the_default_zeroes_outside_the_reported_period_and_nothing_else[2.2]",
+    "test_the_replica_fill_ships_zero_on_every_readout_that_can_replicate",
+    "test_the_result_names_the_faithful_count_and_the_fill_applied"
+   ],
+   "n_caught": 6,
+   "n_sites_mutated": 2,
+   "rc": 1,
+   "summary": "6 failed, 42 passed in 171.49s (0:02:51)"
+  },
+  "item3_fill_keyed_on_half_the_period": {
+   "caught": [
+    "test_blanking_the_exact_readouts_faithful_band_would_be_caught",
+    "test_keying_the_fill_on_the_window_centre_would_be_caught",
+    "test_keying_the_fill_on_the_wrong_period_would_be_caught",
+    "test_repeat_reproduces_the_previous_release_on_the_exact_readout",
+    "test_the_default_zeroes_outside_the_reported_period_and_nothing_else[1.1]",
+    "test_the_default_zeroes_outside_the_reported_period_and_nothing_else[1.6]",
+    "test_the_default_zeroes_outside_the_reported_period_and_nothing_else[2.2]",
+    "test_the_faithful_zone_is_centred_on_the_field_not_on_the_window",
+    "test_the_zeroed_set_is_one_period_about_the_field_origin[ana2]",
+    "test_the_zeroed_set_is_one_period_about_the_field_origin[ana4]",
+    "test_the_zeroed_set_is_one_period_about_the_field_origin[edge]",
+    "test_the_zeroed_set_is_one_period_about_the_field_origin[wide]",
+    "test_the_zeroed_set_is_one_period_about_the_field_origin[x030]",
+    "test_the_zeroed_set_is_one_period_about_the_field_origin[xy]",
+    "test_the_zeroed_set_is_one_period_about_the_field_origin[y030]",
+    "test_zeroing_one_sample_inside_the_period_would_be_caught"
+   ],
+   "n_caught": 16,
+   "n_sites_mutated": 1,
+   "rc": 1,
+   "summary": "16 failed, 32 passed in 144.08s (0:02:24)"
+  },
+  "item3_fill_keyed_on_window_centre": {
+   "caught": [
+    "test_keying_the_fill_on_the_window_centre_would_be_caught",
+    "test_the_faithful_zone_is_centred_on_the_field_not_on_the_window",
+    "test_the_zeroed_set_is_one_period_about_the_field_origin[ana2]",
+    "test_the_zeroed_set_is_one_period_about_the_field_origin[ana4]",
+    "test_the_zeroed_set_is_one_period_about_the_field_origin[edge]",
+    "test_the_zeroed_set_is_one_period_about_the_field_origin[wide]",
+    "test_the_zeroed_set_is_one_period_about_the_field_origin[x030]",
+    "test_the_zeroed_set_is_one_period_about_the_field_origin[xy]",
+    "test_the_zeroed_set_is_one_period_about_the_field_origin[y030]"
+   ],
+   "n_caught": 9,
+   "n_sites_mutated": 1,
+   "rc": 1,
+   "summary": "9 failed, 39 passed in 147.07s (0:02:27)"
+  },
+  "item3_fill_on_the_refusal_path_collins": {
+   "caught": [
+    "test_an_off_axis_window_is_refused_where_the_same_ratio_is_served",
+    "test_the_refusal_precedes_the_fill_on_the_collins_readout"
+   ],
+   "n_caught": 2,
+   "n_sites_mutated": 1,
+   "rc": 1,
+   "summary": "2 failed, 46 passed in 185.98s (0:03:05)"
+  },
+  "item3_fill_on_the_refusal_path_exact": {
+   "caught": [
+    "test_the_refusal_precedes_the_fill_on_the_exact_readout"
+   ],
+   "n_caught": 1,
+   "n_sites_mutated": 1,
+   "rc": 1,
+   "summary": "1 failed, 47 passed in 158.21s (0:02:38)"
+  },
+  "item3_fill_on_the_refusal_path_sziklas": {
+   "caught": [
+    "test_the_refusal_is_taken_before_the_fill_is_reached",
+    "test_the_replica_refusal_is_unchanged_by_the_fill"
+   ],
+   "n_caught": 2,
+   "n_sites_mutated": 1,
+   "rc": 1,
+   "summary": "2 failed, 46 passed in 179.38s (0:02:59)"
+  }
+ },
+ "python": "C:/Users/Tesla/AppData/Local/Programs/Python/Python314/python.exe",
+ "tree": "C:/tmp/c5b_mut"
+}
