@@ -1103,12 +1103,20 @@ direction cosine `N`, and it feeds three things at once -- the returned
 direction, the leg length and the branch-safe Moebius free-space step -- so
 after a mirror all three run along `+z` while the light travels toward `-z`.
 Measured against an independent 3-D tracer on a concave R = -15 mm mirror
-whose geometric focus is 7.5 mm behind the vertex: at `z_image = +f` the
-returned spot RMS is **7756x** the traced one (3.879e-04 m against 5.001e-08 m)
-and the returned `N` sign is `+1` against a traced `-1`; flipping the sign of
-`z_image` recovers the transverse positions to 2.830e-19 m but leaves a
-**0.48-wave** piston.  A one-line sign flip would trade a loud wrong answer
-for a quiet one, so the branch REFUSES this class with a named error.
+whose geometric focus is 7.5 mm behind the vertex, on two different ray
+quadratures: at `z_image = +f` the returned transverse positions are the truth
+at `z = +f` while the light is at `z = -f` -- defocused by twice the focal
+length -- so the returned spot RMS lands **four decades** wide of the traced
+focal one (**7756x**, 3.879e-04 m against 5.001e-08 m; and **20137x**,
+1.433e-04 m against 7.118e-09 m on the re-measurement, the ratio moving with
+the quadrature because its denominator is a diffraction-scale number), and the
+returned `N` sign is `+1` against a traced `-1`.  Flipping the sign of
+`z_image` recovers the transverse positions exactly (2.830e-19 m; one part in
+1e12 of the focal RMS on the re-measurement) and leaves a piston of the wrong
+sign, **0.48** and **0.491** waves.  A one-line sign flip would trade a loud
+wrong answer for a quiet one -- `Nz2` feeds all three of the direction, the
+leg and the Moebius step -- so the branch REFUSES this class with a named
+error.
 
 The refusal deliberately does NOT send the caller to `world_output_plane`, as
 the previous entry's open item recommended: measured on both builds, that
