@@ -893,8 +893,21 @@ tracer indirectly; it asks that the way back be REACHABLE, and a transitive
 caller reaches it through the parent it calls.
 `validation/probe_c2_round2/r2_transitive_parents.py` names that parent and
 the chain for the verification's own list of 46, identically on both builds:
-**35 of 46 resolve to a parent that now carries both keywords**, in one to
-four hops.  A sample, and the shape of all of them:
+**31 of 46 resolve to a parent that now carries both keywords**, in one to
+four hops, and four more resolve to `trace_jax`, which has neither switch by
+design -- 35 of 46 reach a tracer through a named parent.
+
+(Corrected in round 3, VERIFY-WP-C2 round 2 defect VR2-D6: 35 is the number
+that resolve to a named parent AT ALL, and this sentence read it as the
+number that reach a way back.  Re-measured by asking `inspect.signature` of
+every named parent on the running build,
+`validation/probe_c2_round3/r3_transitive_carry_{win,wsl}.json`, identical
+on both: 31 carry both keywords, 4 -- `monte_carlo_tolerancing`,
+`monte_carlo_tolerancing_jax`, `optimize_traced_geometry`,
+`make_lg_aberration_merit_jax` -- resolve to `trace_jax`, 0 fail to
+import.  The sample table's own last row already said so.)
+
+A sample, and the shape of all of them:
 
 | transitive caller | chain to the way back |
 |---|---|
@@ -908,7 +921,14 @@ four hops.  A sample, and the shape of all of them:
 | `field_grid_wfe` | -> `eval_image_plane_wfe` |
 | `aberration_summary`, `propagate_subaperture_asymptotic`, `propagate_huygens_fresnel_through_prescription` | -> `fit_canonical_polynomials` |
 | `propagate`, `apply_real_lens_maslov_vector` | -> `apply_real_lens_maslov` |
-| `monte_carlo_tolerancing`, `optimize_traced_geometry`, `make_lg_aberration_merit_jax` | -> the `*_jax` twins -> `trace_jax` (no switch by design) |
+| `monte_carlo_tolerancing`, `monte_carlo_tolerancing_jax`, `optimize_traced_geometry`, `make_lg_aberration_merit_jax` | -> the `*_jax` twins -> `trace_jax` (no switch by design) |
+
+`monte_carlo_tolerancing`'s CPU path is `-> apply_real_lens`, not
+`-> trace_jax`; the walk resolves it to the JAX twin because its CPU leg
+calls `apply_real_lens` with `seidel_correction` unset and so reaches no CPU
+tracer today.  Since round 3 it would reach one the moment a caller turns
+the Seidel correction on -- and `apply_real_lens` now carries both keywords
+(VR2-D1), so that path has a way back too.
 
 **And the walk is module-scoped, which is what makes it a census rather than
 a guess.**  A call graph keyed by bare NAME is sound for the DIRECT census --
