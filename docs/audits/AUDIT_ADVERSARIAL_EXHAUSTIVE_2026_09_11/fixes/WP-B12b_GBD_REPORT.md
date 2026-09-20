@@ -734,16 +734,22 @@ exists, rather than after the ray trace has been paid for:
             'apply_prescription_persurface_to_beamlets')
 ```
 
-**One tolerance, not two.**  The import is the shared helper, not a copy.  A
-module-level `from .fga import _require_non_immersed_exit` was measured to
-import cleanly from five entry modules (`lumenairy`, `lumenairy.elements`,
-`lumenairy.propagators`, `lumenairy.raytrace`, `lumenairy.propagators.gbd`
-and `...fga` first), so there is no cycle today -- but it would make
-`propagators.gbd` eagerly depend on `propagators.fga`, which
-`propagators/__init__.py` documents as cycle-free, and `fga` already reaches
-into `gbd` through a function-level import of the same shape.  The
-function-level form was chosen for that reason and the measurement is
-recorded here rather than the claim.
+**One tolerance, not two.**  The import is the shared helper, not a copy.
+Whether it had to be function-level was MEASURED, not assumed: a
+module-level `from .fga import _require_non_immersed_exit` was added and
+each of six modules imported FIRST in its own fresh interpreter --
+`lumenairy.propagators.gbd`, `lumenairy.propagators.fga`, `lumenairy`,
+`lumenairy.elements`, `lumenairy.propagators`, `lumenairy.raytrace` -- and
+all six imported cleanly, so there is no cycle today.  It was still not
+taken: it would make `propagators.gbd` eagerly depend on
+`propagators.fga`, which `propagators/__init__.py` documents as
+cycle-free ("The new propagators -- `gbd`, `hfpi`, `subaperture` -- have no
+such cycle"), and `fga` already reaches into `gbd` through a function-level
+import of exactly this shape (`from ..propagators.gbd import
+_fresnel_jones_matrix_per_beamlet`).  The function-level form keeps that
+property and matches the direction the codebase already uses; no helper was
+moved to a new home, so the tolerance still has one definition and one
+file.
 
 **The premise, measured (both builds, identical to every printed digit).**
 
