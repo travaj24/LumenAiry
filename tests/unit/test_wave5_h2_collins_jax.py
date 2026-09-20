@@ -26,6 +26,23 @@ spread times a stated factor for the chain depth, re-measured on the running
 build at the FIXTURE's own shape -- so it tracks a numpy release, an XLA
 release, or a change of FFT backend rather than pinning today's.
 
+WITH ONE MEASURED CAVEAT (VERIFY-WAVE5-HYGIENE2 round 2, D-5; re-measured
+here 2026-09-20 on both builds).  On the shipped fixture the tracking term is
+NOT what is asserted against: the measured single-transform spread is
+2.6853e-16 (WIN py3.14) / 2.5091e-16 (WSL py3.12), six times it is 1.61e-15 /
+1.51e-15, and ``_fft_spread_bar`` therefore returns its FLOOR --
+``32 * eps == 7.105427357601002e-15`` exactly, on both builds -- which
+dominates by 4.41x (WIN) / 4.72x (WSL).  So a backend change would have to
+move the spread by more than 4.4x before the bar moved at all; the measured
+term is a tripwire for that, not the active bound.  And the spread is not
+what the name suggests either: ``np.fft.fft2`` and ``jnp.fft.fft2`` agree BIT
+FOR BIT at this shape on both builds (relative difference exactly 0.0), so the
+whole of the 2.5e-16 .. 2.7e-16 is the LIBRARY's ``_fft2`` wrapper -- pyFFTW
+here -- against XLA, i.e. two FFT wrappers rather than NumPy against XLA.
+``tests/unit/test_verify_hyg2_round2.py::
+test_the_cross_backend_bar_is_the_legs_own_last_bit_sensitivity`` derives the
+same bar from a quantity that is a property of the leg instead.
+
 ``jax_enable_x64`` is forced on: in float32 the comparison would be measuring
 JAX's default dtype policy, not the port.
 
@@ -821,20 +838,34 @@ def test_the_central_difference_through_this_merit_has_no_truncation_branch():
     quantity that is zero is not something a test may assume, so it is read
     off the ladder -- but NOT by a ratio.  A five-point third difference of a
     quadratic returns pure round-off, and round-off is free to come out
-    EXACTLY 0.0: MEASURED 2026-09-19 on WSL py3.12, the estimate reads
-    ``+0.00000e+00`` at ``h = 1e-4`` while Windows py3.14 reads
-    ``+7.11e-03`` at the same rung.  A first cut of this id asserted a
-    per-decade GROWTH ratio and was red on WSL for exactly that reason -- a
-    ratio whose denominator or numerator may be zero is not a statistic, which
-    is this repository's own S4 shape.
+    EXACTLY 0.0: MEASURED on WSL py3.12, the estimate reads ``+0.00000e+00``
+    at TWO of the four rungs (``h = 1e-3`` and ``h = 1e-4``) while Windows
+    py3.14 reads ``-1.42e-05`` and ``+7.11e-03`` at the same two.  A first cut
+    of this id asserted a per-decade GROWTH ratio and was red on WSL for
+    exactly that reason -- a ratio whose denominator or numerator may be zero
+    is not a statistic, which is this repository's own S4 shape.
 
     THE BUILD-FREE FORM is a BOUND: a round-off third difference is bounded by
     the floor it comes from, ``eps |P| / h^3``, and zero satisfies that bound
-    while a real derivative does not.  MEASURED at ``h = 1e-1``, estimate over
-    its own floor: **0.36 (WIN) and 1.09 (WSL)**, against a bar of 100.  The
-    falsification arm is the next id, where the same statistic on a genuinely
-    cubic merit reads **1.9e+04 .. 7.0e+08** over the same ladder -- two
-    decades clear of this bar on one side and six on the other.
+    while a real derivative does not.  MEASURED over the LADDER, estimate over
+    its own floor, both builds, 2026-09-20 -- corrected from a wording that
+    quoted one rung's number under another rung's label
+    (VERIFY-WAVE5-HYGIENE2 round 2, D-3):
+
+        h           1e-1    1e-2    1e-3    1e-4
+        WIN py3.14  0.3622  1.4487  0.7243  0.3622
+        WSL py3.12  0.3622  1.0865  0.0000  0.0000
+
+    against a bar of 100.  At ``h = 1e-1`` the two builds agree to four
+    figures, which is a better advertisement for the bound than "0.36 (WIN)
+    and 1.09 (WSL)" was: 1.09 is the ``h = 1e-2`` rung, not the ``h = 1e-1``
+    one.  And the estimate is exactly zero at TWO WSL rungs rather than one,
+    which is why the ratio form was unusable.  The falsification arm is the
+    next id, where the same statistic on a genuinely cubic merit reads
+    **1.9e+04 .. 7.1e+08 over ITS OWN ladder** (``1e-1 .. 3e-3``, which is
+    not this id's) -- two decades clear of this bar on one side and six on
+    the other.  The two ladders differ on purpose; the next id's docstring
+    says what happens when the cubic one is extended onto this one.
 
     The second assertion is the one the previous id's bar actually needs: the
     implied truncation contribution ``|P'''| h^2 / (6|g|)`` stays under the
@@ -877,7 +908,7 @@ def test_the_central_difference_through_this_merit_has_no_truncation_branch():
             f"branch after all")
 
 
-def test_the_same_ladder_does_find_a_truncation_branch_on_a_cubic_merit():
+def test_the_same_statistic_finds_a_truncation_branch_on_a_cubic_merit():
     """Falsification arm for the id above: the instrument is not blind.
 
     Cube the on-axis intensity and the merit is genuinely cubic in the
@@ -889,6 +920,26 @@ def test_the_same_ladder_does_find_a_truncation_branch_on_a_cubic_merit():
     6.92e-09 at h = 1e-1, 3e-2, 1e-2, 3e-3 -- and the truncation model
     ``|P'''| h^2 / (6 |g|)`` predicts it to three significant figures.  The
     minimum is real, at h = 1e-4.
+
+    THE SEPARATION IS LADDER-CONDITIONAL, and that is why the two ids do not
+    share a ladder (restated 2026-09-20, VERIFY-WAVE5-HYGIENE2 round 2, D-4).
+    An earlier wording here said the control "cannot silently drift into the
+    quadratic merit's regime".  It can, on a longer ladder: a third
+    difference's round-off floor grows as ``h^-3`` and eventually swamps any
+    real ``P'''``.  MEASURED over-floor statistic on THIS merit, extending its
+    ladder by two decades, both builds 2026-09-20:
+
+        h           1e-1     3e-2     1e-2     3e-3    1e-3   1e-4
+        WIN py3.14  7.06e+08 1.91e+07 7.06e+05 1.91e+04 705.5  0.3505
+        WSL py3.12  7.06e+08 1.91e+07 7.06e+05 1.90e+04 719.9  7.010
+
+    One decade past this id's own ladder the statistic is already BELOW the
+    ``min(floors) > 1e4`` premise gate, and by ``h = 1e-4`` it is 0.35 (WIN) /
+    7.01 (WSL) -- inside the quadratic merit's own band of 0.00 .. 1.45.  The
+    id is not wrong and is not fragile: the premise gate is asserted over its
+    OWN four rungs and refuses the ladder rather than the conclusion if it
+    ever stops separating.  What was wrong was the sentence, which claimed as
+    a property of the merit what is a property of the ladder.
     """
     amp0 = jnp.asarray(np.real(_gauss()))
 
@@ -929,10 +980,15 @@ def test_the_same_ladder_does_find_a_truncation_branch_on_a_cubic_merit():
     floors = [abs(p3) / (eps * abs(P0) / h ** 3) for h, _rel, p3 in rows]
     assert min(floors) > 1e4, (
         f"PREMISE FAILED: the cubic merit's third difference is only "
-        f"{min(floors):.3g}x its own round-off floor (measured 1.9e+04 .. "
-        f"7.0e+08 on 2026-09-19).  The quadratic merit's id passes at <= 100x "
-        f"that floor, so if this control drops toward 100 the two readings "
-        f"stop being separable and both bars become noise")
+        f"{min(floors):.3g}x its own round-off floor over ITS ladder "
+        f"(1e-1 .. 3e-3; measured 1.91e+04 .. 7.06e+08 on both builds, "
+        f"2026-09-20).  The quadratic merit's id passes at <= 100x that "
+        f"floor, so if this control drops toward 100 the two readings stop "
+        f"being separable and both bars become noise.  The separation is a "
+        f"property of THIS ladder and not of the merit: one decade further "
+        f"the same statistic reads 705.5 (WIN) / 719.9 (WSL) and two decades "
+        f"further 0.3505 / 7.010, which is why this gate refuses the ladder "
+        f"rather than trusting the conclusion")
     # THE CLAIM: the disagreement IS the truncation model, to 10 %, and it
     # falls as h^2 -- neither is true of the shipped quadratic merit.
     for h, rel, p3 in rows:
