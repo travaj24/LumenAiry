@@ -41,7 +41,7 @@ report: every number is re-measured on this verifier's own sphere set, its own
 | 8 | the two d3 movers, restated against a one-ULP floor | **READINGS REPRODUCE; the bar has no gap below** | `moved` 0.8360 vs 0.836, floor 0.1404 vs 0.1404, degree effect 0.16894 vs 0.1689, floor 0.002586 vs 0.0026.  Floors ARE measured in process; the multipliers (10x, 3x) are CHOSEN; neither arm is two-sided.  **The arm-2 floor's own spread over four one-ULP directions is 3.22x (Win) / 4.79x (WSL) -- at or above the 3.0 multiplier on it. DEFECT D8** |
 | 9 | `analysis.ghost` keeps the generic normal | **CONFIRMED, and it is a defect** | three 2-bounce ghost paths of a spherical doublet move by up to **2.13e-14 mm** of RMS spot radius (normal only) / 4.26e-14 mm (both keywords); transmittance, energy fraction and ray counts unchanged. **DEFECT D5** |
 | 10 | the `EDITED_IN_PLACE` map is guarded | **PARTLY -- the guard is one-sided** | it REFUSES an unrelated line and an out-of-range coordinate, and it ACCEPTS a silently reverted default, a nonsense value, and a stale copy left at the mapped line.  It is not version-pinned. **DEFECT D7** |
-| 11 | nine pre-existing reds at 49ddf4bd | **8 of 9 CONFIRMED on my own archive** | the same 8 fail identically on `git archive 49ddf4bd`; `test_installed_metadata_version_matches_source_version` PASSES on both trees on this box, so its "pre-existing" classification is an environment fact of the C2 agent's box, not a property of either tree |
+| 11 | nine pre-existing reds at 49ddf4bd | **9 of 9 CONFIRMED on my own archive** | eight fail identically on `git archive 49ddf4bd` under the Windows build; the ninth (`test_installed_metadata_version_matches_source_version`) is green on the Windows mount and RED on the WSL one -- installed metadata 5.11.0 against a source 5.48.1 -- and red on the ARCHIVE there too, so it is a stale editable install on that mount, pre-existing exactly as the report classifies it |
 | 12 | the mutation matrix | **8 of 9 caught; one gap** | defaults reverted (signature AND in-loop, with `functools.wraps` so the signature is untouched), clamp moved, mirror `nz` flipped, `nz` flipped everywhere, clamp on the analytic route only, exit rescale never runs, predicate accepts conics -- **all caught**.  **`jax_gets_a_clamp` survives 294 raytrace and parity tests** (the mutation was verified to bite: 1901 of 2000 alive instead of 2000).  `whole_normal_sign_flipped` survives CORRECTLY -- a negative control, since the shared core orients the normal against the ray |
 
 ---
@@ -872,12 +872,12 @@ names the same six and is short by ten.
 
 ## 5. Ship recommendation
 
-**SHIP**, with D11, D1, D3, D4 and D7 actioned before the release note is
-written, and D2, D5, D6, D8, D9, D10, D12 filed (D12 is a two-line
-number correction and could equally go in the first group).  D11 is the only P1: a reader who
-opens `_sphere_normal` to ask whether the rim band is reachable is told, in
-that docstring, that it is not -- which is the opposite of what the release
-actually did.
+**SHIP**, with D11, D1, D3, D4, D7 and D12 actioned before the release note
+is written, and D2, D5, D6, D8, D9, D10 filed.  D11 is the only P1: a reader
+who opens `_sphere_normal` to ask whether the rim band is reachable is told,
+in that docstring, that it is not -- which is the opposite of what the release
+actually did.  D12 is two numbers in two user-facing files and costs nothing to
+fix.
 
 The two default flips are sound and this verification strengthened rather than
 weakened both:
@@ -894,12 +894,18 @@ weakened both:
   measured linear sensitivity coefficient.  Its speed benefit is real but
   small and sign-dependent on surface count; **KEEP** (section 3).
 
-The five items that must not go out unqualified are the three private
-docstrings that still say the generic route is shipped (**D11, P1**), the
-entry points with no way back (**sixteen**, not six -- D4), the oracle whose
-own error exceeds what it reports above `h = 0.9 abs(R)` (D1), the
-`0.6 n eps` coefficient (D3) and the citation override that accepts a
-reverted default (D7).
+The six items that must not go out unqualified are the four private-docstring
+sentences that still say the generic route is shipped (**D11, P1**), the entry
+points with no way back (**sixteen**, not six -- D4), the oracle whose own
+error exceeds what it reports above `h = 0.9 abs(R)` (D1), the `0.6 n eps`
+coefficient (D3), the citation override that accepts a reverted default (D7)
+and the byte-identity count the CHANGELOG and Migration Guide get wrong (D12).
+
+**And the two results the release notes should gain, because they are better
+than what is in them now.**  The way back is byte-identical archive to archive
+in a second process (594 / 594 arrays, both builds), and the closed form's
+accuracy against a corrected oracle is 1.00 against 1.75 rather than 1.75
+against 2.00-2.25.  Both are stronger claims than the ones currently shipped.
 
 ---
 
