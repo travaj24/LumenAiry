@@ -1,0 +1,72 @@
+{
+ "meta": {
+  "python": "3.14.6 (tags/v3.14.6:c63aec6, Jun 10 2026, 10:26:10) [MSC v.1944 64 bit (AMD64)]",
+  "numpy": "2.4.4",
+  "lumenairy": "5.48.1",
+  "platform": "win32"
+ },
+ "summary": {
+  "degree_ratio_range": [
+   1.1659723074160453,
+   72.14684449481607
+  ],
+  "degree_ratio_spread": 61.876979441049826,
+  "moved_range": [
+   0.835986727313219,
+   22.5526539501776
+  ],
+  "moved_spread": 26.977287094807906,
+  "inert_off_everywhere": true,
+  "separation_range": [
+   121.34514141898934,
+   192.1694838903331
+  ]
+ },
+ "results": {
+  "shipped defaults, input nudged 1 ULP up": {
+   "bad6": 1.0094664846250894,
+   "good6": 0.00831246006624457,
+   "bad4": 1.1770099663374793,
+   "separation": 121.44016050367019,
+   "degree_ratio": 1.1659723074160453,
+   "moved": 0.835986727313219,
+   "launch_off_inert": true,
+   "launch_off_max_delta": 0.0,
+   "defaults": [
+    "exit",
+    "analytic"
+   ],
+   "nudge": 1.0
+  },
+  "shipped defaults, input nudged 1 ULP down": {
+   "bad6": 1.008676641437438,
+   "good6": 0.008312460059316308,
+   "bad4": 1.176973555677057,
+   "separation": 121.34514141898934,
+   "degree_ratio": 1.1668492233544574,
+   "moved": 0.835986727313219,
+   "launch_off_inert": true,
+   "launch_off_max_delta": 0.0,
+   "defaults": [
+    "exit",
+    "analytic"
+   ],
+   "nudge": -1.0
+  },
+  "pre-5.49 defaults, input nudged 1 ULP up": {
+   "bad6": 1.5974011972368078,
+   "good6": 0.008312460255908318,
+   "bad4": 115.24745577287699,
+   "separation": 192.1694838903331,
+   "degree_ratio": 72.14684449481607,
+   "moved": 22.5526539501776,
+   "launch_off_inert": true,
+   "launch_off_max_delta": 0.0,
+   "defaults": [
+    "surface",
+    "generic"
+   ],
+   "nudge": 1.0
+  }
+ }
+}
