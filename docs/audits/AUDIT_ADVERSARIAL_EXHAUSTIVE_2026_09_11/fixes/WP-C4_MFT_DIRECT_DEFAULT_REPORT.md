@@ -259,14 +259,35 @@ timing.
 | 64 | 1024 | 16 | 19.92 | 36.8 | 166.7 | 8x | NO |
 
 **The dense route is the cheapest of the three at 42 of 42 shapes on BOTH
-builds, by 6.4x to 334.9x, and the two builds' readings are IDENTICAL TO THE
-BYTE at every shape** (the `identical WIN/WSL` column is `yes` at 42 of 42).
-The full ordering `dense < separable < chirp-Z 2-D` also holds at 42 of 42 on
-both builds.  This is build-free by construction: it follows from the padding
-(`L = next_fast_len(N + M - 1)` per axis) and not from a timing.
+builds, by 6.4x to 334.9x.  What is identical across builds is the ORDERING,
+not the readings** (corrected 2026-09-20, round 2, VERIFY-WP-C4 D3).  An
+earlier wording here said "the two builds' readings are IDENTICAL TO THE BYTE
+at every shape (the `identical WIN/WSL` column is `yes` at 42 of 42)", which
+contradicted the column printed immediately above it -- `NO` at all 42 rows --
+and this section's own data: `c4_ladder_mem_win.json` and
+`c4_ladder_mem_wsl.json` agree byte for byte at **0 of 42** shapes, and at
+`N = 64, M = 16` the chirp-Z reading differs by a factor of **9.98**
+(8,001,186 bytes against 801,515).  The two builds agree on `dense_cheapest`
+at **42 of 42**, and the full ordering `dense < separable < chirp-Z 2-D` holds
+at 42 of 42 on both.  THAT is the build-free half, and it is build-free by
+construction: it follows from the padding (`L = next_fast_len(N + M - 1)` per
+axis) and not from a timing, while a `tracemalloc` peak is a reading of one
+interpreter's allocator on one run.  Round 2's own 51-shape census reproduces
+both halves: **0 of 51** identical readings, **51 of 51** identical cheapest
+route (`validation/probe_c4_round2/r2_memcensus_all_{win,wsl}.json`), and the
+claim is now gated by
+`tests/unit/test_c4_round2_memory_claim.py::
+test_the_reports_cross_build_memory_claim_matches_the_committed_json`.
 
-So the memory half never argues against the rule anywhere -- including in the
-region 1/32 excludes, which is why the boundary is set by time alone.
+So the memory half never argues against the rule anywhere **on the SQUARE
+ladder** -- but this ladder is square, and that is the same blind spot
+V-C4-D1 found in the timing half.  At `2048x64 -> 64x2` the dense route is the
+LARGER of the two (5.264 MB against the separable route's 4.399 MB, on both
+builds), and eight more thin shapes read the same way.  Every one of them is
+REFUSED by the second condition that round 2 added to the rule, so after that
+change the memory half argues against the captured region at **0 of 51**
+shapes on both builds -- which is what the sentence above was always meant to
+say and, before round 2, did not.
 
 ---
 

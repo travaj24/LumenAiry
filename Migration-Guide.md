@@ -1790,48 +1790,100 @@ as an opt-in `method='direct'`.  `'auto'` now DECIDES FROM THE SHAPES: it takes
 the dense route where that route was measured never slower on either build, and
 the chirp-Z reduction everywhere else.
 
-**Affected entry points**
+**Affected entry points, and what to pass at each**
 
-* `lumenairy.fresnel_propagate_mft`
-* `lumenairy.fraunhofer_propagate_mft`
-* `lumenairy.angular_spectrum_propagate_mft`
-* `lumenairy.resample_field(method='chirpz')` (its chirp-Z leg calls the same
-  primitive; it has no `method=` of this vocabulary, so the way back there is
-  the module constant below)
-* the carrier readouts and `_collins_transport`, which reach the same primitive
-* `propagate(method='asm' | 'fresnel' | 'fraunhofer', output_dx=..., N_out=...)`,
-  which forwards to the three above
+Every one of these moves at a captured shape and is byte-identical above the
+boundary, and every one of them has a ONE-KEYWORD way back.  Which SPELLING
+reproduces the pre-5.49.0 bytes depends on which chirp-Z arm that caller was
+on, so it is listed per entry point rather than guessed -- it was measured
+archive-to-archive against 5.48.1 on Windows py3.14 and WSL py3.12, which
+agree row for row.
+
+| entry point | what its own `method=` names | the way back | spelling |
+|---|---|---|---|
+| `fresnel_propagate_mft` | the MFT route | `method=` | `'bluestein'` (or `'separable'`) |
+| `fraunhofer_propagate_mft` | the MFT route | `method=` | `'bluestein'` (or `'separable'`) |
+| `angular_spectrum_propagate_mft` | the MFT route | `method=` | `'bluestein'` (or `'separable'`) |
+| `asm_propagate` | -- (it has none) | `method=`, forwarded through `**method_kwargs` | `'bluestein'` |
+| `compute_psf(method='mft')` | the SAMPLER (`'fft'` / `'mft'`) | **`mft_method=`** | `'bluestein'` |
+| `resample_field(method='chirpz')` | the RESAMPLER (`'spline'` / `'chirpz'`) | **`mft_method=`** | `'bluestein'` |
+| `propagate(method='asm', output_grid=...)` | the propagator FAMILY | **`mft_method=`** | `'bluestein'` |
+| `propagate(method='fresnel', output_grid=...)` | the propagator FAMILY | **`mft_method=`** | `'bluestein'` |
+| `carrier_referenced_focus_readout` | -- | **`mft_method=`** | `'bluestein'` |
+| `carrier_referenced_exact_focus_readout` | -- | **`mft_method=`** | `'separable'` |
+| `re_reference` (`CarrierField` verb) | -- | **`mft_method=`** | `'separable'` |
+| `propagate_traced_carrier_chain` / `..._multi` | -- | **`mft_method=`** | `'bluestein'`, or `'separable'` with `transport='collins'` |
+| `propagate_carrier_referenced(transport='collins')` | the TRANSPORT | **`mft_method=`** | `'separable'` (its output lattice keeps the input's `N`, so the rule cannot fire on it today) |
+| `propagate_through_system` (fresnel leg) | the propagator family | not needed | -- `N_out` is pinned to the chain's own sample count, so the ratio is exactly 1 |
+
+`mft_method=` was added in 5.49.0 precisely because `method=` is already spent
+on something else at those entry points; it is the same vocabulary the MFT
+propagators' `method=` accepts (`'auto'`, `'bluestein'`, `'separable'`,
+`'direct'`) and its default, `None`, names nothing at all -- the keyword is
+left off the inner call, so the library's own default governs.
+
+Two things this table deliberately does NOT say.  `propagate`'s own `method=`
+does **not** reach the MFT route: it names the propagator family
+(`'asm'` / `'fresnel'` / ...), which is why `mft_method=` exists there.  And
+`_MFT_DIRECT_MAX_RATIO = _MFT_DIRECT_NEVER` is a private, PROCESS-WIDE switch
+described at the end of this section -- it is not the way back, and a caller
+who wants the old bytes for one call inside a program that also wants the new
+ones must use the keyword.
 
 ### The rule, in one sentence
 
 `method='auto'` takes the dense route when BOTH output-over-input grid ratios,
 `N_out_y / Ny_in` and `N_out_x / Nx_in`, sit at or under
-`lumenairy.propagators._bluestein._MFT_DIRECT_MAX_RATIO`, which is **1/32**.
+`lumenairy.propagators._bluestein._MFT_DIRECT_MAX_RATIO` (**1/32**) **and** the
+dense route would spend at least
+`lumenairy.propagators._bluestein._MFT_DIRECT_MIN_WORK_PER_KERNEL_ENTRY`
+(**16**) multiply-adds per transcendental kernel entry.
 
-It is a pure function of the four grid sizes and that one constant --
-`_auto_selects_direct(Ny_in, Nx_in, N_out_y, N_out_x)` -- so the route a call
-takes is predictable from its arguments, identical on every build and every
-backend, and unchanged by the clock, the environment, the thread count or the
-array's contents.
+The second condition is there because a ratio cannot see a THIN input.  The
+dense route builds `My*Ny + Mx*Nx` complex exponentials and then spends
+`min(My*Ny*Nx + My*Nx*Mx, Ny*Nx*Mx + My*Ny*Mx)` multiply-adds using them;
+`2048x2048 -> 64x64` spends 1056 of them per exponential and
+`2048x64 -> 64x2` spends 4.0, and both sit at ratio exactly `(1/32, 1/32)`.  At
+the thin one the dense route was measured 1.1x to 13x SLOWER than the chirp-Z
+fallback on both builds, and larger in memory besides, so it is refused.
+
+Both conditions are pure functions of the four grid sizes and those two
+constants -- `_auto_selects_direct(Ny_in, Nx_in, N_out_y, N_out_x)` -- so the
+route a call takes is predictable from its arguments, identical on every build
+and every backend, and unchanged by the clock, the environment, the thread
+count or the array's contents.
 
 ### Does this affect me?
 
-Compute `max(N_out_y/Ny_in, N_out_x/Nx_in)` for your call.
+Compute `max(N_out_y/Ny_in, N_out_x/Nx_in)` for your call.  If it is greater
+than 1/32, nothing moves and you can stop here.  If it is at or under 1/32,
+compute the work ratio as well:
 
-| your ratio | what you get | bytes vs 5.48.1 |
+```python
+entries = N_out_y*Ny_in + N_out_x*Nx_in
+flops   = min(N_out_y*Ny_in*Nx_in + N_out_y*Nx_in*N_out_x,
+              Ny_in*Nx_in*N_out_x + N_out_y*Ny_in*N_out_x)
+work_per_entry = flops / entries          # >= 16 -> the dense route
+```
+
+| your call | what you get | bytes vs 5.48.1 |
 |---|---|---|
-| `> 1/32` | the chirp-Z route, exactly as before | **identical** |
-| `<= 1/32` | the dense matrix-Fourier route | move in the last bits |
+| max ratio `> 1/32` | the chirp-Z route, exactly as before | **identical** |
+| max ratio `<= 1/32`, `work_per_entry < 16` | the chirp-Z route, exactly as before | **identical** |
+| max ratio `<= 1/32`, `work_per_entry >= 16` | the dense matrix-Fourier route | move in the last bits |
+
+For a SQUARE `N -> M` grid the work ratio is just `(N + M)/2`, so any square
+call with `N >= 32` clears the second condition and only the ratio decides.
 
 Every focal-zoom grid these propagators are written for -- an output grid the
 same size as the input, or a zoomed window of comparable size -- is in the first
-row and does not move.  The second row is the strongly-decimating case: reading a
-64 x 64 window out of a 4096 x 4096 fine grid, or resampling a field down by
-more than 32x.
+row and does not move.  The moving row is the strongly-decimating case on a grid
+that is not extremely thin: reading a 64 x 64 window out of a 4096 x 4096 fine
+grid, or resampling a field down by more than 32x.
 
 ### Recipe -- keep the previous route, byte for byte
 
-Per call, with a keyword:
+Per call, with a keyword.  On the three MFT propagators it is `method=`:
 
 ```python
 # Old (<= 5.48.1), and new if you want the same bytes:
@@ -1840,41 +1892,85 @@ E = la.fresnel_propagate_mft(E_in, z, wl, dx, dx_out, N_out,
 # ... or 'separable', if you were on the two-pass chirp-Z arm
 ```
 
-For a whole process, with the constant -- which is also the way back for
-`resample_field(method='chirpz')` and the carrier readouts, neither of which
-exposes the keyword:
+Everywhere else `method=` already names something else, so the keyword is
+`mft_method=` -- same vocabulary, different name, and the table above says
+which spelling reproduces your previous bytes:
+
+```python
+psf, dx = la.compute_psf(pupil, wl, f, dx_pupil, N_psf=8,
+                         method='mft',               # the SAMPLER
+                         mft_method='bluestein')     # the MFT ROUTE
+
+E, dx  = la.resample_field(E_in, dx_in, dx_out, N_out=8,
+                           method='chirpz', mft_method='bluestein')
+
+res    = la.propagate(E_in, z=z, wavelength=wl, dx=dx, method='asm',
+                      output_grid=(8, dx_out), mft_method='bluestein')
+
+F      = la.carrier_referenced_exact_focus_readout(
+             E_full, R, z, wl, dx, dx_out=dx_out, N_out=8,
+             mft_method='separable')                 # it was on the two-pass arm
+```
+
+`mft_method=None` is the default and names nothing: the keyword is left off the
+inner call, so the library's own default governs.  Passing `mft_method='auto'`
+is not the same statement -- it pins that name -- although the two give the
+same bytes today.  Passing it where no matrix Fourier transform is reached
+(`compute_psf(method='fft')`, `propagate` without an output grid,
+`propagate_carrier_referenced(transport='sziklas')`) is a `ValueError` rather
+than a silent no-op.
+
+Proved archive to archive against 5.48.1 on Windows py3.14 and WSL py3.12: 138
+of 138 fixtures identical on the `'bluestein'` arm and 138 of 138 on the
+`'separable'` arm for the three propagators, and at every entry point in the
+table above the captured shape MOVES without the keyword and is reproduced
+EXACTLY with it -- 11 of 11 on each build.
+
+**The process-wide switch, which is not the way back.**  There is also a
+private module constant.  It is documented because it is useful when an entire
+program wants the old dispatch, and it is NOT the recommended remedy: it is
+private, it is process-wide, and it cannot serve a program that wants the old
+bytes at one call and the new ones at another.
 
 ```python
 from lumenairy.propagators import _bluestein as _bl
 _bl._MFT_DIRECT_MAX_RATIO = _bl._MFT_DIRECT_NEVER    # 0.0 -- never select it
 ```
 
-Both are byte-identical to 5.48.1 at every shape, proved archive to archive on
-Windows py3.14 and WSL py3.12: 138 of 138 fixtures identical on the
-`'bluestein'` arm, 138 of 138 on the `'separable'` arm, and 138 of 138 with the
-constant set to never.
-
-`_bl._MFT_DIRECT_ALWAYS` (`float('inf')`) is the other end: every shape takes
-the dense route.
+138 of 138 fixtures identical with it set.  `_bl._MFT_DIRECT_ALWAYS`
+(`float('inf')`) is the other end: every shape takes the dense route,
+overriding BOTH conditions.
 
 ### Recipe -- take the new default, and what it buys
 
 Change nothing.  At the shapes the rule captures you get, MEASURED on both
 builds:
 
-* **less memory, by a lot, and that ordering is build-free.**  `tracemalloc`
+* **less memory, by a lot, and the ORDERING is build-free.**  `tracemalloc`
   peak at `N = 1024, M = 32`: 1.85 MB, against 34.7 MB for the separable
-  chirp-Z route and 159.6 MB for the 2-D one.  Across a 42-shape ladder the
-  dense route is the smallest at 42 of 42 shapes on both builds, by 6.4x to
-  334.9x, and the readings are identical to the byte across builds.
+  chirp-Z route and 159.6 MB for the 2-D one.  Across a 42-shape square ladder
+  the dense route is the smallest at 42 of 42 shapes on both builds, by 6.4x to
+  334.9x; across a 51-shape ladder that includes thin inputs it is the smallest
+  at 30 of 30 shapes the rule CAPTURES, by 1.6x to 73.6x.  Which route is
+  cheapest is identical on both builds at every shape -- that follows from the
+  padding law, not from a run.  The READINGS are not identical across builds
+  (they differ at every shape, by up to a factor of 10 at `N = 64, M = 16`), so
+  do not pin a `tracemalloc` number.
 * **less time.**  Worst dense-over-fallback ratio at `M/N <= 1/32`, over three
   independent rounds: 0.477 on Windows py3.14 and 0.954 on WSL py3.12 -- never
-  slower on either, which is the criterion the boundary was set from.
+  slower on either, which is the criterion the boundary was set from.  The thin
+  shapes where that was NOT true are what the second condition refuses; over the
+  51-shape round-2 ladder the worst captured reading is 0.921 (Windows) and
+  0.636 (WSL).
 * **a closer answer.**  Against a reference whose phase is reduced exactly, at a
-  phase budget of 1e3, the dense route is 31x to 485x nearer the exact sum.  The
-  mechanism is the reason the gap grows exactly where the rule fires: the
-  chirp-Z route's phase argument reaches `alpha * max(N, M)^2` while the dense
-  route's reaches only `alpha * (N-1) * (M-1)`.
+  phase budget of 1e3, the dense route is **about 30x** nearer the exact sum at
+  fixtures where its phase is genuinely rounded (28.2x to 34.3x on Windows,
+  27.9x to 34.0x on WSL), and 202x to 408x at fixtures where `alpha` happens to
+  make `alpha*n*k` exactly representable, where the dense route's phase carries
+  no error at all by construction.  The mechanism is the reason the gap grows
+  exactly where the rule fires: the chirp-Z route's phase argument reaches
+  `alpha * max(N, M)^2` while the dense route's reaches only
+  `alpha * (N-1) * (M-1)`.
 * **a route that needs no FFT.**  It is two matrix products, so it runs wherever
   `xp.matmul` does.  On a box whose cuFFT is unusable, CuPy calls at these
   shapes now succeed where 5.48.1 raised `ImportError: cufft`.
@@ -1900,12 +1996,22 @@ now: at the natural MFT grids `alpha = zoom/N`, so the budget is of order
 * The dense route's two matrix products go through BLAS, so its last bits move
   with the BLAS kernel and the thread count.  Do not pin them; compare against a
   reference with a derived bar.
-* The constant is the largest ladder ratio at which the dense route was measured
-  never slower on BOTH builds.  Its margin is thin at one shape (WSL
-  `N = 1024, M = 32`, where the dense route is faster by 5 to 18 %) and wide
-  everywhere else.  1/64 is the ratio with a two-fold margin at every shape, if
-  a deployment wants more headroom; 1/16 is NOT safe (on WSL at
-  `N = 1024, M = 64` the dense route is 1.4x slower).
+* The ratio constant is the largest ladder ratio at which the dense route was
+  measured never slower on BOTH builds, on a ladder of SQUARE shapes.  Its
+  margin is thin at one shape (WSL `N = 1024, M = 32`, where the dense route is
+  faster by 5 to 18 %) and wide everywhere else.  1/64 is the ratio with a
+  two-fold margin at every shape, if a deployment wants more headroom; 1/16 is
+  not safe on one of the two instruments the boundary was measured with (on WSL
+  at `N = 1024, M = 64` it reads 1.4x slower with the shipped instrument and
+  0.99 with an independent one), so 1/32 is the conservative value either way.
+* The work constant, 16, is the largest value that still captures every
+  anisotropic shape measured safe above the slower region, and it clears that
+  region by 1.34x (the largest work ratio measured slower on either build is
+  11.95).  It is a ONE-SIDED SCREEN, not a crossover: the readings are not
+  monotone in it, so it also refuses some thin shapes that would have been fine
+  (11 of the 34 on the round-2 ladder).  If you are on one of those and want the
+  dense route's memory and accuracy anyway, name it: `method='direct'` on the
+  three propagators, or `mft_method='direct'` elsewhere.
 
 Full measurements, with the box's load recorded:
 `docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/WP-C4_MFT_DIRECT_DEFAULT_REPORT.md`.

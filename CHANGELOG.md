@@ -4,7 +4,7 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
-### Changed -- MFT propagators (WP-C4): `method='auto'` now SELECTS the direct-matrix route where it was measured never slower on either build, which is `N_out/N_in <= 1/32`
+### Changed -- MFT propagators (WP-C4): `method='auto'` now SELECTS the direct-matrix route where it was measured never slower on either build, which is `N_out/N_in <= 1/32` AND at least 16 multiply-adds per transcendental
 
 `fresnel_propagate_mft`, `fraunhofer_propagate_mft` and
 `angular_spectrum_propagate_mft` -- and the two primitives behind them,
@@ -16,13 +16,24 @@ the most accurate and the cheapest in memory of the three routes.  What it
 would not do was select it automatically, because the TIME crossover is
 per-build.  This release selects it from the SHAPE instead.
 
-**The rule.**  One module constant, `_MFT_DIRECT_MAX_RATIO = 1/32`, and one
-function, `_auto_selects_direct(Ny_in, Nx_in, N_out_y, N_out_x)`.  `'auto'`
-takes the dense route when BOTH per-axis `N_out/N_in` ratios sit at or under
-the constant -- the MAX of the two decides, so neither axis may be past the
-boundary -- and otherwise reproduces the pre-5.49.0 dispatch exactly.  The
-decision reads four integers and that one constant and nothing else: no clock,
-no environment variable, no thread count, no backend, no array contents.
+**The rule, in one sentence.**  `'auto'` takes the dense route when BOTH
+per-axis `N_out/N_in` ratios sit at or under `_MFT_DIRECT_MAX_RATIO` (**1/32**)
+AND the dense route spends at least `_MFT_DIRECT_MIN_WORK_PER_KERNEL_ENTRY`
+(**16**) multiply-adds per transcendental kernel entry; otherwise it reproduces
+the pre-5.49.0 dispatch exactly.
+
+One function reads both, `_auto_selects_direct(Ny_in, Nx_in, N_out_y,
+N_out_x)`.  On the first condition the MAX of the two ratios decides, so
+neither axis may be past the boundary.  The second counts
+`min(My*Ny*Nx + My*Nx*Mx, Ny*Nx*Mx + My*Ny*Mx)` multiply-adds against
+`My*Ny + Mx*Nx` transcendental kernel entries -- the same two expressions
+`_direct_matrix_2d` itself compares to pick its association order -- because a
+RATIO cannot see a THIN input: `2048x2048 -> 64x64` reads 1056 multiply-adds
+per kernel entry and `2048x64 -> 64x2` reads 4.0, and both sit at ratio exactly
+`(1/32, 1/32)`.  For a square `N -> M` the quantity is `(N+M)/2`, so every
+square shape with `N >= 32` clears it.  The decision reads four integers and
+those two constants and nothing else: no clock, no environment variable, no
+thread count, no backend, no array contents.
 MEASURED over 30 shapes under ten perturbations that are not a shape (the clock
 advanced, `OMP_NUM_THREADS` / `OPENBLAS_NUM_THREADS` / `MKL_NUM_THREADS` /
 `SCIPY_FFT_WORKERS` / `LUMENAIRY_MEM_BUDGET_MB` set high, set low and removed,
@@ -55,12 +66,51 @@ margin is thin at one shape (WSL `N = 1024, M = 32`: 0.844 / 0.877 / 0.954) and
 wide everywhere else; 1/64 is the ratio with a two-fold margin at every shape,
 if more headroom is ever wanted.
 
-**Memory never argues against it, and that half IS build-free.**  The dense
-route's `tracemalloc` peak is the smallest of the three at 42 of 42 shapes on
-both builds, by 6.4x to 334.9x, and the readings are identical to the byte
-across builds.  At `N = 1024, M = 32`: **1.85 MB against 34.7 MB (separable)
-and 159.6 MB (chirp-Z 2-D)**; at `N = 2048, M = 64`, 7.4 MB against 138.5 and
-638.3.
+**Why a SECOND condition, and why 16.**  That ladder is square, and the race is
+not decided by the two ratios: six of twelve thin shapes AT ratio `(1/32,
+1/32)` were measured SLOWER on both builds, by up to 13x.  A second ladder of
+34 CAPTURED anisotropic shapes spanning 1.25 to 64 multiply-adds per
+transcendental kernel entry -- both orientations, several absolute sizes per
+decade, plus 17 square / non-dyadic / mildly anisotropic controls -- two rounds
+of best-of-nine, routes interleaved with the order rotating per repeat, cold
+before every repeat, and `SCIPY_FFT_WORKERS = 1` so BOTH sides are
+single-threaded (`OMP_NUM_THREADS=1` pins the dense route's BLAS products and
+does NOT constrain scipy's pocketfft), verdict on the worst round, both builds,
+against `min(chirp-Z 2-D, separable)`:
+
+| | largest work/entry measured SLOWER | smallest measured safe above it |
+|---|---|---|
+| Windows py3.14 | 7.99 (`4096x128 -> 128x4`, 1.659) | 8.86 (`512x64 -> 8x1`, 0.348) |
+| WSL py3.12 | 11.95 (`2048x128 -> 64x4`, 1.110) | 16.00 (`256x64 -> 4x1`, 0.294) |
+| union of both builds | **11.95** | **16.00** |
+
+16 is the LARGEST value that still captures every shape measured safe above the
+slower region, and it clears that region by **1.34x**.  It refuses 10 of the 10
+shapes measured slower (by 1.11x to 13.03x) and keeps 17 of 17 controls; the
+six shapes the whole shipped suite drives read 264, 516, 520, 1028, 1044 and
+2052, so none of them moves.  It is a ONE-SIDED SCREEN and not a crossover --
+the readings are not monotone in it (`512x32 -> 16x1` reads 2.99 and is safe,
+because at that absolute size the chirp-Z route's fixed costs dominate whatever
+the asymptotic count says) -- so it also refuses shapes that would have been
+fine: 11 of the 34 thin shapes here.  That is the correct direction for a rule
+whose premise is "never slower": refusing a safe shape costs a few per cent of
+time, and capturing an unsafe one cost up to 13x on this ladder.
+
+**Memory: the ORDERING is build-free, the readings are not, and inside the
+captured region the dense route is the cheapest everywhere.**  The dense
+route's `tracemalloc` peak is the smallest of the three at 42 of 42 shapes of
+the square ladder, by 6.4x to 334.9x, and WHICH route is cheapest is identical
+on both builds at every shape -- that follows from the padding law
+(`L = next_fast_len(N + M - 1)` per axis) and not from a run.  The READINGS are
+not identical: the two builds' peaks differ at 42 of 42 shapes, by a factor of
+9.98 at `N = 64, M = 16` (8,001,186 bytes against 801,515).  At
+`N = 1024, M = 32`: **1.85 MB against 34.7 MB (separable) and 159.6 MB
+(chirp-Z 2-D)**; at `N = 2048, M = 64`, 7.4 MB against 138.5 and 638.3.  On the
+51-shape anisotropic ladder the dense route is the cheapest at 42 of 51 -- the
+nine exceptions are THIN shapes, worst `2048x64 -> 64x2` at 5.264 MB against
+the separable route's 4.399 MB -- and every one of them is refused by the
+second condition, so inside the region the rule captures the dense route is the
+cheapest at **30 of 30 on both builds**, by 1.6x to 73.6x.
 
 **Accuracy.**  Against a reference whose phase is reduced EXACTLY
 (`fractions.Fraction` for the phase, `math.fsum` for the sum), 16 shapes x 2
@@ -75,6 +125,23 @@ exact answer (Windows and WSL agree to the second figure), where a
 summation-only comparison at a budget of 1 reads the two routes within 0.64x to
 2.66x of each other.  Hygiene-2 round 3's budget ladder reproduces to the digit
 on both builds.
+
+That **31x to 485x is two populations, and only the smaller number is a
+comparison of the routes** (corrected 2026-09-20, VERIFY-WP-C4 N5).  The ladder
+holds `alpha = budget / N_max^2`, and at `budget = 1e3` that value is EXACTLY
+representable whenever the odd part of `N_max^2` divides 125 -- true at
+`64 -> 2`, `128 -> 4`, `160 -> 5`, `256 -> 8` and `128 -> 2`, five of the eight
+dense-side rows.  At those fixtures `t = alpha*n*k` is exact, so is
+`t - rint(t)`, and the dense route's phase carries no error at all: it agrees
+with an exactly-reduced reference BY CONSTRUCTION, which is the same degeneracy
+the `1e15` control in the report is kept to expose.  Split by whether
+`alpha*n*k` is exact, an independent re-measurement reads **28.2x to 34.3x
+(Windows) / 27.9x to 34.0x (WSL) at the rows where the dense route's phase is
+genuinely rounded**, and 202x to 397x / 209x to 408x at the rows where `alpha`
+makes it exact.  With a non-dyadic `alpha` at EVERY shape the whole dense-side
+ladder reads 21.5x to 91.8x and tracks the derived phase ratio as it should.
+So the honest statement is: **about 30x where both routes really round, and
+larger where the fixture hands the dense route an exact phase.**
 
 **One behaviour change that is not a byte move.**  The chirp phase-budget guard
 now runs BEFORE `'auto'` chooses, so a caller who was being warned at a high
