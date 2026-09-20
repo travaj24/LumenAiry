@@ -130,7 +130,7 @@ move -- asserted as a measurement, not read off the signature.
 `propagate_traced_carrier_chain`, plus `_publish_readout_route`.  See section
 0.
 
-### 1.3 Two defects the flip made reachable, both fixed
+### 1.3 Three geometries with NO fallback, all fixed
 
 Both were opt-in before this package and would have been the default after
 it.  Both were found by RUNNING the flip against WP-B4's own test file, not
@@ -154,11 +154,35 @@ N = 1024 at 4 um): the chirp-Z ran at K1 = 1.0222 and K3 = 2.7997, so the
 returned window spanned 2.8 periods and its outer samples were wrapped copies
 of inner ones.
 
-ONE change fixes both: the fallback calls
+**A leg PAST the carrier's geometric focus (`A < 0`) likewise had none.**  It
+was excluded on the grounds that "`m <= 0` is the split this transport exists
+to avoid".  That is the right instinct and the wrong rule: avoiding the split
+is what the chirp-Z buys WHERE THE CHIRP-Z IS REPRESENTABLE, and where it is
+not there is nothing to buy.  MEASURED on `test_carrier_referenced.py`'s
+focus-crossing oracle (`w0 = 4 um` at 30 mm, N = 2048, `dx = 12.1 um`):
+
+| z | `A` | K1 | K3 | windowed r2m | analytic |
+|---|---|---|---|---|---|
+| 45 mm | -0.5 | 1.5907 | 2.5924 | **3333.4 um** | 1105.7 um |
+| 60 mm | -1.0 | 2.3831 | 3.8886 | **6981.9 um** | 2211.4 um |
+
+-- 3.0x and 3.2x, against a Sziklas split that matches the same oracle to
+better than 1 %.
+
+ONE change fixes all three: the fallback calls
 `propagate_carrier_referenced(..., transport='sziklas')` instead of one branch
-of it.  The fallback is then the Sziklas ANSWER in every branch it has, which
-is also what makes VERIFY-WP-B4 F2's "the legs that move are exactly those
-with `N dx^2 <= lambda |z_eff|`" literally true rather than nearly true.
+of it, and the two exclusions that were properties of that ONE branch are
+dropped.  The fallback is then the Sziklas ANSWER in every branch it has,
+which is also what makes VERIFY-WP-B4 F2's "the legs that move are exactly
+those with `N dx^2 <= lambda |z_eff|`" literally true rather than nearly true.
+
+**What still has no fallback, and it is the honest boundary.**  `A == 0`
+exactly, and a leg whose output reference the transport resolves FLAT.  Those
+are precisely the legs the Sziklas transport could never evaluate: it
+re-references to `R_out = 0`, which `carrier_referenced_envelope` refuses, and
+it has no flat-reference form.  So "the legs with no complementary form are
+the legs the old transport could not do at all" is a statement about the
+selection, not a gap in it.
 
 ### 1.4 Three internal call sites that rode the public default
 
@@ -176,7 +200,29 @@ by nothing else.  All three sites now NAME `transport='sziklas'`; the other
 two are the `transport != 'collins'` arms of the chain's gap and final legs,
 where naming it is a statement of fact rather than a change.
 
-### 1.5 The CuPy arm
+### 1.5 The stop-plane readout keys stop being refused and start SELECTING
+
+`focus_readout`'s `standoff` and `on_focus_containment` describe the Sziklas
+readout's stop plane.  WP-B4 REFUSED them on `transport='collins'`, correctly
+at the time: that transport had no stop plane and no fallback, so the keys had
+no referent and accepting them would have been the accept-and-ignore shape the
+vocabulary gates exist to remove.
+
+Since the readout resolves its quadrature they have a referent again, because
+the Sziklas readout is the route most chain readouts take.  So naming one now
+SELECTS that route.  Nothing is accepted and ignored -- the key does exactly
+what it says -- and the stage publishes
+`readout_route_reason='stop_plane_key'`.
+
+This is not a style preference; it is the blast radius.  MEASURED 2026-09-20:
+with the refusal in place and the default flipped, **30 ids** across
+`test_niche_d3_guards`, `_d4_dgrating`, `_d5_dx_flatness_gate`,
+`_c1_consolidation`, `_d2_chain_multi`, `_r8_tiltaware_chain_api` and
+`_r9_highna_final_leg` raised -- every one of them a caller who legitimately
+wants the standoff-based readout and had no reason to know the transport
+keyword had moved underneath them.
+
+### 1.6 The CuPy arm
 
 See section 5.
 
@@ -328,36 +374,60 @@ Selection: every test file that names `transport`, plus every file that calls
 `propagate_traced_carrier_chain_multi`, `carrier_referenced_focus_readout` or
 a `_collins_*` helper (grep, not memory), plus `test_*carrier*`, the
 near-focus H2-3 file and the collins-JAX file.  **54 files, 1846 collected
-ids** before this package's own file was added.
+ids.**
 
-### 4.1 Every test that moved, and its classification
+**The first full run after the flip read 62 failed + 22 errors.**  Two of
+those groups were CODE defects the flip exposed rather than fixtures to
+re-pin; they are sections 1.3 and 1.5 and they account for **46 of the 84**.
+What is left is restated below, and nothing is loosened.
 
-| test | classification | what was done |
+### 4.1 The two code fixes, by the ids they closed
+
+| defect | ids it was failing | fix |
+|---|---|---|
+| the stop-plane keys refused (1.5) | 30, over 7 files | the keys SELECT the Sziklas readout and the stage says so |
+| no fallback past the focus / astigmatic / collimated (1.3) | 16, over 3 files | the fallback is the Sziklas TRANSPORT, not one branch of it |
+
+### 4.2 Every test that was restated, and its classification
+
+| test(s) | classification | what was done |
 |---|---|---|
 | `b4::TestVocabulary::test_the_free_lattice_kwargs_are_refused_on_the_default_transport` | genuine contract on `'sziklas'` | renamed `..._on_the_sziklas_transport` and NAMES it; a new arm asserts the default HONOURS `dx_out` / `carrier_out` and that they change the returned lattice, so the pair is two-sided |
-| `b4::TestDefaultIsByteIdentical::test_the_single_step_is_equal_bit_for_bit` (5 ids) | the pin being retired | the claim moved with the default: the unnamed call is compared to the NAMED `'collins'` one |
+| `b4::TestVocabulary::test_the_stop_plane_readout_keys_are_refused_on_collins` | the contract itself changed | renamed `..._SELECT_the_sziklas_readout`; asserts the route, the published reason, that K1 is NOT published as the reason, and bit-identity with the named-`'sziklas'` run |
+| `b4::TestDefaultIsByteIdentical::test_the_single_step_is_equal_bit_for_bit` (5 ids) | the pin being retired | the unnamed call is now compared to the NAMED `'collins'` one |
 | `b4::TestDefaultIsByteIdentical::test_the_focus_crossing_split_is_equal_bit_for_bit` | fixture now closer to the oracle | restated: the default does NOT take the split, lands finite, and lands on a FINER lattice than the collapsing co-moving one |
 | `b4::TestDefaultIsByteIdentical::test_the_chain_is_equal_bit_for_bit` | still bit-identical, plus new keys | every stage compared whole after removing the `collins_*` and `readout_route*` keys, with their presence and absence per transport asserted separately |
 | `b4::TestNoNearFocusApparatus::test_the_same_poison_fires_on_the_default_transport` | genuine contract on `'sziklas'` | renamed `..._on_the_sziklas_transport`; a new arm runs the same leg on the default with the whole apparatus poisoned |
-| `d2::_leg_for_window` (18 errors + 2 failures) | genuine contract on `'sziklas'` | the calibration measures "period per metre of fine-zoom leg", which exists only on that readout; it names the transport, with the reason, and so do the five other `standoff=` fixtures |
-| `d2::test_default_refuses_the_periodic_replica_regime` | genuine contract on `'sziklas'` | the regime does not exist on the Collins readout, whose period is 3846.09 um against the 2867.20 um window; named, with the measurement |
-| `d2::test_auto_window_is_independent_of_congruence_order` | genuine contract on `'sziklas'` | ditto -- the per-congruence period difference IS a standoff difference |
-| `d2::test_auto_tile_equals_the_same_tile_asked_for_explicitly` | genuine contract on `'sziklas'` | ditto |
+| `d2::_leg_for_window` and its five sibling `standoff=` fixtures | genuine contract on `'sziklas'` | the calibration measures "period per metre of fine-zoom leg", which exists only on that readout; `_SZIKLAS_STANDOFF` names it once, with the reason |
+| `d2::test_default_refuses_the_periodic_replica_regime`, `..._auto_window_is_independent_of_congruence_order`, `..._auto_tile_equals_the_same_tile_asked_for_explicitly` | genuine contract on `'sziklas'` | the regime does not exist on the Collins readout, whose period is 3846.09 um against the 2867.20 um window; named, with that measurement |
+| `d3::_linearity_error` (4 ids) | genuine contract on `'sziklas'` | its own docstring is the reason: "all five runs land on the same lattice" is a property of the co-moving pitch; the Collins leg resolves a pitch per FIELD and the five fields are deliberately different, so `mux - ref` stops being a linearity residual |
+| `exact_gap_kernel::_one_and_two` (8 ids) and `d4::_pair` / `TestSplitLegPathDependence` (4 ids) | genuine contract on `'sziklas'` | a split composes exactly only on the co-moving step -- which is `test_niche_exact_gap_kernel`'s own theorem |
+| `d4::TestDoeChainBookkeeping::test_matches_the_manual_hand_split` | genuine contract on `'sziklas'` | the DOE claim is an equivalence between a ONE-piece and a TWO-piece transport of the same leg |
+| `exact_gap_kernel::test_a_collimated_leg_honours_the_gap_kernel` | genuine contract on `'sziklas'` | `R = +/-inf` is a BRANCH of that entry point, compared bitwise to that branch's own `_exact_envelope_tf_step` |
+| `exact_gap_kernel::test_an_astigmatic_carrier_refuses_the_exact_kernel...` | both transports refuse, differently | restated to assert BOTH, with the two reasons kept apart |
+| `carrier_referenced::test_focus_crossing_*` (4 ids) | closed by the code fix (1.3) | no test change |
+| `carrier_referenced::test_zero_carrier_raises_but_focus_crossing_is_handled` | both transports, different answers | both arms asserted: `'sziklas'` comes back on the flipped geometric carrier, the default on a FLAT reference, which is the physical statement |
+| `carrier_referenced::test_near_focus_landing_fast_path_unchanged` | genuine contract on `'sziklas'` | `_carrier_step_fast` IS that transport's no-crossing branch |
+| `v1_v8::TestV3ChainScope` (2 ids) | genuine contract on `'sziklas'` | every claim is in units of the Sziklas readout's PERIOD, 3.8x smaller than the Collins one here |
+| `h2_near_focus_table::_sziklas()` | naming slip | the closure IS the Sziklas arm and reached it through the default |
+| `k2::test_jax_grad_through_carrier_leg` | genuine contract on `'sziklas'` | the co-moving step is trace-safe; the Collins leg refuses by name (see the Migration note) |
+| `d5::test_dx_flatness_alone_is_not_sufficient` | fixture now closer to the oracle | see below |
+| `r8::test_r8_focus_readout_survives_exact_focus` | fixture now closer to the oracle | the fail-before arm names `'sziklas'`; a NEW arm asserts the default returns a finite field at the exact focus, which is the flip's headline |
+| `a24::test_the_paraxial_final_leg_does_enter_it` + `d6::_run_chain` | genuine contract on `'sziklas'` | `_default_focus_standoff` is that readout's own resolver; `_run_chain` gained an opt-in `transport=` and forwards it only when NAMED, so the rest of that file still tracks the library default |
 
-A NEW class was added to `b4::TestDefaultIsByteIdentical`,
-`test_the_cells_that_resolve_to_the_transfer_function_form_do_not_move`: it
-asks the leg which quadrature it resolved to and requires every
-transfer-function cell to be bit-identical while at least one chirp-Z cell
-moves.  A sixth cell (`A = -0.5`, past the focus) had to be ADDED to the
-fixture set, because MEASURED on WP-B4's own N = 1024 grid all five original
-cells now resolve to the transfer-function form and are bit-identical -- which
-is the flip's central claim and also means they cannot, by themselves, tell a
-working selection from a dead one.
+**`d5::test_dx_flatness_alone_is_not_sufficient` deserves its own paragraph**,
+because its docstring predicted this exact event twice ("a further accuracy
+improvement could walk through it" -- one did in 2026-08-13, and another has
+now).  The test demonstrates that a flatness-only gate passes a
+DELIBERATELY BROKEN configuration (`carrier_reference='parabola'`) that sits
+wide of an independent Debye oracle.  On the flipped default that
+configuration reads a FWHM/oracle ratio of **0.963** -- it is no longer wide
+of the oracle at all.  That is a real result about the transport and it is
+recorded as one; it is NOT a reason to lower the bar.  The lesson the test
+exists for needs a configuration that HAS a level failure, so the test names
+the transport where this one still does.
 
-**No bar was loosened.**  Every restatement above either names the transport
-whose contract it is, or re-derives its claim from the fixture.
-
-### 4.2 Four documentation / lint gates, each fixed at the cause
+### 4.3 Four documentation / lint gates, each fixed at the cause
 
 | gate | why it fired | fix |
 |---|---|---|
@@ -366,16 +436,13 @@ whose contract it is, or re-derives its claim from the fixture.
 | `test_v18_5_the_5_47_0_block_citations_name_the_right_lines` | 11 citations into `carrier.py` shifted; one could not be anchored at all | the 11 re-anchored with the committed content-based tool.  The twelfth is worth recording: the 5.47.0 entry about the Collins readout's applicability window cites the BLANK line introducing the `WHERE THE COLLINS ONE-STEP READOUT APPLIES` paragraph, and the tool breaks a blank line's tie on the two lines either side of it -- a paragraph INSERTED ABOVE gave a second blank line the same 2-of-4 score and the anchor went ambiguous.  Moving the new paragraph BELOW that one restores a 4-of-4 context. **A docstring insertion, not an edit, can orphan a citation that points at whitespace.** |
 | `test_no_backticked_identifier_in_the_docs_is_unresolved` | `readout_route` / `_k1` / `_reason` are stage-DICT keys, not symbols | curated with that reason beside `n_planes`, rather than widening the rule |
 
-### 4.3 One pre-existing red, not caused by this package
+### 4.4 Pre-existing reds, not caused by this package
 
-`test_public_api.py::test_installed_metadata_version_matches_source_version`
-fails on this box because the editable install's metadata reads 5.47.0
-against a source `__version__` of 5.48.1.  **Verified on the base tree**
-(`git archive 49ddf4bd` extracted whole and run from there): it fails there
-too.  It is an environment fact about this machine's install, and the test
-says so in its own message.
-
----
+| id | where | why |
+|---|---|---|
+| `test_public_api.py::test_installed_metadata_version_matches_source_version` | both builds | the editable install's metadata reads 5.47.0 against a source `__version__` of 5.48.1.  **Verified on the base tree** (`git archive 49ddf4bd` extracted whole and run from there): it fails there too |
+| `test_v5_2_3_walker_changelog_content.py::test_v16_synthetic_fabrication_is_caught` | WSL only | git cannot resolve a Windows worktree from WSL; the test's own message names this condition and says it is red "on the base tree too" |
+| `test_v5_3_2_walker_source_line_citation.py::test_v18_5_companion_reanchor_tool_exists_and_covers_the_cited_files` and `::..._the_5_47_0_block_citations_name_the_right_lines` | WSL only | same condition, same message |
 
 ## 5. The CuPy arm
 

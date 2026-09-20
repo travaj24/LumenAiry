@@ -1,7 +1,7 @@
 <!-- lumenairy-history-doc
 module: lumenairy/propagators/carrier.py
-ast_sha256: 7a211a08b6ba8e2cddbe47f30b889848c8e18023bd02b57e5beb72d245a77a6b
-token_sha256: 008939e5262e4555172db0a101c3c38bbebc3995b57b90e297b60144b358c9bc
+ast_sha256: 7bfcf6241a72d82772548f551ec74b349590cd8b79f74ba3d94ed2e6e6531ac5
+token_sha256: 0cba0d449e89b5777fcc2b1c64e5b8b3b0120257d037c923877bfb13e58ce1b7
 pre_relocation_lines: 11602
 recorded_by: WP-A17 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
@@ -16,6 +16,7 @@ re_recorded: 2026-09-14 -- Wave 5 item D (handoff 4.4): the warning chain is swe
 re_recorded: 2026-09-19 -- H2-2 (audit item 18): ONE xp threaded through the _collins_transport chain (_fft2_pair, _as_c_order, _is_traced; _collins_axis_chirp on bld, _collins_exact_kernel_correction through _tf_phase_to_H); NumPy path byte-identical (84/84 archive-to-archive, both builds)
 re_recorded: 2026-09-19 -- Round 2 (VERIFY-WAVE5-HYGIENE2): _exact_dispersion_phase consolidates the three transcriptions of the non-paraxial dispersion (V-D22); _collins_carrier_leg and _collins_input_box run in the field's own namespace so the port reaches the public transport='collins' leg (V-D3); traced scalars, a closed-over jnp constant and the astigmatic 'auto' case are refused or documented by name (V-D11/V-D12/V-D13); the accuracy-keyed near-focus fallback is added behind _GAP_KERNEL_ACCURACY_TAU = None, off by default. NumPy path byte-identical archive-to-archive, 245/245 keys on both builds.
 re_recorded: 2026-09-20 -- WP-C3: transport='collins' becomes the default on the three entry points that take it; the chain's focus readout resolves its quadrature with the new _collins_readout_k1 and falls back to the Sziklas readout above K1 = 1, publishing the route on its stage; the leg's transfer-function fallback now calls propagate_carrier_referenced(transport='sziklas') instead of _carrier_step_fast, which fixes an all-NaN collimated leg and gives an astigmatic carrier the fallback it was denied; the three internal call sites name their transport
+re_recorded: 2026-09-20 -- WP-C3 round 2: the focus_readout stop-plane keys (standoff / on_focus_containment) SELECT the Sziklas readout instead of being refused on transport='collins', with _FOCUS_READOUT_STOP_PLANE_KEYS naming them and readout_route_reason='stop_plane_key' publishing the resolution; the leg's transfer-function fallback is opened to an inverted frame (A < 0), leaving only A == 0 and a resolved flat reference without one -- exactly the legs the Sziklas transport could never evaluate; the traced refusal names transport='sziklas' as its shortest way out
 -->
 
 # Version history -- `lumenairy/propagators/carrier.py`

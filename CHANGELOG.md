@@ -64,7 +64,7 @@ K1 alone routes.  K3 is already owned by `on_replica` (which defaults to
 returned samples wrong -- the transform evaluates the integral exactly AT the
 requested points whether or not they resolve the field (VERIFY-WP-B4 row 8).
 
-### Fixed -- carrier (WP-C3): a COLLIMATED carrier returned NaN on `transport='collins'`, and an ASTIGMATIC one had no fallback
+### Fixed -- carrier (WP-C3): three geometries had no fallback on `transport='collins'` -- a COLLIMATED carrier returned NaN, an ASTIGMATIC one and a leg PAST the focus ran an under-sampled chirp-Z
 
 Both were opt-in before this release and would have been the default after
 it; both were found by running the flip against WP-B4's own test file.
@@ -87,12 +87,30 @@ the very triple the leg promises.  MEASURED on WP-B4's astigmatic fixture
 K1 = 1.0222 and K3 = 2.7997, so the returned window spanned 2.8 periods and
 its outer samples were wrapped copies of inner ones.
 
-One change fixes both: the fallback calls
+Third, a leg PAST the carrier's geometric focus (`A < 0`) was excluded from
+the fallback on the grounds that "`m <= 0` is the split this transport exists
+to avoid".  That is the right instinct and the wrong rule: avoiding the split
+is what the chirp-Z buys WHERE THE CHIRP-Z IS REPRESENTABLE, and where it is
+not there is nothing to buy.  MEASURED on `test_carrier_referenced.py`'s
+focus-crossing oracle (`w0 = 4 um` at 30 mm, N = 2048): at `z = 45 mm` the
+chirp-Z ran at K1 = 1.5907 and K3 = 2.5924 and read a windowed r2m of
+**3333.4 um against the analytic Gaussian's 1105.7** -- 3.0x -- while the
+Sziklas split matches that oracle to better than 1 %.  At `z = 60 mm` it ran
+at K1 = 2.3831 / K3 = 3.8886.
+
+ONE change fixes all three: the fallback calls
 `propagate_carrier_referenced(..., transport='sziklas')` instead of one branch
-of it.  The fallback is then the Sziklas ANSWER in every branch it has --
-collimated, near-focus bridge, focus crossing -- which is also what makes
+of it, and the exclusions that were properties of that ONE branch are dropped.
+The fallback is then the Sziklas ANSWER in every branch it has -- collimated,
+astigmatic, near-focus bridge, focus crossing -- which is also what makes
 "the legs that move are exactly those with `N dx^2 <= lambda |z_eff|`"
 (VERIFY-WP-B4 F2) literally true rather than nearly true.
+
+`A == 0` and a resolved FLAT output reference stay without a fallback, and
+those two are the real boundary: they are exactly the legs the Sziklas
+transport could never evaluate (it re-references to `R_out = 0`, which
+`carrier_referenced_envelope` refuses, and it has no flat-reference form).
+That is the honest statement of what the flip does and does not change.
 
 ### Fixed -- carrier (WP-C3): three INTERNAL call sites rode the public `transport` default
 
@@ -206,17 +224,28 @@ from the one-step readout, which is the defect the resolution removes.  The
 guard is not dead: a caller-NAMED output lattice has no complementary form to
 fall back to and the guard still speaks there, which is asserted separately.
 
-**Two calls that now RAISE on the default**, both with the way out in the
-message:
+**What does NOT change, although an earlier reading of this flip said it
+would.**  `focus_readout={'standoff': ...}` and
+`focus_readout={'on_focus_containment': ...}` (and the same keys inside
+`output_grid` on `..._multi`) keep working exactly as before.  Since 5.46.0
+those two keys were REFUSED on an explicit `transport='collins'`, correctly:
+that transport had no stop plane and no fallback, so they had no referent.
+Now that the readout resolves its quadrature they have one, so naming either
+key SELECTS the Sziklas readout -- the key does exactly what it says, nothing
+is accepted and ignored, and the stage records
+`readout_route_reason='stop_plane_key'`.  `final_distance=0` with a
+`focus_readout` also still works, for the same reason.
 
-* `focus_readout={'standoff': ...}` and `focus_readout=
-  {'on_focus_containment': ...}` on `propagate_traced_carrier_chain` (and the
-  same keys inside `output_grid` on `..._multi`) describe the stop plane of
-  the Sziklas readout, which `transport='collins'` does not have.  They are
-  refused, not ignored.  Pass `transport='sziklas'` to keep them.
-* nothing else: `final_distance=0` with a `focus_readout` still works on the
-  default, because the resolution routes it to the Sziklas readout exactly as
-  before.
+**No public call that worked on 5.48.1 raises on 5.49.0**, with ONE exception,
+and it is a JAX one: `jax.grad` / `jax.jit` through
+`propagate_carrier_referenced` now refuses by default, because the Collins
+leg resolves its output lattice and its quadrature by MEASURING the envelope
+and a Tracer has no entries to measure.  The refusal names three ways out,
+shortest first, and the shortest is `transport='sziklas'` -- which is what
+the call did before.  Silently switching transport under a trace was
+considered and rejected: the two transports return different output LATTICES
+near a focus, so the gradient would be of a different array than the eager
+call's.
 
 **The way back is one keyword, and it costs no bits.**  Pass
 `transport='sziklas'` and you get the pre-5.49.0 arithmetic.  That is proved

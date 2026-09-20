@@ -1834,24 +1834,37 @@ default passed, and the answer is bit-identical.  Which route ran is published
 on the readout stage as `readout_route` / `readout_route_k1` /
 `readout_route_reason`.
 
-### Two calls that now RAISE, with the way out in the message
+### The one call that now RAISES: `jax.grad` through a carrier leg
 
 ```python
-# 5.48: worked (the default had a stop plane).  5.49: ValueError.
-la.propagate_traced_carrier_chain(
-    E, groups, wl, dx,
-    focus_readout=dict(dx_out=5e-7, N_out=64, standoff=2e-3))
+# 5.48: worked (the default transport measures nothing).
+# 5.49: ValueError naming the leg and three ways out.
+g = jax.grad(lambda a: merit(la.propagate_carrier_referenced(
+    a, R, z, wl, dx)))(amp)
 
-# 5.49 recipe -- name the transport whose readout HAS a stop plane:
-la.propagate_traced_carrier_chain(
-    E, groups, wl, dx, transport='sziklas',
-    focus_readout=dict(dx_out=5e-7, N_out=64, standoff=2e-3))
+# 5.49 recipe -- the shortest way out is the pre-5.49.0 transport:
+g = jax.grad(lambda a: merit(la.propagate_carrier_referenced(
+    a, R, z, wl, dx, transport='sziklas')))(amp)
 ```
 
-The same applies to `on_focus_containment` inside `focus_readout`, and to both
-keys inside `output_grid` on `propagate_traced_carrier_chain_multi`.  They
-describe the STOP PLANE of the Sziklas readout, which the Collins readout does
-not have; they are refused rather than accepted and ignored.
+The Collins leg resolves its output lattice AND its quadrature by MEASURING
+the envelope's own phase-space box, and a Tracer has no entries to measure.
+Silently switching transport under a trace was considered and rejected: the
+two transports return different output LATTICES near a focus, so the gradient
+would be of a different array than the eager call's.  The private
+`_collins_transport` remains differentiable with the two decisions taken by
+the caller (`gap_kernel='fresnel'`, `on_collins_sampling='ignore'`); see
+`tests/unit/test_wave5_h2_collins_jax.py`.
+
+### What does NOT change: the readout's stop-plane keys
+
+`focus_readout={'standoff': ...}` and `focus_readout={'on_focus_containment':
+...}` -- and the same keys inside `output_grid` on
+`propagate_traced_carrier_chain_multi` -- keep working exactly as they did.
+Since 5.46.0 they were refused on an explicit `transport='collins'`; since
+5.49.0 naming either one SELECTS the Sziklas readout, which is the route that
+HAS a stop plane.  The key does what it says, nothing is accepted and
+ignored, and the stage records `readout_route_reason='stop_plane_key'`.
 
 `final_distance=0` with a `focus_readout` still works on the default.
 
@@ -1907,7 +1920,13 @@ If you were already passing `transport='collins'` on 5.46-5.48:
   `dx = nan` whenever the leg resolved to the transfer-function form;
 * an ASTIGMATIC carrier had no such fallback at all and could return a
   replica-contaminated window (measured at K1 = 1.02, K3 = 2.80 on WP-B4's own
-  astigmatic fixture).
+  astigmatic fixture);
+* a leg PAST the carrier's geometric focus (`A < 0`) likewise had none, and
+  could read 3.0x wide of the analytic Gaussian (measured at K1 = 1.59,
+  K3 = 2.59 on `test_carrier_referenced.py`'s focus-crossing oracle).
 
-Both are fixed in 5.49.0 and both now return the Sziklas answer on the legs
-where the chirp-Z is not representable.
+All three are fixed in 5.49.0 and all three now return the Sziklas answer on
+the legs where the chirp-Z is not representable.  Two geometries still have no
+fallback, and they are the two the Sziklas transport could never evaluate at
+all: `A == 0` exactly (the carrier's own focus) and a leg whose output
+reference the transport resolves FLAT.
