@@ -459,7 +459,6 @@ class TestDefaultIsByteIdentical:
             'the standoff readout took the one-step form\'s Kelly guard '
             'keyword, which means it is no longer only the standoff readout')
         assert p['standoff'].default is None
-        assert p['replica_fill'].default == 'repeat'
         assert p['transport'].default == 'sziklas', (
             'the standoff readout moved its own default; this entry point has '
             'no other way back, and the resolver and guard around the leg '
@@ -483,6 +482,46 @@ class TestDefaultIsByteIdentical:
             assert pd['standoff'] == 1e-3 and 'containment' in pd, (
                 f'transport={tr!r} did not go through a stop plane, so this '
                 f'entry point is no longer the standoff readout: {pd!r}')
+
+        # ``replica_fill``: its CONSEQUENCE, not its spelling.  WP-B4 pinned
+        # the literal ``'repeat'`` here; WP-C5 item 3 moves that default to
+        # ``'zero'`` in the same release, so a literal pin is a merge
+        # conflict whose resolution is a coin-flip and whose loser ships a
+        # test asserting the opposite of the source.  What this id is about
+        # is that the standoff readout still OWNS the fill, so the default is
+        # read off the signature and the behaviour it implies is asserted --
+        # correct under BOTH values, on whichever one is live.
+        fill = p['replica_fill'].default
+        assert fill in ('repeat', 'zero'), (
+            f'replica_fill grew a third value {fill!r} without this '
+            f'vocabulary gate being told')
+        n2, dx2, so2 = 128, 4e-6, 1e-4
+        x2 = (np.arange(n2) - n2 / 2) * dx2
+        X2, Y2 = np.meshgrid(x2, x2)
+        e2 = np.exp(-(X2 ** 2 + Y2 ** 2) / (120e-6 ** 2)).astype(
+            np.complex128)
+        pd2 = {}
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            F = np.asarray(C.carrier_referenced_focus_readout(
+                e2, -0.03, 0.03, 633e-9, dx2, dx_out=2e-7, N_out=2048,
+                standoff=so2, on_replica='ignore',
+                on_focus_containment='ignore', _period_out=pd2))
+        per = min(pd2['period'])
+        win = 2048 * 2e-7
+        assert win > per, (
+            f'the fixture no longer reaches outside one Bluestein period '
+            f'({win * 1e6:.4f} um against {per * 1e6:.4f} um), so it cannot '
+            f'say what the fill does')
+        edge = np.abs(F[:8, :8])
+        if fill == 'zero':
+            assert edge.max() == 0.0, (
+                f"replica_fill defaults to 'zero' but the corner outside one "
+                f"period came back at {edge.max():.6e}")
+        else:
+            assert edge.max() > 0.0, (
+                f"replica_fill defaults to {fill!r} but the corner outside "
+                f"one period came back empty")
 
     @pytest.mark.slow
     def test_the_chain_is_equal_bit_for_bit(self):
