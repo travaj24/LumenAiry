@@ -2849,9 +2849,10 @@ def _collins_readout_k1(env, R, z, wavelength, dx, dy):
     re-measured in round 2.)
 
     A KNOWN LIMITATION, so nobody reads the fallback as exact.  Routing to
-    the Sziklas readout is the RIGHT decision above the bar -- it is four
-    decades better than the aliased one-step form on the fixture above -- but
-    it is less wrong, not right.  MEASURED 2026-09-20 against the same
+    the Sziklas readout is the RIGHT decision above the bar -- on the fixture
+    above it reads relative L2 9.4509e-02 against that same converged
+    quadrature where the un-resolved one-step form reads 40.017, a factor of
+    **423** -- but it is less wrong, not right.  MEASURED 2026-09-20 against the same
     converged quadrature, on WP-B4's relay at ``final_distance`` 8 mm: complex
     relative L2 **9.4509e-02**, amplitude-only **2.4768e-02**, centre
     |ratio| **1.0012150** at arg **1.756 mrad**.  Most of the complex residual
@@ -10561,8 +10562,8 @@ def propagate_traced_carrier_chain(
           -- otherwise.  A long final distance on a small exit beam is
           comfortable (the WP-A6 fixture reads K1 = 0.16); a SHORT one on a
           wide exit beam is not (8 mm on a 6.74 mm exit beam radius at
-          76.5 um reads K1 = 82.36), and ``final_distance = 0`` is the limit, which routes
-          to the Sziklas readout as it always did.  Which route ran is
+          76.5 um reads K1 = 82.36), and ``final_distance = 0`` is the
+          limit, which routes to the Sziklas readout as it always did.  Which route ran is
           published on the readout stage as ``readout_route`` /
           ``readout_route_k1`` / ``readout_route_reason``.
 

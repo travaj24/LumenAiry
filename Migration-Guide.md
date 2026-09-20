@@ -2003,6 +2003,35 @@ res = la.propagate_traced_carrier_chain(E, groups, wl, dx,
                                         gap_kernel='exact', ...)
 ```
 
+### A near-focus caveat, measured and not yet settled
+
+A leg landing very close to the carrier's own geometric focus is the one
+place where the two transports return different output LATTICES rather than
+different arithmetic on one: the co-moving pitch collapses as `|A| dx` and
+the Sziklas step takes its near-focus bridge, while the Collins leg resolves
+a FLAT reference and floors its pitch at `2 r_out/N`.  MEASURED on this
+repository's own capstone composition (traced doublet + carrier gap leg +
+universal-gated relay + carrier final leg onto the paraxial image, graded
+against an independent ring-Huygens Debye integral), with the final leg at
+`A = 1 + z/R = 0.006663`:
+
+| final leg | pitch returned | EE50 | EE80 |
+|---|---|---|---|
+| `transport='sziklas'` | co-moving + bridge | 7.2890 um | **11.0139 um** |
+| `transport='collins'` | 6.3126 um (the floor) | 6.2930 um | **12.3588 um** |
+
+The co-moving column matches that oracle inside 6 % and the Collins column
+misses by 11.2 %.  Whether that is the field or only the returned sampling is
+not settled -- the floored pitch puts about two samples inside EE80 where the
+co-moving grid puts six.  **If you read a spot metric off a leg that lands
+within a percent of a carrier focus, pass `transport='sziklas'` until that is
+closed:**
+
+```python
+env4, R4, dx4 = la.propagate_carrier_referenced(
+    env3, R3, z_to_image, wl, dx3, transport='sziklas')
+```
+
 ### The Kelly sampling warning
 
 `on_collins_sampling` defaults to `'warn'`, so a caller who never saw the

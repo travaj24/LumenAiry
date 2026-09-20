@@ -1055,6 +1055,48 @@ Sziklas side, so a readout whose window exceeds one period AND that waives
 `on_replica` needs `replica_fill='repeat'` as well.  Both caller-facing
 documents now say so.
 
+### R2.3b AN OPEN ACCURACY QUESTION THE ROUND-2 FIX EXPOSED
+
+Closing the flat-reference hole made one previously-unreachable leg
+reachable, and on it the flip is measurably WORSE than the co-moving step
+against this repository's own Debye oracle.  It is recorded here in full
+because it bears on the flip's central claim and this round did not close it.
+
+`tests/unit/test_niche_p8_capstone.py::test_stepB_composed_doublet_relay_
+matches_debye` composes a traced doublet, a carrier gap leg, the
+universal-gated relay and a carrier final leg onto the paraxial image, and
+grades EE50 / EE80 against an independent ring-Huygens Debye integral.
+MEASURED on three trees, WIN-py3.14 and WSL-py3.12 agreeing:
+
+| tree | gap leg | final leg | EE50 | EE80 | vs the oracle |
+|---|---|---|---|---|---|
+| 49ddf4bd (`'sziklas'`) | co-moving | co-moving + bridge | 7.2890 um | **11.0139 um** | inside 6 % |
+| pre-round-2 branch | **chirp-Z at K1 = 1.0566, flat ref, NO fallback** | transfer-function, `A = 0.2102` | 7.2389 um | **11.0205 um** | inside 6 % |
+| round 2 | transfer-function (the fallback this round opened) | **chirp-Z, flat ref, `A = 0.006663`, K1 = K3 = 0.9549, pitch 6.3126 um** | 6.2930 um | **12.3588 um** | **11.2 % out** |
+
+The pre-round-2 pass was luck: its GAP leg ran the under-sampled chirp-Z the
+`and not flat` exclusion allowed, and the lattice that produced sent the
+FINAL leg down the transfer-function route at `A = 0.2102`.  With the gap leg
+falling back, the final leg lands 0.67 % of the way from the carrier's own
+geometric focus -- and there the two transports do not merely differ in
+arithmetic, they return different LATTICES: the co-moving pitch collapses as
+`|A| dx` and the Sziklas step takes its near-focus bridge, while the Collins
+leg resolves a flat reference and floors its pitch at `2 r_out/N` = 6.3126 um,
+which puts about TWO samples inside EE80 where the co-moving grid puts six.
+
+**What this round can and cannot say.**  It can say the two disagree by
+11.2 % of EE80 on a real aberrated composition, that the co-moving column
+matches the Debye oracle and the Collins column does not, and that the
+disagreement is reachable on the SHIPPED DEFAULT.  It cannot say whether the
+Collins field is wrong or only its returned sampling is: separating those
+needs the near-focus accuracy study on an aberrated design that §7 already
+lists as owed, on a common lattice, against a non-paraxial truth.  So the id
+NAMES `transport='sziklas'` -- the lattice its metric was calibrated on --
+and gains a second arm that MEASURES the default on the same chain and
+asserts the two still disagree, so that closing the gap turns the test red
+and forces this section to be re-read.  The Migration guide carries it as a
+near-focus caveat with the way back.
+
 ### R2.4 What round 2 did not close
 
 * **The device run of the whole leg is still owed.**  `cupy.fft` on this box
@@ -1070,3 +1112,15 @@ documents now say so.
 * **A fully NON-paraxial truth.**  Every oracle here is paraxial, as are both
   transports, so the comparisons are like-for-like but the true physical
   field below ~1e-3 is not established.
+* **THE NEAR-FOCUS ACCURACY QUESTION OF R2.3b**, which is the largest thing
+  this round leaves open: on a real aberrated composition the Collins leg at
+  `A = 0.0067` reads EE80 11.2 % away from a Debye oracle the co-moving step
+  matches, and whether that is the field or the returned sampling is not
+  settled here.
+* **The merged tree's full 54-file blast set.**  The merge was measured on
+  the files the two branches touch and on the ids VERIFY-WP-C5 listed; a full
+  merged run is the gate that should precede the tag and it is a maintainer
+  action.
+* **Re-deriving the focus-standoff apparatus for a Collins standoff leg**,
+  which is what would let `carrier_referenced_focus_readout`'s new keyword
+  default to the more accurate quadrature (R2.2, D8).

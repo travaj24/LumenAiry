@@ -419,6 +419,32 @@ and therefore OVER tau -- saw its departure fall from 1.5e-4 to 6.2873e-15.
 That id is restated here on both values of the constant, so neither branch
 ships a red the other creates.
 
+**A NEAR-FOCUS CAVEAT, measured on a real composed chain and not yet
+settled.**  A leg that lands very close to the carrier's own geometric focus
+is the one place where the two transports return different output LATTICES
+rather than different arithmetic on one: the co-moving pitch collapses as
+`|A| dx` and the Sziklas step takes its near-focus bridge, while the Collins
+leg resolves a FLAT reference and floors its pitch at `2 r_out/N`.  MEASURED
+2026-09-20 on this repository's own capstone composition (traced doublet +
+carrier gap leg + universal-gated relay + carrier final leg onto the paraxial
+image, graded against an independent ring-Huygens Debye integral), with the
+final leg at `A = 1 + z/R = 0.006663` and K1 = K3 = 0.9549:
+
+| final leg | pitch returned | EE50 | EE80 |
+|---|---|---|---|
+| `transport='sziklas'` | co-moving + bridge | 7.2890 um | **11.0139 um** |
+| `transport='collins'` | 6.3126 um (the floor) | 6.2930 um | **12.3588 um** |
+
+The co-moving column matches that oracle inside 6 % and the Collins column
+misses by 11.2 %.  Whether that is the FIELD or only the returned sampling --
+the floored pitch puts about two samples inside EE80 where the co-moving grid
+puts six -- is not settled here, and settling it needs the near-focus
+accuracy study on an aberrated design that the report's section 7 already
+lists as owed.  **If you read a spot metric off a leg that lands within a
+percent of a carrier focus, pass `transport='sziklas'` until that is closed**,
+and see `fixes/WP-C3_COLLINS_DEFAULT_REPORT.md` section R2.3b for the whole
+measurement.
+
 **The K3 warning.**  `on_collins_sampling` defaults to `'warn'`, so callers
 who never saw the Kelly sampling warning could in principle start seeing it.
 MEASURED across the shipped fixtures this package drives -- 21 Collins calls
@@ -461,7 +487,7 @@ ordinary chains (the one above) then read **22 cells going ok -> RuntimeError
 (11.5 %)**, and an independent 103-key archive-to-archive set read **23 of 103**
 doing the same, on both builds, all of them the Sziklas focus readout's
 containment refusal.  The cause was the flat-reference leg with no fallback
-(see the Fixed entry above): the aliased gap leg handed the chain a exit
+(see the Fixed entry above): the aliased gap leg handed the chain an exit
 lattice 3.65x too wide carrying 60.7x the power it went in with, and the
 readout's guard refused it -- correctly.  With that leg falling back, the
 same two censuses read:
@@ -3961,7 +3987,7 @@ peak at two well-sampled legs, on both `gap_kernel` settings.
 What the free pitch buys, measured:
 
 * **the image-plane readout is one step.**  `transport='collins'` lands the
-  target plane directly on the caller's `(dx_out, N_out)` (`carrier.py:2925`),
+  target plane directly on the caller's `(dx_out, N_out)` (`carrier.py:2926`),
   with no standoff plane, no beam-containment resolution and no near-focus
   bridge.  Against an analytic Gaussian-ABCD oracle carrying the absolute piston
   and Gouy phase, over NA 0.03-0.45 x grid extents 1.5-10 beam radii (30 cells),
