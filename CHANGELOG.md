@@ -76,6 +76,24 @@ with the alive masks equal, on both builds -- the JAX tracer has always used a
 closed-form sphere normal, so this flip moves the CPU tracer TOWARD it rather
 than away.
 
+**A KNOWN CROSS-BACKEND DIFFERENCE, unchanged by this release and now
+recorded.**  The flip moves the two backends closer, but it does not close the
+gap: the NumPy tracer applies the `0.9999` sphere-domain clamp on BOTH normal
+routes and `jax_trace` applies no gate at all, so on a prescription whose
+aperture reaches the rim the two disagree about a whole outer ANNULUS, not
+about one ULP.  Measured on a ball lens (R = 12.5 mm, clear semi-diameter
+12.5 mm), 40 000 rays swept to `0.999999 |R|`, of which 1962 are past the
+clamp: the CPU kills all 1962 with `RAY_NAN` under every one of the four
+`(renormalize, sphere_normal)` settings, and JAX keeps all 1962 -- identically
+on Windows py3.14 / jax 0.11.0 and WSL py3.12 / jax 0.10.2.  This is
+PRE-EXISTING; WP-C2 neither caused it nor changed it.  The maintainer's
+decision to leave it rather than clamp JAX -- clamping would move every JAX
+answer on such a design and put a non-differentiable step inside a gradient
+path -- is section 1.10 of
+`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/MAINTAINER_DECISIONS_2026_09.md`,
+and it is pinned two-sidedly (CPU kills every ray past the clamp, JAX keeps
+every one) so a one-sided future change is loud.
+
 **Vignetting: one rim band moves, and only that.**  The two routes gate the
 `0.9999` domain clamp from different expressions -- `(x*x + y*y)/(R*R)` against
 `(1 + conic) * sqrt(x*x + y*y)**2 / R**2` -- which differ by up to 1 ULP, so
@@ -89,6 +107,20 @@ to `0.99999 |R|`, three field angles on the seven-surface stack, the
 Cassegrain, and three shipped prescription builders at two field angles each --
 move ZERO `alive` flags and ZERO error codes on either build.  No shipped
 fixture's vignetting count changes.
+
+**What a real design meets at the rim is the CLAMP, not the band.**  Both
+routes refuse a ray above `h = 0.99995 |R|` and report it as `RAY_NAN` -- a
+numerical-fault code, not `RAY_APERTURE`.  That clamp does not move in this
+release, and it is what a BALL LENS or HEMISPHERE meets, because such a part
+has its clear semi-diameter at `|R|` by construction: of 60 000 rays packed
+into the outer 0.1 % of the aperture of an R = 12.5 mm ball lens, **3024
+(5.04 %) die `RAY_NAN`**, identically through both normal routes, identically
+on a hemisphere, and identically on both builds.  A fast singlet cannot reach
+it (max `h/|R| = 0.495` at f/1).  The one-ULP band sits INSIDE that region and
+**does not exist on the meridian at all**: located by 80-step bisection on the
+running build the two gate expressions bisect to the SAME float,
+`0.9999499987499374`, at all eight radii tested of both signs, on both builds,
+so a meridional fan cannot enter it.
 
 **The domain clamp STAYS.**  WP-B9's deferred item 6.2 proposed dropping it
 because the closed form is "well-conditioned to `h = |R|`"; VERIFY-B9 section

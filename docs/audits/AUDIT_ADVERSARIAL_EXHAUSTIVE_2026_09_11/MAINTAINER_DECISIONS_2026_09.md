@@ -265,6 +265,63 @@ warning already fires from 256 MiB upward.  If the maintainer wants the
 boundary case out of the cache, do it in a MINOR with the boundary case's
 re-pinning.
 
+### 1.10 The JAX tracer applies no sphere-normal domain clamp, so the two backends' vignetting differs by an annulus (VERIFY-WP-C2 D6)
+
+What it is.  `surface._sphere_normal` returns NaN outside
+`h**2/R**2 < 0.9999`, and `_surface_sag_derivative` applies the same gate, so
+the NumPy tracer kills every ray past `h = 0.99995 |R|` on a pure sphere with
+`RAY_NAN` -- on BOTH normal routes, before and after WP-C2.
+`jax_trace._refract_jax` builds the pure-spherical normal from the
+intersection's own `z` as `(x, y, z - R)/R` and applies NO gate at all.  The
+two backends therefore disagree about a whole outer ANNULUS, not about one
+ULP, on any prescription whose aperture reaches the rim.
+
+This is PRE-EXISTING.  WP-C2 did not cause it, and it does not move under any
+of the four `(renormalize, sphere_normal)` CPU settings.  What WP-C2 did do is
+say "the flip moves the CPU tracer TOWARD the JAX one" without noting that the
+two still differ by an annulus, and VERIFY-WP-C2 raised that as D6.
+
+Measured (round 2, `validation/probe_c2_round2/r2_jax_clamp_{win,wsl}.json`,
+Windows py3.14 / numpy 2.4.4 / jax 0.11.0 and WSL py3.12 / numpy 2.4.6 /
+jax 0.10.2, identical on both), on a **ball lens** -- R = 12.5 mm with its
+clear semi-diameter AT 12.5 mm, which is what makes the rim reachable at all
+-- 40 000 rays swept from `0.9990 |R|` to `0.999999 |R|`:
+
+| | rays past the clamp | kept alive |
+|---|---|---|
+| CPU, all four `(renormalize, sphere_normal)` settings | 1962 | **0** (all `RAY_NAN`) |
+| **JAX** | 1962 | **1962** |
+
+i.e. **1962 alive-flag disagreements on a catalogue part**, and nothing pinned
+it before: the `jax_gets_a_clamp` mutation survived 294 raytrace and parity
+tests in the verification's own matrix.
+
+The two options, and what each costs.
+
+* **Clamp JAX to match the CPU.**  Every JAX answer on a prescription whose
+  aperture reaches `|R|` moves -- rays that are alive today become dead, so
+  spot sizes, energy fractions and any downstream optimisation objective on
+  such a design move with them.  It is a vignetting change in a
+  differentiable backend, which also makes the gate a non-differentiable step
+  inside a gradient path.
+* **Leave it, and document it.**  The backends stay different on that annulus,
+  which is what this release does.  The cost is that a user comparing CPU and
+  JAX on a ball lens sees 1962 rays disagree and has nothing in the release
+  notes telling them why.
+
+Recommendation (medium confidence): **leave it**, document it as a known
+cross-backend difference in the CHANGELOG, and pin it two-sidedly so a
+one-sided future change is loud -- which is what round 2 does
+(`test_c2_the_two_backends_gate_the_sphere_domain_differently` in the shipped
+WP-C2 file and
+`test_verify_c2_analytic_normal.py::test_vc2_the_jax_backend_does_not_apply_the_numpy_domain_clamp`).
+Both arms assert BOTH halves -- the CPU kills every ray past the clamp and JAX
+keeps every one -- so adding a clamp to `jax_trace`, or removing the NumPy
+one, turns them red and brings whoever does it here.  Note that this is the
+SAME question as 1.3's second half asked from the other backend: if the
+maintainer ever drops the NumPy clamp, this item resolves itself and both arms
+must be restated together.
+
 ---
 
 ## 2. Whose diagnostic it is

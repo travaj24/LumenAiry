@@ -658,6 +658,43 @@ def test_multi_congruence_ignore_reproduces_the_pre_d3_silence(_fan_input):
     assert float(np.max(np.abs(res.field))) > 0.0
 
 
+def _one_ulp(G, kind):
+    """``G`` moved by ONE ULP, in one of four directions.
+
+    WP-C2 round 2 (VERIFY-WP-C2 defect D8).  The floor these two arms bar
+    against used to be measured from a SINGLE perturbation -- ``nextafter``
+    toward ``+inf`` on both parts of every element -- and a floor measured
+    along one direction is a draw in the same way the magnitude it replaced
+    was.  Measured over these four directions the floor spans 3.22x
+    (Windows) / 4.79x (WSL), i.e. AT OR ABOVE the 3.0 multiplier that was
+    sitting on it, so the arms now take the WORST of them.
+
+    * ``'up'``    -- the shipped direction, ``+inf`` on real and imaginary;
+    * ``'down'``  -- ``-inf`` on both, which is not the same rounding;
+    * ``'real'``  -- the real part only, so the perturbation is not
+      isotropic in the complex plane;
+    * ``'one_element'`` -- a single element (the envelope's peak), which is
+      the SMALLEST one-ULP move the input admits and therefore the floor's
+      lower end.
+    """
+    G = np.asarray(G)
+    cplx = np.iscomplexobj(G)
+    if kind == 'one_element':
+        out = G.copy()
+        idx = np.unravel_index(int(np.argmax(np.abs(G))), G.shape)
+        v = out[idx]
+        out[idx] = (np.nextafter(v.real, np.inf)
+                    + 1j * np.nextafter(v.imag, np.inf)) if cplx else \
+            np.nextafter(v, np.inf)
+        return out
+    to = np.inf if kind in ('up', 'real') else -np.inf
+    if not cplx:
+        return np.nextafter(G, to)
+    if kind == 'real':
+        return np.nextafter(G.real, to) + 1j * G.imag
+    return np.nextafter(G.real, to) + 1j * np.nextafter(G.imag, to)
+
+
 def _linearity_error(tilt, *, nudge=False):
     """Relative L2 LINEARITY VIOLATION of the chain at a 2x2 fan of
     half-angle ``tilt``.
@@ -681,9 +718,9 @@ def _linearity_error(tilt, *, nudge=False):
     if nudge:
         # WP-C2 (2026-09-20): one ULP of the input envelope, so a caller
         # can measure this quantity's own last-bit floor and compare a
-        # claimed effect against it LIKE FOR LIKE.
-        G = (np.nextafter(G.real, np.inf) + 1j * np.nextafter(G.imag, np.inf)
-             if np.iscomplexobj(G) else np.nextafter(G, np.inf))
+        # claimed effect against it LIKE FOR LIKE.  Round 2 (D8): which
+        # DIRECTION is a parameter, because one direction is not a floor.
+        G = _one_ulp(G, 'up' if nudge is True else nudge)
     parts = [G * np.exp(1j * _K0 * tilt * (sx * X + sy * Y))
              for sx in (-1, 1) for sy in (-1, 1)]
     kw = dict(focus_readout=None, on_multi_congruence='ignore')
@@ -892,7 +929,7 @@ def _mux_chain_field(tilt, *, degree, launch):
         _lens_traced.REMAP_STATIONARY_PHASE_LAUNCH = _lch
 
 
-def _mux_last_bit_noise(tilt, *, degree, launch):
+def _mux_last_bit_noise(tilt, *, degree, launch, kind='up'):
     """How much this fixture's own answer moves under a ONE-ULP nudge of
     its input -- the noise floor any claim about that answer has to clear.
 
@@ -926,12 +963,16 @@ def _mux_last_bit_noise(tilt, *, degree, launch):
     moves its answer by more than its own last bits do.  This measures
     that floor in process, with a perturbation -- one ULP of the input
     envelope -- that no library behaviour can be attributed to.
+
+    ROUND 2 (VERIFY-WP-C2 defect D8): ``kind`` selects WHICH one-ULP
+    direction, because one direction is not a floor.  Measured over the
+    four (``validation/probe_c2_round2/r2_d3_floor_{win,wsl}.json``) the
+    reading spans a factor of several, which is why the caller bars
+    against the WORST of them rather than against a single draw.
     """
     base = _mux_chain_field(tilt, degree=degree, launch=launch)
     X, Y = _grid(_CN, _CDX)
-    G = np.asarray(_gauss(_CN, _CDX, _CW))
-    G = (np.nextafter(G.real, np.inf) + 1j * np.nextafter(G.imag, np.inf)
-         if np.iscomplexobj(G) else np.nextafter(G, np.inf))
+    G = _one_ulp(_gauss(_CN, _CDX, _CW), kind)
     fan = sum(G * np.exp(1j * _K0 * tilt * (sx * X + sy * Y))
               for sx in (-1, 1) for sy in (-1, 1))
     _deg = _lens_traced._REMAP_RESID_EIKONAL_DEGREE

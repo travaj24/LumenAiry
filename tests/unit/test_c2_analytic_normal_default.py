@@ -1644,6 +1644,111 @@ def test_c2_the_edited_in_place_map_is_version_pinned():
 
 
 # ===========================================================================
+# 6g -- the two backends gate the sphere's domain differently (D6)
+# ===========================================================================
+
+def test_c2_the_two_backends_gate_the_sphere_domain_differently():
+    """A KNOWN, DECIDED cross-backend difference, pinned two-sidedly.
+
+    `surface._sphere_normal` is NaN outside `h**2/R**2 < 0.9999` and
+    `_surface_sag_derivative` applies the same gate, so the NumPy tracer
+    kills every ray past `h = 0.99995 |R|` on a pure sphere with
+    `RAY_NAN` -- on BOTH normal routes, before and after WP-C2.
+    `jax_trace._refract_jax` builds the pure-spherical normal from the
+    intersection's own `z` and applies NO gate, so the two backends
+    disagree about a whole outer ANNULUS rather than about one ULP.
+
+    That is PRE-EXISTING; WP-C2 neither caused it nor changed it, and it
+    is identical under all four `(renormalize, sphere_normal)` CPU
+    settings.  The maintainer's decision -- section 1.10 of
+    ``MAINTAINER_DECISIONS_2026_09.md`` -- is to LEAVE it rather than
+    clamp JAX, because clamping would move every JAX answer on a
+    prescription whose aperture reaches `|R|` and would put a
+    non-differentiable step inside a gradient path.
+
+    So this arm exists to make a one-sided future change LOUD.  It
+    asserts BOTH halves: the CPU kills EVERY ray past the clamp, and JAX
+    keeps EVERY one.  Adding a clamp to `jax_trace`, or removing the
+    NumPy one, turns it red and brings whoever does it to the ledger.
+
+    MEASURED 2026-09-20
+    (``validation/probe_c2_round2/r2_jax_clamp_{win,wsl}.json``): ball
+    lens R = 12.5 mm with its clear semi-diameter AT 12.5 mm -- the
+    catalogue part that makes the rim reachable at all -- 40 000 rays
+    from `0.9990 |R|` to `0.999999 |R|`, of which 1962 are past the
+    clamp.  CPU keeps 0 of them on all four settings; JAX keeps all
+    1962.  Identical on Windows py3.14 / jax 0.11.0 and WSL py3.12 /
+    jax 0.10.2.  The counts here are DERIVED from the ray set rather
+    than recorded, so the arm moves only if a backend's gate moves.
+    """
+    jax = pytest.importorskip('jax')
+    jax.config.update('jax_enable_x64', True)
+
+    from lumenairy.raytrace import surfaces_from_prescription
+    from lumenairy.raytrace.jax_trace import make_jax_ray_state, trace_jax
+    from lumenairy.raytrace.surface import RAY_NAN
+
+    R = 0.0125
+    pres = dict(name='ball', aperture_diameter=2 * R,
+                surfaces=[dict(radius=R, conic=0.0, aspheric_coeffs=None,
+                               radius_y=None, conic_y=None,
+                               aspheric_coeffs_y=None, glass_before='air',
+                               glass_after='N-BK7'),
+                          dict(radius=-R, conic=0.0, aspheric_coeffs=None,
+                               radius_y=None, conic_y=None,
+                               aspheric_coeffs_y=None,
+                               glass_before='N-BK7', glass_after='air')],
+                thicknesses=[2 * R])
+    surfs = surfaces_from_prescription(pres)
+
+    n = 4000
+    r = R * np.linspace(0.9990, 0.999999, n)
+    z = np.zeros(n)
+    past = (r / R) ** 2 >= 0.9999
+    n_past = int(past.sum())
+    assert n_past > 100, (
+        f'premise: the ray set must actually reach past the clamp for '
+        f'this comparison to have content; only {n_past} of {n} do.')
+    assert n_past < n, (
+        f'premise: some rays must be INSIDE the clamp too, or "past the '
+        f'clamp" is the whole bundle and the arm is not a comparison.')
+
+    # --- the CPU half, on every combination of the two flipped defaults
+    for rn in (PRE_C2_RENORMALIZE, 'exit'):
+        for sn in ('generic', 'analytic'):
+            b = _make_bundle(r.copy(), z.copy(), z.copy(), z.copy(), WL)
+            out = trace(b, surfs, WL, output_filter='last',
+                        renormalize=rn, sphere_normal=sn).image_rays
+            alive = np.asarray(out.alive, dtype=bool)
+            code = np.asarray(out.error_code)
+            assert int((alive & past).sum()) == 0, (
+                f'the NumPy tracer ({rn}/{sn}) keeps '
+                f'{int((alive & past).sum())} of the {n_past} rays past '
+                f'its own domain clamp; the clamp kills every one.')
+            assert int(((code == RAY_NAN) & past).sum()) == n_past, (
+                f'the NumPy tracer ({rn}/{sn}) no longer reports every '
+                f'ray past the clamp as RAY_NAN.')
+            # and the other side: rays INSIDE the clamp are not all dead
+            assert int((alive & ~past).sum()) > 0, (
+                f'the NumPy tracer ({rn}/{sn}) killed every ray inside '
+                f'the clamp too, so "past the clamp" is not what the '
+                f'kill is attributable to.')
+
+    # --- the JAX half
+    st = make_jax_ray_state(x=r, y=z.copy(), z=z.copy(), L=z.copy(),
+                            M=z.copy(), N=np.ones(n))
+    ja = np.asarray(trace_jax(st, pres, WL).alive, dtype=bool)
+    assert int((ja & past).sum()) == n_past, (
+        f'the JAX tracer now kills {n_past - int((ja & past).sum())} of '
+        f'the {n_past} rays past the NumPy domain clamp.  That is a '
+        f'cross-backend BEHAVIOUR CHANGE: section 1.10 of '
+        f'MAINTAINER_DECISIONS_2026_09.md decided to leave the two '
+        f'backends different here and to document it.  If the decision '
+        f'has been revisited, update the ledger, the CHANGELOG entry and '
+        f'this arm together.')
+
+
+# ===========================================================================
 # 7 -- the mutation matrix, stated
 # ===========================================================================
 
@@ -1673,6 +1778,7 @@ def test_c2_mutation_matrix_is_stated_and_each_arm_is_named():
     | the release text's counts drift off the JSON | ``test_c2_the_release_text_byte_identity_counts_match_the_probe_json`` |
     | a re-anchored citation's claim becomes false | ``test_c2_the_edited_in_place_override_pins_the_content`` |
     | the EDITED_IN_PLACE map outlives its release | ``test_c2_the_edited_in_place_map_is_version_pinned`` |
+    | a backend's sphere-domain gate moves alone  | ``test_c2_the_two_backends_gate_the_sphere_domain_differently`` |
     """
     import sys
     mod = sys.modules[__name__]
@@ -1694,7 +1800,8 @@ def test_c2_mutation_matrix_is_stated_and_each_arm_is_named():
             'test_c2_no_private_docstring_claims_the_generic_route_is_shipped',
             'test_c2_the_release_text_byte_identity_counts_match_the_probe_json',
             'test_c2_the_edited_in_place_override_pins_the_content',
-            'test_c2_the_edited_in_place_map_is_version_pinned'):
+            'test_c2_the_edited_in_place_map_is_version_pinned',
+            'test_c2_the_two_backends_gate_the_sphere_domain_differently'):
         assert callable(getattr(mod, name, None)), (
             f'{name} named in the mutation matrix no longer exists; '
             f'either restore it or update the table above.')

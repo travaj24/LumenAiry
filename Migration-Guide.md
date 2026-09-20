@@ -1834,6 +1834,33 @@ algorithm -- so give the surface an explicit clear aperture instead of relying
 on the clamp to define the edge.  The clamp itself is unchanged in 5.49.0 and
 stays until a vignetting decision is taken on its own merits.
 
+**AND WHAT A REAL DESIGN ACTUALLY MEETS THERE IS THE CLAMP, NOT THE BAND.**
+Both routes refuse a ray above `h = 0.99995 |R|` and report it as `RAY_NAN` --
+a NUMERICAL-FAULT code, not `RAY_APERTURE`, so it lands in
+`raytrace.layout`'s fault histogram rather than its vignetting one.  That
+clamp is unchanged by this release, and it is what a **ball lens or
+hemisphere** meets, because such a part has its clear semi-diameter at `|R|`
+by construction: of 60 000 rays packed into the outer 0.1 % of the aperture of
+an R = 12.5 mm ball lens, **3024 (5.04 %) die `RAY_NAN`**, identically through
+`sphere_normal='generic'` and `sphere_normal='analytic'`, identically on a
+hemisphere, and identically on both development mounts.  A fast singlet cannot
+reach it -- at f/1 its marginal ray is at half the radius (max `h/|R| = 0.495`
+measured) -- so this is a catalogue-part fact rather than a general one, but
+ball lenses and hemispheres are catalogue parts (fibre couplers, endoscope
+objectives, immersion optics).
+
+**The one-ULP band sits INSIDE that region, and it does not exist on the
+meridian at all.**  The two gate expressions agree EXACTLY at `y = 0`: located
+by 80-step bisection on the running build they bisect to the same float,
+`0.9999499987499374`, at all eight radii tested, of both signs, on both
+mounts.  So a meridional fan cannot enter the band, and only azimuths where
+`(x*x + y*y)` and `sqrt(x*x + y*y)**2` round apart can.  Sampling cannot find
+it either: 360 000 traced rays over twelve prescription and field-angle
+combinations moved zero `alive` flags and zero error codes, and the
+independent verification moved a further 580 000 with the same result.  Only a
+directed `nextafter` walk reaches it.
+
+
 **Every entry point has one.**  Sixteen exported functions trace INTERNALLY,
 so their answers moved with `trace`.  All sixteen take `sphere_normal=` and
 `renormalize=` themselves -- same names, same accepted values -- and forward

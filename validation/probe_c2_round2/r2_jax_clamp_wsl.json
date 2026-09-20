@@ -1,0 +1,32 @@
+{
+ "R_m": 0.0125,
+ "clamp": 0.9999,
+ "cpu": {
+  "exit/analytic": {
+   "alive_past_the_clamp": 0,
+   "ray_nan_past_the_clamp": 1962
+  },
+  "exit/generic": {
+   "alive_past_the_clamp": 0,
+   "ray_nan_past_the_clamp": 1962
+  },
+  "surface/analytic": {
+   "alive_past_the_clamp": 0,
+   "ray_nan_past_the_clamp": 1962
+  },
+  "surface/generic": {
+   "alive_past_the_clamp": 0,
+   "ray_nan_past_the_clamp": 1962
+  }
+ },
+ "cpu_kills_all_past_the_clamp": true,
+ "disagreeing_rays": 1962,
+ "jax": "0.10.2",
+ "jax_alive_past_the_clamp": 1962,
+ "jax_keeps_all_past_the_clamp": true,
+ "lumenairy_file": "/mnt/c/tmp/lum_c2b/lumenairy/__init__.py",
+ "n_rays": 40000,
+ "numpy": "2.4.6",
+ "python": "3.12.3",
+ "rays_past_the_clamp": 1962
+}
