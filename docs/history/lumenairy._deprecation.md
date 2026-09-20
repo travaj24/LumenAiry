@@ -1,11 +1,12 @@
 <!-- lumenairy-history-doc
 module: lumenairy/_deprecation.py
-ast_sha256: de1c52354641ed24fbb08c622ba620b05187b22e9e8aa2e8375d50170724d3c9
-token_sha256: 5f7feeb45778e60bffba2c9730451d5dc7a1844ec1687c306ff60a3eb70cbc03
+ast_sha256: d4acc2085a13fdd88674facc3828e5f5394dc0805da18cdcb58b0b5fae317d4e
+token_sha256: 68a9f5a6c710d9929f5c6a555080aa57acf181c833af2e4fa7acf3ac2055ce32
 pre_relocation_lines: 688
 recorded_by: WP-A17 SWEEP-3 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
 re_recorded: 2026-09-14 -- Wave-5 item D (CI run 34914295323): DIGEST-SCHEME change, not a code change -- token_fingerprint now feeds an f-string to the digest as ONE STRING record holding its exact source text instead of the running tokenizer's FSTRING_START/FSTRING_MIDDLE/FSTRING_END run, so the recorded value is a property of the file rather than of the interpreter that read it; PEP 701 made CPython 3.12 tokenize f-strings differently from 3.11, these digests were recorded on 3.12+, and all five py3.11 CI shards read a different token_sha256 for byte-identical sources (110 of 123 documents, measured).  The module source is unchanged and ast_sha256 is unchanged.
+re_recorded: 2026-09-20 -- 5.48.0: NEXT_REMOVAL_VERSION 5.48 -> 5.50 and REMOVAL_SCHEDULE gains the slip entry; the three GBD aliases and the CarrierField freeze were not removed in the Wave 5 release
 -->
 
 

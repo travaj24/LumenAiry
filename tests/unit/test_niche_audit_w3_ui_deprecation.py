@@ -559,17 +559,35 @@ class TestDeprecationRemovalSchedule:
         assert dep.resolve_removal_version('6.0') == '6.0'
 
     def test_executed_removals_leave_no_registry_entry(self):
-        """v5.30 (W5) removal-bookkeeping invariant.
+        """v5.30 (W5) removal-bookkeeping invariant, RESTATED 2026-09-19 (5.48.0).
 
-        ``check_removal_schedule`` requires every ``REMOVAL_SCHEDULE``
-        VALUE to lie in the future (invariant 2), so an entry for a
-        completed removal can never be satisfied -- it would turn the
-        self-check permanently red.  The registry's convention is
-        therefore to DELETE the entry and tombstone it in a comment; the
-        backstop above keeps the banner safe either way."""
-        assert dep.REMOVAL_SCHEDULE == {}, (
-            f'REMOVAL_SCHEDULE should be empty after the v5.30 W5 wave '
-            f'executed its only entry; got {dep.REMOVAL_SCHEDULE!r}')
+        ``check_removal_schedule`` requires every ``REMOVAL_SCHEDULE`` VALUE to
+        lie in the future (invariant 2), so an entry for a COMPLETED removal
+        can never be satisfied; the registry's convention is to DELETE the
+        entry and tombstone it in a comment.  The first draft of this pin
+        asserted the registry EMPTY -- the state after v5.30 executed its only
+        entry -- which also forbade the registry's documented use: a
+        deliberate slip of a horizon whose removals were NOT executed.  5.48.0
+        is exactly that (``{'5.48': '5.50'}`` for the three GBD aliases and
+        the ``CarrierField`` freeze).  The invariant, stated as itself: every
+        entry's STATED version has shipped, its LIVE version lies in the
+        future, and at least one reachable ``version_removed=`` call site
+        still advertises the stated version -- an entry whose call sites are
+        gone is a completed removal and must be deleted.  Two-sided: a
+        tombstone-shaped entry (``{'5.27': '5.32'}``, no call site) fails
+        the call-site clause; a not-yet-shipped key fails the first."""
+        cur = dep._version_tuple(la.__version__)
+        stated_at_sites = {ver for _rel, _line, ver in _version_removed_sites()}
+        for stated, live in dep.REMOVAL_SCHEDULE.items():
+            assert dep._version_tuple(stated) <= cur, (
+                f'REMOVAL_SCHEDULE[{stated!r}] re-schedules a horizon that has '
+                f'not shipped (running {la.__version__})')
+            assert dep._version_tuple(live) > cur, (
+                f'REMOVAL_SCHEDULE[{stated!r}]={live!r} is not in the future '
+                f'(running {la.__version__})')
+            assert stated in stated_at_sites, (
+                f'REMOVAL_SCHEDULE[{stated!r}] has no live version_removed= '
+                f'call site -- a completed removal must delete its entry')
         assert dep.check_removal_schedule() == []
 
     def test_the_module_itself_stays_fully_functional(self):

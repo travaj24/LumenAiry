@@ -4,11 +4,36 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
-Wave 5 of the 2026-09-11 adversarial audit's remediation -- the open items
-`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/HANDOFF_2026_09_14.md`
-section 4 left, built to the plan in `PLAN_WAVE5_LEFTOVERS_2026_09_14.md`.
-Entries are added as each item lands; the release text is assembled at the
-close.
+## [5.48.0] — 2026-09-20
+
+This release is the fifth wave of the 2026-09-11 adversarial audit's remediation:
+the open items the 2026-09-14 handoff listed (`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/HANDOFF_2026_09_14.md`, section 4), built to
+`PLAN_WAVE5_LEFTOVERS_2026_09_14.md` on the same pattern as the previous waves --
+each item built by an engineer, re-measured by an independent verifier on the
+verifier's own fixtures and oracle, and the follow-ups those verifications raised
+closed in the same release, several of them through a second verification.
+
+Two answers move, each with a Migration note below: the frozen-Gaussian swarm
+(`apply_real_lens_fga` and every entry point that reaches it) on any prescription
+whose LAST surface is curved, and the per-surface Gaussian-beam decomposition
+(`apply_real_lens_gbd`) on any last surface that is not a plain conic.  Both were
+the same defect -- an image leg that started on the last surface instead of at
+the exit-vertex plane -- and both now ask ONE shared projection.  Everything
+else in this release is a guard that refuses a case that was served wrong, a
+process-safety repair, a structural move that is byte-identical by proof, or a
+test that now asks the library for its own number instead of recomputing it.
+
+Nothing in this release moves a numerical DEFAULT.  Every setting that measured
+better but moves fixtures (the grey aperture edge, the Collins transport, the
+analytic sphere normal and its clamp, the near-focus kernel fallback, the odd-N
+centring, the replica fill, the dense memory accounting, the direct-matrix MFT
+threshold, the pool timeout, the multibranch accept criterion) ships switchable
+with the shipped default unchanged, and is presented with its measurements and a
+recommendation in `docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/MAINTAINER_DECISIONS_2026_09.md` for the maintainer to decide.
+
+The deprecation horizon slips from 5.48 to 5.50 (see the last entry of this
+block): the three GBD aliases scheduled for removal at 5.48 and the
+`CarrierField` freeze stay, and their warnings now name the slip.
 
 ### Changed -- lens-traced (WP-B7c round 3): the pixel-halving arbiter's half-pitch lattice gets ONE definition and a stated convention, the Pearcey route stops calling the branch sum's reading the cusp field's, a fallback says its dark tail is unarbitrated, and the bar is re-derived on 1304 planes over sixteen optics
 
@@ -1636,6 +1661,27 @@ while the fields agree to 1.7e-15 and 2.2e-15 relative.  The variable is a
 CEILING on the `mem_budget_mb` keyword, and
 `propagate_gbd_through_prescription` has no such keyword at all, so pin the
 environment variable, not only the keyword.  No solver answer depends on it.
+
+### Changed -- the deprecation horizon slips from 5.48 to 5.50
+
+`lumenairy._deprecation.NEXT_REMOVAL_VERSION` moves from `'5.48'` to `'5.50'` and
+`REMOVAL_SCHEDULE` gains the entry `{'5.48': '5.50'}`, so every shim whose call
+site says `version_removed='5.48'` -- the three GBD aliases `gbd_field_to_asm`,
+`asm_field_to_gbd` and `match_global_phase` (deprecated in 5.46) -- keeps working
+and its warning reads "will be removed in v5.50 (rescheduled from v5.48)".  The
+`CarrierField` attribute-assignment freeze (`_CARRIER_FIELD_FROZEN_IN = '5.48'`)
+resolves through the same registry to 5.50.  Nothing is removed in this release;
+the removals were not executed because this wave's scope was the handoff's open
+work, not the deprecation cycle, and a horizon that has shipped may not stand
+(`check_removal_schedule` would refuse it).  The self-check pins in
+`tests/unit/test_niche_audit_w3_ui_deprecation.py` and
+`test_niche_audit_w4_p5_return_contract.py` hold on the new values, with one
+restated: `test_executed_removals_leave_no_registry_entry` pinned the registry
+as EMPTY (the state after v5.30 executed its only entry), which also forbade the
+registry's documented use; it now asserts the invariant it protects -- every
+entry's stated version has shipped, its live version lies in the future, and a
+reachable `version_removed=` call site still advertises the stated version, so
+an entry whose call sites are gone (a completed removal) still fails.
 
 ## [5.47.1] — 2026-09-15
 

@@ -99,7 +99,8 @@ __all__ = [
 #     returns no violations, so a shipped release cannot carry a horizon it
 #     has already passed.
 #
-# Both registries are EMPTY today: every scheduled removal and the one API
+# The API-transition registry is EMPTY today; the removal registry carries
+# one slip (5.48 -> 5.50, see REMOVAL_SCHEDULE).  Every earlier scheduled removal and the one API
 # transition have been executed, and the entries are retired with them.
 # The module stays fully functional -- the next deprecation cycle, or the
 # next API transition, registers here as before.
@@ -107,15 +108,18 @@ __all__ = [
 #: Removal horizon for deprecations whose stated version has shipped.  Set
 #: it to a version the project can realistically hit; bumping it is a
 #: deliberate one-line slip, recorded in the CHANGELOG.
-NEXT_REMOVAL_VERSION = '5.48'
+NEXT_REMOVAL_VERSION = '5.50'
 
 #: Re-scheduled horizons: ``{version as written at the shim call site:
 #: live removal version}``.  Keys are the ORIGINAL (now shipped) schedule
 #: so the message can name both; values must lie in the future.
 #:
-#: **Currently empty** -- every re-scheduled deprecation has been EXECUTED
-#: (Tombstone, v5.30: the ``'5.27' -> '5.32'`` source-factory kwarg entry was
-#: removed with the kwargs it scheduled).
+#: **One entry (5.48.0)**: ``'5.48' -> '5.50'``, the three GBD aliases
+#: (``gbd_field_to_asm``, ``asm_field_to_gbd``, ``match_global_phase``,
+#: deprecated in 5.46 with ``version_removed='5.48'``) and the ``CarrierField``
+#: freeze, whose removal was not executed in the 5.48.0 wave.  (Earlier
+#: tombstone, v5.30: the ``'5.27' -> '5.32'`` source-factory kwarg entry was
+#: removed with the kwargs it scheduled.)
 #:
 #: An entry is DELETED when its removal is executed, not kept as history:
 #: :func:`check_removal_schedule` invariant 2 requires every value to lie
@@ -128,7 +132,7 @@ NEXT_REMOVAL_VERSION = '5.48'
 #: ``version_removed='5.27'`` (or any other already-shipped horizon) to
 #: :data:`NEXT_REMOVAL_VERSION`, so deleting an entry cannot resurrect a
 #: past-horizon banner.
-REMOVAL_SCHEDULE: dict[str, str] = {}
+REMOVAL_SCHEDULE: dict[str, str] = {'5.48': '5.50'}
 
 #: Version at which any scheduled **API-contract transition** lands -- the
 #: default-flip counterpart to :data:`NEXT_REMOVAL_VERSION` (which schedules
