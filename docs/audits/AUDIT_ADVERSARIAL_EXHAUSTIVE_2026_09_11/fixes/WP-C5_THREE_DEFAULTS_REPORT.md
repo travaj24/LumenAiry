@@ -297,7 +297,12 @@ caller who selects it has opted out of the claim.
 
 -- identical to all printed digits on BOTH builds, which is what says the
 difference is the summation order and not anything the allocator or the BLAS
-is doing.
+is doing.  The figure is GRID-SPECIFIC and has to be quoted with its grid
+(VERIFY-WP-C5 D8): on the verification's own grids the same quantity reads
+1.8e-16 at N = 320 and 7.3e-17 at N = 512, identical on both builds -- the
+same last-bit character an order of magnitude above the two rows above.  The
+claim this table supports is "the last bits", not "2e-17"; the branch's test
+bar is 1e-12 and is unaffected either way.
 
 -- i.e. the last bits, and the two are NOT identical (the chunk did move).  The
 same budget run twice is bit-identical under both modes.
@@ -460,9 +465,27 @@ each keeps its original assertion under the opt-in and gains a two-sided arm.
 | the fill keyed on the WRONG period (half, or one and a half) | `test_keying_the_fill_on_the_wrong_period_would_be_caught` -- builds both mutants through the library's own `_fill_readout_replicas`, asserts both are rejected, and asserts the RIGHT period passes the same helper |
 | the fill applied on the REFUSAL path | `test_the_refusal_is_taken_before_the_fill_is_reached` -- raising sentinel, plus the counter-pin above |
 
-All three aim at one helper, `_assert_confined`, which is also what the
+The first two aim at one helper, `_assert_confined`, which is also what the
 non-mutated ids assert, so a mutation that slipped past the helper would slip
-past the real ids too and the matrix would be measuring nothing.
+past the real ids too and the matrix would be measuring nothing.  The third
+aims at a CALL SITE rather than at the helper, and there are three of them
+(carrier.py 2772 / 4493 / 7235); this id exercises the paraxial readout's
+(4493).  VERIFY-WP-C5 D9 measured the other two per call site and found the
+C5 file set caught the Collins one only through the verification's own id and
+the exact one not at all, so round 2 gives each site a named id in this file:
+`test_the_refusal_precedes_the_fill_on_the_collins_readout` (2772) and
+`test_the_refusal_precedes_the_fill_on_the_exact_readout` (7235), each with
+the same raising sentinel and the same counter-pin.  The LIBRARY was covered
+on all three throughout -- the Collins site by
+`test_audit2609_b4_collins_transport.py::TestKellyGuard::test_the_period_is_the_input_grid_s_and_the_replica_guard_sees_it`
+and the exact site by
+`test_fix_v1_v8_readout_guard_and_standoff.py::TestV3ExactReadout::test_one_period_off_the_chief_ray_is_refused`
+and
+`test_niche_tight_focus_readout.py::test_the_exact_readout_guards_the_same_way_on_its_own_period`
+(VERIFY-WP-C5, measured per call site) -- so this was a reach statement about
+this file's own matrix, not a hole in the guards.  It mattered because
+`_collins_focus_readout` is the readout WP-C3 is about to make the default
+route.
 
 ### Public entry points whose returned array can change
 
@@ -569,11 +592,17 @@ fingerprint, which is why no third re-record appears.
 The plugin ran inside the 768-test carrier / chain run.  **167 legs** reached
 the accuracy rule (i.e. the `k4` gate had already resolved them to `'exact'`)
 across **48 test ids**; **24** of them fell back.  Twenty-three are in the
-three ids that exist to exercise the rule -- twenty of those are the bisection
-inside
+four ids that exist to exercise the rule -- nineteen of those are the
+bisection inside
 `test_c5_three_defaults.py::test_the_rule_fires_only_inside_the_band_the_law_predicts`,
 which walks the threshold on purpose and whose last ten rungs read a departure
-of 1.0000e-04 against a tau of 1e-04.
+of 1.0000e-04 against a tau of 1e-04.  (Corrected in round 2, VERIFY-WP-C5 D7:
+the prose read "three ids ... twenty of those" against this branch's own
+`item1_census_win.json`, which records four and nineteen -- `nodes_with_fallback`
+holds six entries, of which `test_wave5_h2_near_focus_table.py::test_the_departure_law_predicts_what_the_refinement_actually_changes`
+carries `kernel_asked = None` and is the direct call counted out below, and
+the sixth is the `mismatch_matrix` leg named next.  The independent census
+reproduces both figures.)
 
 **One leg outside the tau fixtures changes kernel**, and it is worth naming:
 
