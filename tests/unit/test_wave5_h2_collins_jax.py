@@ -547,26 +547,65 @@ def test_an_eager_jax_array_is_not_a_tracer_and_measures_normally():
 # 4. The gradient, against a central finite difference (a ladder)
 # ===========================================================================
 
+#: the finite-difference ladder, extended upward to ``3e-1`` in 2026-09.
+#: The old ladder stopped at ``1e-2`` and therefore sat ENTIRELY on the
+#: cancellation branch without saying so; the best step on this merit is near
+#: the TOP of the ladder, not in the middle of it.
+_FD_LADDER = (3e-1, 1e-1, 3e-2, 1e-2, 3e-3, 1e-3, 3e-4, 1e-4, 3e-5, 1e-5)
+
+
+def _fd_ladder(merit, a, ij, g_ij, P0):
+    """``[(h, rel_disagreement, cancellation_floor), ...]`` over the ladder.
+
+    ``cancellation_floor`` is the derived bound on a central difference's
+    ROUND-OFF error, relative to the gradient entry it is compared against::
+
+        |fd - g| ~ eps |P| / h        ->      rel ~ eps |P| / (h |g|)
+
+    It carries no truncation term; see the test below for why that is a
+    measured fact about this merit and not an omission.
+    """
+    eps = float(np.finfo(np.float64).eps)
+    out = []
+    for h in _FD_LADDER:
+        def _at(sign, mult=1):
+            ap = a.copy()
+            ap[ij] += sign * mult * h
+            return float(merit(jnp.asarray(ap)))
+        fd = (_at(+1) - _at(-1)) / (2.0 * h)
+        out.append((h, abs(fd - g_ij) / abs(g_ij),
+                    eps * abs(P0) / (h * abs(g_ij))))
+    return out
+
+
 def test_jax_grad_through_the_collins_transport_matches_a_central_difference():
     """``jax.grad`` of a scalar merit through the transport, against an
     independent central finite difference -- on a LADDER of step sizes, with
     the bar derived from the difference's own error rather than chosen.
 
-    A central difference of a merit ``P`` has error ``~ P''' h^2 / 6``
-    (truncation) plus ``~ eps |P| / h`` (cancellation), so its accuracy is a
-    U-curve in ``h`` and no single ``h`` is "the" answer.  The ladder is
-    scanned and the claim is made where the two terms are balanced: the BEST
-    agreement over the ladder must fall below the smallest achievable
-    difference error, ``~ (eps |P|)^(2/3)`` in relative terms, times a stated
-    factor of ten.  Hard-failing only when the whole ladder is exhausted is
-    the standard this repository holds fail-before demonstrations to, and the
-    same reasoning applies to a gradient check.
+    THE FLOOR MODEL, CORRECTED 2026-09-19 (VERIFY-WAVE5-HYGIENE2 V-D7).  A
+    central difference has error ``~ P''' h^2 / 6`` (truncation) plus
+    ``~ eps |P| / h`` (cancellation), and where BOTH exist the balance sits at
+    ``h ~ eps^(1/3)`` with a relative error ``~ eps^(2/3) = 3.67e-11``.  That
+    model does not apply here.  ``_collins_transport`` is LINEAR in the
+    envelope, so ``P(a) = sum|L a|^2`` is an exact quadratic form and
+    ``P''' == 0``: there is no truncation branch, the ladder has no U-curve
+    minimum, and ``eps^(2/3)`` is ~4.7 decades looser than the measurement --
+    loose enough that a gradient wrong by three decades would have passed.
+    MEASURED on this build 2026-09-19: best 7.55e-15 at ``h = 1e-1``, against
+    the old bar of 3.67e-10.
 
-    The merit is transported POWER, which the leg conserves to grid accuracy,
-    so the gradient also has an ANALYTIC form: ``d/da_ij sum|u_out|^2`` is
-    proportional to ``a_ij``.  That is asserted separately as a shape check
-    (correlation), because the proportionality constant carries the leg's own
-    area scaling.
+    THE BAR IS NOW THE CANCELLATION BRANCH ITSELF, at every rung:
+    ``rel <= 10 * eps |P| / (h |g|)``.  It is derived, it is per-rung rather
+    than a single number, and it tracks the fixture: MEASURED ratios of the
+    disagreement to its own floor over the ten rungs are 0.077 .. 0.737, so
+    the factor of ten carries 13.6x of headroom at the worst rung while the
+    failure it must catch -- a wrong gradient -- is decades away.
+
+    THE GRADIENT'S SHAPE.  The merit is transported POWER, which the leg
+    conserves to grid accuracy, so ``d/da_ij sum|u_out|^2`` is proportional to
+    ``a_ij``.  Its bar is derived from the leg's own measured departure from a
+    scaled isometry, not pinned; see :func:`_gradient_shape_bars`.
     """
     amp0 = jnp.asarray(np.real(_gauss()))
     merit = _merit_factory(gap_kernel='fresnel',
@@ -577,36 +616,194 @@ def test_jax_grad_through_the_collins_transport_matches_a_central_difference():
     a = np.asarray(amp0)
     ij = np.unravel_index(int(np.argmax(a)), a.shape)
     P0 = float(merit(amp0))
-    eps = float(np.finfo(np.float64).eps)
-    # the best a central difference can do, relatively: balancing eps|P|/h
-    # against P''' h^2/6 puts the optimum at h ~ (eps)^(1/3) with a relative
-    # error ~ eps^(2/3).
-    floor = eps ** (2.0 / 3.0)
-    bar = 10.0 * floor
+    rows = _fd_ladder(merit, a, ij, g[ij], P0)
 
-    best = np.inf
-    best_h = None
-    for h in (1e-2, 3e-3, 1e-3, 3e-4, 1e-4, 3e-5, 1e-5):
-        def _at(sign):
+    over = [(h, rel, fl) for h, rel, fl in rows if rel > 10.0 * fl]
+    assert not over, (
+        f"the central difference disagrees with jax.grad by more than ten "
+        f"times its own cancellation floor eps|P|/(h|g|) at "
+        f"{[f'h={h:.0e}: {r:.3e} vs {fl:.3e}' for h, r, fl in over]}; "
+        f"P0={P0:.6e}, g_ij={g[ij]:.6e}")
+    best_h, best, best_fl = min(rows, key=lambda r: r[1])
+    # Two-sided: the bar must also be above the measurement by a real margin,
+    # or it is not bounding anything.  MEASURED worst ratio 0.737.
+    assert best < 10.0 * best_fl, (
+        f"best {best:.3e} at h={best_h:.0e} against its floor {best_fl:.3e}")
+    assert best > 0.0, (
+        "the best central difference agrees with jax.grad EXACTLY, which a "
+        "round-off-limited comparison cannot do; the two arms are not "
+        "independent")
+
+    _gradient_shape_bars(g, a)
+
+
+def _gradient_shape_bars(g, a):
+    """The gradient's SHAPE claim, with the bar derived from the leg itself.
+
+    The merit is ``P(a) = a^T (L^H L) a`` with ``L`` the (linear) leg, so
+    ``grad P = 2 (L^H L) a`` is exactly parallel to ``a`` when ``a`` is an
+    eigenvector of ``L^H L`` -- i.e. when the leg acts on this envelope as a
+    SCALED ISOMETRY.  It does not exactly: a 64x64 grid at 8 um clips a 60 um
+    envelope, and the clipping is what makes the leg depart from one.
+
+    So the shortfall of Pearson's correlation is not free to be pinned; it is
+    SECOND ORDER in that departure.  Write ``c`` for the best scalar multiple
+    and ``r`` for the residual's relative norm::
+
+        c = <g, a> / <a, a>,    r = |g - c a| / |c a|,    1 - corr ~ r^2 / 2
+
+    MEASURED on the shipped fixture, both builds 2026-09-19: ``r = 4.998e-04``,
+    ``1 - corr = 3.1689e-07``, ``(1 - corr)/r^2 = 1.2686``.  The bars are
+    ``r^2/100 < 1 - corr < 10 r^2`` -- 7.9x of headroom above and 127x below.
+
+    WHY THE PINNED BAR IS GONE (V-D6).  ``corr > 1 - 1e-6`` had no stated
+    origin, sat 0.50 decades from firing (3.1689e-07 against 1e-6), and
+    measured a property of the FIXTURE rather than of the port: over envelope
+    widths 30..100 um on the same grid, ``1 - corr`` moves 6.08e-11 ..
+    1.13e-03, so a 17 % change of the fixture's width would have put it 7x
+    over the bar.  The derived form moves with the fixture, because it is
+    written against the same clipping that moves it.
+    """
+    m = a > 0.05 * a.max()
+    c = float(np.dot(g[m], a[m]) / np.dot(a[m], a[m]))
+    r = float(np.linalg.norm(g[m] - c * a[m]) / np.linalg.norm(c * a[m]))
+    corr = float(np.corrcoef(g[m], a[m])[0, 1])
+    # PREMISE: the leg is NEAR a scaled isometry on this fixture but not
+    # exactly one.  Both ends matter -- at r = 0 the claim is vacuous, and
+    # above ~1e-1 the second-order expansion the bar rests on stops holding.
+    assert 0.0 < r < 1e-1, (
+        f"PREMISE FAILED: the gradient's residual from the best scalar "
+        f"multiple of the input is r = {r:.4e}; the 1 - corr ~ r^2/2 "
+        f"expansion the bars below are derived from does not apply")
+    assert (1.0 - corr) < 10.0 * r * r, (
+        f"the gradient of transported power departs from proportionality to "
+        f"the input amplitude by more than the leg's own non-isometry allows: "
+        f"1 - corr = {1.0 - corr:.4e} against 10 r^2 = {10.0 * r * r:.4e} "
+        f"(r = {r:.4e}).  The leg is not conserving power, or the gradient is "
+        f"not the one it should be")
+    assert (1.0 - corr) > 0.01 * r * r, (
+        f"1 - corr = {1.0 - corr:.4e} is BELOW r^2/100 = {0.01 * r * r:.4e}.  "
+        f"Pearson's shortfall is second order in the residual, so a "
+        f"correlation this good with a residual this large means the two are "
+        f"not being measured on the same entries")
+
+
+def test_the_central_difference_through_this_merit_has_no_truncation_branch():
+    """The premise the bar above rests on, MEASURED rather than argued.
+
+    ``_collins_transport`` is linear in the envelope, so ``P = sum|L a|^2`` is
+    an exact quadratic form and its third derivative is identically zero.  A
+    quantity that is zero is not something a test may assume; here it is read
+    off the ladder by its SCALING.  A five-point third difference of a
+    quadratic returns pure round-off, which grows as ``eps |P| / h^3``: a
+    thousandfold per decade of ``h``.  A genuine ``P'''`` would instead be
+    CONSTANT across the ladder.
+
+    MEASURED 2026-09-19 (Windows py3.14, and the same conclusion on WSL):
+    the estimate reads -7.11e-12, -2.84e-08, -1.42e-05, +7.11e-03, +2.84e+01
+    at h = 1e-1, 1e-2, 1e-3, 1e-4, 1e-5 -- 1e3 per decade to three digits,
+    with the SIGN flipping, which is round-off and not a derivative.
+
+    The falsification arm is the next id: on a genuinely cubic merit the same
+    ladder returns a constant ``P'''`` and a textbook ``h^2`` truncation arm,
+    so the absence here is a fact about this merit and not about the
+    instrument.
+    """
+    amp0 = jnp.asarray(np.real(_gauss()))
+    merit = _merit_factory(gap_kernel='fresnel',
+                           on_collins_sampling='ignore')
+    a = np.asarray(amp0)
+    ij = np.unravel_index(int(np.argmax(a)), a.shape)
+    P0 = float(merit(amp0))
+
+    ests = []
+    for h in (1e-1, 1e-2, 1e-3, 1e-4):
+        def _at(sign, mult=1):
             ap = a.copy()
-            ap[ij] += sign * h
+            ap[ij] += sign * mult * h
+            return float(merit(jnp.asarray(ap)))
+        ests.append((h, (_at(+1, 2) - 2 * _at(+1) + 2 * _at(-1) - _at(-1, 2))
+                     / (2.0 * h ** 3)))
+    # Round-off scaling: each decade of h multiplies the estimate by ~1e3.
+    ratios = [abs(ests[i + 1][1]) / abs(ests[i][1])
+              for i in range(len(ests) - 1)]
+    assert all(r > 100.0 for r in ratios), (
+        f"the third-difference estimate does not grow like eps|P|/h^3 over "
+        f"the ladder (per-decade ratios {['%.1f' % r for r in ratios]}), so it "
+        f"is NOT pure round-off: this merit has a real third derivative and "
+        f"the cancellation-only bar in the previous id is not the right "
+        f"model.  P0={P0:.6e}")
+    # and the implied truncation contribution is below the cancellation floor
+    # at every rung, which is the statement the bar actually needs.
+    eps = float(np.finfo(np.float64).eps)
+    g_ij = float(np.asarray(jax.grad(merit)(amp0))[ij])
+    for h, p3 in ests:
+        trunc = abs(p3) * h * h / (6.0 * abs(g_ij))
+        cancel = eps * abs(P0) / (h * abs(g_ij))
+        assert trunc <= cancel, (
+            f"at h={h:.0e} the implied truncation term {trunc:.3e} exceeds the "
+            f"cancellation floor {cancel:.3e}; the ladder has a truncation "
+            f"branch after all")
+
+
+def test_the_same_ladder_does_find_a_truncation_branch_on_a_cubic_merit():
+    """Falsification arm for the id above: the instrument is not blind.
+
+    Cube the on-axis intensity and the merit is genuinely cubic in the
+    perturbed entry, so ``P'''`` is a real number and the ladder must show the
+    textbook ``h^2`` arm and a real U.  MEASURED 2026-09-19: the
+    third-difference estimate is CONSTANT at +2.235e-04 over four decades
+    (against the 1e3-per-decade growth of the quadratic merit), the
+    disagreement falls exactly 10x per decade -- 7.69e-06, 6.92e-07, 7.69e-08,
+    6.92e-09 at h = 1e-1, 3e-2, 1e-2, 3e-3 -- and the truncation model
+    ``|P'''| h^2 / (6 |g|)`` predicts it to three significant figures.  The
+    minimum is real, at h = 1e-4.
+    """
+    amp0 = jnp.asarray(np.real(_gauss()))
+
+    def merit(amp):
+        out = CA._collins_transport(
+            amp.astype(jnp.complex128), R_IN, Z, WL, DX, DX, dx_out=DX,
+            dy_out=DX, N_out_x=N, N_out_y=N, R_ref=R_REF,
+            gap_kernel='fresnel', on_collins_sampling='ignore')
+        return (jnp.abs(out[N // 2, N // 2]) ** 2) ** 3
+
+    a = np.asarray(amp0)
+    ij = np.unravel_index(int(np.argmax(a)), a.shape)
+    g_ij = float(np.asarray(jax.grad(merit)(amp0))[ij])
+    P0 = float(merit(amp0))
+
+    rows = []
+    for h in (1e-1, 3e-2, 1e-2, 3e-3):
+        def _at(sign, mult=1):
+            ap = a.copy()
+            ap[ij] += sign * mult * h
             return float(merit(jnp.asarray(ap)))
         fd = (_at(+1) - _at(-1)) / (2.0 * h)
-        rel = abs(fd - g[ij]) / abs(g[ij])
-        if rel < best:
-            best, best_h = rel, h
-    assert best < bar, (
-        f"the best central difference over the ladder disagrees with jax.grad "
-        f"by {best:.3e} (at h={best_h}), past {bar:.3e} = 10 x the "
-        f"difference's own eps^(2/3) floor; P0={P0:.6e}")
+        p3 = (_at(+1, 2) - 2 * _at(+1) + 2 * _at(-1) - _at(-1, 2)) \
+            / (2.0 * h ** 3)
+        rows.append((h, abs(fd - g_ij) / abs(g_ij), p3))
 
-    # the analytic SHAPE of the gradient, where the beam has support
-    m = a > 0.05 * a.max()
-    corr = float(np.corrcoef(g[m], a[m])[0, 1])
-    assert corr > 1.0 - 1e-6, (
-        f"the gradient of transported power is not proportional to the input "
-        f"amplitude (correlation {corr:.9f}); the leg is not conserving power "
-        f"or the gradient is not the one it should be")
+    # PREMISE: P''' is a real, CONSTANT number here (the opposite reading from
+    # the quadratic merit's 1e3-per-decade round-off growth).
+    p3s = [abs(r[2]) for r in rows]
+    assert max(p3s) / min(p3s) < 1.1, (
+        f"PREMISE FAILED: the third-difference estimate is not constant over "
+        f"the ladder ({['%.4e' % p for p in p3s]}), so this merit is not the "
+        f"cubic control it is meant to be")
+    # THE CLAIM: the disagreement IS the truncation model, to 10 %, and it
+    # falls as h^2 -- neither is true of the shipped quadratic merit.
+    for h, rel, p3 in rows:
+        pred = abs(p3) * h * h / (6.0 * abs(g_ij))
+        assert abs(rel - pred) / pred < 0.1, (
+            f"at h={h:.0e} the disagreement {rel:.4e} is not the truncation "
+            f"model {pred:.4e}; P0={P0:.6e}")
+    slope = np.polyfit(np.log([r[0] for r in rows]),
+                       np.log([r[1] for r in rows]), 1)[0]
+    assert abs(slope - 2.0) < 0.05, (
+        f"the cubic merit's central difference falls as h^{slope:.4f}, not "
+        f"h^2; the ladder is not resolving a truncation branch even where one "
+        f"exists, which would make the previous id's conclusion vacuous")
 
 
 def test_the_gradient_is_not_trivially_zero_or_constant():
