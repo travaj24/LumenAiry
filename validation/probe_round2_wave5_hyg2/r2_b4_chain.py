@@ -25,15 +25,14 @@ import warnings
 sys.path.insert(0, os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
     'probe_wave5_hyg2'))
-import hlib                                                  # noqa: E402
-
-import numpy as np                                           # noqa: E402
+import hlib  # noqa: E402
+import numpy as np  # noqa: E402
 
 
 def main(tree, out):
     hlib.anchor(tree)
     import lumenairy.propagators.carrier as C
-    from lumenairy.elements import apply_real_lens_traced       # noqa: F401
+    from lumenairy.elements import apply_real_lens_traced  # noqa: F401
     from lumenairy.glass import GLASS_REGISTRY
     from lumenairy.raytrace.seidel import system_abcd_prescription
 

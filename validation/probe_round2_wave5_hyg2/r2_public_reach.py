@@ -17,9 +17,8 @@ import sys
 sys.path.insert(0, os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
     'probe_wave5_hyg2'))
-import hlib                                                  # noqa: E402
-
-import numpy as np                                           # noqa: E402
+import hlib  # noqa: E402
+import numpy as np  # noqa: E402
 
 WL = 633e-9
 N = 64
