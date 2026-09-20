@@ -1805,7 +1805,7 @@ agree row for row.
 | `fresnel_propagate_mft` | the MFT route | `method=` | `'bluestein'` (or `'separable'`) |
 | `fraunhofer_propagate_mft` | the MFT route | `method=` | `'bluestein'` (or `'separable'`) |
 | `angular_spectrum_propagate_mft` | the MFT route | `method=` | `'bluestein'` (or `'separable'`) |
-| `asm_propagate` | -- (it has none) | `method=`, forwarded through `**method_kwargs` | `'bluestein'` |
+| `asm_propagate` | -- (it has none) | `method=`, forwarded through `**method_kwargs` | `'bluestein'` (or `'separable'`) -- it is the propagator's own keyword, arriving through the forwarder |
 | `compute_psf(method='mft')` | the SAMPLER (`'fft'` / `'mft'`) | **`mft_method=`** | `'bluestein'` |
 | `resample_field(method='chirpz')` | the RESAMPLER (`'spline'` / `'chirpz'`) | **`mft_method=`** | `'bluestein'` |
 | `propagate(method='asm', output_grid=...)` | the propagator FAMILY | **`mft_method=`** | `'bluestein'` |
