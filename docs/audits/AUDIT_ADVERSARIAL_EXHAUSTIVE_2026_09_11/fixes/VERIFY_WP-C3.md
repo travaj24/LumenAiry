@@ -1070,7 +1070,9 @@ arm above, which is a gap rather than a loosening.
 | `tests/unit/test_audit2609_a15a_durations_staleness.py` | WIN-py3.14 | **4 passed** in 1:40 |
 | `test_niche_exact_gap_kernel.py` + `test_wave5_h2_near_focus_table.py` + `test_niche_c3_gap_paraxial_guard.py` | WIN-py3.14 | **158 passed, 1 skipped** in 1:37 |
 | the 54-file carrier-touching blast set + both C3 files, **1876 ids** | WIN-py3.14 | **1872 passed, 4 skipped, 0 failed** in **1:16:45** |
-| the same, `b4` excluded and run per class | WSL-py3.12 | see §7.5 |
+| the same, `b4` excluded, **1753 ids** | WSL-py3.12 | **1741 passed, 5 skipped, 0 failed** in **1:29:43** |
+| `test_audit2609_b4_collins_transport.py`, ONE CLASS AT A TIME | WSL-py3.12 | see §7.5 |
+| `test_niche_d3_guards.py` + `test_niche_d5_dx_flatness_gate.py`, whole files | WIN-py3.14 | **54 passed** in 7:48 |
 
 The Windows blast set is **green end to end** — cleaner than the package's own
 run, which carried one failure it correctly diagnosed as stale.
