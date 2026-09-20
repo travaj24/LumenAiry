@@ -1,0 +1,488 @@
+{
+ "build": "WIN-py3.14",
+ "cells": {
+  "HASWELLx1": {
+   "build": "WIN-py3.14",
+   "env": {
+    "MKL_NUM_THREADS": "1",
+    "OMP_NUM_THREADS": "1",
+    "OPENBLAS_CORETYPE": "HASWELL",
+    "OPENBLAS_NUM_THREADS": "1"
+   },
+   "label": "HASWELLx1",
+   "lumenairy_file": "C:\\tmp\\lum_c4\\lumenairy\\__init__.py",
+   "numpy": "2.4.4",
+   "numpy_config": "{'Build Dependencies': {'blas': {'name': 'scipy-openblas', 'found': True, 'version': '0.3.31.188.0', 'detection method': 'pkgconfig', 'include directory': 'C:/Users/runneradmin/AppData/Local/Temp/cibw-run-ucojyb64/cp314-win_amd64/build/venv/Lib/site-packages/scipy_openblas64/include', 'lib directory': 'C:/Users/runneradmin/AppData/Local/Temp/cibw-run-ucojyb64/cp314-win_amd64/build/venv/Lib/site-packages/scipy_openblas64/lib', 'openblas configuration': 'OpenBLAS 0.3.31.188.0  USE64BITINT DYNAMIC_ARCH NO_AFFINITY Haswell MAX_THREADS=24', 'pc file directory': 'D:/a/numpy-release/numpy-release/.openblas'}, 'lapack': {'name': 'scipy-openblas', 'found': True, 'version': '0.3.31.188.0', 'detection method': 'pkgconfig', 'include directory': 'C:/Users/runneradmin/AppData/Local/Temp/cibw-run-ucojyb64/cp314-win_amd64/build/venv/Lib/site-packages/scipy_openblas64/include', 'lib directory': 'C:/Users/runneradmin/AppData/Local/Temp/cibw-run-ucojyb64/cp314-win_amd64/build/venv/Lib/site-packages/scipy_openblas64/lib', 'openblas configuration': 'OpenBLAS 0.3.31.188.0  USE64BITINT DYNAMIC_ARCH NO_AFFINITY Haswell MAX_THREADS=24', 'pc file directory': 'D:/a/numpy-release/numpy-release/.openblas'}}}",
+   "rows": [
+    {
+     "M": 3,
+     "N": 96,
+     "auto_digest": "3ca3cbca271ba9940da08cdaa5f180dccea2f2951716d6b3c48906f37ad0dad7",
+     "chirp_digest": "fe329faa275c7f6dce302bfb3d20b74082b98061a2ce7638fec25632ab560874",
+     "dense_digest": "3ca3cbca271ba9940da08cdaa5f180dccea2f2951716d6b3c48906f37ad0dad7",
+     "dense_inside_bar": true,
+     "dense_vs_exact_max_abs": 5.225267702499604e-13,
+     "derived_bar_dense": 5.807334597172686e-10,
+     "route": "direct",
+     "route_agrees_with_rule": true,
+     "rule_says_direct": true
+    },
+    {
+     "M": 4,
+     "N": 128,
+     "auto_digest": "02f4137f021f59fc3cbc2ece80845af90b6f83339414c384afb3dff133c1ccbf",
+     "chirp_digest": "105cc7f7c0ec4294dfec19f63d815434f650197f057a96377cc5bfa3eaab739e",
+     "dense_digest": "02f4137f021f59fc3cbc2ece80845af90b6f83339414c384afb3dff133c1ccbf",
+     "dense_inside_bar": true,
+     "dense_vs_exact_max_abs": 2.3437142008433856e-13,
+     "derived_bar_dense": 1.2585228838158986e-09,
+     "route": "direct",
+     "route_agrees_with_rule": true,
+     "rule_says_direct": true
+    },
+    {
+     "M": 12,
+     "N": 24,
+     "auto_digest": "cf0b27dba4d956324541eea8eb721dce6a6aecdf979fbb0ded4cb775ebd4de35",
+     "chirp_digest": "cf0b27dba4d956324541eea8eb721dce6a6aecdf979fbb0ded4cb775ebd4de35",
+     "dense_digest": "c4bdaf2a73ece9f9691b11123429b675521fa5ee09f919557235798d16e493c2",
+     "dense_inside_bar": true,
+     "dense_vs_exact_max_abs": 9.238118584960956e-12,
+     "derived_bar_dense": 4.4090830743412286e-10,
+     "route": "bluestein",
+     "route_agrees_with_rule": true,
+     "rule_says_direct": false
+    }
+   ]
+  },
+  "HASWELLx4": {
+   "build": "WIN-py3.14",
+   "env": {
+    "MKL_NUM_THREADS": "4",
+    "OMP_NUM_THREADS": "4",
+    "OPENBLAS_CORETYPE": "HASWELL",
+    "OPENBLAS_NUM_THREADS": "4"
+   },
+   "label": "HASWELLx4",
+   "lumenairy_file": "C:\\tmp\\lum_c4\\lumenairy\\__init__.py",
+   "numpy": "2.4.4",
+   "numpy_config": "{'Build Dependencies': {'blas': {'name': 'scipy-openblas', 'found': True, 'version': '0.3.31.188.0', 'detection method': 'pkgconfig', 'include directory': 'C:/Users/runneradmin/AppData/Local/Temp/cibw-run-ucojyb64/cp314-win_amd64/build/venv/Lib/site-packages/scipy_openblas64/include', 'lib directory': 'C:/Users/runneradmin/AppData/Local/Temp/cibw-run-ucojyb64/cp314-win_amd64/build/venv/Lib/site-packages/scipy_openblas64/lib', 'openblas configuration': 'OpenBLAS 0.3.31.188.0  USE64BITINT DYNAMIC_ARCH NO_AFFINITY Haswell MAX_THREADS=24', 'pc file directory': 'D:/a/numpy-release/numpy-release/.openblas'}, 'lapack': {'name': 'scipy-openblas', 'found': True, 'version': '0.3.31.188.0', 'detection method': 'pkgconfig', 'include directory': 'C:/Users/runneradmin/AppData/Local/Temp/cibw-run-ucojyb64/cp314-win_amd64/build/venv/Lib/site-packages/scipy_openblas64/include', 'lib directory': 'C:/Users/runneradmin/AppData/Local/Temp/cibw-run-ucojyb64/cp314-win_amd64/build/venv/Lib/site-packages/scipy_openblas64/lib', 'openblas configuration': 'OpenBLAS 0.3.31.188.0  USE64BITINT DYNAMIC_ARCH NO_AFFINITY Haswell MAX_THREADS=24', 'pc file directory': 'D:/a/numpy-release/numpy-release/.openblas'}}}",
+   "rows": [
+    {
+     "M": 3,
+     "N": 96,
+     "auto_digest": "3ca3cbca271ba9940da08cdaa5f180dccea2f2951716d6b3c48906f37ad0dad7",
+     "chirp_digest": "fe329faa275c7f6dce302bfb3d20b74082b98061a2ce7638fec25632ab560874",
+     "dense_digest": "3ca3cbca271ba9940da08cdaa5f180dccea2f2951716d6b3c48906f37ad0dad7",
+     "dense_inside_bar": true,
+     "dense_vs_exact_max_abs": 5.225267702499604e-13,
+     "derived_bar_dense": 5.807334597172686e-10,
+     "route": "direct",
+     "route_agrees_with_rule": true,
+     "rule_says_direct": true
+    },
+    {
+     "M": 4,
+     "N": 128,
+     "auto_digest": "02f4137f021f59fc3cbc2ece80845af90b6f83339414c384afb3dff133c1ccbf",
+     "chirp_digest": "105cc7f7c0ec4294dfec19f63d815434f650197f057a96377cc5bfa3eaab739e",
+     "dense_digest": "02f4137f021f59fc3cbc2ece80845af90b6f83339414c384afb3dff133c1ccbf",
+     "dense_inside_bar": true,
+     "dense_vs_exact_max_abs": 2.3437142008433856e-13,
+     "derived_bar_dense": 1.2585228838158986e-09,
+     "route": "direct",
+     "route_agrees_with_rule": true,
+     "rule_says_direct": true
+    },
+    {
+     "M": 12,
+     "N": 24,
+     "auto_digest": "cf0b27dba4d956324541eea8eb721dce6a6aecdf979fbb0ded4cb775ebd4de35",
+     "chirp_digest": "cf0b27dba4d956324541eea8eb721dce6a6aecdf979fbb0ded4cb775ebd4de35",
+     "dense_digest": "c4bdaf2a73ece9f9691b11123429b675521fa5ee09f919557235798d16e493c2",
+     "dense_inside_bar": true,
+     "dense_vs_exact_max_abs": 9.238118584960956e-12,
+     "derived_bar_dense": 4.4090830743412286e-10,
+     "route": "bluestein",
+     "route_agrees_with_rule": true,
+     "rule_says_direct": false
+    }
+   ]
+  },
+  "KATMAIx1": {
+   "build": "WIN-py3.14",
+   "env": {
+    "MKL_NUM_THREADS": "1",
+    "OMP_NUM_THREADS": "1",
+    "OPENBLAS_CORETYPE": "KATMAI",
+    "OPENBLAS_NUM_THREADS": "1"
+   },
+   "label": "KATMAIx1",
+   "lumenairy_file": "C:\\tmp\\lum_c4\\lumenairy\\__init__.py",
+   "numpy": "2.4.4",
+   "numpy_config": "{'Build Dependencies': {'blas': {'name': 'scipy-openblas', 'found': True, 'version': '0.3.31.188.0', 'detection method': 'pkgconfig', 'include directory': 'C:/Users/runneradmin/AppData/Local/Temp/cibw-run-ucojyb64/cp314-win_amd64/build/venv/Lib/site-packages/scipy_openblas64/include', 'lib directory': 'C:/Users/runneradmin/AppData/Local/Temp/cibw-run-ucojyb64/cp314-win_amd64/build/venv/Lib/site-packages/scipy_openblas64/lib', 'openblas configuration': 'OpenBLAS 0.3.31.188.0  USE64BITINT DYNAMIC_ARCH NO_AFFINITY Haswell MAX_THREADS=24', 'pc file directory': 'D:/a/numpy-release/numpy-release/.openblas'}, 'lapack': {'name': 'scipy-openblas', 'found': True, 'version': '0.3.31.188.0', 'detection method': 'pkgconfig', 'include directory': 'C:/Users/runneradmin/AppData/Local/Temp/cibw-run-ucojyb64/cp314-win_amd64/build/venv/Lib/site-packages/scipy_openblas64/include', 'lib directory': 'C:/Users/runneradmin/AppData/Local/Temp/cibw-run-ucojyb64/cp314-win_amd64/build/venv/Lib/site-packages/scipy_openblas64/lib', 'openblas configuration': 'OpenBLAS 0.3.31.188.0  USE64BITINT DYNAMIC_ARCH NO_AFFINITY Haswell MAX_THREADS=24', 'pc file directory': 'D:/a/numpy-release/numpy-release/.openblas'}}}",
+   "rows": [
+    {
+     "M": 3,
+     "N": 96,
+     "auto_digest": "34587faa8e3cc1ff42c9a06327fbdaac4b3d773248983dbbd76cd8fe68a63b59",
+     "chirp_digest": "fe329faa275c7f6dce302bfb3d20b74082b98061a2ce7638fec25632ab560874",
+     "dense_digest": "34587faa8e3cc1ff42c9a06327fbdaac4b3d773248983dbbd76cd8fe68a63b59",
+     "dense_inside_bar": true,
+     "dense_vs_exact_max_abs": 5.383738749604451e-13,
+     "derived_bar_dense": 5.807334597172686e-10,
+     "route": "direct",
+     "route_agrees_with_rule": true,
+     "rule_says_direct": true
+    },
+    {
+     "M": 4,
+     "N": 128,
+     "auto_digest": "2876cfe398641bb6e12e8ff245706cb142e308d778b18acd313ebd1da2de9aa9",
+     "chirp_digest": "105cc7f7c0ec4294dfec19f63d815434f650197f057a96377cc5bfa3eaab739e",
+     "dense_digest": "2876cfe398641bb6e12e8ff245706cb142e308d778b18acd313ebd1da2de9aa9",
+     "dense_inside_bar": true,
+     "dense_vs_exact_max_abs": 2.0958752502552918e-13,
+     "derived_bar_dense": 1.2585228838158986e-09,
+     "route": "direct",
+     "route_agrees_with_rule": true,
+     "rule_says_direct": true
+    },
+    {
+     "M": 12,
+     "N": 24,
+     "auto_digest": "cf0b27dba4d956324541eea8eb721dce6a6aecdf979fbb0ded4cb775ebd4de35",
+     "chirp_digest": "cf0b27dba4d956324541eea8eb721dce6a6aecdf979fbb0ded4cb775ebd4de35",
+     "dense_digest": "c0d6db5d5c7af80bc0fcb23ddb7ed6b585f84154e8503fa1299dbe8da8d15c0e",
+     "dense_inside_bar": true,
+     "dense_vs_exact_max_abs": 9.2445132530634e-12,
+     "derived_bar_dense": 4.4090830743412286e-10,
+     "route": "bluestein",
+     "route_agrees_with_rule": true,
+     "rule_says_direct": false
+    }
+   ]
+  },
+  "KATMAIx4": {
+   "build": "WIN-py3.14",
+   "env": {
+    "MKL_NUM_THREADS": "4",
+    "OMP_NUM_THREADS": "4",
+    "OPENBLAS_CORETYPE": "KATMAI",
+    "OPENBLAS_NUM_THREADS": "4"
+   },
+   "label": "KATMAIx4",
+   "lumenairy_file": "C:\\tmp\\lum_c4\\lumenairy\\__init__.py",
+   "numpy": "2.4.4",
+   "numpy_config": "{'Build Dependencies': {'blas': {'name': 'scipy-openblas', 'found': True, 'version': '0.3.31.188.0', 'detection method': 'pkgconfig', 'include directory': 'C:/Users/runneradmin/AppData/Local/Temp/cibw-run-ucojyb64/cp314-win_amd64/build/venv/Lib/site-packages/scipy_openblas64/include', 'lib directory': 'C:/Users/runneradmin/AppData/Local/Temp/cibw-run-ucojyb64/cp314-win_amd64/build/venv/Lib/site-packages/scipy_openblas64/lib', 'openblas configuration': 'OpenBLAS 0.3.31.188.0  USE64BITINT DYNAMIC_ARCH NO_AFFINITY Haswell MAX_THREADS=24', 'pc file directory': 'D:/a/numpy-release/numpy-release/.openblas'}, 'lapack': {'name': 'scipy-openblas', 'found': True, 'version': '0.3.31.188.0', 'detection method': 'pkgconfig', 'include directory': 'C:/Users/runneradmin/AppData/Local/Temp/cibw-run-ucojyb64/cp314-win_amd64/build/venv/Lib/site-packages/scipy_openblas64/include', 'lib directory': 'C:/Users/runneradmin/AppData/Local/Temp/cibw-run-ucojyb64/cp314-win_amd64/build/venv/Lib/site-packages/scipy_openblas64/lib', 'openblas configuration': 'OpenBLAS 0.3.31.188.0  USE64BITINT DYNAMIC_ARCH NO_AFFINITY Haswell MAX_THREADS=24', 'pc file directory': 'D:/a/numpy-release/numpy-release/.openblas'}}}",
+   "rows": [
+    {
+     "M": 3,
+     "N": 96,
+     "auto_digest": "34587faa8e3cc1ff42c9a06327fbdaac4b3d773248983dbbd76cd8fe68a63b59",
+     "chirp_digest": "fe329faa275c7f6dce302bfb3d20b74082b98061a2ce7638fec25632ab560874",
+     "dense_digest": "34587faa8e3cc1ff42c9a06327fbdaac4b3d773248983dbbd76cd8fe68a63b59",
+     "dense_inside_bar": true,
+     "dense_vs_exact_max_abs": 5.383738749604451e-13,
+     "derived_bar_dense": 5.807334597172686e-10,
+     "route": "direct",
+     "route_agrees_with_rule": true,
+     "rule_says_direct": true
+    },
+    {
+     "M": 4,
+     "N": 128,
+     "auto_digest": "2876cfe398641bb6e12e8ff245706cb142e308d778b18acd313ebd1da2de9aa9",
+     "chirp_digest": "105cc7f7c0ec4294dfec19f63d815434f650197f057a96377cc5bfa3eaab739e",
+     "dense_digest": "2876cfe398641bb6e12e8ff245706cb142e308d778b18acd313ebd1da2de9aa9",
+     "dense_inside_bar": true,
+     "dense_vs_exact_max_abs": 2.0958752502552918e-13,
+     "derived_bar_dense": 1.2585228838158986e-09,
+     "route": "direct",
+     "route_agrees_with_rule": true,
+     "rule_says_direct": true
+    },
+    {
+     "M": 12,
+     "N": 24,
+     "auto_digest": "cf0b27dba4d956324541eea8eb721dce6a6aecdf979fbb0ded4cb775ebd4de35",
+     "chirp_digest": "cf0b27dba4d956324541eea8eb721dce6a6aecdf979fbb0ded4cb775ebd4de35",
+     "dense_digest": "c0d6db5d5c7af80bc0fcb23ddb7ed6b585f84154e8503fa1299dbe8da8d15c0e",
+     "dense_inside_bar": true,
+     "dense_vs_exact_max_abs": 9.2445132530634e-12,
+     "derived_bar_dense": 4.4090830743412286e-10,
+     "route": "bluestein",
+     "route_agrees_with_rule": true,
+     "rule_says_direct": false
+    }
+   ]
+  },
+  "NEHALEMx1": {
+   "build": "WIN-py3.14",
+   "env": {
+    "MKL_NUM_THREADS": "1",
+    "OMP_NUM_THREADS": "1",
+    "OPENBLAS_CORETYPE": "NEHALEM",
+    "OPENBLAS_NUM_THREADS": "1"
+   },
+   "label": "NEHALEMx1",
+   "lumenairy_file": "C:\\tmp\\lum_c4\\lumenairy\\__init__.py",
+   "numpy": "2.4.4",
+   "numpy_config": "{'Build Dependencies': {'blas': {'name': 'scipy-openblas', 'found': True, 'version': '0.3.31.188.0', 'detection method': 'pkgconfig', 'include directory': 'C:/Users/runneradmin/AppData/Local/Temp/cibw-run-ucojyb64/cp314-win_amd64/build/venv/Lib/site-packages/scipy_openblas64/include', 'lib directory': 'C:/Users/runneradmin/AppData/Local/Temp/cibw-run-ucojyb64/cp314-win_amd64/build/venv/Lib/site-packages/scipy_openblas64/lib', 'openblas configuration': 'OpenBLAS 0.3.31.188.0  USE64BITINT DYNAMIC_ARCH NO_AFFINITY Haswell MAX_THREADS=24', 'pc file directory': 'D:/a/numpy-release/numpy-release/.openblas'}, 'lapack': {'name': 'scipy-openblas', 'found': True, 'version': '0.3.31.188.0', 'detection method': 'pkgconfig', 'include directory': 'C:/Users/runneradmin/AppData/Local/Temp/cibw-run-ucojyb64/cp314-win_amd64/build/venv/Lib/site-packages/scipy_openblas64/include', 'lib directory': 'C:/Users/runneradmin/AppData/Local/Temp/cibw-run-ucojyb64/cp314-win_amd64/build/venv/Lib/site-packages/scipy_openblas64/lib', 'openblas configuration': 'OpenBLAS 0.3.31.188.0  USE64BITINT DYNAMIC_ARCH NO_AFFINITY Haswell MAX_THREADS=24', 'pc file directory': 'D:/a/numpy-release/numpy-release/.openblas'}}}",
+   "rows": [
+    {
+     "M": 3,
+     "N": 96,
+     "auto_digest": "32bd933fc61519dc82183b2169a2e8e577cc0663561630d835a02b78d72bf4b7",
+     "chirp_digest": "fe329faa275c7f6dce302bfb3d20b74082b98061a2ce7638fec25632ab560874",
+     "dense_digest": "32bd933fc61519dc82183b2169a2e8e577cc0663561630d835a02b78d72bf4b7",
+     "dense_inside_bar": true,
+     "dense_vs_exact_max_abs": 5.383738749604451e-13,
+     "derived_bar_dense": 5.807334597172686e-10,
+     "route": "direct",
+     "route_agrees_with_rule": true,
+     "rule_says_direct": true
+    },
+    {
+     "M": 4,
+     "N": 128,
+     "auto_digest": "2876cfe398641bb6e12e8ff245706cb142e308d778b18acd313ebd1da2de9aa9",
+     "chirp_digest": "105cc7f7c0ec4294dfec19f63d815434f650197f057a96377cc5bfa3eaab739e",
+     "dense_digest": "2876cfe398641bb6e12e8ff245706cb142e308d778b18acd313ebd1da2de9aa9",
+     "dense_inside_bar": true,
+     "dense_vs_exact_max_abs": 2.0958752502552918e-13,
+     "derived_bar_dense": 1.2585228838158986e-09,
+     "route": "direct",
+     "route_agrees_with_rule": true,
+     "rule_says_direct": true
+    },
+    {
+     "M": 12,
+     "N": 24,
+     "auto_digest": "cf0b27dba4d956324541eea8eb721dce6a6aecdf979fbb0ded4cb775ebd4de35",
+     "chirp_digest": "cf0b27dba4d956324541eea8eb721dce6a6aecdf979fbb0ded4cb775ebd4de35",
+     "dense_digest": "c0d6db5d5c7af80bc0fcb23ddb7ed6b585f84154e8503fa1299dbe8da8d15c0e",
+     "dense_inside_bar": true,
+     "dense_vs_exact_max_abs": 9.2445132530634e-12,
+     "derived_bar_dense": 4.4090830743412286e-10,
+     "route": "bluestein",
+     "route_agrees_with_rule": true,
+     "rule_says_direct": false
+    }
+   ]
+  },
+  "NEHALEMx4": {
+   "build": "WIN-py3.14",
+   "env": {
+    "MKL_NUM_THREADS": "4",
+    "OMP_NUM_THREADS": "4",
+    "OPENBLAS_CORETYPE": "NEHALEM",
+    "OPENBLAS_NUM_THREADS": "4"
+   },
+   "label": "NEHALEMx4",
+   "lumenairy_file": "C:\\tmp\\lum_c4\\lumenairy\\__init__.py",
+   "numpy": "2.4.4",
+   "numpy_config": "{'Build Dependencies': {'blas': {'name': 'scipy-openblas', 'found': True, 'version': '0.3.31.188.0', 'detection method': 'pkgconfig', 'include directory': 'C:/Users/runneradmin/AppData/Local/Temp/cibw-run-ucojyb64/cp314-win_amd64/build/venv/Lib/site-packages/scipy_openblas64/include', 'lib directory': 'C:/Users/runneradmin/AppData/Local/Temp/cibw-run-ucojyb64/cp314-win_amd64/build/venv/Lib/site-packages/scipy_openblas64/lib', 'openblas configuration': 'OpenBLAS 0.3.31.188.0  USE64BITINT DYNAMIC_ARCH NO_AFFINITY Haswell MAX_THREADS=24', 'pc file directory': 'D:/a/numpy-release/numpy-release/.openblas'}, 'lapack': {'name': 'scipy-openblas', 'found': True, 'version': '0.3.31.188.0', 'detection method': 'pkgconfig', 'include directory': 'C:/Users/runneradmin/AppData/Local/Temp/cibw-run-ucojyb64/cp314-win_amd64/build/venv/Lib/site-packages/scipy_openblas64/include', 'lib directory': 'C:/Users/runneradmin/AppData/Local/Temp/cibw-run-ucojyb64/cp314-win_amd64/build/venv/Lib/site-packages/scipy_openblas64/lib', 'openblas configuration': 'OpenBLAS 0.3.31.188.0  USE64BITINT DYNAMIC_ARCH NO_AFFINITY Haswell MAX_THREADS=24', 'pc file directory': 'D:/a/numpy-release/numpy-release/.openblas'}}}",
+   "rows": [
+    {
+     "M": 3,
+     "N": 96,
+     "auto_digest": "32bd933fc61519dc82183b2169a2e8e577cc0663561630d835a02b78d72bf4b7",
+     "chirp_digest": "fe329faa275c7f6dce302bfb3d20b74082b98061a2ce7638fec25632ab560874",
+     "dense_digest": "32bd933fc61519dc82183b2169a2e8e577cc0663561630d835a02b78d72bf4b7",
+     "dense_inside_bar": true,
+     "dense_vs_exact_max_abs": 5.383738749604451e-13,
+     "derived_bar_dense": 5.807334597172686e-10,
+     "route": "direct",
+     "route_agrees_with_rule": true,
+     "rule_says_direct": true
+    },
+    {
+     "M": 4,
+     "N": 128,
+     "auto_digest": "2876cfe398641bb6e12e8ff245706cb142e308d778b18acd313ebd1da2de9aa9",
+     "chirp_digest": "105cc7f7c0ec4294dfec19f63d815434f650197f057a96377cc5bfa3eaab739e",
+     "dense_digest": "2876cfe398641bb6e12e8ff245706cb142e308d778b18acd313ebd1da2de9aa9",
+     "dense_inside_bar": true,
+     "dense_vs_exact_max_abs": 2.0958752502552918e-13,
+     "derived_bar_dense": 1.2585228838158986e-09,
+     "route": "direct",
+     "route_agrees_with_rule": true,
+     "rule_says_direct": true
+    },
+    {
+     "M": 12,
+     "N": 24,
+     "auto_digest": "cf0b27dba4d956324541eea8eb721dce6a6aecdf979fbb0ded4cb775ebd4de35",
+     "chirp_digest": "cf0b27dba4d956324541eea8eb721dce6a6aecdf979fbb0ded4cb775ebd4de35",
+     "dense_digest": "c0d6db5d5c7af80bc0fcb23ddb7ed6b585f84154e8503fa1299dbe8da8d15c0e",
+     "dense_inside_bar": true,
+     "dense_vs_exact_max_abs": 9.2445132530634e-12,
+     "derived_bar_dense": 4.4090830743412286e-10,
+     "route": "bluestein",
+     "route_agrees_with_rule": true,
+     "rule_says_direct": false
+    }
+   ]
+  },
+  "SANDYBRIDGEx1": {
+   "build": "WIN-py3.14",
+   "env": {
+    "MKL_NUM_THREADS": "1",
+    "OMP_NUM_THREADS": "1",
+    "OPENBLAS_CORETYPE": "SANDYBRIDGE",
+    "OPENBLAS_NUM_THREADS": "1"
+   },
+   "label": "SANDYBRIDGEx1",
+   "lumenairy_file": "C:\\tmp\\lum_c4\\lumenairy\\__init__.py",
+   "numpy": "2.4.4",
+   "numpy_config": "{'Build Dependencies': {'blas': {'name': 'scipy-openblas', 'found': True, 'version': '0.3.31.188.0', 'detection method': 'pkgconfig', 'include directory': 'C:/Users/runneradmin/AppData/Local/Temp/cibw-run-ucojyb64/cp314-win_amd64/build/venv/Lib/site-packages/scipy_openblas64/include', 'lib directory': 'C:/Users/runneradmin/AppData/Local/Temp/cibw-run-ucojyb64/cp314-win_amd64/build/venv/Lib/site-packages/scipy_openblas64/lib', 'openblas configuration': 'OpenBLAS 0.3.31.188.0  USE64BITINT DYNAMIC_ARCH NO_AFFINITY Haswell MAX_THREADS=24', 'pc file directory': 'D:/a/numpy-release/numpy-release/.openblas'}, 'lapack': {'name': 'scipy-openblas', 'found': True, 'version': '0.3.31.188.0', 'detection method': 'pkgconfig', 'include directory': 'C:/Users/runneradmin/AppData/Local/Temp/cibw-run-ucojyb64/cp314-win_amd64/build/venv/Lib/site-packages/scipy_openblas64/include', 'lib directory': 'C:/Users/runneradmin/AppData/Local/Temp/cibw-run-ucojyb64/cp314-win_amd64/build/venv/Lib/site-packages/scipy_openblas64/lib', 'openblas configuration': 'OpenBLAS 0.3.31.188.0  USE64BITINT DYNAMIC_ARCH NO_AFFINITY Haswell MAX_THREADS=24', 'pc file directory': 'D:/a/numpy-release/numpy-release/.openblas'}}}",
+   "rows": [
+    {
+     "M": 3,
+     "N": 96,
+     "auto_digest": "32bd933fc61519dc82183b2169a2e8e577cc0663561630d835a02b78d72bf4b7",
+     "chirp_digest": "fe329faa275c7f6dce302bfb3d20b74082b98061a2ce7638fec25632ab560874",
+     "dense_digest": "32bd933fc61519dc82183b2169a2e8e577cc0663561630d835a02b78d72bf4b7",
+     "dense_inside_bar": true,
+     "dense_vs_exact_max_abs": 5.383738749604451e-13,
+     "derived_bar_dense": 5.807334597172686e-10,
+     "route": "direct",
+     "route_agrees_with_rule": true,
+     "rule_says_direct": true
+    },
+    {
+     "M": 4,
+     "N": 128,
+     "auto_digest": "2876cfe398641bb6e12e8ff245706cb142e308d778b18acd313ebd1da2de9aa9",
+     "chirp_digest": "105cc7f7c0ec4294dfec19f63d815434f650197f057a96377cc5bfa3eaab739e",
+     "dense_digest": "2876cfe398641bb6e12e8ff245706cb142e308d778b18acd313ebd1da2de9aa9",
+     "dense_inside_bar": true,
+     "dense_vs_exact_max_abs": 2.0958752502552918e-13,
+     "derived_bar_dense": 1.2585228838158986e-09,
+     "route": "direct",
+     "route_agrees_with_rule": true,
+     "rule_says_direct": true
+    },
+    {
+     "M": 12,
+     "N": 24,
+     "auto_digest": "cf0b27dba4d956324541eea8eb721dce6a6aecdf979fbb0ded4cb775ebd4de35",
+     "chirp_digest": "cf0b27dba4d956324541eea8eb721dce6a6aecdf979fbb0ded4cb775ebd4de35",
+     "dense_digest": "c0d6db5d5c7af80bc0fcb23ddb7ed6b585f84154e8503fa1299dbe8da8d15c0e",
+     "dense_inside_bar": true,
+     "dense_vs_exact_max_abs": 9.2445132530634e-12,
+     "derived_bar_dense": 4.4090830743412286e-10,
+     "route": "bluestein",
+     "route_agrees_with_rule": true,
+     "rule_says_direct": false
+    }
+   ]
+  },
+  "SANDYBRIDGEx4": {
+   "build": "WIN-py3.14",
+   "env": {
+    "MKL_NUM_THREADS": "4",
+    "OMP_NUM_THREADS": "4",
+    "OPENBLAS_CORETYPE": "SANDYBRIDGE",
+    "OPENBLAS_NUM_THREADS": "4"
+   },
+   "label": "SANDYBRIDGEx4",
+   "lumenairy_file": "C:\\tmp\\lum_c4\\lumenairy\\__init__.py",
+   "numpy": "2.4.4",
+   "numpy_config": "{'Build Dependencies': {'blas': {'name': 'scipy-openblas', 'found': True, 'version': '0.3.31.188.0', 'detection method': 'pkgconfig', 'include directory': 'C:/Users/runneradmin/AppData/Local/Temp/cibw-run-ucojyb64/cp314-win_amd64/build/venv/Lib/site-packages/scipy_openblas64/include', 'lib directory': 'C:/Users/runneradmin/AppData/Local/Temp/cibw-run-ucojyb64/cp314-win_amd64/build/venv/Lib/site-packages/scipy_openblas64/lib', 'openblas configuration': 'OpenBLAS 0.3.31.188.0  USE64BITINT DYNAMIC_ARCH NO_AFFINITY Haswell MAX_THREADS=24', 'pc file directory': 'D:/a/numpy-release/numpy-release/.openblas'}, 'lapack': {'name': 'scipy-openblas', 'found': True, 'version': '0.3.31.188.0', 'detection method': 'pkgconfig', 'include directory': 'C:/Users/runneradmin/AppData/Local/Temp/cibw-run-ucojyb64/cp314-win_amd64/build/venv/Lib/site-packages/scipy_openblas64/include', 'lib directory': 'C:/Users/runneradmin/AppData/Local/Temp/cibw-run-ucojyb64/cp314-win_amd64/build/venv/Lib/site-packages/scipy_openblas64/lib', 'openblas configuration': 'OpenBLAS 0.3.31.188.0  USE64BITINT DYNAMIC_ARCH NO_AFFINITY Haswell MAX_THREADS=24', 'pc file directory': 'D:/a/numpy-release/numpy-release/.openblas'}}}",
+   "rows": [
+    {
+     "M": 3,
+     "N": 96,
+     "auto_digest": "32bd933fc61519dc82183b2169a2e8e577cc0663561630d835a02b78d72bf4b7",
+     "chirp_digest": "fe329faa275c7f6dce302bfb3d20b74082b98061a2ce7638fec25632ab560874",
+     "dense_digest": "32bd933fc61519dc82183b2169a2e8e577cc0663561630d835a02b78d72bf4b7",
+     "dense_inside_bar": true,
+     "dense_vs_exact_max_abs": 5.383738749604451e-13,
+     "derived_bar_dense": 5.807334597172686e-10,
+     "route": "direct",
+     "route_agrees_with_rule": true,
+     "rule_says_direct": true
+    },
+    {
+     "M": 4,
+     "N": 128,
+     "auto_digest": "2876cfe398641bb6e12e8ff245706cb142e308d778b18acd313ebd1da2de9aa9",
+     "chirp_digest": "105cc7f7c0ec4294dfec19f63d815434f650197f057a96377cc5bfa3eaab739e",
+     "dense_digest": "2876cfe398641bb6e12e8ff245706cb142e308d778b18acd313ebd1da2de9aa9",
+     "dense_inside_bar": true,
+     "dense_vs_exact_max_abs": 2.0958752502552918e-13,
+     "derived_bar_dense": 1.2585228838158986e-09,
+     "route": "direct",
+     "route_agrees_with_rule": true,
+     "rule_says_direct": true
+    },
+    {
+     "M": 12,
+     "N": 24,
+     "auto_digest": "cf0b27dba4d956324541eea8eb721dce6a6aecdf979fbb0ded4cb775ebd4de35",
+     "chirp_digest": "cf0b27dba4d956324541eea8eb721dce6a6aecdf979fbb0ded4cb775ebd4de35",
+     "dense_digest": "c0d6db5d5c7af80bc0fcb23ddb7ed6b585f84154e8503fa1299dbe8da8d15c0e",
+     "dense_inside_bar": true,
+     "dense_vs_exact_max_abs": 9.2445132530634e-12,
+     "derived_bar_dense": 4.4090830743412286e-10,
+     "route": "bluestein",
+     "route_agrees_with_rule": true,
+     "rule_says_direct": false
+    }
+   ]
+  }
+ },
+ "summary": {
+  "kernels_seen": [
+   "HASWELL",
+   "KATMAI",
+   "NEHALEM",
+   "SANDYBRIDGE"
+  ],
+  "n_cells": 8,
+  "n_ran": 8,
+  "per_shape": [
+   {
+    "M": 3,
+    "N": 96,
+    "dense_inside_derived_bar_in_every_cell": true,
+    "dense_vs_exact_max": 5.383738749604451e-13,
+    "dense_vs_exact_min": 5.225267702499604e-13,
+    "distinct_dense_digests": 3,
+    "distinct_routes": [
+     "direct"
+    ],
+    "route_agrees_with_rule_in_every_cell": true,
+    "rule_says_direct": true
+   },
+   {
+    "M": 4,
+    "N": 128,
+    "dense_inside_derived_bar_in_every_cell": true,
+    "dense_vs_exact_max": 2.3437142008433856e-13,
+    "dense_vs_exact_min": 2.0958752502552918e-13,
+    "distinct_dense_digests": 2,
+    "distinct_routes": [
+     "direct"
+    ],
+    "route_agrees_with_rule_in_every_cell": true,
+    "rule_says_direct": true
+   },
+   {
+    "M": 12,
+    "N": 24,
+    "dense_inside_derived_bar_in_every_cell": true,
+    "dense_vs_exact_max": 9.2445132530634e-12,
+    "dense_vs_exact_min": 9.238118584960956e-12,
+    "distinct_dense_digests": 2,
+    "distinct_routes": [
+     "bluestein"
+    ],
+    "route_agrees_with_rule_in_every_cell": true,
+    "rule_says_direct": false
+   }
+  ]
+ }
+}
