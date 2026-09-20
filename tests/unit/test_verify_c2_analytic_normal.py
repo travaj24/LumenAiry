@@ -259,14 +259,21 @@ def test_vc2_the_jax_backend_does_not_apply_the_numpy_domain_clamp():
 def test_vc2_analysis_ghost_still_asks_for_the_private_default():
     """``analysis.ghost`` calls ``_refract`` / ``_reflect`` directly, and
     those kept ``sphere_normal='generic'``, so a ghost path and the public
-    trace now refract off different arithmetic on the same sphere.
+    trace refracted off different arithmetic on the same sphere -- up to
+    2.13e-14 mm of RMS spot radius apart on three 2-bounce paths of a
+    spherical doublet (defect D5).
 
-    The private defaults are the contract that makes every direct caller
-    unchanged by construction, so they are pinned here from the signature.
-    The arm is a DECISION: it fails if the private defaults move (which
-    would silently change ghost and the finite-difference differential
-    path) AND it names the alternative, so whoever threads the keyword
-    through ``ghost.py`` has to come here and say so.
+    ROUND 2 CLOSED IT and this arm is INVERTED: the ghost leg now asks
+    ``raytrace.trace._library_trace_default('sphere_normal')`` -- the
+    library's CURRENT public route, not a literal -- so it tracks the next
+    default flip instead of pinning this one.  ``renormalize`` stays at the
+    private ``True``, which D5 requires: the ghost loop has no exit pass to
+    hoist a single rescale to.
+
+    Both halves are still asserted here: the PRIVATE defaults have NOT
+    moved (that is what keeps the finite-difference differential path
+    unchanged by construction), and the ghost leg's two call sites now name
+    the keyword.
     """
     for fn in (_refract,):
         p = inspect.signature(fn).parameters
@@ -275,12 +282,22 @@ def test_vc2_analysis_ghost_still_asks_for_the_private_default():
             p['sphere_normal'].default)
     src = (REPO / 'lumenairy' / 'analysis' / 'ghost.py').read_text(
         encoding='utf-8')
-    for call in ("_reflect(rays, surfs[s_idx])",
-                 "_refract(rays, surfs[s_idx], n1, n2)"):
+    for call in ("_reflect(rays, surfs[s_idx], sphere_normal=_ghost_sphere_normal)",
+                 "_refract(rays, surfs[s_idx], n1, n2,\n"
+                 "                     sphere_normal=_ghost_sphere_normal)"):
         assert call in src, (
-            f'{call!r} is no longer in analysis/ghost.py.  If the ghost '
-            f'path now forwards sphere_normal, VERIFY_WP-C2.md defect D5 '
-            f'has been actioned: delete this arm and pin the new call.')
+            f'{call!r} is not in analysis/ghost.py.  D5 was closed by '
+            f'making the ghost leg ask the library default; if the leg has '
+            f'been changed again, re-measure and update this arm.')
+    assert "_library_trace_default('sphere_normal')" in src, (
+        'the ghost leg no longer asks the LIBRARY for its route.  A '
+        "literal 'analytic' here would pin this release's default into "
+        'the ghost path for every release after it, which is the failure '
+        'D4 and D5 were both written to avoid.')
+    # two-sided: the route it gets really is the public one
+    from lumenairy.raytrace.trace import _library_trace_default
+    assert (_library_trace_default('sphere_normal')
+            == inspect.signature(trace).parameters['sphere_normal'].default)
 
 
 # ======================================================================

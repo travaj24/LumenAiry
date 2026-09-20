@@ -859,6 +859,17 @@ def retrace_ghost_path(
         _refract,
         _transfer,
     )
+    from ..raytrace.trace import _library_trace_default
+
+    # VERIFY-WP-C2 D5: ask the library's CURRENT public normal route rather
+    # than the private helper's own default.  Before this, a ghost leg and
+    # the public ``trace`` refracted off two different sphere normals on
+    # the same surface -- measured up to 2.13e-14 mm of RMS spot radius
+    # apart on three 2-bounce paths of a spherical doublet.  ``renormalize``
+    # deliberately stays at the private ``True``: this loop has no exit
+    # pass to hoist a single rescale to, so per-surface rescaling is the
+    # only setting under which the bundle carries a unit direction at all.
+    _ghost_sphere_normal = _library_trace_default('sphere_normal')
 
     # Axial positions of each surface vertex relative to surface 0.
     z_vertex = np.zeros(n_surfs, dtype=float)
@@ -931,7 +942,7 @@ def retrace_ghost_path(
                           n_medium=n_current, direction=direction)
 
         if action == 'reflect':
-            _reflect(rays, surfs[s_idx])
+            _reflect(rays, surfs[s_idx], sphere_normal=_ghost_sphere_normal)
             # After reflection the bundle is travelling in the opposite
             # axial direction; the medium stays the same (mirror /
             # ghost reflection does not change which side of the
@@ -952,7 +963,8 @@ def retrace_ghost_path(
                 n1 = get_glass_index(surfs[s_idx].glass_after, wavelength)
                 n2 = get_glass_index(surfs[s_idx].glass_before, wavelength)
                 next_medium = surfs[s_idx].glass_before
-            _refract(rays, surfs[s_idx], n1, n2)
+            _refract(rays, surfs[s_idx], n1, n2,
+                     sphere_normal=_ghost_sphere_normal)
             current_medium = next_medium
             n_current = n2
 

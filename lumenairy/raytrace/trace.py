@@ -1580,6 +1580,38 @@ def apply_doe_phase_traced(
 #: :func:`trace` to get the arithmetic it used to get.
 _WAY_BACK_KEYWORDS = ('renormalize', 'sphere_normal')
 
+_LIBRARY_TRACE_DEFAULTS: Dict[str, Any] = {}
+
+
+def _library_trace_default(keyword: str) -> Any:
+    """Whatever :func:`trace` currently defaults ``keyword`` to.
+
+    A DIRECT caller of :func:`intersection._refract` / ``_reflect`` -- one
+    that owns its own surface loop and so never reaches :func:`trace` --
+    asks this instead of writing ``'analytic'`` down, so that the day the
+    library's default moves again the caller moves with it rather than
+    silently pinning the route this release happens to ship.  That is the
+    difference between "the ghost path agrees with ``trace``" and "the
+    ghost path agrees with what ``trace`` did in 5.49.0".
+
+    The private defaults of ``_refract`` / ``_reflect`` do NOT move: they
+    stay ``sphere_normal='generic'`` / ``renormalize=True``, which is what
+    keeps every OTHER direct caller (the finite-difference differential
+    path) unchanged by construction.  A caller that wants the public
+    arithmetic opts in through this helper, one call site at a time.
+
+    Read from ``inspect.signature`` and cached per keyword, so it costs one
+    dict lookup inside a per-surface loop.
+    """
+    try:
+        return _LIBRARY_TRACE_DEFAULTS[keyword]
+    except KeyError:
+        pass
+    import inspect
+    value = inspect.signature(trace).parameters[keyword].default
+    _LIBRARY_TRACE_DEFAULTS[keyword] = value
+    return value
+
 
 def _way_back_kwargs(renormalize=None, sphere_normal=None):
     """Build the ``**kwargs`` an internally-tracing entry point forwards.

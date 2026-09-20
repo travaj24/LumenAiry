@@ -39,6 +39,7 @@ from __future__ import annotations
 import decimal
 import inspect
 import math
+import pathlib
 import unittest.mock as _mock
 
 import numpy as np
@@ -1108,6 +1109,118 @@ def test_c2_none_stamps_nothing_on_the_entry_points(name):
 
 
 # ===========================================================================
+# 6c -- analysis.ghost asks the same normal route as trace (D5)
+# ===========================================================================
+
+def test_c2_the_ghost_path_asks_the_library_default_normal_route():
+    """``analysis.ghost`` owns its own surface loop and calls ``_refract`` /
+    ``_reflect`` directly, so it kept the PRIVATE default
+    ``sphere_normal='generic'`` while ``trace`` moved to the closed form --
+    one implementation refracting off two different normals on the same
+    sphere (VERIFY-WP-C2 defect D5).
+
+    The ghost leg now asks :func:`raytrace.trace._library_trace_default`
+    for the route rather than naming one, so it tracks the library instead
+    of pinning this release's answer.  ``renormalize`` deliberately stays
+    at the private ``True``: the ghost loop has no exit pass to hoist a
+    single rescale to.
+
+    Three claims, each two-sided:
+
+    1. a spy on ``_surface_normal`` sees the SAME ``analytic_sphere``
+       values from a ghost retrace as from a public ``trace`` on the same
+       prescription -- and the set is non-empty, so "equal" is not two
+       empty sets;
+    2. at the refraction step the two are BIT-IDENTICAL, and the generic
+       route on the same bundle is NOT, so the identity is not vacuous;
+    3. the private defaults have not moved, which is what keeps the OTHER
+       direct caller (the finite-difference differential path) unchanged.
+
+    MEASURED 2026-09-20 (``validation/probe_c2_round2/r2_ghost_*.json``):
+    forcing the ghost leg back to ``'generic'`` moves the RMS spot radius
+    of three 2-bounce ghost paths of a spherical doublet by up to
+    9.66e-13 mm (Windows) / 5.40e-13 mm (WSL); transmittance, energy
+    fraction and ray counts do not move at all.
+    """
+    import warnings
+
+    from lumenairy.analysis.ghost import _path_from_pair, retrace_ghost_path
+    from lumenairy.io.prescriptions_builders import make_doublet
+    from lumenairy.raytrace import surfaces_from_prescription
+    from lumenairy.raytrace.trace import _library_trace_default
+
+    pres = make_doublet(0.0517, -0.0345, -0.1200, 0.0090, 0.0025,
+                        'N-BK7', 'N-SF5', 0.0250)
+    surfs = surfaces_from_prescription(pres)
+
+    # ---- 1. the spy: what route each path actually asks for -------------
+    seen = {'trace': set(), 'ghost': set()}
+    real = _isect._surface_normal
+
+    def _spy(tag):
+        def spy(x, y, surface, *, analytic_sphere=False):
+            seen[tag].add(bool(analytic_sphere))
+            return real(x, y, surface, analytic_sphere=analytic_sphere)
+        return spy
+
+    h = np.linspace(-0.008, 0.008, 33)
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        with _mock.patch.object(_isect, '_surface_normal', _spy('trace')):
+            trace(_make_bundle(h, 0.3 * h, np.zeros_like(h),
+                               np.zeros_like(h), WL), surfs, WL,
+                  output_filter='last')
+        with _mock.patch.object(_isect, '_surface_normal', _spy('ghost')):
+            retrace_ghost_path(pres, _path_from_pair(3, 0, 2), WL,
+                               semi_aperture=0.010, n_rays=64,
+                               image_plane_z=0.090)
+    assert seen['trace'], 'the trace spy saw no surface normal at all'
+    assert seen['ghost'], 'the ghost spy saw no surface normal at all'
+    assert seen['ghost'] == seen['trace'], (
+        f'the ghost leg asks for analytic_sphere={sorted(seen["ghost"])} '
+        f'where trace asks for {sorted(seen["trace"])}; one implementation '
+        f'is refracting off two different normals on the same sphere.')
+
+    # ---- 2. bit identity at the refraction step -------------------------
+    sph = Surface(radius=0.0517, conic=0.0, thickness=0.009,
+                  glass_before='air', glass_after='N-BK7',
+                  semi_diameter=0.0125)
+    assert _is_pure_spherical(sph)
+
+    def _refracted(route):
+        b = _make_bundle(h.copy(), 0.3 * h.copy(), np.zeros_like(h),
+                         np.zeros_like(h), WL)
+        _isect._refract(b, sph, 1.0, 1.5168, sphere_normal=route)
+        return b.L.tobytes() + b.M.tobytes() + b.N.tobytes()
+
+    ghost_route = _library_trace_default('sphere_normal')
+    trace_route = inspect.signature(trace).parameters['sphere_normal'].default
+    assert ghost_route == trace_route, (ghost_route, trace_route)
+    assert _refracted(ghost_route) == _refracted(trace_route), (
+        'the route the ghost leg asks for and the route trace defaults to '
+        'no longer produce the same bytes at the refraction step.')
+    assert _refracted(ghost_route) != _refracted('generic'), (
+        'the generic route produces the SAME bytes as the shipped default '
+        'on this fixture, so the identity above proves nothing -- pick a '
+        'fixture where the two routes differ.')
+
+    # ---- 3. the private defaults are unmoved ----------------------------
+    prm = inspect.signature(_isect._refract).parameters
+    assert prm['sphere_normal'].default == 'generic', (
+        'the PRIVATE default moved; that is the contract that keeps the '
+        'finite-difference differential path unchanged by construction.')
+    assert prm['renormalize'].default is True, prm['renormalize'].default
+    ghost_src = (pathlib.Path(la.__file__).parent / 'analysis'
+                 / 'ghost.py').read_text(encoding='cp1252')
+    assert 'renormalize' not in ghost_src.split(
+        'def retrace_ghost_path')[1][:6000], (
+        'the ghost leg now names renormalize.  VERIFY-WP-C2 D5 is explicit '
+        'that it must NOT: the loop has no exit pass to hoist a single '
+        'rescale to, so per-surface rescaling is the only setting under '
+        'which the bundle carries a unit direction at all.')
+
+
+# ===========================================================================
 # 7 -- the mutation matrix, stated
 # ===========================================================================
 
@@ -1132,6 +1245,7 @@ def test_c2_mutation_matrix_is_stated_and_each_arm_is_named():
     | the hoist starts accumulating with surfaces  | ``test_c2_the_exit_hoist_does_not_accumulate_with_surface_count`` |
     | an entry point that traces loses a keyword   | ``test_c2_every_entry_point_that_traces_carries_both_keywords`` |
     | a forwarded keyword defaults to today's value | ``test_c2_none_stamps_nothing_on_the_entry_points`` |
+    | the ghost leg drifts off trace's normal      | ``test_c2_the_ghost_path_asks_the_library_default_normal_route`` |
     """
     import sys
     mod = sys.modules[__name__]
@@ -1148,7 +1262,8 @@ def test_c2_mutation_matrix_is_stated_and_each_arm_is_named():
             'test_c2_history_bundles_are_not_unit_under_the_new_default',
             'test_c2_the_exit_hoist_does_not_accumulate_with_surface_count',
             'test_c2_every_entry_point_that_traces_carries_both_keywords',
-            'test_c2_none_stamps_nothing_on_the_entry_points'):
+            'test_c2_none_stamps_nothing_on_the_entry_points',
+            'test_c2_the_ghost_path_asks_the_library_default_normal_route'):
         assert callable(getattr(mod, name, None)), (
             f'{name} named in the mutation matrix no longer exists; '
             f'either restore it or update the table above.')
