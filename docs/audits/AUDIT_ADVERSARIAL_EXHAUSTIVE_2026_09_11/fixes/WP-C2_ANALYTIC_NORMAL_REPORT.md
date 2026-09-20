@@ -886,6 +886,121 @@ At the refraction step itself the route the ghost leg asks for and `trace`'s
 default are byte-identical, and the generic route on the same bundle is not --
 so the identity is not vacuous.
 
+## D4 -- and the 46 TRANSITIVE callers, each with its parent named
+
+The campaign rule does not ask for a keyword on a function that reaches a
+tracer indirectly; it asks that the way back be REACHABLE, and a transitive
+caller reaches it through the parent it calls.
+`validation/probe_c2_round2/r2_transitive_parents.py` names that parent and
+the chain for the verification's own list of 46, identically on both builds:
+**35 of 46 resolve to a parent that now carries both keywords**, in one to
+four hops.  A sample, and the shape of all of them:
+
+| transitive caller | chain to the way back |
+|---|---|
+| `apply_real_lens_universal`, `apply_real_lens_traced_multi`, `apply_real_lens_traced_segmented`, `prepare_real_lens_traced`, `propagate_through_system`, `propagate_traced_carrier_chain` | -> `apply_real_lens_traced` |
+| `apply_real_lens_traced_multibranch` | -> `_multibranch_render` -> `_trace_launch_grid` -> `trace` |
+| `apply_real_lens_traced_uniform` | -> `_trace_meridional_cusp` -> `trace` |
+| `apply_real_lens_auto`, `apply_real_lens_fga`, `apply_real_lens_fga_vector` | -> `_caustic_zone` / `_fga_through_lens` -> `ray_transfer_jacobian` |
+| `apply_real_lens_gbd`, `propagate_gbd_through_prescription`, `propagate_gbd_vector_through_prescription` | -> `apply_prescription_persurface_to_beamlets` -> `_reframe_beamlets_to_world_plane` -> `trace_world` |
+| `distortion_grid`, `distortion_vs_field`, `field_aberration_sweep`, `footprint_per_surface`, `relative_illumination`, `spot_diagram_vs_field` | -> `analysis.field._trace` -> `trace` |
+| `ray_fan_plot`, `ray_fan_plot_prescription` | -> `ray_fan_data` |
+| `field_grid_wfe` | -> `eval_image_plane_wfe` |
+| `aberration_summary`, `propagate_subaperture_asymptotic`, `propagate_huygens_fresnel_through_prescription` | -> `fit_canonical_polynomials` |
+| `propagate`, `apply_real_lens_maslov_vector` | -> `apply_real_lens_maslov` |
+| `monte_carlo_tolerancing`, `optimize_traced_geometry`, `make_lg_aberration_merit_jax` | -> the `*_jax` twins -> `trace_jax` (no switch by design) |
+
+**And the walk is module-scoped, which is what makes it a census rather than
+a guess.**  A call graph keyed by bare NAME is sound for the DIRECT census --
+the function itself names the tracer -- but not for a transitive walk:
+`solve`, `fn`, `_run`, `_apply`, `_trace` and `propagate` are each defined
+many times across the package, and a name-keyed closure manufactures chains
+that do not exist.  Here a call resolves to a definition in the SAME MODULE
+first, then to a globally unique one, and an ambiguous name is refused.
+
+**The 11 that do not resolve are a finding about the census, not about the
+library.**  Eight of them -- `pmm_1d`, `pmm_jones_1d` and its six siblings --
+contain NO tracer reference in their own bodies at all: they are grating
+solvers, and they entered the verification's transitive list through exactly
+the name collision above (somebody else's `solve`).  The remaining three
+(`aberration_tensor`, `design_optimize_multi_objective`,
+`prescription_subdomain`) reach a tracer through names this walk refuses to
+resolve; their JSON entry lists what they actually call, so the next reader
+starts from evidence rather than from a count.
+
+## The recorded items
+
+* **`.test_durations`** (D10): all **41** ids of
+  `tests/unit/test_c2_analytic_normal_default.py` (WP-C2's 19 plus round 2's
+  22) spliced, the **17** of `test_verify_c2_analytic_normal.py` refreshed,
+  and the five ids this round made materially slower re-measured -- the two
+  `ModalAsymptotic` arms 3.4 / 4.4 s -> 6.4 / 8.6 s (70 extra propagations for
+  the Jacobian), the two d3 arms 43.8 / 10.2 s -> 93.6 / 33.0 s (the second
+  perturbation direction), and the `w6_a2` arm.  Measured serially with the
+  three BLAS variables on the command line through `pytest-split
+  --store-durations`.  16 613 -> **16 654** entries, 41 added and 22 updated,
+  re-parsed as JSON, the file's existing (unsorted) key order preserved.
+  `test_audit2609_a15a_durations_staleness.py`: 4 passed.
+* **History fingerprints**: re-recorded with a reason for the nine modules
+  this round touched -- `raytrace.trace`, `raytrace.ray_fan`,
+  `raytrace.differential`, `analysis.aberration`, `analysis.ghost`,
+  `analysis.image_plane_wfe`, `propagators.asymptotic_canonical_fit`,
+  `elements._lens_traced` and `elements.lenses_maslov`.
+  `record_history_fingerprints.py --check`: **OK: every history document
+  matches its module.**
+* **Citations**: re-anchored after the source edits
+  (`--base f4f18851 --block "[5.47.0]"`), 15 re-anchored across the round;
+  `--check` now reports **0** and prints no `EDITED_IN_PLACE` refusal.  The
+  four map entries were verified to FIRE against the real base -- their
+  digests match the live `trace.py:60/61` and `world_trace.py:82/83` -- so
+  the D7 guard is live rather than silently dead.
+* **No forward version token** in `lumenairy/`: the first draft of the D11
+  rewrite named 5.49.0 in `_library_trace_default`'s docstring and
+  `test_public_api.py::test_no_shipped_source_claims_a_version_the_package_has_not_reached`
+  caught it; the sentence now names WP-C2 and lets the CHANGELOG carry the
+  number.
+* **The JAX tracer was not touched.**  `lumenairy/raytrace/jax_trace.py` is
+  byte-identical to `49ddf4bd` on this branch, which is the D6 decision
+  expressed in the diff.
+
+## The runs
+
+All with `OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1` on the
+command line and `-q -p no:randomly --capture=sys -rf`.
+
+| what | Windows py3.14 | WSL py3.12 |
+|---|---|---|
+| the 30-file gate -- both C2 files, the B9 family, `test_audit_propagation.py`, `test_niche_audit_w6_asymptotic.py`, `test_niche_d3_guards.py`, the ghost consumers, nine raytrace-touching files, and the census / walker / dispatcher-pin / public-API / doc-consistency / history-relocation / except-budget / durations gates | **1558 passed, 1 skipped, 0 failed** in 11:16 | a 15-file subset: **1154 passed, 1 skipped, 3 failed** in 3:38, all three pre-existing (below) |
+| `tests/unit/test_c2_analytic_normal_default.py` | **41 passed** | in sweep |
+| `tests/unit/test_verify_c2_analytic_normal.py` | **17 passed** | in sweep |
+| `tests/unit/test_niche_d3_guards.py` + `test_niche_audit_w6_asymptotic.py` | 41 + 53 passed | **94 passed** in 11:02 |
+| `tests/unit/test_audit_propagation.py` | 104 passed | **104 passed** |
+| the D4 mutant -- a fresh `git archive` of this tree with `sphere_normal` dropped from `ray_fan_data`'s signature only | **3 failed** (both census arms + VERIFY-WP-C2's) | **3 failed** |
+| the D11 fail-before -- this round's test file on a `git archive eadc67ba` tree | **1 failed**, naming 4 of 4 stale sentences | **1 failed** |
+| the D12 fail-before -- the same file on the same tree | **1 failed**, naming the missing WSL count | **1 failed** |
+| WSL `ruff check lumenairy/ tests/ scripts/` | -- | **All checks passed!** |
+| `python -m mypy` (no args) | **Success: no issues found in 33 source files** | -- |
+| `record_history_fingerprints.py --check` | **OK** | -- |
+| `reanchor_citations.py --check` | **0 re-anchored, no refusals** | -- |
+
+**The three WSL reds are pre-existing and none is a finding.**
+`test_public_api.py::test_installed_metadata_version_matches_source_version`
+is the ninth pre-existing red the WP-C2 report classifies (a stale editable
+install on that mount), and the two
+`test_v5_3_2_walker_source_line_citation.py` ids are the WSL-against-a-Windows-worktree
+condition their own docstring documents: `git rev-parse --git-dir` fails there
+because the worktree's `.git` file holds a Windows path.  All three were
+re-run against this round's own `git archive 49ddf4bd` under WSL and fail
+there identically.
+
+The sweep ran on the tree frozen at `a123f08f`.  Four commits landed after it
+started and NONE touches library code: this addendum and the probe README
+(documents no test in the sweep reads); one added assertion in
+`test_c2_analytic_normal_default.py`, re-run on its own file at **41 passed**;
+and one CHANGELOG sentence retired (a cProfile share this round did not
+re-measure), with the two ids that READ the CHANGELOG -- the D12 counts arm
+and the doc-consistency gate -- re-run at **9 passed**.
+
 ## What could not be measured
 
 1. **The 368-file blast radius was not re-run.**  It cost the WP-C2 agent

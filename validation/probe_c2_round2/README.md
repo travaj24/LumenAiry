@@ -22,6 +22,7 @@ outputs.
 | `r2_d3_floor_directions.py` | D8 | the d3 arms' one-ULP floor over four perturbation directions | spread **3.22x / 4.79x** (arm 2) and **2.07x / 26.99x** (arm 1); the same degree twice reads exactly **0.0** |
 | `r2_rim_clamp.py` | D9 | whether the rim band exists on the meridian, and what a ball lens loses to the clamp | both gates bisect to the SAME float `0.9999499987499374` at all eight radii; **3024 of 60 000** rim-packed rays (5.04 %) die `RAY_NAN` on BOTH routes |
 | `r2_jax_clamp.py` | D6 | how far apart the two backends' sphere-domain gates are | 1962 of 40 000 rays past the clamp: CPU keeps **0** under all four settings, JAX keeps **1962** |
+| `r2_transitive_parents.py` | D4 | which PARENT each of the 46 transitive callers reaches, on a MODULE-SCOPED call graph | **35 of 46** resolve to a parent that carries both keywords, in one to four hops, identically on both builds; 8 of the 11 that do not are PMM grating functions whose bodies name no tracer at all |
 
 Two probes already in the tree were RE-RUN rather than replaced, because the
 defect was in them rather than in what they measured:
