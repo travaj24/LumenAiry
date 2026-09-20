@@ -575,7 +575,8 @@ def angular_spectrum_propagate_mft(
     return E_out
 
 
-def _resample_field_chirpz(E_in, dx_in, dx_out, Ny_out, Nx_out):
+def _resample_field_chirpz(E_in, dx_in, dx_out, Ny_out, Nx_out, *,
+                           mft_method=None):
     """Band-limited (chirp-Z) pitch change -- the ``method='chirpz'`` leg
     of :func:`resample_field` (audit K6).
 
@@ -601,8 +602,12 @@ def _resample_field_chirpz(E_in, dx_in, dx_out, Ny_out, Nx_out):
 
     Returns the field in ``complex128``, matching the spline leg (whose
     ``map_coordinates`` works in float64 and promotes).
+
+    ``mft_method`` names the route through that primitive's own transform
+    (WP-C4 round 2, V-C4-D2): ``None`` stamps nothing, ``'bluestein'``
+    reproduces the pre-5.49.0 dispatch for ONE call.
     """
-    from ._bluestein import _bluestein_centred_2d
+    from ._bluestein import _bluestein_centred_2d, _mft_route_kwargs
 
     E = np.asarray(E_in).astype(np.complex128, copy=False)
     Ny_in, Nx_in = E.shape
@@ -625,6 +630,7 @@ def _resample_field_chirpz(E_in, dx_in, dx_out, Ny_out, Nx_out):
         k_centre_out_y=Ny_out / 2.0 - off_in_y / float(dx_out),
         sign=+1, xp=np, fft2=_fft2, ifft2=_ifft2,
         target_cdtype=cdt,
+        **_mft_route_kwargs(mft_method),
     )
     return (F * cdt.type(1.0 / (Nx_in * Ny_in))).astype(cdt, copy=False)
 
@@ -637,6 +643,7 @@ def resample_field(
     order: int = 3,
     *,
     method: str = 'spline',
+    mft_method: Optional[str] = None,
 ) -> Tuple[np.ndarray, float]:
     """
     Resample a complex optical field from one grid spacing to another.
@@ -731,6 +738,18 @@ def resample_field(
           not, so a down-sample of a field with real near-Nyquist
           content folds MORE power with ``'chirpz'``.  Low-pass first if
           that matters.
+
+    mft_method : {None, 'auto', 'bluestein', 'separable', 'direct'}, \
+keyword-only, default ``None``
+        Which route through the chirp-Z leg's own transform, forwarded to
+        :func:`~lumenairy.propagators._bluestein._bluestein_centred_2d` as its
+        ``method=``.  ``method=`` above names the RESAMPLER and is therefore
+        not available for this; ``mft_method`` is the one-call way back to the
+        pre-5.49.0 dispatch, which is ``mft_method='bluestein'`` here (this leg
+        does not pass ``separable``, so the previous route was the 2-D chirp-Z
+        arm).  ``None`` (the default) names nothing and leaves the primitive's
+        own default in force.  Ignored by ``method='spline'``, which reaches
+        no transform.  See the 5.49.0 section of ``Migration-Guide.md``.
 
     Returns
     -------
@@ -869,7 +888,8 @@ def resample_field(
                         'step inverts the input spectrum)',
             N_out_y=Ny_out)
         return _resample_field_chirpz(E_in, dx_in, dx_out,
-                                      Ny_out, Nx_out), dx_out
+                                      Ny_out, Nx_out,
+                                      mft_method=mft_method), dx_out
 
     from scipy.ndimage import map_coordinates
 

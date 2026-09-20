@@ -1243,5 +1243,30 @@ def _bluestein_centred_2d(
     return F
 
 
+def _mft_route_kwargs(mft_method) -> dict:
+    """``{}`` when the caller named no MFT route, ``{'method': ...}`` when
+    they did -- the ONE place the ``mft_method=`` pass-through is turned into
+    a call.
+
+    WHY A HELPER AND NOT ``method=mft_method or 'auto'`` AT EACH SITE.  Seven
+    public entry points (``compute_psf``, ``resample_field``, ``propagate``'s
+    asm / fresnel / fraunhofer legs, both carrier focus readouts,
+    ``re_reference`` and ``propagate_traced_carrier_chain``) already spend the
+    name ``method`` on something else -- a sampler, a resampler, a propagator
+    family -- so each of them exposes ``mft_method=`` instead and forwards it
+    here.  ``None`` is the "the caller named nothing" sentinel and it STAMPS
+    NOTHING: the keyword is left off the call entirely, so whatever the
+    primitive's own default is at the time governs, and a future change to
+    that default reaches these callers without eight edits.  Passing
+    ``mft_method='auto'`` explicitly is NOT the same statement -- it pins the
+    name -- even though today the two produce the same bytes.
+
+    Gated by ``tests/unit/test_c4_round2_mft_method.py::
+    test_mft_method_none_stamps_nothing_on_the_primitive``.
+    """
+    return {} if mft_method is None else {'method': mft_method}
+
+
 __all__ = ['_bluestein_2d', '_bluestein_centred_2d',
-           '_direct_matrix_2d', '_auto_selects_direct']
+           '_direct_matrix_2d', '_auto_selects_direct',
+           '_mft_route_kwargs']
