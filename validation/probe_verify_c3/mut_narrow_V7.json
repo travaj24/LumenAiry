@@ -1,0 +1,9 @@
+{
+ "V7_stop_plane_keys_refused_again": {
+  "failed": [
+   "tests/unit/test_audit2609_b4_collins_transport.py::TestVocabulary::test_the_stop_plane_readout_keys_SELECT_the_sziklas_readout"
+  ],
+  "tail": "1 failed, 12 passed in 7.40s",
+  "rc": 1
+ }
+}

@@ -32,9 +32,20 @@ was left in the opposite state from the code that implements it.
 | **D5** | the CHANGELOG / Migration-Guide claim that **no public call that worked on 5.48.1 raises on 5.49.0** except a JAX one | MEASURED false on both builds: **11 of 12** ordinary chain configurations that return at 49ddf4bd raise `RuntimeError` on the flipped default.  A caller upgrading on the strength of that sentence gets a crash. |
 | **D6** | the leg with a **resolved FLAT reference** has no fallback and runs an aliased chirp-Z on the new default, **far from any focus** | a converging grid ladder shows the default DIVERGING (3.0x, 3.2x, 3.2x in r2m at N = 256/512/1024) where `'sziklas'` converges.  This is a correctness defect, not a documentation one. |
 
+| **D13** | the C3 x C5 contradiction, and the red that exists only in the merge | `CHANGELOG.md` and `Migration-Guide.md` promise `_GAP_KERNEL_ACCURACY_TAU` "ships OFF and **stays off**" while the sibling 5.49.0 branch ships it at `1e-4`; `carrier.py` merges with ZERO conflicts so nothing catches it; and a real 3-way merge turns `test_wave5_h2_near_focus_table.py` from green into **1 failed, 24 passed**.  Neither branch can fix that alone. |
+
 Four more should close with them (**D1**, **D2**, **D3**, **D4**) because they
 are cheap and each one misdirects a reader of the shipped source.  The
 remaining items are recorded for the follow-up.
+
+**What this verification is NOT saying.**  The flip is not wrong and should
+not be reverted.  Over 192 ordinary chains **61.5 % are bit-identical to
+49ddf4bd** — the complementary selection doing exactly what the package says —
+the three fallback fixes are real and reproduce to every digit, the way back
+is byte-exact on 103 of 103 keys on both builds, and this is the first
+work package in the C-series where **no public entry point is missing its
+one-keyword way back**.  The blockers are two claims and one hole, not the
+design.
 
 The recommendation is **not** "revert the flip".  It is: correct the two
 claims, close the flat-reference hole, and re-run the blast set.  The
@@ -55,11 +66,11 @@ selection mechanism itself survived every attack this package made on it.
 | 7 | the stop-plane keys SELECT, two-sided | **CONFIRMED** | Base refuses, branch does not.  On a K1 <= 1 fixture (K1 = 0.9672040627727245) the `'collins'` baseline really takes the one-step route and differs from `'sziklas'`; naming `standoff` flips it back to **bit-identical to `'sziklas'` with the same key**, `reason='stop_plane_key'`, `readout_route_k1 is None`, and K1 is genuinely not computed (a call counter reads 1 on every no-key run and **0** on every key run).  The stop-plane key correctly WINS over the K1 test.  Note the branch's own b4 test asserts the field arm at `final_distance=8e-3`, where K1 = 82.36 and both routes coincide, so that one arm is vacuous; its route/reason/`k1 is None` arms are not. |
 | 8 | the CuPy arm: one implementation, three censuses, <= 0.71 ULP, the broken-cuFFT decision | **PARTIAL** | Every NUMBER reproduces and survives harder stress than the package applied (positive R, an offset, 2.5e5 rad phase, a 0.31/0.22 tilt; `_exact_dispersion_phase` bitwise 0.0 on all six cells).  ONE implementation CONFIRMED (no `_cupy`/`_jax` twin of any Collins helper).  The substituted-module test CONFIRMED, including on a build with no CuPy, with no leakage.  **Two structural claims REFUTED**: the public CHAIN with a device array dies with **exactly the implicit-conversion `TypeError`** the report says must not happen (`_chain_entry_congruence_stats:6377`), and the host-demotion census **misses 9 of 13** injected demotions, 4 of them real device breaks.  The device run is confirmed unmeasurable here for the stated reason. |
 | 9 | the design-121 gate; K1 = 0.99958 sits 4e-4 below the bar | **CONFIRMED on the numbers, FRAMING REFUTED** | All six rows reproduce to every printed digit on Windows and N = 512 / 1024 to every digit on WSL including both K1 values; zero Kelly warnings.  Measured K1 spread over **13 build settings** (2 builds x 6 OpenBLAS coretypes x 3 thread counts) is **3.885780586188048e-15 = 17.5 ULP of 1**, ratio 1.08e11 to the margin, and the discrete containment index `j = 504` never moved — so **the route is stable**.  But the margin is the wrong number: see §2. |
-| 10 | 21 Collins calls, 0 Kelly warnings after the resolution, 5 before | see §7 | |
-| 11 | C3 x C5: `_GAP_KERNEL_ACCURACY_TAU` "ships OFF and stays off" | see §5 | |
-| 12 | the restatements are decisions, not loosenings | see §7 | |
-| 13 | the 26 new tests and their mutation matrix | see §7 | |
-| 14 | four pre-existing WSL reds | **CONFIRMED** | The census/walker/dispatcher/public-API sweep reads **647 passed, 14 skipped, 0 failed** on Windows and **4 failed, 643 passed, 14 skipped** on WSL, and the four are exactly the four named. |
+| 10 | 21 Collins calls, 0 Kelly warnings after the resolution, 5 before | **CONFIRMED for its own fixtures, with an arithmetic correction, and it does NOT generalise** | Re-run on three pinned trees, both builds: base **21 calls, 5 with Kelly, 8 WARNINGS**; branch and merged **21 / 0 / 0**; the Sziklas side 18 calls / 0 on every tree.  So §6's "the same 21 calls fired FIVE warnings" should read "**five CALLS fired EIGHT warnings**" — its own enumeration (1+4+1+1+1) already sums to 8.  The guard is confirmed not dead (a caller-NAMED `dx_out` or `carrier_out` still warns; an unnamed lattice does not).  **But the zero does not generalise**: over 192 ordinary chains the branch emits **74 warnings across 51 cells** where the base emits 0 — see §4/D5. |
+| 11 | C3 x C5: `_GAP_KERNEL_ACCURACY_TAU` "ships OFF and stays off" | **REFUTED**, plus a new merge-only red | **§5** — the sibling branch ships it at `1e-4`; `carrier.py` merges with zero conflicts so nothing flags it; and a real 3-way merge turns `test_wave5_h2_near_focus_table.py` from 24/25 passed into **1 failed, 24 passed** |
+| 12 | the restatements are decisions, not loosenings | **CONFIRMED** (13 sampled + 5 read here) | **No sampled restatement is a loosened bar.**  Each either names a precondition the test already depended on, replaces a retired pin with its successor, or asserts strictly more.  Three corrections: the report calls `d3::_mux_chain_field` "a test silently becoming VACUOUS" when it FAILS loudly (`moved = 0.0` against a bar of `> 1.0` — measured); one `b4` arm is vacuous as written (§7.1b); and `_SZIKLAS_STANDOFF`'s docstring mis-describes three of its nine uses. |
+| 13 | the 26 new tests and their mutation matrix | **PARTIAL — one real gap, closed here** | **26 passed** on both builds (23.2 s WIN, 30.9 s WSL) and **51 passed** with C5's suite on a merged tree.  Of 13 mutations, four are missed by `test_c3_collins_default.py` and **one — moving the routing bar from `<= 1.0` to `<= 2.0` — is missed by the whole suite**, because every shipped assertion on `readout_route_k1` reads `is None` or the 82.36 fixture.  All five are caught by this verification's committed tests (§7.2b). |
+| 14 | four pre-existing WSL reds | **PARTIAL** | The sweep reads **647 passed, 14 skipped, 0 failed** on Windows and **4 failed, 643 passed, 14 skipped** on WSL, and the four are exactly the four named.  Run from the base ARCHIVE on the same WSL interpreter, **three of the four are red there too**; the fourth (`test_v16_synthetic_fabrication_is_caught`) does not fail — it **SKIPS**, with "git not available; V16.4 needs a real diff range".  An extracted archive is not a git repo, so §4.4's "the test's own message … says it is red on the base tree too" is not verifiable this way; it needs a base-tree WORKTREE.  Not a code defect — a wording one. |
 
 ---
 
@@ -446,6 +457,23 @@ NEW:
           stage with K1 not computed at all.
 ```
 
+**Two more of the same, and these the branch WROTE rather than inherited:**
+`tests/unit/test_niche_d2_chain_multi.py:136-138` ("…and **it refuses the
+`standoff` key by name** rather than accepting and ignoring it") and
+`:171-172` ("…there is no leg to calibrate and the **`standoff` key is refused
+by name**").  Both are new on this branch, both describe the contract this
+branch replaced, and both need the same rewrite.  A grep of the whole tree for
+`refused, not ignored` finds only `carrier.py:10344`, this verification's own
+test, and an unrelated `validation/pipeline/spec.py:15`.
+
+Also in the same file: `_SZIKLAS_STANDOFF`'s docstring claims "Every fixture
+in this file that sizes a `standoff` … the ones that are NOT about a standoff
+are left on the library's default", but **three of its nine uses pass no
+`standoff` at all** (`test_default_refuses_the_periodic_replica_regime`,
+`…_auto_window_is_independent_of_congruence_order`,
+`…_auto_tile_equals_the_same_tile_asked_for_explicitly`), and `_leg_for_window`
+uses the bare literal `'sziklas'` instead of the constant.
+
 ### D2 — documentation. `_collins_readout_k1`'s docstring carries two mutually inconsistent MEASURED readings for one fixture.
 
 `carrier.py:2786` says "exit pitch 76.5 um, exit support **5.76 mm**,
@@ -458,8 +486,11 @@ builds, on the array the chain itself hands the condition): exit pitch
 **76.54441837133348 um**, exit support radius **6.7359088166773455 mm**, and
 K1 = **82.36047 / 41.44910 / 21.42248 / 10.94410** at N = 256/512/1024/2048.
 So the second triple is right to its printed precision and the first pair is
-not.  `K1 = 56.0` is the reading the fixture's INPUT beam radius (4.55 mm)
-would give, not its exit support.
+not.  (Solving the K1 formula backwards, `K1 = 56.0` on this leg corresponds
+to a support radius of **4.554 mm** — near the fixture's INPUT beam radius of
+4.5 mm rather than its measured exit support of 6.736 mm.  That is an
+inference, not a measurement, and is offered only to say where the number is
+likely to have come from.)
 
 Requested edit at `carrier.py:2786-2788`:
 
@@ -744,7 +775,107 @@ the shipped `None` nothing below is evaluated and the leg is 5.47.0 to the
 byte", beside an assignment of `1e-4`.  That is C5's to fix, but it is in the
 same file and the same release.
 
+### `carrier.py` MERGES CLEANLY, so nothing flags the contradiction
+
+`git merge-file` (and `git merge-tree`) over base 49ddf4bd:
+**`lumenairy/propagators/carrier.py` merges with ZERO conflicts**, and the
+merged line reads `_GAP_KERNEL_ACCURACY_TAU = 1e-4` beside
+`transport: str = 'collins'` on all three signatures.  The documents do
+conflict (`CHANGELOG.md` 10 hunks, `Migration-Guide.md` 2,
+`docs/history/carrier.md` 2, one real test conflict in
+`test_fix_v1_v8_readout_guard_and_standoff.py`) — and C3's "ships OFF and
+stays off" paragraph sits **inside** the big first CHANGELOG hunk, so a
+resolver who takes both sides ships a release note saying the constant is off
+while the source has it on.
+
+**The ledger itself was superseded and C3 never synced it.**
+`MAINTAINER_DECISIONS_2026_09.md` has **no section 0** in the C3 or C5
+worktrees (identical md5 across 12 trees); section 0 exists only in
+`C:/tmp/lum_wave5`, and it records "**Decided 2026-09-20 (later the same
+day), also shipping in 5.49.0:** the near-focus kernel switch ON (0.1)".
+C3's copy still carries only §1.5/§4.3, whose recommendation was "shipped
+behind a switch defaulting off" — so C3 cites, in a caller-facing document, a
+ledger revision the maintainer had already replaced.
+
+### A RED NEITHER BRANCH CAN SEE — measured on a real 3-way merge
+
+`tests/unit/test_wave5_h2_near_focus_table.py::test_the_exact_kernels_departure_on_a_collimated_leg_is_the_quartic`,
+**byte-identical on all four trees** (md5
+`6bd24719519f40a369be7511153e4b13`):
+
+| tree | tail |
+|---|---|
+| base 49ddf4bd, file alone | `17 passed in 19.03s` |
+| C3 alone @ 4d87ff48 | `24 passed in 16.81s` |
+| C5 alone @ d8de383c | `25 passed in 20.58s` |
+| **MERGED C3 + C5** | **`1 failed, 24 passed in 18.78s`** |
+
+```
+AssertionError: the exact kernel's departure from the paraxial oracle is
+6.2873e-15, not the predicted quartic 1.5000e-04 (ratio 0.0000)
+assert 0.5 < (6.2873075655336215e-15 / 0.00014999999999999996)
+```
+
+The id calls `propagate_carrier_referenced(env, inf, z, LAM, dx,
+gap_kernel='auto')` with no `transport=`.  Its predicted quartic
+**1.5e-4 > tau 1e-4**, so with C3's default flip the call reaches
+`_collins_transport`, where C5's armed rule drops `'auto'` to `'fresnel'`.
+Measured remedies on the merged tree:
+
+| spelling | rel | ratio | |
+|---|---|---|---|
+| as shipped (no transport, `'auto'`) | 6.287308e-15 | 0.0000 | **FAIL** |
+| `transport='sziklas'`, `'auto'` | 1.838036e-04 | 1.2254 | PASS |
+| default transport, `gap_kernel='exact'` | 1.838036e-04 | 1.2254 | PASS |
+| `transport='collins'`, `'auto'` | 6.287308e-15 | 0.0000 | FAIL |
+
+**Neither branch can be asked to fix this alone** — it exists only in the
+merge.  Both new suites are otherwise green together on the merged tree
+(`test_c3_collins_default.py` + `test_c5_three_defaults.py` → **51 passed** in
+2:34).
+
+### AND "naming `'sziklas'` is the pre-flip arithmetic in every bit" becomes FALSE in 5.49.0
+
+Not because of tau — because of **C5 item 3**, which moves `replica_fill`'s
+default from `'repeat'` to `'zero'`, and that hits the **Sziklas** side too.
+Measured on the d2 relay (window 2867.20 um against a Sziklas period of
+117.227 um):
+
+| tree | `transport='sziklas'` readout | `transport='collins'` |
+|---|---|---|
+| C3 | `ab9b13af5cae16e2` | `f4a0e81cd35bf09f` |
+| MERGED | **`6793caeba8516588`** | **`b1fe5d207254470a`** |
+| MERGED + explicit `replica_fill='repeat'` | `ab9b13af5cae16e2` | `f4a0e81cd35bf09f` |
+| MERGED + tau forced `None` + `replica_fill='repeat'` | `ab9b13af5cae16e2` | `f4a0e81cd35bf09f` |
+
+100 % attributable to `replica_fill`.  C3's archive-to-archive 42/42 (and this
+verification's 103/103) are correct **for C3 alone**; it is the
+RELEASE-LEVEL sentence that breaks, in four places:
+`carrier.py:1802` and `:10327` ("returns the arithmetic of the releases before
+the default moved, **in every bit**"), `CHANGELOG.md:232-235` ("**bit for
+bit**") and `Migration-Guide.md:1831-1834` ("**bit-identical**").  Scope: only
+readouts whose window exceeds one period AND that waive `on_replica` (the
+shipped `'error'` refuses first).
+
+### The interaction is NOT a guard bypass — a negative result worth recording
+
+The obvious hypothesis is that C3's transfer-function fallback lets a leg skip
+C5's tau guard.  **It does not.**  A 160-leg sweep (4 grid families x 8
+carrier radii from −100 to −0.5 mm x 5 distances-to-focus from 1e-7 to 1e-3 m)
+found 140 chirp-Z, 16 transfer-function, **57 legs over tau, and all 57 reach
+the tau condition — 0 bypassed**.  The mechanism is that the two are
+anti-correlated: the fallback fires on SHORT `|z_eff|` (large K3) and tau
+fires on LARGE `|z_eff|`.
+
 ### Requested edits
+
+0. **Fix the merge red** in whichever branch merges second: add
+   `gap_kernel='exact'` (which tau never overrides) or `transport='sziklas'`
+   to the one call at `tests/unit/test_wave5_h2_near_focus_table.py:~200`, and
+   say in its docstring that `'auto'` no longer resolves to the exact kernel
+   there because the predicted quartic 1.5e-4 exceeds the shipped `tau = 1e-4`.
+   **And qualify the four "in every bit" statements** above with "except for
+   `replica_fill`, whose default also moves in 5.49.0 (WP-C5 item 3)".
 
 1. **`CHANGELOG.md:252` and `Migration-Guide.md:1899`** — delete "**and stays
    off**" and the "(ledger 1.5, resolved by 4.3)" attribution, and replace the
@@ -835,6 +966,27 @@ branch and the branch did not touch that text.  The bar is `1.0`, 22x inside,
 so nothing is fragile; but the restatement was an opportunity to re-measure it
 and did not.
 
+### 7.1b The rest of the restatement sample
+
+Each read against its own diff, and classified by whether the CLAIM changed or
+only the precondition was named.
+
+| restatement | old claim → new claim | class |
+|---|---|---|
+| `d3::_linearity_error` (4 ids) | unchanged (the traced entrance→exit map is non-linear on a multi-valued input); `transport='sziklas'` NAMED | **DECISION** — the pre-existing docstring already required "all five runs land on the same lattice", which IS the co-moving pitch |
+| `d3::_mux_chain_field` (1 id) | unchanged; transport NAMED | **DECISION** — §7.1, the vacuity reproduced exactly |
+| `exact_gap_kernel::_one_and_two` (8 ids) | unchanged (a split composes exactly); transport NAMED | **DECISION** — "the split is inert" is a statement about the transport that SPLITS; the Collins quadrature does not split legs at all |
+| `exact_gap_kernel::test_a_collimated_leg_honours_the_gap_kernel` | unchanged; transport NAMED | **DECISION** — `R = ±inf` is a BRANCH of that entry point and `ref` is that branch's own `_exact_envelope_tf_step`, compared bitwise |
+| `exact_gap_kernel::test_an_astigmatic_carrier_refuses_the_exact_kernel…` | one refusal → **BOTH** refusals, with the two reasons kept apart | **STRENGTHENED** — it now asserts strictly more than before |
+| `b4::TestVocabulary::…_SELECT_the_sziklas_readout` | the contract itself changed (refuse → select) | **DECISION**, but one of its arms is **VACUOUS**: it runs only at `final_distance = 8e-3` where K1 = 82.36, so the two routes coincide and its `array_equal` arm cannot fail.  Its route / reason / `k1 is None` arms are sound.  A non-vacuous field arm needs a K1 ≤ 1 fixture (one is measured in §1 claim 7 at K1 = 0.9672040627727245) |
+| `b4::TestDefaultIsByteIdentical::…` (the four classes) | "naming `'sziklas'` changes nothing" → "naming `'collins'` changes nothing" + the archive proof | **DECISION** — the pin being retired is replaced, not dropped |
+| `d2` `_SZIKLAS_STANDOFF` + the six `standoff=` fixtures | unchanged; the constant is named ONCE with its reason | **DECISION** — the calibration measures "period per metre of fine-zoom leg", which exists only on that readout |
+
+**Nothing in the sample is a loosened bar.**  Every one either names a
+precondition the test already depended on, or replaces a retired pin with its
+successor, or asserts more than before.  The one thing to fix is the vacuous
+arm above, which is a gap rather than a loosening.
+
 ### 7.2 Test runs — every tail grepped
 
 | run | build | result |
@@ -846,8 +998,37 @@ and did not.
 | the census / walker / dispatcher-pin / public-API / doc-consistency sweep, plus `test_audit_except_budget.py` and `test_ci_kernel_consistency.py` | WIN-py3.14 | **647 passed, 14 skipped** in 3:07 |
 | the same | WSL-py3.12 | **4 failed, 643 passed, 14 skipped** in 2:39 — the four are exactly §4.4's pre-existing WSL reds |
 | `tests/unit/test_audit2609_a15a_durations_staleness.py` | WIN-py3.14 | **4 passed** in 1:40 |
-| the 54-file carrier-touching blast set + both C3 files | WIN-py3.14 | *(see below)* |
-| the same, `b4` excluded and run per class | WSL-py3.12 | *(see below)* |
+| `test_niche_exact_gap_kernel.py` + `test_wave5_h2_near_focus_table.py` + `test_niche_c3_gap_paraxial_guard.py` | WIN-py3.14 | **158 passed, 1 skipped** in 1:37 |
+| the 54-file carrier-touching blast set + both C3 files, **1876 ids** | WIN-py3.14 | **1872 passed, 4 skipped, 0 failed** in **1:16:45** |
+| the same, `b4` excluded and run per class | WSL-py3.12 | see §7.5 |
+
+The Windows blast set is **green end to end** — cleaner than the package's own
+run, which carried one failure it correctly diagnosed as stale.
+
+### 7.2b The mutation matrix — what this verification's own tests catch
+
+A sibling measurement over 13 mutations found four that **nothing in the
+shipped suite catches inside `test_c3_collins_default.py`**, one of which
+(moving the routing bar itself) nothing in the wider suite catches either.
+Every one of those is caught by `tests/unit/test_verify_c3_collins_default.py`
+as committed.  Each mutation was applied to a private copy of the branch tree
+(`/c/tmp/vc3_mutX = git archive HEAD` plus the one edit), never to the
+worktree:
+
+| mutation | shipped `test_c3_collins_default.py` | **this verification's file** |
+|---|---|---|
+| **V1** the readout bar `<= 1.0` → `<= 2.0` | **26 passed — MISSED**, and missed by the wider suite too | **1 failed** — `…k1_fallback_is_the_sziklas_readout_to_the_bit` (its fixture reads K1 = 1.7342235907130157, which straddles the bar) |
+| **V2** the reason string always `'representable'` | 1 failed | **4 failed** |
+| **V3** the fallback calls `_carrier_step_fast` again | **26 passed — MISSED** (caught only in `b4`) | **3 failed** |
+| **V6** the three route keys published on `'sziklas'` too | 1 failed | **1 failed** — `…three_route_keys_are_absent_on_the_sziklas_spelling` |
+| **V7** the stop-plane keys refused again | **26 passed — MISSED** (caught only in `b4`) | **1 failed** — `…stop_plane_key_selects_and_k1_is_not_even_computed` |
+
+So the gap the sibling measurement filed as **defect V1** is closed by the
+committed tests, and no separate library or test edit is needed for it.  The
+fixture that closes it is the one thing the shipped suite never had: a readout
+K1 **inside (1, 2]**.  Every shipped assertion on `readout_route_k1` reads
+either `is None` or the 82.36 fixture, so a bar moved anywhere between 1 and
+82 is invisible to them.
 
 ### 7.3 Gates
 
