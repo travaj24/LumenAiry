@@ -777,13 +777,21 @@ def test_neither_guard_moves_one_byte_of_an_air_terminated_field():
     round-2 addendum.  Run at a PINNED memory budget, both the environment
     ceiling and the keyword (D-6), because a GBD digest depends on it.
 
-    Two-sided: the guard-deleted build must still be a DIFFERENT function
-    object, and it must SERVE the immersed fixture -- otherwise the mutation
-    did nothing and the identity is vacuous.
+    Two-sided, and the second half is the one that matters: the mutation must
+    reach the SAME code path ``_gbd_field`` uses.  ``apply_real_lens_gbd``
+    calls the beamlet function through ``elements.lenses_gbd``'s own
+    module-level import, so a mutation that rebound only
+    ``propagators.gbd``'s attribute would leave the public entry running the
+    ORIGINAL function -- and the byte identity below would be a tautology.
+    The id therefore asserts, inside the mutated block, that the PUBLIC entry
+    SERVES a fixture the guarded build refuses.
     """
     fixtures = {'conic_last': _presc('air'),
                 'flat_last': _flat_last_presc('air')}
     shipped = {k: _gbd_field(p, 2.0e-3) for k, p in fixtures.items()}
+    immersed = _presc('R2B-T172')
+    with pytest.raises(NotImplementedError):
+        _gbd_field(immersed, 2.0e-3)          # premise: guarded today
     orig_fn = getattr(G, _FN)
     with _GuardDeleted(*(_IMMERSED_GUARD + _MIRROR_GUARD)):
         assert getattr(G, _FN) is not orig_fn, (
@@ -791,7 +799,13 @@ def test_neither_guard_moves_one_byte_of_an_air_terminated_field():
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
             G.apply_prescription_persurface_to_beamlets(
-                _bundle(), _presc('R2B-T172'), _LAM, z_image=2.0e-3)
+                _bundle(), immersed, _LAM, z_image=2.0e-3)
+        # the PUBLIC entry, through elements.lenses_gbd, must reach the
+        # mutated function too -- else the identity below proves nothing
+        served = _gbd_field(immersed, 2.0e-3)
+        assert np.asarray(served).size > 0, (
+            'the mutation did not reach apply_real_lens_gbd, so the '
+            'byte-identity claim below would be vacuous')
         unguarded = {k: _gbd_field(p, 2.0e-3) for k, p in fixtures.items()}
     for k in fixtures:
         a, b = shipped[k], unguarded[k]
