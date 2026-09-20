@@ -909,17 +909,22 @@ distinction.  That file now reads **9 passed** where it read 8 passed +
 
 Two independent checks, because they fail differently.
 
-**Archive to archive** (`probe_r2_identity.py`, Windows, PRE = `git archive
-76019ede` against this branch, `LUMENAIRY_MEM_BUDGET_MB=2048` pinned on both
-arms).  Fifteen air-terminated fixtures -- VERIFY-WP-B12b's eight (one optic,
-last surface varied: conic, conic + k, even asphere, flat-base asphere,
-biconic, freeform, field-frame decentre, flat last), WP-B12b's own six, and
-mine -- at TWO planes each (the exit vertex and the fixture's own traced best
-focus):
+**Archive to archive** (`probe_r2_identity.py`, PRE = `git archive 76019ede`
+against this branch, `LUMENAIRY_MEM_BUDGET_MB=2048` pinned on both arms,
+**both builds**).  Fifteen air-terminated fixtures -- VERIFY-WP-B12b's eight
+(one optic, last surface varied: conic, conic + k, even asphere, flat-base
+asphere, biconic, freeform, field-frame decentre, flat last), WP-B12b's own
+six, and mine -- at TWO planes each (the exit vertex and the fixture's own
+traced best focus):
 
-> **30 of 30 field digests IDENTICAL, 0 differ**, plus the three local public
-> entry points byte-identical to one another in BOTH trees
-> (`f799fc7c4666b585...`).
+| build | field digests identical | differ | the three local entry points |
+|---|---|---|---|
+| Windows py3.14 | **30 / 30** | **0** | all three equal, in BOTH trees (`f799fc7c4666b585...`) |
+| WSL py3.12 | **30 / 30** | **0** | all three equal, in BOTH trees (`2d7f8e01221a1319...`) |
+
+Every byte-identity statement here is WITHIN one build, between two trees;
+the digests do not agree ACROSS builds and are not expected to (a coherent
+sum over hundreds of beamlets on two LAPACKs).
 
 Two of those digests are this package's own published ones, reproduced from a
 different probe and a different oracle module: `077c35f46f9f283c32736e99` for

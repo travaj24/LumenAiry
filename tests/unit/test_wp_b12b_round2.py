@@ -673,6 +673,58 @@ def test_a_transmissive_prescription_and_a_mid_prescription_fold_are_served():
         'guard is scoped to a mirror-TERMINATED prescription')
 
 
+def test_the_mirror_guard_looks_past_a_trailing_coordinate_break():
+    """DECISION, two-sided: "the last surface" means the last surface that
+    carries optics, so a trailing COORDINATE BREAK does not hide a mirror
+    from the guard -- and does not invent one after a transmissive surface.
+
+    A coordinate break carries no power and no medium of its own; it is a
+    frame change.  ``_last_optical_surface`` therefore skips trailing ones,
+    and this id pins both directions of that skip, plus the empty-list case,
+    because a helper whose branch nothing reaches is a branch that can rot.
+
+    The coordinate break is built from the library's own ``Surface`` with
+    ``is_coordbrk=True``, which is the state ``surfaces_from_prescription``
+    produces for one, rather than a stub that merely resembles it.
+    """
+    import copy as _copy
+
+    from lumenairy.propagators.gbd import (
+        _last_optical_surface,
+        _require_forward_going_local_exit,
+    )
+    mirror_surfs = _surfs(_presc(mirror=True, R2=-15.0e-3, semi=0.30e-3))
+    trans_surfs = _surfs(_presc('air'))
+    assert bool(getattr(mirror_surfs[-1], 'is_mirror', False))
+    assert not bool(getattr(trans_surfs[-1], 'is_mirror', False))
+
+    def _cb(from_surf):
+        cb = _copy.copy(from_surf)
+        cb.is_coordbrk = True
+        cb.is_mirror = False
+        return cb
+
+    with_cb = list(mirror_surfs) + [_cb(trans_surfs[-1])]
+    assert _last_optical_surface(with_cb) is mirror_surfs[-1], (
+        'the guard must look past a trailing coordinate break to the last '
+        'surface that carries optics')
+    with pytest.raises(NotImplementedError, match='MIRROR'):
+        _require_forward_going_local_exit(with_cb, _FN)
+
+    # the other side: a coordinate break after a TRANSMISSIVE last surface
+    # must not be refused, and must not be mistaken for the optical one
+    trans_with_cb = list(trans_surfs) + [_cb(trans_surfs[-1])]
+    assert _last_optical_surface(trans_with_cb) is trans_surfs[-1]
+    assert _require_forward_going_local_exit(trans_with_cb, _FN) is False, (
+        'the guard must return the DECISION False (nothing refused) rather '
+        'than merely not raising, so both sides are observable')
+    assert _require_forward_going_local_exit(trans_surfs, _FN) is False
+    assert _last_optical_surface([]) is None, (
+        'an empty surface list must not raise inside the guard'
+    )
+    assert _require_forward_going_local_exit([], _FN) is False
+
+
 def test_deleting_the_mirror_guard_from_the_gbd_site_reddens_a_named_check():
     """FAIL-BEFORE (D-4): with ``_require_forward_going_local_exit`` deleted
     from the shipped function's own source,

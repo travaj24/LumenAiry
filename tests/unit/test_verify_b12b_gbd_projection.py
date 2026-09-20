@@ -31,6 +31,18 @@ GREEN under three of the five mutations tried):
 * the **mirror-terminated local branch** and the **immersed exit** are recorded
   as open items with no pin at all.
 
+Round 2 (2026-09-19): both of those open items are CLOSED in the library, as
+REFUSALS -- ``propagators.gbd``'s local branch now raises on a
+mirror-terminated prescription and on an immersed exit medium (the latter
+through the same ``fga._require_non_immersed_exit`` the four FGA sites use,
+so there is one tolerance definition).  Two ids here changed as a result: the
+mirror id is no longer an ``xfail`` (see its docstring -- the xfail could not
+have turned red), and the immersed id takes its already-present "refused"
+branch.  ``tests/unit/test_wp_b12b_round2.py`` carries the guards' own
+two-sided pins, their fail-before arms and the byte-identity claim; this file
+keeps the DECISIONS on its own fixtures against its own 3-D oracle.  Every
+field id here now runs at a PINNED ``LUMENAIRY_MEM_BUDGET_MB`` (D-6).
+
 Every oracle here is built from this file's own geometry -- the conic sag from
 the QUADRIC ROOT rather than the library's rationalised form, the intersection
 from a damped Newton on the implicit 3-D surface, refraction from vector Snell

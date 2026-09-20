@@ -1,0 +1,306 @@
+{
+ "arm": "post",
+ "arm_tokens": {
+  "immersed_guard": true,
+  "mirror_guard": true
+ },
+ "entry_points": {
+  "apply_real_lens_gbd": "2d7f8e01221a13195188332bf1728d245d61726e47e6b579840962189ca52c2d",
+  "apply_real_lens_universal_gbd": "2d7f8e01221a13195188332bf1728d245d61726e47e6b579840962189ca52c2d",
+  "propagate_gbd_through_prescription": "2d7f8e01221a13195188332bf1728d245d61726e47e6b579840962189ca52c2d"
+ },
+ "env": {
+  "arm": "post",
+  "arm_tokens": {
+   "immersed_guard": true,
+   "mirror_guard": true
+  },
+  "build": "linux_312",
+  "env": {
+   "LUMENAIRY_MEM_BUDGET_MB": "2048",
+   "MKL_NUM_THREADS": "1",
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "PYTHONPATH": "/mnt/c/tmp/lum_gbd2:/mnt/c/tmp/lum_gbd2/validation/probe_wp_b12b_round2",
+   "R2_TREE": "/mnt/c/tmp/lum_gbd2"
+  },
+  "lumenairy_file": "/mnt/c/tmp/lum_gbd2/lumenairy/__init__.py",
+  "lumenairy_version": "5.47.1",
+  "numpy": "2.4.6",
+  "platform": "Linux-4.4.0-26100-Microsoft-x86_64-with-glibc2.39",
+  "python": "3.12.3 (main, Mar 23 2026, 19:04:32) [GCC 13.3.0]",
+  "scipy": "1.17.1"
+ },
+ "fields": {
+  "b12b:asphere_field@0.000000e+00": {
+   "digest": "154a1ff93b0064724ea076bbab3cd5b04617eed4267b4aa76eafcb836a88a498",
+   "energy": 1998.9856178430466,
+   "peak": 1.019314603755385,
+   "shape": [
+    128,
+    128
+   ]
+  },
+  "b12b:asphere_field@9.926240e-03": {
+   "digest": "cd681ddbe74fbb1087f59ca9e57edcea0b4c674b41dadd7ab3693408ea5e6f2e",
+   "energy": 1999.2540185765074,
+   "peak": 8.568147899988073,
+   "shape": [
+    128,
+    128
+   ]
+  },
+  "b12b:asphere_flat_base@0.000000e+00": {
+   "digest": "e74e01d7a6de2feb6405366d792b9a15e6b629bd8f056304a67ec6626a45178e",
+   "energy": 1996.5478632656575,
+   "peak": 1.0195238080268565,
+   "shape": [
+    128,
+    128
+   ]
+  },
+  "b12b:asphere_flat_base@6.698121e-03": {
+   "digest": "e76abf13e35989e7a4339fe32c6c89f7a05d8656a43b6861678d355773d68ec2",
+   "energy": 1996.973806080758,
+   "peak": 10.627686555204669,
+   "shape": [
+    128,
+    128
+   ]
+  },
+  "b12b:asphere_mild@0.000000e+00": {
+   "digest": "c3093bc25e480e51110ce1b637d080a705eda8df551ab2fe5d14203be2505847",
+   "energy": 1998.1872484041428,
+   "peak": 1.0203105682685767,
+   "shape": [
+    128,
+    128
+   ]
+  },
+  "b12b:asphere_mild@9.884260e-03": {
+   "digest": "d86d558fe95939923f8af0bacc90f22d49e2e116945e8d372c68a20292c9d4d3",
+   "energy": 1998.483984186621,
+   "peak": 7.843785107007631,
+   "shape": [
+    128,
+    128
+   ]
+  },
+  "b12b:conic_k_last@0.000000e+00": {
+   "digest": "b1a34f780535e4d5ae543885d9ac1381390bd76aecc875aaa8a5aa04ab879be4",
+   "energy": 1998.6613431925432,
+   "peak": 1.0207652586082006,
+   "shape": [
+    128,
+    128
+   ]
+  },
+  "b12b:conic_k_last@8.264422e-03": {
+   "digest": "1220be19f80e625c717c796db97b6fca836f8455a5914071f28e01bba2dbf0b2",
+   "energy": 1999.0555060427184,
+   "peak": 10.470020624045313,
+   "shape": [
+    128,
+    128
+   ]
+  },
+  "b12b:conic_ref@0.000000e+00": {
+   "digest": "b876426df90afc9de75825c1d9993e11e7352ef6c8b5b4e541f4f4186a6b9908",
+   "energy": 1998.661515648186,
+   "peak": 1.0207654295721307,
+   "shape": [
+    128,
+    128
+   ]
+  },
+  "b12b:conic_ref@8.262974e-03": {
+   "digest": "9fe47b31b6f7b9e3cf4c59ad931394613dd4f99c20e5428e487cc581da3af065",
+   "energy": 1999.055673889411,
+   "peak": 10.471749688372155,
+   "shape": [
+    128,
+    128
+   ]
+  },
+  "b12b:flat_last_lasf9@0.000000e+00": {
+   "digest": "1c4b21d1be1dc523f580ff4352069a0295f84276f0f50089bbdcd22775ee7169",
+   "energy": 2934.1230845900736,
+   "peak": 1.1976861894456272,
+   "shape": [
+    128,
+    128
+   ]
+  },
+  "b12b:flat_last_lasf9@1.430342e-03": {
+   "digest": "368be7c7d03e7254cbe68f2663d2c538818f6017b64a3928e01a28cb4609c139",
+   "energy": 4302.7242921914785,
+   "peak": 64.4200392923683,
+   "shape": [
+    128,
+    128
+   ]
+  },
+  "mine:air_singlet@0.000000e+00": {
+   "digest": "e01b931b7a7e04b94575788dc11e062dca490b19cf09839ab55b8ead4ece7117",
+   "energy": 2471.85460103247,
+   "peak": 1.0685935954728607,
+   "shape": [
+    128,
+    128
+   ]
+  },
+  "mine:air_singlet@2.000000e-03": {
+   "digest": "2d7f8e01221a13195188332bf1728d245d61726e47e6b579840962189ca52c2d",
+   "energy": 2472.549798036854,
+   "peak": 2.678497425160327,
+   "shape": [
+    128,
+    128
+   ]
+  },
+  "vb12b:asph@0.000000e+00": {
+   "digest": "225701283103a0894dc8abf4e70eff05e8f7db45b3e9ee9f55c6a68c81664bd0",
+   "energy": 3408.5141102269754,
+   "peak": 1.0635738237489092,
+   "shape": [
+    192,
+    192
+   ]
+  },
+  "vb12b:asph@5.265259e-03": {
+   "digest": "05610387f044f083b7877a00f6ec94cd51e570bc4fbb0328b968475518d5dbaa",
+   "energy": 3409.554988317495,
+   "peak": 14.938290503719532,
+   "shape": [
+    192,
+    192
+   ]
+  },
+  "vb12b:bicon@0.000000e+00": {
+   "digest": "210623335a56aac0eab1baf05ff72cffc02bf1e6e01bbc51a3d663d913a61254",
+   "energy": 3408.068296052955,
+   "peak": 1.0643598670532444,
+   "shape": [
+    192,
+    192
+   ]
+  },
+  "vb12b:bicon@5.422767e-03": {
+   "digest": "a51773d4a3f84ec6832f528478b0c7f89153a7d7eb4893644a2bab7ab08dd4d7",
+   "energy": 3409.0254988374572,
+   "peak": 9.126643578958259,
+   "shape": [
+    192,
+    192
+   ]
+  },
+  "vb12b:conic@0.000000e+00": {
+   "digest": "261854155f254f3dfd05eac6e7a6cad965aaa1b0fa69db4e036b2e757d6127d0",
+   "energy": 3407.717103534542,
+   "peak": 1.0643566095765877,
+   "shape": [
+    192,
+    192
+   ]
+  },
+  "vb12b:conic@4.987066e-03": {
+   "digest": "29ea29559239bd1667be2eb8fe6f2bb356857001c9072311f4417258fccfc8bc",
+   "energy": 3408.8388597885278,
+   "peak": 15.885792264538354,
+   "shape": [
+    192,
+    192
+   ]
+  },
+  "vb12b:conic_k@0.000000e+00": {
+   "digest": "86dfe005bc84211827c29246fd966bfcb61c973da78fe63d1c98bcce3feaa0ed",
+   "energy": 3407.716143538911,
+   "peak": 1.0643559932927882,
+   "shape": [
+    192,
+    192
+   ]
+  },
+  "vb12b:conic_k@4.987561e-03": {
+   "digest": "e488bc6ec9388a047efa08dc72ed34997b9a1db4c7b88fabeaa62393d8e08cf0",
+   "energy": 3408.8375118915837,
+   "peak": 15.884112148818394,
+   "shape": [
+    192,
+    192
+   ]
+  },
+  "vb12b:fieldframe@0.000000e+00": {
+   "digest": "dd4ff47ea8db2d96f465cdc639cb0e7cbeb1c966a2b23def75687f95fdfc7e26",
+   "energy": 3407.510734193194,
+   "peak": 1.0644013606079323,
+   "shape": [
+    192,
+    192
+   ]
+  },
+  "vb12b:fieldframe@4.986009e-03": {
+   "digest": "2b1c52eca3f97262e30ddf26927a1c90fde3538cf847769eaee6dbecd6ae65bf",
+   "energy": 3408.73578437508,
+   "peak": 15.407116279725239,
+   "shape": [
+    192,
+    192
+   ]
+  },
+  "vb12b:flat_last@0.000000e+00": {
+   "digest": "959a47ccaa239e827554166c81835be400e21f455e158cc928c3f3971d713103",
+   "energy": 3407.0402454364926,
+   "peak": 1.1162905798039597,
+   "shape": [
+    192,
+    192
+   ]
+  },
+  "vb12b:flat_last@4.196184e-03": {
+   "digest": "275430cef465b230e58924251be92f9a16b51534345b4d145787934b5c1ed43e",
+   "energy": 3408.511933273636,
+   "peak": 18.007789436301604,
+   "shape": [
+    192,
+    192
+   ]
+  },
+  "vb12b:flatbase_asph@0.000000e+00": {
+   "digest": "81593bf95f3ec2f2d2ff6ceaecd318bb03b7869eee7311e93f1d6548715d70b3",
+   "energy": 3406.7366937058605,
+   "peak": 1.063691846128592,
+   "shape": [
+    192,
+    192
+   ]
+  },
+  "vb12b:flatbase_asph@5.552379e-03": {
+   "digest": "284a6c4e8762b59c6d45891d5a1b6befc999dbf0f99dd36cce0f3dac29d924fc",
+   "energy": 3407.4772641162353,
+   "peak": 12.729170899593868,
+   "shape": [
+    192,
+    192
+   ]
+  },
+  "vb12b:freeform@0.000000e+00": {
+   "digest": "edf6abe893acc8a02c1137b97fdbadd8680d06597d1146f7d8d4f4997caa754d",
+   "energy": 3407.7769200039274,
+   "peak": 1.064328242328428,
+   "shape": [
+    192,
+    192
+   ]
+  },
+  "vb12b:freeform@5.077985e-03": {
+   "digest": "ec965192384f786aaa7c1f05338147f00625965ff8d0e998e57c1afa2b4d5756",
+   "energy": 3408.847402200171,
+   "peak": 6.775221662739101,
+   "shape": [
+    192,
+    192
+   ]
+  }
+ }
+}
