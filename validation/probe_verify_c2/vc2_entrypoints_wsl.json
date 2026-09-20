@@ -1,0 +1,1684 @@
+{
+ "exported_direct_without_a_way_back": [
+  "apply_real_lens_maslov",
+  "apply_real_lens_maslov_jax",
+  "apply_real_lens_traced",
+  "apply_real_lens_traced_jax",
+  "caustic_diagnostic",
+  "eval_image_plane_wfe",
+  "fit_canonical_polynomials",
+  "fit_canonical_polynomials_jax",
+  "fit_hf_polynomials",
+  "opd_fan_data",
+  "opd_fan_data_world",
+  "paraxial_focus_world",
+  "plot_lens_layout",
+  "ray_fan_data",
+  "ray_fan_data_world",
+  "ray_transfer_jacobian",
+  "ray_transfer_jacobian_jax",
+  "raytrace_system",
+  "through_focus_rms",
+  "trace_jax",
+  "trace_prescription"
+ ],
+ "exported_transitive_without_a_way_back": [
+  "aberration_summary",
+  "aberration_tensor",
+  "apply_prescription_persurface_to_beamlets",
+  "apply_real_lens_auto",
+  "apply_real_lens_fga",
+  "apply_real_lens_fga_vector",
+  "apply_real_lens_gbd",
+  "apply_real_lens_maslov_vector",
+  "apply_real_lens_traced_multi",
+  "apply_real_lens_traced_multibranch",
+  "apply_real_lens_traced_segmented",
+  "apply_real_lens_traced_uniform",
+  "apply_real_lens_universal",
+  "design_optimize_multi_objective",
+  "distortion_grid",
+  "distortion_vs_field",
+  "field_aberration_sweep",
+  "field_grid_wfe",
+  "footprint_per_surface",
+  "make_lg_aberration_merit_jax",
+  "monte_carlo_tolerancing",
+  "monte_carlo_tolerancing_jax",
+  "optimize_traced_geometry",
+  "pmm_1d",
+  "pmm_efficiency_1d_slanted",
+  "pmm_jones_1d",
+  "pmm_jones_1d_segments",
+  "pmm_jones_1d_segments_vs_wavelength",
+  "pmm_jones_1d_slanted",
+  "pmm_jones_1d_slanted_segments",
+  "pmm_jones_1d_vs_wavelength",
+  "prepare_real_lens_traced",
+  "prescription_subdomain",
+  "propagate",
+  "propagate_gbd_through_prescription",
+  "propagate_gbd_vector_through_prescription",
+  "propagate_hfpi_through_prescription",
+  "propagate_huygens_fresnel_through_prescription",
+  "propagate_subaperture_asymptotic",
+  "propagate_through_system",
+  "propagate_traced_carrier_chain",
+  "propagate_traced_carrier_chain_multi",
+  "ray_fan_plot",
+  "ray_fan_plot_prescription",
+  "relative_illumination",
+  "spot_diagram_vs_field"
+ ],
+ "meta": {
+  "file": "/mnt/c/tmp/lum_vc2/lumenairy/__init__.py",
+  "lumenairy": "5.48.1",
+  "python": "3.12.3"
+ },
+ "n_exported": 71,
+ "n_exported_direct": 23,
+ "n_exported_direct_without_a_way_back": 21,
+ "n_exported_transitive_without_a_way_back": 46,
+ "n_functions_that_trace": 114,
+ "rows": [
+  {
+   "depth": 2,
+   "direct": false,
+   "exported_from": "lumenairy",
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/analysis/aberration.py",
+   "name": "aberration_summary",
+   "qualname": "aberration_summary",
+   "signature_keywords": [],
+   "tracers": [
+    "aberration_tensor",
+    "fit_canonical_polynomials"
+   ]
+  },
+  {
+   "depth": 5,
+   "direct": false,
+   "exported_from": "lumenairy",
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/propagators/asymptotic_aberration_tensor.py",
+   "name": "aberration_tensor",
+   "qualname": "aberration_tensor",
+   "signature_keywords": [],
+   "tracers": [
+    "_measure_image_plane_waist"
+   ]
+  },
+  {
+   "depth": 2,
+   "direct": false,
+   "exported_from": "lumenairy",
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/propagators/gbd.py",
+   "name": "apply_prescription_persurface_to_beamlets",
+   "qualname": "apply_prescription_persurface_to_beamlets",
+   "signature_keywords": [],
+   "tracers": [
+    "_reframe_beamlets_to_world_plane"
+   ]
+  },
+  {
+   "depth": 3,
+   "direct": false,
+   "exported_from": "lumenairy",
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/propagators/fga.py",
+   "name": "apply_real_lens_auto",
+   "qualname": "apply_real_lens_auto",
+   "signature_keywords": [],
+   "tracers": [
+    "_caustic_zone",
+    "apply_real_lens_fga",
+    "apply_real_lens_gbd"
+   ]
+  },
+  {
+   "depth": 3,
+   "direct": false,
+   "exported_from": "lumenairy",
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/propagators/fga.py",
+   "name": "apply_real_lens_fga",
+   "qualname": "apply_real_lens_fga",
+   "signature_keywords": [],
+   "tracers": [
+    "_fga_through_lens",
+    "apply_real_lens_fga"
+   ]
+  },
+  {
+   "depth": 3,
+   "direct": false,
+   "exported_from": "lumenairy",
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/propagators/fga.py",
+   "name": "apply_real_lens_fga_vector",
+   "qualname": "apply_real_lens_fga_vector",
+   "signature_keywords": [],
+   "tracers": [
+    "_fga_vector_through_lens"
+   ]
+  },
+  {
+   "depth": 3,
+   "direct": false,
+   "exported_from": "lumenairy",
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/elements/lenses_gbd.py",
+   "name": "apply_real_lens_gbd",
+   "qualname": "apply_real_lens_gbd",
+   "signature_keywords": [],
+   "tracers": [
+    "apply_prescription_persurface_to_beamlets",
+    "apply_real_lens_gbd",
+    "propagate_gbd_through_prescription"
+   ]
+  },
+  {
+   "depth": 1,
+   "direct": true,
+   "exported_from": "lumenairy",
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/elements/lenses_maslov.py",
+   "name": "apply_real_lens_maslov",
+   "qualname": "apply_real_lens_maslov",
+   "signature_keywords": [],
+   "tracers": [
+    "apply_real_lens_maslov",
+    "trace"
+   ]
+  },
+  {
+   "depth": 1,
+   "direct": true,
+   "exported_from": "lumenairy",
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/elements/_lens_jax.py",
+   "name": "apply_real_lens_maslov_jax",
+   "qualname": "apply_real_lens_maslov_jax",
+   "signature_keywords": [],
+   "tracers": [
+    "trace_jax"
+   ]
+  },
+  {
+   "depth": 2,
+   "direct": false,
+   "exported_from": "lumenairy",
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/elements/lenses_maslov.py",
+   "name": "apply_real_lens_maslov_vector",
+   "qualname": "apply_real_lens_maslov_vector",
+   "signature_keywords": [],
+   "tracers": [
+    "apply_real_lens_maslov"
+   ]
+  },
+  {
+   "depth": 1,
+   "direct": true,
+   "exported_from": "lumenairy",
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/elements/_lens_traced.py",
+   "name": "apply_real_lens_traced",
+   "qualname": "apply_real_lens_traced",
+   "signature_keywords": [],
+   "tracers": [
+    "_opl_by_backward_trace",
+    "apply_real_lens_traced",
+    "apply_real_lens_traced_multibranch",
+    "apply_real_lens_traced_uniform",
+    "trace"
+   ]
+  },
+  {
+   "depth": 1,
+   "direct": true,
+   "exported_from": "lumenairy",
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/elements/_lens_jax.py",
+   "name": "apply_real_lens_traced_jax",
+   "qualname": "apply_real_lens_traced_jax",
+   "signature_keywords": [],
+   "tracers": [
+    "trace_jax"
+   ]
+  },
+  {
+   "depth": 2,
+   "direct": false,
+   "exported_from": "lumenairy",
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/elements/_lens_traced.py",
+   "name": "apply_real_lens_traced_multi",
+   "qualname": "apply_real_lens_traced_multi",
+   "signature_keywords": [],
+   "tracers": [
+    "apply_real_lens_traced",
+    "prepare_real_lens_traced"
+   ]
+  },
+  {
+   "depth": 3,
+   "direct": false,
+   "exported_from": "lumenairy",
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/elements/_lens_traced_multibranch.py",
+   "name": "apply_real_lens_traced_multibranch",
+   "qualname": "apply_real_lens_traced_multibranch",
+   "signature_keywords": [],
+   "tracers": [
+    "_multibranch_render",
+    "apply_real_lens_traced_multibranch"
+   ]
+  },
+  {
+   "depth": 2,
+   "direct": false,
+   "exported_from": "lumenairy",
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/elements/_lens_traced.py",
+   "name": "apply_real_lens_traced_segmented",
+   "qualname": "apply_real_lens_traced_segmented",
+   "signature_keywords": [],
+   "tracers": [
+    "apply_real_lens_traced",
+    "apply_real_lens_traced_multi"
+   ]
+  },
+  {
+   "depth": 2,
+   "direct": false,
+   "exported_from": "lumenairy",
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/elements/_lens_traced_uniform.py",
+   "name": "apply_real_lens_traced_uniform",
+   "qualname": "apply_real_lens_traced_uniform",
+   "signature_keywords": [],
+   "tracers": [
+    "_multibranch_render",
+    "_trace_meridional_cusp",
+    "_trace_meridional_fold"
+   ]
+  },
+  {
+   "depth": 2,
+   "direct": false,
+   "exported_from": "lumenairy",
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/propagators/fga.py",
+   "name": "apply_real_lens_universal",
+   "qualname": "apply_real_lens_universal",
+   "signature_keywords": [],
+   "tracers": [
+    "_universal_route",
+    "apply_real_lens_fga",
+    "apply_real_lens_gbd",
+    "apply_real_lens_traced"
+   ]
+  },
+  {
+   "depth": 1,
+   "direct": true,
+   "exported_from": "lumenairy",
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/analysis/aberration.py",
+   "name": "caustic_diagnostic",
+   "qualname": "caustic_diagnostic",
+   "signature_keywords": [],
+   "tracers": [
+    "trace"
+   ]
+  },
+  {
+   "depth": 3,
+   "direct": false,
+   "exported_from": "lumenairy",
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/optimize/multi_objective.py",
+   "name": "design_optimize_multi_objective",
+   "qualname": "design_optimize_multi_objective",
+   "signature_keywords": [],
+   "tracers": [
+    "__init__"
+   ]
+  },
+  {
+   "depth": 2,
+   "direct": false,
+   "exported_from": "lumenairy",
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/analysis/field.py",
+   "name": "distortion_grid",
+   "qualname": "distortion_grid",
+   "signature_keywords": [],
+   "tracers": [
+    "_append_image_plane",
+    "_trace"
+   ]
+  },
+  {
+   "depth": 2,
+   "direct": false,
+   "exported_from": "lumenairy",
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/analysis/field.py",
+   "name": "distortion_vs_field",
+   "qualname": "distortion_vs_field",
+   "signature_keywords": [],
+   "tracers": [
+    "_append_image_plane",
+    "_trace"
+   ]
+  },
+  {
+   "depth": 1,
+   "direct": true,
+   "exported_from": "lumenairy",
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/analysis/image_plane_wfe.py",
+   "name": "eval_image_plane_wfe",
+   "qualname": "eval_image_plane_wfe",
+   "signature_keywords": [],
+   "tracers": [
+    "trace"
+   ]
+  },
+  {
+   "depth": 2,
+   "direct": false,
+   "exported_from": "lumenairy",
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/analysis/field.py",
+   "name": "field_aberration_sweep",
+   "qualname": "field_aberration_sweep",
+   "signature_keywords": [],
+   "tracers": [
+    "_trace"
+   ]
+  },
+  {
+   "depth": 2,
+   "direct": false,
+   "exported_from": "lumenairy",
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/analysis/image_plane_wfe.py",
+   "name": "field_grid_wfe",
+   "qualname": "field_grid_wfe",
+   "signature_keywords": [],
+   "tracers": [
+    "eval_image_plane_wfe"
+   ]
+  },
+  {
+   "depth": 1,
+   "direct": true,
+   "exported_from": "lumenairy",
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/propagators/asymptotic_canonical_fit.py",
+   "name": "fit_canonical_polynomials",
+   "qualname": "fit_canonical_polynomials",
+   "signature_keywords": [],
+   "tracers": [
+    "fit_canonical_polynomials",
+    "trace"
+   ]
+  },
+  {
+   "depth": 1,
+   "direct": true,
+   "exported_from": "lumenairy",
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/propagators/asymptotic_jax_twin.py",
+   "name": "fit_canonical_polynomials_jax",
+   "qualname": "fit_canonical_polynomials_jax",
+   "signature_keywords": [],
+   "tracers": [
+    "trace_jax"
+   ]
+  },
+  {
+   "depth": 1,
+   "direct": true,
+   "exported_from": "lumenairy",
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/propagators/asymptotic_canonical_fit.py",
+   "name": "fit_hf_polynomials",
+   "qualname": "fit_hf_polynomials",
+   "signature_keywords": [],
+   "tracers": [
+    "trace"
+   ]
+  },
+  {
+   "depth": 2,
+   "direct": false,
+   "exported_from": "lumenairy",
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/analysis/field.py",
+   "name": "footprint_per_surface",
+   "qualname": "footprint_per_surface",
+   "signature_keywords": [],
+   "tracers": [
+    "_append_image_plane",
+    "_trace"
+   ]
+  },
+  {
+   "depth": 2,
+   "direct": false,
+   "exported_from": "lumenairy",
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/optimize/jax_merits.py",
+   "name": "make_lg_aberration_merit_jax",
+   "qualname": "make_lg_aberration_merit_jax",
+   "signature_keywords": [],
+   "tracers": [
+    "fit_canonical_polynomials_jax"
+   ]
+  },
+  {
+   "depth": 3,
+   "direct": false,
+   "exported_from": "lumenairy",
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/analysis/through_focus.py",
+   "name": "monte_carlo_tolerancing",
+   "qualname": "monte_carlo_tolerancing",
+   "signature_keywords": [],
+   "tracers": [
+    "monte_carlo_tolerancing_jax"
+   ]
+  },
+  {
+   "depth": 2,
+   "direct": false,
+   "exported_from": "lumenairy",
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/analysis/through_focus.py",
+   "name": "monte_carlo_tolerancing_jax",
+   "qualname": "monte_carlo_tolerancing_jax",
+   "signature_keywords": [],
+   "tracers": [
+    "apply_real_lens_traced_jax"
+   ]
+  },
+  {
+   "depth": 1,
+   "direct": true,
+   "exported_from": "lumenairy",
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/raytrace/ray_fan.py",
+   "name": "opd_fan_data",
+   "qualname": "opd_fan_data",
+   "signature_keywords": [],
+   "tracers": []
+  },
+  {
+   "depth": 1,
+   "direct": true,
+   "exported_from": "lumenairy.raytrace",
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/raytrace/ray_fan.py",
+   "name": "opd_fan_data_world",
+   "qualname": "opd_fan_data_world",
+   "signature_keywords": [],
+   "tracers": []
+  },
+  {
+   "depth": 2,
+   "direct": false,
+   "exported_from": "lumenairy",
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/optimize/jax_merits.py",
+   "name": "optimize_traced_geometry",
+   "qualname": "optimize_traced_geometry",
+   "signature_keywords": [],
+   "tracers": [
+    "apply_real_lens_traced_jax",
+    "loss"
+   ]
+  },
+  {
+   "depth": 1,
+   "direct": true,
+   "exported_from": "lumenairy",
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/raytrace/world.py",
+   "name": "paraxial_focus_world",
+   "qualname": "paraxial_focus_world",
+   "signature_keywords": [],
+   "tracers": [
+    "trace_world"
+   ]
+  },
+  {
+   "depth": 1,
+   "direct": true,
+   "exported_from": "lumenairy",
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/analysis/plotting.py",
+   "name": "plot_lens_layout",
+   "qualname": "plot_lens_layout",
+   "signature_keywords": [],
+   "tracers": [
+    "trace"
+   ]
+  },
+  {
+   "depth": 9,
+   "direct": false,
+   "exported_from": "lumenairy",
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/elements/pmm/oned.py",
+   "name": "pmm_1d",
+   "qualname": "pmm_1d",
+   "signature_keywords": [],
+   "tracers": [
+    "pmm_jones_1d",
+    "pmm_jones_1d_segments",
+    "pmm_jones_1d_slanted",
+    "pmm_jones_1d_slanted_segments"
+   ]
+  },
+  {
+   "depth": 9,
+   "direct": false,
+   "exported_from": "lumenairy",
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/elements/pmm/oned.py",
+   "name": "pmm_efficiency_1d_slanted",
+   "qualname": "pmm_efficiency_1d_slanted",
+   "signature_keywords": [],
+   "tracers": [
+    "pmm_jones_1d_slanted"
+   ]
+  },
+  {
+   "depth": 8,
+   "direct": false,
+   "exported_from": "lumenairy",
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/elements/pmm/oned.py",
+   "name": "pmm_jones_1d",
+   "qualname": "pmm_jones_1d",
+   "signature_keywords": [],
+   "tracers": [
+    "_pmm_jones_slant_solve",
+    "_pmm_jones_solve"
+   ]
+  },
+  {
+   "depth": 8,
+   "direct": false,
+   "exported_from": "lumenairy",
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/elements/pmm/oned.py",
+   "name": "pmm_jones_1d_segments",
+   "qualname": "pmm_jones_1d_segments",
+   "signature_keywords": [],
+   "tracers": [
+    "_pmm_jones_slant_segments_solve",
+    "_pmm_jones_solve_segments"
+   ]
+  },
+  {
+   "depth": 9,
+   "direct": false,
+   "exported_from": "lumenairy",
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/elements/pmm/oned.py",
+   "name": "pmm_jones_1d_segments_vs_wavelength",
+   "qualname": "pmm_jones_1d_segments_vs_wavelength",
+   "signature_keywords": [],
+   "tracers": [
+    "pmm_jones_1d_segments"
+   ]
+  },
+  {
+   "depth": 8,
+   "direct": false,
+   "exported_from": "lumenairy",
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/elements/pmm/oned.py",
+   "name": "pmm_jones_1d_slanted",
+   "qualname": "pmm_jones_1d_slanted",
+   "signature_keywords": [],
+   "tracers": [
+    "_pmm_jones_slant_solve",
+    "pmm_jones_1d"
+   ]
+  },
+  {
+   "depth": 8,
+   "direct": false,
+   "exported_from": "lumenairy",
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/elements/pmm/oned.py",
+   "name": "pmm_jones_1d_slanted_segments",
+   "qualname": "pmm_jones_1d_slanted_segments",
+   "signature_keywords": [],
+   "tracers": [
+    "_pmm_jones_slant_segments_solve",
+    "pmm_jones_1d_segments"
+   ]
+  },
+  {
+   "depth": 9,
+   "direct": false,
+   "exported_from": "lumenairy",
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/elements/pmm/oned.py",
+   "name": "pmm_jones_1d_vs_wavelength",
+   "qualname": "pmm_jones_1d_vs_wavelength",
+   "signature_keywords": [],
+   "tracers": [
+    "pmm_jones_1d"
+   ]
+  },
+  {
+   "depth": 2,
+   "direct": false,
+   "exported_from": "lumenairy",
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/elements/_lens_traced.py",
+   "name": "prepare_real_lens_traced",
+   "qualname": "prepare_real_lens_traced",
+   "signature_keywords": [],
+   "tracers": [
+    "apply_real_lens_traced",
+    "prepare_real_lens_traced"
+   ]
+  },
+  {
+   "depth": 4,
+   "direct": false,
+   "exported_from": "lumenairy",
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/propagators/mhs.py",
+   "name": "prescription_subdomain",
+   "qualname": "prescription_subdomain",
+   "signature_keywords": [],
+   "tracers": [
+    "propagate"
+   ]
+  },
+  {
+   "depth": 3,
+   "direct": false,
+   "exported_from": "lumenairy",
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/elements/polarization.py",
+   "name": "propagate",
+   "qualname": "JonesField.propagate",
+   "signature_keywords": [],
+   "tracers": []
+  },
+  {
+   "depth": 3,
+   "direct": false,
+   "exported_from": "lumenairy",
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/propagators/dispatch.py",
+   "name": "propagate",
+   "qualname": "propagate",
+   "signature_keywords": [],
+   "tracers": [
+    "_dispatch_to_method"
+   ]
+  },
+  {
+   "depth": 3,
+   "direct": false,
+   "exported_from": "lumenairy",
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/sources/core.py",
+   "name": "propagate",
+   "qualname": "Source.propagate",
+   "signature_keywords": [],
+   "tracers": [
+    "propagate"
+   ]
+  },
+  {
+   "depth": 3,
+   "direct": false,
+   "exported_from": "lumenairy",
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/propagators/gbd.py",
+   "name": "propagate_gbd_through_prescription",
+   "qualname": "propagate_gbd_through_prescription",
+   "signature_keywords": [],
+   "tracers": [
+    "apply_prescription_persurface_to_beamlets"
+   ]
+  },
+  {
+   "depth": 4,
+   "direct": false,
+   "exported_from": "lumenairy",
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/propagators/gbd.py",
+   "name": "propagate_gbd_vector_through_prescription",
+   "qualname": "propagate_gbd_vector_through_prescription",
+   "signature_keywords": [],
+   "tracers": [
+    "propagate_gbd_through_prescription"
+   ]
+  },
+  {
+   "depth": 2,
+   "direct": false,
+   "exported_from": "lumenairy",
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/propagators/hfpi.py",
+   "name": "propagate_hfpi_through_prescription",
+   "qualname": "propagate_hfpi_through_prescription",
+   "signature_keywords": [],
+   "tracers": [
+    "_hfpi_segment_trace"
+   ]
+  },
+  {
+   "depth": 2,
+   "direct": false,
+   "exported_from": "lumenairy",
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/propagators/hf.py",
+   "name": "propagate_huygens_fresnel_through_prescription",
+   "qualname": "propagate_huygens_fresnel_through_prescription",
+   "signature_keywords": [],
+   "tracers": [
+    "fit_canonical_polynomials",
+    "fit_hf_polynomials"
+   ]
+  },
+  {
+   "depth": 2,
+   "direct": false,
+   "exported_from": "lumenairy",
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/propagators/subaperture.py",
+   "name": "propagate_subaperture_asymptotic",
+   "qualname": "propagate_subaperture_asymptotic",
+   "signature_keywords": [],
+   "tracers": [
+    "fit_canonical_polynomials"
+   ]
+  },
+  {
+   "depth": 2,
+   "direct": false,
+   "exported_from": "lumenairy",
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/propagators/system.py",
+   "name": "propagate_through_system",
+   "qualname": "propagate_through_system",
+   "signature_keywords": [],
+   "tracers": [
+    "apply_real_lens_traced"
+   ]
+  },
+  {
+   "depth": 2,
+   "direct": false,
+   "exported_from": "lumenairy",
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/propagators/carrier.py",
+   "name": "propagate_traced_carrier_chain",
+   "qualname": "propagate_traced_carrier_chain",
+   "signature_keywords": [],
+   "tracers": [
+    "_fine_trace_group_exit",
+    "_group_chief_transfer",
+    "_run_chain_dx_self_check",
+    "apply_real_lens_traced",
+    "propagate_traced_carrier_chain"
+   ]
+  },
+  {
+   "depth": 3,
+   "direct": false,
+   "exported_from": "lumenairy",
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/propagators/carrier.py",
+   "name": "propagate_traced_carrier_chain_multi",
+   "qualname": "propagate_traced_carrier_chain_multi",
+   "signature_keywords": [],
+   "tracers": [
+    "_chain_chief_ray_at_target",
+    "_run",
+    "propagate_traced_carrier_chain"
+   ]
+  },
+  {
+   "depth": 1,
+   "direct": true,
+   "exported_from": "lumenairy",
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/raytrace/ray_fan.py",
+   "name": "ray_fan_data",
+   "qualname": "ray_fan_data",
+   "signature_keywords": [],
+   "tracers": []
+  },
+  {
+   "depth": 1,
+   "direct": true,
+   "exported_from": "lumenairy.raytrace",
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/raytrace/ray_fan.py",
+   "name": "ray_fan_data_world",
+   "qualname": "ray_fan_data_world",
+   "signature_keywords": [],
+   "tracers": []
+  },
+  {
+   "depth": 2,
+   "direct": false,
+   "exported_from": "lumenairy",
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/raytrace/ray_fan.py",
+   "name": "ray_fan_plot",
+   "qualname": "ray_fan_plot",
+   "signature_keywords": [],
+   "tracers": [
+    "ray_fan_data"
+   ]
+  },
+  {
+   "depth": 3,
+   "direct": false,
+   "exported_from": "lumenairy",
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/raytrace/ray_fan.py",
+   "name": "ray_fan_plot_prescription",
+   "qualname": "ray_fan_plot_prescription",
+   "signature_keywords": [],
+   "tracers": [
+    "ray_fan_plot"
+   ]
+  },
+  {
+   "depth": 1,
+   "direct": true,
+   "exported_from": "lumenairy",
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/raytrace/differential.py",
+   "name": "ray_transfer_jacobian",
+   "qualname": "ray_transfer_jacobian",
+   "signature_keywords": [],
+   "tracers": [
+    "trace"
+   ]
+  },
+  {
+   "depth": 1,
+   "direct": true,
+   "exported_from": "lumenairy",
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/raytrace/differential.py",
+   "name": "ray_transfer_jacobian_jax",
+   "qualname": "ray_transfer_jacobian_jax",
+   "signature_keywords": [],
+   "tracers": [
+    "trace_jax"
+   ]
+  },
+  {
+   "depth": 1,
+   "direct": true,
+   "exported_from": "lumenairy",
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/raytrace/trace.py",
+   "name": "raytrace_system",
+   "qualname": "raytrace_system",
+   "signature_keywords": [],
+   "tracers": [
+    "trace"
+   ]
+  },
+  {
+   "depth": 2,
+   "direct": false,
+   "exported_from": "lumenairy",
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/analysis/field.py",
+   "name": "relative_illumination",
+   "qualname": "relative_illumination",
+   "signature_keywords": [],
+   "tracers": [
+    "_append_image_plane",
+    "_trace"
+   ]
+  },
+  {
+   "depth": 2,
+   "direct": false,
+   "exported_from": "lumenairy",
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/analysis/field.py",
+   "name": "spot_diagram_vs_field",
+   "qualname": "spot_diagram_vs_field",
+   "signature_keywords": [],
+   "tracers": [
+    "_append_image_plane",
+    "_trace"
+   ]
+  },
+  {
+   "depth": 1,
+   "direct": true,
+   "exported_from": "lumenairy",
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/raytrace/ray_fan.py",
+   "name": "through_focus_rms",
+   "qualname": "through_focus_rms",
+   "signature_keywords": [],
+   "tracers": [
+    "trace"
+   ]
+  },
+  {
+   "depth": 0,
+   "direct": true,
+   "exported_from": "lumenairy",
+   "forwards_to_tracer": [],
+   "has_way_back": true,
+   "module": "lumenairy/raytrace/trace.py",
+   "name": "trace",
+   "qualname": "trace",
+   "signature_keywords": [
+    "sphere_normal",
+    "renormalize"
+   ],
+   "tracers": []
+  },
+  {
+   "depth": 0,
+   "direct": true,
+   "exported_from": "lumenairy",
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/raytrace/jax_trace.py",
+   "name": "trace_jax",
+   "qualname": "trace_jax",
+   "signature_keywords": [],
+   "tracers": []
+  },
+  {
+   "depth": 1,
+   "direct": true,
+   "exported_from": "lumenairy",
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/raytrace/trace.py",
+   "name": "trace_prescription",
+   "qualname": "trace_prescription",
+   "signature_keywords": [],
+   "tracers": [
+    "trace"
+   ]
+  },
+  {
+   "depth": 0,
+   "direct": true,
+   "exported_from": "lumenairy",
+   "forwards_to_tracer": [],
+   "has_way_back": true,
+   "module": "lumenairy/raytrace/world_trace.py",
+   "name": "trace_world",
+   "qualname": "trace_world",
+   "signature_keywords": [
+    "sphere_normal",
+    "renormalize"
+   ],
+   "tracers": []
+  },
+  {
+   "depth": 5,
+   "direct": false,
+   "exported_from": null,
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/algebra/base.py",
+   "name": "apply_with_intermediates",
+   "qualname": "CompositeOperator.apply_with_intermediates",
+   "signature_keywords": [],
+   "tracers": [
+    "_apply"
+   ]
+  },
+  {
+   "depth": 4,
+   "direct": false,
+   "exported_from": null,
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/ui/slider_dock.py",
+   "name": "attach_variable",
+   "qualname": "SliderDock.attach_variable",
+   "signature_keywords": [],
+   "tracers": [
+    "_generate_sliders"
+   ]
+  },
+  {
+   "depth": 8,
+   "direct": false,
+   "exported_from": null,
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/elements/bor/bor_solve.py",
+   "name": "build_layer",
+   "qualname": "build_layer",
+   "signature_keywords": [],
+   "tracers": [
+    "layer_modes"
+   ]
+  },
+  {
+   "depth": 5,
+   "direct": false,
+   "exported_from": null,
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/elements/eme/eme_2d.py",
+   "name": "cell_smatrix",
+   "qualname": "cell_smatrix",
+   "signature_keywords": [],
+   "tracers": [
+    "_prop"
+   ]
+  },
+  {
+   "depth": 8,
+   "direct": false,
+   "exported_from": null,
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/elements/eme/eme_diffraction.py",
+   "name": "diffraction_eme",
+   "qualname": "diffraction_eme",
+   "signature_keywords": [],
+   "tracers": [
+    "layer_modes"
+   ]
+  },
+  {
+   "depth": 6,
+   "direct": false,
+   "exported_from": null,
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/elements/eme/eme_2d.py",
+   "name": "dispersion",
+   "qualname": "dispersion",
+   "signature_keywords": [],
+   "tracers": [
+    "cell_smatrix"
+   ]
+  },
+  {
+   "depth": 5,
+   "direct": false,
+   "exported_from": null,
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/algebra/from_prescription.py",
+   "name": "from_prescription",
+   "qualname": "from_prescription",
+   "signature_keywords": [],
+   "tracers": []
+  },
+  {
+   "depth": 5,
+   "direct": false,
+   "exported_from": null,
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/propagators/mhs.py",
+   "name": "from_prescription",
+   "qualname": "MhsPipeline.from_prescription",
+   "signature_keywords": [],
+   "tracers": [
+    "prescription_subdomain"
+   ]
+  },
+  {
+   "depth": 7,
+   "direct": false,
+   "exported_from": null,
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/elements/bor/zcascade.py",
+   "name": "layer_modes",
+   "qualname": "layer_modes",
+   "signature_keywords": [],
+   "tracers": []
+  },
+  {
+   "depth": 7,
+   "direct": false,
+   "exported_from": null,
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/elements/eme/eme_2d.py",
+   "name": "layer_modes",
+   "qualname": "layer_modes",
+   "signature_keywords": [],
+   "tracers": [
+    "dispersion"
+   ]
+  },
+  {
+   "depth": 2,
+   "direct": false,
+   "exported_from": null,
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/optimize/jax_merits.py",
+   "name": "loss",
+   "qualname": "optimize_traced_geometry.loss",
+   "signature_keywords": [],
+   "tracers": [
+    "apply_real_lens_traced_jax"
+   ]
+  },
+  {
+   "depth": 1,
+   "direct": true,
+   "exported_from": null,
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/ui/model.py",
+   "name": "merit_function",
+   "qualname": "SystemModel.merit_function",
+   "signature_keywords": [],
+   "tracers": [
+    "trace"
+   ]
+  },
+  {
+   "depth": 2,
+   "direct": false,
+   "exported_from": null,
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/ui/layout_2d.py",
+   "name": "rebuild",
+   "qualname": "Layout2DView.rebuild",
+   "signature_keywords": [],
+   "tracers": [
+    "run_trace"
+   ]
+  },
+  {
+   "depth": 2,
+   "direct": false,
+   "exported_from": null,
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/ui/layout_3d.py",
+   "name": "rebuild",
+   "qualname": "Layout3DView.rebuild",
+   "signature_keywords": [],
+   "tracers": []
+  },
+  {
+   "depth": 3,
+   "direct": false,
+   "exported_from": null,
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/ui/model.py",
+   "name": "reset_design",
+   "qualname": "SystemModel.reset_design",
+   "signature_keywords": [],
+   "tracers": [
+    "__init__"
+   ]
+  },
+  {
+   "depth": 2,
+   "direct": false,
+   "exported_from": null,
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/ui/model.py",
+   "name": "retrace",
+   "qualname": "SystemModel.retrace",
+   "signature_keywords": [],
+   "tracers": [
+    "run_trace"
+   ]
+  },
+  {
+   "depth": 1,
+   "direct": true,
+   "exported_from": null,
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/propagators/mhs.py",
+   "name": "run",
+   "qualname": "MhsPipeline.run",
+   "signature_keywords": [],
+   "tracers": []
+  },
+  {
+   "depth": 1,
+   "direct": true,
+   "exported_from": null,
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/ui/_worker.py",
+   "name": "run",
+   "qualname": "AnalysisWorker.run",
+   "signature_keywords": [],
+   "tracers": []
+  },
+  {
+   "depth": 1,
+   "direct": true,
+   "exported_from": null,
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/ui/ao_dock.py",
+   "name": "run",
+   "qualname": "_AOClosedLoopWorker.run",
+   "signature_keywords": [],
+   "tracers": []
+  },
+  {
+   "depth": 1,
+   "direct": true,
+   "exported_from": null,
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/ui/caustic_dock.py",
+   "name": "run",
+   "qualname": "CausticWorker.run",
+   "signature_keywords": [],
+   "tracers": [
+    "caustic_diagnostic"
+   ]
+  },
+  {
+   "depth": 1,
+   "direct": true,
+   "exported_from": null,
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/ui/coherence_dock.py",
+   "name": "run",
+   "qualname": "_KoehlerWorker.run",
+   "signature_keywords": [],
+   "tracers": []
+  },
+  {
+   "depth": 1,
+   "direct": true,
+   "exported_from": null,
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/ui/coherence_dock.py",
+   "name": "run",
+   "qualname": "_CoherenceAnalysisWorker.run",
+   "signature_keywords": [],
+   "tracers": []
+  },
+  {
+   "depth": 1,
+   "direct": true,
+   "exported_from": null,
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/ui/coronagraph_dock.py",
+   "name": "run",
+   "qualname": "_CoronagraphWorker.run",
+   "signature_keywords": [],
+   "tracers": []
+  },
+  {
+   "depth": 1,
+   "direct": true,
+   "exported_from": null,
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/ui/ghost_dock.py",
+   "name": "run",
+   "qualname": "_GhostWorker.run",
+   "signature_keywords": [],
+   "tracers": []
+  },
+  {
+   "depth": 1,
+   "direct": true,
+   "exported_from": null,
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/ui/multiconfig_dock.py",
+   "name": "run",
+   "qualname": "_MultiConfigWorker.run",
+   "signature_keywords": [],
+   "tracers": []
+  },
+  {
+   "depth": 1,
+   "direct": true,
+   "exported_from": null,
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/ui/optimizer_dock.py",
+   "name": "run",
+   "qualname": "OptimizeWorker.run",
+   "signature_keywords": [],
+   "tracers": [
+    "run_optimization"
+   ]
+  },
+  {
+   "depth": 1,
+   "direct": true,
+   "exported_from": null,
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/ui/optimizer_dock.py",
+   "name": "run",
+   "qualname": "WaveOptimizeWorker.run",
+   "signature_keywords": [],
+   "tracers": [
+    "_run_multi_objective"
+   ]
+  },
+  {
+   "depth": 1,
+   "direct": true,
+   "exported_from": null,
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/ui/optimizer_dock.py",
+   "name": "run",
+   "qualname": "GlobalSearchWorker.run",
+   "signature_keywords": [],
+   "tracers": [
+    "_run_impl"
+   ]
+  },
+  {
+   "depth": 1,
+   "direct": true,
+   "exported_from": null,
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/ui/phase_retrieval_dock.py",
+   "name": "run",
+   "qualname": "_PhaseRetrievalWorker.run",
+   "signature_keywords": [],
+   "tracers": []
+  },
+  {
+   "depth": 1,
+   "direct": true,
+   "exported_from": null,
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/ui/psf_mtf_dock.py",
+   "name": "run",
+   "qualname": "_PolyStrehlWorker.run",
+   "signature_keywords": [],
+   "tracers": []
+  },
+  {
+   "depth": 1,
+   "direct": true,
+   "exported_from": null,
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/ui/richards_wolf_dock.py",
+   "name": "run",
+   "qualname": "RichardsWolfWorker.run",
+   "signature_keywords": [],
+   "tracers": []
+  },
+  {
+   "depth": 1,
+   "direct": true,
+   "exported_from": null,
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/ui/through_focus_dock.py",
+   "name": "run",
+   "qualname": "ThroughFocusWorker.run",
+   "signature_keywords": [],
+   "tracers": []
+  },
+  {
+   "depth": 1,
+   "direct": true,
+   "exported_from": null,
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/ui/tolerance_dock.py",
+   "name": "run",
+   "qualname": "ToleranceWorker.run",
+   "signature_keywords": [],
+   "tracers": [
+    "trace_world"
+   ]
+  },
+  {
+   "depth": 1,
+   "direct": true,
+   "exported_from": null,
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/ui/wavefront_map_dock.py",
+   "name": "run",
+   "qualname": "_OPDWorker.run",
+   "signature_keywords": [],
+   "tracers": [
+    "_compute_ray_traced_opd"
+   ]
+  },
+  {
+   "depth": 1,
+   "direct": true,
+   "exported_from": null,
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/ui/waveoptics_dock.py",
+   "name": "run",
+   "qualname": "_CalibrationWorker.run",
+   "signature_keywords": [],
+   "tracers": []
+  },
+  {
+   "depth": 1,
+   "direct": true,
+   "exported_from": null,
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/ui/waveoptics_dock.py",
+   "name": "run",
+   "qualname": "WaveOpticsWorker.run",
+   "signature_keywords": [],
+   "tracers": [
+    "_run_impl"
+   ]
+  },
+  {
+   "depth": 2,
+   "direct": false,
+   "exported_from": null,
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/ui/model.py",
+   "name": "run_optimization",
+   "qualname": "SystemModel.run_optimization",
+   "signature_keywords": [],
+   "tracers": [
+    "merit_function"
+   ]
+  },
+  {
+   "depth": 1,
+   "direct": true,
+   "exported_from": null,
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/ui/model.py",
+   "name": "run_trace",
+   "qualname": "SystemModel.run_trace",
+   "signature_keywords": [],
+   "tracers": [
+    "trace_world"
+   ]
+  },
+  {
+   "depth": 2,
+   "direct": false,
+   "exported_from": null,
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/ui/main_window.py",
+   "name": "showEvent",
+   "qualname": "MainWindow.showEvent",
+   "signature_keywords": [],
+   "tracers": [
+    "showEvent"
+   ]
+  },
+  {
+   "depth": 2,
+   "direct": false,
+   "exported_from": null,
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/ui/spot_field_dock.py",
+   "name": "showEvent",
+   "qualname": "SpotFieldDock.showEvent",
+   "signature_keywords": [],
+   "tracers": [
+    "_replot",
+    "showEvent"
+   ]
+  },
+  {
+   "depth": 6,
+   "direct": false,
+   "exported_from": null,
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/elements/pmm/stack.py",
+   "name": "solve_vs_wavelength",
+   "qualname": "PMMStack.solve_vs_wavelength",
+   "signature_keywords": [],
+   "tracers": [
+    "_sem_modes_uniform",
+    "_solve_one",
+    "_solve_vs_wavelength_perlayer",
+    "_uniform_geo_eig"
+   ]
+  },
+  {
+   "depth": 6,
+   "direct": false,
+   "exported_from": null,
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/elements/pmm/stack2d.py",
+   "name": "solve_vs_wavelength",
+   "qualname": "PMM2DStackHybrid.solve_vs_wavelength",
+   "signature_keywords": [],
+   "tracers": [
+    "_solve_one"
+   ]
+  },
+  {
+   "depth": 6,
+   "direct": false,
+   "exported_from": null,
+   "forwards_to_tracer": [],
+   "has_way_back": false,
+   "module": "lumenairy/elements/rcwa/stack.py",
+   "name": "solve_vs_wavelength",
+   "qualname": "RCWAStack.solve_vs_wavelength",
+   "signature_keywords": [],
+   "tracers": [
+    "_solve_one"
+   ]
+  }
+ ]
+}

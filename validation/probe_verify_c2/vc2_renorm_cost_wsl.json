@@ -1,0 +1,73 @@
+{
+ "added_once_s": 0.0003240363281236114,
+ "break_even_surface_count": Infinity,
+ "cpu_clock_cross_check": {
+  "normalize_directions": 0.00030517578125,
+  "refract_false": 0.00738525390625,
+  "refract_false_flat": 0.00689697265625,
+  "refract_true": 0.00701904296875,
+  "refract_true_flat": 0.0064697265625
+ },
+ "cpu_clock_removed_per_surface_s": -0.0003662109375,
+ "meta": {
+  "cpu_count": 24,
+  "file": "/mnt/c/tmp/lum_vc2/lumenairy/__init__.py",
+  "lumenairy": "5.48.1",
+  "min_sample_s": 1.5,
+  "n_rays": 100000,
+  "numpy": "2.4.6",
+  "python": "3.12.3",
+  "repeats": 9,
+  "reps": 256
+ },
+ "nonbending_cross_check": {
+  "break_even_surface_count": Infinity,
+  "removed_fraction": -0.03312776635638796,
+  "removed_per_surface_s": -0.00022254453124048723,
+  "t_false": 0.006940308984368926,
+  "t_true": 0.006717764453128439
+ },
+ "predicted_per_surface_count": {
+  "11_surfaces": {
+   "predicted_saving_fraction": -0.00729834709502887,
+   "predicted_saving_s": -0.0011413320312314568,
+   "predicted_speedup": 0.9927545328391765,
+   "t_surface_mode_s": 0.15638226250007392
+  },
+  "13_surfaces": {
+   "predicted_saving_fraction": -0.006547166889150149,
+   "predicted_saving_s": -0.0012899312499783377,
+   "predicted_speedup": 0.9934954196837243,
+   "t_surface_mode_s": 0.1970212875000925
+  },
+  "3_surfaces": {
+   "predicted_saving_fraction": -0.005817047778702724,
+   "predicted_saving_s": -0.0005469351562439329,
+   "predicted_speedup": 0.9942165945670245,
+   "t_surface_mode_s": 0.09402280624999548
+  },
+  "5_surfaces": {
+   "predicted_saving_fraction": -0.006138476704760266,
+   "predicted_saving_s": -0.0006955343749908138,
+   "predicted_speedup": 0.9938989742993781,
+   "t_surface_mode_s": 0.11330732499993701
+  },
+  "7_surfaces": {
+   "predicted_saving_fraction": -0.00643080227693838,
+   "predicted_saving_s": -0.0008441335937376948,
+   "predicted_speedup": 0.9936102886930831,
+   "t_surface_mode_s": 0.13126411874998212
+  },
+  "9_surfaces": {
+   "predicted_saving_fraction": -0.006407182961986093,
+   "predicted_saving_s": -0.0009927328124845758,
+   "predicted_speedup": 0.993633607678426,
+   "t_surface_mode_s": 0.15494060624996564
+  }
+ },
+ "removed_per_surface_fraction_of_refract": -0.0099102973941599,
+ "removed_per_surface_s": -7.429960937344049e-05,
+ "t_normalize_directions": 0.0003240363281236114,
+ "t_refract_renormalize_false": 0.00757151250000021,
+ "t_refract_renormalize_true": 0.00749721289062677
+}

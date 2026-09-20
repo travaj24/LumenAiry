@@ -81,15 +81,23 @@ def _ghost_item():
     out = {'pairs': [list(p) for p in pairs], 'per_path': {}}
     real_refract, real_reflect = _isect._refract, _isect._reflect
 
-    def _pr(rays, surface, n1, n2, **kw):
-        kw['sphere_normal'] = 'analytic'
-        kw['renormalize'] = False
-        return real_refract(rays, surface, n1, n2, **kw)
+    def _mk(which):
+        # ``renormalize=False`` is NOT a candidate edit for ghost: ghost
+        # owns its own loop and has no exit pass, so turning it off would
+        # leave the directions unnormalised for good.  It is measured only
+        # to bound the whole gap; the RECOMMENDED edit is the normal alone.
+        def _pr(rays, surface, n1, n2, **kw):
+            kw['sphere_normal'] = 'analytic'
+            if which == 'both':
+                kw['renormalize'] = False
+            return real_refract(rays, surface, n1, n2, **kw)
 
-    def _pl(rays, surface, **kw):
-        kw['sphere_normal'] = 'analytic'
-        kw['renormalize'] = False
-        return real_reflect(rays, surface, **kw)
+        def _pl(rays, surface, **kw):
+            kw['sphere_normal'] = 'analytic'
+            if which == 'both':
+                kw['renormalize'] = False
+            return real_reflect(rays, surface, **kw)
+        return _pr, _pl
 
     def _run(pth):
         return _ghost.retrace_ghost_path(pres, pth, WL,
@@ -99,19 +107,20 @@ def _ghost_item():
     for (i, j) in pairs:
         pth = _ghost._path_from_pair(n, int(i), int(j))
         base = _run(pth)
-        _isect._refract, _isect._reflect = _pr, _pl
-        try:
-            alt = _run(pth)
-        finally:
-            _isect._refract, _isect._reflect = real_refract, real_reflect
         rec = {}
-        for k in sorted(set(base) | set(alt)):
-            a, b = base.get(k), alt.get(k)
-            if isinstance(a, (int, float)) and isinstance(b, (int, float)):
-                rec['d_' + k] = float(abs(a - b))
-                rec['v_' + k] = float(a)
-            elif isinstance(a, np.ndarray) and isinstance(b, np.ndarray)                     and a.shape == b.shape and a.dtype.kind == 'f':
-                rec['d_' + k] = float(np.max(np.abs(a - b)))
+        for which in ('normal_only', 'both'):
+            _isect._refract, _isect._reflect = _mk(which)
+            try:
+                alt = _run(pth)
+            finally:
+                _isect._refract = real_refract
+                _isect._reflect = real_reflect
+            for k in sorted(set(base) | set(alt)):
+                a, b = base.get(k), alt.get(k)
+                if isinstance(a, (int, float)) and isinstance(b,
+                                                              (int, float)):
+                    rec['d_%s_%s' % (which, k)] = float(abs(a - b))
+                    rec['v_' + k] = float(a)
         rec['bit_identical'] = all(v == 0.0 for kk, v in rec.items()
                                    if kk.startswith('d_'))
         out['per_path'][f'{int(i)},{int(j)}'] = rec
@@ -163,40 +172,56 @@ def _reanchor_item():
             fires=(fires is not None), how=how, reason=reason)
     res['mapped_coordinates'] = probes
 
-    # --- ABUSE A: same leading token, different MEANING -------------
-    # The guard compares only the text before the first '=' .  Anything
-    # after it may be replaced by anything at all.
-    hay = ra.lines('lumenairy/raytrace/trace.py')
-    orig = hay[60]                              # line 61, sphere_normal
-    lead = orig.strip().split('=')[0].strip()
-    res['abuse_A_same_lead_any_value'] = dict(
-        guard_token=lead,
-        would_accept=[f"{lead} = 'anything'", f"{lead} = None",
-                      f"{lead} = 'generic'   # SILENTLY REVERTED"],
-        note=('the override is keyed on the token BEFORE the "=", so a '
-              'later release that changes the same default again is '
-              're-anchored to the same line with the 5.49.0 reason text '
-              'and no complaint'))
+    # --- the abuse harness: swap in a DOCTORED copy of one file -----
+    TGT = 'lumenairy/raytrace/trace.py'
+    real_lines = ra.lines
 
-    # --- ABUSE B: the new coordinate is a CONSTANT ------------------
-    res['abuse_B_new_number_is_a_constant'] = dict(
-        note=('EDITED_IN_PLACE maps a base coordinate to a FIXED new '
-              'number.  If the declaration later moves, the guard still '
-              'passes whenever whatever now sits at that fixed number '
-              'happens to start with the same token -- and every one of '
-              'the four mapped lines is a parameter declaration in a '
-              'signature, so its NEIGHBOURS start with different tokens '
-              'but a re-ordered signature puts a different parameter '
-              'there.'),
-        mapped_new_numbers=sorted(v[0] for v in
-                                  ra.EDITED_IN_PLACE.values()))
+    def _doctored(new_line_61=None, move_away=None):
+        hay = list(real_lines(TGT))
+        if new_line_61 is not None:
+            hay[60] = new_line_61
+        if move_away is not None:
+            decl = hay[60]
+            hay[60] = move_away
+            hay.append(decl)
+        return hay
 
-    # --- ABUSE C: the guard on a line with NO '=' -------------------
-    res['abuse_C_no_equals'] = dict(
-        note=('with no "=" in the base line the token is the WHOLE line, '
-              'so the guard degenerates to an exact-prefix check -- '
-              'strict, not loose.  None of the four mapped lines is of '
-              'that shape.'))
+    def _try(hay):
+        def _patched(path, rev=None):
+            if path == TGT and rev is None:
+                return hay
+            return real_lines(path, rev)
+        ra.lines = _patched
+        try:
+            n, how = ra._edited_in_place(TGT, 61, base)
+        finally:
+            ra.lines = real_lines
+        return dict(fires=(n is not None), new_num=n, how=how)
+
+    REVERTED = "    sphere_normal: str = 'generic',"
+    NONSENSE = "    sphere_normal: str = 'not-a-route',"
+    STALE = "    sphere_normal: str = 'generic',  # a STALE COPY"
+
+    res['abuse_A_default_silently_reverted'] = dict(
+        doctored_line=REVERTED, result=_try(_doctored(REVERTED)),
+        verdict=('FIRES -- the override re-anchors a citation whose claim '
+                 '(the default moved to analytic) is now false'))
+    res['abuse_A2_default_set_to_nonsense'] = dict(
+        doctored_line=NONSENSE, result=_try(_doctored(NONSENSE)),
+        verdict='FIRES -- everything after the "=" is unchecked')
+    res['abuse_B_declaration_moved_away'] = dict(
+        doctored_line=STALE, result=_try(_doctored(move_away=STALE)),
+        verdict=('FIRES -- the map hard-codes the new NUMBER, so a stale '
+                 'copy at that line satisfies it while the real '
+                 'declaration has moved elsewhere'))
+    res['abuse_C_unrelated_line_control'] = dict(
+        doctored_line='    renormalize: str = "exit",',
+        result=_try(_doctored('    renormalize: str = "exit",')),
+        verdict='REFUSED -- the leading-token guard does work, one-sided')
+    res['abuse_C2_file_truncated_control'] = dict(
+        doctored_line='(file truncated to 30 lines)',
+        result=_try(list(real_lines(TGT))[:30]),
+        verdict='REFUSED -- out-of-range new coordinate')
 
     # --- ABUSE D: version pinning ----------------------------------
     src = open(os.path.join(_ROOT, 'scripts', 'reanchor_citations.py'),
