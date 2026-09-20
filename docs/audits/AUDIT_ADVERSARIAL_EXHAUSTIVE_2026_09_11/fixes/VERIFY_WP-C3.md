@@ -1071,7 +1071,8 @@ arm above, which is a gap rather than a loosening.
 | `test_niche_exact_gap_kernel.py` + `test_wave5_h2_near_focus_table.py` + `test_niche_c3_gap_paraxial_guard.py` | WIN-py3.14 | **158 passed, 1 skipped** in 1:37 |
 | the 54-file carrier-touching blast set + both C3 files, **1876 ids** | WIN-py3.14 | **1872 passed, 4 skipped, 0 failed** in **1:16:45** |
 | the same, `b4` excluded, **1753 ids** | WSL-py3.12 | **1741 passed, 5 skipped, 0 failed** in **1:29:43** |
-| `test_audit2609_b4_collins_transport.py`, ONE CLASS AT A TIME | WSL-py3.12 | see §7.5 |
+| `test_audit2609_b4_collins_transport.py`, ONE CLASS AT A TIME | WSL-py3.12 | **128 passed over 15 classes**; `TestGateCTwoGroupChain` (2 ids) STALLED and was killed by a 20-minute `timeout` — the documented pre-existing WSL staller, reproduced |
+| `test_niche_k2_carrier_backends.py` + `test_wave5_h2_collins_jax.py` + `test_carrier_referenced.py` | WIN-py3.14 | **60 passed, 2 skipped** in 1:43 |
 | `test_niche_d3_guards.py` + `test_niche_d5_dx_flatness_gate.py`, whole files | WIN-py3.14 | **54 passed** in 7:48 |
 | `test_niche_d2_chain_multi.py`, whole file | WIN-py3.14 | **38 passed** in 8:33 |
 | `test_niche_d4_dgrating.py`, whole file | WIN-py3.14 | **59 passed** in 2:54 |
@@ -1103,6 +1104,25 @@ fixture that closes it is the one thing the shipped suite never had: a readout
 K1 **inside (1, 2]**.  Every shipped assertion on `readout_route_k1` reads
 either `is None` or the 82.36 fixture, so a bar moved anywhere between 1 and
 82 is invisible to them.
+
+### 7.2c The WSL staller, reproduced rather than read
+
+The package records `TestGateCTwoGroupChain` as a pre-existing WSL staller.
+Reproduced: the class was still running **9 minutes** after it started with no
+output, and was killed by this verification's own `timeout 1200`.  The per-class
+readings either side of it are
+
+`TestVocabulary` 12 · `TestDefaultIsByteIdentical` 11 · `TestSameTheorem` 9 ·
+`TestGateAOracleMatrix` 24 · `TestGateBMismatchMatrix` 3 · **GateC killed** ·
+`TestGateDMulti` 4 · `TestKellyGuard` 7 · `TestKernelRefinement` 5 ·
+`TestQuadratureComplementarity` 4 · `TestNoNearFocusApparatus` 5 ·
+`TestReadoutPeriodDecoupling` 2 · `TestLegPeriodCondition` 27 ·
+`TestAbsolutePhaseThroughTheFocus` 5 · `TestKernelRefinementNearTheFocus` 5 ·
+`TestTiltedAndDecentredReadout` 5
+
+— **128 passed over 15 classes**, matching the package's own count exactly,
+and the whole file runs **130 passed in 5:16** on Windows.  So the two-id
+difference is the staller and nothing else.
 
 ### 7.3 Gates
 
