@@ -220,8 +220,8 @@ divide, +6 maximum, -3 square, -2 add, -1 sqrt**, i.e.
 added.  So the hoist BREAKS EVEN between two and three surfaces and is a small
 LOSS below that: **WP-B9's 1.03x-1.10x has a reachable floor and an
 unreachable ceiling**, and WP-C2's inability to see the effect is consistent
-with an effect of 0.5 %-2.4 %.  The profile share of the hoisted block agrees:
-0.47-2.35 % of `trace`'s tottime on Windows and 0.02-1.12 % on WSL.
+with an effect of 0.5 %-2.4 % -- which is below what any timing instrument on
+this box could resolve.
 
 **And it costs no measurable accuracy.**  Against a 60-digit end-to-end
 `decimal` trace -- ray-sphere intersection, vector Snell with the outward
