@@ -66,8 +66,10 @@ requested points whether or not they resolve the field (VERIFY-WP-B4 row 8).
 
 ### Fixed -- carrier (WP-C3): three geometries had no fallback on `transport='collins'` -- a COLLIMATED carrier returned NaN, an ASTIGMATIC one and a leg PAST the focus ran an under-sampled chirp-Z
 
-Both were opt-in before this release and would have been the default after
-it; both were found by running the flip against WP-B4's own test file.
+All three were opt-in before this release and would have been the default
+after it, and all three were found by RUNNING the flip against the existing
+suite rather than by reading the diff.  The stop-plane keys also changed
+contract in the same round: see the Migration paragraph.
 
 A leg that resolves to the transfer-function form called `_carrier_step_fast`,
 which is only the NO-CROSSING FAST PATH of the Sziklas transport.  A
@@ -111,6 +113,23 @@ those two are the real boundary: they are exactly the legs the Sziklas
 transport could never evaluate (it re-references to `R_out = 0`, which
 `carrier_referenced_envelope` refuses, and it has no flat-reference form).
 That is the honest statement of what the flip does and does not change.
+
+### Changed -- carrier (WP-C3): `focus_readout`'s stop-plane keys SELECT the Sziklas readout instead of being refused
+
+`standoff` and `on_focus_containment` describe the Sziklas readout's stop
+plane.  WP-B4 REFUSED them on `transport='collins'`, correctly at the time:
+that transport had no stop plane and no fallback, so the keys had no referent
+and accepting them would have been the accept-and-ignore shape the vocabulary
+gates exist to remove.  Since the readout resolves its quadrature they have a
+referent again, so naming one now SELECTS that route -- the key does exactly
+what it says, nothing is accepted and ignored, and the stage records
+`readout_route_reason='stop_plane_key'`.
+
+MEASURED 2026-09-20, which is why this is not a style preference: with the
+refusal in place and the default flipped, **38 of the 54 reported failure
+sections** in the 54-file carrier-touching run carried that refusal's own
+message, and so did all 22 fixture-setup errors -- every one of them a caller
+who legitimately wants the standoff-based readout.
 
 ### Fixed -- carrier (WP-C3): three INTERNAL call sites rode the public `transport` default
 
@@ -3710,7 +3729,7 @@ peak at two well-sampled legs, on both `gap_kernel` settings.
 What the free pitch buys, measured:
 
 * **the image-plane readout is one step.**  `transport='collins'` lands the
-  target plane directly on the caller's `(dx_out, N_out)` (`carrier.py:2796`),
+  target plane directly on the caller's `(dx_out, N_out)` (`carrier.py:2825`),
   with no standoff plane, no beam-containment resolution and no near-focus
   bridge.  Against an analytic Gaussian-ABCD oracle carrying the absolute piston
   and Gouy phase, over NA 0.03-0.45 x grid extents 1.5-10 beam radii (30 cells),
