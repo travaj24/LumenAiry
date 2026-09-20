@@ -886,3 +886,437 @@ def test_repeat_reproduces_the_previous_release_on_the_exact_readout():
             assert pd['replica_fill'] == 'zero'
     assert np.array_equal(out[None], out['zero'])
     _assert_confined(out['repeat'], out['zero'], period, 0.05e-6, n_out)
+
+
+# ===========================================================================
+# ROUND 2 (VERIFY-WP-C5) -- the defects the verification raised, closed
+# ===========================================================================
+#
+# Each id below closes one defect the independent verification raised.  None
+# restates something already asserted above; each is the assertion that would
+# have caught the defect while it was there, and each is two-sided.
+# Measurements quoted in the docstrings were taken 2026-09-20 on Windows
+# py3.14.6 / numpy 2.4.4 and WSL py3.12.3 / numpy 2.4.6 and agree to the
+# digits printed; the bars beside them are derived from what the running
+# build reads.  Probes: ``validation/probe_c5_round2/``.
+
+#: A relay whose carrier is MISMATCHED to its beam, read out a QUARTER of the
+#: way to the beam's focus.  The carrier (``fr * R0``) and the leg (``z``) are
+#: fixed, so every arm below shares one ABCD and one ``z_eff``; the only thing
+#: that moves is the INPUT beam's radius, which moves ``theta_env`` and
+#: nothing else.  That is what separates the band from a distance.
+_D6 = dict(lam=1.55e-6, n=1024, dx=6.25e-6, R0=-20.0e-3, fr=0.70,
+           w_wide=0.80e-3, w_narrow=0.40e-3, nout=64)
+_D6['z'] = 0.25 * abs(_D6['R0'])
+_D6['dx_out'] = (_D6['lam'] * abs(_D6['R0']) / (np.pi * _D6['w_wide'])) / 8.0
+
+
+def _d6_env(w):
+    """``exp(-r^2/w^2)`` times the beam's own lens and the carrier's inverse,
+    i.e. the RESIDUAL lens the mismatch leaves on the envelope."""
+    k = 2.0 * np.pi / _D6['lam']
+    g = _axis(_D6['n'], _D6['dx'])
+    r2 = g[None, :] ** 2 + g[:, None] ** 2
+    return (np.exp(-r2 / float(w) ** 2)
+            * np.exp(1j * k * r2 / (2.0 * _D6['R0']))
+            * np.exp(-1j * k * r2 / (2.0 * _D6['fr'] * _D6['R0']))).astype(
+                np.complex128)
+
+
+def _d6_leg(w, gap_kernel='auto', st=None):
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        return np.asarray(_collins_transport(
+            _d6_env(w), _D6['fr'] * _D6['R0'], _D6['z'], _D6['lam'],
+            _D6['dx'], _D6['dx'], dx_out=_D6['dx_out'],
+            dy_out=_D6['dx_out'], N_out_x=_D6['nout'], N_out_y=_D6['nout'],
+            R_ref=float('inf'), gap_kernel=gap_kernel,
+            on_collins_sampling='ignore', stats_out=st))
+
+
+def test_a_wide_envelope_leg_far_from_any_focus_falls_back():
+    """D6.  THE RULE IS A BAND IN ``k |z_eff| theta_env^4``, NOT A DISTANCE.
+
+    The Migration note and the CHANGELOG used to say the rule fires only for
+    legs near the carrier's ``A = 0`` plane -- "within 23.5 um of the focus
+    and nowhere else".  That is true of the two fixtures the law was fitted
+    on and false of the rule: ``theta_env`` enters at the FOURTH power, so a
+    wide envelope substitutes for a large ``z_eff``.
+
+    This id holds the LEG fixed and moves only the envelope.  One carrier
+    (``0.70 R0``), one readout plane (``z = 0.25 |R0|``), so both arms share
+    ``A = 0.642857``, ``B = 5.000000e-03 m`` and ``z_eff = 7.777778e-03 m``
+    to the bit and both sit 9.00 mm from that carrier's ``A = 0`` plane, with
+    the beam still 48.6 (wide) / 12.2 (narrow) Rayleigh ranges short of its
+    own focus.  Measured 2026-09-20 on both builds:
+
+    ``w`` 0.80 mm: ``theta_env`` 1.715395e-02 rad, departure 4.179416e-04,
+    resolves ``'fresnel'``; ``w`` 0.40 mm: ``theta_env`` 8.659722e-03 rad,
+    departure 2.714408e-05, resolves ``'exact'`` -- a departure ratio of
+    15.40 against an angle ratio of 1.9809, whose fourth power is 15.40.
+
+    Nothing about the leg's geometry differs between the two rows, so a
+    distance rule cannot tell them apart and this one does.  Both bars and
+    the quartic are re-derived here.
+    """
+    tau = CA._GAP_KERNEL_ACCURACY_TAU
+    assert tau is not None, (
+        "PREMISE: the accuracy rule is disarmed on this tree, so there is no "
+        "band to place")
+    rows = {}
+    for tag, w in (('wide', _D6['w_wide']), ('narrow', _D6['w_narrow'])):
+        st = {}
+        _d6_leg(w, 'auto', st)
+        assert 'kernel_departure' in st, (
+            f"the k4 gate did not resolve the {tag} arm to 'exact' "
+            f"(k4={st.get('k4')}), so the accuracy rule never saw it and "
+            f"this fixture cannot place the band")
+        S = np.fft.fft2(np.ascontiguousarray(_d6_env(w), dtype=np.complex128))
+        rows[tag] = dict(
+            dep=float(st['kernel_departure']), kernel=st['kernel'],
+            k4=float(st['k4']),
+            theta=max(CA._collins_envelope_half_angle(
+                S, _D6['dx'], _D6['dx'], _D6['lam'])))
+
+    # (1) the leg is the SAME leg on both arms, and it is far from every
+    #     focus there is -- derived from the fixture's geometry, not read
+    #     back out of the transport.
+    A = 1.0 + _D6['z'] / (_D6['fr'] * _D6['R0'])
+    z_eff = _D6['z'] / A
+    d0 = abs(_D6['z'] - (-_D6['fr'] * _D6['R0']))
+    assert d0 > 1.0e-3, (
+        f"the leg sits {d0 * 1e6:.1f} um from its A = 0 plane, which IS "
+        f"near-focus, so this id is not demonstrating the scope it claims")
+    z_R = np.pi * (_D6['lam'] * abs(_D6['R0'])
+                   / (np.pi * _D6['w_wide'])) ** 2 / _D6['lam']
+    assert (abs(_D6['R0']) - _D6['z']) / z_R > 20.0, (
+        f"PREMISE: the readout plane is only "
+        f"{(abs(_D6['R0']) - _D6['z']) / z_R:.1f} Rayleigh ranges from the "
+        f"beam's own focus, so it IS near one")
+
+    # (2) the decision, two-sided, on that one leg
+    assert rows['wide']['kernel'] == 'fresnel', (
+        f"the wide-envelope arm did NOT fall back: departure "
+        f"{rows['wide']['dep']:.4e} against tau {tau:.1e}, theta_env "
+        f"{rows['wide']['theta']:.4e} rad, z_eff {z_eff:.4e} m, "
+        f"{d0 * 1e3:.2f} mm from the A = 0 plane")
+    assert rows['narrow']['kernel'] == 'exact', (
+        f"the NARROW-envelope arm on the SAME leg fell back too, so this "
+        f"fixture no longer separates the angle from the distance: {rows}")
+    assert rows['wide']['dep'] > tau > rows['narrow']['dep'], rows
+
+    # (3) the separation is the QUARTIC, which is what makes the leg's own
+    #     distance irrelevant.  The law is linear in |z_eff| and that factor
+    #     is shared, so the departure ratio must be the angle ratio to the
+    #     fourth -- an identity between two numbers this run measured.
+    q = ((rows['wide']['theta'] / rows['narrow']['theta']) ** 4
+         / (rows['wide']['dep'] / rows['narrow']['dep']))
+    assert abs(q - 1.0) < 1e-6, (
+        f"the two departures do not stand in the fourth-power ratio of the "
+        f"two envelope angles ({q:.9f}), so they are not the same law on "
+        f"the same leg: {rows}")
+    assert rows['wide']['dep'] / rows['narrow']['dep'] > 4.0, (
+        f"PREMISE: the two arms differ by only "
+        f"{rows['wide']['dep'] / rows['narrow']['dep']:.2f}x, so this "
+        f"fixture is sitting on the bar rather than either side of it")
+    # (4) the REPRESENTABILITY gate sees none of it: both arms are decades
+    #     under its bar of 1, which is the gap the accuracy rule closes.
+    assert max(r['k4'] for r in rows.values()) < 1e-2, rows
+
+
+def test_the_shipped_source_never_says_the_rule_is_off_while_it_is_armed():
+    """D1 / D2 / D3.  THE COMMENTS A READER MEETS FIRST.
+
+    Three stale statements shipped beside the armed rule: the in-function
+    comment in ``_collins_transport`` and the departure law's docstring both
+    said the rule was OFF BY DEFAULT, and one paragraph of
+    ``_fill_readout_replicas``'s docstring began in column 0 inside an
+    indented docstring, which makes ``inspect.cleandoc`` (and Sphinx) render
+    every OTHER paragraph as a literal block.
+
+    All three are properties of the shipped source, so all three are read off
+    the running module rather than off a file path, and each arm carries a
+    counter-arm on a synthetic stale copy -- otherwise the id would pass just
+    as well if the phrase it greps for had been renamed away.
+
+    Measured 2026-09-20 on both builds: with the column-0 paragraph present
+    53 of the docstring's 55 non-blank lines come back from ``cleandoc`` with
+    a four-space prefix; with it indented, 0 do.
+    """
+    stale = 'OFF BY DEFAULT'
+    src = inspect.getsource(CA)
+    tau_src = inspect.getsource(CA._collins_exact_kernel_departure)
+    trans_src = inspect.getsource(CA._collins_transport)
+    # the constant's own note is the run of ``#:`` lines above its assignment
+    head = src.split('_GAP_KERNEL_ACCURACY_TAU = ')[0]
+    note = head[head.rfind('\n\n'):]
+    assert '#:' in note and 'tau' in note.lower(), (
+        "PREMISE: the constant's note was not located, so arm 1 is reading "
+        "the wrong text")
+
+    def offenders(text):
+        return [ln.strip() for ln in text.splitlines() if stale in ln.upper()]
+
+    if CA._GAP_KERNEL_ACCURACY_TAU is not None:
+        bad = {where: offenders(text)
+               for where, text in (('the constant note', note),
+                                   ('the departure law docstring', tau_src),
+                                   ('_collins_transport', trans_src))
+               if offenders(text)}
+        assert not bad, (
+            f"the shipped tau is {CA._GAP_KERNEL_ACCURACY_TAU!r}, i.e. the "
+            f"rule is ARMED, and {len(bad)} place(s) beside it still say "
+            f"{stale!r}: {bad}")
+    # counter-arm: the grep IS discriminating.  The pre-round-2 wording put
+    # back into a copy of the same text is caught.
+    was = trans_src.replace('ACCURACY-KEYED FALLBACK, ARMED BY DEFAULT',
+                            'ACCURACY-KEYED FALLBACK, OFF BY DEFAULT')
+    assert was != trans_src, (
+        "PREMISE: the comment this id watches has been reworded, so the "
+        "counter-arm is not reconstructing the defect it claims")
+    assert offenders(was), (
+        "the grep does not catch the stale wording it was written for")
+
+    # arm 2: the docstring renders as ONE block
+    doc = inspect.cleandoc(CA._fill_readout_replicas.__doc__)
+    body = [ln for ln in doc.splitlines() if ln.strip()]
+    indented = [ln for ln in body if ln.startswith('    ')]
+    assert not indented, (
+        f"{len(indented)} of {len(body)} non-blank lines of "
+        f"_fill_readout_replicas's docstring come back from cleandoc with a "
+        f"four-space prefix, i.e. one paragraph sits at column 0 and the "
+        f"rest render as a literal block: {indented[:2]}")
+    # counter-arm: rebuild the SHAPE the defect had -- the docstring as it
+    # sits in the source, four-space indented, with one paragraph left in
+    # column 0 -- and check that the same reading flips.  Reconstructed from
+    # the cleaned text rather than from ``__doc__``, because py3.13+ dedents
+    # docstrings at COMPILE time (so ``__doc__`` is already clean on the
+    # Windows build and still raw on the WSL one, and only this arm's own
+    # reconstruction is the same on both).
+    marker = "``'zero'`` IS THE DEFAULT"
+    lines = doc.splitlines()
+    hits = [k for k, ln in enumerate(lines) if ln.startswith(marker)]
+    assert len(hits) == 1, (
+        f"PREMISE: the paragraph this id watches was found {len(hits)} "
+        f"times, so the counter-arm is not reconstructing the defect it "
+        f"claims")
+    raw_mut = '\n'.join(
+        ln if (k == hits[0] or not ln.strip()) else '    ' + ln
+        for k, ln in enumerate(lines))
+    mbody = [ln for ln in inspect.cleandoc(raw_mut).splitlines() if ln.strip()]
+    assert len([ln for ln in mbody
+                if ln.startswith('    ')]) > 0.5 * len(mbody), (
+        "the column-0 mutant does NOT make cleandoc indent the rest, so "
+        "this id is not measuring what it says it is")
+
+
+# -- D5: how each readout is periodic, and why the fill is right anyway -----
+_D5 = dict(lam=1.55e-6, R=-25.0e-3, w=0.60e-3, n_in=512, dx_in=5.0e-6,
+           n_out=256, window_periods=1.60)
+_D5['period'] = _D5['lam'] * abs(_D5['R']) / _D5['dx_in']
+_D5['dx_out'] = _D5['window_periods'] * _D5['period'] / _D5['n_out']
+_D5['shift'] = int(round(_D5['period'] / _D5['dx_out']))
+
+
+def _d5_pupil():
+    x = _axis(_D5['n_in'], _D5['dx_in'])
+    return np.exp(-(x[None, :] ** 2 + x[:, None] ** 2)
+                  / _D5['w'] ** 2).astype(np.complex128)
+
+
+def _d5_residuals(F, m):
+    """Complex and modulus residuals at an integer shift of ``m`` samples,
+    each divided by the array's own peak."""
+    F = np.asarray(F)
+    n = F.shape[1]
+    sc = float(np.abs(F).max())
+    A, B = F[:, m:], F[:, :n - m]
+    return (float(np.max(np.abs(A - B))) / sc,
+            float(np.max(np.abs(np.abs(A) - np.abs(B)))) / sc, sc)
+
+
+def test_the_collins_replicas_are_aliases_up_to_a_known_phase():
+    """D5.  WHAT THE FILL IS ACTUALLY JUSTIFIED BY.
+
+    ``_fill_readout_replicas``'s docstring justified the blanking with
+    "``E(u + period) == E(u)`` identically in ABSOLUTE output coordinates".
+    That is true of the two readouts that finish on
+    ``angular_spectrum_propagate_mft`` and NOT of ``_collins_focus_readout``,
+    which the function also serves: its post-chirp ``exp(i k D x^2 / 2B)`` is
+    quadratic in the absolute output coordinate, so a shift of one period
+    multiplies the field by ``exp(i[2 pi u/dx_in + pi lambda z/dx_in^2])``
+    instead of leaving it alone.
+
+    Measured 2026-09-20 on both builds, on a 256-sample window at 1.60
+    periods shifted by exactly one period (160 samples), 0.30 periods off
+    axis: the complex residual is 6.96e-03 of the peak while the MODULUS
+    residual is 2.01e-14, and the closed form holds to 7.17e-09 over 377
+    sample pairs.  The paraxial readout on the same geometry reads 1.13e-13
+    complex, i.e. the literal statement -- which is what says the difference
+    is the Collins post-chirp and not the fixture.
+
+    The behaviour the fill depends on is the MODULUS statement ("a replica is
+    a full-amplitude image of the core"), and that is the arm with the
+    decades under it.  Every bar here is a ratio between two numbers this run
+    measured.
+    """
+    p, m, n = _D5['period'], _D5['shift'], _D5['n_out']
+    assert abs(m * _D5['dx_out'] / p - 1.0) < 1e-12, (
+        f"PREMISE: {m} samples is {m * _D5['dx_out'] / p:.6f} periods, not "
+        f"one, so the shift below is not a replica shift")
+    pd = {}
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        F = np.asarray(CA._collins_focus_readout(
+            _d5_pupil(), _D5['R'], -_D5['R'], _D5['lam'], _D5['dx_in'],
+            _D5['dx_in'], dx_out=_D5['dx_out'], N_out=n,
+            centre_out=(0.30 * p, 0.0), on_replica='ignore',
+            on_collins_sampling='ignore', replica_fill='repeat',
+            _period_out=pd))
+    assert abs(min(pd['period']) / p - 1.0) < 1e-9, (
+        f"PREMISE: the transport reports a period of {min(pd['period']):.6e} "
+        f"m against the {p:.6e} m this fixture derives, so the shift is not "
+        f"the period the library itself uses")
+    c_res, a_res, peak = _d5_residuals(F, m)
+
+    # (1) the MODULUS is periodic -- the statement the fill rests on
+    assert a_res < 1e-10, (
+        f"the modulus is NOT periodic at one period ({a_res:.4e} of the "
+        f"peak), so 'a replica is a full-amplitude image of the core' is "
+        f"not true here and the fill's premise is gone")
+    # (2) the COMPLEX field is not, by six decades or more
+    assert c_res / a_res > 1e6, (
+        f"the complex residual {c_res:.4e} is not separated from the "
+        f"modulus residual {a_res:.4e}, so this fixture does not "
+        f"demonstrate the phase factor at all")
+    # (3) and the phase it is off by is the CLOSED FORM
+    u = _axis(n, _D5['dx_out']) + 0.30 * p
+    pred = np.exp(1j * (2.0 * np.pi * u[:n - m] / _D5['dx_in']
+                        + np.pi * _D5['lam'] * (-_D5['R'])
+                        / _D5['dx_in'] ** 2))
+    A, B = F[:, m:], F[:, :n - m]
+    sel = np.abs(B) > 1e-6 * peak
+    assert int(sel.sum()) > 300, (
+        f"PREMISE: only {int(sel.sum())} sample pairs carry signal, so the "
+        f"closed form below is checked on almost nothing")
+    got = (A / np.where(np.abs(B) > 0, B, 1.0))[sel]
+    err = float(np.max(np.abs(
+        got - np.broadcast_to(pred[None, :], B.shape)[sel])))
+    assert err < 1e-4 * c_res, (
+        f"the ratio E(u+p)/E(u) is not exp(i[2 pi u/dx_in + pi lambda "
+        f"z/dx_in^2]): worst error {err:.4e} over {int(sel.sum())} pairs, "
+        f"against a complex residual of {c_res:.4e}")
+    # (4) two-sided against the OTHER readout: the literal statement holds
+    #     there, so the difference is the post-chirp and not the window
+    pd2 = {}
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        la.carrier_referenced_focus_readout(
+            _d5_pupil(), _D5['R'], -_D5['R'], _D5['lam'], _D5['dx_in'],
+            dx_out=1.0e-6, N_out=32, on_replica='ignore',
+            on_focus_containment='ignore', _period_out=pd2)
+        ps = float(min(pd2['period']))
+        dxs = _D5['window_periods'] * ps / n
+        Fs = np.asarray(la.carrier_referenced_focus_readout(
+            _d5_pupil(), _D5['R'], -_D5['R'], _D5['lam'], _D5['dx_in'],
+            dx_out=dxs, N_out=n, centre_out=(0.30 * ps, 0.0),
+            on_replica='ignore', on_focus_containment='ignore',
+            replica_fill='repeat', _period_out={}))
+    s_res, _s_a, _s_pk = _d5_residuals(Fs, m)
+    assert s_res < 1e-6 * c_res, (
+        f"the paraxial readout is ALSO non-periodic in the complex field "
+        f"({s_res:.4e} against the Collins readout's {c_res:.4e}), so this "
+        f"id is reading a property of the window rather than of the Collins "
+        f"post-chirp")
+
+
+# -- D9: the refusal is taken before the fill, on ALL THREE call sites ------
+def _refusal_sentinel():
+    def boom(*a, **k):
+        raise AssertionError('the fill ran on the refusal path')
+    return boom
+
+
+def test_the_refusal_precedes_the_fill_on_the_collins_readout():
+    """D9.  THE SAME DEMONSTRATION ON ``_collins_focus_readout``.
+
+    ``test_the_refusal_is_taken_before_the_fill_is_reached`` aims at a CALL
+    SITE, and there are three of them, one per readout
+    (``carrier.py`` 2772 / 4493 / 7235 at the branch tip).  That id exercises
+    the paraxial one.  This one is the Collins site -- the readout the traced
+    chain reaches on ``transport='collins'``, i.e. the route WP-C3 is about
+    to make the default, whose refusal otherwise rests on a single
+    pre-existing id in ``test_audit2609_b4_collins_transport.py``
+    (``TestKellyGuard::test_the_period_is_the_input_grid_s_and_the_replica_guard_sees_it``).
+
+    Same shape as the paraxial id: the fill is replaced by a raising sentinel
+    and the REFUSAL must still be what comes out, with the counter-pin that
+    the sentinel IS reached once the guard is waived -- so the arm is about
+    the ORDER and not about an unreachable call.
+    """
+    p = _D5['period']
+    n, dxo = 128, p * 1.60 / 128
+
+    def call(on_replica):
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            return CA._collins_focus_readout(
+                _d5_pupil(), _D5['R'], -_D5['R'], _D5['lam'], _D5['dx_in'],
+                _D5['dx_in'], dx_out=dxo, N_out=n, on_replica=on_replica,
+                on_collins_sampling='ignore')
+
+    assert n * dxo > p, (
+        f"PREMISE: the {n * dxo:.6e} m window fits inside the {p:.6e} m "
+        f"period, so there is nothing to refuse")
+    real = CA._fill_readout_replicas
+    CA._fill_readout_replicas = _refusal_sentinel()
+    try:
+        with pytest.raises(RuntimeError, match='ALIASES'):
+            call('error')
+        with pytest.raises(AssertionError, match='refusal path'):
+            call('ignore')
+    finally:
+        CA._fill_readout_replicas = real
+
+
+def test_the_refusal_precedes_the_fill_on_the_exact_readout():
+    """D9.  THE SAME DEMONSTRATION ON
+    ``carrier_referenced_exact_focus_readout``.
+
+    The third call site.  Before round 2 nothing in either C5 file caught a
+    waived refusal here; the LIBRARY was covered (VERIFY-WP-C5 measured it
+    per call site:
+    ``test_fix_v1_v8_readout_guard_and_standoff.py::TestV3ExactReadout::test_one_period_off_the_chief_ray_is_refused``
+    and
+    ``test_niche_tight_focus_readout.py::test_the_exact_readout_guards_the_same_way_on_its_own_period``
+    both fail on the mutant), and now this file is too.
+    """
+    n, dx, w, R = 512, 0.5e-6, 30e-6, -0.2e-3
+    x = (np.arange(n) - n // 2) * dx
+    r2 = x[:, None] ** 2 + x[None, :] ** 2
+    S = np.sign(R) * (np.sqrt(r2 + R * R) - abs(R))
+    E = (np.exp(-r2 / w ** 2)
+         * np.exp(1j * 2.0 * np.pi / _WL3 * S)).astype(np.complex128)
+
+    def call(on_replica, **kw):
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            return la.carrier_referenced_exact_focus_readout(
+                E, R, -R, _WL3, dx, dx_out=0.05e-6, N_out=3072,
+                window_factor=4.0, on_replica=on_replica, **kw)
+
+    pd = {}
+    call('ignore', _period_out=pd)
+    assert 3072 * 0.05e-6 > min(pd['period']), (
+        f"PREMISE: the {3072 * 0.05e-6 * 1e6:.1f} um window fits inside this "
+        f"readout's {min(pd['period']) * 1e6:.1f} um period, so there is "
+        f"nothing to refuse")
+    real = CA._fill_readout_replicas
+    CA._fill_readout_replicas = _refusal_sentinel()
+    try:
+        with pytest.raises(RuntimeError, match='ALIASES'):
+            call('error')
+        with pytest.raises(AssertionError, match='refusal path'):
+            call('ignore')
+    finally:
+        CA._fill_readout_replicas = real

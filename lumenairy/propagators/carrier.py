@@ -1681,11 +1681,15 @@ _TRANSPORTS = ('sziklas', 'collins')
 #: NOT a geometric margin -- the radii are read from the field on every call.
 _COLLINS_TAIL_FRAC = 1e-6
 
-#: The ACCURACY-keyed fallback for ``gap_kernel='auto'`` near a geometric
-#: focus, ON by default with ``tau = 1e-4`` (the maintainer's decision of
-#: 2026-09-20 on ledger items 1.5 / 4.3; the CHANGELOG carries the release it
-#: shipped in).  ``'auto'`` drops to ``'fresnel'`` on a leg whose PREDICTED
-#: exact-kernel departure exceeds
+#: The ACCURACY-keyed fallback for ``gap_kernel='auto'``, ARMED by default
+#: with ``tau = 1e-4`` (the maintainer's decision of 2026-09-20 on ledger
+#: items 1.5 / 4.3; the CHANGELOG carries the release it shipped in).  It
+#: fires inside a band in ``k |z_eff| theta_env^4`` -- the KERNEL-DEPARTURE
+#: BAND, named for the criterion rather than for a distance, because the
+#: envelope's angle enters at the fourth power and a wide envelope trips it
+#: on a leg that is nowhere near a focus (VERIFY-WP-C5 D6; see "THE BAND IT
+#: FIRES IN" below).  ``'auto'`` drops to ``'fresnel'`` on a leg whose
+#: PREDICTED exact-kernel departure exceeds
 #: ``tau``; an EXPLICIT ``gap_kernel='exact'`` is still honoured, and setting
 #: this back to ``None`` restores 5.48.x bit for bit -- the condition is then
 #: not evaluated at all, so nothing is measured, nothing allocated and no byte
@@ -1694,7 +1698,9 @@ _COLLINS_TAIL_FRAC = 1e-6
 #: WHAT IT DOES, AND WHY THE DEFAULT MOVED.  The existing ``k4`` gate bounds
 #: REPRESENTABILITY -- whether the exact kernel's impulse response wraps the
 #: reduced frame -- and it is the right gate for what it bounds.  It does not
-#: bound ACCURACY, and near a geometric focus the two part company: MEASURED
+#: bound ACCURACY, and wherever ``k |z_eff| theta_env^4`` is large -- near a
+#: geometric focus at a fixed envelope angle, and on a wide envelope at a
+#: fixed distance -- the two part company: MEASURED
 #: 2026-09-19 across three fixtures and two builds, ``k4`` sits 4.65 decades
 #: below its bar of 1 where the exact kernel's departure from the paraxial
 #: oracle is 4.7e-06, and still 2 decades below it where that departure is
@@ -1710,11 +1716,13 @@ _COLLINS_TAIL_FRAC = 1e-6
 #: to a ratio of 1.00002 and the 498x between the two fixtures to four digits.
 #:
 #: WHAT ``tau = 1e-4`` BUYS, AND THE BAND IT FIRES IN.  ``tau`` is a
-#: RELATIVE-L2 budget on the field, a tenth of a per-mille, and because the
-#: departure is linear in ``|z_eff|`` the rule is a NEAR-FOCUS rule with a
-#: closed-form band: it fires only where
-#: ``|z_eff| > 8 tau / (sqrt(3/2) k theta_env^4)``.  Measured 2026-09-20 on
-#: both builds (``validation/probe_c5_three_defaults/``): the hygiene-2 ladder
+#: RELATIVE-L2 budget on the field, a tenth of a per-mille.  The departure is
+#: linear in ``|z_eff|`` and QUARTIC in ``theta_env``, so the rule is a band
+#: in ``k |z_eff| theta_env^4`` -- near-focus at a FIXED envelope angle,
+#: wide-envelope at a FIXED distance -- and not a distance to a focus.  It
+#: fires exactly where ``|z_eff| > 8 tau / (sqrt(3/2) k theta_env^4)``.
+#: Measured 2026-09-20 on both builds
+#: (``validation/probe_c5_three_defaults/``): the hygiene-2 ladder
 #: is INERT at every one of its nine rungs (worst departure 4.72e-06, 1.3
 #: decades under tau) because its carrier focus sits 31.66 um beyond the waist
 #: the ladder walks to; VERIFY-B4 F3's ladder, which does approach ``A = 0``,
@@ -1723,12 +1731,40 @@ _COLLINS_TAIL_FRAC = 1e-6
 #: is under).  On the F3 fixture the fallback replaces a 2.35e-03 relative
 #: departure from the analytic Gaussian with 1.7e-14.
 #:
+#: AND THE OTHER HALF OF THE BAND, which the two fixtures above cannot show
+#: because both hold the envelope's angle fixed and walk the distance.  On a
+#: carrier MISMATCHED to its beam the envelope keeps a residual lens, so
+#: ``theta_env`` grows while the leg stays where it is.  Measured 2026-09-20
+#: on both builds (``validation/probe_c5_round2/``, and pinned by
+#: ``tests/unit/test_c5_three_defaults.py::
+#: test_a_wide_envelope_leg_far_from_any_focus_falls_back``): on ONE leg --
+#: one carrier, one readout plane, ``z_eff`` 7.777778e-03 m, 9.00 mm from
+#: that carrier's ``A = 0`` plane and 48.6 Rayleigh ranges short of the
+#: beam's own focus -- a 0.80 mm input beam (``theta_env`` 1.715395e-02 rad)
+#: reads a departure of 4.179416e-04 and FALLS BACK, while a 0.40 mm beam on
+#: the same leg (8.659722e-03 rad) reads 2.714408e-05 and keeps the exact
+#: kernel.  The ratio is 15.40, which is 1.9809^4: the quartic, with the
+#: distance factored out.  The one leg in the library's own test suite that
+#: this rule moves is of that kind, not of the near-focus kind
+#: (``test_audit2609_b4_collins_transport.py``'s ``mismatch_matrix``,
+#: ``|z_eff|`` 0.180 m, ``theta_env`` 5.5712e-03 rad, departure 1.2733e-04,
+#: 2.00 mm from its ``A = 0`` plane).
+#:
 #: THE CAVEAT, BOTH WAYS.  The oracle that measured the law is PARAXIAL, so it
 #: can say how far the exact kernel departs from the paraxial truth and cannot
 #: say which kernel is more physical.  On a leg where the exact kernel IS the
 #: better physics this rule trades accuracy for agreement with the paraxial
 #: oracle -- which is why an explicit ``gap_kernel='exact'`` is never
-#: overridden and why ``None`` stays one assignment away.  The chain's own
+#: overridden and why ``None`` stays one assignment away.  Scored ONCE against
+#: an oracle that is not paraxial (VERIFY-WP-C5, a closed-form angular
+#: spectrum with the exact transfer function): on the ``mismatch_matrix``
+#: leg the plain kernel reads 8.212599e-02 relative L2 from the true scalar
+#: field and the refined one 8.222558e-02, so the rule moves that leg TOWARD
+#: the truth -- but both sit 8.2e-02 away, because the refinement lives in
+#: the reduced frame on the ENVELOPE's angle while the leg's own
+#: non-paraxiality is set by the BEAM's NA.  At that fixture's NA the rule is
+#: arbitrating 1e-04 of an 8e-02 modelling error, which is the honest size of
+#: the decision and not an argument for either kernel.  The chain's own
 #: :data:`_GAP_ENV_PHI_TOL_DEFAULT` = 0.3 is NOT a usable ``tau`` here: it
 #: would need ``z_eff > 9.8e+05 m`` to trip on the hygiene-2 fixture, i.e.
 #: never.  ``tests/unit/test_wave5_h2_near_focus_table.py`` and
@@ -1779,8 +1815,8 @@ def _collins_exact_kernel_departure(z_eff, theta_env, wavelength):
 
     What the exact-kernel refinement CHANGES, relative, against the paraxial
     kernel.  Derived and re-measured on three fixtures and two builds; see
-    :data:`_GAP_KERNEL_ACCURACY_TAU` for the readings and for why the rule it
-    feeds is off by default.
+    :data:`_GAP_KERNEL_ACCURACY_TAU` for the readings, for the band the rule
+    it feeds fires in, and for the caveat that goes with it.
     """
     if not np.isfinite(z_eff):
         return float('inf')
@@ -2455,12 +2491,14 @@ def _collins_transport(env, R_in, z, wavelength, dx, dy, *,
                     f"theta^4/8 of the beam's own angle).  Pass gap_kernel='auto' "
                     f"to take the ABCD-Fresnel integral here, or 'fresnel' to take "
                     f"it everywhere.")
-        # ACCURACY-KEYED FALLBACK, OFF BY DEFAULT.  See
-        # :data:`_GAP_KERNEL_ACCURACY_TAU`: with the shipped ``None`` nothing
-        # below is evaluated and the leg is 5.47.0 to the byte.  Only 'auto'
-        # falls back; an EXPLICIT 'exact' is honoured, because the caller has
-        # asked for the refinement and silently replacing it is the D4 shape
-        # the vocabulary gate exists to remove.
+        # ACCURACY-KEYED FALLBACK, ARMED BY DEFAULT.  See
+        # :data:`_GAP_KERNEL_ACCURACY_TAU`: setting it back to ``None``
+        # leaves nothing below evaluated and the leg is 5.48.x to the byte.
+        # Only 'auto' falls back; an EXPLICIT 'exact' is honoured, because
+        # the caller has asked for the refinement and silently replacing it
+        # is the D4 shape the vocabulary gate exists to remove.  The band it
+        # fires in is a band in ``k |z_eff| theta_env^4``, not a distance to
+        # a focus (VERIFY-WP-C5 D6).
         dep = None
         if (kernel == 'exact' and _GAP_KERNEL_ACCURACY_TAU is not None):
             th_ex, th_ey = _collins_envelope_half_angle(S, dx, dy, wavelength)
@@ -5262,7 +5300,18 @@ def _fill_readout_replicas(E_out, period, dx_out, N_out,
     Both public readouts finish on
     :func:`~lumenairy.propagators.mft.angular_spectrum_propagate_mft`, whose
     reconstruction obeys ``E(u + period) == E(u)`` identically in ABSOLUTE
-    output coordinates.  Only ``|u| <= period/2`` about that origin carries
+    output coordinates (measured 1.5e-14 and 1.8e-13).
+    :func:`_collins_focus_readout` shares the GEOMETRY and not that last
+    statement: its post-chirp is quadratic in the absolute output coordinate,
+    so there ``E(u + period) = exp(i[2 pi u/dx_in + pi lambda z/dx_in^2])
+    E(u)`` -- the MODULUS is periodic to 2.0e-14 and the complex field only
+    where ``u/dx_in`` is an integer (measured 2026-09-20 on both builds over
+    377 sample pairs, worst 7.2e-09; VERIFY-WP-C5 D5,
+    ``validation/probe_c5_round2/``).  What this function is about is
+    unaffected: the mask is field-independent and built from the period
+    alone, and "a replica is a full-amplitude image of the core" -- the
+    statement every reduction the fill protects depends on -- is the MODULUS
+    statement.  Only ``|u| <= period/2`` about that origin carries
     measurement; every sample beyond it repeats a point the transform already
     evaluated, whatever the field, the NA, the leg and the window
     (:func:`_check_readout_replica` derives the geometry and states the bar).
@@ -5297,7 +5346,7 @@ def _fill_readout_replicas(E_out, period, dx_out, N_out,
     1536 um agree to the digit), i.e. three independent geometries with no
     replicas in them.
 
-``'zero'`` IS THE DEFAULT, AND WHAT THAT DOES NOT CHANGE.  The
+    ``'zero'`` IS THE DEFAULT, AND WHAT THAT DOES NOT CHANGE.  The
     maintainer's decision of 2026-09-20 is that a readout should not hand back
     copies it did not measure, so the blanking is on by default.  It changes
     only what a WAIVED oversized window CONTAINS: the replica refusal is
