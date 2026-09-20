@@ -1,0 +1,83 @@
+{
+ "tau": null,
+ "tree": "C:\\tmp\\vc3_head\\lumenairy\\propagators\\carrier.py",
+ "rows": [
+  {
+   "transport": "sziklas",
+   "case": "readout",
+   "digest": "ab9b13af5cae16e2",
+   "route": null,
+   "reason": null,
+   "k1": null,
+   "period": 0.00011722657961662326
+  },
+  {
+   "transport": "sziklas",
+   "case": "readout+standoff",
+   "digest": "4ea1aac8184bb5ac",
+   "route": null,
+   "reason": null,
+   "k1": null,
+   "period": 0.0006975605760462777
+  },
+  {
+   "transport": "sziklas",
+   "case": "no-readout",
+   "error": "ValueError: carrier_referenced_envelope: R_carrier == 0 (carrier focus)."
+  },
+  {
+   "transport": "collins",
+   "case": "readout",
+   "digest": "f4a0e81cd35bf09f",
+   "route": "collins",
+   "reason": "representable",
+   "k1": 0.021484375,
+   "period": 0.0038460889163294894
+  },
+  {
+   "transport": "collins",
+   "case": "readout+standoff",
+   "digest": "4ea1aac8184bb5ac",
+   "route": "sziklas",
+   "reason": "stop_plane_key",
+   "k1": null,
+   "period": 0.0006975605760462777
+  },
+  {
+   "transport": "collins",
+   "case": "no-readout",
+   "digest": "d4e4d5759af3fee8",
+   "route": null,
+   "reason": null,
+   "k1": null,
+   "period": null
+  },
+  {
+   "transport": "None",
+   "case": "readout",
+   "digest": "f4a0e81cd35bf09f",
+   "route": "collins",
+   "reason": "representable",
+   "k1": 0.021484375,
+   "period": 0.0038460889163294894
+  },
+  {
+   "transport": "None",
+   "case": "readout+standoff",
+   "digest": "4ea1aac8184bb5ac",
+   "route": "sziklas",
+   "reason": "stop_plane_key",
+   "k1": null,
+   "period": 0.0006975605760462777
+  },
+  {
+   "transport": "None",
+   "case": "no-readout",
+   "digest": "d4e4d5759af3fee8",
+   "route": null,
+   "reason": null,
+   "k1": null,
+   "period": null
+  }
+ ]
+}

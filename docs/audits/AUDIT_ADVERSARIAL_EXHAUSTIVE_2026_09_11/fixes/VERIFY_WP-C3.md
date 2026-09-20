@@ -258,6 +258,44 @@ keys reached the same conclusion independently: **23 of 103 keys ok →
 `transport='sziklas'` restores the returning behaviour on every row, so the
 way back is intact and the defect is in the CLAIM.
 
+**HOW WIDE, measured** — because a ship recommendation needs the width and not
+one counterexample.  `validation/probe_verify_c3/probe_vc3_blastwidth.py`
+sweeps a deliberately ordinary space with **no `transport=` named on either
+side** and no stop-plane key, tilt or `gap_kernel` anywhere: 3 prescriptions
+(f = 60 / 120 / 300 mm BK7 biconvex) x 1 and 2 groups x N = 256/512 x
+w = 1.5/3.0 mm x collimated and r_in = 60 mm x `final_distance` = 5/15 mm x
+with and without a focus readout = **192 cells**.  Base vs branch, **identical
+on WIN-py3.14 and WSL-py3.12**:
+
+| classification | cells | share |
+|---|---|---|
+| IDENTICAL | **118** | 61.5 % |
+| MOVED | 52 | 27.1 % |
+| **OK → RAISED** | **22** | **11.5 %** |
+| RAISED → OK | 0 | 0 % |
+
+All 22 are the same containment `RuntimeError`, and all 22 carry a focus
+readout.  So the honest statement is that **the majority of ordinary chains
+are bit-identical — which is the complementary selection working — and about
+one in nine crashes.**  That proportion is what makes this a blocker rather
+than a note.
+
+**The same sweep also refutes the §6 census** (claim 10).  Kelly
+"under-sampled" `RuntimeWarning`s over the 192 cells:
+
+| build | base 49ddf4bd | branch 4d87ff48 |
+|---|---|---|
+| WIN-py3.14 | **0** warnings, 0 of 192 cells | **74** warnings, **51 of 192 cells** (26.6 %) |
+| WSL-py3.12 | **0** warnings, 0 of 192 cells | **74** warnings, 51 of 192 cells |
+
+The package reports "21 Collins calls, **0** emitting the Kelly warning, both
+builds".  That reading is correct for the fixtures it drives and does not
+generalise: on ordinary chains the guard speaks on **one cell in four**, where
+it never spoke before, and in every case on a leg with **no caller-named
+output lattice** — the case §6 names as the only one where the guard is not
+dead.  See also D6, where the warning is the sole trace of a leg that is 3x
+wrong.
+
 **Requested edit — `CHANGELOG.md`, the Migration paragraph** (the sentence
 beginning "**No public call that worked on 5.48.1 raises on 5.49.0**"), and
 the equivalent paragraph in `Migration-Guide.md` §5.49.0.

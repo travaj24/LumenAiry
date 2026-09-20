@@ -1,0 +1,83 @@
+{
+ "tau": 0.0001,
+ "tree": "C:\\tmp\\vc3_merged\\lumenairy\\propagators\\carrier.py",
+ "rows": [
+  {
+   "transport": "sziklas",
+   "case": "readout",
+   "digest": "6793caeba8516588",
+   "route": null,
+   "reason": null,
+   "k1": null,
+   "period": 0.00011722657961662326
+  },
+  {
+   "transport": "sziklas",
+   "case": "readout+standoff",
+   "digest": "9697efe8b882b988",
+   "route": null,
+   "reason": null,
+   "k1": null,
+   "period": 0.0006975605760462777
+  },
+  {
+   "transport": "sziklas",
+   "case": "no-readout",
+   "error": "ValueError: carrier_referenced_envelope: R_carrier == 0 (carrier focus)."
+  },
+  {
+   "transport": "collins",
+   "case": "readout",
+   "digest": "b1fe5d207254470a",
+   "route": "collins",
+   "reason": "representable",
+   "k1": 0.021484375,
+   "period": 0.0038460889163294894
+  },
+  {
+   "transport": "collins",
+   "case": "readout+standoff",
+   "digest": "9697efe8b882b988",
+   "route": "sziklas",
+   "reason": "stop_plane_key",
+   "k1": null,
+   "period": 0.0006975605760462777
+  },
+  {
+   "transport": "collins",
+   "case": "no-readout",
+   "digest": "d4e4d5759af3fee8",
+   "route": null,
+   "reason": null,
+   "k1": null,
+   "period": null
+  },
+  {
+   "transport": "None",
+   "case": "readout",
+   "digest": "b1fe5d207254470a",
+   "route": "collins",
+   "reason": "representable",
+   "k1": 0.021484375,
+   "period": 0.0038460889163294894
+  },
+  {
+   "transport": "None",
+   "case": "readout+standoff",
+   "digest": "9697efe8b882b988",
+   "route": "sziklas",
+   "reason": "stop_plane_key",
+   "k1": null,
+   "period": 0.0006975605760462777
+  },
+  {
+   "transport": "None",
+   "case": "no-readout",
+   "digest": "d4e4d5759af3fee8",
+   "route": null,
+   "reason": null,
+   "k1": null,
+   "period": null
+  }
+ ]
+}
