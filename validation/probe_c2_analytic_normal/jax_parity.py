@@ -133,11 +133,18 @@ def main():
                                        for v in results.values()),
         )
         print(arm, summary[arm])
-    summary['default_matches_analytic'] = all(
-        v['library_default'] == v['analytic_surface']
+    # 5.49.0's default is analytic + exit; asked from a call rather
+    # than from the signature.
+    summary['default_matches_analytic_exit'] = all(
+        v['library_default'] == v['analytic_exit']
         for v in results.values())
-    print('library default == analytic/surface arm:',
-          summary['default_matches_analytic'])
+    summary['default_differs_from_pre_5_49_0'] = any(
+        v['library_default'] != v['generic_surface']
+        for v in results.values())
+    print('library default == analytic/exit arm:',
+          summary['default_matches_analytic_exit'],
+          '| differs from generic/surface:',
+          summary['default_differs_from_pre_5_49_0'])
     meta = dict(python=sys.version, numpy=np.__version__,
                 jax=jax.__version__, lumenairy=la.__version__,
                 platform=sys.platform)

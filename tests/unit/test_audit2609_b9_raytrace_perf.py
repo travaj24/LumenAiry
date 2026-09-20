@@ -187,10 +187,18 @@ def test_b9_i1_surface_mode_leaves_every_history_bundle_unit_length():
     ``'exit'`` only the last one is, and the intermediate drift is real
     (non-zero), which is the two-sided statement that the division was
     actually hoisted rather than merely relocated.
+
+    5.49.0 (WP-C2) made ``'exit'`` the default, so BOTH arms now name
+    their mode: the claim is about the two modes, not about which one
+    a bare call happens to take, and an arm that relied on the default
+    would silently change sides.  The drift bound below is also why the
+    ``trace`` docstring no longer promises ``<= 1e-15`` on the history
+    bundles -- ``4 * n_surfaces * eps`` is the shape, and at 13 surfaces
+    the reading is 1.8e-15.
     """
     S = _spherical_stack()
     rays = _pupil_bundle(400)
-    res_s = trace(rays, S, WL)
+    res_s = trace(rays, S, WL, renormalize='surface')
     res_e = trace(rays, S, WL, renormalize='exit')
 
     def worst(bundle):
@@ -217,7 +225,12 @@ def test_b9_i1_surface_mode_leaves_every_history_bundle_unit_length():
 def test_b9_i1_exit_mode_calls_the_single_pass_exactly_once(monkeypatch):
     """Structural (build-free) count: ``_normalize_directions`` runs ONCE
     per trace in ``'exit'`` mode and never in ``'surface'`` mode, while
-    ``_refract`` runs once per refracting surface in both."""
+    ``_refract`` runs once per refracting surface in both.
+
+    5.49.0 (WP-C2): ``'exit'`` is the default, so the ``'surface'`` arm
+    names its mode.  The DEFAULT's own count is asserted separately, in
+    ``tests/unit/test_c2_analytic_normal_default.py``, so this test
+    keeps measuring the two modes rather than the default."""
     S = _spherical_stack()
     rays = _pupil_bundle(32)
     calls = {'norm': 0, 'refract': 0}
@@ -235,7 +248,7 @@ def test_b9_i1_exit_mode_calls_the_single_pass_exactly_once(monkeypatch):
     monkeypatch.setattr(_trace_mod, '_normalize_directions', counting_norm)
     monkeypatch.setattr(_trace_mod, '_refract', counting_refract)
 
-    trace(rays, S, WL)
+    trace(rays, S, WL, renormalize='surface')
     assert calls == {'norm': 0, 'refract': len(S)}
     calls['norm'] = calls['refract'] = 0
     trace(rays, S, WL, renormalize='exit')

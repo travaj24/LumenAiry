@@ -79,7 +79,7 @@ def trace_world(
     wavelength: float,
     output_filter: Union[str, Callable[..., Any]] = 'all',
     surface_diffraction: Optional[Dict[int, Tuple[float, float, float, float]]] = None,
-    renormalize: str = 'surface',
+    renormalize: str = 'exit',
     sphere_normal: str = 'analytic',
 ) -> 'TraceResult':
     """Sequential ray trace in world coordinates.
@@ -121,12 +121,17 @@ def trace_world(
     surface_diffraction : dict or None
         Same {surface_index: (mx, my, period_x_m, period_y_m)}
         spec accepted by :func:`trace`.
-    renormalize : ``'surface'`` (default) | ``'exit'``
-        Identical semantics to :func:`trace`: where the direction
-        cosines are rescaled to unit length.  ``'exit'`` rescales once,
-        on the bundle leaving the last surface -- in that surface's LOCAL
-        frame, which is the frame the history records, so the returned
-        ``image_rays`` is unit-length there.
+    renormalize : ``'exit'`` (default since 5.49.0) | ``'surface'``
+        Identical semantics to :func:`trace`, including the 5.49.0
+        default change: where the direction cosines are rescaled to unit
+        length.  ``'exit'`` rescales once, on the bundle leaving the
+        last surface -- in that surface's LOCAL frame, which is the
+        frame the history records, so the returned ``image_rays`` is
+        unit-length there, while the INTERMEDIATE history bundles carry
+        up to ``n_surfaces * eps`` of drift.  ``'surface'`` is the
+        pre-5.49.0 arithmetic and is byte-identical to it; see
+        :func:`trace` for the ladder, the corrected drift bound and the
+        timing that did not reproduce.
     sphere_normal : ``'analytic'`` (default since 5.49.0) | ``'generic'``
         Identical semantics to :func:`trace`, including the 5.49.0
         default change: which route computes the surface normal at a

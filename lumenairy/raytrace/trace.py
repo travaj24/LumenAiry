@@ -57,7 +57,7 @@ def trace(
     wavelength: float,
     output_filter: Union[str, Callable[..., Any]] = 'all',
     surface_diffraction: Optional[Dict[int, Tuple[float, float, float, float]]] = None,
-    renormalize: str = 'surface',
+    renormalize: str = 'exit',
     sphere_normal: str = 'analytic',
 ) -> 'TraceResult':
     """Trace a ray bundle through a sequential list of surfaces.
@@ -111,32 +111,58 @@ def trace(
         (``L_new**2 + M_new**2 > 1``) are flagged
         ``alive=False`` with ``error_code=RAY_EVANESCENT``.  See also
         :func:`apply_doe_phase_traced`.
-    renormalize : ``'surface'`` (default) | ``'exit'``
+    renormalize : ``'exit'`` (default since 5.49.0) | ``'surface'``
         Where the refracted / reflected direction cosines are rescaled
         to unit length.
 
+        * ``'exit'`` (the default) -- once, on the bundle that leaves
+          the last surface.  Exact vector Snell with a unit normal
+          returns a unit vector identically, so each per-surface rescale
+          only removes ~1e-16 of rounding drift; hoisting it saves
+          ``np.maximum`` + three divisions per surface.  The
+          degenerate-direction diagnosis (``|d| < 1e-30`` or non-finite
+          -> ``RAY_NAN`` + killed) still runs at every surface, so a
+          collapsed direction is still attributed to the surface that
+          produced it.
         * ``'surface'`` -- after every refraction and reflection, as the
-          trace has always done.
-        * ``'exit'`` -- once, on the bundle that leaves the last surface.
-          Exact vector Snell with a unit normal returns a unit vector
-          identically, so each per-surface rescale only removes ~1e-16 of
-          rounding drift; hoisting it saves ``np.maximum`` + three
-          divisions per surface.  The degenerate-direction diagnosis
-          (``|d| < 1e-30`` or non-finite -> ``RAY_NAN`` + killed) still
-          runs at every surface, so a collapsed direction is still
-          attributed to the surface that produced it.
+          trace did before 5.49.0, and byte-identical to it.
 
-        ``'exit'`` is NOT bit-identical to ``'surface'``: the surviving
-        drift enters the next surface's ray-sphere quadratic (which
-        assumes ``a = |d|**2 = 1``).  Measured on a 20k-ray 7-surface
-        spherical stack and a 3-surface conic stack: identical ``alive``
-        masks, ``max |dx| = 6.2e-17 m``, ``max |dopd| = 1.9e-16 m``,
-        ``max |dL| = 4.7e-16`` -- one to two decades below the trace's own
-        60-digit-oracle OPL floor (1.4e-17 m) but not zero.  Under
-        ``output_filter='all'`` the INTERMEDIATE ``ray_history`` bundles
-        carry ``| |d| - 1 | <= 1e-15`` (only the final bundle is
-        rescaled), so a consumer that reads history direction cosines as
-        exactly unit should stay on ``'surface'``.
+        **The default moved in 5.49.0** (WP-C2, alongside
+        ``sphere_normal``).  Pass ``renormalize='surface'`` for the
+        pre-5.49.0 arithmetic.
+
+        NOT BIT-IDENTICAL: the surviving drift enters the next surface's
+        ray-sphere quadratic, which assumes ``a = |d|**2 = 1``.
+        Measured on a ladder of 3 to 13 surface spherical and conic
+        stacks x 4000 rays, both normal routes (WP-C2,
+        ``validation/probe_c2_analytic_normal/renorm_ladder.py``, both
+        builds, identical to the last digit): ``max |dx| = 6.6e-17 m``,
+        ``max |dopd| = 1.7e-16 m``, ``max |dL| = 7.2e-16``, with the
+        ``alive`` masks and every error code equal on every rung.  The
+        difference does NOT accumulate with surface count -- it stays
+        between 0.11 and 0.39 of the derived ``n_surfaces * eps * |t|``
+        envelope and peaks in the middle of the ladder, not at its end.
+
+        NO MEASURABLE SPEED-UP, on either build.  WP-B9 reported
+        1.03x-1.10x.  WP-C2 measured 0.95x to 1.13x over five
+        prescriptions on two builds, medians 1.00x and 0.99x, on a box
+        whose own resolution (measured from prescriptions the sibling
+        switch cannot touch) is about +-7 % -- i.e. an effect of
+        WP-B9's size is smaller than either measurement can resolve
+        under load.  The default moved on the structural argument (one
+        rescale instead of N, with the fault diagnosis unmoved), not on
+        a timing number.
+
+        HISTORY BUNDLES ARE NOT UNIT.  Under ``output_filter='all'``
+        only the FINAL bundle is rescaled, so the intermediate
+        ``ray_history`` bundles carry ``| |d| - 1 |`` of order
+        ``n_surfaces * eps`` -- measured 6.7e-16 on a 3-surface stack
+        rising to **1.8e-15 on a 13-surface stack** (about 0.6
+        ``n_surfaces * eps``; the "<= 1e-15" this docstring carried
+        before 5.49.0 was a reading from a short stack, not a bound).
+        The final bundle is unit to 2.2e-16 on every rung.  A consumer
+        that reads HISTORY direction cosines as exactly unit should pass
+        ``renormalize='surface'``.
     sphere_normal : ``'analytic'`` (default since 5.49.0) | ``'generic'``
         Which route computes the surface normal at a PURE SPHERE
         (:func:`surface._is_pure_spherical`: finite radius, no conic,

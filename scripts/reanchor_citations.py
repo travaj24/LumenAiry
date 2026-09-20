@@ -91,6 +91,61 @@ OWNED = {
     '_bluestein.py': ('lumenairy/propagators/_bluestein.py', []),
 }
 
+#: Citations whose line did not MOVE but whose CONTENT this repository
+#: deliberately changed, keyed by the coordinate at the base commit.
+#:
+#: WHY THIS EXISTS.  Every other path through this tool assumes a cited line
+#: only ever moves -- it anchors by content and re-points the number.  A
+#: release that CHANGES a cited line in place (a default flip is the obvious
+#: case) leaves the tool with nothing to anchor, and it says "NEEDS A HUMAN".
+#: That is the right report, and this map is the human's answer written down
+#: instead of the check being loosened: it names the exact base coordinate,
+#: the exact new coordinate, and the release that did it.
+#:
+#: It CANNOT hide a silent drift.  ``_edited_in_place`` refuses the override
+#: unless the current line still begins with the same leading token as the
+#: base line did (``sphere_normal:`` below), so a citation that has slid onto
+#: some unrelated line is still reported.
+EDITED_IN_PLACE = {
+    # WP-C2 (5.49.0): ``trace`` / ``trace_world`` default to
+    # ``sphere_normal='analytic'``.  The declaration did not move; its default
+    # changed, which is what that release is.
+    ('lumenairy/raytrace/trace.py', 61): (
+        61, "WP-C2 5.49.0: sphere_normal default 'generic' -> 'analytic'"),
+    ('lumenairy/raytrace/world_trace.py', 83): (
+        83, "WP-C2 5.49.0: sphere_normal default 'generic' -> 'analytic'"),
+    # WP-C2 (5.49.0), second commit: the same two functions default to
+    # ``renormalize='exit'``.
+    ('lumenairy/raytrace/trace.py', 60): (
+        60, "WP-C2 5.49.0: renormalize default 'surface' -> 'exit'"),
+    ('lumenairy/raytrace/world_trace.py', 82): (
+        82, "WP-C2 5.49.0: renormalize default 'surface' -> 'exit'"),
+}
+
+
+def _edited_in_place(path, base_num, base):
+    """``(new_num, how)`` for a cited line this repo edited in place, or
+    ``(None, None)``.
+
+    Two-sided on purpose: the override only fires when the current line
+    still LOOKS like the thing that was cited -- same leading token -- so a
+    citation that has drifted onto an unrelated line is still reported.
+    """
+    entry = EDITED_IN_PLACE.get((path, base_num))
+    if entry is None:
+        return None, None
+    new_num, reason = entry
+    want, _ctx = base_line(path, base_num, base)
+    hay = lines(path)
+    if want is None or not (1 <= new_num <= len(hay)):
+        return None, None
+    got = hay[new_num - 1]
+    lead = want.strip().split('=')[0].strip()
+    if not lead or not got.strip().startswith(lead):
+        return None, None
+    return new_num, f'edited in place ({reason})'
+
+
 #: ``path.py:N`` or ``path.py:N-M``.
 TOKEN_RE = re.compile(r'[A-Za-z0-9_/.]*\.py:\d+(?:-\d+)?')
 #: a bare ``:N`` sibling, e.g. ``(`carrier.py:1700`, `:1736`)``.
@@ -303,6 +358,10 @@ def _new_number(tok, path, elsewhere, base):
             nums = '-'.join(str(a[0]) for a in alt)
             return (f'`:{nums}`' if tail is None else f'{dest}:{nums}'), \
                 f'moved, {alt[0][1]}'
+    edited = [_edited_in_place(path, n, base) for n in ends]
+    if all(e[0] is not None for e in edited):
+        nums = '-'.join(str(e[0]) for e in edited)
+        return (f'`:{nums}`' if tail is None else f'{tail}:{nums}'),             edited[0][1]
     bad = next(i for i, g in enumerate(got) if g[0] is None)
     return None, f'endpoint {ends[bad]} {got[bad][1]}'
 

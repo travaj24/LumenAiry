@@ -1836,3 +1836,44 @@ build the bundle and call `trace(..., sphere_normal='generic')` directly.
 differential path call them directly, with no trace loop around them, and own
 their own arithmetic policy.  `analysis.ghost` therefore still uses the generic
 normal, and its answers do not move in 5.49.0.
+
+### 5.49.0 -- and the `renormalize` default moves to `'exit'`
+
+`trace` and `trace_world` now rescale the direction cosines to unit length
+once, on the bundle leaving the last surface, instead of after every refraction
+and reflection.  The per-surface degenerate-direction diagnosis is unchanged:
+a direction that collapses at surface 3 is still reported as having died at
+surface 3.
+
+**The way back, and it is byte-identical:**
+
+```python
+result = trace(rays, surfaces, wavelength, renormalize='surface')
+```
+
+**Why it moved, stated plainly.**  Not for speed: WP-B9's 1.03x-1.10x does not
+reproduce.  WP-C2 measured 0.95x to 1.13x over five prescriptions on two
+builds, medians 1.00x and 0.99x, against a measurement resolution of about
++-7 % -- no effect this method can see.  It moved because one rescale instead
+of N is the structurally simpler contract, with the fault diagnosis unmoved,
+which is the argument section 1.3 of the maintainer ledger records.
+
+**The one case that genuinely needs the old setting.**  Under
+`output_filter='all'` only the FINAL bundle is rescaled, so the intermediate
+`ray_history` bundles -- `result.rays_at(i)` for `i < len(surfaces) - 1` --
+carry `| |d| - 1 |` of order `n_surfaces * eps`: measured 6.7e-16 on a
+3-surface stack and **1.8e-15 on a 13-surface stack**.  (The `<= 1e-15` the
+5.48.x docstring promised was a reading from a short stack; it is exceeded by
+the eighth surface.)  `result.image_rays` is unit to 2.2e-16 as before, on
+every `output_filter`.  If your code reads history direction cosines and treats
+them as exactly unit, pass `renormalize='surface'`.
+
+**What else moves:** `max |dx| = 6.6e-17 m`, `max |dopd| = 1.7e-16 m`,
+`max |dL| = 7.2e-16` over a 3-to-13-surface ladder on spherical and conic
+stacks, with every `alive` mask and error code equal.  The difference does not
+grow with surface count.
+
+**No keyword there** -- the same list as for `sphere_normal`:
+`trace_prescription`, `raytrace_system`, `ray_fan_data`, `opd_fan_data`,
+`through_focus_rms`, and `spot_rms` / `spot_geo_radius` / `refocus` applied to
+their results.

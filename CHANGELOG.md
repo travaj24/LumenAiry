@@ -101,6 +101,64 @@ directly.  Every measured number is in
 `docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/WP-C2_ANALYTIC_NORMAL_REPORT.md`
 and `validation/probe_c2_analytic_normal/`.
 
+### Changed -- raytrace (WP-C2): `trace(renormalize='exit')` is the DEFAULT -- one rescale instead of N, on a structural argument, because the speed-up WP-B9 reported does not reproduce
+
+`trace` and `trace_world` now rescale the direction cosines to unit length
+ONCE, on the bundle that leaves the last surface, instead of after every
+refraction and reflection (`raytrace/trace.py:60`, `world_trace.py:82`).  The
+degenerate-direction diagnosis (`|d| < 1e-30` or non-finite -> `RAY_NAN` +
+killed) still runs at EVERY surface, so a collapsed direction is still
+attributed to the surface that produced it.  `renormalize='surface'` is the way
+back and is byte-identical to 5.48.1.  The private `_refract` / `_reflect`
+keep `renormalize=True`: `analysis.ghost` and the finite-difference
+differential path call them with no trace loop around them to run the single
+exit-plane pass, so per-surface rescaling is the only setting under which those
+callers own a unit direction at all.
+
+**The speed-up does not reproduce, and the default moved anyway.**  WP-B9
+reported 1.03x to 1.10x.  WP-C2 measured **0.95x to 1.13x over five
+prescriptions on two builds, medians 1.00x (Windows) and 0.99x (WSL)** -- i.e.
+no measurable effect, on a box whose own resolution is about +-7 % (measured
+from the prescriptions the sibling `sphere_normal` switch cannot touch).  An
+effect of WP-B9's stated size is smaller than either measurement can resolve
+under this load, so it is neither confirmed nor refuted; it is simply not
+evidence.  The default moves on the structural argument the ledger's section
+1.3 records -- one rescale instead of N, with the per-surface fault diagnosis
+unmoved -- and this entry says plainly that the timing number behind it is not
+reproducible here.
+
+**What moves.**  The surviving drift enters the next surface's ray-sphere
+quadratic, which assumes `a = |d|**2 = 1`.  Measured on a ladder of 3, 5, 7, 9,
+11 and 13-surface spherical and conic stacks x 4000 rays x both normal routes,
+identical to the last digit on both builds: `max |dx| = 6.6e-17 m`,
+`max |dopd| = 1.7e-16 m`, `max |dL| = 7.2e-16`, with the `alive` masks and
+every error code equal on every rung.  It does NOT accumulate with surface
+count: the difference stays between 0.11 and 0.39 of the derived
+`n_surfaces * eps * |t|` envelope and peaks in the MIDDLE of the ladder, not at
+its end.
+
+**One documented bound was wrong and is now derived.**  The pre-5.49.0
+docstring promised that under `output_filter='all'` the intermediate
+`ray_history` bundles carry `| |d| - 1 | <= 1e-15`.  Measured: 6.7e-16 on a
+3-surface stack, rising to **1.8e-15 on a 13-surface stack** -- about
+`0.6 * n_surfaces * eps`, so `1e-15` was a reading from a short stack, not a
+bound, and it is exceeded by the eighth surface.  The docstring now states the
+`n_surfaces * eps` form with both measurements.  The FINAL bundle is unit to
+2.2e-16 on every rung, on every `output_filter`.
+
+**Migration.**  Pass `renormalize='surface'` to `trace` / `trace_world` for the
+pre-5.49.0 arithmetic; it is byte-identical.  One case genuinely needs it: a
+consumer that reads HISTORY direction cosines (`result.rays_at(i)` for
+`i < len(surfaces) - 1`) and treats them as exactly unit.  Under the new
+default those carry up to `n_surfaces * eps` of drift -- 1.8e-15 on a
+13-surface stack -- while `result.image_rays` is unit to 2.2e-16 as before.
+The same entry points that expose no `sphere_normal` expose no `renormalize`
+either (`trace_prescription`, `raytrace_system`, `ray_fan_data`,
+`opd_fan_data`, `through_focus_rms`, and `spot_rms` / `spot_geo_radius` /
+`refocus` on their results); a caller who needs the old arithmetic through
+those must build the bundle and call `trace(..., renormalize='surface')`
+directly.
+
 ### Changed -- tests (WP-C2): the two pins WP-B9 called knife-edge become decisions with bars this build derives, and the mechanism both B9 reports named is measurably not the one
 
 WP-B9 section 5 items 2 and 3 and VERIFY-B9 section 4 required two pins to be
@@ -4588,7 +4646,7 @@ remove ~1e-16 of rounding drift.  `trace` and `trace_world` gain
 `world_trace.py:82`); `_refract` / `_reflect` gain the matching
 `renormalize: bool = True` (`intersection.py:541`, `:646`), and the single-pass
 form is `intersection._normalize_directions` (`:520`), applied once to the
-bundle leaving the last surface (`trace.py:230`, `:341`, `world_trace.py:243`).
+bundle leaving the last surface (`trace.py:283`, `:394`, `world_trace.py:250`).
 
 The degenerate-direction DIAGNOSIS is not hoisted: the per-surface
 `|d| < 1e-30 or not finite -> RAY_NAN + killed` test runs in both modes, because
@@ -4656,7 +4714,7 @@ restating those pins; see the WP-B9 report.
 
 `make_rings` is equal-radius / equal-count, so the pupil areal sampling density
 falls off as `~1/r` and every unweighted `spot_rms` built on it is centre-biased
-small.  It gains `pattern={'rings' (default), 'vogel'}` (`raytrace/trace.py:1204`,
+small.  It gains `pattern={'rings' (default), 'vogel'}` (`raytrace/trace.py:1257`,
 generator at `:1285`): the Vogel / Fibonacci sunflower `r_i = R sqrt(i/N)`,
 `theta_i = i pi (3 - sqrt(5))`, with `i = 1..N` so the outermost ray sits exactly
 on the rim as the outer ring does.  Threaded through

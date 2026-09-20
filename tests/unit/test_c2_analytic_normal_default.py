@@ -177,8 +177,8 @@ def test_c2_the_defaults_are_what_the_ledger_decided_from_the_signature():
     """MUTATION ARM 1a: a silent revert of either default fails here.
 
     5.49.0 moved ``trace`` and ``trace_world`` to
-    ``sphere_normal='analytic'`` (this commit) and, in its own commit,
-    to ``renormalize='exit'`` -- whose arms live beside these.  The
+    ``sphere_normal='analytic'`` and ``renormalize='exit'``, each in its
+    own commit.  The
     PRIVATE helpers deliberately did not move -- ``analysis.ghost`` and
     the finite-difference differential path call ``_refract`` /
     ``_reflect`` directly with no trace loop around them to run a single
@@ -190,6 +190,7 @@ def test_c2_the_defaults_are_what_the_ledger_decided_from_the_signature():
     for fn in (trace, trace_world):
         params = inspect.signature(fn).parameters
         assert params['sphere_normal'].default == C2_SPHERE_NORMAL, fn
+        assert params['renormalize'].default == C2_RENORMALIZE, fn
     for fn in (_isect._refract, _isect._reflect):
         params = inspect.signature(fn).parameters
         assert params['sphere_normal'].default == PRE_C2_SPHERE_NORMAL, fn
@@ -224,6 +225,34 @@ def test_c2_the_defaults_are_what_a_call_actually_takes():
               sphere_normal=PRE_C2_SPHERE_NORMAL)
         assert seen and not any(seen), seen
         assert len(seen) == n
+
+    # The same question for the other default.  ``trace`` imports the
+    # single-pass helper BY NAME, so the count has to be taken in
+    # ``trace``'s own namespace -- patching ``intersection`` sees
+    # nothing, and a probe that did would report 0 under both settings
+    # and look like a pass.
+    import importlib
+    _trace_mod = importlib.import_module('lumenairy.raytrace.trace')
+    calls = []
+    real_norm = _trace_mod._normalize_directions
+
+    def counting(rays_):
+        calls.append(1)
+        return real_norm(rays_)
+
+    with _mock.patch.object(_trace_mod, '_normalize_directions',
+                            counting):
+        trace(_bundle(64), S, WL, output_filter='last')
+        assert len(calls) == 1, (
+            f"renormalize='exit' rescales ONCE, on the bundle leaving "
+            f"the last surface; the default call made {len(calls)} "
+            f"single-pass calls.")
+        calls.clear()
+        trace(_bundle(64), S, WL, output_filter='last',
+              renormalize=PRE_C2_RENORMALIZE)
+        assert not calls, (
+            f"renormalize='surface' must not reach the single-pass "
+            f"helper at all; it made {len(calls)} calls.")
 
 
 
@@ -618,6 +647,143 @@ def test_c2_the_predicate_is_what_selects_the_closed_form():
 
 
 # ===========================================================================
+# 8 -- the renormalize default: one rescale instead of N
+# ===========================================================================
+
+def test_c2_history_bundles_are_not_unit_under_the_new_default():
+    """THE CONTRACT `renormalize='exit'` CHANGES, derived and laddered.
+
+    Under `'exit'` only the FINAL bundle is rescaled, so under
+    ``output_filter='all'`` the INTERMEDIATE history bundles carry the
+    drift the per-surface rescale used to remove.  That drift is
+    `O(n_surfaces * eps)` by construction -- each surface's exact vector
+    Snell returns a unit vector from a unit normal up to one rounding --
+    and the pre-5.49.0 docstring's `<= 1e-15` was a READING from a short
+    stack, not a bound: measured 6.7e-16 at 3 surfaces rising to
+    1.8e-15 at 13, i.e. about `0.6 * n_surfaces * eps`, so 1e-15 is
+    exceeded by the eighth surface.
+
+    Both halves are asserted here, because making `'exit'` the default
+    makes this load-bearing for every history consumer: the drift stays
+    inside the derived `n_surfaces * eps` envelope, it GROWS with
+    surface count (so the envelope is the right shape and not an
+    accident), and the final bundle is unit regardless.
+    """
+    eps = float(np.finfo(np.float64).eps)
+    drifts = []
+    for n_pairs in (1, 3, 6):
+        S = []
+        for _ in range(n_pairs):
+            S.append(Surface(radius=0.0515, thickness=0.004,
+                             glass_before='air', glass_after='N-BK7',
+                             semi_diameter=0.0127))
+            S.append(Surface(radius=-0.0515, thickness=0.006,
+                             glass_before='N-BK7', glass_after='air',
+                             semi_diameter=0.0127))
+        S.append(Surface(radius=np.inf, thickness=0.0,
+                         glass_before='air', glass_after='air',
+                         semi_diameter=0.030))
+        res = trace(_bundle(2000, semi=0.010), S, WL,
+                    output_filter='all')
+        worst = 0.0
+        for i in range(len(S) - 1):
+            r = res.rays_at(i)
+            m = np.asarray(r.alive)
+            if not m.any():
+                continue
+            d = np.sqrt(np.asarray(r.L)[m] ** 2 + np.asarray(r.M)[m] ** 2
+                        + np.asarray(r.N)[m] ** 2)
+            worst = max(worst, float(np.max(np.abs(d - 1.0))))
+        drifts.append((len(S), worst))
+        # the derived envelope, not a reading
+        assert worst <= len(S) * eps, (len(S), worst, len(S) * eps)
+        # and the FINAL bundle is unit whatever the history does
+        f = res.image_rays
+        m = np.asarray(f.alive)
+        d = np.sqrt(np.asarray(f.L)[m] ** 2 + np.asarray(f.M)[m] ** 2
+                    + np.asarray(f.N)[m] ** 2)
+        assert float(np.max(np.abs(d - 1.0))) <= 4 * eps, (len(S), d)
+    assert drifts[-1][1] > drifts[0][1], (
+        f'the history drift must GROW with surface count for the '
+        f'n_surfaces * eps envelope to be the right shape; measured '
+        f'{drifts}.')
+    assert drifts[-1][1] > 1e-15, (
+        f'the pre-5.49.0 docstring promised <= 1e-15 on the history '
+        f'bundles; it is exceeded by the eighth surface (measured '
+        f'1.8e-15 at 13 surfaces, {drifts}).  If this no longer holds, '
+        f'the docstring correction shipped with this flip is stale.')
+    # the way back restores the old contract exactly
+    S = [Surface(radius=0.0515, thickness=0.004, glass_before='air',
+                 glass_after='N-BK7', semi_diameter=0.0127),
+         Surface(radius=-0.0515, thickness=0.006, glass_before='N-BK7',
+                 glass_after='air', semi_diameter=0.0127),
+         Surface(radius=np.inf, thickness=0.0, glass_before='air',
+                 glass_after='air', semi_diameter=0.030)]
+    res = trace(_bundle(2000, semi=0.010), S, WL, output_filter='all',
+                renormalize=PRE_C2_RENORMALIZE)
+    for i in range(len(S)):
+        r = res.rays_at(i)
+        m = np.asarray(r.alive)
+        d = np.sqrt(np.asarray(r.L)[m] ** 2 + np.asarray(r.M)[m] ** 2
+                    + np.asarray(r.N)[m] ** 2)
+        assert float(np.max(np.abs(d - 1.0))) <= 4 * eps, i
+
+
+def test_c2_the_exit_hoist_does_not_accumulate_with_surface_count():
+    """The claim the hoist rests on, as a LADDER rather than a reading.
+
+    The surviving drift enters the next surface's ray-sphere quadratic,
+    which assumes `a = |d|^2 = 1`, so the question is whether the
+    difference between the two modes GROWS with surface count.  Derived
+    envelope: the drift after k surfaces is `O(k eps)`, the quadratic's
+    root error is `|t| k eps / 2`, so over an N-surface stack the
+    positional envelope is `N eps |t|`.
+
+    Measured 2026-09-20 on 3-to-13-surface spherical and conic stacks x
+    4000 rays x both normal routes, identical to the last digit on
+    Windows py3.14 / numpy 2.4.4 and WSL py3.12 / numpy 2.4.6:
+    `max |dx| = 6.6e-17 m`, `max |dopd| = 1.7e-16 m`,
+    `max |dL| = 7.2e-16`, every `alive` mask and error code equal, and
+    the ratio to the envelope peaking at 0.386 in the MIDDLE of the
+    ladder and falling to 0.109 at its end.
+    """
+    ratios = []
+    for n_pairs in (1, 3, 6):
+        S = []
+        for _ in range(n_pairs):
+            S.append(Surface(radius=0.0515, thickness=0.004,
+                             glass_before='air', glass_after='N-BK7',
+                             semi_diameter=0.0127))
+            S.append(Surface(radius=-0.0515, thickness=0.006,
+                             glass_before='N-BK7', glass_after='air',
+                             semi_diameter=0.0127))
+        S.append(Surface(radius=np.inf, thickness=0.0,
+                         glass_before='air', glass_after='air',
+                         semi_diameter=0.030))
+        rays = _bundle(2000, semi=0.010)
+        a = trace(rays, S, WL, output_filter='last').image_rays
+        b = trace(rays, S, WL, output_filter='last',
+                  renormalize=PRE_C2_RENORMALIZE).image_rays
+        assert np.array_equal(np.asarray(a.alive), np.asarray(b.alive))
+        assert np.array_equal(np.asarray(a.error_code),
+                              np.asarray(b.error_code))
+        m = np.asarray(a.alive)
+        dpos = max(float(np.max(np.abs(np.asarray(getattr(a, f))[m]
+                                       - np.asarray(getattr(b, f))[m])))
+                   for f in ('x', 'y', 'z'))
+        envelope = len(S) * float(np.finfo(np.float64).eps) * 0.11
+        ratios.append(dpos / envelope)
+    assert max(ratios) < 1.0, (
+        f'the exit-plane hoist left more than the derived '
+        f'n_surfaces * eps * |t| envelope allows: ratios {ratios} '
+        f'(measured 0.109 to 0.386).')
+    assert ratios[-1] <= ratios[0] * 3.0, (
+        f'the difference between the two modes is now growing FASTER '
+        f'than the envelope with surface count, which is what the '
+        f'hoist claims it does not do: ratios {ratios}.')
+
+
+# ===========================================================================
 # 7 -- the mutation matrix, stated
 # ===========================================================================
 
@@ -637,6 +803,9 @@ def test_c2_mutation_matrix_is_stated_and_each_arm_is_named():
     | the rim band stops being the only difference | ``test_c2_no_bundle_that_is_not_aimed_at_the_rim_band_lands_in_it`` |
     | the normal's SIGN flips (mirror)             | ``test_c2_a_spherical_mirror_reflects_about_the_outward_normal`` |
     | the selection predicate widens or narrows    | ``test_c2_the_predicate_is_what_selects_the_closed_form`` |
+    | the exit rescale runs twice, or not at all   | ``test_c2_the_defaults_are_what_a_call_actually_takes`` |
+    | the history drift contract changes shape     | ``test_c2_history_bundles_are_not_unit_under_the_new_default`` |
+    | the hoist starts accumulating with surfaces  | ``test_c2_the_exit_hoist_does_not_accumulate_with_surface_count`` |
     """
     import sys
     mod = sys.modules[__name__]
@@ -649,7 +818,9 @@ def test_c2_mutation_matrix_is_stated_and_each_arm_is_named():
             'test_c2_the_domain_clamp_stays_where_the_ledger_left_it',
             'test_c2_no_bundle_that_is_not_aimed_at_the_rim_band_lands_in_it',
             'test_c2_a_spherical_mirror_reflects_about_the_outward_normal',
-            'test_c2_the_predicate_is_what_selects_the_closed_form'):
+            'test_c2_the_predicate_is_what_selects_the_closed_form',
+            'test_c2_history_bundles_are_not_unit_under_the_new_default',
+            'test_c2_the_exit_hoist_does_not_accumulate_with_surface_count'):
         assert callable(getattr(mod, name, None)), (
             f'{name} named in the mutation matrix no longer exists; '
             f'either restore it or update the table above.')

@@ -37,7 +37,8 @@
    "worst_dopd": 3.122502256758253e-17,
    "alive_equal_everywhere": true
   },
-  "default_matches_analytic": true
+  "default_matches_analytic_exit": true,
+  "default_differs_from_pre_5_49_0": true
  },
  "results": {
   "singlet 51.5/-80 N-BK7 @ 0 deg": {
@@ -74,7 +75,7 @@
     "n_alive": 33,
     "dx": 8.673617379884035e-19,
     "dy": 0.0,
-    "dopd": 2.6020852139652106e-17
+    "dopd": 2.5153490401663703e-17
    }
   },
   "singlet 51.5/-80 N-BK7 @ 4 deg": {
@@ -148,7 +149,7 @@
     "n_alive": 33,
     "dx": 4.336808689942018e-19,
     "dy": 0.0,
-    "dopd": 6.5052130349130266e-18
+    "dopd": 6.071532165918825e-18
    }
   },
   "singlet 20/-20 N-BK7 @ 4 deg": {
@@ -183,9 +184,9 @@
    "library_default": {
     "alive_equal": true,
     "n_alive": 33,
-    "dx": 8.673617379884035e-19,
+    "dx": 4.336808689942018e-19,
     "dy": 0.0,
-    "dopd": 4.7704895589362195e-18
+    "dopd": 5.204170427930421e-18
    }
   },
   "doublet 51.7/-34.5/-120 @ 0 deg": {
@@ -222,7 +223,7 @@
     "n_alive": 33,
     "dx": 1.734723475976807e-18,
     "dy": 0.0,
-    "dopd": 1.734723475976807e-17
+    "dopd": 3.122502256758253e-17
    }
   },
   "doublet 51.7/-34.5/-120 @ 4 deg": {
@@ -259,7 +260,7 @@
     "n_alive": 33,
     "dx": 3.469446951953614e-18,
     "dy": 0.0,
-    "dopd": 3.122502256758253e-17
+    "dopd": 2.7755575615628914e-17
    }
   },
   "plano-convex 51.5/inf @ 0 deg": {
