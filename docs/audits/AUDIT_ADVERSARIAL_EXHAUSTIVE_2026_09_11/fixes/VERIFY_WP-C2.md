@@ -700,16 +700,25 @@ perturbation.  The same applies to the sibling arm's `10.0 * noise`, whose
 floor differs by **31x** between the two builds (2.59e-3 Windows against
 8.42e-5 WSL) -- absorbed there by a 65x-2008x margin, but it should be stated.
 
-### D9 (P3, docs) -- the Migration note names the wrong reachable fact
+### D9 (P3, docs) -- the Migration note's rim-band paragraph is right but incomplete
 
-The Migration note names the 1-ULP rim band.  Measured: no ray of 580 000
-aimed at the rim lands within 4 ULP of either gate, and the band does not exist
-at all on the meridian.  What a real design CAN reach is the pre-existing
-clamp: a ball lens or hemisphere loses **4.9 %** of a rim-packed bundle to
-`RAY_NAN` -- a numerical-fault code, not `RAY_APERTURE` -- on both routes,
-before and after WP-C2.
+Credit where it is due: the Migration Guide already tells a user who works rays
+past `0.9999 R^2` to give the surface an explicit clear aperture rather than
+rely on the clamp, and already says neither route resolves the normal there.
+Two facts it does not carry, both measured here, and both of which change how a
+reader sizes the risk:
 
-Requested edit to the Migration Guide's 5.49.0 `sphere_normal` section:
+* the band **does not exist on the meridian at all** -- the two gate
+  expressions agree EXACTLY at `y = 0`, at all eight radii bisected, so a
+  meridional fan cannot enter it;
+* what a real design actually meets is the **clamp**, not the band, and it is
+  quantifiable: a ball lens or hemisphere (semi-diameter `abs(R)`) loses
+  **4.9 %** of a rim-packed bundle to `RAY_NAN` -- a numerical-fault code, not
+  `RAY_APERTURE`, so it lands in `raytrace.layout`'s fault histogram rather
+  than its vignetting one -- on both routes, before and after WP-C2.
+
+Requested addition to the Migration Guide's 5.49.0 `sphere_normal`
+section, after the existing rim-band paragraph:
 
 ```
 Both routes refuse a ray above ``h = 0.99995 |R|`` and report it as
@@ -791,6 +800,36 @@ nothing caught these.  Requested edits:
 Pinned by
 `test_verify_c2_analytic_normal.py::test_vc2_no_private_docstring_claims_the_generic_route_is_shipped`.
 
+### D12 (P2, docs) -- the CHANGELOG and Migration Guide carry a byte-identity count that the probe's own JSON contradicts
+
+`CHANGELOG.md:50` and `Migration-Guide.md:1795-1797` both say:
+
+> explicitly, **938 of 1008** are byte-identical and **the 70** that are not are
+> exactly [the entry points listed]
+
+`WP-C2_ANALYTIC_NORMAL_REPORT.md:539,541` says 934 / 1008 (Windows) and
+935 / 1008 (WSL), with 73-74 moving.  The probe's own committed output settles
+it: `validation/probe_c2_analytic_normal/byte_identity_old_kw_win.json` has
+`n_moved = 74` and the WSL file `n_moved = 73`, i.e. **934** and **935**
+identical.  Summing the moved keys in the Windows file by entry point gives
+`trace_prescription` 27 + `refocus` 26 + `ray_fan_data` 8 + `opd_fan_data` 8 +
+`spot_rms` 4 + `through_focus` 1 = **74**, which is the report's number and not
+the guide's.
+
+The two USER-FACING documents are the ones that are wrong, and they are the
+ones a reader will quote.
+
+Requested edits, in both files:
+
+```
+explicitly, 934 of 1008 are byte-identical on Windows (935 on WSL) and the
+74 that are not (73 on WSL) are exactly [the entry points listed]
+```
+
+and, while that line is being touched, the entry-point list itself needs the
+correction in **D4** -- the Migration Guide's "No keyword there" paragraph
+names the same six and is short by ten.
+
 ### D10 (P3, process) -- the 19 new test ids are not in `.test_durations`
 
 `git diff 49ddf4bd..eadc67ba -- .test_durations` is empty, and
@@ -807,7 +846,8 @@ and splice its 19 ids into `.test_durations`.
 ## 5. Ship recommendation
 
 **SHIP**, with D11, D1, D3, D4 and D7 actioned before the release note is
-written, and D2, D5, D6, D8, D9, D10 filed.  D11 is the only P1: a reader who
+written, and D2, D5, D6, D8, D9, D10, D12 filed (D12 is a two-line
+number correction and could equally go in the first group).  D11 is the only P1: a reader who
 opens `_sphere_normal` to ask whether the rim band is reachable is told, in
 that docstring, that it is not -- which is the opposite of what the release
 actually did.
