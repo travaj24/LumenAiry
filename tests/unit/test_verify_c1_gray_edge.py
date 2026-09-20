@@ -155,7 +155,7 @@ def test_verify_c1_the_jit_kernel_honours_the_elements_edge_samples(n_sub):
     Bit identity, not a tolerance: the three routes run the same body on the
     same input, so anything short of equal bytes is a divergence.
     """
-    jax = _jax_or_skip()
+    _jax_or_skip()
     import jax.numpy as jnp
     from lumenairy.propagators.system import propagate_through_system_jax
 
@@ -225,7 +225,7 @@ def test_verify_c1_all_three_chain_routes_agree_on_an_edge_element(
     strict xfails, so they FAIL as soon as the coercion is removed and this
     scaffolding has to go with it.
     """
-    jax = _jax_or_skip()
+    _jax_or_skip()
     import jax.numpy as jnp
     from lumenairy.propagators.system import propagate_through_system_jax
 
