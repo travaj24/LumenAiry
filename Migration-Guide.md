@@ -9,9 +9,9 @@ migration recipe -- "I bumped from v4.X to v4.Y, what do I change?".
 
 v4.13 through v5.49.  Sections are in version order; the newest is
 [5.49.0 -- the ray tracer's `sphere_normal` default moves to `'analytic'` (WP-C2)](#5490----the-ray-tracers-sphere_normal-default-moves-to-analytic-wp-c2)
-at the end of this file; the 5.46.0 section before it is the largest single
-batch of behaviour changes the library has shipped, and 5.47.0 is the wave that
-implemented what it deferred.
+at the end of this file, followed by its `renormalize` companion; the 5.46.0
+section is the largest single batch of behaviour changes the library has
+shipped, and 5.47.0 is the wave that implemented what it deferred.
 
 Only behavior shifts that **require user code changes** or **change
 numerical answers** are listed.  Pure additions (new functions, new
