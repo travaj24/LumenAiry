@@ -2770,10 +2770,15 @@ def _collins_carrier_leg(env, R, z, wavelength, dx, dy, *,
         # COLLIMATED carrier never reaches it on the Sziklas side -- its own
         # entry point short-circuits ``R = +/-inf`` to a same-grid exact
         # transfer-function step, because ``m = R_out/R = inf/inf`` is NaN.
-        # MEASURED 2026-09-20: ``_collins_carrier_leg(env, inf, 5e-3, ...)``
-        # returned an ALL-NaN envelope on ``dx = nan`` while resolving
-        # ``collins_form='tf'`` with K1 = 0.79 and K3 = 1.29, i.e. having
-        # correctly decided to fall back.  It was invisible while
+        # RE-MEASURED 2026-09-20 on the base tree 49ddf4bd, with the
+        # fixture spelled out because the first reading of it was not
+        # reproducible (VERIFY-WP-C3 D12): a collimated Gaussian w = 0.30 mm
+        # on N = 1024 at dx = 4 um, lambda = 1.064 um, z = 5 mm.
+        # ``_collins_carrier_leg(env, inf, 5e-3, ...)`` resolved
+        # ``collins_form='tf'`` at K1 = 1.1222362546992480 and
+        # K3 = 3.0796992481203 -- i.e. having correctly decided to fall back
+        # -- and returned an ALL-NaN envelope (0 of 1048576 finite) on
+        # ``dx = nan``.  It was invisible while
         # ``'collins'`` was opt-in and a collimated carrier is one of the
         # commonest chain inputs (``r_in=np.inf``), so the flip is what makes
         # it reachable.  Routing through the entry point means the fallback is
@@ -2842,6 +2847,17 @@ def _collins_readout_k1(env, R, z, wavelength, dx, dy):
     revision of this docstring said the free leg reads 1.2359 and quoted
     7295x; no spelling of that leg reproduces 1.2359 -- VERIFY-WP-C3 claim 1,
     re-measured in round 2.)
+
+    A KNOWN LIMITATION, so nobody reads the fallback as exact.  Routing to
+    the Sziklas readout is the RIGHT decision above the bar -- it is four
+    decades better than the aliased one-step form on the fixture above -- but
+    it is less wrong, not right.  MEASURED 2026-09-20 against the same
+    converged quadrature, on WP-B4's relay at ``final_distance`` 8 mm: complex
+    relative L2 **9.4509e-02**, amplitude-only **2.4768e-02**, centre
+    |ratio| **1.0012150** at arg **1.756 mrad**.  Most of the complex residual
+    is a smooth piston-plus-tilt that a fit removes (equal in both axes to 11
+    digits), leaving ~3.2 mrad rms.  So 1.0743 at the window peak is the
+    Sziklas readout's answer and not the field's, to about 2.5 % in amplitude.
 
     WHERE THE BAR IS, AND WHAT KIND OF BAR IT IS.  ``<= 1`` is a CONSERVATIVE
     CHOICE on a slope, not a cliff.  MEASURED on a dial fixture where only K1
@@ -6528,7 +6544,16 @@ def _chain_entry_congruence_stats(env, dx, wavelength):
     thing that kills a propagation."""
     from ..elements._lens_traced import _carrier_residual_rms
     from .fga import _tilt_dispersion
-    E = np.asarray(env)
+    # Host-side reduction on ANY backend.  ``np.asarray`` is a no-op on
+    # NumPy and RAISES ``TypeError: Implicit conversion to a NumPy array
+    # is not allowed`` on a CuPy device array -- so the public CHAIN died
+    # here, before any transform, on the default
+    # ``on_multi_congruence='warn'`` and on BOTH transports (measured
+    # 2026-09-20, VERIFY-WP-C3 D10a).  Both estimators below are host
+    # code, so pull explicitly, exactly as ``_collins_power_marginals``
+    # does.
+    from ..backend import to_numpy
+    E = np.asarray(to_numpy(env))
     try:
         resid = float(_carrier_residual_rms(E, None, wavelength, dx))
     except (ValueError, RuntimeError, FloatingPointError, ImportError):

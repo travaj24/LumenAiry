@@ -104,6 +104,12 @@ def main():
     N = int(sys.argv[3]) if len(sys.argv) > 3 else 512
 
     sys.path.insert(0, _D121)
+    # The sibling design-121 checkout asserts that the ``lumenairy`` it
+    # imported is the one ``LUMENAIRY_ROOT`` names, and dies with an
+    # AssertionError naming that variable when it is unset -- so the d121
+    # rows were not reproducible from the repository (VERIFY-WP-C3 D12).
+    # Point it at the tree this probe already anchored.
+    os.environ['LUMENAIRY_ROOT'] = _TREE
     rec = {'build': clib.build_tag(), 'tree': _TREE,
            'lumenairy': la.__file__, 'N': N, 'wavelength': LAM}
     try:

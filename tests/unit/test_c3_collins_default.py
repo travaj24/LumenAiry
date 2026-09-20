@@ -39,14 +39,21 @@ WHAT THIS FILE GATES, IN THE ORDER THE WORK PACKAGE ASKS FOR IT.
 5. **A mutation matrix.**  Five ways this work could silently come undone,
    each with the named test that catches it:
 
+   WHICH FILE CATCHES WHICH, corrected in WP-C3 round 2 (VERIFY-WP-C3 D12):
+   three rows below are NOT caught in this file and the table used to imply
+   they were.
+
    | mutation | caught by |
    |---|---|
-   | the default quietly reverted to ``'sziklas'`` | ``test_the_default_is_collins_in_every_signature`` AND ``test_an_unnamed_call_is_the_collins_call_and_not_the_sziklas_one`` |
-   | a Collins helper losing its ``xp`` / ``bld`` | ``test_every_helper_on_the_collins_path_is_xp_parametrised`` |
-   | the CuPy arm demoting a device array to the host | ``test_no_collins_helper_demotes_the_field_to_host_numpy`` (structural, both builds) AND ``test_a_device_array_reaches_the_device_transform`` (premise-gated) |
-   | the FFT dispatcher answering "this is a CuPy array" without binding its ``cp``, so the device transform raises ``NameError`` | ``test_a_true_cupy_answer_really_binds_the_fft_dispatchers_cp`` (substituted module; runs with no CuPy) |
-   | the readout's route resolution deleted, so the default returns the aliased one-step answer | ``test_the_readout_resolves_its_quadrature_and_the_fallback_is_bit_identical`` |
-   | an internal caller riding the public default again | ``test_every_internal_transport_call_site_names_its_transport`` with its fail-before arm |
+   | the default quietly reverted to ``'sziklas'`` | HERE: ``test_the_default_is_collins_in_every_signature`` AND ``test_an_unnamed_call_is_the_collins_call_and_not_the_sziklas_one`` |
+   | a Collins helper losing its ``xp`` / ``bld`` | HERE: ``test_every_helper_on_the_collins_path_is_xp_parametrised`` |
+   | the CuPy arm demoting a device array to the host | HERE: ``test_no_collins_helper_demotes_the_field_to_host_numpy`` (structural, both builds; 14 of 14 injections caught, ``validation/probe_c3_round2/r2_d10_demotion_mutants.py``) AND ``test_a_device_array_reaches_the_device_transform`` (premise-gated, and on THIS box it only reaches the broken-cuFFT decision) |
+   | the FFT dispatcher answering "this is a CuPy array" without binding its ``cp``, so the device transform raises ``NameError`` | HERE: ``test_a_true_cupy_answer_really_binds_the_fft_dispatchers_cp`` (substituted module; runs with no CuPy).  The JAX half of that row is caught only ON A JAX BUILD, by ``test_wave5_h2_collins_jax.py`` |
+   | the readout's route resolution deleted, so the default returns the aliased one-step answer | HERE: ``test_the_readout_resolves_its_quadrature_and_the_fallback_is_bit_identical`` |
+   | the readout's routing BAR moved (``<= 1.0`` -> ``<= 2.0``) | NOT HERE and nowhere in the shipped suite before round 2: every assertion in this file reads ``readout_route_k1 is None`` or the 82.36 fixture.  ``tests/unit/test_verify_c3_collins_default.py`` carries the fixture that straddles the bar (K1 = 1.7342235907130157) |
+   | the leg's fallback calling ``_carrier_step_fast`` again | NOT HERE: ``tests/unit/test_audit2609_b4_collins_transport.py`` |
+   | the stop-plane keys refused again instead of selecting | NOT HERE: ``tests/unit/test_audit2609_b4_collins_transport.py::TestVocabulary`` |
+   | an internal caller riding the public default again | HERE: ``test_every_internal_transport_call_site_names_its_transport``, 7 of 7 placements caught (``validation/probe_c3_round2/r2_d9_census_mutants.py``) |
 
 THE FIXTURE'S OWN FLOOR, MEASURED, because every bar below is two-sided.  The
 ladder's Gaussian is truncated by its grid: at six ``1/e`` radii across N
@@ -732,7 +739,13 @@ _HOST_SIDE_BY_DESIGN = {
     '_collins_exact_kernel_departure': 'takes only Python floats',
     '_collins_envelope_abcd': 'takes only Python floats',
     '_collins_leg_output_axis': 'takes only Python floats',
-    '_collins_readout_k1': 'reads the measured box; returns a float',
+    '_collins_readout_k1':
+        'takes a FIELD and returns a float.  It holds no kernel of its own: '
+        'its one transform is inside _collins_input_box, which IS '
+        'xp-parametrised, so there is no backend parameter for it to carry '
+        '-- but it IS a demotion-census root, because it does receive the '
+        'array (WP-C3 round 2, VERIFY-WP-C3 D10(d), which recorded it as '
+        'allow-listed-and-unchecked)',
     '_check_collins_sampling': 'disposes of a stats dict of floats',
     '_check_transport': 'vocabulary gate on a string',
     '_publish_readout_route': 'writes three entries into a stage dict',
@@ -836,84 +849,282 @@ def test_every_helper_on_the_collins_path_is_xp_parametrised():
         f'declared xp-parametrised nor declared host-side-by-design: '
         f'{unclassified}.  Classify each one (and say why) rather than '
         f'widening the census.')
+
+    # ROUND 2 (VERIFY-WP-C3 D10(c)): the census used to classify only names
+    # beginning ``_collins``, so 43 of the 66 reached functions were never
+    # looked at and a new unclassified helper called ``_carrier_brand_new``
+    # did not fire at all.  Every reached helper that RECEIVES A FIELD is now
+    # classified: as xp-parametrised, as host-side by design, or as a member
+    # of the Sziklas-side set the Collins fallback routes into.
+    field_takers = sorted(
+        nm for nm in reached
+        if nm in funcs and (
+            {a.arg for a in funcs[nm].args.args}
+            | {a.arg for a in funcs[nm].args.kwonlyargs}) & set(_FIELD_NAMES))
+    assert len(field_takers) >= 20, (
+        f'only {len(field_takers)} reached helpers take a field; the census '
+        f'is not reading the module')
+    stray = sorted(nm for nm in field_takers
+                   if nm not in known and nm not in _SZIKLAS_SIDE_REACHED)
+    assert not stray, (
+        f'these helpers receive a FIELD on the Collins path and are in no '
+        f'classification at all: {stray}.  Put each one in '
+        f'_XP_PARAMETRISED, in _HOST_SIDE_BY_DESIGN with its reason, or in '
+        f'_SZIKLAS_SIDE_REACHED.')
+    gone = sorted(nm for nm in _SZIKLAS_SIDE_REACHED if nm not in reached)
+    assert not gone, (
+        f'these names are declared Sziklas-side-reached but the Collins path '
+        f'no longer reaches them, so the list has gone stale: {gone}')
     for nm, why in _HOST_SIDE_BY_DESIGN.items():
         assert why and len(why) > 10, f'{nm} is allow-listed with no reason'
 
 
-#: The names a FIELD travels under inside the Collins chain.  A host
+#: The names a FIELD travels under inside the carrier module.  A host
 #: normalisation of any of these is the demotion; a host normalisation of a
 #: coordinate axis or a scalar is not, which is why the census is keyed on the
-#: ARGUMENT and not on the function.
-_FIELD_NAMES = ('env', 'env_a', 'E_env', 'spectrum', 'g', 'G', 'E_out')
+#: ARGUMENT and not only on the function.
+_FIELD_NAMES = ('env', 'env_a', 'E_env', 'spectrum', 'g', 'G', 'E_out', 'E',
+                'u', 'u_in', 'u_out', 'field')
 
-#: The two host normalisations that silently copy a device array (or raise a
-#: bare TypeError on CuPy) while being a bitwise no-op on NumPy.
-_HOST_NORMALISERS = ('asarray', 'ascontiguousarray')
+#: Host normalisations that silently COPY a device array (or raise a bare
+#: TypeError on CuPy) while being a bitwise no-op on NumPy.
+_HOST_NORMALISERS = ('asarray', 'ascontiguousarray', 'array', 'asanyarray',
+                     'asfortranarray', 'ravel', 'reshape', 'copy')
+
+#: NumPy element-wise functions.  Applied to a FIELD these run on the host.
+_HOST_UFUNCS = ('exp', 'log', 'sqrt', 'abs', 'conj', 'real', 'imag', 'angle',
+                'sin', 'cos', 'tan', 'sum', 'mean', 'max', 'min', 'where',
+                'clip', 'multiply', 'divide', 'add', 'subtract', 'power',
+                'cumsum', 'sort', 'argsort', 'fft')
+
+#: NumPy ARRAY CONSTRUCTORS.  Combining one of these with a field promotes the
+#: whole expression to host NumPy on CuPy (``TypeError: Unsupported type``)
+#: and silently on JAX.
+_HOST_CONSTRUCTORS = ('arange', 'zeros', 'ones', 'linspace', 'empty', 'full',
+                      'eye', 'identity', 'meshgrid', 'fromfunction',
+                      'zeros_like', 'ones_like', 'empty_like', 'result_type')
+
+#: Host SCALAR extraction from a field -- legal at a guard, fatal inside a
+#: traced or device kernel.
+_HOST_SCALARISERS = ('float', 'int', 'complex', 'bool', 'len', 'round')
 
 
-def _host_demotions(node):
-    """``np.<normaliser>(<field>)`` call sites inside one function node."""
+def _numpy_aliases(tree):
+    """Every local name in this module that IS numpy: ``import numpy as np``,
+    ``import numpy``, and any assignment chained off one of those."""
+    al = set()
+    for n in ast.walk(tree):
+        if isinstance(n, ast.Import):
+            for a in n.names:
+                if a.name == 'numpy' or a.name.startswith('numpy.'):
+                    al.add(a.asname or a.name.split('.')[0])
+    for _ in range(4):                      # chase alias chains to a fixpoint
+        for n in ast.walk(tree):
+            if isinstance(n, ast.Assign) and isinstance(n.value, ast.Name) \
+                    and n.value.id in al:
+                for t in n.targets:
+                    if isinstance(t, ast.Name):
+                        al.add(t.id)
+    return al or {'np'}
+
+
+def _names_in(node):
+    return {n.id for n in ast.walk(node) if isinstance(n, ast.Name)}
+
+
+def _host_demotions(node, aliases=('np', 'numpy')):
+    """Every host-demotion shape inside one function node.
+
+    FIVE shapes, each measured against the twelve injections VERIFY-WP-C3 D10
+    found the first version of this census missing nine of:
+
+    1. ``<numpy alias>.<normaliser>(<any local>)`` -- INVERTED.  The old rule
+       excused everything whose argument was not one of ``_FIELD_NAMES``, so
+       ``_vtmp = env; np.asarray(_vtmp)`` walked through.  Inside the Collins
+       chain NO local may be host-normalised, so the test is on the CALL and
+       not on the argument's spelling;
+    2. ``<alias>.<ufunc>(<expr naming a field>)`` -- ``np.exp(env)``;
+    3. an expression naming BOTH a field and a numpy CONSTRUCTOR --
+       ``env_a * np.arange(n)``, which raises ``TypeError: Unsupported type``
+       on CuPy;
+    4. ``float(<expr naming a field>)`` / ``.item()`` -- a host scalar pulled
+       out of a device or traced array;
+    5. ``math.<anything>(<expr naming a field>)``.
+
+    ``aliases`` is every name that IS numpy in the module under census, so
+    ``import numpy`` and ``_vnp = np`` are matched as well as ``np``.
+    """
     hits = []
     for n in ast.walk(node):
-        if not isinstance(n, ast.Call) or not n.args:
-            continue
-        f = n.func
-        if not (isinstance(f, ast.Attribute)
-                and f.attr in _HOST_NORMALISERS
-                and isinstance(f.value, ast.Name) and f.value.id == 'np'):
-            continue
-        a0 = n.args[0]
-        if isinstance(a0, ast.Name) and a0.id in _FIELD_NAMES:
-            hits.append(f'line {n.lineno}: np.{f.attr}({a0.id}, ...)')
-    return hits
+        if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) \
+                and isinstance(n.func.value, ast.Name) \
+                and n.func.value.id in aliases and n.args:
+            a0 = n.args[0]
+            if n.func.attr in _HOST_NORMALISERS:
+                hits.append(f'line {n.lineno}: {n.func.value.id}.'
+                            f'{n.func.attr}({ast.unparse(a0)[:40]})')
+                continue
+            if n.func.attr in _HOST_UFUNCS and \
+                    _names_in(a0) & set(_FIELD_NAMES):
+                hits.append(f'line {n.lineno}: {n.func.value.id}.'
+                            f'{n.func.attr}(<field>)')
+                continue
+        if isinstance(n, (ast.BinOp, ast.Assign, ast.Return)):
+            names = _names_in(n)
+            if not (names & set(_FIELD_NAMES)):
+                continue
+            for c in ast.walk(n):
+                if isinstance(c, ast.Call) and isinstance(c.func,
+                                                          ast.Attribute) \
+                        and isinstance(c.func.value, ast.Name) \
+                        and c.func.value.id in aliases \
+                        and c.func.attr in _HOST_CONSTRUCTORS:
+                    hits.append(f'line {c.lineno}: a field expression builds '
+                                f'{c.func.value.id}.{c.func.attr}(...)')
+        if isinstance(n, ast.Call) and isinstance(n.func, ast.Name) \
+                and n.func.id in _HOST_SCALARISERS and n.args \
+                and (_names_in(n.args[0]) & set(_FIELD_NAMES)) \
+                and not isinstance(n.args[0], ast.Name):
+            hits.append(f'line {n.lineno}: {n.func.id}(<field expression>)')
+        if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) \
+                and n.func.attr == 'item' \
+                and (_names_in(n.func.value) & set(_FIELD_NAMES)):
+            hits.append(f'line {n.lineno}: <field>....item()')
+        if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) \
+                and isinstance(n.func.value, ast.Name) \
+                and n.func.value.id == 'math' and n.args \
+                and (_names_in(n.args[0]) & set(_FIELD_NAMES)):
+            hits.append(f'line {n.lineno}: math.{n.func.attr}(<field>)')
+    return sorted(set(hits))
+
+
+#: Sites on the Collins path where a host normalisation is CORRECT, each with
+#: its reason.  Anything else the matcher finds is a demotion.
+_DECLARED_HOST_SITES = {
+    ('_collins_power_marginals', 'np.asarray(to_numpy(E))'):
+        'the documented pull: backend.to_numpy first, then a host reduction '
+        'in row bands, which is what keeps the NumPy summation order',
+    ('_collins_containment_radius', 'np.asarray(coord)'):
+        'a coordinate AXIS, not a field -- the marginals arrive host-side',
+    ('_chain_entry_congruence_stats', 'np.asarray(to_numpy(env))'):
+        'the fix for VERIFY-WP-C3 D10(a): both congruence estimators are '
+        'host code, so the field is pulled through backend.to_numpy '
+        'explicitly rather than by an np.asarray that raises on CuPy',
+    ('_chain_entry_congruence_stats', 'float(<field expression>)'):
+        'the two estimators return host floats from the pulled array E; '
+        'this guard is a DIAGNOSTIC and is host-side by design',
+}
+
+#: Guards the PUBLIC CHAIN runs on a raw field before any transform.  Each
+#: must pull through ``backend.to_numpy`` rather than ``np.asarray``:
+#: VERIFY-WP-C3 D10(a) measured the chain dying here with exactly the
+#: implicit-conversion ``TypeError`` section 5.3 forbids, on the default
+#: ``on_multi_congruence='warn'`` and on BOTH transports.
+_CHAIN_ENTRY_GUARDS = ('_chain_entry_congruence_stats',)
+
+#: Helpers of the SZIKLAS transport and the shared envelope algebra that the
+#: Collins path reaches -- through the leg's fallback, which routes into
+#: ``propagate_carrier_referenced``.  They take a field, they were threaded by
+#: Wave-5 hygiene-2 H2-2, and re-classifying them is not this package's work;
+#: what IS gated is that the list is CLOSED, so a NEW field-taking helper on
+#: the Collins path has to be classified before it can ship.
+_SZIKLAS_SIDE_REACHED = frozenset({
+    '_asm_axis', '_axis_amp_radius', '_axis_bridge', '_axis_collimated_step',
+    '_axis_near_focus_needs_bridge', '_axis_step', '_axis_step_fast',
+    '_backend_of', '_carrier_step_fast', '_envelope_amp_centroid',
+    '_envelope_amp_radius', '_envelope_tf_step', '_exact_envelope_tf_step',
+    '_exact_tf_2d_xp', '_fill_readout_replicas', '_fresnel_tf_2d_xp',
+    '_fresnel_tf_axis', '_match_env_dtype', '_near_focus_needs_bridge',
+    '_propagate_carrier_astigmatic', '_propagate_carrier_focus_crossing',
+    'carrier_referenced_reconstruct', 'propagate_carrier_referenced',
+})
 
 
 def test_no_collins_helper_demotes_the_field_to_host_numpy():
     """The mutation that the JAX value tests cannot see, closed structurally.
 
-    ``np.asarray(env)`` is bitwise a no-op for a NumPy field and a silent
-    host demotion for a JAX one, so no VALUE comparison on either backend can
-    catch it -- V-D3 records exactly that: the leg's ``env_a = np.asarray(env)``
-    was invisible to every test until a CuPy array raised a bare ``TypeError``
+    ``np.asarray(env)`` is bitwise a no-op for a NumPy field and a silent host
+    demotion for a JAX one, so no VALUE comparison on either backend can catch
+    it -- V-D3 records exactly that: the leg's ``env_a = np.asarray(env)`` was
+    invisible to every test until a CuPy array raised a bare ``TypeError``
     naming neither the leg nor the transport.
 
-    So the gate is on the SOURCE: inside the Collins chain's own functions, a
-    field may be normalised only through ``xp.asarray`` / :func:`_as_c_order`,
-    never through ``np.asarray`` / ``np.ascontiguousarray``.  Host-side
-    MEASUREMENT keeps its ``np.asarray`` -- it goes through
-    ``backend.to_numpy`` first, and those functions are the allow-listed ones
-    above, which this census does not walk into.
+    So the gate is on the SOURCE.  WIDENED IN WP-C3 ROUND 2 (VERIFY-WP-C3
+    D10), which measured the first version against thirteen injected
+    demotions and found it missing nine, four of them real device breaks:
+
+    * it walked a HAND-WRITTEN five-tuple of functions, so the one site that
+      actually broke the public chain (``_chain_entry_congruence_stats``, a
+      chain-entry guard) was invisible to it.  It now walks the CALL GRAPH and
+      censuses every reached helper of this module's own Collins family, plus
+      the chain-entry guards by name;
+    * it matched the literal name ``np``, so ``import numpy; numpy.asarray``
+      and ``_vnp = np; _vnp.asarray`` walked through.  The alias set is now
+      COMPUTED from the module's own imports and assignment chains;
+    * it excused any argument that was not spelled like a field, so
+      ``_vtmp = env; np.asarray(_vtmp)`` walked through.  The normaliser rule
+      is INVERTED: inside these functions no local may be host-normalised at
+      all, and the two sites where that is correct are declared with reasons
+      in :data:`_DECLARED_HOST_SITES`;
+    * it saw only normalisers, so ``env_a * np.arange(n)`` (a real CuPy
+      ``TypeError: Unsupported type``), ``np.exp(env)``, ``float(env[0,0])``,
+      ``env.ravel()[0].item()`` and ``math.sqrt(...)`` walked through.  All
+      five shapes are matched now.
 
     It is a census of AST CALL NODES, not a substring search, for a reason
     this test was taught the hard way (2026-09-20): ``_collins_input_box``
-    carries a COMMENT naming the old spelling
-    (``_fft2(np.ascontiguousarray(env, ...))``) as the defect it fixed, and a
-    substring search over the function's source fired on it -- a false
-    positive on a cross-reference, which is the same shape H2-2's own census
-    hit on a docstring and the opposite of what the gate is for.  Matching
-    call nodes cannot see a comment at all.
+    carries a COMMENT naming the old spelling as the defect it fixed, and a
+    substring search fired on it.  Matching call nodes cannot see a comment.
 
-    The census is shown to be LOAD-BEARING at the end: the same matcher is run
-    over a deliberately mutated copy of one function and must fire.
+    The census is shown to be LOAD-BEARING at the end, and
+    ``validation/probe_c3_round2/r2_d10_demotion_mutants.py`` drives all
+    thirteen injections against it.
     """
-    _, funcs = _module_functions()
-    sites = ('_collins_transport', '_collins_carrier_leg',
-             '_collins_focus_readout', '_collins_input_box',
-             '_collins_exact_kernel_correction')
-    bad = [f'{nm}: {hit}' for nm in sites
-           for hit in _host_demotions(funcs[nm])]
+    src, funcs = _module_functions()
+    aliases = tuple(_numpy_aliases(ast.parse(src)))
+    reached = _collins_call_graph(
+        funcs, ('_collins_transport', '_collins_carrier_leg',
+                '_collins_focus_readout', '_collins_readout_k1'))
+    censused = sorted(nm for nm in reached if nm.startswith('_collins'))
+    assert '_collins_readout_k1' in censused, (
+        'the readout condition is a census root since round 2 (D10(d)): it '
+        'takes the FIELD, and it was allow-listed as host-side and never '
+        'checked')
+    assert len(censused) >= 10, (
+        f'the call-graph walk reached only {censused}; the census is not '
+        f'reading the module')
+    bad = []
+    for nm in censused + [g for g in _CHAIN_ENTRY_GUARDS if g in funcs]:
+        for hit in _host_demotions(funcs[nm], aliases):
+            call = hit.split(': ', 1)[1]
+            if (nm, call) in _DECLARED_HOST_SITES:
+                continue
+            bad.append(f'{nm}: {hit}')
     assert not bad, (
-        'these sites demote the FIELD to host NumPy inside the Collins '
-        'chain, which is bitwise invisible on NumPy and a silent device '
-        'copy (or a bare TypeError) elsewhere:\n  ' + '\n  '.join(bad))
+        'these sites demote the FIELD to host NumPy on the Collins path, '
+        'which is bitwise invisible on NumPy and a silent device copy (or a '
+        'bare TypeError) elsewhere:\n  ' + '\n  '.join(bad))
+    for (nm, call), why in _DECLARED_HOST_SITES.items():
+        assert nm in funcs and why and len(why) > 10, (
+            f'{nm}: {call} is declared host-side with no reason, or no '
+            f'longer exists')
 
-    mutated = ast.parse(
-        'def f(env):\n'
-        '    env_a = np.asarray(env)\n'
-        '    return env_a\n').body[0]
-    assert _host_demotions(mutated), (
-        'the matcher does not fire on an explicit np.asarray(env), so the '
-        'clean reading above is not evidence of anything')
+    # ... and the matcher fires on every shape it claims to match.
+    for srcmut in (
+            'def f(env):\n    return np.asarray(env)\n',
+            'def f(env):\n    _v = np; return _v.asarray(env)\n',
+            'def f(env):\n    return numpy.asarray(env)\n',
+            'def f(env):\n    _t = env; return np.asarray(_t)\n',
+            'def f(env_a, n):\n    return env_a * np.arange(n)\n',
+            'def f(env):\n    return np.exp(env)\n',
+            'def f(env):\n    return float(env[0, 0].real)\n',
+            'def f(env):\n    return env.ravel()[0].item()\n',
+            'def f(env):\n    return math.sqrt(abs(env[0, 0]))\n'):
+        node = ast.parse(srcmut).body[0]
+        assert _host_demotions(node, ('np', 'numpy', '_v')), (
+            f'the matcher is blind to this shape, so the clean reading above '
+            f'is not evidence of anything:\n{srcmut}')
+
 
 
 def test_the_fft_on_the_collins_path_is_the_backend_dispatcher():
@@ -936,13 +1147,33 @@ def test_the_fft_on_the_collins_path_is_the_backend_dispatcher():
     b = np.ascontiguousarray(backend_fft2(np.ascontiguousarray(
         env, dtype=np.complex128)))
     assert np.array_equal(a.view(np.float64), b.view(np.float64))
+    # ROUND 2 (VERIFY-WP-C3 D10(e)): this was a 2000-character SUBSTRING
+    # window that included a ~1700-character docstring, so a mention of
+    # ``_is_cupy_array(x)`` in PROSE satisfied it and the branch could have
+    # moved anywhere in the body -- or out of it.  It is an AST check now:
+    # the FIRST non-docstring statement must be ``if _is_cupy_array(x):``.
     disp = pathlib.Path(fft_infra.__file__).read_text(encoding='cp1252')
-    for fn in ('def _fft2(x):', 'def _ifft2(x):'):
-        head = disp.split(fn, 1)[1][:2000]
-        assert '_is_cupy_array(x)' in head, (
-            f'{fn.strip()} no longer dispatches a CuPy array to cp.fft, so '
-            f'the Collins chain would run a device array through the host '
-            f'transform')
+    dtree = ast.parse(disp)
+    dfn = {n.name: n for n in ast.walk(dtree)
+           if isinstance(n, ast.FunctionDef)}
+    for fn in ('_fft2', '_ifft2'):
+        assert fn in dfn, f'{fn} is no longer defined in fft_infra'
+        body = dfn[fn].body
+        if (body and isinstance(body[0], ast.Expr)
+                and isinstance(body[0].value, ast.Constant)
+                and isinstance(body[0].value.value, str)):
+            body = body[1:]
+        first = body[0]
+        ok = (isinstance(first, ast.If)
+              and isinstance(first.test, ast.Call)
+              and isinstance(first.test.func, ast.Name)
+              and first.test.func.id == '_is_cupy_array'
+              and [ast.unparse(a) for a in first.test.args] == ['x'])
+        assert ok, (
+            f"{fn}'s first non-docstring statement is "
+            f'{ast.unparse(first)[:80]!r}, not '
+            f'`if _is_cupy_array(x):` -- the Collins chain would run a '
+            f'device array through the host transform')
 
 
 def test_a_true_cupy_answer_really_binds_the_fft_dispatchers_cp(monkeypatch):

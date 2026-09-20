@@ -1,0 +1,52 @@
+{
+ "tree": "C:\\tmp\\lum_c3b",
+ "lumenairy": "C:\\tmp\\lum_c3b\\lumenairy\\__init__.py",
+ "rows": [
+  {
+   "label": "single-step leg",
+   "outcome": "raised",
+   "error_type": "ImportError",
+   "error": "DLL load failed while importing cufft: The specified module could not be found.",
+   "frames": [
+    "carrier.py:1953 _collins_input_box",
+    "fft_infra.py:2253 _fft2",
+    "_fft.py:750 fft2",
+    "__init__.py:85 __getattr__",
+    "__init__.py:88 import_module"
+   ],
+   "is_implicit_conversion_TypeError": false,
+   "names_cufft": true
+  },
+  {
+   "label": "chain, defaults",
+   "outcome": "raised",
+   "error_type": "ImportError",
+   "error": "DLL load failed while importing cufft: The specified module could not be found.",
+   "frames": [
+    "carrier.py:1953 _collins_input_box",
+    "fft_infra.py:2253 _fft2",
+    "_fft.py:750 fft2",
+    "__init__.py:85 __getattr__",
+    "__init__.py:88 import_module"
+   ],
+   "is_implicit_conversion_TypeError": false,
+   "names_cufft": true
+  },
+  {
+   "label": "chain, guards silent",
+   "outcome": "raised",
+   "error_type": "ImportError",
+   "error": "DLL load failed while importing cufft: The specified module could not be found.",
+   "frames": [
+    "carrier.py:1953 _collins_input_box",
+    "fft_infra.py:2253 _fft2",
+    "_fft.py:750 fft2",
+    "__init__.py:85 __getattr__",
+    "__init__.py:88 import_module"
+   ],
+   "is_implicit_conversion_TypeError": false,
+   "names_cufft": true
+  }
+ ],
+ "cupy": "14.0.1"
+}

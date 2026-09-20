@@ -1,0 +1,77 @@
+{
+ "tree": "C:\\tmp\\c3b_mut9",
+ "caught": 14,
+ "n": 14,
+ "rows": {
+  "I01_np_asarray_env": {
+   "caught": true,
+   "tail": "1 failed, 1 passed in 1.72s",
+   "why": "E           _collins_carrier_leg: line 2643: np.asarray(env)"
+  },
+  "I02_np_ascontiguousarray_env": {
+   "caught": true,
+   "tail": "1 failed, 1 passed in 1.67s",
+   "why": "E           _collins_carrier_leg: line 2643: np.ascontiguousarray(env)"
+  },
+  "I03_np_asarray_env_a": {
+   "caught": true,
+   "tail": "1 failed, 1 passed in 1.76s",
+   "why": "E           _collins_carrier_leg: line 2643: np.asarray(env)"
+  },
+  "I04_np_array_env": {
+   "caught": true,
+   "tail": "1 failed, 1 passed in 1.63s",
+   "why": "E           _collins_carrier_leg: line 2643: np.array(env)"
+  },
+  "I05_numpy_alias_assignment": {
+   "caught": true,
+   "tail": "1 failed, 1 passed in 1.59s",
+   "why": "E           _collins_carrier_leg: line 2644: _vnp.asarray(env)"
+  },
+  "I06_full_module_name": {
+   "caught": true,
+   "tail": "1 failed, 1 passed in 1.63s",
+   "why": "E           _collins_carrier_leg: line 2644: numpy.asarray(env)"
+  },
+  "I07_renamed_local": {
+   "caught": true,
+   "tail": "1 failed, 1 passed in 1.63s",
+   "why": "E           _collins_carrier_leg: line 2644: np.asarray(_vtmp)"
+  },
+  "I08_numpy_constructor_in_expr": {
+   "caught": true,
+   "tail": "1 failed, 1 passed in 1.70s",
+   "why": "E           _collins_carrier_leg: line 2643: a field expression builds np.arange(...)"
+  },
+  "I09_np_ufunc_on_field": {
+   "caught": true,
+   "tail": "1 failed, 1 passed in 1.63s",
+   "why": "E           _collins_carrier_leg: line 2643: np.exp(<field>)"
+  },
+  "I10_float_of_field": {
+   "caught": true,
+   "tail": "1 failed, 1 passed in 1.67s",
+   "why": "E           _collins_carrier_leg: line 2643: float(<field expression>)"
+  },
+  "I11_item_of_field": {
+   "caught": true,
+   "tail": "1 failed, 1 passed in 1.58s",
+   "why": "E           _collins_carrier_leg: line 2643: <field>....item()"
+  },
+  "I12_math_on_field": {
+   "caught": true,
+   "tail": "1 failed, 1 passed in 1.62s",
+   "why": "E           _collins_carrier_leg: line 2644: math.sqrt(<field>)"
+  },
+  "I13_astype_result_type": {
+   "caught": true,
+   "tail": "1 failed, 1 passed in 1.62s",
+   "why": "E           _collins_carrier_leg: line 2643: a field expression builds np.result_type(...)"
+  },
+  "I14_new_unclassified_helper": {
+   "caught": true,
+   "tail": "1 failed, 1 passed in 1.59s",
+   "why": "# looked at and a new unclassified helper called ``_carrier_brand_new``"
+  }
+ }
+}
