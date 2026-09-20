@@ -1135,6 +1135,8 @@ CHANGELOG entry.
 | `test_wp_b12b_round2.py` alone (23) | WSL | **23 passed** in 13.7 s; slowest id 5.02 s |
 | the GBD BLAST-RADIUS set -- every other file naming `apply_real_lens_gbd`, `apply_prescription_persurface_to_beamlets`, `propagate_gbd_through_prescription` or `method='gbd'`: `test_analytic_ray_transfer.py`, the three `test_audit2609_a16_lens_config*` files, `test_audit2609_b7_asymptotic.py` (which inspects this function's SOURCE), `test_audit_glass.py`, `test_niche_audit_w3_elements.py`, `test_niche_audit_w3_ui_deprecation.py`, `test_niche_audit_w4_ignored_kwarg_warnings.py`, `test_niche_audit_w4_input_kind.py`, `test_niche_d5_dx_flatness_gate.py`, `test_niche_k1_kmah_caustic.py`, `test_niche_p11_ray_density_amplitude.py`, `test_niche_p8_capstone.py`, `test_niche_p9_decenter_tilt.py` (a FIELD-FRAME decentred prescription through the beamlet function), `test_v4_15_3_dispatcher_pin_2d_scalar_field.py`, `test_v4_16_0_walker_dy_threading.py`, `test_v5_2_physics_fixes.py` (18 files, 660 ids) | Windows | **660 passed, 0 failed** in 1022.7 s |
 | the census / walker / dispatcher-pin / public-API / doc-consistency sweep + `test_audit_except_budget.py` (30 files, 1404 ids) | Windows | **1389 passed, 14 skipped, 1 failed** in 280.9 s -- the one red is PRE-EXISTING and environmental (below) |
+| the doc / history / walker / census subset of that sweep (13 files, 833 ids) | WSL | **823 passed, 8 skipped, 2 failed** in 206.6 s -- BOTH reds environmental (below) |
+| `test_audit_except_budget.py` alone (4 ids) | Windows | **4 passed** in 0.5 s |
 
 `test_verify_b12b_gbd_projection.py` reads **9 passed** where it read 8 passed
 + 1 xfailed, because its mirror id is now a real decision (R2.2).
@@ -1149,7 +1151,22 @@ integration tip `76019ede` as well, and this package's diff does not touch
 that file at all (`git diff 76019ede -- lumenairy/__init__.py` is empty).
 Re-running that single id reproduces it in 0.9 s with the same two strings.
 Reported, not fixed: re-installing the editable package would change state
-this package does not own.
+this package does not own.  The WSL venv carries the same drift, which is
+one of that build's two reds.
+
+**Why the census / walker sweep is a WINDOWS gate.**  Its second WSL red,
+`test_v5_2_3_walker_changelog_content.py::test_v16_synthetic_fabrication_is_caught`,
+reads `rc=2` ("nothing to verify") where it wants `rc=1` ("fabrication
+flagged").  The cause is not the CHANGELOG: `git` cannot open this worktree
+from WSL at all.  A Windows-created worktree's `.git` file points at a
+Windows absolute path, so from `/mnt/c/tmp/lum_gbd2` even `git rev-parse
+--git-dir` fails with *"not a git repository:
+/mnt/c/tmp/lum_gbd2/D:/.../\.git/worktrees/lum_gbd2"*.  Every walker that
+shells out to `git` therefore reports "nothing to verify" on the WSL build
+of a Windows worktree, whatever the branch.  The same id passes on Windows
+in 0.23 s.  This is why the sweep is recorded here as a Windows gate, and
+why VERIFY-WP-B12b ran it on Windows only; it is a property of where the
+worktree lives, not of any change in it.
 
 | gate | result |
 |---|---|
