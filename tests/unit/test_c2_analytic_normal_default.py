@@ -844,13 +844,43 @@ _JAX_ONLY_ENTRY_POINTS = {
     'ray_transfer_jacobian_jax',
 }
 
+#: Exported functions that reach a tracer ONLY through a PRIVATE helper of
+#: their own module, and carry neither way-back keyword.  WP-C2 round 3
+#: (2026-09-20) gave the census that second hop -- which is what finally
+#: named ``apply_real_lens``, the seventeenth entry point (VR2-D1) -- and
+#: the same hop made this twelve visible for the first time.
+#:
+#: They are RECORDED rather than closed.  Closing them is twelve signatures
+#: and six private helpers (``analysis/field.py::_trace`` alone serves six
+#: of them), each needing its own archive-to-archive byte-identity proof and
+#: its own forwarding pin, which is a work package of the size of WP-C2
+#: itself and not something to land unverified in a round that is closing
+#: seven filed defects.  Measured on both builds on 2026-09-20; the set is
+#: allowed to SHRINK (give one the pair and it leaves) and never to grow,
+#: so a NEW helper-routed entry point still turns the census red.
+_C2_TRACES_VIA_A_PRIVATE_HELPER = {
+    'apply_prescription_persurface_to_beamlets',
+    'apply_real_lens_traced_multibranch',
+    'apply_real_lens_traced_uniform',
+    'distortion_grid',
+    'distortion_vs_field',
+    'field_aberration_sweep',
+    'footprint_per_surface',
+    'propagate_hfpi_through_prescription',
+    'propagate_traced_carrier_chain',
+    'propagate_traced_carrier_chain_multi',
+    'relative_illumination',
+    'spot_diagram_vs_field',
+}
+
 #: The names a body has to mention for the census to call it a tracer.
 _C2_TRACERS = {'trace', 'trace_world', 'trace_prescription',
                'raytrace_system', 'trace_jax', 'trace_jax_world'}
 _C2_WAY_BACK = ('sphere_normal', 'renormalize')
 
 
-def _c2_entry_point_census(package_root=None, keywords=_C2_WAY_BACK):
+def _c2_entry_point_census(package_root=None, keywords=_C2_WAY_BACK,
+                           hop=True):
     """AST census: every EXPORTED function whose own body names a tracer,
     mapped to which of the two way-back keywords its signature carries.
 
@@ -860,6 +890,19 @@ def _c2_entry_point_census(package_root=None, keywords=_C2_WAY_BACK):
     calling it, and a census that reads only ``ast.Call`` misses it and
     both ``*_world`` twins with it), and an ATTRIBUTE call counts too
     (``rt.trace(...)`` in ``elements/lenses_maslov.py``).
+
+    ALIAS-AWARE since round 3 (VERIFY-WP-C2 round 2, defect VR2-D1).  A
+    body that imports the tracer under another name --
+    ``from ..raytrace import trace as _rt_trace`` inside
+    ``_apply_real_lens_impl`` -- names ``_rt_trace``, not ``trace``, so a
+    census keyed on the tracer NAMES misses it.  That is how
+    ``apply_real_lens`` hid from both this census and VERIFY-WP-C2's own
+    for two rounds while tracing internally and MOVING archive to archive
+    (2.8389e-13 Windows / 2.8387e-13 WSL).  The module's ``Import`` /
+    ``ImportFrom`` aliases are collected first -- including the ones inside
+    function bodies, which is where the lens modules put theirs to break an
+    import cycle -- and a bare ``Name`` bound to one of them counts as a
+    tracer mention.
 
     ``package_root`` lets the arm below run the same census over a MUTANT
     copy of the package; it defaults to the installed one.
@@ -877,20 +920,61 @@ def _c2_entry_point_census(package_root=None, keywords=_C2_WAY_BACK):
             tree = ast.parse(f.read_text(encoding='utf-8', errors='replace'))
         except SyntaxError:
             continue
+        # ``{local name: tracer it is bound to}`` for the WHOLE module, so a
+        # function-body import is seen by the walk of any function in it.
+        aliases = {a.asname: a.name
+                   for node in ast.walk(tree)
+                   if isinstance(node, (ast.Import, ast.ImportFrom))
+                   for a in node.names
+                   if a.asname and a.name in _C2_TRACERS}
+        traces = {}
+        defs = {}
+        names_used = {}
         for node in ast.walk(tree):
             if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 continue
-            if node.name.startswith('_'):
-                continue
-            hit = any(
-                (isinstance(sub, ast.Name) and sub.id in _C2_TRACERS)
-                or (isinstance(sub, ast.Call)
-                    and isinstance(sub.func, ast.Attribute)
-                    and sub.func.attr in _C2_TRACERS)
-                for sub in ast.walk(node))
+            defs[node.name] = node
+            used = set()
+            hit = False
+            for sub in ast.walk(node):
+                if isinstance(sub, ast.Name):
+                    used.add(sub.id)
+                    if sub.id in _C2_TRACERS or sub.id in aliases:
+                        hit = True
+                elif (isinstance(sub, ast.Call)
+                        and isinstance(sub.func, ast.Attribute)):
+                    if sub.func.attr in _C2_TRACERS:
+                        hit = True
+            names_used[node.name] = used
             if hit:
-                direct.setdefault(node.name, set()).add(
+                traces.setdefault(node.name, set()).add(
                     f.relative_to(package_root).as_posix())
+        # ONE MORE HOP, through PRIVATE helpers of the SAME module.  An
+        # exported entry point whose whole body is
+        # ``return _apply_real_lens_impl(...)`` traces exactly as much as
+        # the impl does, and a census that stops at the public body calls
+        # it route-less -- which is how ``apply_real_lens`` (VR2-D1) hid
+        # behind BOTH the private split-out AND the import alias.  Only
+        # underscore-prefixed callees defined IN THIS FILE are followed, so
+        # this stays a census of entry points and does not become the
+        # 46-function transitive-caller population.
+        changed = bool(hop)
+        while changed:
+            changed = False
+            for name, used in names_used.items():
+                if name in traces:
+                    continue
+                for callee in used:
+                    if (callee.startswith('_') and callee in defs
+                            and callee in traces):
+                        traces.setdefault(name, set()).add(
+                            f.relative_to(package_root).as_posix())
+                        changed = True
+                        break
+        for name in traces:
+            if name.startswith('_'):
+                continue
+            direct.setdefault(name, set()).update(traces[name])
     public = {}
     for mod in ('lumenairy', 'lumenairy.raytrace', 'lumenairy.analysis',
                 'lumenairy.io', 'lumenairy.optimize', 'lumenairy.elements',
@@ -927,15 +1011,32 @@ def test_c2_every_entry_point_that_traces_carries_both_keywords():
     ``apply_real_lens_maslov``.  All sixteen now take ``sphere_normal=``
     and ``renormalize=`` and forward them verbatim.
 
-    MEASURED 2026-09-20 (round 2, both builds, identical): the census finds
-    20 exported directly-tracing functions; 16 carry both keywords and the
-    4 that do not are exactly the ``*_jax`` twins, which reach a tracer that
-    has neither switch by design.
+    ROUND 3 (VERIFY-WP-C2 round 2, defect VR2-D1).  Both the shipped
+    census and VERIFY-WP-C2's own decided "this body traces" from the
+    tracer NAMES, and ``elements/_lens_real.py`` imports the tracer inside
+    a function body as ``trace as _rt_trace`` and calls it from the
+    PRIVATE split-out ``_apply_real_lens_impl``.  Two blind spots in
+    series hid a SEVENTEENTH entry point --
+    ``apply_real_lens(seidel_correction=True)``, the plain-lens propagator
+    most users reach for first -- which traced with both keywords omitted
+    and MOVED archive to archive (max abs delta 2.8389e-13 Windows /
+    2.8387e-13 WSL on a 256 x 256 field).  The census now resolves import
+    aliases and follows one hop into a private same-module helper, and
+    ``apply_real_lens`` carries the pair.
+
+    MEASURED 2026-09-20 (round 3, both builds, identical): 20 exported
+    functions trace in their OWN bodies and 33 once the private-helper hop
+    is followed; 17 carry both keywords.  Of the 16 that do not, 4 are
+    exactly the ``*_jax`` twins, which reach a tracer that has neither
+    switch by design, and 12 reach a tracer only through a private helper
+    of their own module -- ``_C2_TRACES_VIA_A_PRIVATE_HELPER``, which
+    round 3 made visible for the first time and recorded rather than
+    closed.
 
     This is a CENSUS, not a list: a new entry point that traces without
-    forwarding joins it automatically and turns this arm red.  The
-    ``_JAX_ONLY_ENTRY_POINTS`` exemption is asserted to be non-empty and to
-    be exactly the jax set, so it cannot quietly grow into an escape hatch.
+    forwarding joins it automatically and turns this arm red.  Both
+    exemptions are asserted to be non-empty, disjoint and exactly what
+    they say, so neither can quietly grow into an escape hatch.
     """
     # the library names the pair itself; this census must be checking the
     # same two keywords the tracer documents as its way back, or it is
@@ -945,24 +1046,47 @@ def test_c2_every_entry_point_that_traces_carries_both_keywords():
         f'raytrace.trace._WAY_BACK_KEYWORDS names {_WAY_BACK_KEYWORDS} and '
         f'this census checks {_C2_WAY_BACK}; they have to be the same pair.')
 
+    # neither exemption may go empty or overlap -- an empty set is an
+    # escape hatch with nothing written in it
+    assert _C2_TRACES_VIA_A_PRIVATE_HELPER and _JAX_ONLY_ENTRY_POINTS, (
+        'an exemption set went empty; delete it rather than leaving an '
+        'unexplained escape hatch in the census.')
+    assert not (_C2_TRACES_VIA_A_PRIVATE_HELPER & _JAX_ONLY_ENTRY_POINTS), (
+        'the two exemptions overlap, so one of them is not saying what it '
+        'says.')
+
     census = _c2_entry_point_census()
-    assert len(census) >= 20, (
+    assert len(census) >= 33, (
         f'the AST census found only {len(census)} exported tracing entry '
-        f'points; it found 20 on 2026-09-20, so it has stopped looking.')
+        f'points; it found 33 on 2026-09-20 (20 of them tracing in their '
+        f'own bodies), so it has stopped looking.')
+    exempt = _JAX_ONLY_ENTRY_POINTS | _C2_TRACES_VIA_A_PRIVATE_HELPER
     missing = {n for n, kw in census.items() if len(kw) < 2}
-    assert missing == _JAX_ONLY_ENTRY_POINTS, (
+    assert missing == exempt, (
         f'entry points that trace internally and do NOT carry both '
         f'{_C2_WAY_BACK} keywords:\n'
-        f'  newly without a way back: {sorted(missing - _JAX_ONLY_ENTRY_POINTS)}\n'
-        f'  no longer in the exempt set: '
-        f'{sorted(_JAX_ONLY_ENTRY_POINTS - missing)}\n'
-        f'Every exported function that traces must forward BOTH keywords '
-        f'(default None, which stamps nothing).  The only exemption is an '
-        f'entry point that reaches trace_jax, which has neither switch.')
+        f'  newly without a way back: {sorted(missing - exempt)}\n'
+        f'  no longer in the exempt set: {sorted(exempt - missing)}\n'
+        f'Every exported function that traces in its OWN body must forward '
+        f'BOTH keywords (default None, which stamps nothing).  The two '
+        f'exemptions are an entry point that reaches trace_jax, which has '
+        f'neither switch by design, and one that reaches a tracer only '
+        f'through a private helper of its own module, which round 3 '
+        f'recorded rather than closed.')
     with_both = {n for n, kw in census.items() if len(kw) == 2}
-    assert len(with_both) >= 16, (
-        f'only {len(with_both)} entry points carry both keywords; sixteen '
-        f'did on 2026-09-20.')
+    assert len(with_both) >= 17, (
+        f'only {len(with_both)} entry points carry both keywords; '
+        f'seventeen did on 2026-09-20, after VR2-D1 was closed.')
+    # VR2-D1: the seventeenth, named.  It is the one entry point the census
+    # reaches through BOTH an import alias and a private split-out, so if
+    # either resolution is lost this line says which.
+    assert census.get('apply_real_lens') == list(_C2_WAY_BACK), (
+        f'apply_real_lens -- the seventeenth entry point, which traces '
+        f'through the aliased import in _apply_real_lens_impl whenever '
+        f'seidel_correction=True -- reads '
+        f'{census.get("apply_real_lens")!r} in the census.  Either it lost '
+        f'the way back or the census lost the alias / private-helper '
+        f'resolution that finds it (VR2-D1).')
     # the two tracers themselves are not in the census (their own bodies do
     # not name a tracer), so their keywords are asserted directly
     for fn in (trace, trace_world):
@@ -1044,11 +1168,274 @@ def test_c2_the_entry_point_census_fires_when_one_keyword_is_dropped(tmp_path):
         'a grep-based census would not have caught it.')
 
 
-@pytest.mark.parametrize('name', [
+def test_c2_the_census_names_a_route_less_caller_hidden_by_an_alias(tmp_path):
+    """Fail-before arm for the two resolutions VR2-D1 added.
+
+    The defect was not "a keyword was forgotten"; it was that the census
+    COULD NOT SEE the entry point.  ``elements/_lens_real.py`` imports the
+    tracer inside a function body as ``trace as _rt_trace`` and calls it
+    from the PRIVATE split-out ``_apply_real_lens_impl``, so a census that
+    keys on the tracer NAMES and stops at the public body reads
+    ``apply_real_lens`` as not tracing at all -- which both the shipped
+    census and VERIFY-WP-C2's own did, for two rounds.
+
+    MEASURED 2026-09-20 on this verifier's own ``git archive 49ddf4bd``
+    tree and on the tip, both builds, identical
+    (``validation/probe_c2_round3/r3_census_{pre,post}_{win,wsl}.json``):
+
+        reading        PRE entry points   PRE apply_real_lens   tip
+        name only            20            not in census        20 / 16
+        + import alias       20            not in census        20 / 16
+        + private hop        33            IN, zero keywords    33 / 17
+
+    so the alias resolution alone is NOT enough -- it takes the private
+    hop as well -- and with both, the seventeenth is named on the pre-fix
+    tree carrying neither keyword.
+
+    This arm reproduces that shape in process, on a SCRATCH tree, using a
+    name that does not trace anywhere in the real package
+    (``make_doublet``, a prescription builder) so that naming it can only
+    have come from the scratch body.  Two-sided three ways: with the alias
+    AND the hop it is named, with the hop switched off it is not, and a
+    second scratch caller that names the tracer DIRECTLY is named either
+    way (so the arm is not merely asserting that the census sees
+    everything).
+    """
+    root = tmp_path / 'scratchpkg'
+    root.mkdir()
+    (root / '__init__.py').write_text('', encoding='utf-8')
+    (root / 'aliased.py').write_text(
+        "from lumenairy.raytrace import trace as _rt_alias\n"
+        "\n"
+        "\n"
+        "def _scratch_impl(rays, surfaces, wavelength):\n"
+        "    return _rt_alias(rays, surfaces, wavelength)\n"
+        "\n"
+        "\n"
+        "def make_doublet(rays, surfaces, wavelength):\n"
+        "    return _scratch_impl(rays, surfaces, wavelength)\n",
+        encoding='utf-8')
+    (root / 'plain.py').write_text(
+        "from lumenairy.raytrace import trace\n"
+        "\n"
+        "\n"
+        "def make_singlet(rays, surfaces, wavelength):\n"
+        "    return trace(rays, surfaces, wavelength)\n",
+        encoding='utf-8')
+
+    # PREMISE: neither name traces in the REAL package, so any hit below
+    # comes from the scratch bodies and not from the installed ones.
+    real = _c2_entry_point_census()
+    assert 'make_doublet' not in real and 'make_singlet' not in real, (
+        'make_doublet / make_singlet trace in the real package now, so '
+        'this scratch arm can no longer attribute a hit to its own '
+        'source.  Pick two other exported non-tracing names.')
+
+    both = _c2_entry_point_census(package_root=root)
+    assert 'make_doublet' in both, (
+        'the census did not name a route-less exported caller that reaches '
+        'the tracer through an IMPORT ALIAS and a PRIVATE helper -- the '
+        'exact shape that hid apply_real_lens for two rounds (VR2-D1).')
+    assert 'make_singlet' in both, (
+        'the census stopped naming a caller that names the tracer '
+        'outright, so it is no longer a census of anything.')
+
+    # and the hop is load-bearing: without it the aliased-through-a-private
+    # -helper caller disappears while the direct one stays
+    no_hop = _c2_entry_point_census(package_root=root, hop=False)
+    assert 'make_doublet' not in no_hop, (
+        'the private-helper hop is no longer what finds the caller, so '
+        'this arm is not measuring the resolution it says it measures.')
+    assert 'make_singlet' in no_hop, no_hop
+
+    # the keywords the census reports are read from the LIVE signature, so
+    # both scratch names come back route-less -- which is what the PRE-tree
+    # probe reads for apply_real_lens
+    assert both['make_doublet'] == [], both['make_doublet']
+
+
+#: The nine entry points whose whole answer is cheap enough to compare BYTE
+#: for byte across three calls, which is the strongest form of the claim:
+#: omitted == None, and both != the forced old routes.
+_C2_BYTE_COMPARED = (
     'trace_prescription', 'raytrace_system', 'ray_fan_data',
     'ray_fan_data_world', 'opd_fan_data', 'opd_fan_data_world',
     'through_focus_rms', 'paraxial_focus_world', 'ray_transfer_jacobian',
-])
+)
+
+#: The other EIGHT, measured by SPYING on the tracer instead of comparing
+#: answers: they build a whole field or a figure, so three full calls each
+#: would cost minutes, while one spied call each costs seconds and pins the
+#: same property one level closer to the wire (the keyword ARRIVES at every
+#: internal trace call, and the default call arrives with neither).
+#:
+#: VERIFY-WP-C2 round 2, defect VR2-D4: before these ids existed, dropping
+#: the forward in ``elements/_lens_traced.py``,
+#: ``propagators/asymptotic_canonical_fit.py``,
+#: ``analysis/image_plane_wfe.py`` or ``analysis/aberration.py`` left the
+#: WHOLE C2 suite green -- 58 passed, 0 failed on each of the four.  The
+#: keyword stayed in the signature, so the census stayed green; it simply
+#: went nowhere.
+_C2_SPIED = (
+    'caustic_diagnostic', 'eval_image_plane_wfe', 'plot_lens_layout',
+    'fit_canonical_polynomials', 'fit_hf_polynomials',
+    'apply_real_lens_traced', 'apply_real_lens_maslov',
+    # VR2-D1: the seventeenth.  It traces only under seidel_correction=True.
+    'apply_real_lens',
+)
+
+
+def _c2_spy_prescription():
+    """A spherical doublet -- three PURE SPHERES, so ``sphere_normal`` has
+    something to select on at every surface."""
+    return {
+        'name': 'c2 round-3 spy doublet',
+        'aperture_diameter': 0.0280,
+        'surfaces': [
+            {'radius': 0.0731, 'conic': 0.0,
+             'glass_before': 'air', 'glass_after': 'N-BK7'},
+            {'radius': -0.0437, 'conic': 0.0,
+             'glass_before': 'N-BK7', 'glass_after': 'N-SF5'},
+            {'radius': -0.1013, 'conic': 0.0,
+             'glass_before': 'N-SF5', 'glass_after': 'air'},
+        ],
+        'thicknesses': [0.0082, 0.0031],
+    }
+
+
+def _c2_spied_call(name, P):
+    """``fn(**way_back_kwargs) -> None`` for one of the eight spied entry
+    points.  Sized small deliberately: the arm measures WHICH keywords
+    reach the tracer, not the answer, so every grid here is the smallest
+    one that still traces."""
+    import numpy as _np
+
+    def call(**kw):
+        if name == 'caustic_diagnostic':
+            from lumenairy.analysis.aberration import caustic_diagnostic
+            return caustic_diagnostic(P, WL, fan_radius=2.5e-3,
+                                      n_z_per_gap=6,
+                                      z_after_last_surface=0.0800, **kw)
+        if name == 'eval_image_plane_wfe':
+            from lumenairy.analysis.image_plane_wfe import eval_image_plane_wfe
+            return eval_image_plane_wfe(
+                dict(P, object_distance=float('inf')), WL, field=(0.0, 0.4),
+                n_pupil=9, field_max_rad=0.022, **kw)
+        if name == 'plot_lens_layout':
+            import matplotlib
+            matplotlib.use('Agg')
+            import matplotlib.pyplot as plt
+
+            from lumenairy.analysis.plotting import plot_lens_layout
+            fig, _ax = plot_lens_layout(P, wavelength=WL, show_rays=True,
+                                        n_field_angles=2, max_field_deg=1.5,
+                                        rays_per_fan=5, **kw)
+            plt.close(fig)
+            return None
+        if name == 'fit_canonical_polynomials':
+            from lumenairy.propagators.asymptotic_canonical_fit import (
+                fit_canonical_polynomials)
+            return fit_canonical_polynomials(P, WL, n_field=3, n_pupil=5,
+                                             poly_order=4, **kw)
+        if name == 'fit_hf_polynomials':
+            from lumenairy.propagators.asymptotic_canonical_fit import (
+                fit_hf_polynomials)
+            return fit_hf_polynomials(P, WL, n_field=3, n_pupil=5,
+                                      poly_order=4, **kw)
+        n, dx = 48, 25e-6
+        a = (_np.arange(n) - n // 2) * dx
+        X, Y = _np.meshgrid(a, a, indexing='xy')
+        E = _np.exp(-(X ** 2 + Y ** 2) / (0.35e-3) ** 2).astype(
+            _np.complex128)
+        if name == 'apply_real_lens_traced':
+            from lumenairy.elements import apply_real_lens_traced
+            return apply_real_lens_traced(
+                E, prescription=P, wavelength=WL, dx=dx, ray_subsample=8,
+                bandlimit=False, on_undersample='silent',
+                on_noncollimated='silent', on_aperture_beam='silent',
+                on_fit_domain_basis='silent', on_pool_memory='silent',
+                n_workers=1, **kw)
+        if name == 'apply_real_lens':
+            from lumenairy.elements import apply_real_lens
+            # the Seidel-residual fan is the ONLY trace this entry point
+            # makes, so the correction has to be ON or the arm is vacuous
+            return apply_real_lens(
+                E, prescription=P, wavelength=WL, dx=dx,
+                seidel_correction=True, seidel_poly_order=6, **kw)
+        from lumenairy.elements import apply_real_lens_maslov
+        return apply_real_lens_maslov(
+            E, prescription=P, wavelength=WL, dx=dx, ray_field_samples=5,
+            ray_pupil_samples=5, poly_order=4, output_subsample=2, **kw)
+
+    return call
+
+
+def _c2_spy_on_the_tracers(call):
+    """Run ``call`` twice -- once with both keywords forced to the old
+    routes, once at the default -- with every module attribute bound to
+    ``trace`` / ``trace_world`` replaced by a recording wrapper.
+
+    Returns ``(forced, default)``, each a list of
+    ``(sphere_normal, renormalize)`` as the tracer actually received them.
+
+    Patching every BINDING rather than the defining module is deliberate:
+    the entry points bind ``trace`` at import time, so patching
+    ``raytrace.trace.trace`` alone would reach only the late-binding
+    callers.
+    """
+    import sys as _sys
+    import warnings
+
+    seen = []
+    tmod = _sys.modules['lumenairy.raytrace.trace']
+    wmod = _sys.modules['lumenairy.raytrace.world_trace']
+    reals = [tmod.trace, wmod.trace_world]
+
+    def _mk(real):
+        def spied(*a, **k):
+            seen.append((k.get('sphere_normal', '<omitted>'),
+                         k.get('renormalize', '<omitted>')))
+            return real(*a, **k)
+        return spied
+
+    # warm the imports BEFORE the patch, so every module the entry point
+    # binds from is already in sys.modules when the spies go in
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        call()
+
+    spy_of = {id(r): _mk(r) for r in reals}
+    patched = []
+    for mn, m in list(_sys.modules.items()):
+        if not mn.startswith('lumenairy') or m is None:
+            continue
+        if not hasattr(m, '__dict__'):
+            continue
+        for an in list(vars(m)):
+            try:
+                v = getattr(m, an)
+            except Exception:                     # pragma: no cover
+                continue
+            if id(v) in spy_of:
+                setattr(m, an, spy_of[id(v)])
+                patched.append((m, an, v))
+    assert patched, 'no module attribute was bound to the tracer to patch'
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            seen.clear()
+            call(sphere_normal='generic', renormalize='surface')
+            forced = list(seen)
+            seen.clear()
+            call()
+            default = list(seen)
+    finally:
+        for m, an, v in patched:
+            setattr(m, an, v)
+    return forced, default
+
+
+@pytest.mark.parametrize('name', _C2_BYTE_COMPARED + _C2_SPIED)
 def test_c2_none_stamps_nothing_on_the_entry_points(name):
     """``None`` -- the default of every forwarded keyword -- must name
     nothing, so an unkeyworded call is byte-identical to one that passes
@@ -1062,10 +1449,28 @@ def test_c2_none_stamps_nothing_on_the_entry_points(name):
 
     MEASURED 2026-09-20, both builds, over all sixteen entry points and 742
     arrays (``validation/probe_c2_round2/r2_wayback_summary_*.json``):
-    ``post_default`` and ``post_none`` are identical on every array.  This
-    arm re-measures nine of them in process, including the two ``_world``
-    twins and the differential Jacobian.
+    ``post_default`` and ``post_none`` are identical on every array.
+
+    ROUND 3 (VERIFY-WP-C2 round 2, defect VR2-D4).  The ``a != c`` half of
+    this arm is the only IN-PROCESS pin that a forwarded keyword actually
+    REACHES the internal trace, and it used to parametrize NINE of the
+    sixteen.  The other seven were covered only by a committed probe JSON,
+    which is a recording rather than a gate: dropping the forward
+    (``**_way_back_kwargs()`` with no arguments) in
+    ``elements/_lens_traced.py``, ``propagators/asymptotic_canonical_fit.py``,
+    ``analysis/image_plane_wfe.py`` or ``analysis/aberration.py`` left the
+    whole C2 suite GREEN -- 58 passed, 0 failed on every one of the four.
+
+    All SEVENTEEN are parametrized now.  The nine in ``_C2_BYTE_COMPARED``
+    keep the byte comparison; the eight in ``_C2_SPIED`` -- which build a
+    whole field or a figure -- are measured by spying on the tracer
+    instead, which pins the same property one level closer to the wire and
+    costs one call each instead of three.
     """
+    if name in _C2_SPIED:
+        _c2_assert_the_forward_reaches_the_tracer(name)
+        return
+
     import numpy as _np
 
     from lumenairy.io.prescriptions_builders import make_doublet
@@ -1157,6 +1562,44 @@ def test_c2_none_stamps_nothing_on_the_entry_points(name):
         f'produced byte-identical output to the default, so the forwarded '
         f'keywords do not reach the internal trace on this fixture and the '
         f'None-stamps-nothing arm above proves nothing.')
+
+
+def _c2_assert_the_forward_reaches_the_tracer(name):
+    """The ``_C2_SPIED`` half of the arm above: the forwarded keywords must
+    arrive at EVERY internal trace call, and the default call must arrive
+    with NEITHER.
+
+    Two-sided by construction.  The first half is VR2-D4 -- a keyword that
+    is accepted and then dropped before the trace leaves the signature
+    census green and the way back broken.  The second is the sentinel: if
+    ``None`` stamped ``'analytic'`` / ``'exit'``, this release's default
+    would be frozen into the call site and the next flip would reach none
+    of the seventeen.
+
+    MEASURED 2026-09-20 on Windows py3.14 / numpy 2.4.4 and WSL py3.12 /
+    numpy 2.4.6: every one of the eight makes between one and four
+    internal trace calls and every call carries the forced pair; the
+    default call carries neither.  Cost 4.4 s for the seven that existed
+    in round 2 (VERIFY-WP-C2 round 2 section 1, VR2-D4).
+    """
+    call = _c2_spied_call(name, _c2_spy_prescription())
+    forced, default = _c2_spy_on_the_tracers(call)
+    assert forced, (
+        f'{name}: the tracer was never called, so this arm measured '
+        f'nothing.  Measured at least one call per entry point on '
+        f'2026-09-20; if the entry point stopped tracing, move it out of '
+        f'_C2_SPIED rather than leaving a vacuous id behind.')
+    assert set(forced) == {('generic', 'surface')}, (
+        f'{name}: the forwarded keywords did NOT reach every internal '
+        f'trace call -- the tracer saw {sorted(set(forced))} over '
+        f'{len(forced)} call(s).  A keyword that is accepted and then '
+        f'dropped before the trace is the VR2-D4 shape: it leaves the '
+        f'signature census green and the way back broken.')
+    assert set(default) == {('<omitted>', '<omitted>')}, (
+        f'{name}: the DEFAULT call stamped {sorted(set(default))} on the '
+        f'tracer.  None must name nothing, or this release\'s default is '
+        f'frozen into the call site and the next flip reaches none of the '
+        f'seventeen.')
 
 
 # ===========================================================================

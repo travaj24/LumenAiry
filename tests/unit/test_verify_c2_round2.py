@@ -49,7 +49,16 @@ _TRACERS = {'trace', 'trace_world', 'trace_prescription', 'raytrace_system',
 #: carry no way back.  Measured 2026-09-20 (VR2-D1); the requested fix is
 #: either the keyword pair on ``apply_real_lens`` or the alias removed.
 #: Shrinking this set is the fix; GROWING it is the regression.
-_ALIAS_HIDDEN_WITHOUT_A_WAY_BACK = {'apply_real_lens'}
+#:
+#: EMPTIED by WP-C2 round 3 (2026-09-20), which took the first of the two
+#: offered fixes: ``apply_real_lens`` now carries ``renormalize=`` and
+#: ``sphere_normal=`` and threads them through ``_apply_real_lens_impl``
+#: into the aliased ``_rt_trace`` call.  The alias itself is deliberately
+#: LEFT in place -- it breaks a genuine import cycle -- so the two
+#: premises above this arm's assertion (the alias is in the source, and a
+#: name-only census misses it) still hold and the arm still measures the
+#: blind spot rather than a removed one.
+_ALIAS_HIDDEN_WITHOUT_A_WAY_BACK = set()
 
 
 # ---------------------------------------------------------------- helpers

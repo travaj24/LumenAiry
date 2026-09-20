@@ -1,0 +1,61 @@
+{
+  "n_control_identical": 3,
+  "n_default_moved": 3,
+  "n_prescriptions": 3,
+  "n_way_back_identical": 3,
+  "post": {
+    "lumenairy_file": "C:\\tmp\\lum_c2c\\lumenairy\\__init__.py",
+    "numpy": "2.4.4",
+    "python": "3.14.6",
+    "signature_defaults": {
+      "renormalize": "None",
+      "sphere_normal": "None"
+    }
+  },
+  "pre": {
+    "lumenairy_file": "C:\\tmp\\lum_c2c_pre49\\lumenairy\\__init__.py",
+    "numpy": "2.4.4",
+    "python": "3.14.6"
+  },
+  "rows": [
+    {
+      "default_moved": true,
+      "none_equals_omitted": true,
+      "post_control": "3ae90374",
+      "post_control_with_old_keywords": "3ae90374",
+      "post_seidel_default": "0289fe29",
+      "post_seidel_old_keywords": "fe53dfb9",
+      "pre_control": "3ae90374",
+      "pre_seidel": "fe53dfb9",
+      "prescription": "asphere_singlet",
+      "seidel_false_control_identical_with_and_without_keywords": true,
+      "way_back_is_byte_identical": true
+    },
+    {
+      "default_moved": true,
+      "none_equals_omitted": true,
+      "post_control": "c5af9c30",
+      "post_control_with_old_keywords": "c5af9c30",
+      "post_seidel_default": "774e93b3",
+      "post_seidel_old_keywords": "216dce26",
+      "pre_control": "c5af9c30",
+      "pre_seidel": "216dce26",
+      "prescription": "spherical_doublet",
+      "seidel_false_control_identical_with_and_without_keywords": true,
+      "way_back_is_byte_identical": true
+    },
+    {
+      "default_moved": true,
+      "none_equals_omitted": true,
+      "post_control": "5caf9d0d",
+      "post_control_with_old_keywords": "5caf9d0d",
+      "post_seidel_default": "6dc7d801",
+      "post_seidel_old_keywords": "ecc24ca9",
+      "pre_control": "5caf9d0d",
+      "pre_seidel": "ecc24ca9",
+      "prescription": "spherical_singlet",
+      "seidel_false_control_identical_with_and_without_keywords": true,
+      "way_back_is_byte_identical": true
+    }
+  ]
+}

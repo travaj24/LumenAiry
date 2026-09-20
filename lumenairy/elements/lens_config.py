@@ -399,6 +399,16 @@ class LensGeometry:
 # LensNumerics
 # ---------------------------------------------------------------------------
 
+#: The two ``raytrace.trace.trace`` keywords WP-C2 added as the way back to
+#: the pre-flip arithmetic, as :class:`LensNumerics` field names.  The tracer
+#: owns the list (``raytrace.trace._WAY_BACK_KEYWORDS``) and the accepted
+#: spellings; this tuple is only which of this class's fields are the pair, so
+#: ``__post_init__`` can type-check them in one loop.  Pinned equal to the
+#: tracer's tuple by
+#: ``tests/unit/test_c2_analytic_normal_default.py``.
+_WAY_BACK_FIELDS: Tuple[str, ...] = ('renormalize', 'sphere_normal')
+
+
 @dataclass(frozen=True, eq=False)
 class LensNumerics:
     """HOW the same problem is discretised and solved.
@@ -504,6 +514,38 @@ class LensNumerics:
         Per-call override of the inverse-characteristic evaluator gate;
         ``None`` -> follow ``_lens_imap.TRACED_INVERSE_MAP``.  Accepted by:
         ``apply_real_lens_traced``, ``prepare_real_lens_traced``.
+    renormalize : str or None, default None
+        Where the internal ray trace rescales its direction cosines:
+        ``'exit'`` (once, on the bundle leaving the last surface) or
+        ``'surface'`` (after every refraction and reflection).  ``None`` --
+        the default -- names nothing, so the call takes whatever
+        ``raytrace.trace.trace`` defaults to AT THE TIME IT RUNS; a config
+        that spelled today's value out would freeze this release's
+        arithmetic into every call built from it, which is the failure the
+        sentinel exists to prevent.  The MEMBERSHIP check deliberately lives
+        in the tracer, which is the single place the two spellings are
+        defined (``raytrace.trace.trace`` raises on an unknown one); this
+        object checks only that a named value is a string, exactly as
+        ``newton_fit`` / ``inversion_method`` leave their vocabularies to
+        the entry point.  Accepted by: ``apply_real_lens`` (where it reaches
+        the Seidel-residual fan, so it is inert unless
+        ``seidel_correction`` is set), ``apply_real_lens_traced``,
+        ``apply_real_lens_maslov``.
+    sphere_normal : str or None, default None
+        Which route computes the surface normal at a pure sphere inside the
+        internal ray trace: ``'analytic'`` (the closed form) or
+        ``'generic'``.  ``None`` means "the library's default at call time",
+        for the same reason as ``renormalize``, and the vocabulary is the
+        tracer's for the same reason.  Accepted by: ``apply_real_lens``
+        (same Seidel-fan caveat), ``apply_real_lens_traced``,
+        ``apply_real_lens_maslov``.
+
+    ``renormalize`` and ``sphere_normal`` are :class:`LensNumerics` fields
+    rather than :class:`LensPhysics` ones because they carry no TERM: both
+    routes evaluate the same refraction to the same order and differ only in
+    the rounding of the arithmetic that evaluates it (measured
+    ``max |dx| = 6.6e-17 m`` over a 3-to-13-surface ladder, WP-C2).  That is
+    the truncation-error line this class is drawn on.
     """
 
     bandlimit: bool = True
@@ -525,6 +567,8 @@ class LensNumerics:
     caustic_ray_subsample: int = 2
     caustic_min_area_ratio: float = 1e-6
     inverse_map: Optional[bool] = None
+    renormalize: Optional[str] = None
+    sphere_normal: Optional[str] = None
 
     # Value equality through ``_same`` -- see :func:`_dataclass_eq`.  Declared
     # on all three so the group compares uniformly (a LensConfig comparison
@@ -566,6 +610,18 @@ class LensNumerics:
                 f"and the branch sum is empty.")
         if self.inverse_map is not None:
             _require_bool(fn, 'inverse_map', self.inverse_map)
+        # WP-C2 round 3 (2026-09-20): the two way-back switches.  Only the
+        # TYPE is checked here -- the accepted spellings are defined once,
+        # in ``raytrace.trace.trace``, and restating them would give the
+        # library two vocabularies to keep in step.  A wrong spelling is
+        # refused by the tracer with its own message.
+        for _wb in _WAY_BACK_FIELDS:
+            _v = getattr(self, _wb)
+            if _v is not None and not isinstance(_v, str):
+                raise ValueError(
+                    f"{fn}: {_wb}={_v!r} must be None (the library's own "
+                    f"default at call time) or one of the strings "
+                    f"raytrace.trace.trace accepts for it.")
 
 
 # ---------------------------------------------------------------------------
@@ -872,7 +928,8 @@ _NUMERICS_FOR: Dict[str, Dict[str, str]] = {
     'apply_real_lens': {
         'bandlimit': 'bandlimit', 'wave_propagator': 'wave_propagator',
         'remap_order': 'remap_order',
-        'displaced_n_side': 'displaced_n_side'},
+        'displaced_n_side': 'displaced_n_side',
+        'renormalize': 'renormalize', 'sphere_normal': 'sphere_normal'},
     'apply_real_lens_traced': {
         'bandlimit': 'bandlimit', 'wave_propagator': 'wave_propagator',
         'ray_subsample': 'ray_subsample',
@@ -886,7 +943,8 @@ _NUMERICS_FOR: Dict[str, Dict[str, str]] = {
         'caustic_band': 'caustic_band',
         'caustic_ray_subsample': 'caustic_ray_subsample',
         'caustic_min_area_ratio': 'caustic_min_area_ratio',
-        'inverse_map': 'inverse_map'},
+        'inverse_map': 'inverse_map',
+        'renormalize': 'renormalize', 'sphere_normal': 'sphere_normal'},
     'prepare_real_lens_traced': {
         'bandlimit': 'bandlimit', 'wave_propagator': 'wave_propagator',
         'ray_subsample': 'ray_subsample',
@@ -899,7 +957,8 @@ _NUMERICS_FOR: Dict[str, Dict[str, str]] = {
         'amplitude_model': 'amplitude_model',
         'inverse_map': 'inverse_map'},
     'apply_real_lens_maslov': {
-        'output_subsample': 'output_subsample'},
+        'output_subsample': 'output_subsample',
+        'renormalize': 'renormalize', 'sphere_normal': 'sphere_normal'},
     'apply_real_lens_gbd': {
         'output_subsample': 'output_subsample'},
     'apply_real_lens_fga': {},

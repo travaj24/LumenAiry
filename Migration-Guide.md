@@ -1834,7 +1834,7 @@ used a closed-form sphere normal, so this brings the two backends closer.
 band about **one ULP of `h` wide at `h = 0.99995 |R|`** the two land on opposite
 sides of the clamp: a ray the old route killed as `RAY_NAN` may now refract, or
 die with an honest `RAY_TIR` / `RAY_APERTURE` instead, and vice versa.  A
-directed `nextafter` walk constructs such points; no sampled bundle found one.
+directed nextafter walk constructs such points; no sampled bundle found one.
 If a design deliberately works rays past `0.9999 R^2` of a spherical surface,
 note that NEITHER route resolves the normal there better than about 1e-12
 relative -- the cancellation in `sqrt(1 - u)` is in the inputs, not in the
@@ -1866,7 +1866,7 @@ mounts.  So a meridional fan cannot enter the band, and only azimuths where
 it either: 360 000 traced rays over twelve prescription and field-angle
 combinations moved zero `alive` flags and zero error codes, and the
 independent verification moved a further 580 000 with the same result.  Only a
-directed `nextafter` walk reaches it.
+directed nextafter walk reaches it.
 
 
 **Every entry point has one.**  Sixteen exported functions trace INTERNALLY,
@@ -1936,7 +1936,7 @@ identical on both mounts to the last digit -- which says the hoist is worth
 **0.9910x at two surfaces (a LOSS), 1.0050x at three, 1.0189x at seven and
 1.0237x at thirteen**: it removes `n_refracting * (1 maximum + 3 divides)` and
 adds one `_normalize_directions` (10 element passes), so it breaks even between
-two and three surfaces.  Against a 60-digit end-to-end `decimal` trace it costs
+two and three surfaces.  Against a 60-digit end-to-end decimal trace it costs
 no measurable accuracy: all four `(renormalize, sphere_normal)` combinations
 land within 5.2e-18 m in position and 6.9e-17 m in OPL of the truth, and the
 drift it leaves behind induces 3.0e-18 m of position error at thirteen surfaces
@@ -1960,7 +1960,8 @@ Size a tolerance from `n_surfaces * eps` itself, not from a coefficient: the
 ratio is 1.000 at three surfaces and 0.615 at thirteen, so "about 0.6 of it"
 is 40 % under on a triplet.  (The `<= 1e-15` the 5.48.x docstring promised was
 a reading from a short stack; it is first exceeded at the **seventh** surface,
-1.22e-15 against 8.88e-16 at five.)  `result.image_rays` is unit to 2.2e-16 as
+1.22e-15 against 8.88e-16 at five.)  The image-plane bundle that
+`trace` returns is unit to 2.2e-16 as
 before, on every `output_filter`.  If your code reads history direction
 cosines and treats them as exactly unit, pass `renormalize='surface'`.
 

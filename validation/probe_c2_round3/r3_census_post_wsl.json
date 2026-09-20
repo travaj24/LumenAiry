@@ -1,0 +1,133 @@
+{
+  "package_root": "/mnt/c/tmp/lum_c2c/lumenairy",
+  "readings": {
+    "alias": {
+      "apply_real_lens": "<not in census>",
+      "n_entry_points": 20,
+      "n_with_both": 16,
+      "names": [
+        "apply_real_lens_maslov",
+        "apply_real_lens_maslov_jax",
+        "apply_real_lens_traced",
+        "apply_real_lens_traced_jax",
+        "caustic_diagnostic",
+        "eval_image_plane_wfe",
+        "fit_canonical_polynomials",
+        "fit_canonical_polynomials_jax",
+        "fit_hf_polynomials",
+        "opd_fan_data",
+        "opd_fan_data_world",
+        "paraxial_focus_world",
+        "plot_lens_layout",
+        "ray_fan_data",
+        "ray_fan_data_world",
+        "ray_transfer_jacobian",
+        "ray_transfer_jacobian_jax",
+        "raytrace_system",
+        "through_focus_rms",
+        "trace_prescription"
+      ],
+      "without_both": [
+        "apply_real_lens_maslov_jax",
+        "apply_real_lens_traced_jax",
+        "fit_canonical_polynomials_jax",
+        "ray_transfer_jacobian_jax"
+      ]
+    },
+    "alias_hop": {
+      "apply_real_lens": [
+        "sphere_normal",
+        "renormalize"
+      ],
+      "n_entry_points": 33,
+      "n_with_both": 17,
+      "names": [
+        "apply_prescription_persurface_to_beamlets",
+        "apply_real_lens",
+        "apply_real_lens_maslov",
+        "apply_real_lens_maslov_jax",
+        "apply_real_lens_traced",
+        "apply_real_lens_traced_jax",
+        "apply_real_lens_traced_multibranch",
+        "apply_real_lens_traced_uniform",
+        "caustic_diagnostic",
+        "distortion_grid",
+        "distortion_vs_field",
+        "eval_image_plane_wfe",
+        "field_aberration_sweep",
+        "fit_canonical_polynomials",
+        "fit_canonical_polynomials_jax",
+        "fit_hf_polynomials",
+        "footprint_per_surface",
+        "opd_fan_data",
+        "opd_fan_data_world",
+        "paraxial_focus_world",
+        "plot_lens_layout",
+        "propagate_hfpi_through_prescription",
+        "propagate_traced_carrier_chain",
+        "propagate_traced_carrier_chain_multi",
+        "ray_fan_data",
+        "ray_fan_data_world",
+        "ray_transfer_jacobian",
+        "ray_transfer_jacobian_jax",
+        "raytrace_system",
+        "relative_illumination",
+        "spot_diagram_vs_field",
+        "through_focus_rms",
+        "trace_prescription"
+      ],
+      "without_both": [
+        "apply_prescription_persurface_to_beamlets",
+        "apply_real_lens_maslov_jax",
+        "apply_real_lens_traced_jax",
+        "apply_real_lens_traced_multibranch",
+        "apply_real_lens_traced_uniform",
+        "distortion_grid",
+        "distortion_vs_field",
+        "field_aberration_sweep",
+        "fit_canonical_polynomials_jax",
+        "footprint_per_surface",
+        "propagate_hfpi_through_prescription",
+        "propagate_traced_carrier_chain",
+        "propagate_traced_carrier_chain_multi",
+        "ray_transfer_jacobian_jax",
+        "relative_illumination",
+        "spot_diagram_vs_field"
+      ]
+    },
+    "name_only": {
+      "apply_real_lens": "<not in census>",
+      "n_entry_points": 20,
+      "n_with_both": 16,
+      "names": [
+        "apply_real_lens_maslov",
+        "apply_real_lens_maslov_jax",
+        "apply_real_lens_traced",
+        "apply_real_lens_traced_jax",
+        "caustic_diagnostic",
+        "eval_image_plane_wfe",
+        "fit_canonical_polynomials",
+        "fit_canonical_polynomials_jax",
+        "fit_hf_polynomials",
+        "opd_fan_data",
+        "opd_fan_data_world",
+        "paraxial_focus_world",
+        "plot_lens_layout",
+        "ray_fan_data",
+        "ray_fan_data_world",
+        "ray_transfer_jacobian",
+        "ray_transfer_jacobian_jax",
+        "raytrace_system",
+        "through_focus_rms",
+        "trace_prescription"
+      ],
+      "without_both": [
+        "apply_real_lens_maslov_jax",
+        "apply_real_lens_traced_jax",
+        "fit_canonical_polynomials_jax",
+        "ray_transfer_jacobian_jax"
+      ]
+    }
+  },
+  "tag": "post"
+}

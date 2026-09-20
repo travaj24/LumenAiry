@@ -1,0 +1,36 @@
+{
+  "apply_real_lens_carries_the_pair": true,
+  "digests": {
+    "asphere_singlet": {
+      "control": "3b82b65b934c9a61d930ee268898e9821d34c7d7b91ce978a316f3e5262df9a5",
+      "control_kw": "3b82b65b934c9a61d930ee268898e9821d34c7d7b91ce978a316f3e5262df9a5",
+      "seidel": "60425c70d9f0f0868b7294fb364a5eac37784cda56c7fa6e533a34b67f4352f8",
+      "seidel_none": "60425c70d9f0f0868b7294fb364a5eac37784cda56c7fa6e533a34b67f4352f8",
+      "seidel_old": "96738a32118c68a91fa1b96d0b854b37c4c820e31d62c578b551d6a529ea29b9"
+    },
+    "spherical_doublet": {
+      "control": "94a68d7eadee5d5d86e02572d38a5251838ab77520344339cc6a1002f50fbe20",
+      "control_kw": "94a68d7eadee5d5d86e02572d38a5251838ab77520344339cc6a1002f50fbe20",
+      "seidel": "3e1a9467813963443976d53579ef07d9569324200d1110719430ff272dee4c7d",
+      "seidel_none": "3e1a9467813963443976d53579ef07d9569324200d1110719430ff272dee4c7d",
+      "seidel_old": "b6030e4efcde0081ae283396b21c67e73a22ff2b011bf08f4414177fba5adbb2"
+    },
+    "spherical_singlet": {
+      "control": "995d57c76d5e7870157f7b3c86dc57108f50b61517f19a45eb8a57c4c07c6a33",
+      "control_kw": "995d57c76d5e7870157f7b3c86dc57108f50b61517f19a45eb8a57c4c07c6a33",
+      "seidel": "f29c6232ab869f00ce3b8084e65ed97dfc852d0a0bc502f0df98cd5789a382fb",
+      "seidel_none": "f29c6232ab869f00ce3b8084e65ed97dfc852d0a0bc502f0df98cd5789a382fb",
+      "seidel_old": "fb31d3e48b54c37bf7a57fc4804e14476cdb38419b529306446d52350650278f"
+    }
+  },
+  "field_sha256": "1db7bb5aea7bc058407789bbe628b503f3c95624f4cf2a2f181e8e6b44788c28",
+  "lumenairy_file": "/mnt/c/tmp/lum_c2c/lumenairy/__init__.py",
+  "numpy": "2.4.6",
+  "python": "3.12.3",
+  "signature_defaults": {
+    "renormalize": "None",
+    "sphere_normal": "None"
+  },
+  "tag": "post",
+  "version": "5.48.1"
+}
