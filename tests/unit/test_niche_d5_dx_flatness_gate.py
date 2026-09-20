@@ -373,8 +373,22 @@ _CACHE: dict = {}
 
 def _run(N, rs, tag='defaults', chain_kwargs=None, traced_kwargs=None):
     """Run the stand-in through ``propagate_traced_carrier_chain`` and return
-    ``(metrics, stages)``.  Memoised: the ladder is shared across tests."""
-    key = (N, rs, tag)
+    ``(metrics, stages)``.  Memoised: the ladder is shared across tests.
+
+    THE KEY CARRIES THE KWARGS, and it has to (WP-C3, 2026-09-20).  It used to
+    be ``(N, rs, tag)`` alone, so two tests that shared a TAG but passed
+    DIFFERENT ``chain_kwargs`` collided and whichever ran first decided what
+    the other measured.  That is not hypothetical: ``test_gate_has_teeth
+    [parabola-...]`` and ``test_dx_flatness_alone_is_not_sufficient`` both use
+    ``tag='parabola'``, and when the latter was given
+    ``transport='sziklas'`` the keyword was INERT in a whole-file run -- the
+    id passed standalone and failed in the suite, with the pre-change number
+    to the last digit (0.9632271871259244).  A memo that ignores the
+    configuration is a memo that can answer the wrong question.
+    """
+    key = (N, rs, tag,
+           repr(sorted((chain_kwargs or {}).items())),
+           repr(sorted((traced_kwargs or {}).items())))
     if key in _CACHE:
         return _CACHE[key]
     env, dx, R1, P_in = _launch(N)
