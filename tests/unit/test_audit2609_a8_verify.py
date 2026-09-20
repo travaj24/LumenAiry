@@ -603,7 +603,11 @@ def test_verify_a8_e7_gray_edge_beats_hard_at_anamorphic_and_offset_rims(
                                       **kw)
         return float(np.sum(np.real(out))) * dx * dy
 
-    e_hard = abs(_area() / analytic - 1.0)
+    # v5.49.0 (WP-C1): the hard arm is named explicitly -- the default moved
+    # to 'gray', and an unnamed ``_area()`` here would have turned
+    # ``e_g4 <= e_hard`` into a tautology instead of a comparison.  The
+    # readings and the bars are unchanged.
+    e_hard = abs(_area(edge='hard') / analytic - 1.0)
     e_g4 = abs(_area(edge='gray') / analytic - 1.0)
     e_g16 = abs(_area(edge='gray', edge_samples=16) / analytic - 1.0)
     assert e_g16 < 3e-4, (d_px, dy_ratio, offset, e_g16)
@@ -628,7 +632,10 @@ def test_verify_a8_e7_gray_edge_zeroes_a_blocked_pixel_even_if_it_is_not_finite(
     scale outside the opening.  Exact-zero assertion; no bar is meaningful.
     """
     E = np.full((32, 32), fill, dtype=np.complex128)
-    hard = elem_mod.apply_aperture(E, 1e-6, 'circular', {'diameter': 1e-5})
+    # v5.49.0 (WP-C1): both arms named, so this stays a hard-vs-gray claim
+    # after the default moved to 'gray'.
+    hard = elem_mod.apply_aperture(E, 1e-6, 'circular', {'diameter': 1e-5},
+                                   edge='hard')
     gray = elem_mod.apply_aperture(E, 1e-6, 'circular', {'diameter': 1e-5},
                                    edge='gray')
     outside = np.zeros((32, 32), dtype=bool)
@@ -663,6 +670,7 @@ def test_verify_a8_e7_gray_edge_is_not_advertised_for_axis_aligned_rims():
 
     e_g4 = abs(_area(edge='gray') / analytic - 1.0)
     e_g16 = abs(_area(edge='gray', edge_samples=16) / analytic - 1.0)
-    assert e_g4 < abs(_area() / analytic - 1.0)
+    # v5.49.0 (WP-C1): the hard arm named explicitly (the default moved).
+    assert e_g4 < abs(_area(edge='hard') / analytic - 1.0)
     # linear in 1/n_sub: the ratio is 4.0 +- 25 %, not the 8 of n**1.5
     assert 3.0 < e_g4 / e_g16 < 5.0, (e_g4, e_g16)

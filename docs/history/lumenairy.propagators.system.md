@@ -1,7 +1,7 @@
 <!-- lumenairy-history-doc
 module: lumenairy/propagators/system.py
-ast_sha256: 6b5fbcc3d28590001bfd9ee129b5d6e464f80842865274490fa08992150660dd
-token_sha256: 02f88bf42cbc995d4233b2c406ed26673c4f2f51ba5cadccc0a1b362467305e0
+ast_sha256: 66593932b1e080cee7a64f8569bdd9228884229d145506d91d2e88f0a251e213
+token_sha256: 8d0e75fff9d1eaff48524d196b05aea36fb41941ef619a72ab8ae4535729d343
 pre_relocation_lines: 1919
 recorded_by: WP-A17 SWEEP-1 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
@@ -9,6 +9,7 @@ re_recorded: 2026-09-13 -- WP-B3b (K6): the 'fresnel' leg evaluates fresnel_prop
 re_recorded: 2026-09-13 -- VERIFY-B3b (K6): the 'fresnel' leg carries _warn_system_fresnel_window -- retiring the resample retired _warn_system_resample_crop with it, and fresnel_propagate_mft's faithful-zone warning is a disjoint condition on the chain grid (it reduces to z < N dx^2/lambda, the K1 band), so a beam that outgrows the chain window above that bound had no diagnostic at all
 re_recorded: 2026-09-14 -- Wave-5 item D (CI run 34914295323): DIGEST-SCHEME change, not a code change -- token_fingerprint now feeds an f-string to the digest as ONE STRING record holding its exact source text instead of the running tokenizer's FSTRING_START/FSTRING_MIDDLE/FSTRING_END run, so the recorded value is a property of the file rather than of the interpreter that read it; PEP 701 made CPython 3.12 tokenize f-strings differently from 3.11, these digests were recorded on 3.12+, and all five py3.11 CI shards read a different token_sha256 for byte-identical sources (110 of 123 documents, measured).  The module source is unchanged and ast_sha256 is unchanged.
 re_recorded: 2026-09-14 -- Wave 5 item D (handoff 4.4): the six warnings.warn literal stacklevels are swept onto lumenairy.elements._lens_kernels.caller_stacklevel().  The system chain reaches its guard sites from propagate_through_system and from evaluate, i.e. at two library depths, so a literal is right for at most one of them.  No physics changed.
+re_recorded: 2026-09-20 -- WP-C1: the 'aperture' element forwards edge/edge_samples on both backends, and the two JAX routes call elements.apply_aperture instead of carrying their own pixel-centre indicator
 -->
 
 # Version history -- `lumenairy/propagators/system.py`

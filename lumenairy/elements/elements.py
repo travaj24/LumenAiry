@@ -6,8 +6,12 @@ modify an electric field on a 2-D computational grid.  The elements fall
 into several categories:
 
 * **Mirrors** -- flat and curved reflectors (including conics/aspheres).
-* **Apertures** -- hard-edge amplitude masks (circular, annular, rectangular)
-  and soft (Gaussian) apertures.
+* **Apertures** -- sharp-edged (unapodized) amplitude masks (circular,
+  annular, rectangular) and soft (Gaussian) apertures.  Since v5.49.0 a
+  sharp-edged mask renders its rim by pixel AREA (``edge='gray'``, the
+  default) rather than by a pixel-centre indicator (``edge='hard'``); both
+  describe the same physical stop, and the grey rendering is the one with a
+  convergence order -- see :func:`apply_aperture`.
 * **Arbitrary masks** -- generic complex transmission functions for DOEs,
   SLMs, metasurfaces, grey-scale filters, etc.
 * **Zernike aberrations** -- phase screens described by Zernike polynomial
@@ -225,7 +229,7 @@ def apply_mirror(E_in, wavelength, dx, radius=None, conic=0.0,
 # =============================================================================
 
 def apply_aperture(E_in, dx, shape='circular', params=None, xc=0, yc=0,
-                   dy=None, edge='hard', edge_samples=4):
+                   dy=None, edge='gray', edge_samples=4):
     """
     Apply a standalone aperture (amplitude mask) to an optical field.
 
@@ -255,19 +259,54 @@ def apply_aperture(E_in, dx, shape='circular', params=None, xc=0, yc=0,
         (non-square) grids so annular / circular / rectangular
         apertures don't get silently stretched along y.
 
-    edge : {'hard', 'gray'}, default 'hard'
-        ``'hard'`` gives the binary in/out mask: each pixel is wholly
-        passed or wholly blocked, so the transmitted area is quantised to
-        whole pixels.  ``'gray'`` gives each boundary pixel its
-        ``edge_samples**2``-supersampled open-area fraction instead, which
-        removes the area quantisation and most of the edge aliasing.
-        Measured transmitted-area error against the analytic disc area,
-        rms over the 12 sub-pixel rim placements
-        ``linspace(0, 0.95, 12)`` (2026-09-12, N = 512, dx = 1 um): at
-        ``D/dx ~ 50`` pixels **0.386 % hard** (range -0.535 %..+0.805 %)
-        vs **0.044 % gray** at the 4x4 default; at ``D/dx ~ 200``
-        0.031 % hard vs 0.0041 % gray.  Costs ``edge_samples**2`` mask
-        builds (one full-grid boolean each, not held simultaneously).
+    edge : {'gray', 'hard'}, default ``'gray'`` since v5.49.0
+        ``'gray'`` gives each boundary pixel its
+        ``edge_samples**2``-supersampled open-area fraction, which removes
+        the area quantisation and most of the edge aliasing.  ``'hard'``
+        gives the binary in/out mask instead: each pixel is wholly passed
+        or wholly blocked, so the transmitted area is quantised to whole
+        pixels.
+
+        **The default moved in v5.49.0** (it was ``'hard'`` through
+        v5.48.1).  ``edge='hard'`` reproduces the pre-5.49 answer
+        BIT FOR BIT -- nothing else about the mask changed -- so a pinned
+        hard-aperture number is one keyword away.
+
+        Why the default moved (WP-B11 sec. 2.9 and WP-C1, both measured
+        against the closed-form on-axis field behind a circular aperture,
+        ``U = e^{ikz} - (z/r_a) e^{ik r_a}``, lambda = 633 nm,
+        a = 100 um, window 512 um).  On-axis relative error, and the
+        convergence order between successive rows:
+
+        ======  ===========  ===========  ===========  ===========
+        N       RS hard      RS gray      HF hard      HF gray
+        ======  ===========  ===========  ===========  ===========
+        128     8.3008e-03   1.4847e-03   2.7708e-02   1.4438e-02
+        256     3.3548e-03   3.6098e-04   1.1120e-02   3.4928e-03
+        512     3.4207e-04   8.1013e-05   1.1509e-03   8.5680e-04
+        1024    5.2718e-04   2.5030e-05   1.7601e-03   2.1122e-04
+        order   1.31/3.29/   2.04/2.16/   1.32/3.27/   2.05/2.03/
+                **-0.62**    1.69         **-0.61**    2.02
+        ======  ===========  ===========  ===========  ===========
+
+        The hard edge has **no convergence order at all** -- a circle's
+        staircase area error does not shrink monotonically, hence the
+        negative last step -- while the grey edge is second order.  The
+        grey default therefore buys a RATE, not a constant: 21x (RS) and
+        8x (HF) by N = 1024, and more at every finer grid.
+
+        Transmitted-area error against the analytic disc area, rms over
+        the 12 sub-pixel rim placements ``linspace(0, 0.95, 12)``
+        (2026-09-12, N = 512, dx = 1 um): at ``D/dx ~ 50`` pixels
+        **0.386 % hard** (range -0.535 %..+0.805 %) vs **0.044 % gray**
+        at the 4x4 default; at ``D/dx ~ 200`` 0.031 % hard vs 0.0041 %
+        gray.
+
+        What it costs: ``edge_samples**2`` mask builds (one full-grid
+        boolean each, not held simultaneously), confined to the boundary
+        pixels -- 312 of them at N = 256 (0.476 % of the grid) and 1196
+        at N = 1024 (0.114 %), i.e. 0.076x and 0.018x of one full-grid
+        pass.
 
     edge_samples : int, default 4
         Sub-samples per axis for ``edge='gray'`` (so 4 -> 16 per pixel).
@@ -987,10 +1026,16 @@ def apply_lyot_stop(E_in, dx, *, outer_diameter, inner_diameter=0.0,
                      xc=0.0, yc=0.0, dy=None):
     """Apply a downstream Lyot-stop pupil aperture.
 
-    Hard-edge annular aperture used in the pupil plane downstream of
-    a coronagraphic focal-plane mask.  Functionally equivalent to
-    ``apply_aperture(..., shape='annular', ...)`` but named to match
-    coronagraph literature.
+    Sharp-edged (unapodized) annular aperture used in the pupil plane
+    downstream of a coronagraphic focal-plane mask -- contrast
+    :func:`apply_apodized_pupil`, which softens the rim on purpose.
+    Functionally equivalent to ``apply_aperture(..., shape='annular', ...)``
+    but named to match coronagraph literature, and it takes that function's
+    ``edge`` DEFAULT: since v5.49.0 the rim is rendered by pixel area
+    (``edge='gray'``), so **this function's returned field moved in
+    v5.49.0**.  It exposes no ``edge`` keyword of its own; call
+    ``apply_aperture(..., shape='annular', edge='hard')`` directly for the
+    pre-5.49 answer, which is bit-identical.
 
     Parameters
     ----------

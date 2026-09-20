@@ -749,10 +749,16 @@ def propagate_through_system(E_in: np.ndarray,
         ``xc`` / ``yc`` (float, optional, default 0).
 
     ``'aperture'``
-        Hard aperture (circular, rectangular, etc.).
-        Keys: ``shape`` (str, optional, default ``'circular'``),
-        ``params`` (dict, optional, shape-specific parameters),
-        ``xc`` / ``yc`` (float, optional, default 0).
+        Sharp-edged (unapodized) aperture -- circular, rectangular,
+        annular.  Keys: ``shape`` (str, optional, default
+        ``'circular'``), ``params`` (dict, optional, shape-specific
+        parameters), ``xc`` / ``yc`` (float, optional, default 0),
+        ``edge`` and ``edge_samples`` (optional, forwarded to
+        :func:`~lumenairy.elements.elements.apply_aperture`).  **v5.49.0:
+        omitting ``edge`` takes that function's new ``'gray'`` default
+        (rim by pixel area), so an aperture element's answer moved; add
+        ``'edge': 'hard'`` for the pre-5.49 staircase rim, bit for bit.
+        The JAX twin reads the same keys and takes the same default.**
 
     ``'gaussian_aperture'``
         Soft Gaussian aperture.
@@ -1071,11 +1077,17 @@ def propagate_through_system(E_in: np.ndarray,
                              dy=current_dy)
 
         elif elem['type'] == 'aperture':
+            # v5.49.0 (WP-C1): the element forwards ``edge`` /
+            # ``edge_samples`` so a chain has the same way back to the
+            # pre-5.49 staircase rim that a direct ``apply_aperture`` call
+            # has.  Omitted, both take the function's own defaults
+            # (``'gray'``, 4) -- which is what moved.
             E = apply_aperture(E, current_dx,
                                shape=elem.get('shape', 'circular'),
                                params=elem.get('params', {}),
                                xc=elem.get('xc', 0), yc=elem.get('yc', 0),
-                               dy=current_dy)
+                               dy=current_dy,
+                               **_aperture_edge_kwargs(elem))
 
         elif elem['type'] == 'cylindrical_lens':
             E = apply_cylindrical_lens(E, f=elem['f'], wavelength=wavelength,
@@ -1529,9 +1541,53 @@ except ImportError:
 _TRACEABLE_ELEMENT_TYPES = frozenset({
     'propagate',     # angular_spectrum_propagate (JAX backend)
     'lens',          # thin-lens phase screen
-    'aperture',      # boolean mask multiplication
+    'aperture',      # amplitude mask multiplication (see _aperture_edge_kwargs)
     'mask',          # arbitrary mask multiplication
 })
+
+
+def _aperture_edge_kwargs(elem: Dict[str, Any]) -> Dict[str, Any]:
+    """The ``edge`` / ``edge_samples`` an ``'aperture'`` element asks for.
+
+    v5.49.0 (WP-C1).  Both backends resolve the rim rendering HERE, from
+    one reading of the element, so the NumPy chain and its JAX twin cannot
+    drift apart on it: an element that names neither key takes
+    :func:`~lumenairy.elements.elements.apply_aperture`'s own defaults,
+    which moved to ``edge='gray'`` (rim by pixel area) in v5.49.0.  An
+    element that pins ``{'edge': 'hard'}`` gets the pre-5.49 staircase rim
+    back, bit for bit, on either backend.
+
+    Returns only the keys the element actually names, so an element that
+    names neither cannot pin today's defaults into tomorrow's answer.
+    """
+    kw: Dict[str, Any] = {}
+    if 'edge' in elem:
+        kw['edge'] = elem['edge']
+    if 'edge_samples' in elem:
+        kw['edge_samples'] = elem['edge_samples']
+    return kw
+
+
+def _jax_apply_aperture_element(E, dx, dy, shape, params, xc, yc,
+                                edge, edge_samples):
+    """Apply one ``'aperture'`` element on the JAX backend.
+
+    v5.49.0 (WP-C1).  Calls the ONE aperture implementation
+    (:func:`~lumenairy.elements.elements.apply_aperture`, which dispatches
+    through ``backend.array_namespace`` and traces under ``jax.jit`` /
+    ``jax.grad``) rather than carrying a second copy of the mask here.
+    ``edge`` / ``edge_samples`` are ``None`` when the element named
+    neither, in which case the function's own defaults apply -- the same
+    defaults the NumPy chain takes, which is what makes the two backends
+    answer the same element dict the same way.
+    """
+    kw: Dict[str, Any] = {}
+    if edge is not None:
+        kw['edge'] = edge
+    if edge_samples is not None:
+        kw['edge_samples'] = edge_samples
+    return apply_aperture(E, dx, shape=shape, params=params,
+                          xc=xc, yc=yc, dy=dy, **kw)
 
 
 # v5.0 (audit_v4_13_1 Part 5 / honest break): the legacy pre-v4.12 JAX
@@ -1642,12 +1698,21 @@ def _system_element_signature(elem: Dict[str, Any]) -> Optional[Tuple]:
         if resolved is None:
             return None
         shape, halves = resolved
+        # v5.49.0 (WP-C1): the rim rendering is part of the STATIC
+        # signature -- two elements that differ only in ``edge`` are two
+        # different kernels, not one kernel silently serving both.
+        edge_kw = _aperture_edge_kwargs(elem)
+        edge = (str(edge_kw['edge']) if 'edge' in edge_kw else None)
+        n_sub = (int(edge_kw['edge_samples'])
+                 if 'edge_samples' in edge_kw else None)
         if shape == 'circular':
-            return ('aperture_circular', halves[0], xc, yc)
+            return ('aperture_circular', halves[0], xc, yc, edge, n_sub)
         if shape == 'rectangular':
-            return ('aperture_rect', halves[0], halves[1], xc, yc)
+            return ('aperture_rect', halves[0], halves[1], xc, yc,
+                    edge, n_sub)
         if shape == 'annular':
-            return ('aperture_annular', halves[0], halves[1], xc, yc)
+            return ('aperture_annular', halves[0], halves[1], xc, yc,
+                    edge, n_sub)
         return None
     if etype == 'mask':
         m = elem.get('mask')
@@ -1694,19 +1759,34 @@ def _make_system_jax_kernel(elem_sigs, wavelength, dx, dy):
                 _, f, xc, yc = sig
                 r2 = (X - xc) ** 2 + (Y - yc) ** 2
                 E = E * jnp.exp(-1j * k0 * r2 / (2.0 * f))
+            # v5.49.0 (WP-C1): the three aperture tags call the ONE
+            # aperture implementation (``elements.apply_aperture``, which
+            # is ``array_namespace``-dispatched and traces under
+            # ``jax.jit`` / ``jax.grad``) instead of re-deriving the mask
+            # here.  Before, this kernel carried its own pixel-centre
+            # indicator; the NumPy chain's rim moved to pixel-area
+            # rendering in 5.49.0 and a second copy here would have let
+            # the two backends answer differently for the SAME element
+            # dict, under a cross-backend bar (5 % of pixels) too loose to
+            # see it.  One implementation, one default, one way back.
             elif tag == 'aperture_circular':
-                _, r, xc, yc = sig
-                mask = ((X - xc) ** 2 + (Y - yc) ** 2) <= r * r
-                E = E * mask.astype(E.dtype)
+                _, r, xc, yc, edge, n_sub = sig
+                E = _jax_apply_aperture_element(
+                    E, dx, dy, 'circular', {'diameter': 2.0 * r},
+                    xc, yc, edge, n_sub)
             elif tag == 'aperture_rect':
-                _, hx, hy, xc, yc = sig
-                mask = (jnp.abs(X - xc) <= hx) & (jnp.abs(Y - yc) <= hy)
-                E = E * mask.astype(E.dtype)
+                _, hx, hy, xc, yc, edge, n_sub = sig
+                E = _jax_apply_aperture_element(
+                    E, dx, dy, 'rectangular',
+                    {'width_x': 2.0 * hx, 'width_y': 2.0 * hy},
+                    xc, yc, edge, n_sub)
             elif tag == 'aperture_annular':
-                _, r_o, r_i, xc, yc = sig
-                rho2 = (X - xc) ** 2 + (Y - yc) ** 2
-                mask = (rho2 <= r_o * r_o) & (rho2 >= r_i * r_i)
-                E = E * mask.astype(E.dtype)
+                _, r_o, r_i, xc, yc, edge, n_sub = sig
+                E = _jax_apply_aperture_element(
+                    E, dx, dy, 'annular',
+                    {'inner_diameter': 2.0 * r_i,
+                     'outer_diameter': 2.0 * r_o},
+                    xc, yc, edge, n_sub)
             elif tag == 'mask':
                 m = next(mask_iter)
                 E = E * m
@@ -1767,8 +1847,13 @@ def propagate_through_system_jax(E_in: np.ndarray,
 
       * ``'propagate'``  -> ``angular_spectrum_propagate`` (JAX backend)
       * ``'lens'``       -> paraxial thin-lens phase screen
-      * ``'aperture'``   -> hard boolean mask multiplication (circular /
-        rectangular / annular).  Uses the same canonical NumPy schema
+      * ``'aperture'``   -> :func:`apply_aperture` (circular /
+        rectangular / annular), the SAME implementation the NumPy chain
+        calls -- v5.49.0 (WP-C1) replaced this kernel's own copy of the
+        pixel-centre indicator with it, so both backends take the same
+        ``edge`` default (``'gray'`` since 5.49.0) and read the same
+        ``'edge'`` / ``'edge_samples'`` element keys.  Uses the same
+        canonical NumPy schema
         as :func:`apply_aperture` (``params={'diameter': ...}`` etc.);
         the pre-v4.12 JAX-only schema (``params={'radius': ...}``) was
         deprecated in v4.12 and **removed in v5.0** -- it now raises
@@ -2004,28 +2089,26 @@ def propagate_through_system_jax(E_in: np.ndarray,
             # was removed; legacy keys now raise ValueError inside
             # ``_resolve_aperture_params`` with the migration recipe
             # inline.  See Migration-Guide.md §5.0.0.
+            # v5.49.0 (WP-C1): the slow path calls the same ONE aperture
+            # implementation the jit'd kernel above calls, so the two JAX
+            # routes and the NumPy chain all answer one element dict the
+            # same way, rim included.
             xc = elem.get('xc', 0.0)
             yc = elem.get('yc', 0.0)
-            dx_loc = X - xc
-            dy_loc = Y - yc
             resolved = _resolve_aperture_params(elem)
             if resolved is not None:
                 shape, halves = resolved
+                edge_kw = _aperture_edge_kwargs(elem)
                 if shape == 'circular':
-                    r = halves[0]
-                    mask = (dx_loc ** 2 + dy_loc ** 2) <= float(r) ** 2
-                    E = E * mask.astype(E.dtype)
+                    ap_params = {'diameter': 2.0 * float(halves[0])}
                 elif shape == 'rectangular':
-                    hx, hy = halves
-                    mask = ((jnp.abs(dx_loc) <= float(hx)) &
-                            (jnp.abs(dy_loc) <= float(hy)))
-                    E = E * mask.astype(E.dtype)
-                elif shape == 'annular':
-                    r_o, r_i = halves
-                    rho2 = dx_loc ** 2 + dy_loc ** 2
-                    mask = ((rho2 <= float(r_o) ** 2) &
-                            (rho2 >= float(r_i) ** 2))
-                    E = E * mask.astype(E.dtype)
+                    ap_params = {'width_x': 2.0 * float(halves[0]),
+                                 'width_y': 2.0 * float(halves[1])}
+                else:  # annular
+                    ap_params = {'outer_diameter': 2.0 * float(halves[0]),
+                                 'inner_diameter': 2.0 * float(halves[1])}
+                E = apply_aperture(E, dx, shape=shape, params=ap_params,
+                                   xc=xc, yc=yc, dy=dy, **edge_kw)
             # No-op silently if aperture params are missing (matches
             # NumPy ``apply_aperture`` default of all-infinity).
 

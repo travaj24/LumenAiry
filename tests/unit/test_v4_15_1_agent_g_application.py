@@ -202,19 +202,62 @@ class TestCylindricalLensApplication:
 
 class TestApertureApplication:
 
-    def test_circular_aperture_zeros_outside_disk(self) -> None:
+    def test_circular_aperture_renders_the_disk_by_pixel_area(self) -> None:
+        """v5.49.0 (WP-C1): ``Aperture`` delegates to ``apply_aperture``,
+        whose default rim rendering moved from a pixel-centre indicator to the
+        pixel AREA fraction, so a pixel the rim CUTS is now scaled by its
+        covered fraction instead of being passed or blocked whole.
+
+        The claim is RE-PINNED, not relaxed -- restated at the level the
+        operator actually contracts at, where it says strictly more than the
+        old ``allclose`` / ``< 1e-30`` pair did:
+
+          * a pixel whose FARTHEST corner is inside the disk passes EXACTLY
+            (bit for bit, where the old test allowed a tolerance);
+          * a pixel whose NEAREST corner is outside is EXACTLY zero;
+          * every other pixel -- the rim -- is the input scaled by a real
+            factor in [0, 1], and there is at least one such pixel, so the
+            grey path is genuinely exercised;
+          * the transmitted area is closer to the analytic disc area than the
+            pixel-centre indicator's, which is the reason the default moved.
+            Measured here on this fixture, both ways, as a DECISION with no
+            bar: the grey rendering's |area error| must be the smaller.
+        """
         src = _build_test_source(N=64, dx=2e-6)
         D = 50e-6  # tight aperture compared to the field extent
         op = Aperture(diameter=D, shape='circular')
         out = op(src)
-        # Build the expected mask
         N = src.E.shape[0]
-        x = (np.arange(N) - N / 2) * src.dx
+        dx = src.dx
+        x = (np.arange(N) - N / 2) * dx
         X, Y = np.meshgrid(x, x)
-        mask = X ** 2 + Y ** 2 <= (D / 2) ** 2
-        # Inside the disk: out.E == src.E.  Outside: out.E == 0.
-        assert np.allclose(out.E[mask], src.E[mask])
-        assert np.all(np.abs(out.E[~mask]) < 1e-30)
+        # Corner distances of each pixel decide which of the three sets it is
+        # in; no tolerance is involved, and nothing here depends on the
+        # sub-sample count.
+        near = ((np.maximum(np.abs(X) - dx / 2, 0.0)) ** 2
+                + (np.maximum(np.abs(Y) - dx / 2, 0.0)) ** 2)
+        far = (np.abs(X) + dx / 2) ** 2 + (np.abs(Y) + dx / 2) ** 2
+        r2 = (D / 2) ** 2
+        wholly_in = far <= r2
+        wholly_out = near > r2
+        rim = ~(wholly_in | wholly_out)
+        assert np.any(wholly_in) and np.any(wholly_out) and np.any(rim)
+        assert np.array_equal(out.E[wholly_in], src.E[wholly_in])
+        assert np.all(out.E[wholly_out] == 0)
+        ratio = out.E[rim] / src.E[rim]
+        assert np.all(np.abs(ratio.imag) == 0.0)
+        assert np.all((ratio.real >= 0.0) & (ratio.real <= 1.0)), ratio.real
+        # ... and the rim rendering is the better one.
+        analytic = np.pi * (D / 2) ** 2
+        ones = np.ones((N, N), dtype=complex)
+        area_gray = float(np.sum(np.real(
+            la.apply_aperture(ones, dx, 'circular',
+                              {'diameter': D})))) * dx * dx
+        area_hard = float(np.sum(np.real(
+            la.apply_aperture(ones, dx, 'circular', {'diameter': D},
+                              edge='hard')))) * dx * dx
+        assert abs(area_gray - analytic) < abs(area_hard - analytic), (
+            area_gray, area_hard, analytic)
 
     def test_gaussian_aperture_smoothly_attenuates(self) -> None:
         src = _build_test_source(N=64, dx=2e-6)

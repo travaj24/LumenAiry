@@ -643,7 +643,16 @@ def test_e7_periodic_phase_mask_square_behaviour_is_unchanged():
 # E7 -- grey-pixel aperture edge
 # ===========================================================================
 
-def test_e7_aperture_hard_edge_is_the_default_and_unchanged():
+def test_e7_aperture_hard_edge_is_one_keyword_away_and_unchanged():
+    """v5.49.0 (WP-C1) moved the DEFAULT to ``'gray'`` on the maintainer's
+    ruling (MAINTAINER_DECISIONS_2026_09.md sec. 1.1).  What E7 built is
+    unchanged and is what this test still pins: ``edge='hard'`` is exactly the
+    binary in/out mask, for all three shapes.  The default assertion below is
+    RE-PINNED to the new ruling rather than relaxed -- it still reads the
+    signature, it just reads the value the library now ships, and the reason
+    that value is right is measured in
+    ``tests/unit/test_c1_gray_edge_default.py`` against a closed form.
+    """
     N, dx = 256, 2e-6
     rng = np.random.default_rng(1)
     E = rng.normal(size=(N, N)) + 1j * rng.normal(size=(N, N))
@@ -657,10 +666,25 @@ def test_e7_aperture_hard_edge_is_the_default_and_unchanged():
              & ((X ** 2 + Y ** 2) <= (1e-4) ** 2)),
             ('rectangular', {'width_x': 1.5e-4, 'width_y': 9e-5},
              (np.abs(X) <= 7.5e-5) & (np.abs(Y) <= 4.5e-5))):
-        got = elem_mod.apply_aperture(E, dx, shape, params)
+        got = elem_mod.apply_aperture(E, dx, shape, params, edge='hard')
         assert np.array_equal(got, np.where(mask, E, 0)), shape
+        # ... and the DEFAULT is the grey mask, which differs from the binary
+        # one exactly where the rim actually cuts a pixel.  Derived from the
+        # fixture rather than asserted: the two curved rims always cut
+        # pixels, while this rectangle's rims land on pixel BOUNDARIES
+        # (width_x/2 = 37.5 dx, width_y/2 = 22.5 dx), so no pixel is
+        # partially covered and the grey and hard masks coincide exactly --
+        # which is the right answer and is worth pinning as such.
+        frac = np.real(elem_mod.apply_aperture(
+            np.ones_like(E), dx, shape, params))
+        has_partial_pixels = bool(np.any((frac > 0.0) & (frac < 1.0)))
+        assert has_partial_pixels == (shape != 'rectangular'), (
+            shape, has_partial_pixels)
+        default = elem_mod.apply_aperture(E, dx, shape, params)
+        assert (np.array_equal(default, np.where(mask, E, 0))
+                is not has_partial_pixels), shape
     assert inspect.signature(
-        elem_mod.apply_aperture).parameters['edge'].default == 'hard'
+        elem_mod.apply_aperture).parameters['edge'].default == 'gray'
 
 
 def test_e7_aperture_gray_edge_removes_the_area_quantisation():
@@ -686,8 +710,13 @@ def test_e7_aperture_gray_edge_removes_the_area_quantisation():
         for frac in np.linspace(0.0, 0.95, 12):
             D = (npx + frac) * dx
             analytic = np.pi * (D / 2) ** 2
+            # v5.49.0 (WP-C1): the hard arm is now the EXPLICIT one -- the
+            # default moved to 'gray', and this test is the hard-vs-gray
+            # comparison, so it must name the arm it means.  The readings and
+            # the bars below are unchanged.
             h = float(np.sum(np.real(elem_mod.apply_aperture(
-                E, dx, 'circular', {'diameter': D})))) * dx * dx
+                E, dx, 'circular', {'diameter': D},
+                edge='hard')))) * dx * dx
             g = float(np.sum(np.real(elem_mod.apply_aperture(
                 E, dx, 'circular', {'diameter': D},
                 edge='gray')))) * dx * dx

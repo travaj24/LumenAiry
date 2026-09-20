@@ -50,6 +50,12 @@ class Aperture(Operator):
     or off-axis decentered apertures, call ``apply_aperture``
     directly -- the algebraic surface deliberately exposes a
     minimal shape vocabulary.
+
+    That delegation carries ``apply_aperture``'s ``edge`` DEFAULT, which
+    moved to ``'gray'`` (rim rendered by pixel area) in v5.49.0, so **this
+    operator's applied field moved in v5.49.0**.  The operator exposes no
+    ``edge`` keyword; for the pre-5.49 answer -- bit-identical -- call
+    ``apply_aperture(..., edge='hard')`` directly.
     """
 
     _ALLOWED_SHAPES = ('circular', 'rectangular', 'annular')
