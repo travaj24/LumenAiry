@@ -803,10 +803,11 @@ reporting a stale number for every campaign that ran on this box.
     functions directly from an archive of its tip and applied this tree's
     rule to the shapes they produced, which answers "which shapes get
     captured" but not "what a full chain's answer moves by".
-6.  **The census on WSL.**  The five firing files take 15-25 minutes each
-    time, and the WSL box carried two other verification sessions' pytest
-    runs throughout; the run was started three times and did not finish
-    inside this session.  It is the one item here that is redundant rather
+6.  **The census on WSL.**  Started three times and finished none: the first
+    two were terminated by a signal from outside this session (`EXIT=15`),
+    and the third, launched detached, was still at 26 % of 276 ids after 19
+    minutes on a box carrying two other verification sessions' pytest work.
+    I stopped it rather than leave it running.  It is the one item here that is redundant rather
     than missing: what the rule ANSWERS is a function of four integers, and
     the purity probe measures the same answers at 20 of 20 shapes on both
     builds, so a WSL census could only re-confirm which shapes the suite
