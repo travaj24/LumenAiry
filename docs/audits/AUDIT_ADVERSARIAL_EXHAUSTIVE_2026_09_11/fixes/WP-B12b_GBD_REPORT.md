@@ -1059,20 +1059,55 @@ CHANGELOG entry.
 2. **A fold mirror in the MIDDLE of a prescription through the LOCAL branch.**
    Out of the new guard's scope by decision, not by oversight (R2.2).  It is
    loud today, and `world_output_plane` serves the flat case.
-3. **A signed-`N` local branch that would SERVE a mirror-terminated
-   prescription** is not attempted.  The refusal is a cost decision.  What it
-   would take: a signed propagation-direction convention carried through
-   `new_dir`, the leg length `t` and `_freespace_tensor_moebius_np`'s branch
-   choice at once, plus a reconstruction frame that knows which way the
-   grid's `+z` points; and a 3-D oracle arm for a CURVED terminating mirror,
-   which neither package has (`probe_r5_mirror.py`'s tracer is the starting
-   point -- it already produces the exit-vertex state and the true focal spot
-   for this class, which is what such an arm would score against).  The world
-   branch's own refusal of a powered fold would have to be lifted in the same
-   change or the two branches would disagree about which classes exist.
-4. **The GPU reconstruction path and the vector GBD path** are untouched and
+3. **Neither branch serves a curved terminating mirror, and I did not make
+   one do so.**  The brief asked for the world branch to be attempted as a
+   separate commit if it could be measured against a 3-D oracle.  It cannot
+   be done as a follow-up; here is what it would take, read off the code
+   rather than guessed.
+
+   `_unfolded_equivalent_surfaces` evolves `Q` on a STRAIGHT equivalent
+   system and re-introduces the fold only through the world ray trace.  That
+   substitution is exact for a FLAT fold because a flat mirror leaves `Q`
+   invariant; it refuses a curved one because the mirror has power the
+   transmissive surrogate does not.  Matching the surrogate's POWER is not
+   enough: what the branch actually consumes is the per-surface 4x4
+   differential Jacobian traced through the real surface, so a surrogate
+   would have to reproduce that whole matrix -- the conic and aspheric terms
+   included -- and a surface that does is the same surface, not a surrogate.
+
+   The honest route is the one the refusal already names: a per-surface
+   WORLD differential transfer -- `raytrace.differential`'s finite-difference
+   AND analytic backends taught to trace the FOLDED system in world
+   coordinates and return each surface's 4x4 in its own local frame with the
+   reflection carried explicitly -- after which no unfolding is needed and
+   the branch's `Q` loop is unchanged.  That is a new primitive plus its
+   analytic twin, i.e. a work package with its own verification, not a
+   follow-up to this one.
+
+   The ORACLE for it is the cheap part and already exists in outline: an
+   on-axis concave mirror is rotationally symmetric, so
+   `vb12b_common.VFixture.oracle_field` (band-limited angular spectrum of the
+   geometrical-optics exit-vertex boundary field, resampled by radius) scores
+   it as it stands, and `probe_r5_mirror.py` already produces the
+   exit-vertex state, the traced geometric focus and the true focal spot RMS
+   for exactly this class.  A PRE/POST ladder would be a day's work ON TOP OF
+   the primitive, not instead of it.
+
+   One coupling to remember if anyone takes it: the local branch's refusal
+   message asserts that no route serves a CURVED terminating mirror.  The day
+   the world branch does, that message and
+   `test_the_mirror_refusal_does_not_send_the_caller_to_a_dead_end` -- which
+   MEASURES the world branch's behaviour in the same id before asserting
+   anything about the message -- both go red, which is the point.
+
+4. **A signed-`N` LOCAL branch** is likewise not attempted.  It would need a
+   signed propagation-direction convention carried through `new_dir`, the leg
+   length `t` and `_freespace_tensor_moebius_np`'s branch choice at once,
+   plus a reconstruction frame that knows which way the output grid's `+z`
+   points.  The refusal is a cost decision and is recorded as one.
+5. **The GPU reconstruction path and the vector GBD path** are untouched and
    unmeasured here, as in the verification: the guards sit upstream of both.
-5. **The CI cross-build spread.**  Both builds here are the same box; the
+6. **The CI cross-build spread.**  Both builds here are the same box; the
    runner mix was not sampled.  Every bar in the new file is derived at run
    time from a quantity the running build measures.
 
