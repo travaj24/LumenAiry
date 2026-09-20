@@ -166,12 +166,22 @@ def test_the_private_collins_transport_stays_on_an_eager_jax_backend():
 def test_the_public_collins_leg_demotes_the_backend_but_never_the_answer():
     """The boundary of H2-2's reach, BOUNDED rather than merely noted.
 
-    ``propagate_carrier_referenced(transport='collins')`` reaches
-    ``_collins_carrier_leg``, which opens with ``env_a = np.asarray(env)``.
-    H2-2 did not touch that, so at the public surface an eager JAX array is
-    still demoted to the host.  A demotion is a placement defect; a WRONG
-    ANSWER would be a correctness defect.  This id says which one it is, so
-    the defect cannot quietly become the other.
+    WHEN THIS WAS WRITTEN (2026-09-19):
+    ``propagate_carrier_referenced(transport='collins')`` reached
+    ``_collins_carrier_leg``, which opened with ``env_a = np.asarray(env)``.
+    H2-2 had not touched it, so at the public surface an eager JAX array was
+    demoted to the host.  A demotion is a placement defect; a WRONG ANSWER
+    would be a correctness defect.  This id said which one it was, so the
+    defect could not quietly become the other.
+
+    SINCE ROUND 2 the leg runs in the field's own namespace and the demotion
+    is gone -- the same call now returns a ``jaxlib`` array, and the
+    comparison below has become an ordinary cross-backend parity claim
+    (measured 4.1309e-16 WIN / 4.1251e-16 WSL against the same bar, where it
+    read exactly 0.0 while both arms were NumPy).  The ASSERTIONS are
+    unchanged and still hold, which is the property a defect-bounding id
+    should have: it was written so that fixing the defect does not falsify
+    it.
     """
     jax = pytest.importorskip("jax")
     jnp = pytest.importorskip("jax.numpy")
@@ -197,12 +207,19 @@ def test_a_traced_collins_call_never_returns_a_silently_wrong_field():
     """Two-sided, and the two sides are different functions.
 
     The PRIVATE transport takes the designed refusal and must name both ways
-    out.  The PUBLIC leg has no such refusal -- it meets JAX's own
-    ``TracerArrayConversionError`` at ``np.asarray`` first -- so all that can
-    be asserted there is that it RAISES rather than materialising the tracer
-    and computing off the copy.  If the leg is ever threaded, the first arm
-    still passes and the second becomes "it returned a traced array", which
-    this id accepts.
+    out.  When this was written the PUBLIC leg had no such refusal -- it met
+    JAX's own ``TracerArrayConversionError`` at ``np.asarray`` first -- so all
+    that could be asserted there was that it RAISES rather than materialising
+    the tracer and computing off the copy, with the note that "if the leg is
+    ever threaded, the first arm still passes and the second becomes 'it
+    returned a traced array', which this id accepts".
+
+    SINCE ROUND 2 the leg IS threaded and the public refusal is designed: a
+    ``ValueError`` naming ``_collins_transport``, ``dx_out``, ``gap_kernel``
+    and ``on_collins_sampling``.  This id still takes the raising disposition,
+    unchanged; the id that pins WHICH exception and WHAT it names is
+    ``tests/unit/test_wave5_h2_collins_jax.py::
+    test_the_public_collins_leg_refuses_a_trace_by_name``.
     """
     jax = pytest.importorskip("jax")
     jnp = pytest.importorskip("jax.numpy")
@@ -590,7 +607,12 @@ def test_as_c_order_makes_the_numpy_path_contiguous():
 # ===========================================================================
 
 def test_the_chirp_phase_error_is_linear_in_the_budget_and_dense_is_immune():
-    """What ``_bluestein_2d``'s ``alpha * N_max^2 > 1e15`` guard is guarding.
+    """What ``_bluestein_2d``'s phase-budget guard is guarding.
+
+    (The threshold read ``1e15`` when this was written; Round 2 derived it
+    from the law below and it is now ``1e-6/eps = 4.5036e9``.  This id is
+    unaffected, which is what "deliberately not a pin on the threshold" was
+    for.)
 
     The chirp signal's phase is rounded to float64 BEFORE ``exp``, so the
     chirp-Z routes' relative error tracks the budget LINEARLY --
