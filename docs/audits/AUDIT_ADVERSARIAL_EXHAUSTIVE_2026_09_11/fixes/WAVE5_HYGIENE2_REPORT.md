@@ -1096,6 +1096,13 @@ the `sqrt(<u^8>) = sqrt(3/2)` moment the magnitude law is fitted on.  Bar 1 %,
 
 ### V-D5 -- CLOSED.  The chirp phase budget, 7.5 decades late
 
+> **The `dense rel L2` row below is SUPERSEDED.**  It is what a reference
+> forming its own phase the way the dense route forms it reads about that
+> route, i.e. a measurement of the instrument.  The THRESHOLD and the LAW are
+> unaffected -- both are read off the chirp-Z row, which is measured correctly.
+> See **Round 3, D-1** at the end of this document for the re-measurement
+> against an exactly-reduced phase.
+
 `_PHASE_BUDGET_MAX = 1e-6 / eps = 4.5036e9`, derived from the measured law
 rather than from taste.  Against a `math.fsum` correctly-rounded reference at
 N=24 M=12:
@@ -1125,6 +1132,11 @@ fixture, both builds: `r = 4.998e-04`, `1 - corr = 3.1689e-07`,
 needs.
 
 ### V-D7 -- CLOSED.  The `eps^(2/3)` floor model
+
+> **Two labels in this entry are SUPERSEDED**: "**0.36 (WIN) and 1.09 (WSL)**
+> at `h = 1e-1`" quotes the `h = 1e-2` rung's WSL number under the `h = 1e-1`
+> label, and "the same ladder" describes two ladders that differ.  The
+> conclusions stand.  See **Round 3, D-3 and D-4**.
 
 `P(a) = sum|L a|^2` is an exact quadratic form, so `P''' == 0`, so there is no
 truncation branch to balance against cancellation and `eps^(2/3)` is ~4.7
@@ -1310,3 +1322,392 @@ does not grow a `kernel_departure` key while it is.
 * **An uncontended Windows timing ladder.**  Unchanged; the crossover is a
   ratio taken under the same conditions for all three routes and is what the
   decision rests on.
+
+---
+
+# Round 3 (VERIFY-WAVE5-HYGIENE2 round 2) -- 2026-09-20
+
+The round-2 verification's verdict was "ship the CONTENT, not the merge as it
+stood": two BLOCKERs created by the merge itself, one MAJOR claim that does not
+hold, two MINOR labels and one SUGGESTION.  D-B (four stale citations) and
+D-2 / D-7 (the verifier's own new tests) were closed on the integration branch
+before this round opened; **D-A, D-1, D-3, D-4 and D-5 are closed here**, on
+`fix/wave5-hygiene-2-round3` off `afee9769`.
+
+**Nothing this round changes an answer.**  It changes one `RuntimeWarning`'s
+text, four docstring paragraphs, two test-id names, one test reference and
+three test docstrings.  The distinction is measured rather than asserted --
+see "The byte-identity count" below.
+
+## How this round was gated
+
+* **Both builds, every reading.**  Windows py3.14 (numpy 2.4.4, jax 0.11.0) and
+  WSL py3.12 (numpy 2.4.6 on scipy-openblas SkylakeX, jax 0.10.2), with
+  `OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1` on the COMMAND
+  LINE and pytest run with `--capture=sys`.  Every number below was measured
+  before it was written, on both builds, and any cross-build difference is
+  stated as one.
+* **Archive-to-archive, from my own `git archive afee9769`.**  The base arm is
+  a read-only extraction into `C:/tmp/lum_r3_base`; each probe runs in a child
+  process whose `PYTHONPATH` names one tree and which REFUSES to continue if
+  `lumenairy.__file__` does not resolve under it.
+* **One measurement trap worth writing down.**  `sys.path[0]` for a script is
+  the SCRIPT'S directory, not the working directory, and this box carries an
+  installed `lumenairy` 5.47.0 in Windows site-packages.  The first run of the
+  budget probe silently bound it and died with
+  `_bluestein_2d() got an unexpected keyword argument 'method'` -- the installed
+  copy predates the keyword.  Every probe here carries the anchor because of
+  that.  The same shape bit the JAX probe a second way: a probe that imports
+  `test_wave5_h2_collins_jax.py` does NOT get that module's autouse
+  `jax_enable_x64` fixture, and without it every ladder reading came back at
+  complex64 precision (the quadratic merit's over-floor statistic read 3.9e+08
+  instead of 0.36).
+* **Decisions, not readings.**  Every bar this round adds is two-sided, derived
+  from a rival hypothesis or from the data's own floor, and premise-gated.
+
+### The byte-identity count, stated
+
+`validation/probe_wave5_hyg2_round3/r3_routes_bitid.py` digests the returned
+VALUE and the emitted WARNINGS as SEPARATE keys, so "a warning text change is a
+diagnostic change, not a byte move" is a measurement and not an argument.
+**417 keys**:
+
+| group | what |
+|---|---|
+| `M` (240) | `fresnel` / `fraunhofer` / `angular_spectrum` MFT x 4 `method` values x 3 grids x 2 distances x 3 zooms, plus off-axis centres, anisotropic pitches, complex64, a backward leg and `bandlimit=False` |
+| `R` (6) | `resample_field` on both legs at three pitch ratios |
+| `B` (84) | both Bluestein primitives x both signs x 4 `method` values x 3 shapes x the off-centre convention, plus both `separable` settings |
+| `P` (80) | the phase-budget regime: 5 budgets straddling `_PHASE_BUDGET_MAX` x 2 shapes x 2 primitives x 4 `method` values |
+| `G` (7) | the guard rows (refused sign, refused `N_out`, refused `method` on both primitives and on a public entry point, `dx_out = 0`, a backward Fresnel leg) |
+
+| comparison | keys | VALUE differing | WARNING differing |
+|---|---|---|---|
+| `afee9769` -> this branch, WIN py3.14 | 417 | **0** | 36 |
+| `afee9769` -> this branch, WSL py3.12 | 417 | **0** | 36 |
+
+The 36 are exactly the `P`-section keys at the three budgets ABOVE the
+threshold (`2.2 x _PHASE_BUDGET_MAX`, 1e12, 1e15) on the three CHIRP methods:
+3 budgets x 2 shapes x 2 primitives x {`auto`, `bluestein`, `separable`}.
+**Zero `direct` keys and zero `M` / `R` / `B` / `G` keys are among them** --
+which also re-proves, from the other end, that no propagator fixture in this
+probe reaches the budget at all.
+
+---
+
+## Per finding
+
+### D-A -- BLOCKER, CLOSED.  Two forward version claims in `gbd.py`
+
+`tests/unit/test_public_api.py::
+test_no_shipped_source_claims_a_version_the_package_has_not_reached` read
+**1 failed on BOTH builds** at `afee9769`, naming `gbd.py:3622`
+("returned silently (VERIFY-WP-B12b D-4 / D-5, 5.48.0)") and `gbd.py:3640`
+(".. versionchanged:: 5.48.0") against `__version__ = 5.47.1`.
+
+**The form chosen is the repository's own.**  `2f1c9aa6` reworded seven
+docstrings rather than renumbering them, on a measurement of the last five
+releases: 0, 0, 0, 1 (a numeric table cell) and 0 mentions of the released
+version inside `lumenairy/**/*.py` at the release commit's PARENT, and the
+release commit touches exactly one library file.  So `:3622` loses the number
+and the `.. versionchanged::` block becomes a numpydoc section, "What changed
+here, and whose fields move", carrying the same prose plus a sentence naming
+who owns the number.  **The gate's exemption list is NOT widened**: it carries
+no written reason for `.. versionchanged::`, and the four OTHER
+`.. versionchanged::` directives in this file name 5.2, 5.24.4 and 5.30 --
+i.e. the repository uses that directive for history, which is what makes an
+unreleased one the odd case rather than a category to exempt.
+
+**The fold will not have to touch these lines again**, measured: the gate's own
+scanner, imported from the gate rather than re-implemented, run over
+`lumenairy/` with `here` set to each candidate --
+
+| `here` | offenders |
+|---|---|
+| 5.47.1 (the tree) | **0** |
+| 5.48.0 | **0** |
+| 5.50.0 | **0** |
+| 6.0.0 | **0** |
+
+The only `5.48` tokens left in `gbd.py` are the three `version_removed='5.48'`
+deprecation horizons, which the deprecation machinery reads and the gate
+exempts by construction.
+
+Tails: `test_public_api.py` **8 passed, 1 failed** on both builds; the failure
+is `test_installed_metadata_version_matches_source_version`, environmental and
+pre-existing (Windows site-packages holds `lumenairy-5.47.0.dist-info`, the WSL
+venv `5.11.0`, against a source `5.47.1` that `afee9769` already had).
+Commit `a06b53c3`.
+
+### D-1 -- MAJOR, CLOSED.  `method='direct'` is not immune to the phase budget
+
+`_direct_matrix_2d` forms `t = alpha*(n - cI)*(k - cO)` in float64 and then
+reduces it by `t - rint(t)`.  The SECOND step is exact; the FIRST has already
+discarded the low bits of a product needing ~63 of them.  The dense route's
+phase error is therefore `~eps * |alpha| * n * k <= eps * budget` -- the same
+law, with a smaller constant.
+
+**RE-MEASURED on the shipped id's own geometry before anything was written**
+(`_bluestein_2d`, `cI = cO = 0`, `N` = 24 -> `M` = 12, seed 5, the library's own
+`_fft2` / `_ifft2`), against a reference whose phase is reduced EXACTLY with
+`fractions.Fraction` and whose double sum is accumulated with `math.fsum`.
+**Identical to the digit on WIN py3.14 and WSL py3.12**
+(`validation/probe_wave5_hyg2_round3/r3_budget_exact.py`, both outputs
+archived):
+
+| budget | 1e5 | 1e9 | 1e12 | 1e15 |
+|---|---|---|---|---|
+| chirp-Z rel L2 | 2.772e-11 | 1.635e-07 | 1.865e-04 | 2.285e-01 |
+| **dense rel L2** | **6.871e-12** | **1.104e-07** | **8.621e-05** | **6.739e-02** |
+| `eps * budget` | 2.220e-11 | 2.220e-07 | 2.220e-04 | 2.220e-01 |
+| `C = rel/(eps*budget)`, chirp-Z | 1.2485 | 0.7364 | 0.8398 | 1.0291 |
+| `C`, dense | 0.3095 | 0.4973 | 0.3883 | 0.3035 |
+| **chirp / dense** | **4.035** | **1.481** | **2.163** | **3.391** |
+| dense vs the NAIVE reference | 3.4e-16 | 3.3e-16 | 3.2e-16 | 2.8e-16 |
+
+Fitted slopes over the full eight-rung ladder (1e5 .. 1e15): **0.9632**
+(chirp-Z) and **0.9917** (dense).  Over the four rungs tabulated: 0.992 and
+0.998.
+
+The round-2 probe's CENTRED geometry is reproduced independently in the same
+run -- 2.292e-12 / 2.751e-08 / 3.401e-05 / 1.960e-02, factor **4.4 .. 11.8**,
+slopes 0.9881 / 0.9973 -- so the verifier's table is confirmed to the digit AND
+the factor is shown to be geometry-dependent, which is why the shipped id's bar
+is derived on the shipped id's geometry rather than borrowed.
+
+**The threshold's own two rungs, re-measured against the exact reference**,
+both builds:
+
+| | budget | chirp-Z | warns? | dense | warns? | factor |
+|---|---|---|---|---|---|---|
+| 0.9x `_PHASE_BUDGET_MAX` | 4.0532e+09 | 6.786e-07 | no | 3.150e-07 | no | 2.154 |
+| 2.2x `_PHASE_BUDGET_MAX` | 9.9079e+09 | 2.028e-06 | **yes** | 1.079e-06 | no | 1.880 |
+
+The THRESHOLD and the LAW are unaffected: `1e-6/eps` is read off the chirp-Z
+row, which was always measured correctly, and both sides of it still hold.
+
+**What changed.**
+
+1. *The warning.*  "pass `method='direct'` (the dense route reduces its phase
+   modulo one turn and measured 3e-16 at every budget tested)" is replaced by
+   what is true: EVERY route follows `rel ~ eps * budget`, so the way out is a
+   smaller BUDGET `= |alpha| * N_max^2` -- fewer samples on whichever of
+   `N_in` / `N_out` sets `N_max`, or a smaller `|alpha|` (for the MFT
+   propagators `alpha = dx*dx_out/(lambda z)`, so a finer output pitch, a finer
+   input pitch or a longer `z`), or a regular FFT propagator -- with
+   `method='direct'` named as the more accurate route by a measured bounded
+   factor of 1.5x .. 11.8x and explicitly not as an escape.
+2. *The two Notes and the conclusion.*  `_bluestein_2d`'s Notes carried the
+   2.8e-16 .. 4.5e-16 reading; the three copies of `mft.py`'s `method=` entry
+   said the dense route "is exact where the chirp signals are not (3.7e-16)";
+   `_direct_matrix_2d`'s "Phase construction" paragraph already contained the
+   right law ("the irreducible error is the two roundings in forming `t`
+   itself, amplified by `2*pi`") and drew the opposite conclusion from it in
+   the sentence before.  All four now state the law, the measured constants,
+   and where the old reading came from.
+3. *The reference and the ids.*  `_fsum_reference` made only the SUMMATION
+   correctly rounded and formed its phase with the same two roundings the route
+   commits, so `assert rd < 1e-14` could not fail for any dense route that
+   reduces its phase the way the reference does.  It is rebuilt on an exact
+   phase (`_exact_phase_rows`), and the old naive-phase reference is KEPT as
+   `_naive_phase_reference` and used as the premise arm.  The id becomes
+   `test_both_routes_follow_the_budget_law_and_dense_wins_by_a_bounded_factor`,
+   a DECISION with derived two-sided bars:
+
+| claim | bar | measured | gap below the bar | gap above the bar |
+|---|---|---|---|---|
+| both routes obey `rel = C eps budget` | `0.03 < C < 5` | 0.74 .. 1.25 (chirp-Z), 0.30 .. 0.50 (dense) | 10 decades to the immunity reading (`C = 1.4e-12` at 1e12) | 10 decades to an O(1) wrong answer (`C = 4.5e10` at 1e5) |
+| the law's fitted slope, both routes | within 0.1 of 1, over >= 5 decades (10 asserted) | 0.992, 0.998 | slope 0 = a budget-independent route | slope 2 = a quadratic law; 0.1 is one ninth of the distance to the nearer |
+| dense is better, boundedly | `1 < chirp/dense < 30` | 1.48 .. 4.04 (4.4 .. 11.8 centred) | the decision boundary itself | 8 decades to the 6.3e9 immunity would imply at 1e12 |
+
+   **Premise-gated on the reference's own exactness** by a new id,
+   `test_the_exact_phase_reference_is_exact_where_float64_can_check_it`: at
+   four DYADIC alphas, where the float64 product IS exactly representable, the
+   exact reduction and the route's agree to a whole number of turns EXACTLY
+   (0.0, both builds); at `alpha = 1e12/24^2` they part by **5.293e-05** of a
+   turn (both builds).  Exactly zero and 5.3e-05 with nothing in between is the
+   whole instrument.
+
+   The threshold id's `assert rd_hi < 1e-14` becomes `1e-8 < rd_hi < rc_hi`,
+   with 1e-8 derived as 7.5 decades above the summation floor (3.2e-16) and two
+   below the measured 1.079e-06.  `test_verify_wave5_hyg2.py`'s twin is renamed
+   `..._and_a_shared_phase_reference_is_blind` and re-scoped to what it validly
+   asserts -- the chirp law, plus the blindness as a decision about the
+   instrument -- instead of duplicating the corrected measurement.
+
+**OPEN ITEM, not closed here.**  The guard is scoped to the chirp signals'
+phase, so at 2.2x the threshold the dense route is SILENT while reading
+1.079e-06, past the 1e-6 the threshold is named for, by a factor of 1.9.
+Widening the guard to the dense route is a behaviour change owed to the
+maintainer.  It is recorded in the code comment above the direct-route early
+return and gated two-sidedly by
+`test_the_chirp_phase_guard_fires_on_the_chirp_route_and_not_the_dense_one`, so
+it cannot change in either direction without a decision.
+
+Commit `db6c0555`.
+
+### D-3 -- MINOR, CLOSED.  The over-floor reading was labelled with the wrong rung
+
+MEASURED 2026-09-20 on the same fixture, the same merit and the same ladder
+(`validation/probe_wave5_hyg2_round3/r3_fd_ladders.py`):
+
+| h | 1e-1 | 1e-2 | 1e-3 | 1e-4 |
+|---|---|---|---|---|
+| WIN py3.14 | 0.3622 | 1.4487 | 0.7243 | 0.3622 |
+| WSL py3.12 | 0.3622 | **1.0865** | **0.0000** | **0.0000** |
+
+1.09 is the `h = 1e-2` rung.  At `h = 1e-1` the two builds agree to FOUR
+figures, which is a better advertisement for the bound than the sentence made,
+and the estimate is exactly zero at TWO WSL rungs rather than one, which is
+precisely why the ratio form was unusable.  The docstring of
+`test_the_central_difference_through_this_merit_has_no_truncation_branch` now
+carries the whole table for both builds.  (The round-2 report's numbers are
+reproduced to the digit; this is an independent confirmation, not a copy.)
+
+### D-4 -- MINOR, CLOSED.  The cubic control's separation is ladder-conditional
+
+The two ids do not share a ladder: the control's is `(1e-1, 3e-2, 1e-2, 3e-3)`
+and the quadratic merit's is `(1e-1, 1e-2, 1e-3, 1e-4)`.  A third difference's
+round-off floor grows as `h^-3`, so the control's over-floor statistic
+collapses when its ladder is extended.  MEASURED, both builds:
+
+| h | 1e-1 | 3e-2 | 1e-2 | 3e-3 | 1e-3 | 1e-4 |
+|---|---|---|---|---|---|---|
+| WIN py3.14 | 7.06e+08 | 1.91e+07 | 7.06e+05 | 1.91e+04 | **705.5** | **0.3505** |
+| WSL py3.12 | 7.06e+08 | 1.91e+07 | 7.06e+05 | 1.90e+04 | **719.9** | **7.010** |
+
+One decade past its own ladder the statistic is already BELOW the id's own
+`min(floors) > 1e4` premise gate; two decades past it is inside the quadratic
+merit's band of 0.00 .. 1.45.  The verifier measured 0.3505 at `h = 1e-4`; that
+is the WINDOWS reading -- WSL reads **7.010** there -- and both are recorded,
+because a single number would read as build-free when it is not.
+
+The id is renamed
+`test_the_same_statistic_finds_a_truncation_branch_on_a_cubic_merit` (the
+statistic is shared; the ladder is not), its docstring says "over ITS OWN
+ladder (`1e-1 .. 3e-3`)" and carries the extension, and the premise message
+names the ladder and what happens off it.  The ASSERTION is unchanged: it was
+already premise-gated over its own four rungs and refuses the ladder rather
+than the conclusion.  What was wrong was the sentence, which claimed as a
+property of the merit what is a property of the ladder.
+
+### D-5 -- SUGGESTION, RECORDED.  What the cross-backend bar asserts against
+
+**Confirmed here myself before writing it**, both builds:
+
+| | WIN py3.14 | WSL py3.12 |
+|---|---|---|
+| single-transform spread (`_fft2` vs `jnp.fft.fft2`) | 2.6853e-16 | 2.5091e-16 |
+| `6 x` spread | 1.6112e-15 | 1.5054e-15 |
+| `_fft_spread_bar(env)` returns | 7.105427357601002e-15 | 7.105427357601002e-15 |
+| `== 32 * eps` exactly? | **yes** | **yes** |
+| floor dominates by | 4.410x | 4.720x |
+| `np.fft.fft2` vs `jnp.fft.fft2` | **bit for bit identical** (rel exactly 0.0) | **bit for bit identical** (rel exactly 0.0) |
+
+So two things are true at once and neither was written down.  The bar IS
+`32 * eps` on both builds -- the measured term is a tripwire for a future
+backend, not the active bound, and a backend would have to move the spread by
+more than 4.4x before the bar moved at all.  And the spread is not NumPy
+against XLA: the whole of the 2.5e-16 .. 2.7e-16 is the LIBRARY's own `_fft2`
+wrapper (pyFFTW here) against XLA, i.e. two FFT WRAPPERS.  Both are written
+into `test_wave5_h2_collins_jax.py`'s module docstring beside the claim they
+qualify, with the pointer to `tests/unit/test_verify_hyg2_round2.py::
+test_the_cross_backend_bar_is_the_legs_own_last_bit_sensitivity`, which derives
+the bar from a property of the leg instead.  **No bar is changed** -- that is a
+behaviour change and D-5 is a suggestion.
+
+Commit `823b231d` (D-3, D-4 and D-5 together: one test file, one probe).
+
+## Test tails
+
+Sweep: 53 files -- every `test_wave5_h2_*`, both verification files, every
+`*carrier*` and `*mft*` file, `test_audit2609_b4_collins_transport.py`,
+`test_audit2609_b12b_gbd_projection.py`, `test_wp_b12b_round2.py`,
+`test_fix_v3_mft_centre_window.py`, the census / walker / dispatcher-pin /
+public-API / doc-consistency / history files, `test_audit_except_budget.py`
+and `test_ci_kernel_consistency.py`.  BLAS pinned on the command line,
+`--capture=sys`, `-p no:cacheprovider`, one process.
+
+| build | files | result |
+|---|---|---|
+| WIN py3.14 | 53 | **2 failed, 2029 passed, 16 skipped** in 860.10 s |
+| WSL py3.12 | 52 (`b4_collins_transport` excluded -- it STALLS on WSL, pre-existing and proved so at `112c3049` by round 2) | **4 failed, 1900 passed, 17 skipped** in 696.93 s |
+
+The Windows failures were `test_installed_metadata_version_matches_source_
+version` (environmental) and the citation gate above, now re-anchored and
+1 passed.  The WSL failures are those two plus
+`test_v5_2_3_walker_changelog_content.py::
+test_v16_synthetic_fabrication_is_caught`; all three of the WSL-only ones are
+the WSL-against-a-Windows-worktree git condition, and the two V18.5 ids say so
+in their own message ("ENVIRONMENT, not a citation finding ... on the base tree
+too").  Nothing else in 2029 / 1900 ids is red.
+
+Focused tails, both builds: `test_wave5_h2_mft_direct.py` **34 passed** (was
+33; one id added, one renamed), `test_wave5_h2_collins_jax.py` **28 passed**,
+`test_verify_wave5_hyg2.py` + `test_verify_hyg2_round2.py` **19 passed**,
+`test_public_api.py` **8 passed, 1 failed** (the environmental one; V-D15's own
+id 1 passed).  `scripts/record_history_fingerprints.py --check` green -- both
+fingerprints drop docstrings and comments, `gbd.py` and `mft.py` are the only
+touched modules with history documents, and no token stream moved, so nothing
+needed re-recording.  ruff 0.15.16 from WSL clean on `lumenairy/`, `tests/` and
+`validation/probe_wave5_hyg2_round3/`.
+
+`.test_durations`: the four new / renamed ids were timed serially with BLAS
+pinned and spliced in place -- **4 insertions, 3 deletions**, 16 595 -> 16 596
+entries, re-parsed as JSON with every value asserted a non-negative number and
+every key a node id.
+
+### D-B, again -- the same gate caught THIS round's own line shifts
+
+Not a finding of the verification, but of the verification's instrument
+working on the next change.  D-1's edits insert docstring paragraphs into
+`lumenairy/propagators/mft.py` at three places, which moves every line below
+them.  Six `file:line` citations in the `[5.47.0]` CHANGELOG block point into
+that file, and the 53-file Windows sweep read
+`test_v5_3_2_walker_source_line_citation.py::
+test_v18_5_the_5_47_0_block_citations_name_the_right_lines` as **1 failed**:
+
+```
+mft.py:600 -> mft.py:611                              [was mft.py:550 at f4f18851]
+mft.py:539 -> mft.py:550                              [was mft.py:489]
+mft.py:819 -> mft.py:830                              [was mft.py:769]
+lumenairy/propagators/mft.py:1074 -> :1096            [was :972]
+lumenairy/propagators/mft.py:655-680 -> :666-691      [was :605-630]
+lumenairy/propagators/mft.py:661-670 -> :672-681      [was :611-620]
+```
+
+V18 passes all six -- every one lands on some other real line -- which is
+exactly the blind spot V-D2 built V18.5 for.  Fixed with the sanctioned tool,
+`python scripts/reanchor_citations.py --base f4f18851 --block "[5.47.0]"`:
+6 re-anchored, then `--check` reports **0 re-anchored**, and the gate reads
+1 passed.  Recorded here because it is the second time in two rounds that a
+docstring-only edit to `mft.py` has moved citations, and because "a
+documentation-only change moves no line numbers" is the assumption that makes
+it invisible.
+
+---
+
+## What could not be measured, this round
+
+* **CuPy on the device.**  Unchanged from round 2: `cupy.fft.fft2` raises
+  `ImportError: DLL load failed while importing cufft` on Windows and WSL has
+  no CuPy, so the chirp-Z routes' CuPy arm at a large budget, and D-6's `M11` /
+  `M13` mutation arms, remain unmeasurable here.  The dense route needs no
+  transform, so round 2's CuPy reading for it survives.
+* **`mpmath` as a third, independent oracle for the exact phase.**  Present on
+  Windows (1.3.0) and ABSENT in the WSL venv, so a claim built on it would be
+  per-build by construction.  The exactness premise is built instead from a
+  property float64 can check on both builds -- a dyadic `alpha`, where the
+  route's own product is exact -- which is why that id has the form it does.
+* **Whether the dense route SHOULD warn.**  Measured that it does not, and
+  measured what it reads when it does not (1.079e-06 at 2.2x the threshold).
+  Whether to widen the guard is a behaviour change and is left as the open item
+  above rather than decided here.
+* **An uncontended box.**  Unchanged; nothing here reads a wall clock as a
+  claim.
+* **The two environmental reds.**  `test_public_api.py::
+  test_installed_metadata_version_matches_source_version` fails on both builds
+  from a stale installed distribution (Windows `lumenairy-5.47.0.dist-info`,
+  WSL `5.11.0`) against source `5.47.1`; it reads the same at `afee9769`.  From
+  WSL, this WINDOWS worktree's `.git` pointer does not resolve, so every
+  `git show`-based citation gate fails there for the reason round 2 already
+  recorded.  Both are green or unaffected on Windows.
