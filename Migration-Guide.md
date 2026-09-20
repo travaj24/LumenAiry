@@ -1839,10 +1839,10 @@ multibranch's own gain tripwire (`_MB_POWER_RATIO_MAX = _ENERGY_BLOWUP_FACTOR = 
 five optics and 51 fold planes against the direct oracle: accepted planes read 0.82-1.25, the
 smallest broken one 5.85).  Every refused field has already emitted the multibranch's own
 `RuntimeWarning`.  The LOSS side is reported, not refused (a multibranch field that loses energy is
-this module's normal input).  The diagnostics carry `multibranch_power_ratio`,
-`multibranch_power_ratio_bracketed`, `multibranch_power_ratio_band` and `power_ratio_decision` on
-every return path; the multibranch's own diagnostics gain `n_branch_max`, `launched_power` and
-`launched_power_triangles`.  Falling back is not a remedy (the fallback target is the same field)
+this module's normal input).  The diagnostics carry `'multibranch_power_ratio'`,
+`'multibranch_power_ratio_bracketed'`, `'multibranch_power_ratio_band'` and `'power_ratio_decision'` on
+every return path; the multibranch's own diagnostics gain `'n_branch_max'`, `'launched_power'` and
+`'launched_power_triangles'`.  Falling back is not a remedy (the fallback target is the same field)
 and there is no keyword that serves the refused field.
 
 **FGA image leg into a non-unit exit index (the four FGA sites, including the caustic-zone
@@ -1867,7 +1867,7 @@ plane and raises `NotImplementedError` on a curved fold mirror; the refusal mess
 **Writes to eight moved names on `lumenairy.elements.lenses`.**  WP-B11c moved
 `CUPY_AVAILABLE`, `_is_cupy_array`, `_ensure_cupy_loaded`, `_load_numba`,
 `_get_aspheric_sag_accum_numba`, `_ensure_numexpr_loaded`, `_collect_semi_diameters` and
-`_warn_if_aperture_exceeds_grid` to `lumenairy.elements._lens_kernels`; a `monkeypatch.setattr` or
+`_warn_if_aperture_exceeds_grid` to `lumenairy.elements._lens_kernels`; a pytest monkeypatch or
 `del` on the old module silently reached nothing (or removed the re-export for the rest of the
 process).  Setting or deleting any of the eight on `lenses` now raises `AttributeError` naming
 `_lens_kernels` as the address that works.  Reading is untouched: same object, same `import *`
@@ -1920,7 +1920,7 @@ and tests with no default moved (5.49.0 acts on it).  `ray_transfer_jacobian(ref
 `ray_transfer_jacobian_analytic(reference=)`, default `'surface'` unchanged.
 
 Lens-traced Newton pool: a broken worker pool (a worker dies while the executor's feeder thread is
-mid-write, so every pending future fails with `BrokenProcessPool`) falls back to serial instead of
+mid-write, so every pending future fails with the standard library's broken-process-pool error) falls back to serial instead of
 hanging the process on an untimed join, and the answer is bit-identical to the pooled one; the persistent pool is no longer rebuilt on almost
 every dispatch; teardown, census and shutdown follow-ups closed.  No field moves.
 
@@ -2099,7 +2099,7 @@ from lumenairy.propagators import _bluestein as _bl
 _bl._MFT_DIRECT_MAX_RATIO = _bl._MFT_DIRECT_NEVER    # 0.0 -- never select it
 ```
 
-138 of 138 fixtures identical with it set.  `_bl._MFT_DIRECT_ALWAYS`
+138 of 138 fixtures identical with it set.  `_MFT_DIRECT_ALWAYS`
 (`float('inf')`) is the other end: every shape takes the dense route,
 overriding BOTH conditions.
 
@@ -2108,7 +2108,7 @@ overriding BOTH conditions.
 Change nothing.  At the shapes the rule captures you get, MEASURED on both
 builds:
 
-* **less memory, by a lot, and the ORDERING is build-free.**  `tracemalloc`
+* **less memory, by a lot, and the ORDERING is build-free.**  tracemalloc
   peak at `N = 1024, M = 32`: 1.85 MB, against 34.7 MB for the separable
   chirp-Z route and 159.6 MB for the 2-D one.  Across a 42-shape square ladder
   the dense route is the smallest at 42 of 42 shapes on both builds, by 6.4x to
@@ -2117,7 +2117,7 @@ builds:
   cheapest is identical on both builds at every shape -- that follows from the
   padding law, not from a run.  The READINGS are not identical across builds
   (they differ at every shape, by up to a factor of 10 at `N = 64, M = 16`), so
-  do not pin a `tracemalloc` number.
+  do not pin a tracemalloc number.
 * **less time.**  Worst dense-over-fallback ratio at `M/N <= 1/32`, over three
   independent rounds: 0.477 on Windows py3.14 and 0.954 on WSL py3.12 -- never
   slower on either, which is the criterion the boundary was set from.  The thin
@@ -2134,7 +2134,7 @@ builds:
   `alpha * max(N, M)^2` while the dense route's reaches only
   `alpha * (N-1) * (M-1)`.
 * **a route that needs no FFT.**  It is two matrix products, so it runs wherever
-  `xp.matmul` does.  On a box whose cuFFT is unusable, CuPy calls at these
+  the backend's matrix product does.  On a box whose cuFFT is unusable, CuPy calls at these
   shapes now succeed where 5.48.1 raised `ImportError: cufft`.
 
 ### One warning you may now hear that you did not
