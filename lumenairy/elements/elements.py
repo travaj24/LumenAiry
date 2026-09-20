@@ -275,8 +275,7 @@ def apply_aperture(E_in, dx, shape='circular', params=None, xc=0, yc=0,
 
         Why ``'gray'`` is the default (WP-B11 sec. 2.9 and WP-C1, both
         measured against the closed-form on-axis field behind a circular
-        aperture,
-        ``U = e^{ikz} - (z/r_a) e^{ik r_a}``, lambda = 633 nm,
+        aperture, ``U = e^{ikz} - (z/r_a) e^{ik r_a}``, lambda = 633 nm,
         a = 100 um, window 512 um).  On-axis relative error, and the
         convergence order between successive rows:
 
