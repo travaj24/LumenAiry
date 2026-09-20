@@ -1792,6 +1792,14 @@ result = trace(rays, surfaces, wavelength, sphere_normal='generic')
 result = trace_world(rays, world_surfaces, wavelength, sphere_normal='generic')
 ```
 
+The way back is byte-identical in a SECOND PROCESS against a read-only
+`git archive 49ddf4bd`, not merely against this tree with the keyword ignored:
+**594 of 594** recorded arrays are identical on both development mounts -- five
+prescriptions at two field angles under both `output_filter` modes, every
+history bundle, `x/y/z/L/M/N/opd/alive/code`.  At the DEFAULTS the same set
+reads 172 of 594 identical, so the identity is not a switch that reaches
+nothing.
+
 Archive to archive against 49ddf4bd, with BOTH old keywords passed, **934 of
 1008** recorded arrays (1 630 399 values) are byte-identical on the Windows
 mount and **935 of 1008** on the WSL one; the **74** that are not (73 on WSL)
@@ -1920,11 +1928,21 @@ surface 3.
 result = trace(rays, surfaces, wavelength, renormalize='surface')
 ```
 
-**Why it moved, stated plainly.**  Not for speed: WP-B9's 1.03x-1.10x does not
-reproduce.  WP-C2 measured 0.95x to 1.13x over five prescriptions on two
-builds, medians 1.00x and 0.99x, against a measurement resolution of about
-+-7 % -- no effect this method can see.  It moved because one rescale instead
-of N is the structurally simpler contract, with the fault diagnosis unmoved,
+**Why it moved, stated plainly.**  Not on a timing number: WP-B9's
+1.03x-1.10x does not reproduce, and three timing instruments moved under load
+on the development box (one read the block as exactly zero, two wall-clock runs
+disagreed in SIGN).  It moved on a DETERMINISTIC element-operation count --
+identical on both mounts to the last digit -- which says the hoist is worth
+**0.9910x at two surfaces (a LOSS), 1.0050x at three, 1.0189x at seven and
+1.0237x at thirteen**: it removes `n_refracting * (1 maximum + 3 divides)` and
+adds one `_normalize_directions` (10 element passes), so it breaks even between
+two and three surfaces.  Against a 60-digit end-to-end `decimal` trace it costs
+no measurable accuracy: all four `(renormalize, sphere_normal)` combinations
+land within 5.2e-18 m in position and 6.9e-17 m in OPL of the truth, and the
+drift it leaves behind induces 3.0e-18 m of position error at thirteen surfaces
+through a measured, LINEAR sensitivity of 1.786e-3 m per unit of drift -- at
+the trace's own distance from the truth, not above it.  One rescale instead of
+N is also the structurally simpler contract, with the fault diagnosis unmoved,
 which is the argument section 1.3 of the maintainer ledger records.
 
 **The one case that genuinely needs the old setting.**  Under

@@ -1,6 +1,6 @@
 {
  "meta": {
-  "file": "/mnt/c/tmp/lum_vc2/lumenairy/__init__.py",
+  "file": "/mnt/c/tmp/lum_c2b/lumenairy/__init__.py",
   "lumenairy": "5.48.1",
   "n_rays": 4096,
   "numpy": "2.4.6",

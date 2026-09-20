@@ -1,7 +1,7 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/lenses_maslov.py
-ast_sha256: b47b80d914f300e47b24b4126114a08ff8d4ddc7878413a7c32527d059a1688b
-token_sha256: ffb2727d6ffb6885bb4f93813704299438b6ae2be1301e34788d8b75d69041cc
+ast_sha256: 8efe280648ce98c0adfdee2f632f5fbac595f10d0a8e355d6eb32e202e53b548
+token_sha256: a3dac21086e9b5cf0cc382a001946434e16299cf8af411fdcb715736bc255ea3
 pre_relocation_lines: 4484
 recorded_by: WP-A17 SWEEP-4 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
@@ -16,6 +16,7 @@ re_recorded: 2026-09-14 -- Wave-5 item D (CI run 34914295323): DIGEST-SCHEME cha
 re_recorded: 2026-09-14 -- WP-B11c: _fit_normaliser and _multi_indices_total_degree move to the _lens_kernels leaf and lenses_maslov reads all four of the back-edge's names there, closing the last module-level 2-cycle in the lens family; lenses re-exports both.  Bit-identical (45/45 archive-to-archive hashes, both builds).
 re_recorded: 2026-09-15 -- 5.47.0 CI hardening: the input-NA sizing arithmetic extracted into _measured_input_na (one implementation) so the chart-sizing gate compares the driver's own float
 re_recorded: 2026-09-15 -- merge of verify/wp-b11c into wave5/audit-leftovers: the WP-B11c moves and the Wave-5 item D digest-scheme change land in one tree (both sides' re_recorded lines kept)
+re_recorded: 2026-09-20 -- WP-C2 round 2 (VERIFY-WP-C2 D4): this module's exported internally-tracing entry point(s) take the tracer's own sphere_normal= / renormalize= keywords (default None, which stamps nothing) and forward them verbatim to the trace call, so the pre-WP-C2 arithmetic is one keyword away; 742/742 arrays byte-identical archive to archive on both builds
 -->
 
 # Version history -- `lumenairy/elements/lenses_maslov.py`

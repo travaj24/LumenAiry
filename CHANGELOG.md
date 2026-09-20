@@ -134,7 +134,13 @@ the literal is caught.
 
 **Migration.**  Pass `sphere_normal='generic'` to `trace` / `trace_world` for
 the pre-5.49.0 arithmetic; it is byte-identical to what 5.48.1 produced, pinned
-archive to archive.  Nothing else needs to change: no `alive` flag, error code
+archive to archive in a SECOND PROCESS against a read-only `git archive
+49ddf4bd`: **594 of 594 recorded arrays identical on both builds** -- five
+prescriptions (doublet, 7-surface stack, 13-surface ladder, a conic stack, a
+two-mirror stack) at two field angles under both `output_filter` modes, every
+history bundle, `x/y/z/L/M/N/opd/alive/code` -- with both old keywords forced.
+At the DEFAULTS the same set reads 172 of 594 identical, 422 moved, worst
+3.3e-16, so the identity is not a switch that reaches nothing.  Nothing else needs to change: no `alive` flag, error code
 or vignetting count moves on any shipped prescription, and the answers that do
 move, move by at most 1.8e-11 absolute and 3.4e-13 relative.  Two things are
 worth knowing.  First, the RIM BAND: between `0.99995 |R|` and the domain
@@ -164,7 +170,7 @@ JAX tracer uses a closed-form normal ALWAYS and has no switch.  Every measured n
 `docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/WP-C2_ANALYTIC_NORMAL_REPORT.md`
 and `validation/probe_c2_analytic_normal/`.
 
-### Changed -- raytrace (WP-C2): `trace(renormalize='exit')` is the DEFAULT -- one rescale instead of N, on a structural argument, because the speed-up WP-B9 reported does not reproduce
+### Changed -- raytrace (WP-C2): `trace(renormalize='exit')` is the DEFAULT -- one rescale instead of N, worth 0.99x to 1.02x by a deterministic count, and it costs no measurable accuracy
 
 `trace` and `trace_world` now rescale the direction cosines to unit length
 ONCE, on the bundle that leaves the last surface, instead of after every
@@ -178,17 +184,67 @@ differential path call them with no trace loop around them to run the single
 exit-plane pass, so per-surface rescaling is the only setting under which those
 callers own a unit direction at all.
 
-**The speed-up does not reproduce, and the default moved anyway.**  WP-B9
-reported 1.03x to 1.10x.  WP-C2 measured **0.95x to 1.13x over five
-prescriptions on two builds, medians 1.00x (Windows) and 0.99x (WSL)** -- i.e.
-no measurable effect, on a box whose own resolution is about +-7 % (measured
-from the prescriptions the sibling `sphere_normal` switch cannot touch).  An
-effect of WP-B9's stated size is smaller than either measurement can resolve
-under this load, so it is neither confirmed nor refuted; it is simply not
-evidence.  The default moves on the structural argument the ledger's section
-1.3 records -- one rescale instead of N, with the per-surface fault diagnosis
-unmoved -- and this entry says plainly that the timing number behind it is not
-reproducible here.
+**The speed-up is not measurable by TIMING on this box, and it is exactly
+measurable by COUNTING.**  WP-B9 reported 1.03x to 1.10x.  WP-C2 measured
+0.95x to 1.13x over five prescriptions on two builds, medians 1.00x and 0.99x
+-- no effect that method can resolve on a box whose own resolution is about
++-7 %.  Three timing instruments were tried against this switch and all three
+moved under load: Windows' process clock ticks at 15.6 ms, which on a 3.5 ms
+body quantises at 0.9 % and read the 9.6 % rescale block as exactly ZERO; two
+wall-clock runs of the SAME two arms came out 9.6 % apart and then 5.7 % apart
+with the SIGN REVERSED, which cannot happen (`renormalize=True` does strictly
+more work), and the inversion reproduced on WSL; only cProfile shares were
+stable, and they are blind to code inlined in `_refract`.
+
+A deterministic instrument settles it.  An `ndarray` subclass implementing
+BOTH `__array_ufunc__` and `__array_function__` counts every element-wise
+operation -- both protocols are needed, because `np.where` dispatches through
+`__array_function__` and without it returns a BASE array, after which
+everything downstream is invisible, which under-counts exactly the branch that
+uses `np.where` most and makes the census come out backwards.  The result is a
+COUNT, **identical on both builds to the last digit**:
+
+| prescription | surfaces | element-ops saved | predicted |
+|---|---|---|---|
+| two mirrors | 2 | **-8 192** | **0.9910x (a LOSS)** |
+| doublet | 3 | +8 192 | 1.0050x |
+| stack | 5 | +40 960 | 1.0147x |
+| stack | 7 | +73 728 | 1.0189x |
+| stack | 9 | +106 496 | 1.0212x |
+| ladder | 13 | +172 032 | **1.0237x** |
+
+and it reproduces the code exactly: at seven surfaces the delta is **+18
+divide, +6 maximum, -3 square, -2 add, -1 sqrt**, i.e.
+`n_refracting * (1 maximum + 3 in-place divides)` removed against one
+`_normalize_directions` (3 squares + 2 adds + 1 sqrt + 1 maximum + 3 divides)
+added.  So the hoist BREAKS EVEN between two and three surfaces and is a small
+LOSS below that: **WP-B9's 1.03x-1.10x has a reachable floor and an
+unreachable ceiling**, and WP-C2's inability to see the effect is consistent
+with an effect of 0.5 %-2.4 %.  The profile share of the hoisted block agrees:
+0.47-2.35 % of `trace`'s tottime on Windows and 0.02-1.12 % on WSL.
+
+**And it costs no measurable accuracy.**  Against a 60-digit end-to-end
+`decimal` trace -- ray-sphere intersection, vector Snell with the outward
+sphere normal, vertex-plane transfer, `opd += n t`, fed exactly-unit axial rays
+(only an axial launch has an exactly-unit float64 direction) -- on three
+prescriptions, all four `(renormalize, sphere_normal)` combinations land within
+**5.2e-18 m** in position and **6.9e-17 m** in OPL of the truth, and which
+combination is CLOSEST flips with the prescription and with the build.  The
+structural worry is real and is now a number: the ray-sphere quadratic
+hard-codes `a = |d|**2 = 1` and the OPL leg is `n t` with `t` parametric, so a
+direction-norm drift is a FIRST-ORDER error in both.  Measured by injecting a
+drift nine decades above the noise and scaling back, on both builds:
+`d(position)/d(drift) = 1.786e-3 m` and `d(OPL)/d(drift) = 8.99e-4 m`, and
+LINEAR -- the coefficients from injections of 1e-12 and 1e-10 agree to 0.089 %
+and 0.40 %.  At the measured 13-surface history drift of 1.67e-15 that is an
+induced error of **3.0e-18 m** in position and **1.5e-18 m** in OPL, i.e. AT
+the trace's own distance from the truth rather than above it.
+
+The default therefore moves on three measured grounds rather than on the
+structural argument alone: the accounting is positive from three surfaces up,
+the accuracy cost is below the trace's own floor, and the contract it changes
+is documented below.  Section 1.3 of the maintainer ledger records the
+decision.
 
 **What moves.**  The surviving drift enters the next surface's ray-sphere
 quadratic, which assumes `a = |d|**2 = 1`.  Measured on a ladder of 3, 5, 7, 9,

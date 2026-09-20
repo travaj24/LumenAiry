@@ -741,3 +741,162 @@ every test three orders of magnitude inside the 60 s budget.
 4. **Cross-build identity.**  Deliberately not claimed anywhere: every byte
    identity comparison is archive-to-archive on the SAME build, and every bar
    in the restated pins is derived on the running build.
+
+
+---
+
+# Round 2 (VERIFY-WP-C2) -- 2026-09-20
+
+The twelve defects, the tautology and the release-text follow-ups from
+[`VERIFY_WP-C2.md`](VERIFY_WP-C2.md) (verdict SHIP after D11, D1, D3, D4, D7
+and D12 are actioned and D2, D5, D6, D8, D9, D10 are filed), closed on
+`feat/c2-analytic-normal-round2` off `verify/c2-analytic-normal` (`61ffe596`).
+
+Everything below was **re-measured in this round**, never read off the
+verification.  Both builds every time, with
+`OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1` on the command
+line and `lumenairy.__file__` printed by every probe: **Windows py3.14.6 /
+numpy 2.4.4 / jax 0.11.0** and **WSL py3.12.3 / numpy 2.4.6 / jax 0.10.2**.
+The PRE tree is this round's own `git archive 49ddf4bd` extracted to
+`C:/tmp/lum_c2b_pre`, and every archive comparison runs each side in its own
+process with its own `sys.path`.  New evidence:
+`validation/probe_c2_round2/` (six probes, JSON per build).
+
+## Closure table
+
+| defect | verdict | this round's numbers (Windows / WSL) |
+|---|---|---|
+| **D4** (P2) sixteen entry points with no way back | **CLOSED** | all sixteen take `sphere_normal=` / `renormalize=`, default `None`; **742 / 742 arrays byte-identical** archive to archive on BOTH builds, with **16 of 16** entry points shown to move at the default and `None` byte-identical to omitted on all 742 |
+| **D11** (P1) four private docstrings say the generic route ships | **CLOSED** | all four rewritten; the new census test FAILS on a `git archive eadc67ba` tree naming **4 of 4** stale sentences, on both builds, and passes here |
+| **D1** (P2) the oracle's input conversion is not exact | **CLOSED** | `Decimal(float(x))`, prec 60 -> 80; closed form **1.50 ULP** to `0.95 |R|` against the generic route's **1.75** (was 1.75 / 2.00-2.25), whole set **45.86 vs 91.49** (was 57.47 / 76.30), **0 of 672** worse by > 1 there; prec 80 == prec 120 on every summary field |
+| **D12** (P2) the release text's byte-identity counts | **CLOSED** | 934 of 1008 (Win, 74 move) / 935 (WSL, 73 move), derived from the committed JSON by a test; the stale "938" / "the 70" are refused by name |
+| **D7** (P2) `EDITED_IN_PLACE` accepts a reverted default | **CLOSED** | each entry pins a SHA-256 of the expected content and the release it was recorded for; the three abuses are now REFUSED with both lines printed, the two it already refused still are, and the map refuses one patch past its release |
+| **D2** (P2) `kappa` is drawn from a random direction | **CLOSED** | `kappa` is the true induced `inf <- 2` norm of the field's Jacobian: **2.9059e+07**, identical to five digits on both builds and both fixtures, **4.65x** the shipped seed's draw; bar 100x -> **10x** the floor; eight readings 1.57-1.93 floors, margins **5.2x-6.4x**; the bar is now bracketed above AND below |
+| **D3** (P3) "about 0.6 n eps" | **CLOSED** | the ratio runs **1.000 at 3 surfaces to 0.615 at 13**; `1e-15` first exceeded at the **SEVENTH** (1.22e-15 against 8.88e-16 at five), not the eighth |
+| **D5** (P3) `analysis.ghost` refracts off a different normal | **CLOSED** | the ghost leg asks `_library_trace_default('sphere_normal')`; RMS spot radius moves **9.663e-13 mm / 5.400e-13 mm**, transmittance and ray counts unmoved; a spy sees `analytic_sphere=True` from ghost AND from `trace` |
+| **D8** (P3) the d3 arm-2 floor's spread | **CLOSED** | floors over four one-ULP directions spread **3.22x / 4.79x** (arm 2) and **2.07x / 26.99x** (arm 1); both arms now bar against the MAX, margins 4.69x / 8.59x and 65.3x / 74.4x; arm 2 gains its lower half (the same degree twice reads **exactly 0.0**) |
+| **D9** (P3) the Migration note's rim paragraph | **CLOSED** | the two gates bisect to the SAME float `0.9999499987499374` at all eight radii on the meridian, both builds; a ball lens or hemisphere loses **3024 of 60 000** rim-packed rays (5.04 %) to `RAY_NAN` on BOTH routes |
+| **D6** (P3) JAX has no domain clamp | **CLOSED as a DECISION** | ledger section 1.10; 1962 of 40 000 rays past the clamp, CPU keeps **0** under all four settings, JAX keeps **1962**, identical on both builds; no clamp is added to JAX |
+| **D10** (P3) the new ids are not in `.test_durations` | **CLOSED** | see "The recorded items" |
+| the `w6_a2` tautology | **CLOSED** | `norm_offset <= 2 * bound` reads **0.99991 / 0.7159** of its own theorem and is retired; the replacement is that a SECOND Newton step is **1.94e-07 / 8.77e-08** of the first, against a 1e-4 bar |
+
+## D4 -- the way back through all sixteen, archive to archive
+
+The design is the one WP-C1 used for `evaluate(aperture_edge=)`: each entry
+point takes the tracer's OWN two keywords, same names and same accepted
+values, defaulting to `None`, and `trace._way_back_kwargs` turns `None` into
+"do not name it at all".  An entry point that defaulted to today's `'exit'` /
+`'analytic'` would freeze this release's default into every call site the day
+the library's default moves again, which is the failure the campaign rule
+exists to prevent.
+
+`validation/probe_c2_round2/r2_wayback_entrypoints.py` runs each tree in its
+own process with `lumenairy.__file__` asserted inside it, digests every
+returned array with SHA-256 over dtype + shape + raw bytes, and compares four
+arms: the PRE tree with no keyword, this tree with
+`renormalize='surface', sphere_normal='generic'`, this tree at the defaults,
+and this tree with both keywords `None`.
+
+| entry point | module | way back (identical / total) | arrays that move at the default | `None` == omitted |
+|---|---|---|---|---|
+| `trace_prescription` | `raytrace.trace` | 36 / 36 | 24 | 36 / 36 |
+| `raytrace_system` | `raytrace.trace` | 45 / 45 | 29 | 45 / 45 |
+| `ray_fan_data` | `raytrace.ray_fan` | 4 / 4 | 2 | 4 / 4 |
+| `ray_fan_data_world` | `raytrace.ray_fan` | 4 / 4 | 2 | 4 / 4 |
+| `opd_fan_data` | `raytrace.ray_fan` | 4 / 4 | 2 | 4 / 4 |
+| `opd_fan_data_world` | `raytrace.ray_fan` | 4 / 4 | 2 | 4 / 4 |
+| `through_focus_rms` | `raytrace.ray_fan` | 3 / 3 | 1 | 3 / 3 |
+| `paraxial_focus_world` | `raytrace.world` | 2 / 2 | 1 | 2 / 2 |
+| `ray_transfer_jacobian` | `raytrace.differential` | 7 / 7 | 6 | 7 / 7 |
+| `caustic_diagnostic` | `analysis.aberration` | 8 / 8 | 2 | 8 / 8 |
+| `eval_image_plane_wfe` | `analysis.image_plane_wfe` | 12 / 12 | 1 | 12 / 12 |
+| `plot_lens_layout` | `analysis.plotting` | 18 / 18 | 9 (7 on WSL) | 18 / 18 |
+| `fit_canonical_polynomials` | `propagators.asymptotic_canonical_fit` | 298 / 298 | 8 (6 on WSL) | 298 / 298 |
+| `fit_hf_polynomials` | `propagators.asymptotic_canonical_fit` | 295 / 295 | 5 (3 on WSL) | 295 / 295 |
+| `apply_real_lens_traced` | `elements` | 1 / 1 | 1 | 1 / 1 |
+| `apply_real_lens_maslov` | `elements` | 1 / 1 | 1 | 1 / 1 |
+| **total** | | **742 / 742** | **16 of 16 entry points move** | **742 / 742** |
+
+Identical on Windows and WSL.  The middle column is what makes the first one
+mean something: every one of the sixteen really does produce different bytes
+at the shipped defaults, so a 742/742 way back cannot be a keyword that
+reaches nothing.
+
+`spot_rms`, `spot_geo_radius` and `refocus` take no keyword because they do
+not trace -- they consume a `TraceResult`, and their answers move only because
+their input does.  The five JAX entry points take none because `trace_jax` has
+neither switch by design.
+
+**The census that keeps it true.**
+`test_c2_every_entry_point_that_traces_carries_both_keywords` walks the
+package's AST (a bare NAME counts as well as a call -- `ray_fan_data` PASSES
+`trace` to `_trace_fan_set` rather than calling it -- and an ATTRIBUTE call
+counts too), finds 20 exported directly-tracing functions, and requires the
+four that lack a keyword to be EXACTLY the jax twins.  Its fail-before arm
+reads a mutant whose `ray_fan_data` signature has lost `sphere_normal` while
+its body still mentions it -- the shape a grep census misses -- and a real
+mutant tree confirms it: on a fresh `git archive` of the round-2 tree with
+that one edit, the two census arms and VERIFY-WP-C2's own are **3 failed** on
+BOTH builds.
+
+## D2 -- the conditioning bar, and why the margin got smaller
+
+`kappa` was measured along one random direction in coefficient space, and
+`kappa` is directional: `default_rng(20260920)` reads 6.2427e+06 and
+`default_rng(7770001)` 1.6406e+06 on the same fixture and build.  It is now
+the full finite-difference Jacobian of the field in the fit's 70 phase
+coefficients, reduced to the induced `inf <- 2` operator norm -- for a complex
+field and a real perturbation, the largest singular value of
+`[Re J_row; Im J_row]` maximised over rows, computed in closed form for all
+1024 pixels and confirmed by an SVD of the winning row.
+
+| quantity | Windows | WSL |
+|---|---|---|
+| `kappa`, true worst case over directions | **2.9059e+07** | **2.9059e+07** |
+| `kappa` along the shipped random direction | 6.2427e+06 | 6.2427e+06 |
+| response along the attaining direction, deltas 1e-12 / 1e-11 / 1e-10 | 2.9062e+07 / 2.9059e+07 / 2.9059e+07 | same |
+| floor `eps * kappa` | 6.4527e-09 | 6.4527e-09 |
+| reading, shipped defaults | 1.042e-08 (**1.62 floors**) | 1.015e-08 (**1.57 floors**) |
+
+With the correct `kappa` the two implementations sit essentially AT the floor,
+so the 100x bar would have been a 62x margin -- a ceiling a fiftyfold
+degradation would pass.  The bar is now **10x** the floor, and it is
+BRACKETED: one injected drift two decades above it must be refused (reads
+100.0x-100.1x the bar on all eight combinations) and a second a decade below
+it must be accepted.  All eight combinations pass with margins 5.2x-6.4x
+(section 1.3's table, re-run).
+
+## D5 -- the ghost leg, and why it asks rather than names
+
+`retrace_ghost_path` resolves the route once per call through the new
+`raytrace.trace._library_trace_default('sphere_normal')` and passes it to both
+`_reflect` and `_refract`.  It asks the LIBRARY rather than writing
+`'analytic'` down, because a literal there would pin this release's default
+into the ghost path for every release after it.  `renormalize` stays at the
+private `True`: the ghost loop has no exit pass to hoist a single rescale to.
+
+| quantity, three 2-bounce paths of a spherical doublet, 256 rays | Windows | WSL |
+|---|---|---|
+| RMS spot radius, worst change | 9.663e-13 mm | 5.400e-13 mm |
+| FWHM, worst change | 0.0 | 2.842e-14 mm |
+| total transmittance / energy fraction | unmoved | unmoved |
+| `analytic_sphere` seen by a spy, ghost vs `trace` | `{True}` vs `{True}` | same |
+
+At the refraction step itself the route the ghost leg asks for and `trace`'s
+default are byte-identical, and the generic route on the same bundle is not --
+so the identity is not vacuous.
+
+## What could not be measured
+
+1. **The 368-file blast radius was not re-run.**  It cost the WP-C2 agent
+   about seven hours across seven shards.  What was re-run is in "The runs"
+   below.
+2. **A clean absolute timing number**, unchanged from the work package's own
+   answer.  The element-op count replaces it for both switches, but it is a
+   COUNT with a stated first-order cost model, not a time.
+3. **`mpmath` on WSL**, unchanged: the 60-digit cross-check of the `w6_a2`
+   Newton step is a Windows-only reading.
+4. **The 1008-array byte-identity census was not re-run.**  D12 makes the
+   release text quote the committed JSON rather than a retyped number, and the
+   742-array sixteen-entry-point census supersedes its conclusion, but the
+   1008 counts themselves are still the WP-C2 measurement.

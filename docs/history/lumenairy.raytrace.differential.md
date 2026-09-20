@@ -1,7 +1,7 @@
 <!-- lumenairy-history-doc
 module: lumenairy/raytrace/differential.py
-ast_sha256: f272449de482a26222bebaaf938fa2fbb2386064ca49080dd1211733e17f7334
-token_sha256: 89d9757e32c39257684241f20770fde85ae0a599b62ac7ec9027b401b25f61a5
+ast_sha256: 1099b9e4bf3db5149f5fa11aea5f785dc2dfb7684e3089e3b980ca643d14cfb7
+token_sha256: 0b2996d75f6a4c290febdfed4e4936b9fb0085f1015a2781448a3a76603bd2ce
 pre_relocation_lines: 1078
 recorded_by: WP-A17 SWEEP-3 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
@@ -10,6 +10,7 @@ re_recorded: 2026-09-14 -- WP-B12: ray_transfer_jacobian / _analytic take refere
 re_recorded: 2026-09-15 -- WAVE5-E: _project_to_exit_vertex_plane freezes DEAD rays instead of projecting them (VERIFY-WP-B12 O-1); alive rows bit-identical
 re_recorded: 2026-09-15 -- WAVE5-E round 2: the freeze keys on REACHED THE SURFACE (reached_surface=), not on the FD backend's conflated base&companion alive -- a companion-dead but base-alive ray did reach the vertex plane and at_exit_vertex projects it
 re_recorded: 2026-09-15 -- merge of verify/wp-b12 into wave5/audit-leftovers: the WP-B12 projection helper's digest was recorded under the pre-item-D token scheme; the module source is unchanged by the merge and ast_sha256 is unchanged (token-only drift = the f-string digest-scheme change)
+re_recorded: 2026-09-20 -- WP-C2 round 2 (VERIFY-WP-C2 D4): this module's exported internally-tracing entry point(s) take the tracer's own sphere_normal= / renormalize= keywords (default None, which stamps nothing) and forward them verbatim to the trace call, so the pre-WP-C2 arithmetic is one keyword away; 742/742 arrays byte-identical archive to archive on both builds
 -->
 
 
