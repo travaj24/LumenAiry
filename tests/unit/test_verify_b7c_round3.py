@@ -3,9 +3,9 @@
 `fixes/VERIFY_WP-B7c_ROUND3.md` re-measured WP-B7c round 3 -- the bar's
 derivation, the fold ring's two fidelity populations, the half-pitch lattice,
 the fallback route's scope and the bit identity -- on an independent
-population of twelve (prescription, grid) pairs over eight prescriptions, four
+population of sixteen (prescription, grid) pairs over nine prescriptions, four
 of which no round of this campaign has used, scored against an independently
-written full-radius oracle.  Most of what round 3 reports reproduces.  This
+written full-radius oracle (1141 planes).  Most of what round 3 reports reproduces.  This
 file is the gate for the five things that did not have one.
 
 * **an unnamed SCOPE must be refused with a diagnosable error.**  Round 3
