@@ -1,0 +1,153 @@
+{
+ "tree": "C:\\tmp\\vc3_base",
+ "lumenairy": "C:\\tmp\\vc3_base\\lumenairy\\__init__.py",
+ "python": "3.14.6",
+ "numpy": "2.4.4",
+ "default_transport": "sziklas",
+ "rows": [
+  {
+   "N": 512,
+   "dx_um": 20.0,
+   "w_mm": 2.0,
+   "final_distance": 0.005,
+   "outcome": "returned",
+   "peak": 3.189160717799543,
+   "route": null,
+   "route_k1": null,
+   "reason": null,
+   "carrier_warnings": []
+  },
+  {
+   "N": 512,
+   "dx_um": 20.0,
+   "w_mm": 2.0,
+   "final_distance": 0.008,
+   "outcome": "returned",
+   "peak": 4.1404473803895385,
+   "route": null,
+   "route_k1": null,
+   "reason": null,
+   "carrier_warnings": []
+  },
+  {
+   "N": 512,
+   "dx_um": 20.0,
+   "w_mm": 2.0,
+   "final_distance": 0.02,
+   "outcome": "returned",
+   "peak": 9.354442623203346,
+   "route": null,
+   "route_k1": null,
+   "reason": null,
+   "carrier_warnings": []
+  },
+  {
+   "N": 256,
+   "dx_um": 20.0,
+   "w_mm": 2.0,
+   "final_distance": 0.005,
+   "outcome": "returned",
+   "peak": 3.184859900476199,
+   "route": null,
+   "route_k1": null,
+   "reason": null,
+   "carrier_warnings": []
+  },
+  {
+   "N": 256,
+   "dx_um": 20.0,
+   "w_mm": 2.0,
+   "final_distance": 0.008,
+   "outcome": "returned",
+   "peak": 4.092799916868213,
+   "route": null,
+   "route_k1": null,
+   "reason": null,
+   "carrier_warnings": []
+  },
+  {
+   "N": 256,
+   "dx_um": 20.0,
+   "w_mm": 2.0,
+   "final_distance": 0.02,
+   "outcome": "returned",
+   "peak": 9.347355682708162,
+   "route": null,
+   "route_k1": null,
+   "reason": null,
+   "carrier_warnings": []
+  },
+  {
+   "N": 512,
+   "dx_um": 20.0,
+   "w_mm": 3.0,
+   "final_distance": 0.005,
+   "outcome": "returned",
+   "peak": 3.2791451349982412,
+   "route": null,
+   "route_k1": null,
+   "reason": null,
+   "carrier_warnings": []
+  },
+  {
+   "N": 512,
+   "dx_um": 20.0,
+   "w_mm": 3.0,
+   "final_distance": 0.008,
+   "outcome": "returned",
+   "peak": 4.189978617886548,
+   "route": null,
+   "route_k1": null,
+   "reason": null,
+   "carrier_warnings": []
+  },
+  {
+   "N": 512,
+   "dx_um": 20.0,
+   "w_mm": 3.0,
+   "final_distance": 0.02,
+   "outcome": "returned",
+   "peak": 9.858808999567724,
+   "route": null,
+   "route_k1": null,
+   "reason": null,
+   "carrier_warnings": []
+  },
+  {
+   "N": 1024,
+   "dx_um": 10.0,
+   "w_mm": 2.0,
+   "final_distance": 0.005,
+   "outcome": "returned",
+   "peak": 1.6313732530649612,
+   "route": null,
+   "route_k1": null,
+   "reason": null,
+   "carrier_warnings": []
+  },
+  {
+   "N": 1024,
+   "dx_um": 10.0,
+   "w_mm": 2.0,
+   "final_distance": 0.008,
+   "outcome": "returned",
+   "peak": 1.8983122687452159,
+   "route": null,
+   "route_k1": null,
+   "reason": null,
+   "carrier_warnings": []
+  },
+  {
+   "N": 1024,
+   "dx_um": 10.0,
+   "w_mm": 2.0,
+   "final_distance": 0.02,
+   "outcome": "returned",
+   "peak": 3.7497864954419704,
+   "route": null,
+   "route_k1": null,
+   "reason": null,
+   "carrier_warnings": []
+  }
+ ]
+}

@@ -1,0 +1,142 @@
+{
+ "tree": "C:\\tmp\\lum_vc3",
+ "lumenairy": "C:\\tmp\\lum_vc3\\lumenairy\\__init__.py",
+ "python": "3.14.6",
+ "numpy": "2.4.4",
+ "default_transport": "collins",
+ "rows": [
+  {
+   "N": 512,
+   "dx_um": 20.0,
+   "w_mm": 2.0,
+   "final_distance": 0.005,
+   "outcome": "raised",
+   "exc": "RuntimeError",
+   "msg": "carrier_referenced_focus_readout: the beam does not fit the co-moving grid at the stop plane.  The grid half-width there is 4447.8151 um against a measured amplitude radius of 5130.7213 um -- a containment of 0.867 beam radii and 0.868 against the beam's own Gaussian ABCD width there (5126.751 um --",
+   "where": "_guard_dispose",
+   "carrier_warnings": []
+  },
+  {
+   "N": 512,
+   "dx_um": 20.0,
+   "w_mm": 2.0,
+   "final_distance": 0.008,
+   "outcome": "raised",
+   "exc": "RuntimeError",
+   "msg": "carrier_referenced_focus_readout: the beam does not fit the co-moving grid at the stop plane.  The grid half-width there is 4334.5987 um against a measured amplitude radius of 4897.1777 um -- a containment of 0.885 beam radii and 0.886 against the beam's own Gaussian ABCD width there (4890.446 um --",
+   "where": "_guard_dispose",
+   "carrier_warnings": []
+  },
+  {
+   "N": 512,
+   "dx_um": 20.0,
+   "w_mm": 2.0,
+   "final_distance": 0.02,
+   "outcome": "raised",
+   "exc": "RuntimeError",
+   "msg": "carrier_referenced_focus_readout: the beam does not fit the co-moving grid at the stop plane.  The grid half-width there is 3884.6629 um against a measured amplitude radius of 3962.5548 um -- a containment of 0.980 beam radii and 0.985 against the beam's own Gaussian ABCD width there (3945.226 um --",
+   "where": "_guard_dispose",
+   "carrier_warnings": []
+  },
+  {
+   "N": 256,
+   "dx_um": 20.0,
+   "w_mm": 2.0,
+   "final_distance": 0.005,
+   "outcome": "returned",
+   "peak": 0.9885467426299276,
+   "route": "sziklas",
+   "route_k1": 17.63145051011972,
+   "reason": "k1",
+   "carrier_warnings": []
+  },
+  {
+   "N": 256,
+   "dx_um": 20.0,
+   "w_mm": 2.0,
+   "final_distance": 0.008,
+   "outcome": "raised",
+   "exc": "RuntimeError",
+   "msg": "carrier_referenced_focus_readout: the beam does not fit the co-moving grid at the stop plane.  The grid half-width there is 2641.8113 um against a measured amplitude radius of 2650.4215 um -- a containment of 0.997 beam radii and 0.996 against the beam's own Gaussian ABCD width there (2652.040 um --",
+   "where": "_guard_dispose",
+   "carrier_warnings": []
+  },
+  {
+   "N": 256,
+   "dx_um": 20.0,
+   "w_mm": 2.0,
+   "final_distance": 0.02,
+   "outcome": "raised",
+   "exc": "RuntimeError",
+   "msg": "carrier_referenced_focus_readout: the beam does not fit the co-moving grid at the stop plane.  The grid half-width there is 2321.1661 um against a measured amplitude radius of 2486.6039 um -- a containment of 0.933 beam radii and 0.929 against the beam's own Gaussian ABCD width there (2497.804 um --",
+   "where": "_guard_dispose",
+   "carrier_warnings": []
+  },
+  {
+   "N": 512,
+   "dx_um": 20.0,
+   "w_mm": 3.0,
+   "final_distance": 0.005,
+   "outcome": "raised",
+   "exc": "RuntimeError",
+   "msg": "carrier_referenced_focus_readout: the beam does not fit the co-moving grid at the stop plane.  The grid half-width there is 4676.9691 um against a measured amplitude radius of 5473.1597 um -- a containment of 0.855 beam radii and 0.854 against the beam's own Gaussian ABCD width there (5475.963 um --",
+   "where": "_guard_dispose",
+   "carrier_warnings": []
+  },
+  {
+   "N": 512,
+   "dx_um": 20.0,
+   "w_mm": 3.0,
+   "final_distance": 0.008,
+   "outcome": "raised",
+   "exc": "RuntimeError",
+   "msg": "carrier_referenced_focus_readout: the beam does not fit the co-moving grid at the stop plane.  The grid half-width there is 4556.3359 um against a measured amplitude radius of 5291.7417 um -- a containment of 0.861 beam radii and 0.860 against the beam's own Gaussian ABCD width there (5296.506 um --",
+   "where": "_guard_dispose",
+   "carrier_warnings": []
+  },
+  {
+   "N": 512,
+   "dx_um": 20.0,
+   "w_mm": 3.0,
+   "final_distance": 0.02,
+   "outcome": "raised",
+   "exc": "RuntimeError",
+   "msg": "carrier_referenced_focus_readout: the beam does not fit the co-moving grid at the stop plane.  The grid half-width there is 4074.7312 um against a measured amplitude radius of 4573.3738 um -- a containment of 0.891 beam radii and 0.890 against the beam's own Gaussian ABCD width there (4578.678 um --",
+   "where": "_guard_dispose",
+   "carrier_warnings": []
+  },
+  {
+   "N": 1024,
+   "dx_um": 10.0,
+   "w_mm": 2.0,
+   "final_distance": 0.005,
+   "outcome": "raised",
+   "exc": "RuntimeError",
+   "msg": "carrier_referenced_focus_readout: the beam does not fit the co-moving grid at the stop plane.  The grid half-width there is 4917.9874 um against a measured amplitude radius of 5639.8071 um -- a containment of 0.872 beam radii and 0.871 against the beam's own Gaussian ABCD width there (5646.250 um --",
+   "where": "_guard_dispose",
+   "carrier_warnings": []
+  },
+  {
+   "N": 1024,
+   "dx_um": 10.0,
+   "w_mm": 2.0,
+   "final_distance": 0.008,
+   "outcome": "raised",
+   "exc": "RuntimeError",
+   "msg": "carrier_referenced_focus_readout: the beam does not fit the co-moving grid at the stop plane.  The grid half-width there is 4787.0193 um against a measured amplitude radius of 5489.2782 um -- a containment of 0.872 beam radii and 0.870 against the beam's own Gaussian ABCD width there (5504.996 um --",
+   "where": "_guard_dispose",
+   "carrier_warnings": []
+  },
+  {
+   "N": 1024,
+   "dx_um": 10.0,
+   "w_mm": 2.0,
+   "final_distance": 0.02,
+   "outcome": "raised",
+   "exc": "RuntimeError",
+   "msg": "carrier_referenced_focus_readout: the beam does not fit the co-moving grid at the stop plane.  The grid half-width there is 4283.2066 um against a measured amplitude radius of 4882.3015 um -- a containment of 0.877 beam radii and 0.867 against the beam's own Gaussian ABCD width there (4939.981 um --",
+   "where": "_guard_dispose",
+   "carrier_warnings": []
+  }
+ ]
+}

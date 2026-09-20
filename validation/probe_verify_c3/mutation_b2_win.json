@@ -1,0 +1,10 @@
+{
+ "B2_collins_leg_demotes_to_host_numpy": {
+  "failed": [
+   "tests/unit/test_c3_collins_default.py::test_a_device_array_reaches_the_device_transform",
+   "tests/unit/test_c3_collins_default.py::test_no_collins_helper_demotes_the_field_to_host_numpy"
+  ],
+  "tail": "2 failed, 24 passed in 17.19s",
+  "rc": 1
+ }
+}

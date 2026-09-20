@@ -383,6 +383,40 @@ class TestOpenDefectsFiledByVerifyWpC3:
             'readout that has it nor was refused')
 
     @pytest.mark.xfail(strict=True, reason=(
+        'VERIFY_WP-C3 defect D5 (SHIP BLOCKER): the CHANGELOG Migration '
+        'paragraph says "No public call that worked on 5.48.1 raises on '
+        '5.49.0, with ONE exception, and it is a JAX one".  MEASURED on both '
+        'builds, on an ORDINARY two-group relay (collimated launch, two BK7 '
+        'biconvex singlets, a plain focus_readout, no stop-plane keys, no '
+        'tilt): 12 of 12 configurations RETURN at 49ddf4bd and 11 of 12 '
+        'raise RuntimeError on the flipped default, from the Sziklas '
+        'readout\'s containment guard, because the moved gap legs change the '
+        'chain\'s exit lattice.  Requested fix: replace the blanket sentence '
+        'with the measured one and name the way back (transport="sziklas").'))
+    def test_no_ordinary_chain_that_returned_on_the_old_default_now_raises(
+            self):
+        from tests.unit.test_audit2609_b4_collins_transport import (
+            _CHAIN_TKW, _singlet)
+        p = _singlet(120e-3, -120e-3, 6e-3, 'N-BK7', 25.4e-3)
+        groups = [{'prescription': p, 'gap_before': 20e-3},
+                  {'prescription': p, 'gap_before': 15e-3}]
+        n, dx, w = 512, 20e-6, 2.0e-3
+        kw = dict(r_in=np.inf, ray_subsample=16, n_workers=1,
+                  traced_kwargs=_CHAIN_TKW, final_leg='paraxial',
+                  final_distance=8e-3,
+                  focus_readout=dict(dx_out=0.5e-6, N_out=64))
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            # the pre-flip arithmetic still returns -- so this is a property
+            # of the DEFAULT, not of the fixture
+            ref = C.propagate_traced_carrier_chain(
+                _gauss(n, dx, w), groups, LAM, dx, transport='sziklas', **kw)
+            assert np.all(np.isfinite(ref.field))
+            got = C.propagate_traced_carrier_chain(
+                _gauss(n, dx, w), groups, LAM, dx, **kw)
+        assert np.all(np.isfinite(got.field))
+
+    @pytest.mark.xfail(strict=True, reason=(
         'VERIFY_WP-C3 defect D1: propagate_traced_carrier_chain\'s own '
         'transport docstring still tells callers the stop-plane keys are '
         '"refused, not ignored" on transport="collins", which this same '

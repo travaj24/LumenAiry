@@ -46,6 +46,10 @@ ARMS = {
          "                    env, R, gap, wavelength, cur_dx, gap_kernel=gap_kernel,\n"
          "                    tilt=_leg_tilt)", 1),
     ],
+    'B2_collins_leg_demotes_to_host_numpy': [
+        ("    env_a = xp.asarray(env)\n    if z == 0:",
+         "    env_a = np.asarray(env)\n    if z == 0:", 1),
+    ],
     # ---- MY OWN arms --------------------------------------------------
     'V1_readout_bar_2': [
         ("            if not (_ro_k1 <= 1.0):", "            if not (_ro_k1 <= 2.0):", 1),
