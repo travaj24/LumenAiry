@@ -203,17 +203,27 @@ and the file's own inline scalar one put the saddle in the same place to
 7.3e-18 (8.7e-17 of the pupil half-range) at all 1024 pixels, and the
 correlation between saddle disagreement and field disagreement is 0.06.  The
 disagreement is a DENSE field -- 996 to 1011 pixels above 1e-12 relative,
-median 2.1e-09 -- at the cancellation floor of the moment contraction.  An FD
-ladder over the fit's phase coefficients measures the field amplifying a
-relative input perturbation by `kappa = 6.24e+06`, flat to 0.3 % over four
-decades on both builds, so two independent float64 evaluations can agree no
-better than `eps * kappa = 1.39e-09`.  The two arms now measure `kappa`
-in-test, assert the ladder's linearity, set the bar at `100 * eps * kappa`, and
-inject a drift sized from the measured `kappa` to land two decades above the
-bar so the comparison demonstrates it still refuses a real one.  Eight readings
-(two builds x four `(renormalize, sphere_normal)` combinations) span 1.01e-08
-to 1.25e-08 against a 1.386e-07 bar: 11.1x margin at worst, and the bar tracks
-the build instead of carrying a number from a prior run.
+median 2.1e-09 -- at the cancellation floor of the moment contraction.  The
+full finite-difference Jacobian of the field in the fit's 70 phase coefficients
+measures the TRUE worst-case amplification of a relative input perturbation --
+the induced `inf <- 2` operator norm, maximised over every direction rather
+than sampled along one -- at **`kappa = 2.9059e+07`**, identical to five digits
+on both builds and both fixtures, with the response along the attaining
+direction linear to 1.0001 over three decades.  So two independent float64
+evaluations can agree no better than `eps * kappa = 6.4527e-09`.  The two arms
+measure `kappa` in-test, assert that linearity and that the finite-difference
+response reproduces the linearised worst case, set the bar at
+`10 * eps * kappa`, and BRACKET that bar with two injected drifts -- one two
+decades above it, which must be refused, and one a decade below it, which must
+be accepted -- so the bar is two-sided on the running build rather than a
+ceiling.  Eight readings (two builds x four `(renormalize, sphere_normal)`
+combinations) span 1.01e-08 to 1.25e-08, i.e. **1.57 to 1.93 times the
+floor**, against a 6.4524e-08 bar: margins 5.2x to 6.4x, and the bar tracks the
+build instead of carrying a number from a prior run.  (An earlier draft of this
+entry measured `kappa` along ONE RANDOM DIRECTION and read 6.24e+06; `kappa` is
+directional, and another seed reads 1.64e+06 on the same fixture, so that bar's
+strictness -- and the 11.1x margin it produced -- were properties of a seed
+rather than of the field.)
 
 `tests/unit/test_niche_audit_w6_asymptotic.py::test_w6_a2_v2_star_is_untouched_by_the_verdict_fix`
 -- the `1e-15` bar rested on a symmetry argument about the OPTIC, but the

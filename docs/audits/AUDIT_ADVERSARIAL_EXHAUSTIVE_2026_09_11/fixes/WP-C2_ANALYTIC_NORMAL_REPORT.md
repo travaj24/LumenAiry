@@ -28,8 +28,10 @@ derived on the running build.
    wrong, in both cases.**  Neither pin's quantity is bimodal and neither has
    a saddle-basin flip in it.  The ModalAsymptotic arms sit at the
    *cancellation floor* of a field whose conditioning this build can measure
-   (`kappa = 6.24e+06`, so `eps * kappa = 1.39e-09`, and the two routines read
-   7.3x to 9.0x it).  The `w6_a2` root is *genuinely off centre*: a 60-digit
+   (round 2: the TRUE worst case over directions is `kappa = 2.9059e+07`, so
+   `eps * kappa = 6.4527e-09`, and the two routines read **1.57x to 1.93x**
+   it -- essentially AT the floor.  The 6.24e+06 first published here was
+   drawn along one random direction; see D2 in section 1.2).  The `w6_a2` root is *genuinely off centre*: a 60-digit
    `decimal` Newton on the same polynomial system reproduces the library's
    answer to 4.5e-22, and the offset is `H^-1 r(v_c)` where `r(v_c)` is the
    least-squares fit's own asymmetry, resolved eight decades above its
@@ -97,9 +99,10 @@ coin".  The measurements are in `validation/probe_c2_analytic_normal/`.
 | correlation, saddle disagreement vs field disagreement | 0.063 | -0.003 |
 | pixels with field disagreement > 1e-12 relative (of 1024) | 996 | 1000 |
 | median / p99 / max field disagreement, relative | 2.1e-9 / 8.1e-9 / 1.03e-8 | 2.2e-9 / 8.7e-9 / 1.11e-8 |
-| FD conditioning `kappa` (4-point ladder, 1e-13..1e-10) | 6.2423e+06 .. 6.2639e+06 | 6.2423e+06 .. 6.2638e+06 |
-| `eps * kappa` | 1.3866e-09 | 1.3866e-09 |
-| reading / floor | 7.4x | 8.0x |
+| FD conditioning `kappa` ALONG ONE RANDOM DIRECTION (4-point ladder, 1e-13..1e-10; superseded -- see round 2) | 6.2423e+06 .. 6.2639e+06 | 6.2423e+06 .. 6.2638e+06 |
+| **`kappa`, TRUE worst case over directions (round 2)** | **2.9059e+07** | **2.9059e+07** |
+| `eps * kappa` (true) | 6.4527e-09 | 6.4527e-09 |
+| reading / floor (true) | **1.62x** | **1.57x** |
 
 The quantity is continuous and dense, not bimodal: the two implementations
 differ by a handful of roundings on a field that amplifies its own inputs by
@@ -128,14 +131,50 @@ bounded that asymmetry.
 
 ### 1.2 The restatements
 
-`tests/unit/test_audit_propagation.py` -- `_conditioning_bar` measures `kappa`
-with a 3-point FD ladder over the fit's phase coefficients, asserts the ladder
-is linear (so it is conditioning and not a threshold), asserts `kappa > 1e3`
-(the premise that makes `eps * kappa` the right bar at all), and sets
-`bar = 100 * eps * kappa`.  `_assert_at_conditioning_floor` asserts the reading
-is under the bar AND that an injected drift -- sized from the measured `kappa`
-to land two decades above it -- is still refused.  That is the fail-before
-demonstration, on the running build, in the test.
+`tests/unit/test_audit_propagation.py` -- `_conditioning_bar` measures
+`kappa` on the running build, asserts the response is linear (so it is
+conditioning and not a threshold), asserts `kappa > 1e3` (the premise that
+makes `eps * kappa` the right bar at all), and sets the bar from it.
+`_assert_at_conditioning_floor` asserts the reading is under the bar AND that
+an injected drift -- sized from the measured `kappa` to land two decades above
+it -- is still refused.  That is the fail-before demonstration, on the running
+build, in the test.
+
+**ROUND 2 (VERIFY-WP-C2 defect D2) replaced the sampled `kappa` with the true
+one.**  The first version drew ONE RANDOM DIRECTION in coefficient space, and
+`kappa` is directional: the shipped seed reads 6.2427e+06 and another
+1.6406e+06 on the same fixture and build, a 3.8x spread, so the bar's value --
+and the arm's strictness -- was a property of a seed.  `kappa` is now the full
+finite-difference Jacobian of the field in the fit's 70 phase coefficients,
+reduced to the induced `inf <- 2` operator norm (the largest per-pixel response
+to a unit-2-norm relative coefficient perturbation, maximised over ALL
+directions; for a complex field and a real perturbation that is the largest
+singular value of `[Re J_row; Im J_row]`, maximised over rows).  Measured
+**2.9059e+07, identical to five digits on both builds and both fixtures**, i.e.
+4.65x the shipped seed's draw, with the response along the attaining direction
+linear to 1.0001 over three decades.
+
+With the true `kappa` the two implementations sit essentially AT the floor --
+1.57 to 1.93 `eps * kappa` over the eight readings -- so the bar moved from
+100x the floor to **10x**: at 100x it would have been a 62x margin, a ceiling a
+fiftyfold degradation would pass.  And the bar is now bracketed on BOTH sides
+on the running build: one injected drift two decades above it must be refused,
+and a second a decade BELOW it must be accepted, so the arm is not satisfiable
+by a bar of infinity.
+
+| build / defaults | reading | floors | bar | margin |
+|---|---|---|---|---|
+| Win surface/generic | 1.0331e-08 | 1.60 | 6.4524e-08 | 6.2x |
+| Win surface/analytic | 1.2478e-08 | 1.93 | 6.4524e-08 | 5.2x |
+| Win exit/generic | 1.1015e-08 | 1.71 | 6.4524e-08 | 5.9x |
+| Win exit/analytic (shipped) | 1.0421e-08 | 1.62 | 6.4524e-08 | 6.2x |
+| WSL surface/generic | 1.1062e-08 | 1.71 | 6.4524e-08 | 5.8x |
+| WSL surface/analytic | 1.2433e-08 | 1.93 | 6.4524e-08 | 5.2x |
+| WSL exit/generic | 1.0789e-08 | 1.67 | 6.4524e-08 | 6.0x |
+| WSL exit/analytic (shipped) | 1.0146e-08 | 1.57 | 6.4524e-08 | 6.4x |
+
+All eight pass, and the injected drift reads 100.0x-100.1x the bar on every
+one of them.
 
 `tests/unit/test_niche_audit_w6_asymptotic.py` -- two decisions: the returned
 expansion point equals the model's own one-Newton-step root from the pupil
@@ -153,16 +192,24 @@ alongside and the premise that `r(v_c)` is resolved asserted separately).
 4 did (and clearing the `lru_cache`d, TRACED `w6._fit` between combinations --
 forgetting that silently reports the first combination's number four times).
 
-| build | combination | lg00 | 4-mode | w6_a2 | reading | bar | margin |
-|---|---|---|---|---|---|---|---|
-| Windows | surface/generic | PASS | PASS | PASS | 1.0331e-08 | 1.3862e-07 | 13.4x |
-| Windows | surface/analytic | PASS | PASS | PASS | 1.2478e-08 | 1.3862e-07 | 11.1x |
-| Windows | exit/generic | PASS | PASS | PASS | 1.1015e-08 | 1.3862e-07 | 12.6x |
-| Windows | exit/analytic | PASS | PASS | PASS | 1.0421e-08 | 1.3862e-07 | 13.3x |
-| WSL | surface/generic | PASS | PASS | PASS | 1.1062e-08 | 1.3862e-07 | 12.5x |
-| WSL | surface/analytic | PASS | PASS | PASS | 1.2433e-08 | 1.3862e-07 | 11.1x |
-| WSL | exit/generic | PASS | PASS | PASS | 1.0789e-08 | 1.3862e-07 | 12.8x |
-| WSL | exit/analytic | PASS | PASS | PASS | 1.0146e-08 | 1.3862e-07 | 13.7x |
+Re-run in round 2 with the corrected `kappa` (D2).  The readings are
+unchanged -- they are properties of the library, not of the bar -- and the bar
+moved from `100 * eps * kappa_sampled = 1.3862e-07` to
+`10 * eps * kappa_true = 6.4524e-08`, so the margins are the honest ones:
+
+| build | combination | lg00 | 4-mode | w6_a2 | reading | floors | bar | margin |
+|---|---|---|---|---|---|---|---|---|
+| Windows | surface/generic | PASS | PASS | PASS | 1.0331e-08 | 1.60 | 6.4524e-08 | 6.2x |
+| Windows | surface/analytic | PASS | PASS | PASS | 1.2478e-08 | 1.93 | 6.4524e-08 | 5.2x |
+| Windows | exit/generic | PASS | PASS | PASS | 1.1015e-08 | 1.71 | 6.4524e-08 | 5.9x |
+| Windows | exit/analytic | PASS | PASS | PASS | 1.0421e-08 | 1.62 | 6.4524e-08 | 6.2x |
+| WSL | surface/generic | PASS | PASS | PASS | 1.1062e-08 | 1.71 | 6.4524e-08 | 5.8x |
+| WSL | surface/analytic | PASS | PASS | PASS | 1.2433e-08 | 1.93 | 6.4524e-08 | 5.2x |
+| WSL | exit/generic | PASS | PASS | PASS | 1.0789e-08 | 1.67 | 6.4524e-08 | 6.0x |
+| WSL | exit/analytic | PASS | PASS | PASS | 1.0146e-08 | 1.57 | 6.4524e-08 | 6.4x |
+
+The injected ABOVE-bar drift reads 100.0x-100.1x the bar on all eight, and the
+BELOW-bar drift round 2 added is accepted on all eight.
 
 Note the first row: at the SHIPPED defaults this box read 1.0331e-08, i.e. the
 pre-WP-B9 `1e-8` bar was already red here, independent of any default.  That is

@@ -75,11 +75,19 @@ def _margins(tp, fit, which):
         fit, src, pup, 50e-6, 0.02, S2X, S2Y)
     peak = float(np.max(np.abs(cold)))
     reading = float(np.max(np.abs(new - cold))) / peak
-    bar, kappa, probe, pdelta = inst._conditioning_bar(fit, kw, new, peak)
+    # WP-C2 round 2 (D2): ``_conditioning_bar`` returns a fifth value (the
+    # BELOW-bar probe) and its bar is 10x the floor, not 100x, because
+    # ``kappa`` is now the true worst case over directions rather than one
+    # random draw.
+    bar, kappa, probe, pdelta, probe_below = inst._conditioning_bar(
+        fit, kw, new, peak)
     injected = float(np.max(np.abs(probe - cold))) / peak
+    under = float(np.max(np.abs(probe_below - cold))) / peak
     return dict(reading=reading, bar=bar, kappa=kappa,
-                floor=bar / 100.0, margin=bar / reading,
+                floor=bar / 10.0, margin=bar / reading,
+                reading_over_floor=reading / (bar / 10.0),
                 injected=injected, injected_over_bar=injected / bar,
+                under=under, under_over_bar=under / bar,
                 probe_delta=pdelta)
 
 
