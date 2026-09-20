@@ -33,7 +33,7 @@ N_out=64)`), the chain's image-plane readout through each transport:
 | Kelly guard | silent | ONE `RuntimeWarning` (K1) | -- |
 
 A ratio of that size is not an accuracy difference; one of the two is wrong.
-**The true value is 1.2359**, and it is not this module's opinion: the same
+**The true value is 0.9234085** (ROUND 2: this paragraph read 1.2359, which no spelling of the free leg reproduces), and it is not this module's opinion: the same
 exit envelope carried the same 8 mm by the chain's own FREE leg -- where the
 complementary quadrature selection already existed, so BOTH transports return
 the same array to the bit -- reads on-axis `|env|^2` = 1.2359 with the power
@@ -73,7 +73,7 @@ runs on (the chain exit, `final_distance = 0`):
 | 1024 | 19.14 um | 6.774 mm | 34.228 mrad | **21.4557** |
 
 Identical on both builds to every printed digit.  It falls as `1/dx` (ratios
-1.987 and 1.932), so `N ~ 16000` would be needed to sample it.  The
+1.987 and 1.932), so `N ~ 32768` would be needed to sample it (ROUND 2 re-measurement; and only where the angular support is INSIDE the band -- where it is grid-clipped there is no such N).  The
 hand-derived reading and `_collins_readout_k1`'s own agree to the last digit
 at all three grids, which is what says the helper computes what this report
 says it computes.
@@ -116,13 +116,21 @@ module):
 | entry point | line |
 |---|---|
 | `propagate_carrier_referenced` | `carrier.py:1156` |
-| `propagate_traced_carrier_chain` | `carrier.py:9518` |
-| `propagate_traced_carrier_chain_multi` | `carrier.py:12275` |
+| `propagate_traced_carrier_chain` | `carrier.py:9775` |
+| `propagate_traced_carrier_chain_multi` | `carrier.py:12587` |
+| `carrier_referenced_focus_readout` | `carrier.py:4381` (ROUND 2) |
 
-`carrier_referenced_focus_readout` and
-`carrier_referenced_exact_focus_readout` do NOT take `transport` and do not
-move -- asserted as a measurement, not read off the signature.
-`final_leg='exact'` does not move on either setting (WP-B4 section 1.2).
+(The second and third lines read 9518 and 12275 when this section was
+written; they were already stale at that commit, and round 2 added the
+fourth.)
+
+`carrier_referenced_exact_focus_readout` does NOT take `transport` and does
+not move -- asserted as a measurement, not read off the signature.
+`carrier_referenced_focus_readout` DOES take one since round 2, and its
+default moves on 5 of 103 archive keys.  `final_leg='exact'`'s own leg runs
+no carrier transport; the chain's gap legs do, so the returned field moves
+wherever a gap leg moves (measured bit-identical on every fixture tried
+after the round-2 fix -- see the Round 2 section).
 
 ### 1.2 The readout's quadrature resolution
 
@@ -177,12 +185,17 @@ which is also what makes VERIFY-WP-B4 F2's "the legs that move are exactly
 those with `N dx^2 <= lambda |z_eff|`" literally true rather than nearly true.
 
 **What still has no fallback, and it is the honest boundary.**  `A == 0`
-exactly, and a leg whose output reference the transport resolves FLAT.  Those
-are precisely the legs the Sziklas transport could never evaluate: it
-re-references to `R_out = 0`, which `carrier_referenced_envelope` refuses, and
-it has no flat-reference form.  So "the legs with no complementary form are
-the legs the old transport could not do at all" is a statement about the
-selection, not a gap in it.
+exactly.  It is the leg the Sziklas transport could never evaluate: it
+re-references to `R_out = 0`, which `carrier_referenced_envelope` refuses.
+
+> **SUPERSEDED IN ROUND 2 (see the Round 2 section at the end).**  This
+> paragraph originally also excluded "a leg whose output reference the
+> transport resolves FLAT", on the same grounds.  That was WRONG and it was
+> the ship blocker: `flat` is ALSO resolved when the geometric reference's
+> space-bandwidth exceeds `N`, where `R_out = R + z` is finite and non-zero
+> and the co-moving step evaluates the leg perfectly well.  `and not flat`
+> is dropped; a flat-resolving leg falls back like any other unrepresentable
+> leg, and the flat form is kept where the chirp-Z IS representable.
 
 ### 1.4 Three internal call sites that rode the public default
 
@@ -263,7 +276,7 @@ Sziklas cell.  **WIN and WSL agree to a ratio of 1.00000 on all 22 readings**,
 and the focus cell raises on both.
 
 **The floor, and why the Collins column is the floor.**  The fixture's own
-grid-truncation relative L2 is **3.87e-05**, computed from the fixture by
+grid-truncation relative L2 floor is **6.51e-05** (ROUND 2; 3.87e-05 was the ladder's own focus-cell reading), computed from the fixture by
 quadrature (and the quadrature is refined and compared before it is used, so
 the number is converged rather than asserted): the Gaussian is truncated at
 three `1/e` radii, where its amplitude is `exp(-9) = 1.23e-4`.  Every Collins
@@ -680,7 +693,7 @@ and two prescriptions with and without an image-plane readout:
 | WIN-py3.14 | 21 | **0** | -- |
 | WSL-py3.12 | 21 | **0** | -- |
 
-**Before the readout resolution landed, the same 21 calls fired FIVE
+**Before the readout resolution landed, FIVE of those 21 CALLS fired EIGHT
 warnings**, all K1 and all from the one-step readout -- `_multi` at K = 1
 (one) and K = 2 (four), the chain readout (one), and the singlet and doublet
 readouts (one each).  That is the defect the resolution removes, and it is
@@ -711,7 +724,7 @@ this order:
    is `_collins_readout_k1 <= 1` where it reads 82.36 / 41.45 / 21.46 at
    N = 256 / 512 / 1024 on WP-B4's relay and falls only as `1/dx`.  There are
    three ways and they are not equivalent: a chain that exits on a far finer
-   grid (N ~ 16000 on this fixture -- a 256x memory cost), a LONGER final
+   grid (N ~ 32768 on this fixture -- a 16384x memory cost, and no such N at all where the angular support is grid-clipped; ROUND 2), a LONGER final
    distance on a small exit beam (K1 carries `|A| r / |B|`, so the WP-A6
    fixture reads 0.16), or a re-derivation of the readout that does not form
    the pre-chirp on the exit pitch at all.  Only the third retires the
@@ -837,3 +850,209 @@ python -m mypy
 python scripts/record_history_fingerprints.py --check
 python scripts/reanchor_citations.py --base f4f18851 --block "[5.47.0]" --check
 ```
+
+---
+
+## Round 2 (VERIFY-WP-C3) -- 2026-09-20
+
+VERIFY-WP-C3 (`fixes/VERIFY_WP-C3.md`, verification branch
+`verify/c3-collins-default` @ 50ec3ea4) recommended DO NOT SHIP AS IS on three
+blockers (D5, D6, D13) with nine more to close with them.  This section
+records what round 2 measured and changed, on branch
+`feat/c3-collins-round2`.  Every number below was re-measured on this machine
+with `OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1` on the
+command line, against this verification's own `git archive 49ddf4bd` base
+tree, with `lumenairy.__file__` asserted under the tree under test.  Probes
+and data are under `validation/probe_c3_round2/`.
+
+### R2.0 The headline: D5 and D6 were ONE defect, and it was section 1.3's
+
+The report's §1.3 closed with "what still has no fallback, and it is the
+honest boundary: `A == 0` exactly, and a leg whose output reference the
+transport resolves FLAT.  Those are precisely the legs the Sziklas transport
+could never evaluate."  **The second half of that sentence is false, and it
+was the ship blocker.**
+
+`_collins_leg_output_axis` resolves `flat` for TWO unrelated reasons: the leg
+landing on the carrier's own geometric focus (`A == 0`, equivalently
+`R_out == 0`), and the geometric reference's space-bandwidth
+`4 r_out theta/(|A| lambda)` exceeding `N`.  Only the first is a leg the
+co-moving step cannot evaluate, and the `Ax != 0 and Ay != 0` conjuncts
+already excluded it.  On the second kind `R_out = R + z` is finite and
+non-zero and the co-moving step evaluates it perfectly well -- so
+`and not flat` left a whole family of legs running an unrepresentable chirp-Z
+with no fallback, ON THE DEFAULT.
+
+That single line explains both blockers:
+
+* **D6** directly.  Single N-BK7 biconvex, collimated w = 2 mm, gap 20 mm,
+  bare final leg 10 mm, window `N dx` = 10.24 mm fixed -- a leg NOWHERE near
+  a focus (`R_out = -108 mm`, `A = 0.915`), the flat test clearing `N` by
+  1.9 %.  Measured, both builds:
+
+  | N | default BEFORE | default AFTER | `'sziklas'` | second-moment oracle |
+  |---|---|---|---|---|
+  | 256 | 3823.7543 um | **1295.3594** | 1295.3594 | 1413.3041 |
+  | 512 | 3847.8052 | **1278.4007** | 1278.4007 | 1281.0221 |
+  | 1024 | 4099.0717 | **1274.1529** | 1274.1529 | 1157.1133 |
+
+  Before: 2.7055x / 3.0037x / 3.5425x of the exact free-space second-moment
+  law, DIVERGING with refinement.  After: bit-identical to the co-moving step
+  on every rung, 0.9165x / 0.9980x / 1.1011x of the oracle, and the Kelly
+  warning this leg used to emit (K1 = 29.1734 / 14.4718 / 7.6621) is gone.
+
+* **D5** through the chain.  On the ordinary two-group relay the report's
+  own reproducer uses, the SECOND gap leg resolves flat
+  (`collins_flat_reference=True`) and ran the chirp-Z at Kelly K1 = K3 =
+  9.566.  The chain exit then came back with an amplitude radius of
+  **3830.25 um** against the co-moving step's **1048.97** (3.65x) and an
+  envelope power of **4.899e-04** against **8.074e-06** (60.7x).  The Sziklas
+  focus readout's containment guard refused that lattice -- correctly.  So
+  the `RuntimeError` census was never the readout's defect; it was this one,
+  seen downstream.
+
+**The censuses, before and after, WIN-py3.14 and WSL-py3.12 identical:**
+
+| census | base 49ddf4bd | branch BEFORE | branch AFTER |
+|---|---|---|---|
+| 192 ordinary chain cells: IDENTICAL / MOVED / OK->RAISED | — | 118 / 52 / **22** | **192 / 0 / 0** |
+| the same, Kelly warnings / cells | 0 / 0 | 74 / 51 | **0 / 0** |
+| 12-configuration reproducer: returns / raises | 12 / 0 | 1 / **11** | **12 / 0** |
+| 103 archive keys, default vs default: OK->RAISED / RAISED->OK | — | **23** / 2 | **0** / 4 |
+| 103 archive keys, `transport='sziklas'` | — | 103 identical | **103 identical** |
+
+The four RAISED->OK are the two `dx_out` / `carrier_out` keywords the old
+transport refuses and this one accepts, and two
+`carrier_referenced_focus_readout` containment refusals that R2.2 removes.
+
+**What this costs the flip's story, and it should be said plainly.**  All 52
+MOVED cells of the 192 were the same aliased flat-reference leg, so on
+ORDINARY relay chains the flip is now bit-identical end to end.  That is what
+the complementary selection is supposed to do -- an ordinary relay leg is
+long and coarse, its chirp-Z is not representable, and the transfer-function
+form IS the co-moving step -- and the ladder in §2 still shows what the flip
+buys where the chirp-Z IS representable (at and past the carrier's focus, and
+on fine grids), unchanged by this fix.
+
+### R2.1 The report's own corrected numbers
+
+| §  | said | measured in round 2 |
+|---|---|---|
+| §0, CHANGELOG | the one-step readout returns 9017 "on axis" where the true value is 1.2359 (7295x) | 9017.103 is the window PEAK; the window centre is 1971.389.  The converged sinc-upsampled Fresnel quadrature reads 0.9250737 at its peak and **0.9234085** at the centre, and the chain's own free leg reads 0.9234085, agreeing with it to 2.2e-08 in modulus and 2.0e-08 rad.  So the ratios are **9748x** (peak) and **2135x** (centre).  **1.2359 is not reproducible by any spelling of the free leg** |
+| §2, CHANGELOG | "the fixture's own grid-truncation floor is 3.87e-05" | **6.51e-05**; `_truncation_floor()` in the package's own test file returns 6.509862159796115e-05 on this build.  3.87e-05 is the ladder's own focus-cell READING, which made "within 13 % of that floor" circular |
+| §6, CHANGELOG | "the same 21 calls fired FIVE warnings" | five CALLS fired **EIGHT** warnings; the sentence's own enumeration (1+4+1+1+1) already summed to eight |
+| §7 item 1, `_collins_readout_k1.__doc__` | K1 "falls only as 1/dx, so N ~ 16000" | the measured law halves K1 per doubling of N (82.36047 / 41.44910 / 21.42248 / 10.94410 at N = 256/512/1024/2048), so **N ~ 32768** -- and only where the angular support is INSIDE the band; where it is grid-clipped `angle_term` is exactly 1 and NO N reaches the bar |
+| `carrier.py` | the collimated-NaN fallback fixture reads "K1 = 0.79 and K3 = 1.29" | not reproducible on any fixture searched.  Re-measured on the base tree with the fixture spelled out (collimated w = 0.30 mm, N = 1024 at dx = 4 um, lambda = 1.064 um, z = 5 mm): **K1 = 1.1222362546992480, K3 = 3.0796992481203**, `collins_form='tf'`, 0 of 1048576 finite on `dx = nan` |
+| `carrier.py` | "exit pitch 76.5 um, exit support 5.76 mm, K1 = 56.0" | on the array the chain itself hands the condition: exit pitch **76.5444 um**, exit support radius **6.7359 mm**, K1 = **82.36047** |
+| §1.1 | `carrier.py:9518` and `:12275` take the default | the three that did are now four; at this commit they are **1156**, **4381** (the focus readout, new in round 2), **9775** and **12587** |
+| §4.4 | the four pre-existing WSL reds "say they are red on the base tree too" | three are red on a base ARCHIVE; the fourth (`test_v16_synthetic_fabrication_is_caught`) **SKIPS** there ("git not available"), because an extracted archive is not a git repo.  The claim needs a base-tree WORKTREE to be taken |
+| §2.5 / probes | `probe_d121_acceptance.py` reproduces the d121 rows | it could not RUN as committed -- the sibling design-121 checkout asserts `LUMENAIRY_ROOT`.  It exports it now, and all six rows reproduce to every printed digit INCLUDING after round 2 (N = 512 sziklas route at K1 = 1.0292860630174718; N = 1024 collins at 0.9995812250283026; N = 2048 collins at 0.5857281125141514; zero Kelly warnings) |
+
+### R2.2 The decisions round 2 took
+
+**The routing condition is a STAIRCASE, and the bar is a SLOPE.**  Both
+findings are VERIFY-WP-C3's and both are now in
+`_collins_readout_k1.__doc__` and in the release notes, because they are a
+STRONGER safety argument than the margin the report quoted.  `K1 = space +
+angle` with both support radii read off GRID COORDINATES, so `angle` lies in
+`{2j/N}` and is bounded above by exactly 1: a margin quoted below one quantum
+`2/N` describes nothing (measured: at N = 512 a w-ladder jumps from
+0.99983553 straight to 1.00409618), and where the envelope's angular support
+is grid-clipped `K1 > 1` at every leg length.  The design-121 N = 1024 route
+is stable because the containment INDEX `j = 504` is stable, not because
+0.99958 is 4e-4 below 1.  And the bar itself is a choice on a slope: relative
+L2 against an analytic Gaussian is flat at the fixture floor (5.33e-06 to
+9.30e-06) from K1 = 0.1 to 1.2, with the knee at 1.5 / 2.0 / 3.0 reading
+6.10e-05 / 8.50e-03 / 1.85e-01.  `<= 1` buys a decade of margin for +25 % of
+the floor, and is documented as that.
+
+**The Sziklas readout is LESS WRONG, not right (D11).**  Against the same
+converged quadrature it reads complex relL2 9.4509e-02, amplitude-only
+2.4768e-02, centre |ratio| 1.0012150 at arg 1.756 mrad, most of it a smooth
+piston+tilt leaving ~3.2 mrad rms.  Recorded as a known limitation in the
+docstring, so nobody reads 1.0743 as the field's value.
+
+**The standoff-leg pin became a KEYWORD (D8).**  §1.4 pinned
+`carrier_referenced_focus_readout`'s carrier step to `'sziklas'`.  The
+physics goes the other way and always did: against a converged dense
+separable Fresnel oracle the Collins leg reads relL2 **4.7340e-05** and the
+pinned one **2.4049**, and over 5 geometries x 6 standoffs the pinned leg
+REFUSES on 7 of 30 while the unpinned one refuses on 0 of 30 and reads
+<= 3.846e-03 everywhere.  What the pin actually protected was the WAY BACK --
+that entry point had no `transport` keyword, so moving it would have moved a
+public answer with none.  Round 2 gives it the keyword instead of the pin
+(default `'collins'`), so the campaign's rule is satisfied in both
+directions.  The verification's "27 keys move without the pin, 17 of them
+ok -> raise" was measured on the pre-round-2 tree; with the flat-reference leg
+falling back it is **5 keys move, 0 raise**, all five that readout's own.
+
+**`bandlimit` stopped being accepted-and-ignored (D4)**, joining `standoff`
+and `on_focus_containment` in `_FOCUS_READOUT_SZIKLAS_ONLY_KEYS`
+(`carrier.py:11790`) with the published reason renamed `'sziklas_only_key'`.
+The b4 vocabulary test's field arm was vacuous as written (it ran only where
+K1 = 82.36 and the two routes coincide) and now carries a second fixture
+measured to take the one-step route with no key named.
+
+**Both CuPy censuses were rebuilt (D9, D10).**  The internal call-site census
+now walks every shipped module, pins the set of four splat forwarders and
+refuses aliases and dynamic lookups -- **7 of 7** un-named placements caught,
+against 2 of 6.  The host-demotion census computes the numpy ALIAS set from
+the module's own imports, inverts the normaliser rule, and matches four more
+shapes -- **14 of 14** injections caught, against 4 of 13 -- and it walks the
+call graph rather than a hand-written five-tuple, which is how it now covers
+the one site that actually broke the public chain.  That site,
+`_chain_entry_congruence_stats`, host-demoted a device field with exactly the
+implicit-conversion `TypeError` §5.3 forbids; with it pulling through
+`backend.to_numpy`, the public chain fails AT `cupy.fft.fft2` naming cufft on
+all three spellings measured.
+
+### R2.3 The C3 x C5 interaction (D13), measured on the round-2 tips
+
+`lumenairy/propagators/carrier.py` merges `feat/c3-collins-round2` with
+`feat/c5-three-defaults-round2` @ f1402bee with **ZERO conflicts**, and the
+merged line reads `_GAP_KERNEL_ACCURACY_TAU = 1e-4` beside
+`transport: str = 'collins'` on all four signatures.  §1.3's and the
+Migration paragraph's "ships OFF and stays off" is therefore false as a
+RELEASE statement and has been rewritten: the switch ships ON at `1e-4` in
+5.49.0 (WP-C5, ledger 0.1), it is reached only through `_collins_transport`
+so it is inert before this flip and live after it, and what it fires on is
+`k |z_eff| theta_env^4` -- a WIDE ENVELOPE as much as a near focus.
+
+The one red that exists only in the merge is
+`test_wave5_h2_near_focus_table.py::test_the_exact_kernels_departure_on_a_
+collimated_leg_is_the_quartic`, whose fixture's predicted quartic (1.5e-4)
+exceeds tau, so `'auto'` drops to `'fresnel'` and the departure falls to
+6.2873e-15.  It is restated here on BOTH values of the constant: the quartic
+LAW is asserted on an explicit `gap_kernel='exact'` (which tau never
+overrides) and what `'auto'` resolves to is asserted on whichever arm the
+shipped constant makes live, with no skip on either.  Measured: **17 passed**
+on this branch (tau `None`) and **17 passed** on the merged tree (tau
+`1e-4`).  The rest of the ids VERIFY-WP-C5 listed are green on the merged
+tree: `test_niche_d3_guards.py` + `test_niche_d2_chain_multi.py::
+test_memory_budget_is_honoured` + `test_niche_exact_gap_kernel.py` +
+`test_niche_c3_gap_paraxial_guard.py` read **183 passed, 1 skipped**, and
+`test_c3_collins_default.py` + `test_verify_c3_collins_default.py` +
+`test_niche_gap_frame_observable.py` are green there too.
+
+Finally, "naming `'sziklas'` is the pre-flip arithmetic in every bit" is a
+TRANSPORT statement and stays true; at RELEASE level WP-C5 item 3 also moves
+`replica_fill`'s default from `'repeat'` to `'zero'`, which touches the
+Sziklas side, so a readout whose window exceeds one period AND that waives
+`on_replica` needs `replica_fill='repeat'` as well.  Both caller-facing
+documents now say so.
+
+### R2.4 What round 2 did not close
+
+* **The device run of the whole leg is still owed.**  `cupy.fft` on this box
+  raises `ImportError: DLL load failed while importing cufft`, so the arm
+  that runs the leg on the device and compares it to NumPy is written and has
+  never executed.  What IS closed is the decision around it: the public chain
+  now reaches that import instead of dying earlier on a host demotion.
+* **The shipped design-121 ACCEPTANCE** (3.450 / 88.8 / 99.6 and the 8x4
+  Dammann fan through `..._multi`) still has not been run against this
+  branch; what runs is the six-row reduction above.
+* **Where `1.2359` came from.**  It is in no saved probe JSON and no spelling
+  of the free leg reproduces it.
+* **A fully NON-paraxial truth.**  Every oracle here is paraxial, as are both
+  transports, so the comparisons are like-for-like but the true physical
+  field below ~1e-3 is not established.
