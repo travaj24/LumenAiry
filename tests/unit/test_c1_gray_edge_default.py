@@ -534,6 +534,10 @@ def test_c1_the_jit_kernel_carries_the_elements_edge_samples(n_sub):
 # ``True``, was ACCEPTED as 1, which is bit-for-bit the pre-5.49 hard rim.
 # Measured 2026-09-20 on both builds and on all four entry points before the
 # round-3 guard: ``True`` and ``numpy.True_`` accepted, ``False`` refused.
+# R3 adds ``edge_samples_none``, whose refusal used to be ``int()``'s own bare
+# ``TypeError`` naming neither ``apply_aperture`` nor ``edge_samples`` -- the
+# one family this census's ``'apply_aperture' in message`` assertion could not
+# cover.
 _BAD_EDGE_ELEMENTS = [
     ('edge_unknown_string', {'edge': 'soft'}),
     ('edge_none', {'edge': None}),
@@ -545,6 +549,7 @@ _BAD_EDGE_ELEMENTS = [
     ('edge_samples_bool_false', {'edge_samples': False}),
     ('edge_samples_bool_true', {'edge_samples': True}),
     ('edge_samples_numpy_bool_true', {'edge_samples': np.True_}),
+    ('edge_samples_none', {'edge_samples': None}),
 ]
 
 _GOOD_EDGE_ELEMENTS = [

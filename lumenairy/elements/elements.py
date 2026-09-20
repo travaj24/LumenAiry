@@ -267,11 +267,11 @@ def _validate_edge_kwargs(edge=_EDGE_UNSET, edge_samples=_EDGE_UNSET):
         If ``edge`` is neither ``'hard'`` nor ``'gray'``, or if
         ``edge_samples`` is not an exact integer >= 1 -- including a
         ``bool`` (VERIFY-C1-ROUND2 R2: ``True`` used to pass the
-        exact-integer test and silently select the pre-5.49 rim).
-    TypeError
-        If ``edge_samples`` is of a type ``int()`` refuses outright
-        (``None``, a list); this is the same refusal the function body
-        gave before the hoist.
+        exact-integer test and silently select the pre-5.49 rim) and
+        including a type ``int()`` refuses outright (``None``, a list, a
+        complex), which VERIFY-C1-ROUND2 R3 turned from ``int()``'s own
+        bare ``TypeError`` into this same ``ValueError``, so that every
+        rim refusal names ``apply_aperture`` and ``edge_samples``.
     """
     if edge is not _EDGE_UNSET and edge not in ('hard', 'gray'):
         raise ValueError(
@@ -294,7 +294,19 @@ def _validate_edge_kwargs(edge=_EDGE_UNSET, edge_samples=_EDGE_UNSET):
             f"(sub-samples per axis), not a bool; got {edge_samples!r} "
             f"(type {type(edge_samples).__name__}).  For the binary "
             f"pixel-centre rim pass edge='hard'.")
-    n_sub = int(edge_samples)
+    try:
+        n_sub = int(edge_samples)
+    except (TypeError, ValueError) as exc:
+        # VERIFY-C1-ROUND2 R3: name the function and the keyword.  int()'s own
+        # TypeError ("int() argument must be a string, a bytes-like object or
+        # a real number, not 'NoneType'") names neither, which made this the
+        # one refusal family the chain census's ``'apply_aperture' in message``
+        # assertion could not cover, and made ``evaluate``'s Raises section
+        # ("a ValueError ... the same refusal, from the same guard") wrong for
+        # it.  Measured 2026-09-20, both builds, on None / [4] / 4+0j.
+        raise ValueError(
+            f"apply_aperture: edge_samples must be a positive integer "
+            f"(sub-samples per axis); got {edge_samples!r}.") from exc
     if n_sub < 1 or n_sub != edge_samples:
         raise ValueError(
             f"apply_aperture: edge_samples must be a positive integer "
