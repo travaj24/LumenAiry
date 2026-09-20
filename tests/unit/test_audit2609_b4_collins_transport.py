@@ -437,15 +437,52 @@ class TestDefaultIsByteIdentical:
             f'the default landed on {float(a.dx):.4e} m and the co-moving '
             f'route on {float(b.dx):.4e} m')
 
-    def test_the_public_readout_kept_its_own_signature(self):
-        """``carrier_referenced_focus_readout`` gained nothing: the Collins
-        readout is a separate entry reached through ``transport``, so a caller
-        of the shipped readout cannot be routed anywhere new by accident."""
+    def test_the_public_readout_is_still_the_sziklas_readout(self):
+        """``carrier_referenced_focus_readout`` is still the STANDOFF readout:
+        a caller of it cannot be routed onto the ONE-STEP Collins readout by
+        accident, whatever they pass.
+
+        RESTATED IN WP-C3 ROUND 2 (VERIFY-WP-C3 D8).  WP-B4 wrote this as
+        "it gained nothing", asserting the absence of a ``transport``
+        parameter.  5.49.0 gives it one -- but it selects which quadrature
+        carries the beam to the STOP PLANE, not which readout runs: the
+        standoff, the reconstruction, the Bluestein zoom and both guards are
+        the same code on either setting, and ``_collins_focus_readout`` is
+        still a separate entry this one never reaches.  The claim this test
+        is about is therefore asserted directly -- the readout still HAS a
+        stop plane on both settings, and still refuses the one-step form's
+        own vocabulary -- instead of by the absence of a keyword.
+        """
         import inspect
         p = inspect.signature(C.carrier_referenced_focus_readout).parameters
-        assert 'transport' not in p and 'on_collins_sampling' not in p
+        assert 'on_collins_sampling' not in p, (
+            'the standoff readout took the one-step form\'s Kelly guard '
+            'keyword, which means it is no longer only the standoff readout')
         assert p['standoff'].default is None
         assert p['replica_fill'].default == 'repeat'
+        assert p['transport'].default == 'sziklas', (
+            'the standoff readout moved its own default; this entry point has '
+            'no other way back, and the resolver and guard around the leg '
+            'are derived about the co-moving stop plane')
+        # the STOP PLANE is still there on both settings, which is the
+        # property "it is the Sziklas readout" actually means.
+        n, dx = 128, 4e-6
+        x = (np.arange(n) - n / 2) * dx
+        X, Y = np.meshgrid(x, x)
+        env = np.exp(-(X ** 2 + Y ** 2) / (120e-6 ** 2)).astype(
+            np.complex128)
+        for tr in ('sziklas', 'collins'):
+            pd = {}
+            with warnings.catch_warnings():
+                warnings.simplefilter('ignore')
+                C.carrier_referenced_focus_readout(
+                    env, -0.03, 0.03, 633e-9, dx, dx_out=2e-7, N_out=32,
+                    standoff=1e-3, on_replica='ignore',
+                    on_focus_containment='ignore', transport=tr,
+                    _period_out=pd)
+            assert pd['standoff'] == 1e-3 and 'containment' in pd, (
+                f'transport={tr!r} did not go through a stop plane, so this '
+                f'entry point is no longer the standoff readout: {pd!r}')
 
     @pytest.mark.slow
     def test_the_chain_is_equal_bit_for_bit(self):

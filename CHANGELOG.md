@@ -238,37 +238,48 @@ that walks every shipped module, excuses a `**kwargs` splat only by a pinned
 allow-list of four forwarders, and refuses an alias or a dynamic lookup of an
 entry point -- 7 of 7 un-named placements caught.
 
-**The readout's OWN standoff leg took the keyword instead of the pin** -- see
-the `carrier_referenced_focus_readout` entry below.
+**The readout's OWN standoff leg keeps the pinned arithmetic, but as a
+DOCUMENTED CHOICE rather than a pin** -- see the
+`carrier_referenced_focus_readout` entry below.
 
-### Added -- carrier (WP-C3): `carrier_referenced_focus_readout(transport=...)`, and its default is `'collins'`
+### Added -- carrier (WP-C3): `carrier_referenced_focus_readout(transport=...)`, defaulting to the behaviour it already had
 
-The readout's carrier step onto the STOP PLANE is a free-space leg, and both
-transports implement it.  Nothing else about that readout is
-transport-dependent: the reconstruction and the final Bluestein zoom are the
-same code either way, and the containment guard measures whatever grid the
+The readout's carrier step onto the STOP PLANE is an ordinary free-space leg
+and both transports implement it, but until now it was PINNED to `'sziklas'`
+with no way for a caller to say otherwise -- an internal site that can never
+benefit from an improved default, which is the shape a pin is criticised for.
+It is a documented choice now.  **The default is `'sziklas'`, so nothing
+moves**: 0 of this package's 103 archive-to-archive keys, on both builds.
+Nothing else about the readout is transport-dependent either -- the standoff
+resolver, the reconstruction, the Bluestein zoom and both guards are the same
+code on either setting, and the containment guard measures whatever grid the
 leg returned.
 
-**The default is `'collins'` because the measurement says so.**  Against a
-converged dense separable Fresnel oracle (self-consistency 4.470e-05,
-convergence 64x -> 256x 5.14e-07) on this readout's own 128-grid fixture
-(`w = 120 um`, `R = -30 mm`, `z = 30 mm`, `standoff = 1 mm`), the Collins leg
-reads relative L2 **4.7340e-05** and the co-moving one **2.4049** (best
-global scale 2.2738, peak ratio 5.1433).  Over five geometries x six
+**What `transport='collins'` buys, and why it is not the default HERE.**
+Against a converged dense separable Fresnel oracle (self-consistency
+4.470e-05, convergence 64x -> 256x 5.14e-07) on this readout's own 128-grid
+fixture (`w = 120 um`, `R = -30 mm`, `z = 30 mm`, `standoff = 1 mm`), the
+Collins leg reads relative L2 **4.7340e-05** and the co-moving one **2.4049**
+(best global scale 2.2738, peak ratio 5.1433).  Over five geometries x six
 standoffs the co-moving leg trips the `on_focus_containment` refusal on
 **7 of 30** and returns relL2 up to 4.876 on several of the rest; the Collins
 leg refuses **0 of 30** and reads relL2 <= 3.846e-03 everywhere, <= 5.3e-04
-on 27 of 30.  The reason is the co-moving grid itself: it CONTRACTS toward
-the focus, so the stop plane it offers is the one the containment guard
-exists to complain about.
+on 27 of 30.  The co-moving grid CONTRACTS toward the focus, so the stop
+plane it offers is the one the containment guard exists to complain about.
 
-**The way back is the same one keyword.**  `transport='sziklas'` reproduces
-the 5.48.1 answer here in every bit.  MEASURED: 5 of this package's 103
-archive-to-archive keys move on the default, all five this readout's own
-(collimated, `on_focus_containment` warn and ignore, standoff 1 mm and 3 mm),
-and none of them raises on either setting -- two of them RAISED at 5.48.1 and
-return now.  `propagate_traced_carrier_chain`'s readout fallback is
-unaffected: it names `transport='sziklas'` explicitly.
+Two reasons the default stays where it was, and both are about this function
+rather than the quadrature.  FIRST, it is public and took no `transport`
+before, so moving its default would move a public answer for every existing
+caller with no way back for code already written.  SECOND, and the real one,
+the machinery AROUND the leg is derived about the co-moving stop plane --
+`_default_focus_standoff` sizes the leg from the contraction,
+`_beam_containment_standoff` and `_achievable_focus_margin` are stated in
+beam radii of that grid, and the Bluestein period is `N * dx` of it.  On a
+Collins leg that apparatus still runs and still produces the better answer
+above, but it is no longer solving the problem it was derived for.
+Re-deriving or retiring it is the follow-up the report's section 7 accounts
+for; flipping the default first would ship a resolver and a guard written
+about a grid the function no longer produces.
 
 ### Changed -- carrier (WP-C3): the CuPy arm of the Collins transport
 
@@ -333,10 +344,10 @@ that take `transport=`:
 * `lumenairy.propagate_traced_carrier_chain_multi`
 
 `carrier_referenced_focus_readout` GAINS a `transport` of its own in this
-release (see its entry above) and its default moves: 5 of this package's 103
-archive keys, all five that readout's, with `transport='sziklas'` as the
-byte-exact way back.  `carrier_referenced_exact_focus_readout` does **not**
-take `transport` and does not move.
+release (see its entry above), but its DEFAULT does not move -- 0 of 103
+archive keys -- so a caller of it is unaffected unless they pass the new
+keyword.  `carrier_referenced_exact_focus_readout` does **not** take
+`transport` and does not move.
 
 `final_leg='exact'`'s own leg runs no carrier transport -- its fine retrace
 and exact-sphere Bluestein readout are unchanged -- but the chain's GAP legs
@@ -458,12 +469,11 @@ same two censuses read:
 | census (both builds) | 49ddf4bd | 5.49.0 |
 |---|---|---|
 | 192 ordinary chain cells: identical / moved / **ok -> raised** | — | 192 / 0 / **0** |
-| 103 archive keys, default vs default: **ok -> raised** / raised -> ok | — | **0** / 4 |
+| 103 archive keys, default vs default: **ok -> raised** / raised -> ok | — | **0** / 2 |
 | 103 archive keys with `transport='sziklas'` | — | **103 identical** |
 
-The four raised -> ok are the two `dx_out` / `carrier_out` keywords the old
-transport refused and this one accepts, and two `carrier_referenced_focus_
-readout` containment refusals that the new standoff leg does not trip.
+The two raised -> ok are the `dx_out` / `carrier_out` keywords the old
+transport refused and this one accepts.
 
 The one remaining exception is the JAX one: `jax.grad` / `jax.jit` through
 `propagate_carrier_referenced` now refuses by default, because the Collins
@@ -3922,7 +3932,7 @@ C1 and the WP-A25 replica regime).
 
 `'collins'` evaluates the same integral in the form Collins (1970, *JOSA* **60**,
 1168) gives for an arbitrary ABCD system, factored as chirp x chirp-Z x chirp
-(`lumenairy/propagators/carrier.py:2224` `_collins_transport`).  In this
+(`lumenairy/propagators/carrier.py:2225` `_collins_transport`).  In this
 library's `exp(-i omega t)` / `exp(+i k z)` convention (CONVENTIONS sec. 7 -- the
 complex conjugate of the form printed in Collins' paper, which uses the opposite
 time convention):
@@ -3931,7 +3941,7 @@ time convention):
                * integral u_in(u) exp(i k (A u^2 - 2 u x + D x^2)/(2 B)) du
 
 with the envelope-to-envelope system "attach the input carrier, fly `z`, remove
-the chosen output carrier" (`carrier.py:1806`):
+the chosen output carrier" (`carrier.py:1807`):
 
     A = 1 + z/R_in = m,   B = z,   C = 1/R_in - A/R_ref,   D = 1 - z/R_ref
 
@@ -3940,7 +3950,7 @@ so `det = AD - BC = 1` for every choice of `R_ref` (pinned as an identity over
 forward leg, converging or not: the carrier's sign lives in `A`, which shrinks to
 zero and past it as a leg crosses the geometric focus, and the transform carries
 `A <= 0` natively.  The three stages are the module's own separable screen
-(`_radial_carrier_phase`'s per-axis factor, `carrier.py:1868`), the separable
+(`_radial_carrier_phase`'s per-axis factor, `carrier.py:1869`), the separable
 centred Bluestein the readouts already run (`_bluestein_centred_2d`), and a
 second separable screen.  At `R_ref = R + z` and `dx_out = m*dx` the result is
 term for term `_carrier_step_fast` -- measured agreement 7.6e-12 and 3.2e-12 of
@@ -3949,7 +3959,7 @@ peak at two well-sampled legs, on both `gap_kernel` settings.
 What the free pitch buys, measured:
 
 * **the image-plane readout is one step.**  `transport='collins'` lands the
-  target plane directly on the caller's `(dx_out, N_out)` (`carrier.py:2825`),
+  target plane directly on the caller's `(dx_out, N_out)` (`carrier.py:2925`),
   with no standoff plane, no beam-containment resolution and no near-focus
   bridge.  Against an analytic Gaussian-ABCD oracle carrying the absolute piston
   and Gouy phase, over NA 0.03-0.45 x grid extents 1.5-10 beam radii (30 cells),
@@ -3974,7 +3984,7 @@ What the free pitch buys, measured:
 * **a near-focus gap leg no longer splits.**  The output pitch is the co-moving
   `|A| dx` floored by `2(|A| r + |B| theta)/N`, the ABCD image of the envelope's
   measured phase-space box, so it carries the leg's own diffraction and cannot
-  follow `A` to zero (`carrier.py:2088`); and where referencing to the
+  follow `A` to zero (`carrier.py:2089`); and where referencing to the
   collapsing ray sphere `R + z` would need more samples than the grid has, the
   output is referenced FLAT instead, which is the physical statement that the
   wavefront is flat at the waist.  Measured 0.1 mm before a 40 mm focus: pitch
@@ -3986,7 +3996,7 @@ What the free pitch buys, measured:
 
 **The sampling guard** (`on_collins_sampling={'error','warn','ignore'}`, default
 `'warn'`) is written against Kelly, *Appl. Opt.* **53**, 2861 (2014) rather than
-against a geometric margin (`carrier.py:1958`, `:1994`).  Three conditions, each
+against a geometric margin (`carrier.py:1959`, `:1995`).  Three conditions, each
 a ratio against the Nyquist rate itself with the bar at 1 and no margin,
 evaluated on the field's own measured `1 - 1e-6`-power support in BOTH domains
 rather than at the grid edge:
@@ -4002,7 +4012,7 @@ rather than at the grid edge:
   EXISTING `on_replica` on this transport's period, so the two guards cannot
   disagree.
 
-The tolerance is the one number `_COLLINS_TAIL_FRAC = 1e-6` (`carrier.py:1690`),
+The tolerance is the one number `_COLLINS_TAIL_FRAC = 1e-6` (`carrier.py:1691`),
 the power allowed outside the support radii the ratios are formed from, so the
 aliased power is bounded by it and the field error by its square root.  Stated
 fail-before, as a ladder over four grids at A = 0.9, B = 3 mm: at K1 = 49.694 /
@@ -4011,7 +4021,7 @@ Gaussian by relL2 1.13e+02 / 5.52e+01 / 2.74e+01 / 1.33e+01 -- tracking K1, whic
 is what says it is the aliasing -- while the complementary quadrature sits at
 6.28e-11 on every grid.
 
-**Quadrature selection, and why it is not a threshold** (`carrier.py:2543`).  The
+**Quadrature selection, and why it is not a threshold** (`carrier.py:2544`).  The
 chirp-Z form needs `K1 <= 1`, which with `r` at the grid half-width is
 `N dx^2 <= lambda |z_eff|`; the transfer-function form (`_carrier_step_fast`)
 samples the kernel on the frequency lattice instead and needs the same
@@ -4028,12 +4038,12 @@ enough to trip `_near_focus_needs_bridge` has `|A| < 0.02` and therefore
 
 `gap_kernel` keeps its meaning on this transport: the Collins stage IS the
 ABCD-Fresnel integral, and `'exact'` pre-applies the diagonal exact/Fresnel
-kernel ratio on the input grid (`carrier.py:2164`), which is an exact operator
+kernel ratio on the input grid (`carrier.py:2165`), which is an exact operator
 identity because both kernels are diagonal in the same basis.  That refinement
 lives on the REDUCED frame `z_eff = B/A`, which is unbounded as a leg approaches
 the geometric focus, so it is applied only where its own group delay
 `|z_eff| theta (1/sqrt(1-theta^2) - 1)` fits inside the grid it is applied on
-(`carrier.py:2126`); an explicit `gap_kernel='exact'` there is REFUSED rather
+(`carrier.py:2127`); an explicit `gap_kernel='exact'` there is REFUSED rather
 than silently downgraded, and `'auto'` takes the ABCD-Fresnel integral and
 records `collins_kernel='fresnel'`.  Applying it anyway leaves the core right and
 destroys the halo: measured against a direct summation of the same integral on

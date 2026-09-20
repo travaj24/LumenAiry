@@ -1797,23 +1797,24 @@ a singularity.
 * `lumenairy.propagate_traced_carrier_chain`
 * `lumenairy.propagate_traced_carrier_chain_multi`
 
-`carrier_referenced_focus_readout` GAINS a `transport` of its own in 5.49.0
-and its default moves -- 5 of this release's 103 archive-to-archive keys, all
-five that readout's, with `transport='sziklas'` as the byte-exact way back;
-see "The focus readout's standoff leg" below.
+`carrier_referenced_focus_readout` GAINS a `transport` of its own in 5.49.0,
+but its DEFAULT does not move (0 of this release's 103 archive-to-archive
+keys), so a caller of it is unaffected unless they pass the new keyword; see
+"The focus readout's standoff leg" below.
 `carrier_referenced_exact_focus_readout` does NOT take `transport` and does
 not move.
 
 `final_leg='exact'`'s own leg runs no carrier transport and is unchanged, but
 the chain's GAP legs do, so a `final_leg='exact'` chain's returned field
 moves wherever a gap leg moves.  MEASURED: bit-identical on six ordinary
-two-group relays and on this release's own 103-key chain fixture (field sha,
-`dx`, `R`, `n_stages` and every warning equal to 5.48.1; peak
+two-group relays and on this release's own 103-key chain fixture (the field's
+digest, `dx`, `R`, the stage count and every warning equal to 5.48.1; peak
 79.78066764070186 bare, 80.46777771966885 with a readout).  What moves on
 those archive keys is the per-stage DIAGNOSTIC dict -- a Collins gap leg
-publishes `collins_form` / `collins_k1` / `k2` / `k3` / `collins_kernel` /
-`collins_flat_reference` / `collins_dx_floor_hit` and a Sziklas one does not
--- so `repr(stages)` differs while nothing the chain RETURNS does.  Where a
+publishes seven collins_ stage keys (which quadrature ran, its three Kelly
+conditions, which kernel, whether the output reference went flat and
+whether the pitch floor bit) and a Sziklas one publishes none of them --
+so `repr(stages)` differs while nothing the chain RETURNS does.  Where a
 gap leg IS representable on the chirp-Z the field moves like any other
 chain's; the way back is the same one keyword.
 
@@ -1878,32 +1879,43 @@ on the readout stage as `readout_route` / `readout_route_k1` /
 
 `carrier_referenced_focus_readout` carries the beam to a STOP PLANE short of
 the target and finishes with a Bluestein zoom.  That first step is an
-ordinary free-space carrier leg, and 5.49.0 lets you say which quadrature
-runs it:
+ordinary free-space carrier leg; until 5.49.0 it was pinned to the co-moving
+step with no way to say otherwise, and now you can:
 
 ```python
-# 5.48 behaviour, bit for bit:
+# unchanged from 5.48, and still the default -- nothing to do:
+F = la.carrier_referenced_focus_readout(env, R, z, wl, dx,
+                                        dx_out=..., N_out=...)
+
+# the accurate setting near a focus, one keyword:
 F = la.carrier_referenced_focus_readout(env, R, z, wl, dx, dx_out=...,
-                                        N_out=..., transport='sziklas')
+                                        N_out=..., transport='collins')
 ```
 
-The default is `'collins'` because the measurement says so.  Against a
-converged dense separable Fresnel oracle (self-consistency 4.470e-05,
-convergence 64x -> 256x 5.14e-07) on this readout's own 128-grid fixture
-(`w = 120 um`, `R = -30 mm`, `z = 30 mm`, `standoff = 1 mm`) the Collins leg
-reads relative L2 **4.7340e-05** and the co-moving one **2.4049**.  Over five
-geometries x six standoffs the co-moving leg trips the
+**The default is unchanged, so this readout does not move** (0 of this
+release's 103 archive-to-archive keys).  What the opt-in buys, measured
+against a converged dense separable Fresnel oracle (self-consistency
+4.470e-05, convergence 64x -> 256x 5.14e-07) on this readout's own 128-grid
+fixture (`w = 120 um`, `R = -30 mm`, `z = 30 mm`, `standoff = 1 mm`): the
+Collins leg reads relative L2 **4.7340e-05** and the co-moving one
+**2.4049**.  Over five geometries x six standoffs the co-moving leg trips the
 `on_focus_containment` refusal on **7 of 30** and returns relL2 up to 4.876
 on several of the rest; the Collins leg refuses **0 of 30** and reads
 <= 3.846e-03 everywhere.  The co-moving grid CONTRACTS toward the focus,
 which is the condition that guard exists to complain about; the Collins leg
 floors its pitch at the value that still holds the beam's phase-space box.
 
-Nothing else about the readout is transport-dependent: the reconstruction and
-the zoom are the same code either way, and the containment guard measures
-whatever grid the leg returned.  `propagate_traced_carrier_chain`'s readout
-FALLBACK names `transport='sziklas'` explicitly, so it stays the pre-flip
-answer in every bit.
+Why it is not the default here when it is the default everywhere else: the
+standoff resolver, the containment margin and the Bluestein period are all
+derived about the CO-MOVING stop plane, so on a Collins leg that apparatus
+still runs and still gives the better answer but is no longer solving the
+problem it was derived for.  Re-deriving or retiring it is a later release's
+work.  Nothing else about the readout is transport-dependent: the
+reconstruction and the zoom are the same code either way, and the containment
+guard measures whatever grid the leg returned.
+`propagate_traced_carrier_chain`'s readout FALLBACK names
+`transport='sziklas'` explicitly, so it stays the pre-flip answer in every
+bit.
 
 ### The one call that now RAISES: `jax.grad` through a carrier leg
 

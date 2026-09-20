@@ -4378,7 +4378,7 @@ def carrier_referenced_focus_readout(
     on_replica: str = 'error',
     replica_fill: str = 'repeat',
     on_focus_containment: str = 'error',
-    transport: str = 'collins',
+    transport: str = 'sziklas',
     _period_out: Optional[dict] = None,
 ) -> np.ndarray:
     """Read a carrier-referenced beam at a target plane NEAR its focus without
@@ -4537,39 +4537,58 @@ def carrier_referenced_focus_readout(
         folded in -- energy that was created rather than measured.  That
         tripwire is only reachable with ``on_replica`` downgraded AND
         ``replica_fill='repeat'``, which is what leaves the replicas in.
-    transport : {'collins', 'sziklas'}, default 'collins'
+    transport : {'sziklas', 'collins'}, default 'sziklas'
         Which quadrature carries the beam over the CARRIER LEG onto the stop
         plane (``z - standoff``).  Nothing else about this readout is
-        transport-dependent: the reconstruction and the final Bluestein zoom
-        are the same code either way, and the containment guard measures
-        whatever grid the leg returned.
+        transport-dependent: the standoff resolver, the reconstruction, the
+        final Bluestein zoom and both guards are the same code either way,
+        and :func:`_check_focus_containment` measures whatever grid the leg
+        returned.
 
-        NEW IN 5.49.0 (WP-C3 round 2).  Before it this leg was PINNED to
-        ``'sziklas'``, which is why ``transport='sziklas'`` reproduces the
-        5.48.1 answer here in every bit.  It is not pinned any more because
-        the measurement goes the other way: against a converged dense
+        NEW IN WP-C3 ROUND 2, AND THE DEFAULT IS THE OLD BEHAVIOUR ON
+        PURPOSE.  Until round 2 this leg was PINNED to ``'sziklas'`` with no
+        way for a caller to say otherwise, which made it a silent second code
+        path -- an internal site that can never benefit from an improved
+        default.  It is a documented CHOICE now, and the measurement that
+        makes the choice worth having is this: against a converged dense
         separable Fresnel oracle (self-consistency 4.470e-05, convergence
         64x -> 256x 5.14e-07) on the 128-grid fixture this function's own
         tests use (``w = 120 um``, ``R = -30 mm``, ``z = 30 mm``,
-        ``standoff = 1 mm``) the Collins leg reads relative L2 **4.7340e-05**
-        and the Sziklas leg **2.4049** (best global scale 2.2738, peak ratio
-        5.1433).  Over five geometries x six standoffs the Sziklas leg trips
-        the ``on_focus_containment`` refusal on **7 of 30** and returns relL2
-        up to 4.876 on several of the rest; the Collins leg refuses **0 of
-        30** and reads relL2 <= 3.846e-03 everywhere, <= 5.3e-04 on 27 of 30.
-        The reason is the co-moving grid itself: it CONTRACTS toward the
-        focus, so the stop plane it offers is the one the containment guard
-        exists to complain about, while the Collins leg resolves a pitch that
-        still holds the beam's own phase-space box.
+        ``standoff = 1 mm``) the COLLINS leg reads relative L2 **4.7340e-05**
+        and the co-moving one **2.4049** (best global scale 2.2738, peak
+        ratio 5.1433).  Over five geometries x six standoffs the co-moving
+        leg trips the ``on_focus_containment`` refusal on **7 of 30** and
+        returns relL2 up to 4.876 on several of the rest; the Collins leg
+        refuses **0 of 30** and reads relL2 <= 3.846e-03 everywhere,
+        <= 5.3e-04 on 27 of 30.  The reason is the co-moving grid itself: it
+        CONTRACTS toward the focus, so the stop plane it offers is the one
+        the containment guard exists to complain about, while the Collins leg
+        resolves a pitch that still holds the beam's own phase-space box.
 
-        MEASURED BLAST RADIUS of the default here: **5 of this package's 103
-        archive-to-archive keys** move, all five this readout's own
-        (collimated, ``on_focus_containment`` warn and ignore, standoff 1 mm
-        and 3 mm), and none of them raises on either setting.
-        ``propagate_traced_carrier_chain``'s readout FALLBACK is unaffected:
-        it names ``transport='sziklas'`` explicitly, because that fallback's
-        contract is to be the pre-flip answer in every bit.
+        WHY IT IS NOT THE DEFAULT HERE, when it is the default on every entry
+        point that takes a ``transport``.  Two reasons, and both are about
+        this function rather than about the quadrature.  FIRST, this entry
+        point is public and took no ``transport`` before, so moving its
+        default would move a public answer for every existing caller
+        (measured: 5 of this package's 103 archive-to-archive keys, all five
+        this readout's own).  SECOND, and the real one, the machinery AROUND
+        the leg is derived about the co-moving stop plane:
+        :func:`_default_focus_standoff` sizes the leg from the contraction,
+        :func:`_beam_containment_standoff` and
+        :func:`_achievable_focus_margin` are stated in beam radii of that
+        grid, and the Bluestein period below is ``N * dx`` of it.  On a
+        Collins leg that apparatus still RUNS and still produces the better
+        answer above, but it is no longer solving the problem it was derived
+        for.  Re-deriving it -- or retiring it, which is the accounting the
+        WP-C3 report's section 7 sets out -- is the follow-up; flipping the
+        default before that would ship a resolver and a guard written about a
+        grid this function no longer produces.
 
+        So ``transport='collins'`` is the accurate setting near a focus and
+        it is one keyword away, and the default is unchanged from the
+        releases before round 2 in every bit (0 of 103 archive keys move).
+        :func:`propagate_traced_carrier_chain`'s readout FALLBACK names
+        ``'sziklas'`` explicitly, for the same reason it always did.
     Returns
     -------
     E_out : ndarray, complex, shape (N_out, N_out)
@@ -5235,8 +5254,8 @@ def _publish_readout_route(stage, transport, took_collins, k1):
       asked for the readout that HAS them (K1 is then not computed at all,
       and ``readout_route_k1`` is ``None``).  The reason string was
       ``'stop_plane_key'`` before WP-C3 round 2 added ``bandlimit``, which
-      is not a stop-plane key; 5.49.0 is the first release to publish
-      either spelling.
+      is not a stop-plane key, and no release has shipped either
+      spelling yet.
 
     NOTHING IS PUBLISHED ON ``transport='sziklas'``, deliberately: that path's
     ``stages`` list is a bit-identity key (WP-B4 sec. 4.2 digests
@@ -6542,6 +6561,7 @@ def _chain_entry_congruence_stats(env, dx, wavelength):
     Returns zeros for the two scores rather than raising if either estimator
     cannot be formed on the given field -- a diagnostic must never be the
     thing that kills a propagation."""
+    from ..backend import to_numpy
     from ..elements._lens_traced import _carrier_residual_rms
     from .fga import _tilt_dispersion
     # Host-side reduction on ANY backend.  ``np.asarray`` is a no-op on
@@ -6550,9 +6570,8 @@ def _chain_entry_congruence_stats(env, dx, wavelength):
     # here, before any transform, on the default
     # ``on_multi_congruence='warn'`` and on BOTH transports (measured
     # 2026-09-20, VERIFY-WP-C3 D10a).  Both estimators below are host
-    # code, so pull explicitly, exactly as ``_collins_power_marginals``
-    # does.
-    from ..backend import to_numpy
+    # code, so ``to_numpy`` pulls explicitly, exactly as
+    # ``_collins_power_marginals`` does.
     E = np.asarray(to_numpy(env))
     try:
         resid = float(_carrier_residual_rms(E, None, wavelength, dx))

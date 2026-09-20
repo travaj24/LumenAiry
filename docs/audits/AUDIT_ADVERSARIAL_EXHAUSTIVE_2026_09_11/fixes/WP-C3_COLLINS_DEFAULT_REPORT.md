@@ -127,7 +127,8 @@ fourth.)
 `carrier_referenced_exact_focus_readout` does NOT take `transport` and does
 not move -- asserted as a measurement, not read off the signature.
 `carrier_referenced_focus_readout` DOES take one since round 2, and its
-default moves on 5 of 103 archive keys.  `final_leg='exact'`'s own leg runs
+default does NOT move (0 of 103 archive keys); naming
+`transport='collins'` there moves 5.  `final_leg='exact'`'s own leg runs
 no carrier transport; the chain's gap legs do, so the returned field moves
 wherever a gap leg moves (measured bit-identical on every fixture tried
 after the round-2 fix -- see the Round 2 section).
@@ -918,12 +919,11 @@ That single line explains both blockers:
 | 192 ordinary chain cells: IDENTICAL / MOVED / OK->RAISED | — | 118 / 52 / **22** | **192 / 0 / 0** |
 | the same, Kelly warnings / cells | 0 / 0 | 74 / 51 | **0 / 0** |
 | 12-configuration reproducer: returns / raises | 12 / 0 | 1 / **11** | **12 / 0** |
-| 103 archive keys, default vs default: OK->RAISED / RAISED->OK | — | **23** / 2 | **0** / 4 |
+| 103 archive keys, default vs default: OK->RAISED / RAISED->OK | — | **23** / 2 | **0** / 2 |
 | 103 archive keys, `transport='sziklas'` | — | 103 identical | **103 identical** |
 
-The four RAISED->OK are the two `dx_out` / `carrier_out` keywords the old
-transport refuses and this one accepts, and two
-`carrier_referenced_focus_readout` containment refusals that R2.2 removes.
+The two RAISED->OK are the `dx_out` / `carrier_out` keywords the old
+transport refuses and this one accepts.
 
 **What this costs the flip's story, and it should be said plainly.**  All 52
 MOVED cells of the 192 were the same aliased flat-reference leg, so on
@@ -972,19 +972,33 @@ converged quadrature it reads complex relL2 9.4509e-02, amplitude-only
 piston+tilt leaving ~3.2 mrad rms.  Recorded as a known limitation in the
 docstring, so nobody reads 1.0743 as the field's value.
 
-**The standoff-leg pin became a KEYWORD (D8).**  §1.4 pinned
-`carrier_referenced_focus_readout`'s carrier step to `'sziklas'`.  The
-physics goes the other way and always did: against a converged dense
-separable Fresnel oracle the Collins leg reads relL2 **4.7340e-05** and the
-pinned one **2.4049**, and over 5 geometries x 6 standoffs the pinned leg
-REFUSES on 7 of 30 while the unpinned one refuses on 0 of 30 and reads
-<= 3.846e-03 everywhere.  What the pin actually protected was the WAY BACK --
-that entry point had no `transport` keyword, so moving it would have moved a
-public answer with none.  Round 2 gives it the keyword instead of the pin
-(default `'collins'`), so the campaign's rule is satisfied in both
-directions.  The verification's "27 keys move without the pin, 17 of them
-ok -> raise" was measured on the pre-round-2 tree; with the flat-reference leg
-falling back it is **5 keys move, 0 raise**, all five that readout's own.
+**The standoff-leg pin became a KEYWORD (D8), and the default stayed put.**
+§1.4 pinned `carrier_referenced_focus_readout`'s carrier step to
+`'sziklas'` with no way for a caller to say otherwise.  The physics goes the
+other way and always did: against a converged dense separable Fresnel oracle
+the Collins leg reads relL2 **4.7340e-05** and the pinned one **2.4049**, and
+over 5 geometries x 6 standoffs the pinned leg REFUSES on 7 of 30 while the
+unpinned one refuses on 0 of 30 and reads <= 3.846e-03 everywhere.  The
+verification's "27 keys move without the pin, 17 of them ok -> raise" was
+measured on the pre-round-2 tree; with the flat-reference leg falling back it
+is **5 keys move, 0 raise**, all five that readout's own.
+
+So the pin is replaced by a `transport` parameter whose DEFAULT is
+`'sziklas'` -- 0 of 103 archive keys move -- for two reasons that are about
+this function rather than about the quadrature.  It is public and had no
+`transport`, so moving its default would move a public answer with no way
+back for code already written.  And the apparatus around the leg is derived
+about the co-moving stop plane: `_default_focus_standoff` sizes the leg from
+the contraction, `_beam_containment_standoff` and `_achievable_focus_margin`
+are stated in beam radii of that grid, and the Bluestein period is `N * dx`
+of it.  Flipping the default first would ship a resolver and a guard written
+about a grid the function no longer produces -- measured as such: with the
+default flipped, **8 ids across `test_audit2609_a6_carrier.py` and
+`test_audit2609_a6_verify_carrier.py` go red**, and every one of them is a
+C1 claim about that co-moving stop plane.  Retiring or re-deriving that
+machinery is §7's accounting and a later release's work; the keyword makes
+the better quadrature reachable and the difference measured in the meantime,
+which is what "not a silent second code path" actually asks for.
 
 **`bandlimit` stopped being accepted-and-ignored (D4)**, joining `standoff`
 and `on_focus_containment` in `_FOCUS_READOUT_SZIKLAS_ONLY_KEYS`
