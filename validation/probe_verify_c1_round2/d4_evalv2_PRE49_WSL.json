@@ -1,0 +1,89 @@
+{
+ "digests": {
+  "no_stop": {
+   "default": "d55f406c7ccb426b",
+   "private_hard": "d55f406c7ccb426b"
+  },
+  "one_stop": {
+   "default": "1772fe33503ff079",
+   "private_hard": "1772fe33503ff079"
+  },
+  "two_stops": {
+   "default": "7926bc1c5e659d15",
+   "private_hard": "7926bc1c5e659d15"
+  }
+ },
+ "evaluate_refusal": {},
+ "guard_before_decomposition": {},
+ "has_aperture_edge_kw": false,
+ "lumenairy_file": "/mnt/c/tmp/lum_vc1b_pre49/lumenairy/__init__.py",
+ "numpy": "2.4.6",
+ "python": "3.12.3",
+ "stamping": {
+  "no_stop": {
+   "all_stamped": false,
+   "element_types": [
+    "real_lens",
+    "propagate"
+   ],
+   "n_aperture_elements": 0,
+   "n_elements": 2,
+   "plain_have_edge_key": [],
+   "stamped_edges": [],
+   "stamped_have_edge_key": [],
+   "stamped_samples": []
+  },
+  "one_stop": {
+   "all_stamped": false,
+   "element_types": [
+    "aperture",
+    "propagate",
+    "real_lens",
+    "propagate"
+   ],
+   "n_aperture_elements": 1,
+   "n_elements": 4,
+   "plain_have_edge_key": [
+    false
+   ],
+   "stamped_edges": [
+    null
+   ],
+   "stamped_have_edge_key": [
+    false
+   ],
+   "stamped_samples": [
+    null
+   ]
+  },
+  "two_stops": {
+   "all_stamped": false,
+   "element_types": [
+    "aperture",
+    "propagate",
+    "real_lens",
+    "propagate",
+    "aperture",
+    "propagate"
+   ],
+   "n_aperture_elements": 2,
+   "n_elements": 6,
+   "plain_have_edge_key": [
+    false,
+    false
+   ],
+   "stamped_edges": [
+    null,
+    null
+   ],
+   "stamped_have_edge_key": [
+    false,
+    false
+   ],
+   "stamped_samples": [
+    null,
+    null
+   ]
+  }
+ }
+}

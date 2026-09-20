@@ -1,0 +1,131 @@
+{
+ "dilation": {
+  "analytic_disc_px": 12271.846303085129,
+  "delta_pct": 1.3679667779496785,
+  "delta_px": 168,
+  "n_true_grey": 12449,
+  "n_true_hard": 12281,
+  "rim_px": 364
+ },
+ "lumenairy_file": "/mnt/c/tmp/lum_vc1b/lumenairy/__init__.py",
+ "numpy": "2.4.6",
+ "python": "3.12.3",
+ "site_1096_1724_nan_masks": {
+  "fan_n_finite_grey": 125,
+  "fan_n_finite_hard": 125,
+  "in_aperture_pv_grey": 2.536185331712e-07,
+  "in_aperture_pv_hard": 2.520836734976e-07,
+  "in_aperture_rms_grey": 7.350021397683213e-08,
+  "in_aperture_rms_hard": 7.307032475288001e-08,
+  "n_finite_grey": 12449,
+  "n_finite_hard": 12281,
+  "rms_rel_move": 0.005883225856816404
+ },
+ "site_1491_radial_rms": {
+  "identical": false,
+  "last_bin_rel_move": 0.003161636386840836,
+  "max_abs_rel_move": 0.07274078156894795,
+  "r_centres_identical": true,
+  "rms_grey": [
+   1.5060868293857694e-07,
+   1.4724048814803045e-07,
+   1.408810494765275e-07,
+   1.31483520309515e-07,
+   1.1924556551652606e-07,
+   1.045171141854741e-07,
+   8.707983860764177e-08,
+   6.76901074156361e-08,
+   4.6982233256627704e-08,
+   2.541404935279714e-08,
+   6.8416673589469915e-09,
+   2.1369850337192564e-08,
+   4.2619203094403014e-08,
+   6.278789931237715e-08,
+   8.080099907535436e-08,
+   9.476761689512813e-08
+  ],
+  "rms_hard": [
+   1.4924960078164777e-07,
+   1.461258606446088e-07,
+   1.3991236013788044e-07,
+   1.3049713578287284e-07,
+   1.1838070597891052e-07,
+   1.0373827669684078e-07,
+   8.651270508007731e-08,
+   6.755682933356338e-08,
+   4.728477202363396e-08,
+   2.6253508161911926e-08,
+   7.378376211264073e-09,
+   2.025763620160586e-08,
+   4.148262572775554e-08,
+   6.185139106385701e-08,
+   8.002527541658463e-08,
+   9.446894045555754e-08
+  ]
+ },
+ "site_1757_auto_n_bins": {
+  "N256_bins_grey": 32,
+  "N256_bins_hard": 32,
+  "N256_bins_move": false,
+  "any_bin_count_moves": true,
+  "ladder": {
+   "12": {
+    "bins_grey": 3,
+    "bins_hard": 3,
+    "bins_move": false,
+    "n_grey": 45,
+    "n_hard": 37
+   },
+   "160": {
+    "bins_grey": 32,
+    "bins_hard": 32,
+    "bins_move": false,
+    "n_grey": 7393,
+    "n_hard": 7213
+   },
+   "24": {
+    "bins_grey": 6,
+    "bins_hard": 6,
+    "bins_move": false,
+    "n_grey": 185,
+    "n_hard": 161
+   },
+   "256": {
+    "bins_grey": 32,
+    "bins_hard": 32,
+    "bins_move": false,
+    "n_grey": 18765,
+    "n_hard": 18513
+   },
+   "48": {
+    "bins_grey": 13,
+    "bins_hard": 12,
+    "bins_move": true,
+    "n_grey": 697,
+    "n_hard": 657
+   },
+   "96": {
+    "bins_grey": 25,
+    "bins_hard": 25,
+    "bins_move": false,
+    "n_grey": 2701,
+    "n_hard": 2601
+   }
+  }
+ },
+ "site_266_reachability": {
+  "in_library_callers_pass": "ctx.prescription[\"aperture_diameter\"]",
+  "note": "two of the three in-library call sites float() the value first; the third (line 492) forwards it unfloated, so an ndarray aperture_diameter in a prescription reaches the array branch"
+ },
+ "site_266_wrapper_merit": {
+  "boolean_overshoot_vs_weighted": 0.008905075288798883,
+  "integrated_power_grey": 10507.123346852703,
+  "integrated_power_hard": 10426.76187272266,
+  "integrated_power_rel_move": 0.007707232131221424,
+  "mask_delta_px": 168,
+  "mask_true_grey": 12449,
+  "mask_true_hard": 12281,
+  "masks_identical": false,
+  "weighted_power_grey_mask": 10414.382486722094
+ }
+}
