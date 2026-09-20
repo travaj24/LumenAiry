@@ -134,10 +134,18 @@ _LEG_CAL = {}
 #: period LINEAR in the length of the fine-zoom leg, and a ``readout_period``
 #: that is ``N * d`` of the co-moving grid there are all properties of that
 #: readout; the Collins readout lands the target in one step, its period is
-#: ``lambda |z| / dx`` of the chain's INPUT grid, and it refuses the
-#: ``standoff`` key by name rather than accepting and ignoring it.  So these
-#: fixtures are about the readout whose stop plane they are sizing, and the
-#: ones that are NOT about a standoff are left on the library's default.
+#: ``lambda |z| / dx`` of the chain's INPUT grid, and naming the
+#: ``standoff`` key there SELECTS this readout rather than being accepted
+#: and ignored (WP-C3 round 2: the key is route-SELECTING, not refused --
+#: an earlier revision of this comment described the 5.46-5.48 contract).
+#: So these fixtures are about the readout whose stop plane they are
+#: sizing.  Of the nine uses of this constant, six pass a ``standoff``;
+#: the other three
+#: (``test_default_refuses_the_periodic_replica_regime``,
+#: ``..._auto_window_is_independent_of_congruence_order`` and
+#: ``..._auto_tile_equals_the_same_tile_asked_for_explicitly``) name it
+#: because they read a ``readout_period`` that is ``N * d`` of the
+#: co-moving grid, which is the same readout's property.
 _SZIKLAS_STANDOFF = 'sziklas'
 
 
@@ -168,10 +176,12 @@ def _leg_for_window(groups, field, carrier, fd, window, margin=1.3):
     ``readout_period`` that is ``N * d`` of the CO-MOVING grid there -- is a
     property of the Sziklas readout.  On the Collins readout the period is
     ``lambda |z| / dx`` of the chain's INPUT grid and owes nothing to a
-    standoff, so there is no leg to calibrate and the ``standoff`` key is
-    refused by name.  The calibration therefore names the transport whose
-    readout it is calibrating, and the fixtures below run on whatever the
-    library's default is.
+    standoff, so there is no leg to calibrate -- and naming the ``standoff``
+    key SELECTS this readout instead (WP-C3 round 2; it is not refused, and
+    saying so here described the 5.46-5.48 contract rather than this one).
+    The calibration therefore names the transport whose readout it is
+    calibrating, and the fixtures below run on whatever the library's
+    default is.
     """
     key = round(float(fd), 12)
     if key not in _LEG_CAL:
@@ -181,7 +191,7 @@ def _leg_for_window(groups, field, carrier, fd, window, margin=1.3):
             probe = la.propagate_traced_carrier_chain(
                 field, groups, _WL, _DX, r_in=carrier, ray_subsample=32,
                 n_workers=1, final_distance=fd, traced_kwargs=_TKW,
-                final_leg='paraxial', transport='sziklas',
+                final_leg='paraxial', transport=_SZIKLAS_STANDOFF,
                 focus_readout=dict(dx_out=_DXO, N_out=8, standoff=s0,
                                    on_replica='ignore'))
         per = float(probe.stages[-1]['readout_period'][0])

@@ -433,9 +433,23 @@ def _score_against_oracle(ext, standoff, n=2048, dx_out=0.02e-6):
     xo = (np.arange(n_out) - n_out // 2) * dx_out
     line = _oracle_focal_line(n, ext, xo)
     O = np.outer(line, line)
+    # ``transport='sziklas'`` NAMED (WP-C3 round 2).  This whole file is
+    # about the STANDOFF RESOLVER, and a standoff exists only because the
+    # co-moving grid CONTRACTS toward the focus: the leg is the knob that
+    # trades hand-off accuracy against how much of the beam that grid
+    # still holds.  5.49.0 gives this readout a ``transport`` of its own
+    # (VERIFY-WP-C3 D8) whose default floors the output pitch instead, so
+    # the standoff stops being the binding constraint and every arm --
+    # resolved and retired-constant alike -- improves.  MEASURED
+    # 2026-09-20 at ext = 2.0: FWHM error 1.54 % resolved against 0.27 %
+    # at 0.8 zR and 9.04 % at 6.0 zR on the new default, where the
+    # co-moving leg reads 4.48 % / 8.95 % / 8.50 %.  Naming the transport
+    # keeps this comparison about the quantity it is a counterexample
+    # for; the new default's own accuracy is decided in
+    # ``test_c3_collins_default.py`` against a converged quadrature.
     F = np.abs(np.asarray(carrier_referenced_focus_readout(
         env, -_Z, _Z, _WL, dx, dx_out=dx_out, N_out=n_out,
-        standoff=standoff)))
+        standoff=standoff, transport='sziklas')))
     f_o = _fwhm(O ** 2, dx_out)
     a, b = F / F.max(), O / O.max()
     return (abs(_fwhm(F ** 2, dx_out) - f_o) / f_o,

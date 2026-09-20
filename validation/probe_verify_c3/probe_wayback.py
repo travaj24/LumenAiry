@@ -219,15 +219,22 @@ def sec_jax(K):
 
 
 # ---------------------------------------------------------------------------
-# 3. the two PUBLIC readouts -- neither takes ``transport``; do they move?
+# 3. the two PUBLIC readouts.  ``carrier_referenced_focus_readout`` GAINED a
+#    ``transport`` of its own in 5.49.0 (WP-C3 round 2, VERIFY-WP-C3 D8), so
+#    the sziklas spelling names it here too -- the way-back rule is one
+#    keyword on every entry point that takes one.  The exact readout still
+#    takes none.
 # ---------------------------------------------------------------------------
 def sec_readouts(K):
     E = sq(128, 4e-6, 120e-6)
     fr = CA.carrier_referenced_focus_readout
     ex = CA.carrier_referenced_exact_focus_readout
+    import inspect as _i
+    _TR_RO = (TR if 'transport' in
+              _i.signature(fr).parameters else {})
 
     def ro(*a, **kw):
-        return {'field': np.asarray(fr(*a, **kw))}
+        return {'field': np.asarray(fr(*a, **dict(_TR_RO, **kw)))}
 
     def exro(*a, **kw):
         return {'field': np.asarray(ex(*a, **kw))}

@@ -207,14 +207,26 @@ class TestVocabulary:
         Both halves are asserted -- the route taken AND the reason published
         -- so a future change that went back to ignoring the key silently
         would fail here rather than reading as a pass.
+
+        THE FIELD ARM RUNS ON A FIXTURE WHERE THE TWO ROUTES DIFFER (WP-C3
+        round 2, VERIFY-WP-C3 section 7.1b).  As first written this test drove
+        only ``final_distance = 8e-3``, where K1 = 82.36 and the default takes
+        the Sziklas readout anyway -- so its ``array_equal`` arm could not
+        fail, whatever the keys did.  The second fixture below is MEASURED to
+        take the one-step route with no key named (K1 = 0.98606 at N = 1024,
+        ``final_distance`` 46 mm, ``readout_route='collins'``), so naming a
+        Sziklas-only key there really does flip the quadrature and the
+        bit-identity assertion has something to say.  ``bandlimit`` joined the
+        two stop-plane keys in round 2 (VERIFY-WP-C3 D4).
         """
         env, dx, r_in, groups = _chain_fixture()
         base = dict(r_in=r_in, ray_subsample=16, n_workers=1,
                     traced_kwargs=_CHAIN_TKW, final_leg='paraxial',
                     final_distance=8e-3)
         fr0 = dict(dx_out=0.5e-6, N_out=64)
-        for key, val in (('standoff', 2e-3),
-                         ('on_focus_containment', 'ignore')):
+        keys = (('standoff', 2e-3), ('on_focus_containment', 'ignore'),
+                ('bandlimit', False))
+        for key, val in keys:
             with warnings.catch_warnings():
                 warnings.simplefilter('ignore')
                 got = C.propagate_traced_carrier_chain(
@@ -225,13 +237,52 @@ class TestVocabulary:
                     focus_readout=dict(fr0, **{key: val}), **base)
             st = got.stages[-1]
             assert st['readout_route'] == 'sziklas'
-            assert st['readout_route_reason'] == 'stop_plane_key'
+            assert st['readout_route_reason'] == 'sziklas_only_key'
             assert st['readout_route_k1'] is None, (
                 'K1 was computed for a route the keyword had already '
                 'decided; it is not the reason and must not be published '
                 'as one')
             assert np.array_equal(np.asarray(got.field),
                                   np.asarray(ref.field))
+
+        # ... and again where the two routes genuinely disagree.
+        n2, fd2 = 1024, 46e-3
+        dx2 = dx * 256 / n2
+        env2 = _gauss_env(n2, dx2, 4.5e-3)
+        base2 = dict(base, final_distance=fd2)
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            free = C.propagate_traced_carrier_chain(
+                env2, groups, 1.31e-6, dx2, transport='collins',
+                focus_readout=dict(fr0), **base2)
+        st0 = free.stages[-1]
+        assert st0['readout_route'] == 'collins' and \
+            st0['readout_route_k1'] <= 1.0, (
+            f'the second fixture no longer takes the one-step route with no '
+            f'key named, so the field arm below would be vacuous again: '
+            f"{st0.get('readout_route')!r}, K1 = "
+            f"{st0.get('readout_route_k1')!r}")
+        for key, val in keys:
+            with warnings.catch_warnings():
+                warnings.simplefilter('ignore')
+                got = C.propagate_traced_carrier_chain(
+                    env2, groups, 1.31e-6, dx2, transport='collins',
+                    focus_readout=dict(fr0, **{key: val}), **base2)
+                ref = C.propagate_traced_carrier_chain(
+                    env2, groups, 1.31e-6, dx2, transport='sziklas',
+                    focus_readout=dict(fr0, **{key: val}), **base2)
+            st = got.stages[-1]
+            assert st['readout_route'] == 'sziklas'
+            assert st['readout_route_reason'] == 'sziklas_only_key'
+            assert st['readout_route_k1'] is None
+            assert np.array_equal(np.asarray(got.field),
+                                  np.asarray(ref.field)), (
+                f'naming {key!r} selected the Sziklas readout by its stage '
+                f'keys but did not return the Sziklas ANSWER')
+            assert not np.array_equal(np.asarray(got.field),
+                                      np.asarray(free.field)), (
+                f'naming {key!r} left the answer where the un-keyed default '
+                f'put it, so the key selected nothing')
 
     def test_an_astigmatic_exact_kernel_is_refused_on_collins(self, env_conv):
         with pytest.raises(ValueError, match='ASTIGMATIC'):

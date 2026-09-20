@@ -78,6 +78,12 @@ _ENTRY_POINTS = ('propagate_carrier_referenced',
                  'propagate_traced_carrier_chain',
                  'propagate_traced_carrier_chain_multi')
 
+#: What the internal call-site census reads.  The three entry points that take
+#: a ``transport`` default, PLUS ``carrier_referenced_focus_readout``, which
+#: takes one of its own since 5.49.0 (WP-C3 round 2) and whose two internal
+#: callers -- the chain's readout fallback -- must keep naming ``'sziklas'``.
+_CENSUS_NAMES = _ENTRY_POINTS + ('carrier_referenced_focus_readout',)
+
 
 # ---------------------------------------------------------------------------
 # fixtures and oracles -- written here, sharing nothing with the transport
@@ -293,44 +299,145 @@ def test_every_internal_transport_call_site_names_its_transport():
     probe rather than by reading the diff.
 
     The census is AST-based and counts CALLS, so a new call site added
-    anywhere in the module is caught at the line.
+    anywhere in the PACKAGE is caught at the line.
+
+    WIDENED IN WP-C3 ROUND 2 (VERIFY-WP-C3 D9), which measured the first
+    version against six un-named fourth call sites and found it fired for two.
+    Four escapes, all closed here:
+
+    * a call in ANOTHER shipped module -- the census read only
+      ``carrier.py``.  It now walks every ``*.py`` under the package root, so
+      the report's "no other module names these entry points" is gated rather
+      than grepped;
+    * a call with ``**kw`` -- excused unconditionally by the old
+      ``not any(kw.arg is None ...)``, and ``**{}`` excused it too.  Splat
+      sites are now excused only by an ALLOW-LIST of enclosing function
+      names, each of which is additionally required to mention ``transport``
+      in its own source (which is what makes the forward real);
+    * a module-level ALIAS (``_alias = propagate_carrier_referenced``) --
+      invisible to a name test on the call node;
+    * a dynamic lookup (``globals()['propagate_carrier_referenced'](...)`` or
+      ``getattr(...)``) -- likewise.
+
+    ``carrier_referenced_focus_readout`` joined the censused names in round 2,
+    because 5.49.0 gives it a ``transport`` of its own (VERIFY-WP-C3 D8) and
+    the chain's readout FALLBACK must keep naming ``'sziklas'`` for its
+    bit-identity contract.
     """
-    src = pathlib.Path(CA.__file__).read_text(encoding='cp1252')
-    tree = ast.parse(src)
-    offenders = []
-    n_sites = 0
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.Call):
+    root = pathlib.Path(CA.__file__).parents[1]
+    #: Enclosing functions whose ``**kwargs`` splat is a VERBATIM forward of
+    #: the caller's own ``transport``.  Curated, not inferred: a new splat
+    #: site anywhere else fails this census by name.
+    _SPLAT_FORWARDERS = frozenset({
+        'propagate_traced_carrier_chain',          # the multi-congruence arm
+        'propagate_traced_carrier_chain_multi',    # -> _common_chain_kwargs
+        '_multi_worker_run',                       # the worker process
+        '_run_chain_dx_self_check',                # the dx self-check re-run
+    })
+    offenders, splats, n_sites, n_files = [], [], 0, 0
+    for _p in sorted(root.rglob('*.py')):
+        try:
+            src = _p.read_text(encoding='cp1252')
+        except (OSError, UnicodeDecodeError):       # pragma: no cover
             continue
-        fn = node.func
-        nm = (fn.id if isinstance(fn, ast.Name)
-              else fn.attr if isinstance(fn, ast.Attribute) else None)
-        if nm not in ('propagate_carrier_referenced',
-                      'propagate_traced_carrier_chain',
-                      'propagate_traced_carrier_chain_multi'):
+        n_files += 1
+        try:
+            tree = ast.parse(src)
+        except SyntaxError:                         # pragma: no cover
             continue
-        n_sites += 1
-        names = {kw.arg for kw in node.keywords}
-        if 'transport' not in names and not any(kw.arg is None
-                                                for kw in node.keywords):
-            offenders.append(f'line {node.lineno}: {nm}(...)')
+        rel = _p.relative_to(root).as_posix()
+        # module-level aliases and dynamic lookups of an entry point
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Assign) and isinstance(
+                    node.value, ast.Name) and node.value.id in _ENTRY_POINTS:
+                offenders.append(
+                    f'{rel}:{node.lineno}: alias of {node.value.id}')
+            if isinstance(node, ast.Subscript) and isinstance(
+                    node.slice, ast.Constant) and \
+                    node.slice.value in _ENTRY_POINTS:
+                offenders.append(
+                    f'{rel}:{node.lineno}: dynamic lookup of '
+                    f'{node.slice.value}')
+            if isinstance(node, ast.Call) and isinstance(
+                    node.func, ast.Name) and node.func.id == 'getattr' and \
+                    len(node.args) >= 2 and isinstance(
+                        node.args[1], ast.Constant) and \
+                    node.args[1].value in _ENTRY_POINTS:
+                offenders.append(
+                    f'{rel}:{node.lineno}: getattr lookup of '
+                    f'{node.args[1].value}')
+        # the calls themselves, with their enclosing function
+        encl = {}
+        for _f in ast.walk(tree):
+            if isinstance(_f, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                for _n in ast.walk(_f):
+                    if isinstance(_n, ast.Call):
+                        encl.setdefault(id(_n), _f)
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            fn = node.func
+            nm = (fn.id if isinstance(fn, ast.Name)
+                  else fn.attr if isinstance(fn, ast.Attribute) else None)
+            if nm not in _CENSUS_NAMES:
+                continue
+            n_sites += 1
+            names = {kw.arg for kw in node.keywords}
+            if 'transport' in names:
+                continue
+            owner = encl.get(id(node))
+            if not any(kw.arg is None for kw in node.keywords):
+                offenders.append(f'{rel}:{node.lineno}: {nm}(...)')
+                continue
+            oname = owner.name if owner is not None else '<module>'
+            splats.append(f'{rel}::{oname}')
+            if oname not in _SPLAT_FORWARDERS:
+                offenders.append(
+                    f'{rel}:{node.lineno}: {nm}(**kw) inside {oname!r}, '
+                    f'which is not an allow-listed forwarder')
+            if any(isinstance(_kw.value, ast.Dict) for _kw in node.keywords
+                   if _kw.arg is None):
+                offenders.append(
+                    f'{rel}:{node.lineno}: {nm}(**<dict literal>) -- a '
+                    f'literal cannot be forwarding a caller transport')
+    assert n_files >= 50, (
+        f'the census walked only {n_files} modules; it is not reading the '
+        f'package')
     assert n_sites >= 3, (
         f'only {n_sites} internal call sites found; the census is not reading '
         f'the module')
+    assert sorted(splats) == sorted(
+        f'propagators/carrier.py::{_f}' for _f in _SPLAT_FORWARDERS), (
+        'the splat-forwarding sites are a curated set of exactly four, '
+        'one per allow-listed function; found: ' + repr(sorted(splats)))
     assert not offenders, (
         'these internal call sites ride the public transport default, which '
         'moved in 5.49.0 and will move again:\n  ' + '\n  '.join(offenders))
 
 
-def test_the_sziklas_readouts_own_leg_is_pinned_and_the_pin_is_load_bearing():
-    """Fail-before: the containment refusal exists only while that leg is the
-    co-moving one.
+def test_the_focus_readouts_standoff_leg_takes_that_readouts_own_transport():
+    """The Sziklas readout's carrier leg onto the stop plane is a CHOICE with
+    a keyword, not a pin (WP-C3 round 2, VERIFY-WP-C3 D8).
 
-    The shipped call raises (the CLAIM).  Then the SAME call is run with the
-    module's internal leg monkeypatched to drop ``transport=`` -- i.e. to ride
-    the new default, which is what the code did before this package pinned it
-    -- and the refusal disappears.  Both arms are asserted, so this cannot
-    pass by the fixture simply never refusing.
+    WP-C3 pinned it to ``'sziklas'`` because the entry point had no
+    ``transport`` of its own, so riding the flipped public default would have
+    moved a public answer with no one-keyword way back.  Round 2 gives it the
+    keyword, because the measurement goes against the pin: against a converged
+    dense separable Fresnel oracle the Collins leg reads relL2 4.7340e-05 on
+    this very fixture and the Sziklas one 2.4049, and over five geometries x
+    six standoffs the Sziklas leg refuses 7 of 30 while the Collins leg
+    refuses none.
+
+    THREE ARMS, so neither side can be empty:
+
+    * ``transport='sziklas'`` still RAISES the documented containment
+      ``RuntimeError`` here -- that is the 5.48.1 behaviour, and it is the way
+      back;
+    * the default RETURNS on the same call, and the containment the guard
+      measured is genuinely different, not merely unreported;
+    * the chain's readout fallback still NAMES ``'sziklas'``, which
+      ``test_every_internal_transport_call_site_names_its_transport``
+      censuses, so the fallback's bit-identity contract is untouched.
     """
     n, dx = 128, 4e-6
     x = _axis(n, dx)
@@ -339,28 +446,67 @@ def test_the_sziklas_readouts_own_leg_is_pinned_and_the_pin_is_load_bearing():
     kw = dict(dx_out=2e-7, N_out=32, standoff=1e-3, on_replica='ignore')
 
     with pytest.raises(RuntimeError, match='co-moving grid at the stop plane'):
-        CA.carrier_referenced_focus_readout(env, -0.03, 0.03, 633e-9, dx, **kw)
+        CA.carrier_referenced_focus_readout(env, -0.03, 0.03, 633e-9, dx,
+                                            transport='sziklas', **kw)
 
-    real = CA.propagate_carrier_referenced
+    pd_c, pd_s = {}, {}
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        got_c = CA.carrier_referenced_focus_readout(
+            env, -0.03, 0.03, 633e-9, dx, _period_out=pd_c, **kw)
+        got_s = CA.carrier_referenced_focus_readout(
+            env, -0.03, 0.03, 633e-9, dx, transport='sziklas',
+            on_focus_containment='ignore', _period_out=pd_s, **kw)
+    assert np.all(np.isfinite(got_c)), (
+        'the default did not return a finite field on the fixture the pinned '
+        'leg refuses, so the decision above has no consequence')
+    assert pd_c['containment'] != pd_s['containment'], (
+        f"the two transports handed the guard the same stop plane "
+        f"({pd_c['containment']:.6g} vs {pd_s['containment']:.6g}), so the "
+        f"keyword selects nothing")
 
-    def _rides_the_default(*a, **k):
-        k.pop('transport', None)
-        return real(*a, **k)
+    # THE ADJUDICATOR: a dense separable Fresnel quadrature of the SAME input
+    # field onto the SAME output lattice, oversampled in the input plane until
+    # it stops moving.  It shares no code with either transport, and its own
+    # convergence is asserted before it is allowed to decide anything.
+    def _oracle(over):
+        k0 = 2.0 * np.pi / 633e-9
+        xa = _axis(n, dx)
+        xd = np.linspace(xa[0], xa[-1] + dx, n * over, endpoint=False)
+        e1 = np.exp(-xd ** 2 / (120e-6 ** 2)) * np.exp(
+            1j * k0 * xd ** 2 / (2.0 * -0.03))
+        xo = _axis(32, 2e-7)
+        ph = np.exp(1j * k0 * xd ** 2 / (2.0 * 0.03))
+        ker = np.exp(-1j * k0 * np.outer(xo, xd) / 0.03)
+        f1 = ker @ (e1 * ph * np.gradient(xd))
+        pre = np.exp(1j * k0 * 0.03) / (1j * 633e-9 * 0.03)
+        return pre * np.outer(f1, f1) * np.exp(
+            1j * k0 * (xo[:, None] ** 2 + xo[None, :] ** 2) / (2.0 * 0.03))
 
-    prev = CA.propagate_carrier_referenced
-    CA.propagate_carrier_referenced = _rides_the_default
-    try:
-        with warnings.catch_warnings():
-            warnings.simplefilter('ignore')
-            out = CA.carrier_referenced_focus_readout(
-                env, -0.03, 0.03, 633e-9, dx, **kw)
-    except RuntimeError:
-        out = None
-    finally:
-        CA.propagate_carrier_referenced = prev
-    assert out is not None, (
-        'the mutation did not change the outcome, so the pin this test gates '
-        'is not load-bearing on this fixture and the claim above is empty')
+    t_hi, t_lo = _oracle(256), _oracle(64)
+    conv = float(np.linalg.norm(t_hi - t_lo) / np.linalg.norm(t_hi))
+    assert conv < 1e-5, (
+        f'the oracle has not converged ({conv:.3e}), so it cannot arbitrate')
+
+    def _rel(a):
+        a = np.asarray(a)
+        return float(np.linalg.norm(a - t_hi) / np.linalg.norm(t_hi))
+
+    r_c, r_s = _rel(got_c), _rel(got_s)
+    # Bars derived from the oracle's own floor: its convergence is ~5e-7 and
+    # its self-consistency against a sampled sum ~4.5e-5, so 1e-3 is two
+    # decades above anything the oracle itself could be wrong by, and 0.1 is
+    # two decades above THAT.  Measured 2026-09-20 on both builds:
+    # collins 4.7340e-05, sziklas 2.4049 -- 50 000x apart.
+    assert r_c < 1e-3, (
+        f'the default standoff leg is {r_c:.4e} from the converged '
+        f'quadrature, which is not the reason this keyword exists')
+    assert r_s > 0.1, (
+        f'the pinned co-moving standoff leg reads {r_s:.4e} here, so this '
+        f'fixture no longer shows the difference the decision was taken on')
+    assert r_s / r_c > 1e3, (
+        f'collins {r_c:.4e} vs sziklas {r_s:.4e}: less than three decades '
+        f'apart, so the decision is inside the fixture\'s own noise')
 
 
 def test_the_readout_resolves_its_quadrature_and_the_fallback_is_bit_identical():

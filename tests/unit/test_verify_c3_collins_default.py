@@ -330,7 +330,7 @@ class TestTheResolvedRouteIsTwoSided:
             got = _run(cfg, 50e-3, dict(fr, **{key: val}), 'collins')
             st = got.stages[-1]
             assert st['readout_route'] == 'sziklas', key
-            assert st['readout_route_reason'] == 'stop_plane_key', key
+            assert st['readout_route_reason'] == 'sziklas_only_key', key
             assert st['readout_route_k1'] is None, (
                 f'{key}: K1 was published for a route the keyword had '
                 f'already decided -- the reason string and the reading '
@@ -444,16 +444,12 @@ class TestOpenDefectsFiledByVerifyWpC3:
             f'on a leg that is nowhere near a focus, while the co-moving step '
             f'agrees with it')
 
-    @pytest.mark.xfail(strict=True, reason=(
-        'VERIFY_WP-C3 defect D4: focus_readout["bandlimit"] is a '
-        'SZIKLAS-readout-only key that is neither refused nor route-selecting '
-        'on transport="collins".  On the collins readout route it is dropped '
-        'from _par_kw and silently ignored -- the accept-and-ignore shape '
-        'WP-C3 section 1.5 removed for standoff / on_focus_containment and '
-        'left in place for this one.  Requested fix: add "bandlimit" to '
-        '_FOCUS_READOUT_STOP_PLANE_KEYS (renamed _FOCUS_READOUT_SZIKLAS_ONLY_'
-        'KEYS) so naming it SELECTS the Sziklas readout, exactly as the other '
-        'two do.'))
+    # CLOSED by WP-C3 ROUND 2 (2026-09-20): ``bandlimit`` joined
+    # ``_FOCUS_READOUT_SZIKLAS_ONLY_KEYS`` (the renamed
+    # ``_FOCUS_READOUT_STOP_PLANE_KEYS``), so naming it on the default
+    # SELECTS the Sziklas readout exactly as ``standoff`` and
+    # ``on_focus_containment`` do, and the published reason string became
+    # ``'sziklas_only_key'`` because ``bandlimit`` is not a stop-plane key.
     def test_bandlimit_is_not_accepted_and_ignored_on_the_collins_route(self):
         cfg = _oversampled_chain()
         fr = dict(dx_out=0.5e-6, N_out=64)
@@ -506,29 +502,24 @@ class TestOpenDefectsFiledByVerifyWpC3:
                 _gauss(n, dx, w), groups, LAM, dx, **kw)
         assert np.all(np.isfinite(got.field))
 
-    @pytest.mark.xfail(strict=True, reason=(
-        'VERIFY_WP-C3 defect D1: propagate_traced_carrier_chain\'s own '
-        'transport docstring still tells callers the stop-plane keys are '
-        '"refused, not ignored" on transport="collins", which this same '
-        'branch changed to a SELECTION.  Requested fix: rewrite that bullet '
-        'to say the keys select the Sziklas readout and publish '
-        'readout_route_reason="stop_plane_key".'))
+    # CLOSED by WP-C3 ROUND 2 (2026-09-20): the bullet now says the keys
+    # SELECT the Sziklas readout and publish
+    # ``readout_route_reason='sziklas_only_key'``.  The two comments the
+    # branch wrote in ``test_niche_d2_chain_multi.py`` were rewritten with
+    # it, and ``_SZIKLAS_STANDOFF``'s docstring now describes all nine of
+    # its uses rather than the six that pass a ``standoff``.
     def test_the_chain_docstring_does_not_still_say_the_keys_are_refused(self):
         doc = C.propagate_traced_carrier_chain.__doc__ or ''
         assert 'refused, not ignored' not in doc, (
             'the public docstring of the function whose contract changed '
             'still describes the pre-change contract')
 
-    @pytest.mark.xfail(strict=True, reason=(
-        'VERIFY_WP-C3 defect D2: _collins_readout_k1\'s docstring carries two '
-        'mutually inconsistent MEASURED readings for ONE fixture -- '
-        '"exit support 5.76 mm, K1 = 56.0" and, three sentences later, '
-        '"82.4 / 21.4 / 10.9".  Measured on this build, on the array the '
-        'chain itself hands the condition, the WP-B4 relay reads exit '
-        'support 6.736 mm and K1 = 82.36047 / 41.44910 / 21.42248 / 10.94410 '
-        'at N = 256 / 512 / 1024 / 2048 -- so the second triple is right to '
-        'its printed precision and the "5.76 mm, K1 = 56.0" clause is not. '
-        'Requested fix: delete that clause.'))
+    # CLOSED by WP-C3 ROUND 2 (2026-09-20).  Re-measured on the array the
+    # chain itself hands the condition: exit pitch 76.5444 um, exit support
+    # radius 6.7359 mm, K1 = 82.36047 / 41.44910 / 21.42248 / 10.94410 at
+    # N = 256/512/1024/2048.  The docstring carries those numbers now, plus
+    # the staircase and the slope, and the '5.76 mm / K1 = 56.0' clause and
+    # the unreproducible free-leg 1.2359 are gone.
     def test_the_readout_k1_docstring_quotes_the_measured_reading(
             self, monkeypatch):
         doc = C._collins_readout_k1.__doc__ or ''

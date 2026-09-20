@@ -115,7 +115,7 @@ def main():
                   'on_replica', 'replica_fill', 'on_focus_containment')
     disp = []
     for k in sorted(C._FOCUS_READOUT_KEYS):
-        sel = k in C._FOCUS_READOUT_STOP_PLANE_KEYS
+        sel = k in getattr(C, '_FOCUS_READOUT_SZIKLAS_ONLY_KEYS', None) or C._FOCUS_READOUT_STOP_PLANE_KEYS
         disp.append(dict(key=k,
                          in_collins_par_kw=(k in collins_kw),
                          in_sziklas_par_kw=(k in sziklas_kw),
