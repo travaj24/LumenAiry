@@ -501,9 +501,29 @@ def apply_aperture(E_in, dx, shape='circular', params=None, xc=0, yc=0,
     # Grey edge: average the binary mask over an n_sub x n_sub lattice of
     # sub-pixel offsets centred on each pixel, giving its open-area
     # fraction.  Accumulated one sub-mask at a time, so the peak stays at
-    # the cost of a single sub-mask evaluation (measured 6.0 float64 grids
-    # at N = 2048, against 5.0 for the hard edge) instead of growing with
-    # n_sub**2 -- measured identical at n_sub = 2, 4 and 8.
+    # the cost of a single sub-mask evaluation instead of growing with
+    # n_sub**2.
+    #
+    # VERIFY-C1-ROUND2 R7.  The two build-free claims, and the ones this
+    # comment is making, are that (a) the branch costs about ONE extra
+    # float64 grid at peak over the hard branch and (b) that peak does not
+    # grow with n_sub.  Allocator trace at N = 2048 (tracemalloc, steady
+    # state, input field's 2 grids excluded), 2026-09-20:
+    #
+    #   build                              hard     grey(4)   delta
+    #   Windows py3.14.6 / numpy 2.4.4     5.0011   6.0011    1.000
+    #   WSL     py3.12.3 / numpy 2.4.6     4.0011   5.1262    1.125
+    #
+    # so the ABSOLUTE pair is the build's and only the delta travels; the
+    # "6.0 against 5.0" this comment used to quote was the Windows reading
+    # alone.  Independence of n_sub, over 2 / 4 / 8 / 16: spread 0.0001
+    # grids on Windows, 0.0006 on WSL.
+    #
+    # Trap: the FIRST apply_aperture call in a PROCESS carries a one-off
+    # allocation of about 1.374 grids (Windows) / 1.053 (WSL) on either
+    # branch, so whichever arm is traced first reads high -- 6.375 for a
+    # hard-first trace here, which would say the grey branch is cheaper.
+    # Warm both arms before comparing.
     real_dtype = xp.zeros((), dtype=E_in.dtype).real.dtype
     offsets = (np.arange(n_sub) + 0.5) / n_sub - 0.5
     frac = xp.zeros((Ny, Nx), dtype=real_dtype)
