@@ -1125,8 +1125,8 @@ CHANGELOG entry.
 
 | selection | build | result |
 |---|---|---|
-| `test_wp_b12b_round2.py` (NEW, 22 ids) | Windows | see R2.10 |
-| `test_audit2609_b12b_gbd_projection.py` (14) + `test_verify_b12b_gbd_projection.py` (9) + `test_wp_b12b_round2.py` (22) | Windows | **45 passed** in 96.7 s |
+| `test_wp_b12b_round2.py` (NEW, **23 ids**) | Windows | **23 passed** in 10.6 s quiet / 14.8 s under the `--store-durations` run; slowest id **6.29 s** |
+| `test_audit2609_b12b_gbd_projection.py` (14) + `test_verify_b12b_gbd_projection.py` (9) + `test_wp_b12b_round2.py` (23, one id newer than that run) | Windows | **45 passed** in 96.7 s |
 | the GBD + FGA + reference-plane selection (21 files) | Windows / WSL | see R2.10 |
 | the census / walker / dispatcher-pin / public-API / doc-consistency sweep + `test_audit_except_budget.py` (30 files, 1404 ids) | Windows | **1389 passed, 14 skipped, 1 failed** in 280.9 s -- the one red is PRE-EXISTING and environmental (below) |
 
@@ -1149,7 +1149,10 @@ this package does not own.
 |---|---|
 | `python scripts/record_history_fingerprints.py --check` | **OK: every history document matches its module** (`lumenairy.propagators.gbd.md` re-recorded) |
 | `python scripts/check_doc_identifiers.py` | **OK**, 621 distinct, 0 unresolved |
-| `.test_durations` | 16 396 -> **16 418** entries, valid JSON, **22** new ids, largest **5.03 s** |
+| `wsl ~/lumvenv/bin/python -m ruff check lumenairy/ tests/ validation/probe_wp_b12b_round2/ validation/probe_verify_b12b/ validation/probe_gbd_projection/` (ruff 0.15.16) | **All checks passed** |
+| Windows `python -m ruff check` on the same paths | **All checks passed** |
+| `python scripts/check_source_line_citations.py` | audits the topmost RELEASED block (v5.47.1) and reports "nothing to verify" (exit 2) -- identical before and after this branch; it does not read `## [Unreleased]` |
+| `.test_durations` | 16 396 -> **16 419** entries, valid JSON, **23** new ids, largest **6.29 s**, spliced into the committed document so the diff is 23 insertions and 0 deletions |
 
 ---
 
