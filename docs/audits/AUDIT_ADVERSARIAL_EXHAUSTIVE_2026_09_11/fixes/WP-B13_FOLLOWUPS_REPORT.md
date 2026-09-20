@@ -670,3 +670,234 @@ for the remaining 900 s, so the sweep is still the right thing to do after any r
    demonstration (three wedge failures, each with its own message and a real dump).  The
    `joins`-only arm completed normally in 138.51 s, so whatever stalled the combined run is not
    reproducible from the `joins` injection alone.
+
+---
+
+# Round 2 (VERIFY-WP-B13-FOLLOWUPS) -- 2026-09-19
+
+The independent verification of this package
+(`VERIFY_WP-B13_FOLLOWUPS.md`, commit `fd615da5` on `verify/wp-b13-followups`) returned **SHIP**
+and raised nine defects, of which it owns none: section 8 lists them as "requested changes outside
+my ownership".  This addendum closes all nine.  Branch `fix/wp-b13-followups-2`, worktree
+`C:\tmp\lum_pool3`, base `fd615da5`.
+
+**One library change (VD2), one test restatement (VD7/VD8), one new decision test (VD3) and six
+documentation corrections.**  Two builds throughout -- **Windows python 3.14.6 / numpy 2.4.4 /
+scipy 1.17.1** and **WSL python 3.12.3 / numpy 2.4.6** -- every command carrying
+`OMP_NUM_THREADS=OPENBLAS_NUM_THREADS=MKL_NUM_THREADS=1` on the command line and every probe
+printing `lumenairy.__file__` as its first line with the tree pinned through `PYTHONPATH`.  The
+thirteen-file pool gate ran under BOTH pytest captures on BOTH builds.
+
+**Box load, stated first.**  The box was shared with other agents' lanes throughout (24-28 resident
+`python.exe` at any moment, 88-91 GB of 128 GB free).  Nothing below is a wall-time claim; the
+quantities are COUNTS, source facts and hang/no-hang decisions, all of which are load-independent.
+
+## R2.0 What changed, per finding
+
+| id | severity | what it was | what changed | proof |
+|---|---|---|---|---|
+| VD1 | P3 | `.test_durations` had no entries for the package's new ids | nothing -- the verifier spliced all twenty in `fd615da5`; **confirmed present and JSON-valid** | R2.1 |
+| VD2 | P3 latent | `_shutdown_pool_bounded`'s helper removed from `_ABANDONED_POOLS` unconditionally | a caller-set `added` flag under `_ABANDONED_POOLS_LOCK`; the helper removes only its own caller's entry | R2.2 |
+| VD3 | P2 | "`TimeoutError` is an `OSError` subclass" is FALSE inside `requires-python` | sec. 6.1 and the CHANGELOG corrected; a decision test drives five MROs through the real dispatcher; the `except` tuple deliberately NOT widened, with the reason recorded | R2.3 |
+| VD4 | P3 | the D5 recommendation did not say a sentinel bounds only the bootstrap | one sentence added to sec. 6.1, and to the CHANGELOG | R2.4 |
+| VD5 | P3 | the docstring's "surplus worker of a wider pool" state does not exist | docstring and sec. 3 restated: lazy spawn, and the never-served column is the cost of a worker the labelling step created | R2.5 |
+| VD6 | P3 | the join detector has 2 residual false negatives | cited, NOT widened: the exposure is closed by the verifier's package sweep with a positive control | R2.6 |
+| VD7 | P3 | the D4 pin misses the magnitude leaving via `_note_pool_inflight`'s return value | a fourth fact: every call site is an expression STATEMENT | R2.7 |
+| VD8 | P4 | the same pin false-fails on `0 < _POOL_INFLIGHT` | operands read from `[node.left, *node.comparators]` minus the counter's node | R2.7 |
+| VD9 | P4 | the sec. 0 D3 row quotes means where the prose quotes maxima | the row now quotes maxima | R2.8 |
+
+## R2.1 VD1 -- the durations are there
+
+`.test_durations` on `fd615da5` and on this branch: **16 288 entries**, reloads as valid JSON, every
+value numeric.  All twenty ids the two packages added are present (twenty-one keys: the
+verification's `test_a_helper_that_raises_an_uncaught_class_still_publishes_and_clears` is
+parametrized and carries `[BaseException]` and `[MemoryError]` separately).  The nine the WP branch
+added read 0.010-2.730 s; the eleven the verification added read 0.220-29.21 s, the slowest being
+`test_a_pool_wider_than_the_dispatch_holds_no_surplus_processes`, comfortably inside the 60 s bar.
+Nothing to change; recorded as confirmed.
+
+## R2.2 VD2 -- the census entry now has an owner
+
+**The edit** (section 8.1, applied verbatim in intent).  `_shutdown_pool_bounded` gains an `added`
+flag, written by the CALLER under `_ABANDONED_POOLS_LOCK` at the moment it appends and read by the
+helper under that same lock before it removes.  **Everything the D2 fix rests on is unchanged**:
+`done` is still published BEFORE the lock, the caller still re-reads `done` under the lock, and the
+expiry still increments `_POOL_SHUTDOWN_TIMEOUTS` before appending.
+
+**The proof, with the verifier's own reproducer imported rather than re-typed.**
+`validation/probe_fix_b13_followups_r2/r2_vd2_census.py` loads
+`validation/probe_verify_b13_followups/vf2_d2_census.py` as a module and runs its `Census`,
+`_StubPool`, `_OrderedLock`, its three ordering copies and its `attack_unconditional_remove`.  The
+fail-before arm is therefore literally the verifier's attack against the verifier's copy of the
+pre-VD2 ordering; the fail-after arm is the same attack against the real
+`lumenairy.elements._lens_traced._shutdown_pool_bounded` and the real `_ABANDONED_POOLS`.
+
+| arm | Windows 3.14.6 | WSL 3.12.3 |
+|---|---|---|
+| **the reaper's entry dropped by the bounded helper, pre-VD2 copy (6 reps)** | **6 / 6** | **6 / 6** |
+| **the same attack, real library after the edit (6 reps)** | **0 / 6** | **0 / 6** |
+| one-liner, helper-first lock order (8 reps) | 8 leaked | 8 leaked |
+| one-liner, caller-first lock order | 0 | 0 |
+| shipped-ordering copy, either order | 0 | 0 |
+| real library, either order | 0 leaked, census empty at end | 0 leaked, census empty at end |
+| helper raises 3 classes it does not catch | returns to empty, all 3 | all 3 |
+| `_abandon_pool` racing a bounded teardown (6 reps) | 0 leaks, 0 premature removals | same |
+| expiry scanned across the bound (8 points) | 0 leaks | 0 leaks |
+
+So the **6/6 drop becomes 0/6** and **the 8/8-vs-0/8 D2 race result is unchanged**, on both builds.
+
+**The precondition pin still holds.**  `test_one_executor_never_reaches_both_teardown_mechanisms`
+is green, and the probe re-reads its two source facts as numbers:
+`close_worker_pool_routes_to_exactly_one_mechanism: true`,
+`_get_persistent_worker_pool_calls_shutdown_pool_bounded: false`, on both builds.  The pin is kept
+rather than retired: it is now a defence in depth (the helper can no longer drop a foreign entry,
+AND no executor reaches both mechanisms), and its failure message is the place a future caller that
+breaks the routing will be told about the census.
+
+## R2.3 VD3 -- what the infrastructure clause reaches, and why the tuple is left alone
+
+**The correction.**  Section 6.1's candidate-B bullet claimed the fallback was already right
+because "`TimeoutError` is an `OSError` subclass, so it lands in the dispatcher's existing
+infrastructure clause".  That is true of the **builtin** on every supported interpreter (PEP 3151)
+and true of `concurrent.futures.TimeoutError` only from **Python 3.11**, where gh-90315 made it an
+alias of the builtin; before that it derived from `concurrent.futures._base.Error(Exception)`.
+`pyproject.toml` declares `requires-python = ">=3.10"` and CI runs 3.10.  The bullet now says so,
+says that naming the timeout class is the FIRST line of whoever adds the bar, and the `[Unreleased]`
+CHANGELOG entry carries the same correction.
+
+**The decision test.**
+`test_fix_newton_pool_broken_fallback.py::test_the_infrastructure_clause_reaches_an_oserror_timeout_and_no_other`
+drives the verifier's reproducer -- a stub executor whose `submit` raises a chosen class, installed
+through the same substitution point the rest of the file uses, so the shipped dispatcher and the
+shipped `except (BrokenProcessPool, RuntimeError, OSError, EOFError)` tuple are what runs -- over
+five MROs, and asserts **the outcome the code ships**:
+
+| raised | MRO | asserted outcome |
+|---|---|---|
+| builtin `TimeoutError` | `-> OSError -> ...` | caught; serial answer byte-identical to the `n_workers=1` reference |
+| `concurrent.futures.TimeoutError` **on the running build** | measured in the test | caught **iff** `issubclass(cf.TimeoutError, OSError)` -- the 3.11 boundary, measured not assumed |
+| reconstructed **pre-3.11** `cf.TimeoutError` (`-> Error -> Exception`) | reconstructed in the test | **escapes to the caller** |
+| `OSError` (control) | | caught, byte-identical |
+| `ValueError` (control) | | escapes, correctly |
+
+The pre-3.11 class is reconstructed rather than imported because no 3.10 interpreter is installed
+on this box; the shape that matters is the MRO, which is what an `except` tuple matches on, and the
+test asserts the reconstruction is not an `OSError` before it uses it.  This is build-free in the
+sense `docs/TESTING_STANDARDS.md` rule 1 asks for: the two-sided statement is about a DECISION (does
+the clause reach it), and the one arm that could move with the interpreter reads its own premise
+off the running build.
+
+**Why `concurrent.futures.TimeoutError` was NOT added to the tuple.**  The brief permitted the
+addition only on proof that it is behaviour-neutral today.  It is not provably neutral, and the
+direction it fails in is the one this module has already legislated against:
+
+* on **3.11+** it is a literal no-op -- `cf.TimeoutError` IS the builtin, which is an `OSError`, and
+  the tuple already names `OSError`.  Nothing to gain;
+* on **3.10** it is a real change, and the only exception it can newly catch is one raised by a
+  WORKER and re-raised by `fut.result()`.  The tuple's own comment refuses to swallow exactly that
+  class of thing ("`ValueError`, `ImportError` and `MemoryError` are deliberately NOT caught any
+  more ... swallowing them silently re-ran the identical computation serially ... or, worse,
+  succeeded serially and hid a genuine parallel-path bug behind a silent 8x slowdown").  A
+  worker-raised timeout is a worker fault by the same argument;
+* and the escape it would prevent is **unreachable today**: nothing inside the dispatcher's `try`
+  asks for a timeout.  Neither `as_completed` nor `Future.result` is given one, which the decision
+  test re-reads from the source as its last assertion, so no path in the block can raise either
+  timeout class.
+
+So the tuple is left as it is and the edit is recorded as the first line of any future sentinel --
+in section 6.1, in the CHANGELOG, in the decision test's docstring and in the failure message of
+`test_verify_b13_followups.py::test_a_timeout_on_the_dispatch_must_name_its_own_exception_class`,
+which turns red the day a `timeout=` lands without the class named.  The decision test's own last
+assertion fires in the same instant and names the same repair, so the requirement is enforced from
+both files.
+
+## R2.4 VD4 -- a bootstrap sentinel bounds only the bootstrap
+
+One sentence added to section 6.1's candidate-B derivation, and to the CHANGELOG's open-D5 note: a
+pool whose first submit ANSWERS and whose later chunks never complete still runs past any deadline.
+The verification measured it on both builds (`vf5_d5_timing.py::measure_residual_exposure`:
+`sentinel_answered: true`, `still_running_at_deadline: true` at 20 s with four submits outstanding),
+and `test_a_bootstrap_bar_would_not_bound_a_chunk_that_wedges_later` pins it.  Candidate B closes
+the `slowboot` shape -- a pool that never comes up -- and narrows nothing else; the unbounded
+`as_completed` is still behind the sentinel.
+
+## R2.5 VD5 -- the never-served worker is the labelling step's cost, not the rule's
+
+`_get_persistent_worker_pool`'s docstring called the never-served worker "what the SURPLUS of a
+pool wider than the clamp is".  That state does not exist.  CPython's `ProcessPoolExecutor` spawns
+LAZILY -- `_adjust_process_count` runs inside `submit`, not inside `__init__` -- so a pool
+CONSTRUCTED at width 12 holds **zero** worker processes and a 4-chunk dispatch on it leaves
+**four**, measured on every rung of both builds by the verification's independent probe
+(`vf3_d3_footprint.py`: `processes_after_construct: 0`, `processes_after_dispatch: 4`) and pinned by
+`test_a_pool_wider_than_the_dispatch_holds_no_surplus_processes`, which is green here on both
+builds.
+
+The docstring and report section 3 now say: the extra width this rule declines to shrink costs
+nothing until something submits to it; the ladder's never-served column prices a worker the
+MEASUREMENT's own labelling step created, and is best read as the FLOOR for a spawn worker of this
+pool (one necessarily imports `lumenairy.elements._lens_traced`, because that is where its
+`initializer` resolves from); and the state the ceiling rule actually leaves behind is a worker that
+SERVED a chunk -- which is the figure the trade was always priced on, so the conclusion does not
+move and the trade is if anything cheaper than the docstring claimed.
+
+The served figure is restated as the measured RANGE over the two independent measurements rather
+than as one box's peak, because they differ by 4-7 % in the same direction on both builds and in
+both states (the 2026-09-15 probe labelled through `_WORKER_PAYLOADS` with a Manager `Barrier`; the
+2026-09-19 probe through a parent-owned socket rendezvous, with no `Manager` process inside the
+measurement): **93.6-101.6 MB** Windows and **69.5-76.9 MB** WSL for a served worker, i.e.
+**5.5-6 %** of the ~1.7 GB per ACTIVE worker the clamp models, and a 16-wide kept pool of served
+workers at **1.5-1.6 GB**.
+
+## R2.6 VD6 -- cited, not widened
+
+The extended join detector scores 12 TP / 0 FP / **2 FN** / 6 TN on the verification's 20-shape
+corpus (the shipped one: 6 / 2 / 8 / 4).  The two misses are `with <aliased class>(...)`, where the
+executor class was imported under a name not ending in `Executor`, and `with ex:` on a pre-built
+name, where the with-item is an `ast.Name` and no class name is visible.  **The detector is not
+widened.**  Making it treat every `with <Name>:` as an executor teardown would have it guess what a
+bare name is bound to, which is how a source pin acquires false positives -- and the exposure is
+already closed one level up by the verification's own package sweep,
+`test_verify_b13_followups.py::test_no_module_uses_an_executor_teardown_the_join_detector_cannot_see`,
+which carries a positive control so it cannot go blind without going red.  A module that ever
+adopts one of those two spellings turns that test red before the detector's blindness can matter.
+Recorded in report section 5, with the corpus numbers, rather than acted on.
+
+## R2.7 VD7 / VD8 -- the D4 pin, restated in both directions
+
+`test_the_in_flight_counter_is_one_claim_per_dispatch_not_per_chunk` now:
+
+* reads the non-zero operands from `[node.left, *node.comparators]` **minus the `_POOL_INFLIGHT`
+  node itself**, so both compare orders are the same decision (VD8);
+* and asserts a fourth fact -- every `_note_pool_inflight` call site is an expression STATEMENT, so
+  the magnitude that leaves the module as that function's RETURN VALUE is discarded (VD7).
+
+Graded by `validation/probe_fix_b13_followups_r2/r2_vd7_pin_grade.py`, which imports the
+verification's own grader (`vf6_d4_readers.branch_d4_check`) and runs it beside the restated check
+over the verification's five shapes plus three that isolate the return-value route.  Identical on
+both builds:
+
+| shape | should | pin before | pin after |
+|---|---|---|---|
+| `_POOL_INFLIGHT > 0` | PASS | PASS | PASS |
+| `0 < _POOL_INFLIGHT` | PASS | **FAIL** | PASS |
+| `_POOL_INFLIGHT == 0` | PASS | PASS | PASS |
+| `_POOL_INFLIGHT > 1` | FAIL | FAIL | FAIL |
+| `n = _note_pool_inflight(0); if n > 1:` | FAIL | **PASS** | FAIL |
+| `_note_pool_inflight(1)` as a statement | PASS | PASS | PASS |
+| `n = _note_pool_inflight(0)` (never compared) | FAIL | **PASS** | FAIL |
+| `if _note_pool_inflight(0) > 1:` | FAIL | **PASS** | FAIL |
+| **misgrades** | | **4 / 8** | **0 / 8** |
+
+On the real module the restated pin is green, with 4 `_note_pool_inflight` call sites all
+discarding the value (1 claim, 3 releases) and every comparison against zero.
+`transcription_is_current: true` on both builds -- the probe checks that what it grades is what the
+test ships, so the copy is not the only evidence.  The verification's own
+`test_nothing_consumes_the_in_flight_counters_magnitude` is kept as well: it states the same call-
+site fact from the other file and is what caught the gap in the first place.
+
+## R2.8 VD9 -- the verdict row now quotes maxima
+
+Section 0's D3 row read "served **98.7-100.8 MB** (Win) / **73.2-76.9 MB** (WSL), never-served
+**52.2 / 39.2 MB**" -- the MEANS -- while section 3 and the docstring quote a 101.56 MB max and
+"~102 MB".  The row now quotes maxima (99.0-101.6 / 73.2-76.9, never-served 52.4 / 39.3) and says
+which it is quoting.
