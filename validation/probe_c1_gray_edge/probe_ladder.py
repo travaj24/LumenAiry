@@ -24,25 +24,25 @@ Two kernels:
   * ``propagate_huygens_fresnel_with_opl_callable`` at z = 5 mm with the exact
     spherical OPL, evaluated at ONE on-axis output point.
 
-Usage:  python validation/probe_c1_gray_edge/probe_ladder.py <tag>
+Usage:  python -P validation/probe_c1_gray_edge/probe_ladder.py <tag>
+        (with PYTHONPATH naming the tree under test; ``-P`` keeps the
+         working directory off sys.path so the tree really is the one
+         PYTHONPATH names, and the probe prints ``lumenairy.__file__``)
 writes  validation/probe_c1_gray_edge/ladder_<tag>.json
 """
 import json
 import os
-import sys
 import platform
+import sys
 
 import numpy as np
 
-sys.path.insert(0, os.path.abspath(
-    os.path.join(os.path.dirname(__file__), '..', '..')))
-
-import lumenairy  # noqa: E402
-from lumenairy.elements.elements import apply_aperture  # noqa: E402
-from lumenairy.propagators.rs import rayleigh_sommerfeld_propagate  # noqa: E402
-from lumenairy.propagators.hf import (  # noqa: E402
+import lumenairy
+from lumenairy.elements.elements import apply_aperture
+from lumenairy.propagators.hf import (
     propagate_huygens_fresnel_with_opl_callable,
 )
+from lumenairy.propagators.rs import rayleigh_sommerfeld_propagate
 
 WAVELENGTH = 633e-9
 A = 100e-6          # aperture RADIUS [m]

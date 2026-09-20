@@ -1,6 +1,6 @@
 {
   "tag": "BEFORE_WSL",
-  "lumenairy_file": "/mnt/c/tmp/lum_c1/lumenairy/__init__.py",
+  "lumenairy_file": "/mnt/c/tmp/lum_c1_base/lumenairy/__init__.py",
   "lumenairy_version": "5.48.1",
   "python": "3.12.3",
   "platform": "Linux-4.4.0-26100-Microsoft-x86_64-with-glibc2.39",

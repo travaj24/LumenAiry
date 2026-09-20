@@ -115,6 +115,24 @@
         128,
         128
       ]
+    },
+    "system_aperture_element_jax_eager": {
+      "dtype": "complex128",
+      "nbytes": 262144,
+      "sha256": "93574601eb5b789b224939f262d0f488067550d55f63be5dcc078629ac182f43",
+      "shape": [
+        128,
+        128
+      ]
+    },
+    "system_aperture_element_jax_jit": {
+      "dtype": "complex128",
+      "nbytes": 262144,
+      "sha256": "387bcc150806c5f51112817e1584f12c602527d783cc7112a4cdbacba2aeb8ca",
+      "shape": [
+        128,
+        128
+      ]
     }
   },
   "arm": "default",

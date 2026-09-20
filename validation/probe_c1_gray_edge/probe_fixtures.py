@@ -97,18 +97,27 @@ def ap_complex64(kw):
 
 @aperture_fixture
 def lyot_stop(kw):
-    from lumenairy.elements.elements import apply_lyot_stop
+    """``apply_lyot_stop`` exposes no ``edge``; on the 'hard' arm the probe
+    calls its DOCUMENTED way back (the equivalent annular
+    ``apply_aperture(..., edge='hard')``), which is the claim that matters."""
+    from lumenairy.elements.elements import apply_aperture, apply_lyot_stop
+    if kw:
+        return apply_aperture(_field(), 2e-6, shape='annular',
+                              params={'inner_diameter': 3e-5,
+                                      'outer_diameter': 1.7e-4}, **kw)
     return apply_lyot_stop(_field(), 2e-6, outer_diameter=1.7e-4,
-                           inner_diameter=3e-5, **kw)
+                           inner_diameter=3e-5)
 
 
 @aperture_fixture
 def algebra_aperture_operator(kw):
-    # The algebraic surface has no edge= vocabulary; it is exercised on the
-    # 'default' arm only (its answer is whatever the default decides).
+    """The algebraic surface has no ``edge`` vocabulary; its documented way
+    back is a direct ``apply_aperture`` call, which the 'hard' arm runs."""
     from lumenairy.algebra.apertures import Aperture
     if kw:
-        return None
+        from lumenairy.elements.elements import apply_aperture
+        return apply_aperture(_field(), 2e-6, shape='circular',
+                              params={'diameter': 1.7e-4}, dy=2e-6, **kw)
     op = Aperture(diameter=1.7e-4, shape='circular')
     E, _dx, _dy = op._apply(_field(), dx=2e-6, dy=2e-6, wavelength=633e-9)
     return E
@@ -116,26 +125,67 @@ def algebra_aperture_operator(kw):
 
 @aperture_fixture
 def jones_field_apply_aperture(kw):
+    """``JonesField.apply_aperture`` has no ``edge``; the way back is the
+    free function on each component, which the 'hard' arm runs."""
     from lumenairy.elements.polarization import JonesField
     if kw:
-        return None
+        from lumenairy.elements.elements import apply_aperture
+        parts = [apply_aperture(_field(seed=s), 2e-6, shape='circular',
+                                params={'diameter': 1.7e-4}, dy=2e-6, **kw)
+                 for s in (11, 12)]
+        return np.concatenate([np.asarray(p).ravel() for p in parts])
     jf = JonesField(_field(seed=11), _field(seed=12), dx=2e-6)
     jf.apply_aperture(shape='circular', params={'diameter': 1.7e-4})
     return np.concatenate([np.asarray(jf.Ex).ravel(),
                            np.asarray(jf.Ey).ravel()])
 
 
+def _aperture_chain(kw):
+    elem = {'type': 'aperture', 'shape': 'circular',
+            'params': {'diameter': 1.7e-4}}
+    elem.update(kw)          # 'edge' is an element key from v5.49.0
+    return [elem]
+
+
 @aperture_fixture
 def system_aperture_element(kw):
     from lumenairy.propagators.system import propagate_through_system
-    if kw:
-        return None
-    E = _field(N=128)
-    out = propagate_through_system(
-        E, [{'type': 'aperture', 'shape': 'circular',
-             'params': {'diameter': 1.7e-4}}],
-        633e-9, dx=2e-6)
+    out = propagate_through_system(_field(N=128), _aperture_chain(kw),
+                                   633e-9, dx=2e-6)
     return np.asarray(out[0] if isinstance(out, tuple) else out)
+
+
+@aperture_fixture
+def system_aperture_element_jax_jit(kw):
+    """The jit'd JAX kernel's aperture branch (fast path)."""
+    import importlib.util
+    if importlib.util.find_spec('jax') is None:
+        return None
+    import jax
+    jax.config.update('jax_enable_x64', True)
+    import jax.numpy as jnp
+
+    from lumenairy.propagators.system import propagate_through_system_jax
+    out = propagate_through_system_jax(
+        jnp.asarray(_field(N=128)), _aperture_chain(kw), 633e-9, 2e-6)
+    return np.asarray(out)
+
+
+@aperture_fixture
+def system_aperture_element_jax_eager(kw):
+    """The JAX slow path (``verbose=True`` bypasses the jit cache)."""
+    import importlib.util
+    if importlib.util.find_spec('jax') is None:
+        return None
+    import jax
+    jax.config.update('jax_enable_x64', True)
+    import jax.numpy as jnp
+
+    from lumenairy.propagators.system import propagate_through_system_jax
+    out = propagate_through_system_jax(
+        jnp.asarray(_field(N=128)), _aperture_chain(kw), 633e-9, 2e-6,
+        verbose=True)
+    return np.asarray(out)
 
 
 @aperture_fixture
@@ -152,8 +202,7 @@ def rs_spatial_of_apertured_field(kw):
 @aperture_fixture
 def hf_quadrature_of_apertured_field(kw):
     from lumenairy.elements.elements import apply_aperture
-    from lumenairy.propagators.hf import (
-        propagate_huygens_fresnel_with_opl_callable)
+    from lumenairy.propagators.hf import propagate_huygens_fresnel_with_opl_callable
     N, dx, lam, z = 128, 4e-6, 633e-9, 5e-3
     E = apply_aperture(np.ones((N, N), dtype=complex), dx, 'circular',
                        {'diameter': 2e-4}, **kw)
@@ -175,6 +224,7 @@ def jax_apply_aperture(kw):
     import jax
     jax.config.update('jax_enable_x64', True)
     import jax.numpy as jnp
+
     from lumenairy.elements.elements import apply_aperture
     E = jnp.asarray(_field(N=64))
     return np.asarray(apply_aperture(E, 2e-6, 'circular',
@@ -187,6 +237,7 @@ def cupy_apply_aperture(kw):
     if importlib.util.find_spec('cupy') is None:
         return None
     import cupy as cp
+
     from lumenairy.elements.elements import apply_aperture
     E = cp.asarray(_field(N=64))
     return cp.asnumpy(apply_aperture(E, 2e-6, 'circular',
