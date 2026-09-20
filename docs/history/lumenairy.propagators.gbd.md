@@ -1,7 +1,7 @@
 <!-- lumenairy-history-doc
 module: lumenairy/propagators/gbd.py
-ast_sha256: c5031996bccf79f47bbef874164f3bb9b139c56a5e84e6d4d88b18334e2a8e02
-token_sha256: 0be8a46de3ed4d396b631689fff1180dbbd7f91d43ac88236ccbf83d4ecbe7ac
+ast_sha256: a4199e5fb468cf648f8b6d45624ec4e02e303adbe51ca434ab1a153a6f563d6c
+token_sha256: 6cd558c1be3fe6ca0294c6a055f71f1845428125807079c2b8965d8045c263e4
 pre_relocation_lines: 3845
 recorded_by: WP-A17 SWEEP-4 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
@@ -11,6 +11,7 @@ re_recorded: 2026-09-14 -- Wave 5 item D (handoff 4.6, the interpreter crash): t
 re_recorded: 2026-09-15 -- WP-B12b: the per-surface beamlet image leg consumes the shared exit-vertex projection (reference='exit_vertex') and the in-line conic-sag copy is deleted
 re_recorded: 2026-09-19 -- merge of the WP-B12b chain into wave5/audit-leftovers: the shared exit-vertex projection lands beside WP-B14's DENSE_MEM_BUDGET_ACCOUNTING code and item E's D3 scope note in one tree; the GBD branch was cut before WP-B14, so its recorded AST lacked that code (both sides' re_recorded lines kept)
 re_recorded: 2026-09-19 -- VERIFY-WP-B12b D-5/D-4 round 2: the local branch of apply_prescription_persurface_to_beamlets now refuses an immersed exit medium (through the shared fga._require_non_immersed_exit, one tolerance definition) and a mirror-terminated prescription (_require_forward_going_local_exit, with _last_optical_surface); two new module-level helpers and two guard statements at the local branch.  No served prescription changes: shipped fields are byte-identical archive-to-archive.
+re_recorded: 2026-09-19 -- VERIFY-WP-B12b D-5/D-4 round 2: the local branch of apply_prescription_persurface_to_beamlets refuses an immersed exit medium (through the shared fga._require_non_immersed_exit, one tolerance definition) and a mirror-terminated prescription (_require_forward_going_local_exit, with _last_optical_surface).  The mirror refusal's message quotes the round-2 re-measurement (validation/probe_wp_b12b_round2/probe_r5_mirror.py) rather than a single quadrature-dependent ratio.  No served prescription changes: shipped fields are byte-identical archive-to-archive.
 -->
 
 # Version history -- `lumenairy/propagators/gbd.py`

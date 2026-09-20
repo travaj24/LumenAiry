@@ -3498,14 +3498,30 @@ def _require_forward_going_local_exit(surfs, fn_name):
     there is no one-line sign to flip: repairing it means giving the branch a
     signed direction convention and re-deriving all three.
 
-    MEASURED (VERIFY-WP-B12b section 9.2, 2026-09-19, a concave mirror
-    ``R = -15 mm`` whose geometric focus is 7.5 mm behind the vertex, scored
-    against an independent 3-D tracer): at ``z_image = +f`` the returned spot
-    RMS is **7756x** the traced one (3.879e-04 m against 5.001e-08 m) and the
-    returned ``N`` sign is ``+1`` against a traced ``-1``; flipping the sign of
-    ``z_image`` recovers the transverse positions to 2.830e-19 m but leaves a
-    **0.48-wave** piston, because the leg's own sign is still wrong.  Both
-    arms are returned silently today, which is what this refuses.
+    MEASURED on a concave mirror ``R = -15 mm`` whose geometric focus is
+    7.5 mm behind the vertex, against an independent 3-D tracer, on two
+    different ray quadratures and both builds:
+
+    * at ``z_image = +f`` the returned transverse positions are the truth at
+      ``z = +f`` while the light is at ``z = -f``, i.e. defocused by TWICE the
+      focal length.  The returned spot RMS is FOUR decades wider than the
+      traced focal one -- **7756x** (VERIFY-WP-B12b sec. 9.2, 3.879e-04 m
+      against 5.001e-08 m) and **20137x** on the round-2 re-measurement
+      (1.433e-04 m against 7.118e-09 m).  The ratio is quadrature-dependent
+      because its denominator is a diffraction-scale number; the DECISION --
+      four decades, from a defocus of 2f -- is not.  The returned ``N`` sign
+      is ``+1`` against a traced ``-1`` on both.
+    * at ``z_image = -f`` the two sign flips cancel in the transverse map and
+      the positions land on the true focus (to 2.830e-19 m, and to one part
+      in 1e12 of the focal RMS on the re-measurement), so nothing in the
+      spot gives the caller a warning -- but the LEG is still
+      ``t = z_image * sec`` where the ray has travelled ``+|z_image| * sec``,
+      leaving a piston of the wrong sign: **0.48 waves** (VERIFY-WP-B12b) and
+      **0.491 waves** (round 2), after the circular mean is removed.
+
+    Both arms are returned silently today, which is what this refuses.
+    ``validation/probe_wp_b12b_round2/probe_r5_mirror.py`` is the
+    re-measurement.
 
     WHY IT DOES NOT NAME ``world_output_plane`` AS THE REMEDY.  WP-B12b's own
     open item 2 recommended exactly that.  Measured here (2026-09-19, both
@@ -3537,10 +3553,12 @@ def _require_forward_going_local_exit(surfs, fn_name):
         f"which is positive whatever the true N, so after a mirror the "
         f"returned direction, the leg t = z_image/Nz2 and the Moebius "
         f"free-space step all run along +z while the light travels toward -z "
-        f"(measured VERIFY-WP-B12b sec. 9.2: the spot RMS is 7.8e3 x the "
-        f"traced one at z_image = +f, and at z_image = -f the transverse "
-        f"positions are right but the leg piston carries the wrong sign, "
-        f"0.48 waves).  NO ROUTE IN THIS LIBRARY SERVES THIS CLASS YET when "
+        f"(measured against a 3-D trace on a concave R = -15 mm mirror: at "
+        f"z_image = +f the returned spot RMS is four decades wider than the "
+        f"traced one -- 7.8e3 x and 2.0e4 x on two independent ray "
+        f"quadratures -- and at z_image = -f the transverse positions are "
+        f"right while the leg piston carries the wrong sign, about half a "
+        f"wave).  NO ROUTE IN THIS LIBRARY SERVES THIS CLASS YET when "
         f"the mirror is CURVED: world_output_plane refuses a powered "
         f"terminating fold itself.  For a FLAT terminating mirror, pass "
         f"world_output_plane=(p0, R_out) -- an explicit plane, since 'auto' "
