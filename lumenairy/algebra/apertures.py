@@ -18,12 +18,12 @@ import numpy as np
 from .base import Operator, _validate_abcd
 
 # ---------------------------------------------------------------------------
-# Aperture (hard amplitude mask)
+# Aperture (sharp-edged amplitude mask)
 # ---------------------------------------------------------------------------
 
 
 class Aperture(Operator):
-    """Hard amplitude aperture with selectable shape.
+    """Sharp-edged (unapodized) amplitude aperture with selectable shape.
 
     ABCD is identity (apertures vignette rays but don't bend them).
 

@@ -160,8 +160,13 @@ places (the jit'd kernel and the `verbose=True` slow path).  Left alone, the
 flip would have made the NumPy chain and the JAX chain answer the same element
 dict differently, and the existing cross-backend test
 (`test_audit_misc.py::test_jax_aperture_matches_numpy`) would NOT have caught it:
-its bar is "fewer than 5 % of pixels mismatched", and a rim on a 64-pixel disk is
-about 1.5 %.  A silent backend divergence introduced by this change.
+its bar is "fewer than 5 % of pixels mismatched", and a rim on that test's own
+fixture (N = 64, dx = 5 um, complex64, D = 97.5 um) is **48 / 4096 = 1.17 %** --
+measured 2026-09-20 on that fixture, not estimated; the "about 1.5 %" this
+paragraph originally carried was the one reading in this report that VERIFY-C1
+could not reproduce, and it was conservative in the direction that matters.  A
+whole-rim divergence therefore sits **4.27x inside** that bar.  A silent backend
+divergence introduced by this change.
 
 Both routes now call `elements.apply_aperture` -- which is
 `backend.array_namespace`-dispatched and traces under `jax.jit` and `jax.grad`
