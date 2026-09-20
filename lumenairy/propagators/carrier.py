@@ -1157,6 +1157,13 @@ def propagate_carrier_referenced(
     dx_out: Optional[float] = None,
     carrier_out: Optional[Union[float, Tuple[float, float]]] = None,
     on_collins_sampling: str = 'warn',
+    # WP-C4 round 2 (V-C4-D2).  Only the Collins transport reaches an MFT
+    # primitive from here, and its own output lattice keeps the input's N, so
+    # the shape rule cannot fire on the default path -- but the keyword is
+    # exposed anyway, because the AST census's rule is "an exported entry
+    # point that CAN reach the primitive exposes a route keyword", not "one
+    # that reaches it today at the shapes we happened to drive".
+    mft_method: Optional[str] = None,
 ) -> CarrierReferencedField:
     """Carrier-referenced ("pilot-beam") free-space propagation step.
 
@@ -1354,6 +1361,17 @@ def propagate_carrier_referenced(
             f"transport and have no meaning on transport={transport!r}, whose "
             f"output pitch is m*dx and whose output carrier is R_carrier + z "
             f"by construction.  Pass transport='collins' to choose them.")
+    if transport != 'collins' and mft_method is not None:
+        # WP-C4 round 2 (V-C4-D2): the Sziklas transform reaches no MFT
+        # primitive at all, so accepting the keyword there would silently drop
+        # a caller who was asking for the pre-5.49.0 bytes.
+        raise ValueError(
+            f"propagate_carrier_referenced: mft_method= names the route "
+            f"through the matrix Fourier transform, which only the Collins "
+            f"transport evaluates; transport={transport!r} is the "
+            f"Sziklas-Siegman scaled-coordinate Fresnel transform and reaches "
+            f"no such primitive.  Drop the keyword, or pass "
+            f"transport='collins'.")
 
     # Parse a possibly-astigmatic carrier.  A 2-tuple (R_x, R_y) with
     # DISTINCT radii routes to the separable astigmatic transform; equal
@@ -1379,7 +1397,7 @@ def propagate_carrier_referenced(
             gap_kernel=gap_kernel, tilt=tilt,
             on_collins_sampling=on_collins_sampling,
             dx_out=dx_out, carrier_out=carrier_out,
-            fn='propagate_carrier_referenced')
+            fn='propagate_carrier_referenced', mft_method=mft_method)
     if is_astig:
         if R_x == 0.0 or R_y == 0.0:
             raise ValueError(
@@ -2217,7 +2235,8 @@ def _collins_transport(env, R_in, z, wavelength, dx, dy, *,
                        centre_out=(0.0, 0.0),
                        gap_kernel='auto', tilt=(0.0, 0.0),
                        on_collins_sampling='warn', fn='_collins_transport',
-                       stats_out=None, stacklevel=None, check_period=False):
+                       stats_out=None, stacklevel=None, check_period=False,
+                       mft_method=None):
     """Evaluate the Collins integral of an ENVELOPE onto a freely chosen output
     lattice; return the envelope referenced to ``R_ref`` there.
 
@@ -2302,7 +2321,7 @@ def _collins_transport(env, R_in, z, wavelength, dx, dy, *,
       (``jax.core.trace_state_clean`` is not available on either jax version
       here, so the value-level check on the transform's OUTPUT is the portable
       form.)"""
-    from ._bluestein import _bluestein_centred_2d
+    from ._bluestein import _bluestein_centred_2d, _mft_route_kwargs
 
     # V-D13.  Only the ENVELOPE may be traced here.  Refused by name, before
     # anything concretises one of these behind a float() or an asarray().
@@ -2501,7 +2520,10 @@ def _collins_transport(env, R_in, z, wavelength, dx, dy, *,
         k_centre_out_x=N_out_x / 2.0 - float(centre_out[0]) / float(dx_out),
         k_centre_out_y=N_out_y / 2.0 - float(centre_out[1]) / float(dy_out),
         sign=-1, xp=xp, fft2=fft2, ifft2=ifft2,
-        target_cdtype=cdt, separable=bool(_EXACT_READOUT_SEPARABLE_BLUESTEIN))
+        target_cdtype=cdt, separable=bool(_EXACT_READOUT_SEPARABLE_BLUESTEIN),
+        # WP-C4 round 2 (V-C4-D2): the one-call way back to the pre-5.49.0
+        # MFT dispatch on the Collins transport.  ``None`` stamps nothing.
+        **_mft_route_kwargs(mft_method))
     del g
 
     # (3) post-chirp and the Collins prefactor.  D == 0 (a reference sphere
@@ -2535,7 +2557,8 @@ def _collins_carrier_leg(env, R, z, wavelength, dx, dy, *,
                          gap_kernel='auto', tilt=(0.0, 0.0),
                          on_collins_sampling='warn', dx_out=None, dy_out=None,
                          carrier_out=None,
-                         fn='_collins_carrier_leg', diag=None):
+                         fn='_collins_carrier_leg', diag=None,
+                         mft_method=None):
     """One free-space CHAIN leg on the Collins transport, returning the same
     ``CarrierReferencedField(env, R, dx)`` triple the Sziklas step returns, so
     the chain body around it is unchanged.
@@ -2688,7 +2711,8 @@ def _collins_carrier_leg(env, R, z, wavelength, dx, dy, *,
         dx_out=dxo, dy_out=dyo, N_out_x=Nx, N_out_y=Ny, R_ref=R_ref,
         centre_out=(0.0, 0.0), gap_kernel=gap_kernel,
         tilt=tilt, on_collins_sampling=on_collins_sampling, fn=fn,
-        stats_out=st, stacklevel=None, check_period=True)
+        stats_out=st, stacklevel=None, check_period=True,
+        mft_method=mft_method)
     if diag is not None:
         diag.update({'collins_form': 'chirp-z',
                      'collins_k1': st.get('k1'), 'collins_k2': st.get('k2'),
@@ -2708,7 +2732,8 @@ def _collins_focus_readout(env, R, z, wavelength, dx, dy, *,
                            gap_kernel='auto', tilt=(0.0, 0.0),
                            on_replica='error', replica_fill='repeat',
                            on_collins_sampling='warn',
-                           fn='_collins_focus_readout', _period_out=None):
+                           fn='_collins_focus_readout', _period_out=None,
+                           mft_method=None):
     """The image-plane readout on the Collins transport: ONE step from the
     chain-exit plane straight onto the caller's ``(dx_out, N_out)`` lattice,
     referenced to ``R_ref = inf`` so what comes back is the FIELD.
@@ -2768,7 +2793,7 @@ def _collins_focus_readout(env, R, z, wavelength, dx, dy, *,
         N_out_x=int(N_out), N_out_y=int(N_out), R_ref=np.inf,
         centre_out=centre_out, gap_kernel=gap_kernel, tilt=tilt,
         on_collins_sampling=on_collins_sampling, fn=fn,
-        stats_out=_period_out, stacklevel=None)
+        stats_out=_period_out, stacklevel=None, mft_method=mft_method)
     return _fill_readout_replicas(E_out, period, dx_out, N_out, centre_out,
                                   fill=replica_fill, out=_period_out)
 
@@ -4149,6 +4174,7 @@ def carrier_referenced_focus_readout(
     on_replica: str = 'error',
     replica_fill: str = 'repeat',
     on_focus_containment: str = 'error',
+    mft_method: Optional[str] = None,
     _period_out: Optional[dict] = None,
 ) -> np.ndarray:
     """Read a carrier-referenced beam at a target plane NEAR its focus without
@@ -4448,6 +4474,7 @@ def carrier_referenced_focus_readout(
 
     E_stop = carrier_referenced_reconstruct(env_s, R_s, wavelength, dx_s)
 
+    from ._bluestein import _mft_route_kwargs
     from .mft import _asm_mft_spatial_period, angular_spectrum_propagate_mft
     _sh = np.shape(E_stop)
     _period = _asm_mft_spatial_period(_sh[-1], dx_s, _sh[-2], dx_s)
@@ -4478,7 +4505,10 @@ def carrier_referenced_focus_readout(
         stacklevel=None)
     E_out = angular_spectrum_propagate_mft(
         E_stop, z - z_stop, wavelength, dx_s, dx_out, int(N_out),
-        centre_out=centre_out, bandlimit=bandlimit)
+        centre_out=centre_out, bandlimit=bandlimit,
+        # WP-C4 round 2 (V-C4-D2): the one-call way back to the pre-5.49.0
+        # MFT dispatch.  ``None`` stamps nothing.
+        **_mft_route_kwargs(mft_method))
     # Measure the part of the window that lies outside one Bluestein period --
     # and, under replica_fill='zero', blank it rather than hand back the copies
     # the transform writes there (:func:`_fill_readout_replicas`).
@@ -6632,6 +6662,7 @@ def carrier_referenced_exact_focus_readout(
     readout_window_tol: float = 1e-4,
     on_replica: str = 'error',
     replica_fill: str = 'repeat',
+    mft_method: Optional[str] = None,
     _period_out: Optional[dict] = None,
 ) -> np.ndarray:
     """Exact (non-paraxial) readout of a strongly-converging FINAL leg (R9).
@@ -7160,6 +7191,7 @@ def carrier_referenced_exact_focus_readout(
     # the physical field at the ABSOLUTE ``centre_out`` -- including the tilt's
     # own transverse advance and path piston, which the propagator computes
     # from the field itself rather than from a paraxial bookkeeping term.
+    from ._bluestein import _mft_route_kwargs
     from .mft import _asm_mft_spatial_period, angular_spectrum_propagate_mft
     _period = _asm_mft_spatial_period(N_fine, dx_fine, N_fine, dx_fine)
     if _period_out is not None:
@@ -7197,7 +7229,11 @@ def carrier_referenced_exact_focus_readout(
         angular_spectrum_propagate_mft(
             E_fine, z, wavelength, dx_fine, dx_out, int(N_out),
             centre_out=_co, bandlimit=bandlimit,
-            _bluestein_separable=bool(_EXACT_READOUT_SEPARABLE_BLUESTEIN)),
+            _bluestein_separable=bool(_EXACT_READOUT_SEPARABLE_BLUESTEIN),
+            # WP-C4 round 2 (V-C4-D2).  ``_bluestein_separable`` selects a
+            # chirp-Z ARM and is powerless once the shape rule fires; this is
+            # the keyword that names the ROUTE.  ``None`` stamps nothing.
+            **_mft_route_kwargs(mft_method)),
         _period, dx_out, N_out, _co, fill=replica_fill, out=_period_out)
 
 
@@ -9416,6 +9452,7 @@ def propagate_traced_carrier_chain(
     gap_kernel: str = 'auto',
     transport: str = 'sziklas',
     on_collins_sampling: str = 'warn',
+    mft_method: Optional[str] = None,
 ) -> TracedCarrierChainResult:
     """Propagate a beam ENVELOPE through a chain of real (traced) lens groups on
     a co-moving carrier-referenced grid (audit F4.1).
@@ -10538,7 +10575,7 @@ def propagate_traced_carrier_chain(
                     env, R, gap, wavelength, cur_dx, cur_dy,
                     gap_kernel=gap_kernel, tilt=_leg_tilt,
                     on_collins_sampling=on_collins_sampling, fn=_fn,
-                    diag=_collins_diag)
+                    diag=_collins_diag, mft_method=mft_method)
             else:
                 cr = propagate_carrier_referenced(
                     env, R, gap, wavelength, cur_dx, gap_kernel=gap_kernel,
@@ -10745,6 +10782,8 @@ def propagate_traced_carrier_chain(
             # a focus_readout that names no cap still caps both grids at the
             # same number, which is what makes the pair consistent.
             exact_kw['n_fine_cap'] = int(fr.get('n_fine_cap', 16384))
+            # WP-C4 round 2 (V-C4-D2), same reason as ``_par_kw`` below.
+            exact_kw['mft_method'] = mft_method
             if _tilted:
                 # niche D6: the EXIT congruence -- the same closure the coarse
                 # path uses (``(x_c, L)`` is an ordinary paraxial ray through
@@ -11020,6 +11059,10 @@ def propagate_traced_carrier_chain(
         # exact kernel made that a MIXED chain.  Both defaults are 'auto', so
         # the shipped default path is unchanged.
         _par_kw.setdefault('gap_kernel', gap_kernel)
+        # WP-C4 round 2 (V-C4-D2): the readout's own MFT route travels with
+        # the chain.  ``None`` stamps nothing, so the shipped default path is
+        # byte-identical either way.
+        _par_kw['mft_method'] = mft_method
         # niche D2: the readout's Bluestein reconstruction is PERIODIC (its
         # period is N*dx of the co-moving grid at the stop plane, which has
         # COLLAPSED near a focus).  Record it so a caller -- in particular
@@ -11115,7 +11158,8 @@ def propagate_traced_carrier_chain(
             cr = _collins_carrier_leg(
                 env, R, final_distance, wavelength, cur_dx, cur_dy,
                 gap_kernel=gap_kernel, tilt=_leg_tilt,
-                on_collins_sampling=on_collins_sampling, fn=_fn)
+                on_collins_sampling=on_collins_sampling, fn=_fn,
+                mft_method=mft_method)
         else:
             cr = propagate_carrier_referenced(
                 env, R, final_distance, wavelength, cur_dx,
@@ -12122,6 +12166,7 @@ def propagate_traced_carrier_chain_multi(
     gap_kernel: str = 'auto',
     transport: str = 'sziklas',
     on_collins_sampling: str = 'warn',
+    mft_method: Optional[str] = None,
     progress: Optional[Callable] = None,
     congruence_workers: Optional[int] = None,
     congruence_worker_min_free_gb: float = 8.0,
@@ -12702,7 +12747,10 @@ def propagate_traced_carrier_chain_multi(
         gap_env_phi_tol=gap_env_phi_tol,
         on_gap_frame=on_gap_frame,
         gap_kernel=gap_kernel,
-        transport=transport, on_collins_sampling=on_collins_sampling)
+        transport=transport, on_collins_sampling=on_collins_sampling,
+        # WP-C4 round 2 (V-C4-D2): spelled here with the rest of the
+        # invariant chain kwargs, so the serial and worker paths cannot drift.
+        mft_method=mft_method)
 
     def _run(k, fr, quiet=False):
         # ``quiet`` is the 'auto' PERIOD-PROBE pass: it runs the same chain a
