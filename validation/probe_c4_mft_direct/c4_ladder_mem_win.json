@@ -1,0 +1,622 @@
+{
+ "build": "WIN-py3.14",
+ "load_after": {
+  "python_processes": 7,
+  "reference_loop_s": 0.0032722000032663345,
+  "total_processes": 418
+ },
+ "load_before": {
+  "python_processes": 7,
+  "reference_loop_s": 0.002728799998294562,
+  "total_processes": 410
+ },
+ "m_ladder": [
+  16,
+  32,
+  64,
+  128,
+  256,
+  512,
+  1024
+ ],
+ "n_ladder": [
+  64,
+  128,
+  256,
+  512,
+  1024,
+  2048
+ ],
+ "python": "3.14.6",
+ "rows": [
+  {
+   "M": 16,
+   "N": 64,
+   "alpha": 0.244140625,
+   "budget": 1000.0,
+   "dense_cheapest": true,
+   "ordering_holds": true,
+   "peak_bytes": {
+    "chirpz2d": 8001186,
+    "dense": 61392,
+    "separable": 221192
+   },
+   "ratio": 0.25
+  },
+  {
+   "M": 32,
+   "N": 64,
+   "alpha": 0.244140625,
+   "budget": 1000.0,
+   "dense_cheapest": true,
+   "ordering_holds": true,
+   "peak_bytes": {
+    "chirpz2d": 1116301,
+    "dense": 118160,
+    "separable": 238472
+   },
+   "ratio": 0.5
+  },
+  {
+   "M": 64,
+   "N": 64,
+   "alpha": 0.244140625,
+   "budget": 1000.0,
+   "dense_cheapest": true,
+   "ordering_holds": true,
+   "peak_bytes": {
+    "chirpz2d": 1922701,
+    "dense": 264192,
+    "separable": 404640
+   },
+   "ratio": 1.0
+  },
+  {
+   "M": 128,
+   "N": 64,
+   "alpha": 0.06103515625,
+   "budget": 1000.0,
+   "dense_cheapest": true,
+   "ordering_holds": true,
+   "peak_bytes": {
+    "chirpz2d": 4290293,
+    "dense": 657408,
+    "separable": 1063584
+   },
+   "ratio": 2.0
+  },
+  {
+   "M": 256,
+   "N": 64,
+   "alpha": 0.0152587890625,
+   "budget": 1000.0,
+   "dense_cheapest": true,
+   "ordering_holds": true,
+   "peak_bytes": {
+    "chirpz2d": 27018745,
+    "dense": 1837056,
+    "separable": 2905792
+   },
+   "ratio": 4.0
+  },
+  {
+   "M": 512,
+   "N": 64,
+   "alpha": 0.003814697265625,
+   "budget": 1000.0,
+   "dense_cheapest": true,
+   "ordering_holds": true,
+   "peak_bytes": {
+    "chirpz2d": 45825847,
+    "dense": 5769216,
+    "separable": 9997032
+   },
+   "ratio": 8.0
+  },
+  {
+   "M": 1024,
+   "N": 64,
+   "alpha": 0.00095367431640625,
+   "budget": 1000.0,
+   "dense_cheapest": true,
+   "ordering_holds": true,
+   "peak_bytes": {
+    "chirpz2d": 166713031,
+    "dense": 19924992,
+    "separable": 36797192
+   },
+   "ratio": 16.0
+  },
+  {
+   "M": 16,
+   "N": 128,
+   "alpha": 0.06103515625,
+   "budget": 1000.0,
+   "dense_cheapest": true,
+   "ordering_holds": true,
+   "peak_bytes": {
+    "chirpz2d": 2609920,
+    "dense": 118544,
+    "separable": 699912
+   },
+   "ratio": 0.125
+  },
+  {
+   "M": 32,
+   "N": 128,
+   "alpha": 0.06103515625,
+   "budget": 1000.0,
+   "dense_cheapest": true,
+   "ordering_holds": true,
+   "peak_bytes": {
+    "chirpz2d": 3155085,
+    "dense": 233360,
+    "separable": 733576
+   },
+   "ratio": 0.25
+  },
+  {
+   "M": 64,
+   "N": 128,
+   "alpha": 0.06103515625,
+   "budget": 1000.0,
+   "dense_cheapest": true,
+   "ordering_holds": true,
+   "peak_bytes": {
+    "chirpz2d": 4420181,
+    "dense": 462992,
+    "separable": 801216
+   },
+   "ratio": 0.5
+  },
+  {
+   "M": 128,
+   "N": 128,
+   "alpha": 0.06103515625,
+   "budget": 1000.0,
+   "dense_cheapest": true,
+   "ordering_holds": true,
+   "peak_bytes": {
+    "chirpz2d": 8694463,
+    "dense": 1050624,
+    "separable": 1329312
+   },
+   "ratio": 1.0
+  },
+  {
+   "M": 256,
+   "N": 128,
+   "alpha": 0.0152587890625,
+   "budget": 1000.0,
+   "dense_cheapest": true,
+   "ordering_holds": true,
+   "peak_bytes": {
+    "chirpz2d": 19195863,
+    "dense": 2623488,
+    "separable": 3694824
+   },
+   "ratio": 2.0
+  },
+  {
+   "M": 512,
+   "N": 128,
+   "alpha": 0.003814697265625,
+   "budget": 1000.0,
+   "dense_cheapest": true,
+   "ordering_holds": true,
+   "peak_bytes": {
+    "chirpz2d": 54745623,
+    "dense": 7342080,
+    "separable": 11573480
+   },
+   "ratio": 4.0
+  },
+  {
+   "M": 1024,
+   "N": 128,
+   "alpha": 0.00095367431640625,
+   "budget": 1000.0,
+   "dense_cheapest": true,
+   "ordering_holds": true,
+   "peak_bytes": {
+    "chirpz2d": 182729239,
+    "dense": 23070720,
+    "separable": 39913704
+   },
+   "ratio": 8.0
+  },
+  {
+   "M": 16,
+   "N": 256,
+   "alpha": 0.0152587890625,
+   "budget": 1000.0,
+   "dense_cheapest": true,
+   "ordering_holds": true,
+   "peak_bytes": {
+    "chirpz2d": 10775007,
+    "dense": 234256,
+    "separable": 2325160
+   },
+   "ratio": 0.0625
+  },
+  {
+   "M": 32,
+   "N": 256,
+   "alpha": 0.0152587890625,
+   "budget": 1000.0,
+   "dense_cheapest": true,
+   "ordering_holds": true,
+   "peak_bytes": {
+    "chirpz2d": 11713439,
+    "dense": 463760,
+    "separable": 2379208
+   },
+   "ratio": 0.125
+  },
+  {
+   "M": 64,
+   "N": 256,
+   "alpha": 0.0152587890625,
+   "budget": 1000.0,
+   "dense_cheapest": true,
+   "ordering_holds": true,
+   "peak_bytes": {
+    "chirpz2d": 14207271,
+    "dense": 921616,
+    "separable": 2642440
+   },
+   "ratio": 0.25
+  },
+  {
+   "M": 128,
+   "N": 256,
+   "alpha": 0.0152587890625,
+   "budget": 1000.0,
+   "dense_cheapest": true,
+   "ordering_holds": true,
+   "peak_bytes": {
+    "chirpz2d": 19981607,
+    "dense": 1839632,
+    "separable": 3170312
+   },
+   "ratio": 0.5
+  },
+  {
+   "M": 256,
+   "N": 256,
+   "alpha": 0.0152587890625,
+   "budget": 1000.0,
+   "dense_cheapest": true,
+   "ordering_holds": true,
+   "peak_bytes": {
+    "chirpz2d": 34676127,
+    "dense": 4196352,
+    "separable": 5274856
+   },
+   "ratio": 1.0
+  },
+  {
+   "M": 512,
+   "N": 256,
+   "alpha": 0.003814697265625,
+   "budget": 1000.0,
+   "dense_cheapest": true,
+   "ordering_holds": true,
+   "peak_bytes": {
+    "chirpz2d": 76647839,
+    "dense": 10487808,
+    "separable": 14726376
+   },
+   "ratio": 2.0
+  },
+  {
+   "M": 1024,
+   "N": 256,
+   "alpha": 0.00095367431640625,
+   "budget": 1000.0,
+   "dense_cheapest": true,
+   "ordering_holds": true,
+   "peak_bytes": {
+    "chirpz2d": 218395159,
+    "dense": 29362176,
+    "separable": 46212328
+   },
+   "ratio": 4.0
+  },
+  {
+   "M": 16,
+   "N": 512,
+   "alpha": 0.003814697265625,
+   "budget": 1000.0,
+   "dense_cheapest": true,
+   "ordering_holds": true,
+   "peak_bytes": {
+    "chirpz2d": 39953631,
+    "dense": 465840,
+    "separable": 8684200
+   },
+   "ratio": 0.03125
+  },
+  {
+   "M": 32,
+   "N": 512,
+   "alpha": 0.003814697265625,
+   "budget": 1000.0,
+   "dense_cheapest": true,
+   "ordering_holds": true,
+   "peak_bytes": {
+    "chirpz2d": 42991455,
+    "dense": 923568,
+    "separable": 9045032
+   },
+   "ratio": 0.0625
+  },
+  {
+   "M": 64,
+   "N": 512,
+   "alpha": 0.003814697265625,
+   "budget": 1000.0,
+   "dense_cheapest": true,
+   "ordering_holds": true,
+   "peak_bytes": {
+    "chirpz2d": 46741863,
+    "dense": 1841328,
+    "separable": 9472616
+   },
+   "ratio": 0.125
+  },
+  {
+   "M": 128,
+   "N": 512,
+   "alpha": 0.003814697265625,
+   "budget": 1000.0,
+   "dense_cheapest": true,
+   "ordering_holds": true,
+   "peak_bytes": {
+    "chirpz2d": 56710503,
+    "dense": 3676848,
+    "separable": 10524776
+   },
+   "ratio": 0.25
+  },
+  {
+   "M": 256,
+   "N": 512,
+   "alpha": 0.003814697265625,
+   "budget": 1000.0,
+   "dense_cheapest": true,
+   "ordering_holds": true,
+   "peak_bytes": {
+    "chirpz2d": 79793511,
+    "dense": 7347888,
+    "separable": 12629096
+   },
+   "ratio": 0.5
+  },
+  {
+   "M": 512,
+   "N": 512,
+   "alpha": 0.003814697265625,
+   "budget": 1000.0,
+   "dense_cheapest": true,
+   "ordering_holds": true,
+   "peak_bytes": {
+    "chirpz2d": 138542559,
+    "dense": 16779392,
+    "separable": 21032264
+   },
+   "ratio": 1.0
+  },
+  {
+   "M": 1024,
+   "N": 512,
+   "alpha": 0.00095367431640625,
+   "budget": 1000.0,
+   "dense_cheapest": true,
+   "ordering_holds": true,
+   "peak_bytes": {
+    "chirpz2d": 306373167,
+    "dense": 41945216,
+    "separable": 58809672
+   },
+   "ratio": 2.0
+  },
+  {
+   "M": 16,
+   "N": 1024,
+   "alpha": 0.00095367431640625,
+   "budget": 1000.0,
+   "dense_cheapest": true,
+   "ordering_holds": true,
+   "peak_bytes": {
+    "chirpz2d": 158030175,
+    "dense": 927536,
+    "separable": 34468136
+   },
+   "ratio": 0.015625
+  },
+  {
+   "M": 32,
+   "N": 1024,
+   "alpha": 0.00095367431640625,
+   "budget": 1000.0,
+   "dense_cheapest": true,
+   "ordering_holds": true,
+   "peak_bytes": {
+    "chirpz2d": 159648735,
+    "dense": 1845168,
+    "separable": 34665320
+   },
+   "ratio": 0.03125
+  },
+  {
+   "M": 64,
+   "N": 1024,
+   "alpha": 0.00095367431640625,
+   "budget": 1000.0,
+   "dense_cheapest": true,
+   "ordering_holds": true,
+   "peak_bytes": {
+    "chirpz2d": 168712743,
+    "dense": 3680432,
+    "separable": 35748488
+   },
+   "ratio": 0.0625
+  },
+  {
+   "M": 128,
+   "N": 1024,
+   "alpha": 0.00095367431640625,
+   "budget": 1000.0,
+   "dense_cheapest": true,
+   "ordering_holds": true,
+   "peak_bytes": {
+    "chirpz2d": 186791271,
+    "dense": 7350960,
+    "separable": 37816424
+   },
+   "ratio": 0.125
+  },
+  {
+   "M": 256,
+   "N": 1024,
+   "alpha": 0.00095367431640625,
+   "budget": 1000.0,
+   "dense_cheapest": true,
+   "ordering_holds": true,
+   "peak_bytes": {
+    "chirpz2d": 226651495,
+    "dense": 14692016,
+    "separable": 42017896
+   },
+   "ratio": 0.25
+  },
+  {
+   "M": 512,
+   "N": 1024,
+   "alpha": 0.00095367431640625,
+   "budget": 1000.0,
+   "dense_cheapest": true,
+   "ordering_holds": true,
+   "peak_bytes": {
+    "chirpz2d": 318954855,
+    "dense": 29374128,
+    "separable": 50420840
+   },
+   "ratio": 0.5
+  },
+  {
+   "M": 1024,
+   "N": 1024,
+   "alpha": 0.00095367431640625,
+   "budget": 1000.0,
+   "dense_cheapest": true,
+   "ordering_holds": true,
+   "peak_bytes": {
+    "chirpz2d": 553893343,
+    "dense": 67111016,
+    "separable": 84004168
+   },
+   "ratio": 1.0
+  },
+  {
+   "M": 16,
+   "N": 2048,
+   "alpha": 0.0002384185791015625,
+   "budget": 1000.0,
+   "dense_cheapest": true,
+   "ordering_holds": true,
+   "peak_bytes": {
+    "chirpz2d": 620603679,
+    "dense": 1853232,
+    "separable": 136368584
+   },
+   "ratio": 0.0078125
+  },
+  {
+   "M": 32,
+   "N": 2048,
+   "alpha": 0.0002384185791015625,
+   "budget": 1000.0,
+   "dense_cheapest": true,
+   "ordering_holds": true,
+   "peak_bytes": {
+    "chirpz2d": 620604447,
+    "dense": 3688368,
+    "separable": 136368968
+   },
+   "ratio": 0.015625
+  },
+  {
+   "M": 64,
+   "N": 2048,
+   "alpha": 0.0002384185791015625,
+   "budget": 1000.0,
+   "dense_cheapest": true,
+   "ordering_holds": true,
+   "peak_bytes": {
+    "chirpz2d": 638310879,
+    "dense": 7358640,
+    "separable": 138533480
+   },
+   "ratio": 0.03125
+  },
+  {
+   "M": 128,
+   "N": 2048,
+   "alpha": 0.0002384185791015625,
+   "budget": 1000.0,
+   "dense_cheapest": true,
+   "ordering_holds": true,
+   "peak_bytes": {
+    "chirpz2d": 674560095,
+    "dense": 14699184,
+    "separable": 142862504
+   },
+   "ratio": 0.0625
+  },
+  {
+   "M": 256,
+   "N": 2048,
+   "alpha": 0.0002384185791015625,
+   "budget": 1000.0,
+   "dense_cheapest": true,
+   "ordering_holds": true,
+   "peak_bytes": {
+    "chirpz2d": 746859951,
+    "dense": 29380272,
+    "separable": 151127144
+   },
+   "ratio": 0.125
+  },
+  {
+   "M": 512,
+   "N": 2048,
+   "alpha": 0.0002384185791015625,
+   "budget": 1000.0,
+   "dense_cheapest": true,
+   "ordering_holds": true,
+   "peak_bytes": {
+    "chirpz2d": 906272223,
+    "dense": 58742448,
+    "separable": 167918696
+   },
+   "ratio": 0.25
+  },
+  {
+   "M": 1024,
+   "N": 2048,
+   "alpha": 0.0002384185791015625,
+   "budget": 1000.0,
+   "dense_cheapest": true,
+   "ordering_holds": true,
+   "peak_bytes": {
+    "chirpz2d": 1275428319,
+    "dense": 117466800,
+    "separable": 201501800
+   },
+   "ratio": 0.5
+  }
+ ],
+ "what": "mem"
+}

@@ -122,6 +122,7 @@ from typing import Any, Dict, Iterable, List, NamedTuple, Optional, Sequence, Tu
 import numpy as np
 
 from ..elements._lens_kernels import caller_stacklevel as _caller_stacklevel
+from ._bluestein import _mft_route_kwargs
 from .carrier import (
     _check_guard_action,
     _envelope_amp_radius,
@@ -1228,6 +1229,7 @@ def re_reference(field: CarrierField, to_carrier: CarrierSpec,
                  on_nyquist: str = 'error',
                  on_window: str = 'warn',
                  bandlimit: bool = False,
+                 mft_method: Optional[str] = None,
                  _separable: bool = True) -> CarrierField:
     """Move ``field`` onto ``target_grid`` and onto ``to_carrier``, exactly.
 
@@ -1328,6 +1330,17 @@ def re_reference(field: CarrierField, to_carrier: CarrierSpec,
         Passed to the resample.  Default ``False``, matching the probe: the
         envelope is already inside the band by construction and the
         band-limit filter would clip its skirt.
+    mft_method : {None, 'auto', 'bluestein', 'separable', 'direct'}, optional
+        Which route through the resample's transform, forwarded to
+        :func:`~lumenairy.propagators.mft.angular_spectrum_propagate_mft` as
+        its ``method=`` (WP-C4 round 2, V-C4-D2).  ``None`` (the default)
+        stamps nothing and leaves the propagator's own default in force.
+        ``_separable`` selects a chirp-Z ARM and is powerless once the MFT
+        shape rule sends the transform to the dense matrix route, so the way
+        back for ONE call at ``target_grid.n <= field.grid.n/32`` is
+        ``mft_method='separable'`` (this call passes ``_separable=True`` by
+        default) -- see the MFT shape-rule section of
+        ``Migration-Guide.md``.
 
     Returns
     -------
@@ -1464,7 +1477,8 @@ def re_reference(field: CarrierField, to_carrier: CarrierSpec,
             centre_out=(target_grid.origin[0] - field.grid.origin[0],
                         target_grid.origin[1] - field.grid.origin[1]),
             bandlimit=bool(bandlimit),
-            _bluestein_separable=bool(_separable))
+            _bluestein_separable=bool(_separable),
+            **_mft_route_kwargs(mft_method))
         resampled = True
 
     # ---- (3) the ANALYTIC carrier difference ----------------------------

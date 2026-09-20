@@ -1,0 +1,176 @@
+{
+ "N_captured": 16,
+ "N_in": 512,
+ "N_refused": 32,
+ "base_errors": {},
+ "branch_errors": {
+  "angular_spectrum_propagate_mft|captured|none": "ValueError: method must be one of ('auto', 'bluestein', 'separable', 'direct'), got None"
+ },
+ "build": "wsl",
+ "did_not_move_at_captured": [
+  "propagate_carrier_referenced_collins"
+ ],
+ "moved_at_a_refused_shape": [],
+ "moved_without_a_way_back": [],
+ "n_base_keys": 24,
+ "n_branch_keys": 71,
+ "none_not_inert": [],
+ "rows": [
+  {
+   "auto_equals_no_keyword": true,
+   "bluestein_matches_base": true,
+   "entry_point": "angular_spectrum_propagate_mft",
+   "identical_at_refused": true,
+   "moves_at_captured": true,
+   "none_is_inert": null,
+   "separable_matches_base": false,
+   "spelling_reproducing_base": [
+    "bluestein"
+   ],
+   "way_back": true
+  },
+  {
+   "auto_equals_no_keyword": true,
+   "bluestein_matches_base": false,
+   "entry_point": "carrier_referenced_exact_focus_readout",
+   "identical_at_refused": true,
+   "moves_at_captured": true,
+   "none_is_inert": true,
+   "separable_matches_base": true,
+   "spelling_reproducing_base": [
+    "separable"
+   ],
+   "way_back": true
+  },
+  {
+   "auto_equals_no_keyword": true,
+   "bluestein_matches_base": true,
+   "entry_point": "carrier_referenced_focus_readout",
+   "identical_at_refused": true,
+   "moves_at_captured": true,
+   "none_is_inert": true,
+   "separable_matches_base": false,
+   "spelling_reproducing_base": [
+    "bluestein"
+   ],
+   "way_back": true
+  },
+  {
+   "auto_equals_no_keyword": true,
+   "bluestein_matches_base": true,
+   "entry_point": "compute_psf",
+   "identical_at_refused": true,
+   "moves_at_captured": true,
+   "none_is_inert": true,
+   "separable_matches_base": false,
+   "spelling_reproducing_base": [
+    "bluestein"
+   ],
+   "way_back": true
+  },
+  {
+   "auto_equals_no_keyword": true,
+   "bluestein_matches_base": true,
+   "entry_point": "propagate_asm",
+   "identical_at_refused": true,
+   "moves_at_captured": true,
+   "none_is_inert": true,
+   "separable_matches_base": false,
+   "spelling_reproducing_base": [
+    "bluestein"
+   ],
+   "way_back": true
+  },
+  {
+   "auto_equals_no_keyword": true,
+   "bluestein_matches_base": false,
+   "entry_point": "propagate_carrier_referenced_collins",
+   "identical_at_refused": true,
+   "moves_at_captured": false,
+   "none_is_inert": true,
+   "separable_matches_base": true,
+   "spelling_reproducing_base": [
+    "separable"
+   ],
+   "way_back": true
+  },
+  {
+   "auto_equals_no_keyword": true,
+   "bluestein_matches_base": true,
+   "entry_point": "propagate_fresnel",
+   "identical_at_refused": true,
+   "moves_at_captured": true,
+   "none_is_inert": true,
+   "separable_matches_base": false,
+   "spelling_reproducing_base": [
+    "bluestein"
+   ],
+   "way_back": true
+  },
+  {
+   "auto_equals_no_keyword": true,
+   "bluestein_matches_base": false,
+   "entry_point": "propagate_traced_carrier_chain_collins",
+   "identical_at_refused": true,
+   "moves_at_captured": true,
+   "none_is_inert": true,
+   "separable_matches_base": true,
+   "spelling_reproducing_base": [
+    "separable"
+   ],
+   "way_back": true
+  },
+  {
+   "auto_equals_no_keyword": true,
+   "bluestein_matches_base": true,
+   "entry_point": "propagate_traced_carrier_chain_multi",
+   "identical_at_refused": true,
+   "moves_at_captured": true,
+   "none_is_inert": true,
+   "separable_matches_base": false,
+   "spelling_reproducing_base": [
+    "bluestein"
+   ],
+   "way_back": true
+  },
+  {
+   "auto_equals_no_keyword": true,
+   "bluestein_matches_base": true,
+   "entry_point": "propagate_traced_carrier_chain_sziklas",
+   "identical_at_refused": true,
+   "moves_at_captured": true,
+   "none_is_inert": true,
+   "separable_matches_base": false,
+   "spelling_reproducing_base": [
+    "bluestein"
+   ],
+   "way_back": true
+  },
+  {
+   "auto_equals_no_keyword": true,
+   "bluestein_matches_base": false,
+   "entry_point": "re_reference",
+   "identical_at_refused": true,
+   "moves_at_captured": true,
+   "none_is_inert": true,
+   "separable_matches_base": true,
+   "spelling_reproducing_base": [
+    "separable"
+   ],
+   "way_back": true
+  },
+  {
+   "auto_equals_no_keyword": true,
+   "bluestein_matches_base": true,
+   "entry_point": "resample_field",
+   "identical_at_refused": true,
+   "moves_at_captured": true,
+   "none_is_inert": true,
+   "separable_matches_base": false,
+   "spelling_reproducing_base": [
+    "bluestein"
+   ],
+   "way_back": true
+  }
+ ]
+}

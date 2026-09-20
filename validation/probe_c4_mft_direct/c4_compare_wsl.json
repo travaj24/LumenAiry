@@ -1,0 +1,134 @@
+{
+ "all_byte_identity_claims_hold": true,
+ "base": {
+  "build": "WSL-py3.12",
+  "has_rule": false,
+  "lumenairy_file": "/mnt/c/tmp/lum_c4_base/lumenairy/__init__.py",
+  "ratio": NaN,
+  "tree": "/mnt/c/tmp/lum_c4_base/lumenairy",
+  "version": "5.48.1"
+ },
+ "branch": {
+  "build": "WSL-py3.12",
+  "has_rule": true,
+  "lumenairy_file": "/mnt/c/tmp/lum_c4/lumenairy/__init__.py",
+  "ratio": 0.03125,
+  "tree": "/mnt/c/tmp/lum_c4/lumenairy",
+  "version": "5.48.1"
+ },
+ "carrier_leg": {
+  "differing": 1,
+  "differing_keys": [
+   "exact_focus/cr_tiny"
+  ],
+  "identical": 1,
+  "n": 2,
+  "only_base": [],
+  "only_branch": []
+ },
+ "constant_never": {
+  "differing": 0,
+  "differing_keys": [],
+  "identical": 138,
+  "n": 138,
+  "only_base": [],
+  "only_branch": []
+ },
+ "no_keyword": {
+  "differing": 57,
+  "differing_keys": [
+   "asm/p_small_out",
+   "asm/p_small_out/offaxis",
+   "asm/p_tiny_out",
+   "asm/p_tiny_out/offaxis",
+   "centred/aniso_lo/s-1/sep0",
+   "centred/aniso_lo/s-1/sep1",
+   "centred/aniso_lo/s1/sep0",
+   "centred/aniso_lo/s1/sep1",
+   "centred/r1o128/s-1/sep0",
+   "centred/r1o128/s-1/sep1",
+   "centred/r1o128/s1/sep0",
+   "centred/r1o128/s1/sep1",
+   "centred/r1o32/s-1/sep0",
+   "centred/r1o32/s-1/sep1",
+   "centred/r1o32/s1/sep0",
+   "centred/r1o32/s1/sep1",
+   "centred/r1o32b/s-1/sep0",
+   "centred/r1o32b/s-1/sep1",
+   "centred/r1o32b/s1/sep0",
+   "centred/r1o32b/s1/sep1",
+   "centred/r1o64/s-1/sep0",
+   "centred/r1o64/s-1/sep1",
+   "centred/r1o64/s1/sep0",
+   "centred/r1o64/s1/sep1",
+   "fraunhofer/p_small_out",
+   "fraunhofer/p_small_out/offaxis",
+   "fraunhofer/p_tiny_out",
+   "fraunhofer/p_tiny_out/offaxis",
+   "fresnel/p_small_out",
+   "fresnel/p_small_out/offaxis",
+   "fresnel/p_tiny_out",
+   "fresnel/p_tiny_out/offaxis",
+   "offcentre/aniso_lo",
+   "offcentre/r1o128",
+   "offcentre/r1o32",
+   "offcentre/r1o32b",
+   "offcentre/r1o64",
+   "plain/aniso_lo/s-1/sep0",
+   "plain/aniso_lo/s-1/sep1",
+   "plain/aniso_lo/s1/sep0",
+   "plain/aniso_lo/s1/sep1",
+   "plain/r1o128/s-1/sep0",
+   "plain/r1o128/s-1/sep1",
+   "plain/r1o128/s1/sep0",
+   "plain/r1o128/s1/sep1",
+   "plain/r1o32/s-1/sep0",
+   "plain/r1o32/s-1/sep1",
+   "plain/r1o32/s1/sep0",
+   "plain/r1o32/s1/sep1",
+   "plain/r1o32b/s-1/sep0",
+   "plain/r1o32b/s-1/sep1",
+   "plain/r1o32b/s1/sep0",
+   "plain/r1o32b/s1/sep1",
+   "plain/r1o64/s-1/sep0",
+   "plain/r1o64/s-1/sep1",
+   "plain/r1o64/s1/sep0",
+   "plain/r1o64/s1/sep1"
+  ],
+  "identical": 81,
+  "n": 138,
+  "only_base": [],
+  "only_branch": []
+ },
+ "no_keyword_split_vs_rule": {
+  "agree": 138,
+  "disagree": [],
+  "unclassified": 0
+ },
+ "resample_leg": {
+  "differing": 1,
+  "differing_keys": [
+   "chirpz/rs_down"
+  ],
+  "identical": 2,
+  "n": 3,
+  "only_base": [],
+  "only_branch": []
+ },
+ "wayback_bluestein": {
+  "differing": 0,
+  "differing_keys": [],
+  "identical": 138,
+  "n": 138,
+  "only_base": [],
+  "only_branch": []
+ },
+ "wayback_separable": {
+  "differing": 0,
+  "differing_keys": [],
+  "identical": 138,
+  "n": 138,
+  "only_base": [],
+  "only_branch": []
+ }
+}

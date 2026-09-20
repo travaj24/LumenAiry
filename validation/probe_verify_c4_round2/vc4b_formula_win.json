@@ -1,0 +1,735 @@
+{
+ "ALL_association_match": true,
+ "ALL_entries_match": true,
+ "ALL_flops_match": true,
+ "build": "WIN-py3.14",
+ "numpy": "2.4.4",
+ "python": "3.14.6",
+ "rows": [
+  {
+   "Mx": 8,
+   "My": 8,
+   "Nx": 256,
+   "Ny": 256,
+   "association_predicted": "y_first",
+   "association_taken": "y_first",
+   "cost_x_first": 540672,
+   "cost_y_first": 540672,
+   "entries_match": true,
+   "flops_match": true,
+   "matmul_operands": [
+    [
+     [
+      8,
+      256
+     ],
+     [
+      256,
+      256
+     ]
+    ],
+    [
+     [
+      8,
+      256
+     ],
+     [
+      256,
+      8
+     ]
+    ]
+   ],
+   "observed_exp_elements": 4096,
+   "observed_flops": 540672,
+   "rule_entries": 4096,
+   "rule_flops": 540672,
+   "shape": "256x256->8x8",
+   "work_per_entry": 132.0
+  },
+  {
+   "Mx": 64,
+   "My": 64,
+   "Nx": 2048,
+   "Ny": 2048,
+   "association_predicted": "y_first",
+   "association_taken": "y_first",
+   "cost_x_first": 276824064,
+   "cost_y_first": 276824064,
+   "entries_match": true,
+   "flops_match": true,
+   "matmul_operands": [
+    [
+     [
+      64,
+      2048
+     ],
+     [
+      2048,
+      2048
+     ]
+    ],
+    [
+     [
+      64,
+      2048
+     ],
+     [
+      2048,
+      64
+     ]
+    ]
+   ],
+   "observed_exp_elements": 262144,
+   "observed_flops": 276824064,
+   "rule_entries": 262144,
+   "rule_flops": 276824064,
+   "shape": "2048x2048->64x64",
+   "work_per_entry": 1056.0
+  },
+  {
+   "Mx": 2,
+   "My": 64,
+   "Nx": 64,
+   "Ny": 2048,
+   "association_predicted": "x_first",
+   "association_taken": "x_first",
+   "cost_x_first": 524288,
+   "cost_y_first": 8396800,
+   "entries_match": true,
+   "flops_match": true,
+   "matmul_operands": [
+    [
+     [
+      2048,
+      64
+     ],
+     [
+      64,
+      2
+     ]
+    ],
+    [
+     [
+      64,
+      2048
+     ],
+     [
+      2048,
+      2
+     ]
+    ]
+   ],
+   "observed_exp_elements": 131200,
+   "observed_flops": 524288,
+   "rule_entries": 131200,
+   "rule_flops": 524288,
+   "shape": "2048x64->64x2",
+   "work_per_entry": 3.9960975609756098
+  },
+  {
+   "Mx": 4,
+   "My": 128,
+   "Nx": 128,
+   "Ny": 4096,
+   "association_predicted": "x_first",
+   "association_taken": "x_first",
+   "cost_x_first": 4194304,
+   "cost_y_first": 67174400,
+   "entries_match": true,
+   "flops_match": true,
+   "matmul_operands": [
+    [
+     [
+      4096,
+      128
+     ],
+     [
+      128,
+      4
+     ]
+    ],
+    [
+     [
+      128,
+      4096
+     ],
+     [
+      4096,
+      4
+     ]
+    ]
+   ],
+   "observed_exp_elements": 524800,
+   "observed_flops": 4194304,
+   "rule_entries": 524800,
+   "rule_flops": 4194304,
+   "shape": "4096x128->128x4",
+   "work_per_entry": 7.9921951219512195
+  },
+  {
+   "Mx": 128,
+   "My": 4,
+   "Nx": 4096,
+   "Ny": 128,
+   "association_predicted": "y_first",
+   "association_taken": "y_first",
+   "cost_x_first": 67174400,
+   "cost_y_first": 4194304,
+   "entries_match": true,
+   "flops_match": true,
+   "matmul_operands": [
+    [
+     [
+      4,
+      128
+     ],
+     [
+      128,
+      4096
+     ]
+    ],
+    [
+     [
+      4,
+      4096
+     ],
+     [
+      4096,
+      128
+     ]
+    ]
+   ],
+   "observed_exp_elements": 524800,
+   "observed_flops": 4194304,
+   "rule_entries": 524800,
+   "rule_flops": 4194304,
+   "shape": "128x4096->4x128",
+   "work_per_entry": 7.9921951219512195
+  },
+  {
+   "Mx": 1,
+   "My": 4,
+   "Nx": 64,
+   "Ny": 256,
+   "association_predicted": "x_first",
+   "association_taken": "x_first",
+   "cost_x_first": 17408,
+   "cost_y_first": 65792,
+   "entries_match": true,
+   "flops_match": true,
+   "matmul_operands": [
+    [
+     [
+      256,
+      64
+     ],
+     [
+      64,
+      1
+     ]
+    ],
+    [
+     [
+      4,
+      256
+     ],
+     [
+      256,
+      1
+     ]
+    ]
+   ],
+   "observed_exp_elements": 1088,
+   "observed_flops": 17408,
+   "rule_entries": 1088,
+   "rule_flops": 17408,
+   "shape": "256x64->4x1",
+   "work_per_entry": 16.0
+  },
+  {
+   "Mx": 4,
+   "My": 1,
+   "Nx": 256,
+   "Ny": 64,
+   "association_predicted": "y_first",
+   "association_taken": "y_first",
+   "cost_x_first": 65792,
+   "cost_y_first": 17408,
+   "entries_match": true,
+   "flops_match": true,
+   "matmul_operands": [
+    [
+     [
+      1,
+      64
+     ],
+     [
+      64,
+      256
+     ]
+    ],
+    [
+     [
+      1,
+      256
+     ],
+     [
+      256,
+      4
+     ]
+    ]
+   ],
+   "observed_exp_elements": 1088,
+   "observed_flops": 17408,
+   "rule_entries": 1088,
+   "rule_flops": 17408,
+   "shape": "64x256->1x4",
+   "work_per_entry": 16.0
+  },
+  {
+   "Mx": 4,
+   "My": 32,
+   "Nx": 128,
+   "Ny": 1024,
+   "association_predicted": "x_first",
+   "association_taken": "x_first",
+   "cost_x_first": 655360,
+   "cost_y_first": 4210688,
+   "entries_match": true,
+   "flops_match": true,
+   "matmul_operands": [
+    [
+     [
+      1024,
+      128
+     ],
+     [
+      128,
+      4
+     ]
+    ],
+    [
+     [
+      32,
+      1024
+     ],
+     [
+      1024,
+      4
+     ]
+    ]
+   ],
+   "observed_exp_elements": 33280,
+   "observed_flops": 655360,
+   "rule_entries": 33280,
+   "rule_flops": 655360,
+   "shape": "1024x128->32x4",
+   "work_per_entry": 19.692307692307693
+  },
+  {
+   "Mx": 32,
+   "My": 4,
+   "Nx": 1024,
+   "Ny": 128,
+   "association_predicted": "y_first",
+   "association_taken": "y_first",
+   "cost_x_first": 4210688,
+   "cost_y_first": 655360,
+   "entries_match": true,
+   "flops_match": true,
+   "matmul_operands": [
+    [
+     [
+      4,
+      128
+     ],
+     [
+      128,
+      1024
+     ]
+    ],
+    [
+     [
+      4,
+      1024
+     ],
+     [
+      1024,
+      32
+     ]
+    ]
+   ],
+   "observed_exp_elements": 33280,
+   "observed_flops": 655360,
+   "rule_entries": 33280,
+   "rule_flops": 655360,
+   "shape": "128x1024->4x32",
+   "work_per_entry": 19.692307692307693
+  },
+  {
+   "Mx": 1,
+   "My": 16,
+   "Nx": 32,
+   "Ny": 512,
+   "association_predicted": "x_first",
+   "association_taken": "x_first",
+   "cost_x_first": 24576,
+   "cost_y_first": 262656,
+   "entries_match": true,
+   "flops_match": true,
+   "matmul_operands": [
+    [
+     [
+      512,
+      32
+     ],
+     [
+      32,
+      1
+     ]
+    ],
+    [
+     [
+      16,
+      512
+     ],
+     [
+      512,
+      1
+     ]
+    ]
+   ],
+   "observed_exp_elements": 8224,
+   "observed_flops": 24576,
+   "rule_entries": 8224,
+   "rule_flops": 24576,
+   "shape": "512x32->16x1",
+   "work_per_entry": 2.9883268482490273
+  },
+  {
+   "Mx": 16,
+   "My": 1,
+   "Nx": 512,
+   "Ny": 32,
+   "association_predicted": "y_first",
+   "association_taken": "y_first",
+   "cost_x_first": 262656,
+   "cost_y_first": 24576,
+   "entries_match": true,
+   "flops_match": true,
+   "matmul_operands": [
+    [
+     [
+      1,
+      32
+     ],
+     [
+      32,
+      512
+     ]
+    ],
+    [
+     [
+      1,
+      512
+     ],
+     [
+      512,
+      16
+     ]
+    ]
+   ],
+   "observed_exp_elements": 8224,
+   "observed_flops": 24576,
+   "rule_entries": 8224,
+   "rule_flops": 24576,
+   "shape": "32x512->1x16",
+   "work_per_entry": 2.9883268482490273
+  },
+  {
+   "Mx": 4,
+   "My": 64,
+   "Nx": 128,
+   "Ny": 2048,
+   "association_predicted": "x_first",
+   "association_taken": "x_first",
+   "cost_x_first": 1572864,
+   "cost_y_first": 16809984,
+   "entries_match": true,
+   "flops_match": true,
+   "matmul_operands": [
+    [
+     [
+      2048,
+      128
+     ],
+     [
+      128,
+      4
+     ]
+    ],
+    [
+     [
+      64,
+      2048
+     ],
+     [
+      2048,
+      4
+     ]
+    ]
+   ],
+   "observed_exp_elements": 131584,
+   "observed_flops": 1572864,
+   "rule_entries": 131584,
+   "rule_flops": 1572864,
+   "shape": "2048x128->64x4",
+   "work_per_entry": 11.95330739299611
+  },
+  {
+   "Mx": 64,
+   "My": 4,
+   "Nx": 2048,
+   "Ny": 128,
+   "association_predicted": "y_first",
+   "association_taken": "y_first",
+   "cost_x_first": 16809984,
+   "cost_y_first": 1572864,
+   "entries_match": true,
+   "flops_match": true,
+   "matmul_operands": [
+    [
+     [
+      4,
+      128
+     ],
+     [
+      128,
+      2048
+     ]
+    ],
+    [
+     [
+      4,
+      2048
+     ],
+     [
+      2048,
+      64
+     ]
+    ]
+   ],
+   "observed_exp_elements": 131584,
+   "observed_flops": 1572864,
+   "rule_entries": 131584,
+   "rule_flops": 1572864,
+   "shape": "128x2048->4x64",
+   "work_per_entry": 11.95330739299611
+  },
+  {
+   "Mx": 25,
+   "My": 25,
+   "Nx": 1000,
+   "Ny": 1000,
+   "association_predicted": "y_first",
+   "association_taken": "y_first",
+   "cost_x_first": 25625000,
+   "cost_y_first": 25625000,
+   "entries_match": true,
+   "flops_match": true,
+   "matmul_operands": [
+    [
+     [
+      25,
+      1000
+     ],
+     [
+      1000,
+      1000
+     ]
+    ],
+    [
+     [
+      25,
+      1000
+     ],
+     [
+      1000,
+      25
+     ]
+    ]
+   ],
+   "observed_exp_elements": 50000,
+   "observed_flops": 25625000,
+   "rule_entries": 50000,
+   "rule_flops": 25625000,
+   "shape": "1000x1000->25x25",
+   "work_per_entry": 512.5
+  },
+  {
+   "Mx": 16,
+   "My": 64,
+   "Nx": 512,
+   "Ny": 2048,
+   "association_predicted": "x_first",
+   "association_taken": "x_first",
+   "cost_x_first": 18874368,
+   "cost_y_first": 67633152,
+   "entries_match": true,
+   "flops_match": true,
+   "matmul_operands": [
+    [
+     [
+      2048,
+      512
+     ],
+     [
+      512,
+      16
+     ]
+    ],
+    [
+     [
+      64,
+      2048
+     ],
+     [
+      2048,
+      16
+     ]
+    ]
+   ],
+   "observed_exp_elements": 139264,
+   "observed_flops": 18874368,
+   "rule_entries": 139264,
+   "rule_flops": 18874368,
+   "shape": "2048x512->64x16",
+   "work_per_entry": 135.52941176470588
+  },
+  {
+   "Mx": 64,
+   "My": 16,
+   "Nx": 2048,
+   "Ny": 512,
+   "association_predicted": "y_first",
+   "association_taken": "y_first",
+   "cost_x_first": 67633152,
+   "cost_y_first": 18874368,
+   "entries_match": true,
+   "flops_match": true,
+   "matmul_operands": [
+    [
+     [
+      16,
+      512
+     ],
+     [
+      512,
+      2048
+     ]
+    ],
+    [
+     [
+      16,
+      2048
+     ],
+     [
+      2048,
+      64
+     ]
+    ]
+   ],
+   "observed_exp_elements": 139264,
+   "observed_flops": 18874368,
+   "rule_entries": 139264,
+   "rule_flops": 18874368,
+   "shape": "512x2048->16x64",
+   "work_per_entry": 135.52941176470588
+  },
+  {
+   "Mx": 2,
+   "My": 2,
+   "Nx": 64,
+   "Ny": 64,
+   "association_predicted": "y_first",
+   "association_taken": "y_first",
+   "cost_x_first": 8448,
+   "cost_y_first": 8448,
+   "entries_match": true,
+   "flops_match": true,
+   "matmul_operands": [
+    [
+     [
+      2,
+      64
+     ],
+     [
+      64,
+      64
+     ]
+    ],
+    [
+     [
+      2,
+      64
+     ],
+     [
+      64,
+      2
+     ]
+    ]
+   ],
+   "observed_exp_elements": 256,
+   "observed_flops": 8448,
+   "rule_entries": 256,
+   "rule_flops": 8448,
+   "shape": "64x64->2x2",
+   "work_per_entry": 33.0
+  },
+  {
+   "Mx": 1,
+   "My": 128,
+   "Nx": 32,
+   "Ny": 4096,
+   "association_predicted": "x_first",
+   "association_taken": "x_first",
+   "cost_x_first": 655360,
+   "cost_y_first": 16781312,
+   "entries_match": true,
+   "flops_match": true,
+   "matmul_operands": [
+    [
+     [
+      4096,
+      32
+     ],
+     [
+      32,
+      1
+     ]
+    ],
+    [
+     [
+      128,
+      4096
+     ],
+     [
+      4096,
+      1
+     ]
+    ]
+   ],
+   "observed_exp_elements": 524320,
+   "observed_flops": 655360,
+   "rule_entries": 524320,
+   "rule_flops": 655360,
+   "shape": "4096x32->128x1",
+   "work_per_entry": 1.2499237107110162
+  }
+ ],
+ "source_costs": {
+  "cost_x_first": "Ny_in * Nx_in * N_out_x + N_out_y * Ny_in * N_out_x",
+  "cost_y_first": "N_out_y * Ny_in * Nx_in + N_out_y * Nx_in * N_out_x"
+ },
+ "source_matches_rule": true
+}

@@ -169,6 +169,7 @@ def compute_psf(
     *,
     method: str = 'fft',
     dx_psf: Optional[float] = None,
+    mft_method: Optional[str] = None,
 ) -> Tuple[np.ndarray, float]:
     """
     Compute the point spread function (PSF) from a pupil function.
@@ -234,6 +235,20 @@ def compute_psf(
         sampling of the core over a narrower field), a larger one zooms
         out.  Passing it with ``method='fft'`` is a ``ValueError`` --
         the FFT grid is not free.
+
+    mft_method : {None, 'auto', 'bluestein', 'separable', 'direct'}, optional,
+        keyword-only, ``method='mft'`` only.
+        Which route through the matrix Fourier transform, forwarded to
+        :func:`lumenairy.propagators.fraunhofer_propagate_mft` as its
+        ``method=``.  ``method`` above names the SAMPLER (``'fft'`` /
+        ``'mft'``), so it cannot carry this; ``mft_method`` is the one-call way
+        back to the dispatch this path had before the MFT shape rule, which
+        here is ``mft_method='bluestein'``.  ``None`` (the default) names
+        nothing and leaves the propagator's own default in force.  Relevant
+        whenever ``N_psf <= N_pupil/32``, where the shape rule sends the
+        transform to the dense matrix route; see the MFT shape-rule section of
+        ``Migration-Guide.md`` and the CHANGELOG for the release it landed
+        in.
 
     Returns
     -------
@@ -356,6 +371,18 @@ def compute_psf(
             f"wavelength*f/(N_psf*dx_pupil); ask for a finer pitch with "
             f"a larger N_psf / oversample, or pass method='mft'.")
 
+    # Same refusal, same reason (WP-C4 round 2, V-C4-D2): ``mft_method=``
+    # names a route through the matrix Fourier transform, and the FFT sampler
+    # reaches no such transform.  Accepting it there would silently ignore a
+    # caller who was asking for the pre-shape-rule bytes.
+    if mft_method is not None and method != 'mft':
+        raise ValueError(
+            f"compute_psf: mft_method= is only meaningful with method='mft' "
+            f"(got method={method!r}).  It names the route through the "
+            f"matrix Fourier transform ('auto' / 'bluestein' / 'separable' / "
+            f"'direct'); the FFT sampler takes one centred FFT and reaches "
+            f"no such transform.")
+
     if method == 'fft' and int(N_psf) < Np:
         # The FFT sampler cannot crop: it would return the pupil-sized
         # array while reporting the N_psf pitch, and scale 'power' by a
@@ -369,7 +396,8 @@ def compute_psf(
 
     if method == 'mft':
         psf, dx_psf_out = _compute_psf_mft(
-            pupil, wavelength, f, dx_pupil, N_psf, normalize, dx_psf, xp)
+            pupil, wavelength, f, dx_pupil, N_psf, normalize, dx_psf, xp,
+            mft_method=mft_method)
         return psf, dx_psf_out
 
     # Zero-pad pupil if oversampling.  Uses xp.pad so CuPy / JAX
@@ -466,7 +494,7 @@ def _scaled(a, factor, xp, *, divisor=None):
 
 
 def _compute_psf_mft(pupil, wavelength, f, dx_pupil, N_psf, normalize,
-                     dx_psf, xp):
+                     dx_psf, xp, *, mft_method=None):
     """``compute_psf(method='mft')``: Soummer (2007) matrix Fourier
     transform onto an arbitrary focal-plane pitch, no padding.
 
@@ -480,9 +508,14 @@ def _compute_psf_mft(pupil, wavelength, f, dx_pupil, N_psf, normalize,
     further scaling -- and unlike an in-window rescale it stays right
     when the window is a zoomed sub-field.  ``'none'`` divides that
     constant back out to recover the FFT path's raw ``|FT{pupil}|^2``
-    convention."""
+    convention.
+
+    ``mft_method`` names the route through that propagator's transform
+    (WP-C4 round 2, V-C4-D2): ``None`` stamps nothing, ``'bluestein'``
+    reproduces the pre-shape-rule dispatch for ONE call."""
     import warnings
 
+    from ..propagators._bluestein import _mft_route_kwargs
     from ..propagators.mft import fraunhofer_propagate_mft
 
     if not (np.isfinite(f) and f > 0):
@@ -512,7 +545,7 @@ def _compute_psf_mft(pupil, wavelength, f, dx_pupil, N_psf, normalize,
 
     E_focal = fraunhofer_propagate_mft(
         pupil, float(f), float(wavelength), float(dx_pupil),
-        dx_psf, int(N_psf))
+        dx_psf, int(N_psf), **_mft_route_kwargs(mft_method))
     if xp is np and isinstance(E_focal, np.ndarray):
         psf = np.abs(E_focal)
         del E_focal

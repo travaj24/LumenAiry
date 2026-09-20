@@ -1,0 +1,224 @@
+{
+ "CAPTURED_AND_SLOWER": [],
+ "build": "WIN-py3.14",
+ "constant": 0.03125,
+ "family": "minarm",
+ "instrument": "interleaved",
+ "load_after": {
+  "python_processes": 35,
+  "ref_loop_s": 4.020000051241368e-05,
+  "total_processes": 477,
+  "wall": 1789921239.4156244
+ },
+ "numpy": "2.4.4",
+ "python": "3.14.6",
+ "reps": 5,
+ "round_load": [
+  {
+   "python_processes": 35,
+   "ref_loop_s": 3.740000101970509e-05,
+   "total_processes": 478,
+   "wall": 1789921206.8643637
+  },
+  {
+   "python_processes": 35,
+   "ref_loop_s": 4.0099999750964344e-05,
+   "total_processes": 484,
+   "wall": 1789921224.207157
+  }
+ ],
+ "rounds": 2,
+ "rows": [
+  {
+   "Mx": 1024,
+   "My": 8,
+   "Nx_in": 1024,
+   "Ny_in": 1024,
+   "best_dense_over_fallback": 0.3100721280651817,
+   "name": "m_1024_8x1024",
+   "ratio_max": 1.0,
+   "ratio_x": 1.0,
+   "ratio_y": 0.0078125,
+   "rounds": [
+    {
+     "best_s": {
+      "chirpz2d": 0.1520827000058489,
+      "dense": 0.04018519999954151,
+      "separable": 0.12437820000195643
+     },
+     "dense_over_fallback": 0.32308877278260506,
+     "fallback_s": 0.12437820000195643,
+     "faster_fallback": "separable",
+     "round": 0
+    },
+    {
+     "best_s": {
+      "chirpz2d": 0.1383468999993056,
+      "dense": 0.0362913999997545,
+      "separable": 0.11704180000378983
+     },
+     "dense_over_fallback": 0.3100721280651817,
+     "fallback_s": 0.11704180000378983,
+     "faster_fallback": "separable",
+     "round": 1
+    }
+   ],
+   "rule_says_direct": false,
+   "safe_worst_round": true,
+   "worst_dense_over_fallback": 0.32308877278260506
+  },
+  {
+   "Mx": 512,
+   "My": 8,
+   "Nx_in": 512,
+   "Ny_in": 512,
+   "best_dense_over_fallback": 0.42302807394320097,
+   "name": "m_512_8x512",
+   "ratio_max": 1.0,
+   "ratio_x": 1.0,
+   "ratio_y": 0.015625,
+   "rounds": [
+    {
+     "best_s": {
+      "chirpz2d": 0.06972169999789912,
+      "dense": 0.009592499998689163,
+      "separable": 0.02267579999897862
+     },
+     "dense_over_fallback": 0.42302807394320097,
+     "fallback_s": 0.02267579999897862,
+     "faster_fallback": "separable",
+     "round": 0
+    },
+    {
+     "best_s": {
+      "chirpz2d": 0.07238939999660943,
+      "dense": 0.013677700000698678,
+      "separable": 0.029070900003716815
+     },
+     "dense_over_fallback": 0.47049454949622943,
+     "fallback_s": 0.029070900003716815,
+     "faster_fallback": "separable",
+     "round": 1
+    }
+   ],
+   "rule_says_direct": false,
+   "safe_worst_round": true,
+   "worst_dense_over_fallback": 0.47049454949622943
+  },
+  {
+   "Mx": 1024,
+   "My": 16,
+   "Nx_in": 64,
+   "Ny_in": 1024,
+   "best_dense_over_fallback": 0.058758567791049494,
+   "name": "m_1024x64_16x1024",
+   "ratio_max": 16.0,
+   "ratio_x": 16.0,
+   "ratio_y": 0.015625,
+   "rounds": [
+    {
+     "best_s": {
+      "chirpz2d": 0.054783499996119644,
+      "dense": 0.003218999998352956,
+      "separable": 0.07352009999885922
+     },
+     "dense_over_fallback": 0.058758567791049494,
+     "fallback_s": 0.054783499996119644,
+     "faster_fallback": "chirpz2d",
+     "round": 0
+    },
+    {
+     "best_s": {
+      "chirpz2d": 0.05240760000015143,
+      "dense": 0.00310620000527706,
+      "separable": 0.08693669999775011
+     },
+     "dense_over_fallback": 0.059270029638222026,
+     "fallback_s": 0.05240760000015143,
+     "faster_fallback": "chirpz2d",
+     "round": 1
+    }
+   ],
+   "rule_says_direct": false,
+   "safe_worst_round": true,
+   "worst_dense_over_fallback": 0.059270029638222026
+  },
+  {
+   "Mx": 2048,
+   "My": 16,
+   "Nx_in": 2048,
+   "Ny_in": 2048,
+   "best_dense_over_fallback": 0.3239491212765576,
+   "name": "m_2048_16x2048",
+   "ratio_max": 1.0,
+   "ratio_x": 1.0,
+   "ratio_y": 0.0078125,
+   "rounds": [
+    {
+     "best_s": {
+      "chirpz2d": 0.7434622000000672,
+      "dense": 0.1802188000001479,
+      "separable": 0.5110597999955644
+     },
+     "dense_over_fallback": 0.35263740173207136,
+     "fallback_s": 0.5110597999955644,
+     "faster_fallback": "separable",
+     "round": 0
+    },
+    {
+     "best_s": {
+      "chirpz2d": 0.7033051999969757,
+      "dense": 0.17450649999955203,
+      "separable": 0.5386848999987706
+     },
+     "dense_over_fallback": 0.3239491212765576,
+     "fallback_s": 0.5386848999987706,
+     "faster_fallback": "separable",
+     "round": 1
+    }
+   ],
+   "rule_says_direct": false,
+   "safe_worst_round": true,
+   "worst_dense_over_fallback": 0.35263740173207136
+  },
+  {
+   "Mx": 8,
+   "My": 1024,
+   "Nx_in": 1024,
+   "Ny_in": 1024,
+   "best_dense_over_fallback": 0.9948646591442858,
+   "name": "m_1024_1024x8",
+   "ratio_max": 1.0,
+   "ratio_x": 0.0078125,
+   "ratio_y": 1.0,
+   "rounds": [
+    {
+     "best_s": {
+      "chirpz2d": 0.1272199000013643,
+      "dense": 0.03789339999639196,
+      "separable": 0.038088999994215555
+     },
+     "dense_over_fallback": 0.9948646591442858,
+     "fallback_s": 0.038088999994215555,
+     "faster_fallback": "separable",
+     "round": 0
+    },
+    {
+     "best_s": {
+      "chirpz2d": 0.1403273000032641,
+      "dense": 0.03785249999782536,
+      "separable": 0.031851100000494625
+     },
+     "dense_over_fallback": 1.1884204940249328,
+     "fallback_s": 0.031851100000494625,
+     "faster_fallback": "separable",
+     "round": 1
+    }
+   ],
+   "rule_says_direct": false,
+   "safe_worst_round": false,
+   "worst_dense_over_fallback": 1.1884204940249328
+  }
+ ],
+ "scipy_fft_workers": -1
+}

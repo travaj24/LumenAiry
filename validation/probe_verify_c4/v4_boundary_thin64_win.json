@@ -1,0 +1,265 @@
+{
+ "CAPTURED_AND_SLOWER": [
+  "h_4096x64",
+  "h_64x4096"
+ ],
+ "build": "WIN-py3.14",
+ "constant": 0.03125,
+ "family": "thin64",
+ "instrument": "interleaved",
+ "load_after": {
+  "python_processes": 23,
+  "ref_loop_s": 5.3999996453057975e-05,
+  "total_processes": 488,
+  "wall": 1789919827.2581875
+ },
+ "numpy": "2.4.4",
+ "python": "3.14.6",
+ "reps": 7,
+ "round_load": [
+  {
+   "python_processes": 23,
+   "ref_loop_s": 9.320000390289351e-05,
+   "total_processes": 488,
+   "wall": 1789919799.948142
+  },
+  {
+   "python_processes": 23,
+   "ref_loop_s": 5.099999543745071e-05,
+   "total_processes": 488,
+   "wall": 1789919813.691616
+  }
+ ],
+ "rounds": 2,
+ "rows": [
+  {
+   "Mx": 1,
+   "My": 64,
+   "Nx_in": 64,
+   "Ny_in": 4096,
+   "best_dense_over_fallback": 1.072704251797424,
+   "name": "h_4096x64",
+   "ratio_max": 0.015625,
+   "ratio_x": 0.015625,
+   "ratio_y": 0.015625,
+   "rounds": [
+    {
+     "best_s": {
+      "chirpz2d": 0.022230800001125317,
+      "dense": 0.013021999999182299,
+      "separable": 0.00875889999588253
+     },
+     "dense_over_fallback": 1.4867163690992944,
+     "fallback_s": 0.00875889999588253,
+     "faster_fallback": "separable",
+     "round": 0
+    },
+    {
+     "best_s": {
+      "chirpz2d": 0.023288900003535673,
+      "dense": 0.011267900001257658,
+      "separable": 0.010504199999559205
+     },
+     "dense_over_fallback": 1.072704251797424,
+     "fallback_s": 0.010504199999559205,
+     "faster_fallback": "separable",
+     "round": 1
+    }
+   ],
+   "rule_says_direct": true,
+   "safe_worst_round": false,
+   "worst_dense_over_fallback": 1.4867163690992944
+  },
+  {
+   "Mx": 1,
+   "My": 32,
+   "Nx_in": 64,
+   "Ny_in": 2048,
+   "best_dense_over_fallback": 0.5079627915009634,
+   "name": "h_2048x64",
+   "ratio_max": 0.015625,
+   "ratio_x": 0.015625,
+   "ratio_y": 0.015625,
+   "rounds": [
+    {
+     "best_s": {
+      "chirpz2d": 0.010736000003817026,
+      "dense": 0.00292539999645669,
+      "separable": 0.003941200004192069
+     },
+     "dense_over_fallback": 0.7422612385428499,
+     "fallback_s": 0.003941200004192069,
+     "faster_fallback": "separable",
+     "round": 0
+    },
+    {
+     "best_s": {
+      "chirpz2d": 0.012191599998914171,
+      "dense": 0.002484699994965922,
+      "separable": 0.004891500000667293
+     },
+     "dense_over_fallback": 0.5079627915009634,
+     "fallback_s": 0.004891500000667293,
+     "faster_fallback": "separable",
+     "round": 1
+    }
+   ],
+   "rule_says_direct": true,
+   "safe_worst_round": true,
+   "worst_dense_over_fallback": 0.7422612385428499
+  },
+  {
+   "Mx": 2,
+   "My": 32,
+   "Nx_in": 128,
+   "Ny_in": 2048,
+   "best_dense_over_fallback": 0.38007408022093153,
+   "name": "h_2048x128",
+   "ratio_max": 0.015625,
+   "ratio_x": 0.015625,
+   "ratio_y": 0.015625,
+   "rounds": [
+    {
+     "best_s": {
+      "chirpz2d": 0.025141699996311218,
+      "dense": 0.0035092999969492666,
+      "separable": 0.009233199998561759
+     },
+     "dense_over_fallback": 0.38007408022093153,
+     "fallback_s": 0.009233199998561759,
+     "faster_fallback": "separable",
+     "round": 0
+    },
+    {
+     "best_s": {
+      "chirpz2d": 0.04128819999459665,
+      "dense": 0.004006100003607571,
+      "separable": 0.008373900003789458
+     },
+     "dense_over_fallback": 0.47840313376021715,
+     "fallback_s": 0.008373900003789458,
+     "faster_fallback": "separable",
+     "round": 1
+    }
+   ],
+   "rule_says_direct": true,
+   "safe_worst_round": true,
+   "worst_dense_over_fallback": 0.47840313376021715
+  },
+  {
+   "Mx": 64,
+   "My": 1,
+   "Nx_in": 4096,
+   "Ny_in": 64,
+   "best_dense_over_fallback": 1.0787862206633767,
+   "name": "h_64x4096",
+   "ratio_max": 0.015625,
+   "ratio_x": 0.015625,
+   "ratio_y": 0.015625,
+   "rounds": [
+    {
+     "best_s": {
+      "chirpz2d": 0.03893039999820758,
+      "dense": 0.01576700000441633,
+      "separable": 0.014615499996580184
+     },
+     "dense_over_fallback": 1.0787862206633767,
+     "fallback_s": 0.014615499996580184,
+     "faster_fallback": "separable",
+     "round": 0
+    },
+    {
+     "best_s": {
+      "chirpz2d": 0.030254400000558235,
+      "dense": 0.010057299994514324,
+      "separable": 0.009129899997788016
+     },
+     "dense_over_fallback": 1.1015783302063547,
+     "fallback_s": 0.009129899997788016,
+     "faster_fallback": "separable",
+     "round": 1
+    }
+   ],
+   "rule_says_direct": true,
+   "safe_worst_round": false,
+   "worst_dense_over_fallback": 1.1015783302063547
+  },
+  {
+   "Mx": 2,
+   "My": 64,
+   "Nx_in": 128,
+   "Ny_in": 4096,
+   "best_dense_over_fallback": 0.5886278738977484,
+   "name": "h_4096x128",
+   "ratio_max": 0.015625,
+   "ratio_x": 0.015625,
+   "ratio_y": 0.015625,
+   "rounds": [
+    {
+     "best_s": {
+      "chirpz2d": 0.057959400000981987,
+      "dense": 0.01491130000067642,
+      "separable": 0.02284019999933662
+     },
+     "dense_over_fallback": 0.6528533025590629,
+     "fallback_s": 0.02284019999933662,
+     "faster_fallback": "separable",
+     "round": 0
+    },
+    {
+     "best_s": {
+      "chirpz2d": 0.038930200003960636,
+      "dense": 0.012400800005707424,
+      "separable": 0.021067299996502697
+     },
+     "dense_over_fallback": 0.5886278738977484,
+     "fallback_s": 0.021067299996502697,
+     "faster_fallback": "separable",
+     "round": 1
+    }
+   ],
+   "rule_says_direct": true,
+   "safe_worst_round": true,
+   "worst_dense_over_fallback": 0.6528533025590629
+  },
+  {
+   "Mx": 1,
+   "My": 16,
+   "Nx_in": 64,
+   "Ny_in": 1024,
+   "best_dense_over_fallback": 0.3092334846124879,
+   "name": "h_1024x64",
+   "ratio_max": 0.015625,
+   "ratio_x": 0.015625,
+   "ratio_y": 0.015625,
+   "rounds": [
+    {
+     "best_s": {
+      "chirpz2d": 0.00893750000250293,
+      "dense": 0.0011220000014873222,
+      "separable": 0.0029288999940035865
+     },
+     "dense_over_fallback": 0.3830789729196702,
+     "fallback_s": 0.0029288999940035865,
+     "faster_fallback": "separable",
+     "round": 0
+    },
+    {
+     "best_s": {
+      "chirpz2d": 0.007255500000610482,
+      "dense": 0.0007887000028858893,
+      "separable": 0.002550500001234468
+     },
+     "dense_over_fallback": 0.3092334846124879,
+     "fallback_s": 0.002550500001234468,
+     "faster_fallback": "separable",
+     "round": 1
+    }
+   ],
+   "rule_says_direct": true,
+   "safe_worst_round": true,
+   "worst_dense_over_fallback": 0.3830789729196702
+  }
+ ],
+ "scipy_fft_workers": -1
+}

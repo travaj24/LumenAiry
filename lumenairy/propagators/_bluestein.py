@@ -40,11 +40,15 @@ cost ``O((N + M) \\log (N + M))`` per axis, where ``N = N_in`` and
 ``M = N_out``.  This is dramatically faster than a direct matrix-Fourier
 transform for typical focal-zoom workflows.  ``O(N^2 M^2)`` is the cost of the
 UNFACTORED four-index sum; the transform is separable, so the dense route
-(:func:`_direct_matrix_2d`, shipped as the opt-in ``method=
-'direct'``) evaluates it as two matrix products at ``O(M N^2 + M^2 N)``.  The
+(:func:`_direct_matrix_2d`) evaluates it as two matrix products at
+``O(M N^2 + M^2 N)``.  The default ``method='auto'`` now SELECTS that
+dense route wherever it was measured never slower on either build -- both
+output-over-input ratios at or under :data:`_MFT_DIRECT_MAX_RATIO` -- and takes
+the chirp-Z reduction everywhere else; see :func:`_auto_selects_direct`.  The
 measured time and memory crossover is tabulated in
 ``docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/
-WAVE5_HYGIENE2_REPORT.md``.
+WP-C4_MFT_DIRECT_DEFAULT_REPORT.md``, and the route's own measurements in the
+``WAVE5_HYGIENE2_REPORT.md`` beside it.
 
 Backends
 --------
@@ -269,6 +273,281 @@ _EPS64 = float(np.finfo(np.float64).eps)
 _PHASE_BUDGET_MAX = 1e-6 / _EPS64                         # 4.503599627e+09
 
 
+#: The shape boundary ``method='auto'`` takes the dense route at or below.
+#:
+#: The rule is ``max(N_out_y/Ny_in, N_out_x/Nx_in) <= _MFT_DIRECT_MAX_RATIO``
+#: -- BOTH axes' output-over-input ratios have to sit at or under it -- and it
+#: is read by :func:`_auto_selects_direct`, which takes the four grid sizes and
+#: nothing else.
+#:
+#: DERIVED, 2026-09-20 (WP-C4), and not chosen.  The criterion the default
+#: flip rests on is "the dense route is NEVER SLOWER on EITHER build",
+#: so the constant is the largest ladder ratio at which that holds at EVERY
+#: shape on BOTH builds.  Fresh ladder, ``N`` in {64,128,256,512,1024,2048} x
+#: ``M`` in {16,32,64,128,256,512,1024} (42 shapes), best of five, cold, the
+#: box's load recorded in the probe JSON; then the shapes that decide the
+#: boundary re-measured on their own, THREE independent rounds of best-of-nine
+#: each, the verdict taken on the WORST round.  The comparison is against
+#: ``min(chirp-Z 2-D, separable)`` -- the FASTER of the two routes ``'auto'``
+#: could otherwise have taken, because either can be the one a given caller
+#: was on.  Worst dense-over-fallback ratio, over all three rounds:
+#:
+#:      M/N      1/64     1/32     1/16      1/8
+#:      WIN     0.206    0.477    0.713    1.427
+#:      WSL     0.561    0.954    1.450    2.982
+#:
+#: 1/16 is NOT safe: on WSL at ``N = 1024, M = 64`` the dense route is 1.38 to
+#: 1.45 times SLOWER, in all three rounds.  (That is the shape the two earlier
+#: campaigns already disagreed about -- ``WAVE5_HYGIENE2_REPORT.md`` read dense
+#: losing there and ``VERIFY_WAVE5_HYGIENE2.md`` read it winning -- which is
+#: why it was re-measured on its own rather than read off either.)  1/32 is the
+#: conservative crossover BOTH builds support.  Its margin is thin at one shape
+#: (WSL ``N = 1024, M = 32``, 0.844 / 0.877 / 0.954 -- dense faster by 5 to
+#: 18 %) and wide everywhere else; 1/64 is the ratio with a two-fold margin at
+#: every shape, if more headroom is ever wanted.  The full table, with the
+#: load, is in ``docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/
+#: WP-C4_MFT_DIRECT_DEFAULT_REPORT.md``.
+#:
+#: WHY A RATIO AND NOT A TIME.  The TIME crossover is per-build -- the two
+#: builds' crossovers differ by an octave, because scipy's pocketfft drives the
+#: separable route's 1-D passes through its own worker pool on Linux
+#: (``SCIPY_FFT_WORKERS = -1``, which ``OMP_NUM_THREADS=1`` does not
+#: constrain).  A constant read off ONE build's clock is exactly the shape
+#: ``docs/TESTING_STANDARDS.md`` calls S1.  This constant is instead the
+#: INTERSECTION of the two builds' safe regions, it is compared against a
+#: SHAPE at run time and never against a clock, and the MEMORY ordering --
+#: which is build-free, and which puts the dense route cheapest at all 42
+#: shapes on both builds -- never argues against it anywhere.
+#:
+#: THE TWO DOCUMENTED SETTINGS.  :data:`_MFT_DIRECT_ALWAYS` (``float('inf')``)
+#: means ALWAYS: every shape takes the dense route.  :data:`_MFT_DIRECT_NEVER`
+#: (``0.0``) means NEVER: the library goes back to the dispatch this keyword
+#: had before this rule -- byte for byte, at every shape -- and so does any
+#: value ``<= 0`` or
+#: ``nan``.  Both are gated by ``tests/unit/test_c4_mft_direct_default.py``.
+_MFT_DIRECT_MAX_RATIO = 1.0 / 32.0
+
+#: The documented "always" and "never" settings of
+#: :data:`_MFT_DIRECT_MAX_RATIO`, named so neither has to be typed as a float.
+#: Assigning ``_MFT_DIRECT_MAX_RATIO = _MFT_DIRECT_NEVER`` is the supported way
+#: back to the previous dispatch for a whole process; ``method='separable'``
+#: / ``method='bluestein'`` is the way back for one call.
+_MFT_DIRECT_ALWAYS = float('inf')
+_MFT_DIRECT_NEVER = 0.0
+
+
+#: The SECOND condition ``method='auto'`` has to clear, and the one a ratio
+#: cannot see.
+#:
+#: WHY A RATIO IS NOT ENOUGH.  :func:`_direct_matrix_2d` builds
+#: ``My*Ny + Mx*Nx`` transcendental kernel entries -- each a complex ``exp``,
+#: tens of times the cost of a multiply-add -- and then spends
+#: ``min(My*Ny*Nx + My*Nx*Mx, Ny*Nx*Mx + My*Ny*Mx)`` multiply-adds using them
+#: (the two costs that function itself compares to pick its association
+#: order).  The RATIO of those two numbers, the multiply-adds per kernel
+#: entry, is what says whether the BUILD or the products dominate -- and it is
+#: not a function of the two grid ratios.  ``2048x2048 -> 64x64`` reads
+#: **1056** and ``2048x64 -> 64x2`` reads **4.0**, and both sit at ratio
+#: exactly ``(1/32, 1/32)``.  For a square ``N -> M`` the quantity is
+#: ``(N + M)/2``, so the ladder :data:`_MFT_DIRECT_MAX_RATIO` was derived from
+#: -- square shapes only -- could not see the thin-input regime at all.
+#:
+#: DERIVED, 2026-09-20 (WP-C4 round 2, VERIFY-WP-C4 D1).  Ladder: 34 CAPTURED
+#: anisotropic shapes spanning this quantity from 1.25 to 64 (both
+#: orientations, several absolute sizes per decade) plus 17 square /
+#: non-dyadic / mildly anisotropic control shapes; two independent rounds of
+#: best-of-nine, routes INTERLEAVED with the order rotating per repeat, cold
+#: before every repeat, ``fft_infra.SCIPY_FFT_WORKERS = 1`` so both sides are
+#: single-threaded, verdict on the WORST round, on BOTH builds.  Against
+#: ``min(chirp-Z 2-D, separable)``:
+#:
+#:  * the largest work/entry at which the dense route was measured SLOWER on
+#:    EITHER build is **11.95** (``2048x128 -> 64x4``: 1.110 on WSL py3.12,
+#:    0.924 on Windows py3.14);
+#:  * the smallest at which it was measured safe on BOTH builds ABOVE that is
+#:    **16.00** (``256x64 -> 4x1``: 0.310 / 0.294).
+#:
+#: 16.0 is the largest value this ladder's two boundary readings admit, and it
+#: clears the slower region by 1.34x on them.  BOTH of those boundary readings
+#: are instrument-dependent and only one of them is thin: ``2048x128 -> 64x4``
+#: (11.95) is SAFE on Windows here (0.924) and straddles unity on WSL (worst
+#: 1.110, best 0.968), and an independent re-measurement
+#: (``VERIFY_WP-C4_ROUND2.md``, 35 shapes, both orientations matched, two
+#: builds) reads it safe in every round on both builds and puts the largest
+#: work/entry measured slower at 7.99 instead -- which would make the
+#: admissible interval (7.99, 8.73] and 16.0 a value with 2.00x of margin
+#: rather than the tightest one.  What BOTH instruments agree on is the only
+#: thing the rule needs: no shape at or above 16.0 was measured slower on
+#: either build, on either ladder.  Read "the largest admissible value" as
+#: this ladder's reading and not as a settled fact.  It refuses 10 of the 10 shapes measured slower (by 1.11x to
+#: 13.03x) and keeps 17 of 17 control shapes; the six shapes the whole shipped
+#: suite drives read 264, 516, 520, 1028, 1044 and 2052, so none of them
+#: moves.  Full table:
+#: ``validation/probe_c4_round2/r2_workladder_all_{win,wsl}.json``.
+#:
+#: IT IS A ONE-SIDED SCREEN, NOT A CROSSOVER, and that costs coverage.  The
+#: readings are not monotone in it -- ``512x32 -> 16x1`` reads 2.99 and is
+#: safe (0.569 / 0.582), because at that absolute size the chirp-Z route's
+#: fixed costs (planning, padding to ``next_fast_len``) dominate whatever the
+#: asymptotic count says -- so a threshold refuses shapes that would have been
+#: fine: 11 of the 34 thin shapes here were safe on both builds and are
+#: refused anyway.  That is the correct direction for a rule whose premise is
+#: "never slower": refusing a safe shape costs a few per cent of time, and
+#: capturing an unsafe one cost up to 13x on this ladder.
+#:
+#: A non-positive or ``nan`` value means the screen refuses nothing the ratio
+#: admitted, which is the exposure this condition was added to close.  Gated
+#: by ``tests/unit/test_c4_mft_direct_default.py::
+#: test_the_work_screen_refuses_a_thin_input_at_the_boundary_ratio`` and by
+#: that file's ``work_constant_silently_zero`` mutation.
+_MFT_DIRECT_MIN_WORK_PER_KERNEL_ENTRY = 16.0
+
+
+def _auto_selects_direct(Ny_in, Nx_in, N_out_y, N_out_x) -> bool:
+    """Does ``method='auto'`` take the dense route at this shape?
+
+    A pure function of the FOUR grid sizes and the TWO module constants
+    :data:`_MFT_DIRECT_MAX_RATIO` and
+    :data:`_MFT_DIRECT_MIN_WORK_PER_KERNEL_ENTRY`.
+    It reads no clock, no environment variable, no thread count, no backend, no
+    array CONTENTS and no module state other than those two constants -- so the
+    route a call takes is reproducible from its signature alone, on every build
+    and every backend.  That is the property the per-shape byte-identity claim
+    rests on: "this shape goes to the previous route" is a statement about the
+    shape, not about the run.  Gated by
+    ``tests/unit/test_c4_mft_direct_default.py::
+    test_the_selection_reads_nothing_but_the_four_grid_sizes``.
+
+    Parameters
+    ----------
+    Ny_in, Nx_in : int
+        Input grid size.
+    N_out_y, N_out_x : int
+        Output grid size.
+
+    Returns
+    -------
+    bool
+        ``True`` when BOTH conditions hold.  (1) Both per-axis ratios
+        ``N_out / N_in`` sit at or below :data:`_MFT_DIRECT_MAX_RATIO`.  The
+        MAX of the two is taken, which is the conservative reading on an
+        anisotropic grid: the axis with the larger ratio decides, so a shape
+        reaches the dense route only when NEITHER axis is past the boundary.
+        (2) The dense route spends at least
+        :data:`_MFT_DIRECT_MIN_WORK_PER_KERNEL_ENTRY` multiply-adds per
+        transcendental kernel entry.  A ratio cannot see a THIN input: at
+        ratio ``(1/32, 1/32)`` the dense route was measured 1.1x to 13.0x
+        SLOWER once the other axis is short, because it is then paying more
+        transcendentals than multiply-adds.
+
+    Notes
+    -----
+    The comparison is ``<=`` and the constant is the largest ratio MEASURED
+    safe, rather than ``<`` against the first ratio measured unsafe, so the
+    boundary ratio itself is inside the dense region and the constant names a
+    shape that was actually timed.  Every ladder ratio is dyadic, so
+    ``N_out / N_in`` at the boundary is exact in float64 and the comparison has
+    no tie to resolve.
+
+    A non-positive or ``nan`` constant means NEVER, and that is decided BEFORE
+    the division, so a mis-set constant cannot reach the arithmetic.
+
+    BOTH CONDITIONS ARE BUILD-FREE (WP-C4 round 2, VERIFY-WP-C4 D1).  The
+    second one counts multiply-adds and kernel entries with the SAME
+    expressions :func:`_direct_matrix_2d` uses to pick its association order,
+    so it is four integers and one constant like the first -- no clock, no
+    environment, no backend.
+    """
+    r = float(_MFT_DIRECT_MAX_RATIO)
+    if not (r > 0.0):                    # 0.0, negative, or nan -> never
+        return False
+    ny, nx = int(Ny_in), int(Nx_in)
+    my, mx = int(N_out_y), int(N_out_x)
+    if ny < 1 or nx < 1 or my < 1 or mx < 1:
+        return False
+    if r == float('inf'):                # the documented "always"
+        return True
+    if not (max(my / ny, mx / nx) <= r):
+        return False
+    # A ratio cannot see a THIN input: at ratio (1/32, 1/32) the dense route
+    # is 1.1x to 13.0x slower once the other axis is short, because it is then
+    # paying more transcendentals than multiply-adds.  MEASURED 2026-09-20
+    # (WP-C4 round 2, ``validation/probe_c4_round2/r2_workladder_*.json``);
+    # the constant's own block has the ladder and the margin.
+    entries = my * ny + mx * nx
+    flops = min(my * ny * nx + my * nx * mx, ny * nx * mx + my * ny * mx)
+    return flops >= float(_MFT_DIRECT_MIN_WORK_PER_KERNEL_ENTRY) * entries
+
+
+def _warn_phase_budget(alpha_x, alpha_y, Nx_in, Ny_in, N_out_x, N_out_y, *,
+                       on_dense: bool, stacklevel: int) -> float:
+    """The chirp phase-budget guard, in ONE place, and the budget it read.
+
+    The guard's THRESHOLD and its LAW are unchanged (see
+    :data:`_PHASE_BUDGET_MAX` and :func:`_bluestein_2d`'s Notes): the relative
+    error of every route here is ``~eps * |alpha| * N_max^2``, linear in the
+    budget over eleven decades, so the threshold is read off the law at the
+    accuracy wanted rather than set at the point where the chirp wraps.
+
+    WHAT WP-C4 CHANGED, and why.  Before the shape rule, the guard sat between the
+    ``method='direct'`` early return and the chirp-Z arms, so only a chirp-Z
+    call could reach it.  With ``'auto'`` now able to choose the dense route
+    from the shapes, leaving it there would mean a caller who was being warned
+    at a high budget goes SILENT on a shape the new rule captures -- a
+    diagnostic removed by a default flip, which is the one thing a default flip
+    may not do.  So ``'auto'`` evaluates the guard BEFORE it chooses, on the
+    budget, and the message names the route it then takes.
+
+    EXPLICIT ``method='direct'`` IS UNCHANGED AND STILL SILENT.  That is the
+    shipped decision from hygiene-2 -- warning on the one route the warning's
+    own advice names would be a false positive -- and it stays gated
+    two-sidedly by ``tests/unit/test_wave5_h2_mft_direct.py::
+    test_the_chirp_phase_guard_fires_on_the_chirp_route_and_not_the_dense_one``.
+
+    ``on_dense=False`` reproduces the PREVIOUS message BYTE FOR BYTE, which
+    is what keeps the byte-identity claim true for the fixtures that warn.
+    """
+    N_max = max(int(Nx_in), int(Ny_in), int(N_out_x), int(N_out_y))
+    alpha_max = max(abs(float(alpha_x)), abs(float(alpha_y)))
+    phase_budget = alpha_max * float(N_max) ** 2
+    if phase_budget <= _PHASE_BUDGET_MAX:
+        return phase_budget
+    import warnings
+    head = (
+        f"Bluestein chirp phase argument ~{phase_budget:.1e} exceeds the "
+        f"float64 chirp budget {_PHASE_BUDGET_MAX:.1e}; the chirp-Z "
+        f"routes' relative error at this budget is "
+        f"~{phase_budget * _EPS64:.1e}.  EVERY route here follows "
+        f"rel ~ eps * budget with budget = |alpha| * N_max^2, so the way "
+        f"out is a smaller BUDGET and not a different route: fewer "
+        f"samples on whichever of N_in / N_out sets N_max, or a smaller "
+        f"|alpha| -- for the MFT propagators alpha = dx*dx_out/(lambda "
+        f"z), so a finer output pitch, a finer input pitch or a longer z "
+        f"-- or a regular FFT propagator, which spends no such phase at "
+        f"all.  ")
+    if on_dense:
+        tail = (
+            f"This call is ALREADY on the dense route: method='auto' chose "
+            f"it from the shapes alone (both N_out/N_in at or under "
+            f"{float(_MFT_DIRECT_MAX_RATIO):.6g}), and it is the more "
+            f"accurate of the two at the SAME budget -- but only by a "
+            f"bounded factor (MEASURED 2026-09-20, 1.5x .. 11.8x over ten "
+            f"decades of budget at N=24 -> M=12 on both index conventions "
+            f"and both builds), so it is a smaller error and not an escape "
+            f"from this one.  method='bluestein' / 'separable' name the "
+            f"chirp-Z routes, which are the LESS accurate ones here.")
+    else:
+        tail = (
+            "method='direct' is the more accurate route at the SAME "
+            "budget, but only by a bounded factor (MEASURED 2026-09-20, "
+            "1.5x .. 11.8x over ten decades of budget at N=24 -> M=12 on "
+            "both index conventions and both builds), so it is a smaller "
+            "error and not an escape from this one.")
+    warnings.warn(head + tail, RuntimeWarning, stacklevel=stacklevel)
+    return phase_budget
+
+
+
 def _direct_matrix_2d(
     E,
     alpha_x: float,
@@ -319,12 +598,25 @@ def _direct_matrix_2d(
       route at a given budget by a BOUNDED factor and not by decades -- see
       the Notes below and :func:`_bluestein_2d`'s.
 
-    It is NOT the default anywhere and nothing in the library selects it
-    automatically: at the shapes the MFT propagators are written for the
-    chirp-Z route wins on time by one to three orders of magnitude, and a
-    threshold-automatic switch would move answers on existing fixtures (the
-    three routes agree to round-off, not bit for bit).  See the report's
-    maintainer-decision paragraph.
+    THIS IS NOW THE DEFAULT ROUTE AT SMALL OUTPUT GRIDS (WP-C4).
+    ``method='auto'`` -- the default on both primitives and on all three public
+    MFT entry points -- selects it when both ``N_out / N_in`` ratios sit at or
+    under :data:`_MFT_DIRECT_MAX_RATIO`, the largest ladder ratio at which the
+    dense route was MEASURED never slower than the faster of the two chirp-Z
+    fallbacks, on BOTH builds, in three independent rounds.  Everywhere else
+    ``'auto'`` takes the route it always took, byte for byte.  The selection is
+    :func:`_auto_selects_direct`, a pure function of the four grid sizes.
+
+    It MOVES ANSWERS on the shapes it captures -- the three routes agree to
+    round-off, not bit for bit -- which is why it carries a Migration note and
+    why the way back is one keyword (``method='separable'`` or
+    ``'bluestein'``) or one constant (``_MFT_DIRECT_MAX_RATIO =
+    _MFT_DIRECT_NEVER``).  An earlier wording here said "It is NOT the default
+    anywhere and nothing in the library selects it automatically"; the reason
+    it gave -- "at the shapes the MFT propagators are written for the chirp-Z
+    route wins on time by one to three orders of magnitude" -- is true at
+    ``M ~ N`` and false by a factor of 2 to 20 at ``M <= N/32``, which is the
+    region the rule captures and nothing else.
 
     Parameters
     ----------
@@ -515,18 +807,32 @@ def _bluestein_2d(
         (:func:`~lumenairy.propagators.carrier.carrier_referenced_exact_focus_readout`)
         carries its own default-ON switch with the 2-D path one flag away.
     method : {'auto', 'bluestein', 'separable', 'direct'}, default 'auto'
-        Which route through the SAME sum to take.  ``'auto'`` (the default, and
-        the ONLY value any shipped caller passes unless it is asked for
-        another) reproduces the historical dispatch exactly: the separable
-        two-pass route when ``separable=True`` and ``xp is numpy``, the 2-D
-        convolution otherwise.  ``'bluestein'`` and ``'separable'`` name those
-        two arms explicitly (``'separable'`` still falls back to the 2-D arm
-        off NumPy, for the reason the ``separable`` entry gives).  ``'direct'``
-        takes :func:`_direct_matrix_2d`, the dense matrix-Fourier transform --
-        opt-in only; see that function's docstring and the measured crossover
-        table in ``docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/
-        WAVE5_HYGIENE2_REPORT.md``.  The three routes agree to round-off, NOT
-        bit for bit.
+        Which route through the SAME sum to take.
+
+        ``'auto'`` (the default) DECIDES FROM THE SHAPES: it
+        takes :func:`_direct_matrix_2d`, the dense matrix-Fourier transform,
+        when :func:`_auto_selects_direct` says both ``N_out / N_in`` ratios sit
+        at or under :data:`_MFT_DIRECT_MAX_RATIO`, and otherwise reproduces the
+        historical dispatch exactly and byte for byte -- the separable two-pass
+        route when ``separable=True`` and ``xp is numpy``, the 2-D convolution
+        otherwise.  The decision is a pure function of the four grid sizes and
+        that one constant: no clock, no environment, no backend, no array
+        contents, so it is identical on every build and every backend.
+
+        ``'bluestein'`` and ``'separable'`` name the two chirp-Z arms
+        explicitly and are the WAY BACK for one call (``'separable'`` still
+        falls back to the 2-D arm off NumPy, for the reason the ``separable``
+        entry gives).  ``'direct'`` names the dense route explicitly, and
+        differs from an ``'auto'`` that selected it in exactly one respect: it
+        is SILENT at a phase budget past :data:`_PHASE_BUDGET_MAX`, where
+        ``'auto'`` warns (see :func:`_warn_phase_budget`).
+
+        The routes agree to round-off, NOT bit for bit, so a shape the rule
+        captures MOVES in its last bits.  Setting
+        ``_MFT_DIRECT_MAX_RATIO = _MFT_DIRECT_NEVER`` restores the previous
+        dispatch for a whole process.  The measured crossover table is in
+        ``docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/
+        WP-C4_MFT_DIRECT_DEFAULT_REPORT.md``.
 
     Returns
     -------
@@ -603,19 +909,20 @@ def _bluestein_2d(
             else np.dtype(np.complex128)
     target_cdtype = np.dtype(target_cdtype)
 
-    # ----- 0a) direct route (opt-in) ----------------------------------------
-    # Taken BEFORE the chirp phase-budget guard below.  The guard is SCOPED to
-    # the chirp signals' float64 phase, which this route does not build; what
-    # it is NOT is a statement that this route is accurate at that budget.
-    # MEASURED 2026-09-20 (round 2 D-1) at 2.2x the threshold on the shipped
-    # N=24 -> M=12 fixture: chirp-Z 2.028e-06 and warning, dense 1.079e-06 and
-    # SILENT -- i.e. the dense route is quiet at a budget where it has itself
-    # passed the 1e-6 the threshold is named for, by a factor of 1.9 rather
-    # than by decades.  Widening the guard to this route is a behaviour change
-    # owed to the maintainer and is recorded as an open item in
-    # ``docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/
-    # WAVE5_HYGIENE2_REPORT.md``; the scoping is gated two-sidedly by
-    # ``tests/unit/test_wave5_h2_mft_direct.py::
+    # ----- 0a) the dense route, asked for by name ---------------------------
+    # Taken BEFORE the chirp phase-budget guard below, and SILENT.  The guard
+    # is scoped to the chirp signals' float64 phase, which this route does not
+    # build; what that scoping is NOT is a statement that this route is
+    # accurate at that budget.  MEASURED 2026-09-20 (round 2 D-1) at 2.2x the
+    # threshold on the shipped N=24 -> M=12 fixture: chirp-Z 2.028e-06 and
+    # warning, dense 1.079e-06 and SILENT -- i.e. the dense route is quiet at
+    # a budget where it has itself passed the 1e-6 the threshold is named for,
+    # by a factor of 1.9 rather than by decades.  Widening the guard to a
+    # caller who NAMED this route is a behaviour change owed to the maintainer
+    # and is still an open item in ``docs/audits/
+    # AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/WAVE5_HYGIENE2_REPORT.md``;
+    # the scoping is gated two-sidedly by ``tests/unit/
+    # test_wave5_h2_mft_direct.py::
     # test_the_chirp_phase_guard_fires_on_the_chirp_route_and_not_the_dense_one``
     # so it cannot change silently either way.
     if method == 'direct':
@@ -623,34 +930,35 @@ def _bluestein_2d(
             E, alpha_x, alpha_y, N_out_y, N_out_x,
             sign=sign, xp=xp, target_cdtype=target_cdtype)
 
+    # ----- 0b) which arm 'auto' takes, decided from the SHAPES alone --------
+    # WP-C4.  ``'auto'`` takes the dense route where it was measured
+    # never slower on EITHER build -- see :func:`_auto_selects_direct` and
+    # :data:`_MFT_DIRECT_MAX_RATIO`.  The decision is a pure function of the
+    # four grid sizes and that one constant: no clock, no environment, no
+    # backend, no array contents.  Every other shape takes the route this
+    # dispatch has always taken, byte for byte.
+    auto_direct = (method == 'auto'
+                   and _auto_selects_direct(Ny_in, Nx_in, N_out_y, N_out_x))
+
     # Numerical-precision guard.  The chirp signal exp(sign*pi*j*alpha*n^2)
     # has phase up to pi * |alpha| * N_max^2, and the relative error that
     # costs is LINEAR in that budget (`rel ~ eps * budget`, measured over 11
     # decades at two geometries on both builds -- see the Notes).  The
     # threshold is therefore read off the law at the accuracy wanted rather
     # than set at the point where the chirp wraps incoherently.
-    N_max = max(Nx_in, Ny_in, N_out_x, N_out_y)
-    alpha_max = max(abs(alpha_x), abs(alpha_y))
-    phase_budget = float(alpha_max) * float(N_max) ** 2
-    if phase_budget > _PHASE_BUDGET_MAX:
-        import warnings
-        warnings.warn(
-            f"Bluestein chirp phase argument ~{phase_budget:.1e} exceeds the "
-            f"float64 chirp budget {_PHASE_BUDGET_MAX:.1e}; the chirp-Z "
-            f"routes' relative error at this budget is "
-            f"~{phase_budget * _EPS64:.1e}.  EVERY route here follows "
-            f"rel ~ eps * budget with budget = |alpha| * N_max^2, so the way "
-            f"out is a smaller BUDGET and not a different route: fewer "
-            f"samples on whichever of N_in / N_out sets N_max, or a smaller "
-            f"|alpha| -- for the MFT propagators alpha = dx*dx_out/(lambda "
-            f"z), so a finer output pitch, a finer input pitch or a longer z "
-            f"-- or a regular FFT propagator, which spends no such phase at "
-            f"all.  method='direct' is the more accurate route at the SAME "
-            f"budget, but only by a bounded factor (MEASURED 2026-09-20, "
-            f"1.5x .. 11.8x over ten decades of budget at N=24 -> M=12 on "
-            f"both index conventions and both builds), so it is a smaller "
-            f"error and not an escape from this one.",
-            RuntimeWarning, stacklevel=2)
+    #
+    # It runs BEFORE the ``'auto'`` dense return below, and not after, so that
+    # the default flip cannot take a warning away from a caller who was
+    # getting one: the budget is a property of the CALL, and both routes pay
+    # it (round 2 D-1).  ``on_dense`` only changes which route the message's
+    # last sentence names -- see :func:`_warn_phase_budget`.
+    _warn_phase_budget(alpha_x, alpha_y, Nx_in, Ny_in, N_out_x, N_out_y,
+                       on_dense=auto_direct, stacklevel=3)
+
+    if auto_direct:
+        return _direct_matrix_2d(
+            E, alpha_x, alpha_y, N_out_y, N_out_x,
+            sign=sign, xp=xp, target_cdtype=target_cdtype)
 
     # ----- 0) separable route (v5.33.2) --------------------------------------
     # Same sum, two 1-D passes, ``(N_in x L)`` instead of ``L^2``.  Taken
@@ -827,12 +1135,21 @@ def _bluestein_centred_2d(
         themselves separable (a pre-chirp in ``n``, a post-chirp in ``k`` and
         a constant), so ``separable`` changes only the core primitive.
     method : {'auto', 'bluestein', 'separable', 'direct'}, default 'auto'
-        Same as :func:`_bluestein_2d`, with one difference that matters:
-        ``'direct'`` does NOT go through the pre-chirp / post-chirp / constant
-        decomposition above, because :func:`_direct_matrix_2d` takes the index
-        centres themselves and builds the centred kernel in one step.  The
-        decomposition and the one-step build are the same sum; they are not the
-        same bits, which is why ``'direct'`` is opt-in here as well.
+        Same as :func:`_bluestein_2d`, including the shape rule, with
+        one difference that matters: the dense route does NOT go through the
+        pre-chirp / post-chirp / constant decomposition above, because
+        :func:`_direct_matrix_2d` takes the index centres themselves and builds
+        the centred kernel in one step.  The decomposition and the one-step
+        build are the same sum; they are not the same bits.
+
+        That is why the dense arm is taken HERE, before the decomposition, for
+        BOTH ``'direct'`` and an ``'auto'`` the rule sends to it: routing an
+        ``'auto'`` dense call through the decomposition and then into the dense
+        core would produce a THIRD set of bits, matching neither the one-step
+        dense build nor the chirp-Z route.  ``'auto'`` asks
+        :func:`_auto_selects_direct` on the same four grid sizes the inner
+        :func:`_bluestein_2d` call would ask it on, so the two primitives never
+        disagree about which arm a shape takes.
 
     Returns
     -------
@@ -867,8 +1184,24 @@ def _bluestein_centred_2d(
             else np.dtype(np.complex128)
     target_cdtype = np.dtype(target_cdtype)
 
-    # Opt-in dense route: the centred kernel in one build, no decomposition.
-    if method == 'direct':
+    # The dense route: the centred kernel in ONE build, no decomposition.
+    # Reached by name (``method='direct'``) or by the shape rule under
+    # ``'auto'`` -- and it has to be reached HERE in both cases, because going
+    # through the pre-chirp / post-chirp / constant decomposition below and
+    # then into the dense core would be a THIRD arithmetic, agreeing with
+    # neither the one-step dense build nor the chirp-Z route bit for bit.
+    # ``'auto'`` asks the same :func:`_auto_selects_direct` on the same four
+    # grid sizes that :func:`_bluestein_2d` would ask on the decomposed call,
+    # so the two primitives never disagree about which arm a shape takes.
+    auto_direct = (method == 'auto'
+                   and _auto_selects_direct(Ny_in, Nx_in, N_out_y, N_out_x))
+    if method == 'direct' or auto_direct:
+        if auto_direct:
+            # Same reason as in :func:`_bluestein_2d`: the default flip may
+            # not silence a diagnostic.  A caller who NAMED the route stays
+            # silent, which is the unchanged shipped decision.
+            _warn_phase_budget(alpha_x, alpha_y, Nx_in, Ny_in,
+                               N_out_x, N_out_y, on_dense=True, stacklevel=3)
         return _direct_matrix_2d(
             E, alpha_x, alpha_y, N_out_y, N_out_x,
             sign=sign, xp=xp, target_cdtype=target_cdtype,
@@ -923,5 +1256,30 @@ def _bluestein_centred_2d(
     return F
 
 
+def _mft_route_kwargs(mft_method) -> dict:
+    """``{}`` when the caller named no MFT route, ``{'method': ...}`` when
+    they did -- the ONE place the ``mft_method=`` pass-through is turned into
+    a call.
+
+    WHY A HELPER AND NOT ``method=mft_method or 'auto'`` AT EACH SITE.  Seven
+    public entry points (``compute_psf``, ``resample_field``, ``propagate``'s
+    asm / fresnel / fraunhofer legs, both carrier focus readouts,
+    ``re_reference`` and ``propagate_traced_carrier_chain``) already spend the
+    name ``method`` on something else -- a sampler, a resampler, a propagator
+    family -- so each of them exposes ``mft_method=`` instead and forwards it
+    here.  ``None`` is the "the caller named nothing" sentinel and it STAMPS
+    NOTHING: the keyword is left off the call entirely, so whatever the
+    primitive's own default is at the time governs, and a future change to
+    that default reaches these callers without eight edits.  Passing
+    ``mft_method='auto'`` explicitly is NOT the same statement -- it pins the
+    name -- even though today the two produce the same bytes.
+
+    Gated by ``tests/unit/test_c4_round2_mft_method.py::
+    test_mft_method_none_stamps_nothing_on_the_call_it_makes``.
+    """
+    return {} if mft_method is None else {'method': mft_method}
+
+
 __all__ = ['_bluestein_2d', '_bluestein_centred_2d',
-           '_direct_matrix_2d']
+           '_direct_matrix_2d', '_auto_selects_direct',
+           '_mft_route_kwargs']

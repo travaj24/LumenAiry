@@ -1,0 +1,157 @@
+{
+ "WITHOUT_A_WAY_BACK": [],
+ "base_build": "WIN-py3.14",
+ "base_version": "5.48.1",
+ "branch_build": "WIN-py3.14",
+ "branch_version": "5.48.1",
+ "n_entry_points": 11,
+ "n_identical_at_refused": 11,
+ "n_moving": 11,
+ "n_with_a_way_back": 11,
+ "rows": [
+  {
+   "base_captured": "b2a79edbb90689b24289d388496351f100d5a4e615ee5f9ddf62e64cafc0c0d4",
+   "base_refused": "3f2a6b676d64e4bf2eae5dcfc1b1f5aa85932932fa78edcb8d2fa60895600ea1",
+   "branch_captured": "2ba4415873e2dde962dc0653f3977acde8df733a6e838b5f9a07789dffdcb675",
+   "branch_refused": "3f2a6b676d64e4bf2eae5dcfc1b1f5aa85932932fa78edcb8d2fa60895600ea1",
+   "entry_point": "angular_spectrum_propagate_mft",
+   "identical_at_refused": true,
+   "moves_at_captured": true,
+   "way_back": "bluestein",
+   "way_back_spellings": [
+    "bluestein"
+   ]
+  },
+  {
+   "base_captured": "6b5062d6c21631ad537416d4a8f53655e3dd34d2de948d3768298ef28aeae76f",
+   "base_refused": "0584dd4570ea42582fd96144b2494b54180e88049f6bb238c22195c99f2bcc66",
+   "branch_captured": "8b402b220a6d1c82d89b55a92f95dc1c241a0c029890c8260d9b2cd6c7aad273",
+   "branch_refused": "0584dd4570ea42582fd96144b2494b54180e88049f6bb238c22195c99f2bcc66",
+   "entry_point": "carrier_referenced_exact_focus_readout",
+   "identical_at_refused": true,
+   "moves_at_captured": true,
+   "way_back": "separable",
+   "way_back_spellings": [
+    "separable"
+   ]
+  },
+  {
+   "base_captured": "e0d748c22557952468f4b86ffc9dd174bee721ce58f96eaf8a70392f1f4513f2",
+   "base_refused": "0185968eb01893cf19600b9c05f0cad4cac7549cdc16bad9dfad64efb348b62e",
+   "branch_captured": "f671b519e5f42cf54f391391fde106984c693b7f58709f6f3011ce2524eee49b",
+   "branch_refused": "0185968eb01893cf19600b9c05f0cad4cac7549cdc16bad9dfad64efb348b62e",
+   "entry_point": "carrier_referenced_focus_readout",
+   "identical_at_refused": true,
+   "moves_at_captured": true,
+   "way_back": "bluestein",
+   "way_back_spellings": [
+    "bluestein"
+   ]
+  },
+  {
+   "base_captured": "8855880cfc31ca841bbe16ebdd8695ede2c5743766c1d9ff02edbad8b427dc00",
+   "base_refused": "fae3df8a5cefa1986479d6f038540d828523e88d56acf73336e0b3f4f003d550",
+   "branch_captured": "38c8162d9b59e6406f59b7f7a4f25bebed293c0d98eca408bc17afa29d785c3d",
+   "branch_refused": "fae3df8a5cefa1986479d6f038540d828523e88d56acf73336e0b3f4f003d550",
+   "entry_point": "compute_psf",
+   "identical_at_refused": true,
+   "moves_at_captured": true,
+   "way_back": "bluestein",
+   "way_back_spellings": [
+    "bluestein"
+   ]
+  },
+  {
+   "base_captured": "b2a79edbb90689b24289d388496351f100d5a4e615ee5f9ddf62e64cafc0c0d4",
+   "base_refused": "3f2a6b676d64e4bf2eae5dcfc1b1f5aa85932932fa78edcb8d2fa60895600ea1",
+   "branch_captured": "2ba4415873e2dde962dc0653f3977acde8df733a6e838b5f9a07789dffdcb675",
+   "branch_refused": "3f2a6b676d64e4bf2eae5dcfc1b1f5aa85932932fa78edcb8d2fa60895600ea1",
+   "entry_point": "propagate_asm",
+   "identical_at_refused": true,
+   "moves_at_captured": true,
+   "way_back": "bluestein",
+   "way_back_spellings": [
+    "bluestein"
+   ]
+  },
+  {
+   "base_captured": "91420c016377a37dd3dcbf6b1d81eb9b678c7920f66c3948b46b721e9ae1b251",
+   "base_refused": "6d162791b3ce064692e9d9b53788c3d50b4c84e73feb361dcb8e348a97336961",
+   "branch_captured": "c1419d253fbc5aadf694ac8d02954ef45bb142899c63bf31e0b9940520737064",
+   "branch_refused": "6d162791b3ce064692e9d9b53788c3d50b4c84e73feb361dcb8e348a97336961",
+   "entry_point": "propagate_fresnel",
+   "identical_at_refused": true,
+   "moves_at_captured": true,
+   "way_back": "bluestein",
+   "way_back_spellings": [
+    "bluestein"
+   ]
+  },
+  {
+   "base_captured": "e365ed9b1d47afb013716cb5435638a1ecb41594482e62be1bdbefa5c692d94d",
+   "base_refused": "c6d5e7cfad1d4ec0eb7927b80881233db3af236c6b6490f101f3453c4ed2b73d",
+   "branch_captured": "8196c06ce15dc3575ef97fa766e4ad7ad595991e303e2294eb0539e60d146283",
+   "branch_refused": "c6d5e7cfad1d4ec0eb7927b80881233db3af236c6b6490f101f3453c4ed2b73d",
+   "entry_point": "propagate_traced_carrier_chain",
+   "identical_at_refused": true,
+   "moves_at_captured": true,
+   "way_back": "bluestein",
+   "way_back_spellings": [
+    "bluestein"
+   ]
+  },
+  {
+   "base_captured": "cb1554a82070f1a51b7731e8e36c0e8b62bb7753033dc33742559a3eabc1bb04",
+   "base_refused": "c666fa66b75018936e025ae852a9979237096b7282d95a0dcb6984cfaa21fa76",
+   "branch_captured": "34be0dfbf47a238e6571c5b38f944b066582d474fde84623fc8eb02142575695",
+   "branch_refused": "c666fa66b75018936e025ae852a9979237096b7282d95a0dcb6984cfaa21fa76",
+   "entry_point": "propagate_traced_carrier_chain_collins",
+   "identical_at_refused": true,
+   "moves_at_captured": true,
+   "way_back": "separable",
+   "way_back_spellings": [
+    "separable"
+   ]
+  },
+  {
+   "base_captured": "e365ed9b1d47afb013716cb5435638a1ecb41594482e62be1bdbefa5c692d94d",
+   "base_refused": "c6d5e7cfad1d4ec0eb7927b80881233db3af236c6b6490f101f3453c4ed2b73d",
+   "branch_captured": "8196c06ce15dc3575ef97fa766e4ad7ad595991e303e2294eb0539e60d146283",
+   "branch_refused": "c6d5e7cfad1d4ec0eb7927b80881233db3af236c6b6490f101f3453c4ed2b73d",
+   "entry_point": "propagate_traced_carrier_chain_multi",
+   "identical_at_refused": true,
+   "moves_at_captured": true,
+   "way_back": "bluestein",
+   "way_back_spellings": [
+    "bluestein"
+   ]
+  },
+  {
+   "base_captured": "1e3ba313b8cf4c250e20d4f956049a4d8767d9cd02b66f3d4a9873a15c75455a",
+   "base_refused": "01eca3828675675b6202d7d1c1fbf929e06e1c24048129f7e35c8a5b762b4bf2",
+   "branch_captured": "7d145ef9749583209e8c7ff318e42c2c8e01a24c9dba7ffde0bfe3ce1a521bd5",
+   "branch_refused": "01eca3828675675b6202d7d1c1fbf929e06e1c24048129f7e35c8a5b762b4bf2",
+   "entry_point": "re_reference",
+   "identical_at_refused": true,
+   "moves_at_captured": true,
+   "way_back": "separable",
+   "way_back_spellings": [
+    "separable"
+   ]
+  },
+  {
+   "base_captured": "ae808cd6f7221ac9f31488b2107c49f26072557d162429fda8c0aeaeeaff7a52",
+   "base_refused": "d397e52a2917a8b6ec2fe35878b4097d951981c5d7444f2b01de5d756809a70d",
+   "branch_captured": "350611643659632505c56b42cc39fae8ce9dcaec90c3a6d20864186e2c8b95f6",
+   "branch_refused": "d397e52a2917a8b6ec2fe35878b4097d951981c5d7444f2b01de5d756809a70d",
+   "entry_point": "resample_field",
+   "identical_at_refused": true,
+   "moves_at_captured": true,
+   "way_back": "bluestein",
+   "way_back_spellings": [
+    "bluestein"
+   ]
+  }
+ ],
+ "tag": "win"
+}

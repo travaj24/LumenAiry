@@ -1,0 +1,1945 @@
+{
+ "by_test": {
+  "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_a_faithful_window_is_untouched_by_either_fill": {
+   "direct_shapes": [],
+   "min_ratio": 0.0625,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_replica_fill_reaches_the_readout_through_the_chain": {
+   "direct_shapes": [],
+   "min_ratio": 0.5,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_chain_publishes_the_faithful_window_size_per_stage": {
+   "direct_shapes": [],
+   "min_ratio": 0.5,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_core_s_replica_enters_the_window_at_exactly_two_periods": {
+   "direct_shapes": [],
+   "min_ratio": 0.46875,
+   "n": 18,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_knob_keeps_the_readouts_input_dtype": {
+   "direct_shapes": [],
+   "min_ratio": 0.0625,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_refusal_names_the_knob_and_no_longer_promises_a_safe_peak": {
+   "direct_shapes": [
+    [
+     512,
+     512,
+     16,
+     16
+    ]
+   ],
+   "min_ratio": 0.03125,
+   "n": 1,
+   "n_direct": 1
+  },
+  "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_shipped_request_scores_an_image_of_the_core": {
+   "direct_shapes": [],
+   "min_ratio": 0.5,
+   "n": 20,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_two_fills_differ_only_outside_one_period": {
+   "direct_shapes": [
+    [
+     512,
+     512,
+     16,
+     16
+    ]
+   ],
+   "min_ratio": 0.03125,
+   "n": 5,
+   "n_direct": 1
+  },
+  "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_unclipped_cell_reproduces_the_analytic_gaussian_focus": {
+   "direct_shapes": [],
+   "min_ratio": 0.5,
+   "n": 20,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_a5_propagators.py::TestK20UniformReturnType::test_every_output_grid_capable_method_returns_an_ndarray[asm]": {
+   "direct_shapes": [],
+   "min_ratio": 0.5,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_a6_verify_carrier.py::TestVerifyC1AgainstTheAnalyticFocus::test_a_narrow_grid_resolves_and_the_guard_sees_the_pre_fix_leg[0.93-0.85-0.02546]": {
+   "direct_shapes": [],
+   "min_ratio": 0.09375,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_a6_verify_carrier.py::TestVerifyC1AgainstTheAnalyticFocus::test_a_narrow_grid_resolves_and_the_guard_sees_the_pre_fix_leg[0.97-0.92-0.300483]": {
+   "direct_shapes": [],
+   "min_ratio": 0.09375,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_a6_verify_carrier.py::TestVerifyC1AgainstTheAnalyticFocus::test_a_narrow_grid_resolves_and_the_guard_sees_the_pre_fix_leg[0.99-0.97-0.91256]": {
+   "direct_shapes": [],
+   "min_ratio": 0.09375,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_a6_verify_carrier.py::TestVerifyC1AgainstTheAnalyticFocus::test_the_contained_control_on_the_same_narrow_grid_is_untouched": {
+   "direct_shapes": [],
+   "min_ratio": 0.046875,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_a6_verify_carrier.py::TestVerifyC1AgainstTheAnalyticFocus::test_the_readout_matches_the_analytic_focus_at_a_new_na[0.93-0.85-0.15-0.024932]": {
+   "direct_shapes": [],
+   "min_ratio": 0.09375,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_a6_verify_carrier.py::TestVerifyC1AgainstTheAnalyticFocus::test_the_readout_matches_the_analytic_focus_at_a_new_na[0.97-0.9-0.08-0.216767]": {
+   "direct_shapes": [],
+   "min_ratio": 0.09375,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_a6_verify_carrier.py::TestVerifyC1AgainstTheAnalyticFocus::test_the_readout_matches_the_analytic_focus_at_a_new_na[1.0-0.99-0.01-0.999799]": {
+   "direct_shapes": [],
+   "min_ratio": 0.09375,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_a6_verify_carrier.py::TestVerifyC1AgainstTheAnalyticFocus::test_the_sixty_cell_matrix_is_untouched_and_silent": {
+   "direct_shapes": [],
+   "min_ratio": 0.0625,
+   "n": 120,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_a6_verify_carrier.py::TestVerifyC1Quadratic::test_the_downward_quadratic_still_resolves_a_leg": {
+   "direct_shapes": [],
+   "min_ratio": 0.09375,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_a6_verify_carrier.py::TestVerifyC3::test_every_readout_keeps_complex64": {
+   "direct_shapes": [],
+   "min_ratio": 0.125,
+   "n": 6,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_a6_verify_carrier.py::TestVerifyC3::test_the_chain_tilted_paraxial_landing_keeps_its_dtype[complex128]": {
+   "direct_shapes": [],
+   "min_ratio": 0.125,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_a6_verify_carrier.py::TestVerifyC3::test_the_chain_tilted_paraxial_landing_keeps_its_dtype[complex64]": {
+   "direct_shapes": [],
+   "min_ratio": 0.125,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_a6_verify_carrier.py::TestVerifyC5::test_the_readout_really_forwards_the_kernel_and_the_tilt": {
+   "direct_shapes": [],
+   "min_ratio": 0.125,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b3_propagator_kernels.py::TestK6ChirpZResampler::test_a_non_square_input_keeps_both_axes": {
+   "direct_shapes": [],
+   "min_ratio": 2.0,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b3_propagator_kernels.py::TestK6ChirpZResampler::test_a_window_wider_than_the_period_returns_replicas_and_warns": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b3_propagator_kernels.py::TestK6ChirpZResampler::test_chirpz_is_the_trigonometric_interpolant": {
+   "direct_shapes": [],
+   "min_ratio": 1.3125,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b3_propagator_kernels.py::TestK6ChirpZResampler::test_chirpz_reproduces_the_samples_it_was_given": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b3_propagator_kernels.py::TestK6ChirpZResampler::test_the_chirpz_leg_places_an_odd_grids_origin[17-17-0.55]": {
+   "direct_shapes": [],
+   "min_ratio": 1.8235294117647058,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b3_propagator_kernels.py::TestK6ChirpZResampler::test_the_chirpz_leg_places_an_odd_grids_origin[33-21-1.4]": {
+   "direct_shapes": [],
+   "min_ratio": 0.7272727272727273,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b3_propagator_kernels.py::TestK6ChirpZResampler::test_the_chirpz_leg_places_an_odd_grids_origin[45-63-0.7]": {
+   "direct_shapes": [],
+   "min_ratio": 1.4285714285714286,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b3_propagator_kernels.py::TestK6ChirpZResampler::test_the_chirpz_leg_places_an_odd_grids_origin[65-65-0.5]": {
+   "direct_shapes": [],
+   "min_ratio": 2.0,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b3_propagator_kernels.py::TestK6ChirpZResampler::test_the_chirpz_mtf_is_flat_where_the_splines_rolls_off": {
+   "direct_shapes": [],
+   "min_ratio": 2.0,
+   "n": 10,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b3_propagator_kernels.py::TestK6ChirpZResampler::test_the_faithful_zone_warning_sizes_each_axis_separately": {
+   "direct_shapes": [],
+   "min_ratio": 0.9090909090909091,
+   "n": 6,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b3b_resample_call_sites.py::TestF6TheUnitMtfIsAPropertyOfTheWindow::test_a_downsample_at_an_exact_window_is_the_fold_not_the_gain[2.0]": {
+   "direct_shapes": [],
+   "min_ratio": 0.5,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b3b_resample_call_sites.py::TestF6TheUnitMtfIsAPropertyOfTheWindow::test_a_downsample_at_an_exact_window_is_the_fold_not_the_gain[4.0]": {
+   "direct_shapes": [],
+   "min_ratio": 0.25,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b3b_resample_call_sites.py::TestF6TheUnitMtfIsAPropertyOfTheWindow::test_a_rounded_window_departs_by_the_field_in_the_sliver": {
+   "direct_shapes": [],
+   "min_ratio": 0.796875,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b3b_resample_call_sites.py::TestF6TheUnitMtfIsAPropertyOfTheWindow::test_an_exact_period_window_returns_the_power_exactly[0.5]": {
+   "direct_shapes": [],
+   "min_ratio": 2.0,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b3b_resample_call_sites.py::TestF6TheUnitMtfIsAPropertyOfTheWindow::test_an_exact_period_window_returns_the_power_exactly[0.8]": {
+   "direct_shapes": [],
+   "min_ratio": 1.25,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b3b_resample_call_sites.py::TestF6TheUnitMtfIsAPropertyOfTheWindow::test_an_exact_period_window_returns_the_power_exactly[1.0]": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b3b_resample_call_sites.py::TestK6ByteIdentityWhereTheGateSelectsTheSpline::test_the_comparison_is_not_vacuous_where_the_window_fits[gap_fresnel_bk7_plate]": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b3b_resample_call_sites.py::TestK6ByteIdentityWhereTheGateSelectsTheSpline::test_the_comparison_is_not_vacuous_where_the_window_fits[sys_sas_64_z1mm]": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b3b_resample_call_sites.py::TestK6FresnelLegEvaluatesOntoTheChainGrid::test_the_leg_keeps_the_chain_pitch_and_the_input_sample_count": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b3b_resample_call_sites.py::TestK6FresnelLegEvaluatesOntoTheChainGrid::test_the_leg_performs_no_resample": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b3b_resample_call_sites.py::TestK6FresnelLegEvaluatesOntoTheChainGrid::test_the_leg_reproduces_the_fresnel_double_sum[nonsquare_24x18]": {
+   "direct_shapes": [],
+   "min_ratio": 1.3333333333333333,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b3b_resample_call_sites.py::TestK6FresnelLegEvaluatesOntoTheChainGrid::test_the_leg_reproduces_the_fresnel_double_sum[nonsquare_64x48]": {
+   "direct_shapes": [],
+   "min_ratio": 1.3333333333333333,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b3b_resample_call_sites.py::TestK6FresnelLegEvaluatesOntoTheChainGrid::test_the_leg_reproduces_the_fresnel_double_sum[square_24]": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b3b_resample_call_sites.py::TestK6FresnelLegEvaluatesOntoTheChainGrid::test_the_leg_reproduces_the_fresnel_double_sum[square_32_z2mm]": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b3b_resample_call_sites.py::TestK6FresnelLegEvaluatesOntoTheChainGrid::test_the_leg_reproduces_the_fresnel_double_sum[square_64]": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b3b_resample_call_sites.py::TestK6FresnelLegEvaluatesOntoTheChainGrid::test_the_resample_back_is_the_thing_the_bar_separates_from": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b3b_resample_call_sites.py::TestK6FresnelLegEvaluatesOntoTheChainGrid::test_the_undersampled_chirp_guard_still_fires_from_this_leg": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b3b_resample_call_sites.py::TestK6TheChirpZGate::test_an_ungated_chirpz_returns_the_tiling_power": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 6,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b3b_resample_call_sites.py::TestK6TheChirpZGate::test_the_in_glass_gap_legs_gate_on_window_against_period[plate_fine_grid_fresnel]": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b3b_resample_call_sites.py::TestK6TheChirpZGate::test_the_system_sas_leg_gates_on_window_against_period[sas_coarsens_256]": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b3b_resample_call_sites.py::TestK6TheChirpZGate::test_the_system_sas_leg_gates_on_window_against_period[sas_coarsens_64]": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b3b_resample_call_sites.py::TestK6TheImprovementWhereTheGateSelectsChirpZ::test_chirpz_is_the_better_interpolant_on_a_contained_field": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b3b_resample_call_sites.py::TestK6TheImprovementWhereTheGateSelectsChirpZ::test_chirpz_tracks_the_direct_evaluation_better_than_the_spline": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b3b_resample_call_sites.py::TestV1TheFresnelLegStillReportsAWindowLoss::test_it_is_silent_where_the_window_holds_the_beam": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 10,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b3b_resample_call_sites.py::TestV1TheFresnelLegStillReportsAWindowLoss::test_the_diagnostic_moves_no_values": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b3b_resample_call_sites.py::TestV1TheFresnelLegStillReportsAWindowLoss::test_the_leg_warns_when_the_window_holds_part_of_the_beam": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b3b_resample_call_sites.py::TestV2TheExactPeriodScaleFactorsDependOnNin::test_an_odd_Nin_does_not_get_an_exact_window_at_x2": {
+   "direct_shapes": [],
+   "min_ratio": 0.49230769230769234,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b3b_resample_call_sites.py::TestV3ThePerAxisPeriodIsLoadBearing::test_the_shorter_input_extent_sets_the_period[short_x_binds_and_fits]": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b3b_resample_call_sites.py::TestV3ThePerAxisPeriodIsLoadBearing::test_the_shorter_input_extent_sets_the_period[short_y_between_the_two_periods]": {
+   "direct_shapes": [],
+   "min_ratio": 2.0,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b3b_resample_call_sites.py::TestV3ThePerAxisPeriodIsLoadBearing::test_the_shorter_input_extent_sets_the_period[short_y_between_the_two_periods_b]": {
+   "direct_shapes": [],
+   "min_ratio": 1.3333333333333333,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b3b_resample_call_sites.py::TestV3ThePerAxisPeriodIsLoadBearing::test_the_shorter_input_extent_sets_the_period[short_y_far_between]": {
+   "direct_shapes": [],
+   "min_ratio": 4.0,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b3b_resample_call_sites.py::TestV4TheGateSharesTheResamplersOwnTolerance::test_the_resamplers_tolerance_is_one_part_in_1e9": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 10,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b3b_resample_call_sites.py::TestV5TheFresnelGapLegRefusesWhatItCannotResample::test_the_square_isotropic_call_still_runs": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestAbsolutePhaseThroughTheFocus::test_the_gouy_phase_is_continuous_through_the_geometric_focus[-0.001]": {
+   "direct_shapes": [],
+   "min_ratio": 0.125,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestAbsolutePhaseThroughTheFocus::test_the_gouy_phase_is_continuous_through_the_geometric_focus[-1e-06]": {
+   "direct_shapes": [],
+   "min_ratio": 0.125,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestAbsolutePhaseThroughTheFocus::test_the_gouy_phase_is_continuous_through_the_geometric_focus[0.001]": {
+   "direct_shapes": [],
+   "min_ratio": 0.125,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestAbsolutePhaseThroughTheFocus::test_the_gouy_phase_is_continuous_through_the_geometric_focus[0.0]": {
+   "direct_shapes": [],
+   "min_ratio": 0.125,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestAbsolutePhaseThroughTheFocus::test_the_gouy_phase_is_continuous_through_the_geometric_focus[1e-06]": {
+   "direct_shapes": [],
+   "min_ratio": 0.125,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestDefaultIsByteIdentical::test_the_chain_is_equal_bit_for_bit": {
+   "direct_shapes": [],
+   "min_ratio": 0.25,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestDefaultIsByteIdentical::test_the_multi_orchestrator_is_equal_bit_for_bit": {
+   "direct_shapes": [],
+   "min_ratio": 0.25,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_collins_is_never_worse_than_sziklas[1.5-0.03]": {
+   "direct_shapes": [],
+   "min_ratio": 0.125,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_collins_is_never_worse_than_sziklas[1.5-0.1]": {
+   "direct_shapes": [],
+   "min_ratio": 0.125,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_collins_is_never_worse_than_sziklas[1.5-0.3]": {
+   "direct_shapes": [],
+   "min_ratio": 0.125,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_collins_is_never_worse_than_sziklas[1.5-0.45]": {
+   "direct_shapes": [],
+   "min_ratio": 0.125,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_collins_is_never_worse_than_sziklas[10.0-0.03]": {
+   "direct_shapes": [],
+   "min_ratio": 0.125,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_collins_is_never_worse_than_sziklas[10.0-0.1]": {
+   "direct_shapes": [],
+   "min_ratio": 0.125,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_collins_is_never_worse_than_sziklas[10.0-0.3]": {
+   "direct_shapes": [],
+   "min_ratio": 0.125,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_collins_is_never_worse_than_sziklas[10.0-0.45]": {
+   "direct_shapes": [],
+   "min_ratio": 0.125,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_collins_is_never_worse_than_sziklas[2.5-0.03]": {
+   "direct_shapes": [],
+   "min_ratio": 0.125,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_collins_is_never_worse_than_sziklas[2.5-0.1]": {
+   "direct_shapes": [],
+   "min_ratio": 0.125,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_collins_is_never_worse_than_sziklas[2.5-0.3]": {
+   "direct_shapes": [],
+   "min_ratio": 0.125,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_collins_is_never_worse_than_sziklas[2.5-0.45]": {
+   "direct_shapes": [],
+   "min_ratio": 0.125,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_collins_is_never_worse_than_sziklas[4.0-0.03]": {
+   "direct_shapes": [],
+   "min_ratio": 0.125,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_collins_is_never_worse_than_sziklas[4.0-0.1]": {
+   "direct_shapes": [],
+   "min_ratio": 0.125,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_collins_is_never_worse_than_sziklas[4.0-0.3]": {
+   "direct_shapes": [],
+   "min_ratio": 0.125,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_collins_is_never_worse_than_sziklas[4.0-0.45]": {
+   "direct_shapes": [],
+   "min_ratio": 0.125,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_on_a_wide_grid_collins_sits_on_the_truncation_floor[0.03]": {
+   "direct_shapes": [],
+   "min_ratio": 0.125,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_on_a_wide_grid_collins_sits_on_the_truncation_floor[0.1]": {
+   "direct_shapes": [],
+   "min_ratio": 0.125,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_on_a_wide_grid_collins_sits_on_the_truncation_floor[0.3]": {
+   "direct_shapes": [],
+   "min_ratio": 0.125,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_on_a_wide_grid_collins_sits_on_the_truncation_floor[0.45]": {
+   "direct_shapes": [],
+   "min_ratio": 0.125,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_the_small_extent_cells_are_materially_better[0.03]": {
+   "direct_shapes": [],
+   "min_ratio": 0.125,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_the_small_extent_cells_are_materially_better[0.1]": {
+   "direct_shapes": [],
+   "min_ratio": 0.125,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_the_small_extent_cells_are_materially_better[0.3]": {
+   "direct_shapes": [],
+   "min_ratio": 0.125,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_the_small_extent_cells_are_materially_better[0.45]": {
+   "direct_shapes": [],
+   "min_ratio": 0.125,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestGateBMismatchMatrix::test_the_sziklas_column_reproduces_the_published_matrix": {
+   "direct_shapes": [],
+   "min_ratio": 0.0625,
+   "n": 20,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestGateDMulti::test_k1_reduces_to_the_single_congruence_chain[collins]": {
+   "direct_shapes": [],
+   "min_ratio": 0.25,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestGateDMulti::test_k1_reduces_to_the_single_congruence_chain[sziklas]": {
+   "direct_shapes": [],
+   "min_ratio": 0.25,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestGateDMulti::test_k2_is_the_hand_summed_pair[collins]": {
+   "direct_shapes": [],
+   "min_ratio": 0.25,
+   "n": 8,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestGateDMulti::test_k2_is_the_hand_summed_pair[sziklas]": {
+   "direct_shapes": [],
+   "min_ratio": 0.25,
+   "n": 8,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestKellyGuard::test_a_sampled_configuration_is_silent_and_right": {
+   "direct_shapes": [],
+   "min_ratio": 0.125,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestKellyGuard::test_an_unsampled_configuration_fires_and_is_wrong[1024-1e-05]": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestKellyGuard::test_an_unsampled_configuration_fires_and_is_wrong[256-4e-05]": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestKellyGuard::test_an_unsampled_configuration_fires_and_is_wrong[512-2e-05]": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestKellyGuard::test_the_conditions_are_ratios_against_the_nyquist_rate": {
+   "direct_shapes": [],
+   "min_ratio": 0.0625,
+   "n": 6,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestKellyGuard::test_the_period_is_the_input_grid_s_and_the_replica_guard_sees_it": {
+   "direct_shapes": [
+    [
+     1024,
+     1024,
+     16,
+     16
+    ]
+   ],
+   "min_ratio": 0.015625,
+   "n": 1,
+   "n_direct": 1
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestKellyGuard::test_the_support_radii_are_measured_not_geometric": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestKernelRefinement::test_applying_it_anyway_is_demonstrably_wrong": {
+   "direct_shapes": [],
+   "min_ratio": 0.125,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestKernelRefinement::test_it_is_dropped_where_it_would_wrap_and_auto_says_so[0.99999999]": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestKernelRefinement::test_it_is_dropped_where_it_would_wrap_and_auto_says_so[1.0]": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestKernelRefinement::test_the_refinement_is_applied_where_it_is_representable": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 8,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestKernelRefinementNearTheFocus::test_the_abcd_fresnel_integral_is_exact_right_up_to_the_focus[0.0001]": {
+   "direct_shapes": [],
+   "min_ratio": 0.125,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestKernelRefinementNearTheFocus::test_the_abcd_fresnel_integral_is_exact_right_up_to_the_focus[0.001]": {
+   "direct_shapes": [],
+   "min_ratio": 0.125,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestKernelRefinementNearTheFocus::test_the_abcd_fresnel_integral_is_exact_right_up_to_the_focus[0.005]": {
+   "direct_shapes": [],
+   "min_ratio": 0.125,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestKernelRefinementNearTheFocus::test_the_abcd_fresnel_integral_is_exact_right_up_to_the_focus[1e-05]": {
+   "direct_shapes": [],
+   "min_ratio": 0.125,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestKernelRefinementNearTheFocus::test_the_abcd_fresnel_integral_is_exact_right_up_to_the_focus[1e-06]": {
+   "direct_shapes": [],
+   "min_ratio": 0.125,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestLegPeriodCondition::test_a_leg_conserves_power[0.012]": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestLegPeriodCondition::test_a_leg_conserves_power[0.02]": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestLegPeriodCondition::test_a_leg_conserves_power[0.039]": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestLegPeriodCondition::test_a_leg_evaluates_the_form_that_is_SAMPLED_on_its_own_lattice[-0.03]": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestLegPeriodCondition::test_a_leg_evaluates_the_form_that_is_SAMPLED_on_its_own_lattice[0.012]": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestLegPeriodCondition::test_a_leg_evaluates_the_form_that_is_SAMPLED_on_its_own_lattice[0.02]": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestLegPeriodCondition::test_a_leg_evaluates_the_form_that_is_SAMPLED_on_its_own_lattice[0.039]": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestLegPeriodCondition::test_a_leg_evaluates_the_form_that_is_SAMPLED_on_its_own_lattice[0.03]": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestLegPeriodCondition::test_k3_is_never_below_k1_on_a_leg_lattice[-0.03]": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestLegPeriodCondition::test_k3_is_never_below_k1_on_a_leg_lattice[0.02]": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestLegPeriodCondition::test_k3_is_never_below_k1_on_a_leg_lattice[0.039]": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestLegPeriodCondition::test_the_leg_publishes_its_period_ratio_and_its_kernel": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestLegPeriodCondition::test_the_period_condition_speaks_on_a_caller_chosen_lattice[0.5-False]": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestLegPeriodCondition::test_the_selection_boundary_is_where_both_forms_hold": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 6,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestNoNearFocusApparatus::test_a_near_focus_leg_runs_with_the_whole_apparatus_poisoned": {
+   "direct_shapes": [],
+   "min_ratio": 0.0625,
+   "n": 10,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestNoNearFocusApparatus::test_the_collapsing_pitch_is_floored_by_the_measured_box": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestNoNearFocusApparatus::test_the_reference_goes_flat_exactly_at_the_geometric_focus": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestQuadratureComplementarity::test_the_selected_form_is_published": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestQuadratureComplementarity::test_the_two_forms_have_exactly_opposite_conditions": {
+   "direct_shapes": [],
+   "min_ratio": 0.0625,
+   "n": 8,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestQuadratureComplementarity::test_where_both_hold_the_two_forms_agree[0.012]": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestQuadratureComplementarity::test_where_both_hold_the_two_forms_agree[0.02]": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestReadoutPeriodDecoupling::test_replica_fill_is_inert_on_a_window_inside_one_period": {
+   "direct_shapes": [],
+   "min_ratio": 0.0625,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestReadoutPeriodDecoupling::test_the_period_follows_the_input_grid_and_the_leg_only": {
+   "direct_shapes": [
+    [
+     1024,
+     1024,
+     16,
+     16
+    ]
+   ],
+   "min_ratio": 0.015625,
+   "n": 4,
+   "n_direct": 4
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestSameTheorem::test_collins_on_the_co_moving_lattice_is_the_sziklas_step[auto-0.012]": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestSameTheorem::test_collins_on_the_co_moving_lattice_is_the_sziklas_step[auto-0.02]": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestSameTheorem::test_collins_on_the_co_moving_lattice_is_the_sziklas_step[fresnel-0.012]": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestSameTheorem::test_collins_on_the_co_moving_lattice_is_the_sziklas_step[fresnel-0.02]": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestSameTheorem::test_on_a_marginal_leg_the_direct_sum_sides_with_the_chirp_z[-0.006]": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestSameTheorem::test_on_a_marginal_leg_the_direct_sum_sides_with_the_chirp_z[0.008]": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestSameTheorem::test_the_focus_readout_matches_the_analytic_gaussian_absolutely": {
+   "direct_shapes": [],
+   "min_ratio": 0.125,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestSameTheorem::test_the_transform_equals_a_direct_summation_of_the_same_integral": {
+   "direct_shapes": [],
+   "min_ratio": 0.125,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestTiltedAndDecentredReadout::test_a_tilted_decentred_congruence_through_the_collins_readout[0.0-0.0-0.0-0.0]": {
+   "direct_shapes": [],
+   "min_ratio": 0.125,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestTiltedAndDecentredReadout::test_a_tilted_decentred_congruence_through_the_collins_readout[0.0-0.0-0.0005--0.0003]": {
+   "direct_shapes": [],
+   "min_ratio": 0.125,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestTiltedAndDecentredReadout::test_a_tilted_decentred_congruence_through_the_collins_readout[0.02--0.012-0.0-0.0]": {
+   "direct_shapes": [],
+   "min_ratio": 0.125,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestTiltedAndDecentredReadout::test_a_tilted_decentred_congruence_through_the_collins_readout[0.02--0.012-0.0005--0.0003]": {
+   "direct_shapes": [],
+   "min_ratio": 0.125,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestTiltedAndDecentredReadout::test_a_tilted_decentred_congruence_through_the_collins_readout[0.046-0.0-0.0-0.0]": {
+   "direct_shapes": [],
+   "min_ratio": 0.125,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit_jax_c64_propagator_precision.py::test_mft_jax_complex64_honors_phase_contract": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit_propagation.py::TestAuditFixesV4_12_0_round4_dispatch_AsmMftBandLimitNumpyJaxParity::test_band_limit_uses_strict_less_than_numpy": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit_propagation.py::TestAuditFixesV4_12_0_round4_dispatch_AsmMftBandLimitNumpyJaxParity::test_tilted_plane_wave_at_band_limit_numpy_vs_jax": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit_propagation.py::TestAuditFixesV4_12_0_round4_dispatch_DispatcherOutputGridAsmFamily::test_asm_with_output_dx_auto_promotes_to_mft": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit_propagation.py::TestAuditFixesV4_12_0_round4_dispatch_DispatcherOutputGridAsmFamily::test_asm_with_output_grid_tuple_form": {
+   "direct_shapes": [],
+   "min_ratio": 0.5,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit_propagation.py::TestAuditFixesV4_12_0_round4_dispatch_DispatcherOutputGridAsmFamily::test_fraunhofer_with_output_dx_auto_promotes_to_mft": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit_propagation.py::TestAuditFixesV4_12_0_round4_dispatch_DispatcherOutputGridAsmFamily::test_fresnel_with_output_dx_auto_promotes_to_mft": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit_s2_10_asm_H_consolidation.py::test_mft_H_c64_matches_longdouble_oracle": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_fix_v3_mft_centre_window.py::test_field_transform_kernels_share_the_condition[fraunhofer_propagate_mft]": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_fix_v3_mft_centre_window.py::test_field_transform_kernels_share_the_condition[fresnel_propagate_mft]": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_fix_v3_mft_centre_window.py::test_off_origin_same_window_now_warns": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_fix_v3_mft_centre_window.py::test_offset_budget_is_weight_two": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_fix_v3_mft_centre_window.py::test_on_origin_window_inside_period_is_silent": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_audit_w3_propagators.py::TestNewSystemMethodValidation::test_honoured_methods_still_run[fresnel]": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_audit_w3_propagators.py::TestNewSystemMethodValidation::test_honoured_methods_still_run[sas]": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_audit_w3_propagators.py::TestNewSystemMethodValidation::test_per_element_override_still_honoured": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_audit_w3_propagators.py::TestP11MftOutputGrid::test_asm_mft_natural_and_same_grid_windows_are_silent": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 6,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_audit_w3_propagators.py::TestP11MftOutputGrid::test_asm_mft_replica_window_warns_with_numbers": {
+   "direct_shapes": [],
+   "min_ratio": 4.0,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_audit_w3_propagators.py::TestP11MftOutputGrid::test_fresnel_family_replica_period_is_lambda_z_over_dx[fraunhofer_propagate_mft]": {
+   "direct_shapes": [],
+   "min_ratio": 4.0,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_audit_w3_propagators.py::TestP11MftOutputGrid::test_fresnel_family_replica_period_is_lambda_z_over_dx[fresnel_propagate_mft]": {
+   "direct_shapes": [],
+   "min_ratio": 4.0,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_audit_w3_propagators.py::TestP11MftOutputGrid::test_replica_warning_is_a_warning_not_a_change_in_values": {
+   "direct_shapes": [],
+   "min_ratio": 4.0,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_audit_w3_propagators.py::TestP13DeadCode::test_asm_family_z_guards_are_live_and_must_stay": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_audit_w9_dispatch.py::test_asm_propagate_tilt_plus_output_dx_warns": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_audit_w9_dispatch.py::test_auto_with_output_dx_agrees_with_the_exact_mft_oracle": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_audit_w9_dispatch.py::test_auto_with_output_dx_runs_and_honours_the_requested_pitch[0.0006]": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_audit_w9_dispatch.py::test_auto_with_output_dx_runs_and_honours_the_requested_pitch[0.001]": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_audit_w9_dispatch.py::test_auto_with_output_dx_runs_and_honours_the_requested_pitch[0.003]": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_audit_w9_dispatch.py::test_auto_with_output_dx_runs_and_honours_the_requested_pitch[0.01]": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_audit_w9_dispatch.py::test_output_dx_shortcut_still_wins_over_output_grid": {
+   "direct_shapes": [],
+   "min_ratio": 1.5,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_audit_w9_dispatch.py::test_output_grid_pitch_is_reported_on_the_result_bare_grid[dict]": {
+   "direct_shapes": [],
+   "min_ratio": 1.5,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_audit_w9_dispatch.py::test_output_grid_pitch_is_reported_on_the_result_bare_grid[tuple]": {
+   "direct_shapes": [],
+   "min_ratio": 1.5,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_audit_w9_dispatch2.py::test_the_routed_member_beats_the_old_one_against_an_exact_oracle[128-0.9516]": {
+   "direct_shapes": [
+    [
+     1024,
+     1024,
+     8,
+     8
+    ],
+    [
+     2048,
+     2048,
+     8,
+     8
+    ]
+   ],
+   "min_ratio": 0.00390625,
+   "n": 3,
+   "n_direct": 3
+  },
+  "tests/unit/test_niche_audit_w9_dispatch2.py::test_the_routed_member_beats_the_old_one_against_an_exact_oracle[256-0.8185]": {
+   "direct_shapes": [
+    [
+     1024,
+     1024,
+     8,
+     8
+    ],
+    [
+     2048,
+     2048,
+     8,
+     8
+    ]
+   ],
+   "min_ratio": 0.00390625,
+   "n": 3,
+   "n_direct": 3
+  },
+  "tests/unit/test_niche_audit_w9_dispatch2.py::test_the_routed_member_beats_the_old_one_against_an_exact_oracle[512-0.4111]": {
+   "direct_shapes": [
+    [
+     2048,
+     2048,
+     8,
+     8
+    ],
+    [
+     4096,
+     4096,
+     8,
+     8
+    ]
+   ],
+   "min_ratio": 0.001953125,
+   "n": 3,
+   "n_direct": 3
+  },
+  "tests/unit/test_niche_c5_exact_tilted_reference.py::test_every_untilted_configuration_is_byte_identical[10]": {
+   "direct_shapes": [],
+   "min_ratio": 0.09375,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_c5_exact_tilted_reference.py::test_every_untilted_configuration_is_byte_identical[11]": {
+   "direct_shapes": [],
+   "min_ratio": 0.09375,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_c5_exact_tilted_reference.py::test_every_untilted_configuration_is_byte_identical[9]": {
+   "direct_shapes": [],
+   "min_ratio": 0.375,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_d1_tilted_carrier.py::test_chief_ray_closure_matches_the_exact_chief_trace": {
+   "direct_shapes": [],
+   "min_ratio": 0.25,
+   "n": 6,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_d1_tilted_carrier.py::test_engaged_carrier_intersects_the_two_fit_discs[4.4]": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_d1_tilted_carrier.py::test_engaged_carrier_intersects_the_two_fit_discs[5.6]": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_d1_tilted_carrier.py::test_exact_final_leg_now_runs_for_a_tilted_carrier": {
+   "direct_shapes": [],
+   "min_ratio": 0.25,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_d1_tilted_carrier.py::test_off_axis_fit_disc_tracks_the_local_spline_map": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 6,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_d1_tilted_carrier.py::test_per_order_residual_stays_inside_the_documented_envelope": {
+   "direct_shapes": [],
+   "min_ratio": 0.25,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_d2_chain_multi.py::test_a_clipping_readout_window_is_reported": {
+   "direct_shapes": [
+    [
+     1024,
+     1024,
+     16,
+     16
+    ]
+   ],
+   "min_ratio": 0.015625,
+   "n": 2,
+   "n_direct": 2
+  },
+  "tests/unit/test_niche_d2_chain_multi.py::test_auto_tile_equals_the_same_tile_asked_for_explicitly": {
+   "direct_shapes": [
+    [
+     1024,
+     1024,
+     16,
+     16
+    ]
+   ],
+   "min_ratio": 0.015625,
+   "n": 10,
+   "n_direct": 2
+  },
+  "tests/unit/test_niche_d2_chain_multi.py::test_auto_window_is_independent_of_congruence_order": {
+   "direct_shapes": [
+    [
+     1024,
+     1024,
+     16,
+     16
+    ]
+   ],
+   "min_ratio": 0.015625,
+   "n": 12,
+   "n_direct": 4
+  },
+  "tests/unit/test_niche_d2_chain_multi.py::test_coherent_recombination_makes_the_analytic_fringe": {
+   "direct_shapes": [
+    [
+     1024,
+     1024,
+     16,
+     16
+    ]
+   ],
+   "min_ratio": 0.015625,
+   "n": 12,
+   "n_direct": 4
+  },
+  "tests/unit/test_niche_d2_chain_multi.py::test_default_refuses_the_periodic_replica_regime": {
+   "direct_shapes": [
+    [
+     1024,
+     1024,
+     16,
+     16
+    ]
+   ],
+   "min_ratio": 0.015625,
+   "n": 6,
+   "n_direct": 2
+  },
+  "tests/unit/test_niche_d2_chain_multi.py::test_k1_keeps_the_requested_field_of_view": {
+   "direct_shapes": [],
+   "min_ratio": 2.0,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_d2_chain_multi.py::test_k1_reduces_to_the_single_congruence_chain": {
+   "direct_shapes": [],
+   "min_ratio": 0.5,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_d2_chain_multi.py::test_k2_full_grid_equals_hand_summed_independent_runs": {
+   "direct_shapes": [
+    [
+     1024,
+     1024,
+     8,
+     8
+    ]
+   ],
+   "min_ratio": 0.0078125,
+   "n": 17,
+   "n_direct": 1
+  },
+  "tests/unit/test_niche_d2_chain_multi.py::test_k2_tiled_equals_hand_placed_independent_runs": {
+   "direct_shapes": [],
+   "min_ratio": 0.25,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_d2_chain_multi.py::test_k4_tiled_equals_hand_placed_independent_runs": {
+   "direct_shapes": [],
+   "min_ratio": 0.25,
+   "n": 8,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two": {
+   "direct_shapes": [],
+   "min_ratio": 0.25,
+   "n": 80,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_d2_chain_multi.py::test_memory_budget_is_honoured": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_d2_chain_multi.py::test_off_grid_congruence_warns_and_reports_the_clip": {
+   "direct_shapes": [],
+   "min_ratio": 0.0625,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_d2_chain_multi.py::test_per_emitter_array_images_onto_the_exact_ray_trace": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 8,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_d2_chain_multi.py::test_result_grid_convention_is_the_readout_convention": {
+   "direct_shapes": [],
+   "min_ratio": 2.0,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_d2_chain_multi.py::test_throughput_is_window_independent_but_power_out_is_not": {
+   "direct_shapes": [
+    [
+     1024,
+     1024,
+     16,
+     16
+    ]
+   ],
+   "min_ratio": 0.015625,
+   "n": 6,
+   "n_direct": 2
+  },
+  "tests/unit/test_niche_d2_chain_multi.py::test_tiles_avoid_the_periodic_replica_regime": {
+   "direct_shapes": [],
+   "min_ratio": 2.0,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_d2_chain_multi.py::test_tilted_congruence_takes_the_exact_final_leg": {
+   "direct_shapes": [],
+   "min_ratio": 0.25,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_d6_exact_tilted_leg.py::test_a_harmless_readout_window_clamp_stays_silent": {
+   "direct_shapes": [],
+   "min_ratio": 0.125,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_d6_exact_tilted_leg.py::test_a_negligible_tilt_reproduces_the_on_axis_exact_leg": {
+   "direct_shapes": [],
+   "min_ratio": 0.046875,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_d6_exact_tilted_leg.py::test_decentred_carrier_decentre_penalty_envelope": {
+   "direct_shapes": [],
+   "min_ratio": 0.046875,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_d6_exact_tilted_leg.py::test_exact_beats_paraxial_for_a_tilted_congruence_against_the_oracle": {
+   "direct_shapes": [],
+   "min_ratio": 0.046875,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_d6_exact_tilted_leg.py::test_on_decentred_fit_is_silent_on_axis_and_below_the_threshold": {
+   "direct_shapes": [],
+   "min_ratio": 0.046875,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_d6_exact_tilted_leg.py::test_on_decentred_fit_warns_and_names_the_lower_bound": {
+   "direct_shapes": [],
+   "min_ratio": 0.046875,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_d6_exact_tilted_leg.py::test_readout_centre_and_tilt_defaults_are_byte_identical": {
+   "direct_shapes": [],
+   "min_ratio": 0.25,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_d6_exact_tilted_leg.py::test_readout_is_translation_covariant": {
+   "direct_shapes": [],
+   "min_ratio": 0.25,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_d6_exact_tilted_leg.py::test_the_exact_leg_is_reachable_under_a_tilted_carrier": {
+   "direct_shapes": [],
+   "min_ratio": 0.046875,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_d6_exact_tilted_leg.py::test_the_readout_window_refusal_can_be_downgraded": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_d6_exact_tilted_leg.py::test_the_refusal_can_be_downgraded_and_then_it_is_worse": {
+   "direct_shapes": [],
+   "min_ratio": 0.046875,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_d6_exact_tilted_leg.py::test_the_tilted_exact_leg_conserves_power_like_the_paraxial_one": {
+   "direct_shapes": [],
+   "min_ratio": 0.046875,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_d6_exact_tilted_leg.py::test_untilted_tiltedcarrier_takes_the_scalar_path_byte_identically": {
+   "direct_shapes": [],
+   "min_ratio": 0.046875,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_tight_focus_readout.py::test_an_oversized_readout_window_is_refused_by_default": {
+   "direct_shapes": [
+    [
+     2048,
+     2048,
+     40,
+     40
+    ]
+   ],
+   "min_ratio": 0.01953125,
+   "n": 1,
+   "n_direct": 1
+  },
+  "tests/unit/test_niche_tight_focus_readout.py::test_focal_accuracy_does_not_depend_on_the_propagation_grid[1024]": {
+   "direct_shapes": [],
+   "min_ratio": 0.3203125,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_tight_focus_readout.py::test_focal_accuracy_does_not_depend_on_the_propagation_grid[2048]": {
+   "direct_shapes": [],
+   "min_ratio": 0.16015625,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_tight_focus_readout.py::test_focal_accuracy_does_not_depend_on_the_propagation_grid[4096]": {
+   "direct_shapes": [],
+   "min_ratio": 0.080078125,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_tight_focus_readout.py::test_longitudinal_placement_dominates_the_error_budget": {
+   "direct_shapes": [],
+   "min_ratio": 0.0712890625,
+   "n": 12,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_tight_focus_readout.py::test_readout_accuracy_is_governed_by_the_bluestein_leg_length": {
+   "direct_shapes": [],
+   "min_ratio": 0.087890625,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_tight_focus_readout.py::test_the_core_waist_is_robust_to_the_readout_pitch": {
+   "direct_shapes": [
+    [
+     2048,
+     2048,
+     40,
+     40
+    ]
+   ],
+   "min_ratio": 0.01953125,
+   "n": 5,
+   "n_direct": 1
+  },
+  "tests/unit/test_niche_tight_focus_readout.py::test_the_default_leg_beats_both_constants_at_a_truncated_pupil": {
+   "direct_shapes": [],
+   "min_ratio": 0.1171875,
+   "n": 6,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_tight_focus_readout.py::test_the_exact_readout_guards_the_same_way_on_its_own_period": {
+   "direct_shapes": [],
+   "min_ratio": 2.0,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_tight_focus_readout.py::test_the_refused_window_really_would_have_been_corrupt": {
+   "direct_shapes": [],
+   "min_ratio": 0.16015625,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_tight_focus_readout.py::test_three_micron_spot_is_recovered_from_a_tractable_grid": {
+   "direct_shapes": [],
+   "min_ratio": 0.16015625,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_verify_hyg2_round2.py::test_the_accuracy_rule_is_never_executed_while_tau_is_none": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 6,
+   "n_direct": 0
+  },
+  "tests/unit/test_verify_hyg2_round2.py::test_the_cross_backend_bar_is_the_legs_own_last_bit_sensitivity": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 10,
+   "n_direct": 0
+  },
+  "tests/unit/test_verify_wave5_hyg2.py::test_the_central_difference_through_this_merit_has_no_truncation_branch": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 24,
+   "n_direct": 0
+  },
+  "tests/unit/test_verify_wave5_hyg2.py::test_the_chirp_phase_error_is_linear_and_a_shared_phase_reference_is_blind": {
+   "direct_shapes": [],
+   "min_ratio": 0.5,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_verify_wave5_hyg2.py::test_the_exact_kernel_retards_the_envelope_and_the_sign_is_gated": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_verify_wave5_hyg2.py::test_the_gradient_shape_bar_is_the_legs_departure_from_a_scaled_isometry": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_verify_wave5_hyg2.py::test_the_private_collins_transport_stays_on_an_eager_jax_backend": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 6,
+   "n_direct": 0
+  },
+  "tests/unit/test_verify_wave5_hyg2.py::test_the_public_mft_method_vocabulary_is_closed_and_documented": {
+   "direct_shapes": [],
+   "min_ratio": 0.25,
+   "n": 6,
+   "n_direct": 0
+  },
+  "tests/unit/test_verify_wave5_hyg2.py::test_the_summation_bar_is_two_sided_where_the_shipped_file_asserts_it": {
+   "direct_shapes": [],
+   "min_ratio": 0.5,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_verify_wave5_hyg2.py::test_the_two_reductions_margins_move_in_opposite_directions_with_n": {
+   "direct_shapes": [],
+   "min_ratio": 0.5,
+   "n": 3,
+   "n_direct": 0
+  },
+  "tests/unit/test_wave5_h2_collins_jax.py::test_a_closed_over_jax_constant_under_jit_is_refused_by_name": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_wave5_h2_collins_jax.py::test_a_tilted_exact_kernel_crosses_backends": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_wave5_h2_collins_jax.py::test_an_astigmatic_auto_is_accepted_under_a_trace_because_it_measures_nothing": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_wave5_h2_collins_jax.py::test_an_eager_jax_array_is_not_a_tracer_and_measures_normally": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_wave5_h2_collins_jax.py::test_jax_grad_through_the_collins_transport_matches_a_central_difference": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 44,
+   "n_direct": 0
+  },
+  "tests/unit/test_wave5_h2_collins_jax.py::test_jit_of_the_transport_matches_the_eager_traced_call": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_wave5_h2_collins_jax.py::test_the_astigmatic_arm_crosses_backends_too": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_wave5_h2_collins_jax.py::test_the_backend_does_not_silently_upcast_a_complex64_envelope": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_wave5_h2_collins_jax.py::test_the_central_difference_through_this_merit_has_no_truncation_branch": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 36,
+   "n_direct": 0
+  },
+  "tests/unit/test_wave5_h2_collins_jax.py::test_the_gradient_is_not_trivially_zero_or_constant": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_wave5_h2_collins_jax.py::test_the_numpy_path_is_untouched_by_the_backend_plumbing": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_wave5_h2_collins_jax.py::test_the_private_transport_agrees_across_backends[auto]": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 8,
+   "n_direct": 0
+  },
+  "tests/unit/test_wave5_h2_collins_jax.py::test_the_private_transport_agrees_across_backends[exact]": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 8,
+   "n_direct": 0
+  },
+  "tests/unit/test_wave5_h2_collins_jax.py::test_the_private_transport_agrees_across_backends[fresnel]": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 8,
+   "n_direct": 0
+  },
+  "tests/unit/test_wave5_h2_collins_jax.py::test_the_same_statistic_finds_a_truncation_branch_on_a_cubic_merit": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 52,
+   "n_direct": 0
+  },
+  "tests/unit/test_wave5_h2_mft_direct.py::test_both_routes_follow_the_budget_law_and_dense_wins_by_a_bounded_factor": {
+   "direct_shapes": [],
+   "min_ratio": 0.5,
+   "n": 6,
+   "n_direct": 0
+  },
+  "tests/unit/test_wave5_h2_mft_direct.py::test_every_route_agrees_with_the_pairwise_reference[shape0--1]": {
+   "direct_shapes": [],
+   "min_ratio": 0.5,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_wave5_h2_mft_direct.py::test_every_route_agrees_with_the_pairwise_reference[shape0-1]": {
+   "direct_shapes": [],
+   "min_ratio": 0.5,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_wave5_h2_mft_direct.py::test_every_route_agrees_with_the_pairwise_reference[shape1--1]": {
+   "direct_shapes": [],
+   "min_ratio": 0.8333333333333334,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_wave5_h2_mft_direct.py::test_every_route_agrees_with_the_pairwise_reference[shape1-1]": {
+   "direct_shapes": [],
+   "min_ratio": 0.8333333333333334,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_wave5_h2_mft_direct.py::test_every_route_agrees_with_the_pairwise_reference[shape2--1]": {
+   "direct_shapes": [],
+   "min_ratio": 2.5555555555555554,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_wave5_h2_mft_direct.py::test_every_route_agrees_with_the_pairwise_reference[shape2-1]": {
+   "direct_shapes": [],
+   "min_ratio": 2.5555555555555554,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_wave5_h2_mft_direct.py::test_no_shipped_mft_grid_comes_near_the_phase_budget": {
+   "direct_shapes": [],
+   "min_ratio": 0.125,
+   "n": 24,
+   "n_direct": 0
+  },
+  "tests/unit/test_wave5_h2_mft_direct.py::test_the_centred_primitive_is_the_same_sum_on_the_dense_route": {
+   "direct_shapes": [],
+   "min_ratio": 0.6,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_wave5_h2_mft_direct.py::test_the_chirp_phase_guard_fires_on_the_chirp_route_and_not_the_dense_one": {
+   "direct_shapes": [],
+   "min_ratio": 0.5,
+   "n": 1,
+   "n_direct": 0
+  },
+  "tests/unit/test_wave5_h2_mft_direct.py::test_the_default_takes_the_chirp_z_route_bit_for_bit": {
+   "direct_shapes": [],
+   "min_ratio": 0.5909090909090909,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_wave5_h2_mft_direct.py::test_the_direct_route_reaches_the_same_physics[angular_spectrum_propagate_mft]": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_wave5_h2_mft_direct.py::test_the_direct_route_reaches_the_same_physics[fraunhofer_propagate_mft]": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_wave5_h2_mft_direct.py::test_the_direct_route_reaches_the_same_physics[fresnel_propagate_mft]": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_wave5_h2_mft_direct.py::test_the_phase_budget_threshold_is_the_budget_that_keeps_six_figures": {
+   "direct_shapes": [],
+   "min_ratio": 0.5,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_wave5_h2_mft_direct.py::test_the_propagators_default_is_byte_identical_to_omitting_the_keyword[angular_spectrum_propagate_mft]": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_wave5_h2_mft_direct.py::test_the_propagators_default_is_byte_identical_to_omitting_the_keyword[fraunhofer_propagate_mft]": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_wave5_h2_mft_direct.py::test_the_propagators_default_is_byte_identical_to_omitting_the_keyword[fresnel_propagate_mft]": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_wave5_h2_mft_direct.py::test_the_vocabulary_the_error_names_is_the_vocabulary_that_works": {
+   "direct_shapes": [],
+   "min_ratio": 0.5,
+   "n": 1,
+   "n_direct": 0
+  },
+  "tests/unit/test_wave5_h2_near_focus_table.py::test_a_double_applied_carrier_is_the_failure_mode_the_bar_excludes": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_wave5_h2_near_focus_table.py::test_auto_and_exact_are_the_same_row_everywhere_on_the_ladder": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 20,
+   "n_direct": 0
+  },
+  "tests/unit/test_wave5_h2_near_focus_table.py::test_both_spellings_of_the_output_reference_give_the_same_field": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_wave5_h2_near_focus_table.py::test_tau_1e_4_leaves_this_ladder_inert_and_catches_f3": {
+   "direct_shapes": [],
+   "min_ratio": 0.125,
+   "n": 18,
+   "n_direct": 0
+  },
+  "tests/unit/test_wave5_h2_near_focus_table.py::test_the_departure_is_linear_in_the_reduced_distance": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 36,
+   "n_direct": 0
+  },
+  "tests/unit/test_wave5_h2_near_focus_table.py::test_the_departure_is_quartic_in_the_envelopes_own_angle": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 24,
+   "n_direct": 0
+  },
+  "tests/unit/test_wave5_h2_near_focus_table.py::test_the_departure_law_predicts_what_the_refinement_actually_changes": {
+   "direct_shapes": [],
+   "min_ratio": 0.125,
+   "n": 8,
+   "n_direct": 0
+  },
+  "tests/unit/test_wave5_h2_near_focus_table.py::test_the_exact_kernels_departure_falls_monotonically_away_from_the_focus": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 10,
+   "n_direct": 0
+  },
+  "tests/unit/test_wave5_h2_near_focus_table.py::test_the_kernel_gate_never_fires_on_this_fixture": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 10,
+   "n_direct": 0
+  },
+  "tests/unit/test_wave5_h2_near_focus_table.py::test_the_measured_departure_is_the_quartic_times_one_constant": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 6,
+   "n_direct": 0
+  },
+  "tests/unit/test_wave5_h2_near_focus_table.py::test_the_paraxial_arm_holds_the_oracle_floor_all_the_way_to_the_focus": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 10,
+   "n_direct": 0
+  },
+  "tests/unit/test_wave5_h2_near_focus_table.py::test_the_shipped_default_does_not_evaluate_the_accuracy_rule_at_all": {
+   "direct_shapes": [],
+   "min_ratio": 0.125,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_wave5_h2_near_focus_table.py::test_the_sziklas_transport_loses_the_focus_and_the_collins_one_does_not": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 2,
+   "n_direct": 0
+  }
+ },
+ "summary": {
+  "calls_answering_direct": 35,
+  "distinct_ratios": 42,
+  "distinct_shapes": 83,
+  "min_ratio_seen": 0.001953125,
+  "ratios_below_1_over_16": [
+   0.001953125,
+   0.00390625,
+   0.0078125,
+   0.015625,
+   0.01953125,
+   0.03125,
+   0.046875,
+   0.0625
+  ],
+  "tests_with_a_direct_call": [
+   "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_refusal_names_the_knob_and_no_longer_promises_a_safe_peak",
+   "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_two_fills_differ_only_outside_one_period",
+   "tests/unit/test_audit2609_b4_collins_transport.py::TestKellyGuard::test_the_period_is_the_input_grid_s_and_the_replica_guard_sees_it",
+   "tests/unit/test_audit2609_b4_collins_transport.py::TestReadoutPeriodDecoupling::test_the_period_follows_the_input_grid_and_the_leg_only",
+   "tests/unit/test_niche_audit_w9_dispatch2.py::test_the_routed_member_beats_the_old_one_against_an_exact_oracle[128-0.9516]",
+   "tests/unit/test_niche_audit_w9_dispatch2.py::test_the_routed_member_beats_the_old_one_against_an_exact_oracle[256-0.8185]",
+   "tests/unit/test_niche_audit_w9_dispatch2.py::test_the_routed_member_beats_the_old_one_against_an_exact_oracle[512-0.4111]",
+   "tests/unit/test_niche_d2_chain_multi.py::test_a_clipping_readout_window_is_reported",
+   "tests/unit/test_niche_d2_chain_multi.py::test_auto_tile_equals_the_same_tile_asked_for_explicitly",
+   "tests/unit/test_niche_d2_chain_multi.py::test_auto_window_is_independent_of_congruence_order",
+   "tests/unit/test_niche_d2_chain_multi.py::test_coherent_recombination_makes_the_analytic_fringe",
+   "tests/unit/test_niche_d2_chain_multi.py::test_default_refuses_the_periodic_replica_regime",
+   "tests/unit/test_niche_d2_chain_multi.py::test_k2_full_grid_equals_hand_summed_independent_runs",
+   "tests/unit/test_niche_d2_chain_multi.py::test_throughput_is_window_independent_but_power_out_is_not",
+   "tests/unit/test_niche_tight_focus_readout.py::test_an_oversized_readout_window_is_refused_by_default",
+   "tests/unit/test_niche_tight_focus_readout.py::test_the_core_waist_is_robust_to_the_readout_pitch"
+  ],
+  "total_calls": 1572
+ }
+}

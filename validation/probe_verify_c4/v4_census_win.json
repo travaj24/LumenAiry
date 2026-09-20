@@ -1,0 +1,6867 @@
+{
+ "all_calls": [
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_unclipped_cell_reproduces_the_analytic_gaussian_focus",
+   "shape": [
+    1024,
+    1024,
+    512,
+    512
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_unclipped_cell_reproduces_the_analytic_gaussian_focus",
+   "shape": [
+    1024,
+    1024,
+    512,
+    512
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_unclipped_cell_reproduces_the_analytic_gaussian_focus",
+   "shape": [
+    512,
+    512,
+    512,
+    512
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_unclipped_cell_reproduces_the_analytic_gaussian_focus",
+   "shape": [
+    512,
+    512,
+    512,
+    512
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_unclipped_cell_reproduces_the_analytic_gaussian_focus",
+   "shape": [
+    512,
+    512,
+    512,
+    512
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_unclipped_cell_reproduces_the_analytic_gaussian_focus",
+   "shape": [
+    512,
+    512,
+    512,
+    512
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_unclipped_cell_reproduces_the_analytic_gaussian_focus",
+   "shape": [
+    512,
+    512,
+    512,
+    512
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_unclipped_cell_reproduces_the_analytic_gaussian_focus",
+   "shape": [
+    512,
+    512,
+    512,
+    512
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_unclipped_cell_reproduces_the_analytic_gaussian_focus",
+   "shape": [
+    512,
+    512,
+    512,
+    512
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_unclipped_cell_reproduces_the_analytic_gaussian_focus",
+   "shape": [
+    512,
+    512,
+    512,
+    512
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_unclipped_cell_reproduces_the_analytic_gaussian_focus",
+   "shape": [
+    512,
+    512,
+    512,
+    512
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_unclipped_cell_reproduces_the_analytic_gaussian_focus",
+   "shape": [
+    512,
+    512,
+    512,
+    512
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_unclipped_cell_reproduces_the_analytic_gaussian_focus",
+   "shape": [
+    512,
+    512,
+    512,
+    512
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_unclipped_cell_reproduces_the_analytic_gaussian_focus",
+   "shape": [
+    512,
+    512,
+    512,
+    512
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_unclipped_cell_reproduces_the_analytic_gaussian_focus",
+   "shape": [
+    512,
+    512,
+    512,
+    512
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_unclipped_cell_reproduces_the_analytic_gaussian_focus",
+   "shape": [
+    512,
+    512,
+    512,
+    512
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_unclipped_cell_reproduces_the_analytic_gaussian_focus",
+   "shape": [
+    512,
+    512,
+    512,
+    512
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_unclipped_cell_reproduces_the_analytic_gaussian_focus",
+   "shape": [
+    512,
+    512,
+    512,
+    512
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_unclipped_cell_reproduces_the_analytic_gaussian_focus",
+   "shape": [
+    512,
+    512,
+    512,
+    512
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_unclipped_cell_reproduces_the_analytic_gaussian_focus",
+   "shape": [
+    512,
+    512,
+    512,
+    512
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_shipped_request_scores_an_image_of_the_core",
+   "shape": [
+    1024,
+    1024,
+    512,
+    512
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_shipped_request_scores_an_image_of_the_core",
+   "shape": [
+    1024,
+    1024,
+    512,
+    512
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_shipped_request_scores_an_image_of_the_core",
+   "shape": [
+    512,
+    512,
+    512,
+    512
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_shipped_request_scores_an_image_of_the_core",
+   "shape": [
+    512,
+    512,
+    512,
+    512
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_shipped_request_scores_an_image_of_the_core",
+   "shape": [
+    512,
+    512,
+    512,
+    512
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_shipped_request_scores_an_image_of_the_core",
+   "shape": [
+    512,
+    512,
+    512,
+    512
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_shipped_request_scores_an_image_of_the_core",
+   "shape": [
+    512,
+    512,
+    512,
+    512
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_shipped_request_scores_an_image_of_the_core",
+   "shape": [
+    512,
+    512,
+    512,
+    512
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_shipped_request_scores_an_image_of_the_core",
+   "shape": [
+    512,
+    512,
+    512,
+    512
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_shipped_request_scores_an_image_of_the_core",
+   "shape": [
+    512,
+    512,
+    512,
+    512
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_shipped_request_scores_an_image_of_the_core",
+   "shape": [
+    512,
+    512,
+    512,
+    512
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_shipped_request_scores_an_image_of_the_core",
+   "shape": [
+    512,
+    512,
+    512,
+    512
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_shipped_request_scores_an_image_of_the_core",
+   "shape": [
+    512,
+    512,
+    512,
+    512
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_shipped_request_scores_an_image_of_the_core",
+   "shape": [
+    512,
+    512,
+    512,
+    512
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_shipped_request_scores_an_image_of_the_core",
+   "shape": [
+    512,
+    512,
+    512,
+    512
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_shipped_request_scores_an_image_of_the_core",
+   "shape": [
+    512,
+    512,
+    512,
+    512
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_shipped_request_scores_an_image_of_the_core",
+   "shape": [
+    512,
+    512,
+    512,
+    512
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_shipped_request_scores_an_image_of_the_core",
+   "shape": [
+    512,
+    512,
+    512,
+    512
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_shipped_request_scores_an_image_of_the_core",
+   "shape": [
+    512,
+    512,
+    512,
+    512
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_shipped_request_scores_an_image_of_the_core",
+   "shape": [
+    512,
+    512,
+    512,
+    512
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_core_s_replica_enters_the_window_at_exactly_two_periods",
+   "shape": [
+    1024,
+    1024,
+    480,
+    480
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_core_s_replica_enters_the_window_at_exactly_two_periods",
+   "shape": [
+    1024,
+    1024,
+    480,
+    480
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_core_s_replica_enters_the_window_at_exactly_two_periods",
+   "shape": [
+    480,
+    480,
+    480,
+    480
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_core_s_replica_enters_the_window_at_exactly_two_periods",
+   "shape": [
+    480,
+    480,
+    480,
+    480
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_core_s_replica_enters_the_window_at_exactly_two_periods",
+   "shape": [
+    480,
+    480,
+    480,
+    480
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_core_s_replica_enters_the_window_at_exactly_two_periods",
+   "shape": [
+    480,
+    480,
+    480,
+    480
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_core_s_replica_enters_the_window_at_exactly_two_periods",
+   "shape": [
+    480,
+    480,
+    480,
+    480
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_core_s_replica_enters_the_window_at_exactly_two_periods",
+   "shape": [
+    480,
+    480,
+    480,
+    480
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_core_s_replica_enters_the_window_at_exactly_two_periods",
+   "shape": [
+    480,
+    480,
+    480,
+    480
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_core_s_replica_enters_the_window_at_exactly_two_periods",
+   "shape": [
+    480,
+    480,
+    480,
+    480
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_core_s_replica_enters_the_window_at_exactly_two_periods",
+   "shape": [
+    480,
+    480,
+    480,
+    480
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_core_s_replica_enters_the_window_at_exactly_two_periods",
+   "shape": [
+    480,
+    480,
+    480,
+    480
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_core_s_replica_enters_the_window_at_exactly_two_periods",
+   "shape": [
+    480,
+    480,
+    480,
+    480
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_core_s_replica_enters_the_window_at_exactly_two_periods",
+   "shape": [
+    480,
+    480,
+    480,
+    480
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_core_s_replica_enters_the_window_at_exactly_two_periods",
+   "shape": [
+    480,
+    480,
+    480,
+    480
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_core_s_replica_enters_the_window_at_exactly_two_periods",
+   "shape": [
+    480,
+    480,
+    480,
+    480
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_core_s_replica_enters_the_window_at_exactly_two_periods",
+   "shape": [
+    480,
+    480,
+    480,
+    480
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_core_s_replica_enters_the_window_at_exactly_two_periods",
+   "shape": [
+    480,
+    480,
+    480,
+    480
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_a_faithful_window_is_untouched_by_either_fill",
+   "shape": [
+    512,
+    512,
+    32,
+    32
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_a_faithful_window_is_untouched_by_either_fill",
+   "shape": [
+    512,
+    512,
+    32,
+    32
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_a_faithful_window_is_untouched_by_either_fill",
+   "shape": [
+    512,
+    512,
+    32,
+    32
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_a_faithful_window_is_untouched_by_either_fill",
+   "shape": [
+    512,
+    512,
+    32,
+    32
+   ]
+  },
+  {
+   "answer": true,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_two_fills_differ_only_outside_one_period",
+   "shape": [
+    512,
+    512,
+    16,
+    16
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_two_fills_differ_only_outside_one_period",
+   "shape": [
+    512,
+    512,
+    256,
+    256
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_two_fills_differ_only_outside_one_period",
+   "shape": [
+    512,
+    512,
+    256,
+    256
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_two_fills_differ_only_outside_one_period",
+   "shape": [
+    512,
+    512,
+    256,
+    256
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_two_fills_differ_only_outside_one_period",
+   "shape": [
+    512,
+    512,
+    256,
+    256
+   ]
+  },
+  {
+   "answer": true,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_refusal_names_the_knob_and_no_longer_promises_a_safe_peak",
+   "shape": [
+    512,
+    512,
+    16,
+    16
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_knob_keeps_the_readouts_input_dtype",
+   "shape": [
+    256,
+    256,
+    16,
+    16
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_knob_keeps_the_readouts_input_dtype",
+   "shape": [
+    256,
+    256,
+    16,
+    16
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_knob_keeps_the_readouts_input_dtype",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_knob_keeps_the_readouts_input_dtype",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_replica_fill_reaches_the_readout_through_the_chain",
+   "shape": [
+    1024,
+    1024,
+    512,
+    512
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_replica_fill_reaches_the_readout_through_the_chain",
+   "shape": [
+    1024,
+    1024,
+    512,
+    512
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_replica_fill_reaches_the_readout_through_the_chain",
+   "shape": [
+    1024,
+    1024,
+    512,
+    512
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_replica_fill_reaches_the_readout_through_the_chain",
+   "shape": [
+    1024,
+    1024,
+    512,
+    512
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_chain_publishes_the_faithful_window_size_per_stage",
+   "shape": [
+    1024,
+    1024,
+    512,
+    512
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_chain_publishes_the_faithful_window_size_per_stage",
+   "shape": [
+    1024,
+    1024,
+    512,
+    512
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestDefaultIsByteIdentical::test_the_chain_is_equal_bit_for_bit",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestDefaultIsByteIdentical::test_the_chain_is_equal_bit_for_bit",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestDefaultIsByteIdentical::test_the_chain_is_equal_bit_for_bit",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestDefaultIsByteIdentical::test_the_chain_is_equal_bit_for_bit",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestDefaultIsByteIdentical::test_the_multi_orchestrator_is_equal_bit_for_bit",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestDefaultIsByteIdentical::test_the_multi_orchestrator_is_equal_bit_for_bit",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestDefaultIsByteIdentical::test_the_multi_orchestrator_is_equal_bit_for_bit",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestDefaultIsByteIdentical::test_the_multi_orchestrator_is_equal_bit_for_bit",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestSameTheorem::test_collins_on_the_co_moving_lattice_is_the_sziklas_step[fresnel-0.012]",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestSameTheorem::test_collins_on_the_co_moving_lattice_is_the_sziklas_step[fresnel-0.012]",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestSameTheorem::test_collins_on_the_co_moving_lattice_is_the_sziklas_step[fresnel-0.02]",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestSameTheorem::test_collins_on_the_co_moving_lattice_is_the_sziklas_step[fresnel-0.02]",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestSameTheorem::test_collins_on_the_co_moving_lattice_is_the_sziklas_step[auto-0.012]",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestSameTheorem::test_collins_on_the_co_moving_lattice_is_the_sziklas_step[auto-0.012]",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestSameTheorem::test_collins_on_the_co_moving_lattice_is_the_sziklas_step[auto-0.02]",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestSameTheorem::test_collins_on_the_co_moving_lattice_is_the_sziklas_step[auto-0.02]",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestSameTheorem::test_on_a_marginal_leg_the_direct_sum_sides_with_the_chirp_z[0.008]",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestSameTheorem::test_on_a_marginal_leg_the_direct_sum_sides_with_the_chirp_z[0.008]",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestSameTheorem::test_on_a_marginal_leg_the_direct_sum_sides_with_the_chirp_z[-0.006]",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestSameTheorem::test_on_a_marginal_leg_the_direct_sum_sides_with_the_chirp_z[-0.006]",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestSameTheorem::test_the_focus_readout_matches_the_analytic_gaussian_absolutely",
+   "shape": [
+    1024,
+    1024,
+    128,
+    128
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestSameTheorem::test_the_focus_readout_matches_the_analytic_gaussian_absolutely",
+   "shape": [
+    1024,
+    1024,
+    128,
+    128
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestSameTheorem::test_the_transform_equals_a_direct_summation_of_the_same_integral",
+   "shape": [
+    1024,
+    1024,
+    128,
+    128
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestSameTheorem::test_the_transform_equals_a_direct_summation_of_the_same_integral",
+   "shape": [
+    1024,
+    1024,
+    128,
+    128
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_collins_is_never_worse_than_sziklas[1.5-0.03]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_collins_is_never_worse_than_sziklas[1.5-0.03]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_collins_is_never_worse_than_sziklas[1.5-0.03]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_collins_is_never_worse_than_sziklas[1.5-0.03]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_collins_is_never_worse_than_sziklas[1.5-0.1]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_collins_is_never_worse_than_sziklas[1.5-0.1]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_collins_is_never_worse_than_sziklas[1.5-0.1]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_collins_is_never_worse_than_sziklas[1.5-0.1]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_collins_is_never_worse_than_sziklas[1.5-0.3]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_collins_is_never_worse_than_sziklas[1.5-0.3]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_collins_is_never_worse_than_sziklas[1.5-0.3]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_collins_is_never_worse_than_sziklas[1.5-0.3]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_collins_is_never_worse_than_sziklas[1.5-0.45]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_collins_is_never_worse_than_sziklas[1.5-0.45]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_collins_is_never_worse_than_sziklas[1.5-0.45]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_collins_is_never_worse_than_sziklas[1.5-0.45]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_collins_is_never_worse_than_sziklas[2.5-0.03]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_collins_is_never_worse_than_sziklas[2.5-0.03]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_collins_is_never_worse_than_sziklas[2.5-0.03]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_collins_is_never_worse_than_sziklas[2.5-0.03]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_collins_is_never_worse_than_sziklas[2.5-0.1]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_collins_is_never_worse_than_sziklas[2.5-0.1]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_collins_is_never_worse_than_sziklas[2.5-0.1]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_collins_is_never_worse_than_sziklas[2.5-0.1]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_collins_is_never_worse_than_sziklas[2.5-0.3]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_collins_is_never_worse_than_sziklas[2.5-0.3]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_collins_is_never_worse_than_sziklas[2.5-0.3]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_collins_is_never_worse_than_sziklas[2.5-0.3]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_collins_is_never_worse_than_sziklas[2.5-0.45]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_collins_is_never_worse_than_sziklas[2.5-0.45]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_collins_is_never_worse_than_sziklas[2.5-0.45]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_collins_is_never_worse_than_sziklas[2.5-0.45]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_collins_is_never_worse_than_sziklas[4.0-0.03]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_collins_is_never_worse_than_sziklas[4.0-0.03]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_collins_is_never_worse_than_sziklas[4.0-0.03]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_collins_is_never_worse_than_sziklas[4.0-0.03]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_collins_is_never_worse_than_sziklas[4.0-0.1]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_collins_is_never_worse_than_sziklas[4.0-0.1]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_collins_is_never_worse_than_sziklas[4.0-0.1]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_collins_is_never_worse_than_sziklas[4.0-0.1]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_collins_is_never_worse_than_sziklas[4.0-0.3]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_collins_is_never_worse_than_sziklas[4.0-0.3]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_collins_is_never_worse_than_sziklas[4.0-0.3]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_collins_is_never_worse_than_sziklas[4.0-0.3]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_collins_is_never_worse_than_sziklas[4.0-0.45]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_collins_is_never_worse_than_sziklas[4.0-0.45]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_collins_is_never_worse_than_sziklas[4.0-0.45]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_collins_is_never_worse_than_sziklas[4.0-0.45]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_collins_is_never_worse_than_sziklas[10.0-0.03]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_collins_is_never_worse_than_sziklas[10.0-0.03]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_collins_is_never_worse_than_sziklas[10.0-0.03]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_collins_is_never_worse_than_sziklas[10.0-0.03]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_collins_is_never_worse_than_sziklas[10.0-0.1]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_collins_is_never_worse_than_sziklas[10.0-0.1]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_collins_is_never_worse_than_sziklas[10.0-0.1]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_collins_is_never_worse_than_sziklas[10.0-0.1]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_collins_is_never_worse_than_sziklas[10.0-0.3]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_collins_is_never_worse_than_sziklas[10.0-0.3]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_collins_is_never_worse_than_sziklas[10.0-0.3]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_collins_is_never_worse_than_sziklas[10.0-0.3]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_collins_is_never_worse_than_sziklas[10.0-0.45]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_collins_is_never_worse_than_sziklas[10.0-0.45]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_collins_is_never_worse_than_sziklas[10.0-0.45]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_collins_is_never_worse_than_sziklas[10.0-0.45]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_the_small_extent_cells_are_materially_better[0.03]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_the_small_extent_cells_are_materially_better[0.03]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_the_small_extent_cells_are_materially_better[0.03]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_the_small_extent_cells_are_materially_better[0.03]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_the_small_extent_cells_are_materially_better[0.1]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_the_small_extent_cells_are_materially_better[0.1]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_the_small_extent_cells_are_materially_better[0.1]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_the_small_extent_cells_are_materially_better[0.1]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_the_small_extent_cells_are_materially_better[0.3]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_the_small_extent_cells_are_materially_better[0.3]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_the_small_extent_cells_are_materially_better[0.3]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_the_small_extent_cells_are_materially_better[0.3]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_the_small_extent_cells_are_materially_better[0.45]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_the_small_extent_cells_are_materially_better[0.45]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_the_small_extent_cells_are_materially_better[0.45]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_the_small_extent_cells_are_materially_better[0.45]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_on_a_wide_grid_collins_sits_on_the_truncation_floor[0.03]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_on_a_wide_grid_collins_sits_on_the_truncation_floor[0.03]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_on_a_wide_grid_collins_sits_on_the_truncation_floor[0.03]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_on_a_wide_grid_collins_sits_on_the_truncation_floor[0.03]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_on_a_wide_grid_collins_sits_on_the_truncation_floor[0.1]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_on_a_wide_grid_collins_sits_on_the_truncation_floor[0.1]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_on_a_wide_grid_collins_sits_on_the_truncation_floor[0.1]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_on_a_wide_grid_collins_sits_on_the_truncation_floor[0.1]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_on_a_wide_grid_collins_sits_on_the_truncation_floor[0.3]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_on_a_wide_grid_collins_sits_on_the_truncation_floor[0.3]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_on_a_wide_grid_collins_sits_on_the_truncation_floor[0.3]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_on_a_wide_grid_collins_sits_on_the_truncation_floor[0.3]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_on_a_wide_grid_collins_sits_on_the_truncation_floor[0.45]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_on_a_wide_grid_collins_sits_on_the_truncation_floor[0.45]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_on_a_wide_grid_collins_sits_on_the_truncation_floor[0.45]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateAOracleMatrix::test_on_a_wide_grid_collins_sits_on_the_truncation_floor[0.45]",
+   "shape": [
+    512,
+    512,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateBMismatchMatrix::test_the_sziklas_column_reproduces_the_published_matrix",
+   "shape": [
+    1024,
+    1024,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateBMismatchMatrix::test_the_sziklas_column_reproduces_the_published_matrix",
+   "shape": [
+    1024,
+    1024,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateBMismatchMatrix::test_the_sziklas_column_reproduces_the_published_matrix",
+   "shape": [
+    1024,
+    1024,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateBMismatchMatrix::test_the_sziklas_column_reproduces_the_published_matrix",
+   "shape": [
+    1024,
+    1024,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateBMismatchMatrix::test_the_sziklas_column_reproduces_the_published_matrix",
+   "shape": [
+    1024,
+    1024,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateBMismatchMatrix::test_the_sziklas_column_reproduces_the_published_matrix",
+   "shape": [
+    1024,
+    1024,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateBMismatchMatrix::test_the_sziklas_column_reproduces_the_published_matrix",
+   "shape": [
+    1024,
+    1024,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateBMismatchMatrix::test_the_sziklas_column_reproduces_the_published_matrix",
+   "shape": [
+    1024,
+    1024,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateBMismatchMatrix::test_the_sziklas_column_reproduces_the_published_matrix",
+   "shape": [
+    1024,
+    1024,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateBMismatchMatrix::test_the_sziklas_column_reproduces_the_published_matrix",
+   "shape": [
+    1024,
+    1024,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateBMismatchMatrix::test_the_sziklas_column_reproduces_the_published_matrix",
+   "shape": [
+    1024,
+    1024,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateBMismatchMatrix::test_the_sziklas_column_reproduces_the_published_matrix",
+   "shape": [
+    1024,
+    1024,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateBMismatchMatrix::test_the_sziklas_column_reproduces_the_published_matrix",
+   "shape": [
+    1024,
+    1024,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateBMismatchMatrix::test_the_sziklas_column_reproduces_the_published_matrix",
+   "shape": [
+    1024,
+    1024,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateBMismatchMatrix::test_the_sziklas_column_reproduces_the_published_matrix",
+   "shape": [
+    1024,
+    1024,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateBMismatchMatrix::test_the_sziklas_column_reproduces_the_published_matrix",
+   "shape": [
+    1024,
+    1024,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateBMismatchMatrix::test_the_sziklas_column_reproduces_the_published_matrix",
+   "shape": [
+    1024,
+    1024,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateBMismatchMatrix::test_the_sziklas_column_reproduces_the_published_matrix",
+   "shape": [
+    1024,
+    1024,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateBMismatchMatrix::test_the_sziklas_column_reproduces_the_published_matrix",
+   "shape": [
+    1024,
+    1024,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateBMismatchMatrix::test_the_sziklas_column_reproduces_the_published_matrix",
+   "shape": [
+    1024,
+    1024,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateDMulti::test_k1_reduces_to_the_single_congruence_chain[sziklas]",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateDMulti::test_k1_reduces_to_the_single_congruence_chain[sziklas]",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateDMulti::test_k1_reduces_to_the_single_congruence_chain[sziklas]",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateDMulti::test_k1_reduces_to_the_single_congruence_chain[sziklas]",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateDMulti::test_k1_reduces_to_the_single_congruence_chain[collins]",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateDMulti::test_k1_reduces_to_the_single_congruence_chain[collins]",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateDMulti::test_k1_reduces_to_the_single_congruence_chain[collins]",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateDMulti::test_k1_reduces_to_the_single_congruence_chain[collins]",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateDMulti::test_k2_is_the_hand_summed_pair[sziklas]",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateDMulti::test_k2_is_the_hand_summed_pair[sziklas]",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateDMulti::test_k2_is_the_hand_summed_pair[sziklas]",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateDMulti::test_k2_is_the_hand_summed_pair[sziklas]",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateDMulti::test_k2_is_the_hand_summed_pair[sziklas]",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateDMulti::test_k2_is_the_hand_summed_pair[sziklas]",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateDMulti::test_k2_is_the_hand_summed_pair[sziklas]",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateDMulti::test_k2_is_the_hand_summed_pair[sziklas]",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateDMulti::test_k2_is_the_hand_summed_pair[collins]",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateDMulti::test_k2_is_the_hand_summed_pair[collins]",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateDMulti::test_k2_is_the_hand_summed_pair[collins]",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateDMulti::test_k2_is_the_hand_summed_pair[collins]",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateDMulti::test_k2_is_the_hand_summed_pair[collins]",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateDMulti::test_k2_is_the_hand_summed_pair[collins]",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateDMulti::test_k2_is_the_hand_summed_pair[collins]",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestGateDMulti::test_k2_is_the_hand_summed_pair[collins]",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestKellyGuard::test_the_conditions_are_ratios_against_the_nyquist_rate",
+   "shape": [
+    1024,
+    1024,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestKellyGuard::test_the_conditions_are_ratios_against_the_nyquist_rate",
+   "shape": [
+    1024,
+    1024,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestKellyGuard::test_the_conditions_are_ratios_against_the_nyquist_rate",
+   "shape": [
+    1024,
+    1024,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestKellyGuard::test_the_conditions_are_ratios_against_the_nyquist_rate",
+   "shape": [
+    1024,
+    1024,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestKellyGuard::test_the_conditions_are_ratios_against_the_nyquist_rate",
+   "shape": [
+    1024,
+    1024,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestKellyGuard::test_the_conditions_are_ratios_against_the_nyquist_rate",
+   "shape": [
+    1024,
+    1024,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestKellyGuard::test_the_support_radii_are_measured_not_geometric",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestKellyGuard::test_the_support_radii_are_measured_not_geometric",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestKellyGuard::test_a_sampled_configuration_is_silent_and_right",
+   "shape": [
+    1024,
+    1024,
+    128,
+    128
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestKellyGuard::test_a_sampled_configuration_is_silent_and_right",
+   "shape": [
+    1024,
+    1024,
+    128,
+    128
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestKellyGuard::test_an_unsampled_configuration_fires_and_is_wrong[256-4e-05]",
+   "shape": [
+    256,
+    256,
+    256,
+    256
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestKellyGuard::test_an_unsampled_configuration_fires_and_is_wrong[256-4e-05]",
+   "shape": [
+    256,
+    256,
+    256,
+    256
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestKellyGuard::test_an_unsampled_configuration_fires_and_is_wrong[256-4e-05]",
+   "shape": [
+    256,
+    256,
+    256,
+    256
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestKellyGuard::test_an_unsampled_configuration_fires_and_is_wrong[256-4e-05]",
+   "shape": [
+    256,
+    256,
+    256,
+    256
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestKellyGuard::test_an_unsampled_configuration_fires_and_is_wrong[512-2e-05]",
+   "shape": [
+    512,
+    512,
+    512,
+    512
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestKellyGuard::test_an_unsampled_configuration_fires_and_is_wrong[512-2e-05]",
+   "shape": [
+    512,
+    512,
+    512,
+    512
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestKellyGuard::test_an_unsampled_configuration_fires_and_is_wrong[512-2e-05]",
+   "shape": [
+    512,
+    512,
+    512,
+    512
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestKellyGuard::test_an_unsampled_configuration_fires_and_is_wrong[512-2e-05]",
+   "shape": [
+    512,
+    512,
+    512,
+    512
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestKellyGuard::test_an_unsampled_configuration_fires_and_is_wrong[1024-1e-05]",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestKellyGuard::test_an_unsampled_configuration_fires_and_is_wrong[1024-1e-05]",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestKellyGuard::test_an_unsampled_configuration_fires_and_is_wrong[1024-1e-05]",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestKellyGuard::test_an_unsampled_configuration_fires_and_is_wrong[1024-1e-05]",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": true,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestKellyGuard::test_the_period_is_the_input_grid_s_and_the_replica_guard_sees_it",
+   "shape": [
+    1024,
+    1024,
+    16,
+    16
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestKernelRefinement::test_the_refinement_is_applied_where_it_is_representable",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestKernelRefinement::test_the_refinement_is_applied_where_it_is_representable",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestKernelRefinement::test_the_refinement_is_applied_where_it_is_representable",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestKernelRefinement::test_the_refinement_is_applied_where_it_is_representable",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestKernelRefinement::test_the_refinement_is_applied_where_it_is_representable",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestKernelRefinement::test_the_refinement_is_applied_where_it_is_representable",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestKernelRefinement::test_the_refinement_is_applied_where_it_is_representable",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestKernelRefinement::test_the_refinement_is_applied_where_it_is_representable",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestKernelRefinement::test_it_is_dropped_where_it_would_wrap_and_auto_says_so[1.0]",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestKernelRefinement::test_it_is_dropped_where_it_would_wrap_and_auto_says_so[1.0]",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestKernelRefinement::test_it_is_dropped_where_it_would_wrap_and_auto_says_so[0.99999999]",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestKernelRefinement::test_it_is_dropped_where_it_would_wrap_and_auto_says_so[0.99999999]",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestKernelRefinement::test_applying_it_anyway_is_demonstrably_wrong",
+   "shape": [
+    1024,
+    1024,
+    128,
+    128
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestKernelRefinement::test_applying_it_anyway_is_demonstrably_wrong",
+   "shape": [
+    1024,
+    1024,
+    128,
+    128
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestKernelRefinement::test_applying_it_anyway_is_demonstrably_wrong",
+   "shape": [
+    1024,
+    1024,
+    128,
+    128
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestKernelRefinement::test_applying_it_anyway_is_demonstrably_wrong",
+   "shape": [
+    1024,
+    1024,
+    128,
+    128
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestQuadratureComplementarity::test_the_two_forms_have_exactly_opposite_conditions",
+   "shape": [
+    1024,
+    1024,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestQuadratureComplementarity::test_the_two_forms_have_exactly_opposite_conditions",
+   "shape": [
+    1024,
+    1024,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestQuadratureComplementarity::test_the_two_forms_have_exactly_opposite_conditions",
+   "shape": [
+    1024,
+    1024,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestQuadratureComplementarity::test_the_two_forms_have_exactly_opposite_conditions",
+   "shape": [
+    1024,
+    1024,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestQuadratureComplementarity::test_the_two_forms_have_exactly_opposite_conditions",
+   "shape": [
+    1024,
+    1024,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestQuadratureComplementarity::test_the_two_forms_have_exactly_opposite_conditions",
+   "shape": [
+    1024,
+    1024,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestQuadratureComplementarity::test_the_two_forms_have_exactly_opposite_conditions",
+   "shape": [
+    1024,
+    1024,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestQuadratureComplementarity::test_the_two_forms_have_exactly_opposite_conditions",
+   "shape": [
+    1024,
+    1024,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestQuadratureComplementarity::test_where_both_hold_the_two_forms_agree[0.012]",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestQuadratureComplementarity::test_where_both_hold_the_two_forms_agree[0.012]",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestQuadratureComplementarity::test_where_both_hold_the_two_forms_agree[0.02]",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestQuadratureComplementarity::test_where_both_hold_the_two_forms_agree[0.02]",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestQuadratureComplementarity::test_the_selected_form_is_published",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestQuadratureComplementarity::test_the_selected_form_is_published",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestNoNearFocusApparatus::test_a_near_focus_leg_runs_with_the_whole_apparatus_poisoned",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestNoNearFocusApparatus::test_a_near_focus_leg_runs_with_the_whole_apparatus_poisoned",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestNoNearFocusApparatus::test_a_near_focus_leg_runs_with_the_whole_apparatus_poisoned",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestNoNearFocusApparatus::test_a_near_focus_leg_runs_with_the_whole_apparatus_poisoned",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestNoNearFocusApparatus::test_a_near_focus_leg_runs_with_the_whole_apparatus_poisoned",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestNoNearFocusApparatus::test_a_near_focus_leg_runs_with_the_whole_apparatus_poisoned",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestNoNearFocusApparatus::test_a_near_focus_leg_runs_with_the_whole_apparatus_poisoned",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestNoNearFocusApparatus::test_a_near_focus_leg_runs_with_the_whole_apparatus_poisoned",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestNoNearFocusApparatus::test_a_near_focus_leg_runs_with_the_whole_apparatus_poisoned",
+   "shape": [
+    1024,
+    1024,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestNoNearFocusApparatus::test_a_near_focus_leg_runs_with_the_whole_apparatus_poisoned",
+   "shape": [
+    1024,
+    1024,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestNoNearFocusApparatus::test_the_collapsing_pitch_is_floored_by_the_measured_box",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestNoNearFocusApparatus::test_the_collapsing_pitch_is_floored_by_the_measured_box",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestNoNearFocusApparatus::test_the_reference_goes_flat_exactly_at_the_geometric_focus",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestNoNearFocusApparatus::test_the_reference_goes_flat_exactly_at_the_geometric_focus",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": true,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestReadoutPeriodDecoupling::test_the_period_follows_the_input_grid_and_the_leg_only",
+   "shape": [
+    1024,
+    1024,
+    16,
+    16
+   ]
+  },
+  {
+   "answer": true,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestReadoutPeriodDecoupling::test_the_period_follows_the_input_grid_and_the_leg_only",
+   "shape": [
+    1024,
+    1024,
+    16,
+    16
+   ]
+  },
+  {
+   "answer": true,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestReadoutPeriodDecoupling::test_the_period_follows_the_input_grid_and_the_leg_only",
+   "shape": [
+    1024,
+    1024,
+    16,
+    16
+   ]
+  },
+  {
+   "answer": true,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestReadoutPeriodDecoupling::test_the_period_follows_the_input_grid_and_the_leg_only",
+   "shape": [
+    1024,
+    1024,
+    16,
+    16
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestReadoutPeriodDecoupling::test_replica_fill_is_inert_on_a_window_inside_one_period",
+   "shape": [
+    1024,
+    1024,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestReadoutPeriodDecoupling::test_replica_fill_is_inert_on_a_window_inside_one_period",
+   "shape": [
+    1024,
+    1024,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestReadoutPeriodDecoupling::test_replica_fill_is_inert_on_a_window_inside_one_period",
+   "shape": [
+    1024,
+    1024,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestReadoutPeriodDecoupling::test_replica_fill_is_inert_on_a_window_inside_one_period",
+   "shape": [
+    1024,
+    1024,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestLegPeriodCondition::test_a_leg_evaluates_the_form_that_is_SAMPLED_on_its_own_lattice[-0.03]",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestLegPeriodCondition::test_a_leg_evaluates_the_form_that_is_SAMPLED_on_its_own_lattice[-0.03]",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestLegPeriodCondition::test_a_leg_evaluates_the_form_that_is_SAMPLED_on_its_own_lattice[0.012]",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestLegPeriodCondition::test_a_leg_evaluates_the_form_that_is_SAMPLED_on_its_own_lattice[0.012]",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestLegPeriodCondition::test_a_leg_evaluates_the_form_that_is_SAMPLED_on_its_own_lattice[0.02]",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestLegPeriodCondition::test_a_leg_evaluates_the_form_that_is_SAMPLED_on_its_own_lattice[0.02]",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestLegPeriodCondition::test_a_leg_evaluates_the_form_that_is_SAMPLED_on_its_own_lattice[0.03]",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestLegPeriodCondition::test_a_leg_evaluates_the_form_that_is_SAMPLED_on_its_own_lattice[0.03]",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestLegPeriodCondition::test_a_leg_evaluates_the_form_that_is_SAMPLED_on_its_own_lattice[0.039]",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestLegPeriodCondition::test_a_leg_evaluates_the_form_that_is_SAMPLED_on_its_own_lattice[0.039]",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestLegPeriodCondition::test_a_leg_conserves_power[0.012]",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestLegPeriodCondition::test_a_leg_conserves_power[0.012]",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestLegPeriodCondition::test_a_leg_conserves_power[0.02]",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestLegPeriodCondition::test_a_leg_conserves_power[0.02]",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestLegPeriodCondition::test_a_leg_conserves_power[0.039]",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestLegPeriodCondition::test_a_leg_conserves_power[0.039]",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestLegPeriodCondition::test_the_period_condition_speaks_on_a_caller_chosen_lattice[0.5-False]",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestLegPeriodCondition::test_the_period_condition_speaks_on_a_caller_chosen_lattice[0.5-False]",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestLegPeriodCondition::test_the_selection_boundary_is_where_both_forms_hold",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestLegPeriodCondition::test_the_selection_boundary_is_where_both_forms_hold",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestLegPeriodCondition::test_the_selection_boundary_is_where_both_forms_hold",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestLegPeriodCondition::test_the_selection_boundary_is_where_both_forms_hold",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestLegPeriodCondition::test_the_selection_boundary_is_where_both_forms_hold",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestLegPeriodCondition::test_the_selection_boundary_is_where_both_forms_hold",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestLegPeriodCondition::test_k3_is_never_below_k1_on_a_leg_lattice[-0.03]",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestLegPeriodCondition::test_k3_is_never_below_k1_on_a_leg_lattice[-0.03]",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestLegPeriodCondition::test_k3_is_never_below_k1_on_a_leg_lattice[0.02]",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestLegPeriodCondition::test_k3_is_never_below_k1_on_a_leg_lattice[0.02]",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestLegPeriodCondition::test_k3_is_never_below_k1_on_a_leg_lattice[0.039]",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestLegPeriodCondition::test_k3_is_never_below_k1_on_a_leg_lattice[0.039]",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestLegPeriodCondition::test_the_leg_publishes_its_period_ratio_and_its_kernel",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestLegPeriodCondition::test_the_leg_publishes_its_period_ratio_and_its_kernel",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestAbsolutePhaseThroughTheFocus::test_the_gouy_phase_is_continuous_through_the_geometric_focus[-0.001]",
+   "shape": [
+    1024,
+    1024,
+    128,
+    128
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestAbsolutePhaseThroughTheFocus::test_the_gouy_phase_is_continuous_through_the_geometric_focus[-0.001]",
+   "shape": [
+    1024,
+    1024,
+    128,
+    128
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestAbsolutePhaseThroughTheFocus::test_the_gouy_phase_is_continuous_through_the_geometric_focus[-1e-06]",
+   "shape": [
+    1024,
+    1024,
+    128,
+    128
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestAbsolutePhaseThroughTheFocus::test_the_gouy_phase_is_continuous_through_the_geometric_focus[-1e-06]",
+   "shape": [
+    1024,
+    1024,
+    128,
+    128
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestAbsolutePhaseThroughTheFocus::test_the_gouy_phase_is_continuous_through_the_geometric_focus[0.0]",
+   "shape": [
+    1024,
+    1024,
+    128,
+    128
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestAbsolutePhaseThroughTheFocus::test_the_gouy_phase_is_continuous_through_the_geometric_focus[0.0]",
+   "shape": [
+    1024,
+    1024,
+    128,
+    128
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestAbsolutePhaseThroughTheFocus::test_the_gouy_phase_is_continuous_through_the_geometric_focus[1e-06]",
+   "shape": [
+    1024,
+    1024,
+    128,
+    128
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestAbsolutePhaseThroughTheFocus::test_the_gouy_phase_is_continuous_through_the_geometric_focus[1e-06]",
+   "shape": [
+    1024,
+    1024,
+    128,
+    128
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestAbsolutePhaseThroughTheFocus::test_the_gouy_phase_is_continuous_through_the_geometric_focus[0.001]",
+   "shape": [
+    1024,
+    1024,
+    128,
+    128
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestAbsolutePhaseThroughTheFocus::test_the_gouy_phase_is_continuous_through_the_geometric_focus[0.001]",
+   "shape": [
+    1024,
+    1024,
+    128,
+    128
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestKernelRefinementNearTheFocus::test_the_abcd_fresnel_integral_is_exact_right_up_to_the_focus[1e-06]",
+   "shape": [
+    1024,
+    1024,
+    128,
+    128
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestKernelRefinementNearTheFocus::test_the_abcd_fresnel_integral_is_exact_right_up_to_the_focus[1e-06]",
+   "shape": [
+    1024,
+    1024,
+    128,
+    128
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestKernelRefinementNearTheFocus::test_the_abcd_fresnel_integral_is_exact_right_up_to_the_focus[1e-05]",
+   "shape": [
+    1024,
+    1024,
+    128,
+    128
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestKernelRefinementNearTheFocus::test_the_abcd_fresnel_integral_is_exact_right_up_to_the_focus[1e-05]",
+   "shape": [
+    1024,
+    1024,
+    128,
+    128
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestKernelRefinementNearTheFocus::test_the_abcd_fresnel_integral_is_exact_right_up_to_the_focus[0.0001]",
+   "shape": [
+    1024,
+    1024,
+    128,
+    128
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestKernelRefinementNearTheFocus::test_the_abcd_fresnel_integral_is_exact_right_up_to_the_focus[0.0001]",
+   "shape": [
+    1024,
+    1024,
+    128,
+    128
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestKernelRefinementNearTheFocus::test_the_abcd_fresnel_integral_is_exact_right_up_to_the_focus[0.001]",
+   "shape": [
+    1024,
+    1024,
+    128,
+    128
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestKernelRefinementNearTheFocus::test_the_abcd_fresnel_integral_is_exact_right_up_to_the_focus[0.001]",
+   "shape": [
+    1024,
+    1024,
+    128,
+    128
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestKernelRefinementNearTheFocus::test_the_abcd_fresnel_integral_is_exact_right_up_to_the_focus[0.005]",
+   "shape": [
+    1024,
+    1024,
+    128,
+    128
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestKernelRefinementNearTheFocus::test_the_abcd_fresnel_integral_is_exact_right_up_to_the_focus[0.005]",
+   "shape": [
+    1024,
+    1024,
+    128,
+    128
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestTiltedAndDecentredReadout::test_a_tilted_decentred_congruence_through_the_collins_readout[0.0-0.0-0.0-0.0]",
+   "shape": [
+    1024,
+    1024,
+    128,
+    128
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestTiltedAndDecentredReadout::test_a_tilted_decentred_congruence_through_the_collins_readout[0.0-0.0-0.0-0.0]",
+   "shape": [
+    1024,
+    1024,
+    128,
+    128
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestTiltedAndDecentredReadout::test_a_tilted_decentred_congruence_through_the_collins_readout[0.02--0.012-0.0-0.0]",
+   "shape": [
+    1024,
+    1024,
+    128,
+    128
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestTiltedAndDecentredReadout::test_a_tilted_decentred_congruence_through_the_collins_readout[0.02--0.012-0.0-0.0]",
+   "shape": [
+    1024,
+    1024,
+    128,
+    128
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestTiltedAndDecentredReadout::test_a_tilted_decentred_congruence_through_the_collins_readout[0.046-0.0-0.0-0.0]",
+   "shape": [
+    1024,
+    1024,
+    128,
+    128
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestTiltedAndDecentredReadout::test_a_tilted_decentred_congruence_through_the_collins_readout[0.046-0.0-0.0-0.0]",
+   "shape": [
+    1024,
+    1024,
+    128,
+    128
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestTiltedAndDecentredReadout::test_a_tilted_decentred_congruence_through_the_collins_readout[0.0-0.0-0.0005--0.0003]",
+   "shape": [
+    1024,
+    1024,
+    128,
+    128
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestTiltedAndDecentredReadout::test_a_tilted_decentred_congruence_through_the_collins_readout[0.0-0.0-0.0005--0.0003]",
+   "shape": [
+    1024,
+    1024,
+    128,
+    128
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestTiltedAndDecentredReadout::test_a_tilted_decentred_congruence_through_the_collins_readout[0.02--0.012-0.0005--0.0003]",
+   "shape": [
+    1024,
+    1024,
+    128,
+    128
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "carrier.py:2498:_collins_transport",
+   "nodeid": "tests/unit/test_audit2609_b4_collins_transport.py::TestTiltedAndDecentredReadout::test_a_tilted_decentred_congruence_through_the_collins_readout[0.02--0.012-0.0005--0.0003]",
+   "shape": [
+    1024,
+    1024,
+    128,
+    128
+   ]
+  },
+  {
+   "answer": true,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_audit_w9_dispatch2.py::test_the_routed_member_beats_the_old_one_against_an_exact_oracle[128-0.9516]",
+   "shape": [
+    1024,
+    1024,
+    8,
+    8
+   ]
+  },
+  {
+   "answer": true,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_audit_w9_dispatch2.py::test_the_routed_member_beats_the_old_one_against_an_exact_oracle[128-0.9516]",
+   "shape": [
+    1024,
+    1024,
+    8,
+    8
+   ]
+  },
+  {
+   "answer": true,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_audit_w9_dispatch2.py::test_the_routed_member_beats_the_old_one_against_an_exact_oracle[128-0.9516]",
+   "shape": [
+    2048,
+    2048,
+    8,
+    8
+   ]
+  },
+  {
+   "answer": true,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_audit_w9_dispatch2.py::test_the_routed_member_beats_the_old_one_against_an_exact_oracle[256-0.8185]",
+   "shape": [
+    1024,
+    1024,
+    8,
+    8
+   ]
+  },
+  {
+   "answer": true,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_audit_w9_dispatch2.py::test_the_routed_member_beats_the_old_one_against_an_exact_oracle[256-0.8185]",
+   "shape": [
+    1024,
+    1024,
+    8,
+    8
+   ]
+  },
+  {
+   "answer": true,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_audit_w9_dispatch2.py::test_the_routed_member_beats_the_old_one_against_an_exact_oracle[256-0.8185]",
+   "shape": [
+    2048,
+    2048,
+    8,
+    8
+   ]
+  },
+  {
+   "answer": true,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_audit_w9_dispatch2.py::test_the_routed_member_beats_the_old_one_against_an_exact_oracle[512-0.4111]",
+   "shape": [
+    2048,
+    2048,
+    8,
+    8
+   ]
+  },
+  {
+   "answer": true,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_audit_w9_dispatch2.py::test_the_routed_member_beats_the_old_one_against_an_exact_oracle[512-0.4111]",
+   "shape": [
+    2048,
+    2048,
+    8,
+    8
+   ]
+  },
+  {
+   "answer": true,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_audit_w9_dispatch2.py::test_the_routed_member_beats_the_old_one_against_an_exact_oracle[512-0.4111]",
+   "shape": [
+    4096,
+    4096,
+    8,
+    8
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k1_reduces_to_the_single_congruence_chain",
+   "shape": [
+    512,
+    512,
+    256,
+    256
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k1_reduces_to_the_single_congruence_chain",
+   "shape": [
+    512,
+    512,
+    256,
+    256
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k1_reduces_to_the_single_congruence_chain",
+   "shape": [
+    512,
+    512,
+    256,
+    256
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k1_reduces_to_the_single_congruence_chain",
+   "shape": [
+    512,
+    512,
+    256,
+    256
+   ]
+  },
+  {
+   "answer": true,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k2_full_grid_equals_hand_summed_independent_runs",
+   "shape": [
+    1024,
+    1024,
+    8,
+    8
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k2_full_grid_equals_hand_summed_independent_runs",
+   "shape": [
+    1024,
+    1024,
+    256,
+    256
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k2_full_grid_equals_hand_summed_independent_runs",
+   "shape": [
+    1024,
+    1024,
+    256,
+    256
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k2_full_grid_equals_hand_summed_independent_runs",
+   "shape": [
+    1024,
+    1024,
+    256,
+    256
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k2_full_grid_equals_hand_summed_independent_runs",
+   "shape": [
+    1024,
+    1024,
+    256,
+    256
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k2_full_grid_equals_hand_summed_independent_runs",
+   "shape": [
+    1024,
+    1024,
+    256,
+    256
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k2_full_grid_equals_hand_summed_independent_runs",
+   "shape": [
+    1024,
+    1024,
+    256,
+    256
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k2_full_grid_equals_hand_summed_independent_runs",
+   "shape": [
+    1024,
+    1024,
+    256,
+    256
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k2_full_grid_equals_hand_summed_independent_runs",
+   "shape": [
+    1024,
+    1024,
+    256,
+    256
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k2_full_grid_equals_hand_summed_independent_runs",
+   "shape": [
+    1024,
+    1024,
+    2048,
+    2048
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k2_full_grid_equals_hand_summed_independent_runs",
+   "shape": [
+    1024,
+    1024,
+    2048,
+    2048
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k2_full_grid_equals_hand_summed_independent_runs",
+   "shape": [
+    1024,
+    1024,
+    2048,
+    2048
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k2_full_grid_equals_hand_summed_independent_runs",
+   "shape": [
+    1024,
+    1024,
+    2048,
+    2048
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k2_full_grid_equals_hand_summed_independent_runs",
+   "shape": [
+    1024,
+    1024,
+    2048,
+    2048
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k2_full_grid_equals_hand_summed_independent_runs",
+   "shape": [
+    1024,
+    1024,
+    2048,
+    2048
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k2_full_grid_equals_hand_summed_independent_runs",
+   "shape": [
+    1024,
+    1024,
+    2048,
+    2048
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k2_full_grid_equals_hand_summed_independent_runs",
+   "shape": [
+    1024,
+    1024,
+    2048,
+    2048
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k2_tiled_equals_hand_placed_independent_runs",
+   "shape": [
+    1024,
+    1024,
+    256,
+    256
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k2_tiled_equals_hand_placed_independent_runs",
+   "shape": [
+    1024,
+    1024,
+    256,
+    256
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k2_tiled_equals_hand_placed_independent_runs",
+   "shape": [
+    1024,
+    1024,
+    256,
+    256
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k2_tiled_equals_hand_placed_independent_runs",
+   "shape": [
+    1024,
+    1024,
+    256,
+    256
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k4_tiled_equals_hand_placed_independent_runs",
+   "shape": [
+    1024,
+    1024,
+    256,
+    256
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k4_tiled_equals_hand_placed_independent_runs",
+   "shape": [
+    1024,
+    1024,
+    256,
+    256
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k4_tiled_equals_hand_placed_independent_runs",
+   "shape": [
+    1024,
+    1024,
+    256,
+    256
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k4_tiled_equals_hand_placed_independent_runs",
+   "shape": [
+    1024,
+    1024,
+    256,
+    256
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k4_tiled_equals_hand_placed_independent_runs",
+   "shape": [
+    1024,
+    1024,
+    256,
+    256
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k4_tiled_equals_hand_placed_independent_runs",
+   "shape": [
+    1024,
+    1024,
+    256,
+    256
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k4_tiled_equals_hand_placed_independent_runs",
+   "shape": [
+    1024,
+    1024,
+    256,
+    256
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k4_tiled_equals_hand_placed_independent_runs",
+   "shape": [
+    1024,
+    1024,
+    256,
+    256
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_tiles_avoid_the_periodic_replica_regime",
+   "shape": [
+    1024,
+    1024,
+    2048,
+    2048
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_tiles_avoid_the_periodic_replica_regime",
+   "shape": [
+    1024,
+    1024,
+    2048,
+    2048
+   ]
+  },
+  {
+   "answer": true,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_default_refuses_the_periodic_replica_regime",
+   "shape": [
+    1024,
+    1024,
+    16,
+    16
+   ]
+  },
+  {
+   "answer": true,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_default_refuses_the_periodic_replica_regime",
+   "shape": [
+    1024,
+    1024,
+    16,
+    16
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_default_refuses_the_periodic_replica_regime",
+   "shape": [
+    1024,
+    1024,
+    82,
+    82
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_default_refuses_the_periodic_replica_regime",
+   "shape": [
+    1024,
+    1024,
+    82,
+    82
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_default_refuses_the_periodic_replica_regime",
+   "shape": [
+    1024,
+    1024,
+    82,
+    82
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_default_refuses_the_periodic_replica_regime",
+   "shape": [
+    1024,
+    1024,
+    82,
+    82
+   ]
+  },
+  {
+   "answer": true,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_auto_window_is_independent_of_congruence_order",
+   "shape": [
+    1024,
+    1024,
+    16,
+    16
+   ]
+  },
+  {
+   "answer": true,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_auto_window_is_independent_of_congruence_order",
+   "shape": [
+    1024,
+    1024,
+    16,
+    16
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_auto_window_is_independent_of_congruence_order",
+   "shape": [
+    1024,
+    1024,
+    82,
+    82
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_auto_window_is_independent_of_congruence_order",
+   "shape": [
+    1024,
+    1024,
+    82,
+    82
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_auto_window_is_independent_of_congruence_order",
+   "shape": [
+    1024,
+    1024,
+    82,
+    82
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_auto_window_is_independent_of_congruence_order",
+   "shape": [
+    1024,
+    1024,
+    82,
+    82
+   ]
+  },
+  {
+   "answer": true,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_auto_window_is_independent_of_congruence_order",
+   "shape": [
+    1024,
+    1024,
+    16,
+    16
+   ]
+  },
+  {
+   "answer": true,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_auto_window_is_independent_of_congruence_order",
+   "shape": [
+    1024,
+    1024,
+    16,
+    16
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_auto_window_is_independent_of_congruence_order",
+   "shape": [
+    1024,
+    1024,
+    82,
+    82
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_auto_window_is_independent_of_congruence_order",
+   "shape": [
+    1024,
+    1024,
+    82,
+    82
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_auto_window_is_independent_of_congruence_order",
+   "shape": [
+    1024,
+    1024,
+    82,
+    82
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_auto_window_is_independent_of_congruence_order",
+   "shape": [
+    1024,
+    1024,
+    82,
+    82
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k1_keeps_the_requested_field_of_view",
+   "shape": [
+    1024,
+    1024,
+    2048,
+    2048
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k1_keeps_the_requested_field_of_view",
+   "shape": [
+    1024,
+    1024,
+    2048,
+    2048
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k1_keeps_the_requested_field_of_view",
+   "shape": [
+    1024,
+    1024,
+    2048,
+    2048
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k1_keeps_the_requested_field_of_view",
+   "shape": [
+    1024,
+    1024,
+    2048,
+    2048
+   ]
+  },
+  {
+   "answer": true,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_auto_tile_equals_the_same_tile_asked_for_explicitly",
+   "shape": [
+    1024,
+    1024,
+    16,
+    16
+   ]
+  },
+  {
+   "answer": true,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_auto_tile_equals_the_same_tile_asked_for_explicitly",
+   "shape": [
+    1024,
+    1024,
+    16,
+    16
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_auto_tile_equals_the_same_tile_asked_for_explicitly",
+   "shape": [
+    1024,
+    1024,
+    82,
+    82
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_auto_tile_equals_the_same_tile_asked_for_explicitly",
+   "shape": [
+    1024,
+    1024,
+    82,
+    82
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_auto_tile_equals_the_same_tile_asked_for_explicitly",
+   "shape": [
+    1024,
+    1024,
+    82,
+    82
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_auto_tile_equals_the_same_tile_asked_for_explicitly",
+   "shape": [
+    1024,
+    1024,
+    82,
+    82
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_auto_tile_equals_the_same_tile_asked_for_explicitly",
+   "shape": [
+    1024,
+    1024,
+    82,
+    82
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_auto_tile_equals_the_same_tile_asked_for_explicitly",
+   "shape": [
+    1024,
+    1024,
+    82,
+    82
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_auto_tile_equals_the_same_tile_asked_for_explicitly",
+   "shape": [
+    1024,
+    1024,
+    82,
+    82
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_auto_tile_equals_the_same_tile_asked_for_explicitly",
+   "shape": [
+    1024,
+    1024,
+    82,
+    82
+   ]
+  },
+  {
+   "answer": true,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_throughput_is_window_independent_but_power_out_is_not",
+   "shape": [
+    1024,
+    1024,
+    16,
+    16
+   ]
+  },
+  {
+   "answer": true,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_throughput_is_window_independent_but_power_out_is_not",
+   "shape": [
+    1024,
+    1024,
+    16,
+    16
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_throughput_is_window_independent_but_power_out_is_not",
+   "shape": [
+    1024,
+    1024,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_throughput_is_window_independent_but_power_out_is_not",
+   "shape": [
+    1024,
+    1024,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_throughput_is_window_independent_but_power_out_is_not",
+   "shape": [
+    1024,
+    1024,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_throughput_is_window_independent_but_power_out_is_not",
+   "shape": [
+    1024,
+    1024,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": true,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_a_clipping_readout_window_is_reported",
+   "shape": [
+    1024,
+    1024,
+    16,
+    16
+   ]
+  },
+  {
+   "answer": true,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_a_clipping_readout_window_is_reported",
+   "shape": [
+    1024,
+    1024,
+    16,
+    16
+   ]
+  },
+  {
+   "answer": true,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_coherent_recombination_makes_the_analytic_fringe",
+   "shape": [
+    1024,
+    1024,
+    16,
+    16
+   ]
+  },
+  {
+   "answer": true,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_coherent_recombination_makes_the_analytic_fringe",
+   "shape": [
+    1024,
+    1024,
+    16,
+    16
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_coherent_recombination_makes_the_analytic_fringe",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_coherent_recombination_makes_the_analytic_fringe",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_coherent_recombination_makes_the_analytic_fringe",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_coherent_recombination_makes_the_analytic_fringe",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": true,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_coherent_recombination_makes_the_analytic_fringe",
+   "shape": [
+    1024,
+    1024,
+    16,
+    16
+   ]
+  },
+  {
+   "answer": true,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_coherent_recombination_makes_the_analytic_fringe",
+   "shape": [
+    1024,
+    1024,
+    16,
+    16
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_coherent_recombination_makes_the_analytic_fringe",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_coherent_recombination_makes_the_analytic_fringe",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_coherent_recombination_makes_the_analytic_fringe",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_coherent_recombination_makes_the_analytic_fringe",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_per_emitter_array_images_onto_the_exact_ray_trace",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_per_emitter_array_images_onto_the_exact_ray_trace",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_per_emitter_array_images_onto_the_exact_ray_trace",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_per_emitter_array_images_onto_the_exact_ray_trace",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_per_emitter_array_images_onto_the_exact_ray_trace",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_per_emitter_array_images_onto_the_exact_ray_trace",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_per_emitter_array_images_onto_the_exact_ray_trace",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_per_emitter_array_images_onto_the_exact_ray_trace",
+   "shape": [
+    1024,
+    1024,
+    1024,
+    1024
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two",
+   "shape": [
+    256,
+    256,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_memory_budget_is_honoured",
+   "shape": [
+    64,
+    64,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_memory_budget_is_honoured",
+   "shape": [
+    64,
+    64,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_off_grid_congruence_warns_and_reports_the_clip",
+   "shape": [
+    1024,
+    1024,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_off_grid_congruence_warns_and_reports_the_clip",
+   "shape": [
+    1024,
+    1024,
+    64,
+    64
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_tilted_congruence_takes_the_exact_final_leg",
+   "shape": [
+    1024,
+    1024,
+    256,
+    256
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_tilted_congruence_takes_the_exact_final_leg",
+   "shape": [
+    1024,
+    1024,
+    256,
+    256
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_result_grid_convention_is_the_readout_convention",
+   "shape": [
+    256,
+    256,
+    512,
+    512
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_d2_chain_multi.py::test_result_grid_convention_is_the_readout_convention",
+   "shape": [
+    256,
+    256,
+    512,
+    512
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_tight_focus_readout.py::test_three_micron_spot_is_recovered_from_a_tractable_grid",
+   "shape": [
+    2048,
+    2048,
+    328,
+    328
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_tight_focus_readout.py::test_three_micron_spot_is_recovered_from_a_tractable_grid",
+   "shape": [
+    2048,
+    2048,
+    328,
+    328
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_tight_focus_readout.py::test_focal_accuracy_does_not_depend_on_the_propagation_grid[1024]",
+   "shape": [
+    1024,
+    1024,
+    328,
+    328
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_tight_focus_readout.py::test_focal_accuracy_does_not_depend_on_the_propagation_grid[1024]",
+   "shape": [
+    1024,
+    1024,
+    328,
+    328
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_tight_focus_readout.py::test_focal_accuracy_does_not_depend_on_the_propagation_grid[2048]",
+   "shape": [
+    2048,
+    2048,
+    328,
+    328
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_tight_focus_readout.py::test_focal_accuracy_does_not_depend_on_the_propagation_grid[2048]",
+   "shape": [
+    2048,
+    2048,
+    328,
+    328
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_tight_focus_readout.py::test_focal_accuracy_does_not_depend_on_the_propagation_grid[4096]",
+   "shape": [
+    4096,
+    4096,
+    328,
+    328
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_tight_focus_readout.py::test_focal_accuracy_does_not_depend_on_the_propagation_grid[4096]",
+   "shape": [
+    4096,
+    4096,
+    328,
+    328
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_tight_focus_readout.py::test_the_core_waist_is_robust_to_the_readout_pitch",
+   "shape": [
+    2048,
+    2048,
+    328,
+    328
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_tight_focus_readout.py::test_the_core_waist_is_robust_to_the_readout_pitch",
+   "shape": [
+    2048,
+    2048,
+    328,
+    328
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_tight_focus_readout.py::test_the_core_waist_is_robust_to_the_readout_pitch",
+   "shape": [
+    2048,
+    2048,
+    164,
+    164
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_tight_focus_readout.py::test_the_core_waist_is_robust_to_the_readout_pitch",
+   "shape": [
+    2048,
+    2048,
+    164,
+    164
+   ]
+  },
+  {
+   "answer": true,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_tight_focus_readout.py::test_the_core_waist_is_robust_to_the_readout_pitch",
+   "shape": [
+    2048,
+    2048,
+    40,
+    40
+   ]
+  },
+  {
+   "answer": true,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_tight_focus_readout.py::test_an_oversized_readout_window_is_refused_by_default",
+   "shape": [
+    2048,
+    2048,
+    40,
+    40
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_tight_focus_readout.py::test_the_refused_window_really_would_have_been_corrupt",
+   "shape": [
+    2048,
+    2048,
+    512,
+    512
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_tight_focus_readout.py::test_the_refused_window_really_would_have_been_corrupt",
+   "shape": [
+    2048,
+    2048,
+    512,
+    512
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_tight_focus_readout.py::test_the_refused_window_really_would_have_been_corrupt",
+   "shape": [
+    2048,
+    2048,
+    328,
+    328
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_tight_focus_readout.py::test_the_refused_window_really_would_have_been_corrupt",
+   "shape": [
+    2048,
+    2048,
+    328,
+    328
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_tight_focus_readout.py::test_the_exact_readout_guards_the_same_way_on_its_own_period",
+   "shape": [
+    256,
+    256,
+    512,
+    512
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_tight_focus_readout.py::test_the_exact_readout_guards_the_same_way_on_its_own_period",
+   "shape": [
+    256,
+    256,
+    512,
+    512
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_tight_focus_readout.py::test_the_exact_readout_guards_the_same_way_on_its_own_period",
+   "shape": [
+    256,
+    256,
+    4096,
+    4096
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_tight_focus_readout.py::test_the_exact_readout_guards_the_same_way_on_its_own_period",
+   "shape": [
+    256,
+    256,
+    4096,
+    4096
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_tight_focus_readout.py::test_longitudinal_placement_dominates_the_error_budget",
+   "shape": [
+    2048,
+    2048,
+    328,
+    328
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_tight_focus_readout.py::test_longitudinal_placement_dominates_the_error_budget",
+   "shape": [
+    2048,
+    2048,
+    328,
+    328
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_tight_focus_readout.py::test_longitudinal_placement_dominates_the_error_budget",
+   "shape": [
+    2048,
+    2048,
+    310,
+    310
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_tight_focus_readout.py::test_longitudinal_placement_dominates_the_error_budget",
+   "shape": [
+    2048,
+    2048,
+    310,
+    310
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_tight_focus_readout.py::test_longitudinal_placement_dominates_the_error_budget",
+   "shape": [
+    2048,
+    2048,
+    180,
+    180
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_tight_focus_readout.py::test_longitudinal_placement_dominates_the_error_budget",
+   "shape": [
+    2048,
+    2048,
+    180,
+    180
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_tight_focus_readout.py::test_longitudinal_placement_dominates_the_error_budget",
+   "shape": [
+    2048,
+    2048,
+    310,
+    310
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_tight_focus_readout.py::test_longitudinal_placement_dominates_the_error_budget",
+   "shape": [
+    2048,
+    2048,
+    310,
+    310
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_tight_focus_readout.py::test_longitudinal_placement_dominates_the_error_budget",
+   "shape": [
+    2048,
+    2048,
+    146,
+    146
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_tight_focus_readout.py::test_longitudinal_placement_dominates_the_error_budget",
+   "shape": [
+    2048,
+    2048,
+    146,
+    146
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_tight_focus_readout.py::test_longitudinal_placement_dominates_the_error_budget",
+   "shape": [
+    2048,
+    2048,
+    310,
+    310
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_tight_focus_readout.py::test_longitudinal_placement_dominates_the_error_budget",
+   "shape": [
+    2048,
+    2048,
+    310,
+    310
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_tight_focus_readout.py::test_readout_accuracy_is_governed_by_the_bluestein_leg_length",
+   "shape": [
+    2048,
+    2048,
+    180,
+    180
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_tight_focus_readout.py::test_readout_accuracy_is_governed_by_the_bluestein_leg_length",
+   "shape": [
+    2048,
+    2048,
+    180,
+    180
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_tight_focus_readout.py::test_readout_accuracy_is_governed_by_the_bluestein_leg_length",
+   "shape": [
+    2048,
+    2048,
+    1078,
+    1078
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_tight_focus_readout.py::test_readout_accuracy_is_governed_by_the_bluestein_leg_length",
+   "shape": [
+    2048,
+    2048,
+    1078,
+    1078
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_tight_focus_readout.py::test_the_default_leg_beats_both_constants_at_a_truncated_pupil",
+   "shape": [
+    2048,
+    2048,
+    240,
+    240
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_tight_focus_readout.py::test_the_default_leg_beats_both_constants_at_a_truncated_pupil",
+   "shape": [
+    2048,
+    2048,
+    240,
+    240
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_tight_focus_readout.py::test_the_default_leg_beats_both_constants_at_a_truncated_pupil",
+   "shape": [
+    2048,
+    2048,
+    240,
+    240
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_tight_focus_readout.py::test_the_default_leg_beats_both_constants_at_a_truncated_pupil",
+   "shape": [
+    2048,
+    2048,
+    240,
+    240
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_tight_focus_readout.py::test_the_default_leg_beats_both_constants_at_a_truncated_pupil",
+   "shape": [
+    2048,
+    2048,
+    240,
+    240
+   ]
+  },
+  {
+   "answer": false,
+   "caller": "mft.py:558:angular_spectrum_propagate_mft",
+   "nodeid": "tests/unit/test_niche_tight_focus_readout.py::test_the_default_leg_beats_both_constants_at_a_truncated_pupil",
+   "shape": [
+    2048,
+    2048,
+    240,
+    240
+   ]
+  }
+ ],
+ "calls_answering_direct": 35,
+ "direct_callers": [
+  "carrier.py:2498:_collins_transport",
+  "mft.py:558:angular_spectrum_propagate_mft"
+ ],
+ "direct_shapes": [
+  [
+   512,
+   512,
+   16,
+   16
+  ],
+  [
+   1024,
+   1024,
+   8,
+   8
+  ],
+  [
+   1024,
+   1024,
+   16,
+   16
+  ],
+  [
+   2048,
+   2048,
+   8,
+   8
+  ],
+  [
+   2048,
+   2048,
+   40,
+   40
+  ],
+  [
+   4096,
+   4096,
+   8,
+   8
+  ]
+ ],
+ "distinct_ratios": 22,
+ "distinct_shapes": 35,
+ "exitstatus": 0,
+ "files_where_the_rule_fires": {
+  "tests/unit/test_audit2609_a25_carrier_focus_readout.py": [
+   "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_refusal_names_the_knob_and_no_longer_promises_a_safe_peak",
+   "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_two_fills_differ_only_outside_one_period"
+  ],
+  "tests/unit/test_audit2609_b4_collins_transport.py": [
+   "tests/unit/test_audit2609_b4_collins_transport.py::TestKellyGuard::test_the_period_is_the_input_grid_s_and_the_replica_guard_sees_it",
+   "tests/unit/test_audit2609_b4_collins_transport.py::TestReadoutPeriodDecoupling::test_the_period_follows_the_input_grid_and_the_leg_only"
+  ],
+  "tests/unit/test_niche_audit_w9_dispatch2.py": [
+   "tests/unit/test_niche_audit_w9_dispatch2.py::test_the_routed_member_beats_the_old_one_against_an_exact_oracle[128-0.9516]",
+   "tests/unit/test_niche_audit_w9_dispatch2.py::test_the_routed_member_beats_the_old_one_against_an_exact_oracle[256-0.8185]",
+   "tests/unit/test_niche_audit_w9_dispatch2.py::test_the_routed_member_beats_the_old_one_against_an_exact_oracle[512-0.4111]"
+  ],
+  "tests/unit/test_niche_d2_chain_multi.py": [
+   "tests/unit/test_niche_d2_chain_multi.py::test_a_clipping_readout_window_is_reported",
+   "tests/unit/test_niche_d2_chain_multi.py::test_auto_tile_equals_the_same_tile_asked_for_explicitly",
+   "tests/unit/test_niche_d2_chain_multi.py::test_auto_window_is_independent_of_congruence_order",
+   "tests/unit/test_niche_d2_chain_multi.py::test_coherent_recombination_makes_the_analytic_fringe",
+   "tests/unit/test_niche_d2_chain_multi.py::test_default_refuses_the_periodic_replica_regime",
+   "tests/unit/test_niche_d2_chain_multi.py::test_k2_full_grid_equals_hand_summed_independent_runs",
+   "tests/unit/test_niche_d2_chain_multi.py::test_throughput_is_window_independent_but_power_out_is_not"
+  ],
+  "tests/unit/test_niche_tight_focus_readout.py": [
+   "tests/unit/test_niche_tight_focus_readout.py::test_an_oversized_readout_window_is_refused_by_default",
+   "tests/unit/test_niche_tight_focus_readout.py::test_the_core_waist_is_robust_to_the_readout_pitch"
+  ]
+ },
+ "ids_where_the_rule_fires": [
+  "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_refusal_names_the_knob_and_no_longer_promises_a_safe_peak",
+  "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_two_fills_differ_only_outside_one_period",
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestKellyGuard::test_the_period_is_the_input_grid_s_and_the_replica_guard_sees_it",
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestReadoutPeriodDecoupling::test_the_period_follows_the_input_grid_and_the_leg_only",
+  "tests/unit/test_niche_audit_w9_dispatch2.py::test_the_routed_member_beats_the_old_one_against_an_exact_oracle[128-0.9516]",
+  "tests/unit/test_niche_audit_w9_dispatch2.py::test_the_routed_member_beats_the_old_one_against_an_exact_oracle[256-0.8185]",
+  "tests/unit/test_niche_audit_w9_dispatch2.py::test_the_routed_member_beats_the_old_one_against_an_exact_oracle[512-0.4111]",
+  "tests/unit/test_niche_d2_chain_multi.py::test_a_clipping_readout_window_is_reported",
+  "tests/unit/test_niche_d2_chain_multi.py::test_auto_tile_equals_the_same_tile_asked_for_explicitly",
+  "tests/unit/test_niche_d2_chain_multi.py::test_auto_window_is_independent_of_congruence_order",
+  "tests/unit/test_niche_d2_chain_multi.py::test_coherent_recombination_makes_the_analytic_fringe",
+  "tests/unit/test_niche_d2_chain_multi.py::test_default_refuses_the_periodic_replica_regime",
+  "tests/unit/test_niche_d2_chain_multi.py::test_k2_full_grid_equals_hand_summed_independent_runs",
+  "tests/unit/test_niche_d2_chain_multi.py::test_throughput_is_window_independent_but_power_out_is_not",
+  "tests/unit/test_niche_tight_focus_readout.py::test_an_oversized_readout_window_is_refused_by_default",
+  "tests/unit/test_niche_tight_focus_readout.py::test_the_core_waist_is_robust_to_the_readout_pitch"
+ ],
+ "n_files": 5,
+ "n_ids_where_the_rule_fires": 16,
+ "platform": "win32",
+ "python": "3.14.6",
+ "smallest_ratio": 0.001953125,
+ "total_rule_calls": 615
+}

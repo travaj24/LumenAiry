@@ -1,0 +1,100 @@
+{
+ "NO_TRANSFORM_but_silently_accepted": [
+  "resample_field(method=\"spline\", mft_method=...)",
+  "propagate_traced_carrier_chain(NO focus_readout, mft_method=...)"
+ ],
+ "NO_TRANSFORM_refused_but_not_about_the_keyword": [
+  "propagate(method=\"rs\", output_grid=..., mft_method=...)"
+ ],
+ "REACHES_but_refused": [],
+ "build": "WIN-py3.14",
+ "cases": [
+  {
+   "case": "compute_psf(method=\"mft\", mft_method=\"bluestein\")",
+   "exc": null,
+   "kind": "REACHES",
+   "message": null,
+   "outcome": "accepted"
+  },
+  {
+   "case": "compute_psf(method=\"fft\", mft_method=\"bluestein\")",
+   "exc": "ValueError",
+   "kind": "NO-TRANSFORM",
+   "message": "compute_psf: mft_method= is only meaningful with method='mft' (got method='fft').  It names the route through the matrix Fourier transform ('auto' / 'bluestein' / 'separable' / 'direct'); the FFT sampler takes one centred FFT and reaches no such transform.",
+   "outcome": "raised"
+  },
+  {
+   "case": "propagate(method=\"asm\", output_grid=..., mft_method=...)",
+   "exc": null,
+   "kind": "REACHES",
+   "message": null,
+   "outcome": "accepted"
+  },
+  {
+   "case": "propagate(method=\"asm\", NO output_grid, mft_method=...)",
+   "exc": "ValueError",
+   "kind": "NO-TRANSFORM",
+   "message": "propagate(method='asm', mft_method='bluestein'): mft_method= names the route through the matrix Fourier transform and only the MFT output-grid legs reach one -- method in ('asm', 'fresnel', 'fraunhofer') WITH output_grid= or output_dx=.  This call reaches no MFT transform, so the keyword would be dropped.  Drop it, or ask for an output grid.",
+   "outcome": "raised"
+  },
+  {
+   "case": "propagate(method=\"rs\", output_grid=..., mft_method=...)",
+   "exc": "ValueError",
+   "kind": "NO-TRANSFORM",
+   "message": "propagate(method='rs', output_grid/output_dx=...): Rayleigh-Sommerfeld does not support arbitrary output-grid sampling in 4.12 (no MFT variant).  Use method='asm' (auto-promotes to angular_spectrum_propagate_mft) for output-pitch sampling.",
+   "outcome": "raised"
+  },
+  {
+   "case": "propagate_carrier_referenced(transport=\"collins\", mft_method=...)",
+   "exc": null,
+   "kind": "REACHES",
+   "message": null,
+   "outcome": "accepted"
+  },
+  {
+   "case": "propagate_carrier_referenced(transport=\"sziklas\", mft_method=...)",
+   "exc": "ValueError",
+   "kind": "NO-TRANSFORM",
+   "message": "propagate_carrier_referenced: mft_method= names the route through the matrix Fourier transform, which only the Collins transport evaluates; transport='sziklas' is the Sziklas-Siegman scaled-coordinate Fresnel transform and reaches no such primitive.  Drop the keyword, or pass transport='collins'.",
+   "outcome": "raised"
+  },
+  {
+   "case": "resample_field(method=\"chirpz\", mft_method=...)",
+   "exc": null,
+   "kind": "REACHES",
+   "message": null,
+   "outcome": "accepted"
+  },
+  {
+   "case": "resample_field(method=\"spline\", mft_method=...)",
+   "exc": null,
+   "kind": "NO-TRANSFORM",
+   "message": null,
+   "outcome": "accepted"
+  },
+  {
+   "case": "propagate_traced_carrier_chain(focus_readout=..., mft_method=...)",
+   "exc": null,
+   "kind": "REACHES",
+   "message": null,
+   "outcome": "accepted"
+  },
+  {
+   "case": "propagate_traced_carrier_chain(NO focus_readout, mft_method=...)",
+   "exc": null,
+   "kind": "NO-TRANSFORM",
+   "message": null,
+   "outcome": "accepted"
+  },
+  {
+   "case": "re_reference(coarser target grid, mft_method=...)",
+   "exc": null,
+   "kind": "REACHES",
+   "message": null,
+   "outcome": "accepted"
+  }
+ ],
+ "lumenairy_version": "5.48.1",
+ "numpy": "2.4.4",
+ "python": "3.14.6"
+}

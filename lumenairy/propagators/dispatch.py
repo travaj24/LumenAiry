@@ -94,6 +94,14 @@ def propagate(
     accuracy: str = 'balanced',
     output_grid: Optional[tuple] = None,
     output_dx: Optional[float] = None,
+    # WP-C4 round 2 (V-C4-D2): ``method`` here names the PROPAGATOR FAMILY, so
+    # it cannot also name the route through the MFT's transform the way the
+    # three MFT propagators' own ``method=`` does.  ``mft_method=`` is that
+    # keyword, and it is the one-call way back to the dispatch the asm /
+    # fresnel / fraunhofer output-grid legs had before the MFT shape rule.
+    # ``None`` stamps
+    # nothing -- see ``_bluestein._mft_route_kwargs``.
+    mft_method: Optional[str] = None,
     # The default is the "not passed" sentinel, NOT a literal ``True``, so
     # "the library's stable contract applies" stays distinguishable from
     # "this caller asked for the wrapper".  It resolves to the STABLE
@@ -366,6 +374,7 @@ def propagate(
         prescription=prescription,
         output_grid=output_grid,
         output_dx=output_dx,
+        mft_method=mft_method,
         **method_kwargs,
     )
     if not wrap:
@@ -886,7 +895,8 @@ def _resolve_dispatcher_output_grid(method, output_grid, output_dx, in_shape):
 
 
 def _dispatch_bare_grid_with_output(method, E_in, *, z, wavelength, dx,
-                                     output_grid, output_dx, **kwargs):
+                                     output_grid, output_dx,
+                                     mft_method=None, **kwargs):
     """Route a bare-grid method (asm/fresnel/fraunhofer/sas/rs) to the
     correct MFT variant when the caller asks for an output-pitch /
     output-grid that differs from the natural FFT output.
@@ -901,7 +911,17 @@ def _dispatch_bare_grid_with_output(method, E_in, *, z, wavelength, dx,
     ``output_grid`` can be ``(N_out, dx_out)`` or a dict
     ``{'N': ..., 'dx': ...}``.  ``output_dx`` short-circuits and uses
     the input N for the MFT N_out.
+
+    ``mft_method`` (WP-C4 round 2, V-C4-D2) names the route through the MFT
+    variant's own transform and is forwarded as its ``method=``.  ``None``
+    stamps nothing, so the propagator's own default governs; ``'bluestein'``
+    / ``'separable'`` are the one-call way back to the dispatch these legs
+    had before the MFT shape rule.
+    ``propagate``'s own ``method=`` names the propagator FAMILY and so cannot
+    carry this.
     """
+    from ._bluestein import _mft_route_kwargs
+    _route = _mft_route_kwargs(mft_method)
     if z is None:
         raise ValueError(
             f"propagate(method={method!r}, output_grid/output_dx=...): "
@@ -938,15 +958,15 @@ def _dispatch_bare_grid_with_output(method, E_in, *, z, wavelength, dx,
     if method == 'asm':
         from .propagation import angular_spectrum_propagate_mft
         return angular_spectrum_propagate_mft(
-            E_in, z, wavelength, dx, dx_out, N_out, **kwargs)
+            E_in, z, wavelength, dx, dx_out, N_out, **_route, **kwargs)
     if method == 'fresnel':
         from .propagation import fresnel_propagate_mft
         return fresnel_propagate_mft(
-            E_in, z, wavelength, dx, dx_out, N_out, **kwargs)
+            E_in, z, wavelength, dx, dx_out, N_out, **_route, **kwargs)
     if method == 'fraunhofer':
         from .propagation import fraunhofer_propagate_mft
         return fraunhofer_propagate_mft(
-            E_in, z, wavelength, dx, dx_out, N_out, **kwargs)
+            E_in, z, wavelength, dx, dx_out, N_out, **_route, **kwargs)
     if method == 'sas':
         raise ValueError(
             "propagate(method='sas', output_grid/output_dx=...): "
@@ -969,7 +989,7 @@ def _dispatch_bare_grid_with_output(method, E_in, *, z, wavelength, dx,
 
 def _dispatch_to_method(method, E_in, *, z, wavelength, dx,
                         prescription, output_grid, output_dx,
-                        **kwargs):
+                        mft_method=None, **kwargs):
     """Call the chosen propagator with the appropriate signature.
 
     4.12 fix (audit round-4 B1-6): when the user explicitly picks a
@@ -1052,11 +1072,26 @@ def _dispatch_to_method(method, E_in, *, z, wavelength, dx,
             f"request.")
 
     _BARE_GRID_METHODS = ('asm', 'sas', 'fresnel', 'fraunhofer', 'rs')
+    # WP-C4 round 2 (V-C4-D2).  ``mft_method=`` reaches a transform only on
+    # the MFT legs below.  Anywhere else it would be silently dropped -- and a
+    # caller passing it is asking for the pre-shape-rule MFT bytes, which is
+    # exactly the request a default flip may not lose.  Refuse instead.
+    if mft_method is not None and not (
+            method in _BARE_GRID_METHODS
+            and (output_grid is not None or output_dx is not None)):
+        raise ValueError(
+            f"propagate(method={method!r}, mft_method={mft_method!r}): "
+            f"mft_method= names the route through the matrix Fourier "
+            f"transform and only the MFT output-grid legs reach one -- "
+            f"method in ('asm', 'fresnel', 'fraunhofer') WITH output_grid= or "
+            f"output_dx=.  This call reaches no MFT transform, so the keyword "
+            f"would be dropped.  Drop it, or ask for an output grid.")
     if method in _BARE_GRID_METHODS and (output_grid is not None
                                           or output_dx is not None):
         return _dispatch_bare_grid_with_output(
             method, E_in, z=z, wavelength=wavelength, dx=dx,
-            output_grid=output_grid, output_dx=output_dx, **kwargs,
+            output_grid=output_grid, output_dx=output_dx,
+            mft_method=mft_method, **kwargs,
         )
 
     if method == 'asm':
@@ -1381,6 +1416,14 @@ def which_propagator(
         Source aperture [m] used in the Fresnel-number heuristic.
     verbose : bool
         Print the decision to stdout (useful in interactive use).
+    mft_method : {None, 'auto', 'bluestein', 'separable', 'direct'}, optional
+        Which route through the matrix Fourier transform this call's readout
+        takes, forwarded to the primitive as its ``method=``.  ``None`` (the
+        default) names nothing -- the keyword is left off, so the library's
+        own default governs.  The one-call way back to the dispatch this
+        entry point had before the MFT shape rule is ``'bluestein'`` (see
+        the MFT shape-rule section of ``Migration-Guide.md``).  A ``ValueError`` when the
+        call reaches no matrix Fourier transform (no output grid).
 
     Returns
     -------

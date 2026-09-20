@@ -1,0 +1,95 @@
+{
+ "UNCAUGHT": [
+  "work_comparison_strict"
+ ],
+ "build": "WIN-py3.14",
+ "control_caught_with_no_mutation": [],
+ "lumenairy_version": "5.48.1",
+ "python": "3.14.6",
+ "rows": [
+  {
+   "caught_at_all": true,
+   "claims_that_caught_it": [
+    "dispatch_chirp_side"
+   ],
+   "expectation_holds": true,
+   "mutation": "conjunction_or_instead_of_and",
+   "shipped_expectation": "dispatch_chirp_side"
+  },
+  {
+   "caught_at_all": true,
+   "claims_that_caught_it": [
+    "boundary",
+    "work_screen",
+    "accuracy"
+   ],
+   "expectation_holds": true,
+   "mutation": "constant_silently_zero",
+   "shipped_expectation": "boundary"
+  },
+  {
+   "caught_at_all": true,
+   "claims_that_caught_it": [
+    "accuracy"
+   ],
+   "expectation_holds": true,
+   "mutation": "dense_answer_is_really_separable",
+   "shipped_expectation": "accuracy"
+  },
+  {
+   "caught_at_all": true,
+   "claims_that_caught_it": [
+    "r2_none_stamps_nothing_and_route_arrives"
+   ],
+   "expectation_holds": null,
+   "mutation": "mft_method_ignored_at_one_entry_point",
+   "shipped_expectation": "?"
+  },
+  {
+   "caught_at_all": true,
+   "claims_that_caught_it": [
+    "boundary"
+   ],
+   "expectation_holds": null,
+   "mutation": "ratio_condition_dropped",
+   "shipped_expectation": "?"
+  },
+  {
+   "caught_at_all": true,
+   "claims_that_caught_it": [
+    "dispatch_dense_side",
+    "dispatch_chirp_side",
+    "way_back",
+    "accuracy"
+   ],
+   "expectation_holds": true,
+   "mutation": "rule_inverted",
+   "shipped_expectation": "dispatch_dense_side"
+  },
+  {
+   "caught_at_all": false,
+   "claims_that_caught_it": [],
+   "expectation_holds": null,
+   "mutation": "work_comparison_strict",
+   "shipped_expectation": "?"
+  },
+  {
+   "caught_at_all": true,
+   "claims_that_caught_it": [
+    "work_screen"
+   ],
+   "expectation_holds": true,
+   "mutation": "work_constant_silently_zero",
+   "shipped_expectation": "work_screen"
+  },
+  {
+   "caught_at_all": true,
+   "claims_that_caught_it": [
+    "work_screen"
+   ],
+   "expectation_holds": null,
+   "mutation": "work_formula_max_instead_of_min",
+   "shipped_expectation": "?"
+  }
+ ]
+}

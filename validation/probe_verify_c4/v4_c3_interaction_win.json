@@ -1,0 +1,263 @@
+{
+ "build": "WIN-py3.14",
+ "c3_lumenairy_file": "C:\\Users/Tesla/AppData/Local/Temp/claude/C--Users-Tesla/372a2d1f-acbe-4b57-a148-eeae3fe1d729/scratchpad/c3tip\\lumenairy\\__init__.py",
+ "c3_tree": "C:/Users/Tesla/AppData/Local/Temp/claude/C--Users-Tesla/372a2d1f-acbe-4b57-a148-eeae3fe1d729/scratchpad/c3tip",
+ "constant": 0.03125,
+ "rows": [
+  {
+   "case": "focus_readout",
+   "n_in": 1024,
+   "n_out": 16,
+   "rule": [
+    {
+     "N_out_x": 16,
+     "N_out_y": 16,
+     "Nx_in": 1024,
+     "Ny_in": 1024,
+     "ratio_max": 0.015625,
+     "rule_says_direct": true,
+     "work_per_kernel_entry": 520.0
+    }
+   ],
+   "shapes": [
+    {
+     "N_out_x": 16,
+     "N_out_y": 16,
+     "Nx_in": 1024,
+     "Ny_in": 1024
+    }
+   ]
+  },
+  {
+   "case": "carrier_leg",
+   "n_in": 1024,
+   "n_out": null,
+   "rule": [
+    {
+     "N_out_x": 1024,
+     "N_out_y": 1024,
+     "Nx_in": 1024,
+     "Ny_in": 1024,
+     "ratio_max": 1.0,
+     "rule_says_direct": false,
+     "work_per_kernel_entry": 1024.0
+    }
+   ],
+   "shapes": [
+    {
+     "N_out_x": 1024,
+     "N_out_y": 1024,
+     "Nx_in": 1024,
+     "Ny_in": 1024
+    }
+   ]
+  },
+  {
+   "case": "focus_readout",
+   "n_in": 1024,
+   "n_out": 32,
+   "rule": [
+    {
+     "N_out_x": 32,
+     "N_out_y": 32,
+     "Nx_in": 1024,
+     "Ny_in": 1024,
+     "ratio_max": 0.03125,
+     "rule_says_direct": true,
+     "work_per_kernel_entry": 528.0
+    }
+   ],
+   "shapes": [
+    {
+     "N_out_x": 32,
+     "N_out_y": 32,
+     "Nx_in": 1024,
+     "Ny_in": 1024
+    }
+   ]
+  },
+  {
+   "case": "carrier_leg",
+   "n_in": 1024,
+   "n_out": null,
+   "rule": [
+    {
+     "N_out_x": 1024,
+     "N_out_y": 1024,
+     "Nx_in": 1024,
+     "Ny_in": 1024,
+     "ratio_max": 1.0,
+     "rule_says_direct": false,
+     "work_per_kernel_entry": 1024.0
+    }
+   ],
+   "shapes": [
+    {
+     "N_out_x": 1024,
+     "N_out_y": 1024,
+     "Nx_in": 1024,
+     "Ny_in": 1024
+    }
+   ]
+  },
+  {
+   "case": "focus_readout",
+   "n_in": 1024,
+   "n_out": 64,
+   "rule": [
+    {
+     "N_out_x": 64,
+     "N_out_y": 64,
+     "Nx_in": 1024,
+     "Ny_in": 1024,
+     "ratio_max": 0.0625,
+     "rule_says_direct": false,
+     "work_per_kernel_entry": 544.0
+    }
+   ],
+   "shapes": [
+    {
+     "N_out_x": 64,
+     "N_out_y": 64,
+     "Nx_in": 1024,
+     "Ny_in": 1024
+    }
+   ]
+  },
+  {
+   "case": "carrier_leg",
+   "n_in": 1024,
+   "n_out": null,
+   "rule": [
+    {
+     "N_out_x": 1024,
+     "N_out_y": 1024,
+     "Nx_in": 1024,
+     "Ny_in": 1024,
+     "ratio_max": 1.0,
+     "rule_says_direct": false,
+     "work_per_kernel_entry": 1024.0
+    }
+   ],
+   "shapes": [
+    {
+     "N_out_x": 1024,
+     "N_out_y": 1024,
+     "Nx_in": 1024,
+     "Ny_in": 1024
+    }
+   ]
+  },
+  {
+   "case": "focus_readout",
+   "n_in": 512,
+   "n_out": 16,
+   "rule": [
+    {
+     "N_out_x": 16,
+     "N_out_y": 16,
+     "Nx_in": 512,
+     "Ny_in": 512,
+     "ratio_max": 0.03125,
+     "rule_says_direct": true,
+     "work_per_kernel_entry": 264.0
+    }
+   ],
+   "shapes": [
+    {
+     "N_out_x": 16,
+     "N_out_y": 16,
+     "Nx_in": 512,
+     "Ny_in": 512
+    }
+   ]
+  },
+  {
+   "case": "carrier_leg",
+   "n_in": 512,
+   "n_out": null,
+   "rule": [],
+   "shapes": []
+  },
+  {
+   "case": "focus_readout",
+   "n_in": 2048,
+   "n_out": 40,
+   "rule": [
+    {
+     "N_out_x": 40,
+     "N_out_y": 40,
+     "Nx_in": 2048,
+     "Ny_in": 2048,
+     "ratio_max": 0.01953125,
+     "rule_says_direct": true,
+     "work_per_kernel_entry": 1044.0
+    }
+   ],
+   "shapes": [
+    {
+     "N_out_x": 40,
+     "N_out_y": 40,
+     "Nx_in": 2048,
+     "Ny_in": 2048
+    }
+   ]
+  },
+  {
+   "case": "carrier_leg",
+   "n_in": 2048,
+   "n_out": null,
+   "rule": [
+    {
+     "N_out_x": 2048,
+     "N_out_y": 2048,
+     "Nx_in": 2048,
+     "Ny_in": 2048,
+     "ratio_max": 1.0,
+     "rule_says_direct": false,
+     "work_per_kernel_entry": 2048.0
+    }
+   ],
+   "shapes": [
+    {
+     "N_out_x": 2048,
+     "N_out_y": 2048,
+     "Nx_in": 2048,
+     "Ny_in": 2048
+    }
+   ]
+  },
+  {
+   "case": "focus_readout",
+   "n_in": 256,
+   "n_out": 128,
+   "rule": [
+    {
+     "N_out_x": 128,
+     "N_out_y": 128,
+     "Nx_in": 256,
+     "Ny_in": 256,
+     "ratio_max": 0.5,
+     "rule_says_direct": false,
+     "work_per_kernel_entry": 192.0
+    }
+   ],
+   "shapes": [
+    {
+     "N_out_x": 128,
+     "N_out_y": 128,
+     "Nx_in": 256,
+     "Ny_in": 256
+    }
+   ]
+  },
+  {
+   "case": "carrier_leg",
+   "n_in": 256,
+   "n_out": null,
+   "rule": [],
+   "shapes": []
+  }
+ ],
+ "this_tree": "C:/tmp/lum_vc4"
+}

@@ -1,0 +1,488 @@
+{
+ "build": "WSL-py3.12",
+ "cells": {
+  "HASWELLx1": {
+   "build": "WSL-py3.12",
+   "env": {
+    "MKL_NUM_THREADS": "1",
+    "OMP_NUM_THREADS": "1",
+    "OPENBLAS_CORETYPE": "HASWELL",
+    "OPENBLAS_NUM_THREADS": "1"
+   },
+   "label": "HASWELLx1",
+   "lumenairy_file": "/mnt/c/tmp/lum_c4/lumenairy/__init__.py",
+   "numpy": "2.4.6",
+   "numpy_config": "{'Build Dependencies': {'blas': {'name': 'scipy-openblas', 'found': True, 'version': '0.3.31.188.0', 'detection method': 'pkgconfig', 'include directory': '/opt/_internal/cpython-3.12.12/lib/python3.12/site-packages/scipy_openblas64/include', 'lib directory': '/opt/_internal/cpython-3.12.12/lib/python3.12/site-packages/scipy_openblas64/lib', 'openblas configuration': 'OpenBLAS 0.3.31.188.0  USE64BITINT DYNAMIC_ARCH NO_AFFINITY SkylakeX MAX_THREADS=64', 'pc file directory': '/project/.openblas'}, 'lapack': {'name': 'scipy-openblas', 'found': True, 'version': '0.3.31.188.0', 'detection method': 'pkgconfig', 'include directory': '/opt/_internal/cpython-3.12.12/lib/python3.12/site-packages/scipy_openblas64/include', 'lib directory': '/opt/_internal/cpython-3.12.12/lib/python3.12/site-packages/scipy_openblas64/lib', 'openblas configuration': 'OpenBLAS 0.3.31.188.0  USE64BITINT DYNAMIC_ARCH NO_AFFINITY SkylakeX MAX_THREADS=64', 'pc file directory': '/project/.openblas'}}}",
+   "rows": [
+    {
+     "M": 3,
+     "N": 96,
+     "auto_digest": "117317faf483ed80f3f8af0b6f0804ff90fb6166cae1744ad6c3eeac6488a938",
+     "chirp_digest": "5507bfe0474ffdd77903ec5ddffb4a782ffd6430427ebc8e1b95ec4a054d5baa",
+     "dense_digest": "117317faf483ed80f3f8af0b6f0804ff90fb6166cae1744ad6c3eeac6488a938",
+     "dense_inside_bar": true,
+     "dense_vs_exact_max_abs": 5.429959962425187e-13,
+     "derived_bar_dense": 5.807334597172686e-10,
+     "route": "direct",
+     "route_agrees_with_rule": true,
+     "rule_says_direct": true
+    },
+    {
+     "M": 4,
+     "N": 128,
+     "auto_digest": "fa4722c97ad61ec3caa75098e0ff7692a3fb57146b78e395059df09bc031a80c",
+     "chirp_digest": "f6df494a63b2638e2930e588152540be7114d240b74a1323f1900997b469bb1a",
+     "dense_digest": "fa4722c97ad61ec3caa75098e0ff7692a3fb57146b78e395059df09bc031a80c",
+     "dense_inside_bar": true,
+     "dense_vs_exact_max_abs": 2.669977196213713e-13,
+     "derived_bar_dense": 1.2585228838158986e-09,
+     "route": "direct",
+     "route_agrees_with_rule": true,
+     "rule_says_direct": true
+    },
+    {
+     "M": 12,
+     "N": 24,
+     "auto_digest": "9d69bf890b957f6273c0228fab2769768c5ac5ecfa6b53479cdda9509db9b863",
+     "chirp_digest": "9d69bf890b957f6273c0228fab2769768c5ac5ecfa6b53479cdda9509db9b863",
+     "dense_digest": "657a92ab26375ce9d74435d57f2e0355b34b293fc56bd020421787974985be26",
+     "dense_inside_bar": true,
+     "dense_vs_exact_max_abs": 9.238118584960956e-12,
+     "derived_bar_dense": 4.4090830743412286e-10,
+     "route": "bluestein",
+     "route_agrees_with_rule": true,
+     "rule_says_direct": false
+    }
+   ]
+  },
+  "HASWELLx4": {
+   "build": "WSL-py3.12",
+   "env": {
+    "MKL_NUM_THREADS": "4",
+    "OMP_NUM_THREADS": "4",
+    "OPENBLAS_CORETYPE": "HASWELL",
+    "OPENBLAS_NUM_THREADS": "4"
+   },
+   "label": "HASWELLx4",
+   "lumenairy_file": "/mnt/c/tmp/lum_c4/lumenairy/__init__.py",
+   "numpy": "2.4.6",
+   "numpy_config": "{'Build Dependencies': {'blas': {'name': 'scipy-openblas', 'found': True, 'version': '0.3.31.188.0', 'detection method': 'pkgconfig', 'include directory': '/opt/_internal/cpython-3.12.12/lib/python3.12/site-packages/scipy_openblas64/include', 'lib directory': '/opt/_internal/cpython-3.12.12/lib/python3.12/site-packages/scipy_openblas64/lib', 'openblas configuration': 'OpenBLAS 0.3.31.188.0  USE64BITINT DYNAMIC_ARCH NO_AFFINITY SkylakeX MAX_THREADS=64', 'pc file directory': '/project/.openblas'}, 'lapack': {'name': 'scipy-openblas', 'found': True, 'version': '0.3.31.188.0', 'detection method': 'pkgconfig', 'include directory': '/opt/_internal/cpython-3.12.12/lib/python3.12/site-packages/scipy_openblas64/include', 'lib directory': '/opt/_internal/cpython-3.12.12/lib/python3.12/site-packages/scipy_openblas64/lib', 'openblas configuration': 'OpenBLAS 0.3.31.188.0  USE64BITINT DYNAMIC_ARCH NO_AFFINITY SkylakeX MAX_THREADS=64', 'pc file directory': '/project/.openblas'}}}",
+   "rows": [
+    {
+     "M": 3,
+     "N": 96,
+     "auto_digest": "117317faf483ed80f3f8af0b6f0804ff90fb6166cae1744ad6c3eeac6488a938",
+     "chirp_digest": "5507bfe0474ffdd77903ec5ddffb4a782ffd6430427ebc8e1b95ec4a054d5baa",
+     "dense_digest": "117317faf483ed80f3f8af0b6f0804ff90fb6166cae1744ad6c3eeac6488a938",
+     "dense_inside_bar": true,
+     "dense_vs_exact_max_abs": 5.429959962425187e-13,
+     "derived_bar_dense": 5.807334597172686e-10,
+     "route": "direct",
+     "route_agrees_with_rule": true,
+     "rule_says_direct": true
+    },
+    {
+     "M": 4,
+     "N": 128,
+     "auto_digest": "fa4722c97ad61ec3caa75098e0ff7692a3fb57146b78e395059df09bc031a80c",
+     "chirp_digest": "f6df494a63b2638e2930e588152540be7114d240b74a1323f1900997b469bb1a",
+     "dense_digest": "fa4722c97ad61ec3caa75098e0ff7692a3fb57146b78e395059df09bc031a80c",
+     "dense_inside_bar": true,
+     "dense_vs_exact_max_abs": 2.669977196213713e-13,
+     "derived_bar_dense": 1.2585228838158986e-09,
+     "route": "direct",
+     "route_agrees_with_rule": true,
+     "rule_says_direct": true
+    },
+    {
+     "M": 12,
+     "N": 24,
+     "auto_digest": "9d69bf890b957f6273c0228fab2769768c5ac5ecfa6b53479cdda9509db9b863",
+     "chirp_digest": "9d69bf890b957f6273c0228fab2769768c5ac5ecfa6b53479cdda9509db9b863",
+     "dense_digest": "657a92ab26375ce9d74435d57f2e0355b34b293fc56bd020421787974985be26",
+     "dense_inside_bar": true,
+     "dense_vs_exact_max_abs": 9.238118584960956e-12,
+     "derived_bar_dense": 4.4090830743412286e-10,
+     "route": "bluestein",
+     "route_agrees_with_rule": true,
+     "rule_says_direct": false
+    }
+   ]
+  },
+  "KATMAIx1": {
+   "build": "WSL-py3.12",
+   "env": {
+    "MKL_NUM_THREADS": "1",
+    "OMP_NUM_THREADS": "1",
+    "OPENBLAS_CORETYPE": "KATMAI",
+    "OPENBLAS_NUM_THREADS": "1"
+   },
+   "label": "KATMAIx1",
+   "lumenairy_file": "/mnt/c/tmp/lum_c4/lumenairy/__init__.py",
+   "numpy": "2.4.6",
+   "numpy_config": "{'Build Dependencies': {'blas': {'name': 'scipy-openblas', 'found': True, 'version': '0.3.31.188.0', 'detection method': 'pkgconfig', 'include directory': '/opt/_internal/cpython-3.12.12/lib/python3.12/site-packages/scipy_openblas64/include', 'lib directory': '/opt/_internal/cpython-3.12.12/lib/python3.12/site-packages/scipy_openblas64/lib', 'openblas configuration': 'OpenBLAS 0.3.31.188.0  USE64BITINT DYNAMIC_ARCH NO_AFFINITY SkylakeX MAX_THREADS=64', 'pc file directory': '/project/.openblas'}, 'lapack': {'name': 'scipy-openblas', 'found': True, 'version': '0.3.31.188.0', 'detection method': 'pkgconfig', 'include directory': '/opt/_internal/cpython-3.12.12/lib/python3.12/site-packages/scipy_openblas64/include', 'lib directory': '/opt/_internal/cpython-3.12.12/lib/python3.12/site-packages/scipy_openblas64/lib', 'openblas configuration': 'OpenBLAS 0.3.31.188.0  USE64BITINT DYNAMIC_ARCH NO_AFFINITY SkylakeX MAX_THREADS=64', 'pc file directory': '/project/.openblas'}}}",
+   "rows": [
+    {
+     "M": 3,
+     "N": 96,
+     "auto_digest": "e1e03766fd939f0f59f3e520f5b469c1d36f24890f624e92568e4e20a2ac1747",
+     "chirp_digest": "5507bfe0474ffdd77903ec5ddffb4a782ffd6430427ebc8e1b95ec4a054d5baa",
+     "dense_digest": "e1e03766fd939f0f59f3e520f5b469c1d36f24890f624e92568e4e20a2ac1747",
+     "dense_inside_bar": true,
+     "dense_vs_exact_max_abs": 5.334278619990147e-13,
+     "derived_bar_dense": 5.807334597172686e-10,
+     "route": "direct",
+     "route_agrees_with_rule": true,
+     "rule_says_direct": true
+    },
+    {
+     "M": 4,
+     "N": 128,
+     "auto_digest": "7cf2bc5069f33cbec2edf5242c2a35ca52fefe95c3fb29b485e6f5645e572e96",
+     "chirp_digest": "f6df494a63b2638e2930e588152540be7114d240b74a1323f1900997b469bb1a",
+     "dense_digest": "7cf2bc5069f33cbec2edf5242c2a35ca52fefe95c3fb29b485e6f5645e572e96",
+     "dense_inside_bar": true,
+     "dense_vs_exact_max_abs": 2.0097183471152322e-13,
+     "derived_bar_dense": 1.2585228838158986e-09,
+     "route": "direct",
+     "route_agrees_with_rule": true,
+     "rule_says_direct": true
+    },
+    {
+     "M": 12,
+     "N": 24,
+     "auto_digest": "9d69bf890b957f6273c0228fab2769768c5ac5ecfa6b53479cdda9509db9b863",
+     "chirp_digest": "9d69bf890b957f6273c0228fab2769768c5ac5ecfa6b53479cdda9509db9b863",
+     "dense_digest": "c346a28a9631dffafe559d28727ad7f1a2bd3dc4749093e2213ce754f10304aa",
+     "dense_inside_bar": true,
+     "dense_vs_exact_max_abs": 9.238118584960956e-12,
+     "derived_bar_dense": 4.4090830743412286e-10,
+     "route": "bluestein",
+     "route_agrees_with_rule": true,
+     "rule_says_direct": false
+    }
+   ]
+  },
+  "KATMAIx4": {
+   "build": "WSL-py3.12",
+   "env": {
+    "MKL_NUM_THREADS": "4",
+    "OMP_NUM_THREADS": "4",
+    "OPENBLAS_CORETYPE": "KATMAI",
+    "OPENBLAS_NUM_THREADS": "4"
+   },
+   "label": "KATMAIx4",
+   "lumenairy_file": "/mnt/c/tmp/lum_c4/lumenairy/__init__.py",
+   "numpy": "2.4.6",
+   "numpy_config": "{'Build Dependencies': {'blas': {'name': 'scipy-openblas', 'found': True, 'version': '0.3.31.188.0', 'detection method': 'pkgconfig', 'include directory': '/opt/_internal/cpython-3.12.12/lib/python3.12/site-packages/scipy_openblas64/include', 'lib directory': '/opt/_internal/cpython-3.12.12/lib/python3.12/site-packages/scipy_openblas64/lib', 'openblas configuration': 'OpenBLAS 0.3.31.188.0  USE64BITINT DYNAMIC_ARCH NO_AFFINITY SkylakeX MAX_THREADS=64', 'pc file directory': '/project/.openblas'}, 'lapack': {'name': 'scipy-openblas', 'found': True, 'version': '0.3.31.188.0', 'detection method': 'pkgconfig', 'include directory': '/opt/_internal/cpython-3.12.12/lib/python3.12/site-packages/scipy_openblas64/include', 'lib directory': '/opt/_internal/cpython-3.12.12/lib/python3.12/site-packages/scipy_openblas64/lib', 'openblas configuration': 'OpenBLAS 0.3.31.188.0  USE64BITINT DYNAMIC_ARCH NO_AFFINITY SkylakeX MAX_THREADS=64', 'pc file directory': '/project/.openblas'}}}",
+   "rows": [
+    {
+     "M": 3,
+     "N": 96,
+     "auto_digest": "e1e03766fd939f0f59f3e520f5b469c1d36f24890f624e92568e4e20a2ac1747",
+     "chirp_digest": "5507bfe0474ffdd77903ec5ddffb4a782ffd6430427ebc8e1b95ec4a054d5baa",
+     "dense_digest": "e1e03766fd939f0f59f3e520f5b469c1d36f24890f624e92568e4e20a2ac1747",
+     "dense_inside_bar": true,
+     "dense_vs_exact_max_abs": 5.334278619990147e-13,
+     "derived_bar_dense": 5.807334597172686e-10,
+     "route": "direct",
+     "route_agrees_with_rule": true,
+     "rule_says_direct": true
+    },
+    {
+     "M": 4,
+     "N": 128,
+     "auto_digest": "7cf2bc5069f33cbec2edf5242c2a35ca52fefe95c3fb29b485e6f5645e572e96",
+     "chirp_digest": "f6df494a63b2638e2930e588152540be7114d240b74a1323f1900997b469bb1a",
+     "dense_digest": "7cf2bc5069f33cbec2edf5242c2a35ca52fefe95c3fb29b485e6f5645e572e96",
+     "dense_inside_bar": true,
+     "dense_vs_exact_max_abs": 2.0097183471152322e-13,
+     "derived_bar_dense": 1.2585228838158986e-09,
+     "route": "direct",
+     "route_agrees_with_rule": true,
+     "rule_says_direct": true
+    },
+    {
+     "M": 12,
+     "N": 24,
+     "auto_digest": "9d69bf890b957f6273c0228fab2769768c5ac5ecfa6b53479cdda9509db9b863",
+     "chirp_digest": "9d69bf890b957f6273c0228fab2769768c5ac5ecfa6b53479cdda9509db9b863",
+     "dense_digest": "c346a28a9631dffafe559d28727ad7f1a2bd3dc4749093e2213ce754f10304aa",
+     "dense_inside_bar": true,
+     "dense_vs_exact_max_abs": 9.238118584960956e-12,
+     "derived_bar_dense": 4.4090830743412286e-10,
+     "route": "bluestein",
+     "route_agrees_with_rule": true,
+     "rule_says_direct": false
+    }
+   ]
+  },
+  "NEHALEMx1": {
+   "build": "WSL-py3.12",
+   "env": {
+    "MKL_NUM_THREADS": "1",
+    "OMP_NUM_THREADS": "1",
+    "OPENBLAS_CORETYPE": "NEHALEM",
+    "OPENBLAS_NUM_THREADS": "1"
+   },
+   "label": "NEHALEMx1",
+   "lumenairy_file": "/mnt/c/tmp/lum_c4/lumenairy/__init__.py",
+   "numpy": "2.4.6",
+   "numpy_config": "{'Build Dependencies': {'blas': {'name': 'scipy-openblas', 'found': True, 'version': '0.3.31.188.0', 'detection method': 'pkgconfig', 'include directory': '/opt/_internal/cpython-3.12.12/lib/python3.12/site-packages/scipy_openblas64/include', 'lib directory': '/opt/_internal/cpython-3.12.12/lib/python3.12/site-packages/scipy_openblas64/lib', 'openblas configuration': 'OpenBLAS 0.3.31.188.0  USE64BITINT DYNAMIC_ARCH NO_AFFINITY SkylakeX MAX_THREADS=64', 'pc file directory': '/project/.openblas'}, 'lapack': {'name': 'scipy-openblas', 'found': True, 'version': '0.3.31.188.0', 'detection method': 'pkgconfig', 'include directory': '/opt/_internal/cpython-3.12.12/lib/python3.12/site-packages/scipy_openblas64/include', 'lib directory': '/opt/_internal/cpython-3.12.12/lib/python3.12/site-packages/scipy_openblas64/lib', 'openblas configuration': 'OpenBLAS 0.3.31.188.0  USE64BITINT DYNAMIC_ARCH NO_AFFINITY SkylakeX MAX_THREADS=64', 'pc file directory': '/project/.openblas'}}}",
+   "rows": [
+    {
+     "M": 3,
+     "N": 96,
+     "auto_digest": "5084eef3a43866f876877c4efe6e6f33e7f2bd8c8431cbb1558bd1134ddbc9fe",
+     "chirp_digest": "5507bfe0474ffdd77903ec5ddffb4a782ffd6430427ebc8e1b95ec4a054d5baa",
+     "dense_digest": "5084eef3a43866f876877c4efe6e6f33e7f2bd8c8431cbb1558bd1134ddbc9fe",
+     "dense_inside_bar": true,
+     "dense_vs_exact_max_abs": 5.401994317466067e-13,
+     "derived_bar_dense": 5.807334597172686e-10,
+     "route": "direct",
+     "route_agrees_with_rule": true,
+     "rule_says_direct": true
+    },
+    {
+     "M": 4,
+     "N": 128,
+     "auto_digest": "7cf2bc5069f33cbec2edf5242c2a35ca52fefe95c3fb29b485e6f5645e572e96",
+     "chirp_digest": "f6df494a63b2638e2930e588152540be7114d240b74a1323f1900997b469bb1a",
+     "dense_digest": "7cf2bc5069f33cbec2edf5242c2a35ca52fefe95c3fb29b485e6f5645e572e96",
+     "dense_inside_bar": true,
+     "dense_vs_exact_max_abs": 2.0097183471152322e-13,
+     "derived_bar_dense": 1.2585228838158986e-09,
+     "route": "direct",
+     "route_agrees_with_rule": true,
+     "rule_says_direct": true
+    },
+    {
+     "M": 12,
+     "N": 24,
+     "auto_digest": "9d69bf890b957f6273c0228fab2769768c5ac5ecfa6b53479cdda9509db9b863",
+     "chirp_digest": "9d69bf890b957f6273c0228fab2769768c5ac5ecfa6b53479cdda9509db9b863",
+     "dense_digest": "c346a28a9631dffafe559d28727ad7f1a2bd3dc4749093e2213ce754f10304aa",
+     "dense_inside_bar": true,
+     "dense_vs_exact_max_abs": 9.238118584960956e-12,
+     "derived_bar_dense": 4.4090830743412286e-10,
+     "route": "bluestein",
+     "route_agrees_with_rule": true,
+     "rule_says_direct": false
+    }
+   ]
+  },
+  "NEHALEMx4": {
+   "build": "WSL-py3.12",
+   "env": {
+    "MKL_NUM_THREADS": "4",
+    "OMP_NUM_THREADS": "4",
+    "OPENBLAS_CORETYPE": "NEHALEM",
+    "OPENBLAS_NUM_THREADS": "4"
+   },
+   "label": "NEHALEMx4",
+   "lumenairy_file": "/mnt/c/tmp/lum_c4/lumenairy/__init__.py",
+   "numpy": "2.4.6",
+   "numpy_config": "{'Build Dependencies': {'blas': {'name': 'scipy-openblas', 'found': True, 'version': '0.3.31.188.0', 'detection method': 'pkgconfig', 'include directory': '/opt/_internal/cpython-3.12.12/lib/python3.12/site-packages/scipy_openblas64/include', 'lib directory': '/opt/_internal/cpython-3.12.12/lib/python3.12/site-packages/scipy_openblas64/lib', 'openblas configuration': 'OpenBLAS 0.3.31.188.0  USE64BITINT DYNAMIC_ARCH NO_AFFINITY SkylakeX MAX_THREADS=64', 'pc file directory': '/project/.openblas'}, 'lapack': {'name': 'scipy-openblas', 'found': True, 'version': '0.3.31.188.0', 'detection method': 'pkgconfig', 'include directory': '/opt/_internal/cpython-3.12.12/lib/python3.12/site-packages/scipy_openblas64/include', 'lib directory': '/opt/_internal/cpython-3.12.12/lib/python3.12/site-packages/scipy_openblas64/lib', 'openblas configuration': 'OpenBLAS 0.3.31.188.0  USE64BITINT DYNAMIC_ARCH NO_AFFINITY SkylakeX MAX_THREADS=64', 'pc file directory': '/project/.openblas'}}}",
+   "rows": [
+    {
+     "M": 3,
+     "N": 96,
+     "auto_digest": "5084eef3a43866f876877c4efe6e6f33e7f2bd8c8431cbb1558bd1134ddbc9fe",
+     "chirp_digest": "5507bfe0474ffdd77903ec5ddffb4a782ffd6430427ebc8e1b95ec4a054d5baa",
+     "dense_digest": "5084eef3a43866f876877c4efe6e6f33e7f2bd8c8431cbb1558bd1134ddbc9fe",
+     "dense_inside_bar": true,
+     "dense_vs_exact_max_abs": 5.401994317466067e-13,
+     "derived_bar_dense": 5.807334597172686e-10,
+     "route": "direct",
+     "route_agrees_with_rule": true,
+     "rule_says_direct": true
+    },
+    {
+     "M": 4,
+     "N": 128,
+     "auto_digest": "7cf2bc5069f33cbec2edf5242c2a35ca52fefe95c3fb29b485e6f5645e572e96",
+     "chirp_digest": "f6df494a63b2638e2930e588152540be7114d240b74a1323f1900997b469bb1a",
+     "dense_digest": "7cf2bc5069f33cbec2edf5242c2a35ca52fefe95c3fb29b485e6f5645e572e96",
+     "dense_inside_bar": true,
+     "dense_vs_exact_max_abs": 2.0097183471152322e-13,
+     "derived_bar_dense": 1.2585228838158986e-09,
+     "route": "direct",
+     "route_agrees_with_rule": true,
+     "rule_says_direct": true
+    },
+    {
+     "M": 12,
+     "N": 24,
+     "auto_digest": "9d69bf890b957f6273c0228fab2769768c5ac5ecfa6b53479cdda9509db9b863",
+     "chirp_digest": "9d69bf890b957f6273c0228fab2769768c5ac5ecfa6b53479cdda9509db9b863",
+     "dense_digest": "c346a28a9631dffafe559d28727ad7f1a2bd3dc4749093e2213ce754f10304aa",
+     "dense_inside_bar": true,
+     "dense_vs_exact_max_abs": 9.238118584960956e-12,
+     "derived_bar_dense": 4.4090830743412286e-10,
+     "route": "bluestein",
+     "route_agrees_with_rule": true,
+     "rule_says_direct": false
+    }
+   ]
+  },
+  "SANDYBRIDGEx1": {
+   "build": "WSL-py3.12",
+   "env": {
+    "MKL_NUM_THREADS": "1",
+    "OMP_NUM_THREADS": "1",
+    "OPENBLAS_CORETYPE": "SANDYBRIDGE",
+    "OPENBLAS_NUM_THREADS": "1"
+   },
+   "label": "SANDYBRIDGEx1",
+   "lumenairy_file": "/mnt/c/tmp/lum_c4/lumenairy/__init__.py",
+   "numpy": "2.4.6",
+   "numpy_config": "{'Build Dependencies': {'blas': {'name': 'scipy-openblas', 'found': True, 'version': '0.3.31.188.0', 'detection method': 'pkgconfig', 'include directory': '/opt/_internal/cpython-3.12.12/lib/python3.12/site-packages/scipy_openblas64/include', 'lib directory': '/opt/_internal/cpython-3.12.12/lib/python3.12/site-packages/scipy_openblas64/lib', 'openblas configuration': 'OpenBLAS 0.3.31.188.0  USE64BITINT DYNAMIC_ARCH NO_AFFINITY SkylakeX MAX_THREADS=64', 'pc file directory': '/project/.openblas'}, 'lapack': {'name': 'scipy-openblas', 'found': True, 'version': '0.3.31.188.0', 'detection method': 'pkgconfig', 'include directory': '/opt/_internal/cpython-3.12.12/lib/python3.12/site-packages/scipy_openblas64/include', 'lib directory': '/opt/_internal/cpython-3.12.12/lib/python3.12/site-packages/scipy_openblas64/lib', 'openblas configuration': 'OpenBLAS 0.3.31.188.0  USE64BITINT DYNAMIC_ARCH NO_AFFINITY SkylakeX MAX_THREADS=64', 'pc file directory': '/project/.openblas'}}}",
+   "rows": [
+    {
+     "M": 3,
+     "N": 96,
+     "auto_digest": "5084eef3a43866f876877c4efe6e6f33e7f2bd8c8431cbb1558bd1134ddbc9fe",
+     "chirp_digest": "5507bfe0474ffdd77903ec5ddffb4a782ffd6430427ebc8e1b95ec4a054d5baa",
+     "dense_digest": "5084eef3a43866f876877c4efe6e6f33e7f2bd8c8431cbb1558bd1134ddbc9fe",
+     "dense_inside_bar": true,
+     "dense_vs_exact_max_abs": 5.401994317466067e-13,
+     "derived_bar_dense": 5.807334597172686e-10,
+     "route": "direct",
+     "route_agrees_with_rule": true,
+     "rule_says_direct": true
+    },
+    {
+     "M": 4,
+     "N": 128,
+     "auto_digest": "7cf2bc5069f33cbec2edf5242c2a35ca52fefe95c3fb29b485e6f5645e572e96",
+     "chirp_digest": "f6df494a63b2638e2930e588152540be7114d240b74a1323f1900997b469bb1a",
+     "dense_digest": "7cf2bc5069f33cbec2edf5242c2a35ca52fefe95c3fb29b485e6f5645e572e96",
+     "dense_inside_bar": true,
+     "dense_vs_exact_max_abs": 2.0097183471152322e-13,
+     "derived_bar_dense": 1.2585228838158986e-09,
+     "route": "direct",
+     "route_agrees_with_rule": true,
+     "rule_says_direct": true
+    },
+    {
+     "M": 12,
+     "N": 24,
+     "auto_digest": "9d69bf890b957f6273c0228fab2769768c5ac5ecfa6b53479cdda9509db9b863",
+     "chirp_digest": "9d69bf890b957f6273c0228fab2769768c5ac5ecfa6b53479cdda9509db9b863",
+     "dense_digest": "c346a28a9631dffafe559d28727ad7f1a2bd3dc4749093e2213ce754f10304aa",
+     "dense_inside_bar": true,
+     "dense_vs_exact_max_abs": 9.238118584960956e-12,
+     "derived_bar_dense": 4.4090830743412286e-10,
+     "route": "bluestein",
+     "route_agrees_with_rule": true,
+     "rule_says_direct": false
+    }
+   ]
+  },
+  "SANDYBRIDGEx4": {
+   "build": "WSL-py3.12",
+   "env": {
+    "MKL_NUM_THREADS": "4",
+    "OMP_NUM_THREADS": "4",
+    "OPENBLAS_CORETYPE": "SANDYBRIDGE",
+    "OPENBLAS_NUM_THREADS": "4"
+   },
+   "label": "SANDYBRIDGEx4",
+   "lumenairy_file": "/mnt/c/tmp/lum_c4/lumenairy/__init__.py",
+   "numpy": "2.4.6",
+   "numpy_config": "{'Build Dependencies': {'blas': {'name': 'scipy-openblas', 'found': True, 'version': '0.3.31.188.0', 'detection method': 'pkgconfig', 'include directory': '/opt/_internal/cpython-3.12.12/lib/python3.12/site-packages/scipy_openblas64/include', 'lib directory': '/opt/_internal/cpython-3.12.12/lib/python3.12/site-packages/scipy_openblas64/lib', 'openblas configuration': 'OpenBLAS 0.3.31.188.0  USE64BITINT DYNAMIC_ARCH NO_AFFINITY SkylakeX MAX_THREADS=64', 'pc file directory': '/project/.openblas'}, 'lapack': {'name': 'scipy-openblas', 'found': True, 'version': '0.3.31.188.0', 'detection method': 'pkgconfig', 'include directory': '/opt/_internal/cpython-3.12.12/lib/python3.12/site-packages/scipy_openblas64/include', 'lib directory': '/opt/_internal/cpython-3.12.12/lib/python3.12/site-packages/scipy_openblas64/lib', 'openblas configuration': 'OpenBLAS 0.3.31.188.0  USE64BITINT DYNAMIC_ARCH NO_AFFINITY SkylakeX MAX_THREADS=64', 'pc file directory': '/project/.openblas'}}}",
+   "rows": [
+    {
+     "M": 3,
+     "N": 96,
+     "auto_digest": "5084eef3a43866f876877c4efe6e6f33e7f2bd8c8431cbb1558bd1134ddbc9fe",
+     "chirp_digest": "5507bfe0474ffdd77903ec5ddffb4a782ffd6430427ebc8e1b95ec4a054d5baa",
+     "dense_digest": "5084eef3a43866f876877c4efe6e6f33e7f2bd8c8431cbb1558bd1134ddbc9fe",
+     "dense_inside_bar": true,
+     "dense_vs_exact_max_abs": 5.401994317466067e-13,
+     "derived_bar_dense": 5.807334597172686e-10,
+     "route": "direct",
+     "route_agrees_with_rule": true,
+     "rule_says_direct": true
+    },
+    {
+     "M": 4,
+     "N": 128,
+     "auto_digest": "7cf2bc5069f33cbec2edf5242c2a35ca52fefe95c3fb29b485e6f5645e572e96",
+     "chirp_digest": "f6df494a63b2638e2930e588152540be7114d240b74a1323f1900997b469bb1a",
+     "dense_digest": "7cf2bc5069f33cbec2edf5242c2a35ca52fefe95c3fb29b485e6f5645e572e96",
+     "dense_inside_bar": true,
+     "dense_vs_exact_max_abs": 2.0097183471152322e-13,
+     "derived_bar_dense": 1.2585228838158986e-09,
+     "route": "direct",
+     "route_agrees_with_rule": true,
+     "rule_says_direct": true
+    },
+    {
+     "M": 12,
+     "N": 24,
+     "auto_digest": "9d69bf890b957f6273c0228fab2769768c5ac5ecfa6b53479cdda9509db9b863",
+     "chirp_digest": "9d69bf890b957f6273c0228fab2769768c5ac5ecfa6b53479cdda9509db9b863",
+     "dense_digest": "c346a28a9631dffafe559d28727ad7f1a2bd3dc4749093e2213ce754f10304aa",
+     "dense_inside_bar": true,
+     "dense_vs_exact_max_abs": 9.238118584960956e-12,
+     "derived_bar_dense": 4.4090830743412286e-10,
+     "route": "bluestein",
+     "route_agrees_with_rule": true,
+     "rule_says_direct": false
+    }
+   ]
+  }
+ },
+ "summary": {
+  "kernels_seen": [
+   "HASWELL",
+   "KATMAI",
+   "NEHALEM",
+   "SANDYBRIDGE"
+  ],
+  "n_cells": 8,
+  "n_ran": 8,
+  "per_shape": [
+   {
+    "M": 3,
+    "N": 96,
+    "dense_inside_derived_bar_in_every_cell": true,
+    "dense_vs_exact_max": 5.429959962425187e-13,
+    "dense_vs_exact_min": 5.334278619990147e-13,
+    "distinct_dense_digests": 3,
+    "distinct_routes": [
+     "direct"
+    ],
+    "route_agrees_with_rule_in_every_cell": true,
+    "rule_says_direct": true
+   },
+   {
+    "M": 4,
+    "N": 128,
+    "dense_inside_derived_bar_in_every_cell": true,
+    "dense_vs_exact_max": 2.669977196213713e-13,
+    "dense_vs_exact_min": 2.0097183471152322e-13,
+    "distinct_dense_digests": 2,
+    "distinct_routes": [
+     "direct"
+    ],
+    "route_agrees_with_rule_in_every_cell": true,
+    "rule_says_direct": true
+   },
+   {
+    "M": 12,
+    "N": 24,
+    "dense_inside_derived_bar_in_every_cell": true,
+    "dense_vs_exact_max": 9.238118584960956e-12,
+    "dense_vs_exact_min": 9.238118584960956e-12,
+    "distinct_dense_digests": 2,
+    "distinct_routes": [
+     "bluestein"
+    ],
+    "route_agrees_with_rule_in_every_cell": true,
+    "rule_says_direct": false
+   }
+  ]
+ }
+}

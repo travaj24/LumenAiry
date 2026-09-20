@@ -1,11 +1,12 @@
 <!-- lumenairy-history-doc
 module: lumenairy/propagators/dispatch.py
-ast_sha256: 49e2718d8cae3a8ab540e9870fe9e5f0cc76e2d43988b4b0a4e50a3c96b3add2
-token_sha256: 371f80cf0f655ec6456872ea7403c0badd2c0ab9d95ca205f41953fbb01485e0
+ast_sha256: 504759d2fd087ca3802a67a9095f63d79ca9120fa8a89f931fc59da26cac810d
+token_sha256: 29a13a40db0740b20317146d4e938978d0dd4fa76c731c5436dc71e6f892fee3
 pre_relocation_lines: 1698
 recorded_by: WP-A17 SWEEP-1 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
 re_recorded: 2026-09-14 -- Wave-5 item D (CI run 34914295323): DIGEST-SCHEME change, not a code change -- token_fingerprint now feeds an f-string to the digest as ONE STRING record holding its exact source text instead of the running tokenizer's FSTRING_START/FSTRING_MIDDLE/FSTRING_END run, so the recorded value is a property of the file rather than of the interpreter that read it; PEP 701 made CPython 3.12 tokenize f-strings differently from 3.11, these digests were recorded on 3.12+, and all five py3.11 CI shards read a different token_sha256 for byte-identical sources (110 of 123 documents, measured).  The module source is unchanged and ast_sha256 is unchanged.
+re_recorded: 2026-09-20 -- WP-C4 round 2 (VERIFY-WP-C4 D2): mft_method= added and threaded to the MFT call, so the shape rule's default flip keeps a one-keyword way back at every public entry point; None stamps nothing and no answer moves
 -->
 
 # Version history -- `lumenairy/propagators/dispatch.py`
