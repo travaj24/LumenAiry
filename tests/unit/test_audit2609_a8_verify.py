@@ -588,8 +588,29 @@ def test_verify_a8_e7_gray_edge_beats_hard_at_anamorphic_and_offset_rims(
 
     Bars: gray(16) < 3e-4 absolute relative error (the worst measurement is
     8.1e-5, so 3.7x of headroom, and the coarsest hard reading it must beat
-    is 4.85e-3), plus the two DECISIONS -- gray(4) at least as good as hard
-    and gray(16) better than gray(4) -- which need no bar at all.
+    is 4.85e-3); ``e_hard / e_g4 >= 1.5``, derived below; and gray(16)
+    better than gray(4), a strict inequality that needs no bar at all.
+
+    The ratio bar, and why it is not ``e_g4 <= e_hard`` (VERIFY-C1 defect
+    D2).  ``<=`` is satisfied by EQUALITY, so the id passed when the two arms
+    were the SAME array: the verification mutated ``edge='hard'`` to return
+    the grey mask, watched fifteen other ids go red, and found this one still
+    green on both builds.  ``1.0`` is exactly where "grey IS hard" lives, so
+    the bar has to sit strictly above it.  Re-measured 2026-09-20 on this
+    id's own three fixtures, Windows py3.14 / numpy 2.4.4 and WSL py3.12 /
+    numpy 2.4.6, IDENTICAL to sixteen significant figures on both (there is
+    no BLAS in any of it -- a mask sum is an integer count over
+    ``n_sub**2``), raw JSON in ``validation/probe_verify_c1/d2_ratio_*.json``:
+
+        D/dx = 37,  dy/dx = 1.0, offset 0.37 px : 5.804555
+        D/dx = 63,  dy/dx = 2.5, offset 0.13 px : 8.815875
+        D/dx = 145, dy/dx = 0.4, offset 0.29 px : 1.992823   <- the worst
+
+    so 1.5 sits 1.33x below the smallest real reading and 1.5x above the
+    degenerate 1.0, which is a gap on both sides.  The 145-px fixture is the
+    binding one because a 145-pixel rim is already well sampled, so the
+    staircase it beats is the mildest of the three -- which is the right
+    fixture for the bar to be derived from.
     """
     N, dx = 512, 1e-6
     dy = dx * dy_ratio
@@ -611,7 +632,13 @@ def test_verify_a8_e7_gray_edge_beats_hard_at_anamorphic_and_offset_rims(
     e_g4 = abs(_area(edge='gray') / analytic - 1.0)
     e_g16 = abs(_area(edge='gray', edge_samples=16) / analytic - 1.0)
     assert e_g16 < 3e-4, (d_px, dy_ratio, offset, e_g16)
-    assert e_g4 <= e_hard, (e_g4, e_hard)
+    # VERIFY-C1 D2: a RATIO, not ``<=``.  ``e_g4 <= e_hard`` is satisfied by
+    # EQUALITY, so it passed while the two arms were the same array -- with
+    # ``edge='hard'`` mutated to return the grey mask, 15 ids went red on
+    # both builds and this was not one of them.  Derivation and the three
+    # re-measured ratios are in the docstring's "Bars" paragraph.
+    assert e_hard / e_g4 >= 1.5, (d_px, dy_ratio, offset, e_hard, e_g4,
+                                  e_hard / e_g4)
     assert e_g16 < e_g4, (e_g16, e_g4)
 
 
