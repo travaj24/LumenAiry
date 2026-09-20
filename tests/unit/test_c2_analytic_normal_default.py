@@ -1427,6 +1427,180 @@ def test_c2_the_release_text_byte_identity_counts_match_the_probe_json():
 
 
 # ===========================================================================
+# 6f -- the EDITED_IN_PLACE override refuses a claim that became false (D7)
+# ===========================================================================
+
+def _c2_load_reanchor():
+    import importlib.util
+    path = _c2_repo_root() / 'scripts' / 'reanchor_citations.py'
+    spec = importlib.util.spec_from_file_location('_c2_reanchor', path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+_C2_REANCHOR_TARGET = 'lumenairy/raytrace/trace.py'
+_C2_REANCHOR_BASE = 'SYNTHETIC-BASE'
+
+
+def _c2_try_override(ra, current_lines, base_lines):
+    """Run ``_edited_in_place`` against a synthetic base and current file.
+
+    Both sides are supplied, so the arm is a pure unit test of the guard and
+    needs neither a git checkout nor the base commit to be present.
+    """
+    real_lines = ra.lines
+
+    def patched(path, rev=None):
+        if path != _C2_REANCHOR_TARGET:
+            return real_lines(path, rev)
+        return base_lines if rev == _C2_REANCHOR_BASE else current_lines
+
+    ra.lines = patched
+    ra.EDITED_IN_PLACE_REFUSALS.clear()
+    try:
+        num, how = ra._edited_in_place(_C2_REANCHOR_TARGET, 61,
+                                       _C2_REANCHOR_BASE)
+        return num, how, list(ra.EDITED_IN_PLACE_REFUSALS)
+    finally:
+        ra.lines = real_lines
+        ra.EDITED_IN_PLACE_REFUSALS.clear()
+
+
+@pytest.mark.parametrize('abuse,current,fires', [
+    ('the shipped state', "    sphere_normal: str = 'analytic',", True),
+    ('the default silently REVERTED', "    sphere_normal: str = 'generic',",
+     False),
+    ('a nonsense value', "    sphere_normal: str = 'not-a-route',", False),
+    ('a stale copy of the old declaration',
+     "    sphere_normal: str = 'generic',  # moved to line 1300", False),
+    ('an unrelated line', '    renormalize: str = "exit",', False),
+])
+def test_c2_the_edited_in_place_override_pins_the_content(abuse, current,
+                                                          fires):
+    """``scripts/reanchor_citations.py``'s ``EDITED_IN_PLACE`` map answers a
+    citation whose CONTENT changed -- a default flip is exactly that case --
+    and its guard used to compare only the text BEFORE the first ``=``.
+
+    VERIFY-WP-C2 defect D7 abused that on both builds: the override fired on
+    the default silently REVERTED to the value the entry says the release
+    moved AWAY from, on a nonsense value, and on a STALE COPY left at the
+    mapped line while the declaration moved elsewhere.  All three
+    re-anchored clean and reported a 5.49.0 reason for a claim that had
+    become false.  It refused an unrelated line and an out-of-range
+    coordinate, which is only half a guard.
+
+    Each entry now pins a SHA-256 of the exact content the release was
+    supposed to produce, so the value after the ``=`` is inside the check,
+    and a refusal is recorded with BOTH lines rather than folded into a
+    silent fall-through.
+
+    This is parametrized over all five cases so the fix cannot be a guard
+    that refuses everything: the shipped state must still FIRE.
+    """
+    ra = _c2_load_reanchor()
+    assert (_C2_REANCHOR_TARGET, 61) in ra.EDITED_IN_PLACE, (
+        'the EDITED_IN_PLACE map no longer carries trace.py:61; if it has '
+        'been retired, delete this arm.')
+    entry = ra.EDITED_IN_PLACE[(_C2_REANCHOR_TARGET, 61)]
+    assert len(entry) == 4, (
+        f'an EDITED_IN_PLACE entry must carry (new_num, reason, digest, '
+        f'recorded_for); this one carries {len(entry)} fields: {entry}')
+
+    base_lines = (['# pad'] * 60
+                  + ["    sphere_normal: str = 'generic',",
+                     '    ) -> None:'])
+    current_lines = list(base_lines)
+    current_lines[60] = current
+
+    num, how, refusals = _c2_try_override(ra, current_lines, base_lines)
+    if fires:
+        assert num == 61, (
+            f'the override no longer fires on {abuse!r}, which is the '
+            f'change it was written for; how={how!r} refusals={refusals}')
+        assert not refusals, refusals
+    else:
+        assert num is None, (
+            f'the override still fires on {abuse!r}.  D7: the map must not '
+            f're-anchor a citation whose CLAIM has become false.')
+        if abuse != 'an unrelated line':
+            # the unrelated line is caught by the older leading-token guard,
+            # which returns before the digest is consulted; the other three
+            # must be caught by the DIGEST and must say so with both lines
+            assert len(refusals) == 1, (
+                f'{abuse!r} was refused silently; D7 asks for the refusal '
+                f'to name both lines.  refusals={refusals}')
+            r = refusals[0]
+            assert r['found_line'] == current.strip(), r
+            assert r['base_line'] == "sphere_normal: str = 'generic',", r
+            assert r['expected_digest'] != r['found_digest'], r
+
+
+def test_c2_the_edited_in_place_override_refuses_an_out_of_range_coordinate():
+    """The second arm the guard already had, kept: a file too short to hold
+    the mapped coordinate is refused rather than indexed."""
+    ra = _c2_load_reanchor()
+    base_lines = (['# pad'] * 60
+                  + ["    sphere_normal: str = 'generic',",
+                     '    ) -> None:'])
+    num, _how, refusals = _c2_try_override(ra, base_lines[:30], base_lines)
+    assert num is None, (
+        'the override stopped refusing an out-of-range new coordinate.')
+    assert not refusals, (
+        'an out-of-range coordinate should be refused BEFORE the content '
+        'check, so it is not a content refusal: %r' % (refusals,))
+
+
+def test_c2_the_edited_in_place_map_is_version_pinned():
+    """The release number used to live only in the human-readable reason
+    string, so nothing compared it to anything and the map kept firing for
+    every release after the one it records (D7).
+
+    Each entry now records the release it was made for, and the override
+    refuses once the package has gone PAST it -- by then the base commit a
+    re-anchor should use is already past that release and there is no
+    in-place edit left to answer.
+
+    Two-sided: the entry fires at the version it records (and at every
+    version before it, which is where the tree sits while the release is
+    unreleased), and refuses at the next one.
+    """
+    ra = _c2_load_reanchor()
+    entry = ra.EDITED_IN_PLACE[(_C2_REANCHOR_TARGET, 61)]
+    recorded_for = entry[3]
+    assert ra._version_tuple(recorded_for) >= ra._version_tuple(
+        ra._source_version()), (
+        f'the map records {recorded_for} and the package is already at '
+        f'{ra._source_version()}; the entries are stale and should be '
+        f'retired rather than re-pointed.')
+
+    base_lines = (['# pad'] * 60
+                  + ["    sphere_normal: str = 'generic',",
+                     '    ) -> None:'])
+    shipped = list(base_lines)
+    shipped[60] = "    sphere_normal: str = 'analytic',"
+
+    real_version = ra._source_version
+    try:
+        ra._source_version = lambda: recorded_for
+        num, _how, refusals = _c2_try_override(ra, shipped, base_lines)
+        assert num == 61 and not refusals, (num, refusals)
+
+        bumped = list(ra._version_tuple(recorded_for))
+        bumped[-1] += 1
+        ra._source_version = lambda: '.'.join(str(v) for v in bumped)
+        num, _how, refusals = _c2_try_override(ra, shipped, base_lines)
+        assert num is None, (
+            f'the override still fires with the package at '
+            f'{ra._source_version()}, one patch past the {recorded_for} it '
+            f'records.  D7 asks for the map to be version-pinned.')
+        assert len(refusals) == 1 and 'recorded for' in refusals[0]['why'], (
+            refusals)
+    finally:
+        ra._source_version = real_version
+
+
+# ===========================================================================
 # 7 -- the mutation matrix, stated
 # ===========================================================================
 
@@ -1454,6 +1628,8 @@ def test_c2_mutation_matrix_is_stated_and_each_arm_is_named():
     | the ghost leg drifts off trace's normal      | ``test_c2_the_ghost_path_asks_the_library_default_normal_route`` |
     | a private docstring says generic is shipped  | ``test_c2_no_private_docstring_claims_the_generic_route_is_shipped`` |
     | the release text's counts drift off the JSON | ``test_c2_the_release_text_byte_identity_counts_match_the_probe_json`` |
+    | a re-anchored citation's claim becomes false | ``test_c2_the_edited_in_place_override_pins_the_content`` |
+    | the EDITED_IN_PLACE map outlives its release | ``test_c2_the_edited_in_place_map_is_version_pinned`` |
     """
     import sys
     mod = sys.modules[__name__]
@@ -1473,7 +1649,9 @@ def test_c2_mutation_matrix_is_stated_and_each_arm_is_named():
             'test_c2_none_stamps_nothing_on_the_entry_points',
             'test_c2_the_ghost_path_asks_the_library_default_normal_route',
             'test_c2_no_private_docstring_claims_the_generic_route_is_shipped',
-            'test_c2_the_release_text_byte_identity_counts_match_the_probe_json'):
+            'test_c2_the_release_text_byte_identity_counts_match_the_probe_json',
+            'test_c2_the_edited_in_place_override_pins_the_content',
+            'test_c2_the_edited_in_place_map_is_version_pinned'):
         assert callable(getattr(mod, name, None)), (
             f'{name} named in the mutation matrix no longer exists; '
             f'either restore it or update the table above.')

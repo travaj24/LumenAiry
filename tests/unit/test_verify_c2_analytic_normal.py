@@ -749,22 +749,24 @@ def _load_reanchor():
 
 def test_vc2_the_edited_in_place_override_accepts_a_reverted_default():
     """``scripts/reanchor_citations.py``'s ``EDITED_IN_PLACE`` map answers
-    a citation whose CONTENT changed, guarded by "the current line still
-    begins with the same leading token".
+    a citation whose CONTENT changed, and its guard was "the current line
+    still begins with the same leading token".
 
-    That guard is one-sided.  It refuses an unrelated line and an
-    out-of-range coordinate -- both asserted here -- but it accepts ANY
-    value after the ``=``, including the value the citation says the
-    release moved AWAY from.  So a later release that silently reverts the
-    default is re-anchored with the 5.49.0 reason text and reported clean.
+    That guard was one-sided.  It refused an unrelated line and an
+    out-of-range coordinate, and it ACCEPTED the default silently REVERTED
+    to the value the entry says the release moved AWAY from, a nonsense
+    value, and a stale copy left at the mapped line -- all three measured
+    on both builds (defect D7).
+
+    ROUND 2 CLOSED IT and this arm is INVERTED: each entry now pins a
+    SHA-256 of the exact content the release was supposed to produce, and
+    records the release it was made for, so the value after the ``=`` is
+    inside the check and the map cannot outlive its release.  A refusal is
+    recorded with BOTH lines instead of falling through silently.
 
     Both the BASE and the CURRENT file contents are supplied here, so the
     arm is a pure unit test of the guard and needs neither a git checkout
     nor the base commit to be present.
-
-    This arm PINS the one-sidedness, so it cannot be relied on by
-    accident: it fails the day the override starts checking the new
-    content, which is the fix VERIFY_WP-C2.md defect D7 asks for.
     """
     ra = _load_reanchor()
     tgt = 'lumenairy/raytrace/trace.py'
@@ -772,7 +774,11 @@ def test_vc2_the_edited_in_place_override_accepts_a_reverted_default():
     assert (tgt, 61) in ra.EDITED_IN_PLACE, (
         'the EDITED_IN_PLACE map no longer carries trace.py:61; if the '
         'map has been retired, delete this arm.')
-    assert ra.EDITED_IN_PLACE[(tgt, 61)][0] == 61, ra.EDITED_IN_PLACE
+    entry = ra.EDITED_IN_PLACE[(tgt, 61)]
+    assert entry[0] == 61, entry
+    assert len(entry) == 4, (
+        f'D7 asks for (new_num, reason, content digest, recorded_for); '
+        f'this entry carries {len(entry)} fields: {entry}')
 
     base_lines = (['# pad'] * 60
                   + ["    sphere_normal: str = 'generic',",
@@ -786,35 +792,46 @@ def test_vc2_the_edited_in_place_override_accepts_a_reverted_default():
                 return real_lines(path, rev)
             return base_lines if rev == base else current
         ra.lines = patched
+        ra.EDITED_IN_PLACE_REFUSALS.clear()
         try:
-            return ra._edited_in_place(tgt, 61, base)[0]
+            num = ra._edited_in_place(tgt, 61, base)[0]
+            return num, list(ra.EDITED_IN_PLACE_REFUSALS)
         finally:
             ra.lines = real_lines
+            ra.EDITED_IN_PLACE_REFUSALS.clear()
 
     shipped = list(base_lines)
     shipped[60] = "    sphere_normal: str = 'analytic',"
-    assert _try(shipped) == 61, (
-        'the override no longer fires on the change it was written for.')
+    assert _try(shipped) == (61, []), (
+        'the override no longer fires on the change it was written for, so '
+        'the fix refuses everything rather than refusing the right things.')
 
-    # ABUSE: the default reverted in place -- still accepted
-    reverted = list(base_lines)
-    assert _try(reverted) == 61, (
-        'the EDITED_IN_PLACE override now REFUSES a reverted default, '
-        'which is the fix VERIFY_WP-C2.md defect D7 asks for.  Delete '
-        'this arm and pin the new two-sided behaviour instead.')
-
-    nonsense = list(base_lines)
-    nonsense[60] = "    sphere_normal: str = 'not-a-route',"
-    assert _try(nonsense) == 61, (
-        'the override now checks the value after the "=" -- D7 actioned.')
+    # the three abuses, now REFUSED, each naming both lines
+    for label, text in (
+            ('the default reverted in place',
+             "    sphere_normal: str = 'generic',"),
+            ('a nonsense value',
+             "    sphere_normal: str = 'not-a-route',"),
+            ('a stale copy at the mapped line',
+             "    sphere_normal: str = 'generic',  # moved to line 1300")):
+        cur = list(base_lines)
+        cur[60] = text
+        num, refusals = _try(cur)
+        assert num is None, (
+            f'the EDITED_IN_PLACE override still accepts {label}; D7 asks '
+            f'for the entry to pin the NEW content, not just the old '
+            f'leading token.')
+        assert len(refusals) == 1, (label, refusals)
+        assert refusals[0]['found_line'] == text.strip(), refusals[0]
+        assert refusals[0]['base_line'] == base_lines[60].strip(), refusals[0]
 
     # the guard IS two-sided for an unrelated line, and for a short file
     unrelated = list(base_lines)
     unrelated[60] = '    renormalize: str = "exit",'
-    assert _try(unrelated) is None, (
+    assert _try(unrelated)[0] is None, (
         'the leading-token guard stopped refusing an unrelated line; the '
         'override can now re-anchor a citation onto anything.')
-    assert _try(base_lines[:30]) is None, (
+    assert _try(base_lines[:30])[0] is None, (
         'the override stopped refusing an out-of-range new coordinate.')
 
 

@@ -2895,7 +2895,7 @@ it by 2.2e-12 -- a change of basis, not a change of answer.
 
 That is fix D5 / `FIX_G8_PROBE`'s finding for the fit's ORDER, restated for its
 BASIS, and it is now stated on the parameter itself
-(`lumenairy/elements/_lens_traced.py:8906`).  Documentation only: no behaviour
+(`lumenairy/elements/_lens_traced.py:8908`).  Documentation only: no behaviour
 moves, and `scripts/record_history_fingerprints.py --check` is OK without a
 re-record, because both fingerprints drop docstrings.
 
@@ -4598,7 +4598,7 @@ tangential fan and a sagittal fan -- through the same surfaces at the same
 wavelength, paying the per-call glass resolution and the Python surface loop
 four times over on bundles of 1, 1, `n_rays` and `n_rays` rays.  They now
 concatenate the four launches into one bundle, trace it once and slice the
-result (`raytrace/ray_fan.py:96` `_trace_fan_set`, `:79` `_bundle_slice`;
+result (`raytrace/ray_fan.py:97` `_trace_fan_set`, `:80` `_bundle_slice`;
 applied at `:584`, `:639`, `:836`, `:897`).
 
 This is EXACT, not an approximation: every step of `trace` is elementwise over
@@ -4674,9 +4674,9 @@ per-surface `sqrt` + floor + three divisions in `_refract` / `_reflect` only
 remove ~1e-16 of rounding drift.  `trace` and `trace_world` gain
 `renormalize={'surface' (default), 'exit'}` (`raytrace/trace.py:60`,
 `world_trace.py:82`); `_refract` / `_reflect` gain the matching
-`renormalize: bool = True` (`intersection.py:541`, `:646`), and the single-pass
+`renormalize: bool = True` (`intersection.py:543`, `:651`), and the single-pass
 form is `intersection._normalize_directions` (`:520`), applied once to the
-bundle leaving the last surface (`trace.py:284`, `:395`, `world_trace.py:250`).
+bundle leaving the last surface (`trace.py:294`, `:405`, `world_trace.py:250`).
 
 The degenerate-direction DIAGNOSIS is not hoisted: the per-surface
 `|d| < 1e-30 or not finite -> RAY_NAN + killed` test runs in both modes, because
@@ -4718,7 +4718,7 @@ the vertex.  `raytrace/surface.py:679` `_sphere_normal`; selected by
 matching INTERSECTION.**  Both now select on ONE predicate,
 `surface._is_pure_spherical` (`surface.py:650`), which
 `intersection._intersect_surface` also uses for its closed-form root
-(`intersection.py:242`) -- so the closed form is the normal of the sphere the
+(`intersection.py:244`) -- so the closed form is the normal of the sphere the
 intersection actually solved, at the point the intersection actually returned.
 Verified against a 60-digit `decimal` oracle on R = +-2 mm .. 1 m at heights up
 to 0.95|R|: the closed form is within **4 ULP** of the oracle, is never worse
@@ -4744,11 +4744,11 @@ restating those pins; see the WP-B9 report.
 
 `make_rings` is equal-radius / equal-count, so the pupil areal sampling density
 falls off as `~1/r` and every unweighted `spot_rms` built on it is centre-biased
-small.  It gains `pattern={'rings' (default), 'vogel'}` (`raytrace/trace.py:1258`,
+small.  It gains `pattern={'rings' (default), 'vogel'}` (`raytrace/trace.py:1268`,
 generator at `:1285`): the Vogel / Fibonacci sunflower `r_i = R sqrt(i/N)`,
 `theta_i = i pi (3 - sqrt(5))`, with `i = 1..N` so the outermost ray sits exactly
 on the rim as the outer ring does.  Threaded through
-`through_focus_rms(pattern=)` (`ray_fan.py:1049`) and
+`through_focus_rms(pattern=)` (`ray_fan.py:1120`) and
 `trace_prescription` / `raytrace_system`'s `ray_pattern='vogel'`.
 
 Measured at the defaults (`num_rings=6`, `rays_per_ring=36`, chief included, 217
@@ -4774,7 +4774,7 @@ the opt-in for an area-true statistic.
 `aspheric_coeffs`, so every `jacobian='auto'` consumer silently fell back to the
 finite-difference primitive there -- 9 traced rays per base ray and ~4e-8 of
 truncation.  `_adrt_step` now carries the even-power polynomial departure
-(`raytrace/differential.py:614`): the exact conic root seeds a FIXED 6-step
+(`raytrace/differential.py:628`): the exact conic root seeds a FIXED 6-step
 Newton refinement onto `conic + polynomial`
 (`:477` `_adrt_aspheric_intersect`, `:445` `_adrt_poly_sag`, `:463`
 `_adrt_conic_sag`), and the normal comes from the implicit `F = z - S(u) - P(u)`
@@ -4797,7 +4797,7 @@ a `k = -0.6` base:
 | bit-identical from | 2 Newton steps (shipped budget: 6) |
 
 The numba forward-AD kernel is EXCLUDED for aspheric surfaces
-(`differential.py:805`): its inlined primitives replicate the CONIC arithmetic
+(`differential.py:819`): its inlined primitives replicate the CONIC arithmetic
 only, so left eligible it would have traced an asphere as its base conic --
 right shape, wrong surface, silently.  Freeforms, biconics
 (`radius_y` / `conic_y` / `aspheric_coeffs_y`) and field-frame decenter / tilt

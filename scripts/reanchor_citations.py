@@ -58,6 +58,7 @@ how ``tests/unit/test_v5_3_2_walker_source_line_citation.py`` gates a single
 release's block without being held hostage to the rest of the file.
 """
 import argparse
+import hashlib
 import os
 import re
 import subprocess
@@ -102,39 +103,117 @@ OWNED = {
 #: instead of the check being loosened: it names the exact base coordinate,
 #: the exact new coordinate, and the release that did it.
 #:
-#: It CANNOT hide a silent drift.  ``_edited_in_place`` refuses the override
-#: unless the current line still begins with the same leading token as the
-#: base line did (``sphere_normal:`` below), so a citation that has slid onto
-#: some unrelated line is still reported.
+#: It CANNOT hide a silent drift, and since WP-C2 round 2 (VERIFY-WP-C2
+#: defect D7) it cannot hide a silent REVERT either.  Each entry pins four
+#: things: the new coordinate, the human-readable reason, a SHA-256 of the
+#: exact line content the release was supposed to produce, and the release
+#: the entry was recorded for.  The override fires only when all of these
+#: hold, and any refusal is recorded in ``EDITED_IN_PLACE_REFUSALS`` with
+#: both lines so the operator sees WHAT it found where it expected.
+#:
+#: WHAT THE ONE-SIDED GUARD LET THROUGH, measured by VERIFY-WP-C2 on both
+#: builds.  Comparing only the text BEFORE the first ``=`` meant the map
+#: accepted the default silently REVERTED (``sphere_normal: str =
+#: 'generic',`` -- the very thing the entry says the release moved AWAY
+#: from), accepted a nonsense value (``'not-a-route'``), and accepted a
+#: STALE COPY left behind at the mapped line when the declaration moved
+#: elsewhere.  All three re-anchored clean and reported a 5.49.0 reason for
+#: a claim that had become false.  It correctly refused an unrelated line
+#: and an out-of-range coordinate; those two arms are unchanged.
+#:
+#: WHY A DIGEST AND NOT THE LITERAL: the point is that the entry pins ONE
+#: exact content, and a digest cannot be "nearly" satisfied by a line that
+#: happens to start the same way.  The expected text is in the comment
+#: beside each entry for the human; the digest is what the tool compares.
+#:
+#: WHY A VERSION: the release number lived only in the reason STRING, so
+#: nothing stopped the map firing for every release afterwards.  An entry is
+#: honoured while ``lumenairy.__version__`` has not gone PAST the release it
+#: records -- so it works while 5.49.0 is unreleased and at 5.49.0 itself,
+#: and refuses from the next version on, which is exactly when a human
+#: should look (by then the right base commit is past that release and there
+#: is no in-place edit left to answer).
 EDITED_IN_PLACE = {
     # WP-C2 (5.49.0): ``trace`` / ``trace_world`` default to
     # ``sphere_normal='analytic'``.  The declaration did not move; its default
     # changed, which is what that release is.
+    #   expected: "sphere_normal: str = 'analytic',"
     ('lumenairy/raytrace/trace.py', 61): (
-        61, "WP-C2 5.49.0: sphere_normal default 'generic' -> 'analytic'"),
+        61, "WP-C2 5.49.0: sphere_normal default 'generic' -> 'analytic'",
+        '5d0d66152214935b80f74a951839e9030acbc6f731e495ae60331c9ecf4fecb0',
+        '5.49.0'),
+    #   expected: "sphere_normal: str = 'analytic',"
     ('lumenairy/raytrace/world_trace.py', 83): (
-        83, "WP-C2 5.49.0: sphere_normal default 'generic' -> 'analytic'"),
+        83, "WP-C2 5.49.0: sphere_normal default 'generic' -> 'analytic'",
+        '5d0d66152214935b80f74a951839e9030acbc6f731e495ae60331c9ecf4fecb0',
+        '5.49.0'),
     # WP-C2 (5.49.0), second commit: the same two functions default to
     # ``renormalize='exit'``.
+    #   expected: "renormalize: str = 'exit',"
     ('lumenairy/raytrace/trace.py', 60): (
-        60, "WP-C2 5.49.0: renormalize default 'surface' -> 'exit'"),
+        60, "WP-C2 5.49.0: renormalize default 'surface' -> 'exit'",
+        'a967d130200770f69bf7bc26d427d33cfa4f89a1da6db5cd0f15b926072475fe',
+        '5.49.0'),
+    #   expected: "renormalize: str = 'exit',"
     ('lumenairy/raytrace/world_trace.py', 82): (
-        82, "WP-C2 5.49.0: renormalize default 'surface' -> 'exit'"),
+        82, "WP-C2 5.49.0: renormalize default 'surface' -> 'exit'",
+        'a967d130200770f69bf7bc26d427d33cfa4f89a1da6db5cd0f15b926072475fe',
+        '5.49.0'),
 }
+
+#: Every override this run REFUSED, as dicts carrying both lines.  The CLI
+#: prints them; the tests read them.  A refusal is not a crash -- the
+#: citation simply falls through to "NEEDS A HUMAN", which is the report the
+#: tool is supposed to make -- but a silent fall-through would hide WHY, and
+#: "why" is the whole content of this defect.
+EDITED_IN_PLACE_REFUSALS = []
+
+
+def content_digest(text):
+    """SHA-256 of one source line, leading/trailing whitespace stripped.
+
+    Stripped so a re-indent (a line moving inside a ``with`` block, say) is
+    not read as a content change; everything else, including the value after
+    the ``=``, is inside the digest.
+    """
+    return hashlib.sha256(text.strip().encode('utf-8')).hexdigest()
+
+
+def _source_version():
+    """``lumenairy.__version__`` read from the source, without importing it.
+
+    The script runs from ``scripts/`` and must not depend on the package
+    being importable (or on WHICH copy would be imported).
+    """
+    txt = (REPO / 'lumenairy' / '__init__.py').read_text(encoding='utf-8')
+    m = re.search(r"^__version__\s*=\s*['\"]([^'\"]+)", txt, re.M)
+    return m.group(1) if m else '0'
+
+
+def _version_tuple(v):
+    out = []
+    for part in str(v).split('.'):
+        digits = ''.join(c for c in part if c.isdigit())
+        out.append(int(digits) if digits else 0)
+    return tuple(out + [0] * (3 - len(out)))[:3]
 
 
 def _edited_in_place(path, base_num, base):
     """``(new_num, how)`` for a cited line this repo edited in place, or
     ``(None, None)``.
 
-    Two-sided on purpose: the override only fires when the current line
-    still LOOKS like the thing that was cited -- same leading token -- so a
-    citation that has drifted onto an unrelated line is still reported.
+    Two-sided on purpose, and since D7 two-sided on the CONTENT as well as
+    on the shape: the override fires only when the current line still begins
+    with the same leading token as the base line did AND hashes to the exact
+    content this entry says the release produced AND the library has not
+    moved past the release the entry records.  Anything else is recorded in
+    ``EDITED_IN_PLACE_REFUSALS``, with the base line and the line actually
+    found, and reported as needing a human.
     """
     entry = EDITED_IN_PLACE.get((path, base_num))
     if entry is None:
         return None, None
-    new_num, reason = entry
+    new_num, reason, want_digest, recorded_for = entry
     want, _ctx = base_line(path, base_num, base)
     hay = lines(path)
     if want is None or not (1 <= new_num <= len(hay)):
@@ -143,6 +222,28 @@ def _edited_in_place(path, base_num, base):
     lead = want.strip().split('=')[0].strip()
     if not lead or not got.strip().startswith(lead):
         return None, None
+
+    def _refuse(why):
+        EDITED_IN_PLACE_REFUSALS.append({
+            'path': path, 'base_num': base_num, 'new_num': new_num,
+            'reason': reason, 'why': why,
+            'base_line': want.strip(), 'found_line': got.strip(),
+            'expected_digest': want_digest,
+            'found_digest': content_digest(got),
+            'recorded_for': recorded_for,
+            'source_version': _source_version(),
+        })
+        return None, None
+
+    if content_digest(got) != want_digest:
+        return _refuse(
+            'the line at the mapped coordinate is not the content this '
+            'entry records the release as producing')
+    if _version_tuple(_source_version()) > _version_tuple(recorded_for):
+        return _refuse(
+            f'this entry was recorded for {recorded_for} and the package '
+            f'is already at {_source_version()}, so the in-place edit it '
+            f'answers is behind the base a re-anchor should now use')
     return new_num, f'edited in place ({reason})'
 
 
@@ -462,9 +563,20 @@ def main(argv=None):
           + ('  (--check: nothing written)' if args.check else ''))
     for n in notes:
         print('  !! ' + n)
+    # D7: an EDITED_IN_PLACE entry that REFUSED is the single most
+    # important thing this tool can say -- it means a cited line is at its
+    # coordinate but is no longer the content the release claims -- so it
+    # is printed with BOTH lines rather than folded into a bare
+    # "NEEDS A HUMAN".
+    for r in EDITED_IN_PLACE_REFUSALS:
+        print(f"  !! EDITED_IN_PLACE refused {r['path']}:{r['base_num']} "
+              f"-> :{r['new_num']}  ({r['reason']})")
+        print(f"       because {r['why']}")
+        print(f"       base line  : {r['base_line']}")
+        print(f"       found line : {r['found_line']}")
     if args.check:
-        return 1 if (changed or notes) else 0
-    return 1 if notes else 0
+        return 1 if (changed or notes or EDITED_IN_PLACE_REFUSALS) else 0
+    return 1 if (notes or EDITED_IN_PLACE_REFUSALS) else 0
 
 
 if __name__ == '__main__':
