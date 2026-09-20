@@ -1364,7 +1364,7 @@ def propagate_carrier_referenced(
     if transport != 'collins' and mft_method is not None:
         # WP-C4 round 2 (V-C4-D2): the Sziklas transform reaches no MFT
         # primitive at all, so accepting the keyword there would silently drop
-        # a caller who was asking for the pre-5.49.0 bytes.
+        # a caller who was asking for the pre-shape-rule bytes.
         raise ValueError(
             f"propagate_carrier_referenced: mft_method= names the route "
             f"through the matrix Fourier transform, which only the Collins "
@@ -2521,8 +2521,9 @@ def _collins_transport(env, R_in, z, wavelength, dx, dy, *,
         k_centre_out_y=N_out_y / 2.0 - float(centre_out[1]) / float(dy_out),
         sign=-1, xp=xp, fft2=fft2, ifft2=ifft2,
         target_cdtype=cdt, separable=bool(_EXACT_READOUT_SEPARABLE_BLUESTEIN),
-        # WP-C4 round 2 (V-C4-D2): the one-call way back to the pre-5.49.0
-        # MFT dispatch on the Collins transport.  ``None`` stamps nothing.
+        # WP-C4 round 2 (V-C4-D2): the one-call way back to the MFT
+        # dispatch the Collins transport had before the shape rule.  ``None``
+        # stamps nothing.
         **_mft_route_kwargs(mft_method))
     del g
 
@@ -4506,8 +4507,9 @@ def carrier_referenced_focus_readout(
     E_out = angular_spectrum_propagate_mft(
         E_stop, z - z_stop, wavelength, dx_s, dx_out, int(N_out),
         centre_out=centre_out, bandlimit=bandlimit,
-        # WP-C4 round 2 (V-C4-D2): the one-call way back to the pre-5.49.0
-        # MFT dispatch.  ``None`` stamps nothing.
+        # WP-C4 round 2 (V-C4-D2): the one-call way back to the MFT
+        # dispatch this readout had before the shape rule.  ``None`` stamps
+        # nothing.
         **_mft_route_kwargs(mft_method))
     # Measure the part of the window that lies outside one Bluestein period --
     # and, under replica_fill='zero', blank it rather than hand back the copies
