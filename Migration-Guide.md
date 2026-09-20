@@ -7,8 +7,8 @@ migration recipe -- "I bumped from v4.X to v4.Y, what do I change?".
 
 ## Versions covered
 
-v4.13 through v5.47.  Sections are in version order; the newest is
-[5.47.0 -- adversarial audit remediation, Wave 4 (2026-09-14)](#5470----adversarial-audit-remediation-wave-4-2026-09-14)
+v4.13 through v5.49.  Sections are in version order; the newest is
+[5.49.0 -- `transport='collins'` is the traced carrier chain's default](#5490----transportcollins-is-the-traced-carrier-chains-default)
 at the end of this file; the 5.46.0 section before it is the largest single
 batch of behaviour changes the library has shipped, and 5.47.0 is the wave that
 implemented what it deferred.
@@ -1774,3 +1774,140 @@ no-op on the fixed polynomial space; the wall-corner cure is the hp mesh), Levin
 the RCWA Toeplitz inverses (12 to 20 times slower and two decades less accurate than the
 shipped inverse), the chessboard FFT-shift identity (bit-identical only on power-of-two
 grids).
+
+
+---
+
+## 5.49.0 -- `transport='collins'` is the traced carrier chain's default
+
+**This changes numerical answers on some carrier legs.  It is a
+default-shift, and it is the first one this campaign has taken.**
+
+### What changed
+
+The carrier chain's free-space transport was the Sziklas-Siegman co-moving
+step.  It is now the Collins / ABCD-Fresnel integral, which is the same
+theorem for a quadratic carrier, evaluated on a freely chosen output lattice
+so that `m -> 0` (a leg landing on the carrier's geometric focus) stops being
+a singularity.
+
+### Affected entry points -- exactly the three that take `transport=`
+
+* `lumenairy.propagate_carrier_referenced`
+* `lumenairy.propagate_traced_carrier_chain`
+* `lumenairy.propagate_traced_carrier_chain_multi`
+
+`carrier_referenced_focus_readout` and
+`carrier_referenced_exact_focus_readout` do NOT take `transport` and do not
+move.  `final_leg='exact'` does not move on either setting.
+
+### Recipe -- the way back is one keyword
+
+```python
+# 5.48 and earlier, and 5.49+ with the old arithmetic:
+out = la.propagate_carrier_referenced(env, R, z, wl, dx,
+                                      transport='sziklas')
+res = la.propagate_traced_carrier_chain(E, groups, wl, dx,
+                                        transport='sziklas', ...)
+```
+
+`transport='sziklas'` is byte-identical to 5.48.1, proved archive to archive:
+42 of 42 digest keys equal on both builds, over every single-step branch
+(including the focus crossing, the collimated and astigmatic arms and
+complex64), both public readouts, the reconstruct / envelope / fit-radius /
+aperture helpers, the chain with `repr(stages)`, and the multi orchestrator at
+K = 1 and K = 2.
+
+### Which legs actually move
+
+Not all of them, and the rule is checkable without running anything.  A leg
+RESOLVES its quadrature between two evaluations that are exact complements, so
+the legs that move are exactly those with
+
+    N dx^2 <= lambda |z_eff|
+
+Every other leg takes the transfer-function form, which IS the Sziklas step,
+and is bit-identical.  A focus READOUT moves only where the chain's own exit
+lattice satisfies `K1 = 2 dx (|A| r/|B| + theta)/lambda <= 1`; everywhere else
+the chain takes the Sziklas readout with the same arguments the pre-5.49.0
+default passed, and the answer is bit-identical.  Which route ran is published
+on the readout stage as `readout_route` / `readout_route_k1` /
+`readout_route_reason`.
+
+### Two calls that now RAISE, with the way out in the message
+
+```python
+# 5.48: worked (the default had a stop plane).  5.49: ValueError.
+la.propagate_traced_carrier_chain(
+    E, groups, wl, dx,
+    focus_readout=dict(dx_out=5e-7, N_out=64, standoff=2e-3))
+
+# 5.49 recipe -- name the transport whose readout HAS a stop plane:
+la.propagate_traced_carrier_chain(
+    E, groups, wl, dx, transport='sziklas',
+    focus_readout=dict(dx_out=5e-7, N_out=64, standoff=2e-3))
+```
+
+The same applies to `on_focus_containment` inside `focus_readout`, and to both
+keys inside `output_grid` on `propagate_traced_carrier_chain_multi`.  They
+describe the STOP PLANE of the Sziklas readout, which the Collins readout does
+not have; they are refused rather than accepted and ignored.
+
+`final_distance=0` with a `focus_readout` still works on the default.
+
+### The near-focus interaction -- read this before upgrading
+
+With Collins the default, a gap leg near a geometric focus is no longer split
+into carrier -> through-waist ASM bridge -> carrier, and `gap_kernel='auto'`'s
+exact-kernel refinement is then applied over a reduced frame `z_eff = B/A`
+that diverges at the focus.  Its wrap guard bounds the WRAP of the kernel, not
+its accuracy, so nothing warns.  MEASURED (VERIFY-WP-B4 F3; `w = 0.3 mm`,
+N = 1024, `dx = 4 um`, `lambda = 1.064 um`, relative L2 against the analytic
+Gaussian):
+
+| distance short of `A = 0` | `gap_kernel='fresnel'` | `gap_kernel='auto'` |
+|---|---|---|
+| 1 um | 1.71e-14 | **2.35e-03** |
+| 10 um | 1.33e-14 | 2.35e-04 |
+| 100 um | 8.87e-15 | 2.36e-05 |
+| 1 mm | 1.15e-14 | 2.41e-06 |
+
+The cost is linear in `|z_eff|` and independent of N.  If you read a plane
+within a few hundred microns of a carrier focus, pass
+`gap_kernel='fresnel'` -- which is the ABCD-Fresnel integral the Collins stage
+already is:
+
+```python
+res = la.propagate_traced_carrier_chain(E, groups, wl, dx,
+                                        gap_kernel='fresnel', ...)
+```
+
+The accuracy-keyed automatic fallback that would do this for you exists in the
+source as `lumenairy.propagators.carrier._GAP_KERNEL_ACCURACY_TAU` and **ships
+OFF**.  It is a maintainer decision, not a user knob, and it is not taken in
+this release.
+
+### The Kelly sampling warning
+
+`on_collins_sampling` defaults to `'warn'`, so a caller who never saw the
+chirp-Z sampling warning could start seeing it.  MEASURED across the shipped
+fixtures -- 21 Collins calls covering the single-step ladder, two chain
+prescriptions with and without a readout, the multi orchestrator at K = 1 and
+K = 2, and the focus readouts -- the count on the shipped default is **zero**,
+on both builds, because both the legs and the readout resolve away from the
+chirp-Z exactly where the conditions would fire.  If you DO see it, it names
+which of K1 / K2 / K3 fired and what to change; `on_collins_sampling='ignore'`
+silences it and `'error'` promotes it.
+
+### Two defects fixed with the flip, in case you were already opted in
+
+If you were already passing `transport='collins'` on 5.46-5.48:
+
+* a COLLIMATED carrier (`R = +/-inf`) returned an all-NaN envelope on
+  `dx = nan` whenever the leg resolved to the transfer-function form;
+* an ASTIGMATIC carrier had no such fallback at all and could return a
+  replica-contaminated window (measured at K1 = 1.02, K3 = 2.80 on WP-B4's own
+  astigmatic fixture).
+
+Both are fixed in 5.49.0 and both now return the Sziklas answer on the legs
+where the chirp-Z is not representable.

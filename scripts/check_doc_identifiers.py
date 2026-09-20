@@ -218,6 +218,15 @@ CURATED: Dict[str, str] = {
     #  field of ``ui.model.SourceDefinition`` and resolves through the static
     #  index, so the entry was removed rather than left with a false reason.)
     'n_planes': 'HDF5 attribute key',
+    # (WP-C3) the three keys the carrier chain publishes on a readout STAGE
+    # dict to say which quadrature evaluated the readout.  They are dict keys
+    # written by ``_publish_readout_route``, not attributes or parameters, so
+    # there is no symbol for the index to resolve -- the same reason
+    # ``n_planes`` above is here.  The Migration guide has to name them,
+    # because a caller reading ``res.stages[-1]`` is exactly who needs them.
+    'readout_route': 'chain stage-dict key',
+    'readout_route_k1': 'chain stage-dict key',
+    'readout_route_reason': 'chain stage-dict key',
     'z_limit': "a cited paper's symbol",
     'groove_index': 'historical UI-dock kwarg',
     'substrate_index': 'historical UI-dock kwarg',

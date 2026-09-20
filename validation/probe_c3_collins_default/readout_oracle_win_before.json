@@ -1,0 +1,78 @@
+{
+ "N256": {
+  "R_exit": -0.04620692561794844,
+  "arms": {
+   "collins": {
+    "kelly": [
+     "propagate_traced_carrier_chain: the Collins chirp-Z stage is under-sampled -- K1 (input) 82.3605: the product of the envelope and the pre-chirp exp(i k A u^2/2B) is sampled at 82.3605x its own Nyquist"
+    ],
+    "l2": 2466.853273838811,
+    "peak": 9017.103294411521,
+    "power": 1.5213412686623153e-06,
+    "raised": null,
+    "rel_l2_piston_free": 0.9931386692598898,
+    "rel_l2_vs_oracle": 1.3355223782715355
+   },
+   "sziklas": {
+    "kelly": [],
+    "l2": 62.302503983654134,
+    "peak": 1.0742675277719256,
+    "power": 9.7040050065831e-10,
+    "raised": null,
+    "rel_l2_piston_free": 0.9998097133471394,
+    "rel_l2_vs_oracle": 1.0001719818859867
+   }
+  },
+  "dx_exit": 7.654441837133347e-05,
+  "dx_in": 6e-05,
+  "n_in": 256,
+  "oracle": {
+   "l2": 2465.285045125573,
+   "peak": 11811.55642174132,
+   "power": 1.5194075884299484e-06
+  },
+  "z_final": 0.008
+ },
+ "N512": {
+  "R_exit": -0.04620692561794844,
+  "arms": {
+   "collins": {
+    "kelly": [
+     "propagate_traced_carrier_chain: the Collins chirp-Z stage is under-sampled -- K1 (input) 41.4491: the product of the envelope and the pre-chirp exp(i k A u^2/2B) is sampled at 41.4491x its own Nyquist"
+    ],
+    "l2": 1247.7362146134499,
+    "peak": 11865.99318059865,
+    "power": 3.8921141531447504e-07,
+    "raised": null,
+    "rel_l2_piston_free": 0.9967782802268534,
+    "rel_l2_vs_oracle": 1.256718236657216
+   },
+   "sziklas": {
+    "kelly": [],
+    "l2": 61.514847982278894,
+    "peak": 0.9374975638908998,
+    "power": 9.460191305707206e-10,
+    "raised": null,
+    "rel_l2_piston_free": 0.9913573007722593,
+    "rel_l2_vs_oracle": 0.9958484510461425
+   }
+  },
+  "dx_exit": 3.8272209185666736e-05,
+  "dx_in": 3e-05,
+  "n_in": 512,
+  "oracle": {
+   "l2": 1506.8966588564463,
+   "peak": 19263.43705595516,
+   "power": 5.6768438511818e-07
+  },
+  "z_final": 0.008
+ },
+ "build": "WIN-py3.14",
+ "carrier_file": "C:\\tmp\\lum_c3\\lumenairy\\propagators\\carrier.py",
+ "oracle_convergence": {
+  "peak_ratio_512_over_256": 1.630897433677521,
+  "power_ratio_512_over_256": 0.3736221863317045
+ },
+ "tree": "C:\\tmp\\lum_c3",
+ "wavelength": 1.31e-06
+}

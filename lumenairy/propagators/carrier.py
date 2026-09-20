@@ -1231,15 +1231,6 @@ def propagate_carrier_referenced(
         the two are the same theorem, and on a shared lattice they agree to
         ~4e-12 of peak.  ``gap_kernel`` means the same thing on both.
 
-        WHY IT IS SAFE AS A DEFAULT ON THIS ENTRY.  A leg RESOLVES its
-        quadrature: the chirp-Z evaluation and the transfer-function
-        evaluation are exact complements (``K3 * K_tf = 2 dx theta/lambda
-        <= 1`` identically), so a leg the chirp-Z cannot represent is taken by
-        the transfer-function form -- which is the Sziklas arithmetic, bit for
-        bit -- and only a leg where BOTH hold can move.  The legs that move
-        are therefore exactly those with ``N dx^2 <= lambda |z_eff|``
-        (VERIFY-WP-B4 F2), checkable per design without running anything.
-
         WHERE THE COLLINS ONE-STEP READOUT APPLIES.  The freedom has a
         sampling price, and it is paid by the CHAIN'S EXIT GRID rather than by
         this leg: a one-step readout's pre-chirp is
@@ -1256,6 +1247,15 @@ def propagate_carrier_referenced(
         plane in the co-moving frame, where only the ENVELOPE has to be
         sampled, and finishes with a separate zoom whose period then depends
         on that standoff.
+
+        WHY IT IS SAFE AS A DEFAULT ON THIS ENTRY.  A leg RESOLVES its
+        quadrature: the chirp-Z evaluation and the transfer-function
+        evaluation are exact complements (``K3 * K_tf = 2 dx theta/lambda
+        <= 1`` identically), so a leg the chirp-Z cannot represent is taken by
+        the transfer-function form -- which is the Sziklas arithmetic, bit for
+        bit -- and only a leg where BOTH hold can move.  The legs that move
+        are therefore exactly those with ``N dx^2 <= lambda |z_eff|``
+        (VERIFY-WP-B4 F2), checkable per design without running anything.
     dx_out : float, optional
         ``transport='collins'`` only: the output pitch (m).  Default: the
         co-moving ``|m|*dx``, floored by the pitch at which the output grid
@@ -1794,12 +1794,12 @@ def _check_transport(value, fn):
         raise ValueError(
             f"{fn}: transport must be one of {list(_TRANSPORTS)!r} "
             f"(case-sensitive strings), got {value!r}.  'collins' (the "
-            f"default since 5.49.0) is the ABCD-Fresnel (Collins) integral "
-            f"evaluated by a chirp-Z onto a FREELY chosen output pitch, which "
-            f"is the same theorem for a quadratic carrier and has no "
-            f"singularity at m = 0; 'sziklas' is the Sziklas-Siegman co-moving "
-            f"step, whose output pitch is forced to m*dx, and returns the "
-            f"pre-5.49.0 arithmetic in every bit.")
+            f"default) is the ABCD-Fresnel (Collins) integral evaluated by a "
+            f"chirp-Z onto a FREELY chosen output pitch, which is the same "
+            f"theorem for a quadratic carrier and has no singularity at "
+            f"m = 0; 'sziklas' is the Sziklas-Siegman co-moving step, whose "
+            f"output pitch is forced to m*dx, and returns the arithmetic of "
+            f"the releases before the default moved, in every bit.")
     return value
 
 
@@ -2694,7 +2694,7 @@ def _collins_carrier_leg(env, R, z, wavelength, dx, dy, *,
                     and carrier_out is None)
     if tf_available and (max(k1x, k1y) > 1.0 or max(k3x, k3y) > 1.0):
         # THE FALLBACK IS THE SZIKLAS TRANSPORT, not one branch of it (WP-C3).
-        # Until 5.49.0 this line called ``_carrier_step_fast`` directly, which
+        # This line used to call ``_carrier_step_fast`` directly, which
         # is only the no-crossing fast path of that transport, and a
         # COLLIMATED carrier never reaches it on the Sziklas side -- its own
         # entry point short-circuits ``R = +/-inf`` to a same-grid exact
@@ -10289,9 +10289,10 @@ def propagate_traced_carrier_chain(
         Which transport carries the chain's FREE-SPACE legs: every inter-group
         gap, the bare final leg, and the paraxial focus readout.
         ``'sziklas'`` is the co-moving Sziklas-Siegman step this module was
-        built on; naming it returns the pre-5.49.0 arithmetic in every bit.
+        built on; naming it returns the arithmetic of the releases before the
+        default moved, in every bit.
 
-        ``'collins'`` (the default since 5.49.0) evaluates the same
+        ``'collins'`` (the default) evaluates the same
         ABCD-Fresnel integral with the output lattice chosen freely
         (chirp x chirp-Z x chirp; see :func:`propagate_carrier_referenced`),
         which changes what the chain can do rather than only how fast it does
@@ -10322,7 +10323,7 @@ def propagate_traced_carrier_chain(
           chain's own EXIT pitch resolves the exit beam's convergence over the
           reduced final leg, ``K1 = 2 dx (|A| r/|B| + theta)/lambda <= 1``
           (:func:`_collins_readout_k1`), and the Sziklas readout -- with the
-          same arguments the pre-5.49.0 default passed, hence bit-identically
+          same arguments the previous default passed, hence bit-identically
           -- otherwise.  A long final distance on a small exit beam is
           comfortable (the WP-A6 fixture reads K1 = 0.16); a SHORT one on a
           wide exit beam is not (8 mm on a 5.76 mm exit beam at 76.5 um reads
@@ -10704,7 +10705,7 @@ def propagate_traced_carrier_chain(
                 # ``transport='sziklas'`` NAMED: this branch IS the
                 # ``transport != 'collins'`` arm, so naming it is a statement
                 # of that fact rather than a reliance on the parameter's
-                # default, which moved in 5.49.0 (WP-C3).
+                # default, which has moved once and can move again (WP-C3).
                 cr = propagate_carrier_referenced(
                     env, R, gap, wavelength, cur_dx, gap_kernel=gap_kernel,
                     tilt=_leg_tilt, transport='sziklas')
