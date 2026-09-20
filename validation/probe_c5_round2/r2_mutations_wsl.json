@@ -3,7 +3,7 @@
   "caught": [],
   "n_caught": 0,
   "rc": 0,
-  "summary": "48 passed in 128.21s (0:02:08)"
+  "summary": "48 passed in 145.96s (0:02:25)"
  },
  "mutations": {
   "item1_tau_disarmed": {
@@ -22,7 +22,7 @@
    "n_caught": 10,
    "n_sites_mutated": 1,
    "rc": 1,
-   "summary": "10 failed, 38 passed in 125.42s (0:02:05)"
+   "summary": "10 failed, 38 passed in 132.85s (0:02:12)"
   },
   "item1_wrong_angle": {
    "caught": [
@@ -35,7 +35,7 @@
    "n_caught": 5,
    "n_sites_mutated": 1,
    "rc": 1,
-   "summary": "5 failed, 43 passed in 121.08s (0:02:01)"
+   "summary": "5 failed, 43 passed in 169.46s (0:02:49)"
   },
   "item2_default_reverted": {
    "caught": [
@@ -45,7 +45,7 @@
    "n_caught": 2,
    "n_sites_mutated": 1,
    "rc": 1,
-   "summary": "2 failed, 46 passed in 127.13s (0:02:07)"
+   "summary": "2 failed, 46 passed in 133.11s (0:02:13)"
   },
   "item2_floor_forgets_fixed_term": {
    "caught": [
@@ -57,7 +57,7 @@
    "n_caught": 4,
    "n_sites_mutated": 1,
    "rc": 1,
-   "summary": "4 failed, 44 passed in 102.03s (0:01:42)"
+   "summary": "4 failed, 44 passed in 129.21s (0:02:09)"
   },
   "item2_notice_suppressed": {
    "caught": [
@@ -67,7 +67,7 @@
    "n_caught": 2,
    "n_sites_mutated": 1,
    "rc": 1,
-   "summary": "2 failed, 46 passed in 124.61s (0:02:04)"
+   "summary": "2 failed, 46 passed in 134.63s (0:02:14)"
   },
   "item2_unknown_mode_falls_through": {
    "caught": [
@@ -76,7 +76,7 @@
    "n_caught": 1,
    "n_sites_mutated": 1,
    "rc": 1,
-   "summary": "1 failed, 47 passed in 151.74s (0:02:31)"
+   "summary": "1 failed, 47 passed in 150.05s (0:02:30)"
   },
   "item3_default_reverted": {
    "caught": [
@@ -90,7 +90,7 @@
    "n_caught": 6,
    "n_sites_mutated": 2,
    "rc": 1,
-   "summary": "6 failed, 42 passed in 168.56s (0:02:48)"
+   "summary": "6 failed, 42 passed in 156.84s (0:02:36)"
   },
   "item3_fill_keyed_on_half_the_period": {
    "caught": [
@@ -114,7 +114,7 @@
    "n_caught": 16,
    "n_sites_mutated": 1,
    "rc": 1,
-   "summary": "16 failed, 32 passed in 172.39s (0:02:52)"
+   "summary": "16 failed, 32 passed in 132.73s (0:02:12)"
   },
   "item3_fill_keyed_on_window_centre": {
    "caught": [
@@ -131,7 +131,7 @@
    "n_caught": 9,
    "n_sites_mutated": 1,
    "rc": 1,
-   "summary": "9 failed, 39 passed in 175.99s (0:02:55)"
+   "summary": "9 failed, 39 passed in 141.76s (0:02:21)"
   },
   "item3_fill_on_the_refusal_path_collins": {
    "caught": [
@@ -141,7 +141,7 @@
    "n_caught": 2,
    "n_sites_mutated": 1,
    "rc": 1,
-   "summary": "2 failed, 46 passed in 165.80s (0:02:45)"
+   "summary": "2 failed, 46 passed in 179.11s (0:02:59)"
   },
   "item3_fill_on_the_refusal_path_exact": {
    "caught": [
@@ -150,7 +150,7 @@
    "n_caught": 1,
    "n_sites_mutated": 1,
    "rc": 1,
-   "summary": "1 failed, 47 passed in 148.72s (0:02:28)"
+   "summary": "1 failed, 47 passed in 162.03s (0:02:42)"
   },
   "item3_fill_on_the_refusal_path_sziklas": {
    "caught": [
@@ -160,7 +160,7 @@
    "n_caught": 2,
    "n_sites_mutated": 1,
    "rc": 1,
-   "summary": "2 failed, 46 passed in 137.46s (0:02:17)"
+   "summary": "2 failed, 46 passed in 179.11s (0:02:59)"
   }
  },
  "python": "/home/travaj/lumvenv/bin/python",
