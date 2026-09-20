@@ -1987,6 +1987,21 @@ _C2_REANCHOR_TARGET = 'lumenairy/raytrace/trace.py'
 _C2_REANCHOR_BASE = 'SYNTHETIC-BASE'
 
 
+#: The synthetic file both EDITED_IN_PLACE arms run against: 60 lines of
+#: padding with a module-level ``def trace(`` at line 55, so line 61 has the
+#: same ENCLOSING DEFINITION as the real ``lumenairy/raytrace/trace.py:61``.
+#: VERIFY-WP-C2 round 2 defect VR2-D7: the content digest alone accepted the
+#: expected line under a different ``def``, so the owner is now part of the
+#: fixture rather than absent from it.
+def _c2_synthetic_lines(current, owner='def trace('):
+    lines = ['# pad'] * 60
+    lines[54] = owner
+    lines += ["    sphere_normal: str = 'generic',", '    ) -> None:']
+    base = list(lines)
+    lines[60] = current
+    return lines, base
+
+
 def _c2_try_override(ra, current_lines, base_lines):
     """Run ``_edited_in_place`` against a synthetic base and current file.
 
@@ -2011,17 +2026,28 @@ def _c2_try_override(ra, current_lines, base_lines):
         ra.EDITED_IN_PLACE_REFUSALS.clear()
 
 
-@pytest.mark.parametrize('abuse,current,fires', [
-    ('the shipped state', "    sphere_normal: str = 'analytic',", True),
+@pytest.mark.parametrize('abuse,current,fires,owner', [
+    ('the shipped state', "    sphere_normal: str = 'analytic',", True,
+     'def trace('),
     ('the default silently REVERTED', "    sphere_normal: str = 'generic',",
-     False),
-    ('a nonsense value', "    sphere_normal: str = 'not-a-route',", False),
+     False, 'def trace('),
+    ('a nonsense value', "    sphere_normal: str = 'not-a-route',", False,
+     'def trace('),
     ('a stale copy of the old declaration',
-     "    sphere_normal: str = 'generic',  # moved to line 1300", False),
-    ('an unrelated line', '    renormalize: str = "exit",', False),
+     "    sphere_normal: str = 'generic',  # moved to line 1300", False,
+     'def trace('),
+    ('an unrelated line', '    renormalize: str = "exit",', False,
+     'def trace('),
+    # VERIFY-WP-C2 round 2, defect VR2-D7: the EXACT expected content under
+    # a DIFFERENT enclosing definition.  The content digest cannot see it --
+    # the text is right -- and the citation re-anchors to the right line in
+    # the wrong function.
+    ('the expected content under a DIFFERENT def',
+     "    sphere_normal: str = 'analytic',", False,
+     'def trace_a_different_thing('),
 ])
 def test_c2_the_edited_in_place_override_pins_the_content(abuse, current,
-                                                          fires):
+                                                          fires, owner):
     """``scripts/reanchor_citations.py``'s ``EDITED_IN_PLACE`` map answers a
     citation whose CONTENT changed -- a default flip is exactly that case --
     and its guard used to compare only the text BEFORE the first ``=``.
@@ -2047,15 +2073,15 @@ def test_c2_the_edited_in_place_override_pins_the_content(abuse, current,
         'the EDITED_IN_PLACE map no longer carries trace.py:61; if it has '
         'been retired, delete this arm.')
     entry = ra.EDITED_IN_PLACE[(_C2_REANCHOR_TARGET, 61)]
-    assert len(entry) == 4, (
+    assert len(entry) == 5, (
         f'an EDITED_IN_PLACE entry must carry (new_num, reason, digest, '
-        f'recorded_for); this one carries {len(entry)} fields: {entry}')
+        f'recorded_for, enclosing_def); this one carries {len(entry)} '
+        f'fields: {entry}')
+    assert entry[4] == 'def trace(', (
+        f'the entry for trace.py:61 records {entry[4]!r} as its enclosing '
+        f'definition; the line is a parameter of ``def trace(``.')
 
-    base_lines = (['# pad'] * 60
-                  + ["    sphere_normal: str = 'generic',",
-                     '    ) -> None:'])
-    current_lines = list(base_lines)
-    current_lines[60] = current
+    current_lines, base_lines = _c2_synthetic_lines(current, owner=owner)
 
     num, how, refusals = _c2_try_override(ra, current_lines, base_lines)
     if fires:
@@ -2069,24 +2095,31 @@ def test_c2_the_edited_in_place_override_pins_the_content(abuse, current,
             f're-anchor a citation whose CLAIM has become false.')
         if abuse != 'an unrelated line':
             # the unrelated line is caught by the older leading-token guard,
-            # which returns before the digest is consulted; the other three
-            # must be caught by the DIGEST and must say so with both lines
+            # which returns before the digest is consulted; the others must
+            # be caught by the DIGEST or by the enclosing-definition guard,
+            # and must say so with both lines
             assert len(refusals) == 1, (
                 f'{abuse!r} was refused silently; D7 asks for the refusal '
                 f'to name both lines.  refusals={refusals}')
             r = refusals[0]
             assert r['found_line'] == current.strip(), r
             assert r['base_line'] == "sphere_normal: str = 'generic',", r
-            assert r['expected_digest'] != r['found_digest'], r
+            if owner == 'def trace(':
+                assert r['expected_digest'] != r['found_digest'], r
+            else:
+                # VR2-D7: the content is RIGHT -- that is the whole point --
+                # so the digest matches and the OWNER is what refused it
+                assert r['expected_digest'] == r['found_digest'], r
+                assert r['expected_owner'] == 'def trace(', r
+                assert 'belongs to' in r['why'], r
 
 
 def test_c2_the_edited_in_place_override_refuses_an_out_of_range_coordinate():
     """The second arm the guard already had, kept: a file too short to hold
     the mapped coordinate is refused rather than indexed."""
     ra = _c2_load_reanchor()
-    base_lines = (['# pad'] * 60
-                  + ["    sphere_normal: str = 'generic',",
-                     '    ) -> None:'])
+    _cur, base_lines = _c2_synthetic_lines(
+        "    sphere_normal: str = 'analytic',")
     num, _how, refusals = _c2_try_override(ra, base_lines[:30], base_lines)
     assert num is None, (
         'the override stopped refusing an out-of-range new coordinate.')
@@ -2118,11 +2151,8 @@ def test_c2_the_edited_in_place_map_is_version_pinned():
         f'{ra._source_version()}; the entries are stale and should be '
         f'retired rather than re-pointed.')
 
-    base_lines = (['# pad'] * 60
-                  + ["    sphere_normal: str = 'generic',",
-                     '    ) -> None:'])
-    shipped = list(base_lines)
-    shipped[60] = "    sphere_normal: str = 'analytic',"
+    shipped, base_lines = _c2_synthetic_lines(
+        "    sphere_normal: str = 'analytic',")
 
     real_version = ra._source_version
     try:

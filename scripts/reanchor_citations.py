@@ -133,32 +133,49 @@ OWNED = {
 #: and refuses from the next version on, which is exactly when a human
 #: should look (by then the right base commit is past that release and there
 #: is no in-place edit left to answer).
+#: WHAT THE CONTENT DIGEST STILL LETS THROUGH, measured by VERIFY-WP-C2
+#: round 2 on twelve doctored cases.  Three abuses still fired:
+#:
+#:   1. the same content RE-INDENTED -- documented and deliberate;
+#:      ``content_digest`` strips whitespace so a line moving inside a
+#:      ``with`` block is not read as a content change;
+#:   2. the exact expected content under a DIFFERENT enclosing ``def`` --
+#:      the citation re-anchors to the right TEXT in the wrong function.
+#:      CLOSED in round 3: each entry now records the enclosing definition
+#:      as a fifth field and the override refuses a line whose nearest
+#:      preceding module-level ``def`` / ``class`` is not it;
+#:   3. the map's own digest re-recorded to match a REVERTED default.  An
+#:      editor with commit access to this file can still bless a false
+#:      claim, and no file-content guard can stop them: it is a
+#:      code-review property, not a tool property.  It is stated here
+#:      rather than defended against -- a reviewer of a diff that touches
+#:      one of these digests is reviewing the CLAIM, not the hash.
 EDITED_IN_PLACE = {
     # WP-C2 (5.49.0): ``trace`` / ``trace_world`` default to
     # ``sphere_normal='analytic'``.  The declaration did not move; its default
     # changed, which is what that release is.
-    #   expected: "sphere_normal: str = 'analytic',"
+    #   expected: "sphere_normal: str = 'analytic',"  inside "def trace("
     ('lumenairy/raytrace/trace.py', 61): (
         61, "WP-C2 5.49.0: sphere_normal default 'generic' -> 'analytic'",
         '5d0d66152214935b80f74a951839e9030acbc6f731e495ae60331c9ecf4fecb0',
-        '5.49.0'),
-    #   expected: "sphere_normal: str = 'analytic',"
+        '5.49.0', 'def trace('),
+    #   expected: "sphere_normal: str = 'analytic',"  inside "def trace_world("
     ('lumenairy/raytrace/world_trace.py', 83): (
         83, "WP-C2 5.49.0: sphere_normal default 'generic' -> 'analytic'",
         '5d0d66152214935b80f74a951839e9030acbc6f731e495ae60331c9ecf4fecb0',
-        '5.49.0'),
+        '5.49.0', 'def trace_world('),
     # WP-C2 (5.49.0), second commit: the same two functions default to
     # ``renormalize='exit'``.
-    #   expected: "renormalize: str = 'exit',"
+    #   expected: "renormalize: str = 'exit',"  inside "def trace("
     ('lumenairy/raytrace/trace.py', 60): (
         60, "WP-C2 5.49.0: renormalize default 'surface' -> 'exit'",
         'a967d130200770f69bf7bc26d427d33cfa4f89a1da6db5cd0f15b926072475fe',
-        '5.49.0'),
-    #   expected: "renormalize: str = 'exit',"
+        '5.49.0', 'def trace('),
+    #   expected: "renormalize: str = 'exit',"  inside "def trace_world("
     ('lumenairy/raytrace/world_trace.py', 82): (
         82, "WP-C2 5.49.0: renormalize default 'surface' -> 'exit'",
         'a967d130200770f69bf7bc26d427d33cfa4f89a1da6db5cd0f15b926072475fe',
-        '5.49.0'),
+        '5.49.0', 'def trace_world('),
 }
 
 #: Every override this run REFUSED, as dicts carrying both lines.  The CLI
@@ -205,15 +222,17 @@ def _edited_in_place(path, base_num, base):
     Two-sided on purpose, and since D7 two-sided on the CONTENT as well as
     on the shape: the override fires only when the current line still begins
     with the same leading token as the base line did AND hashes to the exact
-    content this entry says the release produced AND the library has not
-    moved past the release the entry records.  Anything else is recorded in
+    content this entry says the release produced AND sits under the
+    enclosing definition the entry records (VERIFY-WP-C2 round 2, VR2-D7)
+    AND the library has not moved past the release the entry records.
+    Anything else is recorded in
     ``EDITED_IN_PLACE_REFUSALS``, with the base line and the line actually
     found, and reported as needing a human.
     """
     entry = EDITED_IN_PLACE.get((path, base_num))
     if entry is None:
         return None, None
-    new_num, reason, want_digest, recorded_for = entry
+    new_num, reason, want_digest, recorded_for, want_owner = entry
     want, _ctx = base_line(path, base_num, base)
     hay = lines(path)
     if want is None or not (1 <= new_num <= len(hay)):
@@ -231,6 +250,7 @@ def _edited_in_place(path, base_num, base):
             'expected_digest': want_digest,
             'found_digest': content_digest(got),
             'recorded_for': recorded_for,
+            'expected_owner': want_owner,
             'source_version': _source_version(),
         })
         return None, None
@@ -239,6 +259,20 @@ def _edited_in_place(path, base_num, base):
         return _refuse(
             'the line at the mapped coordinate is not the content this '
             'entry records the release as producing')
+    # VERIFY-WP-C2 round 2 (2026-09-20), defect VR2-D7: the content digest
+    # ALONE accepts the same line under a DIFFERENT enclosing definition --
+    # ``sphere_normal: str = 'analytic',`` is a plausible parameter of more
+    # than one function, and re-anchoring to the right text in the wrong
+    # function is exactly the claim this map exists to prevent.  Require
+    # the nearest preceding module-level ``def`` / ``class`` to be the one
+    # this entry recorded.
+    owner = next((ln for ln in reversed(hay[:new_num - 1])
+                  if ln.startswith(('def ', 'class '))), '')
+    if not owner.startswith(want_owner):
+        return _refuse(
+            'the line at the mapped coordinate is the expected content but '
+            'belongs to %r, not %r'
+            % (owner.strip()[:60], want_owner))
     if _version_tuple(_source_version()) > _version_tuple(recorded_for):
         return _refuse(
             f'this entry was recorded for {recorded_for} and the package '
