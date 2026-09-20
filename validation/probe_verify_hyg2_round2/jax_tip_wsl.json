@@ -24,7 +24,8 @@
   "within_bar": true
  },
  "J2": {
-  "cache_primed_entries": 0,
+  "asm_H_primed": 1,
+  "cache_primed_entries": 1,
   "exception": "ValueError",
   "message": "propagate_carrier_referenced: the envelope is a JAX Tracer (inside jax.jit / jax.grad).  This leg resolves its OUTPUT LATTICE and its QUADRATURE by measuring the envelope's own phase-space box -- the support radii r_x/r_y and the angular half-widths th_x/th_y -- and a Tracer has no entries to measure, so unlike _collins_transport there is no spelling of this call that takes those decisions for it.  Call _collins_transport directly with an explicit (dx_out, dy_out, N_out_x, N_out_y, R_ref), gap_kernel='fresnel' and on_collins_sampling='ignore', having checked the Kelly conditions on a concrete array first -- or move this call outside the trace.",
   "needles": {
@@ -39,6 +40,7 @@
    "on_collins_sampling='ignore'": true,
    "outside the trace": true
   },
+  "pyfftw_plans_primed": 2,
   "state_unchanged": {
    "asm_H_cache": true,
    "bluestein_cache": true,
@@ -48,7 +50,8 @@
   "stats_out_untouched": true,
   "stats_sentinel_after": {
    "SENTINEL": 1
-  }
+  },
+  "warning_filters_primed": 10
  },
  "J3": {
   "tilted": {

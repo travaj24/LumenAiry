@@ -154,12 +154,28 @@ def main(out_path):
             'warning_filters': [repr(f) for f in warnings.filters],
         }
 
-    # prime the caches first, so "unchanged" is a real reading and not the
-    # trivial "both empty"
+    # PRIME the caches first, so "unchanged" is a real reading and not the
+    # trivial "both empty".  MEASURED 2026-09-20: a Collins leg (and a
+    # Sziklas one, and an exact-kernel one) leaves ALL FOUR of these at zero
+    # -- they are filled by the MFT propagators, not by the carrier chain --
+    # so priming through the carrier leg would have made three quarters of
+    # this reading vacuous.  ``angular_spectrum_propagate_mft`` fills the
+    # chirp-Z kernel cache, the pyFFTW plan cache, the ASM H cache and
+    # ``warnings.filters`` in one call, which is what is used here.
+    from lumenairy.propagators.mft import angular_spectrum_propagate_mft
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        angular_spectrum_propagate_mft(E, Z, WL, DX, dx_out=DX, N_out=N)
     CA.propagate_carrier_referenced(E, R_IN, Z, WL, DX, **kw)
     before = state()
+    res_primed = {k: (len(v) if isinstance(v, (list, tuple)) else v)
+                  for k, v in before.items()}
     stats = {'SENTINEL': 1}
-    j2 = {'cache_primed_entries': before['bluestein_cache'][0]}
+    j2 = {'cache_primed_entries': before['bluestein_cache'][0],
+          'pyfftw_plans_primed': len(before['pyfftw_plans']),
+          'asm_H_primed': len(before['asm_H_cache']),
+          'warning_filters_primed': len(before['warning_filters'])}
+    del res_primed
 
     def traced(a):
         return CA.propagate_carrier_referenced(a, R_IN, Z, WL, DX, **kw).env
