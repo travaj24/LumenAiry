@@ -901,3 +901,96 @@ Section 0's D3 row read "served **98.7-100.8 MB** (Win) / **73.2-76.9 MB** (WSL)
 **52.2 / 39.2 MB**" -- the MEANS -- while section 3 and the docstring quote a 101.56 MB max and
 "~102 MB".  The row now quotes maxima (99.0-101.6 / 73.2-76.9, never-served 52.4 / 39.3) and says
 which it is quoting.
+
+## R2.9 Runs
+
+### R2.9.1 The thirteen traced-lens / pool files, four arms
+
+The same thirteen files as section 9.1, same command.  **374 collected** (373 before this round,
+**+1** from the VD3 decision test), so the expected reading is **373 passed / 1 skipped** -- the
+verification's 372/1 plus the one id this round adds.
+
+| build | capture | result | wall |
+|---|---|---|---|
+| Windows 3.14.6 | default (`fd`) | **373 passed, 1 skipped** | 761.55 s |
+| Windows 3.14.6 | `--capture=sys` | **373 passed, 1 skipped** | 961.88 s |
+| WSL 3.12.3 | default (`fd`) | **373 passed, 1 skipped** | 779.58 s |
+| WSL 3.12.3 | `--capture=sys` | **373 passed, 1 skipped** | 932.29 s |
+
+Four arms, four identical readings, and the same single skip every time
+(`test_fix_newton_pool_memory.py:1217`, whose own reason is that this BLAS reduces identically at
+every width it tries -- `{1: 0.0, 2: 0.0, 4: 0.0}`).  The capture axis moves nothing but wall time.
+The walls are roughly half the verification's for the reason in its own header: it ran its arms
+against three other agents' lanes; this round ran two lanes at a time against two.
+
+### R2.9.2 The rest of the gate
+
+| command | build | result | wall |
+|---|---|---|---|
+| `pytest test_verify_b13_newton_pool.py test_verify_b13_followups.py test_fix_newton_pool_broken_fallback.py -q --durations=0` | Windows | **39 passed** (3 + 11 + 25) | 194.73 s |
+| the same | WSL | **39 passed** | 113.08 s |
+| `pytest test_audit_except_budget.py test_public_api.py test_v4_16_2_dispatcher_pin_doc_consistency.py test_audit2609_a17_history_lint.py test_audit2609_a23_census_mechanism.py test_v4_14_2_dispatcher_pin_cache_locks.py test_eme_census_determinacy.py test_audit2609_a17_history_relocation.py -q` | Windows | **892 passed, 6 skipped** | 259.32 s |
+| the same sweep | WSL | **1 failed, 891 passed, 6 skipped** -- the same environmental red, see below | 233.75 s |
+| `pytest tests/unit -q -k walker` | Windows | **118 passed, 6 skipped, 16206 deselected** | 106.26 s |
+| `ruff check lumenairy/ tests/ validation/probe_fix_b13_followups_r2/` | WSL | **All checks passed** | -- |
+| `python scripts/record_history_fingerprints.py --check` | Windows | **OK: every history document matches its module** | -- |
+
+**The one WSL red is the environment fact the verification already isolated, re-confirmed here
+independently.**  `test_public_api.py::test_installed_metadata_version_matches_source_version`
+compares `importlib.metadata.version('lumenairy')` against `lumenairy.__version__`: in `~/lumvenv`
+the editable install's metadata reads **5.11.0**, and the source reads **5.47.0** on this branch AND
+at the WP base (`git show b631ce79:lumenairy/__init__.py` -> `__version__ = "5.47.0"`), so the base
+fails it identically and nothing in this round touches versioning.  The same test passes on Windows.
+The repair is `pip install -e .` in that venv, by whoever owns it; like the WP branch and like the
+verification, I did not silently reinstall under other agents' lanes.
+
+The walker sweep deselects **16 206** where the verification's run deselected 16 205: the difference
+is exactly the one test this round adds, which is the only thing that changed in the collection.
+
+`.test_durations` now carries that id as well, spliced with its measured value (**1.41 s** Windows,
+**3.81 s** WSL; the larger is recorded so a shard scheduler cannot under-budget it): **16 289**
+entries, reloading as valid JSON.
+
+### R2.9.3 Probes
+
+| file | what it measures | JSON |
+|---|---|---|
+| `validation/probe_fix_b13_followups_r2/r2_vd2_census.py` | VD2: the verification's own `attack_unconditional_remove` against the pre-VD2 ordering copy AND against the real fixed function, plus the whole D2 race matrix and the three other D2 attacks | `r2_vd2_win.json`, `r2_vd2_wsl.json` |
+| `validation/probe_fix_b13_followups_r2/r2_vd7_pin_grade.py` | VD7/VD8: the verification's grader beside the restated pin over 8 shapes, plus the real module and a transcription check | `r2_vd7_win.json`, `r2_vd7_wsl.json` |
+
+Both import the verification's probes (`vf2_d2_census.py`, `vf6_d4_readers.py`) rather than copying
+them, so the fail-before arm of each is the verifier's own reproducer and cannot drift from it.
+
+### R2.9.4 Orphan sweep
+
+Every arm of `r2_vd2_census.py` builds threads that park on a gated stub and releases them, and the
+pool gate spawns real worker interpreters.  Swept on both builds after the last run:
+
+| build | command | processes of MINE found |
+|---|---|---|
+| Windows 3.14.6 | `Get-CimInstance Win32_Process -Filter "Name='python.exe'"`, matched on command line against `spawn_main`, `lum_pool3`, `r2_vd`, `test_fix_newton_pool`, `test_verify_b13` | **0** |
+| WSL 3.12.3 | `pgrep -af spawn_main`, `pgrep -af "r2_vd|vf[0-9]_"`, `ps -eo pid,ppid,etimes,cmd \| grep -i lum_pool3` | **0** |
+
+Eight `python.exe` and four WSL pytest lanes were resident at the end; every one is another agent's,
+identified by its file list and its worktree (`lum_hyg3`, a dispatcher/walker lane, a GBD/FGA lane
+and a B12 FGA lane), and left alone.
+
+## R2.10 What I could not measure
+
+1. **Python 3.10.**  The VD3 arm is a reconstruction of the pre-3.11
+   `concurrent.futures.TimeoutError` class hierarchy driven through the real dispatcher, not a run
+   on a 3.10 interpreter; none is installed on this box.  The MRO is what an `except` tuple matches
+   on, so the reconstruction is faithful to the mechanism, but the CI arm that would confirm it end
+   to end is CI's.
+2. **Whether VD2 has ever been hit in the field.**  It needed a caller handing one executor to both
+   teardown mechanisms, and no library path did; the fix closes the mechanism, and the 6/6 reading
+   is a state built by construction, not one observed in a log.
+3. **A quiet box.**  Two of my four gate arms ran against two other agents' lanes and the other two
+   against three.  Nothing in this round is a wall-time claim, and the counts, the source facts and
+   the drop/no-drop decisions are load-independent.
+4. **The cost of the VD2 `added` flag.**  It is one list append and one truthiness test inside a
+   lock the function already took, on a path that runs at most once per pool teardown; I did not
+   attempt to measure it against the 0.188-4.592 s teardown ladder in the module comment, because
+   the ratio is not resolvable.
+5. **N = 32768.**  Unchanged from both earlier packages: no ladder here goes past N = 1024, so
+   anything either report says about production field sizes remains extrapolation.

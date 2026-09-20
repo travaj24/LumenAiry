@@ -5809,6 +5809,7 @@
   "tests/unit/test_fix_newton_pool_broken_fallback.py::test_the_dump_helper_writes_through_a_real_descriptor": 0.01,
   "tests/unit/test_fix_newton_pool_broken_fallback.py::test_the_in_flight_counter_cannot_go_negative_or_leak": 0.0004619000246748328,
   "tests/unit/test_fix_newton_pool_broken_fallback.py::test_the_in_flight_counter_is_one_claim_per_dispatch_not_per_chunk": 0.78,
+  "tests/unit/test_fix_newton_pool_broken_fallback.py::test_the_infrastructure_clause_reaches_an_oserror_timeout_and_no_other": 3.81,
   "tests/unit/test_fix_newton_pool_broken_fallback.py::test_the_join_detector_sees_the_with_form": 0.012,
   "tests/unit/test_fix_newton_pool_broken_fallback.py::test_the_sibling_process_pool_still_carries_an_unbounded_join": 1.61,
   "tests/unit/test_fix_newton_pool_broken_fallback.py::test_the_traced_chain_completes_under_either_pytest_capture[fd]": 32.07,
