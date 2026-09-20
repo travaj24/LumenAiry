@@ -30,6 +30,32 @@ the Rayleigh-Sommerfeld-I sum are IMPORTED from
 independent oracle for this reference-plane question.  Re-typing them here
 would be a third copy of a numerical kernel, which is the very defect this
 package removes from the library.
+
+Round 2 (VERIFY-WP-B12b, 2026-09-19)
+------------------------------------
+Three things this file learned from its own re-verification:
+
+* **Every byte-identity id here runs at a PINNED memory budget.**  A GBD
+  field's SHA-256 depends on ``LUMENAIRY_MEM_BUDGET_MB`` *through the public
+  entry point*: ``_reconstruct_windowed`` chunks each bucket of the coherent
+  beamlet sum to stay under the budget, and the chunk boundaries change the
+  grouping of a ``bincount`` scatter-add.  Measured with only that variable
+  varied (``validation/probe_wp_b12b_round2/probe_r3_budget.py``, both
+  builds): unset / 4096 / 2048 / 512 give ONE digest, 64 and 8 give two
+  others, while the fields agree to ~1e-15.  The variable is a CEILING on the
+  ``mem_budget_mb`` keyword, so an id that pins only one of the two is
+  reproducible only in the environment it was written in; the autouse
+  ``_pin_mem_budget`` fixture and an explicit ``mem_budget_mb`` pin both.
+* **One assertion could not fail** (D-2): ``"'radius'" not in fn_flat`` was
+  searched on a token stream that drops STRING tokens.  It now searches the
+  source text through :func:`last_surface_radius_reads`, and
+  ``tests/unit/test_wp_b12b_round2.py`` proves both halves against the
+  committed PRE source.
+* **The two open items are closed in the library** (D-4, D-5): the local
+  branch now refuses a mirror-terminated prescription and an immersed exit
+  medium.  Nothing in this file's fixture set is affected -- every fixture
+  here is air-terminated and transmissive -- which is itself asserted, archive
+  to archive, in the round-2 package.
 """
 from __future__ import annotations
 
@@ -87,6 +113,27 @@ _N, _DX = 96, 6.6e-6
 # ``propagate_gbd_through_prescription`` have different sampling DEFAULTS, so
 # only an explicit frame lets them be compared byte for byte.
 _FRAME = dict(sample_step=4, waist_factor=4.0)
+
+
+#: VERIFY-WP-B12b D-6 (2026-09-19).  A GBD field's SHA-256 depends on the
+#: memory budget through the PUBLIC entry: ``_reconstruct_windowed`` chunks
+#: each bucket of the coherent beamlet sum to stay under it, and the chunk
+#: boundaries change the grouping of a ``bincount`` scatter-add.  Measured on
+#: one fixture with only ``LUMENAIRY_MEM_BUDGET_MB`` varied -- unset / 4096 /
+#: 2048 / 512 give ONE digest, 64 and 8 give two others, while the fields
+#: agree to ~1e-15 (``validation/probe_wp_b12b_round2/probe_r3_budget.py``,
+#: both builds).  The environment variable is a CEILING on the kwarg, so a
+#: byte-identity id must pin BOTH or it is only reproducible in the
+#: environment it was written in.
+_MEM_BUDGET_MB = 2048.0
+
+
+@pytest.fixture(autouse=True)
+def _pin_mem_budget(monkeypatch):
+    """Every id in this file runs at ONE memory budget (D-6), so its digests
+    are a property of the library and not of the shell that invoked it."""
+    monkeypatch.setenv('LUMENAIRY_MEM_BUDGET_MB', str(int(_MEM_BUDGET_MB)))
+
 
 
 def _singlet(last=None, R2=None, semi=_SEMI, glass=_GLASS, R1=_R, t=_T):
@@ -224,7 +271,8 @@ def _gbd_field(presc, z, N, dx, w0):
         warnings.simplefilter('ignore')
         return np.asarray(la.apply_real_lens_gbd(
             E, prescription=presc, wavelength=_LAM, dx=dx,
-            output_plane_distance=float(z), **_FRAME))
+            output_plane_distance=float(z),
+            mem_budget_mb=_MEM_BUDGET_MB, **_FRAME))
 
 
 def _sha(a):
@@ -313,6 +361,39 @@ def test_the_local_branch_asks_for_the_exit_vertex_plane():
         f'the world branch asked for {world}, not surface')
 
 
+#: The spellings of "read the LAST surface's radius" that the deleted in-line
+#: conic-sag copy used, whitespace removed.  The PRE source
+#: (``validation/probe_wp_b12b_round2/pre_b12_beamlet_fn.py.txt``, commit
+#: 1218b24f) opens that block with a ``getattr`` of the quoted attribute name;
+#: the other two entries are the obvious respellings.
+_LAST_SURFACE_RADIUS_READS = (
+    "getattr(surfs[-1],'radius'",
+    'getattr(surfs[-1],"radius"',
+    'surfs[-1].radius',
+)
+
+
+def last_surface_radius_reads(fn_src):
+    """Which last-surface RADIUS reads appear in ``fn_src`` -- ONE definition.
+
+    Searched on the SOURCE TEXT with all whitespace removed, deliberately NOT
+    on the comment-and-string-free token stream the rest of
+    :func:`test_the_module_carries_no_second_sag_kernel` uses: a quoted
+    attribute name is a STRING token, and that stream drops STRING tokens, so
+    a check for it there can never fail (VERIFY-WP-B12b D-2).  The cost of
+    searching raw text is that a COMMENT could trip this, which is the
+    conservative direction; no comment in the shipped function contains any of
+    these.
+
+    ``tests/unit/test_wp_b12b_round2.py`` calls THIS function against the
+    committed PRE source and asserts it returns a non-empty list, so the
+    repaired check is proven to FAIL on the source it was written to reject --
+    and runs the OLD form against the same text to show that it did not.
+    """
+    flat = ''.join(str(fn_src).split())
+    return [tok for tok in _LAST_SURFACE_RADIUS_READS if tok in flat]
+
+
 def test_the_module_carries_no_second_sag_kernel():
     """INVARIANT (the house rule): ``propagators/gbd.py`` contains no second
     implementation of a surface sag.
@@ -342,15 +423,26 @@ def test_the_module_carries_no_second_sag_kernel():
         'propagators/gbd.py imports a sag kernel directly; the projection '
         'belongs to raytrace.differential')
     fn_src = inspect.getsource(G.apply_prescription_persurface_to_beamlets)
+    # D-2 (VERIFY-WP-B12b, repaired 2026-09-19).  The radius check used
+    # to read ``assert "'radius'" not in fn_flat`` on the token stream
+    # built below -- which DROPS STRING tokens, so the searched text could
+    # never contain a quoted attribute name and the assertion could not
+    # fail.  Proven rather than argued: ``tests/unit/test_wp_b12b_round2
+    # .py`` runs the old form against the committed PRE source, which
+    # reads the last surface radius through ``getattr``, and it passes.
+    # The check now searches the SOURCE TEXT, through the one helper both
+    # files call.
+    hits = last_surface_radius_reads(fn_src)
+    assert not hits, (
+        f'apply_prescription_persurface_to_beamlets reads the last '
+        f'surface radius again ({", ".join(hits)}); the sag belongs to '
+        f'the shared projection')
     fn_code = []
     for tok in tokenize.generate_tokens(io.StringIO(fn_src).readline):
         if tok.type in (tokenize.COMMENT, tokenize.STRING):
             continue
         fn_code.append(tok.string)
     fn_flat = ' '.join(fn_code).replace(' ', '')
-    assert "'radius'" not in fn_flat and '"radius"' not in fn_flat, (
-        'apply_prescription_persurface_to_beamlets reads the last surface '
-        'radius again; the sag belongs to the shared projection')
     assert "reference=_reference" in fn_flat or "reference='exit_vertex'" \
         in fn_flat, (
         'the function no longer names a reference plane at its call site')
@@ -714,7 +806,9 @@ def test_the_public_entry_points_follow_the_beamlet_function():
         warnings.simplefilter('ignore')
         u = np.asarray(la.apply_real_lens_universal(
             E, prescription=presc, wavelength=_LAM, dx=dx, method='gbd',
-            output_plane_distance=z, method_kwargs={'gbd': dict(_FRAME)}))
+            output_plane_distance=z,
+            method_kwargs={'gbd': dict(_FRAME,
+                                       mem_budget_mb=_MEM_BUDGET_MB)}))
         p = np.asarray(G.propagate_gbd_through_prescription(
             E, dx, presc, wavelength=_LAM, output_shape=(N, N), output_dx=dx,
             per_surface=True, z_image=z, **_FRAME))
