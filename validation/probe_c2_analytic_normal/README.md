@@ -59,4 +59,24 @@ Headline findings, both builds:
 | `timing.py` | whole-trace wall clock on several prescriptions, interleaved, with the load stated |
 | `vignetting.py` | which rays' `alive` flags move between the two routes, and whether any shipped fixture's vignetting count changes |
 | `byte_identity.py` | archive-to-archive byte identity against `git archive 49ddf4bd`, with the old keywords passed explicitly |
-| `jax_parity.py` | CPU / JAX trace parity re-derived under both defaults |
+| `jax_parity.py` | CPU / JAX trace parity re-derived under all four CPU settings (the JAX tracer has NEITHER switch) |
+| `renorm_ladder.py` | item 3: the `'surface'` vs `'exit'` difference against the derived `n_surfaces * eps * |t|` envelope, over a 3-to-13-surface ladder, plus the history-drift contract and the single-pass call count |
+| `trace_touching_files.txt` | the grep-selected blast-radius file list (368 files: every ray-trace-touching test plus the lens family's traced / FGA / GBD / multibranch files) |
+
+Headline findings, both builds:
+
+* the closed form is within **1.75 ULP** of the 60-digit oracle out to
+  `h = 0.95 |R|` against the generic route's 2.00 (Windows) and 2.25
+  (WSL), and never worse there by more than 1 ULP at any of 672 points --
+  but above `0.95 |R|` both routes are at the conditioning limit of
+  `sqrt(1 - u)` and neither dominates point by point;
+* `sphere_normal='analytic'` is worth **1.08x to 1.44x** on prescriptions
+  that contain spheres, against controls (no sphere) at 0.93x to 1.03x --
+  which is this method's own resolution on a loaded box;
+  `renormalize='exit'` reads 0.95x to 1.13x, i.e. nothing this method can
+  see;
+* the rim band VERIFY-B9 3.3 predicted is real and reaches `alive`, but
+  360 000 traced rays over twelve prescription and field-angle
+  combinations move ZERO alive flags and ZERO error codes;
+* CPU / JAX parity is **identical to the last digit** under all four CPU
+  settings (3.469e-18 m position, 3.123e-17 m OPL).
