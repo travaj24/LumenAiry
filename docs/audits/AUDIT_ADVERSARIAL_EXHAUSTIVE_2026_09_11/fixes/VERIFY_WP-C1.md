@@ -173,6 +173,50 @@ typo'd `edge_sample` now silently selects the new default where before the flip
 it silently selected the old one, which is the first release in which that
 silence costs anything.
 
+### 2.3b The Migration note's own numbers, and the cost claim
+
+Both are user-facing, so both were re-measured rather than carried over.
+
+**How far the answer moves.**  RS spatial at z = 16 mm on WP-B11's optic,
+grey against hard, relative L2 of the propagated field and worst pixel
+normalised by the peak:
+
+| N | rel. L2 (published / measured) | worst pixel (published / measured) |
+|---|---|---|
+| 256 | 7.678e-03 / **7.6856e-03** | 3.660e-03 / **3.6595e-03** |
+| 512 | 2.930e-03 / **2.9301e-03** | 1.251e-03 / **1.2513e-03** |
+| 1024 | 1.237e-03 / **1.2371e-03** | 5.434e-04 / **5.4345e-04** |
+
+Five of six reproduce to every published digit; the N = 256 L2 differs in the
+fourth digit (7.686 against 7.678, 0.1 %), which is a normalisation choice in
+the denominator, not a disagreement about the move.
+
+**What it costs.**  Rim-pixel counts on the same optic, exactly as published:
+**312** boundary pixels at N = 256 (**0.476 %** of the grid) and **1196** at
+N = 1024 (**0.114 %**), so the `edge_samples**2 = 16` extra indicator
+evaluations are **0.0762x** and **0.0182x** of one full-grid pass.
+
+What was NOT re-measured is the peak-memory claim in the source comment
+("measured 6.0 float64 grids at N = 2048, against 5.0 for the hard edge");
+that needs an allocator trace this verification did not run.
+
+### 2.4b The claimed failure, proved out
+
+WP-C1 says the existing cross-backend guard would NOT have caught a silent rim
+divergence: *"its bar is 'fewer than 5 % of pixels mismatched', and a rim on a
+64-pixel disk is about 1.5 %"*.  That is a claimed FAILURE, so it was proved
+out rather than taken on trust, on that test's own fixture
+(`test_audit_misc.py` `field`: N = 64, dx = 5 um, complex64, D = 97.5 um):
+
+    mismatched pixels, edge='hard' vs edge='gray':  48 / 4096 = 1.17 %
+    the test's bar:                                 5.00 %
+    slack:                                          4.27x
+
+So the claim holds with room -- a whole-rim divergence sits four times inside
+that bar.  The measured figure is 1.17 %, not "about 1.5 %"; the report's
+number is the only reading in it that this verification could not reproduce,
+and it is conservative in the direction that matters.
+
 ### 2.5 The POWER band, re-derived
 
 For a unit-amplitude field and a mask `f` in [0, 1]:
