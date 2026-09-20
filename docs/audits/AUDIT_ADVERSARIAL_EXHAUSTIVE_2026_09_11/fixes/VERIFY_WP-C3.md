@@ -17,7 +17,7 @@ child's **cwd AND `PYTHONPATH`** to the tree root and asserting
 
 ## 0. SHIP RECOMMENDATION
 
-**DO NOT SHIP AS IS.  Two defects must be closed first; the physics is sound
+**DO NOT SHIP AS IS.  Three defects must be closed first; the physics is sound
 and the engineering is good.**
 
 The transport work is right.  The complementary selection is real, the way
@@ -31,7 +31,6 @@ was left in the opposite state from the code that implements it.
 |---|---|---|
 | **D5** | the CHANGELOG / Migration-Guide claim that **no public call that worked on 5.48.1 raises on 5.49.0** except a JAX one | MEASURED false on both builds: **11 of 12** ordinary chain configurations that return at 49ddf4bd raise `RuntimeError` on the flipped default.  A caller upgrading on the strength of that sentence gets a crash. |
 | **D6** | the leg with a **resolved FLAT reference** has no fallback and runs an aliased chirp-Z on the new default, **far from any focus** | a converging grid ladder shows the default DIVERGING (3.0x, 3.2x, 3.2x in r2m at N = 256/512/1024) where `'sziklas'` converges.  This is a correctness defect, not a documentation one. |
-
 | **D13** | the C3 x C5 contradiction, and the red that exists only in the merge | `CHANGELOG.md` and `Migration-Guide.md` promise `_GAP_KERNEL_ACCURACY_TAU` "ships OFF and **stays off**" while the sibling 5.49.0 branch ships it at `1e-4`; `carrier.py` merges with ZERO conflicts so nothing catches it; and a real 3-way merge turns `test_wave5_h2_near_focus_table.py` from green into **1 failed, 24 passed**.  Neither branch can fix that alone. |
 
 Four more should close with them (**D1**, **D2**, **D3**, **D4**) because they
@@ -48,8 +47,9 @@ one-keyword way back**.  The blockers are two claims and one hole, not the
 design.
 
 The recommendation is **not** "revert the flip".  It is: correct the two
-claims, close the flat-reference hole, and re-run the blast set.  The
-selection mechanism itself survived every attack this package made on it.
+claims, close the flat-reference hole, resolve the C5 contradiction and the
+merge-only red, and re-run the blast set on the MERGED tree.  The selection
+mechanism itself survived every attack this verification made on it.
 
 ---
 
