@@ -25,9 +25,9 @@ report: every number is re-measured on this verifier's own sphere set, its own
 | 1 | closed form within 1.75 ULP to `0.95 R`, never worse by > 1 ULP there; above it neither dominates | **CONFIRMED, with better numbers** | on 2240 of my own points and an EXACT-input oracle: **1.00 vs 1.75** out to `0.95 R`, **0 of 1280** worse by > 1; whole set **41.47 vs 75.66**; 28 of 2240 worse, by up to 16.08.  Both builds identical to the last digit |
 | 2a | what `renormalize='exit'` changes numerically | **ANSWERED** (the report does not) | history `abs(abs(d)-1)` 2.22e-16 -> 6.66e-16 (3 surf) .. **1.67e-15** (13); the ray-sphere quadratic hard-codes `a = abs(d)**2 = 1` and the OPL leg is `n t`, so the drift is a FIRST-ORDER error with a measured, LINEAR coefficient: **1.786e-3 m** position and **8.95e-4 m** OPL per unit drift -> induced error **3.0e-18 m / 1.5e-18 m** at 13 surfaces |
 | 2b | against a 60-digit END-TO-END oracle, is `'exit'` worse? | **NO** | all four combinations within **5.2e-18 m** position and **7.0e-17 m** OPL of the truth on three prescriptions; which is closest flips with prescription AND build |
-| 2c | WP-B9's 1.03x-1.10x "does not reproduce" | **CONFIRMED as a measurement, and now BOUNDED** | timed: 0.889x-1.088x (Win), 0.990x-1.053x (WSL), medians ~1.00x, controls 1.02x-1.66x.  Deterministic element-op count: **0.9910x at 2 surfaces (a LOSS), 1.0050x at 3, 1.0189x at 7, 1.0237x at 13**.  B9's floor is reachable; **its ceiling of 1.10x is not** |
+| 2c | WP-B9's 1.03x-1.10x "does not reproduce" | **CONFIRMED as a measurement, and now BOUNDED** | timed, sphere-bearing prescriptions: 0.889x-1.088x (Win, median 1.006x), 0.990x-1.053x (WSL, median 0.997x).  This switch has NO control arm -- it applies to every prescription, sphere or not -- so the conic and aspheric prescriptions are extra samples, not controls, and they read 1.076x / 1.660x (Win) and 1.000x / 1.056x (WSL), i.e. the spread of the METHOD swamps the effect.  Deterministic element-op count: **0.9910x at 2 surfaces (a LOSS), 1.0050x at 3, 1.0189x at 7, 1.0237x at 13**.  B9's floor is reachable; **its ceiling of 1.10x is not** |
 | 2d | KEEP or REVERT `44151397` | **KEEP** -- see section 3 | |
-| 3 | analytic normal 1.08x-1.44x, profile share 16.1 % -> 9.8 % / 19.6 % -> 10.4 % | **CONFIRMED** | CPU 1.043x-1.359x (Win), **1.105x-1.224x median 1.181x** (WSL); profile share **10.04-11.87 % -> 7.26-9.20 %** (Win), **10.31-13.61 % -> 6.62-10.43 %** (WSL); element-op count **1.1612x-1.1973x**, controls **exactly 1.0000x** |
+| 3 | analytic normal 1.08x-1.44x, profile share 16.1 % -> 9.8 % / 19.6 % -> 10.4 % | **CONFIRMED** | CPU **1.121x-1.359x median 1.147x** (Win), **1.105x-1.224x median 1.181x** (WSL); profile share **10.04-11.67 % -> 7.26-9.80 %** (Win), **10.31-13.61 % -> 6.63-10.43 %** (WSL); element-op count **1.1612x-1.1973x**, controls **exactly 1.0000x** |
 | 4a | the rim band, and 360 000 rays move nothing | **CONFIRMED, and the band is NARROWER than stated** | both gates LOCATED by bisection are the **same float** (`0.9999499987499374`) at all 8 radii ON THE AXIS -- the band is not an annulus, it exists only at azimuths where the two expressions round apart.  Straddle found at 2 of 6 radii, reaches `_refract` (code 4 vs 0) and `trace` (code 4 vs 1).  **580 000 rays over twelve combinations: zero alive flags, zero error codes**, both builds, against both the new pair and the full pre-5.49.0 pair |
 | 4b | can a REAL design land in the band? | **ANSWERED** | a fast singlet cannot (`max h/abs(R) = 0.495` at f/1).  A **BALL LENS** and a **HEMISPHERE** -- catalogue parts with semi-diameter `abs(R)` -- reach 0.999999 and DO cross the clamp: **2930 of 60 000** rim-packed rays die RAY_NAN on BOTH routes.  The 1-ULP straddle inside that region is not reachable by sampling (0 of 580 000 within 4 ULP of the gate).  **Migration-note fact: the reachable part is the PRE-EXISTING clamp, not the band** |
 | 5a | the way back is byte-identical to the pre-5.49.0 arithmetic | **CONFIRMED, archive to archive** | **594 of 594 arrays identical** on both builds -- the PRE tree (this verifier's own `git archive 49ddf4bd`, its own root, its own process) against the branch with both old keywords forced, over five prescriptions x two fields x `'last'` and `'all'` with every history bundle recorded.  At the DEFAULTS the same set reads 172/594 identical, 422 moved, worst 3.3e-16 |
@@ -155,9 +155,9 @@ get a different answer.
 
 | instrument | Windows | WSL |
 |---|---|---|
-| CPU time, min over 7 interleaved repeats of a >= 1.5 s batch | 1.043x .. 1.359x | **1.105x .. 1.224x, median 1.181x** |
-| controls (no pure sphere) | 1.016x, 1.023x, and one 0.54x/1.93x contention spike | **1.010x and 0.990x** |
-| profile share of the normal block | 10.04-11.87 % -> 7.26-9.20 % | 10.31-13.61 % -> 6.62-10.43 % |
+| CPU time, min over 7 interleaved repeats of a >= 1.5 s batch | **1.121x .. 1.359x, median 1.147x** | **1.105x .. 1.224x, median 1.181x** |
+| controls (no pure sphere) | 1.023x, and one 0.818x contention spike | **1.010x and 0.990x** |
+| profile share of the normal block | 10.04-11.67 % -> 7.26-9.80 % | 10.31-13.61 % -> 6.63-10.43 % |
 | element-op count (deterministic) | **1.1612x .. 1.1973x** | identical |
 | element-op count, controls | **exactly 1.0000x** (0 elements) | exactly 1.0000x |
 
@@ -328,7 +328,9 @@ surfaces.  **WP-B9's 1.03x-1.10x therefore has a reachable floor and an
 unreachable ceiling**: 1.10x is above what the change can produce on any
 surface count measured, and WP-C2's inability to see the effect is consistent
 with an effect of 0.5 %-2.4 %.  The profile share of the hoisted block agrees:
-1.2-2.7 % of `trace`'s tottime on Windows, 0.02-1.1 % on WSL.
+0.47-2.35 % of `trace`'s tottime on Windows and 0.02-1.12 % on WSL (one
+Windows control reads -0.65 %, which is the profiler's own noise on a
+prescription where the block is not there to be removed).
 
 **Cost: one documented behaviour moves, and it is now correctly bounded.**
 The intermediate `ray_history` bundles are no longer unit.  Measured on my own
@@ -756,10 +758,21 @@ rays aimed at the rim moved zero flags -- and it does not exist on the
 meridian at all, because the two gate expressions agree exactly at ``y = 0``.
 ```
 
-### D11 (P1, docs) -- three private-layer docstrings still say the shipped default is the GENERIC route
+### D10 (P3, process) -- the 19 new test ids are not in `.test_durations`
+
+`git diff 49ddf4bd..eadc67ba -- .test_durations` is empty, and
+`test_c2_analytic_normal_default.py`'s 19 ids are absent from the file.  The
+durations file is what splits the CI lanes; 19 unlisted ids are scheduled
+blind.  This verification's 16 ids ARE spliced (see the commit).
+
+Requested edit: run
+`python -m pytest tests/unit/test_c2_analytic_normal_default.py -p no:randomly -vv --durations=0`
+and splice its 19 ids into `.test_durations`.
+
+### D11 (P1, docs) -- four private-layer docstring sentences still say the shipped default is the GENERIC route
 
 The work package rewrote the two PUBLIC docstrings and left the private ones
-behind.  Three of their sentences are now flatly false, and the first is the
+behind.  Four of their sentences are now false, and the first is the
 one a reader reaches for when asking exactly the question the Migration note
 raises:
 
@@ -854,17 +867,6 @@ explicitly, 934 of 1008 are byte-identical on Windows (935 on WSL) and the
 and, while that line is being touched, the entry-point list itself needs the
 correction in **D4** -- the Migration Guide's "No keyword there" paragraph
 names the same six and is short by ten.
-
-### D10 (P3, process) -- the 19 new test ids are not in `.test_durations`
-
-`git diff 49ddf4bd..eadc67ba -- .test_durations` is empty, and
-`test_c2_analytic_normal_default.py`'s 19 ids are absent from the file.  The
-durations file is what splits the CI lanes; 19 unlisted ids are scheduled
-blind.  This verification's 16 ids ARE spliced (see the commit).
-
-Requested edit: run
-`python -m pytest tests/unit/test_c2_analytic_normal_default.py -p no:randomly -vv --durations=0`
-and splice its 19 ids into `.test_durations`.
 
 ---
 
