@@ -463,7 +463,7 @@ one is not this package's work.
 
 | id | where | why |
 |---|---|---|
-| `test_public_api.py::test_installed_metadata_version_matches_source_version` | both builds | the editable install's metadata reads 5.47.0 against a source `__version__` of 5.48.1.  **Verified on the base tree** (`git archive 49ddf4bd` extracted whole and run from there): it fails there too |
+| `test_public_api.py::test_installed_metadata_version_matches_source_version` | WSL only (it cleared on Windows partway through this package, when that install was refreshed by something outside it) | the venv's install metadata reads 5.47.0 against a source `__version__` of 5.48.1.  **Verified on the base tree** (`git archive 49ddf4bd` extracted whole and run from there, same interpreter): it fails there too, which it must -- the test compares the INSTALLED distribution's metadata against the tree's `__version__`, and the install is not a property of either tree |
 | `test_v5_2_3_walker_changelog_content.py::test_v16_synthetic_fabrication_is_caught` | WSL only | git cannot resolve a Windows worktree from WSL; the test's own message names this condition and says it is red "on the base tree too" |
 | `test_v5_3_2_walker_source_line_citation.py::test_v18_5_companion_reanchor_tool_exists_and_covers_the_cited_files` and `::..._the_5_47_0_block_citations_name_the_right_lines` | WSL only | same condition, same message |
 
