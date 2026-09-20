@@ -1,0 +1,8 @@
+E        +    where np.int64(0) = <built-in method sum of numpy.ndarray object at 0x7fc32007a7f0>()
+E        +      where <built-in method sum of numpy.ndarray object at 0x7fc32007a7f0> = (array([ True,  True,  True, ..., False, False, False], shape=(4000,)) & array([False, False, False, ...,  True,  True,  True], shape=(4000,))).sum
+
+tests/unit/test_verify_c2_analytic_normal.py:247: AssertionError
+=========================== short test summary info ============================
+FAILED tests/unit/test_c2_analytic_normal_default.py::test_c2_the_two_backends_gate_the_sphere_domain_differently
+FAILED tests/unit/test_verify_c2_analytic_normal.py::test_vc2_the_jax_backend_does_not_apply_the_numpy_domain_clamp
+2 failed, 56 passed in 13.24s

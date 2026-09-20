@@ -1,0 +1,108 @@
+=================== M0  control ===================
+........................................................................ [ 90%]
+.......s                                                                 [100%]
+79 passed, 1 skipped in 29.84s
+
+=================== M8  lumenairy/elements/_lens_traced.py ===================
+dropped the forward in lumenairy/elements/_lens_traced.py
+E       AssertionError: apply_real_lens_traced: the forwarded keywords did NOT reach every internal trace call -- the tracer saw [('<omitted>', '<omitted>')] over 1 call(s).  A keyword that is accepted and then dropped before the trace is the VR2-D4 shape: it leaves the signature census green and the way back broken.
+E       assert {('<omitted>', '<omitted>')} == {('generic', 'surface')}
+E         
+E         Extra items in the left set:
+E         ('<omitted>', '<omitted>')
+E         Extra items in the right set:
+E         ('generic', 'surface')
+E         Use -v to get more diff
+
+tests\unit\test_verify_c2_round2.py:624: AssertionError
+=========================== short test summary info ===========================
+FAILED tests/unit/test_c2_analytic_normal_default.py::test_c2_none_stamps_nothing_on_the_entry_points[apply_real_lens_traced]
+FAILED tests/unit/test_verify_c2_round2.py::test_vr2_the_forward_reaches_the_tracer_in_the_seven_unparametrized_entry_points[apply_real_lens_traced]
+2 failed, 77 passed, 1 skipped in 30.49s
+
+=================== M9  lumenairy/propagators/asymptotic_canonical_fit.py ===================
+dropped the forward in lumenairy/propagators/asymptotic_canonical_fit.py
+E       AssertionError: fit_canonical_polynomials: the forwarded keywords did NOT reach every internal trace call -- the tracer saw [('<omitted>', '<omitted>')] over 1 call(s).  A keyword that is accepted and then dropped before the trace is the VR2-D4 shape: it leaves the signature census green and the way back broken.
+E       assert {('<omitted>', '<omitted>')} == {('generic', 'surface')}
+E         
+E         Extra items in the left set:
+E         ('<omitted>', '<omitted>')
+E         Extra items in the right set:
+E         ('generic', 'surface')
+E         Use -v to get more diff
+
+tests\unit\test_verify_c2_round2.py:624: AssertionError
+=========================== short test summary info ===========================
+FAILED tests/unit/test_c2_analytic_normal_default.py::test_c2_none_stamps_nothing_on_the_entry_points[fit_canonical_polynomials]
+FAILED tests/unit/test_verify_c2_round2.py::test_vr2_the_forward_reaches_the_tracer_in_the_seven_unparametrized_entry_points[fit_canonical_polynomials]
+2 failed, 77 passed, 1 skipped in 30.37s
+
+=================== M10  lumenairy/analysis/image_plane_wfe.py ===================
+dropped the forward in lumenairy/analysis/image_plane_wfe.py
+E       AssertionError: eval_image_plane_wfe: the forwarded keywords did NOT reach every internal trace call -- the tracer saw [('<omitted>', '<omitted>')] over 1 call(s).  A keyword that is accepted and then dropped before the trace is the VR2-D4 shape: it leaves the signature census green and the way back broken.
+E       assert {('<omitted>', '<omitted>')} == {('generic', 'surface')}
+E         
+E         Extra items in the left set:
+E         ('<omitted>', '<omitted>')
+E         Extra items in the right set:
+E         ('generic', 'surface')
+E         Use -v to get more diff
+
+tests\unit\test_verify_c2_round2.py:624: AssertionError
+=========================== short test summary info ===========================
+FAILED tests/unit/test_c2_analytic_normal_default.py::test_c2_none_stamps_nothing_on_the_entry_points[eval_image_plane_wfe]
+FAILED tests/unit/test_verify_c2_round2.py::test_vr2_the_forward_reaches_the_tracer_in_the_seven_unparametrized_entry_points[eval_image_plane_wfe]
+2 failed, 77 passed, 1 skipped in 31.10s
+
+=================== M11  lumenairy/analysis/aberration.py ===================
+dropped the forward in lumenairy/analysis/aberration.py
+E       AssertionError: caustic_diagnostic: the forwarded keywords did NOT reach every internal trace call -- the tracer saw [('<omitted>', '<omitted>')] over 1 call(s).  A keyword that is accepted and then dropped before the trace is the VR2-D4 shape: it leaves the signature census green and the way back broken.
+E       assert {('<omitted>', '<omitted>')} == {('generic', 'surface')}
+E         
+E         Extra items in the left set:
+E         ('<omitted>', '<omitted>')
+E         Extra items in the right set:
+E         ('generic', 'surface')
+E         Use -v to get more diff
+
+tests\unit\test_verify_c2_round2.py:624: AssertionError
+=========================== short test summary info ===========================
+FAILED tests/unit/test_c2_analytic_normal_default.py::test_c2_none_stamps_nothing_on_the_entry_points[caustic_diagnostic]
+FAILED tests/unit/test_verify_c2_round2.py::test_vr2_the_forward_reaches_the_tracer_in_the_seven_unparametrized_entry_points[caustic_diagnostic]
+2 failed, 77 passed, 1 skipped in 31.06s
+
+=================== M12  lumenairy/elements/_lens_real.py ===================
+dropped the forward in lumenairy/elements/_lens_real.py
+            f'signature census green and the way back broken.')
+E       AssertionError: apply_real_lens: the forwarded keywords did NOT reach every internal trace call -- the tracer saw [('<omitted>', '<omitted>')] over 1 call(s).  A keyword that is accepted and then dropped before the trace is the VR2-D4 shape: it leaves the signature census green and the way back broken.
+E       assert {('<omitted>', '<omitted>')} == {('generic', 'surface')}
+E         
+E         Extra items in the left set:
+E         ('<omitted>', '<omitted>')
+E         Extra items in the right set:
+E         ('generic', 'surface')
+E         Use -v to get more diff
+
+tests\unit\test_c2_analytic_normal_default.py:1592: AssertionError
+=========================== short test summary info ===========================
+FAILED tests/unit/test_c2_analytic_normal_default.py::test_c2_none_stamps_nothing_on_the_entry_points[apply_real_lens]
+1 failed, 78 passed, 1 skipped in 31.44s
+
+=================== M4  _library_trace_default ===================
+_library_trace_default now answers the wrong renormalize route
+                f'-- would then refract off a route the public tracer does '
+                f'not use, which is exactly the defect D5 closed for '
+                f'sphere_normal.')
+E           AssertionError: _library_trace_default('renormalize') answers 'surface' while trace defaults to 'exit'.  Every direct caller that asks the helper -- analysis.ghost today, anything else tomorrow -- would then refract off a route the public tracer does not use, which is exactly the defect D5 closed for sphere_normal.
+E           assert 'surface' == 'exit'
+E             
+E             - exit
+E             + surface
+
+tests\unit\test_verify_c2_round2.py:458: AssertionError
+=========================== short test summary info ===========================
+FAILED tests/unit/test_c2_analytic_normal_default.py::test_c2_the_ghost_path_asks_the_library_default_normal_route
+FAILED tests/unit/test_verify_c2_round2.py::test_vr2_library_trace_default_agrees_with_trace_for_every_keyword
+2 failed, 77 passed, 1 skipped in 31.24s
+
+=================== done ===================

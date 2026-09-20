@@ -1,0 +1,1746 @@
+{
+ "python": "3.12.3",
+ "lumenairy_file": "/mnt/c/tmp/lum_vc2b/lumenairy/__init__.py",
+ "n_defs_naming_a_tracer": 37,
+ "n_exported_tracing": 20,
+ "n_with_both_keywords": 16,
+ "n_lacking": 4,
+ "with_both": [
+  "lumenairy.analysis.aberration:caustic_diagnostic",
+  "lumenairy.analysis.image_plane_wfe:eval_image_plane_wfe",
+  "lumenairy.analysis.plotting:plot_lens_layout",
+  "lumenairy.elements._lens_traced:apply_real_lens_traced",
+  "lumenairy.elements.lenses_maslov:apply_real_lens_maslov",
+  "lumenairy.propagators.asymptotic_canonical_fit:fit_canonical_polynomials",
+  "lumenairy.propagators.asymptotic_canonical_fit:fit_hf_polynomials",
+  "lumenairy.raytrace.differential:ray_transfer_jacobian",
+  "lumenairy.raytrace.ray_fan:opd_fan_data",
+  "lumenairy.raytrace.ray_fan:opd_fan_data_world",
+  "lumenairy.raytrace.ray_fan:ray_fan_data",
+  "lumenairy.raytrace.ray_fan:ray_fan_data_world",
+  "lumenairy.raytrace.ray_fan:through_focus_rms",
+  "lumenairy.raytrace.trace:raytrace_system",
+  "lumenairy.raytrace.trace:trace_prescription",
+  "lumenairy.raytrace.world:paraxial_focus_world"
+ ],
+ "lacking": [
+  "lumenairy.elements._lens_jax:apply_real_lens_maslov_jax",
+  "lumenairy.elements._lens_jax:apply_real_lens_traced_jax",
+  "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax",
+  "lumenairy.raytrace.differential:ray_transfer_jacobian_jax"
+ ],
+ "lacking_detail": {
+  "lumenairy.elements._lens_jax:apply_real_lens_maslov_jax": {
+   "exported_as": [
+    "lumenairy.apply_real_lens_maslov_jax",
+    "lumenairy.elements._lens_jax.apply_real_lens_maslov_jax",
+    "lumenairy.elements.lenses.apply_real_lens_maslov_jax"
+   ],
+   "tracers_named": [
+    "trace_jax"
+   ],
+   "sig_way_back": [],
+   "file": "elements/_lens_jax.py"
+  },
+  "lumenairy.elements._lens_jax:apply_real_lens_traced_jax": {
+   "exported_as": [
+    "lumenairy.apply_real_lens_traced_jax",
+    "lumenairy.elements._lens_jax.apply_real_lens_traced_jax",
+    "lumenairy.elements.lenses.apply_real_lens_traced_jax"
+   ],
+   "tracers_named": [
+    "trace_jax"
+   ],
+   "sig_way_back": [],
+   "file": "elements/_lens_jax.py"
+  },
+  "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax": {
+   "exported_as": [
+    "lumenairy.fit_canonical_polynomials_jax",
+    "lumenairy.propagators.asymptotic.fit_canonical_polynomials_jax",
+    "lumenairy.propagators.asymptotic_jax_twin.fit_canonical_polynomials_jax"
+   ],
+   "tracers_named": [
+    "trace_jax"
+   ],
+   "sig_way_back": [],
+   "file": "propagators/asymptotic_jax_twin.py"
+  },
+  "lumenairy.raytrace.differential:ray_transfer_jacobian_jax": {
+   "exported_as": [
+    "lumenairy.ray_transfer_jacobian_jax",
+    "lumenairy.raytrace.differential.ray_transfer_jacobian_jax",
+    "lumenairy.raytrace.ray_transfer_jacobian_jax"
+   ],
+   "tracers_named": [
+    "trace_jax"
+   ],
+   "sig_way_back": [],
+   "file": "raytrace/differential.py"
+  }
+ },
+ "import_errors": {
+  "lumenairy.ui._worker": "ModuleNotFoundError: No module named 'PySide6'",
+  "lumenairy.ui.algebra_dock": "ModuleNotFoundError: No module named 'PySide6'",
+  "lumenairy.ui.analysis": "ModuleNotFoundError: No module named 'PySide6'",
+  "lumenairy.ui.ao_dock": "ModuleNotFoundError: No module named 'PySide6'",
+  "lumenairy.ui.caustic_dock": "ModuleNotFoundError: No module named 'PySide6'",
+  "lumenairy.ui.chebyshev_fit_dock": "ModuleNotFoundError: No module named 'PySide6'",
+  "lumenairy.ui.coatings_dock": "ModuleNotFoundError: No module named 'PySide6'",
+  "lumenairy.ui.coherence_dock": "ModuleNotFoundError: No module named 'PySide6'",
+  "lumenairy.ui.command_palette": "ModuleNotFoundError: No module named 'PySide6'",
+  "lumenairy.ui.coronagraph_dock": "ModuleNotFoundError: No module named 'PySide6'",
+  "lumenairy.ui.diagnostics": "ModuleNotFoundError: No module named 'PySide6'",
+  "lumenairy.ui.distortion_dock": "ModuleNotFoundError: No module named 'PySide6'",
+  "lumenairy.ui.element_table": "ModuleNotFoundError: No module named 'PySide6'",
+  "lumenairy.ui.field_browser_dock": "ModuleNotFoundError: No module named 'PySide6'",
+  "lumenairy.ui.footprint_dock": "ModuleNotFoundError: No module named 'PySide6'",
+  "lumenairy.ui.ghost_dock": "ModuleNotFoundError: No module named 'PySide6'",
+  "lumenairy.ui.glass_map_dock": "ModuleNotFoundError: No module named 'PySide6'",
+  "lumenairy.ui.interferometry_dock": "ModuleNotFoundError: No module named 'PySide6'",
+  "lumenairy.ui.jones_pupil_dock": "ModuleNotFoundError: No module named 'PySide6'",
+  "lumenairy.ui.layout_2d": "ModuleNotFoundError: No module named 'PySide6'",
+  "lumenairy.ui.layout_3d": "ModuleNotFoundError: No module named 'PySide6'",
+  "lumenairy.ui.lens_options_dialog": "ModuleNotFoundError: No module named 'PySide6'",
+  "lumenairy.ui.lg_aberration_dock": "ModuleNotFoundError: No module named 'PySide6'",
+  "lumenairy.ui.library_dock": "ModuleNotFoundError: No module named 'PySide6'",
+  "lumenairy.ui.log_viewer_dock": "ModuleNotFoundError: No module named 'PySide6'",
+  "lumenairy.ui.main_window": "ModuleNotFoundError: No module named 'PySide6'",
+  "lumenairy.ui.materials_dock": "ModuleNotFoundError: No module named 'PySide6'",
+  "lumenairy.ui.model": "ModuleNotFoundError: No module named 'PySide6'",
+  "lumenairy.ui.multiconfig_dock": "ModuleNotFoundError: No module named 'PySide6'",
+  "lumenairy.ui.optimizer_dock": "ModuleNotFoundError: No module named 'PySide6'",
+  "lumenairy.ui.phase_retrieval_dock": "ModuleNotFoundError: No module named 'PySide6'",
+  "lumenairy.ui.psf_mtf_dock": "ModuleNotFoundError: No module named 'PySide6'",
+  "lumenairy.ui.rayfan_dock": "ModuleNotFoundError: No module named 'PySide6'",
+  "lumenairy.ui.repl_dock": "ModuleNotFoundError: No module named 'PySide6'",
+  "lumenairy.ui.richards_wolf_dock": "ModuleNotFoundError: No module named 'PySide6'",
+  "lumenairy.ui.sensitivity_dock": "ModuleNotFoundError: No module named 'PySide6'",
+  "lumenairy.ui.shack_hartmann_dock": "ModuleNotFoundError: No module named 'PySide6'",
+  "lumenairy.ui.slider_dock": "ModuleNotFoundError: No module named 'PySide6'",
+  "lumenairy.ui.snapshots_dock": "ModuleNotFoundError: No module named 'PySide6'",
+  "lumenairy.ui.spot_field_dock": "ModuleNotFoundError: No module named 'PySide6'",
+  "lumenairy.ui.surface_editors": "ModuleNotFoundError: No module named 'PySide6'",
+  "lumenairy.ui.thin_grating_dock": "ModuleNotFoundError: No module named 'PySide6'",
+  "lumenairy.ui.through_focus_dock": "ModuleNotFoundError: No module named 'PySide6'",
+  "lumenairy.ui.tolerance_dock": "ModuleNotFoundError: No module named 'PySide6'",
+  "lumenairy.ui.wavefront_map_dock": "ModuleNotFoundError: No module named 'PySide6'",
+  "lumenairy.ui.waveoptics_dock": "ModuleNotFoundError: No module named 'PySide6'",
+  "lumenairy.ui.welcome_dock": "ModuleNotFoundError: No module named 'PySide6'",
+  "lumenairy.ui.workspace": "ModuleNotFoundError: No module named 'PySide6'",
+  "lumenairy.ui.zernike_dock": "ModuleNotFoundError: No module named 'PySide6'"
+ },
+ "rows": {
+  "lumenairy.analysis.aberration:caustic_diagnostic": {
+   "module": "lumenairy.analysis.aberration",
+   "qualname": "caustic_diagnostic",
+   "file": "analysis/aberration.py",
+   "encoding": "cp1252",
+   "tracers_named": [
+    "trace"
+   ],
+   "top_level": true,
+   "private_name": false,
+   "ast_params": [
+    "prescription",
+    "wavelength",
+    "chief_ray",
+    "fan_radius",
+    "n_z_per_gap",
+    "z_after_last_surface",
+    "renormalize",
+    "sphere_normal"
+   ],
+   "ast_kwonly": [
+    "chief_ray",
+    "fan_radius",
+    "n_z_per_gap",
+    "z_after_last_surface",
+    "renormalize",
+    "sphere_normal"
+   ],
+   "ast_way_back": [
+    "sphere_normal",
+    "renormalize"
+   ],
+   "lineno": 366,
+   "exported_as": [
+    "lumenairy.analysis.aberration.caustic_diagnostic",
+    "lumenairy.analysis.caustic_diagnostic",
+    "lumenairy.caustic_diagnostic"
+   ],
+   "is_exported": true,
+   "sig_way_back": [
+    "sphere_normal",
+    "renormalize"
+   ],
+   "way_back_keyword_only": [
+    "sphere_normal",
+    "renormalize"
+   ],
+   "defaults_none": {
+    "sphere_normal": true,
+    "renormalize": true
+   }
+  },
+  "lumenairy.analysis.field:_trace": {
+   "module": "lumenairy.analysis.field",
+   "qualname": "_trace",
+   "file": "analysis/field.py",
+   "encoding": "cp1252",
+   "tracers_named": [
+    "trace",
+    "trace_world"
+   ],
+   "top_level": true,
+   "private_name": true,
+   "ast_params": [
+    "rays",
+    "surfaces",
+    "wavelength"
+   ],
+   "ast_kwonly": [],
+   "ast_way_back": [],
+   "lineno": 110,
+   "exported_as": [],
+   "is_exported": false,
+   "sig_way_back": [],
+   "way_back_keyword_only": [],
+   "defaults_none": {}
+  },
+  "lumenairy.analysis.field:_world_exit_direction": {
+   "module": "lumenairy.analysis.field",
+   "qualname": "_world_exit_direction",
+   "file": "analysis/field.py",
+   "encoding": "cp1252",
+   "tracers_named": [
+    "trace_world"
+   ],
+   "top_level": true,
+   "private_name": true,
+   "ast_params": [
+    "world_surfaces"
+   ],
+   "ast_kwonly": [],
+   "ast_way_back": [],
+   "lineno": 135,
+   "exported_as": [],
+   "is_exported": false,
+   "sig_way_back": [],
+   "way_back_keyword_only": [],
+   "defaults_none": {}
+  },
+  "lumenairy.analysis.image_plane_wfe:eval_image_plane_wfe": {
+   "module": "lumenairy.analysis.image_plane_wfe",
+   "qualname": "eval_image_plane_wfe",
+   "file": "analysis/image_plane_wfe.py",
+   "encoding": "cp1252",
+   "tracers_named": [
+    "trace"
+   ],
+   "top_level": true,
+   "private_name": false,
+   "ast_params": [
+    "prescription",
+    "wavelength",
+    "field",
+    "n_pupil",
+    "img_d_m",
+    "image_plane",
+    "sphere_tangent",
+    "field_max_m",
+    "pupil_grid",
+    "field_max_rad",
+    "renormalize",
+    "sphere_normal"
+   ],
+   "ast_kwonly": [
+    "renormalize",
+    "sphere_normal"
+   ],
+   "ast_way_back": [
+    "sphere_normal",
+    "renormalize"
+   ],
+   "lineno": 251,
+   "exported_as": [
+    "lumenairy.analysis.eval_image_plane_wfe",
+    "lumenairy.analysis.image_plane_wfe.eval_image_plane_wfe",
+    "lumenairy.eval_image_plane_wfe"
+   ],
+   "is_exported": true,
+   "sig_way_back": [
+    "sphere_normal",
+    "renormalize"
+   ],
+   "way_back_keyword_only": [
+    "sphere_normal",
+    "renormalize"
+   ],
+   "defaults_none": {
+    "sphere_normal": true,
+    "renormalize": true
+   }
+  },
+  "lumenairy.analysis.plotting:plot_lens_layout": {
+   "module": "lumenairy.analysis.plotting",
+   "qualname": "plot_lens_layout",
+   "file": "analysis/plotting.py",
+   "encoding": "cp1252",
+   "tracers_named": [
+    "trace"
+   ],
+   "top_level": true,
+   "private_name": false,
+   "ast_params": [
+    "prescription",
+    "ax",
+    "wavelength",
+    "show_rays",
+    "n_field_angles",
+    "max_field_deg",
+    "rays_per_fan",
+    "semi_diameter",
+    "show_optical_axis",
+    "show_image_plane",
+    "title",
+    "renormalize",
+    "sphere_normal"
+   ],
+   "ast_kwonly": [
+    "ax",
+    "wavelength",
+    "show_rays",
+    "n_field_angles",
+    "max_field_deg",
+    "rays_per_fan",
+    "semi_diameter",
+    "show_optical_axis",
+    "show_image_plane",
+    "title",
+    "renormalize",
+    "sphere_normal"
+   ],
+   "ast_way_back": [
+    "sphere_normal",
+    "renormalize"
+   ],
+   "lineno": 2147,
+   "exported_as": [
+    "lumenairy.analysis.plot_lens_layout",
+    "lumenairy.analysis.plotting.plot_lens_layout",
+    "lumenairy.plot_lens_layout"
+   ],
+   "is_exported": true,
+   "sig_way_back": [
+    "sphere_normal",
+    "renormalize"
+   ],
+   "way_back_keyword_only": [
+    "sphere_normal",
+    "renormalize"
+   ],
+   "defaults_none": {
+    "sphere_normal": true,
+    "renormalize": true
+   }
+  },
+  "lumenairy.elements._lens_jax:apply_real_lens_maslov_jax": {
+   "module": "lumenairy.elements._lens_jax",
+   "qualname": "apply_real_lens_maslov_jax",
+   "file": "elements/_lens_jax.py",
+   "encoding": "cp1252",
+   "tracers_named": [
+    "trace_jax"
+   ],
+   "top_level": true,
+   "private_name": false,
+   "ast_params": [
+    "E_in",
+    "prescription",
+    "wavelength",
+    "dx",
+    "dy",
+    "ray_subsample",
+    "cheb_order",
+    "newton_iters",
+    "amplitude",
+    "bandlimit",
+    "input_wavevector_saddle"
+   ],
+   "ast_kwonly": [
+    "prescription",
+    "wavelength",
+    "dx",
+    "dy",
+    "ray_subsample",
+    "cheb_order",
+    "newton_iters",
+    "amplitude",
+    "bandlimit",
+    "input_wavevector_saddle"
+   ],
+   "ast_way_back": [],
+   "lineno": 762,
+   "exported_as": [
+    "lumenairy.apply_real_lens_maslov_jax",
+    "lumenairy.elements._lens_jax.apply_real_lens_maslov_jax",
+    "lumenairy.elements.lenses.apply_real_lens_maslov_jax"
+   ],
+   "is_exported": true,
+   "sig_way_back": [],
+   "way_back_keyword_only": [],
+   "defaults_none": {}
+  },
+  "lumenairy.elements._lens_jax:apply_real_lens_traced_jax": {
+   "module": "lumenairy.elements._lens_jax",
+   "qualname": "apply_real_lens_traced_jax",
+   "file": "elements/_lens_jax.py",
+   "encoding": "cp1252",
+   "tracers_named": [
+    "trace_jax"
+   ],
+   "top_level": true,
+   "private_name": false,
+   "ast_params": [
+    "E_in",
+    "prescription",
+    "wavelength",
+    "dx",
+    "dy",
+    "ray_subsample",
+    "cheb_order",
+    "newton_iters",
+    "amplitude",
+    "bandlimit",
+    "radii",
+    "conics",
+    "thicknesses"
+   ],
+   "ast_kwonly": [
+    "prescription",
+    "wavelength",
+    "dx",
+    "dy",
+    "ray_subsample",
+    "cheb_order",
+    "newton_iters",
+    "amplitude",
+    "bandlimit",
+    "radii",
+    "conics",
+    "thicknesses"
+   ],
+   "ast_way_back": [],
+   "lineno": 375,
+   "exported_as": [
+    "lumenairy.apply_real_lens_traced_jax",
+    "lumenairy.elements._lens_jax.apply_real_lens_traced_jax",
+    "lumenairy.elements.lenses.apply_real_lens_traced_jax"
+   ],
+   "is_exported": true,
+   "sig_way_back": [],
+   "way_back_keyword_only": [],
+   "defaults_none": {}
+  },
+  "lumenairy.elements._lens_traced:_opl_by_backward_trace": {
+   "module": "lumenairy.elements._lens_traced",
+   "qualname": "_opl_by_backward_trace",
+   "file": "elements/_lens_traced.py",
+   "encoding": "cp1252",
+   "tracers_named": [
+    "trace"
+   ],
+   "top_level": true,
+   "private_name": true,
+   "ast_params": [
+    "E_analytic",
+    "lens_prescription",
+    "wavelength",
+    "dx",
+    "N_grid",
+    "ray_subsample",
+    "tilt_smooth_sigma_px"
+   ],
+   "ast_kwonly": [],
+   "ast_way_back": [],
+   "lineno": 7861,
+   "exported_as": [],
+   "is_exported": false,
+   "sig_way_back": [],
+   "way_back_keyword_only": [],
+   "defaults_none": {}
+  },
+  "lumenairy.elements._lens_traced:apply_real_lens_traced": {
+   "module": "lumenairy.elements._lens_traced",
+   "qualname": "apply_real_lens_traced",
+   "file": "elements/_lens_traced.py",
+   "encoding": "cp1252",
+   "tracers_named": [
+    "trace"
+   ],
+   "top_level": true,
+   "private_name": false,
+   "ast_params": [
+    "E_in",
+    "prescription",
+    "wavelength",
+    "dx",
+    "dy",
+    "bandlimit",
+    "ray_subsample",
+    "n_workers",
+    "progress",
+    "min_coarse_samples_per_aperture",
+    "on_undersample",
+    "preserve_input_phase",
+    "remap_sampling",
+    "tilt_aware_rays",
+    "carrier",
+    "on_noncollimated",
+    "fit_radius_beam_factor",
+    "on_aperture_beam",
+    "on_fit_domain_basis",
+    "on_pool_memory",
+    "beam_centre",
+    "decentred_fit_poly_order",
+    "parallel_amp",
+    "parallel_amp_min_free_gb",
+    "newton_amp_mask_rel",
+    "newton_mask_dilate_coarse_px",
+    "newton_max_iters",
+    "inversion_method",
+    "fast_analytic_phase",
+    "newton_fit",
+    "newton_poly_order",
+    "fit_basis",
+    "use_gpu",
+    "amp_use_gpu",
+    "wave_propagator",
+    "sag_dtype",
+    "sag_chunk_rows",
+    "return_screen",
+    "amplitude_model",
+    "caustic",
+    "output_plane_distance",
+    "caustic_ray_subsample",
+    "caustic_band",
+    "caustic_min_area_ratio",
+    "origin",
+    "inverse_map",
+    "_exit_na_out",
+    "_remap_launch_out",
+    "_imap_out",
+    "geometry",
+    "numerics",
+    "resources",
+    "config",
+    "renormalize",
+    "sphere_normal"
+   ],
+   "ast_kwonly": [
+    "prescription",
+    "wavelength",
+    "dx",
+    "dy",
+    "bandlimit",
+    "ray_subsample",
+    "n_workers",
+    "progress",
+    "min_coarse_samples_per_aperture",
+    "on_undersample",
+    "preserve_input_phase",
+    "remap_sampling",
+    "tilt_aware_rays",
+    "carrier",
+    "on_noncollimated",
+    "fit_radius_beam_factor",
+    "on_aperture_beam",
+    "on_fit_domain_basis",
+    "on_pool_memory",
+    "beam_centre",
+    "decentred_fit_poly_order",
+    "parallel_amp",
+    "parallel_amp_min_free_gb",
+    "newton_amp_mask_rel",
+    "newton_mask_dilate_coarse_px",
+    "newton_max_iters",
+    "inversion_method",
+    "fast_analytic_phase",
+    "newton_fit",
+    "newton_poly_order",
+    "fit_basis",
+    "use_gpu",
+    "amp_use_gpu",
+    "wave_propagator",
+    "sag_dtype",
+    "sag_chunk_rows",
+    "return_screen",
+    "amplitude_model",
+    "caustic",
+    "output_plane_distance",
+    "caustic_ray_subsample",
+    "caustic_band",
+    "caustic_min_area_ratio",
+    "origin",
+    "inverse_map",
+    "_exit_na_out",
+    "_remap_launch_out",
+    "_imap_out",
+    "geometry",
+    "numerics",
+    "resources",
+    "config",
+    "renormalize",
+    "sphere_normal"
+   ],
+   "ast_way_back": [
+    "sphere_normal",
+    "renormalize"
+   ],
+   "lineno": 8152,
+   "exported_as": [
+    "lumenairy.apply_real_lens_traced",
+    "lumenairy.elements._lens_traced.apply_real_lens_traced",
+    "lumenairy.elements.apply_real_lens_traced",
+    "lumenairy.elements.lenses.apply_real_lens_traced",
+    "lumenairy.optimize.core.apply_real_lens_traced",
+    "lumenairy.propagators.system.apply_real_lens_traced"
+   ],
+   "is_exported": true,
+   "sig_way_back": [
+    "sphere_normal",
+    "renormalize"
+   ],
+   "way_back_keyword_only": [
+    "sphere_normal",
+    "renormalize"
+   ],
+   "defaults_none": {
+    "sphere_normal": true,
+    "renormalize": true
+   }
+  },
+  "lumenairy.elements._lens_traced_multibranch:_trace_launch_grid": {
+   "module": "lumenairy.elements._lens_traced_multibranch",
+   "qualname": "_trace_launch_grid",
+   "file": "elements/_lens_traced_multibranch.py",
+   "encoding": "cp1252",
+   "tracers_named": [
+    "trace"
+   ],
+   "top_level": true,
+   "private_name": true,
+   "ast_params": [
+    "prescription",
+    "wavelength",
+    "launch_radius",
+    "n_launch",
+    "output_plane_distance",
+    "output_plane_n",
+    "L0",
+    "M0"
+   ],
+   "ast_kwonly": [],
+   "ast_way_back": [],
+   "lineno": 622,
+   "exported_as": [],
+   "is_exported": false,
+   "sig_way_back": [],
+   "way_back_keyword_only": [],
+   "defaults_none": {}
+  },
+  "lumenairy.elements._lens_traced_uniform:_trace_meridional_cusp": {
+   "module": "lumenairy.elements._lens_traced_uniform",
+   "qualname": "_trace_meridional_cusp",
+   "file": "elements/_lens_traced_uniform.py",
+   "encoding": "cp1252",
+   "tracers_named": [
+    "trace"
+   ],
+   "top_level": true,
+   "private_name": true,
+   "ast_params": [
+    "prescription",
+    "wavelength",
+    "output_plane_distance",
+    "output_plane_n",
+    "launch_radius",
+    "n_fan",
+    "E_in",
+    "dx",
+    "n_band"
+   ],
+   "ast_kwonly": [],
+   "ast_way_back": [],
+   "lineno": 986,
+   "exported_as": [],
+   "is_exported": false,
+   "sig_way_back": [],
+   "way_back_keyword_only": [],
+   "defaults_none": {}
+  },
+  "lumenairy.elements._lens_traced_uniform:_trace_meridional_fold": {
+   "module": "lumenairy.elements._lens_traced_uniform",
+   "qualname": "_trace_meridional_fold",
+   "file": "elements/_lens_traced_uniform.py",
+   "encoding": "cp1252",
+   "tracers_named": [
+    "trace"
+   ],
+   "top_level": true,
+   "private_name": true,
+   "ast_params": [
+    "prescription",
+    "wavelength",
+    "output_plane_distance",
+    "output_plane_n",
+    "launch_radius",
+    "n_fan"
+   ],
+   "ast_kwonly": [],
+   "ast_way_back": [],
+   "lineno": 589,
+   "exported_as": [],
+   "is_exported": false,
+   "sig_way_back": [],
+   "way_back_keyword_only": [],
+   "defaults_none": {}
+  },
+  "lumenairy.elements.lenses_maslov:apply_real_lens_maslov": {
+   "module": "lumenairy.elements.lenses_maslov",
+   "qualname": "apply_real_lens_maslov",
+   "file": "elements/lenses_maslov.py",
+   "encoding": "cp1252",
+   "tracers_named": [
+    "trace"
+   ],
+   "top_level": true,
+   "private_name": false,
+   "ast_params": [
+    "E_in",
+    "prescription",
+    "wavelength",
+    "dx",
+    "dy",
+    "ray_field_samples",
+    "ray_pupil_samples",
+    "poly_order",
+    "n_v2",
+    "output_subsample",
+    "roi",
+    "output_plane_distance",
+    "output_plane_n",
+    "extract_linear_phase",
+    "chunk_v2",
+    "use_numexpr",
+    "integration_method",
+    "stationary_newton_iter",
+    "stationary_newton_tol",
+    "local_n_samples",
+    "local_window_sigma",
+    "levin_tol",
+    "collimated_input",
+    "input_na",
+    "input_wavevector_saddle",
+    "normalize_output",
+    "verbose",
+    "progress",
+    "use_gpu",
+    "fold_split",
+    "geometry",
+    "numerics",
+    "resources",
+    "config",
+    "renormalize",
+    "sphere_normal"
+   ],
+   "ast_kwonly": [
+    "prescription",
+    "wavelength",
+    "dx",
+    "dy",
+    "ray_field_samples",
+    "ray_pupil_samples",
+    "poly_order",
+    "n_v2",
+    "output_subsample",
+    "roi",
+    "output_plane_distance",
+    "output_plane_n",
+    "extract_linear_phase",
+    "chunk_v2",
+    "use_numexpr",
+    "integration_method",
+    "stationary_newton_iter",
+    "stationary_newton_tol",
+    "local_n_samples",
+    "local_window_sigma",
+    "levin_tol",
+    "collimated_input",
+    "input_na",
+    "input_wavevector_saddle",
+    "normalize_output",
+    "verbose",
+    "progress",
+    "use_gpu",
+    "fold_split",
+    "geometry",
+    "numerics",
+    "resources",
+    "config",
+    "renormalize",
+    "sphere_normal"
+   ],
+   "ast_way_back": [
+    "sphere_normal",
+    "renormalize"
+   ],
+   "lineno": 1861,
+   "exported_as": [
+    "lumenairy.apply_real_lens_maslov",
+    "lumenairy.elements.apply_real_lens_maslov",
+    "lumenairy.elements.lenses.apply_real_lens_maslov",
+    "lumenairy.elements.lenses_maslov.apply_real_lens_maslov"
+   ],
+   "is_exported": true,
+   "sig_way_back": [
+    "sphere_normal",
+    "renormalize"
+   ],
+   "way_back_keyword_only": [
+    "sphere_normal",
+    "renormalize"
+   ],
+   "defaults_none": {
+    "sphere_normal": true,
+    "renormalize": true
+   }
+  },
+  "lumenairy.propagators.asymptotic_canonical_fit:fit_canonical_polynomials": {
+   "module": "lumenairy.propagators.asymptotic_canonical_fit",
+   "qualname": "fit_canonical_polynomials",
+   "file": "propagators/asymptotic_canonical_fit.py",
+   "encoding": "cp1252",
+   "tracers_named": [
+    "trace"
+   ],
+   "top_level": true,
+   "private_name": false,
+   "ast_params": [
+    "prescription",
+    "wavelength",
+    "source_box_half",
+    "pupil_box_half",
+    "n_field",
+    "n_pupil",
+    "poly_order",
+    "extract_linear_phase",
+    "object_distance",
+    "surface_diffraction",
+    "endpoint_anchored",
+    "auto_bump_threshold_waves",
+    "max_auto_poly_order",
+    "source_centre",
+    "renormalize",
+    "sphere_normal"
+   ],
+   "ast_kwonly": [
+    "source_box_half",
+    "pupil_box_half",
+    "n_field",
+    "n_pupil",
+    "poly_order",
+    "extract_linear_phase",
+    "object_distance",
+    "surface_diffraction",
+    "endpoint_anchored",
+    "auto_bump_threshold_waves",
+    "max_auto_poly_order",
+    "source_centre",
+    "renormalize",
+    "sphere_normal"
+   ],
+   "ast_way_back": [
+    "sphere_normal",
+    "renormalize"
+   ],
+   "lineno": 414,
+   "exported_as": [
+    "lumenairy.fit_canonical_polynomials",
+    "lumenairy.propagators.asymptotic.fit_canonical_polynomials",
+    "lumenairy.propagators.asymptotic_canonical_fit.fit_canonical_polynomials"
+   ],
+   "is_exported": true,
+   "sig_way_back": [
+    "sphere_normal",
+    "renormalize"
+   ],
+   "way_back_keyword_only": [
+    "sphere_normal",
+    "renormalize"
+   ],
+   "defaults_none": {
+    "sphere_normal": true,
+    "renormalize": true
+   }
+  },
+  "lumenairy.propagators.asymptotic_canonical_fit:fit_hf_polynomials": {
+   "module": "lumenairy.propagators.asymptotic_canonical_fit",
+   "qualname": "fit_hf_polynomials",
+   "file": "propagators/asymptotic_canonical_fit.py",
+   "encoding": "cp1252",
+   "tracers_named": [
+    "trace"
+   ],
+   "top_level": true,
+   "private_name": false,
+   "ast_params": [
+    "prescription",
+    "wavelength",
+    "source_box_half",
+    "pupil_box_half",
+    "n_field",
+    "n_pupil",
+    "poly_order",
+    "extract_linear_phase",
+    "object_distance",
+    "surface_diffraction",
+    "endpoint_anchored",
+    "renormalize",
+    "sphere_normal"
+   ],
+   "ast_kwonly": [
+    "source_box_half",
+    "pupil_box_half",
+    "n_field",
+    "n_pupil",
+    "poly_order",
+    "extract_linear_phase",
+    "object_distance",
+    "surface_diffraction",
+    "endpoint_anchored",
+    "renormalize",
+    "sphere_normal"
+   ],
+   "ast_way_back": [
+    "sphere_normal",
+    "renormalize"
+   ],
+   "lineno": 1030,
+   "exported_as": [
+    "lumenairy.fit_hf_polynomials",
+    "lumenairy.propagators.asymptotic.fit_hf_polynomials",
+    "lumenairy.propagators.asymptotic_canonical_fit.fit_hf_polynomials"
+   ],
+   "is_exported": true,
+   "sig_way_back": [
+    "sphere_normal",
+    "renormalize"
+   ],
+   "way_back_keyword_only": [
+    "sphere_normal",
+    "renormalize"
+   ],
+   "defaults_none": {
+    "sphere_normal": true,
+    "renormalize": true
+   }
+  },
+  "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax": {
+   "module": "lumenairy.propagators.asymptotic_jax_twin",
+   "qualname": "fit_canonical_polynomials_jax",
+   "file": "propagators/asymptotic_jax_twin.py",
+   "encoding": "cp1252",
+   "tracers_named": [
+    "trace_jax"
+   ],
+   "top_level": true,
+   "private_name": false,
+   "ast_params": [
+    "prescription",
+    "wavelength",
+    "source_box_half",
+    "pupil_box_half",
+    "n_field",
+    "n_pupil",
+    "poly_order",
+    "extract_linear_phase",
+    "object_distance",
+    "surface_diffraction",
+    "endpoint_anchored"
+   ],
+   "ast_kwonly": [
+    "source_box_half",
+    "pupil_box_half",
+    "n_field",
+    "n_pupil",
+    "poly_order",
+    "extract_linear_phase",
+    "object_distance",
+    "surface_diffraction",
+    "endpoint_anchored"
+   ],
+   "ast_way_back": [],
+   "lineno": 922,
+   "exported_as": [
+    "lumenairy.fit_canonical_polynomials_jax",
+    "lumenairy.propagators.asymptotic.fit_canonical_polynomials_jax",
+    "lumenairy.propagators.asymptotic_jax_twin.fit_canonical_polynomials_jax"
+   ],
+   "is_exported": true,
+   "sig_way_back": [],
+   "way_back_keyword_only": [],
+   "defaults_none": {}
+  },
+  "lumenairy.propagators.carrier:_group_chief_transfer": {
+   "module": "lumenairy.propagators.carrier",
+   "qualname": "_group_chief_transfer",
+   "file": "propagators/carrier.py",
+   "encoding": "cp1252",
+   "tracers_named": [
+    "trace"
+   ],
+   "top_level": true,
+   "private_name": true,
+   "ast_params": [
+    "presc",
+    "abcd",
+    "x",
+    "y",
+    "L",
+    "M",
+    "wavelength",
+    "fn"
+   ],
+   "ast_kwonly": [],
+   "ast_way_back": [],
+   "lineno": 7455,
+   "exported_as": [],
+   "is_exported": false,
+   "sig_way_back": [],
+   "way_back_keyword_only": [],
+   "defaults_none": {}
+  },
+  "lumenairy.propagators.gbd:_reframe_beamlets_to_world_plane": {
+   "module": "lumenairy.propagators.gbd",
+   "qualname": "_reframe_beamlets_to_world_plane",
+   "file": "propagators/gbd.py",
+   "encoding": "cp1252",
+   "tracers_named": [
+    "trace_world"
+   ],
+   "top_level": true,
+   "private_name": true,
+   "ast_params": [
+    "beamlets",
+    "prescription",
+    "wavelength",
+    "Q",
+    "amp",
+    "k0",
+    "world_output_plane"
+   ],
+   "ast_kwonly": [],
+   "ast_way_back": [],
+   "lineno": 3850,
+   "exported_as": [],
+   "is_exported": false,
+   "sig_way_back": [],
+   "way_back_keyword_only": [],
+   "defaults_none": {}
+  },
+  "lumenairy.propagators.hfpi:_hfpi_segment_trace": {
+   "module": "lumenairy.propagators.hfpi",
+   "qualname": "_hfpi_segment_trace",
+   "file": "propagators/hfpi.py",
+   "encoding": "cp1252",
+   "tracers_named": [
+    "trace"
+   ],
+   "top_level": true,
+   "private_name": true,
+   "ast_params": [
+    "paths",
+    "segment_surfaces",
+    "wavelength",
+    "surface_diffraction"
+   ],
+   "ast_kwonly": [
+    "surface_diffraction"
+   ],
+   "ast_way_back": [],
+   "lineno": 2019,
+   "exported_as": [],
+   "is_exported": false,
+   "sig_way_back": [],
+   "way_back_keyword_only": [],
+   "defaults_none": {}
+  },
+  "lumenairy.raytrace.differential:ray_transfer_jacobian": {
+   "module": "lumenairy.raytrace.differential",
+   "qualname": "ray_transfer_jacobian",
+   "file": "raytrace/differential.py",
+   "encoding": "cp1252",
+   "tracers_named": [
+    "trace"
+   ],
+   "top_level": true,
+   "private_name": false,
+   "ast_params": [
+    "x",
+    "y",
+    "ux",
+    "uy",
+    "surfaces",
+    "wavelength",
+    "per_surface",
+    "h_pos",
+    "h_slope",
+    "reference",
+    "n_exit",
+    "renormalize",
+    "sphere_normal"
+   ],
+   "ast_kwonly": [
+    "per_surface",
+    "h_pos",
+    "h_slope",
+    "reference",
+    "n_exit",
+    "renormalize",
+    "sphere_normal"
+   ],
+   "ast_way_back": [
+    "sphere_normal",
+    "renormalize"
+   ],
+   "lineno": 318,
+   "exported_as": [
+    "lumenairy.ray_transfer_jacobian",
+    "lumenairy.raytrace.differential.ray_transfer_jacobian",
+    "lumenairy.raytrace.ray_transfer_jacobian"
+   ],
+   "is_exported": true,
+   "sig_way_back": [
+    "sphere_normal",
+    "renormalize"
+   ],
+   "way_back_keyword_only": [
+    "sphere_normal",
+    "renormalize"
+   ],
+   "defaults_none": {
+    "sphere_normal": true,
+    "renormalize": true
+   }
+  },
+  "lumenairy.raytrace.differential:ray_transfer_jacobian_jax": {
+   "module": "lumenairy.raytrace.differential",
+   "qualname": "ray_transfer_jacobian_jax",
+   "file": "raytrace/differential.py",
+   "encoding": "cp1252",
+   "tracers_named": [
+    "trace_jax"
+   ],
+   "top_level": true,
+   "private_name": false,
+   "ast_params": [
+    "x",
+    "y",
+    "ux",
+    "uy",
+    "prescription",
+    "wavelength"
+   ],
+   "ast_kwonly": [],
+   "ast_way_back": [],
+   "lineno": 487,
+   "exported_as": [
+    "lumenairy.ray_transfer_jacobian_jax",
+    "lumenairy.raytrace.differential.ray_transfer_jacobian_jax",
+    "lumenairy.raytrace.ray_transfer_jacobian_jax"
+   ],
+   "is_exported": true,
+   "sig_way_back": [],
+   "way_back_keyword_only": [],
+   "defaults_none": {}
+  },
+  "lumenairy.raytrace.differential:ray_transfer_jacobian_jax._out_state": {
+   "module": "lumenairy.raytrace.differential",
+   "qualname": "ray_transfer_jacobian_jax._out_state",
+   "file": "raytrace/differential.py",
+   "encoding": "cp1252",
+   "tracers_named": [
+    "trace_jax"
+   ],
+   "top_level": false,
+   "private_name": true,
+   "ast_params": [
+    "s4"
+   ],
+   "ast_kwonly": [],
+   "ast_way_back": [],
+   "lineno": 533,
+   "exported_as": [],
+   "is_exported": false,
+   "sig_way_back": null,
+   "way_back_keyword_only": null,
+   "defaults_none": null
+  },
+  "lumenairy.raytrace.ray_fan:opd_fan_data": {
+   "module": "lumenairy.raytrace.ray_fan",
+   "qualname": "opd_fan_data",
+   "file": "raytrace/ray_fan.py",
+   "encoding": "cp1252",
+   "tracers_named": [
+    "trace"
+   ],
+   "top_level": true,
+   "private_name": false,
+   "ast_params": [
+    "surfaces",
+    "wavelength",
+    "semi_aperture",
+    "field_angle",
+    "n_rays",
+    "reference_sphere_radius",
+    "renormalize",
+    "sphere_normal"
+   ],
+   "ast_kwonly": [
+    "reference_sphere_radius",
+    "renormalize",
+    "sphere_normal"
+   ],
+   "ast_way_back": [
+    "sphere_normal",
+    "renormalize"
+   ],
+   "lineno": 790,
+   "exported_as": [
+    "lumenairy.opd_fan_data",
+    "lumenairy.raytrace.core.opd_fan_data",
+    "lumenairy.raytrace.opd_fan_data",
+    "lumenairy.raytrace.ray_fan.opd_fan_data"
+   ],
+   "is_exported": true,
+   "sig_way_back": [
+    "sphere_normal",
+    "renormalize"
+   ],
+   "way_back_keyword_only": [
+    "sphere_normal",
+    "renormalize"
+   ],
+   "defaults_none": {
+    "sphere_normal": true,
+    "renormalize": true
+   }
+  },
+  "lumenairy.raytrace.ray_fan:opd_fan_data_world": {
+   "module": "lumenairy.raytrace.ray_fan",
+   "qualname": "opd_fan_data_world",
+   "file": "raytrace/ray_fan.py",
+   "encoding": "cp1252",
+   "tracers_named": [
+    "trace_world"
+   ],
+   "top_level": true,
+   "private_name": false,
+   "ast_params": [
+    "surfaces",
+    "wavelength",
+    "semi_aperture",
+    "field_angle",
+    "n_rays",
+    "reference_sphere_radius",
+    "renormalize",
+    "sphere_normal"
+   ],
+   "ast_kwonly": [
+    "reference_sphere_radius",
+    "renormalize",
+    "sphere_normal"
+   ],
+   "ast_way_back": [
+    "sphere_normal",
+    "renormalize"
+   ],
+   "lineno": 924,
+   "exported_as": [
+    "lumenairy.raytrace.core.opd_fan_data_world",
+    "lumenairy.raytrace.opd_fan_data_world",
+    "lumenairy.raytrace.ray_fan.opd_fan_data_world"
+   ],
+   "is_exported": true,
+   "sig_way_back": [
+    "sphere_normal",
+    "renormalize"
+   ],
+   "way_back_keyword_only": [
+    "sphere_normal",
+    "renormalize"
+   ],
+   "defaults_none": {
+    "sphere_normal": true,
+    "renormalize": true
+   }
+  },
+  "lumenairy.raytrace.ray_fan:ray_fan_data": {
+   "module": "lumenairy.raytrace.ray_fan",
+   "qualname": "ray_fan_data",
+   "file": "raytrace/ray_fan.py",
+   "encoding": "cp1252",
+   "tracers_named": [
+    "trace"
+   ],
+   "top_level": true,
+   "private_name": false,
+   "ast_params": [
+    "surfaces",
+    "wavelength",
+    "semi_aperture",
+    "field_angle",
+    "n_rays",
+    "renormalize",
+    "sphere_normal"
+   ],
+   "ast_kwonly": [
+    "renormalize",
+    "sphere_normal"
+   ],
+   "ast_way_back": [
+    "sphere_normal",
+    "renormalize"
+   ],
+   "lineno": 526,
+   "exported_as": [
+    "lumenairy.ray_fan_data",
+    "lumenairy.raytrace.core.ray_fan_data",
+    "lumenairy.raytrace.ray_fan.ray_fan_data",
+    "lumenairy.raytrace.ray_fan_data"
+   ],
+   "is_exported": true,
+   "sig_way_back": [
+    "sphere_normal",
+    "renormalize"
+   ],
+   "way_back_keyword_only": [
+    "sphere_normal",
+    "renormalize"
+   ],
+   "defaults_none": {
+    "sphere_normal": true,
+    "renormalize": true
+   }
+  },
+  "lumenairy.raytrace.ray_fan:ray_fan_data_world": {
+   "module": "lumenairy.raytrace.ray_fan",
+   "qualname": "ray_fan_data_world",
+   "file": "raytrace/ray_fan.py",
+   "encoding": "cp1252",
+   "tracers_named": [
+    "trace_world"
+   ],
+   "top_level": true,
+   "private_name": false,
+   "ast_params": [
+    "surfaces",
+    "wavelength",
+    "semi_aperture",
+    "field_angle",
+    "n_rays",
+    "renormalize",
+    "sphere_normal"
+   ],
+   "ast_kwonly": [
+    "renormalize",
+    "sphere_normal"
+   ],
+   "ast_way_back": [
+    "sphere_normal",
+    "renormalize"
+   ],
+   "lineno": 631,
+   "exported_as": [
+    "lumenairy.raytrace.core.ray_fan_data_world",
+    "lumenairy.raytrace.ray_fan.ray_fan_data_world",
+    "lumenairy.raytrace.ray_fan_data_world"
+   ],
+   "is_exported": true,
+   "sig_way_back": [
+    "sphere_normal",
+    "renormalize"
+   ],
+   "way_back_keyword_only": [
+    "sphere_normal",
+    "renormalize"
+   ],
+   "defaults_none": {
+    "sphere_normal": true,
+    "renormalize": true
+   }
+  },
+  "lumenairy.raytrace.ray_fan:through_focus_rms": {
+   "module": "lumenairy.raytrace.ray_fan",
+   "qualname": "through_focus_rms",
+   "file": "raytrace/ray_fan.py",
+   "encoding": "cp1252",
+   "tracers_named": [
+    "trace"
+   ],
+   "top_level": true,
+   "private_name": false,
+   "ast_params": [
+    "surfaces",
+    "wavelength",
+    "semi_aperture",
+    "focus_shifts",
+    "field_angle",
+    "num_rings",
+    "rays_per_ring",
+    "pattern",
+    "renormalize",
+    "sphere_normal"
+   ],
+   "ast_kwonly": [
+    "pattern",
+    "renormalize",
+    "sphere_normal"
+   ],
+   "ast_way_back": [
+    "sphere_normal",
+    "renormalize"
+   ],
+   "lineno": 1111,
+   "exported_as": [
+    "lumenairy.raytrace.core.through_focus_rms",
+    "lumenairy.raytrace.ray_fan.through_focus_rms",
+    "lumenairy.raytrace.through_focus_rms",
+    "lumenairy.through_focus_rms"
+   ],
+   "is_exported": true,
+   "sig_way_back": [
+    "sphere_normal",
+    "renormalize"
+   ],
+   "way_back_keyword_only": [
+    "sphere_normal",
+    "renormalize"
+   ],
+   "defaults_none": {
+    "sphere_normal": true,
+    "renormalize": true
+   }
+  },
+  "lumenairy.raytrace.trace:_library_trace_default": {
+   "module": "lumenairy.raytrace.trace",
+   "qualname": "_library_trace_default",
+   "file": "raytrace/trace.py",
+   "encoding": "cp1252",
+   "tracers_named": [
+    "trace"
+   ],
+   "top_level": true,
+   "private_name": true,
+   "ast_params": [
+    "keyword"
+   ],
+   "ast_kwonly": [],
+   "ast_way_back": [],
+   "lineno": 1608,
+   "exported_as": [],
+   "is_exported": false,
+   "sig_way_back": [],
+   "way_back_keyword_only": [],
+   "defaults_none": {}
+  },
+  "lumenairy.raytrace.trace:raytrace_system": {
+   "module": "lumenairy.raytrace.trace",
+   "qualname": "raytrace_system",
+   "file": "raytrace/trace.py",
+   "encoding": "cp1252",
+   "tracers_named": [
+    "trace"
+   ],
+   "top_level": true,
+   "private_name": false,
+   "ast_params": [
+    "elements",
+    "wavelength",
+    "semi_aperture",
+    "field_angle",
+    "num_rings",
+    "rays_per_ring",
+    "ray_pattern",
+    "n_across",
+    "image_distance",
+    "renormalize",
+    "sphere_normal"
+   ],
+   "ast_kwonly": [
+    "renormalize",
+    "sphere_normal"
+   ],
+   "ast_way_back": [
+    "sphere_normal",
+    "renormalize"
+   ],
+   "lineno": 2077,
+   "exported_as": [
+    "lumenairy.raytrace.core.raytrace_system",
+    "lumenairy.raytrace.raytrace_system",
+    "lumenairy.raytrace.trace.raytrace_system",
+    "lumenairy.raytrace_system"
+   ],
+   "is_exported": true,
+   "sig_way_back": [
+    "sphere_normal",
+    "renormalize"
+   ],
+   "way_back_keyword_only": [
+    "sphere_normal",
+    "renormalize"
+   ],
+   "defaults_none": {
+    "sphere_normal": true,
+    "renormalize": true
+   }
+  },
+  "lumenairy.raytrace.trace:trace_prescription": {
+   "module": "lumenairy.raytrace.trace",
+   "qualname": "trace_prescription",
+   "file": "raytrace/trace.py",
+   "encoding": "cp1252",
+   "tracers_named": [
+    "trace"
+   ],
+   "top_level": true,
+   "private_name": false,
+   "ast_params": [
+    "prescription",
+    "wavelength",
+    "semi_aperture",
+    "field_angle",
+    "num_rings",
+    "rays_per_ring",
+    "ray_pattern",
+    "n_across",
+    "image_distance",
+    "renormalize",
+    "sphere_normal"
+   ],
+   "ast_kwonly": [
+    "renormalize",
+    "sphere_normal"
+   ],
+   "ast_way_back": [
+    "sphere_normal",
+    "renormalize"
+   ],
+   "lineno": 1673,
+   "exported_as": [
+    "lumenairy.raytrace.core.trace_prescription",
+    "lumenairy.raytrace.trace.trace_prescription",
+    "lumenairy.raytrace.trace_prescription",
+    "lumenairy.trace_prescription"
+   ],
+   "is_exported": true,
+   "sig_way_back": [
+    "sphere_normal",
+    "renormalize"
+   ],
+   "way_back_keyword_only": [
+    "sphere_normal",
+    "renormalize"
+   ],
+   "defaults_none": {
+    "sphere_normal": true,
+    "renormalize": true
+   }
+  },
+  "lumenairy.raytrace.world:paraxial_focus_world": {
+   "module": "lumenairy.raytrace.world",
+   "qualname": "paraxial_focus_world",
+   "file": "raytrace/world.py",
+   "encoding": "cp1252",
+   "tracers_named": [
+    "trace_world"
+   ],
+   "top_level": true,
+   "private_name": false,
+   "ast_params": [
+    "world_surfaces",
+    "wavelength",
+    "aperture_radius",
+    "renormalize",
+    "sphere_normal"
+   ],
+   "ast_kwonly": [
+    "aperture_radius",
+    "renormalize",
+    "sphere_normal"
+   ],
+   "ast_way_back": [
+    "sphere_normal",
+    "renormalize"
+   ],
+   "lineno": 220,
+   "exported_as": [
+    "lumenairy.paraxial_focus_world",
+    "lumenairy.raytrace.paraxial_focus_world",
+    "lumenairy.raytrace.world.paraxial_focus_world"
+   ],
+   "is_exported": true,
+   "sig_way_back": [
+    "sphere_normal",
+    "renormalize"
+   ],
+   "way_back_keyword_only": [
+    "sphere_normal",
+    "renormalize"
+   ],
+   "defaults_none": {
+    "sphere_normal": true,
+    "renormalize": true
+   }
+  },
+  "lumenairy.ui.main_window:MainWindow._zernike_from_trace": {
+   "module": "lumenairy.ui.main_window",
+   "qualname": "MainWindow._zernike_from_trace",
+   "file": "ui/main_window.py",
+   "encoding": "utf-8",
+   "tracers_named": [
+    "trace"
+   ],
+   "top_level": false,
+   "private_name": true,
+   "ast_params": [
+    "self"
+   ],
+   "ast_kwonly": [],
+   "ast_way_back": [],
+   "lineno": 2007,
+   "exported_as": [],
+   "is_exported": false,
+   "sig_way_back": null,
+   "way_back_keyword_only": null,
+   "defaults_none": null
+  },
+  "lumenairy.ui.model:SystemModel.merit_function": {
+   "module": "lumenairy.ui.model",
+   "qualname": "SystemModel.merit_function",
+   "file": "ui/model.py",
+   "encoding": "utf-8",
+   "tracers_named": [
+    "trace"
+   ],
+   "top_level": false,
+   "private_name": false,
+   "ast_params": [
+    "self",
+    "values"
+   ],
+   "ast_kwonly": [],
+   "ast_way_back": [],
+   "lineno": 2956,
+   "exported_as": [],
+   "is_exported": false,
+   "sig_way_back": null,
+   "way_back_keyword_only": null,
+   "defaults_none": null
+  },
+  "lumenairy.ui.model:SystemModel.run_trace": {
+   "module": "lumenairy.ui.model",
+   "qualname": "SystemModel.run_trace",
+   "file": "ui/model.py",
+   "encoding": "utf-8",
+   "tracers_named": [
+    "trace_world"
+   ],
+   "top_level": false,
+   "private_name": false,
+   "ast_params": [
+    "self",
+    "num_rings",
+    "rays_per_ring",
+    "image_distance"
+   ],
+   "ast_kwonly": [],
+   "ast_way_back": [],
+   "lineno": 2714,
+   "exported_as": [],
+   "is_exported": false,
+   "sig_way_back": null,
+   "way_back_keyword_only": null,
+   "defaults_none": null
+  },
+  "lumenairy.ui.rayfan_dock:RayFanDock._replot": {
+   "module": "lumenairy.ui.rayfan_dock",
+   "qualname": "RayFanDock._replot",
+   "file": "ui/rayfan_dock.py",
+   "encoding": "cp1252",
+   "tracers_named": [
+    "trace_world"
+   ],
+   "top_level": false,
+   "private_name": true,
+   "ast_params": [
+    "self"
+   ],
+   "ast_kwonly": [],
+   "ast_way_back": [],
+   "lineno": 96,
+   "exported_as": [],
+   "is_exported": false,
+   "sig_way_back": null,
+   "way_back_keyword_only": null,
+   "defaults_none": null
+  },
+  "lumenairy.ui.tolerance_dock:ToleranceWorker.run": {
+   "module": "lumenairy.ui.tolerance_dock",
+   "qualname": "ToleranceWorker.run",
+   "file": "ui/tolerance_dock.py",
+   "encoding": "cp1252",
+   "tracers_named": [
+    "trace_world"
+   ],
+   "top_level": false,
+   "private_name": false,
+   "ast_params": [
+    "self"
+   ],
+   "ast_kwonly": [],
+   "ast_way_back": [],
+   "lineno": 62,
+   "exported_as": [],
+   "is_exported": false,
+   "sig_way_back": null,
+   "way_back_keyword_only": null,
+   "defaults_none": null
+  },
+  "lumenairy.ui.wavefront_map_dock:_OPDWorker._compute_ray_traced_opd": {
+   "module": "lumenairy.ui.wavefront_map_dock",
+   "qualname": "_OPDWorker._compute_ray_traced_opd",
+   "file": "ui/wavefront_map_dock.py",
+   "encoding": "cp1252",
+   "tracers_named": [
+    "trace_world"
+   ],
+   "top_level": false,
+   "private_name": true,
+   "ast_params": [
+    "self"
+   ],
+   "ast_kwonly": [],
+   "ast_way_back": [],
+   "lineno": 101,
+   "exported_as": [],
+   "is_exported": false,
+   "sig_way_back": null,
+   "way_back_keyword_only": null,
+   "defaults_none": null
+  }
+ }
+}

@@ -34,6 +34,7 @@ from .exit_vertex import resolve_exit_index, vertex_plane_transfer_t
 from .seidel import first_order_data, system_abcd
 from .surface import RayBundle, Surface, TraceResult
 from .trace import (
+    _way_back_kwargs,
     make_fan,
     make_ray,
     make_rings,
@@ -93,7 +94,7 @@ def _bundle_slice(bundle: 'RayBundle', sl: slice) -> 'RayBundle':
     )
 
 
-def _trace_fan_set(tracer, bundles, surfaces, wavelength):
+def _trace_fan_set(tracer, bundles, surfaces, wavelength, **trace_kw):
     """Trace several launch bundles through ``surfaces`` in ONE call.
 
     Both fan functions need four traces -- a tangential chief, a
@@ -129,6 +130,11 @@ def _trace_fan_set(tracer, bundles, surfaces, wavelength):
     surface and leaves ``image_rays`` bit-identical (it is the same
     ``r.copy()``, taken at the same point in the loop).
 
+    ``**trace_kw`` is forwarded verbatim to ``tracer``: it carries the
+    WP-C2 way-back keywords (``renormalize`` / ``sphere_normal``) when
+    the caller named them, and is EMPTY when the caller did not, so an
+    unkeyworded fan takes the tracer's own defaults.
+
     Returns the per-input image bundles, in input order.
     """
     n = [b.n_rays for b in bundles]
@@ -151,7 +157,8 @@ def _trace_fan_set(tracer, bundles, surfaces, wavelength):
         # RAY_OK, which is why it is the bundle's array that is read.
         error_code=np.concatenate([b.error_code for b in bundles]),
     )
-    img = tracer(joint, surfaces, wavelength, output_filter='last').image_rays
+    img = tracer(joint, surfaces, wavelength, output_filter='last',
+                 **trace_kw).image_rays
     return [_bundle_slice(img, slice(int(stop) - cnt, int(stop)))
             for cnt, stop in zip(n, stops)]
 
@@ -522,6 +529,9 @@ def ray_fan_data(
     semi_aperture: float,
     field_angle: float = 0.0,
     n_rays: int = 101,
+    *,
+    renormalize: Optional[str] = None,
+    sphere_normal: Optional[str] = None,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Compute transverse ray aberration vs normalised pupil coordinate.
 
@@ -532,6 +542,17 @@ def ray_fan_data(
     semi_aperture : float
     field_angle : float
     n_rays : int
+    renormalize : ``None`` (default) | ``'exit'`` | ``'surface'``
+        Forwarded verbatim to the internal :func:`trace` call -- WP-C2's
+        way back, one keyword per flipped default.  ``None`` means
+        "whatever the library's default is", so an unkeyworded call is
+        unchanged and no call site pins today's default.
+    sphere_normal : ``None`` (default) | ``'analytic'`` | ``'generic'``
+        Forwarded verbatim to the same call.  Pass
+        ``renormalize='surface'`` and ``sphere_normal='generic'`` together
+        for the arithmetic this entry point produced before WP-C2 moved
+        the two tracer defaults -- byte-identical, pinned archive to
+        archive.
 
     Returns
     -------
@@ -594,7 +615,8 @@ def ray_fan_data(
     fan_x = make_fan('x', semi_aperture, n_rays, field_angle, wavelength)
     fan_x.x = fan_x.x + ep_off
     ref_y, ref_x, img_y, img_x = _trace_fan_set(
-        trace, (chief_y, chief_x, fan_y, fan_x), surfaces, wavelength)
+        trace, (chief_y, chief_x, fan_y, fan_x), surfaces, wavelength,
+        **_way_back_kwargs(renormalize, sphere_normal))
     y_ref = ref_y.y[0]
     x_ref = ref_x.x[0]
 
@@ -612,6 +634,9 @@ def ray_fan_data_world(
     semi_aperture: float,
     field_angle: float = 0.0,
     n_rays: int = 101,
+    *,
+    renormalize: Optional[str] = None,
+    sphere_normal: Optional[str] = None,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """3.7.8: world-frame version of :func:`ray_fan_data`.
 
@@ -621,6 +646,20 @@ def ray_fan_data_world(
     :func:`trace_world` so the fan is geometry-accurate on folded
     designs (the chief-ray and per-pupil-coord ray traces all
     land at the correct world image-plane position).
+
+    Parameters
+    ----------
+    renormalize : ``None`` (default) | ``'exit'`` | ``'surface'``
+        Forwarded verbatim to the internal :func:`trace_world` call -- WP-C2's
+        way back, one keyword per flipped default.  ``None`` means
+        "whatever the library's default is", so an unkeyworded call is
+        unchanged and no call site pins today's default.
+    sphere_normal : ``None`` (default) | ``'analytic'`` | ``'generic'``
+        Forwarded verbatim to the same call.  Pass
+        ``renormalize='surface'`` and ``sphere_normal='generic'`` together
+        for the arithmetic this entry point produced before WP-C2 moved
+        the two tracer defaults -- byte-identical, pinned archive to
+        archive.
     """
     # RT-5 (AUDIT_RAYTRACE_CORE): the world twin never received the 4.11.2
     # EP-centred chief fix (it launched from (0,0,0)) nor the fan-centring
@@ -649,7 +688,8 @@ def ray_fan_data_world(
     fan_x = make_fan('x', semi_aperture, n_rays, field_angle, wavelength)
     fan_x.x = fan_x.x + ep_off
     ref_y, ref_x, img_y, img_x = _trace_fan_set(
-        trace_world, (chief_y, chief_x, fan_y, fan_x), surfaces, wavelength)
+        trace_world, (chief_y, chief_x, fan_y, fan_x), surfaces, wavelength,
+        **_way_back_kwargs(renormalize, sphere_normal))
     y_ref = ref_y.y[0]
     x_ref = ref_x.x[0]
 
@@ -755,6 +795,8 @@ def opd_fan_data(
     n_rays: int = 101,
     *,
     reference_sphere_radius: Optional[float] = None,
+    renormalize: Optional[str] = None,
+    sphere_normal: Optional[str] = None,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Compute the WAVEFRONT ERROR vs pupil coordinate for both fans.
 
@@ -785,6 +827,17 @@ def opd_fan_data(
         PLANE, which keeps the exact first-order term and drops only the
         second-order ``n*eps**2/(2R)`` one; a positive float overrides
         both.
+    renormalize : ``None`` (default) | ``'exit'`` | ``'surface'``
+        Forwarded verbatim to the internal :func:`trace` call -- WP-C2's
+        way back, one keyword per flipped default.  ``None`` means
+        "whatever the library's default is", so an unkeyworded call is
+        unchanged and no call site pins today's default.
+    sphere_normal : ``None`` (default) | ``'analytic'`` | ``'generic'``
+        Forwarded verbatim to the same call.  Pass
+        ``renormalize='surface'`` and ``sphere_normal='generic'`` together
+        for the arithmetic this entry point produced before WP-C2 moved
+        the two tracer defaults -- byte-identical, pinned archive to
+        archive.
 
     Returns
     -------
@@ -849,7 +902,8 @@ def opd_fan_data(
         trace,
         (_eikonal(chief_y), _eikonal(chief_x),
          _eikonal(fan_y), _eikonal(fan_x)),
-        surfaces, wavelength)
+        surfaces, wavelength,
+        **_way_back_kwargs(renormalize, sphere_normal))
 
     n_img = _image_space_index_for_fan(surfaces, wavelength)
     R_y = _reference_sphere_radius(surfaces, wavelength, ref_y.N[0],
@@ -875,6 +929,8 @@ def opd_fan_data_world(
     n_rays: int = 101,
     *,
     reference_sphere_radius: Optional[float] = None,
+    renormalize: Optional[str] = None,
+    sphere_normal: Optional[str] = None,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """3.7.8: world-frame version of :func:`opd_fan_data`.
 
@@ -884,6 +940,20 @@ def opd_fan_data_world(
     its history in each surface's LOCAL frame, so the chief-relative
     geometry the sphere needs is expressed in exactly the same frame as
     on the sequential path.
+
+    Parameters
+    ----------
+    renormalize : ``None`` (default) | ``'exit'`` | ``'surface'``
+        Forwarded verbatim to the internal :func:`trace_world` call -- WP-C2's
+        way back, one keyword per flipped default.  ``None`` means
+        "whatever the library's default is", so an unkeyworded call is
+        unchanged and no call site pins today's default.
+    sphere_normal : ``None`` (default) | ``'analytic'`` | ``'generic'``
+        Forwarded verbatim to the same call.  Pass
+        ``renormalize='surface'`` and ``sphere_normal='generic'`` together
+        for the arithmetic this entry point produced before WP-C2 moved
+        the two tracer defaults -- byte-identical, pinned archive to
+        archive.
     """
     # RT-5: EP-centre the fans + reference each against a same-orientation
     # chief (see ``ray_fan_data_world`` for the straight-axis/folded caveat).
@@ -910,7 +980,8 @@ def opd_fan_data_world(
         trace_world,
         (_eikonal(chief_y), _eikonal(chief_x),
          _eikonal(fan_y), _eikonal(fan_x)),
-        surfaces, wavelength)
+        surfaces, wavelength,
+        **_way_back_kwargs(renormalize, sphere_normal))
 
     n_img = _image_space_index_for_fan(surfaces, wavelength)
     R_y = _reference_sphere_radius(surfaces, wavelength, ref_y.N[0],
@@ -1047,6 +1118,8 @@ def through_focus_rms(
     rays_per_ring: int = 36,
     *,
     pattern: str = 'rings',
+    renormalize: Optional[str] = None,
+    sphere_normal: Optional[str] = None,
 ) -> Tuple[np.ndarray, np.ndarray, float]:
     """Compute RMS spot size at a series of focus positions.
 
@@ -1082,6 +1155,17 @@ def through_focus_rms(
         centre-weighted.  The best-focus LOCATION is insensitive to the
         choice (a monotone radial reweight does not move the minimum);
         the RMS VALUE at each shift is not.
+    renormalize : ``None`` (default) | ``'exit'`` | ``'surface'``
+        Forwarded verbatim to the internal :func:`trace` call -- WP-C2's
+        way back, one keyword per flipped default.  ``None`` means
+        "whatever the library's default is", so an unkeyworded call is
+        unchanged and no call site pins today's default.
+    sphere_normal : ``None`` (default) | ``'analytic'`` | ``'generic'``
+        Forwarded verbatim to the same call.  Pass
+        ``renormalize='surface'`` and ``sphere_normal='generic'`` together
+        for the arithmetic this entry point produced before WP-C2 moved
+        the two tracer defaults -- byte-identical, pinned archive to
+        archive.
 
     Returns
     -------
@@ -1118,7 +1202,8 @@ def through_focus_rms(
     # output_filter='last' because we only need the final bundle
     # for refocus + spot_rms.  Saves ~N_surfaces memory copies on
     # large ring counts.
-    base = trace(rays, surfaces, wavelength, output_filter='last')
+    base = trace(rays, surfaces, wavelength, output_filter='last',
+                 **_way_back_kwargs(renormalize, sphere_normal))
 
     for j, img_dist in enumerate(focus_shifts):
         shifted = refocus(base, float(img_dist), wavelength=wavelength)

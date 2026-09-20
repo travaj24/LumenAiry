@@ -284,8 +284,10 @@ def test_to_kwargs_emits_only_requests_unless_asked_for_defaults():
     assert cfg.to_kwargs() == {'newton_poly_order': 8}
     everything = cfg.to_kwargs(include_defaults=True)
     n_fields = sum(len(_dataclass_defaults(d)) for _, d, _ in lc._GROUPS)
-    # 40 across geometry/numerics/resources + LensPhysics's 9.
-    assert len(everything) == n_fields == 49, (
+    # 42 across geometry/numerics/resources + LensPhysics's 9.  WP-C2
+    # round 3 (2026-09-20) added LensNumerics.renormalize and
+    # .sphere_normal, taking 49 to 51.
+    assert len(everything) == n_fields == 51, (
         f'to_kwargs(include_defaults=True) emitted {len(everything)} of '
         f'{n_fields} fields.')
     assert everything['newton_poly_order'] == 8
@@ -313,7 +315,9 @@ def test_to_kwargs_for_an_entry_point_is_exactly_what_it_accepts(ep):
                               amplitude_model='ray_density',
                               caustic='multibranch', caustic_band='plain',
                               caustic_ray_subsample=3,
-                              caustic_min_area_ratio=1e-5, inverse_map=True),
+                              caustic_min_area_ratio=1e-5, inverse_map=True,
+                              renormalize='surface',
+                              sphere_normal='generic'),
         resources=LensResources(use_gpu=True, amp_use_gpu=True, n_workers=2,
                                 parallel_amp=False,
                                 parallel_amp_min_free_gb=1.0,

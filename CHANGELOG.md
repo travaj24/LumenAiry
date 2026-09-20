@@ -734,6 +734,361 @@ half-angle without running anything.  A leg that never approaches its carrier's
 `A = 0` plane cannot be affected.  To keep the exact kernel on such a leg
 regardless, pass `gap_kernel='exact'` explicitly; to change how much accuracy
 the rule buys, set `tau` to the relative-L2 budget you want.
+### Changed -- raytrace (WP-C2): `trace(sphere_normal='analytic')` is the DEFAULT; the way back is one keyword and is byte-identical
+
+`trace` and `trace_world` now compute a PURE SPHERE's surface normal from the
+closed form `(-x/R, -y/R, sqrt(1 - h^2/R^2))` instead of differentiating the
+sag numerically (`raytrace/trace.py:61`, `world_trace.py:83`).  The route
+itself shipped opt-in in 5.48.0; this release makes it the default, which the
+maintainer decided on section 1.3 of
+`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/MAINTAINER_DECISIONS_2026_09.md`.
+The PRIVATE helpers do NOT move: `_refract` / `_reflect` / `_surface_normal`
+keep `sphere_normal='generic'` / `analytic_sphere=False`, because
+`analysis.ghost` and the finite-difference differential path call them directly
+and own their own arithmetic policy.
+
+**Accuracy, re-derived against an 80-digit `decimal` oracle with EXACT input
+conversion** on WP-C2's own sphere set -- eight radii of both signs from 2 mm
+to 1 m, eleven heights from the vertex to the domain clamp, six azimuths,
+refracting and mirror alike, 1056 points on each of two builds.  Out to
+`h = 0.95 |R|` the closed form is within **1.50 ULP** of the truth against the
+generic route's **1.75**, identically on Windows py3.14 / numpy 2.4.4 and WSL
+py3.12 / numpy 2.4.6, is never worse by more than 1 ULP at any of the 672
+points there, and is a unit vector to 1.5 ULP by construction.  Over the whole
+set it is closer at 55-56 % of points against 12 % the other way.  Above
+`0.95 |R|` BOTH routes enter the conditioning limit of `sqrt(1 - u)` together
+-- 7.1 ULP at `0.999 |R|`, **46** (closed form) against **91** (generic) at the
+clamp -- and neither dominates point by point: at 14 of 1056 points on Windows
+and 18 on WSL, all at `h >= 0.99 |R|`, the closed form happens to round worse
+by more than one unit, by up to 22.8 / 35.3 ULP.  "More accurate" is therefore
+a bound out to `0.95 |R|` and a mean beyond it, and the test file says so in an
+arm of its own.  The oracle is shown converged rather than assumed converged:
+every summary field is identical at `prec = 80` and `prec = 120`, on both
+builds.  (The first publication of this entry read 1.75 against 2.00-2.25, and
+57 against 76 at the clamp, from an oracle that converted its own inputs with
+`repr(float(x))` -- the shortest round-tripping decimal, not the exact value.
+`sqrt(1 - u)` amplifies that by `u / (2 (1 - u))`, so above about `0.9 |R|` the
+probe was measuring itself; its own contribution reached 1.00 ULP at
+`h = 0.95 |R|` and 41.6 at the clamp.  Both routes read better against the
+corrected oracle and the margin between them widens.)
+
+**Speed.**  1.08x to 1.44x on the whole trace over three sphere-bearing
+prescriptions (a seven-surface spherical stack, a Cooke-like triplet, a
+two-mirror spherical Cassegrain) on two builds, medians 1.12x (Windows) and
+1.19x (WSL), against 0.93x to 1.03x on the two prescriptions with no pure
+sphere, which is this measurement's own resolution on a box under other load
+(the runs recorded 67 to 100 % CPU and 10 to 21 concurrent python processes).
+The contention-immune reading is the profile share: the normal block falls from
+16.1 % to 9.8 % of `trace`'s own tottime on Windows and from 19.6 % to 10.4 %
+on WSL.
+
+**What moves.**  The routes are not bit-identical: measured `max |dx| =
+2.8e-17 m`, `max |dopd| = 8.3e-17 m`, `max |dL| = 2.8e-16` over a 1500-ray
+sweep.  Archive to archive against 49ddf4bd, over **1008 arrays and 1 630 399
+values**, each side run in its own process against a read-only archive
+(`validation/probe_c2_analytic_normal/byte_identity_*.json`): with **both old
+keywords passed explicitly, 934 of 1008 are byte-identical on Windows (74
+move) and 935 on WSL (73 move)**, and the arrays that move are exactly the
+answers of the entry points that trace INTERNALLY -- `trace_prescription` 27,
+`refocus` 26, `ray_fan_data` 8, `opd_fan_data` 8, `spot_rms` 4 and
+`through_focus` 1 on Windows; the same less `through_focus` on WSL.  Those
+entry points now take the two keywords themselves (see the Migration note), so
+that residue has a way back too, re-measured at 742 of 742 arrays identical
+over all sixteen of them, and at 3 of 3 prescriptions over the seventeenth
+(`apply_real_lens`, found in round 3).  At the DEFAULTS the same sweep moves **595 arrays
+on Windows and 594 on WSL**, none by more than **2.4e-11 absolute or 3.4e-13
+relative**.  (That sweep carries BOTH flips: `renormalize='exit'` below
+applies to every prescription, sphere or not.  The 461 recorded for
+`sphere_normal` alone was taken before the second flip landed and is not in the
+committed JSON, so it is not re-stated here.)  Prescriptions with no pure
+sphere are byte-identical either way.  CPU / JAX `trace` parity does not move at all: 3.5e-18 m in position and
+3.1e-17 m in OPL under all four `(renormalize, sphere_normal)` combinations,
+with the alive masks equal, on both builds -- the JAX tracer has always used a
+closed-form sphere normal, so this flip moves the CPU tracer TOWARD it rather
+than away.
+
+**A KNOWN CROSS-BACKEND DIFFERENCE, unchanged by this release and now
+recorded.**  The flip moves the two backends closer, but it does not close the
+gap: the NumPy tracer applies the `0.9999` sphere-domain clamp on BOTH normal
+routes and `jax_trace` applies no gate at all, so on a prescription whose
+aperture reaches the rim the two disagree about a whole outer ANNULUS, not
+about one ULP.  Measured on a ball lens (R = 12.5 mm, clear semi-diameter
+12.5 mm), 40 000 rays swept to `0.999999 |R|`, of which 1962 are past the
+clamp: the CPU kills all 1962 with `RAY_NAN` under every one of the four
+`(renormalize, sphere_normal)` settings, and JAX keeps all 1962 -- identically
+on Windows py3.14 / jax 0.11.0 and WSL py3.12 / jax 0.10.2.  This is
+PRE-EXISTING; WP-C2 neither caused it nor changed it.  The maintainer's
+decision to leave it rather than clamp JAX -- clamping would move every JAX
+answer on such a design and put a non-differentiable step inside a gradient
+path -- is section 1.10 of
+`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/MAINTAINER_DECISIONS_2026_09.md`,
+and it is pinned two-sidedly (CPU kills every ray past the clamp, JAX keeps
+every one) so a one-sided future change is loud.
+
+**Vignetting: one rim band moves, and only that.**  The two routes gate the
+`0.9999` domain clamp from different expressions -- `(x*x + y*y)/(R*R)` against
+`(1 + conic) * sqrt(x*x + y*y)**2 / R**2` -- which differ by up to 1 ULP, so
+over a band about **1 ULP of `h` wide at `0.99995 |R|`** the two land on
+opposite sides and one route refuses a ray the other serves (VERIFY-WP-B9
+section 3.3).  A directed `nextafter` walk constructs such a point, and it
+reaches `_refract`'s `alive` flag and `trace`'s error code.  It is not
+reachable by sampling: 360 000 traced rays over twelve prescription and
+field-angle combinations -- including a sphere whose clear aperture is opened
+to `0.99999 |R|`, three field angles on the seven-surface stack, the
+Cassegrain, and three shipped prescription builders at two field angles each --
+move ZERO `alive` flags and ZERO error codes on either build.  No shipped
+fixture's vignetting count changes.
+
+**What a real design meets at the rim is the CLAMP, not the band.**  Both
+routes refuse a ray above `h = 0.99995 |R|` and report it as `RAY_NAN` -- a
+numerical-fault code, not `RAY_APERTURE`.  That clamp does not move in this
+release, and it is what a BALL LENS or HEMISPHERE meets, because such a part
+has its clear semi-diameter at `|R|` by construction: of 60 000 rays packed
+into the outer 0.1 % of the aperture of an R = 12.5 mm ball lens, **3024
+(5.04 %) die `RAY_NAN`**, identically through both normal routes, identically
+on a hemisphere, and identically on both builds.  A fast singlet cannot reach
+it (max `h/|R| = 0.495` at f/1).  The one-ULP band sits INSIDE that region and
+**does not exist on the meridian at all**: located by 80-step bisection on the
+running build the two gate expressions bisect to the SAME float,
+`0.9999499987499374`, at all eight radii tested of both signs, on both builds,
+so a meridional fan cannot enter it.
+
+**The domain clamp STAYS.**  WP-B9's deferred item 6.2 proposed dropping it
+because the closed form is "well-conditioned to `h = |R|`"; VERIFY-B9 section
+3.2 measured that this is false (the relative error of `sqrt(1 - u)` is bounded
+below by `eps/2 * u/(1 - u)`, about 1.1e-12 at `u = 0.9999`, for BOTH routes),
+so dropping it would be a vignetting trade -- a grazing normal carrying ~1e-12
+relative error instead of a dead ray -- and that decision has not been taken.
+`tests/unit/test_c2_analytic_normal_default.py` now LOCATES the threshold by
+bisection on the running build, so a change to the expression and not only to
+the literal is caught.
+
+**Migration.**  Pass `sphere_normal='generic'` to `trace` / `trace_world` for
+the pre-5.49.0 arithmetic; it is byte-identical to what 5.48.1 produced, pinned
+archive to archive in a SECOND PROCESS against a read-only `git archive
+49ddf4bd`: **594 of 594 recorded arrays identical on both builds** -- five
+prescriptions (doublet, 7-surface stack, 13-surface ladder, a conic stack, a
+two-mirror stack) at two field angles under both `output_filter` modes, every
+history bundle, `x/y/z/L/M/N/opd/alive/code` -- with both old keywords forced.
+At the DEFAULTS the same set reads 172 of 594 identical, 422 moved, worst
+3.3e-16, so the identity is not a switch that reaches nothing.  Nothing else needs to change: no `alive` flag, error code
+or vignetting count moves on any shipped prescription, and the answers that do
+move, move by at most 1.8e-11 absolute and 3.4e-13 relative.  Two things are
+worth knowing.  First, the RIM BAND: between `0.99995 |R|` and the domain
+clamp -- a band one ULP of `h` wide -- a ray the generic route killed as
+`RAY_NAN` may now refract, or die with an honest `RAY_TIR` / `RAY_APERTURE`
+instead, and vice versa.  If a prescription deliberately works rays past
+`0.9999 R^2` of a spherical surface it is in a region where NEITHER route
+resolves the normal better than about 1e-12 relative, and it should carry an
+explicit clear aperture rather than rely on the clamp.  Second, the SEVENTEEN entry
+points that trace INTERNALLY all take the same keyword and forward it
+verbatim: `trace_prescription` and `raytrace_system`
+(`lumenairy.raytrace.trace`); `ray_fan_data`, `ray_fan_data_world`,
+`opd_fan_data`, `opd_fan_data_world` and `through_focus_rms`
+(`raytrace.ray_fan`); `paraxial_focus_world` (`raytrace.world`);
+`ray_transfer_jacobian` (`raytrace.differential`); `caustic_diagnostic`,
+`eval_image_plane_wfe` and `plot_lens_layout` (`analysis`);
+`fit_canonical_polynomials` and `fit_hf_polynomials`
+(`propagators.asymptotic_canonical_fit`); and the three lens propagators
+`apply_real_lens`, `apply_real_lens_traced` and `apply_real_lens_maslov`
+(`elements`).  Each
+defaults to `None`, which names nothing, so an unkeyworded call takes the
+library's default of the day and no call site pins this release's.  Their way
+back is byte-identical, measured archive to archive at **742 of 742 arrays on
+both builds**, with all sixteen shown to move at the default, and at
+**3 of 3 prescriptions on both builds** for the seventeenth.  `spot_rms`,
+`spot_geo_radius` and `refocus` take no keyword because they do not trace --
+they consume a `TraceResult` -- and the JAX entry points take none because the
+JAX tracer uses a closed-form normal ALWAYS and has no switch.  Every measured number is in
+`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/WP-C2_ANALYTIC_NORMAL_REPORT.md`
+and `validation/probe_c2_analytic_normal/`.
+
+### Changed -- raytrace (WP-C2): `trace(renormalize='exit')` is the DEFAULT -- one rescale instead of N, worth 0.99x to 1.02x by a deterministic count, and it costs no measurable accuracy
+
+`trace` and `trace_world` now rescale the direction cosines to unit length
+ONCE, on the bundle that leaves the last surface, instead of after every
+refraction and reflection (`raytrace/trace.py:60`, `world_trace.py:82`).  The
+degenerate-direction diagnosis (`|d| < 1e-30` or non-finite -> `RAY_NAN` +
+killed) still runs at EVERY surface, so a collapsed direction is still
+attributed to the surface that produced it.  `renormalize='surface'` is the way
+back and is byte-identical to 5.48.1.  The private `_refract` / `_reflect`
+keep `renormalize=True`: `analysis.ghost` and the finite-difference
+differential path call them with no trace loop around them to run the single
+exit-plane pass, so per-surface rescaling is the only setting under which those
+callers own a unit direction at all.
+
+**The speed-up is not measurable by TIMING on this box, and it is exactly
+measurable by COUNTING.**  WP-B9 reported 1.03x to 1.10x.  WP-C2 measured
+0.95x to 1.13x over five prescriptions on two builds, medians 1.00x and 0.99x
+-- no effect that method can resolve on a box whose own resolution is about
++-7 %.  Three timing instruments were tried against this switch and all three
+moved under load: Windows' process clock ticks at 15.6 ms, which on a 3.5 ms
+body quantises at 0.9 % and read the 9.6 % rescale block as exactly ZERO; two
+wall-clock runs of the SAME two arms came out 9.6 % apart and then 5.7 % apart
+with the SIGN REVERSED, which cannot happen (`renormalize=True` does strictly
+more work), and the inversion reproduced on WSL; only cProfile shares were
+stable, and they are blind to code inlined in `_refract`.
+
+A deterministic instrument settles it.  An `ndarray` subclass implementing
+BOTH `__array_ufunc__` and `__array_function__` counts every element-wise
+operation -- both protocols are needed, because `np.where` dispatches through
+`__array_function__` and without it returns a BASE array, after which
+everything downstream is invisible, which under-counts exactly the branch that
+uses `np.where` most and makes the census come out backwards.  The result is a
+COUNT, **identical on both builds to the last digit**:
+
+| prescription | surfaces | element-ops saved | predicted |
+|---|---|---|---|
+| two mirrors | 2 | **-8 192** | **0.9910x (a LOSS)** |
+| doublet | 3 | +8 192 | 1.0050x |
+| stack | 5 | +40 960 | 1.0147x |
+| stack | 7 | +73 728 | 1.0189x |
+| stack | 9 | +106 496 | 1.0212x |
+| ladder | 13 | +172 032 | **1.0237x** |
+
+and it reproduces the code exactly: at seven surfaces the delta is **+18
+divide, +6 maximum, -3 square, -2 add, -1 sqrt**, i.e.
+`n_refracting * (1 maximum + 3 in-place divides)` removed against one
+`_normalize_directions` (3 squares + 2 adds + 1 sqrt + 1 maximum + 3 divides)
+added.  So the hoist BREAKS EVEN between two and three surfaces and is a small
+LOSS below that: **WP-B9's 1.03x-1.10x has a reachable floor and an
+unreachable ceiling**, and WP-C2's inability to see the effect is consistent
+with an effect of 0.5 %-2.4 % -- which is below what any timing instrument on
+this box could resolve.
+
+**And it costs no measurable accuracy.**  Against a 60-digit end-to-end
+`decimal` trace -- ray-sphere intersection, vector Snell with the outward
+sphere normal, vertex-plane transfer, `opd += n t`, fed exactly-unit axial rays
+(only an axial launch has an exactly-unit float64 direction) -- on three
+prescriptions, all four `(renormalize, sphere_normal)` combinations land within
+**5.2e-18 m** in position and **6.9e-17 m** in OPL of the truth, and which
+combination is CLOSEST flips with the prescription and with the build.  The
+structural worry is real and is now a number: the ray-sphere quadratic
+hard-codes `a = |d|**2 = 1` and the OPL leg is `n t` with `t` parametric, so a
+direction-norm drift is a FIRST-ORDER error in both.  Measured by injecting a
+drift nine decades above the noise and scaling back, on both builds:
+`d(position)/d(drift) = 1.786e-3 m` and `d(OPL)/d(drift) = 8.99e-4 m`, and
+LINEAR -- the coefficients from injections of 1e-12 and 1e-10 agree to 0.089 %
+and 0.40 %.  At the measured 13-surface history drift of 1.67e-15 that is an
+induced error of **3.0e-18 m** in position and **1.5e-18 m** in OPL, i.e. AT
+the trace's own distance from the truth rather than above it.
+
+The default therefore moves on three measured grounds rather than on the
+structural argument alone: the accounting is positive from three surfaces up,
+the accuracy cost is below the trace's own floor, and the contract it changes
+is documented below.  Section 1.3 of the maintainer ledger records the
+decision.
+
+**What moves.**  The surviving drift enters the next surface's ray-sphere
+quadratic, which assumes `a = |d|**2 = 1`.  Measured on a ladder of 3, 5, 7, 9,
+11 and 13-surface spherical and conic stacks x 4000 rays x both normal routes,
+identical to the last digit on both builds: `max |dx| = 6.6e-17 m`,
+`max |dopd| = 1.7e-16 m`, `max |dL| = 7.2e-16`, with the `alive` masks and
+every error code equal on every rung.  It does NOT accumulate with surface
+count: the difference stays between 0.11 and 0.39 of the derived
+`n_surfaces * eps * |t|` envelope and peaks in the MIDDLE of the ladder, not at
+its end.
+
+**One documented bound was wrong and is now derived.**  The pre-5.49.0
+docstring promised that under `output_filter='all'` the intermediate
+`ray_history` bundles carry `| |d| - 1 | <= 1e-15`.  Measured on a 3 / 5 / 7 /
+9 / 11 / 13-surface ladder, identical to the last digit on both builds:
+
+| surfaces | 3 | 5 | 7 | 9 | 11 | 13 |
+|---|---|---|---|---|---|---|
+| history drift, worst | 6.66e-16 | 8.88e-16 | **1.22e-15** | 1.67e-15 | 1.67e-15 | 1.78e-15 |
+| as a fraction of `n_surfaces * eps` | **1.000** | 0.800 | 0.786 | 0.833 | 0.682 | **0.615** |
+
+`n_surfaces * eps` holds on that ladder, which is one element repeated, and it
+is NOT a bound.  Re-measured over 90 combinations of surface count (3, 5, 7,
+9, 13), glass (N-BK7, N-SF5, N-SF11), radius pair and field angle (0, 2,
+5 deg), identical to the last digit on both builds:
+
+| envelope | combinations exceeding it, of 90 | worst reading |
+|---|---|---|
+| `n_surfaces * eps` | **21** | **1.6667** -- 1.1102e-15 against 6.6613e-16, a 3-surface N-SF11 stack at 5 deg |
+| `2 * n_surfaces * eps` | **0** | 0.8333, i.e. 1.2x of headroom |
+
+So the documented envelope is **`2 * n_surfaces * eps`**, and the coefficient
+in front of `n_surfaces * eps` is NOT constant: across the same 90 it runs
+from **1.00-1.67 at three surfaces to 0.50-0.96 at thirteen**.  A consumer
+sizing a tolerance from `n * eps` -- or from "about 0.6 of it" -- is 40 %
+under on a triplet, the commonest case, so the docstring states `2 n eps` and
+the measured range rather than a coefficient.  `1e-15` was a reading from a
+short stack and is first exceeded between the **THIRD and the SEVENTH**
+surface depending on the stack (1.1102e-15 at three on the N-SF11 ladder,
+1.22e-15 at seven on the repeated N-BK7 one), not the eighth.  The FINAL
+bundle is unit to 2.2e-16 on every one of the 90, on every `output_filter`.
+
+**Migration.**  Pass `renormalize='surface'` to `trace` / `trace_world` for the
+pre-5.49.0 arithmetic; it is byte-identical.  One case genuinely needs it: a
+consumer that reads HISTORY direction cosines (`result.rays_at(i)` for
+`i < len(surfaces) - 1`) and treats them as exactly unit.  Under the new
+default those carry up to `2 * n_surfaces * eps` of drift -- 1.8e-15 on a
+13-surface stack -- while the image-plane bundle is unit to 2.2e-16 as
+before.
+The same seventeen entry points that take `sphere_normal=` take
+`renormalize=` as well, with the same `None` default and the same verbatim
+forward, so the old arithmetic is one keyword away through any of them.  The
+JAX entry points take neither: the JAX body never rescales, so there is no
+per-surface pass to hoist and nothing to switch.
+
+### Changed -- tests (WP-C2): the two pins WP-B9 called knife-edge become decisions with bars this build derives, and the mechanism both B9 reports named is measurably not the one
+
+WP-B9 section 5 items 2 and 3 and VERIFY-B9 section 4 required two pins to be
+restated before the `sphere_normal` default could move, and explained both by
+one mechanism: a knife-edge pixel changing saddle basin, "the quantity is
+bimodal between ~0 and ~1e-8", "a coin".  Re-measured
+(`validation/probe_c2_analytic_normal/`), that mechanism is present in neither.
+
+`tests/unit/test_audit_propagation.py::TestAuditFixesV4_14_0_agent_1_1APropagateModalAsymptoticStillBitEqual`
+-- there is no basin flip anywhere on the grid: the batched cold-start solver
+and the file's own inline scalar one put the saddle in the same place to
+7.3e-18 (8.7e-17 of the pupil half-range) at all 1024 pixels, and the
+correlation between saddle disagreement and field disagreement is 0.06.  The
+disagreement is a DENSE field -- 996 to 1011 pixels above 1e-12 relative,
+median 2.1e-09 -- at the cancellation floor of the moment contraction.  The
+full finite-difference Jacobian of the field in the fit's 70 phase coefficients
+measures the TRUE worst-case amplification of a relative input perturbation --
+the induced `inf <- 2` operator norm, maximised over every direction rather
+than sampled along one -- at **`kappa = 2.9059e+07`**, identical to five digits
+on both builds and both fixtures, with the response along the attaining
+direction linear to 1.0001 over three decades.  So two independent float64
+evaluations can agree no better than `eps * kappa = 6.4527e-09`.  The two arms
+measure `kappa` in-test, assert that linearity and that the finite-difference
+response reproduces the linearised worst case, set the bar at
+`10 * eps * kappa`, and BRACKET that bar with two injected drifts -- one two
+decades above it, which must be refused, and one a decade below it, which must
+be accepted -- so the bar is two-sided on the running build rather than a
+ceiling.  Eight readings (two builds x four `(renormalize, sphere_normal)`
+combinations) span 1.01e-08 to 1.25e-08, i.e. **1.57 to 1.93 times the
+floor**, against a 6.4524e-08 bar: margins 5.2x to 6.4x, and the bar tracks the
+build instead of carrying a number from a prior run.  (An earlier draft of this
+entry measured `kappa` along ONE RANDOM DIRECTION and read 6.24e+06; `kappa` is
+directional, and another seed reads 1.64e+06 on the same fixture, so that bar's
+strictness -- and the 11.1x margin it produced -- were properties of a seed
+rather than of the field.)
+
+`tests/unit/test_niche_audit_w6_asymptotic.py::test_w6_a2_v2_star_is_untouched_by_the_verdict_fix`
+-- the `1e-15` bar rested on a symmetry argument about the OPTIC, but the
+solver works on a least-squares POLYNOMIAL FIT of it whose coefficients are not
+symmetric, so the model's root is genuinely off centre and `1e-15` bounded the
+fit's asymmetry rather than any rounding.  A 60-digit `decimal` Newton on the
+same polynomial system reproduces what the library returns to <= 4.5e-22 on
+both builds (self-consistent to 1e-65 from two independent starts); the
+residual at the pupil centre reads 4.4e-08 to 8.7e-08 and agrees with its own
+60-digit evaluation to 8.8e-07 relative, i.e. resolved about eight decades
+above its rounding floor; and the offset equals the single Newton step
+`H^-1 r(v_c)` from the centre to 9.9e-32.  The pin now makes two decisions
+instead: the returned expansion point IS the root the model puts there (bar
+`4 eps x half-range = 4.5e-18`, the float64 resolution of `v2` on its own
+scale), and that root is the pupil centre at the fit's own resolution (reading
+2.2e-14 to 4.4e-14 of the normalised pupil box against a 1e-10 decision bar,
+with the `|r(v_c)| / sigma_min(H)` bound asserted alongside and the premise that
+`r(v_c)` is resolved asserted separately).
+
+Both files are green under all four `(renormalize, sphere_normal)` default
+combinations on both builds.
 
 ## [5.48.1] — 2026-09-20
 
@@ -2999,7 +3354,7 @@ silently accepted.  A call that would DISCARD the setting — any
 single shared predicate `_routes_to_displaced_remap_2d` (`:1558`) so the guard
 and the dispatch cannot drift apart.
 
-Carried as `LensNumerics.displaced_n_side` (`lens_config.py:514`), floored
+Carried as `LensNumerics.displaced_n_side` (`lens_config.py:556`), floored
 against `_lens_real._DISP_REMAP_2D_MIN_N_SIDE` through the existing `_vocab`
 accessor so a config cannot accept a value the call would refuse, and wired
 into `_NUMERICS_FOR['apply_real_lens']` so `from_kwargs` / `to_kwargs` round
@@ -3234,7 +3589,7 @@ before (i.e. marginally more often).  No output field moves.
 comment (including its pitch column: 55.6 / 39.1 / 19.5 / 9.8 um ->
 **57.2 / 40.2 / 20.1 / 10.1 um**), `_normalise_displaced_n_side`'s refusal
 message and `LensNumerics.displaced_n_side`'s docstring
-(`lens_config.py:440`) all stated the pitch as `2 * r_aperture / (n - 1)`.  All
+(`lens_config.py:450`) all stated the pitch as `2 * r_aperture / (n - 1)`.  All
 now state `2 * 1.03 * r_aperture / (n - 1)` and say why the factor is there.
 `_build_displaced_ray_map_2d`'s docstring no longer describes the default as
 "a fixed 181".
@@ -3394,7 +3749,7 @@ it by 2.2e-12 -- a change of basis, not a change of answer.
 
 That is fix D5 / `FIX_G8_PROBE`'s finding for the fit's ORDER, restated for its
 BASIS, and it is now stated on the parameter itself
-(`lumenairy/elements/_lens_traced.py:8906`).  Documentation only: no behaviour
+(`lumenairy/elements/_lens_traced.py:8908`).  Documentation only: no behaviour
 moves, and `scripts/record_history_fingerprints.py --check` is OK without a
 re-record, because both fingerprints drop docstrings.
 
@@ -5106,7 +5461,7 @@ tangential fan and a sagittal fan -- through the same surfaces at the same
 wavelength, paying the per-call glass resolution and the Python surface loop
 four times over on bundles of 1, 1, `n_rays` and `n_rays` rays.  They now
 concatenate the four launches into one bundle, trace it once and slice the
-result (`raytrace/ray_fan.py:96` `_trace_fan_set`, `:79` `_bundle_slice`;
+result (`raytrace/ray_fan.py:97` `_trace_fan_set`, `:80` `_bundle_slice`;
 applied at `:584`, `:639`, `:836`, `:897`).
 
 This is EXACT, not an approximation: every step of `trace` is elementwise over
@@ -5182,9 +5537,9 @@ per-surface `sqrt` + floor + three divisions in `_refract` / `_reflect` only
 remove ~1e-16 of rounding drift.  `trace` and `trace_world` gain
 `renormalize={'surface' (default), 'exit'}` (`raytrace/trace.py:60`,
 `world_trace.py:82`); `_refract` / `_reflect` gain the matching
-`renormalize: bool = True` (`intersection.py:541`, `:646`), and the single-pass
+`renormalize: bool = True` (`intersection.py:543`, `:651`), and the single-pass
 form is `intersection._normalize_directions` (`:520`), applied once to the
-bundle leaving the last surface (`trace.py:230`, `:341`, `world_trace.py:243`).
+bundle leaving the last surface (`trace.py:314`, `:425`, `world_trace.py:250`).
 
 The degenerate-direction DIAGNOSIS is not hoisted: the per-surface
 `|d| < 1e-30 or not finite -> RAY_NAN + killed` test runs in both modes, because
@@ -5226,7 +5581,7 @@ the vertex.  `raytrace/surface.py:679` `_sphere_normal`; selected by
 matching INTERSECTION.**  Both now select on ONE predicate,
 `surface._is_pure_spherical` (`surface.py:650`), which
 `intersection._intersect_surface` also uses for its closed-form root
-(`intersection.py:242`) -- so the closed form is the normal of the sphere the
+(`intersection.py:244`) -- so the closed form is the normal of the sphere the
 intersection actually solved, at the point the intersection actually returned.
 Verified against a 60-digit `decimal` oracle on R = +-2 mm .. 1 m at heights up
 to 0.95|R|: the closed form is within **4 ULP** of the oracle, is never worse
@@ -5252,11 +5607,11 @@ restating those pins; see the WP-B9 report.
 
 `make_rings` is equal-radius / equal-count, so the pupil areal sampling density
 falls off as `~1/r` and every unweighted `spot_rms` built on it is centre-biased
-small.  It gains `pattern={'rings' (default), 'vogel'}` (`raytrace/trace.py:1204`,
+small.  It gains `pattern={'rings' (default), 'vogel'}` (`raytrace/trace.py:1288`,
 generator at `:1285`): the Vogel / Fibonacci sunflower `r_i = R sqrt(i/N)`,
 `theta_i = i pi (3 - sqrt(5))`, with `i = 1..N` so the outermost ray sits exactly
 on the rim as the outer ring does.  Threaded through
-`through_focus_rms(pattern=)` (`ray_fan.py:1049`) and
+`through_focus_rms(pattern=)` (`ray_fan.py:1120`) and
 `trace_prescription` / `raytrace_system`'s `ray_pattern='vogel'`.
 
 Measured at the defaults (`num_rings=6`, `rays_per_ring=36`, chief included, 217
@@ -5282,7 +5637,7 @@ the opt-in for an area-true statistic.
 `aspheric_coeffs`, so every `jacobian='auto'` consumer silently fell back to the
 finite-difference primitive there -- 9 traced rays per base ray and ~4e-8 of
 truncation.  `_adrt_step` now carries the even-power polynomial departure
-(`raytrace/differential.py:614`): the exact conic root seeds a FIXED 6-step
+(`raytrace/differential.py:628`): the exact conic root seeds a FIXED 6-step
 Newton refinement onto `conic + polynomial`
 (`:477` `_adrt_aspheric_intersect`, `:445` `_adrt_poly_sag`, `:463`
 `_adrt_conic_sag`), and the normal comes from the implicit `F = z - S(u) - P(u)`
@@ -5305,7 +5660,7 @@ a `k = -0.6` base:
 | bit-identical from | 2 Newton steps (shipped budget: 6) |
 
 The numba forward-AD kernel is EXCLUDED for aspheric surfaces
-(`differential.py:805`): its inlined primitives replicate the CONIC arithmetic
+(`differential.py:819`): its inlined primitives replicate the CONIC arithmetic
 only, so left eligible it would have traced an asphere as its base conic --
 right shape, wrong surface, silently.  Freeforms, biconics
 (`radius_y` / `conic_y` / `aspheric_coeffs_y`) and field-frame decenter / tilt
@@ -6379,7 +6734,7 @@ and the exact edit each needs are in `docs/lens_configuration.md` section
 
 ### Added -- `LensConfig.to_kwargs(strict=True)`
 
-`elements/lens_config.py:1250`.  Raises instead of dropping when a field the
+`elements/lens_config.py:1309`.  Raises instead of dropping when a field the
 config actually REQUESTS -- one whose value differs from its dataclass default --
 is not a keyword of the named entry point.  A field left at its default is not a
 request and is still dropped quietly, including under `include_defaults=True`,

@@ -1,0 +1,168 @@
+{
+ "all_identical": false,
+ "moved": [
+  {
+   "key": "conic.0.all.0.L",
+   "max_abs": 1.3877787807814457e-17
+  },
+  {
+   "key": "conic.0.all.0.M",
+   "max_abs": 1.3877787807814457e-17
+  },
+  {
+   "key": "conic.0.all.0.N",
+   "max_abs": 2.220446049250313e-16
+  },
+  {
+   "key": "conic.0.all.1.L",
+   "max_abs": 4.163336342344337e-17
+  },
+  {
+   "key": "conic.0.all.1.M",
+   "max_abs": 3.8163916471489756e-17
+  },
+  {
+   "key": "conic.0.all.1.N",
+   "max_abs": 3.3306690738754696e-16
+  },
+  {
+   "key": "conic.0.all.1.opd",
+   "max_abs": 5.204170427930421e-18
+  },
+  {
+   "key": "conic.0.all.1.x",
+   "max_abs": 1.734723475976807e-18
+  },
+  {
+   "key": "conic.0.all.1.y",
+   "max_abs": 1.734723475976807e-18
+  },
+  {
+   "key": "conic.0.all.1.z",
+   "max_abs": 6.505213034913027e-19
+  },
+  {
+   "key": "conic.0.all.2.L",
+   "max_abs": 1.8041124150158794e-16
+  },
+  {
+   "key": "conic.0.all.2.M",
+   "max_abs": 1.249000902703301e-16
+  },
+  {
+   "key": "conic.0.all.2.N",
+   "max_abs": 2.220446049250313e-16
+  },
+  {
+   "key": "conic.0.all.2.opd",
+   "max_abs": 6.938893903907228e-18
+  },
+  {
+   "key": "conic.0.all.2.x",
+   "max_abs": 1.734723475976807e-18
+  },
+  {
+   "key": "conic.0.all.2.y",
+   "max_abs": 1.734723475976807e-18
+  },
+  {
+   "key": "conic.0.all.2.z",
+   "max_abs": 1.0842021724855044e-19
+  },
+  {
+   "key": "conic.0.last.0.L",
+   "max_abs": 1.8041124150158794e-16
+  },
+  {
+   "key": "conic.0.last.0.M",
+   "max_abs": 1.249000902703301e-16
+  },
+  {
+   "key": "conic.0.last.0.N",
+   "max_abs": 2.220446049250313e-16
+  },
+  {
+   "key": "conic.0.last.0.opd",
+   "max_abs": 6.938893903907228e-18
+  },
+  {
+   "key": "conic.0.last.0.x",
+   "max_abs": 1.734723475976807e-18
+  },
+  {
+   "key": "conic.0.last.0.y",
+   "max_abs": 1.734723475976807e-18
+  },
+  {
+   "key": "conic.0.last.0.z",
+   "max_abs": 1.0842021724855044e-19
+  },
+  {
+   "key": "conic.4.all.0.L",
+   "max_abs": 2.7755575615628914e-17
+  },
+  {
+   "key": "conic.4.all.0.M",
+   "max_abs": 1.3877787807814457e-17
+  },
+  {
+   "key": "conic.4.all.0.N",
+   "max_abs": 2.220446049250313e-16
+  },
+  {
+   "key": "conic.4.all.1.L",
+   "max_abs": 6.938893903907228e-17
+  },
+  {
+   "key": "conic.4.all.1.M",
+   "max_abs": 4.5102810375396984e-17
+  },
+  {
+   "key": "conic.4.all.1.N",
+   "max_abs": 3.3306690738754696e-16
+  },
+  {
+   "key": "conic.4.all.1.opd",
+   "max_abs": 5.204170427930421e-18
+  },
+  {
+   "key": "conic.4.all.1.x",
+   "max_abs": 8.673617379884035e-19
+  },
+  {
+   "key": "conic.4.all.1.y",
+   "max_abs": 8.673617379884035e-19
+  },
+  {
+   "key": "conic.4.all.1.z",
+   "max_abs": 4.336808689942018e-19
+  },
+  {
+   "key": "conic.4.all.2.L",
+   "max_abs": 1.942890293094024e-16
+  },
+  {
+   "key": "conic.4.all.2.M",
+   "max_abs": 1.6653345369377348e-16
+  },
+  {
+   "key": "conic.4.all.2.N",
+   "max_abs": 2.220446049250313e-16
+  },
+  {
+   "key": "conic.4.all.2.opd",
+   "max_abs": 6.938893903907228e-18
+  },
+  {
+   "key": "conic.4.all.2.x",
+   "max_abs": 1.734723475976807e-18
+  },
+  {
+   "key": "conic.4.all.2.y",
+   "max_abs": 1.734723475976807e-18
+  }
+ ],
+ "n_arrays": 594,
+ "n_identical": 172,
+ "n_moved": 422
+}

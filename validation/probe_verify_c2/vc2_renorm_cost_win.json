@@ -1,0 +1,73 @@
+{
+ "added_once_s": 0.00032124101562658325,
+ "break_even_surface_count": Infinity,
+ "cpu_clock_cross_check": {
+  "normalize_directions": 0.00030517578125,
+  "refract_false": 0.00384521484375,
+  "refract_false_flat": 0.004638671875,
+  "refract_true": 0.00390625,
+  "refract_true_flat": 0.00439453125
+ },
+ "cpu_clock_removed_per_surface_s": 6.103515625e-05,
+ "meta": {
+  "cpu_count": 24,
+  "file": "C:\\tmp/lum_vc2\\lumenairy\\__init__.py",
+  "lumenairy": "5.48.1",
+  "min_sample_s": 1.5,
+  "n_rays": 100000,
+  "numpy": "2.4.4",
+  "python": "3.14.6",
+  "repeats": 9,
+  "reps": 256
+ },
+ "nonbending_cross_check": {
+  "break_even_surface_count": Infinity,
+  "removed_fraction": -0.08312186056040029,
+  "removed_per_surface_s": -0.00037482890627416054,
+  "t_false": 0.004884219140649293,
+  "t_true": 0.004509390234375132
+ },
+ "predicted_per_surface_count": {
+  "11_surfaces": {
+   "predicted_saving_fraction": -0.030418807176483237,
+   "predicted_saving_s": -0.002791024609678061,
+   "predicted_speedup": 0.9704791809266023,
+   "t_surface_mode_s": 0.09175325624983088
+  },
+  "13_surfaces": {
+   "predicted_saving_fraction": -0.023112717034744386,
+   "predicted_saving_s": -0.0032400761722328753,
+   "predicted_speedup": 0.9774094128145223,
+   "t_surface_mode_s": 0.1401858624999477
+  },
+  "3_surfaces": {
+   "predicted_saving_fraction": -0.029482912003106654,
+   "predicted_saving_s": -0.0009948183594588045,
+   "predicted_speedup": 0.9713614362517775,
+   "t_surface_mode_s": 0.03374220156251795
+  },
+  "5_surfaces": {
+   "predicted_saving_fraction": -0.030508547464363805,
+   "predicted_saving_s": -0.0014438699220136186,
+   "predicted_speedup": 0.9703946682058755,
+   "t_surface_mode_s": 0.04732673437501944
+  },
+  "7_surfaces": {
+   "predicted_saving_fraction": -0.027984228053873548,
+   "predicted_saving_s": -0.0018929214845684328,
+   "predicted_speedup": 0.9727775706181292,
+   "t_surface_mode_s": 0.06764244062492253
+  },
+  "9_surfaces": {
+   "predicted_saving_fraction": -0.031074699017660794,
+   "predicted_saving_s": -0.002341973047123247,
+   "predicted_speedup": 0.9698618353769454,
+   "t_surface_mode_s": 0.07536591249981939
+  }
+ },
+ "removed_per_surface_fraction_of_refract": -0.05734562696733407,
+ "removed_per_surface_s": -0.00022452578127740708,
+ "t_normalize_directions": 0.00032124101562658325,
+ "t_refract_renormalize_false": 0.0041398335937685715,
+ "t_refract_renormalize_true": 0.0039153078124911644
+}

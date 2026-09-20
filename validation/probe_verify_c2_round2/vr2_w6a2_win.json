@@ -1,0 +1,23 @@
+{
+ "lumenairy_file": "C:\\tmp/lum_vc2b\\lumenairy\\__init__.py",
+ "python": "3.14.6",
+ "numpy": "2.4.4",
+ "first_step_norm": 8.011184398095828e-16,
+ "v_star_minus_v_c": [
+  -1.0821979753403542e-17,
+  8.010453416362627e-16
+ ],
+ "second_step_ratios": {
+  "shipped": 1.9354985730679017e-07,
+  "no_step": 1.0,
+  "half_step": 0.4999998913246126,
+  "tenth_step": 0.9000003134512088,
+  "sign_error": 2.0000002196118856,
+  "no_prior_in_the_step": 2.5328840880617837e-05
+ },
+ "bar": 0.0001,
+ "shipped_headroom_under_the_bar": 516.6627420525191,
+ "smallest_unconverged_ratio": 2.5328840880617837e-05,
+ "gap_above_the_bar": 0.25328840880617837,
+ "fraction_of_the_first_step_that_may_be_missed_at_the_bar": 9.968532498677572e-05
+}

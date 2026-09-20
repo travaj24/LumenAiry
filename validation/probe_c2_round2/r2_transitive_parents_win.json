@@ -1,0 +1,451 @@
+{
+ "lumenairy_file": "C:\\tmp\\lum_c2b\\lumenairy\\__init__.py",
+ "max_hops": 6,
+ "n_population": 46,
+ "n_unresolved": 11,
+ "n_with_a_parent": 35,
+ "population": [
+  "aberration_summary",
+  "aberration_tensor",
+  "apply_prescription_persurface_to_beamlets",
+  "apply_real_lens_auto",
+  "apply_real_lens_fga",
+  "apply_real_lens_fga_vector",
+  "apply_real_lens_gbd",
+  "apply_real_lens_maslov_vector",
+  "apply_real_lens_traced_multi",
+  "apply_real_lens_traced_multibranch",
+  "apply_real_lens_traced_segmented",
+  "apply_real_lens_traced_uniform",
+  "apply_real_lens_universal",
+  "design_optimize_multi_objective",
+  "distortion_grid",
+  "distortion_vs_field",
+  "field_aberration_sweep",
+  "field_grid_wfe",
+  "footprint_per_surface",
+  "make_lg_aberration_merit_jax",
+  "monte_carlo_tolerancing",
+  "monte_carlo_tolerancing_jax",
+  "optimize_traced_geometry",
+  "pmm_1d",
+  "pmm_efficiency_1d_slanted",
+  "pmm_jones_1d",
+  "pmm_jones_1d_segments",
+  "pmm_jones_1d_segments_vs_wavelength",
+  "pmm_jones_1d_slanted",
+  "pmm_jones_1d_slanted_segments",
+  "pmm_jones_1d_vs_wavelength",
+  "prepare_real_lens_traced",
+  "prescription_subdomain",
+  "propagate",
+  "propagate_gbd_through_prescription",
+  "propagate_gbd_vector_through_prescription",
+  "propagate_hfpi_through_prescription",
+  "propagate_huygens_fresnel_through_prescription",
+  "propagate_subaperture_asymptotic",
+  "propagate_through_system",
+  "propagate_traced_carrier_chain",
+  "propagate_traced_carrier_chain_multi",
+  "ray_fan_plot",
+  "ray_fan_plot_prescription",
+  "relative_illumination",
+  "spot_diagram_vs_field"
+ ],
+ "python": "3.14.6",
+ "transitive_parents": {
+  "aberration_summary": {
+   "parent": "fit_canonical_polynomials",
+   "path": [
+    "fit_canonical_polynomials"
+   ]
+  },
+  "apply_prescription_persurface_to_beamlets": {
+   "parent": "trace_world",
+   "path": [
+    "_reframe_beamlets_to_world_plane",
+    "trace_world"
+   ]
+  },
+  "apply_real_lens_auto": {
+   "parent": "ray_transfer_jacobian",
+   "path": [
+    "_caustic_zone",
+    "ray_transfer_jacobian"
+   ]
+  },
+  "apply_real_lens_fga": {
+   "parent": "ray_transfer_jacobian",
+   "path": [
+    "_fga_through_lens",
+    "ray_transfer_jacobian"
+   ]
+  },
+  "apply_real_lens_fga_vector": {
+   "parent": "ray_transfer_jacobian",
+   "path": [
+    "_fga_vector_through_lens",
+    "ray_transfer_jacobian"
+   ]
+  },
+  "apply_real_lens_gbd": {
+   "parent": "trace_world",
+   "path": [
+    "apply_prescription_persurface_to_beamlets",
+    "_reframe_beamlets_to_world_plane",
+    "trace_world"
+   ]
+  },
+  "apply_real_lens_maslov_vector": {
+   "parent": "apply_real_lens_maslov",
+   "path": [
+    "apply_real_lens_maslov"
+   ]
+  },
+  "apply_real_lens_traced_multi": {
+   "parent": "apply_real_lens_traced",
+   "path": [
+    "apply_real_lens_traced"
+   ]
+  },
+  "apply_real_lens_traced_multibranch": {
+   "parent": "trace",
+   "path": [
+    "_multibranch_render",
+    "_trace_launch_grid",
+    "trace"
+   ]
+  },
+  "apply_real_lens_traced_segmented": {
+   "parent": "apply_real_lens_traced",
+   "path": [
+    "apply_real_lens_traced"
+   ]
+  },
+  "apply_real_lens_traced_uniform": {
+   "parent": "trace",
+   "path": [
+    "_trace_meridional_cusp",
+    "trace"
+   ]
+  },
+  "apply_real_lens_universal": {
+   "parent": "apply_real_lens_traced",
+   "path": [
+    "apply_real_lens_traced"
+   ]
+  },
+  "distortion_grid": {
+   "parent": "trace",
+   "path": [
+    "_trace",
+    "trace"
+   ]
+  },
+  "distortion_vs_field": {
+   "parent": "trace",
+   "path": [
+    "_trace",
+    "trace"
+   ]
+  },
+  "field_aberration_sweep": {
+   "parent": "trace",
+   "path": [
+    "_trace",
+    "trace"
+   ]
+  },
+  "field_grid_wfe": {
+   "parent": "eval_image_plane_wfe",
+   "path": [
+    "eval_image_plane_wfe"
+   ]
+  },
+  "footprint_per_surface": {
+   "parent": "trace",
+   "path": [
+    "_trace",
+    "trace"
+   ]
+  },
+  "make_lg_aberration_merit_jax": {
+   "parent": "trace_jax",
+   "path": [
+    "fit_canonical_polynomials_jax",
+    "trace_jax"
+   ]
+  },
+  "monte_carlo_tolerancing": {
+   "parent": "trace_jax",
+   "path": [
+    "monte_carlo_tolerancing_jax",
+    "apply_real_lens_traced_jax",
+    "trace_jax"
+   ]
+  },
+  "monte_carlo_tolerancing_jax": {
+   "parent": "trace_jax",
+   "path": [
+    "apply_real_lens_traced_jax",
+    "trace_jax"
+   ]
+  },
+  "optimize_traced_geometry": {
+   "parent": "trace_jax",
+   "path": [
+    "apply_real_lens_traced_jax",
+    "trace_jax"
+   ]
+  },
+  "prepare_real_lens_traced": {
+   "parent": "apply_real_lens_traced",
+   "path": [
+    "apply_real_lens_traced"
+   ]
+  },
+  "propagate": {
+   "parent": "apply_real_lens_maslov",
+   "path": [
+    "_dispatch_to_method",
+    "apply_real_lens_maslov"
+   ]
+  },
+  "propagate_gbd_through_prescription": {
+   "parent": "trace_world",
+   "path": [
+    "apply_prescription_persurface_to_beamlets",
+    "_reframe_beamlets_to_world_plane",
+    "trace_world"
+   ]
+  },
+  "propagate_gbd_vector_through_prescription": {
+   "parent": "trace_world",
+   "path": [
+    "propagate_gbd_through_prescription",
+    "apply_prescription_persurface_to_beamlets",
+    "_reframe_beamlets_to_world_plane",
+    "trace_world"
+   ]
+  },
+  "propagate_hfpi_through_prescription": {
+   "parent": "trace",
+   "path": [
+    "_hfpi_segment_trace",
+    "trace"
+   ]
+  },
+  "propagate_huygens_fresnel_through_prescription": {
+   "parent": "fit_canonical_polynomials",
+   "path": [
+    "fit_canonical_polynomials"
+   ]
+  },
+  "propagate_subaperture_asymptotic": {
+   "parent": "fit_canonical_polynomials",
+   "path": [
+    "fit_canonical_polynomials"
+   ]
+  },
+  "propagate_through_system": {
+   "parent": "apply_real_lens_traced",
+   "path": [
+    "apply_real_lens_traced"
+   ]
+  },
+  "propagate_traced_carrier_chain": {
+   "parent": "apply_real_lens_traced",
+   "path": [
+    "apply_real_lens_traced"
+   ]
+  },
+  "propagate_traced_carrier_chain_multi": {
+   "parent": "apply_real_lens_traced",
+   "path": [
+    "propagate_traced_carrier_chain",
+    "apply_real_lens_traced"
+   ]
+  },
+  "ray_fan_plot": {
+   "parent": "ray_fan_data",
+   "path": [
+    "ray_fan_data"
+   ]
+  },
+  "ray_fan_plot_prescription": {
+   "parent": "ray_fan_data",
+   "path": [
+    "ray_fan_plot",
+    "ray_fan_data"
+   ]
+  },
+  "relative_illumination": {
+   "parent": "trace",
+   "path": [
+    "_trace",
+    "trace"
+   ]
+  },
+  "spot_diagram_vs_field": {
+   "parent": "trace",
+   "path": [
+    "_trace",
+    "trace"
+   ]
+  }
+ },
+ "unresolved": {
+  "aberration_tensor": [
+   "AberrationTensorResult",
+   "_compute_M_b",
+   "_contract_against_moment_table",
+   "_lg00_sampling_waist",
+   "_maslov_branch_corrected_sqrt",
+   "_measure_image_plane_waist",
+   "_measure_sigma_phase_curvature",
+   "_multiply_polys_2d",
+   "_polynomial_substitute_linear_2d",
+   "_polynomial_under_affine_shift",
+   "_required_sigma_grid_n",
+   "_s2_validity_room"
+  ],
+  "design_optimize_multi_objective": [
+   "NSGA2",
+   "ParetoResult",
+   "TypeError",
+   "ValueError",
+   "_LumenAiryMOOProblem",
+   "_ProgressCallback",
+   "__init__",
+   "_call_progress",
+   "_check_pymoo",
+   "_f",
+   "append",
+   "asarray"
+  ],
+  "pmm_1d": [
+   "ValueError",
+   "_promote_eps_tensor",
+   "_resolve_incidence_checked",
+   "_resolve_order_count",
+   "abs",
+   "bool",
+   "dict",
+   "float",
+   "int",
+   "pmm_jones_1d",
+   "pmm_jones_1d_segments",
+   "pmm_jones_1d_slanted"
+  ],
+  "pmm_efficiency_1d_slanted": [
+   "ValueError",
+   "_C",
+   "_lossy_incidence",
+   "_pmm_slant_solve",
+   "_resolve_incidence_checked",
+   "_resolve_order_count",
+   "_stabilize_scalar",
+   "abs",
+   "bool",
+   "dict",
+   "eye",
+   "float"
+  ],
+  "pmm_jones_1d": [
+   "NotImplementedError",
+   "ValueError",
+   "_C",
+   "_lossy_incidence",
+   "_off_mag",
+   "_pmm_jones_1d_jax",
+   "_pmm_jones_slant_solve",
+   "_pmm_jones_solve",
+   "_resolve_incidence_checked",
+   "_resolve_order_count",
+   "_stabilize_jones",
+   "abs"
+  ],
+  "pmm_jones_1d_segments": [
+   "ValueError",
+   "_C",
+   "_lossy_incidence",
+   "_pmm_jones_slant_segments_solve",
+   "_pmm_jones_solve_segments",
+   "_resolve_incidence_checked",
+   "_resolve_order_count",
+   "_stabilize_jones",
+   "abs",
+   "append",
+   "asarray",
+   "bool"
+  ],
+  "pmm_jones_1d_segments_vs_wavelength": [
+   "ValueError",
+   "_at",
+   "_resolve_incidence_checked",
+   "_resolve_order_count",
+   "all",
+   "any",
+   "asarray",
+   "atleast_1d",
+   "callable",
+   "empty",
+   "enumerate",
+   "float"
+  ],
+  "pmm_jones_1d_slanted": [
+   "ValueError",
+   "_C",
+   "_lossy_incidence",
+   "_pmm_jones_oblique_solve",
+   "_pmm_jones_slant_diag_solve",
+   "_pmm_jones_slant_solve",
+   "_resolve_incidence_checked",
+   "_resolve_order_count",
+   "_stabilize_jones",
+   "abs",
+   "asarray",
+   "bool"
+  ],
+  "pmm_jones_1d_slanted_segments": [
+   "ValueError",
+   "_C",
+   "_lossy_incidence",
+   "_pmm_jones_oblique_segments_solve",
+   "_pmm_jones_slant_segments_solve",
+   "_resolve_incidence_checked",
+   "_resolve_order_count",
+   "_stabilize_jones",
+   "abs",
+   "append",
+   "asarray",
+   "bool"
+  ],
+  "pmm_jones_1d_vs_wavelength": [
+   "ValueError",
+   "_at",
+   "_resolve_incidence_checked",
+   "_resolve_order_count",
+   "all",
+   "any",
+   "asarray",
+   "atleast_1d",
+   "callable",
+   "empty",
+   "enumerate",
+   "float"
+  ],
+  "prescription_subdomain": [
+   "MhsSubdomain",
+   "ValueError",
+   "_resample_preserving_window_power",
+   "abs",
+   "float",
+   "int",
+   "items",
+   "propagate",
+   "update",
+   "warn"
+  ]
+ }
+}

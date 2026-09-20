@@ -1,0 +1,30 @@
+=================== M0  control, shipped 1e-5 bar ===================
+.                                                                        [100%]
+1 passed, 52 deselected in 0.90s
+
+=========== M13a  wrong Hessian, still iterating, 1e-5 bar ===========
+prior term dropped from the Hessian; sweeps: iterating
+.                                                                        [100%]
+1 passed, 52 deselected in 1.35s
+
+=========== M13b  wrong Hessian + one sweep, SHIPPED 1e-5 bar ===========
+prior term dropped from the Hessian; sweeps: one_sweep
+            f'this 1e-5 bar -- 51x to 114x of headroom -- while an '
+            f'unconverged root reads 2.53e-05 (the prior term dropped from '
+            f'the Hessian, which a 1e-4 bar would have PASSED), 0.10 (a tenth '
+            f'of the step missed), 0.50 (half the step), 1.00 (no step at '
+            f'all) or 2.00 (a sign error).')
+E       AssertionError: v2* is not a CONVERGED root of the model: a second Newton step from it is 2.570e-05 of the first, so the returned point is one step from the centre rather than the place the nonlinear system actually sits.  Measured 1.9355e-07 (Windows py3.14 / numpy 2.4.4) and 8.7659e-08 (WSL py3.12 / numpy 2.4.6) against this 1e-5 bar -- 51x to 114x of headroom -- while an unconverged root reads 2.53e-05 (the prior term dropped from the Hessian, which a 1e-4 bar would have PASSED), 0.10 (a tenth of the step missed), 0.50 (half the step), 1.00 (no step at all) or 2.00 (a sign error).
+E       assert 2.569817216326244e-05 < 1e-05
+
+tests/unit/test_niche_audit_w6_asymptotic.py:892: AssertionError
+=========================== short test summary info ============================
+FAILED tests/unit/test_niche_audit_w6_asymptotic.py::test_w6_a2_v2_star_is_untouched_by_the_verdict_fix
+1 failed, 52 deselected in 0.90s
+
+=========== M13b  the same tree, RETIRED 1e-4 bar ===========
+the bar put back to the retired 1e-4
+.                                                                        [100%]
+1 passed, 52 deselected in 0.72s
+
+=================== done ===================

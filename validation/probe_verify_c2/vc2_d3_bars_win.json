@@ -1,0 +1,51 @@
+{
+ "arm1_degree_effect": {
+  "bad4": 1.1769575578650315,
+  "bad4_over_bad6": 1.1689359333822467,
+  "bad6": 1.0068623303071664,
+  "bar": 10.0,
+  "degree_effect": 0.16893593338224666,
+  "good6": null,
+  "headroom_over_the_bar": 6.531687710946888,
+  "margin": 65.31687710946888,
+  "passes": true,
+  "same_degree_twice": 0.0,
+  "shipped_floor": 0.002586405548739199
+ },
+ "arm2_moved": {
+  "bar": 3.0,
+  "floor_max": 0.17820415939653114,
+  "floor_min": 0.05535335929141736,
+  "floor_spread_ratio": 3.2193919515949236,
+  "floors": {
+   "down": 0.17820415939653114,
+   "one_element": 0.05535335929141736,
+   "real_only": 0.14036064236753482,
+   "up": 0.14036064236753482
+  },
+  "headroom_over_the_bar": 1.9853303443002321,
+  "margin_at_shipped_floor": 5.955991032900696,
+  "margin_at_worst_floor": 4.691174045231023,
+  "moved": 0.835986727313219,
+  "passes_at_shipped_floor": true,
+  "passes_at_worst_floor": true,
+  "same_degree_twice": 0.0,
+  "shipped_floor": 0.14036064236753482
+ },
+ "meta": {
+  "file": "C:\\tmp/lum_vc2\\lumenairy\\__init__.py",
+  "lumenairy": "5.48.1",
+  "numpy": "2.4.4",
+  "python": "3.14.6"
+ },
+ "verdict": {
+  "arm1_headroom": 6.531687710946888,
+  "arm2_bar": 3.0,
+  "arm2_bar_inside_its_own_floor_spread": true,
+  "arm2_floor_spread_ratio": 3.2193919515949236,
+  "arm2_headroom": 1.9853303443002321,
+  "floors_are_measured_in_process": true,
+  "multipliers_are_chosen_not_derived": true,
+  "two_sided": false
+ }
+}

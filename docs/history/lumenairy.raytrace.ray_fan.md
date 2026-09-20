@@ -1,13 +1,14 @@
 <!-- lumenairy-history-doc
 module: lumenairy/raytrace/ray_fan.py
-ast_sha256: 7b359195858eea6cdb2bbd8d161d5ae001afdbf6b594de662cc37f6656f20c63
-token_sha256: e1e2f1ac9becc1bea99679a4dc168df2ac7bd7963b025e2e0232c5a0104c745e
+ast_sha256: d34ab63465a8bc62e05e206d021199a934c64f00da5c7773907a82a07f4c8d25
+token_sha256: c2719cdbe76128e54c58a50036711ffcc7328e4c6521a78992191723f7b72327
 pre_relocation_lines: 1074
 recorded_by: WP-A17 SWEEP-3 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
 re_recorded: 2026-09-13 -- WP-B9 item 3: both ray fans and both OPD fans issue ONE concatenated trace via the new _trace_fan_set / _bundle_slice helpers instead of four; through_focus_rms gains pattern= for the area-uniform pupil
 re_recorded: 2026-09-13 -- VERIFY-WP-B9: _trace_fan_set reads each input bundle's own error_code (the np.zeros stand-in would relabel a dead ray RAY_OK) and names the absolute Newton tolerance
 re_recorded: 2026-09-14 -- Wave-5 item D (CI run 34914295323): DIGEST-SCHEME change, not a code change -- token_fingerprint now feeds an f-string to the digest as ONE STRING record holding its exact source text instead of the running tokenizer's FSTRING_START/FSTRING_MIDDLE/FSTRING_END run, so the recorded value is a property of the file rather than of the interpreter that read it; PEP 701 made CPython 3.12 tokenize f-strings differently from 3.11, these digests were recorded on 3.12+, and all five py3.11 CI shards read a different token_sha256 for byte-identical sources (110 of 123 documents, measured).  The module source is unchanged and ast_sha256 is unchanged.
+re_recorded: 2026-09-20 -- WP-C2 round 2 (VERIFY-WP-C2 D4): this module's exported internally-tracing entry point(s) take the tracer's own sphere_normal= / renormalize= keywords (default None, which stamps nothing) and forward them verbatim to the trace call, so the pre-WP-C2 arithmetic is one keyword away; 742/742 arrays byte-identical archive to archive on both builds
 -->
 
 

@@ -1,0 +1,171 @@
+{
+ "analytic_sphere_seen": {
+  "ghost": [
+   true
+  ],
+  "trace": [
+   true
+  ]
+ },
+ "ghost_asks_what_trace_asks": true,
+ "lumenairy_file": "C:\\tmp\\lum_c2b\\lumenairy\\__init__.py",
+ "numpy": "2.4.4",
+ "paths": [
+  {
+   "analytic_forced": {
+    "energy_fraction_ppm": 90.16975030189619,
+    "fwhm_mm": 215.27504195611886,
+    "rms_radius_mm": 156.71730428296536,
+    "total_transmittance": 9.016975030189618e-05
+   },
+   "default_is_analytic": true,
+   "delta": {
+    "energy_fraction_ppm": 0.0,
+    "fwhm_mm": 0.0,
+    "rms_radius_mm": 9.663381206337363e-13,
+    "total_transmittance": 0.0
+   },
+   "generic_forced": {
+    "energy_fraction_ppm": 90.16975030189619,
+    "fwhm_mm": 215.27504195611886,
+    "rms_radius_mm": 156.71730428296632,
+    "total_transmittance": 9.016975030189618e-05
+   },
+   "library_default": {
+    "energy_fraction_ppm": 90.16975030189619,
+    "fwhm_mm": 215.27504195611886,
+    "rms_radius_mm": 156.71730428296536,
+    "total_transmittance": 9.016975030189618e-05
+   },
+   "path": [
+    [
+     0,
+     "transmit"
+    ],
+    [
+     1,
+     "reflect"
+    ],
+    [
+     0,
+     "reflect"
+    ],
+    [
+     1,
+     "transmit"
+    ],
+    [
+     2,
+     "transmit"
+    ]
+   ]
+  },
+  {
+   "analytic_forced": {
+    "energy_fraction_ppm": 2379.294114186636,
+    "fwhm_mm": 94.74596780567775,
+    "rms_radius_mm": 44.4818611798896,
+    "total_transmittance": 0.002379294114186636
+   },
+   "default_is_analytic": true,
+   "delta": {
+    "energy_fraction_ppm": 0.0,
+    "fwhm_mm": 0.0,
+    "rms_radius_mm": 7.105427357601002e-15,
+    "total_transmittance": 0.0
+   },
+   "generic_forced": {
+    "energy_fraction_ppm": 2379.294114186636,
+    "fwhm_mm": 94.74596780567775,
+    "rms_radius_mm": 44.48186117988959,
+    "total_transmittance": 0.002379294114186636
+   },
+   "library_default": {
+    "energy_fraction_ppm": 2379.294114186636,
+    "fwhm_mm": 94.74596780567775,
+    "rms_radius_mm": 44.4818611798896,
+    "total_transmittance": 0.002379294114186636
+   },
+   "path": [
+    [
+     0,
+     "transmit"
+    ],
+    [
+     1,
+     "transmit"
+    ],
+    [
+     2,
+     "reflect"
+    ],
+    [
+     1,
+     "transmit"
+    ],
+    [
+     0,
+     "reflect"
+    ],
+    [
+     1,
+     "transmit"
+    ],
+    [
+     2,
+     "transmit"
+    ]
+   ]
+  },
+  {
+   "analytic_forced": {
+    "energy_fraction_ppm": 135.47602546386918,
+    "fwhm_mm": 76.73981127130335,
+    "rms_radius_mm": 34.26440626607578,
+    "total_transmittance": 0.00013547602546386917
+   },
+   "default_is_analytic": true,
+   "delta": {
+    "energy_fraction_ppm": 0.0,
+    "fwhm_mm": 0.0,
+    "rms_radius_mm": 0.0,
+    "total_transmittance": 0.0
+   },
+   "generic_forced": {
+    "energy_fraction_ppm": 135.47602546386918,
+    "fwhm_mm": 76.73981127130335,
+    "rms_radius_mm": 34.26440626607578,
+    "total_transmittance": 0.00013547602546386917
+   },
+   "library_default": {
+    "energy_fraction_ppm": 135.47602546386918,
+    "fwhm_mm": 76.73981127130335,
+    "rms_radius_mm": 34.26440626607578,
+    "total_transmittance": 0.00013547602546386917
+   },
+   "path": [
+    [
+     0,
+     "transmit"
+    ],
+    [
+     1,
+     "transmit"
+    ],
+    [
+     2,
+     "reflect"
+    ],
+    [
+     1,
+     "reflect"
+    ],
+    [
+     2,
+     "transmit"
+    ]
+   ]
+  }
+ ],
+ "python": "3.14.6"
+}

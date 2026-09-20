@@ -1945,15 +1945,6 @@ recorded in `docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/MAINTAINER_DECI
 Each subsection below is one work package: what moved, who is affected, and the
 one-keyword way back where one exists.
 
----
-
-## 5.49.0 -- the default flips (2026-09-20)
-
-Eight settings the 2026-09-11 audit measured and left switchable become the
-defaults their measurements supported (the maintainer decisions of 2026-09-20,
-recorded in `docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/MAINTAINER_DECISIONS_2026_09.md`).
-Each subsection below is one work package: what moved, who is affected, and the
-one-keyword way back where one exists.
 
 ### `method='auto'` selects the direct-matrix MFT route at a small output grid
 
@@ -2508,4 +2499,268 @@ re-sized a requested 2.87 mm window down to 1.29 mm and returned zeros over the
 rest; it was refused then and is refused now.  The window and the returned grid
 keep the size the caller asked for, and the part that is blanked is exactly the
 part the transform never evaluated, reported in the result rather than assumed.
+
+### the ray tracer's `sphere_normal` default moves to `'analytic'` (WP-C2)
+
+`trace` and `trace_world` now compute a PURE SPHERE's surface normal from the
+closed form `(-x/R, -y/R, sqrt(1 - h^2/R^2))` rather than by differentiating
+the sag numerically.  The route shipped opt-in in 5.48.0 (`sphere_normal=`);
+5.49.0 makes it the default, on the maintainer decision recorded as section 1.3
+of `docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/MAINTAINER_DECISIONS_2026_09.md`.
+
+**The way back, and it is byte-identical:**
+
+```python
+result = trace(rays, surfaces, wavelength, sphere_normal='generic')
+result = trace_world(rays, world_surfaces, wavelength, sphere_normal='generic')
+```
+
+The way back is byte-identical in a SECOND PROCESS against a read-only
+`git archive 49ddf4bd`, not merely against this tree with the keyword ignored:
+**594 of 594** recorded arrays are identical on both development mounts -- five
+prescriptions at two field angles under both `output_filter` modes, every
+history bundle, `x/y/z/L/M/N/opd/alive/code`.  At the DEFAULTS the same set
+reads 172 of 594 identical, so the identity is not a switch that reaches
+nothing.
+
+Archive to archive against 49ddf4bd, with BOTH old keywords passed, **934 of
+1008** recorded arrays (1 630 399 values) are byte-identical on the Windows
+mount and **935 of 1008** on the WSL one; the **74** that are not (73 on WSL)
+are exactly the answers of the entry points listed under "Every entry point has
+one" below -- `trace_prescription` 27, `refocus` 26, `ray_fan_data` 8,
+`opd_fan_data` 8, `spot_rms` 4 and `through_focus` 1 on Windows, the same less
+`through_focus` on WSL.  Those entry points now carry the keywords themselves,
+and that way back was measured separately: 742 of 742 arrays byte-identical
+over all sixteen, on both mounts (and at 3 of 3 prescriptions over the
+seventeenth, `apply_real_lens`, which round 3 added).
+
+**What you get if you do nothing.**  A 1.08x to 1.44x faster trace on
+prescriptions that contain spherical surfaces (medians 1.12x and 1.19x on the
+two development mounts; 0.93x to 1.03x on prescriptions with no pure sphere,
+which is the measurement's own resolution), a normal that is within **1.50 ULP**
+of an 80-digit exact-input oracle out to `h = 0.95 |R|` against the previous
+route's **1.75** -- identical on both development mounts, never worse there by
+more than one unit at any of 672 points -- and answers that move by at most
+1.8e-11 absolute and 3.4e-13 relative.  Above `0.95 |R|` both routes are at the
+conditioning limit of `sqrt(1 - h^2/R^2)` and neither dominates point by point
+(46 against 91 ULP at the clamp; at 14 of 1056 points on one mount and 18 on
+the other the closed form rounds worse by more than a unit).  "More accurate"
+is a bound out to `0.95 |R|` and a mean beyond it.  No
+`alive` flag, error code or vignetting count moves on any shipped prescription:
+360 000 traced rays over twelve prescription and field-angle combinations moved
+zero of each.  CPU / JAX parity is unmoved (3.5e-18 m in position, 3.1e-17 m in
+OPL, alive masks equal, under all four settings) -- the JAX tracer has always
+used a closed-form sphere normal, so this brings the two backends closer.
+
+**THE RIM BAND -- the one discontinuous change.**  The two routes evaluate the
+`0.9999` domain clamp from different expressions, `(x*x + y*y)/(R*R)` against
+`(1 + conic) * sqrt(x*x + y*y)**2 / R**2`, which differ by up to 1 ULP.  Over a
+band about **one ULP of `h` wide at `h = 0.99995 |R|`** the two land on opposite
+sides of the clamp: a ray the old route killed as `RAY_NAN` may now refract, or
+die with an honest `RAY_TIR` / `RAY_APERTURE` instead, and vice versa.  A
+directed nextafter walk constructs such points; no sampled bundle found one.
+If a design deliberately works rays past `0.9999 R^2` of a spherical surface,
+note that NEITHER route resolves the normal there better than about 1e-12
+relative -- the cancellation in `sqrt(1 - u)` is in the inputs, not in the
+algorithm -- so give the surface an explicit clear aperture instead of relying
+on the clamp to define the edge.  The clamp itself is unchanged in 5.49.0 and
+stays until a vignetting decision is taken on its own merits.
+
+**AND WHAT A REAL DESIGN ACTUALLY MEETS THERE IS THE CLAMP, NOT THE BAND.**
+Both routes refuse a ray above `h = 0.99995 |R|` and report it as `RAY_NAN` --
+a NUMERICAL-FAULT code, not `RAY_APERTURE`, so it lands in
+`raytrace.layout`'s fault histogram rather than its vignetting one.  That
+clamp is unchanged by this release, and it is what a **ball lens or
+hemisphere** meets, because such a part has its clear semi-diameter at `|R|`
+by construction: of 60 000 rays packed into the outer 0.1 % of the aperture of
+an R = 12.5 mm ball lens, **3024 (5.04 %) die `RAY_NAN`**, identically through
+`sphere_normal='generic'` and `sphere_normal='analytic'`, identically on a
+hemisphere, and identically on both development mounts.  A fast singlet cannot
+reach it -- at f/1 its marginal ray is at half the radius (max `h/|R| = 0.495`
+measured) -- so this is a catalogue-part fact rather than a general one, but
+ball lenses and hemispheres are catalogue parts (fibre couplers, endoscope
+objectives, immersion optics).
+
+**The one-ULP band sits INSIDE that region, and it does not exist on the
+meridian at all.**  The two gate expressions agree EXACTLY at `y = 0`: located
+by 80-step bisection on the running build they bisect to the same float,
+`0.9999499987499374`, at all eight radii tested, of both signs, on both
+mounts.  So a meridional fan cannot enter the band, and only azimuths where
+`(x*x + y*y)` and `sqrt(x*x + y*y)**2` round apart can.  Sampling cannot find
+it either: 360 000 traced rays over twelve prescription and field-angle
+combinations moved zero `alive` flags and zero error codes, and the
+independent verification moved a further 580 000 with the same result.  Only a
+directed nextafter walk reaches it.
+
+
+**Every entry point has one.**  Seventeen exported functions trace
+INTERNALLY, so their answers moved with `trace`.  All seventeen take
+`sphere_normal=` and `renormalize=` themselves -- same names, same accepted
+values -- and forward them verbatim to the trace they make:
+
+| entry point | module |
+|---|---|
+| `trace_prescription`, `raytrace_system` | `lumenairy.raytrace.trace` |
+| `ray_fan_data`, `ray_fan_data_world`, `opd_fan_data`, `opd_fan_data_world`, `through_focus_rms` | `lumenairy.raytrace.ray_fan` |
+| `paraxial_focus_world` | `lumenairy.raytrace.world` |
+| `ray_transfer_jacobian` | `lumenairy.raytrace.differential` |
+| `caustic_diagnostic` | `lumenairy.analysis.aberration` |
+| `eval_image_plane_wfe` | `lumenairy.analysis.image_plane_wfe` |
+| `plot_lens_layout` | `lumenairy.analysis.plotting` |
+| `fit_canonical_polynomials`, `fit_hf_polynomials` | `lumenairy.propagators.asymptotic_canonical_fit` |
+| `apply_real_lens` (only under `seidel_correction=True`) | `lumenairy.elements` |
+| `apply_real_lens_traced` | `lumenairy.elements` |
+| `apply_real_lens_maslov` | `lumenairy.elements` |
+
+Each defaults to `None`, which names nothing: an unkeyworded call takes
+whatever the library's default is at the time it runs, so no call site pins
+today's default into tomorrow's answer.  Pass
+`sphere_normal='generic', renormalize='surface'` through any of them for the
+pre-5.49.0 arithmetic -- byte-identical, measured archive to archive at 742 of
+742 arrays on both development mounts over the first sixteen, with all
+sixteen shown to move at the default so the identity is not a keyword going
+nowhere, and at 3 of 3 prescriptions (a spherical singlet, a spherical
+doublet and an aspheric singlet) for the seventeenth.
+
+`apply_real_lens` joined the list in round 3 of this work package.  It traces
+only when `seidel_correction=True` -- the residual fan the Seidel correction
+is fitted to -- and it reached the tracer through a local import alias
+(`trace as _rt_trace`) inside a private implementation, which is why two
+entry-point censuses read it as not tracing at all.  With the correction OFF,
+which is the default, the call is byte-identical with and without the two
+keywords, measured on all three prescriptions on both mounts.  The pair is
+also reachable through `LensConfig`: they are `LensNumerics` fields, accepted
+by `apply_real_lens`, `apply_real_lens_traced` and `apply_real_lens_maslov`.
+
+`spot_rms`, `spot_geo_radius` and `refocus` take no keyword because they do
+not trace: they consume a `TraceResult`, so their answers move only because
+their input does.  Trace the bundle with the keyword and hand the result to
+them.
+
+**Two populations do NOT have a keyword of their own, and both are answered
+by the process-level default rather than by a call.**
+
+*The designer GUI.*  Three class METHODS name a tracer and carry no keyword:
+`SystemModel.run_trace` and `SystemModel.merit_function` (in
+`lumenairy/ui/model.py`) and `ToleranceWorker.run` (in
+`lumenairy/ui/tolerance_dock.py`).  Neither census
+covers methods, and a GUI user drives these through the docks rather than by
+keyword, so there is no keyword surface to add one to.  Their answers move
+with the library default, and the way back for a GUI session is therefore the
+process-level default: set it before the application starts, in the process
+that will run it, by naming the route at the tracer --
+
+```python
+import functools
+
+import lumenairy.raytrace.trace as _t
+import lumenairy.raytrace.world_trace as _wt
+
+_t.trace = functools.partial(_t.trace, sphere_normal='generic',
+                             renormalize='surface')
+_wt.trace_world = functools.partial(_wt.trace_world,
+                                    sphere_normal='generic',
+                                    renormalize='surface')
+```
+
+-- before importing `lumenairy.ui`, so the docks bind the wrapped tracer.
+That is a process-wide setting and it changes every trace in the session,
+which is the point: a GUI has one arithmetic, not one per widget.
+
+*Twelve exported functions that reach a tracer only through a private helper
+of their own module* -- `distortion_grid`, `distortion_vs_field`,
+`field_aberration_sweep`, `footprint_per_surface`, `relative_illumination`
+and `spot_diagram_vs_field` (all through one helper in
+`lumenairy.analysis.field`), `apply_prescription_persurface_to_beamlets`,
+`propagate_hfpi_through_prescription`, `propagate_traced_carrier_chain`,
+`propagate_traced_carrier_chain_multi`, `apply_real_lens_traced_multibranch`
+and `apply_real_lens_traced_uniform`.  Round 3 made this population visible
+for the first time and recorded it rather than closing it; it is named in
+`tests/unit/test_c2_analytic_normal_default.py` as a shrink-only exemption,
+so the census still turns red if a NEW one appears.  The same process-level
+default above is the way back for these until they grow keywords of their
+own.
+
+The **JAX** entry points -- `trace_jax`, `apply_real_lens_traced_jax`,
+`apply_real_lens_maslov_jax`, `fit_canonical_polynomials_jax`,
+`ray_transfer_jacobian_jax` -- take neither keyword, and that is structural
+rather than an omission: the JAX tracer has always used a closed-form sphere
+normal and has no per-surface rescale to hoist, so there is no switch to
+expose.  Their answers do not move in 5.49.0.
+
+**Unchanged on purpose.**  The private helpers `_refract`, `_reflect` and
+`_surface_normal` keep their old defaults (`sphere_normal='generic'`,
+`analytic_sphere=False`): `analysis.ghost` and the finite-difference
+differential path call them directly, with no trace loop around them, and own
+their own arithmetic policy.  `analysis.ghost` therefore still uses the generic
+normal, and its answers do not move in 5.49.0.
+
+#### 5.49.0 -- and the `renormalize` default moves to `'exit'`
+
+`trace` and `trace_world` now rescale the direction cosines to unit length
+once, on the bundle leaving the last surface, instead of after every refraction
+and reflection.  The per-surface degenerate-direction diagnosis is unchanged:
+a direction that collapses at surface 3 is still reported as having died at
+surface 3.
+
+**The way back, and it is byte-identical:**
+
+```python
+result = trace(rays, surfaces, wavelength, renormalize='surface')
+```
+
+**Why it moved, stated plainly.**  Not on a timing number: WP-B9's
+1.03x-1.10x does not reproduce, and three timing instruments moved under load
+on the development box (one read the block as exactly zero, two wall-clock runs
+disagreed in SIGN).  It moved on a DETERMINISTIC element-operation count --
+identical on both mounts to the last digit -- which says the hoist is worth
+**0.9910x at two surfaces (a LOSS), 1.0050x at three, 1.0189x at seven and
+1.0237x at thirteen**: it removes `n_refracting * (1 maximum + 3 divides)` and
+adds one `_normalize_directions` (10 element passes), so it breaks even between
+two and three surfaces.  Against a 60-digit end-to-end decimal trace it costs
+no measurable accuracy: all four `(renormalize, sphere_normal)` combinations
+land within 5.2e-18 m in position and 6.9e-17 m in OPL of the truth, and the
+drift it leaves behind induces 3.0e-18 m of position error at thirteen surfaces
+through a measured, LINEAR sensitivity of 1.786e-3 m per unit of drift -- at
+the trace's own distance from the truth, not above it.  One rescale instead of
+N is also the structurally simpler contract, with the fault diagnosis unmoved,
+which is the argument section 1.3 of the maintainer ledger records.
+
+**The one case that genuinely needs the old setting.**  Under
+`output_filter='all'` only the FINAL bundle is rescaled, so the intermediate
+`ray_history` bundles -- `result.rays_at(i)` for `i < len(surfaces) - 1` --
+carry `| |d| - 1 |` BOUNDED BY `2 * n_surfaces * eps`, measured on a ladder
+that is identical to the last digit on both development mounts:
+
+| surfaces | 3 | 5 | 7 | 9 | 11 | 13 |
+|---|---|---|---|---|---|---|
+| history drift, worst | 6.66e-16 | 8.88e-16 | **1.22e-15** | 1.67e-15 | 1.67e-15 | 1.78e-15 |
+| as a fraction of `n_surfaces * eps` | **1.000** | 0.800 | 0.786 | 0.833 | 0.682 | **0.615** |
+
+**Size a tolerance from `2 * n_surfaces * eps`, not from `n_surfaces * eps`.**
+That ladder is one element repeated, and `n_surfaces * eps` does not survive
+ordinary stacks.  Re-measured over 90 combinations of surface count (3, 5, 7,
+9, 13), glass (N-BK7, N-SF5, N-SF11), radius pair and field angle (0, 2,
+5 deg), identical to the last digit on both mounts: **21 of 90 exceed
+`n_surfaces * eps`**, worst **1.6667** (1.1102e-15 against 6.6613e-16 on a
+three-surface N-SF11 stack at 5 deg), while **none of the 90 exceeds
+`2 * n_surfaces * eps`**, the worst reading being 0.8333 of it.  The
+coefficient is not constant either -- 1.00-1.67 at three surfaces down to
+0.50-0.96 at thirteen -- so "about 0.6 of `n eps`" is 40 % under on a
+triplet, and so is 1.0.  (The `<= 1e-15` the 5.48.x docstring promised was a
+reading from a short stack; it is first exceeded between the **third** and
+the **seventh** surface depending on the stack.)  The image-plane bundle that
+`trace` returns is unit to 2.2e-16 as before, on every `output_filter`.  If
+your code reads history direction cosines and treats them as exactly unit,
+pass `renormalize='surface'`.
+
+**What else moves:** `max |dx| = 6.6e-17 m`, `max |dopd| = 1.7e-16 m`,
+`max |dL| = 7.2e-16` over a 3-to-13-surface ladder on spherical and conic
+stacks, with every `alive` mask and error code equal.  The difference does not
+grow with surface count.
+
+**Every entry point has one** -- the same seventeen as for `sphere_normal`,
+each taking `renormalize=` (default `None`) and forwarding it verbatim.  The
+JAX entry points take neither keyword: the JAX body never rescales, so there is
+no per-surface pass to hoist and nothing to switch.
 

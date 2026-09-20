@@ -1,0 +1,110 @@
+{
+ "clamp": {
+  "ball_lens": {
+   "R_m": 0.0125,
+   "arms": {
+    "analytic/exit": {
+     "alive": 56976,
+     "dead": 3024,
+     "ray_nan": 3024
+    },
+    "generic/surface": {
+     "alive": 56976,
+     "dead": 3024,
+     "ray_nan": 3024
+    },
+    "library default": {
+     "alive": 56976,
+     "dead": 3024,
+     "ray_nan": 3024
+    }
+   },
+   "both_routes_agree": true,
+   "fraction_past_the_clamp": 0.0504,
+   "max_h_over_R": 0.9999999888507444,
+   "n_rays": 60000,
+   "rays_past_the_clamp": 3024,
+   "semi_diameter_m": 0.0125
+  },
+  "hemisphere": {
+   "R_m": 0.0125,
+   "arms": {
+    "analytic/exit": {
+     "alive": 0,
+     "dead": 60000,
+     "ray_nan": 3024
+    },
+    "generic/surface": {
+     "alive": 0,
+     "dead": 60000,
+     "ray_nan": 3024
+    },
+    "library default": {
+     "alive": 0,
+     "dead": 60000,
+     "ray_nan": 3024
+    }
+   },
+   "both_routes_agree": true,
+   "fraction_past_the_clamp": 0.0504,
+   "max_h_over_R": 0.9999999888507444,
+   "n_rays": 60000,
+   "rays_past_the_clamp": 3024,
+   "semi_diameter_m": 0.0125
+  }
+ },
+ "lumenairy_file": "C:\\tmp\\lum_c2b\\lumenairy\\__init__.py",
+ "meridian_band_is_empty": true,
+ "meridian_gates": {
+  "-0.002": {
+   "analytic": 0.9999499987499374,
+   "generic": 0.9999499987499374,
+   "identical": true,
+   "width_ulp": 0.0
+  },
+  "-0.0125": {
+   "analytic": 0.9999499987499374,
+   "generic": 0.9999499987499374,
+   "identical": true,
+   "width_ulp": 0.0
+  },
+  "-0.12": {
+   "analytic": 0.9999499987499374,
+   "generic": 0.9999499987499374,
+   "identical": true,
+   "width_ulp": 0.0
+  },
+  "-1.0": {
+   "analytic": 0.9999499987499374,
+   "generic": 0.9999499987499374,
+   "identical": true,
+   "width_ulp": 0.0
+  },
+  "0.002": {
+   "analytic": 0.9999499987499374,
+   "generic": 0.9999499987499374,
+   "identical": true,
+   "width_ulp": 0.0
+  },
+  "0.0125": {
+   "analytic": 0.9999499987499374,
+   "generic": 0.9999499987499374,
+   "identical": true,
+   "width_ulp": 0.0
+  },
+  "0.0515": {
+   "analytic": 0.9999499987499374,
+   "generic": 0.9999499987499374,
+   "identical": true,
+   "width_ulp": 0.0
+  },
+  "0.5": {
+   "analytic": 0.9999499987499374,
+   "generic": 0.9999499987499374,
+   "identical": true,
+   "width_ulp": 0.0
+  }
+ },
+ "numpy": "2.4.4",
+ "python": "3.14.6"
+}

@@ -1,0 +1,217 @@
+{
+ "entry_points": 16,
+ "entry_points_that_moved_at_the_default": 16,
+ "moved_at_default": {
+  "apply_real_lens_maslov": {
+   "moved": 1,
+   "total": 1
+  },
+  "apply_real_lens_traced": {
+   "moved": 1,
+   "total": 1
+  },
+  "caustic_diagnostic": {
+   "moved": 2,
+   "total": 8
+  },
+  "eval_image_plane_wfe": {
+   "moved": 1,
+   "total": 12
+  },
+  "fit_canonical_polynomials": {
+   "moved": 8,
+   "total": 298
+  },
+  "fit_hf_polynomials": {
+   "moved": 5,
+   "total": 295
+  },
+  "opd_fan_data": {
+   "moved": 2,
+   "total": 4
+  },
+  "opd_fan_data_world": {
+   "moved": 2,
+   "total": 4
+  },
+  "paraxial_focus_world": {
+   "moved": 1,
+   "total": 2
+  },
+  "plot_lens_layout": {
+   "moved": 9,
+   "total": 18
+  },
+  "ray_fan_data": {
+   "moved": 2,
+   "total": 4
+  },
+  "ray_fan_data_world": {
+   "moved": 2,
+   "total": 4
+  },
+  "ray_transfer_jacobian": {
+   "moved": 6,
+   "total": 7
+  },
+  "raytrace_system": {
+   "moved": 29,
+   "total": 45
+  },
+  "through_focus_rms": {
+   "moved": 1,
+   "total": 3
+  },
+  "trace_prescription": {
+   "moved": 24,
+   "total": 36
+  }
+ },
+ "none_equals_omitted": {
+  "apply_real_lens_maslov": {
+   "identical": 1,
+   "total": 1
+  },
+  "apply_real_lens_traced": {
+   "identical": 1,
+   "total": 1
+  },
+  "caustic_diagnostic": {
+   "identical": 8,
+   "total": 8
+  },
+  "eval_image_plane_wfe": {
+   "identical": 12,
+   "total": 12
+  },
+  "fit_canonical_polynomials": {
+   "identical": 298,
+   "total": 298
+  },
+  "fit_hf_polynomials": {
+   "identical": 295,
+   "total": 295
+  },
+  "opd_fan_data": {
+   "identical": 4,
+   "total": 4
+  },
+  "opd_fan_data_world": {
+   "identical": 4,
+   "total": 4
+  },
+  "paraxial_focus_world": {
+   "identical": 2,
+   "total": 2
+  },
+  "plot_lens_layout": {
+   "identical": 18,
+   "total": 18
+  },
+  "ray_fan_data": {
+   "identical": 4,
+   "total": 4
+  },
+  "ray_fan_data_world": {
+   "identical": 4,
+   "total": 4
+  },
+  "ray_transfer_jacobian": {
+   "identical": 7,
+   "total": 7
+  },
+  "raytrace_system": {
+   "identical": 45,
+   "total": 45
+  },
+  "through_focus_rms": {
+   "identical": 3,
+   "total": 3
+  },
+  "trace_prescription": {
+   "identical": 36,
+   "total": 36
+  }
+ },
+ "post": {
+  "lumenairy_file": "C:\\tmp\\lum_c2b\\lumenairy\\__init__.py",
+  "numpy": "2.4.4",
+  "python": "3.14.6",
+  "root": "C:\\tmp\\lum_c2b"
+ },
+ "pre": {
+  "lumenairy_file": "C:\\tmp\\lum_c2b_pre\\lumenairy\\__init__.py",
+  "numpy": "2.4.4",
+  "python": "3.14.6",
+  "root": "C:\\tmp\\lum_c2b_pre"
+ },
+ "way_back": {
+  "apply_real_lens_maslov": {
+   "identical": 1,
+   "total": 1
+  },
+  "apply_real_lens_traced": {
+   "identical": 1,
+   "total": 1
+  },
+  "caustic_diagnostic": {
+   "identical": 8,
+   "total": 8
+  },
+  "eval_image_plane_wfe": {
+   "identical": 12,
+   "total": 12
+  },
+  "fit_canonical_polynomials": {
+   "identical": 298,
+   "total": 298
+  },
+  "fit_hf_polynomials": {
+   "identical": 295,
+   "total": 295
+  },
+  "opd_fan_data": {
+   "identical": 4,
+   "total": 4
+  },
+  "opd_fan_data_world": {
+   "identical": 4,
+   "total": 4
+  },
+  "paraxial_focus_world": {
+   "identical": 2,
+   "total": 2
+  },
+  "plot_lens_layout": {
+   "identical": 18,
+   "total": 18
+  },
+  "ray_fan_data": {
+   "identical": 4,
+   "total": 4
+  },
+  "ray_fan_data_world": {
+   "identical": 4,
+   "total": 4
+  },
+  "ray_transfer_jacobian": {
+   "identical": 7,
+   "total": 7
+  },
+  "raytrace_system": {
+   "identical": 45,
+   "total": 45
+  },
+  "through_focus_rms": {
+   "identical": 3,
+   "total": 3
+  },
+  "trace_prescription": {
+   "identical": 36,
+   "total": 36
+  }
+ },
+ "way_back_arrays_total": 742,
+ "way_back_byte_identical": true,
+ "way_back_identical_total": 742
+}

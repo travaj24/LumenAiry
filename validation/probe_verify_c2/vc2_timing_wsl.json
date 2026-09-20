@@ -1,0 +1,424 @@
+{
+ "meta": {
+  "cpu_count": 24,
+  "file": "/mnt/c/tmp/lum_vc2/lumenairy/__init__.py",
+  "lumenairy": "5.48.1",
+  "min_sample_s": 1.5,
+  "n_rays": 100000,
+  "numpy": "2.4.6",
+  "python": "3.12.3",
+  "repeats": 7
+ },
+ "microbench_cpu_s": {
+  "added": 0.0030517578125,
+  "removed": 0.002960205078125
+ },
+ "renormalize": {
+  "asphere3_control": {
+   "cpu_exit": 1.40625,
+   "cpu_surface": 1.484375,
+   "n_refracting": 3,
+   "n_surfaces": 3,
+   "normdir_share_exit": 0.0032022823401924826,
+   "predicted_saving_fraction": 0.003926809210526316,
+   "predicted_saving_s": 0.005828857421875,
+   "predicted_speedup": 1.0039422898305435,
+   "profile_share_of_hoisted_block": 0.00016753438203553211,
+   "refl_share_exit": 0.012802260065357224,
+   "refl_share_surface": 0.012969794447392756,
+   "reps": 1,
+   "speedup_cpu": 1.0555555555555556,
+   "speedup_wall": 1.1321741334353366
+  },
+  "conic3_control": {
+   "cpu_exit": 0.095703125,
+   "cpu_surface": 0.095703125,
+   "n_refracting": 3,
+   "n_surfaces": 3,
+   "normdir_share_exit": 0.005120837394986368,
+   "predicted_saving_fraction": 0.06090561224489796,
+   "predicted_saving_s": 0.005828857421875,
+   "predicted_speedup": 1.0648556876061122,
+   "profile_share_of_hoisted_block": 0.003330624354056271,
+   "refl_share_exit": 0.02591763976653165,
+   "refl_share_surface": 0.02924826412058792,
+   "reps": 16,
+   "speedup_cpu": 1.0,
+   "speedup_wall": 0.9920745292521451
+  },
+  "doublet3": {
+   "cpu_exit": 0.04638671875,
+   "cpu_surface": 0.0458984375,
+   "n_refracting": 3,
+   "n_surfaces": 3,
+   "normdir_share_exit": 0.00809842791732713,
+   "predicted_saving_fraction": 0.12699468085106383,
+   "predicted_saving_s": 0.005828857421875,
+   "predicted_speedup": 1.1454683929931455,
+   "profile_share_of_hoisted_block": 0.009948760358879101,
+   "refl_share_exit": 0.04016209273985245,
+   "refl_share_surface": 0.05011085309873155,
+   "reps": 32,
+   "speedup_cpu": 0.9894736842105263,
+   "speedup_wall": 0.9791177415126164
+  },
+  "ladder13": {
+   "cpu_exit": 0.1025390625,
+   "cpu_surface": 0.1025390625,
+   "n_refracting": 13,
+   "n_surfaces": 13,
+   "normdir_share_exit": 0.0024320519729100396,
+   "predicted_saving_fraction": 0.3455357142857143,
+   "predicted_saving_s": 0.035430908203125,
+   "predicted_speedup": 1.5279672578444747,
+   "profile_share_of_hoisted_block": 0.010559476319761396,
+   "refl_share_exit": 0.06343564509612784,
+   "refl_share_surface": 0.07399512141588924,
+   "reps": 16,
+   "speedup_cpu": 1.0,
+   "speedup_wall": 0.9984078560089481
+  },
+  "stack7": {
+   "cpu_exit": 0.06396484375,
+   "cpu_surface": 0.0673828125,
+   "n_refracting": 7,
+   "n_surfaces": 7,
+   "normdir_share_exit": 0.005159829929096723,
+   "predicted_saving_fraction": 0.26222826086956524,
+   "predicted_saving_s": 0.017669677734375,
+   "predicted_speedup": 1.3554327808471456,
+   "profile_share_of_hoisted_block": 0.011182018861438867,
+   "refl_share_exit": 0.051745728413966574,
+   "refl_share_surface": 0.06292774727540544,
+   "reps": 32,
+   "speedup_cpu": 1.0534351145038168,
+   "speedup_wall": 1.0233583464787115
+  },
+  "two_mirror": {
+   "cpu_exit": 0.039306640625,
+   "cpu_surface": 0.0390625,
+   "n_refracting": 2,
+   "n_surfaces": 2,
+   "normdir_share_exit": 0.010879836874713878,
+   "predicted_saving_fraction": 0.0734375,
+   "predicted_saving_s": 0.00286865234375,
+   "predicted_speedup": 1.0792580101180438,
+   "profile_share_of_hoisted_block": 0.008187408127764015,
+   "refl_share_exit": 0.019556423553454275,
+   "refl_share_surface": 0.02774383168121829,
+   "reps": 64,
+   "speedup_cpu": 0.9937888198757764,
+   "speedup_wall": 0.9957692523952207
+  }
+ },
+ "sphere_normal": {
+  "asphere3_control": {
+   "cpu_analytic": 1.484375,
+   "cpu_generic": 1.46875,
+   "n_surfaces": 3,
+   "normal_share_analytic": 0.2435187037731992,
+   "normal_share_generic": 0.23123058171619268,
+   "profile": {
+    "analytic": {
+     "normal_block": 0.9006812000000001,
+     "normal_share": 0.2435187037731992,
+     "normalize_directions": 0.0089385,
+     "normalize_directions_share": 0.0024167174064216516,
+     "per_func": {
+      "_normalize_directions": 0.0089385,
+      "_refract": 0.0414221,
+      "_surface_normal": 0.0183648,
+      "_surface_sag_derivative": 0.8810707000000001,
+      "_surface_sag_derivatives_xy": 0.0012457,
+      "trace": 0.060121100000000004
+     },
+     "refract_reflect": 0.0414221,
+     "refract_reflect_share": 0.01119936343687848,
+     "total_tottime": 3.698612000000001
+    },
+    "generic": {
+     "normal_block": 0.9444288,
+     "normal_share": 0.23123058171619268,
+     "normalize_directions": 0.0092698,
+     "normalize_directions_share": 0.002269584797067564,
+     "per_func": {
+      "_normalize_directions": 0.0092698,
+      "_refract": 0.039885300000000005,
+      "_surface_normal": 0.0175126,
+      "_surface_sag_derivative": 0.9255451,
+      "_surface_sag_derivatives_xy": 0.0013711,
+      "trace": 0.0731098
+     },
+     "refract_reflect": 0.039885300000000005,
+     "refract_reflect_share": 0.009765374712127437,
+     "total_tottime": 4.084359400000001
+    }
+   },
+   "reps": 1,
+   "speedup_cpu": 0.9894736842105263,
+   "speedup_wall": 1.0097563111778916
+  },
+  "conic3_control": {
+   "cpu_analytic": 0.0947265625,
+   "cpu_generic": 0.095703125,
+   "n_surfaces": 3,
+   "normal_share_analytic": 0.20856557033052006,
+   "normal_share_generic": 0.20118078358531316,
+   "profile": {
+    "analytic": {
+     "normal_block": 0.3371924,
+     "normal_share": 0.20856557033052006,
+     "normalize_directions": 0.0072369,
+     "normalize_directions_share": 0.004476281719056956,
+     "per_func": {
+      "_normalize_directions": 0.0072369,
+      "_refract": 0.0429439,
+      "_surface_normal": 0.0189021,
+      "_surface_sag_derivative": 0.3177535,
+      "_surface_sag_derivatives_xy": 0.0005368,
+      "trace": 0.082386
+     },
+     "refract_reflect": 0.0429439,
+     "refract_reflect_share": 0.02656233947063107,
+     "total_tottime": 1.616721300000001
+    },
+    "generic": {
+     "normal_block": 0.47273030000000005,
+     "normal_share": 0.20118078358531316,
+     "normalize_directions": 0.0117303,
+     "normalize_directions_share": 0.004992087339632765,
+     "per_func": {
+      "_normalize_directions": 0.0117303,
+      "_refract": 0.0608165,
+      "_surface_normal": 0.0222672,
+      "_surface_sag_derivative": 0.44974270000000005,
+      "_surface_sag_derivatives_xy": 0.0007204000000000001,
+      "trace": 0.11739020000000001
+     },
+     "refract_reflect": 0.0608165,
+     "refract_reflect_share": 0.025881800098102866,
+     "total_tottime": 2.3497785999999996
+    }
+   },
+   "reps": 16,
+   "speedup_cpu": 1.0103092783505154,
+   "speedup_wall": 1.0003813812391114
+  },
+  "doublet3": {
+   "cpu_analytic": 0.0419921875,
+   "cpu_generic": 0.04638671875,
+   "n_surfaces": 3,
+   "normal_share_analytic": 0.09005443429230364,
+   "normal_share_generic": 0.11404015837826316,
+   "profile": {
+    "analytic": {
+     "normal_block": 0.0623201,
+     "normal_share": 0.09005443429230364,
+     "normalize_directions": 0.0051008,
+     "normalize_directions_share": 0.007370810676462046,
+     "per_func": {
+      "_normalize_directions": 0.0051008,
+      "_refract": 0.0285374,
+      "_sphere_normal": 0.0621311,
+      "_surface_normal": 0.000189,
+      "trace": 0.0335842
+     },
+     "refract_reflect": 0.0285374,
+     "refract_reflect_share": 0.04123740836701459,
+     "total_tottime": 0.692027
+    },
+    "generic": {
+     "normal_block": 0.09288060000000001,
+     "normal_share": 0.11404015837826316,
+     "normalize_directions": 0.005484200000000001,
+     "normalize_directions_share": 0.006733580926243703,
+     "per_func": {
+      "_normalize_directions": 0.005484200000000001,
+      "_refract": 0.033231500000000004,
+      "_surface_normal": 0.0151041,
+      "_surface_sag_derivative": 0.0775956,
+      "_surface_sag_derivatives_xy": 0.0001809,
+      "trace": 0.033589400000000005
+     },
+     "refract_reflect": 0.033231500000000004,
+     "refract_reflect_share": 0.040802121467209004,
+     "total_tottime": 0.8144552
+    }
+   },
+   "reps": 32,
+   "speedup_cpu": 1.1046511627906976,
+   "speedup_wall": 1.075602122255078
+  },
+  "ladder13": {
+   "cpu_analytic": 0.1201171875,
+   "cpu_generic": 0.1396484375,
+   "n_surfaces": 13,
+   "normal_share_analytic": 0.06624713223167486,
+   "normal_share_generic": 0.11606881555006587,
+   "profile": {
+    "analytic": {
+     "normal_block": 0.1298253,
+     "normal_share": 0.06624713223167486,
+     "normalize_directions": 0.0052064,
+     "normalize_directions_share": 0.0026567169053411926,
+     "per_func": {
+      "_normalize_directions": 0.0052064,
+      "_refract": 0.11612190000000001,
+      "_sphere_normal": 0.12910760000000002,
+      "_surface_normal": 0.0007177,
+      "trace": 0.08586680000000001
+     },
+     "refract_reflect": 0.11612190000000001,
+     "refract_reflect_share": 0.05925457414150651,
+     "total_tottime": 1.9597120000000001
+    },
+    "generic": {
+     "normal_block": 0.2942388,
+     "normal_share": 0.11606881555006587,
+     "normalize_directions": 0.005951400000000001,
+     "normalize_directions_share": 0.002347657579029897,
+     "per_func": {
+      "_normalize_directions": 0.005951400000000001,
+      "_refract": 0.1371858,
+      "_surface_normal": 0.0850625,
+      "_surface_sag_derivative": 0.205968,
+      "_surface_sag_derivatives_xy": 0.0032083000000000003,
+      "trace": 0.09751470000000001
+     },
+     "refract_reflect": 0.1371858,
+     "refract_reflect_share": 0.05411588585967665,
+     "total_tottime": 2.535037499999999
+    }
+   },
+   "reps": 16,
+   "speedup_cpu": 1.1626016260162602,
+   "speedup_wall": 1.22678654221582
+  },
+  "stack7": {
+   "cpu_analytic": 0.07421875,
+   "cpu_generic": 0.0908203125,
+   "n_surfaces": 7,
+   "normal_share_analytic": 0.07615282109720474,
+   "normal_share_generic": 0.10309506519237674,
+   "profile": {
+    "analytic": {
+     "normal_block": 0.09827600000000002,
+     "normal_share": 0.07615282109720474,
+     "normalize_directions": 0.005451200000000001,
+     "normalize_directions_share": 0.004224065472394913,
+     "per_func": {
+      "_normalize_directions": 0.005451200000000001,
+      "_refract": 0.0695478,
+      "_sphere_normal": 0.09785500000000001,
+      "_surface_normal": 0.00042100000000000004,
+      "trace": 0.0509536
+     },
+     "refract_reflect": 0.0695478,
+     "refract_reflect_share": 0.05389170470007098,
+     "total_tottime": 1.2905103
+    },
+    "generic": {
+     "normal_block": 0.1350387,
+     "normal_share": 0.10309506519237674,
+     "normalize_directions": 0.005041100000000001,
+     "normalize_directions_share": 0.003848619196876824,
+     "per_func": {
+      "_normalize_directions": 0.005041100000000001,
+      "_refract": 0.0660585,
+      "_surface_normal": 0.0326156,
+      "_surface_sag_derivative": 0.10201950000000001,
+      "_surface_sag_derivatives_xy": 0.0004036,
+      "trace": 0.0537204
+     },
+     "refract_reflect": 0.0660585,
+     "refract_reflect_share": 0.0504322491553208,
+     "total_tottime": 1.3098464000000003
+    }
+   },
+   "reps": 16,
+   "speedup_cpu": 1.2236842105263157,
+   "speedup_wall": 1.2113248424770469
+  },
+  "two_mirror": {
+   "cpu_analytic": 0.035400390625,
+   "cpu_generic": 0.04248046875,
+   "n_surfaces": 2,
+   "normal_share_analytic": 0.10434198913366463,
+   "normal_share_generic": 0.13608808542660408,
+   "profile": {
+    "analytic": {
+     "normal_block": 0.0635923,
+     "normal_share": 0.10434198913366463,
+     "normalize_directions": 0.007340500000000001,
+     "normalize_directions_share": 0.012044262768222964,
+     "per_func": {
+      "_normalize_directions": 0.007340500000000001,
+      "_reflect": 0.012479200000000001,
+      "_sphere_normal": 0.0634415,
+      "_surface_normal": 0.0001508,
+      "trace": 0.0188767
+     },
+     "refract_reflect": 0.012479200000000001,
+     "refract_reflect_share": 0.020475820984566177,
+     "total_tottime": 0.6094603000000002
+    },
+    "generic": {
+     "normal_block": 0.10150730000000001,
+     "normal_share": 0.13608808542660408,
+     "normalize_directions": 0.0079222,
+     "normalize_directions_share": 0.010621078783167742,
+     "per_func": {
+      "_normalize_directions": 0.0079222,
+      "_reflect": 0.017383700000000002,
+      "_surface_normal": 0.0144977,
+      "_surface_sag_derivative": 0.0868338,
+      "_surface_sag_derivatives_xy": 0.00017580000000000002,
+      "trace": 0.0209792
+     },
+     "refract_reflect": 0.017383700000000002,
+     "refract_reflect_share": 0.023305855348634604,
+     "total_tottime": 0.7458941000000003
+    }
+   },
+   "reps": 64,
+   "speedup_cpu": 1.2,
+   "speedup_wall": 1.2167655629935703
+  }
+ },
+ "summary": {
+  "control_speedup": [
+   1.0103092783505154,
+   0.9894736842105263
+  ],
+  "normal_share_analytic_range": [
+   0.06624713223167486,
+   0.10434198913366463
+  ],
+  "normal_share_generic_range": [
+   0.10309506519237674,
+   0.13608808542660408
+  ],
+  "renorm_predicted_speedup_range": [
+   1.0039422898305435,
+   1.5279672578444747
+  ],
+  "renorm_profile_share_of_hoisted_block": [
+   0.009948760358879101,
+   0.011182018861438867,
+   0.010559476319761396,
+   0.008187408127764015,
+   0.003330624354056271,
+   0.00016753438203553211
+  ],
+  "renorm_speedup_median": 1.0,
+  "renorm_speedup_range": [
+   0.9894736842105263,
+   1.0555555555555556
+  ],
+  "sphere_speedup_median": 1.18130081300813,
+  "sphere_speedup_range": [
+   1.1046511627906976,
+   1.2236842105263157
+  ]
+ }
+}

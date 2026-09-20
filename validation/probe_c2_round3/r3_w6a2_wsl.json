@@ -1,0 +1,49 @@
+{
+ "bars": {
+  "0.0001": {
+   "fraction_of_the_first_step_missable": 0.00010019833507540764,
+   "modes_caught": [
+    "half_step",
+    "no_step",
+    "sign_error",
+    "tenth_missed"
+   ],
+   "modes_missed": [
+    "no_prior"
+   ],
+   "shipped_headroom": 1140.7848664851276,
+   "shipped_passes": true,
+   "smallest_caught_ratio": 0.10000016122172015
+  },
+  "1e-05": {
+   "fraction_of_the_first_step_missable": 1.033357116192457e-05,
+   "modes_caught": [
+    "half_step",
+    "no_prior",
+    "no_step",
+    "sign_error",
+    "tenth_missed"
+   ],
+   "modes_missed": [],
+   "shipped_headroom": 114.07848664851277,
+   "shipped_passes": true,
+   "smallest_caught_ratio": 2.569817216326244e-05
+  }
+ },
+ "first_step_norm": 8.936379102390247e-16,
+ "lumenairy_file": "/mnt/c/tmp/lum_c2c/lumenairy/__init__.py",
+ "numpy": "2.4.6",
+ "python": "3.12.3",
+ "second_step_ratios": {
+  "half_step": 0.4999999464590681,
+  "no_prior": 2.569817216326244e-05,
+  "no_step": 1.0,
+  "shipped": 8.765894686884305e-08,
+  "sign_error": 1.9999996417152905,
+  "tenth_missed": 0.10000016122172015
+ },
+ "v_star_minus_v_c": [
+  6.397524192851061e-16,
+  -6.239435524430275e-16
+ ]
+}

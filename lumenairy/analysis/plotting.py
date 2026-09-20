@@ -2157,6 +2157,8 @@ def plot_lens_layout(
     show_optical_axis: bool = True,
     show_image_plane: bool = True,
     title: Optional[str] = None,
+    renormalize: Optional[str] = None,
+    sphere_normal: Optional[str] = None,
 ) -> Tuple[Any, Any]:
     """Draw a 2-D cross-section of a lens prescription.
 
@@ -2194,6 +2196,17 @@ def plot_lens_layout(
     show_optical_axis : bool, default True
     show_image_plane : bool, default True
     title : str, optional
+    renormalize : ``None`` (default) | ``'exit'`` | ``'surface'``
+        Forwarded verbatim to the internal :func:`trace` call -- WP-C2's
+        way back, one keyword per flipped default.  ``None`` means
+        "whatever the library's default is", so an unkeyworded call is
+        unchanged and no call site pins today's default.
+    sphere_normal : ``None`` (default) | ``'analytic'`` | ``'generic'``
+        Forwarded verbatim to the same call.  Pass
+        ``renormalize='surface'`` and ``sphere_normal='generic'`` together
+        for the arithmetic this entry point produced before WP-C2 moved
+        the two tracer defaults -- byte-identical, pinned archive to
+        archive.
 
     Returns
     -------
@@ -2269,6 +2282,7 @@ def plot_lens_layout(
         system_abcd,
         trace,
     )
+    from ..raytrace.trace import _way_back_kwargs
 
     if ax is None:
         fig, ax = plt.subplots(figsize=(10, 4))
@@ -2403,7 +2417,9 @@ def plot_lens_layout(
                         semi_aperture=semi_diameter,
                         n_rays=int(rays_per_fan),
                         field_angle=fa_rad, wavelength=wavelength)
-                r = trace(fan, surfaces, wavelength)
+                r = trace(fan, surfaces, wavelength,
+                          **_way_back_kwargs(renormalize,
+                                             sphere_normal))
             except (ValueError, RuntimeError, ZeroDivisionError, KeyError,
                     IndexError, AttributeError, TypeError):
                 # Layout-overlay ray trace failed for this field

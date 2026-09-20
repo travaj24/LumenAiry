@@ -1,0 +1,24 @@
+{
+  "apply_real_lens_carries_the_pair": false,
+  "digests": {
+    "asphere_singlet": {
+      "control": "3ae90374293ee5f2f8dcb2669aa76124d58a05f4e6087a695e27c7ccf2659c78",
+      "seidel": "fe53dfb9be842df7e8050f3cd24369bae21ca3d5865e701593236599c29e17d2"
+    },
+    "spherical_doublet": {
+      "control": "c5af9c30a1161d268d5a4c7f27cb81b036515043dc6a52512ed5d5493f699068",
+      "seidel": "216dce267b3d7aabeb42a04efe983a138236930e09ee259e67e0bf86607c41e9"
+    },
+    "spherical_singlet": {
+      "control": "5caf9d0d03d5136fcba0531115454e7e8158f202fb6042431faec077afc16334",
+      "seidel": "ecc24ca95e2e2cd8b604501c942d962456141b72124f91af50e736081fc85e9c"
+    }
+  },
+  "field_sha256": "a749bf16d75f76977ffd77d8b893054178550a43b964ab6f4dea2f2cc9e5b517",
+  "lumenairy_file": "C:\\tmp\\lum_c2c_pre49\\lumenairy\\__init__.py",
+  "numpy": "2.4.4",
+  "python": "3.14.6",
+  "signature_defaults": {},
+  "tag": "pre",
+  "version": "5.48.1"
+}

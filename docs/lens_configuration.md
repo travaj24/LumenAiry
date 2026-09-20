@@ -279,7 +279,7 @@ the config is passed to it un-narrowed.
 | `beam_centre` | None | -- | Y | -- | -- | -- | -- | -- |
 | `roi` | None | -- | -- | -- | Y | Y | -- | -- |
 
-### `LensNumerics` (19 fields)
+### `LensNumerics` (21 fields)
 
 | field | default | analytic | traced | prepare | maslov | gbd | fga | multibranch |
 |---|---|---|---|---|---|---|---|---|
@@ -302,6 +302,8 @@ the config is passed to it un-narrowed.
 | `caustic_ray_subsample` | 2 | -- | Y | -- | -- | -- | -- | `ray_subsample` |
 | `caustic_min_area_ratio` | 1e-06 | -- | Y | -- | -- | -- | -- | `min_area_ratio` |
 | `inverse_map` | None | -- | Y | Y | -- | -- | -- | -- |
+| `renormalize` | None | Y | Y | -- | Y | -- | -- | -- |
+| `sphere_normal` | None | Y | Y | -- | Y | -- | -- | -- |
 
 ### `LensResources` (11 fields)
 

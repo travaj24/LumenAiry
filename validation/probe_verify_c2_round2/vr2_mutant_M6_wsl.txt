@@ -1,0 +1,8 @@
+FAILED tests/unit/test_verify_c2_analytic_normal.py::test_vc2_the_two_domain_gates_coincide_on_the_axis[-0.0125]
+FAILED tests/unit/test_verify_c2_analytic_normal.py::test_vc2_the_two_domain_gates_coincide_on_the_axis[0.0515]
+FAILED tests/unit/test_verify_c2_analytic_normal.py::test_vc2_the_two_domain_gates_coincide_on_the_axis[-0.12]
+FAILED tests/unit/test_verify_c2_analytic_normal.py::test_vc2_the_two_domain_gates_coincide_on_the_axis[1.0]
+FAILED tests/unit/test_verify_c2_analytic_normal.py::test_vc2_the_rim_band_is_reachable_only_off_axis
+FAILED tests/unit/test_verify_c2_analytic_normal.py::test_vc2_the_jax_backend_does_not_apply_the_numpy_domain_clamp
+FAILED tests/unit/test_verify_c2_analytic_normal.py::test_vc2_the_clamp_kills_through_the_public_trace_on_both_routes
+11 failed, 47 passed in 13.75s

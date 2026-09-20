@@ -1,0 +1,469 @@
+{
+ "meta": {
+  "python": "3.14.6 (tags/v3.14.6:c63aec6, Jun 10 2026, 10:26:10) [MSC v.1944 64 bit (AMD64)]",
+  "numpy": "2.4.4",
+  "lumenairy": "5.48.1",
+  "platform": "win32"
+ },
+ "summary": {
+  "n_straddle_points": 1,
+  "n_straddle_reaching_refract": 1,
+  "n_straddle_reaching_trace": 1,
+  "straddle_trace_example": {
+   "generic": {
+    "alive": false,
+    "code": 4
+   },
+   "analytic": {
+    "alive": false,
+    "code": 1
+   },
+   "moves": true
+  },
+  "straddle_example": {
+   "R": -0.12,
+   "az": 1.1,
+   "x": 0.0544288129262979,
+   "y": 0.10693953582952408,
+   "fast_valid": true,
+   "slow_valid": false,
+   "h_over_R": 0.9999499987499374,
+   "endtoend": {
+    "generic": {
+     "alive": false,
+     "code": 4,
+     "L": NaN,
+     "N": NaN
+    },
+    "analytic": {
+     "alive": true,
+     "code": 0,
+     "L": 0.3380624503502053,
+     "N": 0.6667360127139025
+    },
+    "moves": true
+   }
+  },
+  "sweeps_moved": [
+   {
+    "label": "hemisphere-aperture sphere",
+    "tilt": 0.0,
+    "alive_moved": 0,
+    "code_moved": 0
+   },
+   {
+    "label": "spherical7",
+    "tilt": 0.0,
+    "alive_moved": 0,
+    "code_moved": 0
+   },
+   {
+    "label": "spherical7",
+    "tilt": 3.0,
+    "alive_moved": 0,
+    "code_moved": 0
+   },
+   {
+    "label": "spherical7",
+    "tilt": 8.0,
+    "alive_moved": 0,
+    "code_moved": 0
+   },
+   {
+    "label": "cassegrain (2 spherical mirrors)",
+    "tilt": 0.0,
+    "alive_moved": 0,
+    "code_moved": 0
+   },
+   {
+    "label": "cassegrain (2 spherical mirrors)",
+    "tilt": 2.0,
+    "alive_moved": 0,
+    "code_moved": 0
+   },
+   {
+    "label": "make_singlet R=20/-20 d=2 N-BK7",
+    "tilt": 0.0,
+    "alive_moved": 0,
+    "code_moved": 0
+   },
+   {
+    "label": "make_singlet R=20/-20 d=2 N-BK7",
+    "tilt": 5.0,
+    "alive_moved": 0,
+    "code_moved": 0
+   },
+   {
+    "label": "make_singlet R=51.5/inf d=4.1 N-BK7",
+    "tilt": 0.0,
+    "alive_moved": 0,
+    "code_moved": 0
+   },
+   {
+    "label": "make_singlet R=51.5/inf d=4.1 N-BK7",
+    "tilt": 5.0,
+    "alive_moved": 0,
+    "code_moved": 0
+   },
+   {
+    "label": "make_doublet 51.7/-34.5/-120",
+    "tilt": 0.0,
+    "alive_moved": 0,
+    "code_moved": 0
+   },
+   {
+    "label": "make_doublet 51.7/-34.5/-120",
+    "tilt": 5.0,
+    "alive_moved": 0,
+    "code_moved": 0
+   }
+  ],
+  "total_alive_moved": 0,
+  "total_code_moved": 0,
+  "total_rays": 360000,
+  "shipped_fixture_counts_move": false
+ },
+ "straddle": [
+  {
+   "R": -0.12,
+   "az": 1.1,
+   "x": 0.0544288129262979,
+   "y": 0.10693953582952408,
+   "fast_valid": true,
+   "slow_valid": false,
+   "h_over_R": 0.9999499987499374
+  }
+ ],
+ "endtoend": [
+  {
+   "generic": {
+    "alive": false,
+    "code": 4,
+    "L": NaN,
+    "N": NaN
+   },
+   "analytic": {
+    "alive": true,
+    "code": 0,
+    "L": 0.3380624503502053,
+    "N": 0.6667360127139025
+   },
+   "moves": true
+  }
+ ],
+ "endtoend_trace": [
+  {
+   "generic": {
+    "alive": false,
+    "code": 4
+   },
+   "analytic": {
+    "alive": false,
+    "code": 1
+   },
+   "moves": true
+  }
+ ],
+ "sweeps": [
+  {
+   "label": "hemisphere-aperture sphere",
+   "n": 40000,
+   "tilt_deg": 0.0,
+   "semi": 0.0515,
+   "generic": {
+    "n": 40000,
+    "n_alive": 39209,
+    "codes": {
+     "0": 39209,
+     "1": 787,
+     "2": 1,
+     "4": 3
+    }
+   },
+   "analytic": {
+    "n": 40000,
+    "n_alive": 39209,
+    "codes": {
+     "0": 39209,
+     "1": 787,
+     "2": 1,
+     "4": 3
+    }
+   },
+   "n_alive_moved": 0,
+   "n_code_moved": 0,
+   "alive_count_delta": 0
+  },
+  {
+   "label": "spherical7",
+   "n": 40000,
+   "tilt_deg": 0.0,
+   "semi": 0.0127,
+   "generic": {
+    "n": 40000,
+    "n_alive": 40000,
+    "codes": {
+     "0": 40000
+    }
+   },
+   "analytic": {
+    "n": 40000,
+    "n_alive": 40000,
+    "codes": {
+     "0": 40000
+    }
+   },
+   "n_alive_moved": 0,
+   "n_code_moved": 0,
+   "alive_count_delta": 0
+  },
+  {
+   "label": "spherical7",
+   "n": 40000,
+   "tilt_deg": 3.0,
+   "semi": 0.0127,
+   "generic": {
+    "n": 40000,
+    "n_alive": 35630,
+    "codes": {
+     "0": 35630,
+     "2": 4370
+    }
+   },
+   "analytic": {
+    "n": 40000,
+    "n_alive": 35630,
+    "codes": {
+     "0": 35630,
+     "2": 4370
+    }
+   },
+   "n_alive_moved": 0,
+   "n_code_moved": 0,
+   "alive_count_delta": 0
+  },
+  {
+   "label": "spherical7",
+   "n": 40000,
+   "tilt_deg": 8.0,
+   "semi": 0.0127,
+   "generic": {
+    "n": 40000,
+    "n_alive": 24148,
+    "codes": {
+     "0": 24148,
+     "2": 15852
+    }
+   },
+   "analytic": {
+    "n": 40000,
+    "n_alive": 24148,
+    "codes": {
+     "0": 24148,
+     "2": 15852
+    }
+   },
+   "n_alive_moved": 0,
+   "n_code_moved": 0,
+   "alive_count_delta": 0
+  },
+  {
+   "label": "cassegrain (2 spherical mirrors)",
+   "n": 40000,
+   "tilt_deg": 0.0,
+   "semi": 0.05,
+   "generic": {
+    "n": 40000,
+    "n_alive": 40000,
+    "codes": {
+     "0": 40000
+    }
+   },
+   "analytic": {
+    "n": 40000,
+    "n_alive": 40000,
+    "codes": {
+     "0": 40000
+    }
+   },
+   "n_alive_moved": 0,
+   "n_code_moved": 0,
+   "alive_count_delta": 0
+  },
+  {
+   "label": "cassegrain (2 spherical mirrors)",
+   "n": 40000,
+   "tilt_deg": 2.0,
+   "semi": 0.05,
+   "generic": {
+    "n": 40000,
+    "n_alive": 0,
+    "codes": {
+     "2": 40000
+    }
+   },
+   "analytic": {
+    "n": 40000,
+    "n_alive": 0,
+    "codes": {
+     "2": 40000
+    }
+   },
+   "n_alive_moved": 0,
+   "n_code_moved": 0,
+   "alive_count_delta": 0
+  }
+ ],
+ "shipped": [
+  {
+   "label": "make_singlet R=20/-20 d=2 N-BK7",
+   "n": 20000,
+   "tilt_deg": 0.0,
+   "semi": 0.004995,
+   "generic": {
+    "n": 20000,
+    "n_alive": 20000,
+    "codes": {
+     "0": 20000
+    }
+   },
+   "analytic": {
+    "n": 20000,
+    "n_alive": 20000,
+    "codes": {
+     "0": 20000
+    }
+   },
+   "n_alive_moved": 0,
+   "n_code_moved": 0,
+   "alive_count_delta": 0,
+   "shipped": true
+  },
+  {
+   "label": "make_singlet R=20/-20 d=2 N-BK7",
+   "n": 20000,
+   "tilt_deg": 5.0,
+   "semi": 0.004995,
+   "generic": {
+    "n": 20000,
+    "n_alive": 19872,
+    "codes": {
+     "0": 19872,
+     "2": 128
+    }
+   },
+   "analytic": {
+    "n": 20000,
+    "n_alive": 19872,
+    "codes": {
+     "0": 19872,
+     "2": 128
+    }
+   },
+   "n_alive_moved": 0,
+   "n_code_moved": 0,
+   "alive_count_delta": 0,
+   "shipped": true
+  },
+  {
+   "label": "make_singlet R=51.5/inf d=4.1 N-BK7",
+   "n": 20000,
+   "tilt_deg": 0.0,
+   "semi": 0.005994,
+   "generic": {
+    "n": 20000,
+    "n_alive": 20000,
+    "codes": {
+     "0": 20000
+    }
+   },
+   "analytic": {
+    "n": 20000,
+    "n_alive": 20000,
+    "codes": {
+     "0": 20000
+    }
+   },
+   "n_alive_moved": 0,
+   "n_code_moved": 0,
+   "alive_count_delta": 0,
+   "shipped": true
+  },
+  {
+   "label": "make_singlet R=51.5/inf d=4.1 N-BK7",
+   "n": 20000,
+   "tilt_deg": 5.0,
+   "semi": 0.005994,
+   "generic": {
+    "n": 20000,
+    "n_alive": 19874,
+    "codes": {
+     "0": 19874,
+     "2": 126
+    }
+   },
+   "analytic": {
+    "n": 20000,
+    "n_alive": 19874,
+    "codes": {
+     "0": 19874,
+     "2": 126
+    }
+   },
+   "n_alive_moved": 0,
+   "n_code_moved": 0,
+   "alive_count_delta": 0,
+   "shipped": true
+  },
+  {
+   "label": "make_doublet 51.7/-34.5/-120",
+   "n": 20000,
+   "tilt_deg": 0.0,
+   "semi": 0.0126873,
+   "generic": {
+    "n": 20000,
+    "n_alive": 20000,
+    "codes": {
+     "0": 20000
+    }
+   },
+   "analytic": {
+    "n": 20000,
+    "n_alive": 20000,
+    "codes": {
+     "0": 20000
+    }
+   },
+   "n_alive_moved": 0,
+   "n_code_moved": 0,
+   "alive_count_delta": 0,
+   "shipped": true
+  },
+  {
+   "label": "make_doublet 51.7/-34.5/-120",
+   "n": 20000,
+   "tilt_deg": 5.0,
+   "semi": 0.0126873,
+   "generic": {
+    "n": 20000,
+    "n_alive": 19878,
+    "codes": {
+     "0": 19878,
+     "2": 122
+    }
+   },
+   "analytic": {
+    "n": 20000,
+    "n_alive": 19878,
+    "codes": {
+     "0": 19878,
+     "2": 122
+    }
+   },
+   "n_alive_moved": 0,
+   "n_code_moved": 0,
+   "alive_count_delta": 0,
+   "shipped": true
+  }
+ ]
+}

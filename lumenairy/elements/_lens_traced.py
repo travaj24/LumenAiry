@@ -8204,6 +8204,8 @@ def apply_real_lens_traced(
     numerics: Optional['LensNumerics'] = None,
     resources: Optional['LensResources'] = None,
     config: Optional['LensConfig'] = None,
+    renormalize: Optional[str] = None,
+    sphere_normal: Optional[str] = None,
 ) -> np.ndarray:
     """Wave + per-pixel ray-traced phase variant of :func:`apply_real_lens`.
 
@@ -9371,6 +9373,17 @@ def apply_real_lens_traced(
         raises; a set field this function has no parameter for also raises
         (``config.narrowed_to('apply_real_lens_traced')`` drops those
         deliberately).  See ``docs/lens_configuration.md``.
+    renormalize : ``None`` (default) | ``'exit'`` | ``'surface'``
+        Forwarded verbatim to the internal :func:`trace` call -- WP-C2's
+        way back, one keyword per flipped default.  ``None`` means
+        "whatever the library's default is", so an unkeyworded call is
+        unchanged and no call site pins today's default.
+    sphere_normal : ``None`` (default) | ``'analytic'`` | ``'generic'``
+        Forwarded verbatim to the same call.  Pass
+        ``renormalize='surface'`` and ``sphere_normal='generic'`` together
+        for the arithmetic this entry point produced before WP-C2 moved
+        the two tracer defaults -- byte-identical, pinned archive to
+        archive.
 
     Returns
     -------
@@ -9876,6 +9889,7 @@ def apply_real_lens_traced(
         surfaces_from_prescription,
         trace,
     )
+    from ..raytrace.trace import _way_back_kwargs
 
     call_progress(progress, 'real_lens_traced', 0.0, 'initialising')
 
@@ -11471,7 +11485,8 @@ def apply_real_lens_traced(
     # ray_history for all surfaces would allocate ~1 GB per surface
     # at N=32768 and ~250 MB per surface at N=4096 (for an
     # apply_real_lens_traced call at ray_subsample=8) for no benefit.
-    result = trace(rays, surfaces, wavelength, output_filter='last')
+    result = trace(rays, surfaces, wavelength, output_filter='last',
+                   **_way_back_kwargs(renormalize, sphere_normal))
     final = result.image_rays
     if not final.alive.any():
         raise RuntimeError(
@@ -13352,7 +13367,9 @@ def apply_real_lens_traced(
             _pfin = trace(_make_bundle(x=_px.copy(), y=_py.copy(),
                                        L=_pL, M=_pM, wavelength=wavelength),
                           surfaces, wavelength,
-                          output_filter='last').image_rays
+                          output_filter='last',
+                          **_way_back_kwargs(renormalize,
+                                             sphere_normal)).image_rays
             with np.errstate(divide='ignore', invalid='ignore'):
                 _pt = np.where(_pfin.alive & (np.abs(_pfin.N) > 1e-30),
                                -_pfin.z / _pfin.N, 0.0)

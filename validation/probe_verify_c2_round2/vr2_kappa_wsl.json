@@ -1,0 +1,177 @@
+{
+ "lumenairy_file": "/mnt/c/tmp/lum_vc2b/lumenairy/__init__.py",
+ "python": "3.12.3",
+ "numpy": "2.4.6",
+ "n_coefficients": 70,
+ "n_pixels": 1024,
+ "peak": 38518.38582543884,
+ "eps": 2.220446049250313e-16,
+ "per_delta": {
+  "1e-12": {
+   "kappa_closed_form": 29062240.50807101,
+   "winning_row_closed_form": 591,
+   "kappa_full_svd": 29062240.50807102,
+   "winning_row_svd": 591,
+   "kappa_power_iteration_lower_bound": 29062240.508071013,
+   "kappa_along_shipped_random_direction": 6243239.18785064,
+   "closed_form_vs_svd_rel": 3.845495288734547e-16,
+   "power_vs_svd_rel": 2.5636635258230317e-16
+  },
+  "1e-11": {
+   "kappa_closed_form": 29059005.899820235,
+   "winning_row_closed_form": 528,
+   "kappa_full_svd": 29059005.899820246,
+   "winning_row_svd": 528,
+   "kappa_power_iteration_lower_bound": 29059005.899820242,
+   "kappa_along_shipped_random_direction": 6242297.997300215,
+   "closed_form_vs_svd_rel": 3.845923337472076e-16,
+   "power_vs_svd_rel": 1.2819744458240254e-16
+  },
+  "1e-10": {
+   "kappa_closed_form": 29059016.250437617,
+   "winning_row_closed_form": 528,
+   "kappa_full_svd": 29059016.25043761,
+   "winning_row_svd": 528,
+   "kappa_power_iteration_lower_bound": 29059016.250437617,
+   "kappa_along_shipped_random_direction": 6242290.259709373,
+   "closed_form_vs_svd_rel": 2.5639479783874746e-16,
+   "power_vs_svd_rel": 2.5639479783874746e-16
+  }
+ },
+ "kappa": 29059005.899820246,
+ "kappa_spread_over_fd_steps": 1.0001113117311007,
+ "response_along_attaining_direction": {
+  "1e-12": 29062329.018620014,
+  "1e-11": 29058947.35876679,
+  "1e-10": 29059023.58764146
+ },
+ "ladder_spread": 1.000116372414027,
+ "ladder_vs_kappa": 1.0001143576215656,
+ "other_float_inputs": {
+  "poly_order": {
+   "kind": "int",
+   "perturbable": false
+  },
+  "multi_indices": {
+   "kind": "list",
+   "perturbable": false
+  },
+  "coef_s1x": {
+   "kind": "ndarray",
+   "size": 70,
+   "perturbable": true,
+   "response_to_random_relative_move": 585.0392721565482
+  },
+  "coef_s1y": {
+   "kind": "ndarray",
+   "size": 70,
+   "perturbable": true,
+   "response_to_random_relative_move": 511.9181098332328
+  },
+  "s2x_centre": {
+   "kind": "float",
+   "size": 1,
+   "perturbable": true,
+   "response_to_random_relative_move": 0.0
+  },
+  "s2x_halfrange": {
+   "kind": "float",
+   "size": 1,
+   "perturbable": true,
+   "response_to_random_relative_move": 489.06015775772005
+  },
+  "s2y_centre": {
+   "kind": "float",
+   "size": 1,
+   "perturbable": true,
+   "response_to_random_relative_move": 0.0
+  },
+  "s2y_halfrange": {
+   "kind": "float",
+   "size": 1,
+   "perturbable": true,
+   "response_to_random_relative_move": 457.1424980706995
+  },
+  "v2x_centre": {
+   "kind": "float",
+   "size": 1,
+   "perturbable": true,
+   "response_to_random_relative_move": 0.0
+  },
+  "v2x_halfrange": {
+   "kind": "float",
+   "size": 1,
+   "perturbable": true,
+   "response_to_random_relative_move": 146.2881693541902
+  },
+  "v2y_centre": {
+   "kind": "float",
+   "size": 1,
+   "perturbable": true,
+   "response_to_random_relative_move": 0.0
+  },
+  "v2y_halfrange": {
+   "kind": "float",
+   "size": 1,
+   "perturbable": true,
+   "response_to_random_relative_move": 146.28817903956917
+  },
+  "wavelength": {
+   "kind": "float",
+   "size": 1,
+   "perturbable": true,
+   "response_to_random_relative_move": 1.0000318861475788
+  },
+  "res_phi_rms_waves": {
+   "kind": "float",
+   "size": 1,
+   "perturbable": true,
+   "response_to_random_relative_move": 0.0
+  },
+  "res_s1_rms_m": {
+   "kind": "float",
+   "size": 1,
+   "perturbable": true,
+   "response_to_random_relative_move": 0.0
+  },
+  "n_rays": {
+   "kind": "int",
+   "perturbable": false
+  },
+  "linear_coeffs_phi": {
+   "kind": "ndarray",
+   "size": 5,
+   "perturbable": true,
+   "response_to_random_relative_move": 0.0
+  },
+  "extract_linear_phase": {
+   "kind": "bool",
+   "perturbable": false
+  }
+ },
+ "floor_eps_times_kappa": 6.45239548453974e-09,
+ "bar_10x_floor": 6.45239548453974e-08,
+ "bracket": {
+  "0.5": {
+   "measured_over_bar": 0.5214618221994972,
+   "passes_10x_bar": true
+  },
+  "0.9": {
+   "measured_over_bar": 0.8502096034940066,
+   "passes_10x_bar": true
+  },
+  "1.1": {
+   "measured_over_bar": 1.1957282475257731,
+   "passes_10x_bar": false
+  },
+  "2": {
+   "measured_over_bar": 2.01177040882615,
+   "passes_10x_bar": false
+  },
+  "100": {
+   "measured_over_bar": 99.97211384497656,
+   "passes_10x_bar": false
+  }
+ },
+ "kappa_ratio_true_over_seeded": 4.6551776144599675
+}

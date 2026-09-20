@@ -5222,6 +5222,8 @@ def apply_real_lens(
     resources: Optional['LensResources'] = None,
     physics: Optional['LensPhysics'] = None,
     config: Optional['LensConfig'] = None,
+    renormalize: Optional[str] = None,
+    sphere_normal: Optional[str] = None,
 ) -> np.ndarray:
     """
     Propagate a field through a real lens defined by a surface prescription.
@@ -6064,6 +6066,22 @@ def apply_real_lens(
         2 GB per-entry cap (``N >= 16384`` at complex64, where H is not
         cacheable anyway) and a real repeat cost below it.  ``wave_propagator=
         'asm'`` and the NumPy backend only; inert elsewhere.
+    renormalize : ``None`` (default) | ``'exit'`` | ``'surface'``
+        Forwarded verbatim to the internal :func:`trace` call this function
+        makes when ``seidel_correction=True`` -- WP-C2's way back, one
+        keyword per flipped default.  ``None`` means "whatever the
+        library's default is", so an unkeyworded call is unchanged and no
+        call site pins today's default.  Inert when
+        ``seidel_correction=False``, which is the default: the analytic
+        split-step screen does not trace at all, and a call that leaves the
+        Seidel correction off is byte-identical with and without these two
+        keywords.
+    sphere_normal : ``None`` (default) | ``'analytic'`` | ``'generic'``
+        Forwarded verbatim to the same call.  Pass
+        ``renormalize='surface'`` and ``sphere_normal='generic'`` together
+        for the arithmetic the Seidel fan produced before WP-C2 moved the
+        two tracer defaults -- byte-identical, pinned archive to archive.
+        Same inertness under ``seidel_correction=False``.
 
     Returns
     -------
@@ -6168,6 +6186,8 @@ def apply_real_lens(
             accumulator_store=accumulator_store,
             scratch_dir=scratch_dir,
             stream_transfer_function=stream_transfer_function,
+            renormalize=renormalize,
+            sphere_normal=sphere_normal,
             _accum_store=_store,
         )
 
@@ -6203,6 +6223,8 @@ def _apply_real_lens_impl(
     accumulator_store: str = 'ram',
     scratch_dir: Optional[str] = None,
     stream_transfer_function: bool = False,
+    renormalize: Optional[str] = None,
+    sphere_normal: Optional[str] = None,
     _accum_store: Optional['_AccumulatorStore'] = None,
 ) -> np.ndarray:
     """The body of :func:`apply_real_lens`.
@@ -8321,7 +8343,9 @@ def _apply_real_lens_impl(
             x=h_fan, y=z_arr, L=z_arr, M=z_arr,
             wavelength=wavelength)
         surfs_fan = _rt_surfaces_from_prescription(prescription)
-        res_fan = _rt_trace(fan, surfs_fan, wavelength)
+        from ..raytrace.trace import _way_back_kwargs
+        res_fan = _rt_trace(fan, surfs_fan, wavelength,
+                            **_way_back_kwargs(renormalize, sphere_normal))
         # (1) The ray OPL must be read on the exit VERTEX plane, not at the
         # last surface's sag where ``trace`` leaves it.
         final_fan = res_fan.at_exit_vertex()

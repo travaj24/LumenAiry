@@ -49,7 +49,7 @@ from ..raytrace import (
 # R2's entrance-eikonal helper.  Imported from its home module because
 # ``raytrace/__init__`` does not re-export it (unlike
 # ``exit_vertex_transfer``); no local copy is kept here.
-from ..raytrace.trace import seed_entrance_eikonal
+from ..raytrace.trace import _way_back_kwargs, seed_entrance_eikonal
 
 # W4c: terminal-index factors from their SINGLE SOURCE in
 # raytrace.seidel -- re-deriving them here is the drift R-1 and S11-1
@@ -259,6 +259,9 @@ def eval_image_plane_wfe(
     field_max_m: Optional[float] = None,
     pupil_grid: Optional[Tuple[np.ndarray, np.ndarray]] = None,
     field_max_rad: Optional[float] = None,
+    *,
+    renormalize: Optional[str] = None,
+    sphere_normal: Optional[str] = None,
 ) -> ImagePlaneWFE:
     """Compute image-plane reference-sphere wavefront error.
 
@@ -391,6 +394,17 @@ def eval_image_plane_wfe(
 
         Coordinates outside the unit disk (``px**2 + py**2 > 1``)
         are silently dropped before the trace.
+    renormalize : ``None`` (default) | ``'exit'`` | ``'surface'``
+        Forwarded verbatim to the internal :func:`trace` call -- WP-C2's
+        way back, one keyword per flipped default.  ``None`` means
+        "whatever the library's default is", so an unkeyworded call is
+        unchanged and no call site pins today's default.
+    sphere_normal : ``None`` (default) | ``'analytic'`` | ``'generic'``
+        Forwarded verbatim to the same call.  Pass
+        ``renormalize='surface'`` and ``sphere_normal='generic'`` together
+        for the arithmetic this entry point produced before WP-C2 moved
+        the two tracer defaults -- byte-identical, pinned archive to
+        archive.
 
     Returns
     -------
@@ -689,7 +703,8 @@ def eval_image_plane_wfe(
         _warn_object_distance_precision(
             surfaces, obj_d_m, wavelength, fod)
 
-    res = trace(bundle, surfaces, wavelength, output_filter='last')
+    res = trace(bundle, surfaces, wavelength, output_filter='last',
+                **_way_back_kwargs(renormalize, sphere_normal))
     f = res.image_rays
     alive = np.asarray(f.alive, dtype=bool)
     opl = np.asarray(f.opd)

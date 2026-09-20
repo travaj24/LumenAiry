@@ -148,29 +148,34 @@ def _pupil_bundle(n, semi=0.0126, seed=20260913):
 # ===========================================================================
 
 def test_b9_i1_default_is_the_per_surface_renormalise():
-    """The hoist is OPT-IN.  ``_refract`` / ``_reflect`` default to
-    ``renormalize=True`` and ``trace`` / ``trace_world`` to
-    ``'surface'``, so every existing caller -- ``analysis.ghost`` and the
-    finite-difference differential path reach ``_refract`` directly --
-    keeps its arithmetic by construction, not by measurement."""
+    """The PRIVATE helpers keep WP-B9's defaults, which is what makes
+    every direct caller's arithmetic unchanged BY CONSTRUCTION rather
+    than by measurement.
+
+    ``analysis.ghost`` (``ghost.py:934,955``) and the finite-difference
+    differential path reach ``_refract`` / ``_reflect`` directly, with
+    no trace loop around them to run a single exit-plane rescale, so
+    ``renormalize=True`` there is not a preference -- it is the only
+    setting under which those callers own a unit direction at all.
+    ``_surface_normal``'s ``analytic_sphere=False`` is the same kind of
+    guarantee one level down.
+
+    5.49.0 (WP-C2) moved the PUBLIC tracer defaults -- ``trace`` and
+    ``trace_world`` now default to ``sphere_normal='analytic'`` and
+    ``renormalize='exit'`` -- and those are pinned, from the signature
+    and from a call, in ``tests/unit/test_c2_analytic_normal_default.py``
+    together with the byte-identity of the way back.  This test
+    deliberately does NOT assert them: it is the private-layer contract,
+    and the two layers moved for different reasons.
+    """
     assert (inspect.signature(_isect._refract)
             .parameters['renormalize'].default is True)
     assert (inspect.signature(_isect._reflect)
             .parameters['renormalize'].default is True)
-    from lumenairy.raytrace.world_trace import trace_world
-    assert (inspect.signature(trace).parameters['renormalize'].default
-            == 'surface')
-    assert (inspect.signature(trace_world).parameters['renormalize'].default
-            == 'surface')
-    # item 2's switch is opt-in on exactly the same terms
     assert (inspect.signature(_isect._refract)
             .parameters['sphere_normal'].default == 'generic')
     assert (inspect.signature(_isect._reflect)
             .parameters['sphere_normal'].default == 'generic')
-    assert (inspect.signature(trace).parameters['sphere_normal'].default
-            == 'generic')
-    assert (inspect.signature(trace_world).parameters['sphere_normal']
-            .default == 'generic')
     assert (inspect.signature(_surface_normal)
             .parameters['analytic_sphere'].default is False)
 
@@ -182,10 +187,18 @@ def test_b9_i1_surface_mode_leaves_every_history_bundle_unit_length():
     ``'exit'`` only the last one is, and the intermediate drift is real
     (non-zero), which is the two-sided statement that the division was
     actually hoisted rather than merely relocated.
+
+    5.49.0 (WP-C2) made ``'exit'`` the default, so BOTH arms now name
+    their mode: the claim is about the two modes, not about which one
+    a bare call happens to take, and an arm that relied on the default
+    would silently change sides.  The drift bound below is also why the
+    ``trace`` docstring no longer promises ``<= 1e-15`` on the history
+    bundles -- ``4 * n_surfaces * eps`` is the shape, and at 13 surfaces
+    the reading is 1.8e-15.
     """
     S = _spherical_stack()
     rays = _pupil_bundle(400)
-    res_s = trace(rays, S, WL)
+    res_s = trace(rays, S, WL, renormalize='surface')
     res_e = trace(rays, S, WL, renormalize='exit')
 
     def worst(bundle):
@@ -212,7 +225,12 @@ def test_b9_i1_surface_mode_leaves_every_history_bundle_unit_length():
 def test_b9_i1_exit_mode_calls_the_single_pass_exactly_once(monkeypatch):
     """Structural (build-free) count: ``_normalize_directions`` runs ONCE
     per trace in ``'exit'`` mode and never in ``'surface'`` mode, while
-    ``_refract`` runs once per refracting surface in both."""
+    ``_refract`` runs once per refracting surface in both.
+
+    5.49.0 (WP-C2): ``'exit'`` is the default, so the ``'surface'`` arm
+    names its mode.  The DEFAULT's own count is asserted separately, in
+    ``tests/unit/test_c2_analytic_normal_default.py``, so this test
+    keeps measuring the two modes rather than the default."""
     S = _spherical_stack()
     rays = _pupil_bundle(32)
     calls = {'norm': 0, 'refract': 0}
@@ -230,7 +248,7 @@ def test_b9_i1_exit_mode_calls_the_single_pass_exactly_once(monkeypatch):
     monkeypatch.setattr(_trace_mod, '_normalize_directions', counting_norm)
     monkeypatch.setattr(_trace_mod, '_refract', counting_refract)
 
-    trace(rays, S, WL)
+    trace(rays, S, WL, renormalize='surface')
     assert calls == {'norm': 0, 'refract': len(S)}
     calls['norm'] = calls['refract'] = 0
     trace(rays, S, WL, renormalize='exit')
@@ -487,16 +505,23 @@ def test_b9_i2_the_generic_route_is_the_default_everywhere():
 
 
 def test_b9_i2_the_default_trace_is_bit_identical_and_analytic_is_bounded():
-    """The DEFAULT must not move a bit, and the opt-in must move only by
-    the rounding difference between two routes to the same vector.
+    """The default and the explicitly-named route are ONE path, and the
+    other route differs only by the rounding between two routes to the
+    same vector.
 
-    Bit-identity is asserted against the explicit ``'generic'`` spelling
-    (the default path and the named path are one path).  The opt-in's
-    bar is derived: the two routes differ by O(eps) in each normal
-    component, that feeds a refraction whose transverse lever arm over
-    the remaining ~0.11 m of the stack is |t|, so the positional
-    envelope is ``n_surfaces * eps * |t|`` = 1.7e-16 m.  MEASURED
-    2026-09-13 over 1500 rays x 2 fields: 2.8e-17 m in position,
+    5.49.0 (WP-C2) moved the default from ``'generic'`` to
+    ``'analytic'``, so the bit-identity arm moved with it: the default is
+    now bit-identical to ``sphere_normal='analytic'``, and
+    ``'generic'`` is the WAY BACK -- byte-identical to what 5.48.1
+    produced, which ``test_c2_analytic_normal_default.py`` pins against
+    an archive of 49ddf4bd.  The claim being made here is unchanged:
+    naming the default's route explicitly must not change a bit.
+
+    The other route's bar is derived, not read: the two routes differ by
+    O(eps) in each normal component, that feeds a refraction whose
+    transverse lever arm over the remaining ~0.11 m of the stack is |t|,
+    so the positional envelope is ``n_surfaces * eps * |t|`` = 1.7e-16 m.
+    MEASURED 2026-09-13 over 1500 rays x 2 fields: 2.8e-17 m in position,
     8.3e-17 m in OPL, 2.8e-16 in the direction cosines, with every
     ``alive`` and ``error_code`` byte-identical -- and EXACTLY ZERO on
     the conic stack, which has no pure sphere.
@@ -510,12 +535,12 @@ def test_b9_i2_the_default_trace_is_bit_identical_and_analytic_is_bounded():
         a = trace(rays, S, WL, output_filter='last',
                   sphere_normal='analytic').image_rays
         for f in ('x', 'y', 'z', 'L', 'M', 'N', 'opd'):
-            assert np.array_equal(getattr(d, f), getattr(g, f)), f
-        assert np.array_equal(d.alive, a.alive)
-        assert np.array_equal(d.error_code, a.error_code)
+            assert np.array_equal(getattr(d, f), getattr(a, f)), f
+        assert np.array_equal(d.alive, g.alive)
+        assert np.array_equal(d.error_code, g.error_code)
         m = d.alive
         worst = max(float(np.max(np.abs(getattr(d, f)[m]
-                                        - getattr(a, f)[m])))
+                                        - getattr(g, f)[m])))
                     for f in ('x', 'y', 'z', 'opd'))
         if has_sphere:
             assert 0.0 < worst < 10 * len(S) * 2 ** -52 * 0.11, worst
@@ -523,16 +548,20 @@ def test_b9_i2_the_default_trace_is_bit_identical_and_analytic_is_bounded():
             assert worst == 0.0
 
 
-def test_b9_i2_named_bit_equal_consumers_see_the_default():
-    """The reason item 2 is opt-in, pinned so it stays opt-in.
+def test_b9_i2_the_switch_reaches_every_surface_and_only_by_asking():
+    """Whichever route is asked for, the WHOLE trace takes it.
 
-    ``propagate_modal_asymptotic``'s two bit-equal pins
-    (``tests/unit/test_audit_propagation.py -k
-    ModalAsymptoticStillBitEqual``) and the 1e-15 floor bar in
-    ``test_w6_a2_v2_star_is_untouched_by_the_verdict_fix`` read the ray
-    tracer through the aberration tensor.  Both go red on a ~1e-16 move,
-    so ``trace`` must keep handing them the generic route unless they are
-    asked otherwise.
+    WP-B9 pinned this as "the named bit-equal consumers see the default",
+    i.e. that ``trace`` kept handing the GENERIC route to
+    ``propagate_modal_asymptotic``'s two per-pixel arms and to
+    ``test_w6_a2_v2_star_is_untouched_by_the_verdict_fix``, both of which
+    it reported as going red on a ~1e-16 move.  5.49.0 (WP-C2) measured
+    that premise and found it false in both cases -- neither pin's
+    quantity is the knife-edge WP-B9 described, and all three arms are
+    green under all four ``(renormalize, sphere_normal)`` combinations
+    once restated -- so the default moved and the claim here narrows to
+    what it can actually defend: the switch is honoured at EVERY surface
+    and is never partial.
     """
     S = _spherical_stack()
     rays = _pupil_bundle(64)
@@ -546,10 +575,16 @@ def test_b9_i2_named_bit_equal_consumers_see_the_default():
     import unittest.mock as _mock
     with _mock.patch.object(_isect, '_surface_normal', watching):
         trace(rays, S, WL, output_filter='last')
-        assert called and not any(called)
+        assert called and all(called), called       # 5.49.0 default
+        n_default = len(called)
         called.clear()
         trace(rays, S, WL, output_filter='last', sphere_normal='analytic')
-        assert called and all(called)
+        assert called and all(called), called
+        assert len(called) == n_default
+        called.clear()
+        trace(rays, S, WL, output_filter='last', sphere_normal='generic')
+        assert called and not any(called), called   # the way back
+        assert len(called) == n_default
 
 
 def test_b9_i2_sphere_normal_is_validated_and_names_itself():

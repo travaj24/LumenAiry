@@ -658,7 +658,44 @@ def test_multi_congruence_ignore_reproduces_the_pre_d3_silence(_fan_input):
     assert float(np.max(np.abs(res.field))) > 0.0
 
 
-def _linearity_error(tilt):
+def _one_ulp(G, kind):
+    """``G`` moved by ONE ULP, in one of four directions.
+
+    WP-C2 round 2 (VERIFY-WP-C2 defect D8).  The floor these two arms bar
+    against used to be measured from a SINGLE perturbation -- ``nextafter``
+    toward ``+inf`` on both parts of every element -- and a floor measured
+    along one direction is a draw in the same way the magnitude it replaced
+    was.  Measured over these four directions the floor spans 3.22x
+    (Windows) / 4.79x (WSL), i.e. AT OR ABOVE the 3.0 multiplier that was
+    sitting on it, so the arms now take the WORST of them.
+
+    * ``'up'``    -- the shipped direction, ``+inf`` on real and imaginary;
+    * ``'down'``  -- ``-inf`` on both, which is not the same rounding;
+    * ``'real'``  -- the real part only, so the perturbation is not
+      isotropic in the complex plane;
+    * ``'one_element'`` -- a single element (the envelope's peak), which is
+      the SMALLEST one-ULP move the input admits and therefore the floor's
+      lower end.
+    """
+    G = np.asarray(G)
+    cplx = np.iscomplexobj(G)
+    if kind == 'one_element':
+        out = G.copy()
+        idx = np.unravel_index(int(np.argmax(np.abs(G))), G.shape)
+        v = out[idx]
+        out[idx] = (np.nextafter(v.real, np.inf)
+                    + 1j * np.nextafter(v.imag, np.inf)) if cplx else \
+            np.nextafter(v, np.inf)
+        return out
+    to = np.inf if kind in ('up', 'real') else -np.inf
+    if not cplx:
+        return np.nextafter(G, to)
+    if kind == 'real':
+        return np.nextafter(G.real, to) + 1j * G.imag
+    return np.nextafter(G.real, to) + 1j * np.nextafter(G.imag, to)
+
+
+def _linearity_error(tilt, *, nudge=False):
     """Relative L2 LINEARITY VIOLATION of the chain at a 2x2 fan of
     half-angle ``tilt``.
 
@@ -677,7 +714,13 @@ def _linearity_error(tilt):
     readout) so nothing is window-clipped and all five runs land on the same
     lattice."""
     X, Y = _grid(_CN, _CDX)
-    G = _gauss(_CN, _CDX, _CW)
+    G = np.asarray(_gauss(_CN, _CDX, _CW))
+    if nudge:
+        # WP-C2 (2026-09-20): one ULP of the input envelope, so a caller
+        # can measure this quantity's own last-bit floor and compare a
+        # claimed effect against it LIKE FOR LIKE.  Round 2 (D8): which
+        # DIRECTION is a parameter, because one direction is not a floor.
+        G = _one_ulp(G, 'up' if nudge is True else nudge)
     parts = [G * np.exp(1j * _K0 * tilt * (sx * X + sy * Y))
              for sx in (-1, 1) for sy in (-1, 1)]
     kw = dict(focus_readout=None, on_multi_congruence='ignore')
@@ -838,9 +881,60 @@ def test_the_separation_survives_the_c10_residual_degree_and_is_caused_by_it():
     # 1. the gate still separates (measured 62x / 108x on the two builds here,
     #    259x on the 2026-08-03 tree, 17x pre-C13 on the weaker build)
     assert bad6 > 5.0 * good6, (bad6, good6)
-    # 2. the residual degree is what moves the multiplexed route (15x-29x
-    #    here, 3.20x-6.78x on the 2026-08-03 tree)
-    assert bad4 > 2.0 * bad6, (bad4, bad6)
+    # 2. the residual degree is what moves the multiplexed route.  WP-C2
+    #    (2026-09-20) replaced the absolute ``bad4 > 2.0 * bad6`` bar:
+    #    the quantity under it is a draw (see ``_mux_last_bit_noise``),
+    #    and forcing the PRE-5.49 ray-tracer keywords back gives 115.25
+    #    where this docstring recorded 19.08.  The bar is now this
+    #    fixture's OWN last-bit floor, measured in process.
+    #    The comparator is LIKE FOR LIKE -- the same linearity error,
+    #    recomputed on an input nudged by one ULP -- because the degree
+    #    effect is measured on that quantity and not on the field norm.
+    #    Measured 2026-09-20: degree effect 0.1689 of bad6 against a
+    #    one-ULP floor of 0.0026, i.e. 65x, where the absolute 2.0x bar
+    #    read 1.17x.
+    #
+    #    ROUND 2 (VERIFY-WP-C2 defect D8): the floor is the WORST of two
+    #    one-ULP DIRECTIONS, not one draw.  Measured over four directions
+    #    (``validation/probe_c2_round2/r2_d3_floor_{win,wsl}.json``):
+    #
+    #        direction      Windows      WSL
+    #        up           2.586e-03   8.420e-05
+    #        down         1.802e-03   2.273e-03
+    #        real only    2.586e-03   8.420e-05   (identical to 'up': the
+    #                                              envelope is REAL, so the
+    #                                              two nudges coincide)
+    #        one element  1.250e-03   1.824e-04   (always the smallest)
+    #        spread           2.07x     26.99x
+    #
+    #    The shipped single draw ('up') is the largest on Windows and
+    #    27x the SMALLEST on WSL, so barring against it alone read 65x on
+    #    one build and 2008x on the other for the same fixture.  'up' and
+    #    'down' bracket the maximum on both builds, and 'real' / 'one
+    #    element' cannot exceed them, so the max over those two IS the
+    #    measured worst case -- at 1/3 the cost of all four.
+    #    Margin at the worst floor: 65.3x (Windows), 74.4x (WSL).
+    noise_by_direction = {
+        k: abs(_linearity_error(0.023, nudge=k) - bad6) / max(bad6, 1e-300)
+        for k in ('up', 'down')}
+    noise = max(noise_by_direction.values())
+    spread = noise / max(min(noise_by_direction.values()), 1e-300)
+    assert spread < 100.0, (
+        f'the one-ULP floor now varies by {spread:.1f}x between the two '
+        f'perturbation directions ({noise_by_direction}); measured 1.44x '
+        f'(Windows) and 27.0x (WSL) on 2026-09-20.  Above 100x the '
+        f'"floor" has stopped being one number and the bar below is '
+        f'measuring the choice of direction.')
+    degree_effect = abs(bad4 - bad6) / max(bad6, 1e-300)
+    assert degree_effect > 10.0 * noise, (
+        f'the residual degree no longer moves the multiplexed route by '
+        f'more than a one-ULP nudge of the input does: degree effect '
+        f'{degree_effect:.4f} of bad6 against a last-bit floor of '
+        f'{noise:.4f} (the worst of {noise_by_direction}).  If those are '
+        f'comparable the attribution has no content on this fixture, and '
+        f'the claim belongs where it is exact -- the byte-identity arm in '
+        f'the sibling below.  Measured margin 65.3x (Windows) / 74.4x '
+        f'(WSL) at the worst floor.')
 
 
 def _mux_fan(tilt):
@@ -865,6 +959,67 @@ def _mux_chain_field(tilt, *, degree, launch):
     finally:
         _lens_traced._REMAP_RESID_EIKONAL_DEGREE = _deg
         _lens_traced.REMAP_STATIONARY_PHASE_LAUNCH = _lch
+
+
+def _mux_last_bit_noise(tilt, *, degree, launch, kind='up'):
+    """How much this fixture's own answer moves under a ONE-ULP nudge of
+    its input -- the noise floor any claim about that answer has to clear.
+
+    WP-C2 (2026-09-20).  The two arms that use this used to bar an
+    absolute magnitude (``bad4 > 2.0 * bad6`` and ``moved > 1.0``).  Both
+    are read with niche C6's stationary-phase launch ENGAGED on the
+    MULTIPLEXED fan, and ``test_c13_makes_the_d3_separation_build_independent``
+    below already documents what that state is: the C6 residual-eikonal
+    fit "explains NONE of its own data at EVERY degree 1-6", returns a
+    model whose gradient reaches ``|grad a| = 974`` against a physical
+    maximum of 1, and "perturbing ONLY that fit's coefficients by a
+    relative 1e-12 ... moves ``|mux|`` by 163x".  That sibling's
+    CONDITION was moved on 2026-08-08 for exactly this reason.
+
+    MEASURED (``validation/probe_c2_analytic_normal/d3_guard_draw.py``,
+    Windows py3.14 / numpy 2.4.4):
+
+        configuration                  bad4    bad4/bad6    moved
+        5.49 ray-tracer defaults      1.177       1.17x     0.836
+        pre-5.49 defaults forced    115.249      70.01x    22.553
+        this file's own record       19.085      15.14x    39.830
+
+    The middle row is the point: forcing the PRE-5.49 keywords back does
+    not restore the recorded numbers, it gives 115.25 where 19.08 was
+    recorded.  The magnitude is not reproducible at fixed arithmetic
+    between the recording date and today, so it was never a property of
+    the library.  ``good6`` meanwhile reads 0.00831 in both, so it is
+    specifically the launch-ON multiplexed magnitude that draws.
+
+    What the fixture CAN say, build-free, is whether the residual degree
+    moves its answer by more than its own last bits do.  This measures
+    that floor in process, with a perturbation -- one ULP of the input
+    envelope -- that no library behaviour can be attributed to.
+
+    ROUND 2 (VERIFY-WP-C2 defect D8): ``kind`` selects WHICH one-ULP
+    direction, because one direction is not a floor.  Measured over the
+    four (``validation/probe_c2_round2/r2_d3_floor_{win,wsl}.json``) the
+    reading spans a factor of several, which is why the caller bars
+    against the WORST of them rather than against a single draw.
+    """
+    base = _mux_chain_field(tilt, degree=degree, launch=launch)
+    X, Y = _grid(_CN, _CDX)
+    G = _one_ulp(_gauss(_CN, _CDX, _CW), kind)
+    fan = sum(G * np.exp(1j * _K0 * tilt * (sx * X + sy * Y))
+              for sx in (-1, 1) for sy in (-1, 1))
+    _deg = _lens_traced._REMAP_RESID_EIKONAL_DEGREE
+    _lch = _lens_traced.REMAP_STATIONARY_PHASE_LAUNCH
+    _lens_traced._REMAP_RESID_EIKONAL_DEGREE = degree
+    _lens_traced.REMAP_STATIONARY_PHASE_LAUNCH = launch
+    try:
+        nudged = _chain(fan, quiet=True, focus_readout=None,
+                        on_multi_congruence='ignore').field
+    finally:
+        _lens_traced._REMAP_RESID_EIKONAL_DEGREE = _deg
+        _lens_traced.REMAP_STATIONARY_PHASE_LAUNCH = _lch
+    ref = float(np.linalg.norm(base))
+    assert ref > 0.0, 'the unperturbed multiplexed answer is identically zero'
+    return float(np.linalg.norm(nudged - base)) / ref
 
 
 def test_the_residual_degree_moves_the_multiplexed_route_only_through_c6():
@@ -899,9 +1054,60 @@ def test_the_residual_degree_moves_the_multiplexed_route_only_through_c6():
     ref = float(np.linalg.norm(on6))
     assert ref > 0.0 and np.all(np.isfinite(on6))
     moved = float(np.linalg.norm(on6 - on4)) / ref
-    assert moved > 1.0, (
-        f'the residual degree stopped moving the multiplexed route '
-        f'({moved:.4f} of the degree-6 answer\'s own norm)')
+    # WP-C2 (2026-09-20): the ON half is a DECISION against this
+    # fixture's own last-bit noise, not an absolute magnitude.  The
+    # absolute form (``moved > 1.0``, recorded 39.83 / 43.88 above) is a
+    # draw -- forcing the pre-5.49 ray-tracer keywords back reads 22.55
+    # and the 5.49 defaults read 0.836, without anything this test is
+    # about having changed.  See ``_mux_last_bit_noise``.
+    #
+    # ROUND 2 (VERIFY-WP-C2 defect D8): the floor is the WORST of two
+    # one-ULP DIRECTIONS, not one draw.  Its own spread over four
+    # directions is 3.22x (Windows) and 4.79x (WSL) -- AT OR ABOVE the
+    # 3.0 multiplier that used to sit on a single draw, so the floor was
+    # a draw in the same way the magnitude it replaced was.  Measured
+    # (``validation/probe_c2_round2/r2_d3_floor_{win,wsl}.json``):
+    #
+    #     direction      Windows      WSL
+    #     up           1.4036e-01   1.1079e-01
+    #     down         1.7820e-01   1.1491e-01     <- the maximum on both
+    #     real only    1.4036e-01   1.1079e-01     (== 'up'; real envelope)
+    #     one element  5.5353e-02   2.3985e-02     (always the smallest)
+    #
+    # 'up' and 'down' bracket the maximum on both builds, so the max over
+    # those two IS the measured worst case at half the cost of all four.
+    # Margin at that worst floor: 4.69x (Windows), 8.59x (WSL), against a
+    # 3.0 bar.
+    noise_by_direction = {
+        k: _mux_last_bit_noise(0.023, degree=6, launch=True, kind=k)
+        for k in ('up', 'down')}
+    noise = max(noise_by_direction.values())
+    spread = noise / max(min(noise_by_direction.values()), 1e-300)
+    assert spread < 100.0, (
+        f'the one-ULP floor now varies by {spread:.1f}x between the two '
+        f'perturbation directions ({noise_by_direction}); measured 1.27x '
+        f'(Windows) and 1.04x (WSL) on 2026-09-20.  Above 100x the '
+        f'"floor" has stopped being one number.')
+    assert moved > 3.0 * noise, (
+        f'the residual degree stopped moving the multiplexed route by '
+        f'more than its own last bits do: {moved:.4f} of the degree-6 '
+        f'answer\'s own norm against a one-ULP-input floor of '
+        f'{noise:.4f} (the worst of {noise_by_direction}).  Measured '
+        f'margin 4.69x (Windows) / 8.59x (WSL) at that floor.')
+    # ... and the OTHER side of the bar, which this arm never asserted:
+    # holding the degree FIXED must land AT the floor, not above it.  A
+    # bar that only refuses is satisfiable by a floor of zero; this is
+    # what makes it two-sided.  Measured EXACTLY 0.0 on both builds --
+    # the chain is deterministic, so the same degree twice is the same
+    # float64 words.
+    again = _mux_chain_field(0.023, degree=6, launch=True)
+    control = float(np.linalg.norm(again - on6)) / ref
+    assert control <= noise, (
+        f'running the SAME degree twice moved the multiplexed answer by '
+        f'{control:.4e} of its own norm, which is above the one-ULP '
+        f'floor {noise:.4e}.  Measured exactly 0.0 on both builds: if '
+        f'the chain has become non-deterministic, the comparison above '
+        f'is measuring that instead of the residual degree.')
 
 
 def test_c13_makes_the_d3_separation_build_independent():

@@ -1,0 +1,179 @@
+
+=================== M0 control (no mutation) ===================
+..........................................................               [100%]
+58 passed in 21.94s
+
+=================== M1 ray_fan_data loses sphere_normal from its SIGNATURE ===================
+M1 applied
+        assert census, 'the AST census found no exported function that traces'
+        missing = {n for n, kw in census.items() if len(kw) < 2}
+>       assert missing == _NO_WAY_BACK, (
+            f'the way-back census moved.\n'
+            f'  newly WITHOUT a way back: {sorted(missing - _NO_WAY_BACK)}\n'
+            f'  now WITH one (fixed):     {sorted(_NO_WAY_BACK - missing)}\n'
+            f'Every exported function that traces on the CPU must forward both '
+            f'keywords; only the jax twins are exempt.')
+E       AssertionError: the way-back census moved.
+E           newly WITHOUT a way back: ['ray_fan_data']
+E           now WITH one (fixed):     []
+E         Every exported function that traces on the CPU must forward both keywords; only the jax twins are exempt.
+E       assert {'apply_real_...jacobian_jax'} == {'apply_real_...jacobian_jax'}
+E         
+E         Extra items in the left set:
+E         'ray_fan_data'
+E         Use -v to get more diff
+
+tests\unit\test_verify_c2_analytic_normal.py:716: AssertionError
+=========================== short test summary info ===========================
+FAILED tests/unit/test_c2_analytic_normal_default.py::test_c2_every_entry_point_that_traces_carries_both_keywords
+FAILED tests/unit/test_c2_analytic_normal_default.py::test_c2_the_entry_point_census_fires_when_one_keyword_is_dropped
+FAILED tests/unit/test_c2_analytic_normal_default.py::test_c2_none_stamps_nothing_on_the_entry_points[ray_fan_data]
+FAILED tests/unit/test_verify_c2_analytic_normal.py::test_vc2_the_entry_points_without_a_way_back_are_pinned
+4 failed, 54 passed in 17.04s
+
+=================== M2 keyword threaded but DROPPED before the inner trace ===================
+M2 applied
+            if hasattr(obj, 'x') and hasattr(obj, 'opd'):
+                return [_np.ascontiguousarray(getattr(obj, f)).tobytes()
+                        for f in ('x', 'y', 'z', 'L', 'M', 'N', 'opd')]
+            return [repr(obj).encode()]
+    
+        a, b, c = _bytes(omitted), _bytes(explicit_none), _bytes(old)
+        assert a == b, (
+            f'{name}: passing renormalize=None, sphere_normal=None is NOT the '
+            f'same as omitting them, so None is stamping something.  The '
+            f'sentinel is the whole reason a call site does not pin the '
+            f'current default.')
+        # two-sided: the keywords must reach the trace at all, or the identity
+        # above would be satisfied by a keyword that goes nowhere
+>       assert a != c, (
+            f'{name}: forcing renormalize="surface", sphere_normal="generic" '
+            f'produced byte-identical output to the default, so the forwarded '
+            f'keywords do not reach the internal trace on this fixture and the '
+            f'None-stamps-nothing arm above proves nothing.')
+E       AssertionError: ray_fan_data: forcing renormalize="surface", sphere_normal="generic" produced byte-identical output to the default, so the forwarded keywords do not reach the internal trace on this fixture and the None-stamps-nothing arm above proves nothing.
+E       assert [b'\x00\x00\x00\x00\x00\x00\xf0\xbf\xcd\xcc\xcc\xcc\xcc\xcc\xec\xbf\x9a\x99\x99\x99\x99\x99\xe9\xbfffffff\xe6\xbf33333...e\xedxE%s?\x1f\nA\xe2l\x01w?D\xb6\x8e\x10\x0c\xe2z?\xca\x8e9\xd8\x04\xc8~?\x07q\xbb\xc4%Z\x81?m\xb8\xba\xce\xf5S\x83?'] != [b'\x00\x00\x00\x00\x00\x00\xf0\xbf\xcd\xcc\xcc\xcc\xcc\xcc\xec\xbf\x9a\x99\x99\x99\x99\x99\xe9\xbfffffff\xe6\xbf33333...e\xedxE%s?\x1f\nA\xe2l\x01w?D\xb6\x8e\x10\x0c\xe2z?\xca\x8e9\xd8\x04\xc8~?\x07q\xbb\xc4%Z\x81?m\xb8\xba\xce\xf5S\x83?']
+
+tests\unit\test_c2_analytic_normal_default.py:1155: AssertionError
+=========================== short test summary info ===========================
+FAILED tests/unit/test_c2_analytic_normal_default.py::test_c2_none_stamps_nothing_on_the_entry_points[ray_fan_data]
+1 failed, 57 passed in 22.86s
+
+=================== M3 _way_back_kwargs maps None to 'generic' ===================
+M3 applied
+            f'same as omitting them, so None is stamping something.  The '
+            f'sentinel is the whole reason a call site does not pin the '
+            f'current default.')
+        # two-sided: the keywords must reach the trace at all, or the identity
+        # above would be satisfied by a keyword that goes nowhere
+>       assert a != c, (
+            f'{name}: forcing renormalize="surface", sphere_normal="generic" '
+            f'produced byte-identical output to the default, so the forwarded '
+            f'keywords do not reach the internal trace on this fixture and the '
+            f'None-stamps-nothing arm above proves nothing.')
+E       AssertionError: ray_transfer_jacobian: forcing renormalize="surface", sphere_normal="generic" produced byte-identical output to the default, so the forwarded keywords do not reach the internal trace on this fixture and the None-stamps-nothing arm above proves nothing.
+E       assert [b'=\xb3-\xbb\xd6\xd9\xee?\xc0\n\xd3\x83J\x9d\x84?@\xb8-\x84\xfa\x91~?\x00\xc0\xf6]|b\xe1>\xb0\xed\xd9WD\xaf\x84?`dM:\...b5\xbcp<\xef?\x00j\xf3OAvh\xbf\x80\x16\\_qf\x82?:H\xc9\x9a\xef\xf0%\xc0\x00\x14\x14\x9a7lb\xbf\xd5N\xe1\x04\xff@\xef?'] != [b'=\xb3-\xbb\xd6\xd9\xee?\xc0\n\xd3\x83J\x9d\x84?@\xb8-\x84\xfa\x91~?\x00\xc0\xf6]|b\xe1>\xb0\xed\xd9WD\xaf\x84?`dM:\...b5\xbcp<\xef?\x00j\xf3OAvh\xbf\x80\x16\\_qf\x82?:H\xc9\x9a\xef\xf0%\xc0\x00\x14\x14\x9a7lb\xbf\xd5N\xe1\x04\xff@\xef?']
+
+tests\unit\test_c2_analytic_normal_default.py:1155: AssertionError
+=========================== short test summary info ===========================
+FAILED tests/unit/test_c2_analytic_normal_default.py::test_c2_none_stamps_nothing_on_the_entry_points[trace_prescription]
+FAILED tests/unit/test_c2_analytic_normal_default.py::test_c2_none_stamps_nothing_on_the_entry_points[raytrace_system]
+FAILED tests/unit/test_c2_analytic_normal_default.py::test_c2_none_stamps_nothing_on_the_entry_points[ray_fan_data]
+FAILED tests/unit/test_c2_analytic_normal_default.py::test_c2_none_stamps_nothing_on_the_entry_points[ray_fan_data_world]
+FAILED tests/unit/test_c2_analytic_normal_default.py::test_c2_none_stamps_nothing_on_the_entry_points[opd_fan_data]
+FAILED tests/unit/test_c2_analytic_normal_default.py::test_c2_none_stamps_nothing_on_the_entry_points[opd_fan_data_world]
+FAILED tests/unit/test_c2_analytic_normal_default.py::test_c2_none_stamps_nothing_on_the_entry_points[through_focus_rms]
+FAILED tests/unit/test_c2_analytic_normal_default.py::test_c2_none_stamps_nothing_on_the_entry_points[paraxial_focus_world]
+FAILED tests/unit/test_c2_analytic_normal_default.py::test_c2_none_stamps_nothing_on_the_entry_points[ray_transfer_jacobian]
+9 failed, 49 passed in 25.02s
+
+=================== M4 _library_trace_default returns the wrong route for renormalize ===================
+M4 applied
+..........................................................               [100%]
+58 passed in 24.02s
+
+=================== M5 the JAX tracer GAINS the NumPy domain clamp ===================
+M5 applied
+            ec = np.asarray(ir.error_code)
+            assert int((a & past).sum()) == 0, (
+                f'the NumPy tracer ({rn}/{sn}) now keeps '
+                f'{int((a & past).sum())} of the {n_past} rays past its own '
+                f'domain clamp; the clamp is supposed to kill every one.')
+            assert int(((ec == 4) & past).sum()) == n_past, (
+                f'the NumPy tracer ({rn}/{sn}) no longer reports every ray '
+                f'past the clamp as RAY_NAN.')
+>       assert int((ja & past).sum()) == n_past, (
+            f'the JAX tracer now kills {n_past - int((ja & past).sum())} of the '
+            f'{n_past} rays past the NumPy domain clamp.  If a clamp has been '
+            f'added to jax_trace that is a cross-backend BEHAVIOUR CHANGE and '
+            f'VERIFY_WP-C2.md defect D6 has been actioned -- update this arm '
+            f'and the Migration Guide together.')
+E       AssertionError: the JAX tracer now kills 197 of the 197 rays past the NumPy domain clamp.  If a clamp has been added to jax_trace that is a cross-backend BEHAVIOUR CHANGE and VERIFY_WP-C2.md defect D6 has been actioned -- update this arm and the Migration Guide together.
+E       assert 0 == 197
+E        +  where 0 = int(np.int64(0))
+E        +    where np.int64(0) = <built-in method sum of numpy.ndarray object at 0x000001042C8AF810>()
+E        +      where <built-in method sum of numpy.ndarray object at 0x000001042C8AF810> = (array([ True,  True,  True, ..., False, False, False], shape=(4000,)) & array([False, False, False, ...,  True,  True,  True], shape=(4000,))).sum
+
+tests\unit\test_verify_c2_analytic_normal.py:247: AssertionError
+=========================== short test summary info ===========================
+FAILED tests/unit/test_c2_analytic_normal_default.py::test_c2_the_two_backends_gate_the_sphere_domain_differently
+FAILED tests/unit/test_verify_c2_analytic_normal.py::test_vc2_the_jax_backend_does_not_apply_the_numpy_domain_clamp
+2 failed, 56 passed in 23.27s
+
+=================== M6 the NumPy tracer LOSES its domain clamp ===================
+M6 applied, replacements: 3
+                       renormalize=rn, sphere_normal=sn).image_rays
+            ec = np.asarray(ir.error_code)
+>           assert list(ec[-2:]) == [4, 4], (
+                f'{rn}/{sn}: a ray past the {CLAMP} domain clamp is no longer '
+                f'killed RAY_NAN ({list(ec)}).')
+E           AssertionError: surface/generic: a ray past the 0.9999 domain clamp is no longer killed RAY_NAN ([np.uint8(0), np.uint8(0), np.uint8(0), np.uint8(1), np.uint8(1), np.uint8(1)]).
+E           assert [np.uint8(1), np.uint8(1)] == [4, 4]
+E             
+E             At index 0 diff: np.uint8(1) != 4
+E             Use -v to get more diff
+
+tests\unit\test_verify_c2_analytic_normal.py:941: AssertionError
+=========================== short test summary info ===========================
+FAILED tests/unit/test_c2_analytic_normal_default.py::test_c2_the_domain_clamp_stays_where_the_ledger_left_it
+FAILED tests/unit/test_c2_analytic_normal_default.py::test_c2_the_rim_band_is_the_one_discontinuous_difference
+FAILED tests/unit/test_c2_analytic_normal_default.py::test_c2_the_two_backends_gate_the_sphere_domain_differently
+FAILED tests/unit/test_verify_c2_analytic_normal.py::test_vc2_the_two_domain_gates_coincide_on_the_axis[0.002]
+FAILED tests/unit/test_verify_c2_analytic_normal.py::test_vc2_the_two_domain_gates_coincide_on_the_axis[-0.0125]
+FAILED tests/unit/test_verify_c2_analytic_normal.py::test_vc2_the_two_domain_gates_coincide_on_the_axis[0.0515]
+FAILED tests/unit/test_verify_c2_analytic_normal.py::test_vc2_the_two_domain_gates_coincide_on_the_axis[-0.12]
+FAILED tests/unit/test_verify_c2_analytic_normal.py::test_vc2_the_two_domain_gates_coincide_on_the_axis[1.0]
+FAILED tests/unit/test_verify_c2_analytic_normal.py::test_vc2_the_rim_band_is_reachable_only_off_axis
+FAILED tests/unit/test_verify_c2_analytic_normal.py::test_vc2_the_jax_backend_does_not_apply_the_numpy_domain_clamp
+FAILED tests/unit/test_verify_c2_analytic_normal.py::test_vc2_the_clamp_kills_through_the_public_trace_on_both_routes
+11 failed, 47 passed in 23.43s
+
+=================== M7 a NEW exported entry point that traces with no way back ===================
+M7 applied
+        """
+        census = _census()
+        assert census, 'the AST census found no exported function that traces'
+        missing = {n for n, kw in census.items() if len(kw) < 2}
+>       assert missing == _NO_WAY_BACK, (
+            f'the way-back census moved.\n'
+            f'  newly WITHOUT a way back: {sorted(missing - _NO_WAY_BACK)}\n'
+            f'  now WITH one (fixed):     {sorted(_NO_WAY_BACK - missing)}\n'
+            f'Every exported function that traces on the CPU must forward both '
+            f'keywords; only the jax twins are exempt.')
+E       AssertionError: the way-back census moved.
+E           newly WITHOUT a way back: ['spot_centroid_quick']
+E           now WITH one (fixed):     []
+E         Every exported function that traces on the CPU must forward both keywords; only the jax twins are exempt.
+E       assert {'apply_real_...ntroid_quick'} == {'apply_real_...jacobian_jax'}
+E         
+E         Extra items in the left set:
+E         'spot_centroid_quick'
+E         Use -v to get more diff
+
+tests\unit\test_verify_c2_analytic_normal.py:716: AssertionError
+=========================== short test summary info ===========================
+FAILED tests/unit/test_c2_analytic_normal_default.py::test_c2_every_entry_point_that_traces_carries_both_keywords
+FAILED tests/unit/test_verify_c2_analytic_normal.py::test_vc2_the_entry_points_without_a_way_back_are_pinned
+2 failed, 56 passed in 22.25s
+
+=================== done ===================

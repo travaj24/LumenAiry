@@ -427,6 +427,8 @@ def fit_canonical_polynomials(
     auto_bump_threshold_waves: Optional[float] = None,
     max_auto_poly_order: int = 10,
     source_centre: Tuple[float, float] = (0.0, 0.0),
+    renormalize: Optional[str] = None,
+    sphere_normal: Optional[str] = None,
 ) -> CanonicalPolyFit:
     """Fit Chebyshev tensor-product polynomials to ``Phi(s2, v2)`` and
     ``s1(s2, v2)`` over a 4-D source x pupil grid.
@@ -500,6 +502,17 @@ def fit_canonical_polynomials(
         coefficients change very slightly so this is opt-in for
         bit-compatibility with prior fits.  Default ``False`` (use
         the standard Chebyshev-Gauss roots).
+    renormalize : ``None`` (default) | ``'exit'`` | ``'surface'``
+        Forwarded verbatim to the internal :func:`trace` call -- WP-C2's
+        way back, one keyword per flipped default.  ``None`` means
+        "whatever the library's default is", so an unkeyworded call is
+        unchanged and no call site pins today's default.
+    sphere_normal : ``None`` (default) | ``'analytic'`` | ``'generic'``
+        Forwarded verbatim to the same call.  Pass
+        ``renormalize='surface'`` and ``sphere_normal='generic'`` together
+        for the arithmetic this entry point produced before WP-C2 moved
+        the two tracer defaults -- byte-identical, pinned archive to
+        archive.
 
     Returns
     -------
@@ -515,6 +528,7 @@ def fit_canonical_polynomials(
         If too many rays die for a meaningful fit.
     """
     from ..raytrace import _make_bundle, surfaces_from_prescription, trace
+    from ..raytrace.trace import _way_back_kwargs
 
     if wavelength <= 0:
         raise ValueError(f"wavelength must be > 0, got {wavelength}")
@@ -590,7 +604,8 @@ def fit_canonical_polynomials(
     bundle.z = np.full(n_rays, -object_distance, dtype=np.float64)
 
     res = trace(bundle, surfaces, wavelength, output_filter='last',
-                surface_diffraction=surface_diffraction)
+                surface_diffraction=surface_diffraction,
+                **_way_back_kwargs(renormalize, sphere_normal))
     final = res.image_rays
     alive = np.asarray(final.alive, dtype=bool)
     n_alive = int(alive.sum())
@@ -1025,6 +1040,8 @@ def fit_hf_polynomials(
     object_distance: Optional[float] = None,
     surface_diffraction: Optional[Dict[int, Tuple[float, float, float, float]]] = None,
     endpoint_anchored: bool = False,
+    renormalize: Optional[str] = None,
+    sphere_normal: Optional[str] = None,
 ) -> HFPolyFit:
     """Fit a 4-D Chebyshev tensor-product polynomial to Phi(s1, s2).
 
@@ -1045,12 +1062,24 @@ def fit_hf_polynomials(
     object_distance : float, optional
     surface_diffraction : dict, optional
     endpoint_anchored : bool
+    renormalize : ``None`` (default) | ``'exit'`` | ``'surface'``
+        Forwarded verbatim to the internal :func:`trace` call -- WP-C2's
+        way back, one keyword per flipped default.  ``None`` means
+        "whatever the library's default is", so an unkeyworded call is
+        unchanged and no call site pins today's default.
+    sphere_normal : ``None`` (default) | ``'analytic'`` | ``'generic'``
+        Forwarded verbatim to the same call.  Pass
+        ``renormalize='surface'`` and ``sphere_normal='generic'`` together
+        for the arithmetic this entry point produced before WP-C2 moved
+        the two tracer defaults -- byte-identical, pinned archive to
+        archive.
 
     Returns
     -------
     HFPolyFit
     """
     from ..raytrace import _make_bundle, surfaces_from_prescription, trace
+    from ..raytrace.trace import _way_back_kwargs
 
     if wavelength <= 0:
         raise ValueError("wavelength must be > 0")
@@ -1102,7 +1131,8 @@ def fit_hf_polynomials(
     bundle.z = np.full(n_rays, -object_distance, dtype=np.float64)
 
     res = trace(bundle, surfaces, wavelength, output_filter='last',
-                surface_diffraction=surface_diffraction)
+                surface_diffraction=surface_diffraction,
+                **_way_back_kwargs(renormalize, sphere_normal))
     final = res.image_rays
     alive = np.asarray(final.alive, dtype=bool)
     n_alive = int(alive.sum())

@@ -1,0 +1,23 @@
+{
+ "tag": "pre",
+ "lumenairy_file": "/mnt/c/tmp/lum_vc2b_pre49/lumenairy/__init__.py",
+ "python": "3.12.3",
+ "apply_real_lens_has_sphere_normal": false,
+ "apply_real_lens_has_renormalize": false,
+ "apply_real_lens_module": "lumenairy.elements._lens_real",
+ "spy_trace_calls": 1,
+ "spy_kwargs": [
+  {
+   "sphere_normal": "<omitted>",
+   "renormalize": "<omitted>"
+  }
+ ],
+ "digest_spy": "fb31d3e48b54c37bf7a57fc4804e14476cdb38419b529306446d52350650278f",
+ "digest_default": "fb31d3e48b54c37bf7a57fc4804e14476cdb38419b529306446d52350650278f",
+ "abs_sum": 7786.4317234843,
+ "spy_trace_calls_correction_off": 0,
+ "digest_correction_off": "995d57c76d5e7870157f7b3c86dc57108f50b61517f19a45eb8a57c4c07c6a33",
+ "digest_forced_old": "fb31d3e48b54c37bf7a57fc4804e14476cdb38419b529306446d52350650278f",
+ "forced_differs_from_default": false,
+ "forced_max_abs_delta": 0.0
+}

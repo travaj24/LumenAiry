@@ -57,8 +57,8 @@ def trace(
     wavelength: float,
     output_filter: Union[str, Callable[..., Any]] = 'all',
     surface_diffraction: Optional[Dict[int, Tuple[float, float, float, float]]] = None,
-    renormalize: str = 'surface',
-    sphere_normal: str = 'generic',
+    renormalize: str = 'exit',
+    sphere_normal: str = 'analytic',
 ) -> 'TraceResult':
     """Trace a ray bundle through a sequential list of surfaces.
 
@@ -111,59 +111,143 @@ def trace(
         (``L_new**2 + M_new**2 > 1``) are flagged
         ``alive=False`` with ``error_code=RAY_EVANESCENT``.  See also
         :func:`apply_doe_phase_traced`.
-    renormalize : ``'surface'`` (default) | ``'exit'``
+    renormalize : ``'exit'`` (the default) | ``'surface'``
         Where the refracted / reflected direction cosines are rescaled
         to unit length.
 
+        * ``'exit'`` (the default) -- once, on the bundle that leaves
+          the last surface.  Exact vector Snell with a unit normal
+          returns a unit vector identically, so each per-surface rescale
+          only removes ~1e-16 of rounding drift; hoisting it saves
+          ``np.maximum`` + three divisions per surface.  The
+          degenerate-direction diagnosis (``|d| < 1e-30`` or non-finite
+          -> ``RAY_NAN`` + killed) still runs at every surface, so a
+          collapsed direction is still attributed to the surface that
+          produced it.
         * ``'surface'`` -- after every refraction and reflection, as the
-          trace has always done.
-        * ``'exit'`` -- once, on the bundle that leaves the last surface.
-          Exact vector Snell with a unit normal returns a unit vector
-          identically, so each per-surface rescale only removes ~1e-16 of
-          rounding drift; hoisting it saves ``np.maximum`` + three
-          divisions per surface.  The degenerate-direction diagnosis
-          (``|d| < 1e-30`` or non-finite -> ``RAY_NAN`` + killed) still
-          runs at every surface, so a collapsed direction is still
-          attributed to the surface that produced it.
+          trace did before this default moved, and byte-identical to it.
 
-        ``'exit'`` is NOT bit-identical to ``'surface'``: the surviving
-        drift enters the next surface's ray-sphere quadratic (which
-        assumes ``a = |d|**2 = 1``).  Measured on a 20k-ray 7-surface
-        spherical stack and a 3-surface conic stack: identical ``alive``
-        masks, ``max |dx| = 6.2e-17 m``, ``max |dopd| = 1.9e-16 m``,
-        ``max |dL| = 4.7e-16`` -- one to two decades below the trace's own
-        60-digit-oracle OPL floor (1.4e-17 m) but not zero.  Under
-        ``output_filter='all'`` the INTERMEDIATE ``ray_history`` bundles
-        carry ``| |d| - 1 | <= 1e-15`` (only the final bundle is
-        rescaled), so a consumer that reads history direction cosines as
-        exactly unit should stay on ``'surface'``.
-    sphere_normal : ``'generic'`` (default) | ``'analytic'``
+        **THIS DEFAULT MOVED** (WP-C2, alongside ``sphere_normal``; the
+        CHANGELOG entry carries the release number).  Pass
+        ``renormalize='surface'`` for the arithmetic it replaced.
+
+        NOT BIT-IDENTICAL: the surviving drift enters the next surface's
+        ray-sphere quadratic, which assumes ``a = |d|**2 = 1``.
+        Measured on a ladder of 3 to 13 surface spherical and conic
+        stacks x 4000 rays, both normal routes (WP-C2,
+        ``validation/probe_c2_analytic_normal/renorm_ladder.py``, both
+        builds, identical to the last digit): ``max |dx| = 6.6e-17 m``,
+        ``max |dopd| = 1.7e-16 m``, ``max |dL| = 7.2e-16``, with the
+        ``alive`` masks and every error code equal on every rung.  The
+        difference does NOT accumulate with surface count -- it stays
+        between 0.11 and 0.39 of the derived ``n_surfaces * eps * |t|``
+        envelope and peaks in the middle of the ladder, not at its end.
+
+        NO MEASURABLE SPEED-UP, on either build.  WP-B9 reported
+        1.03x-1.10x.  WP-C2 measured 0.95x to 1.13x over five
+        prescriptions on two builds, medians 1.00x and 0.99x, on a box
+        whose own resolution (measured from prescriptions the sibling
+        switch cannot touch) is about +-7 % -- i.e. an effect of
+        WP-B9's size is smaller than either measurement can resolve
+        under load.  The default moved on the structural argument (one
+        rescale instead of N, with the fault diagnosis unmoved), not on
+        a timing number.
+
+        HISTORY BUNDLES ARE NOT UNIT.  Under ``output_filter='all'``
+        only the FINAL bundle is rescaled, so the intermediate
+        ``ray_history`` bundles carry ``| |d| - 1 |`` BOUNDED BY
+        ``2 * n_surfaces * eps`` -- measured 6.7e-16 on a 3-surface
+        stack rising to **1.8e-15 on a 13-surface stack**.
+
+        ``n_surfaces * eps`` is NOT a bound.  It holds on a ladder of
+        one element repeated and is exceeded on ordinary stacks of
+        different radii and glasses: measured over 90 combinations of
+        surface count (3, 5, 7, 9, 13), glass (N-BK7, N-SF5, N-SF11),
+        radius pair and field angle (0, 2, 5 deg), **21 exceed it**,
+        worst **1.6667** on a THREE-surface N-SF11 stack at 5 deg
+        (1.1102e-15 against 6.6613e-16) -- so a consumer who sizes a
+        tolerance from ``n_surfaces * eps`` on a triplet, the commonest
+        case, is 40 % under.  ``2 * n_surfaces * eps`` holds on all 90
+        with the worst reading at **0.8333** of it, i.e. 1.2x to spare.
+        Every one of the 90 is identical to the last digit on both
+        development builds.
+
+        The coefficient in front of ``n_surfaces * eps`` is NOT
+        constant either: across the same 90 it runs **1.00 to 1.67 at
+        three surfaces down to 0.50-0.96 at thirteen**.  So size a
+        tolerance from ``2 n_surfaces eps``.
+
+        ``1e-15`` -- the bound this docstring carried before the default
+        moved -- is first exceeded between the **THIRD and the SEVENTH**
+        surface depending on the stack (measured 1.1102e-15 at three on
+        the N-SF11 ladder and 1.22e-15 at seven on the repeated N-BK7
+        one), not the eighth.  The final bundle is unit to 2.2e-16 on
+        every one of the 90.  A consumer that reads HISTORY direction
+        cosines as exactly unit should pass ``renormalize='surface'``.
+    sphere_normal : ``'analytic'`` (the default) | ``'generic'``
         Which route computes the surface normal at a PURE SPHERE
         (:func:`surface._is_pure_spherical`: finite radius, no conic,
         aspheric, biconic, freeform or field-frame extension).
 
+        * ``'analytic'`` (the default) -- the closed form
+          ``(-x/R, -y/R, sqrt(1 - h^2/R^2))``, five array operations
+          instead of about fourteen, with no division by a small ``h``
+          near the vertex.  It selects on the SAME predicate as the
+          closed-form ray-sphere intersection, which is what the failed
+          v4.12.0 attempt lacked.
         * ``'generic'`` -- ``sqrt(x^2+y^2)``, a ``np.where(h > 0, ...)``
           guard, two divisions by ``h``, a second ``sqrt`` inside
           ``_surface_sag_derivative`` and the normalising ``sqrt`` + three
-          divisions of ``_surface_normal``.  The arithmetic every caller
-          has always got.
-        * ``'analytic'`` -- the closed form ``(-x/R, -y/R,
-          sqrt(1 - h^2/R^2))``, which is the same vector with five array
-          operations instead of ~fourteen and no division by a small
-          ``h`` near the vertex.  It selects on the SAME predicate as the
-          closed-form ray-sphere intersection, which is what the failed
-          v4.12.0 attempt lacked.
+          divisions of ``_surface_normal``.  The arithmetic callers got
+          before this default moved, and byte-identical to it.
 
-        The normal block is 24 % of ``trace``'s own time (audit
-        RAYTRACE perf #2); MEASURED end to end on a 200k-ray 7-surface
-        spherical stack, ``'analytic'`` is 464.8 -> 373.0 ms, a 1.25x.
-        It is OPT-IN because it is not bit-identical: measured
+        **THIS DEFAULT MOVED** (WP-C2; the CHANGELOG entry carries the
+        release number, and the maintainer's decision is section 1.3 of
+        ``docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/MAINTAINER_DECISIONS_2026_09.md``).
+        Pass ``sphere_normal='generic'`` for the arithmetic it replaced,
+        which is byte-identical to what 5.48.1 produced.
+
+        WHY.  Against an 80-digit ``decimal`` oracle with EXACT input
+        conversion, over 1056 points (eight radii of both signs from 2 mm
+        to 1 m, eleven heights from the vertex to the domain clamp, six
+        azimuths, refracting and mirror alike), the closed form is within
+        **1.50 ULP** everywhere out to ``h = 0.95 |R|`` against the
+        generic route's 1.75, is never worse there by more than 1 ULP at
+        any of the 672 points in that band, and is strictly closer at
+        55-56 % of all points against 12 % the other way.  It is a unit
+        vector to <= 1.5 ULP by construction.  Above ``0.95 |R|`` BOTH
+        routes enter the conditioning limit of ``sqrt(1 - h^2/R^2)``
+        together (7.1 ULP at ``0.999 |R|``, **46 against 91** at the
+        clamp) and neither dominates point by point: at 14 of 1056 points
+        (Windows; 18 on WSL), all at ``h >= 0.99 |R|``, the closed form
+        rounds worse by more than one unit, by up to 22.8 (Windows) /
+        35.3 (WSL).  So "more accurate" is a mean and a bound out to
+        0.95, not a bound everywhere.  (The earlier reading -- 1.75
+        against 2.25, and 57 against 76 at the clamp -- came from an
+        oracle that converted its own inputs with ``repr(float(x))``,
+        the shortest ROUND-TRIPPING decimal rather than the exact value;
+        ``sqrt(1 - u)`` amplifies that by ``u / (2 (1 - u))``, so above
+        about ``0.9 |R|`` the probe was measuring itself.  Both routes
+        read better against the corrected oracle and the margin between
+        them widens.)  Measured speed-up on the whole trace: **1.08x to
+        1.44x** over three sphere-bearing prescriptions on two builds
+        (medians 1.12x Windows, 1.19x WSL), against 0.93x to 1.03x on
+        prescriptions with no pure sphere, which is the measurement's own
+        resolution on a loaded box; the normal block falls from 16.1 % to
+        9.8 % of the profile (Windows) and 19.6 % to 10.4 % (WSL).
+
+        NOT BIT-IDENTICAL, and one behaviour moves.  Measured
         ``max |dx| = 2.8e-17 m``, ``max |dopd| = 8.3e-17 m``,
-        ``max |dL| = 2.8e-16`` on a 1500-ray sweep, with every ``alive``
-        and ``error_code`` byte-identical.  Prescriptions with no pure
-        sphere (conic, biconic, mirror) are byte-identical either way.
-        Downstream BIT-EQUAL pins exist (``propagate_modal_asymptotic``),
-        so the default cannot move without restating them.
+        ``max |dL| = 2.8e-16`` on a 1500-ray sweep; prescriptions with no
+        pure sphere are byte-identical either way.  The two routes gate
+        the domain from different expressions, so within about 1 ULP of
+        ``h^2 = 0.9999 R^2`` -- a rim band one ULP of ``h`` wide at
+        ``0.99995 |R|`` -- they land on opposite sides of the clamp and
+        one route refuses a ray the other refracts.  A directed
+        ``nextafter`` walk finds such points; 360 000 traced rays over
+        twelve prescription and field-angle combinations, three of them
+        shipped fixtures, move ZERO ``alive`` flags and ZERO error codes.
+        See ``renormalize`` for the other default this work package moved.
 
     Returns
     -------
@@ -1519,6 +1603,81 @@ def apply_doe_phase_traced(
 # High-level trace functions
 # ============================================================================
 
+#: The two keywords :func:`trace` / :func:`world_trace.trace_world` carry as
+#: the way back to the pre-WP-C2 arithmetic.  Every exported entry point that
+#: traces INTERNALLY repeats them verbatim -- same names, same accepted
+#: values -- so a caller needs one keyword per flip and never has to drop to
+#: :func:`trace` to get the arithmetic it used to get.
+_WAY_BACK_KEYWORDS = ('renormalize', 'sphere_normal')
+
+_LIBRARY_TRACE_DEFAULTS: Dict[str, Any] = {}
+
+
+def _library_trace_default(keyword: str) -> Any:
+    """Whatever :func:`trace` currently defaults ``keyword`` to.
+
+    A DIRECT caller of :func:`intersection._refract` / ``_reflect`` -- one
+    that owns its own surface loop and so never reaches :func:`trace` --
+    asks this instead of writing ``'analytic'`` down, so that the day the
+    library's default moves again the caller moves with it rather than
+    silently pinning the route this release happens to ship.  That is the
+    difference between "the ghost path agrees with ``trace``" and "the
+    ghost path agrees with the route ``trace`` happened to ship with".
+
+    The private defaults of ``_refract`` / ``_reflect`` do NOT move: they
+    stay ``sphere_normal='generic'`` / ``renormalize=True``, which is what
+    keeps every OTHER direct caller (the finite-difference differential
+    path) unchanged by construction.  A caller that wants the public
+    arithmetic opts in through this helper, one call site at a time.
+
+    Read from ``inspect.signature`` and cached per keyword, so it costs one
+    dict lookup inside a per-surface loop.
+    """
+    try:
+        return _LIBRARY_TRACE_DEFAULTS[keyword]
+    except KeyError:
+        pass
+    import inspect
+    value = inspect.signature(trace).parameters[keyword].default
+    _LIBRARY_TRACE_DEFAULTS[keyword] = value
+    return value
+
+
+def _way_back_kwargs(renormalize=None, sphere_normal=None):
+    """Build the ``**kwargs`` an internally-tracing entry point forwards.
+
+    ``None`` -- the default of every one of those keywords -- means "do not
+    name it at all", so the forwarded call takes whatever :func:`trace`'s
+    OWN default is at the time it runs.  That is deliberate and it is the
+    whole point of the sentinel: an entry point that defaulted its keyword
+    to today's ``'exit'`` / ``'analytic'`` would freeze today's default into
+    every call site the day the library's default moves again, which is
+    exactly the failure WP-C2 was written to avoid.  A call that omits both
+    keywords is therefore byte-identical to one that passes ``None`` for
+    both (asserted, not assumed: see
+    ``tests/unit/test_c2_analytic_normal_default.py``).
+
+    Parameters
+    ----------
+    renormalize : ``None`` (the library default) | ``'exit'`` | ``'surface'``
+    sphere_normal : ``None`` (the library default) | ``'analytic'`` | ``'generic'``
+
+    Returns
+    -------
+    kwargs : dict
+        Zero, one or two entries, ready to splat into a ``trace`` /
+        ``trace_world`` call.  The VALUES are not validated here -- the
+        tracer raises on an unknown spelling, and validating twice would
+        mean two places to keep in step.
+    """
+    kwargs = {}
+    if renormalize is not None:
+        kwargs['renormalize'] = renormalize
+    if sphere_normal is not None:
+        kwargs['sphere_normal'] = sphere_normal
+    return kwargs
+
+
 def trace_prescription(
     prescription: Dict[str, Any],
     wavelength: float,
@@ -1529,6 +1688,9 @@ def trace_prescription(
     ray_pattern: str = 'rings',
     n_across: int = 11,
     image_distance: Optional[float] = None,
+    *,
+    renormalize: Optional[str] = None,
+    sphere_normal: Optional[str] = None,
 ) -> 'TraceResult':
     """Trace rays through a lens prescription.
 
@@ -1560,6 +1722,17 @@ def trace_prescription(
         If given, add a final flat surface at this distance after the
         last prescription surface.  Useful for evaluating the spot at a
         specific image plane.
+    renormalize : ``None`` (default) | ``'exit'`` | ``'surface'``
+        Forwarded verbatim to the internal :func:`trace` call -- WP-C2's
+        way back, one keyword per flipped default.  ``None`` means
+        "whatever the library's default is", so an unkeyworded call is
+        unchanged and no call site pins today's default.
+    sphere_normal : ``None`` (default) | ``'analytic'`` | ``'generic'``
+        Forwarded verbatim to the same call.  Pass
+        ``renormalize='surface'`` and ``sphere_normal='generic'`` together
+        for the arithmetic this entry point produced before WP-C2 moved
+        the two tracer defaults -- byte-identical, pinned archive to
+        archive.
 
     Returns
     -------
@@ -1619,7 +1792,8 @@ def trace_prescription(
             label='Image',
         ))
 
-    return trace(rays, surfaces, wavelength)
+    return trace(rays, surfaces, wavelength,
+                 **_way_back_kwargs(renormalize, sphere_normal))
 
 
 # ============================================================================
@@ -1918,6 +2092,9 @@ def raytrace_system(
     ray_pattern: str = 'rings',
     n_across: int = 11,
     image_distance: Optional[float] = None,
+    *,
+    renormalize: Optional[str] = None,
+    sphere_normal: Optional[str] = None,
 ) -> Tuple['TraceResult', List['Surface']]:
     """Ray-trace the same element list used by propagate_through_system.
 
@@ -1945,6 +2122,17 @@ def raytrace_system(
     image_distance : float or None
         Distance from last surface to image plane [m].  If None, uses
         the paraxial back focal length.
+    renormalize : ``None`` (default) | ``'exit'`` | ``'surface'``
+        Forwarded verbatim to the internal :func:`trace` call -- WP-C2's
+        way back, one keyword per flipped default.  ``None`` means
+        "whatever the library's default is", so an unkeyworded call is
+        unchanged and no call site pins today's default.
+    sphere_normal : ``None`` (default) | ``'analytic'`` | ``'generic'``
+        Forwarded verbatim to the same call.  Pass
+        ``renormalize='surface'`` and ``sphere_normal='generic'`` together
+        for the arithmetic this entry point produced before WP-C2 moved
+        the two tracer defaults -- byte-identical, pinned archive to
+        archive.
 
     Returns
     -------
@@ -2015,7 +2203,8 @@ def raytrace_system(
             label='Image',
         ))
 
-    result = trace(rays, surfaces, wavelength)
+    result = trace(rays, surfaces, wavelength,
+                   **_way_back_kwargs(renormalize, sphere_normal))
     return result, surfaces
 
 

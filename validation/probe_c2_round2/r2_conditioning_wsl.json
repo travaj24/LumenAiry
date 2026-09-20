@@ -1,0 +1,51 @@
+{
+ "cases": {
+  "4-mode LG_p0": {
+   "bar_100x": 6.452423449888842e-07,
+   "floor_eps_kappa_true": 6.4524234498888424e-09,
+   "kappa_along_worst_direction_ladder": [
+    29062444.479230046,
+    29059052.31323238,
+    29059131.455198396
+   ],
+   "kappa_sampled_medians": {
+    "20260920": 6242769.265846758,
+    "424242": 9796607.17421213,
+    "7770001": 1640769.275328036
+   },
+   "kappa_true_pixel": 528,
+   "kappa_true_worst_direction": 29059131.84455604,
+   "margin_bar_over_reading": 63.595741398982696,
+   "peak": 35598.94582065204,
+   "reading_over_floor": 1.5724323327347771,
+   "reading_relative": 1.014599925710129e-08,
+   "sampled_spread": 5.970740262827943,
+   "true_over_shipped_seed": 4.654846368186973
+  },
+  "LG_(0,0)": {
+   "bar_100x": 6.452395484539686e-07,
+   "floor_eps_kappa_true": 6.452395484539686e-09,
+   "kappa_along_worst_direction_ladder": [
+    29062329.01861978,
+    29058947.358766552,
+    29059023.587641224
+   ],
+   "kappa_sampled_medians": {
+    "20260920": 6242723.165214228,
+    "424242": 9796565.6658469,
+    "7770001": 1640760.8993006437
+   },
+   "kappa_true_pixel": 528,
+   "kappa_true_worst_direction": 29059005.89982,
+   "margin_bar_over_reading": 63.59287801696786,
+   "peak": 38518.38582543915,
+   "reading_over_floor": 1.5725031342867983,
+   "reading_relative": 1.014641212309664e-08,
+   "sampled_spread": 5.970745445008214,
+   "true_over_shipped_seed": 4.654860568180072
+  }
+ },
+ "lumenairy_file": "/mnt/c/tmp/lum_c2b/lumenairy/__init__.py",
+ "numpy": "2.4.6",
+ "python": "3.12.3"
+}

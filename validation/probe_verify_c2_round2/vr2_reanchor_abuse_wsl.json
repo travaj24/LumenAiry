@@ -1,0 +1,130 @@
+{
+ "python": "3.12.3",
+ "repo": "/mnt/c/tmp/lum_vc2b",
+ "source_version": "5.48.1",
+ "shipped_line": "sphere_normal: str = 'analytic',",
+ "expected_digest": "5d0d66152214935b80f74a951839e9030acbc6f731e495ae60331c9ecf4fecb0",
+ "n_map_entries": 4,
+ "cases": [
+  {
+   "label": "1 shipped",
+   "fired": false,
+   "new_num": null,
+   "how": null,
+   "n_refusals": 0,
+   "why": null,
+   "refusal_prints_both_lines": false,
+   "found_line": null
+  },
+  {
+   "label": "2 reverted",
+   "fired": false,
+   "new_num": null,
+   "how": null,
+   "n_refusals": 0,
+   "why": null,
+   "refusal_prints_both_lines": false,
+   "found_line": null
+  },
+  {
+   "label": "3 nonsense",
+   "fired": false,
+   "new_num": null,
+   "how": null,
+   "n_refusals": 0,
+   "why": null,
+   "refusal_prints_both_lines": false,
+   "found_line": null
+  },
+  {
+   "label": "4 unrelated",
+   "fired": false,
+   "new_num": null,
+   "how": null,
+   "n_refusals": 0,
+   "why": null,
+   "refusal_prints_both_lines": false,
+   "found_line": null
+  },
+  {
+   "label": "5 truncated",
+   "fired": false,
+   "new_num": null,
+   "how": null,
+   "n_refusals": 0,
+   "why": null,
+   "refusal_prints_both_lines": false,
+   "found_line": null
+  },
+  {
+   "label": "6 stale-copy-old",
+   "fired": false,
+   "new_num": null,
+   "how": null,
+   "n_refusals": 0,
+   "why": null,
+   "refusal_prints_both_lines": false,
+   "found_line": null
+  },
+  {
+   "label": "7 stale-copy-with-expected-content",
+   "fired": false,
+   "new_num": null,
+   "how": null,
+   "n_refusals": 0,
+   "why": null,
+   "refusal_prints_both_lines": false,
+   "found_line": null
+  },
+  {
+   "label": "8 reindented",
+   "fired": false,
+   "new_num": null,
+   "how": null,
+   "n_refusals": 0,
+   "why": null,
+   "refusal_prints_both_lines": false,
+   "found_line": null
+  },
+  {
+   "label": "12 same content, different enclosing def",
+   "fired": false,
+   "new_num": null,
+   "how": null,
+   "n_refusals": 0,
+   "why": null,
+   "refusal_prints_both_lines": false,
+   "found_line": null
+  },
+  {
+   "label": "9 version-ahead",
+   "fired": false,
+   "new_num": null,
+   "how": null,
+   "n_refusals": 0,
+   "why": null,
+   "refusal_prints_both_lines": false,
+   "found_line": null
+  },
+  {
+   "label": "10 version-equal",
+   "fired": false,
+   "new_num": null,
+   "how": null,
+   "n_refusals": 0,
+   "why": null,
+   "refusal_prints_both_lines": false,
+   "found_line": null
+  },
+  {
+   "label": "11 digest re-recorded for a reverted default",
+   "fired": false,
+   "new_num": null,
+   "how": null,
+   "n_refusals": 0,
+   "why": null,
+   "refusal_prints_both_lines": false,
+   "found_line": "sphere_normal: str = 'generic',"
+  }
+ ]
+}

@@ -1,0 +1,51 @@
+{
+ "cases": {
+  "4-mode LG_p0": {
+   "bar_100x": 6.452423449900915e-07,
+   "floor_eps_kappa_true": 6.452423449900915e-09,
+   "kappa_along_worst_direction_ladder": [
+    29061822.810892645,
+    29058983.712868046,
+    29059131.45632698
+   ],
+   "kappa_sampled_medians": {
+    "20260920": 6242760.917425823,
+    "424242": 9796607.175043287,
+    "7770001": 1640783.1456094054
+   },
+   "kappa_true_pixel": 527,
+   "kappa_true_worst_direction": 29059131.84461041,
+   "margin_bar_over_reading": 61.919117787029265,
+   "peak": 35598.945820651374,
+   "reading_over_floor": 1.6150100901622966,
+   "reading_relative": 1.0420728977589794e-08,
+   "sampled_spread": 5.970689789968994,
+   "true_over_shipped_seed": 4.654852593104402
+  },
+  "LG_(0,0)": {
+   "bar_100x": 6.452395484571769e-07,
+   "floor_eps_kappa_true": 6.452395484571769e-09,
+   "kappa_along_worst_direction_ladder": [
+    29061791.417492636,
+    29058868.244559903,
+    29059023.58923817
+   ],
+   "kappa_sampled_medians": {
+    "20260920": 6242715.945857892,
+    "424242": 9796565.666477328,
+    "7770001": 1640782.8299070622
+   },
+   "kappa_true_pixel": 527,
+   "kappa_true_worst_direction": 29059005.89996449,
+   "margin_bar_over_reading": 61.91681194955403,
+   "peak": 38518.38582543913,
+   "reading_over_floor": 1.6150702345830368,
+   "reading_relative": 1.0421071888889854e-08,
+   "sampled_spread": 5.970665640761385,
+   "true_over_shipped_seed": 4.654865951292473
+  }
+ },
+ "lumenairy_file": "C:\\tmp\\lum_c2b\\lumenairy\\__init__.py",
+ "numpy": "2.4.4",
+ "python": "3.14.6"
+}

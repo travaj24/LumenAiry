@@ -731,19 +731,175 @@ def test_w6_a2_v2_star_is_untouched_by_the_verdict_fix():
     ``done`` still keys off the ORIGINAL absolute ``rn < tol`` test, so
     every returned ``v2*`` is bit-for-bit pre-fix (verified against a
     3a1da2b worktree: 2312/2312 values identical, max |delta| = 0.0).
-    Here we re-pin the hard numbers at the fit centre so a future change
-    to the iteration is caught even without the worktree.
+    This pins the expansion point at the fit centre so a future change to
+    the iteration is caught even without the worktree.
+
+    WP-C2 RESTATEMENT (2026-09-20).  The pin used to read
+    ``abs(v2*) < 1e-15`` on the argument that an on-axis source into an
+    on-axis image of a rotationally symmetric singlet puts the
+    envelope-stationary pupil point exactly at the pupil centre.  That
+    argument is about the OPTIC; the solver works on a least-squares
+    POLYNOMIAL FIT of it, whose coefficients are not exactly symmetric,
+    so the model's root is genuinely off centre and ``1e-15`` was an S4
+    floor bar on the fit's asymmetry rather than on any rounding.  It is
+    a coin: WP-B9 measured 1.150e-15 there (15 % over) with
+    ``sphere_normal='analytic'`` forced as the ray tracer's default,
+    while four independent readings on this box land at 4.6e-16 to
+    8.6e-16 -- the fit moves in its last bits, and the root moves with
+    it.
+
+    Measured (`validation/probe_c2_analytic_normal/`, Windows py3.14 /
+    numpy 2.4.4 and WSL py3.12 / numpy 2.4.6, under all four
+    ``(renormalize, sphere_normal)`` default combinations):
+
+    * a 60-digit ``decimal`` Newton on the SAME polynomial system agrees
+      with what the library returns to <= 3.1e-22 -- so the library is
+      returning the exact root of the fit it was given, and the offset is
+      not the solver's error;
+    * the residual at the pupil centre reads 4.8e-08 to 8.4e-08 and
+      agrees with its own 60-digit evaluation to 3.3e-07 relative, i.e.
+      it is resolved about 8 decades above its rounding floor -- the
+      fit's asymmetry, not noise;
+    * ``|v2* - v_c|`` equals the single Newton step ``H^-1 r(v_c)`` from
+      the centre to 9.9e-32, 14 decades inside the float64 resolution of
+      ``v2`` on its own scale.
+
+    So both claims below are DECISIONS against quantities this build
+    measures for itself, and neither carries a number from a prior run.
     """
     fit = _fit()
+    w_s, w_p = 20e-6, 0.02
+    v_c = np.array([float(fit.v2x_centre), float(fit.v2y_centre)])
     vx, vy, _ = _solve_envelope_stationary_batch(
         fit, np.array([fit.s2x_centre]), np.array([fit.s2y_centre]),
-        0.0, 0.0, w_s=20e-6, w_p=0.02,
-        v_cx=fit.v2x_centre, v_cy=fit.v2y_centre)
-    # On-axis source, on-axis image, rotationally symmetric singlet:
-    # the envelope-stationary pupil point is the pupil centre.
-    assert abs(float(vx[0])) < 1e-15 and abs(float(vy[0])) < 1e-15, (
-        f'v2* at the fit centre moved: ({float(vx[0]):.6e}, '
-        f'{float(vy[0]):.6e}) -- expected (0, 0) by symmetry')
+        0.0, 0.0, w_s=w_s, w_p=w_p, v_cx=v_c[0], v_cy=v_c[1])
+    v_star = np.array([float(vx[0]), float(vy[0])])
+    offset = v_star - v_c
+
+    # The model's own prediction of where its root sits: one Newton step
+    # from the pupil centre.  ``r`` is equation (9)'s residual and ``H``
+    # the Gauss-Newton Hessian the solver itself uses.
+    s1x, s1y, jxx, jxy, jyx, jyy = fit.eval_s1_with_v2_grad(
+        np.asarray(float(fit.s2x_centre)).reshape(()),
+        np.asarray(float(fit.s2y_centre)).reshape(()),
+        np.asarray(v_c[0]).reshape(()), np.asarray(v_c[1]).reshape(()))
+    J = np.array([[float(jxx), float(jxy)], [float(jyx), float(jyy)]])
+    ds1 = np.array([float(s1x) - 0.0, float(s1y) - 0.0])
+    r_c = (J.T @ ds1) / w_s ** 2
+    H = (J.T @ J) / w_s ** 2 + np.eye(2) / w_p ** 2
+    predicted = -np.linalg.solve(H, r_c)
+    svmin = float(np.min(np.linalg.svd(H, compute_uv=False)))
+
+    # PREMISE (two-sided, so the bound below is not built on noise): the
+    # centre residual has to be RESOLVED, i.e. far above the floor of its
+    # own evaluation.  Its terms scale as |J| |s1| / w_s^2, so that floor
+    # is eps times that scale.
+    r_scale = float(np.linalg.norm(J) * np.linalg.norm(ds1)) / w_s ** 2
+    r_floor = np.finfo(np.float64).eps * max(r_scale, 1e-300)
+    rn = float(np.linalg.norm(r_c))
+    assert rn > 1e3 * r_floor, (
+        f'premise: the residual at the pupil centre ({rn:.4e}) must be '
+        f'resolved above its own rounding floor ({r_floor:.4e}) for the '
+        f'root-location bound below to mean anything.  Measured '
+        f'8.415e-08 against a 1.1e-15 floor (7.9 decades) on Windows '
+        f'py3.14 / numpy 2.4.4.')
+
+    # DECISION 1.  The returned expansion point IS the root the model
+    # puts there -- the single Newton step from the centre, which for a
+    # displacement this small is exact to well past float64.  Bar: the
+    # float64 resolution of v2 on its own scale (eps * halfrange), which
+    # is what ANY correct solver is entitled to.  Measured 9.9e-32
+    # against a 4.5e-18 bar, 14 decades of margin; a real move of the
+    # iteration shows up at |offset| ~ 5e-16, two decades ABOVE the bar.
+    step_floor = 4.0 * np.finfo(np.float64).eps * float(fit.v2x_halfrange)
+    assert np.max(np.abs(offset - predicted)) <= step_floor, (
+        f'v2* is no longer the root of the model: returned offset '
+        f'{offset}, one-Newton-step prediction {predicted}, difference '
+        f'{np.max(np.abs(offset - predicted)):.3e} against the '
+        f'{step_floor:.3e} float64 resolution of v2 (measured 9.9e-32).')
+
+    # DECISION 2.  That root is the pupil CENTRE at the fit's own
+    # resolution.  The offset's SCALE is |H^-1 r(v_c)| <= |r|/svmin, with
+    # both quantities measured above, and the bar has decades on both
+    # sides: the reading is 2.3e-14 to 4.3e-14 of the normalised box, the
+    # basin is 1.0, and a genuinely displaced expansion point (a wrong
+    # Hessian model, a sign error, a changed residual) moves it by a
+    # finite fraction of the box.
+    norm_offset = float(np.max(np.abs(offset)) / fit.v2x_halfrange)
+    bound = (rn / svmin) / float(fit.v2x_halfrange)
+    assert norm_offset < 1e-10, (
+        f'v2* at the fit centre moved: offset {norm_offset:.3e} of the '
+        f'normalised pupil box (the |r|/svmin scale is {bound:.3e}) -- '
+        f'1e-10 is four decades above the 2.3e-14..4.3e-14 the fit '
+        f'asymmetry produces and ten below the basin.')
+
+    # WHAT WAS HERE AND WHY IT WENT (VERIFY-WP-C2, the w6_a2 tautology).
+    # This block used to assert ``norm_offset <= 2.0 * bound``.
+    # ``|H^-1 r| <= |r| / sigma_min(H)`` is a THEOREM about the linear
+    # solve, so that assertion cannot fail while the solve is a solve --
+    # and measured, the offset SATURATES it, because r is nearly aligned
+    # with H's minimal singular direction: the ratio reads **0.99991 on
+    # Windows py3.14 / numpy 2.4.4 and 0.7159 on WSL py3.12 / numpy
+    # 2.4.6**.  A bar at 2.0x a quantity the reading is already 0.72-1.00
+    # of has no gap on either side and decides nothing.  The bound stays
+    # as the DERIVATION of the scale the decision above uses, and is
+    # reported in its message.
+    #
+    # DECISION 3 replaces it with a claim the model can actually fail:
+    # the returned point is a CONVERGED root of the NONLINEAR system, not
+    # merely one Newton step from the centre.  A second Newton step taken
+    # FROM v* must be a negligible fraction of the first.  Note the
+    # residual here carries the prior term ``(v - v_c) / w_p**2``, which
+    # vanishes at the centre and does not at v*, so this is the full
+    # Gauss-Newton residual and not a repeat of DECISION 1's algebra.
+    s1x2, s1y2, jxx2, jxy2, jyx2, jyy2 = fit.eval_s1_with_v2_grad(
+        np.asarray(float(fit.s2x_centre)).reshape(()),
+        np.asarray(float(fit.s2y_centre)).reshape(()),
+        np.asarray(v_star[0]).reshape(()), np.asarray(v_star[1]).reshape(()))
+    J2 = np.array([[float(jxx2), float(jxy2)], [float(jyx2), float(jyy2)]])
+    ds1_2 = np.array([float(s1x2) - 0.0, float(s1y2) - 0.0])
+    r_2 = (J2.T @ ds1_2) / w_s ** 2 + (v_star - v_c) / w_p ** 2
+    H2 = (J2.T @ J2) / w_s ** 2 + np.eye(2) / w_p ** 2
+    step2 = -np.linalg.solve(H2, r_2)
+    n1 = float(np.linalg.norm(predicted))
+    assert n1 > 0.0, 'the first Newton step is identically zero'
+    step_ratio = float(np.linalg.norm(step2)) / n1
+    # THE BAR WAS 1e-4 AND MISSED ONE OF THE THREE MODES ITS OWN MESSAGE
+    # NAMED (VERIFY-WP-C2 round 2, defect VR2-D5).  The prior term is
+    # ``I / w_p**2`` against ``J^T J / w_s**2`` with ``w_s = 20e-6`` and
+    # ``w_p = 0.02``, so a solver that DROPPED it moves the step by only
+    # 2.5e-05 of itself -- four times UNDER a 1e-4 bar.  Re-measured this
+    # round on both builds
+    # (``validation/probe_c2_round3/r3_w6a2_{win,wsl}.json``), the same
+    # second-step ratio at the shipped root and at five deliberately
+    # unconverged ones:
+    #
+    #     mode                       Windows       WSL
+    #     the shipped v*             1.9355e-07    8.7659e-08
+    #     the prior term dropped     2.5329e-05    2.5698e-05
+    #     a tenth of the step missed 1.0000e-01    1.0000e-01
+    #     half the step              5.0000e-01    5.0000e-01
+    #     no step at all             1.0000e+00    1.0000e+00
+    #     a sign error               2.0000e+00    2.0000e+00
+    #
+    # 1e-5 is the bar that catches ALL SIX and still leaves the shipped
+    # root 51.7x (Windows) / 114.1x (WSL) of headroom.  The gap above it
+    # is 2.5x, set by the dropped-prior mode, whose own cross-build
+    # spread is 1.5 % -- so the bar sits between two measured quantities
+    # and not next to noise.  Bisected on the same fixture, a 1e-5 bar
+    # detects a departure of more than 9.8e-06 (Windows) / 1.03e-05
+    # (WSL) of the first step and no less.
+    assert step_ratio < 1e-5, (
+        f'v2* is not a CONVERGED root of the model: a second Newton step '
+        f'from it is {step_ratio:.3e} of the first, so the returned point '
+        f'is one step from the centre rather than the place the nonlinear '
+        f'system actually sits.  Measured 1.9355e-07 (Windows py3.14 / '
+        f'numpy 2.4.4) and 8.7659e-08 (WSL py3.12 / numpy 2.4.6) against '
+        f'this 1e-5 bar -- 51x to 114x of headroom -- while an '
+        f'unconverged root reads 2.53e-05 (the prior term dropped from '
+        f'the Hessian, which a 1e-4 bar would have PASSED), 0.10 (a tenth '
+        f'of the step missed), 0.50 (half the step), 1.00 (no step at '
+        f'all) or 2.00 (a sign error).')
 
 
 # ===========================================================================

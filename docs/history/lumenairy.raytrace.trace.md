@@ -1,13 +1,16 @@
 <!-- lumenairy-history-doc
 module: lumenairy/raytrace/trace.py
-ast_sha256: 4d2dbbe0b6ed2f29bf4a6cf566c1e45282d479055dee7cf2f673a4fdb9a94dde
-token_sha256: bb412439d66904e77cd75fb0c873aeeb7c558ec9da2df220f9939eae2a20d5b4
+ast_sha256: 60b057d51a6f7efa2640f0f9fd09addcdd42a66ea4d16d5fa69c744259c38b1d
+token_sha256: bd4f86c56973473300b359937a0f7e6de771963f612a61365a8947647b9fdaa4
 pre_relocation_lines: 1902
 recorded_by: WP-A17 SWEEP-3 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
 re_recorded: 2026-09-13 -- WP-B9 items 1, 2, 5: trace() gains renormalize= and sphere_normal= (defaults unchanged); make_rings gains pattern='vogel' area-uniform sampling with the 'rings' default unchanged; ray_pattern='vogel' threaded through trace_prescription / raytrace_system
 re_recorded: 2026-09-13 -- WP-B9 items 1, 2, 5: trace() gains renormalize= and sphere_normal= (defaults unchanged); make_rings gains pattern='vogel' area-uniform sampling with the 'rings' default unchanged; ray_pattern='vogel' threaded through trace_prescription / raytrace_system
 re_recorded: 2026-09-14 -- Wave-5 item D (CI run 34914295323): DIGEST-SCHEME change, not a code change -- token_fingerprint now feeds an f-string to the digest as ONE STRING record holding its exact source text instead of the running tokenizer's FSTRING_START/FSTRING_MIDDLE/FSTRING_END run, so the recorded value is a property of the file rather than of the interpreter that read it; PEP 701 made CPython 3.12 tokenize f-strings differently from 3.11, these digests were recorded on 3.12+, and all five py3.11 CI shards read a different token_sha256 for byte-identical sources (110 of 123 documents, measured).  The module source is unchanged and ast_sha256 is unchanged.
+re_recorded: 2026-09-20 -- WP-C2 (5.49.0): trace() defaults to sphere_normal='analytic' -- the closed-form pure-sphere normal; 'generic' is the byte-identical way back
+re_recorded: 2026-09-20 -- WP-C2 (5.49.0): trace() defaults to renormalize='exit' -- one exit-plane rescale instead of one per surface; 'surface' is the byte-identical way back, and the history-drift bound is restated as n_surfaces * eps
+re_recorded: 2026-09-20 -- WP-C2 round 2: trace_prescription and raytrace_system take the two way-back keywords (D4); the new _way_back_kwargs and _library_trace_default helpers (D4, D5); the sphere_normal docstring restated to the exact-input oracle (D1) and the renormalize docstring to the n*eps bound with the seventh-surface crossing (D3)
 -->
 
 

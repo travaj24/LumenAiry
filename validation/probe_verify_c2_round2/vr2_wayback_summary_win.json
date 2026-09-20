@@ -1,0 +1,258 @@
+{
+ "n_cases": 37,
+ "n_entry_points": 16,
+ "n_arrays": 1506,
+ "wayback_identical": 1506,
+ "wayback_moved": 0,
+ "default_identical": 1322,
+ "default_moved": 184,
+ "none_identical": 1506,
+ "none_moved": 0,
+ "entry_points_moving_at_default": [
+  "apply_real_lens_maslov",
+  "apply_real_lens_traced",
+  "caustic_diagnostic",
+  "eval_image_plane_wfe",
+  "fit_canonical_polynomials",
+  "fit_hf_polynomials",
+  "opd_fan_data",
+  "opd_fan_data_world",
+  "paraxial_focus_world",
+  "plot_lens_layout",
+  "ray_fan_data",
+  "ray_fan_data_world",
+  "ray_transfer_jacobian",
+  "raytrace_system",
+  "through_focus_rms",
+  "trace_prescription"
+ ],
+ "entry_points_not_moving_at_default": [],
+ "per_entry_point": {
+  "apply_real_lens_maslov": {
+   "fixtures": [
+    "apply_real_lens_maslov[asph]",
+    "apply_real_lens_maslov[sph]"
+   ],
+   "wayback_identical": 2,
+   "wayback_total": 2,
+   "arrays_moving_at_default": 2,
+   "none_identical": 2,
+   "none_total": 2
+  },
+  "apply_real_lens_traced": {
+   "fixtures": [
+    "apply_real_lens_traced[asph]",
+    "apply_real_lens_traced[sph]"
+   ],
+   "wayback_identical": 2,
+   "wayback_total": 2,
+   "arrays_moving_at_default": 2,
+   "none_identical": 2,
+   "none_total": 2
+  },
+  "caustic_diagnostic": {
+   "fixtures": [
+    "caustic_diagnostic[asph]",
+    "caustic_diagnostic[sph]"
+   ],
+   "wayback_identical": 14,
+   "wayback_total": 14,
+   "arrays_moving_at_default": 1,
+   "none_identical": 14,
+   "none_total": 14
+  },
+  "eval_image_plane_wfe": {
+   "fixtures": [
+    "eval_image_plane_wfe[asph]",
+    "eval_image_plane_wfe[sph]"
+   ],
+   "wayback_identical": 24,
+   "wayback_total": 24,
+   "arrays_moving_at_default": 4,
+   "none_identical": 24,
+   "none_total": 24
+  },
+  "fit_canonical_polynomials": {
+   "fixtures": [
+    "fit_canonical_polynomials[asph]",
+    "fit_canonical_polynomials[sph]"
+   ],
+   "wayback_identical": 596,
+   "wayback_total": 596,
+   "arrays_moving_at_default": 16,
+   "none_identical": 596,
+   "none_total": 596
+  },
+  "fit_hf_polynomials": {
+   "fixtures": [
+    "fit_hf_polynomials[asph]",
+    "fit_hf_polynomials[sph]"
+   ],
+   "wayback_identical": 590,
+   "wayback_total": 590,
+   "arrays_moving_at_default": 8,
+   "none_identical": 590,
+   "none_total": 590
+  },
+  "opd_fan_data": {
+   "fixtures": [
+    "opd_fan_data[asph]",
+    "opd_fan_data[mir]",
+    "opd_fan_data[sph]"
+   ],
+   "wayback_identical": 12,
+   "wayback_total": 12,
+   "arrays_moving_at_default": 6,
+   "none_identical": 12,
+   "none_total": 12
+  },
+  "opd_fan_data_world": {
+   "fixtures": [
+    "opd_fan_data_world[asph]",
+    "opd_fan_data_world[mir]",
+    "opd_fan_data_world[sph]"
+   ],
+   "wayback_identical": 12,
+   "wayback_total": 12,
+   "arrays_moving_at_default": 6,
+   "none_identical": 12,
+   "none_total": 12
+  },
+  "paraxial_focus_world": {
+   "fixtures": [
+    "paraxial_focus_world[asph]",
+    "paraxial_focus_world[sph]"
+   ],
+   "wayback_identical": 4,
+   "wayback_total": 4,
+   "arrays_moving_at_default": 1,
+   "none_identical": 4,
+   "none_total": 4
+  },
+  "plot_lens_layout": {
+   "fixtures": [
+    "plot_lens_layout[asph]",
+    "plot_lens_layout[sph]"
+   ],
+   "wayback_identical": 35,
+   "wayback_total": 35,
+   "arrays_moving_at_default": 14,
+   "none_identical": 35,
+   "none_total": 35
+  },
+  "ray_fan_data": {
+   "fixtures": [
+    "ray_fan_data[asph]",
+    "ray_fan_data[mir]",
+    "ray_fan_data[sph]"
+   ],
+   "wayback_identical": 12,
+   "wayback_total": 12,
+   "arrays_moving_at_default": 4,
+   "none_identical": 12,
+   "none_total": 12
+  },
+  "ray_fan_data_world": {
+   "fixtures": [
+    "ray_fan_data_world[asph]",
+    "ray_fan_data_world[mir]",
+    "ray_fan_data_world[sph]"
+   ],
+   "wayback_identical": 12,
+   "wayback_total": 12,
+   "arrays_moving_at_default": 4,
+   "none_identical": 12,
+   "none_total": 12
+  },
+  "ray_transfer_jacobian": {
+   "fixtures": [
+    "ray_transfer_jacobian[asph]",
+    "ray_transfer_jacobian[sph]"
+   ],
+   "wayback_identical": 14,
+   "wayback_total": 14,
+   "arrays_moving_at_default": 10,
+   "none_identical": 14,
+   "none_total": 14
+  },
+  "raytrace_system": {
+   "fixtures": [
+    "raytrace_system[asph]",
+    "raytrace_system[sph]"
+   ],
+   "wayback_identical": 81,
+   "wayback_total": 81,
+   "arrays_moving_at_default": 51,
+   "none_identical": 81,
+   "none_total": 81
+  },
+  "through_focus_rms": {
+   "fixtures": [
+    "through_focus_rms[asph]",
+    "through_focus_rms[sph]"
+   ],
+   "wayback_identical": 6,
+   "wayback_total": 6,
+   "arrays_moving_at_default": 2,
+   "none_identical": 6,
+   "none_total": 6
+  },
+  "trace_prescription": {
+   "fixtures": [
+    "trace_prescription[asph]",
+    "trace_prescription[mir]",
+    "trace_prescription[sph]"
+   ],
+   "wayback_identical": 90,
+   "wayback_total": 90,
+   "arrays_moving_at_default": 53,
+   "none_identical": 90,
+   "none_total": 90
+  }
+ },
+ "per_case_default_moved": {
+  "apply_real_lens_maslov[asph]": 1,
+  "apply_real_lens_maslov[sph]": 1,
+  "apply_real_lens_traced[asph]": 1,
+  "apply_real_lens_traced[sph]": 1,
+  "caustic_diagnostic[asph]": 0,
+  "caustic_diagnostic[sph]": 1,
+  "eval_image_plane_wfe[asph]": 2,
+  "eval_image_plane_wfe[sph]": 2,
+  "fit_canonical_polynomials[asph]": 10,
+  "fit_canonical_polynomials[sph]": 6,
+  "fit_hf_polynomials[asph]": 5,
+  "fit_hf_polynomials[sph]": 3,
+  "opd_fan_data[asph]": 2,
+  "opd_fan_data[mir]": 2,
+  "opd_fan_data[sph]": 2,
+  "opd_fan_data_world[asph]": 2,
+  "opd_fan_data_world[mir]": 2,
+  "opd_fan_data_world[sph]": 2,
+  "paraxial_focus_world[asph]": 0,
+  "paraxial_focus_world[sph]": 1,
+  "plot_lens_layout[asph]": 6,
+  "plot_lens_layout[sph]": 8,
+  "ray_fan_data[asph]": 0,
+  "ray_fan_data[mir]": 2,
+  "ray_fan_data[sph]": 2,
+  "ray_fan_data_world[asph]": 0,
+  "ray_fan_data_world[mir]": 2,
+  "ray_fan_data_world[sph]": 2,
+  "ray_transfer_jacobian[asph]": 4,
+  "ray_transfer_jacobian[sph]": 6,
+  "raytrace_system[asph]": 22,
+  "raytrace_system[sph]": 29,
+  "through_focus_rms[asph]": 1,
+  "through_focus_rms[sph]": 1,
+  "trace_prescription[asph]": 13,
+  "trace_prescription[mir]": 17,
+  "trace_prescription[sph]": 23
+ },
+ "roots": {
+  "pre": "C:\\tmp\\lum_vc2b_pre49",
+  "post": "C:\\tmp\\lum_vc2b"
+ },
+ "python": "3.14.6",
+ "numpy": "2.4.4"
+}

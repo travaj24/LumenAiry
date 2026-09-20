@@ -1,0 +1,413 @@
+{
+ "meta": {
+  "file": "C:\\tmp/lum_c2b\\lumenairy\\__init__.py",
+  "lumenairy": "5.48.1",
+  "n_rays": 4096,
+  "numpy": "2.4.4",
+  "python": "3.14.6"
+ },
+ "per_prescription": {
+  "asphere3_control": {
+   "by_ufunc_renorm_delta": {
+    "add.__call__": [
+     -2,
+     -8192
+    ],
+    "divide.__call__": [
+     6,
+     24576
+    ],
+    "maximum.__call__": [
+     2,
+     8192
+    ],
+    "sqrt.__call__": [
+     -1,
+     -4096
+    ],
+    "square.__call__": [
+     -3,
+     -12288
+    ]
+   },
+   "n_surfaces": 3,
+   "normal": {
+    "elements_analytic": 4300800,
+    "elements_generic": 4300800,
+    "elements_saved": 0,
+    "elements_saved_fraction": 0.0,
+    "ops_analytic": 1050,
+    "ops_generic": 1050,
+    "ops_saved": 0,
+    "predicted_speedup": 1.0
+   },
+   "renorm": {
+    "elements_exit": 4300800,
+    "elements_saved": 8192,
+    "elements_saved_fraction": 0.0019011406844106464,
+    "elements_surface": 4308992,
+    "ops_exit": 1050,
+    "ops_saved": 2,
+    "ops_surface": 1052,
+    "predicted_speedup": 1.0019047619047619
+   }
+  },
+  "conic3_control": {
+   "by_ufunc_renorm_delta": {
+    "add.__call__": [
+     -2,
+     -8192
+    ],
+    "divide.__call__": [
+     6,
+     24576
+    ],
+    "maximum.__call__": [
+     2,
+     8192
+    ],
+    "sqrt.__call__": [
+     -1,
+     -4096
+    ],
+    "square.__call__": [
+     -3,
+     -12288
+    ]
+   },
+   "n_surfaces": 3,
+   "normal": {
+    "elements_analytic": 2895872,
+    "elements_generic": 2895872,
+    "elements_saved": 0,
+    "elements_saved_fraction": 0.0,
+    "ops_analytic": 707,
+    "ops_generic": 707,
+    "ops_saved": 0,
+    "predicted_speedup": 1.0
+   },
+   "renorm": {
+    "elements_exit": 2895872,
+    "elements_saved": 8192,
+    "elements_saved_fraction": 0.0028208744710860366,
+    "elements_surface": 2904064,
+    "ops_exit": 707,
+    "ops_saved": 2,
+    "ops_surface": 709,
+    "predicted_speedup": 1.002828854314003
+   }
+  },
+  "doublet3": {
+   "by_ufunc_renorm_delta": {
+    "add.__call__": [
+     -2,
+     -8192
+    ],
+    "divide.__call__": [
+     6,
+     24576
+    ],
+    "maximum.__call__": [
+     2,
+     8192
+    ],
+    "sqrt.__call__": [
+     -1,
+     -4096
+    ],
+    "square.__call__": [
+     -3,
+     -12288
+    ]
+   },
+   "n_surfaces": 3,
+   "normal": {
+    "elements_analytic": 1654784,
+    "elements_generic": 1925120,
+    "elements_saved": 270336,
+    "elements_saved_fraction": 0.14042553191489363,
+    "ops_analytic": 404,
+    "ops_generic": 470,
+    "ops_saved": 66,
+    "predicted_speedup": 1.1633663366336633
+   },
+   "renorm": {
+    "elements_exit": 1654784,
+    "elements_saved": 8192,
+    "elements_saved_fraction": 0.0049261083743842365,
+    "elements_surface": 1662976,
+    "ops_exit": 404,
+    "ops_saved": 2,
+    "ops_surface": 406,
+    "predicted_speedup": 1.004950495049505
+   }
+  },
+  "ladder13": {
+   "by_ufunc_renorm_delta": {
+    "add.__call__": [
+     -2,
+     -8192
+    ],
+    "divide.__call__": [
+     36,
+     147456
+    ],
+    "maximum.__call__": [
+     12,
+     49152
+    ],
+    "sqrt.__call__": [
+     -1,
+     -4096
+    ],
+    "square.__call__": [
+     -3,
+     -12288
+    ]
+   },
+   "n_surfaces": 13,
+   "normal": {
+    "elements_analytic": 7266304,
+    "elements_generic": 8437760,
+    "elements_saved": 1171456,
+    "elements_saved_fraction": 0.13883495145631067,
+    "ops_analytic": 1774,
+    "ops_generic": 2060,
+    "ops_saved": 286,
+    "predicted_speedup": 1.161217587373168
+   },
+   "renorm": {
+    "elements_exit": 7266304,
+    "elements_saved": 172032,
+    "elements_saved_fraction": 0.023127753303964757,
+    "elements_surface": 7438336,
+    "ops_exit": 1774,
+    "ops_saved": 42,
+    "ops_surface": 1816,
+    "predicted_speedup": 1.0236753100338218
+   }
+  },
+  "stack5": {
+   "by_ufunc_renorm_delta": {
+    "add.__call__": [
+     -2,
+     -8192
+    ],
+    "divide.__call__": [
+     12,
+     49152
+    ],
+    "maximum.__call__": [
+     4,
+     16384
+    ],
+    "sqrt.__call__": [
+     -1,
+     -4096
+    ],
+    "square.__call__": [
+     -3,
+     -12288
+    ]
+   },
+   "n_surfaces": 5,
+   "normal": {
+    "elements_analytic": 2777088,
+    "elements_generic": 3227648,
+    "elements_saved": 450560,
+    "elements_saved_fraction": 0.13959390862944163,
+    "ops_analytic": 678,
+    "ops_generic": 788,
+    "ops_saved": 110,
+    "predicted_speedup": 1.1622418879056047
+   },
+   "renorm": {
+    "elements_exit": 2777088,
+    "elements_saved": 40960,
+    "elements_saved_fraction": 0.014534883720930232,
+    "elements_surface": 2818048,
+    "ops_exit": 678,
+    "ops_saved": 10,
+    "ops_surface": 688,
+    "predicted_speedup": 1.0147492625368733
+   }
+  },
+  "stack7": {
+   "by_ufunc_renorm_delta": {
+    "add.__call__": [
+     -2,
+     -8192
+    ],
+    "divide.__call__": [
+     18,
+     73728
+    ],
+    "maximum.__call__": [
+     6,
+     24576
+    ],
+    "sqrt.__call__": [
+     -1,
+     -4096
+    ],
+    "square.__call__": [
+     -3,
+     -12288
+    ]
+   },
+   "n_surfaces": 7,
+   "normal": {
+    "elements_analytic": 3899392,
+    "elements_generic": 4530176,
+    "elements_saved": 630784,
+    "elements_saved_fraction": 0.13924050632911392,
+    "ops_analytic": 952,
+    "ops_generic": 1106,
+    "ops_saved": 154,
+    "predicted_speedup": 1.161764705882353
+   },
+   "renorm": {
+    "elements_exit": 3899392,
+    "elements_saved": 73728,
+    "elements_saved_fraction": 0.018556701030927835,
+    "elements_surface": 3973120,
+    "ops_exit": 952,
+    "ops_saved": 18,
+    "ops_surface": 970,
+    "predicted_speedup": 1.01890756302521
+   }
+  },
+  "stack9": {
+   "by_ufunc_renorm_delta": {
+    "add.__call__": [
+     -2,
+     -8192
+    ],
+    "divide.__call__": [
+     24,
+     98304
+    ],
+    "maximum.__call__": [
+     8,
+     32768
+    ],
+    "sqrt.__call__": [
+     -1,
+     -4096
+    ],
+    "square.__call__": [
+     -3,
+     -12288
+    ]
+   },
+   "n_surfaces": 9,
+   "normal": {
+    "elements_analytic": 5021696,
+    "elements_generic": 5832704,
+    "elements_saved": 811008,
+    "elements_saved_fraction": 0.13904494382022473,
+    "ops_analytic": 1226,
+    "ops_generic": 1424,
+    "ops_saved": 198,
+    "predicted_speedup": 1.1615008156606852
+   },
+   "renorm": {
+    "elements_exit": 5021696,
+    "elements_saved": 106496,
+    "elements_saved_fraction": 0.020766773162939296,
+    "elements_surface": 5128192,
+    "ops_exit": 1226,
+    "ops_saved": 26,
+    "ops_surface": 1252,
+    "predicted_speedup": 1.0212071778140293
+   }
+  },
+  "two_mirror": {
+   "by_ufunc_renorm_delta": {
+    "add.__call__": [
+     -2,
+     -8192
+    ],
+    "divide.__call__": [
+     3,
+     12288
+    ],
+    "maximum.__call__": [
+     1,
+     4096
+    ],
+    "sqrt.__call__": [
+     -1,
+     -4096
+    ],
+    "square.__call__": [
+     -3,
+     -12288
+    ]
+   },
+   "n_surfaces": 2,
+   "normal": {
+    "elements_analytic": 913408,
+    "elements_generic": 1093632,
+    "elements_saved": 180224,
+    "elements_saved_fraction": 0.1647940074906367,
+    "ops_analytic": 223,
+    "ops_generic": 267,
+    "ops_saved": 44,
+    "predicted_speedup": 1.1973094170403586
+   },
+   "renorm": {
+    "elements_exit": 913408,
+    "elements_saved": -8192,
+    "elements_saved_fraction": -0.00904977375565611,
+    "elements_surface": 905216,
+    "ops_exit": 223,
+    "ops_saved": -2,
+    "ops_surface": 221,
+    "predicted_speedup": 0.9910313901345291
+   }
+  }
+ },
+ "summary": {
+  "controls": [
+   {
+    "name": "conic3_control",
+    "normal": 1.0,
+    "renorm": 1.002828854314003
+   },
+   {
+    "name": "asphere3_control",
+    "normal": 1.0,
+    "renorm": 1.0019047619047619
+   }
+  ],
+  "normal_predicted_speedup": {
+   "asphere3_control": 1.0,
+   "conic3_control": 1.0,
+   "doublet3": 1.1633663366336633,
+   "ladder13": 1.161217587373168,
+   "stack5": 1.1622418879056047,
+   "stack7": 1.161764705882353,
+   "stack9": 1.1615008156606852,
+   "two_mirror": 1.1973094170403586
+  },
+  "normal_range": [
+   1.161217587373168,
+   1.1973094170403586
+  ],
+  "renorm_predicted_speedup": {
+   "asphere3_control": 1.0019047619047619,
+   "conic3_control": 1.002828854314003,
+   "doublet3": 1.004950495049505,
+   "ladder13": 1.0236753100338218,
+   "stack5": 1.0147492625368733,
+   "stack7": 1.01890756302521,
+   "stack9": 1.0212071778140293,
+   "two_mirror": 0.9910313901345291
+  },
+  "renorm_range": [
+   0.9910313901345291,
+   1.0236753100338218
+  ]
+ }
+}
