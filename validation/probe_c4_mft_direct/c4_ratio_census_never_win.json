@@ -1,0 +1,321 @@
+{
+ "by_test": {
+  "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_a_faithful_window_is_untouched_by_either_fill": {
+   "direct_shapes": [],
+   "min_ratio": 0.0625,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_replica_fill_reaches_the_readout_through_the_chain": {
+   "direct_shapes": [],
+   "min_ratio": 0.5,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_chain_publishes_the_faithful_window_size_per_stage": {
+   "direct_shapes": [],
+   "min_ratio": 0.5,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_core_s_replica_enters_the_window_at_exactly_two_periods": {
+   "direct_shapes": [],
+   "min_ratio": 0.46875,
+   "n": 18,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_knob_keeps_the_readouts_input_dtype": {
+   "direct_shapes": [],
+   "min_ratio": 0.0625,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_refusal_names_the_knob_and_no_longer_promises_a_safe_peak": {
+   "direct_shapes": [],
+   "min_ratio": 0.03125,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_shipped_request_scores_an_image_of_the_core": {
+   "direct_shapes": [],
+   "min_ratio": 0.5,
+   "n": 20,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_two_fills_differ_only_outside_one_period": {
+   "direct_shapes": [],
+   "min_ratio": 0.03125,
+   "n": 6,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_unclipped_cell_reproduces_the_analytic_gaussian_focus": {
+   "direct_shapes": [],
+   "min_ratio": 0.5,
+   "n": 20,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestKellyGuard::test_a_sampled_configuration_is_silent_and_right": {
+   "direct_shapes": [],
+   "min_ratio": 0.125,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestKellyGuard::test_an_unsampled_configuration_fires_and_is_wrong[1024-1e-05]": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestKellyGuard::test_an_unsampled_configuration_fires_and_is_wrong[256-4e-05]": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestKellyGuard::test_an_unsampled_configuration_fires_and_is_wrong[512-2e-05]": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestKellyGuard::test_the_conditions_are_ratios_against_the_nyquist_rate": {
+   "direct_shapes": [],
+   "min_ratio": 0.0625,
+   "n": 6,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestKellyGuard::test_the_period_is_the_input_grid_s_and_the_replica_guard_sees_it": {
+   "direct_shapes": [],
+   "min_ratio": 0.015625,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestKellyGuard::test_the_support_radii_are_measured_not_geometric": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestReadoutPeriodDecoupling::test_replica_fill_is_inert_on_a_window_inside_one_period": {
+   "direct_shapes": [],
+   "min_ratio": 0.0625,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestReadoutPeriodDecoupling::test_the_period_follows_the_input_grid_and_the_leg_only": {
+   "direct_shapes": [],
+   "min_ratio": 0.015625,
+   "n": 8,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_audit_w9_dispatch2.py::test_the_routed_member_beats_the_old_one_against_an_exact_oracle[128-0.9516]": {
+   "direct_shapes": [],
+   "min_ratio": 0.00390625,
+   "n": 6,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_audit_w9_dispatch2.py::test_the_routed_member_beats_the_old_one_against_an_exact_oracle[256-0.8185]": {
+   "direct_shapes": [],
+   "min_ratio": 0.00390625,
+   "n": 6,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_audit_w9_dispatch2.py::test_the_routed_member_beats_the_old_one_against_an_exact_oracle[512-0.4111]": {
+   "direct_shapes": [],
+   "min_ratio": 0.001953125,
+   "n": 6,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_d2_chain_multi.py::test_a_clipping_readout_window_is_reported": {
+   "direct_shapes": [],
+   "min_ratio": 0.015625,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_d2_chain_multi.py::test_auto_tile_equals_the_same_tile_asked_for_explicitly": {
+   "direct_shapes": [],
+   "min_ratio": 0.015625,
+   "n": 12,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_d2_chain_multi.py::test_auto_window_is_independent_of_congruence_order": {
+   "direct_shapes": [],
+   "min_ratio": 0.015625,
+   "n": 16,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_d2_chain_multi.py::test_coherent_recombination_makes_the_analytic_fringe": {
+   "direct_shapes": [],
+   "min_ratio": 0.015625,
+   "n": 16,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_d2_chain_multi.py::test_default_refuses_the_periodic_replica_regime": {
+   "direct_shapes": [],
+   "min_ratio": 0.015625,
+   "n": 8,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_d2_chain_multi.py::test_k1_keeps_the_requested_field_of_view": {
+   "direct_shapes": [],
+   "min_ratio": 2.0,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_d2_chain_multi.py::test_k1_reduces_to_the_single_congruence_chain": {
+   "direct_shapes": [],
+   "min_ratio": 0.5,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_d2_chain_multi.py::test_k2_full_grid_equals_hand_summed_independent_runs": {
+   "direct_shapes": [],
+   "min_ratio": 0.0078125,
+   "n": 18,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_d2_chain_multi.py::test_k2_tiled_equals_hand_placed_independent_runs": {
+   "direct_shapes": [],
+   "min_ratio": 0.25,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_d2_chain_multi.py::test_k4_tiled_equals_hand_placed_independent_runs": {
+   "direct_shapes": [],
+   "min_ratio": 0.25,
+   "n": 8,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_d2_chain_multi.py::test_k_is_not_capped_at_thirty_two": {
+   "direct_shapes": [],
+   "min_ratio": 0.25,
+   "n": 80,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_d2_chain_multi.py::test_memory_budget_is_honoured": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_d2_chain_multi.py::test_off_grid_congruence_warns_and_reports_the_clip": {
+   "direct_shapes": [],
+   "min_ratio": 0.0625,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_d2_chain_multi.py::test_per_emitter_array_images_onto_the_exact_ray_trace": {
+   "direct_shapes": [],
+   "min_ratio": 1.0,
+   "n": 8,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_d2_chain_multi.py::test_result_grid_convention_is_the_readout_convention": {
+   "direct_shapes": [],
+   "min_ratio": 2.0,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_d2_chain_multi.py::test_throughput_is_window_independent_but_power_out_is_not": {
+   "direct_shapes": [],
+   "min_ratio": 0.015625,
+   "n": 8,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_d2_chain_multi.py::test_tiles_avoid_the_periodic_replica_regime": {
+   "direct_shapes": [],
+   "min_ratio": 2.0,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_d2_chain_multi.py::test_tilted_congruence_takes_the_exact_final_leg": {
+   "direct_shapes": [],
+   "min_ratio": 0.25,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_tight_focus_readout.py::test_an_oversized_readout_window_is_refused_by_default": {
+   "direct_shapes": [],
+   "min_ratio": 0.01953125,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_tight_focus_readout.py::test_focal_accuracy_does_not_depend_on_the_propagation_grid[1024]": {
+   "direct_shapes": [],
+   "min_ratio": 0.3203125,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_tight_focus_readout.py::test_focal_accuracy_does_not_depend_on_the_propagation_grid[2048]": {
+   "direct_shapes": [],
+   "min_ratio": 0.16015625,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_tight_focus_readout.py::test_focal_accuracy_does_not_depend_on_the_propagation_grid[4096]": {
+   "direct_shapes": [],
+   "min_ratio": 0.080078125,
+   "n": 2,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_tight_focus_readout.py::test_longitudinal_placement_dominates_the_error_budget": {
+   "direct_shapes": [],
+   "min_ratio": 0.0712890625,
+   "n": 12,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_tight_focus_readout.py::test_readout_accuracy_is_governed_by_the_bluestein_leg_length": {
+   "direct_shapes": [],
+   "min_ratio": 0.087890625,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_tight_focus_readout.py::test_the_core_waist_is_robust_to_the_readout_pitch": {
+   "direct_shapes": [],
+   "min_ratio": 0.01953125,
+   "n": 6,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_tight_focus_readout.py::test_the_default_leg_beats_both_constants_at_a_truncated_pupil": {
+   "direct_shapes": [],
+   "min_ratio": 0.1171875,
+   "n": 6,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_tight_focus_readout.py::test_the_exact_readout_guards_the_same_way_on_its_own_period": {
+   "direct_shapes": [],
+   "min_ratio": 2.0,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_tight_focus_readout.py::test_the_refused_window_really_would_have_been_corrupt": {
+   "direct_shapes": [],
+   "min_ratio": 0.16015625,
+   "n": 4,
+   "n_direct": 0
+  },
+  "tests/unit/test_niche_tight_focus_readout.py::test_three_micron_spot_is_recovered_from_a_tractable_grid": {
+   "direct_shapes": [],
+   "min_ratio": 0.16015625,
+   "n": 2,
+   "n_direct": 0
+  }
+ },
+ "summary": {
+  "calls_answering_direct": 0,
+  "distinct_ratios": 22,
+  "distinct_shapes": 34,
+  "min_ratio_seen": 0.001953125,
+  "ratios_below_1_over_16": [
+   0.001953125,
+   0.00390625,
+   0.0078125,
+   0.015625,
+   0.01953125,
+   0.03125,
+   0.0625
+  ],
+  "tests_with_a_direct_call": [],
+  "total_calls": 380
+ }
+}
