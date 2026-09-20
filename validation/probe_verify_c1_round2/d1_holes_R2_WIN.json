@@ -1,0 +1,409 @@
+{
+ "cache": {
+  "bool_True": {
+   "digest": "be29d4edc8ba78fc",
+   "routes": {
+    "jax_eager": [
+     false,
+     "",
+     "be29d4edc8ba78fc"
+    ],
+    "jax_jit": [
+     false,
+     "",
+     "be29d4edc8ba78fc"
+    ],
+    "numpy_chain": [
+     false,
+     "",
+     "be29d4edc8ba78fc"
+    ]
+   },
+   "routes_identical": true,
+   "signature": "('aperture_circular', 4.55e-05, 0.0, 0.0, None, 1)",
+   "value": "True"
+  },
+  "float_1p0": {
+   "digest": "be29d4edc8ba78fc",
+   "routes": {
+    "jax_eager": [
+     false,
+     "",
+     "be29d4edc8ba78fc"
+    ],
+    "jax_jit": [
+     false,
+     "",
+     "be29d4edc8ba78fc"
+    ],
+    "numpy_chain": [
+     false,
+     "",
+     "be29d4edc8ba78fc"
+    ]
+   },
+   "routes_identical": true,
+   "signature": "('aperture_circular', 4.55e-05, 0.0, 0.0, None, 1)",
+   "value": "1.0"
+  },
+  "float_4p0": {
+   "digest": "f5b52cf0842fd9bd",
+   "routes": {
+    "jax_eager": [
+     false,
+     "",
+     "f5b52cf0842fd9bd"
+    ],
+    "jax_jit": [
+     false,
+     "",
+     "f5b52cf0842fd9bd"
+    ],
+    "numpy_chain": [
+     false,
+     "",
+     "f5b52cf0842fd9bd"
+    ]
+   },
+   "routes_identical": true,
+   "signature": "('aperture_circular', 4.55e-05, 0.0, 0.0, None, 4)",
+   "value": "4.0"
+  },
+  "int_1": {
+   "digest": "be29d4edc8ba78fc",
+   "routes": {
+    "jax_eager": [
+     false,
+     "",
+     "be29d4edc8ba78fc"
+    ],
+    "jax_jit": [
+     false,
+     "",
+     "be29d4edc8ba78fc"
+    ],
+    "numpy_chain": [
+     false,
+     "",
+     "be29d4edc8ba78fc"
+    ]
+   },
+   "routes_identical": true,
+   "signature": "('aperture_circular', 4.55e-05, 0.0, 0.0, None, 1)",
+   "value": "1"
+  },
+  "int_4": {
+   "digest": "f5b52cf0842fd9bd",
+   "routes": {
+    "jax_eager": [
+     false,
+     "",
+     "f5b52cf0842fd9bd"
+    ],
+    "jax_jit": [
+     false,
+     "",
+     "f5b52cf0842fd9bd"
+    ],
+    "numpy_chain": [
+     false,
+     "",
+     "f5b52cf0842fd9bd"
+    ]
+   },
+   "routes_identical": true,
+   "signature": "('aperture_circular', 4.55e-05, 0.0, 0.0, None, 4)",
+   "value": "4"
+  },
+  "np_bool_True": {
+   "digest": "be29d4edc8ba78fc",
+   "routes": {
+    "jax_eager": [
+     false,
+     "",
+     "be29d4edc8ba78fc"
+    ],
+    "jax_jit": [
+     false,
+     "",
+     "be29d4edc8ba78fc"
+    ],
+    "numpy_chain": [
+     false,
+     "",
+     "be29d4edc8ba78fc"
+    ]
+   },
+   "routes_identical": true,
+   "signature": "('aperture_circular', 4.55e-05, 0.0, 0.0, None, 1)",
+   "value": "np.True_"
+  },
+  "np_int64_4": {
+   "digest": "f5b52cf0842fd9bd",
+   "routes": {
+    "jax_eager": [
+     false,
+     "",
+     "f5b52cf0842fd9bd"
+    ],
+    "jax_jit": [
+     false,
+     "",
+     "f5b52cf0842fd9bd"
+    ],
+    "numpy_chain": [
+     false,
+     "",
+     "f5b52cf0842fd9bd"
+    ]
+   },
+   "routes_identical": true,
+   "signature": "('aperture_circular', 4.55e-05, 0.0, 0.0, None, 4)",
+   "value": "np.int64(4)"
+  }
+ },
+ "cache_verdict": {
+  "group_four_is_one_answer": true,
+  "group_one_is_one_answer": true,
+  "groups_differ": true
+ },
+ "holes": {
+  "diameter_none_edge_soft": {
+   "elem": "{'type': 'aperture', 'shape': 'circular', 'params': {'diameter': None}, 'edge': 'soft'}",
+   "routes": {
+    "jax_eager": [
+     false,
+     "",
+     "2450777df7f6127a"
+    ],
+    "jax_jit": [
+     false,
+     "",
+     "2450777df7f6127a"
+    ],
+    "numpy_chain": [
+     true,
+     "ValueError: apply_aperture: edge must be 'hard' (binary pixel mask) or 'gray' (supersampled open-area fraction on boundary pixels); got 'soft'.",
+     null
+    ]
+   },
+   "routes_identical": false,
+   "verdicts": {
+    "jax_eager": false,
+    "jax_jit": false,
+    "numpy_chain": true
+   }
+  },
+  "empty_params_edge_soft": {
+   "elem": "{'type': 'aperture', 'shape': 'circular', 'params': {}, 'edge': 'soft'}",
+   "routes": {
+    "jax_eager": [
+     false,
+     "",
+     "2450777df7f6127a"
+    ],
+    "jax_jit": [
+     false,
+     "",
+     "2450777df7f6127a"
+    ],
+    "numpy_chain": [
+     true,
+     "ValueError: apply_aperture: edge must be 'hard' (binary pixel mask) or 'gray' (supersampled open-area fraction on boundary pixels); got 'soft'.",
+     null
+    ]
+   },
+   "routes_identical": false,
+   "verdicts": {
+    "jax_eager": false,
+    "jax_jit": false,
+    "numpy_chain": true
+   }
+  },
+  "no_params_edge_hard": {
+   "elem": "{'type': 'aperture', 'shape': 'circular', 'edge': 'hard'}",
+   "routes": {
+    "jax_eager": [
+     false,
+     "",
+     "2450777df7f6127a"
+    ],
+    "jax_jit": [
+     false,
+     "",
+     "2450777df7f6127a"
+    ],
+    "numpy_chain": [
+     false,
+     "",
+     "2450777df7f6127a"
+    ]
+   },
+   "routes_identical": true,
+   "verdicts": {
+    "jax_eager": false,
+    "jax_jit": false,
+    "numpy_chain": false
+   }
+  },
+  "no_params_edge_none": {
+   "elem": "{'type': 'aperture', 'shape': 'circular', 'edge': None}",
+   "routes": {
+    "jax_eager": [
+     false,
+     "",
+     "2450777df7f6127a"
+    ],
+    "jax_jit": [
+     false,
+     "",
+     "2450777df7f6127a"
+    ],
+    "numpy_chain": [
+     true,
+     "ValueError: apply_aperture: edge must be 'hard' (binary pixel mask) or 'gray' (supersampled open-area fraction on boundary pixels); got None.",
+     null
+    ]
+   },
+   "routes_identical": false,
+   "verdicts": {
+    "jax_eager": false,
+    "jax_jit": false,
+    "numpy_chain": true
+   }
+  },
+  "no_params_edge_samples_two_point_five": {
+   "elem": "{'type': 'aperture', 'shape': 'circular', 'edge_samples': 2.5}",
+   "routes": {
+    "jax_eager": [
+     false,
+     "",
+     "2450777df7f6127a"
+    ],
+    "jax_jit": [
+     false,
+     "",
+     "2450777df7f6127a"
+    ],
+    "numpy_chain": [
+     true,
+     "ValueError: apply_aperture: edge_samples must be a positive integer (sub-samples per axis); got 2.5.",
+     null
+    ]
+   },
+   "routes_identical": false,
+   "verdicts": {
+    "jax_eager": false,
+    "jax_jit": false,
+    "numpy_chain": true
+   }
+  },
+  "no_params_edge_samples_zero": {
+   "elem": "{'type': 'aperture', 'shape': 'circular', 'edge_samples': 0}",
+   "routes": {
+    "jax_eager": [
+     false,
+     "",
+     "2450777df7f6127a"
+    ],
+    "jax_jit": [
+     false,
+     "",
+     "2450777df7f6127a"
+    ],
+    "numpy_chain": [
+     true,
+     "ValueError: apply_aperture: edge_samples must be a positive integer (sub-samples per axis); got 0.",
+     null
+    ]
+   },
+   "routes_identical": false,
+   "verdicts": {
+    "jax_eager": false,
+    "jax_jit": false,
+    "numpy_chain": true
+   }
+  },
+  "no_params_edge_soft": {
+   "elem": "{'type': 'aperture', 'shape': 'circular', 'edge': 'soft'}",
+   "routes": {
+    "jax_eager": [
+     false,
+     "",
+     "2450777df7f6127a"
+    ],
+    "jax_jit": [
+     false,
+     "",
+     "2450777df7f6127a"
+    ],
+    "numpy_chain": [
+     true,
+     "ValueError: apply_aperture: edge must be 'hard' (binary pixel mask) or 'gray' (supersampled open-area fraction on boundary pixels); got 'soft'.",
+     null
+    ]
+   },
+   "routes_identical": false,
+   "verdicts": {
+    "jax_eager": false,
+    "jax_jit": false,
+    "numpy_chain": true
+   }
+  },
+  "rect_no_widths_edge_soft": {
+   "elem": "{'type': 'aperture', 'shape': 'rectangular', 'params': {}, 'edge': 'soft'}",
+   "routes": {
+    "jax_eager": [
+     false,
+     "",
+     "2450777df7f6127a"
+    ],
+    "jax_jit": [
+     false,
+     "",
+     "2450777df7f6127a"
+    ],
+    "numpy_chain": [
+     true,
+     "ValueError: apply_aperture: edge must be 'hard' (binary pixel mask) or 'gray' (supersampled open-area fraction on boundary pixels); got 'soft'.",
+     null
+    ]
+   },
+   "routes_identical": false,
+   "verdicts": {
+    "jax_eager": false,
+    "jax_jit": false,
+    "numpy_chain": true
+   }
+  },
+  "resolvable_edge_soft": {
+   "elem": "{'type': 'aperture', 'shape': 'circular', 'params': {'diameter': 5.3e-05}, 'edge': 'soft'}",
+   "routes": {
+    "jax_eager": [
+     true,
+     "ValueError: apply_aperture: edge must be 'hard' (binary pixel mask) or 'gray' (supersampled open-area fraction on boundary pixels); got 'soft'.",
+     null
+    ],
+    "jax_jit": [
+     true,
+     "ValueError: apply_aperture: edge must be 'hard' (binary pixel mask) or 'gray' (supersampled open-area fraction on boundary pixels); got 'soft'.",
+     null
+    ],
+    "numpy_chain": [
+     true,
+     "ValueError: apply_aperture: edge must be 'hard' (binary pixel mask) or 'gray' (supersampled open-area fraction on boundary pixels); got 'soft'.",
+     null
+    ]
+   },
+   "routes_identical": true,
+   "verdicts": {
+    "jax_eager": true,
+    "jax_jit": true,
+    "numpy_chain": true
+   }
+  }
+ },
+ "lumenairy_file": "C:\\tmp\\lum_vc1b\\lumenairy\\__init__.py",
+ "numpy": "2.4.4",
+ "python": "3.14.6"
+}
