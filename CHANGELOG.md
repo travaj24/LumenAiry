@@ -1715,6 +1715,15 @@ any answer:
 * **The lens-screen convention marker moved with WP-B11c** from the lenses
   facade to the `_lens_kernels` leaf; `test_g08_s4_20_packaging_ui.py` reads it
   from the module that carries it, and the one in-code cross-reference follows.
+* **A CPython mechanism asserted unconditionally.**
+  `test_verify_b13_newton_pool.py::test_a_non_waiting_shutdown_still_blocks_on_a_terminating_executor`
+  asserted that a non-waiting `shutdown` blocks while the manager thread's
+  broken teardown holds the executor's shutdown lock -- true from Python 3.12,
+  where the join runs under that lock, and false on 3.10 and 3.11, where it
+  runs outside it (the second matrix, run 35501791535, read 0.000 s on both).
+  The wrapper now reads whether the lock is held at the join and the decision
+  follows the reading on both arms (held: blocked by most of the hold; not
+  held: returned promptly, and the interpreter must be older than 3.12).
 * **mypy strict:** `NUMEXPR_AVAILABLE` is a LIVE forward through the lenses
   facade (a read lands on the leaf's slot), which the type checker cannot see;
   a `TYPE_CHECKING`-only import binds the name statically and executes never,

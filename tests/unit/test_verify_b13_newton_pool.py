@@ -95,6 +95,17 @@ def test_a_non_waiting_shutdown_still_blocks_on_a_terminating_executor():
 
     The same measurement at hold=20 s read 19.998 s (python 3.14.6, Windows)
     and 20.004 s (python 3.12.3, WSL) on 2026-09-15.
+
+    PREMISE-GATED 2026-09-20 (5.48.0, CI run 35501791535): the mechanism is
+    an interpreter fact.  From 3.12 the manager thread performs its broken
+    teardown's join while HOLDING the executor's ``_shutdown_lock``, which is
+    what a non-waiting ``shutdown`` then blocks on; on 3.10 and 3.11 the join
+    runs outside that lock and ``shutdown`` returned in 0.000 s on both CI
+    shards.  The wrapper now READS whether the lock is held at the join and
+    the decision follows the reading on both arms: held -> blocked by most
+    of the hold; not held -> returned promptly, and the interpreter must be
+    older than 3.12 (a 3.12+ interpreter reading not-held means the layout
+    this module's teardown is built for has changed, and that is a failure).
     """
     import concurrent.futures.process as cfp
     from concurrent.futures import ProcessPoolExecutor
@@ -114,6 +125,9 @@ def test_a_non_waiting_shutdown_still_blocks_on_a_terminating_executor():
 
     def slow(self, broken=False):
         marks.setdefault('entered', time.monotonic())
+        # The premise, measured where it matters: is the executor's shutdown
+        # lock held by this (manager) thread at the join?
+        marks.setdefault('lock_held', bool(self.shutdown_lock.locked()))
         time.sleep(hold)
         marks['left'] = time.monotonic()
         return orig(self, broken=broken)
@@ -139,12 +153,26 @@ def test_a_non_waiting_shutdown_still_blocks_on_a_terminating_executor():
     finally:
         setattr(cfp._ExecutorManagerThread, _join_name, orig)
 
-    assert blocked > 0.5 * hold, (
-        f'shutdown(wait=False, cancel_futures=True) returned in {blocked:.3f} '
-        f's while the manager thread held the executor\'s _shutdown_lock for '
-        f'{hold:.1f} s.  If that is real, the handoff\'s one-line fix WOULD '
-        f'have been enough and this module\'s two-mechanism teardown is '
-        f'over-built -- re-derive it before relaxing anything.')
+    held = marks.get('lock_held')
+    assert held is not None, 'the join wrapper never ran, so the premise was not read'
+    if held:
+        assert blocked > 0.5 * hold, (
+            f'shutdown(wait=False, cancel_futures=True) returned in {blocked:.3f} '
+            f's while the manager thread held the executor\'s _shutdown_lock for '
+            f'{hold:.1f} s.  If that is real, the handoff\'s one-line fix WOULD '
+            f'have been enough and this module\'s two-mechanism teardown is '
+            f'over-built -- re-derive it before relaxing anything.')
+    else:
+        assert blocked < 0.1 * hold, (
+            f"the manager thread did NOT hold _shutdown_lock at its join, yet "
+            f"shutdown(wait=False, cancel_futures=True) blocked for {blocked:.3f} "
+            f"s of a {hold:.1f} s hold -- something other than the lock is "
+            f"blocking it; re-derive the mechanism")
+        assert sys.version_info < (3, 12), (
+            f"python {sys.version.split()[0]} performed the broken teardown's "
+            f"join WITHOUT holding _shutdown_lock; from 3.12 the join is under "
+            f"the lock, which is the layout this module's two-mechanism "
+            f"teardown is built for -- the interpreter changed the internals")
 
 
 def _suicide(_):
