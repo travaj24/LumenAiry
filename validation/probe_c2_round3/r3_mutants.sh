@@ -93,3 +93,7 @@ RUN $T
 
 echo
 echo "=================== done ==================="
+
+# VR2-D5's own mutant (M13, the prior term dropped from the Gauss-Newton
+# Hessian) lives in r3_w6a2_mutant.sh, because it has to be run twice --
+# once under each bar -- against the same mutant tree.

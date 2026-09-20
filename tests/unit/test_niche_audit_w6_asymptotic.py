@@ -864,15 +864,42 @@ def test_w6_a2_v2_star_is_untouched_by_the_verdict_fix():
     n1 = float(np.linalg.norm(predicted))
     assert n1 > 0.0, 'the first Newton step is identically zero'
     step_ratio = float(np.linalg.norm(step2)) / n1
-    assert step_ratio < 1e-4, (
+    # THE BAR WAS 1e-4 AND MISSED ONE OF THE THREE MODES ITS OWN MESSAGE
+    # NAMED (VERIFY-WP-C2 round 2, defect VR2-D5).  The prior term is
+    # ``I / w_p**2`` against ``J^T J / w_s**2`` with ``w_s = 20e-6`` and
+    # ``w_p = 0.02``, so a solver that DROPPED it moves the step by only
+    # 2.5e-05 of itself -- four times UNDER a 1e-4 bar.  Re-measured this
+    # round on both builds
+    # (``validation/probe_c2_round3/r3_w6a2_{win,wsl}.json``), the same
+    # second-step ratio at the shipped root and at five deliberately
+    # unconverged ones:
+    #
+    #     mode                       Windows       WSL
+    #     the shipped v*             1.9355e-07    8.7659e-08
+    #     the prior term dropped     2.5329e-05    2.5698e-05
+    #     a tenth of the step missed 1.0000e-01    1.0000e-01
+    #     half the step              5.0000e-01    5.0000e-01
+    #     no step at all             1.0000e+00    1.0000e+00
+    #     a sign error               2.0000e+00    2.0000e+00
+    #
+    # 1e-5 is the bar that catches ALL SIX and still leaves the shipped
+    # root 51.7x (Windows) / 114.1x (WSL) of headroom.  The gap above it
+    # is 2.5x, set by the dropped-prior mode, whose own cross-build
+    # spread is 1.5 % -- so the bar sits between two measured quantities
+    # and not next to noise.  Bisected on the same fixture, a 1e-5 bar
+    # detects a departure of more than 9.8e-06 (Windows) / 1.03e-05
+    # (WSL) of the first step and no less.
+    assert step_ratio < 1e-5, (
         f'v2* is not a CONVERGED root of the model: a second Newton step '
         f'from it is {step_ratio:.3e} of the first, so the returned point '
         f'is one step from the centre rather than the place the nonlinear '
-        f'system actually sits.  Measured 1.94e-07 (Windows py3.14 / '
-        f'numpy 2.4.4) and 8.77e-08 (WSL py3.12 / numpy 2.4.6) against '
-        f'this 1e-4 bar -- 500x to 1100x of headroom -- while a root that '
-        f'is not converged (a wrong Hessian, a missing prior term, a sign '
-        f'error) gives a ratio of order 1, four decades above it.')
+        f'system actually sits.  Measured 1.9355e-07 (Windows py3.14 / '
+        f'numpy 2.4.4) and 8.7659e-08 (WSL py3.12 / numpy 2.4.6) against '
+        f'this 1e-5 bar -- 51x to 114x of headroom -- while an '
+        f'unconverged root reads 2.53e-05 (the prior term dropped from '
+        f'the Hessian, which a 1e-4 bar would have PASSED), 0.10 (a tenth '
+        f'of the step missed), 0.50 (half the step), 1.00 (no step at '
+        f'all) or 2.00 (a sign error).')
 
 
 # ===========================================================================

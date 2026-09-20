@@ -1,0 +1,13 @@
+M13: one Newton sweep, prior term dropped from the Hessian
+=================== M13 under the SHIPPED 1e-5 bar ===================
+.                                                                        [100%]
+1 passed, 52 deselected in 1.39s
+
+=================== M13 under the RETIRED 1e-4 bar ===================
+Traceback (most recent call last):
+  File "<stdin>", line 5, in <module>
+AssertionError
+.                                                                        [100%]
+1 passed, 52 deselected in 0.97s
+
+=================== done ===================
