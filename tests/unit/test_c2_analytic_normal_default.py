@@ -937,6 +937,14 @@ def test_c2_every_entry_point_that_traces_carries_both_keywords():
     ``_JAX_ONLY_ENTRY_POINTS`` exemption is asserted to be non-empty and to
     be exactly the jax set, so it cannot quietly grow into an escape hatch.
     """
+    # the library names the pair itself; this census must be checking the
+    # same two keywords the tracer documents as its way back, or it is
+    # policing something else.
+    from lumenairy.raytrace.trace import _WAY_BACK_KEYWORDS
+    assert set(_WAY_BACK_KEYWORDS) == set(_C2_WAY_BACK), (
+        f'raytrace.trace._WAY_BACK_KEYWORDS names {_WAY_BACK_KEYWORDS} and '
+        f'this census checks {_C2_WAY_BACK}; they have to be the same pair.')
+
     census = _c2_entry_point_census()
     assert len(census) >= 20, (
         f'the AST census found only {len(census)} exported tracing entry '
