@@ -1,7 +1,7 @@
 <!-- lumenairy-history-doc
 module: lumenairy/propagators/gbd.py
-ast_sha256: 06a02e50ec99920e46a7aff187ae251a699915dbb16341780c5f98b46cd6c650
-token_sha256: 7cabb2b50c4eb0abd541662043839faa545cf802020973b968a8331c1279bf24
+ast_sha256: c5031996bccf79f47bbef874164f3bb9b139c56a5e84e6d4d88b18334e2a8e02
+token_sha256: 0be8a46de3ed4d396b631689fff1180dbbd7f91d43ac88236ccbf83d4ecbe7ac
 pre_relocation_lines: 3845
 recorded_by: WP-A17 SWEEP-4 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
@@ -10,6 +10,7 @@ re_recorded: 2026-09-14 -- Wave-5 item D (CI run 34914295323): DIGEST-SCHEME cha
 re_recorded: 2026-09-14 -- Wave 5 item D (handoff 4.6, the interpreter crash): the dense reconstruction's chunk sizing reads DENSE_MEM_BUDGET_ACCOUNTING.  The shipped 16 B per cell-column under-counts the loop's live working set by 4.5-6.0x (measured 72.0-96.8 B/cell-col by tracemalloc over a 64/128/192/256 ladder; a 512 MB budget peaked at 3073 MB), so mem_budget_mb was not a bound.  The honest constant is added beside it and the switch DEFAULTS TO 'legacy', which is byte-identical: correcting the constant moves the chunk boundary and therefore the summation order.  The flip is a decision reserved for the maintainer.
 re_recorded: 2026-09-15 -- WP-B12b: the per-surface beamlet image leg consumes the shared exit-vertex projection (reference='exit_vertex') and the in-line conic-sag copy is deleted
 re_recorded: 2026-09-19 -- merge of the WP-B12b chain into wave5/audit-leftovers: the shared exit-vertex projection lands beside WP-B14's DENSE_MEM_BUDGET_ACCOUNTING code and item E's D3 scope note in one tree; the GBD branch was cut before WP-B14, so its recorded AST lacked that code (both sides' re_recorded lines kept)
+re_recorded: 2026-09-19 -- VERIFY-WP-B12b D-5/D-4 round 2: the local branch of apply_prescription_persurface_to_beamlets now refuses an immersed exit medium (through the shared fga._require_non_immersed_exit, one tolerance definition) and a mirror-terminated prescription (_require_forward_going_local_exit, with _last_optical_surface); two new module-level helpers and two guard statements at the local branch.  No served prescription changes: shipped fields are byte-identical archive-to-archive.
 -->
 
 # Version history -- `lumenairy/propagators/gbd.py`
