@@ -41,7 +41,7 @@ cost ``O((N + M) \\log (N + M))`` per axis, where ``N = N_in`` and
 transform for typical focal-zoom workflows.  ``O(N^2 M^2)`` is the cost of the
 UNFACTORED four-index sum; the transform is separable, so the dense route
 (:func:`_direct_matrix_2d`) evaluates it as two matrix products at
-``O(M N^2 + M^2 N)``.  Since v5.49.0 the default ``method='auto'`` SELECTS that
+``O(M N^2 + M^2 N)``.  The default ``method='auto'`` now SELECTS that
 dense route wherever it was measured never slower on either build -- both
 output-over-input ratios at or under :data:`_MFT_DIRECT_MAX_RATIO` -- and takes
 the chirp-Z reduction everywhere else; see :func:`_auto_selects_direct`.  The
@@ -280,8 +280,8 @@ _PHASE_BUDGET_MAX = 1e-6 / _EPS64                         # 4.503599627e+09
 #: is read by :func:`_auto_selects_direct`, which takes the four grid sizes and
 #: nothing else.
 #:
-#: DERIVED, 2026-09-20 (WP-C4), and not chosen.  The criterion the 5.49.0
-#: default flip rests on is "the dense route is NEVER SLOWER on EITHER build",
+#: DERIVED, 2026-09-20 (WP-C4), and not chosen.  The criterion the default
+#: flip rests on is "the dense route is NEVER SLOWER on EITHER build",
 #: so the constant is the largest ladder ratio at which that holds at EVERY
 #: shape on BOTH builds.  Fresh ladder, ``N`` in {64,128,256,512,1024,2048} x
 #: ``M`` in {16,32,64,128,256,512,1024} (42 shapes), best of five, cold, the
@@ -321,15 +321,16 @@ _PHASE_BUDGET_MAX = 1e-6 / _EPS64                         # 4.503599627e+09
 #:
 #: THE TWO DOCUMENTED SETTINGS.  :data:`_MFT_DIRECT_ALWAYS` (``float('inf')``)
 #: means ALWAYS: every shape takes the dense route.  :data:`_MFT_DIRECT_NEVER`
-#: (``0.0``) means NEVER: the library goes back to the pre-5.49.0 dispatch
-#: exactly, byte for byte, at every shape -- and so does any value ``<= 0`` or
+#: (``0.0``) means NEVER: the library goes back to the dispatch this keyword
+#: had before this rule -- byte for byte, at every shape -- and so does any
+#: value ``<= 0`` or
 #: ``nan``.  Both are gated by ``tests/unit/test_c4_mft_direct_default.py``.
 _MFT_DIRECT_MAX_RATIO = 1.0 / 32.0
 
 #: The documented "always" and "never" settings of
 #: :data:`_MFT_DIRECT_MAX_RATIO`, named so neither has to be typed as a float.
 #: Assigning ``_MFT_DIRECT_MAX_RATIO = _MFT_DIRECT_NEVER`` is the supported way
-#: back to the pre-5.49.0 dispatch for a whole process; ``method='separable'``
+#: back to the previous dispatch for a whole process; ``method='separable'``
 #: / ``method='bluestein'`` is the way back for one call.
 _MFT_DIRECT_ALWAYS = float('inf')
 _MFT_DIRECT_NEVER = 0.0
@@ -398,7 +399,7 @@ def _warn_phase_budget(alpha_x, alpha_y, Nx_in, Ny_in, N_out_x, N_out_y, *,
     budget over eleven decades, so the threshold is read off the law at the
     accuracy wanted rather than set at the point where the chirp wraps.
 
-    WHAT WP-C4 CHANGED, and why.  Before 5.49.0 the guard sat between the
+    WHAT WP-C4 CHANGED, and why.  Before the shape rule, the guard sat between the
     ``method='direct'`` early return and the chirp-Z arms, so only a chirp-Z
     call could reach it.  With ``'auto'`` now able to choose the dense route
     from the shapes, leaving it there would mean a caller who was being warned
@@ -413,7 +414,7 @@ def _warn_phase_budget(alpha_x, alpha_y, Nx_in, Ny_in, N_out_x, N_out_y, *,
     two-sidedly by ``tests/unit/test_wave5_h2_mft_direct.py::
     test_the_chirp_phase_guard_fires_on_the_chirp_route_and_not_the_dense_one``.
 
-    ``on_dense=False`` reproduces the pre-5.49.0 message BYTE FOR BYTE, which
+    ``on_dense=False`` reproduces the PREVIOUS message BYTE FOR BYTE, which
     is what keeps the byte-identity claim true for the fixtures that warn.
     """
     N_max = max(int(Nx_in), int(Ny_in), int(N_out_x), int(N_out_y))
@@ -507,7 +508,7 @@ def _direct_matrix_2d(
       route at a given budget by a BOUNDED factor and not by decades -- see
       the Notes below and :func:`_bluestein_2d`'s.
 
-    SINCE v5.49.0 THIS IS THE DEFAULT ROUTE AT SMALL OUTPUT GRIDS (WP-C4).
+    THIS IS NOW THE DEFAULT ROUTE AT SMALL OUTPUT GRIDS (WP-C4).
     ``method='auto'`` -- the default on both primitives and on all three public
     MFT entry points -- selects it when both ``N_out / N_in`` ratios sit at or
     under :data:`_MFT_DIRECT_MAX_RATIO`, the largest ladder ratio at which the
@@ -718,7 +719,7 @@ def _bluestein_2d(
     method : {'auto', 'bluestein', 'separable', 'direct'}, default 'auto'
         Which route through the SAME sum to take.
 
-        ``'auto'`` (the default) DECIDES FROM THE SHAPES since v5.49.0: it
+        ``'auto'`` (the default) DECIDES FROM THE SHAPES: it
         takes :func:`_direct_matrix_2d`, the dense matrix-Fourier transform,
         when :func:`_auto_selects_direct` says both ``N_out / N_in`` ratios sit
         at or under :data:`_MFT_DIRECT_MAX_RATIO`, and otherwise reproduces the
@@ -738,7 +739,7 @@ def _bluestein_2d(
 
         The routes agree to round-off, NOT bit for bit, so a shape the rule
         captures MOVES in its last bits.  Setting
-        ``_MFT_DIRECT_MAX_RATIO = _MFT_DIRECT_NEVER`` restores the pre-5.49.0
+        ``_MFT_DIRECT_MAX_RATIO = _MFT_DIRECT_NEVER`` restores the previous
         dispatch for a whole process.  The measured crossover table is in
         ``docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/
         WP-C4_MFT_DIRECT_DEFAULT_REPORT.md``.
@@ -840,7 +841,7 @@ def _bluestein_2d(
             sign=sign, xp=xp, target_cdtype=target_cdtype)
 
     # ----- 0b) which arm 'auto' takes, decided from the SHAPES alone --------
-    # v5.49.0 (WP-C4).  ``'auto'`` takes the dense route where it was measured
+    # WP-C4.  ``'auto'`` takes the dense route where it was measured
     # never slower on EITHER build -- see :func:`_auto_selects_direct` and
     # :data:`_MFT_DIRECT_MAX_RATIO`.  The decision is a pure function of the
     # four grid sizes and that one constant: no clock, no environment, no
@@ -857,7 +858,7 @@ def _bluestein_2d(
     # than set at the point where the chirp wraps incoherently.
     #
     # It runs BEFORE the ``'auto'`` dense return below, and not after, so that
-    # the 5.49.0 default flip cannot take a warning away from a caller who was
+    # the default flip cannot take a warning away from a caller who was
     # getting one: the budget is a property of the CALL, and both routes pay
     # it (round 2 D-1).  ``on_dense`` only changes which route the message's
     # last sentence names -- see :func:`_warn_phase_budget`.
@@ -1044,7 +1045,7 @@ def _bluestein_centred_2d(
         themselves separable (a pre-chirp in ``n``, a post-chirp in ``k`` and
         a constant), so ``separable`` changes only the core primitive.
     method : {'auto', 'bluestein', 'separable', 'direct'}, default 'auto'
-        Same as :func:`_bluestein_2d`, including the v5.49.0 shape rule, with
+        Same as :func:`_bluestein_2d`, including the shape rule, with
         one difference that matters: the dense route does NOT go through the
         pre-chirp / post-chirp / constant decomposition above, because
         :func:`_direct_matrix_2d` takes the index centres themselves and builds
@@ -1094,7 +1095,7 @@ def _bluestein_centred_2d(
     target_cdtype = np.dtype(target_cdtype)
 
     # The dense route: the centred kernel in ONE build, no decomposition.
-    # Reached by name (``method='direct'``) or by the v5.49.0 shape rule under
+    # Reached by name (``method='direct'``) or by the shape rule under
     # ``'auto'`` -- and it has to be reached HERE in both cases, because going
     # through the pre-chirp / post-chirp / constant decomposition below and
     # then into the dense core would be a THIRD arithmetic, agreeing with

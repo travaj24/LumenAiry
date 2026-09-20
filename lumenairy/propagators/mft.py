@@ -241,8 +241,8 @@ def angular_spectrum_propagate_mft(
     method : {'auto', 'bluestein', 'separable', 'direct'}, default 'auto'
         Which route through the transform's own sum to take.
 
-        ``'auto'`` is the shipped default and SINCE v5.49.0 IT DECIDES FROM
-        THE SHAPES (WP-C4).  It takes ``'direct'`` -- the dense
+        ``'auto'`` is the shipped default and IT NOW DECIDES FROM THE SHAPES
+        (WP-C4).  It takes ``'direct'`` -- the dense
         matrix-Fourier transform
         (:func:`~lumenairy.propagators._bluestein._direct_matrix_2d`): two
         matrix products, ``O(M N^2 + M^2 N)`` multiply-adds, no zero-padding
@@ -261,7 +261,8 @@ def angular_spectrum_propagate_mft(
         sum -- so a call whose output grid is 32x coarser than its input
         moves in its last bits.  Nothing else does: at ``M > N/32``, which is
         every focal-zoom grid this propagator is written for, ``'auto'`` is
-        byte-identical to 5.48.1, proved archive-to-archive on two builds.
+        byte-identical to the previous release, proved archive-to-archive on
+        two builds.
         Pass ``method='separable'`` or ``method='bluestein'`` to get the
         previous route back for one call (byte-identical), or set
         ``_MFT_DIRECT_MAX_RATIO = _MFT_DIRECT_NEVER`` to get it back for a
@@ -317,8 +318,8 @@ def angular_spectrum_propagate_mft(
         :data:`~lumenairy.propagators._bluestein._PHASE_BUDGET_MAX` it WARNS
         even when it has chosen the dense route, so the default flip cannot
         take a diagnostic away from a caller who was getting one.  A caller
-        who NAMES ``'direct'`` stays silent, which is the unchanged 5.48
-        decision.
+        who NAMES ``'direct'`` stays silent, which is the unchanged decision
+        the route shipped with.
 
         The crossover tables are in
         ``docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/WP-C4_MFT_DIRECT_DEFAULT_REPORT.md``
@@ -959,8 +960,8 @@ def fresnel_propagate_mft(
     method : {'auto', 'bluestein', 'separable', 'direct'}, default 'auto'
         Which route through the transform's own sum to take.
 
-        ``'auto'`` is the shipped default and SINCE v5.49.0 IT DECIDES FROM
-        THE SHAPES (WP-C4).  It takes ``'direct'`` -- the dense
+        ``'auto'`` is the shipped default and IT NOW DECIDES FROM THE SHAPES
+        (WP-C4).  It takes ``'direct'`` -- the dense
         matrix-Fourier transform
         (:func:`~lumenairy.propagators._bluestein._direct_matrix_2d`): two
         matrix products, ``O(M N^2 + M^2 N)`` multiply-adds, no zero-padding
@@ -979,7 +980,8 @@ def fresnel_propagate_mft(
         sum -- so a call whose output grid is 32x coarser than its input
         moves in its last bits.  Nothing else does: at ``M > N/32``, which is
         every focal-zoom grid this propagator is written for, ``'auto'`` is
-        byte-identical to 5.48.1, proved archive-to-archive on two builds.
+        byte-identical to the previous release, proved archive-to-archive on
+        two builds.
         Pass ``method='separable'`` or ``method='bluestein'`` to get the
         previous route back for one call (byte-identical), or set
         ``_MFT_DIRECT_MAX_RATIO = _MFT_DIRECT_NEVER`` to get it back for a
@@ -1035,8 +1037,8 @@ def fresnel_propagate_mft(
         :data:`~lumenairy.propagators._bluestein._PHASE_BUDGET_MAX` it WARNS
         even when it has chosen the dense route, so the default flip cannot
         take a diagnostic away from a caller who was getting one.  A caller
-        who NAMES ``'direct'`` stays silent, which is the unchanged 5.48
-        decision.
+        who NAMES ``'direct'`` stays silent, which is the unchanged decision
+        the route shipped with.
 
         The crossover tables are in
         ``docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/WP-C4_MFT_DIRECT_DEFAULT_REPORT.md``
@@ -1279,8 +1281,8 @@ def fraunhofer_propagate_mft(
     method : {'auto', 'bluestein', 'separable', 'direct'}, default 'auto'
         Which route through the transform's own sum to take.
 
-        ``'auto'`` is the shipped default and SINCE v5.49.0 IT DECIDES FROM
-        THE SHAPES (WP-C4).  It takes ``'direct'`` -- the dense
+        ``'auto'`` is the shipped default and IT NOW DECIDES FROM THE SHAPES
+        (WP-C4).  It takes ``'direct'`` -- the dense
         matrix-Fourier transform
         (:func:`~lumenairy.propagators._bluestein._direct_matrix_2d`): two
         matrix products, ``O(M N^2 + M^2 N)`` multiply-adds, no zero-padding
@@ -1299,7 +1301,8 @@ def fraunhofer_propagate_mft(
         sum -- so a call whose output grid is 32x coarser than its input
         moves in its last bits.  Nothing else does: at ``M > N/32``, which is
         every focal-zoom grid this propagator is written for, ``'auto'`` is
-        byte-identical to 5.48.1, proved archive-to-archive on two builds.
+        byte-identical to the previous release, proved archive-to-archive on
+        two builds.
         Pass ``method='separable'`` or ``method='bluestein'`` to get the
         previous route back for one call (byte-identical), or set
         ``_MFT_DIRECT_MAX_RATIO = _MFT_DIRECT_NEVER`` to get it back for a
@@ -1355,8 +1358,8 @@ def fraunhofer_propagate_mft(
         :data:`~lumenairy.propagators._bluestein._PHASE_BUDGET_MAX` it WARNS
         even when it has chosen the dense route, so the default flip cannot
         take a diagnostic away from a caller who was getting one.  A caller
-        who NAMES ``'direct'`` stays silent, which is the unchanged 5.48
-        decision.
+        who NAMES ``'direct'`` stays silent, which is the unchanged decision
+        the route shipped with.
 
         The crossover tables are in
         ``docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/WP-C4_MFT_DIRECT_DEFAULT_REPORT.md``
