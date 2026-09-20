@@ -27,7 +27,7 @@ the scratchpad, and the defects below carry the exact requested edit.
 |---|---|---|
 | `v4lib.py` | -- | the shared harness: tree anchor, load census, cold-cache helper, digest |
 | `v4_ladder.py` | `v4_ladder_time_r1_{win,wsl}.json`, `v4_ladder_mem_r1_{win,wsl}.json` | the 36-shape TIME ladder (interleaved instrument) and the `tracemalloc` MEMORY ladder with byte counts derived from the code |
-| `v4_boundary.py` | `v4_boundary_all_wsl.json`, `v4_boundary_thin_{win,wsl}.json`, `v4_boundary_thin_blocked_{win,wsl}.json`, `v4_boundary_thin64_win.json`, `v4_boundary_minarm_win.json` | the deciding shapes on their own: the branch's family, the THIN family under both instruments, the same anisotropy at 1/64, and the shapes a `min` conjunction would take |
+| `v4_boundary.py` | `v4_boundary_all_wsl.json`, `v4_boundary_thin_{win,wsl}.json`, `v4_boundary_thin_blocked_{win,wsl}.json`, `v4_boundary_thin_w1_{win,wsl}.json`, `v4_boundary_thin64_win.json`, `v4_boundary_minarm_win.json` | the deciding shapes on their own: the branch's family, the THIN family under three instruments (interleaved, blocked, and `SCIPY_FFT_WORKERS=1`), the same anisotropy at 1/64, and the shapes a `min` conjunction would take |
 | `v4_rss.py` | `v4_rss_{win,wsl}.json` | peak RSS from the OS, one child process per (shape, route), beside the derived byte counts |
 | `v4_purity.py` | `v4_purity_{win,wsl}.json` | the selection under perturbations that are not a shape, the DISPATCH under seven input variants, no third arithmetic, the warning counts, and the JAX arms |
 | `v4_bitid.py` + `v4_bitid_compare.py` | `v4_bitid_{base,branch}_{win,wsl}.json`, `v4_bitid_compare_{win,wsl}.json` | byte identity archive-to-archive and the SPLIT checked against the rule |
@@ -109,8 +109,26 @@ interleaves the routes; and the branch's, which runs them in blocks) --
 | `32x2048 -> 1x64` | 1.5 | **2.040** | **2.180** | **2.040** | **1.623** |
 | `4096x64 -> 128x2` | 3.0 | **2.802** | **2.619** | **4.040** | **9.685** |
 
+**And it is not the thread asymmetry.**  The comparison above gives the
+chirp-Z routes every core (`fft_infra.SCIPY_FFT_WORKERS = -1`, which
+`OMP_NUM_THREADS=1` does not constrain) and the dense route one, which is what
+a caller actually sees -- so it can only make the dense route look WORSE.  Run
+again with `SCIPY_FFT_WORKERS = 1`, i.e. fully symmetric and single-threaded,
+two rounds of best-of-seven, the same six shapes are slower on each build:
+
+| shape | WIN `workers=1` | WSL `workers=1` |
+|---|---|---|
+| `2048x64 -> 64x2` | **1.414** | **1.209** |
+| `2048x32 -> 64x1` | **2.277** | **2.615** |
+| `1024x32 -> 32x1` | **1.718** | **1.210** |
+| `64x2048 -> 2x64` | **1.449** | **1.552** |
+| `32x2048 -> 1x64` | **2.219** | **2.247** |
+| `4096x64 -> 128x2` | **2.995** | **1.787** |
+| (the six safe ones) | 0.411 .. 0.890 | 0.461 .. 0.891 |
+
 Six of twelve captured shapes are slower on EACH build (seven in the union of
-the two), in every round, under both instruments.  The 36-shape main ladder
+the two), in every round, under THREE instruments -- interleaved, blocked, and
+single-threaded.  The 36-shape main ladder
 finds the same thing independently at `2048x64 -> 64x2` (1.278).
 
 **The work ratio is a one-sided SCREEN, not a crossover.**  It is not monotone
@@ -407,7 +425,7 @@ contended WSL box reads 0.99 at `1024 -> 64` where the branch's quiet one read
 constant is not in question -- only the sentence "this is reproducible and not
 a contention artefact" about the 1/16 failure is.  `--workers 1` is wired into
 `validation/probe_verify_c4/v4_boundary.py` for whoever wants the symmetric
-arm.
+arm, and V-C4-D1's readings are reproduced on it.
 
 **V-C4-N2 -- JAX symbolic shapes.**  `jax.export` with a polymorphic shape
 raises `InconclusiveDimensionOperation` on the BRANCH (`int()` in
@@ -680,8 +698,9 @@ the phase-budget guard moved without losing or inventing a diagnostic.
 
 What must not ship as it stands is the CONSTANT's justification.  The
 "never slower on either build" premise is false at 6 of 12 anisotropic shapes
-the rule captures, reproducibly, on both builds and under two independent
-timing instruments, and by up to 9.7x; the memory argument fails at the same
+the rule captures, reproducibly, on both builds and under three independent
+timing instruments (including a fully symmetric single-threaded one), and by
+up to 9.7x; the memory argument fails at the same
 shapes; and no retune of `_MFT_DIRECT_MAX_RATIO` reaches them.  The fix is one
 constant and three lines (V-C4-D1); APPLIED to a tree copy and measured, it
 refuses 9 of 9 shapes measured slower, keeps 11 of 11 square ladder shapes and

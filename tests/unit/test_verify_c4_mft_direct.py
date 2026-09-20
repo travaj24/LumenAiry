@@ -12,8 +12,9 @@ WHAT EACH ID IS FOR, and why it is written the way it is:
     derived from a ladder of SQUARE shapes.  On a THIN input -- one axis long,
     the other short -- both output/input ratios can sit at 1/32 while the
     dense route is 1.1x to 9.7x SLOWER than the faster chirp-Z fallback, on
-    BOTH builds and under BOTH timing instruments (measured 2026-09-20, worst
-    readings in ``_MEASURED_SLOWER`` below).  A ratio cannot see this, because
+    BOTH builds and under THREE timing instruments -- interleaved, blocked,
+    and fully single-threaded (measured 2026-09-20, worst readings in
+    ``_MEASURED_SLOWER`` below).  A ratio cannot see this, because
     the quantity that decides it is the dense route's multiply-adds PER
     transcendental kernel entry, and that is not a function of the two ratios.
     The ids here gate the predictor and bound the exposure, and they are
@@ -116,8 +117,10 @@ def _dense_work_per_kernel_entry(ny, nx, my, mx):
 #: worst reading over BOTH instruments -- mine, which interleaves the routes,
 #: and the branch's, which runs them in blocks.  The two agree about WHICH
 #: shapes are slower at every entry.  Evidence:
-#: ``validation/probe_verify_c4/v4_boundary_thin_{win,wsl}.json`` and
-#: ``..._thin_blocked_{win,wsl}.json``.
+#: ``validation/probe_verify_c4/v4_boundary_thin_{win,wsl}.json``,
+#: ``..._thin_blocked_{win,wsl}.json`` and ``..._thin_w1_{win,wsl}.json`` (the
+#: last with ``SCIPY_FFT_WORKERS = 1``, i.e. both sides single-threaded, which
+#: removes the thread asymmetry as an explanation).
 _MEASURED_SLOWER = {
     (2048, 128, 64, 4): (0.849, 1.250),
     (2048, 64, 64, 2): (1.432, 1.810),
