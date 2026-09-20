@@ -357,6 +357,96 @@ class TestOpenDefectsFiledByVerifyWpC3:
     turns its marker red and forces the marker's removal with the fix."""
 
     @pytest.mark.xfail(strict=True, reason=(
+        'VERIFY_WP-C3 defect D6 (SHIP BLOCKER, correctness): a leg that '
+        'resolves a FLAT output reference has no transfer-function '
+        'complement, so `tf_available` is False and the chirp-Z runs '
+        'regardless of K1/K3.  On a single-group collimated relay with a '
+        '10 mm bare final leg -- nowhere near a focus, R_out = -108 mm, '
+        'A = 0.915 -- the default runs at Kelly K1 = 29.17 and lands 2.7x to '
+        '3.5x wide of the EXACT free-space second-moment law, on both '
+        'builds, while transport="sziklas" agrees with it to 0.2 % at '
+        'N = 512.  Requested fix: drop `not flat` from `tf_available` '
+        '(carrier.py:2721-2723) so the leg falls back, or refuse it by name '
+        'instead of returning an aliased array.'))
+    def test_a_flat_reference_leg_agrees_with_the_moment_law_or_refuses(self):
+        """The exact free-space second-moment law, which needs no propagator:
+
+            <r^2>(z) = <r^2>(0) + 2 z <r.theta>(0) + z^2 <theta^2>(0)
+
+        Read off the chain's OWN exit field -- which both transports share,
+        the exit plane being before the final leg -- so the prediction is
+        common to both arms and arbitrates between them.  The bar is 1.5x,
+        derived: the oracle's own reading moves 22 % across N = 256..1024
+        because a second moment is tail-sensitive on a truncated grid, and
+        `'sziklas'` sits inside that spread (0.92 / 1.00 / 1.10), so 1.5x is
+        a decade of room above the oracle's own uncertainty and a factor of
+        two below the 2.7x-3.5x this leg actually reads.
+        """
+        from tests.unit.test_audit2609_b4_collins_transport import (
+            _CHAIN_TKW, _singlet)
+        p = _singlet(120e-3, -120e-3, 6e-3, 'N-BK7', 25.4e-3, 'p')
+        groups = [{'prescription': p, 'gap_before': 20e-3}]
+        n, w, z = 512, 2e-3, 10e-3
+        dx = 10.24e-3 / n
+        base = dict(r_in=np.inf, ray_subsample=16, n_workers=1,
+                    traced_kwargs=_CHAIN_TKW, final_leg='paraxial')
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            ex = C.propagate_traced_carrier_chain(
+                _gauss(n, dx, w), groups, LAM, dx, final_distance=0.0,
+                transport='sziklas', **base)
+        dxe = float(ex.dx[0]) if isinstance(ex.dx, tuple) else float(ex.dx)
+        r_x, _r_y, _ = C._parse_carrier(ex.R, 'moment')
+        ax = (np.arange(n) - n // 2) * dxe
+        xx, yy = np.meshgrid(ax, ax, indexing='ij')
+        kk = 2.0 * np.pi / LAM
+        phys = np.asarray(ex.field) * np.exp(
+            1j * kk * (xx ** 2 + yy ** 2) / (2.0 * r_x))
+        inten = np.abs(phys) ** 2
+        r2 = float(((xx ** 2 + yy ** 2) * inten).sum() / inten.sum())
+        spec = np.fft.fft2(phys)
+        ps = np.abs(spec) ** 2
+        fr = np.fft.fftfreq(n, d=dxe)
+        fx, fy = np.meshgrid(fr, fr, indexing='ij')
+        th2 = float((((LAM * fx) ** 2 + (LAM * fy) ** 2) * ps).sum()
+                    / ps.sum())
+        mix = float(np.imag(np.sum(np.conj(phys) * (
+            xx * np.fft.ifft2(spec * (2j * np.pi * fx))
+            + yy * np.fft.ifft2(spec * (2j * np.pi * fy)))))
+            / inten.sum() / kk)
+        oracle = float(np.sqrt(r2 + 2.0 * z * mix + z * z * th2))
+
+        def _r2m(field, d):
+            a = (np.arange(field.shape[0]) - field.shape[0] // 2) * d
+            gx, gy = np.meshgrid(a, a, indexing='ij')
+            ii = np.abs(field) ** 2
+            return float(np.sqrt(((gx ** 2 + gy ** 2) * ii).sum() / ii.sum()))
+
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            ref = C.propagate_traced_carrier_chain(
+                _gauss(n, dx, w), groups, LAM, dx, final_distance=z,
+                transport='sziklas', **base)
+        d_ref = float(ref.dx[0]) if isinstance(ref.dx, tuple) else float(ref.dx)
+        assert 1 / 1.5 < _r2m(np.asarray(ref.field), d_ref) / oracle < 1.5, (
+            'the fixture no longer exercises the law: even the co-moving '
+            'step disagrees with the oracle, so it cannot arbitrate')
+        try:
+            with warnings.catch_warnings():
+                warnings.simplefilter('ignore')
+                got = C.propagate_traced_carrier_chain(
+                    _gauss(n, dx, w), groups, LAM, dx, final_distance=z,
+                    **base)
+        except (ValueError, RuntimeError):
+            return          # refusing is an acceptable answer; aliasing is not
+        d_got = float(got.dx[0]) if isinstance(got.dx, tuple) else float(got.dx)
+        ratio = _r2m(np.asarray(got.field), d_got) / oracle
+        assert 1 / 1.5 < ratio < 1.5, (
+            f'the DEFAULT lands {ratio:.4f}x of the exact second-moment law '
+            f'on a leg that is nowhere near a focus, while the co-moving step '
+            f'agrees with it')
+
+    @pytest.mark.xfail(strict=True, reason=(
         'VERIFY_WP-C3 defect D4: focus_readout["bandlimit"] is a '
         'SZIKLAS-readout-only key that is neither refused nor route-selecting '
         'on transport="collins".  On the collins readout route it is dropped '

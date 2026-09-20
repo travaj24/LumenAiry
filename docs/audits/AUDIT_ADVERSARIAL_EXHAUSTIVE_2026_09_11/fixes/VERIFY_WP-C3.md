@@ -374,6 +374,32 @@ Mechanism, measured: the leg resolves `flat=True`
 The leg is nowhere near a focus (`R_out = −108 mm`, `A = 0.915`) and the flat
 test clears `N` by only **1.9 %**.
 
+**AN ORACLE THAT DOES NO PROPAGATION AT ALL, so "converges" becomes
+"correct".**  Grid refinement says which arm converges; it does not say which
+is right.  The exact free-space second-moment law does, and it needs no
+transform of the answer and no independent propagator:
+
+    <r^2>(z) = <r^2>(0) + 2 z <r.theta>(0) + z^2 <theta^2>(0)
+
+exact for any paraxial field in free space.  All three moments are read off
+the CHAIN'S OWN EXIT FIELD — which both arms share bit for bit, the exit plane
+being before the final leg — with the carrier reconstructed first
+(`env * exp(i k r^2 / 2R)`, since the carrier carries real ray angle), so the
+prediction is common to both arms and arbitrates between them.  **Identical to
+every printed digit on WIN-py3.14 and WSL-py3.12**:
+
+| N | **oracle** r2m (µm) | `'sziklas'` | ratio | default `'collins'` | ratio |
+|---|---|---|---|---|---|
+| 256 | **1413.3041** | 1295.3594 | 0.9165 | 3823.7543 | **2.7055** |
+| 512 | **1281.0221** | 1278.4007 | **0.9980** | 3847.8052 | **3.0037** |
+| 1024 | **1157.1133** | 1274.1529 | 1.1011 | 4099.0717 | **3.5425** |
+
+The oracle's own reading moves 22 % across the ladder, because a second moment
+is tail-sensitive on a truncated grid — so it cannot pin `'sziklas'` to better
+than ~10 %.  It does not need to: **it rules out 3.8–4.1 mm by a factor of
+three, on every rung and on both builds.**  The default is wrong on this leg
+and `'sziklas'` is right.
+
 An independent construction reaches the same hole from the other side: a
 grid-filling envelope at θ = 0.8 Nyquist on `A = +0.11`, `z = 2 mm` resolves
 flat at K1 = K3 = **1.1230** and reads σ_x **151.98 µm** against an analytic
