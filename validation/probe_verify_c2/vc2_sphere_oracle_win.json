@@ -1,0 +1,155 @@
+{
+ "analytic_worst_ulp_all": 5308.26572461159,
+ "analytic_worst_ulp_le_0p95": 3.8594764134048107,
+ "build": {
+  "lumenairy": "5.48.1",
+  "lumenairy_file": "C:\\tmp/lum_vc2\\lumenairy\\__init__.py",
+  "numpy": "2.4.4",
+  "python": "3.14.6"
+ },
+ "closer": 1188,
+ "further": 360,
+ "generic_worst_ulp_all": 9684.677628680418,
+ "generic_worst_ulp_le_0p95": 6.742221954601389,
+ "metricB_analytic_worst_all": 41.46875,
+ "metricB_analytic_worst_le_0p95": 1.0,
+ "metricB_generic_worst_all": 75.6640625,
+ "metricB_generic_worst_le_0p95": 1.75,
+ "metricB_n_analytic_worse_by_gt_1_all": 28,
+ "metricB_n_analytic_worse_by_gt_1_le_0p95": 0,
+ "metricB_worst_analytic_deficit_all": 16.078125,
+ "metricB_worst_analytic_deficit_le_0p95": 0.75,
+ "mirror_changes_normal": 0,
+ "n_analytic_worse_by_gt_1ulp_all": 96,
+ "n_analytic_worse_by_gt_1ulp_le_0p95": 16,
+ "n_domain_gate_disagreements": 0,
+ "n_finite": 2240,
+ "n_high": 960,
+ "n_high_points": 960,
+ "n_low": 1280,
+ "n_points": 2240,
+ "oracle_repr_conversion_at_0p95": 1.0,
+ "oracle_repr_conversion_vs_analytic_le_0p95": 1.0,
+ "oracle_repr_conversion_worst_all": 41.578125,
+ "oracle_repr_conversion_worst_le_0p95": 1.0,
+ "per_height": {
+  "0.0": {
+   "a": 0.0,
+   "aB": 0.0,
+   "g": 0.0,
+   "gB": 0.0,
+   "n": 160,
+   "oracleB": 0.0
+  },
+  "0.01": {
+   "a": 0.493111376468797,
+   "aB": 0.0,
+   "g": 2.5950825506527027,
+   "gB": 0.5,
+   "n": 160,
+   "oracleB": 0.0078125
+  },
+  "0.1": {
+   "a": 0.4937236128849959,
+   "aB": 0.0,
+   "g": 1.605087440381558,
+   "gB": 0.125,
+   "n": 160,
+   "oracleB": 0.0625
+  },
+  "0.3": {
+   "a": 0.49279630510482636,
+   "aB": 0.0,
+   "g": 2.445028695434613,
+   "gB": 0.5,
+   "n": 160,
+   "oracleB": 0.25
+  },
+  "0.5": {
+   "a": 0.5945763428752822,
+   "aB": 0.5,
+   "g": 1.5945763428752822,
+   "gB": 1.0,
+   "n": 160,
+   "oracleB": 0.5
+  },
+  "0.7": {
+   "a": 0.8054902492824821,
+   "aB": 0.5,
+   "g": 1.5652548550205634,
+   "gB": 0.5,
+   "n": 160,
+   "oracleB": 0.5
+  },
+  "0.9": {
+   "a": 3.8594764134048107,
+   "aB": 1.0,
+   "g": 5.2457002048143115,
+   "gB": 1.25,
+   "n": 160,
+   "oracleB": 0.75
+  },
+  "0.95": {
+   "a": 3.7512200111461103,
+   "aB": 1.0,
+   "g": 6.742221954601389,
+   "gB": 1.75,
+   "n": 160,
+   "oracleB": 1.0
+  },
+  "0.97": {
+   "a": 17.294165840542984,
+   "aB": 2.125,
+   "g": 21.900079428163036,
+   "gB": 2.75,
+   "n": 160,
+   "oracleB": 2.125
+  },
+  "0.99": {
+   "a": 20.248508067956383,
+   "aB": 2.5,
+   "g": 40.84515117263289,
+   "gB": 5.125,
+   "n": 160,
+   "oracleB": 4.25
+  },
+  "0.995": {
+   "a": 80.15421915131954,
+   "aB": 5.0,
+   "g": 119.15421915131954,
+   "gB": 7.4375,
+   "n": 160,
+   "oracleB": 3.8125
+  },
+  "0.999": {
+   "a": 360.0762674312617,
+   "aB": 11.25,
+   "g": 360.0762674312617,
+   "gB": 11.25,
+   "n": 160,
+   "oracleB": 8.59375
+  },
+  "0.9999": {
+   "a": 4126.551909740314,
+   "aB": 32.2421875,
+   "g": 4192.771010071262,
+   "gB": 32.7578125,
+   "n": 160,
+   "oracleB": 25.765625
+  },
+  "0.99994": {
+   "a": 5308.26572461159,
+   "aB": 41.46875,
+   "g": 9684.677628680418,
+   "gB": 75.6640625,
+   "n": 160,
+   "oracleB": 41.578125
+  }
+ },
+ "surface_normal_equals_sphere_normal": true,
+ "tie": 692,
+ "unit_defect_analytic_worst_ulp": 1.0,
+ "unit_defect_generic_worst_ulp": 1.0,
+ "worst_analytic_deficit_all": 2058.9580925255905,
+ "worst_analytic_deficit_le_0p95": 3.0
+}
