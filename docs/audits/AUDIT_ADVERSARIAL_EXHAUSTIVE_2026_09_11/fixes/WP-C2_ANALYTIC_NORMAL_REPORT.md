@@ -1275,9 +1275,23 @@ command line and `-q -p no:randomly --capture=sys -rf`.
 
 | run | files | result |
 |---|---|---|
-| Windows: the 31-file gate the round-2 verification names, plus the lens files that exercise `apply_real_lens`, `test_public_api.py`, `test_audit_except_budget.py` and the doc-identifier gate | 37 | see below |
-| WSL: the C2 subset | -- | see below |
-| Windows / WSL mutation matrix | 6 + 4 arms | above |
+| Windows: the 31-file gate the round-2 verification names, plus the lens files that exercise `apply_real_lens` (`seidel_correction`, `LensConfig`, `LensPhysics`), `test_public_api.py`, `test_audit_except_budget.py` and the doc-identifier gate | 37 | **1952 passed, 1 skipped, 0 failed** in 15:15 |
+| WSL: a 20-file subset -- the three C2 files, the B9 family, `test_audit_propagation.py`, `test_niche_audit_w6_asymptotic.py`, `test_niche_d3_guards.py`, the ghost consumer, three raytrace files, `test_public_api.py`, `test_audit_except_budget.py`, the lens-config and lens-arch gates, the analytic-lens gate, the hygiene gate, the durations gate, the doc-identifier gate and the walker gate | 20 | **773 passed, 2 skipped, 3 failed** in 16:38 -- the three are the documented pre-existing WSL reds |
+| Windows: the C2 files after every source edit | 3 | 85 passed (with the doc-identifier gate) |
+| Windows: the mutation matrix (M0, M4, M8-M12) | 6 arms | above |
+| WSL: the same matrix | 6 arms | identical to Windows on all six |
+| Windows / WSL: the VR2-D5 matrix (M0, M13a, M13b x 2 bars) | 4 arms each | above |
+| WSL: the two red files on this round's own `git archive 49ddf4bd` | 2 | **the same 3 failed**, 17 passed, 1 skipped |
+
+**The three WSL reds are pre-existing and none is a finding.**
+`test_public_api.py::test_installed_metadata_version_matches_source_version`
+is the stale-editable-install condition on that mount, and the two
+`test_v5_3_2_walker_source_line_citation.py` ids are the
+WSL-against-a-Windows-worktree condition their own docstrings document
+(`git rev-parse --git-dir` fails there because the worktree's `.git` file
+holds a Windows path).  All three were re-run against this round's own
+`git archive 49ddf4bd` under WSL and fail there identically, which is the
+same classification round 2 made.
 
 `ruff check lumenairy/ tests/ scripts/ validation/probe_c2_round3/` (WSL):
 **All checks passed!**
