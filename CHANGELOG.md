@@ -137,12 +137,14 @@ grows.
 Below the floor the dense path now emits a `RuntimeWarning` naming the floor,
 the budget, the ratio and the two mitigations, instead of exceeding the request
 silently.  It WARNS rather than raises, and the choice was measured: at the
-shipped `mem_budget_mb=512.0` default the floor binds from `Ny*Nx > 2.909e+06`
-cells -- any square grid past N = 1706 -- so a refusal would turn a call that
-completes today into a hard error on a DEFAULT path, and the one mitigation
-that keeps the grid (`window=5.0`, whose own accounting is correct) changes the
-returned field by its own ~1e-11 truncation and so cannot be applied on the
-caller's behalf.  Under `'legacy'` nothing is emitted: that mode's arithmetic
+shipped `mem_budget_mb=512.0` default the floor binds from `Ny*Nx >=
+2.909e+06` cells -- any square grid from N = 1706 up (511.6364 MB at N = 1705
+against 512.2367 MB at N = 1706, so N = 1706 is the first square grid that
+binds) -- so a refusal would turn a call that completes today into a hard
+error on a DEFAULT path, and the one mitigation that keeps the grid
+(`window=5.0`, whose own accounting is correct) changes the returned field by
+its own ~1e-11 truncation and so cannot be applied on the caller's behalf.
+Under `'legacy'` nothing is emitted: that mode's arithmetic
 never claimed to bound the loop.  `_dense_budget_floor_bytes` does not take the
 accounting mode -- it is what the LOOP costs, and a `'legacy'` floor would read
 4.19 MB on a grid where the loop measurably cannot go below 9.58.

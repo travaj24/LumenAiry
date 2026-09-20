@@ -417,11 +417,15 @@ def test_a_budget_below_the_floor_is_loud_and_names_the_floor(
     old behaviour was to exceed it silently; the new one is to run and say so.
 
     Why a warning and not a refusal, measured: at the shipped
-    ``mem_budget_mb=512`` default the floor binds from ``Ny*Nx > 2.909e+06``
-    cells -- any square grid past N = 1706 -- so refusing would turn a call
-    that completes today into a hard error on a DEFAULT path, and the one
-    mitigation that keeps the grid (``window=5.0``) changes the returned field
-    by its own ~1e-11 truncation and so cannot be applied for the caller.
+    ``mem_budget_mb=512`` default the floor binds from ``Ny*Nx >= 2.909e+06``
+    cells -- any square grid from N = 1706 UP, the floor reading 511.6364 MB
+    at N = 1705 against 512.2367 MB at N = 1706, so 1706 is the first square
+    grid that binds (VERIFY-WP-C5 D4, re-measured 2026-09-20 on both builds;
+    ``test_verify_c5_three_defaults.py`` derives the crossing at runtime) --
+    so refusing would turn a call that completes today into a hard error on a
+    DEFAULT path, and the one mitigation that keeps the grid
+    (``window=5.0``) changes the returned field by its own ~1e-11 truncation
+    and so cannot be applied for the caller.
 
     Two-sided: the notice fires below the floor and is SILENT above it (the
     sweep above runs under ``simplefilter('error')``, which is the other

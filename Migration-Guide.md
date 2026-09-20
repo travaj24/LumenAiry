@@ -1857,8 +1857,10 @@ chunk cannot go below one beamlet column, so
 the smallest budget that can be honoured.  Ask for less and the dense path now
 emits a `RuntimeWarning` naming the floor and the two mitigations instead of
 exceeding the request silently.  It warns rather than raises because at the
-shipped `mem_budget_mb=512.0` default the floor binds on any square grid past
-N = 1706, so refusing would break calls that complete today.
+shipped `mem_budget_mb=512.0` default the floor binds on any square grid from
+N = 1706 up -- it reads 511.6364 MB at N = 1705 and 512.2367 MB at N = 1706,
+so 1706 is the first square grid that binds -- and refusing would break calls
+that complete today.
 
 **Recipe -- keep 5.48.x exactly:**
 

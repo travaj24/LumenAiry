@@ -1623,13 +1623,15 @@ _DENSE_FIXED_CELL_BYTES = 48.0
 #: ``'measured'`` the dense path emits a ``RuntimeWarning`` naming the floor,
 #: the budget and the two mitigations.  It WARNS rather than raises, measured:
 #: at the shipped ``mem_budget_mb=512`` default the floor binds from
-#: ``Ny*Nx > 2.909e+06`` cells, i.e. any square grid past N = 1706, so a
-#: refusal would turn a call that completes today into a hard error on a
-#: DEFAULT path -- and the one mitigation that keeps the grid (``window=5.0``)
-#: changes the returned field by its own ~1e-11 truncation, so the library
-#: cannot apply it on the caller's behalf.  The honest move is to run and say
-#: so.  Under ``'legacy'`` nothing is emitted: that mode's arithmetic never
-#: claimed to bound the loop, and a caller who selects it has opted out.
+#: ``Ny*Nx >= 2.909e+06`` cells, i.e. any square grid from N = 1706 up (the
+#: floor reads 511.6364 MB at N = 1705 and 512.2367 MB at N = 1706, so it
+#: binds AT 1706), so a refusal would turn a call that completes today into
+#: a hard error on a DEFAULT path -- and the one mitigation that keeps the
+#: grid (``window=5.0``) changes the returned field by its own ~1e-11
+#: truncation, so the library cannot apply it on the caller's behalf.  The
+#: honest move is to run and say so.  Under ``'legacy'`` nothing is emitted:
+#: that mode's arithmetic never claimed to bound the loop, and a caller who
+#: selects it has opted out.
 #:
 #: MITIGATIONS: pass ``window=5.0`` (the bounded-support scatter-add, whose own
 #: accounting IS correct and whose chunk has no one-column floor at this size),
