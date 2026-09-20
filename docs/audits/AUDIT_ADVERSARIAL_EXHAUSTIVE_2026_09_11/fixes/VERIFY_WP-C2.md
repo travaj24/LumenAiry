@@ -30,7 +30,8 @@ report: every number is re-measured on this verifier's own sphere set, its own
 | 3 | analytic normal 1.08x-1.44x, profile share 16.1 % -> 9.8 % / 19.6 % -> 10.4 % | **CONFIRMED** | CPU 1.043x-1.359x (Win), **1.105x-1.224x median 1.181x** (WSL); profile share **10.04-11.87 % -> 7.26-9.20 %** (Win), **10.31-13.61 % -> 6.62-10.43 %** (WSL); element-op count **1.1612x-1.1973x**, controls **exactly 1.0000x** |
 | 4a | the rim band, and 360 000 rays move nothing | **CONFIRMED, and the band is NARROWER than stated** | both gates LOCATED by bisection are the **same float** (`0.9999499987499374`) at all 8 radii ON THE AXIS -- the band is not an annulus, it exists only at azimuths where the two expressions round apart.  Straddle found at 2 of 6 radii, reaches `_refract` (code 4 vs 0) and `trace` (code 4 vs 1).  **580 000 rays over twelve combinations: zero alive flags, zero error codes**, both builds, against both the new pair and the full pre-5.49.0 pair |
 | 4b | can a REAL design land in the band? | **ANSWERED** | a fast singlet cannot (`max h/abs(R) = 0.495` at f/1).  A **BALL LENS** and a **HEMISPHERE** -- catalogue parts with semi-diameter `abs(R)` -- reach 0.999999 and DO cross the clamp: **2930 of 60 000** rim-packed rays die RAY_NAN on BOTH routes.  The 1-ULP straddle inside that region is not reachable by sampling (0 of 580 000 within 4 ULP of the gate).  **Migration-note fact: the reachable part is the PRE-EXISTING clamp, not the band** |
-| 5 | the SIX entry points with no way back | **REFUTED -- there are sixteen** | an AST census of the package finds **21** exported, directly-tracing entry points carrying neither keyword; 5 reach `trace_jax` (which has neither switch by design), leaving **16 CPU-affected** against the report's six.  A further **46** reach a tracer transitively. **DEFECT D4** |
+| 5a | the way back is byte-identical to the pre-5.49.0 arithmetic | **CONFIRMED, archive to archive** | **594 of 594 arrays identical** on both builds -- the PRE tree (this verifier's own `git archive 49ddf4bd`, its own root, its own process) against the branch with both old keywords forced, over five prescriptions x two fields x `'last'` and `'all'` with every history bundle recorded.  At the DEFAULTS the same set reads 172/594 identical, 422 moved, worst 3.3e-16 |
+| 5b | the SIX entry points with no way back | **REFUTED -- there are sixteen** | an AST census of the package finds **21** exported, directly-tracing entry points carrying neither keyword; 5 reach `trace_jax` (which has neither switch by design), leaving **16 CPU-affected** against the report's six.  A further **46** reach a tracer transitively. **DEFECT D4** |
 | 6a | CPU/JAX parity 3.5e-18 m unmoved under all four CPU settings | **CONFIRMED** | **3.469e-18 m** position, 5.55e-17 m (Win) / 5.20e-17 m (WSL) OPL, alive masks equal, **identical under all five CPU settings** including the library default |
 | 6b | does the JAX tracer have the same clamp? | **NO -- and the backends' vignetting bands differ by a whole annulus** | `_refract_jax` applies NO domain gate.  Ball lens, 40 000 rim-packed rays: **1991 past the clamp; CPU kills all 1991 on both routes, JAX keeps all 1991**.  Pre-existing, unpinned. **DEFECT D6** |
 | 7a | both B9 reports' "basin flip / bimodal" mechanism is wrong | **CONFIRMED independently** | **71.5-75.6 %** of the 1024 pixels are above 10 % of the maximum where a one-knife-edge-pixel story predicts **0.098 %**; 91.5 % above 1 %; median/max 0.208; exactly ONE pixel within 1 % of the max |
@@ -382,8 +383,11 @@ Requested edit:
                 decimal.Decimal(float(R)))
 ```
 
-and raise `prec` from 60 to 80 (the exact decimal expansion of a float near
-1e-3 needs ~60 significant digits, so 60 rounds it).  The report's section 2.1
+`prec` may stay at 60 -- this verification re-ran its whole sweep at
+`prec = 120` and every summary field was identical, so 60 is demonstrably
+enough for the exact-input form -- but raising it to 80 costs nothing and
+removes the last question (the exact decimal expansion of a float near 1e-3
+runs to about 60 significant digits, so 60 sits exactly at the boundary).  The report's section 2.1
 table and the `trace` docstring's "1.75 ULP" / "57 to 76 at the clamp" should
 be re-run and restated; with the exact conversion they become **1.00 / 1.75**
 and **41.47 / 75.66**, i.e. the conclusion is unchanged and stronger.
@@ -466,6 +470,27 @@ Requested edit: replace "about 0.6 ``n_surfaces * eps``" with
 
 and correct the same "by the eighth surface" claim in the report's section 0
 item 7 and section 3.2.
+
+### The way back itself is exact (not a defect -- the strongest result here)
+
+Before the defect, the claim that matters most to a user.  `vc2_wayback.py`
+dumps 594 arrays -- five prescriptions (doublet, 7-surface stack, 13-surface
+ladder, a conic stack, a two-mirror stack) at two field angles under both
+`output_filter` modes, every history bundle, `x/y/z/L/M/N/opd/alive/code` --
+from the PRE tree in its own process with its own `PYTHONPATH`, and from the
+branch with both old keywords forced.
+
+| | Windows | WSL |
+|---|---|---|
+| `sphere_normal='generic', renormalize='surface'` vs the 49ddf4bd archive | **594 / 594 byte-identical** | **594 / 594** |
+| the shipped DEFAULTS vs the same archive | 172 / 594 identical, 422 moved | 172 / 594, 422 moved |
+| worst absolute move at the defaults | 3.33e-16 | 3.33e-16 |
+
+The way back is exact, and it is exact through a real second process on a
+read-only archive rather than by self-consistency.  Note the second row's
+company: the CONIC prescription moves too, because `renormalize='exit'`
+applies to every prescription whether or not it contains a sphere -- which is
+why that switch has no control arm, as the WP-C2 report itself observes.
 
 ### D4 (P2, API) -- sixteen entry points have no way back, not six
 
