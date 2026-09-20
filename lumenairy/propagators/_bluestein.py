@@ -367,9 +367,19 @@ _MFT_DIRECT_NEVER = 0.0
 #:  * the smallest at which it was measured safe on BOTH builds ABOVE that is
 #:    **16.00** (``256x64 -> 4x1``: 0.310 / 0.294).
 #:
-#: 16.0 is therefore the LARGEST value that still captures every shape
-#: measured safe above the slower region, and it clears the slower region by
-#: **1.34x**.  It refuses 10 of the 10 shapes measured slower (by 1.11x to
+#: 16.0 is the largest value this ladder's two boundary readings admit, and it
+#: clears the slower region by 1.34x on them.  BOTH of those boundary readings
+#: are instrument-dependent and only one of them is thin: ``2048x128 -> 64x4``
+#: (11.95) is SAFE on Windows here (0.924) and straddles unity on WSL (worst
+#: 1.110, best 0.968), and an independent re-measurement
+#: (``VERIFY_WP-C4_ROUND2.md``, 35 shapes, both orientations matched, two
+#: builds) reads it safe in every round on both builds and puts the largest
+#: work/entry measured slower at 7.99 instead -- which would make the
+#: admissible interval (7.99, 8.73] and 16.0 a value with 2.00x of margin
+#: rather than the tightest one.  What BOTH instruments agree on is the only
+#: thing the rule needs: no shape at or above 16.0 was measured slower on
+#: either build, on either ladder.  Read "the largest admissible value" as
+#: this ladder's reading and not as a settled fact.  It refuses 10 of the 10 shapes measured slower (by 1.11x to
 #: 13.03x) and keeps 17 of 17 control shapes; the six shapes the whole shipped
 #: suite drives read 264, 516, 520, 1028, 1044 and 2052, so none of them
 #: moves.  Full table:
@@ -1265,7 +1275,7 @@ def _mft_route_kwargs(mft_method) -> dict:
     name -- even though today the two produce the same bytes.
 
     Gated by ``tests/unit/test_c4_round2_mft_method.py::
-    test_mft_method_none_stamps_nothing_on_the_primitive``.
+    test_mft_method_none_stamps_nothing_on_the_call_it_makes``.
     """
     return {} if mft_method is None else {'method': mft_method}
 

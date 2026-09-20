@@ -16377,7 +16377,7 @@
   "tests/unit/test_verify_c4_round2.py::test_the_collins_carrier_leg_cannot_fire_the_shape_rule": 0.05,
   "tests/unit/test_verify_c4_round2.py::test_the_cross_build_memory_guard_would_have_refused_the_old_sentence[changelog]": 0.06,
   "tests/unit/test_verify_c4_round2.py::test_the_cross_build_memory_guard_would_have_refused_the_old_sentence[report]": 0.0,
-  "tests/unit/test_verify_c4_round2.py::test_the_entry_points_that_accept_and_ignore_the_keyword_are_the_known_two": 0.07,
+  "tests/unit/test_verify_c4_round2.py::test_the_entry_points_that_accept_and_ignore_the_keyword_are_the_known_one": 0.07,
   "tests/unit/test_verify_c4_round2.py::test_the_guide_names_every_entry_point_that_carries_mft_method": 0.0,
   "tests/unit/test_verify_c4_round2.py::test_the_guides_spelling_column_matches_the_measured_evidence[win]": 0.0,
   "tests/unit/test_verify_c4_round2.py::test_the_guides_spelling_column_matches_the_measured_evidence[wsl]": 0.0,

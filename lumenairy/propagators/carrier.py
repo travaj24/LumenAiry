@@ -1277,6 +1277,15 @@ def propagate_carrier_referenced(
         chirp-Z repeats with ``lambda |z| / dx`` of the INPUT grid) is weighed
         here too: a ``dx_out`` wide enough to take the window past one period
         returns wrapped copies in its outer samples and says so.
+    mft_method : {None, 'auto', 'bluestein', 'separable', 'direct'}, optional
+        Which route the Collins leg's matrix Fourier transform takes,
+        forwarded to the primitive as its ``method=``.  ``None`` (the
+        default) names nothing.  MEASURED (VERIFY-WP-C4 round 2): the MFT
+        shape rule cannot fire on this leg, because its output lattice keeps
+        the input's sample count and both ratios are exactly 1, so no spelling
+        is needed today; the keyword exists so that stays true by construction.
+        A ``ValueError`` with ``transport='sziklas'``, which reaches no such
+        transform.
 
     Returns
     -------
@@ -4334,6 +4343,13 @@ def carrier_referenced_focus_readout(
         folded in -- energy that was created rather than measured.  That
         tripwire is only reachable with ``on_replica`` downgraded AND
         ``replica_fill='repeat'``, which is what leaves the replicas in.
+    mft_method : {None, 'auto', 'bluestein', 'separable', 'direct'}, optional
+        Which route through the matrix Fourier transform this call's readout
+        takes, forwarded to the primitive as its ``method=``.  ``None`` (the
+        default) names nothing -- the keyword is left off, so the library's
+        own default governs.  The one-call way back to the dispatch this
+        entry point had before the MFT shape rule is ``'bluestein'`` (see
+        the MFT shape-rule section of ``Migration-Guide.md``).
 
     Returns
     -------
@@ -6880,6 +6896,14 @@ def carrier_referenced_exact_focus_readout(
         The shipped chain never reaches it: its second crop lands at
         ``window_factor * rho`` beam radii with ``rho < 1`` (see
         ``window_factor``), i.e. strictly inside the grid.
+    mft_method : {None, 'auto', 'bluestein', 'separable', 'direct'}, optional
+        Which route through the matrix Fourier transform this call's readout
+        takes, forwarded to the primitive as its ``method=``.  ``None`` (the
+        default) names nothing -- the keyword is left off, so the library's
+        own default governs.  The one-call way back to the dispatch this
+        entry point had before the MFT shape rule is ``'separable'`` (see
+        the MFT shape-rule section of ``Migration-Guide.md``).  It is ``'separable'`` here
+        because this readout passes the separable flag into the primitive.
 
     Returns
     -------
@@ -10224,6 +10248,17 @@ def propagate_traced_carrier_chain(
         sampled), ``collins_kernel`` (which gap kernel the leg resolved to, or
         ``None`` on the transfer-function form), ``collins_flat_reference`` and
         ``collins_dx_floor_hit``.
+    mft_method : {None, 'auto', 'bluestein', 'separable', 'direct'}, optional
+        Which route through the matrix Fourier transform this call's readout
+        takes, forwarded to the primitive as its ``method=``.  ``None`` (the
+        default) names nothing -- the keyword is left off, so the library's
+        own default governs.  The one-call way back to the dispatch this
+        entry point had before the MFT shape rule is ``'bluestein'`` (see
+        the MFT shape-rule section of ``Migration-Guide.md``).  With ``transport='collins'`` the
+        spelling is ``'separable'``.  The keyword reaches a transform through
+        the focus readout and, on the Collins transport, through each leg;
+        with neither (Sziklas transport, no ``focus_readout``) it is
+        accepted and inert.
 
     Returns
     -------
@@ -12451,6 +12486,15 @@ def propagate_traced_carrier_chain_multi(
     congruence_worker_min_free_gb : float, default 8.0
         RAM held back from the ``congruence_workers`` clamp, so a fully
         subscribed pool cannot take the box to the edge.
+    mft_method : {None, 'auto', 'bluestein', 'separable', 'direct'}, optional
+        Which route through the matrix Fourier transform this call's readout
+        takes, forwarded to the primitive as its ``method=``.  ``None`` (the
+        default) names nothing -- the keyword is left off, so the library's
+        own default governs.  The one-call way back to the dispatch this
+        entry point had before the MFT shape rule is ``'bluestein'`` (see
+        the MFT shape-rule section of ``Migration-Guide.md``).  Forwarded verbatim to every
+        congruence's ``propagate_traced_carrier_chain`` call, whose entry
+        above applies.
 
     Returns
     -------

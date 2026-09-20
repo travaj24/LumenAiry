@@ -1416,6 +1416,14 @@ def which_propagator(
         Source aperture [m] used in the Fresnel-number heuristic.
     verbose : bool
         Print the decision to stdout (useful in interactive use).
+    mft_method : {None, 'auto', 'bluestein', 'separable', 'direct'}, optional
+        Which route through the matrix Fourier transform this call's readout
+        takes, forwarded to the primitive as its ``method=``.  ``None`` (the
+        default) names nothing -- the keyword is left off, so the library's
+        own default governs.  The one-call way back to the dispatch this
+        entry point had before the MFT shape rule is ``'bluestein'`` (see
+        the MFT shape-rule section of ``Migration-Guide.md``).  A ``ValueError`` when the
+        call reaches no matrix Fourier transform (no output grid).
 
     Returns
     -------

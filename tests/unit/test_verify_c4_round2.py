@@ -397,8 +397,14 @@ def test_the_mft_method_refusal_is_two_sided_at_the_three_doors_that_have_one():
         f"mft_method= by name (got {msg!r})")
 
 
-def test_the_entry_points_that_accept_and_ignore_the_keyword_are_the_known_two():
-    """The other half of the contract, pinned so a third silent door is loud.
+def test_the_entry_points_that_accept_and_ignore_the_keyword_are_the_known_one():
+    """The other half of the contract, pinned so a second silent door is loud.
+
+    RESTATED in WP-C4 round 3: ``resample_field(method='spline')`` now REFUSES
+    the keyword like the other three doors (V-R2-3 closed), so the known
+    accept-and-ignore set is the traced chain without a ``focus_readout`` --
+    documented in its docstring, and inert there because on the Sziklas
+    transport no transform is reached.
 
     MEASURED 2026-09-20 on both builds
     (``validation/probe_verify_c4_round2/vc4b_refusal_{win,wsl}.json``): two
@@ -412,20 +418,22 @@ def test_the_entry_points_that_accept_and_ignore_the_keyword_are_the_known_two()
     """
     dx = 2e-6
     E = _gauss(256, dx, 256 * dx / 6.0)
-    assert _refuses(lambda: lumenairy.resample_field(
+    msg = _refuses(lambda: lumenairy.resample_field(
         E, dx, dx * 256 / 8.0, N_out=8, method='spline',
-        mft_method='bluestein')) is None, (
-        "resample_field(method='spline') now REFUSES mft_method=.  That is "
-        "the contract the other three doors keep and it is an improvement -- "
-        "but it is a new ValueError on a signature that shipped accepting it, "
-        "so record it in the Migration Guide and update this id rather than "
-        "deleting it")
+        mft_method='bluestein'))
+    assert msg is not None and 'mft_method' in msg and 'spline' in msg, (
+        "resample_field(method='spline') accepted mft_method= and dropped it "
+        "(V-R2-3): the spline leg reaches no matrix Fourier transform, so the "
+        "keyword must be refused there with a message naming it, as the other "
+        "three doors do", msg)
+    # Two-sided: the same call on the chirp-Z leg ACCEPTS the keyword.
+    assert _refuses(lambda: lumenairy.resample_field(
+        E, dx, dx * 256 / 8.0, N_out=8, method='chirpz',
+        mft_method='bluestein')) is None
     doc = lumenairy.resample_field.__doc__ or ''
-    assert 'mft_method' in doc and 'spline' in doc, (
-        "resample_field accepts mft_method= and ignores it on the spline leg "
-        "and no longer says so in its own docstring; a silent no-op that is "
-        "not documented anywhere is the exposure the other three doors raise "
-        "a ValueError to avoid")
+    assert 'ValueError' in doc and 'spline' in doc, (
+        "resample_field's docstring no longer says the spline leg refuses "
+        "mft_method=")
 
 
 # ===========================================================================

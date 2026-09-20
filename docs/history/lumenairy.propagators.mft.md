@@ -1,7 +1,7 @@
 <!-- lumenairy-history-doc
 module: lumenairy/propagators/mft.py
-ast_sha256: bb52bf011536f0548ff2d2afbed9ceb902a655afe9ae03282fbbf1dbb7e6ec47
-token_sha256: 9d0e247e6ab7930247f0b8a95fd11ef80b8511327469f3d278317d82adec32c6
+ast_sha256: 1aadf398ce0775a1536979a965c0f3f0c2ac15401cfd12ad0d7babf1358dafbf
+token_sha256: 2719cc7299bc72d8f3421df1c574b6d91056f09ce368e26cc8b71ad092f5f9e9
 pre_relocation_lines: 1073
 recorded_by: WP-A17 SWEEP-1 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
@@ -9,6 +9,7 @@ re_recorded: 2026-09-13 -- WP-B3 (audit K6 second half): resample_field gains me
 re_recorded: 2026-09-14 -- Wave-5 item D (CI run 34914295323): DIGEST-SCHEME change, not a code change -- token_fingerprint now feeds an f-string to the digest as ONE STRING record holding its exact source text instead of the running tokenizer's FSTRING_START/FSTRING_MIDDLE/FSTRING_END run, so the recorded value is a property of the file rather than of the interpreter that read it; PEP 701 made CPython 3.12 tokenize f-strings differently from 3.11, these digests were recorded on 3.12+, and all five py3.11 CI shards read a different token_sha256 for byte-identical sources (110 of 123 documents, measured).  The module source is unchanged and ast_sha256 is unchanged.
 re_recorded: 2026-09-19 -- H2-1 (audit item 14): method= selector threaded to the three public MFT entry points for the opt-in direct matrix-Fourier route; default 'auto' byte-identical (179/179 archive-to-archive, both builds)
 re_recorded: 2026-09-20 -- WP-C4 round 2 (VERIFY-WP-C4 D2): mft_method= added and threaded to the MFT call, so the shape rule's default flip keeps a one-keyword way back at every public entry point; None stamps nothing and no answer moves
+re_recorded: 2026-09-20 -- WP-C4 round 3 (VERIFY-WP-C4 round 2, V-R2-3): resample_field refuses mft_method= on the spline leg, which reaches no matrix Fourier transform, with the same ValueError the other three doors carry; docstring updated to match
 -->
 
 # Version history -- `lumenairy/propagators/mft.py`

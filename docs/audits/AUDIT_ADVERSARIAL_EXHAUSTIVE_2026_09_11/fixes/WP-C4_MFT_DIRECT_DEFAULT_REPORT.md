@@ -813,7 +813,10 @@ the SAME assertion the release carries rather than a paraphrase:
 `R = max|t|_chirp / max|t|_dense = N_max^2 / ((N-1)(M-1))` comes from the two
 kernels and `alpha` cancels, so it is a property of the shapes.  The measured
 constant ratio `C_chirp/C_dense` is 1.481 .. 4.035 over ten decades of budget
-(section 4.4), so the bar asserted is `R/4`.
+(section 4.4; an mpmath-40-digit re-measurement in VERIFY-WP-C4 round 2 reads
+0.94 .. 3.09 at the same geometry, so the bar's clearance below the implied gap
+is 1.9x .. 6.2x rather than 3.0x .. 8.1x), so the bar asserted is `R/4`, a
+chosen margin.
 
 | shape | R/4 (the bar) | measured gap | clear by |
 |---|---|---|---|
@@ -1120,8 +1123,10 @@ So the TURN ratio is `(L - N_out)^2 / (2*(N-1)*(M-1))`, and what
 `_phase_term_ratio` returns, `N_max^2 / ((N-1)(M-1))`, is about TWICE it:
 exactly `2*N_max^2 / (L - N_out)^2` times it, which is 2 up to `(N/(N-1))^2`
 when `L = N + M - 1` and below 2 whenever `next_fast_len` pads further.  The
-bar `R/4` is therefore `R_turns/2`, and it sits **3.0x to 8.1x** below the gap
-the measured `C_chirp/C_dense` in [1.481, 4.035] implies.  **The bar is not
+bar `R/4` is therefore `R_turns/2`, and it sits **1.9x to 6.2x** below the gap
+the re-measured `C_chirp/C_dense` in [0.94, 3.09] implies (VERIFY-WP-C4 round 2;
+this round's text read 3.0x to 8.1x from [1.481, 4.035], which did not
+reproduce against a 40-digit reference).  **The bar is not
 loosened**; what changes is that the `/4` is now labelled a CHOSEN margin
 rather than a derivation, in `_phase_term_ratio`'s docstring, in the claim's
 own "Bars" paragraph and in section 4.2 of this report.
@@ -1265,3 +1270,49 @@ removed, 61 written, 16,657 total, JSON re-parsed after the write.
     could only re-confirm which files drive it.
 
 ---
+
+## Round 3 (VERIFY-WP-C4 round 2), 2026-09-20
+
+The independent re-verification of round 2 (`VERIFY_WP-C4_ROUND2.md`) reproduced
+every safety claim on both builds -- no captured shape slower on its own 35-shape
+ladder, the work/entry formula equal to the arithmetic the dense route actually
+does at 18 of 18, the way back row for row at every entry point with the
+spelling table confirmed, the census 615 / 35 / 16 / 5 exactly, round-2
+neutrality 24 of 24 -- and filed five P3 items, closed here without moving a
+byte of any answer:
+
+* **V-R2-1.**  The derivation sentence for `_MFT_DIRECT_MIN_WORK_PER_KERNEL_ENTRY`
+  claimed 16.0 as the LARGEST admissible value with 1.34x of margin; the
+  re-verification's ladder puts the largest work/entry measured slower at 7.99
+  (the 11.95 reading straddled unity in one WSL round) and 16.0 therefore at
+  2.00x of margin.  The constant block, the CHANGELOG and the Migration Guide now
+  say the reading is this ladder's and that both instruments agree on the only
+  thing the rule needs: nothing at or above 16 was measured slower on either
+  build.  The constant is unchanged.
+* **V-R2-2.**  The work screen's inclusive comparison (`>=`) was gated by
+  nothing; a strict comparison would refuse `256x64 -> 4x1`, the shape the
+  constant is set from.  Closed by the re-verification's own id
+  `test_the_work_screens_comparison_is_inclusive_at_the_constant`.
+* **V-R2-3.**  `resample_field(method='spline')` accepted `mft_method=` and
+  dropped it while the other three doors refuse the keyword where no transform
+  is reached.  It now raises the same `ValueError`; the traced chains keep
+  accepting it without a `focus_readout` because their Collins legs reach a
+  transform of their own, and their docstrings now say so.  A new refusal on a
+  signature that shipped accepting the keyword inside this same branch, recorded
+  in the CHANGELOG Migration paragraph and the Guide's table.
+* **V-R2-4.**  `C_chirp/C_dense` re-measured against a 40-digit reference reads
+  [0.94, 3.09], not [1.481, 4.035], so the accuracy bar `R/4` sits 1.9x to 6.2x
+  below the implied gap, not 3.0x to 8.1x; the bar is unchanged, two-sided
+  (impostor 0.996 .. 1.005 at 12 of 12) and cleared by 4.2x at worst on the
+  shipped shapes.  Section 4.2, the claim's docstring and the round-2 addendum
+  are corrected.
+* **V-R2-5.**  `_mft_route_kwargs`' gate reference named a test id that does
+  not exist (now `..._on_the_call_it_makes`), and six of the nine signatures
+  carrying `mft_method=` did not document it; each now has a `Parameters` entry
+  with its measured way-back spelling.
+
+Also from that round: `test_c4_round2_memory_claim.py::
+test_the_prose_does_not_carry_the_refuted_cross_build_sentence` had no
+fail-before (its literal never matched the sentence it was written against);
+the re-verification's `test_the_cross_build_memory_guard_would_have_refused_the_
+old_sentence` is the guard that fires on both pre-fix documents.

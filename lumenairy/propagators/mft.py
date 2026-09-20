@@ -749,7 +749,10 @@ keyword-only, default ``None``
         ``mft_method='bluestein'`` here (this leg does not pass ``separable``,
         so the previous route was the 2-D chirp-Z arm).  ``None`` (the
         default) names nothing and leaves the primitive's own default in
-        force.  Ignored by ``method='spline'``, which reaches no transform.
+        force.  A ``ValueError`` on ``method='spline'``, which reaches no
+        transform (the same refusal ``compute_psf``, ``propagate`` and
+        ``propagate_carrier_referenced`` carry; VERIFY-WP-C4 round 2 found
+        the spline leg accepting and dropping it).
         See the MFT shape-rule section of ``Migration-Guide.md``.
 
     Returns
@@ -829,6 +832,19 @@ keyword-only, default ``None``
             f"'chirpz' (the band-limited chirp-Z interpolant, unit gain at "
             f"every representable frequency, periodic with period "
             f"N_in*dx_in); got {method!r}.")
+
+    # WP-C4 round 2 (V-C4-D2), completed VERIFY-WP-C4 round 2 (V-R2-3): the
+    # same refusal ``compute_psf``, ``propagate`` and
+    # ``propagate_carrier_referenced`` carry.  The spline leg reaches no
+    # matrix Fourier transform, so accepting the keyword there would silently
+    # drop a caller asking for the pre-shape-rule bytes.
+    if mft_method is not None and method != 'chirpz':
+        raise ValueError(
+            f"resample_field: mft_method= is only meaningful with "
+            f"method='chirpz' (got method={method!r}).  It names the route "
+            f"through the matrix Fourier transform ('auto' / 'bluestein' / "
+            f"'separable' / 'direct'); the spline resampler interpolates with "
+            f"map_coordinates and reaches no such transform.")
 
     # S11-6a (AUDIT_SIBLING_PATTERN_SWEEP_2026_07_25 §1, "harness knobs
     # must ERROR on unrecognised values"): ``order`` is passed straight

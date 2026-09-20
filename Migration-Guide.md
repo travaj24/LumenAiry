@@ -1807,7 +1807,7 @@ agree row for row.
 | `angular_spectrum_propagate_mft` | the MFT route | `method=` | `'bluestein'` (or `'separable'`) |
 | `asm_propagate` | -- (it has none) | `method=`, forwarded through `**method_kwargs` | `'bluestein'` (or `'separable'`) -- it is the propagator's own keyword, arriving through the forwarder |
 | `compute_psf(method='mft')` | the SAMPLER (`'fft'` / `'mft'`) | **`mft_method=`** | `'bluestein'` |
-| `resample_field(method='chirpz')` | the RESAMPLER (`'spline'` / `'chirpz'`) | **`mft_method=`** | `'bluestein'` |
+| `resample_field(method='chirpz')` | the RESAMPLER (`'spline'` / `'chirpz'`) | **`mft_method=`** | `'bluestein'`.  A `ValueError` with `method='spline'`, which reaches no transform |
 | `propagate(method='asm', output_grid=...)` | the propagator FAMILY | **`mft_method=`** | `'bluestein'` |
 | `propagate(method='fresnel', output_grid=...)` | the propagator FAMILY | **`mft_method=`** | `'bluestein'` |
 | `carrier_referenced_focus_readout` | -- | **`mft_method=`** | `'bluestein'` |
@@ -2005,10 +2005,12 @@ now: at the natural MFT grids `alpha = zoom/N`, so the budget is of order
   not safe on one of the two instruments the boundary was measured with (on WSL
   at `N = 1024, M = 64` it reads 1.4x slower with the shipped instrument and
   0.99 with an independent one), so 1/32 is the conservative value either way.
-* The work constant, 16, is the largest value that still captures every
-  anisotropic shape measured safe above the slower region, and it clears that
-  region by 1.34x (the largest work ratio measured slower on either build is
-  11.95).  It is a ONE-SIDED SCREEN, not a crossover: the readings are not
+* The work constant, 16, is the largest value the round-2 ladder's boundary
+  readings admit, clearing the slower region by 1.34x on that ladder (largest
+  work ratio measured slower 11.95); an independent ladder reads that boundary
+  at 7.99, so 16 carries 2.00x of margin rather than being the tightest value.
+  Both instruments agree that no shape at or above 16 was measured slower on
+  either build.  It is a ONE-SIDED SCREEN, not a crossover: the readings are not
   monotone in it, so it also refuses some thin shapes that would have been fine
   (11 of the 34 on the round-2 ladder).  If you are on one of those and want the
   dense route's memory and accuracy anyway, name it: `method='direct'` on the

@@ -490,12 +490,16 @@ def _claim_the_dense_side_is_the_more_accurate_side(shapes):
     TWICE the ratio of the two routes' phase arguments in TURNS; write
     ``R_turns = R/2``.  The gap the two kernels imply is
     ``R_turns * C_chirp/C_dense``, with ``C_chirp/C_dense`` MEASURED in
-    [1.481, 4.035] over ten decades of budget at the shipped N=24 -> M=12
-    geometry (hygiene-2 round 3, reproduced 2026-09-20 on both builds).  The
-    bar asserted is ``R / 4``, which IS ``R_turns / 2`` -- so it sits 3.0x to
-    8.1x below the implied gap (``2 x 1.481`` to ``2 x 4.035``).  That factor
-    is a chosen margin and not a derivation; the bar itself is unchanged and
-    it has a gap on both sides:
+    [0.94, 3.09] over eleven budgets spanning ten decades at the shipped
+    N=24 -> M=12 geometry, against an mpmath-40-digit reference on both
+    builds (VERIFY-WP-C4 round 2; an earlier wording read [1.481, 4.035]
+    from hygiene-2 round 3 and has not reproduced).  The bar asserted is
+    ``R / 4``, which IS ``R_turns / 2`` to within 3.1 % -- so it sits 1.9x
+    to 6.2x below the implied gap.  That factor is a chosen margin and not a
+    derivation.  The SHAPES here clear it by 4.2x at worst; a wider non-exact
+    ladder (224 -> 7) clears it by only 1.30x, so the margin belongs to these
+    fixtures and not to the bar.  The bar itself is unchanged and it has a
+    gap on both sides:
 
     * ABOVE.  MEASURED 2026-09-20 at a budget of 1e3, identical on both
       builds: 96 -> 3 reads a gap of 51 against a bar of 12.1 (4.2x clear),
