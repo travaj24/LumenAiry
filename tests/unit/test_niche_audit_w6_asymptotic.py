@@ -819,23 +819,60 @@ def test_w6_a2_v2_star_is_untouched_by_the_verdict_fix():
         f'{step_floor:.3e} float64 resolution of v2 (measured 9.9e-32).')
 
     # DECISION 2.  That root is the pupil CENTRE at the fit's own
-    # resolution.  The offset is bounded by |H^-1 r(v_c)| <= |r|/svmin --
-    # a theorem, with both quantities measured above -- and the bar has
-    # decades on both sides: the reading is 2.3e-14 to 4.3e-14 of the
-    # normalised box, the basin is 1.0, and a genuinely displaced
-    # expansion point (a wrong Hessian model, a sign error, a changed
-    # residual) moves it by a finite fraction of the box.
+    # resolution.  The offset's SCALE is |H^-1 r(v_c)| <= |r|/svmin, with
+    # both quantities measured above, and the bar has decades on both
+    # sides: the reading is 2.3e-14 to 4.3e-14 of the normalised box, the
+    # basin is 1.0, and a genuinely displaced expansion point (a wrong
+    # Hessian model, a sign error, a changed residual) moves it by a
+    # finite fraction of the box.
     norm_offset = float(np.max(np.abs(offset)) / fit.v2x_halfrange)
     bound = (rn / svmin) / float(fit.v2x_halfrange)
-    assert norm_offset <= 2.0 * bound, (
-        f'v2* sits further from the pupil centre than the fit asymmetry '
-        f'allows: {norm_offset:.3e} of the box against the derived '
-        f'|r|/svmin bound {bound:.3e}.')
     assert norm_offset < 1e-10, (
         f'v2* at the fit centre moved: offset {norm_offset:.3e} of the '
-        f'normalised pupil box -- 1e-10 is four decades above the '
-        f'2.3e-14..4.3e-14 the fit asymmetry produces and ten below the '
-        f'basin.')
+        f'normalised pupil box (the |r|/svmin scale is {bound:.3e}) -- '
+        f'1e-10 is four decades above the 2.3e-14..4.3e-14 the fit '
+        f'asymmetry produces and ten below the basin.')
+
+    # WHAT WAS HERE AND WHY IT WENT (VERIFY-WP-C2, the w6_a2 tautology).
+    # This block used to assert ``norm_offset <= 2.0 * bound``.
+    # ``|H^-1 r| <= |r| / sigma_min(H)`` is a THEOREM about the linear
+    # solve, so that assertion cannot fail while the solve is a solve --
+    # and measured, the offset SATURATES it, because r is nearly aligned
+    # with H's minimal singular direction: the ratio reads **0.99991 on
+    # Windows py3.14 / numpy 2.4.4 and 0.7159 on WSL py3.12 / numpy
+    # 2.4.6**.  A bar at 2.0x a quantity the reading is already 0.72-1.00
+    # of has no gap on either side and decides nothing.  The bound stays
+    # as the DERIVATION of the scale the decision above uses, and is
+    # reported in its message.
+    #
+    # DECISION 3 replaces it with a claim the model can actually fail:
+    # the returned point is a CONVERGED root of the NONLINEAR system, not
+    # merely one Newton step from the centre.  A second Newton step taken
+    # FROM v* must be a negligible fraction of the first.  Note the
+    # residual here carries the prior term ``(v - v_c) / w_p**2``, which
+    # vanishes at the centre and does not at v*, so this is the full
+    # Gauss-Newton residual and not a repeat of DECISION 1's algebra.
+    s1x2, s1y2, jxx2, jxy2, jyx2, jyy2 = fit.eval_s1_with_v2_grad(
+        np.asarray(float(fit.s2x_centre)).reshape(()),
+        np.asarray(float(fit.s2y_centre)).reshape(()),
+        np.asarray(v_star[0]).reshape(()), np.asarray(v_star[1]).reshape(()))
+    J2 = np.array([[float(jxx2), float(jxy2)], [float(jyx2), float(jyy2)]])
+    ds1_2 = np.array([float(s1x2) - 0.0, float(s1y2) - 0.0])
+    r_2 = (J2.T @ ds1_2) / w_s ** 2 + (v_star - v_c) / w_p ** 2
+    H2 = (J2.T @ J2) / w_s ** 2 + np.eye(2) / w_p ** 2
+    step2 = -np.linalg.solve(H2, r_2)
+    n1 = float(np.linalg.norm(predicted))
+    assert n1 > 0.0, 'the first Newton step is identically zero'
+    step_ratio = float(np.linalg.norm(step2)) / n1
+    assert step_ratio < 1e-4, (
+        f'v2* is not a CONVERGED root of the model: a second Newton step '
+        f'from it is {step_ratio:.3e} of the first, so the returned point '
+        f'is one step from the centre rather than the place the nonlinear '
+        f'system actually sits.  Measured 1.94e-07 (Windows py3.14 / '
+        f'numpy 2.4.4) and 8.77e-08 (WSL py3.12 / numpy 2.4.6) against '
+        f'this 1e-4 bar -- 500x to 1100x of headroom -- while a root that '
+        f'is not converged (a wrong Hessian, a missing prior term, a sign '
+        f'error) gives a ratio of order 1, four decades above it.')
 
 
 # ===========================================================================

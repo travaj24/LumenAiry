@@ -893,16 +893,48 @@ def test_the_separation_survives_the_c10_residual_degree_and_is_caused_by_it():
     #    Measured 2026-09-20: degree effect 0.1689 of bad6 against a
     #    one-ULP floor of 0.0026, i.e. 65x, where the absolute 2.0x bar
     #    read 1.17x.
-    noise = abs(_linearity_error(0.023, nudge=True) - bad6) / max(bad6,
-                                                                 1e-300)
+    #
+    #    ROUND 2 (VERIFY-WP-C2 defect D8): the floor is the WORST of two
+    #    one-ULP DIRECTIONS, not one draw.  Measured over four directions
+    #    (``validation/probe_c2_round2/r2_d3_floor_{win,wsl}.json``):
+    #
+    #        direction      Windows      WSL
+    #        up           2.586e-03   8.420e-05
+    #        down         1.802e-03   2.273e-03
+    #        real only    2.586e-03   8.420e-05   (identical to 'up': the
+    #                                              envelope is REAL, so the
+    #                                              two nudges coincide)
+    #        one element  1.250e-03   1.824e-04   (always the smallest)
+    #        spread           2.07x     26.99x
+    #
+    #    The shipped single draw ('up') is the largest on Windows and
+    #    27x the SMALLEST on WSL, so barring against it alone read 65x on
+    #    one build and 2008x on the other for the same fixture.  'up' and
+    #    'down' bracket the maximum on both builds, and 'real' / 'one
+    #    element' cannot exceed them, so the max over those two IS the
+    #    measured worst case -- at 1/3 the cost of all four.
+    #    Margin at the worst floor: 65.3x (Windows), 74.4x (WSL).
+    noise_by_direction = {
+        k: abs(_linearity_error(0.023, nudge=k) - bad6) / max(bad6, 1e-300)
+        for k in ('up', 'down')}
+    noise = max(noise_by_direction.values())
+    spread = noise / max(min(noise_by_direction.values()), 1e-300)
+    assert spread < 100.0, (
+        f'the one-ULP floor now varies by {spread:.1f}x between the two '
+        f'perturbation directions ({noise_by_direction}); measured 1.44x '
+        f'(Windows) and 27.0x (WSL) on 2026-09-20.  Above 100x the '
+        f'"floor" has stopped being one number and the bar below is '
+        f'measuring the choice of direction.')
     degree_effect = abs(bad4 - bad6) / max(bad6, 1e-300)
     assert degree_effect > 10.0 * noise, (
         f'the residual degree no longer moves the multiplexed route by '
         f'more than a one-ULP nudge of the input does: degree effect '
         f'{degree_effect:.4f} of bad6 against a last-bit floor of '
-        f'{noise:.4f}.  If those are comparable the attribution has no '
-        f'content on this fixture, and the claim belongs where it is '
-        f'exact -- the byte-identity arm in the sibling below.')
+        f'{noise:.4f} (the worst of {noise_by_direction}).  If those are '
+        f'comparable the attribution has no content on this fixture, and '
+        f'the claim belongs where it is exact -- the byte-identity arm in '
+        f'the sibling below.  Measured margin 65.3x (Windows) / 74.4x '
+        f'(WSL) at the worst floor.')
 
 
 def _mux_fan(tilt):
@@ -1028,12 +1060,54 @@ def test_the_residual_degree_moves_the_multiplexed_route_only_through_c6():
     # draw -- forcing the pre-5.49 ray-tracer keywords back reads 22.55
     # and the 5.49 defaults read 0.836, without anything this test is
     # about having changed.  See ``_mux_last_bit_noise``.
-    noise = _mux_last_bit_noise(0.023, degree=6, launch=True)
+    #
+    # ROUND 2 (VERIFY-WP-C2 defect D8): the floor is the WORST of two
+    # one-ULP DIRECTIONS, not one draw.  Its own spread over four
+    # directions is 3.22x (Windows) and 4.79x (WSL) -- AT OR ABOVE the
+    # 3.0 multiplier that used to sit on a single draw, so the floor was
+    # a draw in the same way the magnitude it replaced was.  Measured
+    # (``validation/probe_c2_round2/r2_d3_floor_{win,wsl}.json``):
+    #
+    #     direction      Windows      WSL
+    #     up           1.4036e-01   1.1079e-01
+    #     down         1.7820e-01   1.1491e-01     <- the maximum on both
+    #     real only    1.4036e-01   1.1079e-01     (== 'up'; real envelope)
+    #     one element  5.5353e-02   2.3985e-02     (always the smallest)
+    #
+    # 'up' and 'down' bracket the maximum on both builds, so the max over
+    # those two IS the measured worst case at half the cost of all four.
+    # Margin at that worst floor: 4.69x (Windows), 8.59x (WSL), against a
+    # 3.0 bar.
+    noise_by_direction = {
+        k: _mux_last_bit_noise(0.023, degree=6, launch=True, kind=k)
+        for k in ('up', 'down')}
+    noise = max(noise_by_direction.values())
+    spread = noise / max(min(noise_by_direction.values()), 1e-300)
+    assert spread < 100.0, (
+        f'the one-ULP floor now varies by {spread:.1f}x between the two '
+        f'perturbation directions ({noise_by_direction}); measured 1.27x '
+        f'(Windows) and 1.04x (WSL) on 2026-09-20.  Above 100x the '
+        f'"floor" has stopped being one number.')
     assert moved > 3.0 * noise, (
         f'the residual degree stopped moving the multiplexed route by '
         f'more than its own last bits do: {moved:.4f} of the degree-6 '
         f'answer\'s own norm against a one-ULP-input floor of '
-        f'{noise:.4f}')
+        f'{noise:.4f} (the worst of {noise_by_direction}).  Measured '
+        f'margin 4.69x (Windows) / 8.59x (WSL) at that floor.')
+    # ... and the OTHER side of the bar, which this arm never asserted:
+    # holding the degree FIXED must land AT the floor, not above it.  A
+    # bar that only refuses is satisfiable by a floor of zero; this is
+    # what makes it two-sided.  Measured EXACTLY 0.0 on both builds --
+    # the chain is deterministic, so the same degree twice is the same
+    # float64 words.
+    again = _mux_chain_field(0.023, degree=6, launch=True)
+    control = float(np.linalg.norm(again - on6)) / ref
+    assert control <= noise, (
+        f'running the SAME degree twice moved the multiplexed answer by '
+        f'{control:.4e} of its own norm, which is above the one-ULP '
+        f'floor {noise:.4e}.  Measured exactly 0.0 on both builds: if '
+        f'the chain has become non-deterministic, the comparison above '
+        f'is measuring that instead of the residual degree.')
 
 
 def test_c13_makes_the_d3_separation_build_independent():

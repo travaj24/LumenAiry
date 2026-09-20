@@ -1710,8 +1710,8 @@ def test_c2_the_two_backends_gate_the_sphere_domain_differently():
         f'premise: the ray set must actually reach past the clamp for '
         f'this comparison to have content; only {n_past} of {n} do.')
     assert n_past < n, (
-        f'premise: some rays must be INSIDE the clamp too, or "past the '
-        f'clamp" is the whole bundle and the arm is not a comparison.')
+        'premise: some rays must be INSIDE the clamp too, or "past the '
+        'clamp" is the whole bundle and the arm is not a comparison.')
 
     # --- the CPU half, on every combination of the two flipped defaults
     for rn in (PRE_C2_RENORMALIZE, 'exit'):
