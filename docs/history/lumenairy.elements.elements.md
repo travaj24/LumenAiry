@@ -1,12 +1,13 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/elements.py
-ast_sha256: f25bd1a46050f4d980382640e536ae3356f12645c48130c3fcd2e74367d442e6
-token_sha256: 3dcd336174c168e17649c4cde2b0faab761e0d8de628e14463557a66de8be19b
+ast_sha256: 6943dd547be12c6dd1396cb36968727185fc208e3e7ff02a1ef52b6aa64fbf96
+token_sha256: 72333d83f9b248dc393cfd43f65df9c238fdf3c9bb91f68fdf99dc5d738d7cbf
 pre_relocation_lines: 1402
 recorded_by: WP-A17 SWEEP-2 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
 re_recorded: 2026-09-14 -- Wave-5 item D (CI run 34914295323): DIGEST-SCHEME change, not a code change -- token_fingerprint now feeds an f-string to the digest as ONE STRING record holding its exact source text instead of the running tokenizer's FSTRING_START/FSTRING_MIDDLE/FSTRING_END run, so the recorded value is a property of the file rather than of the interpreter that read it; PEP 701 made CPython 3.12 tokenize f-strings differently from 3.11, these digests were recorded on 3.12+, and all five py3.11 CI shards read a different token_sha256 for byte-identical sources (110 of 123 documents, measured).  The module source is unchanged and ast_sha256 is unchanged.
 re_recorded: 2026-09-20 -- WP-C1: apply_aperture's edge default flips 'hard' -> 'gray' (the signature's default token)
+re_recorded: 2026-09-20 -- VERIFY-C1 D1: the two rim-keyword guards move out of apply_aperture's body into the shared _validate_edge_kwargs, which the chain's element reader also calls, so all three chain routes refuse identically.  VERIFY-C1 D3: the docstring's 'no convergence order at all' is restated as 'first order at best with erratic step orders', with the independent optic's mean orders.
 -->
 
 # Version history -- `lumenairy/elements/elements.py`

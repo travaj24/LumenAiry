@@ -348,9 +348,19 @@ def apply_aperture(E_in, dx, shape='circular', params=None, xc=0, yc=0,
                 **-0.62**    1.69         **-0.61**    2.02
         ======  ===========  ===========  ===========  ===========
 
-        The hard edge has **no convergence order at all** -- a circle's
-        staircase area error does not shrink monotonically, hence the
-        negative last step -- while the grey edge is second order.  The
+        The hard edge is **first order at best and its step orders are
+        erratic** -- a circle's staircase area error need not shrink
+        monotonically, and on THIS optic it does not, hence the negative
+        last step (the last refinement rises 54 % on RS and 53 % on HF) --
+        while the grey edge is second order.  The rise itself is this
+        optic's: whether the staircase error rises at a given refinement
+        depends on where the rim falls on the lattice at each N.  The RATE
+        gap is the general claim, and it reproduces elsewhere -- on
+        lambda = 1064 nm, a = 62.5 um, window 400 um, z = 4.0 / 2.5 mm the
+        hard arm falls at every step and still gains only 9.5x (RS) and
+        9.3x (HF) over the same three halvings against the grey arm's
+        56.1x and 44.9x, mean orders 1.08 / 1.07 against 1.94 / 1.83
+        (2026-09-20, both builds; ``validation/probe_verify_c1/``).  The
         grey default therefore buys a RATE, not a constant: 21x (RS) and
         8x (HF) by N = 1024, and more at every finer grid.
 

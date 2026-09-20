@@ -1791,11 +1791,19 @@ gives each boundary pixel its `edge_samples**2`-supersampled open-area fraction.
 
 It buys a convergence RATE, not a constant.  Against the closed-form on-axis
 field behind a circular aperture (lambda = 633 nm, a = 100 um, window 512 um),
-on both of the library's spatial kernels, the hard rim's error does not even
-shrink monotonically -- it RISES 54 % from N = 512 to N = 1024 on the
-Rayleigh-Sommerfeld spatial kernel and 53 % on the Huygens-Fresnel OPL
-quadrature -- while the grey rim is second order and is 21.1x (RS) and 8.3x (HF)
-more accurate at N = 1024.  The full ladders are in the CHANGELOG entry and in
+on both of the library's spatial kernels, the hard rim's error is **first order
+at best and its step orders are erratic**, while the grey rim is second order
+and is 21.1x (RS) and 8.3x (HF) more accurate at N = 1024.  On the reference
+optic the hard arm's last refinement actually RISES 54 % from N = 512 to
+N = 1024 on the Rayleigh-Sommerfeld spatial kernel and 53 % on the
+Huygens-Fresnel OPL quadrature.  That rise is that optic's -- whether the
+staircase error rises at a given refinement depends on where the rim falls on
+the lattice at each N -- so do not read it as a library property; on an
+independent optic (lambda = 1064 nm, a = 62.5 um, window 400 um, z = 4.0 /
+2.5 mm) the hard arm falls at every step and still gains only 9.5x and 9.3x
+over the three halvings against the grey arm's 56.1x and 44.9x, mean orders
+1.08 / 1.07 against 1.94 / 1.83.  It is the RATE gap that you can count on at
+any (lambda, a, window, z).  The full ladders are in the CHANGELOG entry and in
 `docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/WP-C1_GRAY_EDGE_REPORT.md`.
 The extra work is confined to the boundary pixels: 0.076x of one full-grid pass
 at N = 256 and 0.018x at N = 1024.

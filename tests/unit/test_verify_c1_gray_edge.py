@@ -449,10 +449,14 @@ def test_verify_c1_the_rate_gap_reproduces_on_an_independent_optic():
         HF gray  6.2004e-03  1.8600e-03  4.2403e-04  1.3795e-04
 
     so over the three halvings the grey arm gains 56.1x (RS) and 44.9x (HF)
-    -- mean orders 1.94 and 1.83, i.e. second order -- while the hard arm
-    gains 9.46x and 9.27x -- mean orders 1.08 and 1.06, i.e. first order --
-    and the hard arm's STEP orders are erratic (0.20 at one step on both
-    kernels, against 1.68 and 1.36 at the others).
+    -- mean orders 1.9369 and 1.8301, i.e. second order -- while the hard arm
+    gains 9.4555x and 9.2699x -- mean orders 1.0804 and 1.0709, i.e. first
+    order -- and the hard arm's STEP orders are erratic (0.20 at one step on
+    both kernels, against 1.68 and 1.36 at the others).  (Re-measured
+    2026-09-20 in round 2 on both builds, identical to every digit above; the
+    HF hard mean order printed 1.06 here and in VERIFY_WP-C1.md section 2.1,
+    which is log2(9.2699)/3 rounded the wrong way -- it is 1.0709.  No
+    assertion read it; the CHANGELOG restatement quotes the corrected value.)
 
     The decisions, each with measured headroom:
       * grey falls at every refinement on both kernels (monotone);

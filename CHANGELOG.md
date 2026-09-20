@@ -28,12 +28,28 @@ window 512 um), on both spatial kernels, at N = 128 / 256 / 512 / 1024:
 | 1024 | **5.2718e-04** | 2.5030e-05 | **1.7601e-03** | 2.1122e-04 |
 | order | 1.31 / 3.29 / **-0.62** | 2.04 / 2.16 / 1.69 | 1.32 / 3.27 / **-0.61** | 2.05 / 2.03 / 2.02 |
 
-The hard arm's error RISES on the last refinement (by 54 % on RS and 53 % on HF)
--- a circle's staircase area error does not shrink monotonically, so that arm has
-no usable order at all -- while the grey arm falls at every step and by 59.3x (RS)
-and 68.4x (HF) over the three halvings.  The gain at the finest grid is 21.1x and
-8.3x.  Both builds (Windows py3.14 / scipy-openblas, WSL py3.12 / scipy-openblas)
-read every entry above to five significant figures.
+The hard arm is **first order at best and its step orders are erratic**, while
+the grey arm is second order: on the reference optic above the hard arm's error
+actually RISES on the last refinement (by 54 % on RS and 53 % on HF), which is
+where its negative last step order comes from, while the grey arm falls at every
+step and by 59.3x (RS) and 68.4x (HF) over the three halvings.  The gain at the
+finest grid is 21.1x and 8.3x.  Both builds (Windows py3.14 / scipy-openblas,
+WSL py3.12 / scipy-openblas) read every entry above to five significant figures.
+
+**The RATE gap is the general claim; the RISE is this optic's.**  Whether a
+circle's staircase area error actually rises at a given refinement depends on
+where the rim falls on the lattice at each N, so it is a property of one
+(lambda, a, window, z) and not of the library.  Re-measured on an independent
+optic two octaves away in Fresnel number (lambda = 1064 nm, a = 62.5 um, window
+400 um, z = 4.0 mm RS / 2.5 mm HF, same closed form, both builds identical to
+twelve significant figures): the hard arm FALLS at every step there, with step
+orders 1.68 / 0.20 / 1.36 (RS) and 1.67 / 0.20 / 1.34 (HF) -- but its mean order
+over the same three halvings is only **1.08** (RS) and **1.07** (HF) against the
+grey arm's **1.94** and **1.83**, so the rate gap reproduces and the
+non-monotonicity does not.  Ladders and JSON in
+`validation/probe_verify_c1/`; pinned from both sides by
+`tests/unit/test_verify_c1_gray_edge.py::test_verify_c1_the_rate_gap_reproduces_on_an_independent_optic`
+and `::test_verify_c1_the_hard_arms_non_monotonicity_is_fixture_specific`.
 
 `edge_samples` stays at 4, which is the knee and is now pinned as one: on the RS
 ladder at N = 512 the readings are 3.4207e-04 / 1.6563e-04 / **8.1013e-05** /
@@ -3202,7 +3218,7 @@ hardest on exactly this field because the single-FFT Fresnel output's
 residual chirp sits at Nyquist at the grid edge by construction.
 
 The leg now calls `fresnel_propagate_mft` with the chain's own pitch and
-sample count (`lumenairy/propagators/system.py:934`).  That is the same
+sample count (`lumenairy/propagators/system.py:935`).  That is the same
 Fresnel integral, sampled where the chain wants it, so neither error
 exists.  Refereed against the Fresnel integral written out as an explicit
 double sum over the input samples -- no FFT, no Bluestein, no library
@@ -3230,13 +3246,13 @@ reads a single input pitch, so a grid with `Ny != Nx` had its y axis
 rescaled by the **x** ratio -- wrong by `Nx/Ny`, with no diagnostic.
 
 Because there is no resample left to crop, the leg no longer calls
-`_warn_system_resample_crop` (`system.py:361`); the `'sas'` leg still
+`_warn_system_resample_crop` (`system.py:362`); the `'sas'` leg still
 does, unchanged.  `fresnel_propagate_mft` carries the same K1
 chirp-sampling guard (`lumenairy/propagators/mft.py:1096`) plus its own
 faithful-zone warning with period `lambda*|z|/dx_in`, so no diagnostic
 is lost -- see Migration for the two messages whose wording moves.
 
-Files: `lumenairy/propagators/system.py:55`, `:806-841`, `:359-383`,
+Files: `lumenairy/propagators/system.py:56`, `:806-841`, `:359-383`,
 `:160-173`, `:452-459`, `:1638-1646`, `:1771-1783`.
 Tests: `tests/unit/test_audit2609_b3b_resample_call_sites.py::TestK6FresnelLegEvaluatesOntoTheChainGrid`
 (12 tests).
@@ -3273,7 +3289,7 @@ interpolant and the historical cubic spline:
     method=('chirpz' if N_out * dx_out <= N_in * dx_in else 'spline')
 ```
 
-per axis (`lumenairy/propagators/system.py:977`,
+per axis (`lumenairy/propagators/system.py:978`,
 `lumenairy/elements/_lens_real.py:2969` and `:2889`).  The chirp-Z leg
 has unit MTF at every frequency the grid represents, but its
 reconstruction is **periodic** with period `N_in*dx_in`, so a window
@@ -3312,7 +3328,7 @@ dx = 112.500 um, lambda = 632.8 nm) **both** gaps sit at `dx_new/dx` =
 1 mm N-BK7 plate at dx = 2 um sits at 1.6320 and takes the chirp-Z leg.
 Both directions occur in the shipped suite.
 
-Files: `lumenairy/propagators/system.py:958-983`,
+Files: `lumenairy/propagators/system.py:959-984`,
 `lumenairy/elements/_lens_real.py:2905-2976`, `:2882-2895`.
 Tests: `tests/unit/test_audit2609_b3b_resample_call_sites.py::TestK6TheChirpZGate`
 (11), `::TestK6ByteIdentityWhereTheGateSelectsTheSpline` (7),
@@ -3372,13 +3388,13 @@ message and the function's docstring say so.  Behaviour is unchanged --
 the JAX path is still ASM-only and still refuses both, and an
 `method='asm'` JAX chain is byte-identical.
 
-Files: `lumenairy/propagators/system.py:1944-1956`, `:1730-1738`.
+Files: `lumenairy/propagators/system.py:1968-1980`, `:1730-1738`.
 
 <!-- WP-VERIFY_WP-B3b: Propagator call sites: verifier follow-ups -->
 ### Fixed -- a `method='fresnel'` chain step warns again when the chain window holds only part of the beam (K6)
 
 WP-B3b retired the `'fresnel'` leg's resample, and the K6 crop warning
-went with it (`_warn_system_resample_crop`, `system.py:361`).  Its
+went with it (`_warn_system_resample_crop`, `system.py:362`).  Its
 changelog recorded that `fresnel_propagate_mft`'s own faithful-zone
 warning takes over, so no diagnostic is lost.  It does not: on the chain
 grid the two conditions are **disjoint**.  `fresnel_propagate_mft` warns
@@ -3411,7 +3427,7 @@ own replica regime at that pitch, so they bound the loss rather than
 measure it.)
 
 The leg now calls `_warn_system_fresnel_window`
-(`lumenairy/propagators/system.py:417`, called at `:933`), which measures
+(`lumenairy/propagators/system.py:418`, called at `:934`), which measures
 the power the chain window keeps and raises the same `RuntimeWarning`
 class, at the same `1e-6` retained-power bar, as
 `_warn_system_resample_crop` -- naming the retained percentage, `z`
@@ -3435,7 +3451,7 @@ three-element, lens+aperture, anamorphic, tilted element, tilted chain),
 and every guard text.  Exactly one warning record changes, and it is the
 probe where 5.46.0 emitted the crop warning.
 
-`_warn_system_resample_crop`'s docstring (`system.py:361`) and the
+`_warn_system_resample_crop`'s docstring (`system.py:362`) and the
 `'fresnel'` leg's comment now say which of the three diagnostics covers
 which condition, instead of describing one as the other's replacement.
 
