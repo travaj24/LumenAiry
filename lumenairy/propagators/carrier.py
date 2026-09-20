@@ -2140,7 +2140,7 @@ def _collins_transport(env, R_in, z, wavelength, dx, dy, *,
     can fill the replicas), so it leaves this false; the chain leg has no such
     argument, so it passes it true.  See :func:`_check_collins_sampling`.
 
-    BACKENDS (5.48.0).  The transport runs in the FIELD'S OWN namespace on
+    BACKENDS.  The transport runs in the FIELD'S OWN namespace on
     NumPy, CuPy and JAX, selected by :func:`_backend_of` exactly as every other
     leg in this module is.  There is no ``_jax`` twin: the three stages, the
     exact-kernel refinement and the chirp builders are one implementation each,
@@ -2413,7 +2413,7 @@ def _collins_carrier_leg(env, R, z, wavelength, dx, dy, *,
     BACKENDS.  The leg runs in the FIELD'S OWN namespace, resolved by the same
     :func:`_backend_of` triple :func:`_collins_transport` uses, so the port is
     reachable from ``propagate_carrier_referenced(transport='collins')`` and
-    not only from the private transport.  Until 5.48 this line read
+    not only from the private transport.  Until this change the line read
     ``env_a = np.asarray(env)``: an eager JAX array was silently demoted to
     host NumPy (bitwise equal to the NumPy arm, so no test could see it), a
     CuPy array raised a bare ``TypeError: Implicit conversion to a NumPy array

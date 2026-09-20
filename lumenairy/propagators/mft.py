@@ -238,8 +238,8 @@ def angular_spectrum_propagate_mft(
         exact limit; being the larger of the two it never over-filters.
         See :func:`~lumenairy.propagators.fft_infra._get_or_make_bandlimit`.
     use_gpu : bool, default False
-    method : {'auto', 'direct'}, default 'auto'
-        Which route through the transform's own sum to take (5.48.0).
+    method : {'auto', 'bluestein', 'separable', 'direct'}, default 'auto'
+        Which route through the transform's own sum to take.
         ``'auto'`` is the shipped default and is the chirp-Z (Bluestein)
         reduction this propagator has always taken -- byte for byte, on
         every backend, proved archive-to-archive against 5.47.0 over 179
@@ -248,6 +248,18 @@ def angular_spectrum_propagate_mft(
         (:func:`~lumenairy.propagators._bluestein._direct_matrix_2d`): two
         matrix products, ``O(M N^2 + M^2 N)`` multiply-adds, no zero-padding
         and no chirp signal to spend float64 mantissa on.
+
+        ``'bluestein'`` and ``'separable'`` name the two chirp-Z arms
+        explicitly (the 2-D convolution, and the two-pass form that holds
+        ``N x L`` instead of ``L^2``; ``'separable'`` falls back to the 2-D
+        arm off NumPy).  They were accepted here by pass-through from the
+        first release of this keyword and were not documented, so this entry
+        used to advertise a NARROWER vocabulary than the code takes -- a
+        caller reading it would have thought a working value was refused
+        (V-D18, 2026-09-19).  The four values are
+        :data:`~lumenairy.propagators._bluestein._SUM_METHODS` plus
+        ``'auto'``, the vocabulary is CLOSED, and an unrecognised value
+        raises rather than falling through to a default.
 
         WHEN IT IS THE BETTER ROUTE.  For MEMORY, always at these shapes:
         the chirp-Z route pads each axis to
@@ -906,8 +918,8 @@ def fresnel_propagate_mft(
         Route through CuPy if available.  Auto-detected from ``E_in``
         (CuPy / JAX arrays use their native backend regardless of this
         flag).
-    method : {'auto', 'direct'}, default 'auto'
-        Which route through the transform's own sum to take (5.48.0).
+    method : {'auto', 'bluestein', 'separable', 'direct'}, default 'auto'
+        Which route through the transform's own sum to take.
         ``'auto'`` is the shipped default and is the chirp-Z (Bluestein)
         reduction this propagator has always taken -- byte for byte, on
         every backend, proved archive-to-archive against 5.47.0 over 179
@@ -916,6 +928,18 @@ def fresnel_propagate_mft(
         (:func:`~lumenairy.propagators._bluestein._direct_matrix_2d`): two
         matrix products, ``O(M N^2 + M^2 N)`` multiply-adds, no zero-padding
         and no chirp signal to spend float64 mantissa on.
+
+        ``'bluestein'`` and ``'separable'`` name the two chirp-Z arms
+        explicitly (the 2-D convolution, and the two-pass form that holds
+        ``N x L`` instead of ``L^2``; ``'separable'`` falls back to the 2-D
+        arm off NumPy).  They were accepted here by pass-through from the
+        first release of this keyword and were not documented, so this entry
+        used to advertise a NARROWER vocabulary than the code takes -- a
+        caller reading it would have thought a working value was refused
+        (V-D18, 2026-09-19).  The four values are
+        :data:`~lumenairy.propagators._bluestein._SUM_METHODS` plus
+        ``'auto'``, the vocabulary is CLOSED, and an unrecognised value
+        raises rather than falling through to a default.
 
         WHEN IT IS THE BETTER ROUTE.  For MEMORY, always at these shapes:
         the chirp-Z route pads each axis to
@@ -954,7 +978,7 @@ def fresnel_propagate_mft(
     transform with two zero-padded 2-D FFTs.  ``O(N^2 M^2)`` is the cost of
     the UNFACTORED four-index sum a direct matrix-Fourier transform is
     sometimes quoted at; the transform is separable, so the dense route
-    ``method='direct'`` (5.48.0) pays ``O(M N^2 + M^2 N)`` instead and is
+    ``method='direct'`` pays ``O(M N^2 + M^2 N)`` instead and is
     the faster of the two below the measured crossover as well as always
     the smaller in memory.  See the ``method`` parameter.
 
@@ -1176,8 +1200,8 @@ def fraunhofer_propagate_mft(
         an off-axis point (e.g. an exoplanet location relative to a
         stellar chief image).
     use_gpu : bool, default False
-    method : {'auto', 'direct'}, default 'auto'
-        Which route through the transform's own sum to take (5.48.0).
+    method : {'auto', 'bluestein', 'separable', 'direct'}, default 'auto'
+        Which route through the transform's own sum to take.
         ``'auto'`` is the shipped default and is the chirp-Z (Bluestein)
         reduction this propagator has always taken -- byte for byte, on
         every backend, proved archive-to-archive against 5.47.0 over 179
@@ -1186,6 +1210,18 @@ def fraunhofer_propagate_mft(
         (:func:`~lumenairy.propagators._bluestein._direct_matrix_2d`): two
         matrix products, ``O(M N^2 + M^2 N)`` multiply-adds, no zero-padding
         and no chirp signal to spend float64 mantissa on.
+
+        ``'bluestein'`` and ``'separable'`` name the two chirp-Z arms
+        explicitly (the 2-D convolution, and the two-pass form that holds
+        ``N x L`` instead of ``L^2``; ``'separable'`` falls back to the 2-D
+        arm off NumPy).  They were accepted here by pass-through from the
+        first release of this keyword and were not documented, so this entry
+        used to advertise a NARROWER vocabulary than the code takes -- a
+        caller reading it would have thought a working value was refused
+        (V-D18, 2026-09-19).  The four values are
+        :data:`~lumenairy.propagators._bluestein._SUM_METHODS` plus
+        ``'auto'``, the vocabulary is CLOSED, and an unrecognised value
+        raises rather than falling through to a default.
 
         WHEN IT IS THE BETTER ROUTE.  For MEMORY, always at these shapes:
         the chirp-Z route pads each axis to

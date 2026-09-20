@@ -30,9 +30,31 @@ The bar is ABSOLUTE, so what is asserted against it is the MAX-ABS departure.
 MEASURED 2026-09-15/19 on Windows py3.14 (numpy 2.4.4) and WSL py3.12
 (numpy 2.4.6, scipy-openblas SkylakeX), at ``N = 16/32/48``: the dense route
 sits ``2.17 .. 2.59`` decades inside its bar and the chirp-Z routes ``1.47 ..
-1.98`` -- the margin narrowing with ``n``, as it must, because the growth
-factors are upper bounds.  The smallest real signal above is an O(1) wrong
-answer, so there are fourteen decades on the other side.
+1.98``.  The smallest real signal above is an O(1) wrong answer, so there are
+fourteen decades on the other side.
+
+THE MARGIN AND ITS RANGE OF VALIDITY (corrected 2026-09-19,
+VERIFY-WAVE5-HYGIENE2 V-D8).  An earlier wording here said "the margin
+narrowing with ``n``, as it must, because the growth factors are upper
+bounds".  That is backwards twice over: a bar that grows faster than the error
+it bounds gives a WIDENING margin, and the two routes do OPPOSITE things.
+MEASURED over ``N -> M`` = 16->8, 48->24, 96->48, 128->64, 192->96, 256->128
+on both builds:
+
+* the DENSE route's margin WIDENS, 1.84 -> 3.60 decades, because its error
+  grows like ``sqrt(n)`` against a bar that grows like ``n``;
+* the chirp-Z routes' margin NARROWS, 1.93 -> 0.73 decades, because their
+  error grows FASTER than ``3*log2(L^2) * eps * sum|E|``.
+
+The bar is a bound for both at every shape measured -- it is never crossed up
+to N = 256 on either build -- and the shapes this file exercises (max 32x24)
+are 1.6-2.4 decades inside it, so the shipped assertions are sound.  What is
+finite is the chirp-Z half's lifetime: extrapolating the measured trend, its
+bar would first be crossed near ``N ~ 4000-5000``.  Nothing here goes near
+that, and nothing in the formula says so, which is why it is written down.
+The trend itself is gated, as a trend, by
+``tests/unit/test_verify_wave5_hyg2.py::
+test_the_two_reductions_margins_move_in_opposite_directions_with_n``.
 """
 from __future__ import annotations
 
@@ -297,8 +319,209 @@ def test_the_vocabulary_the_error_names_is_the_vocabulary_that_works():
         assert out.shape == (4, 4)
 
 
+def test_the_two_primitives_report_the_same_first_error():
+    """Vocabulary before geometry, and the SAME order in both primitives.
+
+    MEASURED 2026-09-19 (VERIFY-WAVE5-HYGIENE2 V-D17):
+    ``_bluestein_centred_2d([[1+0j, 2+0j]], ..., method='bogus')`` raised
+    ``AttributeError: 'list' object has no attribute 'shape'`` because it read
+    ``E.shape`` before it checked ``method``, while ``_bluestein_2d`` with the
+    same arguments raised the designed ``ValueError``.  With
+    ``sign=0, method='bogus'`` the two even named DIFFERENT first errors.  A
+    caller who mistypes a keyword should be told which keyword, by whichever
+    primitive they reached.
+
+    The input is deliberately a LIST, not an array: that is what makes the
+    ordering observable at all.
+    """
+    E = [[1 + 0j, 2 + 0j], [3 + 0j, 4 + 0j]]
+    kw = dict(xp=np, fft2=_fft2, ifft2=_ifft2)
+    for sign, method, needle in ((-1, 'bogus', 'method'),
+                                 (0, 'bogus', 'sign'),
+                                 (0, 'auto', 'sign')):
+        seen = {}
+        for name, fn in (('_bluestein_2d', _bluestein_2d),
+                         ('_bluestein_centred_2d', _bluestein_centred_2d)):
+            with pytest.raises(ValueError) as exc:
+                fn(E, 0.01, 0.01, 2, 2, sign=sign, method=method, **kw)
+            seen[name] = str(exc.value)
+            assert needle in seen[name], (
+                f"{name}(sign={sign}, method={method!r}) reported "
+                f"{seen[name]!r}, which does not name {needle}")
+        assert seen['_bluestein_2d'].split(' must ')[0] == \
+            seen['_bluestein_centred_2d'].split(' must ')[0], (
+            f"the two primitives disagree on which keyword is wrong first: "
+            f"{seen}")
+
+
+def _fsum_reference(E, alpha, M, sign=-1):
+    """The same sum again, but summed by ``math.fsum`` -- correctly rounded.
+
+    :func:`_pairwise_reference` is the right reference for comparing two
+    SUMMATIONS, because it commits the same class of error as the routes it is
+    compared against.  It is the wrong reference for measuring how much a
+    CHIRP PHASE costs, because at a large phase budget the reference's own
+    chirp is as wrong as the route's.  ``math.fsum`` is exact to the last bit
+    of the true sum, so what is left is the phase.
+    """
+    import math
+    ny, nx = E.shape
+    n_x = np.arange(nx, dtype=np.float64)
+    n_y = np.arange(ny, dtype=np.float64)
+    out = np.empty((M, M), dtype=np.complex128)
+    for ky in range(M):
+        ty = alpha * ky * n_y
+        wy = np.exp(1j * sign * 2.0 * np.pi * (ty - np.rint(ty)))
+        for kx in range(M):
+            tx = alpha * kx * n_x
+            wx = np.exp(1j * sign * 2.0 * np.pi * (tx - np.rint(tx)))
+            T = E * (wy[:, None] * wx[None, :])
+            out[ky, kx] = complex(math.fsum(T.real.ravel()),
+                                  math.fsum(T.imag.ravel()))
+    return out
+
+
+def _chirp_and_dense_at(budget, N=24, M=12, seed=5):
+    """``(rel_chirp, warned_chirp, rel_dense, warned_dense)`` at one budget."""
+    import warnings as _w
+    from lumenairy.propagators._bluestein import _bluestein_2d as _b2
+    E = _rand(N, N, seed=seed)
+    alpha = budget / float(N) ** 2
+    ref = _fsum_reference(E, alpha, M)
+    out = []
+    for kw in ({}, {'method': 'direct'}):
+        with _w.catch_warnings(record=True) as caught:
+            _w.simplefilter('always')
+            got = _b2(E, alpha, alpha, M, M, sign=-1, xp=np, fft2=_fft2,
+                      ifft2=_ifft2, **kw)
+        out.append(float(np.linalg.norm(got - ref) / np.linalg.norm(ref)))
+        out.append(any('chirp phase' in str(c.message) for c in caught))
+    return tuple(out)
+
+
+def test_the_chirp_phase_error_is_linear_in_the_budget_and_dense_is_immune():
+    """THE LAW the threshold is derived from, re-measured by the gate itself.
+
+    Against a ``math.fsum`` correctly-rounded reference, the chirp-Z routes'
+    relative L2 is LINEAR in the phase budget ``alpha * N_max^2`` -- there is
+    no cliff to sit just below, and the historical "approaches float64
+    precision limit (1e15-1e16)" wording described a cliff that does not
+    exist.  MEASURED 2026-09-19 on both builds: 1.98e-10, 1.41e-08, 1.84e-04,
+    2.48e-01 at budgets 1e6, 1e8, 1e12, 1e15, against ``eps * budget`` of
+    2.22e-10, 2.22e-08, 2.22e-04, 2.22e-01 -- the same number to within a
+    factor of 1.5 over nine decades.  The dense route reads 3.1e-16 ..
+    1.8e-16 at every one of them.
+
+    Nothing here pins the THRESHOLD; the next id does that, so this one stays
+    true whatever the threshold becomes.
+    """
+    from lumenairy.propagators._bluestein import _EPS64
+    budgets = (1e6, 1e8, 1e10, 1e12)
+    rows = [(b,) + _chirp_and_dense_at(b) for b in budgets]
+    for b, rc, _wc, rd, _wd in rows:
+        pred = _EPS64 * b
+        assert 0.2 * pred < rc < 5.0 * pred, (
+            f"at budget {b:.0e} the chirp-Z relative error is {rc:.3e}, not "
+            f"the measured law eps*budget = {pred:.3e} (factor "
+            f"{rc / pred:.2f}); the threshold is derived from that law")
+        assert rd < 1e-14, (
+            f"at budget {b:.0e} the DENSE route reads {rd:.3e}; it reduces "
+            f"its phase by t - rint(t) and must be immune to the budget")
+    slope = np.polyfit(np.log([r[0] for r in rows]),
+                       np.log([r[1] for r in rows]), 1)[0]
+    assert abs(slope - 1.0) < 0.1, (
+        f"the chirp error grows as budget^{slope:.4f}, not linearly; the "
+        f"derivation of the threshold below does not hold")
+
+
+def test_the_phase_budget_threshold_is_the_budget_that_keeps_six_figures():
+    """The THRESHOLD, two-sided, against the law above.
+
+    DERIVED: ``_PHASE_BUDGET_MAX = 1e-6 / eps = 4.5036e9`` is the budget at
+    which six significant figures remain.  Both sides are asserted, because a
+    threshold with only one side is a preference:
+
+    * just BELOW it the routes are quiet AND still accurate -- MEASURED
+      5.32e-07 at the threshold itself, inside the 1e-6 the threshold is
+      named for;
+    * just ABOVE it the guard fires AND the error really has passed 1e-6 --
+      MEASURED 1.90e-06 at a budget of 1e10.
+
+    WHY THE OLD 1e15 IS GONE (VERIFY-WAVE5-HYGIENE2 V-D5).  It was 7.5 decades
+    late: at 1e12 the route returned an answer wrong in the fourth significant
+    figure in silence, and the first budget that warned at all was 3.16e15, by
+    which point the answer was 25 % wrong.  This is a change in WARNING
+    behaviour, not a byte move -- no route's arithmetic changed -- and the
+    quiet-caller side of it is the id after this one.
+    """
+    from lumenairy.propagators._bluestein import _EPS64, _PHASE_BUDGET_MAX
+
+    # the derivation itself, so the constant cannot drift from its reason
+    assert _PHASE_BUDGET_MAX * _EPS64 == pytest.approx(1e-6, rel=1e-12), (
+        f"_PHASE_BUDGET_MAX = {_PHASE_BUDGET_MAX:.6e} is not 1e-6/eps; the "
+        f"constant and the accuracy it claims have parted company")
+
+    rc_lo, w_lo, rd_lo, wd_lo = _chirp_and_dense_at(_PHASE_BUDGET_MAX * 0.9)
+    assert not w_lo and not wd_lo, (
+        "the guard fires BELOW its own threshold")
+    assert rc_lo < 1e-6, (
+        f"at 0.9x the threshold the chirp-Z error is already {rc_lo:.3e}, "
+        f"past the 1e-6 the threshold is named for; re-derive it")
+
+    rc_hi, w_hi, rd_hi, wd_hi = _chirp_and_dense_at(_PHASE_BUDGET_MAX * 2.2)
+    assert w_hi, "the guard did not fire above its threshold"
+    assert not wd_hi, (
+        "the dense route warned; it has no chirp phase to lose and its "
+        "method= is the warning's own advice")
+    assert rc_hi > 1e-6, (
+        f"just above the threshold the chirp-Z error is {rc_hi:.3e}, still "
+        f"inside 1e-6 -- the threshold would be firing early")
+    assert rd_hi < 1e-14, f"the dense route moved to {rd_hi:.3e}"
+
+
+def test_no_shipped_mft_grid_comes_near_the_phase_budget():
+    """The other side of lowering a threshold: who does it make noisy?
+
+    The budget a public MFT call spends is ``alpha * N_max^2`` with
+    ``alpha = dx * dx_out / (lambda z)``, which the caller's own numbers give
+    without instrumenting anything.  For the natural focal-zoom grids these
+    propagators are written for, ``alpha ~ zoom/N`` and the budget is of order
+    ``zoom * N``.  Every fixture below is asserted to sit at least three
+    decades under the threshold AND to run without a RuntimeWarning, with
+    warnings promoted to errors so a silent one cannot slip through.
+    """
+    import warnings as _w
+    from lumenairy.propagators._bluestein import _PHASE_BUDGET_MAX
+    from lumenairy.propagators.mft import (angular_spectrum_propagate_mft,
+                                           fraunhofer_propagate_mft,
+                                           fresnel_propagate_mft)
+    wl = 633e-9
+    cases = [
+        # (N, dx, z, zoom, N_out)
+        (256, 8e-6, 0.05, 10.0, 128),
+        (512, 4e-6, 0.20, 4.0, 256),
+        (1024, 2e-6, 0.01, 20.0, 128),
+        (128, 20e-6, 1.00, 2.0, 128),
+    ]
+    for N, dx, z, zoom, N_out in cases:
+        dx_out = (wl * z / (N * dx)) / zoom
+        budget = (dx * dx_out / (wl * z)) * float(max(N, N_out)) ** 2
+        assert budget < _PHASE_BUDGET_MAX / 1e3, (
+            f"a natural MFT grid (N={N}, dx={dx:.1e}, z={z}, zoom={zoom}) "
+            f"spends a phase budget of {budget:.3e}, within three decades of "
+            f"the {_PHASE_BUDGET_MAX:.3e} threshold -- lowering the threshold "
+            f"would make an ordinary caller noisy")
+        E = _gauss(N, dx, 12.0 * dx)
+        for fn in (fresnel_propagate_mft, fraunhofer_propagate_mft,
+                   angular_spectrum_propagate_mft):
+            with _w.catch_warnings():
+                _w.simplefilter('ignore')
+                _w.simplefilter('error', RuntimeWarning)
+                fn(E, z, wl, dx, dx_out, N_out)
+
+
 def test_the_chirp_phase_guard_fires_on_the_chirp_route_and_not_the_dense_one():
-    """The ``alpha * N^2 > 1e15`` warning is a statement about the CHIRP
+    """The phase-budget warning is a statement about the CHIRP
     signals' float64 phase, and its advice ("fall back to a regular FFT
     propagator") is about the route that has them.  The dense route reduces its
     argument modulo one turn, so it has no such phase -- warning there would be

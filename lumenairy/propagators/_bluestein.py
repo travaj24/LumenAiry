@@ -40,7 +40,7 @@ cost ``O((N + M) \\log (N + M))`` per axis, where ``N = N_in`` and
 ``M = N_out``.  This is dramatically faster than a direct matrix-Fourier
 transform for typical focal-zoom workflows.  ``O(N^2 M^2)`` is the cost of the
 UNFACTORED four-index sum; the transform is separable, so the dense route
-(:func:`_direct_matrix_2d`, shipped since 5.48.0 as the opt-in ``method=
+(:func:`_direct_matrix_2d`, shipped as the opt-in ``method=
 'direct'``) evaluates it as two matrix products at ``O(M N^2 + M^2 N)``.  The
 measured time and memory crossover is tabulated in
 ``docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/
@@ -244,6 +244,29 @@ def _bluestein_2d_separable(E, alpha_x, alpha_y, N_out_y, N_out_x, *,
 #: ``separable=True`` flag has selected since v5.33.2; ``'direct'`` is the
 #: dense matrix-Fourier transform below.
 _SUM_METHODS = ('bluestein', 'separable', 'direct')
+
+#: float64 machine epsilon, named once so the budget below is visibly derived
+#: from it rather than typed as a number.
+_EPS64 = float(np.finfo(np.float64).eps)
+
+#: The chirp phase budget at which the chirp-Z routes still return six
+#: significant figures.  DERIVED, 2026-09-19 (VERIFY-WAVE5-HYGIENE2 V-D5):
+#: against a ``math.fsum`` correctly-rounded reference at two geometries on
+#: both builds, over 23 budgets spanning 11 decades, the chirp-Z relative L2
+#: is LINEAR in the budget -- ``rel ~ eps * alpha * N_max^2`` -- so the budget
+#: that leaves a relative error of 1e-6 is ``1e-6 / eps = 4.5e9``.
+#:
+#: THIS IS A CHANGE IN WARNING BEHAVIOUR AND NOT A CHANGE OF ANSWER.  No route
+#: moves a byte; a caller who was between the old 1e15 and this 4.5e9 now
+#: hears about an error they were already paying.  MEASURED at the old
+#: threshold: a budget of 1e12 returned an answer wrong in the FOURTH
+#: significant figure (rel 1.9e-04) and said nothing, and the first budget
+#: that warned at all was 3.16e15, by which point the answer was 25 % wrong.
+#: The natural MFT grids are nowhere near it: ``alpha = zoom/N`` there, so
+#: ``budget = zoom*N ~ 1e4`` at N = 1024 with 10x zoom -- five decades of
+#: silence for every shipped caller, which
+#: ``tests/unit/test_wave5_h2_mft_direct.py`` asserts as its own claim.
+_PHASE_BUDGET_MAX = 1e-6 / _EPS64                         # 4.503599627e+09
 
 
 def _direct_matrix_2d(
@@ -483,7 +506,7 @@ def _bluestein_2d(
     method : {'auto', 'bluestein', 'separable', 'direct'}, default 'auto'
         Which route through the SAME sum to take.  ``'auto'`` (the default, and
         the ONLY value any shipped caller passes unless it is asked for
-        another) reproduces the pre-5.48 dispatch exactly: the separable
+        another) reproduces the historical dispatch exactly: the separable
         two-pass route when ``separable=True`` and ``xp is numpy``, the 2-D
         convolution otherwise.  ``'bluestein'`` and ``'separable'`` name those
         two arms explicitly (``'separable'`` still falls back to the 2-D arm
@@ -502,12 +525,28 @@ def _bluestein_2d(
 
     Notes
     -----
-    Numerical sensitivity: the chirp value ``exp(sign*pi*j*alpha*n^2)``
-    can wrap around float64 phase precision if ``alpha * N^2 >> 1e16``
-    (i.e., the phase argument exceeds ~10^16 radians, beyond float64
-    precision).  In typical Fresnel / Fraunhofer propagation parameters
-    this never happens.  A guard warns the caller if ``alpha * N_max^2``
-    exceeds 1e15.
+    Numerical sensitivity, MEASURED rather than reasoned about (2026-09-19).
+    The chirp value ``exp(sign*pi*j*alpha*n^2)`` carries a phase up to
+    ``pi * |alpha| * N_max^2``, and the error this costs is LINEAR in that
+    budget -- there is no cliff to sit just below.  Against a ``math.fsum``
+    correctly-rounded reference at N=24 M=12 and at N=48 M=24, over 23 budgets
+    spanning 11 decades on both builds, the chirp-Z routes' relative L2 reads
+
+        budget   1e8     1e10    1e12    1e14    1e15    1e17
+        rel L2   1.5e-08 2.0e-06 1.9e-04 1.3e-02 2.5e-01 1.6e+00
+
+    i.e. ``rel ~ eps * budget`` to within a small factor over the whole range.
+    The dense route (``method='direct'``) reads 2.8e-16 .. 4.5e-16 at EVERY
+    budget tested, because it reduces ``t`` by ``t - rint(t)`` before calling
+    ``exp`` and therefore has no chirp phase to lose.
+
+    The guard's threshold is derived from that law and not from taste:
+    ``_PHASE_BUDGET_MAX = 1e-6 / eps ~ 4.5e9`` is the budget at which six
+    significant figures still remain.  The historical ``1e15`` was 7.5 decades
+    late -- at a budget of 1e12 the route returned an answer wrong in the
+    fourth significant figure and said nothing.  Shipped callers stay silent:
+    at the natural MFT grids ``alpha = zoom/N``, so ``budget = zoom*N`` is of
+    order 1e4 at N = 1024 with 10x zoom, five decades below the threshold.
     """
     if sign not in (+1, -1):
         raise ValueError(f"sign must be +1 or -1, got {sign}")
@@ -540,18 +579,24 @@ def _bluestein_2d(
             sign=sign, xp=xp, target_cdtype=target_cdtype)
 
     # Numerical-precision guard.  The chirp signal exp(sign*pi*j*alpha*n^2)
-    # has phase up to pi * |alpha| * N_max^2.  float64 gives ~16 decimal
-    # digits, so phases beyond ~10^15 lose meaningful precision.  Beyond
-    # ~10^16 the chirp wraps incoherently and the output is garbage.
+    # has phase up to pi * |alpha| * N_max^2, and the relative error that
+    # costs is LINEAR in that budget (`rel ~ eps * budget`, measured over 11
+    # decades at two geometries on both builds -- see the Notes).  The
+    # threshold is therefore read off the law at the accuracy wanted rather
+    # than set at the point where the chirp wraps incoherently.
     N_max = max(Nx_in, Ny_in, N_out_x, N_out_y)
     alpha_max = max(abs(alpha_x), abs(alpha_y))
     phase_budget = float(alpha_max) * float(N_max) ** 2
-    if phase_budget > 1e15:
+    if phase_budget > _PHASE_BUDGET_MAX:
         import warnings
         warnings.warn(
-            f"Bluestein chirp phase argument ~{phase_budget:.1e} approaches "
-            f"float64 precision limit (1e15-1e16).  Reduce N or alpha, "
-            f"or fall back to a regular FFT propagator.",
+            f"Bluestein chirp phase argument ~{phase_budget:.1e} exceeds the "
+            f"float64 chirp budget {_PHASE_BUDGET_MAX:.1e}; the chirp-Z "
+            f"routes' relative error at this budget is "
+            f"~{phase_budget * _EPS64:.1e}.  Reduce N or alpha, pass "
+            f"method='direct' (the dense route reduces its phase modulo one "
+            f"turn and measured 3e-16 at every budget tested), or fall back "
+            f"to a regular FFT propagator.",
             RuntimeWarning, stacklevel=2)
 
     # ----- 0) separable route (v5.33.2) --------------------------------------
@@ -740,11 +785,21 @@ def _bluestein_centred_2d(
     -------
     F : ndarray, complex 2-D, shape ``(N_out_y, N_out_x)``.
     """
-    Ny_in, Nx_in = E.shape
+    # VOCABULARY BEFORE GEOMETRY, and in the SAME order as _bluestein_2d
+    # (V-D17, 2026-09-19).  These two lines used to sit the other way round,
+    # so ``_bluestein_centred_2d([[1+0j, 2+0j]], ..., method='bogus')`` raised
+    # ``AttributeError: 'list' object has no attribute 'shape'`` where
+    # ``_bluestein_2d`` with the same arguments raised the designed
+    # ``ValueError`` -- and with ``sign=0, method='bogus'`` the two primitives
+    # named DIFFERENT first errors.  A caller who mistypes a keyword should be
+    # told which keyword, by whichever primitive they reached.
+    if sign not in (+1, -1):
+        raise ValueError(f"sign must be +1 or -1, got {sign}")
     if method not in ('auto',) + _SUM_METHODS:
         raise ValueError(
             f"method must be one of {('auto',) + _SUM_METHODS}, got "
             f"{method!r}")
+    Ny_in, Nx_in = E.shape
     if n_centre_in_x is None:
         n_centre_in_x = Nx_in / 2.0
     if n_centre_in_y is None:
