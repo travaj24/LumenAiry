@@ -530,9 +530,16 @@ def test_s10_vector_normalisation_is_one_joint_scale_for_the_pair():
     The bar here is instead the sum of the two sources, both taken on the
     running build:
 
-      * the PRODUCTS: ``fl(s*a)`` then ``fl(re^2)``, ``fl(im^2)``, ``fl(+)``
-        is at most three roundings of half an ULP each, so <= ``3u``
-        relative per leg and ``6u`` for the ratio (``u = eps/2``);
+      * the PRODUCTS: per COMPLEX element the chain is ``fl(s*re)``,
+        ``fl(s*im)``, ``fl((s*re)^2)``, ``fl((s*im)^2)``, ``fl(+)`` -- FIVE
+        roundings of half an ULP each, so <= ``5u`` relative per leg and
+        ``10u`` for the ratio (``u = eps/2``).  (Corrected 2026-09-19,
+        VERIFY-WAVE5-E D8: this read "``fl(s*a)`` then ``fl(re^2)``,
+        ``fl(im^2)``, ``fl(+)`` ... at most three roundings ... ``6u`` for the
+        ratio", which counted ONE component's scaling where the scale is
+        applied to both the real and the imaginary part before either is
+        squared.  Re-measured over the same 16 arms, the correction moves the
+        bar from 27.3-34.0 to 41.53-48.25 ULP and changes no arm's verdict.)
       * the REDUCTION: measured by :func:`_power_sum_rounding_spread`, which
         is 1.49 to 3.17 ULP of the ratio across the 16 arms -- on its own
         already comparable to the whole shipped bar.
@@ -540,8 +547,12 @@ def test_s10_vector_normalisation_is_one_joint_scale_for_the_pair():
     times a safety factor of 4, which is documented rather than tuned: the
     derived quantity itself spans 2.1x across the 16 arms, so 4x admits a
     build whose summation tree scatters twice as widely as the widest arm
-    measured.  That puts the bar at 27.3 to 34.0 ULP -- 9.1x to 11.3x above
-    the widest READING, and 1.5e+07x below the real signal.
+    measured.  That puts the bar at 41.53 to 48.25 ULP -- at least 15.3x above
+    the widest READING on every arm (two of the sixteen read 0 ULP in both
+    modes, where the margin is unbounded), and at worst 1.07e+07x below the
+    real signal (16 arms re-measured 2026-09-19 with the five-rounding
+    products term, ``validation/probe_wave5_e/e3_d8_*.json``; with the old 6u
+    term the same arms give 27.31 to 34.03 ULP, so no arm changes verdict).
 
     THE OTHER SIDE OF THE BAR is asserted here, not assumed: the pre-fix
     behaviour (each leg normalised on its own) is reconstructed from this
@@ -566,7 +577,9 @@ def test_s10_vector_normalisation_is_one_joint_scale_for_the_pair():
 
     # ---- the bar, derived on this build -----------------------------------
     u = float(np.finfo(np.float64).eps) / 2.0
-    product_rel = 6.0 * u                       # 3 roundings per leg, two legs
+    # 5 roundings per leg (fl(s*re), fl(s*im), fl((s*re)^2), fl((s*im)^2),
+    # fl(+)), two legs -- see the docstring; corrected from 6u, 2026-09-19.
+    product_rel = 10.0 * u
     reduction_rel = max(
         _power_sum_rounding_spread(terms[m][0])
         + _power_sum_rounding_spread(terms[m][1])

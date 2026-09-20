@@ -1,0 +1,33 @@
+{
+ "coretype": "HASWELL",
+ "lumenairy_file": "C:\\tmp\\lum_e2\\lumenairy\\__init__.py",
+ "numpy": "2.4.4",
+ "platform": "win32",
+ "python": "3.14.6",
+ "result": {
+  "bar10_clears_reading": true,
+  "bar10_over_widest": 41.528338168672896,
+  "bar_ulp_10u": 41.528338168672896,
+  "bar_ulp_6u": 27.306116862845464,
+  "dev_from_input": -6.44340089062112e-08,
+  "indep_over_1e3_bar10": true,
+  "indep_over_bar10": 12422466.84431885,
+  "indep_ulp": 515884404.0,
+  "products_ulp_10u": 8.888888316142143,
+  "products_ulp_6u": 5.333332989685286,
+  "r_none": 1.7777776632284288,
+  "reading_peak_ulp": 0.0,
+  "reading_power_ulp": 1.0,
+  "reduction_ulp": 1.4931962260260803,
+  "ulp": 2.220446049250313e-16,
+  "widest_reading_ulp": 1.0
+ },
+ "threadpools": [
+  {
+   "arch": "Haswell",
+   "prefix": "libscipy_openblas",
+   "threads": 4
+  }
+ ],
+ "threads": "4"
+}

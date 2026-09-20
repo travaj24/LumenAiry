@@ -1,0 +1,33 @@
+{
+ "coretype": "KATMAI",
+ "lumenairy_file": "/mnt/c/tmp/lum_e2/lumenairy/__init__.py",
+ "numpy": "2.4.6",
+ "platform": "linux",
+ "python": "3.12.3",
+ "result": {
+  "bar10_clears_reading": true,
+  "bar10_over_widest": 48.2477216193984,
+  "bar_ulp_10u": 48.2477216193984,
+  "bar_ulp_6u": 34.0255003133844,
+  "dev_from_input": -6.442089084401914e-08,
+  "indep_over_1e3_bar10": true,
+  "indep_over_bar10": 10690232.734070215,
+  "indep_ulp": 515779373.0,
+  "products_ulp_10u": 8.888888316258749,
+  "products_ulp_6u": 5.333332989755249,
+  "r_none": 1.7777776632517497,
+  "reading_peak_ulp": 1.0,
+  "reading_power_ulp": 1.0,
+  "reduction_ulp": 3.173042088590851,
+  "ulp": 2.220446049250313e-16,
+  "widest_reading_ulp": 1.0
+ },
+ "threadpools": [
+  {
+   "arch": "Katmai",
+   "prefix": "libscipy_openblas",
+   "threads": 4
+  }
+ ],
+ "threads": "4"
+}
