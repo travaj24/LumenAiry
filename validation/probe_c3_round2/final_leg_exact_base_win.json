@@ -1,0 +1,37 @@
+{
+ "tree": "C:\\tmp\\c3b_base",
+ "lumenairy": "C:\\tmp\\c3b_base\\lumenairy\\__init__.py",
+ "default_transport": "sziklas",
+ "rows": {
+  "f60-1grp-bare": {
+   "outcome": "returned",
+   "peak": 7.979149012670749,
+   "power": 10376.039914031357
+  },
+  "f60-2grp-bare": {
+   "outcome": "returned",
+   "peak": 343.2580047205125,
+   "power": 41113.97367826913
+  },
+  "f60-2grp-readout": {
+   "outcome": "returned",
+   "peak": 321.7182278325266,
+   "power": 878113.9746420581
+  },
+  "f120-2grp-bare": {
+   "outcome": "returned",
+   "peak": 9.18671972778498,
+   "power": 101703.68578964667
+  },
+  "f120-2grp-readout": {
+   "outcome": "returned",
+   "peak": 6.185720547962022,
+   "power": 24908.18573166053
+  },
+  "f60-2grp-w1.5-bare": {
+   "outcome": "returned",
+   "peak": 17.72178749699509,
+   "power": 45507.721126939534
+  }
+ }
+}

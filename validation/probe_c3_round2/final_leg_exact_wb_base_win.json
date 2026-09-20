@@ -1,0 +1,29 @@
+{
+ "tree": "C:\\tmp\\c3b_base",
+ "lumenairy": "C:\\tmp\\c3b_base\\lumenairy\\__init__.py",
+ "default_transport": "sziklas",
+ "rows": {
+  "C5-final-leg-exact-bare": {
+   "outcome": "returned",
+   "peak": 79.78066764070186,
+   "power": 382490.711935576,
+   "sha": "58246df6d64100cd",
+   "dx": "7.910983779678808e-06",
+   "R": "-0.004124751720899262",
+   "n_stages": 2,
+   "sum_abs": 83072.60612171877,
+   "argmax": 32639
+  },
+  "C5-final-leg-exact-readout": {
+   "outcome": "returned",
+   "peak": 80.46777771966885,
+   "power": 325346.8058409455,
+   "sha": "3c50c2b1b44c61f4",
+   "dx": "4e-07",
+   "R": "None",
+   "n_stages": 2,
+   "sum_abs": 36505.0028973639,
+   "argmax": 1886
+  }
+ }
+}
