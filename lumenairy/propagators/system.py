@@ -754,11 +754,10 @@ def propagate_through_system(E_in: np.ndarray,
         ``'circular'``), ``params`` (dict, optional, shape-specific
         parameters), ``xc`` / ``yc`` (float, optional, default 0),
         ``edge`` and ``edge_samples`` (optional, forwarded to
-        :func:`~lumenairy.elements.elements.apply_aperture`).  **v5.49.0:
-        omitting ``edge`` takes that function's new ``'gray'`` default
-        (rim by pixel area), so an aperture element's answer moved; add
-        ``'edge': 'hard'`` for the pre-5.49 staircase rim, bit for bit.
-        The JAX twin reads the same keys and takes the same default.**
+        :func:`~lumenairy.elements.elements.apply_aperture`).  Omitting
+        ``edge`` takes that function's own default, which renders the rim by
+        pixel AREA; add ``'edge': 'hard'`` for the binary pixel-centre mask.
+        The JAX twin reads the same keys and takes the same default.
 
     ``'gaussian_aperture'``
         Soft Gaussian aperture.
@@ -1077,11 +1076,10 @@ def propagate_through_system(E_in: np.ndarray,
                              dy=current_dy)
 
         elif elem['type'] == 'aperture':
-            # v5.49.0 (WP-C1): the element forwards ``edge`` /
-            # ``edge_samples`` so a chain has the same way back to the
-            # pre-5.49 staircase rim that a direct ``apply_aperture`` call
-            # has.  Omitted, both take the function's own defaults
-            # (``'gray'``, 4) -- which is what moved.
+            # WP-C1: the element forwards ``edge`` / ``edge_samples``
+            # so a chain can ask for the binary pixel-centre rim exactly as
+            # a direct ``apply_aperture`` call can.  Omitted, both take the
+            # function's own defaults (``'gray'``, 4).
             E = apply_aperture(E, current_dx,
                                shape=elem.get('shape', 'circular'),
                                params=elem.get('params', {}),
@@ -1549,13 +1547,12 @@ _TRACEABLE_ELEMENT_TYPES = frozenset({
 def _aperture_edge_kwargs(elem: Dict[str, Any]) -> Dict[str, Any]:
     """The ``edge`` / ``edge_samples`` an ``'aperture'`` element asks for.
 
-    v5.49.0 (WP-C1).  Both backends resolve the rim rendering HERE, from
-    one reading of the element, so the NumPy chain and its JAX twin cannot
-    drift apart on it: an element that names neither key takes
-    :func:`~lumenairy.elements.elements.apply_aperture`'s own defaults,
-    which moved to ``edge='gray'`` (rim by pixel area) in v5.49.0.  An
-    element that pins ``{'edge': 'hard'}`` gets the pre-5.49 staircase rim
-    back, bit for bit, on either backend.
+    WP-C1.  Both backends resolve the rim rendering HERE, from one reading
+    of the element, so the NumPy chain and its JAX twin cannot drift apart
+    on it: an element that names neither key takes
+    :func:`~lumenairy.elements.elements.apply_aperture`'s own defaults, which
+    render the rim by pixel AREA.  An element that pins ``{'edge': 'hard'}``
+    gets the binary pixel-centre rim, bit for bit, on either backend.
 
     Returns only the keys the element actually names, so an element that
     names neither cannot pin today's defaults into tomorrow's answer.
@@ -1572,7 +1569,7 @@ def _jax_apply_aperture_element(E, dx, dy, shape, params, xc, yc,
                                 edge, edge_samples):
     """Apply one ``'aperture'`` element on the JAX backend.
 
-    v5.49.0 (WP-C1).  Calls the ONE aperture implementation
+    WP-C1.  Calls the ONE aperture implementation
     (:func:`~lumenairy.elements.elements.apply_aperture`, which dispatches
     through ``backend.array_namespace`` and traces under ``jax.jit`` /
     ``jax.grad``) rather than carrying a second copy of the mask here.
@@ -1698,7 +1695,7 @@ def _system_element_signature(elem: Dict[str, Any]) -> Optional[Tuple]:
         if resolved is None:
             return None
         shape, halves = resolved
-        # v5.49.0 (WP-C1): the rim rendering is part of the STATIC
+        # WP-C1: the rim rendering is part of the STATIC
         # signature -- two elements that differ only in ``edge`` are two
         # different kernels, not one kernel silently serving both.
         edge_kw = _aperture_edge_kwargs(elem)
@@ -1759,16 +1756,15 @@ def _make_system_jax_kernel(elem_sigs, wavelength, dx, dy):
                 _, f, xc, yc = sig
                 r2 = (X - xc) ** 2 + (Y - yc) ** 2
                 E = E * jnp.exp(-1j * k0 * r2 / (2.0 * f))
-            # v5.49.0 (WP-C1): the three aperture tags call the ONE
+            # WP-C1: the three aperture tags call the ONE
             # aperture implementation (``elements.apply_aperture``, which
             # is ``array_namespace``-dispatched and traces under
             # ``jax.jit`` / ``jax.grad``) instead of re-deriving the mask
-            # here.  Before, this kernel carried its own pixel-centre
-            # indicator; the NumPy chain's rim moved to pixel-area
-            # rendering in 5.49.0 and a second copy here would have let
-            # the two backends answer differently for the SAME element
-            # dict, under a cross-backend bar (5 % of pixels) too loose to
-            # see it.  One implementation, one default, one way back.
+            # here.  A second copy would let the two backends answer
+            # differently for the SAME element dict -- and the
+            # cross-backend bar that guards them (5 % of pixels) is far
+            # too loose to see a rim.  One implementation, one default,
+            # one way back.
             elif tag == 'aperture_circular':
                 _, r, xc, yc, edge, n_sub = sig
                 E = _jax_apply_aperture_element(
@@ -1849,10 +1845,10 @@ def propagate_through_system_jax(E_in: np.ndarray,
       * ``'lens'``       -> paraxial thin-lens phase screen
       * ``'aperture'``   -> :func:`apply_aperture` (circular /
         rectangular / annular), the SAME implementation the NumPy chain
-        calls -- v5.49.0 (WP-C1) replaced this kernel's own copy of the
+        calls -- WP-C1 replaced this kernel's own copy of the
         pixel-centre indicator with it, so both backends take the same
-        ``edge`` default (``'gray'`` since 5.49.0) and read the same
-        ``'edge'`` / ``'edge_samples'`` element keys.  Uses the same
+        ``edge`` default and read the same ``'edge'`` / ``'edge_samples'``
+        element keys.  Uses the same
         canonical NumPy schema
         as :func:`apply_aperture` (``params={'diameter': ...}`` etc.);
         the pre-v4.12 JAX-only schema (``params={'radius': ...}``) was
@@ -2089,7 +2085,7 @@ def propagate_through_system_jax(E_in: np.ndarray,
             # was removed; legacy keys now raise ValueError inside
             # ``_resolve_aperture_params`` with the migration recipe
             # inline.  See Migration-Guide.md §5.0.0.
-            # v5.49.0 (WP-C1): the slow path calls the same ONE aperture
+            # WP-C1: the slow path calls the same ONE aperture
             # implementation the jit'd kernel above calls, so the two JAX
             # routes and the NumPy chain all answer one element dict the
             # same way, rim included.

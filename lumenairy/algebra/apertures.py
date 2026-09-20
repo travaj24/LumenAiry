@@ -52,10 +52,11 @@ class Aperture(Operator):
     minimal shape vocabulary.
 
     That delegation carries ``apply_aperture``'s ``edge`` DEFAULT, which
-    moved to ``'gray'`` (rim rendered by pixel area) in v5.49.0, so **this
-    operator's applied field moved in v5.49.0**.  The operator exposes no
-    ``edge`` keyword; for the pre-5.49 answer -- bit-identical -- call
-    ``apply_aperture(..., edge='hard')`` directly.
+    renders the rim by pixel AREA.  The operator exposes no ``edge``
+    keyword; for the binary pixel-centre mask call
+    ``apply_aperture(..., edge='hard')`` directly.  The CHANGELOG's
+    Migration note records when this operator's applied field moved with
+    that default.
     """
 
     _ALLOWED_SHAPES = ('circular', 'rectangular', 'annular')

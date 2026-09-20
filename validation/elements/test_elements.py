@@ -26,19 +26,33 @@ N_default = 256; dx_default = 4e-6; lam_default = 1.31e-6
 
 
 def t_circular_aperture():
+    """v5.49.0 (WP-C1): the default rim rendering is the pixel AREA
+    fraction, so a pixel the rim CUTS is scaled, not passed or blocked
+    whole.  The three sets are decided from the pixel CORNERS -- wholly
+    inside, wholly outside, and the rim -- and the first two are EXACT
+    claims, which the old pixel-centre ``inside`` set could not make (its
+    mean read 0.9960 against a 0.99 bar, i.e. it used 0.4 of the margin)."""
     N = N_default; dx = dx_default
+    R = 0.25e-3
     E_in = np.ones((N, N), dtype=np.complex128)
     E_out = la.apply_aperture(E_in, dx, shape='circular',
-                              params={'diameter': 0.5e-3})
+                              params={'diameter': 2 * R})
     x = (np.arange(N) - N/2) * dx
     X, Y = np.meshgrid(x, x)
-    r = np.sqrt(X**2 + Y**2)
-    inside = r <= 0.25e-3
-    outside = r > 0.26e-3
-    amp_in = np.abs(E_out[inside]).mean()
-    amp_out = np.abs(E_out[outside]).mean()
-    return amp_in > 0.99 and amp_out < 0.01, \
-        f'amp inside={amp_in:.4f}, outside={amp_out:.6f}'
+    near = (np.maximum(np.abs(X) - dx/2, 0.0)**2
+            + np.maximum(np.abs(Y) - dx/2, 0.0)**2)
+    far = (np.abs(X) + dx/2)**2 + (np.abs(Y) + dx/2)**2
+    wholly_in = far <= R*R
+    wholly_out = near > R*R
+    rim = ~(wholly_in | wholly_out)
+    amp = np.abs(E_out)
+    ok = (bool(np.all(amp[wholly_in] == 1.0))
+          and bool(np.all(amp[wholly_out] == 0.0))
+          and bool(np.all((amp[rim] >= 0.0) & (amp[rim] <= 1.0)))
+          and int(np.sum(rim)) > 0)
+    return ok, (f'wholly-inside px={int(np.sum(wholly_in))} all exactly 1, '
+                f'wholly-outside px={int(np.sum(wholly_out))} all exactly 0, '
+                f'rim px={int(np.sum(rim))} in [0, 1]')
 
 
 H.run('Aperture: circular clips correctly', t_circular_aperture)
@@ -154,18 +168,52 @@ H.run('Mirror wave-optics: focuses at R/2', t_apply_mirror_convergence)
 # ---------------------------------------------------------------------
 
 def t_circular_aperture_throughput_matches_disk_area():
-    """A unit-amplitude field through a circular aperture has total
-    transmitted power equal to the disk area (within sampling)."""
+    """A unit-amplitude field through a circular aperture transmits the
+    disk AREA -- and, since v5.49.0, the transmitted POWER is a different
+    number, by a derivable amount.
+
+    The aperture is an AMPLITUDE mask, so the linear sum of the mask is the
+    transmitted area and the quadratic sum is the transmitted power of a
+    unit-amplitude field.  For a binary rim the two coincide (f is 0 or 1);
+    for the v5.49.0 area-averaged rim they differ by exactly the rim's own
+    ``sum(f - f^2) dx^2``, which is bounded by ``n_rim dx^2 / 4`` (the
+    maximum of ``f - f^2`` is 1/4, at f = 1/2) and falls like the
+    perimeter, i.e. as 1/N.
+
+    Measured 2026-09-20 on this fixture (N = 256, dx = 8 um, D = 1 mm),
+    identical on Windows py3.14 and WSL py3.12 because the mask sum is an
+    integer count over 16 with no BLAS anywhere in it:
+
+        area   +0.0746 % (hard)  ->  +0.0074 % (gray, the default)
+        power  +0.0746 % (hard)  ->  -0.4893 % (gray)
+        rim 364 px, deficit 0.4967 %, bound n_rim dx^2/4 = 0.7415 %
+
+    and the deficit halves with the pitch: 0.4967 / 0.2585 / 0.1297 % at
+    N = 256 / 512 / 1024.
+
+    The bars.  AREA within 5e-4 relative: the reading is 7.4e-5 (6.7x of
+    headroom) and the pixel-centre rim it must beat reads 7.46e-4, so the
+    bar sits between the two with 1.5x below and 6.7x above.  POWER inside
+    ``[area - n_rim dx^2/4, area]``: a DERIVED two-sided band, not a
+    tolerance.
+    """
     N, dx, ap = 256, 8e-6, 1e-3
     E_in = np.ones((N, N), dtype=np.complex128)
     E_out = la.apply_aperture(E_in, dx, shape='circular',
                               params={'diameter': ap})
-    P_out = float(np.sum(np.abs(E_out)**2) * dx**2)
+    f = np.real(E_out)
     P_expect = np.pi * (ap / 2)**2
-    rel = abs(P_out - P_expect) / P_expect
-    return rel < 0.02, \
-        (f'P_out={P_out*1e9:.3f}nm^2, '
-         f'pi(D/2)^2={P_expect*1e9:.3f}nm^2, rel={rel*100:.2f}%')
+    area = float(np.sum(f)) * dx**2
+    power = float(np.sum(np.abs(E_out)**2)) * dx**2
+    n_rim = int(np.sum((f > 0) & (f < 1)))
+    bound = n_rim * dx**2 / 4.0
+    rel_area = area / P_expect - 1.0
+    ok = (abs(rel_area) < 5e-4
+          and (area - bound) <= power <= area + 1e-12 * P_expect)
+    return ok, (f'area={area*1e9:.4f}nm^2 (rel {rel_area*100:+.4f}%), '
+                f'power={power*1e9:.4f}nm^2 '
+                f'(rel {power/P_expect*100-100:+.4f}%), '
+                f'rim={n_rim}px, band lower={(area-bound)*1e9:.4f}nm^2')
 
 
 H.run('Circular aperture: throughput matches disk area',
@@ -173,16 +221,44 @@ H.run('Circular aperture: throughput matches disk area',
 
 
 def t_rectangular_aperture_throughput_matches_area():
-    """Rectangular aperture transmits exactly width_x * width_y."""
+    """Rectangular aperture transmits exactly width_x * width_y -- as AREA.
+
+    Same restatement as the circular case above, and for the same reason:
+    the old ``sum(|E|^2)`` reading is the transmitted POWER, not the area,
+    and after v5.49.0 the two differ by the rim's ``sum(f - f^2)``.  Here
+    that difference is large enough that the old 2 % bar was being cleared
+    by 0.5 % of itself.  Measured 2026-09-20, identical on both builds:
+
+        area   +0.6400 % (hard)  ->  +0.0000 % (gray, EXACT: the rims sit
+               at 25.00 and 18.75 pixels, and a 4x4 sub-sample lattice
+               resolves a quarter-pixel rim exactly)
+        power  +0.6400 % (hard)  ->  -1.9900 % (gray)
+        rim 176 px, deficit 1.9900 %, bound n_rim dx^2/4 = 2.3467 %
+
+    i.e. the AREA went from 0.64 % wrong to exactly right, while the POWER
+    reading the old assertion used went to 1.99 % against a 2 % bar.  Bars
+    as above: area within 5e-4 relative (the reading is 0.0 and the rim it
+    must beat reads 6.4e-3, so the bar sits 12.8x below that), power inside
+    the derived band.
+    """
     N, dx = 256, 4e-6
     wx, wy = 200e-6, 150e-6
     E_in = np.ones((N, N), dtype=np.complex128)
     E_out = la.apply_aperture(E_in, dx, shape='rectangular',
                               params={'width_x': wx, 'width_y': wy})
-    P_out = float(np.sum(np.abs(E_out)**2) * dx**2)
-    rel = abs(P_out - wx * wy) / (wx * wy)
-    return rel < 0.02, \
-        f'P_out={P_out*1e12:.3f}um^2, wx*wy={wx*wy*1e12:.3f}um^2'
+    f = np.real(E_out)
+    exact = wx * wy
+    area = float(np.sum(f)) * dx**2
+    power = float(np.sum(np.abs(E_out)**2)) * dx**2
+    n_rim = int(np.sum((f > 0) & (f < 1)))
+    bound = n_rim * dx**2 / 4.0
+    rel_area = area / exact - 1.0
+    ok = (abs(rel_area) < 5e-4
+          and (area - bound) <= power <= area + 1e-12 * exact)
+    return ok, (f'area={area*1e12:.4f}um^2 (rel {rel_area*100:+.4f}%), '
+                f'power={power*1e12:.4f}um^2 '
+                f'(rel {power/exact*100-100:+.4f}%), '
+                f'wx*wy={exact*1e12:.3f}um^2, rim={n_rim}px')
 
 
 H.run('Rectangular aperture: throughput matches area',

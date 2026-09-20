@@ -3183,7 +3183,7 @@ hardest on exactly this field because the single-FFT Fresnel output's
 residual chirp sits at Nyquist at the grid edge by construction.
 
 The leg now calls `fresnel_propagate_mft` with the chain's own pitch and
-sample count (`lumenairy/propagators/system.py:929`).  That is the same
+sample count (`lumenairy/propagators/system.py:934`).  That is the same
 Fresnel integral, sampled where the chain wants it, so neither error
 exists.  Refereed against the Fresnel integral written out as an explicit
 double sum over the input samples -- no FFT, no Bluestein, no library
@@ -3254,7 +3254,7 @@ interpolant and the historical cubic spline:
     method=('chirpz' if N_out * dx_out <= N_in * dx_in else 'spline')
 ```
 
-per axis (`lumenairy/propagators/system.py:972`,
+per axis (`lumenairy/propagators/system.py:977`,
 `lumenairy/elements/_lens_real.py:2969` and `:2889`).  The chirp-Z leg
 has unit MTF at every frequency the grid represents, but its
 reconstruction is **periodic** with period `N_in*dx_in`, so a window
@@ -3293,7 +3293,7 @@ dx = 112.500 um, lambda = 632.8 nm) **both** gaps sit at `dx_new/dx` =
 1 mm N-BK7 plate at dx = 2 um sits at 1.6320 and takes the chirp-Z leg.
 Both directions occur in the shipped suite.
 
-Files: `lumenairy/propagators/system.py:953-978`,
+Files: `lumenairy/propagators/system.py:958-983`,
 `lumenairy/elements/_lens_real.py:2905-2976`, `:2882-2895`.
 Tests: `tests/unit/test_audit2609_b3b_resample_call_sites.py::TestK6TheChirpZGate`
 (11), `::TestK6ByteIdentityWhereTheGateSelectsTheSpline` (7),
@@ -3353,7 +3353,7 @@ message and the function's docstring say so.  Behaviour is unchanged --
 the JAX path is still ASM-only and still refuses both, and an
 `method='asm'` JAX chain is byte-identical.
 
-Files: `lumenairy/propagators/system.py:1863-1875`, `:1730-1738`.
+Files: `lumenairy/propagators/system.py:1944-1956`, `:1730-1738`.
 
 <!-- WP-VERIFY_WP-B3b: Propagator call sites: verifier follow-ups -->
 ### Fixed -- a `method='fresnel'` chain step warns again when the chain window holds only part of the beam (K6)
@@ -3392,7 +3392,7 @@ own replica regime at that pitch, so they bound the loss rather than
 measure it.)
 
 The leg now calls `_warn_system_fresnel_window`
-(`lumenairy/propagators/system.py:417`, called at `:928`), which measures
+(`lumenairy/propagators/system.py:417`, called at `:933`), which measures
 the power the chain window keeps and raises the same `RuntimeWarning`
 class, at the same `1e-6` retained-power bar, as
 `_warn_system_resample_crop` -- naming the retained percentage, `z`
@@ -5494,7 +5494,7 @@ Tests: `tests/unit/test_audit2609_b8_analysis_sources.py`.
 `J00*Ex + J01*Ey` written out builds two products and a sum per component, so
 when the second component is formed the first component's result plus three
 temporaries are live.  The mix moves into `_jones_mix_2x2`
-(`lumenairy/elements/polarization.py:722`), where one scratch buffer serves
+(`lumenairy/elements/polarization.py:731`), where one scratch buffer serves
 both components and both sums land in place.
 
 Measured at N = 2048 complex128: **268.4 MB (4.00 grids) / 131.8 ms -> 201.3

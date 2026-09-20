@@ -7,11 +7,11 @@ into several categories:
 
 * **Mirrors** -- flat and curved reflectors (including conics/aspheres).
 * **Apertures** -- sharp-edged (unapodized) amplitude masks (circular,
-  annular, rectangular) and soft (Gaussian) apertures.  Since v5.49.0 a
-  sharp-edged mask renders its rim by pixel AREA (``edge='gray'``, the
-  default) rather than by a pixel-centre indicator (``edge='hard'``); both
-  describe the same physical stop, and the grey rendering is the one with a
-  convergence order -- see :func:`apply_aperture`.
+  annular, rectangular) and soft (Gaussian) apertures.  A sharp-edged mask
+  renders its rim by pixel AREA (``edge='gray'``, the default) rather than by
+  a pixel-centre indicator (``edge='hard'``); both describe the same physical
+  stop, and the grey rendering is the one with a convergence order -- see
+  :func:`apply_aperture`.
 * **Arbitrary masks** -- generic complex transmission functions for DOEs,
   SLMs, metasurfaces, grey-scale filters, etc.
 * **Zernike aberrations** -- phase screens described by Zernike polynomial
@@ -259,7 +259,7 @@ def apply_aperture(E_in, dx, shape='circular', params=None, xc=0, yc=0,
         (non-square) grids so annular / circular / rectangular
         apertures don't get silently stretched along y.
 
-    edge : {'gray', 'hard'}, default ``'gray'`` since v5.49.0
+    edge : {'gray', 'hard'}, default ``'gray'``
         ``'gray'`` gives each boundary pixel its
         ``edge_samples**2``-supersampled open-area fraction, which removes
         the area quantisation and most of the edge aliasing.  ``'hard'``
@@ -267,13 +267,15 @@ def apply_aperture(E_in, dx, shape='circular', params=None, xc=0, yc=0,
         or wholly blocked, so the transmitted area is quantised to whole
         pixels.
 
-        **The default moved in v5.49.0** (it was ``'hard'`` through
-        v5.48.1).  ``edge='hard'`` reproduces the pre-5.49 answer
-        BIT FOR BIT -- nothing else about the mask changed -- so a pinned
-        hard-aperture number is one keyword away.
+        ``edge='hard'`` is the pixel-centre indicator and nothing else, so
+        it is what a caller passes to reproduce a staircase answer BIT FOR
+        BIT.  The CHANGELOG's Migration note records when the default
+        became ``'gray'`` and names every entry point whose answer moved
+        with it.
 
-        Why the default moved (WP-B11 sec. 2.9 and WP-C1, both measured
-        against the closed-form on-axis field behind a circular aperture,
+        Why ``'gray'`` is the default (WP-B11 sec. 2.9 and WP-C1, both
+        measured against the closed-form on-axis field behind a circular
+        aperture,
         ``U = e^{ikz} - (z/r_a) e^{ik r_a}``, lambda = 633 nm,
         a = 100 um, window 512 um).  On-axis relative error, and the
         convergence order between successive rows:
@@ -1031,11 +1033,11 @@ def apply_lyot_stop(E_in, dx, *, outer_diameter, inner_diameter=0.0,
     :func:`apply_apodized_pupil`, which softens the rim on purpose.
     Functionally equivalent to ``apply_aperture(..., shape='annular', ...)``
     but named to match coronagraph literature, and it takes that function's
-    ``edge`` DEFAULT: since v5.49.0 the rim is rendered by pixel area
-    (``edge='gray'``), so **this function's returned field moved in
-    v5.49.0**.  It exposes no ``edge`` keyword of its own; call
+    ``edge`` DEFAULT, which renders the rim by pixel area (``edge='gray'``).
+    It exposes no ``edge`` keyword of its own; call
     ``apply_aperture(..., shape='annular', edge='hard')`` directly for the
-    pre-5.49 answer, which is bit-identical.
+    binary pixel-centre mask.  The CHANGELOG's Migration note records when
+    this function's returned field moved with that default.
 
     Parameters
     ----------
