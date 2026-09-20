@@ -335,11 +335,12 @@ def test_on_the_wide_angle_leg_the_fallback_is_not_a_step_away_from_physics(
     kernels sit 2.9e-02 from the exact field, because the refinement lives in
     the REDUCED frame on the ENVELOPE's angle while the leg's own
     non-paraxiality is set by the beam's NA.  The decision the rule takes is
-    170x smaller than the error neither kernel addresses.
+    192x smaller than the error neither kernel addresses (1.506e-04 against
+    2.899e-02).
 
     Bars: (1) is an inequality between two measurements taken here, with a
     premise that the oracle's own quadrature error is two decades under the
-    gap being read; (2) is a ratio with a bar of 10 against a measured 170.
+    gap being read; (2) is a ratio with a bar of 10 against a measured 192.
     """
     oracle, quad_err = _exact_scalar_oracle
     st = {}
@@ -548,14 +549,15 @@ def test_the_flip_bounds_the_resident_set_and_not_only_tracemalloc(
     honest arm is the ``'measured'`` one FIRST, so its pages are the fresh
     ones.
 
-    MEASURED 2026-09-20.  Windows py3.14: ``'measured'`` 0.7135x the budget on
-    ``tracemalloc`` and 0.7152x on RSS; ``'legacy'`` 5.9983x and 5.9806x.
-    WSL py3.12: 0.6573x / 0.7813x and 5.5017x / 5.4673x.  Bars, all derived
-    here: the two modes must separate by 3x in RESIDENT SET (measured 8.36x
-    and 7.00x), ``'measured'`` must come in under the budget on the RSS
-    reading (0.715 / 0.781), and the two instruments must agree within 2x on
-    each arm (worst 1.189) -- otherwise one of them is not measuring this
-    loop and nothing here can be concluded.
+    MEASURED 2026-09-20 at this id's own settings.  Windows py3.14:
+    ``'measured'`` 0.7135x the budget on ``tracemalloc`` and 0.7146x on RSS;
+    ``'legacy'`` 5.9983x and 5.9924x.  WSL py3.12: 0.6573x / 0.7789x and
+    5.5017x / 5.4679x.  Bars, all derived here: the two modes must separate by
+    3x in RESIDENT SET (measured 8.39x and 7.02x), ``'measured'`` must come in
+    under the budget on the RSS reading (0.715 / 0.779), and the two
+    instruments must agree within 2x on each arm (worst 1.185) -- otherwise
+    one of them is not measuring this loop and nothing here can be
+    concluded.
     """
     b = _bundle(n=256)
     N, budget_mb = 512, 300.0

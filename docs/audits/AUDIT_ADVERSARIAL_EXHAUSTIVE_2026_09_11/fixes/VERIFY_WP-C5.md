@@ -64,7 +64,7 @@ this verification reads differently.
 | claim | WP-C5 | here (Windows) | here (WSL) | verdict |
 |---|---|---|---|---|
 | explicit `'legacy'` identical to PRE | 24/24 | 12/12 explicit-mode keys identical (6 `'legacy'`, 6 `'measured'`) + 2 windowed | identical | CONFIRMED |
-| default path moves, the rest explained | 14/22 moved | 3/18 moved, all `default/*`; `default/512/8MB` does not move because both accountings already floor the chunk at one column there | identical set | CONFIRMED |
+| default path moves, the rest explained | 14/22 moved | 3 of my 18 keys moved and all three are `default/*`; the fourth default key (`default/512/8MB`) does not move because both accountings already floor the chunk at one column at that budget -- the report's own explanation, reproduced | identical set | CONFIRMED |
 | overrun 6.0x -> 0.76x at 512 MB / 1024 beamlets | 6.00x / 6.02x -> 0.756x / 0.762x | 6.0003x / 6.0214x -> 0.7587x / 0.7621x | 5.5009x / 5.5215x -> 0.6961x / 0.7005x | CONFIRMED |
 | fitted constants: `fixed` ~48.5, `c` 96 Windows / 88 WSL | 48.551 / 96 / 88 | 48.556 (N=512), 49.375 (N=320), c = 96.000, worst model deviation 4.0e-07 | 48.183 / 48.420, c = 88.000, 4.3e-07 | CONFIRMED |
 | the floor is an upper bound on the one-column peak by 1.2x-1.3x | 1.205-1.294 | 1.2106 (N=320) / 1.2175 (N=512) | 1.2901 / 1.2924 | CONFIRMED |
@@ -75,7 +75,7 @@ this verification reads differently.
 | a default call past that still completes | not run | **run**: N = 2048, default budget -> completes, finite, exactly ONE notice, 601 MB RSS; the same call under `'legacy'` takes 3013 MB and says nothing | 570 MB / 2783 MB | CONFIRMED, and the decision is vindicated |
 | the unknown-mode refusal | refused by name | refused for `'Measured'`, `'MEASURED'`, `'legacy '`, `''`, `16`, `'honest'`, and through the public entry point; on the PRE tree the same value is silently ACCEPTED as `'legacy'` | identical | CONFIRMED |
 | `'legacy'` vs `'measured'` fields differ by ~2e-17 relative | 2.117e-17 / 1.824e-18 | **1.799e-16 (N=320), 7.260e-17 (N=512)** -- same last-bit character, an order of magnitude larger on these grids | identical to every digit | CONFIRMED in kind; the quoted figure is grid-specific |
-| RSS | "could not be measured" | **MEASURED** on both builds with a sampled high-water mark: at a 300 MB budget on 512^2, `'measured'` peaks at 0.7152x the budget in resident set and `'legacy'` at 5.9806x | 0.7813x / 5.4673x | ANSWERED |
+| RSS | "could not be measured" | **MEASURED** on both builds with a sampled high-water mark: at a 300 MB budget on 512^2, `'measured'` peaks at 0.7146x the budget in resident set and `'legacy'` at 5.9924x | 0.7789x / 5.4679x | ANSWERED |
 
 ### Item 3 -- `replica_fill='zero'`
 
@@ -160,16 +160,21 @@ departure 1.7729e-04):
 Both readings are identical on both builds to seven digits.  Two conclusions,
 and the second matters more than the first:
 
-1. **The rule does not make that leg worse.**  On every mismatched row of both
-   fixtures the exact-kernel refinement moves the answer AWAY from the exact
-   scalar field, and the rule removes it where it fires.  The scope of the
-   rule is not a defect.
+1. **The rule does not make that leg worse.**  On six of the seven mismatched
+   rows measured across the two fixtures the exact-kernel refinement moves the
+   answer AWAY from the exact scalar field, and the rule removes it on both
+   rows where it fires.  The seventh (`fr = 0.99`, departure 2.68e-07, two
+   decades under tau and therefore untouched by the rule) is 4e-08 better with
+   the refinement -- at that size the comparison is the oracle's own last
+   digits.  The scope of the rule is not a defect.
 2. **The decision is not a physics choice at this fixture's NA.**  Both
-   kernels sit 8.2e-02 from the true field, because the refinement lives in the
-   REDUCED frame on the ENVELOPE's angle while the leg's own non-paraxiality is
-   set by the beam's NA (0.05).  The rule arbitrates 1.5e-04 of a 8.2e-02
-   modelling error -- a factor of 550.  Neither kernel is "right" there; the
-   plain one is merely not wrong in a second way.
+   kernels sit 8.21e-02 from the true field, because the refinement lives in
+   the REDUCED frame on the ENVELOPE's angle while the leg's own
+   non-paraxiality is set by the beam's NA (0.05).  The rule changes the
+   returned field by 1.2733e-04 relative and changes its error against the
+   true field by 9.96e-05, against a modelling error of 8.2126e-02 --
+   factors of 645 and 825.  Neither kernel is "right" there; the plain one is
+   merely not wrong in a second way.
 
 ### The scope: the rule is a band in `k |z_eff| theta^4`, not a distance
 
@@ -244,13 +249,13 @@ honest arm run FIRST so its pages are fresh:
 
 | build | mode | `tracemalloc` / budget | sampled RSS peak / budget |
 |---|---|---|---|
-| Windows | `'measured'` | 0.7135 | **0.7152** |
-| Windows | `'legacy'` | 5.9983 | **5.9806** |
-| WSL | `'measured'` | 0.6573 | **0.7813** |
-| WSL | `'legacy'` | 5.5017 | **5.4673** |
+| Windows | `'measured'` | 0.7135 | **0.7146** |
+| Windows | `'legacy'` | 5.9983 | **5.9924** |
+| WSL | `'measured'` | 0.6573 | **0.7789** |
+| WSL | `'legacy'` | 5.5017 | **5.4679** |
 
 So the flip makes `mem_budget_mb` a bound on the RESIDENT SET and not only on
-the Python allocator's own accounting: separation 8.36x (Windows) and 7.00x
+the Python allocator's own accounting: separation 8.39x (Windows) and 7.02x
 (WSL), with the two instruments agreeing to within 19 % on every arm.
 
 ### Warn, not refuse -- the premise, checked where it binds
@@ -283,6 +288,18 @@ remedies (`window=5.0` and `raise mem_budget_mb`) and the helper that
 publishes the number.  The PRE tree runs the identical call at 3019 MB and
 says nothing, and its returned bytes are identical to the branch's `'legacy'`
 arm -- which is the archive-to-archive statement that `'legacy'` is 5.48.x.
+
+### The element family's exposure, re-grepped
+
+The report's narrowing claim checks out.  `mem_budget_mb` reaches this loop
+from `lumenairy/elements/lenses_gbd.py` at four call sites (lines 540, 548,
+610, 616) and every one of them also passes `window=window`, whose parameter
+default is `5.0` (line 272) -- so all four take the WINDOWED path, whose
+accounting this item does not touch, unless a caller passes `window=None`.
+`carrier.py`'s and `fga.py`'s `mem_budget_mb` are different budgets and never
+reach the dense loop.  Measured beside that: the two `windowed/*` digests in
+this verification's set are byte-identical to the parent archive on both
+builds.
 
 ### The unknown-mode refusal, two-sided against the parent
 
@@ -579,8 +596,9 @@ The Collins readout obeys instead
 
 -- its post-chirp is quadratic in the ABSOLUTE output coordinate, so it
 contributes a phase that is unity only where `u / dx_in` is an integer.
-Verified to **7.1698e-09** over 377 sample pairs
-(`validation/probe_verify_c5/`, both builds).  On this fixture
+Verified to **7.1698e-09** (Windows) and 7.1737e-09 (WSL) over 377 sample
+pairs -- `validation/probe_verify_c5/v_item3_periodicity.py`, whose JSON on
+both builds carries every cell of the table above.  On this fixture
 `pi lambda z / dx_in^2` is `1550 pi` and drops out, and the core and its own
 replica happen to land on `u/dx_in` integers -- which is why they agree to
 3.0e-11 and why an on-axis reading of the peak never sees it, while a wing
@@ -784,15 +802,19 @@ running BOTH C5 test files, 43 ids:
 | 2772 | `_collins_focus_readout` | **1**, and it is this verification's `test_an_off_axis_window_is_refused_where_the_same_ratio_is_served` |
 | 7235 | `carrier_referenced_exact_focus_readout` | **0** |
 
-The library itself is covered -- re-run against a wider set the exact
-readout's call site is caught by two pre-existing ids
-(`test_fix_v1_v8_readout_guard_and_standoff.py::TestV3ExactReadout::test_one_period_off_the_chief_ray_is_refused`
+The library itself is covered on all three -- re-run against wider sets, the
+exact readout's call site is caught by
+`test_fix_v1_v8_readout_guard_and_standoff.py::TestV3ExactReadout::test_one_period_off_the_chief_ray_is_refused`
 and
-`test_niche_tight_focus_readout.py::test_the_exact_readout_guards_the_same_way_on_its_own_period`;
-control 121 passed, mutant 2 failed / 119 passed) -- so this is a claim about
-the branch's matrix, not a hole in the guard.  It matters because
-`_collins_focus_readout` is the readout WP-C3 is about to make the default
-route, and the C5 file was the only place its refusal was being demonstrated.
+`test_niche_tight_focus_readout.py::test_the_exact_readout_guards_the_same_way_on_its_own_period`
+(control 121 passed, mutant 2 failed / 119 passed), and the Collins one by
+`test_audit2609_b4_collins_transport.py::TestKellyGuard::test_the_period_is_the_input_grid_s_and_the_replica_guard_sees_it`
+(control 285 passed, mutant 2 failed / 283 passed).  So this is a claim about
+the branch's matrix and about what the C5 file set alone would catch, not a
+hole in the guards.  It matters because `_collins_focus_readout` is the readout WP-C3 is about to
+make the default route: its refusal now rests on ONE pre-existing id in the b4
+file (plus this verification's), while the paraxial readout's has a dedicated
+fail-before demonstration in the C5 file itself.
 
 **Exact edits.**
 
@@ -868,22 +890,24 @@ tip (`C:/tmp/vc5_mut` and `/mnt/c/tmp/vc5_mut_wsl`, never the worktree; the
 driver restores the file in a `finally` and the tree is diffed against the
 worktree afterwards), each scored against BOTH C5 test files
 (`test_c5_three_defaults.py` + `test_verify_c5_three_defaults.py`, 43 ids).
-Control: **43 passed** on both builds.
+Control: **43 passed** on both builds.  **The two builds agree cell for cell
+on every row, and on the SET of ids that caught each mutation, not only on the
+counts** (`v_mutations_win.json` / `v_mutations_wsl.json`).
 
 | mutation | ids that caught it (Windows) | ids that caught it (WSL) |
 |---|---|---|
-| item 1: `_GAP_KERNEL_ACCURACY_TAU` back to `None` | **9** | <!--W1--> |
-| item 1: the rule keyed on the CONTAINMENT half-angle instead of the analytic one | **4** | <!--W2--> |
-| item 2: `_dense_budget_floor_bytes` loses its fixed term | **4** | <!--W3--> |
-| item 2: the floor notice suppressed | **2** | <!--W4--> |
-| item 2: `_dense_cell_bytes` falls through to `'legacy'` on an unknown mode | **1** | <!--W5--> |
-| item 2: `DENSE_MEM_BUDGET_ACCOUNTING` back to `'legacy'` | **2** | <!--W6--> |
-| item 3: the fill keyed on the WINDOW's centre (`centre_out` dropped) | **9** | <!--W7--> |
-| item 3: the fill keyed on HALF the period | **16** | <!--W8--> |
-| item 3: `replica_fill` back to `'repeat'` on all three readouts | **6** | <!--W9--> |
-| item 3: the refusal waived on `_collins_focus_readout` | **1** | <!--W10--> |
-| item 3: the refusal waived on `carrier_referenced_focus_readout` | **2** | <!--W11--> |
-| item 3: the refusal waived on `carrier_referenced_exact_focus_readout` | **0** | <!--W12--> |
+| item 1: `_GAP_KERNEL_ACCURACY_TAU` back to `None` | **9** | **9** |
+| item 1: the rule keyed on the CONTAINMENT half-angle instead of the analytic one | **4** | **4** |
+| item 2: `_dense_budget_floor_bytes` loses its fixed term | **4** | **4** |
+| item 2: the floor notice suppressed | **2** | **2** |
+| item 2: `_dense_cell_bytes` falls through to `'legacy'` on an unknown mode | **1** | **1** |
+| item 2: `DENSE_MEM_BUDGET_ACCOUNTING` back to `'legacy'` | **2** | **2** |
+| item 3: the fill keyed on the WINDOW's centre (`centre_out` dropped) | **9** | **9** |
+| item 3: the fill keyed on HALF the period | **16** | **16** |
+| item 3: `replica_fill` back to `'repeat'` on all three readouts | **6** | **6** |
+| item 3: the refusal waived on `_collins_focus_readout` | **1** | **1** |
+| item 3: the refusal waived on `carrier_referenced_focus_readout` | **2** | **2** |
+| item 3: the refusal waived on `carrier_referenced_exact_focus_readout` | **0** | **0** |
 
 **11 of 12 caught by the two C5 files; the twelfth is a SCOPE finding, not a
 library defect.**  The branch's matrix demonstrates "the refusal is taken
@@ -897,7 +921,11 @@ between them cover two of the three:
   is caught by exactly ONE id in the 43, and it is this verification's
   (`test_an_off_axis_window_is_refused_where_the_same_ratio_is_served`).
   Before this file there was nothing in the C5 set that would have noticed a
-  waived Collins refusal. <!--COLLINSWIDE-->
+  waived Collins refusal.  Re-run against a wider set (8 files, 285 ids) it IS
+  caught, by one pre-existing id --
+  `test_audit2609_b4_collins_transport.py::TestKellyGuard::test_the_period_is_the_input_grid_s_and_the_replica_guard_sees_it`
+  -- alongside this verification's (control 285 passed, mutant 2 failed /
+  283 passed).
 * `carrier_referenced_exact_focus_readout` is caught by NOTHING in the 43.
   Re-run against a wider set it IS caught, by two pre-existing ids --
   `test_fix_v1_v8_readout_guard_and_standoff.py::TestV3ExactReadout::test_one_period_off_the_chief_ray_is_refused`
@@ -947,7 +975,8 @@ MKL_NUM_THREADS=1 LUMENAIRY_MEM_BUDGET_MB=2048 PYTHONPATH=C:/tmp/lum_vc5`,
 | the census / walker / dispatcher-pin / public-API / doc-consistency sweep, 33 files incl. `test_audit_except_budget.py` and `test_niche_audit_w4_input_kind.py` | **1752 passed, 14 skipped** in 242 s |
 | `test_verify_c5_three_defaults.py` alone | **18 passed** in 53-88 s |
 | `test_audit2609_a15a_durations_staleness.py` after the splice | **4 passed** in 44 s |
-| the mutation matrix (11 pytest runs on a scratch copy) | control 43 passed; 10/10 mutations caught |
+| the mutation matrix, 12 mutations (13 pytest runs on a scratch copy) | control **43 passed**; 11/12 caught by the two C5 files, the twelfth caught by two pre-existing ids in a wider set (D9) |
+| the three periodicity probes (D5), both builds | Windows and WSL agree to 4 digits on every cell |
 | the forced-Collins census | 950 passed, 64 failed, 22 errors (expected: the run re-routes ids that assert `'sziklas'`) |
 | `test_verify_c5_three_defaults.py` against the PRE tree | **16 failed, 2 passed** -- the regression gate |
 
@@ -1010,7 +1039,7 @@ out in the branch's favour when measured:
   field, not away from it (8.212599e-02 against 8.222558e-02), so the rule's
   scope is not a defect;
 * the honest dense accounting bounds the process RESIDENT SET and not only
-  `tracemalloc` (0.7152x the budget against `'legacy'`'s 5.9806x), and the
+  `tracemalloc` (0.7146x the budget against `'legacy'`'s 5.9924x), and the
   "warn, not refuse" decision is vindicated by a default-path call at N = 2048
   that completes in 601 MB and would have been a hard error under a refusal --
   the same call takes 3013 MB and says nothing on the parent commit.
