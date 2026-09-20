@@ -1796,14 +1796,26 @@ at best and its step orders are erratic**, while the grey rim is second order
 and is 21.1x (RS) and 8.3x (HF) more accurate at N = 1024.  On the reference
 optic the hard arm's last refinement actually RISES 54 % from N = 512 to
 N = 1024 on the Rayleigh-Sommerfeld spatial kernel and 53 % on the
-Huygens-Fresnel OPL quadrature.  That rise is that optic's -- whether the
-staircase error rises at a given refinement depends on where the rim falls on
-the lattice at each N -- so do not read it as a library property; on an
-independent optic (lambda = 1064 nm, a = 62.5 um, window 400 um, z = 4.0 /
-2.5 mm) the hard arm falls at every step and still gains only 9.5x and 9.3x
-over the three halvings against the grey arm's 56.1x and 44.9x, mean orders
-1.08 / 1.07 against 1.94 / 1.83.  It is the RATE gap that you can count on at
-any (lambda, a, window, z).  The full ladders are in the CHANGELOG entry and in
+Huygens-Fresnel OPL quadrature.
+
+A rise like that is **common, not exceptional** (VERIFY-C1 ROUND2 R5, measured
+2026-09-20 on three optics, identical on both builds).  What is not a library
+property is the DIRECTION at any given N: whether the staircase error rises at
+a particular refinement depends on where the rim falls on the lattice there.
+On a second optic (lambda = 1064 nm, a = 62.5 um, window 400 um, z = 4.0 /
+2.5 mm) the hard arm falls at every step and still gains only 9.5x (RS) and
+9.3x (HF) over the three halvings, against the grey arm's 56.1x and 44.9x, mean
+orders 1.08 / 1.07 against 1.94 / 1.83.  On a THIRD (lambda = 532 nm,
+a = 150 um, window 900 um, z = 30 / 15 mm) it rises on the same last refinement
+by a FACTOR of 9.3 (RS: 7.6432e-05 -> 7.1042e-04) and 9.1 (HF: 1.2930e-04 ->
+1.1785e-03) -- far harder than the reference optic's 54 % -- while still gaining
+only 8.9x and 9.1x against the grey arm's 51.1x and 65.2x.  So two of the three
+optics rise, and the individual hard step orders on that third one run from
+**-3.216 to +3.608**: "first order at best" is a statement about the ladder
+AVERAGE (1.05 / 1.06 there), not about any one step.  It is the RATE gap --
+grey mean order 1.83-2.01 against hard 1.05-1.08, ladder gains 45-65x against
+8.9-9.5x, over 532-1064 nm and Fresnel numbers 0.9-1.4 -- that you can count on
+at any (lambda, a, window, z).  The full ladders are in the CHANGELOG entry and in
 `docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/WP-C1_GRAY_EDGE_REPORT.md`.
 The extra work is confined to the boundary pixels: 0.076x of one full-grid pass
 at N = 256 and 0.018x at N = 1024.

@@ -28,28 +28,45 @@ window 512 um), on both spatial kernels, at N = 128 / 256 / 512 / 1024:
 | 1024 | **5.2718e-04** | 2.5030e-05 | **1.7601e-03** | 2.1122e-04 |
 | order | 1.31 / 3.29 / **-0.62** | 2.04 / 2.16 / 1.69 | 1.32 / 3.27 / **-0.61** | 2.05 / 2.03 / 2.02 |
 
-The hard arm is **first order at best and its step orders are erratic**, while
-the grey arm is second order: on the reference optic above the hard arm's error
-actually RISES on the last refinement (by 54 % on RS and 53 % on HF), which is
-where its negative last step order comes from, while the grey arm falls at every
-step and by 59.3x (RS) and 68.4x (HF) over the three halvings.  The gain at the
-finest grid is 21.1x and 8.3x.  Both builds (Windows py3.14 / scipy-openblas,
-WSL py3.12 / scipy-openblas) read every entry above to five significant figures.
+The hard arm averages **first order at best over a ladder** and its individual
+step orders are **erratic**, while the grey arm is second order: on the reference
+optic above the hard arm's error actually RISES on the last refinement (by 54 %
+on RS and 53 % on HF), which is where its negative last step order comes from,
+while the grey arm falls at every step and by 59.3x (RS) and 68.4x (HF) over the
+three halvings.  The gain at the finest grid is 21.1x and 8.3x.  Both builds
+(Windows py3.14 / scipy-openblas, WSL py3.12 / scipy-openblas) read every entry
+above to five significant figures.
 
-**The RATE gap is the general claim; the RISE is this optic's.**  Whether a
-circle's staircase area error actually rises at a given refinement depends on
-where the rim falls on the lattice at each N, so it is a property of one
-(lambda, a, window, z) and not of the library.  Re-measured on an independent
-optic two octaves away in Fresnel number (lambda = 1064 nm, a = 62.5 um, window
-400 um, z = 4.0 mm RS / 2.5 mm HF, same closed form, both builds identical to
-twelve significant figures): the hard arm FALLS at every step there, with step
-orders 1.68 / 0.20 / 1.36 (RS) and 1.67 / 0.20 / 1.34 (HF) -- but its mean order
-over the same three halvings is only **1.08** (RS) and **1.07** (HF) against the
-grey arm's **1.94** and **1.83**, so the rate gap reproduces and the
-non-monotonicity does not.  Ladders and JSON in
-`validation/probe_verify_c1/`; pinned from both sides by
-`tests/unit/test_verify_c1_gray_edge.py::test_verify_c1_the_rate_gap_reproduces_on_an_independent_optic`
-and `::test_verify_c1_the_hard_arms_non_monotonicity_is_fixture_specific`.
+**The RATE gap is the general claim; the DIRECTION at any given N is the
+fixture's.**  Whether a circle's staircase area error rises at a particular
+refinement depends on where the rim falls on the lattice there, so it is a
+property of one (lambda, a, window, z) and not of the library -- but a rise is
+COMMON rather than exceptional, and the averaged "first order at best" must not
+be read as a bound on the individual steps.  Measured on two further optics
+(same closed form, both builds identical to twelve significant figures;
+VERIFY-C1-ROUND2 R5 re-measured the second one 2026-09-20):
+
+* lambda = 1064 nm, a = 62.5 um, window 400 um, z = 4.0 mm RS / 2.5 mm HF --
+  two octaves away in Fresnel number, the hard arm FALLS at every step, with
+  step orders 1.68 / 0.20 / 1.36 (RS) and 1.67 / 0.20 / 1.34 (HF), yet its mean
+  order over the same three halvings is only **1.08** (RS) and **1.07** (HF)
+  against the grey arm's **1.94** and **1.83**;
+* lambda = 532 nm, a = 150 um, window 900 um, z = 30 mm RS / 15 mm HF -- the
+  hard arm RISES on the last refinement by a **factor of 9.3** (RS, 7.6432e-05
+  -> 7.1042e-04) and 9.1 (HF, 1.2930e-04 -> 1.1785e-03), far harder than the
+  reference optic's 54 %, and its RS step orders run **2.756 / 3.608 / -3.216**
+  -- two of them ABOVE second order.  Mean orders **1.05** / **1.06** against
+  the grey arm's **1.89** / **2.01**; ladder gains 8.9x / 9.1x against 51.1x /
+  65.2x.
+
+So across three optics spanning 532-1064 nm and Fresnel numbers 0.9-1.4 the rate
+gap is grey mean order 1.83-2.01 against hard 1.05-1.08, and ladder gains 45-65x
+against 8.9-9.5x.  Two of the three rise.  Ladders and JSON in
+`validation/probe_verify_c1/`, `validation/probe_verify_c1_round2/` and
+`validation/probe_wpc1_round3/`; pinned from both sides by
+`tests/unit/test_verify_c1_gray_edge.py::test_verify_c1_the_rate_gap_reproduces_on_an_independent_optic`,
+`::test_verify_c1_the_hard_arms_non_monotonicity_is_fixture_specific` and
+`tests/unit/test_verify_c1_round2.py::test_verify_c1r2_the_hard_arms_rise_is_common_and_its_steps_exceed_two`.
 
 `edge_samples` stays at 4, which is the knee and is now pinned as one: on the RS
 ladder at N = 512 the readings are 3.4207e-04 / 1.6563e-04 / **8.1013e-05** /

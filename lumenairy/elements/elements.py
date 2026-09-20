@@ -376,21 +376,40 @@ def apply_aperture(E_in, dx, shape='circular', params=None, xc=0, yc=0,
                 **-0.62**    1.69         **-0.61**    2.02
         ======  ===========  ===========  ===========  ===========
 
-        The hard edge is **first order at best and its step orders are
-        erratic** -- a circle's staircase area error need not shrink
-        monotonically, and on THIS optic it does not, hence the negative
-        last step (the last refinement rises 54 % on RS and 53 % on HF) --
-        while the grey edge is second order.  The rise itself is this
-        optic's: whether the staircase error rises at a given refinement
-        depends on where the rim falls on the lattice at each N.  The RATE
-        gap is the general claim, and it reproduces elsewhere -- on
-        lambda = 1064 nm, a = 62.5 um, window 400 um, z = 4.0 / 2.5 mm the
-        hard arm falls at every step and still gains only 9.5x (RS) and
-        9.3x (HF) over the same three halvings against the grey arm's
-        56.1x and 44.9x, mean orders 1.08 / 1.07 against 1.94 / 1.83
-        (2026-09-20, both builds; ``validation/probe_verify_c1/``).  The
-        grey default therefore buys a RATE, not a constant: 21x (RS) and
-        8x (HF) by N = 1024, and more at every finer grid.
+        The hard edge averages **first order at best over a ladder**
+        (1.05-1.32 measured on three optics) and its individual step
+        orders are **erratic** -- measured from -3.2 to +3.6, as the
+        table's own ``3.29`` and ``-0.62`` already show.  A circle's
+        staircase area error need not shrink monotonically, and on THIS
+        optic it does not, hence the negative last step (the last
+        refinement rises 54 % on RS and 53 % on HF).  The grey edge is
+        second order.
+
+        A rise like that is COMMON rather than exceptional
+        (VERIFY-C1-ROUND2 R5, three optics, 2026-09-20, identical on both
+        builds); what is not a library property is the DIRECTION at any
+        given N, which depends on where the rim falls on the lattice
+        there.  The RATE gap is the general claim, and it reproduces on
+        two further optics:
+
+        * lambda = 1064 nm, a = 62.5 um, window 400 um, z = 4.0 / 2.5 mm
+          -- the hard arm FALLS at every step and still gains only 9.5x
+          (RS) and 9.3x (HF) over the same three halvings against the grey
+          arm's 56.1x and 44.9x, mean orders 1.08 / 1.07 against
+          1.94 / 1.83 (``validation/probe_verify_c1/``);
+        * lambda = 532 nm, a = 150 um, window 900 um, z = 30 / 15 mm --
+          the hard arm RISES on the last refinement by a FACTOR of 9.3
+          (RS, 7.6432e-05 -> 7.1042e-04, step order -3.216) and 9.1 (HF,
+          1.2930e-04 -> 1.1785e-03, step order -3.188), its other two RS
+          step orders being 2.756 and 3.608, i.e. ABOVE second order; gains
+          8.9x and 9.1x against the grey arm's 51.1x and 65.2x, mean orders
+          1.05 / 1.06 against 1.89 / 2.01
+          (``validation/probe_verify_c1_round2/d3_ladder_R2_*.json`` and
+          ``validation/probe_wpc1_round3/d3_ladder_R3_*.json``).
+
+        The grey default therefore buys a RATE, not a constant: 21x (RS)
+        and 8x (HF) by N = 1024 on the reference optic, and more at every
+        finer grid.
 
         Transmitted-area error against the analytic disc area, rms over
         the 12 sub-pixel rim placements ``linspace(0, 0.95, 12)``
