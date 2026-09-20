@@ -80,8 +80,10 @@ restores them: the previous behaviour is reachable only from the parent commit.
 A prescription whose last surface is FLAT is unaffected, bit for bit, proved
 archive-to-archive.  Callers who pinned FGA output digests on a curved-last-
 surface prescription must re-record them.  `apply_real_lens_gbd` and
-`apply_prescription_persurface_to_beamlets` are untouched: they keep the
-`'surface'` default and their own in-line vertex correction.
+`apply_prescription_persurface_to_beamlets` were untouched by this entry --
+they kept the `'surface'` default and their own in-line vertex correction --
+and the GBD entry below then replaced that in-line copy with the same shared
+projection.
 
 Pinned by `tests/unit/test_audit2609_b12_fga_reference_plane.py` (14 tests, one
 `slow`); the eight files that pinned the previous numbers are restated against
@@ -970,6 +972,94 @@ first re-runs the published order-10 `_GHOST` control -- which must still read 5
 does here and in three of VERIFY-WP-B14's `git archive` trees -- so "the fit default moved"
 and "the bound is dead" cannot be confused: the first skips with every candidate's reading,
 the second is a hard failure.
+
+### Fixed -- GBD: the per-surface beamlet image leg uses the shared exit-vertex projection instead of an in-line conic-sag copy
+
+From v5.22 to 5.47.0
+`lumenairy.propagators.gbd.apply_prescription_persurface_to_beamlets` carried
+its own vertex correction.  Its local-frame branch folded `-sag` into the
+image-side leg (`t = (z_image - _sag) / Nz2`) from an in-line expression
+written out of the last surface's `radius` and `conic` alone.  That copy was
+exact on a conic last surface -- which is why the defect went unnoticed -- and
+wrong on every other surface class the raytracer supports:
+
+| last surface | what the in-line copy used | error in the beamlet's optical path |
+|---|---|---|
+| conic (any radius, any conic constant) | the same sag | **0** (5.8e-23 m measured) |
+| even asphere, A4 = 1.5e8 | the conic base only | 0.92 waves |
+| even asphere, A4 = 5.0e8 / A6 = -4.0e15 | the conic base only | 1.09 waves |
+| **flat base, all power in A2 / A4** | **zero** (its own `np.isfinite(radius)` guard) | **4.39 waves** |
+| biconic, `radius_y` = -7.0 mm | the x-branch radius on both axes | 1.90 waves |
+| freeform (XY polynomial) | the base conic only | 3.31 waves |
+| field-frame decentred 60 um / -40 um | the sag at the UNdecentred coordinates | 1.98 waves |
+| **concave mirror** | `-sag` with the sign of a forward-going ray | **16.28 waves** -- twice the correction, i.e. the sign was inverted |
+| flat | zero | 0, and the whole path short-circuits |
+
+(One optic, N-BAF10 biconvex R1 = +11.0 mm, t = 0.9 mm, semi = 0.30 mm at
+1.064 um, with only the last surface varied; the mirror row is a separate
+concave R = -20 mm.  On WP-B12's own steeper A4 / A6 fixture the same copy
+reads **16.05 waves, 72 % of the sag**, reproducing that package's 15.52-wave
+measurement.)
+
+The in-line copy is deleted.  The local branch now asks the differential
+primitive for `reference='exit_vertex'` and consumes
+`raytrace.differential._project_to_exit_vertex_plane`, the single projection
+`propagators.fga` already uses -- which takes its sag and sag gradient from the
+package's general surface kernels (so it is exact on every class above),
+resolves the exit-medium index through
+`raytrace.exit_vertex.resolve_exit_index`, recovers the propagation-direction
+sign through a mirror, projects the 4x4 Jacobian with the state so `Q` and the
+base ray land on one plane, and short-circuits structurally on a flat last
+surface.  The `world_output_plane` branch keeps `reference='surface'` and is
+unchanged, bit for bit: it world-traces the base rays itself and measures its
+own leg from the last-surface intersection, so moving it would double-count
+the sag -- the same defect mirrored.
+
+Scored against a brute-force Rayleigh-Sommerfeld-I oracle built on an exact
+conic / even-aspheric raytrace, archive-to-archive: the `before` column is the
+parent commit's `lumenairy/` extracted into its own tree and run there in its
+own process, not a reconstruction (`validation/probe_gbd_projection/`).  One
+optic, N-BAF10 biconvex R1 = +11.0 mm, t = 0.9 mm, semi = 0.30 mm at 1.064 um,
+with only the last surface varied:
+
+| last surface | plane | before | after |
+|---|---|---|---|
+| conic (control) | exit vertex | 0.998896 | 0.998896 |
+| the same | focus, 8.263 mm | 0.999711 | 0.999711 |
+| conic + k = -0.60 (control) | exit vertex | 0.998896 | 0.998896 |
+| the same | focus, 8.264 mm | 0.999711 | 0.999711 |
+| even asphere, A4 = 1.5e8 | exit vertex | 0.760509 | **0.998895** |
+| the same | focus, 9.884 mm | 0.761746 | **0.999781** |
+| even asphere, A4 = 5.0e8 / A6 = -4.0e15 | exit vertex | 0.503115 | **0.998896** |
+| the same | focus, 9.926 mm | 0.503899 | **0.999765** |
+| **flat base, all power in A2 / A4** | exit vertex | **0.017658** | **0.998894** |
+| the same | focus, 6.698 mm | **0.017708** | **0.999671** |
+
+The power ratio moves with the fidelity on the flat-base row (0.8894 -> 0.9988
+at the exit vertex).  The two conic rows are the controls the in-line copy got
+right: their fidelity is unchanged to every printed digit and only the field
+BYTES move, by the Jacobian projection described in the Migration note below.
+
+**Migration.**  **Every field returned by `apply_real_lens_gbd`,
+`apply_prescription_persurface_to_beamlets`,
+`propagate_gbd_through_prescription(per_surface=True)` and
+`apply_real_lens_universal(method='gbd')` moves on any prescription whose LAST
+surface is an even asphere, a biconic, a freeform, a field-frame decentred /
+tilted surface or a mirror** -- from wrong to right, by the waves of optical
+path tabulated above, so there is no reason to want the old answers back and
+no keyword restores them.  A CONIC last surface moves only in the fifth
+decimal (measured at the beamlet level: 5.5e-05 relative in `Q`, 6.9e-06
+relative in amplitude, 8.9e-06 rad of relative phase, and the base-ray
+positions and optical paths are bit-identical) because the Jacobian is now
+projected with the state, `J_v = P J`, rather than composed with a plain
+free-space step.  A FLAT last surface and the `world_output_plane` branch are
+bit-identical.  Callers who pinned per-surface GBD output digests on an
+aspheric, biconic, freeform, field-frame or mirror last surface must
+re-record them.
+
+Pinned by `tests/unit/test_audit2609_b12b_gbd_projection.py`; the full
+measurement is
+`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/WP-B12b_GBD_REPORT.md`.
 
 ## [5.47.1] — 2026-09-15
 

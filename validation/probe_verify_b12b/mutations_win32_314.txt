@@ -1,0 +1,46 @@
+[none] tests/unit/test_audit2609_b12b_gbd_projection.py :: 14 passed in 30.86s
+[none] tests/unit/test_verify_b12b_gbd_projection.py :: 8 passed, 1 xfailed in 70.26s (0:01:10)
+[none] tests/unit/test_audit2609_b12_fga_reference_plane.py :: 14 passed in 30.10s
+[none] tests/unit/test_verify_b12_fga_reference_plane.py :: 4 passed in 16.23s
+[fold_restored] tests/unit/test_audit2609_b12b_gbd_projection.py :: 14 passed in 28.79s
+[fold_restored] tests/unit/test_verify_b12b_gbd_projection.py :: 6 failed, 2 passed, 1 xfailed in 79.47s (0:01:19)
+    RED: ::test_a_conic_last_surface_reproduces_a_diffraction_oracle_and_a_double_vertex_correction_does_not ::test_a_non_rotationally_symmetric_last_surface_is_scored_against_a_three_d_oracle[bicon] ::test_a_non_rotationally_symmetric_last_surface_is_scored_against_a_three_d_oracle[freeform] ::test_a_non_rotationally_symmetric_last_surface_is_scored_against_a_three_d_oracle[fieldframe] ::test_the_world_branch_keeps_the_surface_plane_because_the_exit_vertex_one_double_counts ::test_the_named_beamlet_frame_is_a_cost_choice_not_a_result 
+[fold_restored] tests/unit/test_audit2609_b12_fga_reference_plane.py :: 14 passed in 40.00s
+[fold_restored] tests/unit/test_verify_b12_fga_reference_plane.py :: 4 passed in 26.45s
+[fold_restored_renamed] tests/unit/test_audit2609_b12b_gbd_projection.py :: 14 passed in 42.62s
+[fold_restored_renamed] tests/unit/test_verify_b12b_gbd_projection.py :: 6 failed, 2 passed, 1 xfailed in 71.40s (0:01:11)
+    RED: ::test_a_conic_last_surface_reproduces_a_diffraction_oracle_and_a_double_vertex_correction_does_not ::test_a_non_rotationally_symmetric_last_surface_is_scored_against_a_three_d_oracle[bicon] ::test_a_non_rotationally_symmetric_last_surface_is_scored_against_a_three_d_oracle[freeform] ::test_a_non_rotationally_symmetric_last_surface_is_scored_against_a_three_d_oracle[fieldframe] ::test_the_world_branch_keeps_the_surface_plane_because_the_exit_vertex_one_double_counts ::test_the_named_beamlet_frame_is_a_cost_choice_not_a_result 
+[fold_restored_renamed] tests/unit/test_audit2609_b12_fga_reference_plane.py :: 14 passed in 32.10s
+[fold_restored_renamed] tests/unit/test_verify_b12_fga_reference_plane.py :: 4 passed in 25.41s
+[local_surface] tests/unit/test_audit2609_b12b_gbd_projection.py :: 4 failed, 10 passed in 33.06s
+    RED: ::test_the_local_branch_asks_for_the_exit_vertex_plane ::test_a_flat_last_surface_field_is_bit_identical_to_the_surface_arm ::test_the_repaired_field_reproduces_a_diffraction_oracle_where_the_old_one_did_not ::test_the_public_entry_points_follow_the_beamlet_function 
+[local_surface] tests/unit/test_verify_b12b_gbd_projection.py :: 6 failed, 2 passed, 1 xfailed in 70.91s (0:01:10)
+    RED: ::test_a_conic_last_surface_reproduces_a_diffraction_oracle_and_a_double_vertex_correction_does_not ::test_a_non_rotationally_symmetric_last_surface_is_scored_against_a_three_d_oracle[bicon] ::test_a_non_rotationally_symmetric_last_surface_is_scored_against_a_three_d_oracle[freeform] ::test_a_non_rotationally_symmetric_last_surface_is_scored_against_a_three_d_oracle[fieldframe] ::test_the_world_branch_keeps_the_surface_plane_because_the_exit_vertex_one_double_counts ::test_the_named_beamlet_frame_is_a_cost_choice_not_a_result 
+[local_surface] tests/unit/test_audit2609_b12_fga_reference_plane.py :: 14 passed in 31.63s
+[local_surface] tests/unit/test_verify_b12_fga_reference_plane.py :: 4 passed in 14.29s
+[world_exit_vertex] tests/unit/test_audit2609_b12b_gbd_projection.py :: 1 failed, 13 passed in 28.78s
+    RED: ::test_the_local_branch_asks_for_the_exit_vertex_plane 
+[world_exit_vertex] tests/unit/test_verify_b12b_gbd_projection.py :: 1 failed, 7 passed, 1 xfailed in 80.51s (0:01:20)
+    RED: ::test_the_world_branch_keeps_the_surface_plane_because_the_exit_vertex_one_double_counts 
+[world_exit_vertex] tests/unit/test_audit2609_b12_fga_reference_plane.py :: 14 passed in 32.96s
+[world_exit_vertex] tests/unit/test_verify_b12_fga_reference_plane.py :: 4 passed in 14.70s
+[state_only] tests/unit/test_audit2609_b12b_gbd_projection.py :: 14 passed in 32.48s
+[state_only] tests/unit/test_verify_b12b_gbd_projection.py :: 8 passed, 1 xfailed in 74.75s (0:01:14)
+[state_only] tests/unit/test_audit2609_b12_fga_reference_plane.py :: 2 failed, 12 passed in 29.41s
+    RED: ::test_the_projected_jacobian_is_the_derivative_of_the_projected_map ::test_per_surface_projection_moves_only_the_last_local_transfer 
+[state_only] tests/unit/test_verify_b12_fga_reference_plane.py :: 1 failed, 3 passed in 12.62s
+    RED: ::test_the_two_backends_agree_on_the_exit_vertex_plane_where_both_are_alive 
+[sign_plus] tests/unit/test_audit2609_b12b_gbd_projection.py :: 2 failed, 12 passed in 18.27s
+    RED: ::test_the_projection_reproduces_the_library_s_own_exit_vertex_operator[mirror-presc6-0.0006] ::test_a_mirror_terminated_prescription_gets_the_propagation_sign 
+[sign_plus] tests/unit/test_verify_b12b_gbd_projection.py :: 8 passed, 1 xfailed in 52.57s
+[sign_plus] tests/unit/test_audit2609_b12_fga_reference_plane.py :: 1 failed, 13 passed in 28.99s
+    RED: ::test_a_mirror_terminated_prescription_projects_with_the_right_sign 
+[sign_plus] tests/unit/test_verify_b12_fga_reference_plane.py :: 4 passed in 11.22s
+[identity] tests/unit/test_audit2609_b12b_gbd_projection.py :: 11 failed, 3 passed in 28.58s
+    RED: ::test_the_projection_reproduces_the_library_s_own_exit_vertex_operator[conic-presc0-0.0003] ::test_the_projection_reproduces_the_library_s_own_exit_vertex_operator[asphere-presc1-0.0003] ::test_the_projection_reproduces_the_library_s_own_exit_vertex_operator[flat_base_asphere-presc2-0.0003] ::test_the_projection_reproduces_the_library_s_own_exit_vertex_operator[biconic-presc3-0.0003] ::test_the_projection_reproduces_the_library_s_own_exit_vertex_operator[freeform-presc4-0.0003] ::test_the_projection_reproduces_the_library_s_own_exit_vertex_operator[field_frame-presc5-0.0003] ::test_the_projection_reproduces_the_library_s_own_exit_vertex_operator[mirror-presc6-0.0006] ::test_a_flat_last_surface_field_is_bit_identical_to_the_surface_arm ::test_the_repaired_field_reproduces_a_diffraction_oracle_where_the_old_one_did_not ::test_a_mirror_terminated_prescription_gets_the_propagation_sign ::test_the_public_entry_points_follow_the_beamlet_function 
+[identity] tests/unit/test_verify_b12b_gbd_projection.py :: 6 failed, 2 passed, 1 xfailed in 64.03s (0:01:04)
+    RED: ::test_a_conic_last_surface_reproduces_a_diffraction_oracle_and_a_double_vertex_correction_does_not ::test_a_non_rotationally_symmetric_last_surface_is_scored_against_a_three_d_oracle[bicon] ::test_a_non_rotationally_symmetric_last_surface_is_scored_against_a_three_d_oracle[freeform] ::test_a_non_rotationally_symmetric_last_surface_is_scored_against_a_three_d_oracle[fieldframe] ::test_the_world_branch_keeps_the_surface_plane_because_the_exit_vertex_one_double_counts ::test_the_named_beamlet_frame_is_a_cost_choice_not_a_result 
+[identity] tests/unit/test_audit2609_b12_fga_reference_plane.py :: 9 failed, 5 passed in 25.81s
+    RED: ::test_the_two_reference_planes_are_the_trace_s_own_two_planes ::test_the_two_planes_differ_by_the_last_surface_s_sag_along_the_ray ::test_the_flat_control_field_is_bit_identical_through_the_public_api ::test_the_projected_jacobian_is_the_derivative_of_the_projected_map ::test_per_surface_projection_moves_only_the_last_local_transfer ::test_an_aspheric_last_surface_projects_with_its_polynomial_departure ::test_a_mirror_terminated_prescription_projects_with_the_right_sign ::test_the_caustic_zone_is_measured_from_the_exit_vertex_plane ::test_fga_reproduces_a_diffraction_oracle_at_a_caustic_on_a_curved_lens 
+[identity] tests/unit/test_verify_b12_fga_reference_plane.py :: 4 failed in 11.26s
+    RED: ::test_a_biconic_last_surface_projects_with_both_axis_branches ::test_a_field_frame_decentred_last_surface_projects_in_its_own_frame ::test_the_exit_medium_index_is_resolved_from_the_prescription ::test_the_two_backends_agree_on_the_exit_vertex_plane_where_both_are_alive 

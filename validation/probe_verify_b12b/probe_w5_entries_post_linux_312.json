@@ -1,0 +1,56 @@
+{
+ "env": {
+  "platform": "linux",
+  "python": "3.12.3",
+  "numpy": "2.4.6",
+  "scipy": "1.17.1",
+  "lumenairy_version": "5.47.0",
+  "lumenairy_file": "/mnt/c/tmp/lum_vgbd/lumenairy/__init__.py",
+  "mem_budget": "4096",
+  "threads": [
+   "1",
+   "1",
+   "1"
+  ]
+ },
+ "arm": "post",
+ "fixture": "flatbase_asph",
+ "z": 0.005255018542589874,
+ "frame": {
+  "sample_step": 4,
+  "waist_factor": 4.0
+ },
+ "sha_apply_real_lens_gbd": "4b1e08ac759a1cb0914eb6b1",
+ "sha_propagate": "4b1e08ac759a1cb0914eb6b1",
+ "sha_universal": "4b1e08ac759a1cb0914eb6b1",
+ "universal_is_gbd_bytes": true,
+ "propagate_is_gbd_bytes": true,
+ "propagate_vs_gbd_fidelity": 1.0,
+ "propagate_vs_gbd_max_abs": 0.0,
+ "propagate_vs_gbd_rel": 0.0,
+ "n_beamlets_raw": 784,
+ "n_beamlets_clipped": 784,
+ "n_beamlets_pruned": 437,
+ "sha_bundle_raw": "cfe9698febcfb31d9c5153c8",
+ "sha_bundle_pruned": "c75b5100e3c0ee95d1a17168",
+ "n_evolved_raw": 437,
+ "n_evolved_pruned": 437,
+ "sha_field_from_raw": "4b1e08ac759a1cb0914eb6b1",
+ "sha_field_from_pruned": "4b1e08ac759a1cb0914eb6b1",
+ "raw_vs_pruned_max_abs": 0.0,
+ "raw_vs_pruned_rel": 0.0,
+ "field_from_pruned_is_gbd": true,
+ "field_from_raw_is_propagate": true,
+ "chunk_digests": {
+  "2048": "4b1e08ac759a1cb0914eb6b1",
+  "512": "4b1e08ac759a1cb0914eb6b1",
+  "97": "4b1e08ac759a1cb0914eb6b1"
+ },
+ "budget_digests": {
+  "4096.0": "70eb038ab31d5bcfd44316bc",
+  "512.0": "4b1e08ac759a1cb0914eb6b1",
+  "1.0": "70eb038ab31d5bcfd44316bc"
+ },
+ "chunk_digests_agree": true,
+ "budget_digests_agree": false
+}

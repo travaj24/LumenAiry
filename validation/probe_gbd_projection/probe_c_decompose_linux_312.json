@@ -1,0 +1,136 @@
+{
+ "build": {
+  "python": "3.12.3",
+  "numpy": "2.4.6",
+  "scipy": "1.17.1",
+  "platform": "linux"
+ },
+ "version": "5.47.0",
+ "fixtures": {
+  "conic_ref": {
+   "note": "the reference optic, CONIC last surface -- the in-line copy was exact here, so the field may move only by the Jacobian projection and floating-point reassociation",
+   "n_beamlets": 6353,
+   "z_image_m": 0.008271866302365864,
+   "N": 96,
+   "dx": 6.666666666666667e-06,
+   "full_vs_fs_sag_sec": {
+    "rel_Q": 6.063763695559097e-05,
+    "rel_amp": 7.402095303142654e-06,
+    "max_dpos_m": 0.0,
+    "max_relative_dphase_rad": 3.443787435906078e-06
+   },
+   "full_vs_state_only": {
+    "rel_Q": 0.0004333895088200702,
+    "rel_amp": 9.859224193675365e-05,
+    "max_dpos_m": 0.0,
+    "max_relative_dphase_rad": 6.885596585603451e-06
+   },
+   "fs_sag_sec_vs_state_only": {
+    "rel_Q": 0.0004337357788549535,
+    "rel_amp": 0.00010575869864165669,
+    "max_dpos_m": 0.0,
+    "max_relative_dphase_rad": 3.441809149716978e-06
+   }
+  },
+  "conic_k_last": {
+   "note": "the same optic with conic k = -0.60 on the last surface: the in-line copy carried k, so this is a second exactness control",
+   "n_beamlets": 6353,
+   "z_image_m": 0.008271866302365864,
+   "N": 96,
+   "dx": 6.666666666666667e-06,
+   "full_vs_fs_sag_sec": {
+    "rel_Q": 6.0617661340820255e-05,
+    "rel_amp": 7.400903500305856e-06,
+    "max_dpos_m": 0.0,
+    "max_relative_dphase_rad": 3.442175511476754e-06
+   },
+   "full_vs_state_only": {
+    "rel_Q": 0.0004333446320289247,
+    "rel_amp": 9.858778148464426e-05,
+    "max_dpos_m": 0.0,
+    "max_relative_dphase_rad": 6.8833863778104225e-06
+   },
+   "fs_sag_sec_vs_state_only": {
+    "rel_Q": 0.0004336915097691755,
+    "rel_amp": 0.0001057530912747189,
+    "max_dpos_m": 0.0,
+    "max_relative_dphase_rad": 3.4412108663743212e-06
+   }
+  },
+  "asphere_field": {
+   "note": "the same optic + A4 = 5.0e8, A6 = -4.0e15 on the LAST surface -- the headline CURVED-base aspheric fixture",
+   "n_beamlets": 6353,
+   "z_image_m": 0.008271866302365864,
+   "N": 96,
+   "dx": 6.666666666666667e-06,
+   "full_vs_fs_sag_sec": {
+    "rel_Q": 7.036726252506859e-05,
+    "rel_amp": 4.145044828408494e-06,
+    "max_dpos_m": 0.0,
+    "max_relative_dphase_rad": 6.867783799956453e-06
+   },
+   "full_vs_state_only": {
+    "rel_Q": 0.0003020746097507305,
+    "rel_amp": 7.426186668290997e-05,
+    "max_dpos_m": 0.0,
+    "max_relative_dphase_rad": 9.921147011993154e-06
+   },
+   "fs_sag_sec_vs_state_only": {
+    "rel_Q": 0.00030226758616063213,
+    "rel_amp": 7.811848291795019e-05,
+    "max_dpos_m": 0.0,
+    "max_relative_dphase_rad": 3.0533632119770507e-06
+   }
+  },
+  "asphere_flat_base": {
+   "note": "FLAT base radius on the last surface with the power carried by A2 = -9.0e1 / A4 = 4.0e8 -- the in-line copy read its sag as exactly zero, so forcing reference=surface reproduces the pre-WP-B12b field bit for bit",
+   "n_beamlets": 6353,
+   "z_image_m": 0.016276133565472264,
+   "N": 96,
+   "dx": 6.666666666666667e-06,
+   "full_vs_fs_sag_sec": {
+    "rel_Q": 2.1087471341797813e-05,
+    "rel_amp": 6.078480951773382e-06,
+    "max_dpos_m": 0.0,
+    "max_relative_dphase_rad": 1.7867661360886307e-06
+   },
+   "full_vs_state_only": {
+    "rel_Q": 0.00028111041392267294,
+    "rel_amp": 8.30409173534325e-05,
+    "max_dpos_m": 0.0,
+    "max_relative_dphase_rad": 3.1176362176998406e-06
+   },
+   "fs_sag_sec_vs_state_only": {
+    "rel_Q": 0.0002827793131062184,
+    "rel_amp": 8.868648503471249e-05,
+    "max_dpos_m": 0.0,
+    "max_relative_dphase_rad": 1.3308700816114545e-06
+   }
+  },
+  "flat_last_lasf9": {
+   "note": "N-LASF9 plano-convex, curved side FIRST -- the flat-last-surface control (every field must be byte-identical)",
+   "n_beamlets": 6565,
+   "z_image_m": 0.0014463241022722427,
+   "N": 96,
+   "dx": 5.733333333333333e-06,
+   "full_vs_fs_sag_sec": {
+    "rel_Q": 0.0,
+    "rel_amp": 0.0,
+    "max_dpos_m": 0.0,
+    "max_relative_dphase_rad": 6.760231407720553e-17
+   },
+   "full_vs_state_only": {
+    "rel_Q": 0.0,
+    "rel_amp": 0.0,
+    "max_dpos_m": 0.0,
+    "max_relative_dphase_rad": 6.760231407720553e-17
+   },
+   "fs_sag_sec_vs_state_only": {
+    "rel_Q": 0.0,
+    "rel_amp": 0.0,
+    "max_dpos_m": 0.0,
+    "max_relative_dphase_rad": 6.760231407720553e-17
+   }
+  }
+ }
+}

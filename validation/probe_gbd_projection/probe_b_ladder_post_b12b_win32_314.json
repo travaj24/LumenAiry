@@ -1,0 +1,319 @@
+{
+ "build": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "platform": "win32"
+ },
+ "version": "5.47.0",
+ "arm": "post_b12b",
+ "inline_copy_present": false,
+ "lumenairy_file": "C:\\tmp\\lum_gbd\\lumenairy\\__init__.py",
+ "symmetric": {
+  "conic_ref": {
+   "note": "the reference optic, CONIC last surface -- the in-line copy was exact here, so the field may move only by the Jacobian projection and floating-point reassociation",
+   "N": 128,
+   "dx": 5e-06,
+   "lam": 1.064e-06,
+   "best_focus_m": 0.008262974045883005,
+   "airy_radius_m": 1.8525248757088258e-05,
+   "dx_over_airy": 0.26990190877123127,
+   "rows": [
+    {
+     "plane": "exit_vertex",
+     "z_m": 0.0,
+     "fidelity": 0.9988961340404535,
+     "rel_l2": 0.03322447831864759,
+     "power_ratio_gbd_over_oracle": 0.9990875986418328,
+     "sha_field": "fc2f9ab267d230273fb1185b",
+     "gbd_power": 2024.7590024226793,
+     "oracle_power": 2026.608082389524,
+     "seconds_gbd": 16.396669149398804,
+     "seconds_oracle": 0.00296783447265625
+    },
+    {
+     "plane": "focus",
+     "z_m": 0.008262974045883005,
+     "fidelity": 0.9997111281102863,
+     "rel_l2": 0.01699623163280305,
+     "power_ratio_gbd_over_oracle": 0.9990008467620576,
+     "sha_field": "25a117308a3a34a7127fa163",
+     "gbd_power": 2025.1126198999464,
+     "oracle_power": 2027.1380414378052,
+     "seconds_gbd": 108.27155947685242,
+     "seconds_oracle": 31.740605354309082
+    }
+   ]
+  },
+  "conic_k_last": {
+   "note": "the same optic with conic k = -0.60 on the last surface: the in-line copy carried k, so this is a second exactness control",
+   "N": 128,
+   "dx": 5e-06,
+   "lam": 1.064e-06,
+   "best_focus_m": 0.008264421622499143,
+   "airy_radius_m": 1.8527147815928118e-05,
+   "dx_over_airy": 0.2698742434440671,
+   "rows": [
+    {
+     "plane": "exit_vertex",
+     "z_m": 0.0,
+     "fidelity": 0.9988961335753491,
+     "rel_l2": 0.033224485318098684,
+     "power_ratio_gbd_over_oracle": 0.9990876149688925,
+     "sha_field": "c7bde33966f9ff9b9a02113c",
+     "gbd_power": 2024.7590387622467,
+     "oracle_power": 2026.6080856435092,
+     "seconds_gbd": 15.364558935165405,
+     "seconds_oracle": 0.00269317626953125
+    },
+    {
+     "plane": "focus",
+     "z_m": 0.008264421622499143,
+     "fidelity": 0.9997112367143098,
+     "rel_l2": 0.016993036388056926,
+     "power_ratio_gbd_over_oracle": 0.9990016315259918,
+     "sha_field": "08fa0e52d8990fd2462c04df",
+     "gbd_power": 2025.11262933641,
+     "oracle_power": 2027.1364584690582,
+     "seconds_gbd": 134.04143047332764,
+     "seconds_oracle": 40.69639730453491
+    }
+   ]
+  },
+  "asphere_mild": {
+   "note": "the same optic + A4 = 1.5e8 on the LAST surface (a mild departure)",
+   "N": 128,
+   "dx": 5e-06,
+   "lam": 1.064e-06,
+   "best_focus_m": 0.009884259883328052,
+   "airy_radius_m": 2.54633277944379e-05,
+   "dx_over_airy": 0.19636082292009682,
+   "rows": [
+    {
+     "plane": "exit_vertex",
+     "z_m": 0.0,
+     "fidelity": 0.9988948216953132,
+     "rel_l2": 0.03324422212486279,
+     "power_ratio_gbd_over_oracle": 0.9991108468121367,
+     "sha_field": "97ad36e27adbc09c4e55912c",
+     "gbd_power": 2024.84926623279,
+     "oracle_power": 2026.6512696699042,
+     "seconds_gbd": 22.649171113967896,
+     "seconds_oracle": 0.007565975189208984
+    },
+    {
+     "plane": "focus",
+     "z_m": 0.009884259883328052,
+     "fidelity": 0.9997807565158636,
+     "rel_l2": 0.014806872868143096,
+     "power_ratio_gbd_over_oracle": 0.999435868510853,
+     "sha_field": "bfea13ac55895e6e4fcbd6a4",
+     "gbd_power": 2025.0441331650945,
+     "oracle_power": 2026.1871691501178,
+     "seconds_gbd": 152.339271068573,
+     "seconds_oracle": 30.573382139205933
+    }
+   ]
+  },
+  "asphere_field": {
+   "note": "the same optic + A4 = 5.0e8, A6 = -4.0e15 on the LAST surface -- the headline CURVED-base aspheric fixture",
+   "N": 128,
+   "dx": 5e-06,
+   "lam": 1.064e-06,
+   "best_focus_m": 0.009926239703927517,
+   "airy_radius_m": 1.8413323562288607e-05,
+   "dx_over_airy": 0.2715425047024235,
+   "rows": [
+    {
+     "plane": "exit_vertex",
+     "z_m": 0.0,
+     "fidelity": 0.9988959062742011,
+     "rel_l2": 0.03322790582928733,
+     "power_ratio_gbd_over_oracle": 0.9991658914612066,
+     "sha_field": "542e1417ed4947589f31a683",
+     "gbd_power": 2024.9532510540553,
+     "oracle_power": 2026.6436918625295,
+     "seconds_gbd": 12.502838611602783,
+     "seconds_oracle": 0.0030438899993896484
+    },
+    {
+     "plane": "focus",
+     "z_m": 0.009926239703927517,
+     "fidelity": 0.9997646582658016,
+     "rel_l2": 0.015340851808063782,
+     "power_ratio_gbd_over_oracle": 0.9990617938125891,
+     "sha_field": "1121e75b00c717345b152230",
+     "gbd_power": 2025.2136571869369,
+     "oracle_power": 2027.115509500547,
+     "seconds_gbd": 110.86509490013123,
+     "seconds_oracle": 29.228498697280884
+    }
+   ]
+  },
+  "asphere_flat_base": {
+   "note": "FLAT base radius on the last surface with the power carried by A2 = -9.0e1 / A4 = 4.0e8 -- the in-line copy read its sag as exactly zero, so forcing reference=surface reproduces the pre-WP-B12b field bit for bit",
+   "N": 128,
+   "dx": 5e-06,
+   "lam": 1.064e-06,
+   "best_focus_m": 0.006698121435077724,
+   "airy_radius_m": 2.452416124628007e-05,
+   "dx_over_airy": 0.20388057107390054,
+   "rows": [
+    {
+     "plane": "exit_vertex",
+     "z_m": 0.0,
+     "fidelity": 0.9988941492221441,
+     "rel_l2": 0.033254334722818656,
+     "power_ratio_gbd_over_oracle": 0.9988490233192208,
+     "sha_field": "c9386beb71bcbb59d90fa1d2",
+     "gbd_power": 2024.1885172011835,
+     "oracle_power": 2026.5209956102403,
+     "seconds_gbd": 13.925633668899536,
+     "seconds_oracle": 0.003023386001586914
+    },
+    {
+     "plane": "focus",
+     "z_m": 0.006698121435077724,
+     "fidelity": 0.9996713034955185,
+     "rel_l2": 0.018129989092142366,
+     "power_ratio_gbd_over_oracle": 0.9994191530370371,
+     "sha_field": "043dcd0bf9af0b70616149eb",
+     "gbd_power": 2024.570873080323,
+     "oracle_power": 2025.747522376425,
+     "seconds_gbd": 123.61956453323364,
+     "seconds_oracle": 37.034419298172
+    }
+   ]
+  },
+  "flat_last_lasf9": {
+   "note": "N-LASF9 plano-convex, curved side FIRST -- the flat-last-surface control (every field must be byte-identical)",
+   "N": 128,
+   "dx": 4.3e-06,
+   "lam": 8.5e-07,
+   "best_focus_m": 0.0014303422206344027,
+   "airy_radius_m": 3.4347202215175468e-06,
+   "dx_over_airy": 1.2519214732721813,
+   "rows": [
+    {
+     "plane": "exit_vertex",
+     "z_m": 0.0,
+     "fidelity": 0.9977655673624081,
+     "rel_l2": 0.047269785673207006,
+     "power_ratio_gbd_over_oracle": 0.9916523918618685,
+     "sha_field": "b90e3f5767722f1f97b4d102",
+     "gbd_power": 2966.724080675223,
+     "oracle_power": 2991.6975999070355,
+     "seconds_gbd": 9.229796648025513,
+     "seconds_oracle": 0.003093242645263672
+    },
+    {
+     "plane": "focus",
+     "z_m": 0.0014303422206344027,
+     "fidelity": 0.9991176112294206,
+     "rel_l2": 0.02970502938189378,
+     "power_ratio_gbd_over_oracle": 0.9929604155739163,
+     "sha_field": "85a23bd7dc8db39b79db160b",
+     "gbd_power": 4295.289953422974,
+     "oracle_power": 4325.7413750379565,
+     "seconds_gbd": 140.08694195747375,
+     "seconds_oracle": 35.36686611175537
+    }
+   ]
+  }
+ },
+ "nonsym": {
+  "biconic": {
+   "note": "biconic last surface (radius_y = -7.0 mm): the in-line copy evaluated the x-branch radius for both axes",
+   "rows": {
+    "exit_vertex": {
+     "z_m": 0.0,
+     "sha_field": "fe83b90e58243e14cc176ab2",
+     "power": 2024.3389342888718,
+     "peak": 1.0327478848175269,
+     "seconds": 17.369760751724243
+    },
+    "bfl": {
+     "z_m": 0.008271866302365864,
+     "sha_field": "0aa409b615f9c7806e5db7a0",
+     "power": 2024.900966173874,
+     "peak": 6.1504736524039405,
+     "seconds": 103.56968474388123
+    }
+   }
+  },
+  "freeform": {
+   "note": "freeform (XY-polynomial) last surface: the in-line copy dropped the whole departure",
+   "rows": {
+    "exit_vertex": {
+     "z_m": 0.0,
+     "sha_field": "7d97edf0b83dbe84c917fea5",
+     "power": 2024.6370343318292,
+     "peak": 1.0327436296516639,
+     "seconds": 13.257005214691162
+    },
+    "bfl": {
+     "z_m": 0.008271866302365864,
+     "sha_field": "3e8231c79450738947abd895",
+     "power": 2024.944214202725,
+     "peak": 2.970036521698004,
+     "seconds": 98.04753375053406
+    }
+   }
+  },
+  "field_frame": {
+   "note": "field-frame decentered last surface (60 um, -40 um): the in-line copy evaluated the sag at the undecentered coordinates",
+   "rows": {
+    "exit_vertex": {
+     "z_m": 0.0,
+     "sha_field": "19758dbf1ab300bb71ef5602",
+     "power": 2024.5214077501134,
+     "peak": 1.0327658780619524,
+     "seconds": 13.50997281074524
+    },
+    "bfl": {
+     "z_m": 0.008271866302365864,
+     "sha_field": "5a5cda8383186e134ce98cf1",
+     "power": 2024.9065157705927,
+     "peak": 10.465855626420359,
+     "seconds": 104.48514747619629
+    }
+   }
+  },
+  "mirror": {
+   "note": "concave MIRROR last surface (R = -20.0 mm): the in-line copy hard-assumed a forward-propagating exit ray, so its sag correction carried the wrong SIGN and doubled the error",
+   "rows": {
+    "exit_vertex": {
+     "z_m": 0.0,
+     "sha_field": "95e7a571666a2ebcb5aa152b",
+     "power": 58764.4403301431,
+     "peak": 13.164189217381688,
+     "seconds": 0.07214951515197754
+    },
+    "bfl": {
+     "z_m": 0.01,
+     "sha_field": "ea929fb06f522c2b27908db5",
+     "power": 1.618206078155671,
+     "peak": 0.03753206586467005,
+     "seconds": 0.07418632507324219
+    }
+   }
+  }
+ },
+ "entry_points": {
+  "propagate_gbd_through_prescription_per_surface": {
+   "sha_field": "043dcd0bf9af0b70616149eb",
+   "fidelity": 0.9996713034955185,
+   "rel_l2": 0.018129989092142366
+  },
+  "apply_real_lens_universal_method_gbd": {
+   "sha_field": "043dcd0bf9af0b70616149eb",
+   "fidelity": 0.9996713034955185,
+   "rel_l2": 0.018129989092142366
+  },
+  "world_output_plane_branch": {
+   "sha_field": "851ccadc6483aa3451659c32",
+   "power": 1910.1662142861219,
+   "n_beamlets": 177
+  }
+ }
+}

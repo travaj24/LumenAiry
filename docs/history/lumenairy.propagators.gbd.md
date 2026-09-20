@@ -1,13 +1,15 @@
 <!-- lumenairy-history-doc
 module: lumenairy/propagators/gbd.py
-ast_sha256: 775d4193443b5f4c04db3d41b377d20896db5050a3ba0127193745a8b4b10f01
-token_sha256: bc6ec716e2f5fbe17fcd3b21101c02e01bba7f88fb59ffe5e6e31eec32f969fc
+ast_sha256: 06a02e50ec99920e46a7aff187ae251a699915dbb16341780c5f98b46cd6c650
+token_sha256: 7cabb2b50c4eb0abd541662043839faa545cf802020973b968a8331c1279bf24
 pre_relocation_lines: 3845
 recorded_by: WP-A17 SWEEP-4 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
 re_recorded: 2026-09-13 -- WP-B7 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, WP-A4 sec. 6 items 3-8 + VERIFY-B1 F1/F2): the Y4 fused basis evaluation and hoisted Newton factor, the aberration_tensor mode/waist caches, the S6 gate's k1-slope statistic and mean-plus-spread chart sizing, the JAX screen's chief-ray displacement term, and the S9 FFT kernel clip
 re_recorded: 2026-09-14 -- Wave-5 item D (CI run 34914295323): DIGEST-SCHEME change, not a code change -- token_fingerprint now feeds an f-string to the digest as ONE STRING record holding its exact source text instead of the running tokenizer's FSTRING_START/FSTRING_MIDDLE/FSTRING_END run, so the recorded value is a property of the file rather than of the interpreter that read it; PEP 701 made CPython 3.12 tokenize f-strings differently from 3.11, these digests were recorded on 3.12+, and all five py3.11 CI shards read a different token_sha256 for byte-identical sources (110 of 123 documents, measured).  The module source is unchanged and ast_sha256 is unchanged.
 re_recorded: 2026-09-14 -- Wave 5 item D (handoff 4.6, the interpreter crash): the dense reconstruction's chunk sizing reads DENSE_MEM_BUDGET_ACCOUNTING.  The shipped 16 B per cell-column under-counts the loop's live working set by 4.5-6.0x (measured 72.0-96.8 B/cell-col by tracemalloc over a 64/128/192/256 ladder; a 512 MB budget peaked at 3073 MB), so mem_budget_mb was not a bound.  The honest constant is added beside it and the switch DEFAULTS TO 'legacy', which is byte-identical: correcting the constant moves the chunk boundary and therefore the summation order.  The flip is a decision reserved for the maintainer.
+re_recorded: 2026-09-15 -- WP-B12b: the per-surface beamlet image leg consumes the shared exit-vertex projection (reference='exit_vertex') and the in-line conic-sag copy is deleted
+re_recorded: 2026-09-19 -- merge of the WP-B12b chain into wave5/audit-leftovers: the shared exit-vertex projection lands beside WP-B14's DENSE_MEM_BUDGET_ACCOUNTING code and item E's D3 scope note in one tree; the GBD branch was cut before WP-B14, so its recorded AST lacked that code (both sides' re_recorded lines kept)
 -->
 
 # Version history -- `lumenairy/propagators/gbd.py`

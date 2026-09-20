@@ -1,0 +1,127 @@
+{
+ "env": {
+  "platform": "linux",
+  "python": "3.12.3",
+  "numpy": "2.4.6",
+  "scipy": "1.17.1",
+  "lumenairy_version": "5.47.0",
+  "lumenairy_file": "/mnt/c/tmp/lum_vgbd/lumenairy/__init__.py",
+  "mem_budget": "4096",
+  "threads": [
+   "1",
+   "1",
+   "1"
+  ]
+ },
+ "arm": "post",
+ "glass_control": [
+  {
+   "glass": "N-BAF10",
+   "lam": 1.064e-06,
+   "mine": 1.6539725432552408,
+   "lib": 1.6539725432552408,
+   "diff": 0.0
+  },
+  {
+   "glass": "N-BAF10",
+   "lam": 7.8e-07,
+   "mine": 1.6606343213443118,
+   "lib": 1.6606343213443118,
+   "diff": 0.0
+  },
+  {
+   "glass": "N-BAF10",
+   "lam": 6.33e-07,
+   "mine": 1.667067718917287,
+   "lib": 1.667067718917287,
+   "diff": 0.0
+  }
+ ],
+ "rows": [
+  {
+   "fixture": "b12b_flat_base_asphere",
+   "frame": "auto (library default)",
+   "frame_kw": {},
+   "z": 0.006585731424935412,
+   "secs": 144.6,
+   "fid_vs_oracle": 0.9996913636678723,
+   "rel_l2_vs_oracle": 0.017917235233842897,
+   "fid_vs_auto_frame": 1.0,
+   "forced_surface_fid_vs_oracle": 0.019117175364825077,
+   "peak": 10.737858761106283,
+   "sha": "5ef1d801c05ec368118dfb6d",
+   "airy": 2.4558136281777626e-05,
+   "na": 0.02642871562210501,
+   "dx_over_airy": 0.26875003560010635,
+   "oracle_src_halved_infid": 4.2554426649132893e-10,
+   "oracle_grid_halved_infid": 3.056293439995805e-05,
+   "oracle_mode": "radial"
+  },
+  {
+   "fixture": "b12b_flat_base_asphere",
+   "frame": "ss2/wf2",
+   "frame_kw": {
+    "sample_step": 2,
+    "waist_factor": 2.0
+   },
+   "z": 0.006585731424935412,
+   "secs": 40.7,
+   "fid_vs_oracle": 0.9997178159538,
+   "rel_l2_vs_oracle": 0.017427751289551076,
+   "fid_vs_auto_frame": 0.9999328544111867,
+   "forced_surface_fid_vs_oracle": 0.03093444109857216,
+   "peak": 10.75196689144004,
+   "sha": "96b2b89541509fbe6ba650cd",
+   "airy": 2.4558136281777626e-05,
+   "na": 0.02642871562210501,
+   "dx_over_airy": 0.26875003560010635,
+   "oracle_src_halved_infid": 4.2554426649132893e-10,
+   "oracle_grid_halved_infid": 3.056293439995805e-05,
+   "oracle_mode": "radial"
+  },
+  {
+   "fixture": "b12b_flat_base_asphere",
+   "frame": "ss4/wf4 (the test file)",
+   "frame_kw": {
+    "sample_step": 4,
+    "waist_factor": 4.0
+   },
+   "z": 0.006585731424935412,
+   "secs": 7.9,
+   "fid_vs_oracle": 0.9993600023608854,
+   "rel_l2_vs_oracle": 0.028206880903695077,
+   "fid_vs_auto_frame": 0.9995628173276647,
+   "forced_surface_fid_vs_oracle": 0.08854346956053016,
+   "peak": 10.744698954553735,
+   "sha": "37cfa5f2a03a0ce44b23418e",
+   "airy": 2.4558136281777626e-05,
+   "na": 0.02642871562210501,
+   "dx_over_airy": 0.26875003560010635,
+   "oracle_src_halved_infid": 4.2554426649132893e-10,
+   "oracle_grid_halved_infid": 3.056293439995805e-05,
+   "oracle_mode": "radial"
+  },
+  {
+   "fixture": "b12b_flat_base_asphere",
+   "frame": "ss6/wf6",
+   "frame_kw": {
+    "sample_step": 6,
+    "waist_factor": 6.0
+   },
+   "z": 0.006585731424935412,
+   "secs": 1.4,
+   "fid_vs_oracle": 0.9986702039260225,
+   "rel_l2_vs_oracle": 0.046273737775528276,
+   "fid_vs_auto_frame": 0.998820809671244,
+   "forced_surface_fid_vs_oracle": 0.11553281807812264,
+   "peak": 10.640842781472147,
+   "sha": "d5c3cb3ae05ceb011ac4b838",
+   "airy": 2.4558136281777626e-05,
+   "na": 0.02642871562210501,
+   "dx_over_airy": 0.26875003560010635,
+   "oracle_src_halved_infid": 4.2554426649132893e-10,
+   "oracle_grid_halved_infid": 3.056293439995805e-05,
+   "oracle_mode": "radial"
+  }
+ ]
+}
