@@ -16586,5 +16586,12 @@
   "tests/unit/test_zcascade.py::test_per_mode_fresnel_sign": 1.7665972000104375,
   "tests/unit/test_zcascade.py::test_roundtrip_interface_identity": 2.1928396000294015,
   "tests/unit/test_zcascade.py::test_same_medium_identity": 2.657165999931749,
-  "tests/unit/test_zcascade.py::test_slab_fabry_perot": 10.370825899939518
+  "tests/unit/test_zcascade.py::test_slab_fabry_perot": 10.370825899939518,
+  "tests/unit/test_verify_hyg2_round2.py::test_the_chief_ray_term_inside_the_one_kernel_is_gated_numerically": 0.004,
+  "tests/unit/test_verify_hyg2_round2.py::test_no_call_site_negates_the_one_kernel": 0.37,
+  "tests/unit/test_verify_hyg2_round2.py::test_the_evanescent_clamp_is_reached_and_holds_at_a_sub_wavelength_pitch": 0.004,
+  "tests/unit/test_verify_hyg2_round2.py::test_the_accuracy_rule_is_never_executed_while_tau_is_none": 0.77,
+  "tests/unit/test_verify_hyg2_round2.py::test_a_phase_budget_reference_must_not_reduce_its_phase_like_the_route": 0.18,
+  "tests/unit/test_verify_hyg2_round2.py::test_the_evanescent_carrier_refusal_is_gated_by_behaviour": 0.004,
+  "tests/unit/test_verify_hyg2_round2.py::test_the_cross_backend_bar_is_the_legs_own_last_bit_sensitivity": 0.87
 }

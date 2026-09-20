@@ -1,0 +1,169 @@
+{
+ "M0_pristine": {
+  "failed": [],
+  "rc": 0,
+  "summary": "108 passed, 4 warnings in 74.94s (0:01:14)",
+  "what": "the unmutated tip -- the control"
+ },
+ "M10_public_leg_demotes_again": {
+  "failed": [
+   "FAILED tests/unit/test_wave5_h2_collins_jax.py::test_the_public_entry_agrees_across_backends[collins]"
+  ],
+  "file": "carrier.py",
+  "rc": 1,
+  "summary": "1 failed, 107 passed, 4 warnings in 73.68s (0:01:13)",
+  "what": "the public leg demotes an eager JAX array to host NumPy again"
+ },
+ "M11_input_box_host_fft": {
+  "failed": [],
+  "file": "carrier.py",
+  "rc": 0,
+  "summary": "108 passed, 4 warnings in 74.76s (0:01:14)",
+  "what": "the input-box transform goes back to a host FFT"
+ },
+ "M12_traced_refusal_removed": {
+  "failed": [
+   "FAILED tests/unit/test_wave5_h2_collins_jax.py::test_the_public_collins_leg_refuses_a_trace_by_name"
+  ],
+  "file": "carrier.py",
+  "rc": 1,
+  "summary": "1 failed, 107 passed, 4 warnings in 71.99s (0:01:11)",
+  "what": "the designed traced ValueError on the public leg is removed"
+ },
+ "M13_complex64_fold_removed": {
+  "failed": [],
+  "file": "carrier.py",
+  "rc": 0,
+  "summary": "108 passed, 4 warnings in 75.52s (0:01:15)",
+  "what": "the complex64 mod-2pi fold before the float32 cast is dropped"
+ },
+ "M14_budget_guard_deleted": {
+  "failed": [
+   "FAILED tests/unit/test_wave5_h2_mft_direct.py::test_the_phase_budget_threshold_is_the_budget_that_keeps_six_figures",
+   "FAILED tests/unit/test_wave5_h2_mft_direct.py::test_the_chirp_phase_guard_fires_on_the_chirp_route_and_not_the_dense_one"
+  ],
+  "file": "_bluestein.py",
+  "rc": 1,
+  "summary": "2 failed, 106 passed, 4 warnings in 76.43s (0:01:16)",
+  "what": "the phase-budget warning never fires at all"
+ },
+ "M15_tau_honours_explicit_exact": {
+  "failed": [
+   "FAILED tests/unit/test_wave5_h2_near_focus_table.py::test_tau_1e_4_leaves_this_ladder_inert_and_catches_f3"
+  ],
+  "file": "carrier.py",
+  "rc": 1,
+  "summary": "1 failed, 107 passed, 4 warnings in 76.91s (0:01:16)",
+  "what": "an explicit gap_kernel='exact' would be silently downgraded when the rule is armed"
+ },
+ "M1_kernel_negated": {
+  "failed": [
+   "FAILED tests/unit/test_wave5_h2_near_focus_table.py::test_the_exact_kernels_departure_on_a_collimated_leg_is_the_quartic",
+   "FAILED tests/unit/test_wave5_h2_near_focus_table.py::test_the_exact_kernels_departure_falls_monotonically_away_from_the_focus",
+   "FAILED tests/unit/test_wave5_h2_near_focus_table.py::test_the_departure_is_linear_in_the_reduced_distance",
+   "FAILED tests/unit/test_wave5_h2_near_focus_table.py::test_the_departure_is_quartic_in_the_envelopes_own_angle",
+   "FAILED tests/unit/test_wave5_h2_near_focus_table.py::test_the_measured_departure_is_the_quartic_times_one_constant",
+   "FAILED tests/unit/test_wave5_h2_near_focus_table.py::test_the_departure_law_predicts_what_the_refinement_actually_changes",
+   "FAILED tests/unit/test_verify_wave5_hyg2.py::test_the_exact_kernel_retards_the_envelope_and_the_sign_is_gated"
+  ],
+  "file": "carrier.py",
+  "rc": 1,
+  "summary": "7 failed, 101 passed, 4 warnings in 73.06s (0:01:13)",
+  "what": "the ONE kernel returns the conjugate phase at all three sites"
+ },
+ "M2_linear_term_dropped": {
+  "failed": [],
+  "file": "carrier.py",
+  "rc": 0,
+  "summary": "108 passed, 4 warnings in 75.05s (0:01:15)",
+  "what": "the (s.q)/N chief-ray subtraction is dropped (tilted legs only)"
+ },
+ "M3_one_site_conjugated": {
+  "failed": [
+   "FAILED tests/unit/test_wave5_h2_near_focus_table.py::test_the_exact_kernels_departure_falls_monotonically_away_from_the_focus",
+   "FAILED tests/unit/test_wave5_h2_near_focus_table.py::test_the_departure_is_linear_in_the_reduced_distance",
+   "FAILED tests/unit/test_wave5_h2_near_focus_table.py::test_the_departure_is_quartic_in_the_envelopes_own_angle",
+   "FAILED tests/unit/test_wave5_h2_near_focus_table.py::test_the_measured_departure_is_the_quartic_times_one_constant",
+   "FAILED tests/unit/test_wave5_h2_near_focus_table.py::test_the_departure_law_predicts_what_the_refinement_actually_changes",
+   "FAILED tests/unit/test_verify_wave5_hyg2.py::test_the_exact_kernel_retards_the_envelope_and_the_sign_is_gated",
+   "FAILED tests/unit/test_audit2609_b4_collins_transport.py::TestSameTheorem::test_collins_on_the_co_moving_lattice_is_the_sziklas_step[auto-0.012]",
+   "FAILED tests/unit/test_audit2609_b4_collins_transport.py::TestSameTheorem::test_collins_on_the_co_moving_lattice_is_the_sziklas_step[auto-0.02]",
+   "FAILED tests/unit/test_audit2609_b4_collins_transport.py::TestQuadratureComplementarity::test_where_both_hold_the_two_forms_agree[0.012]",
+   "FAILED tests/unit/test_audit2609_b4_collins_transport.py::TestQuadratureComplementarity::test_where_both_hold_the_two_forms_agree[0.02]"
+  ],
+  "file": "carrier.py",
+  "rc": 1,
+  "summary": "10 failed, 98 passed, 4 warnings in 76.00s (0:01:15)",
+  "what": "ONE call site conjugates the kernel -- the shape the consolidation is supposed to make impossible"
+ },
+ "M4_root0_not_subtracted": {
+  "failed": [
+   "FAILED tests/unit/test_wave5_h2_near_focus_table.py::test_the_exact_kernels_departure_on_a_collimated_leg_is_the_quartic",
+   "FAILED tests/unit/test_wave5_h2_near_focus_table.py::test_the_exact_kernels_departure_falls_monotonically_away_from_the_focus",
+   "FAILED tests/unit/test_wave5_h2_near_focus_table.py::test_the_departure_is_linear_in_the_reduced_distance",
+   "FAILED tests/unit/test_wave5_h2_near_focus_table.py::test_the_departure_is_quartic_in_the_envelopes_own_angle",
+   "FAILED tests/unit/test_wave5_h2_near_focus_table.py::test_the_measured_departure_is_the_quartic_times_one_constant",
+   "FAILED tests/unit/test_wave5_h2_near_focus_table.py::test_the_departure_law_predicts_what_the_refinement_actually_changes",
+   "FAILED tests/unit/test_verify_wave5_hyg2.py::test_the_exact_kernel_retards_the_envelope_and_the_sign_is_gated"
+  ],
+  "file": "carrier.py",
+  "rc": 1,
+  "summary": "7 failed, 101 passed, 4 warnings in 74.16s (0:01:14)",
+  "what": "the q = 0 value k N is left in (double-counts the piston)"
+ },
+ "M5_evanescent_clamp_removed": {
+  "failed": [
+   "FAILED tests/unit/test_wave5_h2_near_focus_table.py::test_the_exact_kernels_departure_on_a_collimated_leg_is_the_quartic",
+   "FAILED tests/unit/test_wave5_h2_near_focus_table.py::test_the_measured_departure_is_the_quartic_times_one_constant"
+  ],
+  "file": "carrier.py",
+  "rc": 1,
+  "summary": "2 failed, 106 passed, 6 warnings in 72.53s (0:01:12)",
+  "what": "the evanescent band is no longer clamped to zero"
+ },
+ "M6_tilt_guard_weakened": {
+  "failed": [
+   "FAILED tests/unit/test_wave5_h2_collins_jax.py::test_the_exact_dispersion_is_written_once"
+  ],
+  "file": "carrier.py",
+  "rc": 1,
+  "summary": "1 failed, 107 passed, 4 warnings in 74.26s (0:01:14)",
+  "what": "the |s|^2 < 1 refusal admits the grazing |s| = 1 direction"
+ },
+ "M7_budget_back_to_1e15": {
+  "failed": [
+   "FAILED tests/unit/test_wave5_h2_mft_direct.py::test_the_phase_budget_threshold_is_the_budget_that_keeps_six_figures"
+  ],
+  "file": "_bluestein.py",
+  "rc": 1,
+  "summary": "1 failed, 107 passed, 4 warnings in 75.44s (0:01:15)",
+  "what": "the chirp phase-budget threshold reverts to the historical 1e15"
+ },
+ "M8_budget_a_decade_low": {
+  "failed": [
+   "FAILED tests/unit/test_wave5_h2_mft_direct.py::test_the_phase_budget_threshold_is_the_budget_that_keeps_six_figures"
+  ],
+  "file": "_bluestein.py",
+  "rc": 1,
+  "summary": "1 failed, 107 passed, 4 warnings in 73.95s (0:01:13)",
+  "what": "the threshold drops a decade below its derivation (the other side)"
+ },
+ "M9_tau_armed_at_1e_4": {
+  "failed": [
+   "FAILED tests/unit/test_wave5_h2_near_focus_table.py::test_the_shipped_default_does_not_evaluate_the_accuracy_rule_at_all"
+  ],
+  "file": "carrier.py",
+  "rc": 1,
+  "summary": "1 failed, 107 passed, 4 warnings in 71.92s (0:01:11)",
+  "what": "the near-focus accuracy rule ships ARMED at tau = 1e-4"
+ },
+ "_selection": [
+  "tests/unit/test_wave5_h2_collins_jax.py",
+  "tests/unit/test_wave5_h2_near_focus_table.py",
+  "tests/unit/test_wave5_h2_mft_direct.py",
+  "tests/unit/test_verify_wave5_hyg2.py",
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestSameTheorem",
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestKernelRefinement",
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestQuadratureComplementarity"
+ ]
+}

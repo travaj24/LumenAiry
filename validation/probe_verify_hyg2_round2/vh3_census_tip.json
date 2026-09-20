@@ -1,0 +1,116 @@
+{
+ "assignment_forms": {},
+ "call_site_expressions": {
+  "_collins_exact_kernel_correction": {
+   "forms": [
+    "phase = _exact_dispersion_phase(qx, qy, k, tilt, bld, '_collins_exact_kernel_correction')"
+   ],
+   "n_calls": 1
+  },
+  "_exact_envelope_tf_step": {
+   "forms": [
+    "phase = _exact_dispersion_phase(kx, ky, k, tilt, np, '_exact_envelope_tf_step')"
+   ],
+   "n_calls": 1
+  },
+  "_exact_tf_2d_xp": {
+   "forms": [
+    "arg = k * z + z * _exact_dispersion_phase(kx, ky, k, tilt, bld, '_exact_tf_2d_xp')"
+   ],
+   "n_calls": 1
+  }
+ },
+ "kernel_callers": [
+  "lumenairy/propagators/carrier.py::_collins_exact_kernel_correction",
+  "lumenairy/propagators/carrier.py::_exact_dispersion_phase",
+  "lumenairy/propagators/carrier.py::_exact_envelope_tf_step",
+  "lumenairy/propagators/carrier.py::_exact_tf_2d_xp"
+ ],
+ "n_functions_walked": 4546,
+ "root": "C:\\tmp\\lum_vhyg3",
+ "structural": [
+  {
+   "expressions": [
+    "k * k - kx_sq[None, :]"
+   ],
+   "function": "through_focus_scan",
+   "module": "lumenairy/analysis/through_focus.py"
+  },
+  {
+   "expressions": [
+    "k * k - kx * kx"
+   ],
+   "function": "_build_through_focus_scan_jax_kernel",
+   "module": "lumenairy/analysis/through_focus.py"
+  },
+  {
+   "expressions": [
+    "k * k - (2 * jnp.pi * FX) ** 2"
+   ],
+   "function": "_asm_jax",
+   "module": "lumenairy/optimize/jax_merits.py"
+  },
+  {
+   "expressions": [
+    "k ** 2 - kx_sq[None, :]"
+   ],
+   "function": "_build_asm_H_square",
+   "module": "lumenairy/propagators/asm.py"
+  },
+  {
+   "expressions": [
+    "k ** 2 - kx_sq[None, :]"
+   ],
+   "function": "_get_asm_H_natural",
+   "module": "lumenairy/propagators/asm.py"
+  },
+  {
+   "expressions": [
+    "k ** 2 - kx_sq[None, :]"
+   ],
+   "function": "_asm_apply_H_streamed",
+   "module": "lumenairy/propagators/asm.py"
+  },
+  {
+   "expressions": [
+    "k ** 2 - kx ** 2"
+   ],
+   "function": "angular_spectrum_propagate_tilted",
+   "module": "lumenairy/propagators/asm.py"
+  },
+  {
+   "expressions": [
+    "k * k - (ax * ax + ay * ay)",
+    "np.subtract(k * k, phase, out=phase)"
+   ],
+   "function": "_exact_dispersion_phase",
+   "module": "lumenairy/propagators/carrier.py"
+  },
+  {
+   "expressions": [
+    "k * k - kx_sq"
+   ],
+   "function": "_asm_axis",
+   "module": "lumenairy/propagators/carrier.py"
+  },
+  {
+   "expressions": [
+    "k * k - kx_sq[None, :]"
+   ],
+   "function": "angular_spectrum_propagate_mft",
+   "module": "lumenairy/propagators/mft.py"
+  }
+ ],
+ "tokens": {
+  "ax * ax + ay * ay": [
+   "lumenairy/propagators/carrier.py::_exact_dispersion_phase",
+   "lumenairy/propagators/vectorial_hfpi.py::_rigid_rotate"
+  ],
+  "root0": [
+   "lumenairy/propagators/carrier.py::_exact_dispersion_phase"
+  ],
+  "s2 < 1.0": [
+   "lumenairy/propagators/carrier.py::_exact_dispersion_phase"
+  ]
+ }
+}

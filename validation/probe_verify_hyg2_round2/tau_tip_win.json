@@ -1,0 +1,100 @@
+{
+ "T1": {
+  "imported_value": "None",
+  "is_None_in_source": true,
+  "source_line": "_GAP_KERNEL_ACCURACY_TAU = None",
+  "source_value": "None"
+ },
+ "T2_sentinel": {
+  "calls_seen": [],
+  "result": {
+   "error": null,
+   "ok": true
+  }
+ },
+ "T2_trace": {
+  "carrier_lines_executed": 207,
+  "guard_lines": [
+   2450
+  ],
+  "guard_lines_executed": [
+   2450
+  ],
+  "rule_is_inert": true,
+  "rule_lines": [
+   1762,
+   2451,
+   2452,
+   2454,
+   2474
+  ],
+  "rule_lines_executed": [],
+  "trace_is_live": true
+ },
+ "T3": {
+  "f3": {
+   "1e-03": {
+    "departure": 2.2908702030356414e-06,
+    "k4": 8.88567460635277e-06,
+    "kernel": "exact"
+   },
+   "1e-04": {
+    "departure": 2.3437364384902574e-05,
+    "k4": 9.090728635729939e-05,
+    "kernel": "exact"
+   },
+   "1e-05": {
+    "departure": 0.00023490230620349943,
+    "k4": 0.0009111234038664844,
+    "kernel": "fresnel"
+   },
+   "1e-06": {
+    "departure": 0.002349551724385367,
+    "k4": 0.009113284578942428,
+    "kernel": "fresnel"
+   }
+  },
+  "f3_100um": "exact",
+  "f3_10um": "fresnel",
+  "f3_1um": "fresnel",
+  "h2_all_exact": true,
+  "h2_worst_departure": 4.7160533693084405e-06,
+  "hygiene2": {
+   "1e-03": {
+    "departure": 1.4184539754315932e-07,
+    "k4": 6.710031113197615e-07,
+    "kernel": "exact"
+   },
+   "1e-04": {
+    "departure": 1.1641122700967077e-06,
+    "k4": 5.506861475168618e-06,
+    "kernel": "exact"
+   },
+   "1e-05": {
+    "departure": 3.6955810714547244e-06,
+    "k4": 1.7482036358113243e-05,
+    "kernel": "exact"
+   },
+   "1e-06": {
+    "departure": 4.7160533693084405e-06,
+    "k4": 2.2309405442592168e-05,
+    "kernel": "exact"
+   },
+   "5e-03": {
+    "departure": 2.296035053428266e-08,
+    "k4": 1.0861449798403423e-07,
+    "kernel": "exact"
+   }
+  }
+ },
+ "T3_restored": "None",
+ "T4": {
+  "departure": 0.002349551724385367,
+  "fresnel_still_fresnel": true,
+  "honoured": true,
+  "kernel": "exact"
+ },
+ "lumenairy_file": "C:\\tmp\\lum_vhyg3\\lumenairy\\__init__.py",
+ "platform": "win32",
+ "python": "3.14.6"
+}

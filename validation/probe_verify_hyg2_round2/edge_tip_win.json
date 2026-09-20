@@ -1,0 +1,78 @@
+{
+ "E1_evanescent": {
+  "dx0.25lam.t0.3_-0.2": {
+   "n_clamped": 12,
+   "out_has_nan": false,
+   "out_norm": 10.026513098523985,
+   "phase_has_nan": false,
+   "phase_min": -8072673.101316404,
+   "qmax_over_k": 2.0
+  },
+  "dx0.25lam.t0_0": {
+   "n_clamped": 3303,
+   "out_has_nan": false,
+   "out_norm": 10.026513098523983,
+   "phase_has_nan": false,
+   "phase_min": -4053667.940115862,
+   "qmax_over_k": 2.0
+  },
+  "dx0.40lam.t0.3_-0.2": {
+   "n_clamped": 8,
+   "out_has_nan": false,
+   "out_norm": 10.026513098523985,
+   "phase_has_nan": false,
+   "phase_min": -6463299.34205329,
+   "qmax_over_k": 1.25
+  },
+  "dx0.40lam.t0_0": {
+   "n_clamped": 2035,
+   "out_has_nan": false,
+   "out_norm": 10.026513098523981,
+   "phase_has_nan": false,
+   "phase_min": -4053667.940115862,
+   "qmax_over_k": 1.25
+  },
+  "dx2.00lam.t0.3_-0.2": {
+   "n_clamped": 0,
+   "out_has_nan": false,
+   "out_norm": 10.026513098523981,
+   "phase_has_nan": false,
+   "phase_min": -371462.7717079405,
+   "qmax_over_k": 0.25
+  },
+  "dx2.00lam.t0_0": {
+   "n_clamped": 0,
+   "out_has_nan": false,
+   "out_norm": 10.026513098523981,
+   "phase_has_nan": false,
+   "phase_min": -261808.79220005637,
+   "qmax_over_k": 0.25
+  }
+ },
+ "E2_complex64_fold": {
+  "z0.001": {
+   "c64_has_nan": false,
+   "dtype64": "complex64",
+   "kz": 4053.667940115862,
+   "kz_over_float32_eps_limit": 0.00048323487862944603,
+   "rel_c64_vs_c128": 1.5477037173038327e-07
+  },
+  "z1": {
+   "c64_has_nan": false,
+   "dtype64": "complex64",
+   "kz": 4053667.940115862,
+   "kz_over_float32_eps_limit": 0.48323488235473633,
+   "rel_c64_vs_c128": 1.4439735747432476e-07
+  },
+  "z100": {
+   "c64_has_nan": false,
+   "dtype64": "complex64",
+   "kz": 405366794.0115862,
+   "kz_over_float32_eps_limit": 48.323486328125,
+   "rel_c64_vs_c128": 1.4957765517804218e-07
+  }
+ },
+ "lumenairy_file": "C:\\tmp\\lum_vhyg3\\lumenairy\\__init__.py",
+ "platform": "win32",
+ "python": "3.14.6"
+}

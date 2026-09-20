@@ -1,0 +1,206 @@
+{
+ "J1": {
+  "bar": 3.4693485548643764e-15,
+  "bar_derivation": "10 x max(n_transforms x measured NumPy-vs-JAX FFT spread on this build's own transforms of these grids, the leg's measured response to a 1-ULP perturbation of its own input)",
+  "decades_of_headroom": 9.948057516466774,
+  "fft_spreads": {
+   "L": 256,
+   "fft2_env": 0.0,
+   "fft2_env_chirped": 0.0,
+   "fft2_padded_L": 0.0,
+   "ifft2_env": 0.0,
+   "ifft2_env_chirped": 0.0
+  },
+  "jax_is_plain_ndarray": false,
+  "jax_type": "jaxlib._jax.ArrayImpl",
+  "max_abs": 4.742874840267547e-16,
+  "n_transforms_assumed": 6,
+  "numpy_type": "numpy.ndarray",
+  "peak": 0.6438683155975863,
+  "rel": 4.0289029654543854e-16,
+  "shipped_bar_32eps_floor": 7.105427357601002e-15,
+  "smallest_real_signal": 3.078261075613381e-05,
+  "ulp_sensitivity": 3.4693485548643763e-16,
+  "within_bar": true
+ },
+ "J2": {
+  "asm_H_primed": 1,
+  "cache_primed_entries": 1,
+  "exception": "ValueError",
+  "message": "propagate_carrier_referenced: the envelope is a JAX Tracer (inside jax.jit / jax.grad).  This leg resolves its OUTPUT LATTICE and its QUADRATURE by measuring the envelope's own phase-space box -- the support radii r_x/r_y and the angular half-widths th_x/th_y -- and a Tracer has no entries to measure, so unlike _collins_transport there is no spelling of this call that takes those decisions for it.  Call _collins_transport directly with an explicit (dx_out, dy_out, N_out_x, N_out_y, R_ref), gap_kernel='fresnel' and on_collins_sampling='ignore', having checked the Kelly conditions on a concrete array first -- or move this call outside the trace.",
+  "needles": {
+   "Tracer": true,
+   "_collins_transport": true,
+   "dx_out": true,
+   "gap_kernel": true,
+   "gap_kernel='fresnel'": true,
+   "jax.grad": true,
+   "jax.jit": true,
+   "on_collins_sampling": true,
+   "on_collins_sampling='ignore'": true,
+   "outside the trace": true
+  },
+  "pyfftw_plans_primed": 2,
+  "state_unchanged": {
+   "asm_H_cache": true,
+   "bluestein_cache": true,
+   "pyfftw_plans": true,
+   "warning_filters": true
+  },
+  "stats_out_untouched": true,
+  "stats_sentinel_after": {
+   "SENTINEL": 1
+  },
+  "warning_filters_primed": 10
+ },
+ "J3": {
+  "tilted": {
+   "R_equal": true,
+   "direct_kernel_rel": 1.3665804183082144e-16,
+   "dx_equal": true,
+   "jax_type": "jaxlib._jax.ArrayImpl",
+   "rel": 4.154117269600323e-16
+  },
+  "untilted": {
+   "R_equal": true,
+   "direct_kernel_rel": 1.1210036363697228e-16,
+   "dx_equal": true,
+   "jax_type": "jaxlib._jax.ArrayImpl",
+   "rel": 4.223501838780177e-16
+  }
+ },
+ "J4": {
+  "private_collins": {
+   "best": {
+    "fd": 1.3007243295626836,
+    "floor": 7.418342520289227e-14,
+    "h": 0.1,
+    "over_floor": 0.3658855047475014,
+    "rel": 2.7142639974258758e-14
+   },
+   "grad_at_peak": 1.3007243295627189,
+   "grad_nonzero": true,
+   "grad_not_constant": true,
+   "ladder": [
+    {
+     "fd": 1.3007243295626836,
+     "floor": 7.418342520289227e-14,
+     "h": 0.1,
+     "over_floor": 0.3658855047475014,
+     "rel": 2.7142639974258758e-14
+    },
+    {
+     "fd": 1.3007243295630153,
+     "floor": 2.4701888895389044e-13,
+     "h": 0.03,
+     "over_floor": 0.922584307995195,
+     "rel": 2.2789575072726694e-13
+    },
+    {
+     "fd": 1.300724329561831,
+     "floor": 7.408345845380636e-13,
+     "h": 0.01,
+     "over_floor": 0.9214783109004,
+     "rel": 6.826630016167345e-13
+    },
+    {
+     "fd": 1.3007243295627784,
+     "floor": 2.4691895487861323e-12,
+     "h": 0.003,
+     "over_floor": 0.018528289411987565,
+     "rel": 4.574985857296445e-14
+    },
+    {
+     "fd": 1.3007243295604098,
+     "floor": 7.407346597981603e-12,
+     "h": 0.001,
+     "over_floor": 0.23965355396914237,
+     "rel": 1.7751969376875273e-12
+    },
+    {
+     "fd": 1.3007243295722524,
+     "floor": 2.4690896273136106e-11,
+     "h": 0.0003,
+     "over_floor": 0.29684488785293023,
+     "rel": 7.32936633518742e-12
+    },
+    {
+     "fd": 1.3007243296669913,
+     "floor": 7.407246677442618e-11,
+     "h": 0.0001,
+     "over_floor": 1.0822489348403768,
+     "rel": 8.016484826762194e-11
+    }
+   ]
+  },
+  "public_collins_grad_is_refused_by_design": true,
+  "public_sziklas_exact": {
+   "best": {
+    "fd": 1.5802469135802966,
+    "floor": 5.5922469385723574e-14,
+    "h": 0.1,
+    "over_floor": 0.5628296299118434,
+    "rel": 3.147482274812319e-14
+   },
+   "grad_at_peak": 1.5802469135802468,
+   "grad_nonzero": true,
+   "grad_not_constant": true,
+   "ladder": [
+    {
+     "fd": 1.5802469135802966,
+     "floor": 5.5922469385723574e-14,
+     "h": 0.1,
+     "over_floor": 0.5628296299118434,
+     "rel": 3.147482274812319e-14
+    },
+    {
+     "fd": 1.5802469135797046,
+     "floor": 1.8613234086412588e-13,
+     "h": 0.03,
+     "over_floor": 1.843482821965077,
+     "rel": 3.431317729951644e-13
+    },
+    {
+     "fd": 1.5802469135806518,
+     "floor": 5.581705370953541e-13,
+     "h": 0.01,
+     "over_floor": 0.4591696770102605,
+     "rel": 2.562949852347174e-13
+    },
+    {
+     "fd": 1.580246913583494,
+     "floor": 1.8603077211071807e-12,
+     "h": 0.003,
+     "over_floor": 1.1045787005090226,
+     "rel": 2.054856285127471e-12
+    },
+    {
+     "fd": 1.580246913583494,
+     "floor": 5.5807006746274075e-12,
+     "h": 0.001,
+     "over_floor": 0.3682075791073784,
+     "rel": 2.054856285127471e-12
+    },
+    {
+     "fd": 1.5802469135669148,
+     "floor": 1.8602076361668453e-11,
+     "h": 0.0003,
+     "over_floor": 0.4535331141795107,
+     "rel": 8.436657622512556e-12
+    },
+    {
+     "fd": 1.5802469136616537,
+     "floor": 5.5806006995991516e-11,
+     "h": 0.0001,
+     "over_floor": 0.9231137435774339,
+     "rel": 5.1515292032178195e-11
+    }
+   ]
+  }
+ },
+ "jax": "0.10.2",
+ "lumenairy_file": "/mnt/c/tmp/lum_vhyg3/lumenairy/__init__.py",
+ "numpy": "2.4.6",
+ "platform": "linux",
+ "python": "3.12.3"
+}

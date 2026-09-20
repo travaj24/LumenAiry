@@ -1,0 +1,181 @@
+{
+ "M0_pristine": {
+  "failed": [],
+  "rc": 0,
+  "summary": "216 passed, 4 warnings in 211.05s (0:03:31)",
+  "what": "the unmutated tip -- the control"
+ },
+ "M10_public_leg_demotes_again": {
+  "failed": [
+   "FAILED tests/unit/test_wave5_h2_collins_jax.py::test_the_public_entry_agrees_across_backends[collins]"
+  ],
+  "file": "carrier.py",
+  "rc": 1,
+  "summary": "1 failed, 215 passed, 4 warnings in 207.87s (0:03:27)",
+  "what": "the public leg demotes an eager JAX array to host NumPy again"
+ },
+ "M11_input_box_host_fft": {
+  "failed": [],
+  "file": "carrier.py",
+  "rc": 0,
+  "summary": "216 passed, 4 warnings in 207.89s (0:03:27)",
+  "what": "the input-box transform goes back to a host FFT"
+ },
+ "M12_traced_refusal_removed": {
+  "failed": [
+   "FAILED tests/unit/test_wave5_h2_collins_jax.py::test_the_public_collins_leg_refuses_a_trace_by_name"
+  ],
+  "file": "carrier.py",
+  "rc": 1,
+  "summary": "1 failed, 215 passed, 4 warnings in 212.51s (0:03:32)",
+  "what": "the designed traced ValueError on the public leg is removed"
+ },
+ "M13_complex64_fold_removed": {
+  "failed": [],
+  "file": "carrier.py",
+  "rc": 0,
+  "summary": "216 passed, 4 warnings in 208.25s (0:03:28)",
+  "what": "the complex64 mod-2pi fold before the float32 cast is dropped"
+ },
+ "M14_budget_guard_deleted": {
+  "failed": [
+   "FAILED tests/unit/test_wave5_h2_mft_direct.py::test_the_phase_budget_threshold_is_the_budget_that_keeps_six_figures",
+   "FAILED tests/unit/test_wave5_h2_mft_direct.py::test_the_chirp_phase_guard_fires_on_the_chirp_route_and_not_the_dense_one"
+  ],
+  "file": "_bluestein.py",
+  "rc": 1,
+  "summary": "2 failed, 214 passed, 4 warnings in 220.46s (0:03:40)",
+  "what": "the phase-budget warning never fires at all"
+ },
+ "M15_tau_honours_explicit_exact": {
+  "failed": [
+   "FAILED tests/unit/test_wave5_h2_near_focus_table.py::test_tau_1e_4_leaves_this_ladder_inert_and_catches_f3"
+  ],
+  "file": "carrier.py",
+  "rc": 1,
+  "summary": "1 failed, 215 passed, 4 warnings in 247.58s (0:04:07)",
+  "what": "an explicit gap_kernel='exact' would be silently downgraded when the rule is armed"
+ },
+ "M1_kernel_negated": {
+  "failed": [
+   "FAILED tests/unit/test_wave5_h2_near_focus_table.py::test_the_exact_kernels_departure_on_a_collimated_leg_is_the_quartic",
+   "FAILED tests/unit/test_wave5_h2_near_focus_table.py::test_the_exact_kernels_departure_falls_monotonically_away_from_the_focus",
+   "FAILED tests/unit/test_wave5_h2_near_focus_table.py::test_the_departure_is_linear_in_the_reduced_distance",
+   "FAILED tests/unit/test_wave5_h2_near_focus_table.py::test_the_departure_is_quartic_in_the_envelopes_own_angle",
+   "FAILED tests/unit/test_wave5_h2_near_focus_table.py::test_the_measured_departure_is_the_quartic_times_one_constant",
+   "FAILED tests/unit/test_wave5_h2_near_focus_table.py::test_the_departure_law_predicts_what_the_refinement_actually_changes",
+   "FAILED tests/unit/test_verify_wave5_hyg2.py::test_the_exact_kernel_retards_the_envelope_and_the_sign_is_gated",
+   "FAILED tests/unit/test_audit2609_b4_collins_transport.py::TestGateBMismatchMatrix::test_the_sziklas_column_reproduces_the_published_matrix",
+   "FAILED tests/unit/test_audit2609_b4_collins_transport.py::TestGateBMismatchMatrix::test_collins_reads_unity_at_every_mismatch",
+   "FAILED tests/unit/test_audit2609_b4_collins_transport.py::TestGateCTwoGroupChain::test_both_transports_reproduce_the_audit_s_own_readings",
+   "FAILED tests/unit/test_audit2609_b4_collins_transport.py::TestKellyGuard::test_an_unsampled_configuration_fires_and_is_wrong[256-4e-05]",
+   "FAILED tests/unit/test_audit2609_b4_collins_transport.py::TestKellyGuard::test_an_unsampled_configuration_fires_and_is_wrong[512-2e-05]",
+   "FAILED tests/unit/test_audit2609_b4_collins_transport.py::TestKellyGuard::test_an_unsampled_configuration_fires_and_is_wrong[1024-1e-05]",
+   "FAILED tests/unit/test_audit2609_b4_collins_transport.py::TestLegPeriodCondition::test_a_leg_conserves_power[0.039]",
+   "FAILED tests/unit/test_audit2609_b4_collins_transport.py::TestLegPeriodCondition::test_k3_is_never_below_k1_on_a_leg_lattice[0.039]"
+  ],
+  "file": "carrier.py",
+  "rc": 1,
+  "summary": "15 failed, 201 passed, 4 warnings in 213.76s (0:03:33)",
+  "what": "the ONE kernel returns the conjugate phase at all three sites"
+ },
+ "M2_linear_term_dropped": {
+  "failed": [],
+  "file": "carrier.py",
+  "rc": 0,
+  "summary": "216 passed, 4 warnings in 207.47s (0:03:27)",
+  "what": "the (s.q)/N chief-ray subtraction is dropped (tilted legs only)"
+ },
+ "M3_one_site_conjugated": {
+  "failed": [
+   "FAILED tests/unit/test_wave5_h2_near_focus_table.py::test_the_exact_kernels_departure_falls_monotonically_away_from_the_focus",
+   "FAILED tests/unit/test_wave5_h2_near_focus_table.py::test_the_departure_is_linear_in_the_reduced_distance",
+   "FAILED tests/unit/test_wave5_h2_near_focus_table.py::test_the_departure_is_quartic_in_the_envelopes_own_angle",
+   "FAILED tests/unit/test_wave5_h2_near_focus_table.py::test_the_measured_departure_is_the_quartic_times_one_constant",
+   "FAILED tests/unit/test_wave5_h2_near_focus_table.py::test_the_departure_law_predicts_what_the_refinement_actually_changes",
+   "FAILED tests/unit/test_verify_wave5_hyg2.py::test_the_exact_kernel_retards_the_envelope_and_the_sign_is_gated",
+   "FAILED tests/unit/test_audit2609_b4_collins_transport.py::TestSameTheorem::test_collins_on_the_co_moving_lattice_is_the_sziklas_step[auto-0.012]",
+   "FAILED tests/unit/test_audit2609_b4_collins_transport.py::TestSameTheorem::test_collins_on_the_co_moving_lattice_is_the_sziklas_step[auto-0.02]",
+   "FAILED tests/unit/test_audit2609_b4_collins_transport.py::TestGateBMismatchMatrix::test_collins_reads_unity_at_every_mismatch",
+   "FAILED tests/unit/test_audit2609_b4_collins_transport.py::TestQuadratureComplementarity::test_where_both_hold_the_two_forms_agree[0.012]",
+   "FAILED tests/unit/test_audit2609_b4_collins_transport.py::TestQuadratureComplementarity::test_where_both_hold_the_two_forms_agree[0.02]",
+   "FAILED tests/unit/test_audit2609_b4_collins_transport.py::TestLegPeriodCondition::test_a_leg_conserves_power[0.039]",
+   "FAILED tests/unit/test_audit2609_b4_collins_transport.py::TestLegPeriodCondition::test_k3_is_never_below_k1_on_a_leg_lattice[0.039]"
+  ],
+  "file": "carrier.py",
+  "rc": 1,
+  "summary": "13 failed, 203 passed, 4 warnings in 208.43s (0:03:28)",
+  "what": "ONE call site conjugates the kernel -- the shape the consolidation is supposed to make impossible"
+ },
+ "M4_root0_not_subtracted": {
+  "failed": [
+   "FAILED tests/unit/test_wave5_h2_near_focus_table.py::test_the_exact_kernels_departure_on_a_collimated_leg_is_the_quartic",
+   "FAILED tests/unit/test_wave5_h2_near_focus_table.py::test_the_exact_kernels_departure_falls_monotonically_away_from_the_focus",
+   "FAILED tests/unit/test_wave5_h2_near_focus_table.py::test_the_departure_is_linear_in_the_reduced_distance",
+   "FAILED tests/unit/test_wave5_h2_near_focus_table.py::test_the_departure_is_quartic_in_the_envelopes_own_angle",
+   "FAILED tests/unit/test_wave5_h2_near_focus_table.py::test_the_measured_departure_is_the_quartic_times_one_constant",
+   "FAILED tests/unit/test_wave5_h2_near_focus_table.py::test_the_departure_law_predicts_what_the_refinement_actually_changes",
+   "FAILED tests/unit/test_verify_wave5_hyg2.py::test_the_exact_kernel_retards_the_envelope_and_the_sign_is_gated",
+   "FAILED tests/unit/test_audit2609_b4_collins_transport.py::TestKellyGuard::test_an_unsampled_configuration_fires_and_is_wrong[256-4e-05]",
+   "FAILED tests/unit/test_audit2609_b4_collins_transport.py::TestKellyGuard::test_an_unsampled_configuration_fires_and_is_wrong[512-2e-05]",
+   "FAILED tests/unit/test_audit2609_b4_collins_transport.py::TestKellyGuard::test_an_unsampled_configuration_fires_and_is_wrong[1024-1e-05]"
+  ],
+  "file": "carrier.py",
+  "rc": 1,
+  "summary": "10 failed, 206 passed, 4 warnings in 208.27s (0:03:28)",
+  "what": "the q = 0 value k N is left in (double-counts the piston)"
+ },
+ "M5_evanescent_clamp_removed": {
+  "failed": [
+   "FAILED tests/unit/test_wave5_h2_near_focus_table.py::test_the_exact_kernels_departure_on_a_collimated_leg_is_the_quartic",
+   "FAILED tests/unit/test_wave5_h2_near_focus_table.py::test_the_measured_departure_is_the_quartic_times_one_constant"
+  ],
+  "file": "carrier.py",
+  "rc": 1,
+  "summary": "2 failed, 214 passed, 6 warnings in 208.18s (0:03:28)",
+  "what": "the evanescent band is no longer clamped to zero"
+ },
+ "M6_tilt_guard_weakened": {
+  "failed": [
+   "FAILED tests/unit/test_wave5_h2_collins_jax.py::test_the_exact_dispersion_is_written_once"
+  ],
+  "file": "carrier.py",
+  "rc": 1,
+  "summary": "1 failed, 215 passed, 4 warnings in 207.92s (0:03:27)",
+  "what": "the |s|^2 < 1 refusal admits the grazing |s| = 1 direction"
+ },
+ "M7_budget_back_to_1e15": {
+  "failed": [
+   "FAILED tests/unit/test_wave5_h2_mft_direct.py::test_the_phase_budget_threshold_is_the_budget_that_keeps_six_figures"
+  ],
+  "file": "_bluestein.py",
+  "rc": 1,
+  "summary": "1 failed, 215 passed, 4 warnings in 208.16s (0:03:28)",
+  "what": "the chirp phase-budget threshold reverts to the historical 1e15"
+ },
+ "M8_budget_a_decade_low": {
+  "failed": [
+   "FAILED tests/unit/test_wave5_h2_mft_direct.py::test_the_phase_budget_threshold_is_the_budget_that_keeps_six_figures"
+  ],
+  "file": "_bluestein.py",
+  "rc": 1,
+  "summary": "1 failed, 215 passed, 4 warnings in 208.27s (0:03:28)",
+  "what": "the threshold drops a decade below its derivation (the other side)"
+ },
+ "M9_tau_armed_at_1e_4": {
+  "failed": [
+   "FAILED tests/unit/test_wave5_h2_near_focus_table.py::test_the_shipped_default_does_not_evaluate_the_accuracy_rule_at_all"
+  ],
+  "file": "carrier.py",
+  "rc": 1,
+  "summary": "1 failed, 215 passed, 4 warnings in 232.32s (0:03:52)",
+  "what": "the near-focus accuracy rule ships ARMED at tau = 1e-4"
+ },
+ "_selection": [
+  "tests/unit/test_wave5_h2_collins_jax.py",
+  "tests/unit/test_wave5_h2_near_focus_table.py",
+  "tests/unit/test_wave5_h2_mft_direct.py",
+  "tests/unit/test_verify_wave5_hyg2.py",
+  "tests/unit/test_audit2609_b4_collins_transport.py"
+ ]
+}
