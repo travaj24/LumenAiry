@@ -3467,6 +3467,88 @@ def _resolve_world_output_plane(prescription, wavelength, spec):
     return np.asarray(p0, np.float64), np.asarray(R_out, np.float64), wsurfs
 
 
+def _last_optical_surface(surfs):
+    """``surfs[-1]``, skipping any trailing COORDINATE-BREAK placeholders.
+
+    A coordinate break carries no optical power and no medium of its own, so
+    "the last surface" of a prescription -- the one whose exit medium and
+    whose mirror flag decide what the image-side leg may assume -- is the last
+    entry that is not one.  Returns ``None`` for an empty list.
+    """
+    for surf in reversed(list(surfs)):
+        if not bool(getattr(surf, 'is_coordbrk', False)):
+            return surf
+    return None
+
+
+def _require_forward_going_local_exit(surfs, fn_name):
+    """Refuse a MIRROR-terminated prescription on the LOCAL-frame branch.
+
+    Returns ``False`` when the prescription's exit ray travels along ``+z``
+    (nothing is refused and nothing is changed); raises otherwise.  The return
+    value exists so the DECISION is observable from both sides in a test,
+    rather than only its exception.
+
+    WHY.  :func:`apply_prescription_persurface_to_beamlets`'s local branch
+    builds its image-side leg from ``Nz2 = 1/sqrt(1 + ux^2 + uy^2)``, which is
+    POSITIVE whatever the true direction cosine ``N`` is.  After a mirror the
+    light travels toward ``-z``, and that one unsigned quantity feeds THREE
+    things at once -- the returned ``new_dir``, the leg length
+    ``t = z_image / Nz2`` and the branch-safe Moebius free-space step -- so
+    there is no one-line sign to flip: repairing it means giving the branch a
+    signed direction convention and re-deriving all three.
+
+    MEASURED (VERIFY-WP-B12b section 9.2, 2026-09-19, a concave mirror
+    ``R = -15 mm`` whose geometric focus is 7.5 mm behind the vertex, scored
+    against an independent 3-D tracer): at ``z_image = +f`` the returned spot
+    RMS is **7756x** the traced one (3.879e-04 m against 5.001e-08 m) and the
+    returned ``N`` sign is ``+1`` against a traced ``-1``; flipping the sign of
+    ``z_image`` recovers the transverse positions to 2.830e-19 m but leaves a
+    **0.48-wave** piston, because the leg's own sign is still wrong.  Both
+    arms are returned silently today, which is what this refuses.
+
+    WHY IT DOES NOT NAME ``world_output_plane`` AS THE REMEDY.  WP-B12b's own
+    open item 2 recommended exactly that.  Measured here (2026-09-19, both
+    builds, ``validation/probe_wp_b12b_round2/probe_r1_guards.py``): with a
+    CURVED terminating mirror that branch raises ``NotImplementedError:
+    world_output_plane: curved (powered) fold mirrors are not yet supported``
+    -- so on the class where the local branch is wrong there is nowhere to
+    send the caller, and a message naming it would be a dead end.  With a
+    FLAT terminating mirror the world branch DOES serve the prescription,
+    through an explicit ``(p0, R_out)`` plane (``'auto'`` cannot find a
+    paraxial focus for a flat fold with no power after it), so the message
+    distinguishes the two cases instead of collapsing them.
+
+    SCOPE.  This refuses a mirror-TERMINATED prescription, the class
+    VERIFY-WP-B12b measured.  A fold mirror in the MIDDLE of a prescription
+    reaching this branch is a related but separately-measured class: it is
+    what ``world_output_plane`` exists for, it is loud rather than silent
+    today (``tests/unit/test_gbd_feature_complete.py``'s periscope id pins
+    the local arm's non-finite energy), and it is recorded as an open item
+    rather than swept into this guard.
+    """
+    last = _last_optical_surface(surfs)
+    if last is None or not bool(getattr(last, 'is_mirror', False)):
+        return False
+    raise NotImplementedError(
+        f"{fn_name}: the prescription's LAST surface is a MIRROR, and the "
+        f"local-frame branch cannot serve a mirror-terminated prescription.  "
+        f"Its image-side leg is built from Nz2 = 1/sqrt(1 + ux^2 + uy^2), "
+        f"which is positive whatever the true N, so after a mirror the "
+        f"returned direction, the leg t = z_image/Nz2 and the Moebius "
+        f"free-space step all run along +z while the light travels toward -z "
+        f"(measured VERIFY-WP-B12b sec. 9.2: the spot RMS is 7.8e3 x the "
+        f"traced one at z_image = +f, and at z_image = -f the transverse "
+        f"positions are right but the leg piston carries the wrong sign, "
+        f"0.48 waves).  NO ROUTE IN THIS LIBRARY SERVES THIS CLASS YET when "
+        f"the mirror is CURVED: world_output_plane refuses a powered "
+        f"terminating fold itself.  For a FLAT terminating mirror, pass "
+        f"world_output_plane=(p0, R_out) -- an explicit plane, since 'auto' "
+        f"has no paraxial focus to find.  Otherwise propagate to the mirror "
+        f"and continue the reverse leg yourself.  Refusing rather than "
+        f"returning a wrong field silently.")
+
+
 def apply_prescription_persurface_to_beamlets(
     beamlets: BeamletBundle,
     prescription: Dict[str, Any],
@@ -3515,6 +3597,31 @@ def apply_prescription_persurface_to_beamlets(
     world-traces the base rays itself and measures its own leg from the
     last-surface INTERSECTION, so its piston and its leg are already on one
     plane.  It is unchanged, bit for bit, by WP-B12b.
+
+    What the local branch REFUSES
+    -----------------------------
+    Two classes the local branch cannot serve are refused loudly rather than
+    returned silently (VERIFY-WP-B12b D-4 / D-5, 5.48.0).  A prescription
+    whose LAST surface is a MIRROR raises ``NotImplementedError`` -- the leg
+    is built from an unsigned ``Nz2`` that feeds the returned direction, the
+    leg length and the Moebius step alike, so the returned field is wrong by
+    a factor of 7.8e3 in spot RMS (see
+    :func:`_require_forward_going_local_exit`, which also says why
+    ``world_output_plane`` is not the alternative for a CURVED one).  A
+    prescription whose exit medium is not air is refused by
+    :func:`lumenairy.propagators.fga._require_non_immersed_exit`, the SAME
+    guard and the SAME single tolerance definition the four ``fga`` sites
+    use: this branch's leg is ``t = z_image / Nz2``, carrying no exit index,
+    so an immersed exit costs ``(n_exit - 1) * z_image * sec`` of optical
+    path (measured 1846.26 waves at a 2 mm leg in n = 1.72).  Neither guard
+    fires on any prescription the library serves today, and the
+    ``world_output_plane`` branch is not guarded here -- its own leg is
+    likewise index-free, which is recorded as an open item, not measured.
+
+    .. versionchanged:: 5.48.0
+       The local branch now REFUSES a mirror-terminated prescription and an
+       immersed exit medium (see "What the local branch REFUSES"); both were
+       served silently before.  Nothing the library serves today is affected.
 
     .. versionchanged:: 5.48.0
        v5.22 to 5.47.0 folded ``-sag`` into the image leg from an in-line
@@ -3577,6 +3684,24 @@ def apply_prescription_persurface_to_beamlets(
         if z_image is None:
             _res = system_abcd_prescription(prescription, wavelength)
             z_image = float(_res[2])
+        # VERIFY-WP-B12b D-4 / D-5 (2026-09-19): the two classes this branch
+        # cannot serve, refused HERE -- where ``z_image``, the length of the
+        # index-free leg, first exists -- rather than after the trace has been
+        # paid for.  ``propagators.fga`` guards its own index-free image leg
+        # the same way at four sites; the tolerance has ONE definition
+        # (``fga._immersed_exit_tolerance``) and this site reaches the SAME
+        # function object through the SAME ``_require_non_immersed_exit``,
+        # imported lazily so ``propagators.gbd`` keeps the no-module-level-
+        # cycle property ``propagators/__init__`` records for it.  Neither
+        # guard fires on any prescription this library serves today (every
+        # GBD fixture exits into air through a transmissive last surface), so
+        # the shipped fields are byte-identical across this change.
+        _require_forward_going_local_exit(
+            surfs, 'apply_prescription_persurface_to_beamlets')
+        from .fga import _require_non_immersed_exit
+        _require_non_immersed_exit(
+            surfs, wavelength, z_image,
+            'apply_prescription_persurface_to_beamlets')
     # Trace to the LAST surface vertex (zero its transfer); the image-side
     # free-space is done branch-safe below (its single leg crosses the focus).
     surfs[-1] = _copy.copy(surfs[-1])
