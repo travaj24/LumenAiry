@@ -1,0 +1,45 @@
+        """
+        census = _census()
+        assert census, 'the AST census found no exported function that traces'
+        missing = {n for n, kw in census.items() if len(kw) < 2}
+>       assert missing == _NO_WAY_BACK, (
+            f'the way-back census moved.\n'
+            f'  newly WITHOUT a way back: {sorted(missing - _NO_WAY_BACK)}\n'
+            f'  now WITH one (fixed):     {sorted(_NO_WAY_BACK - missing)}\n'
+            f'Every exported function that traces on the CPU must forward both '
+            f'keywords; only the jax twins are exempt.')
+E       AssertionError: the way-back census moved.
+E           newly WITHOUT a way back: ['spot_centroid_quick']
+E           now WITH one (fixed):     []
+E         Every exported function that traces on the CPU must forward both keywords; only the jax twins are exempt.
+E       assert {'apply_real_...ntroid_quick'} == {'apply_real_...jacobian_jax'}
+E         
+E         Extra items in the left set:
+E         'spot_centroid_quick'
+E         Use -v to get more diff
+
+tests/unit/test_verify_c2_analytic_normal.py:716: AssertionError
+=========================== short test summary info ============================
+FAILED tests/unit/test_c2_analytic_normal_default.py::test_c2_every_entry_point_that_traces_carries_both_keywords
+FAILED tests/unit/test_verify_c2_analytic_normal.py::test_vc2_the_entry_points_without_a_way_back_are_pinned
+2 failed, 56 passed in 15.73s
+
+=================== done ===================
+erify_c2_analytic_normal.py::test_vc2_the_two_domain_gates_coincide_on_the_axis[-0.12]
+FAILED tests/unit/test_verify_c2_analytic_normal.py::test_vc2_the_two_domain_gates_coincide_on_the_axis[1.0]
+FAILED tests/unit/test_verify_c2_analytic_normal.py::test_vc2_the_rim_band_is_reachable_only_off_axis
+FAILED tests/unit/test_verify_c2_analytic_normal.py::test_vc2_the_jax_backend_does_not_apply_the_numpy_domain_clamp
+FAILED tests/unit/test_verify_c2_analytic_normal.py::test_vc2_the_clamp_kills_through_the_public_trace_on_both_routes
+11 failed, 47 passed in 14.77s
+
+=================== M7 a NEW exported entry point that traces with no way back ===================
+M7 applied
+try_points[opd_fan_data]
+FAILED tests/unit/test_c2_analytic_normal_default.py::test_c2_none_stamps_nothing_on_the_entry_points[opd_fan_data_world]
+FAILED tests/unit/test_c2_analytic_normal_default.py::test_c2_none_stamps_nothing_on_the_entry_points[through_focus_rms]
+FAILED tests/unit/test_c2_analytic_normal_default.py::test_c2_none_stamps_nothing_on_the_entry_points[paraxial_focus_world]
+FAILED tests/unit/test_c2_analytic_normal_default.py::test_c2_none_stamps_nothing_on_the_entry_points[ray_transfer_jacobian]
+9 failed, 49 passed in 16.09s
+
+=================== M4 _library_trace_default returns the wrong route for renormalize ===================
+M4 applied

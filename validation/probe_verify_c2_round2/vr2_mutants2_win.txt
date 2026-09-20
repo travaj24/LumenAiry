@@ -1,0 +1,22 @@
+
+=================== M8  lumenairy/elements/_lens_traced.py ===================
+dropped the forward in lumenairy/elements/_lens_traced.py
+..........................................................               [100%]
+58 passed in 21.55s
+
+=================== M9  lumenairy/propagators/asymptotic_canonical_fit.py ===================
+dropped the forward in lumenairy/propagators/asymptotic_canonical_fit.py
+..........................................................               [100%]
+58 passed in 24.31s
+
+=================== M10  lumenairy/analysis/image_plane_wfe.py ===================
+dropped the forward in lumenairy/analysis/image_plane_wfe.py
+..........................................................               [100%]
+58 passed in 23.64s
+
+=================== M11  lumenairy/analysis/aberration.py ===================
+dropped the forward in lumenairy/analysis/aberration.py
+..........................................................               [100%]
+58 passed in 20.16s
+
+=================== done ===================

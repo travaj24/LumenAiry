@@ -16652,5 +16652,18 @@
   "tests/unit/test_c2_analytic_normal_default.py::test_c2_the_release_text_byte_identity_counts_match_the_probe_json": 0.014484100000117905,
   "tests/unit/test_c2_analytic_normal_default.py::test_c2_the_rim_band_is_the_one_discontinuous_difference": 0.0012059000000590459,
   "tests/unit/test_c2_analytic_normal_default.py::test_c2_the_two_backends_gate_the_sphere_domain_differently": 1.1314631999994162,
-  "tests/unit/test_c2_analytic_normal_default.py::test_c2_the_way_back_is_the_pre_5_49_0_arithmetic_exactly": 0.007809200003976002
+  "tests/unit/test_c2_analytic_normal_default.py::test_c2_the_way_back_is_the_pre_5_49_0_arithmetic_exactly": 0.007809200003976002,
+  "tests/unit/test_verify_c2_round2.py::test_vr2_an_aliased_tracer_import_hides_an_exported_entry_point": 6.288638600002741,
+  "tests/unit/test_verify_c2_round2.py::test_vr2_library_trace_default_agrees_with_trace_for_every_keyword": 0.0013657999952556565,
+  "tests/unit/test_verify_c2_round2.py::test_vr2_the_alias_hidden_entry_point_really_traces_and_really_moves": 1.157107700011693,
+  "tests/unit/test_verify_c2_round2.py::test_vr2_the_edited_in_place_override_refuses_the_three_round_one_abuses": 0.11537369998404756,
+  "tests/unit/test_verify_c2_round2.py::test_vr2_the_forward_reaches_the_tracer_in_the_seven_unparametrized_entry_points[apply_real_lens_maslov]": 0.11630879998847377,
+  "tests/unit/test_verify_c2_round2.py::test_vr2_the_forward_reaches_the_tracer_in_the_seven_unparametrized_entry_points[apply_real_lens_traced]": 2.256492399988929,
+  "tests/unit/test_verify_c2_round2.py::test_vr2_the_forward_reaches_the_tracer_in_the_seven_unparametrized_entry_points[caustic_diagnostic]": 0.010438899989821948,
+  "tests/unit/test_verify_c2_round2.py::test_vr2_the_forward_reaches_the_tracer_in_the_seven_unparametrized_entry_points[eval_image_plane_wfe]": 0.005942799994954839,
+  "tests/unit/test_verify_c2_round2.py::test_vr2_the_forward_reaches_the_tracer_in_the_seven_unparametrized_entry_points[fit_canonical_polynomials]": 0.014883000010740943,
+  "tests/unit/test_verify_c2_round2.py::test_vr2_the_forward_reaches_the_tracer_in_the_seven_unparametrized_entry_points[fit_hf_polynomials]": 0.009371899999678135,
+  "tests/unit/test_verify_c2_round2.py::test_vr2_the_forward_reaches_the_tracer_in_the_seven_unparametrized_entry_points[plot_lens_layout]": 0.5625498999870615,
+  "tests/unit/test_verify_c2_round2.py::test_vr2_the_history_drift_envelope_needs_two_n_eps_not_one": 0.007926999998744577,
+  "tests/unit/test_verify_c2_round2.py::test_vr2_the_w6a2_second_step_bar_misses_the_dropped_prior_term": 0.11667290001059882
 }

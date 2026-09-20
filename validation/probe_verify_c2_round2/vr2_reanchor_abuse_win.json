@@ -1,0 +1,130 @@
+{
+ "python": "3.14.6",
+ "repo": "C:\\tmp\\lum_vc2b",
+ "source_version": "5.48.1",
+ "shipped_line": "sphere_normal: str = 'analytic',",
+ "expected_digest": "5d0d66152214935b80f74a951839e9030acbc6f731e495ae60331c9ecf4fecb0",
+ "n_map_entries": 4,
+ "cases": [
+  {
+   "label": "1 shipped",
+   "fired": true,
+   "new_num": 61,
+   "how": "edited in place (WP-C2 5.49.0: sphere_normal default 'generic' -> 'analytic')",
+   "n_refusals": 0,
+   "why": null,
+   "refusal_prints_both_lines": false,
+   "found_line": null
+  },
+  {
+   "label": "2 reverted",
+   "fired": false,
+   "new_num": null,
+   "how": null,
+   "n_refusals": 1,
+   "why": "the line at the mapped coordinate is not the content this entry records the release as producing",
+   "refusal_prints_both_lines": true,
+   "found_line": "sphere_normal: str = 'generic',"
+  },
+  {
+   "label": "3 nonsense",
+   "fired": false,
+   "new_num": null,
+   "how": null,
+   "n_refusals": 1,
+   "why": "the line at the mapped coordinate is not the content this entry records the release as producing",
+   "refusal_prints_both_lines": true,
+   "found_line": "sphere_normal: str = 'not-a-route',"
+  },
+  {
+   "label": "4 unrelated",
+   "fired": false,
+   "new_num": null,
+   "how": null,
+   "n_refusals": 0,
+   "why": null,
+   "refusal_prints_both_lines": false,
+   "found_line": null
+  },
+  {
+   "label": "5 truncated",
+   "fired": false,
+   "new_num": null,
+   "how": null,
+   "n_refusals": 0,
+   "why": null,
+   "refusal_prints_both_lines": false,
+   "found_line": null
+  },
+  {
+   "label": "6 stale-copy-old",
+   "fired": false,
+   "new_num": null,
+   "how": null,
+   "n_refusals": 1,
+   "why": "the line at the mapped coordinate is not the content this entry records the release as producing",
+   "refusal_prints_both_lines": true,
+   "found_line": "sphere_normal: str = 'generic',"
+  },
+  {
+   "label": "7 stale-copy-with-expected-content",
+   "fired": true,
+   "new_num": 61,
+   "how": "edited in place (WP-C2 5.49.0: sphere_normal default 'generic' -> 'analytic')",
+   "n_refusals": 0,
+   "why": null,
+   "refusal_prints_both_lines": false,
+   "found_line": null
+  },
+  {
+   "label": "8 reindented",
+   "fired": true,
+   "new_num": 61,
+   "how": "edited in place (WP-C2 5.49.0: sphere_normal default 'generic' -> 'analytic')",
+   "n_refusals": 0,
+   "why": null,
+   "refusal_prints_both_lines": false,
+   "found_line": null
+  },
+  {
+   "label": "12 same content, different enclosing def",
+   "fired": true,
+   "new_num": 61,
+   "how": "edited in place (WP-C2 5.49.0: sphere_normal default 'generic' -> 'analytic')",
+   "n_refusals": 0,
+   "why": null,
+   "refusal_prints_both_lines": false,
+   "found_line": null
+  },
+  {
+   "label": "9 version-ahead",
+   "fired": false,
+   "new_num": null,
+   "how": null,
+   "n_refusals": 1,
+   "why": "this entry was recorded for 5.49.0 and the package is already at 5.50.0, so the in-place edit it answers is behind the base a re-anchor should now use",
+   "refusal_prints_both_lines": true,
+   "found_line": "sphere_normal: str = 'analytic',"
+  },
+  {
+   "label": "10 version-equal",
+   "fired": true,
+   "new_num": 61,
+   "how": "edited in place (WP-C2 5.49.0: sphere_normal default 'generic' -> 'analytic')",
+   "n_refusals": 0,
+   "why": null,
+   "refusal_prints_both_lines": false,
+   "found_line": null
+  },
+  {
+   "label": "11 digest re-recorded for a reverted default",
+   "fired": true,
+   "new_num": 61,
+   "how": "edited in place (WP-C2 5.49.0: sphere_normal default 'generic' -> 'analytic')",
+   "n_refusals": 0,
+   "why": null,
+   "refusal_prints_both_lines": false,
+   "found_line": "sphere_normal: str = 'generic',"
+  }
+ ]
+}

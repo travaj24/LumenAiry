@@ -1,0 +1,167 @@
+{
+ "lumenairy_file": "/mnt/c/tmp/lum_vc2b/lumenairy/__init__.py",
+ "python": "3.12.3",
+ "numpy": "2.4.6",
+ "eps": 2.220446049250313e-16,
+ "d3_rows": [
+  {
+   "n_surfaces": 3,
+   "history_drift_exit": 8.881784197001252e-16,
+   "final_drift_exit": 1.1102230246251565e-16,
+   "history_drift_surface": 2.220446049250313e-16,
+   "final_drift_surface": 1.1102230246251565e-16,
+   "envelope_n_eps": 6.661338147750939e-16,
+   "ratio_exit_to_n_eps": 1.3333333333333333,
+   "exceeds_1e_15": false
+  },
+  {
+   "n_surfaces": 5,
+   "history_drift_exit": 1.1102230246251565e-15,
+   "final_drift_exit": 2.220446049250313e-16,
+   "history_drift_surface": 2.220446049250313e-16,
+   "final_drift_surface": 1.1102230246251565e-16,
+   "envelope_n_eps": 1.1102230246251565e-15,
+   "ratio_exit_to_n_eps": 1.0,
+   "exceeds_1e_15": true
+  },
+  {
+   "n_surfaces": 7,
+   "history_drift_exit": 1.5543122344752192e-15,
+   "final_drift_exit": 2.220446049250313e-16,
+   "history_drift_surface": 2.220446049250313e-16,
+   "final_drift_surface": 1.1102230246251565e-16,
+   "envelope_n_eps": 1.5543122344752192e-15,
+   "ratio_exit_to_n_eps": 1.0,
+   "exceeds_1e_15": true
+  },
+  {
+   "n_surfaces": 9,
+   "history_drift_exit": 1.7763568394002505e-15,
+   "final_drift_exit": 2.220446049250313e-16,
+   "history_drift_surface": 2.220446049250313e-16,
+   "final_drift_surface": 1.1102230246251565e-16,
+   "envelope_n_eps": 1.9984014443252818e-15,
+   "ratio_exit_to_n_eps": 0.8888888888888888,
+   "exceeds_1e_15": true
+  },
+  {
+   "n_surfaces": 11,
+   "history_drift_exit": 2.220446049250313e-15,
+   "final_drift_exit": 2.220446049250313e-16,
+   "history_drift_surface": 2.220446049250313e-16,
+   "final_drift_surface": 1.1102230246251565e-16,
+   "envelope_n_eps": 2.4424906541753444e-15,
+   "ratio_exit_to_n_eps": 0.9090909090909091,
+   "exceeds_1e_15": true
+  },
+  {
+   "n_surfaces": 13,
+   "history_drift_exit": 2.4424906541753444e-15,
+   "final_drift_exit": 2.220446049250313e-16,
+   "history_drift_surface": 2.220446049250313e-16,
+   "final_drift_surface": 1.1102230246251565e-16,
+   "envelope_n_eps": 2.886579864025407e-15,
+   "ratio_exit_to_n_eps": 0.8461538461538461,
+   "exceeds_1e_15": true
+  }
+ ],
+ "d3_ratio_at_3_surfaces": 1.3333333333333333,
+ "d3_ratio_at_13_surfaces": 0.8461538461538461,
+ "d3_envelope_holds_on_every_rung": false,
+ "d3_first_surface_count_exceeding_1e_15": 5,
+ "d3_surface_drift_is_flat": true,
+ "d9_gates": {
+  "0.002": {
+   "analytic": "0.9999499987499374",
+   "generic": "0.9999499987499374",
+   "identical": true
+  },
+  "-0.002": {
+   "analytic": "0.9999499987499374",
+   "generic": "0.9999499987499374",
+   "identical": true
+  },
+  "0.0125": {
+   "analytic": "0.9999499987499374",
+   "generic": "0.9999499987499374",
+   "identical": true
+  },
+  "-0.0125": {
+   "analytic": "0.9999499987499374",
+   "generic": "0.9999499987499374",
+   "identical": true
+  },
+  "0.0515": {
+   "analytic": "0.9999499987499374",
+   "generic": "0.9999499987499374",
+   "identical": true
+  },
+  "-0.12": {
+   "analytic": "0.9999499987499374",
+   "generic": "0.9999499987499374",
+   "identical": true
+  },
+  "0.5": {
+   "analytic": "0.9999499987499374",
+   "generic": "0.9999499987499374",
+   "identical": true
+  },
+  "-1": {
+   "analytic": "0.9999499987499374",
+   "generic": "0.9999499987499374",
+   "identical": true
+  }
+ },
+ "d9_all_gates_identical_on_the_meridian": true,
+ "d9_gate_values": [
+  "0.9999499987499374"
+ ],
+ "d9_n_rays": 60000,
+ "d9_n_past_the_clamp": 3029,
+ "d9_clamp": {
+  "ball/surface/generic": {
+   "n_ray_nan": 3029,
+   "n_alive": 56971,
+   "fraction_ray_nan": 0.05048333333333333
+  },
+  "ball/surface/analytic": {
+   "n_ray_nan": 3029,
+   "n_alive": 56971,
+   "fraction_ray_nan": 0.05048333333333333
+  },
+  "ball/exit/generic": {
+   "n_ray_nan": 3029,
+   "n_alive": 56971,
+   "fraction_ray_nan": 0.05048333333333333
+  },
+  "ball/exit/analytic": {
+   "n_ray_nan": 3029,
+   "n_alive": 56971,
+   "fraction_ray_nan": 0.05048333333333333
+  },
+  "hemisphere/surface/generic": {
+   "n_ray_nan": 3029,
+   "n_alive": 0,
+   "fraction_ray_nan": 0.05048333333333333
+  },
+  "hemisphere/surface/analytic": {
+   "n_ray_nan": 3029,
+   "n_alive": 0,
+   "fraction_ray_nan": 0.05048333333333333
+  },
+  "hemisphere/exit/generic": {
+   "n_ray_nan": 3029,
+   "n_alive": 0,
+   "fraction_ray_nan": 0.05048333333333333
+  },
+  "hemisphere/exit/analytic": {
+   "n_ray_nan": 3029,
+   "n_alive": 0,
+   "fraction_ray_nan": 0.05048333333333333
+  }
+ },
+ "d9_ray_nan_identical_across_all_eight": true,
+ "d9_n_ray_nan": [
+  3029
+ ]
+}

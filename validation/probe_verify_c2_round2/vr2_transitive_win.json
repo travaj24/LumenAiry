@@ -1,0 +1,5373 @@
+{
+ "lumenairy_file": "C:\\tmp/lum_vc2b\\lumenairy\\__init__.py",
+ "python": "3.14.6",
+ "n_direct_tracing_defs": 38,
+ "n_exported_transitive": 215,
+ "n_with_a_parent_carrying_both": 17,
+ "n_without": 198,
+ "without_a_parent": [
+  "lumenairy._cache_registry:clear_all_registered_caches",
+  "lumenairy._cache_registry:register_cache_clearer",
+  "lumenairy._context:lumenairy_context",
+  "lumenairy.analysis.ao:apply_dm",
+  "lumenairy.analysis.ao:make_shack_hartmann_wfs",
+  "lumenairy.analysis.beam_stats:M2",
+  "lumenairy.analysis.beam_stats:beam_centroid",
+  "lumenairy.analysis.beam_stats:beam_d4sigma",
+  "lumenairy.analysis.beam_stats:beam_diameter",
+  "lumenairy.analysis.beam_stats:beam_power",
+  "lumenairy.analysis.coherence:extended_source_image",
+  "lumenairy.analysis.coherence:koehler_image",
+  "lumenairy.analysis.detector:apply_detector",
+  "lumenairy.analysis.detector:shack_hartmann",
+  "lumenairy.analysis.field:distortion_grid",
+  "lumenairy.analysis.field:distortion_vs_field",
+  "lumenairy.analysis.field:field_aberration_sweep",
+  "lumenairy.analysis.field:footprint_per_surface",
+  "lumenairy.analysis.field:relative_illumination",
+  "lumenairy.analysis.field:sensitivity_ranking",
+  "lumenairy.analysis.field:spot_diagram_vs_field",
+  "lumenairy.analysis.ghost:retrace_ghost_path",
+  "lumenairy.analysis.opd:wave_opd_1d",
+  "lumenairy.analysis.opd:wave_opd_2d",
+  "lumenairy.analysis.plotting:plot_amplitude_phase",
+  "lumenairy.analysis.plotting:plot_beam_profile",
+  "lumenairy.analysis.plotting:plot_cross_section",
+  "lumenairy.analysis.plotting:plot_field",
+  "lumenairy.analysis.plotting:plot_intensity",
+  "lumenairy.analysis.plotting:plot_phase",
+  "lumenairy.analysis.plotting:plot_planes_grid",
+  "lumenairy.analysis.polychromatic:ee_polychromatic",
+  "lumenairy.analysis.polychromatic:polychromatic_psf",
+  "lumenairy.analysis.polychromatic:polychromatic_strehl",
+  "lumenairy.analysis.polychromatic:radial_power_bands",
+  "lumenairy.analysis.psf_mtf_otf:compute_mtf",
+  "lumenairy.analysis.psf_mtf_otf:compute_otf",
+  "lumenairy.analysis.psf_mtf_otf:compute_psf",
+  "lumenairy.analysis.psf_mtf_otf:encircled_energy_curve",
+  "lumenairy.analysis.psf_mtf_otf:encircled_energy_profile",
+  "lumenairy.analysis.psf_mtf_otf:encircled_energy_radius",
+  "lumenairy.analysis.strehl:coupling_efficiency",
+  "lumenairy.analysis.strehl:strehl_ratio",
+  "lumenairy.analysis.through_focus:diffraction_limited_peak",
+  "lumenairy.analysis.through_focus:monte_carlo_tolerancing",
+  "lumenairy.analysis.through_focus:monte_carlo_tolerancing_jax",
+  "lumenairy.analysis.through_focus:monte_carlo_tolerancing_linearized",
+  "lumenairy.analysis.through_focus:single_plane_metrics",
+  "lumenairy.analysis.through_focus:through_focus_scan",
+  "lumenairy.analysis.through_focus:through_focus_scan_jax",
+  "lumenairy.analysis.through_focus:tolerancing_report",
+  "lumenairy.analysis.through_focus:tolerancing_sweep",
+  "lumenairy.backend.scipy:erf",
+  "lumenairy.backend.scipy:expi",
+  "lumenairy.backend.scipy:gammaln",
+  "lumenairy.backend.scipy:jv",
+  "lumenairy.cache:set_cache_budget",
+  "lumenairy.elements._lens_real:apply_real_lens",
+  "lumenairy.elements._lens_real:lens_sag_float32_opd_error",
+  "lumenairy.elements._lens_real:set_pointwise_cos_grid_cache_budget",
+  "lumenairy.elements._lens_thin:apply_aspheric_lens",
+  "lumenairy.elements._lens_thin:apply_axicon",
+  "lumenairy.elements._lens_thin:apply_cylindrical_lens",
+  "lumenairy.elements._lens_thin:apply_grin_lens",
+  "lumenairy.elements._lens_thin:apply_spherical_lens",
+  "lumenairy.elements._lens_thin:apply_thin_lens",
+  "lumenairy.elements._lens_traced_multibranch:apply_real_lens_traced_multibranch",
+  "lumenairy.elements._lens_traced_uniform:apply_real_lens_traced_uniform",
+  "lumenairy.elements.berreman:berreman_jones_1d",
+  "lumenairy.elements.bor._inv_census:census_inv",
+  "lumenairy.elements.bor._inv_census:census_solve",
+  "lumenairy.elements.bor.coupled_radial_eigensolver:guided_modes",
+  "lumenairy.elements.bor.farfield:fourier_bessel",
+  "lumenairy.elements.bor.farfield:order_power_fractions",
+  "lumenairy.elements.bor.fiber_oracle:fiber_det",
+  "lumenairy.elements.bor.fiber_oracle:fiber_modes",
+  "lumenairy.elements.bor.stepindex_oracle:stepindex_det",
+  "lumenairy.elements.bor.stepindex_oracle:stepindex_modes",
+  "lumenairy.elements.doe:load_fits_field",
+  "lumenairy.elements.doe:save_fits_field",
+  "lumenairy.elements.elements:apply_mirror",
+  "lumenairy.elements.eme.eme_diffraction:diffraction_eme",
+  "lumenairy.elements.eme.eme_diffraction:diffraction_fd",
+  "lumenairy.elements.eme.eme_diffraction:mode_match",
+  "lumenairy.elements.lens_config:resolve_entry_point_kwargs",
+  "lumenairy.elements.lenses_gbd:apply_real_lens_gbd",
+  "lumenairy.elements.pmm.conical:pmm_jones_1d_conical",
+  "lumenairy.elements.pmm.conical:pmm_jones_1d_conical_tensor",
+  "lumenairy.elements.pmm.oned:pmm_jones_1d_slanted",
+  "lumenairy.elements.pmm.oned:pmm_jones_1d_slanted_segments",
+  "lumenairy.elements.pmm.twod:pmm_efficiency_2d",
+  "lumenairy.elements.pmm.twod:pmm_efficiency_2d_cell",
+  "lumenairy.elements.pmm.twod:prepare_pmm_2d",
+  "lumenairy.elements.pmm.twod:prepare_pmm_2d_cell",
+  "lumenairy.elements.pmm.twod_jones:pmm_jones_2d",
+  "lumenairy.elements.rcwa.oned:rcwa_efficiency_1d",
+  "lumenairy.elements.rcwa.oned:rcwa_efficiency_1d_jax",
+  "lumenairy.elements.rcwa.oned:rcwa_efficiency_vs_wavelength",
+  "lumenairy.elements.rcwa.oned:rcwa_jones_1d",
+  "lumenairy.elements.rcwa.oned:rcwa_jones_1d_segments",
+  "lumenairy.elements.rcwa.oned:rcwa_jones_vs_wavelength",
+  "lumenairy.elements.rcwa.oned:rcwa_jones_vs_wavelength_segments",
+  "lumenairy.elements.rcwa.twod:prepare_rcwa_2d",
+  "lumenairy.elements.rcwa.twod:rcwa_efficiency_2d",
+  "lumenairy.elements.rcwa.twod:rcwa_efficiency_2d_shapes",
+  "lumenairy.elements.rcwa.twod:rcwa_efficiency_2d_vs_wavelength",
+  "lumenairy.elements.rcwa.twod:rcwa_jones_2d",
+  "lumenairy.io.storage:append_plane",
+  "lumenairy.io.storage:append_plane_h5",
+  "lumenairy.io.storage:list_planes",
+  "lumenairy.io.storage:load_field_h5",
+  "lumenairy.io.storage:load_plane_by_label",
+  "lumenairy.io.storage:load_plane_slice",
+  "lumenairy.io.storage:load_planes",
+  "lumenairy.io.storage:read_sim_metadata",
+  "lumenairy.io.storage:replay_run",
+  "lumenairy.io.storage:save_field_h5",
+  "lumenairy.io.storage:save_planes_h5",
+  "lumenairy.io.storage:write_sim_metadata",
+  "lumenairy.optimize.driver:design_optimize",
+  "lumenairy.optimize.driver:register_wave_propagator",
+  "lumenairy.optimize.jax_merits:make_lg_aberration_merit_jax",
+  "lumenairy.optimize.jax_merits:optimize_traced_geometry",
+  "lumenairy.optimize.multiconfig:multi_config_merit",
+  "lumenairy.propagators.asm:angular_spectrum_propagate",
+  "lumenairy.propagators.asm:angular_spectrum_propagate_tilted",
+  "lumenairy.propagators.asm:apply_fresnel_curvature",
+  "lumenairy.propagators.asymptotic:propagate_modal_asymptotic",
+  "lumenairy.propagators.asymptotic_aberration_tensor:aberration_tensor",
+  "lumenairy.propagators.carrier:carrier_referenced_aperture",
+  "lumenairy.propagators.carrier:carrier_referenced_envelope",
+  "lumenairy.propagators.carrier:carrier_referenced_exact_focus_readout",
+  "lumenairy.propagators.carrier:carrier_referenced_fit_radius",
+  "lumenairy.propagators.carrier:carrier_referenced_focus_readout",
+  "lumenairy.propagators.carrier:carrier_referenced_reconstruct",
+  "lumenairy.propagators.carrier:propagate_carrier_referenced",
+  "lumenairy.propagators.carrier:propagate_traced_carrier_chain",
+  "lumenairy.propagators.carrier:propagate_traced_carrier_chain_multi",
+  "lumenairy.propagators.carrier_field:aggregate",
+  "lumenairy.propagators.carrier_field:carrier_difference_nyquist",
+  "lumenairy.propagators.carrier_field:load_carrier_field_zarr",
+  "lumenairy.propagators.carrier_field:re_reference",
+  "lumenairy.propagators.carrier_field:save_carrier_field_zarr",
+  "lumenairy.propagators.dispatch:asm_propagate",
+  "lumenairy.propagators.dispatch:which_propagator",
+  "lumenairy.propagators.ensemble:propagate_ensemble",
+  "lumenairy.propagators.fga:fga_memory_estimate",
+  "lumenairy.propagators.fresnel:fraunhofer_propagate",
+  "lumenairy.propagators.fresnel:fresnel_propagate",
+  "lumenairy.propagators.fresnel:fresnel_tf_propagate",
+  "lumenairy.propagators.gbd:apply_aperture_to_beamlets",
+  "lumenairy.propagators.gbd:apply_prescription_persurface_to_beamlets",
+  "lumenairy.propagators.gbd:asm_field_to_gbd",
+  "lumenairy.propagators.gbd:converge_gbd_sampling",
+  "lumenairy.propagators.gbd:decompose_field_adaptive",
+  "lumenairy.propagators.gbd:gbd_field_to_asm",
+  "lumenairy.propagators.gbd:match_global_phase",
+  "lumenairy.propagators.gbd:propagate_gbd",
+  "lumenairy.propagators.gbd:propagate_gbd_freespace",
+  "lumenairy.propagators.gbd:propagate_gbd_freespace_csp",
+  "lumenairy.propagators.gbd:propagate_gbd_freespace_spectral",
+  "lumenairy.propagators.gbd:propagate_gbd_freespace_vector",
+  "lumenairy.propagators.gbd:propagate_gbd_thin_lens",
+  "lumenairy.propagators.gbd:propagate_gbd_through_prescription",
+  "lumenairy.propagators.gbd:propagate_gbd_vector_through_prescription",
+  "lumenairy.propagators.gbd:recommend_gbd_sampling",
+  "lumenairy.propagators.hf:propagate_huygens_fresnel",
+  "lumenairy.propagators.hf:propagate_huygens_fresnel_freespace",
+  "lumenairy.propagators.hfpi:propagate_hfpi_through_prescription",
+  "lumenairy.propagators.mft:angular_spectrum_propagate_mft",
+  "lumenairy.propagators.mft:fraunhofer_propagate_mft",
+  "lumenairy.propagators.mft:fresnel_propagate_mft",
+  "lumenairy.propagators.mft:resample_field",
+  "lumenairy.propagators.mhs:aperture_subdomain",
+  "lumenairy.propagators.mhs:asm_subdomain",
+  "lumenairy.propagators.mhs:gbd_freespace_subdomain",
+  "lumenairy.propagators.mhs:prescription_subdomain",
+  "lumenairy.propagators.rs:rayleigh_sommerfeld_propagate",
+  "lumenairy.propagators.sas:scalable_angular_spectrum_propagate",
+  "lumenairy.propagators.system:propagate_through_system_jax",
+  "lumenairy.propagators.vector_diffraction:debye_wolf_psf",
+  "lumenairy.propagators.vector_diffraction:richards_wolf_focus",
+  "lumenairy.raytrace.from_field:rays_from_field",
+  "lumenairy.sources.core:create_annular_beam",
+  "lumenairy.sources.core:create_annular_incoherent_source",
+  "lumenairy.sources.core:create_bessel_beam",
+  "lumenairy.sources.core:create_fiber_mode",
+  "lumenairy.sources.core:create_gaussian_beam",
+  "lumenairy.sources.core:create_gaussian_schell_source",
+  "lumenairy.sources.core:create_hermite_gauss",
+  "lumenairy.sources.core:create_laguerre_gauss",
+  "lumenairy.sources.core:create_led_source",
+  "lumenairy.sources.core:create_multi_field_sources",
+  "lumenairy.sources.core:create_point_source",
+  "lumenairy.sources.core:create_schell_model_source",
+  "lumenairy.sources.core:create_tilted_plane_wave",
+  "lumenairy.sources.core:create_top_hat_beam",
+  "lumenairy.ui.waveoptics_dock:forecast_resources"
+ ],
+ "round2_population": [
+  "aberration_summary",
+  "aberration_tensor",
+  "apply_prescription_persurface_to_beamlets",
+  "apply_real_lens_auto",
+  "apply_real_lens_fga",
+  "apply_real_lens_fga_vector",
+  "apply_real_lens_gbd",
+  "apply_real_lens_maslov_vector",
+  "apply_real_lens_traced_multi",
+  "apply_real_lens_traced_multibranch",
+  "apply_real_lens_traced_segmented",
+  "apply_real_lens_traced_uniform",
+  "apply_real_lens_universal",
+  "design_optimize_multi_objective",
+  "distortion_grid",
+  "distortion_vs_field",
+  "field_aberration_sweep",
+  "field_grid_wfe",
+  "footprint_per_surface",
+  "make_lg_aberration_merit_jax",
+  "monte_carlo_tolerancing",
+  "monte_carlo_tolerancing_jax",
+  "optimize_traced_geometry",
+  "pmm_1d",
+  "pmm_efficiency_1d_slanted",
+  "pmm_jones_1d",
+  "pmm_jones_1d_segments",
+  "pmm_jones_1d_segments_vs_wavelength",
+  "pmm_jones_1d_slanted",
+  "pmm_jones_1d_slanted_segments",
+  "pmm_jones_1d_vs_wavelength",
+  "prepare_real_lens_traced",
+  "prescription_subdomain",
+  "propagate",
+  "propagate_gbd_through_prescription",
+  "propagate_gbd_vector_through_prescription",
+  "propagate_hfpi_through_prescription",
+  "propagate_huygens_fresnel_through_prescription",
+  "propagate_subaperture_asymptotic",
+  "propagate_through_system",
+  "propagate_traced_carrier_chain",
+  "propagate_traced_carrier_chain_multi",
+  "ray_fan_plot",
+  "ray_fan_plot_prescription",
+  "relative_illumination",
+  "spot_diagram_vs_field"
+ ],
+ "round2_unresolved": [
+  "aberration_tensor",
+  "design_optimize_multi_objective",
+  "pmm_1d",
+  "pmm_efficiency_1d_slanted",
+  "pmm_jones_1d",
+  "pmm_jones_1d_segments",
+  "pmm_jones_1d_segments_vs_wavelength",
+  "pmm_jones_1d_slanted",
+  "pmm_jones_1d_slanted_segments",
+  "pmm_jones_1d_vs_wavelength",
+  "prescription_subdomain"
+ ],
+ "round2_unresolved_that_are_pmm": [
+  "pmm_1d",
+  "pmm_efficiency_1d_slanted",
+  "pmm_jones_1d",
+  "pmm_jones_1d_segments",
+  "pmm_jones_1d_segments_vs_wavelength",
+  "pmm_jones_1d_slanted",
+  "pmm_jones_1d_slanted_segments",
+  "pmm_jones_1d_vs_wavelength"
+ ],
+ "round2_unresolved_that_are_not_pmm": [
+  "aberration_tensor",
+  "design_optimize_multi_objective",
+  "prescription_subdomain"
+ ],
+ "round2_population_this_walk_also_reaches": [
+  "aberration_summary",
+  "aberration_tensor",
+  "apply_prescription_persurface_to_beamlets",
+  "apply_real_lens_auto",
+  "apply_real_lens_fga",
+  "apply_real_lens_fga_vector",
+  "apply_real_lens_gbd",
+  "apply_real_lens_maslov_vector",
+  "apply_real_lens_traced_multi",
+  "apply_real_lens_traced_multibranch",
+  "apply_real_lens_traced_segmented",
+  "apply_real_lens_traced_uniform",
+  "apply_real_lens_universal",
+  "distortion_grid",
+  "distortion_vs_field",
+  "field_aberration_sweep",
+  "field_grid_wfe",
+  "footprint_per_surface",
+  "make_lg_aberration_merit_jax",
+  "monte_carlo_tolerancing",
+  "monte_carlo_tolerancing_jax",
+  "optimize_traced_geometry",
+  "pmm_jones_1d_slanted",
+  "pmm_jones_1d_slanted_segments",
+  "prepare_real_lens_traced",
+  "prescription_subdomain",
+  "propagate",
+  "propagate_gbd_through_prescription",
+  "propagate_gbd_vector_through_prescription",
+  "propagate_hfpi_through_prescription",
+  "propagate_huygens_fresnel_through_prescription",
+  "propagate_subaperture_asymptotic",
+  "propagate_through_system",
+  "propagate_traced_carrier_chain",
+  "propagate_traced_carrier_chain_multi",
+  "ray_fan_plot",
+  "ray_fan_plot_prescription",
+  "relative_illumination",
+  "spot_diagram_vs_field"
+ ],
+ "round2_population_this_walk_does_not_reach": [
+  "design_optimize_multi_objective",
+  "pmm_1d",
+  "pmm_efficiency_1d_slanted",
+  "pmm_jones_1d",
+  "pmm_jones_1d_segments",
+  "pmm_jones_1d_segments_vs_wavelength",
+  "pmm_jones_1d_vs_wavelength"
+ ],
+ "rows": {
+  "lumenairy._cache_registry:clear_all_registered_caches": {
+   "exported_as": [
+    "lumenairy._cache_registry.clear_all_registered_caches"
+   ],
+   "chain": [
+    "lumenairy._cache_registry:clear_all_registered_caches",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 2,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": []
+  },
+  "lumenairy._cache_registry:register_cache_clearer": {
+   "exported_as": [
+    "lumenairy._cache_registry.register_cache_clearer",
+    "lumenairy.register_cache_clearer"
+   ],
+   "chain": [
+    "lumenairy._cache_registry:register_cache_clearer",
+    "lumenairy._cache_registry:_clearer_identity",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "get (ambiguous (3 definitions))"
+   ]
+  },
+  "lumenairy._context:lumenairy_context": {
+   "exported_as": [
+    "lumenairy._context.lumenairy_context",
+    "lumenairy.lumenairy_context"
+   ],
+   "chain": [
+    "lumenairy._context:lumenairy_context",
+    "lumenairy._cache_registry:clear_all_registered_caches",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "clear (ambiguous (3 definitions))",
+    "values (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.analysis.aberration:aberration_summary": {
+   "exported_as": [
+    "lumenairy.aberration_summary",
+    "lumenairy.analysis.aberration.aberration_summary",
+    "lumenairy.analysis.aberration_summary"
+   ],
+   "chain": [
+    "lumenairy.analysis.aberration:aberration_summary",
+    "lumenairy.propagators.asymptotic_canonical_fit:fit_canonical_polynomials"
+   ],
+   "hops": 1,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": "lumenairy.propagators.asymptotic_canonical_fit:fit_canonical_polynomials",
+   "ambiguous_names_refused": []
+  },
+  "lumenairy.analysis.ao:apply_dm": {
+   "exported_as": [
+    "lumenairy.analysis.ao.apply_dm",
+    "lumenairy.analysis.apply_dm",
+    "lumenairy.apply_dm"
+   ],
+   "chain": [
+    "lumenairy.analysis.ao:apply_dm",
+    "lumenairy._validation:_check_2d_scalar_field",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 4,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.analysis.ao:make_shack_hartmann_wfs": {
+   "exported_as": [
+    "lumenairy.analysis.ao.make_shack_hartmann_wfs",
+    "lumenairy.analysis.make_shack_hartmann_wfs",
+    "lumenairy.make_shack_hartmann_wfs"
+   ],
+   "chain": [
+    "lumenairy.analysis.ao:make_shack_hartmann_wfs",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "grid (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.analysis.beam_stats:M2": {
+   "exported_as": [
+    "lumenairy.M2",
+    "lumenairy.analysis.M2",
+    "lumenairy.analysis.beam_stats.M2",
+    "lumenairy.analysis.core.M2"
+   ],
+   "chain": [
+    "lumenairy.analysis.beam_stats:M2",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_prop (ambiguous (5 definitions))",
+    "grid (ambiguous (2 definitions))",
+    "is_cupy_array (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.analysis.beam_stats:beam_centroid": {
+   "exported_as": [
+    "lumenairy.analysis.beam_centroid",
+    "lumenairy.analysis.beam_stats.beam_centroid",
+    "lumenairy.analysis.core.beam_centroid",
+    "lumenairy.analysis.through_focus.beam_centroid",
+    "lumenairy.beam_centroid"
+   ],
+   "chain": [
+    "lumenairy.analysis.beam_stats:beam_centroid",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "get (ambiguous (3 definitions))",
+    "grid (ambiguous (2 definitions))",
+    "key (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "values (ambiguous (2 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.analysis.beam_stats:beam_d4sigma": {
+   "exported_as": [
+    "lumenairy.analysis.beam_d4sigma",
+    "lumenairy.analysis.beam_stats.beam_d4sigma",
+    "lumenairy.analysis.core.beam_d4sigma",
+    "lumenairy.analysis.through_focus.beam_d4sigma",
+    "lumenairy.beam_d4sigma"
+   ],
+   "chain": [
+    "lumenairy.analysis.beam_stats:beam_d4sigma",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "get (ambiguous (3 definitions))",
+    "grid (ambiguous (2 definitions))",
+    "key (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "values (ambiguous (2 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.analysis.beam_stats:beam_diameter": {
+   "exported_as": [
+    "lumenairy.analysis.beam_diameter",
+    "lumenairy.analysis.beam_stats.beam_diameter",
+    "lumenairy.analysis.core.beam_diameter",
+    "lumenairy.beam_diameter"
+   ],
+   "chain": [
+    "lumenairy.analysis.beam_stats:beam_diameter",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "grid (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.analysis.beam_stats:beam_power": {
+   "exported_as": [
+    "lumenairy.analysis.beam_power",
+    "lumenairy.analysis.beam_stats.beam_power",
+    "lumenairy.analysis.core.beam_power",
+    "lumenairy.beam_power"
+   ],
+   "chain": [
+    "lumenairy.analysis.beam_stats:beam_power",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "get (ambiguous (3 definitions))",
+    "grid (ambiguous (2 definitions))",
+    "key (ambiguous (2 definitions))",
+    "prop (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "values (ambiguous (2 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.analysis.coherence:extended_source_image": {
+   "exported_as": [
+    "lumenairy.analysis.coherence.extended_source_image",
+    "lumenairy.analysis.extended_source_image",
+    "lumenairy.extended_source_image"
+   ],
+   "chain": [
+    "lumenairy.analysis.coherence:extended_source_image",
+    "lumenairy._validation:_check_2d_scalar_field",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 4,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_is_cupy_array (ambiguous (4 definitions))",
+    "_prop (ambiguous (5 definitions))",
+    "apply_real_lens (ambiguous (2 definitions))",
+    "copy (ambiguous (2 definitions))",
+    "get (ambiguous (3 definitions))",
+    "grid (ambiguous (2 definitions))",
+    "is_cupy_array (ambiguous (2 definitions))",
+    "prop (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.analysis.coherence:koehler_image": {
+   "exported_as": [
+    "lumenairy.analysis.coherence.koehler_image",
+    "lumenairy.analysis.koehler_image",
+    "lumenairy.koehler_image"
+   ],
+   "chain": [
+    "lumenairy.analysis.coherence:koehler_image",
+    "lumenairy._validation:_check_2d_scalar_field",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 4,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_is_cupy_array (ambiguous (4 definitions))",
+    "_prop (ambiguous (5 definitions))",
+    "apply_real_lens (ambiguous (2 definitions))",
+    "copy (ambiguous (2 definitions))",
+    "get (ambiguous (3 definitions))",
+    "grid (ambiguous (2 definitions))",
+    "is_cupy_array (ambiguous (2 definitions))",
+    "prop (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.analysis.detector:apply_detector": {
+   "exported_as": [
+    "lumenairy.analysis.apply_detector",
+    "lumenairy.analysis.detector.apply_detector",
+    "lumenairy.apply_detector"
+   ],
+   "chain": [
+    "lumenairy.analysis.detector:apply_detector",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_key (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.analysis.detector:shack_hartmann": {
+   "exported_as": [
+    "lumenairy.analysis.detector.shack_hartmann",
+    "lumenairy.analysis.shack_hartmann",
+    "lumenairy.shack_hartmann"
+   ],
+   "chain": [
+    "lumenairy.analysis.detector:shack_hartmann",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_prop (ambiguous (5 definitions))",
+    "grid (ambiguous (2 definitions))",
+    "is_cupy_array (ambiguous (2 definitions))",
+    "ix (ambiguous (2 definitions))",
+    "prop (ambiguous (2 definitions))",
+    "rows (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.analysis.field:distortion_grid": {
+   "exported_as": [
+    "lumenairy.analysis.distortion_grid",
+    "lumenairy.analysis.field.distortion_grid",
+    "lumenairy.distortion_grid"
+   ],
+   "chain": [
+    "lumenairy.analysis.field:distortion_grid",
+    "lumenairy.analysis.field:_trace"
+   ],
+   "hops": 1,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": []
+  },
+  "lumenairy.analysis.field:distortion_vs_field": {
+   "exported_as": [
+    "lumenairy.analysis.distortion_vs_field",
+    "lumenairy.analysis.field.distortion_vs_field",
+    "lumenairy.distortion_vs_field"
+   ],
+   "chain": [
+    "lumenairy.analysis.field:distortion_vs_field",
+    "lumenairy.analysis.field:_trace"
+   ],
+   "hops": 1,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": []
+  },
+  "lumenairy.analysis.field:field_aberration_sweep": {
+   "exported_as": [
+    "lumenairy.analysis.field.field_aberration_sweep",
+    "lumenairy.analysis.field_aberration_sweep",
+    "lumenairy.field_aberration_sweep"
+   ],
+   "chain": [
+    "lumenairy.analysis.field:field_aberration_sweep",
+    "lumenairy.analysis.field:_trace"
+   ],
+   "hops": 1,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": []
+  },
+  "lumenairy.analysis.field:footprint_per_surface": {
+   "exported_as": [
+    "lumenairy.analysis.field.footprint_per_surface",
+    "lumenairy.analysis.footprint_per_surface",
+    "lumenairy.footprint_per_surface"
+   ],
+   "chain": [
+    "lumenairy.analysis.field:footprint_per_surface",
+    "lumenairy.analysis.field:_trace"
+   ],
+   "hops": 1,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": []
+  },
+  "lumenairy.analysis.field:relative_illumination": {
+   "exported_as": [
+    "lumenairy.analysis.field.relative_illumination",
+    "lumenairy.analysis.relative_illumination",
+    "lumenairy.relative_illumination"
+   ],
+   "chain": [
+    "lumenairy.analysis.field:relative_illumination",
+    "lumenairy.analysis.field:_trace"
+   ],
+   "hops": 1,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": []
+  },
+  "lumenairy.analysis.field:sensitivity_ranking": {
+   "exported_as": [
+    "lumenairy.analysis.field.sensitivity_ranking",
+    "lumenairy.analysis.sensitivity_ranking",
+    "lumenairy.sensitivity_ranking"
+   ],
+   "chain": [
+    "lumenairy.analysis.field:sensitivity_ranking",
+    "lumenairy.optimize.driver:merit_fn",
+    "lumenairy.optimize.driver:evaluate",
+    "lumenairy.analysis.through_focus:diffraction_limited_peak",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 6,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_f (ambiguous (2 definitions))",
+    "_is_cupy_array (ambiguous (4 definitions))",
+    "_prop (ambiguous (5 definitions))",
+    "build (ambiguous (3 definitions))",
+    "cb (ambiguous (2 definitions))",
+    "copy (ambiguous (2 definitions))",
+    "f (ambiguous (3 definitions))",
+    "get (ambiguous (3 definitions))"
+   ]
+  },
+  "lumenairy.analysis.field:spot_diagram_vs_field": {
+   "exported_as": [
+    "lumenairy.analysis.field.spot_diagram_vs_field",
+    "lumenairy.analysis.spot_diagram_vs_field",
+    "lumenairy.spot_diagram_vs_field"
+   ],
+   "chain": [
+    "lumenairy.analysis.field:spot_diagram_vs_field",
+    "lumenairy.analysis.field:_trace"
+   ],
+   "hops": 1,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": []
+  },
+  "lumenairy.analysis.ghost:retrace_ghost_path": {
+   "exported_as": [
+    "lumenairy.analysis.ghost.retrace_ghost_path",
+    "lumenairy.analysis.retrace_ghost_path",
+    "lumenairy.retrace_ghost_path"
+   ],
+   "chain": [
+    "lumenairy.analysis.ghost:retrace_ghost_path",
+    "lumenairy.raytrace.trace:_library_trace_default"
+   ],
+   "hops": 1,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": []
+  },
+  "lumenairy.analysis.image_plane_wfe:field_grid_wfe": {
+   "exported_as": [
+    "lumenairy.analysis.field_grid_wfe",
+    "lumenairy.analysis.image_plane_wfe.field_grid_wfe",
+    "lumenairy.field_grid_wfe"
+   ],
+   "chain": [
+    "lumenairy.analysis.image_plane_wfe:field_grid_wfe",
+    "lumenairy.analysis.image_plane_wfe:eval_image_plane_wfe"
+   ],
+   "hops": 1,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": "lumenairy.analysis.image_plane_wfe:eval_image_plane_wfe",
+   "ambiguous_names_refused": []
+  },
+  "lumenairy.analysis.opd:wave_opd_1d": {
+   "exported_as": [
+    "lumenairy.analysis.core.wave_opd_1d",
+    "lumenairy.analysis.opd.wave_opd_1d",
+    "lumenairy.analysis.wave_opd_1d",
+    "lumenairy.wave_opd_1d"
+   ],
+   "chain": [
+    "lumenairy.analysis.opd:wave_opd_1d",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "f (ambiguous (3 definitions))",
+    "grid (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.analysis.opd:wave_opd_2d": {
+   "exported_as": [
+    "lumenairy.analysis.core.wave_opd_2d",
+    "lumenairy.analysis.opd.wave_opd_2d",
+    "lumenairy.analysis.wave_opd_2d",
+    "lumenairy.optimize.core.wave_opd_2d",
+    "lumenairy.wave_opd_2d"
+   ],
+   "chain": [
+    "lumenairy.analysis.opd:wave_opd_2d",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "copy (ambiguous (2 definitions))",
+    "f (ambiguous (3 definitions))",
+    "grid (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.analysis.plotting:plot_amplitude_phase": {
+   "exported_as": [
+    "lumenairy.analysis.plot_amplitude_phase",
+    "lumenairy.analysis.plotting.plot_amplitude_phase",
+    "lumenairy.plot_amplitude_phase"
+   ],
+   "chain": [
+    "lumenairy.analysis.plotting:plot_amplitude_phase",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "grid (ambiguous (2 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.analysis.plotting:plot_beam_profile": {
+   "exported_as": [
+    "lumenairy.analysis.plot_beam_profile",
+    "lumenairy.analysis.plotting.plot_beam_profile",
+    "lumenairy.plot_beam_profile"
+   ],
+   "chain": [
+    "lumenairy.analysis.plotting:plot_beam_profile",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_f (ambiguous (2 definitions))",
+    "grid (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "values (ambiguous (2 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.analysis.plotting:plot_cross_section": {
+   "exported_as": [
+    "lumenairy.analysis.plot_cross_section",
+    "lumenairy.analysis.plotting.plot_cross_section",
+    "lumenairy.plot_cross_section"
+   ],
+   "chain": [
+    "lumenairy.analysis.plotting:plot_cross_section",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_f (ambiguous (2 definitions))",
+    "grid (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "values (ambiguous (2 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.analysis.plotting:plot_field": {
+   "exported_as": [
+    "lumenairy.analysis.plot_field",
+    "lumenairy.analysis.plotting.plot_field",
+    "lumenairy.plot_field"
+   ],
+   "chain": [
+    "lumenairy.analysis.plotting:plot_field",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "cb (ambiguous (2 definitions))",
+    "grid (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.analysis.plotting:plot_intensity": {
+   "exported_as": [
+    "lumenairy.analysis.plot_intensity",
+    "lumenairy.analysis.plotting.plot_intensity",
+    "lumenairy.plot_intensity"
+   ],
+   "chain": [
+    "lumenairy.analysis.plotting:plot_intensity",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "cb (ambiguous (2 definitions))",
+    "grid (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.analysis.plotting:plot_phase": {
+   "exported_as": [
+    "lumenairy.analysis.plot_phase",
+    "lumenairy.analysis.plotting.plot_phase",
+    "lumenairy.plot_phase"
+   ],
+   "chain": [
+    "lumenairy.analysis.plotting:plot_phase",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "cb (ambiguous (2 definitions))",
+    "grid (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.analysis.plotting:plot_planes_grid": {
+   "exported_as": [
+    "lumenairy.analysis.plot_planes_grid",
+    "lumenairy.analysis.plotting.plot_planes_grid",
+    "lumenairy.plot_planes_grid"
+   ],
+   "chain": [
+    "lumenairy.analysis.plotting:plot_planes_grid",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "get (ambiguous (3 definitions))",
+    "grid (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.analysis.polychromatic:ee_polychromatic": {
+   "exported_as": [
+    "lumenairy.analysis.core.ee_polychromatic",
+    "lumenairy.analysis.ee_polychromatic",
+    "lumenairy.analysis.polychromatic.ee_polychromatic",
+    "lumenairy.ee_polychromatic"
+   ],
+   "chain": [
+    "lumenairy.analysis.polychromatic:ee_polychromatic",
+    "lumenairy.analysis.psf_mtf_otf:encircled_energy_curve",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 4,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_f (ambiguous (2 definitions))",
+    "_is_cupy_array (ambiguous (4 definitions))",
+    "_rows (ambiguous (2 definitions))",
+    "apply_real_lens (ambiguous (2 definitions))",
+    "copy (ambiguous (2 definitions))",
+    "f (ambiguous (3 definitions))",
+    "get (ambiguous (3 definitions))",
+    "grid (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.analysis.polychromatic:polychromatic_psf": {
+   "exported_as": [
+    "lumenairy.analysis.core.polychromatic_psf",
+    "lumenairy.analysis.polychromatic.polychromatic_psf",
+    "lumenairy.analysis.polychromatic_psf",
+    "lumenairy.polychromatic_psf"
+   ],
+   "chain": [
+    "lumenairy.analysis.polychromatic:polychromatic_psf",
+    "lumenairy.analysis.through_focus:diffraction_limited_peak",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 4,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_f (ambiguous (2 definitions))",
+    "_is_cupy_array (ambiguous (4 definitions))",
+    "_prop (ambiguous (5 definitions))",
+    "_rows (ambiguous (2 definitions))",
+    "apply_real_lens (ambiguous (2 definitions))",
+    "cb (ambiguous (2 definitions))",
+    "copy (ambiguous (2 definitions))",
+    "evaluate (ambiguous (31 definitions))"
+   ]
+  },
+  "lumenairy.analysis.polychromatic:polychromatic_strehl": {
+   "exported_as": [
+    "lumenairy.analysis.core.polychromatic_strehl",
+    "lumenairy.analysis.polychromatic.polychromatic_strehl",
+    "lumenairy.analysis.polychromatic_strehl",
+    "lumenairy.polychromatic_strehl"
+   ],
+   "chain": [
+    "lumenairy.analysis.polychromatic:polychromatic_strehl",
+    "lumenairy.analysis.through_focus:diffraction_limited_peak",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 4,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_f (ambiguous (2 definitions))",
+    "_is_cupy_array (ambiguous (4 definitions))",
+    "_prop (ambiguous (5 definitions))",
+    "_rows (ambiguous (2 definitions))",
+    "apply_real_lens (ambiguous (2 definitions))",
+    "cb (ambiguous (2 definitions))",
+    "copy (ambiguous (2 definitions))",
+    "f (ambiguous (3 definitions))"
+   ]
+  },
+  "lumenairy.analysis.polychromatic:radial_power_bands": {
+   "exported_as": [
+    "lumenairy.analysis.core.radial_power_bands",
+    "lumenairy.analysis.polychromatic.radial_power_bands",
+    "lumenairy.analysis.radial_power_bands",
+    "lumenairy.analysis.through_focus.radial_power_bands",
+    "lumenairy.radial_power_bands"
+   ],
+   "chain": [
+    "lumenairy.analysis.polychromatic:radial_power_bands",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "grid (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.analysis.psf_mtf_otf:compute_mtf": {
+   "exported_as": [
+    "lumenairy.analysis.compute_mtf",
+    "lumenairy.analysis.core.compute_mtf",
+    "lumenairy.analysis.psf_mtf_otf.compute_mtf",
+    "lumenairy.compute_mtf"
+   ],
+   "chain": [
+    "lumenairy.analysis.psf_mtf_otf:compute_mtf",
+    "lumenairy._validation:_check_2d_scalar_field",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 4,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "copy (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.analysis.psf_mtf_otf:compute_otf": {
+   "exported_as": [
+    "lumenairy.analysis.compute_otf",
+    "lumenairy.analysis.core.compute_otf",
+    "lumenairy.analysis.psf_mtf_otf.compute_otf",
+    "lumenairy.compute_otf"
+   ],
+   "chain": [
+    "lumenairy.analysis.psf_mtf_otf:compute_otf",
+    "lumenairy._validation:_check_2d_scalar_field",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 4,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_prop (ambiguous (5 definitions))",
+    "copy (ambiguous (2 definitions))",
+    "is_cupy_array (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.analysis.psf_mtf_otf:compute_psf": {
+   "exported_as": [
+    "lumenairy.analysis.compute_psf",
+    "lumenairy.analysis.core.compute_psf",
+    "lumenairy.analysis.psf_mtf_otf.compute_psf",
+    "lumenairy.compute_psf"
+   ],
+   "chain": [
+    "lumenairy.analysis.psf_mtf_otf:compute_psf",
+    "lumenairy._validation:_check_2d_scalar_field",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 4,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_ensure_cupy_loaded (ambiguous (5 definitions))",
+    "_is_cupy_array (ambiguous (4 definitions))",
+    "_prop (ambiguous (5 definitions))",
+    "copy (ambiguous (2 definitions))",
+    "f (ambiguous (3 definitions))",
+    "get (ambiguous (3 definitions))",
+    "is_cupy_array (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))"
+   ]
+  },
+  "lumenairy.analysis.psf_mtf_otf:encircled_energy_curve": {
+   "exported_as": [
+    "lumenairy.analysis.core.encircled_energy_curve",
+    "lumenairy.analysis.encircled_energy_curve",
+    "lumenairy.analysis.psf_mtf_otf.encircled_energy_curve",
+    "lumenairy.encircled_energy_curve"
+   ],
+   "chain": [
+    "lumenairy.analysis.psf_mtf_otf:encircled_energy_curve",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "grid (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.analysis.psf_mtf_otf:encircled_energy_profile": {
+   "exported_as": [
+    "lumenairy.analysis.core.encircled_energy_profile",
+    "lumenairy.analysis.encircled_energy_profile",
+    "lumenairy.analysis.psf_mtf_otf.encircled_energy_profile",
+    "lumenairy.encircled_energy_profile"
+   ],
+   "chain": [
+    "lumenairy.analysis.psf_mtf_otf:encircled_energy_profile",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "grid (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.analysis.psf_mtf_otf:encircled_energy_radius": {
+   "exported_as": [
+    "lumenairy.analysis.core.encircled_energy_radius",
+    "lumenairy.analysis.encircled_energy_radius",
+    "lumenairy.analysis.psf_mtf_otf.encircled_energy_radius",
+    "lumenairy.encircled_energy_radius"
+   ],
+   "chain": [
+    "lumenairy.analysis.psf_mtf_otf:encircled_energy_radius",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "grid (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.analysis.strehl:coupling_efficiency": {
+   "exported_as": [
+    "lumenairy.analysis.core.coupling_efficiency",
+    "lumenairy.analysis.coupling_efficiency",
+    "lumenairy.analysis.strehl.coupling_efficiency",
+    "lumenairy.coupling_efficiency"
+   ],
+   "chain": [
+    "lumenairy.analysis.strehl:coupling_efficiency",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "grid (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.analysis.strehl:strehl_ratio": {
+   "exported_as": [
+    "lumenairy.analysis.core.strehl_ratio",
+    "lumenairy.analysis.strehl.strehl_ratio",
+    "lumenairy.analysis.strehl_ratio",
+    "lumenairy.strehl_ratio"
+   ],
+   "chain": [
+    "lumenairy.analysis.strehl:strehl_ratio",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "grid (ambiguous (2 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.analysis.through_focus:diffraction_limited_peak": {
+   "exported_as": [
+    "lumenairy.analysis.diffraction_limited_peak",
+    "lumenairy.analysis.through_focus.diffraction_limited_peak",
+    "lumenairy.diffraction_limited_peak",
+    "lumenairy.optimize.core.diffraction_limited_peak"
+   ],
+   "chain": [
+    "lumenairy.analysis.through_focus:diffraction_limited_peak",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_is_cupy_array (ambiguous (4 definitions))",
+    "copy (ambiguous (2 definitions))",
+    "f (ambiguous (3 definitions))",
+    "get (ambiguous (3 definitions))",
+    "grid (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.analysis.through_focus:monte_carlo_tolerancing": {
+   "exported_as": [
+    "lumenairy.analysis.monte_carlo_tolerancing",
+    "lumenairy.analysis.through_focus.monte_carlo_tolerancing",
+    "lumenairy.monte_carlo_tolerancing"
+   ],
+   "chain": [
+    "lumenairy.analysis.through_focus:monte_carlo_tolerancing",
+    "lumenairy.analysis.through_focus:monte_carlo_tolerancing_jax",
+    "lumenairy.elements._lens_jax:apply_real_lens_traced_jax"
+   ],
+   "hops": 2,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_key (ambiguous (2 definitions))",
+    "apply_real_lens (ambiguous (2 definitions))",
+    "cb (ambiguous (2 definitions))",
+    "copy (ambiguous (2 definitions))",
+    "f (ambiguous (3 definitions))",
+    "get (ambiguous (3 definitions))",
+    "grid (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))"
+   ]
+  },
+  "lumenairy.analysis.through_focus:monte_carlo_tolerancing_jax": {
+   "exported_as": [
+    "lumenairy.analysis.monte_carlo_tolerancing_jax",
+    "lumenairy.analysis.through_focus.monte_carlo_tolerancing_jax",
+    "lumenairy.monte_carlo_tolerancing_jax"
+   ],
+   "chain": [
+    "lumenairy.analysis.through_focus:monte_carlo_tolerancing_jax",
+    "lumenairy.elements._lens_jax:apply_real_lens_traced_jax"
+   ],
+   "hops": 1,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "apply_real_lens (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.analysis.through_focus:monte_carlo_tolerancing_linearized": {
+   "exported_as": [
+    "lumenairy.analysis.monte_carlo_tolerancing_linearized",
+    "lumenairy.analysis.through_focus.monte_carlo_tolerancing_linearized",
+    "lumenairy.monte_carlo_tolerancing_linearized"
+   ],
+   "chain": [
+    "lumenairy.analysis.through_focus:monte_carlo_tolerancing_linearized",
+    "lumenairy.analysis.through_focus:diffraction_limited_peak",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 4,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_f (ambiguous (2 definitions))",
+    "_is_cupy_array (ambiguous (4 definitions))",
+    "_key (ambiguous (2 definitions))",
+    "_prop (ambiguous (5 definitions))",
+    "apply_real_lens (ambiguous (2 definitions))",
+    "cb (ambiguous (2 definitions))",
+    "copy (ambiguous (2 definitions))",
+    "f (ambiguous (3 definitions))"
+   ]
+  },
+  "lumenairy.analysis.through_focus:single_plane_metrics": {
+   "exported_as": [
+    "lumenairy.analysis.single_plane_metrics",
+    "lumenairy.analysis.through_focus.single_plane_metrics",
+    "lumenairy.single_plane_metrics"
+   ],
+   "chain": [
+    "lumenairy.analysis.through_focus:single_plane_metrics",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "grid (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.analysis.through_focus:through_focus_scan": {
+   "exported_as": [
+    "lumenairy.analysis.through_focus.through_focus_scan",
+    "lumenairy.analysis.through_focus_scan",
+    "lumenairy.optimize.core.through_focus_scan",
+    "lumenairy.through_focus_scan"
+   ],
+   "chain": [
+    "lumenairy.analysis.through_focus:through_focus_scan",
+    "lumenairy.analysis.through_focus:single_plane_metrics",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 4,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_f (ambiguous (2 definitions))",
+    "_prop (ambiguous (5 definitions))",
+    "cb (ambiguous (2 definitions))",
+    "copy (ambiguous (2 definitions))",
+    "f (ambiguous (3 definitions))",
+    "get (ambiguous (3 definitions))",
+    "grid (ambiguous (2 definitions))",
+    "is_cupy_array (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.analysis.through_focus:through_focus_scan_jax": {
+   "exported_as": [
+    "lumenairy.analysis.through_focus.through_focus_scan_jax",
+    "lumenairy.analysis.through_focus_scan_jax",
+    "lumenairy.through_focus_scan_jax"
+   ],
+   "chain": [
+    "lumenairy.analysis.through_focus:through_focus_scan_jax",
+    "lumenairy.analysis.through_focus:single_plane_metrics",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 4,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_f (ambiguous (2 definitions))",
+    "_prop (ambiguous (5 definitions))",
+    "copy (ambiguous (2 definitions))",
+    "f (ambiguous (3 definitions))",
+    "get (ambiguous (3 definitions))",
+    "grid (ambiguous (2 definitions))",
+    "is_cupy_array (ambiguous (2 definitions))",
+    "key (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.analysis.through_focus:tolerancing_report": {
+   "exported_as": [
+    "lumenairy.analysis.through_focus.tolerancing_report",
+    "lumenairy.analysis.tolerancing_report",
+    "lumenairy.tolerancing_report"
+   ],
+   "chain": [
+    "lumenairy.analysis.through_focus:tolerancing_report",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 2,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "summary (ambiguous (2 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.analysis.through_focus:tolerancing_sweep": {
+   "exported_as": [
+    "lumenairy.analysis.through_focus.tolerancing_sweep",
+    "lumenairy.analysis.tolerancing_sweep",
+    "lumenairy.tolerancing_sweep"
+   ],
+   "chain": [
+    "lumenairy.analysis.through_focus:tolerancing_sweep",
+    "lumenairy.analysis.through_focus:diffraction_limited_peak",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 4,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_is_cupy_array (ambiguous (4 definitions))",
+    "_prop (ambiguous (5 definitions))",
+    "apply_real_lens (ambiguous (2 definitions))",
+    "cb (ambiguous (2 definitions))",
+    "copy (ambiguous (2 definitions))",
+    "f (ambiguous (3 definitions))",
+    "get (ambiguous (3 definitions))",
+    "grid (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.backend.scipy:erf": {
+   "exported_as": [
+    "lumenairy.backend.scipy.erf"
+   ],
+   "chain": [
+    "lumenairy.backend.scipy:erf",
+    "lumenairy.backend.scipy:_dispatch_special",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "is_cupy_array (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.backend.scipy:expi": {
+   "exported_as": [
+    "lumenairy.backend.scipy.expi"
+   ],
+   "chain": [
+    "lumenairy.backend.scipy:expi",
+    "lumenairy.backend.scipy:_dispatch_special",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "is_cupy_array (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.backend.scipy:gammaln": {
+   "exported_as": [
+    "lumenairy.backend.scipy.gammaln"
+   ],
+   "chain": [
+    "lumenairy.backend.scipy:gammaln",
+    "lumenairy.backend.scipy:_dispatch_special",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "is_cupy_array (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.backend.scipy:jv": {
+   "exported_as": [
+    "lumenairy.backend.scipy.jv"
+   ],
+   "chain": [
+    "lumenairy.backend.scipy:jv",
+    "lumenairy.backend.scipy:_dispatch_special",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "is_cupy_array (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.cache:set_cache_budget": {
+   "exported_as": [
+    "lumenairy.cache.set_cache_budget",
+    "lumenairy.set_cache_budget"
+   ],
+   "chain": [
+    "lumenairy.cache:set_cache_budget",
+    "lumenairy.cache:_enforce_global_budget_locked",
+    "lumenairy.io.storage:store",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 5,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_store (ambiguous (3 definitions))",
+    "f (ambiguous (3 definitions))",
+    "grid (ambiguous (2 definitions))",
+    "nbytes (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.elements._lens_real:apply_real_lens": {
+   "exported_as": [
+    "lumenairy.analysis.coherence.apply_real_lens",
+    "lumenairy.analysis.through_focus.apply_real_lens",
+    "lumenairy.apply_real_lens",
+    "lumenairy.elements._lens_jax.apply_real_lens",
+    "lumenairy.elements._lens_real.apply_real_lens",
+    "lumenairy.elements._lens_traced.apply_real_lens",
+    "lumenairy.elements.apply_real_lens",
+    "lumenairy.elements.lenses.apply_real_lens",
+    "lumenairy.elements.polarization.apply_real_lens",
+    "lumenairy.optimize.core.apply_real_lens",
+    "lumenairy.optimize.driver.apply_real_lens",
+    "lumenairy.propagators.system.apply_real_lens"
+   ],
+   "chain": [
+    "lumenairy.elements._lens_real:apply_real_lens",
+    "lumenairy.elements._lens_real:_apply_real_lens_impl",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 4,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_store (ambiguous (3 definitions))",
+    "body (ambiguous (6 definitions))",
+    "cb (ambiguous (2 definitions))",
+    "clear (ambiguous (3 definitions))",
+    "copy (ambiguous (2 definitions))",
+    "evaluate (ambiguous (31 definitions))",
+    "f (ambiguous (3 definitions))",
+    "get (ambiguous (3 definitions))"
+   ]
+  },
+  "lumenairy.elements._lens_real:lens_sag_float32_opd_error": {
+   "exported_as": [
+    "lumenairy.elements._lens_real.lens_sag_float32_opd_error",
+    "lumenairy.elements.lens_sag_float32_opd_error",
+    "lumenairy.elements.lenses.lens_sag_float32_opd_error",
+    "lumenairy.lens_sag_float32_opd_error"
+   ],
+   "chain": [
+    "lumenairy.elements._lens_real:lens_sag_float32_opd_error",
+    "lumenairy.elements._lens_real:apply_real_lens",
+    "lumenairy.elements._lens_real:_apply_real_lens_impl",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 5,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_f (ambiguous (2 definitions))",
+    "_store (ambiguous (3 definitions))",
+    "body (ambiguous (6 definitions))",
+    "cb (ambiguous (2 definitions))",
+    "clear (ambiguous (3 definitions))",
+    "copy (ambiguous (2 definitions))",
+    "evaluate (ambiguous (31 definitions))",
+    "f (ambiguous (3 definitions))"
+   ]
+  },
+  "lumenairy.elements._lens_real:set_pointwise_cos_grid_cache_budget": {
+   "exported_as": [
+    "lumenairy.elements._lens_real.set_pointwise_cos_grid_cache_budget",
+    "lumenairy.elements.lenses.set_pointwise_cos_grid_cache_budget",
+    "lumenairy.elements.set_pointwise_cos_grid_cache_budget",
+    "lumenairy.set_pointwise_cos_grid_cache_budget"
+   ],
+   "chain": [
+    "lumenairy.elements._lens_real:set_pointwise_cos_grid_cache_budget",
+    "lumenairy.cache:set_budget",
+    "lumenairy.cache:_enforce_global_budget_locked",
+    "lumenairy.io.storage:store",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 6,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_store (ambiguous (3 definitions))",
+    "f (ambiguous (3 definitions))",
+    "grid (ambiguous (2 definitions))",
+    "nbytes (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "solve (ambiguous (11 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.elements._lens_thin:apply_aspheric_lens": {
+   "exported_as": [
+    "lumenairy.apply_aspheric_lens",
+    "lumenairy.elements._lens_thin.apply_aspheric_lens",
+    "lumenairy.elements.apply_aspheric_lens",
+    "lumenairy.elements.lenses.apply_aspheric_lens",
+    "lumenairy.propagators.system.apply_aspheric_lens"
+   ],
+   "chain": [
+    "lumenairy.elements._lens_thin:apply_aspheric_lens",
+    "lumenairy._validation:_check_2d_scalar_field",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 4,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_f (ambiguous (2 definitions))",
+    "_is_cupy_array (ambiguous (4 definitions))",
+    "f (ambiguous (3 definitions))",
+    "grid (ambiguous (2 definitions))",
+    "keys (ambiguous (2 definitions))",
+    "power (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.elements._lens_thin:apply_axicon": {
+   "exported_as": [
+    "lumenairy.apply_axicon",
+    "lumenairy.elements._lens_thin.apply_axicon",
+    "lumenairy.elements.apply_axicon",
+    "lumenairy.elements.lenses.apply_axicon",
+    "lumenairy.propagators.system.apply_axicon"
+   ],
+   "chain": [
+    "lumenairy.elements._lens_thin:apply_axicon",
+    "lumenairy._validation:_check_2d_scalar_field",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 4,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_f (ambiguous (2 definitions))",
+    "_is_cupy_array (ambiguous (4 definitions))",
+    "get (ambiguous (3 definitions))",
+    "get_refractive_index (ambiguous (2 definitions))",
+    "grid (ambiguous (2 definitions))",
+    "key (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.elements._lens_thin:apply_cylindrical_lens": {
+   "exported_as": [
+    "lumenairy.apply_cylindrical_lens",
+    "lumenairy.elements._lens_thin.apply_cylindrical_lens",
+    "lumenairy.elements.apply_cylindrical_lens",
+    "lumenairy.elements.lenses.apply_cylindrical_lens",
+    "lumenairy.propagators.system.apply_cylindrical_lens"
+   ],
+   "chain": [
+    "lumenairy.elements._lens_thin:apply_cylindrical_lens",
+    "lumenairy._validation:_check_2d_scalar_field",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 4,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_f (ambiguous (2 definitions))",
+    "_is_cupy_array (ambiguous (4 definitions))",
+    "f (ambiguous (3 definitions))",
+    "grid (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.elements._lens_thin:apply_grin_lens": {
+   "exported_as": [
+    "lumenairy.apply_grin_lens",
+    "lumenairy.elements._lens_thin.apply_grin_lens",
+    "lumenairy.elements.apply_grin_lens",
+    "lumenairy.elements.lenses.apply_grin_lens",
+    "lumenairy.propagators.system.apply_grin_lens"
+   ],
+   "chain": [
+    "lumenairy.elements._lens_thin:apply_grin_lens",
+    "lumenairy._validation:_check_2d_scalar_field",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 4,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_f (ambiguous (2 definitions))",
+    "_is_cupy_array (ambiguous (4 definitions))",
+    "grid (ambiguous (2 definitions))",
+    "power (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.elements._lens_thin:apply_spherical_lens": {
+   "exported_as": [
+    "lumenairy.apply_spherical_lens",
+    "lumenairy.elements._lens_thin.apply_spherical_lens",
+    "lumenairy.elements.apply_spherical_lens",
+    "lumenairy.elements.lenses.apply_spherical_lens",
+    "lumenairy.elements.polarization.apply_spherical_lens",
+    "lumenairy.propagators.system.apply_spherical_lens"
+   ],
+   "chain": [
+    "lumenairy.elements._lens_thin:apply_spherical_lens",
+    "lumenairy._validation:_check_2d_scalar_field",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 4,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_f (ambiguous (2 definitions))",
+    "_is_cupy_array (ambiguous (4 definitions))",
+    "grid (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.elements._lens_thin:apply_thin_lens": {
+   "exported_as": [
+    "lumenairy.apply_thin_lens",
+    "lumenairy.elements._lens_thin.apply_thin_lens",
+    "lumenairy.elements.apply_thin_lens",
+    "lumenairy.elements.lenses.apply_thin_lens",
+    "lumenairy.elements.polarization.apply_thin_lens",
+    "lumenairy.propagators.system.apply_thin_lens"
+   ],
+   "chain": [
+    "lumenairy.elements._lens_thin:apply_thin_lens",
+    "lumenairy._validation:_check_2d_scalar_field",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 4,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_f (ambiguous (2 definitions))",
+    "_is_cupy_array (ambiguous (4 definitions))",
+    "f (ambiguous (3 definitions))",
+    "grid (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.elements._lens_traced:apply_real_lens_traced_multi": {
+   "exported_as": [
+    "lumenairy.apply_real_lens_traced_multi",
+    "lumenairy.elements._lens_traced.apply_real_lens_traced_multi",
+    "lumenairy.elements.apply_real_lens_traced_multi",
+    "lumenairy.elements.lenses.apply_real_lens_traced_multi"
+   ],
+   "chain": [
+    "lumenairy.elements._lens_traced:apply_real_lens_traced_multi",
+    "lumenairy.elements._lens_traced:apply_real_lens_traced"
+   ],
+   "hops": 1,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": "lumenairy.elements._lens_traced:apply_real_lens_traced",
+   "ambiguous_names_refused": []
+  },
+  "lumenairy.elements._lens_traced:apply_real_lens_traced_segmented": {
+   "exported_as": [
+    "lumenairy.apply_real_lens_traced_segmented",
+    "lumenairy.elements._lens_traced.apply_real_lens_traced_segmented",
+    "lumenairy.elements.apply_real_lens_traced_segmented",
+    "lumenairy.elements.lenses.apply_real_lens_traced_segmented"
+   ],
+   "chain": [
+    "lumenairy.elements._lens_traced:apply_real_lens_traced_segmented",
+    "lumenairy.elements._lens_traced:apply_real_lens_traced"
+   ],
+   "hops": 1,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": "lumenairy.elements._lens_traced:apply_real_lens_traced",
+   "ambiguous_names_refused": []
+  },
+  "lumenairy.elements._lens_traced:prepare_real_lens_traced": {
+   "exported_as": [
+    "lumenairy.elements._lens_traced.prepare_real_lens_traced",
+    "lumenairy.elements.lenses.prepare_real_lens_traced",
+    "lumenairy.elements.prepare_real_lens_traced",
+    "lumenairy.prepare_real_lens_traced"
+   ],
+   "chain": [
+    "lumenairy.elements._lens_traced:prepare_real_lens_traced",
+    "lumenairy.elements._lens_traced:apply_real_lens_traced"
+   ],
+   "hops": 1,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": "lumenairy.elements._lens_traced:apply_real_lens_traced",
+   "ambiguous_names_refused": []
+  },
+  "lumenairy.elements._lens_traced_multibranch:apply_real_lens_traced_multibranch": {
+   "exported_as": [
+    "lumenairy.apply_real_lens_traced_multibranch",
+    "lumenairy.elements._lens_traced_multibranch.apply_real_lens_traced_multibranch",
+    "lumenairy.elements.apply_real_lens_traced_multibranch",
+    "lumenairy.elements.lenses.apply_real_lens_traced_multibranch"
+   ],
+   "chain": [
+    "lumenairy.elements._lens_traced_multibranch:apply_real_lens_traced_multibranch",
+    "lumenairy.elements._lens_traced_multibranch:_multibranch_render",
+    "lumenairy.elements._lens_traced_multibranch:_trace_launch_grid"
+   ],
+   "hops": 2,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": []
+  },
+  "lumenairy.elements._lens_traced_uniform:apply_real_lens_traced_uniform": {
+   "exported_as": [
+    "lumenairy.apply_real_lens_traced_uniform",
+    "lumenairy.elements._lens_traced_uniform.apply_real_lens_traced_uniform",
+    "lumenairy.elements.apply_real_lens_traced_uniform",
+    "lumenairy.elements.lenses.apply_real_lens_traced_uniform"
+   ],
+   "chain": [
+    "lumenairy.elements._lens_traced_uniform:apply_real_lens_traced_uniform",
+    "lumenairy.elements._lens_traced_uniform:_trace_meridional_cusp"
+   ],
+   "hops": 1,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": []
+  },
+  "lumenairy.elements.berreman:berreman_jones_1d": {
+   "exported_as": [
+    "lumenairy.berreman_jones_1d",
+    "lumenairy.elements.berreman.berreman_jones_1d",
+    "lumenairy.elements.berreman_jones_1d"
+   ],
+   "chain": [
+    "lumenairy.elements.berreman:berreman_jones_1d",
+    "lumenairy.elements._berreman_jax:_berreman_jones_1d_jax",
+    "lumenairy.elements._berreman_jax:_solve_jax",
+    "lumenairy.elements._berreman_jax:_flux_jax",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 6,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_f (ambiguous (2 definitions))",
+    "_fast_geig (ambiguous (2 definitions))",
+    "_require_jax_x64 (ambiguous (3 definitions))",
+    "_resolve_incidence_checked (ambiguous (2 definitions))",
+    "cb (ambiguous (2 definitions))",
+    "copy (ambiguous (2 definitions))",
+    "f (ambiguous (3 definitions))",
+    "flags (ambiguous (3 definitions))"
+   ]
+  },
+  "lumenairy.elements.bor._inv_census:census_inv": {
+   "exported_as": [
+    "lumenairy.elements.bor._inv_census.census_inv",
+    "lumenairy.elements.bor.coupled_radial_eigensolver.census_inv",
+    "lumenairy.elements.bor.sem_radial.census_inv",
+    "lumenairy.elements.bor.zcascade.census_inv"
+   ],
+   "chain": [
+    "lumenairy.elements.bor._inv_census:census_inv",
+    "lumenairy.elements.bor._inv_census:_record",
+    "lumenairy.elements.rcwa._core:_equilibrated_inverse_residual",
+    "lumenairy.elements.rcwa._core:_inverse_residual",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 6,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "prop (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.elements.bor._inv_census:census_solve": {
+   "exported_as": [
+    "lumenairy.elements.bor._inv_census.census_solve",
+    "lumenairy.elements.bor.bor_stack.census_solve",
+    "lumenairy.elements.bor.sem_radial.census_solve",
+    "lumenairy.elements.bor.zcascade.census_solve"
+   ],
+   "chain": [
+    "lumenairy.elements.bor._inv_census:census_solve",
+    "lumenairy.elements.bor._inv_census:_record",
+    "lumenairy.elements.rcwa._core:_equilibrated_inverse_residual",
+    "lumenairy.elements.rcwa._core:_inverse_residual",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 6,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "prop (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "solve (ambiguous (11 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.elements.bor.coupled_radial_eigensolver:guided_modes": {
+   "exported_as": [
+    "lumenairy.elements.bor.coupled_radial_eigensolver.guided_modes",
+    "lumenairy.elements.bor.guided_modes"
+   ],
+   "chain": [
+    "lumenairy.elements.bor.coupled_radial_eigensolver:guided_modes",
+    "lumenairy.elements.bor.coupled_radial_eigensolver:_step_index_root_census",
+    "lumenairy.elements.bor.fiber_oracle:fiber_det",
+    "lumenairy.backend.scipy:jv",
+    "lumenairy.backend.scipy:_dispatch_special",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 6,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_fast_geig (ambiguous (2 definitions))",
+    "copy (ambiguous (2 definitions))",
+    "get (ambiguous (3 definitions))",
+    "is_cupy_array (ambiguous (2 definitions))",
+    "prop (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.elements.bor.farfield:fourier_bessel": {
+   "exported_as": [
+    "lumenairy.elements.bor.farfield.fourier_bessel",
+    "lumenairy.elements.bor.fourier_bessel"
+   ],
+   "chain": [
+    "lumenairy.elements.bor.farfield:fourier_bessel",
+    "lumenairy.backend.scipy:jv",
+    "lumenairy.backend.scipy:_dispatch_special",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 4,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "f (ambiguous (3 definitions))",
+    "is_cupy_array (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.elements.bor.farfield:order_power_fractions": {
+   "exported_as": [
+    "lumenairy.elements.bor.farfield.order_power_fractions",
+    "lumenairy.elements.bor.order_power_fractions"
+   ],
+   "chain": [
+    "lumenairy.elements.bor.farfield:order_power_fractions",
+    "lumenairy.elements.bor.farfield:fourier_bessel",
+    "lumenairy.backend.scipy:jv",
+    "lumenairy.backend.scipy:_dispatch_special",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 5,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "f (ambiguous (3 definitions))",
+    "is_cupy_array (ambiguous (2 definitions))",
+    "prop (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.elements.bor.fiber_oracle:fiber_det": {
+   "exported_as": [
+    "lumenairy.elements.bor.fiber_oracle.fiber_det"
+   ],
+   "chain": [
+    "lumenairy.elements.bor.fiber_oracle:fiber_det",
+    "lumenairy.backend.scipy:jv",
+    "lumenairy.backend.scipy:_dispatch_special",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 4,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "is_cupy_array (ambiguous (2 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.elements.bor.fiber_oracle:fiber_modes": {
+   "exported_as": [
+    "lumenairy.elements.bor.fiber_modes",
+    "lumenairy.elements.bor.fiber_oracle.fiber_modes"
+   ],
+   "chain": [
+    "lumenairy.elements.bor.fiber_oracle:fiber_modes",
+    "lumenairy.elements.bor.fiber_oracle:fiber_det",
+    "lumenairy.backend.scipy:jv",
+    "lumenairy.backend.scipy:_dispatch_special",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 5,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "is_cupy_array (ambiguous (2 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.elements.bor.stepindex_oracle:stepindex_det": {
+   "exported_as": [
+    "lumenairy.elements.bor.stepindex_oracle.stepindex_det"
+   ],
+   "chain": [
+    "lumenairy.elements.bor.stepindex_oracle:stepindex_det",
+    "lumenairy.backend.scipy:jv",
+    "lumenairy.backend.scipy:_dispatch_special",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 4,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "is_cupy_array (ambiguous (2 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.elements.bor.stepindex_oracle:stepindex_modes": {
+   "exported_as": [
+    "lumenairy.elements.bor.stepindex_modes",
+    "lumenairy.elements.bor.stepindex_oracle.stepindex_modes"
+   ],
+   "chain": [
+    "lumenairy.elements.bor.stepindex_oracle:stepindex_modes",
+    "lumenairy.elements.bor.stepindex_oracle:stepindex_det",
+    "lumenairy.backend.scipy:jv",
+    "lumenairy.backend.scipy:_dispatch_special",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 5,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "is_cupy_array (ambiguous (2 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.elements.doe:load_fits_field": {
+   "exported_as": [
+    "lumenairy.elements.doe.load_fits_field",
+    "lumenairy.elements.load_fits_field",
+    "lumenairy.load_fits_field"
+   ],
+   "chain": [
+    "lumenairy.elements.doe:load_fits_field",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_f (ambiguous (2 definitions))",
+    "data (ambiguous (3 definitions))",
+    "get (ambiguous (3 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.elements.doe:save_fits_field": {
+   "exported_as": [
+    "lumenairy.elements.doe.save_fits_field",
+    "lumenairy.elements.save_fits_field",
+    "lumenairy.save_fits_field"
+   ],
+   "chain": [
+    "lumenairy.elements.doe:save_fits_field",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_f (ambiguous (2 definitions))",
+    "f (ambiguous (3 definitions))",
+    "grid (ambiguous (2 definitions))",
+    "key (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.elements.elements:apply_mirror": {
+   "exported_as": [
+    "lumenairy.apply_mirror",
+    "lumenairy.elements.apply_mirror",
+    "lumenairy.elements.elements.apply_mirror",
+    "lumenairy.elements.polarization.apply_mirror",
+    "lumenairy.propagators.system.apply_mirror"
+   ],
+   "chain": [
+    "lumenairy.elements.elements:apply_mirror",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "copy (ambiguous (2 definitions))",
+    "grid (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.elements.eme.eme_diffraction:diffraction_eme": {
+   "exported_as": [
+    "lumenairy.elements.eme.diffraction_eme",
+    "lumenairy.elements.eme.eme_diffraction.diffraction_eme"
+   ],
+   "chain": [
+    "lumenairy.elements.eme.eme_diffraction:diffraction_eme",
+    "lumenairy.elements.eme.eme_diffraction:mode_match",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 4,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_f (ambiguous (2 definitions))",
+    "cb (ambiguous (2 definitions))",
+    "is_cupy_array (ambiguous (2 definitions))",
+    "layer_modes (ambiguous (2 definitions))",
+    "prop (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.elements.eme.eme_diffraction:diffraction_fd": {
+   "exported_as": [
+    "lumenairy.elements.eme.diffraction_fd",
+    "lumenairy.elements.eme.eme_diffraction.diffraction_fd"
+   ],
+   "chain": [
+    "lumenairy.elements.eme.eme_diffraction:diffraction_fd",
+    "lumenairy.elements.eme.eme_diffraction:mode_match",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 4,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_require_jax_x64 (ambiguous (3 definitions))",
+    "is_cupy_array (ambiguous (2 definitions))",
+    "prop (ambiguous (2 definitions))",
+    "rows (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.elements.eme.eme_diffraction:mode_match": {
+   "exported_as": [
+    "lumenairy.elements.eme.eme_diffraction.mode_match",
+    "lumenairy.elements.eme.mode_match"
+   ],
+   "chain": [
+    "lumenairy.elements.eme.eme_diffraction:mode_match",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "is_cupy_array (ambiguous (2 definitions))",
+    "prop (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.elements.lens_config:resolve_entry_point_kwargs": {
+   "exported_as": [
+    "lumenairy.elements.lens_config.resolve_entry_point_kwargs"
+   ],
+   "chain": [
+    "lumenairy.elements.lens_config:resolve_entry_point_kwargs",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 2,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "f (ambiguous (3 definitions))",
+    "get (ambiguous (3 definitions))",
+    "key (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.elements.lenses_gbd:apply_real_lens_gbd": {
+   "exported_as": [
+    "lumenairy.apply_real_lens_gbd",
+    "lumenairy.elements.apply_real_lens_gbd",
+    "lumenairy.elements.lenses.apply_real_lens_gbd",
+    "lumenairy.elements.lenses_gbd.apply_real_lens_gbd"
+   ],
+   "chain": [
+    "lumenairy.elements.lenses_gbd:apply_real_lens_gbd",
+    "lumenairy.propagators.gbd:apply_prescription_persurface_to_beamlets",
+    "lumenairy.propagators.gbd:_reframe_beamlets_to_world_plane"
+   ],
+   "hops": 2,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "get (ambiguous (3 definitions))",
+    "grad_fn (ambiguous (5 definitions))",
+    "rows (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "w_fn (ambiguous (5 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.elements.lenses_maslov:apply_real_lens_maslov_vector": {
+   "exported_as": [
+    "lumenairy.apply_real_lens_maslov_vector",
+    "lumenairy.elements.lenses_maslov.apply_real_lens_maslov_vector"
+   ],
+   "chain": [
+    "lumenairy.elements.lenses_maslov:apply_real_lens_maslov_vector",
+    "lumenairy.elements.lenses_maslov:apply_real_lens_maslov"
+   ],
+   "hops": 1,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": "lumenairy.elements.lenses_maslov:apply_real_lens_maslov",
+   "ambiguous_names_refused": []
+  },
+  "lumenairy.elements.pmm.conical:pmm_jones_1d_conical": {
+   "exported_as": [
+    "lumenairy.elements.pmm.conical.pmm_jones_1d_conical",
+    "lumenairy.elements.pmm.pmm_jones_1d_conical",
+    "lumenairy.pmm_jones_1d_conical"
+   ],
+   "chain": [
+    "lumenairy.elements.pmm.conical:pmm_jones_1d_conical",
+    "lumenairy.elements.pmm.conical:_conical_nodal_solve",
+    "lumenairy.elements.pmm._core:_mode_cut_scoped",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 4,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_f (ambiguous (2 definitions))",
+    "_gll_nodes_weights (ambiguous (2 definitions))",
+    "_graded_boundaries (ambiguous (2 definitions))",
+    "_interface_smatrix (ambiguous (2 definitions))",
+    "_kz_forward2 (ambiguous (2 definitions))",
+    "_propagation_smatrix (ambiguous (2 definitions))",
+    "copy (ambiguous (2 definitions))",
+    "formulation (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.elements.pmm.conical:pmm_jones_1d_conical_tensor": {
+   "exported_as": [
+    "lumenairy.elements.pmm.conical.pmm_jones_1d_conical_tensor",
+    "lumenairy.elements.pmm.pmm_jones_1d_conical_tensor",
+    "lumenairy.pmm_jones_1d_conical_tensor"
+   ],
+   "chain": [
+    "lumenairy.elements.pmm.conical:pmm_jones_1d_conical_tensor",
+    "lumenairy.elements.pmm.conical:_conical_nodal_solve",
+    "lumenairy.elements.pmm._core:_mode_cut_scoped",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 4,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_f (ambiguous (2 definitions))",
+    "_fast_geig (ambiguous (2 definitions))",
+    "_gll_nodes_weights (ambiguous (2 definitions))",
+    "_graded_boundaries (ambiguous (2 definitions))",
+    "_interface_smatrix (ambiguous (2 definitions))",
+    "_kz_forward2 (ambiguous (2 definitions))",
+    "_propagation_smatrix (ambiguous (2 definitions))",
+    "copy (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.elements.pmm.oned:pmm_jones_1d_slanted": {
+   "exported_as": [
+    "lumenairy.elements.pmm.oned.pmm_jones_1d_slanted",
+    "lumenairy.elements.pmm.pmm_jones_1d_slanted",
+    "lumenairy.elements.pmm_jones_1d_slanted",
+    "lumenairy.pmm_jones_1d_slanted"
+   ],
+   "chain": [
+    "lumenairy.elements.pmm.oned:pmm_jones_1d_slanted",
+    "lumenairy.elements.pmm._core:_pmm_jones_oblique_solve",
+    "lumenairy.elements.pmm._core:_pmm_jones_oblique_core",
+    "lumenairy.elements.pmm._core:_cov_layer_4n",
+    "lumenairy.elements.pmm._core:_cov_generator_4n",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 6,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_apply (ambiguous (9 definitions))",
+    "_f (ambiguous (2 definitions))",
+    "_require_jax_x64 (ambiguous (3 definitions))",
+    "_resolve_incidence_checked (ambiguous (2 definitions))",
+    "copy (ambiguous (2 definitions))",
+    "f (ambiguous (3 definitions))",
+    "flags (ambiguous (3 definitions))",
+    "get (ambiguous (3 definitions))"
+   ]
+  },
+  "lumenairy.elements.pmm.oned:pmm_jones_1d_slanted_segments": {
+   "exported_as": [
+    "lumenairy.elements.pmm.oned.pmm_jones_1d_slanted_segments",
+    "lumenairy.elements.pmm.pmm_jones_1d_slanted_segments",
+    "lumenairy.elements.pmm_jones_1d_slanted_segments",
+    "lumenairy.pmm_jones_1d_slanted_segments"
+   ],
+   "chain": [
+    "lumenairy.elements.pmm.oned:pmm_jones_1d_slanted_segments",
+    "lumenairy.elements.pmm._core:_pmm_jones_oblique_segments_solve",
+    "lumenairy.elements.pmm._core:_pmm_jones_oblique_core",
+    "lumenairy.elements.pmm._core:_cov_layer_4n",
+    "lumenairy.elements.pmm._core:_cov_generator_4n",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 6,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_apply (ambiguous (9 definitions))",
+    "_f (ambiguous (2 definitions))",
+    "_resolve_incidence_checked (ambiguous (2 definitions))",
+    "copy (ambiguous (2 definitions))",
+    "f (ambiguous (3 definitions))",
+    "flags (ambiguous (3 definitions))",
+    "get (ambiguous (3 definitions))",
+    "is_cupy_array (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.elements.pmm.twod:pmm_efficiency_2d": {
+   "exported_as": [
+    "lumenairy.elements.pmm.pmm_efficiency_2d",
+    "lumenairy.elements.pmm.twod.pmm_efficiency_2d",
+    "lumenairy.elements.pmm_efficiency_2d",
+    "lumenairy.pmm_efficiency_2d"
+   ],
+   "chain": [
+    "lumenairy.elements.pmm.twod:pmm_efficiency_2d",
+    "lumenairy.elements.pmm.twod:_pmm2d_solve_core",
+    "lumenairy.elements.pmm.twod:_scalar_projected_ops",
+    "lumenairy.elements.pmm.twod:_sandwich_factorized",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 6,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_f (ambiguous (2 definitions))",
+    "_gll_nodes_weights (ambiguous (2 definitions))",
+    "_graded_boundaries (ambiguous (2 definitions))",
+    "_interface_smatrix (ambiguous (2 definitions))",
+    "_propagation_smatrix (ambiguous (2 definitions))",
+    "_require_jax_x64 (ambiguous (3 definitions))",
+    "cb (ambiguous (2 definitions))",
+    "cv (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.elements.pmm.twod:pmm_efficiency_2d_cell": {
+   "exported_as": [
+    "lumenairy.elements.pmm.pmm_efficiency_2d_cell",
+    "lumenairy.elements.pmm.twod.pmm_efficiency_2d_cell",
+    "lumenairy.pmm_efficiency_2d_cell"
+   ],
+   "chain": [
+    "lumenairy.elements.pmm.twod:pmm_efficiency_2d_cell",
+    "lumenairy.elements.pmm.twod:_pmm2d_solve_core",
+    "lumenairy.elements.pmm.twod:_scalar_projected_ops",
+    "lumenairy.elements.pmm.twod:_sandwich_factorized",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 6,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_f (ambiguous (2 definitions))",
+    "_gll_nodes_weights (ambiguous (2 definitions))",
+    "_graded_boundaries (ambiguous (2 definitions))",
+    "_interface_smatrix (ambiguous (2 definitions))",
+    "_propagation_smatrix (ambiguous (2 definitions))",
+    "_require_jax_x64 (ambiguous (3 definitions))",
+    "cb (ambiguous (2 definitions))",
+    "cv (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.elements.pmm.twod:prepare_pmm_2d": {
+   "exported_as": [
+    "lumenairy.elements.pmm.prepare_pmm_2d",
+    "lumenairy.elements.pmm.twod.prepare_pmm_2d",
+    "lumenairy.prepare_pmm_2d"
+   ],
+   "chain": [
+    "lumenairy.elements.pmm.twod:prepare_pmm_2d",
+    "lumenairy.elements.pmm.twod:_prepare_pmm2d_core",
+    "lumenairy.elements.pmm.twod:_scalar_projected_ops",
+    "lumenairy.elements.pmm.twod:_sandwich_factorized",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 6,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_f (ambiguous (2 definitions))",
+    "_gll_nodes_weights (ambiguous (2 definitions))",
+    "_graded_boundaries (ambiguous (2 definitions))",
+    "cb (ambiguous (2 definitions))",
+    "f (ambiguous (3 definitions))",
+    "formulation (ambiguous (2 definitions))",
+    "get (ambiguous (3 definitions))",
+    "ix (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.elements.pmm.twod:prepare_pmm_2d_cell": {
+   "exported_as": [
+    "lumenairy.elements.pmm.prepare_pmm_2d_cell",
+    "lumenairy.elements.pmm.twod.prepare_pmm_2d_cell",
+    "lumenairy.prepare_pmm_2d_cell"
+   ],
+   "chain": [
+    "lumenairy.elements.pmm.twod:prepare_pmm_2d_cell",
+    "lumenairy.elements.pmm.twod:_prepare_pmm2d_core",
+    "lumenairy.elements.pmm.twod:_scalar_projected_ops",
+    "lumenairy.elements.pmm.twod:_sandwich_factorized",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 6,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_f (ambiguous (2 definitions))",
+    "_gll_nodes_weights (ambiguous (2 definitions))",
+    "_graded_boundaries (ambiguous (2 definitions))",
+    "cb (ambiguous (2 definitions))",
+    "f (ambiguous (3 definitions))",
+    "formulation (ambiguous (2 definitions))",
+    "get (ambiguous (3 definitions))",
+    "ix (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.elements.pmm.twod_jones:pmm_jones_2d": {
+   "exported_as": [
+    "lumenairy.elements.pmm.pmm_jones_2d",
+    "lumenairy.elements.pmm.twod_jones.pmm_jones_2d",
+    "lumenairy.pmm_jones_2d"
+   ],
+   "chain": [
+    "lumenairy.elements.pmm.twod_jones:pmm_jones_2d",
+    "lumenairy.elements.pmm._jax_twod_jones:_pmm_jones_2d_cell_jax",
+    "lumenairy.elements.pmm._jax_twod:_proj_sandwich_jnp",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 5,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_f (ambiguous (2 definitions))",
+    "_fast_geig (ambiguous (2 definitions))",
+    "_gll_nodes_weights (ambiguous (2 definitions))",
+    "_graded_boundaries (ambiguous (2 definitions))",
+    "_interface_smatrix (ambiguous (2 definitions))",
+    "_kz_forward2 (ambiguous (2 definitions))",
+    "_propagation_smatrix (ambiguous (2 definitions))",
+    "_require_jax_x64 (ambiguous (3 definitions))"
+   ]
+  },
+  "lumenairy.elements.rcwa.oned:rcwa_efficiency_1d": {
+   "exported_as": [
+    "lumenairy.elements.rcwa.oned.rcwa_efficiency_1d",
+    "lumenairy.elements.rcwa.rcwa_efficiency_1d",
+    "lumenairy.elements.rcwa_efficiency_1d",
+    "lumenairy.rcwa_efficiency_1d"
+   ],
+   "chain": [
+    "lumenairy.elements.rcwa.oned:rcwa_efficiency_1d",
+    "lumenairy.elements.rcwa._blas:_with_blas_limit",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_concrete (ambiguous (3 definitions))",
+    "_interface_smatrix (ambiguous (2 definitions))",
+    "_inv_lam (ambiguous (6 definitions))",
+    "_is_traced (ambiguous (3 definitions))",
+    "_key (ambiguous (2 definitions))",
+    "_require_jax_x64 (ambiguous (3 definitions))",
+    "copy (ambiguous (2 definitions))",
+    "f (ambiguous (3 definitions))"
+   ]
+  },
+  "lumenairy.elements.rcwa.oned:rcwa_efficiency_1d_jax": {
+   "exported_as": [
+    "lumenairy.elements.rcwa.oned.rcwa_efficiency_1d_jax",
+    "lumenairy.elements.rcwa.rcwa_efficiency_1d_jax",
+    "lumenairy.elements.rcwa_efficiency_1d_jax",
+    "lumenairy.rcwa_efficiency_1d_jax"
+   ],
+   "chain": [
+    "lumenairy.elements.rcwa.oned:rcwa_efficiency_1d_jax",
+    "lumenairy.elements.rcwa.oned:rcwa_efficiency_1d",
+    "lumenairy.elements.rcwa._blas:_with_blas_limit",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 4,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_concrete (ambiguous (3 definitions))",
+    "_interface_smatrix (ambiguous (2 definitions))",
+    "_inv_lam (ambiguous (6 definitions))",
+    "_is_traced (ambiguous (3 definitions))",
+    "_key (ambiguous (2 definitions))",
+    "_require_jax_x64 (ambiguous (3 definitions))",
+    "copy (ambiguous (2 definitions))",
+    "f (ambiguous (3 definitions))"
+   ]
+  },
+  "lumenairy.elements.rcwa.oned:rcwa_efficiency_vs_wavelength": {
+   "exported_as": [
+    "lumenairy.elements.rcwa.oned.rcwa_efficiency_vs_wavelength",
+    "lumenairy.elements.rcwa.rcwa_efficiency_vs_wavelength",
+    "lumenairy.elements.rcwa_efficiency_vs_wavelength",
+    "lumenairy.rcwa_efficiency_vs_wavelength"
+   ],
+   "chain": [
+    "lumenairy.elements.rcwa.oned:rcwa_efficiency_vs_wavelength",
+    "lumenairy.elements.rcwa._blas:_with_blas_limit",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_concrete (ambiguous (3 definitions))",
+    "_interface_smatrix (ambiguous (2 definitions))",
+    "_inv_lam (ambiguous (6 definitions))",
+    "_is_traced (ambiguous (3 definitions))",
+    "_require_jax_x64 (ambiguous (3 definitions))",
+    "formulation (ambiguous (2 definitions))",
+    "period_y (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))"
+   ]
+  },
+  "lumenairy.elements.rcwa.oned:rcwa_jones_1d": {
+   "exported_as": [
+    "lumenairy.elements.rcwa.oned.rcwa_jones_1d",
+    "lumenairy.elements.rcwa.rcwa_jones_1d",
+    "lumenairy.elements.rcwa_jones_1d",
+    "lumenairy.rcwa_jones_1d"
+   ],
+   "chain": [
+    "lumenairy.elements.rcwa.oned:rcwa_jones_1d",
+    "lumenairy.elements.rcwa._blas:_with_blas_limit",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_concrete (ambiguous (3 definitions))",
+    "_interface_smatrix (ambiguous (2 definitions))",
+    "_is_traced (ambiguous (3 definitions))",
+    "_require_jax_x64 (ambiguous (3 definitions))",
+    "copy (ambiguous (2 definitions))",
+    "f (ambiguous (3 definitions))",
+    "formulation (ambiguous (2 definitions))",
+    "is_cupy_array (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.elements.rcwa.oned:rcwa_jones_1d_segments": {
+   "exported_as": [
+    "lumenairy.elements.rcwa.oned.rcwa_jones_1d_segments",
+    "lumenairy.elements.rcwa.rcwa_jones_1d_segments",
+    "lumenairy.elements.rcwa_jones_1d_segments",
+    "lumenairy.rcwa_jones_1d_segments"
+   ],
+   "chain": [
+    "lumenairy.elements.rcwa.oned:rcwa_jones_1d_segments",
+    "lumenairy.elements.rcwa._blas:_with_blas_limit",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_concrete (ambiguous (3 definitions))",
+    "_interface_smatrix (ambiguous (2 definitions))",
+    "_is_traced (ambiguous (3 definitions))",
+    "_require_jax_x64 (ambiguous (3 definitions))",
+    "f (ambiguous (3 definitions))",
+    "formulation (ambiguous (2 definitions))",
+    "is_cupy_array (ambiguous (2 definitions))",
+    "jones_transmission (ambiguous (4 definitions))"
+   ]
+  },
+  "lumenairy.elements.rcwa.oned:rcwa_jones_vs_wavelength": {
+   "exported_as": [
+    "lumenairy.elements.rcwa.oned.rcwa_jones_vs_wavelength",
+    "lumenairy.elements.rcwa.rcwa_jones_vs_wavelength",
+    "lumenairy.elements.rcwa_jones_vs_wavelength",
+    "lumenairy.rcwa_jones_vs_wavelength"
+   ],
+   "chain": [
+    "lumenairy.elements.rcwa.oned:rcwa_jones_vs_wavelength",
+    "lumenairy.elements.rcwa.oned:rcwa_jones_1d",
+    "lumenairy.elements.rcwa._blas:_with_blas_limit",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 4,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_concrete (ambiguous (3 definitions))",
+    "_f (ambiguous (2 definitions))",
+    "_interface_smatrix (ambiguous (2 definitions))",
+    "_is_traced (ambiguous (3 definitions))",
+    "_require_jax_x64 (ambiguous (3 definitions))",
+    "copy (ambiguous (2 definitions))",
+    "f (ambiguous (3 definitions))",
+    "formulation (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.elements.rcwa.oned:rcwa_jones_vs_wavelength_segments": {
+   "exported_as": [
+    "lumenairy.elements.rcwa.oned.rcwa_jones_vs_wavelength_segments",
+    "lumenairy.elements.rcwa.rcwa_jones_vs_wavelength_segments",
+    "lumenairy.elements.rcwa_jones_vs_wavelength_segments",
+    "lumenairy.rcwa_jones_vs_wavelength_segments"
+   ],
+   "chain": [
+    "lumenairy.elements.rcwa.oned:rcwa_jones_vs_wavelength_segments",
+    "lumenairy.elements.rcwa.oned:rcwa_jones_1d_segments",
+    "lumenairy.elements.rcwa._blas:_with_blas_limit",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 4,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_concrete (ambiguous (3 definitions))",
+    "_f (ambiguous (2 definitions))",
+    "_interface_smatrix (ambiguous (2 definitions))",
+    "_is_traced (ambiguous (3 definitions))",
+    "_require_jax_x64 (ambiguous (3 definitions))",
+    "f (ambiguous (3 definitions))",
+    "formulation (ambiguous (2 definitions))",
+    "is_cupy_array (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.elements.rcwa.twod:prepare_rcwa_2d": {
+   "exported_as": [
+    "lumenairy.elements.rcwa.prepare_rcwa_2d",
+    "lumenairy.elements.rcwa.twod.prepare_rcwa_2d",
+    "lumenairy.prepare_rcwa_2d"
+   ],
+   "chain": [
+    "lumenairy.elements.rcwa.twod:prepare_rcwa_2d",
+    "lumenairy.elements.rcwa._blas:_with_blas_limit",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_key (ambiguous (2 definitions))",
+    "_prop (ambiguous (5 definitions))",
+    "f (ambiguous (3 definitions))",
+    "formulation (ambiguous (2 definitions))",
+    "get (ambiguous (3 definitions))",
+    "is_cupy_array (ambiguous (2 definitions))",
+    "period_x (ambiguous (2 definitions))",
+    "period_y (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.elements.rcwa.twod:rcwa_efficiency_2d": {
+   "exported_as": [
+    "lumenairy.elements.rcwa.rcwa_efficiency_2d",
+    "lumenairy.elements.rcwa.twod.rcwa_efficiency_2d",
+    "lumenairy.elements.rcwa_efficiency_2d",
+    "lumenairy.rcwa_efficiency_2d"
+   ],
+   "chain": [
+    "lumenairy.elements.rcwa.twod:rcwa_efficiency_2d",
+    "lumenairy.elements.rcwa._blas:_with_blas_limit",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_concrete (ambiguous (3 definitions))",
+    "_interface_smatrix (ambiguous (2 definitions))",
+    "_is_traced (ambiguous (3 definitions))",
+    "_key (ambiguous (2 definitions))",
+    "_prop (ambiguous (5 definitions))",
+    "_require_jax_x64 (ambiguous (3 definitions))",
+    "cv (ambiguous (2 definitions))",
+    "f (ambiguous (3 definitions))"
+   ]
+  },
+  "lumenairy.elements.rcwa.twod:rcwa_efficiency_2d_shapes": {
+   "exported_as": [
+    "lumenairy.elements.rcwa.rcwa_efficiency_2d_shapes",
+    "lumenairy.elements.rcwa.twod.rcwa_efficiency_2d_shapes",
+    "lumenairy.elements.rcwa_efficiency_2d_shapes",
+    "lumenairy.rcwa_efficiency_2d_shapes"
+   ],
+   "chain": [
+    "lumenairy.elements.rcwa.twod:rcwa_efficiency_2d_shapes",
+    "lumenairy.elements.rcwa._blas:_with_blas_limit",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_interface_smatrix (ambiguous (2 definitions))",
+    "_key (ambiguous (2 definitions))",
+    "cb (ambiguous (2 definitions))",
+    "f (ambiguous (3 definitions))",
+    "formulation (ambiguous (2 definitions))",
+    "get (ambiguous (3 definitions))",
+    "is_cupy_array (ambiguous (2 definitions))",
+    "key (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.elements.rcwa.twod:rcwa_efficiency_2d_vs_wavelength": {
+   "exported_as": [
+    "lumenairy.elements.rcwa.rcwa_efficiency_2d_vs_wavelength",
+    "lumenairy.elements.rcwa.twod.rcwa_efficiency_2d_vs_wavelength",
+    "lumenairy.rcwa_efficiency_2d_vs_wavelength"
+   ],
+   "chain": [
+    "lumenairy.elements.rcwa.twod:rcwa_efficiency_2d_vs_wavelength",
+    "lumenairy.elements.rcwa.twod:prepare_rcwa_2d",
+    "lumenairy.elements.rcwa._blas:_with_blas_limit",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 4,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_f (ambiguous (2 definitions))",
+    "_interface_smatrix (ambiguous (2 definitions))",
+    "_key (ambiguous (2 definitions))",
+    "_prop (ambiguous (5 definitions))",
+    "f (ambiguous (3 definitions))",
+    "formulation (ambiguous (2 definitions))",
+    "get (ambiguous (3 definitions))",
+    "is_cupy_array (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.elements.rcwa.twod:rcwa_jones_2d": {
+   "exported_as": [
+    "lumenairy.elements.rcwa.rcwa_jones_2d",
+    "lumenairy.elements.rcwa.twod.rcwa_jones_2d",
+    "lumenairy.elements.rcwa_jones_2d",
+    "lumenairy.rcwa_jones_2d"
+   ],
+   "chain": [
+    "lumenairy.elements.rcwa.twod:rcwa_jones_2d",
+    "lumenairy.elements.rcwa._blas:_with_blas_limit",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_concrete (ambiguous (3 definitions))",
+    "_interface_smatrix (ambiguous (2 definitions))",
+    "_is_traced (ambiguous (3 definitions))",
+    "_key (ambiguous (2 definitions))",
+    "_prop (ambiguous (5 definitions))",
+    "_require_jax_x64 (ambiguous (3 definitions))",
+    "cv (ambiguous (2 definitions))",
+    "formulation (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.io.storage:append_plane": {
+   "exported_as": [
+    "lumenairy.append_plane",
+    "lumenairy.io.append_plane",
+    "lumenairy.io.storage.append_plane"
+   ],
+   "chain": [
+    "lumenairy.io.storage:append_plane",
+    "lumenairy.io.storage:_zarr_append_plane",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 4,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "f (ambiguous (3 definitions))",
+    "get (ambiguous (3 definitions))",
+    "grid (ambiguous (2 definitions))",
+    "release (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.io.storage:append_plane_h5": {
+   "exported_as": [
+    "lumenairy.append_plane_h5",
+    "lumenairy.io.append_plane_h5",
+    "lumenairy.io.storage.append_plane_h5"
+   ],
+   "chain": [
+    "lumenairy.io.storage:append_plane_h5",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "f (ambiguous (3 definitions))",
+    "get (ambiguous (3 definitions))",
+    "grid (ambiguous (2 definitions))",
+    "release (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.io.storage:list_planes": {
+   "exported_as": [
+    "lumenairy.io.list_planes",
+    "lumenairy.io.list_planes_store",
+    "lumenairy.io.storage.list_planes",
+    "lumenairy.io.storage.list_planes_store",
+    "lumenairy.list_planes",
+    "lumenairy.list_planes_store"
+   ],
+   "chain": [
+    "lumenairy.io.storage:list_planes",
+    "lumenairy.io.storage:_zarr_list_planes",
+    "lumenairy.io.storage:store",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 5,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "cb (ambiguous (2 definitions))",
+    "copy (ambiguous (2 definitions))",
+    "data (ambiguous (3 definitions))",
+    "f (ambiguous (3 definitions))",
+    "get (ambiguous (3 definitions))",
+    "grid (ambiguous (2 definitions))",
+    "key (ambiguous (2 definitions))",
+    "keys (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.io.storage:load_field_h5": {
+   "exported_as": [
+    "lumenairy.io.load_field_h5",
+    "lumenairy.io.storage.load_field_h5",
+    "lumenairy.load_field_h5"
+   ],
+   "chain": [
+    "lumenairy.io.storage:load_field_h5",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "f (ambiguous (3 definitions))",
+    "keys (ambiguous (2 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.io.storage:load_plane_by_label": {
+   "exported_as": [
+    "lumenairy.io.load_plane_by_label",
+    "lumenairy.io.load_plane_by_label_store",
+    "lumenairy.io.storage.load_plane_by_label",
+    "lumenairy.io.storage.load_plane_by_label_store",
+    "lumenairy.load_plane_by_label",
+    "lumenairy.load_plane_by_label_store"
+   ],
+   "chain": [
+    "lumenairy.io.storage:load_plane_by_label",
+    "lumenairy.io.storage:_zarr_load_plane_by_label",
+    "lumenairy.io.storage:store",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 5,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "cb (ambiguous (2 definitions))",
+    "copy (ambiguous (2 definitions))",
+    "data (ambiguous (3 definitions))",
+    "f (ambiguous (3 definitions))",
+    "get (ambiguous (3 definitions))",
+    "grid (ambiguous (2 definitions))",
+    "key (ambiguous (2 definitions))",
+    "keys (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.io.storage:load_plane_slice": {
+   "exported_as": [
+    "lumenairy.io.load_plane_slice",
+    "lumenairy.io.load_plane_slice_store",
+    "lumenairy.io.storage.load_plane_slice",
+    "lumenairy.io.storage.load_plane_slice_store",
+    "lumenairy.load_plane_slice",
+    "lumenairy.load_plane_slice_store"
+   ],
+   "chain": [
+    "lumenairy.io.storage:load_plane_slice",
+    "lumenairy.io.storage:_zarr_load_plane_slice",
+    "lumenairy.io.storage:store",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 5,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "copy (ambiguous (2 definitions))",
+    "data (ambiguous (3 definitions))",
+    "f (ambiguous (3 definitions))",
+    "get (ambiguous (3 definitions))",
+    "grid (ambiguous (2 definitions))",
+    "key (ambiguous (2 definitions))",
+    "keys (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))"
+   ]
+  },
+  "lumenairy.io.storage:load_planes": {
+   "exported_as": [
+    "lumenairy.io.load_planes",
+    "lumenairy.io.storage.load_planes",
+    "lumenairy.load_planes"
+   ],
+   "chain": [
+    "lumenairy.io.storage:load_planes",
+    "lumenairy.io.storage:_zarr_load_planes",
+    "lumenairy.io.storage:store",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 5,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "cb (ambiguous (2 definitions))",
+    "copy (ambiguous (2 definitions))",
+    "data (ambiguous (3 definitions))",
+    "f (ambiguous (3 definitions))",
+    "get (ambiguous (3 definitions))",
+    "grid (ambiguous (2 definitions))",
+    "key (ambiguous (2 definitions))",
+    "keys (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.io.storage:read_sim_metadata": {
+   "exported_as": [
+    "lumenairy.io.read_metadata",
+    "lumenairy.io.read_sim_metadata",
+    "lumenairy.io.storage.read_metadata",
+    "lumenairy.io.storage.read_sim_metadata",
+    "lumenairy.read_metadata",
+    "lumenairy.read_sim_metadata"
+   ],
+   "chain": [
+    "lumenairy.io.storage:read_sim_metadata",
+    "lumenairy.io.storage:_zarr_read_sim_metadata",
+    "lumenairy.io.storage:store",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 5,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "data (ambiguous (3 definitions))",
+    "f (ambiguous (3 definitions))",
+    "get (ambiguous (3 definitions))",
+    "grid (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.io.storage:replay_run": {
+   "exported_as": [
+    "lumenairy.io.replay_run",
+    "lumenairy.io.storage.replay_run",
+    "lumenairy.replay_run"
+   ],
+   "chain": [
+    "lumenairy.io.storage:replay_run",
+    "lumenairy.io.storage:list_planes",
+    "lumenairy.io.storage:_zarr_list_planes",
+    "lumenairy.io.storage:store",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 6,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "cb (ambiguous (2 definitions))",
+    "copy (ambiguous (2 definitions))",
+    "data (ambiguous (3 definitions))",
+    "f (ambiguous (3 definitions))",
+    "get (ambiguous (3 definitions))",
+    "grid (ambiguous (2 definitions))",
+    "key (ambiguous (2 definitions))",
+    "keys (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.io.storage:save_field_h5": {
+   "exported_as": [
+    "lumenairy.io.save_field_h5",
+    "lumenairy.io.storage.save_field_h5",
+    "lumenairy.save_field_h5"
+   ],
+   "chain": [
+    "lumenairy.io.storage:save_field_h5",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "f (ambiguous (3 definitions))",
+    "grid (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.io.storage:save_planes_h5": {
+   "exported_as": [
+    "lumenairy.io.save_planes_h5",
+    "lumenairy.io.storage.save_planes_h5",
+    "lumenairy.save_planes_h5"
+   ],
+   "chain": [
+    "lumenairy.io.storage:save_planes_h5",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "f (ambiguous (3 definitions))",
+    "key (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.io.storage:write_sim_metadata": {
+   "exported_as": [
+    "lumenairy.io.storage.write_metadata",
+    "lumenairy.io.storage.write_sim_metadata",
+    "lumenairy.io.write_metadata",
+    "lumenairy.io.write_sim_metadata",
+    "lumenairy.write_metadata",
+    "lumenairy.write_sim_metadata"
+   ],
+   "chain": [
+    "lumenairy.io.storage:write_sim_metadata",
+    "lumenairy.io.storage:_zarr_write_sim_metadata",
+    "lumenairy.io.storage:store",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 5,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "copy (ambiguous (2 definitions))",
+    "data (ambiguous (3 definitions))",
+    "f (ambiguous (3 definitions))",
+    "grid (ambiguous (2 definitions))",
+    "key (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.optimize.driver:design_optimize": {
+   "exported_as": [
+    "lumenairy.design_optimize",
+    "lumenairy.optimize.core.design_optimize",
+    "lumenairy.optimize.design_optimize",
+    "lumenairy.optimize.driver.design_optimize"
+   ],
+   "chain": [
+    "lumenairy.optimize.driver:design_optimize",
+    "lumenairy.optimize.jax_merits:gradient_at_x",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_is_cupy_array (ambiguous (4 definitions))",
+    "build (ambiguous (3 definitions))",
+    "cb (ambiguous (2 definitions))",
+    "clear (ambiguous (3 definitions))",
+    "copy (ambiguous (2 definitions))",
+    "f (ambiguous (3 definitions))",
+    "get (ambiguous (3 definitions))",
+    "grid (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.optimize.driver:register_wave_propagator": {
+   "exported_as": [
+    "lumenairy.optimize.core.register_wave_propagator",
+    "lumenairy.optimize.driver.register_wave_propagator",
+    "lumenairy.optimize.register_wave_propagator",
+    "lumenairy.register_wave_propagator"
+   ],
+   "chain": [
+    "lumenairy.optimize.driver:register_wave_propagator",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 2,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": []
+  },
+  "lumenairy.optimize.jax_merits:make_lg_aberration_merit_jax": {
+   "exported_as": [
+    "lumenairy.make_lg_aberration_merit_jax",
+    "lumenairy.optimize.core.make_lg_aberration_merit_jax",
+    "lumenairy.optimize.jax_merits.make_lg_aberration_merit_jax",
+    "lumenairy.optimize.make_lg_aberration_merit_jax"
+   ],
+   "chain": [
+    "lumenairy.optimize.jax_merits:make_lg_aberration_merit_jax",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 1,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": []
+  },
+  "lumenairy.optimize.jax_merits:optimize_traced_geometry": {
+   "exported_as": [
+    "lumenairy.optimize.core.optimize_traced_geometry",
+    "lumenairy.optimize.jax_merits.optimize_traced_geometry",
+    "lumenairy.optimize.optimize_traced_geometry",
+    "lumenairy.optimize_traced_geometry"
+   ],
+   "chain": [
+    "lumenairy.optimize.jax_merits:optimize_traced_geometry",
+    "lumenairy.elements._lens_jax:apply_real_lens_traced_jax"
+   ],
+   "hops": 1,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": []
+  },
+  "lumenairy.optimize.multiconfig:multi_config_merit": {
+   "exported_as": [
+    "lumenairy.multi_config_merit",
+    "lumenairy.optimize.multi_config_merit",
+    "lumenairy.optimize.multiconfig.multi_config_merit"
+   ],
+   "chain": [
+    "lumenairy.optimize.multiconfig:multi_config_merit",
+    "lumenairy.optimize.driver:merit_fn",
+    "lumenairy.optimize.driver:evaluate",
+    "lumenairy.analysis.through_focus:diffraction_limited_peak",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 6,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_is_cupy_array (ambiguous (4 definitions))",
+    "_prop (ambiguous (5 definitions))",
+    "build (ambiguous (3 definitions))",
+    "cb (ambiguous (2 definitions))",
+    "copy (ambiguous (2 definitions))",
+    "f (ambiguous (3 definitions))",
+    "get (ambiguous (3 definitions))",
+    "get_refractive_index (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.propagators.asm:angular_spectrum_propagate": {
+   "exported_as": [
+    "lumenairy.analysis.coherence.angular_spectrum_propagate",
+    "lumenairy.analysis.through_focus.angular_spectrum_propagate",
+    "lumenairy.angular_spectrum_propagate",
+    "lumenairy.elements._lens_real.angular_spectrum_propagate",
+    "lumenairy.elements.polarization.angular_spectrum_propagate",
+    "lumenairy.propagators.asm.angular_spectrum_propagate",
+    "lumenairy.propagators.propagation.angular_spectrum_propagate",
+    "lumenairy.propagators.system.angular_spectrum_propagate"
+   ],
+   "chain": [
+    "lumenairy.propagators.asm:angular_spectrum_propagate",
+    "lumenairy._validation:_check_2d_scalar_field",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 4,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_f (ambiguous (2 definitions))",
+    "_is_cupy_array (ambiguous (4 definitions))",
+    "_prop (ambiguous (5 definitions))",
+    "copy (ambiguous (2 definitions))",
+    "evaluate (ambiguous (31 definitions))",
+    "flags (ambiguous (3 definitions))",
+    "get (ambiguous (3 definitions))",
+    "grid (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.propagators.asm:angular_spectrum_propagate_tilted": {
+   "exported_as": [
+    "lumenairy.angular_spectrum_propagate_tilted",
+    "lumenairy.elements.polarization.angular_spectrum_propagate_tilted",
+    "lumenairy.propagators.asm.angular_spectrum_propagate_tilted",
+    "lumenairy.propagators.propagation.angular_spectrum_propagate_tilted",
+    "lumenairy.propagators.system.angular_spectrum_propagate_tilted"
+   ],
+   "chain": [
+    "lumenairy.propagators.asm:angular_spectrum_propagate_tilted",
+    "lumenairy._validation:_check_2d_scalar_field",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 4,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_f (ambiguous (2 definitions))",
+    "_is_cupy_array (ambiguous (4 definitions))",
+    "_prop (ambiguous (5 definitions))",
+    "copy (ambiguous (2 definitions))",
+    "evaluate (ambiguous (31 definitions))",
+    "flags (ambiguous (3 definitions))",
+    "get (ambiguous (3 definitions))",
+    "grid (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.propagators.asm:apply_fresnel_curvature": {
+   "exported_as": [
+    "lumenairy.apply_fresnel_curvature",
+    "lumenairy.propagators.asm.apply_fresnel_curvature",
+    "lumenairy.propagators.propagation.apply_fresnel_curvature"
+   ],
+   "chain": [
+    "lumenairy.propagators.asm:apply_fresnel_curvature",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "copy (ambiguous (2 definitions))",
+    "grid (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.propagators.asymptotic:propagate_modal_asymptotic": {
+   "exported_as": [
+    "lumenairy.propagate_modal_asymptotic",
+    "lumenairy.propagators.asymptotic.propagate_modal_asymptotic"
+   ],
+   "chain": [
+    "lumenairy.propagators.asymptotic:propagate_modal_asymptotic",
+    "lumenairy.propagators.asymptotic_maslov:_batched_polynomial_substitute_linear_2d",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_conv (ambiguous (2 definitions))",
+    "f (ambiguous (3 definitions))",
+    "get (ambiguous (3 definitions))",
+    "keys (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.propagators.asymptotic_aberration_tensor:aberration_tensor": {
+   "exported_as": [
+    "lumenairy.aberration_tensor",
+    "lumenairy.propagators.asymptotic.aberration_tensor",
+    "lumenairy.propagators.asymptotic_aberration_tensor.aberration_tensor"
+   ],
+   "chain": [
+    "lumenairy.propagators.asymptotic_aberration_tensor:aberration_tensor",
+    "lumenairy.propagators.asymptotic_aberration_tensor:_measure_image_plane_waist",
+    "lumenairy.propagators.asymptotic_aberration_tensor:_callable_identity",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 4,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_conv (ambiguous (2 definitions))",
+    "_key (ambiguous (2 definitions))",
+    "f (ambiguous (3 definitions))",
+    "get (ambiguous (3 definitions))",
+    "grid (ambiguous (2 definitions))",
+    "in_box (ambiguous (2 definitions))",
+    "key (ambiguous (2 definitions))",
+    "keys (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.propagators.carrier:carrier_referenced_aperture": {
+   "exported_as": [
+    "lumenairy.carrier_referenced_aperture",
+    "lumenairy.propagators.carrier.carrier_referenced_aperture",
+    "lumenairy.propagators.carrier_referenced_aperture",
+    "lumenairy.propagators.propagation.carrier_referenced_aperture"
+   ],
+   "chain": [
+    "lumenairy.propagators.carrier:carrier_referenced_aperture",
+    "lumenairy.propagators.carrier:_parse_carrier",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "grid (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))"
+   ]
+  },
+  "lumenairy.propagators.carrier:carrier_referenced_envelope": {
+   "exported_as": [
+    "lumenairy.carrier_referenced_envelope",
+    "lumenairy.propagators.carrier.carrier_referenced_envelope",
+    "lumenairy.propagators.carrier_referenced_envelope",
+    "lumenairy.propagators.propagation.carrier_referenced_envelope"
+   ],
+   "chain": [
+    "lumenairy.propagators.carrier:carrier_referenced_envelope",
+    "lumenairy.propagators.carrier:_build_carrier_phase",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "copy (ambiguous (2 definitions))",
+    "grid (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.propagators.carrier:carrier_referenced_exact_focus_readout": {
+   "exported_as": [
+    "lumenairy.carrier_referenced_exact_focus_readout",
+    "lumenairy.propagators.carrier.carrier_referenced_exact_focus_readout",
+    "lumenairy.propagators.carrier_referenced_exact_focus_readout",
+    "lumenairy.propagators.propagation.carrier_referenced_exact_focus_readout"
+   ],
+   "chain": [
+    "lumenairy.propagators.carrier:carrier_referenced_exact_focus_readout",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_ensure_cupy_loaded (ambiguous (5 definitions))",
+    "_is_cupy_array (ambiguous (4 definitions))",
+    "format_bytes (ambiguous (2 definitions))",
+    "get (ambiguous (3 definitions))",
+    "grid (ambiguous (2 definitions))",
+    "ix (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.propagators.carrier:carrier_referenced_fit_radius": {
+   "exported_as": [
+    "lumenairy.carrier_referenced_fit_radius",
+    "lumenairy.propagators.carrier.carrier_referenced_fit_radius",
+    "lumenairy.propagators.carrier_referenced_fit_radius",
+    "lumenairy.propagators.propagation.carrier_referenced_fit_radius"
+   ],
+   "chain": [
+    "lumenairy.propagators.carrier:carrier_referenced_fit_radius",
+    "lumenairy.propagators.carrier:_carrier_fit_alias_fraction",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 4,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_proj (ambiguous (5 definitions))",
+    "grid (ambiguous (2 definitions))",
+    "ix (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.propagators.carrier:carrier_referenced_focus_readout": {
+   "exported_as": [
+    "lumenairy.carrier_referenced_focus_readout",
+    "lumenairy.propagators.carrier.carrier_referenced_focus_readout",
+    "lumenairy.propagators.carrier_referenced_focus_readout",
+    "lumenairy.propagators.propagation.carrier_referenced_focus_readout"
+   ],
+   "chain": [
+    "lumenairy.propagators.carrier:carrier_referenced_focus_readout",
+    "lumenairy.propagators.carrier:_check_focus_containment",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_ensure_cupy_loaded (ambiguous (5 definitions))",
+    "_is_cupy_array (ambiguous (4 definitions))",
+    "copy (ambiguous (2 definitions))",
+    "f (ambiguous (3 definitions))",
+    "get (ambiguous (3 definitions))",
+    "grid (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))"
+   ]
+  },
+  "lumenairy.propagators.carrier:carrier_referenced_reconstruct": {
+   "exported_as": [
+    "lumenairy.carrier_referenced_reconstruct",
+    "lumenairy.propagators.carrier.carrier_referenced_reconstruct",
+    "lumenairy.propagators.carrier_referenced_reconstruct",
+    "lumenairy.propagators.propagation.carrier_referenced_reconstruct"
+   ],
+   "chain": [
+    "lumenairy.propagators.carrier:carrier_referenced_reconstruct",
+    "lumenairy.propagators.carrier:_build_carrier_phase",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "copy (ambiguous (2 definitions))",
+    "grid (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.propagators.carrier:propagate_carrier_referenced": {
+   "exported_as": [
+    "lumenairy.propagate_carrier_referenced",
+    "lumenairy.propagators.carrier.propagate_carrier_referenced",
+    "lumenairy.propagators.propagate_carrier_referenced",
+    "lumenairy.propagators.propagation.propagate_carrier_referenced"
+   ],
+   "chain": [
+    "lumenairy.propagators.carrier:propagate_carrier_referenced",
+    "lumenairy.propagators.carrier:_check_gap_kernel",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "copy (ambiguous (2 definitions))",
+    "get (ambiguous (3 definitions))",
+    "grid (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))"
+   ]
+  },
+  "lumenairy.propagators.carrier:propagate_traced_carrier_chain": {
+   "exported_as": [
+    "lumenairy.propagate_traced_carrier_chain",
+    "lumenairy.propagators.carrier.propagate_traced_carrier_chain",
+    "lumenairy.propagators.propagate_traced_carrier_chain",
+    "lumenairy.propagators.propagation.propagate_traced_carrier_chain"
+   ],
+   "chain": [
+    "lumenairy.propagators.carrier:propagate_traced_carrier_chain",
+    "lumenairy.propagators.carrier:_group_chief_transfer"
+   ],
+   "hops": 1,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": []
+  },
+  "lumenairy.propagators.carrier:propagate_traced_carrier_chain_multi": {
+   "exported_as": [
+    "lumenairy.propagate_traced_carrier_chain_multi",
+    "lumenairy.propagators.carrier.propagate_traced_carrier_chain_multi",
+    "lumenairy.propagators.propagate_traced_carrier_chain_multi",
+    "lumenairy.propagators.propagation.propagate_traced_carrier_chain_multi"
+   ],
+   "chain": [
+    "lumenairy.propagators.carrier:propagate_traced_carrier_chain_multi",
+    "lumenairy.propagators.carrier:_chain_chief_ray_at_target",
+    "lumenairy.propagators.carrier:_group_chief_transfer"
+   ],
+   "hops": 2,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "get (ambiguous (3 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.propagators.carrier_field:aggregate": {
+   "exported_as": [
+    "lumenairy.aggregate",
+    "lumenairy.propagators.aggregate",
+    "lumenairy.propagators.carrier_field.aggregate"
+   ],
+   "chain": [
+    "lumenairy.propagators.carrier_field:aggregate",
+    "lumenairy.propagators.carrier_field:re_reference",
+    "lumenairy.propagators.carrier:_check_guard_action",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 4,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_ensure_cupy_loaded (ambiguous (5 definitions))",
+    "_is_cupy_array (ambiguous (4 definitions))",
+    "_prop (ambiguous (5 definitions))",
+    "_rows (ambiguous (2 definitions))",
+    "cb (ambiguous (2 definitions))",
+    "f (ambiguous (3 definitions))",
+    "get (ambiguous (3 definitions))",
+    "grid (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.propagators.carrier_field:carrier_difference_nyquist": {
+   "exported_as": [
+    "lumenairy.carrier_difference_nyquist",
+    "lumenairy.propagators.carrier_difference_nyquist",
+    "lumenairy.propagators.carrier_field.carrier_difference_nyquist"
+   ],
+   "chain": [
+    "lumenairy.propagators.carrier_field:carrier_difference_nyquist",
+    "lumenairy.propagators.carrier_field:_max_over_disc",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "grid (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.propagators.carrier_field:load_carrier_field_zarr": {
+   "exported_as": [
+    "lumenairy.load_carrier_field_zarr",
+    "lumenairy.propagators.carrier_field.load_carrier_field_zarr",
+    "lumenairy.propagators.load_carrier_field_zarr"
+   ],
+   "chain": [
+    "lumenairy.propagators.carrier_field:load_carrier_field_zarr",
+    "lumenairy.io.storage:store",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 4,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "f (ambiguous (3 definitions))",
+    "get (ambiguous (3 definitions))",
+    "grid (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.propagators.carrier_field:re_reference": {
+   "exported_as": [
+    "lumenairy.propagators.carrier_field.re_reference",
+    "lumenairy.propagators.re_reference",
+    "lumenairy.re_reference"
+   ],
+   "chain": [
+    "lumenairy.propagators.carrier_field:re_reference",
+    "lumenairy.propagators.carrier:_check_guard_action",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_ensure_cupy_loaded (ambiguous (5 definitions))",
+    "_is_cupy_array (ambiguous (4 definitions))",
+    "cb (ambiguous (2 definitions))",
+    "get (ambiguous (3 definitions))",
+    "grid (ambiguous (2 definitions))",
+    "report (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))"
+   ]
+  },
+  "lumenairy.propagators.carrier_field:save_carrier_field_zarr": {
+   "exported_as": [
+    "lumenairy.propagators.carrier_field.save_carrier_field_zarr",
+    "lumenairy.propagators.save_carrier_field_zarr",
+    "lumenairy.save_carrier_field_zarr"
+   ],
+   "chain": [
+    "lumenairy.propagators.carrier_field:save_carrier_field_zarr",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "cb (ambiguous (2 definitions))",
+    "f (ambiguous (3 definitions))",
+    "grid (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.propagators.dispatch:asm_propagate": {
+   "exported_as": [
+    "lumenairy.asm_propagate",
+    "lumenairy.propagators.asm_propagate",
+    "lumenairy.propagators.dispatch.asm_propagate"
+   ],
+   "chain": [
+    "lumenairy.propagators.dispatch:asm_propagate",
+    "lumenairy.propagators.dispatch:which_propagator",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_ensure_cupy_loaded (ambiguous (5 definitions))",
+    "_is_cupy_array (ambiguous (4 definitions))",
+    "_prop (ambiguous (5 definitions))",
+    "copy (ambiguous (2 definitions))",
+    "evaluate (ambiguous (31 definitions))",
+    "flags (ambiguous (3 definitions))",
+    "get (ambiguous (3 definitions))",
+    "grid (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.propagators.dispatch:propagate": {
+   "exported_as": [
+    "lumenairy.propagate",
+    "lumenairy.propagators.dispatch.propagate",
+    "lumenairy.propagators.propagate"
+   ],
+   "chain": [
+    "lumenairy.propagators.dispatch:propagate",
+    "lumenairy.propagators.dispatch:_dispatch_to_method",
+    "lumenairy.elements.lenses_maslov:apply_real_lens_maslov"
+   ],
+   "hops": 2,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": "lumenairy.elements.lenses_maslov:apply_real_lens_maslov",
+   "ambiguous_names_refused": [
+    "get (ambiguous (3 definitions))",
+    "shape (ambiguous (4 definitions))"
+   ]
+  },
+  "lumenairy.propagators.dispatch:which_propagator": {
+   "exported_as": [
+    "lumenairy.propagators.dispatch.which_propagator",
+    "lumenairy.propagators.which_propagator",
+    "lumenairy.which_propagator"
+   ],
+   "chain": [
+    "lumenairy.propagators.dispatch:which_propagator",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 2,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "get (ambiguous (3 definitions))",
+    "grid (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))"
+   ]
+  },
+  "lumenairy.propagators.ensemble:propagate_ensemble": {
+   "exported_as": [
+    "lumenairy.propagate_ensemble",
+    "lumenairy.propagators.ensemble.propagate_ensemble",
+    "lumenairy.propagators.propagate_ensemble"
+   ],
+   "chain": [
+    "lumenairy.propagators.ensemble:propagate_ensemble",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 2,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "grid (ambiguous (2 definitions))",
+    "key (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.propagators.fga:apply_real_lens_auto": {
+   "exported_as": [
+    "lumenairy.apply_real_lens_auto",
+    "lumenairy.propagators.apply_real_lens_auto",
+    "lumenairy.propagators.fga.apply_real_lens_auto"
+   ],
+   "chain": [
+    "lumenairy.propagators.fga:apply_real_lens_auto",
+    "lumenairy.propagators.fga:_caustic_zone",
+    "lumenairy.raytrace.differential:ray_transfer_jacobian"
+   ],
+   "hops": 2,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": "lumenairy.raytrace.differential:ray_transfer_jacobian",
+   "ambiguous_names_refused": [
+    "copy (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.propagators.fga:apply_real_lens_fga": {
+   "exported_as": [
+    "lumenairy.apply_real_lens_fga",
+    "lumenairy.propagators.apply_real_lens_fga",
+    "lumenairy.propagators.fga.apply_real_lens_fga"
+   ],
+   "chain": [
+    "lumenairy.propagators.fga:apply_real_lens_fga",
+    "lumenairy.propagators.fga:_fga_through_lens",
+    "lumenairy.raytrace.differential:ray_transfer_jacobian"
+   ],
+   "hops": 2,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": "lumenairy.raytrace.differential:ray_transfer_jacobian",
+   "ambiguous_names_refused": [
+    "copy (ambiguous (2 definitions))",
+    "get (ambiguous (3 definitions))",
+    "shape (ambiguous (4 definitions))"
+   ]
+  },
+  "lumenairy.propagators.fga:apply_real_lens_fga_vector": {
+   "exported_as": [
+    "lumenairy.apply_real_lens_fga_vector",
+    "lumenairy.propagators.apply_real_lens_fga_vector",
+    "lumenairy.propagators.fga.apply_real_lens_fga_vector"
+   ],
+   "chain": [
+    "lumenairy.propagators.fga:apply_real_lens_fga_vector",
+    "lumenairy.propagators.fga:_fga_vector_through_lens",
+    "lumenairy.raytrace.differential:ray_transfer_jacobian"
+   ],
+   "hops": 2,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": "lumenairy.raytrace.differential:ray_transfer_jacobian",
+   "ambiguous_names_refused": [
+    "copy (ambiguous (2 definitions))",
+    "get (ambiguous (3 definitions))",
+    "shape (ambiguous (4 definitions))"
+   ]
+  },
+  "lumenairy.propagators.fga:apply_real_lens_universal": {
+   "exported_as": [
+    "lumenairy.apply_real_lens_universal",
+    "lumenairy.propagators.apply_real_lens_universal",
+    "lumenairy.propagators.fga.apply_real_lens_universal"
+   ],
+   "chain": [
+    "lumenairy.propagators.fga:apply_real_lens_universal",
+    "lumenairy.elements._lens_traced:apply_real_lens_traced"
+   ],
+   "hops": 1,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": "lumenairy.elements._lens_traced:apply_real_lens_traced",
+   "ambiguous_names_refused": [
+    "apply_real_lens (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.propagators.fga:fga_memory_estimate": {
+   "exported_as": [
+    "lumenairy.fga_memory_estimate",
+    "lumenairy.propagators.fga.fga_memory_estimate",
+    "lumenairy.propagators.fga_memory_estimate"
+   ],
+   "chain": [
+    "lumenairy.propagators.fga:fga_memory_estimate",
+    "lumenairy.propagators.fga:_resolve_nq_chunk",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "get (ambiguous (3 definitions))",
+    "grid (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))"
+   ]
+  },
+  "lumenairy.propagators.fresnel:fraunhofer_propagate": {
+   "exported_as": [
+    "lumenairy.elements.polarization.fraunhofer_propagate",
+    "lumenairy.fraunhofer_propagate",
+    "lumenairy.propagators.fresnel.fraunhofer_propagate",
+    "lumenairy.propagators.propagation.fraunhofer_propagate"
+   ],
+   "chain": [
+    "lumenairy.propagators.fresnel:fraunhofer_propagate",
+    "lumenairy._validation:_check_2d_scalar_field",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 4,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_f (ambiguous (2 definitions))",
+    "_prop (ambiguous (5 definitions))",
+    "copy (ambiguous (2 definitions))",
+    "grid (ambiguous (2 definitions))",
+    "is_cupy_array (ambiguous (2 definitions))",
+    "key (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.propagators.fresnel:fresnel_propagate": {
+   "exported_as": [
+    "lumenairy.elements.polarization.fresnel_propagate",
+    "lumenairy.fresnel_propagate",
+    "lumenairy.propagators.fresnel.fresnel_propagate",
+    "lumenairy.propagators.propagation.fresnel_propagate"
+   ],
+   "chain": [
+    "lumenairy.propagators.fresnel:fresnel_propagate",
+    "lumenairy._validation:_check_2d_scalar_field",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 4,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_f (ambiguous (2 definitions))",
+    "_prop (ambiguous (5 definitions))",
+    "copy (ambiguous (2 definitions))",
+    "grid (ambiguous (2 definitions))",
+    "is_cupy_array (ambiguous (2 definitions))",
+    "key (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.propagators.fresnel:fresnel_tf_propagate": {
+   "exported_as": [
+    "lumenairy.fresnel_tf_propagate",
+    "lumenairy.propagators.carrier.fresnel_tf_propagate",
+    "lumenairy.propagators.fresnel.fresnel_tf_propagate",
+    "lumenairy.propagators.propagation.fresnel_tf_propagate"
+   ],
+   "chain": [
+    "lumenairy.propagators.fresnel:fresnel_tf_propagate",
+    "lumenairy._validation:_check_2d_scalar_field",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 4,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_f (ambiguous (2 definitions))",
+    "_prop (ambiguous (5 definitions))",
+    "copy (ambiguous (2 definitions))",
+    "grid (ambiguous (2 definitions))",
+    "is_cupy_array (ambiguous (2 definitions))",
+    "key (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.propagators.gbd:apply_aperture_to_beamlets": {
+   "exported_as": [
+    "lumenairy.apply_aperture_to_beamlets",
+    "lumenairy.propagators.apply_aperture_to_beamlets",
+    "lumenairy.propagators.gbd.apply_aperture_to_beamlets"
+   ],
+   "chain": [
+    "lumenairy.propagators.gbd:apply_aperture_to_beamlets",
+    "lumenairy.propagators.gbd:_erf_xp",
+    "lumenairy.backend.scipy:erf",
+    "lumenairy.backend.scipy:_dispatch_special",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 5,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_f (ambiguous (2 definitions))",
+    "is_cupy_array (ambiguous (2 definitions))",
+    "prop (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))"
+   ]
+  },
+  "lumenairy.propagators.gbd:apply_prescription_persurface_to_beamlets": {
+   "exported_as": [
+    "lumenairy.apply_prescription_persurface_to_beamlets",
+    "lumenairy.elements.lenses_gbd.apply_prescription_persurface_to_beamlets",
+    "lumenairy.propagators.gbd.apply_prescription_persurface_to_beamlets"
+   ],
+   "chain": [
+    "lumenairy.propagators.gbd:apply_prescription_persurface_to_beamlets",
+    "lumenairy.propagators.gbd:_reframe_beamlets_to_world_plane"
+   ],
+   "hops": 1,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": []
+  },
+  "lumenairy.propagators.gbd:asm_field_to_gbd": {
+   "exported_as": [
+    "lumenairy.asm_field_to_gbd",
+    "lumenairy.propagators.asm_field_to_gbd",
+    "lumenairy.propagators.gbd.asm_field_to_gbd"
+   ],
+   "chain": [
+    "lumenairy.propagators.gbd:asm_field_to_gbd",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.propagators.gbd:converge_gbd_sampling": {
+   "exported_as": [
+    "lumenairy.converge_gbd_sampling",
+    "lumenairy.propagators.converge_gbd_sampling",
+    "lumenairy.propagators.gbd.converge_gbd_sampling"
+   ],
+   "chain": [
+    "lumenairy.propagators.gbd:converge_gbd_sampling",
+    "lumenairy._validation:_check_2d_scalar_field",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 4,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_is_cupy_array (ambiguous (4 definitions))",
+    "_prop (ambiguous (5 definitions))",
+    "copy (ambiguous (2 definitions))",
+    "get (ambiguous (3 definitions))",
+    "grid (ambiguous (2 definitions))",
+    "is_cupy_array (ambiguous (2 definitions))",
+    "ix (ambiguous (2 definitions))",
+    "key (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.propagators.gbd:decompose_field_adaptive": {
+   "exported_as": [
+    "lumenairy.decompose_field_adaptive",
+    "lumenairy.propagators.decompose_field_adaptive",
+    "lumenairy.propagators.gbd.decompose_field_adaptive"
+   ],
+   "chain": [
+    "lumenairy.propagators.gbd:decompose_field_adaptive",
+    "lumenairy._validation:_check_2d_scalar_field",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 4,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "grid (ambiguous (2 definitions))",
+    "ix (ambiguous (2 definitions))",
+    "key (ambiguous (2 definitions))",
+    "keys (ambiguous (2 definitions))",
+    "power (ambiguous (2 definitions))",
+    "sample (ambiguous (4 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.propagators.gbd:gbd_field_to_asm": {
+   "exported_as": [
+    "lumenairy.gbd_field_to_asm",
+    "lumenairy.propagators.gbd.gbd_field_to_asm",
+    "lumenairy.propagators.gbd_field_to_asm"
+   ],
+   "chain": [
+    "lumenairy.propagators.gbd:gbd_field_to_asm",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.propagators.gbd:match_global_phase": {
+   "exported_as": [
+    "lumenairy.match_global_phase",
+    "lumenairy.propagators.gbd.match_global_phase",
+    "lumenairy.propagators.match_global_phase"
+   ],
+   "chain": [
+    "lumenairy.propagators.gbd:match_global_phase",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.propagators.gbd:propagate_gbd": {
+   "exported_as": [
+    "lumenairy.propagate_gbd",
+    "lumenairy.propagators.gbd.propagate_gbd",
+    "lumenairy.propagators.propagate_gbd"
+   ],
+   "chain": [
+    "lumenairy.propagators.gbd:propagate_gbd",
+    "lumenairy.propagators.gbd:propagate_gbd_freespace",
+    "lumenairy.propagators.gbd:_warn_if_tilted_no_dirsample",
+    "lumenairy.propagators.gbd:_mean_input_tilt",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 6,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_f (ambiguous (2 definitions))",
+    "get (ambiguous (3 definitions))",
+    "grid (ambiguous (2 definitions))",
+    "ix (ambiguous (2 definitions))",
+    "key (ambiguous (2 definitions))",
+    "keys (ambiguous (2 definitions))",
+    "power (ambiguous (2 definitions))",
+    "sample (ambiguous (4 definitions))"
+   ]
+  },
+  "lumenairy.propagators.gbd:propagate_gbd_freespace": {
+   "exported_as": [
+    "lumenairy.propagate_gbd_freespace",
+    "lumenairy.propagators.gbd.propagate_gbd_freespace",
+    "lumenairy.propagators.propagate_gbd_freespace"
+   ],
+   "chain": [
+    "lumenairy.propagators.gbd:propagate_gbd_freespace",
+    "lumenairy.propagators.gbd:_warn_if_tilted_no_dirsample",
+    "lumenairy.propagators.gbd:_mean_input_tilt",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 5,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_f (ambiguous (2 definitions))",
+    "get (ambiguous (3 definitions))",
+    "grid (ambiguous (2 definitions))",
+    "ix (ambiguous (2 definitions))",
+    "key (ambiguous (2 definitions))",
+    "keys (ambiguous (2 definitions))",
+    "power (ambiguous (2 definitions))",
+    "sample (ambiguous (4 definitions))"
+   ]
+  },
+  "lumenairy.propagators.gbd:propagate_gbd_freespace_csp": {
+   "exported_as": [
+    "lumenairy.propagate_gbd_freespace_csp",
+    "lumenairy.propagators.gbd.propagate_gbd_freespace_csp",
+    "lumenairy.propagators.propagate_gbd_freespace_csp"
+   ],
+   "chain": [
+    "lumenairy.propagators.gbd:propagate_gbd_freespace_csp",
+    "lumenairy._validation:_check_2d_scalar_field",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 4,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "grid (ambiguous (2 definitions))",
+    "ix (ambiguous (2 definitions))",
+    "sample (ambiguous (4 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "solve (ambiguous (11 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.propagators.gbd:propagate_gbd_freespace_spectral": {
+   "exported_as": [
+    "lumenairy.propagate_gbd_freespace_spectral",
+    "lumenairy.propagators.gbd.propagate_gbd_freespace_spectral"
+   ],
+   "chain": [
+    "lumenairy.propagators.gbd:propagate_gbd_freespace_spectral",
+    "lumenairy._validation:_check_2d_scalar_field",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 4,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_rows (ambiguous (2 definitions))",
+    "grid (ambiguous (2 definitions))",
+    "ix (ambiguous (2 definitions))",
+    "sample (ambiguous (4 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.propagators.gbd:propagate_gbd_freespace_vector": {
+   "exported_as": [
+    "lumenairy.propagate_gbd_freespace_vector",
+    "lumenairy.propagators.gbd.propagate_gbd_freespace_vector"
+   ],
+   "chain": [
+    "lumenairy.propagators.gbd:propagate_gbd_freespace_vector",
+    "lumenairy.propagators.gbd:_warn_if_tilted_no_dirsample",
+    "lumenairy.propagators.gbd:_mean_input_tilt",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 5,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_f (ambiguous (2 definitions))",
+    "get (ambiguous (3 definitions))",
+    "grid (ambiguous (2 definitions))",
+    "ix (ambiguous (2 definitions))",
+    "key (ambiguous (2 definitions))",
+    "keys (ambiguous (2 definitions))",
+    "power (ambiguous (2 definitions))",
+    "sample (ambiguous (4 definitions))"
+   ]
+  },
+  "lumenairy.propagators.gbd:propagate_gbd_thin_lens": {
+   "exported_as": [
+    "lumenairy.propagate_gbd_thin_lens",
+    "lumenairy.propagators.gbd.propagate_gbd_thin_lens",
+    "lumenairy.propagators.propagate_gbd_thin_lens"
+   ],
+   "chain": [
+    "lumenairy.propagators.gbd:propagate_gbd_thin_lens",
+    "lumenairy.propagators.gbd:_warn_if_tilted_no_dirsample",
+    "lumenairy.propagators.gbd:_mean_input_tilt",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 5,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_f (ambiguous (2 definitions))",
+    "get (ambiguous (3 definitions))",
+    "grid (ambiguous (2 definitions))",
+    "ix (ambiguous (2 definitions))",
+    "key (ambiguous (2 definitions))",
+    "keys (ambiguous (2 definitions))",
+    "power (ambiguous (2 definitions))",
+    "prop (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.propagators.gbd:propagate_gbd_through_prescription": {
+   "exported_as": [
+    "lumenairy.propagate_gbd_through_prescription",
+    "lumenairy.propagators.gbd.propagate_gbd_through_prescription",
+    "lumenairy.propagators.propagate_gbd_through_prescription"
+   ],
+   "chain": [
+    "lumenairy.propagators.gbd:propagate_gbd_through_prescription",
+    "lumenairy.propagators.gbd:apply_prescription_persurface_to_beamlets",
+    "lumenairy.propagators.gbd:_reframe_beamlets_to_world_plane"
+   ],
+   "hops": 2,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "shape (ambiguous (4 definitions))"
+   ]
+  },
+  "lumenairy.propagators.gbd:propagate_gbd_vector_through_prescription": {
+   "exported_as": [
+    "lumenairy.propagate_gbd_vector_through_prescription",
+    "lumenairy.propagators.gbd.propagate_gbd_vector_through_prescription"
+   ],
+   "chain": [
+    "lumenairy.propagators.gbd:propagate_gbd_vector_through_prescription",
+    "lumenairy.propagators.gbd:propagate_gbd_through_prescription",
+    "lumenairy.propagators.gbd:apply_prescription_persurface_to_beamlets",
+    "lumenairy.propagators.gbd:_reframe_beamlets_to_world_plane"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "copy (ambiguous (2 definitions))",
+    "get (ambiguous (3 definitions))",
+    "grid (ambiguous (2 definitions))",
+    "ix (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.propagators.gbd:recommend_gbd_sampling": {
+   "exported_as": [
+    "lumenairy.propagators.gbd.recommend_gbd_sampling",
+    "lumenairy.recommend_gbd_sampling"
+   ],
+   "chain": [
+    "lumenairy.propagators.gbd:recommend_gbd_sampling",
+    "lumenairy._validation:_check_2d_scalar_field",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 4,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "grid (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.propagators.hf:propagate_huygens_fresnel": {
+   "exported_as": [
+    "lumenairy.propagate_huygens_fresnel",
+    "lumenairy.propagators.hf.propagate_huygens_fresnel",
+    "lumenairy.propagators.propagate_huygens_fresnel"
+   ],
+   "chain": [
+    "lumenairy.propagators.hf:propagate_huygens_fresnel",
+    "lumenairy.propagators.hf:propagate_huygens_fresnel_freespace",
+    "lumenairy.propagators.rs:rayleigh_sommerfeld_propagate",
+    "lumenairy._validation:_check_2d_scalar_field",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 6,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_f (ambiguous (2 definitions))",
+    "_is_cupy_array (ambiguous (4 definitions))",
+    "_prop (ambiguous (5 definitions))",
+    "copy (ambiguous (2 definitions))",
+    "evaluate (ambiguous (31 definitions))",
+    "flags (ambiguous (3 definitions))",
+    "get (ambiguous (3 definitions))",
+    "grid (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.propagators.hf:propagate_huygens_fresnel_freespace": {
+   "exported_as": [
+    "lumenairy.propagate_huygens_fresnel_freespace",
+    "lumenairy.propagators.hf.propagate_huygens_fresnel_freespace",
+    "lumenairy.propagators.propagate_huygens_fresnel_freespace"
+   ],
+   "chain": [
+    "lumenairy.propagators.hf:propagate_huygens_fresnel_freespace",
+    "lumenairy.propagators.rs:rayleigh_sommerfeld_propagate",
+    "lumenairy._validation:_check_2d_scalar_field",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 5,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_f (ambiguous (2 definitions))",
+    "_is_cupy_array (ambiguous (4 definitions))",
+    "_prop (ambiguous (5 definitions))",
+    "copy (ambiguous (2 definitions))",
+    "evaluate (ambiguous (31 definitions))",
+    "flags (ambiguous (3 definitions))",
+    "get (ambiguous (3 definitions))",
+    "grid (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.propagators.hf:propagate_huygens_fresnel_through_prescription": {
+   "exported_as": [
+    "lumenairy.propagate_huygens_fresnel_through_prescription",
+    "lumenairy.propagators.hf.propagate_huygens_fresnel_through_prescription",
+    "lumenairy.propagators.propagate_huygens_fresnel_through_prescription"
+   ],
+   "chain": [
+    "lumenairy.propagators.hf:propagate_huygens_fresnel_through_prescription",
+    "lumenairy.propagators.asymptotic_canonical_fit:fit_canonical_polynomials"
+   ],
+   "hops": 1,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": "lumenairy.propagators.asymptotic_canonical_fit:fit_canonical_polynomials",
+   "ambiguous_names_refused": []
+  },
+  "lumenairy.propagators.hfpi:propagate_hfpi_through_prescription": {
+   "exported_as": [
+    "lumenairy.propagate_hfpi_through_prescription",
+    "lumenairy.propagators.hfpi.propagate_hfpi_through_prescription",
+    "lumenairy.propagators.propagate_hfpi_through_prescription"
+   ],
+   "chain": [
+    "lumenairy.propagators.hfpi:propagate_hfpi_through_prescription",
+    "lumenairy.propagators.hfpi:_hfpi_segment_trace"
+   ],
+   "hops": 1,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": []
+  },
+  "lumenairy.propagators.mft:angular_spectrum_propagate_mft": {
+   "exported_as": [
+    "lumenairy.angular_spectrum_propagate_mft",
+    "lumenairy.propagators.carrier_field.angular_spectrum_propagate_mft",
+    "lumenairy.propagators.mft.angular_spectrum_propagate_mft",
+    "lumenairy.propagators.propagation.angular_spectrum_propagate_mft"
+   ],
+   "chain": [
+    "lumenairy.propagators.mft:angular_spectrum_propagate_mft",
+    "lumenairy.propagators._bluestein:_bluestein_centred_2d",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 4,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_ensure_cupy_loaded (ambiguous (5 definitions))",
+    "_f (ambiguous (2 definitions))",
+    "_is_cupy_array (ambiguous (4 definitions))",
+    "_prop (ambiguous (5 definitions))",
+    "copy (ambiguous (2 definitions))",
+    "evaluate (ambiguous (31 definitions))",
+    "flags (ambiguous (3 definitions))",
+    "get (ambiguous (3 definitions))"
+   ]
+  },
+  "lumenairy.propagators.mft:fraunhofer_propagate_mft": {
+   "exported_as": [
+    "lumenairy.fraunhofer_propagate_mft",
+    "lumenairy.propagators.mft.fraunhofer_propagate_mft",
+    "lumenairy.propagators.propagation.fraunhofer_propagate_mft"
+   ],
+   "chain": [
+    "lumenairy.propagators.mft:fraunhofer_propagate_mft",
+    "lumenairy.propagators._bluestein:_bluestein_centred_2d",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 4,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_ensure_cupy_loaded (ambiguous (5 definitions))",
+    "_f (ambiguous (2 definitions))",
+    "_is_cupy_array (ambiguous (4 definitions))",
+    "_prop (ambiguous (5 definitions))",
+    "copy (ambiguous (2 definitions))",
+    "get (ambiguous (3 definitions))",
+    "grid (ambiguous (2 definitions))",
+    "is_cupy_array (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.propagators.mft:fresnel_propagate_mft": {
+   "exported_as": [
+    "lumenairy.fresnel_propagate_mft",
+    "lumenairy.propagators.mft.fresnel_propagate_mft",
+    "lumenairy.propagators.propagation.fresnel_propagate_mft",
+    "lumenairy.propagators.system.fresnel_propagate_mft"
+   ],
+   "chain": [
+    "lumenairy.propagators.mft:fresnel_propagate_mft",
+    "lumenairy.propagators._bluestein:_bluestein_centred_2d",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 4,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_ensure_cupy_loaded (ambiguous (5 definitions))",
+    "_f (ambiguous (2 definitions))",
+    "_is_cupy_array (ambiguous (4 definitions))",
+    "_prop (ambiguous (5 definitions))",
+    "copy (ambiguous (2 definitions))",
+    "get (ambiguous (3 definitions))",
+    "grid (ambiguous (2 definitions))",
+    "is_cupy_array (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.propagators.mft:resample_field": {
+   "exported_as": [
+    "lumenairy.propagators.mft.resample_field",
+    "lumenairy.propagators.propagation.resample_field",
+    "lumenairy.propagators.system.resample_field",
+    "lumenairy.resample_field"
+   ],
+   "chain": [
+    "lumenairy.propagators.mft:resample_field",
+    "lumenairy._validation:_check_2d_scalar_field",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 4,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_prop (ambiguous (5 definitions))",
+    "copy (ambiguous (2 definitions))",
+    "grid (ambiguous (2 definitions))",
+    "is_cupy_array (ambiguous (2 definitions))",
+    "ix (ambiguous (2 definitions))",
+    "period_x (ambiguous (2 definitions))",
+    "period_y (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))"
+   ]
+  },
+  "lumenairy.propagators.mhs:aperture_subdomain": {
+   "exported_as": [
+    "lumenairy.aperture_subdomain",
+    "lumenairy.propagators.aperture_subdomain",
+    "lumenairy.propagators.mhs.aperture_subdomain"
+   ],
+   "chain": [
+    "lumenairy.propagators.mhs:aperture_subdomain",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "grid (ambiguous (2 definitions))",
+    "propagate (ambiguous (3 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.propagators.mhs:asm_subdomain": {
+   "exported_as": [
+    "lumenairy.asm_subdomain",
+    "lumenairy.propagators.asm_subdomain",
+    "lumenairy.propagators.mhs.asm_subdomain"
+   ],
+   "chain": [
+    "lumenairy.propagators.mhs:asm_subdomain",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_is_cupy_array (ambiguous (4 definitions))",
+    "copy (ambiguous (2 definitions))",
+    "get (ambiguous (3 definitions))",
+    "grid (ambiguous (2 definitions))",
+    "propagate (ambiguous (3 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.propagators.mhs:gbd_freespace_subdomain": {
+   "exported_as": [
+    "lumenairy.gbd_freespace_subdomain",
+    "lumenairy.propagators.gbd_freespace_subdomain",
+    "lumenairy.propagators.mhs.gbd_freespace_subdomain"
+   ],
+   "chain": [
+    "lumenairy.propagators.mhs:gbd_freespace_subdomain",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "grid (ambiguous (2 definitions))",
+    "propagate (ambiguous (3 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.propagators.mhs:prescription_subdomain": {
+   "exported_as": [
+    "lumenairy.prescription_subdomain",
+    "lumenairy.propagators.mhs.prescription_subdomain",
+    "lumenairy.propagators.prescription_subdomain"
+   ],
+   "chain": [
+    "lumenairy.propagators.mhs:prescription_subdomain",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "copy (ambiguous (2 definitions))",
+    "f (ambiguous (3 definitions))",
+    "grid (ambiguous (2 definitions))",
+    "propagate (ambiguous (3 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.propagators.rs:rayleigh_sommerfeld_propagate": {
+   "exported_as": [
+    "lumenairy.propagators.propagation.rayleigh_sommerfeld_propagate",
+    "lumenairy.propagators.rs.rayleigh_sommerfeld_propagate",
+    "lumenairy.rayleigh_sommerfeld_propagate"
+   ],
+   "chain": [
+    "lumenairy.propagators.rs:rayleigh_sommerfeld_propagate",
+    "lumenairy._validation:_check_2d_scalar_field",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 4,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_f (ambiguous (2 definitions))",
+    "_is_cupy_array (ambiguous (4 definitions))",
+    "_prop (ambiguous (5 definitions))",
+    "copy (ambiguous (2 definitions))",
+    "evaluate (ambiguous (31 definitions))",
+    "flags (ambiguous (3 definitions))",
+    "get (ambiguous (3 definitions))",
+    "grid (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.propagators.sas:scalable_angular_spectrum_propagate": {
+   "exported_as": [
+    "lumenairy.elements.polarization.scalable_angular_spectrum_propagate",
+    "lumenairy.propagators.propagation.scalable_angular_spectrum_propagate",
+    "lumenairy.propagators.sas.scalable_angular_spectrum_propagate",
+    "lumenairy.scalable_angular_spectrum_propagate"
+   ],
+   "chain": [
+    "lumenairy.propagators.sas:scalable_angular_spectrum_propagate",
+    "lumenairy._validation:_check_2d_scalar_field",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 4,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_f (ambiguous (2 definitions))",
+    "_is_cupy_array (ambiguous (4 definitions))",
+    "_prop (ambiguous (5 definitions))",
+    "copy (ambiguous (2 definitions))",
+    "flags (ambiguous (3 definitions))",
+    "get (ambiguous (3 definitions))",
+    "grid (ambiguous (2 definitions))",
+    "is_cupy_array (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.propagators.subaperture:propagate_subaperture_asymptotic": {
+   "exported_as": [
+    "lumenairy.propagate_subaperture_asymptotic",
+    "lumenairy.propagators.propagate_subaperture_asymptotic",
+    "lumenairy.propagators.subaperture.propagate_subaperture_asymptotic"
+   ],
+   "chain": [
+    "lumenairy.propagators.subaperture:propagate_subaperture_asymptotic",
+    "lumenairy.propagators.asymptotic_canonical_fit:fit_canonical_polynomials"
+   ],
+   "hops": 1,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": "lumenairy.propagators.asymptotic_canonical_fit:fit_canonical_polynomials",
+   "ambiguous_names_refused": []
+  },
+  "lumenairy.propagators.system:evaluate": {
+   "exported_as": [
+    "lumenairy.evaluate",
+    "lumenairy.propagators.system.evaluate"
+   ],
+   "chain": [
+    "lumenairy.propagators.system:evaluate",
+    "lumenairy.propagators.system:propagate_through_system",
+    "lumenairy.elements._lens_traced:apply_real_lens_traced"
+   ],
+   "hops": 2,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": "lumenairy.elements._lens_traced:apply_real_lens_traced",
+   "ambiguous_names_refused": [
+    "apply_aperture (ambiguous (2 definitions))",
+    "apply_mask (ambiguous (2 definitions))",
+    "apply_mirror (ambiguous (2 definitions))",
+    "apply_real_lens (ambiguous (2 definitions))",
+    "get (ambiguous (3 definitions))",
+    "grid (ambiguous (2 definitions))",
+    "keys (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))"
+   ]
+  },
+  "lumenairy.propagators.system:propagate_through_system": {
+   "exported_as": [
+    "lumenairy.propagate_through_system",
+    "lumenairy.propagators.system.propagate_through_system"
+   ],
+   "chain": [
+    "lumenairy.propagators.system:propagate_through_system",
+    "lumenairy.elements._lens_traced:apply_real_lens_traced"
+   ],
+   "hops": 1,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": "lumenairy.elements._lens_traced:apply_real_lens_traced",
+   "ambiguous_names_refused": [
+    "apply_aperture (ambiguous (2 definitions))",
+    "apply_mask (ambiguous (2 definitions))",
+    "apply_mirror (ambiguous (2 definitions))",
+    "apply_real_lens (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.propagators.system:propagate_through_system_jax": {
+   "exported_as": [
+    "lumenairy.propagate_through_system_jax",
+    "lumenairy.propagators.system.propagate_through_system_jax"
+   ],
+   "chain": [
+    "lumenairy.propagators.system:propagate_through_system_jax",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_is_cupy_array (ambiguous (4 definitions))",
+    "copy (ambiguous (2 definitions))",
+    "f (ambiguous (3 definitions))",
+    "get (ambiguous (3 definitions))",
+    "grid (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.propagators.vector_diffraction:debye_wolf_psf": {
+   "exported_as": [
+    "lumenairy.debye_wolf_psf",
+    "lumenairy.propagators.vector_diffraction.debye_wolf_psf"
+   ],
+   "chain": [
+    "lumenairy.propagators.vector_diffraction:debye_wolf_psf",
+    "lumenairy._validation:_check_2d_scalar_field",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 4,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_prop (ambiguous (5 definitions))",
+    "f (ambiguous (3 definitions))",
+    "is_cupy_array (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.propagators.vector_diffraction:richards_wolf_focus": {
+   "exported_as": [
+    "lumenairy.propagators.vector_diffraction.richards_wolf_focus",
+    "lumenairy.richards_wolf_focus"
+   ],
+   "chain": [
+    "lumenairy.propagators.vector_diffraction:richards_wolf_focus",
+    "lumenairy._validation:_check_2d_scalar_field",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 4,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_prop (ambiguous (5 definitions))",
+    "copy (ambiguous (2 definitions))",
+    "f (ambiguous (3 definitions))",
+    "is_cupy_array (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.raytrace.from_field:rays_from_field": {
+   "exported_as": [
+    "lumenairy.rays_from_field",
+    "lumenairy.raytrace.from_field.rays_from_field",
+    "lumenairy.raytrace.rays_from_field"
+   ],
+   "chain": [
+    "lumenairy.raytrace.from_field:rays_from_field",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "grid (ambiguous (2 definitions))",
+    "ix (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.raytrace.ray_fan:ray_fan_plot": {
+   "exported_as": [
+    "lumenairy.ray_fan_plot",
+    "lumenairy.raytrace.core.ray_fan_plot",
+    "lumenairy.raytrace.ray_fan.ray_fan_plot",
+    "lumenairy.raytrace.ray_fan_plot"
+   ],
+   "chain": [
+    "lumenairy.raytrace.ray_fan:ray_fan_plot",
+    "lumenairy.raytrace.ray_fan:ray_fan_data"
+   ],
+   "hops": 1,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": "lumenairy.raytrace.ray_fan:ray_fan_data",
+   "ambiguous_names_refused": [
+    "grid (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.raytrace.ray_fan:ray_fan_plot_prescription": {
+   "exported_as": [
+    "lumenairy.ray_fan_plot_prescription",
+    "lumenairy.raytrace.core.ray_fan_plot_prescription",
+    "lumenairy.raytrace.ray_fan.ray_fan_plot_prescription",
+    "lumenairy.raytrace.ray_fan_plot_prescription"
+   ],
+   "chain": [
+    "lumenairy.raytrace.ray_fan:ray_fan_plot_prescription",
+    "lumenairy.raytrace.ray_fan:ray_fan_plot",
+    "lumenairy.raytrace.ray_fan:ray_fan_data"
+   ],
+   "hops": 2,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": "lumenairy.raytrace.ray_fan:ray_fan_data",
+   "ambiguous_names_refused": [
+    "get (ambiguous (3 definitions))",
+    "grid (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.sources.core:create_annular_beam": {
+   "exported_as": [
+    "lumenairy.create_annular_beam",
+    "lumenairy.sources.core.create_annular_beam",
+    "lumenairy.sources.create_annular_beam"
+   ],
+   "chain": [
+    "lumenairy.sources.core:create_annular_beam",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "grid (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.sources.core:create_annular_incoherent_source": {
+   "exported_as": [
+    "lumenairy.create_annular_incoherent_source",
+    "lumenairy.sources.core.create_annular_incoherent_source",
+    "lumenairy.sources.create_annular_incoherent_source"
+   ],
+   "chain": [
+    "lumenairy.sources.core:create_annular_incoherent_source",
+    "lumenairy.sources.core:from_ensemble",
+    "lumenairy.sources.core:shape",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 5,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_f (ambiguous (2 definitions))",
+    "_fast_geig (ambiguous (2 definitions))",
+    "_key (ambiguous (2 definitions))",
+    "cb (ambiguous (2 definitions))",
+    "f (ambiguous (3 definitions))",
+    "get (ambiguous (3 definitions))",
+    "grid (ambiguous (2 definitions))",
+    "prop (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.sources.core:create_bessel_beam": {
+   "exported_as": [
+    "lumenairy.create_bessel_beam",
+    "lumenairy.sources.core.create_bessel_beam",
+    "lumenairy.sources.create_bessel_beam"
+   ],
+   "chain": [
+    "lumenairy.sources.core:create_bessel_beam",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "grid (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.sources.core:create_fiber_mode": {
+   "exported_as": [
+    "lumenairy.create_fiber_mode",
+    "lumenairy.sources.core.create_fiber_mode",
+    "lumenairy.sources.create_fiber_mode"
+   ],
+   "chain": [
+    "lumenairy.sources.core:create_fiber_mode",
+    "lumenairy.sources.core:create_gaussian_beam",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 4,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "grid (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.sources.core:create_gaussian_beam": {
+   "exported_as": [
+    "lumenairy.create_gaussian_beam",
+    "lumenairy.sources.core.create_gaussian_beam",
+    "lumenairy.sources.create_gaussian_beam"
+   ],
+   "chain": [
+    "lumenairy.sources.core:create_gaussian_beam",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "grid (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.sources.core:create_gaussian_schell_source": {
+   "exported_as": [
+    "lumenairy.create_gaussian_schell_source",
+    "lumenairy.sources.core.create_gaussian_schell_source",
+    "lumenairy.sources.create_gaussian_schell_source"
+   ],
+   "chain": [
+    "lumenairy.sources.core:create_gaussian_schell_source",
+    "lumenairy.sources.core:from_ensemble",
+    "lumenairy.sources.core:shape",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 5,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_f (ambiguous (2 definitions))",
+    "_fast_geig (ambiguous (2 definitions))",
+    "_key (ambiguous (2 definitions))",
+    "_prop (ambiguous (5 definitions))",
+    "cb (ambiguous (2 definitions))",
+    "copy (ambiguous (2 definitions))",
+    "f (ambiguous (3 definitions))",
+    "get (ambiguous (3 definitions))"
+   ]
+  },
+  "lumenairy.sources.core:create_hermite_gauss": {
+   "exported_as": [
+    "lumenairy.create_hermite_gauss",
+    "lumenairy.sources.core.create_hermite_gauss",
+    "lumenairy.sources.create_hermite_gauss"
+   ],
+   "chain": [
+    "lumenairy.sources.core:create_hermite_gauss",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "get (ambiguous (3 definitions))",
+    "grid (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.sources.core:create_laguerre_gauss": {
+   "exported_as": [
+    "lumenairy.create_laguerre_gauss",
+    "lumenairy.sources.core.create_laguerre_gauss",
+    "lumenairy.sources.create_laguerre_gauss"
+   ],
+   "chain": [
+    "lumenairy.sources.core:create_laguerre_gauss",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "get (ambiguous (3 definitions))",
+    "grid (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.sources.core:create_led_source": {
+   "exported_as": [
+    "lumenairy.create_led_source",
+    "lumenairy.sources.core.create_led_source",
+    "lumenairy.sources.create_led_source"
+   ],
+   "chain": [
+    "lumenairy.sources.core:create_led_source",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "grid (ambiguous (2 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.sources.core:create_multi_field_sources": {
+   "exported_as": [
+    "lumenairy.create_multi_field_sources",
+    "lumenairy.sources.core.create_multi_field_sources",
+    "lumenairy.sources.create_multi_field_sources"
+   ],
+   "chain": [
+    "lumenairy.sources.core:create_multi_field_sources",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "grid (ambiguous (2 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.sources.core:create_point_source": {
+   "exported_as": [
+    "lumenairy.create_point_source",
+    "lumenairy.sources.core.create_point_source",
+    "lumenairy.sources.create_point_source"
+   ],
+   "chain": [
+    "lumenairy.sources.core:create_point_source",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "grid (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.sources.core:create_schell_model_source": {
+   "exported_as": [
+    "lumenairy.create_schell_model_source",
+    "lumenairy.sources.core.create_schell_model_source",
+    "lumenairy.sources.create_schell_model_source"
+   ],
+   "chain": [
+    "lumenairy.sources.core:create_schell_model_source",
+    "lumenairy.sources.core:shape",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 4,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_f (ambiguous (2 definitions))",
+    "_fast_geig (ambiguous (2 definitions))",
+    "_key (ambiguous (2 definitions))",
+    "_prop (ambiguous (5 definitions))",
+    "copy (ambiguous (2 definitions))",
+    "f (ambiguous (3 definitions))",
+    "get (ambiguous (3 definitions))",
+    "grid (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.sources.core:create_tilted_plane_wave": {
+   "exported_as": [
+    "lumenairy.create_tilted_plane_wave",
+    "lumenairy.sources.core.create_tilted_plane_wave",
+    "lumenairy.sources.create_tilted_plane_wave"
+   ],
+   "chain": [
+    "lumenairy.sources.core:create_tilted_plane_wave",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "grid (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.sources.core:create_top_hat_beam": {
+   "exported_as": [
+    "lumenairy.create_top_hat_beam",
+    "lumenairy.sources.core.create_top_hat_beam",
+    "lumenairy.sources.create_top_hat_beam"
+   ],
+   "chain": [
+    "lumenairy.sources.core:create_top_hat_beam",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 3,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "grid (ambiguous (2 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  },
+  "lumenairy.ui.waveoptics_dock:forecast_resources": {
+   "exported_as": [
+    "lumenairy.ui.waveoptics_dock.forecast_resources"
+   ],
+   "chain": [
+    "lumenairy.ui.waveoptics_dock:forecast_resources",
+    "lumenairy.ui.waveoptics_dock:_local_asm_baseline_ms",
+    "lumenairy.elements.pmm._core:E",
+    "lumenairy.optimize.jax_merits:fn",
+    "lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax"
+   ],
+   "hops": 4,
+   "own_way_back": [],
+   "first_parent_with_a_way_back": null,
+   "ambiguous_names_refused": [
+    "_is_cupy_array (ambiguous (4 definitions))",
+    "copy (ambiguous (2 definitions))",
+    "get (ambiguous (3 definitions))",
+    "shape (ambiguous (4 definitions))",
+    "zeros (ambiguous (2 definitions))"
+   ]
+  }
+ }
+}
