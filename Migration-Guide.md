@@ -1789,7 +1789,7 @@ below moves what an unmodified call returns, and every one of them leaves the
 previous behaviour ONE keyword or ONE constant away, byte-identical under it
 (proved against a `git archive` of the parent commit, on both builds).
 
-### `gap_kernel='auto'` now falls back to `'fresnel'` near a carrier focus
+### `gap_kernel='auto'` now falls back to `'fresnel'` inside a band in `k |z_eff| theta_env^4`
 
 **What moved.**  `lumenairy.propagators.carrier._GAP_KERNEL_ACCURACY_TAU`
 defaults to `1e-4` instead of `None`.  On a Collins carrier leg, `'auto'` now
@@ -1798,14 +1798,36 @@ truth, `sqrt(3/2) * k * |z_eff| * theta_env^4 / 8`, against that tolerance, and
 takes the paraxial kernel above it.  `theta_env` is the ENVELOPE's analytic
 `1/e^2` half-angle, not the beam's.
 
-**Who is affected.**  Only legs whose reduced frame `z_eff = B/A` is large,
-i.e. legs close to the carrier's own `A = 0` plane.  The threshold is closed
-form -- `|z_eff| > 8 tau / (sqrt(3/2) k theta_env^4)` -- so a design can be
-checked without running anything.  Measured: on the VERIFY-B4 F3 fixture
-(`w = 0.3 mm`, `lambda = 1.064 um`) the rule fires within **23.5 um** of the
-focus and nowhere else; on the Wave-5 hygiene-2 fixture it fires within
-**1.54 um** of that carrier's `A = 0` plane, which its published ladder never
-reaches.  Entry points that can reach such a leg:
+**Who is affected.**  Legs for which `k |z_eff| theta_env^4` is large -- a
+NEAR-FOCUS condition at a fixed envelope angle (`z_eff = B/A` grows without
+bound as a leg approaches the carrier's `A = 0` plane) and a WIDE-ENVELOPE
+condition at a fixed distance, because `theta_env` enters at the FOURTH power.
+Both happen in practice: a carrier mismatched to its beam leaves a residual
+lens on the envelope and makes `theta_env` large on a leg that is nowhere near
+a focus.  The threshold is closed form --
+`|z_eff| > 8 tau / (sqrt(3/2) k theta_env^4)` -- so a design can be checked
+without running anything, and `theta_env` is `2 sqrt(<theta^2>)` of the
+ENVELOPE's own sampled spectrum, not the beam's angle.  Measured: on the
+VERIFY-B4 F3 fixture (`w = 0.3 mm`, `lambda = 1.064 um`, `theta_env`
+1.13e-03 rad) the rule fires within **23.5 um** of the focus and nowhere else;
+on the Wave-5 hygiene-2 fixture within **1.54 um** of that carrier's `A = 0`
+plane, which its published ladder never reaches; and on a 0.90-mismatched
+NA-0.05 relay (`theta_env` 5.57e-03 rad) it fires **2.00 mm** from the `A = 0`
+plane -- the one leg in the library's own test suite that this flip moves.
+
+To see that the second condition is not the first in disguise: hold the LEG
+fixed and move only the envelope.  On one 1.55 um relay (carrier `0.70 R0`,
+`R0 = -20 mm`, readout a quarter of the way to the focus, so `z_eff` is
+7.777778e-03 m, the plane sits 9.00 mm from `A = 0` and the beam is still 48.6
+Rayleigh ranges short of its own focus), a 0.80 mm input beam gives
+`theta_env` 1.715395e-02 rad and a departure of 4.179416e-04 and FALLS BACK,
+while a 0.40 mm beam on the same leg gives 8.659722e-03 rad and 2.714408e-05
+and keeps the exact kernel.  The departure ratio is 15.40, which is the angle
+ratio 1.9809 to the fourth: the distance cancels.  (Measured 2026-09-20,
+identical on both builds; `validation/probe_c5_round2/` and
+`tests/unit/test_c5_three_defaults.py::test_a_wide_envelope_leg_far_from_any_focus_falls_back`.)
+
+Entry points that can reach such a leg:
 `propagate_carrier_referenced`, `propagate_traced_carrier_chain`,
 `propagate_traced_carrier_chain_multi` and
 `carrier_referenced_focus_readout`, each with `transport='collins'`.
@@ -1831,6 +1853,17 @@ measures how far the exact kernel departs from the paraxial truth; it cannot
 say which kernel is the more physical.  On a leg where the exact kernel is the
 better physics this rule trades accuracy for agreement with that oracle, which
 is why the opt-out is one line and an explicit request is never overridden.
+
+On the ONE leg in the library's own suite that this flip moves, the question
+was settled against an oracle that is not paraxial: the plain kernel reads
+8.212599e-02 relative L2 from the exact scalar field and the refined one
+8.222558e-02, so the rule moves that leg toward the truth.  Read the sizes
+too.  Both kernels sit 8.2e-02 from the true field, because the refinement
+lives in the reduced frame on the ENVELOPE's angle while the leg's own
+non-paraxiality is set by the BEAM's NA -- at that fixture's NA (0.05) the
+rule is arbitrating 1e-04 of an 8e-02 modelling error.  If your leg is
+genuinely non-paraxial, neither kernel is the fix; a non-paraxial propagator
+is.
 
 ### The dense GBD reconstruction counts its memory honestly
 

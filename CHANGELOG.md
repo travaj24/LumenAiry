@@ -107,9 +107,12 @@ after", on both.)
 
 `'legacy'` stays selectable and is byte-identical to 5.48.x.  The two differ
 only in the order the per-chunk reductions are summed in -- the constant moves
-the chunk boundary and floating-point addition is not associative -- measured
-at 2.1e-17 relative (N = 256) and 1.8e-18 (N = 512), and the same budget run
-twice is identical to the bit under either mode.
+the chunk boundary and floating-point addition is not associative.  The size of
+that difference is GRID-SPECIFIC, so it is quoted with its grid: 2.1e-17
+relative at N = 256 and 1.8e-18 at N = 512 here, 1.8e-16 at N = 320 and
+7.3e-17 at N = 512 on the independent verification's own grids (both builds).
+The claim is "the last bits", not any one of those numbers.  The same budget
+run twice is identical to the bit under either mode.
 
 **A floor is published, and the regime below it is loud.**  The chunk cannot go
 below ONE beamlet column, and the whole-grid arrays the loop holds outside the
@@ -149,6 +152,27 @@ never claimed to bound the loop.  `_dense_budget_floor_bytes` does not take the
 accounting mode -- it is what the LOOP costs, and a `'legacy'` floor would read
 4.19 MB on a grid where the loop measurably cannot go below 9.58.
 
+The "warn, not refuse" half of that decision is vindicated where it binds, on
+a call that passes no budget at all.  At N = 2048 with 48 beamlets and the
+default `mem_budget_mb=512.0` the floor reads 738.198 MB, so the budget cannot
+be met; measured 2026-09-20 with a thread-sampled high-water mark on the
+process's RESIDENT SET (a before/after difference is not a peak -- the
+transient is freed before the call returns and the allocator keeps the arena):
+
+| build | accounting | completes | finite | floor notices | peak RSS above baseline |
+|---|---|---|---|---|---|
+| Windows | default (`'measured'`) | yes | yes | **exactly 1** | **827 MB** (826.6 / 827.5 over two runs) |
+| Windows | `'legacy'` | yes | yes | 0 | **3019 MB** |
+| WSL | default | yes | yes | **exactly 1** | **639 MB** |
+| WSL | `'legacy'` | yes | yes | 0 | **2784 MB** |
+
+A refusal would have turned each of those first rows into a hard error on a
+default path.  Instead the call runs, stays inside a resident set 3.7x
+(Windows) / 4.3x (WSL) smaller than the mode it replaces, and says out loud
+that the budget was not met -- naming the floor, the ratio, `window=5.0`,
+`raise mem_budget_mb` and the helper that publishes the number.  The
+`'legacy'` rows are 5.48.x, and they say nothing.
+
 An unrecognised `DENSE_MEM_BUDGET_ACCOUNTING` is now REFUSED by name rather
 than treated as `'legacy'`.  While `'legacy'` was the default, falling through
 to it was the conservative choice; with `'measured'` the default it would
@@ -171,7 +195,7 @@ budget below `_dense_budget_floor_bytes(Ny, Nx)` says so out loud instead of
 being exceeded.  If that notice fires, either raise the budget to the floor it
 quotes or pass `window=5.0`.
 
-### Changed -- carrier (WP-C5 item 1): `gap_kernel='auto'` falls back to the paraxial kernel inside a derived near-focus band
+### Changed -- carrier (WP-C5 item 1): `gap_kernel='auto'` falls back to the paraxial kernel inside a derived band in `k |z_eff| theta_env^4`
 
 `lumenairy.propagators.carrier._GAP_KERNEL_ACCURACY_TAU` now defaults to `1e-4`
 instead of `None`, which ARMS the accuracy-keyed fallback that shipped switched
@@ -194,8 +218,9 @@ margin, nothing warns -- while the exact kernel departs from the analytic
 Gaussian by 2.3496e-03 and the paraxial kernel holds 1.46e-14.  The rule is
 what closes that gap.
 
-Because the departure is linear in `|z_eff|`, the rule is a NEAR-FOCUS rule
-with a closed-form band: it fires only where
+Because the departure is linear in `|z_eff|` and QUARTIC in `theta_env`, the
+rule is a band in `k |z_eff| theta_env^4` -- near-focus at a fixed envelope
+angle, wide-envelope at a fixed distance.  It fires exactly where
 `|z_eff| > 8 tau / (sqrt(3/2) k theta_env^4)`.  Measured on both builds
 (`validation/probe_c5_three_defaults/item1_*.json`):
 
@@ -203,6 +228,16 @@ with a closed-form band: it fires only where
 |---|---|---|---|---|
 | VERIFY-B4 F3 | 1.1289e-03 rad | above 68.10 m | **inside 23.48 um** | the 1 um (2.3496e-03) and 10 um (2.3490e-04) rungs |
 | Wave-5 hygiene-2 | 7.9512e-04 rad | above 260.09 m | **inside 1.5427 um** | nothing: that ladder walks to the WAIST and this carrier's focus sits 31.66 um further on, so its z_eff caps at 12.27 m |
+| a 0.70-mismatched 1.55 um relay, read out a QUARTER of the way to its focus | 1.7154e-02 rad | above 1.86e-03 m | fires at **9.00 mm** from `A = 0` | the leg itself (departure 4.1794e-04): `z_eff` is only 7.7778e-03 m and the beam is 48.6 Rayleigh ranges short of its own focus |
+
+The third row is the half of the band the first two cannot show, because both
+hold the envelope's angle fixed and walk the distance.  Hold the LEG fixed
+instead and move only the envelope: on that relay a 0.80 mm input beam reads
+`theta_env` 1.715395e-02 rad and a departure of 4.179416e-04 and falls back,
+while a 0.40 mm beam on the same leg reads 8.659722e-03 rad and 2.714408e-05
+and keeps the exact kernel -- a departure ratio of 15.40, which is the angle
+ratio 1.9809 to the fourth, with the distance cancelling.  A "near-focus rule"
+would not separate those two.
 
 Blast radius, measured archive-to-archive against `49ddf4bd` over 48 digested
 legs per build: **2 keys move, 46 are byte-identical**, and the two are F3's
@@ -210,11 +245,36 @@ legs per build: **2 keys move, 46 are byte-identical**, and the two are F3's
 set.  On those two legs the relative L2 against the analytic Gaussian goes from
 2.3496e-03 to 1.4568e-14 and from 2.3490e-04 to 1.1822e-14.
 
+Over the library's own suite the reach is one leg wider than that digest set.
+A pytest census of every leg the `k4` gate resolved to `'exact'` across the 27
+carrier / traced-chain files (167 legs over 48 ids) finds 24 fallbacks: 23 in
+the four ids that exist to exercise the rule, and one in
+`test_audit2609_b4_collins_transport.py`'s `mismatch_matrix` fixture
+(`|z_eff|` 0.180 m, `theta_env` 5.5712e-03 rad, departure 1.2733e-04 = 1.27
+tau) -- a WIDE-ANGLE leg 2.00 mm from its own `A = 0` plane, not a near-focus
+one.  That file stays green: its gate is `|peak - 1| < 1e-4` on a column
+reading 1.000000 to 0.999938.
+
 CAVEAT, stated both ways: the oracle that measured the law is PARAXIAL, so it
 can say how far the exact kernel departs from the paraxial truth and cannot say
 which kernel is the more physical.  That is why an explicit
 `gap_kernel='exact'` is honoured over `tau` and why the opt-out is one
 assignment.
+
+That question HAS been answered on the one leg the suite moves, against an
+oracle that is not paraxial and shares no machinery with the library (the
+input's analytic 2-D spectrum propagated with the exact transfer function
+`exp(i k z sqrt(1 - lambda^2 f^2))` and inverted by a Hankel quadrature,
+self-checked at 3.7e-09 and validated against the `sqrt(3/2) k |z| NA^4 / 8`
+non-paraxial law over a decade of NA; VERIFY-WP-C5).  On
+`mismatch_matrix`'s `fr = 0.90` row the plain kernel reads **8.212599e-02**
+relative L2 from the true scalar field and the refined one **8.222558e-02**,
+so the rule moves that leg TOWARD the truth.  The size of that statement is
+the honest part: both kernels sit 8.2e-02 away, because the refinement lives
+in the REDUCED frame on the ENVELOPE's angle while the leg's own
+non-paraxiality is set by the BEAM's NA (0.05 there).  The rule is arbitrating
+1e-04 of an 8e-02 modelling error -- it is not the thing that makes such a leg
+right or wrong, and at moderate NA neither kernel is "right".
 
 **Migration.** Set `lumenairy.propagators.carrier._GAP_KERNEL_ACCURACY_TAU =
 None` to restore 5.48.x bit for bit: the condition is then not evaluated at
