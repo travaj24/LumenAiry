@@ -170,12 +170,22 @@ its end.
 
 **One documented bound was wrong and is now derived.**  The pre-5.49.0
 docstring promised that under `output_filter='all'` the intermediate
-`ray_history` bundles carry `| |d| - 1 | <= 1e-15`.  Measured: 6.7e-16 on a
-3-surface stack, rising to **1.8e-15 on a 13-surface stack** -- about
-`0.6 * n_surfaces * eps`, so `1e-15` was a reading from a short stack, not a
-bound, and it is exceeded by the eighth surface.  The docstring now states the
-`n_surfaces * eps` form with both measurements.  The FINAL bundle is unit to
-2.2e-16 on every rung, on every `output_filter`.
+`ray_history` bundles carry `| |d| - 1 | <= 1e-15`.  Measured on a 3 / 5 / 7 /
+9 / 11 / 13-surface ladder, identical to the last digit on both builds:
+
+| surfaces | 3 | 5 | 7 | 9 | 11 | 13 |
+|---|---|---|---|---|---|---|
+| history drift, worst | 6.66e-16 | 8.88e-16 | **1.22e-15** | 1.67e-15 | 1.67e-15 | 1.78e-15 |
+| as a fraction of `n_surfaces * eps` | **1.000** | 0.800 | 0.786 | 0.833 | 0.682 | **0.615** |
+
+So `n_surfaces * eps` is the BOUND -- it holds on every rung -- and the
+coefficient in front of it is NOT constant: it runs from **1.000 at three
+surfaces to 0.615 at thirteen**.  A consumer sizing a tolerance from "about
+0.6 of `n * eps`" would be 40 % under on a triplet, the commonest case, so the
+docstring states the bound and the measured range rather than a coefficient.
+`1e-15` was a reading from a short stack and is first exceeded at the
+**SEVENTH** surface (1.22e-15 against 8.88e-16 at five), not the eighth.  The
+FINAL bundle is unit to 2.2e-16 on every rung, on every `output_filter`.
 
 **Migration.**  Pass `renormalize='surface'` to `trace` / `trace_world` for the
 pre-5.49.0 arithmetic; it is byte-identical.  One case genuinely needs it: a
@@ -4686,7 +4696,7 @@ remove ~1e-16 of rounding drift.  `trace` and `trace_world` gain
 `world_trace.py:82`); `_refract` / `_reflect` gain the matching
 `renormalize: bool = True` (`intersection.py:543`, `:651`), and the single-pass
 form is `intersection._normalize_directions` (`:520`), applied once to the
-bundle leaving the last surface (`trace.py:294`, `:405`, `world_trace.py:250`).
+bundle leaving the last surface (`trace.py:306`, `:417`, `world_trace.py:250`).
 
 The degenerate-direction DIAGNOSIS is not hoisted: the per-surface
 `|d| < 1e-30 or not finite -> RAY_NAN + killed` test runs in both modes, because
@@ -4754,7 +4764,7 @@ restating those pins; see the WP-B9 report.
 
 `make_rings` is equal-radius / equal-count, so the pupil areal sampling density
 falls off as `~1/r` and every unweighted `spot_rms` built on it is centre-biased
-small.  It gains `pattern={'rings' (default), 'vogel'}` (`raytrace/trace.py:1268`,
+small.  It gains `pattern={'rings' (default), 'vogel'}` (`raytrace/trace.py:1280`,
 generator at `:1285`): the Vogel / Fibonacci sunflower `r_i = R sqrt(i/N)`,
 `theta_i = i pi (3 - sqrt(5))`, with `i = 1..N` so the outermost ray sits exactly
 on the rim as the outer ring does.  Threaded through

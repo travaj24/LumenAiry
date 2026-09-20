@@ -75,7 +75,11 @@ derived on the running build.
 7. **One documented bound was a reading and is exceeded.**  The pre-5.49.0
    `trace` docstring promised `| |d| - 1 | <= 1e-15` on the intermediate
    history bundles under `'exit'`.  Measured 1.8e-15 at 13 surfaces -- about
-   `0.6 * n_surfaces * eps` -- so it is exceeded by the eighth surface.  The
+   `0.6 * n_surfaces * eps` -- so it is exceeded by the eighth surface.
+   (ROUND 2, defect D3: both halves of that sentence are corrected in section
+   3.2.  `n_surfaces * eps` is the bound, the coefficient runs 1.000 to 0.615
+   and is not constant, and `1e-15` is first exceeded at the SEVENTH
+   surface.)  The
    docstring now carries the derived form and the new test asserts it.
 
 ---
@@ -380,8 +384,25 @@ INTERMEDIATE history bundles under `'exit'`.  Measured on the same ladder:
 | history, worst | 6.7e-16 | 8.9e-16 | 1.2e-15 | 1.3e-15 | 1.3e-15 | **1.8e-15** |
 | final bundle | 2.2e-16 | 2.2e-16 | 2.2e-16 | 2.2e-16 | 2.2e-16 | 2.2e-16 |
 
-so `1e-15` is exceeded by the eighth surface.  It is about
-`0.6 * n_surfaces * eps`.  Making `'exit'` the default makes this contract
+**ROUND 2 (VERIFY-WP-C2 defect D3) corrects both readings above.**  Measured
+on the shipped test's own ladder, identical to the last digit on both builds:
+
+| surfaces | 3 | 5 | 7 | 9 | 11 | 13 |
+|---|---|---|---|---|---|---|
+| history drift, worst | 6.66e-16 | 8.88e-16 | **1.22e-15** | 1.67e-15 | 1.67e-15 | 1.78e-15 |
+| as a fraction of `n_surfaces * eps` | **1.000** | 0.800 | 0.786 | 0.833 | 0.682 | **0.615** |
+
+`n_surfaces * eps` is the BOUND and it holds on every rung; the coefficient in
+front of it runs from **1.000 at three surfaces to 0.615 at thirteen**, so
+"about 0.6" is a long-end reading and a consumer sizing a tolerance from it is
+40 % under on a triplet -- the commonest case.  And `1e-15` is first exceeded
+at the **SEVENTH** surface (1.22e-15), not the eighth: five surfaces read
+8.88e-16.  The docstring and the test now state the bound, the measured range
+and the seventh-surface crossing; the test asserts the coefficient FALLS
+(1.63x from three surfaces to thirteen, against a 1.25x bar) so it cannot be
+restated as a constant.
+
+Making `'exit'` the default makes this contract
 load-bearing for every history consumer, so the docstring now carries the
 `n_surfaces * eps` form with both measurements, and the test asserts the
 envelope, asserts the drift GROWS with surface count (so the envelope is the

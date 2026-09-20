@@ -661,18 +661,33 @@ def test_c2_history_bundles_are_not_unit_under_the_new_default():
     Snell returns a unit vector from a unit normal up to one rounding --
     and the pre-5.49.0 docstring's `<= 1e-15` was a READING from a short
     stack, not a bound: measured 6.7e-16 at 3 surfaces rising to
-    1.8e-15 at 13, i.e. about `0.6 * n_surfaces * eps`, so 1e-15 is
-    exceeded by the eighth surface.
+    1.8e-15 at 13.
 
-    Both halves are asserted here, because making `'exit'` the default
+    THE COEFFICIENT IS NOT CONSTANT (VERIFY-WP-C2 defect D3).  The first
+    version of this correction said "about `0.6 * n_surfaces * eps`",
+    which is a reading at the LONG end.  Re-measured on this fixture's
+    own ladder, identical on both builds:
+
+        surfaces      3      5      7      9     11     13
+        drift    6.66e-16 8.88e-16 1.22e-15 1.67e-15 1.67e-15 1.78e-15
+        / n*eps    1.000  0.800  0.786  0.833  0.682  0.615
+
+    so `n_surfaces * eps` is the BOUND and 0.6 is 40 % under on a
+    triplet -- the commonest case.  `1e-15` is first exceeded at the
+    SEVENTH surface (1.22e-15 against 8.88e-16 at five), not the
+    eighth.
+
+    Four claims are asserted here, because making `'exit'` the default
     makes this load-bearing for every history consumer: the drift stays
     inside the derived `n_surfaces * eps` envelope, it GROWS with
     surface count (so the envelope is the right shape and not an
-    accident), and the final bundle is unit regardless.
+    accident), the coefficient FALLS with surface count (so the bound
+    cannot be restated as a constant times `n * eps`), and the final
+    bundle is unit regardless.
     """
     eps = float(np.finfo(np.float64).eps)
     drifts = []
-    for n_pairs in (1, 3, 6):
+    for n_pairs in (1, 2, 3, 6):
         S = []
         for _ in range(n_pairs):
             S.append(Surface(radius=0.0515, thickness=0.004,
@@ -710,9 +725,37 @@ def test_c2_history_bundles_are_not_unit_under_the_new_default():
         f'{drifts}.')
     assert drifts[-1][1] > 1e-15, (
         f'the pre-5.49.0 docstring promised <= 1e-15 on the history '
-        f'bundles; it is exceeded by the eighth surface (measured '
-        f'1.8e-15 at 13 surfaces, {drifts}).  If this no longer holds, '
-        f'the docstring correction shipped with this flip is stale.')
+        f'bundles; measured 1.8e-15 at 13 surfaces ({drifts}).  If this '
+        f'no longer holds, the docstring correction shipped with this '
+        f'flip is stale.')
+    # D3: the coefficient in front of n*eps is NOT constant, so the bound
+    # cannot be restated as "about 0.6 n eps".  Measured 1.000 at three
+    # surfaces against 0.615 at thirteen on BOTH builds -- a 1.63x fall --
+    # and the bar is a RATIO, so nothing here pins a reading.
+    ratios = [(n, d / (n * eps)) for n, d in drifts]
+    assert all(r <= 1.0 + 4 * eps for _n, r in ratios), (
+        f'the drift left the n_surfaces * eps envelope: {ratios}')
+    first, last = ratios[0][1], ratios[-1][1]
+    assert first > 1.25 * last, (
+        f'the ratio to n_surfaces * eps no longer FALLS with surface '
+        f'count ({ratios}), so "the coefficient is not constant" -- the '
+        f'whole point of the D3 restatement -- has stopped being true '
+        f'and the docstring should say a constant after all.  Measured '
+        f'1.000 at 3 surfaces against 0.615 at 13 (1.63x) on both '
+        f'builds, against a 1.25x bar.')
+    # and 1e-15 is first exceeded at SEVEN surfaces, not eight.  Asserted
+    # as a BAND rather than an equality: the quantity is deterministic and
+    # identical on both development builds, but it is a sum of last-bit
+    # roundings and a numpy release is entitled to move it by a rung.
+    exceeding = [n for n, d in drifts if d > 1e-15]
+    assert exceeding, (
+        f'1e-15 is no longer exceeded anywhere on the ladder ({drifts}); '
+        f'the retired bound has stopped being wrong, so the docstring '
+        f'correction is stale.')
+    assert 5 <= exceeding[0] <= 9, (
+        f'1e-15 is first exceeded at {exceeding[0]} surfaces ({drifts}); '
+        f'measured SEVEN on both development builds (1.22e-15 against '
+        f'8.88e-16 at five).  Re-measure and restate the docstring.')
     # the way back restores the old contract exactly
     S = [Surface(radius=0.0515, thickness=0.004, glass_before='air',
                  glass_after='N-BK7', semi_diameter=0.0127),
