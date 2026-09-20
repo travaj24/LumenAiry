@@ -356,18 +356,16 @@ class TestOpenDefectsFiledByVerifyWpC3:
     repository's instrument for that (``xfail_strict`` is on), so closing one
     turns its marker red and forces the marker's removal with the fix."""
 
-    @pytest.mark.xfail(strict=True, reason=(
-        'VERIFY_WP-C3 defect D6 (SHIP BLOCKER, correctness): a leg that '
-        'resolves a FLAT output reference has no transfer-function '
-        'complement, so `tf_available` is False and the chirp-Z runs '
-        'regardless of K1/K3.  On a single-group collimated relay with a '
-        '10 mm bare final leg -- nowhere near a focus, R_out = -108 mm, '
-        'A = 0.915 -- the default runs at Kelly K1 = 29.17 and lands 2.7x to '
-        '3.5x wide of the EXACT free-space second-moment law, on both '
-        'builds, while transport="sziklas" agrees with it to 0.2 % at '
-        'N = 512.  Requested fix: drop `not flat` from `tf_available` '
-        '(carrier.py:2721-2723) so the leg falls back, or refuse it by name '
-        'instead of returning an aliased array.'))
+    # CLOSED by WP-C3 ROUND 2 (2026-09-20): ``not flat`` was dropped from
+    # ``tf_available``, so a flat-resolving leg whose chirp-Z is not
+    # representable falls back to the Sziklas transport like every other
+    # unrepresentable leg.  MEASURED after the fix, same ladder, same window:
+    # the default reads 1295.3594 / 1278.4007 / 1274.1529 um at
+    # N = 256/512/1024 -- bit-identical to ``transport='sziklas'`` on every
+    # rung -- against the oracle's 1413.30 / 1281.02 / 1157.11, i.e. 0.9165x /
+    # 0.9980x / 1.1011x, and the Kelly warning this leg used to emit is gone.
+    # The strict xfail marker was removed with the fix, which is what the
+    # marker exists to force.
     def test_a_flat_reference_leg_agrees_with_the_moment_law_or_refuses(self):
         """The exact free-space second-moment law, which needs no propagator:
 
@@ -472,22 +470,24 @@ class TestOpenDefectsFiledByVerifyWpC3:
             'naming a Sziklas-only key on the default neither selected the '
             'readout that has it nor was refused')
 
-    @pytest.mark.xfail(strict=True, reason=(
-        'VERIFY_WP-C3 defect D5 (SHIP BLOCKER): the CHANGELOG Migration '
-        'paragraph says "No public call that worked on 5.48.1 raises on '
-        '5.49.0, with ONE exception, and it is a JAX one".  MEASURED on both '
-        'builds, on an ORDINARY two-group relay (collimated launch, two BK7 '
-        'biconvex singlets, a plain focus_readout, no stop-plane keys, no '
-        'tilt): 12 of 12 configurations RETURN at 49ddf4bd and 11 of 12 '
-        'raise RuntimeError on the flipped default, from the Sziklas '
-        'readout\'s containment guard, because the moved gap legs change the '
-        'chain\'s exit lattice.  Requested fix: replace the blanket sentence '
-        'with the measured one and name the way back (transport="sziklas").'))
+    # CLOSED by WP-C3 ROUND 2 (2026-09-20), and by the SAME edit as D6 above:
+    # the raise was never the readout's.  This relay's SECOND gap leg resolved
+    # a flat output reference, had no fallback, and ran the chirp-Z at Kelly
+    # K1 = K3 = 9.566; the exit envelope came back with an amplitude radius of
+    # 3830.25 um against the co-moving step's 1048.97 (3.65x) and 4.899e-04 of
+    # envelope power against 8.074e-06 (60.7x).  The Sziklas focus readout's
+    # containment guard then refused that lattice -- correctly.  With the leg
+    # falling back, the 192-cell ordinary-chain census reads 192 IDENTICAL,
+    # 0 MOVED, 0 OK->RAISED and 0 Kelly warnings against 49ddf4bd, where
+    # before the fix it read 118 / 52 / 22 / 74.
     def test_no_ordinary_chain_that_returned_on_the_old_default_now_raises(
             self):
         from tests.unit.test_audit2609_b4_collins_transport import (
             _CHAIN_TKW, _singlet)
-        p = _singlet(120e-3, -120e-3, 6e-3, 'N-BK7', 25.4e-3)
+        # ROUND 2: the sixth argument (the group NAME) was missing when
+        # this id was written, so the strict xfail was green on a
+        # TypeError and never reached the claim it is about.
+        p = _singlet(120e-3, -120e-3, 6e-3, 'N-BK7', 25.4e-3, 'p')
         groups = [{'prescription': p, 'gap_before': 20e-3},
                   {'prescription': p, 'gap_before': 15e-3}]
         n, dx, w = 512, 20e-6, 2.0e-3

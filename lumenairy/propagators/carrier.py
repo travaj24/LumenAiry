@@ -2586,8 +2586,12 @@ def _collins_carrier_leg(env, R, z, wavelength, dx, dy, *,
 
     So a leg takes the transfer-function form when the chirp-Z cannot be
     represented on the lattice this leg would return (``K3 > 1``, or the
-    weaker ``K1 > 1``) AND that form exists -- a scalar carrier, ``A > 0``, the
-    geometric output reference, and no caller override.  Otherwise it stays on
+    weaker ``K1 > 1``) AND that form exists -- ``A != 0`` on both axes and no
+    caller-named lattice or reference.  That is the WHOLE exclusion list as of
+    WP-C3 round 2: an astigmatic carrier, an inverted frame (``A < 0``) and a
+    RESOLVED FLAT REFERENCE were each excluded once and each turned out to be
+    a property of ``_carrier_step_fast`` rather than of the Sziklas transport
+    this line now calls.  Otherwise it stays on
     the chirp-Z and ``on_collins_sampling`` speaks, K3 included, because a leg
     has no ``on_replica`` of its own.  Where both forms hold they agree to
     ~4e-12 of peak: they are the same theorem.
@@ -2710,15 +2714,52 @@ def _collins_carrier_leg(env, R, z, wavelength, dx, dy, *,
     #     The selection is "take the form that is REPRESENTABLE on this
     #     lattice"; it is not "prefer this transport".
     #
-    # ``A == 0`` stays excluded and so does ``flat``, and those two are the
-    # real boundary: the Sziklas transport cannot land on the carrier's own
-    # focus at all (it re-references to ``R_out = 0`` and
-    # ``carrier_referenced_envelope`` refuses that), and it cannot produce a
-    # FLAT output reference, which is what this leg resolves to exactly where
-    # the geometric one collapses.  So the legs with no fallback are precisely
-    # the legs the Sziklas transport could never evaluate -- which is the
-    # honest statement of what the flip does and does not change.
-    tf_available = (Ax != 0.0 and Ay != 0.0 and not flat
+    # (c) A RESOLVED FLAT OUTPUT REFERENCE -- dropped in WP-C3 ROUND 2, and it
+    #     was the same mistake one level further out.  The exclusion read
+    #     "the Sziklas transport has no flat-reference form, so a leg that
+    #     resolves one is a leg it could never evaluate"; what is true is that
+    #     the Sziklas transport cannot land on the carrier's own GEOMETRIC
+    #     FOCUS, and that case is ``A == 0`` (equivalently ``R_out == 0``,
+    #     since ``A = R_out/R``), which the first two conjuncts below already
+    #     exclude on their own.  ``flat`` is resolved for a SECOND, unrelated
+    #     reason -- ``_collins_leg_output_axis`` reports it whenever the
+    #     geometric reference's space-bandwidth ``4 r_out theta/(|A| lambda)``
+    #     exceeds ``N`` -- and on those legs ``R_out = R + z`` is finite and
+    #     non-zero, so the Sziklas step evaluates them perfectly well.  Until
+    #     round 2 such a leg had NO fallback and ran the chirp-Z regardless of
+    #     K1/K3.
+    #
+    #     MEASURED 2026-09-20 (VERIFY-WP-C3 D6), single N-BK7 biconvex
+    #     (R = +/-120 mm, t = 6 mm), collimated w = 2 mm, gap 20 mm, bare
+    #     final leg 10 mm, window N*dx = 10.24 mm held fixed -- a leg NOWHERE
+    #     NEAR a focus (``R_out = -108 mm``, ``A = 0.915``), whose flat test
+    #     clears ``N`` by 1.9 % (``sbp = 260.9`` against ``N = 256``).  The
+    #     chirp-Z ran at Kelly K1 = 29.1734 / 14.4718 / 7.6621 at
+    #     N = 256/512/1024 and read r2m 3823.75 / 3847.81 / 4099.07 um -- it
+    #     DIVERGES with refinement -- against the EXACT free-space
+    #     second-moment law ``<r^2>(z) = <r^2> + 2 z <r.theta> + z^2
+    #     <theta^2>`` read off the shared exit field, which predicts
+    #     1413.30 / 1281.02 / 1157.11 um.  That is 2.7055x / 3.0037x /
+    #     3.5425x, while the Sziklas step reads 0.9165x / 0.9980x / 1.1011x
+    #     and converges.  The same hole is what made an ordinary two-group
+    #     relay's chain exit unusable: its second gap leg resolved flat and
+    #     ran at K1 = K3 = 9.566, the exit envelope came back 3.65x wide with
+    #     60x the power it went in with, and the Sziklas focus readout's
+    #     containment guard then -- correctly -- refused that lattice, which
+    #     is VERIFY-WP-C3 D5's 11-of-12 ``RuntimeError`` census.
+    #
+    #     The flat reference is KEPT where the chirp-Z is representable: this
+    #     is a selection on K1/K3, not a retreat from the flat form.  A
+    #     well-sampled flat-resolving leg still returns ``R = inf`` and the
+    #     resolved pitch (asserted two-sided in
+    #     ``tests/unit/test_verify_c3_collins_default.py``).
+    #
+    # ``A == 0`` stays excluded and it is the ONLY real boundary: the Sziklas
+    # transport cannot land on the carrier's own focus at all (it re-references
+    # to ``R_out = 0`` and ``carrier_referenced_envelope`` refuses that).  A
+    # caller-NAMED lattice or reference stays excluded too, for the different
+    # reason that the fallback could not honour it.
+    tf_available = (Ax != 0.0 and Ay != 0.0
                     and dx_out is None and dy_out is None
                     and carrier_out is None)
     if tf_available and (max(k1x, k1y) > 1.0 or max(k3x, k3y) > 1.0):

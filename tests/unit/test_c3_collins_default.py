@@ -1050,3 +1050,169 @@ def test_the_default_does_not_start_warning_on_the_shipped_fixtures():
             if 'chirp-Z stage is under-sampled' in str(w.message)], (
         'the Kelly guard did not fire even on a deliberately under-sampled '
         'caller-named lattice, so the zero above is not evidence of anything')
+
+
+# ===========================================================================
+# 6.  WP-C3 ROUND 2 -- the flat-reference leg, and the ordinary chain that
+#     used to raise (VERIFY-WP-C3 D6 and D5, which are ONE defect)
+# ===========================================================================
+def _flat_unrepresentable_leg():
+    """A leg the transport resolves FLAT and whose chirp-Z is NOT
+    representable, DERIVED from the running build rather than pinned.
+
+    Construction: a grid-filling Gaussian carrying a linear phase ramp, so the
+    measured angular half-width is a large fraction of the grid's Nyquist
+    angle, on a short leg with ``A`` small enough that the geometric
+    reference's space-bandwidth ``4 r_out theta/(|A| lambda)`` exceeds ``N``.
+    Both facts are READ BACK from the library's own resolver below, so this
+    helper cannot drift from what the leg actually does.
+    """
+    wl, n, dx, w = 1.064e-6, 1024, 4.0e-6, 0.30e-3
+    f0 = 1.0e5                      # 0.4 cycles/sample -> theta = 0.1064 rad
+    z = 2.0e-3
+    r_c = -z / 0.89                 # A = 1 + z/R = 0.11
+    x = _axis(n, dx)
+    xx, yy = np.meshgrid(x, x, indexing='ij')
+    env = (np.exp(-(xx ** 2 + yy ** 2) / (w * w))
+           * np.exp(2j * np.pi * f0 * yy)).astype(np.complex128)
+    r_x, _r_y, th_x, _th_y = CA._collins_input_box(
+        env, dx, dx, wl, CA._COLLINS_TAIL_FRAC)
+    a, b, _c, _d = CA._collins_envelope_abcd(r_c, z, np.inf)
+    d_out, flat = CA._collins_leg_output_axis(
+        a, b, r_c + z, dx, n, r_x, th_x, wl)
+    k1 = 2.0 * dx * (abs(a) * r_x / abs(b) + th_x) / wl
+    k3 = n * d_out / (wl * abs(b) / dx)
+    return env, r_c, z, wl, dx, flat, k1, k3
+
+
+def test_a_flat_resolving_leg_resolves_its_quadrature_like_any_other():
+    """ROUND 2, closing VERIFY-WP-C3 D6 -- and D5 with it, since the ordinary
+    chain that raised did so because ITS second gap leg took this branch.
+
+    A resolved FLAT output reference used to disable the fallback outright
+    (``tf_available`` carried ``and not flat``), so the chirp-Z ran on such a
+    leg whatever K1 and K3 read.  The exclusion's stated reason -- "the
+    Sziklas transport could never evaluate these legs" -- is true only of the
+    ``A == 0`` sub-case, which the ``Ax != 0`` conjunct already excludes on
+    its own; ``flat`` is ALSO resolved whenever the geometric reference's
+    space-bandwidth exceeds ``N``, and there ``R_out = R + z`` is finite and
+    non-zero.
+
+    TWO-SIDED, because the fix is a selection and not a retreat:
+
+    * a flat-resolving leg whose chirp-Z is NOT representable now falls back,
+      and the fallback is the Sziklas ANSWER to the bit;
+    * a flat-resolving leg whose chirp-Z IS representable keeps the flat
+      reference and the chirp-Z, and still comes back with ``R = inf``.
+    """
+    env, r_c, z, wl, dx, flat, k1, k3 = _flat_unrepresentable_leg()
+    # the PREMISE, measured off the library's own resolver, not assumed
+    assert flat, ('the fixture no longer resolves a flat output reference, '
+                  'so it cannot exercise the branch this test is about')
+    assert max(k1, k3) > 1.0, (
+        f'the fixture is representable (K1 = {k1:.6g}, K3 = {k3:.6g}), so no '
+        f'fallback would be owed here')
+    diag = {}
+    with warnings.catch_warnings(record=True) as rec:
+        warnings.simplefilter('always')
+        got = CA._collins_carrier_leg(env, r_c, z, wl, dx, dx,
+                                      gap_kernel='fresnel',
+                                      on_collins_sampling='warn', diag=diag)
+    assert diag.get('collins_form') == 'tf', (
+        f"a flat-resolving leg at K1 = {k1:.6g} / K3 = {k3:.6g} still ran the "
+        f"chirp-Z ({diag.get('collins_form')!r})")
+    assert not [w for w in rec
+                if 'chirp-Z stage is under-sampled' in str(w.message)], (
+        'the leg fell back and still emitted the Kelly warning')
+    ref = CA.propagate_carrier_referenced(env, r_c, z, wl, dx,
+                                          gap_kernel='fresnel',
+                                          transport='sziklas')
+    assert np.array_equal(np.asarray(got.env), np.asarray(ref.env)), (
+        'the flat leg fell back but not to the Sziklas ANSWER')
+    assert _one(got.dx) == _one(ref.dx) and _one(got.R) == _one(ref.R)
+
+    # ... and the other side: a flat reference that IS representable is kept.
+    n2, dx2, w2, wl2 = 256, 6.0 * W_IN / 256, W_IN, WL
+    x2 = _axis(n2, dx2)
+    xx2, yy2 = np.meshgrid(x2, x2, indexing='ij')
+    env2 = np.exp(-(xx2 ** 2 + yy2 ** 2) / (w2 * w2)).astype(np.complex128)
+    r2, z2 = R_CONV, -R_CONV                      # A == 0: the focus landing
+    rr, _ry, tt, _ty = CA._collins_input_box(
+        env2, dx2, dx2, wl2, CA._COLLINS_TAIL_FRAC)
+    a2, b2, _c2, _d2 = CA._collins_envelope_abcd(r2, z2, np.inf)
+    d2, flat2 = CA._collins_leg_output_axis(a2, b2, r2 + z2, dx2, n2, rr, tt,
+                                            wl2)
+    assert flat2
+    assert n2 * d2 / (wl2 * abs(b2) / dx2) <= 1.0, (
+        'the second arm is no longer a REPRESENTABLE flat leg')
+    diag2 = {}
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        got2 = CA._collins_carrier_leg(env2, r2, z2, wl2, dx2, dx2,
+                                       diag=diag2)
+    assert diag2.get('collins_form') == 'chirp-z', (
+        'a representable flat leg was pushed onto the fallback, which would '
+        'make the fix a retreat from the flat form rather than a selection')
+    assert diag2.get('collins_flat_reference') is True
+    assert not np.isfinite(_one(got2.R)), (
+        'the representable flat leg no longer returns R = inf')
+
+
+def _one(v):
+    return float(v[0]) if isinstance(v, tuple) else float(v)
+
+
+def test_an_ordinary_two_group_relay_with_a_readout_matches_the_old_default():
+    """ROUND 2, closing VERIFY-WP-C3 D5 at the level the Migration paragraph
+    makes its claim.
+
+    The reproducer is deliberately ORDINARY: a converging launch into two
+    identical N-BK7 biconvex singlets, a plain ``focus_readout``, no
+    stop-plane key, no tilt, no ``gap_kernel``.  Before round 2, 11 of 12
+    configurations of this family RAISED ``RuntimeError`` from the Sziklas
+    readout's containment guard where all 12 returned at 49ddf4bd, and a
+    192-cell ordinary-chain sweep read 118 IDENTICAL / 52 MOVED / 22
+    OK->RAISED with 74 Kelly warnings over 51 cells.  After it the same sweep
+    reads 192 IDENTICAL / 0 MOVED / 0 OK->RAISED / 0 warnings, on both builds.
+
+    Asserted as a DECISION rather than as those counts: on this family the
+    default returns, agrees with ``transport='sziklas'`` to the bit, and warns
+    about nothing.  The fixture's own relevance is asserted too -- the readout
+    really does route to the Sziklas quadrature here (K1 > 1), which is what
+    made the containment guard reachable at all.
+    """
+    p = _singlet()
+    groups = [{'prescription': p, 'gap_before': 20e-3},
+              {'prescription': p, 'gap_before': 15e-3}]
+    n, dx, w = 256, 10.24e-3 / 256, 3.0e-3
+    x = _axis(n, dx)
+    xx, yy = np.meshgrid(x, x, indexing='ij')
+    env = np.exp(-(xx ** 2 + yy ** 2) / (w * w)).astype(np.complex128)
+    for fd in (5e-3, 15e-3):
+        kw = dict(r_in=60e-3, ray_subsample=16, n_workers=1,
+                  traced_kwargs=_TKW, final_leg='paraxial',
+                  final_distance=fd,
+                  focus_readout=dict(dx_out=0.5e-6, N_out=64))
+        with warnings.catch_warnings(record=True) as rec:
+            warnings.simplefilter('always')
+            ref = CA.propagate_traced_carrier_chain(
+                env, groups, 1.31e-6, dx, transport='sziklas', **kw)
+            got = CA.propagate_traced_carrier_chain(
+                env, groups, 1.31e-6, dx, **kw)
+        assert np.all(np.isfinite(ref.field)), (
+            'the pre-flip arithmetic no longer returns on this fixture, so '
+            'it cannot say anything about the default')
+        assert np.array_equal(np.asarray(got.field), np.asarray(ref.field)), (
+            f'the default moved on an ordinary two-group relay at '
+            f'final_distance = {fd * 1e3:g} mm')
+        st = got.stages[-1]
+        assert st.get('readout_route') == 'sziklas' and \
+            (st.get('readout_route_k1') or 0.0) > 1.0, (
+            f'the fixture no longer reaches the Sziklas readout route '
+            f'({st.get("readout_route")!r}, K1 = '
+            f'{st.get("readout_route_k1")!r}), so the containment guard this '
+            f'defect was about is no longer on the path')
+        assert not [x_ for x_ in rec
+                    if 'chirp-Z stage is under-sampled' in str(x_.message)], (
+            'the default emitted a Kelly warning on an ordinary relay where '
+            'the pre-flip default emitted none')
