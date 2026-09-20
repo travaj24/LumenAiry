@@ -364,11 +364,15 @@ The stated derivation -- "`(a s)^2 / (b s)^2` is exact up to the rounding of the
 products" -- accounted for one of the two rounding sources.  Each power is a SUM of
 `N*N = 9216` non-negative terms, and rescaling every term by an exact common factor does
 not make the two reductions round the same way.  The bar is now the sum of both sources,
-taken on the running build: the products contribute at most `6u` relative (three roundings
-per leg, two legs), and the reduction's own rounding is MEASURED by summing the identical
-terms through five different summation trees against `math.fsum`.  Times a documented
-safety factor of 4 -- the derived quantity itself spans 2.1x across the ladder below -- the
-bar lands at 27.3 to 34.0 ULP.
+taken on the running build: the products contribute at most `10u` relative (FIVE roundings
+per leg -- `fl(s*re)`, `fl(s*im)`, `fl((s*re)^2)`, `fl((s*im)^2)`, `fl(+)` -- two legs),
+and the reduction's own rounding is MEASURED by summing the identical terms through five
+different summation trees against `math.fsum`.  Times a documented safety factor of 4 --
+the derived quantity itself spans 2.1x across the ladder below -- the bar lands at 41.53 to
+48.25 ULP.  (The products term read `6u`, three roundings per leg, and the bar 27.3 to 34.0
+ULP until 2026-09-19: the old count included the scaling of one real component where the
+scale is applied to both before either is squared.  Re-measured over the same 16 arms, the
+correction changes no arm's verdict -- VERIFY-WAVE5-E D8.)
 
 A 16-arm ladder (both builds x `OPENBLAS_CORETYPE` in {HASWELL, NEHALEM, KATMAI,
 SANDYBRIDGE} x 1 and 4 threads, 2026-09-15,
@@ -379,7 +383,7 @@ SANDYBRIDGE} x 1 and 4 threads, 2026-09-15,
 | `'power'` | 0 .. 3 ULP |
 | `'peak'` | 0 .. 3 ULP |
 | the derived reduction term | 1.49 .. 3.17 ULP |
-| the derived bar | 27.3 .. 34.0 ULP |
+| the derived bar | **41.53 .. 48.25 ULP** (27.3 .. 34.0 with the old `6u` products term) |
 | an INDEPENDENT per-leg scale (the pre-fix defect) | 5.16e+08 ULP |
 
 so the bar sits 9.1x to 11.3x above the widest reading and 1.5e+07x below the real signal.
@@ -472,6 +476,33 @@ boundary index error costs exactly the one-milliwave budget over that leg).  Bef
 rewriting the guard's tolerance to drop `z_image` entirely left all 29 ids green on both
 builds; it now fails a named id on both.
 
+Each of the FOUR `_require_non_immersed_exit` call sites is now pinned independently, through
+the entry point that reaches THAT site's guard first -- `_fga_coarse` is entered directly,
+because every in-library caller reaches it from inside `_fga_through_lens`, whose guard runs
+first.  Before this, deleting the guard from `_fga_coarse` left the whole file green; now
+each site's deletion reddens its own id and no other (measured on both builds: 1 failed for
+`_fga_coarse`, 2 failed for each of the other three, whose entry-path arm fires as well).
+33 ids.
+
+**Known issue, pre-existing and NOT fixed here: the JAX path of
+`ray_transfer_jacobian_analytic` reports every ray alive.**
+`raytrace.differential._adrt_jax` ends `alive=jnp.ones((n,), dtype=bool)` and calls
+`_adrt_step(..., compute_dead=False)`, so that backend carries no vignetting, TIR or
+missed-surface logic at all.  Measured over a six-rung aperture ladder, 201 rays, both
+builds: 0 dead at every rung against 0 / 68 / 104 / 134 / 156 / 174 on the NumPy analytic
+path and the bundle tracer's identical set, with the two analytic paths agreeing to 1.1e-19 m
+of OPL on the rays NumPy kills -- so it is the mask alone.  No in-library consumer reaches
+it (`fga._pick_ray_transfer` hands it NumPy arrays; `gbd.py` calls it with
+`per_surface=True`, which `_adrt_jax` refuses), so the exposure is the public entry point
+alone, for a `jax.grad`/`jax.jit` caller.  Reproducer:
+`validation/probe_verify_wave5_e/probe_v_e5_jax_alive.py`; the exact patch and its one
+caveat (the in-line comment at `differential.py:897` claims the dead computation would trip
+a tracer-to-ndarray conversion, which has not been measured) are in
+`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/VERIFY_WAVE5_E.md` D2 and in the
+item report's open items.  Pinned as a known red by
+`tests/unit/test_verify_wave5_e.py::test_the_jax_analytic_backend_reports_no_vignetting_KNOWN_DEFECT`,
+which asserts JAX's absence as a fact rather than skipping on it.
+
 ### Added -- a durable fail-before for the C8 inverse-support bound at the SHIPPED decentred-fit order
 
 The c7 / c8 halo fixtures state `decentred_fit_poly_order=10` -- the pre-WP-A26 default -- so
@@ -506,9 +537,17 @@ the fraction of it outside the traced footprint.
 | n = 256 | 0.596 | 0.596 | 7.7e-2 | 9.0e-3 | 9.0e-3 | 2.4e-5 | 1.8e-7 |
 | n = 512 | 0.216 | 2.3e-2 | 2.0e-3 | 1.7e-4 | 1.3e-5 | 1.0e-6 | 7.5e-8 |
 
-Five of seven rungs clear 10x at 256 and seven of seven at 512, both monotone, for ~2 s of
-element calls instead of ~14 min.  Four ids, 12 s (Windows) / 19 s (WSL).  Nothing states a
-fit order: the calls run at whatever `_DECENTRED_FIT_POLY_ORDER` ships.  The premise gate
+Five of seven rungs clear 10x at 256 and six of seven at 512 (the 2.0 w rung reads 4.63x,
+which the table above shows as 0.216), all seven monotone at both, for ~2 s of element calls
+instead of ~14 min.  Four ids, 12 s (Windows) / 19 s (WSL).  The number of rungs the pin
+REQUIRES is one constant, `_REQUIRED_TRIPS = 3`, read by the stimulus gate and by both
+fail-before assertions, so the premise and the claim cannot drift apart.  A rung the bound
+empties completely (suppression exactly 0.0) now COUNTS as tripped -- it is the strongest
+evidence the ladder can produce, and the old predicate discarded it while the file's own
+formatter and premise gate read it as `inf`; measured on a 25-rung sweep, the 6.50 w and
+6.75 w rungs read exactly 0.0 and the trip count goes 14 -> 16 on both builds, with the
+pin's own seven rungs unaffected.  Nothing states a fit order: the calls run at whatever
+`_DECENTRED_FIT_POLY_ORDER` ships.  The premise gate
 first re-runs the published order-10 `_GHOST` control -- which must still read 51.5x, as it
 does here and in three of VERIFY-WP-B14's `git archive` trees -- so "the fit default moved"
 and "the bound is dead" cannot be confused: the first skips with every candidate's reading,
