@@ -97,8 +97,9 @@ def propagate(
     # WP-C4 round 2 (V-C4-D2): ``method`` here names the PROPAGATOR FAMILY, so
     # it cannot also name the route through the MFT's transform the way the
     # three MFT propagators' own ``method=`` does.  ``mft_method=`` is that
-    # keyword, and it is the one-call way back to the pre-5.49.0 dispatch on
-    # the asm / fresnel / fraunhofer output-grid legs.  ``None`` stamps
+    # keyword, and it is the one-call way back to the dispatch the asm /
+    # fresnel / fraunhofer output-grid legs had before the MFT shape rule.
+    # ``None`` stamps
     # nothing -- see ``_bluestein._mft_route_kwargs``.
     mft_method: Optional[str] = None,
     # The default is the "not passed" sentinel, NOT a literal ``True``, so
@@ -914,7 +915,8 @@ def _dispatch_bare_grid_with_output(method, E_in, *, z, wavelength, dx,
     ``mft_method`` (WP-C4 round 2, V-C4-D2) names the route through the MFT
     variant's own transform and is forwarded as its ``method=``.  ``None``
     stamps nothing, so the propagator's own default governs; ``'bluestein'``
-    / ``'separable'`` are the one-call way back to the pre-5.49.0 dispatch.
+    / ``'separable'`` are the one-call way back to the dispatch these legs
+    had before the MFT shape rule.
     ``propagate``'s own ``method=`` names the propagator FAMILY and so cannot
     carry this.
     """
@@ -1072,7 +1074,7 @@ def _dispatch_to_method(method, E_in, *, z, wavelength, dx,
     _BARE_GRID_METHODS = ('asm', 'sas', 'fresnel', 'fraunhofer', 'rs')
     # WP-C4 round 2 (V-C4-D2).  ``mft_method=`` reaches a transform only on
     # the MFT legs below.  Anywhere else it would be silently dropped -- and a
-    # caller passing it is asking for the pre-5.49.0 MFT bytes, which is
+    # caller passing it is asking for the pre-shape-rule MFT bytes, which is
     # exactly the request a default flip may not lose.  Refuse instead.
     if mft_method is not None and not (
             method in _BARE_GRID_METHODS

@@ -3120,7 +3120,7 @@ its docstring rated at "< 0.1 %", and the single-FFT Fresnel output
 chirp sits at exactly Nyquist at the grid edge by construction.
 
 `method` (new, `{'spline', 'chirpz'}`, keyword-only, default `'spline'`;
-`mft.py:639`) adds the band-limited alternative: transform to the centred
+`mft.py:645`) adds the band-limited alternative: transform to the centred
 spectrum and inverse-transform it straight onto the output grid with
 `_bluestein_centred_2d` (`_resample_field_chirpz`, `mft.py:578`), which
 is the trigonometric (Dirichlet-kernel) interpolant of the samples. Its
@@ -3148,7 +3148,7 @@ reconstruction is **periodic** with period `N_in*dx_in`, so an output
 window wider than the input extent returns replicas rather than the
 zeros the spline pads with — measured power ratio exactly 4.000000 for a
 2× window, where the spline gives 1.000000. That case now warns, reusing
-the MFT family's faithful-zone diagnostic (`mft.py:858`), which grew a
+the MFT family's faithful-zone diagnostic (`mft.py:878`), which grew a
 per-axis `N_out_y` for the non-square extent-preserving default
 (`mft.py:95`). And neither leg anti-aliases on down-sampling.
 
@@ -3288,7 +3288,7 @@ rescaled by the **x** ratio -- wrong by `Nx/Ny`, with no diagnostic.
 Because there is no resample left to crop, the leg no longer calls
 `_warn_system_resample_crop` (`system.py:361`); the `'sas'` leg still
 does, unchanged.  `fresnel_propagate_mft` carries the same K1
-chirp-sampling guard (`lumenairy/propagators/mft.py:1152`) plus its own
+chirp-sampling guard (`lumenairy/propagators/mft.py:1173`) plus its own
 faithful-zone warning with period `lambda*|z|/dx_in`, so no diagnostic
 is lost -- see Migration for the two messages whose wording moves.
 
@@ -3410,7 +3410,7 @@ with a 0.30 cyc/px carrier, **0.993922** (x1.25), 0.998015 (x1.5),
 for a contained one.  With an exact-period `N_out` the reading is 1 to
 -1.1e-16 .. +6.7e-16.
 
-Docstring only: `lumenairy/propagators/mft.py:694-719`.  The module's
+Docstring only: `lumenairy/propagators/mft.py:701-726`.  The module's
 AST and token fingerprints are unchanged, which is
 `scripts/record_history_fingerprints.py --check` confirming it.
 Tests: `tests/unit/test_audit2609_b3b_resample_call_sites.py::TestF6TheUnitMtfIsAPropertyOfTheWindow`
@@ -3516,7 +3516,7 @@ where the default lands on the period exactly.  The fixture the paragraph quotes
 exact, which is why it read as true.
 
 Corrected in place with that reading added
-(`lumenairy/propagators/mft.py:700-709`).  Docstring only:
+(`lumenairy/propagators/mft.py:707-716`).  Docstring only:
 `scripts/record_history_fingerprints.py --check` reports
 `lumenairy.propagators.mft` OK.
 
@@ -3587,7 +3587,7 @@ C1 and the WP-A25 replica regime).
 
 `'collins'` evaluates the same integral in the form Collins (1970, *JOSA* **60**,
 1168) gives for an arbitrary ABCD system, factored as chirp x chirp-Z x chirp
-(`lumenairy/propagators/carrier.py:2215` `_collins_transport`).  In this
+(`lumenairy/propagators/carrier.py:2233` `_collins_transport`).  In this
 library's `exp(-i omega t)` / `exp(+i k z)` convention (CONVENTIONS sec. 7 -- the
 complex conjugate of the form printed in Collins' paper, which uses the opposite
 time convention):
@@ -3596,7 +3596,7 @@ time convention):
                * integral u_in(u) exp(i k (A u^2 - 2 u x + D x^2)/(2 B)) du
 
 with the envelope-to-envelope system "attach the input carrier, fly `z`, remove
-the chosen output carrier" (`carrier.py:1797`):
+the chosen output carrier" (`carrier.py:1815`):
 
     A = 1 + z/R_in = m,   B = z,   C = 1/R_in - A/R_ref,   D = 1 - z/R_ref
 
@@ -3605,7 +3605,7 @@ so `det = AD - BC = 1` for every choice of `R_ref` (pinned as an identity over
 forward leg, converging or not: the carrier's sign lives in `A`, which shrinks to
 zero and past it as a leg crosses the geometric focus, and the transform carries
 `A <= 0` natively.  The three stages are the module's own separable screen
-(`_radial_carrier_phase`'s per-axis factor, `carrier.py:1859`), the separable
+(`_radial_carrier_phase`'s per-axis factor, `carrier.py:1877`), the separable
 centred Bluestein the readouts already run (`_bluestein_centred_2d`), and a
 second separable screen.  At `R_ref = R + z` and `dx_out = m*dx` the result is
 term for term `_carrier_step_fast` -- measured agreement 7.6e-12 and 3.2e-12 of
@@ -3614,7 +3614,7 @@ peak at two well-sampled legs, on both `gap_kernel` settings.
 What the free pitch buys, measured:
 
 * **the image-plane readout is one step.**  `transport='collins'` lands the
-  target plane directly on the caller's `(dx_out, N_out)` (`carrier.py:2706`),
+  target plane directly on the caller's `(dx_out, N_out)` (`carrier.py:2731`),
   with no standoff plane, no beam-containment resolution and no near-focus
   bridge.  Against an analytic Gaussian-ABCD oracle carrying the absolute piston
   and Gouy phase, over NA 0.03-0.45 x grid extents 1.5-10 beam radii (30 cells),
@@ -3639,7 +3639,7 @@ What the free pitch buys, measured:
 * **a near-focus gap leg no longer splits.**  The output pitch is the co-moving
   `|A| dx` floored by `2(|A| r + |B| theta)/N`, the ABCD image of the envelope's
   measured phase-space box, so it carries the leg's own diffraction and cannot
-  follow `A` to zero (`carrier.py:2079`); and where referencing to the
+  follow `A` to zero (`carrier.py:2097`); and where referencing to the
   collapsing ray sphere `R + z` would need more samples than the grid has, the
   output is referenced FLAT instead, which is the physical statement that the
   wavefront is flat at the waist.  Measured 0.1 mm before a 40 mm focus: pitch
@@ -3651,7 +3651,7 @@ What the free pitch buys, measured:
 
 **The sampling guard** (`on_collins_sampling={'error','warn','ignore'}`, default
 `'warn'`) is written against Kelly, *Appl. Opt.* **53**, 2861 (2014) rather than
-against a geometric margin (`carrier.py:1949`, `:1985`).  Three conditions, each
+against a geometric margin (`carrier.py:1967`, `:2003`).  Three conditions, each
 a ratio against the Nyquist rate itself with the bar at 1 and no margin,
 evaluated on the field's own measured `1 - 1e-6`-power support in BOTH domains
 rather than at the grid edge:
@@ -3667,7 +3667,7 @@ rather than at the grid edge:
   EXISTING `on_replica` on this transport's period, so the two guards cannot
   disagree.
 
-The tolerance is the one number `_COLLINS_TAIL_FRAC = 1e-6` (`carrier.py:1682`),
+The tolerance is the one number `_COLLINS_TAIL_FRAC = 1e-6` (`carrier.py:1700`),
 the power allowed outside the support radii the ratios are formed from, so the
 aliased power is bounded by it and the field error by its square root.  Stated
 fail-before, as a ladder over four grids at A = 0.9, B = 3 mm: at K1 = 49.694 /
@@ -3676,7 +3676,7 @@ Gaussian by relL2 1.13e+02 / 5.52e+01 / 2.74e+01 / 1.33e+01 -- tracking K1, whic
 is what says it is the aliasing -- while the complementary quadrature sits at
 6.28e-11 on every grid.
 
-**Quadrature selection, and why it is not a threshold** (`carrier.py:2534`).  The
+**Quadrature selection, and why it is not a threshold** (`carrier.py:2557`).  The
 chirp-Z form needs `K1 <= 1`, which with `r` at the grid half-width is
 `N dx^2 <= lambda |z_eff|`; the transfer-function form (`_carrier_step_fast`)
 samples the kernel on the frequency lattice instead and needs the same
@@ -3693,12 +3693,12 @@ enough to trip `_near_focus_needs_bridge` has `|A| < 0.02` and therefore
 
 `gap_kernel` keeps its meaning on this transport: the Collins stage IS the
 ABCD-Fresnel integral, and `'exact'` pre-applies the diagonal exact/Fresnel
-kernel ratio on the input grid (`carrier.py:2155`), which is an exact operator
+kernel ratio on the input grid (`carrier.py:2173`), which is an exact operator
 identity because both kernels are diagonal in the same basis.  That refinement
 lives on the REDUCED frame `z_eff = B/A`, which is unbounded as a leg approaches
 the geometric focus, so it is applied only where its own group delay
 `|z_eff| theta (1/sqrt(1-theta^2) - 1)` fits inside the grid it is applied on
-(`carrier.py:2117`); an explicit `gap_kernel='exact'` there is REFUSED rather
+(`carrier.py:2135`); an explicit `gap_kernel='exact'` there is REFUSED rather
 than silently downgraded, and `'auto'` takes the ABCD-Fresnel integral and
 records `collins_kernel='fresnel'`.  Applying it anyway leaves the core right and
 destroys the halo: measured against a direct summation of the same integral on
@@ -5272,7 +5272,7 @@ written out as its own two axis passes so the padded input can be released
 between them, and ownership of the padded array is handed over explicitly
 (`psf_mtf_otf.py:84` `_centred_fft2_take`) so the caller's name cannot keep it
 alive across the transform.  `|amp|^2` is then built through one real buffer
-and both normalisations are applied in place (`psf_mtf_otf.py:451`
+and both normalisations are applied in place (`psf_mtf_otf.py:479`
 `_scaled`).
 
 Measured (interleaved medians, `tracemalloc` peak, `OPENBLAS_NUM_THREADS=1`,
@@ -5370,7 +5370,7 @@ Tests: `tests/unit/test_audit2609_b8_analysis_sources.py`.
 `encircled_energy_curve` and `encircled_energy_radius` each build the same
 sorted cumulative-energy profile, so a caller wanting BOTH -- the ordinary
 spec-sheet pattern -- pays for two identical full-grid `argsort` passes.  The
-construction is now a public value (`lumenairy/analysis/psf_mtf_otf.py:770`
+construction is now a public value (`lumenairy/analysis/psf_mtf_otf.py:803`
 `encircled_energy_profile(E, dx, *, dy=None, centroid=None) ->
 (r_sorted, p_cum, r_max)`) and both functions accept it as `profile=`.
 
@@ -5627,7 +5627,7 @@ lengths and the endpoints". Only the shapes and the lengths were checked. A `pro
 `r_sorted` came back as `[0, 0, 1]`; an all-NaN `p_cum` was accepted. Nor was the profile's length
 compared with `E.size`, so a profile built on an 8x8 field was accepted by a 16x16 call and quietly
 answered the 8x8 question. Both checks are O(1) -- they cost nothing the argument was bought to avoid --
-and both now run: `lumenairy/analysis/psf_mtf_otf.py:905` (length against `E.size`, after the
+and both now run: `lumenairy/analysis/psf_mtf_otf.py:938` (length against `E.size`, after the
 zero-power short circuit) and `:912` (the two endpoints). The endpoint slack is derived rather than
 chosen: `p_cum` is a `cumsum` over `len(p_cum)` positive terms divided by their exact total, so
 `len(p_cum) * eps` bounds its drift off 1 -- measured worst 8.8e-12 over N = 16...2048 x {Gaussian,
@@ -5698,7 +5698,7 @@ still reporting `wavelength*f/(N_psf*dx_pupil)` as its pitch (and, for `normaliz
 `psf_power_area` built from that pitch). `method='mft'` honours `N_psf`, so the two return different
 SHAPES there -- measured at `N_pupil = 32`: `(32, 32)` against `(16, 16)`, with the same reported
 `dx_psf`. The Notes now name the regime and which sampler is at fault, and the divergence is pinned so it
-cannot be re-introduced as a surprise. `lumenairy/analysis/psf_mtf_otf.py:268`. **No behaviour moves** --
+cannot be re-introduced as a surprise. `lumenairy/analysis/psf_mtf_otf.py:283`. **No behaviour moves** --
 the FFT path's handling of `N_psf < N_pupil` is pre-existing and changing it would move a default; it is
 recorded for the coordinator instead. Test:
 `::test_verifyb8_mft_and_fft_shapes_diverge_below_the_pupil_size`.
@@ -5725,7 +5725,7 @@ The FFT sampler pads only when `N_psf > N_pupil`, so a smaller `N_psf` silently 
 `dx_psf` reported `wavelength*f/(N_psf*dx_pupil)` and, under `normalize='power'`, the scale carried a pixel area built from that
 pitch -- off by `(N_pupil/N_psf)^2`.  Measured on the pre-fix library at `N_pupil = 32`, `N_psf = 16`: shape `(32, 32)` with the same
 reported pitch as the MFT's honoured `(16, 16)`.  The call now raises `ValueError` with the CONVENTIONS section 2 prefix, naming the two
-remedies (`N_psf >= N_pupil` / `oversample`, or `method='mft'`).  `lumenairy/analysis/psf_mtf_otf.py:361`.  **Migration:** a caller who
+remedies (`N_psf >= N_pupil` / `oversample`, or `method='mft'`).  `lumenairy/analysis/psf_mtf_otf.py:388`.  **Migration:** a caller who
 passed `N_psf` below the pupil size on the FFT path was receiving the un-cropped pupil-sized PSF with a mis-reported pitch; that call now
 raises.  Ask for `N_psf >= N_pupil`, or use `method='mft'`, which samples exactly `N_psf` points.  Test:
 `tests/unit/test_audit2609_b8_analysis_sources.py::test_verifyb8_the_fft_path_refuses_n_psf_below_the_pupil_size`.
@@ -5921,7 +5921,7 @@ fixture, so its levels belong in a slow lane.
 
 ### Changed -- the Collins one-step readout's applicability window is on the public docstring
 
-`propagators/carrier.py:1233`.  The K1 condition
+`propagators/carrier.py:1240`.  The K1 condition
 `2 dx (|A| r/|B| + theta)/lambda` on the CHAIN'S OWN exit pitch was derived at
 length in `_collins_readout`'s docstring but nowhere a caller choosing
 `transport=` would read it.  The `transport` parameter now carries the window

@@ -122,6 +122,7 @@ from typing import Any, Dict, Iterable, List, NamedTuple, Optional, Sequence, Tu
 import numpy as np
 
 from ..elements._lens_kernels import caller_stacklevel as _caller_stacklevel
+from ._bluestein import _mft_route_kwargs
 from .carrier import (
     _check_guard_action,
     _envelope_amp_radius,
@@ -132,7 +133,6 @@ from .carrier import (
     _tilt_exactness_phase,
     _tilt_ramp,
 )
-from ._bluestein import _mft_route_kwargs
 from .mft import angular_spectrum_propagate_mft
 
 __all__ = [
@@ -1335,11 +1335,12 @@ def re_reference(field: CarrierField, to_carrier: CarrierSpec,
         :func:`~lumenairy.propagators.mft.angular_spectrum_propagate_mft` as
         its ``method=`` (WP-C4 round 2, V-C4-D2).  ``None`` (the default)
         stamps nothing and leaves the propagator's own default in force.
-        ``_separable`` selects a chirp-Z ARM and is powerless once 5.49.0's
+        ``_separable`` selects a chirp-Z ARM and is powerless once the MFT
         shape rule sends the transform to the dense matrix route, so the way
         back for ONE call at ``target_grid.n <= field.grid.n/32`` is
         ``mft_method='separable'`` (this call passes ``_separable=True`` by
-        default) -- see the 5.49.0 section of ``Migration-Guide.md``.
+        default) -- see the MFT shape-rule section of
+        ``Migration-Guide.md``.
 
     Returns
     -------

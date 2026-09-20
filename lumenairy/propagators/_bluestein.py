@@ -386,7 +386,8 @@ _MFT_DIRECT_NEVER = 0.0
 #: capturing an unsafe one cost up to 13x on this ladder.
 #:
 #: A non-positive or ``nan`` value means the screen refuses nothing that the
-#: ratio admitted, which is the PRE-5.49.0 exposure and is what the
+#: ratio admitted, which is the exposure this rule was widened to close,
+#: and is what the
 #: ``constant_silently_zero`` mutation in
 #: ``tests/unit/test_c4_mft_direct_default.py`` exercises.
 _MFT_DIRECT_MIN_WORK_PER_KERNEL_ENTRY = 16.0

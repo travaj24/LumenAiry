@@ -242,12 +242,13 @@ def compute_psf(
         :func:`lumenairy.propagators.fraunhofer_propagate_mft` as its
         ``method=``.  ``method`` above names the SAMPLER (``'fft'`` /
         ``'mft'``), so it cannot carry this; ``mft_method`` is the one-call way
-        back to the pre-5.49.0 dispatch, which on this path is
-        ``mft_method='bluestein'``.  ``None`` (the default) names nothing and
-        leaves the propagator's own default in force.  Relevant whenever
-        ``N_psf <= N_pupil/32``, where 5.49.0's shape rule sends the transform
-        to the dense matrix route; see the 5.49.0 section of
-        ``Migration-Guide.md``.
+        back to the dispatch this path had before the MFT shape rule, which
+        here is ``mft_method='bluestein'``.  ``None`` (the default) names
+        nothing and leaves the propagator's own default in force.  Relevant
+        whenever ``N_psf <= N_pupil/32``, where the shape rule sends the
+        transform to the dense matrix route; see the MFT shape-rule section of
+        ``Migration-Guide.md`` and the CHANGELOG for the release it landed
+        in.
 
     Returns
     -------
@@ -373,7 +374,7 @@ def compute_psf(
     # Same refusal, same reason (WP-C4 round 2, V-C4-D2): ``mft_method=``
     # names a route through the matrix Fourier transform, and the FFT sampler
     # reaches no such transform.  Accepting it there would silently ignore a
-    # caller who was asking for the pre-5.49.0 bytes.
+    # caller who was asking for the pre-shape-rule bytes.
     if mft_method is not None and method != 'mft':
         raise ValueError(
             f"compute_psf: mft_method= is only meaningful with method='mft' "
@@ -511,7 +512,7 @@ def _compute_psf_mft(pupil, wavelength, f, dx_pupil, N_psf, normalize,
 
     ``mft_method`` names the route through that propagator's transform
     (WP-C4 round 2, V-C4-D2): ``None`` stamps nothing, ``'bluestein'``
-    reproduces the pre-5.49.0 dispatch for ONE call."""
+    reproduces the pre-shape-rule dispatch for ONE call."""
     import warnings
 
     from ..propagators._bluestein import _mft_route_kwargs

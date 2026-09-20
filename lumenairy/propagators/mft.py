@@ -605,7 +605,7 @@ def _resample_field_chirpz(E_in, dx_in, dx_out, Ny_out, Nx_out, *,
 
     ``mft_method`` names the route through that primitive's own transform
     (WP-C4 round 2, V-C4-D2): ``None`` stamps nothing, ``'bluestein'``
-    reproduces the pre-5.49.0 dispatch for ONE call.
+    reproduces the pre-shape-rule dispatch for ONE call.
     """
     from ._bluestein import _bluestein_centred_2d, _mft_route_kwargs
 
@@ -745,11 +745,12 @@ keyword-only, default ``None``
         :func:`~lumenairy.propagators._bluestein._bluestein_centred_2d` as its
         ``method=``.  ``method=`` above names the RESAMPLER and is therefore
         not available for this; ``mft_method`` is the one-call way back to the
-        pre-5.49.0 dispatch, which is ``mft_method='bluestein'`` here (this leg
-        does not pass ``separable``, so the previous route was the 2-D chirp-Z
-        arm).  ``None`` (the default) names nothing and leaves the primitive's
-        own default in force.  Ignored by ``method='spline'``, which reaches
-        no transform.  See the 5.49.0 section of ``Migration-Guide.md``.
+        dispatch this leg had before the MFT shape rule, which is
+        ``mft_method='bluestein'`` here (this leg does not pass ``separable``,
+        so the previous route was the 2-D chirp-Z arm).  ``None`` (the
+        default) names nothing and leaves the primitive's own default in
+        force.  Ignored by ``method='spline'``, which reaches no transform.
+        See the MFT shape-rule section of ``Migration-Guide.md``.
 
     Returns
     -------
