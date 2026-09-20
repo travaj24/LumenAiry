@@ -1,0 +1,359 @@
+{
+ "arm": "post",
+ "arm_tokens": {
+  "immersed_guard": true,
+  "mirror_guard": true
+ },
+ "entry_points": {
+  "mine_air": {
+   "apply_real_lens_gbd": {
+    "decision": "served",
+    "digest": "69242eaa670b0ef7ad4abbe19acc5fee776776d6f9e2339dadb7b56d020bd9e8",
+    "shape": [
+     128,
+     128
+    ]
+   },
+   "apply_real_lens_universal_gbd": {
+    "decision": "served",
+    "digest": "938a2758d91eb4e97b1a409fbae74fe124fab9ed80272d7f449be40f5487c4f1",
+    "shape": [
+     128,
+     128
+    ]
+   },
+   "beamlet_function": {
+    "decision": "served",
+    "digest": "a920e90dda613a48b279c4f8a132979ab18abb12462af70f7410b2edaffb4321",
+    "shape": [
+     859,
+     3
+    ]
+   },
+   "propagate_gbd_through_prescription": {
+    "decision": "served",
+    "digest": "69242eaa670b0ef7ad4abbe19acc5fee776776d6f9e2339dadb7b56d020bd9e8",
+    "shape": [
+     128,
+     128
+    ]
+   },
+   "world_output_plane_branch": {
+    "decision": "served",
+    "digest": "7db702e40f41a0ccfa74a09bed433ffdd7c7e45c2cea2374e2f7826e43fe7c39",
+    "shape": [
+     859,
+     3
+    ]
+   }
+  },
+  "mine_immersed_oil152": {
+   "apply_real_lens_gbd": {
+    "decision": "refused",
+    "kind": "NotImplementedError",
+    "message": "apply_prescription_persurface_to_beamlets: the prescription's exit medium has refractive index 1.518 (surfaces[-1].glass_after), i.e. the optic is IMMERSED (or, at a long image leg, merely has an exit index far enough from 1 to spend the wavefront budget over that leg).  This propagator adds its image-side leg as opd += z_image*sqrt(1+ux^2+uy^2), which carries no exit index, so the returned phase would be wrong by at least 491 waves at z_image=0.0006 m (tolerance 1.06e-06, 0.001 waves).  Refusing rather than serving it silently.  Terminate the prescription in air -- add the immersion medium as an explicit last element -- or use a propagator that carries the exit index through the image leg."
+   },
+   "apply_real_lens_universal_gbd": {
+    "decision": "refused",
+    "kind": "NotImplementedError",
+    "message": "apply_prescription_persurface_to_beamlets: the prescription's exit medium has refractive index 1.518 (surfaces[-1].glass_after), i.e. the optic is IMMERSED (or, at a long image leg, merely has an exit index far enough from 1 to spend the wavefront budget over that leg).  This propagator adds its image-side leg as opd += z_image*sqrt(1+ux^2+uy^2), which carries no exit index, so the returned phase would be wrong by at least 491 waves at z_image=0.0006 m (tolerance 1.06e-06, 0.001 waves).  Refusing rather than serving it silently.  Terminate the prescription in air -- add the immersion medium as an explicit last element -- or use a propagator that carries the exit index through the image leg."
+   },
+   "beamlet_function": {
+    "decision": "refused",
+    "kind": "NotImplementedError",
+    "message": "apply_prescription_persurface_to_beamlets: the prescription's exit medium has refractive index 1.518 (surfaces[-1].glass_after), i.e. the optic is IMMERSED (or, at a long image leg, merely has an exit index far enough from 1 to spend the wavefront budget over that leg).  This propagator adds its image-side leg as opd += z_image*sqrt(1+ux^2+uy^2), which carries no exit index, so the returned phase would be wrong by at least 491 waves at z_image=0.0006 m (tolerance 1.06e-06, 0.001 waves).  Refusing rather than serving it silently.  Terminate the prescription in air -- add the immersion medium as an explicit last element -- or use a propagator that carries the exit index through the image leg."
+   },
+   "propagate_gbd_through_prescription": {
+    "decision": "refused",
+    "kind": "NotImplementedError",
+    "message": "apply_prescription_persurface_to_beamlets: the prescription's exit medium has refractive index 1.518 (surfaces[-1].glass_after), i.e. the optic is IMMERSED (or, at a long image leg, merely has an exit index far enough from 1 to spend the wavefront budget over that leg).  This propagator adds its image-side leg as opd += z_image*sqrt(1+ux^2+uy^2), which carries no exit index, so the returned phase would be wrong by at least 491 waves at z_image=0.0006 m (tolerance 1.06e-06, 0.001 waves).  Refusing rather than serving it silently.  Terminate the prescription in air -- add the immersion medium as an explicit last element -- or use a propagator that carries the exit index through the image leg."
+   },
+   "world_output_plane_branch": {
+    "decision": "served",
+    "digest": "8515d0dbb34be1790fdc107ce21856ae6e1fd2bfeb440742604e125b87b64df7",
+    "shape": [
+     859,
+     3
+    ]
+   }
+  },
+  "mine_immersed_water133": {
+   "apply_real_lens_gbd": {
+    "decision": "refused",
+    "kind": "NotImplementedError",
+    "message": "apply_prescription_persurface_to_beamlets: the prescription's exit medium has refractive index 1.333 (surfaces[-1].glass_after), i.e. the optic is IMMERSED (or, at a long image leg, merely has an exit index far enough from 1 to spend the wavefront budget over that leg).  This propagator adds its image-side leg as opd += z_image*sqrt(1+ux^2+uy^2), which carries no exit index, so the returned phase would be wrong by at least 316 waves at z_image=0.0006 m (tolerance 1.06e-06, 0.001 waves).  Refusing rather than serving it silently.  Terminate the prescription in air -- add the immersion medium as an explicit last element -- or use a propagator that carries the exit index through the image leg."
+   },
+   "apply_real_lens_universal_gbd": {
+    "decision": "refused",
+    "kind": "NotImplementedError",
+    "message": "apply_prescription_persurface_to_beamlets: the prescription's exit medium has refractive index 1.333 (surfaces[-1].glass_after), i.e. the optic is IMMERSED (or, at a long image leg, merely has an exit index far enough from 1 to spend the wavefront budget over that leg).  This propagator adds its image-side leg as opd += z_image*sqrt(1+ux^2+uy^2), which carries no exit index, so the returned phase would be wrong by at least 316 waves at z_image=0.0006 m (tolerance 1.06e-06, 0.001 waves).  Refusing rather than serving it silently.  Terminate the prescription in air -- add the immersion medium as an explicit last element -- or use a propagator that carries the exit index through the image leg."
+   },
+   "beamlet_function": {
+    "decision": "refused",
+    "kind": "NotImplementedError",
+    "message": "apply_prescription_persurface_to_beamlets: the prescription's exit medium has refractive index 1.333 (surfaces[-1].glass_after), i.e. the optic is IMMERSED (or, at a long image leg, merely has an exit index far enough from 1 to spend the wavefront budget over that leg).  This propagator adds its image-side leg as opd += z_image*sqrt(1+ux^2+uy^2), which carries no exit index, so the returned phase would be wrong by at least 316 waves at z_image=0.0006 m (tolerance 1.06e-06, 0.001 waves).  Refusing rather than serving it silently.  Terminate the prescription in air -- add the immersion medium as an explicit last element -- or use a propagator that carries the exit index through the image leg."
+   },
+   "propagate_gbd_through_prescription": {
+    "decision": "refused",
+    "kind": "NotImplementedError",
+    "message": "apply_prescription_persurface_to_beamlets: the prescription's exit medium has refractive index 1.333 (surfaces[-1].glass_after), i.e. the optic is IMMERSED (or, at a long image leg, merely has an exit index far enough from 1 to spend the wavefront budget over that leg).  This propagator adds its image-side leg as opd += z_image*sqrt(1+ux^2+uy^2), which carries no exit index, so the returned phase would be wrong by at least 316 waves at z_image=0.0006 m (tolerance 1.06e-06, 0.001 waves).  Refusing rather than serving it silently.  Terminate the prescription in air -- add the immersion medium as an explicit last element -- or use a propagator that carries the exit index through the image leg."
+   },
+   "world_output_plane_branch": {
+    "decision": "served",
+    "digest": "bb4a151694d2fbf0111a6bbf46329a193ccd4878f0e2a4a823245d1699fc96d5",
+    "shape": [
+     859,
+     3
+    ]
+   }
+  },
+  "verifier_air_conic": {
+   "apply_real_lens_gbd": {
+    "decision": "served",
+    "digest": "1561aa91cfdbe59d5006cb09bbc05dc525bfbfd390a4a46e7bca2874afb3160e",
+    "shape": [
+     192,
+     192
+    ]
+   },
+   "apply_real_lens_universal_gbd": {
+    "decision": "served",
+    "digest": "99bbfcb225bc04e4596782cde769e35706cb1df9ea3ee8cffe9a3127d4342b5d",
+    "shape": [
+     192,
+     192
+    ]
+   },
+   "beamlet_function": {
+    "decision": "served",
+    "digest": "92637dd222953e1b8613403b465515480ed9fc126167fa19e7203ae53ca4a6d7",
+    "shape": [
+     1201,
+     3
+    ]
+   },
+   "propagate_gbd_through_prescription": {
+    "decision": "served",
+    "digest": "1561aa91cfdbe59d5006cb09bbc05dc525bfbfd390a4a46e7bca2874afb3160e",
+    "shape": [
+     192,
+     192
+    ]
+   },
+   "world_output_plane_branch": {
+    "decision": "served",
+    "digest": "6df9b8d2f30dd6e839fa1fa1bd02b2e082807ca614722a4e3e9d945f11ac4a85",
+    "shape": [
+     1201,
+     3
+    ]
+   }
+  },
+  "verifier_immersed_n172": {
+   "apply_real_lens_gbd": {
+    "decision": "refused",
+    "kind": "NotImplementedError",
+    "message": "apply_prescription_persurface_to_beamlets: the prescription's exit medium has refractive index 1.72 (surfaces[-1].glass_after), i.e. the optic is IMMERSED (or, at a long image leg, merely has an exit index far enough from 1 to spend the wavefront budget over that leg).  This propagator adds its image-side leg as opd += z_image*sqrt(1+ux^2+uy^2), which carries no exit index, so the returned phase would be wrong by at least 1.85e+03 waves at z_image=0.002 m (tolerance 3.9e-07, 0.001 waves).  Refusing rather than serving it silently.  Terminate the prescription in air -- add the immersion medium as an explicit last element -- or use a propagator that carries the exit index through the image leg."
+   },
+   "apply_real_lens_universal_gbd": {
+    "decision": "refused",
+    "kind": "NotImplementedError",
+    "message": "apply_prescription_persurface_to_beamlets: the prescription's exit medium has refractive index 1.72 (surfaces[-1].glass_after), i.e. the optic is IMMERSED (or, at a long image leg, merely has an exit index far enough from 1 to spend the wavefront budget over that leg).  This propagator adds its image-side leg as opd += z_image*sqrt(1+ux^2+uy^2), which carries no exit index, so the returned phase would be wrong by at least 1.85e+03 waves at z_image=0.002 m (tolerance 3.9e-07, 0.001 waves).  Refusing rather than serving it silently.  Terminate the prescription in air -- add the immersion medium as an explicit last element -- or use a propagator that carries the exit index through the image leg."
+   },
+   "beamlet_function": {
+    "decision": "refused",
+    "kind": "NotImplementedError",
+    "message": "apply_prescription_persurface_to_beamlets: the prescription's exit medium has refractive index 1.72 (surfaces[-1].glass_after), i.e. the optic is IMMERSED (or, at a long image leg, merely has an exit index far enough from 1 to spend the wavefront budget over that leg).  This propagator adds its image-side leg as opd += z_image*sqrt(1+ux^2+uy^2), which carries no exit index, so the returned phase would be wrong by at least 1.85e+03 waves at z_image=0.002 m (tolerance 3.9e-07, 0.001 waves).  Refusing rather than serving it silently.  Terminate the prescription in air -- add the immersion medium as an explicit last element -- or use a propagator that carries the exit index through the image leg."
+   },
+   "propagate_gbd_through_prescription": {
+    "decision": "refused",
+    "kind": "NotImplementedError",
+    "message": "apply_prescription_persurface_to_beamlets: the prescription's exit medium has refractive index 1.72 (surfaces[-1].glass_after), i.e. the optic is IMMERSED (or, at a long image leg, merely has an exit index far enough from 1 to spend the wavefront budget over that leg).  This propagator adds its image-side leg as opd += z_image*sqrt(1+ux^2+uy^2), which carries no exit index, so the returned phase would be wrong by at least 1.85e+03 waves at z_image=0.002 m (tolerance 3.9e-07, 0.001 waves).  Refusing rather than serving it silently.  Terminate the prescription in air -- add the immersion medium as an explicit last element -- or use a propagator that carries the exit index through the image leg."
+   },
+   "world_output_plane_branch": {
+    "decision": "served",
+    "digest": "deabc3e95e8834ef17f5c3d646c09a2301bb8e668bc362d5e772a1c1f1f0fe74",
+    "shape": [
+     1201,
+     3
+    ]
+   }
+  }
+ },
+ "env": {
+  "arm": "post",
+  "arm_tokens": {
+   "immersed_guard": true,
+   "mirror_guard": true
+  },
+  "build": "linux_312",
+  "env": {
+   "LUMENAIRY_MEM_BUDGET_MB": "2048",
+   "MKL_NUM_THREADS": "1",
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "PYTHONPATH": "/mnt/c/tmp/lum_gbd2:/mnt/c/tmp/lum_gbd2/validation/probe_wp_b12b_round2",
+   "R2_TREE": "/mnt/c/tmp/lum_gbd2"
+  },
+  "lumenairy_file": "/mnt/c/tmp/lum_gbd2/lumenairy/__init__.py",
+  "lumenairy_version": "5.47.1",
+  "numpy": "2.4.6",
+  "platform": "Linux-4.4.0-26100-Microsoft-x86_64-with-glibc2.39",
+  "python": "3.12.3 (main, Mar 23 2026, 19:04:32) [GCC 13.3.0]",
+  "scipy": "1.17.1"
+ },
+ "helper_identity": {
+  "gbd_reaches_fga_helper": true,
+  "noise_floor": 1e-12,
+  "tolerance_module": "lumenairy.propagators.fga",
+  "tolerance_qualname": "_immersed_exit_tolerance",
+  "wave_budget": 0.001
+ },
+ "mirror": {
+  "mine_mirror_R8_curved": {
+   "local": {
+    "decision": "refused",
+    "message": "apply_prescription_persurface_to_beamlets: the prescription's LAST surface is a MIRROR, and the local-frame branch cannot serve a mirror-terminated prescription.  Its image-side leg is built from Nz2 = 1/sqrt(1 + ux^2 + uy^2), which is positive whatever the true N, so after a mirror the returned direction, the leg t = z_image/Nz2 and the Moebius free-space step all run along +z while the light travels toward -z (measured VERIFY-WP-B12b sec. 9.2: the spot RMS is 7.8e3 x the traced one at z_image = +f, and at z_image = -f the transverse positions are right but the leg piston carries the wrong sign, 0.48 waves).  NO ROUTE IN THIS LIBRARY SERVES THIS CLASS YET when the mirror is CURVED: world_output_plane refuses a powered terminating fold itself.  For a FLAT terminating mirror, pass world_output_plane=(p0, R_out) -- an explicit plane, since 'auto' has no paraxial focus to find.  Otherwise propagate to the mirror and continue the reverse leg yourself.  Refusing rather than returning a wrong field silently."
+   },
+   "truth": null,
+   "world": {
+    "auto": {
+     "decision": "refused",
+     "kind": "NotImplementedError",
+     "message": "world_output_plane: curved (powered) fold mirrors are not yet supported (a flat fold is invariant to Q, a curved one is not).  Use per-surface world differential transfer, or a flat fold."
+    },
+    "explicit": {
+     "decision": "refused",
+     "kind": "NotImplementedError",
+     "message": "world_output_plane: curved (powered) fold mirrors are not yet supported (a flat fold is invariant to Q, a curved one is not).  Use per-surface world differential transfer, or a flat fold."
+    }
+   },
+   "z_image": 0.004
+  },
+  "mine_mirror_flat": {
+   "local": {
+    "decision": "refused",
+    "message": "apply_prescription_persurface_to_beamlets: the prescription's LAST surface is a MIRROR, and the local-frame branch cannot serve a mirror-terminated prescription.  Its image-side leg is built from Nz2 = 1/sqrt(1 + ux^2 + uy^2), which is positive whatever the true N, so after a mirror the returned direction, the leg t = z_image/Nz2 and the Moebius free-space step all run along +z while the light travels toward -z (measured VERIFY-WP-B12b sec. 9.2: the spot RMS is 7.8e3 x the traced one at z_image = +f, and at z_image = -f the transverse positions are right but the leg piston carries the wrong sign, 0.48 waves).  NO ROUTE IN THIS LIBRARY SERVES THIS CLASS YET when the mirror is CURVED: world_output_plane refuses a powered terminating fold itself.  For a FLAT terminating mirror, pass world_output_plane=(p0, R_out) -- an explicit plane, since 'auto' has no paraxial focus to find.  Otherwise propagate to the mirror and continue the reverse leg yourself.  Refusing rather than returning a wrong field silently."
+   },
+   "truth": null,
+   "world": {
+    "auto": {
+     "decision": "refused",
+     "kind": "ValueError",
+     "message": "paraxial_focus_world: axial and marginal rays do not converge (parallel post-system).  System may be afocal or aperture_radius too small."
+    },
+    "explicit": {
+     "decision": "served",
+     "n_beamlets": 1024
+    }
+   },
+   "z_image": 0.004
+  },
+  "verifier_mirror_R15": {
+   "local": {
+    "decision": "refused",
+    "message": "apply_prescription_persurface_to_beamlets: the prescription's LAST surface is a MIRROR, and the local-frame branch cannot serve a mirror-terminated prescription.  Its image-side leg is built from Nz2 = 1/sqrt(1 + ux^2 + uy^2), which is positive whatever the true N, so after a mirror the returned direction, the leg t = z_image/Nz2 and the Moebius free-space step all run along +z while the light travels toward -z (measured VERIFY-WP-B12b sec. 9.2: the spot RMS is 7.8e3 x the traced one at z_image = +f, and at z_image = -f the transverse positions are right but the leg piston carries the wrong sign, 0.48 waves).  NO ROUTE IN THIS LIBRARY SERVES THIS CLASS YET when the mirror is CURVED: world_output_plane refuses a powered terminating fold itself.  For a FLAT terminating mirror, pass world_output_plane=(p0, R_out) -- an explicit plane, since 'auto' has no paraxial focus to find.  Otherwise propagate to the mirror and continue the reverse leg yourself.  Refusing rather than returning a wrong field silently."
+   },
+   "truth": {
+    "n_sign": -1.0,
+    "spot_rms": 7.1471242376137455e-09,
+    "z_focus": -0.007499097624683209
+   },
+   "world": {
+    "auto": {
+     "decision": "refused",
+     "kind": "NotImplementedError",
+     "message": "world_output_plane: curved (powered) fold mirrors are not yet supported (a flat fold is invariant to Q, a curved one is not).  Use per-surface world differential transfer, or a flat fold."
+    },
+    "explicit": {
+     "decision": "refused",
+     "kind": "NotImplementedError",
+     "message": "world_output_plane: curved (powered) fold mirrors are not yet supported (a flat fold is invariant to Q, a curved one is not).  Use per-surface world differential transfer, or a flat fold."
+    }
+   },
+   "z_image": -0.007499097624683209
+  }
+ },
+ "premise": {
+  "mine_air": {
+   "n_exit": 1.0,
+   "omitted_waves": 0.0,
+   "wavelength": 6.33e-07,
+   "z_image": 0.0006
+  },
+  "mine_immersed_oil152": {
+   "n_exit": 1.518,
+   "omitted_waves": 491.09943307174024,
+   "wavelength": 6.33e-07,
+   "z_image": 0.0006
+  },
+  "mine_immersed_water133": {
+   "n_exit": 1.333,
+   "omitted_waves": 315.7798324970187,
+   "wavelength": 6.33e-07,
+   "z_image": 0.0006
+  },
+  "verifier_air_conic": {
+   "n_exit": 1.0,
+   "omitted_waves": 0.0,
+   "wavelength": 7.8e-07,
+   "z_image": 0.002
+  },
+  "verifier_immersed_n172": {
+   "n_exit": 1.72,
+   "omitted_waves": 1846.2589642118448,
+   "wavelength": 7.8e-07,
+   "z_image": 0.002
+  }
+ },
+ "site_boundary": [
+  {
+   "helper_tolerance": 0.001,
+   "refuses_0p99x": false,
+   "refuses_1p01x": true,
+   "rel_gap": 1.734723475976807e-15,
+   "site_boundary": 0.0010000000000000018,
+   "z_image": 0.0
+  },
+  {
+   "helper_tolerance": 0.001,
+   "refuses_0p99x": false,
+   "refuses_1p01x": true,
+   "rel_gap": 1.734723475976807e-15,
+   "site_boundary": 0.0010000000000000018,
+   "z_image": 6.33e-07
+  },
+  {
+   "helper_tolerance": 6.33e-05,
+   "refuses_0p99x": false,
+   "refuses_1p01x": true,
+   "rel_gap": 1.6999536432730857e-13,
+   "site_boundary": 6.329999999998923e-05,
+   "z_image": 1e-05
+  },
+  {
+   "helper_tolerance": 1.8085714285714286e-06,
+   "refuses_0p99x": false,
+   "refuses_1p01x": true,
+   "rel_gap": 3.526194479576674e-11,
+   "site_boundary": 1.8085714285076548e-06,
+   "z_image": 0.00035
+  },
+  {
+   "helper_tolerance": 3.165e-07,
+   "refuses_0p99x": false,
+   "refuses_1p01x": true,
+   "rel_gap": 3.094903501330966e-10,
+   "site_boundary": 3.165000000979537e-07,
+   "z_image": 0.002
+  },
+  {
+   "helper_tolerance": 6.329999999999999e-08,
+   "refuses_0p99x": false,
+   "refuses_1p01x": true,
+   "rel_gap": 3.20452435098382e-10,
+   "site_boundary": 6.330000002028463e-08,
+   "z_image": 0.01
+  }
+ ]
+}
