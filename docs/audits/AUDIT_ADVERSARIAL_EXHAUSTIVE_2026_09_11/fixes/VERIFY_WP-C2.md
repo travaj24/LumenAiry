@@ -870,7 +870,28 @@ names the same six and is short by ten.
 
 ---
 
-## 5. Ship recommendation
+## 5. Gate runs
+
+All with `OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1` on the
+command line, `-q -p no:randomly --capture=sys -rf`.
+
+| run | files | result |
+|---|---|---|
+| Windows: the trace-touching family + both C2 test files + the B9 family + `test_niche_d3_guards.py` + `test_audit_propagation.py` + `test_niche_audit_w6_asymptotic.py` + the census / walker / dispatcher-pin / public-API / doc-consistency / history-relocation gates + `test_audit_except_budget.py` | 29 | **2000 passed, 14 skipped, 0 failed** (14:40) |
+| WSL: both C2 test files + the B9 family + `test_public_api.py` + `test_audit_except_budget.py` | 5 | **123 passed, 1 failed** -- `test_installed_metadata_version_matches_source_version`, which is the ninth pre-existing red and fails on the 49ddf4bd archive on that mount too |
+| WSL: `test_niche_d3_guards.py` + `test_audit_propagation.py` + `test_niche_audit_w6_asymptotic.py` | 3 | **198 passed, 0 failed** (12:04) |
+| `tests/unit/test_verify_c2_analytic_normal.py` alone | 1 | **17 passed**, 5.8 s Windows / 3.5 s WSL |
+| the nine "pre-existing" ids, on this verifier's own `git archive 49ddf4bd` | 9 | 8 failed identically (Windows), the ninth failed identically (WSL) |
+| mutation matrix, both builds | 11 arms | control 94 passed; 8 mutations caught; `jax_gets_a_clamp` survives (also survives a 294-test raytrace and parity sweep); `whole_normal_sign_flipped` survives correctly |
+
+WSL `ruff check lumenairy/ tests/`: **All checks passed!**
+`python -m mypy` (no args): **Success: no issues found in 33 source files.**
+`python scripts/record_history_fingerprints.py --check`: **OK: every history
+document matches its module.**
+
+---
+
+## 6. Ship recommendation
 
 **SHIP**, with D11, D1, D3, D4, D7 and D12 actioned before the release note
 is written, and D2, D5, D6, D8, D9, D10 filed.  D11 is the only P1: a reader
@@ -909,7 +930,7 @@ against 2.00-2.25.  Both are stronger claims than the ones currently shipped.
 
 ---
 
-## 6. What could not be measured
+## 7. What could not be measured
 
 1. **The 1008-array byte-identity census was not re-run.**  The AST entry-point
    census supersedes its CONCLUSION (and finds ten more entry points than it
