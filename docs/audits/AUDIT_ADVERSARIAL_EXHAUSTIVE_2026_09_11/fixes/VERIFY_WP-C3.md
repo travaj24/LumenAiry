@@ -695,6 +695,30 @@ complex relL2 **0.09451**, amplitude-only **0.02477**, centre |ratio|
 
 ### D12 — small documentation items
 
+* **§6 and `CHANGELOG.md:259-265`: "the same 21 calls fired FIVE warnings" is
+  an arithmetic slip** — the sentence's own enumeration (`_multi` K=1 one,
+  K=2 four, the chain readout one, the singlet one, the doublet one) sums to
+  **eight**.  Re-measured on three pinned trees and both builds: the base
+  reads 21 Collins calls, **5 calls with a Kelly warning, 8 warnings total**;
+  the branch and the merged tree read 21 / 0 / 0; the Sziklas side is 18
+  calls / 0 everywhere.  Requested edit: "five CALLS fired EIGHT warnings".
+* **§4.4's pre-existing-red note is not verifiable as written.**  Run from a
+  base ARCHIVE on the same WSL interpreter, three of the four are red there
+  too — but `test_v5_2_3_walker_changelog_content.py::test_v16_synthetic_
+  fabrication_is_caught` does not fail, it **SKIPS** ("git not available;
+  V16.4 needs a real diff range to compare against"), because an extracted
+  archive is not a git repo.  Requested edit: say the v16 id skips on an
+  archive and is red only against a base-tree WORKTREE, or re-take the claim
+  on a worktree.
+* **Two more stale "refused by name" docstrings, both NEW on this branch** —
+  `tests/unit/test_niche_d2_chain_multi.py:136-138` and `:171-172`; see D1.
+* **`_SZIKLAS_STANDOFF`'s docstring mis-describes three of its nine uses** —
+  see D1.
+* **`test_c3_collins_default.py`'s mutation-matrix docstring** implies in-file
+  coverage of the fallback and CuPy rows that it does not have (V3 and V7 are
+  caught only by `b4`; V4 only on a JAX build).  Requested edit: name the
+  file that actually catches each.
+
 * Report §1.1's line citations are stale: `carrier.py:9518` → **9596**,
   `carrier.py:12275` → **12382** (at the report's own commit the
   `transport: str = 'collins'` lines are 1156, 9596, 12382).
