@@ -803,6 +803,78 @@ same file and the same release.
 
 ---
 
-## 7. TEST RUNS AND GATES
+## 7. THE RESTATEMENTS, THE NEW TESTS AND THE CENSUS
 
-*(filled in below)*
+### 7.1 The restatement this verification checked most closely — `d3`
+
+The package's most interesting restatement claim is that
+`test_niche_d3_guards.py::_mux_chain_field` would have gone VACUOUS on the
+flipped default, `||E6 - E4||` reading exactly 0.0.  **Reproduced, exactly**,
+by driving the helper's own body with each transport in turn:
+
+| transport | ARM 1 (`launch=False`, the fail-before) | ARM 2 (`launch=True`, the claim) |
+|---|---|---|
+| `'sziklas'` (what the branch names) | `max|E6-E4| = 0.000000e+00` — inert, as claimed | `||E6|| = 3.782241e-02`, `||E6-E4|| = 8.529958e-01`, **moved = 22.552654** against a bar of `> 1.0` |
+| `'collins'` (the flipped default) | `max|E6-E4| = 0.000000e+00` | `||E6|| = 6.347786e+01`, `||E6-E4|| = **0.000000e+00**`, **moved = 0.000000** |
+
+So on the flipped default the test does not silently pass — it FAILS, and it
+fails by reporting the residual-eikonal degree as INERT, which is its own
+fail-before condition reached for the wrong reason.  That is exactly the shape
+the package names, and pinning the transport is the right restatement: the
+claim being made is about `apply_real_lens_traced`, and the co-moving pitch is
+what makes the subtraction of two chain runs well posed.  **Classified
+DECISION, and the sibling `_linearity_error` likewise** — its pre-existing
+docstring already required "all five runs land on the same lattice", so the
+branch is naming a precondition the test always had, not weakening one.
+
+**A pre-existing stale number, recorded and NOT charged to this package.**
+That test's docstring says `||E6-E4||/||E6||` was "measured **39.83**
+(Windows) and **43.88** (WSL)".  It reads **22.552654** here — and reads the
+same 22.552654 on the base tree 49ddf4bd, so it was already stale before this
+branch and the branch did not touch that text.  The bar is `1.0`, 22x inside,
+so nothing is fragile; but the restatement was an opportunity to re-measure it
+and did not.
+
+### 7.2 Test runs — every tail grepped
+
+| run | build | result |
+|---|---|---|
+| `tests/unit/test_verify_c3_collins_default.py` (this package's decision tests) | WIN-py3.14 | **9 passed, 4 xfailed** in 14.1 s |
+| the same | WSL-py3.12 | **9 passed, 4 xfailed** in 16.1 s |
+| `tests/unit/test_c3_collins_default.py` (the branch's own) | WIN-py3.14 | **26 passed** in 11.2 s |
+| `tests/unit/test_audit2609_b4_collins_transport.py`, WHOLE file | WIN-py3.14 | **130 passed** in 5:16 |
+| the census / walker / dispatcher-pin / public-API / doc-consistency sweep, plus `test_audit_except_budget.py` and `test_ci_kernel_consistency.py` | WIN-py3.14 | **647 passed, 14 skipped** in 3:07 |
+| the same | WSL-py3.12 | **4 failed, 643 passed, 14 skipped** in 2:39 — the four are exactly §4.4's pre-existing WSL reds |
+| `tests/unit/test_audit2609_a15a_durations_staleness.py` | WIN-py3.14 | **4 passed** in 1:40 |
+| the 54-file carrier-touching blast set + both C3 files | WIN-py3.14 | *(see below)* |
+| the same, `b4` excluded and run per class | WSL-py3.12 | *(see below)* |
+
+### 7.3 Gates
+
+| gate | result |
+|---|---|
+| `ruff check lumenairy/ tests/ scripts/` (WSL, the CI invocation) | **All checks passed** |
+| `ruff check .` (WSL, whole repo under the project config) | **All checks passed** |
+| `python -m mypy` (no args) | **Success: no issues found in 33 source files** |
+| `scripts/record_history_fingerprints.py --check` | **OK: every history document matches its module** |
+| `.test_durations` | valid JSON, 16596 → **16609** ids (13 spliced); the staleness gate is 4 passed |
+
+`validation/` is `extend-exclude`d in the ruff config, so the probe files in
+`validation/probe_verify_c3/` are outside both gates by design, exactly as the
+package's own probes are.
+
+### 7.4 Files this verification wrote
+
+Probes and data under `validation/probe_verify_c3/` (both builds where the
+claim is a number): the K1 decomposition, quantisation and tie-margin probes;
+the reachability sweep; the `bandlimit` drop; the default-vs-default key set;
+the independent new-`RuntimeError` reproducer; the 192-cell blast-width sweep;
+and the sub-task harnesses (the 103-key archive-to-archive way-back set, the
+validated analytic-Gaussian oracle and its converged upsampled Fresnel
+reference, the fallback/recursion/standoff probes, the CuPy censuses and
+mutations, and the design-121 driver with its 13-setting build sweep).
+
+Decision tests: `tests/unit/test_verify_c3_collins_default.py` — nine passing
+and four strict xfails (D5, D4, D1, D2), the repository's own instrument for a
+gap a verification finds and does not fix, so closing one turns its marker red
+and forces the marker out with the fix.
