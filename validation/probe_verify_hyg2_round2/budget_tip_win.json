@@ -1,0 +1,313 @@
+{
+ "B1": {
+  "20x10": [
+   {
+    "alpha": 250.0,
+    "bluestein": 3.4678038497962446e-11,
+    "budget": 100000.0,
+    "direct": 3.0619601876189376e-16,
+    "eps_times_budget": 2.220446049250313e-11,
+    "separable": 3.4677958609743613e-11,
+    "warned_bluestein": false,
+    "warned_direct": false,
+    "warned_separable": false
+   },
+   {
+    "alpha": 25000.0,
+    "bluestein": 1.6189534736675487e-09,
+    "budget": 10000000.0,
+    "direct": 3.0619601876189376e-16,
+    "eps_times_budget": 2.220446049250313e-09,
+    "separable": 1.6189534738400642e-09,
+    "warned_bluestein": false,
+    "warned_direct": false,
+    "warned_separable": false
+   },
+   {
+    "alpha": 250000.0,
+    "bluestein": 1.4879655246842195e-08,
+    "budget": 100000000.0,
+    "direct": 3.0619601876189376e-16,
+    "eps_times_budget": 2.220446049250313e-08,
+    "separable": 1.4879655079881694e-08,
+    "warned_bluestein": false,
+    "warned_direct": false,
+    "warned_separable": false
+   },
+   {
+    "alpha": 2500000.0,
+    "bluestein": 1.0136063869711765e-07,
+    "budget": 1000000000.0,
+    "direct": 3.0619601876189376e-16,
+    "eps_times_budget": 2.220446049250313e-07,
+    "separable": 1.0136063894266195e-07,
+    "warned_bluestein": false,
+    "warned_direct": false,
+    "warned_separable": false
+   },
+   {
+    "alpha": 11259000.0,
+    "bluestein": 1.1454010665896913e-06,
+    "budget": 4503600000.0,
+    "direct": 3.0619601876189376e-16,
+    "eps_times_budget": 1.000000082740371e-06,
+    "separable": 1.1454010666518888e-06,
+    "warned_bluestein": true,
+    "warned_direct": false,
+    "warned_separable": true
+   },
+   {
+    "alpha": 25000000.0,
+    "bluestein": 1.6329608056759366e-06,
+    "budget": 10000000000.0,
+    "direct": 3.0619601876189376e-16,
+    "eps_times_budget": 2.220446049250313e-06,
+    "separable": 1.6329608056408836e-06,
+    "warned_bluestein": true,
+    "warned_direct": false,
+    "warned_separable": true
+   },
+   {
+    "alpha": 250000000.0,
+    "bluestein": 2.6972850901972992e-05,
+    "budget": 100000000000.0,
+    "direct": 3.0619601876189376e-16,
+    "eps_times_budget": 2.220446049250313e-05,
+    "separable": 2.6972850902244978e-05,
+    "warned_bluestein": true,
+    "warned_direct": false,
+    "warned_separable": true
+   },
+   {
+    "alpha": 2500000000.0,
+    "bluestein": 0.00027447167965121913,
+    "budget": 1000000000000.0,
+    "direct": 3.0619601876189376e-16,
+    "eps_times_budget": 0.0002220446049250313,
+    "separable": 0.0002744716796510744,
+    "warned_bluestein": true,
+    "warned_direct": false,
+    "warned_separable": true
+   },
+   {
+    "alpha": 25000000000.0,
+    "bluestein": 0.001752483485993034,
+    "budget": 10000000000000.0,
+    "direct": 3.0619601876189376e-16,
+    "eps_times_budget": 0.002220446049250313,
+    "separable": 0.0017524834859928727,
+    "warned_bluestein": true,
+    "warned_direct": false,
+    "warned_separable": true
+   },
+   {
+    "alpha": 2500000000000.0,
+    "bluestein": 0.22779784522608126,
+    "budget": 1000000000000000.0,
+    "direct": 3.0619601876189376e-16,
+    "eps_times_budget": 0.2220446049250313,
+    "separable": 0.22779784522608157,
+    "warned_bluestein": true,
+    "warned_direct": false,
+    "warned_separable": true
+   },
+   {
+    "alpha": 25000000000000.0,
+    "bluestein": 1.5774079321557655,
+    "budget": 1e+16,
+    "direct": 3.0619601876189376e-16,
+    "eps_times_budget": 2.220446049250313,
+    "separable": 1.577407932155765,
+    "warned_bluestein": true,
+    "warned_direct": false,
+    "warned_separable": true
+   }
+  ],
+  "28x14": [
+   {
+    "alpha": 127.55102040816327,
+    "bluestein": 1.674935853288218e-11,
+    "budget": 100000.0,
+    "direct": 3.186074748735079e-12,
+    "eps_times_budget": 2.220446049250313e-11,
+    "separable": 1.6749364477219932e-11,
+    "warned_bluestein": false,
+    "warned_direct": false,
+    "warned_separable": false
+   },
+   {
+    "alpha": 12755.102040816326,
+    "bluestein": 1.7342702544881111e-09,
+    "budget": 10000000.0,
+    "direct": 2.528202918094362e-10,
+    "eps_times_budget": 2.220446049250313e-09,
+    "separable": 1.7342702430760776e-09,
+    "warned_bluestein": false,
+    "warned_direct": false,
+    "warned_separable": false
+   },
+   {
+    "alpha": 127551.02040816327,
+    "bluestein": 1.4398470700705177e-08,
+    "budget": 100000000.0,
+    "direct": 2.1045393526322815e-09,
+    "eps_times_budget": 2.220446049250313e-08,
+    "separable": 1.439847071456798e-08,
+    "warned_bluestein": false,
+    "warned_direct": false,
+    "warned_separable": false
+   },
+   {
+    "alpha": 1275510.2040816327,
+    "bluestein": 1.898929872298121e-07,
+    "budget": 1000000000.0,
+    "direct": 2.76073486042603e-08,
+    "eps_times_budget": 2.220446049250313e-07,
+    "separable": 1.8989298719433622e-07,
+    "warned_bluestein": false,
+    "warned_direct": false,
+    "warned_separable": false
+   },
+   {
+    "alpha": 5744387.755102041,
+    "bluestein": 6.178701979515441e-07,
+    "budget": 4503600000.0,
+    "direct": 1.171113419796555e-07,
+    "eps_times_budget": 1.000000082740371e-06,
+    "separable": 6.178701979371027e-07,
+    "warned_bluestein": true,
+    "warned_direct": false,
+    "warned_separable": true
+   },
+   {
+    "alpha": 12755102.040816326,
+    "bluestein": 1.3536630855951055e-06,
+    "budget": 10000000000.0,
+    "direct": 2.916602670407998e-07,
+    "eps_times_budget": 2.220446049250313e-06,
+    "separable": 1.3536630856049233e-06,
+    "warned_bluestein": true,
+    "warned_direct": false,
+    "warned_separable": true
+   },
+   {
+    "alpha": 127551020.40816326,
+    "bluestein": 1.2276922392230666e-05,
+    "budget": 100000000000.0,
+    "direct": 2.8256392537871287e-06,
+    "eps_times_budget": 2.220446049250313e-05,
+    "separable": 1.2276922392187545e-05,
+    "warned_bluestein": true,
+    "warned_direct": false,
+    "warned_separable": true
+   },
+   {
+    "alpha": 1275510204.0816326,
+    "bluestein": 0.0001644228197414199,
+    "budget": 1000000000000.0,
+    "direct": 3.4208501592221756e-16,
+    "eps_times_budget": 0.0002220446049250313,
+    "separable": 0.0001644228197414078,
+    "warned_bluestein": true,
+    "warned_direct": false,
+    "warned_separable": true
+   },
+   {
+    "alpha": 12755102040.816326,
+    "bluestein": 0.0011691779180272913,
+    "budget": 10000000000000.0,
+    "direct": 0.00024564668096040013,
+    "eps_times_budget": 0.002220446049250313,
+    "separable": 0.0011691779180273104,
+    "warned_bluestein": true,
+    "warned_direct": false,
+    "warned_separable": true
+   },
+   {
+    "alpha": 1275510204081.6326,
+    "bluestein": 0.1937813296003898,
+    "budget": 1000000000000000.0,
+    "direct": 0.023217369316624905,
+    "eps_times_budget": 0.2220446049250313,
+    "separable": 0.1937813296003898,
+    "warned_bluestein": true,
+    "warned_direct": false,
+    "warned_separable": true
+   },
+   {
+    "alpha": 12755102040816.326,
+    "bluestein": 1.0211723262341157,
+    "budget": 1e+16,
+    "direct": 0.2446565054474282,
+    "eps_times_budget": 2.220446049250313,
+    "separable": 1.0211723262341157,
+    "warned_bluestein": true,
+    "warned_direct": false,
+    "warned_separable": true
+   }
+  ]
+ },
+ "B1_slope": {
+  "20x10": {
+   "decades": 8.0,
+   "n_points": 9,
+   "slope": 0.9959775621713419
+  },
+  "28x14": {
+   "decades": 8.0,
+   "n_points": 9,
+   "slope": 0.9831901799426095
+  }
+ },
+ "B2": {
+  "a_decade_above": {
+   "budget": 45035996273.704956,
+   "dense_rel": 2.485523289541867e-16,
+   "dense_warned": false,
+   "keeps_six_figures": false,
+   "message": "Bluestein chirp phase argument ~4.5e+10 exceeds the float64 chirp budget 4.5e+09; the chirp-Z routes' relative error at this budget is ~1.0e-05.  Reduce N or alpha, pass method='direct' (the dense route reduces its phase modulo one turn and measured 3e-16 at every budget tested), or fall back to a regular FFT propagator.",
+   "rel": 9.386041487667332e-06,
+   "warned": true
+  },
+  "a_decade_below": {
+   "budget": 450359962.7370496,
+   "dense_rel": 4.6748166682304394e-09,
+   "dense_warned": false,
+   "keeps_six_figures": true,
+   "message": null,
+   "rel": 5.295316483345828e-08,
+   "warned": false
+  },
+  "just_above": {
+   "budget": 4953959590.107546,
+   "dense_rel": 6.99252581673305e-08,
+   "dense_warned": false,
+   "keeps_six_figures": true,
+   "message": "Bluestein chirp phase argument ~5.0e+09 exceeds the float64 chirp budget 4.5e+09; the chirp-Z routes' relative error at this budget is ~1.1e-06.  Reduce N or alpha, pass method='direct' (the dense route reduces its phase modulo one turn and measured 3e-16 at every budget tested), or fall back to a regular FFT propagator.",
+   "rel": 5.699106615893995e-07,
+   "warned": true
+  },
+  "just_below": {
+   "budget": 4053239664.633446,
+   "dense_rel": 1.0069899772380376e-07,
+   "dense_warned": false,
+   "keeps_six_figures": true,
+   "message": null,
+   "rel": 5.055323452592895e-07,
+   "warned": false
+  }
+ },
+ "B3": {
+  "derivation_exact": true,
+  "message": "Bluestein chirp phase argument ~5.0e+09 exceeds the float64 chirp budget 4.5e+09; the chirp-Z routes' relative error at this budget is ~1.1e-06.  Reduce N or alpha, pass method='direct' (the dense route reduces its phase modulo one turn and measured 3e-16 at every budget tested), or fall back to a regular FFT propagator.",
+  "message_names_budget": true,
+  "message_names_direct": true,
+  "message_names_implied_error": true
+ },
+ "B3_budget_times_eps": 1e-06,
+ "PHASE_BUDGET_MAX": 4503599627.370496,
+ "eps": 2.220446049250313e-16,
+ "lumenairy_file": "C:\\tmp\\lum_vhyg3\\lumenairy\\__init__.py",
+ "platform": "win32",
+ "python": "3.14.6"
+}

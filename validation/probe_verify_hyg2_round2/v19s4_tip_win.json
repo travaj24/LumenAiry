@@ -1,0 +1,121 @@
+{
+ "S4": {
+  "cubic_control": {
+   "P0": 689810.1888832984,
+   "any_rung_exactly_zero": false,
+   "max_over_floor": 69926307866.33556,
+   "min_over_floor": 71.06437218527853,
+   "rows": [
+    {
+     "floor": 1.531686308638532e-07,
+     "h": 0.1,
+     "over_floor": 69926307866.33556,
+     "p3": 10710.516837250905,
+     "p3_is_exactly_zero": false
+    },
+    {
+     "floor": 0.0001531686308638532,
+     "h": 0.01,
+     "over_floor": 69893660.3780619,
+     "p3": 10705.516266170887,
+     "p3_is_exactly_zero": false
+    },
+    {
+     "floor": 0.1531686308638532,
+     "h": 0.001,
+     "over_floor": 69890.47996238909,
+     "p3": 10705.029126256704,
+     "p3_is_exactly_zero": false
+    },
+    {
+     "floor": 153.1686308638532,
+     "h": 0.0001,
+     "over_floor": 71.06437218527853,
+     "p3": 10884.832590818403,
+     "p3_is_exactly_zero": false
+    }
+   ],
+   "satisfies_100x_bound": false
+  },
+  "quadratic_shipped": {
+   "P0": 88.35745569567473,
+   "any_rung_exactly_zero": false,
+   "max_over_floor": 1.4486609985790464,
+   "min_over_floor": 0.3621652496447616,
+   "rows": [
+    {
+     "floor": 1.961929634212705e-11,
+     "h": 0.1,
+     "over_floor": 0.3621652496447616,
+     "p3": -7.105427357601e-12,
+     "p3_is_exactly_zero": false
+    },
+    {
+     "floor": 1.961929634212705e-08,
+     "h": 0.01,
+     "over_floor": 1.4486609985790464,
+     "p3": -2.8421709430404004e-08,
+     "p3_is_exactly_zero": false
+    },
+    {
+     "floor": 1.9619296342127052e-05,
+     "h": 0.001,
+     "over_floor": 0.7243304992895231,
+     "p3": -1.4210854715202002e-05,
+     "p3_is_exactly_zero": false
+    },
+    {
+     "floor": 0.01961929634212705,
+     "h": 0.0001,
+     "over_floor": 0.3621652496447616,
+     "p3": 0.007105427357601001,
+     "p3_is_exactly_zero": false
+    }
+   ],
+   "satisfies_100x_bound": true
+  }
+ },
+ "S4_two_sided": {
+  "cubic_control_breaks_bound": true,
+  "quadratic_within_bound": true,
+  "separation_decades": 1.690685155605776
+ },
+ "V1": {
+  "all_tf": true,
+  "bar": 2.8306689507167967e-13,
+  "claim_holds": true,
+  "decades_bar_to_switch": 7.582978700245922,
+  "diff_over_peak": 0.0,
+  "forms": [
+   "tf"
+  ],
+  "k1": [
+   [
+    1.9167255571331,
+    1.9167255571331
+   ]
+  ],
+  "k3": [
+   [
+    2.138739677980305,
+    2.138739677980305
+   ]
+  ],
+  "margins": [
+   2.138739677980305
+  ],
+  "max_abs_diff": 0.0,
+  "min_margin": 2.138739677980305,
+  "n_collins_stages": 1,
+  "peak": 1.27481996316574,
+  "premise_bar": 1.5,
+  "premise_holds": true,
+  "switch_signature_diff": 1.0835969687023749e-05,
+  "switch_signature_fails_the_bar": true,
+  "ulp_reassociation_diff": 2.482534153247273e-16,
+  "ulp_reassociation_passes_the_bar": true
+ },
+ "lumenairy_file": "C:\\tmp\\lum_vhyg3\\lumenairy\\__init__.py",
+ "platform": "win32",
+ "python": "3.14.6"
+}

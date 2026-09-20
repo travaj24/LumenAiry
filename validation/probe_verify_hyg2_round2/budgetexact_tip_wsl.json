@@ -1,0 +1,264 @@
+{
+ "PHASE_BUDGET_MAX": 4503599627.370496,
+ "eps": 2.220446049250313e-16,
+ "lumenairy_file": "/mnt/c/tmp/lum_vhyg3/lumenairy/__init__.py",
+ "platform": "linux",
+ "python": "3.12.3",
+ "rows": {
+  "16x8": [
+   {
+    "alpha": 390.625,
+    "bluestein": 1.2357526439186536e-11,
+    "budget": 100000.0,
+    "direct": 2.282593265814802e-16,
+    "direct_vs_naive_reference": 2.306651216261994e-16,
+    "eps_times_budget": 2.220446049250313e-11,
+    "naive_reference_vs_exact": 1.273686195800632e-16,
+    "separable": 1.235757576828812e-11,
+    "warned_bluestein": false,
+    "warned_direct": false,
+    "warned_separable": false
+   },
+   {
+    "alpha": 39062.5,
+    "bluestein": 8.476212404276184e-10,
+    "budget": 10000000.0,
+    "direct": 3.499452599022803e-16,
+    "direct_vs_naive_reference": 2.634967749784232e-16,
+    "eps_times_budget": 2.220446049250313e-09,
+    "naive_reference_vs_exact": 1.6679868044783043e-16,
+    "separable": 8.476211973341422e-10,
+    "warned_bluestein": false,
+    "warned_direct": false,
+    "warned_separable": false
+   },
+   {
+    "alpha": 3906250.0,
+    "bluestein": 4.336081383903986e-07,
+    "budget": 1000000000.0,
+    "direct": 3.35147065125214e-16,
+    "direct_vs_naive_reference": 3.35147065125214e-16,
+    "eps_times_budget": 2.220446049250313e-07,
+    "naive_reference_vs_exact": 0.0,
+    "separable": 4.3360813825587007e-07,
+    "warned_bluestein": false,
+    "warned_direct": false,
+    "warned_separable": false
+   },
+   {
+    "alpha": 17592186.044416,
+    "bluestein": 5.589686622358278e-07,
+    "budget": 4503599627.370496,
+    "direct": 1.3214400111484642e-07,
+    "direct_vs_naive_reference": 2.3643088601857835e-16,
+    "eps_times_budget": 1e-06,
+    "naive_reference_vs_exact": 1.3214400111522388e-07,
+    "separable": 5.589686621500892e-07,
+    "warned_bluestein": false,
+    "warned_direct": false,
+    "warned_separable": false
+   },
+   {
+    "alpha": 39062500.0,
+    "bluestein": 6.019758047496923e-06,
+    "budget": 10000000000.0,
+    "direct": 3.35147065125214e-16,
+    "direct_vs_naive_reference": 3.35147065125214e-16,
+    "eps_times_budget": 2.220446049250313e-06,
+    "naive_reference_vs_exact": 0.0,
+    "separable": 6.0197580469350736e-06,
+    "warned_bluestein": true,
+    "warned_direct": false,
+    "warned_separable": true
+   },
+   {
+    "alpha": 390625000.0,
+    "bluestein": 6.747490503498363e-05,
+    "budget": 100000000000.0,
+    "direct": 3.35147065125214e-16,
+    "direct_vs_naive_reference": 3.35147065125214e-16,
+    "eps_times_budget": 2.220446049250313e-05,
+    "naive_reference_vs_exact": 0.0,
+    "separable": 6.747490503570735e-05,
+    "warned_bluestein": true,
+    "warned_direct": false,
+    "warned_separable": true
+   },
+   {
+    "alpha": 3906250000.0,
+    "bluestein": 0.00038447404548669757,
+    "budget": 1000000000000.0,
+    "direct": 3.35147065125214e-16,
+    "direct_vs_naive_reference": 3.35147065125214e-16,
+    "eps_times_budget": 0.0002220446049250313,
+    "naive_reference_vs_exact": 0.0,
+    "separable": 0.0003844740454868009,
+    "warned_bluestein": true,
+    "warned_direct": false,
+    "warned_separable": true
+   },
+   {
+    "alpha": 390625000000.0,
+    "bluestein": 0.040066565500920526,
+    "budget": 100000000000000.0,
+    "direct": 3.35147065125214e-16,
+    "direct_vs_naive_reference": 3.35147065125214e-16,
+    "eps_times_budget": 0.02220446049250313,
+    "naive_reference_vs_exact": 0.0,
+    "separable": 0.040066565500920366,
+    "warned_bluestein": true,
+    "warned_direct": false,
+    "warned_separable": true
+   },
+   {
+    "alpha": 3906250000000.0,
+    "bluestein": 0.4366062037187818,
+    "budget": 1000000000000000.0,
+    "direct": 3.35147065125214e-16,
+    "direct_vs_naive_reference": 3.35147065125214e-16,
+    "eps_times_budget": 0.2220446049250313,
+    "naive_reference_vs_exact": 0.0,
+    "separable": 0.4366062037187819,
+    "warned_bluestein": true,
+    "warned_direct": false,
+    "warned_separable": true
+   }
+  ],
+  "24x12": [
+   {
+    "alpha": 173.61111111111111,
+    "bluestein": 1.7546925099213253e-11,
+    "budget": 100000.0,
+    "direct": 2.2920302036295894e-12,
+    "direct_vs_naive_reference": 3.528417007868653e-16,
+    "eps_times_budget": 2.220446049250313e-11,
+    "naive_reference_vs_exact": 2.29200732769095e-12,
+    "separable": 1.754695021119751e-11,
+    "warned_bluestein": false,
+    "warned_direct": false,
+    "warned_separable": false
+   },
+   {
+    "alpha": 17361.11111111111,
+    "bluestein": 1.8962190624516155e-09,
+    "budget": 10000000.0,
+    "direct": 2.0077798366732849e-10,
+    "direct_vs_naive_reference": 3.321495324384234e-16,
+    "eps_times_budget": 2.220446049250313e-09,
+    "naive_reference_vs_exact": 2.007779620877827e-10,
+    "separable": 1.89621906635371e-09,
+    "warned_bluestein": false,
+    "warned_direct": false,
+    "warned_separable": false
+   },
+   {
+    "alpha": 1736111.111111111,
+    "bluestein": 1.8775831489246852e-07,
+    "budget": 1000000000.0,
+    "direct": 2.7511968802005078e-08,
+    "direct_vs_naive_reference": 3.138348756885792e-16,
+    "eps_times_budget": 2.220446049250313e-07,
+    "naive_reference_vs_exact": 2.7511968839535337e-08,
+    "separable": 1.8775831486915163e-07,
+    "warned_bluestein": false,
+    "warned_direct": false,
+    "warned_separable": false
+   },
+   {
+    "alpha": 7818749.353073778,
+    "bluestein": 9.186425356823369e-07,
+    "budget": 4503599627.370496,
+    "direct": 1.46499910441445e-07,
+    "direct_vs_naive_reference": 3.036380211642483e-16,
+    "eps_times_budget": 1e-06,
+    "naive_reference_vs_exact": 1.4649991047183972e-07,
+    "separable": 9.186425356508742e-07,
+    "warned_bluestein": false,
+    "warned_direct": false,
+    "warned_separable": false
+   },
+   {
+    "alpha": 17361111.111111112,
+    "bluestein": 1.8353086176557905e-06,
+    "budget": 10000000000.0,
+    "direct": 2.5403185610969475e-07,
+    "direct_vs_naive_reference": 3.305240642038142e-16,
+    "eps_times_budget": 2.220446049250313e-06,
+    "naive_reference_vs_exact": 2.540318561240259e-07,
+    "separable": 1.8353086176584468e-06,
+    "warned_bluestein": true,
+    "warned_direct": false,
+    "warned_separable": true
+   },
+   {
+    "alpha": 173611111.1111111,
+    "bluestein": 2.7891271232811287e-05,
+    "budget": 100000000000.0,
+    "direct": 2.361065538944809e-06,
+    "direct_vs_naive_reference": 3.524670937298582e-16,
+    "eps_times_budget": 2.220446049250313e-05,
+    "naive_reference_vs_exact": 2.3610655389087476e-06,
+    "separable": 2.789127123280098e-05,
+    "warned_bluestein": true,
+    "warned_direct": false,
+    "warned_separable": true
+   },
+   {
+    "alpha": 1736111111.1111112,
+    "bluestein": 0.00014842018391914903,
+    "budget": 1000000000000.0,
+    "direct": 3.401499564240554e-05,
+    "direct_vs_naive_reference": 3.5610174053283944e-16,
+    "eps_times_budget": 0.0002220446049250313,
+    "naive_reference_vs_exact": 3.401499564239411e-05,
+    "separable": 0.00014842018391915017,
+    "warned_bluestein": true,
+    "warned_direct": false,
+    "warned_separable": true
+   },
+   {
+    "alpha": 173611111111.1111,
+    "bluestein": 0.012403707326264177,
+    "budget": 100000000000000.0,
+    "direct": 0.0019490353696729472,
+    "direct_vs_naive_reference": 3.3830609272102604e-16,
+    "eps_times_budget": 0.02220446049250313,
+    "naive_reference_vs_exact": 0.0019490353696729364,
+    "separable": 0.012403707326264184,
+    "warned_bluestein": true,
+    "warned_direct": false,
+    "warned_separable": true
+   },
+   {
+    "alpha": 1736111111111.111,
+    "bluestein": 0.18342162511085358,
+    "budget": 1000000000000000.0,
+    "direct": 0.01960031087258447,
+    "direct_vs_naive_reference": 3.4087590033558323e-16,
+    "eps_times_budget": 0.2220446049250313,
+    "naive_reference_vs_exact": 0.01960031087258448,
+    "separable": 0.18342162511085372,
+    "warned_bluestein": true,
+    "warned_direct": false,
+    "warned_separable": true
+   }
+  ]
+ },
+ "slopes": {
+  "16x8:bluestein": {
+   "decades": 7.0,
+   "n": 7,
+   "slope": 1.1092566700066622
+  },
+  "24x12:bluestein": {
+   "decades": 7.0,
+   "n": 7,
+   "slope": 1.0044653799970826
+  },
+  "24x12:direct": {
+   "decades": 9.0,
+   "n": 8,
+   "slope": 1.003828670161603
+  }
+ }
+}

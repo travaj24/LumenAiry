@@ -1,0 +1,203 @@
+{
+ "J1": {
+  "bar": 3.4537296187979238e-15,
+  "bar_derivation": "10 x max(n_transforms x measured NumPy-vs-JAX FFT spread on this build's own transforms of these grids, the leg's measured response to a 1-ULP perturbation of its own input)",
+  "decades_of_headroom": 9.950017115675612,
+  "fft_spreads": {
+   "L": 256,
+   "fft2_env": 0.0,
+   "fft2_env_chirped": 0.0,
+   "fft2_padded_L": 0.0,
+   "ifft2_env": 0.0,
+   "ifft2_env_chirped": 0.0
+  },
+  "jax_is_plain_ndarray": true,
+  "jax_type": "numpy.ndarray",
+  "max_abs": 0.0,
+  "n_transforms_assumed": 6,
+  "numpy_type": "numpy.ndarray",
+  "peak": 0.6438683155975864,
+  "rel": 0.0,
+  "shipped_bar_32eps_floor": 7.105427357601002e-15,
+  "smallest_real_signal": 3.0782610756144496e-05,
+  "ulp_sensitivity": 3.4537296187979237e-16,
+  "within_bar": true
+ },
+ "J2": {
+  "cache_primed_entries": 0,
+  "exception": "TracerArrayConversionError",
+  "message": "The numpy.ndarray conversion method __array__() was called on traced array with shape complex128[128,128]\nThe error occurred while tracing the function traced at C:\\tmp\\lum_vhyg3\\validation\\probe_verify_hyg2_round2\\vh3_jax.py:166 for jit. This concrete value was not available in Python because it depends on the value of the argument a.\nSee https://docs.jax.dev/en/latest/errors.html#jax.errors.TracerArrayConversionError",
+  "needles": {
+   "Tracer": true,
+   "_collins_transport": false,
+   "dx_out": false,
+   "gap_kernel": false,
+   "gap_kernel='fresnel'": false,
+   "jax.grad": false,
+   "jax.jit": false,
+   "on_collins_sampling": false,
+   "on_collins_sampling='ignore'": false,
+   "outside the trace": false
+  },
+  "state_unchanged": {
+   "asm_H_cache": true,
+   "bluestein_cache": true,
+   "pyfftw_plans": true,
+   "warning_filters": true
+  },
+  "stats_out_untouched": true,
+  "stats_sentinel_after": {
+   "SENTINEL": 1
+  }
+ },
+ "J3": {
+  "tilted": {
+   "R_equal": true,
+   "direct_kernel_rel": 8.24067205078427e-17,
+   "dx_equal": true,
+   "jax_type": "jaxlib._jax.ArrayImpl",
+   "rel": 5.169804158488923e-16
+  },
+  "untilted": {
+   "R_equal": true,
+   "direct_kernel_rel": 6.129619161845824e-17,
+   "dx_equal": true,
+   "jax_type": "jaxlib._jax.ArrayImpl",
+   "rel": 5.054529182233571e-16
+  }
+ },
+ "J4": {
+  "private_collins": {
+   "best": {
+    "fd": 1.3007243295627784,
+    "floor": 2.470188889538904e-13,
+    "h": 0.03,
+    "over_floor": 0.1838257872110276,
+    "rel": 4.540844171794231e-14
+   },
+   "grad_at_peak": 1.3007243295627193,
+   "grad_nonzero": true,
+   "grad_not_constant": true,
+   "ladder": [
+    {
+     "fd": 1.3007243295628257,
+     "floor": 7.418342520289227e-14,
+     "h": 0.1,
+     "over_floor": 1.1022588476355542,
+     "rel": 8.176933677779837e-14
+    },
+    {
+     "fd": 1.3007243295627784,
+     "floor": 2.470188889538904e-13,
+     "h": 0.03,
+     "over_floor": 0.1838257872110276,
+     "rel": 4.540844171794231e-14
+    },
+    {
+     "fd": 1.3007243295625415,
+     "floor": 7.408345845380636e-13,
+     "h": 0.01,
+     "over_floor": 0.1845721748015054,
+     "rel": 1.367374504363601e-13
+    },
+    {
+     "fd": 1.3007243295627784,
+     "floor": 2.4691895487861323e-12,
+     "h": 0.003,
+     "over_floor": 0.01839001859548019,
+     "rel": 4.540844171794231e-14
+    },
+    {
+     "fd": 1.3007243295675153,
+     "floor": 7.407346597981603e-12,
+     "h": 0.001,
+     "over_floor": 0.49776681528796074,
+     "rel": 3.687131325811413e-12
+    },
+    {
+     "fd": 1.3007243295485675,
+     "floor": 2.4690896273136106e-11,
+     "h": 0.0003,
+     "over_floor": 0.4406454427021928,
+     "rel": 1.0879930918989982e-11
+    },
+    {
+     "fd": 1.300724329595937,
+     "floor": 7.407246677442618e-11,
+     "h": 0.0001,
+     "over_floor": 0.34476791659980593,
+     "rel": 2.5537810047227262e-11
+    }
+   ]
+  },
+  "public_collins_grad_is_refused_by_design": true,
+  "public_sziklas_exact": {
+   "best": {
+    "fd": 1.5802469135802966,
+    "floor": 5.592246938572358e-14,
+    "h": 0.1,
+    "over_floor": 0.5628296299118433,
+    "rel": 3.147482274812319e-14
+   },
+   "grad_at_peak": 1.5802469135802468,
+   "grad_nonzero": true,
+   "grad_not_constant": true,
+   "ladder": [
+    {
+     "fd": 1.5802469135802966,
+     "floor": 5.592246938572358e-14,
+     "h": 0.1,
+     "over_floor": 0.5628296299118433,
+     "rel": 3.147482274812319e-14
+    },
+    {
+     "fd": 1.5802469135801782,
+     "floor": 1.8613234086412593e-13,
+     "h": 0.03,
+     "over_floor": 0.23326625388501582,
+     "rel": 4.3418393880223505e-14
+    },
+    {
+     "fd": 1.5802469135806518,
+     "floor": 5.581705370953543e-13,
+     "h": 0.01,
+     "over_floor": 0.45916967701026035,
+     "rel": 2.562949852347174e-13
+    },
+    {
+     "fd": 1.5802469135811255,
+     "floor": 1.860307721107181e-12,
+     "h": 0.003,
+     "over_floor": 0.2988797810389908,
+     "rel": 5.560083643496583e-13
+    },
+    {
+     "fd": 1.580246913583494,
+     "floor": 5.580700674627408e-12,
+     "h": 0.001,
+     "over_floor": 0.36820757910737834,
+     "rel": 2.054856285127471e-12
+    },
+    {
+     "fd": 1.5802469135905997,
+     "floor": 1.8602076361668456e-11,
+     "h": 0.0003,
+     "over_floor": 0.3521864935981427,
+     "rel": 6.551400047460909e-12
+    },
+    {
+     "fd": 1.5802469135905994,
+     "floor": 5.5806006995991516e-11,
+     "h": 0.0001,
+     "over_floor": 0.11739344718445677,
+     "rel": 6.551259534859355e-12
+    }
+   ]
+  }
+ },
+ "jax": "0.11.0",
+ "lumenairy_file": "C:\\tmp\\vh3arch\\pre112\\lumenairy\\__init__.py",
+ "numpy": "2.4.4",
+ "platform": "win32",
+ "python": "3.14.6"
+}
