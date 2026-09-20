@@ -393,7 +393,23 @@ Run sharded (the box carried another agent's work throughout, and a single
 process was projecting well past a working day), each shard
 `python -m pytest <files> -q -p no:randomly --capture=sys -rf` with
 `OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1` on the command
-line.
+line.  Seven parts, all completed:
+
+| part | result | wall |
+|---|---|---|
+| 0 | 3 failed, 2388 passed, 5 skipped | 1:33:22 |
+| 1 | 10 failed, 3155 passed, 49 skipped | 1:26:24 |
+| 2 | 1 failed, 3401 passed, 4 skipped, 2 deselected | 1:36:32 |
+| 3a | 639 passed | 0:45:42 |
+| 3b | 895 passed, 1 skipped | 0:55:49 |
+| 3c | 740 passed | 0:21:36 |
+| 3d | 940 passed, 6 skipped | 0:33:29 |
+| **total** | **14 failed, 12 158 passed, 65 skipped** | |
+
+(Part 3 was one shard that had to be split four ways mid-run: it was
+projecting past twelve hours behind three heavy traced-lens and Maslov
+quadrature files.  `py-spy dump` confirmed it was computing, not hung, before
+it was split.)
 
 ### 5.2 Every test that moved, classified
 
@@ -418,7 +434,7 @@ quantity that can carry one.
 | `test_v5_3_2_walker_source_line_citation.py::test_v18_5_the_5_47_0_block_citations_name_the_right_lines` | the docstring expansions moved eight `[5.47.0]` source-line citations, and four of those cited lines did not MOVE -- their CONTENT changed, which the re-anchor tool had no path for and correctly reported as NEEDS A HUMAN | four re-anchored mechanically; the other four answered with an explicit, guarded `EDITED_IN_PLACE` map in `scripts/reanchor_citations.py` naming each base coordinate, its new coordinate and the release that edited it |
 | `test_public_api.py::test_no_shipped_source_claims_a_version_the_package_has_not_reached` | 16 docstring lines said "5.49.0" while `__version__` reads 5.48.1 | the docstrings describe the change instead; the CHANGELOG and Migration Guide carry the number, which is where the rule says it belongs |
 
-**C. Pre-existing reds, verified identical at 49ddf4bd (8 tests).**  Each was
+**C. Pre-existing reds, verified identical at 49ddf4bd (9 tests).**  Each was
 re-run against a read-only `git archive 49ddf4bd` and fails there with the
 same message.
 
@@ -432,6 +448,7 @@ same message.
 | `test_niche_audit_w3_infra.py::TestA6EstimateAsmMemory::test_est_bounds_measured_first_call_peak[512-complex128]` | a measured peak-memory bound on a loaded box |
 | ... `[1024-complex128]` | same |
 | `test_public_api.py::test_installed_metadata_version_matches_source_version` | the editable install reports 5.47.0 against a source `__version__` of 5.48.1 -- a stale `pip install -e .` |
+| `test_v4_15_agent_e.py::TestUI6and7PsfMtfDockRayAccumulation::test_no_last_write_wins` | a source-text grep for `np.add.at` in `ui/psf_mtf_dock.py::_load_from_raytrace`, which is not there on either tree |
 
 **E. Genuine movers that are bars on a draw -- restated against the
 fixture's own last-bit noise (2 tests, `tests/unit/test_niche_d3_guards.py`,
@@ -480,10 +497,14 @@ version of this restatement compared the linearity-error effect against the
 FIELD-norm floor and correctly refused -- 0.1689 against 0.1404 -- which is
 why the comparator is now like for like.
 
-**Summary.**  Over the parts that completed, the sweep ran **368 files**.  The
-only tests that moved because of this work package are the 5 in block A, the
-2 gates in block B and the 2 in block E; 8 reds are pre-existing and 4 were an
-artefact of measuring while committing.
+**Summary.**  368 files, 12 158 passed, 14 failed.  The only tests that moved
+because of this work package are the **5** in block A, the **2** gates in
+block B and the **2** in block E -- nine in total, every one restated as a
+decision or a re-anchored fact, none by loosening a bar to fit a reading.
+**Nine** of the fourteen reds are pre-existing (block C, each re-run against a
+read-only archive of 49ddf4bd and failing there identically) and **four** were
+an artefact of a shard reading the source while the second flip was being
+committed (block D, green on a clean re-run).
 
 **D. An artefact of this work package's own mid-run edits, not a mover (4
 parametrised ids).**  `test_audit2609_a17_history_relocation.py`'s AST and
