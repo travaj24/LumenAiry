@@ -25,9 +25,10 @@ renders its annulus through `apply_aperture`.  The library's `apply_aperture`
 default moved from `edge='hard'` (each pixel wholly inside or wholly outside)
 to `edge='gray'` (each boundary pixel gets its 4x4-supersampled open-area
 fraction) in 5.49.0, so **the field the dock displays and exports at Stop 3,
-and everything computed downstream of it -- the Lyot-plane and final-image
-panels, the contrast curve and the throughput readout -- moves**, at the 1e-3
-level in relative L2 on a propagated field.
+and everything computed downstream of it, moves**: the `Stop 4: Image plane`
+panel (the forward Fraunhofer of the Stop 3 field), the contrast curve
+reduced from that panel's intensity, and the throughput readout.  The move is
+at the 1e-3 level in relative L2 on a propagated field.
 
 Nothing in the dock changed and nothing is wrong either way: the grey rim is
 the one with a convergence order (second order against first, measured on two
