@@ -538,6 +538,74 @@ def test_verify_c1r2_the_boolean_cast_moves_the_auto_radial_bin_count():
         assert moved is want_move, (n_small, n_h, n_g)
 
 
+def test_verify_c1r2_the_wrapper_merit_array_branch_is_out_of_the_librarys_reach():
+    """R6's DECISION, measured.  The verifier asked whether the in-library
+    call at ``wrapper_merits.py:492`` -- the one caller that forwards
+    ``ctx.prescription['aperture_diameter']`` to ``_get_wrapper_merit_cache``
+    without ``float()``-ing it -- should WEIGHT by a grey mask instead of
+    casting it, on the grounds that a merit overshooting by 8.9e-3 of power is
+    a wrong answer.
+
+    It cannot overshoot, because an ndarray cannot get there.
+    ``MultiWavelengthMerit.evaluate`` calls
+    ``surfaces_from_prescription(ctx.prescription)`` at the TOP of its
+    per-wavelength loop -- before ``:492``, and outside the ``try`` that wraps
+    ``system_abcd`` -- and that call runs ``validate_prescription``, which
+    refuses a non-numeric ``aperture_diameter`` with "must be a number".  So
+    the array branch at ``:266`` is reachable only by calling the PRIVATE
+    ``_get_wrapper_merit_cache`` directly with an array, which is a caller's
+    choice and not the library's, and R6 is closed with a Migration row and a
+    CHANGELOG sentence rather than with a code change that would redefine a
+    documented boolean mask for every other consumer.
+
+    The id pins that premise from both sides, so the decision is revisited
+    automatically if it ever stops holding:
+      * the SCALAR prescription passes ``surfaces_from_prescription`` (else
+        the refusal below would prove nothing about the array);
+      * the same prescription with a grey MASK array in
+        ``aperture_diameter`` raises, and the message names the key;
+      * and the cost that would be paid if it did get through is measured
+        here, not asserted: the boolean cast overshoots the weighted grey
+        mask by more than 1e-3 of integrated power (measured 9.88e-03 on the
+        fixture below, 9.9x above the bar and two decades above the ~1e-5 a
+        float64 reduction over 65 536 pixels can produce by round-off).
+    Both builds read every integer count and every digit identically.
+    """
+    import lumenairy as la
+    from lumenairy.optimize import core as _core
+    from lumenairy.optimize.wrapper_merits import (_clear_wrapper_merit_cache,
+                                                   _get_wrapper_merit_cache)
+
+    N, dx, D = 256, 4e-6, 0.5e-3
+    hard, grey = _hard_and_grey_masks(N, dx, D)
+
+    def _rx(ap):
+        rx = la.make_singlet(R1=0.032, R2=-0.075, d=4e-4, glass='N-BK7',
+                             aperture=D)
+        rx['aperture_diameter'] = ap
+        return rx
+
+    assert len(_core.surfaces_from_prescription(_rx(float(D)))) == 2
+    with pytest.raises(ValueError, match='aperture_diameter'):
+        _core.surfaces_from_prescription(_rx(grey))
+
+    yy, xx = np.mgrid[0:N, 0:N]
+    rr = np.sqrt(((xx - (N - 1) / 2.0) * dx) ** 2
+                 + ((yy - (N - 1) / 2.0) * dx) ** 2)
+    inten = np.exp(-((rr / (D / 2)) ** 2) * 0.35) ** 2
+    _clear_wrapper_merit_cache()
+    try:
+        m_g = _get_wrapper_merit_cache(N, dx, grey, np.complex128)['mask']
+        assert m_g.dtype == np.bool_, m_g.dtype
+        p_cast = float(inten[m_g].sum())
+        p_weight = float((inten * grey).sum())
+        assert (p_cast - p_weight) / p_weight > 1e-3, (p_cast, p_weight)
+    finally:
+        _clear_wrapper_merit_cache()
+    assert int(np.count_nonzero(grey.astype(bool))
+               - np.count_nonzero(hard.astype(bool))) == 168
+
+
 # ===========================================================================
 # R7 -- the peak-memory comment
 # ===========================================================================

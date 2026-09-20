@@ -121,6 +121,36 @@ see `GUI_CHANGELOG.md`), and the worked AO-loop example in
 its pupil with `la.apply_aperture(np.ones((N, N), dtype=complex), ...)`; that
 example is still correct -- multiplying a grey amplitude mask into a field is
 exactly what the mask is for -- but its printed numbers move.
+
+**One more family moves, for callers rather than for the library: a consumer
+that BOOLEAN-CASTS an `apply_aperture` result.**  `plot_wavefront` /
+`plot_opd_summary` (`lumenairy/analysis/plotting.py:1491`, `:1757`, `:1096`,
+`:1724`) and the wrapper-merit mask cache
+(`lumenairy/optimize/wrapper_merits.py:266`) accept an `aperture=` ARRAY and
+cast it with `astype(bool)`.  A grey mask casts to the union of the open area
+and the WHOLE rim: measured +168 px on a 12281-px disc (**+1.3680 %**, 364 rim
+pixels, N = 256, dx = 4 um, D = 0.5 mm; analytic disc 12271.8), identical on
+both builds.  Downstream that is a radial-RMS curve moving by up to
+**7.2741e-02** relative, an automatic bin count moving a whole bin on small
+grids (12 -> 13 at N = 48, 657 -> 697 px; both saturate at 32 by N = 256), an
+in-aperture RMS moving **5.8832e-03** (PV 2.520837e-07 -> 2.536185e-07), and a
+merit's integrated power moving **7.7072e-03** -- which also **overshoots the
+correctly weighted grey mask by 8.9051e-03**, since a rim pixel transmitting a
+third of its area is counted whole.  `aperture=` is documented as a boolean
+mask and still is; what changed is that the obvious way to BUILD one --
+`apply_aperture(np.ones(...), ...)` -- no longer produces one.  The way back is
+`edge='hard'` when building the array, or weighting by the mask instead of
+casting it (`(inten * mask).sum()`), or casting with the threshold you mean
+(`mask >= 0.5`).  No shipped answer is wrong: nothing in `lumenairy/`,
+`validation/` or `examples/` feeds an `apply_aperture` result into either
+consumer, and the only in-library route to `wrapper_merits.py:266`'s array
+branch -- an ndarray in `prescription['aperture_diameter']` reaching
+`wrapper_merits.py:492` -- is closed by `surfaces_from_prescription`, which is
+called on the same prescription EARLIER in the same loop iteration and refuses
+a non-numeric `aperture_diameter` (`validate_prescription: aperture_diameter:
+must be a number`) on both builds.  Pinned by
+`tests/unit/test_verify_c1_round2.py::test_verify_c1r2_the_wrapper_merit_array_branch_is_out_of_the_librarys_reach`.
+
 Every propagator downstream of one of those --
 `rayleigh_sommerfeld_propagate`, the `propagate_huygens_fresnel_*` family, the ASM
 legs, GBD -- is itself unchanged: it moves only because its INPUT moved, and is

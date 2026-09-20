@@ -1837,7 +1837,24 @@ L2 of the move on a propagated field: **7.678e-03 at N = 256, 2.930e-03 at 512,
 | `lumenairy.evaluate` on a prescription with a STOP surface | yes, NEW in 5.49.0 -- `aperture_edge=` / `aperture_edge_samples=` | `la.evaluate(rx, src, aperture_edge='hard')`, bit for bit |
 | the GUI's **Coronagraph dock**, Stop 3 (it calls `apply_lyot_stop`) | no | re-record; see `GUI_CHANGELOG.md` |
 | the worked AO loop in `lumenairy.analysis.ao`'s module docstring | it is an example, not an entry point | add `edge='hard'` to its `la.apply_aperture(...)` line if you are reproducing its printed numbers |
-| a script emitted by `lumenairy.io.codegen` for a STOP surface | it emits no keyword | edit the generated `la.apply_aperture(...)` call, or re-pin |
+| a script emitted by `lumenairy.io.codegen` with `style='unrolled'` (the default) for a STOP surface | it emits no keyword | add `edge='hard'` to the generated `la.apply_aperture(...)` call, or re-pin |
+| the same with `style='system'` | it emits no key | add `'edge': 'hard'` to the generated `{'type': 'aperture', ...}` element, or re-pin |
+| an `apply_aperture` RESULT passed as an array `aperture=` to `plot_wavefront`, `plot_opd_summary` or a wrapper merit | not applicable -- these BOOLEAN-CAST the array | `edge='hard'` when building it, or weight by it / cast it yourself with the threshold you mean (`mask = arr >= 0.5`) |
+
+*A grey mask boolean-casts to the union of the open area and the WHOLE rim:
+measured +168 pixels (+1.3680 %) on a 12281-pixel disc at N = 256, dx = 4 um,
+D = 0.5 mm (364 rim pixels; analytic disc 12271.8), identical on both builds.
+That moves `plot_opd_summary`'s radial-RMS curve by up to 7.2741e-02 relative
+and its automatic bin count by a whole bin on small grids (12 -> 13 at N = 48,
+657 -> 697 pixels; both saturate at 32 by N = 256), the in-aperture RMS on a
+NaN-masked map by 5.8832e-03 (PV 2.520837e-07 -> 2.536185e-07), and a wrapper
+merit's integrated power by 7.7072e-03 -- where the cast also OVERSHOOTS the
+correctly weighted grey mask by 8.9051e-03, because a rim pixel that transmits
+a third of its area is counted whole.  `aperture=` is documented as a boolean
+mask and still is; what changed is that the obvious way to BUILD one,
+`apply_aperture(np.ones(...), ...)`, no longer produces one.  If you want the
+area weighting the grey rim exists to give, multiply by the mask instead of
+casting it.*
 
 Every propagator downstream is itself unchanged -- `rayleigh_sommerfeld_propagate`,
 the `propagate_huygens_fresnel_*` family, the ASM legs, GBD, the analytic and
