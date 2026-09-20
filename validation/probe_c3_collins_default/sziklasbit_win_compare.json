@@ -16,8 +16,8 @@
  "only_base": [],
  "only_branch": [],
  "seconds": {
-  "base": 7.9,
-  "branch": 8.4
+  "base": 16.1,
+  "branch": 22.4
  },
  "verdict": "IDENTICAL"
 }

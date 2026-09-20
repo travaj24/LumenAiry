@@ -156,15 +156,39 @@ class TestVocabulary:
         assert msg.startswith('propagate_carrier_referenced: ')
         assert 'sziklas' in msg and 'collins' in msg
 
-    def test_the_free_lattice_kwargs_are_refused_on_the_default_transport(
+    def test_the_free_lattice_kwargs_are_refused_on_the_sziklas_transport(
             self, env_conv):
         """``dx_out`` / ``carrier_out`` have no referent on a transport whose
         output pitch IS ``m*dx``; accepting and ignoring them is the
-        accept-and-ignore class D4/D11 adjudicated against."""
+        accept-and-ignore class D4/D11 adjudicated against.
+
+        ``transport='sziklas'`` is now NAMED (WP-C3).  It used to be the
+        default and this test used to reach the refusal by passing nothing;
+        since 5.49.0 the default is ``'collins'``, on which these two keywords
+        are the whole point of the transport.  So the refusal is a contract of
+        the SZIKLAS transport, and the test says so -- restated, not
+        re-pinned.  That the default now ACCEPTS them is the other half and is
+        asserted below.
+        """
         for kw in ({'dx_out': 1e-6}, {'carrier_out': np.inf}):
             with pytest.raises(ValueError, match='transport'):
                 C.propagate_carrier_referenced(env_conv, _R, 5e-3, _WL, _DX,
-                                               **kw)
+                                               transport='sziklas', **kw)
+
+    def test_the_free_lattice_kwargs_are_honoured_on_the_default(
+            self, env_conv):
+        """The other side of the refusal above: on the 5.49.0 default the two
+        keywords are live, and they must actually CHANGE the returned
+        lattice -- otherwise this test would pass on a transport that accepted
+        and ignored them, which is the class the refusal exists for."""
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            free = C.propagate_carrier_referenced(
+                env_conv, _R, 5e-3, _WL, _DX, dx_out=1e-6)
+            flat = C.propagate_carrier_referenced(
+                env_conv, _R, 5e-3, _WL, _DX, carrier_out=np.inf)
+        assert float(free.dx) == pytest.approx(1e-6, rel=0, abs=0)
+        assert np.isinf(flat.R)
 
     def test_the_stop_plane_readout_keys_are_refused_on_collins(self):
         """``standoff`` and ``on_focus_containment`` describe the Sziklas
@@ -220,33 +244,117 @@ def _chain_fixture():
 
 
 class TestDefaultIsByteIdentical:
-    """``transport`` defaults to ``'sziklas'`` and naming it explicitly changes
-    nothing -- the only statement that makes "nothing existing moves" checkable
-    rather than asserted."""
+    """``transport`` defaults to ``'collins'`` since 5.49.0 (WP-C3), and the
+    statement that makes "nothing existing moves" checkable has MOVED with it.
 
-    @pytest.mark.parametrize('R,z', [(-40e-3, 5e-3), (-40e-3, -3e-3),
-                                     (np.inf, 5e-3), (80e-3, 12e-3),
-                                     ((-40e-3, -55e-3), 5e-3)])
-    def test_the_single_step_is_equal_bit_for_bit(self, env_conv, R, z):
-        a = C.propagate_carrier_referenced(env_conv, R, z, _WL, _DX)
-        b = C.propagate_carrier_referenced(env_conv, R, z, _WL, _DX,
-                                           transport='sziklas')
+    It used to read "naming ``'sziklas'`` changes nothing", because that was
+    the default.  It now reads, in two halves:
+
+    * naming ``'collins'`` changes nothing, because that is the default --
+      the first arm below;
+    * naming ``'sziklas'`` returns the PRE-FLIP arithmetic in every bit, which
+      cannot be proved against the working tree and is proved archive to
+      archive instead (``validation/probe_c3_collins_default/``: 42 of 42 keys
+      on both builds, with the base spelled to pass no ``transport=`` at all).
+      ``tests/unit/test_c3_collins_default.py`` gates the structural property
+      that keeps it true.
+
+    THE CELLS THAT MOVE, and why they are the ones that move: exactly the legs
+    where the chirp-Z quadrature is representable (``N dx^2 <= lambda
+    |z_eff|``, VERIFY-WP-B4 F2).  On every other leg the transport RESOLVES to
+    the transfer-function form, which IS the Sziklas step, and the two
+    spellings stay bit-identical -- asserted below rather than assumed, with
+    both sets counted so neither can quietly empty.
+    """
+
+    #: The five WP-B4 cells plus ONE that the flip actually moves.  MEASURED
+    #: 2026-09-20: on this fixture (N = 1024 at 4 um) all five original cells
+    #: resolve to the transfer-function form and are bit-identical on both
+    #: spellings -- which is the flip's central claim and also means they
+    #: cannot, by themselves, tell a working selection from a dead one.  The
+    #: sixth cell is a leg PAST the carrier's geometric focus (``A = -0.5``),
+    #: where the co-moving frame has inverted, ``Ax > 0`` fails and no
+    #: transfer-function form exists: the chirp-Z runs and the answer moves.
+    _CELLS = [(-40e-3, 5e-3), (-40e-3, -3e-3), (np.inf, 5e-3),
+              (80e-3, 12e-3), ((-40e-3, -55e-3), 5e-3),
+              (-40e-3, 60e-3)]
+
+    @pytest.mark.parametrize('R,z', _CELLS)
+    def test_the_single_step_is_equal_bit_for_bit_to_the_named_default(
+            self, env_conv, R, z):
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            a = C.propagate_carrier_referenced(env_conv, R, z, _WL, _DX)
+            b = C.propagate_carrier_referenced(env_conv, R, z, _WL, _DX,
+                                               transport='collins')
         assert np.array_equal(np.asarray(a.env), np.asarray(b.env))
         assert a.R == b.R and a.dx == b.dx
 
-    def test_the_focus_crossing_split_is_equal_bit_for_bit(self, env_conv):
-        """The near-focus branch too: the new keyword is checked BEFORE the
-        split, so this is the arm that would catch a check that perturbed it.
-        (``z = -R`` exactly is not used: the SHIPPED transport cannot land on
-        the focus at all -- its bridge re-references to ``R_out = 0`` and
-        ``carrier_referenced_envelope`` refuses that -- which is one of the
-        cases the Collins transport turns into an ordinary point.)"""
+    def test_the_cells_that_resolve_to_the_transfer_function_form_do_not_move(
+            self, env_conv):
+        """Both sides of the resolution, counted.
+
+        Every cell of ``_CELLS`` is run on both transports and the leg is
+        asked which quadrature it resolved to.  A cell that resolved to the
+        transfer-function form MUST be bit-identical (that form is the
+        Sziklas step); a cell where the chirp-Z ran is allowed to differ, and
+        at least one must, or the flip would be changing nothing here and this
+        class would be gating nothing.
+        """
+        same, moved = [], []
+        for R, z in self._CELLS:
+            diag = {}
+            with warnings.catch_warnings():
+                warnings.simplefilter('ignore')
+                R_x, R_y, is_astig = C._parse_carrier(R, 'probe')
+                C._collins_carrier_leg(
+                    env_conv, ((R_x, R_y) if is_astig else R_x), z, _WL,
+                    _DX, _DX, on_collins_sampling='ignore', diag=diag)
+                a = C.propagate_carrier_referenced(env_conv, R, z, _WL, _DX)
+                b = C.propagate_carrier_referenced(env_conv, R, z, _WL, _DX,
+                                                   transport='sziklas')
+            eq = (np.shape(a.env) == np.shape(b.env)
+                  and np.array_equal(np.asarray(a.env), np.asarray(b.env))
+                  and a.R == b.R and a.dx == b.dx)
+            (same if diag['collins_form'] == 'tf' else moved).append(
+                (R, z, diag['collins_form'], eq))
+        for R, z, form, eq in same:
+            assert eq, (
+                f'R={R!r} z={z!r} resolved to the transfer-function form, '
+                f'which IS the Sziklas step, yet the two spellings differ')
+        assert moved, (
+            'every cell resolved to the transfer-function form, so this '
+            'fixture set cannot see the flip at all')
+        assert any(not eq for _R, _z, _f, eq in moved), (
+            f'the chirp-Z ran on {len(moved)} cell(s) and none of them moved; '
+            f'either the two quadratures agree to the bit here (they do not) '
+            f'or the transport is not being selected')
+
+    def test_the_focus_crossing_split_is_not_entered_on_the_default(
+            self, env_conv):
+        """The near-focus branch: the cell the flip exists for.
+
+        ``z = -R * 0.995`` lands inside the Sziklas bridge's own trigger, so
+        the two transports take structurally different routes and the fields
+        are NOT expected to agree.  What is asserted is that the default
+        answer is finite and lands on a FINER lattice than the collapsing
+        co-moving one -- the point of the one-step form near a focus being
+        that its pitch is floored by the measured box instead of collapsing
+        with the carrier.  (``z = -R`` exactly is not used here: the Sziklas
+        transport cannot land on the focus at all -- its bridge re-references
+        to ``R_out = 0`` and ``carrier_referenced_envelope`` refuses that --
+        which is the cell ``TestNoNearFocusApparatus`` takes.)
+        """
         z = -_R * 0.995
-        a = C.propagate_carrier_referenced(env_conv, _R, z, _WL, _DX)
-        b = C.propagate_carrier_referenced(env_conv, _R, z, _WL, _DX,
-                                           transport='sziklas')
-        assert np.array_equal(np.asarray(a.env), np.asarray(b.env))
-        assert a.R == b.R and a.dx == b.dx
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            a = C.propagate_carrier_referenced(env_conv, _R, z, _WL, _DX)
+            b = C.propagate_carrier_referenced(env_conv, _R, z, _WL, _DX,
+                                               transport='sziklas')
+        assert np.all(np.isfinite(np.asarray(a.env)))
+        assert float(a.dx) < float(b.dx), (
+            f'the default landed on {float(a.dx):.4e} m and the co-moving '
+            f'route on {float(b.dx):.4e} m')
 
     def test_the_public_readout_kept_its_own_signature(self):
         """``carrier_referenced_focus_readout`` gained nothing: the Collins
@@ -260,6 +368,20 @@ class TestDefaultIsByteIdentical:
 
     @pytest.mark.slow
     def test_the_chain_is_equal_bit_for_bit(self):
+        """This chain does NOT move under the flip, and the reason is
+        measured rather than hoped: every free leg of it resolves to the
+        transfer-function form and its readout resolves to the Sziklas
+        readout (K1 = 82.36 on the exit lattice), so the two spellings return
+        the same array.
+
+        The ONE thing that legitimately differs is the readout stage's new
+        ``readout_route*`` keys, which are published on ``'collins'`` only --
+        deliberately, because the ``'sziklas'`` ``stages`` list is a
+        bit-identity key (WP-B4 sec. 4.2 digests ``repr(stages)``).  So the
+        stage comparison is made with those three keys removed from the
+        Collins side, and their presence is asserted separately, instead of
+        the whole comparison being dropped.
+        """
         env, dx, r_in, groups = _chain_fixture()
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
@@ -276,7 +398,25 @@ class TestDefaultIsByteIdentical:
                 focus_readout=dict(dx_out=0.5e-6, N_out=64))
         assert np.array_equal(np.asarray(a.field), np.asarray(b.field))
         assert a.dx == b.dx and a.R == b.R
-        assert a.stages == b.stages
+        _route = ('readout_route', 'readout_route_k1', 'readout_route_reason')
+        assert all(k in a.stages[-1] for k in _route)
+        assert a.stages[-1]['readout_route'] == 'sziklas'
+        assert a.stages[-1]['readout_route_k1'] > 1.0
+        assert not any(k in b.stages[-1] for k in _route)
+        # Every gap leg publishes its own ``collins_*`` readings on the
+        # Collins spelling and nothing on the Sziklas one -- that is WP-B4's
+        # design and is what ``on_collins_sampling``'s documentation
+        # promises.  Both facts are asserted, then those keys are removed and
+        # the REST of every stage is compared whole.
+        _a = [{k: v for k, v in st.items()
+               if not k.startswith('collins_') and k not in _route}
+              for st in a.stages]
+        assert any(st.get('collins_form') for st in a.stages), (
+            'no stage published a collins_form, so this chain did not run '
+            'the Collins leg and the comparison below is vacuous')
+        assert not any(k.startswith('collins_')
+                       for st in b.stages for k in st)
+        assert _a == b.stages
 
     @pytest.mark.slow
     def test_the_multi_orchestrator_is_equal_bit_for_bit(self):
@@ -1081,15 +1221,37 @@ class TestNoNearFocusApparatus:
         C._collins_focus_readout(env_conv, _R, -_R, _WL, _DX, _DX,
                                  dx_out=2e-6, N_out=64, on_replica='ignore')
 
-    def test_the_same_poison_fires_on_the_default_transport(self, env_conv,
+    def test_the_same_poison_fires_on_the_sziklas_transport(self, env_conv,
                                                             monkeypatch):
         """The falsifier: without it the test above could pass because the
-        poison never had a chance to fire."""
+        poison never had a chance to fire.
+
+        ``transport='sziklas'`` NAMED (WP-C3).  This arm's whole content is
+        that the focus machinery IS entered by the transport that needs it,
+        and since 5.49.0 that transport is reached by naming it rather than by
+        passing nothing.  The claim is unchanged; what moved is which spelling
+        selects the machinery.
+        """
         def boom(*a, **k):
             raise AssertionError('near-focus apparatus entered')
         monkeypatch.setattr(C, '_propagate_carrier_focus_crossing', boom)
         with pytest.raises(AssertionError, match='near-focus'):
-            C.propagate_carrier_referenced(env_conv, _R, -_R, _WL, _DX)
+            C.propagate_carrier_referenced(env_conv, _R, -_R, _WL, _DX,
+                                           transport='sziklas')
+
+    def test_the_default_transport_does_not_enter_the_apparatus_at_all(
+            self, env_conv, monkeypatch):
+        """And the 5.49.0 default runs the same leg with the whole apparatus
+        poisoned -- the statement the flip actually makes, on the spelling a
+        caller now gets by default."""
+        def boom(*a, **k):
+            raise AssertionError('near-focus apparatus entered')
+        for name in self._POISON:
+            monkeypatch.setattr(C, name, boom)
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            cr = C.propagate_carrier_referenced(env_conv, _R, -_R, _WL, _DX)
+        assert np.isfinite(np.abs(np.asarray(cr.env)).max())
 
     def test_the_collapsing_pitch_is_floored_by_the_measured_box(self,
                                                                  env_conv):

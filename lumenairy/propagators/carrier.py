@@ -2668,21 +2668,51 @@ def _collins_carrier_leg(env, R, z, wavelength, dx, dy, *,
     k3x = Nx * dxo / (wavelength * abs(B) / float(dx))
     k3y = Ny * dyo / (wavelength * abs(B) / float(dy))
     # The transfer-function form exists only where it would return the same
-    # triple this leg promises: one scalar carrier (it has no per-axis form),
-    # an un-inverted frame (``m <= 0`` is the split this transport exists to
-    # avoid), the geometric output reference, and a lattice the caller has not
-    # named.  It is NOT required that the resolved pitch already equal the
-    # co-moving one: the floor sits a hair above it for any beam whose measured
-    # support reaches the grid edge (the floor carries the leg's own
-    # ``|B| theta`` on top of ``|A| r``), and letting that hair veto the
-    # fallback is what would leave a 47x under-sampled chirp-Z running on an
-    # ordinary relay leg.
-    tf_available = (not is_astig and Ax > 0.0 and not flat
+    # triple this leg promises: an un-inverted frame on every axis (``m <= 0``
+    # is the split this transport exists to avoid), the geometric output
+    # reference, and a lattice the caller has not named.  It is NOT required
+    # that the resolved pitch already equal the co-moving one: the floor sits
+    # a hair above it for any beam whose measured support reaches the grid
+    # edge (the floor carries the leg's own ``|B| theta`` on top of
+    # ``|A| r``), and letting that hair veto the fallback is what would leave
+    # a 47x under-sampled chirp-Z running on an ordinary relay leg.
+    #
+    # AN ASTIGMATIC CARRIER IS NOW INCLUDED (WP-C3).  It was excluded because
+    # the sentence "the transfer-function form has no per-axis form" was true
+    # of ``_carrier_step_fast``, which this line used to call -- but not of
+    # the Sziklas TRANSPORT, whose entry point routes an astigmatic carrier to
+    # the separable per-axis step and returns exactly the ``((R_x + z,
+    # R_y + z), (m_x dx, m_y dy))`` triple this leg promises.  Now that the
+    # fallback goes through that entry point the exclusion has no referent,
+    # and it mattered: MEASURED 2026-09-20 on WP-B4's own astigmatic fixture
+    # (``R = (-40, -55) mm``, ``z = 5 mm``, N = 1024 at 4 um) the chirp-Z runs
+    # at K1 = 1.0222 and K3 = 2.7997, i.e. the returned window spans 2.8
+    # periods and its outer samples are wrapped copies -- an answer that was
+    # opt-in before the flip and would have been the default after it.
+    tf_available = (Ax > 0.0 and Ay > 0.0 and not flat
                     and dx_out is None and dy_out is None
                     and carrier_out is None)
     if tf_available and (max(k1x, k1y) > 1.0 or max(k3x, k3y) > 1.0):
-        cr = _carrier_step_fast(env_a, R_x, z, wavelength, dx, dy,
-                                gap_kernel=gap_kernel, tilt=tilt)
+        # THE FALLBACK IS THE SZIKLAS TRANSPORT, not one branch of it (WP-C3).
+        # Until 5.49.0 this line called ``_carrier_step_fast`` directly, which
+        # is only the no-crossing fast path of that transport, and a
+        # COLLIMATED carrier never reaches it on the Sziklas side -- its own
+        # entry point short-circuits ``R = +/-inf`` to a same-grid exact
+        # transfer-function step, because ``m = R_out/R = inf/inf`` is NaN.
+        # MEASURED 2026-09-20: ``_collins_carrier_leg(env, inf, 5e-3, ...)``
+        # returned an ALL-NaN envelope on ``dx = nan`` while resolving
+        # ``collins_form='tf'`` with K1 = 0.79 and K3 = 1.29, i.e. having
+        # correctly decided to fall back.  It was invisible while
+        # ``'collins'`` was opt-in and a collimated carrier is one of the
+        # commonest chain inputs (``r_in=np.inf``), so the flip is what makes
+        # it reachable.  Routing through the entry point means the fallback is
+        # the Sziklas ANSWER in every branch it has -- collimated, near-focus
+        # bridge, focus crossing -- which is also what makes "the legs that
+        # move are exactly those with N dx^2 <= lambda |z_eff|" literally
+        # true rather than nearly true.
+        cr = propagate_carrier_referenced(
+            env_a, ((R_x, R_y) if is_astig else R_x), z, wavelength, dx, dy,
+            gap_kernel=gap_kernel, tilt=tilt, transport='sziklas')
         if diag is not None:
             diag.update({'collins_form': 'tf', 'collins_k1': (k1x, k1y),
                          'collins_k2': (0.0, 0.0), 'collins_k3': (k3x, k3y),
