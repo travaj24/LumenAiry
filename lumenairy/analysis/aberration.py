@@ -370,6 +370,8 @@ def caustic_diagnostic(prescription: Dict[str, Any],
                        fan_radius: float = 1e-4,
                        n_z_per_gap: int = 32,
                        z_after_last_surface: Optional[float] = None,
+                       renormalize: Optional[str] = None,
+                       sphere_normal: Optional[str] = None,
                        ) -> CausticDiagnostic:
     """Identify caustic crossings along the chief-ray of a
     prescription.
@@ -403,6 +405,17 @@ def caustic_diagnostic(prescription: Dict[str, Any],
         Length of the free-space stretch after the last refractive
         surface to sample (defaults to the prescription's final
         thickness, or 100 mm if no thickness is set).
+    renormalize : ``None`` (default) | ``'exit'`` | ``'surface'``
+        Forwarded verbatim to the internal :func:`trace` call -- WP-C2's
+        way back, one keyword per flipped default.  ``None`` means
+        "whatever the library's default is", so an unkeyworded call is
+        unchanged and no call site pins today's default.
+    sphere_normal : ``None`` (default) | ``'analytic'`` | ``'generic'``
+        Forwarded verbatim to the same call.  Pass
+        ``renormalize='surface'`` and ``sphere_normal='generic'`` together
+        for the arithmetic this entry point produced before WP-C2 moved
+        the two tracer defaults -- byte-identical, pinned archive to
+        archive.
 
     Returns
     -------
@@ -429,6 +442,7 @@ def caustic_diagnostic(prescription: Dict[str, Any],
         surfaces_from_prescription,
         trace,
     )
+    from ..raytrace.trace import _way_back_kwargs
 
     surfaces = surfaces_from_prescription(prescription)
     if not surfaces:
@@ -480,7 +494,8 @@ def caustic_diagnostic(prescription: Dict[str, Any],
     # Trace the bundle, capturing per-surface ray history so we can
     # interpolate between surfaces by linear ray propagation in air.
     res = trace(bundle, surfaces, wavelength=wavelength,
-                output_filter='all')
+                output_filter='all',
+                **_way_back_kwargs(renormalize, sphere_normal))
     history = res.ray_history  # list of RayBundle, one per surface
 
     # Each history[k] is the bundle just after refraction at surface k.

@@ -222,6 +222,8 @@ def paraxial_focus_world(
     wavelength: float,
     *,
     aperture_radius: Optional[float] = None,
+    renormalize: Optional[str] = None,
+    sphere_normal: Optional[str] = None,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """Paraxial focus position and propagation direction in world coords.
 
@@ -245,6 +247,17 @@ def paraxial_focus_world(
         the surface list (or 1 mm if no finite semi-diameter is
         available).  Smaller values give a more strictly paraxial
         result but lose numerical conditioning.
+    renormalize : ``None`` (default) | ``'exit'`` | ``'surface'``
+        Forwarded verbatim to the internal :func:`trace_world` call -- WP-C2's
+        way back, one keyword per flipped default.  ``None`` means
+        "whatever the library's default is", so an unkeyworded call is
+        unchanged and no call site pins today's default.
+    sphere_normal : ``None`` (default) | ``'analytic'`` | ``'generic'``
+        Forwarded verbatim to the same call.  Pass
+        ``renormalize='surface'`` and ``sphere_normal='generic'`` together
+        for the arithmetic this entry point produced before WP-C2 moved
+        the two tracer defaults -- byte-identical, pinned archive to
+        archive.
 
     Returns
     -------
@@ -293,6 +306,9 @@ def paraxial_focus_world(
             aperture_radius = 1e-3
 
     from .core import _make_bundle, trace_world
+    from .trace import _way_back_kwargs
+
+    _wb = _way_back_kwargs(renormalize, sphere_normal)
 
     # Both rays travel parallel to world +z at z = 0 (paraxial /
     # infinite-object setup).  Axial at (0, 0); marginal at
@@ -307,8 +323,8 @@ def paraxial_focus_world(
         L=np.array([0.0]), M=np.array([0.0]),
         wavelength=float(wavelength),
     )
-    res_axial = trace_world(axial, world_surfaces, wavelength)
-    res_marg = trace_world(marginal, world_surfaces, wavelength)
+    res_axial = trace_world(axial, world_surfaces, wavelength, **_wb)
+    res_marg = trace_world(marginal, world_surfaces, wavelength, **_wb)
     if not (bool(res_axial.image_rays.alive[0])
             and bool(res_marg.image_rays.alive[0])):
         dead = [name for name, res in (('axial', res_axial),

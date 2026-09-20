@@ -63,7 +63,7 @@ from ._conic_core import (
     reflect_mirror,
     refract_snell,
 )
-from .trace import _make_bundle, trace
+from .trace import _make_bundle, _way_back_kwargs, trace
 
 
 @dataclass
@@ -328,6 +328,8 @@ def ray_transfer_jacobian(
     h_slope: float = 5e-5,
     reference: str = 'surface',
     n_exit: Optional[float] = None,
+    renormalize: Optional[str] = None,
+    sphere_normal: Optional[str] = None,
 ) -> DifferentialTransfer:
     """Differential ray-transfer Jacobian along each base ray.
 
@@ -373,6 +375,17 @@ def ray_transfer_jacobian(
         (:func:`lumenairy.raytrace.exit_vertex.resolve_exit_index`, which
         raises rather than guessing 1.0 for a name it cannot resolve).
         Ignored by ``reference='surface'``.
+    renormalize : ``None`` (default) | ``'exit'`` | ``'surface'``
+        Forwarded verbatim to the internal :func:`trace` call -- WP-C2's
+        way back, one keyword per flipped default.  ``None`` means
+        "whatever the library's default is", so an unkeyworded call is
+        unchanged and no call site pins today's default.
+    sphere_normal : ``None`` (default) | ``'analytic'`` | ``'generic'``
+        Forwarded verbatim to the same call.  Pass
+        ``renormalize='surface'`` and ``sphere_normal='generic'`` together
+        for the arithmetic this entry point produced before WP-C2 moved
+        the two tracer defaults -- byte-identical, pinned archive to
+        archive.
 
     Returns
     -------
@@ -403,7 +416,8 @@ def ray_transfer_jacobian(
     rb = _make_bundle(xx, yy, L, M, wavelength)
 
     of = 'all' if per_surface else 'last'
-    res = trace(rb, surfaces, wavelength, output_filter=of)
+    res = trace(rb, surfaces, wavelength, output_filter=of,
+                **_way_back_kwargs(renormalize, sphere_normal))
 
     def _state(bundle):
         return (bundle.x, bundle.y, bundle.L / bundle.N, bundle.M / bundle.N,

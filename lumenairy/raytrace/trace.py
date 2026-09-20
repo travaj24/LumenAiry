@@ -1573,6 +1573,49 @@ def apply_doe_phase_traced(
 # High-level trace functions
 # ============================================================================
 
+#: The two keywords :func:`trace` / :func:`world_trace.trace_world` carry as
+#: the way back to the pre-WP-C2 arithmetic.  Every exported entry point that
+#: traces INTERNALLY repeats them verbatim -- same names, same accepted
+#: values -- so a caller needs one keyword per flip and never has to drop to
+#: :func:`trace` to get the arithmetic it used to get.
+_WAY_BACK_KEYWORDS = ('renormalize', 'sphere_normal')
+
+
+def _way_back_kwargs(renormalize=None, sphere_normal=None):
+    """Build the ``**kwargs`` an internally-tracing entry point forwards.
+
+    ``None`` -- the default of every one of those keywords -- means "do not
+    name it at all", so the forwarded call takes whatever :func:`trace`'s
+    OWN default is at the time it runs.  That is deliberate and it is the
+    whole point of the sentinel: an entry point that defaulted its keyword
+    to today's ``'exit'`` / ``'analytic'`` would freeze today's default into
+    every call site the day the library's default moves again, which is
+    exactly the failure WP-C2 was written to avoid.  A call that omits both
+    keywords is therefore byte-identical to one that passes ``None`` for
+    both (asserted, not assumed: see
+    ``tests/unit/test_c2_analytic_normal_default.py``).
+
+    Parameters
+    ----------
+    renormalize : ``None`` (the library default) | ``'exit'`` | ``'surface'``
+    sphere_normal : ``None`` (the library default) | ``'analytic'`` | ``'generic'``
+
+    Returns
+    -------
+    kwargs : dict
+        Zero, one or two entries, ready to splat into a ``trace`` /
+        ``trace_world`` call.  The VALUES are not validated here -- the
+        tracer raises on an unknown spelling, and validating twice would
+        mean two places to keep in step.
+    """
+    kwargs = {}
+    if renormalize is not None:
+        kwargs['renormalize'] = renormalize
+    if sphere_normal is not None:
+        kwargs['sphere_normal'] = sphere_normal
+    return kwargs
+
+
 def trace_prescription(
     prescription: Dict[str, Any],
     wavelength: float,
@@ -1583,6 +1626,9 @@ def trace_prescription(
     ray_pattern: str = 'rings',
     n_across: int = 11,
     image_distance: Optional[float] = None,
+    *,
+    renormalize: Optional[str] = None,
+    sphere_normal: Optional[str] = None,
 ) -> 'TraceResult':
     """Trace rays through a lens prescription.
 
@@ -1614,6 +1660,17 @@ def trace_prescription(
         If given, add a final flat surface at this distance after the
         last prescription surface.  Useful for evaluating the spot at a
         specific image plane.
+    renormalize : ``None`` (default) | ``'exit'`` | ``'surface'``
+        Forwarded verbatim to the internal :func:`trace` call -- WP-C2's
+        way back, one keyword per flipped default.  ``None`` means
+        "whatever the library's default is", so an unkeyworded call is
+        unchanged and no call site pins today's default.
+    sphere_normal : ``None`` (default) | ``'analytic'`` | ``'generic'``
+        Forwarded verbatim to the same call.  Pass
+        ``renormalize='surface'`` and ``sphere_normal='generic'`` together
+        for the arithmetic this entry point produced before WP-C2 moved
+        the two tracer defaults -- byte-identical, pinned archive to
+        archive.
 
     Returns
     -------
@@ -1673,7 +1730,8 @@ def trace_prescription(
             label='Image',
         ))
 
-    return trace(rays, surfaces, wavelength)
+    return trace(rays, surfaces, wavelength,
+                 **_way_back_kwargs(renormalize, sphere_normal))
 
 
 # ============================================================================
@@ -1972,6 +2030,9 @@ def raytrace_system(
     ray_pattern: str = 'rings',
     n_across: int = 11,
     image_distance: Optional[float] = None,
+    *,
+    renormalize: Optional[str] = None,
+    sphere_normal: Optional[str] = None,
 ) -> Tuple['TraceResult', List['Surface']]:
     """Ray-trace the same element list used by propagate_through_system.
 
@@ -1999,6 +2060,17 @@ def raytrace_system(
     image_distance : float or None
         Distance from last surface to image plane [m].  If None, uses
         the paraxial back focal length.
+    renormalize : ``None`` (default) | ``'exit'`` | ``'surface'``
+        Forwarded verbatim to the internal :func:`trace` call -- WP-C2's
+        way back, one keyword per flipped default.  ``None`` means
+        "whatever the library's default is", so an unkeyworded call is
+        unchanged and no call site pins today's default.
+    sphere_normal : ``None`` (default) | ``'analytic'`` | ``'generic'``
+        Forwarded verbatim to the same call.  Pass
+        ``renormalize='surface'`` and ``sphere_normal='generic'`` together
+        for the arithmetic this entry point produced before WP-C2 moved
+        the two tracer defaults -- byte-identical, pinned archive to
+        archive.
 
     Returns
     -------
@@ -2069,7 +2141,8 @@ def raytrace_system(
             label='Image',
         ))
 
-    result = trace(rays, surfaces, wavelength)
+    result = trace(rays, surfaces, wavelength,
+                   **_way_back_kwargs(renormalize, sphere_normal))
     return result, surfaces
 
 

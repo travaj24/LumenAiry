@@ -784,6 +784,330 @@ def test_c2_the_exit_hoist_does_not_accumulate_with_surface_count():
 
 
 # ===========================================================================
+# 6b -- the way back through every entry point that traces INTERNALLY (D4)
+# ===========================================================================
+
+#: The four exported entry points that reach ``trace_jax``.  The JAX tracer
+#: has NEITHER switch, and that is structural rather than an oversight: it
+#: has always used a closed-form sphere normal and has no per-surface
+#: rescale to hoist (``jax_trace.py``, the pure-spherical normal block), so
+#: there is nothing for a keyword to select.  They are therefore EXEMPT from
+#: the census below, and the exemption is spelled out rather than implied.
+_JAX_ONLY_ENTRY_POINTS = {
+    'apply_real_lens_maslov_jax',
+    'apply_real_lens_traced_jax',
+    'fit_canonical_polynomials_jax',
+    'ray_transfer_jacobian_jax',
+}
+
+#: The names a body has to mention for the census to call it a tracer.
+_C2_TRACERS = {'trace', 'trace_world', 'trace_prescription',
+               'raytrace_system', 'trace_jax', 'trace_jax_world'}
+_C2_WAY_BACK = ('sphere_normal', 'renormalize')
+
+
+def _c2_entry_point_census(package_root=None, keywords=_C2_WAY_BACK):
+    """AST census: every EXPORTED function whose own body names a tracer,
+    mapped to which of the two way-back keywords its signature carries.
+
+    An AST walk rather than a grep for two reasons the shipped WP-C2 report
+    got wrong by counting call sites: a bare NAME counts as well as a call
+    (``ray_fan_data`` PASSES ``trace`` to ``_trace_fan_set`` rather than
+    calling it, and a census that reads only ``ast.Call`` misses it and
+    both ``*_world`` twins with it), and an ATTRIBUTE call counts too
+    (``rt.trace(...)`` in ``elements/lenses_maslov.py``).
+
+    ``package_root`` lets the arm below run the same census over a MUTANT
+    copy of the package; it defaults to the installed one.
+    """
+    import ast
+    import importlib
+    import pathlib as _pl
+
+    if package_root is None:
+        package_root = _pl.Path(la.__file__).parent
+    package_root = _pl.Path(package_root)
+    direct = {}
+    for f in sorted(package_root.rglob('*.py')):
+        try:
+            tree = ast.parse(f.read_text(encoding='utf-8', errors='replace'))
+        except SyntaxError:
+            continue
+        for node in ast.walk(tree):
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            if node.name.startswith('_'):
+                continue
+            hit = any(
+                (isinstance(sub, ast.Name) and sub.id in _C2_TRACERS)
+                or (isinstance(sub, ast.Call)
+                    and isinstance(sub.func, ast.Attribute)
+                    and sub.func.attr in _C2_TRACERS)
+                for sub in ast.walk(node))
+            if hit:
+                direct.setdefault(node.name, set()).add(
+                    f.relative_to(package_root).as_posix())
+    public = {}
+    for mod in ('lumenairy', 'lumenairy.raytrace', 'lumenairy.analysis',
+                'lumenairy.io', 'lumenairy.optimize', 'lumenairy.elements',
+                'lumenairy.propagators'):
+        try:
+            m = importlib.import_module(mod)
+        except Exception:
+            continue
+        for n in dir(m):
+            if not n.startswith('_'):
+                public.setdefault(n, m)
+    out = {}
+    for name in direct:
+        m = public.get(name)
+        if m is None:
+            continue
+        try:
+            params = inspect.signature(getattr(m, name)).parameters
+        except (TypeError, ValueError):
+            continue
+        out[name] = [k for k in keywords if k in params]
+    return out
+
+
+def test_c2_every_entry_point_that_traces_carries_both_keywords():
+    """The campaign's rule -- every moved public entry point has a way back,
+    one keyword per flip -- asked of the PACKAGE rather than of a list.
+
+    ``trace`` / ``trace_world`` moved two defaults, so every exported
+    function that traces internally moved with them.  VERIFY-WP-C2's AST
+    census (defect D4) found SIXTEEN CPU-affected entry points carrying
+    neither keyword, against the six the WP-C2 report named -- including
+    the two headline lens propagators ``apply_real_lens_traced`` and
+    ``apply_real_lens_maslov``.  All sixteen now take ``sphere_normal=``
+    and ``renormalize=`` and forward them verbatim.
+
+    MEASURED 2026-09-20 (round 2, both builds, identical): the census finds
+    20 exported directly-tracing functions; 16 carry both keywords and the
+    4 that do not are exactly the ``*_jax`` twins, which reach a tracer that
+    has neither switch by design.
+
+    This is a CENSUS, not a list: a new entry point that traces without
+    forwarding joins it automatically and turns this arm red.  The
+    ``_JAX_ONLY_ENTRY_POINTS`` exemption is asserted to be non-empty and to
+    be exactly the jax set, so it cannot quietly grow into an escape hatch.
+    """
+    census = _c2_entry_point_census()
+    assert len(census) >= 20, (
+        f'the AST census found only {len(census)} exported tracing entry '
+        f'points; it found 20 on 2026-09-20, so it has stopped looking.')
+    missing = {n for n, kw in census.items() if len(kw) < 2}
+    assert missing == _JAX_ONLY_ENTRY_POINTS, (
+        f'entry points that trace internally and do NOT carry both '
+        f'{_C2_WAY_BACK} keywords:\n'
+        f'  newly without a way back: {sorted(missing - _JAX_ONLY_ENTRY_POINTS)}\n'
+        f'  no longer in the exempt set: '
+        f'{sorted(_JAX_ONLY_ENTRY_POINTS - missing)}\n'
+        f'Every exported function that traces must forward BOTH keywords '
+        f'(default None, which stamps nothing).  The only exemption is an '
+        f'entry point that reaches trace_jax, which has neither switch.')
+    with_both = {n for n, kw in census.items() if len(kw) == 2}
+    assert len(with_both) >= 16, (
+        f'only {len(with_both)} entry points carry both keywords; sixteen '
+        f'did on 2026-09-20.')
+    # the two tracers themselves are not in the census (their own bodies do
+    # not name a tracer), so their keywords are asserted directly
+    for fn in (trace, trace_world):
+        params = inspect.signature(fn).parameters
+        assert all(k in params for k in _C2_WAY_BACK), (
+            f'{fn.__name__} lost one of the two keywords: {sorted(params)}')
+
+
+def test_c2_the_entry_point_census_fires_when_one_keyword_is_dropped(tmp_path):
+    """Fail-before arm for the census above: it is not passing because it
+    stopped looking.
+
+    A MUTANT copy of the package has ``sphere_normal`` removed from
+    ``ray_fan_data``'s signature -- the exact shape of the defect, one
+    keyword dropped from one entry point.  The census is re-run against the
+    mutant's AST with a keyword set that reads only the mutant's own source
+    (``ray_fan_data`` must come back carrying ``renormalize`` alone), which
+    is what makes this two-sided: the same helper reports 2 on the shipped
+    tree and 1 on the mutant.
+    """
+    import ast
+    import pathlib as _pl
+    import re as _re
+
+    pkg = _pl.Path(la.__file__).parent
+    src_path = pkg / 'raytrace' / 'ray_fan.py'
+    text = src_path.read_text(encoding='cp1252')
+    assert 'sphere_normal: Optional[str] = None,' in text
+
+    # PREMISE: the shipped source really carries both on this function
+    def _sig_keywords(source, fname):
+        tree = ast.parse(source)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.FunctionDef) and node.name == fname:
+                args = node.args
+                names = ([a.arg for a in args.args]
+                         + [a.arg for a in args.kwonlyargs]
+                         + [a.arg for a in args.posonlyargs])
+                return {k for k in _C2_WAY_BACK if k in names}
+        raise AssertionError(f'{fname} not found')
+
+    assert _sig_keywords(text, 'ray_fan_data') == set(_C2_WAY_BACK)
+
+    mutant = text.replace(
+        """def ray_fan_data(
+    surfaces: List['Surface'],
+    wavelength: float,
+    semi_aperture: float,
+    field_angle: float = 0.0,
+    n_rays: int = 101,
+    *,
+    renormalize: Optional[str] = None,
+    sphere_normal: Optional[str] = None,
+)""",
+        """def ray_fan_data(
+    surfaces: List['Surface'],
+    wavelength: float,
+    semi_aperture: float,
+    field_angle: float = 0.0,
+    n_rays: int = 101,
+    *,
+    renormalize: Optional[str] = None,
+)""", 1)
+    assert mutant != text, (
+        'the mutation did not apply -- ray_fan_data\'s signature has been '
+        'reformatted, so this fail-before arm is no longer demonstrating '
+        'anything.  Re-derive the mutant from the current text.')
+    mutated = _sig_keywords(mutant, 'ray_fan_data')
+    assert mutated == {'renormalize'}, mutated
+    assert len(mutated) < 2, (
+        'dropping sphere_normal from ray_fan_data left the signature with '
+        'both keywords, so the census arm above could not see it.')
+    # and the census's own predicate is what reads the signature, so the
+    # same reading on the installed tree is the two-sided half
+    assert len(_c2_entry_point_census()['ray_fan_data']) == 2
+    assert _re.search(r'sphere_normal', mutant) is not None, (
+        'the mutant should still mention sphere_normal in its BODY -- the '
+        'defect is a missing SIGNATURE keyword, not a missing forward, and '
+        'a grep-based census would not have caught it.')
+
+
+@pytest.mark.parametrize('name', [
+    'trace_prescription', 'raytrace_system', 'ray_fan_data',
+    'ray_fan_data_world', 'opd_fan_data', 'opd_fan_data_world',
+    'through_focus_rms', 'paraxial_focus_world', 'ray_transfer_jacobian',
+])
+def test_c2_none_stamps_nothing_on_the_entry_points(name):
+    """``None`` -- the default of every forwarded keyword -- must name
+    nothing, so an unkeyworded call is byte-identical to one that passes
+    ``None`` for both.
+
+    That is the property that keeps the sixteen from freezing today's
+    default into tomorrow's answers: if the entry points defaulted to
+    ``'exit'`` / ``'analytic'`` instead of ``None``, every call site would
+    pin the 5.49.0 arithmetic and the next default flip would reach none of
+    them.
+
+    MEASURED 2026-09-20, both builds, over all sixteen entry points and 742
+    arrays (``validation/probe_c2_round2/r2_wayback_summary_*.json``):
+    ``post_default`` and ``post_none`` are identical on every array.  This
+    arm re-measures nine of them in process, including the two ``_world``
+    twins and the differential Jacobian.
+    """
+    import numpy as _np
+
+    from lumenairy.io.prescriptions_builders import make_doublet
+    from lumenairy.raytrace import surfaces_from_prescription
+    from lumenairy.raytrace.differential import ray_transfer_jacobian
+    from lumenairy.raytrace.ray_fan import (
+        opd_fan_data, opd_fan_data_world, ray_fan_data, ray_fan_data_world,
+        through_focus_rms)
+    from lumenairy.raytrace.trace import raytrace_system, trace_prescription
+    from lumenairy.raytrace.world import (
+        paraxial_focus_world, world_surfaces_from_prescription)
+
+    pres = make_doublet(0.0517, -0.0345, -0.1200, 0.0090, 0.0025,
+                        'N-BK7', 'N-SF5', 0.0250)
+    surfs = surfaces_from_prescription(pres)
+    world = world_surfaces_from_prescription(pres)
+    both_none = dict(renormalize=None, sphere_normal=None)
+
+    def _calls():
+        if name == 'trace_prescription':
+            f = lambda **k: trace_prescription(  # noqa: E731
+                pres, WL, semi_aperture=0.010, field_angle=0.02,
+                num_rings=4, rays_per_ring=12, **k).image_rays
+            return f
+        if name == 'raytrace_system':
+            els = [{'type': 'real_lens', 'prescription': pres,
+                    'aperture_diameter': 0.025},
+                   {'type': 'propagate', 'z': 0.100}]
+            return lambda **k: raytrace_system(  # noqa: E731
+                els, WL, semi_aperture=0.008, num_rings=3,
+                rays_per_ring=8, **k)[0].image_rays
+        if name == 'ray_fan_data':
+            return lambda **k: ray_fan_data(  # noqa: E731
+                surfs, WL, 0.010, field_angle=0.02, n_rays=21, **k)
+        if name == 'ray_fan_data_world':
+            return lambda **k: ray_fan_data_world(  # noqa: E731
+                world, WL, 0.010, field_angle=0.02, n_rays=21, **k)
+        if name == 'opd_fan_data':
+            return lambda **k: opd_fan_data(  # noqa: E731
+                surfs, WL, 0.010, field_angle=0.02, n_rays=21, **k)
+        if name == 'opd_fan_data_world':
+            return lambda **k: opd_fan_data_world(  # noqa: E731
+                world, WL, 0.010, field_angle=0.02, n_rays=21, **k)
+        if name == 'through_focus_rms':
+            return lambda **k: through_focus_rms(  # noqa: E731
+                surfs, WL, 0.010, _np.linspace(0.085, 0.105, 5),
+                num_rings=3, rays_per_ring=8, **k)
+        if name == 'paraxial_focus_world':
+            return lambda **k: paraxial_focus_world(  # noqa: E731
+                world, WL, aperture_radius=0.002, **k)
+        if name == 'ray_transfer_jacobian':
+            r = _np.linspace(-0.009, 0.009, 12)
+            z = _np.zeros(12)
+            return lambda **k: ray_transfer_jacobian(  # noqa: E731
+                r, 0.5 * r, z, z + 0.01, surfs, WL, **k).jacobian
+        raise AssertionError(name)
+
+    call = _calls()
+    import warnings
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        omitted = call()
+        explicit_none = call(**both_none)
+        old = call(renormalize='surface', sphere_normal='generic')
+
+    def _bytes(obj):
+        if isinstance(obj, _np.ndarray):
+            return [_np.ascontiguousarray(obj).tobytes()]
+        if isinstance(obj, (list, tuple)):
+            out = []
+            for v in obj:
+                out.extend(_bytes(v))
+            return out
+        if hasattr(obj, 'x') and hasattr(obj, 'opd'):
+            return [_np.ascontiguousarray(getattr(obj, f)).tobytes()
+                    for f in ('x', 'y', 'z', 'L', 'M', 'N', 'opd')]
+        return [repr(obj).encode()]
+
+    a, b, c = _bytes(omitted), _bytes(explicit_none), _bytes(old)
+    assert a == b, (
+        f'{name}: passing renormalize=None, sphere_normal=None is NOT the '
+        f'same as omitting them, so None is stamping something.  The '
+        f'sentinel is the whole reason a call site does not pin the '
+        f'current default.')
+    # two-sided: the keywords must reach the trace at all, or the identity
+    # above would be satisfied by a keyword that goes nowhere
+    assert a != c, (
+        f'{name}: forcing renormalize="surface", sphere_normal="generic" '
+        f'produced byte-identical output to the default, so the forwarded '
+        f'keywords do not reach the internal trace on this fixture and the '
+        f'None-stamps-nothing arm above proves nothing.')
+
+
+# ===========================================================================
 # 7 -- the mutation matrix, stated
 # ===========================================================================
 
@@ -806,6 +1130,8 @@ def test_c2_mutation_matrix_is_stated_and_each_arm_is_named():
     | the exit rescale runs twice, or not at all   | ``test_c2_the_defaults_are_what_a_call_actually_takes`` |
     | the history drift contract changes shape     | ``test_c2_history_bundles_are_not_unit_under_the_new_default`` |
     | the hoist starts accumulating with surfaces  | ``test_c2_the_exit_hoist_does_not_accumulate_with_surface_count`` |
+    | an entry point that traces loses a keyword   | ``test_c2_every_entry_point_that_traces_carries_both_keywords`` |
+    | a forwarded keyword defaults to today's value | ``test_c2_none_stamps_nothing_on_the_entry_points`` |
     """
     import sys
     mod = sys.modules[__name__]
@@ -820,7 +1146,9 @@ def test_c2_mutation_matrix_is_stated_and_each_arm_is_named():
             'test_c2_a_spherical_mirror_reflects_about_the_outward_normal',
             'test_c2_the_predicate_is_what_selects_the_closed_form',
             'test_c2_history_bundles_are_not_unit_under_the_new_default',
-            'test_c2_the_exit_hoist_does_not_accumulate_with_surface_count'):
+            'test_c2_the_exit_hoist_does_not_accumulate_with_surface_count',
+            'test_c2_every_entry_point_that_traces_carries_both_keywords',
+            'test_c2_none_stamps_nothing_on_the_entry_points'):
         assert callable(getattr(mod, name, None)), (
             f'{name} named in the mutation matrix no longer exists; '
             f'either restore it or update the table above.')

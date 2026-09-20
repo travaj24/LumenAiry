@@ -589,26 +589,30 @@ _TRACERS = {'trace', 'trace_world', 'trace_prescription', 'raytrace_system',
             'trace_jax', 'trace_jax_world'}
 _KEYWORDS = ('sphere_normal', 'renormalize')
 
-#: Exported functions whose own body NAMES a tracer and whose signature
-#: carries NEITHER keyword, i.e. a caller cannot ask them for the
-#: pre-5.49.0 arithmetic.  MEASURED 2026-09-20 by an AST walk of the whole
-#: package (``validation/probe_verify_c2/vc2_entrypoints.py``), both
-#: builds identical.  The WP-C2 report's section 8 names six of these.
-#: The four ``*_jax`` entries reach ``trace_jax``, which has NEITHER
-#: switch by design, so they are listed but are not part of the defect:
-#: SIXTEEN CPU-affected exported entry points have no way back, against
-#: the six the report names.  (``trace_jax`` itself is a tracer, not a
-#: consumer, so it is not in this set.)
-_NO_WAY_BACK = {
-    'apply_real_lens_maslov', 'apply_real_lens_maslov_jax',
-    'apply_real_lens_traced', 'apply_real_lens_traced_jax',
+#: The SIXTEEN CPU-affected exported entry points VERIFY-WP-C2 defect D4
+#: found with no way back -- measured 2026-09-20 by an AST walk of the whole
+#: package (``validation/probe_verify_c2/vc2_entrypoints.py``), both builds
+#: identical, against the six the WP-C2 report named.  Round 2 threaded
+#: ``sphere_normal=`` and ``renormalize=`` through every one of them, so
+#: this set is now the set that MUST carry both keywords, and the arm below
+#: is inverted from the one that pinned the defect.
+_SIXTEEN_WITH_A_WAY_BACK = {
+    'apply_real_lens_maslov', 'apply_real_lens_traced',
     'caustic_diagnostic', 'eval_image_plane_wfe',
-    'fit_canonical_polynomials', 'fit_canonical_polynomials_jax',
-    'fit_hf_polynomials', 'opd_fan_data', 'opd_fan_data_world',
-    'paraxial_focus_world', 'plot_lens_layout', 'ray_fan_data',
-    'ray_fan_data_world', 'ray_transfer_jacobian',
-    'ray_transfer_jacobian_jax', 'raytrace_system', 'through_focus_rms',
+    'fit_canonical_polynomials', 'fit_hf_polynomials',
+    'opd_fan_data', 'opd_fan_data_world', 'paraxial_focus_world',
+    'plot_lens_layout', 'ray_fan_data', 'ray_fan_data_world',
+    'ray_transfer_jacobian', 'raytrace_system', 'through_focus_rms',
     'trace_prescription',
+}
+
+#: The four that reach ``trace_jax``, which has NEITHER switch by design
+#: (closed-form normal always, no per-surface rescale to hoist), so they
+#: are exempt and stay exempt.  (``trace_jax`` itself is a tracer, not a
+#: consumer, so it is not in this census.)
+_NO_WAY_BACK = {
+    'apply_real_lens_maslov_jax', 'apply_real_lens_traced_jax',
+    'fit_canonical_polynomials_jax', 'ray_transfer_jacobian_jax',
 }
 
 
@@ -669,15 +673,25 @@ def test_vc2_the_entry_points_without_a_way_back_are_pinned():
     exported function that traces internally moved with them -- and can
     only be put back if it forwards the two keywords.
 
-    The WP-C2 report names SIX.  An AST walk of the package finds
-    twenty-one, including the lens propagators ``apply_real_lens_traced``
-    and ``apply_real_lens_maslov``, ``ray_transfer_jacobian``,
-    ``eval_image_plane_wfe``, ``plot_lens_layout``, ``caustic_diagnostic``,
-    the two ``*_world`` fan twins and both polynomial fitters.
+    The WP-C2 report named SIX.  This verification's AST walk found
+    twenty exported directly-tracing functions with neither keyword,
+    sixteen of them CPU-affected, including the lens propagators
+    ``apply_real_lens_traced`` and ``apply_real_lens_maslov``,
+    ``ray_transfer_jacobian``, ``eval_image_plane_wfe``,
+    ``plot_lens_layout``, ``caustic_diagnostic``, the two ``*_world`` fan
+    twins and both polynomial fitters (defect D4).
 
-    This pins the census both ways: nothing may silently JOIN the list
-    (a new entry point that traces without forwarding), and anything that
-    LEAVES it is a fix that should update VERIFY_WP-C2.md defect D4.
+    ROUND 2 CLOSED IT, and this arm is INVERTED accordingly: all sixteen
+    now carry both keywords, and the only entry points that do not are the
+    four ``*_jax`` twins, whose tracer has neither switch by design.  Their
+    way back was re-measured archive to archive on both builds --
+    ``validation/probe_c2_round2/r2_wayback_summary_{win,wsl}.json``, 742
+    of 742 arrays byte-identical against a ``git archive 49ddf4bd`` tree in
+    its own process, with all sixteen moving at the default.
+
+    The census is pinned both ways: nothing may silently JOIN the exempt
+    set (a new entry point that traces without forwarding), and a jax twin
+    that GAINS the keywords is a change that should update D4.
     """
     census = _census()
     assert census, 'the AST census found no exported function that traces'
@@ -686,8 +700,15 @@ def test_vc2_the_entry_points_without_a_way_back_are_pinned():
         f'the way-back census moved.\n'
         f'  newly WITHOUT a way back: {sorted(missing - _NO_WAY_BACK)}\n'
         f'  now WITH one (fixed):     {sorted(_NO_WAY_BACK - missing)}\n'
-        f'If an entry point has been given the two keywords, remove it '
-        f'from _NO_WAY_BACK here and from defect D4 in VERIFY_WP-C2.md.')
+        f'Every exported function that traces on the CPU must forward both '
+        f'keywords; only the jax twins are exempt.')
+    have = {n for n, kw in census.items() if len(kw) == 2}
+    assert _SIXTEEN_WITH_A_WAY_BACK <= have, (
+        f'these entry points lost their way back again: '
+        f'{sorted(_SIXTEEN_WITH_A_WAY_BACK - have)}')
+    assert len(_SIXTEEN_WITH_A_WAY_BACK) == 16, (
+        'D4 is about sixteen entry points; this set must stay the sixteen '
+        'that were measured, or the defect record and the test disagree.')
     # the two tracers themselves are not in the census (their own bodies
     # do not name a tracer), so their way back is asserted directly
     from lumenairy.raytrace.world_trace import trace_world
@@ -695,9 +716,6 @@ def test_vc2_the_entry_points_without_a_way_back_are_pinned():
         p = inspect.signature(fn).parameters
         assert all(k in p for k in _KEYWORDS), (
             f'{fn.__name__} lost one of the two keywords: {sorted(p)}')
-    assert len(_NO_WAY_BACK) > 6, (
-        'the report names six; this arm exists because the measured count '
-        'is larger, and it must stay larger until they are fixed.')
 
 
 # ======================================================================

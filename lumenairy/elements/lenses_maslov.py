@@ -1894,6 +1894,8 @@ def apply_real_lens_maslov(
     numerics: Optional['LensNumerics'] = None,
     resources: Optional['LensResources'] = None,
     config: Optional['LensConfig'] = None,
+    renormalize: Optional[str] = None,
+    sphere_normal: Optional[str] = None,
 ) -> np.ndarray:
     """
     Phase-space / Maslov propagator through a thick-lens prescription.
@@ -1946,6 +1948,15 @@ def apply_real_lens_maslov(
 
     Parameters mirror the inline-in-lenses.py predecessor exactly so
     no caller-side changes are required.
+
+    ``renormalize`` and ``sphere_normal`` (both defaulting to ``None``)
+    are forwarded verbatim to the internal :func:`lumenairy.raytrace.trace`
+    call -- WP-C2's way back, one keyword per flipped tracer default.
+    ``None`` means "whatever the library's default is", so an unkeyworded
+    call is unchanged and no call site pins today's default; pass
+    ``renormalize='surface', sphere_normal='generic'`` together for the
+    arithmetic this propagator produced before WP-C2 moved them
+    (byte-identical, pinned archive to archive).
 
     Anamorphic pixels (``dy != dx``) are supported (v5.20): the
     entrance/exit sampler, output axes, and angular-content estimate
@@ -2624,7 +2635,10 @@ def apply_real_lens_maslov(
         opd=np.zeros(n_rays),
     )
 
-    tr = rt.trace(rays, surfaces, wavelength)
+    from ..raytrace.trace import _way_back_kwargs
+
+    tr = rt.trace(rays, surfaces, wavelength,
+                  **_way_back_kwargs(renormalize, sphere_normal))
     # ``rt.trace`` leaves every ray ON the last surface, at z = sag(rho) in
     # that surface's local frame -- NOT on the exit vertex plane.  The
     # canonical map (s2, v2) -> OPD built below is documented (and consumed)
