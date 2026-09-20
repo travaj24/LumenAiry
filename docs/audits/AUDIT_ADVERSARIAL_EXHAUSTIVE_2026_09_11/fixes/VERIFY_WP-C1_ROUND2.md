@@ -665,7 +665,7 @@ under test, and `lumenairy.__file__` printed by every probe.
 
 | what | Windows py3.14 | WSL py3.12 |
 |---|---|---|
-| the 81-file sweep -- every aperture / system / evaluate-touching unit file, plus census, walkers, dispatcher pins, public API, doc consistency, A17, the durations gate, `test_audit_except_budget.py` and the three C1 files | see sec. 5.1 | see sec. 5.1 |
+| the 81-file sweep -- every aperture / system / evaluate-touching unit file, plus census, walkers, dispatcher pins, public API, doc consistency, A17, the durations gate, `test_audit_except_budget.py` and the three C1 files | **3856 passed, 14 skipped, 8 xfailed, 0 failed** in 35:20 | **3847 passed, 19 skipped, 8 xfailed, 4 failed** in 45:07, all four premise-gated (sec. 5.1) |
 | `tests/unit/test_verify_c1_round2.py` | **16 passed, 8 xfailed** in 16.0 s | **16 passed, 8 xfailed** in 16.3 s |
 | `tests/unit/test_c1_gray_edge_default.py` + `tests/unit/test_verify_c1_gray_edge.py` | **59 passed** in 22.4 s | (in sweep) |
 | `tests/unit/test_audit2609_a8_verify.py` | **36 passed** in 8.8 s | (in sweep) |
@@ -680,10 +680,45 @@ under test, and `lumenairy.__file__` printed by every probe.
 | `python -m mypy` (no args) | **Success: no issues found in 33 source files** | -- |
 | `python scripts/record_history_fingerprints.py --check` | **OK: every history document matches its module** (rc 0) | -- |
 
-### 5.1 Sweep results
+### 5.1 The sweep, and the four WSL reds
 
-(Filled in from `validation/probe_verify_c1_round2/_sweep_WIN.log` and the WSL
-lane; the file list is `validation/probe_verify_c1_round2/_sweep_files.txt`.)
+The file list is `validation/probe_verify_c1_round2/_sweep_files.txt` (81
+files, built by grepping `tests/unit/` for `apply_aperture`,
+`apply_lyot_stop`, a `'type': 'aperture'` element, `propagate_through_system`,
+`evaluate`, `_prescription_to_elements` and the `algebra.Aperture` operator,
+then adding every census / walker / dispatcher-pin / public-API /
+doc-consistency / A17 / durations-gate / except-budget file and the three C1
+files).  Tails in `_sweep_WIN_tail.txt` and `_sweep_WSL_tail.txt`.
+
+| lane | result |
+|---|---|
+| Windows py3.14 | **3856 passed, 14 skipped, 8 xfailed, 0 failed** in 2120.38 s |
+| WSL py3.12 | **3847 passed, 19 skipped, 8 xfailed, 4 failed** in 2707.24 s |
+
+The 8 xfailed on both lanes are this round's own strict xfails (R1's five
+params and R3's three), which is what a strict xfail is for: they fail the
+moment either defect is fixed.
+
+**The four WSL reds are the four round 2 names, and none is a library
+finding.**  All four are GREEN on the Windows lane on this same commit:
+
+* `test_public_api.py::test_installed_metadata_version_matches_source_version`
+  -- the WSL venv's editable install metadata against a 5.48.1 source.
+* `test_v5_3_2_walker_source_line_citation.py::test_v18_5_the_5_47_0_block_citations_name_the_right_lines`
+  and `::test_v18_5_companion_reanchor_tool_exists_and_covers_the_cited_files`
+  -- both shell out to `git`, which from WSL cannot resolve this worktree's
+  `.git` file (it points at a Windows path).
+* `test_v5_2_3_walker_changelog_content.py::test_v16_synthetic_fabrication_is_caught`
+  -- same root: the walker returns rc = 2 ("the git plumbing failed") where the
+  test expects rc = 1.
+
+Confirmed premise-gated by re-running those three files from inside this
+round's own `git archive 7ea01ede` extraction under WSL: **3 failed, 19 passed,
+3 skipped** -- the same three failures, with `test_v16_synthetic_fabrication_is_caught`
+SKIPPING there on a different premise gate, exactly as round 2 describes.  The
+conflated-diagnostic note VERIFY-C1 left on that id (its failure message reads
+"the walker is silently passing fabrications", which is wrong for rc = 2)
+still stands and is still nobody's to fix in this chain.
 
 ---
 

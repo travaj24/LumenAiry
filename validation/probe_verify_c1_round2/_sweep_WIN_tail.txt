@@ -1,0 +1,3 @@
+SKIPPED [1] tests\unit\test_v5_2_walker_changelog_changeset.py:262: CHANGELOG ``## [5.48.1]`` block has no ``X pass / Y collected / Z skip / W xfail`` claim; V12.3 has nothing to reconcile.
+SKIPPED [1] tests\unit\test_v5_3_walker_changelog_self_citation.py:152: CHANGELOG ``## [5.48.1]`` block has no canonical ``X pass + Y skip + Z xfail`` self-citation; V17.1 has nothing to verify.
+3856 passed, 14 skipped, 8 xfailed, 86 warnings in 2120.38s (0:35:20)
