@@ -3619,7 +3619,7 @@ def apply_prescription_persurface_to_beamlets(
     What the local branch REFUSES
     -----------------------------
     Two classes the local branch cannot serve are refused loudly rather than
-    returned silently (VERIFY-WP-B12b D-4 / D-5, 5.48.0).  A prescription
+    returned silently (VERIFY-WP-B12b D-4 / D-5).  A prescription
     whose LAST surface is a MIRROR raises ``NotImplementedError`` -- the leg
     is built from an unsigned ``Nz2`` that feeds the returned direction, the
     leg length and the Moebius step alike, so the returned spot lands four
@@ -3637,21 +3637,29 @@ def apply_prescription_persurface_to_beamlets(
     ``world_output_plane`` branch is not guarded here -- its own leg is
     likewise index-free, which is recorded as an open item, not measured.
 
-    .. versionchanged:: 5.48.0
-       v5.22 to 5.47.0 folded ``-sag`` into the image leg from an in-line
-       conic-sag copy that dropped the aspheric departure, the biconic
-       y-branch, freeforms and the field-frame class (measured 15.5 waves of
-       optical path, 71 % of the sag, on an A4 / A6 last surface).  Fields on
-       an ASPHERIC / biconic / freeform / field-frame last surface move; a
-       conic last surface moves only by the Jacobian projection and floating-
-       point reassociation; a flat one is bit-identical.  See
-       ``docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/``
-       ``WP-B12b_GBD_REPORT.md``.
+    What changed here, and whose fields move
+    ---------------------------------------
+    v5.22 to 5.47.0 folded ``-sag`` into the image leg from an in-line
+    conic-sag copy that dropped the aspheric departure, the biconic y-branch,
+    freeforms and the field-frame class (measured 15.5 waves of optical path,
+    71 % of the sag, on an A4 / A6 last surface).  Fields on an ASPHERIC /
+    biconic / freeform / field-frame last surface move; a conic last surface
+    moves only by the Jacobian projection and floating-point reassociation; a
+    flat one is bit-identical.  See
+    ``docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/``
+    ``WP-B12b_GBD_REPORT.md``.
 
-       The same release also makes the local branch REFUSE a
-       mirror-terminated prescription and an immersed exit medium (see
-       "What the local branch REFUSES" above); both were served silently
-       before, and nothing the library serves today is affected.
+    The same change makes the local branch REFUSE a mirror-terminated
+    prescription and an immersed exit medium (see "What the local branch
+    REFUSES" above); both were served silently before, and nothing the library
+    serves today is affected.
+
+    The release this lands in is the CHANGELOG's to name, not this
+    docstring's: the number is stamped at the commit that makes it true, the
+    way ``__init__.py`` is stamped, and
+    ``tests/unit/test_public_api.py::
+    test_no_shipped_source_claims_a_version_the_package_has_not_reached``
+    refuses a shipped line that predicts one (V-D15).
 
     Parameters
     ----------
