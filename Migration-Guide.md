@@ -1787,8 +1787,9 @@ The matrix-Fourier-transform propagators evaluate their transform as one sum by
 one of three routes.  Until 5.49.0 the default, `method='auto'`, always took a
 chirp-Z (Bluestein) reduction; the dense matrix-Fourier route shipped in 5.48
 as an opt-in `method='direct'`.  `'auto'` now DECIDES FROM THE SHAPES: it takes
-the dense route where that route was measured never slower on either build, and
-the chirp-Z reduction everywhere else.
+the dense route where that route was measured never slower on either build --
+which takes TWO conditions, a grid-ratio one and a work one, both spelled out
+below -- and the chirp-Z reduction everywhere else.
 
 **Affected entry points, and what to pass at each**
 
@@ -1813,7 +1814,7 @@ agree row for row.
 | `carrier_referenced_exact_focus_readout` | -- | **`mft_method=`** | `'separable'` |
 | `re_reference` (`CarrierField` verb) | -- | **`mft_method=`** | `'separable'` |
 | `propagate_traced_carrier_chain` / `..._multi` | -- | **`mft_method=`** | `'bluestein'`, or `'separable'` with `transport='collins'` |
-| `propagate_carrier_referenced(transport='collins')` | the TRANSPORT | **`mft_method=`** | `'separable'` (its output lattice keeps the input's `N`, so the rule cannot fire on it today) |
+| `propagate_carrier_referenced(transport='collins')` | the TRANSPORT | **`mft_method=`** | not needed today -- the Collins leg's output lattice keeps the input's `N`, so both ratios are exactly 1 and the rule cannot fire; the keyword is exposed so that stays true by construction rather than by luck.  It is a `ValueError` on `transport='sziklas'`, which reaches no transform at all |
 | `propagate_through_system` (fresnel leg) | the propagator family | not needed | -- `N_out` is pinned to the chain's own sample count, so the ratio is exactly 1 |
 
 `mft_method=` was added in 5.49.0 precisely because `method=` is already spent

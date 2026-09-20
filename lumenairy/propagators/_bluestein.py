@@ -385,20 +385,22 @@ _MFT_DIRECT_NEVER = 0.0
 #: "never slower": refusing a safe shape costs a few per cent of time, and
 #: capturing an unsafe one cost up to 13x on this ladder.
 #:
-#: A non-positive or ``nan`` value means the screen refuses nothing that the
-#: ratio admitted, which is the exposure this rule was widened to close,
-#: and is what the
-#: ``constant_silently_zero`` mutation in
-#: ``tests/unit/test_c4_mft_direct_default.py`` exercises.
+#: A non-positive or ``nan`` value means the screen refuses nothing the ratio
+#: admitted, which is the exposure this condition was added to close.  Gated
+#: by ``tests/unit/test_c4_mft_direct_default.py::
+#: test_the_work_screen_refuses_a_thin_input_at_the_boundary_ratio`` and by
+#: that file's ``work_constant_silently_zero`` mutation.
 _MFT_DIRECT_MIN_WORK_PER_KERNEL_ENTRY = 16.0
 
 
 def _auto_selects_direct(Ny_in, Nx_in, N_out_y, N_out_x) -> bool:
     """Does ``method='auto'`` take the dense route at this shape?
 
-    A pure function of the FOUR grid sizes and :data:`_MFT_DIRECT_MAX_RATIO`.
+    A pure function of the FOUR grid sizes and the TWO module constants
+    :data:`_MFT_DIRECT_MAX_RATIO` and
+    :data:`_MFT_DIRECT_MIN_WORK_PER_KERNEL_ENTRY`.
     It reads no clock, no environment variable, no thread count, no backend, no
-    array CONTENTS and no module state other than that one constant -- so the
+    array CONTENTS and no module state other than those two constants -- so the
     route a call takes is reproducible from its signature alone, on every build
     and every backend.  That is the property the per-shape byte-identity claim
     rests on: "this shape goes to the previous route" is a statement about the

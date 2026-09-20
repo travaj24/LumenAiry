@@ -79,8 +79,16 @@ _ROOT = os.path.dirname(os.path.abspath(lumenairy.__file__))
 # The census
 # ---------------------------------------------------------------------------
 
+#: Parsing the package and walking its call graph costs about 6 s, and three
+#: ids want the same answer.  Memoised per process -- the sweep is a pure
+#: function of the tree on disk, which pytest does not edit mid-session.
+_PACKAGE_MEMO = {}
+
+
 def _parse_package():
     """``{'relative/path.py': ast.Module}`` for every module in the package."""
+    if 'mods' in _PACKAGE_MEMO:
+        return _PACKAGE_MEMO['mods']
     mods = {}
     for dirpath, _dirnames, filenames in os.walk(_ROOT):
         for fn in sorted(filenames):
@@ -94,6 +102,7 @@ def _parse_package():
                 mods[rel] = ast.parse(src)
             except SyntaxError:                       # pragma: no cover
                 pytest.fail(f"{rel} does not parse")
+    _PACKAGE_MEMO['mods'] = mods
     return mods
 
 
@@ -156,6 +165,8 @@ def _reaching_functions(mods):
     the transform, and its way back is ``compute_psf``'s keyword.  ``ui/`` is
     excluded -- it is an application, not a library entry point.
     """
+    if 'reach' in _PACKAGE_MEMO:
+        return _PACKAGE_MEMO['reach']
     callers, defined = _call_graph(mods)
     seed = {(mod, name) for name in _PRIMITIVES
             for mod in defined.get(name, ())}
@@ -179,6 +190,7 @@ def _reaching_functions(mods):
                 reach.add(caller)
                 nxt.add(caller)
         frontier = nxt
+    _PACKAGE_MEMO['reach'] = reach
     return reach
 
 

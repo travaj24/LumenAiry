@@ -167,17 +167,40 @@ different association orders over the same sum.  Nothing else moves: at
 for, the default is byte-identical to 5.48.1 (proved archive-to-archive on two
 builds over 138 no-keyword fixtures, of which the 81 above the boundary are
 identical and the 57 below it are exactly the ones the rule captures -- 138 of
-138 keys agree with the rule, 0 disagree).  THE WAY BACK is one keyword or one
-constant, and both are byte-identical to 5.48.1 at every shape: pass
-`method='separable'` or `method='bluestein'` on the call (138 of 138 keys
-identical on both arms and both builds), or set
+138 keys agree with the rule, 0 disagree).
+
+**THE WAY BACK IS ONE KEYWORD, AT EVERY ENTRY POINT.**  On the three MFT
+propagators it is the `method=` they already had: `method='separable'` or
+`method='bluestein'`, 138 of 138 keys byte-identical to 5.48.1 on both arms
+and both builds.  Everywhere else `method=` is already spent on something else
+-- the PSF sampler, the resampler, the propagator family, the transport -- so
+those entry points gain **`mft_method=`**, same vocabulary, different name,
+default `None` meaning "name nothing" (the keyword is left off the inner call,
+so the library's own default governs; passing it where no transform is reached
+is a `ValueError`, not a silent no-op).  It is on `compute_psf`,
+`resample_field`, `propagate`, `carrier_referenced_focus_readout`,
+`carrier_referenced_exact_focus_readout`, `re_reference`,
+`propagate_traced_carrier_chain(_multi)` and
+`propagate_carrier_referenced`.  Measured archive to archive against 5.48.1 on
+both builds, each entry point driven at a captured shape and at a refused one:
+**11 of 11 move without the keyword, 11 of 11 are byte-identical above the
+boundary, and 11 of 11 are reproduced EXACTLY by one keyword.**  Which
+spelling is a measurement and is listed per entry point in
+`Migration-Guide.md`: `'separable'` at the three callers that were passing the
+separable flag into the primitive
+(`carrier_referenced_exact_focus_readout`, `re_reference`, and the chain on
+`transport='collins'`), `'bluestein'` everywhere else.
+
+There is also a process-wide switch, and it is NOT the way back: setting
 `lumenairy.propagators._bluestein._MFT_DIRECT_MAX_RATIO =
-lumenairy.propagators._bluestein._MFT_DIRECT_NEVER` once for a whole process
-(138 of 138 identical).  `_MFT_DIRECT_ALWAYS` is the other end -- every shape
-on the dense route.  A caller who pins bytes across the 5.48 -> 5.49 boundary
-on a small output grid should take the keyword; a caller who wants the smaller
-memory, the better accuracy and a route that needs no FFT should take the new
-default and change nothing.
+lumenairy.propagators._bluestein._MFT_DIRECT_NEVER` restores the previous
+dispatch for a whole process (138 of 138 identical), but it is private,
+process-wide, and useless to a program that wants the old bytes at one call
+and the new ones at another.  `_MFT_DIRECT_ALWAYS` is the other end -- every
+shape on the dense route, overriding both conditions.  A caller who pins bytes
+across the 5.48 -> 5.49 boundary on a small output grid should take the
+keyword; a caller who wants the smaller memory, the better accuracy and a
+route that needs no FFT should take the new default and change nothing.
 
 
 ## [5.48.1] — 2026-09-20

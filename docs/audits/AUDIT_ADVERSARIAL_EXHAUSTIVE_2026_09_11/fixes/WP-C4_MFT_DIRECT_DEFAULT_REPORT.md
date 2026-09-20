@@ -918,3 +918,350 @@ command line and `pytest -q --capture=sys -p no:randomly`.
     `'auto'` warns when IT picks the dense route, so the default flip removes
     no diagnostic.
 
+---
+
+# Round 2 (VERIFY-WP-C4) -- 2026-09-20
+
+`VERIFY_WP-C4.md` beside this file said SHIP AFTER two P1 defects, with four
+smaller corrections.  All of them are closed here, on branch
+`feat/c4-mft-direct-round2` (worktree `C:/tmp/lum_c4b`), re-measured rather
+than adopted: every number below is this round's own, on BOTH builds --
+Windows py3.14 (numpy 2.4.4, scipy 1.17.1) and WSL py3.12 (numpy 2.4.6 on
+scipy-openblas, scipy 1.17.1) -- with
+`OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1` on the command
+line, `SCIPY_FFT_WORKERS=1` wired into every timing probe (the verification
+found that the three thread variables do NOT constrain scipy's pocketfft), and
+every probe pinned to ONE tree by `PYTHONPATH` with `lumenairy.__file__`
+asserted under it.  The PRE tree is this round's own `git archive 49ddf4bd`.
+
+Probes and JSON: `validation/probe_c4_round2/`.
+
+## Closure table
+
+| item | closure | WIN | WSL |
+|---|---|---|---|
+| **V-C4-D1** (P1) the "never slower" premise is false in the anisotropic captured region | a SECOND, build-free condition in `_auto_selects_direct`, with `_MFT_DIRECT_MIN_WORK_PER_KERNEL_ENTRY = 16.0` DERIVED from this round's own ladder | largest work/entry measured SLOWER **7.99**, smallest safe above it **8.86**; after the fix, 30 captured shapes read **0.109 .. 0.921** | largest slower **11.95**, smallest safe above **16.00**; after the fix, 30 captured shapes read **0.037 .. 0.636** |
+| **V-C4-D1**, memory half | the same condition removes every memory exception from the captured region | dense cheapest at **42 of 51**, captured-and-not-cheapest **0** | identical: **42 of 51**, **0** |
+| **V-C4-D2** (P1) seven public entry points move with no one-keyword way back | `mft_method=` added and threaded at every one, `None` stamping nothing | **11 of 11** entry points move at a captured shape, **11 of 11** identical at a refused one, **11 of 11** reproduced exactly by one keyword | identical, row for row |
+| **V-C4-D3** (P2) the memory section's cross-build claim contradicts its own table | section 3 corrected and gated against the committed JSON | readings identical across builds at **0 of 42** (branch ladder) and **0 of 51** (this round); cheapest route identical at **42 of 42** and **51 of 51** | same JSON, same counts |
+| **V-C4-D5** (P3) the shipped warning claim counts ">= 1" | the shipped id now counts EXACTLY ONE and reads the message off that warning | 1 of 1 per call, both primitives | (the wider 144/144 matrix is the verification's own id) |
+| **V-C4-D6** (P3) `_phase_term_ratio`'s derivation is 2x off | the derivation corrected in the docstring and in the claim's "Bars" paragraph; the BAR IS UNCHANGED | `R/4 = R_turns/2`, sitting **3.0x to 8.1x** below the gap the measured `C_chirp/C_dense` in [1.481, 4.035] implies | same |
+| **V-C4-N5** the "31x-485x closer" headline mixes two populations | restated in the CHANGELOG, the Guide and section 4.3 with both populations named | ~30x (28.2 .. 34.3) where the dense phase is genuinely rounded; 202 .. 397 where `alpha` makes it exact | 27.9 .. 34.0 / 209 .. 408 |
+| **V-C4-N1** the 1/16 verdict is instrument-dependent | recorded below, in section 2.4's own terms | -- | -- |
+
+## D1 -- the second condition, and where the data puts its constant
+
+**The mechanism, from the code.**  `_direct_matrix_2d` builds `My*Ny + Mx*Nx`
+transcendental kernel entries and then spends
+`min(My*Ny*Nx + My*Nx*Mx, Ny*Nx*Mx + My*Ny*Mx)` multiply-adds using them --
+the two costs the function itself compares to pick its association order.  The
+ratio of those two numbers says whether the BUILD or the products dominate,
+and it is NOT a function of the two grid ratios: `2048x2048 -> 64x64` reads
+**1056** and `2048x64 -> 64x2` reads **4.0**, both at ratio exactly
+`(1/32, 1/32)`.  Section 2's ladder is square, where the quantity is `(N+M)/2`
+and is therefore large at every shape it timed, so it could not see the thin
+regime at all.
+
+**The ladder this round derived the constant from.**  34 CAPTURED anisotropic
+shapes spanning work/entry **1.25 to 64** -- both orientations, and several
+absolute sizes per decade, because the screen is one-sided and the readings
+are not monotone in it -- plus 17 square / non-dyadic / mildly anisotropic
+controls.  Two independent rounds of best-of-nine, routes INTERLEAVED with the
+order rotating by repeat, every registered cache dropped and `gc.collect()`
+before each repeat, all three routes' answers digested in the same pass (three
+distinct digests at 51 of 51 shapes, so no row is fast because a route did not
+run), the reference loop read before and after every shape,
+`fft_infra.SCIPY_FFT_WORKERS = 1` so both sides are single-threaded, verdict
+on the WORST round.  Against `min(chirp-Z 2-D, separable)`.  Load: Windows 26
+-> 33 Python processes, reference-loop drift 0.25 .. 2.02; WSL 14 -> 17, drift
+0.44 .. 2.23 -- so every reading is a BOUND, and the quantity the decision
+rests on is a ratio taken under the same conditions for all three routes.
+
+| | shapes measured SLOWER | largest work/entry among them | smallest work/entry measured SAFE above it |
+|---|---|---|---|
+| Windows py3.14 | 9 of 34, 1.227 .. 6.522 | **7.99** (`4096x128 -> 128x4`, 1.659) | **8.86** (`512x64 -> 8x1`, 0.348) |
+| WSL py3.12 | 10 of 34, 1.110 .. 13.034 | **11.95** (`2048x128 -> 64x4`, 1.110) | **16.00** (`256x64 -> 4x1`, 0.294) |
+| union of both builds | 10 of 34 | **11.95** | **16.00** |
+
+No shape on the ladder lies strictly between 11.95 and 16.00, so the whole
+open interval is admissible and **16.0 is the largest value in it** -- the
+value that clears the slower region by the most (**1.34x**) while still
+capturing every shape measured safe above it.  That is where this round's data
+puts the constant, and it agrees with the value the verification proposed from
+its own ladder (which read 12.0 / 19.7 for the same two quantities).
+
+**What 16.0 does, measured on the shipped rule:**
+
+| group | before | after |
+|---|---|---|
+| shapes measured SLOWER on either build | 10 of 10 captured | **0 of 10** |
+| square / non-dyadic / mildly anisotropic controls | 17 of 17 | **17 of 17** |
+| the six shapes the whole shipped suite drives (work/entry 264 .. 2052) | 6 of 6 | **6 of 6** |
+| thin shapes measured safe on BOTH builds | 11 of 11 | **0 of 11** -- the cost of a one-sided screen |
+| worst captured dense-over-fallback, all 30 captured shapes | 6.522 / 13.034 | **0.921 (WIN) / 0.636 (WSL)** |
+
+The last row is the claim the default flip rests on, and it is now true as
+stated: over 51 shapes on two builds, no shape the rule captures was measured
+slower than the faster chirp-Z fallback.
+
+**The memory census, re-run with the byte counts re-derived from the code.**
+`tracemalloc` peak, cold, one route per trace, every route's answer digested.
+The dense route is the cheapest of the three at **42 of 51** shapes on both
+builds.  The nine exceptions are all THIN -- worst `2048x64 -> 64x2`, dense
+**5.264 MB** against the separable route's **4.399 MB**, which reproduces the
+verification's reading to the digit -- and every one of them is REFUSED by the
+second condition.  Inside the captured region the dense route is cheapest at
+**30 of 30 on both builds**, by 1.6x to 73.6x.  Byte counts derived from the
+two routes' own array sizes predict the measured cheapest route at 48 of 51.
+The report's "42 of 42 ... never argues against the rule anywhere" is
+corrected in section 3 accordingly; it was a statement about a square ladder.
+
+**The rule's tests.**  `tests/unit/test_c4_mft_direct_default.py` gains a
+sixth claim, `_claim_the_work_screen_refuses_a_thin_input`, which builds its
+probe shapes FROM the two constants (the square one by closed form, the thin
+one by a scale SCAN) so a retune keeps the id; the boundary claim is decoupled
+from the work screen; the purity sweep gains three shapes on both sides of the
+new condition at the same ratio pair; the dispatch claim's chirp side gains a
+thin shape the screen refuses, so the new condition is exercised on real bytes
+and not only on the predicate; and the mutation matrix gains
+`work_constant_silently_zero` (caught by `work_screen`) and
+`conjunction_or_instead_of_and` (caught by `dispatch_chirp_side` -- measured:
+the claims that call `_auto_selects_direct` by its imported name hold the
+pre-mutation reference, which is the same reason `rule_inverted` is named for
+a dispatch claim).  **25 passed**, against 21 before.
+
+## D2 -- the way back, per entry point
+
+`mft_method=` (values as the MFT `method=` accepts, default `None`) is added
+to `compute_psf`, `resample_field`, `propagate`,
+`carrier_referenced_focus_readout`,
+`carrier_referenced_exact_focus_readout`, `re_reference`,
+`propagate_traced_carrier_chain`, `propagate_traced_carrier_chain_multi` and
+`propagate_carrier_referenced`, and threaded to the
+`_bluestein_2d` / `_bluestein_centred_2d` call through one helper,
+`_bluestein._mft_route_kwargs`.  `None` is not `'auto'`: it yields `{}`, so
+the keyword is left OFF and whatever the callee's own default is at the time
+governs.  Passing it where no transform is reached is a `ValueError`, not a
+silent no-op.
+
+Driven ARCHIVE TO ARCHIVE against `git archive 49ddf4bd`, each entry point at
+a captured shape (`256 -> 8`: ratio 1/32, work/entry 132) and at a refused one
+(`256 -> 64`), SHA-256 over dtype, shape and raw bytes.  44 keys on the branch
+tree and 22 on the base tree per build, 0 errors.  **Identical verdicts on
+both builds:**
+
+| entry point | moves at the captured shape | identical at the refused shape | spelling that reproduces the base bytes |
+|---|---|---|---|
+| `compute_psf(method='mft')` | yes | yes | `mft_method='bluestein'` |
+| `resample_field(method='chirpz')` | yes | yes | `mft_method='bluestein'` |
+| `propagate(method='asm', output_grid=...)` | yes | yes | `mft_method='bluestein'` |
+| `propagate(method='fresnel', output_grid=...)` | yes | yes | `mft_method='bluestein'` |
+| `carrier_referenced_focus_readout` | yes | yes | `mft_method='bluestein'` |
+| `carrier_referenced_exact_focus_readout` | yes | yes | `mft_method='separable'` |
+| `re_reference` | yes | yes | `mft_method='separable'` |
+| `propagate_traced_carrier_chain` (`transport='sziklas'`) | yes | yes | `mft_method='bluestein'` |
+| `propagate_traced_carrier_chain` (`transport='collins'`) | yes | yes | `mft_method='separable'` |
+| `propagate_traced_carrier_chain_multi` | yes | yes | `mft_method='bluestein'` |
+| `angular_spectrum_propagate_mft` (control, already had one) | yes | yes | `method='bluestein'` |
+
+The spelling is a MEASUREMENT: `'separable'` at exactly the three callers that
+were passing the separable flag into the primitive, `'bluestein'` everywhere
+else.  The Migration Guide's way-back table carries it per entry point.
+
+**The census that keeps it true.**  `tests/unit/test_c4_round2_mft_method.py`
+sweeps the package's own AST, builds a MODULE-QUALIFIED backwards call graph
+(resolving by bare name alone joins unrelated subpackages through shared
+helper names and grows the reachable set from 22 functions to 535 -- measured),
+walks back from the two primitives through private functions and the three MFT
+propagators, and stops at the first public function.  **22 functions can reach
+a primitive, of which 13 are exported**; twelve name a route with `method=` or
+`mft_method=`, and the thirteenth, `asm_propagate`, has no `method` of its own
+and splats `**method_kwargs` into the MFT propagators -- which the id checks
+structurally in the AST rather than excusing.  Its falsifier is its own id: one
+entry point's parameter set is rewritten to drop the keyword, and the census
+must name THAT entry point and no other.  15 passed.
+
+## D3 -- what is build-free about the memory half
+
+Section 3's "the two builds' readings are IDENTICAL TO THE BYTE at every shape
+(the `identical WIN/WSL` column is `yes` at 42 of 42)" contradicted the column
+printed immediately above it (`NO` at all 42 rows) and the JSON it was
+measured from.  Re-measured: `c4_ladder_mem_win.json` and
+`c4_ladder_mem_wsl.json` agree byte for byte at **0 of 42** shapes, and at
+`N = 64, M = 16` the chirp-Z reading differs by a factor of **9.98**
+(8,001,186 bytes against 801,515).  What IS identical across builds is the
+ORDERING -- `dense_cheapest` agrees at **42 of 42** -- and that follows from
+the padding law, not from a run.  This round's own 51-shape census reads the
+same way: **0 of 51** identical readings, **51 of 51** identical cheapest
+route.  Gated by `tests/unit/test_c4_round2_memory_claim.py`, which reads the
+committed JSON and refuses the claim in EITHER direction, and which also
+refuses a reading in which the rule captures a shape the dense route is not
+the smallest at.
+
+## D5 -- the warning claim counts
+
+The guard has two call sites, which is exactly the shape a ">= 1" assertion
+cannot see.  `test_the_default_flip_does_not_take_a_warning_away_from_a_caller`
+now filters the recorded warnings to the phase-budget `RuntimeWarning`,
+asserts there is **exactly one**, and reads the "ALREADY on the dense route"
+sentence off THAT warning.  The wider matrix -- exactly once at 144 of 144
+driven cases, and the message naming the route taken at 144 of 144 -- stays
+where the verification put it,
+`test_verify_c4_mft_direct.py::test_the_phase_guard_warns_exactly_once_per_call`
+and `::test_the_warning_names_the_route_the_call_actually_took`.
+
+## D6 -- the phase-ratio derivation, and what the `/4` is
+
+The chirp-Z route builds `exp(sign*i*pi*alpha*m^2)` over the PADDED index
+`|m| <= L - N_out` with `L = next_fast_len(N_in + N_out - 1)`.  That is
+`pi*alpha*(L - N_out)^2` RADIANS, i.e. `alpha*(L - N_out)^2 / 2` TURNS -- `pi`
+is half a turn -- against the dense route's `alpha*(N-1)*(M-1)` turns exactly.
+So the TURN ratio is `(L - N_out)^2 / (2*(N-1)*(M-1))`, and what
+`_phase_term_ratio` returns, `N_max^2 / ((N-1)(M-1))`, is about TWICE it:
+exactly `2*N_max^2 / (L - N_out)^2` times it, which is 2 up to `(N/(N-1))^2`
+when `L = N + M - 1` and below 2 whenever `next_fast_len` pads further.  The
+bar `R/4` is therefore `R_turns/2`, and it sits **3.0x to 8.1x** below the gap
+the measured `C_chirp/C_dense` in [1.481, 4.035] implies.  **The bar is not
+loosened**; what changes is that the `/4` is now labelled a CHOSEN margin
+rather than a derivation, in `_phase_term_ratio`'s docstring, in the claim's
+own "Bars" paragraph and in section 4.2 of this report.
+
+## N5 -- the accuracy headline, in two populations
+
+Section 4.3's ladder holds `alpha = budget / N_max^2`, and at `budget = 1e3`
+that value is EXACTLY representable whenever the odd part of `N_max^2` divides
+125 -- true at **five of the eight dense-side rows** (`64 -> 2`, `128 -> 4`,
+`160 -> 5`, `256 -> 8` and `128 -> 2`).  At those fixtures `t = alpha*n*k` is
+exact, so is `t - rint(t)`, and the dense route's phase carries no error at
+all: it agrees with an exactly-reduced reference BY CONSTRUCTION -- the same
+degeneracy section 4.5 keeps as a labelled control at `1e15`.  The two
+populations, from the verification's independent re-measurement with the
+branch's own `alpha`:
+
+| `alpha*n*k` exact? | shapes | gap (WIN / WSL) |
+|---|---|---|
+| NO -- a real comparison of the routes | `96 -> 3`, `192 -> 6`, `224 -> 7` | **28.2 .. 34.3** / **27.9 .. 34.0** |
+| YES -- the dense phase is exact by construction | `64 -> 2`, `128 -> 4`, `160 -> 5`, `256 -> 8`, `128 -> 2` | 202 .. 397 / 209 .. 408 |
+
+With a non-dyadic `alpha` at EVERY shape the whole dense-side ladder reads
+21.5 .. 91.8 and tracks `R` as the derivation says it should.  The headline is
+therefore **about 30x where both routes really round, and larger where the
+fixture hands the dense route an exact phase** -- restated in that form in the
+CHANGELOG, the Migration Guide and section 4.3's readings.
+
+## N1 -- the 1/16 verdict was instrument-dependent, and the WSL census was not completed
+
+Two things recorded here rather than silently dropped.
+
+**The 1/16 reading.**  Section 2.4 argues the constant from "1/16 FAILS on WSL
+at `N = 1024, M = 64` (dense 1.38-1.45x slower, three rounds)".  The
+verification re-ran this branch's OWN probe on the same WSL build and
+reproduced that verdict exactly (`1/16 worst 1.411 NOT SAFE`); its own
+instrument -- the same three routes, three rounds of best-of-nine, but with
+the REPEAT loop outermost and the route order rotating -- read **0.709 / 0.994
+/ 0.765** at the same shape, i.e. never slower.  Side by side over the whole
+boundary family the two instruments agree on the SIGN at 11 of 12 shapes, and
+this is the one that differs.  **Both instruments put 1/32 inside the safe
+region on both builds** (worst 0.477 / 0.954 on this branch's, 0.325 / 0.686
+on the verification's), so the shipped value is the conservative one either
+way; what is not reproducible is the REASON GIVEN for excluding 1/16, and that
+sentence should be read as "not safe on one of the two instruments the
+boundary was measured with" rather than as a settled fact.  Round 2's own
+ladder does not re-open it: it measures the work axis, at a fixed ratio.
+
+**The WSL census.**  The verification started the WSL arm of the rule census
+three times and finished none -- twice terminated by a signal from outside its
+session, and once still at 26 % of 276 ids after 19 minutes on a contended
+box.  It is REDUNDANT rather than missing, and now demonstrably so: what the
+rule ANSWERS is a pure function of four integers and two constants, both
+conditions are integer arithmetic, and the purity probe measured one answer at
+20 of 20 shapes on both builds.  Round 2 adds the direct check -- the same 51
+shapes, put to `_auto_selects_direct` on each build, give the same 30 captured
+and 21 refused -- so a WSL census could only re-confirm which shapes the suite
+drives, and those are the same test files.
+
+## The census, re-run on the two-condition rule
+
+Re-run with the verification's own pytest plugin (which wraps
+`_auto_selects_direct` for a whole session, changes no answer, and records
+each call's immediate caller) over the same five firing files, on the
+TWO-CONDITION rule: **276 passed, 4 warnings in 1071.29 s**.
+
+| quantity | verification, one-condition rule | round 2, two-condition rule |
+|---|---|---|
+| calls answering `'direct'` | 35 | **35** |
+| ids in which the rule fires | 16 | **16** |
+| files | 5 | **5** |
+| total rule calls | 615 | **615** |
+| distinct shapes the rule is asked about | 35 | **35** |
+| smallest ratio seen | 1/512 | **1/512** |
+| shapes it FIRES at | `512x512 -> 16x16`, `1024x1024 -> 8x8`, `1024x1024 -> 16x16`, `2048x2048 -> 8x8`, `2048x2048 -> 40x40`, `4096x4096 -> 8x8` | **the same six** |
+| per file (a25 / b4 / w9 / d2 / tight) | 2 / 5 / 9 / 17 / 2 | **2 / 5 / 9 / 17 / 2** |
+| callers of the 35 | `mft.py angular_spectrum_propagate_mft` 32, `carrier.py _collins_transport` 3 | **the same two, 32 / 3** |
+
+Every count is IDENTICAL, which is the point: the six shapes the whole shipped
+suite drives are square and work-dense (264, 516, 520, 1028, 1044 and 2052
+multiply-adds per transcendental kernel entry), so the second condition
+captures every one of them exactly as the first did alone.  The exposure
+V-C4-D1 names is real and is simply not driven by the shipped suite.  JSON:
+`validation/probe_c4_round2/r2_census_win.json`.
+
+## Round 2 runs
+
+All with `OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1` on the
+command line and `pytest -q --capture=sys -p no:randomly`.
+
+| run | build | tail |
+|---|---|---|
+| the 8 core MFT files + both C4 test files + the two new round-2 files | WIN | **164 passed, 4 warnings in 125.81 s** |
+| the same eleven files (with `test_public_api.py`) | WSL | **1 failed, 172 passed, 4 warnings in 61.92 s** -- the one failure is `test_installed_metadata_version_matches_source_version`, ENVIRONMENTAL (the WSL venv's editable `.dist-info` reads 5.11.0 against a source 5.48.1; it reproduces on `49ddf4bd` and has done for every campaign on this box) |
+| the census / walker / dispatcher-pin / history / public-API sweep + `test_audit_except_budget.py` + `test_ci_kernel_consistency.py` (33 files) | WIN | **1402 passed, 14 skipped, 7 warnings in 267.36 s** |
+| 12 MFT-touching files (propagator kernels, resample call sites, analysis, JAX c64 precision, odd-N grids, dispatch) | WIN | **797 passed, 21 warnings in 127.30 s** |
+| the carrier readout files (`test_carrier_referenced`, `a25_carrier_focus_readout`, `test_carrier_field`, `a6_verify_carrier`) | WIN | **163 passed, 3 warnings in 184.02 s** |
+| the durations-staleness and history-relocation gates | WIN | **756 passed in 121.11 s** |
+| the test-hygiene and history-lint gates | WIN | **8 passed in 12.71 s** |
+| the five firing files, with the rule census | WIN | **276 passed, 4 warnings in 1071.29 s** -- 615 rule calls, 35 answering `'direct'`, 16 ids, 5 files |
+| `ruff check .` | **WSL** | `All checks passed!` |
+| `python -m mypy` (no args) | WIN | `Success: no issues found in 33 source files` |
+| `scripts/record_history_fingerprints.py --check` | WIN | `OK: every history document matches its module.` |
+| `scripts/reanchor_citations.py --base f4f18851 --block "[5.47.0]"` | WIN | **22 re-anchored** |
+
+`.test_durations` was re-measured SERIALLY for the four C4 test files (61 ids,
+`--durations=0 -vv`, one process, no `-n`) and spliced in: 38 stale entries
+removed, 61 written, 16,657 total, JSON re-parsed after the write.
+
+## What round 2 could not measure
+
+1.  **A quiet box.**  Four sibling verification sessions were running heavy
+    Windows and WSL pytest work throughout.  Every timing here is a BOUND; the
+    load census and the per-shape reference-loop drift are in each probe's
+    JSON, and the quantity the second condition rests on is a RATIO taken
+    under the same conditions for all three routes -- which is why the sign of
+    the thin-shape finding survives two builds and two rounds while individual
+    readings move by a factor of two between rounds.
+2.  **A second Linux build, or a different BLAS wheel on Linux.**  One WSL
+    build, as both previous rounds had.  The work constant's margin (1.34x
+    over the largest reading measured slower) is the headroom a different
+    wheel would have to eat before the screen stopped refusing what it was
+    derived to refuse.
+3.  **CuPy or JAX timings for the second condition.**  The condition is
+    integer arithmetic over four grid sizes and is therefore identical on
+    every backend by construction, and the branch's own backend sweep already
+    measured the SELECTION matching NumPy's on JAX and CuPy; what is not
+    measured is whether the thin-shape crossover sits in the same place on a
+    GPU, where the dense route's two matrix products and the chirp-Z route's
+    FFTs have quite different constants.  If it does not, the screen is still
+    conservative there -- it refuses, it never captures more.
+4.  **The CI matrix.**  Two local builds only.
+5.  **A traced carrier chain on the merged C3 x C4 tree.**  The two branches
+    are not merged anywhere.  Round 2's entry-point probe drives
+    `propagate_traced_carrier_chain` on BOTH transports on this tree, which
+    answers "does the keyword reach the Collins readout" (it does, and
+    `'separable'` is the spelling there); it does not answer what a merged
+    chain's full answer moves by.
+6.  **The WSL rule census.**  Not run, for the reason recorded under N1 above:
+    the rule is four-integer arithmetic and both builds were measured to give
+    the same 30 captured / 21 refused on the same 51 shapes, so a WSL census
+    could only re-confirm which files drive it.
+
+---
