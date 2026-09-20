@@ -1,0 +1,100 @@
+{
+ "base": "v4_entry_base_win.json",
+ "branch": "v4_entry_branch_win.json",
+ "build": "WIN-py3.14",
+ "defects": [
+  "carrier_exact_focus_readout",
+  "carrier_focus_readout",
+  "compute_psf",
+  "propagate_asm",
+  "propagate_fresnel",
+  "re_reference",
+  "resample_field"
+ ],
+ "rows": [
+  {
+   "captured_moves": true,
+   "entry_point": "asm_mft",
+   "refused_stays": true,
+   "way_back": "method=",
+   "way_back_reproduces_base_bytes": true
+  },
+  {
+   "captured_moves": true,
+   "entry_point": "asm_propagate",
+   "refused_stays": true,
+   "way_back": "method= (through **method_kwargs)",
+   "way_back_reproduces_base_bytes": true
+  },
+  {
+   "captured_moves": true,
+   "entry_point": "carrier_exact_focus_readout",
+   "refused_stays": true,
+   "way_back": null,
+   "way_back_reproduces_base_bytes": null
+  },
+  {
+   "captured_moves": true,
+   "entry_point": "carrier_focus_readout",
+   "refused_stays": true,
+   "way_back": null,
+   "way_back_reproduces_base_bytes": null
+  },
+  {
+   "captured_moves": true,
+   "entry_point": "compute_psf",
+   "refused_stays": true,
+   "way_back": null,
+   "way_back_reproduces_base_bytes": null
+  },
+  {
+   "captured_moves": true,
+   "entry_point": "fraunhofer_mft",
+   "refused_stays": true,
+   "way_back": "method=",
+   "way_back_reproduces_base_bytes": true
+  },
+  {
+   "captured_moves": true,
+   "entry_point": "fresnel_mft",
+   "refused_stays": true,
+   "way_back": "method=",
+   "way_back_reproduces_base_bytes": true
+  },
+  {
+   "captured_moves": true,
+   "entry_point": "propagate_asm",
+   "refused_stays": true,
+   "way_back": null,
+   "way_back_reproduces_base_bytes": null
+  },
+  {
+   "captured_moves": true,
+   "entry_point": "propagate_fresnel",
+   "refused_stays": true,
+   "way_back": null,
+   "way_back_reproduces_base_bytes": null
+  },
+  {
+   "captured_moves": false,
+   "entry_point": "propagate_through_system",
+   "refused_stays": null,
+   "way_back": null,
+   "way_back_reproduces_base_bytes": null
+  },
+  {
+   "captured_moves": true,
+   "entry_point": "re_reference",
+   "refused_stays": true,
+   "way_back": null,
+   "way_back_reproduces_base_bytes": null
+  },
+  {
+   "captured_moves": true,
+   "entry_point": "resample_field",
+   "refused_stays": true,
+   "way_back": null,
+   "way_back_reproduces_base_bytes": null
+  }
+ ]
+}

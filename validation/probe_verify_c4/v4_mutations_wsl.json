@@ -1,0 +1,179 @@
+{
+ "build": "WSL-py3.12",
+ "rows": [
+  {
+   "failed_id_names": [],
+   "failed_ids": [],
+   "mutation": "control",
+   "n_failed": 0,
+   "returncode": 0,
+   "tail": ".....................                                                    [100%]",
+   "tree": "/mnt/c/Users/Tesla/AppData/Local/Temp/claude/C--Users-Tesla/372a2d1f-acbe-4b57-a148-eeae3fe1d729/scratchpad/muts_wsl/mut_control"
+  },
+  {
+   "failed_id_names": [
+    "test_auto_returns_the_route_the_rule_names_on_the_chirp_side",
+    "test_auto_returns_the_route_the_rule_names_on_the_dense_side",
+    "test_each_mutation_of_the_rule_is_caught_by_a_named_id",
+    "test_on_the_dense_side_the_selected_route_is_the_more_accurate_one",
+    "test_the_boundary_is_asked_from_the_constant_and_the_two_settings_hold",
+    "test_the_default_flip_does_not_take_a_warning_away_from_a_caller",
+    "test_the_mutation_matrix_is_not_passing_because_everything_fails",
+    "test_the_public_propagators_are_unchanged_at_an_ordinary_focal_zoom_grid",
+    "test_the_public_propagators_take_the_dense_route_at_a_small_output_grid"
+   ],
+   "failed_ids": [
+    "tests/unit/test_c4_mft_direct_default.py::test_auto_returns_the_route_the_rule_names_on_the_chirp_side[False-centred]",
+    "tests/unit/test_c4_mft_direct_default.py::test_auto_returns_the_route_the_rule_names_on_the_chirp_side[False-plain]",
+    "tests/unit/test_c4_mft_direct_default.py::test_auto_returns_the_route_the_rule_names_on_the_chirp_side[True-centred]",
+    "tests/unit/test_c4_mft_direct_default.py::test_auto_returns_the_route_the_rule_names_on_the_chirp_side[True-plain]",
+    "tests/unit/test_c4_mft_direct_default.py::test_auto_returns_the_route_the_rule_names_on_the_dense_side[False-centred]",
+    "tests/unit/test_c4_mft_direct_default.py::test_auto_returns_the_route_the_rule_names_on_the_dense_side[False-plain]",
+    "tests/unit/test_c4_mft_direct_default.py::test_auto_returns_the_route_the_rule_names_on_the_dense_side[True-centred]",
+    "tests/unit/test_c4_mft_direct_default.py::test_auto_returns_the_route_the_rule_names_on_the_dense_side[True-plain]",
+    "tests/unit/test_c4_mft_direct_default.py::test_each_mutation_of_the_rule_is_caught_by_a_named_id[dense_answer_is_really_separable]",
+    "tests/unit/test_c4_mft_direct_default.py::test_each_mutation_of_the_rule_is_caught_by_a_named_id[rule_inverted]",
+    "tests/unit/test_c4_mft_direct_default.py::test_on_the_dense_side_the_selected_route_is_the_more_accurate_one",
+    "tests/unit/test_c4_mft_direct_default.py::test_the_boundary_is_asked_from_the_constant_and_the_two_settings_hold",
+    "tests/unit/test_c4_mft_direct_default.py::test_the_default_flip_does_not_take_a_warning_away_from_a_caller",
+    "tests/unit/test_c4_mft_direct_default.py::test_the_mutation_matrix_is_not_passing_because_everything_fails",
+    "tests/unit/test_c4_mft_direct_default.py::test_the_public_propagators_are_unchanged_at_an_ordinary_focal_zoom_grid",
+    "tests/unit/test_c4_mft_direct_default.py::test_the_public_propagators_take_the_dense_route_at_a_small_output_grid"
+   ],
+   "mutation": "rule_inverted",
+   "n_failed": 16,
+   "returncode": 1,
+   "tail": "FAILED tests/unit/test_c4_mft_direct_default.py::test_the_mutation_matrix_is_not_passing_because_everything_fails",
+   "tree": "/mnt/c/Users/Tesla/AppData/Local/Temp/claude/C--Users-Tesla/372a2d1f-acbe-4b57-a148-eeae3fe1d729/scratchpad/muts_wsl/mut_rule_inverted"
+  },
+  {
+   "failed_id_names": [
+    "test_auto_returns_the_route_the_rule_names_on_the_dense_side",
+    "test_each_mutation_of_the_rule_is_caught_by_a_named_id",
+    "test_on_the_dense_side_the_selected_route_is_the_more_accurate_one",
+    "test_the_boundary_is_asked_from_the_constant_and_the_two_settings_hold",
+    "test_the_default_flip_does_not_take_a_warning_away_from_a_caller",
+    "test_the_mutation_matrix_is_not_passing_because_everything_fails",
+    "test_the_public_propagators_take_the_dense_route_at_a_small_output_grid"
+   ],
+   "failed_ids": [
+    "tests/unit/test_c4_mft_direct_default.py::test_auto_returns_the_route_the_rule_names_on_the_dense_side[False-centred]",
+    "tests/unit/test_c4_mft_direct_default.py::test_auto_returns_the_route_the_rule_names_on_the_dense_side[False-plain]",
+    "tests/unit/test_c4_mft_direct_default.py::test_auto_returns_the_route_the_rule_names_on_the_dense_side[True-centred]",
+    "tests/unit/test_c4_mft_direct_default.py::test_auto_returns_the_route_the_rule_names_on_the_dense_side[True-plain]",
+    "tests/unit/test_c4_mft_direct_default.py::test_each_mutation_of_the_rule_is_caught_by_a_named_id[dense_answer_is_really_separable]",
+    "tests/unit/test_c4_mft_direct_default.py::test_each_mutation_of_the_rule_is_caught_by_a_named_id[rule_inverted]",
+    "tests/unit/test_c4_mft_direct_default.py::test_on_the_dense_side_the_selected_route_is_the_more_accurate_one",
+    "tests/unit/test_c4_mft_direct_default.py::test_the_boundary_is_asked_from_the_constant_and_the_two_settings_hold",
+    "tests/unit/test_c4_mft_direct_default.py::test_the_default_flip_does_not_take_a_warning_away_from_a_caller",
+    "tests/unit/test_c4_mft_direct_default.py::test_the_mutation_matrix_is_not_passing_because_everything_fails",
+    "tests/unit/test_c4_mft_direct_default.py::test_the_public_propagators_take_the_dense_route_at_a_small_output_grid"
+   ],
+   "mutation": "constant_silently_zero",
+   "n_failed": 11,
+   "returncode": 1,
+   "tail": "FAILED tests/unit/test_c4_mft_direct_default.py::test_the_mutation_matrix_is_not_passing_because_everything_fails",
+   "tree": "/mnt/c/Users/Tesla/AppData/Local/Temp/claude/C--Users-Tesla/372a2d1f-acbe-4b57-a148-eeae3fe1d729/scratchpad/muts_wsl/mut_constant_silently_zero"
+  },
+  {
+   "failed_id_names": [
+    "test_auto_returns_the_route_the_rule_names_on_the_chirp_side",
+    "test_on_the_dense_side_the_selected_route_is_the_more_accurate_one",
+    "test_the_mutation_matrix_is_not_passing_because_everything_fails"
+   ],
+   "failed_ids": [
+    "tests/unit/test_c4_mft_direct_default.py::test_auto_returns_the_route_the_rule_names_on_the_chirp_side[True-plain]",
+    "tests/unit/test_c4_mft_direct_default.py::test_on_the_dense_side_the_selected_route_is_the_more_accurate_one",
+    "tests/unit/test_c4_mft_direct_default.py::test_the_mutation_matrix_is_not_passing_because_everything_fails"
+   ],
+   "mutation": "dense_arm_is_separable",
+   "n_failed": 3,
+   "returncode": 1,
+   "tail": "FAILED tests/unit/test_c4_mft_direct_default.py::test_the_mutation_matrix_is_not_passing_because_everything_fails",
+   "tree": "/mnt/c/Users/Tesla/AppData/Local/Temp/claude/C--Users-Tesla/372a2d1f-acbe-4b57-a148-eeae3fe1d729/scratchpad/muts_wsl/mut_dense_arm_is_separable"
+  },
+  {
+   "failed_id_names": [
+    "test_the_default_flip_does_not_take_a_warning_away_from_a_caller"
+   ],
+   "failed_ids": [
+    "tests/unit/test_c4_mft_direct_default.py::test_the_default_flip_does_not_take_a_warning_away_from_a_caller"
+   ],
+   "mutation": "warning_message_lies",
+   "n_failed": 1,
+   "returncode": 1,
+   "tail": "FAILED tests/unit/test_c4_mft_direct_default.py::test_the_default_flip_does_not_take_a_warning_away_from_a_caller",
+   "tree": "/mnt/c/Users/Tesla/AppData/Local/Temp/claude/C--Users-Tesla/372a2d1f-acbe-4b57-a148-eeae3fe1d729/scratchpad/muts_wsl/mut_warning_message_lies"
+  },
+  {
+   "failed_id_names": [
+    "test_the_boundary_is_asked_from_the_constant_and_the_two_settings_hold",
+    "test_the_mutation_matrix_is_not_passing_because_everything_fails"
+   ],
+   "failed_ids": [
+    "tests/unit/test_c4_mft_direct_default.py::test_the_boundary_is_asked_from_the_constant_and_the_two_settings_hold",
+    "tests/unit/test_c4_mft_direct_default.py::test_the_mutation_matrix_is_not_passing_because_everything_fails"
+   ],
+   "mutation": "conjunction_max_to_min",
+   "n_failed": 2,
+   "returncode": 1,
+   "tail": "FAILED tests/unit/test_c4_mft_direct_default.py::test_the_mutation_matrix_is_not_passing_because_everything_fails",
+   "tree": "/mnt/c/Users/Tesla/AppData/Local/Temp/claude/C--Users-Tesla/372a2d1f-acbe-4b57-a148-eeae3fe1d729/scratchpad/muts_wsl/mut_conjunction_max_to_min"
+  },
+  {
+   "failed_id_names": [
+    "test_auto_returns_the_route_the_rule_names_on_the_dense_side",
+    "test_each_mutation_of_the_rule_is_caught_by_a_named_id",
+    "test_on_the_dense_side_the_selected_route_is_the_more_accurate_one",
+    "test_the_boundary_is_asked_from_the_constant_and_the_two_settings_hold",
+    "test_the_default_flip_does_not_take_a_warning_away_from_a_caller",
+    "test_the_mutation_matrix_is_not_passing_because_everything_fails",
+    "test_the_public_propagators_take_the_dense_route_at_a_small_output_grid"
+   ],
+   "failed_ids": [
+    "tests/unit/test_c4_mft_direct_default.py::test_auto_returns_the_route_the_rule_names_on_the_dense_side[False-centred]",
+    "tests/unit/test_c4_mft_direct_default.py::test_auto_returns_the_route_the_rule_names_on_the_dense_side[False-plain]",
+    "tests/unit/test_c4_mft_direct_default.py::test_auto_returns_the_route_the_rule_names_on_the_dense_side[True-centred]",
+    "tests/unit/test_c4_mft_direct_default.py::test_auto_returns_the_route_the_rule_names_on_the_dense_side[True-plain]",
+    "tests/unit/test_c4_mft_direct_default.py::test_each_mutation_of_the_rule_is_caught_by_a_named_id[dense_answer_is_really_separable]",
+    "tests/unit/test_c4_mft_direct_default.py::test_each_mutation_of_the_rule_is_caught_by_a_named_id[rule_inverted]",
+    "tests/unit/test_c4_mft_direct_default.py::test_on_the_dense_side_the_selected_route_is_the_more_accurate_one",
+    "tests/unit/test_c4_mft_direct_default.py::test_the_boundary_is_asked_from_the_constant_and_the_two_settings_hold",
+    "tests/unit/test_c4_mft_direct_default.py::test_the_default_flip_does_not_take_a_warning_away_from_a_caller",
+    "tests/unit/test_c4_mft_direct_default.py::test_the_mutation_matrix_is_not_passing_because_everything_fails",
+    "tests/unit/test_c4_mft_direct_default.py::test_the_public_propagators_take_the_dense_route_at_a_small_output_grid"
+   ],
+   "mutation": "boundary_lt_not_le",
+   "n_failed": 11,
+   "returncode": 1,
+   "tail": "FAILED tests/unit/test_c4_mft_direct_default.py::test_the_mutation_matrix_is_not_passing_because_everything_fails",
+   "tree": "/mnt/c/Users/Tesla/AppData/Local/Temp/claude/C--Users-Tesla/372a2d1f-acbe-4b57-a148-eeae3fe1d729/scratchpad/muts_wsl/mut_boundary_lt_not_le"
+  },
+  {
+   "failed_id_names": [
+    "test_auto_returns_the_route_the_rule_names_on_the_dense_side"
+   ],
+   "failed_ids": [
+    "tests/unit/test_c4_mft_direct_default.py::test_auto_returns_the_route_the_rule_names_on_the_dense_side[False-centred]",
+    "tests/unit/test_c4_mft_direct_default.py::test_auto_returns_the_route_the_rule_names_on_the_dense_side[False-plain]",
+    "tests/unit/test_c4_mft_direct_default.py::test_auto_returns_the_route_the_rule_names_on_the_dense_side[True-centred]",
+    "tests/unit/test_c4_mft_direct_default.py::test_auto_returns_the_route_the_rule_names_on_the_dense_side[True-plain]"
+   ],
+   "mutation": "swapped_axis_arguments",
+   "n_failed": 4,
+   "returncode": 1,
+   "tail": "FAILED tests/unit/test_c4_mft_direct_default.py::test_auto_returns_the_route_the_rule_names_on_the_dense_side[True-centred]",
+   "tree": "/mnt/c/Users/Tesla/AppData/Local/Temp/claude/C--Users-Tesla/372a2d1f-acbe-4b57-a148-eeae3fe1d729/scratchpad/muts_wsl/mut_swapped_axis_arguments"
+  },
+  {
+   "failed_id_names": [],
+   "failed_ids": [],
+   "mutation": "constant_1_over_31",
+   "n_failed": 0,
+   "returncode": 0,
+   "tail": ".....................                                                    [100%]",
+   "tree": "/mnt/c/Users/Tesla/AppData/Local/Temp/claude/C--Users-Tesla/372a2d1f-acbe-4b57-a148-eeae3fe1d729/scratchpad/muts_wsl/mut_constant_1_over_31"
+  }
+ ],
+ "testfile": "tests/unit/test_c4_mft_direct_default.py"
+}

@@ -1,0 +1,682 @@
+{
+ "build": "WIN-py3.14",
+ "cells": [
+  {
+   "build": "WIN-py3.14",
+   "coretype": "HASWELL",
+   "rows": [
+    {
+     "auto_digest": "f0c4ef999d8879cc9a3ae691cc41184f3bce716d0cca419d2b3058e6019dae62",
+     "auto_is_chirp": false,
+     "auto_is_dense": true,
+     "bar_chirp": 2.737494934665055e-09,
+     "bar_dense": 1.430358453954906e-10,
+     "chirp_digest": "dad48dbf1fec99060fd1d57c0044a0240f66fdbce11635095c582b78ce5e75a8",
+     "chirp_inside_bar": true,
+     "chirp_maxabs_vs_ref": 8.29887452095707e-12,
+     "dense_digest": "f0c4ef999d8879cc9a3ae691cc41184f3bce716d0cca419d2b3058e6019dae62",
+     "dense_inside_bar": true,
+     "dense_maxabs_vs_ref": 2.6963786171231466e-13,
+     "rule_says_direct": true,
+     "shape": [
+      96,
+      96,
+      3,
+      3
+     ]
+    },
+    {
+     "auto_digest": "1ba596b28323436043208da7844edc3476f225cf0f023fde0bbd1f1f9bd64354",
+     "auto_is_chirp": false,
+     "auto_is_dense": true,
+     "bar_chirp": 4.990093844174598e-09,
+     "bar_dense": 2.8837609922922456e-10,
+     "chirp_digest": "fafd925e65e41d38494e30651102dd7ec9d7348794e0bb6cf53ea171ccf7339f",
+     "chirp_inside_bar": true,
+     "chirp_maxabs_vs_ref": 1.5326576456837578e-11,
+     "dense_digest": "1ba596b28323436043208da7844edc3476f225cf0f023fde0bbd1f1f9bd64354",
+     "dense_inside_bar": true,
+     "dense_maxabs_vs_ref": 5.605637319182511e-13,
+     "rule_says_direct": true,
+     "shape": [
+      128,
+      128,
+      4,
+      4
+     ]
+    },
+    {
+     "auto_digest": "34062616d46106e8e047556ba5622e2d6280062ab6ebd0ecf807f5d43a7d24a4",
+     "auto_is_chirp": true,
+     "auto_is_dense": false,
+     "bar_chirp": 1.2378123944920775e-09,
+     "bar_dense": 2.706943125972352e-10,
+     "chirp_digest": "34062616d46106e8e047556ba5622e2d6280062ab6ebd0ecf807f5d43a7d24a4",
+     "chirp_inside_bar": true,
+     "chirp_maxabs_vs_ref": 6.587640354833857e-12,
+     "dense_digest": "b1710f85c1d283584dbbb6f6cafd4fa9598e652a2cf369caf367f2641e0cddf2",
+     "dense_inside_bar": true,
+     "dense_maxabs_vs_ref": 1.7042512306151973e-12,
+     "rule_says_direct": false,
+     "shape": [
+      64,
+      64,
+      8,
+      8
+     ]
+    }
+   ],
+   "threadpool": [
+    {
+     "architecture": "Haswell",
+     "internal_api": "openblas",
+     "num_threads": 1,
+     "user_api": "blas"
+    },
+    {
+     "architecture": "Haswell",
+     "internal_api": "openblas",
+     "num_threads": 1,
+     "user_api": "blas"
+    }
+   ],
+   "threads": "1"
+  },
+  {
+   "build": "WIN-py3.14",
+   "coretype": "HASWELL",
+   "rows": [
+    {
+     "auto_digest": "f0c4ef999d8879cc9a3ae691cc41184f3bce716d0cca419d2b3058e6019dae62",
+     "auto_is_chirp": false,
+     "auto_is_dense": true,
+     "bar_chirp": 2.737494934665055e-09,
+     "bar_dense": 1.430358453954906e-10,
+     "chirp_digest": "dad48dbf1fec99060fd1d57c0044a0240f66fdbce11635095c582b78ce5e75a8",
+     "chirp_inside_bar": true,
+     "chirp_maxabs_vs_ref": 8.29887452095707e-12,
+     "dense_digest": "f0c4ef999d8879cc9a3ae691cc41184f3bce716d0cca419d2b3058e6019dae62",
+     "dense_inside_bar": true,
+     "dense_maxabs_vs_ref": 2.6963786171231466e-13,
+     "rule_says_direct": true,
+     "shape": [
+      96,
+      96,
+      3,
+      3
+     ]
+    },
+    {
+     "auto_digest": "1ba596b28323436043208da7844edc3476f225cf0f023fde0bbd1f1f9bd64354",
+     "auto_is_chirp": false,
+     "auto_is_dense": true,
+     "bar_chirp": 4.990093844174598e-09,
+     "bar_dense": 2.8837609922922456e-10,
+     "chirp_digest": "fafd925e65e41d38494e30651102dd7ec9d7348794e0bb6cf53ea171ccf7339f",
+     "chirp_inside_bar": true,
+     "chirp_maxabs_vs_ref": 1.5326576456837578e-11,
+     "dense_digest": "1ba596b28323436043208da7844edc3476f225cf0f023fde0bbd1f1f9bd64354",
+     "dense_inside_bar": true,
+     "dense_maxabs_vs_ref": 5.605637319182511e-13,
+     "rule_says_direct": true,
+     "shape": [
+      128,
+      128,
+      4,
+      4
+     ]
+    },
+    {
+     "auto_digest": "34062616d46106e8e047556ba5622e2d6280062ab6ebd0ecf807f5d43a7d24a4",
+     "auto_is_chirp": true,
+     "auto_is_dense": false,
+     "bar_chirp": 1.2378123944920775e-09,
+     "bar_dense": 2.706943125972352e-10,
+     "chirp_digest": "34062616d46106e8e047556ba5622e2d6280062ab6ebd0ecf807f5d43a7d24a4",
+     "chirp_inside_bar": true,
+     "chirp_maxabs_vs_ref": 6.587640354833857e-12,
+     "dense_digest": "b1710f85c1d283584dbbb6f6cafd4fa9598e652a2cf369caf367f2641e0cddf2",
+     "dense_inside_bar": true,
+     "dense_maxabs_vs_ref": 1.7042512306151973e-12,
+     "rule_says_direct": false,
+     "shape": [
+      64,
+      64,
+      8,
+      8
+     ]
+    }
+   ],
+   "threadpool": [
+    {
+     "architecture": "Haswell",
+     "internal_api": "openblas",
+     "num_threads": 4,
+     "user_api": "blas"
+    },
+    {
+     "architecture": "Haswell",
+     "internal_api": "openblas",
+     "num_threads": 4,
+     "user_api": "blas"
+    }
+   ],
+   "threads": "4"
+  },
+  {
+   "build": "WIN-py3.14",
+   "coretype": "NEHALEM",
+   "rows": [
+    {
+     "auto_digest": "5350109795636243028f081511872dea3b3e92ada631c383615fb8e01f971560",
+     "auto_is_chirp": false,
+     "auto_is_dense": true,
+     "bar_chirp": 2.737494934665055e-09,
+     "bar_dense": 1.430358453954906e-10,
+     "chirp_digest": "dad48dbf1fec99060fd1d57c0044a0240f66fdbce11635095c582b78ce5e75a8",
+     "chirp_inside_bar": true,
+     "chirp_maxabs_vs_ref": 8.29887452095707e-12,
+     "dense_digest": "5350109795636243028f081511872dea3b3e92ada631c383615fb8e01f971560",
+     "dense_inside_bar": true,
+     "dense_maxabs_vs_ref": 2.8028186595912554e-13,
+     "rule_says_direct": true,
+     "shape": [
+      96,
+      96,
+      3,
+      3
+     ]
+    },
+    {
+     "auto_digest": "a1890ce7160dfaaf8a0e9fe9dec90f3fa432e1da53070e5023580f4dd917ed86",
+     "auto_is_chirp": false,
+     "auto_is_dense": true,
+     "bar_chirp": 4.990093844174598e-09,
+     "bar_dense": 2.8837609922922456e-10,
+     "chirp_digest": "fafd925e65e41d38494e30651102dd7ec9d7348794e0bb6cf53ea171ccf7339f",
+     "chirp_inside_bar": true,
+     "chirp_maxabs_vs_ref": 1.5326576456837578e-11,
+     "dense_digest": "a1890ce7160dfaaf8a0e9fe9dec90f3fa432e1da53070e5023580f4dd917ed86",
+     "dense_inside_bar": true,
+     "dense_maxabs_vs_ref": 5.977011836879766e-13,
+     "rule_says_direct": true,
+     "shape": [
+      128,
+      128,
+      4,
+      4
+     ]
+    },
+    {
+     "auto_digest": "34062616d46106e8e047556ba5622e2d6280062ab6ebd0ecf807f5d43a7d24a4",
+     "auto_is_chirp": true,
+     "auto_is_dense": false,
+     "bar_chirp": 1.2378123944920775e-09,
+     "bar_dense": 2.706943125972352e-10,
+     "chirp_digest": "34062616d46106e8e047556ba5622e2d6280062ab6ebd0ecf807f5d43a7d24a4",
+     "chirp_inside_bar": true,
+     "chirp_maxabs_vs_ref": 6.587640354833857e-12,
+     "dense_digest": "23c88b3afd413d88a40dceb0987371b466991af11f9567838d141ba43111be64",
+     "dense_inside_bar": true,
+     "dense_maxabs_vs_ref": 1.7059916900454983e-12,
+     "rule_says_direct": false,
+     "shape": [
+      64,
+      64,
+      8,
+      8
+     ]
+    }
+   ],
+   "threadpool": [
+    {
+     "architecture": "Nehalem",
+     "internal_api": "openblas",
+     "num_threads": 1,
+     "user_api": "blas"
+    },
+    {
+     "architecture": "Nehalem",
+     "internal_api": "openblas",
+     "num_threads": 1,
+     "user_api": "blas"
+    }
+   ],
+   "threads": "1"
+  },
+  {
+   "build": "WIN-py3.14",
+   "coretype": "NEHALEM",
+   "rows": [
+    {
+     "auto_digest": "5350109795636243028f081511872dea3b3e92ada631c383615fb8e01f971560",
+     "auto_is_chirp": false,
+     "auto_is_dense": true,
+     "bar_chirp": 2.737494934665055e-09,
+     "bar_dense": 1.430358453954906e-10,
+     "chirp_digest": "dad48dbf1fec99060fd1d57c0044a0240f66fdbce11635095c582b78ce5e75a8",
+     "chirp_inside_bar": true,
+     "chirp_maxabs_vs_ref": 8.29887452095707e-12,
+     "dense_digest": "5350109795636243028f081511872dea3b3e92ada631c383615fb8e01f971560",
+     "dense_inside_bar": true,
+     "dense_maxabs_vs_ref": 2.8028186595912554e-13,
+     "rule_says_direct": true,
+     "shape": [
+      96,
+      96,
+      3,
+      3
+     ]
+    },
+    {
+     "auto_digest": "a1890ce7160dfaaf8a0e9fe9dec90f3fa432e1da53070e5023580f4dd917ed86",
+     "auto_is_chirp": false,
+     "auto_is_dense": true,
+     "bar_chirp": 4.990093844174598e-09,
+     "bar_dense": 2.8837609922922456e-10,
+     "chirp_digest": "fafd925e65e41d38494e30651102dd7ec9d7348794e0bb6cf53ea171ccf7339f",
+     "chirp_inside_bar": true,
+     "chirp_maxabs_vs_ref": 1.5326576456837578e-11,
+     "dense_digest": "a1890ce7160dfaaf8a0e9fe9dec90f3fa432e1da53070e5023580f4dd917ed86",
+     "dense_inside_bar": true,
+     "dense_maxabs_vs_ref": 5.977011836879766e-13,
+     "rule_says_direct": true,
+     "shape": [
+      128,
+      128,
+      4,
+      4
+     ]
+    },
+    {
+     "auto_digest": "34062616d46106e8e047556ba5622e2d6280062ab6ebd0ecf807f5d43a7d24a4",
+     "auto_is_chirp": true,
+     "auto_is_dense": false,
+     "bar_chirp": 1.2378123944920775e-09,
+     "bar_dense": 2.706943125972352e-10,
+     "chirp_digest": "34062616d46106e8e047556ba5622e2d6280062ab6ebd0ecf807f5d43a7d24a4",
+     "chirp_inside_bar": true,
+     "chirp_maxabs_vs_ref": 6.587640354833857e-12,
+     "dense_digest": "23c88b3afd413d88a40dceb0987371b466991af11f9567838d141ba43111be64",
+     "dense_inside_bar": true,
+     "dense_maxabs_vs_ref": 1.7059916900454983e-12,
+     "rule_says_direct": false,
+     "shape": [
+      64,
+      64,
+      8,
+      8
+     ]
+    }
+   ],
+   "threadpool": [
+    {
+     "architecture": "Nehalem",
+     "internal_api": "openblas",
+     "num_threads": 4,
+     "user_api": "blas"
+    },
+    {
+     "architecture": "Nehalem",
+     "internal_api": "openblas",
+     "num_threads": 4,
+     "user_api": "blas"
+    }
+   ],
+   "threads": "4"
+  },
+  {
+   "build": "WIN-py3.14",
+   "coretype": "SANDYBRIDGE",
+   "rows": [
+    {
+     "auto_digest": "5350109795636243028f081511872dea3b3e92ada631c383615fb8e01f971560",
+     "auto_is_chirp": false,
+     "auto_is_dense": true,
+     "bar_chirp": 2.737494934665055e-09,
+     "bar_dense": 1.430358453954906e-10,
+     "chirp_digest": "dad48dbf1fec99060fd1d57c0044a0240f66fdbce11635095c582b78ce5e75a8",
+     "chirp_inside_bar": true,
+     "chirp_maxabs_vs_ref": 8.29887452095707e-12,
+     "dense_digest": "5350109795636243028f081511872dea3b3e92ada631c383615fb8e01f971560",
+     "dense_inside_bar": true,
+     "dense_maxabs_vs_ref": 2.8028186595912554e-13,
+     "rule_says_direct": true,
+     "shape": [
+      96,
+      96,
+      3,
+      3
+     ]
+    },
+    {
+     "auto_digest": "a1890ce7160dfaaf8a0e9fe9dec90f3fa432e1da53070e5023580f4dd917ed86",
+     "auto_is_chirp": false,
+     "auto_is_dense": true,
+     "bar_chirp": 4.990093844174598e-09,
+     "bar_dense": 2.8837609922922456e-10,
+     "chirp_digest": "fafd925e65e41d38494e30651102dd7ec9d7348794e0bb6cf53ea171ccf7339f",
+     "chirp_inside_bar": true,
+     "chirp_maxabs_vs_ref": 1.5326576456837578e-11,
+     "dense_digest": "a1890ce7160dfaaf8a0e9fe9dec90f3fa432e1da53070e5023580f4dd917ed86",
+     "dense_inside_bar": true,
+     "dense_maxabs_vs_ref": 5.977011836879766e-13,
+     "rule_says_direct": true,
+     "shape": [
+      128,
+      128,
+      4,
+      4
+     ]
+    },
+    {
+     "auto_digest": "34062616d46106e8e047556ba5622e2d6280062ab6ebd0ecf807f5d43a7d24a4",
+     "auto_is_chirp": true,
+     "auto_is_dense": false,
+     "bar_chirp": 1.2378123944920775e-09,
+     "bar_dense": 2.706943125972352e-10,
+     "chirp_digest": "34062616d46106e8e047556ba5622e2d6280062ab6ebd0ecf807f5d43a7d24a4",
+     "chirp_inside_bar": true,
+     "chirp_maxabs_vs_ref": 6.587640354833857e-12,
+     "dense_digest": "23c88b3afd413d88a40dceb0987371b466991af11f9567838d141ba43111be64",
+     "dense_inside_bar": true,
+     "dense_maxabs_vs_ref": 1.7059916900454983e-12,
+     "rule_says_direct": false,
+     "shape": [
+      64,
+      64,
+      8,
+      8
+     ]
+    }
+   ],
+   "threadpool": [
+    {
+     "architecture": "Sandybridge",
+     "internal_api": "openblas",
+     "num_threads": 1,
+     "user_api": "blas"
+    },
+    {
+     "architecture": "Sandybridge",
+     "internal_api": "openblas",
+     "num_threads": 1,
+     "user_api": "blas"
+    }
+   ],
+   "threads": "1"
+  },
+  {
+   "build": "WIN-py3.14",
+   "coretype": "SANDYBRIDGE",
+   "rows": [
+    {
+     "auto_digest": "5350109795636243028f081511872dea3b3e92ada631c383615fb8e01f971560",
+     "auto_is_chirp": false,
+     "auto_is_dense": true,
+     "bar_chirp": 2.737494934665055e-09,
+     "bar_dense": 1.430358453954906e-10,
+     "chirp_digest": "dad48dbf1fec99060fd1d57c0044a0240f66fdbce11635095c582b78ce5e75a8",
+     "chirp_inside_bar": true,
+     "chirp_maxabs_vs_ref": 8.29887452095707e-12,
+     "dense_digest": "5350109795636243028f081511872dea3b3e92ada631c383615fb8e01f971560",
+     "dense_inside_bar": true,
+     "dense_maxabs_vs_ref": 2.8028186595912554e-13,
+     "rule_says_direct": true,
+     "shape": [
+      96,
+      96,
+      3,
+      3
+     ]
+    },
+    {
+     "auto_digest": "a1890ce7160dfaaf8a0e9fe9dec90f3fa432e1da53070e5023580f4dd917ed86",
+     "auto_is_chirp": false,
+     "auto_is_dense": true,
+     "bar_chirp": 4.990093844174598e-09,
+     "bar_dense": 2.8837609922922456e-10,
+     "chirp_digest": "fafd925e65e41d38494e30651102dd7ec9d7348794e0bb6cf53ea171ccf7339f",
+     "chirp_inside_bar": true,
+     "chirp_maxabs_vs_ref": 1.5326576456837578e-11,
+     "dense_digest": "a1890ce7160dfaaf8a0e9fe9dec90f3fa432e1da53070e5023580f4dd917ed86",
+     "dense_inside_bar": true,
+     "dense_maxabs_vs_ref": 5.977011836879766e-13,
+     "rule_says_direct": true,
+     "shape": [
+      128,
+      128,
+      4,
+      4
+     ]
+    },
+    {
+     "auto_digest": "34062616d46106e8e047556ba5622e2d6280062ab6ebd0ecf807f5d43a7d24a4",
+     "auto_is_chirp": true,
+     "auto_is_dense": false,
+     "bar_chirp": 1.2378123944920775e-09,
+     "bar_dense": 2.706943125972352e-10,
+     "chirp_digest": "34062616d46106e8e047556ba5622e2d6280062ab6ebd0ecf807f5d43a7d24a4",
+     "chirp_inside_bar": true,
+     "chirp_maxabs_vs_ref": 6.587640354833857e-12,
+     "dense_digest": "23c88b3afd413d88a40dceb0987371b466991af11f9567838d141ba43111be64",
+     "dense_inside_bar": true,
+     "dense_maxabs_vs_ref": 1.7059916900454983e-12,
+     "rule_says_direct": false,
+     "shape": [
+      64,
+      64,
+      8,
+      8
+     ]
+    }
+   ],
+   "threadpool": [
+    {
+     "architecture": "Sandybridge",
+     "internal_api": "openblas",
+     "num_threads": 4,
+     "user_api": "blas"
+    },
+    {
+     "architecture": "Sandybridge",
+     "internal_api": "openblas",
+     "num_threads": 4,
+     "user_api": "blas"
+    }
+   ],
+   "threads": "4"
+  },
+  {
+   "build": "WIN-py3.14",
+   "coretype": "KATMAI",
+   "rows": [
+    {
+     "auto_digest": "886746553d86ac42046b1ecf301ceb7a7f2628bb86777e3a4edc643331dac0b6",
+     "auto_is_chirp": false,
+     "auto_is_dense": true,
+     "bar_chirp": 2.737494934665055e-09,
+     "bar_dense": 1.430358453954906e-10,
+     "chirp_digest": "dad48dbf1fec99060fd1d57c0044a0240f66fdbce11635095c582b78ce5e75a8",
+     "chirp_inside_bar": true,
+     "chirp_maxabs_vs_ref": 8.29887452095707e-12,
+     "dense_digest": "886746553d86ac42046b1ecf301ceb7a7f2628bb86777e3a4edc643331dac0b6",
+     "dense_inside_bar": true,
+     "dense_maxabs_vs_ref": 2.8028186595912554e-13,
+     "rule_says_direct": true,
+     "shape": [
+      96,
+      96,
+      3,
+      3
+     ]
+    },
+    {
+     "auto_digest": "a1890ce7160dfaaf8a0e9fe9dec90f3fa432e1da53070e5023580f4dd917ed86",
+     "auto_is_chirp": false,
+     "auto_is_dense": true,
+     "bar_chirp": 4.990093844174598e-09,
+     "bar_dense": 2.8837609922922456e-10,
+     "chirp_digest": "fafd925e65e41d38494e30651102dd7ec9d7348794e0bb6cf53ea171ccf7339f",
+     "chirp_inside_bar": true,
+     "chirp_maxabs_vs_ref": 1.5326576456837578e-11,
+     "dense_digest": "a1890ce7160dfaaf8a0e9fe9dec90f3fa432e1da53070e5023580f4dd917ed86",
+     "dense_inside_bar": true,
+     "dense_maxabs_vs_ref": 5.977011836879766e-13,
+     "rule_says_direct": true,
+     "shape": [
+      128,
+      128,
+      4,
+      4
+     ]
+    },
+    {
+     "auto_digest": "34062616d46106e8e047556ba5622e2d6280062ab6ebd0ecf807f5d43a7d24a4",
+     "auto_is_chirp": true,
+     "auto_is_dense": false,
+     "bar_chirp": 1.2378123944920775e-09,
+     "bar_dense": 2.706943125972352e-10,
+     "chirp_digest": "34062616d46106e8e047556ba5622e2d6280062ab6ebd0ecf807f5d43a7d24a4",
+     "chirp_inside_bar": true,
+     "chirp_maxabs_vs_ref": 6.587640354833857e-12,
+     "dense_digest": "23c88b3afd413d88a40dceb0987371b466991af11f9567838d141ba43111be64",
+     "dense_inside_bar": true,
+     "dense_maxabs_vs_ref": 1.7059916900454983e-12,
+     "rule_says_direct": false,
+     "shape": [
+      64,
+      64,
+      8,
+      8
+     ]
+    }
+   ],
+   "threadpool": [
+    {
+     "architecture": "Katmai",
+     "internal_api": "openblas",
+     "num_threads": 1,
+     "user_api": "blas"
+    },
+    {
+     "architecture": "Katmai",
+     "internal_api": "openblas",
+     "num_threads": 1,
+     "user_api": "blas"
+    }
+   ],
+   "threads": "1"
+  },
+  {
+   "build": "WIN-py3.14",
+   "coretype": "KATMAI",
+   "rows": [
+    {
+     "auto_digest": "886746553d86ac42046b1ecf301ceb7a7f2628bb86777e3a4edc643331dac0b6",
+     "auto_is_chirp": false,
+     "auto_is_dense": true,
+     "bar_chirp": 2.737494934665055e-09,
+     "bar_dense": 1.430358453954906e-10,
+     "chirp_digest": "dad48dbf1fec99060fd1d57c0044a0240f66fdbce11635095c582b78ce5e75a8",
+     "chirp_inside_bar": true,
+     "chirp_maxabs_vs_ref": 8.29887452095707e-12,
+     "dense_digest": "886746553d86ac42046b1ecf301ceb7a7f2628bb86777e3a4edc643331dac0b6",
+     "dense_inside_bar": true,
+     "dense_maxabs_vs_ref": 2.8028186595912554e-13,
+     "rule_says_direct": true,
+     "shape": [
+      96,
+      96,
+      3,
+      3
+     ]
+    },
+    {
+     "auto_digest": "a1890ce7160dfaaf8a0e9fe9dec90f3fa432e1da53070e5023580f4dd917ed86",
+     "auto_is_chirp": false,
+     "auto_is_dense": true,
+     "bar_chirp": 4.990093844174598e-09,
+     "bar_dense": 2.8837609922922456e-10,
+     "chirp_digest": "fafd925e65e41d38494e30651102dd7ec9d7348794e0bb6cf53ea171ccf7339f",
+     "chirp_inside_bar": true,
+     "chirp_maxabs_vs_ref": 1.5326576456837578e-11,
+     "dense_digest": "a1890ce7160dfaaf8a0e9fe9dec90f3fa432e1da53070e5023580f4dd917ed86",
+     "dense_inside_bar": true,
+     "dense_maxabs_vs_ref": 5.977011836879766e-13,
+     "rule_says_direct": true,
+     "shape": [
+      128,
+      128,
+      4,
+      4
+     ]
+    },
+    {
+     "auto_digest": "34062616d46106e8e047556ba5622e2d6280062ab6ebd0ecf807f5d43a7d24a4",
+     "auto_is_chirp": true,
+     "auto_is_dense": false,
+     "bar_chirp": 1.2378123944920775e-09,
+     "bar_dense": 2.706943125972352e-10,
+     "chirp_digest": "34062616d46106e8e047556ba5622e2d6280062ab6ebd0ecf807f5d43a7d24a4",
+     "chirp_inside_bar": true,
+     "chirp_maxabs_vs_ref": 6.587640354833857e-12,
+     "dense_digest": "23c88b3afd413d88a40dceb0987371b466991af11f9567838d141ba43111be64",
+     "dense_inside_bar": true,
+     "dense_maxabs_vs_ref": 1.7059916900454983e-12,
+     "rule_says_direct": false,
+     "shape": [
+      64,
+      64,
+      8,
+      8
+     ]
+    }
+   ],
+   "threadpool": [
+    {
+     "architecture": "Katmai",
+     "internal_api": "openblas",
+     "num_threads": 4,
+     "user_api": "blas"
+    },
+    {
+     "architecture": "Katmai",
+     "internal_api": "openblas",
+     "num_threads": 4,
+     "user_api": "blas"
+    }
+   ],
+   "threads": "4"
+  }
+ ],
+ "summary": {
+  "all_inside_bars": true,
+  "cells_run": 8,
+  "cells_total": 8,
+  "per_shape": {
+   "(128, 128, 4, 4)": {
+    "distinct_chirp_digests": 1,
+    "distinct_dense_digests": 2,
+    "distinct_routes": [
+     "dense"
+    ]
+   },
+   "(64, 64, 8, 8)": {
+    "distinct_chirp_digests": 1,
+    "distinct_dense_digests": 2,
+    "distinct_routes": [
+     "chirp"
+    ]
+   },
+   "(96, 96, 3, 3)": {
+    "distinct_chirp_digests": 1,
+    "distinct_dense_digests": 3,
+    "distinct_routes": [
+     "dense"
+    ]
+   }
+  },
+  "route_follows_rule_everywhere": true
+ }
+}

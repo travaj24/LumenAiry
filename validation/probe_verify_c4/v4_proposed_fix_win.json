@@ -1,0 +1,280 @@
+{
+ "build": "WIN-py3.14",
+ "fix_does_what_it_claims": true,
+ "groups": {
+  "measured_safe": {
+   "captured": [
+    true,
+    true,
+    false,
+    false,
+    false,
+    true,
+    true
+   ],
+   "n": 7,
+   "n_captured": 4,
+   "shapes": [
+    [
+     2048,
+     256,
+     64,
+     8
+    ],
+    [
+     1024,
+     128,
+     32,
+     4
+    ],
+    [
+     1024,
+     64,
+     32,
+     2
+    ],
+    [
+     512,
+     64,
+     16,
+     2
+    ],
+    [
+     512,
+     32,
+     16,
+     1
+    ],
+    [
+     2048,
+     512,
+     64,
+     16
+    ],
+    [
+     2048,
+     1024,
+     64,
+     16
+    ]
+   ]
+  },
+  "measured_slower": {
+   "captured": [
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false
+   ],
+   "n": 9,
+   "n_captured": 0,
+   "shapes": [
+    [
+     2048,
+     128,
+     64,
+     4
+    ],
+    [
+     2048,
+     64,
+     64,
+     2
+    ],
+    [
+     2048,
+     32,
+     64,
+     1
+    ],
+    [
+     1024,
+     32,
+     32,
+     1
+    ],
+    [
+     64,
+     2048,
+     2,
+     64
+    ],
+    [
+     32,
+     2048,
+     1,
+     64
+    ],
+    [
+     4096,
+     64,
+     128,
+     2
+    ],
+    [
+     4096,
+     64,
+     64,
+     1
+    ],
+    [
+     64,
+     4096,
+     1,
+     64
+    ]
+   ]
+  },
+  "shipped_suite": {
+   "captured": [
+    true,
+    true,
+    true,
+    true,
+    true,
+    true
+   ],
+   "n": 6,
+   "n_captured": 6,
+   "shapes": [
+    [
+     512,
+     512,
+     16,
+     16
+    ],
+    [
+     1024,
+     1024,
+     8,
+     8
+    ],
+    [
+     1024,
+     1024,
+     16,
+     16
+    ],
+    [
+     2048,
+     2048,
+     8,
+     8
+    ],
+    [
+     2048,
+     2048,
+     40,
+     40
+    ],
+    [
+     4096,
+     4096,
+     8,
+     8
+    ]
+   ]
+  },
+  "square_ladder": {
+   "captured": [
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true
+   ],
+   "n": 11,
+   "n_captured": 11,
+   "shapes": [
+    [
+     2048,
+     2048,
+     64,
+     64
+    ],
+    [
+     1024,
+     1024,
+     32,
+     32
+    ],
+    [
+     512,
+     512,
+     16,
+     16
+    ],
+    [
+     256,
+     256,
+     8,
+     8
+    ],
+    [
+     128,
+     128,
+     4,
+     4
+    ],
+    [
+     64,
+     64,
+     2,
+     2
+    ],
+    [
+     768,
+     768,
+     24,
+     24
+    ],
+    [
+     1536,
+     1536,
+     48,
+     48
+    ],
+    [
+     1000,
+     1000,
+     25,
+     25
+    ],
+    [
+     96,
+     96,
+     3,
+     3
+    ],
+    [
+     512,
+     1024,
+     16,
+     32
+    ]
+   ]
+  }
+ },
+ "patched_tree": "C:/Users/Tesla/AppData/Local/Temp/claude/C--Users-Tesla/372a2d1f-acbe-4b57-a148-eeae3fe1d729/scratchpad\\proposed_fix",
+ "pytest": {
+  "tests/unit/test_c4_mft_direct_default.py": {
+   "failed": [],
+   "tail": "21 passed in 3.98s"
+  },
+  "tests/unit/test_verify_c4_mft_direct.py": {
+   "failed": [],
+   "tail": "17 passed in 3.15s"
+  }
+ }
+}

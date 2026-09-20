@@ -1,0 +1,35 @@
+{
+ "base": "v4_bitid_base_win.json",
+ "branch": "v4_bitid_branch_win.json",
+ "build": "WIN-py3.14",
+ "groups": {
+  "bl": {
+   "agrees_with_rule": 0,
+   "differ": 0,
+   "disagrees": [],
+   "identical": 117,
+   "raised": 0
+  },
+  "never": {
+   "agrees_with_rule": 0,
+   "differ": 0,
+   "disagrees": [],
+   "identical": 117,
+   "raised": 0
+  },
+  "nokw": {
+   "agrees_with_rule": 117,
+   "differ": 54,
+   "disagrees": [],
+   "identical": 63,
+   "raised": 0
+  },
+  "sep": {
+   "agrees_with_rule": 0,
+   "differ": 0,
+   "disagrees": [],
+   "identical": 117,
+   "raised": 0
+  }
+ }
+}
