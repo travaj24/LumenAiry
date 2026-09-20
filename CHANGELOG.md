@@ -3053,9 +3053,9 @@ its docstring rated at "< 0.1 %", and the single-FFT Fresnel output
 chirp sits at exactly Nyquist at the grid edge by construction.
 
 `method` (new, `{'spline', 'chirpz'}`, keyword-only, default `'spline'`;
-`mft.py:611`) adds the band-limited alternative: transform to the centred
+`mft.py:638`) adds the band-limited alternative: transform to the centred
 spectrum and inverse-transform it straight onto the output grid with
-`_bluestein_centred_2d` (`_resample_field_chirpz`, `mft.py:550`), which
+`_bluestein_centred_2d` (`_resample_field_chirpz`, `mft.py:577`), which
 is the trigonometric (Dirichlet-kernel) interpolant of the samples. Its
 MTF is exactly 1 at every frequency the input grid represents. Measured
 on the same Gaussian-times-carrier fixture K6 used (power ratio after
@@ -3081,7 +3081,7 @@ reconstruction is **periodic** with period `N_in*dx_in`, so an output
 window wider than the input extent returns replicas rather than the
 zeros the spline pads with — measured power ratio exactly 4.000000 for a
 2× window, where the spline gives 1.000000. That case now warns, reusing
-the MFT family's faithful-zone diagnostic (`mft.py:830`), which grew a
+the MFT family's faithful-zone diagnostic (`mft.py:857`), which grew a
 per-axis `N_out_y` for the non-square extent-preserving default
 (`mft.py:95`). And neither leg anti-aliases on down-sampling.
 
@@ -3221,7 +3221,7 @@ rescaled by the **x** ratio -- wrong by `Nx/Ny`, with no diagnostic.
 Because there is no resample left to crop, the leg no longer calls
 `_warn_system_resample_crop` (`system.py:361`); the `'sas'` leg still
 does, unchanged.  `fresnel_propagate_mft` carries the same K1
-chirp-sampling guard (`lumenairy/propagators/mft.py:1096`) plus its own
+chirp-sampling guard (`lumenairy/propagators/mft.py:1150`) plus its own
 faithful-zone warning with period `lambda*|z|/dx_in`, so no diagnostic
 is lost -- see Migration for the two messages whose wording moves.
 
@@ -3343,7 +3343,7 @@ with a 0.30 cyc/px carrier, **0.993922** (x1.25), 0.998015 (x1.5),
 for a contained one.  With an exact-period `N_out` the reading is 1 to
 -1.1e-16 .. +6.7e-16.
 
-Docstring only: `lumenairy/propagators/mft.py:666-691`.  The module's
+Docstring only: `lumenairy/propagators/mft.py:693-718`.  The module's
 AST and token fingerprints are unchanged, which is
 `scripts/record_history_fingerprints.py --check` confirming it.
 Tests: `tests/unit/test_audit2609_b3b_resample_call_sites.py::TestF6TheUnitMtfIsAPropertyOfTheWindow`
@@ -3449,7 +3449,7 @@ where the default lands on the period exactly.  The fixture the paragraph quotes
 exact, which is why it read as true.
 
 Corrected in place with that reading added
-(`lumenairy/propagators/mft.py:672-681`).  Docstring only:
+(`lumenairy/propagators/mft.py:699-708`).  Docstring only:
 `scripts/record_history_fingerprints.py --check` reports
 `lumenairy.propagators.mft` OK.
 
