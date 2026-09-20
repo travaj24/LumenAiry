@@ -498,10 +498,11 @@ not read as if it were most of the field.
 | `M` | 2201.74 | 0.200 | 1.1e-02 | **0.0787** | 0.99701 | 0.02684 | **0.00738** | 0.999973 |
 | `Y` (the verification's row) | 1980.00 | 0.209 | 2.6e-02 | **0.0341** | 0.99950 | 0.01649 | **0.00161** | 0.999999 |
 | `G` | 950.00 | 0.354 | 2.4e-01 | **0.1535** | 0.99226 | 0.15187 | **0.00068** | 1.000000 |
+| `P` (f/1.2, round 2's EXCLUDED optic) | 888.00 | 0.452 | 1.4e+00 | **0.9037** | **0.72818** | 0.90318 | **0.00263** | 0.999997 |
 | `X` | 960.00 | **0.461** | 7.2e-01 | **0.3276** | **0.96345** | 0.32677 | **0.00068** | 1.000000 |
 
 Convergence controls on every row: doubling the exact arm's azimuthal safety
-factor moves it by **4.7e-14 .. 7.6e-13**, doubling its ring count by
+factor moves it by **4.7e-14 .. 1.0e-13**, doubling its ring count by
 **1.1e-4 .. 7.0e-4**; doubling the angular spectrum's refinement moves it by
 **4.5e-4 .. 2.3e-3**.  Both arms are converged at least a decade below the
 quantity they measure.
@@ -526,16 +527,21 @@ Three findings:
    more than the fidelity differences either study reads (0.9421 against
    0.9985), so an NA-0.4 optic cannot be scored against the `J0` form.  That is why round 3 scores everything
    against the angular spectrum.
-3. **the scoring arm is bracketed.**  ASM against the exact azimuthal
-   quadrature over all seven rows: **0.00068 .. 0.00738 in relative L2 and
-   0.999973 .. 1.000000 in fidelity**, three decades below every fidelity difference this report
+3. **the scoring arm is bracketed, and it has no NA ceiling here.**  ASM
+   against the exact azimuthal quadrature over all eight rows: **0.00068 ..
+   0.00738 in relative L2 and 0.999973 .. 1.000000 in fidelity**, including
+   at `P`, the f/1.2 optic round 2 EXCLUDED, where the `J0` form is wrong by
+   0.90 in relative L2 and 0.728 in fidelity and the ASM still agrees with
+   the exact quadrature to 0.0026 and 0.999997.  That is what makes scoring
+   `P` at all legitimate, three decades below every fidelity difference this report
    reads, and the agreement is best exactly where the `J0` form is worst.  So
    "an oracle that holds above NA 0.35" is met by construction rather than by
    an envelope argument.
 
 Round 2's `J0` ENERGY CLOSURE column is also re-measured, from a
 well-resolved radial profile: 0.99992 at `y_max/z = 0.108`, 0.99913 at 0.200,
-0.99916 at 0.209, 0.99616 at 0.354 and **0.99222** at 0.461.  The round-2 verification reported
+0.99916 at 0.209, 0.99616 at 0.354, 0.98989 at 0.452 and **0.99222** at
+0.461.  The round-2 verification reported
 0.9972 and 0.9741 at the first two of those and could not reconcile them with
 the published 0.99999 / 0.99921; the discrepancy was its own radial
 reconstruction, not the propagator -- a coarse profile loses energy on both
@@ -752,12 +758,12 @@ them as unknown-duration.
   oracle never imports lumenairy, so the fidelity column cannot move across
   builds; the READING could, and the round-2 verification measured 23 of them
   identical to 4.1e-16 across the two builds on this same library;
-* **the oracle floor on all twelve planes.**  Seven of the twelve completed
-  (`Q`, `W`, `S`, `M`, `Y`, `G`, `X`), spanning `y_max/z` 0.108 to 0.461 --
-  the whole NA axis, and including both planes the earlier rounds published a
-  number for.  The remaining five (`F_alt`, `P`, `HN`, `AS`, `MC`) add
-  coverage, not a new regime, and the exact full-radius quadrature costs
-  10-25 minutes per plane;
+* **the oracle floor on all twelve planes.**  Eight of the twelve completed
+  (`Q`, `W`, `S`, `M`, `Y`, `G`, `P`, `X`), spanning `y_max/z` 0.108 to
+  0.461 -- the whole NA axis, including both planes the earlier rounds
+  published a number for and the f/1.2 optic round 2 excluded.  The remaining
+  four (`F_alt`, `HN`, `AS`, `MC`) add coverage, not a new regime, and the
+  exact full-radius quadrature costs 10-25 minutes per plane;
 * **whether the fold-ring gap has a floor below 1.0045x.**  Each refinement
   halved the logarithm of the gap and the third pass was still finding
   crossings; a fourth would take it lower.  What is established is the trend
