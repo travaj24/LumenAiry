@@ -5,7 +5,9 @@ The decisions are ledger items 1.5 / 4.3, 1.8 and 1.7 of
 ``docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/MAINTAINER_DECISIONS_2026_09.md``:
 
   1. ``carrier._GAP_KERNEL_ACCURACY_TAU = 1e-4`` -- ``gap_kernel='auto'``
-     takes the paraxial kernel inside a derived near-focus band;
+     takes the paraxial kernel inside a derived band in
+     ``k |z_eff| theta_env^4`` (near-focus at a fixed envelope angle,
+     wide-envelope at a fixed distance -- see the round-2 section);
   2. ``gbd.DENSE_MEM_BUDGET_ACCOUNTING = 'measured'`` -- the dense
      reconstruction counts its memory honestly, and says so where the budget
      cannot be met at all;
@@ -45,7 +47,7 @@ from lumenairy.propagators import gbd as G
 from lumenairy.propagators.carrier import _collins_transport
 
 # ===========================================================================
-# Item 1 -- the near-focus kernel switch
+# Item 1 -- the kernel-departure switch (the band in k |z_eff| theta_env^4)
 # ===========================================================================
 #
 # VERIFY-B4 F3's fixture: the one whose ladder actually approaches ``A = 0``,

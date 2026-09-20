@@ -1,0 +1,523 @@
+{
+ "_stamp": {
+  "lumenairy_file": "C:\\tmp\\c5b_arch\\lumenairy\\__init__.py",
+  "lumenairy_version": "5.48.1",
+  "mem_budget_mb_env": "2048",
+  "mkl": "1",
+  "numpy": "2.4.4",
+  "omp": "1",
+  "openblas": "1",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "python": "3.14.6 (tags/v3.14.6:c63aec6, Jun 10 2026, 10:26:10) [MSC v.1944 64 bit (AMD64)]"
+ },
+ "below_floor": [
+  {
+   "N": 320,
+   "budget_mb": 9.0112,
+   "mode": "measured",
+   "n_notices": 1,
+   "names_floor": true,
+   "names_helper": true,
+   "names_raise": true,
+   "names_window": true,
+   "notice": "reconstruct_field_from_beamlets: the dense (window=None) path CANNOT meet mem_budget_mb=9.0112 MB on this 320x320 grid.  Its chunk already floors at ONE beamlet column, and one column plus the whole-grid arrays that live outside the chunk costs 18.0224 MB (48 + 128 B per output cell) -- 2x what was asked for.  The budget is honoured at or above that floor and is a statement of intent below it.  Either raise mem_budget_mb to 18.0224 MB, or pass window=5.0 for the bounded-support scatter-add, whose accounting has no one-column floor here (it changes the returned field by its own ~1e-11 truncatio",
+   "peak_b": 14889739,
+   "peak_over_budget": 1.6523591752485796,
+   "rss_b": 14827520,
+   "rss_over_budget": 1.6454545454545455
+  },
+  {
+   "N": 320,
+   "budget_mb": 9.0112,
+   "mode": "legacy",
+   "n_notices": 0,
+   "names_floor": false,
+   "names_helper": false,
+   "names_raise": false,
+   "names_window": false,
+   "notice": null,
+   "peak_b": 54209013,
+   "peak_over_budget": 6.015737415660511,
+   "rss_b": 53698560,
+   "rss_over_budget": 5.959090909090909
+  },
+  {
+   "N": 512,
+   "budget_mb": 23.068672,
+   "mode": "measured",
+   "n_notices": 1,
+   "names_floor": true,
+   "names_helper": true,
+   "names_raise": true,
+   "names_window": true,
+   "notice": "reconstruct_field_from_beamlets: the dense (window=None) path CANNOT meet mem_budget_mb=23.0687 MB on this 512x512 grid.  Its chunk already floors at ONE beamlet column, and one column plus the whole-grid arrays that live outside the chunk costs 46.1373 MB (48 + 128 B per output cell) -- 2x what was asked for.  The budget is honoured at or above that floor and is a statement of intent below it.  Either raise mem_budget_mb to 46.1373 MB, or pass window=5.0 for the bounded-support scatter-add, whose accounting has no one-column floor here (it changes the returned field by its own ~1e-11 truncati",
+   "peak_b": 37896539,
+   "peak_over_budget": 1.6427707238630815,
+   "rss_b": 37797888,
+   "rss_over_budget": 1.6384943181818181
+  },
+  {
+   "N": 512,
+   "budget_mb": 23.068672,
+   "mode": "legacy",
+   "n_notices": 0,
+   "names_floor": false,
+   "names_helper": false,
+   "names_raise": false,
+   "names_window": false,
+   "notice": null,
+   "peak_b": 138558725,
+   "peak_over_budget": 6.006358970295299,
+   "rss_b": 138723328,
+   "rss_over_budget": 6.013494318181818
+  }
+ ],
+ "default_budget_binding_grid": {
+  "N_star": 1705.6057308448835,
+  "binds_at_1706": true,
+  "binds_at_1707": true,
+  "cells": 2909090.909090909,
+  "floor_at_1706_mb": 512.236736,
+  "floor_at_1707_mb": 512.837424,
+  "per_cell_bytes": 176.0
+ },
+ "default_call_N2048": {
+  "default": {
+   "completed": true,
+   "digest": "5fd581868c3d73216304cbb942352f2c716450d321c728125946da7418805acc",
+   "floor_mb": 738.197504,
+   "n_floor_notices": 1,
+   "n_warnings_total": 2,
+   "names_floor": true,
+   "names_raise": true,
+   "names_window": true,
+   "notice": "reconstruct_field_from_beamlets: the dense (window=None) path CANNOT meet mem_budget_mb=512 MB on this 2048x2048 grid.  Its chunk already floors at ONE beamlet column, and one column plus the whole-grid arrays that live outside the chunk costs 738.198 MB (48 + 128 B per output cell) -- 1.44x what was asked for.  The budget is honoured at or above that floor and is a statement of intent below it.  Either raise mem_budget_mb to 738.198 MB, or pass window=5.0 for the bounded-support scatter-add, whose accounting has no one-column floor here (it changes the returned field by its own ~1e-11 truncation, which is why it is not applied for you).  lumenairy.propagators.gbd._dense_budget_floor_bytes(Ny, Nx) publishes the number.",
+   "other_warnings": [
+    "reconstruct_field_from_beamlets is using the dense O(beamlets * Ny * N"
+   ],
+   "rss_peak_delta_b": 603369472,
+   "shape": [
+    2048,
+    2048
+   ]
+  },
+  "legacy": {
+   "completed": true,
+   "digest": "8649de3ec8210135c517b1b2fb11f269a79ed6e387de6b74c60c01b5de64d9f2",
+   "floor_mb": 738.197504,
+   "n_floor_notices": 0,
+   "n_warnings_total": 1,
+   "names_floor": false,
+   "names_raise": false,
+   "names_window": false,
+   "notice": null,
+   "other_warnings": [
+    "reconstruct_field_from_beamlets is using the dense O(beamlets * Ny * N"
+   ],
+   "rss_peak_delta_b": 3013976064,
+   "shape": [
+    2048,
+    2048
+   ]
+  }
+ },
+ "digests": {
+  "default/320/512MB": "72d081121a0dc36c77e06c264c801c119b25acafc5f5d28cdb994ac290ce211c",
+  "default/320/8MB": "f703688692aef656ccf134f8580600f79deb5794711dd3cbd6e142a55bbe9494",
+  "default/512/512MB": "4935c813ba892e29c474b8ef6c0156c18e2720644a68a45b8f82f782bd9b203f",
+  "default/512/8MB": "82950ea1eee9ccf038622354404fb52a3ca3281ebd47df70db1acac211f168ab",
+  "legacy/320/512MB": "de5c405caa8bf6b6dee23b4c94a808cc2f4ffdb87e5721879b39f6089bec3750",
+  "legacy/320/64MB": "72d081121a0dc36c77e06c264c801c119b25acafc5f5d28cdb994ac290ce211c",
+  "legacy/320/8MB": "213dde3c2be6029feb9ede890307ade36f0ada2f1dea38cf4f01fd7613faaad4",
+  "legacy/512/512MB": "57b1c9dd390d1dce8530414da93f48d90a240783997b4231689ec8c42f7e13ad",
+  "legacy/512/64MB": "4935c813ba892e29c474b8ef6c0156c18e2720644a68a45b8f82f782bd9b203f",
+  "legacy/512/8MB": "82950ea1eee9ccf038622354404fb52a3ca3281ebd47df70db1acac211f168ab",
+  "measured/320/512MB": "72d081121a0dc36c77e06c264c801c119b25acafc5f5d28cdb994ac290ce211c",
+  "measured/320/64MB": "213dde3c2be6029feb9ede890307ade36f0ada2f1dea38cf4f01fd7613faaad4",
+  "measured/320/8MB": "f703688692aef656ccf134f8580600f79deb5794711dd3cbd6e142a55bbe9494",
+  "measured/512/512MB": "4935c813ba892e29c474b8ef6c0156c18e2720644a68a45b8f82f782bd9b203f",
+  "measured/512/64MB": "82950ea1eee9ccf038622354404fb52a3ca3281ebd47df70db1acac211f168ab",
+  "measured/512/8MB": "82950ea1eee9ccf038622354404fb52a3ca3281ebd47df70db1acac211f168ab",
+  "windowed/320/8MB": "cb5d39bf484823f73348b71ed2d590aa89bec36b4c13312a3624908e9032e827",
+  "windowed/512/8MB": "070b760ebc14e86f01458f951c6364e3d1340b53a037155783bd2ee33f08a56c"
+ },
+ "fits": {
+  "320": {
+   "bytes_per_cell": [
+    145.384580078125,
+    241.384892578125,
+    433.384580078125,
+    817.384580078125,
+    1585.384580078125,
+    3121.384580078125
+   ],
+   "chunks": [
+    1,
+    2,
+    4,
+    8,
+    16,
+    32
+   ],
+   "fixed_b_per_cell": 49.384671806980755,
+   "per_col_b_per_cell": 95.99999622423596,
+   "rss_bytes_per_cell": [
+    161.24,
+    244.52,
+    416.68,
+    800.72,
+    1563.96,
+    3063.68
+   ],
+   "worst_rel_dev": 9.458863390474056e-07
+  },
+  "512": {
+   "bytes_per_cell": [
+    144.56013870239258,
+    240.56023025512695,
+    432.5600776672363,
+    816.5600471496582,
+    1584.56001663208,
+    3120.5605659484863
+   ],
+   "chunks": [
+    1,
+    2,
+    4,
+    8,
+    16,
+    32
+   ],
+   "fixed_b_per_cell": 48.56005458926697,
+   "per_col_b_per_cell": 96.0000118860219,
+   "rss_bytes_per_cell": [
+    144.296875,
+    240.046875,
+    432.296875,
+    816.296875,
+    1581.578125,
+    3113.296875
+   ],
+   "worst_rel_dev": 6.31416988726601e-07
+  }
+ },
+ "flip_cost": [
+  {
+   "N": 320,
+   "bitwise_identical": false,
+   "legacy_repeatable": true,
+   "max_abs_rel_diff": 1.798978064606425e-16,
+   "measured_repeatable": true
+  },
+  {
+   "N": 512,
+   "bitwise_identical": false,
+   "legacy_repeatable": true,
+   "max_abs_rel_diff": 7.260233075984007e-17,
+   "measured_repeatable": true
+  }
+ ],
+ "floor_vs_one_column": [
+  {
+   "N": 320,
+   "one_column_peak_b": 14887445,
+   "one_column_rss_b": 14811136,
+   "published_floor_b": 18022400.0,
+   "published_over_rss": 1.2168141592920354,
+   "published_over_trace": 1.2105771003688006
+  },
+  {
+   "N": 512,
+   "one_column_peak_b": 37895613,
+   "one_column_rss_b": 37957632,
+   "published_floor_b": 46137344.0,
+   "published_over_rss": 1.2154958454731843,
+   "published_over_trace": 1.2174850951744731
+  }
+ ],
+ "headline_512mb_1024beamlets": [
+  {
+   "N": 320,
+   "budget_mb": 512.0,
+   "chunk": 312,
+   "mode": "legacy",
+   "peak_b": 3072143862,
+   "peak_over_budget": 6.00028098046875,
+   "rss_b": 3046481920,
+   "rss_over_budget": 5.95016
+  },
+  {
+   "N": 320,
+   "budget_mb": 512.0,
+   "chunk": 39,
+   "mode": "measured",
+   "peak_b": 388444446,
+   "peak_over_budget": 0.75868055859375,
+   "rss_b": 386277376,
+   "rss_over_budget": 0.754448
+  },
+  {
+   "N": 512,
+   "budget_mb": 512.0,
+   "chunk": 122,
+   "mode": "legacy",
+   "peak_b": 3082960198,
+   "peak_over_budget": 6.02140663671875,
+   "rss_b": 3080876032,
+   "rss_over_budget": 6.017336
+  },
+  {
+   "N": 512,
+   "budget_mb": 512.0,
+   "chunk": 15,
+   "mode": "measured",
+   "peak_b": 390216990,
+   "peak_over_budget": 0.76214255859375,
+   "rss_b": 390127616,
+   "rss_over_budget": 0.761968
+  }
+ ],
+ "mutations": {
+  "floor_missing_fixed": {
+   "mutant_floor_b": 13107200.0,
+   "notice_fired": 0,
+   "peak_over_mutant_floor": 1.135821304321289,
+   "ratio": 0.7272727272727273,
+   "true_floor_b": 18022400.0
+  },
+  "notice_present_at_half_floor": {
+   "n": 1,
+   "peak_over_budget": 1.6523565118963068
+  },
+  "silent_legacy": {
+   "legacy_peak_over_budget": 5.547326625,
+   "measured_peak_over_budget": 1.861214125,
+   "ratio": 2.9804881396975214
+  }
+ },
+ "shipped": {
+  "accounting": "measured",
+  "accountings": [
+   "legacy",
+   "measured"
+  ],
+  "default_budget_mb": 512.0,
+  "fixed_b": 48.0,
+  "has_cell_bytes_helper": true,
+  "has_floor_helper": true,
+  "legacy_b": 16.0,
+  "measured_b": 128.0
+ },
+ "sweep_above_floor": [
+  {
+   "N": 320,
+   "budget_mb": 18.0224,
+   "mult": 1.0,
+   "n_notices": 0,
+   "peak_b": 14887437,
+   "peak_over_budget": 0.8260518576882102,
+   "rss_b": 15630336,
+   "rss_over_budget": 0.8672727272727273
+  },
+  {
+   "N": 320,
+   "budget_mb": 22.528,
+   "mult": 1.25,
+   "n_notices": 0,
+   "peak_b": 14887437,
+   "peak_over_budget": 0.6608414861505681,
+   "rss_b": 14938112,
+   "rss_over_budget": 0.6630909090909091
+  },
+  {
+   "N": 320,
+   "budget_mb": 27.0336,
+   "mult": 1.5,
+   "n_notices": 0,
+   "peak_b": 24717837,
+   "peak_over_budget": 0.9143376020951705,
+   "rss_b": 23392256,
+   "rss_over_budget": 0.8653030303030304
+  },
+  {
+   "N": 320,
+   "budget_mb": 36.0448,
+   "mult": 2.0,
+   "n_notices": 0,
+   "peak_b": 24717837,
+   "peak_over_budget": 0.6857532015713779,
+   "rss_b": 24645632,
+   "rss_over_budget": 0.68375
+  },
+  {
+   "N": 320,
+   "budget_mb": 45.056,
+   "mult": 2.5,
+   "n_notices": 0,
+   "peak_b": 34548237,
+   "peak_over_budget": 0.7667843794389204,
+   "rss_b": 32837632,
+   "rss_over_budget": 0.7288181818181818
+  },
+  {
+   "N": 320,
+   "budget_mb": 54.0672,
+   "mult": 3.0,
+   "n_notices": 0,
+   "peak_b": 44378637,
+   "peak_over_budget": 0.8208051646839488,
+   "rss_b": 42356736,
+   "rss_over_budget": 0.7834090909090909
+  },
+  {
+   "N": 320,
+   "budget_mb": 72.0896,
+   "mult": 4.0,
+   "n_notices": 0,
+   "peak_b": 54209037,
+   "peak_over_budget": 0.751967509876598,
+   "rss_b": 52498432,
+   "rss_over_budget": 0.7282386363636364
+  },
+  {
+   "N": 320,
+   "budget_mb": 108.1344,
+   "mult": 6.0,
+   "n_notices": 0,
+   "peak_b": 83700237,
+   "peak_over_budget": 0.7740389459783381,
+   "rss_b": 81989632,
+   "rss_over_budget": 0.7582196969696969
+  },
+  {
+   "N": 320,
+   "budget_mb": 144.1792,
+   "mult": 8.0,
+   "n_notices": 0,
+   "peak_b": 113191437,
+   "peak_over_budget": 0.7850746640292081,
+   "rss_b": 110002176,
+   "rss_over_budget": 0.7629545454545454
+  },
+  {
+   "N": 320,
+   "budget_mb": 216.2688,
+   "mult": 12.0,
+   "n_notices": 0,
+   "peak_b": 162343437,
+   "peak_over_budget": 0.7506558366255327,
+   "rss_b": 160399360,
+   "rss_over_budget": 0.7416666666666667
+  },
+  {
+   "N": 512,
+   "budget_mb": 46.137344,
+   "mult": 1.0,
+   "n_notices": 0,
+   "peak_b": 37895565,
+   "peak_over_budget": 0.8213642510500822,
+   "rss_b": 37830656,
+   "rss_over_budget": 0.8199573863636364
+  },
+  {
+   "N": 512,
+   "budget_mb": 57.67168,
+   "mult": 1.25,
+   "n_notices": 0,
+   "peak_b": 37895557,
+   "peak_over_budget": 0.6570912621238015,
+   "rss_b": 37826560,
+   "rss_over_budget": 0.6558948863636364
+  },
+  {
+   "N": 512,
+   "budget_mb": 69.206016,
+   "mult": 1.5,
+   "n_notices": 0,
+   "peak_b": 63061373,
+   "peak_over_budget": 0.9112122998093114,
+   "rss_b": 62992384,
+   "rss_over_budget": 0.9102154356060606
+  },
+  {
+   "N": 512,
+   "budget_mb": 92.274688,
+   "mult": 2.0,
+   "n_notices": 0,
+   "peak_b": 63061365,
+   "peak_over_budget": 0.6834091381593184,
+   "rss_b": 62992384,
+   "rss_over_budget": 0.6826615767045454
+  },
+  {
+   "N": 512,
+   "budget_mb": 115.34336,
+   "mult": 2.5,
+   "n_notices": 0,
+   "peak_b": 88227132,
+   "peak_over_budget": 0.7649086345325816,
+   "rss_b": 88158208,
+   "rss_over_budget": 0.7643110795454545
+  },
+  {
+   "N": 512,
+   "budget_mb": 138.412032,
+   "mult": 3.0,
+   "n_notices": 0,
+   "peak_b": 113392997,
+   "peak_over_budget": 0.8192423401456891,
+   "rss_b": 113324032,
+   "rss_over_budget": 0.8187440814393939
+  },
+  {
+   "N": 512,
+   "budget_mb": 184.549376,
+   "mult": 4.0,
+   "n_notices": 0,
+   "peak_b": 138558805,
+   "peak_over_budget": 0.750795304775238,
+   "rss_b": 138285056,
+   "rss_over_budget": 0.7493119673295454
+  },
+  {
+   "N": 512,
+   "budget_mb": 276.824064,
+   "mult": 6.0,
+   "n_notices": 0,
+   "peak_b": 214056269,
+   "peak_over_budget": 0.7732574470115431,
+   "rss_b": 213987328,
+   "rss_over_budget": 0.7730084043560606
+  },
+  {
+   "N": 512,
+   "budget_mb": 369.098752,
+   "mult": 8.0,
+   "n_notices": 0,
+   "peak_b": 289553733,
+   "peak_over_budget": 0.7844885181296956,
+   "rss_b": 288727040,
+   "rss_over_budget": 0.7822487571022727
+  },
+  {
+   "N": 512,
+   "budget_mb": 553.648128,
+   "mult": 12.0,
+   "n_notices": 0,
+   "peak_b": 415382845,
+   "peak_over_budget": 0.7502650582429135,
+   "rss_b": 415232000,
+   "rss_over_budget": 0.7499926017992424
+  }
+ ],
+ "unknown_mode": {
+  "''": "ValueError: lumenairy.propagators.gbd.DENSE_MEM_BUDGET_ACCOUNTING must be one of ['legacy', 'measured'] (case-sensitive strings), got ''.  'measured' (t",
+  "'MEASURED'": "ValueError: lumenairy.propagators.gbd.DENSE_MEM_BUDGET_ACCOUNTING must be one of ['legacy', 'measured'] (case-sensitive strings), got 'MEASURED'.  'meas",
+  "'Measured'": "ValueError: lumenairy.propagators.gbd.DENSE_MEM_BUDGET_ACCOUNTING must be one of ['legacy', 'measured'] (case-sensitive strings), got 'Measured'.  'meas",
+  "'honest'": "ValueError: lumenairy.propagators.gbd.DENSE_MEM_BUDGET_ACCOUNTING must be one of ['legacy', 'measured'] (case-sensitive strings), got 'honest'.  'measur",
+  "'legacy '": "ValueError: lumenairy.propagators.gbd.DENSE_MEM_BUDGET_ACCOUNTING must be one of ['legacy', 'measured'] (case-sensitive strings), got 'legacy '.  'measu",
+  "16": "ValueError: lumenairy.propagators.gbd.DENSE_MEM_BUDGET_ACCOUNTING must be one of ['legacy', 'measured'] (case-sensitive strings), got 16.  'measured' (t",
+  "None": "ACCEPTED",
+  "public_entry_point": "ValueError: lumenairy.propagators.gbd.DENSE_MEM_BUDGET_ACCOUNTING must be one of ['legacy', 'measured'] (case-sensitive strings), got 'honest'.  'measur"
+ }
+}

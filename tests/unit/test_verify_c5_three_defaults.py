@@ -42,6 +42,10 @@ Every bar is derived at runtime from what the running build measures.
 """
 import gc
 import inspect
+import json
+import os
+import subprocess
+import sys
 import threading
 import tracemalloc
 import warnings
@@ -533,6 +537,106 @@ def _dense(b, mode, budget_mb, N, chunk=4096, dx=2.5e-6, trace=True,
             msgs if catch else [])
 
 
+#: The RSS arm's child program.  Each arm runs in a FRESH interpreter, for
+#: the reason measured in round 2 and written into the id's docstring below:
+#: an in-process resident-set high-water mark stops seeing this loop once the
+#: process has been running a while, so the precondition has to be ENGINEERED
+#: (``docs/TESTING_STANDARDS.md`` rule 3) rather than hoped for.
+_RSS_ARM_CHILD = r'''
+import gc, json, sys, threading, tracemalloc, warnings
+import numpy as np, psutil
+from lumenairy.propagators import gbd as G
+
+mode, N, budget_mb, n_beamlets, seed = (
+    sys.argv[1], int(sys.argv[2]), float(sys.argv[3]), int(sys.argv[4]),
+    int(sys.argv[5]))
+proc = psutil.Process()
+rng = np.random.default_rng(seed)
+b = G.BeamletBundle(
+    positions=rng.normal(0.0, 1.5e-4, size=(n_beamlets, 3)),
+    directions=np.zeros((n_beamlets, 3)),
+    Q=np.full(n_beamlets, 1.0 / (1.2e-3 - 0.03j), dtype=np.complex128),
+    amplitude=(rng.normal(size=n_beamlets)
+               + 1j * rng.normal(size=n_beamlets)).astype(np.complex128),
+    waist0=np.full(n_beamlets, 1.2e-3))
+G.DENSE_MEM_BUDGET_ACCOUNTING = mode
+
+# Warm-up, discarded: pays the interpreter's, numpy's and the BLAS's
+# first-touch page cost on THIS grid before the baseline is taken, so the
+# delta below is the loop's transient and not the process's start-up.  It
+# runs at chunk=1 under a budget far too large to bind, so it does not
+# exercise the chunk arithmetic this id is about.
+with warnings.catch_warnings():
+    warnings.simplefilter('ignore')
+    G.reconstruct_field_from_beamlets(
+        b, Ny=N, Nx=N, dx=2.5e-6, wavelength=1.064e-6, chunk_beamlets=1,
+        mem_budget_mb=1.0e7)
+
+peak = [0]
+stop = threading.Event()
+
+
+def sample():
+    while not stop.is_set():
+        try:
+            peak[0] = max(peak[0], proc.memory_info().rss)
+        except Exception:
+            return
+        stop.wait(0.002)
+
+
+gc.collect()
+base = proc.memory_info().rss
+peak[0] = base
+th = threading.Thread(target=sample, daemon=True)
+th.start()
+with warnings.catch_warnings():
+    warnings.simplefilter('ignore')
+    tracemalloc.start()
+    try:
+        tracemalloc.reset_peak()
+        t_base = tracemalloc.get_traced_memory()[0]
+        E = np.asarray(G.reconstruct_field_from_beamlets(
+            b, Ny=N, Nx=N, dx=2.5e-6, wavelength=1.064e-6,
+            chunk_beamlets=4096, mem_budget_mb=budget_mb))
+        t_peak = tracemalloc.get_traced_memory()[1]
+    finally:
+        tracemalloc.stop()
+stop.set()
+th.join(timeout=2.0)
+print(json.dumps(dict(trace=int(t_peak - t_base), rss=int(peak[0] - base),
+                      finite=bool(np.all(np.isfinite(E))),
+                      accounting=G.DENSE_MEM_BUDGET_ACCOUNTING,
+                      gbd_file=G.__file__)))
+'''
+
+
+def _dense_in_a_fresh_process(mode, N, budget_mb, n=256, seed=17):
+    """One dense reconstruction in a CHILD interpreter, with both instruments.
+
+    Returns ``(tracemalloc_peak_bytes, rss_peak_delta_bytes, gbd_file)``.
+    """
+    root = os.path.dirname(os.path.dirname(os.path.dirname(
+        os.path.abspath(G.__file__))))
+    env = dict(os.environ)
+    env['PYTHONPATH'] = (root + os.pathsep + env['PYTHONPATH']
+                         if env.get('PYTHONPATH') else root)
+    env.update(OMP_NUM_THREADS='1', OPENBLAS_NUM_THREADS='1',
+               MKL_NUM_THREADS='1')
+    p = subprocess.run(
+        [sys.executable, '-c', _RSS_ARM_CHILD, str(mode), str(int(N)),
+         str(float(budget_mb)), str(int(n)), str(int(seed))],
+        capture_output=True, text=True, env=env, timeout=1800)
+    assert p.returncode == 0 and p.stdout.strip(), (
+        f"the {mode!r} RSS arm's child exited {p.returncode}\n"
+        f"--- stdout ---\n{p.stdout[-2000:]}\n"
+        f"--- stderr ---\n{p.stderr[-2000:]}")
+    row = json.loads(p.stdout.strip().splitlines()[-1])
+    assert row['accounting'] == mode, row
+    assert row['finite'], f"the {mode!r} arm returned a non-finite field"
+    return row['trace'], row['rss'], row['gbd_file']
+
+
 def test_the_flip_bounds_the_resident_set_and_not_only_tracemalloc(
         _restore_accounting):
     """ITEM 2, the instrument the WP-C5 report lists under "could not be
@@ -540,14 +644,23 @@ def test_the_flip_bounds_the_resident_set_and_not_only_tracemalloc(
     CPython allocator handed out; a caller who sets ``mem_budget_mb`` to fit a
     machine cares about the RESIDENT SET.
 
-    Two things make this a measurement rather than a hope.  The transient is
-    kept LARGE on both arms (a 300 MB budget on a 512-square grid: 214 MB
-    under ``'measured'``, 1.80 GB under ``'legacy'``), because a small
-    transient that follows a large one is served out of pages the allocator
-    already holds and an in-process RSS delta then reads ZERO -- measured on
-    WSL glibc, a 24.6 MB transient after a 192 MB one read 4 KB.  And the
-    honest arm is the ``'measured'`` one FIRST, so its pages are the fresh
-    ones.
+    EACH ARM RUNS IN A FRESH INTERPRETER, and that is the load-bearing part of
+    the fixture rather than a convenience.  An in-process resident-set
+    high-water mark only sees a transient that has to map new pages, and glibc
+    stops making this loop map new pages once the process has been running:
+    its ``M_MMAP_THRESHOLD`` is dynamic, so freeing mmap'd blocks ratchets it
+    up (to 32 MB) and same-sized allocations afterwards come out of the
+    retained heap.  MEASURED 2026-09-20, WSL py3.12 (`validation/
+    probe_c5_round2/r2_rss_arena_wsl.json`): 200 MB of work in 2 MB blocks
+    reads 2.0 MB of RSS growth the first time and 0.0041 MB the second -- a
+    factor of 481 -- while the same 200 MB in ONE block reads 192.5 / 196.0
+    either way, and on Windows py3.14 neither moves (1.9 / 2.0 MB).  Run at
+    the tail of a 34-file WSL session this id's ``'measured'`` arm read a
+    sampled RSS delta of exactly 0.0 MB against a 197.2 MB ``tracemalloc``
+    peak and its premise gate refused, correctly, to conclude anything.  A
+    child process makes the precondition ENGINEERED instead of inherited
+    (``docs/TESTING_STANDARDS.md`` rule 3), and the transient is kept LARGE on
+    both arms (a 300 MB budget on a 512-square grid) for the same reason.
 
     MEASURED 2026-09-20 at this id's own settings.  Windows py3.14:
     ``'measured'`` 0.7135x the budget on ``tracemalloc`` and 0.7146x on RSS;
@@ -559,14 +672,14 @@ def test_the_flip_bounds_the_resident_set_and_not_only_tracemalloc(
     one of them is not measuring this loop and nothing here can be
     concluded.
     """
-    b = _bundle(n=256)
     N, budget_mb = 512, 300.0
-    _dense(b, 'legacy', 1.0e7, N, chunk=1)              # warm-up, discarded
     out = {}
     for mode in ('measured', 'legacy'):                 # honest arm FIRST
-        _f, pk, rs, _m = _dense(b, mode, budget_mb, N)
+        pk, rs, gbd_file = _dense_in_a_fresh_process(mode, N, budget_mb)
+        assert os.path.abspath(gbd_file) == os.path.abspath(G.__file__), (
+            f"the child resolved {gbd_file!r} against this session's "
+            f"{G.__file__!r}, so the two arms are not the same build")
         out[mode] = (pk / (budget_mb * 1e6), rs / (budget_mb * 1e6), pk, rs)
-        gc.collect()
     (t_leg, r_leg, pk_leg, rs_leg) = out['legacy']
     (t_mea, r_mea, pk_mea, rs_mea) = out['measured']
 

@@ -1921,8 +1921,10 @@ is unaffected.
 `carrier_referenced_exact_focus_readout` and the private Collins readout the
 traced chain uses on `transport='collins'`.  A readout window wider than one
 period of the transform behind it is filled, outside that period, with periodic
-copies of the field -- `E(u + period) == E(u)` identically -- and those samples
-were never measured.  The default now writes zeros there.
+copies of the field -- `E(u + period) == E(u)` identically on the two readouts
+that finish on `angular_spectrum_propagate_mft`, and identically in MODULUS,
+up to a known phase, on the Collins one -- and those samples were never
+measured.  The default now writes zeros there.
 
 **Who is affected.**  Only a call that BOTH reaches outside one period AND has
 the replica refusal waived.  At the shipped `on_replica='error'` such a request

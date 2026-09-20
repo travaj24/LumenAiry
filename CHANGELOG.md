@@ -10,9 +10,14 @@ All notable changes to the core library are documented here.
 and the private Collins readout the traced chain reaches on
 `transport='collins'` now default to `replica_fill='zero'`.  A readout window
 wider than one period of the transform behind it is filled, outside that
-period, with periodic copies of the field -- `E(u + period) == E(u)`
-identically, whatever the field, the NA, the leg and the window.  Those samples
-were never measured, and a replica is not a degraded reading: it is a
+period, with periodic copies of the field, whatever the field, the NA, the leg
+and the window.  On the two readouts that finish on
+`angular_spectrum_propagate_mft` the copy is exact -- `E(u + period) == E(u)`
+in absolute output coordinates, measured 1.5e-14 and 1.8e-13 -- and on the
+private Collins readout it is exact in MODULUS (2.0e-14) and carries a known
+phase, `E(u + period) = exp(i[2 pi u/dx_in + pi lambda z/dx_in^2]) E(u)`,
+verified to 7.2e-09 over 377 sample pairs.  Either way those samples were
+never measured, and a replica is not a degraded reading: it is a
 full-amplitude image of the core laid down where the field is weak, so it wins
 every max / argmax / centroid / encircled-energy reduction taken over the
 window.  The default now blanks them.  `replica_fill='repeat'` returns them and
