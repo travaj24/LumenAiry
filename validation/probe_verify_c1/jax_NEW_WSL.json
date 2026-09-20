@@ -1,0 +1,324 @@
+{
+ "digests_default": {
+  "jax_eager": "d9c3b42f22467237",
+  "jax_jit": "d9c3b42f22467237",
+  "numpy": "d9c3b42f22467237"
+ },
+ "digests_hard": {
+  "jax_eager": "83239bd82f4c4f23",
+  "jax_jit": "83239bd82f4c4f23",
+  "numpy": "83239bd82f4c4f23"
+ },
+ "element_key_validation": {
+  "edge_bogus": {
+   "agree_numpy_vs_eager": true,
+   "agree_numpy_vs_jit": true,
+   "apply_aperture_direct": {
+    "exc": "ValueError: apply_aperture: edge must be 'hard' (binary pixel mask) or 'gray' (supersampled open-area fraction on boundary pixels); got 'soft'.",
+    "raised": true
+   },
+   "jax_eager": {
+    "exc": "ValueError: apply_aperture: edge must be 'hard' (binary pixel mask) or 'gray' (supersampled open-area fraction on boundary pixels); got 'soft'.",
+    "raised": true
+   },
+   "jax_jit": {
+    "exc": "ValueError: apply_aperture: edge must be 'hard' (binary pixel mask) or 'gray' (supersampled open-area fraction on boundary pixels); got 'soft'.",
+    "raised": true
+   },
+   "numpy": {
+    "exc": "ValueError: apply_aperture: edge must be 'hard' (binary pixel mask) or 'gray' (supersampled open-area fraction on boundary pixels); got 'soft'.",
+    "raised": true
+   }
+  },
+  "edge_none": {
+   "agree_numpy_vs_eager": true,
+   "agree_numpy_vs_jit": true,
+   "apply_aperture_direct": {
+    "exc": "ValueError: apply_aperture: edge must be 'hard' (binary pixel mask) or 'gray' (supersampled open-area fraction on boundary pixels); got None.",
+    "raised": true
+   },
+   "jax_eager": {
+    "exc": "ValueError: apply_aperture: edge must be 'hard' (binary pixel mask) or 'gray' (supersampled open-area fraction on boundary pixels); got None.",
+    "raised": true
+   },
+   "jax_jit": {
+    "exc": "ValueError: apply_aperture: edge must be 'hard' (binary pixel mask) or 'gray' (supersampled open-area fraction on boundary pixels); got 'None'.",
+    "raised": true
+   },
+   "numpy": {
+    "exc": "ValueError: apply_aperture: edge must be 'hard' (binary pixel mask) or 'gray' (supersampled open-area fraction on boundary pixels); got None.",
+    "raised": true
+   }
+  },
+  "edge_samples_float_2p5": {
+   "agree_numpy_vs_eager": true,
+   "agree_numpy_vs_jit": false,
+   "apply_aperture_direct": {
+    "exc": "ValueError: apply_aperture: edge_samples must be a positive integer (sub-samples per axis); got 2.5.",
+    "raised": true
+   },
+   "jax_eager": {
+    "exc": "ValueError: apply_aperture: edge_samples must be a positive integer (sub-samples per axis); got 2.5.",
+    "raised": true
+   },
+   "jax_jit": {
+    "digest": "cee30d3230d0d751",
+    "raised": false
+   },
+   "numpy": {
+    "exc": "ValueError: apply_aperture: edge_samples must be a positive integer (sub-samples per axis); got 2.5.",
+    "raised": true
+   }
+  },
+  "edge_samples_float_4p0": {
+   "agree_numpy_vs_eager": true,
+   "agree_numpy_vs_jit": true,
+   "apply_aperture_direct": {
+    "digest": "d9c3b42f22467237",
+    "raised": false
+   },
+   "jax_eager": {
+    "digest": "d9c3b42f22467237",
+    "raised": false
+   },
+   "jax_jit": {
+    "digest": "d9c3b42f22467237",
+    "raised": false
+   },
+   "numpy": {
+    "digest": "d9c3b42f22467237",
+    "raised": false
+   }
+  },
+  "edge_samples_negative": {
+   "agree_numpy_vs_eager": true,
+   "agree_numpy_vs_jit": true,
+   "apply_aperture_direct": {
+    "exc": "ValueError: apply_aperture: edge_samples must be a positive integer (sub-samples per axis); got -2.",
+    "raised": true
+   },
+   "jax_eager": {
+    "exc": "ValueError: apply_aperture: edge_samples must be a positive integer (sub-samples per axis); got -2.",
+    "raised": true
+   },
+   "jax_jit": {
+    "exc": "ValueError: apply_aperture: edge_samples must be a positive integer (sub-samples per axis); got -2.",
+    "raised": true
+   },
+   "numpy": {
+    "exc": "ValueError: apply_aperture: edge_samples must be a positive integer (sub-samples per axis); got -2.",
+    "raised": true
+   }
+  },
+  "edge_samples_str": {
+   "agree_numpy_vs_eager": true,
+   "agree_numpy_vs_jit": false,
+   "apply_aperture_direct": {
+    "exc": "ValueError: apply_aperture: edge_samples must be a positive integer (sub-samples per axis); got '4'.",
+    "raised": true
+   },
+   "jax_eager": {
+    "exc": "ValueError: apply_aperture: edge_samples must be a positive integer (sub-samples per axis); got '4'.",
+    "raised": true
+   },
+   "jax_jit": {
+    "digest": "d9c3b42f22467237",
+    "raised": false
+   },
+   "numpy": {
+    "exc": "ValueError: apply_aperture: edge_samples must be a positive integer (sub-samples per axis); got '4'.",
+    "raised": true
+   }
+  },
+  "edge_samples_zero": {
+   "agree_numpy_vs_eager": true,
+   "agree_numpy_vs_jit": true,
+   "apply_aperture_direct": {
+    "exc": "ValueError: apply_aperture: edge_samples must be a positive integer (sub-samples per axis); got 0.",
+    "raised": true
+   },
+   "jax_eager": {
+    "exc": "ValueError: apply_aperture: edge_samples must be a positive integer (sub-samples per axis); got 0.",
+    "raised": true
+   },
+   "jax_jit": {
+    "exc": "ValueError: apply_aperture: edge_samples must be a positive integer (sub-samples per axis); got 0.",
+    "raised": true
+   },
+   "numpy": {
+    "exc": "ValueError: apply_aperture: edge_samples must be a positive integer (sub-samples per axis); got 0.",
+    "raised": true
+   }
+  },
+  "unknown_key_edgesample_typo": {
+   "agree_numpy_vs_eager": true,
+   "agree_numpy_vs_jit": true,
+   "apply_aperture_direct": {
+    "digest": "c2a21f13759fd746",
+    "raised": false
+   },
+   "jax_eager": {
+    "digest": "d9c3b42f22467237",
+    "raised": false
+   },
+   "jax_jit": {
+    "digest": "d9c3b42f22467237",
+    "raised": false
+   },
+   "numpy": {
+    "digest": "d9c3b42f22467237",
+    "raised": false
+   }
+  },
+  "unknown_key_gray": {
+   "agree_numpy_vs_eager": true,
+   "agree_numpy_vs_jit": true,
+   "apply_aperture_direct": {
+    "digest": "c2a21f13759fd746",
+    "raised": false
+   },
+   "jax_eager": {
+    "digest": "d9c3b42f22467237",
+    "raised": false
+   },
+   "jax_jit": {
+    "digest": "d9c3b42f22467237",
+    "raised": false
+   },
+   "numpy": {
+    "digest": "d9c3b42f22467237",
+    "raised": false
+   }
+  }
+ },
+ "element_signature": {
+  "default": "('aperture_circular', 4.55e-05, 0.0, 0.0, None, None)",
+  "gray_ns8": "('aperture_circular', 4.55e-05, 0.0, 0.0, 'gray', 8)",
+  "hard": "('aperture_circular', 4.55e-05, 0.0, 0.0, 'hard', None)",
+  "ns_2p5": "('aperture_circular', 4.55e-05, 0.0, 0.0, None, 2)"
+ },
+ "hard_key_honoured": true,
+ "jax": "0.10.2",
+ "jax_grad": {
+  "default": {
+   "finite": true,
+   "grad": 1709.9665764887113
+  },
+  "gray": {
+   "finite": true,
+   "grad": 1709.9665764887113
+  },
+  "hard": {
+   "finite": true,
+   "grad": 1786.015029757675
+  },
+  "jit_grad": {
+   "finite": true,
+   "grad": 1709.966576488711
+  }
+ },
+ "lumenairy_file": "/mnt/c/tmp/lum_vc1/lumenairy/__init__.py",
+ "lumenairy_version": "5.48.1",
+ "nonfinite_outside_stop": {
+  "jax_eager": {
+   "all_finite": true,
+   "corner_00": [
+    0.0,
+    0.0
+   ],
+   "corner_01": [
+    0.0,
+    0.0
+   ],
+   "corner_10": [
+    0.0,
+    0.0
+   ],
+   "n_nonfinite": 0,
+   "neg_zeros": [
+    0,
+    0
+   ]
+  },
+  "jax_jit": {
+   "all_finite": true,
+   "corner_00": [
+    0.0,
+    0.0
+   ],
+   "corner_01": [
+    0.0,
+    0.0
+   ],
+   "corner_10": [
+    0.0,
+    0.0
+   ],
+   "n_nonfinite": 0,
+   "neg_zeros": [
+    0,
+    0
+   ]
+  },
+  "numpy": {
+   "all_finite": true,
+   "corner_00": [
+    0.0,
+    0.0
+   ],
+   "corner_01": [
+    0.0,
+    0.0
+   ],
+   "corner_10": [
+    0.0,
+    0.0
+   ],
+   "n_nonfinite": 0,
+   "neg_zeros": [
+    0,
+    0
+   ]
+  }
+ },
+ "numpy": "2.4.6",
+ "platform": "Linux-4.4.0-26100-Microsoft-x86_64-with-glibc2.39",
+ "python": "3.12.3 (main, Mar 23 2026, 19:04:32) [GCC 13.3.0]",
+ "signed_zeros_default": {
+  "jax_eager": [
+   0,
+   0
+  ],
+  "jax_jit": [
+   0,
+   0
+  ],
+  "n_zero_pixels_eager": 12111,
+  "numpy": [
+   0,
+   0
+  ]
+ },
+ "signed_zeros_hard": {
+  "jax_eager": [
+   0,
+   0
+  ],
+  "jax_jit": [
+   0,
+   0
+  ],
+  "numpy": [
+   0,
+   0
+  ]
+ },
+ "tag": "NEW_WSL",
+ "threads": {
+  "MKL_NUM_THREADS": "1",
+  "OMP_NUM_THREADS": "1",
+  "OPENBLAS_NUM_THREADS": "1"
+ },
+ "three_routes_bit_identical_default": true,
+ "three_routes_bit_identical_hard": true
+}

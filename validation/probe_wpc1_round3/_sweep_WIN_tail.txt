@@ -1,0 +1,400 @@
+        constant came down to 40 MiB and the fence is now DERIVED
+        (:data:`_A6_EST_OVER_COLD_MAX`); the re-measured band is 1.06-1.10
+        over all twelve N x dtype points.  The cold peak is ALSO pinned
+        against its dated two-term model below, so a future drift names
+        itself instead of silently eating the fence's slack.
+    
+        2026-09-12, later the same day (WP-A22 made ``scipy.fft`` a
+        first-use import in ``fft_infra``): the 13.06 MiB ``scipy.fft``
+        import moved INTO the measured first call, every pair fit read
+        F = 49.61 MiB, and the 40 MiB estimate no longer bounded the peak
+        (0.888 at N=512, 0.972 at N=1024).  The constant is 53 MiB
+        (6.8 % over the worst fit) and the model constants above are
+        re-fitted; the fence is unchanged because the complex64 slope
+        endpoint still sets it."""
+        cold, steady, est = _measure_asm_peak(n_grid, dtype)
+        ratio = est / cold
+>       assert ratio >= 1.0, (
+            f"A-6: estimate_asm_memory({n_grid}, {dtype!r}) = {est} B does "
+            f"NOT bound the measured fresh-interpreter first-call peak "
+            f"{cold} B (est/measured = {ratio:.3f}).")
+E       AssertionError: A-6: estimate_asm_memory(1024, 'complex128') = 162109849 B does NOT bound the measured fresh-interpreter first-call peak 169741215 B (est/measured = 0.955).
+E       assert 0.955041172528428 >= 1.0
+
+tests\unit\test_niche_audit_w3_infra.py:1007: AssertionError
+________ TestUI6and7PsfMtfDockRayAccumulation.test_no_last_write_wins _________
+
+self = <tests.unit.test_v4_15_agent_e.TestUI6and7PsfMtfDockRayAccumulation object at 0x000001B778A6ED50>
+
+    @_skip_no_qt
+    def test_no_last_write_wins(self):
+        from lumenairy.ui import psf_mtf_dock
+        src = inspect.getsource(psf_mtf_dock)
+        # Locate _load_from_raytrace.
+        idx = src.find("def _load_from_raytrace(")
+        assert idx >= 0
+        body = src[idx:idx + 3000]
+        # Filter out comment lines so the audit's reference quote in
+        # our own commentary doesn't trigger the regression assertion.
+        non_comment_lines = [ln for ln in body.splitlines()
+                              if not ln.lstrip().startswith('#')]
+        body_code = '\n'.join(non_comment_lines)
+        # Pre-v4.15 line: opd_grid[iy, ix] = opl (last-write-wins).
+        assert "opd_grid[iy, ix] = opl" not in body_code, (
+            "P1-UI-6 regression: ``opd_grid[iy, ix] = opl`` still "
+            "present in executable code; multi-ray-per-pixel still "
+            "last-write-wins")
+        # The fix uses np.add.at or similar mean-accumulation idiom.
+>       assert "np.add.at" in body_code, (
+            "P1-UI-6 fix missing: no np.add.at accumulator in "
+            "_load_from_raytrace (the analysis/core.py mean idiom)")
+E       AssertionError: P1-UI-6 fix missing: no np.add.at accumulator in _load_from_raytrace (the analysis/core.py mean idiom)
+E       assert 'np.add.at' in 'def _load_from_raytrace(self):\n        """Build a geometric pupil from the ray-traced OPD: phase from\n        OPL, ...raw < N)\n                     & (iy_raw >= 0) & (iy_raw < N))\n        ix = ix_raw[in_bounds]\n        iy = iy_raw[in'
+
+tests\unit\test_v4_15_agent_e.py:368: AssertionError
+============================== warnings summary ===============================
+tests/unit/test_audit2609_a8_verify.py::test_verify_a8_e7_gray_edge_zeroes_a_blocked_pixel_even_if_it_is_not_finite[(inf+0j)]
+tests/unit/test_audit2609_a8_verify.py::test_verify_a8_e7_gray_edge_zeroes_a_blocked_pixel_even_if_it_is_not_finite[(-inf+0j)]
+  C:\tmp\lum_c1c\lumenairy\elements\elements.py:544: RuntimeWarning: invalid value encountered in multiply
+    return xp.where(frac > 0, E_in * frac.astype(real_dtype),
+
+tests/unit/test_audit_analysis.py::TestAuditFixesV4_11_2_analysis_PolychromaticPrecisionRespect::test_polychromatic_psf_under_single_precision
+  C:\tmp\lum_c1c\tests\unit\test_audit_analysis.py:388: UserWarning: apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=64, dx=120.000 um, semi=3.840 mm). Largest is system aperture_diameter with semi_diameter=5.000 mm (+1.160 mm beyond the grid); the field will be truncated at the grid edge during propagation, silently dropping energy the real lens would have transmitted. Consider increasing N or dx so N*dx/2 >= max(semi_diameter). Affected surfaces: system aperture_diameter=5.00mm.
+    psf, dx_psf, info = lm.polychromatic_psf(
+
+tests/unit/test_audit_analysis.py::TestAuditFixesV4_11_2_analysis_PolychromaticPrecisionRespect::test_polychromatic_psf_e_in_dtype_under_single_precision
+  C:\tmp\lum_c1c\tests\unit\test_audit_analysis.py:413: UserWarning: apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=32, dx=120.000 um, semi=1.920 mm). Largest is system aperture_diameter with semi_diameter=5.000 mm (+3.080 mm beyond the grid); the field will be truncated at the grid edge during propagation, silently dropping energy the real lens would have transmitted. Consider increasing N or dx so N*dx/2 >= max(semi_diameter). Affected surfaces: system aperture_diameter=5.00mm.
+    return orig_apply_real_lens(E, **kw)
+
+tests/unit/test_audit_analysis.py::TestAuditFixesV4_12_0_round4_analysis_ApplyRealLensTracedMirrorGuard::test_pure_refractive_prescription_unaffected
+  C:\tmp\lum_c1c\tests\unit\test_audit_analysis.py:830: UserWarning: apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=64, dx=10.000 um, semi=0.320 mm). Largest is system aperture_diameter with semi_diameter=2.500 mm (+2.180 mm beyond the grid); the field will be truncated at the grid edge during propagation, silently dropping energy the real lens would have transmitted. Consider increasing N or dx so N*dx/2 >= max(semi_diameter). Affected surfaces: system aperture_diameter=2.50mm.
+    la.apply_real_lens_traced(
+
+tests/unit/test_audit_analysis.py::TestAuditFixesV4_12_0_round4_analysis_ApplyRealLensTracedMirrorGuard::test_pure_refractive_prescription_unaffected
+  C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\concurrent\futures\thread.py:73: UserWarning: apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=64, dx=10.000 um, semi=0.320 mm). Largest is system aperture_diameter with semi_diameter=2.500 mm (+2.180 mm beyond the grid); the field will be truncated at the grid edge during propagation, silently dropping energy the real lens would have transmitted. Consider increasing N or dx so N*dx/2 >= max(semi_diameter). Affected surfaces: system aperture_diameter=2.50mm.
+    return fn(*args, **kwargs)
+
+tests/unit/test_audit_analysis.py::TestAuditFixesV4_12_0_round4_analysis_ApplyRealLensTracedMirrorGuard::test_pure_refractive_prescription_unaffected
+  C:\tmp\lum_c1c\tests\unit\test_audit_analysis.py:830: RuntimeWarning: apply_real_lens_traced: the physical aperture (5.000 mm) is 6.76x the beam 1/e^2 diameter (0.739 mm), above the 1.5x aperture:beam ratio beyond which the traced OPL fit can be corrupted by marginal rays the beam never occupies (audit AUDIT_TRACED_PRODUCTION_READINESS_2026_07_24 �4: measured exit-wavefront Strehl 0.998 -> 0.039 across this cliff on a fast singlet).  Whether it bites depends on how aberrated the surfaces are at the aperture edge.  Pass fit_radius_beam_factor=2.0 to restrict the ray-fit domain to the beam (no energy is vignetted by that -- only the fit domain changes), or on_aperture_beam='silent' to acknowledge.
+    la.apply_real_lens_traced(
+
+tests/unit/test_audit_io.py::TestAuditFixesV4_11_2_io_EvenAsphParm::test_parm1_maps_to_power2_not_power4
+  C:\tmp\lum_c1c\tests\unit\test_audit_io.py:151: UserWarning: Glasses not in GLASS_REGISTRY: {'BK7'}. Add them before calling apply_real_lens. Example:
+    GLASS_REGISTRY['GLASS_NAME'] = ('specs', 'CATALOG', 'PAGE')
+  Browse refractiveindex.info to find the correct path.
+    rx = load_zemax_zmx(path)
+
+tests/unit/test_audit_io.py::TestAuditFixesV4_11_2_io_EvenAsphParm::test_parm2_maps_to_power4
+  C:\tmp\lum_c1c\tests\unit\test_audit_io.py:170: UserWarning: Glasses not in GLASS_REGISTRY: {'BK7'}. Add them before calling apply_real_lens. Example:
+    GLASS_REGISTRY['GLASS_NAME'] = ('specs', 'CATALOG', 'PAGE')
+  Browse refractiveindex.info to find the correct path.
+    rx = load_zemax_zmx(path)
+
+tests/unit/test_audit_io.py::TestAuditFixesV4_11_2_io_EvenAsphParm::test_parm3_maps_to_power6
+  C:\tmp\lum_c1c\tests\unit\test_audit_io.py:186: UserWarning: Glasses not in GLASS_REGISTRY: {'BK7'}. Add them before calling apply_real_lens. Example:
+    GLASS_REGISTRY['GLASS_NAME'] = ('specs', 'CATALOG', 'PAGE')
+  Browse refractiveindex.info to find the correct path.
+    rx = load_zemax_zmx(path)
+
+tests/unit/test_audit_io.py::TestAuditFixesV4_11_2_io_AsphericCoeffsTypeHarmonisation::test_zemax_loader_returns_dict
+  C:\tmp\lum_c1c\tests\unit\test_audit_io.py:691: UserWarning: Glasses not in GLASS_REGISTRY: {'BK7'}. Add them before calling apply_real_lens. Example:
+    GLASS_REGISTRY['GLASS_NAME'] = ('specs', 'CATALOG', 'PAGE')
+  Browse refractiveindex.info to find the correct path.
+    rx = load_zemax_zmx(path)
+
+tests/unit/test_audit_misc.py::TestAuditFixesV4_11_1_SubapertureCallSucceeds::test_propagate_subaperture_asymptotic_call_succeeds
+  C:\tmp\lum_c1c\lumenairy\propagators\asymptotic.py:875: RuntimeWarning: propagate_modal_asymptotic: 183/1024 output pixels (17.9 %) were set to exactly ZERO; dominant reason 'output grid outside the s2 fit box' (output grid outside the s2 fit box: 183).  A zeroed pixel is indistinguishable from a dark one downstream -- an all-zero return is a silent failure, not a dark field.  Out-of-box pixels mean the output grid (or the Newton saddle) left the fit's validity box: restrict the grid, or refit with a larger source_box_half / pupil_box_half.
+    return _finish()
+
+tests/unit/test_audit_misc.py::TestAuditFixesV4_11_1_SubapertureCallSucceeds::test_propagate_subaperture_asymptotic_call_succeeds
+  C:\tmp\lum_c1c\lumenairy\propagators\asymptotic.py:875: RuntimeWarning: propagate_modal_asymptotic: 212/1024 output pixels (20.7 %) were set to exactly ZERO; dominant reason 'output grid outside the s2 fit box' (output grid outside the s2 fit box: 212).  A zeroed pixel is indistinguishable from a dark one downstream -- an all-zero return is a silent failure, not a dark field.  Out-of-box pixels mean the output grid (or the Newton saddle) left the fit's validity box: restrict the grid, or refit with a larger source_box_half / pupil_box_half.
+    return _finish()
+
+tests/unit/test_audit_misc.py::TestAuditFixesV4_11_1_SubapertureCallSucceeds::test_propagate_subaperture_asymptotic_call_succeeds
+  C:\tmp\lum_c1c\lumenairy\propagators\asymptotic.py:875: RuntimeWarning: propagate_modal_asymptotic: 240/1024 output pixels (23.4 %) were set to exactly ZERO; dominant reason 'output grid outside the s2 fit box' (output grid outside the s2 fit box: 240).  A zeroed pixel is indistinguishable from a dark one downstream -- an all-zero return is a silent failure, not a dark field.  Out-of-box pixels mean the output grid (or the Newton saddle) left the fit's validity box: restrict the grid, or refit with a larger source_box_half / pupil_box_half.
+    return _finish()
+
+tests/unit/test_audit_misc.py::TestAuditFixesV4_12_0_round4_tier0_ReadmeCookbookExamples::test_three_minimal_example_2_real_lens_end_to_end
+  C:\tmp\lum_c1c\tests\unit\test_audit_misc.py:1340: UserWarning: thorlabs_lens('AC254-100-C'): the catalogue surface data gives a paraxial EFL of 83.17 mm at 587.6 nm, but the part number specifies 100.0 mm (16.8 % off).  The prescription you just got is NOT the lens the part number names -- check the radii against the vendor drawing before using it for anything quantitative.  (AUDIT_ADVERSARIAL_EXHAUSTIVE 2026-09-11 I6: LA1509-C had exactly this defect, at 2x.)
+    presc = la.thorlabs_lens('AC254-100-C')
+
+tests/unit/test_audit_misc.py::TestAuditFixesV4_12_0_round4_tier0_ReadmeCookbookExamples::test_real_lens_from_zemax_cookbook
+  C:\tmp\lum_c1c\tests\unit\test_audit_misc.py:1395: UserWarning: thorlabs_lens('AC254-200-C'): the catalogue surface data gives a paraxial EFL of 137.40 mm at 587.6 nm, but the part number specifies 200.0 mm (31.3 % off).  The prescription you just got is NOT the lens the part number names -- check the radii against the vendor drawing before using it for anything quantitative.  (AUDIT_ADVERSARIAL_EXHAUSTIVE 2026-09-11 I6: LA1509-C had exactly this defect, at 2x.)
+    rx = la.thorlabs_lens('AC254-200-C')
+
+tests/unit/test_audit_misc.py::TestAuditFixesV4_12_0_round4_tier0_ReadmeCookbookExamples::test_real_lens_from_zemax_cookbook
+  C:\tmp\lum_c1c\tests\unit\test_audit_misc.py:1400: RuntimeWarning: apply_real_lens_traced: the physical aperture (25.400 mm) is 179.98x the beam 1/e^2 diameter (0.141 mm), above the 1.5x aperture:beam ratio beyond which the traced OPL fit can be corrupted by marginal rays the beam never occupies (audit AUDIT_TRACED_PRODUCTION_READINESS_2026_07_24 �4: measured exit-wavefront Strehl 0.998 -> 0.039 across this cliff on a fast singlet).  Whether it bites depends on how aberrated the surfaces are at the aperture edge.  Pass fit_radius_beam_factor=2.0 to restrict the ray-fit domain to the beam (no energy is vignetted by that -- only the fit domain changes), or on_aperture_beam='silent' to acknowledge.
+    E_out_traced = la.apply_real_lens_traced(
+
+tests/unit/test_audit_misc.py::TestAuditFixesV4_12_0_round4_tier0_ReadmeCookbookExamples::test_real_lens_from_zemax_cookbook
+  C:\tmp\lum_c1c\tests\unit\test_audit_misc.py:1400: RuntimeWarning: apply_real_lens_traced: the inverse-characteristic per-pixel evaluator refused to build -- guard GRAM: building the total-degree-14 fit over 22686169 retained samples projects to ~87.3 GB peak (22686169 x 120 float64 design, 4.0 copies) against a 35.3 GB share of this box's 70.5 GB budget (psutil AVAILABLE -- a LIVE reading, so this refusal is not reproducible across boxes or runs) -- raise the budget (lumenairy.set_max_ram), lower exit_degree, or coarsen the launch lattice (ray_subsample) to get the map back.  The call KEEPS the shipped coarse-Newton + map_coordinates upsample path unchanged (refuse, never degrade).  That is a DIFFERENT ANSWER, not a slower one: the incumbent's coarse-lattice upsample carries 6.0e-3..1.08e-2 waves rms of core wavefront error against the exact-trace oracle where this model carries ~2e-12, and on design 121 the two differ by 0.8 % in peak and 3.350 vs 3.450 um in banner FWHM.  This guard is priced against the RESOLVED RAM BUDGET (70.5 GB here): with no lumenairy.set_max_ram override that is psutil's live AVAILABLE reading, so the refusal -- and hence the returned field -- depends on what else the machine is doing.  Call lumenairy.set_max_ram(<bytes>) to make the decision reproducible across boxes and runs.  Set lumenairy.elements._lens_imap.INVERSE_MAP_GUARD = 'silent' to stop reporting it, or TRACED_INVERSE_MAP = False to stop attempting the build at all (that is the fail-before switch and it is byte-identical to this outcome).
+    E_out_traced = la.apply_real_lens_traced(
+
+tests/unit/test_audit_misc.py::TestAuditFixesV4_12_1_coverage_StopIndexWarn::test_out_of_range_stop_index_now_raises
+  C:\tmp\lum_c1c\tests\unit\test_audit_misc.py:2290: UserWarning: apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=32, dx=10.000 um, semi=0.160 mm). Largest is system aperture_diameter with semi_diameter=2.500 mm (+2.340 mm beyond the grid); the field will be truncated at the grid edge during propagation, silently dropping energy the real lens would have transmitted. Consider increasing N or dx so N*dx/2 >= max(semi_diameter). Affected surfaces: system aperture_diameter=2.50mm.
+    la.apply_real_lens(E_in, prescription=rx,
+
+tests/unit/test_audit_misc.py::TestAuditFixesV4_13_0_jax_dtype_dy_siblings_P1CSourceDyThreading::test_source_point_source_factory_preserves_dy
+  C:\tmp\lum_c1c\lumenairy\sources\core.py:3270: RuntimeWarning: create_point_source: spherical-wave edge local-NA clearly exceeds the spatial Nyquist limit lambda/(2*dx) (x: 0.080 vs 0.063; y: 0.143 vs 0.035) -- the outer field aliases to a spurious smaller angle.  Increase |z0| or dx, or reduce N.
+    E, _, _ = create_point_source(
+
+tests/unit/test_audit_misc.py::TestAuditFixesV4_13_0_jax_dtype_dy_siblings_P1CSourceFactoryDispatcherPin::test_factory_threads_dy[point_source]
+tests/unit/test_v4_15_agent_b.py::TestP2FacFactoryValidationMetaPin::test_classmethod_pin_still_passes_for_normalised_5
+  C:\tmp\lum_c1c\lumenairy\sources\core.py:3270: RuntimeWarning: create_point_source: spherical-wave edge local-NA clearly exceeds the spatial Nyquist limit lambda/(2*dx) (x: 0.080 vs 0.063; y: 0.173 vs 0.029) -- the outer field aliases to a spurious smaller angle.  Increase |z0| or dx, or reduce N.
+    E, _, _ = create_point_source(
+
+tests/unit/test_audit_misc.py::test_d2_codev_seq_export_roundtrip_preserves_bfl
+  C:\tmp\lum_c1c\tests\unit\test_audit_misc.py:6147: UserWarning: load_codev_seq('roundtrip.seq'): glasses not in GLASS_REGISTRY: ['BK7'].  Add them before propagating. Example:
+    GLASS_REGISTRY['GLASS_NAME'] = ('specs', 'CATALOG', 'PAGE')
+  Browse refractiveindex.info to find the correct path.  CODE V names are often catalogue-suffixed ('N-BK7_SCHOTT') or 6-digit codes ('517642.514'), neither of which is a registry key.
+    pres_back = load_codev_seq(fpath)
+
+tests/unit/test_audit_misc.py::test_d3_quadoa_qos_roundtrip_preserves_bfl
+  C:\tmp\lum_c1c\tests\unit\test_audit_misc.py:6176: UserWarning: load_quadoa_qos('roundtrip.qos'): glasses not in GLASS_REGISTRY: ['BK7'].  Add them before propagating. Example:  GLASS_REGISTRY['GLASS_NAME'] = ('specs', 'CATALOG', 'PAGE').  Browse refractiveindex.info to find the correct path.
+    pres_back = load_quadoa_qos(fpath)
+
+tests/unit/test_audit_optimize.py::TestAuditFixesV4_13_2_agent_c_C3DualAnnealingCancellation::test_dual_annealing_terminates_quickly_when_cancelled
+  C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\scipy\optimize\_dual_annealing.py:381: UserWarning: apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=32, dx=10.000 um, semi=0.160 mm). Largest is system aperture_diameter with semi_diameter=6.000 mm (+5.840 mm beyond the grid); the field will be truncated at the grid edge during propagation, silently dropping energy the real lens would have transmitted. Consider increasing N or dx so N*dx/2 >= max(semi_diameter). Affected surfaces: system aperture_diameter=6.00mm.
+    return self.func(x, *self.args)
+
+tests/unit/test_audit_optimize.py::TestAuditFixesV4_13_2_agent_c_C3DualAnnealingCancellation::test_dual_annealing_terminates_quickly_when_cancelled
+  C:\tmp\lum_c1c\tests\unit\test_audit_optimize.py:858: UserWarning: apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=32, dx=10.000 um, semi=0.160 mm). Largest is system aperture_diameter with semi_diameter=6.000 mm (+5.840 mm beyond the grid); the field will be truncated at the grid edge during propagation, silently dropping energy the real lens would have transmitted. Consider increasing N or dx so N*dx/2 >= max(semi_diameter). Affected surfaces: system aperture_diameter=6.00mm.
+    res = design_optimize(
+
+tests/unit/test_audit_optimize.py::TestAuditFixesV4_13_2_agent_c_C4WrapperContextX::test_multi_field_threads_x
+  C:\tmp\lum_c1c\tests\unit\test_audit_optimize.py:1012: UserWarning: apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=32, dx=10.000 um, semi=0.160 mm). Largest is system aperture_diameter with semi_diameter=6.000 mm (+5.840 mm beyond the grid); the field will be truncated at the grid edge during propagation, silently dropping energy the real lens would have transmitted. Consider increasing N or dx so N*dx/2 >= max(semi_diameter). Affected surfaces: system aperture_diameter=6.00mm.
+    mf.evaluate(ctx)
+
+tests/unit/test_audit_optimize.py::TestAuditFixesV4_13_2_agent_c_C4WrapperContextX::test_tolerance_aware_threads_x
+  C:\tmp\lum_c1c\tests\unit\test_audit_optimize.py:1061: UserWarning: apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=32, dx=10.000 um, semi=0.160 mm). Largest is system aperture_diameter with semi_diameter=6.000 mm (+5.840 mm beyond the grid); the field will be truncated at the grid edge during propagation, silently dropping energy the real lens would have transmitted. Consider increasing N or dx so N*dx/2 >= max(semi_diameter). Affected surfaces: system aperture_diameter=6.00mm.
+    tol.evaluate(ctx)
+
+tests/unit/test_audit_propagation.py::TestAuditFixesV4_11_2_hfpi_hf_HfpiThroughPrescriptionFiniteConjugate::test_finite_conjugate_returns_nonzero
+  C:\tmp\lum_c1c\tests\unit\test_audit_propagation.py:151: RuntimeWarning: propagate_hfpi_through_prescription: the returned amplitudes are NOT photometric, because no z_output was given, so the bundle is binned where the surface list leaves it and the last leg has zero length (pass z_output=<the plane you want the field on>); and this prescription puts an element with power -- a curved surface, an index step, a tilt, a fold or a grating order -- between the emissions and the output plane, where the system's own Jacobian applies instead of the free-space ray-tube relation the per-path factor carries (measured 4879x at a 19.41 mm singlet's image plane, with the spot shape still close); normalisation='physical' is honoured there if asked for, and warns with those numbers.  The per-path r/(dx_out^2 cos theta_out) Huygens-Fresnel binning Jacobian (audit K13, applied by the free-space entry points) is therefore not evaluable here and the raw path sum is what comes back.  Fringe positions and interference contrast are unaffected; re-normalise against a known-amplitude reference (e.g. ASM on the same geometry) for anything photometric.  A walk with z_output on a prescription whose legs are all free space (flat, index-matched, unsteered surfaces) and whose every re-emission has a non-zero incoming leg is photometric and does not warn.
+    out = propagate_hfpi_through_prescription(
+
+tests/unit/test_audit_propagation.py::TestAuditFixesV4_11_2_hfpi_hf_HfpiThroughPrescriptionFiniteConjugate::test_finite_conjugate_returns_nonzero
+  C:\tmp\lum_c1c\lumenairy\propagators\hfpi.py:2006: RuntimeWarning: accumulate_to_grid: HFPI is UNDER-SAMPLED for this output grid: of 4096 paths only 527 landed on the 32x32 grid (12.87%), i.e. 0.515 landed paths per output pixel.  Below 1 per pixel most pixels are EXACTLY ZERO and the returned array is the Monte-Carlo sampling envelope plus shot noise, not a propagated field -- measured on a 128^2 probe at the default cone, two seeds of the same physics agreed to an intensity-shape fidelity of 0.005.  The docstring's guarantee that 'fringe positions and interference contrast are correct' does NOT hold here.  Two levers: raise n_paths, and -- usually far more effective -- narrow ``cone_half_angle`` from its ~90-degree default (a full forward hemisphere) toward the angle the output grid actually subtends, so paths are not spent where they cannot land.  NOTE one path per pixel is necessary, not sufficient: the same probe still only reached seed-to-seed fidelity 0.44 at ~12 paths per pixel.  Pass on_undersampled='silent' to acknowledge.
+    return accumulate_to_grid(
+
+tests/unit/test_audit_propagation.py::TestGbdHusimiDirectionSampling::test_tilted_source_walks_off_with_direction_sampling
+  C:\tmp\lum_c1c\tests\unit\test_audit_propagation.py:1779: RuntimeWarning: GBD: the input field carries a mean transverse tilt of ~0.0246 (direction cosine) but direction_sampling=False (the default). Position-only beamlets carry that tilt in the amplitude, not the launch direction, so an already-tilted / diverging source does not walk off correctly and can lose significant energy on propagation. Pass direction_sampling=True (Husimi) for a source that is already tilted or diverging at the input plane.
+    E_pos = np.asarray(propagate_gbd_freespace(
+
+tests/unit/test_audit_propagation.py::test_shared_index_matches_double_call_default_centre
+  C:\tmp\lum_c1c\tests\unit\test_audit_propagation.py:2787: RuntimeWarning: accumulate_vector_to_grid: HFPI is UNDER-SAMPLED for this output grid: of 3000 paths only 2845 landed on the 64x64 grid (94.83%), i.e. 0.695 landed paths per output pixel.  Below 1 per pixel most pixels are EXACTLY ZERO and the returned array is the Monte-Carlo sampling envelope plus shot noise, not a propagated field -- measured on a 128^2 probe at the default cone, two seeds of the same physics agreed to an intensity-shape fidelity of 0.005.  The docstring's guarantee that 'fringe positions and interference contrast are correct' does NOT hold here.  Two levers: raise n_paths, and -- usually far more effective -- narrow ``cone_half_angle`` from its ~90-degree default (a full forward hemisphere) toward the angle the output grid actually subtends, so paths are not spent where they cannot land.  NOTE one path per pixel is necessary, not sufficient: the same probe still only reached seed-to-seed fidelity 0.44 at ~12 paths per pixel.  Pass on_undersampled='silent' to acknowledge.
+    Ex_new, Ey_new = accumulate_vector_to_grid(
+
+tests/unit/test_audit_propagation.py::test_shared_index_matches_double_call_default_centre
+  C:\tmp\lum_c1c\tests\unit\test_audit_propagation.py:2773: RuntimeWarning: accumulate_to_grid: HFPI is UNDER-SAMPLED for this output grid: of 3000 paths only 2845 landed on the 64x64 grid (94.83%), i.e. 0.695 landed paths per output pixel.  Below 1 per pixel most pixels are EXACTLY ZERO and the returned array is the Monte-Carlo sampling envelope plus shot noise, not a propagated field -- measured on a 128^2 probe at the default cone, two seeds of the same physics agreed to an intensity-shape fidelity of 0.005.  The docstring's guarantee that 'fringe positions and interference contrast are correct' does NOT hold here.  Two levers: raise n_paths, and -- usually far more effective -- narrow ``cone_half_angle`` from its ~90-degree default (a full forward hemisphere) toward the angle the output grid actually subtends, so paths are not spent where they cannot land.  NOTE one path per pixel is necessary, not sufficient: the same probe still only reached seed-to-seed fidelity 0.44 at ~12 paths per pixel.  Pass on_undersampled='silent' to acknowledge.
+    Ex_out = accumulate_to_grid(
+
+tests/unit/test_audit_propagation.py::test_shared_index_matches_double_call_default_centre
+  C:\tmp\lum_c1c\tests\unit\test_audit_propagation.py:2776: RuntimeWarning: accumulate_to_grid: HFPI is UNDER-SAMPLED for this output grid: of 3000 paths only 2845 landed on the 64x64 grid (94.83%), i.e. 0.695 landed paths per output pixel.  Below 1 per pixel most pixels are EXACTLY ZERO and the returned array is the Monte-Carlo sampling envelope plus shot noise, not a propagated field -- measured on a 128^2 probe at the default cone, two seeds of the same physics agreed to an intensity-shape fidelity of 0.005.  The docstring's guarantee that 'fringe positions and interference contrast are correct' does NOT hold here.  Two levers: raise n_paths, and -- usually far more effective -- narrow ``cone_half_angle`` from its ~90-degree default (a full forward hemisphere) toward the angle the output grid actually subtends, so paths are not spent where they cannot land.  NOTE one path per pixel is necessary, not sufficient: the same probe still only reached seed-to-seed fidelity 0.44 at ~12 paths per pixel.  Pass on_undersampled='silent' to acknowledge.
+    Ey_out = accumulate_to_grid(
+
+tests/unit/test_audit_propagation.py::test_shared_index_matches_double_call_off_centre
+  C:\tmp\lum_c1c\tests\unit\test_audit_propagation.py:2807: RuntimeWarning: accumulate_vector_to_grid: HFPI is UNDER-SAMPLED for this output grid: of 2000 paths only 1734 landed on the 48x64 grid (86.70%), i.e. 0.564 landed paths per output pixel.  Below 1 per pixel most pixels are EXACTLY ZERO and the returned array is the Monte-Carlo sampling envelope plus shot noise, not a propagated field -- measured on a 128^2 probe at the default cone, two seeds of the same physics agreed to an intensity-shape fidelity of 0.005.  The docstring's guarantee that 'fringe positions and interference contrast are correct' does NOT hold here.  Two levers: raise n_paths, and -- usually far more effective -- narrow ``cone_half_angle`` from its ~90-degree default (a full forward hemisphere) toward the angle the output grid actually subtends, so paths are not spent where they cannot land.  NOTE one path per pixel is necessary, not sufficient: the same probe still only reached seed-to-seed fidelity 0.44 at ~12 paths per pixel.  Pass on_undersampled='silent' to acknowledge.
+    Ex_new, Ey_new = accumulate_vector_to_grid(
+
+tests/unit/test_audit_propagation.py::test_shared_index_matches_double_call_off_centre
+  C:\tmp\lum_c1c\tests\unit\test_audit_propagation.py:2773: RuntimeWarning: accumulate_to_grid: HFPI is UNDER-SAMPLED for this output grid: of 2000 paths only 1734 landed on the 48x64 grid (86.70%), i.e. 0.564 landed paths per output pixel.  Below 1 per pixel most pixels are EXACTLY ZERO and the returned array is the Monte-Carlo sampling envelope plus shot noise, not a propagated field -- measured on a 128^2 probe at the default cone, two seeds of the same physics agreed to an intensity-shape fidelity of 0.005.  The docstring's guarantee that 'fringe positions and interference contrast are correct' does NOT hold here.  Two levers: raise n_paths, and -- usually far more effective -- narrow ``cone_half_angle`` from its ~90-degree default (a full forward hemisphere) toward the angle the output grid actually subtends, so paths are not spent where they cannot land.  NOTE one path per pixel is necessary, not sufficient: the same probe still only reached seed-to-seed fidelity 0.44 at ~12 paths per pixel.  Pass on_undersampled='silent' to acknowledge.
+    Ex_out = accumulate_to_grid(
+
+tests/unit/test_audit_propagation.py::test_shared_index_matches_double_call_off_centre
+  C:\tmp\lum_c1c\tests\unit\test_audit_propagation.py:2776: RuntimeWarning: accumulate_to_grid: HFPI is UNDER-SAMPLED for this output grid: of 2000 paths only 1734 landed on the 48x64 grid (86.70%), i.e. 0.564 landed paths per output pixel.  Below 1 per pixel most pixels are EXACTLY ZERO and the returned array is the Monte-Carlo sampling envelope plus shot noise, not a propagated field -- measured on a 128^2 probe at the default cone, two seeds of the same physics agreed to an intensity-shape fidelity of 0.005.  The docstring's guarantee that 'fringe positions and interference contrast are correct' does NOT hold here.  Two levers: raise n_paths, and -- usually far more effective -- narrow ``cone_half_angle`` from its ~90-degree default (a full forward hemisphere) toward the angle the output grid actually subtends, so paths are not spent where they cannot land.  NOTE one path per pixel is necessary, not sufficient: the same probe still only reached seed-to-seed fidelity 0.44 at ~12 paths per pixel.  Pass on_undersampled='silent' to acknowledge.
+    Ey_out = accumulate_to_grid(
+
+tests/unit/test_audit_propagation.py::test_shared_index_default_output_dtype
+  C:\tmp\lum_c1c\tests\unit\test_audit_propagation.py:2822: RuntimeWarning: accumulate_vector_to_grid: HFPI is UNDER-SAMPLED for this output grid: of 500 paths only 122 landed on the 32x32 grid (24.40%), i.e. 0.119 landed paths per output pixel.  Below 1 per pixel most pixels are EXACTLY ZERO and the returned array is the Monte-Carlo sampling envelope plus shot noise, not a propagated field -- measured on a 128^2 probe at the default cone, two seeds of the same physics agreed to an intensity-shape fidelity of 0.005.  The docstring's guarantee that 'fringe positions and interference contrast are correct' does NOT hold here.  Two levers: raise n_paths, and -- usually far more effective -- narrow ``cone_half_angle`` from its ~90-degree default (a full forward hemisphere) toward the angle the output grid actually subtends, so paths are not spent where they cannot land.  NOTE one path per pixel is necessary, not sufficient: the same probe still only reached seed-to-seed fidelity 0.44 at ~12 paths per pixel.  Pass on_undersampled='silent' to acknowledge.
+    Ex_new, Ey_new = accumulate_vector_to_grid(
+
+tests/unit/test_audit_propagation.py::test_shared_index_all_dead_paths
+  C:\tmp\lum_c1c\tests\unit\test_audit_propagation.py:2838: RuntimeWarning: accumulate_vector_to_grid: HFPI is UNDER-SAMPLED for this output grid: of 200 paths only 0 landed on the 16x16 grid (0.00%), i.e. 0 landed paths per output pixel.  Below 1 per pixel most pixels are EXACTLY ZERO and the returned array is the Monte-Carlo sampling envelope plus shot noise, not a propagated field -- measured on a 128^2 probe at the default cone, two seeds of the same physics agreed to an intensity-shape fidelity of 0.005.  The docstring's guarantee that 'fringe positions and interference contrast are correct' does NOT hold here.  Two levers: raise n_paths, and -- usually far more effective -- narrow ``cone_half_angle`` from its ~90-degree default (a full forward hemisphere) toward the angle the output grid actually subtends, so paths are not spent where they cannot land.  NOTE one path per pixel is necessary, not sufficient: the same probe still only reached seed-to-seed fidelity 0.44 at ~12 paths per pixel.  Pass on_undersampled='silent' to acknowledge.
+    Ex_new, Ey_new = accumulate_vector_to_grid(
+
+tests/unit/test_gbd_feature_complete.py::test_world_output_plane_focuses_folded_periscope
+  C:\tmp\lum_c1c\lumenairy\propagators\gbd.py:1663: RuntimeWarning: invalid value encountered in cast
+    W = np.ceil(Wf).astype(np.int64)
+
+tests/unit/test_niche_s11_sibling_deferred.py::test_s11_1_flat_fold_leaves_the_traced_spherical_magnitude_alone
+  C:\tmp\lum_c1c\lumenairy\raytrace\seidel.py:1053: UserWarning: find_stop: no surface flagged is_stop=True and none have a finite semi_diameter; defaulting to surface 0.  Set is_stop=True on the intended aperture-stop surface for correct chief-ray behaviour.
+    stop_index = find_stop(surfaces)
+
+tests/unit/test_niche_s11_sibling_deferred.py::test_s11_1_flat_fold_leaves_the_traced_spherical_magnitude_alone
+  C:\tmp\lum_c1c\lumenairy\raytrace\seidel.py:782: UserWarning: compute_pupils: stop surface at index 0 has infinite semi_diameter; pupil radii will be reported as NaN.  Declare a finite semi_diameter to get meaningful pupil sizes.
+    pupils = compute_pupils(surfaces, wavelength, stop_index=stop_index)
+
+tests/unit/test_rcwa.py::test_wood_anomaly_does_not_crash
+tests/unit/test_rcwa.py::test_wavelength_sweep_matches_per_call
+  C:\tmp\lum_c1c\lumenairy\elements\rcwa\_core.py:1797: WoodNudgeWarning: rcwa_efficiency_1d: a diffracted order sits EXACTLY at cut-off (Wood / Rayleigh anomaly) at the requested wavelength 7e-07 m, where this solver's half-space mode basis is degenerate (kz = 0 gives two coincident modes and a singular interface match).  The result is the SYMMETRIC AVERAGE of solves at 6.999999993e-07 m and 7.000000007000001e-07 m (relative shift +/-1.000e-09), which is continuous through the anomaly; the residual against the exact-wavelength limit falls as sqrt(shift) and is ~6.7e-06 relative on the Lambda = lambda Moharam mount, and an EXACTLY grazing order picks up ~sqrt(shift) of power where the exact answer is 0.  Read wl_eff on the result for the two wavelengths actually solved.
+    return fn(*args, **kwargs)
+
+tests/unit/test_rcwa.py::test_p2a_layer_mode_grazing_pin[te]
+tests/unit/test_rcwa.py::test_p2a_layer_mode_grazing_pin[tm]
+  C:\tmp\lum_c1c\lumenairy\elements\rcwa\_core.py:1797: WoodNudgeWarning: rcwa_efficiency_1d: a diffracted order sits EXACTLY at cut-off (Wood / Rayleigh anomaly) at the requested wavelength 5.5e-07 m, where this solver's half-space mode basis is degenerate (kz = 0 gives two coincident modes and a singular interface match).  The result is the SYMMETRIC AVERAGE of solves at 5.4999999945e-07 m and 5.500000005500001e-07 m (relative shift +/-1.000e-09), which is continuous through the anomaly; the residual against the exact-wavelength limit falls as sqrt(shift) and is ~6.7e-06 relative on the Lambda = lambda Moharam mount, and an EXACTLY grazing order picks up ~sqrt(shift) of power where the exact answer is 0.  Read wl_eff on the result for the two wavelengths actually solved.
+    return fn(*args, **kwargs)
+
+tests/unit/test_rcwa.py::test_p2a_layer_mode_grazing_pin[te]
+tests/unit/test_rcwa.py::test_p2a_layer_mode_grazing_pin[tm]
+  C:\tmp\lum_c1c\lumenairy\elements\rcwa\_core.py:1797: WoodNudgeWarning: rcwa_jones_1d: a diffracted order sits EXACTLY at cut-off (Wood / Rayleigh anomaly) at the requested wavelength 5.5e-07 m, where this solver's half-space mode basis is degenerate (kz = 0 gives two coincident modes and a singular interface match).  The result is the SYMMETRIC AVERAGE of solves at 5.4999999945e-07 m and 5.500000005500001e-07 m (relative shift +/-1.000e-09), which is continuous through the anomaly; the residual against the exact-wavelength limit falls as sqrt(shift) and is ~6.7e-06 relative on the Lambda = lambda Moharam mount, and an EXACTLY grazing order picks up ~sqrt(shift) of power where the exact answer is 0.  Read wl_eff on the result for the two wavelengths actually solved.
+    return fn(*args, **kwargs)
+
+tests/unit/test_rcwa.py::test_p2b_non_propagating_incidence_raises[rcwa_efficiency_1d-None]
+  C:\tmp\lum_c1c\lumenairy\elements\rcwa\_core.py:1797: UserWarning: rcwa_efficiency_1d: LOSSY incidence medium (public eps_superstrate = -3.75+2j).  R and T are each normalised by their own z-flux, but the incident/reflected cross-term in an absorbing half-space also carries net flux, so R + T != 1 by construction (measured +0.2% at Im(n_sup)=0.01, +2.3% at 0.1) and the energy tripwire cannot see it.  The PER-ORDER efficiencies are still exact; treat the sums as indicative.  Use a lossless incidence medium for energy accounting.
+    return fn(*args, **kwargs)
+
+tests/unit/test_rcwa.py::test_p2b_non_propagating_incidence_raises[rcwa_efficiency_2d-None]
+  C:\tmp\lum_c1c\lumenairy\elements\rcwa\_core.py:1797: UserWarning: rcwa_efficiency_2d: LOSSY incidence medium (public eps_superstrate = -3.75+2j).  R and T are each normalised by their own z-flux, but the incident/reflected cross-term in an absorbing half-space also carries net flux, so R + T != 1 by construction (measured +0.2% at Im(n_sup)=0.01, +2.3% at 0.1) and the energy tripwire cannot see it.  The PER-ORDER efficiencies are still exact; treat the sums as indicative.  Use a lossless incidence medium for energy accounting.
+    return fn(*args, **kwargs)
+
+tests/unit/test_rcwa.py::test_jax_wood_anomaly_no_nan
+  C:\tmp\lum_c1c\lumenairy\elements\rcwa\_core.py:1797: WoodNudgeWarning: rcwa_efficiency_1d: a diffracted order sits EXACTLY at cut-off (Wood / Rayleigh anomaly) at the requested wavelength 1e-06 m, where this solver's half-space mode basis is degenerate (kz = 0 gives two coincident modes and a singular interface match).  The result is the SYMMETRIC AVERAGE of solves at 9.99999999e-07 m and 1.000000001e-06 m (relative shift +/-1.000e-09), which is continuous through the anomaly; the residual against the exact-wavelength limit falls as sqrt(shift) and is ~6.7e-06 relative on the Lambda = lambda Moharam mount, and an EXACTLY grazing order picks up ~sqrt(shift) of power where the exact answer is 0.  Read wl_eff on the result for the two wavelengths actually solved.
+    return fn(*args, **kwargs)
+
+tests/unit/test_screen_obliquity.py::test_the_jones_wrapper_is_byte_identical_without_a_carrier
+  C:\tmp\lum_c1c\tests\unit\test_screen_obliquity.py:992: UserWarning: apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=128, dx=20.000 um, semi=1.280 mm). Largest is system aperture_diameter with semi_diameter=1.500 mm (+0.220 mm beyond the grid); the field will be truncated at the grid edge during propagation, silently dropping energy the real lens would have transmitted. Consider increasing N or dx so N*dx/2 >= max(semi_diameter). Affected surfaces: system aperture_diameter=1.50mm.
+    a.apply_real_lens(presc, LAM)
+
+tests/unit/test_screen_obliquity.py::test_the_jones_wrapper_is_byte_identical_without_a_carrier
+  C:\tmp\lum_c1c\tests\unit\test_screen_obliquity.py:993: UserWarning: apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=128, dx=20.000 um, semi=1.280 mm). Largest is system aperture_diameter with semi_diameter=1.500 mm (+0.220 mm beyond the grid); the field will be truncated at the grid edge during propagation, silently dropping energy the real lens would have transmitted. Consider increasing N or dx so N*dx/2 >= max(semi_diameter). Affected surfaces: system aperture_diameter=1.50mm.
+    want = apply_real_lens(E, prescription=presc, wavelength=LAM, dx=dx,
+
+tests/unit/test_v4_14_0_dispatcher_pin_apply_lens.py::TestDyNoneAcceptanceDispatcherPin::test_variant_accepts_dy_none[apply_real_lens_traced]
+  C:\tmp\lum_c1c\tests\unit\test_v4_14_0_dispatcher_pin_apply_lens.py:338: RuntimeWarning: apply_real_lens_traced: the exit beam converges at NA_exit=0.0832 (n_exit=1.00000 x sin(theta)=0.0832, measured in the medium after the last surface), so the exit wavefront needs dx <= lambda/(2*NA_exit) = 3.80 um but the grid has dx = 125.00 um.  The beyond-Nyquist annulus of the exit phase ALIASES: far-halo energy lands at wrong radii, so r^2-weighted spot metrics (r2m / second moments) read low while EE50/EE80 stay plausible.  Use a finer grid (dx <= 3.80 um) for halo-faithful results, or pass on_undersample="silent" to suppress.
+    out = fn(E_in, prescription=rx, wavelength=wavelength,
+
+tests/unit/test_v4_14_0_dispatcher_pin_apply_lens.py::TestDyNoneAcceptanceDispatcherPin::test_variant_accepts_dy_none[apply_real_lens_maslov]
+  C:\tmp\lum_c1c\tests\unit\test_v4_14_0_dispatcher_pin_apply_lens.py:338: RuntimeWarning: apply_real_lens_maslov: integration_method='auto' resolved to 'stationary_phase' because uniform quadrature would need n_v2 ~ 587 samples (cap 256).  The leading-order saddle evaluation is only accurate where the integrand really is oscillatory -- near the lens EXIT plane of a focusing system it is not (the v2-Hessian and the Jacobian both collapse there) and it can be O(1) wrong.  For an observation plane at or near the exit vertex pass integration_method='quadrature' with an explicit n_v2, or use apply_real_lens_traced / apply_real_lens_fga; for a plane near focus pass output_plane_distance= and keep this evaluator.
+    out = fn(E_in, prescription=rx, wavelength=wavelength,
+
+tests/unit/test_v4_14_0_dispatcher_pin_apply_lens.py::TestDyNeDxBehaviourDispatcherPin::test_variant_dy_ne_dx_behaviour[apply_real_lens_maslov]
+  C:\tmp\lum_c1c\tests\unit\test_v4_14_0_dispatcher_pin_apply_lens.py:393: RuntimeWarning: apply_real_lens_maslov: integration_method='auto' resolved to 'stationary_phase' because uniform quadrature would need n_v2 ~ 587 samples (cap 256).  The leading-order saddle evaluation is only accurate where the integrand really is oscillatory -- near the lens EXIT plane of a focusing system it is not (the v2-Hessian and the Jacobian both collapse there) and it can be O(1) wrong.  For an observation plane at or near the exit vertex pass integration_method='quadrature' with an explicit n_v2, or use apply_real_lens_traced / apply_real_lens_fga; for a plane near focus pass output_plane_distance= and keep this evaluator.
+    out = fn(E_in, prescription=rx, wavelength=wavelength,
+
+tests/unit/test_v4_14_0_dispatcher_pin_apply_lens.py::TestDtypePreservationDispatcherPin::test_complex64_input_preserves_complex64_output[apply_real_lens_traced]
+  C:\tmp\lum_c1c\tests\unit\test_v4_14_0_dispatcher_pin_apply_lens.py:528: RuntimeWarning: apply_real_lens_traced: the exit beam converges at NA_exit=0.0832 (n_exit=1.00000 x sin(theta)=0.0832, measured in the medium after the last surface), so the exit wavefront needs dx <= lambda/(2*NA_exit) = 3.80 um but the grid has dx = 125.00 um.  The beyond-Nyquist annulus of the exit phase ALIASES: far-halo energy lands at wrong radii, so r^2-weighted spot metrics (r2m / second moments) read low while EE50/EE80 stay plausible.  Use a finer grid (dx <= 3.80 um) for halo-faithful results, or pass on_undersample="silent" to suppress.
+    out = fn(E_in, prescription=rx, wavelength=wavelength,
+
+tests/unit/test_v4_14_0_dispatcher_pin_apply_lens.py::TestDtypePreservationDispatcherPin::test_complex64_input_preserves_complex64_output[apply_real_lens_maslov]
+  C:\tmp\lum_c1c\tests\unit\test_v4_14_0_dispatcher_pin_apply_lens.py:528: RuntimeWarning: apply_real_lens_maslov: integration_method='auto' resolved to 'stationary_phase' because uniform quadrature would need n_v2 ~ 587 samples (cap 256).  The leading-order saddle evaluation is only accurate where the integrand really is oscillatory -- near the lens EXIT plane of a focusing system it is not (the v2-Hessian and the Jacobian both collapse there) and it can be O(1) wrong.  For an observation plane at or near the exit vertex pass integration_method='quadrature' with an explicit n_v2, or use apply_real_lens_traced / apply_real_lens_fga; for a plane near focus pass output_plane_distance= and keep this evaluator.
+    out = fn(E_in, prescription=rx, wavelength=wavelength,
+
+tests/unit/test_v4_14_0_dispatcher_pin_hfpi.py::TestSpawnRngIndependenceDispatcherPin::test_freespace_aperture_independence[scalar_freespace_aperture]
+  C:\tmp\lum_c1c\lumenairy\propagators\hfpi.py:1135: RuntimeWarning: accumulate_to_grid: HFPI is UNDER-SAMPLED for this output grid: of 256 paths only 0 landed on the 16x16 grid (0.00%), i.e. 0 landed paths per output pixel.  Below 1 per pixel most pixels are EXACTLY ZERO and the returned array is the Monte-Carlo sampling envelope plus shot noise, not a propagated field -- measured on a 128^2 probe at the default cone, two seeds of the same physics agreed to an intensity-shape fidelity of 0.005.  The docstring's guarantee that 'fringe positions and interference contrast are correct' does NOT hold here.  Two levers: raise n_paths, and -- usually far more effective -- narrow ``cone_half_angle`` from its ~90-degree default (a full forward hemisphere) toward the angle the output grid actually subtends, so paths are not spent where they cannot land.  NOTE one path per pixel is necessary, not sufficient: the same probe still only reached seed-to-seed fidelity 0.44 at ~12 paths per pixel.  Pass on_undersampled='silent' to acknowledge.
+    return accumulate_to_grid(
+
+tests/unit/test_v4_14_0_dispatcher_pin_hfpi.py::TestSpawnRngIndependenceDispatcherPin::test_freespace_aperture_independence[vectorial_freespace_aperture]
+  C:\tmp\lum_c1c\lumenairy\propagators\vectorial_hfpi.py:734: RuntimeWarning: accumulate_vector_to_grid: HFPI is UNDER-SAMPLED for this output grid: of 256 paths only 0 landed on the 16x16 grid (0.00%), i.e. 0 landed paths per output pixel.  Below 1 per pixel most pixels are EXACTLY ZERO and the returned array is the Monte-Carlo sampling envelope plus shot noise, not a propagated field -- measured on a 128^2 probe at the default cone, two seeds of the same physics agreed to an intensity-shape fidelity of 0.005.  The docstring's guarantee that 'fringe positions and interference contrast are correct' does NOT hold here.  Two levers: raise n_paths, and -- usually far more effective -- narrow ``cone_half_angle`` from its ~90-degree default (a full forward hemisphere) toward the angle the output grid actually subtends, so paths are not spent where they cannot land.  NOTE one path per pixel is necessary, not sufficient: the same probe still only reached seed-to-seed fidelity 0.44 at ~12 paths per pixel.  Pass on_undersampled='silent' to acknowledge.
+    return accumulate_vector_to_grid(
+
+tests/unit/test_v4_15_1_agent_g_application.py::TestFreeSpaceDyThreading::test_freespace_threads_dy_for_anamorphic_chain
+  C:\tmp\lum_c1c\lumenairy\algebra\base.py:370: UserWarning: FreeSpace._apply: propagating z=0.05 m with the pitch-preserving method='asm' on a 64x64 grid of dx=2e-06 m / dy=4e-06 m at lambda=6.33e-07 m.  That is past z_max = N*dx^2/lambda = 0.000404423 m, and the step returned only 0.8543 of the power it was handed: the beam has outgrown the fixed +-6.4e-05 m window and is being CLIPPED at the grid edge -- silently, and the lost energy does not come back.  Measured on a 20 um waist at N=256, dx=8 um, 633 nm, z=500 mm: 'asm' retains 0.096 of the power and reads the 1/e^2 radius 79 % low, while a resampling kernel retains 0.9998 and is right to 0.07 %.  Either this branch forces the pitch-preserving 'asm' because the resampling kernels are square-grid only, so the remedy here is to enlarge N*dx (or to propagate in stages), or enlarge the grid so that N*dx^2/lambda >= z.  (Reported once per FreeSpace instance.)
+    E_out, dx_out, dy_out = self._apply(
+
+tests/unit/test_v4_15_1_agent_g_examples.py::TestExample4fImaging::test_build_4f_inspect_and_apply
+  C:\tmp\lum_c1c\lumenairy\algebra\base.py:520: UserWarning: FreeSpace._apply: propagating z=0.2 m with the pitch-preserving method='asm' on a 256x256 grid of dx=2e-06 m / dy=2e-06 m at lambda=6.33e-07 m.  That is past z_max = N*dx^2/lambda = 0.00161769 m, and the step returned only 0.9370 of the power it was handed: the beam has outgrown the fixed +-0.000256 m window and is being CLIPPED at the grid edge -- silently, and the lost energy does not come back.  Measured on a 20 um waist at N=256, dx=8 um, 633 nm, z=500 mm: 'asm' retains 0.096 of the power and reads the 1/e^2 radius 79 % low, while a resampling kernel retains 0.9998 and is right to 0.07 %.  Either pass method='auto' (the dispatcher then picks a RESAMPLING kernel, which widens the window at a coarser pitch and gets the far field right -- at the cost of returning a grid the ABCD does not describe; read dx_out off the return), or enlarge the grid so that N*dx^2/lambda >= z.  (Reported once per FreeSpace instance.)
+    E, dx, dy = op._apply(E, dx=dx, dy=dy, wavelength=wavelength)
+
+tests/unit/test_v4_15_1_agent_g_examples.py::TestExample4fImaging::test_build_4f_inspect_and_apply
+  C:\tmp\lum_c1c\lumenairy\algebra\base.py:520: UserWarning: FreeSpace._apply: propagating z=0.1 m with the pitch-preserving method='asm' on a 256x256 grid of dx=2e-06 m / dy=2e-06 m at lambda=6.33e-07 m.  That is past z_max = N*dx^2/lambda = 0.00161769 m, and the step returned only 0.9458 of the power it was handed: the beam has outgrown the fixed +-0.000256 m window and is being CLIPPED at the grid edge -- silently, and the lost energy does not come back.  Measured on a 20 um waist at N=256, dx=8 um, 633 nm, z=500 mm: 'asm' retains 0.096 of the power and reads the 1/e^2 radius 79 % low, while a resampling kernel retains 0.9998 and is right to 0.07 %.  Either pass method='auto' (the dispatcher then picks a RESAMPLING kernel, which widens the window at a coarser pitch and gets the far field right -- at the cost of returning a grid the ABCD does not describe; read dx_out off the return), or enlarge the grid so that N*dx^2/lambda >= z.  (Reported once per FreeSpace instance.)
+    E, dx, dy = op._apply(E, dx=dx, dy=dy, wavelength=wavelength)
+
+tests/unit/test_v4_15_1_agent_g_examples.py::TestExampleApertureCascade::test_aperture_then_lens_then_propagate
+  C:\tmp\lum_c1c\lumenairy\algebra\base.py:520: UserWarning: FreeSpace._apply: propagating z=0.05 m with the pitch-preserving method='asm' on a 256x256 grid of dx=2e-06 m / dy=2e-06 m at lambda=6.33e-07 m.  That is past z_max = N*dx^2/lambda = 0.00161769 m, and the step returned only 0.9337 of the power it was handed: the beam has outgrown the fixed +-0.000256 m window and is being CLIPPED at the grid edge -- silently, and the lost energy does not come back.  Measured on a 20 um waist at N=256, dx=8 um, 633 nm, z=500 mm: 'asm' retains 0.096 of the power and reads the 1/e^2 radius 79 % low, while a resampling kernel retains 0.9998 and is right to 0.07 %.  Either pass method='auto' (the dispatcher then picks a RESAMPLING kernel, which widens the window at a coarser pitch and gets the far field right -- at the cost of returning a grid the ABCD does not describe; read dx_out off the return), or enlarge the grid so that N*dx^2/lambda >= z.  (Reported once per FreeSpace instance.)
+    E, dx, dy = op._apply(E, dx=dx, dy=dy, wavelength=wavelength)
+
+tests/unit/test_v4_15_4_agent_d.py::test_v4_15_5_plot_opd_fan_opd_fan_data_pipeline_end_to_end
+  C:\tmp\lum_c1c\tests\unit\test_v4_15_4_agent_d.py:330: RuntimeWarning: opd_fan_data: the reference sphere centred on the chief ray's image point has radius 0.00271393 m (the chief's path back to the exit pupil), but a ray of this fan sits 0.00488602 m away from that point -- i.e. the LAST surface of the prescription is nowhere near the image, so there is no image point to reference the wavefront to.  Append a flat image surface at the paraxial focus (see find_paraxial_focus) to get a wavefront error.  Falling back to a reference PLANE for this fan; the result still carries the lens's own converging curvature and is NOT a wavefront aberration.
+    py_w, opd_y_w, px_w, opd_x_w = la.opd_fan_data(
+
+tests/unit/test_v4_15_5_agent_b.py::test_plot_opd_fan_fan_units_waves_no_double_division
+  C:\tmp\lum_c1c\tests\unit\test_v4_15_5_agent_b.py:92: RuntimeWarning: opd_fan_data: the reference sphere centred on the chief ray's image point has radius 0.00271393 m (the chief's path back to the exit pupil), but a ray of this fan sits 0.00488602 m away from that point -- i.e. the LAST surface of the prescription is nowhere near the image, so there is no image point to reference the wavefront to.  Append a flat image surface at the paraxial focus (see find_paraxial_focus) to get a wavefront error.  Falling back to a reference PLANE for this fan; the result still carries the lens's own converging curvature and is NOT a wavefront aberration.
+    py_w, opd_y_w, px_w, opd_x_w = la.opd_fan_data(
+
+tests/unit/test_v4_16_1_agent_b.py::TestPropagateEnsemble::test_propagate_ensemble_rejects_non_3d
+tests/unit/test_v4_16_1_agent_b.py::TestPropagateEnsemble::test_propagate_ensemble_propagator_kwargs_merge
+tests/unit/test_v4_16_1_agent_b.py::TestPropagateEnsemble::test_propagate_ensemble_unknown_propagator_string_raises
+tests/unit/test_v4_16_1_agent_b.py::TestMCFRejectionMessage::test_mcf_rejection_message_no_stale_v4_16_wording
+tests/unit/test_v4_16_1_agent_b.py::TestMCFRejectionMessage::test_mcf_rejection_message_points_at_propagate_ensemble
+tests/unit/test_v4_16_1_agent_b.py::TestMCFRejectionMessage::test_3d_ensemble_rejection_message_points_at_propagate_ensemble
+  C:\tmp\lum_c1c\tests\unit\test_v4_16_1_agent_b.py:71: UserWarning: _schell_phase_realizations: coherence_length sigma_g=8e-06 m exceeds L/6 = 5.333e-06 m (L = min(Nx*dx, Ny*dy) = 3.2e-05 m), so fewer than 6 coherence lengths fit across the grid.  The two-point kernel is still the documented Gaussian (the anti-wrap pad sees to that) but (a) the ensemble average of any two-point quantity -- MCF, coherent-mode spectrum -- converges slowly and is aperture-dominated rather than source-dominated, and (b) the pad costs ~9.0x the FFT work per realisation.  Enlarge the grid (N*dx >= 6*sigma_g) for a source-dominated result.
+    return create_gaussian_schell_source(
+
+tests/unit/test_v4_16_2_agent_a.py::TestPropagateEnsembleBackendPreservation::test_numpy_ensemble_stays_numpy
+tests/unit/test_v4_16_2_agent_a.py::TestPropagateEnsembleBackendPreservation::test_jax_ensemble_stays_jax
+tests/unit/test_v4_16_2_agent_a.py::TestPropagateEnsembleBackendPreservation::test_jax_and_numpy_results_agree
+tests/unit/test_v4_16_2_agent_a.py::TestPropagateEnsembleBackendPreservation::test_jax_ensemble_return_ensemble_stacks_on_backend
+tests/unit/test_v4_16_2_agent_a.py::TestPropagateEnsembleKwargsPassThrough::test_propagator_kwargs_pass_through_to_callable
+  C:\tmp\lum_c1c\tests\unit\test_v4_16_2_agent_a.py:65: UserWarning: _schell_phase_realizations: coherence_length sigma_g=8e-06 m exceeds L/6 = 5.333e-06 m (L = min(Nx*dx, Ny*dy) = 3.2e-05 m), so fewer than 6 coherence lengths fit across the grid.  The two-point kernel is still the documented Gaussian (the anti-wrap pad sees to that) but (a) the ensemble average of any two-point quantity -- MCF, coherent-mode spectrum -- converges slowly and is aperture-dominated rather than source-dominated, and (b) the pad costs ~9.0x the FFT work per realisation.  Enlarge the grid (N*dx >= 6*sigma_g) for a source-dominated result.
+    return create_gaussian_schell_source(
+
+tests/unit/test_v4_16_2_agent_a.py::TestPropagateEnsembleKwargsCollision::test_dx_collision_raises_value_error
+tests/unit/test_v4_16_2_agent_a.py::TestPropagateEnsembleKwargsCollision::test_wavelength_collision_raises_value_error
+tests/unit/test_v4_16_2_agent_a.py::TestPropagateEnsembleKwargsCollision::test_collision_message_lists_offending_keys
+tests/unit/test_v4_16_2_agent_a.py::TestPropagateEnsembleKwargsPassThrough::test_propagator_kwargs_overrides_top_level_kwargs
+  C:\tmp\lum_c1c\tests\unit\test_v4_16_2_agent_a.py:65: UserWarning: _schell_phase_realizations: coherence_length sigma_g=8e-06 m exceeds L/6 = 2.667e-06 m (L = min(Nx*dx, Ny*dy) = 1.6e-05 m), so fewer than 6 coherence lengths fit across the grid.  The two-point kernel is still the documented Gaussian (the anti-wrap pad sees to that) but (a) the ensemble average of any two-point quantity -- MCF, coherent-mode spectrum -- converges slowly and is aperture-dominated rather than source-dominated, and (b) the pad costs ~25.0x the FFT work per realisation.  Enlarge the grid (N*dx >= 6*sigma_g) for a source-dominated result.
+    return create_gaussian_schell_source(
+
+tests/unit/test_v5_1_0_agent_a.py::TestSetDefaultWavePropagatorSteersApplyRealLensTraced::test_default_propagated_to_amplitude_leg
+  C:\tmp\lum_c1c\tests\unit\test_v5_1_0_agent_a.py:355: RuntimeWarning: apply_real_lens_traced: the inverse-characteristic per-pixel evaluator refused to build -- guard G7: the exit fit has 81 retained samples for 120 total-degree-14 coefficients, below the 4.0 samples/coefficient floor.  The call KEEPS the shipped coarse-Newton + map_coordinates upsample path unchanged (refuse, never degrade).  That is a DIFFERENT ANSWER, not a slower one: the incumbent's coarse-lattice upsample carries 6.0e-3..1.08e-2 waves rms of core wavefront error against the exact-trace oracle where this model carries ~2e-12, and on design 121 the two differ by 0.8 % in peak and 3.350 vs 3.450 um in banner FWHM.  Set lumenairy.elements._lens_imap.INVERSE_MAP_GUARD = 'silent' to stop reporting it, or TRACED_INVERSE_MAP = False to stop attempting the build at all (that is the fail-before switch and it is byte-identical to this outcome).
+    E_out = la.apply_real_lens_traced(
+
+tests/unit/test_v5_1_0_agent_a.py::TestSetDefaultWavePropagatorSteersPropagateThroughSystem::test_set_default_to_fresnel_changes_system_output
+  C:\tmp\lum_c1c\tests\unit\test_v5_1_0_agent_a.py:420: RuntimeWarning: propagate_through_system: the fresnel leg evaluated the integral on the chain window (N=64 at dx=2.0000e-06 m, extent 1.2800e-04 m) and only 91.18% of the input power lands inside it.  The beam has spread past the chain's grid: z = 0.001 m is 2.47x N*dx^2/wavelength = 0.000404423 m, and the Fresnel integral's own scale at this z is lambda*|z|/dx = 3.1650e-04 m.  Values outside the window are not cropped from anything -- they were never evaluated.  Use a larger N, a coarser chain pitch, or method='asm' (which keeps the pitch and band-limits instead of windowing).
+    E_default_fresnel, _ = la.propagate_through_system(
+
+tests/unit/test_v5_1_0_agent_a.py::TestSetDefaultDyAtApplyRealLensTraced::test_default_none_works_with_traced
+  C:\tmp\lum_c1c\tests\unit\test_v5_1_0_agent_a.py:584: RuntimeWarning: apply_real_lens_traced: the inverse-characteristic per-pixel evaluator refused to build -- guard G7: the exit fit has 81 retained samples for 120 total-degree-14 coefficients, below the 4.0 samples/coefficient floor.  The call KEEPS the shipped coarse-Newton + map_coordinates upsample path unchanged (refuse, never degrade).  That is a DIFFERENT ANSWER, not a slower one: the incumbent's coarse-lattice upsample carries 6.0e-3..1.08e-2 waves rms of core wavefront error against the exact-trace oracle where this model carries ~2e-12, and on design 121 the two differ by 0.8 % in peak and 3.350 vs 3.450 um in banner FWHM.  Set lumenairy.elements._lens_imap.INVERSE_MAP_GUARD = 'silent' to stop reporting it, or TRACED_INVERSE_MAP = False to stop attempting the build at all (that is the fail-before switch and it is byte-identical to this outcome).
+    E_out = la.apply_real_lens_traced(
+
+tests/unit/test_v5_21_2_subsystem_audits.py::test_vd1_immersion_na_raises
+  C:\tmp\lum_c1c\tests\unit\test_v5_21_2_subsystem_audits.py:170: RuntimeWarning: richards_wolf_focus: the pupil array does not span the exit pupil.  The geometric rim sits at rho = f*NA = 6.0000e-04 m but the array only reaches Np*dx_pupil/2 = 3.2000e-05 m (Np=32, dx_pupil=2.0000e-06 m) with the pupil still non-zero at that boundary, so the rim mask never bites and the effective exit pupil becomes a SQUARE (the array boundary) at the array-limited NA_eff=0.0320 instead of the requested NA=0.6000.  The returned focal field is the PSF of that aperture (focal width scales as 1/NA_eff, i.e. about 18.75x too wide).  To deliver the requested NA keep Np*dx_pupil/2 >= f*NA: either dx_pupil >= 3.7500e-05 m at Np=32, or Np >= 600 at dx_pupil=2.0000e-06 m.  If the array-limited aperture is what you want, pass NA <= 0.0320 (or filter this warning).
+    out = richards_wolf_focus(pupil, wl, 0.6, f, dx)
+
+tests/unit/test_v5_21_2_subsystem_audits.py::test_opt2_tolerance_merit_populates_rms_and_opd_subcontext
+  C:\tmp\lum_c1c\tests\unit\test_v5_21_2_subsystem_audits.py:1204: UserWarning: apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=64, dx=8.000 um, semi=0.256 mm). Largest is system aperture_diameter with semi_diameter=6.000 mm (+5.744 mm beyond the grid); the field will be truncated at the grid edge during propagation, silently dropping energy the real lens would have transmitted. Consider increasing N or dx so N*dx/2 >= max(semi_diameter). Affected surfaces: system aperture_diameter=6.00mm.
+    tol.evaluate(ctx)
+
+tests/unit/test_v5_21_2_subsystem_audits.py::test_vhfpi_output_shape_rename_legacy_alias_warns
+tests/unit/test_v5_21_2_subsystem_audits.py::test_vhfpi_output_shape_rename_legacy_alias_warns
+  C:\tmp\lum_c1c\lumenairy\propagators\vectorial_hfpi.py:734: RuntimeWarning: accumulate_vector_to_grid: HFPI is UNDER-SAMPLED for this output grid: of 200 paths only 0 landed on the 12x10 grid (0.00%), i.e. 0 landed paths per output pixel.  Below 1 per pixel most pixels are EXACTLY ZERO and the returned array is the Monte-Carlo sampling envelope plus shot noise, not a propagated field -- measured on a 128^2 probe at the default cone, two seeds of the same physics agreed to an intensity-shape fidelity of 0.005.  The docstring's guarantee that 'fringe positions and interference contrast are correct' does NOT hold here.  Two levers: raise n_paths, and -- usually far more effective -- narrow ``cone_half_angle`` from its ~90-degree default (a full forward hemisphere) toward the angle the output grid actually subtends, so paths are not spent where they cannot land.  NOTE one path per pixel is necessary, not sufficient: the same probe still only reached seed-to-seed fidelity 0.44 at ~12 paths per pixel.  Pass on_undersampled='silent' to acknowledge.
+    return accumulate_vector_to_grid(
+
+tests/unit/test_v5_4_6_wave4_polarization.py::test_jonesfield_apply_real_lens_fresnel_warns
+tests/unit/test_v5_4_6_wave4_polarization.py::test_jonesfield_apply_real_lens_fresnel_warns
+  C:\tmp\lum_c1c\tests\unit\test_v5_4_6_wave4_polarization.py:56: UserWarning: apply_real_lens: 3 prescription aperture(s) exceed the simulation grid (N=64, dx=2.000 um, semi=0.064 mm). Largest is surfaces[0] with semi_diameter=1.000 mm (+0.936 mm beyond the grid); the field will be truncated at the grid edge during propagation, silently dropping energy the real lens would have transmitted. Consider increasing N or dx so N*dx/2 >= max(semi_diameter). Affected surfaces: surfaces[0]=1.00mm, surfaces[1]=1.00mm, system aperture_diameter=1.00mm.
+    jf.apply_real_lens(presc, wavelength=633e-9, fresnel=True)
+
+tests/unit/test_v5_4_6_wave5_delegated.py::test_richards_wolf_focus_smoke
+  C:\tmp\lum_c1c\tests\unit\test_v5_4_6_wave5_delegated.py:68: RuntimeWarning: richards_wolf_focus: the pupil array does not span the exit pupil.  The geometric rim sits at rho = f*NA = 5.0000e-04 m but the array only reaches Np*dx_pupil/2 = 3.2000e-04 m (Np=32, dx_pupil=2.0000e-05 m) with the pupil still non-zero at that boundary, so the rim mask never bites and the effective exit pupil becomes a SQUARE (the array boundary) at the array-limited NA_eff=0.3200 instead of the requested NA=0.5000.  The returned focal field is the PSF of that aperture (focal width scales as 1/NA_eff, i.e. about 1.56x too wide).  To deliver the requested NA keep Np*dx_pupil/2 >= f*NA: either dx_pupil >= 3.1250e-05 m at Np=32, or Np >= 50 at dx_pupil=2.0000e-05 m.  If the array-limited aperture is what you want, pass NA <= 0.3200 (or filter this warning).
+    out = richards_wolf_focus(pupil, wavelength=633e-9, NA=0.5, f=1e-3,
+
+tests/unit/test_validation_helpers.py::TestRealLensTrioDyKwarg::test_apply_real_lens_anamorphic_runs
+  C:\tmp\lum_c1c\tests\unit\test_validation_helpers.py:168: UserWarning: apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=64, dx=4.000 um, semi=0.128 mm). Largest is system aperture_diameter with semi_diameter=2.500 mm (+2.372 mm beyond the grid); the field will be truncated at the grid edge during propagation, silently dropping energy the real lens would have transmitted. Consider increasing N or dx so N*dx/2 >= max(semi_diameter). Affected surfaces: system aperture_diameter=2.50mm.
+    out = la.apply_real_lens(E, prescription=singlet_prescription, wavelength=wavelength_m,
+
+tests/unit/test_validation_helpers.py::TestRealLensTrioDyKwarg::test_apply_real_lens_traced_rejects_dy_ne_dx
+  C:\tmp\lum_c1c\tests\unit\test_validation_helpers.py:178: UserWarning: apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=64, dx=4.000 um, semi=0.128 mm). Largest is system aperture_diameter with semi_diameter=2.500 mm (+2.372 mm beyond the grid); the field will be truncated at the grid edge during propagation, silently dropping energy the real lens would have transmitted. Consider increasing N or dx so N*dx/2 >= max(semi_diameter). Affected surfaces: system aperture_diameter=2.50mm.
+    la.apply_real_lens_traced(E, prescription=singlet_prescription,
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+SKIPPED [2] tests\unit\test_v4_14_2_dispatcher_pin_cache_locks.py:426: _REGISTRY_LOCK is on the exemption list -- it guards an operation or non-cache state and is allowed to exist without a paired cache.
+SKIPPED [1] tests\unit\test_v4_14_2_dispatcher_pin_cache_locks.py:426: _ABANDONED_POOLS_LOCK is on the exemption list -- it guards an operation or non-cache state and is allowed to exist without a paired cache.
+SKIPPED [1] tests\unit\test_v4_14_2_dispatcher_pin_cache_locks.py:426: _PERSISTENT_POOL_LOCK is on the exemption list -- it guards an operation or non-cache state and is allowed to exist without a paired cache.
+SKIPPED [1] tests\unit\test_v4_14_2_dispatcher_pin_cache_locks.py:426: _BLAS_CONTROLLER_LOCK is on the exemption list -- it guards an operation or non-cache state and is allowed to exist without a paired cache.
+SKIPPED [1] tests\unit\test_v4_14_2_dispatcher_pin_cache_locks.py:433: _ZARR_MKDIR_PATCH_LOCK matches ``_<X>_PATCH_LOCK`` -- guards a monkey-patch operation, not a cache.  Documented exemption per AUDIT_V4_14_1 spec.
+SKIPPED [1] tests\unit\test_v5_2_3_walker_changelog_content.py:113: No audit-closure bullets in latest CHANGELOG block OR no PREV_TAG resolvable; nothing to verify.  (script exit 2)
+SKIPPED [1] tests\unit\test_v5_2_walker_changelog_changeset.py:207: No audit IDs cited in CHANGELOG.md ``## [5.48.1]`` block; V12.2 has nothing to verify.
+SKIPPED [1] tests\unit\test_v5_2_walker_changelog_changeset.py:262: CHANGELOG ``## [5.48.1]`` block has no ``X pass / Y collected / Z skip / W xfail`` claim; V12.3 has nothing to reconcile.
+SKIPPED [1] tests\unit\test_v5_2_walker_changelog_changeset.py:307: CHANGELOG ``## [5.48.1]`` block declares no audit closures; V12.4 has no enforcement to apply.
+SKIPPED [1] tests\unit\test_v5_3_2_walker_source_line_citation.py:120: No source-file:line citations in latest CHANGELOG block; nothing to verify.  (script exit 2)
+SKIPPED [1] tests\unit\test_v5_3_multi_field_merit_jit.py:224: complex256 not available on this platform
+SKIPPED [1] tests\unit\test_v5_3_walker_changelog_self_citation.py:152: CHANGELOG ``## [5.48.1]`` block has no canonical ``X pass + Y skip + Z xfail`` self-citation; V17.1 has nothing to verify.
+SKIPPED [1] tests\unit\test_v5_3_walker_changelog_self_citation.py:290: CHANGELOG ``## [5.48.1]`` block has no ``N files touched`` claim; V17.2 has nothing to verify.
+SKIPPED [1] tests\unit\test_v5_3_walker_changelog_self_citation.py:366: CHANGELOG ``## [5.48.1]`` block has no ``CHANGELOG.md: X -> Y lines`` claim; V17.3 has nothing to verify.
+FAILED tests/unit/test_niche_audit_w3_infra.py::TestA6EstimateAsmMemory::test_est_bounds_measured_first_call_peak[512-complex128]
+FAILED tests/unit/test_niche_audit_w3_infra.py::TestA6EstimateAsmMemory::test_est_bounds_measured_first_call_peak[1024-complex128]
+FAILED tests/unit/test_v4_15_agent_e.py::TestUI6and7PsfMtfDockRayAccumulation::test_no_last_write_wins
+3 failed, 4377 passed, 15 skipped, 93 warnings in 1576.28s (0:26:16)

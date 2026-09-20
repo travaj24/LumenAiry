@@ -1,0 +1,77 @@
+{
+ "cast": {
+  "analytic_disc_px": 12271.846303085129,
+  "dilation_px": 168,
+  "dilation_rel": 0.013679667779496784,
+  "n_grey": 12449,
+  "n_hard": 12281
+ },
+ "grid": {
+  "D": 0.0005,
+  "N": 256,
+  "dx": 4e-06
+ },
+ "in_library_path": {
+  "ndarray_grey": {
+   "apply_real_lens": [
+    false,
+    "",
+    "(256, 256)"
+   ],
+   "get_wrapper_merit_cache": [
+    false,
+    "",
+    "'ndarray'"
+   ],
+   "surfaces_from_prescription": [
+    true,
+    "ValueError: validate_prescription: 1 issue(s) found:\n  aperture_diameter: must be a number; got array([[0., 0., 0., ..., 0., 0., 0.],\n       [0., 0., 0., ..., 0., 0., 0.],\n       [0., 0., 0., ..., 0., 0., 0.],\n  ",
+    null
+   ]
+  },
+  "ndarray_hard": {
+   "apply_real_lens": [
+    false,
+    "",
+    "(256, 256)"
+   ],
+   "get_wrapper_merit_cache": [
+    false,
+    "",
+    "'ndarray'"
+   ],
+   "surfaces_from_prescription": [
+    true,
+    "ValueError: validate_prescription: 1 issue(s) found:\n  aperture_diameter: must be a number; got array([[0., 0., 0., ..., 0., 0., 0.],\n       [0., 0., 0., ..., 0., 0., 0.],\n       [0., 0., 0., ..., 0., 0., 0.],\n  ",
+    null
+   ]
+  },
+  "scalar": {
+   "apply_real_lens": [
+    false,
+    "",
+    "(256, 256)"
+   ],
+   "get_wrapper_merit_cache": [
+    false,
+    "",
+    "'ndarray'"
+   ],
+   "surfaces_from_prescription": [
+    false,
+    "",
+    "2"
+   ]
+  }
+ },
+ "lumenairy_file": "/mnt/c/tmp/lum_c1c/lumenairy/__init__.py",
+ "numpy": "2.4.6",
+ "power": {
+  "cast_over_grey_mask": "8912.423525997028",
+  "cast_over_hard_mask": "8829.486385479118",
+  "cast_vs_hard_rel": "0.009393201019518814",
+  "cast_vs_weight_rel": "0.009882173586407545",
+  "weighted_grey_mask": "8825.211256424325"
+ },
+ "python": "3.12.3"
+}

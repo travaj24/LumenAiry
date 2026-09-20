@@ -1,0 +1,34 @@
+{
+ "both_styles_agree_default": true,
+ "both_styles_agree_way_back": true,
+ "lumenairy_file": "C:\\tmp\\lum_c1c\\lumenairy\\__init__.py",
+ "numpy": "2.4.4",
+ "pre_tree": "C:/tmp/lum_c1c_pre49",
+ "python": "3.14.6",
+ "styles": {
+  "system": {
+   "default_differs_from_pre": true,
+   "default_here": "0b91e26e94655cfe",
+   "generator_here": "C:\\tmp\\lum_c1c\\lumenairy\\__init__.py",
+   "generator_pre": "C:\\tmp/lum_c1c_pre49\\lumenairy\\__init__.py",
+   "lumenairy_here": "C:\\tmp\\lum_c1c\\lumenairy\\__init__.py",
+   "lumenairy_pre": "C:\\tmp\\lum_c1c_pre49\\lumenairy\\__init__.py",
+   "pre_49ddf4bd": "cd418e4c202cf817",
+   "pre_emits_edge_key": false,
+   "way_back_equals_pre": true,
+   "way_back_here": "cd418e4c202cf817"
+  },
+  "unrolled": {
+   "default_differs_from_pre": true,
+   "default_here": "0b91e26e94655cfe",
+   "generator_here": "C:\\tmp\\lum_c1c\\lumenairy\\__init__.py",
+   "generator_pre": "C:\\tmp/lum_c1c_pre49\\lumenairy\\__init__.py",
+   "lumenairy_here": "C:\\tmp\\lum_c1c\\lumenairy\\__init__.py",
+   "lumenairy_pre": "C:\\tmp\\lum_c1c_pre49\\lumenairy\\__init__.py",
+   "pre_49ddf4bd": "cd418e4c202cf817",
+   "pre_emits_edge_key": false,
+   "way_back_equals_pre": true,
+   "way_back_here": "cd418e4c202cf817"
+  }
+ }
+}

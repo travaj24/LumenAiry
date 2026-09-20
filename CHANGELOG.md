@@ -212,6 +212,234 @@ across the 5.48 -> 5.49 boundary on a small output grid should take the
 keyword; a caller who wants the smaller memory, the better accuracy and a
 route that needs no FFT should take the new default and change nothing.
 
+### Changed -- `apply_aperture(edge='gray')` is the default: the rim is rendered by pixel AREA, which is the only edge treatment with a convergence order (WP-C1)
+
+A circular aperture on a square grid is a staircase.  Through v5.48.1 the default
+`edge='hard'` set each pixel wholly inside or wholly outside, which quantises the
+transmitted area to whole pixels; `edge='gray'` gives each boundary pixel its
+`edge_samples**2`-supersampled open-area fraction instead.  **From this release
+`'gray'` is the default.**  The ruling is the maintainer's, recorded in
+`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/MAINTAINER_DECISIONS_2026_09.md`
+section 1.1 on the measurement in `fixes/WP-B11_REPORT.md` section 2.9; WP-C1
+re-measured it on an independent build of the probe before flipping anything and
+reproduced all sixteen of that table's entries to the last digit.
+
+**What it buys is a RATE, not a constant.**  On-axis relative error against the
+closed form `U = e^{ikz} - (z/r_a) e^{ik r_a}` (lambda = 633 nm, a = 100 um,
+window 512 um), on both spatial kernels, at N = 128 / 256 / 512 / 1024:
+
+| N | RS spatial, hard | RS spatial, gray | HF quadrature, hard | HF quadrature, gray |
+|---|---|---|---|---|
+| 128 | 8.3008e-03 | 1.4847e-03 | 2.7708e-02 | 1.4438e-02 |
+| 256 | 3.3548e-03 | 3.6098e-04 | 1.1120e-02 | 3.4928e-03 |
+| 512 | 3.4207e-04 | 8.1013e-05 | 1.1509e-03 | 8.5680e-04 |
+| 1024 | **5.2718e-04** | 2.5030e-05 | **1.7601e-03** | 2.1122e-04 |
+| order | 1.31 / 3.29 / **-0.62** | 2.04 / 2.16 / 1.69 | 1.32 / 3.27 / **-0.61** | 2.05 / 2.03 / 2.02 |
+
+The hard arm averages **first order at best over a ladder** and its individual
+step orders are **erratic**, while the grey arm is second order: on the reference
+optic above the hard arm's error actually RISES on the last refinement (by 54 %
+on RS and 53 % on HF), which is where its negative last step order comes from,
+while the grey arm falls at every step and by 59.3x (RS) and 68.4x (HF) over the
+three halvings.  The gain at the finest grid is 21.1x and 8.3x.  Both builds
+(Windows py3.14 / scipy-openblas, WSL py3.12 / scipy-openblas) read every entry
+above to five significant figures.
+
+**The RATE gap is the general claim; the DIRECTION at any given N is the
+fixture's.**  Whether a circle's staircase area error rises at a particular
+refinement depends on where the rim falls on the lattice there, so it is a
+property of one (lambda, a, window, z) and not of the library -- but a rise is
+COMMON rather than exceptional, and the averaged "first order at best" must not
+be read as a bound on the individual steps.  Measured on two further optics
+(same closed form, both builds identical to twelve significant figures;
+VERIFY-C1-ROUND2 R5 re-measured the second one 2026-09-20):
+
+* lambda = 1064 nm, a = 62.5 um, window 400 um, z = 4.0 mm RS / 2.5 mm HF --
+  two octaves away in Fresnel number, the hard arm FALLS at every step, with
+  step orders 1.68 / 0.20 / 1.36 (RS) and 1.67 / 0.20 / 1.34 (HF), yet its mean
+  order over the same three halvings is only **1.08** (RS) and **1.07** (HF)
+  against the grey arm's **1.94** and **1.83**;
+* lambda = 532 nm, a = 150 um, window 900 um, z = 30 mm RS / 15 mm HF -- the
+  hard arm RISES on the last refinement by a **factor of 9.3** (RS, 7.6432e-05
+  -> 7.1042e-04) and 9.1 (HF, 1.2930e-04 -> 1.1785e-03), far harder than the
+  reference optic's 54 %, and its RS step orders run **2.756 / 3.608 / -3.216**
+  -- two of them ABOVE second order.  Mean orders **1.05** / **1.06** against
+  the grey arm's **1.89** / **2.01**; ladder gains 8.9x / 9.1x against 51.1x /
+  65.2x.
+
+So across three optics spanning 532-1064 nm and Fresnel numbers 0.9-1.4 the rate
+gap is grey mean order 1.83-2.01 against hard 1.05-1.08, and ladder gains 45-65x
+against 8.9-9.5x.  Two of the three rise.  Ladders and JSON in
+`validation/probe_verify_c1/`, `validation/probe_verify_c1_round2/` and
+`validation/probe_wpc1_round3/`; pinned from both sides by
+`tests/unit/test_verify_c1_gray_edge.py::test_verify_c1_the_rate_gap_reproduces_on_an_independent_optic`,
+`::test_verify_c1_the_hard_arms_non_monotonicity_is_fixture_specific` and
+`tests/unit/test_verify_c1_round2.py::test_verify_c1r2_the_hard_arms_rise_is_common_and_its_steps_exceed_two`.
+
+`edge_samples` stays at 4, which is the knee and is now pinned as one: on the RS
+ladder at N = 512 the readings are 3.4207e-04 / 1.6563e-04 / **8.1013e-05** /
+8.3954e-05 / 8.3959e-05 at 1 / 2 / 4 / 8 / 16 -- going 2 -> 4 still gains 2.04x
+and going 4 -> 8 gains nothing (it is 3.5 % worse, because past the knee the
+residual is the propagator's, not the mask's).  `edge_samples=1` IS the
+pixel-centre indicator, bit for bit.  The extra work is confined to the boundary
+pixels: 312 of them at N = 256 (0.476 % of the grid) and 1196 at N = 1024
+(0.114 %), i.e. 0.076x and 0.018x of one full-grid pass.
+
+### Changed -- the `'aperture'` element of `propagate_through_system` and its JAX twin share ONE implementation, one default and one way back (WP-C1)
+
+The JAX kernel carried its own copy of the pixel-centre indicator.  After the flip
+above that copy would have answered the same element dict differently from the
+NumPy chain, under a cross-backend test whose bar (5 % of pixels) is far too loose
+to see a rim.  Both JAX routes -- the jit'd kernel and the `verbose=True` slow
+path -- now call `apply_aperture`; both backends read a new optional `'edge'` /
+`'edge_samples'` element key; and both take the same default when the element
+names neither.  Measured after the change: the NumPy chain, the jit'd JAX kernel
+and the eager JAX path are byte-identical to each other on both arms.
+
+That consolidation also removes a defect that PREDATES this release.  The JAX slow
+path multiplied by a boolean mask (`E * mask.astype(E.dtype)`), so a blocked pixel
+came back as a SIGNED zero -- measured at the parent commit, 2652 negative-zero
+real parts and 2762 negative-zero imaginary parts on one 128 x 128 fixture --
+where the jit'd kernel (XLA rewrites the product into a select) and the NumPy
+chain both returned `+0.0`.  The same multiply left a non-finite field non-finite
+outside the stop, which is the defect VERIFY-A8 fixed on the NumPy path and which
+had never reached here.  Both routes now select rather than scale.  A sign bit on
+a zero is not cosmetic: it flips `atan2`, the complex `sqrt` branch and `1/x`, and
+`0.0 * nan` is `nan`, which the next FFT smears over the whole plane.
+
+**Migration.**  **The returned field moves, at the 1e-3 level in relative L2
+(7.678e-03 at N = 256, 2.930e-03 at 512, 1.237e-03 at 1024; worst pixel 3.660e-03
+/ 1.251e-03 / 5.434e-04), for every public entry point that renders a sharp-edged
+stop and does not name `edge=`:** `apply_aperture` itself; `apply_lyot_stop`
+(which exposes no `edge` of its own); the `Aperture` operator in
+`lumenairy.algebra`; `JonesField.apply_aperture`; an `{'type': 'aperture'}`
+element in `propagate_through_system` and in `propagate_through_system_jax` (both
+its jit'd and its slow route); `lumenairy.evaluate`, which decomposes every
+`is_stop=True` surface of a prescription into exactly such an element (its way
+back is the NEW `aperture_edge=` keyword below, not the element dict, since it
+builds the element list itself); and a script emitted by `lumenairy.io.codegen`
+for a STOP surface, which calls `la.apply_aperture` without the keyword and so
+tracks the library default at run time.  Two more answers move behind code that
+is documented elsewhere and are named here for completeness: the **GUI
+coronagraph dock's Stop 3 display** (`lumenairy/ui/coronagraph_dock.py:376`,
+reached from the Stop 3 leg at line 261, calls `apply_lyot_stop`, so the
+displayed field and everything the dock computes from it take the new rim --
+see `GUI_CHANGELOG.md`), and the worked AO-loop example in
+`lumenairy/analysis/ao.py:33`, inside that module's docstring, which builds
+its pupil with `la.apply_aperture(np.ones((N, N), dtype=complex), ...)`; that
+example is still correct -- multiplying a grey amplitude mask into a field is
+exactly what the mask is for -- but its printed numbers move.
+
+**One more family moves, for callers rather than for the library: a consumer
+that BOOLEAN-CASTS an `apply_aperture` result.**  `plot_wavefront` /
+`plot_opd_summary` (`lumenairy/analysis/plotting.py:1491`, `:1757`, `:1096`,
+`:1724`) and the wrapper-merit mask cache
+(`lumenairy/optimize/wrapper_merits.py:266`) accept an `aperture=` ARRAY and
+cast it with `astype(bool)`.  A grey mask casts to the union of the open area
+and the WHOLE rim: measured +168 px on a 12281-px disc (**+1.3680 %**, 364 rim
+pixels, N = 256, dx = 4 um, D = 0.5 mm; analytic disc 12271.8), identical on
+both builds.  Downstream that is a radial-RMS curve moving by up to
+**7.2741e-02** relative, an automatic bin count moving a whole bin on small
+grids (12 -> 13 at N = 48, 657 -> 697 px; both saturate at 32 by N = 256), an
+in-aperture RMS moving **5.8832e-03** (PV 2.520837e-07 -> 2.536185e-07), and a
+merit's integrated power moving **7.7072e-03** -- which also **overshoots the
+correctly weighted grey mask by 8.9051e-03**, since a rim pixel transmitting a
+third of its area is counted whole.  `aperture=` is documented as a boolean
+mask and still is; what changed is that the obvious way to BUILD one --
+`apply_aperture(np.ones(...), ...)` -- no longer produces one.  The way back is
+`edge='hard'` when building the array, or weighting by the mask instead of
+casting it (`(inten * mask).sum()`), or casting with the threshold you mean
+(`mask >= 0.5`).  No shipped answer is wrong: nothing in `lumenairy/`,
+`validation/` or `examples/` feeds an `apply_aperture` result into either
+consumer, and the only in-library route to `wrapper_merits.py:266`'s array
+branch -- an ndarray in `prescription['aperture_diameter']` reaching
+`wrapper_merits.py:492` -- is closed by `surfaces_from_prescription`, which is
+called on the same prescription EARLIER in the same loop iteration and refuses
+a non-numeric `aperture_diameter` (`validate_prescription: aperture_diameter:
+must be a number`) on both builds.  Pinned by
+`tests/unit/test_verify_c1_round2.py::test_verify_c1r2_the_wrapper_merit_array_branch_is_out_of_the_librarys_reach`.
+
+Every propagator downstream of one of those --
+`rayleigh_sommerfeld_propagate`, the `propagate_huygens_fresnel_*` family, the ASM
+legs, GBD -- is itself unchanged: it moves only because its INPUT moved, and is
+byte-identical on an input that did not.  **The way back is one keyword:
+`edge='hard'`, which reproduces the pre-5.49 answer BIT FOR BIT**, proved
+archive-to-archive against a `git archive` of the parent commit (14 of 15
+aperture fixtures identical on Windows, 13 of 14 on WSL; the single exception is
+the JAX slow path's signed zeros described above, which this release fixes and
+which already disagreed with its own fast path at the parent commit).  For the
+entry points with no `edge` parameter, call `apply_aperture(..., edge='hard')`
+directly (`apply_lyot_stop`, the `Aperture` operator, `JonesField.apply_aperture`)
+or add `'edge': 'hard'` to the element dict (either chain).  A caller who pinned a
+hard-aperture digest and wants the new answer re-records it; a caller who wants
+the old number adds the keyword.  Non-aperture answers do not move: 16 of 16
+non-aperture fixtures are byte-identical with no keyword at all, on both builds,
+including `apply_gaussian_aperture`, `apply_apodized_pupil`, the thin lens's and
+the mirror's own aperture masks, the ASM / RS-transfer / HF-freespace
+propagators, RCWA, PMM and the analytic lens.
+
+Pinned by `tests/unit/test_c1_gray_edge_default.py` (31 tests, none slow),
+including a mutation matrix in which the default reverting to `'hard'`,
+`edge_samples` moving off the knee, and a wrong grey boundary fraction (a
+sub-sample lattice anchored on the cell corners instead of centred on the pixel)
+are each caught by a named test.  Four existing tests moved and are re-pinned
+against their own oracles, none by loosening a bar; two more had silently become
+tautologies (their hard arm was the unnamed default) and now name it.  The file
+grew from 17 ids to 31 closing VERIFY-C1's findings: the jit'd kernel carrying
+the element's `edge_samples` (the one mutation that survived its whole 2796-id
+sweep), the three-route refusal census below, and the `evaluate` way back.
+
+### Added -- `lumenairy.evaluate(..., aperture_edge=, aperture_edge_samples=)`: the way back for a prescription's STOP surface (VERIFY-C1 D4)
+
+`lumenairy.evaluate` is the documented one-call entry for a `.zmx`
+prescription.  `_prescription_to_elements` routes the Zemax-loader shape through
+`io.codegen._decompose_prescription`, which emits an `{'type': 'aperture',
+'shape': 'circular', 'params': {'diameter': D}}` step for every `is_stop=True`
+surface with **no `edge` key** -- so `evaluate` takes the new default, its answer
+moved, and, unlike every entry point in the Migration table, it had no route back
+a caller could reach: `evaluate` accepted no rim argument and built its element
+list internally, leaving the private `_prescription_to_elements` plus a
+hand-driven `propagate_through_system` as the only way.
+
+`evaluate` now takes `aperture_edge=None` and `aperture_edge_samples=None`,
+stamped by `_prescription_to_elements` onto every `'aperture'` element it emits.
+`None` stamps nothing, so an unkeyworded call still takes `apply_aperture`'s own
+default and no call pins today's default into tomorrow's answer.  Both are
+validated once, before the decomposition runs, through the same guard
+`apply_aperture` uses, so a misspelled rim is refused with `apply_aperture`'s own
+message rather than at the aperture step.
+
+**`aperture_edge='hard'` reproduces the pre-5.49 answer BIT FOR BIT**, proved
+archive-to-archive against a `git archive` of `49ddf4bd` on both builds
+(`validation/probe_verify_c1/d4_evaluate_*.json`): on one prescription with a
+STOP surface the returned field reads `e7b1f67b9b19d547` at the parent commit,
+`59115e8eb2b2b0d0` here by default and `e7b1f67b9b19d547` again with the keyword
+on Windows py3.14, and `0b97c205be347dfa` / `193bf1d920e2ac88` /
+`0b97c205be347dfa` on WSL py3.12.  `aperture_edge_samples=1` lands on the same
+bytes, which is what proves the second keyword reaches the element too.  Pinned
+by `test_c1_evaluates_way_back_is_one_keyword_and_reaches_the_stop`.
+
+### Fixed -- the validation suite's aperture throughput readings say AREA where they meant area (WP-C1)
+
+Three readings in `validation/elements/` moved with the default, and two of them
+were measuring the wrong moment all along.  The aperture is an AMPLITUDE mask, so
+`sum(mask)` is the transmitted AREA while `sum(|E|^2)` is the transmitted POWER of
+a unit-amplitude field; for a binary rim the two coincide, and for an
+area-averaged rim they differ by exactly the rim's own `sum(f - f^2)`, bounded by
+`n_rim dx^2 / 4` and falling like 1/N.  Both throughput checks asserted the POWER
+against the geometric area.  Measured: the circular fixture's AREA error went
++0.0746 % -> +0.0074 % and the rectangle's +0.6400 % -> **+0.0000 %** (exact --
+its rims sit at 25.00 and 18.75 pixels and a 4x4 lattice resolves a quarter-pixel
+rim exactly), while the POWER reading the assertions were taking went to 1.99 %
+against a 2 % bar, i.e. clearing its own bar by 0.5 % of itself.  Both now assert
+the AREA against a derived 5e-4 bar and the POWER inside the derived band
+`[area - n_rim dx^2/4, area]`.  A third check decided its "inside" pixel set from
+pixel CENTRES (mean 0.9960 against a 0.99 bar) and now decides all three sets from
+the pixel CORNERS, asserting the two outer ones exactly.  31/31.
+
+The probes and their JSON, on both builds, are in
+`validation/probe_c1_gray_edge/`; the report is
+`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/WP-C1_GRAY_EDGE_REPORT.md`.
 
 ## [5.48.1] — 2026-09-20
 
@@ -3291,7 +3519,7 @@ hardest on exactly this field because the single-FFT Fresnel output's
 residual chirp sits at Nyquist at the grid edge by construction.
 
 The leg now calls `fresnel_propagate_mft` with the chain's own pitch and
-sample count (`lumenairy/propagators/system.py:929`).  That is the same
+sample count (`lumenairy/propagators/system.py:935`).  That is the same
 Fresnel integral, sampled where the chain wants it, so neither error
 exists.  Refereed against the Fresnel integral written out as an explicit
 double sum over the input samples -- no FFT, no Bluestein, no library
@@ -3319,13 +3547,13 @@ reads a single input pitch, so a grid with `Ny != Nx` had its y axis
 rescaled by the **x** ratio -- wrong by `Nx/Ny`, with no diagnostic.
 
 Because there is no resample left to crop, the leg no longer calls
-`_warn_system_resample_crop` (`system.py:361`); the `'sas'` leg still
+`_warn_system_resample_crop` (`system.py:362`); the `'sas'` leg still
 does, unchanged.  `fresnel_propagate_mft` carries the same K1
 chirp-sampling guard (`lumenairy/propagators/mft.py:1189`) plus its own
 faithful-zone warning with period `lambda*|z|/dx_in`, so no diagnostic
 is lost -- see Migration for the two messages whose wording moves.
 
-Files: `lumenairy/propagators/system.py:55`, `:806-841`, `:359-383`,
+Files: `lumenairy/propagators/system.py:56`, `:806-841`, `:359-383`,
 `:160-173`, `:452-459`, `:1638-1646`, `:1771-1783`.
 Tests: `tests/unit/test_audit2609_b3b_resample_call_sites.py::TestK6FresnelLegEvaluatesOntoTheChainGrid`
 (12 tests).
@@ -3362,7 +3590,7 @@ interpolant and the historical cubic spline:
     method=('chirpz' if N_out * dx_out <= N_in * dx_in else 'spline')
 ```
 
-per axis (`lumenairy/propagators/system.py:972`,
+per axis (`lumenairy/propagators/system.py:978`,
 `lumenairy/elements/_lens_real.py:2969` and `:2889`).  The chirp-Z leg
 has unit MTF at every frequency the grid represents, but its
 reconstruction is **periodic** with period `N_in*dx_in`, so a window
@@ -3401,7 +3629,7 @@ dx = 112.500 um, lambda = 632.8 nm) **both** gaps sit at `dx_new/dx` =
 1 mm N-BK7 plate at dx = 2 um sits at 1.6320 and takes the chirp-Z leg.
 Both directions occur in the shipped suite.
 
-Files: `lumenairy/propagators/system.py:953-978`,
+Files: `lumenairy/propagators/system.py:959-984`,
 `lumenairy/elements/_lens_real.py:2905-2976`, `:2882-2895`.
 Tests: `tests/unit/test_audit2609_b3b_resample_call_sites.py::TestK6TheChirpZGate`
 (11), `::TestK6ByteIdentityWhereTheGateSelectsTheSpline` (7),
@@ -3461,13 +3689,13 @@ message and the function's docstring say so.  Behaviour is unchanged --
 the JAX path is still ASM-only and still refuses both, and an
 `method='asm'` JAX chain is byte-identical.
 
-Files: `lumenairy/propagators/system.py:1863-1875`, `:1730-1738`.
+Files: `lumenairy/propagators/system.py:2049-2061`, `:1730-1738`.
 
 <!-- WP-VERIFY_WP-B3b: Propagator call sites: verifier follow-ups -->
 ### Fixed -- a `method='fresnel'` chain step warns again when the chain window holds only part of the beam (K6)
 
 WP-B3b retired the `'fresnel'` leg's resample, and the K6 crop warning
-went with it (`_warn_system_resample_crop`, `system.py:361`).  Its
+went with it (`_warn_system_resample_crop`, `system.py:362`).  Its
 changelog recorded that `fresnel_propagate_mft`'s own faithful-zone
 warning takes over, so no diagnostic is lost.  It does not: on the chain
 grid the two conditions are **disjoint**.  `fresnel_propagate_mft` warns
@@ -3500,7 +3728,7 @@ own replica regime at that pitch, so they bound the loss rather than
 measure it.)
 
 The leg now calls `_warn_system_fresnel_window`
-(`lumenairy/propagators/system.py:417`, called at `:928`), which measures
+(`lumenairy/propagators/system.py:418`, called at `:934`), which measures
 the power the chain window keeps and raises the same `RuntimeWarning`
 class, at the same `1e-6` retained-power bar, as
 `_warn_system_resample_crop` -- naming the retained percentage, `z`
@@ -3524,7 +3752,7 @@ three-element, lens+aperture, anamorphic, tilted element, tilted chain),
 and every guard text.  Exactly one warning record changes, and it is the
 probe where 5.46.0 emitted the crop warning.
 
-`_warn_system_resample_crop`'s docstring (`system.py:361`) and the
+`_warn_system_resample_crop`'s docstring (`system.py:362`) and the
 `'fresnel'` leg's comment now say which of the three diagnostics covers
 which condition, instead of describing one as the other's replacement.
 
@@ -5602,7 +5830,7 @@ Tests: `tests/unit/test_audit2609_b8_analysis_sources.py`.
 `J00*Ex + J01*Ey` written out builds two products and a sum per component, so
 when the second component is formed the first component's result plus three
 temporaries are live.  The mix moves into `_jones_mix_2x2`
-(`lumenairy/elements/polarization.py:722`), where one scratch buffer serves
+(`lumenairy/elements/polarization.py:731`), where one scratch buffer serves
 both components and both sums land in place.
 
 Measured at N = 2048 complex128: **268.4 MB (4.00 grids) / 131.8 ms -> 201.3

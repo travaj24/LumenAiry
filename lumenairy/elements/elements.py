@@ -6,8 +6,12 @@ modify an electric field on a 2-D computational grid.  The elements fall
 into several categories:
 
 * **Mirrors** -- flat and curved reflectors (including conics/aspheres).
-* **Apertures** -- hard-edge amplitude masks (circular, annular, rectangular)
-  and soft (Gaussian) apertures.
+* **Apertures** -- sharp-edged (unapodized) amplitude masks (circular,
+  annular, rectangular) and soft (Gaussian) apertures.  A sharp-edged mask
+  renders its rim by pixel AREA (``edge='gray'``, the default) rather than by
+  a pixel-centre indicator (``edge='hard'``); both describe the same physical
+  stop, and the grey rendering is the one with a convergence order -- see
+  :func:`apply_aperture`.
 * **Arbitrary masks** -- generic complex transmission functions for DOEs,
   SLMs, metasurfaces, grey-scale filters, etc.
 * **Zernike aberrations** -- phase screens described by Zernike polynomial
@@ -224,8 +228,94 @@ def apply_mirror(E_in, wavelength, dx, radius=None, conic=0.0,
 # APERTURES AND STOPS
 # =============================================================================
 
+#: Sentinel for "the caller did not name this rim keyword at all", which is
+#: NOT the same as naming it ``None`` (an illegal VALUE that must raise).
+_EDGE_UNSET = object()
+
+
+def _validate_edge_kwargs(edge=_EDGE_UNSET, edge_samples=_EDGE_UNSET):
+    """The ONE refusal for :func:`apply_aperture`'s rim keywords.
+
+    WP-C1 / VERIFY-C1 D1.  Both the NumPy chain and its JAX twin read an
+    ``'aperture'`` element's ``'edge'`` / ``'edge_samples'`` through
+    :func:`lumenairy.propagators.system._aperture_edge_kwargs`, but the
+    jit'd JAX kernel then puts them in a STATIC signature, which has to be
+    hashable and so coerces with ``int()`` / ``str()``.  Measured
+    2026-09-20 on both builds: that coercion made the jit'd route ACCEPT
+    ``{'edge_samples': 2.5}`` (silently using 2) and ``{'edge_samples':
+    '4'}``, both of which :func:`apply_aperture`, the NumPy chain and the
+    eager JAX route all raise ``ValueError`` on.  Hoisting the guard out
+    of the function body into this helper gives every route ONE reading
+    of the element and ONE verdict; the signature keeps its coercions
+    because by the time it runs the value is known to be one of the two
+    legal strings and an exact positive integer.
+
+    Parameters
+    ----------
+    edge, edge_samples : optional
+        Omit either to mean "the caller did not name this key", which is
+        not checked.  ``None`` is a named value and raises.
+
+    Returns
+    -------
+    n_sub : int or None
+        ``int(edge_samples)`` when it was named, else ``None``.
+
+    Raises
+    ------
+    ValueError
+        If ``edge`` is neither ``'hard'`` nor ``'gray'``, or if
+        ``edge_samples`` is not an exact integer >= 1 -- including a
+        ``bool`` (VERIFY-C1-ROUND2 R2: ``True`` used to pass the
+        exact-integer test and silently select the binary pixel-centre
+        rim) and including a type ``int()`` refuses outright (``None``, a
+        list, a complex), which VERIFY-C1-ROUND2 R3 turned from ``int()``'s own
+        bare ``TypeError`` into this same ``ValueError``, so that every
+        rim refusal names ``apply_aperture`` and ``edge_samples``.
+    """
+    if edge is not _EDGE_UNSET and edge not in ('hard', 'gray'):
+        raise ValueError(
+            f"apply_aperture: edge must be 'hard' (binary pixel mask) or "
+            f"'gray' (supersampled open-area fraction on boundary pixels); "
+            f"got {edge!r}.")
+    if edge_samples is _EDGE_UNSET:
+        return None
+    # VERIFY-C1-ROUND2 R2: refuse a bool EXPLICITLY.  ``int(True) == 1`` and
+    # ``1 != True`` is False, so ``True`` slipped through the exact-integer
+    # test below and silently selected n_sub = 1 -- which is bit-for-bit
+    # ``edge='hard'``, the binary pixel-centre rim this release moved away
+    # from, chosen by a caller plainly trying to turn something ON.
+    # ``False`` was refused only because ``int(False) == 0 < 1``, which is
+    # why the census row named for it was green for the wrong reason.
+    # Measured 2026-09-20, both builds, all four entry points.
+    if isinstance(edge_samples, (bool, np.bool_)):
+        raise ValueError(
+            f"apply_aperture: edge_samples must be a positive integer "
+            f"(sub-samples per axis), not a bool; got {edge_samples!r} "
+            f"(type {type(edge_samples).__name__}).  For the binary "
+            f"pixel-centre rim pass edge='hard'.")
+    try:
+        n_sub = int(edge_samples)
+    except (TypeError, ValueError) as exc:
+        # VERIFY-C1-ROUND2 R3: name the function and the keyword.  int()'s own
+        # TypeError ("int() argument must be a string, a bytes-like object or
+        # a real number, not 'NoneType'") names neither, which made this the
+        # one refusal family the chain census's ``'apply_aperture' in message``
+        # assertion could not cover, and made ``evaluate``'s Raises section
+        # ("a ValueError ... the same refusal, from the same guard") wrong for
+        # it.  Measured 2026-09-20, both builds, on None / [4] / 4+0j.
+        raise ValueError(
+            f"apply_aperture: edge_samples must be a positive integer "
+            f"(sub-samples per axis); got {edge_samples!r}.") from exc
+    if n_sub < 1 or n_sub != edge_samples:
+        raise ValueError(
+            f"apply_aperture: edge_samples must be a positive integer "
+            f"(sub-samples per axis); got {edge_samples!r}.")
+    return n_sub
+
+
 def apply_aperture(E_in, dx, shape='circular', params=None, xc=0, yc=0,
-                   dy=None, edge='hard', edge_samples=4):
+                   dy=None, edge='gray', edge_samples=4):
     """
     Apply a standalone aperture (amplitude mask) to an optical field.
 
@@ -255,19 +345,84 @@ def apply_aperture(E_in, dx, shape='circular', params=None, xc=0, yc=0,
         (non-square) grids so annular / circular / rectangular
         apertures don't get silently stretched along y.
 
-    edge : {'hard', 'gray'}, default 'hard'
-        ``'hard'`` gives the binary in/out mask: each pixel is wholly
-        passed or wholly blocked, so the transmitted area is quantised to
-        whole pixels.  ``'gray'`` gives each boundary pixel its
-        ``edge_samples**2``-supersampled open-area fraction instead, which
-        removes the area quantisation and most of the edge aliasing.
-        Measured transmitted-area error against the analytic disc area,
-        rms over the 12 sub-pixel rim placements
-        ``linspace(0, 0.95, 12)`` (2026-09-12, N = 512, dx = 1 um): at
-        ``D/dx ~ 50`` pixels **0.386 % hard** (range -0.535 %..+0.805 %)
-        vs **0.044 % gray** at the 4x4 default; at ``D/dx ~ 200``
-        0.031 % hard vs 0.0041 % gray.  Costs ``edge_samples**2`` mask
-        builds (one full-grid boolean each, not held simultaneously).
+    edge : {'gray', 'hard'}, default ``'gray'``
+        ``'gray'`` gives each boundary pixel its
+        ``edge_samples**2``-supersampled open-area fraction, which removes
+        the area quantisation and most of the edge aliasing.  ``'hard'``
+        gives the binary in/out mask instead: each pixel is wholly passed
+        or wholly blocked, so the transmitted area is quantised to whole
+        pixels.
+
+        ``edge='hard'`` is the pixel-centre indicator and nothing else, so
+        it is what a caller passes to reproduce a staircase answer BIT FOR
+        BIT.  The CHANGELOG's Migration note records when the default
+        became ``'gray'`` and names every entry point whose answer moved
+        with it.
+
+        Why ``'gray'`` is the default (WP-B11 sec. 2.9 and WP-C1, both
+        measured against the closed-form on-axis field behind a circular
+        aperture, ``U = e^{ikz} - (z/r_a) e^{ik r_a}``, lambda = 633 nm,
+        a = 100 um, window 512 um).  On-axis relative error, and the
+        convergence order between successive rows:
+
+        ======  ===========  ===========  ===========  ===========
+        N       RS hard      RS gray      HF hard      HF gray
+        ======  ===========  ===========  ===========  ===========
+        128     8.3008e-03   1.4847e-03   2.7708e-02   1.4438e-02
+        256     3.3548e-03   3.6098e-04   1.1120e-02   3.4928e-03
+        512     3.4207e-04   8.1013e-05   1.1509e-03   8.5680e-04
+        1024    5.2718e-04   2.5030e-05   1.7601e-03   2.1122e-04
+        order   1.31/3.29/   2.04/2.16/   1.32/3.27/   2.05/2.03/
+                **-0.62**    1.69         **-0.61**    2.02
+        ======  ===========  ===========  ===========  ===========
+
+        The hard edge averages **first order at best over a ladder**
+        (1.05-1.32 measured on three optics) and its individual step
+        orders are **erratic** -- measured from -3.2 to +3.6, as the
+        table's own ``3.29`` and ``-0.62`` already show.  A circle's
+        staircase area error need not shrink monotonically, and on THIS
+        optic it does not, hence the negative last step (the last
+        refinement rises 54 % on RS and 53 % on HF).  The grey edge is
+        second order.
+
+        A rise like that is COMMON rather than exceptional
+        (VERIFY-C1-ROUND2 R5, three optics, 2026-09-20, identical on both
+        builds); what is not a library property is the DIRECTION at any
+        given N, which depends on where the rim falls on the lattice
+        there.  The RATE gap is the general claim, and it reproduces on
+        two further optics:
+
+        * lambda = 1064 nm, a = 62.5 um, window 400 um, z = 4.0 / 2.5 mm
+          -- the hard arm FALLS at every step and still gains only 9.5x
+          (RS) and 9.3x (HF) over the same three halvings against the grey
+          arm's 56.1x and 44.9x, mean orders 1.08 / 1.07 against
+          1.94 / 1.83 (``validation/probe_verify_c1/``);
+        * lambda = 532 nm, a = 150 um, window 900 um, z = 30 / 15 mm --
+          the hard arm RISES on the last refinement by a FACTOR of 9.3
+          (RS, 7.6432e-05 -> 7.1042e-04, step order -3.216) and 9.1 (HF,
+          1.2930e-04 -> 1.1785e-03, step order -3.188), its other two RS
+          step orders being 2.756 and 3.608, i.e. ABOVE second order; gains
+          8.9x and 9.1x against the grey arm's 51.1x and 65.2x, mean orders
+          1.05 / 1.06 against 1.89 / 2.01
+          (``validation/probe_verify_c1_round2/d3_ladder_R2_*.json`` and
+          ``validation/probe_wpc1_round3/d3_ladder_R3_*.json``).
+
+        The grey default therefore buys a RATE, not a constant: 21x (RS)
+        and 8x (HF) by N = 1024 on the reference optic, and more at every
+        finer grid.
+
+        Transmitted-area error against the analytic disc area, rms over
+        the 12 sub-pixel rim placements ``linspace(0, 0.95, 12)``
+        (2026-09-12, N = 512, dx = 1 um): at ``D/dx ~ 50`` pixels
+        **0.386 % hard** (range -0.535 %..+0.805 %) vs **0.044 % gray**
+        at the 4x4 default; at ``D/dx ~ 200`` 0.031 % hard vs 0.0041 %
+        gray.
+
+        What it costs: ``edge_samples**2`` mask builds (one full-grid
+        boolean each, not held simultaneously), confined to the boundary
+        pixels -- 312 of them at N = 256 (0.476 % of the grid) and 1196
+        at N = 1024 (0.114 %), i.e. 0.076x and 0.018x of one full-grid
+        pass.
 
     edge_samples : int, default 4
         Sub-samples per axis for ``edge='gray'`` (so 4 -> 16 per pixel).
@@ -299,16 +454,7 @@ def apply_aperture(E_in, dx, shape='circular', params=None, xc=0, yc=0,
         params = {}
     if dy is None:
         dy = dx
-    if edge not in ('hard', 'gray'):
-        raise ValueError(
-            f"apply_aperture: edge must be 'hard' (binary pixel mask) or "
-            f"'gray' (supersampled open-area fraction on boundary pixels); "
-            f"got {edge!r}.")
-    n_sub = int(edge_samples)
-    if n_sub < 1 or n_sub != edge_samples:
-        raise ValueError(
-            f"apply_aperture: edge_samples must be a positive integer "
-            f"(sub-samples per axis); got {edge_samples!r}.")
+    n_sub = _validate_edge_kwargs(edge=edge, edge_samples=edge_samples)
     xp = _xp_of(E_in)
 
     Ny, Nx = E_in.shape
@@ -355,9 +501,29 @@ def apply_aperture(E_in, dx, shape='circular', params=None, xc=0, yc=0,
     # Grey edge: average the binary mask over an n_sub x n_sub lattice of
     # sub-pixel offsets centred on each pixel, giving its open-area
     # fraction.  Accumulated one sub-mask at a time, so the peak stays at
-    # the cost of a single sub-mask evaluation (measured 6.0 float64 grids
-    # at N = 2048, against 5.0 for the hard edge) instead of growing with
-    # n_sub**2 -- measured identical at n_sub = 2, 4 and 8.
+    # the cost of a single sub-mask evaluation instead of growing with
+    # n_sub**2.
+    #
+    # VERIFY-C1-ROUND2 R7.  The two build-free claims, and the ones this
+    # comment is making, are that (a) the branch costs about ONE extra
+    # float64 grid at peak over the hard branch and (b) that peak does not
+    # grow with n_sub.  Allocator trace at N = 2048 (tracemalloc, steady
+    # state, input field's 2 grids excluded), 2026-09-20:
+    #
+    #   build                              hard     grey(4)   delta
+    #   Windows py3.14.6 / numpy 2.4.4     5.0011   6.0011    1.000
+    #   WSL     py3.12.3 / numpy 2.4.6     4.0011   5.1262    1.125
+    #
+    # so the ABSOLUTE pair is the build's and only the delta travels; the
+    # "6.0 against 5.0" this comment used to quote was the Windows reading
+    # alone.  Independence of n_sub, over 2 / 4 / 8 / 16: spread 0.0001
+    # grids on Windows, 0.0006 on WSL.
+    #
+    # Trap: the FIRST apply_aperture call in a PROCESS carries a one-off
+    # allocation of about 1.374 grids (Windows) / 1.053 (WSL) on either
+    # branch, so whichever arm is traced first reads high -- 6.375 for a
+    # hard-first trace here, which would say the grey branch is cheaper.
+    # Warm both arms before comparing.
     real_dtype = xp.zeros((), dtype=E_in.dtype).real.dtype
     offsets = (np.arange(n_sub) + 0.5) / n_sub - 0.5
     frac = xp.zeros((Ny, Nx), dtype=real_dtype)
@@ -987,10 +1153,16 @@ def apply_lyot_stop(E_in, dx, *, outer_diameter, inner_diameter=0.0,
                      xc=0.0, yc=0.0, dy=None):
     """Apply a downstream Lyot-stop pupil aperture.
 
-    Hard-edge annular aperture used in the pupil plane downstream of
-    a coronagraphic focal-plane mask.  Functionally equivalent to
-    ``apply_aperture(..., shape='annular', ...)`` but named to match
-    coronagraph literature.
+    Sharp-edged (unapodized) annular aperture used in the pupil plane
+    downstream of a coronagraphic focal-plane mask -- contrast
+    :func:`apply_apodized_pupil`, which softens the rim on purpose.
+    Functionally equivalent to ``apply_aperture(..., shape='annular', ...)``
+    but named to match coronagraph literature, and it takes that function's
+    ``edge`` DEFAULT, which renders the rim by pixel area (``edge='gray'``).
+    It exposes no ``edge`` keyword of its own; call
+    ``apply_aperture(..., shape='annular', edge='hard')`` directly for the
+    binary pixel-centre mask.  The CHANGELOG's Migration note records when
+    this function's returned field moved with that default.
 
     Parameters
     ----------

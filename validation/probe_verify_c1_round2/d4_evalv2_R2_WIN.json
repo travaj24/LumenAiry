@@ -1,0 +1,160 @@
+{
+ "digests": {
+  "no_stop": {
+   "default": "f93926a229d0da05",
+   "kw_gray4": "f93926a229d0da05",
+   "kw_hard": "f93926a229d0da05",
+   "kw_none_none": "f93926a229d0da05",
+   "kw_samples_1": "f93926a229d0da05",
+   "kw_samples_16": "f93926a229d0da05",
+   "private_hard": "f93926a229d0da05"
+  },
+  "one_stop": {
+   "default": "3553955082c3daed",
+   "kw_gray4": "3553955082c3daed",
+   "kw_hard": "67fc2c48a6a8bab2",
+   "kw_none_none": "3553955082c3daed",
+   "kw_samples_1": "67fc2c48a6a8bab2",
+   "kw_samples_16": "2b5a64b7759e46ee",
+   "private_hard": "67fc2c48a6a8bab2"
+  },
+  "two_stops": {
+   "default": "8b0da8712e5fcb94",
+   "kw_gray4": "8b0da8712e5fcb94",
+   "kw_hard": "9b275f2e12e29e06",
+   "kw_none_none": "8b0da8712e5fcb94",
+   "kw_samples_1": "9b275f2e12e29e06",
+   "kw_samples_16": "4f4efe41207676c8",
+   "private_hard": "9b275f2e12e29e06"
+  }
+ },
+ "evaluate_refusal": {
+  "edge_soft": [
+   true,
+   "ValueError: apply_aperture: edge must be 'hard' (binary pixel mask) or 'gray' (supersampled open-area fraction on boundary pixels); got 'soft'."
+  ],
+  "samples_2p5": [
+   true,
+   "ValueError: apply_aperture: edge_samples must be a positive integer (sub-samples per axis); got 2.5."
+  ],
+  "samples_list": [
+   true,
+   "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'list'"
+  ],
+  "samples_true": [
+   false,
+   ""
+  ],
+  "samples_zero": [
+   true,
+   "ValueError: apply_aperture: edge_samples must be a positive integer (sub-samples per axis); got 0."
+  ]
+ },
+ "guard_before_decomposition": {
+  "bad_edge": {
+   "n_warnings_before_raise": 0,
+   "verdict": [
+    true,
+    "ValueError: apply_aperture: edge must be 'hard' (binary pixel mask) or 'gray' (supersampled open-area fraction on boundary pixels); got 'soft'."
+   ],
+   "warnings": []
+  },
+  "bad_samples": {
+   "n_warnings_before_raise": 0,
+   "verdict": [
+    true,
+    "ValueError: apply_aperture: edge_samples must be a positive integer (sub-samples per axis); got 2.5."
+   ],
+   "warnings": []
+  },
+  "bad_samples_list": {
+   "n_warnings_before_raise": 0,
+   "verdict": [
+    true,
+    "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'list'"
+   ],
+   "warnings": []
+  },
+  "good": {
+   "n_warnings_before_raise": 1,
+   "verdict": [
+    false,
+    ""
+   ],
+   "warnings": [
+    "lumenairy.propagators.system.evaluate: DOE / air-to-air aspheric surface (?) has no elemen"
+   ]
+  }
+ },
+ "has_aperture_edge_kw": true,
+ "lumenairy_file": "C:\\tmp\\lum_vc1b\\lumenairy\\__init__.py",
+ "numpy": "2.4.4",
+ "python": "3.14.6",
+ "stamping": {
+  "no_stop": {
+   "all_stamped": false,
+   "element_types": [
+    "real_lens",
+    "propagate"
+   ],
+   "n_aperture_elements": 0,
+   "n_elements": 2,
+   "plain_have_edge_key": [],
+   "stamped_edges": [],
+   "stamped_have_edge_key": [],
+   "stamped_samples": []
+  },
+  "one_stop": {
+   "all_stamped": true,
+   "element_types": [
+    "aperture",
+    "propagate",
+    "real_lens",
+    "propagate"
+   ],
+   "n_aperture_elements": 1,
+   "n_elements": 4,
+   "plain_have_edge_key": [
+    false
+   ],
+   "stamped_edges": [
+    "hard"
+   ],
+   "stamped_have_edge_key": [
+    true
+   ],
+   "stamped_samples": [
+    7
+   ]
+  },
+  "two_stops": {
+   "all_stamped": true,
+   "element_types": [
+    "aperture",
+    "propagate",
+    "real_lens",
+    "propagate",
+    "aperture",
+    "propagate"
+   ],
+   "n_aperture_elements": 2,
+   "n_elements": 6,
+   "plain_have_edge_key": [
+    false,
+    false
+   ],
+   "stamped_edges": [
+    "hard",
+    "hard"
+   ],
+   "stamped_have_edge_key": [
+    true,
+    true
+   ],
+   "stamped_samples": [
+    7,
+    7
+   ]
+  }
+ }
+}

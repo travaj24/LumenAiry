@@ -1,0 +1,63 @@
+{
+ "N": 2048,
+ "all_settled": true,
+ "arms": {
+  "default": {
+   "held_bytes": 67113104,
+   "peak_bytes": 172006128,
+   "peak_grids": 5.1261820793151855,
+   "peak_grids_plus_input": 7.1261820793151855,
+   "peak_grids_repeat": 5.1261820793151855,
+   "settled": true
+  },
+  "gray_n16": {
+   "held_bytes": 67132669,
+   "peak_bytes": 172025789,
+   "peak_grids": 5.12676802277565,
+   "peak_grids_plus_input": 7.12676802277565,
+   "peak_grids_repeat": 5.126693546772003,
+   "settled": true
+  },
+  "gray_n2": {
+   "held_bytes": 67111288,
+   "peak_bytes": 172004296,
+   "peak_grids": 5.126127481460571,
+   "peak_grids_plus_input": 7.126127481460571,
+   "peak_grids_repeat": 5.126126527786255,
+   "settled": true
+  },
+  "gray_n4": {
+   "held_bytes": 67113104,
+   "peak_bytes": 172006128,
+   "peak_grids": 5.1261820793151855,
+   "peak_grids_plus_input": 7.1261820793151855,
+   "peak_grids_repeat": 5.1261820793151855,
+   "settled": true
+  },
+  "gray_n8": {
+   "held_bytes": 67119761,
+   "peak_bytes": 172012817,
+   "peak_grids": 5.126381427049637,
+   "peak_grids_plus_input": 7.126381427049637,
+   "peak_grids_repeat": 5.126333236694336,
+   "settled": true
+  },
+  "hard": {
+   "held_bytes": 67110634,
+   "peak_bytes": 134253330,
+   "peak_grids": 4.001061022281647,
+   "peak_grids_plus_input": 6.001061022281647,
+   "peak_grids_repeat": 4.001061975955963,
+   "settled": true
+  }
+ },
+ "default_equals_gray_n4": true,
+ "grey_minus_hard_grids": 1.1251210570335388,
+ "grey_peak_independent_of_n_sub": true,
+ "known_1grid_peak_bytes": 33554616,
+ "lumenairy_file": "/mnt/c/tmp/lum_c1c/lumenairy/__init__.py",
+ "numpy": "2.4.6",
+ "numpy_allocations_are_traced": true,
+ "one_float64_grid_bytes": 33554432.0,
+ "python": "3.12.3"
+}

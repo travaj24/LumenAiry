@@ -1,0 +1,324 @@
+{
+ "digests_default": {
+  "jax_eager": "a484445be27acdb0",
+  "jax_jit": "83239bd82f4c4f23",
+  "numpy": "83239bd82f4c4f23"
+ },
+ "digests_hard": {
+  "jax_eager": "a484445be27acdb0",
+  "jax_jit": "83239bd82f4c4f23",
+  "numpy": "83239bd82f4c4f23"
+ },
+ "element_key_validation": {
+  "edge_bogus": {
+   "agree_numpy_vs_eager": false,
+   "agree_numpy_vs_jit": true,
+   "apply_aperture_direct": {
+    "exc": "ValueError: apply_aperture: edge must be 'hard' (binary pixel mask) or 'gray' (supersampled open-area fraction on boundary pixels); got 'soft'.",
+    "raised": true
+   },
+   "jax_eager": {
+    "digest": "a484445be27acdb0",
+    "raised": false
+   },
+   "jax_jit": {
+    "digest": "83239bd82f4c4f23",
+    "raised": false
+   },
+   "numpy": {
+    "digest": "83239bd82f4c4f23",
+    "raised": false
+   }
+  },
+  "edge_none": {
+   "agree_numpy_vs_eager": false,
+   "agree_numpy_vs_jit": true,
+   "apply_aperture_direct": {
+    "exc": "ValueError: apply_aperture: edge must be 'hard' (binary pixel mask) or 'gray' (supersampled open-area fraction on boundary pixels); got None.",
+    "raised": true
+   },
+   "jax_eager": {
+    "digest": "a484445be27acdb0",
+    "raised": false
+   },
+   "jax_jit": {
+    "digest": "83239bd82f4c4f23",
+    "raised": false
+   },
+   "numpy": {
+    "digest": "83239bd82f4c4f23",
+    "raised": false
+   }
+  },
+  "edge_samples_float_2p5": {
+   "agree_numpy_vs_eager": false,
+   "agree_numpy_vs_jit": true,
+   "apply_aperture_direct": {
+    "exc": "ValueError: apply_aperture: edge_samples must be a positive integer (sub-samples per axis); got 2.5.",
+    "raised": true
+   },
+   "jax_eager": {
+    "digest": "a484445be27acdb0",
+    "raised": false
+   },
+   "jax_jit": {
+    "digest": "83239bd82f4c4f23",
+    "raised": false
+   },
+   "numpy": {
+    "digest": "83239bd82f4c4f23",
+    "raised": false
+   }
+  },
+  "edge_samples_float_4p0": {
+   "agree_numpy_vs_eager": false,
+   "agree_numpy_vs_jit": true,
+   "apply_aperture_direct": {
+    "digest": "83239bd82f4c4f23",
+    "raised": false
+   },
+   "jax_eager": {
+    "digest": "a484445be27acdb0",
+    "raised": false
+   },
+   "jax_jit": {
+    "digest": "83239bd82f4c4f23",
+    "raised": false
+   },
+   "numpy": {
+    "digest": "83239bd82f4c4f23",
+    "raised": false
+   }
+  },
+  "edge_samples_negative": {
+   "agree_numpy_vs_eager": false,
+   "agree_numpy_vs_jit": true,
+   "apply_aperture_direct": {
+    "exc": "ValueError: apply_aperture: edge_samples must be a positive integer (sub-samples per axis); got -2.",
+    "raised": true
+   },
+   "jax_eager": {
+    "digest": "a484445be27acdb0",
+    "raised": false
+   },
+   "jax_jit": {
+    "digest": "83239bd82f4c4f23",
+    "raised": false
+   },
+   "numpy": {
+    "digest": "83239bd82f4c4f23",
+    "raised": false
+   }
+  },
+  "edge_samples_str": {
+   "agree_numpy_vs_eager": false,
+   "agree_numpy_vs_jit": true,
+   "apply_aperture_direct": {
+    "exc": "ValueError: apply_aperture: edge_samples must be a positive integer (sub-samples per axis); got '4'.",
+    "raised": true
+   },
+   "jax_eager": {
+    "digest": "a484445be27acdb0",
+    "raised": false
+   },
+   "jax_jit": {
+    "digest": "83239bd82f4c4f23",
+    "raised": false
+   },
+   "numpy": {
+    "digest": "83239bd82f4c4f23",
+    "raised": false
+   }
+  },
+  "edge_samples_zero": {
+   "agree_numpy_vs_eager": false,
+   "agree_numpy_vs_jit": true,
+   "apply_aperture_direct": {
+    "exc": "ValueError: apply_aperture: edge_samples must be a positive integer (sub-samples per axis); got 0.",
+    "raised": true
+   },
+   "jax_eager": {
+    "digest": "a484445be27acdb0",
+    "raised": false
+   },
+   "jax_jit": {
+    "digest": "83239bd82f4c4f23",
+    "raised": false
+   },
+   "numpy": {
+    "digest": "83239bd82f4c4f23",
+    "raised": false
+   }
+  },
+  "unknown_key_edgesample_typo": {
+   "agree_numpy_vs_eager": false,
+   "agree_numpy_vs_jit": true,
+   "apply_aperture_direct": {
+    "digest": "b0d797213c6dff88",
+    "raised": false
+   },
+   "jax_eager": {
+    "digest": "a484445be27acdb0",
+    "raised": false
+   },
+   "jax_jit": {
+    "digest": "83239bd82f4c4f23",
+    "raised": false
+   },
+   "numpy": {
+    "digest": "83239bd82f4c4f23",
+    "raised": false
+   }
+  },
+  "unknown_key_gray": {
+   "agree_numpy_vs_eager": false,
+   "agree_numpy_vs_jit": true,
+   "apply_aperture_direct": {
+    "digest": "b0d797213c6dff88",
+    "raised": false
+   },
+   "jax_eager": {
+    "digest": "a484445be27acdb0",
+    "raised": false
+   },
+   "jax_jit": {
+    "digest": "83239bd82f4c4f23",
+    "raised": false
+   },
+   "numpy": {
+    "digest": "83239bd82f4c4f23",
+    "raised": false
+   }
+  }
+ },
+ "element_signature": {
+  "default": "('aperture_circular', 4.55e-05, 0.0, 0.0)",
+  "gray_ns8": "('aperture_circular', 4.55e-05, 0.0, 0.0)",
+  "hard": "('aperture_circular', 4.55e-05, 0.0, 0.0)",
+  "ns_2p5": "('aperture_circular', 4.55e-05, 0.0, 0.0)"
+ },
+ "hard_key_honoured": false,
+ "jax": "0.11.0",
+ "jax_grad": {
+  "default": {
+   "finite": true,
+   "grad": 1786.015029757675
+  },
+  "gray": {
+   "finite": true,
+   "grad": 1709.9665764887113
+  },
+  "hard": {
+   "finite": true,
+   "grad": 1786.015029757675
+  },
+  "jit_grad": {
+   "finite": true,
+   "grad": 1786.015029757675
+  }
+ },
+ "lumenairy_file": "C:\\tmp\\lum_vc1_base\\lumenairy\\__init__.py",
+ "lumenairy_version": "5.48.1",
+ "nonfinite_outside_stop": {
+  "jax_eager": {
+   "all_finite": false,
+   "corner_00": [
+    NaN,
+    NaN
+   ],
+   "corner_01": [
+    NaN,
+    NaN
+   ],
+   "corner_10": [
+    NaN,
+    NaN
+   ],
+   "n_nonfinite": 3,
+   "neg_zeros": [
+    778,
+    853
+   ]
+  },
+  "jax_jit": {
+   "all_finite": true,
+   "corner_00": [
+    0.0,
+    0.0
+   ],
+   "corner_01": [
+    0.0,
+    0.0
+   ],
+   "corner_10": [
+    0.0,
+    0.0
+   ],
+   "n_nonfinite": 0,
+   "neg_zeros": [
+    0,
+    0
+   ]
+  },
+  "numpy": {
+   "all_finite": true,
+   "corner_00": [
+    0.0,
+    0.0
+   ],
+   "corner_01": [
+    0.0,
+    0.0
+   ],
+   "corner_10": [
+    0.0,
+    0.0
+   ],
+   "n_nonfinite": 0,
+   "neg_zeros": [
+    0,
+    0
+   ]
+  }
+ },
+ "numpy": "2.4.4",
+ "platform": "Windows-11-10.0.26200-SP0",
+ "python": "3.14.6 (tags/v3.14.6:c63aec6, Jun 10 2026, 10:26:10) [MSC v.1944 64 bit (AMD64)]",
+ "signed_zeros_default": {
+  "jax_eager": [
+   3033,
+   3066
+  ],
+  "jax_jit": [
+   0,
+   0
+  ],
+  "n_zero_pixels_eager": 12219,
+  "numpy": [
+   0,
+   0
+  ]
+ },
+ "signed_zeros_hard": {
+  "jax_eager": [
+   3033,
+   3066
+  ],
+  "jax_jit": [
+   0,
+   0
+  ],
+  "numpy": [
+   0,
+   0
+  ]
+ },
+ "tag": "PRE_WIN",
+ "threads": {
+  "MKL_NUM_THREADS": "1",
+  "OMP_NUM_THREADS": "1",
+  "OPENBLAS_NUM_THREADS": "1"
+ },
+ "three_routes_bit_identical_default": false,
+ "three_routes_bit_identical_hard": false
+}

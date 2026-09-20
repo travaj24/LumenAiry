@@ -1,0 +1,23 @@
+{
+ "duplicate_keys": false,
+ "files": {
+  "tests/unit/test_c1_gray_edge_default.py": {
+   "collected": 31,
+   "in_durations": 31,
+   "missing": [],
+   "stale": [],
+   "total_seconds": 12.0209
+  },
+  "tests/unit/test_verify_c1_gray_edge.py": {
+   "collected": 28,
+   "in_durations": 28,
+   "missing": [],
+   "stale": [],
+   "total_seconds": 28.4076
+  }
+ },
+ "first_key": "tests/unit/test_analysis.py::TestBeamCentroid::test_centroid_returns_tuple",
+ "json_valid": true,
+ "last_key": "tests/unit/test_verify_c1_gray_edge.py::test_verify_c1_evaluate_takes_the_new_rim_and_its_way_back_is_one_keyword",
+ "total_entries": 16655
+}

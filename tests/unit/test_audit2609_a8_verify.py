@@ -588,8 +588,56 @@ def test_verify_a8_e7_gray_edge_beats_hard_at_anamorphic_and_offset_rims(
 
     Bars: gray(16) < 3e-4 absolute relative error (the worst measurement is
     8.1e-5, so 3.7x of headroom, and the coarsest hard reading it must beat
-    is 4.85e-3), plus the two DECISIONS -- gray(4) at least as good as hard
-    and gray(16) better than gray(4) -- which need no bar at all.
+    is 4.85e-3); ``e_hard / e_g4 >= 1.5``, derived below; and gray(16)
+    better than gray(4), a strict inequality that needs no bar at all.
+
+    The ratio bar, and why it is not ``e_g4 <= e_hard`` (VERIFY-C1 defect
+    D2).  ``<=`` is satisfied by EQUALITY, so the id passed when the two arms
+    were the SAME array: the verification mutated ``edge='hard'`` to return
+    the grey mask, watched fifteen other ids go red, and found this one still
+    green on both builds.  ``1.0`` is exactly where "grey IS hard" lives, so
+    the bar has to sit strictly above it.  Re-measured 2026-09-20 on this
+    id's own three fixtures, Windows py3.14 / numpy 2.4.4 and WSL py3.12 /
+    numpy 2.4.6, IDENTICAL to sixteen significant figures on both (there is
+    no BLAS in any of it -- a mask sum is an integer count over
+    ``n_sub**2``), raw JSON in ``validation/probe_verify_c1/d2_ratio_*.json``:
+
+        D/dx = 37,  dy/dx = 1.0, offset 0.37 px : 5.804555
+        D/dx = 63,  dy/dx = 2.5, offset 0.13 px : 8.815875
+        D/dx = 145, dy/dx = 0.4, offset 0.29 px : 1.992823   <- the worst
+
+    so 1.5 sits 1.33x below the smallest real reading and 1.5x above the
+    degenerate 1.0, which is a gap on both sides.
+
+    The 145-px fixture is the binding one, but NOT because a bigger rim is a
+    milder staircase (VERIFY-C1 ROUND2 defect R4, which refuted that reading
+    of it).  The ratio is set by where each arm's SIGNED area error falls
+    relative to ZERO, and at ``D/dx = 145`` the hard arm happens to be near a
+    crossing.  A 30-point scan of that fixture's neighbourhood -- the same
+    ``D``, ``dy/dx`` in {0.4, 0.5, 1.0} and ten offsets -- finds FOUR ratios
+    below 1.0, the worst **0.003602** at ``dy/dx = 1.0, offset 0.23``, where
+
+        e_hard = +2.188924e-07   against   e_g4 = +6.077725e-05
+
+    i.e. the hard arm is ~278x BETTER there, purely because its staircase
+    error is passing through zero; the three shipped fixtures' own signed
+    readings are -4.845644e-03 / -8.348003e-04, -7.202868e-04 / +8.170338e-05
+    and +6.077725e-05 / +3.049807e-05.  So the ratio is **not monotone in the
+    rim width**: it inverts wherever the hard arm's signed error crosses zero,
+    which on this fixture family happens inside ``D/dx = 145`` itself as the
+    offset moves from 0.29 (ratio 1.9928) to 0.23 (ratio 0.0036) -- one
+    neighbouring offset away.  The grey arm cannot compensate, because its own
+    sub-sample quantisation residual (about 3e-05 to 8e-05 here) does not
+    shrink with ``D``; see VERIFY_WP-C1.md sec. 2.5, and note that the
+    second-order convergence claim is a FIELD property, not an AREA one.
+
+    Consequence for a future re-pinner: the bar is a pin on THESE THREE
+    fixtures and must be RE-MEASURED, not extrapolated, if they change.
+    "Pick a bigger D, the staircase will be milder" is the opposite of what
+    the data does.  Re-measured 2026-09-20, character-identical on Windows
+    py3.14 / numpy 2.4.4 and WSL py3.12 / numpy 2.4.6; raw JSON in
+    ``validation/probe_verify_c1_round2/d2_ratio_R2_*.json`` and
+    ``validation/probe_wpc1_round3/d2_ratio_R3_*.json``.
     """
     N, dx = 512, 1e-6
     dy = dx * dy_ratio
@@ -603,11 +651,21 @@ def test_verify_a8_e7_gray_edge_beats_hard_at_anamorphic_and_offset_rims(
                                       **kw)
         return float(np.sum(np.real(out))) * dx * dy
 
-    e_hard = abs(_area() / analytic - 1.0)
+    # v5.49.0 (WP-C1): the hard arm is named explicitly -- the default moved
+    # to 'gray', and an unnamed ``_area()`` here would have turned
+    # ``e_g4 <= e_hard`` into a tautology instead of a comparison.  The
+    # readings and the bars are unchanged.
+    e_hard = abs(_area(edge='hard') / analytic - 1.0)
     e_g4 = abs(_area(edge='gray') / analytic - 1.0)
     e_g16 = abs(_area(edge='gray', edge_samples=16) / analytic - 1.0)
     assert e_g16 < 3e-4, (d_px, dy_ratio, offset, e_g16)
-    assert e_g4 <= e_hard, (e_g4, e_hard)
+    # VERIFY-C1 D2: a RATIO, not ``<=``.  ``e_g4 <= e_hard`` is satisfied by
+    # EQUALITY, so it passed while the two arms were the same array -- with
+    # ``edge='hard'`` mutated to return the grey mask, 15 ids went red on
+    # both builds and this was not one of them.  Derivation and the three
+    # re-measured ratios are in the docstring's "Bars" paragraph.
+    assert e_hard / e_g4 >= 1.5, (d_px, dy_ratio, offset, e_hard, e_g4,
+                                  e_hard / e_g4)
     assert e_g16 < e_g4, (e_g16, e_g4)
 
 
@@ -628,7 +686,10 @@ def test_verify_a8_e7_gray_edge_zeroes_a_blocked_pixel_even_if_it_is_not_finite(
     scale outside the opening.  Exact-zero assertion; no bar is meaningful.
     """
     E = np.full((32, 32), fill, dtype=np.complex128)
-    hard = elem_mod.apply_aperture(E, 1e-6, 'circular', {'diameter': 1e-5})
+    # v5.49.0 (WP-C1): both arms named, so this stays a hard-vs-gray claim
+    # after the default moved to 'gray'.
+    hard = elem_mod.apply_aperture(E, 1e-6, 'circular', {'diameter': 1e-5},
+                                   edge='hard')
     gray = elem_mod.apply_aperture(E, 1e-6, 'circular', {'diameter': 1e-5},
                                    edge='gray')
     outside = np.zeros((32, 32), dtype=bool)
@@ -663,6 +724,7 @@ def test_verify_a8_e7_gray_edge_is_not_advertised_for_axis_aligned_rims():
 
     e_g4 = abs(_area(edge='gray') / analytic - 1.0)
     e_g16 = abs(_area(edge='gray', edge_samples=16) / analytic - 1.0)
-    assert e_g4 < abs(_area() / analytic - 1.0)
+    # v5.49.0 (WP-C1): the hard arm named explicitly (the default moved).
+    assert e_g4 < abs(_area(edge='hard') / analytic - 1.0)
     # linear in 1/n_sub: the ratio is 4.0 +- 25 %, not the 8 of n**1.5
     assert 3.0 < e_g4 / e_g16 < 5.0, (e_g4, e_g16)

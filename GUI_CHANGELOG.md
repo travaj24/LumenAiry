@@ -15,6 +15,30 @@ for the same release).  Historical GUI-only releases (e.g. 3.2.0,
 Designer" to "**LumenAiry Designer**" in 3.5.9.  Earlier
 historical entries below retain the old name for traceability.
 
+## [Unreleased]
+
+### Changed -- the Coronagraph dock's Stop 3 field moves with the library's new aperture rim (library WP-C1)
+
+`lumenairy/ui/coronagraph_dock.py:370` (`_apply_lyot_stop`, reached from the
+Stop 3 leg at line 261) calls `lumenairy.elements.apply_lyot_stop`, which
+renders its annulus through `apply_aperture`.  The library's `apply_aperture`
+default moved from `edge='hard'` (each pixel wholly inside or wholly outside)
+to `edge='gray'` (each boundary pixel gets its 4x4-supersampled open-area
+fraction) in 5.49.0, so **the field the dock displays and exports at Stop 3,
+and everything computed downstream of it, moves**: the `Stop 4: Image plane`
+panel (the forward Fraunhofer of the Stop 3 field), the contrast curve
+reduced from that panel's intensity, and the throughput readout.  The move is
+at the 1e-3 level in relative L2 on a propagated field.
+
+Nothing in the dock changed and nothing is wrong either way: the grey rim is
+the one with a convergence order (second order against first, measured on two
+independent optics), which is why the library made it the default.  The dock
+exposes no rim control, so a user reproducing a previously exported Stop 3
+number re-records it; there is no GUI control that restores the old bytes.
+The library-side way back, for anyone driving `apply_lyot_stop` from a script,
+is `apply_aperture(..., shape='annular', edge='hard')` -- see the `5.49.0`
+section of `Migration-Guide.md`, whose "What moves" table now names this dock.
+
 ## [5.46.0] — 2026-09-12
 
 ### Fixed -- analysis docks were analysing a different system than the layout drew (U1, U2, P0)

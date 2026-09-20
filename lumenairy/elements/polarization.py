@@ -525,6 +525,15 @@ class JonesField:
         xc: float = 0,
         yc: float = 0,
     ) -> 'JonesField':
+        """Apply an amplitude stop to both components.
+
+        Carries :func:`~lumenairy.elements.elements.apply_aperture`'s
+        ``edge`` DEFAULT, which renders the rim by pixel AREA.  This method
+        exposes no ``edge`` keyword; for the binary pixel-centre mask call
+        ``apply_aperture(..., edge='hard')`` on ``Ex`` and ``Ey``.  The
+        CHANGELOG's Migration note records when both returned components
+        moved with that default.
+        """
         # v5.4.6 (audit P2-4): forward dy=self.dy for anamorphic grids.
         self.Ex = apply_aperture(self.Ex, self.dx, shape=shape, params=params,
                                  xc=xc, yc=yc, dy=self.dy)

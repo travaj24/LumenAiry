@@ -1,0 +1,63 @@
+{
+ "N": 2048,
+ "all_settled": true,
+ "arms": {
+  "default": {
+   "held_bytes": 67112538,
+   "peak_bytes": 201364474,
+   "peak_grids": 6.001128971576691,
+   "peak_grids_plus_input": 8.00112897157669,
+   "peak_grids_repeat": 6.001092463731766,
+   "settled": true
+  },
+  "gray_n16": {
+   "held_bytes": 67114008,
+   "peak_bytes": 201366040,
+   "peak_grids": 6.00117564201355,
+   "peak_grids_plus_input": 8.00117564201355,
+   "peak_grids_repeat": 6.001095324754715,
+   "settled": true
+  },
+  "gray_n2": {
+   "held_bytes": 67111624,
+   "peak_bytes": 201363544,
+   "peak_grids": 6.00110125541687,
+   "peak_grids_plus_input": 8.00110125541687,
+   "peak_grids_repeat": 6.001100301742554,
+   "settled": true
+  },
+  "gray_n4": {
+   "held_bytes": 67112832,
+   "peak_bytes": 201364768,
+   "peak_grids": 6.001137733459473,
+   "peak_grids_plus_input": 8.001137733459473,
+   "peak_grids_repeat": 6.001120209693909,
+   "settled": true
+  },
+  "gray_n8": {
+   "held_bytes": 67111362,
+   "peak_bytes": 201363330,
+   "peak_grids": 6.001094877719879,
+   "peak_grids_plus_input": 8.00109487771988,
+   "peak_grids_repeat": 6.001097798347473,
+   "settled": true
+  },
+  "hard": {
+   "held_bytes": 67111138,
+   "peak_bytes": 167808202,
+   "peak_grids": 5.001074135303497,
+   "peak_grids_plus_input": 7.001074135303497,
+   "peak_grids_repeat": 5.001075088977814,
+   "settled": true
+  }
+ },
+ "default_equals_gray_n4": false,
+ "grey_minus_hard_grids": 1.0000635981559753,
+ "grey_peak_independent_of_n_sub": true,
+ "known_1grid_peak_bytes": 33554592,
+ "lumenairy_file": "C:\\tmp\\lum_c1c\\lumenairy\\__init__.py",
+ "numpy": "2.4.4",
+ "numpy_allocations_are_traced": true,
+ "one_float64_grid_bytes": 33554432.0,
+ "python": "3.14.6"
+}

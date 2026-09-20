@@ -1,0 +1,54 @@
+{
+ "arms": {
+  "_refusals": {
+   "bad_edge": "ValueError: apply_aperture: edge must be 'hard' (binary pixel mask) or 'gray' (supersampled open-area fraction on boundary pixels); got 'soft'.",
+   "bad_samples": "ValueError: apply_aperture: edge_samples must be a positive integer (sub-samples per axis); got 2.5."
+  },
+  "default": {
+   "dtype": "complex128",
+   "sha256": "193bf1d920e2ac887e7bba26850fe6725b29d87eac91085357b4b5eb530f5de9",
+   "shape": [
+    128,
+    128
+   ]
+  },
+  "kw_gray1": {
+   "dtype": "complex128",
+   "sha256": "0b97c205be347dfa4cbe27baa15b62be619aa049781d562d0b3d8252fdd86252",
+   "shape": [
+    128,
+    128
+   ]
+  },
+  "kw_gray4": {
+   "dtype": "complex128",
+   "sha256": "193bf1d920e2ac887e7bba26850fe6725b29d87eac91085357b4b5eb530f5de9",
+   "shape": [
+    128,
+    128
+   ]
+  },
+  "kw_hard": {
+   "dtype": "complex128",
+   "sha256": "0b97c205be347dfa4cbe27baa15b62be619aa049781d562d0b3d8252fdd86252",
+   "shape": [
+    128,
+    128
+   ]
+  },
+  "private_hard": {
+   "dtype": "complex128",
+   "sha256": "0b97c205be347dfa4cbe27baa15b62be619aa049781d562d0b3d8252fdd86252",
+   "shape": [
+    128,
+    128
+   ]
+  }
+ },
+ "exposes_aperture_edge": true,
+ "lumenairy": "/mnt/c/tmp/lum_c1b/lumenairy/__init__.py",
+ "numpy": "2.4.6",
+ "platform": "Linux-4.4.0-26100-Microsoft-x86_64-with-glibc2.39",
+ "python": "3.12.3",
+ "tag": "R2_WSL"
+}

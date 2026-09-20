@@ -1,0 +1,23 @@
+{
+ "duplicate_keys": false,
+ "files": {
+  "tests/unit/test_c1_gray_edge_default.py": {
+   "collected": 34,
+   "in_durations": 34,
+   "missing": [],
+   "stale": [],
+   "total_seconds": 12.0243
+  },
+  "tests/unit/test_verify_c1_gray_edge.py": {
+   "collected": 28,
+   "in_durations": 28,
+   "missing": [],
+   "stale": [],
+   "total_seconds": 28.4076
+  }
+ },
+ "first_key": "tests/unit/test_analysis.py::TestBeamCentroid::test_centroid_returns_tuple",
+ "json_valid": true,
+ "last_key": "tests/unit/test_c1_gray_edge_default.py::test_c1_all_three_chain_routes_refuse_a_bad_edge_element_identically[edge_samples_none-bad10]",
+ "total_entries": 16685
+}

@@ -1,0 +1,447 @@
+{
+ "aperture": {
+  "identical": [],
+  "moved": [
+   {
+    "base_dtype": "complex128",
+    "base_neg_zero": [
+     0,
+     0
+    ],
+    "base_sha": "1ffb9fa4ece07931",
+    "name": "v_algebra_operator_annular",
+    "new_dtype": "complex128",
+    "new_neg_zero": [
+     0,
+     0
+    ],
+    "new_sha": "25876b25e6a869f0"
+   },
+   {
+    "base_dtype": "complex128",
+    "base_neg_zero": [
+     0,
+     0
+    ],
+    "base_sha": "4e1bbae2d2011bb9",
+    "name": "v_algebra_operator_circ",
+    "new_dtype": "complex128",
+    "new_neg_zero": [
+     0,
+     0
+    ],
+    "new_sha": "324743bc7437125e"
+   },
+   {
+    "base_dtype": "complex128",
+    "base_neg_zero": [
+     0,
+     0
+    ],
+    "base_sha": "f2c6866dfb8cf68a",
+    "name": "v_algebra_operator_square",
+    "new_dtype": "complex128",
+    "new_neg_zero": [
+     0,
+     0
+    ],
+    "new_sha": "15eb10aef4b1b96d"
+   },
+   {
+    "base_dtype": "complex128",
+    "base_neg_zero": [
+     0,
+     0
+    ],
+    "base_sha": "29ee8e06e03e4068",
+    "name": "v_annulus",
+    "new_dtype": "complex128",
+    "new_neg_zero": [
+     0,
+     0
+    ],
+    "new_sha": "1951fff0b47f41a1"
+   },
+   {
+    "base_dtype": "complex128",
+    "base_neg_zero": [
+     0,
+     0
+    ],
+    "base_sha": "fbe8b4d84bd505e2",
+    "name": "v_annulus_decentred_anamorphic",
+    "new_dtype": "complex128",
+    "new_neg_zero": [
+     0,
+     0
+    ],
+    "new_sha": "1317dc17ff19357c"
+   },
+   {
+    "base_dtype": "complex128",
+    "base_neg_zero": [
+     0,
+     0
+    ],
+    "base_sha": "09c5c4abc5b89aa0",
+    "name": "v_asm_of_apertured",
+    "new_dtype": "complex128",
+    "new_neg_zero": [
+     0,
+     0
+    ],
+    "new_sha": "39025a514bab1060"
+   },
+   {
+    "base_dtype": "complex128",
+    "base_neg_zero": [
+     3152,
+     3027
+    ],
+    "base_sha": "386c993dff648a07",
+    "name": "v_chain_jax_eager",
+    "new_dtype": "complex128",
+    "new_neg_zero": [
+     0,
+     0
+    ],
+    "new_sha": "a209a3ddc2647625"
+   },
+   {
+    "base_dtype": "complex128",
+    "base_neg_zero": [
+     3160,
+     3238
+    ],
+    "base_sha": "8f4a17644f864ff8",
+    "name": "v_chain_jax_eager_annular",
+    "new_dtype": "complex128",
+    "new_neg_zero": [
+     0,
+     0
+    ],
+    "new_sha": "809db0b0ea07f40f"
+   },
+   {
+    "base_dtype": "complex128",
+    "base_neg_zero": [
+     0,
+     0
+    ],
+    "base_sha": "a04e643236c6bb2d",
+    "name": "v_chain_jax_jit",
+    "new_dtype": "complex128",
+    "new_neg_zero": [
+     0,
+     0
+    ],
+    "new_sha": "a209a3ddc2647625"
+   },
+   {
+    "base_dtype": "complex128",
+    "base_neg_zero": [
+     0,
+     0
+    ],
+    "base_sha": "a04e643236c6bb2d",
+    "name": "v_chain_numpy",
+    "new_dtype": "complex128",
+    "new_neg_zero": [
+     0,
+     0
+    ],
+    "new_sha": "a209a3ddc2647625"
+   },
+   {
+    "base_dtype": "complex128",
+    "base_neg_zero": [
+     0,
+     0
+    ],
+    "base_sha": "5eaf5c085b53e901",
+    "name": "v_chain_numpy_rect",
+    "new_dtype": "complex128",
+    "new_neg_zero": [
+     0,
+     0
+    ],
+    "new_sha": "e87dbf985ccb936e"
+   },
+   {
+    "base_dtype": "complex128",
+    "base_neg_zero": [
+     0,
+     0
+    ],
+    "base_sha": "7938d5a57ea6a7d7",
+    "name": "v_circ",
+    "new_dtype": "complex128",
+    "new_neg_zero": [
+     0,
+     0
+    ],
+    "new_sha": "9c11daca6852d448"
+   },
+   {
+    "base_dtype": "complex64",
+    "base_neg_zero": [
+     0,
+     0
+    ],
+    "base_sha": "90e470d26c1d2209",
+    "name": "v_circ_complex64",
+    "new_dtype": "complex64",
+    "new_neg_zero": [
+     0,
+     0
+    ],
+    "new_sha": "8796cce0f30f615e"
+   },
+   {
+    "base_dtype": "complex128",
+    "base_neg_zero": [
+     0,
+     0
+    ],
+    "base_sha": "e1057de68510108a",
+    "name": "v_circ_decentred",
+    "new_dtype": "complex128",
+    "new_neg_zero": [
+     0,
+     0
+    ],
+    "new_sha": "f2140466eb514290"
+   },
+   {
+    "base_dtype": "complex128",
+    "base_neg_zero": [
+     0,
+     0
+    ],
+    "base_sha": "1b8bfeb605401d73",
+    "name": "v_circ_edge_samples_8",
+    "new_dtype": "complex128",
+    "new_neg_zero": [
+     0,
+     0
+    ],
+    "new_sha": "958f50facc7976f8"
+   },
+   {
+    "base_dtype": "complex128",
+    "base_neg_zero": [
+     0,
+     0
+    ],
+    "base_sha": "544903c6f0c1bab0",
+    "name": "v_circ_nan_outside",
+    "new_dtype": "complex128",
+    "new_neg_zero": [
+     0,
+     0
+    ],
+    "new_sha": "69dc9ff121a068a1"
+   },
+   {
+    "base_dtype": "complex128",
+    "base_neg_zero": [
+     0,
+     0
+    ],
+    "base_sha": "34de76ebf2e43c8d",
+    "name": "v_circ_odd_grid",
+    "new_dtype": "complex128",
+    "new_neg_zero": [
+     0,
+     0
+    ],
+    "new_sha": "9f02ba88ebd0820a"
+   },
+   {
+    "base_dtype": "complex128",
+    "base_neg_zero": [
+     0,
+     0
+    ],
+    "base_sha": "0b97c205be347dfa",
+    "name": "v_evaluate_prescription_stop",
+    "new_dtype": "complex128",
+    "new_neg_zero": [
+     0,
+     0
+    ],
+    "new_sha": "193bf1d920e2ac88"
+   },
+   {
+    "base_dtype": "complex128",
+    "base_neg_zero": [
+     0,
+     0
+    ],
+    "base_sha": "e7cb2f52ffb5554f",
+    "name": "v_jax_direct",
+    "new_dtype": "complex128",
+    "new_neg_zero": [
+     0,
+     0
+    ],
+    "new_sha": "3ef9d261aa168424"
+   },
+   {
+    "base_dtype": "complex128",
+    "base_neg_zero": [
+     0,
+     0
+    ],
+    "base_sha": "c95a457d5d8a6447",
+    "name": "v_jones_field",
+    "new_dtype": "complex128",
+    "new_neg_zero": [
+     0,
+     0
+    ],
+    "new_sha": "cfe5d5329587a4b4"
+   },
+   {
+    "base_dtype": "complex128",
+    "base_neg_zero": [
+     0,
+     0
+    ],
+    "base_sha": "cbdd0cbb9d847336",
+    "name": "v_lyot_annular",
+    "new_dtype": "complex128",
+    "new_neg_zero": [
+     0,
+     0
+    ],
+    "new_sha": "b572b3d9ebf9c8b5"
+   },
+   {
+    "base_dtype": "complex128",
+    "base_neg_zero": [
+     0,
+     0
+    ],
+    "base_sha": "78645b1f884df911",
+    "name": "v_lyot_outer_only",
+    "new_dtype": "complex128",
+    "new_neg_zero": [
+     0,
+     0
+    ],
+    "new_sha": "9021a923a20e53f6"
+   },
+   {
+    "base_dtype": "float64",
+    "base_neg_zero": [
+     null,
+     null
+    ],
+    "base_sha": "db36f9ff2181acc7",
+    "name": "v_psf_of_apertured",
+    "new_dtype": "float64",
+    "new_neg_zero": [
+     null,
+     null
+    ],
+    "new_sha": "83245bfaca492a6e"
+   },
+   {
+    "base_dtype": "complex128",
+    "base_neg_zero": [
+     0,
+     0
+    ],
+    "base_sha": "d885a0d4a7ecd3f8",
+    "name": "v_rect",
+    "new_dtype": "complex128",
+    "new_neg_zero": [
+     0,
+     0
+    ],
+    "new_sha": "bd579dd8d685a38d"
+   },
+   {
+    "base_dtype": "complex128",
+    "base_neg_zero": [
+     0,
+     0
+    ],
+    "base_sha": "6e2b1ab05b3eafb0",
+    "name": "v_rect_anamorphic_grid",
+    "new_dtype": "complex128",
+    "new_neg_zero": [
+     0,
+     0
+    ],
+    "new_sha": "b1793e000c6fa87f"
+   },
+   {
+    "base_dtype": "complex128",
+    "base_neg_zero": [
+     0,
+     0
+    ],
+    "base_sha": "e509dd1d5e4b2a38",
+    "name": "v_rs_spatial_of_apertured",
+    "new_dtype": "complex128",
+    "new_neg_zero": [
+     0,
+     0
+    ],
+    "new_sha": "6b236281727da42f"
+   }
+  ],
+  "n_identical": 0,
+  "n_moved": 26,
+  "n_total": 26,
+  "only_base": [],
+  "only_new": []
+ },
+ "base": {
+  "arm": "default",
+  "file": "fx_PRE_WSL_default.json",
+  "lumenairy_file": "/mnt/c/tmp/lum_vc1_base/lumenairy/__init__.py",
+  "python": "3.12.3"
+ },
+ "label": "WSL_move",
+ "new": {
+  "arm": "default",
+  "file": "fx_NEW_WSL_default.json",
+  "lumenairy_file": "/mnt/c/tmp/lum_vc1/lumenairy/__init__.py",
+  "python": "3.12.3"
+ },
+ "plain": {
+  "identical": [
+   "p_apodized_pupil",
+   "p_asm",
+   "p_axicon",
+   "p_chain_jax_lens_only",
+   "p_chain_lens_only",
+   "p_fraunhofer_mft",
+   "p_gaussian_aperture",
+   "p_gaussian_beam",
+   "p_hf_freespace",
+   "p_mirror_with_aperture_diameter",
+   "p_pmm",
+   "p_rcwa",
+   "p_real_lens_thin",
+   "p_rs_spatial_gaussian",
+   "p_rs_transfer",
+   "p_thin_grating",
+   "p_thin_lens",
+   "p_thin_lens_aplanatic",
+   "p_turbulence",
+   "p_vortex_phase_mask",
+   "p_zernike_aberration",
+   "p_zernike_basis"
+  ],
+  "moved": [],
+  "n_identical": 22,
+  "n_moved": 0,
+  "n_total": 22,
+  "only_base": [],
+  "only_new": []
+ }
+}

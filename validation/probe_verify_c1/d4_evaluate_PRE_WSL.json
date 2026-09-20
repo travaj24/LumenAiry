@@ -1,0 +1,26 @@
+{
+ "arms": {
+  "default": {
+   "dtype": "complex128",
+   "sha256": "0b97c205be347dfa4cbe27baa15b62be619aa049781d562d0b3d8252fdd86252",
+   "shape": [
+    128,
+    128
+   ]
+  },
+  "private_hard": {
+   "dtype": "complex128",
+   "sha256": "0b97c205be347dfa4cbe27baa15b62be619aa049781d562d0b3d8252fdd86252",
+   "shape": [
+    128,
+    128
+   ]
+  }
+ },
+ "exposes_aperture_edge": false,
+ "lumenairy": "/mnt/c/tmp/lum_pre49/lumenairy/__init__.py",
+ "numpy": "2.4.6",
+ "platform": "Linux-4.4.0-26100-Microsoft-x86_64-with-glibc2.39",
+ "python": "3.12.3",
+ "tag": "PRE_WSL"
+}

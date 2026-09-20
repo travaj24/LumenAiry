@@ -1940,9 +1940,17 @@ known-red fixes are corrected against their own re-measurement.
 
 ---
 
-## 5.49.0 -- `method='auto'` selects the direct-matrix MFT route at a small output grid
+## 5.49.0 -- the default flips (2026-09-20)
 
-### What changed
+Eight settings the 2026-09-11 audit measured and left switchable become the
+defaults their measurements supported (the maintainer decisions of 2026-09-20,
+recorded in `docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/MAINTAINER_DECISIONS_2026_09.md`).
+Each subsection below is one work package: what moved, who is affected, and the
+one-keyword way back where one exists.
+
+### `method='auto'` selects the direct-matrix MFT route at a small output grid
+
+#### What changed
 
 The matrix-Fourier-transform propagators evaluate their transform as one sum by
 one of three routes.  Until 5.49.0 the default, `method='auto'`, always took a
@@ -1992,7 +2000,7 @@ described at the end of this section -- it is not the way back, and a caller
 who wants the old bytes for one call inside a program that also wants the new
 ones must use the keyword.
 
-### The rule, in one sentence
+#### The rule, in one sentence
 
 `method='auto'` takes the dense route when BOTH output-over-input grid ratios,
 `N_out_y / Ny_in` and `N_out_x / Nx_in`, sit at or under
@@ -2015,7 +2023,7 @@ route a call takes is predictable from its arguments, identical on every build
 and every backend, and unchanged by the clock, the environment, the thread
 count or the array's contents.
 
-### Does this affect me?
+#### Does this affect me?
 
 Compute `max(N_out_y/Ny_in, N_out_x/Nx_in)` for your call.  If it is greater
 than 1/32, nothing moves and you can stop here.  If it is at or under 1/32,
@@ -2043,7 +2051,7 @@ row and does not move.  The moving row is the strongly-decimating case on a grid
 that is not extremely thin: reading a 64 x 64 window out of a 4096 x 4096 fine
 grid, or resampling a field down by more than 32x.
 
-### Recipe -- keep the previous route, byte for byte
+#### Recipe -- keep the previous route, byte for byte
 
 Per call, with a keyword.  On the three MFT propagators it is `method=`:
 
@@ -2103,7 +2111,7 @@ _bl._MFT_DIRECT_MAX_RATIO = _bl._MFT_DIRECT_NEVER    # 0.0 -- never select it
 (`float('inf')`) is the other end: every shape takes the dense route,
 overriding BOTH conditions.
 
-### Recipe -- take the new default, and what it buys
+#### Recipe -- take the new default, and what it buys
 
 Change nothing.  At the shapes the rule captures you get, MEASURED on both
 builds:
@@ -2137,7 +2145,7 @@ builds:
   the backend's matrix product does.  On a box whose cuFFT is unusable, CuPy calls at these
   shapes now succeed where 5.48.1 raised `ImportError: cufft`.
 
-### One warning you may now hear that you did not
+#### One warning you may now hear that you did not
 
 The chirp phase-budget guard (`RuntimeWarning: Bluestein chirp phase argument
 ~...`) is now evaluated by `'auto'` BEFORE it picks a route, so a caller past
@@ -2150,7 +2158,7 @@ The threshold itself has not moved.  If you were silent before, you are silent
 now: at the natural MFT grids `alpha = zoom/N`, so the budget is of order
 `zoom*N ~ 1e4`, five decades under the `4.5e9` threshold.
 
-### Caveats
+#### Caveats
 
 * The three routes agree to round-off, **not** bit for bit -- they are different
   association orders over the same sum.  A test that pins MFT bytes across this
@@ -2179,3 +2187,128 @@ now: at the natural MFT grids `alpha = zoom/N`, so the budget is of order
 
 Full measurements, with the box's load recorded:
 `docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/WP-C4_MFT_DIRECT_DEFAULT_REPORT.md`.
+
+### `apply_aperture(edge='gray')` is the default
+
+A circular aperture on a square grid is a staircase.  `apply_aperture`'s `edge`
+keyword chooses how that rim is rendered: `'hard'` sets each pixel wholly inside
+or wholly outside (the transmitted area is quantised to whole pixels), `'gray'`
+gives each boundary pixel its `edge_samples**2`-supersampled open-area fraction.
+**The default moved from `'hard'` to `'gray'` in 5.49.0.**
+
+#### Why
+
+It buys a convergence RATE, not a constant.  Against the closed-form on-axis
+field behind a circular aperture (lambda = 633 nm, a = 100 um, window 512 um),
+on both of the library's spatial kernels, the hard rim's error is **first order
+at best and its step orders are erratic**, while the grey rim is second order
+and is 21.1x (RS) and 8.3x (HF) more accurate at N = 1024.  On the reference
+optic the hard arm's last refinement actually RISES 54 % from N = 512 to
+N = 1024 on the Rayleigh-Sommerfeld spatial kernel and 53 % on the
+Huygens-Fresnel OPL quadrature.
+
+A rise like that is **common, not exceptional** (VERIFY-C1 ROUND2 R5, measured
+2026-09-20 on three optics, identical on both builds).  What is not a library
+property is the DIRECTION at any given N: whether the staircase error rises at
+a particular refinement depends on where the rim falls on the lattice there.
+On a second optic (lambda = 1064 nm, a = 62.5 um, window 400 um, z = 4.0 /
+2.5 mm) the hard arm falls at every step and still gains only 9.5x (RS) and
+9.3x (HF) over the three halvings, against the grey arm's 56.1x and 44.9x, mean
+orders 1.08 / 1.07 against 1.94 / 1.83.  On a THIRD (lambda = 532 nm,
+a = 150 um, window 900 um, z = 30 / 15 mm) it rises on the same last refinement
+by a FACTOR of 9.3 (RS: 7.6432e-05 -> 7.1042e-04) and 9.1 (HF: 1.2930e-04 ->
+1.1785e-03) -- far harder than the reference optic's 54 % -- while still gaining
+only 8.9x and 9.1x against the grey arm's 51.1x and 65.2x.  So two of the three
+optics rise, and the individual hard step orders on that third one run from
+**-3.216 to +3.608**: "first order at best" is a statement about the ladder
+AVERAGE (1.05 / 1.06 there), not about any one step.  It is the RATE gap --
+grey mean order 1.83-2.01 against hard 1.05-1.08, ladder gains 45-65x against
+8.9-9.5x, over 532-1064 nm and Fresnel numbers 0.9-1.4 -- that you can count on
+at any (lambda, a, window, z).  The full ladders are in the CHANGELOG entry and in
+`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/WP-C1_GRAY_EDGE_REPORT.md`.
+The extra work is confined to the boundary pixels: 0.076x of one full-grid pass
+at N = 256 and 0.018x at N = 1024.
+
+#### What moves
+
+Everything that renders a sharp-edged stop and does not name `edge=`.  Relative
+L2 of the move on a propagated field: **7.678e-03 at N = 256, 2.930e-03 at 512,
+1.237e-03 at 1024** (worst pixel 3.660e-03 / 1.251e-03 / 5.434e-04).
+
+| entry point | exposes `edge=`? | the way back |
+|---|---|---|
+| `apply_aperture` | yes | `edge='hard'` |
+| `apply_lyot_stop` | no | `apply_aperture(..., shape='annular', edge='hard')` |
+| `lumenairy.algebra.Aperture` (operator) | no | `apply_aperture(..., edge='hard')` |
+| `JonesField.apply_aperture` | no | `apply_aperture(...,  edge='hard')` on `Ex` and `Ey` |
+| `propagate_through_system`, `{'type': 'aperture'}` element | yes, NEW in 5.49.0 | `{'edge': 'hard'}` in the element dict |
+| `propagate_through_system_jax`, same element (both routes) | yes, NEW in 5.49.0 | `{'edge': 'hard'}` in the element dict |
+| `lumenairy.evaluate` on a prescription with a STOP surface | yes, NEW in 5.49.0 -- `aperture_edge=` / `aperture_edge_samples=` | `la.evaluate(rx, src, aperture_edge='hard')`, bit for bit |
+| the GUI's **Coronagraph dock**, Stop 3 (it calls `apply_lyot_stop`) | no | re-record; see `GUI_CHANGELOG.md` |
+| the worked AO loop in `lumenairy.analysis.ao`'s module docstring | it is an example, not an entry point | add `edge='hard'` to its `la.apply_aperture(...)` line if you are reproducing its printed numbers |
+| a script emitted by `lumenairy.io.codegen` with `style='unrolled'` (the default) for a STOP surface | it emits no keyword | add `edge='hard'` to the generated `la.apply_aperture(...)` call, or re-pin |
+| the same with `style='system'` | it emits no key | add `'edge': 'hard'` to the generated `{'type': 'aperture', ...}` element, or re-pin |
+| an `apply_aperture` RESULT passed as an array `aperture=` to `plot_wavefront`, `plot_opd_summary` or a wrapper merit | not applicable -- these BOOLEAN-CAST the array | `edge='hard'` when building it, or weight by it / cast it yourself with the threshold you mean (`mask = arr >= 0.5`) |
+
+*A grey mask boolean-casts to the union of the open area and the WHOLE rim:
+measured +168 pixels (+1.3680 %) on a 12281-pixel disc at N = 256, dx = 4 um,
+D = 0.5 mm (364 rim pixels; analytic disc 12271.8), identical on both builds.
+That moves `plot_opd_summary`'s radial-RMS curve by up to 7.2741e-02 relative
+and its automatic bin count by a whole bin on small grids (12 -> 13 at N = 48,
+657 -> 697 pixels; both saturate at 32 by N = 256), the in-aperture RMS on a
+NaN-masked map by 5.8832e-03 (PV 2.520837e-07 -> 2.536185e-07), and a wrapper
+merit's integrated power by 7.7072e-03 -- where the cast also OVERSHOOTS the
+correctly weighted grey mask by 8.9051e-03, because a rim pixel that transmits
+a third of its area is counted whole.  `aperture=` is documented as a boolean
+mask and still is; what changed is that the obvious way to BUILD one,
+`apply_aperture(np.ones(...), ...)`, no longer produces one.  If you want the
+area weighting the grey rim exists to give, multiply by the mask instead of
+casting it.*
+
+Every propagator downstream is itself unchanged -- `rayleigh_sommerfeld_propagate`,
+the `propagate_huygens_fresnel_*` family, the ASM legs, GBD, the analytic and
+traced lenses.  They move only because their INPUT moved, and are byte-identical
+on an input that did not.  So are `apply_gaussian_aperture`,
+`apply_apodized_pupil` and the thin lens's and mirror's own `aperture_diameter`
+masks, which are different masks and were never `apply_aperture`.
+
+#### Recipe
+
+```python
+# Pre-5.49 answer, bit for bit -- nothing else about the mask changed.
+E = la.apply_aperture(E, dx, shape='circular', params={'diameter': D},
+                      edge='hard')
+
+# Same, inside a chain (NumPy or JAX):
+elements = [{'type': 'aperture', 'shape': 'circular',
+             'params': {'diameter': D}, 'edge': 'hard'}]
+
+# Same, for a prescription whose STOP surface evaluate renders as an aperture.
+# `aperture_edge_samples=` is there too, and is ignored on the 'hard' arm.
+result = la.evaluate(rx, src, aperture_edge='hard')
+
+# Keep the new default and re-record the pin instead (recommended -- the
+# grey rim is the one with a convergence order):
+E = la.apply_aperture(E, dx, shape='circular', params={'diameter': D})
+```
+
+`edge_samples` did NOT move: it stays at 4, which is the measured knee (2 -> 4
+still gains 2.04x on the RS ladder at N = 512; 4 -> 8 gains nothing).
+`edge_samples=1` is exactly the pre-5.49 pixel-centre indicator, so it is a
+second spelling of the way back -- but `edge='hard'` is the one to use, since it
+skips the sub-sampling loop entirely.
+
+#### Also in 5.49.0: one aperture implementation behind both backends
+
+`propagate_through_system_jax` carried its own copy of the pixel-centre
+indicator; both its routes (the jit'd kernel and the `verbose=True` slow path)
+now call `apply_aperture`, so one element dict gets one answer on either
+backend.  **If you compared the two backends and relied on the JAX slow path's
+output bytes, they changed independently of the default move**: that path
+multiplied by a boolean mask, so a blocked pixel came back as a SIGNED zero
+(2652 negative-zero real parts and 2762 negative-zero imaginary parts on one
+128 x 128 fixture at 5.48.1), disagreeing with its own jit'd kernel and with the
+NumPy chain, and it left a non-finite field non-finite outside the stop.  Both
+routes now select rather than scale.  There is no way back to the signed zeros,
+and no reason to want one.
+

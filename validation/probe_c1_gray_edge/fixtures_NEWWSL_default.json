@@ -1,0 +1,281 @@
+{
+  "aperture": {
+    "algebra_aperture_operator": {
+      "dtype": "complex128",
+      "nbytes": 262144,
+      "sha256": "d24529dea496092d0cb250f8bf815479e539fb68681a19496bf5a0831c369b7d",
+      "shape": [
+        128,
+        128
+      ]
+    },
+    "ap_annular": {
+      "dtype": "complex128",
+      "nbytes": 262144,
+      "sha256": "5bcb10a859dfc9560683245fb25a724370d7225d4768694a090465efdfd7a5b0",
+      "shape": [
+        128,
+        128
+      ]
+    },
+    "ap_circular": {
+      "dtype": "complex128",
+      "nbytes": 262144,
+      "sha256": "d24529dea496092d0cb250f8bf815479e539fb68681a19496bf5a0831c369b7d",
+      "shape": [
+        128,
+        128
+      ]
+    },
+    "ap_complex64": {
+      "dtype": "complex64",
+      "nbytes": 32768,
+      "sha256": "1db811d902e69a96da2e16be0e43e57bdc1fe3e2e7797635dcb1fc91bc9f7280",
+      "shape": [
+        64,
+        64
+      ]
+    },
+    "ap_decentred_anamorphic": {
+      "dtype": "complex128",
+      "nbytes": 262144,
+      "sha256": "df3f00076c44f0539901d927e52205eeb07e8e1308ed1a3bff33dea5ef1e395d",
+      "shape": [
+        128,
+        128
+      ]
+    },
+    "ap_rectangular": {
+      "dtype": "complex128",
+      "nbytes": 262144,
+      "sha256": "b4311d4daeee099e18f4e8010157fd556b87cd115752d211a2869435860a83cb",
+      "shape": [
+        128,
+        128
+      ]
+    },
+    "hf_quadrature_of_apertured_field": {
+      "dtype": "complex128",
+      "nbytes": 32,
+      "sha256": "48db29298027576bc31c89f1c4d32c7cdd6b6b04b42ebcf0de622ccf5a0120d4",
+      "shape": [
+        1,
+        2
+      ]
+    },
+    "jax_apply_aperture": {
+      "dtype": "complex128",
+      "nbytes": 65536,
+      "sha256": "3c7496cc7eaf249971b0a325241da4838a3724b6931f626640f69f816dc1db2e",
+      "shape": [
+        64,
+        64
+      ]
+    },
+    "jones_field_apply_aperture": {
+      "dtype": "complex128",
+      "nbytes": 524288,
+      "sha256": "ad5ad037c94a5057028da07de26573db5a1b01aae0ccbfcba50b587504607800",
+      "shape": [
+        32768
+      ]
+    },
+    "lyot_stop": {
+      "dtype": "complex128",
+      "nbytes": 262144,
+      "sha256": "da699dcab0781a77b5836076e1ac831b3a2d19c7298ddf84bb13e9ef663cdfed",
+      "shape": [
+        128,
+        128
+      ]
+    },
+    "rs_spatial_of_apertured_field": {
+      "dtype": "complex128",
+      "nbytes": 1048576,
+      "sha256": "78b6043bbbcc9bfb0d8da99ef68e60ceba95c7f81b78c7ccb4023fac1b55fb83",
+      "shape": [
+        256,
+        256
+      ]
+    },
+    "system_aperture_element": {
+      "dtype": "complex128",
+      "nbytes": 262144,
+      "sha256": "d24529dea496092d0cb250f8bf815479e539fb68681a19496bf5a0831c369b7d",
+      "shape": [
+        128,
+        128
+      ]
+    },
+    "system_aperture_element_jax_eager": {
+      "dtype": "complex128",
+      "nbytes": 262144,
+      "sha256": "d24529dea496092d0cb250f8bf815479e539fb68681a19496bf5a0831c369b7d",
+      "shape": [
+        128,
+        128
+      ]
+    },
+    "system_aperture_element_jax_jit": {
+      "dtype": "complex128",
+      "nbytes": 262144,
+      "sha256": "d24529dea496092d0cb250f8bf815479e539fb68681a19496bf5a0831c369b7d",
+      "shape": [
+        128,
+        128
+      ]
+    }
+  },
+  "arm": "default",
+  "lumenairy_file": "/mnt/c/tmp/lum_c1/lumenairy/__init__.py",
+  "numpy": "2.4.6",
+  "plain": {
+    "apodized_pupil": {
+      "dtype": "complex128",
+      "nbytes": 262144,
+      "sha256": "689dcb04033cb14fe3fa08db701da2621f650f4922d0b28059f70b786f09fb9a",
+      "shape": [
+        128,
+        128
+      ]
+    },
+    "asm_propagate": {
+      "dtype": "complex128",
+      "nbytes": 262144,
+      "sha256": "7e9078c3bf8023a46294ac7c03fb0583d2e327b5801417171e1a23caab2f7ffa",
+      "shape": [
+        128,
+        128
+      ]
+    },
+    "axicon": {
+      "dtype": "complex128",
+      "nbytes": 262144,
+      "sha256": "aede8729d3a055bf2f37026fad597707f550e0d2cd0c593e668779e25ad7a172",
+      "shape": [
+        128,
+        128
+      ]
+    },
+    "gaussian_aperture": {
+      "dtype": "complex128",
+      "nbytes": 262144,
+      "sha256": "7e5308889cd9a04202ed78b51a22432f20bd37103bcd0132aff1105fd8fc4540",
+      "shape": [
+        128,
+        128
+      ]
+    },
+    "hf_freespace": {
+      "dtype": "complex128",
+      "nbytes": 65536,
+      "sha256": "4e1fbf280a447ee035f9c0db4df57cdc3850a2e07cf2ff3347a2455704ec2bf6",
+      "shape": [
+        64,
+        64
+      ]
+    },
+    "mirror_with_aperture_diameter": {
+      "dtype": "complex128",
+      "nbytes": 262144,
+      "sha256": "43fcd31348de2270d85b776e442497eee8fe4e488f657ecf956b7ecef367dadd",
+      "shape": [
+        128,
+        128
+      ]
+    },
+    "pmm_efficiency_1d": {
+      "dtype": "float64",
+      "nbytes": 336,
+      "sha256": "a0ae45c4950bf0932094ff156069a615761491770e982791e8d659d3602178f3",
+      "shape": [
+        42
+      ]
+    },
+    "rcwa_efficiency_1d": {
+      "dtype": "float64",
+      "nbytes": 240,
+      "sha256": "52651e1d55a10741291172240ed45dc00b64b81161955316547201486cc7d4b9",
+      "shape": [
+        30
+      ]
+    },
+    "real_lens_thin": {
+      "dtype": "complex128",
+      "nbytes": 262144,
+      "sha256": "1b31c18ab3f65e65a573cc86220c0718c3126cfbdea3a2b277dccd7e1d79553b",
+      "shape": [
+        128,
+        128
+      ]
+    },
+    "rs_spatial_gaussian": {
+      "dtype": "complex128",
+      "nbytes": 262144,
+      "sha256": "d759dd1f154a1ca37e546ea50b9ceebb0ef2fe6fb76c47e7bc4040e9aab195f1",
+      "shape": [
+        128,
+        128
+      ]
+    },
+    "rs_transfer_propagate": {
+      "dtype": "complex128",
+      "nbytes": 262144,
+      "sha256": "a138075816b274e48452888a80168df9fd1c32894322fffcd66ecec6b58935e4",
+      "shape": [
+        128,
+        128
+      ]
+    },
+    "thin_grating_efficiency": {
+      "dtype": "float64",
+      "nbytes": 176,
+      "sha256": "00da4141fd1e34cc2556066beb5296651a78317c49af7c9434dc8088781e9ba4",
+      "shape": [
+        22
+      ]
+    },
+    "thin_lens": {
+      "dtype": "complex128",
+      "nbytes": 262144,
+      "sha256": "a1fb6ca7a91308649b5e9c9fa7705c7e5fa459274dc7040541c5ddac6c55a9d4",
+      "shape": [
+        128,
+        128
+      ]
+    },
+    "turbulence_screen": {
+      "dtype": "float64",
+      "nbytes": 32768,
+      "sha256": "1d3d07c2db674e8de429fd0e29309836d69e4f5bb17f15fe4d4b841e3ce48458",
+      "shape": [
+        64,
+        64
+      ]
+    },
+    "zernike_aberration": {
+      "dtype": "complex128",
+      "nbytes": 262144,
+      "sha256": "2fd2768a8f6f3f3bf13e1368c25217e80062e2b33545fdddabd5a18a978caacc",
+      "shape": [
+        128,
+        128
+      ]
+    },
+    "zernike_basis": {
+      "dtype": "float64",
+      "nbytes": 225040,
+      "sha256": "e5995ff1f4c82fadc077afdf175afcc14aea6b337210ad64776261e9de87b34e",
+      "shape": [
+        2813,
+        10
+      ]
+    }
+  },
+  "platform": "Linux-4.4.0-26100-Microsoft-x86_64-with-glibc2.39",
+  "python": "3.12.3",
+  "tag": "NEWWSL",
+  "unavailable": [
+    "aperture:cupy_apply_aperture:not-applicable"
+  ]
+}

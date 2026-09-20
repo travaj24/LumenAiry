@@ -18,12 +18,12 @@ import numpy as np
 from .base import Operator, _validate_abcd
 
 # ---------------------------------------------------------------------------
-# Aperture (hard amplitude mask)
+# Aperture (sharp-edged amplitude mask)
 # ---------------------------------------------------------------------------
 
 
 class Aperture(Operator):
-    """Hard amplitude aperture with selectable shape.
+    """Sharp-edged (unapodized) amplitude aperture with selectable shape.
 
     ABCD is identity (apertures vignette rays but don't bend them).
 
@@ -50,6 +50,13 @@ class Aperture(Operator):
     or off-axis decentered apertures, call ``apply_aperture``
     directly -- the algebraic surface deliberately exposes a
     minimal shape vocabulary.
+
+    That delegation carries ``apply_aperture``'s ``edge`` DEFAULT, which
+    renders the rim by pixel AREA.  The operator exposes no ``edge``
+    keyword; for the binary pixel-centre mask call
+    ``apply_aperture(..., edge='hard')`` directly.  The CHANGELOG's
+    Migration note records when this operator's applied field moved with
+    that default.
     """
 
     _ALLOWED_SHAPES = ('circular', 'rectangular', 'annular')
