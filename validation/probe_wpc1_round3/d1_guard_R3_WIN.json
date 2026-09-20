@@ -1,0 +1,611 @@
+{
+ "guard_call_sites": [
+  "lumenairy/elements/elements.py:438: n_sub = _validate_edge_kwargs(edge=edge, edge_samples=edge_samples)",
+  "lumenairy/propagators/system.py:41: from ..elements.elements import _validate_edge_kwargs",
+  "lumenairy/propagators/system.py:1455: _validate_edge_kwargs(**edge_kw)",
+  "lumenairy/propagators/system.py:1645: _validate_edge_kwargs(**kw)"
+ ],
+ "have_jax": true,
+ "lumenairy_file": "C:\\tmp\\lum_c1c\\lumenairy\\__init__.py",
+ "numpy": "2.4.4",
+ "python": "3.14.6",
+ "rows": {
+  "edge_bytes_gray": {
+   "chain_matches_apply_aperture": true,
+   "chain_routes_identical": true,
+   "kwargs": "{'edge': b'gray'}",
+   "raised": true,
+   "routes": {
+    "apply_aperture": [
+     true,
+     "ValueError: apply_aperture: edge must be 'hard' (binary pixel mask) or 'gray' (supersampled open-area fraction on boundary pixels); got b'gray'."
+    ],
+    "jax_eager": [
+     true,
+     "ValueError: apply_aperture: edge must be 'hard' (binary pixel mask) or 'gray' (supersampled open-area fraction on boundary pixels); got b'gray'."
+    ],
+    "jax_jit": [
+     true,
+     "ValueError: apply_aperture: edge must be 'hard' (binary pixel mask) or 'gray' (supersampled open-area fraction on boundary pixels); got b'gray'."
+    ],
+    "numpy_chain": [
+     true,
+     "ValueError: apply_aperture: edge must be 'hard' (binary pixel mask) or 'gray' (supersampled open-area fraction on boundary pixels); got b'gray'."
+    ]
+   }
+  },
+  "edge_capital_gray": {
+   "chain_matches_apply_aperture": true,
+   "chain_routes_identical": true,
+   "kwargs": "{'edge': 'Gray'}",
+   "raised": true,
+   "routes": {
+    "apply_aperture": [
+     true,
+     "ValueError: apply_aperture: edge must be 'hard' (binary pixel mask) or 'gray' (supersampled open-area fraction on boundary pixels); got 'Gray'."
+    ],
+    "jax_eager": [
+     true,
+     "ValueError: apply_aperture: edge must be 'hard' (binary pixel mask) or 'gray' (supersampled open-area fraction on boundary pixels); got 'Gray'."
+    ],
+    "jax_jit": [
+     true,
+     "ValueError: apply_aperture: edge must be 'hard' (binary pixel mask) or 'gray' (supersampled open-area fraction on boundary pixels); got 'Gray'."
+    ],
+    "numpy_chain": [
+     true,
+     "ValueError: apply_aperture: edge must be 'hard' (binary pixel mask) or 'gray' (supersampled open-area fraction on boundary pixels); got 'Gray'."
+    ]
+   }
+  },
+  "edge_empty_string": {
+   "chain_matches_apply_aperture": true,
+   "chain_routes_identical": true,
+   "kwargs": "{'edge': ''}",
+   "raised": true,
+   "routes": {
+    "apply_aperture": [
+     true,
+     "ValueError: apply_aperture: edge must be 'hard' (binary pixel mask) or 'gray' (supersampled open-area fraction on boundary pixels); got ''."
+    ],
+    "jax_eager": [
+     true,
+     "ValueError: apply_aperture: edge must be 'hard' (binary pixel mask) or 'gray' (supersampled open-area fraction on boundary pixels); got ''."
+    ],
+    "jax_jit": [
+     true,
+     "ValueError: apply_aperture: edge must be 'hard' (binary pixel mask) or 'gray' (supersampled open-area fraction on boundary pixels); got ''."
+    ],
+    "numpy_chain": [
+     true,
+     "ValueError: apply_aperture: edge must be 'hard' (binary pixel mask) or 'gray' (supersampled open-area fraction on boundary pixels); got ''."
+    ]
+   }
+  },
+  "edge_gray_no_samples": {
+   "chain_matches_apply_aperture": true,
+   "chain_routes_identical": true,
+   "kwargs": "{'edge': 'gray'}",
+   "raised": false,
+   "routes": {
+    "apply_aperture": [
+     false,
+     ""
+    ],
+    "jax_eager": [
+     false,
+     ""
+    ],
+    "jax_jit": [
+     false,
+     ""
+    ],
+    "numpy_chain": [
+     false,
+     ""
+    ]
+   }
+  },
+  "edge_hard_and_samples": {
+   "chain_matches_apply_aperture": true,
+   "chain_routes_identical": true,
+   "kwargs": "{'edge': 'hard', 'edge_samples': 3}",
+   "raised": false,
+   "routes": {
+    "apply_aperture": [
+     false,
+     ""
+    ],
+    "jax_eager": [
+     false,
+     ""
+    ],
+    "jax_jit": [
+     false,
+     ""
+    ],
+    "numpy_chain": [
+     false,
+     ""
+    ]
+   }
+  },
+  "edge_hard_no_samples": {
+   "chain_matches_apply_aperture": true,
+   "chain_routes_identical": true,
+   "kwargs": "{'edge': 'hard'}",
+   "raised": false,
+   "routes": {
+    "apply_aperture": [
+     false,
+     ""
+    ],
+    "jax_eager": [
+     false,
+     ""
+    ],
+    "jax_jit": [
+     false,
+     ""
+    ],
+    "numpy_chain": [
+     false,
+     ""
+    ]
+   }
+  },
+  "edge_none": {
+   "chain_matches_apply_aperture": true,
+   "chain_routes_identical": true,
+   "kwargs": "{'edge': None}",
+   "raised": true,
+   "routes": {
+    "apply_aperture": [
+     true,
+     "ValueError: apply_aperture: edge must be 'hard' (binary pixel mask) or 'gray' (supersampled open-area fraction on boundary pixels); got None."
+    ],
+    "jax_eager": [
+     true,
+     "ValueError: apply_aperture: edge must be 'hard' (binary pixel mask) or 'gray' (supersampled open-area fraction on boundary pixels); got None."
+    ],
+    "jax_jit": [
+     true,
+     "ValueError: apply_aperture: edge must be 'hard' (binary pixel mask) or 'gray' (supersampled open-area fraction on boundary pixels); got None."
+    ],
+    "numpy_chain": [
+     true,
+     "ValueError: apply_aperture: edge must be 'hard' (binary pixel mask) or 'gray' (supersampled open-area fraction on boundary pixels); got None."
+    ]
+   }
+  },
+  "edge_numpy_str_gray": {
+   "chain_matches_apply_aperture": true,
+   "chain_routes_identical": true,
+   "kwargs": "{'edge': np.str_('gray')}",
+   "raised": false,
+   "routes": {
+    "apply_aperture": [
+     false,
+     ""
+    ],
+    "jax_eager": [
+     false,
+     ""
+    ],
+    "jax_jit": [
+     false,
+     ""
+    ],
+    "numpy_chain": [
+     false,
+     ""
+    ]
+   }
+  },
+  "edge_samples_bool_false": {
+   "chain_matches_apply_aperture": true,
+   "chain_routes_identical": true,
+   "kwargs": "{'edge_samples': False}",
+   "raised": true,
+   "routes": {
+    "apply_aperture": [
+     true,
+     "ValueError: apply_aperture: edge_samples must be a positive integer (sub-samples per axis), not a bool; got False (type bool).  For the binary pixel-centre rim pass edge='hard'."
+    ],
+    "jax_eager": [
+     true,
+     "ValueError: apply_aperture: edge_samples must be a positive integer (sub-samples per axis), not a bool; got False (type bool).  For the binary pixel-centre rim pass edge='hard'."
+    ],
+    "jax_jit": [
+     true,
+     "ValueError: apply_aperture: edge_samples must be a positive integer (sub-samples per axis), not a bool; got False (type bool).  For the binary pixel-centre rim pass edge='hard'."
+    ],
+    "numpy_chain": [
+     true,
+     "ValueError: apply_aperture: edge_samples must be a positive integer (sub-samples per axis), not a bool; got False (type bool).  For the binary pixel-centre rim pass edge='hard'."
+    ]
+   }
+  },
+  "edge_samples_bool_true": {
+   "chain_matches_apply_aperture": true,
+   "chain_routes_identical": true,
+   "kwargs": "{'edge_samples': True}",
+   "raised": true,
+   "routes": {
+    "apply_aperture": [
+     true,
+     "ValueError: apply_aperture: edge_samples must be a positive integer (sub-samples per axis), not a bool; got True (type bool).  For the binary pixel-centre rim pass edge='hard'."
+    ],
+    "jax_eager": [
+     true,
+     "ValueError: apply_aperture: edge_samples must be a positive integer (sub-samples per axis), not a bool; got True (type bool).  For the binary pixel-centre rim pass edge='hard'."
+    ],
+    "jax_jit": [
+     true,
+     "ValueError: apply_aperture: edge_samples must be a positive integer (sub-samples per axis), not a bool; got True (type bool).  For the binary pixel-centre rim pass edge='hard'."
+    ],
+    "numpy_chain": [
+     true,
+     "ValueError: apply_aperture: edge_samples must be a positive integer (sub-samples per axis), not a bool; got True (type bool).  For the binary pixel-centre rim pass edge='hard'."
+    ]
+   }
+  },
+  "edge_samples_complex": {
+   "chain_matches_apply_aperture": true,
+   "chain_routes_identical": true,
+   "kwargs": "{'edge_samples': (4+0j)}",
+   "raised": true,
+   "routes": {
+    "apply_aperture": [
+     true,
+     "ValueError: apply_aperture: edge_samples must be a positive integer (sub-samples per axis); got (4+0j)."
+    ],
+    "jax_eager": [
+     true,
+     "ValueError: apply_aperture: edge_samples must be a positive integer (sub-samples per axis); got (4+0j)."
+    ],
+    "jax_jit": [
+     true,
+     "ValueError: apply_aperture: edge_samples must be a positive integer (sub-samples per axis); got (4+0j)."
+    ],
+    "numpy_chain": [
+     true,
+     "ValueError: apply_aperture: edge_samples must be a positive integer (sub-samples per axis); got (4+0j)."
+    ]
+   }
+  },
+  "edge_samples_integral_float": {
+   "chain_matches_apply_aperture": true,
+   "chain_routes_identical": true,
+   "kwargs": "{'edge_samples': 4.0}",
+   "raised": false,
+   "routes": {
+    "apply_aperture": [
+     false,
+     ""
+    ],
+    "jax_eager": [
+     false,
+     ""
+    ],
+    "jax_jit": [
+     false,
+     ""
+    ],
+    "numpy_chain": [
+     false,
+     ""
+    ]
+   }
+  },
+  "edge_samples_list": {
+   "chain_matches_apply_aperture": true,
+   "chain_routes_identical": true,
+   "kwargs": "{'edge_samples': [4]}",
+   "raised": true,
+   "routes": {
+    "apply_aperture": [
+     true,
+     "ValueError: apply_aperture: edge_samples must be a positive integer (sub-samples per axis); got [4]."
+    ],
+    "jax_eager": [
+     true,
+     "ValueError: apply_aperture: edge_samples must be a positive integer (sub-samples per axis); got [4]."
+    ],
+    "jax_jit": [
+     true,
+     "ValueError: apply_aperture: edge_samples must be a positive integer (sub-samples per axis); got [4]."
+    ],
+    "numpy_chain": [
+     true,
+     "ValueError: apply_aperture: edge_samples must be a positive integer (sub-samples per axis); got [4]."
+    ]
+   }
+  },
+  "edge_samples_negative_one": {
+   "chain_matches_apply_aperture": true,
+   "chain_routes_identical": true,
+   "kwargs": "{'edge_samples': -1}",
+   "raised": true,
+   "routes": {
+    "apply_aperture": [
+     true,
+     "ValueError: apply_aperture: edge_samples must be a positive integer (sub-samples per axis); got -1."
+    ],
+    "jax_eager": [
+     true,
+     "ValueError: apply_aperture: edge_samples must be a positive integer (sub-samples per axis); got -1."
+    ],
+    "jax_jit": [
+     true,
+     "ValueError: apply_aperture: edge_samples must be a positive integer (sub-samples per axis); got -1."
+    ],
+    "numpy_chain": [
+     true,
+     "ValueError: apply_aperture: edge_samples must be a positive integer (sub-samples per axis); got -1."
+    ]
+   }
+  },
+  "edge_samples_negative_two": {
+   "chain_matches_apply_aperture": true,
+   "chain_routes_identical": true,
+   "kwargs": "{'edge_samples': -2}",
+   "raised": true,
+   "routes": {
+    "apply_aperture": [
+     true,
+     "ValueError: apply_aperture: edge_samples must be a positive integer (sub-samples per axis); got -2."
+    ],
+    "jax_eager": [
+     true,
+     "ValueError: apply_aperture: edge_samples must be a positive integer (sub-samples per axis); got -2."
+    ],
+    "jax_jit": [
+     true,
+     "ValueError: apply_aperture: edge_samples must be a positive integer (sub-samples per axis); got -2."
+    ],
+    "numpy_chain": [
+     true,
+     "ValueError: apply_aperture: edge_samples must be a positive integer (sub-samples per axis); got -2."
+    ]
+   }
+  },
+  "edge_samples_non_integer_float": {
+   "chain_matches_apply_aperture": true,
+   "chain_routes_identical": true,
+   "kwargs": "{'edge_samples': 2.5}",
+   "raised": true,
+   "routes": {
+    "apply_aperture": [
+     true,
+     "ValueError: apply_aperture: edge_samples must be a positive integer (sub-samples per axis); got 2.5."
+    ],
+    "jax_eager": [
+     true,
+     "ValueError: apply_aperture: edge_samples must be a positive integer (sub-samples per axis); got 2.5."
+    ],
+    "jax_jit": [
+     true,
+     "ValueError: apply_aperture: edge_samples must be a positive integer (sub-samples per axis); got 2.5."
+    ],
+    "numpy_chain": [
+     true,
+     "ValueError: apply_aperture: edge_samples must be a positive integer (sub-samples per axis); got 2.5."
+    ]
+   }
+  },
+  "edge_samples_none": {
+   "chain_matches_apply_aperture": true,
+   "chain_routes_identical": true,
+   "kwargs": "{'edge_samples': None}",
+   "raised": true,
+   "routes": {
+    "apply_aperture": [
+     true,
+     "ValueError: apply_aperture: edge_samples must be a positive integer (sub-samples per axis); got None."
+    ],
+    "jax_eager": [
+     true,
+     "ValueError: apply_aperture: edge_samples must be a positive integer (sub-samples per axis); got None."
+    ],
+    "jax_jit": [
+     true,
+     "ValueError: apply_aperture: edge_samples must be a positive integer (sub-samples per axis); got None."
+    ],
+    "numpy_chain": [
+     true,
+     "ValueError: apply_aperture: edge_samples must be a positive integer (sub-samples per axis); got None."
+    ]
+   }
+  },
+  "edge_samples_numpy_bool_true": {
+   "chain_matches_apply_aperture": true,
+   "chain_routes_identical": true,
+   "kwargs": "{'edge_samples': np.True_}",
+   "raised": true,
+   "routes": {
+    "apply_aperture": [
+     true,
+     "ValueError: apply_aperture: edge_samples must be a positive integer (sub-samples per axis), not a bool; got np.True_ (type bool).  For the binary pixel-centre rim pass edge='hard'."
+    ],
+    "jax_eager": [
+     true,
+     "ValueError: apply_aperture: edge_samples must be a positive integer (sub-samples per axis), not a bool; got np.True_ (type bool).  For the binary pixel-centre rim pass edge='hard'."
+    ],
+    "jax_jit": [
+     true,
+     "ValueError: apply_aperture: edge_samples must be a positive integer (sub-samples per axis), not a bool; got np.True_ (type bool).  For the binary pixel-centre rim pass edge='hard'."
+    ],
+    "numpy_chain": [
+     true,
+     "ValueError: apply_aperture: edge_samples must be a positive integer (sub-samples per axis), not a bool; got np.True_ (type bool).  For the binary pixel-centre rim pass edge='hard'."
+    ]
+   }
+  },
+  "edge_samples_numpy_float64": {
+   "chain_matches_apply_aperture": true,
+   "chain_routes_identical": true,
+   "kwargs": "{'edge_samples': np.float64(4.0)}",
+   "raised": false,
+   "routes": {
+    "apply_aperture": [
+     false,
+     ""
+    ],
+    "jax_eager": [
+     false,
+     ""
+    ],
+    "jax_jit": [
+     false,
+     ""
+    ],
+    "numpy_chain": [
+     false,
+     ""
+    ]
+   }
+  },
+  "edge_samples_numpy_int64": {
+   "chain_matches_apply_aperture": true,
+   "chain_routes_identical": true,
+   "kwargs": "{'edge_samples': np.int64(4)}",
+   "raised": false,
+   "routes": {
+    "apply_aperture": [
+     false,
+     ""
+    ],
+    "jax_eager": [
+     false,
+     ""
+    ],
+    "jax_jit": [
+     false,
+     ""
+    ],
+    "numpy_chain": [
+     false,
+     ""
+    ]
+   }
+  },
+  "edge_samples_string": {
+   "chain_matches_apply_aperture": true,
+   "chain_routes_identical": true,
+   "kwargs": "{'edge_samples': '4'}",
+   "raised": true,
+   "routes": {
+    "apply_aperture": [
+     true,
+     "ValueError: apply_aperture: edge_samples must be a positive integer (sub-samples per axis); got '4'."
+    ],
+    "jax_eager": [
+     true,
+     "ValueError: apply_aperture: edge_samples must be a positive integer (sub-samples per axis); got '4'."
+    ],
+    "jax_jit": [
+     true,
+     "ValueError: apply_aperture: edge_samples must be a positive integer (sub-samples per axis); got '4'."
+    ],
+    "numpy_chain": [
+     true,
+     "ValueError: apply_aperture: edge_samples must be a positive integer (sub-samples per axis); got '4'."
+    ]
+   }
+  },
+  "edge_samples_without_edge": {
+   "chain_matches_apply_aperture": true,
+   "chain_routes_identical": true,
+   "kwargs": "{'edge_samples': 2}",
+   "raised": false,
+   "routes": {
+    "apply_aperture": [
+     false,
+     ""
+    ],
+    "jax_eager": [
+     false,
+     ""
+    ],
+    "jax_jit": [
+     false,
+     ""
+    ],
+    "numpy_chain": [
+     false,
+     ""
+    ]
+   }
+  },
+  "edge_samples_zero": {
+   "chain_matches_apply_aperture": true,
+   "chain_routes_identical": true,
+   "kwargs": "{'edge_samples': 0}",
+   "raised": true,
+   "routes": {
+    "apply_aperture": [
+     true,
+     "ValueError: apply_aperture: edge_samples must be a positive integer (sub-samples per axis); got 0."
+    ],
+    "jax_eager": [
+     true,
+     "ValueError: apply_aperture: edge_samples must be a positive integer (sub-samples per axis); got 0."
+    ],
+    "jax_jit": [
+     true,
+     "ValueError: apply_aperture: edge_samples must be a positive integer (sub-samples per axis); got 0."
+    ],
+    "numpy_chain": [
+     true,
+     "ValueError: apply_aperture: edge_samples must be a positive integer (sub-samples per axis); got 0."
+    ]
+   }
+  },
+  "edge_unknown_string": {
+   "chain_matches_apply_aperture": true,
+   "chain_routes_identical": true,
+   "kwargs": "{'edge': 'soft'}",
+   "raised": true,
+   "routes": {
+    "apply_aperture": [
+     true,
+     "ValueError: apply_aperture: edge must be 'hard' (binary pixel mask) or 'gray' (supersampled open-area fraction on boundary pixels); got 'soft'."
+    ],
+    "jax_eager": [
+     true,
+     "ValueError: apply_aperture: edge must be 'hard' (binary pixel mask) or 'gray' (supersampled open-area fraction on boundary pixels); got 'soft'."
+    ],
+    "jax_jit": [
+     true,
+     "ValueError: apply_aperture: edge must be 'hard' (binary pixel mask) or 'gray' (supersampled open-area fraction on boundary pixels); got 'soft'."
+    ],
+    "numpy_chain": [
+     true,
+     "ValueError: apply_aperture: edge must be 'hard' (binary pixel mask) or 'gray' (supersampled open-area fraction on boundary pixels); got 'soft'."
+    ]
+   }
+  }
+ },
+ "sentinel": {
+  "apply_aperture_defaults": [
+   "gray",
+   4
+  ],
+  "edge_named_none": [
+   true,
+   "ValueError: apply_aperture: edge must be 'hard' (binary pixel mask) or 'gray' (supersampled open-area fraction on boundary pixels); got None."
+  ],
+  "edge_samples_named_none": [
+   true,
+   "ValueError: apply_aperture: edge_samples must be a positive integer (sub-samples per axis); got None."
+  ],
+  "omitted_both": [
+   false,
+   ""
+  ],
+  "returns_int_when_set": 4,
+  "returns_none_when_unset": true,
+  "sentinel_is_module_level": true
+ }
+}

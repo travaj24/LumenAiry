@@ -211,34 +211,46 @@ def test_verify_c1r2_the_unresolvable_rim_refusal_is_one_answer_and_neutral():
 # ===========================================================================
 
 def test_verify_c1r2_a_bool_edge_samples_is_answered_the_same_way_everywhere():
-    """``edge_samples=True`` and ``edge_samples=False`` must at least get the
-    SAME answer from all four entry points, whatever that answer is.
+    """``edge_samples=True`` and ``edge_samples=False`` must get the SAME
+    answer from all four entry points, and R2 says what that answer has to be.
 
-    Measured 2026-09-20, byte-identical on both builds: ``True`` is ACCEPTED
-    and silently means 1 (the pre-5.49 pixel-centre rim); ``False`` is refused
-    with "must be a positive integer", because ``int(False) == 0 < 1`` -- not
-    because it is a bool.  That asymmetry is R2; this id pins the part of it
-    that is not in dispute, so a future guard change is visible here.
+    Before round 3, measured 2026-09-20 byte-identically on both builds:
+    ``True`` was ACCEPTED and silently meant 1 (the pre-5.49 pixel-centre
+    rim), while ``False`` was refused with "must be a positive integer" --
+    because ``int(False) == 0 < 1``, not because it is a bool.  Round 3
+    refuses a bool EXPLICITLY, so both are refused, the refusal names the
+    type, and the four routes still agree.
+
+    Two-sided, so the id is not satisfied by a guard that simply refuses
+    everything: ``numpy.int64(4)`` stays LEGAL on all four routes, which is
+    the neighbour the ``isinstance`` test could plausibly have swallowed
+    (``numpy.bool_`` and ``numpy.int64`` are both numpy scalars).
     """
-    for value in (True, False, np.True_):
+    for value in (True, False, np.True_, np.False_):
         got = _four_routes({'edge_samples': value},
                            params={'diameter': 5.3e-5})
         assert len(set(got.values())) == 1, (value, got)
-    assert _four_routes({'edge_samples': True},
-                        params={'diameter': 5.3e-5})['numpy_chain'][0] is False
-    assert _four_routes({'edge_samples': False},
-                        params={'diameter': 5.3e-5})['numpy_chain'][0] is True
+        assert got['numpy_chain'][0] is True, (value, got)
+        assert 'not a bool' in got['numpy_chain'][1], (value, got)
+    legal = _four_routes({'edge_samples': np.int64(4)},
+                         params={'diameter': 5.3e-5})
+    assert len(set(legal.values())) == 1, legal
+    assert legal['numpy_chain'][0] is False, legal
 
 
-def test_verify_c1r2_edge_samples_true_is_bit_for_bit_the_pre_5_49_rim():
-    """What ``edge_samples=True`` silently selects, measured rather than
-    reasoned: the mask is bit-identical to ``edge='hard'`` and to
-    ``edge_samples=1``, and NOT to the shipped default.
+def test_verify_c1r2_a_bool_edge_samples_no_longer_selects_the_pre_5_49_rim():
+    """R2, the half that says what it COST.  Before round 3 the mask
+    ``edge_samples=True`` selected was bit-identical to ``edge='hard'`` and to
+    ``edge_samples=1`` and different from the shipped default -- i.e. a caller
+    who wrote ``edge_samples=True`` intending "switch the grey rim on" got the
+    OLD pre-5.49 answer with no diagnostic.
 
-    So a caller who writes ``edge_samples=True`` intending "switch the grey
-    rim on" gets the OLD pre-5.49 answer with no diagnostic.  The three-way
-    identity is the decision; the inequality against the default is what keeps
-    it from being vacuous.
+    Now it raises instead.  The id keeps the identity that made the silence
+    expensive -- ``edge='hard'`` IS ``edge_samples=1`` and is NOT the default,
+    measured here and not read off a comment -- so the refusal is pinned to a
+    demonstrated cost rather than to a preference, and the id would go red
+    either if the bool were quietly accepted again or if the two rims stopped
+    differing.
     """
     N, dx, D = 128, 1e-6, 61e-6
     E = np.ones((N, N), dtype=complex)
@@ -247,21 +259,39 @@ def test_verify_c1r2_edge_samples_true_is_bit_for_bit_the_pre_5_49_rim():
         return np.real(apply_aperture(E, dx, 'circular', {'diameter': D},
                                       **kw)).tobytes()
 
-    assert mask(edge_samples=True) == mask(edge='hard')
-    assert mask(edge_samples=True) == mask(edge='gray', edge_samples=1)
-    assert mask(edge_samples=True) != mask()
+    assert mask(edge='hard') == mask(edge='gray', edge_samples=1)
+    assert mask(edge='hard') != mask()
+    for value in (True, np.True_):
+        with pytest.raises(ValueError, match='not a bool'):
+            mask(edge_samples=value)
 
 
 @pytest.mark.parametrize('value', [None, [4], 4 + 0j])
 def test_verify_c1r2_the_int_refusal_family_names_the_library(value):
     """Every refusal a caller can trigger through the rim keywords should name
     the function whose contract it is -- which is what the shipped census
-    asserts (``'apply_aperture' in message``) for its own eight rows, none of
-    which is in this family.
+    asserts (``'apply_aperture' in message``) for its own rows.
+
+    Before round 3 this family (``None``, a list, a complex) was the one that
+    did not: ``_validate_edge_kwargs`` let ``int()`` raise its own
+    ``TypeError`` ("int() argument must be a string, a bytes-like object or a
+    real number, not 'NoneType'"), naming neither ``apply_aperture`` nor
+    ``edge_samples``, while ``{'edge': None}`` on the same guard got
+    ``apply_aperture``'s own ``ValueError``.  ``evaluate``'s ``Raises``
+    section promises "a ValueError ... the same refusal, from the same guard",
+    which was wrong for exactly these three.  Round 3 catches the ``int()``
+    failure and re-raises it as that same ``ValueError``; the three params
+    carried ``xfail(strict=True)`` until it landed.
+
+    Two-sided: the same ``(raised, message)`` on all four entry points, not
+    merely a better message on one of them.
     """
     got = _four_routes({'edge_samples': value}, params={'diameter': 5.3e-5})
     assert got['numpy_chain'][0], value
     assert 'apply_aperture' in got['numpy_chain'][1], got['numpy_chain'][1]
+    assert 'edge_samples' in got['numpy_chain'][1], got['numpy_chain'][1]
+    assert got['numpy_chain'][1].startswith('ValueError'), got['numpy_chain']
+    assert len(set(got.values())) == 1, got
 
 
 # ===========================================================================

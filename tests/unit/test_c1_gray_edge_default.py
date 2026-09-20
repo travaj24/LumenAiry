@@ -527,6 +527,13 @@ def test_c1_the_jit_kernel_carries_the_elements_edge_samples(n_sub):
 # ``ValueError`` on the NumPy chain and the eager JAX route, because
 # ``_system_element_signature`` coerced with ``int()`` / ``str()`` before
 # ``apply_aperture`` ever saw the value.
+#
+# VERIFY-C1-ROUND2 R2 adds the last three rows.  ``edge_samples_bool_false``
+# was green for the WRONG reason -- ``int(False) == 0 < 1`` refused it as "not
+# positive", not as "a bool" -- so the bool a caller would actually write,
+# ``True``, was ACCEPTED as 1, which is bit-for-bit the pre-5.49 hard rim.
+# Measured 2026-09-20 on both builds and on all four entry points before the
+# round-3 guard: ``True`` and ``numpy.True_`` accepted, ``False`` refused.
 _BAD_EDGE_ELEMENTS = [
     ('edge_unknown_string', {'edge': 'soft'}),
     ('edge_none', {'edge': None}),
@@ -536,6 +543,8 @@ _BAD_EDGE_ELEMENTS = [
     ('edge_samples_non_integer_float', {'edge_samples': 2.5}),
     ('edge_samples_string', {'edge_samples': '4'}),
     ('edge_samples_bool_false', {'edge_samples': False}),
+    ('edge_samples_bool_true', {'edge_samples': True}),
+    ('edge_samples_numpy_bool_true', {'edge_samples': np.True_}),
 ]
 
 _GOOD_EDGE_ELEMENTS = [

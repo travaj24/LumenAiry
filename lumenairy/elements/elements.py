@@ -265,7 +265,9 @@ def _validate_edge_kwargs(edge=_EDGE_UNSET, edge_samples=_EDGE_UNSET):
     ------
     ValueError
         If ``edge`` is neither ``'hard'`` nor ``'gray'``, or if
-        ``edge_samples`` is not an exact integer >= 1.
+        ``edge_samples`` is not an exact integer >= 1 -- including a
+        ``bool`` (VERIFY-C1-ROUND2 R2: ``True`` used to pass the
+        exact-integer test and silently select the pre-5.49 rim).
     TypeError
         If ``edge_samples`` is of a type ``int()`` refuses outright
         (``None``, a list); this is the same refusal the function body
@@ -278,6 +280,20 @@ def _validate_edge_kwargs(edge=_EDGE_UNSET, edge_samples=_EDGE_UNSET):
             f"got {edge!r}.")
     if edge_samples is _EDGE_UNSET:
         return None
+    # VERIFY-C1-ROUND2 R2: refuse a bool EXPLICITLY.  ``int(True) == 1`` and
+    # ``1 != True`` is False, so ``True`` slipped through the exact-integer
+    # test below and silently selected n_sub = 1 -- which is bit-for-bit
+    # ``edge='hard'``, the pre-5.49 rim this release moved away from, chosen
+    # by a caller who was plainly trying to turn something ON.  ``False`` was
+    # refused only because ``int(False) == 0 < 1``, which is why the census
+    # row named for it was green for the wrong reason.  Measured 2026-09-20,
+    # both builds, all four entry points.
+    if isinstance(edge_samples, (bool, np.bool_)):
+        raise ValueError(
+            f"apply_aperture: edge_samples must be a positive integer "
+            f"(sub-samples per axis), not a bool; got {edge_samples!r} "
+            f"(type {type(edge_samples).__name__}).  For the binary "
+            f"pixel-centre rim pass edge='hard'.")
     n_sub = int(edge_samples)
     if n_sub < 1 or n_sub != edge_samples:
         raise ValueError(
