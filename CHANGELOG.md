@@ -49,7 +49,9 @@ values, 461 arrays move with the new default and none moves by more than
 1.8e-11 absolute or 3.4e-13 relative; with `sphere_normal='generic'` passed
 explicitly, 938 of 1008 are byte-identical and the 70 that are not are exactly
 the entry points that trace INTERNALLY and expose no keyword to pass (see the
-Migration note).  Prescriptions with no pure sphere are byte-identical either
+Migration note).  Those counts are THIS change alone, measured before the
+`renormalize` default below moved; with both flips the same sweep reads 595
+moved and 934 of 1008 identical with both old keywords passed.  Prescriptions with no pure sphere are byte-identical either
 way.  CPU / JAX `trace` parity does not move at all: 3.5e-18 m in position and
 3.1e-17 m in OPL under all four `(renormalize, sphere_normal)` combinations,
 with the alive masks equal, on both builds -- the JAX tracer has always used a
