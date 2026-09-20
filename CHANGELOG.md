@@ -89,9 +89,20 @@ stop and does not name `edge=`:** `apply_aperture` itself; `apply_lyot_stop`
 (which exposes no `edge` of its own); the `Aperture` operator in
 `lumenairy.algebra`; `JonesField.apply_aperture`; an `{'type': 'aperture'}`
 element in `propagate_through_system` and in `propagate_through_system_jax` (both
-its jit'd and its slow route); and a script emitted by `lumenairy.io.codegen` for
-a STOP surface, which calls `la.apply_aperture` without the keyword and so tracks
-the library default at run time.  Every propagator downstream of one of those --
+its jit'd and its slow route); `lumenairy.evaluate`, which decomposes every
+`is_stop=True` surface of a prescription into exactly such an element (its way
+back is the NEW `aperture_edge=` keyword below, not the element dict, since it
+builds the element list itself); and a script emitted by `lumenairy.io.codegen`
+for a STOP surface, which calls `la.apply_aperture` without the keyword and so
+tracks the library default at run time.  Two more answers move behind code that
+is documented elsewhere and are named here for completeness: the **GUI
+coronagraph dock's Stop 3 display** (`lumenairy/ui/coronagraph_dock.py:377`
+calls `apply_lyot_stop`, so the displayed field takes the new rim -- see
+`GUI_CHANGELOG.md`), and the worked AO-loop example in
+`lumenairy/analysis/ao.py`'s module docstring, which builds its pupil with
+`la.apply_aperture(np.ones((N, N), dtype=complex), ...)`; that example is still
+correct -- multiplying a grey amplitude mask into a field is exactly what the
+mask is for -- but its printed numbers move.  Every propagator downstream of one of those --
 `rayleigh_sommerfeld_propagate`, the `propagate_huygens_fresnel_*` family, the ASM
 legs, GBD -- is itself unchanged: it moves only because its INPUT moved, and is
 byte-identical on an input that did not.  **The way back is one keyword:
@@ -109,6 +120,36 @@ non-aperture fixtures are byte-identical with no keyword at all, on both builds,
 including `apply_gaussian_aperture`, `apply_apodized_pupil`, the thin lens's and
 the mirror's own aperture masks, the ASM / RS-transfer / HF-freespace
 propagators, RCWA, PMM and the analytic lens.
+
+### Added -- `lumenairy.evaluate(..., aperture_edge=, aperture_edge_samples=)`: the way back for a prescription's STOP surface (VERIFY-C1 D4)
+
+`lumenairy.evaluate` is the documented one-call entry for a `.zmx`
+prescription.  `_prescription_to_elements` routes the Zemax-loader shape through
+`io.codegen._decompose_prescription`, which emits an `{'type': 'aperture',
+'shape': 'circular', 'params': {'diameter': D}}` step for every `is_stop=True`
+surface with **no `edge` key** -- so `evaluate` takes the new default, its answer
+moved, and, unlike every entry point in the Migration table, it had no route back
+a caller could reach: `evaluate` accepted no rim argument and built its element
+list internally, leaving the private `_prescription_to_elements` plus a
+hand-driven `propagate_through_system` as the only way.
+
+`evaluate` now takes `aperture_edge=None` and `aperture_edge_samples=None`,
+stamped by `_prescription_to_elements` onto every `'aperture'` element it emits.
+`None` stamps nothing, so an unkeyworded call still takes `apply_aperture`'s own
+default and no call pins today's default into tomorrow's answer.  Both are
+validated once, before the decomposition runs, through the same guard
+`apply_aperture` uses, so a misspelled rim is refused with `apply_aperture`'s own
+message rather than at the aperture step.
+
+**`aperture_edge='hard'` reproduces the pre-5.49 answer BIT FOR BIT**, proved
+archive-to-archive against a `git archive` of `49ddf4bd` on both builds
+(`validation/probe_verify_c1/d4_evaluate_*.json`): on one prescription with a
+STOP surface the returned field reads `e7b1f67b9b19d547` at the parent commit,
+`59115e8eb2b2b0d0` here by default and `e7b1f67b9b19d547` again with the keyword
+on Windows py3.14, and `0b97c205be347dfa` / `193bf1d920e2ac88` /
+`0b97c205be347dfa` on WSL py3.12.  `aperture_edge_samples=1` lands on the same
+bytes, which is what proves the second keyword reaches the element too.  Pinned
+by `test_c1_evaluates_way_back_is_one_keyword_and_reaches_the_stop`.
 
 Pinned by `tests/unit/test_c1_gray_edge_default.py` (17 tests, none slow),
 including a mutation matrix in which the default reverting to `'hard'`,
@@ -3388,7 +3429,7 @@ message and the function's docstring say so.  Behaviour is unchanged --
 the JAX path is still ASM-only and still refuses both, and an
 `method='asm'` JAX chain is byte-identical.
 
-Files: `lumenairy/propagators/system.py:1968-1980`, `:1730-1738`.
+Files: `lumenairy/propagators/system.py:2030-2042`, `:1730-1738`.
 
 <!-- WP-VERIFY_WP-B3b: Propagator call sites: verifier follow-ups -->
 ### Fixed -- a `method='fresnel'` chain step warns again when the chain window holds only part of the beam (K6)

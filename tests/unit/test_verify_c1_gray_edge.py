@@ -31,8 +31,10 @@ The gaps closed here (each named in
       round 2, when the refusal moved into the one place both backends read
       the element.
   V3  ``lumenairy.evaluate`` reaches an ``'aperture'`` element and so moves
-      with the default, and exposes no ``edge`` of its own -- an entry point
-      the Migration table does not name.
+      with the default.  It exposed no rim of its own and had NO way back a
+      caller could reach; round 2 gave it ``aperture_edge=`` /
+      ``aperture_edge_samples=``, and this id now pins the way back rather
+      than its absence.
   V4  "grey BEATS hard" restated as a strict, ratio-bounded decision: the
       shipped ``e_g4 <= e_hard`` is satisfied by EQUALITY, so it still passes
       when the two arms are the same array.
@@ -276,23 +278,27 @@ _STOP_PRESCRIPTION = {
 }
 
 
-def test_verify_c1_evaluate_takes_the_new_rim_and_has_no_public_way_back():
-    """GAP CLOSED.  ``lumenairy.evaluate`` -- the documented one-call entry for
-    a ``.zmx`` prescription -- decomposes a STOP surface into an
-    ``{'type': 'aperture'}`` element with NO ``edge`` key, so it takes
-    ``apply_aperture``'s default and its answer MOVED at 5.49.0.  It is not in
-    the Migration-Guide's table of entry points, and unlike every entry point
-    that IS in that table it has no way back a caller can reach: ``evaluate``
-    takes no ``edge`` argument and builds its element list internally.
+def test_verify_c1_evaluate_takes_the_new_rim_and_its_way_back_is_one_keyword():
+    """GAP CLOSED, then FIXED.  ``lumenairy.evaluate`` -- the documented
+    one-call entry for a ``.zmx`` prescription -- decomposes a STOP surface
+    into an ``{'type': 'aperture'}`` element with NO ``edge`` key, so it takes
+    ``apply_aperture``'s default and its answer MOVED at 5.49.0.  When this
+    file was written it was absent from the Migration-Guide's table and,
+    unlike every entry point that IS in that table, had no way back a caller
+    could reach: the only route to the old answer was the private
+    ``_prescription_to_elements`` plus a hand-driven chain.
 
     MEASURED 2026-09-20: this fixture's returned field moves from
-    ``e7b1f67b...`` at 49ddf4bd to ``59115e8e...`` here, on both builds.
+    ``e7b1f67b...`` at 49ddf4bd to ``59115e8e...`` on the branch (Windows;
+    ``0b97c205...`` -> ``193bf1d9...`` on WSL).
 
-    The test pins the three facts a Migration row would need: the element is
-    emitted, ``evaluate`` exposes no ``edge``, and the ONLY route to the old
-    answer is the private builder.  It stays true after the defect is fixed by
-    adding a documented route -- at which point the last assertion is the one
-    to restate.
+    Round 2 (VERIFY-C1 D4) gave ``evaluate`` an ``aperture_edge=`` keyword,
+    so this id now pins the way back itself: the emitted element still names
+    no rim (so it cannot pin today's default into tomorrow's answer), the
+    keyword exists, and ``aperture_edge='hard'`` reproduces the pre-5.49
+    field BIT FOR BIT -- checked here against the hand-built element list,
+    and archive-to-archive against ``git archive 49ddf4bd`` in
+    ``validation/probe_verify_c1/d4_evaluate_*.json`` on both builds.
     """
     import lumenairy as la
     from lumenairy.propagators.system import _prescription_to_elements
@@ -302,9 +308,12 @@ def test_verify_c1_evaluate_takes_the_new_rim_and_has_no_public_way_back():
     assert len(apertures) == 1, elements
     assert 'edge' not in apertures[0] and 'edge_samples' not in apertures[0]
 
-    assert 'edge' not in inspect.signature(la.evaluate).parameters, (
-        "evaluate now exposes an 'edge' -- restate this test and the "
-        "Migration row it stands in for")
+    params = inspect.signature(la.evaluate).parameters
+    assert 'aperture_edge' in params and 'aperture_edge_samples' in params, (
+        "evaluate lost the way back this defect was filed for")
+    assert params['aperture_edge'].default is None, (
+        "aperture_edge must default to None -- naming a rim here would pin "
+        "today's default into tomorrow's answer")
 
     src = la.Source.gaussian(N=128, dx=40e-6, wavelength=633e-9, w0=1.0e-3)
     got = np.asarray(la.evaluate(_STOP_PRESCRIPTION, src).field)
@@ -323,6 +332,28 @@ def test_verify_c1_evaluate_takes_the_new_rim_and_has_no_public_way_back():
     gray = np.asarray(out_g[0] if isinstance(out_g, tuple) else out_g)
     assert _bytes(got) == _bytes(gray), (
         "evaluate does not take apply_aperture's default rim")
+
+    # The way back, by keyword: bit for bit the hand-built hard chain, which
+    # is bit for bit the pre-5.49 answer (measured archive-to-archive).
+    back = np.asarray(
+        la.evaluate(_STOP_PRESCRIPTION, src, aperture_edge='hard').field)
+    assert _bytes(back) == _bytes(hard), (
+        "evaluate(aperture_edge='hard') is not the pre-5.49 answer")
+    # ... and the keyword really reaches the emitted element, rather than
+    # being accepted and ignored.
+    assert _bytes(back) != _bytes(got)
+    gray1 = np.asarray(la.evaluate(_STOP_PRESCRIPTION, src,
+                                   aperture_edge='gray',
+                                   aperture_edge_samples=1).field)
+    assert _bytes(gray1) == _bytes(hard), (
+        "aperture_edge_samples is not reaching the element -- n_sub = 1 IS "
+        "the pixel-centre indicator")
+    stamped = _prescription_to_elements(_STOP_PRESCRIPTION,
+                                        aperture_edge='hard',
+                                        aperture_edge_samples=8)
+    stamped_ap = [e for e in stamped if e.get('type') == 'aperture']
+    assert stamped_ap[0]['edge'] == 'hard'
+    assert stamped_ap[0]['edge_samples'] == 8
 
 
 # ===========================================================================

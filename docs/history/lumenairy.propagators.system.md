@@ -1,7 +1,7 @@
 <!-- lumenairy-history-doc
 module: lumenairy/propagators/system.py
-ast_sha256: 7980870929df9fa2610d5dfacb74de1a0e6b6d75cfbbe108d610e40bd6507780
-token_sha256: a2f1056f012c6ac2bf692cc1efad73be3244e066d287d53b809daccc8f779c49
+ast_sha256: 84f5a80089541bcd5b283f85e03fdd2c57b6f205b964022c14fd79f4a634b077
+token_sha256: 1cea4aaaa72f3a51f50c81bf09c9e4a01e762b8ff982ea2862ca0c40f3124d75
 pre_relocation_lines: 1919
 recorded_by: WP-A17 SWEEP-1 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
@@ -11,6 +11,7 @@ re_recorded: 2026-09-14 -- Wave-5 item D (CI run 34914295323): DIGEST-SCHEME cha
 re_recorded: 2026-09-14 -- Wave 5 item D (handoff 4.4): the six warnings.warn literal stacklevels are swept onto lumenairy.elements._lens_kernels.caller_stacklevel().  The system chain reaches its guard sites from propagate_through_system and from evaluate, i.e. at two library depths, so a literal is right for at most one of them.  No physics changed.
 re_recorded: 2026-09-20 -- WP-C1: the 'aperture' element forwards edge/edge_samples on both backends, and the two JAX routes call elements.apply_aperture instead of carrying their own pixel-centre indicator
 re_recorded: 2026-09-20 -- VERIFY-C1 D1: _aperture_edge_kwargs now validates the element through elements._validate_edge_kwargs, so the jit'd kernel's static signature can no longer accept an element the NumPy chain and the eager JAX route refuse.
+re_recorded: 2026-09-20 -- VERIFY-C1 D4: evaluate gains aperture_edge= / aperture_edge_samples=, stamped by _prescription_to_elements onto every 'aperture' element it emits for an is_stop surface, so the entry point's way back is reachable without a private call; validated once through the shared guard before the decomposition runs.
 -->
 
 # Version history -- `lumenairy/propagators/system.py`

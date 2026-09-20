@@ -634,6 +634,88 @@ def test_c1_the_three_chain_routes_accept_the_legal_edge_elements(
         assert got.tobytes() == np.asarray(npy).tobytes(), (label, verbose)
 
 
+_STOP_PRESCRIPTION = {
+    'elements': [
+        {'surf_num': 1, 'element_type': 'surface', 'radius': np.inf,
+         'glass_after': 'air', 'is_stop': True, 'semi_diameter': 1.2e-3,
+         'comment': 'STOP'},
+        {'surf_num': 2, 'element_type': 'surface', 'radius': 0.05,
+         'glass_after': 'N-BK7', 'semi_diameter': 2e-3},
+        {'surf_num': 3, 'element_type': 'surface', 'radius': -0.05,
+         'glass_after': 'air', 'semi_diameter': 2e-3},
+    ],
+    'all_thicknesses': [2e-3, 3e-3, 20e-3],
+    'aperture_diameter': 2.4e-3,
+}
+
+
+def test_c1_evaluates_way_back_is_one_keyword_and_reaches_the_stop():
+    """``lumenairy.evaluate`` renders every ``is_stop=True`` surface as an
+    ``'aperture'`` element, so its answer moved with the default -- and
+    ``aperture_edge='hard'`` is its way back, the one keyword the Migration
+    table promises for every entry point in it.
+
+    VERIFY-C1 D4.  Before round 2 this entry point had no route back a caller
+    could reach: ``evaluate`` took no rim argument and built its element list
+    internally, so the only way to the old answer was the PRIVATE
+    ``_prescription_to_elements`` plus a hand-driven chain.
+
+    MEASURED 2026-09-20 archive-to-archive, ``git archive 49ddf4bd`` against
+    this tree, both builds
+    (``validation/probe_verify_c1/d4_evaluate_*.json``):
+
+        Windows  pre-5.49 default  e7b1f67b9b19d547
+                 5.49 default      59115e8eb2b2b0d0
+                 aperture_edge='hard'  e7b1f67b9b19d547   <- byte-identical
+        WSL      0b97c205be347dfa / 193bf1d920e2ac88 / 0b97c205be347dfa
+
+    The assertions here are the same decisions inside one tree: bit identity
+    against the hand-built hard chain, non-identity against the default (so
+    the keyword is not accepted-and-ignored), and ``edge_samples=1`` landing
+    on the hard answer, which is what proves the SECOND keyword reaches the
+    element too.  Bytes, not tolerances.
+    """
+    import lumenairy as la
+    from lumenairy.propagators.system import (_prescription_to_elements,
+                                              propagate_through_system)
+    src = la.Source.gaussian(N=128, dx=40e-6, wavelength=633e-9, w0=1.0e-3)
+
+    emitted = _prescription_to_elements(_STOP_PRESCRIPTION)
+    apertures = [e for e in emitted if e.get('type') == 'aperture']
+    assert len(apertures) == 1, emitted
+    assert 'edge' not in apertures[0] and 'edge_samples' not in apertures[0], (
+        "the emitted element must name no rim when the caller named none, "
+        "or it pins today's default into tomorrow's answer")
+
+    hand_hard = [dict(e, edge='hard') if e.get('type') == 'aperture' else e
+                 for e in emitted]
+    out = propagate_through_system(np.asarray(src.E), hand_hard, 633e-9,
+                                   dx=40e-6)
+    hard = np.asarray(out[0] if isinstance(out, tuple) else out)
+
+    default = np.asarray(la.evaluate(_STOP_PRESCRIPTION, src).field)
+    back = np.asarray(la.evaluate(_STOP_PRESCRIPTION, src,
+                                  aperture_edge='hard').field)
+    gray1 = np.asarray(la.evaluate(_STOP_PRESCRIPTION, src,
+                                   aperture_edge='gray',
+                                   aperture_edge_samples=1).field)
+    assert back.tobytes() == hard.tobytes(), (
+        "evaluate(aperture_edge='hard') is not the pre-5.49 answer")
+    assert back.tobytes() != default.tobytes(), (
+        "evaluate's answer does not move with the rim -- then the keyword is "
+        "accepted and ignored, or the STOP surface is not being rendered")
+    assert gray1.tobytes() == hard.tobytes(), (
+        "aperture_edge_samples is not reaching the element -- n_sub = 1 IS "
+        "the pixel-centre indicator")
+
+    # The rim keywords are refused by evaluate with apply_aperture's own
+    # message, before any propagation runs -- the same guard, not a third.
+    for kw in ({'aperture_edge': 'soft'}, {'aperture_edge_samples': 2.5},
+               {'aperture_edge_samples': 0}):
+        with pytest.raises((ValueError, TypeError), match='apply_aperture'):
+            la.evaluate(_STOP_PRESCRIPTION, src, **kw)
+
+
 # ===========================================================================
 # 6 -- the mutation matrix
 # ===========================================================================

@@ -1822,6 +1822,9 @@ L2 of the move on a propagated field: **7.678e-03 at N = 256, 2.930e-03 at 512,
 | `JonesField.apply_aperture` | no | `apply_aperture(...,  edge='hard')` on `Ex` and `Ey` |
 | `propagate_through_system`, `{'type': 'aperture'}` element | yes, NEW in 5.49.0 | `{'edge': 'hard'}` in the element dict |
 | `propagate_through_system_jax`, same element (both routes) | yes, NEW in 5.49.0 | `{'edge': 'hard'}` in the element dict |
+| `lumenairy.evaluate` on a prescription with a STOP surface | yes, NEW in 5.49.0 -- `aperture_edge=` / `aperture_edge_samples=` | `la.evaluate(rx, src, aperture_edge='hard')`, bit for bit |
+| the GUI's **Coronagraph dock**, Stop 3 (it calls `apply_lyot_stop`) | no | re-record; see `GUI_CHANGELOG.md` |
+| the worked AO loop in `lumenairy.analysis.ao`'s module docstring | it is an example, not an entry point | add `edge='hard'` to its `la.apply_aperture(...)` line if you are reproducing its printed numbers |
 | a script emitted by `lumenairy.io.codegen` for a STOP surface | it emits no keyword | edit the generated `la.apply_aperture(...)` call, or re-pin |
 
 Every propagator downstream is itself unchanged -- `rayleigh_sommerfeld_propagate`,
@@ -1841,6 +1844,10 @@ E = la.apply_aperture(E, dx, shape='circular', params={'diameter': D},
 # Same, inside a chain (NumPy or JAX):
 elements = [{'type': 'aperture', 'shape': 'circular',
              'params': {'diameter': D}, 'edge': 'hard'}]
+
+# Same, for a prescription whose STOP surface evaluate renders as an aperture.
+# `aperture_edge_samples=` is there too, and is ignored on the 'hard' arm.
+result = la.evaluate(rx, src, aperture_edge='hard')
 
 # Keep the new default and re-record the pin instead (recommended -- the
 # grey rim is the one with a convergence order):

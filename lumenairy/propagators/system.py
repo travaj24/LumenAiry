@@ -1208,6 +1208,8 @@ def evaluate(
     use_gpu: bool = False,
     verbose: bool = False,
     progress: Optional[Callable] = None,
+    aperture_edge: Optional[str] = None,
+    aperture_edge_samples: Optional[int] = None,
 ) -> 'PropagationResult':
     """Ergonomic one-call entry: prescription + Source -> PropagationResult.
 
@@ -1246,6 +1248,29 @@ def evaluate(
         :func:`propagate_through_system`.
     use_gpu, verbose, progress :
         Forwarded to :func:`propagate_through_system`.
+    aperture_edge : {'gray', 'hard'}, optional
+        How to render the rim of the ``'aperture'`` element this function
+        emits for every ``is_stop=True`` surface of a Zemax-shape
+        prescription.  ``None`` (the default) leaves the element without an
+        ``'edge'`` key, so it takes
+        :func:`~lumenairy.elements.elements.apply_aperture`'s own default,
+        which renders the rim by pixel AREA.
+
+        **This is the way back** (VERIFY-C1 D4).  When that default
+        moved, what ``evaluate`` returns on any prescription with a STOP
+        surface moved with it, and before this keyword existed the only
+        route to the older answer was the private
+        :func:`_prescription_to_elements` plus a hand-driven
+        :func:`propagate_through_system`.  ``aperture_edge='hard'``
+        reproduces the binary pixel-centre answer BIT FOR BIT (proved
+        archive-to-archive against the parent commit on both builds; the
+        CHANGELOG's Migration note records which release moved it).  Prescriptions with no STOP surface emit no aperture
+        element, so this keyword changes nothing for them.
+    aperture_edge_samples : int, optional
+        Sub-samples per axis for ``aperture_edge='gray'``; ``None`` takes
+        ``apply_aperture``'s own default of 4, which is the measured knee.
+        Ignored when the rim is ``'hard'``.  Stamped onto the same emitted
+        elements as ``aperture_edge``.
 
     Returns
     -------
@@ -1257,7 +1282,10 @@ def evaluate(
     ValueError
         If ``source`` is ``None`` or not a :class:`Source` instance;
         if ``prescription`` is missing the keys needed by either
-        prescription shape.
+        prescription shape; if ``aperture_edge`` /
+        ``aperture_edge_samples`` are not what
+        :func:`~lumenairy.elements.elements.apply_aperture` accepts (the
+        same refusal, from the same guard).
 
     Examples
     --------
@@ -1268,6 +1296,11 @@ def evaluate(
     >>> result = la.evaluate(rx, src)
     >>> result.field.shape
     (512, 512)
+
+    The binary pixel-centre (staircase) rim on the STOP surface, bit for
+    bit -- the answer this entry point gave before the rim default moved:
+
+    >>> result = la.evaluate(rx, src, aperture_edge='hard')
     """
     # Lazy import to avoid a top-level circular dependency on
     # ``lumenairy.sources``.
@@ -1324,7 +1357,9 @@ def evaluate(
     #      (what :func:`make_singlet`, :func:`make_doublet` return).
     #      We wrap it as a one-group ``real_lens`` element so the
     #      rest of the pipeline is uniform.
-    elements_list = _prescription_to_elements(prescription)
+    elements_list = _prescription_to_elements(
+        prescription, aperture_edge=aperture_edge,
+        aperture_edge_samples=aperture_edge_samples)
 
     # Route through propagate_through_system with return_result=True so
     # the caller gets a structured PropagationResult back.
@@ -1345,9 +1380,22 @@ def evaluate(
 
 def _prescription_to_elements(
     prescription: Dict[str, Any],
+    *,
+    aperture_edge: Optional[str] = None,
+    aperture_edge_samples: Optional[int] = None,
 ) -> List[Dict[str, Any]]:
     """Convert a prescription dict into a ``propagate_through_system``
     element list.
+
+    ``aperture_edge`` / ``aperture_edge_samples`` are stamped onto every
+    ``'aperture'`` element this emits -- one per ``is_stop=True`` surface of
+    a Zemax-shape prescription -- and are what makes :func:`evaluate`'s
+    rim reachable from the public API (VERIFY-C1 D4).  ``None`` stamps
+    nothing, so the element takes ``apply_aperture``'s own default and
+    cannot pin today's default into tomorrow's answer.  They are validated
+    here, once, through the same guard ``apply_aperture`` uses, so a caller
+    who misspells the rim is refused before any propagation runs rather
+    than at the aperture step.
 
     Accepts two prescription shapes:
 
@@ -1395,6 +1443,16 @@ def _prescription_to_elements(
             "drop ``'elements'`` / ``'all_thicknesses'``.  "
             f"Got keys {sorted(prescription.keys())}.")
 
+    # VERIFY-C1 D4: refuse a bad rim BEFORE decomposing, with
+    # ``apply_aperture``'s own message, and build the keys to stamp once.
+    edge_kw: Dict[str, Any] = {}
+    if aperture_edge is not None:
+        edge_kw['edge'] = aperture_edge
+    if aperture_edge_samples is not None:
+        edge_kw['edge_samples'] = aperture_edge_samples
+    if edge_kw:
+        _validate_edge_kwargs(**edge_kw)
+
     elements_list: List[Dict[str, Any]] = []
 
     if has_elements:
@@ -1425,6 +1483,10 @@ def _prescription_to_elements(
                     'type': 'aperture',
                     'shape': 'circular',
                     'params': {'diameter': D},
+                    # VERIFY-C1 D4: empty unless the caller named a rim, so
+                    # an unkeyworded call still takes apply_aperture's own
+                    # default rather than pinning today's default here.
+                    **edge_kw,
                 })
             elif stype == 'doe_placeholder':
                 # Air-to-air aspheric / DOE surfaces -- no element-handler
