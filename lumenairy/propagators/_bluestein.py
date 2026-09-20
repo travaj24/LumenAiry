@@ -336,6 +336,62 @@ _MFT_DIRECT_ALWAYS = float('inf')
 _MFT_DIRECT_NEVER = 0.0
 
 
+#: The SECOND condition ``method='auto'`` has to clear, and the one a ratio
+#: cannot see.
+#:
+#: WHY A RATIO IS NOT ENOUGH.  :func:`_direct_matrix_2d` builds
+#: ``My*Ny + Mx*Nx`` transcendental kernel entries -- each a complex ``exp``,
+#: tens of times the cost of a multiply-add -- and then spends
+#: ``min(My*Ny*Nx + My*Nx*Mx, Ny*Nx*Mx + My*Ny*Mx)`` multiply-adds using them
+#: (the two costs that function itself compares to pick its association
+#: order).  The RATIO of those two numbers, the multiply-adds per kernel
+#: entry, is what says whether the BUILD or the products dominate -- and it is
+#: not a function of the two grid ratios.  ``2048x2048 -> 64x64`` reads
+#: **1056** and ``2048x64 -> 64x2`` reads **4.0**, and both sit at ratio
+#: exactly ``(1/32, 1/32)``.  For a square ``N -> M`` the quantity is
+#: ``(N + M)/2``, so the ladder :data:`_MFT_DIRECT_MAX_RATIO` was derived from
+#: -- square shapes only -- could not see the thin-input regime at all.
+#:
+#: DERIVED, 2026-09-20 (WP-C4 round 2, VERIFY-WP-C4 D1).  Ladder: 34 CAPTURED
+#: anisotropic shapes spanning this quantity from 1.25 to 64 (both
+#: orientations, several absolute sizes per decade) plus 17 square /
+#: non-dyadic / mildly anisotropic control shapes; two independent rounds of
+#: best-of-nine, routes INTERLEAVED with the order rotating per repeat, cold
+#: before every repeat, ``fft_infra.SCIPY_FFT_WORKERS = 1`` so both sides are
+#: single-threaded, verdict on the WORST round, on BOTH builds.  Against
+#: ``min(chirp-Z 2-D, separable)``:
+#:
+#:  * the largest work/entry at which the dense route was measured SLOWER on
+#:    EITHER build is **11.95** (``2048x128 -> 64x4``: 1.110 on WSL py3.12,
+#:    0.924 on Windows py3.14);
+#:  * the smallest at which it was measured safe on BOTH builds ABOVE that is
+#:    **16.00** (``256x64 -> 4x1``: 0.310 / 0.294).
+#:
+#: 16.0 is therefore the LARGEST value that still captures every shape
+#: measured safe above the slower region, and it clears the slower region by
+#: **1.34x**.  It refuses 10 of the 10 shapes measured slower (by 1.11x to
+#: 13.03x) and keeps 17 of 17 control shapes; the six shapes the whole shipped
+#: suite drives read 264, 516, 520, 1028, 1044 and 2052, so none of them
+#: moves.  Full table:
+#: ``validation/probe_c4_round2/r2_workladder_all_{win,wsl}.json``.
+#:
+#: IT IS A ONE-SIDED SCREEN, NOT A CROSSOVER, and that costs coverage.  The
+#: readings are not monotone in it -- ``512x32 -> 16x1`` reads 2.99 and is
+#: safe (0.569 / 0.582), because at that absolute size the chirp-Z route's
+#: fixed costs (planning, padding to ``next_fast_len``) dominate whatever the
+#: asymptotic count says -- so a threshold refuses shapes that would have been
+#: fine: 11 of the 34 thin shapes here were safe on both builds and are
+#: refused anyway.  That is the correct direction for a rule whose premise is
+#: "never slower": refusing a safe shape costs a few per cent of time, and
+#: capturing an unsafe one cost up to 13x on this ladder.
+#:
+#: A non-positive or ``nan`` value means the screen refuses nothing that the
+#: ratio admitted, which is the PRE-5.49.0 exposure and is what the
+#: ``constant_silently_zero`` mutation in
+#: ``tests/unit/test_c4_mft_direct_default.py`` exercises.
+_MFT_DIRECT_MIN_WORK_PER_KERNEL_ENTRY = 16.0
+
+
 def _auto_selects_direct(Ny_in, Nx_in, N_out_y, N_out_x) -> bool:
     """Does ``method='auto'`` take the dense route at this shape?
 
@@ -359,11 +415,17 @@ def _auto_selects_direct(Ny_in, Nx_in, N_out_y, N_out_x) -> bool:
     Returns
     -------
     bool
-        ``True`` when both per-axis ratios ``N_out / N_in`` sit at or below
-        :data:`_MFT_DIRECT_MAX_RATIO`.  The MAX of the two is taken, which is
-        the conservative reading on an anisotropic grid: the axis with the
-        larger ratio decides, so a shape reaches the dense route only when
-        NEITHER axis is past the boundary.
+        ``True`` when BOTH conditions hold.  (1) Both per-axis ratios
+        ``N_out / N_in`` sit at or below :data:`_MFT_DIRECT_MAX_RATIO`.  The
+        MAX of the two is taken, which is the conservative reading on an
+        anisotropic grid: the axis with the larger ratio decides, so a shape
+        reaches the dense route only when NEITHER axis is past the boundary.
+        (2) The dense route spends at least
+        :data:`_MFT_DIRECT_MIN_WORK_PER_KERNEL_ENTRY` multiply-adds per
+        transcendental kernel entry.  A ratio cannot see a THIN input: at
+        ratio ``(1/32, 1/32)`` the dense route was measured 1.1x to 13.0x
+        SLOWER once the other axis is short, because it is then paying more
+        transcendentals than multiply-adds.
 
     Notes
     -----
@@ -376,6 +438,12 @@ def _auto_selects_direct(Ny_in, Nx_in, N_out_y, N_out_x) -> bool:
 
     A non-positive or ``nan`` constant means NEVER, and that is decided BEFORE
     the division, so a mis-set constant cannot reach the arithmetic.
+
+    BOTH CONDITIONS ARE BUILD-FREE (WP-C4 round 2, VERIFY-WP-C4 D1).  The
+    second one counts multiply-adds and kernel entries with the SAME
+    expressions :func:`_direct_matrix_2d` uses to pick its association order,
+    so it is four integers and one constant like the first -- no clock, no
+    environment, no backend.
     """
     r = float(_MFT_DIRECT_MAX_RATIO)
     if not (r > 0.0):                    # 0.0, negative, or nan -> never
@@ -386,7 +454,16 @@ def _auto_selects_direct(Ny_in, Nx_in, N_out_y, N_out_x) -> bool:
         return False
     if r == float('inf'):                # the documented "always"
         return True
-    return max(my / ny, mx / nx) <= r
+    if not (max(my / ny, mx / nx) <= r):
+        return False
+    # A ratio cannot see a THIN input: at ratio (1/32, 1/32) the dense route
+    # is 1.1x to 13.0x slower once the other axis is short, because it is then
+    # paying more transcendentals than multiply-adds.  MEASURED 2026-09-20
+    # (WP-C4 round 2, ``validation/probe_c4_round2/r2_workladder_*.json``);
+    # the constant's own block has the ladder and the margin.
+    entries = my * ny + mx * nx
+    flops = min(my * ny * nx + my * nx * mx, ny * nx * mx + my * ny * mx)
+    return flops >= float(_MFT_DIRECT_MIN_WORK_PER_KERNEL_ENTRY) * entries
 
 
 def _warn_phase_budget(alpha_x, alpha_y, Nx_in, Ny_in, N_out_x, N_out_y, *,

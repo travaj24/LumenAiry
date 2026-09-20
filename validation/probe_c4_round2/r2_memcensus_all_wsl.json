@@ -1,0 +1,1564 @@
+{
+ "CAPTURED_AND_NOT_CHEAPEST": [],
+ "REFUSED_AND_NOT_CHEAPEST": [
+  "w0125_4096x32",
+  "w0150_2048x32",
+  "w0150_32x2048",
+  "w0200_1024x32",
+  "w0200_4096x64",
+  "w0300_4096x64b",
+  "w0400_2048x64b",
+  "w0400_64x2048",
+  "w0799_4096x128b"
+ ],
+ "build": "WSL-py3.12",
+ "dense_cheapest_count": 42,
+ "derived_predicts_measured_count": 48,
+ "family": "all",
+ "load_after": {
+  "python_processes": 18,
+  "ref_loop_s": 5.549999696086161e-05,
+  "total_processes": 32,
+  "wall": 1789926013.0515509
+ },
+ "load_before": {
+  "python_processes": 18,
+  "ref_loop_s": 5.569999848376028e-05,
+  "total_processes": 32,
+  "wall": 1789925986.6353579
+ },
+ "numpy": "2.4.6",
+ "python": "3.12.3",
+ "rows": [
+  {
+   "Mx": 1,
+   "My": 128,
+   "Nx_in": 32,
+   "Ny_in": 4096,
+   "cheapest": "separable",
+   "dense_over_cheapest_fallback": 4.8509969741640155,
+   "derived_bytes": {
+    "chirpz2d": 2162688,
+    "dense": 12582912,
+    "separable": 8650752
+   },
+   "derived_cheapest": "chirpz2d",
+   "derived_predicts_measured": false,
+   "distinct_route_digests": 3,
+   "name": "w0125_4096x32",
+   "peak_MB": {
+    "chirpz2d": 20.253727,
+    "dense": 21.008232,
+    "separable": 4.330704
+   },
+   "peak_bytes": {
+    "chirpz2d": 20253727,
+    "dense": 21008232,
+    "separable": 4330704
+   },
+   "ratio_max": 0.03125,
+   "rule_says_direct": false,
+   "work_per_kernel_entry": 1.2499237107110162
+  },
+  {
+   "Mx": 1,
+   "My": 64,
+   "Nx_in": 32,
+   "Ny_in": 2048,
+   "cheapest": "separable",
+   "dense_over_cheapest_fallback": 2.3559424629469117,
+   "derived_bytes": {
+    "chirpz2d": 1081344,
+    "dense": 3145728,
+    "separable": 2162688
+   },
+   "derived_cheapest": "chirpz2d",
+   "derived_predicts_measured": false,
+   "distinct_route_digests": 3,
+   "name": "w0150_2048x32",
+   "peak_MB": {
+    "chirpz2d": 9.834435,
+    "dense": 5.26212,
+    "separable": 2.233552
+   },
+   "peak_bytes": {
+    "chirpz2d": 9834435,
+    "dense": 5262120,
+    "separable": 2233552
+   },
+   "ratio_max": 0.03125,
+   "rule_says_direct": false,
+   "work_per_kernel_entry": 1.4996338784476446
+  },
+  {
+   "Mx": 64,
+   "My": 1,
+   "Nx_in": 2048,
+   "Ny_in": 32,
+   "cheapest": "separable",
+   "dense_over_cheapest_fallback": 2.208114124176182,
+   "derived_bytes": {
+    "chirpz2d": 1081344,
+    "dense": 3145728,
+    "separable": 1081344
+   },
+   "derived_cheapest": "separable",
+   "derived_predicts_measured": true,
+   "distinct_route_digests": 3,
+   "name": "w0150_32x2048",
+   "peak_MB": {
+    "chirpz2d": 8.747056,
+    "dense": 5.261512,
+    "separable": 2.382808
+   },
+   "peak_bytes": {
+    "chirpz2d": 8747056,
+    "dense": 5261512,
+    "separable": 2382808
+   },
+   "ratio_max": 0.03125,
+   "rule_says_direct": false,
+   "work_per_kernel_entry": 1.4996338784476446
+  },
+  {
+   "Mx": 1,
+   "My": 32,
+   "Nx_in": 32,
+   "Ny_in": 1024,
+   "cheapest": "separable",
+   "dense_over_cheapest_fallback": 1.115222586786568,
+   "derived_bytes": {
+    "chirpz2d": 540672,
+    "dense": 786432,
+    "separable": 540672
+   },
+   "derived_cheapest": "separable",
+   "derived_predicts_measured": true,
+   "distinct_route_digests": 3,
+   "name": "w0200_1024x32",
+   "peak_MB": {
+    "chirpz2d": 4.925635,
+    "dense": 1.321512,
+    "separable": 1.184976
+   },
+   "peak_bytes": {
+    "chirpz2d": 4925635,
+    "dense": 1321512,
+    "separable": 1184976
+   },
+   "ratio_max": 0.03125,
+   "rule_says_direct": false,
+   "work_per_kernel_entry": 1.9980487804878049
+  },
+  {
+   "Mx": 1,
+   "My": 64,
+   "Nx_in": 64,
+   "Ny_in": 4096,
+   "cheapest": "separable",
+   "dense_over_cheapest_fallback": 1.2339794530187174,
+   "derived_bytes": {
+    "chirpz2d": 4300800,
+    "dense": 6291456,
+    "separable": 4300800
+   },
+   "derived_cheapest": "separable",
+   "derived_predicts_measured": true,
+   "distinct_route_digests": 3,
+   "name": "w0200_4096x64",
+   "peak_MB": {
+    "chirpz2d": 38.853915,
+    "dense": 10.521896,
+    "separable": 8.5268
+   },
+   "peak_bytes": {
+    "chirpz2d": 38853915,
+    "dense": 10521896,
+    "separable": 8526800
+   },
+   "ratio_max": 0.015625,
+   "rule_says_direct": false,
+   "work_per_kernel_entry": 1.9995118379301928
+  },
+  {
+   "Mx": 1,
+   "My": 16,
+   "Nx_in": 32,
+   "Ny_in": 512,
+   "cheapest": "dense",
+   "dense_over_cheapest_fallback": 0.5076526287748528,
+   "derived_bytes": {
+    "chirpz2d": 270336,
+    "dense": 196608,
+    "separable": 262144
+   },
+   "derived_cheapest": "dense",
+   "derived_predicts_measured": true,
+   "distinct_route_digests": 3,
+   "name": "w0299_512x32",
+   "peak_MB": {
+    "chirpz2d": 2.471235,
+    "dense": 0.3354,
+    "separable": 0.660688
+   },
+   "peak_bytes": {
+    "chirpz2d": 2471235,
+    "dense": 335400,
+    "separable": 660688
+   },
+   "ratio_max": 0.03125,
+   "rule_says_direct": false,
+   "work_per_kernel_entry": 2.9883268482490273
+  },
+  {
+   "Mx": 1,
+   "My": 32,
+   "Nx_in": 64,
+   "Ny_in": 2048,
+   "cheapest": "dense",
+   "dense_over_cheapest_fallback": 0.6095645558587937,
+   "derived_bytes": {
+    "chirpz2d": 2128896,
+    "dense": 1572864,
+    "separable": 2097152
+   },
+   "derived_cheapest": "dense",
+   "derived_predicts_measured": true,
+   "distinct_route_digests": 3,
+   "name": "w0300_2048x64",
+   "peak_MB": {
+    "chirpz2d": 19.263395,
+    "dense": 2.640936,
+    "separable": 4.332496
+   },
+   "peak_bytes": {
+    "chirpz2d": 19263395,
+    "dense": 2640936,
+    "separable": 4332496
+   },
+   "ratio_max": 0.015625,
+   "rule_says_direct": false,
+   "work_per_kernel_entry": 2.9970731707317073
+  },
+  {
+   "Mx": 2,
+   "My": 128,
+   "Nx_in": 64,
+   "Ny_in": 4096,
+   "cheapest": "separable",
+   "dense_over_cheapest_fallback": 2.4265753133532613,
+   "derived_bytes": {
+    "chirpz2d": 4460544,
+    "dense": 12582912,
+    "separable": 8650752
+   },
+   "derived_cheapest": "chirpz2d",
+   "derived_predicts_measured": false,
+   "distinct_route_digests": 3,
+   "name": "w0300_4096x64b",
+   "peak_MB": {
+    "chirpz2d": 40.133855,
+    "dense": 21.009192,
+    "separable": 8.65796
+   },
+   "peak_bytes": {
+    "chirpz2d": 40133855,
+    "dense": 21009192,
+    "separable": 8657960
+   },
+   "ratio_max": 0.03125,
+   "rule_says_direct": false,
+   "work_per_kernel_entry": 2.9992677568952892
+  },
+  {
+   "Mx": 2,
+   "My": 64,
+   "Nx_in": 64,
+   "Ny_in": 2048,
+   "cheapest": "separable",
+   "dense_over_cheapest_fallback": 1.196796813183815,
+   "derived_bytes": {
+    "chirpz2d": 2230272,
+    "dense": 3145728,
+    "separable": 2162688
+   },
+   "derived_cheapest": "separable",
+   "derived_predicts_measured": true,
+   "distinct_route_digests": 3,
+   "name": "w0400_2048x64b",
+   "peak_MB": {
+    "chirpz2d": 20.076199,
+    "dense": 5.263656,
+    "separable": 4.39812
+   },
+   "peak_bytes": {
+    "chirpz2d": 20076199,
+    "dense": 5263656,
+    "separable": 4398120
+   },
+   "ratio_max": 0.03125,
+   "rule_says_direct": false,
+   "work_per_kernel_entry": 3.9960975609756098
+  },
+  {
+   "Mx": 64,
+   "My": 2,
+   "Nx_in": 2048,
+   "Ny_in": 64,
+   "cheapest": "separable",
+   "dense_over_cheapest_fallback": 1.1659271287788673,
+   "derived_bytes": {
+    "chirpz2d": 2230272,
+    "dense": 3145728,
+    "separable": 2162688
+   },
+   "derived_cheapest": "separable",
+   "derived_predicts_measured": true,
+   "distinct_route_digests": 3,
+   "name": "w0400_64x2048",
+   "peak_MB": {
+    "chirpz2d": 17.838573,
+    "dense": 5.261512,
+    "separable": 4.512728
+   },
+   "peak_bytes": {
+    "chirpz2d": 17838573,
+    "dense": 5261512,
+    "separable": 4512728
+   },
+   "ratio_max": 0.03125,
+   "rule_says_direct": false,
+   "work_per_kernel_entry": 3.9960975609756098
+  },
+  {
+   "Mx": 1,
+   "My": 8,
+   "Nx_in": 32,
+   "Ny_in": 256,
+   "cheapest": "dense",
+   "dense_over_cheapest_fallback": 0.21947645240293892,
+   "derived_bytes": {
+    "chirpz2d": 135168,
+    "dense": 49152,
+    "separable": 131072
+   },
+   "derived_cheapest": "dense",
+   "derived_predicts_measured": true,
+   "distinct_route_digests": 3,
+   "name": "w0492_256x32",
+   "peak_MB": {
+    "chirpz2d": 1.244003,
+    "dense": 0.087464,
+    "separable": 0.398512
+   },
+   "peak_bytes": {
+    "chirpz2d": 1244003,
+    "dense": 87464,
+    "separable": 398512
+   },
+   "ratio_max": 0.03125,
+   "rule_says_direct": false,
+   "work_per_kernel_entry": 4.923076923076923
+  },
+  {
+   "Mx": 1,
+   "My": 16,
+   "Nx_in": 64,
+   "Ny_in": 1024,
+   "cheapest": "dense",
+   "dense_over_cheapest_fallback": 0.29818050376138977,
+   "derived_bytes": {
+    "chirpz2d": 1075200,
+    "dense": 393216,
+    "separable": 1048576
+   },
+   "derived_cheapest": "dense",
+   "derived_predicts_measured": true,
+   "distinct_route_digests": 3,
+   "name": "w0498_1024x64",
+   "peak_MB": {
+    "chirpz2d": 9.727931,
+    "dense": 0.666536,
+    "separable": 2.235344
+   },
+   "peak_bytes": {
+    "chirpz2d": 9727931,
+    "dense": 666536,
+    "separable": 2235344
+   },
+   "ratio_max": 0.015625,
+   "rule_says_direct": false,
+   "work_per_kernel_entry": 4.980544747081712
+  },
+  {
+   "Mx": 1,
+   "My": 32,
+   "Nx_in": 128,
+   "Ny_in": 4096,
+   "cheapest": "dense",
+   "dense_over_cheapest_fallback": 0.3120625625923814,
+   "derived_bytes": {
+    "chirpz2d": 8515584,
+    "dense": 3145728,
+    "separable": 8388608
+   },
+   "derived_cheapest": "dense",
+   "derived_predicts_measured": true,
+   "distinct_route_digests": 3,
+   "name": "w0500_4096x128",
+   "peak_MB": {
+    "chirpz2d": 76.767675,
+    "dense": 5.279784,
+    "separable": 16.918992
+   },
+   "peak_bytes": {
+    "chirpz2d": 76767675,
+    "dense": 5279784,
+    "separable": 16918992
+   },
+   "ratio_max": 0.0078125,
+   "rule_says_direct": false,
+   "work_per_kernel_entry": 4.995121951219512
+  },
+  {
+   "Mx": 2,
+   "My": 32,
+   "Nx_in": 64,
+   "Ny_in": 1024,
+   "cheapest": "dense",
+   "dense_over_cheapest_fallback": 0.5833030596949123,
+   "derived_bytes": {
+    "chirpz2d": 1115136,
+    "dense": 786432,
+    "separable": 1081344
+   },
+   "derived_cheapest": "dense",
+   "derived_predicts_measured": true,
+   "distinct_route_digests": 3,
+   "name": "w0598_1024x64b",
+   "peak_MB": {
+    "chirpz2d": 10.047399,
+    "dense": 1.323048,
+    "separable": 2.2682
+   },
+   "peak_bytes": {
+    "chirpz2d": 10047399,
+    "dense": 1323048,
+    "separable": 2268200
+   },
+   "ratio_max": 0.03125,
+   "rule_says_direct": false,
+   "work_per_kernel_entry": 5.976653696498055
+  },
+  {
+   "Mx": 4,
+   "My": 128,
+   "Nx_in": 128,
+   "Ny_in": 4096,
+   "cheapest": "separable",
+   "dense_over_cheapest_fallback": 1.213946453426792,
+   "derived_bytes": {
+    "chirpz2d": 8921088,
+    "dense": 12582912,
+    "separable": 8650752
+   },
+   "derived_cheapest": "separable",
+   "derived_predicts_measured": true,
+   "distinct_route_digests": 3,
+   "name": "w0799_4096x128b",
+   "peak_MB": {
+    "chirpz2d": 80.016207,
+    "dense": 21.015336,
+    "separable": 17.311584
+   },
+   "peak_bytes": {
+    "chirpz2d": 80016207,
+    "dense": 21015336,
+    "separable": 17311584
+   },
+   "ratio_max": 0.03125,
+   "rule_says_direct": false,
+   "work_per_kernel_entry": 7.9921951219512195
+  },
+  {
+   "Mx": 1,
+   "My": 8,
+   "Nx_in": 64,
+   "Ny_in": 512,
+   "cheapest": "dense",
+   "dense_over_cheapest_fallback": 0.14493818505386058,
+   "derived_bytes": {
+    "chirpz2d": 537600,
+    "dense": 98304,
+    "separable": 524288
+   },
+   "derived_cheapest": "dense",
+   "derived_predicts_measured": true,
+   "distinct_route_digests": 3,
+   "name": "w0886_512x64",
+   "peak_MB": {
+    "chirpz2d": 4.872947,
+    "dense": 0.172008,
+    "separable": 1.186768
+   },
+   "peak_bytes": {
+    "chirpz2d": 4872947,
+    "dense": 172008,
+    "separable": 1186768
+   },
+   "ratio_max": 0.015625,
+   "rule_says_direct": false,
+   "work_per_kernel_entry": 8.861538461538462
+  },
+  {
+   "Mx": 1,
+   "My": 16,
+   "Nx_in": 128,
+   "Ny_in": 2048,
+   "cheapest": "dense",
+   "dense_over_cheapest_fallback": 0.15604362007618883,
+   "derived_bytes": {
+    "chirpz2d": 4257792,
+    "dense": 786432,
+    "separable": 4194304
+   },
+   "derived_cheapest": "dense",
+   "derived_predicts_measured": true,
+   "distinct_route_digests": 3,
+   "name": "w0896_2048x128",
+   "peak_MB": {
+    "chirpz2d": 38.394915,
+    "dense": 1.331112,
+    "separable": 8.530384
+   },
+   "peak_bytes": {
+    "chirpz2d": 38394915,
+    "dense": 1331112,
+    "separable": 8530384
+   },
+   "ratio_max": 0.0078125,
+   "rule_says_direct": false,
+   "work_per_kernel_entry": 8.964980544747082
+  },
+  {
+   "Mx": 2,
+   "My": 16,
+   "Nx_in": 64,
+   "Ny_in": 512,
+   "cheapest": "dense",
+   "dense_over_cheapest_fallback": 0.2800239353744889,
+   "derived_bytes": {
+    "chirpz2d": 557568,
+    "dense": 196608,
+    "separable": 540672
+   },
+   "derived_cheapest": "dense",
+   "derived_predicts_measured": true,
+   "distinct_route_digests": 3,
+   "name": "w0985_512x64b",
+   "peak_MB": {
+    "chirpz2d": 5.032999,
+    "dense": 0.336936,
+    "separable": 1.20324
+   },
+   "peak_bytes": {
+    "chirpz2d": 5032999,
+    "dense": 336936,
+    "separable": 1203240
+   },
+   "ratio_max": 0.03125,
+   "rule_says_direct": false,
+   "work_per_kernel_entry": 9.846153846153847
+  },
+  {
+   "Mx": 2,
+   "My": 32,
+   "Nx_in": 128,
+   "Ny_in": 2048,
+   "cheapest": "dense",
+   "dense_over_cheapest_fallback": 0.30525602174561584,
+   "derived_bytes": {
+    "chirpz2d": 4390848,
+    "dense": 1572864,
+    "separable": 4325376
+   },
+   "derived_cheapest": "dense",
+   "derived_predicts_measured": true,
+   "distinct_route_digests": 3,
+   "name": "w0996_2048x128b",
+   "peak_MB": {
+    "chirpz2d": 39.459839,
+    "dense": 2.644008,
+    "separable": 8.661608
+   },
+   "peak_bytes": {
+    "chirpz2d": 39459839,
+    "dense": 2644008,
+    "separable": 8661608
+   },
+   "ratio_max": 0.015625,
+   "rule_says_direct": false,
+   "work_per_kernel_entry": 9.961089494163424
+  },
+  {
+   "Mx": 4,
+   "My": 64,
+   "Nx_in": 128,
+   "Ny_in": 2048,
+   "cheapest": "dense",
+   "dense_over_cheapest_fallback": 0.6084055981904615,
+   "derived_bytes": {
+    "chirpz2d": 4460544,
+    "dense": 3145728,
+    "separable": 4325376
+   },
+   "derived_cheapest": "dense",
+   "derived_predicts_measured": true,
+   "distinct_route_digests": 3,
+   "name": "w1195_2048x128c",
+   "peak_MB": {
+    "chirpz2d": 40.019223,
+    "dense": 5.2698,
+    "separable": 8.661656
+   },
+   "peak_bytes": {
+    "chirpz2d": 40019223,
+    "dense": 5269800,
+    "separable": 8661656
+   },
+   "ratio_max": 0.03125,
+   "rule_says_direct": false,
+   "work_per_kernel_entry": 11.95330739299611
+  },
+  {
+   "Mx": 64,
+   "My": 4,
+   "Nx_in": 2048,
+   "Ny_in": 128,
+   "cheapest": "dense",
+   "dense_over_cheapest_fallback": 0.5997687336250913,
+   "derived_bytes": {
+    "chirpz2d": 4460544,
+    "dense": 3145728,
+    "separable": 4325376
+   },
+   "derived_cheapest": "dense",
+   "derived_predicts_measured": true,
+   "distinct_route_digests": 3,
+   "name": "w1195_128x2048",
+   "peak_MB": {
+    "chirpz2d": 35.551325,
+    "dense": 5.261512,
+    "separable": 8.772568
+   },
+   "peak_bytes": {
+    "chirpz2d": 35551325,
+    "dense": 5261512,
+    "separable": 8772568
+   },
+   "ratio_max": 0.03125,
+   "rule_says_direct": false,
+   "work_per_kernel_entry": 11.95330739299611
+  },
+  {
+   "Mx": 1,
+   "My": 4,
+   "Nx_in": 64,
+   "Ny_in": 256,
+   "cheapest": "dense",
+   "dense_over_cheapest_fallback": 0.07092481221167549,
+   "derived_bytes": {
+    "chirpz2d": 270336,
+    "dense": 24576,
+    "separable": 262144
+   },
+   "derived_cheapest": "dense",
+   "derived_predicts_measured": true,
+   "distinct_route_digests": 3,
+   "name": "w1600_256x64",
+   "peak_MB": {
+    "chirpz2d": 2.458067,
+    "dense": 0.046984,
+    "separable": 0.662448
+   },
+   "peak_bytes": {
+    "chirpz2d": 2458067,
+    "dense": 46984,
+    "separable": 662448
+   },
+   "ratio_max": 0.015625,
+   "rule_says_direct": true,
+   "work_per_kernel_entry": 16.0
+  },
+  {
+   "Mx": 1,
+   "My": 8,
+   "Nx_in": 128,
+   "Ny_in": 1024,
+   "cheapest": "dense",
+   "dense_over_cheapest_fallback": 0.07863508053356949,
+   "derived_bytes": {
+    "chirpz2d": 2150400,
+    "dense": 196608,
+    "separable": 2097152
+   },
+   "derived_cheapest": "dense",
+   "derived_predicts_measured": true,
+   "distinct_route_digests": 3,
+   "name": "w1674_1024x128",
+   "peak_MB": {
+    "chirpz2d": 19.380931,
+    "dense": 0.340968,
+    "separable": 4.33608
+   },
+   "peak_bytes": {
+    "chirpz2d": 19380931,
+    "dense": 340968,
+    "separable": 4336080
+   },
+   "ratio_max": 0.0078125,
+   "rule_says_direct": true,
+   "work_per_kernel_entry": 16.73846153846154
+  },
+  {
+   "Mx": 2,
+   "My": 16,
+   "Nx_in": 128,
+   "Ny_in": 1024,
+   "cheapest": "dense",
+   "dense_over_cheapest_fallback": 0.15212251077294398,
+   "derived_bytes": {
+    "chirpz2d": 2217600,
+    "dense": 393216,
+    "separable": 2162688
+   },
+   "derived_cheapest": "dense",
+   "derived_predicts_measured": true,
+   "distinct_route_digests": 3,
+   "name": "w1772_1024x128b",
+   "peak_MB": {
+    "chirpz2d": 19.918759,
+    "dense": 0.669608,
+    "separable": 4.401768
+   },
+   "peak_bytes": {
+    "chirpz2d": 19918759,
+    "dense": 669608,
+    "separable": 4401768
+   },
+   "ratio_max": 0.015625,
+   "rule_says_direct": true,
+   "work_per_kernel_entry": 17.723076923076924
+  },
+  {
+   "Mx": 2,
+   "My": 32,
+   "Nx_in": 256,
+   "Ny_in": 4096,
+   "cheapest": "dense",
+   "dense_over_cheapest_fallback": 0.1526827469265463,
+   "derived_bytes": {
+    "chirpz2d": 17563392,
+    "dense": 3145728,
+    "separable": 17301504
+   },
+   "derived_cheapest": "dense",
+   "derived_predicts_measured": true,
+   "distinct_route_digests": 3,
+   "name": "w1793_4096x256",
+   "peak_MB": {
+    "chirpz2d": 157.546459,
+    "dense": 5.285928,
+    "separable": 34.620336
+   },
+   "peak_bytes": {
+    "chirpz2d": 157546459,
+    "dense": 5285928,
+    "separable": 34620336
+   },
+   "ratio_max": 0.0078125,
+   "rule_says_direct": true,
+   "work_per_kernel_entry": 17.929961089494164
+  },
+  {
+   "Mx": 4,
+   "My": 32,
+   "Nx_in": 128,
+   "Ny_in": 1024,
+   "cheapest": "dense",
+   "dense_over_cheapest_fallback": 0.3019644619402537,
+   "derived_bytes": {
+    "chirpz2d": 2230272,
+    "dense": 786432,
+    "separable": 2162688
+   },
+   "derived_cheapest": "dense",
+   "derived_predicts_measured": true,
+   "distinct_route_digests": 3,
+   "name": "w1969_1024x128c",
+   "peak_MB": {
+    "chirpz2d": 20.020759,
+    "dense": 1.329192,
+    "separable": 4.401816
+   },
+   "peak_bytes": {
+    "chirpz2d": 20020759,
+    "dense": 1329192,
+    "separable": 4401816
+   },
+   "ratio_max": 0.03125,
+   "rule_says_direct": true,
+   "work_per_kernel_entry": 19.692307692307693
+  },
+  {
+   "Mx": 4,
+   "My": 64,
+   "Nx_in": 256,
+   "Ny_in": 4096,
+   "cheapest": "dense",
+   "dense_over_cheapest_fallback": 0.304365659260163,
+   "derived_bytes": {
+    "chirpz2d": 17740800,
+    "dense": 6291456,
+    "separable": 17301504
+   },
+   "derived_cheapest": "dense",
+   "derived_predicts_measured": true,
+   "distinct_route_digests": 3,
+   "name": "w1992_4096x256b",
+   "peak_MB": {
+    "chirpz2d": 158.967767,
+    "dense": 10.537256,
+    "separable": 34.620384
+   },
+   "peak_bytes": {
+    "chirpz2d": 158967767,
+    "dense": 10537256,
+    "separable": 34620384
+   },
+   "ratio_max": 0.015625,
+   "rule_says_direct": true,
+   "work_per_kernel_entry": 19.92217898832685
+  },
+  {
+   "Mx": 8,
+   "My": 128,
+   "Nx_in": 256,
+   "Ny_in": 4096,
+   "cheapest": "dense",
+   "dense_over_cheapest_fallback": 0.6077302221113052,
+   "derived_bytes": {
+    "chirpz2d": 17842176,
+    "dense": 12582912,
+    "separable": 17301504
+   },
+   "derived_cheapest": "dense",
+   "derived_predicts_measured": true,
+   "distinct_route_digests": 3,
+   "name": "w2391_4096x256c",
+   "peak_MB": {
+    "chirpz2d": 159.781175,
+    "dense": 21.039912,
+    "separable": 34.62048
+   },
+   "peak_bytes": {
+    "chirpz2d": 159781175,
+    "dense": 21039912,
+    "separable": 34620480
+   },
+   "ratio_max": 0.03125,
+   "rule_says_direct": true,
+   "work_per_kernel_entry": 23.90661478599222
+  },
+  {
+   "Mx": 2,
+   "My": 8,
+   "Nx_in": 128,
+   "Ny_in": 512,
+   "cheapest": "dense",
+   "dense_over_cheapest_fallback": 0.07706501491296953,
+   "derived_bytes": {
+    "chirpz2d": 1108800,
+    "dense": 98304,
+    "separable": 1081344
+   },
+   "derived_cheapest": "dense",
+   "derived_predicts_measured": true,
+   "distinct_route_digests": 3,
+   "name": "w3200_512x128",
+   "peak_MB": {
+    "chirpz2d": 9.970503,
+    "dense": 0.17508,
+    "separable": 2.271848
+   },
+   "peak_bytes": {
+    "chirpz2d": 9970503,
+    "dense": 175080,
+    "separable": 2271848
+   },
+   "ratio_max": 0.015625,
+   "rule_says_direct": true,
+   "work_per_kernel_entry": 32.0
+  },
+  {
+   "Mx": 16,
+   "My": 2,
+   "Nx_in": 2048,
+   "Ny_in": 256,
+   "cheapest": "dense",
+   "dense_over_cheapest_fallback": 0.07746883800706877,
+   "derived_bytes": {
+    "chirpz2d": 8781696,
+    "dense": 786432,
+    "separable": 8515584
+   },
+   "derived_cheapest": "dense",
+   "derived_predicts_measured": true,
+   "distinct_route_digests": 3,
+   "name": "w3348_256x2048",
+   "peak_MB": {
+    "chirpz2d": 78.788103,
+    "dense": 1.328968,
+    "separable": 17.154872
+   },
+   "peak_bytes": {
+    "chirpz2d": 78788103,
+    "dense": 1328968,
+    "separable": 17154872
+   },
+   "ratio_max": 0.0078125,
+   "rule_says_direct": true,
+   "work_per_kernel_entry": 33.47692307692308
+  },
+  {
+   "Mx": 4,
+   "My": 32,
+   "Nx_in": 256,
+   "Ny_in": 2048,
+   "cheapest": "dense",
+   "dense_over_cheapest_fallback": 0.15337573792300657,
+   "derived_bytes": {
+    "chirpz2d": 8781696,
+    "dense": 1572864,
+    "separable": 8650752
+   },
+   "derived_cheapest": "dense",
+   "derived_predicts_measured": true,
+   "distinct_route_digests": 3,
+   "name": "w3545_2048x256",
+   "peak_MB": {
+    "chirpz2d": 78.788535,
+    "dense": 2.656296,
+    "separable": 17.31888
+   },
+   "peak_bytes": {
+    "chirpz2d": 78788535,
+    "dense": 2656296,
+    "separable": 17318880
+   },
+   "ratio_max": 0.015625,
+   "rule_says_direct": true,
+   "work_per_kernel_entry": 35.44615384615385
+  },
+  {
+   "Mx": 8,
+   "My": 64,
+   "Nx_in": 256,
+   "Ny_in": 2048,
+   "cheapest": "dense",
+   "dense_over_cheapest_fallback": 0.3056979812201368,
+   "derived_bytes": {
+    "chirpz2d": 8921088,
+    "dense": 3145728,
+    "separable": 8650752
+   },
+   "derived_cheapest": "dense",
+   "derived_predicts_measured": true,
+   "distinct_route_digests": 3,
+   "name": "w3938_2048x256b",
+   "peak_MB": {
+    "chirpz2d": 79.905591,
+    "dense": 5.294376,
+    "separable": 17.318976
+   },
+   "peak_bytes": {
+    "chirpz2d": 79905591,
+    "dense": 5294376,
+    "separable": 17318976
+   },
+   "ratio_max": 0.03125,
+   "rule_says_direct": true,
+   "work_per_kernel_entry": 39.38461538461539
+  },
+  {
+   "Mx": 2,
+   "My": 4,
+   "Nx_in": 128,
+   "Ny_in": 256,
+   "cheapest": "dense",
+   "dense_over_cheapest_fallback": 0.04147636503443659,
+   "derived_bytes": {
+    "chirpz2d": 557568,
+    "dense": 28800,
+    "separable": 540672
+   },
+   "derived_cheapest": "dense",
+   "derived_predicts_measured": true,
+   "distinct_route_digests": 3,
+   "name": "w5280_256x128",
+   "peak_MB": {
+    "chirpz2d": 5.021735,
+    "dense": 0.050056,
+    "separable": 1.206856
+   },
+   "peak_bytes": {
+    "chirpz2d": 5021735,
+    "dense": 50056,
+    "separable": 1206856
+   },
+   "ratio_max": 0.015625,
+   "rule_says_direct": true,
+   "work_per_kernel_entry": 52.8
+  },
+  {
+   "Mx": 4,
+   "My": 16,
+   "Nx_in": 256,
+   "Ny_in": 1024,
+   "cheapest": "dense",
+   "dense_over_cheapest_fallback": 0.07865956576988775,
+   "derived_bytes": {
+    "chirpz2d": 4435200,
+    "dense": 393216,
+    "separable": 4325376
+   },
+   "derived_cheapest": "dense",
+   "derived_predicts_measured": true,
+   "distinct_route_digests": 3,
+   "name": "w6400_1024x256",
+   "peak_MB": {
+    "chirpz2d": 39.764375,
+    "dense": 0.681896,
+    "separable": 8.668952
+   },
+   "peak_bytes": {
+    "chirpz2d": 39764375,
+    "dense": 681896,
+    "separable": 8668952
+   },
+   "ratio_max": 0.015625,
+   "rule_says_direct": true,
+   "work_per_kernel_entry": 64.0
+  },
+  {
+   "Mx": 16,
+   "My": 16,
+   "Nx_in": 2048,
+   "Ny_in": 2048,
+   "cheapest": "dense",
+   "dense_over_cheapest_fallback": 0.013591266465720444,
+   "derived_bytes": {
+    "chirpz2d": 69155856,
+    "dense": 1576960,
+    "separable": 68124672
+   },
+   "derived_cheapest": "dense",
+   "derived_predicts_measured": true,
+   "distinct_route_digests": 3,
+   "name": "sq_2048_16",
+   "peak_MB": {
+    "chirpz2d": 620.603095,
+    "dense": 1.853416,
+    "separable": 136.36816
+   },
+   "peak_bytes": {
+    "chirpz2d": 620603095,
+    "dense": 1853416,
+    "separable": 136368160
+   },
+   "ratio_max": 0.0078125,
+   "rule_says_direct": true,
+   "work_per_kernel_entry": 1032.0
+  },
+  {
+   "Mx": 32,
+   "My": 32,
+   "Nx_in": 2048,
+   "Ny_in": 2048,
+   "cheapest": "dense",
+   "dense_over_cheapest_fallback": 0.027048407879166035,
+   "derived_bytes": {
+    "chirpz2d": 69155856,
+    "dense": 3162112,
+    "separable": 68124672
+   },
+   "derived_cheapest": "dense",
+   "derived_predicts_measured": true,
+   "distinct_route_digests": 3,
+   "name": "sq_2048_32",
+   "peak_MB": {
+    "chirpz2d": 620.603863,
+    "dense": 3.688552,
+    "separable": 136.368544
+   },
+   "peak_bytes": {
+    "chirpz2d": 620603863,
+    "dense": 3688552,
+    "separable": 136368544
+   },
+   "ratio_max": 0.015625,
+   "rule_says_direct": true,
+   "work_per_kernel_entry": 1040.0
+  },
+  {
+   "Mx": 64,
+   "My": 64,
+   "Nx_in": 2048,
+   "Ny_in": 2048,
+   "cheapest": "dense",
+   "dense_over_cheapest_fallback": 0.05311962510954786,
+   "derived_bytes": {
+    "chirpz2d": 71368704,
+    "dense": 6356992,
+    "separable": 69206016
+   },
+   "derived_cheapest": "dense",
+   "derived_predicts_measured": true,
+   "distinct_route_digests": 3,
+   "name": "sq_2048_64",
+   "peak_MB": {
+    "chirpz2d": 638.310247,
+    "dense": 7.358824,
+    "separable": 138.533056
+   },
+   "peak_bytes": {
+    "chirpz2d": 638310247,
+    "dense": 7358824,
+    "separable": 138533056
+   },
+   "ratio_max": 0.03125,
+   "rule_says_direct": true,
+   "work_per_kernel_entry": 1056.0
+  },
+  {
+   "Mx": 16,
+   "My": 16,
+   "Nx_in": 1024,
+   "Ny_in": 1024,
+   "cheapest": "dense",
+   "dense_over_cheapest_fallback": 0.026915624686663274,
+   "derived_bytes": {
+    "chirpz2d": 17640000,
+    "dense": 790528,
+    "separable": 17203200
+   },
+   "derived_cheapest": "dense",
+   "derived_predicts_measured": true,
+   "distinct_route_digests": 3,
+   "name": "sq_1024_16",
+   "peak_MB": {
+    "chirpz2d": 158.029543,
+    "dense": 0.92772,
+    "separable": 34.467712
+   },
+   "peak_bytes": {
+    "chirpz2d": 158029543,
+    "dense": 927720,
+    "separable": 34467712
+   },
+   "ratio_max": 0.015625,
+   "rule_says_direct": true,
+   "work_per_kernel_entry": 520.0
+  },
+  {
+   "Mx": 32,
+   "My": 32,
+   "Nx_in": 1024,
+   "Ny_in": 1024,
+   "cheapest": "dense",
+   "dense_over_cheapest_fallback": 0.053234026722595675,
+   "derived_bytes": {
+    "chirpz2d": 17842176,
+    "dense": 1589248,
+    "separable": 17301504
+   },
+   "derived_cheapest": "dense",
+   "derived_predicts_measured": true,
+   "distinct_route_digests": 3,
+   "name": "sq_1024_32",
+   "peak_MB": {
+    "chirpz2d": 159.648151,
+    "dense": 1.845352,
+    "separable": 34.664896
+   },
+   "peak_bytes": {
+    "chirpz2d": 159648151,
+    "dense": 1845352,
+    "separable": 34664896
+   },
+   "ratio_max": 0.03125,
+   "rule_says_direct": true,
+   "work_per_kernel_entry": 528.0
+  },
+  {
+   "Mx": 16,
+   "My": 16,
+   "Nx_in": 512,
+   "Ny_in": 512,
+   "cheapest": "dense",
+   "dense_over_cheapest_fallback": 0.05366531335704619,
+   "derived_bytes": {
+    "chirpz2d": 4460544,
+    "dense": 397312,
+    "separable": 4325376
+   },
+   "derived_cheapest": "dense",
+   "derived_predicts_measured": true,
+   "distinct_route_digests": 3,
+   "name": "sq_512_16",
+   "peak_MB": {
+    "chirpz2d": 39.952999,
+    "dense": 0.466024,
+    "separable": 8.683896
+   },
+   "peak_bytes": {
+    "chirpz2d": 39952999,
+    "dense": 466024,
+    "separable": 8683896
+   },
+   "ratio_max": 0.03125,
+   "rule_says_direct": true,
+   "work_per_kernel_entry": 264.0
+  },
+  {
+   "Mx": 8,
+   "My": 8,
+   "Nx_in": 512,
+   "Ny_in": 512,
+   "cheapest": "dense",
+   "dense_over_cheapest_fallback": 0.0273222226225749,
+   "derived_bytes": {
+    "chirpz2d": 4410000,
+    "dense": 197632,
+    "separable": 4300800
+   },
+   "derived_cheapest": "dense",
+   "derived_predicts_measured": true,
+   "distinct_route_digests": 3,
+   "name": "sq_512_8",
+   "peak_MB": {
+    "chirpz2d": 39.548071,
+    "dense": 0.236584,
+    "separable": 8.659032
+   },
+   "peak_bytes": {
+    "chirpz2d": 39548071,
+    "dense": 236584,
+    "separable": 8659032
+   },
+   "ratio_max": 0.015625,
+   "rule_says_direct": true,
+   "work_per_kernel_entry": 260.0
+  },
+  {
+   "Mx": 8,
+   "My": 8,
+   "Nx_in": 256,
+   "Ny_in": 256,
+   "cheapest": "dense",
+   "dense_over_cheapest_fallback": 0.052525911964255004,
+   "derived_bytes": {
+    "chirpz2d": 1115136,
+    "dense": 99328,
+    "separable": 1081344
+   },
+   "derived_cheapest": "dense",
+   "derived_predicts_measured": true,
+   "distinct_route_digests": 3,
+   "name": "sq_256_8",
+   "peak_MB": {
+    "chirpz2d": 10.014375,
+    "dense": 0.11972,
+    "separable": 2.279256
+   },
+   "peak_bytes": {
+    "chirpz2d": 10014375,
+    "dense": 119720,
+    "separable": 2279256
+   },
+   "ratio_max": 0.03125,
+   "rule_says_direct": true,
+   "work_per_kernel_entry": 132.0
+  },
+  {
+   "Mx": 4,
+   "My": 4,
+   "Nx_in": 128,
+   "Ny_in": 128,
+   "cheapest": "dense",
+   "dense_over_cheapest_fallback": 0.04840871617854643,
+   "derived_bytes": {
+    "chirpz2d": 278784,
+    "dense": 24832,
+    "separable": 270336
+   },
+   "derived_cheapest": "dense",
+   "derived_predicts_measured": true,
+   "distinct_route_digests": 3,
+   "name": "sq_128_4",
+   "peak_MB": {
+    "chirpz2d": 2.235869,
+    "dense": 0.032648,
+    "separable": 0.674424
+   },
+   "peak_bytes": {
+    "chirpz2d": 2235869,
+    "dense": 32648,
+    "separable": 674424
+   },
+   "ratio_max": 0.03125,
+   "rule_says_direct": true,
+   "work_per_kernel_entry": 66.0
+  },
+  {
+   "Mx": 2,
+   "My": 2,
+   "Nx_in": 64,
+   "Ny_in": 64,
+   "cheapest": "dense",
+   "dense_over_cheapest_fallback": 0.05157604259784679,
+   "derived_bytes": {
+    "chirpz2d": 69696,
+    "dense": 6208,
+    "separable": 67584
+   },
+   "derived_cheapest": "dense",
+   "derived_predicts_measured": true,
+   "distinct_route_digests": 3,
+   "name": "sq_64_2",
+   "peak_MB": {
+    "chirpz2d": 0.568253,
+    "dense": 0.010616,
+    "separable": 0.205832
+   },
+   "peak_bytes": {
+    "chirpz2d": 568253,
+    "dense": 10616,
+    "separable": 205832
+   },
+   "ratio_max": 0.03125,
+   "rule_says_direct": true,
+   "work_per_kernel_entry": 33.0
+  },
+  {
+   "Mx": 25,
+   "My": 25,
+   "Nx_in": 1000,
+   "Ny_in": 1000,
+   "cheapest": "dense",
+   "dense_over_cheapest_fallback": 0.04295390658983823,
+   "derived_bytes": {
+    "chirpz2d": 16777216,
+    "dense": 1210000,
+    "separable": 16384000
+   },
+   "derived_cheapest": "dense",
+   "derived_predicts_measured": true,
+   "distinct_route_digests": 3,
+   "name": "nd_1000_25",
+   "peak_MB": {
+    "chirpz2d": 150.347787,
+    "dense": 1.410096,
+    "separable": 32.82812
+   },
+   "peak_bytes": {
+    "chirpz2d": 150347787,
+    "dense": 1410096,
+    "separable": 32828120
+   },
+   "ratio_max": 0.025,
+   "rule_says_direct": true,
+   "work_per_kernel_entry": 512.5
+  },
+  {
+   "Mx": 24,
+   "My": 24,
+   "Nx_in": 768,
+   "Ny_in": 768,
+   "cheapest": "dense",
+   "dense_over_cheapest_fallback": 0.05332418717854519,
+   "derived_bytes": {
+    "chirpz2d": 10036224,
+    "dense": 893952,
+    "separable": 9732096
+   },
+   "derived_cheapest": "dense",
+   "derived_predicts_measured": true,
+   "distinct_route_digests": 3,
+   "name": "nd_768_24",
+   "peak_MB": {
+    "chirpz2d": 89.832155,
+    "dense": 1.040424,
+    "separable": 19.511296
+   },
+   "peak_bytes": {
+    "chirpz2d": 89832155,
+    "dense": 1040424,
+    "separable": 19511296
+   },
+   "ratio_max": 0.03125,
+   "rule_says_direct": true,
+   "work_per_kernel_entry": 396.0
+  },
+  {
+   "Mx": 48,
+   "My": 48,
+   "Nx_in": 1536,
+   "Ny_in": 1536,
+   "cheapest": "dense",
+   "dense_over_cheapest_fallback": 0.053154976308376185,
+   "derived_bytes": {
+    "chirpz2d": 40144896,
+    "dense": 3575808,
+    "separable": 38928384
+   },
+   "derived_cheapest": "dense",
+   "derived_predicts_measured": true,
+   "distinct_route_digests": 3,
+   "name": "nd_1536_48",
+   "peak_MB": {
+    "chirpz2d": 359.100635,
+    "dense": 4.143336,
+    "separable": 77.948224
+   },
+   "peak_bytes": {
+    "chirpz2d": 359100635,
+    "dense": 4143336,
+    "separable": 77948224
+   },
+   "ratio_max": 0.03125,
+   "rule_says_direct": true,
+   "work_per_kernel_entry": 792.0
+  },
+  {
+   "Mx": 16,
+   "My": 64,
+   "Nx_in": 512,
+   "Ny_in": 2048,
+   "cheapest": "dense",
+   "dense_over_cheapest_fallback": 0.15570067648846866,
+   "derived_bytes": {
+    "chirpz2d": 17842176,
+    "dense": 3145728,
+    "separable": 17301504
+   },
+   "derived_cheapest": "dense",
+   "derived_predicts_measured": true,
+   "distinct_route_digests": 3,
+   "name": "an_2048x512",
+   "peak_MB": {
+    "chirpz2d": 159.677669,
+    "dense": 5.392744,
+    "separable": 34.635328
+   },
+   "peak_bytes": {
+    "chirpz2d": 159677669,
+    "dense": 5392744,
+    "separable": 34635328
+   },
+   "ratio_max": 0.03125,
+   "rule_says_direct": true,
+   "work_per_kernel_entry": 135.52941176470588
+  },
+  {
+   "Mx": 64,
+   "My": 16,
+   "Nx_in": 2048,
+   "Ny_in": 512,
+   "cheapest": "dense",
+   "dense_over_cheapest_fallback": 0.15152549104896573,
+   "derived_bytes": {
+    "chirpz2d": 17842176,
+    "dense": 3145728,
+    "separable": 17301504
+   },
+   "derived_cheapest": "dense",
+   "derived_predicts_measured": true,
+   "distinct_route_digests": 3,
+   "name": "an_512x2048",
+   "peak_MB": {
+    "chirpz2d": 159.677719,
+    "dense": 5.261576,
+    "separable": 34.724032
+   },
+   "peak_bytes": {
+    "chirpz2d": 159677719,
+    "dense": 5261576,
+    "separable": 34724032
+   },
+   "ratio_max": 0.03125,
+   "rule_says_direct": true,
+   "work_per_kernel_entry": 135.52941176470588
+  },
+  {
+   "Mx": 8,
+   "My": 64,
+   "Nx_in": 256,
+   "Ny_in": 2048,
+   "cheapest": "dense",
+   "dense_over_cheapest_fallback": 0.3056979812201368,
+   "derived_bytes": {
+    "chirpz2d": 8921088,
+    "dense": 3145728,
+    "separable": 8650752
+   },
+   "derived_cheapest": "dense",
+   "derived_predicts_measured": true,
+   "distinct_route_digests": 3,
+   "name": "an_2048x256",
+   "peak_MB": {
+    "chirpz2d": 79.905543,
+    "dense": 5.294376,
+    "separable": 17.318976
+   },
+   "peak_bytes": {
+    "chirpz2d": 79905543,
+    "dense": 5294376,
+    "separable": 17318976
+   },
+   "ratio_max": 0.03125,
+   "rule_says_direct": true,
+   "work_per_kernel_entry": 39.38461538461539
+  },
+  {
+   "Mx": 64,
+   "My": 16,
+   "Nx_in": 2048,
+   "Ny_in": 2048,
+   "cheapest": "dense",
+   "dense_over_cheapest_fallback": 0.03798065351276161,
+   "derived_bytes": {
+    "chirpz2d": 70253568,
+    "dense": 3162112,
+    "separable": 69206016
+   },
+   "derived_cheapest": "dense",
+   "derived_predicts_measured": true,
+   "distinct_route_digests": 3,
+   "name": "mx_in_2048",
+   "peak_MB": {
+    "chirpz2d": 629.386951,
+    "dense": 5.261576,
+    "separable": 138.533056
+   },
+   "peak_bytes": {
+    "chirpz2d": 629386951,
+    "dense": 5261576,
+    "separable": 138533056
+   },
+   "ratio_max": 0.03125,
+   "rule_says_direct": true,
+   "work_per_kernel_entry": 422.4
+  }
+ ]
+}

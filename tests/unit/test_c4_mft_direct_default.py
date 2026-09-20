@@ -6,10 +6,19 @@ WHAT SHIPPED.  Hygiene-2 built the dense route (``_direct_matrix_2d``) as ONE
 the most accurate and the cheapest in memory of the three routes through the
 MFT sum.  What it would not do was select it automatically, because the TIME
 crossover is per-build.  v5.49.0 selects it from the SHAPE instead:
-``_auto_selects_direct`` reads four grid sizes and ONE module constant,
-``_MFT_DIRECT_MAX_RATIO``, and nothing else.
+``_auto_selects_direct`` reads four grid sizes and TWO module constants,
+``_MFT_DIRECT_MAX_RATIO`` and ``_MFT_DIRECT_MIN_WORK_PER_KERNEL_ENTRY``, and
+nothing else.
 
-THE FIVE CLAIMS IN THIS FILE, each stated as a helper so the mutation matrix
+TWO CONDITIONS, AND WHY THE SECOND ONE EXISTS (round 2, VERIFY-WP-C4 D1).
+The first is the two grid RATIOS.  The second counts the dense route's
+multiply-adds per transcendental kernel entry, because a ratio cannot see a
+THIN input: ``2048x2048 -> 64x64`` reads 1056 of them and ``2048x64 -> 64x2``
+reads 4.0, and both sit at ratio exactly ``(1/32, 1/32)`` -- at which the
+dense route was measured 1.1x to 13.0x SLOWER on both builds, and larger in
+memory besides.  Shapes have to clear BOTH.
+
+THE SIX CLAIMS IN THIS FILE, each stated as a helper so the mutation matrix
 at the bottom can exercise the SAME assertion the shipped id does rather than
 a paraphrase of it:
 
@@ -18,6 +27,9 @@ a paraphrase of it:
 2.  the boundary is asked FROM the constant and never typed as a number, and
     the two documented settings mean what they say --
     ``_claim_the_boundary_comes_from_the_constant``;
+2b. the work screen refuses a thin input at the SAME ratio pair a square
+    shape is captured at, and it too is asked from its constant --
+    ``_claim_the_work_screen_refuses_a_thin_input``;
 3.  at a shape on either side, ``'auto'`` returns the bytes of the route the
     rule names and never a third arithmetic --
     ``_claim_auto_dispatches_as_the_rule_says``;
@@ -78,9 +90,14 @@ _DENSE_SIDE = [(ny, nx, my, mx) for (ny, nx, my, mx) in
                [(96, 96, 3, 3), (128, 128, 4, 4), (256, 256, 8, 8),
                 (64, 64, 2, 2), (512, 1024, 16, 32)]
                if _auto_selects_direct(ny, nx, my, mx)]
+#: ``(512, 32, 16, 1)`` is on this side for the SECOND condition and not the
+#: first: both its ratios are exactly ``1/32``, so the ratio test admits it,
+#: and its dense route spends 2.99 multiply-adds per transcendental kernel
+#: entry, so the work screen refuses it.  It is here so the dispatch claim
+#: covers the new condition on real bytes and not only on the predicate.
 _CHIRP_SIDE = [(ny, nx, my, mx) for (ny, nx, my, mx) in
                [(24, 24, 12, 12), (64, 64, 8, 8), (32, 32, 16, 16),
-                (28, 22, 15, 13), (512, 1024, 64, 32)]
+                (28, 22, 15, 13), (512, 1024, 64, 32), (512, 32, 16, 1)]
                if not _auto_selects_direct(ny, nx, my, mx)]
 
 
@@ -222,24 +239,35 @@ def _claim_the_boundary_comes_from_the_constant():
         f"_MFT_DIRECT_MAX_RATIO = {r!r} is not a ratio in (0, 1); a default "
         f"that selects the dense route at M >= N is not the measured rule")
 
-    # a shape exactly AT the boundary is inside (the constant is the largest
-    # ratio measured safe, and the comparison is <=)
+    # A shape exactly AT the boundary is inside (the constant is the largest
+    # ratio measured safe, and the comparison is <=).  The probe is SQUARE and
+    # scaled by ``k`` so its multiply-adds per kernel entry, ``(N + M)/2``,
+    # sit far above the second condition's constant whatever that constant is
+    # -- this claim is about the RATIO, and the work screen has its own
+    # (round 2, VERIFY-WP-C4 D1).
     n_at = int(round(1.0 / r))
-    assert _auto_selects_direct(n_at, n_at, 1, 1), (
-        f"the boundary ratio 1/{n_at} itself is not on the dense side; the "
-        f"constant names a shape that was measured and the comparison is <=")
+    k = max(1, int(math.ceil(
+        4.0 * float(B._MFT_DIRECT_MIN_WORK_PER_KERNEL_ENTRY) / (n_at + 1.0))))
+    assert _auto_selects_direct(k * n_at, k * n_at, k, k), (
+        f"the boundary ratio 1/{n_at} itself is not on the dense side at a "
+        f"work-dense square shape; the constant names a shape that was "
+        f"measured and the comparison is <=")
     # one output sample MORE is outside
-    assert not _auto_selects_direct(n_at, n_at, 2, 1), (
-        f"a ratio of 2/{n_at}, past the boundary, still takes the dense route")
+    assert not _auto_selects_direct(k * n_at, k * n_at, k + 1, k), (
+        f"a ratio just past 1/{n_at} still takes the dense route")
     # ... and on the OTHER axis too: the max over the two decides
-    assert not _auto_selects_direct(n_at, n_at, 1, 2), (
+    assert not _auto_selects_direct(k * n_at, k * n_at, k, k + 1), (
         "the rule does not take the MAX over the two axes -- one axis past "
         "the boundary must be enough to refuse")
 
     saved = B._MFT_DIRECT_MAX_RATIO
     try:
         probes = [(96, 96, 3, 3), (24, 24, 12, 12), (64, 64, 64, 64),
-                  (8, 8, 8, 8), (1024, 1024, 32, 32)]
+                  (8, 8, 8, 8), (1024, 1024, 32, 32),
+                  # a THIN shape the work screen refuses at the shipped
+                  # constant: ``_MFT_DIRECT_ALWAYS`` has to override BOTH
+                  # conditions, not just the ratio (round 2)
+                  (2048, 64, 64, 2)]
         B._MFT_DIRECT_MAX_RATIO = _MFT_DIRECT_NEVER
         assert not any(_auto_selects_direct(*s) for s in probes), (
             "_MFT_DIRECT_NEVER does not mean never")
@@ -254,6 +282,108 @@ def _claim_the_boundary_comes_from_the_constant():
                 f"comparison does'")
     finally:
         B._MFT_DIRECT_MAX_RATIO = saved
+
+
+def _dense_work_per_kernel_entry(ny, nx, my, mx):
+    """Multiply-adds per transcendental kernel entry, from the code.
+
+    :func:`~lumenairy.propagators._bluestein._direct_matrix_2d` builds
+    ``My*Ny + Mx*Nx`` complex ``exp`` entries and then spends
+    ``min(My*Ny*Nx + My*Nx*Mx, Ny*Nx*Mx + My*Ny*Mx)`` multiply-adds using them
+    -- the two costs that function itself compares to pick its association
+    order.  Four integers in, one number out; no float state, no clock.
+    """
+    entries = my * ny + mx * nx
+    flops = min(my * ny * nx + my * nx * mx, ny * nx * mx + my * ny * mx)
+    return flops / entries
+
+
+def _claim_the_work_screen_refuses_a_thin_input():
+    """The SECOND condition, asserted as a relation and never as a number.
+
+    WHAT IT IS FOR (round 2, VERIFY-WP-C4 D1).  A rule that reads only the two
+    grid ratios cannot separate ``2048x2048 -> 64x64`` from
+    ``2048x64 -> 64x2``: the ratio pair is ``(1/32, 1/32)`` at both.  Their
+    dense routes differ by more than two decades in multiply-adds per
+    transcendental kernel entry (1056 against 4.0), and at the thin one the
+    dense route was measured 1.1x to 13.0x SLOWER than ``min(chirp-Z 2-D,
+    separable)`` on both builds, under a fully single-threaded instrument, and
+    LARGER in memory besides (5.264 MB against 4.399 MB).  Ladder and margins:
+    ``validation/probe_c4_round2/r2_workladder_all_{win,wsl}.json``.
+
+    Nothing here types 16.  The shapes are BUILT from the two constants, so a
+    maintainer who retunes either one keeps this id -- and a rule that stops
+    consulting the work constant fails it.
+    """
+    r = float(_MFT_DIRECT_MAX_RATIO)
+    w = float(B._MFT_DIRECT_MIN_WORK_PER_KERNEL_ENTRY)
+    assert w > 1.0, (
+        f"_MFT_DIRECT_MIN_WORK_PER_KERNEL_ENTRY = {w!r} screens nothing: the "
+        f"dense route always spends at least one multiply-add per kernel "
+        f"entry, so a value at or under 1 is the pre-round-2 exposure")
+    n_at = int(round(1.0 / r))
+
+    # A SQUARE shape at exactly the boundary ratio: its work/entry is
+    # ``(N + M)/2 = k*(n_at + 1)/2``, so this ``k`` puts it at or above
+    # ``2*w`` for whatever ``w`` is.  It must be CAPTURED.
+    k = max(1, int(math.ceil(4.0 * w / (n_at + 1.0))))
+    square = (k * n_at, k * n_at, k, k)
+    # A THIN shape with the SAME ratio pair: one output sample on x against
+    # ``n_at`` input samples.  Its work/entry FALLS with the scale (it tends
+    # to ``n_at/k``), so the scale is SCANNED for one that clears the
+    # constant downwards by 2x rather than assumed -- the relation has to
+    # hold for whatever the maintainer sets the constant to, and hard-failing
+    # only when the ladder is exhausted is what keeps that unconditional.
+    thin = None
+    for kt in range(1, 4097):
+        cand = (kt * n_at, n_at, kt, 1)
+        if _dense_work_per_kernel_entry(*cand) * 2.0 <= w:
+            thin = cand
+            break
+    assert thin is not None, (
+        f"no thin shape at the boundary ratio 1/{n_at} reaches half the work "
+        f"constant {w!r} within a 4096x scale scan; the two constants are no "
+        f"longer separable by a shape and this claim needs re-deriving")
+    assert (max(square[2] / square[0], square[3] / square[1])
+            == max(thin[2] / thin[0], thin[3] / thin[1]) == r), (
+        f"the two probe shapes {square} and {thin} no longer share the "
+        f"boundary ratio pair; the construction behind this claim has "
+        f"drifted and it is no longer testing the SECOND condition")
+    w_sq = _dense_work_per_kernel_entry(*square)
+    w_thin = _dense_work_per_kernel_entry(*thin)
+    assert w_thin < w <= w_sq, (
+        f"the probe shapes read {w_thin:.2f} and {w_sq:.2f} multiply-adds "
+        f"per kernel entry and no longer straddle the constant {w!r}; "
+        f"re-derive the shapes before trusting the two assertions below")
+    assert _auto_selects_direct(*square), (
+        f"the work screen refuses the SQUARE shape {square} "
+        f"({w_sq:.1f} multiply-adds per kernel entry, against a constant of "
+        f"{w!r}) -- the screen is meant to cost the thin regime and nothing "
+        f"else")
+    assert not _auto_selects_direct(*thin), (
+        f"the rule captures the THIN shape {thin}, whose dense route spends "
+        f"only {w_thin:.2f} multiply-adds per transcendental kernel entry "
+        f"against a constant of {w!r}.  It has the same ratio pair as "
+        f"{square}, which is captured, so the two grid ratios cannot tell "
+        f"them apart -- and at this shape family the dense route was "
+        f"MEASURED 1.1x to 13.0x slower on both builds and larger in memory")
+
+    # ... and the screen is a CONSTANT-driven relation, not a hard-coded
+    # shape list: raise the constant past the square shape and it goes too.
+    saved = B._MFT_DIRECT_MIN_WORK_PER_KERNEL_ENTRY
+    try:
+        B._MFT_DIRECT_MIN_WORK_PER_KERNEL_ENTRY = w_sq * 2.0
+        assert not _auto_selects_direct(*square), (
+            "the rule does not read _MFT_DIRECT_MIN_WORK_PER_KERNEL_ENTRY: "
+            "doubling it past the square shape's own work ratio left that "
+            "shape captured")
+        B._MFT_DIRECT_MIN_WORK_PER_KERNEL_ENTRY = 0.0
+        assert _auto_selects_direct(*thin), (
+            "with the work constant at 0 the screen still refuses the thin "
+            "shape, so it is refusing it for some other reason and this "
+            "claim is not measuring the second condition")
+    finally:
+        B._MFT_DIRECT_MIN_WORK_PER_KERNEL_ENTRY = saved
 
 
 def _claim_auto_dispatches_as_the_rule_says(shapes, primitive, separable):
@@ -324,14 +454,27 @@ def _phase_term_ratio(N, M):
     """``max|t|_chirp / max|t|_dense`` -- the DERIVED lower bound on the
     accuracy gap between the two routes, read off their two kernels.
 
-    The chirp-Z route builds ``exp(i*pi*alpha*n^2)`` with ``n`` running to
-    ``N_max = max(N, M)``, so its phase argument reaches ``alpha*N_max^2``.
-    The dense route builds ``exp(2*pi*i*alpha*n*k)`` with ``n < N`` and
-    ``k < M``, so its reaches only ``alpha*(N-1)*(M-1)``.  Both routes' error
-    is ``C * eps * max|t|`` with the SAME law and different constants
-    (VERIFY-WAVE5-HYGIENE2 round 2 D-1, re-measured here), so the gap is this
-    ratio times ``C_chirp / C_dense``.  ``alpha`` cancels, which is what makes
-    this a property of the SHAPES and not of a fixture.
+    UNITS, corrected 2026-09-20 (VERIFY-WP-C4 D6).  The chirp-Z route builds
+    ``exp(sign*i*pi*alpha*m^2)`` over the PADDED index ``|m| <= L - N_out``
+    with ``L = next_fast_len(N_in + N_out - 1)``, so its phase argument is
+    ``pi*alpha*(L - N_out)^2`` RADIANS -- that is ``alpha*(L - N_out)^2 / 2``
+    TURNS, because ``pi`` is half a turn, and ``L - N_out >= N - 1``.  The
+    dense route builds ``exp(2*pi*i*alpha*n*k)`` with ``n < N`` and ``k < M``,
+    which is ``alpha*(N-1)*(M-1)`` turns exactly.  The TURN ratio is therefore
+    ``(L - N_out)^2 / (2*(N-1)*(M-1))``, and what this function returns,
+    ``N_max^2 / ((N-1)(M-1))``, is about TWICE it: exactly
+    ``2*N_max^2 / (L - N_out)^2`` times it, which is 2 up to ``(N/(N-1))^2``
+    when ``L = N + M - 1`` and below 2 whenever ``next_fast_len`` pads
+    further.  An earlier wording here called the chirp argument
+    ``alpha*N_max^2`` and the ``/4`` in the claim below DERIVED; neither is
+    right -- the factor of two is a slip, and the ``/4`` is a CHOSEN margin
+    on top of it.  The BAR IS UNCHANGED, and still conservative: see the
+    claim's own paragraph for the arithmetic.
+
+    Both routes' error is ``C * eps * max|t|`` with the SAME law and different
+    constants (VERIFY-WAVE5-HYGIENE2 round 2 D-1, re-measured here), so the
+    gap is the TURN ratio times ``C_chirp / C_dense``.  ``alpha`` cancels,
+    which is what makes this a property of the SHAPES and not of a fixture.
     """
     return float(max(N, M)) ** 2 / (float(N - 1) * float(max(M - 1, 1)))
 
@@ -341,13 +484,18 @@ def _claim_the_dense_side_is_the_more_accurate_side(shapes):
     both routes are inside their own derived bars, and the gap between them is
     at least the DERIVED one.
 
-    THE GAP IS DERIVED, NOT READ.  :func:`_phase_term_ratio` gives ``R``, the
-    ratio of the two routes' phase arguments, from the shapes alone; the gap
-    is ``R * C_chirp/C_dense``, and ``C_chirp/C_dense`` was MEASURED in
-    [1.5, 4.0] over ten decades of budget at the shipped N=24 -> M=12 geometry
-    (hygiene-2 round 3, reproduced 2026-09-20 on both builds: 1.481 .. 4.035).
-    The bar asserted is ``R / 4`` -- conservative against the SMALLEST of those
-    constants by a further factor of 6 -- and it has a gap on both sides:
+    THE GAP IS DERIVED; THE MARGIN IS CHOSEN -- and the two are labelled
+    separately here, which they were not before (VERIFY-WP-C4 D6, corrected
+    2026-09-20).  :func:`_phase_term_ratio` returns ``R``, which is about
+    TWICE the ratio of the two routes' phase arguments in TURNS; write
+    ``R_turns = R/2``.  The gap the two kernels imply is
+    ``R_turns * C_chirp/C_dense``, with ``C_chirp/C_dense`` MEASURED in
+    [1.481, 4.035] over ten decades of budget at the shipped N=24 -> M=12
+    geometry (hygiene-2 round 3, reproduced 2026-09-20 on both builds).  The
+    bar asserted is ``R / 4``, which IS ``R_turns / 2`` -- so it sits 3.0x to
+    8.1x below the implied gap (``2 x 1.481`` to ``2 x 4.035``).  That factor
+    is a chosen margin and not a derivation; the bar itself is unchanged and
+    it has a gap on both sides:
 
     * ABOVE.  MEASURED 2026-09-20 at a budget of 1e3, identical on both
       builds: 96 -> 3 reads a gap of 51 against a bar of 12.1 (4.2x clear),
@@ -416,6 +564,37 @@ def test_the_boundary_is_asked_from_the_constant_and_the_two_settings_hold():
     _claim_the_boundary_comes_from_the_constant()
 
 
+def test_the_work_screen_refuses_a_thin_input_at_the_boundary_ratio():
+    """The SECOND condition: a ratio cannot see a thin input, so the rule
+    does not decide on the ratios alone (round 2, VERIFY-WP-C4 D1)."""
+    _claim_the_work_screen_refuses_a_thin_input()
+
+
+def test_the_work_ratio_is_a_pure_function_of_the_four_grid_sizes():
+    """The quantity the second condition reads is as build-free as the first,
+    and it is NOT determined by the two ratios -- which is why a second
+    condition was needed at all.
+
+    ``2048x2048 -> 64x64`` and ``2048x64 -> 64x2`` share the ratio pair
+    ``(1/32, 1/32)`` exactly and differ in multiply-adds per transcendental
+    kernel entry by more than two decades.  Asserted about the ratios and the
+    counts, not about what the rule answers, so a future retune leaves it
+    true.
+    """
+    square = _dense_work_per_kernel_entry(2048, 2048, 64, 64)
+    thin = _dense_work_per_kernel_entry(2048, 64, 64, 2)
+    assert 64 / 2048 == 2 / 64 == 1.0 / 32.0
+    assert square / thin > 100.0, (
+        f"the two shapes read {square:.1f} and {thin:.1f} multiply-adds per "
+        f"kernel entry; if that spread has closed, the second condition is "
+        f"no longer separating anything and the ladder needs re-measuring")
+    for _ in range(3):                      # integers in, no float state
+        assert _dense_work_per_kernel_entry(2048, 64, 64, 2) == thin
+    # and it agrees with the rule's own arithmetic at the boundary
+    assert not _auto_selects_direct(2048, 64, 64, 2)
+    assert _auto_selects_direct(2048, 2048, 64, 64)
+
+
 def test_the_selection_reads_nothing_but_the_four_grid_sizes():
     """PURITY: the decision is a function of the shape alone.
 
@@ -465,7 +644,13 @@ def test_the_selection_reads_nothing_but_the_four_grid_sizes():
         ('workers_all', lambda: setattr(fi, 'SCIPY_FFT_WORKERS', -1)),
     ]
     shapes = _DENSE_SIDE + _CHIRP_SIDE + [(1024, 1024, 32, 32),
-                                          (1024, 1024, 33, 32)]
+                                          (1024, 1024, 33, 32),
+                                          # round 2: the second condition is
+                                          # perturbed too, on both of its
+                                          # sides at the SAME ratio pair
+                                          (2048, 64, 64, 2),
+                                          (2048, 2048, 64, 64),
+                                          (160, 32, 5, 1)]
     try:
         for shape in shapes:
             first = _auto_selects_direct(*shape)
@@ -633,6 +818,18 @@ def test_the_default_flip_does_not_take_a_warning_away_from_a_caller():
     the one thing a default flip may not do.  A caller who NAMES ``'direct'``
     is still silent, and that is the unchanged 5.48 decision, gated in
     ``test_wave5_h2_mft_direct.py``.
+
+    EXACTLY ONE, not "at least one" (round 2, VERIFY-WP-C4 D5).  The guard has
+    TWO call sites -- :func:`_bluestein_2d` and :func:`_bluestein_centred_2d`'s
+    dense arm -- and a centred ``'auto'`` call at a REFUSED shape reaches the
+    inner :func:`_bluestein_2d` while one at a CAPTURED shape returns before
+    it.  The code is right and was measured right (exactly one warning at
+    144 of 144 driven cases, both builds,
+    ``validation/probe_verify_c4/v4_purity_{win,wsl}.json``), but a count of
+    ">= 1" is precisely the assertion a two-call-site guard can pass while
+    double-warning.  This id now COUNTS.  The same claim on a wider matrix is
+    ``test_verify_c4_mft_direct.py::
+    test_the_phase_guard_warns_exactly_once_per_call``.
     """
     ny = nx = 96
     my = mx = 3
@@ -643,8 +840,16 @@ def test_the_default_flip_does_not_take_a_warning_away_from_a_caller():
         with pytest.warns(RuntimeWarning, match="chirp phase argument") as rec:
             _clear_h_fft_cache()
             fn(E, a, a, my, mx, sign=-1, xp=np, fft2=_fft2, ifft2=_ifft2)
-        assert any('ALREADY on the dense route' in str(w.message)
-                   for w in rec), (
+        budget_warnings = [w for w in rec
+                           if issubclass(w.category, RuntimeWarning)
+                           and 'chirp phase argument' in str(w.message)]
+        assert len(budget_warnings) == 1, (
+            f"{fn.__name__}: 'auto' emitted {len(budget_warnings)} chirp "
+            f"phase-budget warnings, not exactly one.  The guard has two call "
+            f"sites and a caller must hear it once per call: "
+            f"{[str(w.message)[:60] for w in budget_warnings]}")
+        assert 'ALREADY on the dense route' in str(
+            budget_warnings[0].message), (
             f"{fn.__name__}: 'auto' warned but the message still advises "
             f"method='direct', which is the route it already took")
         with warnings.catch_warnings():
@@ -681,6 +886,53 @@ def _mutate_constant_silently_zero():
     return lambda: setattr(B, '_MFT_DIRECT_MAX_RATIO', saved)
 
 
+def _mutate_work_constant_silently_zero():
+    """Somebody sets the SECOND constant to 0 and the thin-input screen
+    quietly stops screening -- the pre-round-2 exposure, restored in silence.
+
+    It is deliberately the same SHAPE of mistake as
+    ``constant_silently_zero`` one condition down, and it needs its own claim
+    for the same reason: with the screen off the rule and the dispatch still
+    agree with each other perfectly, on a thin shape the dense route is
+    measurably slower at.
+    """
+    saved = B._MFT_DIRECT_MIN_WORK_PER_KERNEL_ENTRY
+    B._MFT_DIRECT_MIN_WORK_PER_KERNEL_ENTRY = 0.0
+    return lambda: setattr(B, '_MFT_DIRECT_MIN_WORK_PER_KERNEL_ENTRY', saved)
+
+
+def _mutate_conjunction_or_instead_of_and():
+    """The two conditions combined with OR instead of AND.
+
+    The conjunction is the whole safety statement: a shape reaches the dense
+    route only when NEITHER condition refuses it.  Under ``or`` a work-dense
+    shape far PAST the ratio boundary is captured (``1024x1024 -> 512x512``
+    reads 768 multiply-adds per kernel entry and a ratio of 1/2, where the
+    dense route is 1.8x slower), and so is a thin shape at the boundary
+    ratio.  This mutation replaces the whole rule rather than a constant,
+    because the conjunction is not a constant.
+    """
+    original = B._auto_selects_direct
+
+    def disjoined(ny, nx, my, mx):
+        r = float(B._MFT_DIRECT_MAX_RATIO)
+        if not (r > 0.0):
+            return False
+        ny, nx, my, mx = int(ny), int(nx), int(my), int(mx)
+        if ny < 1 or nx < 1 or my < 1 or mx < 1:
+            return False
+        if r == float('inf'):
+            return True
+        by_ratio = max(my / ny, mx / nx) <= r
+        entries = my * ny + mx * nx
+        flops = min(my * ny * nx + my * nx * mx, ny * nx * mx + my * ny * mx)
+        by_work = flops >= float(
+            B._MFT_DIRECT_MIN_WORK_PER_KERNEL_ENTRY) * entries
+        return by_ratio or by_work
+    B._auto_selects_direct = disjoined
+    return lambda: setattr(B, '_auto_selects_direct', original)
+
+
 def _mutate_dense_answer_is_really_separable():
     """The rule fires, the dispatch says 'direct', and what comes back is the
     separable chirp-Z answer -- the shape of a copy-paste in the arm."""
@@ -706,6 +958,10 @@ def _mutate_dense_answer_is_really_separable():
 _MUTATIONS = {
     'rule_inverted': (_mutate_rule_inverted, 'dispatch_dense_side'),
     'constant_silently_zero': (_mutate_constant_silently_zero, 'boundary'),
+    'work_constant_silently_zero': (
+        _mutate_work_constant_silently_zero, 'work_screen'),
+    'conjunction_or_instead_of_and': (
+        _mutate_conjunction_or_instead_of_and, 'dispatch_chirp_side'),
     'dense_answer_is_really_separable': (
         _mutate_dense_answer_is_really_separable, 'accuracy'),
 }
@@ -717,6 +973,7 @@ def _run_every_claim():
     caught = []
     for claim, call in (
         ('boundary', _claim_the_boundary_comes_from_the_constant),
+        ('work_screen', _claim_the_work_screen_refuses_a_thin_input),
         ('dispatch_dense_side',
          lambda: _claim_auto_dispatches_as_the_rule_says(
              _DENSE_SIDE[:2], 'plain', False)),
@@ -750,6 +1007,21 @@ def test_each_mutation_of_the_rule_is_caught_by_a_named_id(name):
       other perfectly; they agree on the wrong thing.  The dispatch claim
       cannot see it, which is exactly why a claim that reads the constant
       directly has to exist.
+    * ``work_constant_silently_zero`` -- the WORK-SCREEN claim, and only that
+      one, for exactly the reason ``constant_silently_zero`` needs the
+      boundary claim: with the second constant at zero the rule and the
+      dispatch agree with each other perfectly on a thin shape the dense
+      route was measured 1.1x to 13.0x slower at.
+    * ``conjunction_or_instead_of_and`` -- a DISPATCH claim, and that is a
+      measurement rather than a preference.  This mutation replaces the rule
+      FUNCTION on the module, and the claims that call ``_auto_selects_direct``
+      by its imported name still hold the original -- the same reason
+      ``rule_inverted`` is named for a dispatch claim.  What sees it is the
+      library's own call: under ``or`` a chirp-side shape that is work-dense
+      (``24x24 -> 12x12`` reads 18 multiply-adds per kernel entry) is captured
+      although its ratio is 1/2, so ``'auto'`` returns the dense bytes where
+      the rule's ratio half says chirp.  MEASURED 2026-09-20: caught by
+      ``dispatch_chirp_side``.
     * ``dense_answer_is_really_separable`` -- the ACCURACY claim.  The dispatch
       claim cannot see this one either: ``'auto'`` and ``method='direct'`` go
       through the same arm, so they still agree byte for byte, and the rule
