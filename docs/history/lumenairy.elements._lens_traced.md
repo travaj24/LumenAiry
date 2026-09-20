@@ -1,7 +1,7 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/_lens_traced.py
-ast_sha256: ca6c3cf827ecc9229dcab29606531d0cee59e4f5b93591d00b006186de70c604
-token_sha256: ea23a6cd51a697a4785051665fc728a428b8c03ccef1d357b37cb2d24b8ad3c5
+ast_sha256: 25c2e847e436fc16904b177a147e083a5fe66de348189a639c1fbf27483e9911
+token_sha256: 8bc6470db491684a747c1fdd9e15356643917aa34d14448eafbbc9468ec43930
 pre_relocation_lines: 14898
 recorded_by: WP-A17 SWEEP-4 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
@@ -16,6 +16,7 @@ re_recorded: 2026-09-14 -- P1 4.1b: the Newton pool's teardown becomes non-block
 re_recorded: 2026-09-15 -- P1 4.1b follow-up: the dispatcher's post-claim re-read of the cached pool is removed -- it overrode whatever _get_persistent_worker_pool returned, which broke the H2 executor-spy pins; the microsecond window it closed costs only a bit-identical serial fallback
 re_recorded: 2026-09-15 -- merge of verify/wp-b13 into wave5/audit-leftovers: the WP-B13 pool repair and the wave-5 comment edits land in one tree (both sides' re_recorded lines kept)
 re_recorded: 2026-09-19 -- WP-B13 follow-ups D2/D3/D4: _shutdown_pool_bounded drops its executor from _ABANDONED_POOLS when the teardown returns (census, not ledger, with the expiry boundary ordered); _get_persistent_worker_pool's idle-worker footprint re-measured in the state the ceiling rule leaves behind; _POOL_INFLIGHT documented as a DISPATCH count
+re_recorded: 2026-09-19 -- VERIFY-WP-B13-FOLLOWUPS round 2: VD2 -- _shutdown_pool_bounded's helper removes its _ABANDONED_POOLS entry only when its own caller added it (a caller-set 'added' flag under _ABANDONED_POOLS_LOCK), so a bounded teardown that completes inside its bound can no longer drop an entry _abandon_pool's reaper is still outstanding on (6/6 -> 0/6 by construction, both builds).  The publish-before-lock ordering is unchanged.  VD5 (docstring only) -- _get_persistent_worker_pool no longer calls the never-served worker 'the SURPLUS of a pool wider than the clamp': ProcessPoolExecutor spawns lazily (0 processes after construction, 4 after a 4-chunk dispatch, both builds), so that column prices a worker the labelling step created; the served figure is restated as the measured range over two independent measurements.
 -->
 
 # Version history -- `lumenairy/elements/_lens_traced.py`

@@ -24,7 +24,7 @@ a maintainer would otherwise have to go and measure.
 |---|---|---|---|---|
 | D1 | P2 (test quality) | `_thread_dump()` wrote to an `io.StringIO`, so every wedge detection raised `io.UnsupportedOperation: fileno` and lost its message and its thread dump | **CLOSED** | wedge injected under the harness; the report now names the wedged frame.  Fail-before: the shipped helper re-injected -> both new pins fail with `io.UnsupportedOperation: fileno` |
 | D2 | P3 (resource) | `_shutdown_pool_bounded`'s expiry appended to `_ABANDONED_POOLS` and nothing removed it | **CLOSED** | driven expiries: the census returns to its prior length once the teardown finishes, three times over, and survives the adverse lock order.  Fail-before: the shipped helper re-injected -> 3 failed |
-| D3 | P3 (derivation) | the idle-worker footprint was measured on `ex.map(abs, ...)` workers, not on the state the ceiling rule leaves behind | **CLOSED** | re-measured on both builds with both states present in ONE pool: served **98.7-100.8 MB** (Win) / **73.2-76.9 MB** (WSL), never-served **52.2 / 39.2 MB**.  Docstring, report sec. 5.2 and the CHANGELOG restated with the state named |
+| D3 | P3 (derivation) | the idle-worker footprint was measured on `ex.map(abs, ...)` workers, not on the state the ceiling rule leaves behind | **CLOSED** | re-measured on both builds with both states present in ONE pool: served **99.0-101.6 MB** (Win) / **73.2-76.9 MB** (WSL), never-served **52.4 / 39.3 MB** -- MAXIMA, matching sec. 3 and the docstring (VERIFY-WP-B13-FOLLOWUPS defect VD9: this row quoted the means while the prose quoted the maxima).  Docstring, report sec. 5.2 and the CHANGELOG restated with the state named |
 | D4 | P3 (comment drift) | `_POOL_INFLIGHT`'s comment said "chunks"; the counter is moved once per DISPATCH | **CLOSED** (comment, not counter -- consumers read) | every consumer is a zero-vs-non-zero read; pinned by `test_the_in_flight_counter_is_one_claim_per_dispatch_not_per_chunk` |
 | D7 | P3 (pin blind spot) | the AST pin saw only `x.shutdown(...)`, so a `with ProcessPoolExecutor(...)` teardown passed it | **CLOSED** | the extended detector reports `carrier._multi_parallel_results:11553:with ProcessPoolExecutor`; the shipped one reports `[]`.  Identical on both builds |
 | D5 | P2 (pre-existing) | `as_completed` with no timeout | **OPEN -- maintainer decision**, measured in sec. 6 | -- |
@@ -168,6 +168,25 @@ spawn worker of *this* pool necessarily imports `lumenairy.elements._lens_traced
 where its `initializer=_newton_pool_init` is resolved from, so 52.2 MB is the true floor for a
 worker of this pool on this build and 39.2 MB is the WSL floor.
 
+**CORRECTED 2026-09-19 -- what the never-served column is, and what it is not**
+(VERIFY-WP-B13-FOLLOWUPS defect VD5).  This section and the docstring it produced described the
+never-served worker as "what the SURPLUS of a pool wider than the clamp is".  **That state does not
+exist.**  CPython's `ProcessPoolExecutor` spawns LAZILY -- `_adjust_process_count` runs inside
+`submit`, not inside `__init__` -- so a pool CONSTRUCTED at width 12 holds **zero** worker
+processes, and a 4-chunk dispatch on it leaves **four**.  Measured on every rung of both builds by
+the verifier's independent probe (`validation/probe_verify_b13_followups/vf3_d3_footprint.py`:
+`processes_after_construct: 0`, `processes_after_dispatch: 4`), and pinned by
+`test_a_pool_wider_than_the_dispatch_holds_no_surplus_processes`.  The eight never-served workers in
+the ladder above exist **only because this probe's own labelling step submitted to them**: the
+column is the cost of a worker the LABELLING created, i.e. the floor for a spawn worker of this
+pool, not a cost the ceiling rule incurs.  What the ceiling rule actually leaves behind is a worker
+that SERVED a chunk, which is the figure the trade is -- and always was -- priced on, so the
+conclusion is unchanged and the trade is if anything cheaper than this section said.  The docstring
+now says this, and states the served figure as the measured RANGE over two independent measurements
+(93.6-101.6 MB Windows, 69.5-76.9 MB WSL; the verifier's socket-rendezvous labelling reads 4-7 %
+below the Manager-`Barrier` labelling above, in the same direction on both builds and in both
+states) rather than as one box's peak.
+
 **What changed.**  The docstring now names both states and carries the ladder above with its date
 and its probe.  `WP-B13_NEWTON_POOL_REPORT.md` section 5.2 and the `[Unreleased]` CHANGELOG entry
 carry the correction **with the old figure quoted**, so the trail is explicit rather than silently
@@ -239,6 +258,21 @@ extended one side by side; `fu2_win.json`, `fu2_wsl.json`, byte-identical verdic
 
 `{"shipped_pin_is_blind_to_the_sibling_pool": true, "extended_pin_detects_the_sibling_pool": true,
 "lens_traced_clean_under_extended_pin": true}` on 3.14.6 and on 3.12.3.
+
+**The detector's two residual blind spots are closed by a sweep, not by widening it**
+(VERIFY-WP-B13-FOLLOWUPS defect VD6, recorded here 2026-09-19).  Graded on the verifier's 20-shape
+corpus (`vf4_d7_detector_corpus.py`), the extended detector scores 12 TP / 0 FP / **2 FN** / 6 TN
+against the shipped detector's 6 / 2 / 8 / 4.  The two misses are `with <aliased class>(...)`, where
+the executor class was imported under a name that does not end in `Executor`, and `with ex:` on a
+pre-built executor name, where the with-item is an `ast.Name` and no class name is visible at all.
+**The detector is deliberately NOT widened for them.**  Widening it to every `with <Name>:` would
+make it guess at what a bare name is bound to, which is how a source pin acquires false positives,
+and the exposure those two shapes carry is already closed one level up: the verifier swept the whole
+package for both shapes and pinned that it contains none, with a positive control so the sweep
+cannot go blind without going red --
+`test_verify_b13_followups.py::test_no_module_uses_an_executor_teardown_the_join_detector_cannot_see`.
+A module that ever adopts one of those spellings turns that test red before the detector's blindness
+can matter.
 
 ---
 
@@ -326,9 +360,38 @@ Derivation of the bar, from measurements rather than taste:
   measured here (1.5 s at N = 1024) and below the noise of every rung in the table.  On a cold pool
   it is not an extra cost at all: the sentinel simply pays the spawn the first chunk would have
   paid.
-* the fallback is already right: `TimeoutError` is an `OSError` subclass, so it lands in the
-  dispatcher's existing infrastructure clause and takes the bit-identical serial rung -- the cost
-  of a false positive is wall time only, which is what makes a generous bar the correct shape.
+* the fallback is **not** already right, and the first line of whoever adds this bar is to say so
+  in the `except` tuple (**CORRECTED 2026-09-19, VERIFY-WP-B13-FOLLOWUPS defect VD3**).  This
+  bullet used to read "`TimeoutError` is an `OSError` subclass, so it lands in the dispatcher's
+  existing infrastructure clause".  That is true of the **builtin** on every supported interpreter
+  (PEP 3151) and true of `concurrent.futures.TimeoutError` only from **Python 3.11**, where
+  gh-90315 made it an alias of the builtin; before that it derived from
+  `concurrent.futures._base.Error(Exception)` and had nothing to do with `OSError`.
+  `pyproject.toml` declares `requires-python = ">=3.10"` and CI runs 3.10, so on a SUPPORTED
+  interpreter the pre-3.11 MRO walks straight past
+  `except (BrokenProcessPool, RuntimeError, OSError, EOFError)` at `_lens_traced.py:12943` and the
+  timeout reaches the caller instead of the bit-identical serial rung.  Driven through the real
+  dispatcher on both builds (`vf5_d5_timing.py::measure_clause_reach`, re-driven by
+  `test_the_infrastructure_clause_reaches_an_oserror_timeout_and_no_other`): builtin MRO -> serial,
+  byte-identical; pre-3.11 MRO -> **escapes**.  **Whoever adds the bar must name the timeout class
+  in that tuple.**  The tuple is deliberately NOT widened today: nothing in
+  `_invert_newton_parallel` asks for a timeout (neither `as_completed` nor `Future.result` is given
+  one), so no path can raise one, and adding `concurrent.futures.TimeoutError` would be a literal
+  no-op on 3.11+ while on 3.10 it would newly swallow a WORKER-raised timeout into a silent serial
+  re-run -- exactly what that tuple's own comment refuses to do for `ValueError`, `ImportError` and
+  `MemoryError`.  `test_verify_b13_followups.py::test_a_timeout_on_the_dispatch_must_name_its_own_exception_class`
+  turns red the day a `timeout=` lands without the class named.  The cost of a false positive is
+  still wall time only, which is what makes a generous bar the correct shape.
+* **what this bounds, and what it does not** (**ADDED 2026-09-19, VERIFY-WP-B13-FOLLOWUPS defect
+  VD4**): a bootstrap sentinel bounds only the BOOTSTRAP.  A pool whose first submit answers and
+  whose later chunks never complete still runs past any deadline -- measured on both builds, a
+  dispatch behind an answered sentinel was `still_running_at_deadline: true` at 20 s with four
+  submits outstanding (`vf5_d5_timing.py::measure_residual_exposure`, pinned by
+  `test_a_bootstrap_bar_would_not_bound_a_chunk_that_wedges_later`).  So candidate B closes the
+  `slowboot` shape exactly -- a pool that never comes up -- and narrows nothing else: the
+  unbounded `as_completed` is still behind the sentinel, and a release note written from this
+  recommendation must say that a worker which answers once and then stops answering remains
+  unbounded.
 
 **Candidate C -- a per-`__next__` bar** (re-create `as_completed` with a fresh deadline per result)
 would bound stalls mid-dispatch as well, but its bar has to clear the slowest legitimate CHUNK,
