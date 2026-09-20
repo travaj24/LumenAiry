@@ -1073,6 +1073,8 @@ arm above, which is a gap rather than a loosening.
 | the same, `b4` excluded, **1753 ids** | WSL-py3.12 | **1741 passed, 5 skipped, 0 failed** in **1:29:43** |
 | `test_audit2609_b4_collins_transport.py`, ONE CLASS AT A TIME | WSL-py3.12 | see §7.5 |
 | `test_niche_d3_guards.py` + `test_niche_d5_dx_flatness_gate.py`, whole files | WIN-py3.14 | **54 passed** in 7:48 |
+| `test_niche_d2_chain_multi.py`, whole file | WIN-py3.14 | **38 passed** in 8:33 |
+| `test_niche_d4_dgrating.py`, whole file | WIN-py3.14 | **59 passed** in 2:54 |
 
 The Windows blast set is **green end to end** — cleaner than the package's own
 run, which carried one failure it correctly diagnosed as stale.
