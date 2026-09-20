@@ -637,13 +637,15 @@ this order:
 2. **A decision about `final_distance = 0` with a readout.**  It works today
    on the default because the resolution routes it to the Sziklas readout.
    With that route gone it is a refusal, and it is a shipped configuration.
-3. **The two Sziklas-only `focus_readout` keys.**  `standoff` and
-   `on_focus_containment` are refused on `'collins'`; nine ids in
-   `test_niche_d2_chain_multi.py` and one calibration helper use them as a
-   CONTRACT (they size a Bluestein period that is linear in the leg).  Those
-   fixtures would have to be rewritten against a period that is
-   `lambda |z| / dx` of the input grid instead -- which is a re-statement of
-   what the D2 guard is for, not a re-pinning.
+3. **The two Sziklas-only `focus_readout` keys, which now SELECT the route
+   (section 1.5).**  `standoff` and
+   `on_focus_containment` no longer have a route to select once the Sziklas
+   readout is gone, so they become a refusal again -- and this time with no
+   way out.  Nine ids in `test_niche_d2_chain_multi.py` plus one calibration
+   helper use them as a CONTRACT (they size a Bluestein period that is linear
+   in the leg), and those fixtures would have to be rewritten against a
+   period that is `lambda |z| / dx` of the input grid instead -- a
+   re-statement of what the D2 guard is for, not a re-pinning.
 4. **The replica guard's standoff coupling**, which is the same point one
    level down.
 5. **C1**, which is about a stop grid sized from the carrier.  With no stop
