@@ -1,0 +1,33 @@
+{
+ "coretype": "NEHALEM",
+ "lumenairy_file": "C:\\tmp\\lum_e2\\lumenairy\\__init__.py",
+ "numpy": "2.4.4",
+ "platform": "win32",
+ "python": "3.14.6",
+ "result": {
+  "bar10_clears_reading": true,
+  "bar10_over_widest": 48.24772161455066,
+  "bar_ulp_10u": 48.24772161455066,
+  "bar_ulp_6u": 34.025500309925256,
+  "dev_from_input": -6.451852641031763e-08,
+  "indep_over_1e3_bar10": true,
+  "indep_over_bar10": 10706434.78518609,
+  "indep_ulp": 516561085.0,
+  "products_ulp_10u": 8.888888315390878,
+  "products_ulp_6u": 5.333332989234526,
+  "r_none": 1.7777776630781754,
+  "reading_peak_ulp": 1.0,
+  "reading_power_ulp": 0.0,
+  "reduction_ulp": 3.173042088246789,
+  "ulp": 2.220446049250313e-16,
+  "widest_reading_ulp": 1.0
+ },
+ "threadpools": [
+  {
+   "arch": "Nehalem",
+   "prefix": "libscipy_openblas",
+   "threads": 4
+  }
+ ],
+ "threads": "4"
+}

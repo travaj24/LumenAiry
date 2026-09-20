@@ -1,0 +1,109 @@
+{
+ "root": "C:\\tmp\\lum_ve",
+ "py_files_walked": 236,
+ "n_sites": 10,
+ "n_elidable_other": 0,
+ "elidable": [],
+ "all_sites": [
+  {
+   "file": "lumenairy/propagators/asm.py",
+   "line": 922,
+   "scope": "angular_spectrum_propagate",
+   "via": "inline:_fft2",
+   "dispatcher_side": "left",
+   "op": "Mult",
+   "other_operand_kind": "NAME/ATTR",
+   "src": "_fft2(np.fft.ifftshift(E_in)) * H"
+  },
+  {
+   "file": "lumenairy/propagators/asm.py",
+   "line": 919,
+   "scope": "angular_spectrum_propagate",
+   "via": "inline:_fft2",
+   "dispatcher_side": "left",
+   "op": "Mult",
+   "other_operand_kind": "NAME/ATTR",
+   "src": "_fft2(E_in) * H"
+  },
+  {
+   "file": "lumenairy/propagators/asm.py",
+   "line": 1147,
+   "scope": "angular_spectrum_propagate_batch",
+   "via": "inline:_fft2_nd",
+   "dispatcher_side": "left",
+   "op": "Mult",
+   "other_operand_kind": "BASIC-SUBSCRIPT",
+   "src": "_fft2_nd(xp.fft.ifftshift(E_stack, axes=(-2, -1))) * H[None, :, :]"
+  },
+  {
+   "file": "lumenairy/propagators/asm.py",
+   "line": 1391,
+   "scope": "angular_spectrum_propagate_tilted",
+   "via": "inline:_fft2",
+   "dispatcher_side": "left",
+   "op": "Mult",
+   "other_operand_kind": "NAME/ATTR",
+   "src": "_fft2(np.fft.ifftshift(E_demod)) * H"
+  },
+  {
+   "file": "lumenairy/propagators/carrier.py",
+   "line": 1401,
+   "scope": "_exact_envelope_tf_step",
+   "via": "inline:_fft2",
+   "dispatcher_side": "left",
+   "op": "Mult",
+   "other_operand_kind": "NAME/ATTR",
+   "src": "_fft2(E) * H"
+  },
+  {
+   "file": "lumenairy/propagators/carrier.py",
+   "line": 7126,
+   "scope": "_shift_envelope",
+   "via": "inline:_fft2",
+   "dispatcher_side": "left",
+   "op": "Mult",
+   "other_operand_kind": "NAME/ATTR",
+   "src": "_fft2(_e) * ramp"
+  },
+  {
+   "file": "lumenairy/propagators/fresnel.py",
+   "line": 216,
+   "scope": "fresnel_tf_propagate",
+   "via": "inline:_fft2",
+   "dispatcher_side": "left",
+   "op": "Mult",
+   "other_operand_kind": "NAME/ATTR",
+   "src": "_fft2(np.ascontiguousarray(E_in, dtype=np.complex128)) * H"
+  },
+  {
+   "file": "lumenairy/propagators/rs.py",
+   "line": 942,
+   "scope": "rayleigh_sommerfeld_propagate",
+   "via": "name:E_fft=_fft2@938",
+   "dispatcher_side": "left",
+   "op": "Mult",
+   "other_operand_kind": "NAME/ATTR",
+   "src": "E_fft * H"
+  },
+  {
+   "file": "lumenairy/propagators/rs.py",
+   "line": 939,
+   "scope": "rayleigh_sommerfeld_propagate",
+   "via": "name:E_fft=_fft2@938",
+   "dispatcher_side": "left",
+   "op": "Mult",
+   "other_operand_kind": "NAME/ATTR",
+   "src": "E_fft * H"
+  },
+  {
+   "file": "lumenairy/propagators/rs.py",
+   "line": 936,
+   "scope": "rayleigh_sommerfeld_propagate",
+   "via": "name:E_fft=_fft2@938",
+   "dispatcher_side": "left",
+   "op": "Mult",
+   "other_operand_kind": "NAME/ATTR",
+   "src": "E_fft * H"
+  }
+ ]
+}

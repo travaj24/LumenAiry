@@ -1,0 +1,147 @@
+{
+ "lumenairy_file": "C:\\tmp\\lum_ve\\lumenairy\\__init__.py",
+ "version": "5.47.0",
+ "python": "3.14.6",
+ "numpy": "2.4.4",
+ "platform": "win32",
+ "shipped_default": "legacy",
+ "legacy_const": 16.0,
+ "measured_const": 128.0,
+ "env_budget": null,
+ "cells": [
+  {
+   "N": 256,
+   "n_beamlets": 1024,
+   "budget_mb": 512.0,
+   "chunk": 61,
+   "one_column_floor_mb": 11.534336,
+   "peak_mb": 432.419985,
+   "ratio": 0.844570283203125,
+   "budget_above_floor": true
+  },
+  {
+   "N": 256,
+   "n_beamlets": 1024,
+   "budget_mb": 16.0,
+   "chunk": 1,
+   "one_column_floor_mb": 11.534336,
+   "peak_mb": 9.576082,
+   "ratio": 0.598505125,
+   "budget_above_floor": true
+  },
+  {
+   "N": 256,
+   "n_beamlets": 1024,
+   "budget_mb": 4.0,
+   "chunk": 1,
+   "one_column_floor_mb": 11.534336,
+   "peak_mb": 9.576122,
+   "ratio": 2.3940305,
+   "budget_above_floor": false
+  },
+  {
+   "N": 256,
+   "n_beamlets": 1024,
+   "budget_mb": 1.0,
+   "chunk": 1,
+   "one_column_floor_mb": 11.534336,
+   "peak_mb": 9.576114,
+   "ratio": 9.576114,
+   "budget_above_floor": false
+  },
+  {
+   "N": 192,
+   "n_beamlets": 768,
+   "budget_mb": 512.0,
+   "chunk": 108,
+   "one_column_floor_mb": 6.488064,
+   "peak_mb": 384.113322,
+   "ratio": 0.75022133203125,
+   "budget_above_floor": true
+  },
+  {
+   "N": 192,
+   "n_beamlets": 768,
+   "budget_mb": 16.0,
+   "chunk": 3,
+   "one_column_floor_mb": 6.488064,
+   "peak_mb": 12.524194,
+   "ratio": 0.782762125,
+   "budget_above_floor": true
+  },
+  {
+   "N": 192,
+   "n_beamlets": 768,
+   "budget_mb": 4.0,
+   "chunk": 1,
+   "one_column_floor_mb": 6.488064,
+   "peak_mb": 5.44629,
+   "ratio": 1.3615725,
+   "budget_above_floor": false
+  },
+  {
+   "N": 192,
+   "n_beamlets": 768,
+   "budget_mb": 1.0,
+   "chunk": 1,
+   "one_column_floor_mb": 6.488064,
+   "peak_mb": 5.446282,
+   "ratio": 5.446282,
+   "budget_above_floor": false
+  }
+ ],
+ "ratio_4mb_N256": 2.3940305,
+ "ratio_1mb_N256": 9.576114,
+ "floor_mb_N256": 11.534336,
+ "scope_holds_every_N": true,
+ "bounded_iff_above_floor": [
+  {
+   "N": 256,
+   "budget": 512.0,
+   "above_floor": true,
+   "bounded": true
+  },
+  {
+   "N": 256,
+   "budget": 16.0,
+   "above_floor": true,
+   "bounded": true
+  },
+  {
+   "N": 256,
+   "budget": 4.0,
+   "above_floor": false,
+   "bounded": false
+  },
+  {
+   "N": 256,
+   "budget": 1.0,
+   "above_floor": false,
+   "bounded": false
+  },
+  {
+   "N": 192,
+   "budget": 512.0,
+   "above_floor": true,
+   "bounded": true
+  },
+  {
+   "N": 192,
+   "budget": 16.0,
+   "above_floor": true,
+   "bounded": true
+  },
+  {
+   "N": 192,
+   "budget": 4.0,
+   "above_floor": false,
+   "bounded": false
+  },
+  {
+   "N": 192,
+   "budget": 1.0,
+   "above_floor": false,
+   "bounded": false
+  }
+ ]
+}

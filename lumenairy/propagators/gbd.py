@@ -1539,6 +1539,30 @@ _DENSE_CELL_BYTES_MEASURED = 128.0
 #: is up to 6x what was asked for.  It does not prove the fault, and no fault
 #: was reproduced here.
 #:
+#: THE SCOPE OF THE REPAIR (audit 2026-09-11 WAVE5-E, from VERIFY-WP-B14 D3).
+#: ``'measured'`` makes the budget a bound only ABOVE ONE BEAMLET COLUMN: at
+#: N = 256 a 4 MB budget reads 2.39x and a 1 MB budget 9.58x, because the chunk
+#: floors at 1 and the fixed ~48 B/cell term is outside the chunk arithmetic.
+#: Re-measured 2026-09-15 on both builds, N = 256, 1024 beamlets, ``'measured'``
+#: mode (``validation/probe_wave5_e/e4_gbd_scope_*.json``):
+#:
+#:                 Windows py3.14.6 / numpy 2.4.4   WSL py3.12.3 / numpy 2.4.6
+#:     512 MB      chunk 61, 432.4 MB, 0.84x        chunk 61, 389.6 MB, 0.76x
+#:      16 MB      chunk  1,   9.6 MB, 0.60x        chunk  1,   8.9 MB, 0.56x
+#:       4 MB      chunk  1,   9.6 MB, 2.39x        chunk  1,   8.9 MB, 2.23x
+#:       1 MB      chunk  1,   9.6 MB, 9.58x        chunk  1,   8.9 MB, 8.92x
+#:
+#: The two builds' ``tracemalloc`` peaks differ by ~7 % (the allocator's own
+#: bookkeeping), so the 2.39 / 9.58 figures are the Windows readings and the
+#: bound below one column is the build-free statement: both builds are under 1x
+#: at 512 and 16 MB and over 2x at 4 MB.
+#:
+#: The one-column floor is ``Ny*Nx*(48 + _DENSE_CELL_BYTES_MEASURED)`` bytes
+#: (11.53 MB at N = 256), and no accounting constant can put the loop under a
+#: budget below it -- the chunk cannot go under 1.  Pinned two-sided by
+#: ``tests/unit/test_verify_b14_known_reds.py::
+#: test_the_measured_accounting_bounds_the_budget_only_above_one_column``.
+#:
 #: MITIGATION WITHOUT FLIPPING THE SWITCH: pass ``window=5.0`` (the bounded-
 #: support scatter-add, whose own accounting IS correct), or divide
 #: ``mem_budget_mb`` by 6.

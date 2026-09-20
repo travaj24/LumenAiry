@@ -470,6 +470,31 @@ def _vector_fixture():
                        integration_method='quadrature', n_v2=48, poly_order=4)
 
 
+def _power_sum_rounding_spread(terms):
+    """Relative spread of ``sum(terms)`` over five different summation TREES.
+
+    ``np.sum`` is pairwise, so reducing per axis, reducing the reversed flat
+    array and reducing the transpose are genuinely different orderings of the
+    IDENTICAL multiset of terms; ``math.fsum`` is the exact value they are all
+    approximating.  Every term here is a non-negative ``|E|^2``, so the sum is
+    perfectly conditioned (``sum|t| / |sum t| = 1``) and the spread below IS
+    the reduction's rounding rather than a cancellation artefact.
+
+    This is the quantity a fixed "the two products round" bar ignores: each
+    power is a sum of ``N*N`` terms, and rescaling every term by an exact
+    common factor does NOT make the two reductions round the same way.
+    """
+    v = np.asarray(terms, dtype=np.float64)
+    flat = np.ascontiguousarray(v).ravel()
+    exact = math.fsum(flat.tolist())
+    trees = (float(np.sum(v)),
+             float(np.sum(np.sum(v, axis=0))),
+             float(np.sum(np.sum(v, axis=1))),
+             float(np.sum(flat[::-1])),
+             float(np.sum(np.ascontiguousarray(v.T))))
+    return max(abs(t - exact) for t in trees) / exact if exact else 0.0
+
+
 def test_s10_vector_normalisation_is_one_joint_scale_for_the_pair():
     """S10 third sub-item: ``normalize_output`` must not touch the
     polarization ratio.
@@ -480,41 +505,120 @@ def test_s10_vector_normalisation_is_one_joint_scale_for_the_pair():
     to compute.
 
     MEASURED on an f/3.3 N-BK7 biconvex, 45-degree-ish linear input
-    (P_x/P_y = 1.777777777778 exactly): the propagated ratio is
-    1.777777663332023 under ALL THREE modes -- bit-identical, 0 ULP -- and
-    it departs from the input ratio by -6.4376e-08, which is the s/p
-    diattenuation and is 5.154e+08 ULP of the ratio, so the pre-fix
-    behaviour (ratio == input ratio exactly) is distinguishable by 8
-    decades.  ``'power'`` restores the POST-FRESNEL pair's total power to
-    1.000000000000000 (= 0.9219035 of the raw input pair's, i.e. the
-    two-surface Fresnel transmission survives in the absolute scale);
-    ``'none'`` is 28.46x that, so it really is un-normalised.
+    (P_x/P_y = 1.7777777777777779 exactly): the propagated ratio is
+    1.7777776632250892 (Windows py3.14.6 / numpy 2.4.4, HASWELL t1,
+    2026-09-15) and it departs from the input ratio by -6.4436e-08, which is
+    the s/p diattenuation and is 5.159e+08 ULP of the ratio.  ``'power'``
+    restores the POST-FRESNEL pair's total power to 1.0 (= 0.9219035 of the
+    raw input pair's, i.e. the two-surface Fresnel transmission survives in
+    the absolute scale); ``'none'`` is 28.46x that, so it really is
+    un-normalised.
+
+    THE BAR IS DERIVED AT RUNTIME, NOT STATED (audit 2026-09-11 WAVE5-E).
+    It used to read "bar 4 ULP ... measured 0 ULP for 'power', 1 ULP for
+    'peak'", whose stated derivation -- "``(a s)^2 / (b s)^2`` is exact up to
+    the rounding of the two products" -- accounts for only one of the two
+    rounding sources.  Each power is a SUM of ``N*N = 9216`` terms, and a
+    16-arm ladder (both builds x ``OPENBLAS_CORETYPE`` in {HASWELL, NEHALEM,
+    KATMAI, SANDYBRIDGE} x 1 and 4 threads, 2026-09-15,
+    ``validation/probe_wave5_e/e3_maslov_*.json``) reads
+
+        'power'  0 .. 3 ULP        'peak'  0 .. 3 ULP
+
+    -- i.e. the shipped 4-ULP bar had 1.33x of headroom over its own measured
+    envelope, the S4 "floor bar" shape ``docs/TESTING_STANDARDS.md`` names.
+    The bar here is instead the sum of the two sources, both taken on the
+    running build:
+
+      * the PRODUCTS: per COMPLEX element the chain is ``fl(s*re)``,
+        ``fl(s*im)``, ``fl((s*re)^2)``, ``fl((s*im)^2)``, ``fl(+)`` -- FIVE
+        roundings of half an ULP each, so <= ``5u`` relative per leg and
+        ``10u`` for the ratio (``u = eps/2``).  (Corrected 2026-09-19,
+        VERIFY-WAVE5-E D8: this read "``fl(s*a)`` then ``fl(re^2)``,
+        ``fl(im^2)``, ``fl(+)`` ... at most three roundings ... ``6u`` for the
+        ratio", which counted ONE component's scaling where the scale is
+        applied to both the real and the imaginary part before either is
+        squared.  Re-measured over the same 16 arms, the correction moves the
+        bar from 27.3-34.0 to 41.53-48.25 ULP and changes no arm's verdict.)
+      * the REDUCTION: measured by :func:`_power_sum_rounding_spread`, which
+        is 1.49 to 3.17 ULP of the ratio across the 16 arms -- on its own
+        already comparable to the whole shipped bar.
+
+    times a safety factor of 4, which is documented rather than tuned: the
+    derived quantity itself spans 2.1x across the 16 arms, so 4x admits a
+    build whose summation tree scatters twice as widely as the widest arm
+    measured.  That puts the bar at 41.53 to 48.25 ULP -- at least 15.3x above
+    the widest READING on every arm (two of the sixteen read 0 ULP in both
+    modes, where the margin is unbounded), and at worst 1.07e+07x below the
+    real signal (16 arms re-measured 2026-09-19 with the five-rounding
+    products term, ``validation/probe_wave5_e/e3_d8_*.json``; with the old 6u
+    term the same arms give 27.31 to 34.03 ULP, so no arm changes verdict).
+
+    THE OTHER SIDE OF THE BAR is asserted here, not assumed: the pre-fix
+    behaviour (each leg normalised on its own) is reconstructed from this
+    build's own ``'none'`` output and moves the ratio by 5.16e+08 ULP, eight
+    decades above the bar.  So the bar has a gap on both sides.
     """
     E_vec, kw = _vector_fixture()
-    ratios, powers = {}, {}
+    ratios, powers, terms = {}, {}, {}
+    outs = {}
     for mode in ('none', 'power', 'peak'):
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
             out = apply_real_lens_maslov_vector(
                 E_vec.copy(), normalize_output=mode, **kw)
-        px = float(np.sum(np.abs(out[0]) ** 2))
-        py = float(np.sum(np.abs(out[1]) ** 2))
+        outs[mode] = out
+        tx, ty = np.abs(out[0]) ** 2, np.abs(out[1]) ** 2
+        px, py = float(np.sum(tx)), float(np.sum(ty))
         ratios[mode], powers[mode] = px / py, px + py
+        terms[mode] = (tx, ty)
     r0 = ratios['none']
+    ulp = float(np.spacing(r0))
+
+    # ---- the bar, derived on this build -----------------------------------
+    u = float(np.finfo(np.float64).eps) / 2.0
+    # 5 roundings per leg (fl(s*re), fl(s*im), fl((s*re)^2), fl((s*im)^2),
+    # fl(+)), two legs -- see the docstring; corrected from 6u, 2026-09-19.
+    product_rel = 10.0 * u
+    reduction_rel = max(
+        _power_sum_rounding_spread(terms[m][0])
+        + _power_sum_rounding_spread(terms[m][1])
+        for m in ('none', 'power', 'peak'))
+    bar_ulp = 4.0 * (product_rel + reduction_rel) * r0 / ulp
+
     for mode in ('power', 'peak'):
-        # One joint scale ``s`` makes the ratio ``(a s)^2 / (b s)^2``, which
-        # is exact up to the rounding of the two products: bar 4 ULP.
-        # Measured: 0 ULP for 'power', 1 ULP for 'peak'.
-        assert abs(ratios[mode] - r0) <= 4 * np.spacing(r0), (
+        delta = abs(ratios[mode] - r0) / ulp
+        assert delta <= bar_ulp, (
             f"normalize_output={mode!r} changed P_x/P_y from {r0!r} to "
-            f"{ratios[mode]!r} by {abs(ratios[mode] - r0) / np.spacing(r0):.1f}"
-            f" ULP -- it must be ONE joint scale")
-    r_in = (float(np.sum(np.abs(E_vec[0]) ** 2))
-            / float(np.sum(np.abs(E_vec[1]) ** 2)))
+            f"{ratios[mode]!r} by {delta:.1f} ULP against a bar of "
+            f"{bar_ulp:.1f} ULP derived on this build "
+            f"(products {product_rel * r0 / ulp:.2f} ULP + reduction "
+            f"{reduction_rel * r0 / ulp:.2f} ULP, x4) -- it must be ONE "
+            f"joint scale")
+
+    # ---- the other side: an INDEPENDENT per-leg scale, engineered here ----
+    ox, oy = outs['none'][0], outs['none'][1]
+    px0 = float(np.sum(np.abs(ox) ** 2))
+    py0 = float(np.sum(np.abs(oy) ** 2))
+    pxin = float(np.sum(np.abs(E_vec[0]) ** 2))
+    pyin = float(np.sum(np.abs(E_vec[1]) ** 2))
+    ix = ox * float(np.sqrt(pxin / px0))
+    iy = oy * float(np.sqrt(pyin / py0))
+    r_indep = (float(np.sum(np.abs(ix) ** 2))
+               / float(np.sum(np.abs(iy) ** 2)))
+    indep_ulp = abs(r_indep - r0) / ulp
+    assert indep_ulp > 1e3 * bar_ulp, (
+        f'premise: normalising the two legs INDEPENDENTLY -- the pre-fix '
+        f'behaviour -- must move the ratio by far more than the bar, else '
+        f'this test cannot tell the two apart.  Measured {indep_ulp:.4g} ULP '
+        f'against a bar of {bar_ulp:.1f} ULP (measured 5.16e+08 ULP on the '
+        f'16-arm ladder, 2026-09-15).')
+
+    r_in = pxin / pyin
     dev = abs(r0 / r_in - 1.0)
     assert dev > 1e-9, (
         f'the output ratio ({r0!r}) must still carry the s/p diattenuation '
-        f'(measured -6.4376e-08 relative to the input ratio {r_in!r}); got '
+        f'(measured -6.4436e-08 relative to the input ratio {r_in!r}); got '
         f'{dev:.3e}.  Equality with the input ratio is the pre-fix defect.')
     # The reference is the POST-FRESNEL pair -- the field the scalar legs were
     # handed -- so the surface transmission stays in the absolute scale.

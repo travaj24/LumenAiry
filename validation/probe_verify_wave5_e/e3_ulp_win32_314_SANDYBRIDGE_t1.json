@@ -1,0 +1,60 @@
+{
+ "lumenairy_file": "C:\\tmp\\lum_ve\\lumenairy\\__init__.py",
+ "python": "3.14.6",
+ "platform": "win32",
+ "numpy": "2.4.4",
+ "coretype": "SANDYBRIDGE",
+ "threads": {
+  "OMP_NUM_THREADS": "1",
+  "OPENBLAS_NUM_THREADS": "1",
+  "MKL_NUM_THREADS": "1"
+ },
+ "threadpools": [
+  {
+   "prefix": "libscipy_openblas",
+   "arch": "Sandybridge",
+   "threads": 1,
+   "version": "0.3.31.188.0"
+  }
+ ],
+ "results": [
+  {
+   "fixture": "pinned",
+   "r_none": 1.7777776630747546,
+   "r_power": 1.7777776630747548,
+   "r_peak": 1.7777776630747548,
+   "ulp": 2.220446049250313e-16,
+   "r_in": 1.777777777777778,
+   "dev_from_input": -6.452045064886391e-08,
+   "delta_power_ulp": 1.0,
+   "delta_peak_ulp": 1.0,
+   "products_ulp": 5.333332989224264,
+   "reduction_ulp": 2.6232151287904686,
+   "bar_ulp": 31.826192472058928,
+   "indep_ulp": 516576493.0,
+   "indep_over_bar": 16231174.792696815,
+   "bar_over_widest_reading": 31.826192472058928,
+   "power_total": 1693.2769789255067,
+   "none_over_power": 28.4611857431972
+  },
+  {
+   "fixture": "mine",
+   "r_none": 6.3177479047248735,
+   "r_power": 6.317747904724875,
+   "r_peak": 6.317747904724874,
+   "ulp": 8.881784197001252e-16,
+   "r_in": 6.317750182615048,
+   "dev_from_input": -3.605540118689632e-07,
+   "delta_power_ulp": 2.0,
+   "delta_peak_ulp": 1.0,
+   "products_ulp": 4.738310928543655,
+   "reduction_ulp": 2.0344441373736624,
+   "bar_ulp": 27.091020263669268,
+   "indep_ulp": 2564676338.0,
+   "indep_over_bar": 94668872.30671743,
+   "bar_over_widest_reading": 13.545510131834634,
+   "power_total": 1647.9968015705444,
+   "none_over_power": 61.82467328782195
+  }
+ ]
+}

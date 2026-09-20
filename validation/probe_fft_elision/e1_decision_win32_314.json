@@ -1,0 +1,161 @@
+{
+ "lumenairy_file": "C:\\tmp\\lum_e\\lumenairy\\__init__.py",
+ "python": "3.14.6",
+ "numpy": "2.4.4",
+ "platform": "win32",
+ "pyfftw_available": true,
+ "use_pyfftw": true,
+ "fftw_min_size": 256,
+ "ownership": [
+  {
+   "n": 128,
+   "pingpong_owndata": true,
+   "pingpong_has_base": false,
+   "copy_owndata": true,
+   "copy_has_base": false
+  },
+  {
+   "n": 256,
+   "pingpong_owndata": false,
+   "pingpong_has_base": true,
+   "copy_owndata": true,
+   "copy_has_base": false
+  },
+  {
+   "n": 512,
+   "pingpong_owndata": false,
+   "pingpong_has_base": true,
+   "copy_owndata": true,
+   "copy_has_base": false
+  },
+  {
+   "n": 1024,
+   "pingpong_owndata": false,
+   "pingpong_has_base": true,
+   "copy_owndata": true,
+   "copy_has_base": false
+  }
+ ],
+ "entry_points": [
+  {
+   "n": 256,
+   "entry_point": "angular_spectrum_propagate",
+   "md5_pingpong": "1fbfb8c74100f1b0a3fbeb83ba44b88a",
+   "md5_copy": "1fbfb8c74100f1b0a3fbeb83ba44b88a",
+   "byte_identical": true
+  },
+  {
+   "n": 256,
+   "entry_point": "angular_spectrum_propagate_bl_off",
+   "md5_pingpong": "f80e479129f0eb41b2b4bc7b37efc8c9",
+   "md5_copy": "f80e479129f0eb41b2b4bc7b37efc8c9",
+   "byte_identical": true
+  },
+  {
+   "n": 256,
+   "entry_point": "fresnel_propagate",
+   "md5_pingpong": "556ece37be0aab0d8d0bc3b770dcc3cd",
+   "md5_copy": "556ece37be0aab0d8d0bc3b770dcc3cd",
+   "byte_identical": true
+  },
+  {
+   "n": 256,
+   "entry_point": "carrier_exact_envelope_tf_step",
+   "md5_pingpong": "92d92f6b46ab07bc876b3437d0e7af6a",
+   "md5_copy": "92d92f6b46ab07bc876b3437d0e7af6a",
+   "byte_identical": true
+  },
+  {
+   "n": 512,
+   "entry_point": "angular_spectrum_propagate",
+   "md5_pingpong": "dd9769d6fea87f410c1c55a6522a608e",
+   "md5_copy": "dd9769d6fea87f410c1c55a6522a608e",
+   "byte_identical": true
+  },
+  {
+   "n": 512,
+   "entry_point": "angular_spectrum_propagate_bl_off",
+   "md5_pingpong": "c3191eb4a0e9ba77c431b5616ed165a8",
+   "md5_copy": "c3191eb4a0e9ba77c431b5616ed165a8",
+   "byte_identical": true
+  },
+  {
+   "n": 512,
+   "entry_point": "fresnel_propagate",
+   "md5_pingpong": "82e4295b7a517bd8aee38931f6387fe8",
+   "md5_copy": "82e4295b7a517bd8aee38931f6387fe8",
+   "byte_identical": true
+  },
+  {
+   "n": 512,
+   "entry_point": "carrier_exact_envelope_tf_step",
+   "md5_pingpong": "be28745c2cb24453a57a3e71ab12b5cb",
+   "md5_copy": "be28745c2cb24453a57a3e71ab12b5cb",
+   "byte_identical": true
+  },
+  {
+   "n": 1024,
+   "entry_point": "angular_spectrum_propagate",
+   "md5_pingpong": "47cbf86660673d36f5382c80675f317d",
+   "md5_copy": "47cbf86660673d36f5382c80675f317d",
+   "byte_identical": true
+  },
+  {
+   "n": 1024,
+   "entry_point": "angular_spectrum_propagate_bl_off",
+   "md5_pingpong": "0c6b09cd057c129c175b5790a8c37e09",
+   "md5_copy": "0c6b09cd057c129c175b5790a8c37e09",
+   "byte_identical": true
+  },
+  {
+   "n": 1024,
+   "entry_point": "fresnel_propagate",
+   "md5_pingpong": "0b2e6533a38d919687ba33ff10b566a3",
+   "md5_copy": "0b2e6533a38d919687ba33ff10b566a3",
+   "byte_identical": true
+  },
+  {
+   "n": 1024,
+   "entry_point": "carrier_exact_envelope_tf_step",
+   "md5_pingpong": "c740b208fcee4d6848199cfc86f8e13d",
+   "md5_copy": "c740b208fcee4d6848199cfc86f8e13d",
+   "byte_identical": true
+  }
+ ],
+ "caller_ab": [
+  {
+   "n": 128,
+   "absmax": 0.0,
+   "rel": 0.0,
+   "ndiff": 0,
+   "nvals": 32768,
+   "byte_identical": true
+  },
+  {
+   "n": 256,
+   "absmax": 0.0,
+   "rel": 0.0,
+   "ndiff": 0,
+   "nvals": 131072,
+   "byte_identical": true
+  },
+  {
+   "n": 512,
+   "absmax": 0.0,
+   "rel": 0.0,
+   "ndiff": 0,
+   "nvals": 524288,
+   "byte_identical": true
+  },
+  {
+   "n": 1024,
+   "absmax": 0.0,
+   "rel": 0.0,
+   "ndiff": 0,
+   "nvals": 2097152,
+   "byte_identical": true
+  }
+ ],
+ "library_outputs_all_byte_identical": true,
+ "caller_spelling_moves": false
+}

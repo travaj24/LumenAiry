@@ -695,6 +695,282 @@ both pytest captures on both builds.  No field moved.
   carries all twenty new test ids with measured values and reloads as valid JSON (16 288 entries),
   so a sharded CI run schedules none of them as unknown-duration.
 
+### Changed -- two published claims about the 5.47.0 known-red fixes are corrected against their own re-measurement
+
+Neither is a behaviour change; both are numbers that did not reproduce.
+
+**The glass-validity one-shot pin was not order-dependent against another file.**
+`test_validity_warning_is_one_shot_per_pair` was published here, in the WP-B14 report and
+in the fixture's own docstring as red "only when it ran after
+`tests/unit/test_audit_w4_glass_registry_meshgrid.py`".  Re-measured on the PRE tree
+(`96cb2096`, Windows py3.14.6 / numpy 2.4.4, `-p no:randomly`): it is red **alone**
+(`1 failed, 7 passed`), red with the meshgrid file first and red with it last
+(`1 failed, 23 passed` each way), and red with nothing but this file's own first test
+before it (`1 failed, 1 passed`); the single id in isolation is the only green selection.
+The poisoner is `test_validity_warning_emitted_outside_range`, which memoises the same
+`('N-BK7', 200e-9)` pair.  Right conclusion, wrong reproduction -- and the fix is in fact
+STRONGER than the published claim, because it covers intra-file self-poisoning too.
+
+**`DENSE_MEM_BUDGET_ACCOUNTING = 'measured'` bounds the budget only above one beamlet
+column.**  `gbd.py`'s module note stated the repair without that scope.  Re-measured on
+both builds at N = 256 with 1024 beamlets: 512 MB reads 0.84x (Windows) / 0.76x (WSL) and
+16 MB reads 0.60x / 0.56x -- bounded -- while **4 MB reads 2.39x / 2.23x and 1 MB reads
+9.58x / 8.92x**, because the chunk floors at 1 and the fixed ~48 B/cell term is outside the
+chunk arithmetic entirely.  The one-column floor is
+`Ny*Nx*(48 + _DENSE_CELL_BYTES_MEASURED)` bytes, 11.53 MB at N = 256, and no accounting
+constant can put the loop under a budget below it.  The note now carries the scope, both
+builds' readings and a pointer to the two-sided pin
+(`test_verify_b14_known_reds.py::test_the_measured_accounting_bounds_the_budget_only_above_one_column`).
+
+### Changed -- `set_fft_double_buffer`'s byte-identity claim is scoped to what it covers
+
+`fft_double_buffer`'s registered doc said "values are byte-identical either way".  That is
+true of the TRANSFORM's values and false of a downstream NumPy expression on the returned
+array, on some builds.  The accurate statement, now in the knob's doc, in
+`set_fft_double_buffer`'s own docstring and in the `_PYFFTW_DOUBLE_BUFFER` module note, is:
+**the transform's values are byte-identical either way; the object handed back is a live
+workspace view in one mode and a private copy in the other, which NumPy's temporary elision
+can distinguish.**
+
+The mechanism, established by the independent re-verification of WP-B14 and re-measured
+here: `temp_elide` claims an operand only when it is an unreferenced, NumPy-OWNED temporary,
+so the ping-pong's non-owning workspace view is never elidable while `buf.copy()` is -- and
+on the manylinux numpy 2.4.6 wheel a RIGHT-elided `complex128` multiply does not give the
+same last bits as the named form (rel 1.0e-16 to 1.8e-16 over 16-17 % of the doubles, at
+n >= 128).  The Windows wheel of numpy **2.4.4 and 2.4.6 alike** shows no difference, so the
+axis is the wheel and not the release; `validation/probe_fft_elision/` carries the
+lumenairy-free five-line reproducer and a ready-to-file draft issue for NumPy.
+
+`_fft2` / `_ifft2` **are** functions of their inputs -- six identical evaluations give one
+byte image, in every mode, at every shape, on both builds -- so this is not the FFT
+determinism defect it was first raised as.
+
+**The dispatchers were NOT changed to return a private copy**, on the measurement:
+
+| | Windows py3.14.6 / numpy 2.4.4 | WSL py3.12.3 / numpy 2.4.6 |
+|---|---|---|
+| `angular_spectrum_propagate` 512^2 | +22.1 % | (noise) |
+| the same, 1024^2 | +19.0 % | +0.9 % |
+| the same, 2048^2 | +18.6 % | +13.0 % |
+| one `buf.copy()` / one forward transform | 0.30 - 0.42 | 0.01 - 0.35 |
+| lumenairy entry points that move across the switch | **0 of 12** | **0 of 12** |
+
+Every in-library site that multiplies a dispatcher result NAMES the other operand
+(`asm.py:919/922/1391`, `carrier.py:1401/7126`, `fresnel.py:216` are all `_fft2(...) * H`),
+so nothing is elided with the ping-pong on and only the LEFT operand is with it off -- and
+left-elided equals named on every build measured.  Four entry points x three shapes x both
+builds are byte-identical across the switch, so privatising every transform would cost
+13-22 % of the ASM hot path to remove a difference no lumenairy output exhibits.  A CALLER
+who writes `_fft2(E) * np.exp(1j*P)` -- right operand a fresh temporary -- is exposed, at
+rel 3.4e-16 to 4.0e-16 on the Linux build and 0.0 on the Windows one; the remedy for such a
+caller is to name the operand or to call `set_fft_double_buffer(False)`.
+
+Pinned by `tests/unit/test_wave5_e_fft_elision.py`: the transforms are functions of their
+inputs and no entry point moves across the switch, both unconditionally; the object-kind
+difference and the caller-visible divergence are asserted on the builds whose elision
+asymmetry the test measures for itself, and reported with the reading where it is absent.
+
+### Fixed -- the Maslov vector-normalisation pin's ULP bar is derived at run time, not stated
+
+`test_audit2609_a4_verify_maslov_asymptotic.py::test_s10_vector_normalisation_is_one_joint_scale_for_the_pair`
+asserted `<= 4 ULP` with a docstring origin of "0 ULP for 'power', 1 ULP for 'peak'".  A
+clean process reads 3 and 1 today -- bit-identical archive to archive, so not a package
+regression, but the bar had 1.33x of headroom over its own envelope, the S4 "floor bar"
+shape `docs/TESTING_STANDARDS.md` names.
+
+The stated derivation -- "`(a s)^2 / (b s)^2` is exact up to the rounding of the two
+products" -- accounted for one of the two rounding sources.  Each power is a SUM of
+`N*N = 9216` non-negative terms, and rescaling every term by an exact common factor does
+not make the two reductions round the same way.  The bar is now the sum of both sources,
+taken on the running build: the products contribute at most `10u` relative (FIVE roundings
+per leg -- `fl(s*re)`, `fl(s*im)`, `fl((s*re)^2)`, `fl((s*im)^2)`, `fl(+)` -- two legs),
+and the reduction's own rounding is MEASURED by summing the identical terms through five
+different summation trees against `math.fsum`.  Times a documented safety factor of 4 --
+the derived quantity itself spans 2.1x across the ladder below -- the bar lands at 41.53 to
+48.25 ULP.  (The products term read `6u`, three roundings per leg, and the bar 27.3 to 34.0
+ULP until 2026-09-19: the old count included the scaling of one real component where the
+scale is applied to both before either is squared.  Re-measured over the same 16 arms, the
+correction changes no arm's verdict -- VERIFY-WAVE5-E D8.)
+
+A 16-arm ladder (both builds x `OPENBLAS_CORETYPE` in {HASWELL, NEHALEM, KATMAI,
+SANDYBRIDGE} x 1 and 4 threads, 2026-09-15,
+`validation/probe_wave5_e/e3_maslov_*.json`) reads:
+
+| | envelope |
+|---|---|
+| `'power'` | 0 .. 3 ULP |
+| `'peak'` | 0 .. 3 ULP |
+| the derived reduction term | 1.49 .. 3.17 ULP |
+| the derived bar | **41.53 .. 48.25 ULP** (27.3 .. 34.0 with the old `6u` products term) |
+| an INDEPENDENT per-leg scale (the pre-fix defect) | 5.16e+08 ULP |
+
+so the bar sits 9.1x to 11.3x above the widest reading and 1.5e+07x below the real signal.
+That signal is no longer quoted: the test reconstructs the pre-fix behaviour from this
+build's own `'none'` output and asserts the separation.  The docstring's stale readings
+(the ratio, and its -6.4376e-08 departure from the input ratio) are re-recorded as
+measured -- 1.7777776632250892 and -6.4436e-08.
+
+### Fixed -- the exit-vertex projection freezes dead rays, and the FGA image leg refuses an immersed exit
+
+Both are VERIFY-WP-B12's open items, and neither moves a live bit.
+
+**The projection applied its arithmetic to every row (O-1).**
+`lumenairy.raytrace.exit_vertex.exit_vertex_transfer` is explicit that a vignetted ray
+keeps its position, direction and OPL "exactly", because it never reached the vertex plane.
+`differential._project_to_exit_vertex_plane` -- the one implementation the finite-difference
+backend, the numba kernel, the `_AdrtDual` NumPy path and the JAX path all reach -- did not
+mask, so a dead ray's `opd` walked back along a sag it never touched.  Measured on a fan
+clipped at the last surface, over the eight VERIFY-WP-B12 fixture classes x three backends,
+both builds (`validation/probe_wave5_e/e5_prepost_*.json`):
+
+| | before | after |
+|---|---|---|
+| missed-row `opd` drift | 1.37e-05 .. 1.87e-04 m (17 of 23 scored cells) | **0.0, all 23** |
+| missed-row Jacobian drift | 1.37e-05 .. **1.53e+300** (the analytic backend's rows extrapolate) | **0.0, all 23** |
+| rows that REACHED the surface | -- | **byte-identical, 30 of 30 cells, both builds** |
+
+(30 cells = 8 fixtures x up to 4 backend arms; 7 are vacuous because the JAX path of
+`ray_transfer_jacobian_analytic` reports every ray alive whatever the aperture, so it marks
+nothing for the freeze to act on -- recorded rather than scored.)
+
+`x`, `y`, `opd` and the Jacobian rows are now `where(reached, projected, original)`; `ux`
+and `uy` are a passthrough of the map (a transfer is not a refraction) and are identical on
+both arms by construction.  It was unobservable through `fga.py` only because all four
+consumers zero the dead beamlets first -- a divergence between the module's two
+vertex-plane operators that the next consumer would not have known about.
+
+The mask is REACHED THE LAST SURFACE, which is not always `alive`.  The finite-difference
+backend's `alive` is `base_alive & companion_alive`: it also drops a ray whose 9-ray FD
+companion bundle vignettes while the BASE ray landed (VERIFY-WP-B12 open item O-4).  Such
+a ray's Jacobian is meaningless but its state is not -- it did reach the vertex plane, and
+`TraceResult.at_exit_vertex()` projects it -- so freezing it would have put the two
+operators out of step in the other direction, and would have moved eight existing WP-B12
+pins.  `ray_transfer_jacobian` therefore passes the base ray's own alive; the analytic
+backends trace one ray, have no companions, and let it default to `alive`.  Measured on the
+WP-B12 biconvex fan: 1 ray of 121 is companion-dead-but-base-alive, and its projected state
+agrees with `at_exit_vertex` to 4.3e-19 m.
+
+**The FGA image leg carried no exit index (O-3).**  Each transport asks the projection for
+`reference='exit_vertex'` -- which resolves `n_exit` and weights its sag term with it -- and
+then adds the image-side free-space leg by hand as
+`opd += z_image * sqrt(1 + ux^2 + uy^2)`, with no index.  In a medium of index `n` that
+omits `|n-1| * z_image * sec` of optical path, at least `|n-1| * |z_image| / lambda` waves.
+Every FGA fixture ends in air (`get_glass_index('air', lambda)` is exactly 1.0 on this
+registry at every wavelength measured), so it is unreachable today; it is now REFUSED with a
+named error at all four sites -- `_fga_through_lens`, `_fga_coarse`,
+`_fga_vector_through_lens` and `_caustic_zone` -- rather than served silently.
+
+The tolerance is derived from the wavefront it protects, not chosen:
+`|n - 1| > waves_budget * lambda / max(|z_image|, lambda)` with a one-milliwave budget, so
+a longer leg tightens it in proportion and a zero-length leg (`_caustic_zone`, or
+`output_plane_distance = 0`) floors it at the budget itself, ~500x below the weakest
+immersion medium.
+
+**The floor is not the tolerance.**  At a real image leg the boundary is
+`waves_budget * lambda / |z_image|` and it is tight: measured by bisecting the guard on both
+builds, an exit medium registered as REAL AIR (n - 1 = 2.77e-4 at STP) is refused at
+`z_image = 1e-5 m` and beyond -- by 63x at 0.35 mm and by 1800x at 10 mm -- i.e. at every
+image distance the FGA actually runs.  That is the budget working as derived (the un-indexed
+leg would be wrong by 97 nm, ~0.1 wave, over 0.35 mm of real air), so this is a
+near-unity-exit-index guard and not only an immersion guard, and its message says so.
+`get_glass_index('air', lambda)` is exactly 1.0 on this registry at every wavelength
+measured, so no prescription served today is affected; a caller who really does register a
+purge gas or an index-matching fluid needs the open follow-up "carry `n_exit` in the FGA
+image leg", not a looser tolerance.
+
+`tests/unit/test_wave5_e_exit_vertex_dead_rays.py` pins both two-sided: the freeze is
+bit-exact on dead rows AND the live rows still move (a freeze that froze everything would
+pass the first arm and be a disabled projection); the JAX twin of the primitive is
+bit-identical to the NumPy one on all six surface classes; the guard fires on a synthetic
+immersed-exit prescription at each of the four sites AND does not fire on the
+air-terminated control.
+
+The tolerance has ONE definition, `fga._immersed_exit_tolerance(wavelength, z_image, waves=)`,
+which every guard site reaches through `_require_non_immersed_exit` and which the pin ASKS
+for the number instead of restating the arithmetic beside it: the pin bisects the shipped
+guard at six image distances, requires the boundary to be that helper's return, requires
+1.01x of it to be refused and 0.99x served, and asserts the physics the number encodes (the
+boundary index error costs exactly the one-milliwave budget over that leg).  Before this,
+rewriting the guard's tolerance to drop `z_image` entirely left all 29 ids green on both
+builds; it now fails a named id on both.
+
+Each of the FOUR `_require_non_immersed_exit` call sites is now pinned independently, through
+the entry point that reaches THAT site's guard first -- `_fga_coarse` is entered directly,
+because every in-library caller reaches it from inside `_fga_through_lens`, whose guard runs
+first.  Before this, deleting the guard from `_fga_coarse` left the whole file green; now
+each site's deletion reddens its own id and no other (measured on both builds: 1 failed for
+`_fga_coarse`, 2 failed for each of the other three, whose entry-path arm fires as well).
+33 ids.
+
+**Known issue, pre-existing and NOT fixed here: the JAX path of
+`ray_transfer_jacobian_analytic` reports every ray alive.**
+`raytrace.differential._adrt_jax` ends `alive=jnp.ones((n,), dtype=bool)` and calls
+`_adrt_step(..., compute_dead=False)`, so that backend carries no vignetting, TIR or
+missed-surface logic at all.  Measured over a six-rung aperture ladder, 201 rays, both
+builds: 0 dead at every rung against 0 / 68 / 104 / 134 / 156 / 174 on the NumPy analytic
+path and the bundle tracer's identical set, with the two analytic paths agreeing to 1.1e-19 m
+of OPL on the rays NumPy kills -- so it is the mask alone.  No in-library consumer reaches
+it (`fga._pick_ray_transfer` hands it NumPy arrays; `gbd.py` calls it with
+`per_surface=True`, which `_adrt_jax` refuses), so the exposure is the public entry point
+alone, for a `jax.grad`/`jax.jit` caller.  Reproducer:
+`validation/probe_verify_wave5_e/probe_v_e5_jax_alive.py`; the exact patch and its one
+caveat (the in-line comment at `differential.py:897` claims the dead computation would trip
+a tracer-to-ndarray conversion, which has not been measured) are in
+`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/VERIFY_WAVE5_E.md` D2 and in the
+item report's open items.  Pinned as a known red by
+`tests/unit/test_verify_wave5_e.py::test_the_jax_analytic_backend_reports_no_vignetting_KNOWN_DEFECT`,
+which asserts JAX's absence as a fact rather than skipping on it.
+
+### Added -- a durable fail-before for the C8 inverse-support bound at the SHIPPED decentred-fit order
+
+The c7 / c8 halo fixtures state `decentred_fit_poly_order=10` -- the pre-WP-A26 default -- so
+nothing exercised the order the library ships.  VERIFY-WP-B14 F1 measured that the defect
+class IS still reachable at the default (301x and 3164x on the 768^2 `_GHOST` geometry) and
+declined to turn it into a test: a 27-cell neighbourhood around the strongest cell reads
+ratio 1.00 in 23 of 27, and the sweep cost ~14 min.
+
+A 432-cell sweep over `alpha` x `cx` x `z` x `fit_radius_beam_factor` at `n = 256` and
+`n = 512`, plus four fine scans, confirms there is **no monotone geometry parameter**:
+
+| axis | reading |
+|---|---|
+| `fit_radius_beam_factor` 1.25 / 1.50 / 2.00 / 2.50 | 1.0 / 1793.9 / 1.0 / 1.3 |
+| `cx` 1.30 .. 1.70 mm in 0.10 mm steps | 3.5 / 1.0 / 1793.9 / 1.0 / 170.7 |
+| `alpha` 3.45 / 3.50 / 3.55 | 1.0 / 1793.9 / 1.0 |
+| `n` 128 / 192 / 256 / 512 / 768 | 1.0 / 1.0 / 12.9 / 490.9 / 1.0 |
+
+Whether the order-16 fit's extrapolated inverse folds back into the bright beam is a chaotic
+function of which traced samples the ray grid happens to contain.  The parameter the effect
+IS monotone in is the **halo annulus radius**, and it is monotone for a reason: the bound
+zeroes exit pixels with no traced ray behind them, so the further out the annulus the larger
+the fraction of it outside the traced footprint.
+
+`tests/unit/test_wave5_e_c8_default_order.py` pins that ladder.  Of the 216 cells swept at
+`n = 256`, 47 trip in three or more annuli; the one it uses is the one that also trips at
+`n = 512`, i.e. the cheapest sampling at which the stimulus survives a doubling.  Suppression
+`on/off` per annulus, identical to the printed digits on both builds:
+
+| r > | 2.0 w | 2.5 w | 3.0 w | 3.5 w | 4.0 w | 4.5 w | 5.0 w |
+|---|---|---|---|---|---|---|---|
+| n = 256 | 0.596 | 0.596 | 7.7e-2 | 9.0e-3 | 9.0e-3 | 2.4e-5 | 1.8e-7 |
+| n = 512 | 0.216 | 2.3e-2 | 2.0e-3 | 1.7e-4 | 1.3e-5 | 1.0e-6 | 7.5e-8 |
+
+Five of seven rungs clear 10x at 256 and six of seven at 512 (the 2.0 w rung reads 4.63x,
+which the table above shows as 0.216), all seven monotone at both, for ~2 s of element calls
+instead of ~14 min.  Four ids, 12 s (Windows) / 19 s (WSL).  The number of rungs the pin
+REQUIRES is one constant, `_REQUIRED_TRIPS = 3`, read by the stimulus gate and by both
+fail-before assertions, so the premise and the claim cannot drift apart.  A rung the bound
+empties completely (suppression exactly 0.0) now COUNTS as tripped -- it is the strongest
+evidence the ladder can produce, and the old predicate discarded it while the file's own
+formatter and premise gate read it as `inf`; measured on a 25-rung sweep, the 6.50 w and
+6.75 w rungs read exactly 0.0 and the trip count goes 14 -> 16 on both builds, with the
+pin's own seven rungs unaffected.  Nothing states a fit order: the calls run at whatever
+`_DECENTRED_FIT_POLY_ORDER` ships.  The premise gate
+first re-runs the published order-10 `_GHOST` control -- which must still read 51.5x, as it
+does here and in three of VERIFY-WP-B14's `git archive` trees -- so "the fit default moved"
+and "the bound is dead" cannot be confused: the first skips with every candidate's reading,
+the second is a hard failure.
+
 ## [5.47.1] — 2026-09-15
 
 The publish verification of the `v5.47.0` tag (run 34939783790) stopped before the
@@ -4884,8 +5160,14 @@ every probe and its per-arm JSON is under `validation/probe_known_reds/`.
   challenged.  (4 failed / 24 passed -> 28 passed.)
 
 - **The glass-validity one-shot pin was a partial reset of coupled state.**
-  `test_validity_warning_is_one_shot_per_pair` was red only when it ran after
-  `test_audit_w4_glass_registry_meshgrid.py`.  The state that leaks is not the warn-once
+  `test_validity_warning_is_one_shot_per_pair` was red whenever any earlier call in the
+  process had memoised the `('N-BK7', 200e-9)` pair -- including this file's own first
+  test, `test_validity_warning_emitted_outside_range`, so it was red ALONE
+  (`1 failed, 7 passed` on `96cb2096`) and red in both orders against
+  `test_audit_w4_glass_registry_meshgrid.py` (`1 failed, 23 passed` each way); only the
+  single id in isolation was green.  (Re-measured 2026-09-14; the entry first published
+  here said "only when it ran after the meshgrid file", which was the right conclusion
+  from the wrong reproduction.)  The state that leaks is not the warn-once
   set the test's fixture was clearing: `get_glass_index` memoises the whole
   (name, wavelength) evaluation and returns on a hit BEFORE it reaches the validity
   warning, which the memo's own rationale says is warning-neutral only because

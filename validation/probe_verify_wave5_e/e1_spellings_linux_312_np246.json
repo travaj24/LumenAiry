@@ -1,0 +1,195 @@
+{
+ "numpy": "2.4.6",
+ "python": "3.12.3",
+ "platform": "linux",
+ "machine": "x86_64",
+ "compiler": "GCC 13.3.0",
+ "show_config": {
+  "simd": [
+   "found: true",
+   "found: true",
+   "baseline:",
+   "found:",
+   "not found:"
+  ]
+ },
+ "cells": [
+  {
+   "n": 64,
+   "n_doubles": 8192,
+   "left_elidable": {
+    "equal": true,
+    "rel": 0.0,
+    "ndiff": 0
+   },
+   "right_elidable": {
+    "equal": true,
+    "rel": 0.0,
+    "ndiff": 0
+   },
+   "both_elidable": {
+    "equal": true,
+    "rel": 0.0,
+    "ndiff": 0
+   },
+   "multiply_out_is_right": {
+    "equal": true,
+    "rel": 0.0,
+    "ndiff": 0
+   },
+   "multiply_out_is_left": {
+    "equal": true,
+    "rel": 0.0,
+    "ndiff": 0
+   },
+   "multiply_out_is_fresh": {
+    "equal": true,
+    "rel": 0.0,
+    "ndiff": 0
+   }
+  },
+  {
+   "n": 128,
+   "n_doubles": 32768,
+   "left_elidable": {
+    "equal": true,
+    "rel": 0.0,
+    "ndiff": 0
+   },
+   "right_elidable": {
+    "equal": false,
+    "rel": 1.0180603332349013e-16,
+    "ndiff": 5426
+   },
+   "both_elidable": {
+    "equal": true,
+    "rel": 0.0,
+    "ndiff": 0
+   },
+   "multiply_out_is_right": {
+    "equal": true,
+    "rel": 0.0,
+    "ndiff": 0
+   },
+   "multiply_out_is_left": {
+    "equal": true,
+    "rel": 0.0,
+    "ndiff": 0
+   },
+   "multiply_out_is_fresh": {
+    "equal": true,
+    "rel": 0.0,
+    "ndiff": 0
+   }
+  },
+  {
+   "n": 256,
+   "n_doubles": 131072,
+   "left_elidable": {
+    "equal": true,
+    "rel": 0.0,
+    "ndiff": 0
+   },
+   "right_elidable": {
+    "equal": false,
+    "rel": 9.650878096823596e-17,
+    "ndiff": 21698
+   },
+   "both_elidable": {
+    "equal": true,
+    "rel": 0.0,
+    "ndiff": 0
+   },
+   "multiply_out_is_right": {
+    "equal": true,
+    "rel": 0.0,
+    "ndiff": 0
+   },
+   "multiply_out_is_left": {
+    "equal": true,
+    "rel": 0.0,
+    "ndiff": 0
+   },
+   "multiply_out_is_fresh": {
+    "equal": true,
+    "rel": 0.0,
+    "ndiff": 0
+   }
+  },
+  {
+   "n": 512,
+   "n_doubles": 524288,
+   "left_elidable": {
+    "equal": true,
+    "rel": 0.0,
+    "ndiff": 0
+   },
+   "right_elidable": {
+    "equal": false,
+    "rel": 1.7760122759024755e-16,
+    "ndiff": 86794
+   },
+   "both_elidable": {
+    "equal": true,
+    "rel": 0.0,
+    "ndiff": 0
+   },
+   "multiply_out_is_right": {
+    "equal": true,
+    "rel": 0.0,
+    "ndiff": 0
+   },
+   "multiply_out_is_left": {
+    "equal": true,
+    "rel": 0.0,
+    "ndiff": 0
+   },
+   "multiply_out_is_fresh": {
+    "equal": true,
+    "rel": 0.0,
+    "ndiff": 0
+   }
+  },
+  {
+   "n": 1024,
+   "n_doubles": 2097152,
+   "left_elidable": {
+    "equal": true,
+    "rel": 0.0,
+    "ndiff": 0
+   },
+   "right_elidable": {
+    "equal": false,
+    "rel": 1.7872757359526966e-16,
+    "ndiff": 345396
+   },
+   "both_elidable": {
+    "equal": true,
+    "rel": 0.0,
+    "ndiff": 0
+   },
+   "multiply_out_is_right": {
+    "equal": true,
+    "rel": 0.0,
+    "ndiff": 0
+   },
+   "multiply_out_is_left": {
+    "equal": true,
+    "rel": 0.0,
+    "ndiff": 0
+   },
+   "multiply_out_is_fresh": {
+    "equal": true,
+    "rel": 0.0,
+    "ndiff": 0
+   }
+  }
+ ],
+ "right_elidable_differs_at": [
+  128,
+  256,
+  512,
+  1024
+ ],
+ "explicit_matches_named_everywhere": true
+}

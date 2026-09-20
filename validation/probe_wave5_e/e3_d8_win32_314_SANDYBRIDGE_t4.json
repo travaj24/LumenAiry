@@ -1,0 +1,33 @@
+{
+ "coretype": "SANDYBRIDGE",
+ "lumenairy_file": "C:\\tmp\\lum_e2\\lumenairy\\__init__.py",
+ "numpy": "2.4.4",
+ "platform": "win32",
+ "python": "3.14.6",
+ "result": {
+  "bar10_clears_reading": true,
+  "bar10_over_widest": 15.349471258820516,
+  "bar_ulp_10u": 46.04841377646155,
+  "bar_ulp_6u": 31.826192471928483,
+  "dev_from_input": -6.452501855047643e-08,
+  "indep_over_1e3_bar10": true,
+  "indep_over_bar10": 11218911.155286651,
+  "indep_ulp": 516613063.0,
+  "products_ulp_10u": 8.888888315333169,
+  "products_ulp_6u": 5.333332989199901,
+  "r_none": 1.7777776630666338,
+  "reading_peak_ulp": 2.0,
+  "reading_power_ulp": 3.0,
+  "reduction_ulp": 2.623215128782219,
+  "ulp": 2.220446049250313e-16,
+  "widest_reading_ulp": 3.0
+ },
+ "threadpools": [
+  {
+   "arch": "Sandybridge",
+   "prefix": "libscipy_openblas",
+   "threads": 4
+  }
+ ],
+ "threads": "4"
+}

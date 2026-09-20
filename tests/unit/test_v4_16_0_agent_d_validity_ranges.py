@@ -59,12 +59,27 @@ def _reset_validity_warned():
     the library's design excludes: the warn-once set says "not yet warned"
     while the value cache answers before the warning site is reached.
 
-    That is what made ``test_validity_warning_is_one_shot_per_pair`` red only
-    when it ran AFTER ``tests/unit/test_audit_w4_glass_registry_meshgrid.py``
-    -- that file calls ``get_glass_index('N-BK7', 200e-9)``, leaving the pair
-    memoised, and this file's partial reset did not drop it, so the five calls
-    here produced 0 warnings instead of 1.  Order-dependent, and shared mutable
-    state, not a warning defect.
+    That is what made ``test_validity_warning_is_one_shot_per_pair`` red
+    whenever ANY earlier call in the process had memoised the
+    ``('N-BK7', 200e-9)`` pair -- INCLUDING this file's own first test,
+    ``test_validity_warning_emitted_outside_range``, which evaluates exactly
+    that pair.  The partial reset did not drop the memo, so the five calls here
+    produced 0 warnings instead of 1.  Shared mutable state, not a warning
+    defect.
+
+    RE-MEASURED 2026-09-14 on the PRE tree (``96cb2096``), Windows py3.14.6 /
+    numpy 2.4.4, ``-p no:randomly`` (audit 2026-09-11 WAVE5-E, correcting
+    VERIFY-WP-B14 D2 -- the earlier "only when it ran AFTER the meshgrid file"
+    was the right conclusion from the wrong reproduction):
+
+        this file ALONE                       1 failed, 7 passed
+        meshgrid file FIRST, then this one    1 failed, 23 passed
+        this file FIRST, then the meshgrid    1 failed, 23 passed
+        this file's own first test + the id   1 failed, 1 passed
+        the single id in isolation            1 passed
+
+    i.e. the only green selection is the id on its own; the ordering against
+    the meshgrid file never mattered.
     """
     la.clear_asm_caches()
     _validity_warned.clear()

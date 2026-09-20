@@ -1,0 +1,48 @@
+{
+ "pre": {
+  "lumenairy_file": "/mnt/c/tmp/lum_ve_pre/lumenairy/__init__.py",
+  "version": "5.47.0",
+  "python": "3.12.3",
+  "platform": "linux",
+  "numpy": "2.4.6",
+  "mem_budget": "2000",
+  "digests": {
+   "conic_air/through_lens": "435f3a902495c6ea537d4d6e",
+   "conic_air/coarse": "41623cf5ca89fcdcbc017e04",
+   "conic_air/vector": "72b65aa2b8831af9bd3eb81d",
+   "conic_air/caustic_zone": "[0.0017299022323011002, 0.00173807843002563]",
+   "sphere_air/through_lens": "87f9173e0f195023b266c77d",
+   "sphere_air/coarse": "5b00ec3ce9deb093541eaa0d",
+   "sphere_air/vector": "4798ce4ab3405fb927cb1bdc",
+   "sphere_air/caustic_zone": "[0.0027490885909082895, 0.002760749583134468]",
+   "flat_air/through_lens": "240ab89203dadb10b7e6c892",
+   "flat_air/coarse": "d2f8f8eb7415fb8275b0f88f",
+   "flat_air/vector": "2ce239c1f0ac4465bdbe9d00",
+   "flat_air/caustic_zone": "None"
+  }
+ },
+ "post": {
+  "lumenairy_file": "/mnt/c/tmp/lum_ve/lumenairy/__init__.py",
+  "version": "5.47.0",
+  "python": "3.12.3",
+  "platform": "linux",
+  "numpy": "2.4.6",
+  "mem_budget": "2000",
+  "digests": {
+   "conic_air/through_lens": "435f3a902495c6ea537d4d6e",
+   "conic_air/coarse": "41623cf5ca89fcdcbc017e04",
+   "conic_air/vector": "72b65aa2b8831af9bd3eb81d",
+   "conic_air/caustic_zone": "[0.0017299022323011002, 0.00173807843002563]",
+   "sphere_air/through_lens": "87f9173e0f195023b266c77d",
+   "sphere_air/coarse": "5b00ec3ce9deb093541eaa0d",
+   "sphere_air/vector": "4798ce4ab3405fb927cb1bdc",
+   "sphere_air/caustic_zone": "[0.0027490885909082895, 0.002760749583134468]",
+   "flat_air/through_lens": "240ab89203dadb10b7e6c892",
+   "flat_air/coarse": "d2f8f8eb7415fb8275b0f88f",
+   "flat_air/vector": "2ce239c1f0ac4465bdbe9d00",
+   "flat_air/caustic_zone": "None"
+  }
+ },
+ "identical": 12,
+ "total": 12
+}

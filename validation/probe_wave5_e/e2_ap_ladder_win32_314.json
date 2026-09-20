@@ -1,0 +1,817 @@
+{
+ "lumenairy_file": "C:\\tmp\\lum_e\\lumenairy\\__init__.py",
+ "version": "5.47.0",
+ "python": "3.14.6",
+ "numpy": "2.4.4",
+ "platform": "win32",
+ "default_order": 16,
+ "argv": [
+  "sweep",
+  "--ns",
+  "256,512",
+  "--alphas",
+  "5.0",
+  "--cxs",
+  "0.0",
+  "--zs",
+  "0.006",
+  "--frbfs",
+  "2.0",
+  "--aps",
+  "0.006,0.008,0.010,0.012,0.018",
+  "--out",
+  "validation/probe_wave5_e/e2_ap_ladder_win32_314.json"
+ ],
+ "rows": [
+  {
+   "n": 256,
+   "dx": 7.500000000000001e-05,
+   "alpha": 5.0,
+   "cx": 0.0,
+   "z": 0.006,
+   "frbf": 2.0,
+   "order": null,
+   "w": 0.0015,
+   "ap": 0.006,
+   "off": 0.0,
+   "on": 0.0,
+   "ratio": null,
+   "pw_off": 627.5681590377053,
+   "pw_on": 627.5681590377053,
+   "subtractive": true,
+   "ladder": [
+    {
+     "factor": 2.0,
+     "ncells": 60519,
+     "off": 0.0,
+     "on": 0.0,
+     "suppression": null,
+     "ratio": null
+    },
+    {
+     "factor": 2.5,
+     "ncells": 57711,
+     "off": 0.0,
+     "on": 0.0,
+     "suppression": null,
+     "ratio": null
+    },
+    {
+     "factor": 3.0,
+     "ncells": 54247,
+     "off": 0.0,
+     "on": 0.0,
+     "suppression": null,
+     "ratio": null
+    },
+    {
+     "factor": 3.5,
+     "ncells": 50163,
+     "off": 0.0,
+     "on": 0.0,
+     "suppression": null,
+     "ratio": null
+    },
+    {
+     "factor": 4.0,
+     "ncells": 45463,
+     "off": 0.0,
+     "on": 0.0,
+     "suppression": null,
+     "ratio": null
+    },
+    {
+     "factor": 4.5,
+     "ncells": 40095,
+     "off": 0.0,
+     "on": 0.0,
+     "suppression": null,
+     "ratio": null
+    },
+    {
+     "factor": 5.0,
+     "ncells": 34139,
+     "off": 0.0,
+     "on": 0.0,
+     "suppression": null,
+     "ratio": null
+    }
+   ],
+   "n_trip_10x": 0,
+   "min_trip_ratio": null,
+   "monotone": false,
+   "seconds": 2.824594400008209
+  },
+  {
+   "n": 256,
+   "dx": 7.500000000000001e-05,
+   "alpha": 5.0,
+   "cx": 0.0,
+   "z": 0.006,
+   "frbf": 2.0,
+   "order": null,
+   "w": 0.0015,
+   "ap": 0.008,
+   "off": 0.0,
+   "on": 0.0,
+   "ratio": null,
+   "pw_off": 627.7855701151573,
+   "pw_on": 627.7855701151573,
+   "subtractive": true,
+   "ladder": [
+    {
+     "factor": 2.0,
+     "ncells": 60519,
+     "off": 0.011642983468926645,
+     "on": 0.011642983468926645,
+     "suppression": 1.0,
+     "ratio": 1.0
+    },
+    {
+     "factor": 2.5,
+     "ncells": 57711,
+     "off": 0.0016024527547969694,
+     "on": 0.0016024527547969694,
+     "suppression": 1.0,
+     "ratio": 1.0
+    },
+    {
+     "factor": 3.0,
+     "ncells": 54247,
+     "off": 0.0,
+     "on": 0.0,
+     "suppression": null,
+     "ratio": null
+    },
+    {
+     "factor": 3.5,
+     "ncells": 50163,
+     "off": 0.0,
+     "on": 0.0,
+     "suppression": null,
+     "ratio": null
+    },
+    {
+     "factor": 4.0,
+     "ncells": 45463,
+     "off": 0.0,
+     "on": 0.0,
+     "suppression": null,
+     "ratio": null
+    },
+    {
+     "factor": 4.5,
+     "ncells": 40095,
+     "off": 0.0,
+     "on": 0.0,
+     "suppression": null,
+     "ratio": null
+    },
+    {
+     "factor": 5.0,
+     "ncells": 34139,
+     "off": 0.0,
+     "on": 0.0,
+     "suppression": null,
+     "ratio": null
+    }
+   ],
+   "n_trip_10x": 0,
+   "min_trip_ratio": null,
+   "monotone": false,
+   "seconds": 0.2763035000534728
+  },
+  {
+   "n": 256,
+   "dx": 7.500000000000001e-05,
+   "alpha": 5.0,
+   "cx": 0.0,
+   "z": 0.006,
+   "frbf": 2.0,
+   "order": null,
+   "w": 0.0015,
+   "ap": 0.01,
+   "off": 0.00014349777298823405,
+   "on": 0.00014349777298823405,
+   "ratio": 1.0,
+   "pw_off": 627.7863297764461,
+   "pw_on": 627.7863297764461,
+   "subtractive": true,
+   "ladder": [
+    {
+     "factor": 2.0,
+     "ncells": 60519,
+     "off": 0.011595396230043449,
+     "on": 0.011595396230043449,
+     "suppression": 1.0,
+     "ratio": 1.0
+    },
+    {
+     "factor": 2.5,
+     "ncells": 57711,
+     "off": 0.0014735405026602077,
+     "on": 0.0014735405026602077,
+     "suppression": 1.0,
+     "ratio": 1.0
+    },
+    {
+     "factor": 3.0,
+     "ncells": 54247,
+     "off": 0.00014349777298823405,
+     "on": 0.00014349777298823405,
+     "suppression": 1.0,
+     "ratio": 1.0
+    },
+    {
+     "factor": 3.5,
+     "ncells": 50163,
+     "off": 0.0,
+     "on": 0.0,
+     "suppression": null,
+     "ratio": null
+    },
+    {
+     "factor": 4.0,
+     "ncells": 45463,
+     "off": 0.0,
+     "on": 0.0,
+     "suppression": null,
+     "ratio": null
+    },
+    {
+     "factor": 4.5,
+     "ncells": 40095,
+     "off": 0.0,
+     "on": 0.0,
+     "suppression": null,
+     "ratio": null
+    },
+    {
+     "factor": 5.0,
+     "ncells": 34139,
+     "off": 0.0,
+     "on": 0.0,
+     "suppression": null,
+     "ratio": null
+    }
+   ],
+   "n_trip_10x": 0,
+   "min_trip_ratio": null,
+   "monotone": true,
+   "seconds": 0.3180449999636039
+  },
+  {
+   "n": 256,
+   "dx": 7.500000000000001e-05,
+   "alpha": 5.0,
+   "cx": 0.0,
+   "z": 0.006,
+   "frbf": 2.0,
+   "order": null,
+   "w": 0.0015,
+   "ap": 0.012,
+   "off": 0.000170153824354118,
+   "on": 0.000170153824354118,
+   "ratio": 1.0,
+   "pw_off": 627.79659276588,
+   "pw_on": 627.79659276588,
+   "subtractive": true,
+   "ladder": [
+    {
+     "factor": 2.0,
+     "ncells": 60519,
+     "off": 0.011601675920871832,
+     "on": 0.011601675920871832,
+     "suppression": 1.0,
+     "ratio": 1.0
+    },
+    {
+     "factor": 2.5,
+     "ncells": 57711,
+     "off": 0.0015064686583333043,
+     "on": 0.0015064686583333043,
+     "suppression": 1.0,
+     "ratio": 1.0
+    },
+    {
+     "factor": 3.0,
+     "ncells": 54247,
+     "off": 0.000170153824354118,
+     "on": 0.000170153824354118,
+     "suppression": 1.0,
+     "ratio": 1.0
+    },
+    {
+     "factor": 3.5,
+     "ncells": 50163,
+     "off": 4.5529311970728565e-05,
+     "on": 4.5529311970728565e-05,
+     "suppression": 1.0,
+     "ratio": 1.0
+    },
+    {
+     "factor": 4.0,
+     "ncells": 45463,
+     "off": 0.0,
+     "on": 0.0,
+     "suppression": null,
+     "ratio": null
+    },
+    {
+     "factor": 4.5,
+     "ncells": 40095,
+     "off": 0.0,
+     "on": 0.0,
+     "suppression": null,
+     "ratio": null
+    },
+    {
+     "factor": 5.0,
+     "ncells": 34139,
+     "off": 0.0,
+     "on": 0.0,
+     "suppression": null,
+     "ratio": null
+    }
+   ],
+   "n_trip_10x": 0,
+   "min_trip_ratio": null,
+   "monotone": true,
+   "seconds": 0.5754528999677859
+  },
+  {
+   "n": 256,
+   "dx": 7.500000000000001e-05,
+   "alpha": 5.0,
+   "cx": 0.0,
+   "z": 0.006,
+   "frbf": 2.0,
+   "order": null,
+   "w": 0.0015,
+   "ap": 0.018,
+   "off": 0.0001441031398476629,
+   "on": 0.0001441031398476629,
+   "ratio": 1.0,
+   "pw_off": 627.7856546932751,
+   "pw_on": 627.7856546932751,
+   "subtractive": true,
+   "ladder": [
+    {
+     "factor": 2.0,
+     "ncells": 60519,
+     "off": 0.011597841579292376,
+     "on": 0.011597841579292376,
+     "suppression": 1.0,
+     "ratio": 1.0
+    },
+    {
+     "factor": 2.5,
+     "ncells": 57711,
+     "off": 0.001463728338642721,
+     "on": 0.001463728338642721,
+     "suppression": 1.0,
+     "ratio": 1.0
+    },
+    {
+     "factor": 3.0,
+     "ncells": 54247,
+     "off": 0.0001441031398476629,
+     "on": 0.0001441031398476629,
+     "suppression": 1.0,
+     "ratio": 1.0
+    },
+    {
+     "factor": 3.5,
+     "ncells": 50163,
+     "off": 1.0427990941836612e-05,
+     "on": 1.0427990941836612e-05,
+     "suppression": 1.0,
+     "ratio": 1.0
+    },
+    {
+     "factor": 4.0,
+     "ncells": 45463,
+     "off": 4.898959601355646e-07,
+     "on": 4.898959601355646e-07,
+     "suppression": 1.0,
+     "ratio": 1.0
+    },
+    {
+     "factor": 4.5,
+     "ncells": 40095,
+     "off": 1.1199607245596609e-08,
+     "on": 1.1199607245596609e-08,
+     "suppression": 1.0,
+     "ratio": 1.0
+    },
+    {
+     "factor": 5.0,
+     "ncells": 34139,
+     "off": 9.265799284659606e-11,
+     "on": 9.265799284659606e-11,
+     "suppression": 1.0,
+     "ratio": 1.0
+    }
+   ],
+   "n_trip_10x": 0,
+   "min_trip_ratio": null,
+   "monotone": true,
+   "seconds": 0.516026699973736
+  },
+  {
+   "n": 512,
+   "dx": 3.7500000000000003e-05,
+   "alpha": 5.0,
+   "cx": 0.0,
+   "z": 0.006,
+   "frbf": 2.0,
+   "order": null,
+   "w": 0.0015,
+   "ap": 0.006,
+   "off": 0.0,
+   "on": 0.0,
+   "ratio": null,
+   "pw_off": 2502.294666438762,
+   "pw_on": 2502.294666438762,
+   "subtractive": true,
+   "ladder": [
+    {
+     "factor": 2.0,
+     "ncells": 242071,
+     "off": 0.0,
+     "on": 0.0,
+     "suppression": null,
+     "ratio": null
+    },
+    {
+     "factor": 2.5,
+     "ncells": 230747,
+     "off": 0.0,
+     "on": 0.0,
+     "suppression": null,
+     "ratio": null
+    },
+    {
+     "factor": 3.0,
+     "ncells": 216919,
+     "off": 0.0,
+     "on": 0.0,
+     "suppression": null,
+     "ratio": null
+    },
+    {
+     "factor": 3.5,
+     "ncells": 200615,
+     "off": 0.0,
+     "on": 0.0,
+     "suppression": null,
+     "ratio": null
+    },
+    {
+     "factor": 4.0,
+     "ncells": 181771,
+     "off": 0.0,
+     "on": 0.0,
+     "suppression": null,
+     "ratio": null
+    },
+    {
+     "factor": 4.5,
+     "ncells": 160383,
+     "off": 0.0,
+     "on": 0.0,
+     "suppression": null,
+     "ratio": null
+    },
+    {
+     "factor": 5.0,
+     "ncells": 136535,
+     "off": 0.0,
+     "on": 0.0,
+     "suppression": null,
+     "ratio": null
+    }
+   ],
+   "n_trip_10x": 0,
+   "min_trip_ratio": null,
+   "monotone": false,
+   "seconds": 1.307081000006292
+  },
+  {
+   "n": 512,
+   "dx": 3.7500000000000003e-05,
+   "alpha": 5.0,
+   "cx": 0.0,
+   "z": 0.006,
+   "frbf": 2.0,
+   "order": null,
+   "w": 0.0015,
+   "ap": 0.008,
+   "off": 0.0,
+   "on": 0.0,
+   "ratio": null,
+   "pw_off": 2503.3098034343902,
+   "pw_on": 2503.3098034343902,
+   "subtractive": true,
+   "ladder": [
+    {
+     "factor": 2.0,
+     "ncells": 242071,
+     "off": 0.01169715046504833,
+     "on": 0.01169715046504833,
+     "suppression": 1.0,
+     "ratio": 1.0
+    },
+    {
+     "factor": 2.5,
+     "ncells": 230747,
+     "off": 0.0014884464076017046,
+     "on": 0.0014884464076017046,
+     "suppression": 1.0,
+     "ratio": 1.0
+    },
+    {
+     "factor": 3.0,
+     "ncells": 216919,
+     "off": 0.0,
+     "on": 0.0,
+     "suppression": null,
+     "ratio": null
+    },
+    {
+     "factor": 3.5,
+     "ncells": 200615,
+     "off": 0.0,
+     "on": 0.0,
+     "suppression": null,
+     "ratio": null
+    },
+    {
+     "factor": 4.0,
+     "ncells": 181771,
+     "off": 0.0,
+     "on": 0.0,
+     "suppression": null,
+     "ratio": null
+    },
+    {
+     "factor": 4.5,
+     "ncells": 160383,
+     "off": 0.0,
+     "on": 0.0,
+     "suppression": null,
+     "ratio": null
+    },
+    {
+     "factor": 5.0,
+     "ncells": 136535,
+     "off": 0.0,
+     "on": 0.0,
+     "suppression": null,
+     "ratio": null
+    }
+   ],
+   "n_trip_10x": 0,
+   "min_trip_ratio": null,
+   "monotone": false,
+   "seconds": 1.4965152000077069
+  },
+  {
+   "n": 512,
+   "dx": 3.7500000000000003e-05,
+   "alpha": 5.0,
+   "cx": 0.0,
+   "z": 0.006,
+   "frbf": 2.0,
+   "order": null,
+   "w": 0.0015,
+   "ap": 0.01,
+   "off": 0.00014940585302518654,
+   "on": 0.00014940585302518654,
+   "ratio": 1.0,
+   "pw_off": 2503.312206933767,
+   "pw_on": 2503.312206889207,
+   "subtractive": true,
+   "ladder": [
+    {
+     "factor": 2.0,
+     "ncells": 242071,
+     "off": 0.011693548383171793,
+     "on": 0.011693548383171793,
+     "suppression": 1.0,
+     "ratio": 1.0
+    },
+    {
+     "factor": 2.5,
+     "ncells": 230747,
+     "off": 0.001492288186981138,
+     "on": 0.001492288186981138,
+     "suppression": 1.0,
+     "ratio": 1.0
+    },
+    {
+     "factor": 3.0,
+     "ncells": 216919,
+     "off": 0.00014940585302518654,
+     "on": 0.00014940585302518654,
+     "suppression": 1.0,
+     "ratio": 1.0
+    },
+    {
+     "factor": 3.5,
+     "ncells": 200615,
+     "off": 0.0,
+     "on": 0.0,
+     "suppression": null,
+     "ratio": null
+    },
+    {
+     "factor": 4.0,
+     "ncells": 181771,
+     "off": 0.0,
+     "on": 0.0,
+     "suppression": null,
+     "ratio": null
+    },
+    {
+     "factor": 4.5,
+     "ncells": 160383,
+     "off": 0.0,
+     "on": 0.0,
+     "suppression": null,
+     "ratio": null
+    },
+    {
+     "factor": 5.0,
+     "ncells": 136535,
+     "off": 0.0,
+     "on": 0.0,
+     "suppression": null,
+     "ratio": null
+    }
+   ],
+   "n_trip_10x": 0,
+   "min_trip_ratio": null,
+   "monotone": true,
+   "seconds": 1.680455100024119
+  },
+  {
+   "n": 512,
+   "dx": 3.7500000000000003e-05,
+   "alpha": 5.0,
+   "cx": 0.0,
+   "z": 0.006,
+   "frbf": 2.0,
+   "order": null,
+   "w": 0.0015,
+   "ap": 0.012,
+   "off": 0.00015259103653183094,
+   "on": 0.00015259103653183094,
+   "ratio": 1.0,
+   "pw_off": 2503.3123040794603,
+   "pw_on": 2503.312304078653,
+   "subtractive": true,
+   "ladder": [
+    {
+     "factor": 2.0,
+     "ncells": 242071,
+     "off": 0.011693766200466174,
+     "on": 0.011693766200466174,
+     "suppression": 1.0,
+     "ratio": 1.0
+    },
+    {
+     "factor": 2.5,
+     "ncells": 230747,
+     "off": 0.0014902621392193153,
+     "on": 0.0014902621392193153,
+     "suppression": 1.0,
+     "ratio": 1.0
+    },
+    {
+     "factor": 3.0,
+     "ncells": 216919,
+     "off": 0.00015259103653183094,
+     "on": 0.00015259103653183094,
+     "suppression": 1.0,
+     "ratio": 1.0
+    },
+    {
+     "factor": 3.5,
+     "ncells": 200615,
+     "off": 1.3398504244709206e-05,
+     "on": 1.3398504244709206e-05,
+     "suppression": 1.0,
+     "ratio": 1.0
+    },
+    {
+     "factor": 4.0,
+     "ncells": 181771,
+     "off": 0.0,
+     "on": 0.0,
+     "suppression": null,
+     "ratio": null
+    },
+    {
+     "factor": 4.5,
+     "ncells": 160383,
+     "off": 0.0,
+     "on": 0.0,
+     "suppression": null,
+     "ratio": null
+    },
+    {
+     "factor": 5.0,
+     "ncells": 136535,
+     "off": 0.0,
+     "on": 0.0,
+     "suppression": null,
+     "ratio": null
+    }
+   ],
+   "n_trip_10x": 0,
+   "min_trip_ratio": null,
+   "monotone": true,
+   "seconds": 2.031639399996493
+  },
+  {
+   "n": 512,
+   "dx": 3.7500000000000003e-05,
+   "alpha": 5.0,
+   "cx": 0.0,
+   "z": 0.006,
+   "frbf": 2.0,
+   "order": null,
+   "w": 0.0015,
+   "ap": 0.018,
+   "off": 0.0001543818092875069,
+   "on": 0.0001543818092875069,
+   "ratio": 1.0,
+   "pw_off": 2503.3118744721896,
+   "pw_on": 2503.3118744721896,
+   "subtractive": true,
+   "ladder": [
+    {
+     "factor": 2.0,
+     "ncells": 242071,
+     "off": 0.011694964698836834,
+     "on": 0.011694964698836834,
+     "suppression": 1.0,
+     "ratio": 1.0
+    },
+    {
+     "factor": 2.5,
+     "ncells": 230747,
+     "off": 0.00149476708377974,
+     "on": 0.00149476708377974,
+     "suppression": 1.0,
+     "ratio": 1.0
+    },
+    {
+     "factor": 3.0,
+     "ncells": 216919,
+     "off": 0.0001543818092875069,
+     "on": 0.0001543818092875069,
+     "suppression": 1.0,
+     "ratio": 1.0
+    },
+    {
+     "factor": 3.5,
+     "ncells": 200615,
+     "off": 1.3329757039435513e-05,
+     "on": 1.3329757039435513e-05,
+     "suppression": 1.0,
+     "ratio": 1.0
+    },
+    {
+     "factor": 4.0,
+     "ncells": 181771,
+     "off": 9.403176728371752e-07,
+     "on": 9.403176728371752e-07,
+     "suppression": 1.0,
+     "ratio": 1.0
+    },
+    {
+     "factor": 4.5,
+     "ncells": 160383,
+     "off": 5.1466483617786e-08,
+     "on": 5.1466483617786e-08,
+     "suppression": 1.0,
+     "ratio": 1.0
+    },
+    {
+     "factor": 5.0,
+     "ncells": 136535,
+     "off": 1.9517425362448265e-09,
+     "on": 1.9517425362448265e-09,
+     "suppression": 1.0,
+     "ratio": 1.0
+    }
+   ],
+   "n_trip_10x": 0,
+   "min_trip_ratio": null,
+   "monotone": true,
+   "seconds": 2.976731100003235
+  }
+ ]
+}

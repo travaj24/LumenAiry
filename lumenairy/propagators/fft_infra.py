@@ -909,6 +909,59 @@ _register_knob(
 # byte-identical values, one extra array copy per FFT (priced in the byte-cap
 # note below, which measured it: it is NOT the "~1-3 %" this comment used to
 # claim).
+#
+# SCOPE OF "byte-identical" (audit 2026-09-11 WAVE5-E / VERIFY-WP-B14 D4).  The
+# accurate statement is: **the transform's values are byte-identical either way;
+# the object handed back is a live workspace view in one mode and a private copy
+# in the other, which NumPy's temporary elision can distinguish.**  ``temp_elide``
+# claims an operand only when it is an unreferenced, NumPy-OWNED temporary, so
+# the ping-pong's non-owning view is never elided while ``buf.copy()`` is --
+# and on some NumPy builds (measured: Linux numpy 2.4.6) a right-elided
+# complex128 multiply does not give the same last bits as the named form.
+#
+# This library is NOT exposed: no in-library site that multiplies a dispatcher
+# result hands the elision anything it can claim.  An AST walk over all 236
+# modules (2026-09-19, VERIFY-WAVE5-E D6) finds TEN such sites, in both
+# spellings -- the dispatcher called inline, and its result held under a name,
+# which a grep for ``_fft2(`` misses:
+#
+#     asm.py:919      _fft2(E_in) * H                              NAME
+#     asm.py:922      _fft2(ifftshift(E_in)) * H                   NAME
+#     asm.py:1147     _fft2_nd(...) * H[None, :, :]                basic-slice VIEW
+#     asm.py:1391     _fft2(ifftshift(E_demod)) * H                NAME
+#     carrier.py:1401 _fft2(E) * H                                 NAME
+#     carrier.py:7126 _fft2(_e) * ramp                             NAME
+#     fresnel.py:216  _fft2(...) * H                               NAME
+#     rs.py:936/939/942   E_fft * H, where E_fft = _fft2(...)      NAME
+#
+# (This list used to name six of the ten and say "every"; the four it omitted
+# are ``asm.py:1147`` and the three ``rs.py`` sites.  ``H[None, :, :]`` is a
+# fresh object but a VIEW -- ``owndata`` False -- so ``temp_elide`` cannot
+# claim it either; an ADVANCED index at the same place would be elidable,
+# which is why the property is classified by elidability and not by syntax.
+# The three ``rs.py`` sites are the more fragile shape, because the
+# dispatcher's non-owning result is held under a name and the next edit to
+# that line has no ``_fft2(`` in front of it.)
+#
+# THE LIST IS NOT MAINTAINED BY HAND.  The property and the census are pinned
+# structurally, on every build, by ``tests/unit/test_verify_wave5_e.py::
+# test_no_in_library_fft_product_spells_an_elidable_operand`` -- which walks
+# the source rather than restating this table, so a new site is a test failure
+# with the site named, not a stale comment.  Nothing is elided with the
+# ping-pong on and only the LEFT operand is with it off -- and left-elided
+# equals named on every build measured.  Measured over
+# four entry points x three shapes x both builds: byte-identical across the
+# switch, 12 of 12 cells (``validation/probe_fft_elision/e1_decision_*.json``).
+# A CALLER that writes ``_fft2(E) * np.exp(1j*P)`` -- right operand a fresh
+# temporary -- is exposed, at rel 3.4e-16..4.0e-16 on the Linux build and 0.0 on
+# the Windows one; such a caller names the operand or sets
+# ``set_fft_double_buffer(False)``.
+#
+# Privatising every return instead was MEASURED and rejected: it costs +18.6 %
+# to +22.1 % of ``angular_spectrum_propagate`` at 512^2..2048^2 on Windows and
+# +13.0 % at 2048^2 on Linux (the raw copy is 0.30-0.42 of one forward
+# transform on both builds -- ``e1_copy_cost_*.json``), to remove a difference
+# no library output exhibits.
 _PYFFTW_DOUBLE_BUFFER = True
 
 # PER-KEY BYTE CAP on the ping-pong.  ``_PYFFTW_DOUBLE_BUFFER`` above is an
@@ -990,8 +1043,9 @@ def set_fft_plan_max_bytes_per_buffer(nbytes) -> None:
     A plan key whose workspace exceeds this is built with a SINGLE workspace
     instead of the two-buffer ping-pong, halving its resident cost in exchange
     for one array copy per FFT at that shape -- byte-identical values either
-    way (the same trade :func:`set_fft_double_buffer` makes globally, and in
-    the same "safe set" :func:`lumenairy.set_low_memory` documents).  Pass
+    way, with the elision scope :func:`set_fft_double_buffer` documents (the
+    same trade it makes globally, and in the same "safe set"
+    :func:`lumenairy.set_low_memory` documents).  Pass
     ``float('inf')`` to ping-pong at every shape, whatever its size.
     Clears the plan cache so every resident entry matches the new bound."""
     global _PYFFTW_PLAN_MAX_BYTES_PER_BUFFER
@@ -1021,7 +1075,17 @@ def set_fft_double_buffer(enabled: bool) -> None:
     Disabling halves the resident aligned-workspace memory (one full-grid
     buffer per plan key instead of two) in exchange for one array copy per
     FFT.  Clears the plan cache so every resident entry matches the new
-    mode."""
+    mode.
+
+    Scope of the byte-identity claim (WAVE5-E): the transform's values are
+    byte-identical either way; the object handed back is a live workspace
+    view in one mode and a private copy in the other, which NumPy's
+    temporary elision can distinguish.  Every in-library consumer names the
+    other operand of the multiply, so no lumenairy entry point moves across
+    this switch on any build measured; a caller that multiplies the result
+    by a fresh unnamed temporary may see the last bits move on some NumPy
+    builds.  See the ``_PYFFTW_DOUBLE_BUFFER`` note in this module for the
+    mechanism, the measurements and why the dispatchers do not privatise."""
     global _PYFFTW_DOUBLE_BUFFER
     _PYFFTW_DOUBLE_BUFFER = bool(enabled)
     with _PYFFTW_PLAN_LOCK:
@@ -1037,8 +1101,11 @@ _register_knob(
     'fft_double_buffer',
     getter=get_fft_double_buffer, setter=set_fft_double_buffer,
     doc="pyFFTW two-buffer ping-pong on/off (True shipped).  Off halves the "
-        "resident workspace for one array copy per FFT; values are "
-        "byte-identical either way.  Changing it clears the plan cache.")
+        "resident workspace for one array copy per FFT.  The transform's "
+        "values are byte-identical either way; the object handed back is a "
+        "live workspace view in one mode and a private copy in the other, "
+        "which NumPy's temporary elision can distinguish.  Changing it "
+        "clears the plan cache.")
 
 
 def warmup_fft_plans(shapes: Any, dtype: Optional[Any] = None, threads: Optional[int] = None) -> int:

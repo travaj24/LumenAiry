@@ -1,0 +1,14 @@
+{
+ "lumenairy_file": "C:\\tmp\\lum_ve\\lumenairy\\__init__.py",
+ "python": "3.14.6",
+ "sentence": "the transform's values are byte-identical either way; the object handed back is a live workspace view in one mode and a private copy in the other, which NumPy's temporary elision can distinguish",
+ "verbatim_in": {
+  "registered_knob_doc": true,
+  "set_fft_double_buffer.__doc__": true,
+  "module_note__PYFFTW_DOUBLE_BUFFER": true,
+  "set_fft_plan_max_bytes_per_buffer.__doc__": false
+ },
+ "n_verbatim": 3,
+ "knob_doc_found": true,
+ "knob_doc_excerpt": "pyfftw two-buffer ping-pong on/off (true shipped). off halves the resident workspace for one array copy per fft. the transform's values are byte-identical either way; the object handed back is a live workspace view in one mode and a private copy in the other, which numpy's temporary elision can distinguish. changing it clears the plan cache."
+}

@@ -1,0 +1,66 @@
+{
+ "numpy": "2.4.4",
+ "python": "3.14.6",
+ "platform": "win32",
+ "compiler": {
+  "name": "msvc",
+  "linker": "link",
+  "version": "19.44.35225",
+  "commands": "cl"
+ },
+ "simd": {
+  "baseline": [
+   "X86_V2"
+  ],
+  "found": [
+   "X86_V3"
+  ]
+ },
+ "blas": "OpenBLAS 0.3.31.188.0  USE64BITINT DYNAMIC_ARCH NO_AFFINITY Haswell MAX_THREADS=24",
+ "sizes": [
+  {
+   "n": 64,
+   "right_eq_named": true,
+   "rel": 0.0,
+   "ndiff": 0,
+   "nlanes": 8192
+  },
+  {
+   "n": 128,
+   "right_eq_named": true,
+   "rel": 0.0,
+   "ndiff": 0,
+   "nlanes": 32768
+  },
+  {
+   "n": 256,
+   "right_eq_named": true,
+   "rel": 0.0,
+   "ndiff": 0,
+   "nlanes": 131072
+  },
+  {
+   "n": 512,
+   "right_eq_named": true,
+   "rel": 0.0,
+   "ndiff": 0,
+   "nlanes": 524288
+  },
+  {
+   "n": 1024,
+   "right_eq_named": true,
+   "rel": 0.0,
+   "ndiff": 0,
+   "nlanes": 2097152
+  }
+ ],
+ "spellings": {
+  "both_named__reference": true,
+  "left_temporary_elidable": true,
+  "right_temporary_elidable": true,
+  "explicit_inplace_on_right": true,
+  "explicit_third_array": true,
+  "explicit_inplace_on_left": true
+ },
+ "elision_defect_present": false
+}

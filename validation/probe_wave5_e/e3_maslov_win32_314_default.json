@@ -1,0 +1,118 @@
+{
+ "lumenairy_file": "C:\\tmp\\lum_e\\lumenairy\\__init__.py",
+ "python": "3.14.6",
+ "numpy": "2.4.4",
+ "platform": "win32",
+ "env": {
+  "OPENBLAS_CORETYPE": null,
+  "OPENBLAS_NUM_THREADS": "1",
+  "OMP_NUM_THREADS": "1",
+  "MKL_NUM_THREADS": "1"
+ },
+ "threadpool": [
+  {
+   "user_api": "blas",
+   "internal_api": "openblas",
+   "architecture": "Haswell",
+   "num_threads": 1,
+   "version": "0.3.31.188.0"
+  }
+ ],
+ "N": 96,
+ "n_terms_per_sum": 9216,
+ "modes": {
+  "none": {
+   "px": 30843.30847495045,
+   "py": 17349.36213508117,
+   "ratio": 1.7777776632250892,
+   "power": 48192.67061003162,
+   "px_exact_fsum": 30843.30847495045,
+   "py_exact_fsum": 17349.36213508117,
+   "px_variants": {
+    "pairwise_c": 30843.30847495045,
+    "pairwise_axis0_then_1": 30843.30847495045,
+    "pairwise_axis1_then_0": 30843.30847495045,
+    "pairwise_reversed": 30843.30847495045,
+    "pairwise_transposed": 30843.30847495045
+   },
+   "py_variants": {
+    "pairwise_c": 17349.36213508117,
+    "pairwise_axis0_then_1": 17349.36213508117,
+    "pairwise_axis1_then_0": 17349.362135081174,
+    "pairwise_reversed": 17349.36213508117,
+    "pairwise_transposed": 17349.362135081174
+   },
+   "px_spread_abs": 0.0,
+   "py_spread_abs": 3.637978807091713e-12,
+   "px_spread_rel": 0.0,
+   "py_spread_rel": 2.096894847641436e-16
+  },
+  "power": {
+   "px": 1083.697241373885,
+   "py": 609.5797375516217,
+   "ratio": 1.7777776632250886,
+   "power": 1693.2769789255067,
+   "px_exact_fsum": 1083.6972413738852,
+   "py_exact_fsum": 609.5797375516216,
+   "px_variants": {
+    "pairwise_c": 1083.697241373885,
+    "pairwise_axis0_then_1": 1083.6972413738852,
+    "pairwise_axis1_then_0": 1083.6972413738852,
+    "pairwise_reversed": 1083.697241373885,
+    "pairwise_transposed": 1083.697241373885
+   },
+   "py_variants": {
+    "pairwise_c": 609.5797375516217,
+    "pairwise_axis0_then_1": 609.5797375516216,
+    "pairwise_axis1_then_0": 609.5797375516216,
+    "pairwise_reversed": 609.5797375516216,
+    "pairwise_transposed": 609.5797375516217
+   },
+   "px_spread_abs": 2.2737367544323206e-13,
+   "py_spread_abs": 1.1368683772161603e-13,
+   "px_spread_rel": 2.0981291338803558e-16,
+   "py_spread_rel": 1.86500355438715e-16
+  },
+  "peak": {
+   "px": 680.5323329388928,
+   "py": 382.7994619441502,
+   "ratio": 1.777777663225089,
+   "power": 1063.331794883043,
+   "px_exact_fsum": 680.5323329388928,
+   "py_exact_fsum": 382.7994619441502,
+   "px_variants": {
+    "pairwise_c": 680.5323329388928,
+    "pairwise_axis0_then_1": 680.5323329388928,
+    "pairwise_axis1_then_0": 680.5323329388928,
+    "pairwise_reversed": 680.5323329388928,
+    "pairwise_transposed": 680.5323329388928
+   },
+   "py_variants": {
+    "pairwise_c": 382.7994619441502,
+    "pairwise_axis0_then_1": 382.79946194415015,
+    "pairwise_axis1_then_0": 382.7994619441502,
+    "pairwise_reversed": 382.7994619441502,
+    "pairwise_transposed": 382.7994619441502
+   },
+   "px_spread_abs": 0.0,
+   "py_spread_abs": 5.684341886080802e-14,
+   "px_spread_rel": 0.0,
+   "py_spread_rel": 1.484939883982945e-16
+  }
+ },
+ "r0": 1.7777776632250892,
+ "spacing_r0": 2.220446049250313e-16,
+ "readings_ulp": {
+  "power": 3.0,
+  "peak": 1.0
+ },
+ "summation_rel_uncertainty": 3.9631326882675057e-16,
+ "derived_bar_ulp_raw": 3.1730420885380037,
+ "independent_per_leg": {
+  "ratio": 1.7777777777777775,
+  "delta_ulp": 515899444.0,
+  "input_ratio": 1.777777777777778,
+  "r0_vs_input_rel": 6.443588740356887e-08
+ },
+ "decades_of_gap": 8.211089227022011
+}

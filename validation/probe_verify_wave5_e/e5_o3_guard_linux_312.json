@@ -1,0 +1,139 @@
+{
+ "lumenairy_file": "/mnt/c/tmp/lum_ve/lumenairy/__init__.py",
+ "python": "3.12.3",
+ "platform": "linux",
+ "numpy": "2.4.6",
+ "waves_budget": 0.001,
+ "noise_floor": 1e-12,
+ "wavelength": 1.55e-06,
+ "air_index": {
+  "633nm": 1.0,
+  "780nm": 1.0,
+  "1030nm": 1.0,
+  "1060nm": 1.0,
+  "1310nm": 1.0,
+  "1550nm": 1.0
+ },
+ "air_is_exactly_one": true,
+ "exit_index_immersed": 1.630730453050797,
+ "exit_index_air": 1.0,
+ "sites": {
+  "through_lens": {
+   "immersed": {
+    "fired": true,
+    "immersed_in_message": true,
+    "message": "apply_real_lens_fga: the prescription's exit medium has refractive index 1.630730453050797 (surfaces[-1].glass_after), i.e. the optic is IMMERSED.  This propagator adds its image-side leg as opd += z_image*sqrt(1+ux^2+uy"
+   },
+   "air": {
+    "fired": false
+   }
+  },
+  "coarse": {
+   "immersed": {
+    "fired": true,
+    "immersed_in_message": true,
+    "message": "apply_real_lens_fga: the prescription's exit medium has refractive index 1.630730453050797 (surfaces[-1].glass_after), i.e. the optic is IMMERSED.  This propagator adds its image-side leg as opd += z_image*sqrt(1+ux^2+uy"
+   },
+   "air": {
+    "fired": false
+   }
+  },
+  "vector": {
+   "immersed": {
+    "fired": true,
+    "immersed_in_message": true,
+    "message": "apply_real_lens_fga_vector: the prescription's exit medium has refractive index 1.630730453050797 (surfaces[-1].glass_after), i.e. the optic is IMMERSED.  This propagator adds its image-side leg as opd += z_image*sqrt(1+"
+   },
+   "air": {
+    "fired": false
+   }
+  },
+  "caustic_zone": {
+   "immersed": {
+    "fired": true,
+    "immersed_in_message": true,
+    "message": "_caustic_zone: the prescription's exit medium has refractive index 1.630730453050797 (surfaces[-1].glass_after), i.e. the optic is IMMERSED.  This propagator adds its image-side leg as opd += z_image*sqrt(1+ux^2+uy^2), w"
+   },
+   "air": {
+    "fired": false
+   }
+  }
+ },
+ "guard_two_sided_at_sites": true,
+ "tolerance": [
+  {
+   "z_image_m": 0.0,
+   "refusal_boundary_abs_n_minus_1": 0.001000000000000001,
+   "predicted": 0.001,
+   "refuses_stp_air": false,
+   "refuses_n_1p0001": false,
+   "refuses_water": true,
+   "refuses_exact_one": false
+  },
+  {
+   "z_image_m": 1e-06,
+   "refusal_boundary_abs_n_minus_1": 0.001000000000000001,
+   "predicted": 0.001,
+   "refuses_stp_air": false,
+   "refuses_n_1p0001": false,
+   "refuses_water": true,
+   "refuses_exact_one": false
+  },
+  {
+   "z_image_m": 1.55e-06,
+   "refusal_boundary_abs_n_minus_1": 0.001000000000000001,
+   "predicted": 0.001,
+   "refuses_stp_air": false,
+   "refuses_n_1p0001": false,
+   "refuses_water": true,
+   "refuses_exact_one": false
+  },
+  {
+   "z_image_m": 1e-05,
+   "refusal_boundary_abs_n_minus_1": 0.00015500000000001626,
+   "predicted": 0.000155,
+   "refuses_stp_air": true,
+   "refuses_n_1p0001": false,
+   "refuses_water": true,
+   "refuses_exact_one": false
+  },
+  {
+   "z_image_m": 0.0001,
+   "refusal_boundary_abs_n_minus_1": 1.5500000000057138e-05,
+   "predicted": 1.55e-05,
+   "refuses_stp_air": true,
+   "refuses_n_1p0001": true,
+   "refuses_water": true,
+   "refuses_exact_one": false
+  },
+  {
+   "z_image_m": 0.00035,
+   "refusal_boundary_abs_n_minus_1": 4.4285714285718925e-06,
+   "predicted": 4.428571428571428e-06,
+   "refuses_stp_air": true,
+   "refuses_n_1p0001": true,
+   "refuses_water": true,
+   "refuses_exact_one": false
+  },
+  {
+   "z_image_m": 0.001,
+   "refusal_boundary_abs_n_minus_1": 1.550000000016816e-06,
+   "predicted": 1.55e-06,
+   "refuses_stp_air": true,
+   "refuses_n_1p0001": true,
+   "refuses_water": true,
+   "refuses_exact_one": false
+  },
+  {
+   "z_image_m": 0.01,
+   "refusal_boundary_abs_n_minus_1": 1.5500000005719275e-07,
+   "predicted": 1.55e-07,
+   "refuses_stp_air": true,
+   "refuses_n_1p0001": true,
+   "refuses_water": true,
+   "refuses_exact_one": false
+  }
+ ],
+ "stp_air_refused_anywhere": true,
+ "water_refused_everywhere": true
+}

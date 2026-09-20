@@ -1,0 +1,71 @@
+{
+ "numpy": "2.4.6",
+ "python": "3.12.3",
+ "platform": "linux",
+ "compiler": {
+  "name": "gcc",
+  "linker": "ld.bfd",
+  "version": "14.2.1",
+  "commands": "cc"
+ },
+ "simd": {
+  "baseline": [
+   "X86_V2"
+  ],
+  "found": [
+   "X86_V3"
+  ],
+  "not found": [
+   "X86_V4",
+   "AVX512_ICL",
+   "AVX512_SPR"
+  ]
+ },
+ "blas": "OpenBLAS 0.3.31.188.0  USE64BITINT DYNAMIC_ARCH NO_AFFINITY SkylakeX MAX_THREADS=64",
+ "sizes": [
+  {
+   "n": 64,
+   "right_eq_named": true,
+   "rel": 0.0,
+   "ndiff": 0,
+   "nlanes": 8192
+  },
+  {
+   "n": 128,
+   "right_eq_named": false,
+   "rel": 1.0180603332349013e-16,
+   "ndiff": 5426,
+   "nlanes": 32768
+  },
+  {
+   "n": 256,
+   "right_eq_named": false,
+   "rel": 9.650878096823596e-17,
+   "ndiff": 21698,
+   "nlanes": 131072
+  },
+  {
+   "n": 512,
+   "right_eq_named": false,
+   "rel": 1.7760122759024755e-16,
+   "ndiff": 86794,
+   "nlanes": 524288
+  },
+  {
+   "n": 1024,
+   "right_eq_named": false,
+   "rel": 1.7872757359526966e-16,
+   "ndiff": 345396,
+   "nlanes": 2097152
+  }
+ ],
+ "spellings": {
+  "both_named__reference": true,
+  "left_temporary_elidable": true,
+  "right_temporary_elidable": false,
+  "explicit_inplace_on_right": true,
+  "explicit_third_array": true,
+  "explicit_inplace_on_left": true
+ },
+ "elision_defect_present": true
+}
