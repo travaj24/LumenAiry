@@ -458,7 +458,6 @@ class TestDefaultIsByteIdentical:
         assert 'on_collins_sampling' not in p, (
             'the standoff readout took the one-step form\'s Kelly guard '
             'keyword, which means it is no longer only the standoff readout')
-        assert p['standoff'].default is None
         assert p['transport'].default == 'sziklas', (
             'the standoff readout moved its own default; this entry point has '
             'no other way back, and the resolver and guard around the leg '
@@ -483,14 +482,19 @@ class TestDefaultIsByteIdentical:
                 f'transport={tr!r} did not go through a stop plane, so this '
                 f'entry point is no longer the standoff readout: {pd!r}')
 
-        # ``replica_fill``: its CONSEQUENCE, not its spelling.  WP-B4 pinned
-        # the literal ``'repeat'`` here; WP-C5 item 3 moves that default to
-        # ``'zero'`` in the same release, so a literal pin is a merge
-        # conflict whose resolution is a coin-flip and whose loser ships a
-        # test asserting the opposite of the source.  What this id is about
-        # is that the standoff readout still OWNS the fill, so the default is
-        # read off the signature and the behaviour it implies is asserted --
-        # correct under BOTH values, on whichever one is live.
+        # ``replica_fill``: its CONSEQUENCE as well as its spelling.  WP-B4
+        # pinned the literal ``'repeat'`` at the tail of this method; WP-C5
+        # item 3 moves that default to ``'zero'`` in the same release, so the
+        # literal is LEFT EXACTLY WHERE AND AS IT WAS -- untouched by this
+        # branch, with the unchanged ``standoff`` assertion above it as
+        # separating context -- and WP-C5's one-line edit to it merges
+        # cleanly instead of colliding with round 2's additions.  (Measured:
+        # with this block written over that line the merge conflicted and the
+        # resolution was a coin-flip whose loser shipped a test asserting the
+        # opposite of the source.)  What is added here is the part a literal
+        # cannot say -- that the standoff readout still OWNS the fill and the
+        # behaviour the live default implies is the behaviour observed --
+        # which is correct under BOTH values and so needs no edit from C5.
         fill = p['replica_fill'].default
         assert fill in ('repeat', 'zero'), (
             f'replica_fill grew a third value {fill!r} without this '
@@ -522,6 +526,8 @@ class TestDefaultIsByteIdentical:
             assert edge.max() > 0.0, (
                 f"replica_fill defaults to {fill!r} but the corner outside "
                 f"one period came back empty")
+        assert p['standoff'].default is None
+        assert p['replica_fill'].default == 'repeat'
 
     @pytest.mark.slow
     def test_the_chain_is_equal_bit_for_bit(self):
