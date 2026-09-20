@@ -4,6 +4,66 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+### Changed -- carrier (WP-C5 item 1): `gap_kernel='auto'` falls back to the paraxial kernel inside a derived near-focus band
+
+`lumenairy.propagators.carrier._GAP_KERNEL_ACCURACY_TAU` now defaults to `1e-4`
+instead of `None`, which ARMS the accuracy-keyed fallback that shipped switched
+off in 5.48.0.  On a Collins carrier leg that `gap_kernel='auto'` would have
+refined with the exact kernel, the predicted departure of that refinement from
+the paraxial truth,
+
+    departure_relL2 = sqrt(3/2) * k |z_eff| theta_env^4 / 8
+
+(`theta_env` the ENVELOPE's own analytic `1/e^2` half-angle, read from its
+sampled spectrum), is compared with `tau`, and `'auto'` resolves to `'fresnel'`
+above it.  An EXPLICIT `gap_kernel='exact'` is never overridden.
+
+Why: the existing `k4` gate bounds REPRESENTABILITY -- whether the exact
+kernel's impulse response wraps the reduced frame `z_eff = B/A` -- and near a
+geometric focus that stops tracking accuracy.  Measured on VERIFY-B4 F3's
+fixture (`w = 0.3 mm`, N = 1024, `dx` 4 um, `lambda` 1.064 um), one micron
+short of the focus `k4` reads 9.1e-03 against a bar of 1 -- two decades of
+margin, nothing warns -- while the exact kernel departs from the analytic
+Gaussian by 2.3496e-03 and the paraxial kernel holds 1.46e-14.  The rule is
+what closes that gap.
+
+Because the departure is linear in `|z_eff|`, the rule is a NEAR-FOCUS rule
+with a closed-form band: it fires only where
+`|z_eff| > 8 tau / (sqrt(3/2) k theta_env^4)`.  Measured on both builds
+(`validation/probe_c5_three_defaults/item1_*.json`):
+
+| fixture | `theta_env` | band in z_eff | band as distance to `A = 0` | what fires |
+|---|---|---|---|---|
+| VERIFY-B4 F3 | 1.1289e-03 rad | above 68.10 m | **inside 23.48 um** | the 1 um (2.3496e-03) and 10 um (2.3490e-04) rungs |
+| Wave-5 hygiene-2 | 7.9512e-04 rad | above 260.09 m | **inside 1.5427 um** | nothing: that ladder walks to the WAIST and this carrier's focus sits 31.66 um further on, so its z_eff caps at 12.27 m |
+
+Blast radius, measured archive-to-archive against `49ddf4bd` over 48 digested
+legs per build: **2 keys move, 46 are byte-identical**, and the two are F3's
+1 um and 10 um rungs -- the legs inside the band.  Both builds agree on the
+set.  On those two legs the relative L2 against the analytic Gaussian goes from
+2.3496e-03 to 1.4568e-14 and from 2.3490e-04 to 1.1822e-14.
+
+CAVEAT, stated both ways: the oracle that measured the law is PARAXIAL, so it
+can say how far the exact kernel departs from the paraxial truth and cannot say
+which kernel is the more physical.  That is why an explicit
+`gap_kernel='exact'` is honoured over `tau` and why the opt-out is one
+assignment.
+
+**Migration.** Set `lumenairy.propagators.carrier._GAP_KERNEL_ACCURACY_TAU =
+None` to restore 5.48.x bit for bit: the condition is then not evaluated at
+all, nothing is measured, nothing allocated, and `stats_out` does not grow the
+`'kernel_departure'` key (proved archive-to-archive on 14 opt-out keys per
+build).  Affected calls are Collins-transport carrier legs and the readouts and
+chains that reach them -- `propagate_carrier_referenced` with
+`transport='collins'`, `carrier_referenced_focus_readout` via
+`propagate_traced_carrier_chain` with `transport='collins'`, and
+`propagate_traced_carrier_chain_multi` -- and only where the leg's `z_eff`
+exceeds the band above, which is checkable per design from the envelope's own
+half-angle without running anything.  A leg that never approaches its carrier's
+`A = 0` plane cannot be affected.  To keep the exact kernel on such a leg
+regardless, pass `gap_kernel='exact'` explicitly; to change how much accuracy
+the rule buys, set `tau` to the relative-L2 budget you want.
+
 ## [5.48.1] — 2026-09-20
 
 The publish verification of the `v5.48.0` tag stopped in its slow lane, so 5.48.0

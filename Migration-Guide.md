@@ -7,11 +7,12 @@ migration recipe -- "I bumped from v4.X to v4.Y, what do I change?".
 
 ## Versions covered
 
-v4.13 through v5.47.  Sections are in version order; the newest is
-[5.47.0 -- adversarial audit remediation, Wave 4 (2026-09-14)](#5470----adversarial-audit-remediation-wave-4-2026-09-14)
-at the end of this file; the 5.46.0 section before it is the largest single
-batch of behaviour changes the library has shipped, and 5.47.0 is the wave that
-implemented what it deferred.
+v4.13 through v5.49.  Sections are in version order; the newest is
+[5.49.0 -- the default flips (2026-09-20)](#5490----the-default-flips-2026-09-20)
+at the end of this file, which is where the settings the 2026-09-11 audit
+measured but did not move were decided; the 5.46.0 section is the largest
+single batch of behaviour changes the library has shipped, and 5.47.0 is the
+wave that implemented what it deferred.
 
 Only behavior shifts that **require user code changes** or **change
 numerical answers** are listed.  Pure additions (new functions, new
@@ -1774,3 +1775,59 @@ no-op on the fixed polynomial space; the wall-corner cure is the hp mesh), Levin
 the RCWA Toeplitz inverses (12 to 20 times slower and two decades less accurate than the
 shipped inverse), the chessboard FFT-shift identity (bit-identical only on power-of-two
 grids).
+
+---
+
+## 5.49.0 -- the default flips (2026-09-20)
+
+The 2026-09-11 adversarial audit measured a set of numerical defaults that read
+better than the shipped ones and shipped every one of them switchable with the
+shipped default unchanged, recording the measurements in
+`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/MAINTAINER_DECISIONS_2026_09.md`.
+5.49.0 is the release in which the maintainer took those decisions.  Every item
+below moves what an unmodified call returns, and every one of them leaves the
+previous behaviour ONE keyword or ONE constant away, byte-identical under it
+(proved against a `git archive` of the parent commit, on both builds).
+
+### `gap_kernel='auto'` now falls back to `'fresnel'` near a carrier focus
+
+**What moved.**  `lumenairy.propagators.carrier._GAP_KERNEL_ACCURACY_TAU`
+defaults to `1e-4` instead of `None`.  On a Collins carrier leg, `'auto'` now
+compares the exact-kernel refinement's PREDICTED departure from the paraxial
+truth, `sqrt(3/2) * k * |z_eff| * theta_env^4 / 8`, against that tolerance, and
+takes the paraxial kernel above it.  `theta_env` is the ENVELOPE's analytic
+`1/e^2` half-angle, not the beam's.
+
+**Who is affected.**  Only legs whose reduced frame `z_eff = B/A` is large,
+i.e. legs close to the carrier's own `A = 0` plane.  The threshold is closed
+form -- `|z_eff| > 8 tau / (sqrt(3/2) k theta_env^4)` -- so a design can be
+checked without running anything.  Measured: on the VERIFY-B4 F3 fixture
+(`w = 0.3 mm`, `lambda = 1.064 um`) the rule fires within **23.5 um** of the
+focus and nowhere else; on the Wave-5 hygiene-2 fixture it fires within
+**1.54 um** of that carrier's `A = 0` plane, which its published ladder never
+reaches.  Entry points that can reach such a leg:
+`propagate_carrier_referenced`, `propagate_traced_carrier_chain`,
+`propagate_traced_carrier_chain_multi` and
+`carrier_referenced_focus_readout`, each with `transport='collins'`.
+
+**What it buys.**  On the two F3 rungs inside the band the relative L2 against
+the analytic Gaussian goes from 2.3496e-03 to 1.4568e-14 (1 um) and from
+2.3490e-04 to 1.1822e-14 (10 um).  The k4 wrap guard (the stats key of the same name) does not
+fire at either
+-- it bounds representability, not accuracy.
+
+**Recipe -- keep 5.48.x exactly:**
+
+```python
+import lumenairy.propagators.carrier as _carrier
+_carrier._GAP_KERNEL_ACCURACY_TAU = None      # the rule is not evaluated at all
+```
+
+**Recipe -- keep the exact kernel on one leg:** pass `gap_kernel='exact'`.  An
+explicit `'exact'` is honoured over `tau`; only `'auto'` falls back.
+
+**Caveat, stated both ways.**  The oracle behind the law is paraxial.  It
+measures how far the exact kernel departs from the paraxial truth; it cannot
+say which kernel is the more physical.  On a leg where the exact kernel is the
+better physics this rule trades accuracy for agreement with that oracle, which
+is why the opt-out is one line and an explicit request is never overridden.

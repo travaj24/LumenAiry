@@ -668,17 +668,21 @@ def test_the_sziklas_transport_loses_the_focus_and_the_collins_one_does_not(
 # fallback for gap_kernel='auto' near a focus (VERIFY-WAVE5-HYGIENE2)
 # ===========================================================================
 #
-# WHAT IS SHIPPED: nothing.  ``carrier._GAP_KERNEL_ACCURACY_TAU`` is ``None``,
-# the condition is not evaluated, and the leg is 5.47.0 to the byte -- proved
-# archive-to-archive over 245 fixture keys on both builds.  The rule below is
-# ARMED by setting that one constant to a float.
+# THE DECISION WAS TAKEN 2026-09-20 (WP-C5 item 1, ledger 1.5 / 4.3):
+# ``carrier._GAP_KERNEL_ACCURACY_TAU`` now defaults to ``1e-4`` and the rule
+# RUNS.  These ids are unchanged in what they measure -- the law, the inertness
+# of this ladder, the two F3 rungs the rule catches -- because they were
+# written as measurements of what the rule WOULD do, and what it would do is
+# now what it does.  What moved is the arm that asserted the shipped value:
+# ``None`` is still one assignment away and is still the byte-identical
+# setting, and that is now pinned as the OPT-OUT rather than as the default.
 #
-# WHY IT IS A DECISION AND NOT A FIX.  The oracle is PARAXIAL, so it can say
-# how far the exact kernel departs from the paraxial truth and cannot say which
-# kernel is more physical; on a leg where the exact kernel IS the better
-# physics the rule would trade accuracy for agreement with an oracle.  And it
-# moves answers on any leg it fires on.  These ids measure what the rule WOULD
-# do so the decision can be taken on numbers.
+# WHY IT IS STILL A DECISION AND NOT A FIX.  The oracle is PARAXIAL, so it can
+# say how far the exact kernel departs from the paraxial truth and cannot say
+# which kernel is more physical; on a leg where the exact kernel IS the better
+# physics the rule trades accuracy for agreement with an oracle.  That is why
+# an EXPLICIT ``gap_kernel='exact'`` is never overridden and why ``None``
+# restores 5.48.x bit for bit.
 
 #: VERIFY-B4 F3's fixture, the one whose ladder actually approaches ``A = 0``.
 _F3 = dict(lam=1.064e-6, n=1024, dx=4e-6, w=0.30e-3, R=-40e-3,
@@ -772,20 +776,19 @@ def test_the_departure_law_predicts_what_the_refinement_actually_changes():
         f"law if both are the same reading")
 
 
-def test_the_shipped_default_does_not_evaluate_the_accuracy_rule_at_all():
+def test_tau_none_does_not_evaluate_the_accuracy_rule_at_all(monkeypatch):
     """OFF means OFF: no measurement, no extra key, no changed decision.
 
-    The switch is ``None``, so ``'auto'`` resolves by the ``k4``
-    REPRESENTABILITY gate alone -- which on F3's worst rung sits 2 decades
-    below its bar while the departure is 2.3e-03, the very gap the rule would
-    close.  ``stats_out`` must not grow a ``kernel_departure`` key either: the
-    stats dict is a bit-identity key of this campaign's probes.
+    ``None`` is the OPT-OUT since 5.49.0 (it was the shipped default through
+    5.48.x).  With it the leg resolves by the ``k4`` REPRESENTABILITY gate
+    alone -- which on F3's worst rung sits 2 decades below its bar while the
+    departure is 2.3e-03, the very gap the rule closes.  ``stats_out`` must
+    not grow a ``kernel_departure`` key either: the stats dict is a
+    bit-identity key of this campaign's probes, so publishing one under the
+    opt-out would move a digest without moving a field.
     """
     from lumenairy.propagators import carrier as CA
-    assert CA._GAP_KERNEL_ACCURACY_TAU is None, (
-        "the accuracy-keyed fallback is ARMED in the shipped source.  It is a "
-        "maintainer decision that moves answers near a focus and needs a "
-        "Migration note; it is not this package's to take.")
+    monkeypatch.setattr(CA, '_GAP_KERNEL_ACCURACY_TAU', None)
     st = {}
     _f3_leg(1e-6, 'auto', st)
     assert st['kernel'] == 'exact'
@@ -794,6 +797,35 @@ def test_the_shipped_default_does_not_evaluate_the_accuracy_rule_at_all():
         f"the k4 representability gate reads {st['k4']:.4e} here, not the "
         f"~9.1e-03 measured; the 'two decades below its bar while the "
         f"departure is 2.3e-03' reading is what makes this a decision")
+
+
+def test_the_shipped_default_arms_the_rule_at_tau_1e_4():
+    """THE DEFAULT, as shipped from 5.49.0.
+
+    Read from the running module rather than from the source text, and
+    immediately exercised: F3's 1 um rung -- the leg the whole decision is
+    about -- must resolve to ``'fresnel'`` and must publish the departure it
+    was decided on.  Both halves matter: a constant that had been armed but
+    disconnected would satisfy the first assertion alone.
+
+    The bar on ``tau`` is an IDENTITY (the decision is the number), and the
+    bar on the departure is two-sided and derived at runtime from the reading
+    itself: it must exceed ``tau`` by more than 10x, which is what makes the
+    fallback a decision rather than a coin toss at the threshold.  MEASURED
+    2026-09-20 on both builds: 2.3496e-03, i.e. 23.5x tau.
+    """
+    from lumenairy.propagators import carrier as CA
+    assert CA._GAP_KERNEL_ACCURACY_TAU == 1e-4, (
+        f"the shipped tau is {CA._GAP_KERNEL_ACCURACY_TAU!r}; the maintainer "
+        f"decision of 2026-09-20 (ledger 1.5 / 4.3) is 1e-4, and every band "
+        f"quoted in this file and in Migration-Guide.md is that number")
+    st = {}
+    _f3_leg(1e-6, 'auto', st)
+    assert st['kernel'] == 'fresnel'
+    assert st['kernel_departure'] > 10.0 * CA._GAP_KERNEL_ACCURACY_TAU, (
+        f"F3's 1 um rung reads a departure of {st['kernel_departure']:.4e} "
+        f"against tau {CA._GAP_KERNEL_ACCURACY_TAU:.0e}; the fallback here is "
+        f"supposed to clear the threshold by more than a decade")
 
 
 def test_tau_1e_4_leaves_this_ladder_inert_and_catches_f3(monkeypatch,

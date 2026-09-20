@@ -1681,14 +1681,16 @@ _TRANSPORTS = ('sziklas', 'collins')
 #: NOT a geometric margin -- the radii are read from the field on every call.
 _COLLINS_TAIL_FRAC = 1e-6
 
-#: MAINTAINER SWITCH, DEFAULT OFF: an ACCURACY-keyed fallback for
-#: ``gap_kernel='auto'`` near a geometric focus.  ``None`` is the shipped
-#: value and reproduces 5.47.0's behaviour exactly -- the condition below is
-#: not evaluated at all, so nothing measured, nothing allocated, no byte
-#: moved.  Setting it to a float (the measurement below says ``1e-4``) ARMS
-#: the rule with that ``tau``.  One line.
+#: The ACCURACY-keyed fallback for ``gap_kernel='auto'`` near a geometric
+#: focus, ON by default since 5.49.0 with ``tau = 1e-4`` (the maintainer's
+#: decision of 2026-09-20 on ledger items 1.5 / 4.3).  ``'auto'`` drops to
+#: ``'fresnel'`` on a leg whose PREDICTED exact-kernel departure exceeds
+#: ``tau``; an EXPLICIT ``gap_kernel='exact'`` is still honoured, and setting
+#: this back to ``None`` restores 5.48.x bit for bit -- the condition is then
+#: not evaluated at all, so nothing is measured, nothing allocated and no byte
+#: moved.  One line either way.
 #:
-#: WHAT IT WOULD DO, AND WHY IT IS NOT ON.  The existing ``k4`` gate bounds
+#: WHAT IT DOES, AND WHY THE DEFAULT MOVED.  The existing ``k4`` gate bounds
 #: REPRESENTABILITY -- whether the exact kernel's impulse response wraps the
 #: reduced frame -- and it is the right gate for what it bounds.  It does not
 #: bound ACCURACY, and near a geometric focus the two part company: MEASURED
@@ -1706,19 +1708,31 @@ _COLLINS_TAIL_FRAC = 1e-6
 #: phase over a 2-D circular Gaussian; it predicts VERIFY-B4 F3's 2.3497e-03
 #: to a ratio of 1.00002 and the 498x between the two fixtures to four digits.
 #:
-#: TWO REASONS IT IS THE MAINTAINER'S DECISION AND NOT THIS PACKAGE'S.  The
-#: oracle is PARAXIAL, so it can say how far the exact kernel departs from the
-#: paraxial truth and cannot say which kernel is more physical -- on a leg
-#: where the exact kernel IS the better physics, this rule trades accuracy for
-#: agreement with an oracle.  And it MOVES ANSWERS on any leg it fires on,
-#: which needs a Migration note.  The chain's own
+#: WHAT ``tau = 1e-4`` BUYS, AND THE BAND IT FIRES IN.  ``tau`` is a
+#: RELATIVE-L2 budget on the field, a tenth of a per-mille, and because the
+#: departure is linear in ``|z_eff|`` the rule is a NEAR-FOCUS rule with a
+#: closed-form band: it fires only where
+#: ``|z_eff| > 8 tau / (sqrt(3/2) k theta_env^4)``.  Measured 2026-09-20 on
+#: both builds (``validation/probe_c5_three_defaults/``): the hygiene-2 ladder
+#: is INERT at every one of its nine rungs (worst departure 4.72e-06, 1.3
+#: decades under tau) because its carrier focus sits 31.66 um beyond the waist
+#: the ladder walks to; VERIFY-B4 F3's ladder, which does approach ``A = 0``,
+#: falls back inside 23.5 um of its focus and keeps the exact kernel outside
+#: it (2.35e-03 at 1 um and 2.35e-04 at 10 um are over tau; 2.34e-05 at 100 um
+#: is under).  On the F3 fixture the fallback replaces a 2.35e-03 relative
+#: departure from the analytic Gaussian with 1.7e-14.
+#:
+#: THE CAVEAT, BOTH WAYS.  The oracle that measured the law is PARAXIAL, so it
+#: can say how far the exact kernel departs from the paraxial truth and cannot
+#: say which kernel is more physical.  On a leg where the exact kernel IS the
+#: better physics this rule trades accuracy for agreement with the paraxial
+#: oracle -- which is why an explicit ``gap_kernel='exact'`` is never
+#: overridden and why ``None`` stays one assignment away.  The chain's own
 #: :data:`_GAP_ENV_PHI_TOL_DEFAULT` = 0.3 is NOT a usable ``tau`` here: it
 #: would need ``z_eff > 9.8e+05 m`` to trip on the hygiene-2 fixture, i.e.
-#: never.  ``tau`` has to be set from the accuracy actually wanted, and
-#: ``tests/unit/test_wave5_h2_near_focus_table.py`` measures what ``1e-4``
-#: buys: the hygiene-2 ladder stays INERT (worst departure 4.7e-06) and
-#: VERIFY-B4 F3's 1 um and 10 um rungs fall back (2.3e-03 and 2.3e-04).
-_GAP_KERNEL_ACCURACY_TAU = None
+#: never.  ``tests/unit/test_wave5_h2_near_focus_table.py`` and
+#: ``tests/unit/test_c5_three_defaults.py`` measure both sides of the band.
+_GAP_KERNEL_ACCURACY_TAU = 1e-4
 
 #: ``sqrt(<u^8>)`` under the spectral weight ``exp(-2 u^2)`` of a 2-D circular
 #: Gaussian -- the RMS-vs-peak moment of a quartic phase, and the constant of

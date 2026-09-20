@@ -1,7 +1,7 @@
 <!-- lumenairy-history-doc
 module: lumenairy/propagators/carrier.py
-ast_sha256: 82097682bbf05ac499b0af27dd04d2627edfd1144b9b8b2c0f936644bb4b03fd
-token_sha256: fa79a535df889a1e68fcae26f5195b1d5194a09556e3a523e9e55ee2b722ae16
+ast_sha256: 824e2d7aae55f4a1ea3510f81ba374b406cdea15a96f3f25b92d3c9285b45820
+token_sha256: 4a1f3bdf8350d001641dd6a69591ef9197db25193a6da2e6f665f430421cca90
 pre_relocation_lines: 11602
 recorded_by: WP-A17 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
@@ -15,6 +15,7 @@ re_recorded: 2026-09-14 -- Wave-5 item D (CI run 34914295323): DIGEST-SCHEME cha
 re_recorded: 2026-09-14 -- Wave 5 item D (handoff 4.4): the warning chain is swept onto lumenairy.elements._lens_kernels.caller_stacklevel().  Every warnings.warn literal stacklevel and every threaded literal below it is retargeted to the computed level, which walks out to the first frame outside the package, so the attribution no longer depends on how deep the warn site sits.  MEASURED before the sweep (validation/probe_known_reds/probe_carrier_attribution.py): the tilt-inert notice named the caller when propagate_carrier_referenced was called directly and named library source when the identical site was reached through carrier_referenced_focus_readout -- 2 of 4 emissions misattributed, 0 of 4 after.  No physics changed.
 re_recorded: 2026-09-19 -- H2-2 (audit item 18): ONE xp threaded through the _collins_transport chain (_fft2_pair, _as_c_order, _is_traced; _collins_axis_chirp on bld, _collins_exact_kernel_correction through _tf_phase_to_H); NumPy path byte-identical (84/84 archive-to-archive, both builds)
 re_recorded: 2026-09-19 -- Round 2 (VERIFY-WAVE5-HYGIENE2): _exact_dispersion_phase consolidates the three transcriptions of the non-paraxial dispersion (V-D22); _collins_carrier_leg and _collins_input_box run in the field's own namespace so the port reaches the public transport='collins' leg (V-D3); traced scalars, a closed-over jnp constant and the astigmatic 'auto' case are refused or documented by name (V-D11/V-D12/V-D13); the accuracy-keyed near-focus fallback is added behind _GAP_KERNEL_ACCURACY_TAU = None, off by default. NumPy path byte-identical archive-to-archive, 245/245 keys on both builds.
+re_recorded: 2026-09-20 -- WP-C5 item 1 (ledger 1.5 / 4.3): _GAP_KERNEL_ACCURACY_TAU defaults to 1e-4, so gap_kernel='auto' resolves to 'fresnel' where the predicted exact-kernel departure sqrt(3/2) k |z_eff| theta_env^4/8 exceeds tau.  One constant; the rule itself is unchanged, an explicit gap_kernel='exact' is still honoured, and None restores 5.48.x bit for bit (archive-to-archive: 46 of 48 digested legs identical, the two that move are VERIFY-B4 F3's 1 um and 10 um rungs, both inside the derived band)
 -->
 
 # Version history -- `lumenairy/propagators/carrier.py`
