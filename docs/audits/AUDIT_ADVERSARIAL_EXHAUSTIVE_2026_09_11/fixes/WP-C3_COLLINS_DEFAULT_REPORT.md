@@ -214,13 +214,16 @@ SELECTS that route.  Nothing is accepted and ignored -- the key does exactly
 what it says -- and the stage publishes
 `readout_route_reason='stop_plane_key'`.
 
-This is not a style preference; it is the blast radius.  MEASURED 2026-09-20:
-with the refusal in place and the default flipped, **30 ids** across
+This is not a style preference; it is the blast radius.  MEASURED 2026-09-20,
+by matching the refusal's own message across the run's report: with the
+refusal in place and the default flipped, **38 of the 54 reported failure
+sections carried that message**, and so did all 22 fixture-setup ERRORS (one
+`d2` module fixture, which every id in its file depends on).  They span
 `test_niche_d3_guards`, `_d4_dgrating`, `_d5_dx_flatness_gate`,
-`_c1_consolidation`, `_d2_chain_multi`, `_r8_tiltaware_chain_api` and
-`_r9_highna_final_leg` raised -- every one of them a caller who legitimately
-wants the standoff-based readout and had no reason to know the transport
-keyword had moved underneath them.
+`_c1_consolidation`, `_d2_chain_multi`, `_r8_tiltaware_chain_api`,
+`_r9_highna_final_leg` and `test_audit2609_a6_verify_carrier` -- every one of
+them a caller who legitimately wants the standoff-based readout and had no
+reason to know the transport keyword had moved underneath them.
 
 ### 1.6 The CuPy arm
 
@@ -376,17 +379,23 @@ a `_collins_*` helper (grep, not memory), plus `test_*carrier*`, the
 near-focus H2-3 file and the collins-JAX file.  **54 files, 1846 collected
 ids.**
 
-**The first full run after the flip read 62 failed + 22 errors.**  Two of
-those groups were CODE defects the flip exposed rather than fixtures to
-re-pin; they are sections 1.3 and 1.5 and they account for **46 of the 84**.
-What is left is restated below, and nothing is loosened.
+**The first full run after the flip read 62 failed + 22 errors.**  Two
+groups were CODE defects the flip exposed rather than fixtures to re-pin --
+sections 1.3 and 1.5 -- and between them they are most of it.  What is left
+is restated below, and nothing is loosened.
 
-### 4.1 The two code fixes, by the ids they closed
+### 4.1 The two code fixes, by what they closed
 
-| defect | ids it was failing | fix |
+Counted by matching each defect's own signature across the run's report,
+which prints 54 detailed failure sections for the 62 failed ids
+(parametrised repeats share a section) plus 22 setup errors:
+
+| defect | what it was failing | fix |
 |---|---|---|
-| the stop-plane keys refused (1.5) | 30, over 7 files | the keys SELECT the Sziklas readout and the stage says so |
-| no fallback past the focus / astigmatic / collimated (1.3) | 16, over 3 files | the fallback is the Sziklas TRANSPORT, not one branch of it |
+| the stop-plane keys refused (1.5) | **38 of the 54 sections**, plus all 22 setup errors, over 8 files | the keys SELECT the Sziklas readout and the stage says so |
+| no fallback past the focus (1.3) | 4 of the remaining 16 (`test_focus_crossing_*`, `test_carrier_referenced`) | the fallback is the Sziklas TRANSPORT, not one branch of it |
+
+The other 12 sections are restatements, and the table below is all of them.
 
 ### 4.2 Every test that was restated, and its classification
 
