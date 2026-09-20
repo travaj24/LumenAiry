@@ -596,7 +596,7 @@ under test.
 
 | what | Windows py3.14 | WSL py3.12 |
 |---|---|---|
-| the 61-file sweep -- 34 aperture-touching files + census + walkers + dispatcher pins + public API + doc consistency + A17 + `test_audit_except_budget.py` + both C1 files | **2782 passed, 14 skipped, 0 failed** in 29:36 | see below |
+| the 61-file sweep -- 34 aperture-touching files + census + walkers + dispatcher pins + public API + doc consistency + A17 + `test_audit_except_budget.py` + both C1 files | **2782 passed, 14 skipped, 0 failed** in 29:36 | **2771 passed, 21 skipped, 4 failed** in 31:05, all four premise-gated (below) |
 | `tests/unit/test_verify_c1_gray_edge.py` | **26 passed, 2 xfailed** in 30.1 s | **26 passed, 2 xfailed** in 30.9 s |
 | `tests/unit/test_c1_gray_edge_default.py` (inside the sweep; also standalone under every mutant) | 17 passed | 17 passed |
 | `tests/unit/test_audit2609_a17_history_lint.py` | **5 passed** | (in sweep) |
@@ -609,11 +609,29 @@ under test.
 | `python -m mypy` (no args) | **Success: no issues found in 33 source files** | -- |
 | `python scripts/record_history_fingerprints.py --check` | **OK: every history document matches its module** (rc 0) | -- |
 
-The WSL sweep of the same 61 files was launched and its result is recorded in
-the final hand-off; the WSL-only walker reds WP-C1 documents (three ids that
-shell out to `git` against a Windows worktree path) are an environment
-condition the suite recognises in its own failure text, not a finding, and they
-reproduce on the base tree.
+**The four WSL reds, premise-gated, none a library finding** -- and note that
+the Windows lane is now 0 failed, because the box's editable install has since
+been refreshed (`test_public_api.py` is 9 passed there and
+`importlib.metadata.version('lumenairy')` reads `5.48.1`):
+
+* `test_public_api.py::test_installed_metadata_version_matches_source_version`
+  -- the WSL venv's editable install reads **5.11.0** against a 5.48.1 source.
+  It fails identically on a clean `git archive 49ddf4bd` extraction under WSL,
+  so it predates this work package; the remedy is `pip install -e .` in
+  `~/lumvenv`, which is the box's to do.
+* `test_v5_3_2_walker_source_line_citation.py::test_v18_5_the_5_47_0_block_citations_name_the_right_lines`
+  and `::test_v18_5_companion_reanchor_tool_exists_and_covers_the_cited_files`
+  -- both shell out to `git`, which from WSL cannot resolve this worktree's
+  `.git` file (it points at a Windows path).  Both fail identically on the base
+  tree under WSL and both are green on the Windows lane on this commit.
+* `test_v5_2_3_walker_changelog_content.py::test_v16_synthetic_fabrication_is_caught`
+  -- same root: the walker returns **rc = 2** ("the git plumbing failed")
+  where the test expects rc = 1 ("fabrication flagged").  Green on Windows.
+  Worth a separate, pre-existing note: this id's failure message reads *"This
+  means the walker is silently passing fabrications -- a regression in the V16
+  contract itself"*, which is wrong for rc = 2; the id conflates "git failed"
+  with "fabrication not flagged", and only the rc value distinguishes them.
+  It is not WP-C1's to fix.
 
 ---
 
