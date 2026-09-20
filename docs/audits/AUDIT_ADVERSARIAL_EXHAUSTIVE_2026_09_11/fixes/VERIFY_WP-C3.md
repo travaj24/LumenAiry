@@ -1015,8 +1015,8 @@ by driving the helper's own body with each transport in turn:
 
 | transport | ARM 1 (`launch=False`, the fail-before) | ARM 2 (`launch=True`, the claim) |
 |---|---|---|
-| `'sziklas'` (what the branch names) | `max|E6-E4| = 0.000000e+00` — inert, as claimed | `||E6|| = 3.782241e-02`, `||E6-E4|| = 8.529958e-01`, **moved = 22.552654** against a bar of `> 1.0` |
-| `'collins'` (the flipped default) | `max|E6-E4| = 0.000000e+00` | `||E6|| = 6.347786e+01`, `||E6-E4|| = **0.000000e+00**`, **moved = 0.000000** |
+| `'sziklas'` (what the branch names) | `max\|E6-E4\| = 0.000000e+00` — inert, as claimed | `\|\|E6\|\| = 3.782241e-02`, `\|\|E6-E4\|\| = 8.529958e-01`, **moved = 22.552654** against a bar of `> 1.0` |
+| `'collins'` (the flipped default) | `max\|E6-E4\| = 0.000000e+00` | `\|\|E6\|\| = 6.347786e+01`, `\|\|E6-E4\|\| = **0.000000e+00**`, **moved = 0.000000** |
 
 So on the flipped default the test does not silently pass — it FAILS, and it
 fails by reporting the residual-eikonal degree as INERT, which is its own
