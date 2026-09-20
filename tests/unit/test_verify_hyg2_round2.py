@@ -22,8 +22,8 @@ WHY EACH ONE EXISTS, in one line:
 * D-4  the evanescent clamp is only reached at a sub-wavelength pitch, which
        no shipped fixture uses, and the evanescent REFUSAL beside it is
        gated only by a token census;
-* D-5  the cross-backend bar is built on an FFT spread that reads EXACTLY 0.0
-       on both builds, so what is actually asserted against is its floor;
+* D-5  the cross-backend bar reduces to its ``32 * eps`` floor on both
+       builds, so it is not today a function of the two backends it names;
 * D-6  ``_GAP_KERNEL_ACCURACY_TAU = None`` is asserted by reading the constant
        and by the absence of a stats key, never by the rule not RUNNING.
 """
@@ -376,25 +376,37 @@ def test_the_accuracy_rule_is_never_executed_while_tau_is_none(monkeypatch):
 # D-5.  A cross-backend bar built on a quantity that reads exactly zero
 # ===========================================================================
 
-def test_the_cross_backend_bar_is_not_built_on_a_quantity_that_reads_zero():
-    """The FFT spread the shipped bar is "measured from" is EXACTLY 0.0 here.
+def test_the_cross_backend_bar_is_the_legs_own_last_bit_sensitivity():
+    """A bar derived from a quantity that is not the `32 * eps` FLOOR.
 
     ``test_wave5_h2_collins_jax.py::_fft_spread_bar`` takes one forward
-    transform through each backend and multiplies their relative difference by
-    a chain depth, with ``32 * eps`` as a floor "because a spread measured as
-    exactly zero ... does happen".  MEASURED 2026-09-20: it does not merely
-    happen, it is the READING on both builds and at every shape tried --
-    NumPy's pocketfft and JAX's CPU transform agree bit for bit -- so the
-    quantity actually asserted against is the floor and nothing about the
-    running build's FFTs enters it.
+    transform through each backend, multiplies by a chain depth of 6, and
+    floors the result at ``32 * eps``.  MEASURED 2026-09-20, the shipped
+    fixture, both builds:
 
-    A quantity that does NOT read zero is the leg's own response to a LAST-BIT
-    change of its input, which is precisely what a cross-backend difference
-    is.  MEASURED: 3.454e-16 (WIN) / 3.469e-16 (WSL), against a measured
-    NumPy-vs-JAX difference of 5.486e-16 (WIN) / 4.029e-16 (WSL) through the
-    public Collins leg.  This id asserts the comparison against THAT, with the
-    two-sided half (the bar must sit decades below the smallest real signal,
-    the exact-vs-paraxial kernel departure, measured 3.078e-05).
+        library ``_fft2`` vs ``jnp.fft.fft2``   2.685e-16 (WIN) 2.509e-16 (WSL)
+        ``np.fft.fft2``   vs ``jnp.fft.fft2``   EXACTLY 0.0 on both
+        ``_fft_spread_bar(env)``                7.105427357601002e-15, i.e.
+                                                ``32 * eps`` EXACTLY, on both
+
+    So the floor is what is asserted against -- 4.41x above ``6 x`` the
+    measured spread, which is the ratio the author's V-D16 entry already
+    records -- and the whole of the nonzero reading comes from pyFFTW sitting
+    on the NumPy side: the two libraries' own transforms agree BIT FOR BIT.
+    Nothing is wrong with that bar; it is simply not, today, a function of the
+    backends it names.
+
+    This id asserts the same comparison against a quantity that is a property
+    of the LEG rather than of which FFT wrapper NumPy happens to use: the
+    leg's own response to a one-ULP change of its input, which is exactly what
+    a cross-backend difference IS.  MEASURED: 3.454e-16 (WIN) / 3.469e-16
+    (WSL), against cross-backend differences of 5.486e-16 / 4.029e-16 through
+    the public Collins leg.  Two-sided, as the shipped id is: the bar must
+    also sit decades below the smallest real signal on the fixture, the
+    exact-vs-paraxial kernel departure at 3.078e-05.
+
+    The PREMISE is the shipped id's: the two arms must be two backends.  It
+    is what M10 (the V-D3 regression) trips.
     """
     jnp = pytest.importorskip("jax.numpy")
     jax = pytest.importorskip("jax")
