@@ -502,22 +502,61 @@ worker; that is a policy decision.  Nothing implementing it ships; the
 prototype lives in the probe behind a switch defaulting off.  Windows could
 not be measured (the `sigign` wedge is POSIX-only by construction).
 
-### 4.5 PENDING: the multibranch arbiter's bar and the accept criterion (WP-B7c round 3)
+### 4.5 MEASURED, verification in flight: the multibranch arbiter's bar and the accept criterion (WP-B7c round 3)
 
-The pixel-halving arbiter (round 2) refuses a multibranch field whose
-continuity reading `p_out(dx) / p_out(dx/2)` exceeds `_PIXEL_CONTINUITY_MAX = 1.06`.
-VERIFY-B7c round 2 confirmed the mechanism and the bit identity (44 identical,
-0 moved, 6 newly refused of 57) but found that the 1.0683x gap the bar was
-centred in does not survive a wider population: on 328 planes over 7 optics the
-gap is 1.0038x, the refusal-side margin 1.00051x, and two refusals at fidelity
->= 0.95 each carry a 10 % energy error, so whether they are "false" depends on
-the accept criterion.  Being measured: a >= 12-optic population with a
-full-radius oracle, the cost of the bar at 1.04 / 1.06 / 1.08 and of a bar
-derived from the converged reading's own spread (0.9995 to 1.0002, not exactly
-1).  Decision owed: the accept criterion (what fidelity or energy error counts
-as a wrong field), and with it the bar.
+What it is.  The multibranch traced lens renders its field twice, at the
+caller's pitch and at half of it, and refuses the field when the ratio of the
+two renders' output power (the CONTINUITY reading) exceeds
+`_PIXEL_CONTINUITY_MAX = 1.06`; a converged quadrature reads close to 1.
+Round 2 centred the bar in a 1.07x gap between the returned and refused
+populations; its verification found the gap shrinks on a wider population.
 
----
+Measured by round 3 (WP-B7c_ROUND3_REPORT.md; 1304 oracle-scored planes on 16
+prescriptions, 394 on the fold ring, Windows; the decision gate and the
+mutation matrix on both builds): the gap is a reading of the z ladder, not a
+property of the quantity -- refining the same optics' ladders three times
+takes the fold-ring gap from 1.37x to 1.03x to 1.0045x with no floor.  The
+fidelity populations now OVERLAP on the fold ring: the worst returned field
+scores 0.9421 (an NA-0.41 plano-convex whose whole fold ring is returned at
+0.94 to 0.96 carrying 1.24x to 1.27x the oracle's energy) against the best
+refused field at 0.9520.  So which fields count as wrong is an ACCEPT
+CRITERION the guard cannot supply.  The bar-cost table on the fold ring:
+
+| bar | false refusals at fidelity 0.95 | misses at 0.95 |
+|---|---|---|
+| 1.0018 (1 + 3 x converged spread) | 63 | 1 |
+| 1.0059 (1 + 10 x spread) | 29 | 1 |
+| 1.04 | 5 | 2 |
+| 1.06 (shipped) | 1 | 2 |
+| 1.08 | 1 | 6 |
+
+The derived centre of the bar's own gap over all 1304 planes is 1.0600253,
+so the shipped 1.06 IS the derived centre to three figures, and it beats each
+neighbour by about five-fold on one axis; it was not moved (the two-sided
+margin, 0.047 %, is below the 1 % rule, and moving to the fold-ring-only
+centre 1.0619 changes no fold-ring decision and returns one more wrong
+field).  Spread-derived bars cost 9 to 63 false refusals because on healthy
+fold planes the converged reading spreads 36x more than on control planes.
+Bit identity archive to archive over 157 cases on 17 optics: 116 identical,
+0 moved, 41 refused on both.
+
+Decision owed 1: the accept criterion.  Recommendation (medium confidence):
+fidelity 0.95 against the exact-quadrature oracle, and keep the bar at 1.06
+(1 false refusal, 2 misses over 394 fold-ring planes).
+
+Decision owed 2: whether a LOSS arm should refuse on the FALLBACK route.  On
+the 476 fallback-route planes the shipped bars return, 263 score below 0.95;
+the library's existing continuity-loss reading (a ratio below 1/1.06) flags
+192 of them and not one right field, and a tighter power-loss bar (below
+0.889) flags 254 with 9 wrong fields kept; 13 planes stay unordered, nine of
+them on the new asphere at its non-monotone focal locus.  The physical
+argument for not refusing on a loss (the completion replaces the dark side)
+is false exactly on the fallback route.  Round 3 shipped the scope of the
+reading as a three-value enum in the diagnostics and did not change any
+refusal.  Recommendation (medium confidence): yes, on the fallback route
+only, using the existing continuity-loss reading; a verification of round 3
+is measuring whether any fallback plane exists where that arm would refuse a
+right field.
 
 ## 5. Not decisions, recorded here so the ledger closes
 
