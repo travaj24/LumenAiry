@@ -1,0 +1,1410 @@
+{
+ "A-public-names-with-transport": [
+  "propagate_carrier_referenced",
+  "propagate_traced_carrier_chain",
+  "propagate_traced_carrier_chain_multi"
+ ],
+ "A-signatures": {
+  "carrier_referenced_aperture": {
+   "exported": true,
+   "takes_transport": false,
+   "transport_default": null
+  },
+  "carrier_referenced_envelope": {
+   "exported": true,
+   "takes_transport": false,
+   "transport_default": null
+  },
+  "carrier_referenced_exact_focus_readout": {
+   "exported": true,
+   "takes_transport": false,
+   "transport_default": null
+  },
+  "carrier_referenced_fit_radius": {
+   "exported": true,
+   "takes_transport": false,
+   "transport_default": null
+  },
+  "carrier_referenced_focus_readout": {
+   "exported": true,
+   "takes_transport": false,
+   "transport_default": null
+  },
+  "carrier_referenced_reconstruct": {
+   "exported": true,
+   "takes_transport": false,
+   "transport_default": null
+  },
+  "propagate_carrier_referenced": {
+   "exported": true,
+   "takes_transport": true,
+   "transport_default": "'sziklas'"
+  },
+  "propagate_traced_carrier_chain": {
+   "exported": true,
+   "takes_transport": true,
+   "transport_default": "'sziklas'"
+  },
+  "propagate_traced_carrier_chain_multi": {
+   "exported": true,
+   "takes_transport": true,
+   "transport_default": "'sziklas'"
+  }
+ },
+ "B1-step-A0-exact-collins": {
+  "outcome": "ok",
+  "type": "CarrierReferencedField",
+  "value": {
+   "R": "inf",
+   "dx": "5.408935546875e-06",
+   "env": {
+    "dtype": "complex128",
+    "nan": 0,
+    "peak": 0.7980632868058752,
+    "power": 193.28516869949948,
+    "sha": "10f8de809be05d7a",
+    "shape": [
+     64,
+     64
+    ]
+   },
+   "kind": "CarrierReferencedField"
+  },
+  "warnings": []
+ },
+ "B1-step-A0-exact-default": {
+  "message": "carrier_referenced_envelope: R_carrier == 0 (carrier focus).",
+  "outcome": "raised",
+  "type": "ValueError",
+  "warnings": []
+ },
+ "B1-step-A0-exact-sziklas": {
+  "message": "carrier_referenced_envelope: R_carrier == 0 (carrier focus).",
+  "outcome": "raised",
+  "type": "ValueError",
+  "warnings": []
+ },
+ "B1-step-astig-collins": {
+  "outcome": "ok",
+  "type": "CarrierReferencedField",
+  "value": {
+   "R": "(-0.045000000000000005, -0.075)",
+   "dx": "(7.2e-06, 7.499999999999999e-06)",
+   "env": {
+    "dtype": "complex128",
+    "nan": 0,
+    "peak": 1.084452489281846,
+    "power": 104.71976957255265,
+    "sha": "1c2e3c4d6999a29e",
+    "shape": [
+     64,
+     64
+    ]
+   },
+   "kind": "CarrierReferencedField"
+  },
+  "warnings": [
+   [
+    "RuntimeWarning",
+    "propagate_carrier_referenced: the Collins chirp-Z stage is under-sampled -- K3 (period) 1.2133: the chirp-Z sums over the INPUT lattice, so its output repeats with period lambda|B|/dx = 395.6250 um, a"
+   ]
+  ]
+ },
+ "B1-step-astig-default": {
+  "outcome": "ok",
+  "type": "CarrierReferencedField",
+  "value": {
+   "R": "(-0.045000000000000005, -0.075)",
+   "dx": "(7.2e-06, 7.499999999999999e-06)",
+   "env": {
+    "dtype": "complex128",
+    "nan": 0,
+    "peak": 1.0844524871715435,
+    "power": 104.71975511965977,
+    "sha": "a5f6fe8ea6379e21",
+    "shape": [
+     64,
+     64
+    ]
+   },
+   "kind": "CarrierReferencedField"
+  },
+  "warnings": []
+ },
+ "B1-step-astig-sziklas": {
+  "outcome": "ok",
+  "type": "CarrierReferencedField",
+  "value": {
+   "R": "(-0.045000000000000005, -0.075)",
+   "dx": "(7.2e-06, 7.499999999999999e-06)",
+   "env": {
+    "dtype": "complex128",
+    "nan": 0,
+    "peak": 1.0844524871715435,
+    "power": 104.71975511965977,
+    "sha": "a5f6fe8ea6379e21",
+    "shape": [
+     64,
+     64
+    ]
+   },
+   "kind": "CarrierReferencedField"
+  },
+  "warnings": []
+ },
+ "B1-step-collimated-collins": {
+  "outcome": "ok",
+  "type": "CarrierReferencedField",
+  "value": {
+   "R": "inf",
+   "dx": "nan",
+   "env": {
+    "dtype": "complex128",
+    "nan": 4096,
+    "peak": NaN,
+    "power": 0.0,
+    "sha": "5abcb6fd814373a6",
+    "shape": [
+     64,
+     64
+    ]
+   },
+   "kind": "CarrierReferencedField"
+  },
+  "warnings": [
+   [
+    "RuntimeWarning",
+    "invalid value encountered in scalar divide"
+   ],
+   [
+    "RuntimeWarning",
+    "All-NaN slice encountered"
+   ]
+  ]
+ },
+ "B1-step-collimated-default": {
+  "outcome": "ok",
+  "type": "CarrierReferencedField",
+  "value": {
+   "R": "inf",
+   "dx": "8e-06",
+   "env": {
+    "dtype": "complex128",
+    "nan": 0,
+    "peak": 0.9273717432936602,
+    "power": 88.35729338221296,
+    "sha": "8cf5f48234086a84",
+    "shape": [
+     64,
+     64
+    ]
+   },
+   "kind": "CarrierReferencedField"
+  },
+  "warnings": []
+ },
+ "B1-step-collimated-sziklas": {
+  "outcome": "ok",
+  "type": "CarrierReferencedField",
+  "value": {
+   "R": "inf",
+   "dx": "8e-06",
+   "env": {
+    "dtype": "complex128",
+    "nan": 0,
+    "peak": 0.9273717432936602,
+    "power": 88.35729338221296,
+    "sha": "8cf5f48234086a84",
+    "shape": [
+     64,
+     64
+    ]
+   },
+   "kind": "CarrierReferencedField"
+  },
+  "warnings": []
+ },
+ "B1-step-converging-collins": {
+  "outcome": "ok",
+  "type": "CarrierReferencedField",
+  "value": {
+   "R": "-0.045000000000000005",
+   "dx": "7.2e-06",
+   "env": {
+    "dtype": "complex128",
+    "nan": 0,
+    "peak": 1.1257252734226229,
+    "power": 109.08307824964562,
+    "sha": "232e850029058214",
+    "shape": [
+     64,
+     64
+    ]
+   },
+   "kind": "CarrierReferencedField"
+  },
+  "warnings": []
+ },
+ "B1-step-converging-default": {
+  "outcome": "ok",
+  "type": "CarrierReferencedField",
+  "value": {
+   "R": "-0.045000000000000005",
+   "dx": "7.2e-06",
+   "env": {
+    "dtype": "complex128",
+    "nan": 0,
+    "peak": 1.1257252734226229,
+    "power": 109.08307824964562,
+    "sha": "232e850029058214",
+    "shape": [
+     64,
+     64
+    ]
+   },
+   "kind": "CarrierReferencedField"
+  },
+  "warnings": []
+ },
+ "B1-step-converging-sziklas": {
+  "outcome": "ok",
+  "type": "CarrierReferencedField",
+  "value": {
+   "R": "-0.045000000000000005",
+   "dx": "7.2e-06",
+   "env": {
+    "dtype": "complex128",
+    "nan": 0,
+    "peak": 1.1257252734226229,
+    "power": 109.08307824964562,
+    "sha": "232e850029058214",
+    "shape": [
+     64,
+     64
+    ]
+   },
+   "kind": "CarrierReferencedField"
+  },
+  "warnings": []
+ },
+ "B1-step-focuscross-collins": {
+  "outcome": "ok",
+  "type": "CarrierReferencedField",
+  "value": {
+   "R": "inf",
+   "dx": "5.656658935546875e-06",
+   "env": {
+    "dtype": "complex128",
+    "nan": 0,
+    "peak": 0.75924766098305,
+    "power": 176.7267352755859,
+    "sha": "cc646a188634b479",
+    "shape": [
+     64,
+     64
+    ]
+   },
+   "kind": "CarrierReferencedField"
+  },
+  "warnings": []
+ },
+ "B1-step-focuscross-default": {
+  "outcome": "ok",
+  "type": "CarrierReferencedField",
+  "value": {
+   "R": "0.0005000000000000004",
+   "dx": "3.6000000000000003e-06",
+   "env": {
+    "dtype": "complex128",
+    "nan": 0,
+    "peak": 0.758793407962378,
+    "power": 436.33211090605755,
+    "sha": "30294c53d9f0dbde",
+    "shape": [
+     64,
+     64
+    ]
+   },
+   "kind": "CarrierReferencedField"
+  },
+  "warnings": []
+ },
+ "B1-step-focuscross-sziklas": {
+  "outcome": "ok",
+  "type": "CarrierReferencedField",
+  "value": {
+   "R": "0.0005000000000000004",
+   "dx": "3.6000000000000003e-06",
+   "env": {
+    "dtype": "complex128",
+    "nan": 0,
+    "peak": 0.758793407962378,
+    "power": 436.33211090605755,
+    "sha": "30294c53d9f0dbde",
+    "shape": [
+     64,
+     64
+    ]
+   },
+   "kind": "CarrierReferencedField"
+  },
+  "warnings": []
+ },
+ "B2-chain-bare-collins": {
+  "outcome": "ok",
+  "type": "TracedCarrierChainResult",
+  "value": {
+   "R": "inf",
+   "dx": "2.4807013628346422e-05",
+   "field": {
+    "dtype": "complex128",
+    "nan": 0,
+    "peak": 1245602.3657398513,
+    "power": 2418658419.5289345,
+    "sha": "726d2aa77cd6d960",
+    "shape": [
+     256,
+     256
+    ]
+   },
+   "kind": "chain",
+   "n_stages": 2,
+   "readout_route": [],
+   "readout_route_k1": [],
+   "readout_route_reason": [],
+   "stages_sha": "a3bc64732c2f90b9"
+  },
+  "warnings": [
+   [
+    "UserWarning",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+2.770 mm beyond th"
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+2.770 mm beyond the grid)"
+   ],
+   [
+    "RuntimeWarning",
+    "propagate_traced_carrier_chain: the Collins chirp-Z stage is under-sampled -- K1 (input) 17.6178: the product of the envelope and the pre-chirp exp(i k A u^2/2B) is sampled at 17.6178x its own Nyquist"
+   ],
+   [
+    "RuntimeWarning",
+    "propagate_traced_carrier_chain: the free-space leg into groups[1] (bcx) is outside the SZIKLAS-SIEGMAN FRAME's validity: the measured envelope spread 1.390e-02 rad is 0.87 of this grid's Nyquist tilt "
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=26.479 um, semi=3.389 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+4.611 mm beyond th"
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=26.479 um, semi=3.389 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+4.611 mm beyond the grid)"
+   ],
+   [
+    "RuntimeWarning",
+    "apply_real_lens_traced: tilt_aware_rays=False with a non-trivial input tilt of no single direction (RMS = 2.00e-02 rad, coherence 0.01, i.e. INCOHERENT) -- a divergent, multi-beam, or post-DOE interfe"
+   ],
+   [
+    "RuntimeWarning",
+    "propagate_traced_carrier_chain: the Collins chirp-Z stage is under-sampled -- K1 (input) 14.2625: the product of the envelope and the pre-chirp exp(i k A u^2/2B) is sampled at 14.2625x its own Nyquist"
+   ]
+  ]
+ },
+ "B2-chain-bare-default": {
+  "outcome": "ok",
+  "type": "TracedCarrierChainResult",
+  "value": {
+   "R": "-0.004124751720899262",
+   "dx": "7.910983779678808e-06",
+   "field": {
+    "dtype": "complex128",
+    "nan": 0,
+    "peak": 79.78066764070186,
+    "power": 382490.711935576,
+    "sha": "58246df6d64100cd",
+    "shape": [
+     256,
+     256
+    ]
+   },
+   "kind": "chain",
+   "n_stages": 2,
+   "readout_route": [],
+   "readout_route_k1": [],
+   "readout_route_reason": [],
+   "stages_sha": "082f524d4bd49cb2"
+  },
+  "warnings": [
+   [
+    "UserWarning",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+2.770 mm beyond th"
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+2.770 mm beyond the grid)"
+   ],
+   [
+    "RuntimeWarning",
+    "propagate_traced_carrier_chain: the free-space leg into groups[1] (bcx) is outside the SZIKLAS-SIEGMAN FRAME's validity: the measured envelope spread 1.390e-02 rad is 0.87 of this grid's Nyquist tilt "
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+4.778 mm beyond th"
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+4.778 mm beyond the grid)"
+   ]
+  ]
+ },
+ "B2-chain-bare-sziklas": {
+  "outcome": "ok",
+  "type": "TracedCarrierChainResult",
+  "value": {
+   "R": "-0.004124751720899262",
+   "dx": "7.910983779678808e-06",
+   "field": {
+    "dtype": "complex128",
+    "nan": 0,
+    "peak": 79.78066764070186,
+    "power": 382490.711935576,
+    "sha": "58246df6d64100cd",
+    "shape": [
+     256,
+     256
+    ]
+   },
+   "kind": "chain",
+   "n_stages": 2,
+   "readout_route": [],
+   "readout_route_k1": [],
+   "readout_route_reason": [],
+   "stages_sha": "082f524d4bd49cb2"
+  },
+  "warnings": [
+   [
+    "UserWarning",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+2.770 mm beyond th"
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+2.770 mm beyond the grid)"
+   ],
+   [
+    "RuntimeWarning",
+    "propagate_traced_carrier_chain: the free-space leg into groups[1] (bcx) is outside the SZIKLAS-SIEGMAN FRAME's validity: the measured envelope spread 1.390e-02 rad is 0.87 of this grid's Nyquist tilt "
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+4.778 mm beyond th"
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+4.778 mm beyond the grid)"
+   ]
+  ]
+ },
+ "B2-chain-readout-collins": {
+  "outcome": "ok",
+  "type": "TracedCarrierChainResult",
+  "value": {
+   "R": "None",
+   "dx": "4e-07",
+   "field": {
+    "dtype": "complex128",
+    "nan": 0,
+    "peak": 529154.9101744868,
+    "power": 89749368.47554323,
+    "sha": "8e729b293b76aee6",
+    "shape": [
+     64,
+     64
+    ]
+   },
+   "kind": "chain",
+   "n_stages": 2,
+   "readout_route": [],
+   "readout_route_k1": [],
+   "readout_route_reason": [],
+   "stages_sha": "2e69f3f5062cd890"
+  },
+  "warnings": [
+   [
+    "UserWarning",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+2.770 mm beyond th"
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+2.770 mm beyond the grid)"
+   ],
+   [
+    "RuntimeWarning",
+    "propagate_traced_carrier_chain: the Collins chirp-Z stage is under-sampled -- K1 (input) 17.6178: the product of the envelope and the pre-chirp exp(i k A u^2/2B) is sampled at 17.6178x its own Nyquist"
+   ],
+   [
+    "RuntimeWarning",
+    "propagate_traced_carrier_chain: the free-space leg into groups[1] (bcx) is outside the SZIKLAS-SIEGMAN FRAME's validity: the measured envelope spread 1.390e-02 rad is 0.87 of this grid's Nyquist tilt "
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=26.479 um, semi=3.389 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+4.611 mm beyond th"
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=26.479 um, semi=3.389 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+4.611 mm beyond the grid)"
+   ],
+   [
+    "RuntimeWarning",
+    "apply_real_lens_traced: tilt_aware_rays=False with a non-trivial input tilt of no single direction (RMS = 2.00e-02 rad, coherence 0.01, i.e. INCOHERENT) -- a divergent, multi-beam, or post-DOE interfe"
+   ],
+   [
+    "RuntimeWarning",
+    "propagate_traced_carrier_chain: the Collins chirp-Z stage is under-sampled -- K1 (input) 14.2625: the product of the envelope and the pre-chirp exp(i k A u^2/2B) is sampled at 14.2625x its own Nyquist"
+   ]
+  ]
+ },
+ "B2-chain-readout-default": {
+  "outcome": "ok",
+  "type": "TracedCarrierChainResult",
+  "value": {
+   "R": "None",
+   "dx": "4e-07",
+   "field": {
+    "dtype": "complex128",
+    "nan": 0,
+    "peak": 84.39634688338397,
+    "power": 326603.17472488136,
+    "sha": "97fe067423f21480",
+    "shape": [
+     64,
+     64
+    ]
+   },
+   "kind": "chain",
+   "n_stages": 2,
+   "readout_route": [],
+   "readout_route_k1": [],
+   "readout_route_reason": [],
+   "stages_sha": "0bd88f70be4a78de"
+  },
+  "warnings": [
+   [
+    "UserWarning",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+2.770 mm beyond th"
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+2.770 mm beyond the grid)"
+   ],
+   [
+    "RuntimeWarning",
+    "propagate_traced_carrier_chain: the free-space leg into groups[1] (bcx) is outside the SZIKLAS-SIEGMAN FRAME's validity: the measured envelope spread 1.390e-02 rad is 0.87 of this grid's Nyquist tilt "
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+4.778 mm beyond th"
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+4.778 mm beyond the grid)"
+   ]
+  ]
+ },
+ "B2-chain-readout-standoff-collins": {
+  "message": "propagate_traced_carrier_chain: focus_readout key(s) ['standoff'] describe the STOP PLANE of the Sziklas readout -- the length of its fine Bluestein-zoom leg and the guard on what the contracted co-moving grid held there.  transport='collins' lands the target plane in one step and has neither, so these cannot be honoured.  Drop them, or use transport='sziklas'.",
+  "outcome": "raised",
+  "type": "ValueError",
+  "warnings": []
+ },
+ "B2-chain-readout-standoff-default": {
+  "outcome": "ok",
+  "type": "TracedCarrierChainResult",
+  "value": {
+   "R": "None",
+   "dx": "4e-07",
+   "field": {
+    "dtype": "complex128",
+    "nan": 0,
+    "peak": 97.94918800937293,
+    "power": 330317.55340019125,
+    "sha": "f33c18e9c5328128",
+    "shape": [
+     64,
+     64
+    ]
+   },
+   "kind": "chain",
+   "n_stages": 2,
+   "readout_route": [],
+   "readout_route_k1": [],
+   "readout_route_reason": [],
+   "stages_sha": "d79d9aa69a1521c2"
+  },
+  "warnings": [
+   [
+    "UserWarning",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+2.770 mm beyond th"
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+2.770 mm beyond the grid)"
+   ],
+   [
+    "RuntimeWarning",
+    "propagate_traced_carrier_chain: the free-space leg into groups[1] (bcx) is outside the SZIKLAS-SIEGMAN FRAME's validity: the measured envelope spread 1.390e-02 rad is 0.87 of this grid's Nyquist tilt "
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+4.778 mm beyond th"
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+4.778 mm beyond the grid)"
+   ]
+  ]
+ },
+ "B2-chain-readout-standoff-sziklas": {
+  "outcome": "ok",
+  "type": "TracedCarrierChainResult",
+  "value": {
+   "R": "None",
+   "dx": "4e-07",
+   "field": {
+    "dtype": "complex128",
+    "nan": 0,
+    "peak": 97.94918800937293,
+    "power": 330317.55340019125,
+    "sha": "f33c18e9c5328128",
+    "shape": [
+     64,
+     64
+    ]
+   },
+   "kind": "chain",
+   "n_stages": 2,
+   "readout_route": [],
+   "readout_route_k1": [],
+   "readout_route_reason": [],
+   "stages_sha": "d79d9aa69a1521c2"
+  },
+  "warnings": [
+   [
+    "UserWarning",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+2.770 mm beyond th"
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+2.770 mm beyond the grid)"
+   ],
+   [
+    "RuntimeWarning",
+    "propagate_traced_carrier_chain: the free-space leg into groups[1] (bcx) is outside the SZIKLAS-SIEGMAN FRAME's validity: the measured envelope spread 1.390e-02 rad is 0.87 of this grid's Nyquist tilt "
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+4.778 mm beyond th"
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+4.778 mm beyond the grid)"
+   ]
+  ]
+ },
+ "B2-chain-readout-sziklas": {
+  "outcome": "ok",
+  "type": "TracedCarrierChainResult",
+  "value": {
+   "R": "None",
+   "dx": "4e-07",
+   "field": {
+    "dtype": "complex128",
+    "nan": 0,
+    "peak": 84.39634688338397,
+    "power": 326603.17472488136,
+    "sha": "97fe067423f21480",
+    "shape": [
+     64,
+     64
+    ]
+   },
+   "kind": "chain",
+   "n_stages": 2,
+   "readout_route": [],
+   "readout_route_k1": [],
+   "readout_route_reason": [],
+   "stages_sha": "0bd88f70be4a78de"
+  },
+  "warnings": [
+   [
+    "UserWarning",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+2.770 mm beyond th"
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+2.770 mm beyond the grid)"
+   ],
+   [
+    "RuntimeWarning",
+    "propagate_traced_carrier_chain: the free-space leg into groups[1] (bcx) is outside the SZIKLAS-SIEGMAN FRAME's validity: the measured envelope spread 1.390e-02 rad is 0.87 of this grid's Nyquist tilt "
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+4.778 mm beyond th"
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+4.778 mm beyond the grid)"
+   ]
+  ]
+ },
+ "B2-chain-readout-zero-collins": {
+  "message": "propagate_traced_carrier_chain: transport='collins' has no zero-length form -- the Collins integral's B is the leg, and at B = 0 the readout is a RESAMPLE of the exit plane rather than a transport.  Pass a non-zero final_distance, or transport='sziklas' (whose readout reaches a zero-distance target by backing off to a standoff plane first).",
+  "outcome": "raised",
+  "type": "ValueError",
+  "warnings": [
+   [
+    "UserWarning",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+2.770 mm beyond th"
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+2.770 mm beyond the grid)"
+   ],
+   [
+    "RuntimeWarning",
+    "propagate_traced_carrier_chain: the Collins chirp-Z stage is under-sampled -- K1 (input) 17.6178: the product of the envelope and the pre-chirp exp(i k A u^2/2B) is sampled at 17.6178x its own Nyquist"
+   ],
+   [
+    "RuntimeWarning",
+    "propagate_traced_carrier_chain: the free-space leg into groups[1] (bcx) is outside the SZIKLAS-SIEGMAN FRAME's validity: the measured envelope spread 1.390e-02 rad is 0.87 of this grid's Nyquist tilt "
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=26.479 um, semi=3.389 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+4.611 mm beyond th"
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=26.479 um, semi=3.389 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+4.611 mm beyond the grid)"
+   ],
+   [
+    "RuntimeWarning",
+    "apply_real_lens_traced: tilt_aware_rays=False with a non-trivial input tilt of no single direction (RMS = 2.00e-02 rad, coherence 0.01, i.e. INCOHERENT) -- a divergent, multi-beam, or post-DOE interfe"
+   ]
+  ]
+ },
+ "B2-chain-readout-zero-default": {
+  "outcome": "ok",
+  "type": "TracedCarrierChainResult",
+  "value": {
+   "R": "None",
+   "dx": "4e-07",
+   "field": {
+    "dtype": "complex128",
+    "nan": 0,
+    "peak": 9.27285037347919,
+    "power": 33108.1354839757,
+    "sha": "96e25586ef1bb33d",
+    "shape": [
+     64,
+     64
+    ]
+   },
+   "kind": "chain",
+   "n_stages": 2,
+   "readout_route": [],
+   "readout_route_k1": [],
+   "readout_route_reason": [],
+   "stages_sha": "d83477268663f53f"
+  },
+  "warnings": [
+   [
+    "UserWarning",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+2.770 mm beyond th"
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+2.770 mm beyond the grid)"
+   ],
+   [
+    "RuntimeWarning",
+    "propagate_traced_carrier_chain: the free-space leg into groups[1] (bcx) is outside the SZIKLAS-SIEGMAN FRAME's validity: the measured envelope spread 1.390e-02 rad is 0.87 of this grid's Nyquist tilt "
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+4.778 mm beyond th"
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+4.778 mm beyond the grid)"
+   ]
+  ]
+ },
+ "B2-chain-readout-zero-sziklas": {
+  "outcome": "ok",
+  "type": "TracedCarrierChainResult",
+  "value": {
+   "R": "None",
+   "dx": "4e-07",
+   "field": {
+    "dtype": "complex128",
+    "nan": 0,
+    "peak": 9.27285037347919,
+    "power": 33108.1354839757,
+    "sha": "96e25586ef1bb33d",
+    "shape": [
+     64,
+     64
+    ]
+   },
+   "kind": "chain",
+   "n_stages": 2,
+   "readout_route": [],
+   "readout_route_k1": [],
+   "readout_route_reason": [],
+   "stages_sha": "d83477268663f53f"
+  },
+  "warnings": [
+   [
+    "UserWarning",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+2.770 mm beyond th"
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+2.770 mm beyond the grid)"
+   ],
+   [
+    "RuntimeWarning",
+    "propagate_traced_carrier_chain: the free-space leg into groups[1] (bcx) is outside the SZIKLAS-SIEGMAN FRAME's validity: the measured envelope spread 1.390e-02 rad is 0.87 of this grid's Nyquist tilt "
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+4.778 mm beyond th"
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+4.778 mm beyond the grid)"
+   ]
+  ]
+ },
+ "B3-multi-K1-collins": {
+  "outcome": "ok",
+  "type": "TracedCarrierChainMultiResult",
+  "value": {
+   "centre": "(0.0, 0.0)",
+   "dx": "4e-07",
+   "field": {
+    "dtype": "complex128",
+    "nan": 0,
+    "peak": 529154.9101744868,
+    "power": 89749368.47554323,
+    "sha": "8e729b293b76aee6",
+    "shape": [
+     64,
+     64
+    ]
+   },
+   "kind": "multi"
+  },
+  "warnings": [
+   [
+    "UserWarning",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+2.770 mm beyond th"
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+2.770 mm beyond the grid)"
+   ],
+   [
+    "RuntimeWarning",
+    "propagate_traced_carrier_chain: the Collins chirp-Z stage is under-sampled -- K1 (input) 17.6178: the product of the envelope and the pre-chirp exp(i k A u^2/2B) is sampled at 17.6178x its own Nyquist"
+   ],
+   [
+    "RuntimeWarning",
+    "propagate_traced_carrier_chain: the free-space leg into groups[1] (bcx) is outside the SZIKLAS-SIEGMAN FRAME's validity: the measured envelope spread 1.390e-02 rad is 0.87 of this grid's Nyquist tilt "
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=26.479 um, semi=3.389 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+4.611 mm beyond th"
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=26.479 um, semi=3.389 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+4.611 mm beyond the grid)"
+   ],
+   [
+    "RuntimeWarning",
+    "apply_real_lens_traced: tilt_aware_rays=False with a non-trivial input tilt of no single direction (RMS = 2.00e-02 rad, coherence 0.01, i.e. INCOHERENT) -- a divergent, multi-beam, or post-DOE interfe"
+   ],
+   [
+    "RuntimeWarning",
+    "propagate_traced_carrier_chain: the Collins chirp-Z stage is under-sampled -- K1 (input) 14.2625: the product of the envelope and the pre-chirp exp(i k A u^2/2B) is sampled at 14.2625x its own Nyquist"
+   ],
+   [
+    "RuntimeWarning",
+    "propagate_traced_carrier_chain_multi: congruence 'congruence0' -- its 64 x 0.4000 um readout window holds 0.20 % of the power the chain delivered (power_out 1.435990e-05 vs power_exit 7.013233e-03, to"
+   ]
+  ]
+ },
+ "B3-multi-K1-default": {
+  "outcome": "ok",
+  "type": "TracedCarrierChainMultiResult",
+  "value": {
+   "centre": "(0.0, 0.0)",
+   "dx": "4e-07",
+   "field": {
+    "dtype": "complex128",
+    "nan": 0,
+    "peak": 84.39634688338397,
+    "power": 326603.17472488136,
+    "sha": "97fe067423f21480",
+    "shape": [
+     64,
+     64
+    ]
+   },
+   "kind": "multi"
+  },
+  "warnings": [
+   [
+    "UserWarning",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+2.770 mm beyond th"
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+2.770 mm beyond the grid)"
+   ],
+   [
+    "RuntimeWarning",
+    "propagate_traced_carrier_chain: the free-space leg into groups[1] (bcx) is outside the SZIKLAS-SIEGMAN FRAME's validity: the measured envelope spread 1.390e-02 rad is 0.87 of this grid's Nyquist tilt "
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+4.778 mm beyond th"
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+4.778 mm beyond the grid)"
+   ],
+   [
+    "RuntimeWarning",
+    "propagate_traced_carrier_chain_multi: congruence 'congruence0' -- its 64 x 0.4000 um readout window holds 0.22 % of the power the chain delivered (power_out 5.225651e-08 vs power_exit 2.393767e-05, to"
+   ]
+  ]
+ },
+ "B3-multi-K1-standoff-default": {
+  "outcome": "ok",
+  "type": "TracedCarrierChainMultiResult",
+  "value": {
+   "centre": "(0.0, 0.0)",
+   "dx": "4e-07",
+   "field": {
+    "dtype": "complex128",
+    "nan": 0,
+    "peak": 97.94918800937293,
+    "power": 330317.55340019125,
+    "sha": "f33c18e9c5328128",
+    "shape": [
+     64,
+     64
+    ]
+   },
+   "kind": "multi"
+  },
+  "warnings": [
+   [
+    "UserWarning",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+2.770 mm beyond th"
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+2.770 mm beyond the grid)"
+   ],
+   [
+    "RuntimeWarning",
+    "propagate_traced_carrier_chain: the free-space leg into groups[1] (bcx) is outside the SZIKLAS-SIEGMAN FRAME's validity: the measured envelope spread 1.390e-02 rad is 0.87 of this grid's Nyquist tilt "
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+4.778 mm beyond th"
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+4.778 mm beyond the grid)"
+   ],
+   [
+    "RuntimeWarning",
+    "propagate_traced_carrier_chain_multi: congruence 'congruence0' -- its 64 x 0.4000 um readout window holds 0.22 % of the power the chain delivered (power_out 5.285081e-08 vs power_exit 2.393767e-05, to"
+   ]
+  ]
+ },
+ "B3-multi-K1-sziklas": {
+  "outcome": "ok",
+  "type": "TracedCarrierChainMultiResult",
+  "value": {
+   "centre": "(0.0, 0.0)",
+   "dx": "4e-07",
+   "field": {
+    "dtype": "complex128",
+    "nan": 0,
+    "peak": 84.39634688338397,
+    "power": 326603.17472488136,
+    "sha": "97fe067423f21480",
+    "shape": [
+     64,
+     64
+    ]
+   },
+   "kind": "multi"
+  },
+  "warnings": [
+   [
+    "UserWarning",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+2.770 mm beyond th"
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+2.770 mm beyond the grid)"
+   ],
+   [
+    "RuntimeWarning",
+    "propagate_traced_carrier_chain: the free-space leg into groups[1] (bcx) is outside the SZIKLAS-SIEGMAN FRAME's validity: the measured envelope spread 1.390e-02 rad is 0.87 of this grid's Nyquist tilt "
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+4.778 mm beyond th"
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+4.778 mm beyond the grid)"
+   ],
+   [
+    "RuntimeWarning",
+    "propagate_traced_carrier_chain_multi: congruence 'congruence0' -- its 64 x 0.4000 um readout window holds 0.22 % of the power the chain delivered (power_out 5.225651e-08 vs power_exit 2.393767e-05, to"
+   ]
+  ]
+ },
+ "B4-exact-focus-readout": {
+  "outcome": "ok",
+  "type": "ndarray",
+  "value": {
+   "dtype": "complex128",
+   "nan": 0,
+   "peak": 0.8527085102773184,
+   "power": 872.4501801510007,
+   "sha": "95d8876d3e77d29a",
+   "shape": [
+    32,
+    32
+   ]
+  },
+  "warnings": []
+ },
+ "B4-focus-readout": {
+  "outcome": "ok",
+  "type": "ndarray",
+  "value": {
+   "dtype": "complex128",
+   "nan": 0,
+   "peak": 5.673622600704683,
+   "power": 5778.498660804347,
+   "sha": "1d4c752166fc50c9",
+   "shape": [
+    32,
+    32
+   ]
+  },
+  "warnings": []
+ },
+ "B4-focus-readout-standoff": {
+  "message": "carrier_referenced_focus_readout: the beam does not fit the co-moving grid at the stop plane.  The grid half-width there is 8.5333 um against a measured amplitude radius of 4.6391 um -- a containment of 1.839 beam radii and 0.175 against the beam's own Gaussian ABCD width there (48.867 um -- the MEASURED second moment saturates once the beam overfills the grid, so it reads narrower than the beam i",
+  "outcome": "raised",
+  "type": "RuntimeError",
+  "warnings": []
+ },
+ "B5-final-leg-exact-default": {
+  "outcome": "ok",
+  "type": "TracedCarrierChainResult",
+  "value": {
+   "R": "None",
+   "dx": "4e-07",
+   "field": {
+    "dtype": "complex128",
+    "nan": 0,
+    "peak": 80.46777771966885,
+    "power": 325346.8058409455,
+    "sha": "3c50c2b1b44c61f4",
+    "shape": [
+     64,
+     64
+    ]
+   },
+   "kind": "chain",
+   "n_stages": 2,
+   "readout_route": [],
+   "readout_route_k1": [],
+   "readout_route_reason": [],
+   "stages_sha": "b3509fa47f55ec8f"
+  },
+  "warnings": [
+   [
+    "UserWarning",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+2.770 mm beyond th"
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+2.770 mm beyond the grid)"
+   ],
+   [
+    "RuntimeWarning",
+    "propagate_traced_carrier_chain: the free-space leg into groups[1] (bcx) is outside the SZIKLAS-SIEGMAN FRAME's validity: the measured envelope spread 1.390e-02 rad is 0.87 of this grid's Nyquist tilt "
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=2048, dx=3.147 um, semi=3.222 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+4.778 mm beyond th"
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=2048, dx=3.147 um, semi=3.222 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+4.778 mm beyond the grid)"
+   ],
+   [
+    "RuntimeWarning",
+    "apply_real_lens_traced: the inverse-characteristic per-pixel evaluator refused to build -- guard G7: the exit fit has 169 retained samples for 120 total-degree-14 coefficients, below the 4.0 samples/c"
+   ]
+  ]
+ },
+ "B5-final-leg-exact-sziklas": {
+  "outcome": "ok",
+  "type": "TracedCarrierChainResult",
+  "value": {
+   "R": "None",
+   "dx": "4e-07",
+   "field": {
+    "dtype": "complex128",
+    "nan": 0,
+    "peak": 80.46777771966885,
+    "power": 325346.8058409455,
+    "sha": "3c50c2b1b44c61f4",
+    "shape": [
+     64,
+     64
+    ]
+   },
+   "kind": "chain",
+   "n_stages": 2,
+   "readout_route": [],
+   "readout_route_k1": [],
+   "readout_route_reason": [],
+   "stages_sha": "b3509fa47f55ec8f"
+  },
+  "warnings": [
+   [
+    "UserWarning",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+2.770 mm beyond th"
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+2.770 mm beyond the grid)"
+   ],
+   [
+    "RuntimeWarning",
+    "propagate_traced_carrier_chain: the free-space leg into groups[1] (bcx) is outside the SZIKLAS-SIEGMAN FRAME's validity: the measured envelope spread 1.390e-02 rad is 0.87 of this grid's Nyquist tilt "
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=2048, dx=3.147 um, semi=3.222 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+4.778 mm beyond th"
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=2048, dx=3.147 um, semi=3.222 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+4.778 mm beyond the grid)"
+   ],
+   [
+    "RuntimeWarning",
+    "apply_real_lens_traced: the inverse-characteristic per-pixel evaluator refused to build -- guard G7: the exit fit has 169 retained samples for 120 total-degree-14 coefficients, below the 4.0 samples/c"
+   ]
+  ]
+ },
+ "C-jax": {
+  "available": true,
+  "version": "0.11.0"
+ },
+ "C1-grad-default": {
+  "outcome": "ok",
+  "type": "ndarray",
+  "value": {
+   "dtype": "float64",
+   "nan": 0,
+   "peak": 6.096631611034907,
+   "power": 612.9002585878563,
+   "sha": "234a0f35e088211e",
+   "shape": [
+    64,
+    64
+   ]
+  },
+  "warnings": []
+ },
+ "C1-grad-sziklas": {
+  "outcome": "ok",
+  "type": "ndarray",
+  "value": {
+   "dtype": "float64",
+   "nan": 0,
+   "peak": 6.096631611034907,
+   "power": 612.9002585878563,
+   "sha": "234a0f35e088211e",
+   "shape": [
+    64,
+    64
+   ]
+  },
+  "warnings": []
+ },
+ "C2-jit-default": {
+  "outcome": "ok",
+  "type": "ndarray",
+  "value": {
+   "dtype": "complex128",
+   "nan": 0,
+   "peak": 1.1487686627588478,
+   "power": 124.11230236404086,
+   "sha": "5ee946aa550dec12",
+   "shape": [
+    64,
+    64
+   ]
+  },
+  "warnings": []
+ },
+ "C2-jit-sziklas": {
+  "outcome": "ok",
+  "type": "ndarray",
+  "value": {
+   "dtype": "complex128",
+   "nan": 0,
+   "peak": 1.1487686627588478,
+   "power": 124.11230236404086,
+   "sha": "5ee946aa550dec12",
+   "shape": [
+    64,
+    64
+   ]
+  },
+  "warnings": []
+ },
+ "C3-eager-jax-default": {
+  "outcome": "ok",
+  "type": "dict",
+  "value": "{'kind': 'CarrierReferencedField', 'env': {'sha': '5ee946aa550dec12', 'dtype': 'complex128', 'shape': [64, 64], 'peak': 1.1487686627588478, 'power': 124.11230236404086, 'nan': 0}, 'R': '-0.045000000000000005', 'dx': '7.2e-06'}",
+  "warnings": []
+ },
+ "D1-collins-standoff": {
+  "message": "propagate_traced_carrier_chain: focus_readout key(s) ['standoff'] describe the STOP PLANE of the Sziklas readout -- the length of its fine Bluestein-zoom leg and the guard on what the contracted co-moving grid held there.  transport='collins' lands the target plane in one step and has neither, so these cannot be honoured.  Drop them, or use transport='sziklas'.",
+  "outcome": "raised",
+  "type": "ValueError",
+  "warnings": []
+ },
+ "D2-collins-containment": {
+  "message": "propagate_traced_carrier_chain: focus_readout key(s) ['on_focus_containment'] describe the STOP PLANE of the Sziklas readout -- the length of its fine Bluestein-zoom leg and the guard on what the contracted co-moving grid held there.  transport='collins' lands the target plane in one step and has neither, so these cannot be honoured.  Drop them, or use transport='sziklas'.",
+  "outcome": "raised",
+  "type": "ValueError",
+  "warnings": []
+ },
+ "D3-collins-zero-distance": {
+  "message": "propagate_traced_carrier_chain: transport='collins' has no zero-length form -- the Collins integral's B is the leg, and at B = 0 the readout is a RESAMPLE of the exit plane rather than a transport.  Pass a non-zero final_distance, or transport='sziklas' (whose readout reaches a zero-distance target by backing off to a standoff plane first).",
+  "outcome": "raised",
+  "type": "ValueError",
+  "warnings": [
+   [
+    "UserWarning",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+2.770 mm beyond th"
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+2.770 mm beyond the grid)"
+   ],
+   [
+    "RuntimeWarning",
+    "propagate_traced_carrier_chain: the Collins chirp-Z stage is under-sampled -- K1 (input) 17.6178: the product of the envelope and the pre-chirp exp(i k A u^2/2B) is sampled at 17.6178x its own Nyquist"
+   ],
+   [
+    "RuntimeWarning",
+    "propagate_traced_carrier_chain: the free-space leg into groups[1] (bcx) is outside the SZIKLAS-SIEGMAN FRAME's validity: the measured envelope spread 1.390e-02 rad is 0.87 of this grid's Nyquist tilt "
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=26.479 um, semi=3.389 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+4.611 mm beyond th"
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=26.479 um, semi=3.389 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+4.611 mm beyond the grid)"
+   ],
+   [
+    "RuntimeWarning",
+    "apply_real_lens_traced: tilt_aware_rays=False with a non-trivial input tilt of no single direction (RMS = 2.00e-02 rad, coherence 0.01, i.e. INCOHERENT) -- a divergent, multi-beam, or post-DOE interfe"
+   ]
+  ]
+ },
+ "D4-multi-collins-standoff": {
+  "message": "propagate_traced_carrier_chain: focus_readout key(s) ['standoff'] describe the STOP PLANE of the Sziklas readout -- the length of its fine Bluestein-zoom leg and the guard on what the contracted co-moving grid held there.  transport='collins' lands the target plane in one step and has neither, so these cannot be honoured.  Drop them, or use transport='sziklas'.",
+  "outcome": "raised",
+  "type": "ValueError",
+  "warnings": []
+ },
+ "D5-bad-transport": {
+  "message": "propagate_carrier_referenced: transport must be one of ['sziklas', 'collins'] (case-sensitive strings), got 'Sziklas'.  'sziklas' (the default) is the Sziklas-Siegman co-moving step, whose output pitch is forced to m*dx; 'collins' is the ABCD-Fresnel (Collins) integral evaluated by a chirp-Z onto a FREELY chosen output pitch, which is the same theorem for a quadratic carrier and has no singularity",
+  "outcome": "raised",
+  "type": "ValueError",
+  "warnings": []
+ },
+ "D6-gap-kernel-fresnel-recipe": {
+  "outcome": "ok",
+  "type": "TracedCarrierChainResult",
+  "value": {
+   "R": "None",
+   "dx": "4e-07",
+   "field": {
+    "dtype": "complex128",
+    "nan": 0,
+    "peak": 84.3959808102498,
+    "power": 326602.06879816856,
+    "sha": "cbb93a7ccc5f16a8",
+    "shape": [
+     64,
+     64
+    ]
+   },
+   "kind": "chain",
+   "n_stages": 2,
+   "readout_route": [],
+   "readout_route_k1": [],
+   "readout_route_reason": [],
+   "stages_sha": "a0fe6f30b90b0821"
+  },
+  "warnings": [
+   [
+    "UserWarning",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+2.770 mm beyond th"
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+2.770 mm beyond the grid)"
+   ],
+   [
+    "RuntimeWarning",
+    "propagate_traced_carrier_chain: the free-space leg into groups[1] (bcx) is outside the SZIKLAS-SIEGMAN FRAME's validity: the measured envelope spread 1.390e-02 rad is 0.87 of this grid's Nyquist tilt "
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+4.778 mm beyond th"
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with semi_diameter=8.000 mm (+4.778 mm beyond the grid)"
+   ]
+  ]
+ },
+ "_meta": {
+  "build": "WIN-py3.14",
+  "lumenairy": "5.48.1",
+  "python": "3.14.6",
+  "tree": "C:\\tmp\\vc3_base"
+ }
+}

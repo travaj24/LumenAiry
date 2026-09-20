@@ -1,0 +1,55 @@
+{
+ "LUMENAIRY_ROOT": "C:\\tmp\\vc3_head",
+ "N": 2048,
+ "anchor_held": true,
+ "build": "WIN-py3.14-np2.4.4",
+ "carrier_file": "C:\\tmp\\vc3_head\\lumenairy\\propagators\\carrier.py",
+ "doe_period_um": 113.75662596454582,
+ "env": {
+  "MKL_NUM_THREADS": "1",
+  "NUMBA_NUM_THREADS": null,
+  "OMP_NUM_THREADS": "1",
+  "OPENBLAS_CORETYPE": null,
+  "OPENBLAS_NUM_THREADS": "1"
+ },
+ "env_digest": 261.3552796504971,
+ "force_route": "",
+ "launch": {
+  "R1_mm": 2.0007361513684163,
+  "dx0_um": 1.0,
+  "w0_um": 4.0,
+  "w_z1_mm": 0.20853134251750735,
+  "z1_mm": 2.0
+ },
+ "lumenairy_post": "C:\\tmp\\vc3_head\\lumenairy\\__init__.py",
+ "lumenairy_pre": "C:\\tmp\\vc3_head\\lumenairy\\__init__.py",
+ "n_groups_post": 6,
+ "n_groups_pre": 2,
+ "numpy": "2.4.4",
+ "rows": [
+  {
+   "all_warnings": [],
+   "centroid_x_um": -0.003624129194163878,
+   "ee12": 85.63651191220293,
+   "ee3": 32.479385708772476,
+   "ee6": 68.21411374103928,
+   "fwhm_um": 6.612701284512584,
+   "k1_calls": [],
+   "n_kelly": 0,
+   "n_stages": 8,
+   "peak": 1022.4629328016864,
+   "power": 6.662756818370726e-08,
+   "raised": null,
+   "readout_route": null,
+   "readout_route_k1": null,
+   "readout_route_reason": null,
+   "seconds": 173.73,
+   "transport": "sziklas"
+  }
+ ],
+ "transports": [
+  "sziklas"
+ ],
+ "tree": "C:\\tmp\\vc3_head",
+ "zmx": "D:\\Metacept\\Neurophos\\Python_Test_Scripts\\Free_Space_Optics\\Reverse_Symmetric_ASM\\tx4designstudy121\\20260707 dll Tx02-MSOP16.zmx"
+}

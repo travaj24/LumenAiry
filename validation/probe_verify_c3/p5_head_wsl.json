@@ -1,0 +1,344 @@
+{
+ "label": "HEAD-WSL",
+ "lumenairy_file": "/mnt/c/tmp/vc3_head/lumenairy/__init__.py",
+ "transport_default": "collins",
+ "python": "3.12.3",
+ "numpy": "2.4.6",
+ "i_collimated": {
+  "diag": {
+   "collins_form": "tf",
+   "collins_k1": [
+    1.122236254699248,
+    1.122236254699248
+   ],
+   "collins_k2": [
+    0.0,
+    0.0
+   ],
+   "collins_k3": [
+    3.0796992481203,
+    3.0796992481203
+   ],
+   "collins_kernel": null,
+   "collins_flat_reference": false,
+   "collins_dx_floor_hit": false
+  },
+  "env": {
+   "n_finite": 1048576,
+   "n": 1048576,
+   "all_finite": true,
+   "max_abs": 0.9998230321742307
+  },
+  "dx_out": "4e-06",
+  "R_out": "inf",
+  "warnings": [],
+  "sziklas_env": {
+   "n_finite": 1048576,
+   "n": 1048576,
+   "all_finite": true,
+   "max_abs": 0.9998230321742307
+  },
+  "sziklas_dx": "4e-06",
+  "bit_identical_to_sziklas": true,
+  "analytic_w_out_um": 300.0530996093842,
+  "r2m_analytic_um": 212.1695523677899,
+  "r2m_um": 212.1695524557176,
+  "r2m_sziklas_um": 212.1695524557176
+ },
+ "ii_astigmatic": {
+  "diag": {
+   "collins_form": "tf",
+   "collins_k1": [
+    0.9846422697368419,
+    1.0221679019993162
+   ],
+   "collins_k2": [
+    0.0,
+    0.0
+   ],
+   "collins_k3": [
+    2.6947368421052627,
+    2.7997265892002727
+   ],
+   "collins_kernel": null,
+   "collins_flat_reference": false,
+   "collins_dx_floor_hit": false
+  },
+  "env": {
+   "n_finite": 1048576,
+   "n": 1048576,
+   "all_finite": true,
+   "max_abs": 1.1209742137875411
+  },
+  "dx_out": [
+   3.5000000000000004e-06,
+   3.6363636363636366e-06
+  ],
+  "R_out": [
+   -0.035,
+   -0.05
+  ],
+  "promised_R": [
+   -0.035,
+   -0.05
+  ],
+  "promised_dx_um": [
+   3.5000000000000004,
+   3.6363636363636367
+  ],
+  "m": [
+   0.8750000000000001,
+   0.9090909090909092
+  ],
+  "warnings": [],
+  "input_box": [
+   0.000732,
+   0.000732,
+   0.002857421875,
+   0.002857421875
+  ],
+  "chirpz_period_m": 0.0013300000000000002,
+  "window_over_period_x": 2.694736842105263,
+  "window_over_period_y": 2.799726589200273,
+  "sziklas": {
+   "dx": [
+    3.5000000000000004e-06,
+    3.6363636363636366e-06
+   ],
+   "R": [
+    -0.035,
+    -0.05
+   ],
+   "env": {
+    "n_finite": 1048576,
+    "n": 1048576,
+    "all_finite": true,
+    "max_abs": 1.1209742137875411
+   }
+  },
+  "equals_sziklas": true,
+  "analytic": {
+   "w_x_um": 262.56068362418443,
+   "w_y_um": 272.785681212294,
+   "R_x": -0.035129893806775794,
+   "R_y": -0.0502366197353263
+  },
+  "sigma_x_um": 131.2803418120921,
+  "sigma_y_um": 136.3928406061463,
+  "sigma_x_analytic_um": 131.28034181209222,
+  "sigma_y_analytic_um": 136.392840606147,
+  "sigma_x_sziklas_um": 131.2803418120921,
+  "sigma_y_sziklas_um": 136.3928406061463
+ },
+ "iii_setup": {
+  "zR_um": 38.3705972957532,
+  "R_in": -0.030000049076757893,
+  "w_in_m": 0.003127397189794516,
+  "dx_um": 12.216395272634829,
+  "N": 2048
+ },
+ "iii": {
+  "z45mm": {
+   "A": -0.49999754616611947,
+   "diag": {
+    "collins_form": "tf",
+    "collins_k1": [
+     1.5906596757319367,
+     1.5906596757319367
+    ],
+    "collins_k2": [
+     0.0,
+     0.0
+    ],
+    "collins_k3": [
+     2.5923889903346695,
+     2.5923889903346695
+    ],
+    "collins_kernel": null,
+    "collins_flat_reference": false,
+    "collins_dx_floor_hit": false
+   },
+   "w_true_um": 1563.7024319491416,
+   "w_q_um": 1563.7024319491416,
+   "R_q": 0.015000098153515787,
+   "window_um": 4691.107295847424,
+   "r2m_analytic_um": 1105.7044418303942,
+   "r2m_leg_um": 1105.2918978245107,
+   "ratio_leg_over_analytic": 0.9996268948642364,
+   "dx_out_um": 6.108167659312796,
+   "R_out": 0.014999950923242106,
+   "r2m_sziklas_um": 1105.2918978245107,
+   "ratio_sziklas_over_analytic": 0.9996268948642364,
+   "dx_sziklas_um": 6.108167659312796,
+   "R_sziklas": 0.014999950923242106,
+   "leg_equals_sziklas": true,
+   "warnings": []
+  },
+  "z60mm": {
+   "A": -0.9999967282214928,
+   "diag": {
+    "collins_form": "tf",
+    "collins_k1": [
+     2.383063714953661,
+     2.383063714953661
+    ],
+    "collins_k2": [
+     0.0,
+     0.0
+    ],
+    "collins_k3": [
+     3.8885898468251585,
+     3.8885898468251585
+    ],
+    "collins_kernel": null,
+    "collins_flat_reference": false,
+    "collins_dx_floor_hit": false
+   },
+   "w_true_um": 3127.397189794516,
+   "w_q_um": 3127.397189794516,
+   "R_q": 0.03000004907675789,
+   "window_um": 9382.191569383549,
+   "r2m_analytic_um": 2211.403457250719,
+   "r2m_leg_um": 2210.3907144085433,
+   "ratio_leg_over_analytic": 0.9995420361495524,
+   "dx_out_um": 12.216355303295337,
+   "R_out": 0.029999950923242105,
+   "r2m_sziklas_um": 2210.3907144085433,
+   "ratio_sziklas_over_analytic": 0.9995420361495524,
+   "dx_sziklas_um": 12.216355303295337,
+   "R_sziklas": 0.029999950923242105,
+   "leg_equals_sziklas": true,
+   "warnings": []
+  }
+ },
+ "c_boundary": {
+  "A_eq_0": {
+   "A": 0.0,
+   "diag": {
+    "collins_form": "chirp-z",
+    "collins_k1": [
+     0.021484374999999997,
+     0.021484374999999997
+    ],
+    "collins_k2": [
+     0.008878007531166075,
+     0.008878007531166075
+    ],
+    "collins_k3": [
+     0.021484374999999997,
+     0.021484374999999997
+    ],
+    "collins_kernel": "fresnel",
+    "collins_flat_reference": true,
+    "collins_dx_floor_hit": true
+   },
+   "env": {
+    "n_finite": 1048576,
+    "n": 1048576,
+    "all_finite": true,
+    "max_abs": 6.643405517459616
+   },
+   "dx_out_um": 0.223236083984375,
+   "R_out": "inf",
+   "analytic_w_out_um": 45.157562519940456,
+   "analytic_R_out": 0.03999999999999997,
+   "r2m_um": 31.931041855712117,
+   "r2m_analytic_um": 31.931214302898685,
+   "warnings": [],
+   "sziklas": {
+    "raised": "ValueError",
+    "msg": "carrier_referenced_envelope: R_carrier == 0 (carrier focus)."
+   }
+  },
+  "flat_z39.9mm": {
+   "A": 0.0025000000000000577,
+   "diag": {
+    "collins_form": "chirp-z",
+    "collins_k1": [
+     0.021829222080106285,
+     0.021829222080106285
+    ],
+    "collins_k2": [
+     0.4860887378454072,
+     0.4860887378454072
+    ],
+    "collins_k3": [
+     0.02182922208010629,
+     0.02182922208010629
+    ],
+    "collins_kernel": "exact",
+    "collins_flat_reference": false,
+    "collins_dx_floor_hit": true
+   },
+   "env": {
+    "n_finite": 1048576,
+    "n": 1048576,
+    "all_finite": true,
+    "max_abs": 6.659132668344038
+   },
+   "dx_out_um": 0.22625221252441416,
+   "R_out": -0.00010000000000000286,
+   "analytic_w_out_um": 45.05091198314079,
+   "analytic_R_out": 0.044874828915868845,
+   "r2m_um": 31.855706363441872,
+   "r2m_analytic_um": 31.855800995447343,
+   "warnings": [],
+   "sziklas": {
+    "dx_um": 1.8,
+    "R": -0.00010000000000000286,
+    "env": {
+     "n_finite": 1048576,
+     "n": 1048576,
+     "all_finite": true,
+     "max_abs": 6.658982429224735
+    },
+    "r2m_um": 31.856166751298645
+   }
+  },
+  "flat_z39.99mm": {
+   "A": 0.0002500000000000835,
+   "diag": {
+    "collins_form": "chirp-z",
+    "collins_k1": [
+     0.021518782098015114,
+     0.021518782098015114
+    ],
+    "collins_k2": [
+     0.008890002550705711,
+     0.008890002550705711
+    ],
+    "collins_k3": [
+     0.021518782098015117,
+     0.021518782098015117
+    ],
+    "collins_kernel": "exact",
+    "collins_flat_reference": true,
+    "collins_dx_floor_hit": true
+   },
+   "env": {
+    "n_finite": 1048576,
+    "n": 1048576,
+    "all_finite": true,
+    "max_abs": 6.645057607301379
+   },
+   "dx_out_um": 0.22353769683837904,
+   "R_out": "inf",
+   "analytic_w_out_um": 45.14633542676858,
+   "analytic_R_out": 0.040436385250054774,
+   "r2m_um": 31.923130253203954,
+   "r2m_analytic_um": 31.923275550272006,
+   "warnings": [],
+   "sziklas": {
+    "dx_um": 1.8,
+    "R": -1.0000000000003062e-05,
+    "env": {
+     "n_finite": 1048576,
+     "n": 1048576,
+     "all_finite": true,
+     "max_abs": 6.6448911156842385
+    },
+    "r2m_um": 31.923684362867927
+   }
+  }
+ }
+}

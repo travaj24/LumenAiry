@@ -1,0 +1,34 @@
+{
+ "bar_ulps_of_one": 8.0,
+ "build": "WSL-py3.12-np2.4.6",
+ "carrier_file": "/mnt/c/tmp/vc3_head/lumenairy/propagators/carrier.py",
+ "device_helpers": null,
+ "env": {
+  "MKL_NUM_THREADS": "1",
+  "NUMBA_NUM_THREADS": null,
+  "OMP_NUM_THREADS": "1",
+  "OPENBLAS_CORETYPE": null,
+  "OPENBLAS_NUM_THREADS": "1"
+ },
+ "eps": 2.220446049250313e-16,
+ "host_side": null,
+ "no_cupy_decision": {
+  "axis_chirp_bld_default_is_np": true,
+  "backend_of_bld_is_np": true
+ },
+ "premise": {
+  "cuda_runtime_version": null,
+  "cupy_fft_import_error": null,
+  "device_name": null,
+  "elementwise_error": null,
+  "elementwise_ok": false,
+  "fft_error": null,
+  "fft_ok": false,
+  "import_error": "ModuleNotFoundError: No module named 'cupy'",
+  "importable": false,
+  "n_devices": null,
+  "version": null
+ },
+ "public_legs": null,
+ "tree": "/mnt/c/tmp/vc3_head"
+}

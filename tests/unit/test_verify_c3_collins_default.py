@@ -76,21 +76,42 @@ def _decompose(env, R, z, dx, lam=LAM):
     return angle, space, angle + space
 
 
-def _relay_exit(n):
-    """WP-B4's own two-group relay, stopped AT its exit plane -- the plane the
-    chain's focus readout runs on.  Returns ``(env, R, dx)`` there."""
+def _relay_readout_input(n, monkeypatch, z=8e-3):
+    """The array WP-B4's two-group relay ACTUALLY hands
+    ``_collins_readout_k1``, captured from the chain's own call, together with
+    the K1 the stage publishes.
+
+    IT IS NOT the field a ``final_distance=0`` run returns.  MEASURED
+    2026-09-20 on this relay: the two arrays differ at relative L2 1.4149 on
+    every grid, and although the published K1 and the reconstructed one agree
+    at N = 256 and N = 512 (both saturate), at N = 1024 they read
+    **21.4224837152085** and **21.455686840208497** -- apart by exactly 17
+    angle quanta of ``2/N``.  Reconstructing the readout's input from a
+    ``final_distance=0`` run is therefore not a way to read this condition,
+    and this helper exists so nothing here does it.
+    """
     from tests.unit.test_audit2609_b4_collins_transport import (
         _CHAIN_TKW, _chain_fixture)
     env0, dx0, r_in, groups = _chain_fixture()
     dx = dx0 * env0.shape[0] / n
+    seen = {}
+    real = C._collins_readout_k1
+
+    def _spy(env, R, zz, wl, dxx, dyy):
+        out = real(env, R, zz, wl, dxx, dyy)
+        seen.update(env=np.array(env), R=R, z=zz, dx=float(dxx), k1=out)
+        return out
+
+    monkeypatch.setattr(C, '_collins_readout_k1', _spy)
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
         res = C.propagate_traced_carrier_chain(
             _gauss(n, dx, 4.5e-3), groups, LAM, dx, r_in=r_in,
             ray_subsample=16, n_workers=1, traced_kwargs=_CHAIN_TKW,
-            final_leg='paraxial', final_distance=0.0, transport='sziklas')
-    dxe = res.dx[0] if isinstance(res.dx, tuple) else res.dx
-    return res.field, res.R, float(dxe)
+            final_leg='paraxial', final_distance=z,
+            focus_readout=dict(dx_out=0.5e-6, N_out=64), transport='collins')
+    assert seen, 'the chain never consulted the routing condition'
+    return seen, res.stages[-1]
 
 
 def _oversampled_chain(n=512, dx=8e-6, w=0.30e-3, f=300e-3):
@@ -200,28 +221,35 @@ class TestAGridClippedExitCannotReachTheOneStepReadout:
     ``space_term > 0`` for every finite leg with power on the grid,
     ``K1 <= 1`` is unsatisfiable.
 
-    This CONTRADICTS the shipped reading that K1 "falls only as ``1/dx``, so
-    ``N ~ 16000`` would be needed to sample it"
-    (``_collins_readout_k1.__doc__``, and report section 7 item 1): what falls
-    as ``1/dx`` is the SPACE term, and the sum is floored at 1 while the
-    angular support stays clipped.  See VERIFY_WP-C3.md defect D3.
+    Where the support is NOT clipped the space term decides and does fall as
+    ``1/dx``, so the shipped reading that K1 "falls only as ``1/dx``"
+    (``_collins_readout_k1.__doc__``) is right about the mechanism and wrong
+    about the constant -- see VERIFY_WP-C3.md defect D3.  What it is missing
+    is the floor: there is no grid at which a CLIPPED envelope's readout
+    becomes representable.
+
+    Every reading here is taken from the array the chain ITSELF hands the
+    condition, never from a ``final_distance=0`` reconstruction (see
+    :func:`_relay_readout_input`).
     """
 
     @pytest.mark.parametrize('n', [256, 512])
     def test_the_relay_saturates_its_angular_support_and_stays_over_the_bar(
-            self, n):
-        env, R, dxe = _relay_exit(n)
-        angle, space, k1 = _decompose(env, R, 8e-3, dxe)
+            self, n, monkeypatch):
+        seen, stage = _relay_readout_input(n, monkeypatch)
+        angle, space, k1 = _decompose(seen['env'], seen['R'], seen['z'],
+                                      seen['dx'])
         assert angle == 1.0, (
-            f'expected the WP-B4 relay exit to be angularly grid-clipped at '
-            f'N={n} (the beam is 4.5 mm on a 15.4 mm window, truncated at '
-            f'1.7 w), so the containment radius saturates at the outermost '
-            f'bin and angle_term reads exactly 1.0; got {angle!r}.')
+            f'expected the WP-B4 relay exit envelope to be angularly '
+            f'grid-clipped at N={n} (a 4.5 mm beam on a 15.4 mm window, '
+            f'truncated at 1.7 w), so the containment radius saturates at the '
+            f'outermost bin and angle_term reads exactly 1.0; got {angle!r}.')
         assert space > 0.0
         assert k1 > _K1_BAR, (
             f'K1={k1!r} at N={n}: with the angle term saturated the sum '
-            f'cannot reach the bar.')
-        got = C._collins_readout_k1(env, R, 8e-3, LAM, dxe, dxe)
+            f'cannot reach the bar, whatever the leg.')
+        assert stage['readout_route'] == 'sziklas'
+        assert stage['readout_route_reason'] == 'k1'
         # DERIVED bar, not fitted: the helper forms
         # ``2 dx (|A| r/|B| + theta)/lambda`` with ONE division while the
         # split above forms the two terms separately and adds, so the two
@@ -229,34 +257,32 @@ class TestAGridClippedExitCannotReachTheOneStepReadout:
         # the reading is the smallest bar two orderings of the same six
         # float64 operations can be held to; the measured difference on this
         # build is under one.
-        assert got == pytest.approx(k1, rel=8.0 * float(np.finfo(float).eps),
-                                    abs=0.0), (
-            f'the hand decomposition {k1!r} and the library helper {got!r} '
-            f'disagree by more than a re-association of the same operations '
-            f'-- the split above is no longer what the library computes.')
+        assert stage['readout_route_k1'] == pytest.approx(
+            k1, rel=8.0 * float(np.finfo(float).eps), abs=0.0), (
+            f"the hand decomposition {k1!r} and the published "
+            f"{stage['readout_route_k1']!r} disagree by more than a "
+            f're-association of the same operations -- the split above is no '
+            f'longer what the library computes.')
 
-    def test_refining_the_grid_does_not_bring_the_relay_under_the_bar(self):
-        """The excess over the bar falls as ``1/dx``; the bar itself does not
-        move, so no refinement crosses it.
+    def test_a_saturated_angle_term_forces_the_route_whatever_the_leg(
+            self, monkeypatch):
+        """With the angular support clipped the route is decided BEFORE the
+        leg is looked at, because ``K1 >= angle_term = 1`` identically.
 
-        Asserted as a DECISION rather than as two pinned numbers: the excess
-        must at least halve when the pitch halves (that is the ``1/dx`` law
-        the shipped text invokes) AND the total must stay over the bar on both
-        rungs (which is what the shipped text gets wrong).
+        That is a stronger statement than "K1 came out above 1 here", and it
+        is the one worth gating: it says no final distance and no refinement
+        of the SPACE term can reach the bar on such a field.  Asserted by
+        sweeping the leg over three decades on the captured envelope.
         """
-        excess = {}
-        for n in (256, 512):
-            env, R, dxe = _relay_exit(n)
-            angle, space, k1 = _decompose(env, R, 8e-3, dxe)
-            assert angle == 1.0
-            assert k1 > _K1_BAR
-            excess[n] = space
-        ratio = excess[256] / excess[512]
-        assert 1.8 <= ratio <= 2.2, (
-            f'the space term did not halve with the pitch (ratio {ratio!r}); '
-            f'the 1/dx law the shipped extrapolation rests on is not what '
-            f'this fixture does.')
-        assert excess[512] > 0.0
+        seen, _stage = _relay_readout_input(256, monkeypatch)
+        env, R, dxe = seen['env'], seen['R'], seen['dx']
+        angle, _space, _k1 = _decompose(env, R, 8e-3, dxe)
+        assert angle == 1.0
+        for z in (1e-3, 8e-3, 50e-3, 0.5, 5.0):
+            k1 = C._collins_readout_k1(env, R, z, LAM, dxe, dxe)
+            assert k1 > _K1_BAR, (
+                f'K1={k1!r} at final_distance={z}: the angle term alone is '
+                f'1.0, so the sum cannot be <= 1 at any leg length.')
 
 
 class TestTheResolvedRouteIsTwoSided:
@@ -373,15 +399,17 @@ class TestOpenDefectsFiledByVerifyWpC3:
         'VERIFY_WP-C3 defect D2: _collins_readout_k1\'s docstring carries two '
         'mutually inconsistent MEASURED readings for ONE fixture -- '
         '"exit support 5.76 mm, K1 = 56.0" and, three sentences later, '
-        '"82.4 / 21.4 / 10.9".  Measured on this build the WP-B4 relay reads '
-        'exit support 6.736 mm and K1 = 82.3605 / 41.4491 / 21.4557 / '
-        '11.1267 at N = 256 / 512 / 1024 / 2048.  Requested fix: delete the '
-        '"5.76 mm, K1 = 56.0" clause and correct "10.9" to 11.13.'))
-    def test_the_readout_k1_docstring_quotes_the_measured_reading(self):
+        '"82.4 / 21.4 / 10.9".  Measured on this build, on the array the '
+        'chain itself hands the condition, the WP-B4 relay reads exit '
+        'support 6.736 mm and K1 = 82.36047 / 41.44910 / 21.42248 / 10.94410 '
+        'at N = 256 / 512 / 1024 / 2048 -- so the second triple is right to '
+        'its printed precision and the "5.76 mm, K1 = 56.0" clause is not. '
+        'Requested fix: delete that clause.'))
+    def test_the_readout_k1_docstring_quotes_the_measured_reading(
+            self, monkeypatch):
         doc = C._collins_readout_k1.__doc__ or ''
-        env, R, dxe = _relay_exit(256)
-        k1 = C._collins_readout_k1(env, R, 8e-3, LAM, dxe, dxe)
-        assert f'{k1:.2f}'.startswith('82.3'), k1
+        _seen, stage = _relay_readout_input(256, monkeypatch)
+        assert f"{stage['readout_route_k1']:.2f}".startswith('82.3'), stage
         assert 'K1 = 56.0' not in doc, (
             'the docstring states a K1 for this fixture that the fixture '
             'does not produce')

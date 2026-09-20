@@ -1,0 +1,27 @@
+{
+ "Ax": "0.0008590631199385523",
+ "Ax_hex": "0x1.c265800aed800p-11",
+ "angle_term": "0.4765625",
+ "build": "WIN-py3.14-np2.4.4",
+ "carrier_file": "C:\\tmp\\vc3_head\\lumenairy\\propagators\\carrier.py",
+ "env": {
+  "MKL_NUM_THREADS": "1",
+  "NUMBA_NUM_THREADS": null,
+  "OMP_NUM_THREADS": "1",
+  "OPENBLAS_CORETYPE": null,
+  "OPENBLAS_NUM_THREADS": "1"
+ },
+ "env_l2_hex": "0x1.887930e6e6e4dp+6",
+ "fft_backend": {
+  "cupy": true,
+  "pyfftw": true
+ },
+ "k1": "0.5629188396669038",
+ "k1_hex": "0x1.2036e5ed57de8p-1",
+ "r_x": "0.015277173391792397",
+ "r_x_hex": "0x1.f49a380be9b59p-7",
+ "space_term": "0.08635633966690386",
+ "th_x": "0.00939887749962583",
+ "th_x_hex": "0x1.33fb7fbd70beap-7",
+ "tree": "C:\\tmp\\vc3_head"
+}

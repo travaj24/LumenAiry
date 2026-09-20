@@ -1,0 +1,315 @@
+{
+ "tree": "C:\\tmp\\lum_vc3",
+ "lumenairy": "C:\\tmp\\lum_vc3\\lumenairy\\__init__.py",
+ "version": "5.48.1",
+ "python": "3.14.6",
+ "numpy": "2.4.4",
+ "default_transport": "collins",
+ "keys": {
+  "leg-diverging": {
+   "outcome": "returned",
+   "sha": "d5081360e1f8d86e4dc1a0d6cdfc3683a272cea90196f875f61ab77030be8082",
+   "n_arrays": 1,
+   "all_finite": true,
+   "dx": "4.5e-06",
+   "R": "-0.045",
+   "warnings": []
+  },
+  "leg-converging": {
+   "outcome": "returned",
+   "sha": "a5578a3b87bab7a3e0e37197aa68245ca1c6d2d15db55ce4c45d252a73bd4e84",
+   "n_arrays": 1,
+   "all_finite": true,
+   "dx": "2e-06",
+   "R": "-0.02",
+   "warnings": []
+  },
+  "leg-on-focus": {
+   "outcome": "returned",
+   "sha": "bb44c887e8d7a3f3472c0dd521d26074f1f5003c5ca9222280d030824bea8c2d",
+   "n_arrays": 1,
+   "all_finite": true,
+   "dx": "4.0588378906250003e-07",
+   "R": "inf",
+   "warnings": []
+  },
+  "leg-just-past": {
+   "outcome": "returned",
+   "sha": "863ad40dedabf1cd174d150ad4b7a7e27d1054348c61710dd31e3885743ea4bc",
+   "n_arrays": 1,
+   "all_finite": true,
+   "dx": "4.875152587890629e-07",
+   "R": "0.0010000000000000009",
+   "warnings": []
+  },
+  "leg-well-past": {
+   "outcome": "returned",
+   "sha": "c659c97941620d99ac4244af2def71ed51a3b915674aaf232060bb7439f7edf1",
+   "n_arrays": 1,
+   "all_finite": true,
+   "dx": "2.03851318359375e-06",
+   "R": "0.019999999999999997",
+   "warnings": []
+  },
+  "leg-collimated-inf": {
+   "outcome": "returned",
+   "sha": "63ea0755641b019de63c12067604c8de1b6bcac108b0beb7a27540061d76e2f3",
+   "n_arrays": 1,
+   "all_finite": true,
+   "dx": "4e-06",
+   "R": "inf",
+   "warnings": []
+  },
+  "leg-collimated-neginf": {
+   "outcome": "returned",
+   "sha": "63ea0755641b019de63c12067604c8de1b6bcac108b0beb7a27540061d76e2f3",
+   "n_arrays": 1,
+   "all_finite": true,
+   "dx": "4e-06",
+   "R": "-inf",
+   "warnings": []
+  },
+  "leg-astigmatic": {
+   "outcome": "returned",
+   "sha": "2e413db53f3d5cbf0ab00cfeccdd6ad6fa531c4a13413e6062e3e5dce4d9557b",
+   "n_arrays": 1,
+   "all_finite": true,
+   "dx": "(3.5000000000000004e-06, 3.6363636363636366e-06)",
+   "R": "(-0.035, -0.05)",
+   "warnings": []
+  },
+  "leg-astig-past": {
+   "outcome": "returned",
+   "sha": "ea776b5a41dd9769b3c86c3dc64e7777d8010ca020c8f5706d432981bbb286e5",
+   "n_arrays": 1,
+   "all_finite": true,
+   "dx": "(2.03851318359375e-06, 8.687688654119322e-07)",
+   "R": "(0.019999999999999997, 0.0049999999999999975)",
+   "warnings": []
+  },
+  "leg-back-propagating": {
+   "outcome": "returned",
+   "sha": "0906df9d7f9b53227576642bf5ff6a21e7cc3a6c6c02db156d4ca61b93d85f5d",
+   "n_arrays": 1,
+   "all_finite": true,
+   "dx": "3.5e-06",
+   "R": "0.035",
+   "warnings": []
+  },
+  "leg-zero-length": {
+   "outcome": "returned",
+   "sha": "0b0efe7e6f2ae4c492137e300591d1a2bcb97204b0b014d473c82dcb774e63f4",
+   "n_arrays": 1,
+   "all_finite": true,
+   "dx": "4e-06",
+   "R": "-0.04",
+   "warnings": []
+  },
+  "leg-complex64": {
+   "outcome": "returned",
+   "sha": "fb22297c729217b106b5e103477640fda6db55dc9db30d6fd27ea25164974a34",
+   "n_arrays": 1,
+   "all_finite": true,
+   "dx": "3.5e-06",
+   "R": "-0.035",
+   "warnings": []
+  },
+  "leg-tilted": {
+   "outcome": "returned",
+   "sha": "d5d90185b0cf3a95620342ddbfc4103f1a1b21a27cb6016e00d17890a1edd62f",
+   "n_arrays": 1,
+   "all_finite": true,
+   "dx": "3.5e-06",
+   "R": "-0.035",
+   "warnings": []
+  },
+  "leg-kernel-fresnel": {
+   "outcome": "returned",
+   "sha": "6a62e20e3a2e42e8ee9a8843a9a7c244457dbf872ca3149700b3731ad092ab49",
+   "n_arrays": 1,
+   "all_finite": true,
+   "dx": "2e-06",
+   "R": "-0.02",
+   "warnings": []
+  },
+  "leg-kernel-exact": {
+   "outcome": "returned",
+   "sha": "a5578a3b87bab7a3e0e37197aa68245ca1c6d2d15db55ce4c45d252a73bd4e84",
+   "n_arrays": 1,
+   "all_finite": true,
+   "dx": "2e-06",
+   "R": "-0.02",
+   "warnings": []
+  },
+  "leg-asym-dxdy": {
+   "outcome": "returned",
+   "sha": "afcc77e41ede1ad33d7e0a981af115509f523867cd08ed845bfba3d0f3d361dc",
+   "n_arrays": 1,
+   "all_finite": true,
+   "dx": "3.5000000000000004e-06",
+   "R": "-0.035",
+   "warnings": []
+  },
+  "leg-zero-carrier": {
+   "outcome": "raised",
+   "exc": "ValueError",
+   "msg": "propagate_carrier_referenced: R_carrier == 0 is the carrier's own focus (an infinite curvature screen).  Reference the beam to a plane away from its focus.",
+   "where": "propagate_carrier_referenced",
+   "warnings": []
+  },
+  "leg-exact-focus-fresnel": {
+   "outcome": "returned",
+   "sha": "bb44c887e8d7a3f3472c0dd521d26074f1f5003c5ca9222280d030824bea8c2d",
+   "n_arrays": 1,
+   "all_finite": true,
+   "dx": "4.0588378906250003e-07",
+   "R": "inf",
+   "warnings": []
+  },
+  "jax-grad-through-leg": {
+   "outcome": "raised",
+   "exc": "ValueError",
+   "msg": "propagate_carrier_referenced: the envelope is a JAX Tracer (inside jax.jit / jax.grad).  This leg resolves its OUTPUT LATTICE and its QUADRATURE by measuring the envelope's own phase-space box -- the support radii r_x/r_",
+   "where": "_collins_carrier_leg",
+   "warnings": []
+  },
+  "jax-eager-leg": {
+   "outcome": "returned",
+   "sha": "05305605f61e922f23b26adbb5f84bd8425dad9bd943c5231ba644b57da6c457",
+   "n_arrays": 1,
+   "all_finite": true,
+   "dx": "None",
+   "R": "None",
+   "warnings": [
+    "UserWarning"
+   ]
+  },
+  "ro-focus": {
+   "outcome": "returned",
+   "sha": "f4f98649f48ec8d11f1c3a6baa50d543985befe1f915729555d7c73c73f50d92",
+   "n_arrays": 1,
+   "all_finite": true,
+   "dx": "None",
+   "R": "None",
+   "warnings": []
+  },
+  "ro-focus-standoff": {
+   "outcome": "raised",
+   "exc": "RuntimeError",
+   "msg": "carrier_referenced_focus_readout: the beam does not fit the co-moving grid at the stop plane.  The grid half-width there is 25.5179 um against a measured amplitude radius of 30.4907 um -- a containment of 0.837 beam radi",
+   "where": "_guard_dispose",
+   "warnings": []
+  },
+  "ro-exact-focus": {
+   "outcome": "returned",
+   "sha": "f41067f8f7004b418e78f5c640d94cdbd26afc0303ccbc13a015e324165eff2b",
+   "n_arrays": 1,
+   "all_finite": true,
+   "dx": "None",
+   "R": "None",
+   "warnings": []
+  },
+  "chain-bare-final": {
+   "outcome": "returned",
+   "sha": "cd0d3f6246ed5b95fc2f326b0385722bcb01fdcbdd8bf7f971d07b08e1fbd045",
+   "n_arrays": 1,
+   "all_finite": true,
+   "dx": "6.329196024343745e-05",
+   "R": "-0.03820692561794844",
+   "warnings": [
+    "RuntimeWarning"
+   ]
+  },
+  "chain-readout": {
+   "outcome": "returned",
+   "sha": "2860e0d7490d72690b978f75c22f2d04e109493a99a6fc465a0883de9ef2321b",
+   "n_arrays": 1,
+   "all_finite": true,
+   "dx": "5e-07",
+   "R": "None",
+   "warnings": [
+    "RuntimeWarning"
+   ]
+  },
+  "chain-readout-standoff": {
+   "outcome": "returned",
+   "sha": "4d0a67c5d71b6b80e0353234478caed75ac45d75613ceec39a1cd53eb4f79f27",
+   "n_arrays": 1,
+   "all_finite": true,
+   "dx": "5e-07",
+   "R": "None",
+   "warnings": [
+    "RuntimeWarning"
+   ]
+  },
+  "chain-readout-containment": {
+   "outcome": "returned",
+   "sha": "2860e0d7490d72690b978f75c22f2d04e109493a99a6fc465a0883de9ef2321b",
+   "n_arrays": 1,
+   "all_finite": true,
+   "dx": "5e-07",
+   "R": "None",
+   "warnings": [
+    "RuntimeWarning"
+   ]
+  },
+  "chain-readout-bandlimit": {
+   "outcome": "returned",
+   "sha": "2860e0d7490d72690b978f75c22f2d04e109493a99a6fc465a0883de9ef2321b",
+   "n_arrays": 1,
+   "all_finite": true,
+   "dx": "5e-07",
+   "R": "None",
+   "warnings": [
+    "RuntimeWarning"
+   ]
+  },
+  "chain-readout-zero-final": {
+   "outcome": "returned",
+   "sha": "64d4287efca0afc18a7008868729404d8fc9764714fae043b5315a011ed40a9e",
+   "n_arrays": 1,
+   "all_finite": true,
+   "dx": "5e-07",
+   "R": "None",
+   "warnings": [
+    "RuntimeWarning"
+   ]
+  },
+  "chain-final-leg-exact": {
+   "outcome": "returned",
+   "sha": "2af6ba38231d7fa3f4da4362480fac68fbe9b9c0853e8f17594b2fb1845ef649",
+   "n_arrays": 1,
+   "all_finite": true,
+   "dx": "5e-07",
+   "R": "None",
+   "warnings": [
+    "RuntimeWarning"
+   ]
+  },
+  "chain-fresnel": {
+   "outcome": "returned",
+   "sha": "95e1b34cb06d26d653853fdad132fd0cafbde08b3c4268629b83c5faa5e9c6f4",
+   "n_arrays": 1,
+   "all_finite": true,
+   "dx": "6.329196024343745e-05",
+   "R": "-0.03820692561794844",
+   "warnings": [
+    "RuntimeWarning"
+   ]
+  },
+  "multi-K1": {
+   "outcome": "raised",
+   "exc": "TypeError",
+   "msg": "propagate_traced_carrier_chain_multi() got an unexpected keyword argument 'r_in'",
+   "where": "<lambda>",
+   "warnings": []
+  },
+  "multi-K1-standoff": {
+   "outcome": "raised",
+   "exc": "TypeError",
+   "msg": "propagate_traced_carrier_chain_multi() got an unexpected keyword argument 'r_in'",
+   "where": "<lambda>",
+   "warnings": []
+  }
+ }
+}

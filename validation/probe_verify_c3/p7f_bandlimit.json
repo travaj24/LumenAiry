@@ -1,0 +1,26 @@
+{
+ "p6-fixture": {
+  "identical": false,
+  "relL2": 0.7890866921911288
+ },
+ "p6-tilted-f0=4e4": {
+  "identical": false,
+  "relL2": 0.999994882631114
+ },
+ "p6-tilted-f0=1e5": {
+  "identical": false,
+  "relL2": 1.007205704822563
+ },
+ "tight-N256": {
+  "identical": false,
+  "relL2": 0.8756387876970448
+ },
+ "tight-N256-tilt": {
+  "identical": false,
+  "relL2": 0.9805636807845333
+ },
+ "veryfast": {
+  "identical": false,
+  "relL2": 0.10666020020812152
+ }
+}

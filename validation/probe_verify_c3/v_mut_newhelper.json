@@ -1,0 +1,23 @@
+{
+ "tree": "C:\\tmp\\vc3_mutD",
+ "rows": [
+  {
+   "case": "A_new_helper_named__collins_x",
+   "helper": "_collins_brand_new",
+   "why": "a NEW helper on the path, named _collins*, host-only, demoting",
+   "xp_census_fired": true,
+   "xp_tail": "t ['_collins_brand_new']\n\ntests\\unit\\test_c3_collins_default.py:688: AssertionError\n=========================== short test summary info ===========================\nFAILED tests/unit/test_c3_collins_default.py::test_every_helper_on_the_collins_path_is_xp_parametrised\n1 failed, 25 deselected in 8.03s\n",
+   "demotion_census_fired": false,
+   "demotion_tail": ".                                                                        [100%]\n1 passed, 25 deselected in 0.95s\n"
+  },
+  {
+   "case": "B_new_helper_named_without_the_collins_prefix",
+   "helper": "_carrier_brand_new",
+   "why": "the SAME helper, named without the _collins prefix",
+   "xp_census_fired": false,
+   "xp_tail": ".                                                                        [100%]\n1 passed, 25 deselected in 1.44s\n",
+   "demotion_census_fired": false,
+   "demotion_tail": ".                                                                        [100%]\n1 passed, 25 deselected in 1.47s\n"
+  }
+ ]
+}
