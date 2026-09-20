@@ -26,8 +26,10 @@ The gaps closed here (each named in
       mutant that drops it from the static signature diverges from the NumPy
       chain (measured) and survived the WHOLE shipped suite on both builds.
   V2  the three chain routes must agree on REFUSAL, not only on the field.
-      Two element dicts are accepted by the jit'd route and refused by the
-      other two; those rows are strict xfails and will flip when fixed.
+      Two element dicts were accepted by the jit'd route and refused by the
+      other two; those rows were strict xfails and FLIPPED to passes in
+      round 2, when the refusal moved into the one place both backends read
+      the element.
   V3  ``lumenairy.evaluate`` reaches an ``'aperture'`` element and so moves
       with the default, and exposes no ``edge`` of its own -- an entry point
       the Migration table does not name.
@@ -189,22 +191,18 @@ _EDGE_KEY_CASES = [
     ('edge_samples_zero', {'edge_samples': 0}, True),
     ('edge_samples_negative', {'edge_samples': -2}, True),
     ('edge_samples_float_4p0', {'edge_samples': 4.0}, False),
-    pytest.param(
-        'edge_samples_float_2p5', {'edge_samples': 2.5}, True,
-        marks=pytest.mark.xfail(
-            strict=True,
-            reason="VERIFY-C1 defect D1: _system_element_signature coerces "
-                   "edge_samples with int(), so the jit'd JAX route ACCEPTS "
-                   "2.5 (and silently uses 2) where apply_aperture, the "
-                   "NumPy chain and the eager JAX route all raise "
-                   "ValueError.  Measured 2026-09-20 on both builds.")),
-    pytest.param(
-        'edge_samples_str', {'edge_samples': '4'}, True,
-        marks=pytest.mark.xfail(
-            strict=True,
-            reason="VERIFY-C1 defect D1, same root: int('4') succeeds in the "
-                   "static signature, so the jit'd route accepts a string "
-                   "the other two routes refuse.")),
+    # VERIFY-C1 D1, CLOSED 2026-09-20 (round 2).  These two rows were strict
+    # xfails: ``_system_element_signature`` coerced with ``int()`` / ``str()``
+    # before ``apply_aperture`` saw the value, so the jit'd JAX route ACCEPTED
+    # 2.5 (silently using 2) and '4' where the NumPy chain and the eager JAX
+    # route both raised.  The refusal now lives in
+    # ``elements._validate_edge_kwargs``, called from ``_aperture_edge_kwargs``
+    # -- the one place both backends read the element -- so all three routes
+    # raise the same ValueError with the same message.  The markers are gone
+    # with the defect; if the coercion ever comes back these rows go RED, which
+    # is what a strict xfail was standing in for.
+    ('edge_samples_float_2p5', {'edge_samples': 2.5}, True),
+    ('edge_samples_str', {'edge_samples': '4'}, True),
 ]
 
 
@@ -221,9 +219,13 @@ def test_verify_c1_all_three_chain_routes_agree_on_an_edge_element(
     ``_system_element_signature``, which coerces with ``int()`` / ``str()``
     before ``apply_aperture`` ever sees the value.
 
-    The rows that agree are pinned as agreeing; the two that do not are
-    strict xfails, so they FAIL as soon as the coercion is removed and this
-    scaffolding has to go with it.
+    CLOSED 2026-09-20 (round 2): every row now agrees on all three routes.
+    The two rows that were strict xfails (``edge_samples`` 2.5 and '4') are
+    plain params, and the refusal is a single shared guard rather than a
+    per-route one -- see
+    ``tests/unit/test_c1_gray_edge_default.py::
+    test_c1_all_three_chain_routes_refuse_a_bad_edge_element_identically``,
+    which additionally pins that the MESSAGE is the same on all three.
     """
     _jax_or_skip()
     import jax.numpy as jnp

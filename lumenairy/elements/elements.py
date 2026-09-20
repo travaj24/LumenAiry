@@ -228,6 +228,64 @@ def apply_mirror(E_in, wavelength, dx, radius=None, conic=0.0,
 # APERTURES AND STOPS
 # =============================================================================
 
+#: Sentinel for "the caller did not name this rim keyword at all", which is
+#: NOT the same as naming it ``None`` (an illegal VALUE that must raise).
+_EDGE_UNSET = object()
+
+
+def _validate_edge_kwargs(edge=_EDGE_UNSET, edge_samples=_EDGE_UNSET):
+    """The ONE refusal for :func:`apply_aperture`'s rim keywords.
+
+    WP-C1 / VERIFY-C1 D1.  Both the NumPy chain and its JAX twin read an
+    ``'aperture'`` element's ``'edge'`` / ``'edge_samples'`` through
+    :func:`lumenairy.propagators.system._aperture_edge_kwargs`, but the
+    jit'd JAX kernel then puts them in a STATIC signature, which has to be
+    hashable and so coerces with ``int()`` / ``str()``.  Measured
+    2026-09-20 on both builds: that coercion made the jit'd route ACCEPT
+    ``{'edge_samples': 2.5}`` (silently using 2) and ``{'edge_samples':
+    '4'}``, both of which :func:`apply_aperture`, the NumPy chain and the
+    eager JAX route all raise ``ValueError`` on.  Hoisting the guard out
+    of the function body into this helper gives every route ONE reading
+    of the element and ONE verdict; the signature keeps its coercions
+    because by the time it runs the value is known to be one of the two
+    legal strings and an exact positive integer.
+
+    Parameters
+    ----------
+    edge, edge_samples : optional
+        Omit either to mean "the caller did not name this key", which is
+        not checked.  ``None`` is a named value and raises.
+
+    Returns
+    -------
+    n_sub : int or None
+        ``int(edge_samples)`` when it was named, else ``None``.
+
+    Raises
+    ------
+    ValueError
+        If ``edge`` is neither ``'hard'`` nor ``'gray'``, or if
+        ``edge_samples`` is not an exact integer >= 1.
+    TypeError
+        If ``edge_samples`` is of a type ``int()`` refuses outright
+        (``None``, a list); this is the same refusal the function body
+        gave before the hoist.
+    """
+    if edge is not _EDGE_UNSET and edge not in ('hard', 'gray'):
+        raise ValueError(
+            f"apply_aperture: edge must be 'hard' (binary pixel mask) or "
+            f"'gray' (supersampled open-area fraction on boundary pixels); "
+            f"got {edge!r}.")
+    if edge_samples is _EDGE_UNSET:
+        return None
+    n_sub = int(edge_samples)
+    if n_sub < 1 or n_sub != edge_samples:
+        raise ValueError(
+            f"apply_aperture: edge_samples must be a positive integer "
+            f"(sub-samples per axis); got {edge_samples!r}.")
+    return n_sub
+
+
 def apply_aperture(E_in, dx, shape='circular', params=None, xc=0, yc=0,
                    dy=None, edge='gray', edge_samples=4):
     """
@@ -339,16 +397,7 @@ def apply_aperture(E_in, dx, shape='circular', params=None, xc=0, yc=0,
         params = {}
     if dy is None:
         dy = dx
-    if edge not in ('hard', 'gray'):
-        raise ValueError(
-            f"apply_aperture: edge must be 'hard' (binary pixel mask) or "
-            f"'gray' (supersampled open-area fraction on boundary pixels); "
-            f"got {edge!r}.")
-    n_sub = int(edge_samples)
-    if n_sub < 1 or n_sub != edge_samples:
-        raise ValueError(
-            f"apply_aperture: edge_samples must be a positive integer "
-            f"(sub-samples per axis); got {edge_samples!r}.")
+    n_sub = _validate_edge_kwargs(edge=edge, edge_samples=edge_samples)
     xp = _xp_of(E_in)
 
     Ny, Nx = E_in.shape

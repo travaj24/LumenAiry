@@ -38,6 +38,7 @@ from ..elements import (
     apply_zernike_aberration,
     generate_turbulence_screen,
 )
+from ..elements.elements import _validate_edge_kwargs
 from ..elements.lenses import (
     apply_aspheric_lens,
     apply_axicon,
@@ -1556,12 +1557,29 @@ def _aperture_edge_kwargs(elem: Dict[str, Any]) -> Dict[str, Any]:
 
     Returns only the keys the element actually names, so an element that
     names neither cannot pin today's defaults into tomorrow's answer.
+
+    VERIFY-C1 D1.  This is the ONE place both backends read the element, so
+    it is also where the element is REFUSED.  The jit'd JAX kernel takes its
+    static signature from :func:`_system_element_signature`, which has to be
+    hashable and therefore coerces with ``int()`` / ``str()``; measured
+    2026-09-20 on both builds, that coercion made the jit'd route accept
+    ``{'edge_samples': 2.5}`` (silently using 2) and ``{'edge_samples': '4'}``
+    where ``apply_aperture``, the NumPy chain and the eager JAX route all
+    raised ``ValueError``.  Validating here -- through
+    :func:`~lumenairy.elements.elements._validate_edge_kwargs`, which is the
+    same function ``apply_aperture``'s own body calls and not a second copy
+    of the guards -- gives all three routes one reading and one verdict, and
+    lets the signature keep coercing, because by the time it runs the value
+    is known to be one of the two legal strings and an exact positive
+    integer.
     """
     kw: Dict[str, Any] = {}
     if 'edge' in elem:
         kw['edge'] = elem['edge']
     if 'edge_samples' in elem:
         kw['edge_samples'] = elem['edge_samples']
+    if kw:
+        _validate_edge_kwargs(**kw)
     return kw
 
 
@@ -1698,6 +1716,12 @@ def _system_element_signature(elem: Dict[str, Any]) -> Optional[Tuple]:
         # WP-C1: the rim rendering is part of the STATIC
         # signature -- two elements that differ only in ``edge`` are two
         # different kernels, not one kernel silently serving both.
+        # VERIFY-C1 D1: the ``str()`` / ``int()`` below are here only to
+        # keep the signature hashable, and they are SAFE because
+        # ``_aperture_edge_kwargs`` has already refused anything that is not
+        # one of the two legal strings or an exact positive integer.  Before
+        # that guard existed they were the whole difference between this
+        # route and the other two.
         edge_kw = _aperture_edge_kwargs(elem)
         edge = (str(edge_kw['edge']) if 'edge' in edge_kw else None)
         n_sub = (int(edge_kw['edge_samples'])

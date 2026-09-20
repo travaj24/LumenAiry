@@ -439,6 +439,202 @@ def test_c1_the_system_chain_takes_the_same_default_on_both_backends():
 
 
 # ===========================================================================
+# 5b -- VERIFY-C1 round 2: what the jit'd kernel must carry, and what it must
+#       refuse.  Both closures answer findings in
+#       ``docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/
+#       VERIFY_WP-C1.md`` -- M3, the one mutation that survived its 2796-id
+#       sweep, and D1, the split refusal contract.
+# ===========================================================================
+
+
+def _jax_or_none():
+    """JAX, or ``None`` when it is absent.
+
+    No ``pytest.skip``: a skip would silently remove these ids from the gate
+    on exactly the runner where JAX is missing, which is the shape
+    ``docs/TESTING_STANDARDS.md`` rule 4 names.  Each caller asserts the
+    absence instead.
+    """
+    import importlib.util
+    if importlib.util.find_spec('jax') is None:
+        return None
+    import jax
+    jax.config.update('jax_enable_x64', True)
+    return jax
+
+
+@pytest.mark.parametrize('n_sub', [1, 4])
+def test_c1_the_jit_kernel_carries_the_elements_edge_samples(n_sub):
+    """The jit'd JAX kernel must render the rim the ELEMENT asked for, not the
+    library default, and must do it bit for bit with the eager route.
+
+    ``_system_element_signature`` puts ``edge_samples`` in the jit'd kernel's
+    STATIC signature.  VERIFY-C1 mutated that one line to ``n_sub = None`` and
+    the mutant SURVIVED the whole 61-file / 2796-id sweep on Windows and the
+    17-id WP-C1 file on WSL -- while really diverging: with
+    ``{'edge_samples': 8}`` the NumPy chain and the eager route read
+    ``d3ca82780ee20bbd`` and the jit'd kernel read ``5608c91cd1d4ebae``
+    (measured 2026-09-20, both builds).  This id is the one that goes red.
+
+    The two values are the two ends of the contract: ``1`` is exactly the
+    pre-5.49 pixel-centre indicator and ``4`` is the shipped default, and the
+    last assertion pins that they really are different masks on this fixture,
+    so the bit identities above cannot be three routes agreeing on one
+    default.
+
+    Bit identity, not a tolerance: the three routes run the same body on the
+    same input, so anything short of equal bytes is a divergence -- a mask sum
+    is an integer count over ``n_sub**2`` with no BLAS in it, so there is no
+    cross-build spread for a bar to sit inside.
+    """
+    jax = _jax_or_none()
+    if jax is None:
+        import importlib.util
+        assert importlib.util.find_spec('jax') is None
+        return
+    import jax.numpy as jnp
+    from lumenairy.propagators.system import (propagate_through_system,
+                                              propagate_through_system_jax)
+    N, dx = 96, 1.25e-6
+    rng = np.random.default_rng(311)
+    E = rng.normal(size=(N, N)) + 1j * rng.normal(size=(N, N))
+    elements = [{'type': 'aperture', 'shape': 'circular',
+                 'params': {'diameter': 9.1e-5}, 'edge_samples': n_sub}]
+    npy, _ = propagate_through_system(E, elements, WAVELENGTH, dx=dx)
+    jit_ = np.asarray(propagate_through_system_jax(
+        jnp.asarray(E), elements, WAVELENGTH, dx))
+    eager = np.asarray(propagate_through_system_jax(
+        jnp.asarray(E), elements, WAVELENGTH, dx, verbose=True))
+    assert jit_.tobytes() == eager.tobytes(), (
+        f"the jit'd JAX kernel and the eager JAX route disagree at "
+        f"edge_samples={n_sub} -- the element's value is not reaching one "
+        f"of them")
+    assert jit_.tobytes() == np.asarray(npy).tobytes(), (
+        f"the jit'd JAX kernel did not honour edge_samples={n_sub} from the "
+        f"element dict (it differs from the NumPy chain on the same dict)")
+    other = 4 if n_sub == 1 else 1
+    other_el = [dict(elements[0], edge_samples=other)]
+    other_npy, _ = propagate_through_system(E, other_el, WAVELENGTH, dx=dx)
+    assert np.asarray(other_npy).tobytes() != np.asarray(npy).tobytes(), (
+        f"edge_samples {n_sub} and {other} render the same mask on this "
+        f"fixture, so the identities above prove nothing")
+
+
+# VERIFY-C1 D1.  Six element dicts ``apply_aperture`` refuses, plus three
+# legal spellings that must NOT be refused.  Measured 2026-09-20 on both
+# builds BEFORE the fix: ``{'edge_samples': 2.5}`` and ``{'edge_samples':
+# '4'}`` were ACCEPTED by the jit'd route (2.5 silently using 2) and raised
+# ``ValueError`` on the NumPy chain and the eager JAX route, because
+# ``_system_element_signature`` coerced with ``int()`` / ``str()`` before
+# ``apply_aperture`` ever saw the value.
+_BAD_EDGE_ELEMENTS = [
+    ('edge_unknown_string', {'edge': 'soft'}),
+    ('edge_none', {'edge': None}),
+    ('edge_empty_string', {'edge': ''}),
+    ('edge_samples_zero', {'edge_samples': 0}),
+    ('edge_samples_negative', {'edge_samples': -2}),
+    ('edge_samples_non_integer_float', {'edge_samples': 2.5}),
+    ('edge_samples_string', {'edge_samples': '4'}),
+    ('edge_samples_bool_false', {'edge_samples': False}),
+]
+
+_GOOD_EDGE_ELEMENTS = [
+    ('edge_hard', {'edge': 'hard'}),
+    ('edge_gray', {'edge': 'gray'}),
+    ('edge_samples_integral_float', {'edge_samples': 4.0}),
+]
+
+
+def _refusal(fn):
+    """``(raised, message)`` for one route, so two routes are compared on the
+    VERDICT and on the TEXT, not merely on "something went wrong"."""
+    try:
+        fn()
+    except (ValueError, TypeError) as e:
+        return True, f"{type(e).__name__}: {e}"
+    return False, ''
+
+
+@pytest.mark.parametrize('label,bad', _BAD_EDGE_ELEMENTS)
+def test_c1_all_three_chain_routes_refuse_a_bad_edge_element_identically(
+        label, bad):
+    """A chain's ``'edge'`` / ``'edge_samples'`` keys are a CONTRACT, and a
+    contract has two sides: one element dict is accepted by all three routes
+    or refused by all three, with the SAME diagnostic.
+
+    WP-C1's claim is "one implementation, one default and one way back".
+    VERIFY-C1 confirmed that bit for bit of the FIELD and found it untrue of
+    the REFUSAL, because the jit'd route read the element through
+    ``_system_element_signature``, whose static signature must be hashable and
+    so coerced the value first.  The refusal now lives in
+    ``elements._validate_edge_kwargs`` -- the same function
+    ``apply_aperture``'s own body calls, reached from the one place both
+    backends read the element (``_aperture_edge_kwargs``) -- so this id
+    asserts ONE guard three times rather than three guards hoped to agree.
+
+    Message equality, not merely verdict equality: two routes raising for
+    DIFFERENT reasons satisfy a verdict-only assertion while still disagreeing
+    about what is legal.  The message is the library's own text and carries no
+    build-dependent quantity, so there is no bar here to be per-build.
+    """
+    jax = _jax_or_none()
+    from lumenairy.propagators.system import (propagate_through_system,
+                                              propagate_through_system_jax)
+    N, dx = 64, 1.25e-6
+    rng = np.random.default_rng(313)
+    E = rng.normal(size=(N, N)) + 1j * rng.normal(size=(N, N))
+    elements = [dict({'type': 'aperture', 'shape': 'circular',
+                      'params': {'diameter': 5.3e-5}}, **bad)]
+
+    got = {'numpy': _refusal(
+        lambda: propagate_through_system(E, elements, WAVELENGTH, dx=dx))}
+    if jax is not None:
+        import jax.numpy as jnp
+        got['jax_eager'] = _refusal(lambda: propagate_through_system_jax(
+            jnp.asarray(E), elements, WAVELENGTH, dx, verbose=True))
+        got['jax_jit'] = _refusal(lambda: propagate_through_system_jax(
+            jnp.asarray(E), elements, WAVELENGTH, dx))
+    else:
+        import importlib.util
+        assert importlib.util.find_spec('jax') is None
+
+    assert got['numpy'][0], (
+        f"{label}: the NumPy chain ACCEPTED an element apply_aperture "
+        f"refuses -- the element reader is not validating at all")
+    assert len(set(got.values())) == 1, (
+        f"{label}: the chain routes disagree about this element: "
+        + ' | '.join(f'{k}={v!r}' for k, v in sorted(got.items())))
+    assert 'apply_aperture' in got['numpy'][1], got['numpy'][1]
+
+
+@pytest.mark.parametrize('label,good', _GOOD_EDGE_ELEMENTS)
+def test_c1_the_three_chain_routes_accept_the_legal_edge_elements(
+        label, good):
+    """The other side of the same contract, so the refusal census above cannot
+    be satisfied by a guard that refuses everything -- and the three routes
+    still answer the legal element identically, byte for byte."""
+    jax = _jax_or_none()
+    from lumenairy.propagators.system import (propagate_through_system,
+                                              propagate_through_system_jax)
+    N, dx = 64, 1.25e-6
+    rng = np.random.default_rng(313)
+    E = rng.normal(size=(N, N)) + 1j * rng.normal(size=(N, N))
+    elements = [dict({'type': 'aperture', 'shape': 'circular',
+                      'params': {'diameter': 5.3e-5}}, **good)]
+    npy, _ = propagate_through_system(E, elements, WAVELENGTH, dx=dx)
+    assert np.all(np.isfinite(np.asarray(npy)))
+    if jax is None:
+        import importlib.util
+        assert importlib.util.find_spec('jax') is None
+        return
+    import jax.numpy as jnp
+    for verbose in (False, True):
+        got = np.asarray(propagate_through_system_jax(
+            jnp.asarray(E), elements, WAVELENGTH, dx, verbose=verbose))
+        assert got.tobytes() == np.asarray(npy).tobytes(), (label, verbose)
+
+
+# ===========================================================================
 # 6 -- the mutation matrix
 # ===========================================================================
 #
