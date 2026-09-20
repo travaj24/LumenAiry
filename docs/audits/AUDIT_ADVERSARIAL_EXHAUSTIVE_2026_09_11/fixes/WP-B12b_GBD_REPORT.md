@@ -1126,8 +1126,12 @@ CHANGELOG entry.
 | selection | build | result |
 |---|---|---|
 | `test_wp_b12b_round2.py` (NEW, **23 ids**) | Windows | **23 passed** in 10.6 s quiet / 14.8 s under the `--store-durations` run; slowest id **6.29 s** |
-| `test_audit2609_b12b_gbd_projection.py` (14) + `test_verify_b12b_gbd_projection.py` (9) + `test_wp_b12b_round2.py` (23, one id newer than that run) | Windows | **45 passed** in 96.7 s |
-| the GBD + FGA + reference-plane selection (21 files) | Windows / WSL | see R2.10 |
+| `test_audit2609_b12b_gbd_projection.py` (14) + `test_verify_b12b_gbd_projection.py` (9) + `test_wp_b12b_round2.py` (23) = **46 ids** | Windows | **46 passed** in 54.9 s; slowest id 6.36 s |
+| the 18 WP-B12 pins (`test_audit2609_b12_fga_reference_plane.py` 14 + `test_verify_b12_fga_reference_plane.py` 4) | Windows | **18 passed** in 23.3 s |
+| `test_wave5_e_exit_vertex_dead_rays.py` -- the file that OWNS the shared guard's tolerance pins (33 ids) | Windows | **33 passed** in 12.8 s |
+| the GBD + FGA + reference-plane selection, 21 files (313 ids) | Windows | **313 passed, 0 failed** in 1954.7 s (32.6 min); slowest id 130.9 s (`test_fga_h4_h5`, not mine).  Taken while the round-2 file still had 22 ids; the coordinate-break id added afterwards is covered by the 46-id row above |
+| the same 21 files | WSL | *(below)* |
+| the GBD BLAST-RADIUS set -- every other file naming `apply_real_lens_gbd`, `apply_prescription_persurface_to_beamlets`, `propagate_gbd_through_prescription` or `method='gbd'`: `test_analytic_ray_transfer.py`, the three `test_audit2609_a16_lens_config*` files, `test_audit2609_b7_asymptotic.py` (which inspects this function's SOURCE), `test_audit_glass.py`, `test_niche_audit_w3_elements.py`, `test_niche_audit_w3_ui_deprecation.py`, `test_niche_audit_w4_ignored_kwarg_warnings.py`, `test_niche_audit_w4_input_kind.py`, `test_niche_d5_dx_flatness_gate.py`, `test_niche_k1_kmah_caustic.py`, `test_niche_p11_ray_density_amplitude.py`, `test_niche_p8_capstone.py`, `test_niche_p9_decenter_tilt.py` (a FIELD-FRAME decentred prescription through the beamlet function), `test_v4_15_3_dispatcher_pin_2d_scalar_field.py`, `test_v4_16_0_walker_dy_threading.py`, `test_v5_2_physics_fixes.py` (18 files, 660 ids) | Windows | **660 passed, 0 failed** in 1022.7 s |
 | the census / walker / dispatcher-pin / public-API / doc-consistency sweep + `test_audit_except_budget.py` (30 files, 1404 ids) | Windows | **1389 passed, 14 skipped, 1 failed** in 280.9 s -- the one red is PRE-EXISTING and environmental (below) |
 
 `test_verify_b12b_gbd_projection.py` reads **9 passed** where it read 8 passed
