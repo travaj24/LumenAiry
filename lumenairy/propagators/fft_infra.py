@@ -919,11 +919,37 @@ _register_knob(
 # and on some NumPy builds (measured: Linux numpy 2.4.6) a right-elided
 # complex128 multiply does not give the same last bits as the named form.
 #
-# This library is NOT exposed: every in-library site that multiplies a
-# dispatcher result names the other operand (``asm.py:919/922/1391``,
-# ``carrier.py:1401/7126``, ``fresnel.py:216`` all spell it ``_fft2(...) * H``),
-# so nothing is elided with the ping-pong on and only the LEFT operand is with
-# it off -- and left-elided equals named on every build measured.  Measured over
+# This library is NOT exposed: no in-library site that multiplies a dispatcher
+# result hands the elision anything it can claim.  An AST walk over all 236
+# modules (2026-09-19, VERIFY-WAVE5-E D6) finds TEN such sites, in both
+# spellings -- the dispatcher called inline, and its result held under a name,
+# which a grep for ``_fft2(`` misses:
+#
+#     asm.py:919      _fft2(E_in) * H                              NAME
+#     asm.py:922      _fft2(ifftshift(E_in)) * H                   NAME
+#     asm.py:1147     _fft2_nd(...) * H[None, :, :]                basic-slice VIEW
+#     asm.py:1391     _fft2(ifftshift(E_demod)) * H                NAME
+#     carrier.py:1401 _fft2(E) * H                                 NAME
+#     carrier.py:7126 _fft2(_e) * ramp                             NAME
+#     fresnel.py:216  _fft2(...) * H                               NAME
+#     rs.py:936/939/942   E_fft * H, where E_fft = _fft2(...)      NAME
+#
+# (This list used to name six of the ten and say "every"; the four it omitted
+# are ``asm.py:1147`` and the three ``rs.py`` sites.  ``H[None, :, :]`` is a
+# fresh object but a VIEW -- ``owndata`` False -- so ``temp_elide`` cannot
+# claim it either; an ADVANCED index at the same place would be elidable,
+# which is why the property is classified by elidability and not by syntax.
+# The three ``rs.py`` sites are the more fragile shape, because the
+# dispatcher's non-owning result is held under a name and the next edit to
+# that line has no ``_fft2(`` in front of it.)
+#
+# THE LIST IS NOT MAINTAINED BY HAND.  The property and the census are pinned
+# structurally, on every build, by ``tests/unit/test_verify_wave5_e.py::
+# test_no_in_library_fft_product_spells_an_elidable_operand`` -- which walks
+# the source rather than restating this table, so a new site is a test failure
+# with the site named, not a stale comment.  Nothing is elided with the
+# ping-pong on and only the LEFT operand is with it off -- and left-elided
+# equals named on every build measured.  Measured over
 # four entry points x three shapes x both builds: byte-identical across the
 # switch, 12 of 12 cells (``validation/probe_fft_elision/e1_decision_*.json``).
 # A CALLER that writes ``_fft2(E) * np.exp(1j*P)`` -- right operand a fresh

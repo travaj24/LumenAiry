@@ -144,6 +144,24 @@ def _dispatcher_product_sites(pkg_dir):
     return uniq
 
 
+#: THE CENSUS the ``fft_infra`` note's enumeration is checked against, per
+#: file rather than per line so it survives an edit that moves a site within
+#: its module.  Measured 2026-09-19 by the walk below, both builds, and
+#: identical to ``validation/probe_verify_wave5_e/e1_ast_sites_v2.json``:
+#: ten sites, none elidable.  This is a property of the SOURCE, so it is the
+#: same on every build and every interpreter -- there is nothing here a build
+#: is entitled to move (``docs/TESTING_STANDARDS.md``).
+#:
+#: ADDING A SITE IS ALLOWED.  If this census fires because a legitimate new
+#: product site appeared, update BOTH this dict and the enumeration in
+#: ``lumenairy/propagators/fft_infra.py``'s ``_PYFFTW_DOUBLE_BUFFER`` note --
+#: that pairing is the whole point of pinning the count: the note's list
+#: cannot go stale silently again (VERIFY-WAVE5-E D6, where it named six of
+#: the ten and said "every").
+_EXPECTED_PRODUCT_SITES = {'asm.py': 4, 'carrier.py': 2, 'fresnel.py': 1,
+                           'rs.py': 3}
+
+
 def test_no_in_library_fft_product_spells_an_elidable_operand():
     """THE BUILD-FREE FORM OF ITEM E1'S DECISION.
 
@@ -159,12 +177,15 @@ def test_no_in_library_fft_product_spells_an_elidable_operand():
     SOURCE, so it is asserted here as one, and it fires on every build.
 
     Measured on this tree: 10 product sites, 0 elidable
-    (``validation/probe_verify_wave5_e/e1_ast_sites_v2.json``).  The published
-    note names six of them (``asm.py:919/922/1391``, ``carrier.py:1401/7126``,
-    ``fresnel.py:216``); the four it does not name --
-    ``asm.py:1147`` (a basic-slice VIEW, so also not elidable) and
+    (``validation/probe_verify_wave5_e/e1_ast_sites_v2.json``).  The note in
+    ``fft_infra.py`` used to name six of them (``asm.py:919/922/1391``,
+    ``carrier.py:1401/7126``, ``fresnel.py:216``) and say "every"; the four it
+    omitted -- ``asm.py:1147`` (a basic-slice VIEW, so also not elidable) and
     ``rs.py:936/939/942`` (the dispatcher's result under a name) -- are why
-    this walk is structural instead of a list.
+    this walk is structural instead of a list.  The note now lists all ten and
+    points here, and this id carries the CENSUS
+    (:data:`_EXPECTED_PRODUCT_SITES`) as well as the property, so the note's
+    enumeration cannot go stale silently again (VERIFY-WAVE5-E D6).
     """
     pkg = os.path.dirname(os.path.abspath(la.__file__))
     sites = _dispatcher_product_sites(pkg)
@@ -172,6 +193,22 @@ def test_no_in_library_fft_product_spells_an_elidable_operand():
         f'premise: the walk must find the known dispatcher-product sites; it '
         f'found {len(sites)}.  If the dispatchers were renamed, update '
         f'_FFT_DISPATCHERS -- do not let this test pass vacuously.')
+    # THE CENSUS (VERIFY-WAVE5-E D6).  The note in fft_infra.py enumerates
+    # these sites for a reader; this is what keeps that enumeration honest.
+    census = {}
+    for s in sites:
+        census[s['file']] = census.get(s['file'], 0) + 1
+    assert census == _EXPECTED_PRODUCT_SITES, (
+        f'the in-library FFT-product census moved: {census} against the '
+        f'recorded {_EXPECTED_PRODUCT_SITES} (ten sites, measured '
+        f'2026-09-19).  This is a property of the SOURCE, not of the build, '
+        f'so a difference is a real edit.  If the new site is legitimate, '
+        f'update this census AND the enumeration in '
+        f'lumenairy/propagators/fft_infra.py\'s _PYFFTW_DOUBLE_BUFFER note '
+        f'in the same commit -- that pairing is why the count is pinned.'
+        '\n  ' + '\n  '.join(
+            '%s:%d  [%s]  %s' % (s['file'], s['line'], s['kind'], s['src'])
+            for s in sorted(sites, key=lambda d: (d['file'], d['line']))))
     bad = [s for s in sites if s['kind'] == 'elidable']
     assert not bad, (
         'an in-library site multiplies an FFT dispatcher result by an UNNAMED '
@@ -385,9 +422,29 @@ def test_the_jax_analytic_backend_reports_no_vignetting_KNOWN_DEFECT():
     This id exists so the defect cannot be lost: it asserts the current,
     WRONG behaviour together with the correct behaviour of the NumPy path.
     WHEN IT FAILS BECAUSE THE JAX PATH STARTS VIGNETTING, the defect is
-    fixed -- delete this id and assert the parity instead.
+    fixed -- delete this id and assert the parity instead.  The reproducer is
+    ``validation/probe_verify_wave5_e/probe_v_e5_jax_alive.py`` and the exact
+    patch is in ``VERIFY_WAVE5_E.md`` D2 / the item report's open items.
+
+    PREMISE GATED, NEVER SKIPPED (``docs/TESTING_STANDARDS.md`` rule 4 --
+    "never ``pytest.skip`` on a resource check").  JAX is an optional
+    dependency, so when it is absent the ABSENCE is asserted as a fact,
+    against the library's own view of it, and the id still runs and still
+    passes in the gate rather than silently dropping out of it.
     """
-    jax = pytest.importorskip('jax')
+    import importlib.util                                   # noqa: PLC0415
+
+    from lumenairy.backend.array import JAX_AVAILABLE       # noqa: PLC0415
+    if not JAX_AVAILABLE:
+        # assert the fact, do not skip on it
+        assert (importlib.util.find_spec('jax') is None
+                or os.environ.get('LUMENAIRY_DISABLE_JAX')), (
+            'lumenairy.backend.array.JAX_AVAILABLE is False but jax IS '
+            'importable and LUMENAIRY_DISABLE_JAX is unset -- the backend '
+            'flag and the environment disagree, so this id cannot say '
+            'whether the JAX analytic backend vignettes or not')
+        return
+    import jax                                              # noqa: PLC0415
     jax.config.update('jax_enable_x64', True)
     import jax.numpy as jnp                                 # noqa: PLC0415
 

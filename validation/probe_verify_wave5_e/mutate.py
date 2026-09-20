@@ -61,6 +61,14 @@ MUTATIONS = {
         'lumenairy/propagators/asm.py',
         "            E_out = _ifft2(_fft2(E_in) * H).copy()",
         "            E_out = _ifft2(_fft2(E_in) * np.exp(np.log(H))).copy()"),
+    # VERIFY-WAVE5-E D6: the AST id now pins the CENSUS as well as the
+    # property, so REMOVING a product site must fire it (a census that cannot
+    # fail is decoration).  ``np.multiply(...)`` is not a BinOp, so the walk
+    # stops counting this site and carrier.py drops from 2 to 1.
+    'e1_drop_a_product_site': (
+        'lumenairy/propagators/carrier.py',
+        "    out = _ifft2(_fft2(_e) * ramp)",
+        "    out = _ifft2(np.multiply(_fft2(_e), ramp))"),
     'e1_privatise_dispatchers': (
         'lumenairy/propagators/fft_infra.py',
         "return (buf if (_nbufs > 1",

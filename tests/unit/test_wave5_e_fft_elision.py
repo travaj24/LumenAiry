@@ -146,14 +146,24 @@ def test_no_library_entry_point_moves_across_the_ping_pong_switch(
         n, entry, restore_fft_state):
     """THE REASON REMEDY (a) WAS NOT TAKEN, asserted rather than asserted-about.
 
-    Every in-library consumer of a dispatcher result spells the product with a
-    NAMED right operand (``asm.py:919/922/1391``, ``carrier.py:1401/7126``,
-    ``fresnel.py:216`` are all ``_fft2(...) * H``), so with the ping-pong ON
-    neither operand is an unreferenced temporary and with it OFF only the LEFT
-    one is -- and left-elided equals named on every build measured.  The
-    library is therefore not exposed to the upstream non-invariance, which is
-    why paying 13-22 % of the ASM hot path to privatise every transform buys
-    nothing.
+    No in-library consumer of a dispatcher result hands the elision anything
+    it can claim.  An AST walk over all 236 modules finds TEN such sites, and
+    none of them is elidable: ``asm.py:919/922/1391``, ``carrier.py:1401/7126``
+    and ``fresnel.py:216`` are the inline ``_fft2(...) * H`` spelling;
+    ``asm.py:1147`` multiplies by a basic-slice VIEW (``owndata`` False, so
+    also not elidable); and ``rs.py:936/939/942`` hold the dispatcher's result
+    under a name (``E_fft = _fft2(...); E_fft * H``), which is the shape a
+    grep for ``_fft2(`` misses.  (This docstring listed six of the ten before
+    2026-09-19 -- VERIFY-WAVE5-E D6.)  So with the ping-pong ON neither
+    operand is an unreferenced temporary and with it OFF only the LEFT one is
+    -- and left-elided equals named on every build measured.  The library is
+    therefore not exposed to the upstream non-invariance, which is why paying
+    13-22 % of the ASM hot path to privatise every transform buys nothing.
+
+    The enumeration above is kept honest by ``tests/unit/
+    test_verify_wave5_e.py::test_no_in_library_fft_product_spells_an_elidable_operand``,
+    which walks the source and pins both the property and the census on every
+    build; it is not re-derived here.
 
     If a future edit rewrites one of those sites as ``_fft2(E) * np.exp(...)``
     -- right operand a fresh temporary -- this test goes red on the Linux
