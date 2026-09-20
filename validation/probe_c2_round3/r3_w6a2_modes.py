@@ -42,8 +42,7 @@ assert os.path.realpath(os.path.dirname(la.__file__)) == _want, la.__file__
 sys.path.insert(0, os.path.join(_ROOT, 'tests', 'unit'))
 import test_niche_audit_w6_asymptotic as W  # noqa: E402
 
-from lumenairy.propagators.asymptotic import (  # noqa: E402
-    _solve_envelope_stationary_batch)
+from lumenairy.propagators.asymptotic import _solve_envelope_stationary_batch  # noqa: E402
 
 W_S, W_P = 20e-6, 0.02
 BARS = (1e-4, 1e-5)
