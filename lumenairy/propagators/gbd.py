@@ -1567,23 +1567,28 @@ _DENSE_CELL_BYTES_MEASURED = 128.0
 #:
 #:     peak / (Ny Nx)  =  fixed  +  c * chunk
 #:
-#:     N = 512   fixed 48.551 B/cell   c 96.000 B/cell-col   worst dev 5.8e-07
-#:     N = 256   fixed 50.114 B/cell   c 96.000 B/cell-col   worst dev 7.0e-06
+#:                  Windows py3.14.6 / numpy 2.4.4   WSL py3.12.3 / numpy 2.4.6
+#:     N = 512   fixed 48.551  c 96.000  dev 5.8e-07  fixed 48.047  c 88.000  dev 1.2e-06
+#:     N = 256   fixed 50.114  c 96.000  dev 7.0e-06  fixed 48.098  c 88.000  dev 4.8e-06
 #:
-#: The two ``fixed`` readings differ by 1.56 B/cell, which at N = 256 is
+#: Windows' two ``fixed`` readings differ by 1.56 B/cell, which at N = 256 is
 #: 102 KB -- a grid-INDEPENDENT offset divided by a smaller cell count, not a
-#: second per-cell term.  48.55 is therefore the per-cell figure and N = 512
-#: is the cell that reads it cleanly.
-#: (the same ``c`` the B14 ladder read as "72.0 to 96.8", saturating at 96.0
-#: once the chunk binds -- two independent measurements of one constant).  Of
-#: the 48.55, 32 B/cell is structural (``Xg`` and ``Yg`` at 8 B each and the
-#: ``out`` accumulator at 16 B, all whole-grid and all outside the loop); the
-#: remaining ~16.5 B/cell is one grid-sized complex128 temporary the per-chunk
-#: reduction leaves live.  The constant is the measurement rounded DOWN to
+#: second per-cell term.  48.0-48.6 B/cell is the per-cell figure on both
+#: builds, and N = 512 is the cell that reads it cleanly.
+#:
+#: ``c`` IS BUILD-DEPENDENT (96 against 88 -- one 8-byte-per-cell temporary
+#: the two numpy versions differ over), which is why the constant below is 128
+#: and not either reading: it has to sit above the LARGER of them.
+#: (Windows' ``c`` is the same constant the B14 ladder read as "72.0 to 96.8",
+#: saturating at 96.0 once the chunk binds -- two independent measurements of
+#: one constant on one build.)  Of the ~48, 32 B/cell is structural (``Xg``
+#: and ``Yg`` at 8 B each and the ``out`` accumulator at 16 B, all whole-grid
+#: and all outside the loop); the remaining ~16 B/cell is one grid-sized
+#: complex128 temporary the per-chunk reduction leaves live.  The constant is the measurement rounded DOWN to
 #: 48.0, because the margin that makes the floor an upper bound is carried by
-#: ``_DENSE_CELL_BYTES_MEASURED`` (128 against a measured 96.0): the floor as a
-#: whole reads 1.205x the measured one-column peak at N = 256 (11.534 MB
-#: against 9.576) and 1.218x at N = 512 (46.137 against 37.893).
+#: ``_DENSE_CELL_BYTES_MEASURED``: the floor as a whole reads 1.205x the
+#: measured one-column peak at N = 256 (11.534 MB against 9.576) and 1.218x at
+#: N = 512 (46.137 against 37.893) on Windows, 1.293x and 1.294x on WSL.
 _DENSE_FIXED_CELL_BYTES = 48.0
 
 #: ``'measured'`` (the DEFAULT since 5.49.0) or ``'legacy'``.  Which of the
@@ -1601,7 +1606,9 @@ _DENSE_FIXED_CELL_BYTES = 48.0
 #: transient.  MEASURED 2026-09-20, 1024 beamlets, ``mem_budget_mb=512``:
 #: ``'legacy'`` peaks at 3 074 MB on a 256^2 grid (6.00x the budget) and
 #: 3 083 MB on 512^2 (6.02x); ``'measured'`` peaks at 387 MB (0.756x) and
-#: 390 MB (0.762x).  Handoff section 5 records a long pytest run on the
+#: 390 MB (0.762x).  WSL reads the same story one notch lower (5.50x / 5.52x
+#: against 0.693x / 0.700x), so the build-free statement is "over 5x before,
+#: under 0.8x after", on both.  Handoff section 5 records a long pytest run on the
 #: maintainer's box dying twice with ``Windows fatal exception: access
 #: violation``, once inside this dense path, "which passes alone in 30 s" --
 #: the signature of an allocation that only fails beside other heavy jobs.
@@ -1678,9 +1685,12 @@ def _dense_budget_floor_bytes(Ny, Nx):
 
     MEASURED 2026-09-20 on both builds against the loop's own ``tracemalloc``
     peak at ``chunk = 1``: the published floor is 1.205x that peak at N = 256
-    (9.576 MB measured) and 1.218x at N = 512 (37.893 MB), i.e. the floor is an
-    UPPER bound on the one-column peak, which is what makes "a budget at or
-    above the floor is honoured" a true statement rather than a hopeful one.
+    (9.576 MB measured) and 1.218x at N = 512 (37.893 MB) on Windows, 1.293x
+    and 1.294x on WSL -- an UPPER bound on the one-column peak on BOTH builds,
+    which is what makes "a budget at or above the floor is honoured" a true
+    statement rather than a hopeful one.  Swept from 1.0x to 12x the floor the
+    peak never reaches the budget: worst 0.917 (Windows, N = 256) and 0.849
+    (WSL), both at 1.5x the floor, settling to ``c``/128 as the budget grows.
     """
     return float(Ny) * float(Nx) * (_DENSE_FIXED_CELL_BYTES
                                     + _DENSE_CELL_BYTES_MEASURED)

@@ -19,6 +19,10 @@ beamlets, `mem_budget_mb=512`:
 | 256 x 256 | 3 074 MB (**6.00x** the budget) | 387 MB (0.756x) |
 | 512 x 512 | 3 083 MB (**6.02x**) | 390 MB (0.762x) |
 
+(Windows; WSL reads the same story one notch lower -- 5.50x / 5.52x against
+0.693x / 0.700x -- so the build-free statement is "over 5x before, under 0.8x
+after", on both.)
+
 `'legacy'` stays selectable and is byte-identical to 5.48.x.  The two differ
 only in the order the per-chunk reductions are summed in -- the constant moves
 the chunk boundary and floating-point addition is not associative -- measured
@@ -35,14 +39,18 @@ no accounting constant can meet the request (11.534 MB at N = 256, 46.137 MB at
 N = 512).  Both constants are measured, not asserted: fitting the loop's
 `tracemalloc` peak against the chunk over a 1/2/4/8/16/32 ladder gives
 `peak/(Ny Nx) = fixed + c*chunk` with `fixed` 48.55 B/cell and `c` 96.00
-B/cell-column, worst deviation from that affine model 5.8e-07 at N = 512 and
-7.0e-06 at N = 256.  The published floor is therefore 1.205x (N = 256) and
-1.218x (N = 512) the loop's measured one-column peak -- an upper bound on it,
-which is what makes "at or above the floor the budget is honoured" true rather
-than hopeful.  Swept over ten multiples from 1.0x to 12x the floor, the peak
-never reaches the budget: worst 0.917 at N = 256 and 0.911 at N = 512, both at
-1.5x the floor (where the chunk has just stepped to two), settling to 0.75 as
-the budget grows.
+B/cell-column on Windows, worst deviation from that affine model 5.8e-07 at
+N = 512 and 7.0e-06 at N = 256.  `c` is build-dependent (96 on Windows, 88 on
+WSL -- one 8-byte-per-cell temporary the two numpy versions differ over),
+which is why the shipped constant is 128: it has to sit above the larger of
+them.  The published floor is therefore 1.205x / 1.218x the loop's measured
+one-column peak on Windows (N = 256 / 512) and 1.293x / 1.294x on WSL -- an
+upper bound on BOTH, which is what makes "at or above the floor the budget is
+honoured" true rather than hopeful.  Swept over ten multiples from 1.0x to 12x
+the floor, the peak never reaches the budget: worst 0.917 at N = 256 and 0.911
+at N = 512 on Windows, 0.849 on both grids on WSL, all four at 1.5x the floor
+(where the chunk has just stepped to two), settling to `c`/128 as the budget
+grows.
 
 Below the floor the dense path now emits a `RuntimeWarning` naming the floor,
 the budget, the ratio and the two mitigations, instead of exceeding the request
