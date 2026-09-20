@@ -1,0 +1,3425 @@
+{
+ "pre_tree": "/mnt/c/tmp/lum_vmb3_pre",
+ "post_tree": "/mnt/c/tmp/lum_vmb3_post",
+ "pre": "/mnt/c/tmp/lum_vmb3_pre/lumenairy/__init__.py",
+ "post": "/mnt/c/tmp/lum_vmb3_post/lumenairy/__init__.py",
+ "mem_budget_mb": "2048",
+ "n_cases": 117,
+ "tally": {
+  "identical": 93,
+  "moved": 0,
+  "newly_refused": 0,
+  "newly_returned": 0,
+  "refused_both": 24
+ },
+ "rows": [
+  {
+   "name": "VA:fold",
+   "verdict": "identical",
+   "pre": {
+    "name": "VA:fold",
+    "decision": "returned",
+    "exc": null,
+    "digest": "5118480245b77bb1b7f8cb2c3105be1195266eaa84912d04fdede91aaa8369bc",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 1.0001351039808748,
+    "reason": "fold_ring",
+    "fell_back": false
+   },
+   "post": {
+    "name": "VA:fold",
+    "decision": "returned",
+    "exc": null,
+    "digest": "5118480245b77bb1b7f8cb2c3105be1195266eaa84912d04fdede91aaa8369bc",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 1.0001351039808748,
+    "reason": "fold_ring",
+    "fell_back": false
+   }
+  },
+  {
+   "name": "VA:foldedge",
+   "verdict": "identical",
+   "pre": {
+    "name": "VA:foldedge",
+    "decision": "returned",
+    "exc": null,
+    "digest": "495057c99bf7405a40f698930a1ccdcbc1ba47927198520d8991e84858e4134c",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 0.9973585771826853,
+    "reason": "fold_ring",
+    "fell_back": false
+   },
+   "post": {
+    "name": "VA:foldedge",
+    "decision": "returned",
+    "exc": null,
+    "digest": "495057c99bf7405a40f698930a1ccdcbc1ba47927198520d8991e84858e4134c",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 0.9973585771826853,
+    "reason": "fold_ring",
+    "fell_back": false
+   }
+  },
+  {
+   "name": "VA:blowup",
+   "verdict": "identical",
+   "pre": {
+    "name": "VA:blowup",
+    "decision": "returned",
+    "exc": null,
+    "digest": "4e12e76bc2469db97438409f6866a65b964d0ae673951f0f67047a2e71e5f96b",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 1.0000985147086494,
+    "reason": "fold_ring",
+    "fell_back": false
+   },
+   "post": {
+    "name": "VA:blowup",
+    "decision": "returned",
+    "exc": null,
+    "digest": "4e12e76bc2469db97438409f6866a65b964d0ae673951f0f67047a2e71e5f96b",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 1.0000985147086494,
+    "reason": "fold_ring",
+    "fell_back": false
+   }
+  },
+  {
+   "name": "VA:short",
+   "verdict": "identical",
+   "pre": {
+    "name": "VA:short",
+    "decision": "returned",
+    "exc": null,
+    "digest": "f961c838180bfb05074b93bc1942e79c0ae0d4a9f82fdc2fea772ac71d183bba",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 0.9999571029396472,
+    "reason": "no_fold",
+    "fell_back": true
+   },
+   "post": {
+    "name": "VA:short",
+    "decision": "returned",
+    "exc": null,
+    "digest": "f961c838180bfb05074b93bc1942e79c0ae0d4a9f82fdc2fea772ac71d183bba",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 0.9999571029396472,
+    "reason": "no_fold",
+    "fell_back": true
+   }
+  },
+  {
+   "name": "VA:vertex",
+   "verdict": "identical",
+   "pre": {
+    "name": "VA:vertex",
+    "decision": "returned",
+    "exc": null,
+    "digest": "6c2c33f9556a5a713c22b589cfd83dcb2acda6809b49b0334c48f3b84c6162c3",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 0.9998803050096554,
+    "reason": "no_fold",
+    "fell_back": true
+   },
+   "post": {
+    "name": "VA:vertex",
+    "decision": "returned",
+    "exc": null,
+    "digest": "6c2c33f9556a5a713c22b589cfd83dcb2acda6809b49b0334c48f3b84c6162c3",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 0.9998803050096554,
+    "reason": "no_fold",
+    "fell_back": true
+   }
+  },
+  {
+   "name": "VA:plain",
+   "verdict": "identical",
+   "pre": {
+    "name": "VA:plain",
+    "decision": "returned",
+    "exc": null,
+    "digest": "45f74b19a2bea0bdd0b7b2acdf25dab5cd8869b686c31ac30b8300dd8086571c",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 0.9975345969911356,
+    "reason": "fold_ring",
+    "fell_back": false
+   },
+   "post": {
+    "name": "VA:plain",
+    "decision": "returned",
+    "exc": null,
+    "digest": "45f74b19a2bea0bdd0b7b2acdf25dab5cd8869b686c31ac30b8300dd8086571c",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 0.9975345969911356,
+    "reason": "fold_ring",
+    "fell_back": false
+   }
+  },
+  {
+   "name": "VA:sub4",
+   "verdict": "identical",
+   "pre": {
+    "name": "VA:sub4",
+    "decision": "returned",
+    "exc": null,
+    "digest": "93992766ae9f01461c08dc3d46023a32cc32b5af57bc29b1dd5aff06d9fa53fa",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 0.9899226919925113,
+    "reason": "fold_ring",
+    "fell_back": false
+   },
+   "post": {
+    "name": "VA:sub4",
+    "decision": "returned",
+    "exc": null,
+    "digest": "93992766ae9f01461c08dc3d46023a32cc32b5af57bc29b1dd5aff06d9fa53fa",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 0.9899226919925113,
+    "reason": "fold_ring",
+    "fell_back": false
+   }
+  },
+  {
+   "name": "VA:c64",
+   "verdict": "identical",
+   "pre": {
+    "name": "VA:c64",
+    "decision": "returned",
+    "exc": null,
+    "digest": "1790b732a4bbb917df53ee92697812003eaf6981d400ae40866dc4445682c124",
+    "dtype": "complex64",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 1.0001351040289812,
+    "reason": "fold_ring",
+    "fell_back": false
+   },
+   "post": {
+    "name": "VA:c64",
+    "decision": "returned",
+    "exc": null,
+    "digest": "1790b732a4bbb917df53ee92697812003eaf6981d400ae40866dc4445682c124",
+    "dtype": "complex64",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 1.0001351040289812,
+    "reason": "fold_ring",
+    "fell_back": false
+   }
+  },
+  {
+   "name": "VA:branchsum",
+   "verdict": "identical",
+   "pre": {
+    "name": "VA:branchsum",
+    "decision": "returned",
+    "exc": null,
+    "digest": "ace958d9776513ceb06d313839a95a7b4becadfbfeb9894702071284f5e17e80",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": null,
+    "reason": null,
+    "fell_back": false
+   },
+   "post": {
+    "name": "VA:branchsum",
+    "decision": "returned",
+    "exc": null,
+    "digest": "ace958d9776513ceb06d313839a95a7b4becadfbfeb9894702071284f5e17e80",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": null,
+    "reason": null,
+    "fell_back": false
+   }
+  },
+  {
+   "name": "VA_alt:fold",
+   "verdict": "identical",
+   "pre": {
+    "name": "VA_alt:fold",
+    "decision": "returned",
+    "exc": null,
+    "digest": "d1e956b4428e8ed90080e8fd522e797fb7a01edf401f277bb1605a1bddb145cf",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "reading": 0.9999730006473142,
+    "reason": "fold_ring",
+    "fell_back": false
+   },
+   "post": {
+    "name": "VA_alt:fold",
+    "decision": "returned",
+    "exc": null,
+    "digest": "d1e956b4428e8ed90080e8fd522e797fb7a01edf401f277bb1605a1bddb145cf",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "reading": 0.9999730006473142,
+    "reason": "fold_ring",
+    "fell_back": false
+   }
+  },
+  {
+   "name": "VA_alt:foldedge",
+   "verdict": "identical",
+   "pre": {
+    "name": "VA_alt:foldedge",
+    "decision": "returned",
+    "exc": null,
+    "digest": "ab1ecaf61017790b63fd3ccac71b309adf9fe43060537658d062564547209c3b",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "reading": 0.9980208650794904,
+    "reason": "fold_ring",
+    "fell_back": false
+   },
+   "post": {
+    "name": "VA_alt:foldedge",
+    "decision": "returned",
+    "exc": null,
+    "digest": "ab1ecaf61017790b63fd3ccac71b309adf9fe43060537658d062564547209c3b",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "reading": 0.9980208650794904,
+    "reason": "fold_ring",
+    "fell_back": false
+   }
+  },
+  {
+   "name": "VA_alt:blowup",
+   "verdict": "identical",
+   "pre": {
+    "name": "VA_alt:blowup",
+    "decision": "returned",
+    "exc": null,
+    "digest": "53d8366e7d87e9f8b56bf91f30ac3d5b64b45da80e42192929c1601c7ed13ccc",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "reading": 0.9994492937393032,
+    "reason": "fold_ring",
+    "fell_back": false
+   },
+   "post": {
+    "name": "VA_alt:blowup",
+    "decision": "returned",
+    "exc": null,
+    "digest": "53d8366e7d87e9f8b56bf91f30ac3d5b64b45da80e42192929c1601c7ed13ccc",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "reading": 0.9994492937393032,
+    "reason": "fold_ring",
+    "fell_back": false
+   }
+  },
+  {
+   "name": "VA_alt:short",
+   "verdict": "identical",
+   "pre": {
+    "name": "VA_alt:short",
+    "decision": "returned",
+    "exc": null,
+    "digest": "4b325f78e3cd44f0a8001e6d9f288cd40fe84c427c856271c9c2b5946f362a73",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "reading": 0.9999941205514502,
+    "reason": "no_fold",
+    "fell_back": true
+   },
+   "post": {
+    "name": "VA_alt:short",
+    "decision": "returned",
+    "exc": null,
+    "digest": "4b325f78e3cd44f0a8001e6d9f288cd40fe84c427c856271c9c2b5946f362a73",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "reading": 0.9999941205514502,
+    "reason": "no_fold",
+    "fell_back": true
+   }
+  },
+  {
+   "name": "VA_alt:vertex",
+   "verdict": "identical",
+   "pre": {
+    "name": "VA_alt:vertex",
+    "decision": "returned",
+    "exc": null,
+    "digest": "ad48fcf668f1bd152c7a2884633ebe8fb7eca0b43cdd3a645a8882b57b40f0fc",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "reading": 0.9999106332276064,
+    "reason": "no_fold",
+    "fell_back": true
+   },
+   "post": {
+    "name": "VA_alt:vertex",
+    "decision": "returned",
+    "exc": null,
+    "digest": "ad48fcf668f1bd152c7a2884633ebe8fb7eca0b43cdd3a645a8882b57b40f0fc",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "reading": 0.9999106332276064,
+    "reason": "no_fold",
+    "fell_back": true
+   }
+  },
+  {
+   "name": "VA_alt:plain",
+   "verdict": "identical",
+   "pre": {
+    "name": "VA_alt:plain",
+    "decision": "returned",
+    "exc": null,
+    "digest": "b97787c6e889afa0ed52d5befb711332824d23b41cac4c62f8330764d9ce9679",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "reading": 1.0054455587556332,
+    "reason": "fold_ring",
+    "fell_back": false
+   },
+   "post": {
+    "name": "VA_alt:plain",
+    "decision": "returned",
+    "exc": null,
+    "digest": "b97787c6e889afa0ed52d5befb711332824d23b41cac4c62f8330764d9ce9679",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "reading": 1.0054455587556332,
+    "reason": "fold_ring",
+    "fell_back": false
+   }
+  },
+  {
+   "name": "VA_alt:sub4",
+   "verdict": "identical",
+   "pre": {
+    "name": "VA_alt:sub4",
+    "decision": "returned",
+    "exc": null,
+    "digest": "64ebc55ef3eeea0e4b297a0e087ccd5945639bc936b03544b261c4d22b41f7a5",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "reading": 1.0025312933402786,
+    "reason": "fold_ring",
+    "fell_back": false
+   },
+   "post": {
+    "name": "VA_alt:sub4",
+    "decision": "returned",
+    "exc": null,
+    "digest": "64ebc55ef3eeea0e4b297a0e087ccd5945639bc936b03544b261c4d22b41f7a5",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "reading": 1.0025312933402786,
+    "reason": "fold_ring",
+    "fell_back": false
+   }
+  },
+  {
+   "name": "VA_alt:c64",
+   "verdict": "identical",
+   "pre": {
+    "name": "VA_alt:c64",
+    "decision": "returned",
+    "exc": null,
+    "digest": "d5208e4dbf8bea92874d41d56b5d6c38076e218b38a4ff80643a2f512abaff70",
+    "dtype": "complex64",
+    "shape": [
+     640,
+     640
+    ],
+    "reading": 0.9999729993601002,
+    "reason": "fold_ring",
+    "fell_back": false
+   },
+   "post": {
+    "name": "VA_alt:c64",
+    "decision": "returned",
+    "exc": null,
+    "digest": "d5208e4dbf8bea92874d41d56b5d6c38076e218b38a4ff80643a2f512abaff70",
+    "dtype": "complex64",
+    "shape": [
+     640,
+     640
+    ],
+    "reading": 0.9999729993601002,
+    "reason": "fold_ring",
+    "fell_back": false
+   }
+  },
+  {
+   "name": "VA_alt:branchsum",
+   "verdict": "identical",
+   "pre": {
+    "name": "VA_alt:branchsum",
+    "decision": "returned",
+    "exc": null,
+    "digest": "9ea36bf1d57865796b8a81a14c3132a85607067568801816407590f333767451",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "reading": null,
+    "reason": null,
+    "fell_back": false
+   },
+   "post": {
+    "name": "VA_alt:branchsum",
+    "decision": "returned",
+    "exc": null,
+    "digest": "9ea36bf1d57865796b8a81a14c3132a85607067568801816407590f333767451",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "reading": null,
+    "reason": null,
+    "fell_back": false
+   }
+  },
+  {
+   "name": "VX:fold",
+   "verdict": "identical",
+   "pre": {
+    "name": "VX:fold",
+    "decision": "returned",
+    "exc": null,
+    "digest": "35c7ecb1f9f5a7e8a8d65396b732bcc6b693a4b5be03593acf7f7a9892387556",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "reading": 1.0017348507088495,
+    "reason": "fold_ring",
+    "fell_back": false
+   },
+   "post": {
+    "name": "VX:fold",
+    "decision": "returned",
+    "exc": null,
+    "digest": "35c7ecb1f9f5a7e8a8d65396b732bcc6b693a4b5be03593acf7f7a9892387556",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "reading": 1.0017348507088495,
+    "reason": "fold_ring",
+    "fell_back": false
+   }
+  },
+  {
+   "name": "VX:foldedge",
+   "verdict": "refused_both",
+   "pre": {
+    "name": "VX:foldedge",
+    "decision": "REFUSED",
+    "exc": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch b",
+    "digest": null
+   },
+   "post": {
+    "name": "VX:foldedge",
+    "decision": "REFUSED",
+    "exc": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch b",
+    "digest": null
+   }
+  },
+  {
+   "name": "VX:blowup",
+   "verdict": "identical",
+   "pre": {
+    "name": "VX:blowup",
+    "decision": "returned",
+    "exc": null,
+    "digest": "f986a1cea2f82cf7a553c3e0af72b2a80c2b968392f435453e4a6b217149a28b",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "reading": 1.0074527562402482,
+    "reason": "no_fold",
+    "fell_back": true
+   },
+   "post": {
+    "name": "VX:blowup",
+    "decision": "returned",
+    "exc": null,
+    "digest": "f986a1cea2f82cf7a553c3e0af72b2a80c2b968392f435453e4a6b217149a28b",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "reading": 1.0074527562402482,
+    "reason": "no_fold",
+    "fell_back": true
+   }
+  },
+  {
+   "name": "VX:short",
+   "verdict": "identical",
+   "pre": {
+    "name": "VX:short",
+    "decision": "returned",
+    "exc": null,
+    "digest": "cd48a2e35270ce84809ead689ec8d4994d2ab435883688de1bb7adeed909a619",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "reading": 1.0000170864279958,
+    "reason": "no_fold",
+    "fell_back": true
+   },
+   "post": {
+    "name": "VX:short",
+    "decision": "returned",
+    "exc": null,
+    "digest": "cd48a2e35270ce84809ead689ec8d4994d2ab435883688de1bb7adeed909a619",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "reading": 1.0000170864279958,
+    "reason": "no_fold",
+    "fell_back": true
+   }
+  },
+  {
+   "name": "VX:vertex",
+   "verdict": "identical",
+   "pre": {
+    "name": "VX:vertex",
+    "decision": "returned",
+    "exc": null,
+    "digest": "dd99183d4e859afe50a389a44bff36c76433eb8c734c79ba0c9ae3ad957d4ab8",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "reading": 1.0000159547783023,
+    "reason": "no_fold",
+    "fell_back": true
+   },
+   "post": {
+    "name": "VX:vertex",
+    "decision": "returned",
+    "exc": null,
+    "digest": "dd99183d4e859afe50a389a44bff36c76433eb8c734c79ba0c9ae3ad957d4ab8",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "reading": 1.0000159547783023,
+    "reason": "no_fold",
+    "fell_back": true
+   }
+  },
+  {
+   "name": "VX:plain",
+   "verdict": "identical",
+   "pre": {
+    "name": "VX:plain",
+    "decision": "returned",
+    "exc": null,
+    "digest": "75f9454e9cfa5abe3fe879d706464c19ad8753d85b1eb126d348f7c4d1708f0b",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "reading": 1.0143073374911225,
+    "reason": "fold_ring",
+    "fell_back": false
+   },
+   "post": {
+    "name": "VX:plain",
+    "decision": "returned",
+    "exc": null,
+    "digest": "75f9454e9cfa5abe3fe879d706464c19ad8753d85b1eb126d348f7c4d1708f0b",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "reading": 1.0143073374911225,
+    "reason": "fold_ring",
+    "fell_back": false
+   }
+  },
+  {
+   "name": "VX:sub4",
+   "verdict": "identical",
+   "pre": {
+    "name": "VX:sub4",
+    "decision": "returned",
+    "exc": null,
+    "digest": "6c1e9fc395297aa8a0b35db8719202e4fa68f06d58bf73ba12ba59e058cf98d6",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "reading": 1.0091650056465267,
+    "reason": "fold_ring",
+    "fell_back": false
+   },
+   "post": {
+    "name": "VX:sub4",
+    "decision": "returned",
+    "exc": null,
+    "digest": "6c1e9fc395297aa8a0b35db8719202e4fa68f06d58bf73ba12ba59e058cf98d6",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "reading": 1.0091650056465267,
+    "reason": "fold_ring",
+    "fell_back": false
+   }
+  },
+  {
+   "name": "VX:c64",
+   "verdict": "identical",
+   "pre": {
+    "name": "VX:c64",
+    "decision": "returned",
+    "exc": null,
+    "digest": "33a472aab0b226fa45a28576ab5d05557f39ba8445eb6504b60222d44002ac24",
+    "dtype": "complex64",
+    "shape": [
+     640,
+     640
+    ],
+    "reading": 1.0017348501208412,
+    "reason": "fold_ring",
+    "fell_back": false
+   },
+   "post": {
+    "name": "VX:c64",
+    "decision": "returned",
+    "exc": null,
+    "digest": "33a472aab0b226fa45a28576ab5d05557f39ba8445eb6504b60222d44002ac24",
+    "dtype": "complex64",
+    "shape": [
+     640,
+     640
+    ],
+    "reading": 1.0017348501208412,
+    "reason": "fold_ring",
+    "fell_back": false
+   }
+  },
+  {
+   "name": "VX:branchsum",
+   "verdict": "identical",
+   "pre": {
+    "name": "VX:branchsum",
+    "decision": "returned",
+    "exc": null,
+    "digest": "8b61a40a1b4dd83ba95da4fd4f2dbf59533a604c3df3f7f46700028d52524978",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "reading": null,
+    "reason": null,
+    "fell_back": false
+   },
+   "post": {
+    "name": "VX:branchsum",
+    "decision": "returned",
+    "exc": null,
+    "digest": "8b61a40a1b4dd83ba95da4fd4f2dbf59533a604c3df3f7f46700028d52524978",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "reading": null,
+    "reason": null,
+    "fell_back": false
+   }
+  },
+  {
+   "name": "VX_alt:fold",
+   "verdict": "identical",
+   "pre": {
+    "name": "VX_alt:fold",
+    "decision": "returned",
+    "exc": null,
+    "digest": "3d77772b8fcd47c200011eb1deb8dbcd846ae99af80a4eac391538a0ee1ca372",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 1.0020519146932603,
+    "reason": "fold_ring",
+    "fell_back": false
+   },
+   "post": {
+    "name": "VX_alt:fold",
+    "decision": "returned",
+    "exc": null,
+    "digest": "3d77772b8fcd47c200011eb1deb8dbcd846ae99af80a4eac391538a0ee1ca372",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 1.0020519146932603,
+    "reason": "fold_ring",
+    "fell_back": false
+   }
+  },
+  {
+   "name": "VX_alt:foldedge",
+   "verdict": "refused_both",
+   "pre": {
+    "name": "VX_alt:foldedge",
+    "decision": "REFUSED",
+    "exc": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch b",
+    "digest": null
+   },
+   "post": {
+    "name": "VX_alt:foldedge",
+    "decision": "REFUSED",
+    "exc": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch b",
+    "digest": null
+   }
+  },
+  {
+   "name": "VX_alt:blowup",
+   "verdict": "identical",
+   "pre": {
+    "name": "VX_alt:blowup",
+    "decision": "returned",
+    "exc": null,
+    "digest": "60833ae2f50a66edd2b50193f34dcbc7cc3c43030d27b25d5a7b9d6acf6253ca",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 1.019879144480018,
+    "reason": "no_fold",
+    "fell_back": true
+   },
+   "post": {
+    "name": "VX_alt:blowup",
+    "decision": "returned",
+    "exc": null,
+    "digest": "60833ae2f50a66edd2b50193f34dcbc7cc3c43030d27b25d5a7b9d6acf6253ca",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 1.019879144480018,
+    "reason": "no_fold",
+    "fell_back": true
+   }
+  },
+  {
+   "name": "VX_alt:short",
+   "verdict": "identical",
+   "pre": {
+    "name": "VX_alt:short",
+    "decision": "returned",
+    "exc": null,
+    "digest": "cf0ad246ad494dce9b771a775e0333f89026cb1150015c0b63320e61a3ff254f",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 0.9999919588792014,
+    "reason": "no_fold",
+    "fell_back": true
+   },
+   "post": {
+    "name": "VX_alt:short",
+    "decision": "returned",
+    "exc": null,
+    "digest": "cf0ad246ad494dce9b771a775e0333f89026cb1150015c0b63320e61a3ff254f",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 0.9999919588792014,
+    "reason": "no_fold",
+    "fell_back": true
+   }
+  },
+  {
+   "name": "VX_alt:vertex",
+   "verdict": "identical",
+   "pre": {
+    "name": "VX_alt:vertex",
+    "decision": "returned",
+    "exc": null,
+    "digest": "e88f85a974b982a566d3ae2200ce7efb63499954689ba20a3ce16511d9dbe9c9",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 1.0000532528575685,
+    "reason": "no_fold",
+    "fell_back": true
+   },
+   "post": {
+    "name": "VX_alt:vertex",
+    "decision": "returned",
+    "exc": null,
+    "digest": "e88f85a974b982a566d3ae2200ce7efb63499954689ba20a3ce16511d9dbe9c9",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 1.0000532528575685,
+    "reason": "no_fold",
+    "fell_back": true
+   }
+  },
+  {
+   "name": "VX_alt:plain",
+   "verdict": "identical",
+   "pre": {
+    "name": "VX_alt:plain",
+    "decision": "returned",
+    "exc": null,
+    "digest": "c607aa1b0c4805b36b277004d31d60a42084699dfc77bcc16e9de10a884b3d39",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 1.0165724248391277,
+    "reason": "fold_ring",
+    "fell_back": false
+   },
+   "post": {
+    "name": "VX_alt:plain",
+    "decision": "returned",
+    "exc": null,
+    "digest": "c607aa1b0c4805b36b277004d31d60a42084699dfc77bcc16e9de10a884b3d39",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 1.0165724248391277,
+    "reason": "fold_ring",
+    "fell_back": false
+   }
+  },
+  {
+   "name": "VX_alt:sub4",
+   "verdict": "identical",
+   "pre": {
+    "name": "VX_alt:sub4",
+    "decision": "returned",
+    "exc": null,
+    "digest": "9ed7a8b6776cc9a24d1679ed9080724d354333ae18665d44963ca97c42769e90",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 1.0493450889976113,
+    "reason": "fold_ring",
+    "fell_back": false
+   },
+   "post": {
+    "name": "VX_alt:sub4",
+    "decision": "returned",
+    "exc": null,
+    "digest": "9ed7a8b6776cc9a24d1679ed9080724d354333ae18665d44963ca97c42769e90",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 1.0493450889976113,
+    "reason": "fold_ring",
+    "fell_back": false
+   }
+  },
+  {
+   "name": "VX_alt:c64",
+   "verdict": "identical",
+   "pre": {
+    "name": "VX_alt:c64",
+    "decision": "returned",
+    "exc": null,
+    "digest": "fda4bc4a932719a2ce9e2a255292d48c49f8bc80361866414be2fe19f3341c66",
+    "dtype": "complex64",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 1.002051915297833,
+    "reason": "fold_ring",
+    "fell_back": false
+   },
+   "post": {
+    "name": "VX_alt:c64",
+    "decision": "returned",
+    "exc": null,
+    "digest": "fda4bc4a932719a2ce9e2a255292d48c49f8bc80361866414be2fe19f3341c66",
+    "dtype": "complex64",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 1.002051915297833,
+    "reason": "fold_ring",
+    "fell_back": false
+   }
+  },
+  {
+   "name": "VX_alt:branchsum",
+   "verdict": "identical",
+   "pre": {
+    "name": "VX_alt:branchsum",
+    "decision": "returned",
+    "exc": null,
+    "digest": "ec785f45246cdd17bcd4c2a633ab4c9db34b9bc9fc4a561235cde6062451740d",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": null,
+    "reason": null,
+    "fell_back": false
+   },
+   "post": {
+    "name": "VX_alt:branchsum",
+    "decision": "returned",
+    "exc": null,
+    "digest": "ec785f45246cdd17bcd4c2a633ab4c9db34b9bc9fc4a561235cde6062451740d",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": null,
+    "reason": null,
+    "fell_back": false
+   }
+  },
+  {
+   "name": "VC:fold",
+   "verdict": "refused_both",
+   "pre": {
+    "name": "VC:fold",
+    "decision": "REFUSED",
+    "exc": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch b",
+    "digest": null
+   },
+   "post": {
+    "name": "VC:fold",
+    "decision": "REFUSED",
+    "exc": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch b",
+    "digest": null
+   }
+  },
+  {
+   "name": "VC:foldedge",
+   "verdict": "identical",
+   "pre": {
+    "name": "VC:foldedge",
+    "decision": "returned",
+    "exc": null,
+    "digest": "f125a9141cff8cefa724afba28b366bd71851d697aa29a1c3fb9e0d9e00d7b75",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 0.9984274995857607,
+    "reason": "fold_ring",
+    "fell_back": false
+   },
+   "post": {
+    "name": "VC:foldedge",
+    "decision": "returned",
+    "exc": null,
+    "digest": "f125a9141cff8cefa724afba28b366bd71851d697aa29a1c3fb9e0d9e00d7b75",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 0.9984274995857607,
+    "reason": "fold_ring",
+    "fell_back": false
+   }
+  },
+  {
+   "name": "VC:blowup",
+   "verdict": "identical",
+   "pre": {
+    "name": "VC:blowup",
+    "decision": "returned",
+    "exc": null,
+    "digest": "0db65c37359e8bc155a7446d906c9ed800aecc20f56ecda46aef9c7d10e2f6aa",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 1.0011771526518056,
+    "reason": "no_fold",
+    "fell_back": true
+   },
+   "post": {
+    "name": "VC:blowup",
+    "decision": "returned",
+    "exc": null,
+    "digest": "0db65c37359e8bc155a7446d906c9ed800aecc20f56ecda46aef9c7d10e2f6aa",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 1.0011771526518056,
+    "reason": "no_fold",
+    "fell_back": true
+   }
+  },
+  {
+   "name": "VC:short",
+   "verdict": "identical",
+   "pre": {
+    "name": "VC:short",
+    "decision": "returned",
+    "exc": null,
+    "digest": "f3b248ca2dc8a5633ea2941e15a5d4a3dc3789905b29a4b0d71ea5426fd3979b",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 1.0000890574972738,
+    "reason": "no_fold",
+    "fell_back": true
+   },
+   "post": {
+    "name": "VC:short",
+    "decision": "returned",
+    "exc": null,
+    "digest": "f3b248ca2dc8a5633ea2941e15a5d4a3dc3789905b29a4b0d71ea5426fd3979b",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 1.0000890574972738,
+    "reason": "no_fold",
+    "fell_back": true
+   }
+  },
+  {
+   "name": "VC:vertex",
+   "verdict": "identical",
+   "pre": {
+    "name": "VC:vertex",
+    "decision": "returned",
+    "exc": null,
+    "digest": "6ab891cfc1b9b0886af6ed7ae7e2dc7ce04b51b8b924c92922a78f9efb6e56dc",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 0.9999874406208523,
+    "reason": "no_fold",
+    "fell_back": true
+   },
+   "post": {
+    "name": "VC:vertex",
+    "decision": "returned",
+    "exc": null,
+    "digest": "6ab891cfc1b9b0886af6ed7ae7e2dc7ce04b51b8b924c92922a78f9efb6e56dc",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 0.9999874406208523,
+    "reason": "no_fold",
+    "fell_back": true
+   }
+  },
+  {
+   "name": "VC:plain",
+   "verdict": "refused_both",
+   "pre": {
+    "name": "VC:plain",
+    "decision": "REFUSED",
+    "exc": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch b",
+    "digest": null
+   },
+   "post": {
+    "name": "VC:plain",
+    "decision": "REFUSED",
+    "exc": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch b",
+    "digest": null
+   }
+  },
+  {
+   "name": "VC:sub4",
+   "verdict": "refused_both",
+   "pre": {
+    "name": "VC:sub4",
+    "decision": "REFUSED",
+    "exc": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch b",
+    "digest": null
+   },
+   "post": {
+    "name": "VC:sub4",
+    "decision": "REFUSED",
+    "exc": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch b",
+    "digest": null
+   }
+  },
+  {
+   "name": "VC:c64",
+   "verdict": "refused_both",
+   "pre": {
+    "name": "VC:c64",
+    "decision": "REFUSED",
+    "exc": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch b",
+    "digest": null
+   },
+   "post": {
+    "name": "VC:c64",
+    "decision": "REFUSED",
+    "exc": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch b",
+    "digest": null
+   }
+  },
+  {
+   "name": "VC:branchsum",
+   "verdict": "identical",
+   "pre": {
+    "name": "VC:branchsum",
+    "decision": "returned",
+    "exc": null,
+    "digest": "456d5cff6bb88d691d486f176db2a9d96e250ea1a177dd5f62c68b4a70d40afa",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": null,
+    "reason": null,
+    "fell_back": false
+   },
+   "post": {
+    "name": "VC:branchsum",
+    "decision": "returned",
+    "exc": null,
+    "digest": "456d5cff6bb88d691d486f176db2a9d96e250ea1a177dd5f62c68b4a70d40afa",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": null,
+    "reason": null,
+    "fell_back": false
+   }
+  },
+  {
+   "name": "VC_alt:fold",
+   "verdict": "refused_both",
+   "pre": {
+    "name": "VC_alt:fold",
+    "decision": "REFUSED",
+    "exc": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch b",
+    "digest": null
+   },
+   "post": {
+    "name": "VC_alt:fold",
+    "decision": "REFUSED",
+    "exc": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch b",
+    "digest": null
+   }
+  },
+  {
+   "name": "VC_alt:foldedge",
+   "verdict": "identical",
+   "pre": {
+    "name": "VC_alt:foldedge",
+    "decision": "returned",
+    "exc": null,
+    "digest": "6e3676774dcd96abe3f9e9aeb13ef029ff9a63096649e2cf34f997bb0ab6eb45",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "reading": 1.001261615136381,
+    "reason": "fold_ring",
+    "fell_back": false
+   },
+   "post": {
+    "name": "VC_alt:foldedge",
+    "decision": "returned",
+    "exc": null,
+    "digest": "6e3676774dcd96abe3f9e9aeb13ef029ff9a63096649e2cf34f997bb0ab6eb45",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "reading": 1.001261615136381,
+    "reason": "fold_ring",
+    "fell_back": false
+   }
+  },
+  {
+   "name": "VC_alt:blowup",
+   "verdict": "identical",
+   "pre": {
+    "name": "VC_alt:blowup",
+    "decision": "returned",
+    "exc": null,
+    "digest": "873711ecb84a3ee7575a1a0638c53f5b8e8d43c679d2abe133ce10db7af2e6f9",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "reading": 1.0006541041982802,
+    "reason": "no_fold",
+    "fell_back": true
+   },
+   "post": {
+    "name": "VC_alt:blowup",
+    "decision": "returned",
+    "exc": null,
+    "digest": "873711ecb84a3ee7575a1a0638c53f5b8e8d43c679d2abe133ce10db7af2e6f9",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "reading": 1.0006541041982802,
+    "reason": "no_fold",
+    "fell_back": true
+   }
+  },
+  {
+   "name": "VC_alt:short",
+   "verdict": "identical",
+   "pre": {
+    "name": "VC_alt:short",
+    "decision": "returned",
+    "exc": null,
+    "digest": "21ab5a26b2fd728c0903c42c3f8f9f85c778d307e06b778f11a34d0283c16ca0",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "reading": 1.000036081097972,
+    "reason": "no_fold",
+    "fell_back": true
+   },
+   "post": {
+    "name": "VC_alt:short",
+    "decision": "returned",
+    "exc": null,
+    "digest": "21ab5a26b2fd728c0903c42c3f8f9f85c778d307e06b778f11a34d0283c16ca0",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "reading": 1.000036081097972,
+    "reason": "no_fold",
+    "fell_back": true
+   }
+  },
+  {
+   "name": "VC_alt:vertex",
+   "verdict": "identical",
+   "pre": {
+    "name": "VC_alt:vertex",
+    "decision": "returned",
+    "exc": null,
+    "digest": "3bbbc2dfbbd3c453e12e6a1c17b8da755fcc97391c13c6295e7f2b55855d4b4e",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "reading": 0.999997959827737,
+    "reason": "no_fold",
+    "fell_back": true
+   },
+   "post": {
+    "name": "VC_alt:vertex",
+    "decision": "returned",
+    "exc": null,
+    "digest": "3bbbc2dfbbd3c453e12e6a1c17b8da755fcc97391c13c6295e7f2b55855d4b4e",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "reading": 0.999997959827737,
+    "reason": "no_fold",
+    "fell_back": true
+   }
+  },
+  {
+   "name": "VC_alt:plain",
+   "verdict": "refused_both",
+   "pre": {
+    "name": "VC_alt:plain",
+    "decision": "REFUSED",
+    "exc": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch b",
+    "digest": null
+   },
+   "post": {
+    "name": "VC_alt:plain",
+    "decision": "REFUSED",
+    "exc": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch b",
+    "digest": null
+   }
+  },
+  {
+   "name": "VC_alt:sub4",
+   "verdict": "refused_both",
+   "pre": {
+    "name": "VC_alt:sub4",
+    "decision": "REFUSED",
+    "exc": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch b",
+    "digest": null
+   },
+   "post": {
+    "name": "VC_alt:sub4",
+    "decision": "REFUSED",
+    "exc": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch b",
+    "digest": null
+   }
+  },
+  {
+   "name": "VC_alt:c64",
+   "verdict": "refused_both",
+   "pre": {
+    "name": "VC_alt:c64",
+    "decision": "REFUSED",
+    "exc": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch b",
+    "digest": null
+   },
+   "post": {
+    "name": "VC_alt:c64",
+    "decision": "REFUSED",
+    "exc": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch b",
+    "digest": null
+   }
+  },
+  {
+   "name": "VC_alt:branchsum",
+   "verdict": "identical",
+   "pre": {
+    "name": "VC_alt:branchsum",
+    "decision": "returned",
+    "exc": null,
+    "digest": "177888b1a572201e199f76224d1301e84cc1de3d64ae972a104dbc05a0bdc665",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "reading": null,
+    "reason": null,
+    "fell_back": false
+   },
+   "post": {
+    "name": "VC_alt:branchsum",
+    "decision": "returned",
+    "exc": null,
+    "digest": "177888b1a572201e199f76224d1301e84cc1de3d64ae972a104dbc05a0bdc665",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "reading": null,
+    "reason": null,
+    "fell_back": false
+   }
+  },
+  {
+   "name": "VD:fold",
+   "verdict": "identical",
+   "pre": {
+    "name": "VD:fold",
+    "decision": "returned",
+    "exc": null,
+    "digest": "c77a78a048b7691171bb0a12d5e49e2cd3d2007cb082134af96666bf6a93bdc3",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 1.0019409732692974,
+    "reason": "fold_ring",
+    "fell_back": false
+   },
+   "post": {
+    "name": "VD:fold",
+    "decision": "returned",
+    "exc": null,
+    "digest": "c77a78a048b7691171bb0a12d5e49e2cd3d2007cb082134af96666bf6a93bdc3",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 1.0019409732692974,
+    "reason": "fold_ring",
+    "fell_back": false
+   }
+  },
+  {
+   "name": "VD:foldedge",
+   "verdict": "refused_both",
+   "pre": {
+    "name": "VD:foldedge",
+    "decision": "REFUSED",
+    "exc": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch b",
+    "digest": null
+   },
+   "post": {
+    "name": "VD:foldedge",
+    "decision": "REFUSED",
+    "exc": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch b",
+    "digest": null
+   }
+  },
+  {
+   "name": "VD:blowup",
+   "verdict": "identical",
+   "pre": {
+    "name": "VD:blowup",
+    "decision": "returned",
+    "exc": null,
+    "digest": "7446fa08328283c157046da05215bcb6303ed2d68be317cf9d41ddd7a04fd68e",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 1.0128355898240453,
+    "reason": "no_fold",
+    "fell_back": true
+   },
+   "post": {
+    "name": "VD:blowup",
+    "decision": "returned",
+    "exc": null,
+    "digest": "7446fa08328283c157046da05215bcb6303ed2d68be317cf9d41ddd7a04fd68e",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 1.0128355898240453,
+    "reason": "no_fold",
+    "fell_back": true
+   }
+  },
+  {
+   "name": "VD:short",
+   "verdict": "identical",
+   "pre": {
+    "name": "VD:short",
+    "decision": "returned",
+    "exc": null,
+    "digest": "333175e84177e4fbdbd9a7bbf32b0c20a04b266a6a581623f752eff35b562545",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 1.000111154371331,
+    "reason": "no_fold",
+    "fell_back": true
+   },
+   "post": {
+    "name": "VD:short",
+    "decision": "returned",
+    "exc": null,
+    "digest": "333175e84177e4fbdbd9a7bbf32b0c20a04b266a6a581623f752eff35b562545",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 1.000111154371331,
+    "reason": "no_fold",
+    "fell_back": true
+   }
+  },
+  {
+   "name": "VD:vertex",
+   "verdict": "identical",
+   "pre": {
+    "name": "VD:vertex",
+    "decision": "returned",
+    "exc": null,
+    "digest": "40f53326819027e5dc1f69086915c317b06be6efa6d5f78545ec4614b0427bda",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 0.9999853454392084,
+    "reason": "no_fold",
+    "fell_back": true
+   },
+   "post": {
+    "name": "VD:vertex",
+    "decision": "returned",
+    "exc": null,
+    "digest": "40f53326819027e5dc1f69086915c317b06be6efa6d5f78545ec4614b0427bda",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 0.9999853454392084,
+    "reason": "no_fold",
+    "fell_back": true
+   }
+  },
+  {
+   "name": "VD:plain",
+   "verdict": "identical",
+   "pre": {
+    "name": "VD:plain",
+    "decision": "returned",
+    "exc": null,
+    "digest": "c9162c29b9ae105a37af2f09d31c6b1da5e23fb79221f3de56fe476676a4d5f9",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 1.0293011420862463,
+    "reason": "fold_ring",
+    "fell_back": false
+   },
+   "post": {
+    "name": "VD:plain",
+    "decision": "returned",
+    "exc": null,
+    "digest": "c9162c29b9ae105a37af2f09d31c6b1da5e23fb79221f3de56fe476676a4d5f9",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 1.0293011420862463,
+    "reason": "fold_ring",
+    "fell_back": false
+   }
+  },
+  {
+   "name": "VD:sub4",
+   "verdict": "refused_both",
+   "pre": {
+    "name": "VD:sub4",
+    "decision": "REFUSED",
+    "exc": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the field this ca",
+    "digest": null
+   },
+   "post": {
+    "name": "VD:sub4",
+    "decision": "REFUSED",
+    "exc": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the reading this ",
+    "digest": null
+   }
+  },
+  {
+   "name": "VD:c64",
+   "verdict": "identical",
+   "pre": {
+    "name": "VD:c64",
+    "decision": "returned",
+    "exc": null,
+    "digest": "298b4f7e7f3debb787517cc485226c97c5293068754e025dde0faee58b8991ec",
+    "dtype": "complex64",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 1.0019409764991838,
+    "reason": "fold_ring",
+    "fell_back": false
+   },
+   "post": {
+    "name": "VD:c64",
+    "decision": "returned",
+    "exc": null,
+    "digest": "298b4f7e7f3debb787517cc485226c97c5293068754e025dde0faee58b8991ec",
+    "dtype": "complex64",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 1.0019409764991838,
+    "reason": "fold_ring",
+    "fell_back": false
+   }
+  },
+  {
+   "name": "VD:branchsum",
+   "verdict": "identical",
+   "pre": {
+    "name": "VD:branchsum",
+    "decision": "returned",
+    "exc": null,
+    "digest": "2228bf3e21f865540e6effaf299248f39c5c16558e39cd5eea0ae1c770b9daa6",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": null,
+    "reason": null,
+    "fell_back": false
+   },
+   "post": {
+    "name": "VD:branchsum",
+    "decision": "returned",
+    "exc": null,
+    "digest": "2228bf3e21f865540e6effaf299248f39c5c16558e39cd5eea0ae1c770b9daa6",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": null,
+    "reason": null,
+    "fell_back": false
+   }
+  },
+  {
+   "name": "V:fold",
+   "verdict": "identical",
+   "pre": {
+    "name": "V:fold",
+    "decision": "returned",
+    "exc": null,
+    "digest": "482265382a1b5868c44bae200b7b0f663d41473fcab34ea77280b3fd8706efc6",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 1.000074502959001,
+    "reason": "fold_ring",
+    "fell_back": false
+   },
+   "post": {
+    "name": "V:fold",
+    "decision": "returned",
+    "exc": null,
+    "digest": "482265382a1b5868c44bae200b7b0f663d41473fcab34ea77280b3fd8706efc6",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 1.000074502959001,
+    "reason": "fold_ring",
+    "fell_back": false
+   }
+  },
+  {
+   "name": "V:foldedge",
+   "verdict": "refused_both",
+   "pre": {
+    "name": "V:foldedge",
+    "decision": "REFUSED",
+    "exc": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch b",
+    "digest": null
+   },
+   "post": {
+    "name": "V:foldedge",
+    "decision": "REFUSED",
+    "exc": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch b",
+    "digest": null
+   }
+  },
+  {
+   "name": "V:blowup",
+   "verdict": "refused_both",
+   "pre": {
+    "name": "V:blowup",
+    "decision": "REFUSED",
+    "exc": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch b",
+    "digest": null
+   },
+   "post": {
+    "name": "V:blowup",
+    "decision": "REFUSED",
+    "exc": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch b",
+    "digest": null
+   }
+  },
+  {
+   "name": "V:short",
+   "verdict": "identical",
+   "pre": {
+    "name": "V:short",
+    "decision": "returned",
+    "exc": null,
+    "digest": "fda02c6bd53758c6e5d88cb956a47105e3e08b36e2d925bff81b84ae3caeecc5",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 0.9998727749918246,
+    "reason": "no_fold",
+    "fell_back": true
+   },
+   "post": {
+    "name": "V:short",
+    "decision": "returned",
+    "exc": null,
+    "digest": "fda02c6bd53758c6e5d88cb956a47105e3e08b36e2d925bff81b84ae3caeecc5",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 0.9998727749918246,
+    "reason": "no_fold",
+    "fell_back": true
+   }
+  },
+  {
+   "name": "V:vertex",
+   "verdict": "identical",
+   "pre": {
+    "name": "V:vertex",
+    "decision": "returned",
+    "exc": null,
+    "digest": "44bc5eae91f8cdac5b1f16533aa538595e1a321c7a933a02764a1b1a1ab7a171",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 0.999920931370881,
+    "reason": "no_fold",
+    "fell_back": true
+   },
+   "post": {
+    "name": "V:vertex",
+    "decision": "returned",
+    "exc": null,
+    "digest": "44bc5eae91f8cdac5b1f16533aa538595e1a321c7a933a02764a1b1a1ab7a171",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 0.999920931370881,
+    "reason": "no_fold",
+    "fell_back": true
+   }
+  },
+  {
+   "name": "V:plain",
+   "verdict": "identical",
+   "pre": {
+    "name": "V:plain",
+    "decision": "returned",
+    "exc": null,
+    "digest": "223129507e80c36409b9563cab039225f4c3dd7e2e072ffdc65d442f340f7773",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 0.993536500670927,
+    "reason": "fold_ring",
+    "fell_back": false
+   },
+   "post": {
+    "name": "V:plain",
+    "decision": "returned",
+    "exc": null,
+    "digest": "223129507e80c36409b9563cab039225f4c3dd7e2e072ffdc65d442f340f7773",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 0.993536500670927,
+    "reason": "fold_ring",
+    "fell_back": false
+   }
+  },
+  {
+   "name": "V:sub4",
+   "verdict": "identical",
+   "pre": {
+    "name": "V:sub4",
+    "decision": "returned",
+    "exc": null,
+    "digest": "b199a35de7bc3020cc55893d1b129f5f2d39dbc1fe7b795e3c3f114794ac0fce",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 1.0077101720946093,
+    "reason": "fold_ring",
+    "fell_back": false
+   },
+   "post": {
+    "name": "V:sub4",
+    "decision": "returned",
+    "exc": null,
+    "digest": "b199a35de7bc3020cc55893d1b129f5f2d39dbc1fe7b795e3c3f114794ac0fce",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 1.0077101720946093,
+    "reason": "fold_ring",
+    "fell_back": false
+   }
+  },
+  {
+   "name": "V:c64",
+   "verdict": "identical",
+   "pre": {
+    "name": "V:c64",
+    "decision": "returned",
+    "exc": null,
+    "digest": "6012ef9d9bdaf3fb602e387e9248745d2002f28530be690e90cf1a4c89f30057",
+    "dtype": "complex64",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 1.0000745000533162,
+    "reason": "fold_ring",
+    "fell_back": false
+   },
+   "post": {
+    "name": "V:c64",
+    "decision": "returned",
+    "exc": null,
+    "digest": "6012ef9d9bdaf3fb602e387e9248745d2002f28530be690e90cf1a4c89f30057",
+    "dtype": "complex64",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 1.0000745000533162,
+    "reason": "fold_ring",
+    "fell_back": false
+   }
+  },
+  {
+   "name": "V:branchsum",
+   "verdict": "identical",
+   "pre": {
+    "name": "V:branchsum",
+    "decision": "returned",
+    "exc": null,
+    "digest": "fa8a7648750dc964f21adf10976194b1143761e583ceb3289f2244553721daed",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": null,
+    "reason": null,
+    "fell_back": false
+   },
+   "post": {
+    "name": "V:branchsum",
+    "decision": "returned",
+    "exc": null,
+    "digest": "fa8a7648750dc964f21adf10976194b1143761e583ceb3289f2244553721daed",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": null,
+    "reason": null,
+    "fell_back": false
+   }
+  },
+  {
+   "name": "V_alt:fold",
+   "verdict": "identical",
+   "pre": {
+    "name": "V_alt:fold",
+    "decision": "returned",
+    "exc": null,
+    "digest": "f128f6f8263866bbfe89f8566baabbe85b4dfcad5f61be5a87f9553501eb2447",
+    "dtype": "complex128",
+    "shape": [
+     400,
+     400
+    ],
+    "reading": 1.0325949290582073,
+    "reason": "fold Airy scale under-resolved by the grid",
+    "fell_back": true
+   },
+   "post": {
+    "name": "V_alt:fold",
+    "decision": "returned",
+    "exc": null,
+    "digest": "f128f6f8263866bbfe89f8566baabbe85b4dfcad5f61be5a87f9553501eb2447",
+    "dtype": "complex128",
+    "shape": [
+     400,
+     400
+    ],
+    "reading": 1.0325949290582073,
+    "reason": "fold Airy scale under-resolved by the grid",
+    "fell_back": true
+   }
+  },
+  {
+   "name": "V_alt:foldedge",
+   "verdict": "refused_both",
+   "pre": {
+    "name": "V_alt:foldedge",
+    "decision": "REFUSED",
+    "exc": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch b",
+    "digest": null
+   },
+   "post": {
+    "name": "V_alt:foldedge",
+    "decision": "REFUSED",
+    "exc": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch b",
+    "digest": null
+   }
+  },
+  {
+   "name": "V_alt:blowup",
+   "verdict": "refused_both",
+   "pre": {
+    "name": "V_alt:blowup",
+    "decision": "REFUSED",
+    "exc": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch b",
+    "digest": null
+   },
+   "post": {
+    "name": "V_alt:blowup",
+    "decision": "REFUSED",
+    "exc": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch b",
+    "digest": null
+   }
+  },
+  {
+   "name": "V_alt:short",
+   "verdict": "identical",
+   "pre": {
+    "name": "V_alt:short",
+    "decision": "returned",
+    "exc": null,
+    "digest": "a477b20aff6c2452127ad0c0f72f63d98c1e490c68301a387b4a12a454c0b30d",
+    "dtype": "complex128",
+    "shape": [
+     400,
+     400
+    ],
+    "reading": 1.0002399834187523,
+    "reason": "no_fold",
+    "fell_back": true
+   },
+   "post": {
+    "name": "V_alt:short",
+    "decision": "returned",
+    "exc": null,
+    "digest": "a477b20aff6c2452127ad0c0f72f63d98c1e490c68301a387b4a12a454c0b30d",
+    "dtype": "complex128",
+    "shape": [
+     400,
+     400
+    ],
+    "reading": 1.0002399834187523,
+    "reason": "no_fold",
+    "fell_back": true
+   }
+  },
+  {
+   "name": "V_alt:vertex",
+   "verdict": "identical",
+   "pre": {
+    "name": "V_alt:vertex",
+    "decision": "returned",
+    "exc": null,
+    "digest": "816340534a92cf7130ee8cfdb2afa430eee41678ffb9e50b27fcdd458770cb67",
+    "dtype": "complex128",
+    "shape": [
+     400,
+     400
+    ],
+    "reading": 0.9998885164460177,
+    "reason": "no_fold",
+    "fell_back": true
+   },
+   "post": {
+    "name": "V_alt:vertex",
+    "decision": "returned",
+    "exc": null,
+    "digest": "816340534a92cf7130ee8cfdb2afa430eee41678ffb9e50b27fcdd458770cb67",
+    "dtype": "complex128",
+    "shape": [
+     400,
+     400
+    ],
+    "reading": 0.9998885164460177,
+    "reason": "no_fold",
+    "fell_back": true
+   }
+  },
+  {
+   "name": "V_alt:plain",
+   "verdict": "refused_both",
+   "pre": {
+    "name": "V_alt:plain",
+    "decision": "REFUSED",
+    "exc": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the field this ca",
+    "digest": null
+   },
+   "post": {
+    "name": "V_alt:plain",
+    "decision": "REFUSED",
+    "exc": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the reading this ",
+    "digest": null
+   }
+  },
+  {
+   "name": "V_alt:sub4",
+   "verdict": "identical",
+   "pre": {
+    "name": "V_alt:sub4",
+    "decision": "returned",
+    "exc": null,
+    "digest": "a660b4b41cdb962c815928dc516fe0a633890f436af454214e89cb9cce3264cd",
+    "dtype": "complex128",
+    "shape": [
+     400,
+     400
+    ],
+    "reading": 1.0438046180273337,
+    "reason": "fold Airy scale under-resolved by the grid",
+    "fell_back": true
+   },
+   "post": {
+    "name": "V_alt:sub4",
+    "decision": "returned",
+    "exc": null,
+    "digest": "a660b4b41cdb962c815928dc516fe0a633890f436af454214e89cb9cce3264cd",
+    "dtype": "complex128",
+    "shape": [
+     400,
+     400
+    ],
+    "reading": 1.0438046180273337,
+    "reason": "fold Airy scale under-resolved by the grid",
+    "fell_back": true
+   }
+  },
+  {
+   "name": "V_alt:c64",
+   "verdict": "identical",
+   "pre": {
+    "name": "V_alt:c64",
+    "decision": "returned",
+    "exc": null,
+    "digest": "d1b8fa7b50c997f8650bdc0a009d3fd4ad0a2cbc2d0e19c9830f9f0faae15c76",
+    "dtype": "complex64",
+    "shape": [
+     400,
+     400
+    ],
+    "reading": 1.0325949281992792,
+    "reason": "fold Airy scale under-resolved by the grid",
+    "fell_back": true
+   },
+   "post": {
+    "name": "V_alt:c64",
+    "decision": "returned",
+    "exc": null,
+    "digest": "d1b8fa7b50c997f8650bdc0a009d3fd4ad0a2cbc2d0e19c9830f9f0faae15c76",
+    "dtype": "complex64",
+    "shape": [
+     400,
+     400
+    ],
+    "reading": 1.0325949281992792,
+    "reason": "fold Airy scale under-resolved by the grid",
+    "fell_back": true
+   }
+  },
+  {
+   "name": "V_alt:branchsum",
+   "verdict": "identical",
+   "pre": {
+    "name": "V_alt:branchsum",
+    "decision": "returned",
+    "exc": null,
+    "digest": "f128f6f8263866bbfe89f8566baabbe85b4dfcad5f61be5a87f9553501eb2447",
+    "dtype": "complex128",
+    "shape": [
+     400,
+     400
+    ],
+    "reading": null,
+    "reason": null,
+    "fell_back": false
+   },
+   "post": {
+    "name": "V_alt:branchsum",
+    "decision": "returned",
+    "exc": null,
+    "digest": "f128f6f8263866bbfe89f8566baabbe85b4dfcad5f61be5a87f9553501eb2447",
+    "dtype": "complex128",
+    "shape": [
+     400,
+     400
+    ],
+    "reading": null,
+    "reason": null,
+    "fell_back": false
+   }
+  },
+  {
+   "name": "HN:fold",
+   "verdict": "identical",
+   "pre": {
+    "name": "HN:fold",
+    "decision": "returned",
+    "exc": null,
+    "digest": "3d2ae605f41addb9ff998bc678ede2f685910a73d1f51f58af2fa2f348587ddc",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "reading": 1.0058947914808556,
+    "reason": "fold_ring",
+    "fell_back": false
+   },
+   "post": {
+    "name": "HN:fold",
+    "decision": "returned",
+    "exc": null,
+    "digest": "3d2ae605f41addb9ff998bc678ede2f685910a73d1f51f58af2fa2f348587ddc",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "reading": 1.0058947914808556,
+    "reason": "fold_ring",
+    "fell_back": false
+   }
+  },
+  {
+   "name": "HN:foldedge",
+   "verdict": "refused_both",
+   "pre": {
+    "name": "HN:foldedge",
+    "decision": "REFUSED",
+    "exc": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch b",
+    "digest": null
+   },
+   "post": {
+    "name": "HN:foldedge",
+    "decision": "REFUSED",
+    "exc": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch b",
+    "digest": null
+   }
+  },
+  {
+   "name": "HN:blowup",
+   "verdict": "identical",
+   "pre": {
+    "name": "HN:blowup",
+    "decision": "returned",
+    "exc": null,
+    "digest": "e5a52e6c8dc33d6ff53cc4807fb2a5fe31aa66db98c85c789f22a428d7147b5d",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "reading": 1.0020466356093811,
+    "reason": "no_fold",
+    "fell_back": true
+   },
+   "post": {
+    "name": "HN:blowup",
+    "decision": "returned",
+    "exc": null,
+    "digest": "e5a52e6c8dc33d6ff53cc4807fb2a5fe31aa66db98c85c789f22a428d7147b5d",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "reading": 1.0020466356093811,
+    "reason": "no_fold",
+    "fell_back": true
+   }
+  },
+  {
+   "name": "HN:short",
+   "verdict": "identical",
+   "pre": {
+    "name": "HN:short",
+    "decision": "returned",
+    "exc": null,
+    "digest": "f958f080e723d2528362a379066ae59175a99c76fe6f9a08c9ca3c1f40a84d15",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "reading": 0.9997975988770095,
+    "reason": "no_fold",
+    "fell_back": true
+   },
+   "post": {
+    "name": "HN:short",
+    "decision": "returned",
+    "exc": null,
+    "digest": "f958f080e723d2528362a379066ae59175a99c76fe6f9a08c9ca3c1f40a84d15",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "reading": 0.9997975988770095,
+    "reason": "no_fold",
+    "fell_back": true
+   }
+  },
+  {
+   "name": "HN:vertex",
+   "verdict": "identical",
+   "pre": {
+    "name": "HN:vertex",
+    "decision": "returned",
+    "exc": null,
+    "digest": "6204171a1aa4fb5cb99ac85e1f4017de50fa52a6a12374c93b55e59382cb0b14",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "reading": 0.9999978399978533,
+    "reason": "no_fold",
+    "fell_back": true
+   },
+   "post": {
+    "name": "HN:vertex",
+    "decision": "returned",
+    "exc": null,
+    "digest": "6204171a1aa4fb5cb99ac85e1f4017de50fa52a6a12374c93b55e59382cb0b14",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "reading": 0.9999978399978533,
+    "reason": "no_fold",
+    "fell_back": true
+   }
+  },
+  {
+   "name": "HN:plain",
+   "verdict": "refused_both",
+   "pre": {
+    "name": "HN:plain",
+    "decision": "REFUSED",
+    "exc": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the field this ca",
+    "digest": null
+   },
+   "post": {
+    "name": "HN:plain",
+    "decision": "REFUSED",
+    "exc": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the reading this ",
+    "digest": null
+   }
+  },
+  {
+   "name": "HN:sub4",
+   "verdict": "refused_both",
+   "pre": {
+    "name": "HN:sub4",
+    "decision": "REFUSED",
+    "exc": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the field this ca",
+    "digest": null
+   },
+   "post": {
+    "name": "HN:sub4",
+    "decision": "REFUSED",
+    "exc": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the reading this ",
+    "digest": null
+   }
+  },
+  {
+   "name": "HN:c64",
+   "verdict": "identical",
+   "pre": {
+    "name": "HN:c64",
+    "decision": "returned",
+    "exc": null,
+    "digest": "b80384c1c7b17864e048111af42420f330a00ef92cd6300da3dc6c3c80bc4a94",
+    "dtype": "complex64",
+    "shape": [
+     640,
+     640
+    ],
+    "reading": 1.0058947911174643,
+    "reason": "fold_ring",
+    "fell_back": false
+   },
+   "post": {
+    "name": "HN:c64",
+    "decision": "returned",
+    "exc": null,
+    "digest": "b80384c1c7b17864e048111af42420f330a00ef92cd6300da3dc6c3c80bc4a94",
+    "dtype": "complex64",
+    "shape": [
+     640,
+     640
+    ],
+    "reading": 1.0058947911174643,
+    "reason": "fold_ring",
+    "fell_back": false
+   }
+  },
+  {
+   "name": "HN:branchsum",
+   "verdict": "identical",
+   "pre": {
+    "name": "HN:branchsum",
+    "decision": "returned",
+    "exc": null,
+    "digest": "9678b06642c8d416ec471c918d5fa9c4ce17426c40e36cf55cd6752b5e4a5518",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "reading": null,
+    "reason": null,
+    "fell_back": false
+   },
+   "post": {
+    "name": "HN:branchsum",
+    "decision": "returned",
+    "exc": null,
+    "digest": "9678b06642c8d416ec471c918d5fa9c4ce17426c40e36cf55cd6752b5e4a5518",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "reading": null,
+    "reason": null,
+    "fell_back": false
+   }
+  },
+  {
+   "name": "W:fold",
+   "verdict": "identical",
+   "pre": {
+    "name": "W:fold",
+    "decision": "returned",
+    "exc": null,
+    "digest": "66629bf102cf1afc9b9aa67d7da70a19e5cf2b8a6b6b363157d242e68707feaf",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 1.0013775476349926,
+    "reason": "fold_ring",
+    "fell_back": false
+   },
+   "post": {
+    "name": "W:fold",
+    "decision": "returned",
+    "exc": null,
+    "digest": "66629bf102cf1afc9b9aa67d7da70a19e5cf2b8a6b6b363157d242e68707feaf",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 1.0013775476349926,
+    "reason": "fold_ring",
+    "fell_back": false
+   }
+  },
+  {
+   "name": "W:foldedge",
+   "verdict": "refused_both",
+   "pre": {
+    "name": "W:foldedge",
+    "decision": "REFUSED",
+    "exc": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch b",
+    "digest": null
+   },
+   "post": {
+    "name": "W:foldedge",
+    "decision": "REFUSED",
+    "exc": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch b",
+    "digest": null
+   }
+  },
+  {
+   "name": "W:blowup",
+   "verdict": "refused_both",
+   "pre": {
+    "name": "W:blowup",
+    "decision": "REFUSED",
+    "exc": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the field this ca",
+    "digest": null
+   },
+   "post": {
+    "name": "W:blowup",
+    "decision": "REFUSED",
+    "exc": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the reading this ",
+    "digest": null
+   }
+  },
+  {
+   "name": "W:short",
+   "verdict": "identical",
+   "pre": {
+    "name": "W:short",
+    "decision": "returned",
+    "exc": null,
+    "digest": "f8bd5187e31af282c1e5522fb352440e06ee820727269f3ff5e47da77c547dc0",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 1.000249028147094,
+    "reason": "no_fold",
+    "fell_back": true
+   },
+   "post": {
+    "name": "W:short",
+    "decision": "returned",
+    "exc": null,
+    "digest": "f8bd5187e31af282c1e5522fb352440e06ee820727269f3ff5e47da77c547dc0",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 1.000249028147094,
+    "reason": "no_fold",
+    "fell_back": true
+   }
+  },
+  {
+   "name": "W:vertex",
+   "verdict": "identical",
+   "pre": {
+    "name": "W:vertex",
+    "decision": "returned",
+    "exc": null,
+    "digest": "1a360bf7cf35b630ea7d604bef3ab0afe29fa3a5fc2989674210eca9b939c1d2",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 1.0001064498163512,
+    "reason": "no_fold",
+    "fell_back": true
+   },
+   "post": {
+    "name": "W:vertex",
+    "decision": "returned",
+    "exc": null,
+    "digest": "1a360bf7cf35b630ea7d604bef3ab0afe29fa3a5fc2989674210eca9b939c1d2",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 1.0001064498163512,
+    "reason": "no_fold",
+    "fell_back": true
+   }
+  },
+  {
+   "name": "W:plain",
+   "verdict": "identical",
+   "pre": {
+    "name": "W:plain",
+    "decision": "returned",
+    "exc": null,
+    "digest": "8d858b37298d7ea34d99bc182414ba2e95a9092031fcd059e983bfc0d23c698e",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 0.9607634299287069,
+    "reason": "fold_ring",
+    "fell_back": false
+   },
+   "post": {
+    "name": "W:plain",
+    "decision": "returned",
+    "exc": null,
+    "digest": "8d858b37298d7ea34d99bc182414ba2e95a9092031fcd059e983bfc0d23c698e",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 0.9607634299287069,
+    "reason": "fold_ring",
+    "fell_back": false
+   }
+  },
+  {
+   "name": "W:sub4",
+   "verdict": "identical",
+   "pre": {
+    "name": "W:sub4",
+    "decision": "returned",
+    "exc": null,
+    "digest": "a13df39275aa93121c3e4aeae3ae5d4e8d645203f09684af55f741c7794730e0",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 1.00197437000178,
+    "reason": "fold_ring",
+    "fell_back": false
+   },
+   "post": {
+    "name": "W:sub4",
+    "decision": "returned",
+    "exc": null,
+    "digest": "a13df39275aa93121c3e4aeae3ae5d4e8d645203f09684af55f741c7794730e0",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 1.00197437000178,
+    "reason": "fold_ring",
+    "fell_back": false
+   }
+  },
+  {
+   "name": "W:c64",
+   "verdict": "identical",
+   "pre": {
+    "name": "W:c64",
+    "decision": "returned",
+    "exc": null,
+    "digest": "0c1db9e6175be82a5a0bf89f66153af57e426785bf2179f7731225a4ace145e3",
+    "dtype": "complex64",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 1.001377545198009,
+    "reason": "fold_ring",
+    "fell_back": false
+   },
+   "post": {
+    "name": "W:c64",
+    "decision": "returned",
+    "exc": null,
+    "digest": "0c1db9e6175be82a5a0bf89f66153af57e426785bf2179f7731225a4ace145e3",
+    "dtype": "complex64",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 1.001377545198009,
+    "reason": "fold_ring",
+    "fell_back": false
+   }
+  },
+  {
+   "name": "W:branchsum",
+   "verdict": "identical",
+   "pre": {
+    "name": "W:branchsum",
+    "decision": "returned",
+    "exc": null,
+    "digest": "5d687fbecb09e3278a3949f12a5d51033bd54ae24607d5cf68cab6c5858c23d4",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": null,
+    "reason": null,
+    "fell_back": false
+   },
+   "post": {
+    "name": "W:branchsum",
+    "decision": "returned",
+    "exc": null,
+    "digest": "5d687fbecb09e3278a3949f12a5d51033bd54ae24607d5cf68cab6c5858c23d4",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": null,
+    "reason": null,
+    "fell_back": false
+   }
+  },
+  {
+   "name": "W_alt:fold",
+   "verdict": "identical",
+   "pre": {
+    "name": "W_alt:fold",
+    "decision": "returned",
+    "exc": null,
+    "digest": "4cc70353db7849ae3da67b5a152ec36966cd096144a80aa9209f47dca0c5ad7c",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "reading": 1.003480679175376,
+    "reason": "fold_ring",
+    "fell_back": false
+   },
+   "post": {
+    "name": "W_alt:fold",
+    "decision": "returned",
+    "exc": null,
+    "digest": "4cc70353db7849ae3da67b5a152ec36966cd096144a80aa9209f47dca0c5ad7c",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "reading": 1.003480679175376,
+    "reason": "fold_ring",
+    "fell_back": false
+   }
+  },
+  {
+   "name": "W_alt:foldedge",
+   "verdict": "refused_both",
+   "pre": {
+    "name": "W_alt:foldedge",
+    "decision": "REFUSED",
+    "exc": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch b",
+    "digest": null
+   },
+   "post": {
+    "name": "W_alt:foldedge",
+    "decision": "REFUSED",
+    "exc": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch b",
+    "digest": null
+   }
+  },
+  {
+   "name": "W_alt:blowup",
+   "verdict": "refused_both",
+   "pre": {
+    "name": "W_alt:blowup",
+    "decision": "REFUSED",
+    "exc": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the field this ca",
+    "digest": null
+   },
+   "post": {
+    "name": "W_alt:blowup",
+    "decision": "REFUSED",
+    "exc": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the reading this ",
+    "digest": null
+   }
+  },
+  {
+   "name": "W_alt:short",
+   "verdict": "identical",
+   "pre": {
+    "name": "W_alt:short",
+    "decision": "returned",
+    "exc": null,
+    "digest": "b6c10563baf4d544c8e8cc26a83dfb2f9ccc0086175b904e5b0c53c72df516f0",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "reading": 1.000103519983847,
+    "reason": "no_fold",
+    "fell_back": true
+   },
+   "post": {
+    "name": "W_alt:short",
+    "decision": "returned",
+    "exc": null,
+    "digest": "b6c10563baf4d544c8e8cc26a83dfb2f9ccc0086175b904e5b0c53c72df516f0",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "reading": 1.000103519983847,
+    "reason": "no_fold",
+    "fell_back": true
+   }
+  },
+  {
+   "name": "W_alt:vertex",
+   "verdict": "identical",
+   "pre": {
+    "name": "W_alt:vertex",
+    "decision": "returned",
+    "exc": null,
+    "digest": "c57422bc836c394f646372ab7cb68b288c3fa70635e0778feb80f9237e557491",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "reading": 0.9998879379594339,
+    "reason": "no_fold",
+    "fell_back": true
+   },
+   "post": {
+    "name": "W_alt:vertex",
+    "decision": "returned",
+    "exc": null,
+    "digest": "c57422bc836c394f646372ab7cb68b288c3fa70635e0778feb80f9237e557491",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "reading": 0.9998879379594339,
+    "reason": "no_fold",
+    "fell_back": true
+   }
+  },
+  {
+   "name": "W_alt:plain",
+   "verdict": "identical",
+   "pre": {
+    "name": "W_alt:plain",
+    "decision": "returned",
+    "exc": null,
+    "digest": "8812a7cca06adfb90a9c6e488192f32d830951eb37a3171ce7ea0dade9713ecf",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "reading": 1.0076849973486919,
+    "reason": "fold_ring",
+    "fell_back": false
+   },
+   "post": {
+    "name": "W_alt:plain",
+    "decision": "returned",
+    "exc": null,
+    "digest": "8812a7cca06adfb90a9c6e488192f32d830951eb37a3171ce7ea0dade9713ecf",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "reading": 1.0076849973486919,
+    "reason": "fold_ring",
+    "fell_back": false
+   }
+  },
+  {
+   "name": "W_alt:sub4",
+   "verdict": "identical",
+   "pre": {
+    "name": "W_alt:sub4",
+    "decision": "returned",
+    "exc": null,
+    "digest": "54af00b7472f810eaef5af8f0f39f52a2ebd98a04809820121e6502c197207b9",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "reading": 0.9939552802064475,
+    "reason": "fold_ring",
+    "fell_back": false
+   },
+   "post": {
+    "name": "W_alt:sub4",
+    "decision": "returned",
+    "exc": null,
+    "digest": "54af00b7472f810eaef5af8f0f39f52a2ebd98a04809820121e6502c197207b9",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "reading": 0.9939552802064475,
+    "reason": "fold_ring",
+    "fell_back": false
+   }
+  },
+  {
+   "name": "W_alt:c64",
+   "verdict": "identical",
+   "pre": {
+    "name": "W_alt:c64",
+    "decision": "returned",
+    "exc": null,
+    "digest": "b01219ea0ab8e7d6e92e367e0aae6b835b8775aa05bbea466450fb1b4213ef16",
+    "dtype": "complex64",
+    "shape": [
+     640,
+     640
+    ],
+    "reading": 1.0034806755481538,
+    "reason": "fold_ring",
+    "fell_back": false
+   },
+   "post": {
+    "name": "W_alt:c64",
+    "decision": "returned",
+    "exc": null,
+    "digest": "b01219ea0ab8e7d6e92e367e0aae6b835b8775aa05bbea466450fb1b4213ef16",
+    "dtype": "complex64",
+    "shape": [
+     640,
+     640
+    ],
+    "reading": 1.0034806755481538,
+    "reason": "fold_ring",
+    "fell_back": false
+   }
+  },
+  {
+   "name": "W_alt:branchsum",
+   "verdict": "identical",
+   "pre": {
+    "name": "W_alt:branchsum",
+    "decision": "returned",
+    "exc": null,
+    "digest": "349e2f2cc1cca1d60a92b56dfc0cccc351f57d77914bd9497e5bcd488d8ecd6e",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "reading": null,
+    "reason": null,
+    "fell_back": false
+   },
+   "post": {
+    "name": "W_alt:branchsum",
+    "decision": "returned",
+    "exc": null,
+    "digest": "349e2f2cc1cca1d60a92b56dfc0cccc351f57d77914bd9497e5bcd488d8ecd6e",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "reading": null,
+    "reason": null,
+    "fell_back": false
+   }
+  },
+  {
+   "name": "Q:fold",
+   "verdict": "identical",
+   "pre": {
+    "name": "Q:fold",
+    "decision": "returned",
+    "exc": null,
+    "digest": "951d899cfb75b18df4694bb7261026bb7a51609aa1a31d63465162658c3d44f4",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 1.0032094422723348,
+    "reason": "fold_ring",
+    "fell_back": false
+   },
+   "post": {
+    "name": "Q:fold",
+    "decision": "returned",
+    "exc": null,
+    "digest": "951d899cfb75b18df4694bb7261026bb7a51609aa1a31d63465162658c3d44f4",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 1.0032094422723348,
+    "reason": "fold_ring",
+    "fell_back": false
+   }
+  },
+  {
+   "name": "Q:foldedge",
+   "verdict": "identical",
+   "pre": {
+    "name": "Q:foldedge",
+    "decision": "returned",
+    "exc": null,
+    "digest": "62430629661bd5a3a4ed0206452adcd0993db32024a65cfe5351f5c3f7e53613",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 1.001616519943107,
+    "reason": "fold_ring",
+    "fell_back": false
+   },
+   "post": {
+    "name": "Q:foldedge",
+    "decision": "returned",
+    "exc": null,
+    "digest": "62430629661bd5a3a4ed0206452adcd0993db32024a65cfe5351f5c3f7e53613",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 1.001616519943107,
+    "reason": "fold_ring",
+    "fell_back": false
+   }
+  },
+  {
+   "name": "Q:blowup",
+   "verdict": "identical",
+   "pre": {
+    "name": "Q:blowup",
+    "decision": "returned",
+    "exc": null,
+    "digest": "840d68bfd03bc04647bdb577cc7d83fae85e6bbd5c0bcac59d2fb3fb732fe3ca",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 1.0010293563556536,
+    "reason": "no_fold",
+    "fell_back": true
+   },
+   "post": {
+    "name": "Q:blowup",
+    "decision": "returned",
+    "exc": null,
+    "digest": "840d68bfd03bc04647bdb577cc7d83fae85e6bbd5c0bcac59d2fb3fb732fe3ca",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 1.0010293563556536,
+    "reason": "no_fold",
+    "fell_back": true
+   }
+  },
+  {
+   "name": "Q:short",
+   "verdict": "identical",
+   "pre": {
+    "name": "Q:short",
+    "decision": "returned",
+    "exc": null,
+    "digest": "88328a142933799c87d07228d18227867c36fcdce8d508fa714b881f7d97b4c2",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 1.0000270686878396,
+    "reason": "no_fold",
+    "fell_back": true
+   },
+   "post": {
+    "name": "Q:short",
+    "decision": "returned",
+    "exc": null,
+    "digest": "88328a142933799c87d07228d18227867c36fcdce8d508fa714b881f7d97b4c2",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 1.0000270686878396,
+    "reason": "no_fold",
+    "fell_back": true
+   }
+  },
+  {
+   "name": "Q:vertex",
+   "verdict": "identical",
+   "pre": {
+    "name": "Q:vertex",
+    "decision": "returned",
+    "exc": null,
+    "digest": "6379bff0492ac92f7b8b527188c9dcb34c6ffbb7157399e0725700094f29dde3",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 0.9999754972235357,
+    "reason": "no_fold",
+    "fell_back": true
+   },
+   "post": {
+    "name": "Q:vertex",
+    "decision": "returned",
+    "exc": null,
+    "digest": "6379bff0492ac92f7b8b527188c9dcb34c6ffbb7157399e0725700094f29dde3",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 0.9999754972235357,
+    "reason": "no_fold",
+    "fell_back": true
+   }
+  },
+  {
+   "name": "Q:plain",
+   "verdict": "identical",
+   "pre": {
+    "name": "Q:plain",
+    "decision": "returned",
+    "exc": null,
+    "digest": "6800d3ea6be339574ea795d4a35bbea93b80826c12c3e1121217d74ec409c5ad",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 0.9739549738430167,
+    "reason": "fold_ring",
+    "fell_back": false
+   },
+   "post": {
+    "name": "Q:plain",
+    "decision": "returned",
+    "exc": null,
+    "digest": "6800d3ea6be339574ea795d4a35bbea93b80826c12c3e1121217d74ec409c5ad",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 0.9739549738430167,
+    "reason": "fold_ring",
+    "fell_back": false
+   }
+  },
+  {
+   "name": "Q:sub4",
+   "verdict": "identical",
+   "pre": {
+    "name": "Q:sub4",
+    "decision": "returned",
+    "exc": null,
+    "digest": "3ee59e769d9679ebbd1aee166ebb95c6771cfa22a8ca8b8718fe7a33c76ac5e4",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 0.988182688098381,
+    "reason": "fold_ring",
+    "fell_back": false
+   },
+   "post": {
+    "name": "Q:sub4",
+    "decision": "returned",
+    "exc": null,
+    "digest": "3ee59e769d9679ebbd1aee166ebb95c6771cfa22a8ca8b8718fe7a33c76ac5e4",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 0.988182688098381,
+    "reason": "fold_ring",
+    "fell_back": false
+   }
+  },
+  {
+   "name": "Q:c64",
+   "verdict": "identical",
+   "pre": {
+    "name": "Q:c64",
+    "decision": "returned",
+    "exc": null,
+    "digest": "b5d65c899e0e3c02e6bc7ffc6464009b5f9c947def57a8ddbaf92ab31941a6e2",
+    "dtype": "complex64",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 1.0032094479813811,
+    "reason": "fold_ring",
+    "fell_back": false
+   },
+   "post": {
+    "name": "Q:c64",
+    "decision": "returned",
+    "exc": null,
+    "digest": "b5d65c899e0e3c02e6bc7ffc6464009b5f9c947def57a8ddbaf92ab31941a6e2",
+    "dtype": "complex64",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": 1.0032094479813811,
+    "reason": "fold_ring",
+    "fell_back": false
+   }
+  },
+  {
+   "name": "Q:branchsum",
+   "verdict": "identical",
+   "pre": {
+    "name": "Q:branchsum",
+    "decision": "returned",
+    "exc": null,
+    "digest": "5de94de012bc87062ef2dbd55e02c8efd36528829cc2ed13e805d0fa543e8a17",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": null,
+    "reason": null,
+    "fell_back": false
+   },
+   "post": {
+    "name": "Q:branchsum",
+    "decision": "returned",
+    "exc": null,
+    "digest": "5de94de012bc87062ef2dbd55e02c8efd36528829cc2ed13e805d0fa543e8a17",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "reading": null,
+    "reason": null,
+    "fell_back": false
+   }
+  }
+ ]
+}

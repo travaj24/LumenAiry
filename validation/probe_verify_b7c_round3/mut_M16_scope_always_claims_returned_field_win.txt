@@ -1,0 +1,15 @@
+.....................................FF...                               [100%]
+================================== FAILURES ===================================
+E   AssertionError: returned_field
+    assert 'returned_field' == 'underlying_branch_sum'
+      
+      - underlying_branch_sum
+      + returned_field
+C:\tmp\lum_vmb3_mut\tests\unit\test_wp_b7c_round3.py:294: AssertionError: returned_field
+E   AssertionError: returned_field
+    assert 'returned_field' == 'returned_fie...adrature_only'
+      
+      - returned_field_quadrature_only
+      + returned_field
+C:\tmp\lum_vmb3_mut\tests\unit\test_wp_b7c_round3.py:337: AssertionError: returned_field
+2 failed, 40 passed in 25.96s

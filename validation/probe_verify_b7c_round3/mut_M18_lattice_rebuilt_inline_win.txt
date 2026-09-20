@@ -1,0 +1,9 @@
+...................................F......                               [100%]
+================================== FAILURES ===================================
+E   AssertionError: the completion did not take its half-pitch lattice from half_pitch_centres(N, dx); calls seen: []
+    assert [] == [(512, 2.2e-06)]
+      
+      Right contains one more item: (512, 2.2e-06)
+      Use -v to get more diff
+C:\tmp\lum_vmb3_mut\tests\unit\test_wp_b7c_round3.py:193: AssertionError: the completion did not take its half-pitch lattice from half_pitch_centres(N, dx); calls seen: []
+1 failed, 41 passed in 31.73s

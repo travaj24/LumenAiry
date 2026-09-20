@@ -1,0 +1,25 @@
+.........F..F...................F.......FF....F                          [100%]
+=================================== FAILURES ===================================
+E   AssertionError: assert 'not_measured' == 'not_converged_loss'
+      
+      - not_converged_loss
+      + not_measured
+/mnt/c/tmp/lum_vmb3_mutw/tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py:555: AssertionError: assert 'not_measured' == 'not_converged_loss'
+E   AssertionError: z=5412 um returned a field gaining 1.352x the launched power with both readings inside their bands
+    assert 1.3518381766765355 <= 1.25
+/mnt/c/tmp/lum_vmb3_mutw/tests/unit/test_verify_b7c_multibranch.py:219: AssertionError: z=5412 um returned a field gaining 1.352x the launched power with both readings inside their bands
+E   AssertionError: z = 1775 um falls back and returns the branch sum, but no reading of it was recorded
+    assert None is not None
+     +  where None = <built-in method get of dict object at 0x7fdaa4c7da40>('pixel_continuity')
+     +    where <built-in method get of dict object at 0x7fdaa4c7da40> = {'c0': None, 'c1': None, 'detJ': array([[nan, nan, nan, ..., nan, nan, nan],\n       [nan, nan, nan, ..., nan, nan, nan... nan, nan, ..., nan, nan, nan],\n       [nan, nan, nan, ..., nan, nan, nan]], shape=(201, 201)), 'fell_back': True, ...}.get
+/mnt/c/tmp/lum_vmb3_mutw/tests/unit/test_verify_b7c_round2.py:391: AssertionError: z = 1775 um falls back and returns the branch sum, but no reading of it was recorded
+E   AssertionError: no reading at z = 400 um (decision='not_measured'); the converged control needs one
+    assert None is not None
+/mnt/c/tmp/lum_vmb3_mutw/tests/unit/test_wp_b7c_round3.py:401: AssertionError: no reading at z = 400 um (decision='not_measured'); the converged control needs one
+E   AssertionError: (None, 'not_measured')
+    assert (None is not None)
+/mnt/c/tmp/lum_vmb3_mutw/tests/unit/test_wp_b7c_round3.py:442: AssertionError: (None, 'not_measured')
+E   AssertionError: no reading at N = 192, z = 3251.1 um (decision='not_measured')
+    assert None is not None
+/mnt/c/tmp/lum_vmb3_mutw/tests/unit/test_verify_b7c_round3.py:396: AssertionError: no reading at N = 192, z = 3251.1 um (decision='not_measured')
+6 failed, 41 passed in 28.37s

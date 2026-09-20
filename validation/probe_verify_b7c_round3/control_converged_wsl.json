@@ -1,0 +1,788 @@
+{
+ "mode": "converged",
+ "n": 96,
+ "n_optics": 12,
+ "lo": 0.9997691564413895,
+ "hi": 1.000264655226145,
+ "worst_dev": 0.00026465522614493864,
+ "rms_dev": 8.497839217227195e-05,
+ "rows": [
+  {
+   "fixture": "VA",
+   "z_um": 362.34688238718155,
+   "reading": 1.0000204786100748,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "VA",
+   "z_um": 598.159932829633,
+   "reading": 1.0000548862477787,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "VA",
+   "z_um": 833.9729832720845,
+   "reading": 0.9999578024737675,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "VA",
+   "z_um": 1069.786033714536,
+   "reading": 1.0000215218785315,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "VA",
+   "z_um": 1305.5990841569876,
+   "reading": 1.0000769598667392,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "VA",
+   "z_um": 1541.412134599439,
+   "reading": 0.9999702222943174,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "VA",
+   "z_um": 1777.2251850418907,
+   "reading": 0.9999995886398795,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "VA",
+   "z_um": 2013.038235484342,
+   "reading": 1.0000327496305619,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "VA_alt",
+   "z_um": 362.34688238718155,
+   "reading": 0.9999757762562914,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "VA_alt",
+   "z_um": 598.159932829633,
+   "reading": 0.9999721377317415,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "VA_alt",
+   "z_um": 833.9729832720845,
+   "reading": 1.000023298652016,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "VA_alt",
+   "z_um": 1069.786033714536,
+   "reading": 0.999993797863447,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "VA_alt",
+   "z_um": 1305.5990841569876,
+   "reading": 0.9999621443975808,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "VA_alt",
+   "z_um": 1541.412134599439,
+   "reading": 0.9999892907996423,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "VA_alt",
+   "z_um": 1777.2251850418907,
+   "reading": 1.0000175903848079,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "VA_alt",
+   "z_um": 2013.038235484342,
+   "reading": 1.000014670635753,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "VX",
+   "z_um": 125.44338532635864,
+   "reading": 1.000002341806396,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "VX",
+   "z_um": 143.76694770793733,
+   "reading": 1.0000144993255873,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "VX",
+   "z_um": 162.09051008951602,
+   "reading": 0.9999447685023991,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "VX",
+   "z_um": 180.4140724710947,
+   "reading": 1.0000416610882001,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "VX",
+   "z_um": 198.73763485267338,
+   "reading": 0.9999609566939639,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "VX",
+   "z_um": 217.06119723425206,
+   "reading": 1.0000368526459078,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "VX",
+   "z_um": 235.38475961583075,
+   "reading": 0.9999996226192701,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "VX",
+   "z_um": 253.70832199740943,
+   "reading": 1.0000177946504563,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "VX_alt",
+   "z_um": 125.44338532635864,
+   "reading": 0.999933672227673,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "VX_alt",
+   "z_um": 143.76694770793733,
+   "reading": 1.0000723232152826,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "VX_alt",
+   "z_um": 162.09051008951602,
+   "reading": 0.9998816697285778,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "VX_alt",
+   "z_um": 180.4140724710947,
+   "reading": 1.0000331003632992,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "VX_alt",
+   "z_um": 198.73763485267338,
+   "reading": 1.0000180378583887,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "VX_alt",
+   "z_um": 217.06119723425206,
+   "reading": 0.9999813838004943,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "VX_alt",
+   "z_um": 235.38475961583075,
+   "reading": 1.0000400432241126,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "VX_alt",
+   "z_um": 253.70832199740943,
+   "reading": 0.9998721038885714,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "VC",
+   "z_um": 378.15861392044184,
+   "reading": 1.000056216786337,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "VC",
+   "z_um": 624.2618388527928,
+   "reading": 1.0000976782311848,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "VC",
+   "z_um": 870.365063785144,
+   "reading": 0.9999788723425377,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "VC",
+   "z_um": 1116.468288717495,
+   "reading": 0.9999270307209436,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "VC",
+   "z_um": 1362.571513649846,
+   "reading": 0.9998615258016281,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "VC",
+   "z_um": 1608.6747385821973,
+   "reading": 0.9999747524150214,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "VC",
+   "z_um": 1854.7779635145482,
+   "reading": 1.0000272448042244,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "VC",
+   "z_um": 2100.881188446899,
+   "reading": 1.0001324273144208,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "VC_alt",
+   "z_um": 378.15861392044184,
+   "reading": 1.0000400979271962,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "VC_alt",
+   "z_um": 624.2618388527928,
+   "reading": 0.9999479403873534,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "VC_alt",
+   "z_um": 870.365063785144,
+   "reading": 1.0000359336423545,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "VC_alt",
+   "z_um": 1116.468288717495,
+   "reading": 0.9999971615776433,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "VC_alt",
+   "z_um": 1362.571513649846,
+   "reading": 0.9999350300004995,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "VC_alt",
+   "z_um": 1608.6747385821973,
+   "reading": 1.000110200542483,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "VC_alt",
+   "z_um": 1854.7779635145482,
+   "reading": 0.9999084477720726,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "VC_alt",
+   "z_um": 2100.881188446899,
+   "reading": 1.000102737994522,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "VD",
+   "z_um": 432.12677522748913,
+   "reading": 0.9999135877955199,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "VD",
+   "z_um": 615.9924819321222,
+   "reading": 1.000046083460295,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "VD",
+   "z_um": 799.8581886367554,
+   "reading": 1.0000395837247813,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "VD",
+   "z_um": 983.7238953413885,
+   "reading": 0.9999768168001565,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "VD",
+   "z_um": 1167.5896020460214,
+   "reading": 0.9999569234284987,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "VD",
+   "z_um": 1351.4553087506545,
+   "reading": 1.0000799452798463,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "VD",
+   "z_um": 1535.3210154552878,
+   "reading": 1.0000633788125486,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "VD",
+   "z_um": 1719.1867221599207,
+   "reading": 0.9998150686309437,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "V",
+   "z_um": 225.13161062604792,
+   "reading": 1.0000974806228629,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "V",
+   "z_um": 350.24640788630984,
+   "reading": 0.9999349689354944,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "V",
+   "z_um": 475.3612051465717,
+   "reading": 0.9999625125969525,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "V",
+   "z_um": 600.4760024068336,
+   "reading": 1.0001246178172825,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "V",
+   "z_um": 725.5907996670954,
+   "reading": 0.9998946522293243,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "V",
+   "z_um": 850.7055969273574,
+   "reading": 1.000264655226145,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "V",
+   "z_um": 975.8203941876193,
+   "reading": 0.9999008359669234,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "V",
+   "z_um": 1100.9351914478812,
+   "reading": 1.0001618059629174,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "V_alt",
+   "z_um": 225.13161062604792,
+   "reading": 0.9999173911873863,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "V_alt",
+   "z_um": 350.24640788630984,
+   "reading": 1.0000324465286463,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "V_alt",
+   "z_um": 475.3612051465717,
+   "reading": 1.0000985633634614,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "V_alt",
+   "z_um": 600.4760024068336,
+   "reading": 1.0000671525249205,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "V_alt",
+   "z_um": 725.5907996670954,
+   "reading": 1.0001919544372795,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "V_alt",
+   "z_um": 850.7055969273574,
+   "reading": 1.0001861611713918,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "V_alt",
+   "z_um": 975.8203941876193,
+   "reading": 1.000163262968106,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "V_alt",
+   "z_um": 1100.9351914478812,
+   "reading": 1.0000130368697546,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "HN",
+   "z_um": 284.18270414292664,
+   "reading": 0.999998476150771,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "HN",
+   "z_um": 405.14403782074476,
+   "reading": 0.9999982769662499,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "HN",
+   "z_um": 526.1053714985628,
+   "reading": 1.0000011225616219,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "HN",
+   "z_um": 647.066705176381,
+   "reading": 0.9999947009662967,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "HN",
+   "z_um": 768.028038854199,
+   "reading": 1.00003989562199,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "HN",
+   "z_um": 888.9893725320171,
+   "reading": 0.9999741103694963,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "HN",
+   "z_um": 1009.9507062098353,
+   "reading": 1.0002175577547054,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "HN",
+   "z_um": 1130.9120398876535,
+   "reading": 0.9997691564413895,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "W",
+   "z_um": 619.2665446013582,
+   "reading": 1.0000502115038208,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "W",
+   "z_um": 996.0765212884227,
+   "reading": 1.0000597347763804,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "W",
+   "z_um": 1372.8864979754871,
+   "reading": 1.0000228151549333,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "W",
+   "z_um": 1749.6964746625517,
+   "reading": 0.9999934450988669,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "W",
+   "z_um": 2126.506451349616,
+   "reading": 1.0000029625155478,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "W",
+   "z_um": 2503.3164280366805,
+   "reading": 0.9998642855972582,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "W",
+   "z_um": 2880.126404723745,
+   "reading": 0.9998712023091426,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "W",
+   "z_um": 3256.936381410809,
+   "reading": 0.9998626228509574,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "W_alt",
+   "z_um": 619.2665446013582,
+   "reading": 0.999957892707624,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "W_alt",
+   "z_um": 996.0765212884227,
+   "reading": 1.0000466752064943,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "W_alt",
+   "z_um": 1372.8864979754871,
+   "reading": 0.999949351409315,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "W_alt",
+   "z_um": 1749.6964746625517,
+   "reading": 1.0000670421552569,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "W_alt",
+   "z_um": 2126.506451349616,
+   "reading": 0.9999318042890262,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "W_alt",
+   "z_um": 2503.3164280366805,
+   "reading": 1.000098855696138,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "W_alt",
+   "z_um": 2880.126404723745,
+   "reading": 0.9999812547443051,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  },
+  {
+   "fixture": "W_alt",
+   "z_um": 3256.936381410809,
+   "reading": 0.9998952392208922,
+   "reason": "no_fold",
+   "fell_back": true,
+   "scope": "returned_field_quadrature_only"
+  }
+ ],
+ "lumenairy": "/mnt/c/tmp/lum_vmb3/lumenairy/__init__.py",
+ "python": "3.12.3",
+ "numpy": "2.4.6",
+ "bars": {
+  "cmax": 1.06,
+  "cmin": 0.9433962264150942,
+  "pmax": 2.0,
+  "pmin": 0.5
+ }
+}

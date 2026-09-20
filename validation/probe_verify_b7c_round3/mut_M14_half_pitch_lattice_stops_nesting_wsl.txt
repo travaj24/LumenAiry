@@ -1,0 +1,17 @@
+......F..s...................s....F.F..........                          [100%]
+=================================== FAILURES ===================================
+E   AssertionError: the blown-up plane reads 7343.9293; the quadrature identity says ~4 per halving of the pitch
+    assert 7343.929322368303 < 5.0
+/mnt/c/tmp/lum_vmb3_mutw/tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py:386: AssertionError: the blown-up plane reads 7343.9293; the quadrature identity says ~4 per halving of the pitch
+E   AssertionError: (8, 1.0, "the half-pitch lattice no longer nests on the caller's: the ~4-per-halving identity and the ratio's low variance both rest on fine pixel 2j being coarse pixel j")
+    assert False
+     +  where False = <function array_equal at 0x7fc8d665d330>(array([-4.25, -3.25, -2.25, -1.25, -0.25,  0.75,  1.75,  2.75]), array([-4., -3., -2., -1.,  0.,  1.,  2.,  3.]))
+     +    where <function array_equal at 0x7fc8d665d330> = np.array_equal
+/mnt/c/tmp/lum_vmb3_mutw/tests/unit/test_wp_b7c_round3.py:151: AssertionError: (8, 1.0, "the half-pitch lattice no longer nests on the caller's: the ~4-per-halving identity and the ratio's low variance both rest on fine pixel 2j being coarse pixel j")
+E   AssertionError: both lattices read 1.0039823320717098: the constant is not reaching the fine render, so the bit-identity arm above proves nothing
+    assert 1.0039823320717098 != 1.0039823320717098
+/mnt/c/tmp/lum_vmb3_mutw/tests/unit/test_wp_b7c_round3.py:221: AssertionError: both lattices read 1.0039823320717098: the constant is not reaching the fine render, so the bit-identity arm above proves nothing
+=========================== short test summary info ============================
+SKIPPED [1] tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py:545: no plane of this ladder reads below the loss arm on this build
+SKIPPED [1] tests/unit/test_verify_b7c_round2.py:267: this build does not straddle the bar at this plane (branch sum 1.0180, completion 0.9797); the unconditional arm above ran instead
+3 failed, 42 passed, 2 skipped in 38.92s

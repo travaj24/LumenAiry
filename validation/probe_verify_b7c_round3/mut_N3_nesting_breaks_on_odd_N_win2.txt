@@ -1,0 +1,8 @@
+..................................F............                          [100%]
+================================== FAILURES ===================================
+E   AssertionError: (37, 1.3e-06, "the half-pitch lattice no longer nests on the caller's: the ~4-per-halving identity and the ratio's low variance both rest on fine pixel 2j being coarse pixel j")
+    assert False
+     +  where False = <function array_equal at 0x0000017213078BB0>(array([-2.4375e-05, -2.3075e-05, -2.1775e-05, -2.0475e-05, -1.9175e-05,\n       -1.7875e-05, -1.6575e-05, -1.5275e-05, ...  1.3325e-05,\n        1.4625e-05,  1.5925e-05,  1.7225e-05,  1.8525e-05,  1.9825e-05,\n        2.1125e-05,  2.2425e-05]), array([-2.405e-05, -2.275e-05, -2.145e-05, -2.015e-05, -1.885e-05,\n       -1.755e-05, -1.625e-05, -1.495e-05, -1.365e-...235e-05,  1.365e-05,\n        1.495e-05,  1.625e-05,  1.755e-05,  1.885e-05,  2.015e-05,\n        2.145e-05,  2.275e-05]))
+     +    where <function array_equal at 0x0000017213078BB0> = np.array_equal
+C:\tmp\lum_vmb3_mut\tests\unit\test_wp_b7c_round3.py:151: AssertionError: (37, 1.3e-06, "the half-pitch lattice no longer nests on the caller's: the ~4-per-halving identity and the ratio's low variance both rest on fine pixel 2j being coarse pixel j")
+1 failed, 46 passed in 56.57s

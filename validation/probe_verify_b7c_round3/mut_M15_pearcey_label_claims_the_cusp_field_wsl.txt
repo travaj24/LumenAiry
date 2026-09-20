@@ -1,0 +1,11 @@
+.....................................F.........                          [100%]
+=================================== FAILURES ===================================
+E   AssertionError: the Pearcey cusp field
+    assert ('Pearcey' not in 'the Pearcey cusp field'
+      
+      'Pearcey' is contained here:
+        the Pearcey cusp field
+      ?     +++++++ or 'branch sum' in 'the Pearcey cusp field')
+     +  where 'the Pearcey cusp field' = str('the Pearcey cusp field')
+/mnt/c/tmp/lum_vmb3_mutw/tests/unit/test_wp_b7c_round3.py:289: AssertionError: the Pearcey cusp field
+1 failed, 46 passed in 40.40s
