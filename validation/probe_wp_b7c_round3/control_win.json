@@ -1,0 +1,2129 @@
+{
+ "lumenairy": "C:\\tmp\\lum_mb3\\lumenairy\\__init__.py",
+ "summary": {
+  "n": 114,
+  "min": 0.9994103139933361,
+  "max": 1.001439422409878,
+  "max_abs_dev": 0.001439422409877933
+ },
+ "rows": [
+  {
+   "kind": "optic",
+   "fixture": "V",
+   "z_um": 375.2193835038796,
+   "N": 512,
+   "dx_um": 2.2,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 1.0000754595888548,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 1.0000754595888548,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 1.6665345680123916e-07,
+   "fidelity": 0.9984380494999731,
+   "power_over_oracle": 1.0025386385789623
+  },
+  {
+   "kind": "optic",
+   "fixture": "V",
+   "z_um": 520.5960770204936,
+   "N": 512,
+   "dx_um": 2.2,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 1.0001562717349102,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 1.0001562717349102,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 1.6665299655492457e-07,
+   "fidelity": 0.9981166470618978,
+   "power_over_oracle": 1.0027869425768317
+  },
+  {
+   "kind": "optic",
+   "fixture": "V",
+   "z_um": 665.9727705371076,
+   "N": 512,
+   "dx_um": 2.2,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 0.9998871627597966,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 0.9998871627597966,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 1.6661124379713322e-07,
+   "fidelity": 0.9977801485191691,
+   "power_over_oracle": 1.0026243741951988
+  },
+  {
+   "kind": "optic",
+   "fixture": "V",
+   "z_um": 811.3494640537217,
+   "N": 512,
+   "dx_um": 2.2,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 1.000016038865457,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 1.000016038865457,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 1.666487346659642e-07,
+   "fidelity": 0.9973553429940244,
+   "power_over_oracle": 1.0025070316129334
+  },
+  {
+   "kind": "optic",
+   "fixture": "V",
+   "z_um": 956.7261575703357,
+   "N": 512,
+   "dx_um": 2.2,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 0.9999112165252817,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 0.9999112165252817,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 1.6661841541394345e-07,
+   "fidelity": 0.996849858376149,
+   "power_over_oracle": 1.0023705431558394
+  },
+  {
+   "kind": "optic",
+   "fixture": "V",
+   "z_um": 1102.1028510869498,
+   "N": 512,
+   "dx_um": 2.2,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 0.999794216330919,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 0.999794216330919,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 1.6659907500133329e-07,
+   "fidelity": 0.9961401911464925,
+   "power_over_oracle": 1.00223388694641
+  },
+  {
+   "kind": "optic",
+   "fixture": "S",
+   "z_um": 664.7562631814509,
+   "N": 512,
+   "dx_um": 1.5,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 0.9998657143476821,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 0.9998657143476821,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 1.7373022406431656e-07,
+   "fidelity": 0.9953651658957281,
+   "power_over_oracle": 1.028544089150527
+  },
+  {
+   "kind": "optic",
+   "fixture": "S",
+   "z_um": 1006.9901918608609,
+   "N": 512,
+   "dx_um": 1.5,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 0.9998195538008386,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 0.9998195538008386,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 1.7368980274777586e-07,
+   "fidelity": 0.9951949618632482,
+   "power_over_oracle": 1.028339527280067
+  },
+  {
+   "kind": "optic",
+   "fixture": "S",
+   "z_um": 1349.2241205402709,
+   "N": 512,
+   "dx_um": 1.5,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 1.0001843054002681,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 1.0001843054002681,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 1.7378207526372958e-07,
+   "fidelity": 0.9947498597881436,
+   "power_over_oracle": 1.0289092695936735
+  },
+  {
+   "kind": "optic",
+   "fixture": "S",
+   "z_um": 1691.4580492196808,
+   "N": 512,
+   "dx_um": 1.5,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 1.0001848847830503,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 1.0001848847830503,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 1.7373309252925737e-07,
+   "fidelity": 0.9944909119000868,
+   "power_over_oracle": 1.0286717690113587
+  },
+  {
+   "kind": "optic",
+   "fixture": "S",
+   "z_um": 2033.6919778990905,
+   "N": 512,
+   "dx_um": 1.5,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 0.999751044396066,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 0.999751044396066,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 1.7369286761665723e-07,
+   "fidelity": 0.9940934643532147,
+   "power_over_oracle": 1.0283302914720944
+  },
+  {
+   "kind": "optic",
+   "fixture": "S",
+   "z_um": 2375.925906578501,
+   "N": 512,
+   "dx_um": 1.5,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 1.000260070420971,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 1.000260070420971,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 1.738580669829526e-07,
+   "fidelity": 0.9931870440404594,
+   "power_over_oracle": 1.029339270820058
+  },
+  {
+   "kind": "optic",
+   "fixture": "M",
+   "z_um": 486.34449033556456,
+   "N": 512,
+   "dx_um": 3.5999999999999996,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 0.9998674636083589,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 0.9998674636083589,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 2.3397546743420743e-07,
+   "fidelity": 0.9984653355961025,
+   "power_over_oracle": 1.0011533622385052
+  },
+  {
+   "kind": "optic",
+   "fixture": "M",
+   "z_um": 709.3764630837749,
+   "N": 512,
+   "dx_um": 3.5999999999999996,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 1.0001253110622765,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 1.0001253110622765,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 2.3405271635142072e-07,
+   "fidelity": 0.9980570465339036,
+   "power_over_oracle": 1.0014804227633909
+  },
+  {
+   "kind": "optic",
+   "fixture": "M",
+   "z_um": 932.4084358319851,
+   "N": 512,
+   "dx_um": 3.5999999999999996,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 0.9994103139933361,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 0.9994103139933361,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 2.3389065959403182e-07,
+   "fidelity": 0.9976198663598588,
+   "power_over_oracle": 1.0007500159068006
+  },
+  {
+   "kind": "optic",
+   "fixture": "M",
+   "z_um": 1155.4404085801953,
+   "N": 512,
+   "dx_um": 3.5999999999999996,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 1.0001419396815918,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 1.0001419396815918,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 2.3408690891104863e-07,
+   "fidelity": 0.9970983072359956,
+   "power_over_oracle": 1.0018794734499705
+  },
+  {
+   "kind": "optic",
+   "fixture": "M",
+   "z_um": 1378.4723813284054,
+   "N": 512,
+   "dx_um": 3.5999999999999996,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 1.0002535461772792,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 1.0002535461772792,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 2.340542117779791e-07,
+   "fidelity": 0.9964217331251375,
+   "power_over_oracle": 1.001670301829795
+  },
+  {
+   "kind": "optic",
+   "fixture": "M",
+   "z_um": 1601.5043540766158,
+   "N": 512,
+   "dx_um": 3.5999999999999996,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 0.999710071203523,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 0.999710071203523,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 2.3398798330215132e-07,
+   "fidelity": 0.9954489138660232,
+   "power_over_oracle": 1.00146423996434
+  },
+  {
+   "kind": "optic",
+   "fixture": "Q",
+   "z_um": 1088.8475552718644,
+   "N": 512,
+   "dx_um": 2.6,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 1.0000496594183905,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 1.0000496594183905,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 3.565006021436988e-07,
+   "fidelity": 0.9988495314241913,
+   "power_over_oracle": 1.0019813770542934
+  },
+  {
+   "kind": "optic",
+   "fixture": "Q",
+   "z_um": 1695.305243416675,
+   "N": 512,
+   "dx_um": 2.6,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 0.9999358693555614,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 0.9999358693555614,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 3.5645973843359945e-07,
+   "fidelity": 0.998576156260662,
+   "power_over_oracle": 1.0020176398051728
+  },
+  {
+   "kind": "optic",
+   "fixture": "Q",
+   "z_um": 2301.762931561486,
+   "N": 512,
+   "dx_um": 2.6,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 1.0001009693407992,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 1.0001009693407992,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 3.5650979180577444e-07,
+   "fidelity": 0.9982602369875765,
+   "power_over_oracle": 1.0021006568064024
+  },
+  {
+   "kind": "optic",
+   "fixture": "Q",
+   "z_um": 2908.2206197062965,
+   "N": 512,
+   "dx_um": 2.6,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 0.9999439597495182,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 0.9999439597495182,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 3.564505344024797e-07,
+   "fidelity": 0.9979226923923956,
+   "power_over_oracle": 1.0019489708412597
+  },
+  {
+   "kind": "optic",
+   "fixture": "Q",
+   "z_um": 3514.6783078511066,
+   "N": 512,
+   "dx_um": 2.6,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 1.000086831086294,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 1.000086831086294,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 3.5649977038678654e-07,
+   "fidelity": 0.9974918425665917,
+   "power_over_oracle": 1.0020934272693156
+  },
+  {
+   "kind": "optic",
+   "fixture": "Q",
+   "z_um": 4121.135995995917,
+   "N": 512,
+   "dx_um": 2.6,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 0.999996011419852,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 0.999996011419852,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 3.5648430453588394e-07,
+   "fidelity": 0.9968757601618379,
+   "power_over_oracle": 1.0020586302079753
+  },
+  {
+   "kind": "optic",
+   "fixture": "F_alt",
+   "z_um": 236.7451348217586,
+   "N": 640,
+   "dx_um": 1.4,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 0.9999708573168905,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 0.9999708573168905,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 7.48836331496469e-08,
+   "fidelity": 0.9931490701667149,
+   "power_over_oracle": 1.013961188224465
+  },
+  {
+   "kind": "optic",
+   "fixture": "F_alt",
+   "z_um": 338.534933657964,
+   "N": 640,
+   "dx_um": 1.4,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 0.999852461808307,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 0.999852461808307,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 7.486742173643786e-08,
+   "fidelity": 0.9931200836892798,
+   "power_over_oracle": 1.013366594264136
+  },
+  {
+   "kind": "optic",
+   "fixture": "F_alt",
+   "z_um": 440.32473249416944,
+   "N": 640,
+   "dx_um": 1.4,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 1.0000986096941766,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 1.0000986096941766,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 7.489110895717052e-08,
+   "fidelity": 0.9930396344666788,
+   "power_over_oracle": 1.013859830703502
+  },
+  {
+   "kind": "optic",
+   "fixture": "F_alt",
+   "z_um": 542.1145313303749,
+   "N": 640,
+   "dx_um": 1.4,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 1.0000194249992929,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 1.0000194249992929,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 7.488568824269906e-08,
+   "fidelity": 0.9929162157778388,
+   "power_over_oracle": 1.013974243890799
+  },
+  {
+   "kind": "optic",
+   "fixture": "F_alt",
+   "z_um": 643.9043301665803,
+   "N": 640,
+   "dx_um": 1.4,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 0.9998362412195955,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 0.9998362412195955,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 7.486837759886981e-08,
+   "fidelity": 0.9927377447646843,
+   "power_over_oracle": 1.013918849493357
+  },
+  {
+   "kind": "optic",
+   "fixture": "F_alt",
+   "z_um": 745.6941290027858,
+   "N": 640,
+   "dx_um": 1.4,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 1.000102481051916,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 1.000102481051916,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 7.489604082244916e-08,
+   "fidelity": 0.9925175952253142,
+   "power_over_oracle": 1.0139855032825613
+  },
+  {
+   "kind": "optic",
+   "fixture": "A",
+   "z_um": 624.1629858760481,
+   "N": 512,
+   "dx_um": 3.0,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 0.9999443317707407,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 0.9999443317707407,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 2.720473268668568e-07,
+   "fidelity": 0.9986137975595966,
+   "power_over_oracle": 1.0020580109143846
+  },
+  {
+   "kind": "optic",
+   "fixture": "A",
+   "z_um": 856.5890246781794,
+   "N": 512,
+   "dx_um": 3.0,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 1.0002104939660883,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 1.0002104939660883,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 2.721054200365793e-07,
+   "fidelity": 0.9983179886449298,
+   "power_over_oracle": 1.0019557481890122
+  },
+  {
+   "kind": "optic",
+   "fixture": "A",
+   "z_um": 1089.0150634803106,
+   "N": 512,
+   "dx_um": 3.0,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 1.0001568755189076,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 1.0001568755189076,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 2.7209997560186034e-07,
+   "fidelity": 0.9980008842525346,
+   "power_over_oracle": 1.0021712097480246
+  },
+  {
+   "kind": "optic",
+   "fixture": "A",
+   "z_um": 1321.441102282442,
+   "N": 512,
+   "dx_um": 3.0,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 1.0000745964370619,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 1.0000745964370619,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 2.7208777939965665e-07,
+   "fidelity": 0.9976289698323028,
+   "power_over_oracle": 1.001696101300994
+  },
+  {
+   "kind": "optic",
+   "fixture": "A",
+   "z_um": 1553.8671410845732,
+   "N": 512,
+   "dx_um": 3.0,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 0.9997928739209356,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 0.9997928739209356,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 2.719972532042707e-07,
+   "fidelity": 0.9971566388694064,
+   "power_over_oracle": 1.0016661257411492
+  },
+  {
+   "kind": "optic",
+   "fixture": "A",
+   "z_um": 1786.2931798867046,
+   "N": 512,
+   "dx_um": 3.0,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 0.9998477010687022,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 0.9998477010687022,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 2.720458052984326e-07,
+   "fidelity": 0.9965174982121536,
+   "power_over_oracle": 1.0020638828739687
+  },
+  {
+   "kind": "optic",
+   "fixture": "K",
+   "z_um": 450.83265914559854,
+   "N": 512,
+   "dx_um": 2.0,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 0.9999602678982523,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 0.9999602678982523,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 1.989967634512776e-07,
+   "fidelity": 0.9985141619498656,
+   "power_over_oracle": 1.0024347334234671
+  },
+  {
+   "kind": "optic",
+   "fixture": "K",
+   "z_um": 638.4530123932252,
+   "N": 512,
+   "dx_um": 2.0,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 0.9999257078035935,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 0.9999257078035935,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 1.9900398487918946e-07,
+   "fidelity": 0.9982061693603331,
+   "power_over_oracle": 1.0023517290827466
+  },
+  {
+   "kind": "optic",
+   "fixture": "K",
+   "z_um": 826.0733656408519,
+   "N": 512,
+   "dx_um": 2.0,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 1.00006404535862,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 1.00006404535862,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 1.990290946698675e-07,
+   "fidelity": 0.9978467652056647,
+   "power_over_oracle": 1.002649697368638
+  },
+  {
+   "kind": "optic",
+   "fixture": "K",
+   "z_um": 1013.6937188884784,
+   "N": 512,
+   "dx_um": 2.0,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 0.9998875010089857,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 0.9998875010089857,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 1.989938009329679e-07,
+   "fidelity": 0.9974254712807833,
+   "power_over_oracle": 1.0024863004995794
+  },
+  {
+   "kind": "optic",
+   "fixture": "K",
+   "z_um": 1201.314072136105,
+   "N": 512,
+   "dx_um": 2.0,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 1.000123394013686,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 1.000123394013686,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 1.9903243800676674e-07,
+   "fidelity": 0.9968843966853191,
+   "power_over_oracle": 1.0025503366442887
+  },
+  {
+   "kind": "optic",
+   "fixture": "K",
+   "z_um": 1388.9344253837319,
+   "N": 512,
+   "dx_um": 2.0,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 0.9999135785309197,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 0.9999135785309197,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 1.9897931116281894e-07,
+   "fidelity": 0.9961292317853575,
+   "power_over_oracle": 1.0023560060903147
+  },
+  {
+   "kind": "optic",
+   "fixture": "G",
+   "z_um": 235.9303487724426,
+   "N": 768,
+   "dx_um": 1.2,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 0.9999900757929043,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 0.9999900757929043,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 9.800063757472247e-08,
+   "fidelity": 0.9988937342308983,
+   "power_over_oracle": 1.0025890063525813
+  },
+  {
+   "kind": "optic",
+   "fixture": "G",
+   "z_um": 302.4235309853323,
+   "N": 768,
+   "dx_um": 1.2,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 1.0000078423616232,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 1.0000078423616232,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 9.800241508072987e-08,
+   "fidelity": 0.9988843636545134,
+   "power_over_oracle": 1.002623353043265
+  },
+  {
+   "kind": "optic",
+   "fixture": "G",
+   "z_um": 368.916713198222,
+   "N": 768,
+   "dx_um": 1.2,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 0.999988523645957,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 0.999988523645957,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 9.800046170688978e-08,
+   "fidelity": 0.9988735160913625,
+   "power_over_oracle": 1.0026183364905437
+  },
+  {
+   "kind": "optic",
+   "fixture": "G",
+   "z_um": 435.40989541111173,
+   "N": 768,
+   "dx_um": 1.2,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 0.9999607752768354,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 0.9999607752768354,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 9.799826872710618e-08,
+   "fidelity": 0.9988609915362844,
+   "power_over_oracle": 1.0025473287264102
+  },
+  {
+   "kind": "optic",
+   "fixture": "G",
+   "z_um": 501.90307762400147,
+   "N": 768,
+   "dx_um": 1.2,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 0.9999871689604053,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 0.9999871689604053,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 9.800007015092454e-08,
+   "fidelity": 0.9988418036738089,
+   "power_over_oracle": 1.0026050283743368
+  },
+  {
+   "kind": "optic",
+   "fixture": "G",
+   "z_um": 568.3962598368911,
+   "N": 768,
+   "dx_um": 1.2,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 1.0000117590908328,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 1.0000117590908328,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 9.800237474278536e-08,
+   "fidelity": 0.9988171742026538,
+   "power_over_oracle": 1.0025742940856153
+  },
+  {
+   "kind": "optic",
+   "fixture": "P",
+   "z_um": 236.74513463539097,
+   "N": 512,
+   "dx_um": 1.7999999999999998,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 1.000041535211475,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 1.000041535211475,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 1.791885633397678e-07,
+   "fidelity": 0.9990152260532473,
+   "power_over_oracle": 1.0045506764335626
+  },
+  {
+   "kind": "optic",
+   "fixture": "P",
+   "z_um": 280.77153174465593,
+   "N": 512,
+   "dx_um": 1.7999999999999998,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 0.9999762804643036,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 0.9999762804643036,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 1.7917790773688875e-07,
+   "fidelity": 0.9989578577910941,
+   "power_over_oracle": 1.0045679853385694
+  },
+  {
+   "kind": "optic",
+   "fixture": "P",
+   "z_um": 324.7979288539209,
+   "N": 512,
+   "dx_um": 1.7999999999999998,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 1.000010341005027,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 1.000010341005027,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 1.7918301260128165e-07,
+   "fidelity": 0.9988782719693172,
+   "power_over_oracle": 1.0046810496952996
+  },
+  {
+   "kind": "optic",
+   "fixture": "P",
+   "z_um": 368.8243259631859,
+   "N": 512,
+   "dx_um": 1.7999999999999998,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 1.0000095764905292,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 1.0000095764905292,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 1.7917533510322625e-07,
+   "fidelity": 0.9988128654704949,
+   "power_over_oracle": 1.0045331231255799
+  },
+  {
+   "kind": "optic",
+   "fixture": "P",
+   "z_um": 412.85072307245093,
+   "N": 512,
+   "dx_um": 1.7999999999999998,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 0.9999625629277071,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 0.9999625629277071,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 1.7916957437700632e-07,
+   "fidelity": 0.9986890955947333,
+   "power_over_oracle": 1.0044995345509806
+  },
+  {
+   "kind": "optic",
+   "fixture": "P",
+   "z_um": 456.8771201817159,
+   "N": 512,
+   "dx_um": 1.7999999999999998,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 0.999964302897733,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 0.999964302897733,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 1.791715433447165e-07,
+   "fidelity": 0.9985796050732416,
+   "power_over_oracle": 1.004694869013535
+  },
+  {
+   "kind": "optic",
+   "fixture": "W",
+   "z_um": 1032.1109750215617,
+   "N": 512,
+   "dx_um": 2.4,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 0.9999432028716293,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 0.9999432028716293,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 2.452293039874741e-07,
+   "fidelity": 0.9984804020404566,
+   "power_over_oracle": 1.0023894392172654
+  },
+  {
+   "kind": "optic",
+   "fixture": "W",
+   "z_um": 1476.8722231293928,
+   "N": 512,
+   "dx_um": 2.4,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 0.9999220742644858,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 0.9999220742644858,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 2.452226585419604e-07,
+   "fidelity": 0.9981625443588386,
+   "power_over_oracle": 1.0024608322987427
+  },
+  {
+   "kind": "optic",
+   "fixture": "W",
+   "z_um": 1921.633471237224,
+   "N": 512,
+   "dx_um": 2.4,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 0.9999243543997314,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 0.9999243543997314,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 2.45223196305883e-07,
+   "fidelity": 0.997795307431039,
+   "power_over_oracle": 1.002410114376956
+  },
+  {
+   "kind": "optic",
+   "fixture": "W",
+   "z_um": 2366.394719345055,
+   "N": 512,
+   "dx_um": 2.4,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 0.9999100881503504,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 0.9999100881503504,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 2.452227422148918e-07,
+   "fidelity": 0.9973625975938051,
+   "power_over_oracle": 1.002584711481753
+  },
+  {
+   "kind": "optic",
+   "fixture": "W",
+   "z_um": 2811.155967452886,
+   "N": 512,
+   "dx_um": 2.4,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 0.9998233043165576,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 0.9998233043165576,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 2.452054838879085e-07,
+   "fidelity": 0.9968078713915778,
+   "power_over_oracle": 1.0023953854655943
+  },
+  {
+   "kind": "optic",
+   "fixture": "W",
+   "z_um": 3255.9172155607175,
+   "N": 512,
+   "dx_um": 2.4,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 0.9998469494884348,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 0.9998469494884348,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 2.452078348471792e-07,
+   "fidelity": 0.9960286190039982,
+   "power_over_oracle": 1.0024947691066213
+  },
+  {
+   "kind": "optic",
+   "fixture": "X",
+   "z_um": 253.93406604295208,
+   "N": 640,
+   "dx_um": 1.4,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 1.0000399805131712,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 1.0000399805131712,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 1.734959496612327e-07,
+   "fidelity": 0.9957159075380989,
+   "power_over_oracle": 1.0179350107948897
+  },
+  {
+   "kind": "optic",
+   "fixture": "X",
+   "z_um": 283.64813131633423,
+   "N": 640,
+   "dx_um": 1.4,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 1.0000498081614324,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 1.0000498081614324,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 1.734955785319637e-07,
+   "fidelity": 0.9957096217997987,
+   "power_over_oracle": 1.0179590239111442
+  },
+  {
+   "kind": "optic",
+   "fixture": "X",
+   "z_um": 313.3621965897164,
+   "N": 640,
+   "dx_um": 1.4,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 1.000024845711846,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 1.000024845711846,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 1.734924151370457e-07,
+   "fidelity": 0.9957178265695524,
+   "power_over_oracle": 1.0179114670657807
+  },
+  {
+   "kind": "optic",
+   "fixture": "X",
+   "z_um": 343.0762618630986,
+   "N": 640,
+   "dx_um": 1.4,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 1.0000028100880596,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 1.0000028100880596,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 1.7349160386289887e-07,
+   "fidelity": 0.9957026296568032,
+   "power_over_oracle": 1.0179639314214213
+  },
+  {
+   "kind": "optic",
+   "fixture": "X",
+   "z_um": 372.7903271364808,
+   "N": 640,
+   "dx_um": 1.4,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 0.999977767542392,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 0.999977767542392,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 1.7348771429416278e-07,
+   "fidelity": 0.9956798438352087,
+   "power_over_oracle": 1.017900750063519
+  },
+  {
+   "kind": "optic",
+   "fixture": "X",
+   "z_um": 402.50439240986293,
+   "N": 640,
+   "dx_um": 1.4,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 0.9999500008882988,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 0.9999500008882988,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 1.7347884295148547e-07,
+   "fidelity": 0.995675473917062,
+   "power_over_oracle": 1.0179028082307795
+  },
+  {
+   "kind": "optic",
+   "fixture": "Y",
+   "z_um": 439.80523232152774,
+   "N": 512,
+   "dx_um": 1.7999999999999998,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 1.0000868154049243,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 1.0000868154049243,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 1.7855909261206603e-07,
+   "fidelity": 0.9964122191936662,
+   "power_over_oracle": 1.0078255357225203
+  },
+  {
+   "kind": "optic",
+   "fixture": "Y",
+   "z_um": 603.4768911642068,
+   "N": 512,
+   "dx_um": 1.7999999999999998,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 1.0000276988021382,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 1.0000276988021382,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 1.7856433869444744e-07,
+   "fidelity": 0.99629970960212,
+   "power_over_oracle": 1.007872745327618
+  },
+  {
+   "kind": "optic",
+   "fixture": "Y",
+   "z_um": 767.148550006886,
+   "N": 512,
+   "dx_um": 1.7999999999999998,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 0.999918650466484,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 0.999918650466484,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 1.785346048879113e-07,
+   "fidelity": 0.9963558768228832,
+   "power_over_oracle": 1.0076868899055518
+  },
+  {
+   "kind": "optic",
+   "fixture": "Y",
+   "z_um": 930.8202088495651,
+   "N": 512,
+   "dx_um": 1.7999999999999998,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 0.9999376953836978,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 0.9999376953836978,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 1.7854163094531767e-07,
+   "fidelity": 0.9964863601080554,
+   "power_over_oracle": 1.0075179621162953
+  },
+  {
+   "kind": "optic",
+   "fixture": "Y",
+   "z_um": 1094.4918676922443,
+   "N": 512,
+   "dx_um": 1.7999999999999998,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 1.0000829649365226,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 1.0000829649365226,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 1.7856564556927107e-07,
+   "fidelity": 0.99652471994312,
+   "power_over_oracle": 1.007515995603396
+  },
+  {
+   "kind": "optic",
+   "fixture": "Y",
+   "z_um": 1258.1635265349234,
+   "N": 512,
+   "dx_um": 1.7999999999999998,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 0.9999082480899072,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 0.9999082480899072,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 1.785330394941429e-07,
+   "fidelity": 0.9964194418264088,
+   "power_over_oracle": 1.0077818514223538
+  },
+  {
+   "kind": "optic",
+   "fixture": "Z",
+   "z_um": 705.1730047469848,
+   "N": 512,
+   "dx_um": 1.5999999999999999,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 1.0002565714306042,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 1.0002565714306042,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 1.8291932649509474e-07,
+   "fidelity": 0.9928936304225547,
+   "power_over_oracle": 1.0237668261413473
+  },
+  {
+   "kind": "optic",
+   "fixture": "Z",
+   "z_um": 1077.7077423530698,
+   "N": 512,
+   "dx_um": 1.5999999999999999,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 1.0002895506691085,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 1.0002895506691085,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 1.8293213846765624e-07,
+   "fidelity": 0.9928042678386129,
+   "power_over_oracle": 1.0237958677772512
+  },
+  {
+   "kind": "optic",
+   "fixture": "Z",
+   "z_um": 1450.2424799591545,
+   "N": 512,
+   "dx_um": 1.5999999999999999,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 1.0004414316655061,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 1.0004414316655061,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 1.8298501912880654e-07,
+   "fidelity": 0.9926147125090874,
+   "power_over_oracle": 1.0241860191053853
+  },
+  {
+   "kind": "optic",
+   "fixture": "Z",
+   "z_um": 1822.777217565239,
+   "N": 512,
+   "dx_um": 1.5999999999999999,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 1.000341138894417,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 1.000341138894417,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 1.8294427781937017e-07,
+   "fidelity": 0.9925707890978034,
+   "power_over_oracle": 1.0238911568792501
+  },
+  {
+   "kind": "optic",
+   "fixture": "Z",
+   "z_um": 2195.311955171324,
+   "N": 512,
+   "dx_um": 1.5999999999999999,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 1.0002905568269944,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 1.0002905568269944,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 1.8293314206225044e-07,
+   "fidelity": 0.9926423830507289,
+   "power_over_oracle": 1.0239617283285087
+  },
+  {
+   "kind": "optic",
+   "fixture": "Z",
+   "z_um": 2567.846692777409,
+   "N": 512,
+   "dx_um": 1.5999999999999999,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 1.0004366479769637,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 1.0004366479769637,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 1.8296358642387567e-07,
+   "fidelity": 0.9925245174511775,
+   "power_over_oracle": 1.0240918476600354
+  },
+  {
+   "kind": "optic",
+   "fixture": "C",
+   "z_um": 4604.3938606964875,
+   "N": 512,
+   "dx_um": 4.0,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 1.0000798840897995,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 1.0000798840897995,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 4.218347026646855e-07,
+   "fidelity": 0.9980206835439164,
+   "power_over_oracle": 1.0038806392810222
+  },
+  {
+   "kind": "optic",
+   "fixture": "C",
+   "z_um": 6676.371098009906,
+   "N": 512,
+   "dx_um": 4.0,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 1.0000730695548998,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 1.0000730695548998,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 4.2185281989363426e-07,
+   "fidelity": 0.9980168655051762,
+   "power_over_oracle": 1.0039174572431826
+  },
+  {
+   "kind": "optic",
+   "fixture": "C",
+   "z_um": 8748.348335323324,
+   "N": 512,
+   "dx_um": 4.0,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 1.0000906564814762,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 1.0000906564814762,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 4.2188263896969947e-07,
+   "fidelity": 0.9979068703019047,
+   "power_over_oracle": 1.003997365506015
+  },
+  {
+   "kind": "optic",
+   "fixture": "C",
+   "z_um": 10820.325572636744,
+   "N": 512,
+   "dx_um": 4.0,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 0.9998759811121652,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 0.9998759811121652,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 4.217437298813941e-07,
+   "fidelity": 0.9977201297732337,
+   "power_over_oracle": 1.0036777755445152
+  },
+  {
+   "kind": "optic",
+   "fixture": "C",
+   "z_um": 12892.302809950164,
+   "N": 512,
+   "dx_um": 4.0,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 0.9998937557293877,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 0.9998937557293877,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 4.21781240047173e-07,
+   "fidelity": 0.9973972068791712,
+   "power_over_oracle": 1.0037775340984016
+  },
+  {
+   "kind": "optic",
+   "fixture": "C",
+   "z_um": 14964.280047263583,
+   "N": 512,
+   "dx_um": 4.0,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 0.9998536679951535,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 0.9998536679951535,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 4.2181463584724886e-07,
+   "fidelity": 0.996893792805469,
+   "power_over_oracle": 1.0038674431000063
+  },
+  {
+   "kind": "optic",
+   "fixture": "AS",
+   "z_um": 904.7529760725422,
+   "N": 512,
+   "dx_um": 2.6,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 0.9998951215274475,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 0.9998951215274475,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 6.236893769034995e-07,
+   "fidelity": 0.990254309294117,
+   "power_over_oracle": 1.0527596619299835
+  },
+  {
+   "kind": "optic",
+   "fixture": "AS",
+   "z_um": 988.942661431769,
+   "N": 512,
+   "dx_um": 2.6,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 1.000029146740436,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 1.000029146740436,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 6.237808455921002e-07,
+   "fidelity": 0.9902802499589667,
+   "power_over_oracle": 1.0528753855968143
+  },
+  {
+   "kind": "optic",
+   "fixture": "AS",
+   "z_um": 1073.1323467909958,
+   "N": 512,
+   "dx_um": 2.6,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 0.9999487373012987,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 0.9999487373012987,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 6.237284129189792e-07,
+   "fidelity": 0.9903302403952245,
+   "power_over_oracle": 1.0528299519302597
+  },
+  {
+   "kind": "optic",
+   "fixture": "AS",
+   "z_um": 1157.3220321502226,
+   "N": 512,
+   "dx_um": 2.6,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 1.0000245044268208,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 1.0000245044268208,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 6.237820047944961e-07,
+   "fidelity": 0.9903526011175793,
+   "power_over_oracle": 1.05290693761339
+  },
+  {
+   "kind": "optic",
+   "fixture": "AS",
+   "z_um": 1241.5117175094495,
+   "N": 512,
+   "dx_um": 2.6,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 0.9999592573514128,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 0.9999592573514128,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 6.237503067439372e-07,
+   "fidelity": 0.9903822092896686,
+   "power_over_oracle": 1.0528362414870969
+  },
+  {
+   "kind": "optic",
+   "fixture": "AS",
+   "z_um": 1325.7014028686763,
+   "N": 512,
+   "dx_um": 2.6,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 1.0000402332172,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 1.0000402332172,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 6.238041062086157e-07,
+   "fidelity": 0.9903662328663676,
+   "power_over_oracle": 1.052910717470051
+  },
+  {
+   "kind": "optic",
+   "fixture": "MC",
+   "z_um": 708.0252519767395,
+   "N": 512,
+   "dx_um": 1.9,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 1.0000007997691933,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 1.0000007997691933,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 1.886486904098736e-07,
+   "fidelity": 0.998994342238917,
+   "power_over_oracle": 1.0008285254440161
+  },
+  {
+   "kind": "optic",
+   "fixture": "MC",
+   "z_um": 826.9204601337068,
+   "N": 512,
+   "dx_um": 1.9,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 0.9999904240164312,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 0.9999904240164312,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 1.8865796048081471e-07,
+   "fidelity": 0.9988657788253924,
+   "power_over_oracle": 1.00090115825491
+  },
+  {
+   "kind": "optic",
+   "fixture": "MC",
+   "z_um": 945.8156682906742,
+   "N": 512,
+   "dx_um": 1.9,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 1.0000395230012882,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 1.0000395230012882,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 1.8865748875339583e-07,
+   "fidelity": 0.9987296500866198,
+   "power_over_oracle": 1.0008875797510297
+  },
+  {
+   "kind": "optic",
+   "fixture": "MC",
+   "z_um": 1064.7108764476416,
+   "N": 512,
+   "dx_um": 1.9,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 0.9999749918084339,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 0.9999749918084339,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 1.8864422187752718e-07,
+   "fidelity": 0.9985837859969449,
+   "power_over_oracle": 1.0009007491769175
+  },
+  {
+   "kind": "optic",
+   "fixture": "MC",
+   "z_um": 1183.6060846046091,
+   "N": 512,
+   "dx_um": 1.9,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 1.000020760667231,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 1.000020760667231,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 1.8865552923240054e-07,
+   "fidelity": 0.998418830933075,
+   "power_over_oracle": 1.0009059056492724
+  },
+  {
+   "kind": "optic",
+   "fixture": "MC",
+   "z_um": 1302.5012927615765,
+   "N": 512,
+   "dx_um": 1.9,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 0.9999970840722269,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 0.9999970840722269,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 1.886522760056548e-07,
+   "fidelity": 0.9982343802380803,
+   "power_over_oracle": 1.0009345935412535
+  },
+  {
+   "kind": "optic",
+   "fixture": "HN",
+   "z_um": 473.6379084879338,
+   "N": 640,
+   "dx_um": 2.0,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 1.00000118854486,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 1.00000118854486,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 7.297753057028304e-07,
+   "fidelity": 0.9774706360994811,
+   "power_over_oracle": 1.1442752011025121
+  },
+  {
+   "kind": "optic",
+   "fixture": "HN",
+   "z_um": 605.8536719444343,
+   "N": 640,
+   "dx_um": 2.0,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 0.9999949872287202,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 0.9999949872287202,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 7.637297178788229e-07,
+   "fidelity": 0.9642022532264298,
+   "power_over_oracle": 1.1946215137980156
+  },
+  {
+   "kind": "optic",
+   "fixture": "HN",
+   "z_um": 738.0694354009348,
+   "N": 640,
+   "dx_um": 2.0,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 0.9997161946147268,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 0.9997161946147268,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 7.919955836590901e-07,
+   "fidelity": 0.9505429970889551,
+   "power_over_oracle": 1.2379532247425697
+  },
+  {
+   "kind": "optic",
+   "fixture": "HN",
+   "z_um": 870.2851988574355,
+   "N": 640,
+   "dx_um": 2.0,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 0.9999483801006637,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 0.9999483801006637,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 7.920707241858516e-07,
+   "fidelity": 0.9504473232523087,
+   "power_over_oracle": 1.2380810900679646
+  },
+  {
+   "kind": "optic",
+   "fixture": "HN",
+   "z_um": 1002.5009623139359,
+   "N": 640,
+   "dx_um": 2.0,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 0.9998944658864543,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 0.9998944658864543,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 7.921709049695705e-07,
+   "fidelity": 0.9503420924413613,
+   "power_over_oracle": 1.2382017442107898
+  },
+  {
+   "kind": "optic",
+   "fixture": "HN",
+   "z_um": 1134.7167257704364,
+   "N": 640,
+   "dx_um": 2.0,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 0.9999908336262798,
+   "pixel_continuity_of": "the plain multibranch field",
+   "multibranch_pixel_continuity": 0.9999908336262798,
+   "reason": "no_fold",
+   "fell_back": true,
+   "n_branch_max": 1,
+   "returned_power": 7.923206832202144e-07,
+   "fidelity": 0.9502791979594798,
+   "power_over_oracle": 1.2384876248489587
+  },
+  {
+   "kind": "grid",
+   "fixture": "C",
+   "z_um": 12000.0,
+   "N": 128,
+   "dx_um": 16.0,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 0.9998776345654439,
+   "multibranch_pixel_continuity": 0.9998776345654439,
+   "reason": "no_fold",
+   "fell_back": true,
+   "returned_power": 4.2079856404468384e-07
+  },
+  {
+   "kind": "grid",
+   "fixture": "C",
+   "z_um": 12000.0,
+   "N": 192,
+   "dx_um": 10.666666666666666,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 1.000340676573496,
+   "multibranch_pixel_continuity": 1.000340676573496,
+   "reason": "no_fold",
+   "fell_back": true,
+   "returned_power": 4.215909702036225e-07
+  },
+  {
+   "kind": "grid",
+   "fixture": "C",
+   "z_um": 12000.0,
+   "N": 256,
+   "dx_um": 8.0,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 0.9997586856344289,
+   "multibranch_pixel_continuity": 0.9997586856344289,
+   "reason": "no_fold",
+   "fell_back": true,
+   "returned_power": 4.215898514702826e-07
+  },
+  {
+   "kind": "grid",
+   "fixture": "C",
+   "z_um": 12000.0,
+   "N": 384,
+   "dx_um": 5.333333333333333,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 1.000135978808195,
+   "multibranch_pixel_continuity": 1.000135978808195,
+   "reason": "no_fold",
+   "fell_back": true,
+   "returned_power": 4.2177585277649966e-07
+  },
+  {
+   "kind": "grid",
+   "fixture": "C",
+   "z_um": 12000.0,
+   "N": 512,
+   "dx_um": 4.0,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 1.000117580039641,
+   "multibranch_pixel_continuity": 1.000117580039641,
+   "reason": "no_fold",
+   "fell_back": true,
+   "returned_power": 4.218920658627047e-07
+  },
+  {
+   "kind": "grid",
+   "fixture": "C",
+   "z_um": 12000.0,
+   "N": 768,
+   "dx_um": 2.6666666666666665,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 0.999920899962367,
+   "multibranch_pixel_continuity": 0.999920899962367,
+   "reason": "no_fold",
+   "fell_back": true,
+   "returned_power": 4.218375154395861e-07
+  },
+  {
+   "kind": "grid",
+   "fixture": "C",
+   "z_um": 12000.0,
+   "N": 1024,
+   "dx_um": 2.0,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 1.0000561832684491,
+   "multibranch_pixel_continuity": 1.0000561832684491,
+   "reason": "no_fold",
+   "fell_back": true,
+   "returned_power": 4.219066356851083e-07
+  },
+  {
+   "kind": "window",
+   "fixture": "C",
+   "z_um": 12000.0,
+   "N": 256,
+   "dx_um": 4.0,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 1.001439422409878,
+   "multibranch_pixel_continuity": 1.001439422409878,
+   "reason": "no_fold",
+   "fell_back": true,
+   "returned_power": 4.82167609325407e-07
+  },
+  {
+   "kind": "window",
+   "fixture": "C",
+   "z_um": 12000.0,
+   "N": 384,
+   "dx_um": 4.0,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 1.0001458319877918,
+   "multibranch_pixel_continuity": 1.0001458319877918,
+   "reason": "no_fold",
+   "fell_back": true,
+   "returned_power": 4.219578454603452e-07
+  },
+  {
+   "kind": "window",
+   "fixture": "C",
+   "z_um": 12000.0,
+   "N": 512,
+   "dx_um": 4.0,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 1.000117580039641,
+   "multibranch_pixel_continuity": 1.000117580039641,
+   "reason": "no_fold",
+   "fell_back": true,
+   "returned_power": 4.218920658627047e-07
+  },
+  {
+   "kind": "window",
+   "fixture": "C",
+   "z_um": 12000.0,
+   "N": 640,
+   "dx_um": 4.0,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 1.0001175800396411,
+   "multibranch_pixel_continuity": 1.0001175800396411,
+   "reason": "no_fold",
+   "fell_back": true,
+   "returned_power": 4.2189206586270475e-07
+  },
+  {
+   "kind": "window",
+   "fixture": "C",
+   "z_um": 12000.0,
+   "N": 896,
+   "dx_um": 4.0,
+   "warnings": [
+    "apply_real_lens_traced_uniform (also reached via apply_real_"
+   ],
+   "pixel_continuity": 1.0001175800396411,
+   "multibranch_pixel_continuity": 1.0001175800396411,
+   "reason": "no_fold",
+   "fell_back": true,
+   "returned_power": 4.2189206586270475e-07
+  }
+ ]
+}

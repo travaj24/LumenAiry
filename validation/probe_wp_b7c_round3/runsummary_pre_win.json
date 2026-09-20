@@ -1,0 +1,128 @@
+[
+ {
+  "fixture": "M",
+  "rc": 0,
+  "seconds": 135.1,
+  "out": "C:\\tmp\\lum_mb3\\validation\\probe_wp_b7c_round3\\band_M_pre_win.json"
+ },
+ {
+  "fixture": "V",
+  "rc": 0,
+  "seconds": 141.1,
+  "out": "C:\\tmp\\lum_mb3\\validation\\probe_wp_b7c_round3\\band_V_pre_win.json"
+ },
+ {
+  "fixture": "A",
+  "rc": 0,
+  "seconds": 177.1,
+  "out": "C:\\tmp\\lum_mb3\\validation\\probe_wp_b7c_round3\\band_A_pre_win.json"
+ },
+ {
+  "fixture": "F_alt",
+  "rc": 0,
+  "seconds": 180.1,
+  "out": "C:\\tmp\\lum_mb3\\validation\\probe_wp_b7c_round3\\band_F_alt_pre_win.json"
+ },
+ {
+  "fixture": "Q",
+  "rc": 0,
+  "seconds": 294.2,
+  "out": "C:\\tmp\\lum_mb3\\validation\\probe_wp_b7c_round3\\band_Q_pre_win.json"
+ },
+ {
+  "fixture": "K",
+  "rc": 0,
+  "seconds": 252.2,
+  "out": "C:\\tmp\\lum_mb3\\validation\\probe_wp_b7c_round3\\band_K_pre_win.json"
+ },
+ {
+  "fixture": "W",
+  "rc": 0,
+  "seconds": 246.2,
+  "out": "C:\\tmp\\lum_mb3\\validation\\probe_wp_b7c_round3\\band_W_pre_win.json"
+ },
+ {
+  "fixture": "S",
+  "rc": 0,
+  "seconds": 462.5,
+  "out": "C:\\tmp\\lum_mb3\\validation\\probe_wp_b7c_round3\\band_S_pre_win.json"
+ },
+ {
+  "fixture": "P",
+  "rc": 0,
+  "seconds": 348.4,
+  "out": "C:\\tmp\\lum_mb3\\validation\\probe_wp_b7c_round3\\band_P_pre_win.json"
+ },
+ {
+  "fixture": "C",
+  "rc": 0,
+  "seconds": 66.0,
+  "out": "C:\\tmp\\lum_mb3\\validation\\probe_wp_b7c_round3\\band_C_pre_win.json"
+ },
+ {
+  "fixture": "Y",
+  "rc": 0,
+  "seconds": 294.3,
+  "out": "C:\\tmp\\lum_mb3\\validation\\probe_wp_b7c_round3\\band_Y_pre_win.json"
+ },
+ {
+  "fixture": "G",
+  "rc": 0,
+  "seconds": 570.6,
+  "out": "C:\\tmp\\lum_mb3\\validation\\probe_wp_b7c_round3\\band_G_pre_win.json"
+ },
+ {
+  "fixture": "Z",
+  "rc": 0,
+  "seconds": 423.3,
+  "out": "C:\\tmp\\lum_mb3\\validation\\probe_wp_b7c_round3\\band_Z_pre_win.json"
+ },
+ {
+  "fixture": "MC",
+  "rc": 0,
+  "seconds": 336.2,
+  "out": "C:\\tmp\\lum_mb3\\validation\\probe_wp_b7c_round3\\band_MC_pre_win.json"
+ },
+ {
+  "fixture": "W_alt",
+  "rc": 0,
+  "seconds": 231.1,
+  "out": "C:\\tmp\\lum_mb3\\validation\\probe_wp_b7c_round3\\band_W_alt_pre_win.json"
+ },
+ {
+  "fixture": "V_alt",
+  "rc": 0,
+  "seconds": 138.1,
+  "out": "C:\\tmp\\lum_mb3\\validation\\probe_wp_b7c_round3\\band_V_alt_pre_win.json"
+ },
+ {
+  "fixture": "AS",
+  "rc": 0,
+  "seconds": 522.4,
+  "out": "C:\\tmp\\lum_mb3\\validation\\probe_wp_b7c_round3\\band_AS_pre_win.json"
+ },
+ {
+  "fixture": "X",
+  "rc": 0,
+  "seconds": 765.7,
+  "out": "C:\\tmp\\lum_mb3\\validation\\probe_wp_b7c_round3\\band_X_pre_win.json"
+ },
+ {
+  "fixture": "X_alt",
+  "rc": 0,
+  "seconds": 447.5,
+  "out": "C:\\tmp\\lum_mb3\\validation\\probe_wp_b7c_round3\\band_X_alt_pre_win.json"
+ },
+ {
+  "fixture": "AS_alt",
+  "rc": 0,
+  "seconds": 609.5,
+  "out": "C:\\tmp\\lum_mb3\\validation\\probe_wp_b7c_round3\\band_AS_alt_pre_win.json"
+ },
+ {
+  "fixture": "HN",
+  "rc": 0,
+  "seconds": 1134.7,
+  "out": "C:\\tmp\\lum_mb3\\validation\\probe_wp_b7c_round3\\band_HN_pre_win.json"
+ }
+]
