@@ -27,7 +27,7 @@ the scratchpad, and the defects below carry the exact requested edit.
 |---|---|---|
 | `v4lib.py` | -- | the shared harness: tree anchor, load census, cold-cache helper, digest |
 | `v4_ladder.py` | `v4_ladder_time_r1_{win,wsl}.json`, `v4_ladder_mem_r1_{win,wsl}.json` | the 36-shape TIME ladder (interleaved instrument) and the `tracemalloc` MEMORY ladder with byte counts derived from the code |
-| `v4_boundary.py` | `v4_boundary_all_wsl.json`, `v4_boundary_thin_{win,wsl}.json`, `v4_boundary_thin_blocked_{win,wsl}.json`, `v4_boundary_thin_w1_{win,wsl}.json`, `v4_boundary_thin64_win.json`, `v4_boundary_minarm_win.json` | the deciding shapes on their own: the branch's family, the THIN family under three instruments (interleaved, blocked, and `SCIPY_FFT_WORKERS=1`), the same anisotropy at 1/64, and the shapes a `min` conjunction would take |
+| `v4_boundary.py` | `v4_boundary_repro_win.json`, `v4_boundary_all_wsl.json`, `v4_boundary_thin_{win,wsl}.json`, `v4_boundary_thin_blocked_{win,wsl}.json`, `v4_boundary_thin_w1_{win,wsl}.json`, `v4_boundary_thin64_win.json`, `v4_boundary_minarm_win.json` | the deciding shapes on their own: the branch's family, the THIN family under three instruments (interleaved, blocked, and `SCIPY_FFT_WORKERS=1`), the same anisotropy at 1/64, and the shapes a `min` conjunction would take |
 | `v4_rss.py` | `v4_rss_{win,wsl}.json` | peak RSS from the OS, one child process per (shape, route), beside the derived byte counts |
 | `v4_purity.py` | `v4_purity_{win,wsl}.json` | the selection under perturbations that are not a shape, the DISPATCH under seven input variants, no third arithmetic, the warning counts, and the JAX arms |
 | `v4_bitid.py` + `v4_bitid_compare.py` | `v4_bitid_{base,branch}_{win,wsl}.json`, `v4_bitid_compare_{win,wsl}.json` | byte identity archive-to-archive and the SPLIT checked against the rule |
@@ -35,7 +35,7 @@ the scratchpad, and the defects below carry the exact requested edit.
 | `v4_accuracy.py` | `v4_accuracy_{win,wsl}.json`, `v4_accuracy_g1_{win,wsl}.json` | the exactly-reduced reference, the re-derived bars, the degeneracy controls and the impostor control |
 | `v4_blas.py` | `v4_blas_{win,wsl}.json` | four `OPENBLAS_CORETYPE`s x two thread counts |
 | `v4_mutations.py` | `v4_mutations_{win,wsl}.json` | eight source-level mutations against the whole shipped file |
-| `v4_census_plugin.py` | `v4_census_{win,wsl}.json` | where the rule fires in the shipped suite, and through which caller |
+| `v4_census_plugin.py` | `v4_census_win.json` | where the rule fires in the shipped suite, and through which caller |
 | `v4_c3_interaction.py` | `v4_c3_interaction_{win,wsl}.json` | the shapes WP-C3's transport hands the rule |
 | `v4_never_entry.py` | `v4_never_entry_{base,branch}_win.json` | whether the Migration Guide's process-wide remedy restores the base bytes at the six no-keyword entry points |
 | `v4_proposed_fix.py` | `v4_proposed_fix_win.json` | the V-C4-D1 edit, applied to a tree copy and measured |
@@ -48,7 +48,7 @@ the scratchpad, and the defects below carry the exact requested edit.
 |---|---|---|---|
 | 1 | the boundary `1/32` -- "the dense route is never slower on EITHER build" over the region the rule captures | **REFUTED in the anisotropic region; CONFIRMED for square grids** | 36-shape ladder, best-of-7, routes INTERLEAVED: 21 captured shapes, **20 never slower, 1 slower**. Then a 12-shape THIN family (both ratios exactly 1/32, one input axis short), three rounds of best-of-nine, worst round, under BOTH instruments and on BOTH builds: **6 of 12 captured shapes are SLOWER on each build (7 of 12 in the union), by 1.09x to 9.69x**, than `min(chirp-Z, separable)`. Worst: `4096x64 -> 128x2` at **2.80 (WIN) / 9.69 (WSL)**. See **V-C4-D1**. Square and non-dyadic captured shapes at 1/32 are safe on both builds (WIN worst 0.391, WSL worst 0.683 on the same 36-shape ladder, 0.686 on the three-round boundary family). |
 | 1a | is `max` the right conjunction? | **CONFIRMED as the SAFE conjunction, REFUTED as a tight one** | the brief's `(1/64, 1/8)` shape `1024x1024 -> 16x128`: rule says chirp, dense is **0.208 (WIN) / 0.615 (WSL, same ladder; 0.496 on the three-round family)** -- 1.6x to 4.8x FASTER. 12 (WIN) and 11 (WSL) of the 15 refused shapes on my ladder would have been faster on the dense route. `min` would take them all and be faster at every one of them -- but `min` also takes `1024x1024 -> 1024x8` (ratios `(1, 1/128)`), where dense reads **0.995 / 1.188** over two rounds, i.e. SLOWER. So `max` is the conjunction the safety claim needs, and the cost is coverage, not correctness. Five `min`-would-take shapes measured, `validation/probe_verify_c4/v4_boundary_minarm_win.json`. |
-| 1b | "1/16 FAILS on WSL at N=1024, M=64 (dense 1.38-1.45x slower, three rounds)" | **INSTRUMENT-DEPENDENT** | the branch's OWN probe, re-run by me on the same WSL build, reproduces its verdict (`1/16 worst 1.411 NOT SAFE`). My instrument -- the same three routes, best-of-nine, but the REPEAT loop outermost and the route order rotating -- reads **0.709 / 0.994 / 0.765** at that shape, i.e. never slower. Both instruments agree that **1/32 is safe**, so the shipped value is the conservative one either way; what is not reproducible is the *reason given for excluding 1/16*. See **V-C4-N1**. |
+| 1b | "1/16 FAILS on WSL at N=1024, M=64 (dense 1.38-1.45x slower, three rounds)" | **INSTRUMENT-DEPENDENT** | the branch's OWN probe, re-run by me on the same WSL build, reproduces its verdict (`1/16 worst 1.411 NOT SAFE`). My instrument -- the same three routes, three rounds of best-of-nine, but the REPEAT loop outermost and the route order rotating -- reads **0.709 / 0.994 / 0.765** at that shape, i.e. never slower.  Side by side over the branch's whole boundary family, the two instruments agree on the SIGN at 11 of 12 shapes; this is the one that differs (table in the boundary section). Both instruments agree that **1/32 is safe**, so the shipped value is the conservative one either way; what is not reproducible is the *reason given for excluding 1/16*. See **V-C4-N1**. |
 | 2 | memory: dense cheapest at 42/42 shapes, 6.4x-334.9x | **CONFIRMED for square grids, REFUTED as "42 of 42" / "never argues against the rule anywhere"** | my 36-shape ladder, `tracemalloc` peak, cold: **35 of 36 dense-cheapest on BOTH builds**, 0.84x to 73.5x. The exception is a CAPTURED shape, `2048x64 -> 64x2`: dense **5.264 MB** against separable **4.399 MB** -- and it is the same shape family as V-C4-D1. Peak RSS from the OS, one child process per (shape, route), 7 shapes: dense cheapest at 7/7 on both builds. Byte counts re-derived from the code predict both the rule and the exception. |
 | 2a | "the two builds' readings are IDENTICAL TO THE BYTE at every shape (`yes` at 42 of 42)" | **REFUTED -- and the branch's own table and JSON already say so** | the report's §3 table prints `NO` in that column at **all 42 rows**, and its own `c4_ladder_mem_{win,wsl}.json` agree byte for byte at **0 of 42** shapes (e.g. `N=64, M=16` chirp-Z: 8,001,186 bytes WIN against 801,515 WSL, a factor of 10). My ladder: **0 of 36**. The ORDERING is build-free; the readings are not. See **V-C4-D3**. |
 | 3 | purity: one answer under perturbations that are not a shape | **CONFIRMED, and hardened** | 20 shapes x {python int, `np.int64`, `np.int32`, exact float} -> **one answer at 20 of 20**, both builds. DISPATCH driven through 7 input variants (`complex128` C-order, `complex64`, Fortran order, transposed, strided, real float64, real float32) x 2 `separable` settings x 12 shapes = **168 cases, 0 third arithmetic, 168/168 agree with the rule**, both builds. JAX `jit` agrees with eager at 3/3 and dispatches as the rule says. `jax.export` SYMBOLIC shapes raise -- on the BRANCH *and* on `49ddf4bd`, so that limitation is pre-existing (see **V-C4-N2**). |
@@ -60,7 +60,7 @@ the scratchpad, and the defects below carry the exact requested edit.
 | 6b | is the bar `R/4` with `R = N_max^2/((N-1)(M-1))` DERIVED, and is it two-sided? | **two-sided CONFIRMED; the derivation carries a factor-2 slip that the `/4` absorbs** | an IMPOSTOR dense arm (the separable answer returned in its place) reads a gap of **0.995 .. 1.003** against bars of 10.1 .. 16.3, i.e. **10x to 16x UNDER** -- the bar really is two-sided. But `R` is about TWICE the ratio the kernels imply: the chirp kernel is `exp(i*pi*alpha*m^2)` over `&#124;m&#124; <= L - N_out`, which is `alpha*(L-N_out)^2/2` TURNS, against the dense route's `alpha*(N-1)*(M-1)`. The `/4` is a CHOSEN safety factor, not a derived one. See **V-C4-D6**. |
 | 7 | BLAS sweep: dense digests take 2-3 values, the route takes one, everything inside the bar | **CONFIRMED on BOTH builds** | 8 cells per build (`OPENBLAS_CORETYPE` in {HASWELL, NEHALEM, SANDYBRIDGE, KATMAI} x `OPENBLAS_NUM_THREADS` in {1,4}), `threadpoolctl` confirming the architecture actually changes in every cell: distinct dense digests per shape **3 / 2 / 2** (both builds), distinct chirp digests **1 / 1 / 1**, distinct routes **1** everywhere, `all_inside_bars` **true**, `route_follows_rule_everywhere` **true**.  The threads axis alone moves nothing at these sizes; the CORETYPE does. |
 | 8 | the phase-budget guard runs before `'auto'` chooses; `on_dense=False` reproduces the old message; explicit `'direct'` stays silent | **CONFIRMED, and the counting and the message's truthfulness gated** | over 288 driven cases: past the guard, `'auto'` warns **exactly once at 144/144**, `method='direct'` is silent at **144/144**, `method='bluestein'`/`'separable'` warn once at **144/144**; under the guard `'auto'` warns **0 times**. The message names the route actually taken at **144/144**. A mutation that makes the message lie (`on_dense=False` forced) is caught by exactly one shipped id, `test_the_default_flip_does_not_take_a_warning_away_from_a_caller`. Both builds. |
-| 9 | the census: 35 direct calls in 16 ids across 5 files, smallest ratio 1/512 | **CONFIRMED** (see the census section) | my own pytest plugin, wrapping `_auto_selects_direct` for a whole session and also recording each call's CALLER; the five firing files, Windows. |
+| 9 | the census: 35 direct calls in 16 ids across 5 files, smallest ratio 1/512 | **CONFIRMED on Windows, exactly** | my own pytest plugin, wrapping `_auto_selects_direct` for a whole session and also recording each call's CALLER; the five firing files (276 ids, 940 s). 35 / 16 / 5 and 1/512, with the same per-file breakdown. The WSL arm is redundant rather than missing -- see item 6 of the last section. |
 | 10 | the version-narrative fix: no forward token remains, and the lines still say when | **CONFIRMED** | the only `5.49` in `lumenairy/**/*.py` is the unrelated numeric `5.49e-03` in `elements/rcwa/stack.py:1925`. The rephrasing is exactly the practice the gate's own docstring MEASURES as the repository's ("describe the change and let the CHANGELOG carry the version"); the CHANGELOG and the Migration Guide both name 5.49.0. |
 | 11 | the 21 new tests and the three-entry mutation matrix | **CONFIRMED** | 8 mutations applied at SOURCE level to a scratchpad tree copy, the whole shipped file run against each, identical results on BOTH builds. The branch's three reproduce, and its own five-claim table reproduces exactly at two of three rows: run through `_run_every_claim()`, `rule_inverted` -> `['dispatch_dense_side', 'dispatch_chirp_side', 'way_back', 'accuracy']` (the report says the same four), `dense_answer_is_really_separable` -> `['accuracy']` (the report says "accuracy only" -- correct), control -> `[]` (correct), but `constant_silently_zero` -> **`['boundary', 'accuracy']`**, not "boundary only" -- see **V-C4-N4**. Of my four: `conjunction_max_to_min` caught (boundary only), `boundary_lt_not_le` caught (6 ids), `constant_1_over_31` NOT caught (correct, and the control: the claims are relation-based, so a retune is legal), `swapped_axis_arguments` caught by `test_auto_returns_the_route_the_rule_names_on_the_dense_side` (my first run of it said otherwise and was wrong -- see **V-C4-D4**, retracted). |
 | 12 | the four "pre-existing on base" UI failures | **CONFIRMED** | all four reproduce on MY `git archive 49ddf4bd`. The citation walker's two V18.5 ids also fail on the archive -- for the environmental reason the report names (an archive is not a git repository) -- and pass on the branch worktree. |
@@ -543,7 +543,34 @@ same 21 shapes are captured, **20 never slower and 1 slower** -- the slower one
 is `an_2048x64` again, at **1.802**.  The square and non-dyadic captured
 shapes read 0.083 .. 0.683.
 
-WSL, the boundary family (three rounds, worst round):
+### The branch's own boundary family, side by side
+
+Three rounds of best-of-nine on each build, worst round, my interleaved
+instrument against the numbers the branch published:
+
+| shape | max ratio | branch WIN | mine WIN | branch WSL | mine WSL |
+|---|---|---|---|---|---|
+| `1024 -> 16` | 1/64 | 0.144 | 0.134 | 0.561 | 0.374 |
+| `2048 -> 32` | 1/64 | 0.206 | 0.181 | 0.094 | 0.083 |
+| `512 -> 16` | 1/32 | 0.206 | 0.179 | 0.518 | 0.519 |
+| `1024 -> 32` | 1/32 | 0.266 | 0.206 | **0.954** | 0.686 |
+| `2048 -> 64` | 1/32 | 0.477 | 0.325 | 0.172 | 0.147 |
+| `512 -> 32` | 1/16 | 0.308 | 0.281 | 0.817 | 0.697 |
+| `1024 -> 64` | 1/16 | 0.440 | 0.369 | **1.450 SLOWER** | 0.994 |
+| `2048 -> 128` | 1/16 | 0.713 | 0.567 | 0.340 | 0.249 |
+| `512 -> 64` | 1/8 | 0.615 | 0.538 | **1.612 SLOWER** | **1.306 SLOWER** |
+| `1024 -> 128` | 1/8 | 0.846 | 0.681 | **2.982 SLOWER** | **1.752 SLOWER** |
+| `2048 -> 256` | 1/8 | **1.427 SLOWER** | **1.100 SLOWER** | 0.676 | 0.552 |
+| `1024x1024 -> 16x128` | 1/8 (max) | -- | 0.240 | -- | 0.496 |
+
+Every row agrees on the SIGN except one: WSL `1024 -> 64` at 1/16, where the
+branch reads 1.450 and I read 0.994.  Both instruments therefore agree that
+1/32 is safe on both builds (worst 0.325 WIN / 0.686 WSL on mine, 0.477 /
+0.954 on the branch's) and that 1/8 is not.  The 1/16 verdict -- the one the
+constant's choice is argued from -- is the single reading that does not
+transfer between instruments.
+
+### WSL, the boundary family (three rounds, worst round):
 `1/32` reads 0.083 .. 0.686, `1/16` reads 0.249 .. 0.994, `1/8` reads
 0.552 .. 1.752.  The branch's own probe, re-run by me on the same build,
 reads `1/64 0.460 SAFE`, `1/32 0.721 SAFE`, `1/16 1.411 NOT SAFE`,
@@ -776,6 +803,17 @@ reporting a stale number for every campaign that ran on this box.
     functions directly from an archive of its tip and applied this tree's
     rule to the shapes they produced, which answers "which shapes get
     captured" but not "what a full chain's answer moves by".
-6.  **The `separable=True` arm off NumPy.**  `'separable'` falls back to the
+6.  **The census on WSL.**  The five firing files take 15-25 minutes each
+    time, and the WSL box carried two other verification sessions' pytest
+    runs throughout; the run was started three times and did not finish
+    inside this session.  It is the one item here that is redundant rather
+    than missing: what the rule ANSWERS is a function of four integers, and
+    the purity probe measures the same answers at 20 of 20 shapes on both
+    builds, so a WSL census could only re-confirm which shapes the suite
+    drives -- and those are the same test files.  The Windows census
+    reproduces the branch's counts exactly (35 / 16 / 5, smallest ratio
+    1/512), and the branch's own WSL census reports the same 35 in the same
+    14 ids.
+7.  **The `separable=True` arm off NumPy.**  `'separable'` falls back to the
     2-D chirp-Z arm on CuPy and JAX, so its TIME is a NumPy-only reading, as
     it was for the branch.
