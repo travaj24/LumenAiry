@@ -396,6 +396,9 @@ which prints 54 detailed failure sections for the 62 failed ids
 | no fallback past the focus (1.3) | 4 of the remaining 16 (`test_focus_crossing_*`, `test_carrier_referenced`) | the fallback is the Sziklas TRANSPORT, not one branch of it |
 
 The other 12 sections are restatements, and the table below is all of them.
+Two more appeared after the two code fixes landed and moved the remaining
+readings -- `d3::_mux_chain_field` and `d5::test_dx_flatness_alone_is_not_
+sufficient` -- and both are in the table too.
 
 ### 4.2 Every test that was restated, and its classification
 
@@ -410,6 +413,7 @@ The other 12 sections are restatements, and the table below is all of them.
 | `d2::_leg_for_window` and its five sibling `standoff=` fixtures | genuine contract on `'sziklas'` | the calibration measures "period per metre of fine-zoom leg", which exists only on that readout; `_SZIKLAS_STANDOFF` names it once, with the reason |
 | `d2::test_default_refuses_the_periodic_replica_regime`, `..._auto_window_is_independent_of_congruence_order`, `..._auto_tile_equals_the_same_tile_asked_for_explicitly` | genuine contract on `'sziklas'` | the regime does not exist on the Collins readout, whose period is 3846.09 um against the 2867.20 um window; named, with that measurement |
 | `d3::_linearity_error` (4 ids) | genuine contract on `'sziklas'` | its own docstring is the reason: "all five runs land on the same lattice" is a property of the co-moving pitch; the Collins leg resolves a pitch per FIELD and the five fields are deliberately different, so `mux - ref` stops being a linearity residual |
+| `d3::_mux_chain_field` (1 id) | a test silently becoming VACUOUS | the same shape one level over, and it is the one worth naming: the caller subtracts two of these fields to show the residual-eikonal degree MOVES the multiplexed route, and on the flipped default `\|\|E6 - E4\|\|` reads **exactly 0.0** -- i.e. the test would have reported the degree as INERT, which is the fail-before arm of its own claim, reached for the wrong reason.  Not a number to re-pin |
 | `exact_gap_kernel::_one_and_two` (8 ids) and `d4::_pair` / `TestSplitLegPathDependence` (4 ids) | genuine contract on `'sziklas'` | a split composes exactly only on the co-moving step -- which is `test_niche_exact_gap_kernel`'s own theorem |
 | `d4::TestDoeChainBookkeeping::test_matches_the_manual_hand_split` | genuine contract on `'sziklas'` | the DOE claim is an equivalence between a ONE-piece and a TWO-piece transport of the same leg |
 | `exact_gap_kernel::test_a_collimated_leg_honours_the_gap_kernel` | genuine contract on `'sziklas'` | `R = +/-inf` is a BRANCH of that entry point, compared bitwise to that branch's own `_exact_envelope_tf_step` |
