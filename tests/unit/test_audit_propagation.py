@@ -69,6 +69,8 @@ from __future__ import annotations
 #   * Finding 10  propagate_hf_chebyshev_quadrature stripped kernel
 #                 imaginary part for real E_in.
 # ============================================================================
+import dataclasses
+
 import numpy as np
 import pytest
 
@@ -2939,6 +2941,54 @@ def _build_singlet_fit() -> CanonicalPolyFit:
     )
 
 
+def _assert_at_conditioning_floor(label, max_abs, peak, bar, kappa,
+                                  probe, reference, probe_delta):
+    """WP-C2 (2026-09-20): the two-sided claim the per-pixel arms of
+    ``...PropagateModalAsymptoticStillBitEqual`` make.
+
+    BELOW the bar: the library's field and the inline scalar reference
+    sit at the arithmetic floor of comparing two float64 evaluations of
+    the same quantity, ``eps * kappa`` with ``kappa`` measured by
+    ``_conditioning_bar`` on the running build.
+
+    ABOVE it: the bar still REFUSES a real drift.  ``probe`` is the
+    library's answer with the fit's phase coefficients moved by
+    ``probe_delta``, sized from the measured ``kappa`` to land about two
+    decades above the bar, so the arm demonstrates -- on this build,
+    this run -- that the number it asserts is not noise.
+
+    WHY THIS REPLACES A 3e-8 CONSTANT (WP-B9 sec. 5 item 2, VERIFY-B9
+    sec. 4 request 1).  The old bar was a reading: 1e-8 with 4 % of
+    margin, raised to 3e-8 after WP-B9 measured 1.039e-8 with
+    ``sphere_normal='analytic'`` forced as the ray tracer's default.
+    Both reports describe the quantity as bimodal -- "one knife-edge
+    pixel changing saddle basin", "a coin".  Measured
+    (`validation/probe_c2_analytic_normal/modal_mechanism.py`) that is
+    not what it is: the batched and scalar solvers put the saddle in
+    the same place to 7.3e-18 (8.7e-17 of the pupil half-range, no
+    basin flip anywhere on the grid), and the disagreement is a DENSE
+    field -- 996 of 1024 pixels above 1e-12 relative, median 2.1e-09,
+    p99 8.1e-09 -- which is the cancellation floor of the moment
+    contraction, a continuous quantity with a derivable bar.
+    """
+    assert max_abs < bar * max(peak, 1.0), (
+        f'{label} vs cold-start reference: max|new - cold_ref| = '
+        f'{max_abs:.3e}, peak = {peak:.3e}, i.e. '
+        f'{max_abs / max(peak, 1.0) / (bar / 100.0):.2f} times the '
+        f'eps * kappa = {bar / 100.0:.3e} agreement floor this build '
+        f'measured (kappa = {kappa:.3e}).  The bar is 100x that floor; '
+        f'measured 7.4x to 9.0x on Windows py3.14 / numpy 2.4.4 and '
+        f'WSL py3.12 / numpy 2.4.6 under all four ray-tracer default '
+        f'combinations.')
+    injected = float(np.max(np.abs(probe - reference))) / max(peak, 1.0)
+    assert injected > 10.0 * bar, (
+        f'{label}: the bar no longer refuses a real drift -- a '
+        f'{probe_delta:.2e} relative move of the fit coefficients '
+        f'reads {injected:.3e}, which is not a decade above the '
+        f'{bar:.3e} bar.  Either the conditioning measurement or the '
+        f'comparison has stopped meaning what it says.')
+
+
 # ============================================================================
 # 1A -- private batched helpers match their scalar siblings
 # ============================================================================
@@ -3189,6 +3239,68 @@ class TestAuditFixesV4_14_0_agent_1_1APropagateModalAsymptoticStillBitEqual:
     @pytest.fixture(scope='class')
     def fit(self):
         return _build_singlet_fit()
+
+    # -- WP-C2 (2026-09-20): the derived bar the two per-pixel arms use.
+    def _conditioning_bar(self, fit, kwargs, base, peak):
+        """Measure this build's own agreement floor for the comparison,
+        and return ``(bar, kappa, probe_field, probe_delta)``.
+
+        ``propagate_modal_asymptotic`` and the inline scalar reference
+        below evaluate the SAME mathematical field with different
+        summation orders, so the most they can ever agree to is
+        ``eps * kappa``, where ``kappa`` is how much the field amplifies
+        a relative perturbation of its own inputs.  ``kappa`` is a
+        property of the fixture and of the running build, so it is
+        measured here rather than assumed: a finite-difference ladder
+        over the fit's phase coefficients, with the response checked to
+        be LINEAR in the perturbation (which is what makes it a
+        conditioning measurement and not a threshold reading).
+
+        Measured 2026-09-20 on this fixture, Windows py3.14 / numpy
+        2.4.4 and WSL py3.12 / numpy 2.4.6:  ``kappa = 6.24e+06``, flat
+        to 0.3 % over four decades of perturbation, so the floor is
+        ``eps * kappa = 1.39e-09``; the two routines land at 7.4x to
+        9.0x that floor (1.03e-08 to 1.25e-08) under all four
+        ``(renormalize, sphere_normal)`` ray-tracer default
+        combinations, because they differ by a handful of roundings and
+        not by one.  The bar is set at 100x the floor, which is a
+        decade above the worst of those readings and still five decades
+        below the injected drift the arms check it catches.
+
+        ``probe_field`` is the library's answer with the fit perturbed
+        by ``probe_delta`` -- an injected drift sized from the measured
+        ``kappa`` to land ~2 decades above the bar, so each arm can show
+        the bar still refuses a real one.
+        """
+        deltas = (1e-12, 1e-11, 1e-10)
+        rng = np.random.default_rng(20260920)
+        direction = rng.normal(size=np.asarray(fit.coef_phi).shape)
+        direction /= np.linalg.norm(direction)
+        kappas = []
+        for delta in deltas:
+            alt = dataclasses.replace(
+                fit,
+                coef_phi=np.asarray(fit.coef_phi) * (1.0 + delta * direction))
+            moved = propagate_modal_asymptotic(alt, **kwargs)
+            kappas.append(
+                float(np.max(np.abs(moved - base))) / peak / delta)
+        kappa = float(np.median(kappas))
+        assert max(kappas) / min(kappas) < 1.5, (
+            f'the conditioning ladder is not linear in the perturbation '
+            f'({kappas}), so it is reading a threshold rather than this '
+            f'build\'s amplification.  Measured spread 1.003.')
+        assert kappa > 1e3, (
+            f'premise: the field has to AMPLIFY its inputs for an '
+            f'eps * kappa floor to be the right bar; measured kappa = '
+            f'6.24e+06, got {kappa:.3e}.')
+        floor = float(np.finfo(np.float64).eps) * kappa
+        bar = 100.0 * floor
+        probe_delta = 100.0 * bar / kappa
+        probe = dataclasses.replace(
+            fit,
+            coef_phi=np.asarray(fit.coef_phi) * (1.0 + probe_delta * direction))
+        return bar, kappa, propagate_modal_asymptotic(probe, **kwargs), \
+            probe_delta
 
     def _reference_propagate_modal_asymptotic(
             self, fit, source_amplitudes, pupil_amplitudes,
@@ -3510,13 +3622,14 @@ class TestAuditFixesV4_14_0_agent_1_1APropagateModalAsymptoticStillBitEqual:
         s2x = np.linspace(-5e-6, 5e-6, N)
         s2y = np.linspace(-5e-6, 5e-6, N)
         S2X, S2Y = np.meshgrid(s2x, s2y, indexing='xy')
-        new = propagate_modal_asymptotic(
-            fit, source_point=(0.0, 0.0),
+        kwargs = dict(
+            source_point=(0.0, 0.0),
             source_amplitudes={(0, 0): 1.0 + 0.0j},
             pupil_amplitudes={(0, 0): 1.0 + 0.0j},
             w_s=50e-6, w_p=0.02, v2_centre=(0.0, 0.0),
             s2_grid_x=S2X, s2_grid_y=S2Y,
         )
+        new = propagate_modal_asymptotic(fit, **kwargs)
         # ---- Pin 1: per-pixel agreement vs cold-start reference.
         cold_ref = self._cold_start_reference_propagate_modal_asymptotic(
             fit,
@@ -3525,14 +3638,11 @@ class TestAuditFixesV4_14_0_agent_1_1APropagateModalAsymptoticStillBitEqual:
         )
         cold_peak = float(np.max(np.abs(cold_ref)))
         max_abs = float(np.max(np.abs(new - cold_ref)))
-        # One saddle-basin flip of a knife-edge pixel is ~1.04e-8 relative (the
-        # quantity is bimodal: ~0 or ~1e-8).  Measured 2026-09-13 at the shipped
-        # defaults: 9.616e-9, i.e. a 1e-8 bar had 4 % margin.  3e-8 is one flip
-        # above that reading and a decade below the next real signal.
-        assert max_abs < 3e-8 * max(cold_peak, 1.0), (
-            f'LG_(0,0) vs cold-start reference: max|new - cold_ref| = '
-            f'{max_abs:.3e}, cold_peak = {cold_peak:.3e}'
-        )
+        bar, kappa, probe, probe_delta = self._conditioning_bar(
+            fit, kwargs, new, cold_peak)
+        _assert_at_conditioning_floor(
+            'LG_(0,0)', max_abs, cold_peak, bar, kappa, probe, cold_ref,
+            probe_delta)
 
         # ---- Pin 2: total-energy preservation vs warm-start ref.
         warm_ref = self._reference_propagate_modal_asymptotic(
@@ -3595,13 +3705,14 @@ class TestAuditFixesV4_14_0_agent_1_1APropagateModalAsymptoticStillBitEqual:
             (0, 0): 1.0 + 0.0j,
             (1, 0): 0.2 + 0.0j,
         }
-        new = propagate_modal_asymptotic(
-            fit, source_point=(0.0, 0.0),
+        kwargs = dict(
+            source_point=(0.0, 0.0),
             source_amplitudes=source_amps,
             pupil_amplitudes=pupil_amps,
             w_s=50e-6, w_p=0.02, v2_centre=(0.0, 0.0),
             s2_grid_x=S2X, s2_grid_y=S2Y,
         )
+        new = propagate_modal_asymptotic(fit, **kwargs)
         # ---- Pin 1: per-pixel agreement vs cold-start reference.
         cold_ref = self._cold_start_reference_propagate_modal_asymptotic(
             fit, source_amps, pupil_amps,
@@ -3609,14 +3720,11 @@ class TestAuditFixesV4_14_0_agent_1_1APropagateModalAsymptoticStillBitEqual:
         )
         cold_peak = float(np.max(np.abs(cold_ref)))
         max_abs = float(np.max(np.abs(new - cold_ref)))
-        # One saddle-basin flip of a knife-edge pixel is ~1.04e-8 relative (the
-        # quantity is bimodal: ~0 or ~1e-8).  Measured 2026-09-13 at the shipped
-        # defaults: 9.616e-9, i.e. a 1e-8 bar had 4 % margin.  3e-8 is one flip
-        # above that reading and a decade below the next real signal.
-        assert max_abs < 3e-8 * max(cold_peak, 1.0), (
-            f'4-mode LG_p0 vs cold-start reference: max|new - cold_ref| '
-            f'= {max_abs:.3e}, cold_peak = {cold_peak:.3e}'
-        )
+        bar, kappa, probe, probe_delta = self._conditioning_bar(
+            fit, kwargs, new, cold_peak)
+        _assert_at_conditioning_floor(
+            '4-mode LG_p0', max_abs, cold_peak, bar, kappa, probe,
+            cold_ref, probe_delta)
 
         # ---- Pin 2: total-energy preservation vs warm-start ref.
         warm_ref = self._reference_propagate_modal_asymptotic(
