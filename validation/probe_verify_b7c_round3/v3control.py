@@ -23,7 +23,7 @@ arbiter's alone" is measured rather than assumed.
 
 Usage:
     python v3control.py <mode> <out.json>
-        mode = converged | gridladder | windowladder | fold | ab
+        mode = converged | gridladder | windowladder | fold | ab | jump
 """
 from __future__ import annotations
 
@@ -241,6 +241,46 @@ def mode_ab(out):
                      rows=rows))
 
 
+def mode_jump(out):
+    """What CHANGES across the bar at a picometre separation.
+
+    Round 3 explains the ladder's behaviour by the reading being "not smooth
+    in z near a fold onset", which reads as a steep but continuous crossing.
+    Bisecting between a returned and a refused fold plane to picometres and
+    reading the WHOLE diagnostics on both sides says which it is, and says it
+    with a quantity rather than an adjective.
+    """
+    fx = FX.FIXTURES['V']
+    lo, hi = 1761e-6, 1764e-6
+    bar = S.bars()['cmax']
+    rows = []
+    for _ in range(20):
+        mid = 0.5 * (lo + hi)
+        _E, d = _call(fx, mid)
+        c = float(d['pixel_continuity'])
+        rows.append(dict(z_um=mid * 1e6, reading=c, dz_nm=(hi - lo) * 1e9))
+        if c > bar:
+            hi = mid
+        else:
+            lo = mid
+    sides = {}
+    for z, tag in ((lo, 'returned'), (hi, 'refused')):
+        _E, d = _call(fx, z)
+        sides[tag] = dict(
+            z_um=z * 1e6, reading=float(d['pixel_continuity']),
+            n_branch_max=d.get('n_branch_max'),
+            n_triangles_degenerate=d.get('n_triangles_degenerate'),
+            r_c=d.get('r_c'), kappa=d.get('kappa'),
+            zeta_extrapolation=d.get('zeta_extrapolation'),
+            reason=d.get('reason'), fell_back=bool(d.get('fell_back')))
+        print(json.dumps(sides[tag]), flush=True)
+    _write(out, dict(mode='jump', fixture='V', bar=bar,
+                     dz_nm=(hi - lo) * 1e9,
+                     step=sides['refused']['reading']
+                     / sides['returned']['reading'],
+                     sides=sides, bisection=rows))
+
+
 def _write(out, rep):
     import lumenairy
     rep['lumenairy'] = lumenairy.__file__
@@ -258,7 +298,7 @@ def main():
     print('lumenairy.__file__ =', lumenairy.__file__, flush=True)
     {'converged': mode_converged, 'gridladder': mode_gridladder,
      'windowladder': mode_windowladder, 'fold': mode_fold,
-     'ab': mode_ab}[mode](out)
+     'ab': mode_ab, 'jump': mode_jump}[mode](out)
 
 
 if __name__ == '__main__':
