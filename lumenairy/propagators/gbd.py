@@ -1293,7 +1293,7 @@ def reconstruct_field_from_beamlets(
     a HARD CEILING on it for a memory-constrained host.
 
     HOW HONESTLY the dense path counts is
-    :data:`DENSE_MEM_BUDGET_ACCOUNTING`, ``'measured'`` since 5.49.0 (the
+    :data:`DENSE_MEM_BUDGET_ACCOUNTING`, ``'measured'`` by default (the
     5.48.x ``'legacy'`` arithmetic under-counted the loop's live peak about
     six-fold, so the budget was not a bound; ``'legacy'`` is still selectable
     and byte-identical to those releases).  The budget cannot be met at all
@@ -1345,7 +1345,7 @@ def reconstruct_field_from_beamlets(
     # v5.21: auto-shrink chunk_beamlets to the memory budget.  Never grows the
     # chunk (so small-N default runs stay byte-identical); only shrinks when a
     # chunk would blow the budget.  Which per-cell cost is used is
-    # :data:`DENSE_MEM_BUDGET_ACCOUNTING`, 'measured' by default since 5.49.0.
+    # :data:`DENSE_MEM_BUDGET_ACCOUNTING`, 'measured' by default.
     if mem_budget_mb and mem_budget_mb > 0:
         _cell_bytes = _dense_cell_bytes()
         _bytes_per_col = Ny * Nx * _cell_bytes
@@ -1591,7 +1591,7 @@ _DENSE_CELL_BYTES_MEASURED = 128.0
 #: N = 512 (46.137 against 37.893) on Windows, 1.293x and 1.294x on WSL.
 _DENSE_FIXED_CELL_BYTES = 48.0
 
-#: ``'measured'`` (the DEFAULT since 5.49.0) or ``'legacy'``.  Which of the
+#: ``'measured'`` (the DEFAULT) or ``'legacy'``.  Which of the
 #: two constants above the dense chunk sizing uses.
 #:
 #: THE MAINTAINER'S DECISION, 2026-09-20 (ledger item 1.8): the budget is
