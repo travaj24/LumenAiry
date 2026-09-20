@@ -267,9 +267,9 @@ def _validate_edge_kwargs(edge=_EDGE_UNSET, edge_samples=_EDGE_UNSET):
         If ``edge`` is neither ``'hard'`` nor ``'gray'``, or if
         ``edge_samples`` is not an exact integer >= 1 -- including a
         ``bool`` (VERIFY-C1-ROUND2 R2: ``True`` used to pass the
-        exact-integer test and silently select the pre-5.49 rim) and
-        including a type ``int()`` refuses outright (``None``, a list, a
-        complex), which VERIFY-C1-ROUND2 R3 turned from ``int()``'s own
+        exact-integer test and silently select the binary pixel-centre
+        rim) and including a type ``int()`` refuses outright (``None``, a
+        list, a complex), which VERIFY-C1-ROUND2 R3 turned from ``int()``'s own
         bare ``TypeError`` into this same ``ValueError``, so that every
         rim refusal names ``apply_aperture`` and ``edge_samples``.
     """
@@ -283,11 +283,11 @@ def _validate_edge_kwargs(edge=_EDGE_UNSET, edge_samples=_EDGE_UNSET):
     # VERIFY-C1-ROUND2 R2: refuse a bool EXPLICITLY.  ``int(True) == 1`` and
     # ``1 != True`` is False, so ``True`` slipped through the exact-integer
     # test below and silently selected n_sub = 1 -- which is bit-for-bit
-    # ``edge='hard'``, the pre-5.49 rim this release moved away from, chosen
-    # by a caller who was plainly trying to turn something ON.  ``False`` was
-    # refused only because ``int(False) == 0 < 1``, which is why the census
-    # row named for it was green for the wrong reason.  Measured 2026-09-20,
-    # both builds, all four entry points.
+    # ``edge='hard'``, the binary pixel-centre rim this release moved away
+    # from, chosen by a caller plainly trying to turn something ON.
+    # ``False`` was refused only because ``int(False) == 0 < 1``, which is
+    # why the census row named for it was green for the wrong reason.
+    # Measured 2026-09-20, both builds, all four entry points.
     if isinstance(edge_samples, (bool, np.bool_)):
         raise ValueError(
             f"apply_aperture: edge_samples must be a positive integer "
