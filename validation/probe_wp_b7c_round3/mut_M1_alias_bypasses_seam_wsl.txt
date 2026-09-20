@@ -1,0 +1,81 @@
+F.FF..FFFF..FF..............FFFFF..FFF..FF.....FF...............FFF      [100%]
+=================================== FAILURES ===================================
+E   assert None == 0.9954503261587876
+     +  where 0.9954503261587876 = float(0.9954503261587876)
+/mnt/c/tmp/lum_mb3_mut2/tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py:204: assert None == 0.9954503261587876
+E   AssertionError: assert 'not_requested' == 'not_measured'
+      
+      - not_measured
+      + not_requested
+/mnt/c/tmp/lum_mb3_mut2/tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py:263: AssertionError: assert 'not_requested' == 'not_measured'
+E   AssertionError: assert False
+     +  where False = hasattr(<module 'lumenairy.elements._lens_traced_uniform' from '/mnt/c/tmp/lum_mb3_mut2/lumenairy/elements/_lens_traced_uniform.py'>, '_multibranch_render')
+/mnt/c/tmp/lum_mb3_mut2/tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py:289: AssertionError: assert False
+E   AssertionError: the healthy fold plane is not accepted: not_requested at None
+    assert 'not_requested' == 'ok'
+      
+      - ok
+      + not_requested
+/mnt/c/tmp/lum_mb3_mut2/tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py:373: AssertionError: the healthy fold plane is not accepted: not_requested at None
+E   assert None is not None
+/mnt/c/tmp/lum_mb3_mut2/tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py:433: assert None is not None
+E   Failed: DID NOT RAISE <class 'RuntimeError'>
+/mnt/c/tmp/lum_mb3_mut2/tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py:488: Failed: DID NOT RAISE <class 'RuntimeError'>
+E   AssertionError: assert 'not_requested' == 'not_converged_loss'
+      
+      - not_converged_loss
+      + not_requested
+/mnt/c/tmp/lum_mb3_mut2/tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py:555: AssertionError: assert 'not_requested' == 'not_converged_loss'
+E   AssertionError: z=5412 um returned a field gaining 1.352x the launched power with both readings inside their bands
+    assert 1.3518381766765355 <= 1.25
+/mnt/c/tmp/lum_mb3_mut2/tests/unit/test_verify_b7c_multibranch.py:219: AssertionError: z=5412 um returned a field gaining 1.352x the launched power with both readings inside their bands
+E   Failed: DID NOT RAISE <class 'RuntimeError'>
+/mnt/c/tmp/lum_mb3_mut2/tests/unit/test_verify_b7c_multibranch.py:281: Failed: DID NOT RAISE <class 'RuntimeError'>
+E   AssertionError: z=1073 um: the completion returned no reading at all; the arbiter is not being asked, or its entry cap moved
+    assert None is not None
+/mnt/c/tmp/lum_mb3_mut2/tests/unit/test_verify_b7c_round2.py:193: AssertionError: z=1073 um: the completion returned no reading at all; the arbiter is not being asked, or its entry cap moved
+E   assert (None is not None)
+/mnt/c/tmp/lum_mb3_mut2/tests/unit/test_verify_b7c_round2.py:259: assert (None is not None)
+E   AssertionError: the reading is 'not_requested' at N = 640, which is inside the cap: the completion is not asking for it, or the cap moved
+    assert 'not_requested' not in ('not_measured', 'not_requested')
+     +  where 'not_requested' = <built-in method get of dict object at 0x7f2b020c76c0>('pixel_continuity_decision')
+     +    where <built-in method get of dict object at 0x7f2b020c76c0> = {'c0': (546.6516053856756-446.2063614588345j), 'c1': (44256.25076765953-50446.50481594229j), 'dark_fill_depth': 3.7327...5e-05, -1.45102315e-04, ...,\n        -1.45102315e-04,  1.12816835e-05,  9.23285442e-05]],\n      shape=(211, 211)), ...}.get
+/mnt/c/tmp/lum_mb3_mut2/tests/unit/test_verify_b7c_round2.py:325: AssertionError: the reading is 'not_requested' at N = 640, which is inside the cap: the completion is not asking for it, or the cap moved
+E   AssertionError: past the entry cap the decision reads 'not_requested'; a consumer cannot tell "converged" from "not asked"
+    assert 'not_requested' == 'not_measured'
+      
+      - not_measured
+      + not_requested
+/mnt/c/tmp/lum_mb3_mut2/tests/unit/test_verify_b7c_round2.py:353: AssertionError: past the entry cap the decision reads 'not_requested'; a consumer cannot tell "converged" from "not asked"
+E   AssertionError: z = 1775 um falls back and returns the branch sum, but no reading of it was recorded
+    assert None is not None
+     +  where None = <built-in method get of dict object at 0x7f2b28752180>('pixel_continuity')
+     +    where <built-in method get of dict object at 0x7f2b28752180> = {'c0': None, 'c1': None, 'detJ': array([[nan, nan, nan, ..., nan, nan, nan],\n       [nan, nan, nan, ..., nan, nan, nan... nan, nan, ..., nan, nan, nan],\n       [nan, nan, nan, ..., nan, nan, nan]], shape=(201, 201)), 'fell_back': True, ...}.get
+/mnt/c/tmp/lum_mb3_mut2/tests/unit/test_verify_b7c_round2.py:391: AssertionError: z = 1775 um falls back and returns the branch sum, but no reading of it was recorded
+E   AssertionError: the completion did not take its half-pitch lattice from half_pitch_centres(N, dx); calls seen: []
+    assert [] == [(512, 2.2e-06)]
+      
+      Right contains one more item: (512, 2.2e-06)
+      Use -v to get more diff
+/mnt/c/tmp/lum_mb3_mut2/tests/unit/test_wp_b7c_round3.py:193: AssertionError: the completion did not take its half-pitch lattice from half_pitch_centres(N, dx); calls seen: []
+E   assert (None is not None)
+/mnt/c/tmp/lum_mb3_mut2/tests/unit/test_wp_b7c_round3.py:220: assert (None is not None)
+E   AttributeError: <module 'lumenairy.elements._lens_traced_uniform' from '/mnt/c/tmp/lum_mb3_mut2/lumenairy/elements/_lens_traced_uniform.py'> has no attribute '_multibranch_render'
+/mnt/c/tmp/lum_mb3_mut2/tests/unit/test_wp_b7c_round3.py:262: AttributeError: <module 'lumenairy.elements._lens_traced_uniform' from '/mnt/c/tmp/lum_mb3_mut2/lumenairy/elements/_lens_traced_uniform.py'> has no attribute '_multibranch_render'
+E   AssertionError: no reading at z = 400 um (decision='not_requested'); the converged control needs one
+    assert None is not None
+/mnt/c/tmp/lum_mb3_mut2/tests/unit/test_wp_b7c_round3.py:401: AssertionError: no reading at z = 400 um (decision='not_requested'); the converged control needs one
+E   AssertionError: (None, 'not_requested')
+    assert (None is not None)
+/mnt/c/tmp/lum_mb3_mut2/tests/unit/test_wp_b7c_round3.py:442: AssertionError: (None, 'not_requested')
+E   AttributeError: <module 'lumenairy.elements._lens_traced_uniform' from '/mnt/c/tmp/lum_mb3_mut2/lumenairy/elements/_lens_traced_uniform.py'> has no attribute '_multibranch_render'
+/mnt/c/tmp/lum_mb3_mut2/tests/unit/test_niche_r2_pearcey_cusp.py:482: AttributeError: <module 'lumenairy.elements._lens_traced_uniform' from '/mnt/c/tmp/lum_mb3_mut2/lumenairy/elements/_lens_traced_uniform.py'> has no attribute '_multibranch_render'
+E   AttributeError: <module 'lumenairy.elements._lens_traced_uniform' from '/mnt/c/tmp/lum_mb3_mut2/lumenairy/elements/_lens_traced_uniform.py'> has no attribute '_multibranch_render'
+/mnt/c/tmp/lum_mb3_mut2/tests/unit/test_niche_r2_pearcey_cusp.py:524: AttributeError: <module 'lumenairy.elements._lens_traced_uniform' from '/mnt/c/tmp/lum_mb3_mut2/lumenairy/elements/_lens_traced_uniform.py'> has no attribute '_multibranch_render'
+E   AttributeError: <module 'lumenairy.elements._lens_traced_uniform' from '/mnt/c/tmp/lum_mb3_mut2/lumenairy/elements/_lens_traced_uniform.py'> has no attribute '_multibranch_render'
+/mnt/c/tmp/lum_mb3_mut2/tests/unit/test_niche_r5_gbd_vector_catastrophe.py:392: AttributeError: <module 'lumenairy.elements._lens_traced_uniform' from '/mnt/c/tmp/lum_mb3_mut2/lumenairy/elements/_lens_traced_uniform.py'> has no attribute '_multibranch_render'
+E   AttributeError: <module 'lumenairy.elements._lens_traced_uniform' from '/mnt/c/tmp/lum_mb3_mut2/lumenairy/elements/_lens_traced_uniform.py'> has no attribute '_multibranch_render'
+/mnt/c/tmp/lum_mb3_mut2/tests/unit/test_niche_r5_gbd_vector_catastrophe.py:392: AttributeError: <module 'lumenairy.elements._lens_traced_uniform' from '/mnt/c/tmp/lum_mb3_mut2/lumenairy/elements/_lens_traced_uniform.py'> has no attribute '_multibranch_render'
+E   AttributeError: <module 'lumenairy.elements._lens_traced_uniform' from '/mnt/c/tmp/lum_mb3_mut2/lumenairy/elements/_lens_traced_uniform.py'> has no attribute '_multibranch_render'
+/mnt/c/tmp/lum_mb3_mut2/tests/unit/test_niche_r5_gbd_vector_catastrophe.py:392: AttributeError: <module 'lumenairy.elements._lens_traced_uniform' from '/mnt/c/tmp/lum_mb3_mut2/lumenairy/elements/_lens_traced_uniform.py'> has no attribute '_multibranch_render'
+24 failed, 43 passed in 440.86s (0:07:20)

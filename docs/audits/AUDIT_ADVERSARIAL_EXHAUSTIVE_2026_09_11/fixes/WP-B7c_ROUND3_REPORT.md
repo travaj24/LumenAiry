@@ -554,7 +554,54 @@ the WHOLE five-file gate: the three files round 2 shipped, the verification's
 file and this round's.  `lumenairy/` on the round-3 branch is never touched.
 `PYTHONPATH` pins the mutant tree; `-p no:randomly`, `--capture=sys`, `-rs`.
 
-<!--MUTATION-TABLE-->
+**18 of 18 are caught, on BOTH builds.**  "round-3 ids" names which of this
+round's own eight pins fired; where the column is empty the mutation is caught
+by the round-2 gate alone, which is the correct outcome for a round-2
+regression.
+
+| # | regression | win | wsl | round-3 ids that fire |
+|---|---|---|---|---|
+| **M1** | an ALIAS that bypasses `_multibranch_render` | 24 failed, 43 passed | 24 failed, 43 passed | lattice provenance, lattice-vs-field, both bar arms |
+| **M2** | the arbiter reads the BRANCH SUM instead of the returned field | 1 failed, 41 passed | 1 failed, 41 passed | -- (the verification's own pin) |
+| **M3** | the bar is loosened to 1.20 | 1 failed, 38 passed, 3 skipped | 1 failed, 38 passed, 3 skipped | -- (the verification's own pin) |
+| **M4** | the second render is taken at `(N, dx)` | 19 failed, 22 passed, 1 skipped | 19 failed, 22 passed, 1 skipped | bar above/below |
+| **M5** | the LOSS arm is made to refuse too | 4 failed, 38 passed | 4 failed, 38 passed | -- |
+| **M6** | the band stops being symmetric in the log | 4 failed, 38 passed | 4 failed, 38 passed | converged spread |
+| **M7** | the entry cap drops to 1e6 entries | 14 failed, 26 passed, 2 skipped | 14 failed, 26 passed, 2 skipped | lattice provenance, lattice-vs-field, both bar arms |
+| **M8** | the completion stops asking for the reading | 18 failed, 24 passed | 18 failed, 24 passed | lattice provenance, lattice-vs-field, both bar arms |
+| **M9** | the ratio is inverted | 10 failed, 29 passed, 3 skipped | 10 failed, 29 passed, 3 skipped | bar above/below |
+| **M10** | the FALLBACK path stops arbitrating | 5 failed, 37 passed | 5 failed, 37 passed | both bar arms |
+| **M11** | an unmeasurable reading silently becomes `'ok'` | 2 failed, 40 passed | 2 failed, 40 passed | -- |
+| **M12** | the launched-power tripwire is disabled | 1 failed, 34 passed, 7 skipped | 1 failed, 34 passed, 7 skipped | -- |
+| **M13** | the entry cap drops to 2e6 entries | 2 failed, 39 passed, 1 skipped | 2 failed, 39 passed, 1 skipped | -- |
+| **M14** (R3-3) | the half-pitch lattice stops NESTING (the hull-aligned alternative) | 3 failed, 37 passed, 2 skipped | 3 failed, 37 passed, 2 skipped | **the nesting identity**, lattice-vs-field |
+| **M15** (R3-2) | the Pearcey route labels the branch sum's reading as the cusp field's | 1 failed, 41 passed | 1 failed, 41 passed | **the cusp label** |
+| **M16** (R3-4) | every route claims the reading arbitrates the field it returns | 2 failed, 40 passed | 2 failed, 40 passed | **the cusp scope**, **the fallback scope** |
+| **M17** (R3-1) | the bar is put inside the converged reading's own spread (1.004) | 6 failed, 36 passed | 6 failed, 36 passed | **the converged spread** |
+| **M18** (R3-3) | the completion rebuilds the half-pitch lattice inline | 1 failed, 41 passed | 1 failed, 41 passed | **the lattice provenance** |
+
+Two of these are worth naming.
+
+**M17 caught the pin that was not doing its job.**  On the first run of the
+matrix the bar-at-1.004 mutation was caught by three PRE-EXISTING tests and
+NOT by `test_b7c3_the_bar_clears_the_converged_readings_own_spread`, which is
+the pin that exists for exactly it: at three times the measured spread its own
+threshold was 1.00055, which 1.004 clears.  The factor is now derived from the
+measurement -- the four planes of that ladder read 4.08e-05 .. 1.82e-04 from
+1, identical to the printed digit on both builds, so the shipped bar clears
+the worst of them by **330x** -- and the pin asserts 50x, which fires at 1.004
+and still leaves 6.6x of headroom to the shipped value.  The matrix is green
+either way; the difference is whether the gate would survive the round-2 tests
+being deleted.
+
+**M14 is also caught by the round-2 gate**, and that is the strongest evidence
+for the convention shipped in section 6.1: `test_b7c2_a_converged_render_reads_one_and_a_blown_up_one_reads_four`
+fails under the hull-aligned lattice because the blow-up plane reads 7343.9
+instead of ~4, and `test_vb7c2_the_reading_is_of_the_returned_field_not_of_the_branch_sum`
+stops straddling the bar and SKIPS.  The alternative E5 asks for does not just
+change a number; it breaks the identity the whole diagnosis rests on, and the
+existing gate says so without being asked.
+
 
 ---
 
@@ -633,7 +680,66 @@ All from `cd /c/tmp/lum_mb3`, with
 `OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1` on the command
 line, `--capture=sys` and `-p no:randomly`, `PYTHONPATH` pinning the tree.
 
-<!--RUNS-TABLE-->
+| run | build | result | duration | log |
+|---|---|---|---|---|
+| `test_wp_b7c_round3.py` alone | win | **8 passed** | 7.7 s | -- |
+| the same | **wsl** | **8 passed** | 12.7 s | -- |
+| the five-file b7c gate + `a16` + `niche_r2` + `niche_r5` + `v5_21` | win | **404 passed**, 2 deselected, 51 warnings | 3384.6 s | `pytest_core_win.txt` |
+| the same | **wsl** | **403 passed**, 1 skipped (optional `astropy` absent), 2 deselected, 52 warnings | 1711.4 s | `pytest_core_wsl.txt` |
+| `-k census` (whole suite) | win | **45 passed**, 16344 deselected | 1055.2 s | `pytest_census_win.txt` |
+| `-k walker` (whole suite) | win | **116 passed, 8 skipped**, 16265 deselected | 279.1 s | `pytest_walker_win.txt` |
+| `-k dispatcher_pin` (whole suite) | win | **511 passed, 6 skipped**, 15872 deselected, 7 warnings | 132.9 s | `pytest_dispatch_win.txt` |
+| `-k changelog` (whole suite, after the CHANGELOG edit) | win | **50 passed, 7 skipped**, 16332 deselected | 134.7 s | -- |
+| `test_public_api.py` + `test_v4_16_2_dispatcher_pin_doc_consistency.py` + `test_audit_except_budget.py` | win | 18 passed, **1 failed** -- see below | 14.6 s | `pytest_publicapi_win.txt` |
+| the 18-mutation matrix against the whole five-file gate | win | **18 of 18 caught** | ~21 min | `mutation_win.json`, `mut_*_win.txt` |
+| the same | **wsl** | **18 of 18 caught** | ~22 min | `mutation_wsl.json`, `mut_*_wsl.txt` |
+| `ruff check lumenairy/ tests/ validation/probe_wp_b7c_round3/ validation/oracles/` | **wsl** | **All checks passed** | -- | -- |
+| `scripts/record_history_fingerprints.py --check` | win | **OK: every history document matches its module** | -- | -- |
+
+**The one red is not this round's and predates it.**
+`test_installed_metadata_version_matches_source_version` fails because the
+editable install's distribution metadata reads 5.47.0 while
+`lumenairy.__version__` reads 5.47.1 -- the merge of main that this branch
+starts from bumped the source and the `.pth` shim was not re-installed.  Run
+against the PRE archive (`C:/tmp/lum_mb3_pre`, the parent commit with none of
+this round's changes) it fails identically, which is what the test is for; the
+fix is `pip install -e .` on the dev box and it is not a library change.
+
+**The history fingerprint was not re-recorded, and should not have been.**
+The gate pins modules that have a document under `docs/history/`; the only one
+in this family is `lumenairy.elements._lens_traced.md`, and
+`lumenairy/elements/_lens_traced.py` is UNTOUCHED by this round
+(`git diff dcaa21f0..HEAD -- lumenairy/elements/_lens_traced.py` is empty --
+every change is in `_lens_traced_multibranch.py` and `_lens_traced_uniform.py`,
+neither of which has a history document).  `--check` is green without a
+re-record, and appending a `re_recorded:` line for a module that did not
+change would assert a change that did not happen.  That also keeps this branch
+out of the POOL region of `_lens_traced.py`, which another agent is editing.
+
+```
+python -m pytest tests/unit/test_wp_b7c_round3.py \
+  tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py \
+  tests/unit/test_audit2609_b7c_multibranch_envelope.py \
+  tests/unit/test_verify_b7c_multibranch.py \
+  tests/unit/test_verify_b7c_round2.py \
+  tests/unit/test_audit2609_a16*.py tests/unit/test_niche_r2*.py \
+  tests/unit/test_niche_r5*.py tests/unit/test_v5_21*.py -q --capture=sys
+python -m pytest tests/ -q --capture=sys -k census
+python -m pytest tests/ -q --capture=sys -k walker
+python -m pytest tests/ -q --capture=sys -k dispatcher_pin
+python -m pytest tests/unit/test_public_api.py \
+  tests/unit/test_v4_16_2_dispatcher_pin_doc_consistency.py \
+  tests/unit/test_audit_except_budget.py -q --capture=sys
+MUT_TREE=C:/tmp/lum_mb3_mut python validation/probe_wp_b7c_round3/r3mutate.py mutation_win.json
+wsl -e bash -lc 'cd /mnt/c/tmp/lum_mb3 && ~/lumvenv/bin/ruff check lumenairy/ tests/ \
+  validation/probe_wp_b7c_round3/ validation/oracles/'
+python scripts/record_history_fingerprints.py --check
+```
+
+`.test_durations` carries the eight new ids with their measured values and
+reloads as valid JSON (16 310 entries), so a sharded CI run schedules none of
+them as unknown-duration.
+
 
 ---
 

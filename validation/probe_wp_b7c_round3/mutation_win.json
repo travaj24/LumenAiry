@@ -1,0 +1,375 @@
+[
+ {
+  "returncode": 1,
+  "tail": [
+   "24 failed, 43 passed in 228.44s (0:03:48)"
+  ],
+  "failed_ids": [],
+  "skipped": [],
+  "id": "M1_alias_bypasses_seam",
+  "doc": "M1 -- an ALIAS that bypasses ``_multibranch_render``.",
+  "files": [
+   "tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py",
+   "tests/unit/test_verify_b7c_multibranch.py",
+   "tests/unit/test_audit2609_b7c_multibranch_envelope.py",
+   "tests/unit/test_verify_b7c_round2.py",
+   "tests/unit/test_wp_b7c_round3.py",
+   "tests/unit/test_niche_r2_pearcey_cusp.py",
+   "tests/unit/test_niche_r5_gbd_vector_catastrophe.py"
+  ],
+  "seconds": 238.5,
+  "caught": true
+ },
+ {
+  "returncode": 1,
+  "tail": [
+   "1 failed, 41 passed in 60.30s (0:01:00)"
+  ],
+  "failed_ids": [],
+  "skipped": [],
+  "id": "M2_reads_branch_sum",
+  "doc": "M2 -- the arbiter reads the BRANCH SUM instead of the returned field.",
+  "files": [
+   "tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py",
+   "tests/unit/test_verify_b7c_multibranch.py",
+   "tests/unit/test_audit2609_b7c_multibranch_envelope.py",
+   "tests/unit/test_verify_b7c_round2.py",
+   "tests/unit/test_wp_b7c_round3.py"
+  ],
+  "seconds": 66.1,
+  "caught": true
+ },
+ {
+  "returncode": 1,
+  "tail": [
+   "1 failed, 38 passed, 3 skipped in 60.24s (0:01:00)"
+  ],
+  "failed_ids": [],
+  "skipped": [
+   "SKIPPED [1] tests\\unit\\test_audit2609_b7c2_pixel_halving_arbiter.py:435",
+   "SKIPPED [1] tests\\unit\\test_audit2609_b7c2_pixel_halving_arbiter.py:545",
+   "SKIPPED [1] tests\\unit\\test_verify_b7c_round2.py:267"
+  ],
+  "id": "M3_bar_1_20",
+  "doc": "M3 -- the bar is loosened to 1.20.",
+  "files": [
+   "tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py",
+   "tests/unit/test_verify_b7c_multibranch.py",
+   "tests/unit/test_audit2609_b7c_multibranch_envelope.py",
+   "tests/unit/test_verify_b7c_round2.py",
+   "tests/unit/test_wp_b7c_round3.py"
+  ],
+  "seconds": 66.1,
+  "caught": true
+ },
+ {
+  "returncode": 1,
+  "tail": [
+   "19 failed, 22 passed, 1 skipped in 40.26s"
+  ],
+  "failed_ids": [],
+  "skipped": [
+   "SKIPPED [1] tests\\unit\\test_audit2609_b7c2_pixel_halving_arbiter.py:545"
+  ],
+  "id": "M4_reading_at_N_dx",
+  "doc": "M4 -- the second render is taken at ``(N, dx)``.",
+  "files": [
+   "tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py",
+   "tests/unit/test_verify_b7c_multibranch.py",
+   "tests/unit/test_audit2609_b7c_multibranch_envelope.py",
+   "tests/unit/test_verify_b7c_round2.py",
+   "tests/unit/test_wp_b7c_round3.py"
+  ],
+  "seconds": 44.6,
+  "caught": true
+ },
+ {
+  "returncode": 1,
+  "tail": [
+   "4 failed, 38 passed in 51.39s"
+  ],
+  "failed_ids": [],
+  "skipped": [],
+  "id": "M5_loss_arm_refuses",
+  "doc": "M5 -- the LOSS arm is made to refuse too.",
+  "files": [
+   "tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py",
+   "tests/unit/test_verify_b7c_multibranch.py",
+   "tests/unit/test_audit2609_b7c_multibranch_envelope.py",
+   "tests/unit/test_verify_b7c_round2.py",
+   "tests/unit/test_wp_b7c_round3.py"
+  ],
+  "seconds": 56.5,
+  "caught": true
+ },
+ {
+  "returncode": 1,
+  "tail": [
+   "      comparison failed",
+   "      comparison failed",
+   "4 failed, 38 passed in 68.05s (0:01:08)"
+  ],
+  "failed_ids": [],
+  "skipped": [],
+  "id": "M6_band_asymmetric",
+  "doc": "M6 -- the band stops being symmetric in the log of the ratio.",
+  "files": [
+   "tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py",
+   "tests/unit/test_verify_b7c_multibranch.py",
+   "tests/unit/test_audit2609_b7c_multibranch_envelope.py",
+   "tests/unit/test_verify_b7c_round2.py",
+   "tests/unit/test_wp_b7c_round3.py"
+  ],
+  "seconds": 77.5,
+  "caught": true
+ },
+ {
+  "returncode": 1,
+  "tail": [
+   "14 failed, 26 passed, 2 skipped in 34.51s"
+  ],
+  "failed_ids": [],
+  "skipped": [
+   "SKIPPED [1] tests\\unit\\test_audit2609_b7c2_pixel_halving_arbiter.py:475",
+   "SKIPPED [1] tests\\unit\\test_audit2609_b7c2_pixel_halving_arbiter.py:545"
+  ],
+  "id": "M7_entry_cap_1e6",
+  "doc": "M7 -- the entry cap is lowered to 1e6 entries.",
+  "files": [
+   "tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py",
+   "tests/unit/test_verify_b7c_multibranch.py",
+   "tests/unit/test_audit2609_b7c_multibranch_envelope.py",
+   "tests/unit/test_verify_b7c_round2.py",
+   "tests/unit/test_wp_b7c_round3.py"
+  ],
+  "seconds": 42.7,
+  "caught": true
+ },
+ {
+  "returncode": 1,
+  "tail": [
+   "18 failed, 24 passed in 41.16s"
+  ],
+  "failed_ids": [],
+  "skipped": [],
+  "id": "M8_arbiter_not_requested",
+  "doc": "M8 -- the completion stops asking for the reading.",
+  "files": [
+   "tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py",
+   "tests/unit/test_verify_b7c_multibranch.py",
+   "tests/unit/test_audit2609_b7c_multibranch_envelope.py",
+   "tests/unit/test_verify_b7c_round2.py",
+   "tests/unit/test_wp_b7c_round3.py"
+  ],
+  "seconds": 50.8,
+  "caught": true
+ },
+ {
+  "returncode": 1,
+  "tail": [
+   "      comparison failed",
+   "10 failed, 29 passed, 3 skipped in 68.04s (0:01:08)"
+  ],
+  "failed_ids": [],
+  "skipped": [
+   "SKIPPED [1] tests\\unit\\test_audit2609_b7c2_pixel_halving_arbiter.py:435",
+   "SKIPPED [1] tests\\unit\\test_audit2609_b7c2_pixel_halving_arbiter.py:545",
+   "SKIPPED [1] tests\\unit\\test_verify_b7c_round2.py:267"
+  ],
+  "id": "M9_ratio_inverted",
+  "doc": "M9 -- the ratio is inverted.",
+  "files": [
+   "tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py",
+   "tests/unit/test_verify_b7c_multibranch.py",
+   "tests/unit/test_audit2609_b7c_multibranch_envelope.py",
+   "tests/unit/test_verify_b7c_round2.py",
+   "tests/unit/test_wp_b7c_round3.py"
+  ],
+  "seconds": 77.8,
+  "caught": true
+ },
+ {
+  "returncode": 1,
+  "tail": [
+   "5 failed, 37 passed in 61.81s (0:01:01)"
+  ],
+  "failed_ids": [],
+  "skipped": [],
+  "id": "M10_fallback_not_arbitrated",
+  "doc": "M10 -- the FALLBACK path stops arbitrating.",
+  "files": [
+   "tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py",
+   "tests/unit/test_verify_b7c_multibranch.py",
+   "tests/unit/test_audit2609_b7c_multibranch_envelope.py",
+   "tests/unit/test_verify_b7c_round2.py",
+   "tests/unit/test_wp_b7c_round3.py"
+  ],
+  "seconds": 72.9,
+  "caught": true
+ },
+ {
+  "returncode": 1,
+  "tail": [
+   "2 failed, 40 passed in 70.55s (0:01:10)"
+  ],
+  "failed_ids": [],
+  "skipped": [],
+  "id": "M11_unmeasured_becomes_ok",
+  "doc": "M11 -- an unmeasurable reading silently becomes 'ok'.",
+  "files": [
+   "tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py",
+   "tests/unit/test_verify_b7c_multibranch.py",
+   "tests/unit/test_audit2609_b7c_multibranch_envelope.py",
+   "tests/unit/test_verify_b7c_round2.py",
+   "tests/unit/test_wp_b7c_round3.py"
+  ],
+  "seconds": 80.0,
+  "caught": true
+ },
+ {
+  "returncode": 1,
+  "tail": [
+   "1 failed, 34 passed, 7 skipped in 60.90s (0:01:00)"
+  ],
+  "failed_ids": [],
+  "skipped": [
+   "SKIPPED [1] tests\\unit\\test_audit2609_b7c2_pixel_halving_arbiter.py:611",
+   "SKIPPED [1] tests\\unit\\test_audit2609_b7c_multibranch_envelope.py:196",
+   "SKIPPED [1] tests\\unit\\test_audit2609_b7c_multibranch_envelope.py:226",
+   "SKIPPED [1] tests\\unit\\test_audit2609_b7c_multibranch_envelope.py:248",
+   "SKIPPED [1] tests\\unit\\test_verify_b7c_multibranch.py:264",
+   "SKIPPED [1] tests\\unit\\test_verify_b7c_multibranch.py:341",
+   "SKIPPED [1] tests\\unit\\test_verify_b7c_multibranch.py:475"
+  ],
+  "id": "M12_power_tripwire_off",
+  "doc": "M12 -- the launched-power tripwire is disabled.",
+  "files": [
+   "tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py",
+   "tests/unit/test_verify_b7c_multibranch.py",
+   "tests/unit/test_audit2609_b7c_multibranch_envelope.py",
+   "tests/unit/test_verify_b7c_round2.py",
+   "tests/unit/test_wp_b7c_round3.py"
+  ],
+  "seconds": 67.2,
+  "caught": true
+ },
+ {
+  "returncode": 1,
+  "tail": [
+   "2 failed, 39 passed, 1 skipped in 77.25s (0:01:17)"
+  ],
+  "failed_ids": [],
+  "skipped": [
+   "SKIPPED [1] tests\\unit\\test_audit2609_b7c2_pixel_halving_arbiter.py:475"
+  ],
+  "id": "M13_entry_cap_2e6",
+  "doc": "M13 -- the entry cap is lowered to 2e6 entries.",
+  "files": [
+   "tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py",
+   "tests/unit/test_verify_b7c_multibranch.py",
+   "tests/unit/test_audit2609_b7c_multibranch_envelope.py",
+   "tests/unit/test_verify_b7c_round2.py",
+   "tests/unit/test_wp_b7c_round3.py"
+  ],
+  "seconds": 84.4,
+  "caught": true
+ },
+ {
+  "returncode": 1,
+  "tail": [
+   "3 failed, 37 passed, 2 skipped in 59.35s"
+  ],
+  "failed_ids": [],
+  "skipped": [
+   "SKIPPED [1] tests\\unit\\test_audit2609_b7c2_pixel_halving_arbiter.py:545",
+   "SKIPPED [1] tests\\unit\\test_verify_b7c_round2.py:267"
+  ],
+  "id": "M14_half_pitch_lattice_stops_nesting",
+  "doc": "M14 (R3-3) -- the half-pitch lattice stops NESTING on the caller's: the",
+  "files": [
+   "tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py",
+   "tests/unit/test_verify_b7c_multibranch.py",
+   "tests/unit/test_audit2609_b7c_multibranch_envelope.py",
+   "tests/unit/test_verify_b7c_round2.py",
+   "tests/unit/test_wp_b7c_round3.py"
+  ],
+  "seconds": 69.0,
+  "caught": true
+ },
+ {
+  "returncode": 1,
+  "tail": [
+   "1 failed, 41 passed in 64.52s (0:01:04)"
+  ],
+  "failed_ids": [],
+  "skipped": [],
+  "id": "M15_pearcey_label_claims_the_cusp_field",
+  "doc": "M15 (R3-2) -- the Pearcey cusp route goes back to labelling the branch",
+  "files": [
+   "tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py",
+   "tests/unit/test_verify_b7c_multibranch.py",
+   "tests/unit/test_audit2609_b7c_multibranch_envelope.py",
+   "tests/unit/test_verify_b7c_round2.py",
+   "tests/unit/test_wp_b7c_round3.py"
+  ],
+  "seconds": 68.8,
+  "caught": true
+ },
+ {
+  "returncode": 1,
+  "tail": [
+   "2 failed, 40 passed in 87.55s (0:01:27)"
+  ],
+  "failed_ids": [],
+  "skipped": [],
+  "id": "M16_scope_always_claims_returned_field",
+  "doc": "M16 (R3-4) -- every route claims the reading arbitrates the field it",
+  "files": [
+   "tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py",
+   "tests/unit/test_verify_b7c_multibranch.py",
+   "tests/unit/test_audit2609_b7c_multibranch_envelope.py",
+   "tests/unit/test_verify_b7c_round2.py",
+   "tests/unit/test_wp_b7c_round3.py"
+  ],
+  "seconds": 107.3,
+  "caught": true
+ },
+ {
+  "returncode": 1,
+  "tail": [
+   "6 failed, 36 passed in 62.53s (0:01:02)"
+  ],
+  "failed_ids": [],
+  "skipped": [],
+  "id": "M17_bar_inside_the_converged_spread",
+  "doc": "M17 (R3-1) -- the bar is put inside the converged reading's own",
+  "files": [
+   "tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py",
+   "tests/unit/test_verify_b7c_multibranch.py",
+   "tests/unit/test_audit2609_b7c_multibranch_envelope.py",
+   "tests/unit/test_verify_b7c_round2.py",
+   "tests/unit/test_wp_b7c_round3.py"
+  ],
+  "seconds": 67.2,
+  "caught": true
+ },
+ {
+  "returncode": 1,
+  "tail": [
+   "1 failed, 41 passed in 47.29s"
+  ],
+  "failed_ids": [],
+  "skipped": [],
+  "id": "M18_lattice_rebuilt_inline",
+  "doc": "M18 (R3-3) -- the completion rebuilds the half-pitch lattice inline",
+  "files": [
+   "tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py",
+   "tests/unit/test_verify_b7c_multibranch.py",
+   "tests/unit/test_audit2609_b7c_multibranch_envelope.py",
+   "tests/unit/test_verify_b7c_round2.py",
+   "tests/unit/test_wp_b7c_round3.py"
+  ],
+  "seconds": 52.1,
+  "caught": true
+ }
+]

@@ -1,0 +1,47 @@
+F.F...FFss..FF..............FFF.F..FF...FF                               [100%]
+================================== FAILURES ===================================
+E   AssertionError: the branch sum did not measure the reading when it was asked for
+    assert None is not None
+C:\tmp\lum_mb3_mut\tests\unit\test_audit2609_b7c2_pixel_halving_arbiter.py:200: AssertionError: the branch sum did not measure the reading when it was asked for
+E   assert None is not None
+C:\tmp\lum_mb3_mut\tests\unit\test_audit2609_b7c2_pixel_halving_arbiter.py:269: assert None is not None
+E   assert None is not None
+C:\tmp\lum_mb3_mut\tests\unit\test_audit2609_b7c2_pixel_halving_arbiter.py:365: assert None is not None
+E   assert None is not None
+C:\tmp\lum_mb3_mut\tests\unit\test_audit2609_b7c2_pixel_halving_arbiter.py:433: assert None is not None
+E   AssertionError: z=5412 um returned a field gaining 1.352x the launched power with both readings inside their bands
+    assert 1.3518381766765355 <= 1.25
+C:\tmp\lum_mb3_mut\tests\unit\test_verify_b7c_multibranch.py:219: AssertionError: z=5412 um returned a field gaining 1.352x the launched power with both readings inside their bands
+E   Failed: DID NOT RAISE <class 'RuntimeError'>
+C:\tmp\lum_mb3_mut\tests\unit\test_verify_b7c_multibranch.py:281: Failed: DID NOT RAISE <class 'RuntimeError'>
+E   AssertionError: z=1073 um: the completion returned no reading at all; the arbiter is not being asked, or its entry cap moved
+    assert None is not None
+C:\tmp\lum_mb3_mut\tests\unit\test_verify_b7c_round2.py:193: AssertionError: z=1073 um: the completion returned no reading at all; the arbiter is not being asked, or its entry cap moved
+E   assert (None is not None)
+C:\tmp\lum_mb3_mut\tests\unit\test_verify_b7c_round2.py:259: assert (None is not None)
+E   AssertionError: the arbiter's entry cap no longer covers the largest grid the campaign publishes (N = 768)
+    assert (4 * (768 ** 2)) <= 1000000
+C:\tmp\lum_mb3_mut\tests\unit\test_verify_b7c_round2.py:314: AssertionError: the arbiter's entry cap no longer covers the largest grid the campaign publishes (N = 768)
+E   AssertionError: z = 1775 um falls back and returns the branch sum, but no reading of it was recorded
+    assert None is not None
+     +  where None = <built-in method get of dict object at 0x00000130051EA600>('pixel_continuity')
+     +    where <built-in method get of dict object at 0x00000130051EA600> = {'c0': None, 'c1': None, 'detJ': array([[nan, nan, nan, ..., nan, nan, nan],\n       [nan, nan, nan, ..., nan, nan, nan... nan, nan, ..., nan, nan, nan],\n       [nan, nan, nan, ..., nan, nan, nan]], shape=(201, 201)), 'fell_back': True, ...}.get
+C:\tmp\lum_mb3_mut\tests\unit\test_verify_b7c_round2.py:391: AssertionError: z = 1775 um falls back and returns the branch sum, but no reading of it was recorded
+E   AssertionError: the completion did not take its half-pitch lattice from half_pitch_centres(N, dx); calls seen: []
+    assert [] == [(512, 2.2e-06)]
+      
+      Right contains one more item: (512, 2.2e-06)
+      Use -v to get more diff
+C:\tmp\lum_mb3_mut\tests\unit\test_wp_b7c_round3.py:193: AssertionError: the completion did not take its half-pitch lattice from half_pitch_centres(N, dx); calls seen: []
+E   assert (None is not None)
+C:\tmp\lum_mb3_mut\tests\unit\test_wp_b7c_round3.py:220: assert (None is not None)
+E   AssertionError: no reading at z = 400 um (decision='not_measured'); the converged control needs one
+    assert None is not None
+C:\tmp\lum_mb3_mut\tests\unit\test_wp_b7c_round3.py:401: AssertionError: no reading at z = 400 um (decision='not_measured'); the converged control needs one
+E   AssertionError: (None, 'not_measured')
+    assert (None is not None)
+C:\tmp\lum_mb3_mut\tests\unit\test_wp_b7c_round3.py:442: AssertionError: (None, 'not_measured')
+=========================== short test summary info ===========================
+SKIPPED [1] tests\unit\test_audit2609_b7c2_pixel_halving_arbiter.py:475: the refined grid is past the arbiter entry cap on this build, so the reading is not measured there
+SKIPPED [1] tests\unit\test_audit2609_b7c2_pixel_halving_arbiter.py:545: no plane of this ladder reads below the loss arm on this build
+14 failed, 26 passed, 2 skipped in 34.51s
