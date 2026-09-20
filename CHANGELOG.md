@@ -4,6 +4,27 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+## [5.48.1] — 2026-09-20
+
+The publish verification of the `v5.48.0` tag stopped in its slow lane, so 5.48.0
+exists as a GitHub release but was never published to PyPI.  5.48.1 is 5.48.0 plus
+the one test repair that lane needed; no answer moves.  A caller upgrading from
+5.47.1 gets everything the `## [5.48.0]` block below describes.
+
+### Fixed -- tests: the pool-ceiling id forces the clamp it dispatches with, instead of reading it off the runner's free memory
+
+`tests/unit/test_verify_b13_newton_pool.py::test_a_pool_wider_than_the_clamp_runs_only_clamp_chunks_at_once`
+builds an 8-wide pool and then dispatches with a smaller clamp to measure the
+ceiling rule (a wider pool still runs only `clamp` chunks at once).  The clamp was
+priced by the real resolver from the runner's free memory, targeting 2: the
+`v5.48.0` publish verification's slow-lane runner read **1**, which is a SERIAL
+dispatch with no pool chunks at all (`chunks_run` 0), while the same commit's main
+matrix runner read 2 and passed.  A decision that moves with the runner's memory
+is a resource-conditioned premise; the child now FORCES the dispatched clamp to 2
+and records the RAM-priced number beside it (`priced_by_ram`) for the report, so
+the id measures the ceiling rule on every box.  The pricing arithmetic keeps its
+own pins.  1 passed on Windows py3.14 and WSL py3.12.
+
 ## [5.48.0] — 2026-09-20
 
 This release is the fifth wave of the 2026-09-11 adversarial audit's remediation:

@@ -336,8 +336,19 @@ def main():
     seen = []
     real_resolve = LT._newton_resolve_workers
 
+    priced = []
+
     def spy(requested, n_total, fit_points, **kw):
-        ans = real_resolve(requested, n_total, fit_points, **kw)
+        # The real pricing still runs and is RECORDED, but the clamp this id
+        # dispatches with is FORCED to 2: the priced number is a reading of
+        # the runner's free memory (the first 5.48.0 publish verification
+        # read 1 on its runner, which is a SERIAL dispatch with no pool
+        # chunks at all, while the same commit's main matrix read 2), and
+        # what this id measures is the CEILING rule -- that an 8-wide pool
+        # runs only `clamp` chunks at once -- not the pricing arithmetic,
+        # which has its own pins.
+        priced.append(int(real_resolve(requested, n_total, fit_points, **kw)))
+        ans = 2
         seen.append(int(ans))
         return ans
 
@@ -365,6 +376,7 @@ def main():
     faulthandler.cancel_dump_traceback_later()
     print('RESULT ' + json.dumps({
         'pool_workers': int(pool_workers or 0),
+        'priced_by_ram': (max(priced) if priced else None),
         'clamp': int(clamp),
         'chunks_run': len(spans),
         'peak_concurrent': peak_overlap(spans),
