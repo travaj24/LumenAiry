@@ -16308,5 +16308,10 @@
   "tests/unit/test_wp_b7c_round3.py::test_b7c3_a_fallback_reports_that_the_dark_tail_is_not_arbitrated": 0.85,
   "tests/unit/test_wp_b7c_round3.py::test_b7c3_every_route_declares_a_scope_and_only_a_named_one": 0.0002,
   "tests/unit/test_wp_b7c_round3.py::test_b7c3_the_bar_clears_the_converged_readings_own_spread": 2.65,
-  "tests/unit/test_wp_b7c_round3.py::test_b7c3_the_bar_is_above_the_converged_and_below_the_blown_up": 0.84
+  "tests/unit/test_wp_b7c_round3.py::test_b7c3_the_bar_is_above_the_converged_and_below_the_blown_up": 0.84,
+  "tests/unit/test_verify_b7c_round3.py::test_vb7c3_an_unnamed_continuity_scope_is_refused_with_a_diagnosable_error": 2.61,
+  "tests/unit/test_verify_b7c_round3.py::test_vb7c3_the_two_modules_derivations_cite_the_same_population": 0.0009,
+  "tests/unit/test_verify_b7c_round3.py::test_vb7c3_the_scope_note_a_caller_reads_agrees_with_the_constants_derivation": 0.0006,
+  "tests/unit/test_verify_b7c_round3.py::test_vb7c3_the_bar_has_no_margin_because_the_crossing_is_a_jump_in_z": 11.22,
+  "tests/unit/test_verify_b7c_round3.py::test_vb7c3_the_converged_readings_residue_does_not_follow_the_window": 4.49
 }
