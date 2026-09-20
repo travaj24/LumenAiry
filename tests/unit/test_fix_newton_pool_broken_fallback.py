@@ -48,12 +48,15 @@ close_worker_pool -> shutdown``.  On this tree the same probe returns in
 """
 from __future__ import annotations
 
+import ast
 import faulthandler
-import io
+import inspect
 import json
 import os
 import subprocess
 import sys
+import tempfile
+import textwrap
 import threading
 import time
 import warnings
@@ -135,9 +138,21 @@ def serial_reference():
 
 
 def _thread_dump() -> str:
-    buf = io.StringIO()
-    faulthandler.dump_traceback(file=buf, all_threads=True)
-    return buf.getvalue()
+    """Every thread's stack, as text.
+
+    ``faulthandler.dump_traceback`` writes through the file's ``fileno()``,
+    so an ``io.StringIO`` raises ``io.UnsupportedOperation: fileno`` instead
+    of producing a dump -- and because this helper is only ever called from
+    ``_with_deadline``'s failure path, that turned every wedge detection in
+    this file into an unrelated exception with no thread dump attached
+    (VERIFY-WP-B13 defect D1, 2026-09-15).  A real temporary file has a real
+    descriptor.  ``test_the_wedge_report_carries_the_stack_of_the_wedged_frame``
+    is the behavioural pin.
+    """
+    with tempfile.TemporaryFile('w+') as fh:
+        faulthandler.dump_traceback(file=fh, all_threads=True)
+        fh.seek(0)
+        return fh.read()
 
 
 def _with_deadline(fn, seconds, what):
@@ -732,16 +747,57 @@ def _module_source():
     return inspect.getsource(LT)
 
 
-def test_only_the_bounded_helper_ever_joins_an_executor():
-    """The durable form of the invariant.
+def _last_name(node):
+    """The trailing identifier of a ``Name`` / ``Attribute``, else None."""
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Attribute):
+        return node.attr
+    return None
 
-    Bit-identity cannot see a join, and a wedge only shows up on a box under
-    load, so the guard has to be structural: ``shutdown(wait=True)`` may
-    appear in exactly one place -- the helper that runs it on another thread
-    and joins THAT with a timeout.
+
+def _executor_class_name(node):
+    """The executor class a CALL constructs, or None.
+
+    ``ProcessPoolExecutor(...)``, ``futures.ProcessPoolExecutor(...)`` and
+    ``cf.ThreadPoolExecutor(...)`` all answer; anything else does not.
     """
-    import ast
-    src = _module_source()
+    if not isinstance(node, ast.Call):
+        return None
+    name = _last_name(node.func)
+    return name if name and name.endswith('Executor') else None
+
+
+def _unbounded_executor_joins(src, exempt=('_shutdown_pool_bounded',)):
+    """Every site in ``src`` that joins an executor without a bound.
+
+    TWO SHAPES, because one of them has no ``shutdown`` call in it at all:
+
+    ``x.shutdown(...)``
+        with ``wait`` absent, or present and not the constant ``False``.
+        ``wait`` is read from the keywords AND from the positional slot, so
+        ``ex.shutdown(False)`` is correctly NOT an offender and
+        ``Executor.shutdown(ex, True)`` -- the unbound form, whose first
+        positional is ``self`` -- correctly is.
+    ``with ProcessPoolExecutor(...) as ex:``
+        ``Executor.__exit__`` IS ``shutdown(wait=True)``, so the block's exit
+        joins the feeder thread and every worker process with no timeout.
+        The shipped pin saw only the first shape and was therefore blind to
+        exactly the form the sibling pool uses (VERIFY-WP-B13 defect D7).
+
+    Scope is PROCESS pools.  The exposure is CPython's
+    ``_ExecutorManagerThread._terminate_broken``, which holds the executor's
+    ``_shutdown_lock`` across an untimed ``call_queue.join_thread()`` and an
+    untimed ``p.join()`` per worker; ``ThreadPoolExecutor`` has no such
+    machinery and its ``__exit__`` joins work that its own ``result()`` calls
+    have already collected.  Thread-pool ``with`` blocks are returned
+    separately as ``informational`` rather than silently dropped, so the
+    reading is visible in the failure message instead of being an
+    undocumented exemption.
+
+    Returns ``(offenders, informational)``, each a sorted list of
+    ``'owner:lineno:shape'``.
+    """
     tree = ast.parse(src)
     # Innermost enclosing function of every node, so a match is attributed to
     # the closure that makes it rather than to the whole 8000-line public
@@ -755,25 +811,146 @@ def test_only_the_bounded_helper_ever_joins_an_executor():
                 if child is not parent:
                     owner[child] = parent.name
                     enclosing.setdefault(child, set()).add(parent.name)
-    offenders = []
+
+    def _exempt(node):
+        return bool(set(exempt) & enclosing.get(node, set()))
+
+    offenders, info = [], []
     for node in ast.walk(tree):
-        if not (isinstance(node, ast.Call)
+        if (isinstance(node, ast.Call)
                 and isinstance(node.func, ast.Attribute)
                 and node.func.attr == 'shutdown'):
+            # ``Executor.shutdown(ex, wait)`` puts ``self`` first.
+            unbound = _executor_class_name(
+                ast.Call(func=node.func.value, args=[], keywords=[])) \
+                if isinstance(node.func.value,
+                              (ast.Name, ast.Attribute)) else None
+            slot = 1 if unbound else 0
+            waits = [kw.value for kw in node.keywords if kw.arg == 'wait']
+            if len(node.args) > slot:
+                waits.append(node.args[slot])
+            joining = (not waits) or any(
+                not (isinstance(v, ast.Constant) and v.value is False)
+                for v in waits)
+            if joining and not _exempt(node):
+                offenders.append(
+                    f'{owner.get(node)}:{node.lineno}:shutdown')
             continue
-        waits = [kw.value for kw in node.keywords if kw.arg == 'wait']
-        joining = (not waits) or any(
-            not (isinstance(v, ast.Constant) and v.value is False)
-            for v in waits)
-        if joining and '_shutdown_pool_bounded' not in enclosing.get(
-                node, set()):
-            offenders.append(f'{owner.get(node)}:{node.lineno}')
+        if isinstance(node, (ast.With, ast.AsyncWith)):
+            for item in node.items:
+                cls = _executor_class_name(item.context_expr)
+                if cls is None:
+                    continue
+                where = f'{owner.get(node)}:{node.lineno}:with {cls}'
+                if 'Process' not in cls:
+                    info.append(where)
+                elif not _exempt(node):
+                    offenders.append(where)
+    return sorted(offenders), sorted(info)
+
+
+def test_only_the_bounded_helper_ever_joins_an_executor():
+    """The durable form of the invariant.
+
+    Bit-identity cannot see a join, and a wedge only shows up on a box under
+    load, so the guard has to be structural: an unbounded join of a process
+    pool may appear in exactly one place -- the helper that runs it on
+    another thread and joins THAT with a timeout.
+
+    The detector is ``_unbounded_executor_joins``, which sees the ``with``
+    form as well as the ``shutdown`` call.  Its positive control is
+    ``test_the_join_detector_sees_the_with_form`` and its live example is
+    ``test_the_sibling_process_pool_still_carries_an_unbounded_join``; a pin
+    whose detector is never shown finding anything is a pin that can go blind
+    without going red.
+    """
+    offenders, info = _unbounded_executor_joins(_module_source())
     assert offenders == [], (
-        f'{offenders} call shutdown(wait=True) directly.  CPython joins the '
+        f'{offenders} join a process pool with no bound.  CPython joins the '
         f'queue-feeder thread and every worker process inside '
         f'_terminate_broken, under the same lock shutdown takes first, so a '
-        f'direct joining shutdown can wedge forever; route it through '
-        f'_shutdown_pool_bounded')
+        f'direct joining shutdown -- or a `with ProcessPoolExecutor(...)` '
+        f'block, whose __exit__ IS shutdown(wait=True) -- can wedge forever; '
+        f'route it through _shutdown_pool_bounded.  Thread-pool blocks seen '
+        f'and deliberately out of scope: {info}')
+
+
+def test_the_join_detector_sees_the_with_form():
+    """The positive control, on synthetic source.
+
+    The shipped pin walked only for ``ast.Call`` nodes whose ``func.attr``
+    was ``shutdown``, so a teardown written as a ``with`` block -- which has
+    no such call anywhere -- passed it (VERIFY-WP-B13 D7).  This is that
+    blind spot stated as a decision, on source this test owns, so it stays
+    meaningful however the two real modules evolve.
+    """
+    src = (
+        'def teardown_with(n):\n'
+        '    with ProcessPoolExecutor(max_workers=n) as ex:\n'
+        '        ex.submit(abs, -1)\n'
+        'def teardown_call(ex):\n'
+        '    ex.shutdown(wait=True)\n'
+        'def teardown_unbound(ex):\n'
+        '    Executor.shutdown(ex, True)\n'
+        'def retire(ex):\n'
+        '    ex.shutdown(wait=False, cancel_futures=True)\n'
+        'def retire_positional(ex):\n'
+        '    ex.shutdown(False)\n'
+        'def threads(n):\n'
+        '    with ThreadPoolExecutor(max_workers=n) as tp:\n'
+        '        tp.submit(abs, -1)\n')
+    offenders, info = _unbounded_executor_joins(src, exempt=())
+    shapes = sorted(o.split(':', 1)[0] for o in offenders)
+    assert shapes == ['teardown_call', 'teardown_unbound', 'teardown_with'], (
+        f'the detector reported {offenders}.  It must see all three joining '
+        f'shapes -- the `with` block, the bound call and the unbound call -- '
+        f'and must NOT report a non-joining shutdown written either with a '
+        f'keyword or positionally')
+    assert [i.split(':', 1)[0] for i in info] == ['threads'], (
+        f'thread-pool blocks must be reported as informational, not dropped '
+        f'and not counted: {info}')
+
+
+def test_the_sibling_process_pool_still_carries_an_unbounded_join():
+    """PREMISE GATE, and the record of an OPEN defect.
+
+    `lumenairy.propagators.carrier._multi_parallel_results` runs its own
+    spawn pool as ``with ProcessPoolExecutor(...) as ex:``, i.e.
+    ``shutdown(wait=True)`` on exit, and therefore carries the identical
+    unbounded-join exposure that WP-B13 removed from the Newton pool.  That
+    is VERIFY-WP-B13 D5, a MAINTAINER DECISION deliberately left open here
+    (see `WP-B13_FOLLOWUPS_REPORT.md`): it is a different pool with a
+    different failure policy and it belongs in its own work package.
+
+    This test therefore asserts that the extended detector DETECTS it.  Two
+    things ride on that.  It is the fail-before for the `with` extension --
+    without it the detector reports nothing on this module, which is exactly
+    how the shipped pin stayed green on the shape.  And it is the record:
+    the pin must not be made green by quietly editing `carrier.py`.
+
+    WHEN THIS GOES RED because the sibling pool was repaired, that is the
+    right outcome and not a broken test: delete this test, move the open-defect
+    note out of the report, and rely on
+    ``test_the_join_detector_sees_the_with_form`` for the positive control.
+    """
+    import inspect
+
+    from lumenairy.propagators import carrier as CA
+    offenders, info = _unbounded_executor_joins(inspect.getsource(CA),
+                                                exempt=())
+    owners = {o.split(':', 1)[0] for o in offenders}
+    assert '_multi_parallel_results' in owners, (
+        f'the detector no longer reports an unbounded executor join in '
+        f'carrier._multi_parallel_results.  Either the sibling pool was '
+        f'repaired -- in which case say so and retire this test, and take '
+        f'the open D5 note out of the WP-B13 follow-ups report -- or the '
+        f'detector has gone blind to the `with ProcessPoolExecutor(...)` '
+        f'shape, which is the whole of defect D7.  Offenders seen: '
+        f'{offenders}; informational: {info}')
+    assert any(o.startswith('_multi_parallel_results:')
+               and ':with ProcessPoolExecutor' in o for o in offenders), (
+        f'the site is reported, but not as the `with` shape the sibling '
+        f'module actually uses: {offenders}')
 
 
 def test_the_dispatcher_releases_its_claim_on_every_exit_path():
@@ -805,3 +982,559 @@ def test_the_broken_pool_branch_still_backs_off_the_promotion():
     k = body.index('except (BrokenProcessPool')
     assert 'close_worker_pool()' in body[k:], (
         'the pool-infrastructure fallback no longer drops the cached pool')
+
+
+# ===========================================================================
+# 7.  The wedge REPORT itself (VERIFY-WP-B13 defect D1)
+# ===========================================================================
+
+def _b13_wedged_frame_for_the_dump(gate):
+    """A uniquely named frame that parks forever.
+
+    Module level on purpose: the dump has to name a frame that exists nowhere
+    else in the tree, so matching it is a decision ("the report reached the
+    wedged call") and not a substring coincidence.
+    """
+    gate.wait()
+
+
+def test_the_wedge_report_carries_the_stack_of_the_wedged_frame():
+    """A wedge detection must report ITS OWN message and a real thread dump.
+
+    Every test in this file that can catch a wedge catches it through
+    ``_with_deadline``, whose failure message is the only artifact a
+    maintainer gets: the library call is on a daemon thread that is still
+    stuck, so the stack is not in the traceback.  Shipped, ``_thread_dump``
+    wrote to an ``io.StringIO``; ``faulthandler.dump_traceback`` writes
+    through ``fileno()``, so the dump raised instead of being produced and
+    all three wedge tests reported ``io.UnsupportedOperation: fileno`` with
+    no stack at all (VERIFY-WP-B13 D1, reproduced with the pre-fix behaviour
+    injected: 3 failed, each ending in that exception).
+
+    The wedge here is ENGINEERED rather than hoped for: a daemon thread parks
+    in a uniquely named module-level frame and the deadline is 1 s, so this
+    test costs a second and asserts a decision -- the report names the frame
+    that is stuck.
+    """
+    import io
+
+    gate = threading.Event()
+    try:
+        with pytest.raises(pytest.fail.Exception) as err:
+            _with_deadline(lambda: _b13_wedged_frame_for_the_dump(gate),
+                           1.0, 'an ENGINEERED wedge')
+    finally:
+        gate.set()
+    msg = str(err.value)
+
+    # The premise, MEASURED on this build rather than quoted from the defect
+    # report: what the shipped helper's sink does when faulthandler asks it
+    # for a descriptor.  Reported, not asserted -- a CPython that grew a
+    # StringIO path would not make the fix wrong, only redundant.
+    try:
+        faulthandler.dump_traceback(file=io.StringIO(), all_threads=True)
+        premise = 'io.StringIO accepted the dump on this build'
+    except Exception as exc:                      # noqa: BLE001 -- reported
+        premise = f'io.StringIO raised {type(exc).__name__}: {exc}'
+
+    assert 'an ENGINEERED wedge did not return within' in msg, (
+        f'the wedge report lost _with_deadline\'s own message; that is D1 '
+        f'(the dump helper raised before the message was built).  '
+        f'Premise on this build: {premise}.  Got:\n{msg}')
+    assert 'Thread dump:' in msg and '_b13_wedged_frame_for_the_dump' in msg, (
+        f'the wedge report does not name the frame that is actually stuck, '
+        f'so the one artifact a maintainer gets from a wedge is useless.  '
+        f'Premise on this build: {premise}.  Got:\n{msg}')
+
+
+def test_the_dump_helper_writes_through_a_real_descriptor():
+    """The durable form of D1, independent of the deadline machinery.
+
+    ``_thread_dump`` is called from exactly one place and only when something
+    has already gone wrong, so a defect in it is invisible until the day it
+    matters.  Call it directly and require that it produced this very frame.
+    """
+    dump = _thread_dump()
+    assert 'test_the_dump_helper_writes_through_a_real_descriptor' in dump, (
+        'the thread dump does not contain the calling frame, so it is not a '
+        'thread dump; faulthandler needs a file with a real fileno()')
+
+
+# ===========================================================================
+# 8.  The abandoned-pool census (VERIFY-WP-B13 defect D2)
+# ===========================================================================
+
+def _settle(pred, seconds=15.0):
+    """Wait (bounded) for a background thread to make ``pred`` true."""
+    end = time.monotonic() + seconds
+    while time.monotonic() < end:
+        if pred():
+            return True
+        time.sleep(0.005)
+    return pred()
+
+
+def test_an_expired_bounded_teardown_releases_its_executor_when_it_finishes():
+    """``_ABANDONED_POOLS`` is a census of PENDING teardowns, not a ledger.
+
+    The expiry path hands the executor to the list so a diagnostic can see
+    that a teardown is still outstanding.  As shipped nothing ever took it
+    back out -- unlike ``_abandon_pool``, whose reaper removes in a
+    ``finally`` -- so the list grew by one per expiry and pinned each dead
+    executor's ``_processes`` and queues for the life of the process
+    (VERIFY-WP-B13 D2, measured: length 2 after both shutdowns had in fact
+    completed).
+
+    Both sides are asserted, because only the pair is a fix: while the
+    teardown is outstanding the entry must be THERE (otherwise the census is
+    useless), and once it completes the entry must be GONE.  The number of
+    expiries that happened is carried by ``_POOL_SHUTDOWN_TIMEOUTS``, which
+    is monotone and is asserted to stay so.
+    """
+    before_len = len(LT._ABANDONED_POOLS)
+    before_timeouts = LT._POOL_SHUTDOWN_TIMEOUTS
+    pool = _WedgedBrokenPool(broken=False)
+    try:
+        ok = LT._shutdown_pool_bounded(pool, 0.25)
+        assert ok is False, (
+            'a shutdown that never returns must report the expiry')
+        assert LT._POOL_SHUTDOWN_TIMEOUTS == before_timeouts + 1
+        assert len(LT._ABANDONED_POOLS) == before_len + 1, (
+            'an outstanding teardown is not in the census, so nothing can '
+            'see that this process is holding a dead executor')
+        assert pool in LT._ABANDONED_POOLS
+    finally:
+        pool.release()
+    assert _settle(lambda: pool not in LT._ABANDONED_POOLS), (
+        'the teardown completed and the executor is STILL in '
+        '_ABANDONED_POOLS; the list grows by one per expiry and pins every '
+        'dead executor for the life of the process (D2)')
+    assert len(LT._ABANDONED_POOLS) == before_len, (
+        f'the census did not return to its prior length: '
+        f'{len(LT._ABANDONED_POOLS)} vs {before_len}')
+    assert LT._POOL_SHUTDOWN_TIMEOUTS == before_timeouts + 1, (
+        'the count of expiries must stay monotone -- it is the diagnostic '
+        'the census is NOT')
+
+
+def test_repeated_expiries_do_not_grow_the_census():
+    """The defect's own shape: 'the list grows monotonically with expiries'.
+
+    Three driven expiries, each released in turn.  The count of expiries
+    grows by three; the census ends where it started.  Under the shipped
+    behaviour the census ends three longer, which is the fail-before.
+    """
+    before_len = len(LT._ABANDONED_POOLS)
+    before_timeouts = LT._POOL_SHUTDOWN_TIMEOUTS
+    pools = []
+    try:
+        for _ in range(3):
+            p = _WedgedBrokenPool(broken=False)
+            pools.append(p)
+            assert LT._shutdown_pool_bounded(p, 0.1) is False
+        assert len(LT._ABANDONED_POOLS) == before_len + 3
+    finally:
+        for p in pools:
+            p.release()
+    assert _settle(lambda: len(LT._ABANDONED_POOLS) == before_len), (
+        f'three expiries left {len(LT._ABANDONED_POOLS) - before_len} '
+        f'executors pinned after every one of them had completed')
+    assert LT._POOL_SHUTDOWN_TIMEOUTS == before_timeouts + 3
+
+
+def test_a_teardown_landing_exactly_on_the_expiry_leaves_nothing_behind():
+    """The ordering the one-line fix does not cover.
+
+    The helper can return in the same instant the caller's wait expires.  A
+    bare ``finally: remove`` would then run BEFORE the caller's ``append``
+    and leave exactly the entry it was meant to drop.  The interleaving is
+    ENGINEERED here rather than waited for: the test holds
+    ``_ABANDONED_POOLS_LOCK``, lets the bounded wait expire, releases the
+    executor's join, and only then drops the lock -- so both the caller and
+    the helper are queued on it and either may win.  Both orders are legal;
+    the decision asserted is that both end with the census where it started.
+    """
+    before_len = len(LT._ABANDONED_POOLS)
+    orders = []
+    for _ in range(8):
+        pool = _WedgedBrokenPool(broken=False)
+        box = {}
+
+        def _call(_p=pool, _b=box):
+            _b['ret'] = LT._shutdown_pool_bounded(_p, 0.05)
+
+        t = threading.Thread(target=_call, daemon=True)
+        with LT._ABANDONED_POOLS_LOCK:
+            t.start()
+            time.sleep(0.25)            # the 0.05 s bound has expired
+            pool.release()              # the join returns; both queue on us
+            time.sleep(0.05)
+        t.join(15.0)
+        assert not t.is_alive(), 'the bounded teardown did not return'
+        orders.append(box.get('ret'))
+        assert _settle(lambda _p=pool: _p not in LT._ABANDONED_POOLS), (
+            'a teardown that completed on the expiry boundary stayed in the '
+            'census -- the race the ordering note in _shutdown_pool_bounded '
+            'is about')
+    assert len(LT._ABANDONED_POOLS) == before_len, (
+        f'eight boundary races left {len(LT._ABANDONED_POOLS) - before_len} '
+        f'executors pinned')
+    assert set(orders) <= {True, False}, orders
+
+
+class _HelperFirstLock:
+    """The census lock, made to admit the teardown HELPER before the caller.
+
+    ``threading.Lock`` makes no fairness promise, so the adverse arrival order
+    cannot be produced by sleeping and hoping.  This wrapper produces it by
+    construction: the ``lumenairy-newton-pool-close`` thread is let through
+    immediately, and any other thread waits until that helper has finished its
+    critical section.  It is installed through the module attribute, which is
+    the same substitution point the library's own tests use.
+    """
+
+    def __init__(self, real):
+        self._real = real
+        self._helper_done = threading.Event()
+
+    @staticmethod
+    def _is_helper():
+        return threading.current_thread().name == 'lumenairy-newton-pool-close'
+
+    def acquire(self, *a, **kw):
+        if not self._is_helper():
+            self._helper_done.wait(20.0)
+        return self._real.acquire(*a, **kw)
+
+    def release(self):
+        helper = self._is_helper()
+        out = self._real.release()
+        if helper:
+            self._helper_done.set()
+        return out
+
+    def __enter__(self):
+        self.acquire()
+        return self
+
+    def __exit__(self, *exc):
+        self.release()
+        return False
+
+
+def test_the_census_survives_the_helper_first_lock_order(monkeypatch):
+    """Why the repair is not the one-line ``finally: remove``.
+
+    Two threads reach the census at the boundary: the caller, whose bounded
+    wait has expired and which wants to ADD the executor, and the helper,
+    whose ``shutdown`` has just returned and which wants to REMOVE it.  If the
+    helper's removal is allowed to run before the caller's append -- which is
+    what a bare ``finally: remove`` ahead of ``done.set()`` permits -- the
+    remove finds nothing, the append then runs, and the census keeps exactly
+    the entry the repair was meant to drop.
+
+    The shipped helper therefore publishes ``done`` BEFORE it takes the lock
+    and the caller re-reads ``done`` under it, so this order ends with no
+    append at all.  MEASURED both ways on 2026-09-15 (Windows 3.14.6 and WSL
+    3.12.3): this test passes as shipped and fails with the one-line form
+    injected (``FU_INJECT=d2one``, ``validation/probe_wp_b13_followups/``).
+    """
+    before_len = len(LT._ABANDONED_POOLS)
+    before_timeouts = LT._POOL_SHUTDOWN_TIMEOUTS
+    monkeypatch.setattr(LT, '_ABANDONED_POOLS_LOCK',
+                        _HelperFirstLock(threading.Lock()))
+    pool = _WedgedBrokenPool(broken=False)
+    box = {}
+
+    def _call():
+        box['ret'] = LT._shutdown_pool_bounded(pool, 0.05)
+
+    t = threading.Thread(target=_call, daemon=True)
+    t.start()
+    time.sleep(0.30)                    # the 0.05 s bound has expired
+    pool.release()                      # now the helper reaches the census
+    t.join(20.0)
+    assert not t.is_alive(), (
+        'the bounded teardown never returned under the helper-first order')
+    assert _settle(lambda: pool not in LT._ABANDONED_POOLS), (
+        'the executor is pinned in the census under the helper-first arrival '
+        'order: the helper removed nothing and the caller then added it')
+    assert len(LT._ABANDONED_POOLS) == before_len, (
+        f'census length {len(LT._ABANDONED_POOLS)}, was {before_len}')
+    # The teardown DID complete, so this is not an expiry and must not be
+    # counted as one -- the counter is the durable diagnostic.
+    assert box['ret'] is True, (
+        'a teardown that completed before the caller reached the census was '
+        'reported as an expiry')
+    assert LT._POOL_SHUTDOWN_TIMEOUTS == before_timeouts, (
+        'a completed teardown was counted as a bounded-wait expiry')
+
+
+# ===========================================================================
+# 9.  What _POOL_INFLIGHT counts (VERIFY-WP-B13 defect D4)
+# ===========================================================================
+
+def test_the_in_flight_counter_is_one_claim_per_dispatch_not_per_chunk():
+    """The counter's comment said "chunks"; the counter counts DISPATCHES.
+
+    VERIFY-WP-B13 D4.  The decision taken here was to fix the COMMENT rather
+    than the counter, and the reason is the set of consumers: every read in
+    the library and in its tests and probes is a zero-vs-non-zero read, so
+    the magnitude carries no meaning and a per-chunk counter would only add
+    two lock acquisitions per chunk.  This test pins the three facts that
+    decision rests on, so the corrected comment cannot drift back:
+
+    1. the dispatcher takes its claim exactly ONCE;
+    2. it takes it BEFORE it submits anything, so the claim covers the whole
+       dispatch rather than tracking the chunks;
+    3. every comparison against ``_POOL_INFLIGHT`` in the module is against
+       zero -- the moment one is not, the magnitude has acquired a meaning
+       and the counter, not the comment, is what has to change;
+    4. and no call site CONSUMES ``_note_pool_inflight``'s return value,
+       which is the other route the magnitude has out of the module.
+
+    RESTATED 2026-09-19 (VERIFY-WP-B13-FOLLOWUPS defects VD7 and VD8), in
+    both directions it was wrong in:
+
+    * VD7, a MISS.  Fact 3 walked ``ast.Compare`` nodes only, and the
+      magnitude does not have to travel through one:
+      ``_note_pool_inflight`` ends ``return _POOL_INFLIGHT``, so
+      ``if _note_pool_inflight(0) > 1:`` is a magnitude read that no Compare
+      on the Name can see, and the pin stayed green on it (driven,
+      ``vf6_d4_readers.py::branch_d4_check`` shape 5).  Fact 4 closes that
+      route by requiring every call site to be an expression STATEMENT, i.e.
+      the returned count is discarded.  MEASURED 2026-09-19, grep + AST over
+      all of ``lumenairy/`` on both builds: 4 call sites, 1 claim and 3
+      releases, 0 of them consuming the value.
+    * VD8, a FALSE FAILURE.  The non-zero operands were read from
+      ``node.comparators`` alone, so ``0 < _POOL_INFLIGHT`` -- the same
+      zero-vs-non-zero decision with the operands swapped -- put the Name
+      itself in the "something other than zero" bucket and failed the pin
+      (same driver, shape 2).  The operands are now read from
+      ``[node.left, *node.comparators]`` MINUS the ``_POOL_INFLIGHT`` node,
+      so the pin is about the decision rather than about which side of the
+      operator the counter was written on.
+    """
+    import ast
+    import inspect
+
+    src = inspect.getsource(la.apply_real_lens_traced)
+    i = src.index('def _invert_newton_parallel')
+    j = src.index('\n    def ', i + 1)
+    body = src[i:j]
+    assert body.count('_note_pool_inflight(1)') == 1, (
+        f'the dispatcher claims the pool '
+        f'{body.count("_note_pool_inflight(1)")} times; the claim is one per '
+        f'DISPATCH, which is what _POOL_INFLIGHT counts')
+    assert body.index('_note_pool_inflight(1)') < body.index('ex.submit('), (
+        'the claim is taken after the first submit, so it no longer covers '
+        'the whole dispatch')
+
+    tree = ast.parse(_module_source())
+    comparisons = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Compare):
+            continue
+        operands = [node.left, *node.comparators]
+        if not any(isinstance(n, ast.Name) and n.id == '_POOL_INFLIGHT'
+                   for n in operands):
+            continue
+        # BOTH compare orders are the same decision: read the OTHER operands
+        # from the whole list minus the counter's own node, never from
+        # ``comparators`` alone (VD8 -- ``0 < _POOL_INFLIGHT`` false-failed).
+        others = [x for x in operands
+                  if not (isinstance(x, ast.Name)
+                          and x.id == '_POOL_INFLIGHT')]
+        non_zero = not all(isinstance(x, ast.Constant) and x.value == 0
+                           for x in others)
+        comparisons.append((node.lineno, non_zero))
+    assert comparisons, (
+        'nothing compares _POOL_INFLIGHT any more -- the rebuild rule has '
+        'lost the guard that keeps a rebuild off a live pool')
+    against_non_zero = [ln for ln, non_zero in comparisons if non_zero]
+    assert against_non_zero == [], (
+        f'lines {against_non_zero} compare _POOL_INFLIGHT against something '
+        f'other than zero.  Its magnitude is a count of DISPATCHES, not of '
+        f'chunks; a consumer that needs chunks has to change the counter '
+        f'(and its comment), not read this one')
+
+    # 4. the OTHER route out of the module: ``_note_pool_inflight`` returns
+    #    the count, so a call site that uses the returned value is a
+    #    magnitude read no Compare above can see (VD7).
+    calls = [n for n in ast.walk(tree)
+             if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
+             and n.func.id == '_note_pool_inflight']
+    discarded = [n for n in ast.walk(tree)
+                 if isinstance(n, ast.Expr) and isinstance(n.value, ast.Call)
+                 and isinstance(n.value.func, ast.Name)
+                 and n.value.func.id == '_note_pool_inflight']
+    assert calls, (
+        'nothing calls _note_pool_inflight any more; the rebuild rule has '
+        'lost the claim that keeps a rebuild off a live pool')
+    assert len(discarded) == len(calls), (
+        f'{len(calls) - len(discarded)} of {len(calls)} _note_pool_inflight '
+        f'call sites (lines {[n.lineno for n in calls]}) CONSUME the return '
+        f'value.  That value is the magnitude of a DISPATCH count, and the '
+        f'D4 decision -- fix the comment, not the counter -- is only sound '
+        f'while nothing reads it; a consumer that needs a chunk count has to '
+        f'change the counter, not read this one')
+
+
+# ===========================================================================
+# D5 / VD3 -- what the dispatcher's infrastructure clause actually reaches
+# ===========================================================================
+class _PreThreeElevenError(Exception):
+    """CPython < 3.11's ``concurrent.futures._base.Error``."""
+
+
+class _PreThreeElevenTimeoutError(_PreThreeElevenError):
+    """CPython < 3.11's ``concurrent.futures.TimeoutError``.
+
+    Before gh-90315 ("concurrent.futures.TimeoutError and
+    asyncio.TimeoutError are now aliases of TimeoutError", Python 3.11) this
+    class derived from ``concurrent.futures._base.Error(Exception)`` and had
+    NOTHING to do with ``OSError``.  Reconstructed here rather than imported,
+    because no 3.10 interpreter is installed on this box -- the shape that
+    matters is the MRO, and the MRO is what an ``except`` tuple matches on.
+    """
+
+
+class _RaisingPool:
+    """A stub executor whose ``submit`` raises a chosen exception.
+
+    Installed through the same substitution point every other test in this
+    file uses, so what is exercised is the shipped dispatcher and the shipped
+    ``except (BrokenProcessPool, RuntimeError, OSError, EOFError)`` tuple.
+    """
+
+    _broken = None
+
+    def __init__(self, exc):
+        self._exc = exc
+        self.shutdown_calls = []
+
+    def submit(self, fn, *a, **kw):
+        raise self._exc
+
+    def shutdown(self, wait=True, **kw):
+        self.shutdown_calls.append(bool(wait))
+
+
+def test_the_infrastructure_clause_reaches_an_oserror_timeout_and_no_other(
+        monkeypatch, _forced_pool_bars, serial_reference):
+    """What the shipped dispatcher does with each timeout MRO, driven.
+
+    VERIFY-WP-B13-FOLLOWUPS defect VD3.  The follow-ups report recommended
+    bounding the pool BOOTSTRAP and argued the fallback was already right
+    because "``TimeoutError`` is an ``OSError`` subclass, so it lands in the
+    dispatcher's existing infrastructure clause".  That is true of the
+    BUILTIN on every supported interpreter (PEP 3151), and true of
+    ``concurrent.futures.TimeoutError`` only from Python 3.11, where
+    gh-90315 made it an alias of the builtin.  ``pyproject.toml`` declares
+    ``requires-python = ">=3.10"`` and CI runs 3.10, so on a supported
+    interpreter the pre-3.11 class -- whose MRO is
+    ``TimeoutError -> Error -> Exception`` -- walks straight past
+    ``(BrokenProcessPool, RuntimeError, OSError, EOFError)``.
+
+    THIS TEST ASSERTS THE OUTCOME THE CODE SHIPS, not the outcome a future
+    bar would need.  Nothing in ``_invert_newton_parallel`` asks for a
+    timeout today -- neither ``as_completed`` nor ``Future.result`` is given
+    one, which the last block below re-reads from the source -- so no path
+    inside the ``try`` can raise either timeout class, the escape is
+    unreachable, and adding ``concurrent.futures.TimeoutError`` to the tuple
+    would be a no-op on 3.11+ (it IS ``OSError`` there) while on 3.10 it
+    would newly swallow a WORKER-raised timeout into a silent serial re-run
+    -- exactly what the tuple's own comment refuses to do for ``ValueError``,
+    ``ImportError`` and ``MemoryError``.  The tuple is therefore left as it
+    is, and the requirement recorded for whoever adds the bar: naming the
+    timeout class is the FIRST line of that change, and
+    ``test_verify_b13_followups.py::``
+    ``test_a_timeout_on_the_dispatch_must_name_its_own_exception_class``
+    turns red the day a ``timeout=`` lands without it.
+
+    MEASURED 2026-09-19 through this same reproducer on Windows 3.14.6 and
+    WSL 3.12.3 (``validation/probe_verify_b13_followups/vf5_d5_timing.py::``
+    ``measure_clause_reach``, re-driven here): builtin MRO -> serial,
+    byte-identical; pre-3.11 MRO -> escapes to the caller.
+    """
+    import concurrent.futures as cf
+
+    # The premise, MEASURED on the running build rather than assumed: the
+    # builtin is an OSError everywhere, and whether cf.TimeoutError IS the
+    # builtin is exactly the 3.11 boundary this defect is about.
+    measured = {
+        'python': tuple(sys.version_info[:2]),
+        'builtin_TimeoutError_is_OSError': issubclass(TimeoutError, OSError),
+        'cf_TimeoutError_is_builtin': cf.TimeoutError is TimeoutError,
+        'cf_TimeoutError_is_OSError': issubclass(cf.TimeoutError, OSError),
+        'pre_3_11_mro': [c.__name__
+                         for c in _PreThreeElevenTimeoutError.__mro__],
+    }
+    assert measured['builtin_TimeoutError_is_OSError'], measured
+    assert not issubclass(_PreThreeElevenTimeoutError, OSError), (
+        f'the reconstructed pre-3.11 class is an OSError, so it no longer '
+        f'models the MRO the defect is about: {measured}')
+
+    cases = [
+        ('builtin TimeoutError', TimeoutError('engineered'), True),
+        ('concurrent.futures.TimeoutError on this build',
+         cf.TimeoutError('engineered'),
+         measured['cf_TimeoutError_is_OSError']),
+        ('pre-3.11 concurrent.futures.TimeoutError MRO',
+         _PreThreeElevenTimeoutError('engineered'), False),
+        ('OSError (control)', OSError('engineered'), True),
+        ('ValueError (control)', ValueError('engineered'), False),
+    ]
+    rows = []
+    for label, exc, want_caught in cases:
+        pool = _RaisingPool(exc)
+        with monkeypatch.context() as mp:
+            _install_pool(mp, pool)
+            try:
+                got = _traced(4)
+                caught, escaped = True, None
+            except BaseException as raised:            # noqa: BLE001
+                caught, escaped = False, type(raised).__name__
+                got = None
+        identical = (None if got is None
+                     else bool(np.array_equal(got, serial_reference)))
+        rows.append({'case': label, 'want_caught': want_caught,
+                     'caught': caught, 'escaped_as': escaped,
+                     'identical_to_serial': identical,
+                     'mro': [c.__name__ for c in type(exc).__mro__]})
+        verb = 'took the serial fallback' if caught else 'escaped'
+        assert caught == want_caught, (
+            f'{label}: the dispatcher {verb}, which is not what the shipped '
+            f'except (BrokenProcessPool, RuntimeError, OSError, EOFError) '
+            f'tuple says it should do.  This build measures {measured}; '
+            f'rows so far: {rows}')
+        if caught:
+            assert identical, (
+                f'{label} took the serial fallback but the answer moved -- '
+                f'the fallback exists because the two paths are '
+                f'bit-identical, max|delta| = '
+                f'{np.abs(got - serial_reference).max():.3e}')
+
+    # And the reason the escape above is unreachable today: the dispatcher
+    # never asks for a timeout, so nothing inside its try can raise one.
+    src = inspect.getsource(la.apply_real_lens_traced)
+    i = src.index('def _invert_newton_parallel')
+    j = src.index('\n    def ', i + 1)
+    tree = ast.parse(textwrap.dedent(src[i:j]))
+    timed = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        name = getattr(node.func, 'id', None) or getattr(
+            node.func, 'attr', None)
+        if name in ('as_completed', 'result', 'wait') and any(
+                kw.arg == 'timeout' for kw in node.keywords):
+            timed.append((name, node.lineno))
+    assert timed == [], (
+        f'the dispatcher now asks for a timeout at {timed}, so a timeout '
+        f'class CAN be raised inside the try block.  The infrastructure '
+        f'clause has to name that class explicitly before this ships: on '
+        f'Python 3.10 -- inside this package requires-python -- '
+        f'concurrent.futures.TimeoutError is not an OSError and would reach '
+        f'the caller instead of the bit-identical serial rung.  Measured '
+        f'MROs on this build: {measured}')

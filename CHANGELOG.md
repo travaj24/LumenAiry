@@ -255,10 +255,16 @@ the one way a rebuild could genuinely present as a broken pool.  A microsecond w
 open on purpose between being handed an executor and claiming it: closing it would mean
 overriding whatever `_get_persistent_worker_pool` returned, and that function is a substitution
 point the library's own tests rely on, while the window's whole consequence is a bit-identical
-serial fallback.  The cost of keeping a wider pool is the resident set of the idle workers,
-measured at 33.0 MB mean / 48.8 MB peak each against the ~1.7 GB per ACTIVE worker the clamp
-itself models, i.e. 2 % of one working worker; `close_worker_pool()` remains the documented way
-to free them, and is now the only thing that ever makes the pool narrower.  The warm-pool size
+serial fallback.  The cost of keeping a wider pool is the resident set of the idle workers, and it
+depends on the state they were left in: a worker that has SERVED a Newton chunk measures
+98.7-100.8 MB mean (worst 101.6 MB) on Windows 3.14.6 and 73.2-76.9 MB on WSL 3.12.3, while a
+worker in the same pool that served none measures 52.2 MB / 39.2 MB (2026-09-15, N = 256 / 512 /
+1024, `validation/probe_wp_b13_followups/fu1_worker_footprint.py`).  Against the ~1.7 GB per
+ACTIVE worker the clamp itself models that is 6 % of one working worker, so a 16-wide kept pool
+holds about 1.6 GB.  (This entry first quoted 33.0 MB mean / 48.8 MB peak and "2 %"; that figure
+was measured on workers warmed with `ex.map(abs, ...)`, which is neither state the rule
+produces -- see the WP-B13 follow-ups entry below.)  `close_worker_pool()` remains the documented
+way to free them, and is now the only thing that ever makes the pool narrower.  The warm-pool size
 bar reads `_PERSISTENT_POOL_NWORKERS >= n_cpu` instead of `== n_cpu` for the same reason -- a
 pool wide enough to serve the call has no spawn left to amortise, which is the only thing that
 bar is about.
@@ -478,6 +484,216 @@ replaced them), `validation/oracles/caustic_fold_truth.py` (the NA ceiling, stat
 `validation/probe_wp_b7c_round2/` (probes, the exact-azimuth oracle driver and JSON),
 `docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/WP-B7c_ROUND2_REPORT.md`.
 Closes handoff items 4.2 and 4.3.
+
+### Fixed -- lens-traced: the five follow-ups the WP-B13 verification left, and the two it left open
+
+Closes defects D1, D2, D3, D4 and D7 of
+`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/VERIFY_WP-B13.md`.  The report is
+`WP-B13_FOLLOWUPS_REPORT.md` in the same directory; every probe and its per-build JSON is under
+`validation/probe_wp_b13_followups/`.  Two builds throughout, Windows python 3.14.6 and WSL
+python 3.12.3.  No field moved: every pooled field produced in this package equals its
+`n_workers=1` reference under `np.array_equal`, `max|delta| = 0.0`.
+
+- **An expired bounded teardown no longer pins its executor for the life of the process.**
+  `_shutdown_pool_bounded`'s expiry path appended the executor to `_ABANDONED_POOLS` and nothing
+  ever took it back out, unlike `_abandon_pool`, whose daemon reaper removes in a `finally`.  The
+  list grew by one per expiry and held each dead executor, its `_processes` and its queues,
+  forever.  `_ABANDONED_POOLS` is now a CENSUS OF PENDING TEARDOWNS rather than a ledger: both
+  mechanisms take their entry back out when their `shutdown` returns, so a quiescent process reads
+  an empty list however many pools it has retired, and the monotone count of teardowns that
+  overran stays in `_POOL_SHUTDOWN_TIMEOUTS`, which is what a diagnostic should read.  The removal
+  is ORDERED against the expiry rather than written as a bare `finally`: the helper can reach the
+  census in the same instant the caller's bounded wait expires, and a `remove` that ran before the
+  caller's `append` would leave exactly the entry it was meant to drop -- so the helper publishes
+  `done` before it takes `_ABANDONED_POOLS_LOCK`, and the caller re-reads `done` under that lock
+  before appending (finding it set, it reports the teardown as completed rather than as an expiry,
+  which it is).  Four pins, all engineered rather than sampled, including one that produces the
+  adverse arrival order BY CONSTRUCTION with a census lock that admits the teardown helper first,
+  because `threading.Lock` makes no fairness promise.  Measured with each earlier behaviour
+  re-injected in memory: the shipped version fails three of the four, and the one-line repair the
+  verification asked for fails the helper-first order.
+
+- **The idle-worker footprint is re-derived in the state the ceiling rule actually leaves behind.**
+  `_get_persistent_worker_pool`'s docstring justified never shrinking the pool with "33.0 MB mean /
+  48.8 MB peak per idle worker ... 2 % of one working worker".  That figure was measured on workers
+  warmed with `ex.map(abs, ...)`, which is neither state this rule produces.  Re-measured with both
+  reachable states present in ONE pool (a 12-wide pool serving a 4-worker dispatch; resident sets
+  read parent-side with psutil, each worker labelled by its own `_WORKER_PAYLOADS`, every worker
+  forced to take exactly one labelling task by a Manager Barrier so the labelling is complete by
+  construction): a worker that has SERVED a Newton chunk reads 98.7 / 98.8 / 100.8 MB mean at
+  N = 256 / 512 / 1024 on Windows (worst 101.6 MB) and 73.2 / 74.1 / 76.9 MB on WSL; a worker in the
+  same pool that served none reads 52.2 MB / 39.2 MB.  So the worst kept worker is ~102 MB, a
+  16-wide kept pool holds ~1.6 GB rather than ~0.5 GB, and the fraction of the ~1.7 GB ACTIVE worker
+  the clamp models is 6 %, not 2 %.  The trade the rule rests on is unchanged -- the alternative was
+  measured at 26 spawned interpreters for four dispatches -- but the number was wrong by 2-3x and
+  the state it was taken in was not named.  The docstring now names both states and carries the
+  ladder; the earlier entry above and the WP-B13 report's section 5.2 carry the correction with the
+  old figure quoted.
+
+- **`_POOL_INFLIGHT`'s comment said "chunks"; the counter counts DISPATCHES.**  Fixed the comment
+  and not the counter, by reading the consumers: `_get_persistent_worker_pool`'s
+  `elif _POOL_INFLIGHT > 0` is the only library reader and is a zero-vs-non-zero test, and every
+  test and probe that touches it asserts only that it returns to 0.  A per-chunk counter would buy
+  nothing and would add two lock acquisitions per chunk.  A new pin fixes the three facts that
+  decision rests on -- one claim per dispatch, taken before the first `submit`, and every
+  comparison against the counter made against zero.
+
+- **The AST pin that forbids unbounded executor joins now sees `with ProcessPoolExecutor(...)`.**
+  It walked for `ast.Call` nodes whose `func.attr == 'shutdown'`; a teardown written as a `with`
+  block contains no such call -- `Executor.__exit__` IS `shutdown(wait=True)` -- so it stayed green
+  on exactly the shape `lumenairy.propagators.carrier._multi_parallel_results` uses.  The sweep is
+  now a named helper that sees both shapes, reads `wait` from the positional slot as well as the
+  keywords, scopes itself to PROCESS pools (a `ThreadPoolExecutor` has no `_terminate_broken`, and
+  thread-pool blocks are reported as informational rather than silently exempted), and is backed by
+  a synthetic positive control so it cannot go blind without going red.
+
+- **The wedge tests now report their own message and a real thread dump.**
+  `tests/unit/test_fix_newton_pool_broken_fallback.py::_thread_dump` passed an `io.StringIO` to
+  `faulthandler.dump_traceback`, which writes through `fileno()`, so every wedge detection in the
+  file raised `io.UnsupportedOperation: fileno` and lost the thread dump -- the one artifact a
+  maintainer gets, since the wedged library call is still parked on a daemon thread and is absent
+  from the traceback.  It writes to a real temporary file now, pinned behaviourally by an engineered
+  wedge whose report must name the frame that is stuck.
+
+**STILL OPEN, and deliberately so -- two maintainer decisions, now measured.**  Neither default is
+moved here and `carrier.py` is not edited; the numbers are in the follow-ups report.
+
+- **`as_completed` in `_invert_newton_parallel` still has no timeout**, so a pool whose workers
+  never come up hangs the call forever (reproducible on demand,
+  `validation/probe_verify_b13/vp2_broken_drivers.py --mode slowboot`).  A single `timeout=` on
+  `as_completed` is an absolute deadline on the WHOLE iteration, so it bounds the total dispatch --
+  a quantity that scales with the field while the pathology does not, and no fixed value is
+  derivable (10x the worst cold chunk plus the bootstrap gives 20.5 s on Windows / 24.8 s on WSL
+  from an N <= 1024 ladder, which would abort a legitimate N = 32768 dispatch).  The report
+  recommends bounding the BOOTSTRAP instead -- one trivial sentinel submitted ahead of the chunks,
+  with its own timeout -- and derives 600 s from the loudest healthy reading on record (the WP's own
+  45-56 s cold call on a loaded box) times ten.  Its cost on the healthy path is one round-trip,
+  measured at 0.0007 s (Windows) / 0.0004 s (WSL) on a warm pool (0.0017 s / 0.0642 s re-measured on
+  a loaded box, i.e. 0.06 % and 2.1 % of the warm total at N = 1024).  Two corrections to that
+  recommendation, both from the verification of this package and both now carried in its report:
+  the sentinel bounds only the BOOTSTRAP -- a pool whose first submit answers and whose later
+  chunks never complete still runs past any deadline -- and `concurrent.futures.TimeoutError` is an
+  `OSError` (through being an alias of the builtin) only from Python 3.11, so whoever adds the bar
+  must NAME the timeout class in the dispatcher's `except` clause rather than rely on `OSError`;
+  this package supports 3.10, where the pre-3.11 MRO escapes that clause and reaches the caller.
+  `carrier._multi_parallel_results` carries the identical exposure through its `with
+  ProcessPoolExecutor(...)` block and belongs in the same package; the extended AST pin asserts that
+  it is detected today rather than being made green by editing it.
+
+- **A wedged manager thread still hangs interpreter EXIT, and the candidate repair is not the one
+  that was expected.**  Measured on the natural WSL wedge (one worker SIGKILLed while the survivors
+  ignore SIGTERM): the traced call returns its correct, byte-identical answer in 1.282 s and prints
+  its exit line at t = 2.825 s, and the process then never terminates -- SIGKILLed at the 60 s
+  deadline, a **57.2 s hang against a 0.47 s exit** on the same script with nothing broken.  The
+  repair the verification pointed at -- `atexit` plus `_abandon_pool` daemonising the reaper -- was
+  prototyped behind a switch defaulting OFF and **does not close it**: with all three of its steps
+  confirmed applied (drop the executor from `concurrent.futures.process._threads_wakeups`, set the
+  manager thread's `_daemonic`, discard its `_tstate_lock` from `threading._shutdown_locks`, which
+  step two does not do because the lock was added at start time while the thread was still
+  non-daemon), the hang is 56.98 s.  Thread dumps taken after the exit line say why: the prototype
+  does remove the `concurrent.futures.process._python_exit` join it targets, and the interpreter
+  then blocks on the NEXT unbounded join one layer down, `multiprocessing.util._exit_function`'s
+  `for p in active_children(): p.join()` -- the surviving workers themselves.  The arm that DOES
+  close it removes the workers: SIGKILLing them after the answer is in exits in **0.380 s**, with no
+  prototype at all, because that also releases the manager thread's own `p.join()`.  So the repair,
+  if it is taken, is an escalation in `_abandon_pool`'s reaper -- grace period, then kill the
+  executor's remaining processes -- and it is a policy change (this library has never killed a
+  worker), which is why it is a maintainer decision and not a defect fix.  Until it is taken, the
+  release note should say out loud what ships: on a wedged pool the computation is saved but the
+  process is not.
+
+### Fixed -- lens-traced: the nine defects the WP-B13 follow-ups verification raised
+
+Closes VD1-VD9 of
+`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/VERIFY_WP-B13_FOLLOWUPS.md` (verdict
+SHIP; these are the edits in its section 8, which it asked for as a follow-up).  One library
+change, one test restatement, one new decision test and six documentation corrections; the
+round-2 addendum in `WP-B13_FOLLOWUPS_REPORT.md` carries the per-finding proof.  Two builds
+throughout, Windows python 3.14.6 and WSL python 3.12.3, every command carrying
+`OMP_NUM_THREADS=OPENBLAS_NUM_THREADS=MKL_NUM_THREADS=1` and the thirteen-file pool gate run under
+both pytest captures on both builds.  No field moved.
+
+- **A bounded teardown no longer removes a census entry it did not add** (VD2, latent).
+  `_shutdown_pool_bounded`'s helper ran `_ABANDONED_POOLS.remove(ex)` in its `finally` whether or
+  not the caller had appended, which is correct only while that function is the sole writer of the
+  census -- and it is not, because `_abandon_pool` appends too.  An executor handed to both
+  mechanisms therefore had the reaper's still-outstanding entry dropped by a bounded teardown that
+  COMPLETED INSIDE ITS BOUND, so the census under-reported a teardown that was still running.  The
+  caller now records, under `_ABANDONED_POOLS_LOCK`, that it appended, and the helper removes only
+  then.  The publish-before-lock ordering that closes the D2 race is untouched: `done` is still set
+  before the lock and the caller still re-reads it under the lock.  Measured with the state built
+  by construction rather than waited for: the foreign entry was dropped in **6 of 6** reps before
+  and **0 of 6** after, on both builds, driving the verifier's own reproducer against the real
+  library function; and the D2 race matrix is unchanged (the one-line repair still leaks 8/8 under
+  the helper-first lock order and 0/8 under the caller-first, the shipped ordering and the real
+  library 0 in both orders, census empty at the end).  Unreachable today -- `close_worker_pool`
+  routes a pool to exactly one mechanism and `_get_persistent_worker_pool` retires its stale pool
+  through `_abandon_pool` alone, which
+  `test_one_executor_never_reaches_both_teardown_mechanisms` pins -- so this is a mechanism closed
+  rather than a bug observed.
+
+- **The `_POOL_INFLIGHT` pin was wrong in both directions and is restated** (VD7, VD8).
+  `test_the_in_flight_counter_is_one_claim_per_dispatch_not_per_chunk` walked `ast.Compare` nodes
+  on the counter's Name, which misses the route the magnitude actually takes out of the module --
+  `_note_pool_inflight` ends `return _POOL_INFLIGHT`, so `if _note_pool_inflight(0) > 1:` is a
+  magnitude read no such Compare can see -- and it read its non-zero operands from
+  `node.comparators` alone, so `0 < _POOL_INFLIGHT`, the same zero-vs-non-zero decision with the
+  operands swapped, was a false failure.  The operands are now read from
+  `[node.left, *node.comparators]` minus the counter's own node, and a fourth fact requires every
+  `_note_pool_inflight` call site to be an expression STATEMENT.  Graded over eight shapes against
+  the verifier's own grader: **4 misgrades before, 0 after**, identical on both builds.
+
+- **What the dispatcher's infrastructure clause reaches is now a test, and the recommendation that
+  mis-stated it is corrected** (VD3).  The follow-ups report argued a future bootstrap bar needed
+  no new `except` because "`TimeoutError` is an `OSError` subclass".  That holds for the BUILTIN on
+  every supported interpreter (PEP 3151) but for `concurrent.futures.TimeoutError` only from Python
+  3.11, where gh-90315 made it an alias of the builtin; before that it derived from
+  `concurrent.futures._base.Error(Exception)`.  `requires-python` is `>=3.10` and CI runs 3.10, so
+  on a supported interpreter that MRO walks straight past
+  `except (BrokenProcessPool, RuntimeError, OSError, EOFError)` and the timeout reaches the caller
+  instead of the bit-identical serial rung.  A new decision test drives five MROs -- including a
+  reconstructed pre-3.11 `concurrent.futures.TimeoutError` -- through the real dispatcher and
+  asserts the outcome the code SHIPS: builtin and `OSError` fall back byte-identically, the
+  pre-3.11 shape and `ValueError` escape, and the `concurrent.futures` arm is asserted against the
+  MRO measured on the running build rather than against a version number.  **The `except` tuple is
+  deliberately not widened.**  Nothing in `_invert_newton_parallel` asks for a timeout (neither
+  `as_completed` nor `Future.result` is given one, which the same test re-reads from the source),
+  so no path can raise one; the addition would be a literal no-op on 3.11+ and on 3.10 would newly
+  swallow a WORKER-raised timeout into a silent serial re-run, which is exactly what that tuple's
+  comment refuses to do for `ValueError`, `ImportError` and `MemoryError`.  Naming the timeout
+  class is recorded instead as the first line of whoever adds the bar, and
+  `test_a_timeout_on_the_dispatch_must_name_its_own_exception_class` turns red the day a `timeout=`
+  lands without it.
+
+- **A bootstrap sentinel would bound only the bootstrap** (VD4).  The recommendation now says out
+  loud what it does not close: a pool whose first submit answers and whose later chunks never
+  complete leaves the dispatch running past any deadline (measured on both builds, still running at
+  a 20 s deadline with four submits outstanding behind an answered sentinel).  Candidate B closes
+  the `slowboot` shape -- a pool that never comes up -- and narrows nothing else.
+
+- **The "surplus worker of a wider pool" does not exist** (VD5).  `_get_persistent_worker_pool`'s
+  docstring called the never-served worker "what the SURPLUS of a pool wider than the clamp is".
+  CPython's `ProcessPoolExecutor` spawns LAZILY -- `_adjust_process_count` runs inside `submit` --
+  so a pool constructed at width 12 holds **zero** worker processes and a 4-chunk dispatch on it
+  leaves **four**, on every rung of both builds.  The extra width this rule declines to shrink
+  therefore costs nothing until something submits to it; the never-served column of the footprint
+  ladder prices a worker the MEASUREMENT's own labelling step created (and is the floor for a spawn
+  worker of this pool, which necessarily imports `lumenairy.elements._lens_traced` to resolve its
+  initializer), and the state the ceiling rule actually leaves behind is a worker that SERVED a
+  chunk -- which is the figure the trade was always priced on.  The docstring says this now, and
+  states the served footprint as the measured RANGE over two independent measurements with
+  different labelling mechanisms (93.6-101.6 MB Windows, 69.5-76.9 MB WSL; 5.5-6 % of the ~1.7 GB
+  ACTIVE worker the clamp models) rather than as one box's peak.  The trade, and so the rule, is
+  unchanged and if anything cheaper than the docstring claimed.
+
+- **Three records, no code** (VD6, VD9, VD1).  The join detector's two residual false negatives --
+  `with <aliased class>(...)` and `with ex:` on a pre-built name -- are recorded with the reason
+  they are closed by a package sweep carrying a positive control
+  (`test_no_module_uses_an_executor_teardown_the_join_detector_cannot_see`) rather than by widening
+  the detector into guessing what a bare name is bound to.  The follow-ups report's D3 verdict row
+  quoted the means while its prose quoted the maxima, and now quotes maxima.  `.test_durations`
+  carries all twenty new test ids with measured values and reloads as valid JSON (16 288 entries),
+  so a sharded CI run schedules none of them as unknown-duration.
 
 ## [5.47.1] — 2026-09-15
 

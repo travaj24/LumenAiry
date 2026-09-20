@@ -1,0 +1,110 @@
+{
+ "python": "3.14.6 (tags/v3.14.6:c63aec6, Jun 10 2026, 10:26:10) [MSC v.1944 64 bit (AMD64)]",
+ "platform": "win32",
+ "lumenairy_file": "C:\\tmp\\lum_pool3\\lumenairy\\__init__.py",
+ "verifier_probe": "C:\\tmp\\lum_pool3\\validation\\probe_verify_b13_followups\\vf6_d4_readers.py",
+ "grades": [
+  {
+   "shape": "shipped guard `_POOL_INFLIGHT > 0`",
+   "want": "PASS",
+   "pin_before_vd7_vd8": "PASS",
+   "pin_after": "PASS",
+   "before_correct": true,
+   "after_correct": true,
+   "why": "zero-vs-non-zero, written the way the library writes it"
+  },
+  {
+   "shape": "legal reversal `0 < _POOL_INFLIGHT`",
+   "want": "PASS",
+   "pin_before_vd7_vd8": "FAIL",
+   "pin_after": "PASS",
+   "before_correct": false,
+   "after_correct": true,
+   "why": "the SAME zero-vs-non-zero decision with the operands swapped"
+  },
+  {
+   "shape": "legal `_POOL_INFLIGHT == 0`",
+   "want": "PASS",
+   "pin_before_vd7_vd8": "PASS",
+   "pin_after": "PASS",
+   "before_correct": true,
+   "after_correct": true,
+   "why": "zero-vs-non-zero"
+  },
+  {
+   "shape": "magnitude `_POOL_INFLIGHT > 1`",
+   "want": "FAIL",
+   "pin_before_vd7_vd8": "FAIL",
+   "pin_after": "FAIL",
+   "before_correct": true,
+   "after_correct": true,
+   "why": "a real magnitude read -- the pin must catch it"
+  },
+  {
+   "shape": "magnitude via the return value",
+   "want": "FAIL",
+   "pin_before_vd7_vd8": "PASS",
+   "pin_after": "FAIL",
+   "before_correct": false,
+   "after_correct": true,
+   "why": "the counter leaves the module as a RETURN VALUE; no Compare on _POOL_INFLIGHT can see it"
+  },
+  {
+   "shape": "claim as a statement",
+   "want": "PASS",
+   "pin_before_vd7_vd8": "PASS",
+   "pin_after": "PASS",
+   "before_correct": true,
+   "after_correct": true,
+   "why": "the shipped shape: the return value is discarded"
+  },
+  {
+   "shape": "return value bound to a name, never compared",
+   "want": "FAIL",
+   "pin_before_vd7_vd8": "PASS",
+   "pin_after": "FAIL",
+   "before_correct": false,
+   "after_correct": true,
+   "why": "the magnitude has left the module even without a Compare"
+  },
+  {
+   "shape": "return value used inline",
+   "want": "FAIL",
+   "pin_before_vd7_vd8": "PASS",
+   "pin_after": "FAIL",
+   "before_correct": false,
+   "after_correct": true,
+   "why": "the VD7 route with no intermediate name at all"
+  }
+ ],
+ "real_module": {
+  "note_pool_inflight_call_sites": [
+   12886,
+   13007,
+   12949,
+   13001
+  ],
+  "call_sites_that_discard_the_value": 4,
+  "compare_lines_on_the_counter": [
+   1513
+  ],
+  "restated_pin_on_the_real_module": "PASS"
+ },
+ "transcription_is_current": {
+  "operands = [node.left, *node.comparators]": true,
+  "x.id == '_POOL_INFLIGHT')]": true,
+  "discarded = [n for n in ast.walk(tree)": true,
+  "assert len(discarded) == len(calls), (": true
+ },
+ "verdict": {
+  "misgrades_before": [
+   "legal reversal `0 < _POOL_INFLIGHT`",
+   "magnitude via the return value",
+   "return value bound to a name, never compared",
+   "return value used inline"
+  ],
+  "misgrades_after": [],
+  "restated_pin_green_on_the_real_module": true,
+  "transcription_is_current": true
+ }
+}

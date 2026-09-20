@@ -1,0 +1,177 @@
+{
+ "python": "3.14.6 (tags/v3.14.6:c63aec6, Jun 10 2026, 10:26:10) [MSC v.1944 64 bit (AMD64)]",
+ "platform": "win32",
+ "lumenairy_file": "C:\\tmp\\lum_pool3\\lumenairy\\__init__.py",
+ "verifier_probe": "C:\\tmp\\lum_pool3\\validation\\probe_verify_b13_followups\\vf2_d2_census.py",
+ "reps": 8,
+ "fail_before_copy_of_the_pre_vd2_ordering": {
+  "reps": 6,
+  "reapers_entry_dropped_by_the_bounded_helper": 6,
+  "bounded_teardown_returned_in_bound": true,
+  "severity": "the census UNDER-reports an outstanding teardown; no library path passes one executor to both mechanisms today, so this is latent",
+  "suggested_edit": "have the caller record, under _ABANDONED_POOLS_LOCK, that it appended, and have the helper remove only then"
+ },
+ "fail_after_real_library": {
+  "reps": 6,
+  "reapers_entry_dropped_by_the_bounded_helper": 0,
+  "bounded_teardown_returned_in_bound": true,
+  "returns": [
+   "True"
+  ],
+  "census_len_before": 0,
+  "census_len_after": 0,
+  "timeouts_before": 0,
+  "timeouts_after": 0
+ },
+ "races": [
+  {
+   "impl": "pre",
+   "order": "helper",
+   "reps": 8,
+   "leaked": 8,
+   "leak_rate": 1.0,
+   "returns": [
+    "False"
+   ],
+   "errors": []
+  },
+  {
+   "impl": "pre",
+   "order": "caller",
+   "reps": 8,
+   "leaked": 8,
+   "leak_rate": 1.0,
+   "returns": [
+    "False"
+   ],
+   "errors": []
+  },
+  {
+   "impl": "oneline",
+   "order": "helper",
+   "reps": 8,
+   "leaked": 8,
+   "leak_rate": 1.0,
+   "returns": [
+    "False"
+   ],
+   "errors": []
+  },
+  {
+   "impl": "oneline",
+   "order": "caller",
+   "reps": 8,
+   "leaked": 0,
+   "leak_rate": 0.0,
+   "returns": [
+    "False"
+   ],
+   "errors": []
+  },
+  {
+   "impl": "shipped",
+   "order": "helper",
+   "reps": 8,
+   "leaked": 0,
+   "leak_rate": 0.0,
+   "returns": [
+    "True"
+   ],
+   "errors": []
+  },
+  {
+   "impl": "shipped",
+   "order": "caller",
+   "reps": 8,
+   "leaked": 0,
+   "leak_rate": 0.0,
+   "returns": [
+    "False"
+   ],
+   "errors": []
+  }
+ ],
+ "real_library": [
+  {
+   "order": "helper",
+   "reps": 8,
+   "leaked": 0,
+   "returns": [
+    "True"
+   ],
+   "census_len_before": 0,
+   "census_len_after": 0,
+   "timeouts_before": 0,
+   "timeouts_after": 0
+  },
+  {
+   "order": "caller",
+   "reps": 8,
+   "leaked": 0,
+   "returns": [
+    "False"
+   ],
+   "census_len_before": 0,
+   "census_len_after": 0,
+   "timeouts_before": 0,
+   "timeouts_after": 8
+  }
+ ],
+ "attack_helper_crash": [
+  {
+   "raised_by_helper": "_Uncatchable",
+   "census_while_outstanding": 3,
+   "census_after": 0,
+   "returns_to_empty": true
+  },
+  {
+   "raised_by_helper": "KeyboardInterrupt",
+   "census_while_outstanding": 3,
+   "census_after": 0,
+   "returns_to_empty": true
+  },
+  {
+   "raised_by_helper": "MemoryError",
+   "census_while_outstanding": 3,
+   "census_after": 0,
+   "returns_to_empty": true
+  }
+ ],
+ "attack_double_abandon": {
+  "reps": 6,
+  "leaks": 0,
+  "premature_removals_of_the_reapers_entry": 0,
+  "note": "a premature removal means the bounded helper dropped an entry it never added -- the census then under-reports a teardown that is still outstanding"
+ },
+ "attack_boundary": {
+  "reps": 8,
+  "leaks": 0,
+  "returns": {
+   "True": 8
+  }
+ },
+ "precondition_pin": {
+  "close_worker_pool_routes_to_exactly_one_mechanism": true,
+  "_get_persistent_worker_pool_calls_shutdown_pool_bounded": false,
+  "helper_removal_is_guarded_by_added": true,
+  "caller_sets_added_under_the_lock": true
+ },
+ "verdict": {
+  "vd2_before_drops_per_6": 6,
+  "vd2_after_drops_per_6": 0,
+  "oneline_leaks_helper_first": 8,
+  "oneline_leaks_caller_first": 0,
+  "shipped_copy_leaks_any_order": 0,
+  "real_library_leaks_any_order": 0,
+  "real_library_census_empty_at_end": true,
+  "helper_crash_returns_to_empty": true,
+  "boundary_leaks": 0,
+  "double_abandon_premature_removals": 0,
+  "precondition_pin": {
+   "close_worker_pool_routes_to_exactly_one_mechanism": true,
+   "_get_persistent_worker_pool_calls_shutdown_pool_bounded": false,
+   "helper_removal_is_guarded_by_added": true,
+   "caller_sets_added_under_the_lock": true
+  }
+ }
+}

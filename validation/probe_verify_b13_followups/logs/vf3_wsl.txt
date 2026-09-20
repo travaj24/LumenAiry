@@ -1,0 +1,13 @@
+lumenairy.__file__ = /mnt/c/tmp/lum_vpool2/lumenairy/__init__.py
+rung {"N": 256, "pool_width": 12, "dispatch_workers": 4, "pool_reused_for_the_dispatch": true, "live_workers": 4, "labelled_workers": 12, "accepted_connections": 12, "label_coverage_complete": false, "served_pids": 4, "never_served_pids": 8, "served_after_dispatch": {"n": 4, "mean_MB": 69.31, "max_MB": 69.32, "min_MB": 69.3}, "never_served_after_dispatch": {"n": 0}, "served_after_labelling": {"n": 4, "mean_MB": 69.45, "max_MB": 69.46, "min_MB": 69.44}, "never_served_after_labelling": {"n": 8, "mean_MB": 37.27, "max_MB": 37.27, "min_MB": 37.26}, "all_before_dispatch": {"n": 0}, "identical_to_serial": true, "max_abs_delta": 0.0, "abandoned_pools_len": 0, "shutdown_timeouts": 0}
+rung {"N": 1024, "pool_width": 12, "dispatch_workers": 4, "pool_reused_for_the_dispatch": true, "live_workers": 4, "labelled_workers": 12, "accepted_connections": 12, "label_coverage_complete": false, "served_pids": 4, "never_served_pids": 8, "served_after_dispatch": {"n": 4, "mean_MB": 72.85, "max_MB": 72.86, "min_MB": 72.84}, "never_served_after_dispatch": {"n": 0}, "served_after_labelling": {"n": 4, "mean_MB": 73.0, "max_MB": 73.0, "min_MB": 72.99}, "never_served_after_labelling": {"n": 8, "mean_MB": 37.27, "max_MB": 37.27, "min_MB": 37.26}, "all_before_dispatch": {"n": 0}, "identical_to_serial": true, "max_abs_delta": 0.0, "abandoned_pools_len": 0, "shutdown_timeouts": 0}
+SUMMARY {
+ "worst_served_MB": 72.86,
+ "never_served_mean_MB_range": null,
+ "sixteen_wide_served_pool_GB": 1.14,
+ "fraction_of_a_1p7GB_active_worker_percent": 4.2,
+ "every_rung_label_coverage_complete": false,
+ "every_rung_identical_to_serial": true,
+ "census_empty_on_every_rung": true
+}
+wrote validation/probe_verify_b13_followups/vf3_wsl.json

@@ -1,0 +1,76 @@
+lumenairy.__file__ = /mnt/c/tmp/lum_vpool2/lumenairy/__init__.py
+semantics {"resolved_every_seconds": 0.4, "timeout": 1.0, "results_yielded_before_raise": 2, "exception": "TimeoutError", "elapsed_seconds": 1.008, "timeout_is_absolute_deadline_for_the_whole_iteration": true, "cf_TimeoutError_is_builtin_TimeoutError": true, "cf_TimeoutError_mro": ["TimeoutError", "OSError", "Exception", "BaseException", "object"], "cf_TimeoutError_is_OSError_subclass": true}
+clause_reach [
+ {
+  "exception": "builtin TimeoutError",
+  "mro": [
+   "TimeoutError",
+   "OSError",
+   "Exception",
+   "BaseException",
+   "object"
+  ],
+  "fell_back_to_serial": true,
+  "identical_to_serial": true,
+  "escaped_as": null
+ },
+ {
+  "exception": "concurrent.futures.TimeoutError (this build)",
+  "mro": [
+   "TimeoutError",
+   "OSError",
+   "Exception",
+   "BaseException",
+   "object"
+  ],
+  "fell_back_to_serial": true,
+  "identical_to_serial": true,
+  "escaped_as": null
+ },
+ {
+  "exception": "pre-3.11 cf.TimeoutError MRO",
+  "mro": [
+   "_PreThreeEleven_TimeoutError",
+   "Exception",
+   "BaseException",
+   "object"
+  ],
+  "fell_back_to_serial": false,
+  "identical_to_serial": null,
+  "escaped_as": "_PreThreeEleven_TimeoutError: t"
+ },
+ {
+  "exception": "OSError (control, must be caught)",
+  "mro": [
+   "OSError",
+   "Exception",
+   "BaseException",
+   "object"
+  ],
+  "fell_back_to_serial": true,
+  "identical_to_serial": true,
+  "escaped_as": null
+ },
+ {
+  "exception": "ValueError (control, must NOT be caught)",
+  "mro": [
+   "ValueError",
+   "Exception",
+   "BaseException",
+   "object"
+  ],
+  "fell_back_to_serial": false,
+  "identical_to_serial": null,
+  "escaped_as": "ValueError: v"
+ }
+]
+residual {"deadline_seconds": 20.0, "submits_seen": 4, "sentinel_answered": true, "still_running_at_deadline": true, "elapsed_seconds": 20.08, "outcome": "HUNG -- a sentinel bar does NOT close this"}
+bootstrap {"workers": 8, "rendezvous": "localhost socket (no Manager)", "construct_seconds": 0.1175, "all_ready_seconds": 6.9957, "ready_spread_seconds": 1.8261, "accepted_connections": 8, "distinct_pids": 8, "all_workers_participated": true}
+sentinel {"cold_seconds": 1.2795, "warm_worst_seconds": 0.064192, "warm_all_seconds": [0.040359, 0.048313, 0.049051, 0.064192, 0.02098]}
+timing {"N": 256, "cold": true, "wall_seconds": 3.658, "pool_engaged": true, "chunks_submitted": 8, "arrivals_seen": 8, "progress_channel_live": true, "first_arrival_seconds": 2.881, "total_seconds": 3.422, "largest_inter_arrival_gap_seconds": 2.881, "arrival_gaps_seconds": [2.881, 0.044, 0.03, 0.181, 0.097, 0.052, 0.014, 0.123], "xcheck_slowest_chunk_seconds": 3.198, "xcheck_total_seconds": 3.421, "identical_to_serial": true, "max_abs_delta": 0.0}
+timing {"N": 256, "cold": false, "wall_seconds": 0.317, "pool_engaged": true, "chunks_submitted": 8, "arrivals_seen": 8, "progress_channel_live": true, "first_arrival_seconds": 0.064, "total_seconds": 0.124, "largest_inter_arrival_gap_seconds": 0.064, "arrival_gaps_seconds": [0.064, 0.0, 0.0, 0.0, 0.009, 0.026, 0.008, 0.017], "xcheck_slowest_chunk_seconds": 0.123, "xcheck_total_seconds": 0.124, "identical_to_serial": true, "max_abs_delta": 0.0}
+timing {"N": 512, "cold": true, "wall_seconds": 6.038, "pool_engaged": true, "chunks_submitted": 8, "arrivals_seen": 8, "progress_channel_live": true, "first_arrival_seconds": 3.553, "total_seconds": 5.011, "largest_inter_arrival_gap_seconds": 3.553, "arrival_gaps_seconds": [3.553, 0.149, 0.26, 0.031, 0.131, 0.234, 0.48, 0.173], "xcheck_slowest_chunk_seconds": 4.807, "xcheck_total_seconds": 5.011, "identical_to_serial": true, "max_abs_delta": 0.0}
+timing {"N": 512, "cold": false, "wall_seconds": 1.657, "pool_engaged": true, "chunks_submitted": 8, "arrivals_seen": 8, "progress_channel_live": true, "first_arrival_seconds": 0.269, "total_seconds": 0.632, "largest_inter_arrival_gap_seconds": 0.269, "arrival_gaps_seconds": [0.269, 0.055, 0.045, 0.0, 0.022, 0.145, 0.064, 0.032], "xcheck_slowest_chunk_seconds": 0.623, "xcheck_total_seconds": 0.623, "identical_to_serial": true, "max_abs_delta": 0.0}
+timing {"N": 1024, "cold": true, "wall_seconds": 16.161, "pool_engaged": true, "chunks_submitted": 8, "arrivals_seen": 8, "progress_channel_live": true, "first_arrival_seconds": 4.935, "total_seconds": 11.696, "largest_inter_arrival_gap_seconds": 4.935, "arrival_gaps_seconds": [4.935, 0.762, 0.495, 0.366, 1.415, 0.764, 1.638, 1.321], "xcheck_slowest_chunk_seconds": 11.418, "xcheck_total_seconds": 11.694, "identical_to_serial": true, "max_abs_delta": 0.0}
+timing {"N": 1024, "cold": false, "wall_seconds": 6.949, "pool_engaged": true, "chunks_submitted": 8, "arrivals_seen": 8, "progress_channel_live": true, "first_arrival_seconds": 1.082, "total_seconds": 3.06, "largest_inter_arrival_gap_seconds": 1.21, "arrival_gaps_seconds": [1.082, 0.117, 0.018, 0.003, 0.167, 0.204, 1.21, 0.257], "xcheck_slowest_chunk_seconds": 3.058, "xcheck_total_seconds": 3.058, "identical_to_serial": true, "max_abs_delta": 0.0}
+wrote validation/probe_verify_b13_followups/vf5_wsl.json

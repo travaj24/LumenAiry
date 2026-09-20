@@ -1,0 +1,184 @@
+{
+ "branch_d4_pin_reach": [
+  {
+   "shape": "shipped guard `_POOL_INFLIGHT > 0`",
+   "want": "PASS",
+   "branch_pin": "PASS",
+   "correct": true,
+   "why": "zero-vs-non-zero, written the way the library writes it"
+  },
+  {
+   "shape": "legal reversal `0 < _POOL_INFLIGHT`",
+   "want": "PASS",
+   "branch_pin": "FAIL",
+   "correct": false,
+   "why": "the SAME zero-vs-non-zero decision with the operands swapped"
+  },
+  {
+   "shape": "legal `_POOL_INFLIGHT == 0`",
+   "want": "PASS",
+   "branch_pin": "PASS",
+   "correct": true,
+   "why": "zero-vs-non-zero"
+  },
+  {
+   "shape": "magnitude `_POOL_INFLIGHT > 1`",
+   "want": "FAIL",
+   "branch_pin": "FAIL",
+   "correct": true,
+   "why": "a real magnitude read -- the pin must catch it"
+  },
+  {
+   "shape": "magnitude via the return value",
+   "want": "FAIL",
+   "branch_pin": "PASS",
+   "correct": false,
+   "why": "the counter leaves the module as a RETURN VALUE; no Compare on _POOL_INFLIGHT can see it"
+  }
+ ],
+ "branch_d4_pin_misgrades": [
+  "legal reversal `0 < _POOL_INFLIGHT`",
+  "magnitude via the return value"
+ ],
+ "python": "3.12.3 (main, Mar 23 2026, 19:04:32) [GCC 13.3.0]",
+ "platform": "linux",
+ "lumenairy_file": "/mnt/c/tmp/lum_vpool2/lumenairy/__init__.py",
+ "library": {
+  "grep_hits": [
+   {
+    "file": "lumenairy/elements/_lens_traced.py",
+    "line": 1248,
+    "source": "# NON-ZERO -- ``_get_persistent_worker_pool``'s ``elif _POOL_INFLIGHT > 0``"
+   },
+   {
+    "file": "lumenairy/elements/_lens_traced.py",
+    "line": 1253,
+    "source": "_POOL_INFLIGHT = 0"
+   },
+   {
+    "file": "lumenairy/elements/_lens_traced.py",
+    "line": 1394,
+    "source": "One dispatch, one claim -- see ``_POOL_INFLIGHT``.  Never goes negative,"
+   },
+   {
+    "file": "lumenairy/elements/_lens_traced.py",
+    "line": 1397,
+    "source": "global _POOL_INFLIGHT"
+   },
+   {
+    "file": "lumenairy/elements/_lens_traced.py",
+    "line": 1399,
+    "source": "_POOL_INFLIGHT = max(0, _POOL_INFLIGHT + int(delta))"
+   },
+   {
+    "file": "lumenairy/elements/_lens_traced.py",
+    "line": 1400,
+    "source": "return _POOL_INFLIGHT"
+   },
+   {
+    "file": "lumenairy/elements/_lens_traced.py",
+    "line": 1416,
+    "source": "flight (``_POOL_INFLIGHT == 0``); while a dispatch is running the"
+   },
+   {
+    "file": "lumenairy/elements/_lens_traced.py",
+    "line": 1486,
+    "source": "elif _POOL_INFLIGHT > 0:"
+   }
+  ],
+  "name_loads": [
+   {
+    "file": "lumenairy/elements/_lens_traced.py",
+    "line": 1400,
+    "parent": "Return",
+    "shape": "returned"
+   },
+   {
+    "file": "lumenairy/elements/_lens_traced.py",
+    "line": 1399,
+    "parent": "BinOp",
+    "shape": "arithmetic"
+   },
+   {
+    "file": "lumenairy/elements/_lens_traced.py",
+    "line": 1486,
+    "parent": "Compare",
+    "shape": "compare_against_zero"
+   }
+  ],
+  "attribute_loads": []
+ },
+ "tests": {
+  "grep_hits": 17,
+  "name_loads": [],
+  "attribute_loads": [
+   {
+    "file": "tests/unit/test_fix_newton_pool_broken_fallback.py",
+    "line": 650,
+    "shape": "compare_against_zero"
+   }
+  ]
+ },
+ "validation": {
+  "grep_hits": 23,
+  "name_loads": [],
+  "attribute_loads": [
+   {
+    "file": "validation/probe_verify_b13/vp5_concurrency.py",
+    "line": 294,
+    "shape": "assigned_elsewhere"
+   },
+   {
+    "file": "validation/probe_wp_b13_followups/fu4_exit_hang.py",
+    "line": 221,
+    "shape": "call_argument"
+   }
+  ]
+ },
+ "dispatcher": {
+  "note_pool_inflight_plus_one": 1,
+  "note_pool_inflight_minus_one": 3
+ },
+ "verdict": {
+  "library_readers": [
+   "lumenairy/elements/_lens_traced.py:1399:arithmetic",
+   "lumenairy/elements/_lens_traced.py:1400:returned",
+   "lumenairy/elements/_lens_traced.py:1486:compare_against_zero"
+  ],
+  "library_magnitude_reads": [
+   {
+    "file": "lumenairy/elements/_lens_traced.py",
+    "line": 1400,
+    "parent": "Return",
+    "shape": "returned"
+   },
+   {
+    "file": "lumenairy/elements/_lens_traced.py",
+    "line": 1399,
+    "parent": "BinOp",
+    "shape": "arithmetic"
+   }
+  ],
+  "every_library_read_is_zero_vs_non_zero": false,
+  "magnitude_reads_anywhere_in_the_repo": [
+   {
+    "file": "lumenairy/elements/_lens_traced.py",
+    "line": 1400,
+    "parent": "Return",
+    "shape": "returned"
+   },
+   {
+    "file": "lumenairy/elements/_lens_traced.py",
+    "line": 1399,
+    "parent": "BinOp",
+    "shape": "arithmetic"
+   },
+   {
+    "file": "validation/probe_wp_b13_followups/fu4_exit_hang.py",
+    "line": 221,
+    "shape": "call_argument"
+   }
+  ],
+  "claim_is_once_per_dispatch": true
+ }
+}

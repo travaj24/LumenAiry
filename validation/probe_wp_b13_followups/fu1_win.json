@@ -1,0 +1,364 @@
+{
+ "lumenairy": "C:\\tmp\\lum_pool2\\lumenairy\\__init__.py",
+ "python": "3.14.6 (tags/v3.14.6:c63aec6, Jun 10 2026, 10:26:10) [MSC v.1944 64 bit (AMD64)]",
+ "numpy": "2.4.4",
+ "platform": "win32",
+ "pool_width_requested": 12,
+ "dispatch_workers": 4,
+ "rungs": [
+  {
+   "pool_width_requested": 12,
+   "N": 256,
+   "dispatch_workers": 4,
+   "spawn_and_touch_seconds": 0.578,
+   "spawned_pids": [
+    14388,
+    23108,
+    26844,
+    27892,
+    38664,
+    42684,
+    47592,
+    50728,
+    57324,
+    57976,
+    59356,
+    59376
+   ],
+   "spawned_trivial": {
+    "n": 12,
+    "mean_mb": 52.24,
+    "min_mb": 52.06,
+    "max_mb": 52.4,
+    "values_mb": [
+     52.06,
+     52.1,
+     52.12,
+     52.13,
+     52.15,
+     52.2,
+     52.28,
+     52.31,
+     52.36,
+     52.38,
+     52.38,
+     52.4
+    ]
+   },
+   "parent_rss_mb_after_spawn": 52.9,
+   "traced_seconds": 2.227,
+   "pool_is_the_same_object": true,
+   "pool_width": 12,
+   "parent_rss_mb_after_traced": 351.6,
+   "labelled_pids": [
+    14388,
+    23108,
+    26844,
+    27892,
+    38664,
+    42684,
+    47592,
+    50728,
+    57324,
+    57976,
+    59356,
+    59376
+   ],
+   "served_pids": [
+    26844,
+    47592,
+    50728,
+    59376
+   ],
+   "label_coverage_complete": true,
+   "newton_served": {
+    "n": 4,
+    "mean_mb": 98.67,
+    "min_mb": 98.37,
+    "max_mb": 99.01,
+    "values_mb": [
+     98.37,
+     98.4,
+     98.89,
+     99.01
+    ]
+   },
+   "newton_unserved": {
+    "n": 8,
+    "mean_mb": 52.19,
+    "min_mb": 52.06,
+    "max_mb": 52.38,
+    "values_mb": [
+     52.06,
+     52.1,
+     52.12,
+     52.13,
+     52.15,
+     52.2,
+     52.36,
+     52.38
+    ]
+   },
+   "newton_all": {
+    "n": 12,
+    "mean_mb": 67.68,
+    "min_mb": 52.06,
+    "max_mb": 99.01,
+    "values_mb": [
+     52.06,
+     52.1,
+     52.12,
+     52.13,
+     52.15,
+     52.2,
+     52.36,
+     52.38,
+     98.37,
+     98.4,
+     98.89,
+     99.01
+    ]
+   },
+   "identical_to_serial": true,
+   "max_delta": 0.0,
+   "shutdown_timeouts": 0,
+   "abandoned_pools_len": 0
+  },
+  {
+   "pool_width_requested": 12,
+   "N": 512,
+   "dispatch_workers": 4,
+   "spawn_and_touch_seconds": 0.629,
+   "spawned_pids": [
+    2100,
+    14496,
+    15856,
+    29528,
+    38848,
+    39436,
+    43636,
+    45324,
+    52868,
+    54164,
+    58488,
+    58560
+   ],
+   "spawned_trivial": {
+    "n": 12,
+    "mean_mb": 52.26,
+    "min_mb": 52.02,
+    "max_mb": 52.54,
+    "values_mb": [
+     52.02,
+     52.04,
+     52.1,
+     52.21,
+     52.23,
+     52.29,
+     52.29,
+     52.3,
+     52.33,
+     52.38,
+     52.43,
+     52.54
+    ]
+   },
+   "parent_rss_mb_after_spawn": 353.6,
+   "traced_seconds": 0.974,
+   "pool_is_the_same_object": true,
+   "pool_width": 12,
+   "parent_rss_mb_after_traced": 379.6,
+   "labelled_pids": [
+    2100,
+    14496,
+    15856,
+    29528,
+    38848,
+    39436,
+    43636,
+    45324,
+    52868,
+    54164,
+    58488,
+    58560
+   ],
+   "served_pids": [
+    15856,
+    38848,
+    45324,
+    58560
+   ],
+   "label_coverage_complete": true,
+   "newton_served": {
+    "n": 4,
+    "mean_mb": 98.76,
+    "min_mb": 97.54,
+    "max_mb": 100.12,
+    "values_mb": [
+     97.54,
+     97.65,
+     99.71,
+     100.12
+    ]
+   },
+   "newton_unserved": {
+    "n": 8,
+    "mean_mb": 52.22,
+    "min_mb": 52.02,
+    "max_mb": 52.33,
+    "values_mb": [
+     52.02,
+     52.1,
+     52.21,
+     52.23,
+     52.29,
+     52.29,
+     52.3,
+     52.33
+    ]
+   },
+   "newton_all": {
+    "n": 12,
+    "mean_mb": 67.73,
+    "min_mb": 52.02,
+    "max_mb": 100.12,
+    "values_mb": [
+     52.02,
+     52.1,
+     52.21,
+     52.23,
+     52.29,
+     52.29,
+     52.3,
+     52.33,
+     97.54,
+     97.65,
+     99.71,
+     100.12
+    ]
+   },
+   "identical_to_serial": true,
+   "max_delta": 0.0,
+   "shutdown_timeouts": 0,
+   "abandoned_pools_len": 0
+  },
+  {
+   "pool_width_requested": 12,
+   "N": 1024,
+   "dispatch_workers": 4,
+   "spawn_and_touch_seconds": 0.59,
+   "spawned_pids": [
+    7052,
+    10336,
+    19348,
+    19528,
+    24764,
+    27244,
+    32300,
+    35684,
+    41692,
+    55968,
+    57116,
+    58540
+   ],
+   "spawned_trivial": {
+    "n": 12,
+    "mean_mb": 52.29,
+    "min_mb": 52.04,
+    "max_mb": 52.47,
+    "values_mb": [
+     52.04,
+     52.1,
+     52.17,
+     52.24,
+     52.24,
+     52.29,
+     52.31,
+     52.31,
+     52.37,
+     52.43,
+     52.45,
+     52.47
+    ]
+   },
+   "parent_rss_mb_after_spawn": 374.4,
+   "traced_seconds": 3.121,
+   "pool_is_the_same_object": true,
+   "pool_width": 12,
+   "parent_rss_mb_after_traced": 477.7,
+   "labelled_pids": [
+    7052,
+    10336,
+    19348,
+    19528,
+    24764,
+    27244,
+    32300,
+    35684,
+    41692,
+    55968,
+    57116,
+    58540
+   ],
+   "served_pids": [
+    19528,
+    32300,
+    41692,
+    57116
+   ],
+   "label_coverage_complete": true,
+   "newton_served": {
+    "n": 4,
+    "mean_mb": 100.76,
+    "min_mb": 100.02,
+    "max_mb": 101.56,
+    "values_mb": [
+     100.02,
+     100.1,
+     101.36,
+     101.56
+    ]
+   },
+   "newton_unserved": {
+    "n": 8,
+    "mean_mb": 52.31,
+    "min_mb": 52.1,
+    "max_mb": 52.47,
+    "values_mb": [
+     52.1,
+     52.17,
+     52.24,
+     52.29,
+     52.31,
+     52.43,
+     52.45,
+     52.47
+    ]
+   },
+   "newton_all": {
+    "n": 12,
+    "mean_mb": 68.46,
+    "min_mb": 52.1,
+    "max_mb": 101.56,
+    "values_mb": [
+     52.1,
+     52.17,
+     52.24,
+     52.29,
+     52.31,
+     52.43,
+     52.45,
+     52.47,
+     100.02,
+     100.1,
+     101.36,
+     101.56
+    ]
+   },
+   "identical_to_serial": true,
+   "max_delta": 0.0,
+   "shutdown_timeouts": 0,
+   "abandoned_pools_len": 0
+  }
+ ]
+}

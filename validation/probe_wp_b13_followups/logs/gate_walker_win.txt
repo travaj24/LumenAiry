@@ -1,0 +1,10 @@
+.......................................................s.....ss......... [ 58%]
+..............................sss...................                     [100%]
+=========================== short test summary info ===========================
+SKIPPED [1] tests\unit\test_v5_2_3_walker_changelog_content.py:113: No audit-closure bullets in latest CHANGELOG block OR no PREV_TAG resolvable; nothing to verify.  (script exit 2)
+SKIPPED [1] tests\unit\test_v5_2_walker_changelog_changeset.py:262: CHANGELOG ``## [5.47.0]`` block has no ``X pass / Y collected / Z skip / W xfail`` claim; V12.3 has nothing to reconcile.
+SKIPPED [1] tests\unit\test_v5_2_walker_changelog_changeset.py:307: CHANGELOG ``## [5.47.0]`` block declares no audit closures; V12.4 has no enforcement to apply.
+SKIPPED [1] tests\unit\test_v5_3_walker_changelog_self_citation.py:152: CHANGELOG ``## [5.47.0]`` block has no canonical ``X pass + Y skip + Z xfail`` self-citation; V17.1 has nothing to verify.
+SKIPPED [1] tests\unit\test_v5_3_walker_changelog_self_citation.py:290: CHANGELOG ``## [5.47.0]`` block has no ``N files touched`` claim; V17.2 has nothing to verify.
+SKIPPED [1] tests\unit\test_v5_3_walker_changelog_self_citation.py:366: CHANGELOG ``## [5.47.0]`` block has no ``CHANGELOG.md: X -> Y lines`` claim; V17.3 has nothing to verify.
+118 passed, 6 skipped, 16194 deselected in 78.75s (0:01:18)

@@ -1,0 +1,72 @@
+........................................................................ [ 19%]
+s....................................................................... [ 38%]
+........................................................................ [ 57%]
+........................................................................ [ 77%]
+........................................................................ [ 96%]
+.............                                                            [100%]
+=============================== warnings summary ===============================
+tests/unit/test_niche_newton_pool_both_fits.py::test_a_spline_chain_does_not_promote_a_following_polynomial_chain
+tests/unit/test_niche_newton_pool_both_fits.py::test_warm_tier_pool_result_is_bit_identical_to_serial[spline]
+tests/unit/test_niche_newton_pool_both_fits.py::test_pool_result_is_bit_identical_to_serial[spline]
+  /mnt/c/tmp/lum_pool2/tests/unit/test_niche_newton_pool_both_fits.py:149: RuntimeWarning: apply_real_lens_traced: newton_fit='spline' cannot honour the fit-domain restriction(s) requested here -- fit_radius_beam_factor=2.0 (the beam-relative ray-fit disc, and with it the aperture:beam cliff remedy).  They are INERT on this basis (a local bicubic takes no least-squares weights, and a NaN-masked data array makes RectBivariateSpline return NaN everywhere rather than a restricted fit) for this call, which therefore runs with NO ray-fit-domain guard at all.  That is usually harmless -- a local interpolant does not spread marginal-ray error into the beam the way a global polynomial does -- but it is NOT a safe substitute past the aperture:beam cliff: measured on the E4 corrected relay (beam fixed, aperture grown) the polynomial basis degrades to exit-wavefront Strehl 0.042 and fit_radius_beam_factor=2.0 recovers it to 0.999, while the spline basis returns an ALL-ZERO exit field that this knob cannot rescue.  Use newton_fit='polynomial' (what 'auto' resolves to) if you need the restriction; pass on_fit_domain_basis='silent' to acknowledge, or 'error' to make the combination fatal.
+    res = la.propagate_traced_carrier_chain(
+
+tests/unit/test_carrier_referenced.py::test_traced_handoff_focuses_at_abcd_image
+  /mnt/c/tmp/lum_pool2/tests/unit/test_carrier_referenced.py:410: RuntimeWarning: apply_real_lens_traced: the physical aperture (6.000 mm) is 3.00x the beam 1/e^2 diameter (2.000 mm), above the 1.5x aperture:beam ratio beyond which the traced OPL fit can be corrupted by marginal rays the beam never occupies (audit AUDIT_TRACED_PRODUCTION_READINESS_2026_07_24 §4: measured exit-wavefront Strehl 0.998 -> 0.039 across this cliff on a fast singlet).  Whether it bites depends on how aberrated the surfaces are at the aperture edge.  Pass fit_radius_beam_factor=2.0 to restrict the ray-fit domain to the beam (no energy is vignetted by that -- only the fit domain changes), or on_aperture_beam='silent' to acknowledge.
+    E_exit = np.asarray(la.apply_real_lens_traced(
+
+tests/unit/test_carrier_referenced.py::test_traced_handoff_focuses_at_abcd_image
+  /mnt/c/tmp/lum_pool2/tests/unit/test_carrier_referenced.py:410: RuntimeWarning: apply_real_lens_traced: 8 launch rays INSIDE the clear aperture (of 19881 on the launch square) are vignetted or lost (a per-surface semi_diameter / clear_aperture, or TIR).  The polynomial forward-map fit drops those samples and is smooth across the hole, so every output pixel whose entrance solution lands on a dead launch node is returned as an exactly-zero (masked) pixel rather than as fit extrapolation -- the vignetting is in the answer.  Widen semi_diameter / aperture_diameter if that is not what the design does; pass on_undersample='silent' to suppress.
+    E_exit = np.asarray(la.apply_real_lens_traced(
+
+tests/unit/test_hammer_h3_traced_nyquist_guard.py::test_h3_guard_fires_on_undersampled_fast_beam
+  /mnt/c/tmp/lum_pool2/tests/unit/test_hammer_h3_traced_nyquist_guard.py:86: UserWarning: apply_real_lens_traced: 3 prescription aperture(s) exceed the simulation grid (N=1024, dx=12.000 um, semi=6.144 mm). Largest is surfaces[0] with semi_diameter=12.000 mm (+5.856 mm beyond the grid); the field will be truncated at the grid edge during propagation, silently dropping energy the real lens would have transmitted. Consider increasing N or dx so N*dx/2 >= max(semi_diameter). Affected surfaces: surfaces[0]=12.00mm, surfaces[1]=12.00mm, system aperture_diameter=12.00mm.
+    la.apply_real_lens_traced(E0, prescription=_singlet_f5(),
+
+tests/unit/test_hammer_h3_traced_nyquist_guard.py::test_h3_guard_fires_on_undersampled_fast_beam
+tests/unit/test_hammer_h3_traced_nyquist_guard.py::test_h3_guard_fires_on_undersampled_fast_beam
+tests/unit/test_hammer_h3_traced_nyquist_guard.py::test_h3_guard_suppressed_by_silent_policy
+tests/unit/test_hammer_h3_traced_nyquist_guard.py::test_the_pool_cap_notice_is_silenced_by_its_own_knob
+  /usr/lib/python3.12/concurrent/futures/thread.py:58: UserWarning: apply_real_lens: 3 prescription aperture(s) exceed the simulation grid (N=1024, dx=12.000 um, semi=6.144 mm). Largest is surfaces[0] with semi_diameter=12.000 mm (+5.856 mm beyond the grid); the field will be truncated at the grid edge during propagation, silently dropping energy the real lens would have transmitted. Consider increasing N or dx so N*dx/2 >= max(semi_diameter). Affected surfaces: surfaces[0]=12.00mm, surfaces[1]=12.00mm, system aperture_diameter=12.00mm.
+    result = self.fn(*self.args, **self.kwargs)
+
+tests/unit/test_hammer_h3_traced_nyquist_guard.py::test_h3_guard_fires_on_undersampled_fast_beam
+  /mnt/c/tmp/lum_pool2/tests/unit/test_hammer_h3_traced_nyquist_guard.py:86: RuntimeWarning: apply_real_lens_traced: the physical aperture (24.000 mm) is 2.53x the beam 1/e^2 diameter (9.502 mm), above the 1.5x aperture:beam ratio beyond which the traced OPL fit can be corrupted by marginal rays the beam never occupies (audit AUDIT_TRACED_PRODUCTION_READINESS_2026_07_24 §4: measured exit-wavefront Strehl 0.998 -> 0.039 across this cliff on a fast singlet).  Whether it bites depends on how aberrated the surfaces are at the aperture edge.  Pass fit_radius_beam_factor=2.0 to restrict the ray-fit domain to the beam (no energy is vignetted by that -- only the fit domain changes), or on_aperture_beam='silent' to acknowledge.
+    la.apply_real_lens_traced(E0, prescription=_singlet_f5(),
+
+tests/unit/test_hammer_h3_traced_nyquist_guard.py::test_h3_guard_silent_on_benign_slow_beam
+  /mnt/c/tmp/lum_pool2/tests/unit/test_hammer_h3_traced_nyquist_guard.py:105: UserWarning: apply_real_lens_traced: 3 prescription aperture(s) exceed the simulation grid (N=1024, dx=8.000 um, semi=4.096 mm). Largest is surfaces[0] with semi_diameter=12.000 mm (+7.904 mm beyond the grid); the field will be truncated at the grid edge during propagation, silently dropping energy the real lens would have transmitted. Consider increasing N or dx so N*dx/2 >= max(semi_diameter). Affected surfaces: surfaces[0]=12.00mm, surfaces[1]=12.00mm, system aperture_diameter=12.00mm.
+    la.apply_real_lens_traced(E0, prescription=_singlet_f5(),
+
+tests/unit/test_hammer_h3_traced_nyquist_guard.py::test_h3_guard_silent_on_benign_slow_beam
+  /usr/lib/python3.12/concurrent/futures/thread.py:58: UserWarning: apply_real_lens: 3 prescription aperture(s) exceed the simulation grid (N=1024, dx=8.000 um, semi=4.096 mm). Largest is surfaces[0] with semi_diameter=12.000 mm (+7.904 mm beyond the grid); the field will be truncated at the grid edge during propagation, silently dropping energy the real lens would have transmitted. Consider increasing N or dx so N*dx/2 >= max(semi_diameter). Affected surfaces: surfaces[0]=12.00mm, surfaces[1]=12.00mm, system aperture_diameter=12.00mm.
+    result = self.fn(*self.args, **self.kwargs)
+
+tests/unit/test_hammer_h3_traced_nyquist_guard.py::test_h3_guard_suppressed_by_silent_policy
+  /mnt/c/tmp/lum_pool2/tests/unit/test_hammer_h3_traced_nyquist_guard.py:123: UserWarning: apply_real_lens_traced: 3 prescription aperture(s) exceed the simulation grid (N=1024, dx=12.000 um, semi=6.144 mm). Largest is surfaces[0] with semi_diameter=12.000 mm (+5.856 mm beyond the grid); the field will be truncated at the grid edge during propagation, silently dropping energy the real lens would have transmitted. Consider increasing N or dx so N*dx/2 >= max(semi_diameter). Affected surfaces: surfaces[0]=12.00mm, surfaces[1]=12.00mm, system aperture_diameter=12.00mm.
+    la.apply_real_lens_traced(E0, prescription=_singlet_f5(),
+
+tests/unit/test_hammer_h3_traced_nyquist_guard.py::test_the_pool_cap_notice_is_silenced_by_its_own_knob
+  /mnt/c/tmp/lum_pool2/tests/unit/test_hammer_h3_traced_nyquist_guard.py:213: UserWarning: apply_real_lens_traced: 3 prescription aperture(s) exceed the simulation grid (N=1024, dx=12.000 um, semi=6.144 mm). Largest is surfaces[0] with semi_diameter=12.000 mm (+5.856 mm beyond the grid); the field will be truncated at the grid edge during propagation, silently dropping energy the real lens would have transmitted. Consider increasing N or dx so N*dx/2 >= max(semi_diameter). Affected surfaces: surfaces[0]=12.00mm, surfaces[1]=12.00mm, system aperture_diameter=12.00mm.
+    la.apply_real_lens_traced(E0, on_pool_memory='silent', **kw)
+
+tests/unit/test_niche_perf_round2_2026_08_10.py::test_the_chunk_worker_accepts_both_arg_shapes_identically
+  /mnt/c/tmp/lum_pool2/lumenairy/elements/_lens_traced.py:941: RuntimeWarning: divide by zero encountered in divide
+    inv_det = np.where(safe, 1.0 / det, 0.0)
+
+tests/unit/test_niche_audit_e_prepared_and_enums.py::test_h3_prepared_analytic_lens_freezes_the_wave_propagator
+  /mnt/c/tmp/lum_pool2/lumenairy/elements/_lens_real.py:2880: RuntimeWarning: fresnel_propagate: the quadratic Fresnel chirp is UNDER-SAMPLED at this geometry -- z = 0.004 m is 0.008x the validity bound max(Nx*dx^2, Ny*dy^2)/wavelength = 0.490345 m (Ny=128, Nx=128, dy=4.0000e-05 m, dx=4.0000e-05 m, wavelength=4.1767e-07 m).  The single-FFT sum is then an aliased quadrature and the result is silently wrong (measured 33% relative error at z = 0.25x the bound on a fully-sampled Gaussian).  Use angular_spectrum_propagate, which is exact in this regime, or propagate a longer z / a finer dx so that z >= 0.490345 m.
+    E, dx_new, _ = fresnel_propagate(E, thickness, lam_medium, dx, dy=dy)
+
+tests/unit/test_niche_audit_e_prepared_and_enums.py::test_m3_warn_still_warns
+  /mnt/c/tmp/lum_pool2/tests/unit/test_niche_audit_e_prepared_and_enums.py:930: RuntimeWarning: apply_real_lens_traced: the physical aperture (0.800 mm) is 1.60x the beam 1/e^2 diameter (0.500 mm), above the 1.5x aperture:beam ratio beyond which the traced OPL fit can be corrupted by marginal rays the beam never occupies (audit AUDIT_TRACED_PRODUCTION_READINESS_2026_07_24 §4: measured exit-wavefront Strehl 0.998 -> 0.039 across this cliff on a fast singlet).  Whether it bites depends on how aberrated the surfaces are at the aperture edge.  Pass fit_radius_beam_factor=2.0 to restrict the ray-fit domain to the beam (no energy is vignetted by that -- only the fit domain changes), or on_aperture_beam='silent' to acknowledge.
+    apply_real_lens_traced(
+
+tests/unit/test_niche_audit_e_prepared_and_enums.py::test_m3_warn_still_warns
+  /mnt/c/tmp/lum_pool2/tests/unit/test_niche_audit_e_prepared_and_enums.py:930: RuntimeWarning: apply_real_lens_traced: tilt_aware_rays=False with a non-trivial single-beam input tilt (RMS = 3.00e-02 rad).  The plane-wave reference OPD is off by an amount proportional to (tilt * aperture); set tilt_aware_rays=True for tilt-sensitive analyses.
+    apply_real_lens_traced(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+SKIPPED [1] tests/unit/test_fix_newton_pool_memory.py:1217: this BLAS reduces identically at every width tried ({1: 0.0, 2: 0.0, 4: 0.0}), so a worker that re-fits was already safe here.  The shipped fit is still the durable answer -- see the sibling tests -- but this box cannot witness the defect
+372 passed, 1 skipped, 19 warnings in 469.41s (0:07:49)

@@ -1,0 +1,328 @@
+{
+ "python": "3.14.6 (tags/v3.14.6:c63aec6, Jun 10 2026, 10:26:10) [MSC v.1944 64 bit (AMD64)]",
+ "lumenairy_file": "C:\\tmp\\lum_vpool2\\lumenairy\\__init__.py",
+ "platform": "win32",
+ "rows": [
+  {
+   "shape": "c01_with_plain",
+   "want": "offender",
+   "why": "bare `with ProcessPoolExecutor(...)`: __exit__ IS shutdown(wait=True)",
+   "shipped_offenders": [],
+   "extended_offenders": [
+    "c01_with_plain:2:with ProcessPoolExecutor"
+   ],
+   "extended_informational": [],
+   "shipped_verdict": "clean",
+   "extended_verdict": "offender",
+   "shipped_correct": false,
+   "extended_correct": true
+  },
+  {
+   "shape": "c02_with_dotted",
+   "want": "offender",
+   "why": "fully dotted concurrent.futures.ProcessPoolExecutor",
+   "shipped_offenders": [],
+   "extended_offenders": [
+    "c02_with_dotted:3:with ProcessPoolExecutor"
+   ],
+   "extended_informational": [],
+   "shipped_verdict": "clean",
+   "extended_verdict": "offender",
+   "shipped_correct": false,
+   "extended_correct": true
+  },
+  {
+   "shape": "c03_with_aliased_module",
+   "want": "offender",
+   "why": "module aliased, class name intact",
+   "shipped_offenders": [],
+   "extended_offenders": [
+    "c03_with_aliased_module:3:with ProcessPoolExecutor"
+   ],
+   "extended_informational": [],
+   "shipped_verdict": "clean",
+   "extended_verdict": "offender",
+   "shipped_correct": false,
+   "extended_correct": true
+  },
+  {
+   "shape": "c04_with_aliased_class",
+   "want": "offender",
+   "why": "CLASS aliased to a name that does not end in Executor",
+   "shipped_offenders": [],
+   "extended_offenders": [],
+   "extended_informational": [],
+   "shipped_verdict": "clean",
+   "extended_verdict": "clean",
+   "shipped_correct": false,
+   "extended_correct": false
+  },
+  {
+   "shape": "c05_with_nested_in_function",
+   "want": "offender",
+   "why": "`with` inside a nested def -- attribution must be the inner closure",
+   "shipped_offenders": [],
+   "extended_offenders": [
+    "inner:3:with ProcessPoolExecutor"
+   ],
+   "extended_informational": [],
+   "shipped_verdict": "clean",
+   "extended_verdict": "offender",
+   "shipped_correct": false,
+   "extended_correct": true
+  },
+  {
+   "shape": "c06_shutdown_bare",
+   "want": "offender",
+   "why": "shutdown() with no wait argument defaults to wait=True",
+   "shipped_offenders": [
+    "c06_shutdown_bare:2"
+   ],
+   "extended_offenders": [
+    "c06_shutdown_bare:2:shutdown"
+   ],
+   "extended_informational": [],
+   "shipped_verdict": "offender",
+   "extended_verdict": "offender",
+   "shipped_correct": true,
+   "extended_correct": true
+  },
+  {
+   "shape": "c07_shutdown_wait_true_kw",
+   "want": "offender",
+   "why": "explicit wait=True keyword",
+   "shipped_offenders": [
+    "c07_shutdown_wait_true_kw:2"
+   ],
+   "extended_offenders": [
+    "c07_shutdown_wait_true_kw:2:shutdown"
+   ],
+   "extended_informational": [],
+   "shipped_verdict": "offender",
+   "extended_verdict": "offender",
+   "shipped_correct": true,
+   "extended_correct": true
+  },
+  {
+   "shape": "c08_shutdown_unbound_positional",
+   "want": "offender",
+   "why": "unbound call: first positional is self, wait is the SECOND",
+   "shipped_offenders": [
+    "c08_shutdown_unbound_positional:2"
+   ],
+   "extended_offenders": [
+    "c08_shutdown_unbound_positional:2:shutdown"
+   ],
+   "extended_informational": [],
+   "shipped_verdict": "offender",
+   "extended_verdict": "offender",
+   "shipped_correct": true,
+   "extended_correct": true
+  },
+  {
+   "shape": "c09_shutdown_wait_variable",
+   "want": "offender",
+   "why": "wait is not the constant False, so it may join",
+   "shipped_offenders": [
+    "c09_shutdown_wait_variable:2"
+   ],
+   "extended_offenders": [
+    "c09_shutdown_wait_variable:2:shutdown"
+   ],
+   "extended_informational": [],
+   "shipped_verdict": "offender",
+   "extended_verdict": "offender",
+   "shipped_correct": true,
+   "extended_correct": true
+  },
+  {
+   "shape": "c10_shutdown_cancel_only",
+   "want": "offender",
+   "why": "cancel_futures without wait=False still joins",
+   "shipped_offenders": [
+    "c10_shutdown_cancel_only:2"
+   ],
+   "extended_offenders": [
+    "c10_shutdown_cancel_only:2:shutdown"
+   ],
+   "extended_informational": [],
+   "shipped_verdict": "offender",
+   "extended_verdict": "offender",
+   "shipped_correct": true,
+   "extended_correct": true
+  },
+  {
+   "shape": "c11_shutdown_wait_false_kw",
+   "want": "clean",
+   "why": "the non-joining retire used by _abandon_pool",
+   "shipped_offenders": [],
+   "extended_offenders": [],
+   "extended_informational": [],
+   "shipped_verdict": "clean",
+   "extended_verdict": "clean",
+   "shipped_correct": true,
+   "extended_correct": true
+  },
+  {
+   "shape": "c12_shutdown_wait_false_positional",
+   "want": "clean",
+   "why": "POSITIONAL wait=False -- the shipped detector false-positives here",
+   "shipped_offenders": [
+    "c12_shutdown_wait_false_positional:2"
+   ],
+   "extended_offenders": [],
+   "extended_informational": [],
+   "shipped_verdict": "offender",
+   "extended_verdict": "clean",
+   "shipped_correct": false,
+   "extended_correct": true
+  },
+  {
+   "shape": "c13_shutdown_unbound_false",
+   "want": "clean",
+   "why": "unbound, wait False in the second positional slot",
+   "shipped_offenders": [
+    "c13_shutdown_unbound_false:2"
+   ],
+   "extended_offenders": [],
+   "extended_informational": [],
+   "shipped_verdict": "offender",
+   "extended_verdict": "clean",
+   "shipped_correct": false,
+   "extended_correct": true
+  },
+  {
+   "shape": "c14_not_an_executor",
+   "want": "offender",
+   "why": "any .shutdown(wait=True) is reported -- conservative BY DESIGN; graded as offender because that is the pin's stated contract",
+   "shipped_offenders": [
+    "c14_not_an_executor:2"
+   ],
+   "extended_offenders": [
+    "c14_not_an_executor:2:shutdown"
+   ],
+   "extended_informational": [],
+   "shipped_verdict": "offender",
+   "extended_verdict": "offender",
+   "shipped_correct": true,
+   "extended_correct": true
+  },
+  {
+   "shape": "c15_with_threadpool",
+   "want": "informational",
+   "why": "ThreadPoolExecutor has no _terminate_broken; out of scope but visible",
+   "shipped_offenders": [],
+   "extended_offenders": [],
+   "extended_informational": [
+    "c15_with_threadpool:2:with ThreadPoolExecutor"
+   ],
+   "shipped_verdict": "clean",
+   "extended_verdict": "informational",
+   "shipped_correct": true,
+   "extended_correct": true
+  },
+  {
+   "shape": "c16_with_threadpool_dotted",
+   "want": "informational",
+   "why": "dotted thread pool",
+   "shipped_offenders": [],
+   "extended_offenders": [],
+   "extended_informational": [
+    "c16_with_threadpool_dotted:3:with ThreadPoolExecutor"
+   ],
+   "shipped_verdict": "clean",
+   "extended_verdict": "informational",
+   "shipped_correct": true,
+   "extended_correct": true
+  },
+  {
+   "shape": "c17_with_prebuilt_name",
+   "want": "offender",
+   "why": "`with ex:` on a pre-built executor -- same __exit__, no Call node",
+   "shipped_offenders": [],
+   "extended_offenders": [],
+   "extended_informational": [],
+   "shipped_verdict": "clean",
+   "extended_verdict": "clean",
+   "shipped_correct": false,
+   "extended_correct": false
+  },
+  {
+   "shape": "c18_with_two_items",
+   "want": "offender",
+   "why": "multi-item with: the executor is the SECOND item",
+   "shipped_offenders": [],
+   "extended_offenders": [
+    "c18_with_two_items:2:with ProcessPoolExecutor"
+   ],
+   "extended_informational": [],
+   "shipped_verdict": "clean",
+   "extended_verdict": "offender",
+   "shipped_correct": false,
+   "extended_correct": true
+  },
+  {
+   "shape": "c19_async_with",
+   "want": "offender",
+   "why": "AsyncWith form",
+   "shipped_offenders": [],
+   "extended_offenders": [
+    "c19_async_with:2:with ProcessPoolExecutor"
+   ],
+   "extended_informational": [],
+   "shipped_verdict": "clean",
+   "extended_verdict": "offender",
+   "shipped_correct": false,
+   "extended_correct": true
+  },
+  {
+   "shape": "c20_exempt_helper",
+   "want": "clean",
+   "why": "the ONE place that is allowed to join, because it does so off-thread",
+   "shipped_offenders": [],
+   "extended_offenders": [],
+   "extended_informational": [],
+   "shipped_verdict": "clean",
+   "extended_verdict": "clean",
+   "shipped_correct": true,
+   "extended_correct": true
+  }
+ ],
+ "tally": {
+  "shipped": {
+   "TP": 6,
+   "FP": 2,
+   "FN": 8,
+   "TN": 4
+  },
+  "extended": {
+   "TP": 12,
+   "FP": 0,
+   "FN": 2,
+   "TN": 6
+  }
+ },
+ "real_modules": {
+  "lumenairy.elements._lens_traced": {
+   "shipped_offenders": [],
+   "extended_offenders": [],
+   "extended_informational": [
+    "apply_real_lens_traced:10731:with ThreadPoolExecutor"
+   ]
+  },
+  "lumenairy.propagators.carrier": {
+   "shipped_offenders": [],
+   "extended_offenders": [
+    "_multi_parallel_results:11553:with ProcessPoolExecutor"
+   ],
+   "extended_informational": []
+  }
+ },
+ "shipped_pin_is_blind_to_the_sibling_pool": true,
+ "extended_pin_detects_the_sibling_pool": true,
+ "lens_traced_clean_under_extended_pin": true,
+ "residual_blind_spots": [
+  "c04_with_aliased_class",
+  "c17_with_prebuilt_name"
+ ]
+}

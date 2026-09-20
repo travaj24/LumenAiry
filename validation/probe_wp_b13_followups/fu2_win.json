@@ -1,0 +1,42 @@
+{
+ "lumenairy": "C:\\tmp\\lum_pool2\\lumenairy\\__init__.py",
+ "python": "3.14.6 (tags/v3.14.6:c63aec6, Jun 10 2026, 10:26:10) [MSC v.1944 64 bit (AMD64)]",
+ "platform": "win32",
+ "pin_source": "C:\\tmp\\lum_pool2\\tests\\unit\\test_fix_newton_pool_broken_fallback.py",
+ "cases": {
+  "synthetic": {
+   "shipped_detector_offenders": [
+    "retire_positional:11",
+    "teardown_call:5",
+    "teardown_unbound:7"
+   ],
+   "extended_detector_offenders": [
+    "teardown_call:5:shutdown",
+    "teardown_unbound:7:shutdown",
+    "teardown_with:2:with ProcessPoolExecutor"
+   ],
+   "extended_detector_informational": [
+    "threads:13:with ThreadPoolExecutor"
+   ]
+  },
+  "lumenairy.elements._lens_traced": {
+   "shipped_detector_offenders": [],
+   "extended_detector_offenders": [],
+   "extended_detector_informational": [
+    "apply_real_lens_traced:10731:with ThreadPoolExecutor"
+   ]
+  },
+  "lumenairy.propagators.carrier": {
+   "shipped_detector_offenders": [],
+   "extended_detector_offenders": [
+    "_multi_parallel_results:11553:with ProcessPoolExecutor"
+   ],
+   "extended_detector_informational": []
+  }
+ },
+ "verdict": {
+  "shipped_pin_is_blind_to_the_sibling_pool": true,
+  "extended_pin_detects_the_sibling_pool": true,
+  "lens_traced_clean_under_extended_pin": true
+ }
+}

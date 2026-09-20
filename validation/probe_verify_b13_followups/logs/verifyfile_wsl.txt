@@ -1,0 +1,40 @@
+..............                                                           [100%]
+=============================== warnings summary ===============================
+tests/unit/test_verify_b13_followups.py::test_a_helper_that_raises_an_uncaught_class_still_publishes_and_clears[BaseException]
+  /home/travaj/lumvenv/lib/python3.12/site-packages/_pytest/threadexception.py:58: PytestUnhandledThreadExceptionWarning: Exception in thread lumenairy-newton-pool-close
+  
+  Traceback (most recent call last):
+    File "/usr/lib/python3.12/threading.py", line 1073, in _bootstrap_inner
+      self.run()
+    File "/usr/lib/python3.12/threading.py", line 1010, in run
+      self._target(*self._args, **self._kwargs)
+    File "/mnt/c/tmp/lum_vpool2/lumenairy/elements/_lens_traced.py", line 1357, in _run
+      ex.shutdown(wait=True)
+    File "/mnt/c/tmp/lum_vpool2/tests/unit/test_verify_b13_followups.py", line 230, in shutdown
+      raise self._raise('engineered: the helper does not catch this')
+  tests.unit.test_verify_b13_followups._VB13Uncaught: engineered: the helper does not catch this
+  
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+    warnings.warn(pytest.PytestUnhandledThreadExceptionWarning(msg))
+
+tests/unit/test_verify_b13_followups.py::test_a_helper_that_raises_an_uncaught_class_still_publishes_and_clears[BaseException]
+  /home/travaj/lumvenv/lib/python3.12/site-packages/_pytest/threadexception.py:58: PytestUnhandledThreadExceptionWarning: Exception in thread lumenairy-newton-pool-close
+  
+  Traceback (most recent call last):
+    File "/usr/lib/python3.12/threading.py", line 1073, in _bootstrap_inner
+      self.run()
+    File "/usr/lib/python3.12/threading.py", line 1010, in run
+      self._target(*self._args, **self._kwargs)
+    File "/mnt/c/tmp/lum_vpool2/lumenairy/elements/_lens_traced.py", line 1357, in _run
+      ex.shutdown(wait=True)
+    File "/mnt/c/tmp/lum_vpool2/tests/unit/test_verify_b13_followups.py", line 230, in shutdown
+      raise self._raise('engineered: the helper does not catch this')
+  MemoryError: engineered: the helper does not catch this
+  
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+    warnings.warn(pytest.PytestUnhandledThreadExceptionWarning(msg))
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+14 passed, 2 warnings in 41.22s

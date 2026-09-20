@@ -1237,15 +1237,31 @@ _PERSISTENT_POOL_ATEXIT_REGISTERED = False
 # wider pool on a loaded box, and the cost of it being too LOW is only that a
 # slow-but-healthy teardown finishes on the reaper thread instead of inline.
 _POOL_SHUTDOWN_TIMEOUT = 120.0
-# Chunks currently dispatched on ``_PERSISTENT_POOL``.  Read by
+# DISPATCHES currently in flight on ``_PERSISTENT_POOL`` -- not chunks
+# (corrected 2026-09-15, VERIFY-WP-B13 defect D4: this comment said "chunks",
+# and ``_note_pool_inflight`` is moved ONCE per dispatch by
+# ``_invert_newton_parallel``, whatever the chunk count).  Read by
 # ``_get_persistent_worker_pool`` so a rebuild can never tear a pool down
 # under a dispatch that is still using it (see the REBUILD RULE there).
+#
+# THE COUNTER STAYS A DISPATCH COUNT.  Every consumer reads only ZERO vs
+# NON-ZERO -- ``_get_persistent_worker_pool``'s ``elif _POOL_INFLIGHT > 0``
+# is the single library reader, and the tests and probes that touch it assert
+# it returns to 0 -- so the magnitude carries no meaning and a chunk-level
+# counter would buy nothing while adding two lock acquisitions per chunk.
+# The comment was the defect, not the counter.
 _POOL_INFLIGHT = 0
-# Pools handed to the background reaper, for diagnostics and for tests that
-# want to see that a broken pool was retired rather than joined.  Guarded by
-# its OWN lock: ``_abandon_pool`` is called from inside and outside
-# ``_PERSISTENT_POOL_LOCK``, and a re-entrant acquisition of that lock would
-# be a deadlock of our own making.
+# Pools whose teardown is still OUTSTANDING, for diagnostics and for tests
+# that want to see that a broken pool was retired rather than joined.  A
+# CENSUS, not a ledger: both mechanisms take their entry back out when their
+# shutdown returns, so a quiescent process reads an EMPTY list however many
+# pools it has retired (VERIFY-WP-B13 D2 -- the bounded path used to leave
+# every expired executor here forever, pinning its ``_processes`` and its
+# queues).  The count of teardowns that OVERRAN is
+# ``_POOL_SHUTDOWN_TIMEOUTS``, which is monotone; read that, not ``len()``.
+# Guarded by its OWN lock: ``_abandon_pool`` is called from inside and
+# outside ``_PERSISTENT_POOL_LOCK``, and a re-entrant acquisition of that
+# lock would be a deadlock of our own making.
 _ABANDONED_POOLS: list = []
 _ABANDONED_POOLS_LOCK = threading.Lock()
 # How many times a bounded teardown gave up and abandoned its pool.  A
@@ -1309,6 +1325,45 @@ def _shutdown_pool_bounded(ex, timeout=None) -> bool:
     Returns True when the shutdown completed inside the bound.  On a timeout
     the pool is abandoned to the daemon reaper and ``False`` is returned, so
     the caller always makes progress.
+
+    ``_ABANDONED_POOLS`` IS A CENSUS OF PENDING TEARDOWNS, NOT A LEDGER
+    (VERIFY-WP-B13 defect D2, 2026-09-15).  As shipped, the expiry path
+    appended the executor and nothing ever removed it -- unlike
+    :func:`_abandon_pool`, whose reaper removes in a ``finally`` -- so the
+    list grew by one per expiry and pinned each dead executor (its
+    ``_processes``, its queues) for the life of the process.  The helper
+    thread now removes its own entry when its ``shutdown`` finally returns.
+    The count of expiries that HAPPENED is ``_POOL_SHUTDOWN_TIMEOUTS``, which
+    is monotone and is what a diagnostic should read.
+
+    The removal is ordered against the expiry rather than written as a bare
+    ``finally``: the helper may return in the same instant the caller's wait
+    expires, and a ``remove`` that ran BEFORE the caller's ``append`` would
+    leave exactly the entry it was meant to drop.  So the helper sets ``done``
+    first and only then takes ``_ABANDONED_POOLS_LOCK``, and the caller
+    re-reads ``done`` under that same lock before appending.  Either order of
+    arrival therefore ends with the list empty, and the race window costs the
+    caller one extra ``is_set``.
+
+    THE HELPER REMOVES ONLY THE ENTRY ITS OWN CALLER ADDED
+    (VERIFY-WP-B13-FOLLOWUPS defect VD2, 2026-09-19).  The removal used to be
+    unconditional -- a bare ``remove`` in the ``finally`` whose ``ValueError``
+    was swallowed -- which is correct only while this function is the sole
+    writer of the census.  It is not: :func:`_abandon_pool` appends too, and
+    an executor that reached BOTH mechanisms would have the reaper's still
+    outstanding entry dropped by a bounded teardown that COMPLETED INSIDE ITS
+    BOUND (so its caller never appended anything).  Measured in that state by
+    construction: **6 of 6 reps dropped the foreign entry** before this
+    change, **0 of 6 after**, on Windows 3.14.6 and WSL 3.12.3
+    (``validation/probe_fix_b13_followups_r2/r2_vd2_census.py``).  The
+    ``added`` flag below is set by the CALLER, under the same lock the helper
+    removes under, so the two threads never disagree about who owns the entry.
+    No library path hands one executor to both mechanisms today --
+    ``close_worker_pool`` routes to exactly one of them and
+    ``_get_persistent_worker_pool`` retires its stale pool through
+    ``_abandon_pool`` alone, which
+    ``test_one_executor_never_reaches_both_teardown_mechanisms`` pins -- so
+    this is a latent defect closed at the mechanism rather than a live bug.
     """
     global _POOL_SHUTDOWN_TIMEOUTS
     if ex is None:
@@ -1316,6 +1371,11 @@ def _shutdown_pool_bounded(ex, timeout=None) -> bool:
     if timeout is None:
         timeout = _POOL_SHUTDOWN_TIMEOUT
     done = threading.Event()
+    # Did THIS call append ``ex`` to the census?  Written by the caller and
+    # read by the helper, both under ``_ABANDONED_POOLS_LOCK``; a list rather
+    # than a ``bool`` only because the helper is a closure that must see the
+    # caller's later write.  See the docstring's VD2 note.
+    added = []
 
     def _run():
         try:
@@ -1323,7 +1383,17 @@ def _shutdown_pool_bounded(ex, timeout=None) -> bool:
         except (RuntimeError, OSError, ValueError):
             pass
         finally:
+            # Announce completion BEFORE taking the lock -- see the ordering
+            # note in the docstring.
             done.set()
+            with _ABANDONED_POOLS_LOCK:
+                if added:
+                    # Only OUR entry, never one _abandon_pool's reaper is
+                    # still outstanding on.
+                    try:
+                        _ABANDONED_POOLS.remove(ex)
+                    except ValueError:
+                        pass
 
     try:
         threading.Thread(target=_run, name='lumenairy-newton-pool-close',
@@ -1334,13 +1404,23 @@ def _shutdown_pool_bounded(ex, timeout=None) -> bool:
     if done.wait(timeout):
         return True
     with _ABANDONED_POOLS_LOCK:
+        if done.is_set():
+            # It landed inside the window between the wait expiring and this
+            # lock: the teardown COMPLETED, so it is not an expiry and there
+            # is nothing to abandon.
+            return True
         _POOL_SHUTDOWN_TIMEOUTS += 1
         _ABANDONED_POOLS.append(ex)
+        added.append(True)
     return False
 
 
 def _note_pool_inflight(delta: int) -> int:
-    """Move the in-flight chunk count and return it.  Never goes negative."""
+    """Move the in-flight DISPATCH count and return it.
+
+    One dispatch, one claim -- see ``_POOL_INFLIGHT``.  Never goes negative,
+    so a double release cannot wedge the rebuild rule shut.
+    """
     global _POOL_INFLIGHT
     with _PERSISTENT_POOL_LOCK:
         _POOL_INFLIGHT = max(0, _POOL_INFLIGHT + int(delta))
@@ -1381,14 +1461,75 @@ def _get_persistent_worker_pool(n_workers):
     same sequence builds at most one pool per INCREASE.
 
     THE COST of keeping a pool wider than the current call asks for is the
-    resident set of the workers that stay idle: MEASURED 2026-09-14 on this
-    box at 33.0 MB mean / 48.8 MB peak per idle worker (15 warm pools,
-    ``probe_p6_teardown_ladder.py``), against the ~1.7 GB per ACTIVE worker
-    the clamp itself models for a 262 144-point / 279^2-fit dispatch -- i.e.
-    2 % of one working worker.  The pool is therefore never shrunk implicitly;
-    ``close_worker_pool()`` is the documented way to return the process to a
-    cold state and free the workers.  ``close_worker_pool`` is also registered
-    with ``atexit`` EXACTLY ONCE per process.
+    resident set of the workers that stay idle, and THAT COST DEPENDS ON THE
+    STATE THE WORKER IS LEFT IN.
+
+    THE SURPLUS OF A WIDER POOL IS NOT A PROCESS
+    (VERIFY-WP-B13-FOLLOWUPS defect VD5, 2026-09-19).  This docstring used to
+    call the never-served worker "what the SURPLUS of a pool wider than the
+    clamp is".  That state does not exist: CPython's ``ProcessPoolExecutor``
+    spawns LAZILY -- ``_adjust_process_count`` runs inside ``submit``, not
+    inside ``__init__`` -- so a pool CONSTRUCTED at width 12 holds **zero**
+    worker processes, and a 4-chunk dispatch on it leaves **four**.  MEASURED
+    2026-09-19 on both builds, every rung (``validation/``
+    ``probe_verify_b13_followups/vf3_d3_footprint.py``:
+    ``processes_after_construct: 0``, ``processes_after_dispatch: 4``); pinned
+    by ``test_a_pool_wider_than_the_dispatch_holds_no_surplus_processes``.
+    So the extra width of a pool this rule declines to shrink costs nothing
+    until something submits to it, and what the rule actually leaves behind
+    is a worker that SERVED a chunk on an earlier dispatch.  The two states
+    the ladder below prices are therefore:
+
+      * a worker that has SERVED a Newton chunk -- it holds an entry in
+        ``_WORKER_PAYLOADS`` and whatever scipy/numpy brought in with it.
+        THIS is the state the ceiling rule leaves behind, and it is the
+        figure the trade below is priced on;
+      * a worker that ran ``_newton_pool_init`` and served no chunk.  It
+        exists only because the measurement's own LABELLING step submitted to
+        it -- nothing in the ceiling rule produces one -- so read this column
+        as the floor for a worker of this pool (a spawn worker of it
+        necessarily imports ``lumenairy.elements._lens_traced``, because that
+        is where its ``initializer`` resolves from), not as a cost the rule
+        incurs.
+
+    MEASURED TWICE, independently, with a 12-wide pool serving a 4-worker
+    dispatch so both states are present in the SAME pool and resident sets
+    are read parent-side with ``psutil``: 2026-09-15
+    (``validation/probe_wp_b13_followups/fu1_worker_footprint.py``, workers
+    labelled through their own ``_WORKER_PAYLOADS`` with a Manager
+    ``Barrier``) and 2026-09-19 (``validation/probe_verify_b13_followups/``
+    ``vf3_d3_footprint.py``, labelled instead through a parent-owned socket
+    rendezvous, so no ``Manager`` process sits inside the measurement):
+
+        build                 N      served (max)       never-served (max)
+        Windows 3.14.6       256     93.6 -  99.0 MB    49.8 - 52.4 MB
+        (Ryzen 9 5950X)      512             100.1 MB           52.3 MB
+                            1024     96.5 - 101.6 MB    49.7 - 52.5 MB
+        WSL 3.12.3           256     69.5 -  73.2 MB    37.3 - 39.3 MB
+                             512              75.0 MB           39.3 MB
+                            1024     73.0 -  76.9 MB    37.3 - 39.3 MB
+
+    (ranges where both probes measured that rung; the 512 rows are the
+    2026-09-15 probe alone.  The two readings differ by 4-7 % in the same
+    direction on both builds and in both states -- the reading moment and the
+    box load -- which is why the number is stated as a RANGE rather than as
+    one box's peak.)
+
+    So the worst kept worker is 93.6-101.6 MB, not the 33.0 MB this docstring
+    carried until 2026-09-15 -- that figure was taken on workers warmed with
+    ``ex.map(abs, ...)``, which is neither of the two states above
+    (VERIFY-WP-B13 defect D3).  A 16-wide pool of workers that have all served
+    a chunk therefore holds 1.5-1.6 GB, not 0.5 GB.
+
+    The TRADE is unchanged, and it is the trade and not the number that the
+    rule rests on: 93.6-101.6 MB is 5.5-6 % of the ~1.7 GB per ACTIVE worker
+    the clamp itself models for a 262 144-point / 279^2-fit dispatch, and the
+    alternative -- respawning on every clamp wobble -- was measured at 26
+    spawned interpreters for four dispatches.  The pool is therefore never
+    shrunk implicitly; ``close_worker_pool()`` is the documented way to
+    return the process to a cold state and free the workers.
+    ``close_worker_pool`` is also registered with ``atexit`` EXACTLY ONCE per
+    process.
     """
     global _PERSISTENT_POOL, _PERSISTENT_POOL_NWORKERS
     global _PERSISTENT_POOL_ATEXIT_REGISTERED, _POOL_RESIDENT_PAYLOAD_KEY
