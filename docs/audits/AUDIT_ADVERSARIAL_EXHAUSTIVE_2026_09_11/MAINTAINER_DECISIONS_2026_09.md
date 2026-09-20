@@ -29,6 +29,184 @@ cannot obtain by itself (section 3), and the items still being measured
 
 ---
 
+## 0. The decisions in plain language (added 2026-09-20)
+
+The sections below this one are the evidence, written as the work packages
+wrote it.  This section says the same things in plain language, one entry
+per decision, so that each can be taken from this page alone.  Terms are
+defined where they first appear.
+
+**Decided 2026-09-20, shipping as defaults in 5.49.0:** the grey aperture
+edge (1.1), the Collins one-step transport with its JAX and GPU arms (1.2),
+the analytic sphere normal and the exit-side renormalisation (1.3), and the
+direct-matrix MFT route through a build-free automatic selection (4.2).
+**Decided 2026-09-20 (later the same day), also shipping in 5.49.0:** the
+near-focus kernel switch ON (0.1), honest dense memory accounting as the
+default with the floor made loud (0.2), zeroed replicas as the default with
+the zeroing provably confined to the replica region (0.3); and NOT adding a
+loss-arm refusal on the multibranch fallback route (0.4).  The remaining
+entries (0.5 onward) are still open.
+
+### 0.1 The near-focus kernel switch (details in 1.5 and 4.3)
+
+What it is.  When the traced carrier chain moves a beam from one plane to
+the next it uses a transfer kernel.  Far from a focus it uses an "exact"
+kernel that includes a small correction; very close to a focus that
+correction is computed in a frame that stretches without limit, and the
+correction itself becomes the error.  The plain Fresnel kernel has no such
+term and is at machine precision there.  `gap_kernel='auto'` today always
+picks the exact kernel.
+
+When it matters.  Only for a leg that lands within about 100 micrometres of
+a geometric focus, and only through the exact kernel.  Everywhere else the
+two kernels agree to rounding.
+
+What "yes" changes.  A switch already ships, turned off
+(`carrier._GAP_KERNEL_ACCURACY_TAU = None`).  Setting it to `1e-4` makes
+`'auto'` fall back to the plain kernel when the predicted correction error
+exceeds one part in ten thousand.  Measured: on the fixture that reaches
+the focus, the error one micrometre short of it drops from 2.4e-3 to 1.7e-14;
+on a fixture that never gets within a millimetre nothing changes.  Explicit
+`gap_kernel='exact'` is still honoured.
+
+What it costs.  Nothing in speed.  Any field computed within that band of a
+focus moves (it gets more accurate).  The oracle used is paraxial, so it
+measures the size of the correction error but cannot say which kernel is
+the more physical one in that band.
+
+Recommendation: turn it on (`1e-4`).  Confidence medium-high.
+
+### 0.2 The dense GBD memory accounting (details in 1.8)
+
+What it is.  The dense Gaussian-beam loop sizes its work chunks from a
+memory budget the caller can set (`mem_budget_mb`).  The shipped accounting
+under-counts what a chunk uses by about six-fold, so a caller who sets a
+budget to fit a machine can be handed six times that.  A second accounting
+mode, `'measured'`, counts honestly, but because chunks and the returned
+bytes are coupled it changes the last bits of the returned field.
+
+When it matters.  Only when a caller sets `mem_budget_mb` on a large dense
+GBD run; with no budget set nothing changes.
+
+What "yes" changes.  Either (a) make `'measured'` the default, which moves
+the returned bytes on every dense run (a Migration note), or (b) keep the
+shipped default and add a one-shot notice when `mem_budget_mb` is set,
+naming the six-fold factor and the mode that fixes it.  Note also that
+`'measured'` is a true bound only above a floor of one chunk column (about
+12 MB at a 256-point grid); below it neither mode can honour the budget.
+
+What it costs.  (a) moves bytes on the default path; (b) moves nothing.
+
+Recommendation: (b) now, (a) in a later minor release.  Confidence high.
+
+### 0.3 The readout window's periodic replicas (details in 1.7)
+
+What it is.  A focus readout can be asked for a window wider than one
+period of the transform behind it.  Outside that period the transform
+repeats itself, so the outer part of such a window contains copies of the
+spot rather than the field that is physically there.  The shipped default
+returns the copies (`replica_fill='repeat'`); the alternative blanks them
+(`'zero'`).
+
+When it matters.  Only when a caller asks for an oversized readout window
+and waives the refusal that normally stops it.
+
+What "yes" changes.  With `'zero'` the outer region reads zero instead of a
+spurious copy.  On the battery fixture that takes the measured spot width
+from a wrong 20.5 um to the correct 18.5 um and the window's power from 5.7
+times the true value to 0.999 of it.
+
+What it costs.  Three shipped tests are demonstrations that depend on the
+copies being present, and the rule "the whole requested window is live" was
+decided twice before.  A flip needs those three tests rewritten as
+demonstrations of the opt-in `'repeat'`.
+
+Recommendation: keep `'repeat'` as the default and use `'zero'` per call.
+Confidence medium; a reasonable maintainer could flip it.
+
+### 0.4 The multibranch arbiter: what counts as a wrong field, and whether to refuse on the fallback route (details in 4.5)
+
+What it is.  The multibranch traced lens renders its field twice, at the
+caller's pixel pitch and at half of it, and compares the two powers; a
+converged field reads close to 1 and a blown-up one reads far from it.  The
+bar is 1.06.  Two questions are open.  First, the accept criterion: to say
+the bar is set right, one has to say what fidelity against the exact oracle
+counts as a wrong field.  Second, on the fallback route (where no fold was
+found and the field is a plain branch sum) the arbiter reports but never
+refuses, and a "loss" reading (the ratio far below 1) could be made to
+refuse there.
+
+What was measured.  On two independent populations of about 1,300 and
+1,100 oracle-scored planes, a fidelity criterion of 0.95 with the bar at
+1.06 gives 1 false refusal and 2 misses on the fold ring, better than the
+neighbouring bars on both counts, and the value is the same on both
+populations.  The fields it accepts include a whole fold ring at fidelity
+0.93 to 0.96 carrying about 25 % too much energy on one high-numerical-
+aperture lens, so the criterion is a judgement about that class of field.
+The loss reading on the fallback route never flags a right field, but it
+catches only 11 to 16 of 50 wrong ones and misses the worst field in the
+study (fidelity 0.29 with all readings nominal).
+
+Recommendation.  Accept criterion 0.95, bar unchanged at 1.06 (confidence
+medium).  Do not refuse on the fallback route: a refusal that catches a
+tenth of the wrong fields and none of the worst is false assurance, and the
+diagnostics already say that route is not arbitrated (confidence medium).
+
+### 0.5 The caustic route's aberration budget (details in 1.4)
+
+What it is.  Near a caustic the automatic lens router chooses between the
+phase-screen model, the frozen-Gaussian swarm and the traced lens.  It
+prefers the screen while a sag-based aberration estimate stays under a
+budget of 2.0 radians.
+
+What was measured.  Inside that class the screen is within about 5e-4 of
+fidelity of the best member and 100 to 330 times cheaper.  The screen's
+error grows with the estimate and crosses 1e-3 somewhere between 0.09 and
+0.47 radians depending on the optic, so by 2.0 radians it is one to two
+decades past the accuracy the budget implies.  But the boundary differs by
+a factor of two to three between optics, so a single new number would be
+one fixture's number.
+
+Recommendation: leave the route and the budget as they are until a
+fixture-family sweep exists; confidence medium.
+
+### 0.6 Odd-sized grids (details in 1.6)
+
+What it is.  On a grid with an odd number of samples, the package's
+coordinate origin and the FFT's origin are half a pixel apart, and no
+sample sits at zero.  A PSF computed on an odd grid therefore comes back
+shifted by exactly half a pixel, independent of the grid size.  Twenty-
+seven places in the package couple a coordinate array to an FFT shift.
+
+Recommendation: land the shared centring helper (which moves nothing), then
+decide per site between refusing odd grids and applying the half-pixel
+phase correction, which moves every odd-grid answer at that site.
+Confidence high on the mechanism; the convention is yours.
+
+### 0.7 Smaller items
+
+* The deformable mirror caches its influence basis when it fits under 512
+  MiB inclusive; the audit's 16x16-on-512 case sits exactly on the limit and
+  caches half a gigabyte silently, though a warning already fires from 256
+  MiB.  Recommendation: leave it (1.9).
+* The in-glass gap-leg warnings point at library source rather than at the
+  caller's line; making them name the caller means the lens re-emits them,
+  a design choice about whose warning it is.  Recommendation: the lens owns
+  it (2.1).
+* A NumPy issue draft (the elision non-invariance on the Linux wheel) is
+  ready to file; nothing has been filed (4.1).  Recommendation: file it.
+* The Newton pool's healthy dispatch has no join timeout, and a wedged pool
+  still hangs the process at interpreter exit though the computation
+  completes.  Recommendation: bound the pool's bootstrap with a sentinel
+  (600 s, naming the timeout class explicitly for Python 3.10), and treat
+  killing surviving workers at exit as a policy you take or decline (4.4).
+* Three Thorlabs catalogue rows need vendor data, a Zemax biconic reference
+  file is needed to pin one importer convention, CaF2 has two dispersion
+  sources 2.8e-5 apart, an HDF5 `lzf` write hangs on this box, and two UI
+  checks need a real PySide6 (3.1 to 3.5).
+
+---
+
 ## 1. Numerical defaults that measured better but move fixtures
 
 ### 1.1 `apply_aperture(edge='gray')` as the default (WP-B11 item 9)
