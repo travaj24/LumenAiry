@@ -240,14 +240,33 @@ def angular_spectrum_propagate_mft(
     use_gpu : bool, default False
     method : {'auto', 'bluestein', 'separable', 'direct'}, default 'auto'
         Which route through the transform's own sum to take.
-        ``'auto'`` is the shipped default and is the chirp-Z (Bluestein)
-        reduction this propagator has always taken -- byte for byte, on
-        every backend, proved archive-to-archive against 5.47.0 over 179
-        fixtures on two builds.  ``'direct'`` takes the dense
+
+        ``'auto'`` is the shipped default and SINCE v5.49.0 IT DECIDES FROM
+        THE SHAPES (WP-C4).  It takes ``'direct'`` -- the dense
         matrix-Fourier transform
         (:func:`~lumenairy.propagators._bluestein._direct_matrix_2d`): two
         matrix products, ``O(M N^2 + M^2 N)`` multiply-adds, no zero-padding
-        and no chirp signal to spend float64 mantissa on.
+        and no chirp signal to spend float64 mantissa on -- when BOTH
+        output-over-input grid ratios sit at or under
+        :data:`~lumenairy.propagators._bluestein._MFT_DIRECT_MAX_RATIO`
+        (1/32), and the chirp-Z reduction this propagator has always taken
+        everywhere else, byte for byte.  The decision is
+        :func:`~lumenairy.propagators._bluestein._auto_selects_direct`, a
+        pure function of the four grid sizes and that one constant: no clock,
+        no environment, no backend, no array contents, so the same call takes
+        the same route on every build and every backend.
+
+        WHAT THAT MOVES, AND THE WAY BACK.  The routes agree to round-off,
+        NOT bit for bit -- they are different association orders over the same
+        sum -- so a call whose output grid is 32x coarser than its input
+        moves in its last bits.  Nothing else does: at ``M > N/32``, which is
+        every focal-zoom grid this propagator is written for, ``'auto'`` is
+        byte-identical to 5.48.1, proved archive-to-archive on two builds.
+        Pass ``method='separable'`` or ``method='bluestein'`` to get the
+        previous route back for one call (byte-identical), or set
+        ``_MFT_DIRECT_MAX_RATIO = _MFT_DIRECT_NEVER`` to get it back for a
+        whole process.  ``_MFT_DIRECT_ALWAYS`` is the other end: every shape
+        on the dense route.
 
         ``'bluestein'`` and ``'separable'`` name the two chirp-Z arms
         explicitly (the 2-D convolution, and the two-pass form that holds
@@ -261,42 +280,50 @@ def angular_spectrum_propagate_mft(
         ``'auto'``, the vocabulary is CLOSED, and an unrecognised value
         raises rather than falling through to a default.
 
-        WHEN IT IS THE BETTER ROUTE.  For MEMORY, always at these shapes:
-        the chirp-Z route pads each axis to
-        ``L = next_fast_len(N + M - 1)`` and holds several ``L^2`` working
-        arrays, while the dense route holds two ``M x N`` kernels, one
+        WHY THE BOUNDARY SITS AT 1/32.  For MEMORY the dense route wins
+        everywhere and the ordering is build-free: the chirp-Z route pads each
+        axis to ``L = next_fast_len(N + M - 1)`` and holds several ``L^2``
+        working arrays, while the dense route holds two ``M x N`` kernels, one
         intermediate and the output.  MEASURED peak, ``N = 1024``,
         ``M = 32``: **1.8 MB against 159.6 MB**; at ``M = 512``,
-        29.4 MB against 319.0 MB.  For ACCURACY, when the chirp phase
-        budget ``alpha * N_max^2`` is large -- but by a BOUNDED factor and
-        not by decades (corrected 2026-09-20, VERIFY-WAVE5-HYGIENE2 round 2
-        D-1).  BOTH routes follow ``rel ~ eps * budget``; the dense route
-        reduces its phase argument modulo one turn and so carries the smaller
-        constant, while the float64 product it reduces has already lost the
-        low bits the budget is made of.  MEASURED against a reference whose
-        phase is reduced EXACTLY, at ``N = 24 -> M = 12`` and identical on
-        both builds: ``1.9e-04`` relative error on the chirp route at a
-        budget of 1e12 against ``8.6e-05`` on the dense one, a factor of 2.2
-        (4.4 on the centred index convention).  The earlier reading here,
-        ``3.7e-16`` "exact where the chirp signals are not", was measured
-        against a reference that formed its own phase the way the dense route
-        does and therefore could not see this.  A smaller BUDGET -- fewer
-        samples, or a smaller ``alpha = dx*dx_out/(lambda z)`` -- is the only
-        thing that buys accuracy back by decades.  For TIME, only
-        below the crossover -- roughly ``M <= N/4`` on Windows py3.14, where at
-        ``M >= N/2`` with ``N >= 512`` the separable chirp-Z route is 1.2x to
-        3.0x faster.  The TIME crossover is PER-BUILD: on WSL py3.12, where
-        scipy's pocketfft drives the separable route's 1-D passes with its own
-        worker pool, it sits nearer ``M = N/16``.  The MEMORY ordering is not
-        -- the dense route is the smaller at every shape on both builds.
+        29.4 MB against 319.0 MB.  For TIME it does not: the crossover is
+        PER-BUILD, because scipy's pocketfft drives the separable route's 1-D
+        passes through its own worker pool on Linux.  MEASURED 2026-09-20 over
+        a 42-shape ladder on both builds, three independent rounds at the
+        boundary, worst dense-over-fallback ratio: 1/32 reads 0.477 (Windows
+        py3.14) and 0.954 (WSL py3.12) -- never slower on either -- while 1/16
+        reads 1.450 on WSL and 1/8 reads 1.427 on Windows.  1/32 is the
+        INTERSECTION of the two builds' safe regions, which is why the
+        constant is a shape ratio and never a clock.  For ACCURACY the dense
+        route is the better one wherever the chirp phase budget
+        ``alpha * N_max^2`` is large -- but by a BOUNDED factor and not by
+        decades (corrected 2026-09-20, VERIFY-WAVE5-HYGIENE2 round 2 D-1).
+        BOTH routes follow ``rel ~ eps * budget``; the dense route reduces its
+        phase argument modulo one turn and so carries the smaller constant,
+        while the float64 product it reduces has already lost the low bits the
+        budget is made of.  MEASURED against a reference whose phase is
+        reduced EXACTLY, at ``N = 24 -> M = 12`` and identical on both builds:
+        ``1.9e-04`` relative error on the chirp route at a budget of 1e12
+        against ``8.6e-05`` on the dense one, a factor of 2.2 (4.4 on the
+        centred index convention).  The earlier reading here, ``3.7e-16``
+        "exact where the chirp signals are not", was measured against a
+        reference that formed its own phase the way the dense route does and
+        therefore could not see this.  A smaller BUDGET -- fewer samples, or a
+        smaller ``alpha = dx*dx_out/(lambda z)`` -- is the only thing that
+        buys accuracy back by decades.
 
-        The two routes agree to round-off, NOT bit for bit: they are
-        different association orders over the same sum, and the report's
-        derived bar is ``(g_a + g_b) * eps * sum|E|`` with the two
-        summations' growth factors.  Nothing in the library selects
-        ``'direct'`` automatically; see the crossover table and the
-        maintainer-decision paragraph in
-        ``docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/WAVE5_HYGIENE2_REPORT.md``.
+        One thing ``'auto'`` does that ``'direct'`` does not: at a phase
+        budget past
+        :data:`~lumenairy.propagators._bluestein._PHASE_BUDGET_MAX` it WARNS
+        even when it has chosen the dense route, so the default flip cannot
+        take a diagnostic away from a caller who was getting one.  A caller
+        who NAMES ``'direct'`` stays silent, which is the unchanged 5.48
+        decision.
+
+        The crossover tables are in
+        ``docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/WP-C4_MFT_DIRECT_DEFAULT_REPORT.md``
+        and the route's own measurements in the ``WAVE5_HYGIENE2_REPORT.md``
+        beside it.
 
     Returns
     -------
@@ -931,14 +958,33 @@ def fresnel_propagate_mft(
         flag).
     method : {'auto', 'bluestein', 'separable', 'direct'}, default 'auto'
         Which route through the transform's own sum to take.
-        ``'auto'`` is the shipped default and is the chirp-Z (Bluestein)
-        reduction this propagator has always taken -- byte for byte, on
-        every backend, proved archive-to-archive against 5.47.0 over 179
-        fixtures on two builds.  ``'direct'`` takes the dense
+
+        ``'auto'`` is the shipped default and SINCE v5.49.0 IT DECIDES FROM
+        THE SHAPES (WP-C4).  It takes ``'direct'`` -- the dense
         matrix-Fourier transform
         (:func:`~lumenairy.propagators._bluestein._direct_matrix_2d`): two
         matrix products, ``O(M N^2 + M^2 N)`` multiply-adds, no zero-padding
-        and no chirp signal to spend float64 mantissa on.
+        and no chirp signal to spend float64 mantissa on -- when BOTH
+        output-over-input grid ratios sit at or under
+        :data:`~lumenairy.propagators._bluestein._MFT_DIRECT_MAX_RATIO`
+        (1/32), and the chirp-Z reduction this propagator has always taken
+        everywhere else, byte for byte.  The decision is
+        :func:`~lumenairy.propagators._bluestein._auto_selects_direct`, a
+        pure function of the four grid sizes and that one constant: no clock,
+        no environment, no backend, no array contents, so the same call takes
+        the same route on every build and every backend.
+
+        WHAT THAT MOVES, AND THE WAY BACK.  The routes agree to round-off,
+        NOT bit for bit -- they are different association orders over the same
+        sum -- so a call whose output grid is 32x coarser than its input
+        moves in its last bits.  Nothing else does: at ``M > N/32``, which is
+        every focal-zoom grid this propagator is written for, ``'auto'`` is
+        byte-identical to 5.48.1, proved archive-to-archive on two builds.
+        Pass ``method='separable'`` or ``method='bluestein'`` to get the
+        previous route back for one call (byte-identical), or set
+        ``_MFT_DIRECT_MAX_RATIO = _MFT_DIRECT_NEVER`` to get it back for a
+        whole process.  ``_MFT_DIRECT_ALWAYS`` is the other end: every shape
+        on the dense route.
 
         ``'bluestein'`` and ``'separable'`` name the two chirp-Z arms
         explicitly (the 2-D convolution, and the two-pass form that holds
@@ -952,42 +998,50 @@ def fresnel_propagate_mft(
         ``'auto'``, the vocabulary is CLOSED, and an unrecognised value
         raises rather than falling through to a default.
 
-        WHEN IT IS THE BETTER ROUTE.  For MEMORY, always at these shapes:
-        the chirp-Z route pads each axis to
-        ``L = next_fast_len(N + M - 1)`` and holds several ``L^2`` working
-        arrays, while the dense route holds two ``M x N`` kernels, one
+        WHY THE BOUNDARY SITS AT 1/32.  For MEMORY the dense route wins
+        everywhere and the ordering is build-free: the chirp-Z route pads each
+        axis to ``L = next_fast_len(N + M - 1)`` and holds several ``L^2``
+        working arrays, while the dense route holds two ``M x N`` kernels, one
         intermediate and the output.  MEASURED peak, ``N = 1024``,
         ``M = 32``: **1.8 MB against 159.6 MB**; at ``M = 512``,
-        29.4 MB against 319.0 MB.  For ACCURACY, when the chirp phase
-        budget ``alpha * N_max^2`` is large -- but by a BOUNDED factor and
-        not by decades (corrected 2026-09-20, VERIFY-WAVE5-HYGIENE2 round 2
-        D-1).  BOTH routes follow ``rel ~ eps * budget``; the dense route
-        reduces its phase argument modulo one turn and so carries the smaller
-        constant, while the float64 product it reduces has already lost the
-        low bits the budget is made of.  MEASURED against a reference whose
-        phase is reduced EXACTLY, at ``N = 24 -> M = 12`` and identical on
-        both builds: ``1.9e-04`` relative error on the chirp route at a
-        budget of 1e12 against ``8.6e-05`` on the dense one, a factor of 2.2
-        (4.4 on the centred index convention).  The earlier reading here,
-        ``3.7e-16`` "exact where the chirp signals are not", was measured
-        against a reference that formed its own phase the way the dense route
-        does and therefore could not see this.  A smaller BUDGET -- fewer
-        samples, or a smaller ``alpha = dx*dx_out/(lambda z)`` -- is the only
-        thing that buys accuracy back by decades.  For TIME, only
-        below the crossover -- roughly ``M <= N/4`` on Windows py3.14, where at
-        ``M >= N/2`` with ``N >= 512`` the separable chirp-Z route is 1.2x to
-        3.0x faster.  The TIME crossover is PER-BUILD: on WSL py3.12, where
-        scipy's pocketfft drives the separable route's 1-D passes with its own
-        worker pool, it sits nearer ``M = N/16``.  The MEMORY ordering is not
-        -- the dense route is the smaller at every shape on both builds.
+        29.4 MB against 319.0 MB.  For TIME it does not: the crossover is
+        PER-BUILD, because scipy's pocketfft drives the separable route's 1-D
+        passes through its own worker pool on Linux.  MEASURED 2026-09-20 over
+        a 42-shape ladder on both builds, three independent rounds at the
+        boundary, worst dense-over-fallback ratio: 1/32 reads 0.477 (Windows
+        py3.14) and 0.954 (WSL py3.12) -- never slower on either -- while 1/16
+        reads 1.450 on WSL and 1/8 reads 1.427 on Windows.  1/32 is the
+        INTERSECTION of the two builds' safe regions, which is why the
+        constant is a shape ratio and never a clock.  For ACCURACY the dense
+        route is the better one wherever the chirp phase budget
+        ``alpha * N_max^2`` is large -- but by a BOUNDED factor and not by
+        decades (corrected 2026-09-20, VERIFY-WAVE5-HYGIENE2 round 2 D-1).
+        BOTH routes follow ``rel ~ eps * budget``; the dense route reduces its
+        phase argument modulo one turn and so carries the smaller constant,
+        while the float64 product it reduces has already lost the low bits the
+        budget is made of.  MEASURED against a reference whose phase is
+        reduced EXACTLY, at ``N = 24 -> M = 12`` and identical on both builds:
+        ``1.9e-04`` relative error on the chirp route at a budget of 1e12
+        against ``8.6e-05`` on the dense one, a factor of 2.2 (4.4 on the
+        centred index convention).  The earlier reading here, ``3.7e-16``
+        "exact where the chirp signals are not", was measured against a
+        reference that formed its own phase the way the dense route does and
+        therefore could not see this.  A smaller BUDGET -- fewer samples, or a
+        smaller ``alpha = dx*dx_out/(lambda z)`` -- is the only thing that
+        buys accuracy back by decades.
 
-        The two routes agree to round-off, NOT bit for bit: they are
-        different association orders over the same sum, and the report's
-        derived bar is ``(g_a + g_b) * eps * sum|E|`` with the two
-        summations' growth factors.  Nothing in the library selects
-        ``'direct'`` automatically; see the crossover table and the
-        maintainer-decision paragraph in
-        ``docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/WAVE5_HYGIENE2_REPORT.md``.
+        One thing ``'auto'`` does that ``'direct'`` does not: at a phase
+        budget past
+        :data:`~lumenairy.propagators._bluestein._PHASE_BUDGET_MAX` it WARNS
+        even when it has chosen the dense route, so the default flip cannot
+        take a diagnostic away from a caller who was getting one.  A caller
+        who NAMES ``'direct'`` stays silent, which is the unchanged 5.48
+        decision.
+
+        The crossover tables are in
+        ``docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/WP-C4_MFT_DIRECT_DEFAULT_REPORT.md``
+        and the route's own measurements in the ``WAVE5_HYGIENE2_REPORT.md``
+        beside it.
 
     Returns
     -------
@@ -1224,14 +1278,33 @@ def fraunhofer_propagate_mft(
     use_gpu : bool, default False
     method : {'auto', 'bluestein', 'separable', 'direct'}, default 'auto'
         Which route through the transform's own sum to take.
-        ``'auto'`` is the shipped default and is the chirp-Z (Bluestein)
-        reduction this propagator has always taken -- byte for byte, on
-        every backend, proved archive-to-archive against 5.47.0 over 179
-        fixtures on two builds.  ``'direct'`` takes the dense
+
+        ``'auto'`` is the shipped default and SINCE v5.49.0 IT DECIDES FROM
+        THE SHAPES (WP-C4).  It takes ``'direct'`` -- the dense
         matrix-Fourier transform
         (:func:`~lumenairy.propagators._bluestein._direct_matrix_2d`): two
         matrix products, ``O(M N^2 + M^2 N)`` multiply-adds, no zero-padding
-        and no chirp signal to spend float64 mantissa on.
+        and no chirp signal to spend float64 mantissa on -- when BOTH
+        output-over-input grid ratios sit at or under
+        :data:`~lumenairy.propagators._bluestein._MFT_DIRECT_MAX_RATIO`
+        (1/32), and the chirp-Z reduction this propagator has always taken
+        everywhere else, byte for byte.  The decision is
+        :func:`~lumenairy.propagators._bluestein._auto_selects_direct`, a
+        pure function of the four grid sizes and that one constant: no clock,
+        no environment, no backend, no array contents, so the same call takes
+        the same route on every build and every backend.
+
+        WHAT THAT MOVES, AND THE WAY BACK.  The routes agree to round-off,
+        NOT bit for bit -- they are different association orders over the same
+        sum -- so a call whose output grid is 32x coarser than its input
+        moves in its last bits.  Nothing else does: at ``M > N/32``, which is
+        every focal-zoom grid this propagator is written for, ``'auto'`` is
+        byte-identical to 5.48.1, proved archive-to-archive on two builds.
+        Pass ``method='separable'`` or ``method='bluestein'`` to get the
+        previous route back for one call (byte-identical), or set
+        ``_MFT_DIRECT_MAX_RATIO = _MFT_DIRECT_NEVER`` to get it back for a
+        whole process.  ``_MFT_DIRECT_ALWAYS`` is the other end: every shape
+        on the dense route.
 
         ``'bluestein'`` and ``'separable'`` name the two chirp-Z arms
         explicitly (the 2-D convolution, and the two-pass form that holds
@@ -1245,42 +1318,50 @@ def fraunhofer_propagate_mft(
         ``'auto'``, the vocabulary is CLOSED, and an unrecognised value
         raises rather than falling through to a default.
 
-        WHEN IT IS THE BETTER ROUTE.  For MEMORY, always at these shapes:
-        the chirp-Z route pads each axis to
-        ``L = next_fast_len(N + M - 1)`` and holds several ``L^2`` working
-        arrays, while the dense route holds two ``M x N`` kernels, one
+        WHY THE BOUNDARY SITS AT 1/32.  For MEMORY the dense route wins
+        everywhere and the ordering is build-free: the chirp-Z route pads each
+        axis to ``L = next_fast_len(N + M - 1)`` and holds several ``L^2``
+        working arrays, while the dense route holds two ``M x N`` kernels, one
         intermediate and the output.  MEASURED peak, ``N = 1024``,
         ``M = 32``: **1.8 MB against 159.6 MB**; at ``M = 512``,
-        29.4 MB against 319.0 MB.  For ACCURACY, when the chirp phase
-        budget ``alpha * N_max^2`` is large -- but by a BOUNDED factor and
-        not by decades (corrected 2026-09-20, VERIFY-WAVE5-HYGIENE2 round 2
-        D-1).  BOTH routes follow ``rel ~ eps * budget``; the dense route
-        reduces its phase argument modulo one turn and so carries the smaller
-        constant, while the float64 product it reduces has already lost the
-        low bits the budget is made of.  MEASURED against a reference whose
-        phase is reduced EXACTLY, at ``N = 24 -> M = 12`` and identical on
-        both builds: ``1.9e-04`` relative error on the chirp route at a
-        budget of 1e12 against ``8.6e-05`` on the dense one, a factor of 2.2
-        (4.4 on the centred index convention).  The earlier reading here,
-        ``3.7e-16`` "exact where the chirp signals are not", was measured
-        against a reference that formed its own phase the way the dense route
-        does and therefore could not see this.  A smaller BUDGET -- fewer
-        samples, or a smaller ``alpha = dx*dx_out/(lambda z)`` -- is the only
-        thing that buys accuracy back by decades.  For TIME, only
-        below the crossover -- roughly ``M <= N/4`` on Windows py3.14, where at
-        ``M >= N/2`` with ``N >= 512`` the separable chirp-Z route is 1.2x to
-        3.0x faster.  The TIME crossover is PER-BUILD: on WSL py3.12, where
-        scipy's pocketfft drives the separable route's 1-D passes with its own
-        worker pool, it sits nearer ``M = N/16``.  The MEMORY ordering is not
-        -- the dense route is the smaller at every shape on both builds.
+        29.4 MB against 319.0 MB.  For TIME it does not: the crossover is
+        PER-BUILD, because scipy's pocketfft drives the separable route's 1-D
+        passes through its own worker pool on Linux.  MEASURED 2026-09-20 over
+        a 42-shape ladder on both builds, three independent rounds at the
+        boundary, worst dense-over-fallback ratio: 1/32 reads 0.477 (Windows
+        py3.14) and 0.954 (WSL py3.12) -- never slower on either -- while 1/16
+        reads 1.450 on WSL and 1/8 reads 1.427 on Windows.  1/32 is the
+        INTERSECTION of the two builds' safe regions, which is why the
+        constant is a shape ratio and never a clock.  For ACCURACY the dense
+        route is the better one wherever the chirp phase budget
+        ``alpha * N_max^2`` is large -- but by a BOUNDED factor and not by
+        decades (corrected 2026-09-20, VERIFY-WAVE5-HYGIENE2 round 2 D-1).
+        BOTH routes follow ``rel ~ eps * budget``; the dense route reduces its
+        phase argument modulo one turn and so carries the smaller constant,
+        while the float64 product it reduces has already lost the low bits the
+        budget is made of.  MEASURED against a reference whose phase is
+        reduced EXACTLY, at ``N = 24 -> M = 12`` and identical on both builds:
+        ``1.9e-04`` relative error on the chirp route at a budget of 1e12
+        against ``8.6e-05`` on the dense one, a factor of 2.2 (4.4 on the
+        centred index convention).  The earlier reading here, ``3.7e-16``
+        "exact where the chirp signals are not", was measured against a
+        reference that formed its own phase the way the dense route does and
+        therefore could not see this.  A smaller BUDGET -- fewer samples, or a
+        smaller ``alpha = dx*dx_out/(lambda z)`` -- is the only thing that
+        buys accuracy back by decades.
 
-        The two routes agree to round-off, NOT bit for bit: they are
-        different association orders over the same sum, and the report's
-        derived bar is ``(g_a + g_b) * eps * sum|E|`` with the two
-        summations' growth factors.  Nothing in the library selects
-        ``'direct'`` automatically; see the crossover table and the
-        maintainer-decision paragraph in
-        ``docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/WAVE5_HYGIENE2_REPORT.md``.
+        One thing ``'auto'`` does that ``'direct'`` does not: at a phase
+        budget past
+        :data:`~lumenairy.propagators._bluestein._PHASE_BUDGET_MAX` it WARNS
+        even when it has chosen the dense route, so the default flip cannot
+        take a diagnostic away from a caller who was getting one.  A caller
+        who NAMES ``'direct'`` stays silent, which is the unchanged 5.48
+        decision.
+
+        The crossover tables are in
+        ``docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/WP-C4_MFT_DIRECT_DEFAULT_REPORT.md``
+        and the route's own measurements in the ``WAVE5_HYGIENE2_REPORT.md``
+        beside it.
 
     Returns
     -------

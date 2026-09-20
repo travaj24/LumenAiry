@@ -1,0 +1,1984 @@
+{
+ "build": "WSL-py3.12",
+ "dispatch": [
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": true,
+   "bits_moved_by": [],
+   "matched": "direct",
+   "primitive": "plain",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": true,
+   "separable": false,
+   "shape": [
+    32,
+    32,
+    1,
+    1
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": true,
+   "bits_moved_by": [],
+   "matched": "direct",
+   "primitive": "plain",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": true,
+   "separable": true,
+   "shape": [
+    32,
+    32,
+    1,
+    1
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": true,
+   "bits_moved_by": [],
+   "matched": "direct",
+   "primitive": "centred",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": true,
+   "separable": false,
+   "shape": [
+    32,
+    32,
+    1,
+    1
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": true,
+   "bits_moved_by": [],
+   "matched": "direct",
+   "primitive": "centred",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": true,
+   "separable": true,
+   "shape": [
+    32,
+    32,
+    1,
+    1
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": true,
+   "bits_moved_by": [],
+   "matched": "direct",
+   "primitive": "plain",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": true,
+   "separable": false,
+   "shape": [
+    64,
+    64,
+    2,
+    2
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": true,
+   "bits_moved_by": [],
+   "matched": "direct",
+   "primitive": "plain",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": true,
+   "separable": true,
+   "shape": [
+    64,
+    64,
+    2,
+    2
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": true,
+   "bits_moved_by": [],
+   "matched": "direct",
+   "primitive": "centred",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": true,
+   "separable": false,
+   "shape": [
+    64,
+    64,
+    2,
+    2
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": true,
+   "bits_moved_by": [],
+   "matched": "direct",
+   "primitive": "centred",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": true,
+   "separable": true,
+   "shape": [
+    64,
+    64,
+    2,
+    2
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": true,
+   "bits_moved_by": [],
+   "matched": "direct",
+   "primitive": "plain",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": true,
+   "separable": false,
+   "shape": [
+    128,
+    128,
+    4,
+    4
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": true,
+   "bits_moved_by": [],
+   "matched": "direct",
+   "primitive": "plain",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": true,
+   "separable": true,
+   "shape": [
+    128,
+    128,
+    4,
+    4
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": true,
+   "bits_moved_by": [],
+   "matched": "direct",
+   "primitive": "centred",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": true,
+   "separable": false,
+   "shape": [
+    128,
+    128,
+    4,
+    4
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": true,
+   "bits_moved_by": [],
+   "matched": "direct",
+   "primitive": "centred",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": true,
+   "separable": true,
+   "shape": [
+    128,
+    128,
+    4,
+    4
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": true,
+   "bits_moved_by": [],
+   "matched": "direct",
+   "primitive": "plain",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": true,
+   "separable": false,
+   "shape": [
+    256,
+    256,
+    8,
+    8
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": true,
+   "bits_moved_by": [],
+   "matched": "direct",
+   "primitive": "plain",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": true,
+   "separable": true,
+   "shape": [
+    256,
+    256,
+    8,
+    8
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": true,
+   "bits_moved_by": [],
+   "matched": "direct",
+   "primitive": "centred",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": true,
+   "separable": false,
+   "shape": [
+    256,
+    256,
+    8,
+    8
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": true,
+   "bits_moved_by": [],
+   "matched": "direct",
+   "primitive": "centred",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": true,
+   "separable": true,
+   "shape": [
+    256,
+    256,
+    8,
+    8
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": true,
+   "bits_moved_by": [],
+   "matched": "direct",
+   "primitive": "plain",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": true,
+   "separable": false,
+   "shape": [
+    512,
+    512,
+    16,
+    16
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": true,
+   "bits_moved_by": [],
+   "matched": "direct",
+   "primitive": "plain",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": true,
+   "separable": true,
+   "shape": [
+    512,
+    512,
+    16,
+    16
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": true,
+   "bits_moved_by": [],
+   "matched": "direct",
+   "primitive": "centred",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": true,
+   "separable": false,
+   "shape": [
+    512,
+    512,
+    16,
+    16
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": true,
+   "bits_moved_by": [],
+   "matched": "direct",
+   "primitive": "centred",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": true,
+   "separable": true,
+   "shape": [
+    512,
+    512,
+    16,
+    16
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": true,
+   "bits_moved_by": [],
+   "matched": "direct",
+   "primitive": "plain",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": true,
+   "separable": false,
+   "shape": [
+    96,
+    96,
+    3,
+    3
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": true,
+   "bits_moved_by": [],
+   "matched": "direct",
+   "primitive": "plain",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": true,
+   "separable": true,
+   "shape": [
+    96,
+    96,
+    3,
+    3
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": true,
+   "bits_moved_by": [],
+   "matched": "direct",
+   "primitive": "centred",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": true,
+   "separable": false,
+   "shape": [
+    96,
+    96,
+    3,
+    3
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": true,
+   "bits_moved_by": [],
+   "matched": "direct",
+   "primitive": "centred",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": true,
+   "separable": true,
+   "shape": [
+    96,
+    96,
+    3,
+    3
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": true,
+   "bits_moved_by": [],
+   "matched": "direct",
+   "primitive": "plain",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": true,
+   "separable": false,
+   "shape": [
+    320,
+    320,
+    10,
+    10
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": true,
+   "bits_moved_by": [],
+   "matched": "direct",
+   "primitive": "plain",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": true,
+   "separable": true,
+   "shape": [
+    320,
+    320,
+    10,
+    10
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": true,
+   "bits_moved_by": [],
+   "matched": "direct",
+   "primitive": "centred",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": true,
+   "separable": false,
+   "shape": [
+    320,
+    320,
+    10,
+    10
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": true,
+   "bits_moved_by": [],
+   "matched": "direct",
+   "primitive": "centred",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": true,
+   "separable": true,
+   "shape": [
+    320,
+    320,
+    10,
+    10
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": true,
+   "bits_moved_by": [],
+   "matched": "direct",
+   "primitive": "plain",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": true,
+   "separable": false,
+   "shape": [
+    33,
+    33,
+    1,
+    1
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": true,
+   "bits_moved_by": [],
+   "matched": "direct",
+   "primitive": "plain",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": true,
+   "separable": true,
+   "shape": [
+    33,
+    33,
+    1,
+    1
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": true,
+   "bits_moved_by": [],
+   "matched": "direct",
+   "primitive": "centred",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": true,
+   "separable": false,
+   "shape": [
+    33,
+    33,
+    1,
+    1
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": true,
+   "bits_moved_by": [],
+   "matched": "direct",
+   "primitive": "centred",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": true,
+   "separable": true,
+   "shape": [
+    33,
+    33,
+    1,
+    1
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": true,
+   "bits_moved_by": [],
+   "matched": "direct",
+   "primitive": "plain",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": true,
+   "separable": false,
+   "shape": [
+    65,
+    65,
+    2,
+    2
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": true,
+   "bits_moved_by": [],
+   "matched": "direct",
+   "primitive": "plain",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": true,
+   "separable": true,
+   "shape": [
+    65,
+    65,
+    2,
+    2
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": true,
+   "bits_moved_by": [],
+   "matched": "direct",
+   "primitive": "centred",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": true,
+   "separable": false,
+   "shape": [
+    65,
+    65,
+    2,
+    2
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": true,
+   "bits_moved_by": [],
+   "matched": "direct",
+   "primitive": "centred",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": true,
+   "separable": true,
+   "shape": [
+    65,
+    65,
+    2,
+    2
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": true,
+   "bits_moved_by": [],
+   "matched": "bluestein",
+   "primitive": "plain",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": false,
+   "separable": false,
+   "shape": [
+    512,
+    512,
+    17,
+    16
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": true,
+   "bits_moved_by": [],
+   "matched": "separable",
+   "primitive": "plain",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": false,
+   "separable": true,
+   "shape": [
+    512,
+    512,
+    17,
+    16
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": true,
+   "bits_moved_by": [],
+   "matched": "bluestein",
+   "primitive": "centred",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": false,
+   "separable": false,
+   "shape": [
+    512,
+    512,
+    17,
+    16
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": true,
+   "bits_moved_by": [],
+   "matched": "separable",
+   "primitive": "centred",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": false,
+   "separable": true,
+   "shape": [
+    512,
+    512,
+    17,
+    16
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": true,
+   "bits_moved_by": [],
+   "matched": "bluestein",
+   "primitive": "plain",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": false,
+   "separable": false,
+   "shape": [
+    256,
+    256,
+    9,
+    8
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": true,
+   "bits_moved_by": [],
+   "matched": "separable",
+   "primitive": "plain",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": false,
+   "separable": true,
+   "shape": [
+    256,
+    256,
+    9,
+    8
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": true,
+   "bits_moved_by": [],
+   "matched": "bluestein",
+   "primitive": "centred",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": false,
+   "separable": false,
+   "shape": [
+    256,
+    256,
+    9,
+    8
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": true,
+   "bits_moved_by": [],
+   "matched": "separable",
+   "primitive": "centred",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": false,
+   "separable": true,
+   "shape": [
+    256,
+    256,
+    9,
+    8
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": false,
+   "bits_moved_by": [
+    "scipy_fft_off"
+   ],
+   "matched": "bluestein",
+   "primitive": "plain",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": false,
+   "separable": false,
+   "shape": [
+    64,
+    64,
+    4,
+    4
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": true,
+   "bits_moved_by": [],
+   "matched": "separable",
+   "primitive": "plain",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": false,
+   "separable": true,
+   "shape": [
+    64,
+    64,
+    4,
+    4
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": false,
+   "bits_moved_by": [
+    "scipy_fft_off"
+   ],
+   "matched": "bluestein",
+   "primitive": "centred",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": false,
+   "separable": false,
+   "shape": [
+    64,
+    64,
+    4,
+    4
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": true,
+   "bits_moved_by": [],
+   "matched": "separable",
+   "primitive": "centred",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": false,
+   "separable": true,
+   "shape": [
+    64,
+    64,
+    4,
+    4
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": false,
+   "bits_moved_by": [
+    "scipy_fft_off"
+   ],
+   "matched": "bluestein",
+   "primitive": "plain",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": false,
+   "separable": false,
+   "shape": [
+    48,
+    48,
+    24,
+    24
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": true,
+   "bits_moved_by": [],
+   "matched": "separable",
+   "primitive": "plain",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": false,
+   "separable": true,
+   "shape": [
+    48,
+    48,
+    24,
+    24
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": false,
+   "bits_moved_by": [
+    "scipy_fft_off"
+   ],
+   "matched": "bluestein",
+   "primitive": "centred",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": false,
+   "separable": false,
+   "shape": [
+    48,
+    48,
+    24,
+    24
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": true,
+   "bits_moved_by": [],
+   "matched": "separable",
+   "primitive": "centred",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": false,
+   "separable": true,
+   "shape": [
+    48,
+    48,
+    24,
+    24
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": false,
+   "bits_moved_by": [
+    "scipy_fft_off"
+   ],
+   "matched": "bluestein",
+   "primitive": "plain",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": false,
+   "separable": false,
+   "shape": [
+    28,
+    22,
+    15,
+    13
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": true,
+   "bits_moved_by": [],
+   "matched": "separable",
+   "primitive": "plain",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": false,
+   "separable": true,
+   "shape": [
+    28,
+    22,
+    15,
+    13
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": false,
+   "bits_moved_by": [
+    "scipy_fft_off"
+   ],
+   "matched": "bluestein",
+   "primitive": "centred",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": false,
+   "separable": false,
+   "shape": [
+    28,
+    22,
+    15,
+    13
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": true,
+   "bits_moved_by": [],
+   "matched": "separable",
+   "primitive": "centred",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": false,
+   "separable": true,
+   "shape": [
+    28,
+    22,
+    15,
+    13
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": false,
+   "bits_moved_by": [
+    "scipy_fft_off"
+   ],
+   "matched": "bluestein",
+   "primitive": "plain",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": false,
+   "separable": false,
+   "shape": [
+    24,
+    24,
+    12,
+    12
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": true,
+   "bits_moved_by": [],
+   "matched": "separable",
+   "primitive": "plain",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": false,
+   "separable": true,
+   "shape": [
+    24,
+    24,
+    12,
+    12
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": false,
+   "bits_moved_by": [
+    "scipy_fft_off"
+   ],
+   "matched": "bluestein",
+   "primitive": "centred",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": false,
+   "separable": false,
+   "shape": [
+    24,
+    24,
+    12,
+    12
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": true,
+   "bits_moved_by": [],
+   "matched": "separable",
+   "primitive": "centred",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": false,
+   "separable": true,
+   "shape": [
+    24,
+    24,
+    12,
+    12
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": true,
+   "bits_moved_by": [],
+   "matched": "bluestein",
+   "primitive": "plain",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": false,
+   "separable": false,
+   "shape": [
+    128,
+    128,
+    128,
+    128
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": true,
+   "bits_moved_by": [],
+   "matched": "separable",
+   "primitive": "plain",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": false,
+   "separable": true,
+   "shape": [
+    128,
+    128,
+    128,
+    128
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": true,
+   "bits_moved_by": [],
+   "matched": "bluestein",
+   "primitive": "centred",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": false,
+   "separable": false,
+   "shape": [
+    128,
+    128,
+    128,
+    128
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": true,
+   "bits_moved_by": [],
+   "matched": "separable",
+   "primitive": "centred",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": false,
+   "separable": true,
+   "shape": [
+    128,
+    128,
+    128,
+    128
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": true,
+   "bits_moved_by": [],
+   "matched": "bluestein",
+   "primitive": "plain",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": false,
+   "separable": false,
+   "shape": [
+    64,
+    64,
+    256,
+    256
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": true,
+   "bits_moved_by": [],
+   "matched": "separable",
+   "primitive": "plain",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": false,
+   "separable": true,
+   "shape": [
+    64,
+    64,
+    256,
+    256
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": true,
+   "bits_moved_by": [],
+   "matched": "bluestein",
+   "primitive": "centred",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": false,
+   "separable": false,
+   "shape": [
+    64,
+    64,
+    256,
+    256
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": true,
+   "bits_moved_by": [],
+   "matched": "separable",
+   "primitive": "centred",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": false,
+   "separable": true,
+   "shape": [
+    64,
+    64,
+    256,
+    256
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": false,
+   "bits_moved_by": [
+    "scipy_fft_off"
+   ],
+   "matched": "bluestein",
+   "primitive": "plain",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": false,
+   "separable": false,
+   "shape": [
+    16,
+    16,
+    8,
+    8
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": true,
+   "bits_moved_by": [],
+   "matched": "separable",
+   "primitive": "plain",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": false,
+   "separable": true,
+   "shape": [
+    16,
+    16,
+    8,
+    8
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": false,
+   "bits_moved_by": [
+    "scipy_fft_off"
+   ],
+   "matched": "bluestein",
+   "primitive": "centred",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": false,
+   "separable": false,
+   "shape": [
+    16,
+    16,
+    8,
+    8
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": true,
+   "bits_moved_by": [],
+   "matched": "separable",
+   "primitive": "centred",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": false,
+   "separable": true,
+   "shape": [
+    16,
+    16,
+    8,
+    8
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": true,
+   "bits_moved_by": [],
+   "matched": "direct",
+   "primitive": "plain",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": true,
+   "separable": false,
+   "shape": [
+    100,
+    200,
+    3,
+    6
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": true,
+   "bits_moved_by": [],
+   "matched": "direct",
+   "primitive": "plain",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": true,
+   "separable": true,
+   "shape": [
+    100,
+    200,
+    3,
+    6
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": true,
+   "bits_moved_by": [],
+   "matched": "direct",
+   "primitive": "centred",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": true,
+   "separable": false,
+   "shape": [
+    100,
+    200,
+    3,
+    6
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": true,
+   "bits_moved_by": [],
+   "matched": "direct",
+   "primitive": "centred",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": true,
+   "separable": true,
+   "shape": [
+    100,
+    200,
+    3,
+    6
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": false,
+   "bits_moved_by": [
+    "scipy_fft_off"
+   ],
+   "matched": "bluestein",
+   "primitive": "plain",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": false,
+   "separable": false,
+   "shape": [
+    100,
+    200,
+    3,
+    7
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": true,
+   "bits_moved_by": [],
+   "matched": "separable",
+   "primitive": "plain",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": false,
+   "separable": true,
+   "shape": [
+    100,
+    200,
+    3,
+    7
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": false,
+   "bits_moved_by": [
+    "scipy_fft_off"
+   ],
+   "matched": "bluestein",
+   "primitive": "centred",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": false,
+   "separable": false,
+   "shape": [
+    100,
+    200,
+    3,
+    7
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": true,
+   "bits_moved_by": [],
+   "matched": "separable",
+   "primitive": "centred",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": false,
+   "separable": true,
+   "shape": [
+    100,
+    200,
+    3,
+    7
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": true,
+   "bits_moved_by": [],
+   "matched": "direct",
+   "primitive": "plain",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": true,
+   "separable": false,
+   "shape": [
+    200,
+    100,
+    6,
+    3
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": true,
+   "bits_moved_by": [],
+   "matched": "direct",
+   "primitive": "plain",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": true,
+   "separable": true,
+   "shape": [
+    200,
+    100,
+    6,
+    3
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": true,
+   "bits_moved_by": [],
+   "matched": "direct",
+   "primitive": "centred",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": true,
+   "separable": false,
+   "shape": [
+    200,
+    100,
+    6,
+    3
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": true,
+   "bits_moved_by": [],
+   "matched": "direct",
+   "primitive": "centred",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": true,
+   "separable": true,
+   "shape": [
+    200,
+    100,
+    6,
+    3
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": false,
+   "bits_moved_by": [
+    "scipy_fft_off"
+   ],
+   "matched": "bluestein",
+   "primitive": "plain",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": false,
+   "separable": false,
+   "shape": [
+    7,
+    5,
+    1,
+    1
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": true,
+   "bits_moved_by": [],
+   "matched": "separable",
+   "primitive": "plain",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": false,
+   "separable": true,
+   "shape": [
+    7,
+    5,
+    1,
+    1
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": false,
+   "bits_moved_by": [
+    "scipy_fft_off"
+   ],
+   "matched": "bluestein",
+   "primitive": "centred",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": false,
+   "separable": false,
+   "shape": [
+    7,
+    5,
+    1,
+    1
+   ]
+  },
+  {
+   "as_the_rule_says": true,
+   "auto_bits_stable_under_perturbation": true,
+   "bits_moved_by": [],
+   "matched": "separable",
+   "primitive": "centred",
+   "route_moved_by": [],
+   "route_stable_under_perturbation": true,
+   "rule_says_direct": false,
+   "separable": true,
+   "shape": [
+    7,
+    5,
+    1,
+    1
+   ]
+  }
+ ],
+ "falsifier": {
+  "always": {
+   "n_direct": 30,
+   "n_shapes": 30,
+   "value": "inf"
+  },
+  "never": {
+   "n_direct": 0,
+   "n_shapes": 30,
+   "value": "0.0"
+  },
+  "shipped": {
+   "n_direct": 15,
+   "n_shapes": 30,
+   "value": "0.03125"
+  }
+ },
+ "lumenairy_file": "/mnt/c/tmp/lum_c4/lumenairy/__init__.py",
+ "purity": [
+  {
+   "answers": [
+    true
+   ],
+   "ratio": 0.03125,
+   "says_direct": true,
+   "shape": [
+    32,
+    32,
+    1,
+    1
+   ],
+   "stable": true
+  },
+  {
+   "answers": [
+    true
+   ],
+   "ratio": 0.03125,
+   "says_direct": true,
+   "shape": [
+    64,
+    64,
+    2,
+    2
+   ],
+   "stable": true
+  },
+  {
+   "answers": [
+    true
+   ],
+   "ratio": 0.03125,
+   "says_direct": true,
+   "shape": [
+    128,
+    128,
+    4,
+    4
+   ],
+   "stable": true
+  },
+  {
+   "answers": [
+    true
+   ],
+   "ratio": 0.03125,
+   "says_direct": true,
+   "shape": [
+    256,
+    256,
+    8,
+    8
+   ],
+   "stable": true
+  },
+  {
+   "answers": [
+    true
+   ],
+   "ratio": 0.03125,
+   "says_direct": true,
+   "shape": [
+    512,
+    512,
+    16,
+    16
+   ],
+   "stable": true
+  },
+  {
+   "answers": [
+    true
+   ],
+   "ratio": 0.03125,
+   "says_direct": true,
+   "shape": [
+    1024,
+    1024,
+    32,
+    32
+   ],
+   "stable": true
+  },
+  {
+   "answers": [
+    true
+   ],
+   "ratio": 0.03125,
+   "says_direct": true,
+   "shape": [
+    96,
+    96,
+    3,
+    3
+   ],
+   "stable": true
+  },
+  {
+   "answers": [
+    true
+   ],
+   "ratio": 0.03125,
+   "says_direct": true,
+   "shape": [
+    320,
+    320,
+    10,
+    10
+   ],
+   "stable": true
+  },
+  {
+   "answers": [
+    true
+   ],
+   "ratio": 0.030303030303030304,
+   "says_direct": true,
+   "shape": [
+    33,
+    33,
+    1,
+    1
+   ],
+   "stable": true
+  },
+  {
+   "answers": [
+    true
+   ],
+   "ratio": 0.03076923076923077,
+   "says_direct": true,
+   "shape": [
+    65,
+    65,
+    2,
+    2
+   ],
+   "stable": true
+  },
+  {
+   "answers": [
+    false
+   ],
+   "ratio": 0.033203125,
+   "says_direct": false,
+   "shape": [
+    512,
+    512,
+    17,
+    16
+   ],
+   "stable": true
+  },
+  {
+   "answers": [
+    false
+   ],
+   "ratio": 0.0322265625,
+   "says_direct": false,
+   "shape": [
+    1024,
+    1024,
+    33,
+    32
+   ],
+   "stable": true
+  },
+  {
+   "answers": [
+    false
+   ],
+   "ratio": 0.03515625,
+   "says_direct": false,
+   "shape": [
+    256,
+    256,
+    9,
+    8
+   ],
+   "stable": true
+  },
+  {
+   "answers": [
+    false
+   ],
+   "ratio": 0.0625,
+   "says_direct": false,
+   "shape": [
+    64,
+    64,
+    4,
+    4
+   ],
+   "stable": true
+  },
+  {
+   "answers": [
+    false
+   ],
+   "ratio": 0.5,
+   "says_direct": false,
+   "shape": [
+    48,
+    48,
+    24,
+    24
+   ],
+   "stable": true
+  },
+  {
+   "answers": [
+    false
+   ],
+   "ratio": 0.5909090909090909,
+   "says_direct": false,
+   "shape": [
+    28,
+    22,
+    15,
+    13
+   ],
+   "stable": true
+  },
+  {
+   "answers": [
+    false
+   ],
+   "ratio": 0.5,
+   "says_direct": false,
+   "shape": [
+    24,
+    24,
+    12,
+    12
+   ],
+   "stable": true
+  },
+  {
+   "answers": [
+    false
+   ],
+   "ratio": 1.0,
+   "says_direct": false,
+   "shape": [
+    128,
+    128,
+    128,
+    128
+   ],
+   "stable": true
+  },
+  {
+   "answers": [
+    false
+   ],
+   "ratio": 4.0,
+   "says_direct": false,
+   "shape": [
+    64,
+    64,
+    256,
+    256
+   ],
+   "stable": true
+  },
+  {
+   "answers": [
+    false
+   ],
+   "ratio": 0.5,
+   "says_direct": false,
+   "shape": [
+    16,
+    16,
+    8,
+    8
+   ],
+   "stable": true
+  },
+  {
+   "answers": [
+    true
+   ],
+   "ratio": 0.03125,
+   "says_direct": true,
+   "shape": [
+    512,
+    1024,
+    16,
+    32
+   ],
+   "stable": true
+  },
+  {
+   "answers": [
+    false
+   ],
+   "ratio": 0.0625,
+   "says_direct": false,
+   "shape": [
+    512,
+    1024,
+    16,
+    64
+   ],
+   "stable": true
+  },
+  {
+   "answers": [
+    false
+   ],
+   "ratio": 0.125,
+   "says_direct": false,
+   "shape": [
+    512,
+    1024,
+    64,
+    32
+   ],
+   "stable": true
+  },
+  {
+   "answers": [
+    true
+   ],
+   "ratio": 0.03125,
+   "says_direct": true,
+   "shape": [
+    1024,
+    512,
+    32,
+    16
+   ],
+   "stable": true
+  },
+  {
+   "answers": [
+    true
+   ],
+   "ratio": 0.03125,
+   "says_direct": true,
+   "shape": [
+    768,
+    768,
+    24,
+    24
+   ],
+   "stable": true
+  },
+  {
+   "answers": [
+    false
+   ],
+   "ratio": 0.032552083333333336,
+   "says_direct": false,
+   "shape": [
+    768,
+    768,
+    25,
+    24
+   ],
+   "stable": true
+  },
+  {
+   "answers": [
+    true
+   ],
+   "ratio": 0.03,
+   "says_direct": true,
+   "shape": [
+    100,
+    200,
+    3,
+    6
+   ],
+   "stable": true
+  },
+  {
+   "answers": [
+    false
+   ],
+   "ratio": 0.035,
+   "says_direct": false,
+   "shape": [
+    100,
+    200,
+    3,
+    7
+   ],
+   "stable": true
+  },
+  {
+   "answers": [
+    true
+   ],
+   "ratio": 0.03,
+   "says_direct": true,
+   "shape": [
+    200,
+    100,
+    6,
+    3
+   ],
+   "stable": true
+  },
+  {
+   "answers": [
+    false
+   ],
+   "ratio": 0.2,
+   "says_direct": false,
+   "shape": [
+    7,
+    5,
+    1,
+    1
+   ],
+   "stable": true
+  }
+ ],
+ "python": "3.12.3",
+ "ratio": 0.03125,
+ "summary": {
+  "dispatch_as_rule_says": 88,
+  "dispatch_bits_stable": 74,
+  "dispatch_n": 88,
+  "dispatch_route_stable": 88,
+  "dispatch_third_arithmetic": 0,
+  "n_direct_shapes": 15,
+  "purity_n": 30,
+  "purity_stable": 30,
+  "which_perturbations_move_bits": {
+   "scipy_fft_off": 14
+  }
+ }
+}

@@ -1,0 +1,392 @@
+{
+ "backends": {
+  "cupy": {
+   "premise": "ModuleNotFoundError: No module named 'cupy'"
+  },
+  "jax": {
+   "devices": [
+    "cpu:0"
+   ],
+   "dispatch": [
+    {
+     "derived_bar": 1.4418862050241542e-10,
+     "eager_matches": "direct",
+     "eager_vs_numpy_max_abs": 3.1776437161565096e-14,
+     "inside_bar": true,
+     "jit_matches": "direct",
+     "jit_vs_eager_max_abs": 0.0,
+     "rule_says_direct": true,
+     "shape": [
+      64,
+      64,
+      2,
+      2
+     ]
+    },
+    {
+     "derived_bar": 1.1630936068617172e-09,
+     "eager_matches": "direct",
+     "eager_vs_numpy_max_abs": 2.034684749684793e-13,
+     "inside_bar": true,
+     "jit_matches": "direct",
+     "jit_vs_eager_max_abs": 0.0,
+     "rule_says_direct": true,
+     "shape": [
+      128,
+      128,
+      4,
+      4
+     ]
+    },
+    {
+     "derived_bar": 9.322099590972665e-09,
+     "eager_matches": "direct",
+     "eager_vs_numpy_max_abs": 6.12222357532858e-13,
+     "inside_bar": true,
+     "jit_matches": "direct",
+     "jit_vs_eager_max_abs": 0.0,
+     "rule_says_direct": true,
+     "shape": [
+      256,
+      256,
+      8,
+      8
+     ]
+    },
+    {
+     "derived_bar": 4.885471890705316e-10,
+     "eager_matches": "direct",
+     "eager_vs_numpy_max_abs": 6.07087979554246e-14,
+     "inside_bar": true,
+     "jit_matches": "direct",
+     "jit_vs_eager_max_abs": 0.0,
+     "rule_says_direct": true,
+     "shape": [
+      96,
+      96,
+      3,
+      3
+     ]
+    },
+    {
+     "derived_bar": 1.4418862050241542e-10,
+     "eager_matches": "bluestein",
+     "eager_vs_numpy_max_abs": 1.2224639458285405e-13,
+     "inside_bar": true,
+     "jit_matches": "bluestein",
+     "jit_vs_eager_max_abs": 0.0,
+     "rule_says_direct": false,
+     "shape": [
+      64,
+      64,
+      8,
+      8
+     ]
+    },
+    {
+     "derived_bar": 7.360167169349537e-12,
+     "eager_matches": "bluestein",
+     "eager_vs_numpy_max_abs": 4.2004008360314486e-14,
+     "inside_bar": true,
+     "jit_matches": "bluestein",
+     "jit_vs_eager_max_abs": 0.0,
+     "rule_says_direct": false,
+     "shape": [
+      24,
+      24,
+      12,
+      12
+     ]
+    },
+    {
+     "derived_bar": 6.115689538798957e-11,
+     "eager_matches": "bluestein",
+     "eager_vs_numpy_max_abs": 8.101433657963767e-14,
+     "inside_bar": true,
+     "jit_matches": "bluestein",
+     "jit_vs_eager_max_abs": 0.0,
+     "rule_says_direct": false,
+     "shape": [
+      48,
+      48,
+      24,
+      24
+     ]
+    },
+    {
+     "derived_bar": 1.799355359076253e-11,
+     "eager_matches": "bluestein",
+     "eager_vs_numpy_max_abs": 4.768585600685116e-14,
+     "inside_bar": true,
+     "jit_matches": "bluestein",
+     "jit_vs_eager_max_abs": 0.0,
+     "rule_says_direct": false,
+     "shape": [
+      32,
+      32,
+      16,
+      16
+     ]
+    }
+   ],
+   "dispatch_as_rule_says": 8,
+   "inside_bar": 8,
+   "jit_agrees_with_eager": 8,
+   "n": 8,
+   "premise": "available",
+   "selection": [
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    true,
+    false,
+    false,
+    true,
+    true,
+    false,
+    true,
+    false,
+    true,
+    false
+   ],
+   "selection_matches_numpy": true,
+   "version": "0.10.2",
+   "x64": true
+  }
+ },
+ "build": "WSL-py3.12",
+ "lumenairy_file": "/mnt/c/tmp/lum_c4/lumenairy/__init__.py",
+ "numpy_selection": [
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  false,
+  false,
+  false,
+  false,
+  false,
+  false,
+  false,
+  false,
+  false,
+  false,
+  true,
+  false,
+  false,
+  true,
+  true,
+  false,
+  true,
+  false,
+  true,
+  false
+ ],
+ "python": "3.12.3",
+ "ratio": 0.03125,
+ "shapes": [
+  [
+   32,
+   32,
+   1,
+   1
+  ],
+  [
+   64,
+   64,
+   2,
+   2
+  ],
+  [
+   96,
+   96,
+   3,
+   3
+  ],
+  [
+   128,
+   128,
+   4,
+   4
+  ],
+  [
+   256,
+   256,
+   8,
+   8
+  ],
+  [
+   512,
+   512,
+   16,
+   16
+  ],
+  [
+   1024,
+   1024,
+   32,
+   32
+  ],
+  [
+   33,
+   33,
+   1,
+   1
+  ],
+  [
+   65,
+   65,
+   2,
+   2
+  ],
+  [
+   320,
+   320,
+   10,
+   10
+  ],
+  [
+   512,
+   512,
+   17,
+   16
+  ],
+  [
+   1024,
+   1024,
+   33,
+   32
+  ],
+  [
+   256,
+   256,
+   9,
+   8
+  ],
+  [
+   64,
+   64,
+   4,
+   4
+  ],
+  [
+   48,
+   48,
+   24,
+   24
+  ],
+  [
+   28,
+   22,
+   15,
+   13
+  ],
+  [
+   24,
+   24,
+   12,
+   12
+  ],
+  [
+   128,
+   128,
+   128,
+   128
+  ],
+  [
+   64,
+   64,
+   256,
+   256
+  ],
+  [
+   16,
+   16,
+   8,
+   8
+  ],
+  [
+   512,
+   1024,
+   16,
+   32
+  ],
+  [
+   512,
+   1024,
+   16,
+   64
+  ],
+  [
+   512,
+   1024,
+   64,
+   32
+  ],
+  [
+   1024,
+   512,
+   32,
+   16
+  ],
+  [
+   768,
+   768,
+   24,
+   24
+  ],
+  [
+   768,
+   768,
+   25,
+   24
+  ],
+  [
+   100,
+   200,
+   3,
+   6
+  ],
+  [
+   100,
+   200,
+   3,
+   7
+  ],
+  [
+   200,
+   100,
+   6,
+   3
+  ],
+  [
+   7,
+   5,
+   1,
+   1
+  ]
+ ]
+}

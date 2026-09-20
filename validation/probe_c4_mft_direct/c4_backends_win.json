@@ -1,0 +1,533 @@
+{
+ "backends": {
+  "cupy": {
+   "device": "b'NVIDIA GeForce RTX 4070 Ti'",
+   "dispatch": [
+    {
+     "auto_is_dense_bits": true,
+     "auto_vs_numpy_max_abs": 7.418283949015283e-14,
+     "derived_bar": 1.4418862050241542e-10,
+     "inside_bar": true,
+     "ran": true,
+     "rule_says_direct": true,
+     "shape": [
+      64,
+      64,
+      2,
+      2
+     ]
+    },
+    {
+     "auto_is_dense_bits": true,
+     "auto_vs_numpy_max_abs": 1.797546735911271e-13,
+     "derived_bar": 1.1630936068617172e-09,
+     "inside_bar": true,
+     "ran": true,
+     "rule_says_direct": true,
+     "shape": [
+      128,
+      128,
+      4,
+      4
+     ]
+    },
+    {
+     "auto_is_dense_bits": true,
+     "auto_vs_numpy_max_abs": 7.12281438155046e-13,
+     "derived_bar": 9.322099590972665e-09,
+     "inside_bar": true,
+     "ran": true,
+     "rule_says_direct": true,
+     "shape": [
+      256,
+      256,
+      8,
+      8
+     ]
+    },
+    {
+     "auto_is_dense_bits": true,
+     "auto_vs_numpy_max_abs": 1.4210854715202004e-13,
+     "derived_bar": 4.885471890705316e-10,
+     "inside_bar": true,
+     "ran": true,
+     "rule_says_direct": true,
+     "shape": [
+      96,
+      96,
+      3,
+      3
+     ]
+    },
+    {
+     "error": "ImportError: DLL load failed while importing cufft: The specified module could not be found.",
+     "ran": false,
+     "rule_says_direct": false,
+     "shape": [
+      64,
+      64,
+      8,
+      8
+     ]
+    },
+    {
+     "error": "ImportError: DLL load failed while importing cufft: The specified module could not be found.",
+     "ran": false,
+     "rule_says_direct": false,
+     "shape": [
+      24,
+      24,
+      12,
+      12
+     ]
+    },
+    {
+     "error": "ImportError: DLL load failed while importing cufft: The specified module could not be found.",
+     "ran": false,
+     "rule_says_direct": false,
+     "shape": [
+      48,
+      48,
+      24,
+      24
+     ]
+    },
+    {
+     "error": "ImportError: DLL load failed while importing cufft: The specified module could not be found.",
+     "ran": false,
+     "rule_says_direct": false,
+     "shape": [
+      32,
+      32,
+      16,
+      16
+     ]
+    }
+   ],
+   "fft_premise": "cuFFT BROKEN: ImportError: DLL load failed while importing cufft: The specified module could not be found.",
+   "n": 8,
+   "n_dense_side_ran": 4,
+   "n_ran": 4,
+   "premise": "available",
+   "selection": [
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    true,
+    false,
+    false,
+    true,
+    true,
+    false,
+    true,
+    false,
+    true,
+    false
+   ],
+   "selection_matches_numpy": true,
+   "version": "14.0.1"
+  },
+  "jax": {
+   "devices": [
+    "cpu:0"
+   ],
+   "dispatch": [
+    {
+     "derived_bar": 1.4418862050241542e-10,
+     "eager_matches": "direct",
+     "eager_vs_numpy_max_abs": 4.4938668397781776e-14,
+     "inside_bar": true,
+     "jit_matches": "direct",
+     "jit_vs_eager_max_abs": 0.0,
+     "rule_says_direct": true,
+     "shape": [
+      64,
+      64,
+      2,
+      2
+     ]
+    },
+    {
+     "derived_bar": 1.1630936068617172e-09,
+     "eager_matches": "direct",
+     "eager_vs_numpy_max_abs": 1.7053025658242404e-13,
+     "inside_bar": true,
+     "jit_matches": "direct",
+     "jit_vs_eager_max_abs": 0.0,
+     "rule_says_direct": true,
+     "shape": [
+      128,
+      128,
+      4,
+      4
+     ]
+    },
+    {
+     "derived_bar": 9.322099590972665e-09,
+     "eager_matches": "direct",
+     "eager_vs_numpy_max_abs": 8.003626044415298e-13,
+     "inside_bar": true,
+     "jit_matches": "direct",
+     "jit_vs_eager_max_abs": 0.0,
+     "rule_says_direct": true,
+     "shape": [
+      256,
+      256,
+      8,
+      8
+     ]
+    },
+    {
+     "derived_bar": 4.885471890705316e-10,
+     "eager_matches": "direct",
+     "eager_vs_numpy_max_abs": 5.54951617168815e-14,
+     "inside_bar": true,
+     "jit_matches": "direct",
+     "jit_vs_eager_max_abs": 0.0,
+     "rule_says_direct": true,
+     "shape": [
+      96,
+      96,
+      3,
+      3
+     ]
+    },
+    {
+     "derived_bar": 1.4418862050241542e-10,
+     "eager_matches": "bluestein",
+     "eager_vs_numpy_max_abs": 8.267696017476735e-14,
+     "inside_bar": true,
+     "jit_matches": "bluestein",
+     "jit_vs_eager_max_abs": 0.0,
+     "rule_says_direct": false,
+     "shape": [
+      64,
+      64,
+      8,
+      8
+     ]
+    },
+    {
+     "derived_bar": 7.360167169349537e-12,
+     "eager_matches": "bluestein",
+     "eager_vs_numpy_max_abs": 2.9777166713245526e-14,
+     "inside_bar": true,
+     "jit_matches": "bluestein",
+     "jit_vs_eager_max_abs": 0.0,
+     "rule_says_direct": false,
+     "shape": [
+      24,
+      24,
+      12,
+      12
+     ]
+    },
+    {
+     "derived_bar": 6.115689538798957e-11,
+     "eager_matches": "bluestein",
+     "eager_vs_numpy_max_abs": 8.629968601444372e-14,
+     "inside_bar": true,
+     "jit_matches": "bluestein",
+     "jit_vs_eager_max_abs": 0.0,
+     "rule_says_direct": false,
+     "shape": [
+      48,
+      48,
+      24,
+      24
+     ]
+    },
+    {
+     "derived_bar": 1.799355359076253e-11,
+     "eager_matches": "bluestein",
+     "eager_vs_numpy_max_abs": 5.472217097501671e-14,
+     "inside_bar": true,
+     "jit_matches": "bluestein",
+     "jit_vs_eager_max_abs": 0.0,
+     "rule_says_direct": false,
+     "shape": [
+      32,
+      32,
+      16,
+      16
+     ]
+    }
+   ],
+   "dispatch_as_rule_says": 8,
+   "inside_bar": 8,
+   "jit_agrees_with_eager": 8,
+   "n": 8,
+   "premise": "available",
+   "selection": [
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    true,
+    false,
+    false,
+    true,
+    true,
+    false,
+    true,
+    false,
+    true,
+    false
+   ],
+   "selection_matches_numpy": true,
+   "version": "0.11.0",
+   "x64": true
+  }
+ },
+ "build": "WIN-py3.14",
+ "lumenairy_file": "C:\\tmp\\lum_c4\\lumenairy\\__init__.py",
+ "numpy_selection": [
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  false,
+  false,
+  false,
+  false,
+  false,
+  false,
+  false,
+  false,
+  false,
+  false,
+  true,
+  false,
+  false,
+  true,
+  true,
+  false,
+  true,
+  false,
+  true,
+  false
+ ],
+ "python": "3.14.6",
+ "ratio": 0.03125,
+ "shapes": [
+  [
+   32,
+   32,
+   1,
+   1
+  ],
+  [
+   64,
+   64,
+   2,
+   2
+  ],
+  [
+   96,
+   96,
+   3,
+   3
+  ],
+  [
+   128,
+   128,
+   4,
+   4
+  ],
+  [
+   256,
+   256,
+   8,
+   8
+  ],
+  [
+   512,
+   512,
+   16,
+   16
+  ],
+  [
+   1024,
+   1024,
+   32,
+   32
+  ],
+  [
+   33,
+   33,
+   1,
+   1
+  ],
+  [
+   65,
+   65,
+   2,
+   2
+  ],
+  [
+   320,
+   320,
+   10,
+   10
+  ],
+  [
+   512,
+   512,
+   17,
+   16
+  ],
+  [
+   1024,
+   1024,
+   33,
+   32
+  ],
+  [
+   256,
+   256,
+   9,
+   8
+  ],
+  [
+   64,
+   64,
+   4,
+   4
+  ],
+  [
+   48,
+   48,
+   24,
+   24
+  ],
+  [
+   28,
+   22,
+   15,
+   13
+  ],
+  [
+   24,
+   24,
+   12,
+   12
+  ],
+  [
+   128,
+   128,
+   128,
+   128
+  ],
+  [
+   64,
+   64,
+   256,
+   256
+  ],
+  [
+   16,
+   16,
+   8,
+   8
+  ],
+  [
+   512,
+   1024,
+   16,
+   32
+  ],
+  [
+   512,
+   1024,
+   16,
+   64
+  ],
+  [
+   512,
+   1024,
+   64,
+   32
+  ],
+  [
+   1024,
+   512,
+   32,
+   16
+  ],
+  [
+   768,
+   768,
+   24,
+   24
+  ],
+  [
+   768,
+   768,
+   25,
+   24
+  ],
+  [
+   100,
+   200,
+   3,
+   6
+  ],
+  [
+   100,
+   200,
+   3,
+   7
+  ],
+  [
+   200,
+   100,
+   6,
+   3
+  ],
+  [
+   7,
+   5,
+   1,
+   1
+  ]
+ ]
+}

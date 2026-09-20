@@ -110,11 +110,21 @@ def digest(obj, caught=()) -> str:
     """
     import numpy as np
     h = hashlib.sha256()
-    h.update(type(obj).__name__.encode('utf-8'))
-    a = np.asarray(obj)
-    h.update(str(a.dtype).encode('utf-8'))
-    h.update(str(a.shape).encode('utf-8'))
-    h.update(np.ascontiguousarray(a).tobytes())
+
+    def _fold(o):
+        h.update(type(o).__name__.encode('utf-8'))
+        if isinstance(o, (tuple, list)):
+            h.update(str(len(o)).encode('utf-8'))
+            for item in o:
+                h.update(b'|,|')
+                _fold(item)
+            return
+        a = np.asarray(o)
+        h.update(str(a.dtype).encode('utf-8'))
+        h.update(str(a.shape).encode('utf-8'))
+        h.update(np.ascontiguousarray(a).tobytes())
+
+    _fold(obj)
     for w in caught:
         h.update(b'|W|')
         h.update(getattr(w.category, '__name__', str(w.category))
