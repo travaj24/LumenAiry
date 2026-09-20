@@ -7,7 +7,7 @@ evaluates the textbook normal of the sphere
 
     n = (-dz/dx, -dz/dy, 1) / |.|,   dz/dh = h / (R sqrt(1 - h^2/R^2))
 
-in ``decimal`` at 60 significant digits (~44 digits beyond float64, so
+in ``decimal`` at 80 significant digits (~64 digits beyond float64, so
 the oracle's own error is not measurable here), and compares BOTH
 library routes against it:
 
@@ -21,6 +21,26 @@ Sweep: radii of both signs from 2 mm to 1 m, heights from the vertex up
 to the ``0.99995 |R|`` domain clamp, several azimuths, and the same set
 with the surface declared a MIRROR (``glass_after='mirror'``), which
 must not change the normal at all.
+
+EXACT INPUT CONVERSION (VERIFY-WP-C2 defect D1, closed in round 2).
+This probe used to convert its inputs with
+``ctx.create_decimal(repr(float(x)))`` -- the shortest ROUND-TRIPPING
+decimal, which differs from the float's exact binary value by up to half
+an ULP of the input.  ``nz = sqrt(1 - u)`` amplifies a relative input
+perturbation by ``u / (2 (1 - u))``, so above about ``h = 0.9 |R|`` the
+probe was measuring its own conversion rather than the library: the
+contribution reaches 1.00 of this probe's own ULP unit at ``h = 0.95``
+(exactly where it reported the closed form at 1.75) and 41.6 at the
+clamp.  ``decimal.Decimal(float(x))`` is EXACT for any finite float, so
+the conversion now contributes nothing at all.  The precision is raised
+from 60 to 80 at the same time: the exact decimal expansion of a float
+near 1e-3 runs to about 60 significant digits, so 60 sat exactly at the
+boundary.  Convergence is demonstrated rather than assumed -- see
+``C2_PREC`` below.
+
+``C2_PREC`` (environment, default 80) overrides the working precision so
+the convergence claim can be re-measured: every summary field must be
+identical at 80 and at 120.
 
 Usage:  LUMENAIRY_ROOT=<root> python sphere_oracle.py <out.json>
 """
@@ -45,10 +65,17 @@ from lumenairy.raytrace.core import Surface  # noqa: E402
 ULP = 2.0 ** -52
 
 
-def _oracle(x, y, R, prec=60):
-    ctx = decimal.Context(prec=prec)
+PREC = int(os.environ.get('C2_PREC', '80'))
+
+
+def _oracle(x, y, R, prec=None):
+    ctx = decimal.Context(prec=PREC if prec is None else prec)
     dec = ctx.create_decimal
-    X, Y, RR = dec(repr(float(x))), dec(repr(float(y))), dec(repr(float(R)))
+    # EXACT: Decimal(float) is the float's exact binary value, to as many
+    # digits as it takes.  repr(float) is the shortest round-tripping
+    # decimal and is NOT exact (D1).
+    X, Y, RR = (decimal.Decimal(float(x)), decimal.Decimal(float(y)),
+                decimal.Decimal(float(R)))
     h_sq = ctx.add(ctx.multiply(X, X), ctx.multiply(Y, Y))
     h = h_sq.sqrt(ctx)
     one = dec(1)
@@ -136,6 +163,16 @@ def main():
         ties=int(np.sum(ef[finite] == es[finite])),
         fast_never_worse_by_more_than_ulp=bool(
             np.all(ef[finite] <= es[finite] + 1.0)),
+        # the band the accuracy CLAIM is made over, counted explicitly so
+        # the CHANGELOG's "never worse there by more than 1 ULP at any of
+        # N points" is a field of this file rather than a reading
+        n_points_to_0p95=int(lo.sum()),
+        n_fast_worse_by_more_than_ulp_to_0p95=int(
+            np.sum(ef[lo] > es[lo] + 1.0)),
+        fast_never_worse_by_more_than_ulp_to_0p95=bool(
+            np.all(ef[lo] <= es[lo] + 1.0)),
+        n_fast_worse_all=int(np.sum(ef[finite] > es[finite])),
+        worst_deficit_ulp_all=float(np.max(ef[finite] - es[finite])),
         mirror_invariant=mirror_same,
         n_fast_nan=int(sum(r['fast_nan'] for r in rows)),
         n_slow_nan=int(sum(r['slow_nan'] for r in rows)),
@@ -145,7 +182,8 @@ def main():
     for k, v in summary.items():
         print(f'{k}: {v}')
     meta = dict(python=sys.version, numpy=np.__version__,
-                lumenairy=la.__version__, platform=sys.platform, prec=60)
+                lumenairy=la.__version__, platform=sys.platform, prec=PREC,
+                exact_input_conversion=True)
     with open(out_path, 'w') as fh:
         json.dump(dict(meta=meta, summary=summary, rows=rows), fh, indent=1)
     print('wrote', out_path)

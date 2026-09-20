@@ -1800,9 +1800,15 @@ mounts; the 70 that are not are exactly the entry points listed under
 **What you get if you do nothing.**  A 1.08x to 1.44x faster trace on
 prescriptions that contain spherical surfaces (medians 1.12x and 1.19x on the
 two development mounts; 0.93x to 1.03x on prescriptions with no pure sphere,
-which is the measurement's own resolution), a normal that is within 1.75 ULP of
-a 60-digit oracle out to `h = 0.95 |R|` against the previous route's 2.00-2.25,
-and answers that move by at most 1.8e-11 absolute and 3.4e-13 relative.  No
+which is the measurement's own resolution), a normal that is within **1.50 ULP**
+of an 80-digit exact-input oracle out to `h = 0.95 |R|` against the previous
+route's **1.75** -- identical on both development mounts, never worse there by
+more than one unit at any of 672 points -- and answers that move by at most
+1.8e-11 absolute and 3.4e-13 relative.  Above `0.95 |R|` both routes are at the
+conditioning limit of `sqrt(1 - h^2/R^2)` and neither dominates point by point
+(46 against 91 ULP at the clamp; at 14 of 1056 points on one mount and 18 on
+the other the closed form rounds worse by more than a unit).  "More accurate"
+is a bound out to `0.95 |R|` and a mean beyond it.  No
 `alive` flag, error code or vignetting count moves on any shipped prescription:
 360 000 traced rays over twelve prescription and field-angle combinations moved
 zero of each.  CPU / JAX parity is unmoved (3.5e-18 m in position, 3.1e-17 m in

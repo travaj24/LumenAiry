@@ -187,19 +187,29 @@ def trace(
         Pass ``sphere_normal='generic'`` for the arithmetic it replaced,
         which is byte-identical to what 5.48.1 produced.
 
-        WHY.  Against a 60-digit ``decimal`` oracle over 1056 points
-        (eight radii of both signs from 2 mm to 1 m, eleven heights from
-        the vertex to the domain clamp, six azimuths, refracting and
-        mirror alike), the closed form is within **1.75 ULP** everywhere
-        out to ``h = 0.95 |R|`` against the generic route's 2.25, is
-        never worse there by more than 1 ULP at any of 672 points, and is
-        strictly closer at 56 % of all points against 11 % the other way.
-        It is a unit vector to <= 1.5 ULP by construction.  Above
-        ``0.95 |R|`` BOTH routes enter the conditioning limit of
-        ``sqrt(1 - h^2/R^2)`` together (13 ULP at ``0.999 |R|``, 57 to 76
-        at the clamp) and neither dominates point by point -- so "more
-        accurate" is a mean and a bound out to 0.95, not a bound
-        everywhere.  Measured speed-up on the whole trace: **1.08x to
+        WHY.  Against an 80-digit ``decimal`` oracle with EXACT input
+        conversion, over 1056 points (eight radii of both signs from 2 mm
+        to 1 m, eleven heights from the vertex to the domain clamp, six
+        azimuths, refracting and mirror alike), the closed form is within
+        **1.50 ULP** everywhere out to ``h = 0.95 |R|`` against the
+        generic route's 1.75, is never worse there by more than 1 ULP at
+        any of the 672 points in that band, and is strictly closer at
+        55-56 % of all points against 12 % the other way.  It is a unit
+        vector to <= 1.5 ULP by construction.  Above ``0.95 |R|`` BOTH
+        routes enter the conditioning limit of ``sqrt(1 - h^2/R^2)``
+        together (7.1 ULP at ``0.999 |R|``, **46 against 91** at the
+        clamp) and neither dominates point by point: at 14 of 1056 points
+        (Windows; 18 on WSL), all at ``h >= 0.99 |R|``, the closed form
+        rounds worse by more than one unit, by up to 22.8 (Windows) /
+        35.3 (WSL).  So "more accurate" is a mean and a bound out to
+        0.95, not a bound everywhere.  (The earlier reading -- 1.75
+        against 2.25, and 57 against 76 at the clamp -- came from an
+        oracle that converted its own inputs with ``repr(float(x))``,
+        the shortest ROUND-TRIPPING decimal rather than the exact value;
+        ``sqrt(1 - u)`` amplifies that by ``u / (2 (1 - u))``, so above
+        about ``0.9 |R|`` the probe was measuring itself.  Both routes
+        read better against the corrected oracle and the margin between
+        them widens.)  Measured speed-up on the whole trace: **1.08x to
         1.44x** over three sphere-bearing prescriptions on two builds
         (medians 1.12x Windows, 1.19x WSL), against 0.93x to 1.03x on
         prescriptions with no pure sphere, which is the measurement's own

@@ -17,20 +17,30 @@ keep `sphere_normal='generic'` / `analytic_sphere=False`, because
 `analysis.ghost` and the finite-difference differential path call them directly
 and own their own arithmetic policy.
 
-**Accuracy, re-derived against a 60-digit `decimal` oracle** on WP-C2's own
-sphere set -- eight radii of both signs from 2 mm to 1 m, eleven heights from
-the vertex to the domain clamp, six azimuths, refracting and mirror alike,
-1056 points on each of two builds.  Out to `h = 0.95 |R|` the closed form is
-within **1.75 ULP** of the truth against the generic route's 2.00 (Windows
-py3.14 / numpy 2.4.4) and 2.25 (WSL py3.12 / numpy 2.4.6), is never worse by
-more than 1 ULP at any of the 672 points there, and is a unit vector to 1.5 ULP
-by construction.  Over the whole set it is closer at 56 % of points against
-11 % the other way.  Above `0.95 |R|` BOTH routes enter the conditioning limit
-of `sqrt(1 - u)` together -- 13 ULP at `0.999 |R|`, 57 (closed form) against 76
-(generic) at the clamp -- and neither dominates point by point: at 22 of 1056
-points the closed form happens to round worse, by up to 35 ULP.  "More
-accurate" is therefore a bound out to `0.95 |R|` and a mean beyond it, and the
-test file says so in an arm of its own.
+**Accuracy, re-derived against an 80-digit `decimal` oracle with EXACT input
+conversion** on WP-C2's own sphere set -- eight radii of both signs from 2 mm
+to 1 m, eleven heights from the vertex to the domain clamp, six azimuths,
+refracting and mirror alike, 1056 points on each of two builds.  Out to
+`h = 0.95 |R|` the closed form is within **1.50 ULP** of the truth against the
+generic route's **1.75**, identically on Windows py3.14 / numpy 2.4.4 and WSL
+py3.12 / numpy 2.4.6, is never worse by more than 1 ULP at any of the 672
+points there, and is a unit vector to 1.5 ULP by construction.  Over the whole
+set it is closer at 55-56 % of points against 12 % the other way.  Above
+`0.95 |R|` BOTH routes enter the conditioning limit of `sqrt(1 - u)` together
+-- 7.1 ULP at `0.999 |R|`, **46** (closed form) against **91** (generic) at the
+clamp -- and neither dominates point by point: at 14 of 1056 points on Windows
+and 18 on WSL, all at `h >= 0.99 |R|`, the closed form happens to round worse
+by more than one unit, by up to 22.8 / 35.3 ULP.  "More accurate" is therefore
+a bound out to `0.95 |R|` and a mean beyond it, and the test file says so in an
+arm of its own.  The oracle is shown converged rather than assumed converged:
+every summary field is identical at `prec = 80` and `prec = 120`, on both
+builds.  (The first publication of this entry read 1.75 against 2.00-2.25, and
+57 against 76 at the clamp, from an oracle that converted its own inputs with
+`repr(float(x))` -- the shortest round-tripping decimal, not the exact value.
+`sqrt(1 - u)` amplifies that by `u / (2 (1 - u))`, so above about `0.9 |R|` the
+probe was measuring itself; its own contribution reached 1.00 ULP at
+`h = 0.95 |R|` and 41.6 at the clamp.  Both routes read better against the
+corrected oracle and the margin between them widens.)
 
 **Speed.**  1.08x to 1.44x on the whole trace over three sphere-bearing
 prescriptions (a seven-surface spherical stack, a Cooke-like triplet, a

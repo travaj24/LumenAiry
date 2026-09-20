@@ -37,11 +37,15 @@ derived on the running build.
    come out.  Both pins are now decisions with bars the running build derives,
    green under all four default combinations on both builds.
 2. **`sphere_normal='analytic'` is the better route over the working aperture,
-   and is now the default.**  1.75 ULP against a 60-digit oracle out to
-   `h = 0.95 |R|` (generic: 2.00 Windows, 2.25 WSL), never worse there by more
-   than 1 ULP at any of 672 points, unit to 1.5 ULP by construction.  Above
-   `0.95 |R|` neither route dominates -- stated in the code, in the CHANGELOG
-   and in an arm of the test file, because it is the honest half of the claim.
+   and is now the default.**  **1.50 ULP** against an 80-digit oracle with
+   EXACT input conversion out to `h = 0.95 |R|` (generic: **1.75**, both
+   builds), never worse there by more than 1 ULP at any of 672 points, unit to
+   1.5 ULP by construction.  Above `0.95 |R|` neither route dominates --
+   stated in the code, in the CHANGELOG and in an arm of the test file,
+   because it is the honest half of the claim.  (Round 2, defect D1: the
+   numbers first published here -- 1.75 against 2.00/2.25 -- came from an
+   oracle whose own input conversion was not exact.  Section 2.1 carries the
+   corrected sweep; the conclusion is unchanged and the margin widens.)
 3. **Timing: 1.08x to 1.44x, and the measurement's own resolution is about
    +-7 %.**  The controls (prescriptions with no pure sphere, where the switch
    cannot change anything) read 0.93x to 1.03x.  The box carried other agents'
@@ -175,29 +179,48 @@ what "a coin" looks like from the other side.
 `0.99994 |R|`, six azimuths, each set evaluated twice -- once refracting, once
 with the surface declared a MIRROR -- 1056 points per build.
 
-| quantity | Windows | WSL |
-|---|---|---|
-| closed form, worst ULP out to `h = 0.95 R` (672 points) | **1.75** | **1.75** |
-| generic route, same | 2.00 | 2.25 |
-| points where the closed form is worse by > 1 ULP there | **0** | 0 |
-| closed form, worst ULP over the whole set | 57.47 | 57.47 |
-| generic route, same | 76.30 | 76.30 |
-| unit-vector defect of the closed form, worst | 1.0 ULP | 1.5 ULP |
-| closer / further / tie | 596 / 112 / 348 | 588 / 118 / 350 |
-| normal depends on `glass_after` (mirror vs refracting) | no | no |
-| domain-gate disagreements on this grid | 0 | 0 |
+**The numbers below are the ROUND 2 re-run** with the exact input conversion
+defect D1 asked for (`decimal.Decimal(float(x))` rather than
+`ctx.create_decimal(repr(float(x)))`) at 80 digits.  The superseded readings
+are kept in the last column so the correction is visible rather than silently
+swapped.
 
-Per height (Windows, worst over radii and azimuths):
+| quantity | Windows | WSL | superseded (repr-converted, prec 60) |
+|---|---|---|---|
+| closed form, worst ULP out to `h = 0.95 R` (672 points) | **1.50** | **1.50** | 1.75 / 1.75 |
+| generic route, same | **1.75** | **1.75** | 2.00 / 2.25 |
+| points where the closed form is worse by > 1 ULP there | **0 of 672** | **0 of 672** | 0 |
+| closed form, worst ULP over the whole set | **45.86** | **45.86** | 57.47 |
+| generic route, same | **91.49** | **91.49** | 76.30 |
+| unit-vector defect of the closed form, worst | 1.0 ULP | 1.5 ULP | same |
+| closer / further / tie | 596 / 122 / 338 | 582 / 132 / 342 | 596 / 112 / 348 |
+| points where the closed form is worse by > 1 ULP (whole set) | 14 | 18 | 22 |
+| worst deficit | 22.83 ULP | 35.34 ULP | 35 ULP |
+| normal depends on `glass_after` (mirror vs refracting) | no | no | no |
+| domain-gate disagreements on this grid | 0 | 0 | 0 |
+| `prec = 80` vs `prec = 120`, every summary field | identical | identical | -- |
+
+Per height (worst over radii and azimuths; the two builds agree to the last
+digit except at `0.999` and `0.9999`, where both are given):
 
 | `h/R` | 0 | 0.05 | 0.5 | 0.95 | 0.99 | 0.999 | 0.9999 | 0.99994 |
 |---|---|---|---|---|---|---|---|---|
-| closed form, ULP | 0.00 | 0.03 | 0.50 | 1.75 | 5.38 | 13.06 | 47.55 | 57.47 |
-| generic, ULP | 0.00 | 0.50 | 1.00 | 2.00 | 8.88 | 17.34 | 58.32 | 76.30 |
+| closed form, ULP | 0.00 | 0.00 | 0.50 | **1.50** | 2.75 | 7.09 | 33.13 / 36.17 | 45.86 |
+| generic, ULP | 0.00 | 0.50 | 1.00 | **1.75** | 4.75 | 17.12 / 12.25 | 45.12 / 33.24 | 91.49 |
 
-At 22 of the 1056 points (all at `h >= 0.999 R`) the closed form rounds WORSE,
-by up to 35 ULP.  That is VERIFY-B9 3.2 reproduced: above `0.95 R` both routes
-are at the conditioning limit of `sqrt(1 - u)` and neither dominates point by
-point.
+At 14 of the 1056 points on Windows and 18 on WSL -- all at `h >= 0.99 R` --
+the closed form rounds WORSE by more than one unit, by up to 22.83 / 35.34
+ULP.  That is VERIFY-B9 3.2 reproduced: above `0.95 R` both routes are at the
+conditioning limit of `sqrt(1 - u)` and neither dominates point by point.
+
+Why the correction matters and why it does not change the decision: `repr` of
+a float is the shortest ROUND-TRIPPING decimal, not the float's exact value,
+and `nz = sqrt(1 - u)` amplifies a relative input perturbation by
+`u / (2 (1 - u))`.  The old conversion therefore contributed about 1.00 of
+this probe's own ULP unit at `h = 0.95 |R|` -- exactly the number it then
+reported for the closed form -- and about 41.6 at the clamp.  With the exact
+conversion BOTH routes read better and the gap between them widens, so the
+conclusion strengthens.
 
 ### 2.2 Timing
 
