@@ -868,14 +868,24 @@ def _mux_fan(tilt):
 
 def _mux_chain_field(tilt, *, degree, launch):
     """One chain call on that fan with the residual-eikonal degree and niche
-    C6's stationary-phase launch both pinned.  Restores both flags."""
+    C6's stationary-phase launch both pinned.  Restores both flags.
+
+    ``transport='sziklas'`` NAMED, for the reason :func:`_linearity_error`
+    gives (WP-C3): the caller subtracts two of these fields, which needs the
+    two runs to land on ONE lattice, and that is a property of the co-moving
+    pitch.  MEASURED 2026-09-20 on the flipped default: ``||E6 - E4||``
+    reads exactly 0.0, i.e. the degree appears INERT -- which is the
+    fail-before arm of the very claim the caller is making, reached for the
+    wrong reason.
+    """
     _deg = _lens_traced._REMAP_RESID_EIKONAL_DEGREE
     _lch = _lens_traced.REMAP_STATIONARY_PHASE_LAUNCH
     _lens_traced._REMAP_RESID_EIKONAL_DEGREE = degree
     _lens_traced.REMAP_STATIONARY_PHASE_LAUNCH = launch
     try:
         return _chain(_mux_fan(tilt), quiet=True, focus_readout=None,
-                      on_multi_congruence='ignore').field
+                      on_multi_congruence='ignore',
+                      transport='sziklas').field
     finally:
         _lens_traced._REMAP_RESID_EIKONAL_DEGREE = _deg
         _lens_traced.REMAP_STATIONARY_PHASE_LAUNCH = _lch

@@ -424,17 +424,31 @@ The other 12 sections are restatements, and the table below is all of them.
 | `r8::test_r8_focus_readout_survives_exact_focus` | fixture now closer to the oracle | the fail-before arm names `'sziklas'`; a NEW arm asserts the default returns a finite field at the exact focus, which is the flip's headline |
 | `a24::test_the_paraxial_final_leg_does_enter_it` + `d6::_run_chain` | genuine contract on `'sziklas'` | `_default_focus_standoff` is that readout's own resolver; `_run_chain` gained an opt-in `transport=` and forwards it only when NAMED, so the rest of that file still tracks the library default |
 
-**`d5::test_dx_flatness_alone_is_not_sufficient` deserves its own paragraph**,
-because its docstring predicted this exact event twice ("a further accuracy
-improvement could walk through it" -- one did in 2026-08-13, and another has
-now).  The test demonstrates that a flatness-only gate passes a
-DELIBERATELY BROKEN configuration (`carrier_reference='parabola'`) that sits
-wide of an independent Debye oracle.  On the flipped default that
-configuration reads a FWHM/oracle ratio of **0.963** -- it is no longer wide
-of the oracle at all.  That is a real result about the transport and it is
-recorded as one; it is NOT a reason to lower the bar.  The lesson the test
-exists for needs a configuration that HAS a level failure, so the test names
-the transport where this one still does.
+**`d5::test_dx_flatness_alone_is_not_sufficient` deserves its own paragraph,
+and it is also where this package made a measurement error and caught it.**
+The test demonstrates that a flatness-only gate passes a DELIBERATELY BROKEN
+configuration (`carrier_reference='parabola'`) which is dx-FLAT while sitting
+wide of an independent Debye oracle.  The first reading of its failure was
+recorded here as "the flip improves the broken configuration to a FWHM/oracle
+ratio of 0.963".  **That was wrong.**  0.9632 is the dx-FLATNESS SPREAD
+`(max - min)/mean` of the FWHM across N = 512 / 1024, against a bar of
+5e-03 -- 193x OUTSIDE it, where the co-moving step reads 1.61e-06.  The
+right-conclusion-wrong-number shape, caught by reading the assertion instead
+of the summary line, which is the failure mode `docs/TESTING_STANDARDS.md`
+calls the most dangerous one.
+
+What it actually means: on the flipped default that configuration is not
+dx-flat at all, so the PREMISE of the demonstration disappears rather than
+the configuration improving.  The Collins leg resolves its output pitch from
+the envelope's own measured phase-space box, and on a configuration whose
+carrier reference is deliberately WRONG that box is grid-dependent, so the
+two rungs land on different lattices.  The shipped DEFAULTS ladder stays flat
+on either transport (`test_dx_flatness_gate_passes_on_the_shipped_defaults`
+is green on the flipped default), which is what says this is a property of
+the broken configuration and not of the transport.  The test names the
+transport on which its fixture is flat; showing the same lesson on the
+Collins default would need a different broken configuration, and constructing
+one is not this package's work.
 
 ### 4.3 Four documentation / lint gates, each fixed at the cause
 

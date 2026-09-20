@@ -742,17 +742,24 @@ def test_dx_flatness_alone_is_not_sufficient():
     redundant: the broken configuration above is dx-FLAT.
 
     2026-09-20 (WP-C3) -- ``transport='sziklas'`` IS NOW NAMED, and the
-    sentence three paragraphs down ("a further accuracy improvement could
-    walk through it") predicted this one too.  Moving the chain's free legs to
-    the Collins quadrature improves the deliberately-broken parabola
-    configuration AGAIN, to a FWHM/oracle ratio of 0.963 -- i.e. it is no
-    longer wide of the oracle at all, and there is nothing left for a
-    flatness-only gate to pass silently.  That is a real result about the
-    transport and it is recorded in the WP-C3 report; it is NOT a reason to
-    lower the bar here.  The LESSON this test exists for -- that a
-    flatness-only gate cannot see a level failure -- needs a configuration
-    that HAS a level failure, and on the co-moving step this one still does.
-    So the transport is named and the demonstration keeps its teeth.
+    reason is the FIRST assertion rather than the FWHM one.  On the flipped
+    default this ladder is no longer dx-FLAT at all: the FWHM spread across
+    N = 512 / 1024 reads **0.9632** against the 5e-03 bar, i.e. 193x OUTSIDE
+    it, where on the co-moving step it reads 1.61e-06.  That is not the
+    configuration getting better -- it is the PREMISE of the demonstration
+    disappearing.  The Collins leg resolves its output pitch from the
+    envelope's own MEASURED phase-space box, and on a configuration whose
+    carrier reference is deliberately WRONG that box is grid-dependent, so
+    the two rungs of the ladder land on different lattices.  (The shipped
+    DEFAULTS ladder stays flat on either transport -- that is
+    ``test_dx_flatness_gate_passes_on_the_shipped_defaults``, green on the
+    flipped default.)
+
+    So this demonstration needs the transport on which its broken
+    configuration is dx-flat, and it names it.  Showing the same lesson on
+    the Collins default would need a DIFFERENT broken configuration -- one
+    that is flat there and still wide of the oracle -- and constructing it is
+    not this package's work.
 
     ``carrier_reference='parabola'`` reads FWHM 10.06172 / 10.06224 um at
     N = 512 / 1024 -- a 0.005 % spread, INSIDE the 0.5 % flatness tolerance
@@ -817,7 +824,8 @@ def test_dx_flatness_alone_is_not_sufficient():
     measures 2.8234 -- read at the ladder's finest rung only, which is the
     rung the assertion has always used."""
     _need_ram()
-    rows = _ladder('parabola', {'carrier_reference': 'parabola'}, None,
+    rows = _ladder('parabola', {'carrier_reference': 'parabola',
+                                'transport': 'sziklas'}, None,
                    ((512, 2), (1024, 4)))
     fw = [r['fwhm'] for r in rows]
     spread = (max(fw) - min(fw)) / np.mean(fw)
