@@ -96,13 +96,15 @@ builds the element list itself); and a script emitted by `lumenairy.io.codegen`
 for a STOP surface, which calls `la.apply_aperture` without the keyword and so
 tracks the library default at run time.  Two more answers move behind code that
 is documented elsewhere and are named here for completeness: the **GUI
-coronagraph dock's Stop 3 display** (`lumenairy/ui/coronagraph_dock.py:377`
-calls `apply_lyot_stop`, so the displayed field takes the new rim -- see
-`GUI_CHANGELOG.md`), and the worked AO-loop example in
-`lumenairy/analysis/ao.py`'s module docstring, which builds its pupil with
-`la.apply_aperture(np.ones((N, N), dtype=complex), ...)`; that example is still
-correct -- multiplying a grey amplitude mask into a field is exactly what the
-mask is for -- but its printed numbers move.  Every propagator downstream of one of those --
+coronagraph dock's Stop 3 display** (`lumenairy/ui/coronagraph_dock.py:376`,
+reached from the Stop 3 leg at line 261, calls `apply_lyot_stop`, so the
+displayed field and everything the dock computes from it take the new rim --
+see `GUI_CHANGELOG.md`), and the worked AO-loop example in
+`lumenairy/analysis/ao.py:33`, inside that module's docstring, which builds
+its pupil with `la.apply_aperture(np.ones((N, N), dtype=complex), ...)`; that
+example is still correct -- multiplying a grey amplitude mask into a field is
+exactly what the mask is for -- but its printed numbers move.
+Every propagator downstream of one of those --
 `rayleigh_sommerfeld_propagate`, the `propagate_huygens_fresnel_*` family, the ASM
 legs, GBD -- is itself unchanged: it moves only because its INPUT moved, and is
 byte-identical on an input that did not.  **The way back is one keyword:
@@ -120,6 +122,17 @@ non-aperture fixtures are byte-identical with no keyword at all, on both builds,
 including `apply_gaussian_aperture`, `apply_apodized_pupil`, the thin lens's and
 the mirror's own aperture masks, the ASM / RS-transfer / HF-freespace
 propagators, RCWA, PMM and the analytic lens.
+
+Pinned by `tests/unit/test_c1_gray_edge_default.py` (31 tests, none slow),
+including a mutation matrix in which the default reverting to `'hard'`,
+`edge_samples` moving off the knee, and a wrong grey boundary fraction (a
+sub-sample lattice anchored on the cell corners instead of centred on the pixel)
+are each caught by a named test.  Four existing tests moved and are re-pinned
+against their own oracles, none by loosening a bar; two more had silently become
+tautologies (their hard arm was the unnamed default) and now name it.  The file
+grew from 17 ids to 31 closing VERIFY-C1's findings: the jit'd kernel carrying
+the element's `edge_samples` (the one mutation that survived its whole 2796-id
+sweep), the three-route refusal census below, and the `evaluate` way back.
 
 ### Added -- `lumenairy.evaluate(..., aperture_edge=, aperture_edge_samples=)`: the way back for a prescription's STOP surface (VERIFY-C1 D4)
 
@@ -150,14 +163,6 @@ on Windows py3.14, and `0b97c205be347dfa` / `193bf1d920e2ac88` /
 `0b97c205be347dfa` on WSL py3.12.  `aperture_edge_samples=1` lands on the same
 bytes, which is what proves the second keyword reaches the element too.  Pinned
 by `test_c1_evaluates_way_back_is_one_keyword_and_reaches_the_stop`.
-
-Pinned by `tests/unit/test_c1_gray_edge_default.py` (17 tests, none slow),
-including a mutation matrix in which the default reverting to `'hard'`,
-`edge_samples` moving off the knee, and a wrong grey boundary fraction (a
-sub-sample lattice anchored on the cell corners instead of centred on the pixel)
-are each caught by a named test.  Four existing tests moved and are re-pinned
-against their own oracles, none by loosening a bar; two more had silently become
-tautologies (their hard arm was the unnamed default) and now name it.
 
 ### Fixed -- the validation suite's aperture throughput readings say AREA where they meant area (WP-C1)
 
