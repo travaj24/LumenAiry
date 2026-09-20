@@ -855,6 +855,14 @@ Three readings, and one correction to this package's own message.
    circular mean is removed, reproducing VERIFY-WP-B12b's 0.48 waves.  This is
    the silent half, and it is why a refusal rather than a warning is the right
    shape.
+
+   The probe records BOTH predictions at that arm, which isolates the defect
+   to the sign and to nothing else: against the branch's OWN signed leg
+   (`k0 * z_image * sec`) the residual is **5.448e-04 waves** -- the branch
+   does exactly what it says it does -- while against the TRUE optical path
+   (`k0 * |z_image| * sec`, the distance the ray actually travelled to reach
+   that plane) it is **0.4911 waves**.  Same data, two predictions, three
+   decades apart: the leg is not approximate, it is the wrong sign.
 3. **The 7756x ratio is quadrature-dependent; the decision is not.**  Its
    denominator is a diffraction-scale number, so it moves with the ray
    quadrature and pupil weighting the oracle uses (5.001e-08 m in
