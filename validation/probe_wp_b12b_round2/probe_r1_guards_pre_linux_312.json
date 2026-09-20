@@ -1,0 +1,408 @@
+{
+ "arm": "pre",
+ "arm_tokens": {
+  "immersed_guard": false,
+  "mirror_guard": false
+ },
+ "entry_points": {
+  "mine_air": {
+   "apply_real_lens_gbd": {
+    "decision": "served",
+    "digest": "69242eaa670b0ef7ad4abbe19acc5fee776776d6f9e2339dadb7b56d020bd9e8",
+    "shape": [
+     128,
+     128
+    ]
+   },
+   "apply_real_lens_universal_gbd": {
+    "decision": "served",
+    "digest": "69242eaa670b0ef7ad4abbe19acc5fee776776d6f9e2339dadb7b56d020bd9e8",
+    "shape": [
+     128,
+     128
+    ]
+   },
+   "beamlet_function": {
+    "decision": "served",
+    "digest": "a920e90dda613a48b279c4f8a132979ab18abb12462af70f7410b2edaffb4321",
+    "shape": [
+     859,
+     3
+    ]
+   },
+   "propagate_gbd_through_prescription": {
+    "decision": "served",
+    "digest": "69242eaa670b0ef7ad4abbe19acc5fee776776d6f9e2339dadb7b56d020bd9e8",
+    "shape": [
+     128,
+     128
+    ]
+   },
+   "world_output_plane_branch": {
+    "decision": "served",
+    "digest": "7db702e40f41a0ccfa74a09bed433ffdd7c7e45c2cea2374e2f7826e43fe7c39",
+    "shape": [
+     859,
+     3
+    ]
+   }
+  },
+  "mine_immersed_oil152": {
+   "apply_real_lens_gbd": {
+    "decision": "served",
+    "digest": "64c5be689874c4321286b7cb2136f5f4808bb5149fcc5614e1a2650e68bf7b58",
+    "shape": [
+     128,
+     128
+    ]
+   },
+   "apply_real_lens_universal_gbd": {
+    "decision": "served",
+    "digest": "64c5be689874c4321286b7cb2136f5f4808bb5149fcc5614e1a2650e68bf7b58",
+    "shape": [
+     128,
+     128
+    ]
+   },
+   "beamlet_function": {
+    "decision": "served",
+    "digest": "3d78f146cb68d84b7c27c77316d3e7a360ee172cc5d31e84c28db48652728b70",
+    "shape": [
+     859,
+     3
+    ]
+   },
+   "propagate_gbd_through_prescription": {
+    "decision": "served",
+    "digest": "64c5be689874c4321286b7cb2136f5f4808bb5149fcc5614e1a2650e68bf7b58",
+    "shape": [
+     128,
+     128
+    ]
+   },
+   "world_output_plane_branch": {
+    "decision": "served",
+    "digest": "8515d0dbb34be1790fdc107ce21856ae6e1fd2bfeb440742604e125b87b64df7",
+    "shape": [
+     859,
+     3
+    ]
+   }
+  },
+  "mine_immersed_water133": {
+   "apply_real_lens_gbd": {
+    "decision": "served",
+    "digest": "9b9fc10d7d4f5eba0b3db8d39ff595b21b756f95fecdb0602e55156d8c038b5e",
+    "shape": [
+     128,
+     128
+    ]
+   },
+   "apply_real_lens_universal_gbd": {
+    "decision": "served",
+    "digest": "9b9fc10d7d4f5eba0b3db8d39ff595b21b756f95fecdb0602e55156d8c038b5e",
+    "shape": [
+     128,
+     128
+    ]
+   },
+   "beamlet_function": {
+    "decision": "served",
+    "digest": "afe39c4fde8d8b545436cf5d5354bdb288d1d63e97b5f09760e3ca45838d7d1a",
+    "shape": [
+     859,
+     3
+    ]
+   },
+   "propagate_gbd_through_prescription": {
+    "decision": "served",
+    "digest": "9b9fc10d7d4f5eba0b3db8d39ff595b21b756f95fecdb0602e55156d8c038b5e",
+    "shape": [
+     128,
+     128
+    ]
+   },
+   "world_output_plane_branch": {
+    "decision": "served",
+    "digest": "bb4a151694d2fbf0111a6bbf46329a193ccd4878f0e2a4a823245d1699fc96d5",
+    "shape": [
+     859,
+     3
+    ]
+   }
+  },
+  "verifier_air_conic": {
+   "apply_real_lens_gbd": {
+    "decision": "served",
+    "digest": "1561aa91cfdbe59d5006cb09bbc05dc525bfbfd390a4a46e7bca2874afb3160e",
+    "shape": [
+     192,
+     192
+    ]
+   },
+   "apply_real_lens_universal_gbd": {
+    "decision": "served",
+    "digest": "1561aa91cfdbe59d5006cb09bbc05dc525bfbfd390a4a46e7bca2874afb3160e",
+    "shape": [
+     192,
+     192
+    ]
+   },
+   "beamlet_function": {
+    "decision": "served",
+    "digest": "92637dd222953e1b8613403b465515480ed9fc126167fa19e7203ae53ca4a6d7",
+    "shape": [
+     1201,
+     3
+    ]
+   },
+   "propagate_gbd_through_prescription": {
+    "decision": "served",
+    "digest": "1561aa91cfdbe59d5006cb09bbc05dc525bfbfd390a4a46e7bca2874afb3160e",
+    "shape": [
+     192,
+     192
+    ]
+   },
+   "world_output_plane_branch": {
+    "decision": "served",
+    "digest": "6df9b8d2f30dd6e839fa1fa1bd02b2e082807ca614722a4e3e9d945f11ac4a85",
+    "shape": [
+     1201,
+     3
+    ]
+   }
+  },
+  "verifier_immersed_n172": {
+   "apply_real_lens_gbd": {
+    "decision": "served",
+    "digest": "cf54bcd51e943c320f910fa5ee5502a2901e0ace2692a7597ab963c0ba8a3397",
+    "shape": [
+     192,
+     192
+    ]
+   },
+   "apply_real_lens_universal_gbd": {
+    "decision": "served",
+    "digest": "cf54bcd51e943c320f910fa5ee5502a2901e0ace2692a7597ab963c0ba8a3397",
+    "shape": [
+     192,
+     192
+    ]
+   },
+   "beamlet_function": {
+    "decision": "served",
+    "digest": "28db81eb576ac83b289d60c3b394f6a4dbdee401cb78d0aede1237afe601f400",
+    "shape": [
+     1201,
+     3
+    ]
+   },
+   "propagate_gbd_through_prescription": {
+    "decision": "served",
+    "digest": "cf54bcd51e943c320f910fa5ee5502a2901e0ace2692a7597ab963c0ba8a3397",
+    "shape": [
+     192,
+     192
+    ]
+   },
+   "world_output_plane_branch": {
+    "decision": "served",
+    "digest": "deabc3e95e8834ef17f5c3d646c09a2301bb8e668bc362d5e772a1c1f1f0fe74",
+    "shape": [
+     1201,
+     3
+    ]
+   }
+  }
+ },
+ "env": {
+  "arm": "pre",
+  "arm_tokens": {
+   "immersed_guard": false,
+   "mirror_guard": false
+  },
+  "build": "linux_312",
+  "env": {
+   "LUMENAIRY_MEM_BUDGET_MB": "2048",
+   "MKL_NUM_THREADS": "1",
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "PYTHONPATH": "/mnt/c/tmp/lum_gbd2_pre:/mnt/c/tmp/lum_gbd2/validation/probe_wp_b12b_round2",
+   "R2_TREE": "/mnt/c/tmp/lum_gbd2_pre"
+  },
+  "lumenairy_file": "/mnt/c/tmp/lum_gbd2_pre/lumenairy/__init__.py",
+  "lumenairy_version": "5.47.1",
+  "numpy": "2.4.6",
+  "platform": "Linux-4.4.0-26100-Microsoft-x86_64-with-glibc2.39",
+  "python": "3.12.3 (main, Mar 23 2026, 19:04:32) [GCC 13.3.0]",
+  "scipy": "1.17.1"
+ },
+ "helper_identity": {
+  "gbd_reaches_fga_helper": true,
+  "noise_floor": 1e-12,
+  "tolerance_module": "lumenairy.propagators.fga",
+  "tolerance_qualname": "_immersed_exit_tolerance",
+  "wave_budget": 0.001
+ },
+ "mirror": {
+  "mine_mirror_R8_curved": {
+   "local": {
+    "decision": "served",
+    "n_beamlets": 1024,
+    "n_sign": 1.0,
+    "spot_rms": 0.00016828616710404295
+   },
+   "truth": null,
+   "world": {
+    "auto": {
+     "decision": "refused",
+     "kind": "NotImplementedError",
+     "message": "world_output_plane: curved (powered) fold mirrors are not yet supported (a flat fold is invariant to Q, a curved one is not).  Use per-surface world differential transfer, or a flat fold."
+    },
+    "explicit": {
+     "decision": "refused",
+     "kind": "NotImplementedError",
+     "message": "world_output_plane: curved (powered) fold mirrors are not yet supported (a flat fold is invariant to Q, a curved one is not).  Use per-surface world differential transfer, or a flat fold."
+    }
+   },
+   "z_image": 0.004
+  },
+  "mine_mirror_flat": {
+   "local": {
+    "decision": "served",
+    "n_beamlets": 1024,
+    "n_sign": 1.0,
+    "spot_rms": 8.418620378761575e-05
+   },
+   "truth": null,
+   "world": {
+    "auto": {
+     "decision": "refused",
+     "kind": "ValueError",
+     "message": "paraxial_focus_world: axial and marginal rays do not converge (parallel post-system).  System may be afocal or aperture_radius too small."
+    },
+    "explicit": {
+     "decision": "served",
+     "n_beamlets": 1024
+    }
+   },
+   "z_image": 0.004
+  },
+  "verifier_mirror_R15": {
+   "local": {
+    "decision": "served",
+    "n_beamlets": 877,
+    "n_sign": 1.0,
+    "spot_rms": 1.2873385397670554e-08
+   },
+   "spot_rms_ratio": 1.8011979321586091,
+   "truth": {
+    "n_sign": -1.0,
+    "spot_rms": 7.1471242376137455e-09,
+    "z_focus": -0.007499097624683209
+   },
+   "world": {
+    "auto": {
+     "decision": "refused",
+     "kind": "NotImplementedError",
+     "message": "world_output_plane: curved (powered) fold mirrors are not yet supported (a flat fold is invariant to Q, a curved one is not).  Use per-surface world differential transfer, or a flat fold."
+    },
+    "explicit": {
+     "decision": "refused",
+     "kind": "NotImplementedError",
+     "message": "world_output_plane: curved (powered) fold mirrors are not yet supported (a flat fold is invariant to Q, a curved one is not).  Use per-surface world differential transfer, or a flat fold."
+    }
+   },
+   "z_image": -0.007499097624683209
+  }
+ },
+ "premise": {
+  "mine_air": {
+   "n_exit": 1.0,
+   "omitted_waves": 0.0,
+   "wavelength": 6.33e-07,
+   "z_image": 0.0006
+  },
+  "mine_immersed_oil152": {
+   "n_exit": 1.518,
+   "omitted_waves": 491.09943307174024,
+   "wavelength": 6.33e-07,
+   "z_image": 0.0006
+  },
+  "mine_immersed_water133": {
+   "n_exit": 1.333,
+   "omitted_waves": 315.7798324970187,
+   "wavelength": 6.33e-07,
+   "z_image": 0.0006
+  },
+  "verifier_air_conic": {
+   "n_exit": 1.0,
+   "omitted_waves": 0.0,
+   "wavelength": 7.8e-07,
+   "z_image": 0.002
+  },
+  "verifier_immersed_n172": {
+   "n_exit": 1.72,
+   "omitted_waves": 1846.2589642118448,
+   "wavelength": 7.8e-07,
+   "z_image": 0.002
+  }
+ },
+ "site_boundary": [
+  {
+   "helper_tolerance": 0.001,
+   "refuses_0p99x": false,
+   "refuses_1p01x": false,
+   "rel_gap": null,
+   "site_boundary": null,
+   "unguarded": true,
+   "z_image": 0.0
+  },
+  {
+   "helper_tolerance": 0.001,
+   "refuses_0p99x": false,
+   "refuses_1p01x": false,
+   "rel_gap": null,
+   "site_boundary": null,
+   "unguarded": true,
+   "z_image": 6.33e-07
+  },
+  {
+   "helper_tolerance": 6.33e-05,
+   "refuses_0p99x": false,
+   "refuses_1p01x": false,
+   "rel_gap": null,
+   "site_boundary": null,
+   "unguarded": true,
+   "z_image": 1e-05
+  },
+  {
+   "helper_tolerance": 1.8085714285714286e-06,
+   "refuses_0p99x": false,
+   "refuses_1p01x": false,
+   "rel_gap": null,
+   "site_boundary": null,
+   "unguarded": true,
+   "z_image": 0.00035
+  },
+  {
+   "helper_tolerance": 3.165e-07,
+   "refuses_0p99x": false,
+   "refuses_1p01x": false,
+   "rel_gap": null,
+   "site_boundary": null,
+   "unguarded": true,
+   "z_image": 0.002
+  },
+  {
+   "helper_tolerance": 6.329999999999999e-08,
+   "refuses_0p99x": false,
+   "refuses_1p01x": false,
+   "rel_gap": null,
+   "site_boundary": null,
+   "unguarded": true,
+   "z_image": 0.01
+  }
+ ]
+}

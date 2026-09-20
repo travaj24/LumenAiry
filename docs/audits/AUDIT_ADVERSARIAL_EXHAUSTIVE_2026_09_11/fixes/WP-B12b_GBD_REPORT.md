@@ -759,8 +759,10 @@ The 1846.26 figure reproduces VERIFY-WP-B12b section 9.1 to every printed
 digit, from a different probe.
 
 **The decision, at five routes (`probe_r1_guards.py`).**  Rows are
-`refused` / `served`; PRE is the archive tree, POST this branch.  The two
-builds are **cell-for-cell identical**.
+`refused` / `served`; PRE is the archive tree, POST this branch.  All FOUR
+arms were taken (PRE and POST x Windows and WSL) and the two builds are
+**cell-for-cell identical**, including the bisection table below, which
+agrees to every printed digit.
 
 | route | air (PRE) | air (POST) | immersed (PRE) | immersed (POST) |
 |---|---|---|---|---|

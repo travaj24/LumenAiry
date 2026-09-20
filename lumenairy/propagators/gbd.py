@@ -3622,10 +3622,11 @@ def apply_prescription_persurface_to_beamlets(
     returned silently (VERIFY-WP-B12b D-4 / D-5, 5.48.0).  A prescription
     whose LAST surface is a MIRROR raises ``NotImplementedError`` -- the leg
     is built from an unsigned ``Nz2`` that feeds the returned direction, the
-    leg length and the Moebius step alike, so the returned field is wrong by
-    a factor of 7.8e3 in spot RMS (see
-    :func:`_require_forward_going_local_exit`, which also says why
-    ``world_output_plane`` is not the alternative for a CURVED one).  A
+    leg length and the Moebius step alike, so the returned spot lands four
+    decades wide of the traced one (see
+    :func:`_require_forward_going_local_exit`, which carries the
+    measurement and says why ``world_output_plane`` is not the alternative
+    for a CURVED one).  A
     prescription whose exit medium is not air is refused by
     :func:`lumenairy.propagators.fga._require_non_immersed_exit`, the SAME
     guard and the SAME single tolerance definition the four ``fga`` sites
@@ -3637,11 +3638,6 @@ def apply_prescription_persurface_to_beamlets(
     likewise index-free, which is recorded as an open item, not measured.
 
     .. versionchanged:: 5.48.0
-       The local branch now REFUSES a mirror-terminated prescription and an
-       immersed exit medium (see "What the local branch REFUSES"); both were
-       served silently before.  Nothing the library serves today is affected.
-
-    .. versionchanged:: 5.48.0
        v5.22 to 5.47.0 folded ``-sag`` into the image leg from an in-line
        conic-sag copy that dropped the aspheric departure, the biconic
        y-branch, freeforms and the field-frame class (measured 15.5 waves of
@@ -3651,6 +3647,11 @@ def apply_prescription_persurface_to_beamlets(
        point reassociation; a flat one is bit-identical.  See
        ``docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/``
        ``WP-B12b_GBD_REPORT.md``.
+
+       The same release also makes the local branch REFUSE a
+       mirror-terminated prescription and an immersed exit medium (see
+       "What the local branch REFUSES" above); both were served silently
+       before, and nothing the library serves today is affected.
 
     Parameters
     ----------
