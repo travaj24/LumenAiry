@@ -80,7 +80,7 @@ def trace_world(
     output_filter: Union[str, Callable[..., Any]] = 'all',
     surface_diffraction: Optional[Dict[int, Tuple[float, float, float, float]]] = None,
     renormalize: str = 'surface',
-    sphere_normal: str = 'generic',
+    sphere_normal: str = 'analytic',
 ) -> 'TraceResult':
     """Sequential ray trace in world coordinates.
 
@@ -127,10 +127,12 @@ def trace_world(
         on the bundle leaving the last surface -- in that surface's LOCAL
         frame, which is the frame the history records, so the returned
         ``image_rays`` is unit-length there.
-    sphere_normal : ``'generic'`` (default) | ``'analytic'``
-        Identical semantics to :func:`trace`: which route computes the
-        surface normal at a pure sphere.  Opt-in, for the same last-bit
-        reason.
+    sphere_normal : ``'analytic'`` (default since 5.49.0) | ``'generic'``
+        Identical semantics to :func:`trace`, including the 5.49.0
+        default change: which route computes the surface normal at a
+        pure sphere.  ``'generic'`` is the pre-5.49.0 arithmetic and is
+        byte-identical to it.  See :func:`trace` for the oracle ladder,
+        the timing range and the rim band the two domain gates straddle.
 
     Returns
     -------

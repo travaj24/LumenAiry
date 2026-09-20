@@ -58,7 +58,7 @@ def trace(
     output_filter: Union[str, Callable[..., Any]] = 'all',
     surface_diffraction: Optional[Dict[int, Tuple[float, float, float, float]]] = None,
     renormalize: str = 'surface',
-    sphere_normal: str = 'generic',
+    sphere_normal: str = 'analytic',
 ) -> 'TraceResult':
     """Trace a ray bundle through a sequential list of surfaces.
 
@@ -137,33 +137,60 @@ def trace(
         carry ``| |d| - 1 | <= 1e-15`` (only the final bundle is
         rescaled), so a consumer that reads history direction cosines as
         exactly unit should stay on ``'surface'``.
-    sphere_normal : ``'generic'`` (default) | ``'analytic'``
+    sphere_normal : ``'analytic'`` (default since 5.49.0) | ``'generic'``
         Which route computes the surface normal at a PURE SPHERE
         (:func:`surface._is_pure_spherical`: finite radius, no conic,
         aspheric, biconic, freeform or field-frame extension).
 
+        * ``'analytic'`` (the default) -- the closed form
+          ``(-x/R, -y/R, sqrt(1 - h^2/R^2))``, five array operations
+          instead of about fourteen, with no division by a small ``h``
+          near the vertex.  It selects on the SAME predicate as the
+          closed-form ray-sphere intersection, which is what the failed
+          v4.12.0 attempt lacked.
         * ``'generic'`` -- ``sqrt(x^2+y^2)``, a ``np.where(h > 0, ...)``
           guard, two divisions by ``h``, a second ``sqrt`` inside
           ``_surface_sag_derivative`` and the normalising ``sqrt`` + three
-          divisions of ``_surface_normal``.  The arithmetic every caller
-          has always got.
-        * ``'analytic'`` -- the closed form ``(-x/R, -y/R,
-          sqrt(1 - h^2/R^2))``, which is the same vector with five array
-          operations instead of ~fourteen and no division by a small
-          ``h`` near the vertex.  It selects on the SAME predicate as the
-          closed-form ray-sphere intersection, which is what the failed
-          v4.12.0 attempt lacked.
+          divisions of ``_surface_normal``.  The arithmetic callers got
+          before 5.49.0, and byte-identical to it.
 
-        The normal block is 24 % of ``trace``'s own time (audit
-        RAYTRACE perf #2); MEASURED end to end on a 200k-ray 7-surface
-        spherical stack, ``'analytic'`` is 464.8 -> 373.0 ms, a 1.25x.
-        It is OPT-IN because it is not bit-identical: measured
+        **The default moved in 5.49.0** (WP-C2; the maintainer's
+        decision is section 1.3 of
+        ``docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/MAINTAINER_DECISIONS_2026_09.md``).
+        Pass ``sphere_normal='generic'`` for the pre-5.49.0 arithmetic,
+        which is byte-identical to what 5.48.1 produced.
+
+        WHY.  Against a 60-digit ``decimal`` oracle over 1056 points
+        (eight radii of both signs from 2 mm to 1 m, eleven heights from
+        the vertex to the domain clamp, six azimuths, refracting and
+        mirror alike), the closed form is within **1.75 ULP** everywhere
+        out to ``h = 0.95 |R|`` against the generic route's 2.25, is
+        never worse there by more than 1 ULP at any of 672 points, and is
+        strictly closer at 56 % of all points against 11 % the other way.
+        It is a unit vector to <= 1.5 ULP by construction.  Above
+        ``0.95 |R|`` BOTH routes enter the conditioning limit of
+        ``sqrt(1 - h^2/R^2)`` together (13 ULP at ``0.999 |R|``, 57 to 76
+        at the clamp) and neither dominates point by point -- so "more
+        accurate" is a mean and a bound out to 0.95, not a bound
+        everywhere.  Measured speed-up on the whole trace: **1.08x to
+        1.44x** over three sphere-bearing prescriptions on two builds
+        (medians 1.12x Windows, 1.19x WSL), against 0.93x to 1.03x on
+        prescriptions with no pure sphere, which is the measurement's own
+        resolution on a loaded box; the normal block falls from 16.1 % to
+        9.8 % of the profile (Windows) and 19.6 % to 10.4 % (WSL).
+
+        NOT BIT-IDENTICAL, and one behaviour moves.  Measured
         ``max |dx| = 2.8e-17 m``, ``max |dopd| = 8.3e-17 m``,
-        ``max |dL| = 2.8e-16`` on a 1500-ray sweep, with every ``alive``
-        and ``error_code`` byte-identical.  Prescriptions with no pure
-        sphere (conic, biconic, mirror) are byte-identical either way.
-        Downstream BIT-EQUAL pins exist (``propagate_modal_asymptotic``),
-        so the default cannot move without restating them.
+        ``max |dL| = 2.8e-16`` on a 1500-ray sweep; prescriptions with no
+        pure sphere are byte-identical either way.  The two routes gate
+        the domain from different expressions, so within about 1 ULP of
+        ``h^2 = 0.9999 R^2`` -- a rim band one ULP of ``h`` wide at
+        ``0.99995 |R|`` -- they land on opposite sides of the clamp and
+        one route refuses a ray the other refracts.  A directed
+        ``nextafter`` walk finds such points; 360 000 traced rays over
+        twelve prescription and field-angle combinations, three of them
+        shipped fixtures, move ZERO ``alive`` flags and ZERO error codes.
+        See ``renormalize`` for the other 5.49.0 default change.
 
     Returns
     -------

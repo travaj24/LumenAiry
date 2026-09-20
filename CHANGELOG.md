@@ -4,6 +4,150 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+### Changed -- raytrace (WP-C2): `trace(sphere_normal='analytic')` is the DEFAULT; the way back is one keyword and is byte-identical
+
+`trace` and `trace_world` now compute a PURE SPHERE's surface normal from the
+closed form `(-x/R, -y/R, sqrt(1 - h^2/R^2))` instead of differentiating the
+sag numerically (`raytrace/trace.py:61`, `world_trace.py:83`).  The route
+itself shipped opt-in in 5.48.0; this release makes it the default, which the
+maintainer decided on section 1.3 of
+`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/MAINTAINER_DECISIONS_2026_09.md`.
+The PRIVATE helpers do NOT move: `_refract` / `_reflect` / `_surface_normal`
+keep `sphere_normal='generic'` / `analytic_sphere=False`, because
+`analysis.ghost` and the finite-difference differential path call them directly
+and own their own arithmetic policy.
+
+**Accuracy, re-derived against a 60-digit `decimal` oracle** on WP-C2's own
+sphere set -- eight radii of both signs from 2 mm to 1 m, eleven heights from
+the vertex to the domain clamp, six azimuths, refracting and mirror alike,
+1056 points on each of two builds.  Out to `h = 0.95 |R|` the closed form is
+within **1.75 ULP** of the truth against the generic route's 2.00 (Windows
+py3.14 / numpy 2.4.4) and 2.25 (WSL py3.12 / numpy 2.4.6), is never worse by
+more than 1 ULP at any of the 672 points there, and is a unit vector to 1.5 ULP
+by construction.  Over the whole set it is closer at 56 % of points against
+11 % the other way.  Above `0.95 |R|` BOTH routes enter the conditioning limit
+of `sqrt(1 - u)` together -- 13 ULP at `0.999 |R|`, 57 (closed form) against 76
+(generic) at the clamp -- and neither dominates point by point: at 22 of 1056
+points the closed form happens to round worse, by up to 35 ULP.  "More
+accurate" is therefore a bound out to `0.95 |R|` and a mean beyond it, and the
+test file says so in an arm of its own.
+
+**Speed.**  1.08x to 1.44x on the whole trace over three sphere-bearing
+prescriptions (a seven-surface spherical stack, a Cooke-like triplet, a
+two-mirror spherical Cassegrain) on two builds, medians 1.12x (Windows) and
+1.19x (WSL), against 0.93x to 1.03x on the two prescriptions with no pure
+sphere, which is this measurement's own resolution on a box under other load
+(the runs recorded 67 to 100 % CPU and 10 to 21 concurrent python processes).
+The contention-immune reading is the profile share: the normal block falls from
+16.1 % to 9.8 % of `trace`'s own tottime on Windows and from 19.6 % to 10.4 %
+on WSL.
+
+**What moves.**  The routes are not bit-identical: measured `max |dx| =
+2.8e-17 m`, `max |dopd| = 8.3e-17 m`, `max |dL| = 2.8e-16` over a 1500-ray
+sweep.  Archive to archive against 49ddf4bd, over 1008 arrays and 1 630 399
+values, 461 arrays move with the new default and none moves by more than
+1.8e-11 absolute or 3.4e-13 relative; with `sphere_normal='generic'` passed
+explicitly, 938 of 1008 are byte-identical and the 70 that are not are exactly
+the entry points that trace INTERNALLY and expose no keyword to pass (see the
+Migration note).  Prescriptions with no pure sphere are byte-identical either
+way.  CPU / JAX `trace` parity does not move at all: 3.5e-18 m in position and
+3.1e-17 m in OPL under all four `(renormalize, sphere_normal)` combinations,
+with the alive masks equal, on both builds -- the JAX tracer has always used a
+closed-form sphere normal, so this flip moves the CPU tracer TOWARD it rather
+than away.
+
+**Vignetting: one rim band moves, and only that.**  The two routes gate the
+`0.9999` domain clamp from different expressions -- `(x*x + y*y)/(R*R)` against
+`(1 + conic) * sqrt(x*x + y*y)**2 / R**2` -- which differ by up to 1 ULP, so
+over a band about **1 ULP of `h` wide at `0.99995 |R|`** the two land on
+opposite sides and one route refuses a ray the other serves (VERIFY-WP-B9
+section 3.3).  A directed `nextafter` walk constructs such a point, and it
+reaches `_refract`'s `alive` flag and `trace`'s error code.  It is not
+reachable by sampling: 360 000 traced rays over twelve prescription and
+field-angle combinations -- including a sphere whose clear aperture is opened
+to `0.99999 |R|`, three field angles on the seven-surface stack, the
+Cassegrain, and three shipped prescription builders at two field angles each --
+move ZERO `alive` flags and ZERO error codes on either build.  No shipped
+fixture's vignetting count changes.
+
+**The domain clamp STAYS.**  WP-B9's deferred item 6.2 proposed dropping it
+because the closed form is "well-conditioned to `h = |R|`"; VERIFY-B9 section
+3.2 measured that this is false (the relative error of `sqrt(1 - u)` is bounded
+below by `eps/2 * u/(1 - u)`, about 1.1e-12 at `u = 0.9999`, for BOTH routes),
+so dropping it would be a vignetting trade -- a grazing normal carrying ~1e-12
+relative error instead of a dead ray -- and that decision has not been taken.
+`tests/unit/test_c2_analytic_normal_default.py` now LOCATES the threshold by
+bisection on the running build, so a change to the expression and not only to
+the literal is caught.
+
+**Migration.**  Pass `sphere_normal='generic'` to `trace` / `trace_world` for
+the pre-5.49.0 arithmetic; it is byte-identical to what 5.48.1 produced, pinned
+archive to archive.  Nothing else needs to change: no `alive` flag, error code
+or vignetting count moves on any shipped prescription, and the answers that do
+move, move by at most 1.8e-11 absolute and 3.4e-13 relative.  Two things are
+worth knowing.  First, the RIM BAND: between `0.99995 |R|` and the domain
+clamp -- a band one ULP of `h` wide -- a ray the generic route killed as
+`RAY_NAN` may now refract, or die with an honest `RAY_TIR` / `RAY_APERTURE`
+instead, and vice versa.  If a prescription deliberately works rays past
+`0.9999 R^2` of a spherical surface it is in a region where NEITHER route
+resolves the normal better than about 1e-12 relative, and it should carry an
+explicit clear aperture rather than rely on the clamp.  Second, the entry
+points that trace INTERNALLY -- `trace_prescription`, `raytrace_system`,
+`ray_fan_data`, `opd_fan_data`, `spot_rms` / `spot_geo_radius` / `refocus` on
+their results, and `through_focus_rms` -- do NOT expose `sphere_normal`, so
+there is no keyword to pass there; a caller who needs the pre-5.49.0 arithmetic
+through those must build the bundle and call `trace(..., sphere_normal='generic')`
+directly.  Every measured number is in
+`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/WP-C2_ANALYTIC_NORMAL_REPORT.md`
+and `validation/probe_c2_analytic_normal/`.
+
+### Changed -- tests (WP-C2): the two pins WP-B9 called knife-edge become decisions with bars this build derives, and the mechanism both B9 reports named is measurably not the one
+
+WP-B9 section 5 items 2 and 3 and VERIFY-B9 section 4 required two pins to be
+restated before the `sphere_normal` default could move, and explained both by
+one mechanism: a knife-edge pixel changing saddle basin, "the quantity is
+bimodal between ~0 and ~1e-8", "a coin".  Re-measured
+(`validation/probe_c2_analytic_normal/`), that mechanism is present in neither.
+
+`tests/unit/test_audit_propagation.py::TestAuditFixesV4_14_0_agent_1_1APropagateModalAsymptoticStillBitEqual`
+-- there is no basin flip anywhere on the grid: the batched cold-start solver
+and the file's own inline scalar one put the saddle in the same place to
+7.3e-18 (8.7e-17 of the pupil half-range) at all 1024 pixels, and the
+correlation between saddle disagreement and field disagreement is 0.06.  The
+disagreement is a DENSE field -- 996 to 1011 pixels above 1e-12 relative,
+median 2.1e-09 -- at the cancellation floor of the moment contraction.  An FD
+ladder over the fit's phase coefficients measures the field amplifying a
+relative input perturbation by `kappa = 6.24e+06`, flat to 0.3 % over four
+decades on both builds, so two independent float64 evaluations can agree no
+better than `eps * kappa = 1.39e-09`.  The two arms now measure `kappa`
+in-test, assert the ladder's linearity, set the bar at `100 * eps * kappa`, and
+inject a drift sized from the measured `kappa` to land two decades above the
+bar so the comparison demonstrates it still refuses a real one.  Eight readings
+(two builds x four `(renormalize, sphere_normal)` combinations) span 1.01e-08
+to 1.25e-08 against a 1.386e-07 bar: 11.1x margin at worst, and the bar tracks
+the build instead of carrying a number from a prior run.
+
+`tests/unit/test_niche_audit_w6_asymptotic.py::test_w6_a2_v2_star_is_untouched_by_the_verdict_fix`
+-- the `1e-15` bar rested on a symmetry argument about the OPTIC, but the
+solver works on a least-squares POLYNOMIAL FIT of it whose coefficients are not
+symmetric, so the model's root is genuinely off centre and `1e-15` bounded the
+fit's asymmetry rather than any rounding.  A 60-digit `decimal` Newton on the
+same polynomial system reproduces what the library returns to <= 4.5e-22 on
+both builds (self-consistent to 1e-65 from two independent starts); the
+residual at the pupil centre reads 4.4e-08 to 8.7e-08 and agrees with its own
+60-digit evaluation to 8.8e-07 relative, i.e. resolved about eight decades
+above its rounding floor; and the offset equals the single Newton step
+`H^-1 r(v_c)` from the centre to 9.9e-32.  The pin now makes two decisions
+instead: the returned expansion point IS the root the model puts there (bar
+`4 eps x half-range = 4.5e-18`, the float64 resolution of `v2` on its own
+scale), and that root is the pupil centre at the fit's own resolution (reading
+2.2e-14 to 4.4e-14 of the normalised pupil box against a 1e-10 decision bar,
+with the `|r(v_c)| / sigma_min(H)` bound asserted alongside and the premise that
+`r(v_c)` is resolved asserted separately).
+
+Both files are green under all four `(renormalize, sphere_normal)` default
+combinations on both builds.
+
 ## [5.48.1] — 2026-09-20
 
 The publish verification of the `v5.48.0` tag stopped in its slow lane, so 5.48.0

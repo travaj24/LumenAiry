@@ -1,0 +1,192 @@
+{
+ "meta": {
+  "python": "3.14.6 (tags/v3.14.6:c63aec6, Jun 10 2026, 10:26:10) [MSC v.1944 64 bit (AMD64)]",
+  "numpy": "2.4.4",
+  "lumenairy": "5.48.1",
+  "platform": "win32",
+  "load_before": {
+   "cpu_percent": 57.3,
+   "n_python": 14,
+   "load_source": "psutil"
+  },
+  "load_after": {
+   "cpu_percent": 53.3,
+   "n_python": 14,
+   "load_source": "psutil"
+  },
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ },
+ "summary": {
+  "sphere_normal_range": [
+   1.0793650793650793,
+   1.2173913043478262
+  ],
+  "sphere_normal_median": 1.1212121212121213,
+  "renormalize_range": [
+   0.9855072463768115,
+   1.0950323974082075
+  ],
+  "renormalize_median": 1.0,
+  "renormalize_on_analytic_range": [
+   0.6978723404255319,
+   1.0999999999999999
+  ],
+  "both_range": [
+   1.1724137931034482,
+   1.2333333333333334
+  ],
+  "control_sphere_normal": [
+   0.9298245614035087,
+   1.0304878048780488
+  ],
+  "control_wall_sphere_normal": [
+   0.9807006161645253,
+   0.9326101402992096
+  ],
+  "normal_block_share_generic": 0.16080980129068684,
+  "normal_block_share_analytic": 0.09844200849034887,
+  "normal_block_profile": {
+   "generic": {
+    "total_tottime": 0.2592883,
+    "normal_block": 0.0416961,
+    "share": 0.16080980129068684
+   },
+   "analytic": {
+    "total_tottime": 0.22416039999999998,
+    "normal_block": 0.022066799999999998,
+    "share": 0.09844200849034887
+   }
+  }
+ },
+ "results": {
+  "spherical7": {
+   "has_sphere": true,
+   "n_rays": 100000,
+   "n_surfaces": 7,
+   "reps": 9,
+   "inner": 20,
+   "seconds": {
+    "generic_surface": 0.05644456000009086,
+    "analytic_surface": 0.05275538999994751,
+    "generic_exit": 0.055780009999944015,
+    "analytic_exit": 0.055904550000195743
+   },
+   "cpu_seconds": {
+    "generic_surface": 0.053125,
+    "analytic_surface": 0.04921875,
+    "generic_exit": 0.05390625,
+    "analytic_exit": 0.0453125
+   },
+   "speedup_sphere_normal": 1.0793650793650793,
+   "speedup_renormalize": 0.9855072463768115,
+   "speedup_both": 1.1724137931034482,
+   "speedup_renormalize_on_analytic": 1.0862068965517242,
+   "wall_speedup_sphere_normal": 1.069929726614608,
+   "wall_speedup_renormalize": 1.0119137662425575
+  },
+  "triplet6": {
+   "has_sphere": true,
+   "n_rays": 100000,
+   "n_surfaces": 6,
+   "reps": 9,
+   "inner": 20,
+   "seconds": {
+    "generic_surface": 0.06599543000011181,
+    "analytic_surface": 0.054294184999889694,
+    "generic_exit": 0.06671395000012126,
+    "analytic_exit": 0.05493659500025387
+   },
+   "cpu_seconds": {
+    "generic_surface": 0.065625,
+    "analytic_surface": 0.05390625,
+    "generic_exit": 0.06640625,
+    "analytic_exit": 0.05390625
+   },
+   "speedup_sphere_normal": 1.2173913043478262,
+   "speedup_renormalize": 0.9882352941176471,
+   "speedup_both": 1.2173913043478262,
+   "speedup_renormalize_on_analytic": 1.0,
+   "wall_speedup_sphere_normal": 1.2155156210604485,
+   "wall_speedup_renormalize": 0.9892298387367537
+  },
+  "cassegrain2mirror": {
+   "has_sphere": true,
+   "n_rays": 100000,
+   "n_surfaces": 3,
+   "reps": 9,
+   "inner": 20,
+   "seconds": {
+    "generic_surface": 0.029318714999681104,
+    "analytic_surface": 0.025287810000008903,
+    "generic_exit": 0.029049585000029764,
+    "analytic_exit": 0.022979105000194976
+   },
+   "cpu_seconds": {
+    "generic_surface": 0.02890625,
+    "analytic_surface": 0.02578125,
+    "generic_exit": 0.02890625,
+    "analytic_exit": 0.0234375
+   },
+   "speedup_sphere_normal": 1.1212121212121213,
+   "speedup_renormalize": 1.0,
+   "speedup_both": 1.2333333333333334,
+   "speedup_renormalize_on_analytic": 1.0999999999999999,
+   "wall_speedup_sphere_normal": 1.1594011106406914,
+   "wall_speedup_renormalize": 1.0092645041108528
+  },
+  "conic3 (control)": {
+   "has_sphere": false,
+   "n_rays": 100000,
+   "n_surfaces": 3,
+   "reps": 9,
+   "inner": 20,
+   "seconds": {
+    "generic_surface": 0.04452370500002871,
+    "analytic_surface": 0.045399894999718526,
+    "generic_exit": 0.038610980000157724,
+    "analytic_exit": 0.045774669999809704
+   },
+   "cpu_seconds": {
+    "generic_surface": 0.04140625,
+    "analytic_surface": 0.04453125,
+    "generic_exit": 0.0390625,
+    "analytic_exit": 0.0453125
+   },
+   "speedup_sphere_normal": 0.9298245614035087,
+   "speedup_renormalize": 1.06,
+   "speedup_both": 0.9137931034482759,
+   "speedup_renormalize_on_analytic": 0.9827586206896552,
+   "wall_speedup_sphere_normal": 0.9807006161645253,
+   "wall_speedup_renormalize": 1.153135843737891
+  },
+  "aspheric3 (control)": {
+   "has_sphere": false,
+   "n_rays": 100000,
+   "n_surfaces": 3,
+   "reps": 9,
+   "inner": 20,
+   "seconds": {
+    "generic_surface": 0.0566900549998536,
+    "analytic_surface": 0.060786445000121606,
+    "generic_exit": 0.06292530999999144,
+    "analytic_exit": 0.06184029500000179
+   },
+   "cpu_seconds": {
+    "generic_surface": 0.39609375,
+    "analytic_surface": 0.384375,
+    "generic_exit": 0.36171875,
+    "analytic_exit": 0.55078125
+   },
+   "speedup_sphere_normal": 1.0304878048780488,
+   "speedup_renormalize": 1.0950323974082075,
+   "speedup_both": 0.7191489361702128,
+   "speedup_renormalize_on_analytic": 0.6978723404255319,
+   "wall_speedup_sphere_normal": 0.9326101402992096,
+   "wall_speedup_renormalize": 0.9009102219736592
+  }
+ }
+}

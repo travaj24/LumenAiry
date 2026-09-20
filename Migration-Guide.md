@@ -7,8 +7,8 @@ migration recipe -- "I bumped from v4.X to v4.Y, what do I change?".
 
 ## Versions covered
 
-v4.13 through v5.47.  Sections are in version order; the newest is
-[5.47.0 -- adversarial audit remediation, Wave 4 (2026-09-14)](#5470----adversarial-audit-remediation-wave-4-2026-09-14)
+v4.13 through v5.49.  Sections are in version order; the newest is
+[5.49.0 -- the ray tracer's `sphere_normal` default moves to `'analytic'` (WP-C2)](#5490----the-ray-tracers-sphere_normal-default-moves-to-analytic-wp-c2)
 at the end of this file; the 5.46.0 section before it is the largest single
 batch of behaviour changes the library has shipped, and 5.47.0 is the wave that
 implemented what it deferred.
@@ -1774,3 +1774,65 @@ no-op on the fixed polynomial space; the wall-corner cure is the hp mesh), Levin
 the RCWA Toeplitz inverses (12 to 20 times slower and two decades less accurate than the
 shipped inverse), the chessboard FFT-shift identity (bit-identical only on power-of-two
 grids).
+
+---
+
+## 5.49.0 -- the ray tracer's `sphere_normal` default moves to `'analytic'` (WP-C2)
+
+`trace` and `trace_world` now compute a PURE SPHERE's surface normal from the
+closed form `(-x/R, -y/R, sqrt(1 - h^2/R^2))` rather than by differentiating
+the sag numerically.  The route shipped opt-in in 5.48.0 (`sphere_normal=`);
+5.49.0 makes it the default, on the maintainer decision recorded as section 1.3
+of `docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/MAINTAINER_DECISIONS_2026_09.md`.
+
+**The way back, and it is byte-identical:**
+
+```python
+result = trace(rays, surfaces, wavelength, sphere_normal='generic')
+result = trace_world(rays, world_surfaces, wavelength, sphere_normal='generic')
+```
+
+Archive to archive against 49ddf4bd, with that keyword passed, 938 of 1008
+recorded arrays (1 630 399 values) are byte-identical on both development
+mounts; the 70 that are not are exactly the entry points listed under
+"No keyword there" below.
+
+**What you get if you do nothing.**  A 1.08x to 1.44x faster trace on
+prescriptions that contain spherical surfaces (medians 1.12x and 1.19x on the
+two development mounts; 0.93x to 1.03x on prescriptions with no pure sphere,
+which is the measurement's own resolution), a normal that is within 1.75 ULP of
+a 60-digit oracle out to `h = 0.95 |R|` against the previous route's 2.00-2.25,
+and answers that move by at most 1.8e-11 absolute and 3.4e-13 relative.  No
+`alive` flag, error code or vignetting count moves on any shipped prescription:
+360 000 traced rays over twelve prescription and field-angle combinations moved
+zero of each.  CPU / JAX parity is unmoved (3.5e-18 m in position, 3.1e-17 m in
+OPL, alive masks equal, under all four settings) -- the JAX tracer has always
+used a closed-form sphere normal, so this brings the two backends closer.
+
+**THE RIM BAND -- the one discontinuous change.**  The two routes evaluate the
+`0.9999` domain clamp from different expressions, `(x*x + y*y)/(R*R)` against
+`(1 + conic) * sqrt(x*x + y*y)**2 / R**2`, which differ by up to 1 ULP.  Over a
+band about **one ULP of `h` wide at `h = 0.99995 |R|`** the two land on opposite
+sides of the clamp: a ray the old route killed as `RAY_NAN` may now refract, or
+die with an honest `RAY_TIR` / `RAY_APERTURE` instead, and vice versa.  A
+directed `nextafter` walk constructs such points; no sampled bundle found one.
+If a design deliberately works rays past `0.9999 R^2` of a spherical surface,
+note that NEITHER route resolves the normal there better than about 1e-12
+relative -- the cancellation in `sqrt(1 - u)` is in the inputs, not in the
+algorithm -- so give the surface an explicit clear aperture instead of relying
+on the clamp to define the edge.  The clamp itself is unchanged in 5.49.0 and
+stays until a vignetting decision is taken on its own merits.
+
+**No keyword there.**  These entry points trace internally and do not expose
+`sphere_normal`, so there is no one-keyword way back through them:
+`trace_prescription`, `raytrace_system`, `ray_fan_data`, `opd_fan_data`,
+`through_focus_rms`, and `spot_rms` / `spot_geo_radius` / `refocus` applied to
+their results.  A caller who needs the pre-5.49.0 arithmetic through those must
+build the bundle and call `trace(..., sphere_normal='generic')` directly.
+
+**Unchanged on purpose.**  The private helpers `_refract`, `_reflect` and
+`_surface_normal` keep their old defaults (`sphere_normal='generic'`,
+`analytic_sphere=False`): `analysis.ghost` and the finite-difference
+differential path call them directly, with no trace loop around them, and own
+their own arithmetic policy.  `analysis.ghost` therefore still uses the generic
+normal, and its answers do not move in 5.49.0.
