@@ -70,6 +70,27 @@ _N, _DX, _SEMI, _W0 = 112, 3.6e-6, 0.17e-3, 0.105e-3
 _FRAME = dict(sample_step=4, waist_factor=4.0)
 
 
+#: VERIFY-WP-B12b D-6 (2026-09-19).  A GBD field's SHA-256 depends on the
+#: memory budget through the PUBLIC entry: ``_reconstruct_windowed`` chunks
+#: each bucket of the coherent beamlet sum to stay under it, and the chunk
+#: boundaries change the grouping of a ``bincount`` scatter-add.  Measured on
+#: one fixture with only ``LUMENAIRY_MEM_BUDGET_MB`` varied -- unset / 4096 /
+#: 2048 / 512 give ONE digest, 64 and 8 give two others, while the fields
+#: agree to ~1e-15 (``validation/probe_wp_b12b_round2/probe_r3_budget.py``,
+#: both builds).  The environment variable is a CEILING on the kwarg, so a
+#: byte-identity id must pin BOTH or it is only reproducible in the
+#: environment it was written in.
+_MEM_BUDGET_MB = 2048.0
+
+
+@pytest.fixture(autouse=True)
+def _pin_mem_budget(monkeypatch):
+    """Every id in this file runs at ONE memory budget (D-6), so its digests
+    are a property of the library and not of the shell that invoked it."""
+    monkeypatch.setenv('LUMENAIRY_MEM_BUDGET_MB', str(int(_MEM_BUDGET_MB)))
+
+
+
 # ===========================================================================
 # Glass: a dispersionless MODEL index registered here, so the oracle and the
 # library read the same number by construction and glass modelling is out of
@@ -397,7 +418,8 @@ def _gbd(presc, z, **extra):
         warnings.simplefilter('ignore')
         return np.asarray(la.apply_real_lens_gbd(
             _E_in(), prescription=presc, wavelength=_LAM, dx=_DX,
-            output_plane_distance=float(z), **kw))
+            output_plane_distance=float(z),
+            mem_budget_mb=_MEM_BUDGET_MB, **kw))
 
 
 class _Pin:
@@ -678,29 +700,35 @@ def test_the_world_branch_keeps_the_surface_plane_because_the_exit_vertex_one_do
 # 4.  The two open items, pinned so the edits that close them are forced to
 #     re-derive these numbers.
 # ===========================================================================
-@pytest.mark.xfail(raises=AssertionError, strict=True, reason=(
-    'VERIFY-WP-B12b D-2 (open): the LOCAL branch takes Nz2 = 1/sec, which is '
-    'positive whatever the true N, so a MIRROR-terminated prescription is '
-    'served with a forward-going direction and a leg that walks along an axis '
-    'the light is no longer travelling.  It is neither refused nor signed.  '
-    'This xfail turns RED the day either remedy lands, which is the point.'))
 def test_a_mirror_terminated_local_branch_is_refused_or_carries_the_direction():
-    """DECISION (deliberately failing today): a mirror-terminated prescription
-    through the LOCAL branch must EITHER be refused, OR return an exit
-    direction whose ``z`` sign matches the traced one.
+    """DECISION: a mirror-terminated prescription through the LOCAL branch
+    must EITHER be refused, OR return an exit direction whose ``z`` sign
+    matches the traced one.  It is now REFUSED.
 
-    It does neither.  WP-B12b repaired the SIGN of the sag term on this class
-    (``_exit_direction_sign``, 13.15 waves on this fixture) and left the
+    HISTORY, because the shape of the gate matters.  Until 2026-09-19 this id
+    was ``xfail(raises=AssertionError, strict=True)`` with the note "this
+    xfail turns RED the day either remedy lands".  It would NOT have: both
+    ends of the id raise ``AssertionError`` -- the served arm through its
+    final assertion, the refused arm through the ``except`` clause that
+    re-raises as one -- so a landing remedy would have left it quietly
+    xfailed, and ``strict=True`` only catches an XPASS.  A gate that cannot
+    change state is not a gate; the xfail is removed and the refusal is
+    asserted directly.
+
+    WHAT IS ASSERTED.  WP-B12b repaired the SIGN of the sag term on this
+    class (``_exit_direction_sign``, 13.15 waves on this fixture) and left the
     branch's own direction convention alone, recording it as open item 2 with
     the recommendation "should probably be refused with a message naming
-    ``world_output_plane``".
-
-    Measured here first, as a premise: that recommendation does not have a
-    remedy to name.  The ``world_output_plane`` branch REFUSES a curved
-    terminating mirror outright (``_unfolded_equivalent_surfaces``: "curved
-    (powered) fold mirrors are not yet supported"), so on exactly the class
-    where the local branch is wrong there is nowhere to send the caller.  Any
-    refusal has to say that, not point at the other branch.
+    ``world_output_plane``".  Measured here as a PREMISE first: that
+    recommendation has no remedy to name.  The ``world_output_plane`` branch
+    REFUSES a curved terminating mirror outright
+    (``_unfolded_equivalent_surfaces``: "curved (powered) fold mirrors are not
+    yet supported"), so on exactly the class where the local branch is wrong
+    there is nowhere to send the caller -- and the shipped message must not
+    pretend otherwise.  The refusal itself, its two-sided control and the
+    message's content are pinned in ``tests/unit/test_wp_b12b_round2.py``;
+    what this id keeps is the DECISION on the verifier's own fixture, against
+    the verifier's own 3-D trace.
     """
     presc = _presc(mirror=True, R2=-15.0e-3, semi=0.40e-3)
     osurfs = _osurfs(presc, mirror=True)
@@ -726,20 +754,34 @@ def test_a_mirror_terminated_local_branch_is_refused_or_carries_the_direction():
         f'premise: the world branch was expected to refuse a curved '
         f'terminating mirror; it raised {ei.value}')
 
+    refused = None
     try:
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
             r = G.apply_prescription_persurface_to_beamlets(
                 b, presc, _LAM, z_image=7.5e-3)
-    except (NotImplementedError, ValueError) as e:      # pragma: no cover
-        raise AssertionError(
-            f'refused, which is one of the two acceptable end states -- '
-            f're-derive this test: {e}') from None
-    got = float(np.sign(np.median(np.asarray(r.directions)[:, 2])))
-    assert got == true_sign, (
-        f'the local branch returned a direction with z sign {got:+.0f} for a '
-        f'prescription whose light travels toward {true_sign:+.0f}, and did '
-        f'not refuse')
+    except (NotImplementedError, ValueError) as e:
+        refused = e
+    if refused is None:                                 # pragma: no cover
+        got = float(np.sign(np.median(np.asarray(r.directions)[:, 2])))
+        assert got == true_sign, (
+            f'the local branch returned a direction with z sign {got:+.0f} '
+            f'for a prescription whose light travels toward '
+            f'{true_sign:+.0f}, and did not refuse')
+        return
+    msg = str(refused)
+    assert 'MIRROR' in msg, (
+        f'the refusal must name the class it refuses; it reads {msg[:160]!r}')
+    # and it must NOT send the caller to the branch that refuses this same
+    # class: the premise above measured that ``world_output_plane`` raises on
+    # a CURVED terminating fold, so a message offering it unconditionally
+    # would be a dead end (VERIFY-WP-B12b D-4).
+    low = msg.lower()
+    assert 'world_output_plane' not in low or (
+        'curved' in low and 'flat' in low), (
+        f'the refusal names world_output_plane without distinguishing the '
+        f'CURVED case (which that branch refuses) from the FLAT one (which '
+        f'it serves): {msg[:400]!r}')
 
 
 def test_an_immersed_exit_is_refused_or_served_with_a_vacuum_image_leg():
