@@ -17,6 +17,7 @@ import importlib.util
 import inspect
 import math
 import pathlib
+import re
 from decimal import Decimal, getcontext
 
 import numpy as np
@@ -891,3 +892,67 @@ def test_vc2_the_clamp_kills_through_the_public_trace_on_both_routes():
         assert int(ec[3]) != 4, (
             f'{rn}/{sn}: a ray just INSIDE the clamp is now killed '
             f'RAY_NAN, so the clamp has moved inward ({list(ec)}).')
+
+
+# ======================================================================
+# 11.  The private-layer docstrings the flip left behind
+# ======================================================================
+
+def test_vc2_the_private_docstrings_still_describe_the_old_defaults():
+    """WP-C2 rewrote the two PUBLIC docstrings and left the private ones.
+
+    Four of their sentences became false the moment the default moved, and
+    the first is the one a reader reaches for to answer exactly the question
+    the Migration note raises -- ``_sphere_normal``'s own account of the rim
+    band says "the shipped default is the generic route on both sides",
+    which is the opposite of what the release did.
+
+    Neither the doc-consistency gate nor the walker citation gate reads
+    prose, so nothing else catches this.  This verifier does not edit
+    ``lumenairy/``, so the arm PINS the defect instead: it is green while
+    the stale text is there and goes RED the moment someone corrects it,
+    which is when VERIFY_WP-C2.md defect D11 should be closed and this arm
+    inverted to assert the replacement text.  D11 carries that text.
+    """
+    def _flat(path):
+        return re.sub(r'\s+', ' ', (REPO / 'lumenairy' / 'raytrace'
+                                    / path).read_text(encoding='utf-8'))
+
+    surface_src = _flat('surface.py')
+    isect_src = _flat('intersection.py')
+    trace_src = _flat('trace.py')
+
+    # PREMISE: the two PUBLIC docstrings DO say the defaults moved, so a
+    # red here cannot mean "the whole work package was reverted".
+    assert 'THIS DEFAULT MOVED' in trace_src, (
+        'premise: trace.py no longer says the defaults moved, so this arm '
+        'has nothing to compare the private docstrings against.')
+
+    stale = {
+        'surface.py::_sphere_normal': (
+            surface_src,
+            'That band is reachable only under ``sphere_normal='
+            "'analytic'``; the shipped default is the generic route on "
+            'both sides.'),
+        'surface.py::_surface_normal': (
+            surface_src,
+            'The default is the generic sag-derivative route, which is '
+            'the arithmetic every caller has always got'),
+        'intersection.py::_intersect_surface': (
+            isect_src,
+            'It is opt-in because it differs in the last bit from the '
+            'sag-derivative route every caller has been getting.'),
+        'intersection.py::_refract': (
+            isect_src,
+            "``'generic'`` is the sag-derivative dispatch every caller has "
+            'always used'),
+    }
+    still_there = [k for k, (src, txt) in stale.items()
+                   if re.sub(r'\s+', ' ', txt) in src]
+    assert len(still_there) == 4, (
+        f'the private ray-tracer docstrings have changed: '
+        f'{sorted(set(stale) - set(still_there))} no longer carry the '
+        f'pre-5.49.0 text.  If VERIFY_WP-C2.md defect D11 has been '
+        f'actioned, close it and INVERT this arm to assert the '
+        f'replacement wording (D11 carries it verbatim).  If the text '
+        f'merely drifted, this arm has stopped protecting anything.')

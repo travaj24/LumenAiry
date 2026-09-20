@@ -722,6 +722,75 @@ rays aimed at the rim moved zero flags -- and it does not exist on the
 meridian at all, because the two gate expressions agree exactly at ``y = 0``.
 ```
 
+### D11 (P1, docs) -- three private-layer docstrings still say the shipped default is the GENERIC route
+
+The work package rewrote the two PUBLIC docstrings and left the private ones
+behind.  Three of their sentences are now flatly false, and the first is the
+one a reader reaches for when asking exactly the question the Migration note
+raises:
+
+`lumenairy/raytrace/surface.py:722-724` (`_sphere_normal`):
+
+> That band is reachable only under ``sphere_normal='analytic'``; **the
+> shipped default is the generic route on both sides.**
+
+The shipped default IS the analytic route, so the band is reachable AT THE
+DEFAULT.  This sentence tells a reader the opposite of what the CHANGELOG and
+the Migration Guide tell them, in the very function whose docstring they would
+open to check.
+
+`lumenairy/raytrace/surface.py:749-750` (`_surface_normal`):
+
+> The default is the generic sag-derivative route, which is **the arithmetic
+> every caller has always got**
+
+The PRIVATE default is still `False`, so the first clause is right; "every
+caller" is not -- `trace` and `trace_world` now pass `analytic_sphere=True` at
+every pure sphere.
+
+`lumenairy/raytrace/intersection.py:159-160` (`_intersect_surface`), and the
+same phrase in `_refract`'s `sphere_normal` parameter block:
+
+> It is **opt-in** because it differs in the last bit from the sag-derivative
+> route **every caller has been getting**.
+
+It is opt-OUT for the two public tracers now.
+
+Neither the doc-consistency gate nor the walker citation gate reads prose, so
+nothing caught these.  Requested edits:
+
+```python
+# surface.py, _sphere_normal
+    ``RAY_NAN`` kill through the generic route.  That band is reachable
+    only under ``sphere_normal='analytic'`` -- which is the SHIPPED
+    DEFAULT of ``trace`` / ``trace_world`` since 5.49.0, so it is
+    reachable by default; ``sphere_normal='generic'`` is the way back.
+    Measured: 580 000 rays over twelve prescription and field
+    combinations move zero alive flags, and the band does not exist on
+    the meridian at all (the two gate expressions agree exactly at
+    ``y = 0``).
+
+# surface.py, _surface_normal
+    analytic_sphere : bool, default False
+        ...  This PRIVATE default did not move in 5.49.0 -- it is what
+        ``analysis.ghost`` and the finite-difference differential path
+        get, so their arithmetic is unchanged by construction -- but
+        ``trace`` / ``trace_world`` now pass ``True`` at every pure
+        sphere.
+
+# intersection.py, _intersect_surface
+    It is the DEFAULT for ``trace`` / ``trace_world`` since 5.49.0 and
+    opt-in for every direct caller of ``_refract`` / ``_reflect``,
+    because it differs in the last bit from the sag-derivative route.
+
+# intersection.py, _refract's sphere_normal block
+    ``'generic'`` is the sag-derivative dispatch and the default of THIS
+    private helper; ``trace`` passes ``'analytic'``.
+```
+
+Pinned by
+`test_verify_c2_analytic_normal.py::test_vc2_no_private_docstring_claims_the_generic_route_is_shipped`.
+
 ### D10 (P3, process) -- the 19 new test ids are not in `.test_durations`
 
 `git diff 49ddf4bd..eadc67ba -- .test_durations` is empty, and
@@ -737,8 +806,11 @@ and splice its 19 ids into `.test_durations`.
 
 ## 5. Ship recommendation
 
-**SHIP**, with D1, D3, D4 and D7 actioned before the release note is written,
-and D2, D5, D6, D8, D9, D10 filed.
+**SHIP**, with D11, D1, D3, D4 and D7 actioned before the release note is
+written, and D2, D5, D6, D8, D9, D10 filed.  D11 is the only P1: a reader who
+opens `_sphere_normal` to ask whether the rim band is reachable is told, in
+that docstring, that it is not -- which is the opposite of what the release
+actually did.
 
 The two default flips are sound and this verification strengthened rather than
 weakened both:
@@ -755,10 +827,12 @@ weakened both:
   measured linear sensitivity coefficient.  Its speed benefit is real but
   small and sign-dependent on surface count; **KEEP** (section 3).
 
-The four items that must not go out unqualified are the entry points with no
-way back (**sixteen**, not six -- D4), the oracle whose own error exceeds what
-it reports above `h = 0.9 abs(R)` (D1), the `0.6 n eps` coefficient (D3) and
-the citation override that accepts a reverted default (D7).
+The five items that must not go out unqualified are the three private
+docstrings that still say the generic route is shipped (**D11, P1**), the
+entry points with no way back (**sixteen**, not six -- D4), the oracle whose
+own error exceeds what it reports above `h = 0.9 abs(R)` (D1), the
+`0.6 n eps` coefficient (D3) and the citation override that accepts a
+reverted default (D7).
 
 ---
 
