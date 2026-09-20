@@ -22,8 +22,8 @@ Probes and JSON: [`validation/probe_verify_c1_round2/`](../../../../validation/p
 Decision tests: `tests/unit/test_verify_c1_round2.py` (24 ids, 16 pass +
 8 strict xfail, 16 s, identical on both builds).
 
-**SHIP the C1 chain, with three small defects to close and two documentation
-corrections.**  D2, D3, D4, M3 and every recorded item are closed and every
+**SHIP the C1 chain, with three guard defects to close (R1-R3) and five
+documentation corrections (R4-R8).**  D2, D3, D4, M3 and every recorded item are closed and every
 number round 2 prints is reproducible -- several of them to sixteen digits on
 both builds.  **D1 is closed for the element shape round 2 measured and only
 for that shape**: an `'aperture'` element whose `params` do not resolve still
