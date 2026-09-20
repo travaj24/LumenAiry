@@ -1,0 +1,315 @@
+{
+ "F1-single-N256-dx20um-w1mm": {
+  "dx": "5e-07",
+  "n_runtimewarn": 3,
+  "outcome": "ok",
+  "peak": 1.933361548240395,
+  "power": 7807.433364149866,
+  "warnings": [
+   [
+    "UserWarning",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=20.000 um, semi=2.560 mm). Largest is system aperture_diamete"
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=20.000 um, semi=2.560 mm). Largest is system aperture_diameter with "
+   ],
+   [
+    "RuntimeWarning",
+    "deterministic least-squares: the Gram matrix screened as numerically singular, so the solve reroutes to a threaded QR (geqrf) over the full design mat"
+   ],
+   [
+    "RuntimeWarning",
+    "deterministic least-squares: the Gram matrix screened as numerically singular, so the solve reroutes to a threaded QR (geqrf) over the full design mat"
+   ],
+   [
+    "RuntimeWarning",
+    "deterministic least-squares: the Gram matrix screened as numerically singular, so the solve reroutes to a threaded QR (geqrf) over the full design mat"
+   ]
+  ]
+ },
+ "F1-single-N256-dx40um-w2mm": {
+  "dx": "5e-07",
+  "n_runtimewarn": 0,
+  "outcome": "ok",
+  "peak": 3.675975657480002,
+  "power": 14650.311072041799,
+  "warnings": [
+   [
+    "UserWarning",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.000 um, semi=5.120 mm). Largest is system aperture_diamete"
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.000 um, semi=5.120 mm). Largest is system aperture_diameter with "
+   ]
+  ]
+ },
+ "F1-single-N512-dx20um-w2mm": {
+  "dx": "5e-07",
+  "n_runtimewarn": 0,
+  "outcome": "ok",
+  "peak": 1.9918291812231834,
+  "power": 8036.9626545141255,
+  "warnings": [
+   [
+    "UserWarning",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=512, dx=20.000 um, semi=5.120 mm). Largest is system aperture_diamete"
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=512, dx=20.000 um, semi=5.120 mm). Largest is system aperture_diameter with "
+   ]
+  ]
+ },
+ "F1-single-N512-dx40um-w4mm": {
+  "dx": "5e-07",
+  "n_runtimewarn": 0,
+  "outcome": "ok",
+  "peak": 3.8353321996320924,
+  "power": 15154.918966581328,
+  "warnings": [
+   [
+    "UserWarning",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=512, dx=40.000 um, semi=10.240 mm). Largest is system aperture_diamet"
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=512, dx=40.000 um, semi=10.240 mm). Largest is system aperture_diameter with"
+   ]
+  ]
+ },
+ "F2-two-N256-dx40um-w2mm": {
+  "dx": "5e-07",
+  "n_runtimewarn": 2,
+  "outcome": "ok",
+  "peak": 67.78710214176044,
+  "power": 257325.56078938305,
+  "warnings": [
+   [
+    "UserWarning",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.000 um, semi=5.120 mm). Largest is system aperture_diamete"
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.000 um, semi=5.120 mm). Largest is system aperture_diameter with "
+   ],
+   [
+    "RuntimeWarning",
+    "propagate_traced_carrier_chain: the free-space leg into groups[1] (bcx) is outside the SZIKLAS-SIEGMAN FRAME's validity: the measured envelope spread "
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=29.843 um, semi=3.820 mm). Largest is system aperture_diamete"
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=29.843 um, semi=3.820 mm). Largest is system aperture_diameter with "
+   ],
+   [
+    "RuntimeWarning",
+    "apply_real_lens_traced: amplitude_model='ray_density' energy self-check FAILED -- exit power / aperture-transmitted input power = 3.156702, outside th"
+   ]
+  ]
+ },
+ "F2-two-N512-dx20um-w2mm": {
+  "dx": "5e-07",
+  "n_runtimewarn": 1,
+  "outcome": "ok",
+  "peak": 7.970978591135996,
+  "power": 27817.699236486602,
+  "warnings": [
+   [
+    "UserWarning",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=512, dx=20.000 um, semi=5.120 mm). Largest is system aperture_diamete"
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=512, dx=20.000 um, semi=5.120 mm). Largest is system aperture_diameter with "
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=512, dx=14.921 um, semi=3.820 mm). Largest is system aperture_diamete"
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=512, dx=14.921 um, semi=3.820 mm). Largest is system aperture_diameter with "
+   ],
+   [
+    "RuntimeWarning",
+    "apply_real_lens_traced: amplitude_model='ray_density' energy self-check FAILED -- exit power / aperture-transmitted input power = 1.589778, outside th"
+   ]
+  ]
+ },
+ "F3-containment-warn": {
+  "dx": "5e-07",
+  "n_runtimewarn": 0,
+  "outcome": "ok",
+  "peak": 3.675975657480002,
+  "power": 14650.311072041799,
+  "warnings": [
+   [
+    "UserWarning",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.000 um, semi=5.120 mm). Largest is system aperture_diamete"
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.000 um, semi=5.120 mm). Largest is system aperture_diameter with "
+   ]
+  ]
+ },
+ "F3-standoff-2mm": {
+  "dx": "5e-07",
+  "n_runtimewarn": 0,
+  "outcome": "ok",
+  "peak": 3.7509701773753226,
+  "power": 14870.054351237475,
+  "warnings": [
+   [
+    "UserWarning",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.000 um, semi=5.120 mm). Largest is system aperture_diamete"
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.000 um, semi=5.120 mm). Largest is system aperture_diameter with "
+   ]
+  ]
+ },
+ "F3-zero-distance": {
+  "dx": "5e-07",
+  "n_runtimewarn": 0,
+  "outcome": "ok",
+  "peak": 1.0239306969612108,
+  "power": 4058.420899002757,
+  "warnings": [
+   [
+    "UserWarning",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.000 um, semi=5.120 mm). Largest is system aperture_diamete"
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.000 um, semi=5.120 mm). Largest is system aperture_diameter with "
+   ]
+  ]
+ },
+ "F4-final-leg-exact-bare": {
+  "dx": "2.2177231933159427e-05",
+  "n_runtimewarn": 2,
+  "outcome": "ok",
+  "peak": 68.24025317100093,
+  "power": 38954.495250461754,
+  "warnings": [
+   [
+    "UserWarning",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.000 um, semi=5.120 mm). Largest is system aperture_diamete"
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.000 um, semi=5.120 mm). Largest is system aperture_diameter with "
+   ],
+   [
+    "RuntimeWarning",
+    "propagate_traced_carrier_chain: the free-space leg into groups[1] (bcx) is outside the SZIKLAS-SIEGMAN FRAME's validity: the measured envelope spread "
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=29.843 um, semi=3.820 mm). Largest is system aperture_diamete"
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=29.843 um, semi=3.820 mm). Largest is system aperture_diameter with "
+   ],
+   [
+    "RuntimeWarning",
+    "apply_real_lens_traced: amplitude_model='ray_density' energy self-check FAILED -- exit power / aperture-transmitted input power = 3.156702, outside th"
+   ]
+  ]
+ },
+ "F4-final-leg-exact-readout": {
+  "dx": "5e-07",
+  "n_runtimewarn": 3,
+  "outcome": "ok",
+  "peak": 68.32521524847722,
+  "power": 262961.203229281,
+  "warnings": [
+   [
+    "UserWarning",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.000 um, semi=5.120 mm). Largest is system aperture_diamete"
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.000 um, semi=5.120 mm). Largest is system aperture_diameter with "
+   ],
+   [
+    "RuntimeWarning",
+    "propagate_traced_carrier_chain: the free-space leg into groups[1] (bcx) is outside the SZIKLAS-SIEGMAN FRAME's validity: the measured envelope spread "
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=1024, dx=7.461 um, semi=3.820 mm). Largest is system aperture_diamete"
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=1024, dx=7.461 um, semi=3.820 mm). Largest is system aperture_diameter with "
+   ],
+   [
+    "RuntimeWarning",
+    "apply_real_lens_traced: the inverse-characteristic per-pixel evaluator refused to build -- guard G7: the exit fit has 89 retained samples for 120 tota"
+   ],
+   [
+    "RuntimeWarning",
+    "apply_real_lens_traced: amplitude_model='ray_density' energy self-check FAILED -- exit power / aperture-transmitted input power = 3.275214, outside th"
+   ]
+  ]
+ },
+ "F4-single-final-leg-exact-bare": {
+  "dx": "3.661419171717504e-05",
+  "n_runtimewarn": 0,
+  "outcome": "ok",
+  "peak": 3.7454417164116265,
+  "power": 4527.305475463944,
+  "warnings": [
+   [
+    "UserWarning",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.000 um, semi=5.120 mm). Largest is system aperture_diamete"
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.000 um, semi=5.120 mm). Largest is system aperture_diameter with "
+   ]
+  ]
+ },
+ "F5-converging-two": {
+  "dx": "4e-07",
+  "n_runtimewarn": 1,
+  "outcome": "ok",
+  "peak": 84.39634688338397,
+  "power": 326603.17472488136,
+  "warnings": [
+   [
+    "UserWarning",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diamete"
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with "
+   ],
+   [
+    "RuntimeWarning",
+    "propagate_traced_carrier_chain: the free-space leg into groups[1] (bcx) is outside the SZIKLAS-SIEGMAN FRAME's validity: the measured envelope spread "
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diamete"
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with "
+   ]
+  ]
+ },
+ "_meta": {
+  "build": "WIN-py3.14",
+  "tree": "C:\\tmp\\vc3_base"
+ }
+}

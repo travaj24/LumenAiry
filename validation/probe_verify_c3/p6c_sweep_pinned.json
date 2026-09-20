@@ -1,0 +1,632 @@
+{
+ "label": "HEAD-PINNED",
+ "lumenairy_file": "C:\\tmp\\vc3_head\\lumenairy\\__init__.py",
+ "route": "sziklas-pinned",
+ "rows": [
+  {
+   "geom": "G1-test-fixture",
+   "standoff": null,
+   "transport": "sziklas-pinned",
+   "oracle_conv": 5.142659608592828e-07,
+   "error": {
+    "relL2": 0.018151653073169006,
+    "relL2_scale_free": 0.00013932480986181134,
+    "amp_scale": 1.0049170775533272,
+    "peak_ratio": 1.0100114914901892,
+    "raised": null,
+    "n_warn": 0
+   },
+   "warn": {
+    "relL2": 0.018151653073169006,
+    "relL2_scale_free": 0.00013932480986181134,
+    "amp_scale": 1.0049170775533272,
+    "peak_ratio": 1.0100114914901892,
+    "raised": null,
+    "n_warn": 0
+   }
+  },
+  {
+   "geom": "G1-test-fixture",
+   "standoff": 0.0001,
+   "transport": "sziklas-pinned",
+   "oracle_conv": 5.142659608592828e-07,
+   "error": {
+    "relL2": 0.008892940884950932,
+    "relL2_scale_free": 4.35662138403236e-05,
+    "amp_scale": 0.991797706026562,
+    "peak_ratio": 0.9836962719656192,
+    "raised": null,
+    "n_warn": 0
+   },
+   "warn": {
+    "relL2": 0.008892940884950932,
+    "relL2_scale_free": 4.35662138403236e-05,
+    "amp_scale": 0.991797706026562,
+    "peak_ratio": 0.9836962719656192,
+    "raised": null,
+    "n_warn": 0
+   }
+  },
+  {
+   "geom": "G1-test-fixture",
+   "standoff": 0.0003,
+   "transport": "sziklas-pinned",
+   "oracle_conv": 5.142659608592828e-07,
+   "error": {
+    "relL2": 0.008892940882981112,
+    "relL2_scale_free": 4.356621383758943e-05,
+    "amp_scale": 0.9917977060273809,
+    "peak_ratio": 0.983696271967251,
+    "raised": null,
+    "n_warn": 0
+   },
+   "warn": {
+    "relL2": 0.008892940882981112,
+    "relL2_scale_free": 4.356621383758943e-05,
+    "amp_scale": 0.9917977060273809,
+    "peak_ratio": 0.983696271967251,
+    "raised": null,
+    "n_warn": 0
+   }
+  },
+  {
+   "geom": "G1-test-fixture",
+   "standoff": 0.001,
+   "transport": "sziklas-pinned",
+   "oracle_conv": 5.142659608592828e-07,
+   "error": {
+    "raised": "RuntimeError: carrier_referenced_focus_readout: the beam does not fit the co-moving grid at the stop plane.  The grid half-w"
+   },
+   "warn": {
+    "relL2": 2.4049894966524197,
+    "relL2_scale_free": 0.001813741684679867,
+    "amp_scale": 2.273834668968771,
+    "peak_ratio": 5.143274055705023,
+    "raised": null,
+    "n_warn": 1
+   }
+  },
+  {
+   "geom": "G1-test-fixture",
+   "standoff": 0.003,
+   "transport": "sziklas-pinned",
+   "oracle_conv": 5.142659608592828e-07,
+   "error": {
+    "raised": "RuntimeError: carrier_referenced_focus_readout: the beam does not fit the co-moving grid at the stop plane.  The grid half-w"
+   },
+   "warn": {
+    "relL2": 0.6312376381525581,
+    "relL2_scale_free": 0.001813741684679656,
+    "amp_scale": 0.9769305164567167,
+    "peak_ratio": 0.9494000497143484,
+    "raised": null,
+    "n_warn": 1
+   }
+  },
+  {
+   "geom": "G1-test-fixture",
+   "standoff": 0.01,
+   "transport": "sziklas-pinned",
+   "oracle_conv": 5.142659608592828e-07,
+   "error": {
+    "relL2": 0.03323567047273496,
+    "relL2_scale_free": 0.00015709829597667927,
+    "amp_scale": 0.9761964438094308,
+    "peak_ratio": 0.9530630496436303,
+    "raised": null,
+    "n_warn": 0
+   },
+   "warn": {
+    "relL2": 0.03323567047273496,
+    "relL2_scale_free": 0.00015709829597667927,
+    "amp_scale": 0.9761964438094308,
+    "peak_ratio": 0.9530630496436303,
+    "raised": null,
+    "n_warn": 0
+   }
+  },
+  {
+   "geom": "G2-tight",
+   "standoff": null,
+   "transport": "sziklas-pinned",
+   "oracle_conv": 1.4690290649701515e-06,
+   "error": {
+    "relL2": 0.0032104106279749072,
+    "relL2_scale_free": 0.0002667241567987965,
+    "amp_scale": 0.9995257873899734,
+    "peak_ratio": 0.9990234708525118,
+    "raised": null,
+    "n_warn": 0
+   },
+   "warn": {
+    "relL2": 0.0032104106279749072,
+    "relL2_scale_free": 0.0002667241567987965,
+    "amp_scale": 0.9995257873899734,
+    "peak_ratio": 0.9990234708525118,
+    "raised": null,
+    "n_warn": 0
+   }
+  },
+  {
+   "geom": "G2-tight",
+   "standoff": 0.0001,
+   "transport": "sziklas-pinned",
+   "oracle_conv": 1.4690290649701515e-06,
+   "error": {
+    "relL2": 0.004504536026596138,
+    "relL2_scale_free": 0.0002643151419151337,
+    "amp_scale": 0.9975888537225198,
+    "peak_ratio": 0.9948553883098521,
+    "raised": null,
+    "n_warn": 0
+   },
+   "warn": {
+    "relL2": 0.004504536026596138,
+    "relL2_scale_free": 0.0002643151419151337,
+    "amp_scale": 0.9975888537225198,
+    "peak_ratio": 0.9948553883098521,
+    "raised": null,
+    "n_warn": 0
+   }
+  },
+  {
+   "geom": "G2-tight",
+   "standoff": 0.0003,
+   "transport": "sziklas-pinned",
+   "oracle_conv": 1.4690290649701515e-06,
+   "error": {
+    "raised": "RuntimeError: carrier_referenced_focus_readout: the beam does not fit the co-moving grid at the stop plane.  The grid half-w"
+   },
+   "warn": {
+    "relL2": 0.6042936727354706,
+    "relL2_scale_free": 0.015110555745468403,
+    "amp_scale": 1.022371898247287,
+    "peak_ratio": 0.9976162664686968,
+    "raised": null,
+    "n_warn": 1
+   }
+  },
+  {
+   "geom": "G2-tight",
+   "standoff": 0.001,
+   "transport": "sziklas-pinned",
+   "oracle_conv": 1.4690290649701515e-06,
+   "error": {
+    "relL2": 0.1095040779856971,
+    "relL2_scale_free": 0.005127714729616658,
+    "amp_scale": 0.9105843232436216,
+    "peak_ratio": 0.8257344043649715,
+    "raised": null,
+    "n_warn": 0
+   },
+   "warn": {
+    "relL2": 0.1095040779856971,
+    "relL2_scale_free": 0.005127714729616658,
+    "amp_scale": 0.9105843232436216,
+    "peak_ratio": 0.8257344043649715,
+    "raised": null,
+    "n_warn": 0
+   }
+  },
+  {
+   "geom": "G2-tight",
+   "standoff": 0.003,
+   "transport": "sziklas-pinned",
+   "oracle_conv": 1.4690290649701515e-06,
+   "error": {
+    "relL2": 0.005593931685735212,
+    "relL2_scale_free": 0.00020544224633418064,
+    "amp_scale": 0.9949328928163748,
+    "peak_ratio": 0.9893203426065518,
+    "raised": null,
+    "n_warn": 0
+   },
+   "warn": {
+    "relL2": 0.005593931685735212,
+    "relL2_scale_free": 0.00020544224633418064,
+    "amp_scale": 0.9949328928163748,
+    "peak_ratio": 0.9893203426065518,
+    "raised": null,
+    "n_warn": 0
+   }
+  },
+  {
+   "geom": "G2-tight",
+   "standoff": 0.01,
+   "transport": "sziklas-pinned",
+   "oracle_conv": 1.4690290649701515e-06,
+   "error": {
+    "relL2": 0.0038457118991269243,
+    "relL2_scale_free": 0.00030639555535782456,
+    "amp_scale": 0.9989893326658615,
+    "peak_ratio": 0.9978371337790912,
+    "raised": null,
+    "n_warn": 0
+   },
+   "warn": {
+    "relL2": 0.0038457118991269243,
+    "relL2_scale_free": 0.00030639555535782456,
+    "amp_scale": 0.9989893326658615,
+    "peak_ratio": 0.9978371337790912,
+    "raised": null,
+    "n_warn": 0
+   }
+  },
+  {
+   "geom": "G3-N256",
+   "standoff": null,
+   "transport": "sziklas-pinned",
+   "oracle_conv": 1.1800645981963514e-12,
+   "error": {
+    "relL2": 1.0600101906084977e-05,
+    "relL2_scale_free": 4.0072931301828245e-08,
+    "amp_scale": 0.9999924102752268,
+    "peak_ratio": 0.9999847015518388,
+    "raised": null,
+    "n_warn": 0
+   },
+   "warn": {
+    "relL2": 1.0600101906084977e-05,
+    "relL2_scale_free": 4.0072931301828245e-08,
+    "amp_scale": 0.9999924102752268,
+    "peak_ratio": 0.9999847015518388,
+    "raised": null,
+    "n_warn": 0
+   }
+  },
+  {
+   "geom": "G3-N256",
+   "standoff": 0.0001,
+   "transport": "sziklas-pinned",
+   "oracle_conv": 1.1800645981963514e-12,
+   "error": {
+    "relL2": 1.0053216228969602e-05,
+    "relL2_scale_free": 3.937350045721953e-08,
+    "amp_scale": 0.9999927650357925,
+    "peak_ratio": 0.9999854124268013,
+    "raised": null,
+    "n_warn": 0
+   },
+   "warn": {
+    "relL2": 1.0053216228969602e-05,
+    "relL2_scale_free": 3.937350045721953e-08,
+    "amp_scale": 0.9999927650357925,
+    "peak_ratio": 0.9999854124268013,
+    "raised": null,
+    "n_warn": 0
+   }
+  },
+  {
+   "geom": "G3-N256",
+   "standoff": 0.0003,
+   "transport": "sziklas-pinned",
+   "oracle_conv": 1.1800645981963514e-12,
+   "error": {
+    "relL2": 1.0053218254482335e-05,
+    "relL2_scale_free": 3.9373496216660444e-08,
+    "amp_scale": 0.9999927650370711,
+    "peak_ratio": 0.9999854124293671,
+    "raised": null,
+    "n_warn": 0
+   },
+   "warn": {
+    "relL2": 1.0053218254482335e-05,
+    "relL2_scale_free": 3.9373496216660444e-08,
+    "amp_scale": 0.9999927650370711,
+    "peak_ratio": 0.9999854124293671,
+    "raised": null,
+    "n_warn": 0
+   }
+  },
+  {
+   "geom": "G3-N256",
+   "standoff": 0.001,
+   "transport": "sziklas-pinned",
+   "oracle_conv": 1.1800645981963514e-12,
+   "error": {
+    "raised": "RuntimeError: carrier_referenced_focus_readout: the beam does not fit the co-moving grid at the stop plane.  The grid half-w"
+   },
+   "warn": {
+    "relL2": 0.3807081089174351,
+    "relL2_scale_free": 0.001853656062481019,
+    "amp_scale": 0.9361415663456695,
+    "peak_ratio": 0.8716570566071675,
+    "raised": null,
+    "n_warn": 1
+   }
+  },
+  {
+   "geom": "G3-N256",
+   "standoff": 0.003,
+   "transport": "sziklas-pinned",
+   "oracle_conv": 1.1800645981963514e-12,
+   "error": {
+    "relL2": 0.126807087691512,
+    "relL2_scale_free": 0.0020843438881386787,
+    "amp_scale": 1.0921337407060605,
+    "peak_ratio": 1.20053097082097,
+    "raised": null,
+    "n_warn": 0
+   },
+   "warn": {
+    "relL2": 0.126807087691512,
+    "relL2_scale_free": 0.0020843438881386787,
+    "amp_scale": 1.0921337407060605,
+    "peak_ratio": 1.20053097082097,
+    "raised": null,
+    "n_warn": 0
+   }
+  },
+  {
+   "geom": "G3-N256",
+   "standoff": 0.01,
+   "transport": "sziklas-pinned",
+   "oracle_conv": 1.1800645981963514e-12,
+   "error": {
+    "relL2": 1.1753152396402644e-05,
+    "relL2_scale_free": 1.2847225155174058e-07,
+    "amp_scale": 0.9999926599598148,
+    "peak_ratio": 0.9999851679318542,
+    "raised": null,
+    "n_warn": 0
+   },
+   "warn": {
+    "relL2": 1.1753152396402644e-05,
+    "relL2_scale_free": 1.2847225155174058e-07,
+    "amp_scale": 0.9999926599598148,
+    "peak_ratio": 0.9999851679318542,
+    "raised": null,
+    "n_warn": 0
+   }
+  },
+  {
+   "geom": "G4-coarse",
+   "standoff": null,
+   "transport": "sziklas-pinned",
+   "oracle_conv": 1.8758959713823392e-06,
+   "error": {
+    "relL2": 0.0028405315807180317,
+    "relL2_scale_free": 0.0003925494675802073,
+    "amp_scale": 0.9990975821039995,
+    "peak_ratio": 0.99792608876376,
+    "raised": null,
+    "n_warn": 0
+   },
+   "warn": {
+    "relL2": 0.0028405315807180317,
+    "relL2_scale_free": 0.0003925494675802073,
+    "amp_scale": 0.9990975821039995,
+    "peak_ratio": 0.99792608876376,
+    "raised": null,
+    "n_warn": 0
+   }
+  },
+  {
+   "geom": "G4-coarse",
+   "standoff": 0.0001,
+   "transport": "sziklas-pinned",
+   "oracle_conv": 1.8758959713823392e-06,
+   "error": {
+    "relL2": 0.0038881883468405297,
+    "relL2_scale_free": 0.0004464491509663677,
+    "amp_scale": 0.9978725533192486,
+    "peak_ratio": 0.9950930433519583,
+    "raised": null,
+    "n_warn": 0
+   },
+   "warn": {
+    "relL2": 0.0038881883468405297,
+    "relL2_scale_free": 0.0004464491509663677,
+    "amp_scale": 0.9978725533192486,
+    "peak_ratio": 0.9950930433519583,
+    "raised": null,
+    "n_warn": 0
+   }
+  },
+  {
+   "geom": "G4-coarse",
+   "standoff": 0.0003,
+   "transport": "sziklas-pinned",
+   "oracle_conv": 1.8758959713823392e-06,
+   "error": {
+    "relL2": 0.0038881883462638157,
+    "relL2_scale_free": 0.00044644915101385167,
+    "amp_scale": 0.997872553319435,
+    "peak_ratio": 0.9950930433523314,
+    "raised": null,
+    "n_warn": 0
+   },
+   "warn": {
+    "relL2": 0.0038881883462638157,
+    "relL2_scale_free": 0.00044644915101385167,
+    "amp_scale": 0.997872553319435,
+    "peak_ratio": 0.9950930433523314,
+    "raised": null,
+    "n_warn": 0
+   }
+  },
+  {
+   "geom": "G4-coarse",
+   "standoff": 0.001,
+   "transport": "sziklas-pinned",
+   "oracle_conv": 1.8758959713823392e-06,
+   "error": {
+    "raised": "RuntimeError: carrier_referenced_focus_readout: the beam does not fit the co-moving grid at the stop plane.  The grid half-w"
+   },
+   "warn": {
+    "relL2": 0.4915964434103419,
+    "relL2_scale_free": 0.02669010440429798,
+    "amp_scale": 0.8372994949438115,
+    "peak_ratio": 0.6458597883843419,
+    "raised": null,
+    "n_warn": 1
+   }
+  },
+  {
+   "geom": "G4-coarse",
+   "standoff": 0.003,
+   "transport": "sziklas-pinned",
+   "oracle_conv": 1.8758959713823392e-06,
+   "error": {
+    "relL2": 0.037275589391900364,
+    "relL2_scale_free": 0.0019993272944682917,
+    "amp_scale": 0.9650140687624464,
+    "peak_ratio": 0.9276072216729365,
+    "raised": null,
+    "n_warn": 0
+   },
+   "warn": {
+    "relL2": 0.037275589391900364,
+    "relL2_scale_free": 0.0019993272944682917,
+    "amp_scale": 0.9650140687624464,
+    "peak_ratio": 0.9276072216729365,
+    "raised": null,
+    "n_warn": 0
+   }
+  },
+  {
+   "geom": "G4-coarse",
+   "standoff": 0.01,
+   "transport": "sziklas-pinned",
+   "oracle_conv": 1.8758959713823392e-06,
+   "error": {
+    "relL2": 0.004050336716216465,
+    "relL2_scale_free": 0.0003744388770422889,
+    "amp_scale": 0.9970503651867524,
+    "peak_ratio": 0.9933264236903588,
+    "raised": null,
+    "n_warn": 0
+   },
+   "warn": {
+    "relL2": 0.004050336716216465,
+    "relL2_scale_free": 0.0003744388770422889,
+    "amp_scale": 0.9970503651867524,
+    "peak_ratio": 0.9933264236903588,
+    "raised": null,
+    "n_warn": 0
+   }
+  },
+  {
+   "geom": "G5-1p31um",
+   "standoff": null,
+   "transport": "sziklas-pinned",
+   "oracle_conv": 4.971933358251349e-07,
+   "error": {
+    "relL2": 0.031347624727670935,
+    "relL2_scale_free": 0.0002949568831286036,
+    "amp_scale": 1.0308630315825136,
+    "peak_ratio": 1.0636593848516773,
+    "raised": null,
+    "n_warn": 0
+   },
+   "warn": {
+    "relL2": 0.031347624727670935,
+    "relL2_scale_free": 0.0002949568831286036,
+    "amp_scale": 1.0308630315825136,
+    "peak_ratio": 1.0636593848516773,
+    "raised": null,
+    "n_warn": 0
+   }
+  },
+  {
+   "geom": "G5-1p31um",
+   "standoff": 0.0001,
+   "transport": "sziklas-pinned",
+   "oracle_conv": 4.971933358251349e-07,
+   "error": {
+    "relL2": 0.10477097922348252,
+    "relL2_scale_free": 0.0009811067521601669,
+    "amp_scale": 0.9709030925917285,
+    "peak_ratio": 0.9452080824007524,
+    "raised": null,
+    "n_warn": 0
+   },
+   "warn": {
+    "relL2": 0.10477097922348252,
+    "relL2_scale_free": 0.0009811067521601669,
+    "amp_scale": 0.9709030925917285,
+    "peak_ratio": 0.9452080824007524,
+    "raised": null,
+    "n_warn": 0
+   }
+  },
+  {
+   "geom": "G5-1p31um",
+   "standoff": 0.0003,
+   "transport": "sziklas-pinned",
+   "oracle_conv": 4.971933358251349e-07,
+   "error": {
+    "relL2": 0.10477097922409909,
+    "relL2_scale_free": 0.0009811067521650703,
+    "amp_scale": 0.9709030925907897,
+    "peak_ratio": 0.9452080823989338,
+    "raised": null,
+    "n_warn": 0
+   },
+   "warn": {
+    "relL2": 0.10477097922409909,
+    "relL2_scale_free": 0.0009811067521650703,
+    "amp_scale": 0.9709030925907897,
+    "peak_ratio": 0.9452080823989338,
+    "raised": null,
+    "n_warn": 0
+   }
+  },
+  {
+   "geom": "G5-1p31um",
+   "standoff": 0.001,
+   "transport": "sziklas-pinned",
+   "oracle_conv": 4.971933358251349e-07,
+   "error": {
+    "raised": "RuntimeError: carrier_referenced_focus_readout: the beam does not fit the co-moving grid at the stop plane.  The grid half-w"
+   },
+   "warn": {
+    "relL2": 4.875883417746042,
+    "relL2_scale_free": 0.002084148842969553,
+    "amp_scale": 4.854540970433242,
+    "peak_ratio": 23.451418405904537,
+    "raised": null,
+    "n_warn": 1
+   }
+  },
+  {
+   "geom": "G5-1p31um",
+   "standoff": 0.003,
+   "transport": "sziklas-pinned",
+   "oracle_conv": 4.971933358251349e-07,
+   "error": {
+    "raised": "RuntimeError: carrier_referenced_focus_readout: the beam does not fit the co-moving grid at the stop plane.  The grid half-w"
+   },
+   "warn": {
+    "relL2": 1.1479100330713252,
+    "relL2_scale_free": 0.002084148842968939,
+    "amp_scale": 1.174651693740809,
+    "peak_ratio": 1.3730646688727224,
+    "raised": null,
+    "n_warn": 1
+   }
+  },
+  {
+   "geom": "G5-1p31um",
+   "standoff": 0.01,
+   "transport": "sziklas-pinned",
+   "oracle_conv": 4.971933358251349e-07,
+   "error": {
+    "relL2": 0.4163359659433187,
+    "relL2_scale_free": 0.004248304334841648,
+    "amp_scale": 0.597090911384854,
+    "peak_ratio": 0.35509618163047874,
+    "raised": null,
+    "n_warn": 0
+   },
+   "warn": {
+    "relL2": 0.4163359659433187,
+    "relL2_scale_free": 0.004248304334841648,
+    "amp_scale": 0.597090911384854,
+    "peak_ratio": 0.35509618163047874,
+    "raised": null,
+    "n_warn": 0
+   }
+  }
+ ]
+}

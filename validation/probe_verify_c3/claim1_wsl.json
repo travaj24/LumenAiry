@@ -1,0 +1,496 @@
+{
+ "_build": {
+  "machine": "x86_64",
+  "numpy": "2.4.6",
+  "platform": "Linux-4.4.0-26100-Microsoft-x86_64-with-glibc2.39",
+  "python": "3.12.3"
+ },
+ "a_exit_plane": {
+  "R": -0.04620692561794844,
+  "dx": 7.654441837133347e-05,
+  "matches_spy_R": true,
+  "matches_spy_dx": true,
+  "on_axis": 0.6355806685122605,
+  "power_grid": 2.8288855552898615e-05
+ },
+ "a_free_leg": {
+  "bit_identical": true,
+  "collins": {
+   "R": -0.03820692561794844,
+   "dx": 6.329196024343745e-05,
+   "n_warn": 4,
+   "on_axis": 0.9234085057075989,
+   "peak": {
+    "argmax_ix": 128,
+    "argmax_iy": 128,
+    "centre_ix": 128,
+    "centre_iy": 128,
+    "peak": 0.9234085057075991
+   },
+   "power_grid": 2.8288855552898625e-05
+  },
+  "sziklas": {
+   "R": -0.03820692561794844,
+   "dx": 6.329196024343745e-05,
+   "n_warn": 4,
+   "on_axis": 0.9234085057075989,
+   "peak": {
+    "argmax_ix": 128,
+    "argmax_iy": 128,
+    "centre_ix": 128,
+    "centre_iy": 128,
+    "peak": 0.9234085057075991
+   },
+   "power_grid": 2.8288855552898625e-05
+  }
+ },
+ "a_readouts": {
+  "bit_identical_collins_vs_sziklas": true,
+  "chain_collins_default": {
+   "dx": 5e-07,
+   "n_warn": 4,
+   "on_axis": 0.9256539124183235,
+   "peak": {
+    "argmax_ix": 0,
+    "argmax_iy": 0,
+    "centre_ix": 32,
+    "centre_iy": 32,
+    "peak": 1.0742675277720337
+   },
+   "power_window": 9.704005006583241e-10,
+   "route": {
+    "readout_route": "sziklas",
+    "readout_route_k1": 82.36047195201569,
+    "readout_route_reason": "k1"
+   },
+   "warnings": [
+    "apply_real_lens_traced: fit_radius_beam_factor would restrict the ray-fit domain to r <= 5.2500 mm, which holds only 49 coarse ray samples (< 64 needed to constrain the order-6 fit).  The restriction is ABANDONED and the full launch domain is fitted, so the aperture:beam cliff guard is NOT active on this call.  Lower ray_subsample (currently 16) or raise fit_radius_beam_factor.",
+    "propagate_traced_carrier_chain: the free-space leg into groups[1] (p) is outside the SZIKLAS-SIEGMAN FRAME's validity: the measured envelope spread 6.657e-03 rad is 0.81 of this grid's Nyquist tilt lambda/(2 dx), above 0.5 -- so the wrapped phase-increment estimator has itself aliased and the reading is a LOWER BOUND, not a measurement.  The implied frame drop 0.000 rad is correspondingly an under-estimate.  (w = 5.3613 mm over |R| = 231.5095 mm, gap NA 0.0232, leg 10.0000 mm; phi_sag = k w^4/(8|R|^3) runs 0.040 -> 0.038 rad across the leg.)  This is a DIFFERENT axis from the two arms above: those are computed from the carrier geometry (dropped hand-off quartic; carrier NA 0.0232), and carrier_reference='sphere' cancels the hand-off term exactly, but NOTHING cancels the frame term -- the Sziklas-Siegman scaling is derived from the PARAXIAL wave equation, so its validity rests on the ENVELOPE's own angular content being small, which is what this arm measures rather than assumes.  Note the carrier-NA proxy can read small here while this arm trips (an aberrated intermediate wavefront, or a carrier mismatched to the beam).  REMEDIES: (1) re-reference the carrier closer to the beam so the envelope carries less residual angle; (2) split the leg around an explicit exact ASM step; (3) treat the returned image metrics as indicative.  THRESHOLD CAVEAT: gap_env_phi_tol's default inherits gap_sag_tol's 0.30 rad by DIMENSIONAL ANALOGY (same radians-of-dropped-quartic convention), NOT by an independent end-to-end calibration -- gathering that calibration is exactly what this observable exists for.  Read stages[i]['gap_env_theta'] / ['gap_env_phi_drop'] to price your own design.  on_gap_frame='error' makes this fatal, 'ignore' silences it -- NOTE this is arm C's OWN knob, deliberately separate from on_gap_paraxial so silencing an uncalibrated frame tripwire does not also silence the two calibrated carrier-geometry arms.",
+    "apply_real_lens_traced: fit_radius_beam_factor would restrict the ray-fit domain to r <= 5.2500 mm, which holds only 49 coarse ray samples (< 64 needed to constrain the order-6 fit).  The restriction is ABANDONED and the full launch domain is fitted, so the aperture:beam cliff guard is NOT active on this call.  Lower ray_subsample (currently 16) or raise fit_radius_beam_factor.",
+    "_sphere_parab_conversion: the band-limit radius r_safe=11.908 mm = (|R|^3 lambda/d)^(1/3) at R=-46.207 mm, d=max(dx, dy)=76.544 um sits at 2.41x the beam radius (w=4.946 mm), i.e. the parabola<->sphere DIFFERENCE term's own phase slope passes this grid's Nyquist slope while the beam still carries power there.  The conversion ITSELF stays exact (SPHERE_PARAB_CONVERSION_EXACT), so no field is falsified and a consumer that de-chirps against the same exact sphere -- apply_real_lens_traced, which is what this conversion feeds -- is unaffected.  A consumer that FFTs or RESAMPLES the CONVERTED field (the PARAXIAL focus readout) will alias beyond that radius.  Refine the pitch (it enters as d^(-1/3), so this is expensive) or lower the carrier NA if that path is used."
+   ]
+  },
+  "chain_sziklas": {
+   "n_warn": 4,
+   "on_axis": 0.9256539124183235,
+   "peak": {
+    "argmax_ix": 0,
+    "argmax_iy": 0,
+    "centre_ix": 32,
+    "centre_iy": 32,
+    "peak": 1.0742675277720337
+   },
+   "power_window": 9.704005006583241e-10,
+   "route_keys_present": []
+  },
+  "one_step_collins_UNRESOLVED": {
+   "n_warn": 1,
+   "on_axis": 1971.3889525390698,
+   "peak": {
+    "argmax_ix": 9,
+    "argmax_iy": 24,
+    "centre_ix": 32,
+    "centre_iy": 32,
+    "peak": 9017.103294409548
+   },
+   "power_window": 1.5213412686623253e-06,
+   "warnings": [
+    "_collins_focus_readout: the Collins chirp-Z stage is under-sampled -- K1 (input) 82.3605: the product of the envelope and the pre-chirp exp(i k A u^2/2B) is sampled at 82.3605x its own Nyquist rate over the 0.999999-power support (r = 6735.9088 um, theta = 8.5571 mrad).  ABCD = (0.826866, 0.008, 21.6418, 1); the conditions are Kelly, Appl. Opt. 53, 2861 (2014), evaluated on the measured 0.999999-power support of THIS field rather than at the grid edge.  Remedies: a finer input pitch dx (K1 is linear in it, K3 inversely so), a shorter leg or a carrier closer to the beam's own wavefront (both shrink |A| r/|B|), a finer dx_out (K2), or fewer output samples (K3).  Pass on_collins_sampling='warn' / 'ignore' to downgrade."
+   ]
+  }
+ },
+ "b_k1": [
+  {
+   "A": 0.8268657805510325,
+   "B": 0.008,
+   "N": 256,
+   "edge_amp_rel": 0.0,
+   "exit_R": -0.04620692561794844,
+   "exit_pitch_um": 76.54441837133348,
+   "exit_support_r_x_mm": 6.7359088166773455,
+   "exit_support_r_y_mm": 6.7359088166773455,
+   "identical_bits": true,
+   "k1_hand": 82.36047195201569,
+   "k1_hand_repr": "82.36047195201569",
+   "k1_lib": 82.36047195201569,
+   "k1_lib_repr": "82.36047195201569",
+   "stage_k1": 82.36047195201569,
+   "stage_route": "sziklas",
+   "theta_nyquist_mrad": 8.557122961238711,
+   "theta_x_mrad": 8.557122961238711,
+   "theta_y_mrad": 8.557122961238711
+  },
+  {
+   "A": 0.8268657805510325,
+   "B": 0.008,
+   "N": 512,
+   "edge_amp_rel": 0.0,
+   "exit_R": -0.04620692561794844,
+   "exit_pitch_um": 38.27220918566674,
+   "exit_support_r_x_mm": 6.697636607491678,
+   "exit_support_r_y_mm": 6.697636607491678,
+   "identical_bits": true,
+   "k1_hand": 41.44909827159872,
+   "k1_hand_repr": "41.44909827159872",
+   "k1_lib": 41.44909827159872,
+   "k1_lib_repr": "41.44909827159872",
+   "stage_k1": 41.44909827159872,
+   "stage_route": "sziklas",
+   "theta_nyquist_mrad": 17.114245922477423,
+   "theta_x_mrad": 17.114245922477423,
+   "theta_y_mrad": 17.114245922477423
+  },
+  {
+   "A": 0.8268657805510325,
+   "B": 0.008,
+   "N": 1024,
+   "edge_amp_rel": 0.0,
+   "exit_R": -0.04620692561794844,
+   "exit_pitch_um": 19.13610459283337,
+   "exit_support_r_x_mm": 6.774181025863012,
+   "exit_support_r_y_mm": 6.774181025863012,
+   "identical_bits": true,
+   "k1_hand": 21.4224837152085,
+   "k1_hand_repr": "21.4224837152085",
+   "k1_lib": 21.4224837152085,
+   "k1_lib_repr": "21.4224837152085",
+   "stage_k1": 21.4224837152085,
+   "stage_route": "sziklas",
+   "theta_nyquist_mrad": 34.228491844954846,
+   "theta_x_mrad": 33.09199895166533,
+   "theta_y_mrad": 33.09199895166533
+  }
+ ],
+ "b_k1_from_final_distance_0": [
+  {
+   "N": 256,
+   "R": -0.04620692561794844,
+   "dx": 7.654441837133347e-05,
+   "k1_at_z_8mm": 82.36047195201569
+  },
+  {
+   "N": 512,
+   "R": -0.04620692561794844,
+   "dx": 3.8272209185666736e-05,
+   "k1_at_z_8mm": 41.44909827159872
+  },
+  {
+   "N": 1024,
+   "R": -0.04620692561794844,
+   "dx": 1.9136104592833368e-05,
+   "k1_at_z_8mm": 21.4224837152085
+  }
+ ],
+ "b_k1_ratios": [
+  1.9870268687714683,
+  1.9348409279999916
+ ],
+ "c2_geometry": {
+  "P_total": 2.8288855552898625e-05,
+  "flat_top_on_axis_pred": 0.5398900089489744,
+  "free_leg_R": -0.03820692561794844,
+  "free_leg_grid_pitch_um": 63.291960243437444,
+  "free_leg_on_axis": 0.9234085057075989,
+  "free_leg_power": 2.8288855552898625e-05,
+  "gaussian_on_axis_pred": 1.0797800178979489,
+  "measured_on_axis": 0.9234085057075989,
+  "note": "P/(pi w^2/2) with w the exit beam radius carried to the plane",
+  "w_from_second_moment_mm": 4.083947094617366
+ },
+ "c_centre_sample": {
+  "free_leg": {
+   "abs": 0.9609414684087678,
+   "arg": -1.117324343652088,
+   "im": -0.8638205412862329,
+   "re": 0.4209781207611133
+  },
+  "free_over_reference": {
+   "abs": 0.9999999777432458,
+   "arg_rad": 1.978120197920182e-08
+  },
+  "my_reference": {
+   "abs": 0.9609414897962062,
+   "arg": -1.1173243634332901,
+   "im": -0.863820568839528,
+   "re": 0.42097811304331095
+  },
+  "sziklas_over_reference": {
+   "abs": 1.001215064724222,
+   "arg_rad": 0.0017558919340103936
+  },
+  "sziklas_readout": {
+   "abs": 0.9621090959024987,
+   "arg": -1.1155684714992797,
+   "im": -0.8641287436170956,
+   "re": 0.4230075967084555
+  }
+ },
+ "c_converged": {
+  "F": 256,
+  "fine_pitch_um": 0.2990016342630214,
+  "on_axis": 0.9234085468117522,
+  "peak": {
+   "argmax_ix": 63,
+   "argmax_iy": 63,
+   "centre_ix": 32,
+   "centre_iy": 32,
+   "peak": 0.9250736538739259
+  },
+  "power_window": 9.455056839018858e-10,
+  "ratio_to_prev": 0.9999999998568789,
+  "readout_k1_at_fine": 0.3217205935625613,
+  "rel_l2_to_prev": 8.233601110272786e-08
+ },
+ "c_cross_grid": [
+  {
+   "F": 64,
+   "chain_N": 512,
+   "on_axis_2F": 0.9271989178586446,
+   "on_axis_F": 0.9271989178505012,
+   "peak_2F": {
+    "argmax_ix": 0,
+    "argmax_iy": 0,
+    "centre_ix": 32,
+    "centre_iy": 32,
+    "peak": 0.9273530480285194
+   },
+   "ratio_to_N256_on_axis": 1.0041047606284124,
+   "rel_l2_F_vs_2F": 6.595592167101495e-09,
+   "rel_l2_vs_N256_reference": 1.9773772854282288
+  },
+  {
+   "F": 32,
+   "chain_N": 1024,
+   "on_axis_2F": 0.9290228001628458,
+   "on_axis_F": 0.9290228001743551,
+   "peak_2F": {
+    "argmax_ix": 0,
+    "argmax_iy": 0,
+    "centre_ix": 32,
+    "centre_iy": 32,
+    "peak": 0.9292991919146075
+   },
+   "ratio_to_N256_on_axis": 1.0060799235294906,
+   "rel_l2_F_vs_2F": 9.479924949254125e-10,
+   "rel_l2_vs_N256_reference": 1.9785465644918512
+  }
+ ],
+ "c_paraxial_check": {
+  "F": 256,
+  "centre_phase_rad": 3.9159013571427946e-05,
+  "centre_rel": 3.9167669397926134e-05,
+  "on_axis_fresnel": 0.9234085468117522,
+  "on_axis_plus_quartic": 0.9234100660604345,
+  "rel_l2_correction": 0.0011276438393503566
+ },
+ "c_reference_ladder": [
+  {
+   "F": 1,
+   "fine_pitch_um": 76.54441837133348,
+   "on_axis": 1972.8285621374446,
+   "peak": {
+    "argmax_ix": 9,
+    "argmax_iy": 24,
+    "centre_ix": 32,
+    "centre_iy": 32,
+    "peak": 9126.461109248896
+   },
+   "power_window": 1.5207523789189854e-06,
+   "readout_k1_at_fine": 82.36047195201569
+  },
+  {
+   "F": 2,
+   "fine_pitch_um": 38.27220918566674,
+   "on_axis": 402.29327632127894,
+   "peak": {
+    "argmax_ix": 7,
+    "argmax_iy": 7,
+    "centre_ix": 32,
+    "centre_iy": 32,
+    "peak": 2306.8422893521315
+   },
+   "power_window": 3.768961512911602e-07,
+   "ratio_to_prev": 0.20391699716949438,
+   "readout_k1_at_fine": 41.18023597600784,
+   "rel_l2_to_prev": 0.8818902358560007
+  },
+  {
+   "F": 4,
+   "fine_pitch_um": 19.13610459283337,
+   "on_axis": 112.22029213516126,
+   "peak": {
+    "argmax_ix": 23,
+    "argmax_iy": 45,
+    "centre_ix": 32,
+    "centre_iy": 32,
+    "peak": 678.8046307003551
+   },
+   "power_window": 9.347026279357204e-08,
+   "ratio_to_prev": 0.2789514484590591,
+   "readout_k1_at_fine": 20.59011798800392,
+   "rel_l2_to_prev": 0.8710175654570542
+  },
+  {
+   "F": 8,
+   "fine_pitch_um": 9.568052296416685,
+   "on_axis": 0.2110974325474005,
+   "peak": {
+    "argmax_ix": 59,
+    "argmax_iy": 59,
+    "centre_ix": 32,
+    "centre_iy": 32,
+    "peak": 124.68449925967347
+   },
+   "power_window": 2.331677695846844e-08,
+   "ratio_to_prev": 0.0018810985832504235,
+   "readout_k1_at_fine": 10.29505899400196,
+   "rel_l2_to_prev": 0.8684904137118084
+  },
+  {
+   "F": 16,
+   "fine_pitch_um": 4.784026148208342,
+   "on_axis": 8.451341627577818,
+   "peak": {
+    "argmax_ix": 57,
+    "argmax_iy": 57,
+    "centre_ix": 32,
+    "centre_iy": 32,
+    "peak": 30.026104423150585
+   },
+   "power_window": 5.8022825619783614e-09,
+   "ratio_to_prev": 40.035264880259156,
+   "readout_k1_at_fine": 5.14752949700098,
+   "rel_l2_to_prev": 0.8692548997204159
+  },
+  {
+   "F": 32,
+   "fine_pitch_um": 2.392013074104171,
+   "on_axis": 0.2212525440347303,
+   "peak": {
+    "argmax_ix": 61,
+    "argmax_iy": 61,
+    "centre_ix": 32,
+    "centre_iy": 32,
+    "peak": 5.837071157956293
+   },
+   "power_window": 1.4712560361802357e-09,
+   "ratio_to_prev": 0.02617957642520978,
+   "readout_k1_at_fine": 2.57376474850049,
+   "rel_l2_to_prev": 0.8606764464595309
+  },
+  {
+   "F": 64,
+   "fine_pitch_um": 1.1960065370520856,
+   "on_axis": 0.92340895307741,
+   "peak": {
+    "argmax_ix": 63,
+    "argmax_iy": 63,
+    "centre_ix": 32,
+    "centre_iy": 32,
+    "peak": 0.9250696059496939
+   },
+   "power_window": 9.455055007641525e-10,
+   "ratio_to_prev": 4.173551798493496,
+   "readout_k1_at_fine": 1.286882374250245,
+   "rel_l2_to_prev": 0.6216558998126784
+  },
+  {
+   "F": 128,
+   "fine_pitch_um": 0.5980032685260428,
+   "on_axis": 0.9234085469439114,
+   "peak": {
+    "argmax_ix": 63,
+    "argmax_iy": 63,
+    "centre_ix": 32,
+    "centre_iy": 32,
+    "peak": 0.9250736390741805
+   },
+   "power_window": 9.45505682912894e-10,
+   "ratio_to_prev": 0.9999995601802459,
+   "readout_k1_at_fine": 0.6434411871251225,
+   "rel_l2_to_prev": 1.3324171209598466e-05
+  },
+  {
+   "F": 256,
+   "fine_pitch_um": 0.2990016342630214,
+   "on_axis": 0.9234085468117522,
+   "peak": {
+    "argmax_ix": 63,
+    "argmax_iy": 63,
+    "centre_ix": 32,
+    "centre_iy": 32,
+    "peak": 0.9250736538739259
+   },
+   "power_window": 9.455056839018858e-10,
+   "ratio_to_prev": 0.9999999998568789,
+   "readout_k1_at_fine": 0.3217205935625613,
+   "rel_l2_to_prev": 8.233601110272786e-08
+  }
+ ],
+ "c_sziklas_vs_reference": {
+  "abs_ratio_mean": 1.0128771833341266,
+  "abs_ratio_std": 0.021173878418659416,
+  "fit_defocus_rad_per_m2": -32121856.076358177,
+  "fit_piston_rad": 0.0017237089398417643,
+  "fit_tilt_x_rad_per_m": -6935.307006930178,
+  "fit_tilt_y_rad_per_m": -6935.307006929423,
+  "implied_tilt_rad": -0.0014459627935367622,
+  "phase_ptv_rad": 0.4168789553565603,
+  "phase_rms_after_fit_rad": 0.00321053324884381,
+  "phase_rms_rad": 0.09050545404427401
+ },
+ "c_vs_claims": {
+  "claimed_collins_9017.1": 0.00010240637752844619,
+  "claimed_sziklas_1.0743": 0.8595443980375613,
+  "claimed_true_1.2359": 0.7471547429498764
+ },
+ "c_window_rel_l2": {
+  "one_step_collins": {
+   "centre_ratio_complex": {
+    "im": -38.40839584328227,
+    "re": -25.68461621836785
+   },
+   "peak": {
+    "argmax_ix": 9,
+    "argmax_iy": 24,
+    "centre_ix": 32,
+    "centre_iy": 32,
+    "peak": 9017.103294409548
+   },
+   "rel_l2": 40.01724921043849,
+   "rel_l2_abs_only": 39.22698460871076,
+   "rel_l2_centre16": 42.80097359253511
+  },
+  "reference_peak": {
+   "argmax_ix": 63,
+   "argmax_iy": 63,
+   "centre_ix": 32,
+   "centre_iy": 32,
+   "peak": 0.9250736538739259
+  },
+  "sziklas_readout": {
+   "centre_ratio_complex": {
+    "im": 0.0017580245529811639,
+    "re": 1.0012135212732591
+   },
+   "peak": {
+    "argmax_ix": 0,
+    "argmax_iy": 0,
+    "centre_ix": 32,
+    "centre_iy": 32,
+    "peak": 1.0742675277720337
+   },
+   "rel_l2": 0.0945094944358598,
+   "rel_l2_abs_only": 0.024768075593996585,
+   "rel_l2_centre16": 0.02543379247692447
+  }
+ },
+ "fixture": {
+  "final_distance": 0.008,
+  "focus_readout": {
+   "N_out": 64,
+   "dx_out": 5e-07
+  },
+  "wl": 1.31e-06
+ }
+}

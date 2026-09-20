@@ -1,0 +1,103 @@
+{
+ "label": "BASE-WIN",
+ "lumenairy_file": "C:\\tmp\\vc3_base\\lumenairy\\__init__.py",
+ "transport_default": "sziklas",
+ "fixture": {
+  "N": 128,
+  "dx": 4e-06,
+  "wl": 6.33e-07,
+  "w": 0.00012,
+  "R": -0.03,
+  "z": 0.03,
+  "standoff": 0.001,
+  "dx_out": 2e-07,
+  "N_out": 32
+ },
+ "z_stop": 0.028999999999999998,
+ "stop_legs": {
+  "sziklas": {
+   "dx_stop_um": 0.13333333333333347,
+   "R_stop": "np.float64(-0.0010000000000000009)",
+   "centroid_um": [
+    0.0,
+    0.0
+   ],
+   "w_stop_um": 4.639119050017086,
+   "half_stop_um": 8.533333333333342,
+   "containment": 1.8394296937264227,
+   "shape": [
+    128,
+    128
+   ],
+   "warnings": []
+  },
+  "collins": {
+   "dx_stop_um": 3.4946004231770833,
+   "R_stop": "inf",
+   "centroid_um": [
+    0.0,
+    0.0
+   ],
+   "w_stop_um": 48.88149973734354,
+   "half_stop_um": 223.65442708333333,
+   "containment": 4.575441185010741,
+   "shape": [
+    128,
+    128
+   ],
+   "warnings": []
+  }
+ },
+ "readout_sziklas": {
+  "raised": "RuntimeError: carrier_referenced_focus_readout: the beam does not fit the co-moving grid at the stop plane.  The grid half-width there is 8.5333 um against a measured amplitude radius of 4.6391 um -- a containment of 1.839 beam radii and 0.175 against the beam's own Gaussian ABCD width there (48.867 um -- the MEASURED second moment saturates once the beam overfills the grid, so it reads narrower than the beam i",
+  "warnings": [],
+  "peak": null
+ },
+ "readout_collins": {
+  "raised": null,
+  "warnings": [],
+  "peak": 5.61725034838699
+ },
+ "readout_sziklas_warn": {
+  "raised": null,
+  "warnings": [
+   "carrier_referenced_focus_readout: the beam does not fit the co-moving grid at the stop plane.  The grid half-width there is 8.5333 um against a measured amplitude radius of 4.6391 um -- a containment "
+  ],
+  "peak": 28.891746450341756
+ },
+ "readout_collins_warn": {
+  "raised": null,
+  "warnings": [],
+  "peak": 5.61725034838699
+ },
+ "oracle_sampled_vs_dense_relL2": 4.419867727506442e-05,
+ "oracle_64x_vs_256x_relL2": 5.142659608592828e-07,
+ "oracle_peak": 5.617384206523946,
+ "vs_oracle_sziklas": null,
+ "vs_oracle_collins": {
+  "relL2_absolute": 4.7339890671818134e-05,
+  "relL2_phase_free": 4.7159287678650914e-05,
+  "relL2_scale_free": 4.610020478824584e-05,
+  "best_scale_abs": 0.9999900595883418,
+  "peak_ratio": 0.9999761707349836,
+  "intensity_relL2": 2.0832828457476933e-05
+ },
+ "vs_oracle_sziklas_warn": {
+  "relL2_absolute": 2.4049894966524197,
+  "relL2_phase_free": 1.2738413450934418,
+  "relL2_scale_free": 0.001813741684679867,
+  "best_scale_abs": 2.273834668968771,
+  "peak_ratio": 5.143274055705023,
+  "intensity_relL2": 4.170319313438575
+ },
+ "vs_oracle_collins_warn": {
+  "relL2_absolute": 4.7339890671818134e-05,
+  "relL2_phase_free": 4.7159287678650914e-05,
+  "relL2_scale_free": 4.610020478824584e-05,
+  "best_scale_abs": 0.9999900595883418,
+  "peak_ratio": 0.9999761707349836,
+  "intensity_relL2": 2.0832828457476933e-05
+ },
+ "analytic_w_out_um": 50.37253948858487,
+ "analytic_R_out": 0.029999999999999978
+}

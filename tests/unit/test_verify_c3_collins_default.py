@@ -1,0 +1,387 @@
+"""VERIFY-WP-C3 -- the decisions this verification had to take before it could
+accept ``transport='collins'`` as the carrier chain's default.
+
+WP-C3 makes the chain's focus readout RESOLVE its quadrature on
+``_collins_readout_k1 <= 1``.  Re-measuring that resolution (report
+``docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/VERIFY_WP-C3.md``)
+turned up three properties of the routing CONDITION that nothing in the
+shipped suite states, and two contract gaps.  Everything here is measured on
+the running build; no number is copied from a report.
+
+THE CONDITION IS NOT CONTINUOUS.  ``_collins_readout_k1`` is
+
+    K1 = space_term + angle_term
+    space_term = 2 dx |A| r / (lambda |B|)
+    angle_term = 2 dx theta / lambda
+
+and BOTH ``r`` and ``theta`` come from ``_collins_containment_radius``, which
+returns ``d[order[i]]`` -- a GRID COORDINATE, with no interpolation between
+samples.  ``theta`` is therefore read off ``np.fft.fftfreq(N, d=dx)``, whose
+outermost bin for even ``N`` is exactly ``1/(2 dx)``, so
+
+    angle_term in {2j/N : j = 0 .. N/2},   max exactly 1.0.
+
+Two consequences the shipped documentation does not draw:
+
+* the route is a threshold on a STAIRCASE whose step is ``2/N``, so a margin
+  quoted below ``2/N`` is not a margin -- ``docs/TESTING_STANDARDS.md`` shape
+  S4/S5, one level up;
+* ``angle_term == 1.0`` exactly whenever the envelope's angular support is
+  GRID-CLIPPED (``_collins_containment_radius`` saturates at the outermost
+  sample by design), and then ``K1 = 1 + space_term > 1`` for every
+  non-degenerate leg -- the one-step readout is unreachable on such a field at
+  ANY grid and ANY final distance, which refining ``dx`` does not change.
+
+The last class carries the two contract gaps as STRICT xfails, the
+repository's own instrument for a gap a verification finds and does not fix
+(``test_v4_14_0_dispatcher_pin_apply_lens.py``: "the xfail markers will turn
+into ``passed`` results without any test change", and ``xfail_strict`` is on,
+so closing the gap turns the marker itself red and forces its removal).
+"""
+
+from __future__ import annotations
+
+import hashlib
+import warnings
+
+import numpy as np
+import pytest
+
+from lumenairy.propagators import carrier as C
+
+LAM = 1.31e-6
+
+#: The routing bar itself.  Not a tolerance -- it is the Nyquist statement
+#: ``_collins_readout_k1``'s docstring is written about, and the number the
+#: route block compares against.
+_K1_BAR = 1.0
+
+
+def _gauss(n, dx, w):
+    x = (np.arange(n) - n // 2) * dx
+    xx, yy = np.meshgrid(x, x, indexing='ij')
+    return np.exp(-(xx ** 2 + yy ** 2) / w ** 2).astype(np.complex128)
+
+
+def _decompose(env, R, z, dx, lam=LAM):
+    """``_collins_readout_k1`` split into the two terms it is the sum of,
+    measured through the library's own helpers so the split cannot drift from
+    what the library computes."""
+    r_x, _r_y, th_x, _th_y = C._collins_input_box(
+        env, dx, dx, lam, C._COLLINS_TAIL_FRAC)
+    rx, _ry, _ = C._parse_carrier(R, '_decompose')
+    a, b, _c, _d = C._collins_envelope_abcd(rx, z, np.inf)
+    angle = 2.0 * float(dx) * th_x / lam
+    space = 2.0 * float(dx) * abs(a) * r_x / (abs(b) * lam)
+    return angle, space, angle + space
+
+
+def _relay_exit(n):
+    """WP-B4's own two-group relay, stopped AT its exit plane -- the plane the
+    chain's focus readout runs on.  Returns ``(env, R, dx)`` there."""
+    from tests.unit.test_audit2609_b4_collins_transport import (
+        _CHAIN_TKW, _chain_fixture)
+    env0, dx0, r_in, groups = _chain_fixture()
+    dx = dx0 * env0.shape[0] / n
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        res = C.propagate_traced_carrier_chain(
+            _gauss(n, dx, 4.5e-3), groups, LAM, dx, r_in=r_in,
+            ray_subsample=16, n_workers=1, traced_kwargs=_CHAIN_TKW,
+            final_leg='paraxial', final_distance=0.0, transport='sziklas')
+    dxe = res.dx[0] if isinstance(res.dx, tuple) else res.dx
+    return res.field, res.R, float(dxe)
+
+
+def _oversampled_chain(n=512, dx=8e-6, w=0.30e-3, f=300e-3):
+    """A chain whose exit envelope is NOT grid-clipped, so its readout can
+    actually take the one-step Collins route.  Returns the call's fixed
+    arguments; the caller supplies ``final_distance`` and ``focus_readout``."""
+    from tests.unit.test_audit2609_b4_collins_transport import (
+        _CHAIN_TKW, _singlet)
+    presc = _singlet(2 * f, -2 * f, 3e-3, 'N-BK7', 6e-3, 'p')
+    return dict(
+        env=_gauss(n, dx, w), groups=[{'prescription': presc,
+                                       'gap_before': 10e-3}],
+        dx=dx, kw=dict(r_in=np.inf, ray_subsample=16, n_workers=1,
+                       traced_kwargs=_CHAIN_TKW, final_leg='paraxial'))
+
+
+def _run(cfg, final_distance, focus_readout, transport):
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        return C.propagate_traced_carrier_chain(
+            cfg['env'], cfg['groups'], LAM, cfg['dx'],
+            final_distance=final_distance, focus_readout=focus_readout,
+            transport=transport, **cfg['kw'])
+
+
+def _sha(a):
+    return hashlib.sha256(
+        np.ascontiguousarray(a, dtype=np.complex128).tobytes()).hexdigest()
+
+
+class TestTheRouteConditionIsAStaircase:
+    """``_collins_readout_k1 <= 1`` is a threshold on a QUANTISED quantity.
+
+    Both halves are derived, not fitted: the angle half is read off
+    ``fftfreq``'s own bins and the containment helper returns a bin coordinate,
+    so the assertions below are exact rational statements about the grid and
+    carry no cross-build spread at all.
+    """
+
+    def test_the_angle_term_is_bounded_by_one_and_quantised_in_two_over_N(
+            self):
+        """``angle_term = 2 dx theta/lambda`` lives in ``{2j/N}`` and never
+        exceeds 1.
+
+        WHY IT MATTERS: it is one of the two summands of the routing
+        condition, and it is the one that saturates.  A future change that
+        interpolated the containment radius between bins, or that measured
+        theta on a padded spectrum, would break both statements -- and would
+        silently turn a discrete route decision into a continuous one without
+        any value test noticing.
+        """
+        n, dx = 256, 4.0e-6
+        step = 2.0 / n
+        seen = set()
+        for w_um in (25.0, 40.0, 60.0, 90.0, 140.0, 200.0, 300.0, 420.0):
+            env = _gauss(n, dx, w_um * 1e-6)
+            angle, _space, _k1 = _decompose(env, -40e-3, 6e-3, dx)
+            assert angle <= 1.0, (
+                f'the angular support exceeded the grid Nyquist: '
+                f'angle_term={angle!r} at w={w_um} um.  fftfreq(N, dx)\'s '
+                f'outermost bin is exactly 1/(2 dx), so this is impossible '
+                f'unless the measurement stopped coming off the grid.')
+            j = angle / step
+            assert abs(j - round(j)) < 1e-9, (
+                f'angle_term={angle!r} is not an integer multiple of '
+                f'2/N={step!r} (j={j!r}) -- the containment radius stopped '
+                f'being a grid coordinate.')
+            seen.add(round(j))
+        assert len(seen) >= 4, (
+            f'the ladder did not move the angular support at all '
+            f'(bins seen: {sorted(seen)}); it cannot say anything about '
+            f'quantisation.')
+
+    def test_the_smallest_step_the_condition_can_take_is_two_over_N(self):
+        """The minimum non-zero increment of the angle term over a dense scan
+        IS ``2/N``.
+
+        This is what makes a quoted route margin readable: a margin below one
+        step is not a margin, because the condition cannot take a value in
+        between.  WP-C3 reports the design-121 N = 1024 route as sitting
+        ``4.2e-04`` below the bar; one step there is ``2/1024 = 1.95e-03``,
+        4.7x larger, so that margin is inside the quantum and the stability
+        evidence has to be the containment INDEX matching, not the K1 value.
+        """
+        n, dx = 256, 4.0e-6
+        step = 2.0 / n
+        angles = sorted({round(_decompose(_gauss(n, dx, w), -40e-3, 6e-3,
+                                          dx)[0] / step)
+                         for w in np.linspace(20e-6, 500e-6, 97)})
+        gaps = np.diff(np.asarray(angles, dtype=np.float64))
+        assert angles, 'no readings'
+        assert gaps.size, f'only one distinct reading: {angles}'
+        assert float(gaps.min()) == 1.0, (
+            f'the angle term moved by {float(gaps.min())} bins at its '
+            f'smallest -- it is meant to move by exactly one, which is what '
+            f'makes 2/N the quantum of the routing condition.  Bins seen: '
+            f'{angles}')
+
+
+class TestAGridClippedExitCannotReachTheOneStepReadout:
+    """When the exit envelope's angular support is GRID-CLIPPED the one-step
+    Collins readout is unreachable -- at any grid, and at any final distance.
+
+    ``_collins_containment_radius`` "saturates at the outermost sample when the
+    grid itself already clipped the tail", its own docstring says, so
+    ``angle_term`` is then exactly 1.0 and ``K1 = 1 + space_term``.  Since
+    ``space_term > 0`` for every finite leg with power on the grid,
+    ``K1 <= 1`` is unsatisfiable.
+
+    This CONTRADICTS the shipped reading that K1 "falls only as ``1/dx``, so
+    ``N ~ 16000`` would be needed to sample it"
+    (``_collins_readout_k1.__doc__``, and report section 7 item 1): what falls
+    as ``1/dx`` is the SPACE term, and the sum is floored at 1 while the
+    angular support stays clipped.  See VERIFY_WP-C3.md defect D3.
+    """
+
+    @pytest.mark.parametrize('n', [256, 512])
+    def test_the_relay_saturates_its_angular_support_and_stays_over_the_bar(
+            self, n):
+        env, R, dxe = _relay_exit(n)
+        angle, space, k1 = _decompose(env, R, 8e-3, dxe)
+        assert angle == 1.0, (
+            f'expected the WP-B4 relay exit to be angularly grid-clipped at '
+            f'N={n} (the beam is 4.5 mm on a 15.4 mm window, truncated at '
+            f'1.7 w), so the containment radius saturates at the outermost '
+            f'bin and angle_term reads exactly 1.0; got {angle!r}.')
+        assert space > 0.0
+        assert k1 > _K1_BAR, (
+            f'K1={k1!r} at N={n}: with the angle term saturated the sum '
+            f'cannot reach the bar.')
+        got = C._collins_readout_k1(env, R, 8e-3, LAM, dxe, dxe)
+        # DERIVED bar, not fitted: the helper forms
+        # ``2 dx (|A| r/|B| + theta)/lambda`` with ONE division while the
+        # split above forms the two terms separately and adds, so the two
+        # differ by a handful of roundings and by nothing else.  Eight ULPs of
+        # the reading is the smallest bar two orderings of the same six
+        # float64 operations can be held to; the measured difference on this
+        # build is under one.
+        assert got == pytest.approx(k1, rel=8.0 * float(np.finfo(float).eps),
+                                    abs=0.0), (
+            f'the hand decomposition {k1!r} and the library helper {got!r} '
+            f'disagree by more than a re-association of the same operations '
+            f'-- the split above is no longer what the library computes.')
+
+    def test_refining_the_grid_does_not_bring_the_relay_under_the_bar(self):
+        """The excess over the bar falls as ``1/dx``; the bar itself does not
+        move, so no refinement crosses it.
+
+        Asserted as a DECISION rather than as two pinned numbers: the excess
+        must at least halve when the pitch halves (that is the ``1/dx`` law
+        the shipped text invokes) AND the total must stay over the bar on both
+        rungs (which is what the shipped text gets wrong).
+        """
+        excess = {}
+        for n in (256, 512):
+            env, R, dxe = _relay_exit(n)
+            angle, space, k1 = _decompose(env, R, 8e-3, dxe)
+            assert angle == 1.0
+            assert k1 > _K1_BAR
+            excess[n] = space
+        ratio = excess[256] / excess[512]
+        assert 1.8 <= ratio <= 2.2, (
+            f'the space term did not halve with the pitch (ratio {ratio!r}); '
+            f'the 1/dx law the shipped extrapolation rests on is not what '
+            f'this fixture does.')
+        assert excess[512] > 0.0
+
+
+class TestTheResolvedRouteIsTwoSided:
+    """The resolution's two halves, each asserted against the other spelling
+    rather than against a recorded number."""
+
+    def test_the_k1_fallback_is_the_sziklas_readout_to_the_bit(self):
+        """Where the one-step form is not representable the default must
+        return the SAME BYTES as ``transport='sziklas'`` -- that is the whole
+        of "flipping the default moves nothing it cannot represent"."""
+        cfg = _oversampled_chain()
+        fr = dict(dx_out=0.5e-6, N_out=64)
+        got = _run(cfg, 8e-3, dict(fr), 'collins')
+        ref = _run(cfg, 8e-3, dict(fr), 'sziklas')
+        st = got.stages[-1]
+        assert st['readout_route'] == 'sziklas'
+        assert st['readout_route_reason'] == 'k1'
+        assert st['readout_route_k1'] > _K1_BAR
+        assert _sha(got.field) == _sha(ref.field), (
+            'the k1 fallback did not reproduce the named-sziklas readout '
+            'bit for bit')
+
+    def test_the_representable_route_really_takes_the_other_quadrature(self):
+        """The complement: where the one-step form IS representable the
+        default must NOT be the Sziklas answer, or the resolution is dead and
+        every bit-identity above is vacuous."""
+        cfg = _oversampled_chain()
+        fr = dict(dx_out=0.5e-6, N_out=64)
+        got = _run(cfg, 50e-3, dict(fr), 'collins')
+        ref = _run(cfg, 50e-3, dict(fr), 'sziklas')
+        st = got.stages[-1]
+        assert st['readout_route'] == 'collins'
+        assert st['readout_route_reason'] == 'representable'
+        assert st['readout_route_k1'] <= _K1_BAR
+        assert _sha(got.field) != _sha(ref.field), (
+            'the readout resolved to the one-step Collins form and still '
+            'returned the Sziklas bytes -- the route is published but not '
+            'taken')
+
+    def test_the_stop_plane_key_selects_and_k1_is_not_even_computed(self):
+        cfg = _oversampled_chain()
+        fr = dict(dx_out=0.5e-6, N_out=64)
+        for key, val in (('standoff', 2e-3),
+                         ('on_focus_containment', 'ignore')):
+            got = _run(cfg, 50e-3, dict(fr, **{key: val}), 'collins')
+            st = got.stages[-1]
+            assert st['readout_route'] == 'sziklas', key
+            assert st['readout_route_reason'] == 'stop_plane_key', key
+            assert st['readout_route_k1'] is None, (
+                f'{key}: K1 was published for a route the keyword had '
+                f'already decided -- the reason string and the reading '
+                f'disagree about what took the decision')
+
+    def test_the_three_route_keys_are_absent_on_the_sziklas_spelling(self):
+        """The ``'sziklas'`` ``stages`` list is a bit-identity key, so the new
+        keys must not appear there -- on EITHER route the condition would have
+        chosen."""
+        cfg = _oversampled_chain()
+        fr = dict(dx_out=0.5e-6, N_out=64)
+        for fd in (8e-3, 50e-3):
+            st = _run(cfg, fd, dict(fr), 'sziklas').stages[-1]
+            for k in ('readout_route', 'readout_route_k1',
+                      'readout_route_reason'):
+                assert k not in st, (
+                    f'{k} leaked onto the sziklas stage at '
+                    f'final_distance={fd}')
+
+
+class TestOpenDefectsFiledByVerifyWpC3:
+    """Gaps this verification FILED and did not fix.  Strict xfail is the
+    repository's instrument for that (``xfail_strict`` is on), so closing one
+    turns its marker red and forces the marker's removal with the fix."""
+
+    @pytest.mark.xfail(strict=True, reason=(
+        'VERIFY_WP-C3 defect D4: focus_readout["bandlimit"] is a '
+        'SZIKLAS-readout-only key that is neither refused nor route-selecting '
+        'on transport="collins".  On the collins readout route it is dropped '
+        'from _par_kw and silently ignored -- the accept-and-ignore shape '
+        'WP-C3 section 1.5 removed for standoff / on_focus_containment and '
+        'left in place for this one.  Requested fix: add "bandlimit" to '
+        '_FOCUS_READOUT_STOP_PLANE_KEYS (renamed _FOCUS_READOUT_SZIKLAS_ONLY_'
+        'KEYS) so naming it SELECTS the Sziklas readout, exactly as the other '
+        'two do.'))
+    def test_bandlimit_is_not_accepted_and_ignored_on_the_collins_route(self):
+        cfg = _oversampled_chain()
+        fr = dict(dx_out=0.5e-6, N_out=64)
+        # it BITES on the transport that owns it ...
+        s_on = _sha(_run(cfg, 50e-3, dict(fr), 'sziklas').field)
+        s_off = _sha(_run(cfg, 50e-3, dict(fr, bandlimit=False),
+                          'sziklas').field)
+        assert s_on != s_off, (
+            'the fixture no longer exercises bandlimit at all on the Sziklas '
+            'readout, so it cannot show the key being dropped elsewhere')
+        # ... and on the default it must not be silently dropped.
+        got = _run(cfg, 50e-3, dict(fr, bandlimit=False), 'collins')
+        assert got.stages[-1]['readout_route'] == 'sziklas', (
+            'naming a Sziklas-only key on the default neither selected the '
+            'readout that has it nor was refused')
+
+    @pytest.mark.xfail(strict=True, reason=(
+        'VERIFY_WP-C3 defect D1: propagate_traced_carrier_chain\'s own '
+        'transport docstring still tells callers the stop-plane keys are '
+        '"refused, not ignored" on transport="collins", which this same '
+        'branch changed to a SELECTION.  Requested fix: rewrite that bullet '
+        'to say the keys select the Sziklas readout and publish '
+        'readout_route_reason="stop_plane_key".'))
+    def test_the_chain_docstring_does_not_still_say_the_keys_are_refused(self):
+        doc = C.propagate_traced_carrier_chain.__doc__ or ''
+        assert 'refused, not ignored' not in doc, (
+            'the public docstring of the function whose contract changed '
+            'still describes the pre-change contract')
+
+    @pytest.mark.xfail(strict=True, reason=(
+        'VERIFY_WP-C3 defect D2: _collins_readout_k1\'s docstring carries two '
+        'mutually inconsistent MEASURED readings for ONE fixture -- '
+        '"exit support 5.76 mm, K1 = 56.0" and, three sentences later, '
+        '"82.4 / 21.4 / 10.9".  Measured on this build the WP-B4 relay reads '
+        'exit support 6.736 mm and K1 = 82.3605 / 41.4491 / 21.4557 / '
+        '11.1267 at N = 256 / 512 / 1024 / 2048.  Requested fix: delete the '
+        '"5.76 mm, K1 = 56.0" clause and correct "10.9" to 11.13.'))
+    def test_the_readout_k1_docstring_quotes_the_measured_reading(self):
+        doc = C._collins_readout_k1.__doc__ or ''
+        env, R, dxe = _relay_exit(256)
+        k1 = C._collins_readout_k1(env, R, 8e-3, LAM, dxe, dxe)
+        assert f'{k1:.2f}'.startswith('82.3'), k1
+        assert 'K1 = 56.0' not in doc, (
+            'the docstring states a K1 for this fixture that the fixture '
+            'does not produce')

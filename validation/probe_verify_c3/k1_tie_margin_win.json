@@ -1,0 +1,109 @@
+{
+ "lumenairy": "C:\\tmp\\lum_vc3\\validation\\probe_verify_c3\\..\\..\\lumenairy\\__init__.py",
+ "python": "3.14.6",
+ "numpy": "2.4.4",
+ "rows": [
+  {
+   "N": 256,
+   "exit_dx_um": 76.54441837133348,
+   "k1": 82.36047195201569,
+   "angle_bin_step_in_k1": 0.0078125,
+   "angle_term": 1.0,
+   "angle_tie": {
+    "index": 255,
+    "n": 256,
+    "target": 316422836.7305666,
+    "c_lo": 315347074.82929033,
+    "c_hi": 316423153.1537198,
+    "gap_below_ulps": 18048289782283.0,
+    "gap_above_ulps": 5308699588.0,
+    "gap_below_rel": 0.0033997572255835542,
+    "gap_above_rel": 1.0000000000261762e-06,
+    "radius": 6532.154932243292
+   },
+   "space_tie": {
+    "index": 176,
+    "n": 256,
+    "target": 4828.229320229593,
+    "c_lo": 4827.735474244691,
+    "c_hi": 4828.23414846374,
+    "gap_below_ulps": 542989402730.0,
+    "gap_above_ulps": 5308699586.0,
+    "gap_below_rel": 0.0001022829402461591,
+    "gap_above_rel": 9.99999999649436e-07,
+    "radius": 0.006735908816677345
+   },
+   "angle_index_over_nyquist": 255,
+   "k1_if_angle_index_moved_one_bin_up": 82.36828445201569,
+   "k1_if_angle_index_moved_one_bin_down": 82.35265945201569
+  },
+  {
+   "N": 512,
+   "exit_dx_um": 38.27220918566674,
+   "k1": 41.44909827159872,
+   "angle_bin_step_in_k1": 0.00390625,
+   "angle_term": 1.0,
+   "angle_tie": {
+    "index": 511,
+    "n": 512,
+    "target": 5180708404.472515,
+    "c_lo": 5147085142.71607,
+    "c_hi": 5180713585.186098,
+    "gap_below_ulps": 35256545319526.0,
+    "gap_above_ulps": 5432371926.0,
+    "gap_below_rel": 0.006490083113760307,
+    "gap_above_rel": 9.999999995765938e-07,
+    "radius": 13064.309864486584
+   },
+   "space_tie": {
+    "index": 349,
+    "n": 512,
+    "target": 19762.834184541753,
+    "c_lo": 19762.833341914637,
+    "c_hi": 19762.843072458516,
+    "gap_below_ulps": 231619578.0,
+    "gap_above_ulps": 2443091957.0,
+    "gap_below_rel": 4.2636914603245614e-08,
+    "gap_above_rel": 4.4972840395419947e-07,
+    "radius": 0.006697636607491678
+   },
+   "angle_index_over_nyquist": 511,
+   "k1_if_angle_index_moved_one_bin_up": 41.45300452159872,
+   "k1_if_angle_index_moved_one_bin_down": 41.44519202159872
+  },
+  {
+   "N": 1024,
+   "exit_dx_um": 19.13610459283337,
+   "k1": 21.455686840208497,
+   "angle_bin_step_in_k1": 0.001953125,
+   "angle_term": 1.0,
+   "angle_tie": {
+    "index": 1023,
+    "n": 1024,
+    "target": 84191006206.53305,
+    "c_lo": 84000444429.85817,
+    "c_hi": 84191090397.62352,
+    "gap_below_ulps": 12488656596165.0,
+    "gap_above_ulps": 5517547305.0,
+    "gap_below_rel": 0.002263443504234032,
+    "gap_above_rel": 1.0000000008520725e-06,
+    "radius": 26128.619728973168
+   },
+   "space_tie": {
+    "index": 707,
+    "n": 1024,
+    "target": 80290.80029156973,
+    "c_lo": 80290.79219245295,
+    "c_hi": 80290.8020749345,
+    "gap_below_ulps": 556567067.0,
+    "gap_above_ulps": 122551894.0,
+    "gap_below_rel": 1.0087218771461637e-07,
+    "gap_above_rel": 2.2211299211402617e-08,
+    "radius": 0.006774181025863012
+   },
+   "angle_index_over_nyquist": 1023,
+   "k1_if_angle_index_moved_one_bin_up": 21.457639965208497,
+   "k1_if_angle_index_moved_one_bin_down": 21.453733715208497
+  }
+ ]
+}

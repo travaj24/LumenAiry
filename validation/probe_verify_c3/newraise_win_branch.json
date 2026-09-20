@@ -1,0 +1,348 @@
+{
+ "F1-single-N256-dx20um-w1mm": {
+  "dx": "5e-07",
+  "n_runtimewarn": 3,
+  "outcome": "ok",
+  "peak": 1.933361548240395,
+  "power": 7807.433364149866,
+  "warnings": [
+   [
+    "UserWarning",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=20.000 um, semi=2.560 mm). Largest is system aperture_diamete"
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=20.000 um, semi=2.560 mm). Largest is system aperture_diameter with "
+   ],
+   [
+    "RuntimeWarning",
+    "deterministic least-squares: the Gram matrix screened as numerically singular, so the solve reroutes to a threaded QR (geqrf) over the full design mat"
+   ],
+   [
+    "RuntimeWarning",
+    "deterministic least-squares: the Gram matrix screened as numerically singular, so the solve reroutes to a threaded QR (geqrf) over the full design mat"
+   ],
+   [
+    "RuntimeWarning",
+    "deterministic least-squares: the Gram matrix screened as numerically singular, so the solve reroutes to a threaded QR (geqrf) over the full design mat"
+   ]
+  ]
+ },
+ "F1-single-N256-dx40um-w2mm": {
+  "dx": "5e-07",
+  "n_runtimewarn": 0,
+  "outcome": "ok",
+  "peak": 3.675975657480002,
+  "power": 14650.311072041799,
+  "warnings": [
+   [
+    "UserWarning",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.000 um, semi=5.120 mm). Largest is system aperture_diamete"
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.000 um, semi=5.120 mm). Largest is system aperture_diameter with "
+   ]
+  ]
+ },
+ "F1-single-N512-dx20um-w2mm": {
+  "dx": "5e-07",
+  "n_runtimewarn": 0,
+  "outcome": "ok",
+  "peak": 1.9918291812231834,
+  "power": 8036.9626545141255,
+  "warnings": [
+   [
+    "UserWarning",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=512, dx=20.000 um, semi=5.120 mm). Largest is system aperture_diamete"
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=512, dx=20.000 um, semi=5.120 mm). Largest is system aperture_diameter with "
+   ]
+  ]
+ },
+ "F1-single-N512-dx40um-w4mm": {
+  "dx": "5e-07",
+  "n_runtimewarn": 0,
+  "outcome": "ok",
+  "peak": 3.8353321996320924,
+  "power": 15154.918966581328,
+  "warnings": [
+   [
+    "UserWarning",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=512, dx=40.000 um, semi=10.240 mm). Largest is system aperture_diamet"
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=512, dx=40.000 um, semi=10.240 mm). Largest is system aperture_diameter with"
+   ]
+  ]
+ },
+ "F2-two-N256-dx40um-w2mm": {
+  "exc": "RuntimeError",
+  "msg": "carrier_referenced_focus_readout: the beam does not fit the co-moving grid at the stop plane.  The grid half-width there is 3714.3812 um against a measured amplitude radius of 4231.0360 um -- a containment of 0.878 beam radii and 0.880 against the beam's own G",
+  "n_runtimewarn": 4,
+  "outcome": "raised",
+  "warnings": [
+   [
+    "UserWarning",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.000 um, semi=5.120 mm). Largest is system aperture_diamete"
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.000 um, semi=5.120 mm). Largest is system aperture_diameter with "
+   ],
+   [
+    "RuntimeWarning",
+    "propagate_traced_carrier_chain: the Collins chirp-Z stage is under-sampled -- K1 (input) 8.6543: the product of the envelope and the pre-chirp exp(i k"
+   ],
+   [
+    "RuntimeWarning",
+    "propagate_traced_carrier_chain: the free-space leg into groups[1] (bcx) is outside the SZIKLAS-SIEGMAN FRAME's validity: the measured envelope spread "
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=33.214 um, semi=4.251 mm). Largest is system aperture_diamete"
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=33.214 um, semi=4.251 mm). Largest is system aperture_diameter with "
+   ],
+   [
+    "RuntimeWarning",
+    "apply_real_lens_traced: tilt_aware_rays=False with a non-trivial input tilt of no single direction (RMS = 1.79e-02 rad, coherence 0.01, i.e. INCOHEREN"
+   ],
+   [
+    "RuntimeWarning",
+    "apply_real_lens_traced: amplitude_model='ray_density' energy self-check FAILED -- exit power / aperture-transmitted input power = 0.583406, outside th"
+   ]
+  ]
+ },
+ "F2-two-N512-dx20um-w2mm": {
+  "exc": "RuntimeError",
+  "msg": "carrier_referenced_focus_readout: the beam does not fit the co-moving grid at the stop plane.  The grid half-width there is 3922.9013 um against a measured amplitude radius of 4353.1468 um -- a containment of 0.901 beam radii and 0.901 against the beam's own G",
+  "n_runtimewarn": 2,
+  "outcome": "raised",
+  "warnings": [
+   [
+    "UserWarning",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=512, dx=20.000 um, semi=5.120 mm). Largest is system aperture_diamete"
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=512, dx=20.000 um, semi=5.120 mm). Largest is system aperture_diameter with "
+   ],
+   [
+    "RuntimeWarning",
+    "propagate_traced_carrier_chain: the Collins chirp-Z stage is under-sampled -- K1 (input) 4.6601: the product of the envelope and the pre-chirp exp(i k"
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=512, dx=17.885 um, semi=4.579 mm). Largest is system aperture_diamete"
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=512, dx=17.885 um, semi=4.579 mm). Largest is system aperture_diameter with "
+   ],
+   [
+    "RuntimeWarning",
+    "apply_real_lens_traced: tilt_aware_rays=False with a non-trivial input tilt of no single direction (RMS = 1.76e-02 rad, coherence 0.01, i.e. INCOHEREN"
+   ]
+  ]
+ },
+ "F3-containment-warn": {
+  "dx": "5e-07",
+  "n_runtimewarn": 0,
+  "outcome": "ok",
+  "peak": 3.675975657480002,
+  "power": 14650.311072041799,
+  "warnings": [
+   [
+    "UserWarning",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.000 um, semi=5.120 mm). Largest is system aperture_diamete"
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.000 um, semi=5.120 mm). Largest is system aperture_diameter with "
+   ]
+  ]
+ },
+ "F3-standoff-2mm": {
+  "dx": "5e-07",
+  "n_runtimewarn": 0,
+  "outcome": "ok",
+  "peak": 3.7509701773753226,
+  "power": 14870.054351237475,
+  "warnings": [
+   [
+    "UserWarning",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.000 um, semi=5.120 mm). Largest is system aperture_diamete"
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.000 um, semi=5.120 mm). Largest is system aperture_diameter with "
+   ]
+  ]
+ },
+ "F3-zero-distance": {
+  "dx": "5e-07",
+  "n_runtimewarn": 0,
+  "outcome": "ok",
+  "peak": 1.0239306969612108,
+  "power": 4058.420899002757,
+  "warnings": [
+   [
+    "UserWarning",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.000 um, semi=5.120 mm). Largest is system aperture_diamete"
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.000 um, semi=5.120 mm). Largest is system aperture_diameter with "
+   ]
+  ]
+ },
+ "F4-final-leg-exact-bare": {
+  "dx": "3.00296649761419e-05",
+  "n_runtimewarn": 5,
+  "outcome": "ok",
+  "peak": 38038.00016902815,
+  "power": 101937686.03218454,
+  "warnings": [
+   [
+    "UserWarning",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.000 um, semi=5.120 mm). Largest is system aperture_diamete"
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.000 um, semi=5.120 mm). Largest is system aperture_diameter with "
+   ],
+   [
+    "RuntimeWarning",
+    "propagate_traced_carrier_chain: the Collins chirp-Z stage is under-sampled -- K1 (input) 8.6543: the product of the envelope and the pre-chirp exp(i k"
+   ],
+   [
+    "RuntimeWarning",
+    "propagate_traced_carrier_chain: the free-space leg into groups[1] (bcx) is outside the SZIKLAS-SIEGMAN FRAME's validity: the measured envelope spread "
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=33.214 um, semi=4.251 mm). Largest is system aperture_diamete"
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=33.214 um, semi=4.251 mm). Largest is system aperture_diameter with "
+   ],
+   [
+    "RuntimeWarning",
+    "apply_real_lens_traced: tilt_aware_rays=False with a non-trivial input tilt of no single direction (RMS = 1.79e-02 rad, coherence 0.01, i.e. INCOHEREN"
+   ],
+   [
+    "RuntimeWarning",
+    "apply_real_lens_traced: amplitude_model='ray_density' energy self-check FAILED -- exit power / aperture-transmitted input power = 0.583406, outside th"
+   ],
+   [
+    "RuntimeWarning",
+    "propagate_traced_carrier_chain: the Collins chirp-Z stage is under-sampled -- K1 (input) 19.4914: the product of the envelope and the pre-chirp exp(i "
+   ]
+  ]
+ },
+ "F4-final-leg-exact-readout": {
+  "dx": "5e-07",
+  "n_runtimewarn": 3,
+  "outcome": "ok",
+  "peak": 0.4758480293144593,
+  "power": 701.1178115620706,
+  "warnings": [
+   [
+    "UserWarning",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.000 um, semi=5.120 mm). Largest is system aperture_diamete"
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.000 um, semi=5.120 mm). Largest is system aperture_diameter with "
+   ],
+   [
+    "RuntimeWarning",
+    "propagate_traced_carrier_chain: the Collins chirp-Z stage is under-sampled -- K1 (input) 8.6543: the product of the envelope and the pre-chirp exp(i k"
+   ],
+   [
+    "RuntimeWarning",
+    "propagate_traced_carrier_chain: the free-space leg into groups[1] (bcx) is outside the SZIKLAS-SIEGMAN FRAME's validity: the measured envelope spread "
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=2048, dx=4.152 um, semi=4.251 mm). Largest is system aperture_diamete"
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=2048, dx=4.152 um, semi=4.251 mm). Largest is system aperture_diameter with "
+   ],
+   [
+    "RuntimeWarning",
+    "apply_real_lens_traced: tilt_aware_rays=False with a non-trivial input tilt of no single direction (RMS = 1.78e-02 rad, coherence 0.01, i.e. INCOHEREN"
+   ]
+  ]
+ },
+ "F4-single-final-leg-exact-bare": {
+  "dx": "3.732139184659418e-05",
+  "n_runtimewarn": 1,
+  "outcome": "ok",
+  "peak": 443.5706800942814,
+  "power": 3562605.5429702764,
+  "warnings": [
+   [
+    "UserWarning",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.000 um, semi=5.120 mm). Largest is system aperture_diamete"
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.000 um, semi=5.120 mm). Largest is system aperture_diameter with "
+   ],
+   [
+    "RuntimeWarning",
+    "propagate_traced_carrier_chain: the Collins chirp-Z stage is under-sampled -- K1 (input) 29.1734: the product of the envelope and the pre-chirp exp(i "
+   ]
+  ]
+ },
+ "F5-converging-two": {
+  "exc": "RuntimeError",
+  "msg": "carrier_referenced_focus_readout: the beam does not fit the co-moving grid at the stop plane.  The grid half-width there is 2688.6607 um against a measured amplitude radius of 3737.6397 um -- a containment of 0.719 beam radii and 0.727 against the beam's own G",
+  "n_runtimewarn": 3,
+  "outcome": "raised",
+  "warnings": [
+   [
+    "UserWarning",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diamete"
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with "
+   ],
+   [
+    "RuntimeWarning",
+    "propagate_traced_carrier_chain: the Collins chirp-Z stage is under-sampled -- K1 (input) 17.6178: the product of the envelope and the pre-chirp exp(i "
+   ],
+   [
+    "RuntimeWarning",
+    "propagate_traced_carrier_chain: the free-space leg into groups[1] (bcx) is outside the SZIKLAS-SIEGMAN FRAME's validity: the measured envelope spread "
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=26.479 um, semi=3.389 mm). Largest is system aperture_diamete"
+   ],
+   [
+    "UserWarning",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=26.479 um, semi=3.389 mm). Largest is system aperture_diameter with "
+   ],
+   [
+    "RuntimeWarning",
+    "apply_real_lens_traced: tilt_aware_rays=False with a non-trivial input tilt of no single direction (RMS = 2.00e-02 rad, coherence 0.01, i.e. INCOHEREN"
+   ]
+  ]
+ },
+ "_meta": {
+  "build": "WIN-py3.14",
+  "tree": "C:\\tmp\\vc3_v_mine"
+ }
+}

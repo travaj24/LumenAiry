@@ -1,0 +1,9 @@
+{
+ "B6_internal_caller_rides_default": {
+  "failed": [
+   "tests/unit/test_c3_collins_default.py::test_every_internal_transport_call_site_names_its_transport"
+  ],
+  "tail": "1 failed, 25 passed in 38.94s",
+  "rc": 1
+ }
+}

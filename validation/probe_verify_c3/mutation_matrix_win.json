@@ -1,0 +1,80 @@
+{
+ "B1_default_reverted": {
+  "failed": [
+   "tests/unit/test_c3_collins_default.py::test_an_unnamed_call_is_the_collins_call_and_not_the_sziklas_one",
+   "tests/unit/test_c3_collins_default.py::test_the_chain_and_the_multi_take_the_default_through_to_their_legs",
+   "tests/unit/test_c3_collins_default.py::test_the_default_is_collins_in_every_signature[propagate_carrier_referenced]",
+   "tests/unit/test_c3_collins_default.py::test_the_default_is_collins_in_every_signature[propagate_traced_carrier_chain]",
+   "tests/unit/test_c3_collins_default.py::test_the_default_is_collins_in_every_signature[propagate_traced_carrier_chain_multi]",
+   "tests/unit/test_c3_collins_default.py::test_the_focus_cell_is_reachable_on_the_default_and_not_on_the_old_one",
+   "tests/unit/test_c3_collins_default.py::test_the_sziklas_readouts_own_leg_is_pinned_and_the_pin_is_load_bearing"
+  ],
+  "tail": "7 failed, 19 passed in 12.97s",
+  "rc": 1
+ },
+ "B5_route_resolution_deleted": {
+  "failed": [
+   "tests/unit/test_c3_collins_default.py::test_the_default_does_not_start_warning_on_the_shipped_fixtures",
+   "tests/unit/test_c3_collins_default.py::test_the_readout_resolves_its_quadrature_and_the_fallback_is_bit_identical"
+  ],
+  "tail": "2 failed, 24 passed in 15.37s",
+  "rc": 1
+ },
+ "B6_internal_caller_rides_default": {
+  "apply_error": "('B6_internal_caller_rides_default', 'expected 1 occurrences, found 0', '            cr = propagate_carrier_referenced(\\n                env, R, gap, wave')"
+ },
+ "V1_readout_bar_2": {
+  "failed": [],
+  "tail": "26 passed in 22.55s",
+  "rc": 0
+ },
+ "V2_reason_always_representable": {
+  "failed": [
+   "tests/unit/test_c3_collins_default.py::test_the_readout_resolves_its_quadrature_and_the_fallback_is_bit_identical"
+  ],
+  "tail": "1 failed, 25 passed in 15.59s",
+  "rc": 1
+ },
+ "V2b_reason_swapped": {
+  "failed": [
+   "tests/unit/test_c3_collins_default.py::test_the_readout_resolves_its_quadrature_and_the_fallback_is_bit_identical"
+  ],
+  "tail": "1 failed, 25 passed in 19.31s",
+  "rc": 1
+ },
+ "V3_fallback_is_step_fast_again": {
+  "failed": [],
+  "tail": "26 passed in 24.67s",
+  "rc": 0
+ },
+ "V4_cupy_branch_takes_numpy_fft": {
+  "failed": [],
+  "tail": "26 passed in 22.19s",
+  "rc": 0
+ },
+ "V5_standoff_leg_unpinned": {
+  "failed": [
+   "tests/unit/test_c3_collins_default.py::test_every_internal_transport_call_site_names_its_transport",
+   "tests/unit/test_c3_collins_default.py::test_the_sziklas_readouts_own_leg_is_pinned_and_the_pin_is_load_bearing"
+  ],
+  "tail": "2 failed, 24 passed in 41.06s",
+  "rc": 1
+ },
+ "V6_route_keys_on_sziklas_too": {
+  "failed": [
+   "tests/unit/test_c3_collins_default.py::test_the_sziklas_stage_list_gains_no_key_from_the_route_publisher"
+  ],
+  "tail": "1 failed, 25 passed in 23.01s",
+  "rc": 1
+ },
+ "V7_stop_plane_keys_refused_again": {
+  "failed": [],
+  "tail": "26 passed in 32.93s",
+  "rc": 0
+ },
+ "X1_c5_tau_armed": {
+  "failed": [],
+  "tail": "26 passed in 21.65s",
+  "rc": 0
+ }
+}

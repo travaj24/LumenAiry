@@ -1,0 +1,197 @@
+{
+ "lumenairy": "C:\\tmp\\lum_vc3\\validation\\probe_verify_c3\\..\\..\\lumenairy\\__init__.py",
+ "python": "3.14.6",
+ "numpy": "2.4.4",
+ "route_search": [
+  {
+   "final_distance": 0.05,
+   "route": "sziklas",
+   "k1": 5.297716088877925,
+   "reason": "k1"
+  },
+  {
+   "final_distance": 0.1,
+   "route": "sziklas",
+   "k1": 2.714509982007696,
+   "reason": "k1"
+  },
+  {
+   "final_distance": 0.2,
+   "route": "sziklas",
+   "k1": 1.4229069285725817,
+   "reason": "k1"
+  },
+  {
+   "final_distance": 0.4,
+   "route": "sziklas",
+   "k1": 1.2228945981449757,
+   "reason": "k1"
+  },
+  {
+   "final_distance": 0.8,
+   "route": "sziklas",
+   "k1": 1.545795361503754,
+   "reason": "k1"
+  },
+  {
+   "final_distance": 1.6,
+   "route": "sziklas",
+   "k1": 1.7072457431831438,
+   "reason": "k1"
+  }
+ ],
+ "collins_route_final_distance": null,
+ "bandlimit": [
+  {
+   "label": "sziklas-route",
+   "final_distance": 0.008,
+   "transport": "sziklas",
+   "route": null,
+   "sha_without_bandlimit": "2c362d4b3e5f23be91f3220c2651eddf2ebef34acf426f72b3f0b25490a78058",
+   "sha_with_bandlimit": "2c362d4b3e5f23be91f3220c2651eddf2ebef34acf426f72b3f0b25490a78058",
+   "bandlimit_changes_the_answer": false
+  },
+  {
+   "label": "sziklas-route",
+   "final_distance": 0.008,
+   "transport": "collins",
+   "route": "sziklas",
+   "sha_without_bandlimit": "2c362d4b3e5f23be91f3220c2651eddf2ebef34acf426f72b3f0b25490a78058",
+   "sha_with_bandlimit": "2c362d4b3e5f23be91f3220c2651eddf2ebef34acf426f72b3f0b25490a78058",
+   "bandlimit_changes_the_answer": false
+  }
+ ],
+ "key_disposition": [
+  {
+   "key": "N_fine",
+   "in_collins_par_kw": false,
+   "in_sziklas_par_kw": false,
+   "selects_sziklas_route": false,
+   "dropped_on_collins_route": true
+  },
+  {
+   "key": "N_out",
+   "in_collins_par_kw": true,
+   "in_sziklas_par_kw": true,
+   "selects_sziklas_route": false,
+   "dropped_on_collins_route": false
+  },
+  {
+   "key": "bandlimit",
+   "in_collins_par_kw": false,
+   "in_sziklas_par_kw": true,
+   "selects_sziklas_route": false,
+   "dropped_on_collins_route": true
+  },
+  {
+   "key": "centre_out",
+   "in_collins_par_kw": true,
+   "in_sziklas_par_kw": true,
+   "selects_sziklas_route": false,
+   "dropped_on_collins_route": false
+  },
+  {
+   "key": "dx_fine",
+   "in_collins_par_kw": false,
+   "in_sziklas_par_kw": false,
+   "selects_sziklas_route": false,
+   "dropped_on_collins_route": true
+  },
+  {
+   "key": "dx_out",
+   "in_collins_par_kw": true,
+   "in_sziklas_par_kw": true,
+   "selects_sziklas_route": false,
+   "dropped_on_collins_route": false
+  },
+  {
+   "key": "max_fine_launch_points",
+   "in_collins_par_kw": false,
+   "in_sziklas_par_kw": false,
+   "selects_sziklas_route": false,
+   "dropped_on_collins_route": true
+  },
+  {
+   "key": "n_fine_cap",
+   "in_collins_par_kw": false,
+   "in_sziklas_par_kw": false,
+   "selects_sziklas_route": false,
+   "dropped_on_collins_route": true
+  },
+  {
+   "key": "on_focus_containment",
+   "in_collins_par_kw": false,
+   "in_sziklas_par_kw": true,
+   "selects_sziklas_route": true,
+   "dropped_on_collins_route": false
+  },
+  {
+   "key": "on_n_fine_cap",
+   "in_collins_par_kw": false,
+   "in_sziklas_par_kw": false,
+   "selects_sziklas_route": false,
+   "dropped_on_collins_route": true
+  },
+  {
+   "key": "on_readout_window",
+   "in_collins_par_kw": false,
+   "in_sziklas_par_kw": false,
+   "selects_sziklas_route": false,
+   "dropped_on_collins_route": true
+  },
+  {
+   "key": "on_replica",
+   "in_collins_par_kw": true,
+   "in_sziklas_par_kw": true,
+   "selects_sziklas_route": false,
+   "dropped_on_collins_route": false
+  },
+  {
+   "key": "ram_budget",
+   "in_collins_par_kw": false,
+   "in_sziklas_par_kw": false,
+   "selects_sziklas_route": false,
+   "dropped_on_collins_route": true
+  },
+  {
+   "key": "readout_window_tol",
+   "in_collins_par_kw": false,
+   "in_sziklas_par_kw": false,
+   "selects_sziklas_route": false,
+   "dropped_on_collins_route": true
+  },
+  {
+   "key": "replica_fill",
+   "in_collins_par_kw": true,
+   "in_sziklas_par_kw": true,
+   "selects_sziklas_route": false,
+   "dropped_on_collins_route": false
+  },
+  {
+   "key": "standoff",
+   "in_collins_par_kw": false,
+   "in_sziklas_par_kw": true,
+   "selects_sziklas_route": true,
+   "dropped_on_collins_route": false
+  },
+  {
+   "key": "window_factor",
+   "in_collins_par_kw": false,
+   "in_sziklas_par_kw": false,
+   "selects_sziklas_route": false,
+   "dropped_on_collins_route": true
+  }
+ ],
+ "dropped_on_collins_route": [
+  "N_fine",
+  "bandlimit",
+  "dx_fine",
+  "max_fine_launch_points",
+  "n_fine_cap",
+  "on_n_fine_cap",
+  "on_readout_window",
+  "ram_budget",
+  "readout_window_tol",
+  "window_factor"
+ ]
+}
