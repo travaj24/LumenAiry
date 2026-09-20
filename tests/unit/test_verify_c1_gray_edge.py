@@ -216,10 +216,11 @@ def test_verify_c1_all_three_chain_routes_agree_on_an_edge_element(
     three routes or refused by all three.
 
     WP-C1's claim is "one implementation, one default and one way back".
-    That is true of the FIELD and was verified bit for bit; it is not yet true
+    That was true of the FIELD and was verified bit for bit; it was NOT true
     of the REFUSAL, because the jit'd route reads the element through
-    ``_system_element_signature``, which coerces with ``int()`` / ``str()``
-    before ``apply_aperture`` ever sees the value.
+    ``_system_element_signature``, whose static signature must be hashable and
+    so coerced with ``int()`` / ``str()`` before ``apply_aperture`` ever saw
+    the value.
 
     CLOSED 2026-09-20 (round 2): every row now agrees on all three routes.
     The two rows that were strict xfails (``edge_samples`` 2.5 and '4') are
