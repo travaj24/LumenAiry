@@ -363,6 +363,13 @@ At N = 1024 and at N = 2048 -- the acceptance's OWN grid -- the one-step
 Collins readout RUNS, and the answers agree to **0.05 % of FWHM and 0.05 EE
 points**.  Zero Kelly warnings on every row.
 
+**BOTH BUILDS, on a real design.**  WSL-py3.12 reproduces the N = 512 and
+N = 1024 rows to EVERY PRINTED DIGIT, K1 included
+(1.0292860630174718 and 0.9995812250283026 on both), so the route flip
+between those two grids is not a property of one BLAS.  That is worth having
+on a fixture this size: the readings are the end of a five-group traced chain
+through a real prescription, not a two-line analytic step.
+
 The route flipping between N = 512 and N = 1024 on a real design is the
 clearest single illustration of what this package built: the same call, the
 same geometry, a finer grid, and the readout changes quadrature because the
