@@ -37,6 +37,7 @@ the scratchpad, and the defects below carry the exact requested edit.
 | `v4_mutations.py` | `v4_mutations_{win,wsl}.json` | eight source-level mutations against the whole shipped file |
 | `v4_census_plugin.py` | `v4_census_{win,wsl}.json` | where the rule fires in the shipped suite, and through which caller |
 | `v4_c3_interaction.py` | `v4_c3_interaction_{win,wsl}.json` | the shapes WP-C3's transport hands the rule |
+| `v4_never_entry.py` | `v4_never_entry_{base,branch}_win.json` | whether the Migration Guide's process-wide remedy restores the base bytes at the six no-keyword entry points |
 | `v4_proposed_fix.py` | `v4_proposed_fix_win.json` | the V-C4-D1 edit, applied to a tree copy and measured |
 
 ---
@@ -226,6 +227,16 @@ one (`512x512 -> 128x128`), on both builds:
 | `re_reference` (`CarrierField` verb) | `angular_spectrum_propagate_mft` | **yes** | yes | **NONE** (it has `_separable`, same objection) |
 | `propagate_traced_carrier_chain` | `_collins_focus_readout` -> `_collins_transport` -> `_bluestein_centred_2d` | yes (census: `_collins_transport` answers `'direct'` 3 times in `test_audit2609_b4`) | -- | **NONE** (`transport='sziklas'` changes the PHYSICS route, not the MFT one) |
 | `propagate_through_system` (fresnel leg) | `fresnel_propagate_mft` | **no** -- `N_out` is pinned to the chain's own sample count, so the ratio is exactly 1 | -- | not needed |
+
+**The process-wide remedy DOES work -- it is just not a keyword.**  Measured
+archive-to-archive at the captured shape, on both trees: with
+`_MFT_DIRECT_MAX_RATIO = _MFT_DIRECT_NEVER` set for the process, all six
+drivable no-keyword entry points (`compute_psf`, `resample_field`,
+`propagate(method='asm')`, both carrier readouts and `re_reference`) reproduce
+the `49ddf4bd` bytes EXACTLY, and all six move without it.  So the Migration
+Guide's remedy is true; the objection is that it is private, process-wide, and
+unavailable to a caller who wants the previous bytes for ONE call inside a
+program that also wants the new ones.
 
 **What "verified" means in that table.**  Two separate checks.  (a) The
 keyword call is byte-identical base-to-branch at the captured shape, so naming
