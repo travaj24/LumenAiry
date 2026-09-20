@@ -1161,7 +1161,7 @@ flagged").  The cause is not the CHANGELOG: `git` cannot open this worktree
 from WSL at all.  A Windows-created worktree's `.git` file points at a
 Windows absolute path, so from `/mnt/c/tmp/lum_gbd2` even `git rev-parse
 --git-dir` fails with *"not a git repository:
-/mnt/c/tmp/lum_gbd2/D:/.../\.git/worktrees/lum_gbd2"*.  Every walker that
+/mnt/c/tmp/lum_gbd2/D:/.../.git/worktrees/lum_gbd2"*.  Every walker that
 shells out to `git` therefore reports "nothing to verify" on the WSL build
 of a Windows worktree, whatever the branch.  The same id passes on Windows
 in 0.23 s.  This is why the sweep is recorded here as a Windows gate, and
