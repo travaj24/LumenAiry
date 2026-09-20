@@ -352,9 +352,14 @@ Taken from `probe_b_ladder_post_b12b_win32_314.json`:
 | flat-base asphere | exit vertex | 0.99889415 | 0.03325 | 24.52 um | 0.204 |
 | flat-base asphere | focus | 0.99967130 | 0.01813 | | |
 
-The five exit-vertex rows agree to **1.3e-06 of fidelity** with one another
-after the repair, across a conic, a conic-plus-k, two different aspheres and a
-flat-base asphere.  That is the reading that says the repair is a correction
+The five exit-vertex rows lie within **1.98e-06 of fidelity** of one another
+after the repair (0.99889613, 0.99889613, 0.99889482, 0.99889591,
+0.99889415: `max - min` is 1.98e-06 and the largest deviation from their MEAN
+is 1.3e-06), across a conic, a conic-plus-k, two different aspheres and a
+flat-base asphere.  *(Restated 2026-09-19, VERIFY-WP-B12b D-7: this sentence
+read "agree to 1.3e-06", which is the deviation from the mean rather than the
+spread -- "agree to X" normally means the spread, so both numbers are now
+given.)*  That is the reading that says the repair is a correction
 rather than a tuning: five different last surfaces, one number, and it is
 GBD's own frame-density floor on this grid (0.9989), not a property of any one
 of them.  Before the repair the same five read 0.9989, 0.9989, 0.7605, 0.5031
@@ -456,17 +461,29 @@ Two things are settled here.
      `apply_real_lens_gbd` on BOTH builds and in BOTH trees (`043dcd0b...`
      on Windows, `ff20d960...` on WSL).  It is a dispatcher, and it
      dispatches.
-   * `propagate_gbd_through_prescription(per_surface=True)` is byte-identical
-     to them on the Windows build (in both trees) and is NOT on WSL
-     (`fe36b9a7...` against `ff20d960...`), while its fidelity against the
-     oracle agrees to FIFTEEN digits (0.9996713034955186 against
-     0.9996713034955185).  The two reach the same beamlet frame by different
-     routes -- `apply_real_lens_gbd` derives it through `_auto_sample_step`
-     and clips the entrance aperture, the propagators-level entry takes its
-     own defaults -- so their last-bits agreement is a property of the build,
-     not an invariant.  It is recorded here rather than claimed: the new test
-     file asserts BYTE identity only for the dispatcher pair and a 0.999
-     FIDELITY bar for this one, which is why it passes on both builds.
+   * `propagate_gbd_through_prescription(per_surface=True)` read
+     byte-identical to them on the Windows build (in both trees) and NOT on
+     WSL (`fe36b9a7...` against `ff20d960...`) on THIS fixture, while its
+     fidelity against the oracle agrees to FIFTEEN digits
+     (0.9996713034955186 against 0.9996713034955185).
+
+     *(Restated 2026-09-19, VERIFY-WP-B12b claim 4.)*  This sentence used to
+     conclude "their last-bits agreement is a property of the build".  It is
+     not: the re-verification took the same comparison with the beamlet FRAME
+     named explicitly and found the two entries byte-identical on **both**
+     builds in **both** trees (its section 6.1).  What separates them is the
+     frame and the chunk boundaries it produces, not the LAPACK.  The two
+     routes reach the same live beamlet set by different roads --
+     `apply_real_lens_gbd` prunes dark beamlets up front (784 raw -> 437
+     pruned on that fixture, two DIFFERENT bundle digests), the
+     propagators-level entry lets the trace vignette them (437 survivors
+     either way, and the reconstructed field identical to 0.0) -- and the
+     coherent sum is then grouped by `_reconstruct_windowed`'s chunking,
+     which moves with the memory budget and the frame (see the D-6 note in
+     section 7.4).  The DECISION the test file takes is unchanged and still
+     right: BYTE identity is asserted only for the dispatcher pair, and a
+     0.999 FIDELITY bar for this one, which is why it passes on both builds.
+     It just holds for a reason this report did not give.
 2. **The `world_output_plane` branch is byte-identical between the parent tree
    and this one**, digest for digest.  That is the design of section 2
    measured rather than argued: the branch that measures its own leg from the
@@ -487,7 +504,7 @@ Two things are settled here.
 | `apply_prescription_persurface_to_beamlets(world_output_plane=...)` | **untouched, bit for bit** -- it keeps `reference='surface'` |
 | `propagate_gbd_vector_through_prescription` | untouched: its Jones machinery uses `_fresnel_jones_matrix_per_beamlet`, which traces separately and never calls the differential primitives |
 | every `propagators.fga` site | untouched by this package (WP-B12 already moved them) |
-| the JAX paths | **there is no JAX per-surface-GBD path.**  `propagators/gbd.py`'s xp-dispatched code is the free-space, thin-lens and reconstruction machinery; the per-surface prescription path is NumPy-only by construction (its docstring says so, and `grep -n 'jax\|jnp' lumenairy/propagators/gbd.py` finds no import).  `elements/lenses_gbd.py` contains no JAX at all.  `ray_transfer_jacobian_analytic`'s JAX branch shares `_project_to_exit_vertex_plane` with NumPy, so a future JAX GBD would inherit the repair; nothing today exercises it through GBD. |
+| the JAX paths | **there is no JAX per-surface-GBD path.**  `propagators/gbd.py`'s xp-dispatched code is the free-space, thin-lens and reconstruction machinery; the per-surface prescription path is NumPy-only by construction (its docstring says so, and `lumenairy/propagators/gbd.py` contains no `import jax` and no `import jax.numpy` -- `grep -n 'jax\|jnp'` on that file returns **12** matches, all of them docstrings, `is_jax_array` calls and a comment about a `jnp.at[].add` scatter, and none of them an import; *restated 2026-09-19, VERIFY-WP-B12b D-8, which also confirmed the substantive claim independently in its section 6.4*).  `elements/lenses_gbd.py` contains no JAX at all.  `ray_transfer_jacobian_analytic`'s JAX branch shares `_project_to_exit_vertex_plane` with NumPy, so a future JAX GBD would inherit the repair; nothing today exercises it through GBD. |
 
 ---
 
@@ -591,8 +608,16 @@ live under it.
 **Cross-build agreement.**  Probe A is identical to every printed digit on the
 two builds, on all fourteen rows including the two exact-zero controls.  Probe
 C is identical to every printed digit on every row but the flat control's
-`dPhase`, where the two builds read 8.318e-17 and 8.298e-17 radians -- a
-quantity that is zero up to the unwrap's own rounding.  Probe B's cross-build
+`dPhase`, where the two builds read **6.797e-17** and **6.760e-17** radians --
+a quantity that is zero up to the unwrap's own rounding.  *(Corrected
+2026-09-19, VERIFY-WP-B12b D-3: this sentence published 8.318e-17 / 8.298e-17,
+which is not what the committed JSONs contain.  The shipped artefacts read
+`6.796869888613907e-17` (`probe_c_decompose_win32_314.json`) and
+`6.760231407720553e-17` (`..._linux_312.json`), and re-running
+`probe_c_decompose.py` unchanged on the round-2 tree reproduces both files
+number for number on both builds -- the only line that moves is the embedded
+`"version"` string, which tracks the tree, not the measurement.  Re-run
+recorded in `validation/probe_wp_b12b_round2/probe_r4_probec_*.json`.)*  Probe B's cross-build
 comparison is in section 4.3.
 
 The `pre_b12b` arm is not a claim about what the old code did, it is the old
