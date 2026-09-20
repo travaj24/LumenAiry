@@ -533,6 +533,19 @@ NumPy identity (`_bluestein_2d` keys its chirp-kernel cache on
 FIRST branch -- so the Collins chain needs no second selector, asserted rather
 than assumed.
 
+`test_a_true_cupy_answer_really_binds_the_fft_dispatchers_cp` closes the one
+coupling that branch rests on, using the repository's own instrument for it
+(`test_audit2609_a16_verify_config_and_arch.py::
+test_a_true_cupy_answer_really_binds_the_module_cp`, applied to the
+dispatcher instead of to the lens modules).  `_fft2`'s CuPy branch reads the
+MODULE-LEVEL name `cp`, so `_is_cupy_array(x) is True` must imply `cp` is
+bound or the Collins leg's transform raises `NameError` on the one box it was
+written for.  The shipped `test_fft_infra_keeps_its_cp_alias_contract`
+asserts that coupling only on the branch the running box HAS -- with no CuPy
+it checks `cp is None` and never reaches the True side at all.  This one
+SUBSTITUTES a CuPy answer, so it exercises the True side on every build, and
+restores the module afterwards.
+
 ### 5.4 What RUNS on the device here
 
 Every FIELD-INDEPENDENT grid the Collins chain builds needs no transform, so

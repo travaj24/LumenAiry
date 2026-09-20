@@ -29,11 +29,14 @@ WHAT THIS FILE GATES, IN THE ORDER THE WORK PACKAGE ASKS FOR IT.
    fixture, never pasted.
 
 4. **The CuPy arm**: a structural census that every helper on the Collins path
-   is ``xp``-parametrised or host-side BY NAME, and a premise-gated device arm
-   that first asserts what this box's CuPy actually is and then decides on
-   whichever side of that premise holds.
+   is ``xp``-parametrised or host-side BY NAME; the repo's own
+   SUBSTITUTED-MODULE test applied to the dispatcher the chain's transform
+   goes through (fake a CuPy answer, check the module binds ``cp``, which is
+   what a CUDA box would check); and a premise-gated device arm that first
+   asserts what this box's CuPy actually is and then decides on whichever side
+   of that premise holds.
 
-5. **A mutation matrix.**  Four ways this work could silently come undone,
+5. **A mutation matrix.**  Five ways this work could silently come undone,
    each with the named test that catches it:
 
    | mutation | caught by |
@@ -41,6 +44,7 @@ WHAT THIS FILE GATES, IN THE ORDER THE WORK PACKAGE ASKS FOR IT.
    | the default quietly reverted to ``'sziklas'`` | ``test_the_default_is_collins_in_every_signature`` AND ``test_an_unnamed_call_is_the_collins_call_and_not_the_sziklas_one`` |
    | a Collins helper losing its ``xp`` / ``bld`` | ``test_every_helper_on_the_collins_path_is_xp_parametrised`` |
    | the CuPy arm demoting a device array to the host | ``test_no_collins_helper_demotes_the_field_to_host_numpy`` (structural, both builds) AND ``test_a_device_array_reaches_the_device_transform`` (premise-gated) |
+   | the FFT dispatcher answering "this is a CuPy array" without binding its ``cp``, so the device transform raises ``NameError`` | ``test_a_true_cupy_answer_really_binds_the_fft_dispatchers_cp`` (substituted module; runs with no CuPy) |
    | the readout's route resolution deleted, so the default returns the aliased one-step answer | ``test_the_readout_resolves_its_quadrature_and_the_fallback_is_bit_identical`` |
    | an internal caller riding the public default again | ``test_every_internal_transport_call_site_names_its_transport`` with its fail-before arm |
 
@@ -793,6 +797,48 @@ def test_the_fft_on_the_collins_path_is_the_backend_dispatcher():
             f'{fn.strip()} no longer dispatches a CuPy array to cp.fft, so '
             f'the Collins chain would run a device array through the host '
             f'transform')
+
+
+def test_a_true_cupy_answer_really_binds_the_fft_dispatchers_cp(monkeypatch):
+    """The Collins chain's device transform rests on ONE coupling, and this is
+    the repo's own way of exercising it without a device.
+
+    ``fft_infra._fft2``'s FIRST branch is ``if _is_cupy_array(x): return
+    cp.fft.fft2(x)`` -- it reads the MODULE-LEVEL name ``cp``.  So
+    ``_is_cupy_array(x) is True`` must imply ``cp`` is bound, or the Collins
+    leg's transform raises ``NameError`` on the one box it was written for.
+    The shipped ``test_fft_infra_keeps_its_cp_alias_contract`` asserts that
+    coupling only on the branch this box HAS: with no CuPy it checks
+    ``cp is None`` and never reaches the True side at all.
+
+    This is ``test_audit2609_a16_verify_config_and_arch.py::
+    test_a_true_cupy_answer_really_binds_the_module_cp`` applied to the
+    dispatcher the Collins chain uses: FAKE a CuPy answer by substituting the
+    module's four optional-dependency handles, and check the name afterwards
+    -- which is what a CUDA box would check.  Both sides are asserted, and the
+    module is restored, so a later test cannot inherit a stub.
+    """
+    import types
+    from lumenairy.propagators import fft_infra as fi
+    from lumenairy.backend import _optional
+
+    stub = types.ModuleType('cupy_stub')
+    monkeypatch.setattr(fi, 'CUPY_AVAILABLE', True)
+    monkeypatch.setattr(fi, 'cp', None)
+    monkeypatch.setattr(fi, '_optional_is_cupy_array', lambda x: True)
+    monkeypatch.setattr(fi, '_ensure_cupy', lambda: stub)
+    try:
+        assert fi._is_cupy_array(object()) is True
+        assert fi.cp is stub, (
+            'fft_infra._is_cupy_array answered True without binding the '
+            'module-level cp; the CuPy branch of _fft2 would raise '
+            'NameError, which is how the Collins chain reaches a device '
+            'transform')
+    finally:
+        fi.cp = None
+    monkeypatch.undo()
+    assert fi._is_cupy_array(np.zeros(3)) is False
+    assert fi.CUPY_AVAILABLE is _optional.CUPY_AVAILABLE
 
 
 def _cupy_premise():
