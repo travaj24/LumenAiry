@@ -64,6 +64,28 @@ K1 alone routes.  K3 is already owned by `on_replica` (which defaults to
 returned samples wrong -- the transform evaluates the integral exactly AT the
 requested points whether or not they resolve the field (VERIFY-WP-B4 row 8).
 
+**On a real design, measured.**  WP-B4 section 5's first missing gate was the
+design-121 acceptance, deferred there because its assets were untracked.  They
+are tracked here (`validation/repro_traced_carrier_121/`), so the chain was
+run on the REAL geometry with the design's own launch, both transports, one
+process:
+
+| N | FWHM (um) sziklas / collins | EE3 (%) | EE6 (%) | Collins readout route |
+|---|---|---|---|---|
+| 512 | 6.6013 / 6.6013 | 32.17 / 32.17 | 67.54 / 67.54 | sziklas (K1 = 1.0293) |
+| 1024 | 6.6110 / 6.6147 | 32.41 / 32.37 | 68.08 / 68.02 | **collins** (K1 = 0.99958) |
+| 2048 | 6.6127 / 6.6159 | 32.48 / 32.44 | 68.21 / 68.16 | **collins** (K1 = 0.58573) |
+
+Zero Kelly warnings on every row.  At N = 512 the readout resolves to the
+Sziklas route and the two are identical to every printed digit; at N = 1024
+and 2048 the one-step Collins readout runs and the answers agree to 0.05 % of
+FWHM and 0.05 EE points.  The route flipping with the grid on a real design is
+the clearest single picture of what the resolution does.  These are NOT the
+shipped acceptance's absolute numbers (3.450 / 88.8 / 99.6): that runner uses
+`final_leg='auto'` at NFC = 8192 with a through-focus scan, and running IT
+against this branch needs its hard-coded `sys.path` line parameterised.  That,
+and the 8x4 Dammann fan through `..._multi`, remain owed.
+
 ### Fixed -- carrier (WP-C3): three geometries had no fallback on `transport='collins'` -- a COLLIMATED carrier returned NaN, an ASTIGMATIC one and a leg PAST the focus ran an under-sampled chirp-Z
 
 All three were opt-in before this release and would have been the default

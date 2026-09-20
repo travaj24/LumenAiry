@@ -323,6 +323,68 @@ near-focus landing, a long reduced leg, a deliberately coarse grid -- is where
 the flip is visible, and that condition is checkable per design without
 running anything.
 
+### 2.5 The design-121 chain -- WP-B4's first missing gate, run
+
+WP-B4 section 5 lists four gates it supplied and four it did not, and the
+FIRST of the missing four is the strongest sentence in that report:
+
+> **the design-121 acceptance** (FWHM 3.450 / EE3 88.8 % / EE6 99.6 %, and the
+> 8x4 Dammann fan).  Its assets are in `validation/repro_traced_carrier_122/`
+> and are UNTRACKED on this machine -- the same reason WP-A6 sec. 6.1 deferred
+> the whole item.  **Until that runs, the flip is not defensible**: it is the
+> only fixture in the library where a whole DOE fan, a tilted congruence, a
+> `final_leg='auto'` route flip and a per-order readout tile all interact.
+
+**The premise of that sentence no longer holds on this box.**  The assets are
+here and they are TRACKED -- `validation/repro_traced_carrier_121/`, 430 files
+under git -- and the local `.zmx` and design-study runner both resolve at the
+paths `_d121_common.py` expects.  So the gate is runnable, and not running it
+would have been a choice.
+
+`validation/probe_c3_collins_default/probe_d121_acceptance.py` drives the REAL
+geometry (`_d121_common.geometry()`, read from the same `.zmx`) with the
+design's OWN launch (a `w0 = 4 um` waist 2 mm before the first surface, on the
+runner's pitch law `dx0 = 1 um * 2048/N`) through this tree's
+`propagate_traced_carrier_chain` on both transports, in one process, with the
+anchor asserted:
+
+| N | transport | FWHM (um) | EE3 (%) | EE6 (%) | readout route | readout K1 | Kelly |
+|---|---|---|---|---|---|---|---|
+| 512 | sziklas | 6.6013 | 32.17 | 67.54 | -- | -- | 0 |
+| 512 | collins | 6.6013 | 32.17 | 67.54 | **sziklas** | 1.0293 | 0 |
+| 1024 | sziklas | 6.6110 | 32.41 | 68.08 | -- | -- | 0 |
+| 1024 | collins | 6.6147 | 32.37 | 68.02 | **collins** | 0.99958 | 0 |
+| 2048 | sziklas | 6.6127 | 32.48 | 68.21 | -- | -- | 0 |
+| 2048 | collins | 6.6159 | 32.44 | 68.16 | **collins** | 0.58573 | 0 |
+
+At N = 512 the two are identical to every printed digit, because K1 = 1.0293
+puts the readout over its own bar and the resolution takes the Sziklas route.
+At N = 1024 and at N = 2048 -- the acceptance's OWN grid -- the one-step
+Collins readout RUNS, and the answers agree to **0.05 % of FWHM and 0.05 EE
+points**.  Zero Kelly warnings on every row.
+
+The route flipping between N = 512 and N = 1024 on a real design is the
+clearest single illustration of what this package built: the same call, the
+same geometry, a finer grid, and the readout changes quadrature because the
+condition it is decided on crossed 1.
+
+**WHAT THIS IS NOT, and it matters.**  The absolute numbers are not the
+shipped acceptance's 3.450 / 88.8 / 99.6.  That acceptance is
+`focus_scan_121.py` with `final_leg='auto'` (the exact fine retrace at
+NFC = 8192), `dx_out = 0.05 um` over `N_out = 2048`, and a through-focus scan
+reporting at BEST focus; this probe reads the fixed MSoP plane on
+`final_leg='paraxial'` at `dx_out = 0.25 um` over `N_out = 256`.  So the
+TRANSPORT COMPARISON is exact -- same geometry, same launch, same grid, same
+process, one variable -- and the absolute level is a different configuration's.
+
+The shipped runner was not used directly for a reason worth recording: it
+begins `sys.path.insert(0, r"D:\...\Lumenairy")`, which binds a DIFFERENT
+checkout of the library than the one under test.  A number produced that way
+would be a measurement of somebody else's tree.  Running it against this
+branch needs either that line parameterised or a pre-import wrapper, plus the
+full N = 2048 / NFC = 8192 / through-focus cost; that, and the 8x4 Dammann fan
+through `..._multi`, remain OWED.
+
 ---
 
 ## 3. Byte identity of the way back -- ARCHIVE TO ARCHIVE
