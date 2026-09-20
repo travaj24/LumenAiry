@@ -772,3 +772,158 @@ there on a different premise gate), so none of them is round 2's:
 * **The peak-memory claim** in `apply_aperture`'s grey-branch comment ("measured
   6.0 float64 grids at N = 2048, against 5.0 for the hard edge").  Still not
   re-measured; it needs an allocator trace.
+
+---
+
+## Round 3 (VERIFY-WP-C1 round 2) -- 2026-09-20
+
+`feat/c1-gray-edge-round3`, on `verify/c1-gray-edge-round2` (`0a80e4a2`).
+Closes the three guard defects (R1-R3) and the five documentation corrections
+(R4-R8) of
+[`VERIFY_WP-C1_ROUND2.md`](VERIFY_WP-C1_ROUND2.md), plus its two
+recorded-not-filed items.  Every closure was measured on BOTH builds --
+Windows py3.14.6 / numpy 2.4.4 / jax 0.11.0 and WSL py3.12.3 / numpy 2.4.6 /
+jax 0.10.2, both scipy-openblas, `OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1
+MKL_NUM_THREADS=1` on the command line, `lumenairy.__file__` printed by every
+probe.  The PRE tree is this round's own `git archive 0a80e4a2` at
+`C:/tmp/lum_c1c_pre0a`, and for the pre-5.49 codegen arm `git archive
+49ddf4bd` at `C:/tmp/lum_c1c_pre49`, each run from inside itself.  Probes and
+JSON: [`validation/probe_wpc1_round3/`](../../../../validation/probe_wpc1_round3/).
+
+**The eight strict xfails of `tests/unit/test_verify_c1_round2.py` are gone
+and their ids pass.**  They were the independent fail-before for R1 (5 params)
+and R3 (3 params); `xfail_strict = true` is on in `pyproject.toml`, so each
+would have turned red the moment its defect was fixed.  The file reads
+**27 passed, 0 xfailed** on both builds (24 ids before; three were restated
+because they pinned a defect, and three are new: R6's decision, R8's execution
+and the factory-shape recorded item).
+
+### The closure table
+
+| item | P | what changed | measured, Windows | measured, WSL |
+|---|---|---|---|---|
+| **R1** | P2 | `edge_kw = _aperture_edge_kwargs(elem)` hoisted ABOVE the `resolved is None` gate in `_system_element_signature` **and** in the JAX slow path (`lumenairy/propagators/system.py`) | element shapes SPLIT across the three chain routes **7 of 7 -> 0 of 7**; the legal unresolvable control `{'edge': 'hard'}` with no `params` unchanged bit for bit, `2450777df7f6127a` on all three routes PRE and POST | **7 of 7 -> 0 of 7**; same control digest `2450777df7f6127a` |
+| **R2** | P3 | `isinstance(edge_samples, (bool, np.bool_))` refused explicitly, message naming the type and pointing at `edge='hard'` (`lumenairy/elements/elements.py`) | `edge_samples=True` and `numpy.True_`: **accepted as n_sub = 1 -> ValueError**; `False` refused for the right reason now; `numpy.int64(4)` still **accepted**; 24-row census `chain-routes-split = 0`, `chain-vs-apply_aperture-split = 0` | identical; the whole `rows` object byte-identical WIN vs WSL |
+| **R3** | P3 | the `int()` call wrapped; the failure re-raised as the same `ValueError`, `from exc`; the `TypeError` entry drops out of the guard's `Raises` | `None` / `[4]` / `4+0j`: `TypeError: int() argument must be ...` **-> `ValueError: apply_aperture: edge_samples must be a positive integer (sub-samples per axis); got <v>.`**, same `(raised, message)` on all four routes | identical |
+| **R4** | P3 | the "Bars" paragraph of `test_audit2609_a8_verify.py::test_verify_a8_e7_gray_edge_beats_hard_at_anamorphic_and_offset_rims` rewritten; **the 1.5 bar is unchanged** | the three shipped ratios re-read `5.804555200387276` / `8.815874781721663` / `1.992822748038388`; 30-point neighbourhood scan: **4 below 1.5, 4 below 1.0**, worst **0.003602** at `dy/dx = 1.0, offset 0.23` where `e_hard = +2.188924e-07` against `e_g4 = +6.077725e-05` | `shipped_three` and the whole 30-row scan compare **equal** to Windows |
+| **R5** | P3 | `Migration-Guide.md` 5.49.0 "Why", `apply_aperture`'s docstring and the CHANGELOG restate the rise as COMMON and "first order at best" as a ladder AVERAGE, with three optics' numbers | third optic (532 nm, a = 150 um, window 900 um, z = 30/15 mm): RS hard `6.2976e-03 9.3199e-04 7.6432e-05 7.1042e-04`, orders `2.756 / 3.608 / -3.216`, **rise x9.295**; HF **x9.115**, orders `2.751 / 3.626 / -3.188`; grey means 1.8918 / 2.0091 | every printed digit identical |
+| **R6** | P3 | a Migration row + paragraph and a CHANGELOG paragraph for the two boolean-casting consumers, each with the way back.  **`wrapper_merits.py:492` NOT changed** -- see the decision below | cast 12281 -> 12449 px (+168, **+1.3680 %**, 364 rim px, analytic disc 12271.8); radial-RMS curve **7.2741e-02**; `_auto_n_bins` 12 -> 13 at N = 48; in-aperture RMS **5.8832e-03**, PV `2.520837e-07 -> 2.536185e-07`; merit power **7.7072e-03**, overshoot vs the weighted grey mask **8.9051e-03** | the whole probe JSON byte-identical to Windows |
+| **R7** | P3 | the grey branch's peak-memory comment now states the two build-free claims with both builds' readings, and records the first-call trap | N = 2048, steady state: hard **5.0011**, grey(4) **6.0011**, delta **1.000**, `n_sub` spread over 2/4/8/16 **0.0001**; first call in a process costs **1.3739** extra grids on either arm (hard reads 6.3749) | hard **4.0011**, grey(4) **5.1262**, delta **1.125**, spread **0.0006**; first call **1.0526** |
+| **R8** | P3 | the Migration table's one codegen row becomes two, one per `generate_simulation_script` style, each with its own way back | generated scripts EXECUTED in a subprocess (`stdin=DEVNULL`), archive-to-archive against `49ddf4bd`: pre `cd418e4c202cf817`, default `0b91e26e94655cfe`, **way back `cd418e4c202cf817`** -- both styles | pre `418bbdbaeea97048`, default `72dedec0e1764b5d`, **way back `418bbdbaeea97048`** -- both styles |
+| Rec-1 | -- | a dated erratum block under `VERIFY_WP-C1.md:73`; the verifier's table is untouched | the ladder in that row gives `mean = 1.0709` (`log2(9.2699)/3`), not `1.06` | identical |
+| Rec-2 | -- | one clause in `evaluate`'s `aperture_edge` paragraph on a FACTORY-shape prescription | `make_singlet` -> `['real_lens']`, **0** aperture elements; default == `aperture_edge='hard'` == `aperture_edge_samples=16` (`be924786b22aa645`); `aperture_edge='soft'` still raises | same structure |
+
+### R1, in full
+
+Both JAX routes reached `_aperture_edge_kwargs` -- the one place round 2 put
+the refusal -- only through `_resolve_aperture_params`, and returned before it
+when that gave `None`, while `propagate_through_system` calls the same reader
+unconditionally.  So an `'aperture'` element with no usable `params` carried an
+illegal rim silently past both JAX routes while the NumPy chain raised.
+
+Measured with the verifier's own `probe_d1_holes.py`, nine element shapes, both
+builds:
+
+| element | PRE (`0a80e4a2`) | POST |
+|---|---|---|
+| `{'edge': 'soft'}`, no `params` | NumPy raises, both JAX accept | all three raise, same message |
+| `{'edge_samples': 0}`, no `params` | split | one answer |
+| `{'edge_samples': 2.5}`, no `params` | split | one answer |
+| `{'edge': None}`, no `params` | split | one answer |
+| `{'params': {}, 'edge': 'soft'}` | split | one answer |
+| `rectangular`, `{'params': {}, 'edge': 'soft'}` | split | one answer |
+| `{'params': {'diameter': None}, 'edge': 'soft'}` | split | one answer |
+| control: `{'params': {'diameter': 5.3e-5}, 'edge': 'soft'}` | one answer | one answer |
+| **neutrality control**: `{'edge': 'hard'}`, no `params` | **no route raises**, digest `2450777df7f6127a` x3 | **no route raises**, `2450777df7f6127a` x3 |
+
+7 of 7 -> 0 of 7 on both builds, and the legal unresolvable element still takes
+the route it took before, bit for bit.  The jit signature cache is unaffected:
+`4` / `4.0` / `numpy.int64(4)` still give one digest (`f5b52cf0842fd9bd`) and
+`1` / `1.0` another (`be29d4edc8ba78fc`), the two differing.
+
+### R6, the decision
+
+The verifier asked, with the measurement rather than an opinion, whether the
+in-library call at `wrapper_merits.py:492` -- the only one of the three that
+forwards `ctx.prescription['aperture_diameter']` without `float()`-ing it --
+should weight by a grey mask instead of casting it, "a merit that overshoots by
+8.9e-3 of power is a wrong answer".
+
+**Decision: no edit.**  It cannot overshoot, because an ndarray cannot reach
+that line.  `MultiWavelengthMerit.evaluate` calls
+`surfaces_from_prescription(ctx.prescription)` at the TOP of its per-wavelength
+loop -- before `:492`, and outside the `try` that wraps `system_abcd` -- and
+that call runs `validate_prescription`.  Measured
+(`probe_r6_wrapper_merits_reachability.py`, identical on both builds, on a
+valid `la.make_singlet` prescription whose only varying element is the TYPE of
+`aperture_diameter`):
+
+| arm | `surfaces_from_prescription` | `_get_wrapper_merit_cache` |
+|---|---|---|
+| scalar `float(D)` (control) | **OK**, 2 surfaces | bool ndarray mask |
+| ndarray, hard mask | **`ValueError: validate_prescription: aperture_diameter: must be a number`** | (never reached from `evaluate`) |
+| ndarray, grey mask | **same `ValueError`** | (never reached from `evaluate`) |
+
+So the array branch at `:266` is reachable only by calling the PRIVATE
+`_get_wrapper_merit_cache` directly with an array -- a caller's choice, not the
+library's.  Weighting there would redefine a payload its own docstring
+documents as a *boolean* aperture mask, for every other consumer, in order to
+fix an answer the library cannot produce.  What the exposure earns is the
+Migration row and the CHANGELOG sentence, which is what R6 asked for first.
+
+The decision is pinned, not merely argued:
+`test_verify_c1r2_the_wrapper_merit_array_branch_is_out_of_the_librarys_reach`
+asserts the premise from both sides (the scalar arm PASSES the validator; the
+array arm raises, and the message names the key) and measures the cost that
+would be paid if it stopped holding (the cast overshoots the weighted grey mask
+by 9.88e-03 of integrated power on that fixture, against a 1e-3 bar).
+
+### Neutrality -- did round 3 move any LEGAL answer?
+
+`validation/probe_wpc1_round3/probe_round3_moved_nothing.py` (the verifier's
+23-fixture family plus four that exercise the round-3 edits: a legal rim on an
+unresolvable element through all three chain routes, and a `numpy.str_` edge)
+digested from inside `git archive 0a80e4a2` and from inside the round-3 tree,
+each run from inside itself:
+
+| comparison | Windows | WSL |
+|---|---|---|
+| `0a80e4a2` vs round 3, **27** legal fixtures | **0 moved** | **0 moved** |
+
+(The round-2 copy of this probe recorded only `chain_jit_` in its exception
+handler, so a failure in the eager call -- which runs second -- silently dropped
+`chain_eager_` and turned a 23-fixture comparison into a 22-fixture one on this
+box.  The round-3 copy records both keys with the message.)
+
+### The commits
+
+| sha | item |
+|---|---|
+| `c32ebc8a` | R1 -- the rim is read before the params gate |
+| `2e8408c7` | R2 -- a bool `edge_samples` is refused by type |
+| `6cc3cb95` | R3 -- the `int()` refusal family names the library |
+| `a2caf3e1` | R4 -- the ratio bar's derivation says what the data does |
+| `0f2cf471` | R5 -- the hard arm's rise is common; its steps are not bounded by one |
+| `f37af93a` | R6 -- the boolean-cast Migration row, and the decision |
+| `2ef80b80` | R7 -- the peak-memory comment states the build-free claim |
+| `f56f0264` | R8 -- one codegen recipe per style, and the scripts are RUN |
+| `516fadff` | the two recorded-not-filed items |
+
+### What round 3 could not measure
+
+* **CuPy under WSL** -- still absent; the CuPy arm is Windows-only.  The rim
+  keywords are refused in pure Python before any array work, but that is
+  reasoning, not a measurement.
+* **A GPU device for the JAX arm.**  Both builds' JAX runs are on the CPU
+  backend.  R1's hoist is a pure-Python control-flow change that runs before any
+  device work; again, reasoning.
+* **The whole 14 666-id unit suite.**  What was run is the gate sweep described
+  below, the C1 files, `test_audit2609_a8_verify.py` and the durations gate.  A
+  release gate needs the full matrix.
+* **Whether any EXTERNAL caller passes an `apply_aperture` result into a
+  boolean-casting consumer.**  R6 measures what happens when one does, and this
+  round measures that the LIBRARY cannot; how many external callers do is still
+  unmeasurable from here.
+* **`Migration-Guide.md` still has no 5.48.0 section.**  Still nobody's scope.
+* **Whether the 5 %-of-pixels bar in `test_audit_misc.py` should be tightened.**
+  Unchanged at 1.1719 % with 4.2667x of slack; B1-1's decision.

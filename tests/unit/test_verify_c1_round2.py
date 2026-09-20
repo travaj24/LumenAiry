@@ -62,8 +62,52 @@ below is an integer count over ``n_sub**2`` with no BLAS in it and read
 BYTE-IDENTICAL on the two builds; the two ladder readings agree to every
 printed digit.
 
-Runtime: whole file ~20 s on the reference box; the slowest id is the
-third-optic ladder at ~4 s.  No test is ``slow``.
+Runtime: whole file ~20 s on the reference box; the slowest ids are the
+third-optic ladder (~4 s) and the codegen execution id (~8 s, four
+subprocesses).  No test is ``slow``.
+
+CLOSED by WP-C1 ROUND 3 (``feat/c1-gray-edge-round3``, 2026-09-20), every item
+re-measured on both builds:
+
+  R1  ``_aperture_edge_kwargs(elem)`` is hoisted ABOVE the
+      ``_resolve_aperture_params`` gate in ``_system_element_signature`` and in
+      the JAX slow path.  Element shapes that split across the three chain
+      routes: 7 of 7 -> 0 of 7, both builds.  The five strict xfails below are
+      gone and their ids PASS; their positive twin, which asserted the split,
+      is restated as
+      ``..._the_unresolvable_rim_refusal_is_one_answer_and_neutral``.
+  R2  ``_validate_edge_kwargs`` refuses a ``bool`` / ``numpy.bool_`` by TYPE.
+      ``edge_samples=True`` was accepted as 1; it now raises, and
+      ``numpy.int64(4)`` is still legal.  The census in
+      ``test_c1_gray_edge_default.py`` gains ``edge_samples_bool_true`` and
+      ``edge_samples_numpy_bool_true``.
+  R3  the ``int()`` failure is caught and re-raised as the same ``ValueError``
+      the exact-integer branch uses, so every rim refusal names
+      ``apply_aperture`` and ``edge_samples``.  The three strict xfails are
+      gone and their ids PASS; the census gains ``edge_samples_none``.
+  R4  the "Bars" paragraph of ``test_audit2609_a8_verify.py``'s ratio id now
+      derives the bar from the SIGNED errors and says the ratio is not
+      monotone in the rim width.  The bar (1.5) is unchanged.
+  R5  ``Migration-Guide.md``, ``apply_aperture``'s docstring and the CHANGELOG
+      restate the rise as common and "first order at best" as a ladder
+      AVERAGE, with all three optics' numbers.
+  R6  a Migration row and a CHANGELOG sentence for the boolean-cast consumers.
+      DECIDED, measured: ``wrapper_merits.py:492`` is NOT changed to weight by
+      the mask, because ``surfaces_from_prescription`` -- called on the same
+      prescription earlier in the same loop iteration -- refuses a non-numeric
+      ``aperture_diameter``, so the array branch at ``:266`` is out of the
+      library's own reach.  Pinned by
+      ``..._the_wrapper_merit_array_branch_is_out_of_the_librarys_reach``.
+  R7  the grey branch's peak-memory comment states the build-free claims (a
+      ~1-grid delta, independent of ``n_sub``) with both builds' readings and
+      the first-call trap.
+  R8  the Migration table has one codegen row per style, and
+      ``..._both_codegen_styles_reproduce_the_hard_rim_when_executed`` RUNS the
+      generated scripts.
+
+Neutrality: 27 legal fixtures digested from inside ``git archive 0a80e4a2`` and
+from inside the round-3 tree -- 0 moved on Windows, 0 moved on WSL
+(``validation/probe_wpc1_round3/probe_round3_moved_nothing.py``).
 """
 import gc
 import shutil
