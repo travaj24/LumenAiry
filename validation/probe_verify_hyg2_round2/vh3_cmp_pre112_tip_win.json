@@ -1,0 +1,57 @@
+{
+ "a": {
+  "file": "C:/tmp/vh3arch/pre112_win.json",
+  "lumenairy_file": "C:\\tmp\\vh3arch\\pre112\\lumenairy\\__init__.py",
+  "numpy": "2.4.4",
+  "platform": "win32",
+  "python": "3.14.6"
+ },
+ "b": {
+  "file": "C:/tmp/vh3arch/tip_win.json",
+  "lumenairy_file": "C:\\tmp\\lum_vhyg3\\lumenairy\\__init__.py",
+  "numpy": "2.4.4",
+  "platform": "win32",
+  "python": "3.14.6"
+ },
+ "diff_by_prefix": {
+  "A": [
+   0,
+   119
+  ],
+  "B": [
+   0,
+   53
+  ],
+  "C": [
+   0,
+   29
+  ],
+  "D": [
+   0,
+   27
+  ],
+  "E": [
+   0,
+   44
+  ],
+  "F": [
+   0,
+   22
+  ],
+  "G": [
+   0,
+   12
+  ],
+  "H": [
+   0,
+   36
+  ]
+ },
+ "diff_keys": [],
+ "kind_flips": [],
+ "n_common": 342,
+ "n_diff": 0,
+ "n_same": 342,
+ "only_in_a": [],
+ "only_in_b": []
+}

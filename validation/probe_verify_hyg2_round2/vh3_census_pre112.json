@@ -1,0 +1,125 @@
+{
+ "assignment_forms": {},
+ "call_site_expressions": {
+  "_collins_exact_kernel_correction": {
+   "forms": [],
+   "n_calls": 0
+  },
+  "_exact_envelope_tf_step": {
+   "forms": [],
+   "n_calls": 0
+  },
+  "_exact_tf_2d_xp": {
+   "forms": [],
+   "n_calls": 0
+  }
+ },
+ "kernel_callers": [],
+ "n_functions_walked": 4523,
+ "root": "C:\\tmp\\vh3arch\\pre112",
+ "structural": [
+  {
+   "expressions": [
+    "k * k - kx_sq[None, :]"
+   ],
+   "function": "through_focus_scan",
+   "module": "lumenairy/analysis/through_focus.py"
+  },
+  {
+   "expressions": [
+    "k * k - kx * kx"
+   ],
+   "function": "_build_through_focus_scan_jax_kernel",
+   "module": "lumenairy/analysis/through_focus.py"
+  },
+  {
+   "expressions": [
+    "k * k - (2 * jnp.pi * FX) ** 2"
+   ],
+   "function": "_asm_jax",
+   "module": "lumenairy/optimize/jax_merits.py"
+  },
+  {
+   "expressions": [
+    "k ** 2 - kx_sq[None, :]"
+   ],
+   "function": "_build_asm_H_square",
+   "module": "lumenairy/propagators/asm.py"
+  },
+  {
+   "expressions": [
+    "k ** 2 - kx_sq[None, :]"
+   ],
+   "function": "_get_asm_H_natural",
+   "module": "lumenairy/propagators/asm.py"
+  },
+  {
+   "expressions": [
+    "k ** 2 - kx_sq[None, :]"
+   ],
+   "function": "_asm_apply_H_streamed",
+   "module": "lumenairy/propagators/asm.py"
+  },
+  {
+   "expressions": [
+    "k ** 2 - kx ** 2"
+   ],
+   "function": "angular_spectrum_propagate_tilted",
+   "module": "lumenairy/propagators/asm.py"
+  },
+  {
+   "expressions": [
+    "k * k - (ax * ax + ay * ay)"
+   ],
+   "function": "_exact_tf_2d_xp",
+   "module": "lumenairy/propagators/carrier.py"
+  },
+  {
+   "expressions": [
+    "k * k - (ax * ax + ay * ay)",
+    "np.subtract(k * k, phase, out=phase)"
+   ],
+   "function": "_exact_envelope_tf_step",
+   "module": "lumenairy/propagators/carrier.py"
+  },
+  {
+   "expressions": [
+    "k * k - (ax * ax + ay * ay)"
+   ],
+   "function": "_collins_exact_kernel_correction",
+   "module": "lumenairy/propagators/carrier.py"
+  },
+  {
+   "expressions": [
+    "k * k - kx_sq"
+   ],
+   "function": "_asm_axis",
+   "module": "lumenairy/propagators/carrier.py"
+  },
+  {
+   "expressions": [
+    "k * k - kx_sq[None, :]"
+   ],
+   "function": "angular_spectrum_propagate_mft",
+   "module": "lumenairy/propagators/mft.py"
+  }
+ ],
+ "tokens": {
+  "ax * ax + ay * ay": [
+   "lumenairy/propagators/carrier.py::_collins_exact_kernel_correction",
+   "lumenairy/propagators/carrier.py::_exact_envelope_tf_step",
+   "lumenairy/propagators/carrier.py::_exact_tf_2d_xp",
+   "lumenairy/propagators/vectorial_hfpi.py::_rigid_rotate"
+  ],
+  "root0": [
+   "lumenairy/propagators/carrier.py::_collins_exact_kernel_correction",
+   "lumenairy/propagators/carrier.py::_exact_envelope_tf_step",
+   "lumenairy/propagators/carrier.py::_exact_tf_2d_xp"
+  ],
+  "s2 < 1.0": [
+   "lumenairy/propagators/carrier.py::_collins_exact_kernel_correction",
+   "lumenairy/propagators/carrier.py::_exact_envelope_tf_step",
+   "lumenairy/propagators/carrier.py::_exact_tf_2d_xp"
+  ]
+ }
+}
