@@ -771,8 +771,51 @@ refusal or an aliased answer.
 
 Every command prefixed with
 `OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1`, `--capture=sys`,
-`-p no:randomly`, one process at a time.  Counts and tails are in the
-hand-back report; the reproducible list is:
+`-p no:randomly`, one process at a time.
+
+### The counts
+
+| run | build | result |
+|---|---|---|
+| the blast set (54 files + this package's own), 1875 ids | WIN-py3.14 | **1 failed, 1870 passed, 4 skipped** in 48:36 -- and the one failure was STALE, see below |
+| the same, `b4` excluded (it is run per class here) | WSL-py3.12 | **2 failed, 1738 passed, 5 skipped** in 1:09:39 -- both failures STALE, see below |
+| `test_audit2609_b4_collins_transport.py`, whole file | WIN-py3.14 | **130 passed** in 5:32 |
+| the same, ONE CLASS AT A TIME | WSL-py3.12 | **128 passed** over 15 classes; `TestGateCTwoGroupChain` (2 ids) is the documented pre-existing WSL staller and did not complete |
+| `tests/unit/test_c3_collins_default.py` | both | **26 passed** (11.6 s WIN, 24.9 s WSL) |
+| the census / walker / dispatcher-pin / public-API / doc-consistency sweep, plus `test_audit_except_budget.py` and `test_ci_kernel_consistency.py` | WIN-py3.14 | **647 passed, 14 skipped** in 1:24 |
+| the same | WSL-py3.12 | **4 failed, 643 passed, 14 skipped** in 1:16 -- all four are section 4.4's pre-existing reds |
+| `test_niche_d5_dx_flatness_gate.py`, whole file, after the memo fix | WIN-py3.14 | **13 passed** in 5:17 |
+| `test_niche_d3_guards.py`, whole file | WIN-py3.14 | **41 passed** in 5:09 |
+| `test_niche_d3_guards.py` + `test_niche_d5_dx_flatness_gate.py` | WSL-py3.12 | **54 passed** in 12:22 |
+| `test_niche_d2_chain_multi.py`, whole file | WIN-py3.14 | **38 passed** in 15:24 |
+| `test_niche_d4_dgrating.py`, whole file | WIN-py3.14 | **59 passed** in 8:01 |
+| `test_niche_exact_gap_kernel.py`, whole file | WIN-py3.14 | **123 passed, 1 skipped** in 1:04 |
+
+**THE THREE STALE FAILURES, and what they cost to find.**  The big runs take
+48 to 70 minutes; two fixes landed while they were in flight, so their
+collected copies of `test_niche_d5_dx_flatness_gate.py` and
+`test_niche_d3_guards.py` predated those fixes.  Both files are green whole
+on both builds afterwards, and the counts above say which run is which.
+
+The d5 one was NOT only staleness, and that is the finding: re-running it
+standalone passed while the suite failed with the pre-change number to the
+last digit.  The cause is in section 4.2 -- a memo key that ignored the
+configuration -- and it is fixed in the same branch.
+
+### The gates
+
+| gate | result |
+|---|---|
+| `ruff check lumenairy/ tests/` (WSL, the CI invocation) | All checks passed |
+| `ruff check .` (WSL, whole repo under the project config) | All checks passed |
+| `python -m mypy` (no args) | Success: no issues found in 33 source files |
+| `scripts/record_history_fingerprints.py --check` | green over 124 modules; `carrier.md` re-recorded TWICE, each with its reason |
+| `scripts/reanchor_citations.py --base f4f18851 --block "[5.47.0]" --check` | 0 re-anchored |
+| `.test_durations` | unmodified and valid JSON; `test_audit2609_a15a_durations_staleness.py` 4 passed |
+
+### The commands
+
+
 
 ```
 # the blast set, both builds (WSL runs the b4 file ONE CLASS AT A TIME --
