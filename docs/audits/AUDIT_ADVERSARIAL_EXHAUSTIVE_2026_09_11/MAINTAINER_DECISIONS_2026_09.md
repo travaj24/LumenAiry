@@ -502,7 +502,7 @@ worker; that is a policy decision.  Nothing implementing it ships; the
 prototype lives in the probe behind a switch defaulting off.  Windows could
 not be measured (the `sigign` wedge is POSIX-only by construction).
 
-### 4.5 MEASURED, verification in flight: the multibranch arbiter's bar and the accept criterion (WP-B7c round 3)
+### 4.5 MEASURED and verified: the multibranch arbiter's bar and the accept criterion (WP-B7c round 3, VERIFY-WP-B7c round 3)
 
 What it is.  The multibranch traced lens renders its field twice, at the
 caller's pitch and at half of it, and refuses the field when the ratio of the
@@ -540,9 +540,18 @@ fold planes the converged reading spreads 36x more than on control planes.
 Bit identity archive to archive over 157 cases on 17 optics: 116 identical,
 0 moved, 41 refused on both.
 
-Decision owed 1: the accept criterion.  Recommendation (medium confidence):
-fidelity 0.95 against the exact-quadrature oracle, and keep the bar at 1.06
-(1 false refusal, 2 misses over 394 fold-ring planes).
+Decision owed 1: the accept criterion.  Recommendation (medium confidence,
+now on two independent populations): fidelity 0.95 against the
+exact-quadrature oracle, and keep the bar at 1.06, justified by the COST table
+only.  The independent verification (its own oracle, 1141 planes, 661 on the
+fold ring, four new optics) reads the same knee: 1.06 costs 1 false refusal and
+2 misses; 1.04 costs 5 and 2; 1.08 costs 1 and 4.  Neither geometric argument
+for the value survives: the margin is a reading of the ladder (the crossing
+is a JUMP, an integer branch count going 2 to 9 across 3 picometres, so no
+margin exists at any density), and the derived centre reads 1.057 over all
+planes but 1.054 on the fold ring against round 3's 1.062.  Caveat: at 0.95
+the criterion RETURNS the NA-0.41 plano-convex's entire fold ring at 0.93 to
+0.96 fidelity carrying 1.22x to 1.26x the oracle's energy.
 
 Decision owed 2: whether a LOSS arm should refuse on the FALLBACK route.  On
 the 476 fallback-route planes the shipped bars return, 263 score below 0.95;
@@ -553,10 +562,17 @@ them on the new asphere at its non-monotone focal locus.  The physical
 argument for not refusing on a loss (the completion replaces the dark side)
 is false exactly on the fallback route.  Round 3 shipped the scope of the
 reading as a three-value enum in the diagnostics and did not change any
-refusal.  Recommendation (medium confidence): yes, on the fallback route
-only, using the existing continuity-loss reading; a verification of round 3
-is measuring whether any fallback plane exists where that arm would refuse a
-right field.
+refusal.  Recommendation (REVISED by the independent verification, medium
+confidence): NO -- report, do not refuse.  The zero-false-alarm property
+survives (over 350 returned fallback planes the two loss arms flag 11 and 16,
+every one wrong), but the SENSITIVITY does not: on the verifier's population
+they catch 11 to 16 of 50 wrong planes, not 192 of 263, and the 23 planes
+nothing sees include the worst field in the study (oracle fidelity 0.29 with
+a continuity reading of 0.999 and a launched-power bracket of 0.9999, on the
+slow control 216 um short of focus).  The union that would be sensitive
+refuses 22 right fields, the best at 0.984.  A refusal that catches a tenth
+of the wrong fields and none of the worst is a false assurance; the scope
+enum already tells the caller the field is unarbitrated on that route.
 
 ## 5. Not decisions, recorded here so the ledger closes
 
