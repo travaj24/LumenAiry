@@ -7,11 +7,12 @@ migration recipe -- "I bumped from v4.X to v4.Y, what do I change?".
 
 ## Versions covered
 
-v4.13 through v5.47.  Sections are in version order; the newest is
-[5.47.0 -- adversarial audit remediation, Wave 4 (2026-09-14)](#5470----adversarial-audit-remediation-wave-4-2026-09-14)
-at the end of this file; the 5.46.0 section before it is the largest single
-batch of behaviour changes the library has shipped, and 5.47.0 is the wave that
-implemented what it deferred.
+v4.13 through v5.49.  Sections are in version order; the newest is
+[5.49.0 -- `apply_aperture(edge='gray')` is the default (2026-09-20)](#5490----apply_apertureedgegray-is-the-default-2026-09-20)
+at the end of this file; the 5.46.0 section is the largest single batch of
+behaviour changes the library has shipped, 5.47.0 is the wave that implemented
+what it deferred, and 5.49.0 is the first of the numerical DEFAULTS the
+2026-09-11 audit measured and left for the maintainer to rule on.
 
 Only behavior shifts that **require user code changes** or **change
 numerical answers** are listed.  Pure additions (new functions, new
@@ -1774,3 +1775,86 @@ no-op on the fixed polynomial space; the wall-corner cure is the hp mesh), Levin
 the RCWA Toeplitz inverses (12 to 20 times slower and two decades less accurate than the
 shipped inverse), the chessboard FFT-shift identity (bit-identical only on power-of-two
 grids).
+
+
+---
+
+## 5.49.0 -- `apply_aperture(edge='gray')` is the default (2026-09-20)
+
+A circular aperture on a square grid is a staircase.  `apply_aperture`'s `edge`
+keyword chooses how that rim is rendered: `'hard'` sets each pixel wholly inside
+or wholly outside (the transmitted area is quantised to whole pixels), `'gray'`
+gives each boundary pixel its `edge_samples**2`-supersampled open-area fraction.
+**The default moved from `'hard'` to `'gray'` in 5.49.0.**
+
+### Why
+
+It buys a convergence RATE, not a constant.  Against the closed-form on-axis
+field behind a circular aperture (lambda = 633 nm, a = 100 um, window 512 um),
+on both of the library's spatial kernels, the hard rim's error does not even
+shrink monotonically -- it RISES 54 % from N = 512 to N = 1024 on the
+Rayleigh-Sommerfeld spatial kernel and 53 % on the Huygens-Fresnel OPL
+quadrature -- while the grey rim is second order and is 21.1x (RS) and 8.3x (HF)
+more accurate at N = 1024.  The full ladders are in the CHANGELOG entry and in
+`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/WP-C1_GRAY_EDGE_REPORT.md`.
+The extra work is confined to the boundary pixels: 0.076x of one full-grid pass
+at N = 256 and 0.018x at N = 1024.
+
+### What moves
+
+Everything that renders a sharp-edged stop and does not name `edge=`.  Relative
+L2 of the move on a propagated field: **7.678e-03 at N = 256, 2.930e-03 at 512,
+1.237e-03 at 1024** (worst pixel 3.660e-03 / 1.251e-03 / 5.434e-04).
+
+| entry point | exposes `edge=`? | the way back |
+|---|---|---|
+| `apply_aperture` | yes | `edge='hard'` |
+| `apply_lyot_stop` | no | `apply_aperture(..., shape='annular', edge='hard')` |
+| `lumenairy.algebra.Aperture` (operator) | no | `apply_aperture(..., edge='hard')` |
+| `JonesField.apply_aperture` | no | `apply_aperture(...,  edge='hard')` on `Ex` and `Ey` |
+| `propagate_through_system`, `{'type': 'aperture'}` element | yes, NEW in 5.49.0 | `{'edge': 'hard'}` in the element dict |
+| `propagate_through_system_jax`, same element (both routes) | yes, NEW in 5.49.0 | `{'edge': 'hard'}` in the element dict |
+| a script emitted by `lumenairy.io.codegen` for a STOP surface | it emits no keyword | edit the generated `la.apply_aperture(...)` call, or re-pin |
+
+Every propagator downstream is itself unchanged -- `rayleigh_sommerfeld_propagate`,
+the `propagate_huygens_fresnel_*` family, the ASM legs, GBD, the analytic and
+traced lenses.  They move only because their INPUT moved, and are byte-identical
+on an input that did not.  So are `apply_gaussian_aperture`,
+`apply_apodized_pupil` and the thin lens's and mirror's own `aperture_diameter`
+masks, which are different masks and were never `apply_aperture`.
+
+### Recipe
+
+```python
+# Pre-5.49 answer, bit for bit -- nothing else about the mask changed.
+E = la.apply_aperture(E, dx, shape='circular', params={'diameter': D},
+                      edge='hard')
+
+# Same, inside a chain (NumPy or JAX):
+elements = [{'type': 'aperture', 'shape': 'circular',
+             'params': {'diameter': D}, 'edge': 'hard'}]
+
+# Keep the new default and re-record the pin instead (recommended -- the
+# grey rim is the one with a convergence order):
+E = la.apply_aperture(E, dx, shape='circular', params={'diameter': D})
+```
+
+`edge_samples` did NOT move: it stays at 4, which is the measured knee (2 -> 4
+still gains 2.04x on the RS ladder at N = 512; 4 -> 8 gains nothing).
+`edge_samples=1` is exactly the pre-5.49 pixel-centre indicator, so it is a
+second spelling of the way back -- but `edge='hard'` is the one to use, since it
+skips the sub-sampling loop entirely.
+
+### Also in 5.49.0: one aperture implementation behind both backends
+
+`propagate_through_system_jax` carried its own copy of the pixel-centre
+indicator; both its routes (the jit'd kernel and the `verbose=True` slow path)
+now call `apply_aperture`, so one element dict gets one answer on either
+backend.  **If you compared the two backends and relied on the JAX slow path's
+output bytes, they changed independently of the default move**: that path
+multiplied by a boolean mask, so a blocked pixel came back as a SIGNED zero
+(2652 negative-zero real parts and 2762 negative-zero imaginary parts on one
+128 x 128 fixture at 5.48.1), disagreeing with its own jit'd kernel and with the
+NumPy chain, and it left a non-finite field non-finite outside the stop.  Both
+routes now select rather than scale.  There is no way back to the signed zeros,
+and no reason to want one.

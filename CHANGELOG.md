@@ -4,6 +4,107 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+### Changed -- `apply_aperture(edge='gray')` is the default: the rim is rendered by pixel AREA, which is the only edge treatment with a convergence order (WP-C1)
+
+A circular aperture on a square grid is a staircase.  Through v5.48.1 the default
+`edge='hard'` set each pixel wholly inside or wholly outside, which quantises the
+transmitted area to whole pixels; `edge='gray'` gives each boundary pixel its
+`edge_samples**2`-supersampled open-area fraction instead.  **From this release
+`'gray'` is the default.**  The ruling is the maintainer's, recorded in
+`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/MAINTAINER_DECISIONS_2026_09.md`
+section 1.1 on the measurement in `fixes/WP-B11_REPORT.md` section 2.9; WP-C1
+re-measured it on an independent build of the probe before flipping anything and
+reproduced all sixteen of that table's entries to the last digit.
+
+**What it buys is a RATE, not a constant.**  On-axis relative error against the
+closed form `U = e^{ikz} - (z/r_a) e^{ik r_a}` (lambda = 633 nm, a = 100 um,
+window 512 um), on both spatial kernels, at N = 128 / 256 / 512 / 1024:
+
+| N | RS spatial, hard | RS spatial, gray | HF quadrature, hard | HF quadrature, gray |
+|---|---|---|---|---|
+| 128 | 8.3008e-03 | 1.4847e-03 | 2.7708e-02 | 1.4438e-02 |
+| 256 | 3.3548e-03 | 3.6098e-04 | 1.1120e-02 | 3.4928e-03 |
+| 512 | 3.4207e-04 | 8.1013e-05 | 1.1509e-03 | 8.5680e-04 |
+| 1024 | **5.2718e-04** | 2.5030e-05 | **1.7601e-03** | 2.1122e-04 |
+| order | 1.31 / 3.29 / **-0.62** | 2.04 / 2.16 / 1.69 | 1.32 / 3.27 / **-0.61** | 2.05 / 2.03 / 2.02 |
+
+The hard arm's error RISES on the last refinement (by 54 % on RS and 53 % on HF)
+-- a circle's staircase area error does not shrink monotonically, so that arm has
+no usable order at all -- while the grey arm falls at every step and by 59.3x (RS)
+and 68.4x (HF) over the three halvings.  The gain at the finest grid is 21.1x and
+8.3x.  Both builds (Windows py3.14 / scipy-openblas, WSL py3.12 / scipy-openblas)
+read every entry above to five significant figures.
+
+`edge_samples` stays at 4, which is the knee and is now pinned as one: on the RS
+ladder at N = 512 the readings are 3.4207e-04 / 1.6563e-04 / **8.1013e-05** /
+8.3954e-05 / 8.3959e-05 at 1 / 2 / 4 / 8 / 16 -- going 2 -> 4 still gains 2.04x
+and going 4 -> 8 gains nothing (it is 3.5 % worse, because past the knee the
+residual is the propagator's, not the mask's).  `edge_samples=1` IS the
+pixel-centre indicator, bit for bit.  The extra work is confined to the boundary
+pixels: 312 of them at N = 256 (0.476 % of the grid) and 1196 at N = 1024
+(0.114 %), i.e. 0.076x and 0.018x of one full-grid pass.
+
+### Changed -- the `'aperture'` element of `propagate_through_system` and its JAX twin share ONE implementation, one default and one way back (WP-C1)
+
+The JAX kernel carried its own copy of the pixel-centre indicator.  After the flip
+above that copy would have answered the same element dict differently from the
+NumPy chain, under a cross-backend test whose bar (5 % of pixels) is far too loose
+to see a rim.  Both JAX routes -- the jit'd kernel and the `verbose=True` slow
+path -- now call `apply_aperture`; both backends read a new optional `'edge'` /
+`'edge_samples'` element key; and both take the same default when the element
+names neither.  Measured after the change: the NumPy chain, the jit'd JAX kernel
+and the eager JAX path are byte-identical to each other on both arms.
+
+That consolidation also removes a defect that PREDATES this release.  The JAX slow
+path multiplied by a boolean mask (`E * mask.astype(E.dtype)`), so a blocked pixel
+came back as a SIGNED zero -- measured at the parent commit, 2652 negative-zero
+real parts and 2762 negative-zero imaginary parts on one 128 x 128 fixture --
+where the jit'd kernel (XLA rewrites the product into a select) and the NumPy
+chain both returned `+0.0`.  The same multiply left a non-finite field non-finite
+outside the stop, which is the defect VERIFY-A8 fixed on the NumPy path and which
+had never reached here.  Both routes now select rather than scale.  A sign bit on
+a zero is not cosmetic: it flips `atan2`, the complex `sqrt` branch and `1/x`, and
+`0.0 * nan` is `nan`, which the next FFT smears over the whole plane.
+
+**Migration.**  **The returned field moves, at the 1e-3 level in relative L2
+(7.678e-03 at N = 256, 2.930e-03 at 512, 1.237e-03 at 1024; worst pixel 3.660e-03
+/ 1.251e-03 / 5.434e-04), for every public entry point that renders a sharp-edged
+stop and does not name `edge=`:** `apply_aperture` itself; `apply_lyot_stop`
+(which exposes no `edge` of its own); the `Aperture` operator in
+`lumenairy.algebra`; `JonesField.apply_aperture`; an `{'type': 'aperture'}`
+element in `propagate_through_system` and in `propagate_through_system_jax` (both
+its jit'd and its slow route); and a script emitted by `lumenairy.io.codegen` for
+a STOP surface, which calls `la.apply_aperture` without the keyword and so tracks
+the library default at run time.  Every propagator downstream of one of those --
+`rayleigh_sommerfeld_propagate`, the `propagate_huygens_fresnel_*` family, the ASM
+legs, GBD -- is itself unchanged: it moves only because its INPUT moved, and is
+byte-identical on an input that did not.  **The way back is one keyword:
+`edge='hard'`, which reproduces the pre-5.49 answer BIT FOR BIT**, proved
+archive-to-archive against a `git archive` of the parent commit (14 of 15
+aperture fixtures identical on Windows, 13 of 14 on WSL; the single exception is
+the JAX slow path's signed zeros described above, which this release fixes and
+which already disagreed with its own fast path at the parent commit).  For the
+entry points with no `edge` parameter, call `apply_aperture(..., edge='hard')`
+directly (`apply_lyot_stop`, the `Aperture` operator, `JonesField.apply_aperture`)
+or add `'edge': 'hard'` to the element dict (either chain).  A caller who pinned a
+hard-aperture digest and wants the new answer re-records it; a caller who wants
+the old number adds the keyword.  Non-aperture answers do not move: 16 of 16
+non-aperture fixtures are byte-identical with no keyword at all, on both builds,
+including `apply_gaussian_aperture`, `apply_apodized_pupil`, the thin lens's and
+the mirror's own aperture masks, the ASM / RS-transfer / HF-freespace
+propagators, RCWA, PMM and the analytic lens.
+
+Pinned by `tests/unit/test_c1_gray_edge_default.py` (17 tests, none slow),
+including a mutation matrix in which the default reverting to `'hard'`,
+`edge_samples` moving off the knee, and a wrong grey boundary fraction (a
+sub-sample lattice anchored on the cell corners instead of centred on the pixel)
+are each caught by a named test.  Four existing tests moved and are re-pinned
+against their own oracles, none by loosening a bar; two more had silently become
+tautologies (their hard arm was the unnamed default) and now name it.  The probes
+and their JSON, on both builds, are in `validation/probe_c1_gray_edge/`; the
+report is
+`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/WP-C1_GRAY_EDGE_REPORT.md`.
+
 ## [5.48.1] — 2026-09-20
 
 The publish verification of the `v5.48.0` tag stopped in its slow lane, so 5.48.0
