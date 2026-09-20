@@ -245,7 +245,7 @@ over both JAX routes and both arms.
 ### 3.4 The wider sweep: four more reds, three of them WP-C1's own
 
 The 33-file blast-radius run is not the whole gate.  The census / walker /
-dispatcher-pin / public-API / doc-consistency sweep (61 files, 2764 ids) raised
+dispatcher-pin / public-API / doc-consistency sweep (61 files, 2768 ids) raised
 four more.  Each was premise-gated against the parent commit before being
 called a move.
 
@@ -410,9 +410,54 @@ Each row runs the named test's own check function against the mutant and asserts
 that it FAILS; a row that passed under mutation would mean the named test is not
 load-bearing.
 
+## 6. The final runs, both builds
+
+Every run with `OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1` on
+the command line, `-p no:randomly --capture=sys -q`, `PYTHONPATH` naming this
+worktree, on a tree with nothing uncommitted (a mid-run edit to `elements.py`
+made five source-READING pins red in an earlier pass; they are green on the
+settled tree, which is why the numbers below are from runs taken after the last
+commit, not during).
+
+| what | Windows py3.14 | WSL py3.12 |
+|---|---|---|
+| the 33 aperture-touching files, at the PARENT commit | **1394 passed** in 7:33 | -- |
+| the same 33 files, after the flip and before the re-pins | 4 failed, 1390 passed in 9:42 | -- |
+| the 61-file sweep (aperture set + census + walkers + dispatcher pins + public API + doc consistency + `test_audit_except_budget.py`), final | **1 failed, 2753 passed, 14 skipped** in 19:04 | **4 failed, 2743 passed, 21 skipped** in 28:40 |
+| `tests/unit/test_c1_gray_edge_default.py` alone | **17 passed** in 10.6 s | **17 passed** in 12.7 s |
+| `validation/elements/test_elements.py` | **31/31** | **31/31**, byte-identical readings |
+| `validation/elements/test_doe.py` | **16/16** | -- |
+| `validation/propagators/test_hfpi.py` | **12/12** | -- |
+| `validation/integration/test_integration.py` | **33/33** | -- |
+| `tests/unit/test_audit2609_a15a_durations_staleness.py` | **4 passed** in 1:18 | -- |
+| `ruff check lumenairy/ tests/ scripts/` (WSL) | -- | **All checks passed** |
+| `python -m mypy` (no args) | **Success: no issues found in 33 source files** | -- |
+| `python scripts/record_history_fingerprints.py --check` | **OK: every history document matches its module** (rc 0) | -- |
+
+**The five reds, all premise-gated, none a library finding.**
+
+* `test_public_api.py::test_installed_metadata_version_matches_source_version`
+  (both lanes).  The editable install in this box's site-packages carries
+  `5.47.0` metadata against a `5.48.1` source.  It fails identically on a clean
+  `git archive 49ddf4bd` extraction on this box, so it predates this work
+  package; the remedy is `pip install -e .`, which is the box's to do.
+* Three WSL-only walker ids --
+  `test_v5_3_2_walker_source_line_citation.py::test_v18_5_the_5_47_0_block_citations_name_the_right_lines`,
+  `::test_v18_5_companion_reanchor_tool_exists_and_covers_the_cited_files` and
+  `test_v5_2_3_walker_changelog_content.py::test_v16_synthetic_fabrication_is_caught`.
+  All three shell out to `git`, and from WSL this worktree's `.git` file points
+  at a Windows path (`D:/.../Lumenairy/.git/worktrees/lum_c1`) that `git` cannot
+  resolve under `/mnt/c`.  The suite RECOGNISES this condition and says so in
+  its own failure text: *"ENVIRONMENT, not a citation finding ... This is the
+  WSL-against-a-Windows-worktree condition that also makes
+  test_v16_synthetic_fabrication_is_caught red on that lane, on the base tree
+  too."*  All three are green on the Windows lane, where `git` resolves.
+
 ---
 
-## 6. What could not be measured
+---
+
+## 7. What could not be measured
 
 * **CuPy under WSL.**  Absent there.  The CuPy arm is measured on Windows only,
   and the probe records the absence in `unavailable` instead of skipping.
