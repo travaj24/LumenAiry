@@ -1,6 +1,6 @@
 """VERIFY-WAVE5-HYGIENE2 ROUND 2 -- the gates this verification found missing.
 
-Six ids, one per gap measured in
+Seven ids, one per gap measured in
 ``docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/
 VERIFY_WAVE5_HYGIENE2_ROUND2.md``.  Every bar here is derived at runtime from a
 quantity the running build measures, two-sided, and premise-gated; the probe
@@ -20,7 +20,8 @@ WHY EACH ONE EXISTS, in one line:
        consolidation removes the second COPY, not the unary minus), so the
        absence of one is asserted structurally as well as numerically;
 * D-4  the evanescent clamp is only reached at a sub-wavelength pitch, which
-       no shipped fixture uses;
+       no shipped fixture uses, and the evanescent REFUSAL beside it is
+       gated only by a token census;
 * D-5  the cross-backend bar is built on an FFT spread that reads EXACTLY 0.0
        on both builds, so what is actually asserted against is its floor;
 * D-6  ``_GAP_KERNEL_ACCURACY_TAU = None`` is asserted by reading the constant
@@ -246,6 +247,66 @@ def test_the_evanescent_clamp_is_reached_and_holds_at_a_sub_wavelength_pitch():
                 f"the envelope step returned NaN at dx = {dx_over_lam} lam, "
                 f"tilt {tilt}")
 
+
+
+def test_the_evanescent_carrier_refusal_is_gated_by_behaviour():
+    """``|s|^2 < 1`` must be a BEHAVIOUR, not a token the census greps for.
+
+    MEASURED 2026-09-20: weakening the guard to ``if not (s2 <= 1.0)`` -- so
+    the grazing ``|s| = 1`` direction is ACCEPTED instead of refused -- is
+    caught by exactly ONE id on each build, and on both it is
+    ``test_wave5_h2_collins_jax.py::test_the_exact_dispersion_is_written_once``
+    -- the single-definition census, which notices only because the literal
+    string ``s2 < 1.0`` is one of the three tokens it greps for.  No numerical
+    id notices that the refusal stopped refusing, and my 342-key byte-identity
+    probe sees it as exactly one kind flip.
+
+    A census is the wrong instrument for a behaviour.  Re-spell the guard as
+    ``if s2 >= 1.0: raise`` and the census fails while the behaviour is
+    correct; keep the token and change the comparison somewhere else and the
+    census passes while the behaviour is wrong.  This id asserts the two
+    decisions instead, and it asserts them at BOTH sides of the boundary.
+
+    ``N = sqrt(1 - |s|^2)`` divides the chief-ray term, so ``|s| = 1`` is a
+    division by zero and not merely an unphysical input; the refusal is what
+    keeps an infinity out of the kernel.
+    """
+    qx = 2.0 * np.pi * np.fft.fftfreq(16, d=2e-6)
+    qy = qx
+
+    # --- REFUSED: |s|^2 >= 1 -------------------------------------------
+    for tilt in ((1.0, 0.0), (0.0, -1.0), (0.6, 0.8), (0.8, 0.8), (2.0, 0.0)):
+        s2 = tilt[0] ** 2 + tilt[1] ** 2
+        assert s2 >= 1.0, f"PREMISE: tilt {tilt} has |s|^2 = {s2} < 1"
+        with pytest.raises(ValueError) as exc:
+            CA._exact_dispersion_phase(qx, qy, K, tilt, np, 'PROBE_NAME')
+        msg = str(exc.value)
+        assert 'PROBE_NAME' in msg, (
+            f"the refusal for tilt {tilt} does not name its caller: {msg!r}")
+
+    # --- ACCEPTED: just inside the boundary ----------------------------
+    # Engineered, not hoped for: take |s| one ULP below 1 along x.
+    near = float(np.nextafter(1.0, 0.0))
+    for tilt in ((near, 0.0), (0.0, -near), (0.9999999, 0.0)):
+        s2 = tilt[0] ** 2 + tilt[1] ** 2
+        assert s2 < 1.0, f"PREMISE: tilt {tilt} has |s|^2 = {s2} >= 1"
+        ph = np.asarray(CA._exact_dispersion_phase(
+            qx, qy, K, tilt, np, 'test_verify_hyg2_round2'))
+        assert np.all(np.isfinite(ph)), (
+            f"tilt {tilt} is INSIDE the propagating cone (|s|^2 = {s2!r} < 1) "
+            f"and the kernel returned a non-finite phase; the guard has "
+            f"started refusing -- or admitting -- the wrong side")
+
+    # --- and the two shipped phrasings are both reachable ---------------
+    msgs = {}
+    for fn in ('_exact_tf_2d_xp', '_exact_envelope_tf_step'):
+        with pytest.raises(ValueError) as exc:
+            CA._exact_dispersion_phase(qx, qy, K, (1.0, 0.0), np, fn)
+        msgs[fn] = str(exc.value)
+    assert msgs['_exact_tf_2d_xp'] != msgs['_exact_envelope_tf_step'], (
+        "the two shipped refusal phrasings have collapsed into one; both are "
+        "reproduced verbatim on purpose, because an archive-to-archive "
+        "byte-identity probe folds an exception's MESSAGE into its digest")
 
 # ===========================================================================
 # D-6.  "OFF" asserted by the rule not RUNNING

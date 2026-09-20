@@ -16592,5 +16592,6 @@
   "tests/unit/test_verify_hyg2_round2.py::test_the_evanescent_clamp_is_reached_and_holds_at_a_sub_wavelength_pitch": 0.004,
   "tests/unit/test_verify_hyg2_round2.py::test_the_accuracy_rule_is_never_executed_while_tau_is_none": 0.77,
   "tests/unit/test_verify_hyg2_round2.py::test_the_cross_backend_bar_is_not_built_on_a_quantity_that_reads_zero": 0.87,
-  "tests/unit/test_verify_hyg2_round2.py::test_a_phase_budget_reference_must_not_reduce_its_phase_like_the_route": 0.18
+  "tests/unit/test_verify_hyg2_round2.py::test_a_phase_budget_reference_must_not_reduce_its_phase_like_the_route": 0.18,
+  "tests/unit/test_verify_hyg2_round2.py::test_the_evanescent_carrier_refusal_is_gated_by_behaviour": 0.004
 }
