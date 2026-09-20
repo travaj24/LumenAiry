@@ -116,7 +116,7 @@ def _executed_edges() -> tuple:
                MKL_NUM_THREADS="1")
     env["PYTHONPATH"] = str(PKG.parent)
     out = subprocess.run([sys.executable, str(RECORDER), "lumenairy"],
-                         capture_output=True, text=True, env=env,
+                         stdin=subprocess.DEVNULL, capture_output=True, text=True, env=env,
                          cwd=str(PKG.parent))
     assert out.returncode == 0, (
         f"recorder failed:\n{out.stdout[-2000:]}\n{out.stderr[-4000:]}")

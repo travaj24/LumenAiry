@@ -1232,9 +1232,23 @@ class TestVerifyC5:
         assert f.wavelength == 1.60e-6              # still takes effect
         # the horizon must be ahead of the running library, via the shared
         # resolver rather than a literal
-        from lumenairy._deprecation import resolve_removal_version
-        assert (resolve_removal_version(CF._CARRIER_FIELD_FROZEN_IN)
-                == CF._CARRIER_FIELD_FROZEN_IN)
+        from lumenairy import __version__ as _running
+        from lumenairy._deprecation import (
+            NEXT_REMOVAL_VERSION, _version_tuple, resolve_removal_version)
+        # RESTATED 2026-09-20 (5.48.0): the first draft asserted the resolver
+        # returns the STATED horizon, which is only true while that horizon
+        # has not shipped.  The contract is: the live horizon is always after
+        # the running version; it equals the stated one until that ships,
+        # and NEXT_REMOVAL_VERSION (the recorded slip) from then on.  5.48.0
+        # shipped the stated '5.48' with the removal not executed, so the
+        # freeze now resolves to the slipped horizon.
+        _stated = CF._CARRIER_FIELD_FROZEN_IN
+        _live = resolve_removal_version(_stated)
+        assert _version_tuple(_live) > _version_tuple(_running), (
+            _stated, _live, _running)
+        _expected = (_stated if _version_tuple(_stated) > _version_tuple(_running)
+                     else NEXT_REMOVAL_VERSION)
+        assert _live == _expected, (_stated, _live, _expected, _running)
         # '_built' is a gate, not a field: it must not reach the dataclass API
         assert '_built' not in [fl.name for fl in dataclasses.fields(f)]
         assert '_built' not in repr(f)

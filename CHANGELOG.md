@@ -1683,6 +1683,43 @@ entry's stated version has shipped, its live version lies in the future, and a
 reachable `version_removed=` call site still advertises the stated version, so
 an entry whose call sites are gone (a completed removal) still fails.
 
+### Fixed -- CI, on the release commit: seven test and hygiene reds the first 5.48.0 matrix raised, none in a solver
+
+The first matrix on the 5.48.0 fold (run 35499375120) was red on 18 of 37 jobs;
+every red was a test or a CI-hygiene defect that the Wave 5 additions carried
+and that the local gates could not see, and each is fixed here without moving
+any answer:
+
+* **Two more state pins of the empty deprecation registry.**
+  `test_audit2609_a6_verify_carrier.py::TestVerifyC5::test_the_carrier_field_deprecation_cycle_is_complete`
+  asserted the resolver returns the STATED freeze horizon (true only while it
+  has not shipped) and `test_niche_audit_w5_shim_removals.py::test_no_removed_shim_leaves_a_live_horizon_behind`
+  asserted the registry empty; both are restated to the invariants they
+  protect (the live horizon is always after the running version and equals
+  the recorded slip once the stated one ships; nothing re-schedules the
+  abandoned v5.32 horizon; every key has shipped and every value lies ahead).
+* **A CPython internal pinned by one interpreter's spelling.**
+  `test_verify_b13_newton_pool.py::test_a_non_waiting_shutdown_still_blocks_on_a_terminating_executor`
+  patched `_ExecutorManagerThread._join_executor_internals`, which 3.10 and
+  3.11 spell without the underscore; the live name is resolved and asserted.
+* **A resource-conditioned premise read off the box.**
+  `test_verify_b13_newton_pool.py::test_a_pool_wider_than_the_clamp_runs_only_clamp_chunks_at_once`
+  requested an 8-wide pool, which the free-RAM pricing rule took to 2 on the
+  2-CPU / 7 GB runner, so the pool was never wider than the clamp; the wide
+  build now bypasses the pricing rule (the priced call still goes through the
+  real resolver, which is what the decision measures).
+* **Seven subprocess spawns inheriting stdin** (the shape that raises
+  `OSError [WinError 6]` under pytest fd-capture on Windows), in five Wave 5
+  test files, now pass `stdin=subprocess.DEVNULL`; the packaging gate
+  `test_every_subprocess_spawn_names_all_three_stdio_streams` is green.
+* **The lens-screen convention marker moved with WP-B11c** from the lenses
+  facade to the `_lens_kernels` leaf; `test_g08_s4_20_packaging_ui.py` reads it
+  from the module that carries it, and the one in-code cross-reference follows.
+* **mypy strict:** `NUMEXPR_AVAILABLE` is a LIVE forward through the lenses
+  facade (a read lands on the leaf's slot), which the type checker cannot see;
+  a `TYPE_CHECKING`-only import binds the name statically and executes never,
+  so the forward is unchanged at run time.
+
 ## [5.47.1] — 2026-09-15
 
 The publish verification of the `v5.47.0` tag (run 34939783790) stopped before the

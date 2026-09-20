@@ -789,7 +789,19 @@ class TestModernPathsAreWarningClean:
         """The registry must not still advertise the abandoned v5.32
         horizon for anything the W5 wave removed."""
         from lumenairy import _deprecation as dep
-        assert dep.REMOVAL_SCHEDULE == {}, dep.REMOVAL_SCHEDULE
+        from lumenairy import __version__ as _running
+        # RESTATED 2026-09-20 (5.48.0): the first draft pinned the registry
+        # EMPTY, which also forbade its documented use (a deliberate slip of
+        # a horizon whose removals were NOT executed -- 5.48.0's
+        # {'5.48': '5.50'}).  The W5 invariant, stated as itself: nothing
+        # re-schedules the abandoned v5.32 horizon or the v5.27 key it
+        # replaced, every key has shipped and every value lies ahead.
+        cur = dep._version_tuple(_running)
+        assert '5.27' not in dep.REMOVAL_SCHEDULE, dep.REMOVAL_SCHEDULE
+        assert '5.32' not in dep.REMOVAL_SCHEDULE.values(), dep.REMOVAL_SCHEDULE
+        for stated, live in dep.REMOVAL_SCHEDULE.items():
+            assert dep._version_tuple(stated) <= cur, (stated, _running)
+            assert dep._version_tuple(live) > cur, (live, _running)
         assert dep.check_removal_schedule() == []
 
     def test_the_p5_transition_is_still_SCHEDULED_not_removed(self):

@@ -60,7 +60,10 @@ def test_manifest_ships_reference_docs():
 def test_lens_screen_uses_conjugate_convention():
     """Establish the library convention: wave-optics lens screens apply
     ``exp(-1j*k0*opd)`` (the marker the GUI pupil must match)."""
-    src = _read('lumenairy/elements/lenses.py')
+    # 5.48.0: WP-B11c moved the fused phase-screen multiply (and its
+    # convention note) from the lenses facade to the _lens_kernels leaf;
+    # the marker is read from the module that now carries it.
+    src = _read('lumenairy/elements/_lens_kernels.py')
     assert 'exp(-1j*k0*opd)' in src, (
         'Library lens-screen phase convention marker not found; the '
         'S4-20 GUI pin below is anchored to it.')

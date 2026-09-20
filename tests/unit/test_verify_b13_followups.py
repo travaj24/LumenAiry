@@ -112,7 +112,7 @@ def _run_child(tmp_path, name, body, timeout):
         env[var] = '1'
     try:
         proc = subprocess.run([sys.executable, str(script)],
-                              capture_output=True, text=True,
+                              stdin=subprocess.DEVNULL, capture_output=True, text=True,
                               timeout=timeout, env=env)
     except subprocess.TimeoutExpired as exc:
         got = exc.stdout

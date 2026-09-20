@@ -590,7 +590,7 @@ def _base_changelog_or_fail(module):
     finding.  On a CI clone and on Windows, both resolve.
     """
     probe = subprocess.run(['git', 'rev-parse', '--git-dir'], cwd=_REPO_ROOT,
-                           capture_output=True, text=True, encoding='utf-8')
+                           stdin=subprocess.DEVNULL, capture_output=True, text=True, encoding='utf-8')
     if probe.returncode != 0 or 'not a git repository' in (probe.stderr or ''):
         pytest.fail(
             f"ENVIRONMENT, not a citation finding: git cannot resolve this "
@@ -601,7 +601,7 @@ def _base_changelog_or_fail(module):
             f"without the base commit, and it does not skip.")
     before = subprocess.run(
         ['git', 'show', f'{_V547_BASE}:CHANGELOG.md'],
-        cwd=_REPO_ROOT, capture_output=True, text=True, encoding='utf-8')
+        cwd=_REPO_ROOT, stdin=subprocess.DEVNULL, capture_output=True, text=True, encoding='utf-8')
     if before.returncode != 0 or not before.stdout:
         pytest.fail(
             f"git show {_V547_BASE}:CHANGELOG.md failed (rc="

@@ -415,7 +415,7 @@ def _run_child(tmp_path, name, body, timeout, extra_args=()):
         proc = subprocess.run(
             [sys.executable, str(script), _REPO_ROOT, *extra_args],
             cwd=str(tmp_path), env=env, timeout=timeout,
-            capture_output=True, text=True)
+            stdin=subprocess.DEVNULL, capture_output=True, text=True)
     except subprocess.TimeoutExpired as exc:
         pytest.fail(
             f'{name} did not finish within {timeout:.0f} s -- the child is '
@@ -535,7 +535,7 @@ def test_the_traced_chain_completes_under_either_pytest_capture(tmp_path,
            '-p', 'no:randomly', f'--capture={capture}']
     try:
         proc = subprocess.run(cmd, cwd=str(tmp_path), env=env, timeout=300.0,
-                              capture_output=True, text=True)
+                              stdin=subprocess.DEVNULL, capture_output=True, text=True)
     except subprocess.TimeoutExpired as exc:
         pytest.fail(
             f'the traced chain hung under --capture={capture}; that is the '

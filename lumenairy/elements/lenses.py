@@ -35,7 +35,7 @@ from __future__ import annotations
 # this import block; nothing else in the module uses them.
 import sys as _sys
 import types as _types
-from typing import Tuple
+from typing import TYPE_CHECKING, Tuple
 
 import numpy as np
 
@@ -85,6 +85,11 @@ from ._lens_kernels import (  # noqa: F401 -- re-export, see the block below
 # module keeps no copy of its own, and
 # ``monkeypatch.setattr(lenses, '_NUMBA_AVAILABLE', False)`` -- save, set and
 # undo alike -- reaches the code that reads it.
+if TYPE_CHECKING:  # pragma: no cover -- a static binding for mypy only;
+    # at run time the name is a LIVE forward to the leaf (see below), so
+    # this import must never execute, or the facade would keep a copy.
+    from ._lens_kernels import NUMEXPR_AVAILABLE as NUMEXPR_AVAILABLE
+
 _LIVE_FORWARD_NAMES = frozenset({
     'cp', '_ne', 'NUMEXPR_AVAILABLE',
     '_NUMBA_AVAILABLE', '_numba', '_njit', '_prange', '_NUMBA_KERNELS',

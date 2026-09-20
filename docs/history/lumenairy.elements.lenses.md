@@ -1,7 +1,7 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/lenses.py
-ast_sha256: 3211d8ffb787f33b247a40f0398e739bd81b2d465130f0591166c721eac09027
-token_sha256: 2848f68bc3f920b16946b131a15ff304a00732ca0f5f8989f9af1d3085144e98
+ast_sha256: 96a9cc522bc2d15d5ec71ebfa320cef036156cbf469783888fb13be3382d2ff4
+token_sha256: 8160f43acafb9e3aaf8a8634904f94c3530a261a8faec00606bab231d7a9dab1
 pre_relocation_lines: 1171
 recorded_by: WP-A17 SWEEP-4 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
@@ -14,6 +14,7 @@ re_recorded: 2026-09-14 -- WP-B11c: the facade's module type gains __dir__ so th
 re_recorded: 2026-09-15 -- merge of verify/wp-b11c into wave5/audit-leftovers: the WP-B11c moves and the Wave-5 item D digest-scheme change land in one tree (both sides' re_recorded lines kept)
 re_recorded: 2026-09-19 -- H2-4 (VERIFY-WP-B11c D3): _LensesFacade refuses a write or delete of the eight leaf-owned re-exports instead of binding a silent shadow; reads, dir() and import * unchanged
 re_recorded: 2026-09-19 -- Round 2 (VERIFY-WAVE5-HYGIENE2 V-D21): the leaf-owned refusal's last sentence now says the facade read returns the object bound at IMPORT time and to read the leaf while a substitute is in place -- the old wording read as if the facade read would follow the patch, which it does not (verified live).
+re_recorded: 2026-09-20 -- 5.48.0 CI: a TYPE_CHECKING-only import of NUMEXPR_AVAILABLE from the leaf so mypy sees the live-forwarded gate; no run-time binding (the forward is unchanged)
 -->
 
 # Version history -- `lumenairy/elements/lenses.py`

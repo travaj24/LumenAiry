@@ -61,7 +61,7 @@ def _run_child(tmp_path, name, body, timeout, extra_args=()):
         proc = subprocess.run(
             [sys.executable, str(script), _REPO_ROOT, *extra_args],
             cwd=str(tmp_path), env=env, timeout=timeout,
-            capture_output=True, text=True)
+            stdin=subprocess.DEVNULL, capture_output=True, text=True)
     except subprocess.TimeoutExpired as exc:
         pytest.fail(
             f'{name} did not finish within {timeout:.0f} s -- the child is '
@@ -102,7 +102,15 @@ def test_a_non_waiting_shutdown_still_blocks_on_a_terminating_executor():
 
     hold = 6.0
     marks = {}
-    orig = cfp._ExecutorManagerThread._join_executor_internals
+    # CPython renamed the method in 3.12 (3.10/3.11: join_executor_internals);
+    # resolve the live name rather than pin one interpreter's spelling.
+    _join_name = next((n for n in ('_join_executor_internals',
+                                   'join_executor_internals')
+                       if hasattr(cfp._ExecutorManagerThread, n)), None)
+    assert _join_name is not None, (
+        'concurrent.futures.process._ExecutorManagerThread has neither join '
+        'method name this test knows; the interpreter changed the internals')
+    orig = getattr(cfp._ExecutorManagerThread, _join_name)
 
     def slow(self, broken=False):
         marks.setdefault('entered', time.monotonic())
@@ -110,7 +118,7 @@ def test_a_non_waiting_shutdown_still_blocks_on_a_terminating_executor():
         marks['left'] = time.monotonic()
         return orig(self, broken=broken)
 
-    cfp._ExecutorManagerThread._join_executor_internals = slow
+    setattr(cfp._ExecutorManagerThread, _join_name, slow)
     try:
         ex = ProcessPoolExecutor(max_workers=2,
                                  mp_context=mp.get_context('spawn'))
@@ -129,7 +137,7 @@ def test_a_non_waiting_shutdown_still_blocks_on_a_terminating_executor():
         finally:
             marks.setdefault('entered', 0.0)
     finally:
-        cfp._ExecutorManagerThread._join_executor_internals = orig
+        setattr(cfp._ExecutorManagerThread, _join_name, orig)
 
     assert blocked > 0.5 * hold, (
         f'shutdown(wait=False, cancel_futures=True) returned in {blocked:.3f} '
@@ -280,7 +288,21 @@ def main():
     LT.close_worker_pool()
     LT._newton_invert_chunk = recording_chunk
     la.set_max_ram(None)
-    run(la, wide, N)                            # build the WIDE pool
+    # FORCED precondition (5.48.0, CI run 35499375120): on a 2-CPU / 7 GB
+    # runner the free-RAM pricing rule took the requested 8 down to 2, so the
+    # pool was never wider than the clamp and this id could not exercise the
+    # ceiling -- a resource-conditioned premise, which TESTING_STANDARDS says
+    # to FORCE rather than read off the box.  The WIDE build alone bypasses
+    # the pricing rule (the getter builds the requested width); the priced
+    # call below still goes through the real resolver, which is what the
+    # decision measures.
+    _real_resolve_wide = LT._newton_resolve_workers
+    LT._newton_resolve_workers = (lambda requested, n_total, fit_points, **kw:
+                                  max(1, int(requested)))
+    try:
+        run(la, wide, N)                        # build the WIDE pool
+    finally:
+        LT._newton_resolve_workers = _real_resolve_wide
     pool_workers = LT._PERSISTENT_POOL_NWORKERS
 
     seen = []

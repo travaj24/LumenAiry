@@ -293,7 +293,7 @@ class PSFMTFDock(QWidget):
         phase = k0 * opd_grid
         # Use the CONJUGATE phase convention
         # ``exp(-i k0 OPD)`` to match the wave-optics lens phase-screens
-        # (``elements/lenses.py``: ``E * exp(-1j*k0*opd)``).  Pre-fix the
+        # (``elements/_lens_kernels.py``: ``E * exp(-1j*k0*opd)``).  Pre-fix the
         # ray-traced pupil used ``exp(+i k0 OPD)`` -- the opposite sign
         # -- so the PSF computed from a ray-traced pupil came out
         # MIRROR-FLIPPED relative to the PSF from a wave-optics field,
