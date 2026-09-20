@@ -4,6 +4,88 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+### Changed -- carrier (WP-C5 item 3): the focus readouts blank the periodic replicas by default (`replica_fill='zero'`)
+
+`carrier_referenced_focus_readout`, `carrier_referenced_exact_focus_readout`
+and the private Collins readout the traced chain reaches on
+`transport='collins'` now default to `replica_fill='zero'`.  A readout window
+wider than one period of the transform behind it is filled, outside that
+period, with periodic copies of the field -- `E(u + period) == E(u)`
+identically, whatever the field, the NA, the leg and the window.  Those samples
+were never measured, and a replica is not a degraded reading: it is a
+full-amplitude image of the core laid down where the field is weak, so it wins
+every max / argmax / centroid / encircled-energy reduction taken over the
+window.  The default now blanks them.  `replica_fill='repeat'` returns them and
+is byte-identical to 5.48.x.
+
+WHAT THE BLANKING TOUCHES, and nothing else.  Measured on both builds
+(`validation/probe_c5_three_defaults/item3_*.json`):
+
+* a window at or inside one period is returned by IDENTITY -- the same object,
+  not merely equal values -- on either setting, so every faithful
+  configuration is unchanged by construction;
+* on an oversized window the samples INSIDE one period are byte-identical to
+  `'repeat'` and the samples outside it are exactly 0.  At 1.10 / 1.60 / 2.20
+  periods of a 256-sample window the faithful counts read 233 / 161 / 117,
+  each equal to `2*floor(period/2/dx_out) + 1` of the period the transform
+  itself reports through `_period_out`, not of a heuristic;
+* the zone is centred on the FIELD's own origin, not on the window.  With
+  `centre_out` 0.30 periods off axis the surviving band is off-centre in the
+  returned array by exactly that much -- a fill keyed on the window's centre
+  would pass every on-axis reading and fail here;
+* the REFUSAL is untouched.  Over a ladder of 0.50 / 0.98 / 1.00 / 1.02 /
+  1.60 / 2.20 periods x both fills, the served-versus-refused census is
+  identical cell for cell: 1.00 periods is served, 1.02 is refused, and the
+  guard is evaluated before any fill runs (asserted by replacing the fill with
+  a raising sentinel and getting the refusal out anyway).
+
+Blast radius, archive-to-archive against `49ddf4bd` over 20 digested readouts
+per build: **4 keys move, 16 are byte-identical**, and all four are
+default-fill calls on windows that reach past one period -- the paraxial
+readout at 1.10 / 1.60 / 2.20 periods and the exact readout at 1.71.  Every
+explicit `'repeat'` key, every explicit `'zero'` key and every faithful window
+(default included) is unchanged.  Both builds agree on the set.
+
+New diagnostic: `_period_out['replica_fill']` names the fill that was applied,
+beside the existing `'faithful_samples'`, and the traced chain copies it onto
+each stage as `readout_replica_fill` beside `readout_faithful_samples`.  Both
+are published on both settings, so neither has to be inferred from the other's
+absence.
+
+Three shipped demonstrations now name the opt-in, and each says why in its
+docstring: the walking-chief-ray ghost
+(`test_fix_v1_v8_readout_guard_and_standoff.py::TestV3ChainScope::test_a_walking_chief_ray_gives_a_full_amplitude_ghost`),
+the corrupt wing
+(`test_niche_tight_focus_readout.py::test_the_refused_window_really_would_have_been_corrupt`)
+and the `K == 1` field of view
+(`test_niche_d2_chain_multi.py::test_k1_keeps_the_requested_field_of_view`).
+None is weakened: each keeps its original claim under `'repeat'` and gains the
+two-sided arm under the new default -- the ghost is gone, the wing metric reads
+the beam again, and the requested grid keeps its size with the faithful part
+bit-identical.
+
+**Migration.** Pass `replica_fill='repeat'` to restore 5.48.x bit for bit on
+any single call, or put it in `focus_readout=` /  `output_grid=` to restore it
+through the chain.  The returned array can change ONLY on a call that (a)
+reaches outside one period of the readout's own transform and (b) has the
+replica refusal waived -- `on_replica='warn'` or `'ignore'`; at the default
+`'error'` such a call raises and always did.  The public entry points that can
+reach that state are `carrier_referenced_focus_readout`,
+`carrier_referenced_exact_focus_readout`,
+`propagate_traced_carrier_chain` (through `focus_readout=`) and
+`propagate_traced_carrier_chain_multi` (through `output_grid=`, and through
+`on_replica=` at the orchestrator).  Nothing else in the package calls them.
+Window size, output pitch, `centre_out`, the readout's leg and the standoff are
+all unchanged, and the faithful part of the window is bit-identical either way;
+`_period_out['faithful_samples']` (and the chain's
+`readout_faithful_samples`) says how many samples per axis that is.  A
+window-wide reduction that previously scored a replica -- an argmax, a
+centroid, an encircled energy at large radius, a returned-window power ratio --
+will move, which is the point: on the P2 battery's unclipped cell the same call
+goes from 20.50 um FWHM / 49.5 % encircled energy / 5.70x the stop plane's
+power to 18.50 um / 99.70 % / 0.99873x, which is also what the same readout
+returns at any standoff long enough for one period to cover the window.
+
 ### Changed -- GBD (WP-C5 item 2): the dense reconstruction counts its memory honestly, and says so where the budget cannot be met
 
 `lumenairy.propagators.gbd.DENSE_MEM_BUDGET_ACCOUNTING` now defaults to
@@ -3554,7 +3636,7 @@ C1 and the WP-A25 replica regime).
 
 `'collins'` evaluates the same integral in the form Collins (1970, *JOSA* **60**,
 1168) gives for an arbitrary ABCD system, factored as chirp x chirp-Z x chirp
-(`lumenairy/propagators/carrier.py:2215` `_collins_transport`).  In this
+(`lumenairy/propagators/carrier.py:2230` `_collins_transport`).  In this
 library's `exp(-i omega t)` / `exp(+i k z)` convention (CONVENTIONS sec. 7 -- the
 complex conjugate of the form printed in Collins' paper, which uses the opposite
 time convention):
@@ -3563,7 +3645,7 @@ time convention):
                * integral u_in(u) exp(i k (A u^2 - 2 u x + D x^2)/(2 B)) du
 
 with the envelope-to-envelope system "attach the input carrier, fly `z`, remove
-the chosen output carrier" (`carrier.py:1797`):
+the chosen output carrier" (`carrier.py:1812`):
 
     A = 1 + z/R_in = m,   B = z,   C = 1/R_in - A/R_ref,   D = 1 - z/R_ref
 
@@ -3572,7 +3654,7 @@ so `det = AD - BC = 1` for every choice of `R_ref` (pinned as an identity over
 forward leg, converging or not: the carrier's sign lives in `A`, which shrinks to
 zero and past it as a leg crosses the geometric focus, and the transform carries
 `A <= 0` natively.  The three stages are the module's own separable screen
-(`_radial_carrier_phase`'s per-axis factor, `carrier.py:1859`), the separable
+(`_radial_carrier_phase`'s per-axis factor, `carrier.py:1874`), the separable
 centred Bluestein the readouts already run (`_bluestein_centred_2d`), and a
 second separable screen.  At `R_ref = R + z` and `dx_out = m*dx` the result is
 term for term `_carrier_step_fast` -- measured agreement 7.6e-12 and 3.2e-12 of
@@ -3581,7 +3663,7 @@ peak at two well-sampled legs, on both `gap_kernel` settings.
 What the free pitch buys, measured:
 
 * **the image-plane readout is one step.**  `transport='collins'` lands the
-  target plane directly on the caller's `(dx_out, N_out)` (`carrier.py:2706`),
+  target plane directly on the caller's `(dx_out, N_out)` (`carrier.py:2721`),
   with no standoff plane, no beam-containment resolution and no near-focus
   bridge.  Against an analytic Gaussian-ABCD oracle carrying the absolute piston
   and Gouy phase, over NA 0.03-0.45 x grid extents 1.5-10 beam radii (30 cells),
@@ -3606,7 +3688,7 @@ What the free pitch buys, measured:
 * **a near-focus gap leg no longer splits.**  The output pitch is the co-moving
   `|A| dx` floored by `2(|A| r + |B| theta)/N`, the ABCD image of the envelope's
   measured phase-space box, so it carries the leg's own diffraction and cannot
-  follow `A` to zero (`carrier.py:2079`); and where referencing to the
+  follow `A` to zero (`carrier.py:2094`); and where referencing to the
   collapsing ray sphere `R + z` would need more samples than the grid has, the
   output is referenced FLAT instead, which is the physical statement that the
   wavefront is flat at the waist.  Measured 0.1 mm before a 40 mm focus: pitch
@@ -3618,7 +3700,7 @@ What the free pitch buys, measured:
 
 **The sampling guard** (`on_collins_sampling={'error','warn','ignore'}`, default
 `'warn'`) is written against Kelly, *Appl. Opt.* **53**, 2861 (2014) rather than
-against a geometric margin (`carrier.py:1949`, `:1985`).  Three conditions, each
+against a geometric margin (`carrier.py:1964`, `:2000`).  Three conditions, each
 a ratio against the Nyquist rate itself with the bar at 1 and no margin,
 evaluated on the field's own measured `1 - 1e-6`-power support in BOTH domains
 rather than at the grid edge:
@@ -3643,7 +3725,7 @@ Gaussian by relL2 1.13e+02 / 5.52e+01 / 2.74e+01 / 1.33e+01 -- tracking K1, whic
 is what says it is the aliasing -- while the complementary quadrature sits at
 6.28e-11 on every grid.
 
-**Quadrature selection, and why it is not a threshold** (`carrier.py:2534`).  The
+**Quadrature selection, and why it is not a threshold** (`carrier.py:2549`).  The
 chirp-Z form needs `K1 <= 1`, which with `r` at the grid half-width is
 `N dx^2 <= lambda |z_eff|`; the transfer-function form (`_carrier_step_fast`)
 samples the kernel on the frequency lattice instead and needs the same
@@ -3660,12 +3742,12 @@ enough to trip `_near_focus_needs_bridge` has `|A| < 0.02` and therefore
 
 `gap_kernel` keeps its meaning on this transport: the Collins stage IS the
 ABCD-Fresnel integral, and `'exact'` pre-applies the diagonal exact/Fresnel
-kernel ratio on the input grid (`carrier.py:2155`), which is an exact operator
+kernel ratio on the input grid (`carrier.py:2170`), which is an exact operator
 identity because both kernels are diagonal in the same basis.  That refinement
 lives on the REDUCED frame `z_eff = B/A`, which is unbounded as a leg approaches
 the geometric focus, so it is applied only where its own group delay
 `|z_eff| theta (1/sqrt(1-theta^2) - 1)` fits inside the grid it is applied on
-(`carrier.py:2117`); an explicit `gap_kernel='exact'` there is REFUSED rather
+(`carrier.py:2132`); an explicit `gap_kernel='exact'` there is REFUSED rather
 than silently downgraded, and `'auto'` takes the ABCD-Fresnel integral and
 records `collins_kernel='fresnel'`.  Applying it anyway leaves the core right and
 destroys the halo: measured against a direct summation of the same integral on

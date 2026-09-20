@@ -1878,3 +1878,66 @@ falling through to `'legacy'`.  A typo would otherwise silently restore the
 six-fold under-count the new default exists to remove.  The check runs only
 where the budget arithmetic runs, so a caller who never passes `mem_budget_mb`
 is unaffected.
+
+### The focus readouts blank the periodic replicas by default
+
+**What moved.**  `replica_fill` defaults to `'zero'` instead of `'repeat'` on
+`carrier_referenced_focus_readout`,
+`carrier_referenced_exact_focus_readout` and the private Collins readout the
+traced chain uses on `transport='collins'`.  A readout window wider than one
+period of the transform behind it is filled, outside that period, with periodic
+copies of the field -- `E(u + period) == E(u)` identically -- and those samples
+were never measured.  The default now writes zeros there.
+
+**Who is affected.**  Only a call that BOTH reaches outside one period AND has
+the replica refusal waived.  At the shipped `on_replica='error'` such a request
+raises, as it has since 5.44; the fill only decides what a waived readout
+contains, and it does not change what is refused.  The public entry points that
+can reach that state:
+
+* `carrier_referenced_focus_readout(..., on_replica='warn' | 'ignore')`
+* `carrier_referenced_exact_focus_readout(..., on_replica='warn' | 'ignore')`
+* `propagate_traced_carrier_chain(..., focus_readout={... 'on_replica': ...})`
+* `propagate_traced_carrier_chain_multi(..., output_grid={...},
+  on_replica=...)`
+
+Nothing else in the package calls those readouts.
+
+**What does NOT change.**  The requested window size, the output pitch,
+`centre_out`, the readout's leg and its standoff; the samples INSIDE one period
+(bit-identical either way); and a window that fits inside one period, which is
+returned by identity -- the same object -- on either setting.  The replica
+REFUSAL is unchanged cell for cell over a ladder from 0.50 to 2.20 periods, and
+it is taken before any fill runs.
+
+**What does change, and why that is the point.**  A window-wide reduction that
+was scoring a replica -- an argmax, a centroid, an encircled energy at large
+radius, a returned-window power ratio -- moves to the beam.  On the P2 design
+battery's unclipped doublet cell the same call goes from 20.50 um FWHM / 49.5 %
+encircled energy inside two waists / 5.70x the stop plane's power to 18.50 um /
+99.70 % / 0.99873x -- which is also what this readout returns at any standoff
+long enough for one period to cover the window, i.e. three independent
+geometries with no replicas in them agreeing to the digit.
+
+**Recipe -- keep 5.48.x exactly:**
+
+```python
+F = la.carrier_referenced_focus_readout(..., on_replica='ignore',
+                                        replica_fill='repeat')
+
+res = la.propagate_traced_carrier_chain(
+    ..., focus_readout=dict(dx_out=..., N_out=...,
+                            on_replica='ignore', replica_fill='repeat'))
+```
+
+**How to tell what you were given.**  `_period_out['faithful_samples']` is the
+`(nx, ny)` samples per axis that carry measurement, and
+`_period_out['replica_fill']` (new) names the fill that was applied.  The
+traced chain publishes both per stage under the keys
+readout_faithful_samples and readout_replica_fill.
+
+**This is not the 2026-08-06 shrink-and-zero defect.**  That one silently
+re-sized a requested 2.87 mm window down to 1.29 mm and returned zeros over the
+rest; it was refused then and is refused now.  The window and the returned grid
+keep the size the caller asked for, and the part that is blanked is exactly the
+part the transform never evaluated, reported in the result rather than assumed.

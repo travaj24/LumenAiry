@@ -268,18 +268,30 @@ def _exact_chief_height(gA, gB, tilt, image_distance, d0=0.0):
     return float(res.image_rays.x[0])
 
 
-def _run_chain(groups, field, carrier, fd, centre, n_out=_NOUT, quiet=True):
+def _run_chain(groups, field, carrier, fd, centre, n_out=_NOUT, quiet=True,
+               replica_fill='repeat'):
     """One INDEPENDENT single-congruence chain run, read out on the common
     grid -- the hand-written form of what the orchestrator does per
     congruence.
 
     D3 (2026-08-06): the leg is sized for the TILE, not for the whole common
     grid, so this run is bit-comparable with the orchestrated one inside the
-    tile -- which is the only region any caller of this helper compares.  The
+    tile -- which is the only region most callers of this helper compare.  The
     common grid is 2.867 mm against a tile-sized period, so the outer part of
     THIS array carries replicas; ``on_replica='ignore'`` acknowledges that
-    rather than hiding it, and no assertion in this file reads outside the
-    tile.
+    rather than hiding it.
+
+    WP-C5 (2026-09-20): ``replica_fill='repeat'`` is NAMED here, and it is the
+    default of this helper rather than of the library.  The readouts blank the
+    replicas by default since 5.49.0; this helper is the file's hand-written
+    REFERENCE for what the orchestrator does, and one id
+    (``test_tiles_avoid_the_periodic_replica_regime``) reads outside the tile
+    on purpose -- the replicas are its subject.  Keeping the reference on the
+    historical fill is what lets every comparison in this file stay an
+    EQUIVALENCE between two routes instead of a comparison between two fills;
+    the new default is asserted on its own terms in
+    ``test_k1_keeps_the_requested_field_of_view`` and in
+    ``tests/unit/test_c5_three_defaults.py``.
     """
     def _go():
         return la.propagate_traced_carrier_chain(
@@ -290,7 +302,7 @@ def _run_chain(groups, field, carrier, fd, centre, n_out=_NOUT, quiet=True):
                 dx_out=_DXO, N_out=n_out, centre_out=centre,
                 standoff=_leg_for_window(groups, field, carrier, fd,
                                          _TILE * _DXO),
-                on_replica='ignore'))
+                on_replica='ignore', replica_fill=replica_fill))
     if not quiet:
         return _go()
     with warnings.catch_warnings():
@@ -301,8 +313,12 @@ def _run_chain(groups, field, carrier, fd, centre, n_out=_NOUT, quiet=True):
 def _run_multi(groups, specs, fd, **kw):
     # D3: same leg as _run_chain, so the tiled and hand-placed arms are
     # comparing the same physics rather than two different hand-off planes.
+    # WP-C5: and the same FILL, for the reason _run_chain's docstring gives --
+    # every comparison in this file is an equivalence between two ROUTES, so
+    # both routes have to be on one fill or the equivalence is untestable.
     kw.setdefault('output_grid',
                   dict(dx_out=_DXO, N_out=_NOUT,
+                       replica_fill='repeat',
                        standoff=_leg_for_window(
                            groups, specs[0]['field'], specs[0].get('carrier'),
                            fd, _TILE * _DXO)))
@@ -643,6 +659,23 @@ def test_k1_keeps_the_requested_field_of_view(_fan):
     chain does, refusal included, and with the self-replica guard waived it
     must return the same field over the same whole window.  Both halves are
     asserted below.
+
+    WP-C5 (2026-09-20), WHY ``replica_fill='repeat'`` IS NAMED BELOW.  The
+    readouts' fill now defaults to ``'zero'``, so a waived window past one
+    period comes back blanked outside it.  The K = 1 contract this id pins is
+    an EQUIVALENCE -- the multi must do what the single chain does -- and it
+    holds under either fill, because both sides take the same path.  What
+    moves is the "nothing was zeroed away" arm, which was a statement about
+    the historical answer: it is asserted here under the opt-in that
+    reproduces that answer, and the default is asserted beside it.  The
+    earlier defect the docstring records (a silent shrink of the requested
+    2.87 mm window to 1.29 mm, with ``readout_tile=None`` refused outright) is
+    NOT what the new default does and is still refused: the window and the
+    returned grid keep the size the caller asked for, the guard still refuses
+    the request by default, and the samples outside one period are blanked
+    rather than dropped -- which is visible in the result
+    (``readout_faithful_samples`` and ``readout_replica_fill``) instead of
+    silent.
     """
     fn = la.propagate_traced_carrier_chain_multi
     # the SAME leg the hand-placed reference uses, or the two would be
@@ -660,7 +693,8 @@ def test_k1_keeps_the_requested_field_of_view(_fan):
             fn(_fan['specs'][:1], _fan['groups'], _WL, _DX, **kw)
     # (b) ... and with the SELF-replica guard waived the historical K = 1
     #     field-of-view contract holds verbatim.
-    kw['output_grid'] = dict(kw['output_grid'], on_replica='warn')
+    kw['output_grid'] = dict(kw['output_grid'], on_replica='warn',
+                             replica_fill='repeat')
     with warnings.catch_warnings(record=True) as rec:
         warnings.simplefilter('always')
         res = fn(_fan['specs'][:1], _fan['groups'], _WL, _DX, **kw)
@@ -681,6 +715,22 @@ def test_k1_keeps_the_requested_field_of_view(_fan):
     assert not any("readout_tile='auto'" in m for m in msgs), [
         m[:90] for m in msgs]
     assert res.congruences[0]['capture'] > 1.5
+    # ... and under the SHIPPED fill the same call keeps the same grid and
+    # the same faithful part, and blanks only the rest -- the K = 1
+    # equivalence is a property of the path, not of the fill.
+    kw['output_grid'] = dict(kw['output_grid'], replica_fill='zero')
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        res_z = fn(_fan['specs'][:1], _fan['groups'], _WL, _DX, **kw)
+    got_z = np.asarray(res_z.field)
+    assert got_z.shape == (_NOUT, _NOUT)
+    assert res_z.congruences[0]['tile'] == _NOUT, (
+        'the default fill re-sized the requested window, which is the '
+        'shrink-and-zero defect this id was written against')
+    assert float(np.abs(got_z).max()) > 0.0
+    assert not np.array_equal(got_z, got), (
+        'PREMISE: the two fills agree on this window, so it does not reach '
+        'outside one period and this arm proves nothing')
     # 'ignore' silences the orchestrator's copy of the notice
     with warnings.catch_warnings(record=True) as rec2:
         warnings.simplefilter('always')

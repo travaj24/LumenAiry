@@ -1682,9 +1682,10 @@ _TRANSPORTS = ('sziklas', 'collins')
 _COLLINS_TAIL_FRAC = 1e-6
 
 #: The ACCURACY-keyed fallback for ``gap_kernel='auto'`` near a geometric
-#: focus, ON by default since 5.49.0 with ``tau = 1e-4`` (the maintainer's
-#: decision of 2026-09-20 on ledger items 1.5 / 4.3).  ``'auto'`` drops to
-#: ``'fresnel'`` on a leg whose PREDICTED exact-kernel departure exceeds
+#: focus, ON by default with ``tau = 1e-4`` (the maintainer's decision of
+#: 2026-09-20 on ledger items 1.5 / 4.3; the CHANGELOG carries the release it
+#: shipped in).  ``'auto'`` drops to ``'fresnel'`` on a leg whose PREDICTED
+#: exact-kernel departure exceeds
 #: ``tau``; an EXPLICIT ``gap_kernel='exact'`` is still honoured, and setting
 #: this back to ``None`` restores 5.48.x bit for bit -- the condition is then
 #: not evaluated at all, so nothing is measured, nothing allocated and no byte
@@ -2720,7 +2721,7 @@ def _collins_carrier_leg(env, R, z, wavelength, dx, dy, *,
 def _collins_focus_readout(env, R, z, wavelength, dx, dy, *,
                            dx_out, N_out, centre_out=(0.0, 0.0),
                            gap_kernel='auto', tilt=(0.0, 0.0),
-                           on_replica='error', replica_fill='repeat',
+                           on_replica='error', replica_fill='zero',
                            on_collins_sampling='warn',
                            fn='_collins_focus_readout', _period_out=None):
     """The image-plane readout on the Collins transport: ONE step from the
@@ -4161,7 +4162,7 @@ def carrier_referenced_focus_readout(
     gap_kernel: str = 'auto',
     tilt: Tuple[float, float] = (0.0, 0.0),
     on_replica: str = 'error',
-    replica_fill: str = 'repeat',
+    replica_fill: str = 'zero',
     on_focus_containment: str = 'error',
     _period_out: Optional[dict] = None,
 ) -> np.ndarray:
@@ -4268,19 +4269,25 @@ def carrier_referenced_focus_readout(
         :func:`_check_readout_replica` for the derivation and the measured
         degradation, and ``replica_fill`` for keeping the window without the
         replicas.
-    replica_fill : {'repeat', 'zero'}, default 'repeat'
+    replica_fill : {'zero', 'repeat'}, default 'zero'
         What the readout WRITES outside one period, when ``on_replica`` has
-        let such a window through.  ``'repeat'`` leaves the periodic replicas
-        the transform produces -- the historical answer, and the one a caller
-        deliberately reading the periodic reconstruction needs.  ``'zero'``
-        blanks them, so a window-wide reduction sees measurement and zeros
-        instead of measurement and copies: on the battery cell above that is
-        the difference between 20.50 um / 49.5 % and 18.50 um / 99.70 %, the
+        let such a window through.  ``'zero'`` (the default) blanks the
+        region, so a window-wide reduction sees measurement and zeros instead
+        of measurement and copies: on the battery cell above that is the
+        difference between 20.50 um / 49.5 % and 18.50 um / 99.70 %, the
         latter matching this readout at any standoff long enough to cover the
-        window.  Both settings return the requested shape and are
+        window.  ``'repeat'`` leaves the periodic replicas the
+        transform produces -- the 5.48.x answer bit for bit, and the one a
+        caller deliberately reading the periodic reconstruction needs.
+
+        Both settings return the requested shape, take the same leg and are
         BIT-IDENTICAL inside one period (a faithful window is returned by
-        identity on either); ``_period_out``'s ``'faithful_samples'`` says how
-        many samples per axis that is.  See :func:`_fill_readout_replicas`.
+        IDENTITY on either -- the same object, so every window the guard
+        would pass is untouched); ``_period_out``'s ``'faithful_samples'``
+        says how many samples per axis that is and ``'replica_fill'`` says
+        which fill was applied.  Neither setting changes whether an oversized
+        window is refused: ``on_replica`` decides that, first.  See
+        :func:`_fill_readout_replicas`.
     on_focus_containment : {'error', 'warn', 'ignore'}, default 'error'
         What to do when the beam DOES NOT FIT the co-moving grid at the stop
         plane -- the failure mode the replica guard above cannot see, because
@@ -4519,9 +4526,10 @@ def carrier_referenced_focus_readout(
                 f"is periodic REPLICAS folded into the window -- energy the "
                 f"transform created, not signal it measured.  Lengthen the "
                 f"standoff (the period is linear in it: >= {_need:.6e} m "
-                f"covers this window), narrow N_out*dx_out, keep the window "
-                f"and pass replica_fill='zero' so the unmeasurable part comes "
-                f"back as zeros, or restore on_replica='error'.  Pass "
+                f"covers this window), narrow N_out*dx_out, drop the "
+                f"explicit replica_fill='repeat' so the unmeasurable part "
+                f"comes back as zeros (the default), or restore "
+                f"on_replica='error'.  Pass "
                 f"on_focus_containment='ignore' to silence.",
                 stacklevel=None)
     return E_out
@@ -4913,11 +4921,15 @@ def _publish_readout_containment(stage, pd):
     the stop plane's) and ``readout_faithful_samples`` (the ``(nx, ny)``
     samples per axis of the returned window that lie inside one Bluestein
     period and therefore carry measurement -- ``(N_out, N_out)`` unless the
-    requested window reached outside it).  See ``on_focus_containment``."""
+    requested window reached outside it) and ``readout_replica_fill`` (which
+    fill the readout applied to the part outside it -- ``'zero'`` by default,
+    ``'repeat'`` when the caller asked for the periodic reconstruction).  See
+    ``on_focus_containment``."""
     for _k, _s in (('containment', 'readout_containment'),
                    ('containment_model', 'readout_containment_model'),
                    ('window_energy_frac', 'readout_window_energy'),
-                   ('faithful_samples', 'readout_faithful_samples')):
+                   ('faithful_samples', 'readout_faithful_samples'),
+                   ('replica_fill', 'readout_replica_fill')):
         if _k in pd:
             stage[_s] = pd[_k]
 
@@ -5060,10 +5072,13 @@ def _check_readout_replica(fn, period, dx_out, N_out, on_replica,
     through-focus scan still reads the truth (18.50 um FWHM, 99.70 % encircled
     energy inside two waists) and at 2.063 it reads the replica in the window's
     corner (20.50 um, 49.5 %).  A caller who wants the window anyway can have
-    the replicas blanked with ``replica_fill='zero'``
-    (:func:`_fill_readout_replicas`), which on that cell restores 18.50 um and
-    99.70 %; the faithful part is bit-identical either way.  Until this guard
-    the only thing that fired was a downstream ``UserWarning`` from
+    the replicas blanked, which is what the default ``replica_fill='zero'``
+    does (:func:`_fill_readout_replicas`) -- on that cell it restores 18.50 um
+    and 99.70 % -- and a caller who wants the periodic reconstruction itself
+    asks for ``replica_fill='repeat'``; the faithful part is bit-identical
+    either way, and this guard's decision does not depend on the fill.
+    Until this guard the only thing that fired was a downstream
+    ``UserWarning`` from
     ``angular_spectrum_propagate_mft``, which any upstream
     ``filterwarnings('ignore')`` removes; the module's own ``on_replica`` note
     in :func:`propagate_traced_carrier_chain_multi` already says that is the
@@ -5202,21 +5217,31 @@ def _check_readout_replica(fn, period, dx_out, N_out, on_replica,
            f"period, so NO window is faithful at this offset: bring "
            f"centre_out inside +/-{0.5 * p_min:.6e} m of the field origin")
         + (remedy or "") +
-        ", or keep the window and pass replica_fill='zero' to have the "
-        "unmeasurable part returned as ZERO instead of as replicas (the "
-        "faithful part is bit-identical either way, and _period_out's "
-        "'faithful_samples' says how many samples that is).  "
-        "on_replica='warn' accepts the replicas with a RuntimeWarning, "
+        ", or keep the window and WAIVE this guard: the unmeasurable part "
+        "then comes back as ZERO under the default replica_fill='zero' "
+        "(the faithful part is bit-identical either way, and _period_out's "
+        "'faithful_samples' says how many samples that is), or as the "
+        "REPLICAS themselves under replica_fill='repeat' if the periodic "
+        "reconstruction is what you are looking at.  "
+        "on_replica='warn' accepts the window with a RuntimeWarning, "
         "'ignore' silences the check entirely.",
         stacklevel=stacklevel)
 
 
 #: Accepted ``replica_fill`` values -- what a readout writes in the part of a
 #: requested window that lies outside one Bluestein period of the field's own
-#: origin.  ``'repeat'`` leaves the periodic copies the transform produces
-#: (the historical answer, and the one the multi-congruence chain's own
-#: field-of-view contract and the V3 ghost fixtures are written against);
-#: ``'zero'`` writes zeros there instead.
+#: origin.  ``'zero'`` (the DEFAULT) writes zeros there, so a window-wide
+#: reduction sees measurement and zeros rather than measurement and
+#: full-amplitude copies of the core; ``'repeat'`` leaves the periodic
+#: copies the transform produces, which is what a caller deliberately reading
+#: the periodic reconstruction needs -- the multi-congruence chain's own
+#: field-of-view demonstration and the V3 ghost fixtures are written against
+#: it, and it is the 5.48.x answer bit for bit.
+#:
+#: NEITHER SETTING TOUCHES A FAITHFUL WINDOW, and neither decides whether an
+#: oversized window is SERVED: :func:`_check_readout_replica` refuses one
+#: before either fill is reached, so ``replica_fill`` only says what a WAIVED
+#: readout contains (:func:`_fill_readout_replicas` states the geometry).
 _REPLICA_FILLS = frozenset({'repeat', 'zero'})
 
 
@@ -5272,13 +5297,20 @@ def _fill_readout_replicas(E_out, period, dx_out, N_out,
     1536 um agree to the digit), i.e. three independent geometries with no
     replicas in them.
 
-    ``'repeat'`` is the default because the replicas are load-bearing where a
-    caller is deliberately looking at the periodic reconstruction itself: the
-    multi-congruence chain's ``K == 1`` field-of-view contract requires the
-    whole requested grid live (`readout_tile='auto'` is a SIZING convenience,
-    not a blanking one), and the V3 off-axis ghost fixtures exist to show that
-    a window one whole period off the chief ray returns a full-amplitude copy.
-    Blanking is therefore something a caller asks for, per call.
+``'zero'`` IS THE DEFAULT, AND WHAT THAT DOES NOT CHANGE.  The
+    maintainer's decision of 2026-09-20 is that a readout should not hand back
+    copies it did not measure, so the blanking is on by default.  It changes
+    only what a WAIVED oversized window CONTAINS: the replica refusal is
+    unchanged (``on_replica='error'`` still refuses such a window, and the
+    refusal is taken before this function runs), the leg is unchanged, the
+    faithful region is returned by identity, and ``'repeat'`` reproduces
+    5.48.x to the bit.  ``'repeat'`` stays because the replicas are
+    load-bearing where a caller is deliberately looking at the periodic
+    reconstruction itself: the multi-congruence chain's ``K == 1``
+    field-of-view demonstration reads the whole requested grid
+    (`readout_tile='auto'` is a SIZING convenience, not a blanking one), and
+    the V3 off-axis ghost fixtures exist to show that a window one whole
+    period off the chief ray returns a full-amplitude copy.
 
     Neither fill moves the leg: the standoff stays the accuracy-optimal one
     :func:`_default_focus_standoff` resolves from the beam, for the reason
@@ -5307,6 +5339,13 @@ def _fill_readout_replicas(E_out, period, dx_out, N_out,
     nx, ny = int(keep_x.sum()), int(keep_y.sum())
     if out is not None:
         out['faithful_samples'] = (nx, ny)
+        # WHICH fill was applied, beside how much of the window it governs.
+        # A caller reading ``faithful_samples`` < N_out learns that part of
+        # the window is not measurement; this says what it holds.  Published
+        # on BOTH settings and whether or not the region is empty, so the two
+        # keys are read together and neither has to be inferred from the
+        # other.
+        out['replica_fill'] = str(fill)
     if fill != 'zero' or (nx == n and ny == n):
         return E_out                    # every sample is a measurement
     xp, is_jax, bld = _backend_of(E_out)
@@ -6645,7 +6684,7 @@ def carrier_referenced_exact_focus_readout(
     on_readout_window: str = 'error',
     readout_window_tol: float = 1e-4,
     on_replica: str = 'error',
-    replica_fill: str = 'repeat',
+    replica_fill: str = 'zero',
     _period_out: Optional[dict] = None,
 ) -> np.ndarray:
     """Exact (non-paraxial) readout of a strongly-converging FINAL leg (R9).
@@ -6809,10 +6848,12 @@ def carrier_referenced_exact_focus_readout(
         peak or a width found by an argmax is no longer safe either.  See
         :func:`_check_readout_replica`, and ``replica_fill`` for keeping the
         window without the replicas.
-    replica_fill : {'repeat', 'zero'}, default 'repeat'
+    replica_fill : {'zero', 'repeat'}, default 'zero'
         What to write outside one period when ``on_replica`` has let such a
-        window through: the periodic replicas the transform produces
-        (``'repeat'``, the historical answer) or zeros (``'zero'``).  Both
+        window through: zeros (``'zero'``, the default) or the
+        periodic replicas the transform produces (``'repeat'``, the 5.48.x
+        answer bit for bit).  Neither decides whether such a window is served
+        -- ``on_replica`` does, before either is reached.  Both
         return the requested shape and are bit-identical inside one period;
         ``_period_out['faithful_samples']`` says how many samples per axis
         that is.  See :func:`_fill_readout_replicas`.

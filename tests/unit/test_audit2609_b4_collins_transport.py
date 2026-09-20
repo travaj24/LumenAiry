@@ -256,7 +256,7 @@ class TestDefaultIsByteIdentical:
         p = inspect.signature(C.carrier_referenced_focus_readout).parameters
         assert 'transport' not in p and 'on_collins_sampling' not in p
         assert p['standoff'].default is None
-        assert p['replica_fill'].default == 'repeat'
+        assert p['replica_fill'].default == 'zero'
 
     @pytest.mark.slow
     def test_the_chain_is_equal_bit_for_bit(self):

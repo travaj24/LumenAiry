@@ -463,7 +463,8 @@ def test_the_two_fills_differ_only_outside_one_period():
     dxo = per * 1.6 / n
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
-        F_rep, pd_rep = _read(env, dx, dxo, n, on_replica='ignore')
+        F_rep, pd_rep = _read(env, dx, dxo, n, on_replica='ignore',
+                              replica_fill='repeat')
         F_zero, pd_zero = _read(env, dx, dxo, n, on_replica='ignore',
                                 replica_fill='zero')
     assert pd_rep['faithful_samples'] == pd_zero['faithful_samples']
@@ -479,14 +480,22 @@ def test_the_two_fills_differ_only_outside_one_period():
 
 def test_the_fill_is_validated_and_not_a_silent_fall_through():
     """A typo must not quietly restore the repeats -- the same defect class as
-    the ``on_replica`` / ``gap_kernel`` fall-throughs this campaign fixed."""
+    the ``on_replica`` / ``gap_kernel`` fall-throughs this campaign fixed.
+
+    The shipped default was ``'repeat'`` when this knob landed (WP-A25) and
+    became ``'zero'`` in 5.49.0 (WP-C5, ledger item 1.7).  Both public
+    readouts must carry the SAME default -- leaving one behind is the
+    asymmetry that let the paraxial readout ship without a replica guard in
+    the first place -- and ``tests/unit/test_c5_three_defaults.py`` adds the
+    private Collins readout the chain reaches on that transport.
+    """
     env, dx, w = _gauss_pupil(n=128)
     dxo = (_WL * _RMAG / (np.pi * w)) / 8.0
     for fn in (C.carrier_referenced_focus_readout,
                C.carrier_referenced_exact_focus_readout):
         import inspect
         assert inspect.signature(fn).parameters[
-            'replica_fill'].default == 'repeat'
+            'replica_fill'].default == 'zero'
     with pytest.raises(ValueError, match='replica_fill'):
         _read(env, dx, dxo, 16, replica_fill='zeros')
 
@@ -505,6 +514,10 @@ def test_the_refusal_names_the_knob_and_no_longer_promises_a_safe_peak():
         _read(env, dx, per * 1.10 / n, n)
     msg = str(ei.value)
     assert "replica_fill='zero'" in msg
+    # 5.49.0: 'zero' is the default, so the message has to name the OTHER one
+    # too -- a caller who wants the periodic reconstruction has to be able to
+    # find it from the refusal they are reading.
+    assert "replica_fill='repeat'" in msg
     assert 'a width or a peak still looks right' not in msg
     # the V6 measured-overshoot wording the fix_v1_v8 pins parse stays
     assert 'm over' in msg and 'sample(s) per edge' in msg and 'ALIASES' in msg

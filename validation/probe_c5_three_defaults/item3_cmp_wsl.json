@@ -1,0 +1,18 @@
+{
+ "base_file": "/mnt/c/tmp/c5_arch/base/lumenairy/__init__.py",
+ "base_python": "3.12.3",
+ "head_file": "/mnt/c/tmp/lum_c5/lumenairy/__init__.py",
+ "head_python": "3.12.3",
+ "moved": [
+  "exact/default",
+  "oversized/1.10/default",
+  "oversized/1.60/default",
+  "oversized/2.20/default"
+ ],
+ "n_identical": 16,
+ "n_keys_base": 20,
+ "n_keys_head": 20,
+ "n_moved": 4,
+ "only_in_base": [],
+ "only_in_head": []
+}
