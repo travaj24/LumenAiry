@@ -46,7 +46,17 @@ def anchor(tree: str):
     print(f"[anchor] lumenairy.__file__ = {got}", file=sys.stderr)
     print(f"[anchor] lumenairy.__version__ = {lumenairy.__version__}",
           file=sys.stderr)
-    if os.path.commonpath([got, want]) != want:
+    # V-D20: os.path.commonpath RAISES ValueError("Paths don't have the same
+    # drive") on Windows when the resolved install is on ANOTHER DRIVE -- which
+    # is exactly the case this guard exists for on this box, where a dev-install
+    # sits on D:.  The guard still refused, but with an exception that named
+    # neither tree.  MEASURED 2026-09-19: bare commonpath raises ValueError;
+    # with the try/except the probe exits with the intended WRONG TREE message.
+    try:
+        same = os.path.commonpath([got, want]) == want
+    except ValueError:                    # different drives on Windows
+        same = False
+    if not same:
         raise SystemExit(f"WRONG TREE: {got!r} is not under {want!r}")
     return lumenairy
 
