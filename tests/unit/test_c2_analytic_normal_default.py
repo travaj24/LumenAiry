@@ -1619,6 +1619,9 @@ def test_c2_the_ghost_path_asks_the_library_default_normal_route():
     at the private ``True``: the ghost loop has no exit pass to hoist a
     single rescale to.
 
+    ROUND 3 (VR2-D3): the helper is now pinned for EVERY keyword the
+    library names, not just for ``sphere_normal``.
+
     Three claims, each two-sided:
 
     1. a spy on ``_surface_normal`` sees the SAME ``analytic_sphere``
@@ -1641,7 +1644,8 @@ def test_c2_the_ghost_path_asks_the_library_default_normal_route():
     from lumenairy.analysis.ghost import _path_from_pair, retrace_ghost_path
     from lumenairy.io.prescriptions_builders import make_doublet
     from lumenairy.raytrace import surfaces_from_prescription
-    from lumenairy.raytrace.trace import _library_trace_default
+    from lumenairy.raytrace.trace import (
+        _library_trace_default, _WAY_BACK_KEYWORDS)
 
     pres = make_doublet(0.0517, -0.0345, -0.1200, 0.0090, 0.0025,
                         'N-BK7', 'N-SF5', 0.0250)
@@ -1690,6 +1694,27 @@ def test_c2_the_ghost_path_asks_the_library_default_normal_route():
     ghost_route = _library_trace_default('sphere_normal')
     trace_route = inspect.signature(trace).parameters['sphere_normal'].default
     assert ghost_route == trace_route, (ghost_route, trace_route)
+    # VR2-D3 (VERIFY-WP-C2 round 2, 2026-09-20): the helper offers itself
+    # for BOTH switches and was pinned for ``sphere_normal`` alone.  A
+    # mutant in which it answers ``'surface'`` for ``renormalize`` while
+    # ``trace`` defaults to ``'exit'`` passed the whole C2 suite -- 58
+    # passed, 0 failed.  Nothing consumes that answer today, which is why
+    # it was P3; the day a second direct caller of ``_refract`` /
+    # ``_reflect`` takes the helper up on its offer, a wrong answer is a
+    # silent divergence between that caller and ``trace``.  The loop is
+    # over the pair the LIBRARY names, so a third switch is covered the
+    # day it is added.
+    _params = inspect.signature(trace).parameters
+    assert set(_WAY_BACK_KEYWORDS) == set(_C2_WAY_BACK), _WAY_BACK_KEYWORDS
+    for _key in _WAY_BACK_KEYWORDS:
+        assert _library_trace_default(_key) == _params[_key].default, (
+            f'_library_trace_default({_key!r}) answers '
+            f'{_library_trace_default(_key)!r} while trace defaults it to '
+            f'{_params[_key].default!r}.  The helper exists so a direct '
+            f'caller of _refract / _reflect can ASK the library rather '
+            f'than write a route down; an answer that disagrees with the '
+            f'tracer is worse than the hard-coded route it replaced '
+            f'(VR2-D3).')
     assert _refracted(ghost_route) == _refracted(trace_route), (
         'the route the ghost leg asks for and the route trace defaults to '
         'no longer produce the same bytes at the refraction step.')
