@@ -1,0 +1,219 @@
+{
+ "exitstatus": 0,
+ "legs_kept_per_node": {
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestGateBMismatchMatrix::test_the_sziklas_column_reproduces_the_published_matrix": 3,
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestGateDMulti::test_k1_reduces_to_the_single_congruence_chain[collins]": 2,
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestGateDMulti::test_k2_is_the_hand_summed_pair[collins]": 4,
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestKellyGuard::test_an_unsampled_configuration_fires_and_is_wrong[1024-1e-05]": 3,
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestKellyGuard::test_an_unsampled_configuration_fires_and_is_wrong[256-4e-05]": 3,
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestKellyGuard::test_an_unsampled_configuration_fires_and_is_wrong[512-2e-05]": 3,
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestKellyGuard::test_the_support_radii_are_measured_not_geometric": 1,
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestKernelRefinement::test_the_refinement_is_applied_where_it_is_representable": 4,
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestLegPeriodCondition::test_a_leg_conserves_power[0.012]": 1,
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestLegPeriodCondition::test_a_leg_conserves_power[0.02]": 1,
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestLegPeriodCondition::test_a_leg_conserves_power[0.039]": 1,
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestLegPeriodCondition::test_a_leg_evaluates_the_form_that_is_SAMPLED_on_its_own_lattice[-0.03]": 1,
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestLegPeriodCondition::test_a_leg_evaluates_the_form_that_is_SAMPLED_on_its_own_lattice[0.012]": 1,
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestLegPeriodCondition::test_a_leg_evaluates_the_form_that_is_SAMPLED_on_its_own_lattice[0.02]": 1,
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestLegPeriodCondition::test_a_leg_evaluates_the_form_that_is_SAMPLED_on_its_own_lattice[0.039]": 1,
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestLegPeriodCondition::test_a_leg_evaluates_the_form_that_is_SAMPLED_on_its_own_lattice[0.03]": 1,
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestLegPeriodCondition::test_k3_is_never_below_k1_on_a_leg_lattice[-0.03]": 1,
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestLegPeriodCondition::test_k3_is_never_below_k1_on_a_leg_lattice[0.02]": 1,
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestLegPeriodCondition::test_k3_is_never_below_k1_on_a_leg_lattice[0.039]": 1,
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestLegPeriodCondition::test_the_leg_publishes_its_period_ratio_and_its_kernel": 1,
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestLegPeriodCondition::test_the_period_condition_speaks_on_a_caller_chosen_lattice[0.5-False]": 1,
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestLegPeriodCondition::test_the_period_condition_speaks_on_a_caller_chosen_lattice[2.0-True]": 1,
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestNoNearFocusApparatus::test_a_near_focus_leg_runs_with_the_whole_apparatus_poisoned": 3,
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestNoNearFocusApparatus::test_the_collapsing_pitch_is_floored_by_the_measured_box": 1,
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestQuadratureComplementarity::test_the_selected_form_is_published": 1,
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestQuadratureComplementarity::test_the_two_forms_have_exactly_opposite_conditions": 4,
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestQuadratureComplementarity::test_where_both_hold_the_two_forms_agree[0.012]": 1,
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestQuadratureComplementarity::test_where_both_hold_the_two_forms_agree[0.02]": 1,
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestSameTheorem::test_collins_on_the_co_moving_lattice_is_the_sziklas_step[auto-0.012]": 1,
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestSameTheorem::test_collins_on_the_co_moving_lattice_is_the_sziklas_step[auto-0.02]": 1,
+  "tests/unit/test_c5_three_defaults.py::test_an_explicit_exact_is_never_overridden_by_tau": 1,
+  "tests/unit/test_c5_three_defaults.py::test_the_fallback_replaces_the_departure_with_the_oracle_floor": 1,
+  "tests/unit/test_c5_three_defaults.py::test_the_rule_fires_only_inside_the_band_the_law_predicts": 25,
+  "tests/unit/test_verify_hyg2_round2.py::test_the_cross_backend_bar_is_the_legs_own_last_bit_sensitivity": 4,
+  "tests/unit/test_wave5_h2_collins_jax.py::test_a_tilted_exact_kernel_crosses_backends": 2,
+  "tests/unit/test_wave5_h2_collins_jax.py::test_an_eager_jax_array_is_not_a_tracer_and_measures_normally": 2,
+  "tests/unit/test_wave5_h2_collins_jax.py::test_the_private_transport_agrees_across_backends[auto]": 3,
+  "tests/unit/test_wave5_h2_collins_jax.py::test_the_private_transport_agrees_across_backends[exact]": 3,
+  "tests/unit/test_wave5_h2_collins_jax.py::test_the_private_transport_agrees_across_backends[fresnel]": 1,
+  "tests/unit/test_wave5_h2_near_focus_table.py::test_auto_and_exact_are_the_same_row_everywhere_on_the_ladder": 10,
+  "tests/unit/test_wave5_h2_near_focus_table.py::test_tau_1e_4_leaves_this_ladder_inert_and_catches_f3": 7,
+  "tests/unit/test_wave5_h2_near_focus_table.py::test_the_departure_is_linear_in_the_reduced_distance": 12,
+  "tests/unit/test_wave5_h2_near_focus_table.py::test_the_departure_is_quartic_in_the_envelopes_own_angle": 6,
+  "tests/unit/test_wave5_h2_near_focus_table.py::test_the_departure_law_predicts_what_the_refinement_actually_changes": 3,
+  "tests/unit/test_wave5_h2_near_focus_table.py::test_the_exact_kernels_departure_falls_monotonically_away_from_the_focus": 5,
+  "tests/unit/test_wave5_h2_near_focus_table.py::test_the_kernel_gate_never_fires_on_this_fixture": 5,
+  "tests/unit/test_wave5_h2_near_focus_table.py::test_the_measured_departure_is_the_quartic_times_one_constant": 2
+ },
+ "n_exact_resolved_legs": 167,
+ "n_fell_back": 25,
+ "n_nodes_touching_the_rule": 48,
+ "nodes_with_fallback": {
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestGateBMismatchMatrix::test_the_sziklas_column_reproduces_the_published_matrix": [
+   {
+    "departure": 0.00012732869018769564,
+    "kernel_asked": "auto",
+    "theta_env": 0.005571182532830023,
+    "z_eff": -0.18000000000000027
+   }
+  ],
+  "tests/unit/test_c5_three_defaults.py::test_the_fallback_replaces_the_departure_with_the_oracle_floor": [
+   {
+    "departure": 0.002349551724385367,
+    "kernel_asked": "auto",
+    "theta_env": 0.001128939062998511,
+    "z_eff": 1599.9599999966235
+   }
+  ],
+  "tests/unit/test_c5_three_defaults.py::test_the_rule_fires_only_inside_the_band_the_law_predicts": [
+   {
+    "departure": 0.002349551724385367,
+    "kernel_asked": "auto",
+    "theta_env": 0.001128939062998511,
+    "z_eff": 1599.9599999966235
+   },
+   {
+    "departure": 0.00041776765082901437,
+    "kernel_asked": "auto",
+    "theta_env": 0.001128939062998511,
+    "z_eff": 284.48470560648457
+   },
+   {
+    "departure": 0.0001761371879013655,
+    "kernel_asked": "auto",
+    "theta_env": 0.001128939062998511,
+    "z_eff": 119.94307349321922
+   },
+   {
+    "departure": 0.00011435965904595025,
+    "kernel_asked": "auto",
+    "theta_env": 0.001128939062998511,
+    "z_eff": 77.87480402655824
+   },
+   {
+    "departure": 0.00010265318451196496,
+    "kernel_asked": "auto",
+    "theta_env": 0.001128939062998511,
+    "z_eff": 69.90311700176834
+   },
+   {
+    "departure": 0.00010127673129041403,
+    "kernel_asked": "auto",
+    "theta_env": 0.001128939062998511,
+    "z_eff": 68.96580199248754
+   },
+   {
+    "departure": 0.00010059543745507921,
+    "kernel_asked": "auto",
+    "theta_env": 0.001128939062998511,
+    "z_eff": 68.50186545792789
+   },
+   {
+    "departure": 0.00010025651013284124,
+    "kernel_asked": "auto",
+    "theta_env": 0.001128939062998511,
+    "z_eff": 68.27106817312729
+   },
+   {
+    "departure": 0.00010008747468151228,
+    "kernel_asked": "auto",
+    "theta_env": 0.001128939062998511,
+    "z_eff": 68.15596112615285
+   },
+   {
+    "departure": 0.00010000306379785499,
+    "kernel_asked": "auto",
+    "theta_env": 0.001128939062998511,
+    "z_eff": 68.09848035821982
+   },
+   {
+    "departure": 0.00010000042710448868,
+    "kernel_asked": "auto",
+    "theta_env": 0.001128939062998511,
+    "z_eff": 68.09668486511593
+   },
+   {
+    "departure": 0.0001000000975226778,
+    "kernel_asked": "auto",
+    "theta_env": 0.001128939062998511,
+    "z_eff": 68.09646043178738
+   },
+   {
+    "departure": 0.00010000001512739404,
+    "kernel_asked": "auto",
+    "theta_env": 0.001128939062998511,
+    "z_eff": 68.09640432357028
+   },
+   {
+    "departure": 0.00010000000482800021,
+    "kernel_asked": "auto",
+    "theta_env": 0.001128939062998511,
+    "z_eff": 68.09639731005448
+   },
+   {
+    "departure": 0.00010000000225314261,
+    "kernel_asked": "auto",
+    "theta_env": 0.001128939062998511,
+    "z_eff": 68.09639555666931
+   },
+   {
+    "departure": 0.0001000000009657139,
+    "kernel_asked": "auto",
+    "theta_env": 0.001128939062998511,
+    "z_eff": 68.09639467997677
+   },
+   {
+    "departure": 0.00010000000032201844,
+    "kernel_asked": "auto",
+    "theta_env": 0.001128939062998511,
+    "z_eff": 68.09639424164338
+   },
+   {
+    "departure": 0.00010000000000016127,
+    "kernel_asked": "auto",
+    "theta_env": 0.001128939062998511,
+    "z_eff": 68.09639402247025
+   },
+   {
+    "departure": 0.00010000000000016127,
+    "kernel_asked": "auto",
+    "theta_env": 0.001128939062998511,
+    "z_eff": 68.09639402247025
+   }
+  ],
+  "tests/unit/test_wave5_h2_near_focus_table.py::test_tau_1e_4_leaves_this_ladder_inert_and_catches_f3": [
+   {
+    "departure": 0.002349551724385367,
+    "kernel_asked": "auto",
+    "theta_env": 0.001128939062998511,
+    "z_eff": 1599.9599999966235
+   },
+   {
+    "departure": 0.00023490230620349943,
+    "kernel_asked": "auto",
+    "theta_env": 0.001128939062998511,
+    "z_eff": 159.95999999994658
+   }
+  ],
+  "tests/unit/test_wave5_h2_near_focus_table.py::test_the_departure_law_predicts_what_the_refinement_actually_changes": [
+   {
+    "departure": 0.0023495517243853686,
+    "kernel_asked": null,
+    "theta_env": 0.0011289390629985112,
+    "z_eff": 1599.9599999966235
+   }
+  ],
+  "tests/unit/test_wave5_h2_near_focus_table.py::test_the_shipped_default_arms_the_rule_at_tau_1e_4": [
+   {
+    "departure": 0.002349551724385367,
+    "kernel_asked": "auto",
+    "theta_env": 0.001128939062998511,
+    "z_eff": 1599.9599999966235
+   }
+  ]
+ }
+}
