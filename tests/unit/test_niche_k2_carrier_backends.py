@@ -383,14 +383,24 @@ def test_jax_grad_through_carrier_leg():
 
     The leg conserves power to grid accuracy, so ``d/da_ij [ sum|u_out|^2
     dx_out^2 ] = 2 a_ij dx_in^2``.  Validated both against that analytic form
-    and against an independent central finite difference."""
+    and against an independent central finite difference.
+
+    ``transport='sziklas'`` NAMED (WP-C3).  The co-moving step takes no
+    decision by measuring the field, so it is trace-safe; the Collins leg
+    resolves its output lattice AND its quadrature from the envelope's own
+    measured phase-space box, which a Tracer has no entries for, and REFUSES
+    by name rather than taking those decisions silently.  This file is the
+    carrier ASM's backend acceptance, so it names the transport it is about;
+    the refusal itself, and ``jax.grad`` through the Collins transport's own
+    trace-safe spelling, are gated in ``test_wave5_h2_collins_jax.py``."""
     jax, jnp = _jax_or_skip()
     N, dx = 128, 4e-6
     amp0 = jnp.asarray(np.real(_gauss(N, dx, 40e-6)))
 
     def leg_power(amp):
         e = amp.astype(jnp.complex128)
-        out = propagate_carrier_referenced(e, 30e-3, 40e-3, WL, dx)
+        out = propagate_carrier_referenced(e, 30e-3, 40e-3, WL, dx,
+                                           transport='sziklas')
         return jnp.sum(jnp.abs(out.env) ** 2) * jnp.abs(out.dx) ** 2
 
     g = np.asarray(jax.grad(leg_power)(amp0))

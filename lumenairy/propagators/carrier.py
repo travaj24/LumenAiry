@@ -2626,11 +2626,14 @@ def _collins_carrier_leg(env, R, z, wavelength, dx, dy, *,
             f"radii r_x/r_y and the angular half-widths th_x/th_y -- and a "
             f"Tracer has no entries to measure, so unlike _collins_transport "
             f"there is no spelling of this call that takes those decisions for "
-            f"it.  Call _collins_transport directly with an explicit "
-            f"(dx_out, dy_out, N_out_x, N_out_y, R_ref), gap_kernel='fresnel' "
-            f"and on_collins_sampling='ignore', having checked the Kelly "
-            f"conditions on a concrete array first -- or move this call "
-            f"outside the trace.")
+            f"it.  THREE WAYS OUT, shortest first: pass "
+            f"transport='sziklas', whose co-moving step takes no measured "
+            f"decision at all and is what this entry point returned before "
+            f"the default moved; or call _collins_transport directly with an "
+            f"explicit (dx_out, dy_out, N_out_x, N_out_y, R_ref), "
+            f"gap_kernel='fresnel' and on_collins_sampling='ignore', having "
+            f"checked the Kelly conditions on a concrete array first; or move "
+            f"this call outside the trace.")
     env_a = xp.asarray(env)
     if z == 0:
         return CarrierReferencedField(
@@ -2677,19 +2680,45 @@ def _collins_carrier_leg(env, R, z, wavelength, dx, dy, *,
     # ``|A| r``), and letting that hair veto the fallback is what would leave
     # a 47x under-sampled chirp-Z running on an ordinary relay leg.
     #
-    # AN ASTIGMATIC CARRIER IS NOW INCLUDED (WP-C3).  It was excluded because
-    # the sentence "the transfer-function form has no per-axis form" was true
-    # of ``_carrier_step_fast``, which this line used to call -- but not of
-    # the Sziklas TRANSPORT, whose entry point routes an astigmatic carrier to
-    # the separable per-axis step and returns exactly the ``((R_x + z,
-    # R_y + z), (m_x dx, m_y dy))`` triple this leg promises.  Now that the
-    # fallback goes through that entry point the exclusion has no referent,
-    # and it mattered: MEASURED 2026-09-20 on WP-B4's own astigmatic fixture
-    # (``R = (-40, -55) mm``, ``z = 5 mm``, N = 1024 at 4 um) the chirp-Z runs
-    # at K1 = 1.0222 and K3 = 2.7997, i.e. the returned window spans 2.8
-    # periods and its outer samples are wrapped copies -- an answer that was
-    # opt-in before the flip and would have been the default after it.
-    tf_available = (Ax > 0.0 and Ay > 0.0 and not flat
+    # TWO EXCLUSIONS WERE DROPPED IN WP-C3, and both for the same reason: they
+    # were properties of ``_carrier_step_fast``, which this line used to call,
+    # and not of the Sziklas TRANSPORT, which is what it calls now.  Each one
+    # left a leg with NO fallback, so an under-sampled chirp-Z ran and
+    # returned a wrapped answer with a warning -- opt-in before the flip, the
+    # default after it.
+    #
+    # (a) AN ASTIGMATIC CARRIER.  "The transfer-function form has no per-axis
+    #     form" is true of the fast path and false of the transport, whose
+    #     entry point routes an astigmatic carrier to the separable per-axis
+    #     step and returns exactly the ``((R_x + z, R_y + z),
+    #     (m_x dx, m_y dy))`` triple this leg promises.  MEASURED 2026-09-20
+    #     on WP-B4's own astigmatic fixture (``R = (-40, -55) mm``,
+    #     ``z = 5 mm``, N = 1024 at 4 um): the chirp-Z ran at K1 = 1.0222 and
+    #     K3 = 2.7997, so the returned window spanned 2.8 periods.
+    #
+    # (b) AN INVERTED FRAME, ``A < 0`` -- a leg PAST the carrier's geometric
+    #     focus.  It was excluded because "``m <= 0`` is the split this
+    #     transport exists to avoid", which is the right instinct and the
+    #     wrong rule: avoiding the split is what the chirp-Z buys WHERE THE
+    #     CHIRP-Z IS REPRESENTABLE, and where it is not there is nothing to
+    #     buy.  MEASURED 2026-09-20 on ``test_carrier_referenced.py``'s
+    #     focus-crossing oracle (w0 = 4 um at 30 mm, N = 2048): at z = 45 mm
+    #     (``A = -0.5``) the chirp-Z ran at K1 = 1.5907 and K3 = 2.5924 and
+    #     read a windowed r2m of 3333.4 um against the analytic Gaussian's
+    #     1105.7 -- 3.0x -- while the Sziklas split matches that oracle to
+    #     better than 1 %.  At z = 60 mm it ran at K1 = 2.3831 / K3 = 3.8886.
+    #     The selection is "take the form that is REPRESENTABLE on this
+    #     lattice"; it is not "prefer this transport".
+    #
+    # ``A == 0`` stays excluded and so does ``flat``, and those two are the
+    # real boundary: the Sziklas transport cannot land on the carrier's own
+    # focus at all (it re-references to ``R_out = 0`` and
+    # ``carrier_referenced_envelope`` refuses that), and it cannot produce a
+    # FLAT output reference, which is what this leg resolves to exactly where
+    # the geometric one collapses.  So the legs with no fallback are precisely
+    # the legs the Sziklas transport could never evaluate -- which is the
+    # honest statement of what the flip does and does not change.
+    tf_available = (Ax != 0.0 and Ay != 0.0 and not flat
                     and dx_out is None and dy_out is None
                     and carrier_out is None)
     if tf_available and (max(k1x, k1y) > 1.0 or max(k3x, k3y) > 1.0):
@@ -5034,7 +5063,10 @@ def _publish_readout_route(stage, transport, took_collins, k1):
       lattice, the number the decision was taken on;
     * ``readout_route_reason`` -- ``'representable'`` when the one-step form
       was taken because K1 <= 1, ``'k1'`` when it was not and the Sziklas
-      readout ran instead.
+      readout ran instead, and ``'stop_plane_key'`` when the caller named
+      ``standoff`` or ``on_focus_containment`` and thereby asked for the
+      readout that HAS a stop plane (K1 is then not computed at all, and
+      ``readout_route_k1`` is ``None``).
 
     NOTHING IS PUBLISHED ON ``transport='sziklas'``, deliberately: that path's
     ``stages`` list is a bit-identity key (WP-B4 sec. 4.2 digests
@@ -5050,7 +5082,9 @@ def _publish_readout_route(stage, transport, took_collins, k1):
         return
     stage['readout_route'] = 'collins' if took_collins else 'sziklas'
     stage['readout_route_k1'] = (None if k1 is None else float(k1))
-    stage['readout_route_reason'] = ('representable' if took_collins else 'k1')
+    stage['readout_route_reason'] = (
+        'representable' if took_collins
+        else ('k1' if k1 is not None else 'stop_plane_key'))
 
 
 def _small_extent_focus_standoff_f(env, R, z, wavelength, dx, ext, f_floor,
@@ -10408,21 +10442,31 @@ def propagate_traced_carrier_chain(
                 f"{sorted(_FOCUS_READOUT_KEYS)!r}.  (A dropped key is not "
                 f"inert: 'on_readout_windo' would leave on_readout_window at "
                 f"its hard 'error' default while reading as a downgrade.)")
-        # Same contract one level down: the two keys that describe the SZIKLAS
-        # readout's stop plane have no referent on a transport that has no stop
-        # plane, so they are refused rather than accepted and ignored.
-        if transport == 'collins':
-            _fr_moot = {k for k in ('standoff', 'on_focus_containment')
-                        if k in focus_readout}
-            if _fr_moot:
-                raise ValueError(
-                    f"{_fn}: focus_readout key(s) {sorted(_fr_moot)!r} describe "
-                    f"the STOP PLANE of the Sziklas readout -- the length of "
-                    f"its fine Bluestein-zoom leg and the guard on what the "
-                    f"contracted co-moving grid held there.  transport="
-                    f"'collins' lands the target plane in one step and has "
-                    f"neither, so these cannot be honoured.  Drop them, or use "
-                    f"transport='sziklas'.")
+        # THE STOP-PLANE KEYS SELECT THE ROUTE, they are not refused (WP-C3).
+        #
+        # ``standoff`` and ``on_focus_containment`` describe the SZIKLAS
+        # readout's stop plane -- the length of its fine Bluestein-zoom leg,
+        # and the guard on what the contracted co-moving grid held there.
+        # WP-B4 REFUSED them on ``transport='collins'``, correctly at the
+        # time: that transport had no stop plane and no fallback, so the keys
+        # had no referent and accepting them would have been the
+        # accept-and-ignore shape the vocabulary gates exist to remove.
+        #
+        # Since the readout RESOLVES its quadrature (see the route block
+        # below) they have a referent again, because the Sziklas readout is
+        # the route most chain readouts take.  So naming one now SELECTS that
+        # route, which is the reading that makes the key do exactly what it
+        # says: a caller who names a stop plane is asking for the readout that
+        # has one.  Nothing is accepted and ignored, and the resolution is
+        # published on the stage as ``readout_route_reason='stop_plane_key'``.
+        #
+        # MEASURED 2026-09-20, which is why this is not a style preference:
+        # with the refusal in place and the default flipped, 30 ids across
+        # test_niche_d3_guards, _d4_dgrating, _d5_dx_flatness_gate,
+        # _c1_consolidation, _d2_chain_multi, _r8_tiltaware_chain_api and
+        # _r9_highna_final_leg raised -- every one of them a caller who
+        # legitimately wants the standoff-based readout and had no reason to
+        # know the transport keyword had moved underneath them.
     if not (np.isfinite(decentre_fit_frac) and decentre_fit_frac >= 0.0):
         raise ValueError(
             f"{_fn}: decentre_fit_frac must be a finite non-negative number "
@@ -11201,7 +11245,11 @@ def propagate_traced_carrier_chain(
         # cannot represent, and moves only the ones it can.
         _collins_ro = (transport == 'collins')
         _ro_k1 = None
-        if _collins_ro:
+        _ro_named = sorted(k for k in _FOCUS_READOUT_STOP_PLANE_KEYS
+                           if k in focus_readout)
+        if _collins_ro and _ro_named:
+            _collins_ro = False
+        elif _collins_ro:
             _ro_k1 = _collins_readout_k1(env, R, final_distance, wavelength,
                                          cur_dx, cur_dy)
             if not (_ro_k1 <= 1.0):
@@ -11528,6 +11576,14 @@ _OUTPUT_GRID_PASSTHROUGH = ('standoff', 'bandlimit', 'window_factor',
 # rejected) when the leg turns out to be paraxial -- see ``_par_kw``.
 _FOCUS_READOUT_KEYS = frozenset(
     {'dx_out', 'N_out', 'centre_out'} | set(_OUTPUT_GRID_PASSTHROUGH))
+
+#: The two ``focus_readout`` keys that describe the SZIKLAS readout's STOP
+#: PLANE: the length of its fine Bluestein-zoom leg, and the guard on what the
+#: contracted co-moving grid held there.  Naming either one on
+#: ``transport='collins'`` SELECTS the Sziklas readout rather than being
+#: refused -- see the route block in :func:`propagate_traced_carrier_chain`
+#: for why, and :func:`_publish_readout_route` for what is published.
+_FOCUS_READOUT_STOP_PLANE_KEYS = ('standoff', 'on_focus_containment')
 
 
 def _doe_groups_for_order(groups, doe_order, where):

@@ -209,7 +209,8 @@ def _final_distance():
 
 def _run_chain(carrier, final_leg='auto', n_fine_cap=16384,
                on_tilt_exact_grid='error', N_out=_NOUT, dx_out=_DXO,
-               centre_out=None, groups=None, final_distance=None):
+               centre_out=None, groups=None, final_distance=None,
+               transport=None):
     groups = _groups() if groups is None else groups
     fd = _final_distance() if final_distance is None else final_distance
     env, dx = _launch()
@@ -219,12 +220,16 @@ def _run_chain(carrier, final_leg='auto', n_fine_cap=16384,
         centre_out = (cx, cy)
     fr = {'dx_out': dx_out, 'N_out': int(N_out), 'n_fine_cap': int(n_fine_cap),
           'window_factor': _WFAC, 'centre_out': tuple(centre_out)}
+    # ``transport`` is forwarded only when a caller NAMES it, so this
+    # fixture tracks the library default unless the test is about one
+    # transport in particular (WP-C3).
+    _tr = {} if transport is None else {'transport': transport}
     return la.propagate_traced_carrier_chain(
         env, groups, _WL, dx, r_in=carrier, ray_subsample=4, n_workers=1,
         final_distance=fd, focus_readout=fr, final_leg=final_leg,
         on_tilt_exact_grid=on_tilt_exact_grid,
         traced_kwargs={'fit_radius_beam_factor': 1.5,
-                       'on_undersample': 'silent'}), centre_out
+                       'on_undersample': 'silent'}, **_tr), centre_out
 
 
 # ---------------------------------------------------------------------------

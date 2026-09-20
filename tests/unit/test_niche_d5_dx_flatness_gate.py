@@ -741,6 +741,19 @@ def test_dx_flatness_alone_is_not_sufficient():
     """MEASURED LESSON, pinned so the oracle anchor is never dropped as
     redundant: the broken configuration above is dx-FLAT.
 
+    2026-09-20 (WP-C3) -- ``transport='sziklas'`` IS NOW NAMED, and the
+    sentence three paragraphs down ("a further accuracy improvement could
+    walk through it") predicted this one too.  Moving the chain's free legs to
+    the Collins quadrature improves the deliberately-broken parabola
+    configuration AGAIN, to a FWHM/oracle ratio of 0.963 -- i.e. it is no
+    longer wide of the oracle at all, and there is nothing left for a
+    flatness-only gate to pass silently.  That is a real result about the
+    transport and it is recorded in the WP-C3 report; it is NOT a reason to
+    lower the bar here.  The LESSON this test exists for -- that a
+    flatness-only gate cannot see a level failure -- needs a configuration
+    that HAS a level failure, and on the co-moving step this one still does.
+    So the transport is named and the demonstration keeps its teeth.
+
     ``carrier_reference='parabola'`` reads FWHM 10.06172 / 10.06224 um at
     N = 512 / 1024 -- a 0.005 % spread, INSIDE the 0.5 % flatness tolerance
     and inside every EE/window flatness tolerance too (EE2 6.18876 /

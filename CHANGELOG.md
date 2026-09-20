@@ -30,8 +30,10 @@ pairing.  `lambda = 1.064 um`, `w = 0.30 mm`, N = 512 at six `1/e` radii,
 
 The fixture's own grid-truncation floor is 3.87e-05, computed from the
 fixture by quadrature: the Collins column sits ON it at every cell, so those
-readings are the grid's error and not the transport's, and the 1802x at
-`A = -0.5` is the co-moving frame having inverted.  The focus cell is the
+readings are the grid's error and not the transport's, and the 1796.7x at
+`A = -0.5` is the co-moving frame having inverted through the waist (the
+other cells read 2.70x, 4.72x and 2.52x, and the diverging one is the same
+array on both transports).  The focus cell is the
 qualitative one -- the shipped transport cannot land there at all.
 
 **The readout RESOLVES, and that is what makes the flip safe.**  Flipping the

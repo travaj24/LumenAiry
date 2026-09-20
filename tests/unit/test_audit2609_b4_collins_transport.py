@@ -190,18 +190,48 @@ class TestVocabulary:
         assert float(free.dx) == pytest.approx(1e-6, rel=0, abs=0)
         assert np.isinf(flat.R)
 
-    def test_the_stop_plane_readout_keys_are_refused_on_collins(self):
+    def test_the_stop_plane_readout_keys_SELECT_the_sziklas_readout(self):
         """``standoff`` and ``on_focus_containment`` describe the Sziklas
-        readout's stop plane.  transport='collins' has no stop plane, so they
-        are refused rather than silently dropped."""
-        env = _gauss_env(64, 8e-6, 40e-6)
-        for key, val in (('standoff', 1e-4),
+        readout's stop plane.
+
+        THE CONTRACT CHANGED WITH THE DEFAULT (WP-C3), and the change is
+        recorded here rather than the test being deleted.  WP-B4 REFUSED these
+        two keys on ``transport='collins'`` -- correctly at the time: that
+        transport had no stop plane and no fallback, so the keys had no
+        referent and accepting them would have been accept-and-ignore.  Since
+        the chain's readout RESOLVES its quadrature they have a referent
+        again, because the Sziklas readout is the route most chain readouts
+        take, so naming one now SELECTS that route.  Nothing is accepted and
+        ignored: the key does exactly what it says, and the stage says so.
+
+        Both halves are asserted -- the route taken AND the reason published
+        -- so a future change that went back to ignoring the key silently
+        would fail here rather than reading as a pass.
+        """
+        env, dx, r_in, groups = _chain_fixture()
+        base = dict(r_in=r_in, ray_subsample=16, n_workers=1,
+                    traced_kwargs=_CHAIN_TKW, final_leg='paraxial',
+                    final_distance=8e-3)
+        fr0 = dict(dx_out=0.5e-6, N_out=64)
+        for key, val in (('standoff', 2e-3),
                          ('on_focus_containment', 'ignore')):
-            with pytest.raises(ValueError) as ei:
-                C.propagate_traced_carrier_chain(
-                    env, [{'surfaces': []}], _WL, 8e-6, transport='collins',
-                    focus_readout={'dx_out': 1e-6, 'N_out': 8, key: val})
-            assert key in str(ei.value)
+            with warnings.catch_warnings():
+                warnings.simplefilter('ignore')
+                got = C.propagate_traced_carrier_chain(
+                    env, groups, 1.31e-6, dx, transport='collins',
+                    focus_readout=dict(fr0, **{key: val}), **base)
+                ref = C.propagate_traced_carrier_chain(
+                    env, groups, 1.31e-6, dx, transport='sziklas',
+                    focus_readout=dict(fr0, **{key: val}), **base)
+            st = got.stages[-1]
+            assert st['readout_route'] == 'sziklas'
+            assert st['readout_route_reason'] == 'stop_plane_key'
+            assert st['readout_route_k1'] is None, (
+                'K1 was computed for a route the keyword had already '
+                'decided; it is not the reason and must not be published '
+                'as one')
+            assert np.array_equal(np.asarray(got.field),
+                                  np.asarray(ref.field))
 
     def test_an_astigmatic_exact_kernel_is_refused_on_collins(self, env_conv):
         with pytest.raises(ValueError, match='ASTIGMATIC'):

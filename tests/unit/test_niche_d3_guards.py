@@ -675,12 +675,26 @@ def _linearity_error(tilt):
     Both sides run with ``on_multi_congruence='ignore'`` -- the comparison is
     the point, not the warning.  Read out on the CO-MOVING grid (no focus
     readout) so nothing is window-clipped and all five runs land on the same
-    lattice."""
+    lattice.
+
+    ``transport='sziklas'`` NAMED, and the sentence above is the reason
+    (WP-C3).  "All five runs land on the same lattice" is a PROPERTY of the
+    co-moving step: its output pitch is ``m*dx``, a function of the carrier
+    and the leg and of nothing else, so five different INPUT fields on one
+    grid come back on one grid.  The Collins quadrature resolves its output
+    pitch from each field's own MEASURED phase-space box, and the five fields
+    here are deliberately different -- one 2x2 fan against its four separate
+    tilts -- so they come back on five lattices and ``mux - ref`` stops being
+    a linearity residual at all.  The claim (the traced entrance->exit map is
+    non-linear on a multi-valued input) is about ``apply_real_lens_traced``
+    and is unchanged; what is named is the transport that makes the
+    subtraction well posed."""
     X, Y = _grid(_CN, _CDX)
     G = _gauss(_CN, _CDX, _CW)
     parts = [G * np.exp(1j * _K0 * tilt * (sx * X + sy * Y))
              for sx in (-1, 1) for sy in (-1, 1)]
-    kw = dict(focus_readout=None, on_multi_congruence='ignore')
+    kw = dict(focus_readout=None, on_multi_congruence='ignore',
+              transport='sziklas')
     ref = None
     for p in parts:
         f = _chain(p, quiet=True, **kw).field

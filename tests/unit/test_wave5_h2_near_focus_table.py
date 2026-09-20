@@ -622,9 +622,13 @@ def test_the_sziklas_transport_loses_the_focus_and_the_collins_one_does_not(
     q, R_in, _w, env = fixture_env
 
     def _sziklas(d):
+        # ``transport='sziklas'`` NAMED (WP-C3): this closure IS the Sziklas
+        # arm of the comparison, and it used to reach it through the library
+        # default, which has since moved to 'collins'.
         z = F - d
         sz = propagate_carrier_referenced(env, R_in, z, LAM, DX_IN,
-                                          gap_kernel='fresnel')
+                                          gap_kernel='fresnel',
+                                          transport='sziklas')
         fld = carrier_referenced_reconstruct(sz.env, sz.R, LAM, sz.dx)
         xo = _axis(N_IN, float(sz.dx))
         return sz, _rel(fld, _q_field(xo, xo, q, z)),             _floor_bar(z, N_IN, float(sz.dx), _w_of_q(q + z))

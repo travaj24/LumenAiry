@@ -126,6 +126,21 @@ _RS, _NW = 8, 4
 _LEG_CAL = {}
 
 
+#: Every fixture in this file that sizes a ``standoff`` is calibrating the
+#: SZIKLAS readout, and names that transport rather than riding the library
+#: default (WP-C3, which moved the default to ``'collins'``).
+#:
+#: It is a CONTRACT, not a pin kept alive.  A standoff plane, a Bluestein
+#: period LINEAR in the length of the fine-zoom leg, and a ``readout_period``
+#: that is ``N * d`` of the co-moving grid there are all properties of that
+#: readout; the Collins readout lands the target in one step, its period is
+#: ``lambda |z| / dx`` of the chain's INPUT grid, and it refuses the
+#: ``standoff`` key by name rather than accepting and ignoring it.  So these
+#: fixtures are about the readout whose stop plane they are sizing, and the
+#: ones that are NOT about a standoff are left on the library's default.
+_SZIKLAS_STANDOFF = 'sziklas'
+
+
 def _leg_for_window(groups, field, carrier, fd, window, margin=1.3):
     """Shortest fine-zoom leg whose ONE Bluestein period holds ``window``.
 
@@ -146,6 +161,17 @@ def _leg_for_window(groups, field, carrier, fd, window, margin=1.3):
     breaking the K=1 contract).  A CALLER that genuinely needs a wide window
     is exactly who should make that trade, knowingly -- which is what these
     fixtures do.
+
+    ``transport='sziklas'`` IS THE CONTRACT HERE, not a pin being kept alive
+    (WP-C3).  Everything this function measures -- a standoff plane at all, a
+    period LINEAR in the length of the fine-zoom leg, and a
+    ``readout_period`` that is ``N * d`` of the CO-MOVING grid there -- is a
+    property of the Sziklas readout.  On the Collins readout the period is
+    ``lambda |z| / dx`` of the chain's INPUT grid and owes nothing to a
+    standoff, so there is no leg to calibrate and the ``standoff`` key is
+    refused by name.  The calibration therefore names the transport whose
+    readout it is calibrating, and the fixtures below run on whatever the
+    library's default is.
     """
     key = round(float(fd), 12)
     if key not in _LEG_CAL:
@@ -155,7 +181,7 @@ def _leg_for_window(groups, field, carrier, fd, window, margin=1.3):
             probe = la.propagate_traced_carrier_chain(
                 field, groups, _WL, _DX, r_in=carrier, ray_subsample=32,
                 n_workers=1, final_distance=fd, traced_kwargs=_TKW,
-                final_leg='paraxial',
+                final_leg='paraxial', transport='sziklas',
                 focus_readout=dict(dx_out=_DXO, N_out=8, standoff=s0,
                                    on_replica='ignore'))
         per = float(probe.stages[-1]['readout_period'][0])
@@ -285,7 +311,7 @@ def _run_chain(groups, field, carrier, fd, centre, n_out=_NOUT, quiet=True):
         return la.propagate_traced_carrier_chain(
             field, groups, _WL, _DX, r_in=carrier, ray_subsample=_RS,
             n_workers=_NW, final_distance=fd, traced_kwargs=_TKW,
-            final_leg='paraxial',
+            final_leg='paraxial', transport=_SZIKLAS_STANDOFF,
             focus_readout=dict(
                 dx_out=_DXO, N_out=n_out, centre_out=centre,
                 standoff=_leg_for_window(groups, field, carrier, fd,
@@ -310,7 +336,8 @@ def _run_multi(groups, specs, fd, **kw):
         warnings.simplefilter('ignore')
         return la.propagate_traced_carrier_chain_multi(
             specs, groups, _WL, _DX, final_distance=fd, ray_subsample=_RS,
-            n_workers=_NW, traced_kwargs=_TKW, final_leg='paraxial', **kw)
+            n_workers=_NW, traced_kwargs=_TKW, final_leg='paraxial',
+            transport=_SZIKLAS_STANDOFF, **kw)
 
 
 # ===========================================================================
@@ -529,12 +556,27 @@ def test_default_refuses_the_periodic_replica_regime(_fan):
 
     * ``readout_tile=None`` in that regime RAISES by default, naming the
       period and the largest window that fits it;
-    * the DEFAULT ``readout_tile='auto'`` sizes the window down for you, says
-      so, and lands within one period."""
+    * ``readout_tile='auto'`` (the shipped value) sizes the window down for
+      you, says so, and lands within one period.
+
+    ``transport='sziklas'`` NAMED (WP-C3).  This test is ABOUT the readout
+    period, and the two readouts have different ones: the Sziklas readout's is
+    ``N * d`` of the co-moving grid at its standoff plane -- a function of the
+    resolved leg, which is what makes a per-congruence period differ at all --
+    while the Collins readout's is ``lambda |z| / dx`` of the chain's INPUT
+    grid and owes nothing to a standoff.  MEASURED 2026-09-20 on this
+    fixture: the Collins period is 3846.09 um against the requested 2867.20 um
+    window, so the regime this test constructs does not exist there and the
+    guard correctly says nothing.  That decoupling is WP-B4's gate (b) and is
+    pinned in ``test_audit2609_b4_collins_transport.py::
+    TestReadoutPeriodDecoupling``; this file keeps the statement about the
+    readout whose period it is measuring.
+    """
     fn = la.propagate_traced_carrier_chain_multi
     kw = dict(output_grid=dict(dx_out=_DXO, N_out=_NOUT),
               final_distance=_fan['fd'], ray_subsample=_RS, n_workers=_NW,
-              traced_kwargs=_TKW, final_leg='paraxial')
+              traced_kwargs=_TKW, final_leg='paraxial',
+              transport=_SZIKLAS_STANDOFF)
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
         with pytest.raises(RuntimeError, match='REPLICAS'):
@@ -588,11 +630,26 @@ def test_auto_window_is_independent_of_congruence_order(_fan):
     Two congruences with deliberately DIFFERENT periods (different beam
     widths -> different focus standoff -> different co-moving grid at the
     readout).  Both orders must run, pick the SAME window -- the one set by
-    the SHORTER period -- and give the same field."""
+    the SHORTER period -- and give the same field.
+
+    ``transport='sziklas'`` NAMED (WP-C3).  This test is ABOUT the readout
+    period, and the two readouts have different ones: the Sziklas readout's is
+    ``N * d`` of the co-moving grid at its standoff plane -- a function of the
+    resolved leg, which is what makes a per-congruence period differ at all --
+    while the Collins readout's is ``lambda |z| / dx`` of the chain's INPUT
+    grid and owes nothing to a standoff.  MEASURED 2026-09-20 on this
+    fixture: the Collins period is 3846.09 um against the requested 2867.20 um
+    window, so the regime this test constructs does not exist there and the
+    guard correctly says nothing.  That decoupling is WP-B4's gate (b) and is
+    pinned in ``test_audit2609_b4_collins_transport.py::
+    TestReadoutPeriodDecoupling``; this file keeps the statement about the
+    readout whose period it is measuring.
+    """
     fn = la.propagate_traced_carrier_chain_multi
     kw = dict(output_grid=dict(dx_out=_DXO, N_out=_NOUT),
               final_distance=_fan['fd'], ray_subsample=_RS, n_workers=_NW,
               traced_kwargs=_TKW, final_leg='paraxial',
+              transport=_SZIKLAS_STANDOFF,
               on_readout_clip='ignore')
     specs = [{'field': _gauss(w=1.0e-3), 'name': 'wide',
               'carrier': la.TiltedCarrier(np.inf, _TILT, 0.0)},
@@ -652,7 +709,8 @@ def test_k1_keeps_the_requested_field_of_view(_fan):
                            _TILE * _DXO)
     kw = dict(output_grid=dict(dx_out=_DXO, N_out=_NOUT, standoff=_leg),
               final_distance=_fan['fd'], ray_subsample=_RS, n_workers=_NW,
-              traced_kwargs=_TKW, final_leg='paraxial')
+              traced_kwargs=_TKW, final_leg='paraxial',
+              transport=_SZIKLAS_STANDOFF)
     # (a) the default REFUSES, at K = 1 as at K > 1 ...
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
@@ -693,11 +751,26 @@ def test_k1_keeps_the_requested_field_of_view(_fan):
 def test_auto_tile_equals_the_same_tile_asked_for_explicitly(_fan):
     """``readout_tile='auto'`` is a SIZING convenience and nothing else: the
     field it produces is bit-for-bit (to <= 1e-10 * scale) what the same tile
-    asked for explicitly produces."""
+    asked for explicitly produces.
+
+    ``transport='sziklas'`` NAMED (WP-C3).  This test is ABOUT the readout
+    period, and the two readouts have different ones: the Sziklas readout's is
+    ``N * d`` of the co-moving grid at its standoff plane -- a function of the
+    resolved leg, which is what makes a per-congruence period differ at all --
+    while the Collins readout's is ``lambda |z| / dx`` of the chain's INPUT
+    grid and owes nothing to a standoff.  MEASURED 2026-09-20 on this
+    fixture: the Collins period is 3846.09 um against the requested 2867.20 um
+    window, so the regime this test constructs does not exist there and the
+    guard correctly says nothing.  That decoupling is WP-B4's gate (b) and is
+    pinned in ``test_audit2609_b4_collins_transport.py::
+    TestReadoutPeriodDecoupling``; this file keeps the statement about the
+    readout whose period it is measuring.
+    """
     fn = la.propagate_traced_carrier_chain_multi
     kw = dict(output_grid=dict(dx_out=_DXO, N_out=_NOUT),
               final_distance=_fan['fd'], ray_subsample=_RS, n_workers=_NW,
               traced_kwargs=_TKW, final_leg='paraxial',
+              transport=_SZIKLAS_STANDOFF,
               on_readout_clip='ignore')
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
@@ -928,7 +1001,8 @@ def _conjugate():
     _need = 1.3 * (_NOUT_I * _DXO_I) * fd / (_N * _DX)
     og = dict(dx_out=_DXO_I, N_out=_NOUT_I, standoff=_need)
     kw = dict(output_grid=og, final_distance=fd, ray_subsample=_RS,
-              n_workers=_NW, traced_kwargs=_TKW, final_leg='paraxial')
+              n_workers=_NW, traced_kwargs=_TKW, final_leg='paraxial',
+              transport=_SZIKLAS_STANDOFF)
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
         coh = la.propagate_traced_carrier_chain_multi(
@@ -1036,7 +1110,7 @@ def test_per_emitter_array_images_onto_the_exact_ray_trace():
         res = la.propagate_traced_carrier_chain_multi(
             specs, groups, _WL, _DX,
             output_grid=dict(dx_out=dxo, N_out=nout, standoff=_need),
-            readout_tile=tile,
+            readout_tile=tile, transport=_SZIKLAS_STANDOFF,
             final_distance=fd, ray_subsample=_RS, n_workers=_NW,
             traced_kwargs=_TKW, final_leg='paraxial')
 
@@ -1303,7 +1377,8 @@ def test_result_grid_convention_is_the_readout_convention():
             output_grid=dict(dx_out=0.5e-6, N_out=512, centre_out=cen,
                              standoff=1.3 * (512 * 0.5e-6) * fd / (256 * 40e-6)),
             final_distance=fd, ray_subsample=8, n_workers=1,
-            traced_kwargs=_TKW, final_leg='paraxial')
+            traced_kwargs=_TKW, final_leg='paraxial',
+            transport=_SZIKLAS_STANDOFF)
     assert res.centre == cen
     I = np.abs(np.asarray(res.field)) ** 2
     ax = (np.arange(512) - 512 / 2) * 0.5e-6

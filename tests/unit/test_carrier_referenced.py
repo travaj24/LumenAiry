@@ -26,6 +26,8 @@ carrier-referenced path on that grid is correct (< 1%).
 """
 from __future__ import annotations
 
+import warnings
+
 import numpy as np
 import pytest
 
@@ -286,19 +288,40 @@ def test_zero_distance_identity():
 
 
 def test_zero_carrier_raises_but_focus_crossing_is_handled():
-    """R_carrier == 0 (the carrier's own focus) still raises; a focus CROSSING
-    is now auto-split (Task 2), not an error -- it returns a finite field with
-    a flipped diverging carrier."""
+    """R_carrier == 0 (the carrier's own focus) still raises on BOTH
+    transports; a focus CROSSING is not an error on either.
+
+    The two arms differ in HOW, and that is the point of naming them (WP-C3,
+    which moved the default to ``'collins'``).  ``'sziklas'`` auto-splits the
+    crossing (Task 2) and comes back on the flipped geometric carrier
+    ``R_out = R + z``; ``'collins'`` carries ``A < 0`` natively and resolves
+    the output reference from the beam's own measured phase-space box, which
+    on this fixture is a FLAT one -- the physical statement that the
+    wavefront is flat where the ray carrier is collapsing.  Both are asserted,
+    so the test says what each transport does rather than pinning one of
+    them and calling it the library.
+    """
     N = 128
     dx = 5e-6
     env = _gauss_env(N, dx, 40e-6)
-    with pytest.raises(ValueError):
-        propagate_carrier_referenced(env, 0.0, 5e-3, WL, dx)
-    # converging R=-20mm stepped +25mm crosses the focus (R_out=+5mm): handled.
-    out = propagate_carrier_referenced(env, -20e-3, 25e-3, WL, dx)
-    assert np.all(np.isfinite(np.asarray(out.env)))
-    assert out.R == pytest.approx(5e-3, rel=1e-12)      # flipped, diverging
-    assert out.dx > 0
+    for tr in ('sziklas', 'collins'):
+        with pytest.raises(ValueError):
+            propagate_carrier_referenced(env, 0.0, 5e-3, WL, dx, transport=tr)
+    # converging R=-20mm stepped +25mm crosses the focus (R_out=+5mm).
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        szik = propagate_carrier_referenced(env, -20e-3, 25e-3, WL, dx,
+                                            transport='sziklas')
+        coll = propagate_carrier_referenced(env, -20e-3, 25e-3, WL, dx)
+    for out in (szik, coll):
+        assert np.all(np.isfinite(np.asarray(out.env)))
+        assert float(out.dx if not isinstance(out.dx, tuple)
+                     else out.dx[0]) > 0
+    assert szik.R == pytest.approx(5e-3, rel=1e-12)      # flipped, diverging
+    assert np.isinf(coll.R), (
+        f'the default resolved {coll.R!r} rather than a flat output '
+        f'reference; if the resolver has changed its mind on this fixture '
+        f'the sentence above has to change with it')
 
 
 # ---------------------------------------------------------------------------
@@ -531,12 +554,21 @@ def test_near_focus_landing_fast_path_unchanged():
     """A step landing comfortably away from focus (same sign, |m| ~ O(1)) takes
     the byte-identical fast path -- the near-focus guard does NOT reroute it to
     the bridge, so the result is the exact fast-step output.  Pins the
-    no-crossing contract."""
+    no-crossing contract.
+
+    ``transport='sziklas'`` NAMED (WP-C3).  ``_carrier_step_fast`` IS that
+    transport's no-crossing branch, so "the result is the fast step's output"
+    is a statement about it and about nothing else; the Collins quadrature
+    evaluates the same integral by a different sum and lands on the same
+    lattice (``dx = 11.6667 um``, ``R = 0.07``) without being bit-identical to
+    it, which is what the two forms agreeing to ~4e-12 of peak means.
+    """
     from lumenairy.propagators.carrier import _carrier_step_fast
     N = 512
     dx = 5e-6
     env = _gauss_env(N, dx, 40e-6)
-    out = propagate_carrier_referenced(env, 30e-3, 40e-3, WL, dx)
+    out = propagate_carrier_referenced(env, 30e-3, 40e-3, WL, dx,
+                                       transport='sziklas')
     ref = _carrier_step_fast(env, 30e-3, 40e-3, WL, dx, dx)
     # byte-identical to the extracted fast step (i.e. no rerouting to bridge)
     assert np.array_equal(np.asarray(out.env), np.asarray(ref.env))
