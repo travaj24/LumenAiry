@@ -1808,7 +1808,8 @@ one" below -- `trace_prescription` 27, `refocus` 26, `ray_fan_data` 8,
 `opd_fan_data` 8, `spot_rms` 4 and `through_focus` 1 on Windows, the same less
 `through_focus` on WSL.  Those entry points now carry the keywords themselves,
 and that way back was measured separately: 742 of 742 arrays byte-identical
-over all sixteen, on both mounts.
+over all sixteen, on both mounts (and at 3 of 3 prescriptions over the
+seventeenth, `apply_real_lens`, which round 3 added).
 
 **What you get if you do nothing.**  A 1.08x to 1.44x faster trace on
 prescriptions that contain spherical surfaces (medians 1.12x and 1.19x on the
@@ -1869,10 +1870,10 @@ independent verification moved a further 580 000 with the same result.  Only a
 directed nextafter walk reaches it.
 
 
-**Every entry point has one.**  Sixteen exported functions trace INTERNALLY,
-so their answers moved with `trace`.  All sixteen take `sphere_normal=` and
-`renormalize=` themselves -- same names, same accepted values -- and forward
-them verbatim to the trace they make:
+**Every entry point has one.**  Seventeen exported functions trace
+INTERNALLY, so their answers moved with `trace`.  All seventeen take
+`sphere_normal=` and `renormalize=` themselves -- same names, same accepted
+values -- and forward them verbatim to the trace they make:
 
 | entry point | module |
 |---|---|
@@ -1884,6 +1885,7 @@ them verbatim to the trace they make:
 | `eval_image_plane_wfe` | `lumenairy.analysis.image_plane_wfe` |
 | `plot_lens_layout` | `lumenairy.analysis.plotting` |
 | `fit_canonical_polynomials`, `fit_hf_polynomials` | `lumenairy.propagators.asymptotic_canonical_fit` |
+| `apply_real_lens` (only under `seidel_correction=True`) | `lumenairy.elements` |
 | `apply_real_lens_traced` | `lumenairy.elements` |
 | `apply_real_lens_maslov` | `lumenairy.elements` |
 
@@ -1892,13 +1894,69 @@ whatever the library's default is at the time it runs, so no call site pins
 today's default into tomorrow's answer.  Pass
 `sphere_normal='generic', renormalize='surface'` through any of them for the
 pre-5.49.0 arithmetic -- byte-identical, measured archive to archive at 742 of
-742 arrays on both development mounts, with all sixteen shown to move at the
-default so the identity is not a keyword going nowhere.
+742 arrays on both development mounts over the first sixteen, with all
+sixteen shown to move at the default so the identity is not a keyword going
+nowhere, and at 3 of 3 prescriptions (a spherical singlet, a spherical
+doublet and an aspheric singlet) for the seventeenth.
+
+`apply_real_lens` joined the list in round 3 of this work package.  It traces
+only when `seidel_correction=True` -- the residual fan the Seidel correction
+is fitted to -- and it reached the tracer through a local import alias
+(`trace as _rt_trace`) inside a private implementation, which is why two
+entry-point censuses read it as not tracing at all.  With the correction OFF,
+which is the default, the call is byte-identical with and without the two
+keywords, measured on all three prescriptions on both mounts.  The pair is
+also reachable through `LensConfig`: they are `LensNumerics` fields, accepted
+by `apply_real_lens`, `apply_real_lens_traced` and `apply_real_lens_maslov`.
 
 `spot_rms`, `spot_geo_radius` and `refocus` take no keyword because they do
 not trace: they consume a `TraceResult`, so their answers move only because
 their input does.  Trace the bundle with the keyword and hand the result to
 them.
+
+**Two populations do NOT have a keyword of their own, and both are answered
+by the process-level default rather than by a call.**
+
+*The designer GUI.*  Three class METHODS name a tracer and carry no keyword:
+`SystemModel.run_trace` and `SystemModel.merit_function` (in
+`lumenairy/ui/model.py`) and `ToleranceWorker.run` (in
+`lumenairy/ui/tolerance_dock.py`).  Neither census
+covers methods, and a GUI user drives these through the docks rather than by
+keyword, so there is no keyword surface to add one to.  Their answers move
+with the library default, and the way back for a GUI session is therefore the
+process-level default: set it before the application starts, in the process
+that will run it, by naming the route at the tracer --
+
+```python
+import functools
+
+import lumenairy.raytrace.trace as _t
+import lumenairy.raytrace.world_trace as _wt
+
+_t.trace = functools.partial(_t.trace, sphere_normal='generic',
+                             renormalize='surface')
+_wt.trace_world = functools.partial(_wt.trace_world,
+                                    sphere_normal='generic',
+                                    renormalize='surface')
+```
+
+-- before importing `lumenairy.ui`, so the docks bind the wrapped tracer.
+That is a process-wide setting and it changes every trace in the session,
+which is the point: a GUI has one arithmetic, not one per widget.
+
+*Twelve exported functions that reach a tracer only through a private helper
+of their own module* -- `distortion_grid`, `distortion_vs_field`,
+`field_aberration_sweep`, `footprint_per_surface`, `relative_illumination`
+and `spot_diagram_vs_field` (all through one helper in
+`lumenairy.analysis.field`), `apply_prescription_persurface_to_beamlets`,
+`propagate_hfpi_through_prescription`, `propagate_traced_carrier_chain`,
+`propagate_traced_carrier_chain_multi`, `apply_real_lens_traced_multibranch`
+and `apply_real_lens_traced_uniform`.  Round 3 made this population visible
+for the first time and recorded it rather than closing it; it is named in
+`tests/unit/test_c2_analytic_normal_default.py` as a shrink-only exemption,
+so the census still turns red if a NEW one appears.  The same process-level
+default above is the way back for these until they grow keywords of their
+own.
 
 The **JAX** entry points -- `trace_jax`, `apply_real_lens_traced_jax`,
 `apply_real_lens_maslov_jax`, `fit_canonical_polynomials_jax`,
@@ -1978,7 +2036,7 @@ pass `renormalize='surface'`.
 stacks, with every `alive` mask and error code equal.  The difference does not
 grow with surface count.
 
-**Every entry point has one** -- the same sixteen as for `sphere_normal`,
+**Every entry point has one** -- the same seventeen as for `sphere_normal`,
 each taking `renormalize=` (default `None`) and forwarding it verbatim.  The
 JAX entry points take neither keyword: the JAX body never rescales, so there is
 no per-surface pass to hoist and nothing to switch.

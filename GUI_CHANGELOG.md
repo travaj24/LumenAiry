@@ -15,6 +15,60 @@ for the same release).  Historical GUI-only releases (e.g. 3.2.0,
 Designer" to "**LumenAiry Designer**" in 3.5.9.  Earlier
 historical entries below retain the old name for traceability.
 
+## [Unreleased]
+
+### Changed -- every dock that traces moves with the library's two new tracer defaults, and the way back is a process-level setting
+
+The core library's `trace` / `trace_world` changed two defaults in this
+release: the surface normal at a pure sphere is now computed from the closed
+form (`sphere_normal='analytic'`) and the direction cosines are rescaled once
+on the exit bundle instead of after every surface (`renormalize='exit'`).
+Neither is bit-identical to what 5.48.1 produced.  The MFT shape-rule section
+of `CHANGELOG.md` and the corresponding `Migration-Guide.md` section carry
+the measurements; the short version is that ray positions move by up to
+2.8e-17 m and OPDs by up to 1.7e-16 m, and `alive` flags and error codes do
+not move on any sampled bundle.
+
+**What this means for the GUI.**  Every dock that traces -- Analysis, Caustic,
+Ghost, LG-aberration, Optimizer, PSF/MTF, Tolerance, Wave-optics, and the
+layout view -- goes through `SystemModel.run_trace`,
+`SystemModel.merit_function` (in `lumenairy/ui/model.py`) or
+`ToleranceWorker.run` (in `lumenairy/ui/tolerance_dock.py`).  Those are
+METHODS, not library entry points: they carry no keyword surface of their
+own, and adding one would put a numerical-arithmetic switch in a widget.  So
+the GUI's answers move with the library default and there is no per-dock
+control.
+
+**The way back for a GUI session is the process-level trace default.**  Name
+the old routes on the two tracers before `lumenairy.ui` is imported, so the
+docks bind the wrapped functions:
+
+```python
+import functools
+
+import lumenairy.raytrace.trace as _t
+import lumenairy.raytrace.world_trace as _wt
+
+_t.trace = functools.partial(_t.trace, sphere_normal='generic',
+                             renormalize='surface')
+_wt.trace_world = functools.partial(_wt.trace_world,
+                                    sphere_normal='generic',
+                                    renormalize='surface')
+
+import lumenairy.ui  # noqa: E402  -- after the wrap
+```
+
+That is a whole-session setting and it changes every trace the application
+makes, which is the intended granularity: a design session has one
+arithmetic, not one per dock.  A session that does not set it gets the new
+defaults everywhere, consistently, which is what makes the layout view and
+the analysis docks agree.
+
+Recorded here because the library's own entry-point census covers module-level
+functions and not class methods, so these three do not appear in the seventeen
+entry points the library gives a keyword to.  They are not an oversight; they
+are the documented scope boundary.
+
 ## [5.46.0] — 2026-09-12
 
 ### Fixed -- analysis docks were analysing a different system than the layout drew (U1, U2, P0)

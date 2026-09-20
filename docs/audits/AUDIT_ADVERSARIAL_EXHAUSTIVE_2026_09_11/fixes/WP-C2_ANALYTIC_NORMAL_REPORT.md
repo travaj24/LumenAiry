@@ -1035,3 +1035,283 @@ and the doc-consistency gate -- re-run at **9 passed**.
    release text quote the committed JSON rather than a retyped number, and the
    742-array sixteen-entry-point census supersedes its conclusion, but the
    1008 counts themselves are still the WP-C2 measurement.
+---
+
+# Round 3 (VERIFY-WP-C2 round 2) -- 2026-09-20
+
+Branch `feat/c2-analytic-normal-round3` on `verify/c2-analytic-normal-round2`
+(`9aec3743`).  Subject: the seven defects
+[`VERIFY_WP-C2_ROUND2.md`](VERIFY_WP-C2_ROUND2.md) filed -- VR2-D1 and
+VR2-D4 to be actioned before the release note, VR2-D2 actioned, and VR2-D3,
+VR2-D5, VR2-D6, VR2-D7 filed.  All seven are closed here.
+
+Builds: **Windows py3.14.6 / numpy 2.4.4 / jax 0.11.0** and **WSL py3.12.3 /
+numpy 2.4.6 / jax 0.10.2**, every probe on both, all with
+`OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1` on the command
+line.  The PRE tree is this round's own `git archive 49ddf4bd`, unpacked at
+`C:/tmp/lum_c2c_pre49` and read in its own process with `lumenairy.__file__`
+asserted inside it.  Evidence: `validation/probe_c2_round3/`.
+
+Every number below is re-measured on this round's own fixtures.  Where a
+re-measurement disagrees with the round-2 verification's, this round's
+number is the one that is stated and the disagreement is named.
+
+## Closure table
+
+| defect | closure | this round's numbers, both builds |
+|---|---|---|
+| **VR2-D1** (P2) a SEVENTEENTH entry point, hidden by an import alias | **CLOSED** | `apply_real_lens` takes `renormalize=` / `sphere_normal=` (keyword-only, default `None`) and threads them through `_apply_real_lens_impl` into the aliased `_rt_trace` call.  Way back **3 / 3 prescriptions byte-identical** archive to archive, default **moves 3 / 3**, `None` == omitted **3 / 3**, `seidel_correction=False` control **identical 3 / 3** with and without the keywords.  Census made alias-aware AND given one private-helper hop; it names the seventeenth on the PRE tree carrying zero keywords |
+| **VR2-D4** (P2) the forward pinned in process for 9 of 16 | **CLOSED** | `test_c2_none_stamps_nothing_on_the_entry_points` parametrizes all **seventeen** (nine byte-compared, eight spied).  The four surviving mutants now fail by NAMED id on both builds, and so does the fifth (the seventeenth's own forward) |
+| **VR2-D2** (P2) `n_surfaces * eps` is a reading, not a bound | **CLOSED** | re-measured over 90 combinations: **21 of 90 exceed `n eps`**, worst **1.6667**; **0 of 90 exceed `2 n eps`**, worst reading **0.8333**.  Docstring, test and both release documents restated to `2 n_surfaces eps` |
+| **VR2-D3** (P3) `_library_trace_default` pinned for one keyword | **CLOSED** | the ghost arm loops over `trace._WAY_BACK_KEYWORDS`.  The wrong-`renormalize` mutant went from **58 passed (survives)** to **2 failed** on both builds |
+| **VR2-D5** (P3) the `w6_a2` 1e-4 bar misses the dropped prior term | **CLOSED** | bar tightened to **1e-5**; shipped headroom **51.7x** (Windows) / **114.1x** (WSL), the dropped-prior mode caught at **2.5329e-05** / **2.5698e-05**.  Two-sided on the same mutant tree: fails under 1e-5, passes under 1e-4 |
+| **VR2-D6** (P3) "35 of 46 resolve to a parent carrying both" | **CLOSED** | re-measured from `inspect.signature` of every named parent: **31** carry both, **4** resolve to `trace_jax`, **0** fail to import.  Identical on both builds |
+| **VR2-D7** (P3) `EDITED_IN_PLACE` accepts the same content under a different `def` | **CLOSED** | each entry carries a fifth field, the enclosing definition.  On `9aec3743` the abuse **fires with 0 refusals**; now it is **refused as an OWNER refusal** (equal digests) while the shipped state still fires |
+
+## VR2-D1 -- the seventeenth, measured
+
+`lumenairy/elements/_lens_real.py` imports the tracer inside a function body
+as `trace as _rt_trace` and calls it from the PRIVATE split-out
+`_apply_real_lens_impl`, which `apply_real_lens` reaches one hop away
+whenever `seidel_correction=True`.  Two blind spots in series.
+
+**The census, three ways, over the PRE tree and the tip**
+(`validation/probe_c2_round3/r3_census_{pre,post}_{win,wsl}.json`, source
+read only -- nothing imported -- so the PRE tree does not have to be
+importable).  Identical on both builds:
+
+| reading | PRE entry points | PRE `apply_real_lens` | tip entry points / with both |
+|---|---|---|---|
+| tracer NAMES only (rounds 1 and 2) | 20 | **not in the census** | 20 / 16 |
+| + import aliases (the round-2 requested patch) | 20 | **not in the census** | 20 / 16 |
+| + one private-helper hop | **33** | **IN, zero keywords** | **33 / 17** |
+
+So the requested alias patch ALONE does not reach it: the private split-out
+is the second blind spot and both resolutions are needed.  That is this
+round's one disagreement with the round-2 verification's requested edit, and
+it is recorded rather than glossed.
+
+**The way back, archive to archive**
+(`r3_wayback_{pre,post}_{win,wsl}.json`, one process per tree, SHA-256 over
+`dtype + shape + raw bytes` of the returned 256 x 256 complex field):
+
+| prescription | build | PRE, `seidel_correction=True` | tip at the DEFAULT | tip with `sphere_normal='generic', renormalize='surface'` |
+|---|---|---|---|---|
+| spherical singlet | Windows | `ecc24ca9` | `6dc7d801` (moved) | **`ecc24ca9`** |
+| spherical doublet | Windows | `216dce26` | `774e93b3` (moved) | **`216dce26`** |
+| aspheric singlet | Windows | `fe53dfb9` | `0289fe29` (moved) | **`fe53dfb9`** |
+| spherical singlet | WSL | `fb31d3e4` | `f29c6232` (moved) | **`fb31d3e4`** |
+| spherical doublet | WSL | `b6030e4e` | `3e1a9467` (moved) | **`b6030e4e`** |
+| aspheric singlet | WSL | `96738a32` | `60425c70` (moved) | **`96738a32`** |
+
+3 / 3 way back, 3 / 3 moved, on both builds.  The singlet reproduces
+VERIFY-WP-C2 round 2's own two digests exactly, which is the cross-check
+that this is the same entry point it measured.
+
+The `seidel_correction=False` CONTROL is byte-identical on all three
+prescriptions and both builds, PRE against the tip AND with the two keywords
+set to the old routes against without them: the analytic split-step screen
+does not trace, so the keywords are inert there, and that is measured rather
+than argued (`n_control_identical: 3` in both compare JSONs).  `None` for
+both keywords is byte-identical to omitting them on all three.
+
+**The twelve this round made visible and did NOT close.**  The private-helper
+hop that finds `apply_real_lens` also finds twelve further exported functions
+that reach a tracer only through a private helper of their own module:
+`distortion_grid`, `distortion_vs_field`, `field_aberration_sweep`,
+`footprint_per_surface`, `relative_illumination`, `spot_diagram_vs_field`
+(six sharing one helper in `analysis/field.py`),
+`apply_prescription_persurface_to_beamlets`,
+`propagate_hfpi_through_prescription`, `propagate_traced_carrier_chain`,
+`propagate_traced_carrier_chain_multi`,
+`apply_real_lens_traced_multibranch` and `apply_real_lens_traced_uniform`.
+Closing them is twelve signatures and six private helpers, each needing its
+own archive-to-archive byte-identity proof and its own forwarding pin -- a
+work package the size of WP-C2 itself, and not something to land unverified
+in the round that closes the previous round's findings.  They are recorded
+in `_C2_TRACES_VIA_A_PRIVATE_HELPER` as a named, disjoint, SHRINK-ONLY
+exemption, so a NEW helper-routed entry point still turns the census red, and
+they are named in the Migration Guide with the process-level way back.
+
+**A regression the chain carried in, found by this round's own gate.**
+`tests/unit/test_audit2609_a16_lens_config_round_trip.py` read **2 failed,
+99 passed** on `9aec3743` against **101 passed** on `git archive 49ddf4bd`:
+`renormalize` and `sphere_normal` were added to `apply_real_lens_traced` and
+`apply_real_lens_maslov` without being classified in `lens_config`, and that
+file's "silently ignored kwarg" detector had been red since `eadc67ba`.
+Both, and the new pair on `apply_real_lens`, are now `LensNumerics` fields --
+they carry no TERM, only the rounding of the arithmetic that evaluates the
+same refraction, which is the truncation-error line that class is drawn on --
+mapped for the three entry points that accept them.  `_PHYSICS_FOR`'s empty
+dicts are untouched, so "a physics request handed to a sibling raises" is
+unchanged.  **101 passed.**
+
+## VR2-D4 -- the forwarding mutants, now caught
+
+Five mutants, each on a fresh `git archive` of the round-3 tip, against the
+three C2 test files (80 ids).  Identical on both builds
+(`r3_mutants_{win,wsl}.txt`):
+
+| mutant | before round 3 | now |
+|---|---|---|
+| M8 forward dropped in `elements/_lens_traced.py` | 58 passed (survived) | **2 failed** |
+| M9 `propagators/asymptotic_canonical_fit.py` | 58 passed (survived) | **2 failed** |
+| M10 `analysis/image_plane_wfe.py` | 58 passed (survived) | **2 failed** |
+| M11 `analysis/aberration.py` | 58 passed (survived) | **2 failed** |
+| M12 `elements/_lens_real.py` (the seventeenth) | no forward existed | **1 failed** |
+| M0 control | -- | 79 passed, 1 skipped |
+
+Each fires
+`test_c2_none_stamps_nothing_on_the_entry_points[<that entry point>]` with
+the tracer's own reading of what it received -- `[('<omitted>',
+'<omitted>')] over 1 call(s)` -- and M8-M11 additionally fire the round-2
+verification's own arm, which is the independent second opinion.
+
+## VR2-D2 -- the envelope, re-measured on 90 combinations
+
+`r3_history_drift_{win,wsl}.json`, 5 surface counts x 3 glasses x 2 radius
+pairs x 3 field angles, all 90 rows equal to the last digit across the two
+builds:
+
+| envelope | exceeded by | worst reading |
+|---|---|---|
+| `n_surfaces * eps` | **21 of 90** | **1.6667** -- 1.1102e-15 against 6.6613e-16, a 3-surface N-SF11 stack at 5 deg |
+| `2 * n_surfaces * eps` | **0 of 90** | 0.8333, i.e. 1.2x of headroom |
+
+exceeding by surface count: 9 at three, 8 at five, 3 at seven, 1 at nine,
+0 at thirteen.  The coefficient runs 1.00-1.67 at three surfaces down to
+0.50-0.96 at thirteen.  The round-2 verification measured 6 of 90 and a
+worst of 1.3333 on its own stacks; this round's stacks are harsher and reach
+the same conclusion more strongly.  `1e-15` is first exceeded at the THIRD,
+FIFTH or SEVENTH surface depending on the stack -- the round-2 verification
+read FIFTH on its ladder and the shipped docstring read SEVENTH; both are
+readings of one ladder, and the docstring now gives the range.  The shipped
+test's own ladder still reads SEVENTH, so its `5 <= exceeding[0] <= 9` band
+and its falling-ratio claim both survive, re-measured here.  The final
+bundle is unit to 2.2e-16 on every one of the 90.
+
+## VR2-D5 -- the bar, and the mode it used to miss
+
+`r3_w6a2_{win,wsl}.json`, the same second-step ratio at the shipped root and
+at five deliberately unconverged ones:
+
+| mode | Windows | WSL |
+|---|---|---|
+| the shipped `v*` | 1.9355e-07 | 8.7659e-08 |
+| the prior term dropped from the Hessian | **2.5329e-05** | **2.5698e-05** |
+| a tenth of the first step missed | 1.0000e-01 | 1.0000e-01 |
+| half the first step | 5.0000e-01 | 5.0000e-01 |
+| no step at all | 1.0000e+00 | 1.0000e+00 |
+| a sign error | 2.0000e+00 | 2.0000e+00 |
+
+The shipped root reproduces the round-2 verification's numbers to five
+figures.  At **1e-5** all five unconverged modes are caught and the shipped
+root keeps **51.7x / 114.1x**; bisected on the same fixture the bar detects a
+departure of more than 9.8e-06 (Windows) / 1.03e-05 (WSL) of the first step
+and no less, against 1.00e-04 for the retired bar.  The gap ABOVE the bar is
+2.5x, set by the dropped-prior mode, whose own cross-build spread is 1.5 % --
+so the bar sits between two measured quantities and not next to noise, and
+the message now carries the table instead of the argument.
+
+Two-sided, on the same mutant tree (`r3_w6a2_mutant_{win,wsl}.txt`):
+
+| arm | bar | result |
+|---|---|---|
+| M0 control | 1e-5 | 1 passed |
+| M13a prior dropped from the Hessian, solver still ITERATING | 1e-5 | 1 passed |
+| M13b the same Hessian AND one sweep | **1e-5** | **1 failed**, 2.533e-05 (Win) / 2.570e-05 (WSL) |
+| M13b, the same tree | 1e-4 (retired) | 1 passed -- the defect |
+
+M13a is in the matrix deliberately: Newton with an approximate Jacobian
+converges to the same root if it is allowed to iterate, so a wrong Hessian
+alone leaves a CONVERGED point and both bars are right to pass it.  What the
+bar has to catch is the solver that returns its first step.
+
+## VR2-D6 -- 31, not 35
+
+`r3_transitive_carry_{win,wsl}.json`, `inspect.signature` of every parent the
+committed round-2 walk names, identical on both builds: population 46, 35
+resolve to a named parent, **31** of those carry both keywords, **4**
+(`monte_carlo_tolerancing`, `monte_carlo_tolerancing_jax`,
+`optimize_traced_geometry`, `make_lg_aberration_merit_jax`) resolve to
+`trace_jax`, 0 fail to import.  The D4-transitive section now states both
+numbers.
+
+## VR2-D7 -- the enclosing definition
+
+Measured on the round-2 tip `9aec3743` (entry width 4), the same synthetic
+line at the mapped coordinate under two different enclosing definitions:
+
+| enclosing definition | `9aec3743` | this round |
+|---|---|---|
+| `def trace(` | fires, 0 refusals | fires, 0 refusals |
+| `def trace_a_different_thing(` | **fires, 0 refusals** | **refused**, 1 refusal, `expected_owner='def trace('` |
+
+The refusal is an OWNER refusal and not a digest one -- the digests are
+EQUAL, which is the whole point -- and the decision test asserts that, so a
+guard that refused everything could not pass it.  The third residual hole
+(the map's own digest re-recorded to match a reverted default) is stated in
+the map's comment rather than defended against: it is a code-review property,
+not a tool property.
+
+## Neutrality -- a round must not move a default
+
+The round-1 verifier's 594-key set (`validation/probe_verify_c2/vc2_wayback.py`,
+five prescriptions x two field angles x two output filters, every bundle
+field plus `alive` and `error_code`), each side in its own process against a
+read-only tree:
+
+| comparison | Windows | WSL |
+|---|---|---|
+| `git archive 9aec3743` vs this tip, both at the DEFAULT | **594 / 594 identical** | **594 / 594 identical** |
+| `git archive 49ddf4bd` vs this tip with both old keywords | **594 / 594 identical** | **594 / 594 identical** |
+
+So round 3 moved no default, and the way back is still exact.
+
+## The runs
+
+All with `OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1` on the
+command line and `-q -p no:randomly --capture=sys -rf`.
+
+| run | files | result |
+|---|---|---|
+| Windows: the 31-file gate the round-2 verification names, plus the lens files that exercise `apply_real_lens`, `test_public_api.py`, `test_audit_except_budget.py` and the doc-identifier gate | 37 | see below |
+| WSL: the C2 subset | -- | see below |
+| Windows / WSL mutation matrix | 6 + 4 arms | above |
+
+`ruff check lumenairy/ tests/ scripts/ validation/probe_c2_round3/` (WSL):
+**All checks passed!**
+`python -m mypy` (no args): **Success: no issues found in 33 source files.**
+`python scripts/record_history_fingerprints.py --check`: **OK** after
+re-recording `lumenairy.elements._lens_real` with the VR2-D1 reason.
+`python scripts/reanchor_citations.py --check --base f4f18851 --block
+"[5.47.0]"`: **0 re-anchored, exit 0**, after six citations were re-anchored
+for the line-number shifts this round's source edits caused.
+`.test_durations`: **16 667 -> 16 682**, 15 added and 36 updated from a
+SERIAL `--store-durations` run with the three BLAS variables on the command
+line; re-parsed as JSON; `test_audit2609_a15a_durations_staleness.py`
+**4 passed**.
+
+## What could not be measured
+
+1. **The 368-file blast radius was not re-run**, unchanged from all three
+   previous rounds.
+2. **The 1008-array byte-identity census was not re-run**, unchanged.  The
+   742-array sixteen-entry-point census and this round's three-prescription
+   seventeenth supersede its conclusion; the 1008 counts themselves are
+   still the WP-C2 measurement.
+3. **The twelve helper-routed entry points were not given keywords** and
+   their answers were not measured archive to archive.  They are recorded,
+   not closed; see VR2-D1 above for why, and the Migration Guide for the
+   process-level way back that covers them meanwhile.
+4. **The GUI was not driven.**  The three tracing methods are named in
+   `GUI_CHANGELOG.md` and the Migration Guide with the process-level way
+   back; no dock was opened and no screenshot was compared, because the
+   claim is about which keyword surface exists and not about what a widget
+   renders.
+5. **The `EDITED_IN_PLACE` abuse matrix is Windows-only**, unchanged: run
+   from WSL against a Windows worktree the tool cannot resolve the base
+   commit at all, and the decision test skips rather than passing
+   vacuously.
+6. **`mpmath` on WSL**, unchanged.
+7. **A clean absolute timing number**, unchanged.

@@ -64,7 +64,8 @@ answers of the entry points that trace INTERNALLY -- `trace_prescription` 27,
 `through_focus` 1 on Windows; the same less `through_focus` on WSL.  Those
 entry points now take the two keywords themselves (see the Migration note), so
 that residue has a way back too, re-measured at 742 of 742 arrays identical
-over all sixteen of them.  At the DEFAULTS the same sweep moves **595 arrays
+over all sixteen of them, and at 3 of 3 prescriptions over the seventeenth
+(`apply_real_lens`, found in round 3).  At the DEFAULTS the same sweep moves **595 arrays
 on Windows and 594 on WSL**, none by more than **2.4e-11 absolute or 3.4e-13
 relative**.  (That sweep carries BOTH flips: `renormalize='exit'` below
 applies to every prescription, sphere or not.  The 461 recorded for
@@ -149,7 +150,7 @@ clamp -- a band one ULP of `h` wide -- a ray the generic route killed as
 instead, and vice versa.  If a prescription deliberately works rays past
 `0.9999 R^2` of a spherical surface it is in a region where NEITHER route
 resolves the normal better than about 1e-12 relative, and it should carry an
-explicit clear aperture rather than rely on the clamp.  Second, the SIXTEEN entry
+explicit clear aperture rather than rely on the clamp.  Second, the SEVENTEEN entry
 points that trace INTERNALLY all take the same keyword and forward it
 verbatim: `trace_prescription` and `raytrace_system`
 (`lumenairy.raytrace.trace`); `ray_fan_data`, `ray_fan_data_world`,
@@ -158,12 +159,14 @@ verbatim: `trace_prescription` and `raytrace_system`
 `ray_transfer_jacobian` (`raytrace.differential`); `caustic_diagnostic`,
 `eval_image_plane_wfe` and `plot_lens_layout` (`analysis`);
 `fit_canonical_polynomials` and `fit_hf_polynomials`
-(`propagators.asymptotic_canonical_fit`); and the two lens propagators
-`apply_real_lens_traced` and `apply_real_lens_maslov` (`elements`).  Each
+(`propagators.asymptotic_canonical_fit`); and the three lens propagators
+`apply_real_lens`, `apply_real_lens_traced` and `apply_real_lens_maslov`
+(`elements`).  Each
 defaults to `None`, which names nothing, so an unkeyworded call takes the
 library's default of the day and no call site pins this release's.  Their way
 back is byte-identical, measured archive to archive at **742 of 742 arrays on
-both builds**, with all sixteen shown to move at the default.  `spot_rms`,
+both builds**, with all sixteen shown to move at the default, and at
+**3 of 3 prescriptions on both builds** for the seventeenth.  `spot_rms`,
 `spot_geo_radius` and `refocus` take no keyword because they do not trace --
 they consume a `TraceResult` -- and the JAX entry points take none because the
 JAX tracer uses a closed-form normal ALWAYS and has no switch.  Every measured number is in
@@ -294,7 +297,7 @@ consumer that reads HISTORY direction cosines (`result.rays_at(i)` for
 default those carry up to `2 * n_surfaces * eps` of drift -- 1.8e-15 on a
 13-surface stack -- while the image-plane bundle is unit to 2.2e-16 as
 before.
-The same sixteen entry points that take `sphere_normal=` take
+The same seventeen entry points that take `sphere_normal=` take
 `renormalize=` as well, with the same `None` default and the same verbatim
 forward, so the old arithmetic is one keyword away through any of them.  The
 JAX entry points take neither: the JAX body never rescales, so there is no
@@ -2621,7 +2624,7 @@ silently accepted.  A call that would DISCARD the setting — any
 single shared predicate `_routes_to_displaced_remap_2d` (`:1558`) so the guard
 and the dispatch cannot drift apart.
 
-Carried as `LensNumerics.displaced_n_side` (`lens_config.py:514`), floored
+Carried as `LensNumerics.displaced_n_side` (`lens_config.py:556`), floored
 against `_lens_real._DISP_REMAP_2D_MIN_N_SIDE` through the existing `_vocab`
 accessor so a config cannot accept a value the call would refuse, and wired
 into `_NUMERICS_FOR['apply_real_lens']` so `from_kwargs` / `to_kwargs` round
@@ -2856,7 +2859,7 @@ before (i.e. marginally more often).  No output field moves.
 comment (including its pitch column: 55.6 / 39.1 / 19.5 / 9.8 um ->
 **57.2 / 40.2 / 20.1 / 10.1 um**), `_normalise_displaced_n_side`'s refusal
 message and `LensNumerics.displaced_n_side`'s docstring
-(`lens_config.py:440`) all stated the pitch as `2 * r_aperture / (n - 1)`.  All
+(`lens_config.py:450`) all stated the pitch as `2 * r_aperture / (n - 1)`.  All
 now state `2 * 1.03 * r_aperture / (n - 1)` and say why the factor is there.
 `_build_displaced_ray_map_2d`'s docstring no longer describes the default as
 "a fixed 181".
@@ -4797,7 +4800,7 @@ remove ~1e-16 of rounding drift.  `trace` and `trace_world` gain
 `world_trace.py:82`); `_refract` / `_reflect` gain the matching
 `renormalize: bool = True` (`intersection.py:543`, `:651`), and the single-pass
 form is `intersection._normalize_directions` (`:520`), applied once to the
-bundle leaving the last surface (`trace.py:306`, `:417`, `world_trace.py:250`).
+bundle leaving the last surface (`trace.py:314`, `:425`, `world_trace.py:250`).
 
 The degenerate-direction DIAGNOSIS is not hoisted: the per-surface
 `|d| < 1e-30 or not finite -> RAY_NAN + killed` test runs in both modes, because
@@ -4865,7 +4868,7 @@ restating those pins; see the WP-B9 report.
 
 `make_rings` is equal-radius / equal-count, so the pupil areal sampling density
 falls off as `~1/r` and every unweighted `spot_rms` built on it is centre-biased
-small.  It gains `pattern={'rings' (default), 'vogel'}` (`raytrace/trace.py:1280`,
+small.  It gains `pattern={'rings' (default), 'vogel'}` (`raytrace/trace.py:1288`,
 generator at `:1285`): the Vogel / Fibonacci sunflower `r_i = R sqrt(i/N)`,
 `theta_i = i pi (3 - sqrt(5))`, with `i = 1..N` so the outermost ray sits exactly
 on the rim as the outer ring does.  Threaded through
@@ -5992,7 +5995,7 @@ and the exact edit each needs are in `docs/lens_configuration.md` section
 
 ### Added -- `LensConfig.to_kwargs(strict=True)`
 
-`elements/lens_config.py:1250`.  Raises instead of dropping when a field the
+`elements/lens_config.py:1309`.  Raises instead of dropping when a field the
 config actually REQUESTS -- one whose value differs from its dataclass default --
 is not a keyword of the named entry point.  A field left at its default is not a
 request and is still dropped quietly, including under `include_defaults=True`,
