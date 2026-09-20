@@ -236,9 +236,12 @@ Two ladders identify where the residue comes from:
 The window ladder is the measurement of **E5's mechanism**.  On a window too
 small to contain the field the reading is 1.4e-3 from 1; as soon as the window
 holds the field it drops by 12x and then does not move at all (1.18e-4, bit
-for bit, for N = 512, 640 and 896).  That is exactly what a Voronoi-hull
-mismatch at the window EDGE predicts, and it is 60x below the bar's distance
-to 1.
+for bit, for N = 512, 640 and 896).  CORRECTED 2026-09-19 (VERIFY-WP-B7c round 3 D-4): the window ladder bounds
+the HULL term, which vanishes once the window holds the field, and the
+plateau is the INTERIOR term, which follows the pitch and not the window
+(the verification's grid ladder takes it from 7.9e-4 to 1.3e-5 over 8x in
+N while the window ladder does not move it by a bit).  Either way the
+plateau is 60x below the bar's distance to 1.
 
 **So the reference is real but it is not exact, and it does not hold where the
 guard works.**  On healthy FOLD planes the same reading spreads by up to

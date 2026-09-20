@@ -422,13 +422,19 @@ _MB_PIXEL_CONTINUITY_MIN = _PIXEL_CONTINUITY_MIN
 #
 # ``pixel_continuity_scope`` is the second question, as an enum a consumer can
 # branch on, with ``pixel_continuity_scope_note`` carrying the same statement
-# in words.  MEASURED on the round-3 population (642 oracle-scored planes, 16
-# optics; ``validation/probe_wp_b7c_round3/fallback_win.json``): on the
-# fallback route NOTHING already in these diagnostics orders the returned
-# field's fidelity -- see ``WP-B7c_ROUND3_REPORT.md`` section 7 for the
-# candidates tried and what each one's best threshold achieves -- so the
-# honest thing the module can do there is say that the field is unarbitrated
-# for accuracy, which is what this key does.
+# in words.  MEASURED on the round-3 population (1304 oracle-scored planes, 16
+# prescriptions, of which 476 are fallback planes the shipped bars RETURN;
+# ``validation/probe_wp_b7c_round3/fallback_win.json``).  On the fallback
+# route the reading is of the field this call returns but the dominant error
+# is the dark tail the completion did not build, which this arm cannot see.
+# Two readings the module ALREADY reports do order that population -- the
+# LOSS side of this arm and of the launched-power bracket, whose bars are set
+# for the fold-ring route where a dark deficit does not reach the caller (see
+# ``_lens_traced_multibranch._PIXEL_CONTINUITY_MIN`` for the confusion table)
+# -- and neither refuses there, so what the module can say honestly is that
+# the returned field's dark tail is NOT arbitrated, which is what this key
+# does.  (RESTATED 2026-09-19, VERIFY-WP-B7c round 3 D-1: the first draft
+# cited a 642-plane pass and said nothing orders the fallback route.)
 _PIXEL_CONTINUITY_SCOPES = {
     'returned_field': (
         'the reading is of the field this call returns, and the dark side '
@@ -1772,7 +1778,7 @@ def apply_real_lens_traced_uniform(
     _uni_cont = None
     _E_half = _mb_half_render
     if _E_half is not None:
-        _N_h, _dx_h = 2 * N, 0.5 * dx
+        _dx_h = 0.5 * dx
         # The SAME lattice the branch sum rasterised the half-pitch render
         # onto, taken from the one definition rather than rebuilt here
         # (WP-B7c round 3, E5).  Rebuilt inline this was a seam the two could

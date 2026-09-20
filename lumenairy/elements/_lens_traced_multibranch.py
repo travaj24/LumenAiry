@@ -294,12 +294,18 @@ _ENERGY_COLLAPSE_FACTOR = 0.5
 # below is a COST and not a gap.
 #
 # THE BAR IS KEPT AT 1.06, and it is derived rather than inherited.  The
-# two-sided margin at 1.06 on this population is 1.00047x, below the 1 % that
-# would call for re-centring; the geometric centre of the gap it sits in is
-# **1.0600253** over all 1304 planes -- i.e. 1.06 to three figures IS the
-# derived centre, and the constant does not move.  (The fold-ring-only centre
-# is 1.0619; moving there changes no fold-ring decision and returns one more
-# wrong field over all planes.)  What the bar costs, by fidelity band:
+# two-sided margin at 1.06 on this population reads 1.00047x -- and the
+# round-3 verification showed that margin is a reading of the z ladder, not a
+# property (the crossing is a JUMP: the branch count goes 2 to 9 across three
+# picometres, so no margin exists at any density).  The geometric centre of
+# the gap it sits in reads 1.0600253 over all 1304 planes here and 1.0571316
+# on the verification's independent 1141 -- both 1.06 to three figures --
+# while the FOLD-RING-only centre reads 1.0619044 here and 1.0543406 there.
+# The centre is a reading of the population and the two constructions differ
+# at the third figure, so what keeps the constant where it is, is the COST
+# table below, which reads identical integers at 1.06, 1.0600253 and 1.0619
+# on both populations (RESTATED 2026-09-19, VERIFY-WP-B7c round 3 D-6).
+# What the bar costs, by fidelity band:
 #
 #   fold ring, accept at 0.95:   1 false refusal,   2 misses   (of 394)
 #   fold ring, accept at 0.883: 22 false refusals,  0 misses
@@ -423,7 +429,16 @@ _PIXEL_CONTINUITY_MIN = 1.0 / _PIXEL_CONTINUITY_MAX
 # coarse pixel further out on the ``+x`` and ``+y`` edges and start a quarter
 # of a coarse pixel short on the other two.  Where light reaches the window
 # edge the two integrals are therefore not over the identical rectangle, and
-# a converged render reads 1 to O(1/N) rather than exactly.  Round 2 stated
+# a converged render reads 1 only approximately.  TWO terms, and they are
+# distinguishable (RESTATED 2026-09-19, VERIFY-WP-B7c round 3 D-4): the hull
+# mismatch is what an UNDERSIZED window costs (measured 1.4e-3 against 1.2e-4
+# once the window holds the field, ``WP-B7c_ROUND3_REPORT.md`` section 4;
+# the round-3 verification measures 5.0e-4 against 7.3e-5), and it vanishes
+# once the window holds the field -- growing the window further does not
+# move the reading by a bit.  What is LEFT is the two point-sampled
+# quadratures' INTERIOR difference, which follows the PITCH and not the
+# window: holding the window and refining the grid 8x takes it from 7.9e-4
+# to 1.3e-5 (VERIFY round 3, ``control_gridladder_win.json``).  Round 2 stated
 # that reference as "1 exactly, on any optic, at any plane, at any grid"; it
 # is not exact, and section 4 of ``WP-B7c_ROUND3_REPORT.md`` carries the
 # measured distribution of what it does read (round 2's verification measured

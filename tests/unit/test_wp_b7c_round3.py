@@ -5,7 +5,7 @@ mechanism, its placement, its bit identity and its cost, and left five
 defects.  Round 3 answers them, and this file is the gate for what it changed.
 The measurements are in
 `fixes/WP-B7c_ROUND3_REPORT.md`; the probes and their JSON in
-`validation/probe_wp_b7c_round3/` (642 oracle-scored planes over sixteen
+`validation/probe_wp_b7c_round3/` (1304 oracle-scored planes over sixteen
 optics, four of which no earlier round scored at all).
 
 What is pinned here, and why each one needed pinning:
@@ -32,10 +32,11 @@ What is pinned here, and why each one needed pinning:
 * **E7 / R3-4 -- a fallback says it is a fallback.**  On the fallback route
   the returned field is the bright-side-only branch sum and the dominant error
   is the dark tail the completion did not build, which this arm cannot see:
-  round 3 measured returned fields down to oracle fidelity 0.4639 with
+  round 3 measured returned fields down to oracle fidelity 0.5358 with
   ``pixel_continuity`` 1.002, the launched-power bracket 1.005, both decisions
-  ``'ok'`` and no warning.  Nothing already in the diagnostics orders that
-  population (section 7 of the report tries nine candidates), so the
+  ``'ok'`` and no warning.  Two readings already in the diagnostics (the two LOSS arms) do order that
+  population but neither refuses on this route (section 7 of the report tries
+  fourteen candidates), so the
   diagnostics now state the scope instead of implying one.
 * **E1 / R3-1 -- the bar clears the converged population's own spread.**  The
   quantity's "fixed reference" is what makes the bar a tolerance rather than a
@@ -199,7 +200,7 @@ def test_b7c3_the_arbiter_lattice_never_moves_the_returned_field(monkeypatch):
     """The half-pitch lattice is the ARBITER's alone.
 
     It decides a refusal; it must not touch the answer.  Two calls that differ
-    only in ``_HALF_PITCH_CENTRE_OFFSET`` -- the shipped value and round 2's
+    only in ``_HALF_PITCH_CENTRE_OFFSET`` -- the shipped value and the HULL-ALIGNED alternative E5 asked for (``-0.5``, the round's own M14)
     -- must return the same bytes, or the offset has leaked into the coarse
     render (which would make every field in the library depend on a constant
     introduced for a diagnostic).
@@ -308,11 +309,12 @@ def test_b7c3_a_fallback_reports_that_the_dark_tail_is_not_arbitrated(
     dark tail the completion did not build is absent and this arm cannot see
     it.
 
-    Round 3 measured the consequence on 433 fallback planes: returned fields
-    down to oracle fidelity 0.4639 with ``pixel_continuity`` 1.00201, the
+    Round 3 measured the consequence on 476 returned fallback planes: returned fields
+    down to oracle fidelity 0.5358 with ``pixel_continuity`` 1.00201, the
     bracketed launched-power ratio 1.005, both decisions ``'ok'`` and no
-    warning from either arm; and nine candidate readings already in these
-    diagnostics, none of which orders that population.  Saying so is what the
+    warning from either arm; and fourteen candidate readings already in these
+    diagnostics, of which the two LOSS arms do order it -- and neither refuses on
+    that route.  Saying so is what the
     module can do honestly, and it is what this pins.
 
     Both premises are ASSERTED rather than skipped: if this build no longer

@@ -214,7 +214,7 @@ overlap at every bar.
 > `VERIFY_WP-B7c_ROUND2.md` and E1).**  They overlap.  The round-2
 > verification narrowed the separation from (0.9593, 0.9302) here to (0.9747,
 > 0.9578) on 124 fold-ring planes over seven optics and warned it was
-> narrowing; on **367 fold-ring planes over sixteen optics** it closes -- the
+> narrowing; on **394 fold-ring planes over sixteen optics** it closes -- the
 > worst RETURNED field scores **0.9421** (an NA 0.41 plano-convex at
 > z = 2069.3 um, reading 1.0133, carrying 1.27x the oracle's energy) against a
 > best REFUSED of **0.9520** (a plano-first N-BAK4 at z = 4929.0 um, reading
@@ -249,12 +249,12 @@ rather than papered over.  What makes it usable where round 1's was not:
 > of defocus), so refining the ladder keeps finding readings closer to the
 > bar.  Scanning the SAME sixteen optics three times, each ladder 10-30x
 > finer: the fold-ring gap reads **1.371x at 468 planes, 1.032x at 882 and
-> 1.0045x at 1196**, with the two-sided margin falling 1.040x -> 1.012x ->
+> 1.0045x at 1304**, with the two-sided margin falling 1.040x -> 1.012x ->
 > **1.00047x** and no sign of a floor.  The bar is kept at 1.06 -- which is
 > the geometric centre (1.0600253) of its own gap on that population, to three
 > figures -- but it is derived from what it COSTS and not from a gap: at an
 > accept criterion of fidelity 0.95 it costs 1 false refusal and 2 misses over
-> 367 fold-ring planes, against 5 false refusals for 1.04 and 4 more misses
+> 394 fold-ring planes, against 5 false refusals for 1.04 and 4 more misses
 > for 1.08.  `WP-B7c_ROUND3_REPORT.md` sections 3 and 5.
 
 * the quantity has a FIXED reference (a converged render reads exactly 1), so
@@ -278,9 +278,9 @@ and a stricter 0.95 are reported.
 > **CORRECTED 2026-09-19 (WP-B7c round 3, R3-5; claim 5 of
 > `VERIFY_WP-B7c_ROUND2.md`).**  "0 false refusals at fidelity >= 0.95" is a
 > property of this 82-plane population.  The round-2 verification found 2 of
-> 124; round 3 finds **1 of 367** on the fold ring (`W_alt` z = 4929.0 um,
+> 124; round 3 finds **1 of 394** on the fold ring (`W_alt` z = 4929.0 um,
 > reading 1.0812, fidelity 0.9520) and **2 misses** at the same criterion, and
-> over all 1196 planes 1 false refusal and 226 misses -- 224 of the misses on
+> over all 1304 planes 1 false refusal and 265 misses -- 263 of the misses on
 > the FALLBACK route, which this arm does not claim to arbitrate.  The full
 > confusion by fidelity band, for 1.04 / 1.06 / 1.08 and three bars derived
 > from the converged reading's own spread, is `WP-B7c_ROUND3_REPORT.md`
@@ -311,12 +311,12 @@ dark-side tail and not the quadrature.
 
 > **CORRECTED 2026-09-19 (WP-B7c round 3, R3-4; E7).**  "Returned down to
 > 0.764" is a property of this population's 22 fallback planes.  Over the
-> **437 fallback planes the shipped bars RETURN**, on sixteen optics, the
-> range is **0.5358 .. 0.9999** with 224 below fidelity 0.95 and 142 below
+> **476 fallback planes the shipped bars RETURN**, on sixteen optics, the
+> range is **0.5358 .. 0.9999** with 263 below fidelity 0.95 and 152 below
 > 0.883.  A reading that orders that population DOES exist and is already
-> reported: the LOSS side of this arm flags 161 planes, every one of them
+> reported: the LOSS side of this arm flags 192 planes, every one of them
 > wrong, with zero false alarms, and the launched-power bracket below 0.889
-> flags 215 with none false and only 9 wrong ones missed.  Their bars are set
+> flags 254 with none false and only 9 wrong ones missed.  Their bars are set
 > for the fold-ring route, where the completion replaces the dark side -- an
 > argument that is false on the fallback route, where the deficit reaches the
 > caller verbatim.  Thirteen returned planes are left that nothing sees, the
