@@ -100,9 +100,28 @@ including a mutation matrix in which the default reverting to `'hard'`,
 sub-sample lattice anchored on the cell corners instead of centred on the pixel)
 are each caught by a named test.  Four existing tests moved and are re-pinned
 against their own oracles, none by loosening a bar; two more had silently become
-tautologies (their hard arm was the unnamed default) and now name it.  The probes
-and their JSON, on both builds, are in `validation/probe_c1_gray_edge/`; the
-report is
+tautologies (their hard arm was the unnamed default) and now name it.
+
+### Fixed -- the validation suite's aperture throughput readings say AREA where they meant area (WP-C1)
+
+Three readings in `validation/elements/` moved with the default, and two of them
+were measuring the wrong moment all along.  The aperture is an AMPLITUDE mask, so
+`sum(mask)` is the transmitted AREA while `sum(|E|^2)` is the transmitted POWER of
+a unit-amplitude field; for a binary rim the two coincide, and for an
+area-averaged rim they differ by exactly the rim's own `sum(f - f^2)`, bounded by
+`n_rim dx^2 / 4` and falling like 1/N.  Both throughput checks asserted the POWER
+against the geometric area.  Measured: the circular fixture's AREA error went
++0.0746 % -> +0.0074 % and the rectangle's +0.6400 % -> **+0.0000 %** (exact --
+its rims sit at 25.00 and 18.75 pixels and a 4x4 lattice resolves a quarter-pixel
+rim exactly), while the POWER reading the assertions were taking went to 1.99 %
+against a 2 % bar, i.e. clearing its own bar by 0.5 % of itself.  Both now assert
+the AREA against a derived 5e-4 bar and the POWER inside the derived band
+`[area - n_rim dx^2/4, area]`.  A third check decided its "inside" pixel set from
+pixel CENTRES (mean 0.9960 against a 0.99 bar) and now decides all three sets from
+the pixel CORNERS, asserting the two outer ones exactly.  31/31.
+
+The probes and their JSON, on both builds, are in
+`validation/probe_c1_gray_edge/`; the report is
 `docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/WP-C1_GRAY_EDGE_REPORT.md`.
 
 ## [5.48.1] — 2026-09-20

@@ -242,6 +242,64 @@ but the exact cross-backend claim is asserted in
 `tests/unit/test_c1_gray_edge_default.py::test_c1_the_system_chain_takes_the_same_default_on_both_backends`,
 over both JAX routes and both arms.
 
+### 3.4 The wider sweep: four more reds, three of them WP-C1's own
+
+The 33-file blast-radius run is not the whole gate.  The census / walker /
+dispatcher-pin / public-API / doc-consistency sweep (61 files, 2764 ids) raised
+four more.  Each was premise-gated against the parent commit before being
+called a move.
+
+| red | whose | what was done |
+|---|---|---|
+| `test_public_api.py::test_no_shipped_source_claims_a_version_the_package_has_not_reached` | **WP-C1's** | 19 shipped lines named `v5.49.0` while `__version__` is `5.48.1`.  The gate's own reasoning is the right one and it was MEASURED, not assumed: over the last five releases, mentions of the version being released inside `lumenairy/**` at the release commit's PARENT were 0, 0, 0, 1 (a false positive) and 0, and the release commit touches exactly ONE library file to stamp the number.  Every version token is gone from `lumenairy/**`; the docstrings say what the default IS and point at the Migration note for when it moved. |
+| `test_audit2609_a17_history_lint.py::test_no_module_accumulates_more_version_history` | **WP-C1's** | The same edits grew the version-history NARRATIVE in four modules (`apertures.py` 0 -> 1, `elements.py` 15 -> 17, `polarization.py` 38 -> 39, `system.py` 25 -> 35).  The A17 ratchet allows a module's narrative to shrink or stay, never grow -- the narrative belongs in the CHANGELOG, the Migration-Guide and `docs/history/`.  Same remedy, same commit.  Both gates green, and the baseline was NOT re-recorded (the counts are back at or below their recorded values). |
+| `test_v5_3_2_walker_source_line_citation.py::test_v18_5_the_5_47_0_block_citations_name_the_right_lines` | **WP-C1's** | Six `file:line` citations in the `[5.47.0]` CHANGELOG block no longer named the line whose CONTENT they named, because this work package shifted `system.py` and `polarization.py`.  Re-anchored with the sanctioned, content-based, idempotent tool (`scripts/reanchor_citations.py --base f4f18851 --block "[5.47.0]"`); only the six numbers changed. |
+| `test_public_api.py::test_installed_metadata_version_matches_source_version` | **NOT WP-C1's** | The editable install in this box's site-packages carries `5.47.0` metadata while the source says `5.48.1`.  PREMISE-GATED: the same id fails on a clean `git archive 49ddf4bd` extraction on this box, so it is a box state (a stale `pip install -e .`), not a move.  Left alone; recorded here and in section 6. |
+
+### 3.5 The validation suite: two throughput claims were measuring the wrong moment
+
+`validation/elements/` is not in the unit sweep but it is a gate
+(`validation/run_all.py`, wrapped by `tests/integration/`).  It stayed 31/31
+green through the flip, and two of its green assertions were wrong anyway --
+one of them within 0.5 % of its own bar.
+
+The aperture is an **amplitude** mask.  The LINEAR sum of the mask is the
+transmitted AREA; the QUADRATIC sum is the transmitted POWER of a
+unit-amplitude field.  For a binary rim the two coincide, because `f` is 0 or
+1.  For an area-averaged rim they differ by exactly the rim's own
+`sum(f - f^2) dx^2`, which is bounded by `n_rim dx^2 / 4` (the maximum of
+`f - f^2` is 1/4, at `f = 1/2`) and falls like the perimeter, i.e. as 1/N.
+That is not a defect: the area-averaged AMPLITUDE is the correct band-limited
+representation of the field just behind the stop -- it is what delivers the
+second-order convergence in section 1 -- and it is precisely because it is the
+right FIELD that it is not the right POWER.
+
+Measured 2026-09-20, identical on both builds (a mask sum is an integer count
+over 16, with no BLAS in it):
+
+| fixture | area, hard | area, gray | power, hard | power, gray | rim px | bound `n_rim dx^2/4` |
+|---|---|---|---|---|---|---|
+| circular, N = 256, dx = 8 um, D = 1 mm | +0.0746 % | **+0.0074 %** | +0.0746 % | -0.4893 % | 364 | 0.7415 % |
+| rectangle, N = 256, dx = 4 um, 200 x 150 um | +0.6400 % | **+0.0000 %** | +0.6400 % | -1.9900 % | 176 | 2.3467 % |
+
+and the power deficit halves with the pitch: 0.4967 % / 0.2585 % / 0.1297 % at
+N = 256 / 512 / 1024 on the circular fixture.
+
+So the AREA went 10x better on the circle and became EXACT on the rectangle
+(its rims sit at 25.00 and 18.75 pixels and a 4x4 lattice resolves a
+quarter-pixel rim exactly), while the POWER reading the two assertions were
+actually taking went to 1.99 % against a 2 % bar -- the S4 floor-bar shape
+`docs/TESTING_STANDARDS.md` forbids, green and meaningless.  Both now assert
+the AREA against a derived 5e-4 bar (the readings are 7.4e-5 and 0.0; the
+pixel-centre rim they must beat reads 7.46e-4 and 6.4e-3, so the bar sits
+between them with 1.5x and 12.8x) and the POWER inside the DERIVED two-sided
+band `[area - n_rim dx^2/4, area]`, which is a bound, not a tolerance.
+A third, `t_circular_aperture`, decided its "inside" set from pixel CENTRES and
+read a mean amplitude of 0.9960 against a 0.99 bar; it now decides all three
+sets from the pixel CORNERS and asserts the two outer ones EXACTLY.  31/31.
+
+---
+
 ---
 
 ## 4. Byte identity, archive to archive
@@ -379,3 +437,17 @@ load-bearing.
   untouched; the staleness gate
   (`test_audit2609_a15a_durations_staleness.py`, 4 passed) does not require an
   entry for a newly added file.
+* **`test_public_api.py::test_installed_metadata_version_matches_source_version`
+  cannot pass on this box** and does not pass at the parent commit either: the
+  editable install's metadata reads `5.47.0` against a `5.48.1` source.  The
+  remedy is `pip install -e .` on the box, which is not this work package's to
+  do (it would change what every other session on this machine imports).
+* **Whether the full unit suite is green.**  What was run is the 33-file
+  grep-selected aperture set (1394 ids), the 61-file sweep (2764 ids) and the
+  validation `elements` file; the whole 14 666-id suite was not, and a release
+  gate would need it.
+* **The `edge_samples` knee on the HF quadrature.**  It is pinned on the RS
+  ladder, where WP-B11 measured it.  On the HF quadrature at N = 256 the
+  readings are non-monotone in `edge_samples` (2 -> 3.4183e-03 is marginally
+  better than 4 -> 3.4928e-03), so the knee statement is kernel-specific and is
+  asserted only where it was measured.
