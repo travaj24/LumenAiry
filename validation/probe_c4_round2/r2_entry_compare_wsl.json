@@ -1,0 +1,157 @@
+{
+ "WITHOUT_A_WAY_BACK": [],
+ "base_build": "WSL-py3.12",
+ "base_version": "5.48.1",
+ "branch_build": "WSL-py3.12",
+ "branch_version": "5.48.1",
+ "n_entry_points": 11,
+ "n_identical_at_refused": 11,
+ "n_moving": 11,
+ "n_with_a_way_back": 11,
+ "rows": [
+  {
+   "base_captured": "c353632e94a2e833da9b175418619c6f7bfdfa0e493fbe17fa6464e1d12c0166",
+   "base_refused": "59a08e09fb7cb35cf8c1e97c29865bc41c6f8863f7b85192dc522e8fb9baa561",
+   "branch_captured": "be7b7752d47d4c309ff50e73b29dd5113a9b673104fbccb4eae7d3aa701b8520",
+   "branch_refused": "59a08e09fb7cb35cf8c1e97c29865bc41c6f8863f7b85192dc522e8fb9baa561",
+   "entry_point": "angular_spectrum_propagate_mft",
+   "identical_at_refused": true,
+   "moves_at_captured": true,
+   "way_back": "bluestein",
+   "way_back_spellings": [
+    "bluestein"
+   ]
+  },
+  {
+   "base_captured": "f7966f0fb7ab50f67f9bf3d285d7ac12c46e5c4e01833ed25609232f3558e243",
+   "base_refused": "265438abb67bccfbca65d84cdc150766922d2c2b1c5a2b75d5c0a1927b2b5359",
+   "branch_captured": "81c289261d659de61bb49d1d2305aba1f12b4403c7f5c50b307edbf20a6269c6",
+   "branch_refused": "265438abb67bccfbca65d84cdc150766922d2c2b1c5a2b75d5c0a1927b2b5359",
+   "entry_point": "carrier_referenced_exact_focus_readout",
+   "identical_at_refused": true,
+   "moves_at_captured": true,
+   "way_back": "separable",
+   "way_back_spellings": [
+    "separable"
+   ]
+  },
+  {
+   "base_captured": "a152d7678c6ab2b6d3c6bfb9743278a94b274302a2057142a7f72e4a7f61d88a",
+   "base_refused": "f696b5f426f4e98c7c88d7681b3e886fbe2b4e4a5960c14917757592cd050555",
+   "branch_captured": "d4554e60e11a1bcf0ed54afc5ec115ac4533713d3f77922d525444eecae630cf",
+   "branch_refused": "f696b5f426f4e98c7c88d7681b3e886fbe2b4e4a5960c14917757592cd050555",
+   "entry_point": "carrier_referenced_focus_readout",
+   "identical_at_refused": true,
+   "moves_at_captured": true,
+   "way_back": "bluestein",
+   "way_back_spellings": [
+    "bluestein"
+   ]
+  },
+  {
+   "base_captured": "4bf5cf80ce4f811eac2191bc40a675eb6be06abedfe9fc6041a7c8c4c98dcccf",
+   "base_refused": "3c5613ba05e66bfff533c49612f65210e73a78fb5ef96ef2a227649a50e1d3f0",
+   "branch_captured": "38c8162d9b59e6406f59b7f7a4f25bebed293c0d98eca408bc17afa29d785c3d",
+   "branch_refused": "3c5613ba05e66bfff533c49612f65210e73a78fb5ef96ef2a227649a50e1d3f0",
+   "entry_point": "compute_psf",
+   "identical_at_refused": true,
+   "moves_at_captured": true,
+   "way_back": "bluestein",
+   "way_back_spellings": [
+    "bluestein"
+   ]
+  },
+  {
+   "base_captured": "c353632e94a2e833da9b175418619c6f7bfdfa0e493fbe17fa6464e1d12c0166",
+   "base_refused": "59a08e09fb7cb35cf8c1e97c29865bc41c6f8863f7b85192dc522e8fb9baa561",
+   "branch_captured": "be7b7752d47d4c309ff50e73b29dd5113a9b673104fbccb4eae7d3aa701b8520",
+   "branch_refused": "59a08e09fb7cb35cf8c1e97c29865bc41c6f8863f7b85192dc522e8fb9baa561",
+   "entry_point": "propagate_asm",
+   "identical_at_refused": true,
+   "moves_at_captured": true,
+   "way_back": "bluestein",
+   "way_back_spellings": [
+    "bluestein"
+   ]
+  },
+  {
+   "base_captured": "9be0403ef3f3670cff321279947e6ad54f55691d53f5be959ba77b750d40ceae",
+   "base_refused": "5af95ce1809f4a892593ffb43cb7363e6f8d461a4385015f05d524b8278e7937",
+   "branch_captured": "c9d758f73fbbe09afde5462feeacafb3850e50622f717f953bc11141c07336f9",
+   "branch_refused": "5af95ce1809f4a892593ffb43cb7363e6f8d461a4385015f05d524b8278e7937",
+   "entry_point": "propagate_fresnel",
+   "identical_at_refused": true,
+   "moves_at_captured": true,
+   "way_back": "bluestein",
+   "way_back_spellings": [
+    "bluestein"
+   ]
+  },
+  {
+   "base_captured": "20b8ea2528de01b60381e222eee2f4e959929cc82e0e38b03dcb9f6bedac976e",
+   "base_refused": "c6ff5db30fcd7d0ed75278cc3d7cbf30fbaa9f7b0698013df815693c63422c68",
+   "branch_captured": "de388bba65ea723cb6c7167505fcab428013bfba93d1c1b09e4c4c38d17c763c",
+   "branch_refused": "c6ff5db30fcd7d0ed75278cc3d7cbf30fbaa9f7b0698013df815693c63422c68",
+   "entry_point": "propagate_traced_carrier_chain",
+   "identical_at_refused": true,
+   "moves_at_captured": true,
+   "way_back": "bluestein",
+   "way_back_spellings": [
+    "bluestein"
+   ]
+  },
+  {
+   "base_captured": "ed3ca367bf8cdd0350cff54a89a57ffdbb37ca7f90553316382bc413aa3e5257",
+   "base_refused": "773f3eaf3d502bc64a6ac26fe6fac8c3e7f8291d8e12809c84973fd6ed0fbf34",
+   "branch_captured": "509e61bb45a95c9cff90304c71a0523c9c624396cbe454db10dfac7f851c754b",
+   "branch_refused": "773f3eaf3d502bc64a6ac26fe6fac8c3e7f8291d8e12809c84973fd6ed0fbf34",
+   "entry_point": "propagate_traced_carrier_chain_collins",
+   "identical_at_refused": true,
+   "moves_at_captured": true,
+   "way_back": "separable",
+   "way_back_spellings": [
+    "separable"
+   ]
+  },
+  {
+   "base_captured": "20b8ea2528de01b60381e222eee2f4e959929cc82e0e38b03dcb9f6bedac976e",
+   "base_refused": "c6ff5db30fcd7d0ed75278cc3d7cbf30fbaa9f7b0698013df815693c63422c68",
+   "branch_captured": "de388bba65ea723cb6c7167505fcab428013bfba93d1c1b09e4c4c38d17c763c",
+   "branch_refused": "c6ff5db30fcd7d0ed75278cc3d7cbf30fbaa9f7b0698013df815693c63422c68",
+   "entry_point": "propagate_traced_carrier_chain_multi",
+   "identical_at_refused": true,
+   "moves_at_captured": true,
+   "way_back": "bluestein",
+   "way_back_spellings": [
+    "bluestein"
+   ]
+  },
+  {
+   "base_captured": "1166212f702d5a90187192464e15e1dd6bb062ea8a25a26022ac635906550a72",
+   "base_refused": "dd2d0ea9f4adeb0490c55466735e5f432556ea25e6e3dba59cc9f4d654675267",
+   "branch_captured": "43b7e64e7491c4d471eddc661155aafcc1597049c1e16013354aada36024a82e",
+   "branch_refused": "dd2d0ea9f4adeb0490c55466735e5f432556ea25e6e3dba59cc9f4d654675267",
+   "entry_point": "re_reference",
+   "identical_at_refused": true,
+   "moves_at_captured": true,
+   "way_back": "separable",
+   "way_back_spellings": [
+    "separable"
+   ]
+  },
+  {
+   "base_captured": "9e5f72372656ebce557e3144912b42f3a459401298c9bb271feb3f96e8522049",
+   "base_refused": "2bcbf809424b1cb02eb8803c217e7fcfb848a4334cda1a260aaa8aaf6113ed38",
+   "branch_captured": "d9d3bb8413c008be8834652c2ff97568a016d50f366c2a0d8e605249144e607c",
+   "branch_refused": "2bcbf809424b1cb02eb8803c217e7fcfb848a4334cda1a260aaa8aaf6113ed38",
+   "entry_point": "resample_field",
+   "identical_at_refused": true,
+   "moves_at_captured": true,
+   "way_back": "bluestein",
+   "way_back_spellings": [
+    "bluestein"
+   ]
+  }
+ ],
+ "tag": "wsl"
+}
