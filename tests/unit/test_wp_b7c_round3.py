@@ -378,9 +378,21 @@ def test_b7c3_the_bar_clears_the_converged_readings_own_spread():
     reason -- at least a quarter of the paraxial focal distance short of the
     interior fold, where the landing map is single-valued and far from its
     turning point -- so no reading selects the planes its own spread is then
-    measured on.  The bar must clear three times that spread; the premise that
-    the spread is small enough for the claim to mean anything is ASSERTED, not
-    skipped.
+    measured on.
+
+    THE FACTOR IS DERIVED, not chosen for comfort.  On this ladder the four
+    planes read 4.08e-05, 1.16e-04, 1.63e-04 and 1.82e-04 from 1 -- identical
+    to the printed digit on win py3.14.6 / numpy 2.4.4 and on wsl py3.12.3 /
+    numpy 2.4.6, measured 2026-09-19 -- so the shipped bar clears the worst of
+    them by **330x**.  Requiring 50x asserts that the bar is decades above the
+    reference's own spread, which is what makes it a tolerance on a known
+    value rather than noise, while leaving 6.6x of headroom to the shipped
+    value: a build whose spread were six times larger would still pass.
+    Round 3 measured the same spread on 102 planes over seventeen optics
+    (0.99941 .. 1.00044, rms 1.5e-4), so this ladder is not an outlier.
+
+    The premise that the spread is small enough for the claim to mean anything
+    is ASSERTED, not skipped.
     """
     devs = []
     for z in _V_CONVERGED_Z:
@@ -400,10 +412,12 @@ def test_b7c3_the_bar_clears_the_converged_readings_own_spread():
         f'the converged control itself spreads by {spread:.2e} about 1 '
         f'({[f"{d:.2e}" for d in devs]}); the bar cannot be a tolerance on a '
         'reference that moves by that much -- re-derive the reference')
-    assert _PIXEL_CONTINUITY_MAX > 1.0 + 3.0 * spread, (
-        f'the bar {_PIXEL_CONTINUITY_MAX} is inside three times the converged '
-        f'population\'s own spread ({spread:.2e} measured here), so it is not '
-        'a tolerance on a known value -- it is noise')
+    assert _PIXEL_CONTINUITY_MAX > 1.0 + 50.0 * spread, (
+        f'the bar {_PIXEL_CONTINUITY_MAX} is within fifty times the converged '
+        f'population\'s own spread ({spread:.2e} measured here, so the bar '
+        f'clears it by {(_PIXEL_CONTINUITY_MAX - 1.0) / spread:.0f}x against '
+        'the 330x this ladder measured), so it is no longer decades above the '
+        'reference it is a tolerance on -- it is noise')
     # and two-sided: it is far BELOW the regime it exists to catch.  A
     # quadrature that has stopped being unbiased deposits a power proportional
     # to the pixel area and reads ~4 per halving, which is the mechanism; a
