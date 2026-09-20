@@ -1,0 +1,1080 @@
+{
+ "CAPTURED_AND_NOT_CHEAPEST": [],
+ "build": "WIN-py3.14",
+ "committed_recount": {
+  "captured_and_not_cheapest_win": [],
+  "captured_and_not_cheapest_wsl": [],
+  "captured_win": 30,
+  "captured_wsl": 30,
+  "dense_cheapest_win": 42,
+  "dense_cheapest_wsl": 42,
+  "identical_cheapest_across_builds": 51,
+  "identical_readings_across_builds": [],
+  "n_shapes": 51,
+  "not_cheapest_win": [
+   "w0125_4096x32",
+   "w0150_2048x32",
+   "w0150_32x2048",
+   "w0200_1024x32",
+   "w0200_4096x64",
+   "w0300_4096x64b",
+   "w0400_2048x64b",
+   "w0400_64x2048",
+   "w0799_4096x128b"
+  ],
+  "not_cheapest_wsl": [
+   "w0125_4096x32",
+   "w0150_2048x32",
+   "w0150_32x2048",
+   "w0200_1024x32",
+   "w0200_4096x64",
+   "w0300_4096x64b",
+   "w0400_2048x64b",
+   "w0400_64x2048",
+   "w0799_4096x128b"
+  ],
+  "w0400_2048x64b": {
+   "win": {
+    "cheapest": "separable",
+    "peak_MB": {
+     "chirpz2d": 20.076887,
+     "dense": 5.2638,
+     "separable": 4.39872
+    },
+    "rule_says_direct": false
+   },
+   "wsl": {
+    "cheapest": "separable",
+    "peak_MB": {
+     "chirpz2d": 20.076199,
+     "dense": 5.263656,
+     "separable": 4.39812
+    },
+    "rule_says_direct": false
+   }
+  }
+ },
+ "dense_cheapest_count": 31,
+ "derivation_predicts_at": 34,
+ "lumenairy_version": "5.48.1",
+ "n_shapes": 35,
+ "numpy": "2.4.4",
+ "python": "3.14.6",
+ "rows": [
+  {
+   "Mx": 1,
+   "My": 128,
+   "Nx_in": 32,
+   "Ny_in": 4096,
+   "cheapest": "separable",
+   "cheapest_derived": "chirpz2d",
+   "derivation_predicts_cheapest": false,
+   "derived_bytes": {
+    "chirpz2d": 2162688,
+    "dense": 12582912,
+    "separable": 8650752
+   },
+   "distinct_route_digests": 3,
+   "group": "below",
+   "name": "a0125_T_lg",
+   "peak_MB": {
+    "chirpz2d": 38.149,
+    "dense": 20.035,
+    "separable": 4.13
+   },
+   "peak_bytes": {
+    "chirpz2d": 40001781,
+    "dense": 21008176,
+    "separable": 4330976
+   },
+   "rule_says_direct": false,
+   "work_per_entry": 1.2499237107110162
+  },
+  {
+   "Mx": 128,
+   "My": 1,
+   "Nx_in": 4096,
+   "Ny_in": 32,
+   "cheapest": "separable",
+   "cheapest_derived": "separable",
+   "derivation_predicts_cheapest": true,
+   "derived_bytes": {
+    "chirpz2d": 2162688,
+    "dense": 12582912,
+    "separable": 2162688
+   },
+   "distinct_route_digests": 3,
+   "group": "below",
+   "name": "a0125_W_lg",
+   "peak_MB": {
+    "chirpz2d": 16.674,
+    "dense": 20.034,
+    "separable": 4.417
+   },
+   "peak_bytes": {
+    "chirpz2d": 17483608,
+    "dense": 21006864,
+    "separable": 4631304
+   },
+   "rule_says_direct": false,
+   "work_per_entry": 1.2499237107110162
+  },
+  {
+   "Mx": 1,
+   "My": 16,
+   "Nx_in": 32,
+   "Ny_in": 512,
+   "cheapest": "dense",
+   "cheapest_derived": "dense",
+   "derivation_predicts_cheapest": true,
+   "derived_bytes": {
+    "chirpz2d": 270336,
+    "dense": 196608,
+    "separable": 262144
+   },
+   "distinct_route_digests": 3,
+   "group": "below",
+   "name": "a0299_T_sm",
+   "peak_MB": {
+    "chirpz2d": 2.357,
+    "dense": 0.32,
+    "separable": 0.63
+   },
+   "peak_bytes": {
+    "chirpz2d": 2471599,
+    "dense": 335216,
+    "separable": 660960
+   },
+   "rule_says_direct": false,
+   "work_per_entry": 2.9883268482490273
+  },
+  {
+   "Mx": 32,
+   "My": 1,
+   "Nx_in": 2048,
+   "Ny_in": 64,
+   "cheapest": "dense",
+   "cheapest_derived": "dense",
+   "derivation_predicts_cheapest": true,
+   "derived_bytes": {
+    "chirpz2d": 2128896,
+    "dense": 1572864,
+    "separable": 2128896
+   },
+   "distinct_route_digests": 3,
+   "group": "below",
+   "name": "a0300_W_md",
+   "peak_MB": {
+    "chirpz2d": 16.334,
+    "dense": 2.517,
+    "separable": 4.27
+   },
+   "peak_bytes": {
+    "chirpz2d": 17127445,
+    "dense": 2639632,
+    "separable": 4477416
+   },
+   "rule_says_direct": false,
+   "work_per_entry": 2.9970731707317073
+  },
+  {
+   "Mx": 4,
+   "My": 128,
+   "Nx_in": 128,
+   "Ny_in": 4096,
+   "cheapest": "separable",
+   "cheapest_derived": "separable",
+   "derivation_predicts_cheapest": true,
+   "derived_bytes": {
+    "chirpz2d": 8921088,
+    "dense": 12582912,
+    "separable": 8650752
+   },
+   "distinct_route_digests": 3,
+   "group": "band",
+   "name": "b0799_T_lg",
+   "peak_MB": {
+    "chirpz2d": 76.31,
+    "dense": 20.042,
+    "separable": 16.51
+   },
+   "peak_bytes": {
+    "chirpz2d": 80016855,
+    "dense": 21015152,
+    "separable": 17311976
+   },
+   "rule_says_direct": false,
+   "work_per_entry": 7.9921951219512195
+  },
+  {
+   "Mx": 128,
+   "My": 4,
+   "Nx_in": 4096,
+   "Ny_in": 128,
+   "cheapest": "separable",
+   "cheapest_derived": "separable",
+   "derivation_predicts_cheapest": true,
+   "derived_bytes": {
+    "chirpz2d": 8921088,
+    "dense": 12582912,
+    "separable": 8650752
+   },
+   "distinct_route_digests": 3,
+   "group": "band",
+   "name": "b0799_W_lg",
+   "peak_MB": {
+    "chirpz2d": 67.795,
+    "dense": 20.034,
+    "separable": 16.729
+   },
+   "peak_bytes": {
+    "chirpz2d": 71087949,
+    "dense": 21006864,
+    "separable": 17541192
+   },
+   "rule_says_direct": false,
+   "work_per_entry": 7.9921951219512195
+  },
+  {
+   "Mx": 1,
+   "My": 8,
+   "Nx_in": 64,
+   "Ny_in": 256,
+   "cheapest": "dense",
+   "cheapest_derived": "dense",
+   "derivation_predicts_cheapest": true,
+   "derived_bytes": {
+    "chirpz2d": 270336,
+    "dense": 49152,
+    "separable": 262144
+   },
+   "distinct_route_digests": 3,
+   "group": "band",
+   "name": "b0873_T_sm",
+   "peak_MB": {
+    "chirpz2d": 2.345,
+    "dense": 0.084,
+    "separable": 0.632
+   },
+   "peak_bytes": {
+    "chirpz2d": 2458527,
+    "dense": 87760,
+    "separable": 662688
+   },
+   "rule_says_direct": false,
+   "work_per_entry": 8.727272727272727
+  },
+  {
+   "Mx": 8,
+   "My": 1,
+   "Nx_in": 256,
+   "Ny_in": 64,
+   "cheapest": "dense",
+   "cheapest_derived": "dense",
+   "derivation_predicts_cheapest": true,
+   "derived_bytes": {
+    "chirpz2d": 270336,
+    "dense": 49152,
+    "separable": 270336
+   },
+   "distinct_route_digests": 3,
+   "group": "band",
+   "name": "b0873_W_sm",
+   "peak_MB": {
+    "chirpz2d": 2.08,
+    "dense": 0.083,
+    "separable": 0.651
+   },
+   "peak_bytes": {
+    "chirpz2d": 2180693,
+    "dense": 86640,
+    "separable": 682120
+   },
+   "rule_says_direct": false,
+   "work_per_entry": 8.727272727272727
+  },
+  {
+   "Mx": 1,
+   "My": 16,
+   "Nx_in": 128,
+   "Ny_in": 2048,
+   "cheapest": "dense",
+   "cheapest_derived": "dense",
+   "derivation_predicts_cheapest": true,
+   "derived_bytes": {
+    "chirpz2d": 4257792,
+    "dense": 786432,
+    "separable": 4194304
+   },
+   "distinct_route_digests": 3,
+   "group": "band",
+   "name": "b0896_T_md",
+   "peak_MB": {
+    "chirpz2d": 36.617,
+    "dense": 1.269,
+    "separable": 8.135
+   },
+   "peak_bytes": {
+    "chirpz2d": 38395287,
+    "dense": 1330928,
+    "separable": 8530656
+   },
+   "rule_says_direct": false,
+   "work_per_entry": 8.964980544747082
+  },
+  {
+   "Mx": 16,
+   "My": 1,
+   "Nx_in": 2048,
+   "Ny_in": 128,
+   "cheapest": "dense",
+   "cheapest_derived": "dense",
+   "derivation_predicts_cheapest": true,
+   "derived_bytes": {
+    "chirpz2d": 4257792,
+    "dense": 786432,
+    "separable": 4257792
+   },
+   "distinct_route_digests": 3,
+   "group": "band",
+   "name": "b0896_W_md",
+   "peak_MB": {
+    "chirpz2d": 32.549,
+    "dense": 1.267,
+    "separable": 8.3
+   },
+   "peak_bytes": {
+    "chirpz2d": 34129941,
+    "dense": 1328784,
+    "separable": 8703080
+   },
+   "rule_says_direct": false,
+   "work_per_entry": 8.964980544747082
+  },
+  {
+   "Mx": 2,
+   "My": 16,
+   "Nx_in": 64,
+   "Ny_in": 512,
+   "cheapest": "dense",
+   "cheapest_derived": "dense",
+   "derivation_predicts_cheapest": true,
+   "derived_bytes": {
+    "chirpz2d": 557568,
+    "dense": 196608,
+    "separable": 540672
+   },
+   "distinct_route_digests": 3,
+   "group": "band",
+   "name": "b0985_T_sm",
+   "peak_MB": {
+    "chirpz2d": 4.8,
+    "dense": 0.321,
+    "separable": 1.148
+   },
+   "peak_bytes": {
+    "chirpz2d": 5033415,
+    "dense": 336752,
+    "separable": 1203512
+   },
+   "rule_says_direct": false,
+   "work_per_entry": 9.846153846153847
+  },
+  {
+   "Mx": 16,
+   "My": 2,
+   "Nx_in": 512,
+   "Ny_in": 64,
+   "cheapest": "dense",
+   "cheapest_derived": "dense",
+   "derivation_predicts_cheapest": true,
+   "derived_bytes": {
+    "chirpz2d": 557568,
+    "dense": 196608,
+    "separable": 540672
+   },
+   "distinct_route_digests": 3,
+   "group": "band",
+   "name": "b0985_W_sm",
+   "peak_MB": {
+    "chirpz2d": 4.261,
+    "dense": 0.319,
+    "separable": 1.172
+   },
+   "peak_bytes": {
+    "chirpz2d": 4468365,
+    "dense": 334608,
+    "separable": 1229448
+   },
+   "rule_says_direct": false,
+   "work_per_entry": 9.846153846153847
+  },
+  {
+   "Mx": 2,
+   "My": 16,
+   "Nx_in": 64,
+   "Ny_in": 1024,
+   "cheapest": "dense",
+   "cheapest_derived": "dense",
+   "derivation_predicts_cheapest": true,
+   "derived_bytes": {
+    "chirpz2d": 1108800,
+    "dense": 393216,
+    "separable": 1081344
+   },
+   "distinct_route_digests": 3,
+   "group": "band",
+   "name": "b0992_T_md",
+   "peak_MB": {
+    "chirpz2d": 9.534,
+    "dense": 0.636,
+    "separable": 2.163
+   },
+   "peak_bytes": {
+    "chirpz2d": 9997183,
+    "dense": 667376,
+    "separable": 2268472
+   },
+   "rule_says_direct": false,
+   "work_per_entry": 9.922480620155039
+  },
+  {
+   "Mx": 16,
+   "My": 2,
+   "Nx_in": 1024,
+   "Ny_in": 64,
+   "cheapest": "dense",
+   "cheapest_derived": "dense",
+   "derivation_predicts_cheapest": true,
+   "derived_bytes": {
+    "chirpz2d": 1108800,
+    "dense": 393216,
+    "separable": 1075200
+   },
+   "distinct_route_digests": 3,
+   "group": "band",
+   "name": "b0992_W_md",
+   "peak_MB": {
+    "chirpz2d": 8.469,
+    "dense": 0.634,
+    "separable": 2.21
+   },
+   "peak_bytes": {
+    "chirpz2d": 8880269,
+    "dense": 665232,
+    "separable": 2317256
+   },
+   "rule_says_direct": false,
+   "work_per_entry": 9.922480620155039
+  },
+  {
+   "Mx": 4,
+   "My": 64,
+   "Nx_in": 128,
+   "Ny_in": 2048,
+   "cheapest": "dense",
+   "cheapest_derived": "dense",
+   "derivation_predicts_cheapest": true,
+   "derived_bytes": {
+    "chirpz2d": 4460544,
+    "dense": 3145728,
+    "separable": 4325376
+   },
+   "distinct_route_digests": 3,
+   "group": "band",
+   "name": "b1195_T_md",
+   "peak_MB": {
+    "chirpz2d": 38.166,
+    "dense": 5.025,
+    "separable": 8.261
+   },
+   "peak_bytes": {
+    "chirpz2d": 40019703,
+    "dense": 5269616,
+    "separable": 8661928
+   },
+   "rule_says_direct": false,
+   "work_per_entry": 11.95330739299611
+  },
+  {
+   "Mx": 64,
+   "My": 4,
+   "Nx_in": 2048,
+   "Ny_in": 128,
+   "cheapest": "dense",
+   "cheapest_derived": "dense",
+   "derivation_predicts_cheapest": true,
+   "derived_bytes": {
+    "chirpz2d": 4460544,
+    "dense": 3145728,
+    "separable": 4325376
+   },
+   "distinct_route_digests": 3,
+   "group": "band",
+   "name": "b1195_W_md",
+   "peak_MB": {
+    "chirpz2d": 33.905,
+    "dense": 5.018,
+    "separable": 8.366
+   },
+   "peak_bytes": {
+    "chirpz2d": 35551613,
+    "dense": 5261328,
+    "separable": 8772872
+   },
+   "rule_says_direct": false,
+   "work_per_entry": 11.95330739299611
+  },
+  {
+   "Mx": 4,
+   "My": 128,
+   "Nx_in": 256,
+   "Ny_in": 4096,
+   "cheapest": "dense",
+   "cheapest_derived": "dense",
+   "derivation_predicts_cheapest": true,
+   "derived_bytes": {
+    "chirpz2d": 17842176,
+    "dense": 12582912,
+    "separable": 17301504
+   },
+   "distinct_route_digests": 3,
+   "group": "band",
+   "name": "b1198_T_lg",
+   "peak_MB": {
+    "chirpz2d": 152.38,
+    "dense": 20.049,
+    "separable": 33.017
+   },
+   "peak_bytes": {
+    "chirpz2d": 159781591,
+    "dense": 21023344,
+    "separable": 34620808
+   },
+   "rule_says_direct": false,
+   "work_per_entry": 11.976608187134502
+  },
+  {
+   "Mx": 128,
+   "My": 4,
+   "Nx_in": 4096,
+   "Ny_in": 256,
+   "cheapest": "dense",
+   "cheapest_derived": "dense",
+   "derivation_predicts_cheapest": true,
+   "derived_bytes": {
+    "chirpz2d": 17842176,
+    "dense": 12582912,
+    "separable": 17301504
+   },
+   "distinct_route_digests": 3,
+   "group": "band",
+   "name": "b1198_W_lg",
+   "peak_MB": {
+    "chirpz2d": 152.379,
+    "dense": 20.034,
+    "separable": 33.229
+   },
+   "peak_bytes": {
+    "chirpz2d": 159781471,
+    "dense": 21006864,
+    "separable": 34842696
+   },
+   "rule_says_direct": false,
+   "work_per_entry": 11.976608187134502
+  },
+  {
+   "Mx": 1,
+   "My": 4,
+   "Nx_in": 64,
+   "Ny_in": 128,
+   "cheapest": "dense",
+   "cheapest_derived": "dense",
+   "derivation_predicts_cheapest": true,
+   "derived_bytes": {
+    "chirpz2d": 135168,
+    "dense": 12288,
+    "separable": 131072
+   },
+   "distinct_route_digests": 3,
+   "group": "band",
+   "name": "b1511_T_sm",
+   "peak_MB": {
+    "chirpz2d": 1.045,
+    "dense": 0.024,
+    "separable": 0.382
+   },
+   "peak_bytes": {
+    "chirpz2d": 1095989,
+    "dense": 25264,
+    "separable": 400544
+   },
+   "rule_says_direct": false,
+   "work_per_entry": 15.11111111111111
+  },
+  {
+   "Mx": 4,
+   "My": 1,
+   "Nx_in": 128,
+   "Ny_in": 64,
+   "cheapest": "dense",
+   "cheapest_derived": "dense",
+   "derivation_predicts_cheapest": true,
+   "derived_bytes": {
+    "chirpz2d": 135168,
+    "dense": 12288,
+    "separable": 135168
+   },
+   "distinct_route_digests": 3,
+   "group": "band",
+   "name": "b1511_W_sm",
+   "peak_MB": {
+    "chirpz2d": 1.045,
+    "dense": 0.023,
+    "separable": 0.39
+   },
+   "peak_bytes": {
+    "chirpz2d": 1095989,
+    "dense": 24144,
+    "separable": 408424
+   },
+   "rule_says_direct": false,
+   "work_per_entry": 15.11111111111111
+  },
+  {
+   "Mx": 1,
+   "My": 4,
+   "Nx_in": 64,
+   "Ny_in": 256,
+   "cheapest": "dense",
+   "cheapest_derived": "dense",
+   "derivation_predicts_cheapest": true,
+   "derived_bytes": {
+    "chirpz2d": 270336,
+    "dense": 24576,
+    "separable": 262144
+   },
+   "distinct_route_digests": 3,
+   "group": "band",
+   "name": "b1600_T_sm",
+   "peak_MB": {
+    "chirpz2d": 2.344,
+    "dense": 0.045,
+    "separable": 0.632
+   },
+   "peak_bytes": {
+    "chirpz2d": 2458359,
+    "dense": 46768,
+    "separable": 662688
+   },
+   "rule_says_direct": true,
+   "work_per_entry": 16.0
+  },
+  {
+   "Mx": 4,
+   "My": 1,
+   "Nx_in": 256,
+   "Ny_in": 64,
+   "cheapest": "dense",
+   "cheapest_derived": "dense",
+   "derivation_predicts_cheapest": true,
+   "derived_bytes": {
+    "chirpz2d": 270336,
+    "dense": 24576,
+    "separable": 270336
+   },
+   "distinct_route_digests": 3,
+   "group": "band",
+   "name": "b1600_W_sm",
+   "peak_MB": {
+    "chirpz2d": 2.08,
+    "dense": 0.044,
+    "separable": 0.65
+   },
+   "peak_bytes": {
+    "chirpz2d": 2180597,
+    "dense": 45648,
+    "separable": 682024
+   },
+   "rule_says_direct": true,
+   "work_per_entry": 16.0
+  },
+  {
+   "Mx": 1,
+   "My": 16,
+   "Nx_in": 256,
+   "Ny_in": 2048,
+   "cheapest": "dense",
+   "cheapest_derived": "dense",
+   "derivation_predicts_cheapest": true,
+   "derived_bytes": {
+    "chirpz2d": 8515584,
+    "dense": 786432,
+    "separable": 8388608
+   },
+   "distinct_route_digests": 3,
+   "group": "band",
+   "name": "b1687_T_md",
+   "peak_MB": {
+    "chirpz2d": 73.108,
+    "dense": 1.271,
+    "separable": 16.142
+   },
+   "peak_bytes": {
+    "chirpz2d": 76659023,
+    "dense": 1332976,
+    "separable": 16926432
+   },
+   "rule_says_direct": true,
+   "work_per_entry": 16.868217054263567
+  },
+  {
+   "Mx": 16,
+   "My": 1,
+   "Nx_in": 2048,
+   "Ny_in": 256,
+   "cheapest": "dense",
+   "cheapest_derived": "dense",
+   "derivation_predicts_cheapest": true,
+   "derived_bytes": {
+    "chirpz2d": 8515584,
+    "dense": 786432,
+    "separable": 8515584
+   },
+   "distinct_route_digests": 3,
+   "group": "band",
+   "name": "b1687_W_md",
+   "peak_MB": {
+    "chirpz2d": 73.108,
+    "dense": 1.267,
+    "separable": 16.36
+   },
+   "peak_bytes": {
+    "chirpz2d": 76658967,
+    "dense": 1328784,
+    "separable": 17155176
+   },
+   "rule_says_direct": true,
+   "work_per_entry": 16.868217054263567
+  },
+  {
+   "Mx": 2,
+   "My": 128,
+   "Nx_in": 1024,
+   "Ny_in": 4096,
+   "cheapest": "dense",
+   "cheapest_derived": "dense",
+   "derivation_predicts_cheapest": true,
+   "derived_bytes": {
+    "chirpz2d": 69543936,
+    "dense": 12582912,
+    "separable": 67436544
+   },
+   "distinct_route_digests": 3,
+   "group": "band",
+   "name": "b1793_T_lg",
+   "peak_MB": {
+    "chirpz2d": 594.874,
+    "dense": 20.065,
+    "separable": 128.683
+   },
+   "peak_bytes": {
+    "chirpz2d": 623770215,
+    "dense": 21039792,
+    "separable": 134933816
+   },
+   "rule_says_direct": true,
+   "work_per_entry": 17.929961089494164
+  },
+  {
+   "Mx": 128,
+   "My": 2,
+   "Nx_in": 4096,
+   "Ny_in": 1024,
+   "cheapest": "dense",
+   "cheapest_derived": "dense",
+   "derivation_predicts_cheapest": true,
+   "derived_bytes": {
+    "chirpz2d": 69543936,
+    "dense": 12582912,
+    "separable": 69206016
+   },
+   "distinct_route_digests": 3,
+   "group": "band",
+   "name": "b1793_W_lg",
+   "peak_MB": {
+    "chirpz2d": 594.874,
+    "dense": 20.034,
+    "separable": 132.229
+   },
+   "peak_bytes": {
+    "chirpz2d": 623770095,
+    "dense": 21006928,
+    "separable": 138651752
+   },
+   "rule_says_direct": true,
+   "work_per_entry": 17.929961089494164
+  },
+  {
+   "Mx": 4,
+   "My": 32,
+   "Nx_in": 128,
+   "Ny_in": 1024,
+   "cheapest": "dense",
+   "cheapest_derived": "dense",
+   "derivation_predicts_cheapest": true,
+   "derived_bytes": {
+    "chirpz2d": 2230272,
+    "dense": 786432,
+    "separable": 2162688
+   },
+   "distinct_route_digests": 3,
+   "group": "band",
+   "name": "b1969_T_md",
+   "peak_MB": {
+    "chirpz2d": 19.094,
+    "dense": 1.267,
+    "separable": 4.198
+   },
+   "peak_bytes": {
+    "chirpz2d": 20021239,
+    "dense": 1329008,
+    "separable": 4402088
+   },
+   "rule_says_direct": true,
+   "work_per_entry": 19.692307692307693
+  },
+  {
+   "Mx": 32,
+   "My": 4,
+   "Nx_in": 1024,
+   "Ny_in": 128,
+   "cheapest": "dense",
+   "cheapest_derived": "dense",
+   "derivation_predicts_cheapest": true,
+   "derived_bytes": {
+    "chirpz2d": 2230272,
+    "dense": 786432,
+    "separable": 2162688
+   },
+   "distinct_route_digests": 3,
+   "group": "band",
+   "name": "b1969_W_md",
+   "peak_MB": {
+    "chirpz2d": 16.96,
+    "dense": 1.26,
+    "separable": 4.248
+   },
+   "peak_bytes": {
+    "chirpz2d": 17783421,
+    "dense": 1320720,
+    "separable": 4453896
+   },
+   "rule_says_direct": true,
+   "work_per_entry": 19.692307692307693
+  },
+  {
+   "Mx": 8,
+   "My": 128,
+   "Nx_in": 256,
+   "Ny_in": 4096,
+   "cheapest": "dense",
+   "cheapest_derived": "dense",
+   "derivation_predicts_cheapest": true,
+   "derived_bytes": {
+    "chirpz2d": 17842176,
+    "dense": 12582912,
+    "separable": 17301504
+   },
+   "distinct_route_digests": 3,
+   "group": "band",
+   "name": "b2391_T_lg",
+   "peak_MB": {
+    "chirpz2d": 152.38,
+    "dense": 20.065,
+    "separable": 33.017
+   },
+   "peak_bytes": {
+    "chirpz2d": 159781519,
+    "dense": 21039728,
+    "separable": 34620904
+   },
+   "rule_says_direct": true,
+   "work_per_entry": 23.90661478599222
+  },
+  {
+   "Mx": 128,
+   "My": 8,
+   "Nx_in": 4096,
+   "Ny_in": 256,
+   "cheapest": "dense",
+   "cheapest_derived": "dense",
+   "derivation_predicts_cheapest": true,
+   "derived_bytes": {
+    "chirpz2d": 17842176,
+    "dense": 12582912,
+    "separable": 17301504
+   },
+   "distinct_route_digests": 3,
+   "group": "band",
+   "name": "b2391_W_lg",
+   "peak_MB": {
+    "chirpz2d": 152.38,
+    "dense": 20.034,
+    "separable": 33.229
+   },
+   "peak_bytes": {
+    "chirpz2d": 159781567,
+    "dense": 21006864,
+    "separable": 34842696
+   },
+   "rule_says_direct": true,
+   "work_per_entry": 23.90661478599222
+  },
+  {
+   "Mx": 1,
+   "My": 4,
+   "Nx_in": 128,
+   "Ny_in": 256,
+   "cheapest": "dense",
+   "cheapest_derived": "dense",
+   "derivation_predicts_cheapest": true,
+   "derived_bytes": {
+    "chirpz2d": 540672,
+    "dense": 24576,
+    "separable": 524288
+   },
+   "distinct_route_digests": 3,
+   "group": "band",
+   "name": "b2933_T_sm",
+   "peak_MB": {
+    "chirpz2d": 4.66,
+    "dense": 0.046,
+    "separable": 1.135
+   },
+   "peak_bytes": {
+    "chirpz2d": 4886727,
+    "dense": 47792,
+    "separable": 1190560
+   },
+   "rule_says_direct": true,
+   "work_per_entry": 29.333333333333332
+  },
+  {
+   "Mx": 4,
+   "My": 1,
+   "Nx_in": 256,
+   "Ny_in": 128,
+   "cheapest": "dense",
+   "cheapest_derived": "dense",
+   "derivation_predicts_cheapest": true,
+   "derived_bytes": {
+    "chirpz2d": 540672,
+    "dense": 24576,
+    "separable": 540672
+   },
+   "distinct_route_digests": 3,
+   "group": "band",
+   "name": "b2933_W_sm",
+   "peak_MB": {
+    "chirpz2d": 4.138,
+    "dense": 0.044,
+    "separable": 1.158
+   },
+   "peak_bytes": {
+    "chirpz2d": 4338629,
+    "dense": 45648,
+    "separable": 1214504
+   },
+   "rule_says_direct": true,
+   "work_per_entry": 29.333333333333332
+  },
+  {
+   "Mx": 16,
+   "My": 16,
+   "Nx_in": 512,
+   "Ny_in": 512,
+   "cheapest": "dense",
+   "cheapest_derived": "dense",
+   "derivation_predicts_cheapest": true,
+   "derived_bytes": {
+    "chirpz2d": 4460544,
+    "dense": 397312,
+    "separable": 4325376
+   },
+   "distinct_route_digests": 3,
+   "group": "control",
+   "name": "c0264_sq_md",
+   "peak_MB": {
+    "chirpz2d": 38.103,
+    "dense": 0.444,
+    "separable": 8.282
+   },
+   "peak_bytes": {
+    "chirpz2d": 39953439,
+    "dense": 465840,
+    "separable": 8684200
+   },
+   "rule_says_direct": true,
+   "work_per_entry": 264.0
+  },
+  {
+   "Mx": 32,
+   "My": 32,
+   "Nx_in": 1024,
+   "Ny_in": 1024,
+   "cheapest": "dense",
+   "cheapest_derived": "dense",
+   "derivation_predicts_cheapest": true,
+   "derived_bytes": {
+    "chirpz2d": 17842176,
+    "dense": 1589248,
+    "separable": 17301504
+   },
+   "distinct_route_digests": 3,
+   "group": "control",
+   "name": "c0528_sq_md",
+   "peak_MB": {
+    "chirpz2d": 152.253,
+    "dense": 1.76,
+    "separable": 33.059
+   },
+   "peak_bytes": {
+    "chirpz2d": 159648543,
+    "dense": 1845168,
+    "separable": 34665320
+   },
+   "rule_says_direct": true,
+   "work_per_entry": 528.0
+  },
+  {
+   "Mx": 64,
+   "My": 64,
+   "Nx_in": 2048,
+   "Ny_in": 2048,
+   "cheapest": "dense",
+   "cheapest_derived": "dense",
+   "derivation_predicts_cheapest": true,
+   "derived_bytes": {
+    "chirpz2d": 71368704,
+    "dense": 6356992,
+    "separable": 69206016
+   },
+   "distinct_route_digests": 3,
+   "group": "control",
+   "name": "c1056_sq_lg",
+   "peak_MB": {
+    "chirpz2d": 608.74,
+    "dense": 7.018,
+    "separable": 132.116
+   },
+   "peak_bytes": {
+    "chirpz2d": 638310639,
+    "dense": 7358640,
+    "separable": 138533480
+   },
+   "rule_says_direct": true,
+   "work_per_entry": 1056.0
+  }
+ ]
+}

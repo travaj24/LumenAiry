@@ -1,0 +1,314 @@
+{
+ "backward_exported": [
+  "angular_spectrum_propagate_mft",
+  "asm_propagate",
+  "carrier_referenced_exact_focus_readout",
+  "carrier_referenced_focus_readout",
+  "compute_psf",
+  "fraunhofer_propagate_mft",
+  "fresnel_propagate_mft",
+  "propagate",
+  "propagate_carrier_referenced",
+  "propagate_through_system",
+  "propagate_traced_carrier_chain",
+  "re_reference",
+  "resample_field",
+  "route_less_new_entry_point"
+ ],
+ "backward_reachable_functions": 22,
+ "backward_reachable_sorted": [
+  [
+   "analysis/psf_mtf_otf.py",
+   "_compute_psf_mft"
+  ],
+  [
+   "analysis/psf_mtf_otf.py",
+   "compute_psf"
+  ],
+  [
+   "propagators/_bluestein.py",
+   "_bluestein_centred_2d"
+  ],
+  [
+   "propagators/carrier.py",
+   "_collins_carrier_leg"
+  ],
+  [
+   "propagators/carrier.py",
+   "_collins_focus_readout"
+  ],
+  [
+   "propagators/carrier.py",
+   "_collins_transport"
+  ],
+  [
+   "propagators/carrier.py",
+   "carrier_referenced_exact_focus_readout"
+  ],
+  [
+   "propagators/carrier.py",
+   "carrier_referenced_focus_readout"
+  ],
+  [
+   "propagators/carrier.py",
+   "propagate_carrier_referenced"
+  ],
+  [
+   "propagators/carrier.py",
+   "propagate_traced_carrier_chain"
+  ],
+  [
+   "propagators/carrier_field.py",
+   "re_reference"
+  ],
+  [
+   "propagators/dispatch.py",
+   "_dispatch_bare_grid_with_output"
+  ],
+  [
+   "propagators/dispatch.py",
+   "_dispatch_to_method"
+  ],
+  [
+   "propagators/dispatch.py",
+   "asm_propagate"
+  ],
+  [
+   "propagators/dispatch.py",
+   "propagate"
+  ],
+  [
+   "propagators/mft.py",
+   "_resample_field_chirpz"
+  ],
+  [
+   "propagators/mft.py",
+   "angular_spectrum_propagate_mft"
+  ],
+  [
+   "propagators/mft.py",
+   "fraunhofer_propagate_mft"
+  ],
+  [
+   "propagators/mft.py",
+   "fresnel_propagate_mft"
+  ],
+  [
+   "propagators/mft.py",
+   "resample_field"
+  ],
+  [
+   "propagators/mft.py",
+   "route_less_new_entry_point"
+  ],
+  [
+   "propagators/system.py",
+   "propagate_through_system"
+  ]
+ ],
+ "build": "WIN-py3.14",
+ "forward_exported_reaching_a_primitive": 14,
+ "forward_rows": [
+  {
+   "body_mentions_a_route_keyword": true,
+   "exported_as": "angular_spectrum_propagate_mft",
+   "has_way_back": true,
+   "kind": "__all__",
+   "modules": [
+    "propagators/mft.py"
+   ],
+   "named_route_keywords": [
+    "method"
+   ],
+   "qualname": "angular_spectrum_propagate_mft",
+   "splats_into_mft_propagator": false
+  },
+  {
+   "body_mentions_a_route_keyword": true,
+   "exported_as": "asm_propagate",
+   "has_way_back": true,
+   "kind": "__all__",
+   "modules": [
+    "propagators/dispatch.py"
+   ],
+   "named_route_keywords": [],
+   "qualname": "asm_propagate",
+   "splats_into_mft_propagator": true
+  },
+  {
+   "body_mentions_a_route_keyword": true,
+   "exported_as": "carrier_referenced_exact_focus_readout",
+   "has_way_back": true,
+   "kind": "__all__",
+   "modules": [
+    "propagators/carrier.py"
+   ],
+   "named_route_keywords": [
+    "mft_method"
+   ],
+   "qualname": "carrier_referenced_exact_focus_readout",
+   "splats_into_mft_propagator": true
+  },
+  {
+   "body_mentions_a_route_keyword": true,
+   "exported_as": "carrier_referenced_focus_readout",
+   "has_way_back": true,
+   "kind": "__all__",
+   "modules": [
+    "propagators/carrier.py"
+   ],
+   "named_route_keywords": [
+    "mft_method"
+   ],
+   "qualname": "carrier_referenced_focus_readout",
+   "splats_into_mft_propagator": true
+  },
+  {
+   "body_mentions_a_route_keyword": true,
+   "exported_as": "compute_psf",
+   "has_way_back": true,
+   "kind": "__all__",
+   "modules": [
+    "analysis/psf_mtf_otf.py"
+   ],
+   "named_route_keywords": [
+    "method",
+    "mft_method"
+   ],
+   "qualname": "compute_psf",
+   "splats_into_mft_propagator": false
+  },
+  {
+   "body_mentions_a_route_keyword": true,
+   "exported_as": "fraunhofer_propagate_mft",
+   "has_way_back": true,
+   "kind": "__all__",
+   "modules": [
+    "propagators/mft.py"
+   ],
+   "named_route_keywords": [
+    "method"
+   ],
+   "qualname": "fraunhofer_propagate_mft",
+   "splats_into_mft_propagator": false
+  },
+  {
+   "body_mentions_a_route_keyword": true,
+   "exported_as": "fresnel_propagate_mft",
+   "has_way_back": true,
+   "kind": "__all__",
+   "modules": [
+    "propagators/mft.py"
+   ],
+   "named_route_keywords": [
+    "method"
+   ],
+   "qualname": "fresnel_propagate_mft",
+   "splats_into_mft_propagator": false
+  },
+  {
+   "body_mentions_a_route_keyword": true,
+   "exported_as": "propagate",
+   "has_way_back": true,
+   "kind": "__all__",
+   "modules": [
+    "propagators/dispatch.py"
+   ],
+   "named_route_keywords": [
+    "method",
+    "mft_method"
+   ],
+   "qualname": "propagate",
+   "splats_into_mft_propagator": false
+  },
+  {
+   "body_mentions_a_route_keyword": true,
+   "exported_as": "propagate_carrier_referenced",
+   "has_way_back": true,
+   "kind": "__all__",
+   "modules": [
+    "propagators/carrier.py"
+   ],
+   "named_route_keywords": [
+    "mft_method"
+   ],
+   "qualname": "propagate_carrier_referenced",
+   "splats_into_mft_propagator": false
+  },
+  {
+   "body_mentions_a_route_keyword": true,
+   "exported_as": "propagate_through_system",
+   "has_way_back": true,
+   "kind": "__all__",
+   "modules": [
+    "propagators/system.py"
+   ],
+   "named_route_keywords": [
+    "method"
+   ],
+   "qualname": "propagate_through_system",
+   "splats_into_mft_propagator": false
+  },
+  {
+   "body_mentions_a_route_keyword": true,
+   "exported_as": "propagate_traced_carrier_chain",
+   "has_way_back": true,
+   "kind": "__all__",
+   "modules": [
+    "propagators/carrier.py"
+   ],
+   "named_route_keywords": [
+    "mft_method"
+   ],
+   "qualname": "propagate_traced_carrier_chain",
+   "splats_into_mft_propagator": false
+  },
+  {
+   "body_mentions_a_route_keyword": true,
+   "exported_as": "re_reference",
+   "has_way_back": true,
+   "kind": "__all__",
+   "modules": [
+    "propagators/carrier_field.py"
+   ],
+   "named_route_keywords": [
+    "mft_method"
+   ],
+   "qualname": "re_reference",
+   "splats_into_mft_propagator": true
+  },
+  {
+   "body_mentions_a_route_keyword": true,
+   "exported_as": "resample_field",
+   "has_way_back": true,
+   "kind": "__all__",
+   "modules": [
+    "propagators/mft.py"
+   ],
+   "named_route_keywords": [
+    "method",
+    "mft_method"
+   ],
+   "qualname": "resample_field",
+   "splats_into_mft_propagator": false
+  },
+  {
+   "body_mentions_a_route_keyword": false,
+   "exported_as": "route_less_new_entry_point",
+   "has_way_back": false,
+   "kind": "__all__",
+   "modules": [
+    "propagators/mft.py"
+   ],
+   "named_route_keywords": [],
+   "qualname": "route_less_new_entry_point",
+   "splats_into_mft_propagator": false
+  }
+ ],
+ "mutate": null,
+ "n_modules_parsed": 237,
+ "offenders_without_a_way_back": [
+  "route_less_new_entry_point"
+ ],
+ "tree": "C:/tmp/vc4b_trees/scratch"
+}

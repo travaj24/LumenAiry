@@ -1,0 +1,57 @@
+{
+ "calls_answering_direct": 35,
+ "direct_callers": {
+  "_bluestein.py _bluestein_centred_2d": 35
+ },
+ "direct_shapes": [
+  "512x512->16x16",
+  "1024x1024->8x8",
+  "1024x1024->16x16",
+  "2048x2048->8x8",
+  "2048x2048->40x40",
+  "4096x4096->8x8"
+ ],
+ "distinct_shapes_asked_about": 35,
+ "exitstatus": 0,
+ "files_where_the_rule_fires": [
+  "tests/unit/test_audit2609_a25_carrier_focus_readout.py",
+  "tests/unit/test_audit2609_b4_collins_transport.py",
+  "tests/unit/test_niche_audit_w9_dispatch2.py",
+  "tests/unit/test_niche_d2_chain_multi.py",
+  "tests/unit/test_niche_tight_focus_readout.py"
+ ],
+ "ids_per_file": {
+  "test_audit2609_a25_carrier_focus_readout.py": 2,
+  "test_audit2609_b4_collins_transport.py": 2,
+  "test_niche_audit_w9_dispatch2.py": 3,
+  "test_niche_d2_chain_multi.py": 7,
+  "test_niche_tight_focus_readout.py": 2
+ },
+ "ids_where_the_rule_fires": [
+  "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_refusal_names_the_knob_and_no_longer_promises_a_safe_peak",
+  "tests/unit/test_audit2609_a25_carrier_focus_readout.py::test_the_two_fills_differ_only_outside_one_period",
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestKellyGuard::test_the_period_is_the_input_grid_s_and_the_replica_guard_sees_it",
+  "tests/unit/test_audit2609_b4_collins_transport.py::TestReadoutPeriodDecoupling::test_the_period_follows_the_input_grid_and_the_leg_only",
+  "tests/unit/test_niche_audit_w9_dispatch2.py::test_the_routed_member_beats_the_old_one_against_an_exact_oracle[128-0.9516]",
+  "tests/unit/test_niche_audit_w9_dispatch2.py::test_the_routed_member_beats_the_old_one_against_an_exact_oracle[256-0.8185]",
+  "tests/unit/test_niche_audit_w9_dispatch2.py::test_the_routed_member_beats_the_old_one_against_an_exact_oracle[512-0.4111]",
+  "tests/unit/test_niche_d2_chain_multi.py::test_a_clipping_readout_window_is_reported",
+  "tests/unit/test_niche_d2_chain_multi.py::test_auto_tile_equals_the_same_tile_asked_for_explicitly",
+  "tests/unit/test_niche_d2_chain_multi.py::test_auto_window_is_independent_of_congruence_order",
+  "tests/unit/test_niche_d2_chain_multi.py::test_coherent_recombination_makes_the_analytic_fringe",
+  "tests/unit/test_niche_d2_chain_multi.py::test_default_refuses_the_periodic_replica_regime",
+  "tests/unit/test_niche_d2_chain_multi.py::test_k2_full_grid_equals_hand_summed_independent_runs",
+  "tests/unit/test_niche_d2_chain_multi.py::test_throughput_is_window_independent_but_power_out_is_not",
+  "tests/unit/test_niche_tight_focus_readout.py::test_an_oversized_readout_window_is_refused_by_default",
+  "tests/unit/test_niche_tight_focus_readout.py::test_the_core_waist_is_robust_to_the_readout_pitch"
+ ],
+ "n_files": 5,
+ "n_ids_where_the_rule_fires": 16,
+ "patched_holders": [
+  "lumenairy.propagators._bluestein._auto_selects_direct"
+ ],
+ "platform": "win32",
+ "python": "3.14.6",
+ "smallest_ratio_seen": 0.001953125,
+ "total_rule_calls": 615
+}
