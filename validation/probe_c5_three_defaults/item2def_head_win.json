@@ -1,0 +1,55 @@
+{
+ "_env": {
+  "lumenairy_file": "C:\\tmp\\lum_c5\\lumenairy\\__init__.py",
+  "numpy": "2.4.4",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "python": "3.14.6",
+  "threads": {
+   "LUMENAIRY_MEM_BUDGET_MB": "2048",
+   "MKL_NUM_THREADS": "1",
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1"
+  }
+ },
+ "digests": {
+  "default/N128/1MB": "d5dd421c3723d661396e89aea72b6e0b7a1ab4474025c77acb21934467346041",
+  "default/N128/512MB": "912d1a9a8cf4468f443b072d1e2cfa7367084720a2c2fb2ccb038af0e74d1576",
+  "default/N128/64MB": "d284e0aff63480707f6a9948bbbbf504e014947c424cd67257b9f39240036c25",
+  "default/N128/8MB": "1a0c64a3bc29a6f1eea36c9e83456cf0f5e5b76b865fd09929375cca663728af",
+  "default/N128/no-budget-arg": "912d1a9a8cf4468f443b072d1e2cfa7367084720a2c2fb2ccb038af0e74d1576",
+  "default/N192/1MB": "affe1b95cf7e21ff8079abbe8d5c9089814527f91afe53f4c809305c61c3623d",
+  "default/N192/512MB": "8c4aaefaa68c2f851245e287064e984f02055085292b88ffc73a0b7a99ae6737",
+  "default/N192/64MB": "b6f0492f7896b80cd18bb82072dc9b40521c96e57b5be354dd935f1a6acd0514",
+  "default/N192/8MB": "affe1b95cf7e21ff8079abbe8d5c9089814527f91afe53f4c809305c61c3623d",
+  "default/N256/1MB": "f362e656b60fef3ab32b145bdcff87c934ca42307efb43037fa34affc3a2ce01",
+  "default/N256/512MB": "cba2b0166f257b456b74f1a85181573a44f3507293097e44602bd7d66b66f58e",
+  "default/N256/64MB": "ab781056b0be8708f240c0d536edabce5022b3d1b3af6975e6282c98c8f83b3c",
+  "default/N256/8MB": "f362e656b60fef3ab32b145bdcff87c934ca42307efb43037fa34affc3a2ce01",
+  "default/N64/1MB": "a60cff8419c97b014aa84e41269e43031a8e915ed35b120fcd98974ad7b88b95",
+  "default/N64/512MB": "a60cff8419c97b014aa84e41269e43031a8e915ed35b120fcd98974ad7b88b95",
+  "default/N64/64MB": "8ff7c5d4eb12920fab3ac24ff021873ce55f8f4386252c01b6d60eb07d700da4",
+  "default/N64/8MB": "7be0192a37a59cd7ff54bb5129db1628c8d9bff362dc31cd6b50f0e9452b5c15",
+  "default/N64/no-budget-arg": "a60cff8419c97b014aa84e41269e43031a8e915ed35b120fcd98974ad7b88b95",
+  "frame_completeness/N128": "e7f7b0dbedf045134ae7d36307222fc9db3cbc4b41e87ad82be3f9d7a8ab95c1",
+  "frame_completeness/N64": "59c40d11dc0f20f5d6012d31c2c38d9b8259e3438c7ec2e8a7cf9147bad9e6d6",
+  "windowed/N128/default": "09793b3a7d211a2f37a8ad6dd2249424664813409439ed54f3fc74504d4364dd",
+  "windowed/N64/default": "014433d82f55922eb1331c2485b24886e0b568be09f378dc799d9e5c9e936083"
+ },
+ "floor_helper": true,
+ "floor_notices": {
+  "default/N128/1MB": [
+   "reconstruct_field_from_beamlets: the dense (window=None) path CANNOT meet mem_budget_mb=1 MB on this 128x128 grid.  Its chunk already floors at ONE beamlet column, and one column plus the whole-grid arrays that live outside the chunk costs 2.88358 MB (48 + 128 B per output cell) -- 2.88x what was asked for.  The budget is honoured at or above that floor and is a statement of intent below it.  Either raise mem_budget_mb to 2.88358 MB, or pass window=5.0 for the bounded-support scatter-add, whose accounting has no one-column floor here (it changes the returned field by its own ~1e-11 truncation, which is why it is not applied for you).  lumenairy.propagators.gbd._dense_budget_floor_bytes(Ny, Nx) publishes the number."
+  ],
+  "default/N192/1MB": [
+   "reconstruct_field_from_beamlets: the dense (window=None) path CANNOT meet mem_budget_mb=1 MB on this 192x192 grid.  Its chunk already floors at ONE beamlet column, and one column plus the whole-grid arrays that live outside the chunk costs 6.48806 MB (48 + 128 B per output cell) -- 6.49x what was asked for.  The budget is honoured at or above that floor and is a statement of intent below it.  Either raise mem_budget_mb to 6.48806 MB, or pass window=5.0 for the bounded-support scatter-add, whose accounting has no one-column floor here (it changes the returned field by its own ~1e-11 truncation, which is why it is not applied for you).  lumenairy.propagators.gbd._dense_budget_floor_bytes(Ny, Nx) publishes the number."
+  ],
+  "default/N256/1MB": [
+   "reconstruct_field_from_beamlets: the dense (window=None) path CANNOT meet mem_budget_mb=1 MB on this 256x256 grid.  Its chunk already floors at ONE beamlet column, and one column plus the whole-grid arrays that live outside the chunk costs 11.5343 MB (48 + 128 B per output cell) -- 11.5x what was asked for.  The budget is honoured at or above that floor and is a statement of intent below it.  Either raise mem_budget_mb to 11.5343 MB, or pass window=5.0 for the bounded-support scatter-add, whose accounting has no one-column floor here (it changes the returned field by its own ~1e-11 truncation, which is why it is not applied for you).  lumenairy.propagators.gbd._dense_budget_floor_bytes(Ny, Nx) publishes the number."
+  ],
+  "default/N256/8MB": [
+   "reconstruct_field_from_beamlets: the dense (window=None) path CANNOT meet mem_budget_mb=8 MB on this 256x256 grid.  Its chunk already floors at ONE beamlet column, and one column plus the whole-grid arrays that live outside the chunk costs 11.5343 MB (48 + 128 B per output cell) -- 1.44x what was asked for.  The budget is honoured at or above that floor and is a statement of intent below it.  Either raise mem_budget_mb to 11.5343 MB, or pass window=5.0 for the bounded-support scatter-add, whose accounting has no one-column floor here (it changes the returned field by its own ~1e-11 truncation, which is why it is not applied for you).  lumenairy.propagators.gbd._dense_budget_floor_bytes(Ny, Nx) publishes the number."
+  ]
+ },
+ "n_keys_with_notice": 4,
+ "shipped_default": "measured"
+}

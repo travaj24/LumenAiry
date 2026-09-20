@@ -1,0 +1,28 @@
+{
+ "base_file": "/mnt/c/tmp/c5_arch/base/lumenairy/__init__.py",
+ "base_python": "3.12.3",
+ "head_file": "/mnt/c/tmp/lum_c5/lumenairy/__init__.py",
+ "head_python": "3.12.3",
+ "moved": [
+  "default/N128/1MB",
+  "default/N128/512MB",
+  "default/N128/64MB",
+  "default/N128/8MB",
+  "default/N128/no-budget-arg",
+  "default/N192/512MB",
+  "default/N192/64MB",
+  "default/N192/8MB",
+  "default/N256/512MB",
+  "default/N256/64MB",
+  "default/N256/8MB",
+  "default/N64/1MB",
+  "default/N64/64MB",
+  "default/N64/8MB"
+ ],
+ "n_identical": 8,
+ "n_keys_base": 22,
+ "n_keys_head": 22,
+ "n_moved": 14,
+ "only_in_base": [],
+ "only_in_head": []
+}

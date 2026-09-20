@@ -1,0 +1,42 @@
+{
+ "_env": {
+  "lumenairy_file": "/mnt/c/tmp/c5_arch/base/lumenairy/__init__.py",
+  "numpy": "2.4.6",
+  "platform": "Linux-4.4.0-26100-Microsoft-x86_64-with-glibc2.39",
+  "python": "3.12.3",
+  "threads": {
+   "LUMENAIRY_MEM_BUDGET_MB": "2048",
+   "MKL_NUM_THREADS": "1",
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1"
+  }
+ },
+ "digests": {
+  "default/N128/1MB": "2c695c06ea970eca0a2baa29348fb4e19b3a0f51fb78bcbd7640dc16866c3c16",
+  "default/N128/512MB": "fbaeeddb98235cf3e54ded6e5a0ab07902157c80e3a8419062e28b8d21b09b00",
+  "default/N128/64MB": "d9c97b7fa4c870083c60675ae478e1bef4584119293ca203746c729f48e8a10e",
+  "default/N128/8MB": "0a6352e0d70cad9a9d639f3dc717199a3b1a88ea3c408f8f361fa530775adab5",
+  "default/N128/no-budget-arg": "fbaeeddb98235cf3e54ded6e5a0ab07902157c80e3a8419062e28b8d21b09b00",
+  "default/N192/1MB": "f9facf0d2226b646462939ed49183cc05f23da1c9c544c4f20e45f1b435c3a74",
+  "default/N192/512MB": "f9facf0d2226b646462939ed49183cc05f23da1c9c544c4f20e45f1b435c3a74",
+  "default/N192/64MB": "8e6d7d41c0432566f90324cabf99841975e4ae1cadb064b5275bb32a8717a5e6",
+  "default/N192/8MB": "7ce51cc7a4ad500488d8049dd37d2dfcf4f2ef1a199dfa5003d1000b2495b0bb",
+  "default/N256/1MB": "e4bca15246915c8b4c6d9fb43046db2e61d5a212243b5d2d49eea70bad5e0314",
+  "default/N256/512MB": "466615110f96eec943844fc0fdec15e596651090d39a87622165632f5582c06b",
+  "default/N256/64MB": "ccffff3411065222e52b8d2de609e30f89a1732a94433bec719222bdbf697102",
+  "default/N256/8MB": "42fee507ef5f7ddcdb03cffc295e9d5fd5e696f66a969363c955a31d0f8ad11d",
+  "default/N64/1MB": "9ee07b2971453c992c64a8340008383be560079c085da9dad34901564c7a6bd5",
+  "default/N64/512MB": "d9e4dda1e37b8455a225d45fdfe612407bf2cc4c45c522277ca7c3bf78327905",
+  "default/N64/64MB": "d9e4dda1e37b8455a225d45fdfe612407bf2cc4c45c522277ca7c3bf78327905",
+  "default/N64/8MB": "def5b24af0c50774a475a92d95b4aff45c621915745a35575f9681e353b43b46",
+  "default/N64/no-budget-arg": "d9e4dda1e37b8455a225d45fdfe612407bf2cc4c45c522277ca7c3bf78327905",
+  "frame_completeness/N128": "e7f7b0dbedf045134ae7d36307222fc9db3cbc4b41e87ad82be3f9d7a8ab95c1",
+  "frame_completeness/N64": "59c40d11dc0f20f5d6012d31c2c38d9b8259e3438c7ec2e8a7cf9147bad9e6d6",
+  "windowed/N128/default": "09793b3a7d211a2f37a8ad6dd2249424664813409439ed54f3fc74504d4364dd",
+  "windowed/N64/default": "014433d82f55922eb1331c2485b24886e0b568be09f378dc799d9e5c9e936083"
+ },
+ "floor_helper": false,
+ "floor_notices": {},
+ "n_keys_with_notice": 0,
+ "shipped_default": "legacy"
+}

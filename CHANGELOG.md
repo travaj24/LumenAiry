@@ -4,6 +4,81 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+### Changed -- GBD (WP-C5 item 2): the dense reconstruction counts its memory honestly, and says so where the budget cannot be met
+
+`lumenairy.propagators.gbd.DENSE_MEM_BUDGET_ACCOUNTING` now defaults to
+`'measured'` instead of `'legacy'`.  The dense (`window=None`) reconstruction
+sizes its beamlet chunk from `mem_budget_mb`, and the constant it sized with
+through 5.48.x (`16` B per output cell x beamlet-column) was the size of ONE
+complex128 element where the loop actually holds three float64 buffers and a
+complex128 -- so the budget was not a bound.  MEASURED 2026-09-20, 1024
+beamlets, `mem_budget_mb=512`:
+
+| grid | `'legacy'` peak | `'measured'` peak |
+|---|---|---|
+| 256 x 256 | 3 074 MB (**6.00x** the budget) | 387 MB (0.756x) |
+| 512 x 512 | 3 083 MB (**6.02x**) | 390 MB (0.762x) |
+
+`'legacy'` stays selectable and is byte-identical to 5.48.x.  The two differ
+only in the order the per-chunk reductions are summed in -- the constant moves
+the chunk boundary and floating-point addition is not associative -- measured
+at 2.1e-17 relative (N = 256) and 1.8e-18 (N = 512), and the same budget run
+twice is identical to the bit under either mode.
+
+**A floor is published, and the regime below it is loud.**  The chunk cannot go
+below ONE beamlet column, and the whole-grid arrays the loop holds outside the
+chunk are not in the chunk arithmetic at all, so below
+
+    _dense_budget_floor_bytes(Ny, Nx) = Ny*Nx*(48 + 128) bytes
+
+no accounting constant can meet the request (11.534 MB at N = 256, 46.137 MB at
+N = 512).  Both constants are measured, not asserted: fitting the loop's
+`tracemalloc` peak against the chunk over a 1/2/4/8/16/32 ladder gives
+`peak/(Ny Nx) = fixed + c*chunk` with `fixed` 48.55 B/cell and `c` 96.00
+B/cell-column, worst deviation from that affine model 5.8e-07 at N = 512 and
+7.0e-06 at N = 256.  The published floor is therefore 1.205x (N = 256) and
+1.218x (N = 512) the loop's measured one-column peak -- an upper bound on it,
+which is what makes "at or above the floor the budget is honoured" true rather
+than hopeful.  Swept over ten multiples from 1.0x to 12x the floor, the peak
+never reaches the budget: worst 0.917 at N = 256 and 0.911 at N = 512, both at
+1.5x the floor (where the chunk has just stepped to two), settling to 0.75 as
+the budget grows.
+
+Below the floor the dense path now emits a `RuntimeWarning` naming the floor,
+the budget, the ratio and the two mitigations, instead of exceeding the request
+silently.  It WARNS rather than raises, and the choice was measured: at the
+shipped `mem_budget_mb=512.0` default the floor binds from `Ny*Nx > 2.909e+06`
+cells -- any square grid past N = 1706 -- so a refusal would turn a call that
+completes today into a hard error on a DEFAULT path, and the one mitigation
+that keeps the grid (`window=5.0`, whose own accounting is correct) changes the
+returned field by its own ~1e-11 truncation and so cannot be applied on the
+caller's behalf.  Under `'legacy'` nothing is emitted: that mode's arithmetic
+never claimed to bound the loop.  `_dense_budget_floor_bytes` does not take the
+accounting mode -- it is what the LOOP costs, and a `'legacy'` floor would read
+4.19 MB on a grid where the loop measurably cannot go below 9.58.
+
+An unrecognised `DENSE_MEM_BUDGET_ACCOUNTING` is now REFUSED by name rather
+than treated as `'legacy'`.  While `'legacy'` was the default, falling through
+to it was the conservative choice; with `'measured'` the default it would
+silently restore the six-fold under-count, which is the silent-downgrade shape
+the carrier module's `gap_kernel` and `replica_fill` gates were added to close.
+The check runs only where the budget arithmetic runs, so a caller who never
+sets `mem_budget_mb` is unaffected.
+
+**Migration.** Set `lumenairy.propagators.gbd.DENSE_MEM_BUDGET_ACCOUNTING =
+'legacy'` to restore 5.48.x bit for bit.  Answers move only where a dense
+(`window=None`) reconstruction is given a `mem_budget_mb` that actually binds
+the chunk, and only in the last bits -- the windowed (`window=5.0`) path, the
+FFT path and every call that leaves the chunk unbound are untouched, proved
+archive-to-archive against `49ddf4bd`.  Entry points that reach the dense
+chunk sizing: `reconstruct_field_from_beamlets`, `frame_completeness`, and
+`apply_real_lens_gbd` / the GBD element family through their own
+`mem_budget_mb` (default 512.0).  What changes in PRACTICE is the memory: a run
+that was quietly peaking at six times its budget now stays under it, and a
+budget below `_dense_budget_floor_bytes(Ny, Nx)` says so out loud instead of
+being exceeded.  If that notice fires, either raise the budget to the floor it
+quotes or pass `window=5.0`.
+
 ### Changed -- carrier (WP-C5 item 1): `gap_kernel='auto'` falls back to the paraxial kernel inside a derived near-focus band
 
 `lumenairy.propagators.carrier._GAP_KERNEL_ACCURACY_TAU` now defaults to `1e-4`

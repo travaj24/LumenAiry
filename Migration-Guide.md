@@ -1831,3 +1831,50 @@ measures how far the exact kernel departs from the paraxial truth; it cannot
 say which kernel is the more physical.  On a leg where the exact kernel is the
 better physics this rule trades accuracy for agreement with that oracle, which
 is why the opt-out is one line and an explicit request is never overridden.
+
+### The dense GBD reconstruction counts its memory honestly
+
+**What moved.**  `lumenairy.propagators.gbd.DENSE_MEM_BUDGET_ACCOUNTING`
+defaults to `'measured'` instead of `'legacy'`.  The dense (`window=None`)
+reconstruction sizes its beamlet chunk from `mem_budget_mb` using a per-cell
+cost that was six times too small, so the budget was never a bound: measured at
+`mem_budget_mb=512` with 1024 beamlets, the loop peaked at 3 074 MB on a
+256-square grid (6.00x) and now peaks at 387 MB (0.756x).
+
+**Who is affected.**  Any dense reconstruction whose `mem_budget_mb` actually
+binds the chunk.  The returned field moves in the LAST BITS only (measured
+2.1e-17 relative at N = 256, 1.8e-18 at N = 512), because the chunk boundary
+sets the order the per-chunk reductions are summed in.  The windowed
+(`window=5.0`) path, the FFT path and any call whose chunk was never bound are
+untouched.  Entry points: `reconstruct_field_from_beamlets`,
+`frame_completeness`, and `apply_real_lens_gbd` and its element family through
+their own `mem_budget_mb`.
+
+**New: the budget has a published floor, and below it the path is loud.**  The
+chunk cannot go below one beamlet column, so
+`lumenairy.propagators.gbd._dense_budget_floor_bytes(Ny, Nx)` --
+`Ny*Nx*(48 + 128)` bytes, 11.534 MB at N = 256 and 46.137 MB at N = 512 -- is
+the smallest budget that can be honoured.  Ask for less and the dense path now
+emits a `RuntimeWarning` naming the floor and the two mitigations instead of
+exceeding the request silently.  It warns rather than raises because at the
+shipped `mem_budget_mb=512.0` default the floor binds on any square grid past
+N = 1706, so refusing would break calls that complete today.
+
+**Recipe -- keep 5.48.x exactly:**
+
+```python
+import lumenairy.propagators.gbd as _gbd
+_gbd.DENSE_MEM_BUDGET_ACCOUNTING = 'legacy'   # byte-identical to 5.48.x
+```
+
+**Recipe -- if the floor notice fires:** raise `mem_budget_mb` to the floor the
+message quotes, or pass `window=5.0` to `reconstruct_field_from_beamlets` for
+the bounded-support scatter-add, whose accounting has no one-column floor at
+these sizes.  `window=5.0` changes the returned field by its own truncation
+(tail `exp(-25)`, about 1e-11), which is why it is not applied for you.
+
+**Also:** an unrecognised `DENSE_MEM_BUDGET_ACCOUNTING` now raises instead of
+falling through to `'legacy'`.  A typo would otherwise silently restore the
+six-fold under-count the new default exists to remove.  The check runs only
+where the budget arithmetic runs, so a caller who never passes `mem_budget_mb`
+is unaffected.

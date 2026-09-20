@@ -1,0 +1,361 @@
+{
+ "_env": {
+  "lumenairy_file": "C:\\tmp\\lum_c5\\lumenairy\\__init__.py",
+  "numpy": "2.4.4",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "python": "3.14.6",
+  "threads": {
+   "LUMENAIRY_MEM_BUDGET_MB": "2048",
+   "MKL_NUM_THREADS": "1",
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1"
+  }
+ },
+ "at_the_default_budget": {
+  "legacy/N256/512MB": {
+   "peak_bytes": 3073514922,
+   "peak_over_budget": 6.00295883203125
+  },
+  "legacy/N512/512MB": {
+   "peak_bytes": 3082957843,
+   "peak_over_budget": 6.021402037109375
+  },
+  "measured/N256/512MB": {
+   "peak_bytes": 387063226,
+   "peak_over_budget": 0.75598286328125
+  },
+  "measured/N512/512MB": {
+   "peak_bytes": 390214723,
+   "peak_over_budget": 0.762138130859375
+  }
+ },
+ "budget_sweep": {
+  "256": {
+   "any_notice": false,
+   "rows": [
+    {
+     "budget_mb": 11.534336,
+     "floor_notice": false,
+     "mult": 1.0,
+     "peak_bytes": 9575922,
+     "ratio": 0.8302100788463246
+    },
+    {
+     "budget_mb": 14.41792,
+     "floor_notice": false,
+     "mult": 1.25,
+     "peak_bytes": 9575898,
+     "ratio": 0.6641663984818892
+    },
+    {
+     "budget_mb": 17.301504,
+     "floor_notice": false,
+     "mult": 1.5,
+     "peak_bytes": 15867354,
+     "ratio": 0.9171083623712714
+    },
+    {
+     "budget_mb": 23.068672,
+     "floor_notice": false,
+     "mult": 2.0,
+     "peak_bytes": 15867354,
+     "ratio": 0.6878312717784535
+    },
+    {
+     "budget_mb": 28.83584,
+     "floor_notice": false,
+     "mult": 2.5,
+     "peak_bytes": 22158810,
+     "ratio": 0.7684468356045809
+    },
+    {
+     "budget_mb": 34.603008,
+     "floor_notice": false,
+     "mult": 3.0,
+     "peak_bytes": 28450266,
+     "ratio": 0.8221905448219993
+    },
+    {
+     "budget_mb": 46.137344,
+     "floor_notice": false,
+     "mult": 4.0,
+     "peak_bytes": 34741722,
+     "ratio": 0.7530065449801359
+    },
+    {
+     "budget_mb": 69.206016,
+     "floor_notice": false,
+     "mult": 6.0,
+     "peak_bytes": 53616090,
+     "ratio": 0.7747316360473633
+    },
+    {
+     "budget_mb": 92.274688,
+     "floor_notice": false,
+     "mult": 8.0,
+     "peak_bytes": 72490458,
+     "ratio": 0.785594181580977
+    },
+    {
+     "budget_mb": 138.412032,
+     "floor_notice": false,
+     "mult": 12.0,
+     "peak_bytes": 103947738,
+     "ratio": 0.7510021816600453
+    }
+   ],
+   "worst_at_mult": 1.5,
+   "worst_ratio": 0.9171083623712714
+  },
+  "512": {
+   "any_notice": false,
+   "rows": [
+    {
+     "budget_mb": 46.137344,
+     "floor_notice": false,
+     "mult": 1.0,
+     "peak_bytes": 37893291,
+     "ratio": 0.8213149634274569
+    },
+    {
+     "budget_mb": 57.67168,
+     "floor_notice": false,
+     "mult": 1.25,
+     "peak_bytes": 37893275,
+     "ratio": 0.6570516933094371
+    },
+    {
+     "budget_mb": 69.206016,
+     "floor_notice": false,
+     "mult": 1.5,
+     "peak_bytes": 63059091,
+     "ratio": 0.9111793257973411
+    },
+    {
+     "budget_mb": 92.274688,
+     "floor_notice": false,
+     "mult": 2.0,
+     "peak_bytes": 63059083,
+     "ratio": 0.6833844076503407
+    },
+    {
+     "budget_mb": 115.34336,
+     "floor_notice": false,
+     "mult": 2.5,
+     "peak_bytes": 88224899,
+     "ratio": 0.7648892749439586
+    },
+    {
+     "budget_mb": 138.412032,
+     "floor_notice": false,
+     "mult": 3.0,
+     "peak_bytes": 113390715,
+     "ratio": 0.819225853139704
+    },
+    {
+     "budget_mb": 184.549376,
+     "floor_notice": false,
+     "mult": 4.0,
+     "peak_bytes": 138556531,
+     "ratio": 0.7507829828695818
+    },
+    {
+     "budget_mb": 276.824064,
+     "floor_notice": false,
+     "mult": 6.0,
+     "peak_bytes": 214053995,
+     "ratio": 0.7732492324077722
+    },
+    {
+     "budget_mb": 369.098752,
+     "floor_notice": false,
+     "mult": 8.0,
+     "peak_bytes": 289551459,
+     "ratio": 0.7844823571768674
+    },
+    {
+     "budget_mb": 553.648128,
+     "floor_notice": false,
+     "mult": 12.0,
+     "peak_bytes": 415380579,
+     "ratio": 0.7502609653906389
+    }
+   ],
+   "worst_at_mult": 1.5,
+   "worst_ratio": 0.9111793257973411
+  }
+ },
+ "cell_bytes": {
+  "fixed": 48.0,
+  "legacy": 16.0,
+  "measured": 128.0,
+  "windowed": 32.0
+ },
+ "digests": {
+  "legacy/N128/512MB": "07e90d77b9dc4837caf808f20fd2620d473a25492835beb7141019b1ea628ce3",
+  "legacy/N128/64MB": "610c6ebba01369a565bef7d56ee04656cc832a9c1dee3d0cbd1f8a455c29b5f6",
+  "legacy/N128/8MB": "cc70f7abbb70ea57c211100e7b90c3ab537f9ec99eb889bf6d547b4717dfea22",
+  "legacy/N256/512MB": "a3707fcbf4e737482d3387775fb2c8c5abfaec29c84ae2b846aed76c5a7453e3",
+  "legacy/N256/64MB": "b296efd22f0b27ab6372698dbf3ae4348c01a3b63afd6f78dc6709337cda9210",
+  "legacy/N256/8MB": "cea75853d832a477b0d1d3260703b1ba213a4c9b3a5ce7ef87cf2c6b27e0a28a",
+  "legacy/N512/512MB": "c5e11eb6e2c99fa4713739b535fcf2763df254e54be96f417895f67a7b2f8567",
+  "legacy/N64/512MB": "338d00003a0a461277d7f235583a9bb08bca93a78f9c927bf5d455b787b8d2ee",
+  "legacy/N64/64MB": "cc1e30b06ad12746a524c37cb89c7b1ea2cf462fe22643ae623442c87a427ffc",
+  "legacy/N64/8MB": "ea815c299f9fafd3b560ba6df9e342c477447ac79c84416c239b019c17ee976e",
+  "measured/N128/512MB": "610c6ebba01369a565bef7d56ee04656cc832a9c1dee3d0cbd1f8a455c29b5f6",
+  "measured/N128/64MB": "cc70f7abbb70ea57c211100e7b90c3ab537f9ec99eb889bf6d547b4717dfea22",
+  "measured/N128/8MB": "6e21266ffd4c7544e1460d9a40ce6cdd60a56362500b96dbc23862b48df798c0",
+  "measured/N256/512MB": "b296efd22f0b27ab6372698dbf3ae4348c01a3b63afd6f78dc6709337cda9210",
+  "measured/N256/64MB": "cea75853d832a477b0d1d3260703b1ba213a4c9b3a5ce7ef87cf2c6b27e0a28a",
+  "measured/N256/8MB": "b729c4c870a58e7b57469921ffe3d7ee4d2ae82a547387c622a517f3ae80890e",
+  "measured/N512/512MB": "5249cf5b0039dbcee85d93b418515493f1b301c2f7aefb82e07ea887a4e34f5d",
+  "measured/N64/512MB": "cc1e30b06ad12746a524c37cb89c7b1ea2cf462fe22643ae623442c87a427ffc",
+  "measured/N64/64MB": "ea815c299f9fafd3b560ba6df9e342c477447ac79c84416c239b019c17ee976e",
+  "measured/N64/8MB": "68634b8b93aecfb46fb84eddc2bbd38847c534c35507764b587687e455c2749f",
+  "repeat/legacy/N256/37MB": "bfc587d815bd875cf265df83be312850c0a35c6de65023c33f539629563d28a0",
+  "repeat/measured/N256/37MB": "7e07c146673b430d1a294daa4da338c240fd7afaddcd33bb4e14d67773039bf9",
+  "windowed/N128": "ea7324afed1e8483eb1154c6f7cb30178a3877a4d9875453747b4f7c5b8414fc",
+  "windowed/N256": "fc41e6acc8bf67488a13b4fb9b4dbba8d1a3afab7530f36aa5ae43d813b54f66"
+ },
+ "fit": {
+  "256": {
+   "bytes_per_cell": [
+    146.11257934570312,
+    242.11453247070312,
+    434.1135559082031,
+    818.1139221191406,
+    1586.1139221191406,
+    3122.1139221191406
+   ],
+   "chunks": [
+    1,
+    2,
+    4,
+    8,
+    16,
+    32
+   ],
+   "fixed_b_per_cell": 50.11359052515749,
+   "per_col_b_per_cell": 96.00001414176327,
+   "worst_rel_dev": 7.017337057704762e-06
+  },
+  "512": {
+   "bytes_per_cell": [
+    144.55082321166992,
+    240.55100631713867,
+    432.55085372924805,
+    816.5508232116699,
+    1584.5507926940918,
+    3120.5507316589355
+   ],
+   "chunks": [
+    1,
+    2,
+    4,
+    8,
+    16,
+    32
+   ],
+   "fixed_b_per_cell": 48.55089654495485,
+   "per_col_b_per_cell": 95.99999446909563,
+   "worst_rel_dev": 5.023217089482548e-07
+  }
+ },
+ "floor": {
+  "256": {
+   "empirical_bytes": 9575701.19545132,
+   "library_bytes": 11534336.0,
+   "library_over_empirical": 1.204542180731274
+  },
+  "512": {
+   "empirical_bytes": 37893148.77398725,
+   "library_bytes": 46137344.0,
+   "library_over_empirical": 1.217564269340219
+  }
+ },
+ "legacy_vs_measured": {
+  "256": {
+   "identical": false,
+   "rel_max_abs_diff": 2.117089433990483e-17
+  },
+  "512": {
+   "identical": false,
+   "rel_max_abs_diff": 1.8239679785747488e-18
+  }
+ },
+ "repeat_run_identical": {
+  "legacy": true,
+  "measured": true
+ },
+ "shipped_default": "measured",
+ "two_sided": {
+  "256": {
+   "above_1.5x": {
+    "budget_mb": 17.301504,
+    "floor_named": false,
+    "messages": [],
+    "n_warnings": 0,
+    "peak_bytes": 15867346,
+    "peak_over_budget": 0.917107899983724
+   },
+   "below_0.5x": {
+    "budget_mb": 5.767168,
+    "floor_named": true,
+    "messages": [
+     "reconstruct_field_from_beamlets: the dense (window=None) path CANNOT meet mem_budget_mb=5.76717 MB on this 256x256 grid.  Its chunk already floors at ONE beamlet column, and one column plus the whole-grid arrays that live outside the chunk costs 11.5343 MB (48 + 128 B per output cell) -- 2x what was asked for.  The budget is honoured at or above that floor and is a statement of intent below it.  E"
+    ],
+    "n_warnings": 1,
+    "peak_bytes": 9578161,
+    "peak_over_budget": 1.6608083898370916
+   },
+   "legacy_above_1.5x": {
+    "budget_mb": 17.301504,
+    "n_warnings": 0,
+    "peak_bytes": 103947562,
+    "peak_over_budget": 6.00800728075432
+   },
+   "legacy_below_0.5x": {
+    "budget_mb": 5.767168,
+    "n_warnings": 0,
+    "peak_bytes": 34741722,
+    "peak_over_budget": 6.024052359841087
+   }
+  },
+  "512": {
+   "above_1.5x": {
+    "budget_mb": 69.206016,
+    "floor_named": false,
+    "messages": [
+     "reconstruct_field_from_beamlets is using the dense O(beamlets * Ny * Nx) path (window=None) with 1024 beamlets on a 512x512 grid. Pass window=5.0 for the bounded-support scatter-add (accuracy-preserving, tail ~1e-11) to avoid the N^2 speed / memory footgun."
+    ],
+    "n_warnings": 1,
+    "peak_bytes": 63059179,
+    "peak_over_budget": 0.9111805973630963
+   },
+   "below_0.5x": {
+    "budget_mb": 23.068672,
+    "floor_named": true,
+    "messages": [
+     "reconstruct_field_from_beamlets is using the dense O(beamlets * Ny * Nx) path (window=None) with 1024 beamlets on a 512x512 grid. Pass window=5.0 for the bounded-support scatter-add (accuracy-preserving, tail ~1e-11) to avoid the N^2 speed / memory footgun.",
+     "reconstruct_field_from_beamlets: the dense (window=None) path CANNOT meet mem_budget_mb=23.0687 MB on this 512x512 grid.  Its chunk already floors at ONE beamlet column, and one column plus the whole-grid arrays that live outside the chunk costs 46.1373 MB (48 + 128 B per output cell) -- 2x what was asked for.  The budget is honoured at or above that floor and is a statement of intent below it.  E"
+    ],
+    "n_warnings": 2,
+    "peak_bytes": 37894474,
+    "peak_over_budget": 1.642681208523837
+   },
+   "legacy_above_1.5x": {
+    "budget_mb": 69.206016,
+    "n_warnings": 1,
+    "peak_bytes": 415380523,
+    "peak_over_budget": 6.002086913946903
+   },
+   "legacy_below_0.5x": {
+    "budget_mb": 23.068672,
+    "n_warnings": 1,
+    "peak_bytes": 138556595,
+    "peak_over_budget": 6.006266637281938
+   }
+  }
+ },
+ "unknown_mode": "ValueError: lumenairy.propagators.gbd.DENSE_MEM_BUDGET_ACCOUNTING must be one of ['legacy', 'measured'] (case-sensitive strings), got 'not-a-mode'.  'measured' (the default) sizes the dense chunk from the loop's measured footprint, 128 B per cell-column; 'legacy' uses the 16 B shipped through 5.48.x, which unde"
+}
