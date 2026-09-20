@@ -359,7 +359,7 @@ _MB_POWER_RATIO_MIN = _ENERGY_COLLAPSE_FACTOR
 # 0.9878.
 #
 # RE-MEASURED (WP-B7c round 3, 2026-09-19) against a band-limited ANGULAR
-# SPECTRUM at full radius, on **1196 oracle-scored planes over sixteen
+# SPECTRUM at full radius, on **1304 oracle-scored planes over sixteen
 # prescriptions** -- round 2's eight, the f/1.2 optic round 2 excluded, the
 # five its verification added, and three new (a true even-ASPHERE, a
 # CONCAVE-FIRST meniscus, a plano-convex at NA 0.41).  Probes, populations
@@ -367,9 +367,9 @@ _MB_POWER_RATIO_MIN = _ENERGY_COLLAPSE_FACTOR
 # ``_lens_traced_multibranch._PIXEL_CONTINUITY_MAX`` and the tables in
 # ``WP-B7c_ROUND3_REPORT.md``:
 #
-#   * the 229 fold-ring planes RETURNED read 0.8724 .. 1.0595, fidelity
+#   * the 250 fold-ring planes RETURNED read 0.8724 .. 1.0595, fidelity
 #     0.9421 .. 0.9985;
-#   * the 138 REFUSED read 1.0643 .. 3.9988, fidelity 0.0018 .. 0.9520.
+#   * the 144 REFUSED read 1.0643 .. 3.9988, fidelity 0.0018 .. 0.9520.
 #
 # Round 2's two statements about this bar do NOT survive that population and
 # are corrected there: the two fidelity populations OVERLAP at sixteen optics
@@ -379,7 +379,8 @@ _MB_POWER_RATIO_MIN = _ENERGY_COLLAPSE_FACTOR
 # to 1.032x to 1.0045x with no sign of a floor.  The bar is KEPT at 1.06,
 # which is the geometric centre of its own gap (1.0600253) on the round-3
 # population, and it is derived there from what it COSTS: on the fold ring,
-# 1 false refusal and 2 misses at an accept criterion of fidelity 0.95.
+# 1 false refusal and 2 misses at an accept criterion of fidelity 0.95 over
+# 394 planes.
 #
 # WHAT IT COSTS AND WHAT IT DOES NOT.  One extra rasterisation of the SAME
 # mapped triangles -- never a second ray trace, a second KMAH pass or a second
@@ -393,8 +394,8 @@ _MB_POWER_RATIO_MIN = _ENERGY_COLLAPSE_FACTOR
 # bright-side-only branch sum -- the returned and refused fidelity
 # populations DO overlap, because what is wrong there is the missing dark
 # tail and not the quadrature.  Measured (WP-B7c round 3, 2026-09-19) on the
-# **437 fallback planes the shipped bars RETURN**: fidelity 0.5358 .. 0.9999,
-# with 224 of them below 0.95 -- round 2 quoted "returned down to 0.764" from
+# **476 fallback planes the shipped bars RETURN**: fidelity 0.5358 .. 0.9999,
+# with 263 of them below 0.95 -- round 2 quoted "returned down to 0.764" from
 # a population a fifth the size.  This arm is a detector of ONE failure mode,
 # and a plane it accepts is not thereby certified.  What DOES order that
 # population is the LOSS side of this reading and of the launched-power
@@ -440,10 +441,10 @@ _PIXEL_CONTINUITY_SCOPES = {
         'and NOT arbitrated.  This arm sees the quadrature and nothing else. '
         'On this route the LOSS sides DO order accuracy, and their bars are '
         'set for the fold-ring route where a dark deficit does not reach the '
-        'caller: over 437 returned fallback planes, pixel_continuity below '
-        '1/1.06 flags 161 planes and every one scores under oracle fidelity '
+        'caller: over 476 returned fallback planes, pixel_continuity below '
+        '1/1.06 flags 192 planes and every one scores under oracle fidelity '
         '0.95 with no false alarm, and multibranch_power_ratio_bracketed '
-        'below 0.889 flags 215 with none false and only 9 wrong ones missed. '
+        'below 0.889 flags 254 with none false and only 9 wrong ones missed. '
         'Thirteen wrong planes are left that nothing sees, the worst at '
         'fidelity 0.536 with every reading nominal'),
     'underlying_branch_sum': (
@@ -1276,9 +1277,9 @@ def apply_real_lens_traced_uniform(
       over 102 planes far from every caustic -- while a quadrature that has
       stopped being unbiased deposits a power proportional to the PIXEL AREA
       and reads ~4 per halving.  Outside ``[1/1.06, 1.06]`` the gain arm
-      refuses and the loss arm reports.  Measured on sixteen optics and 367
-      oracle-scored fold planes: the 229 returned read 0.8724-1.0595 with
-      oracle fidelity 0.9421-0.9985, the 138 refused read 1.0643-3.9988 with
+      refuses and the loss arm reports.  Measured on sixteen optics and 394
+      oracle-scored fold planes: the 250 returned read 0.8724-1.0595 with
+      oracle fidelity 0.9421-0.9985, the 144 refused read 1.0643-3.9988 with
       fidelity 0.0018-0.9520 -- so the two fidelity populations OVERLAP, and
       which of them is "right" is an accept criterion the caller chooses.
 

@@ -245,12 +245,12 @@ _ENERGY_COLLAPSE_FACTOR = 0.5
 # 0.9804 against smallest broken 1.106) -- which is why this second arm
 # exists.
 #
-# RE-MEASURED (WP-B7c round 3, 2026-09-19) on **1196 oracle-scored planes**
+# RE-MEASURED (WP-B7c round 3, 2026-09-19) on **1304 oracle-scored planes**
 # over SIXTEEN prescriptions and twenty-one (prescription, grid) pairs --
 # round 2's eight, the f/1.2 optic round 2 EXCLUDED for its oracle's sake,
 # the five the round-2 verification added (including an N-SF10 at NA 0.387),
 # and three new: a true even-ASPHERE with a non-monotone focal locus, a
-# CONCAVE-FIRST positive meniscus, and a plano-convex at **NA 0.41**.  367 of
+# CONCAVE-FIRST positive meniscus, and a plano-convex at **NA 0.41**.  394 of
 # those planes take the completion route.  Scored against a band-limited
 # ANGULAR SPECTRUM at full radius, itself bracketed by an exact azimuthal
 # quadrature of the Rayleigh-Sommerfeld integral evaluated at the output
@@ -259,9 +259,9 @@ _ENERGY_COLLAPSE_FACTOR = 0.5
 # JSON in ``validation/probe_wp_b7c_round3/``; the tables are in
 # ``WP-B7c_ROUND3_REPORT.md``.
 #
-#   * the 229 fold-ring planes the guard RETURNS read 0.8724 .. 1.0595 and
+#   * the 250 fold-ring planes the guard RETURNS read 0.8724 .. 1.0595 and
 #     their fields score 0.9421 .. 0.9985 against the oracle;
-#   * the 138 it REFUSES read 1.0643 .. 3.9988 and their fields score
+#   * the 144 it REFUSES read 1.0643 .. 3.9988 and their fields score
 #     0.0018 .. 0.9520.
 #
 # TWO THINGS ROUND 2 CLAIMED DO NOT SURVIVE THIS POPULATION, and they are the
@@ -270,7 +270,7 @@ _ENERGY_COLLAPSE_FACTOR = 0.5
 # (1) The two FIDELITY populations OVERLAP.  Round 2's strongest statement was
 # that they do not, with no accept bar chosen; the round-2 verification
 # narrowed the separation from (0.9593, 0.9302) to (0.9747, 0.9578) on 124
-# planes, and at 367 it closes: the worst RETURNED fold-ring field scores
+# planes, and at 394 it closes: the worst RETURNED fold-ring field scores
 # 0.9421 (the NA 0.41 plano-convex at z = 2069.3 um, reading 1.0133, carrying
 # 1.27x the oracle's energy) against a best REFUSED of 0.9520 (a plano-first
 # N-BAK4 at z = 4929.0 um, reading 1.0812).  The guard's own split therefore
@@ -286,7 +286,7 @@ _ENERGY_COLLAPSE_FACTOR = 0.5
 #     planes    fold-ring gap    two-sided margin (fold / all planes)
 #      468         1.371x          1.040x / 1.013x
 #      882         1.032x          1.012x / 1.0008x
-#     1196         1.0045x         1.00047x / 1.00047x
+#     1304         1.0045x         1.00047x / 1.00047x
 #
 # The "7 % gap" of round 2 and the "3.8 %" of its verification are both
 # readings of their ladders.  There is no sign of a floor, so no margin
@@ -296,19 +296,19 @@ _ENERGY_COLLAPSE_FACTOR = 0.5
 # THE BAR IS KEPT AT 1.06, and it is derived rather than inherited.  The
 # two-sided margin at 1.06 on this population is 1.00047x, below the 1 % that
 # would call for re-centring; the geometric centre of the gap it sits in is
-# **1.0600253** over all 1196 planes -- i.e. 1.06 to three figures IS the
+# **1.0600253** over all 1304 planes -- i.e. 1.06 to three figures IS the
 # derived centre, and the constant does not move.  (The fold-ring-only centre
 # is 1.0619; moving there changes no fold-ring decision and returns one more
 # wrong field over all planes.)  What the bar costs, by fidelity band:
 #
-#   fold ring, accept at 0.95:   1 false refusal,   2 misses   (of 367)
+#   fold ring, accept at 0.95:   1 false refusal,   2 misses   (of 394)
 #   fold ring, accept at 0.883: 22 false refusals,  0 misses
-#   all planes, accept at 0.95:  1 false refusal, 226 misses   (of 1196)
+#   all planes, accept at 0.95:  1 false refusal, 265 misses   (of 1304)
 #
 # and every alternative measured is worse on one axis or both: 1.04 costs 5
 # false refusals on the fold ring for no fewer misses, 1.08 costs 4 more
 # misses for no fewer false refusals, and a bar derived from the CONVERGED
-# reading's own spread (below) costs 9-61 false refusals.
+# reading's own spread (below) costs 9-63 false refusals.
 #
 # THE FIXED REFERENCE IS NOT EXACT, and it does not hold where the guard
 # works.  Round 2 argued that a converged quadrature "reads 1 exactly, on any
@@ -352,16 +352,16 @@ _PIXEL_CONTINUITY_MAX = 1.06
 # IS the bright-side-only branch sum, and a dark-side deficit reaches the
 # caller verbatim.  Round 2 saw one optic's worth of that ("the nearest
 # returned reading 0.854 ... not a population a bar can be derived on");
-# WP-B7c round 3 measures it on **437 fallback planes the shipped bars
-# RETURN**, over sixteen optics, of which 224 score below oracle fidelity
+# WP-B7c round 3 measures it on **476 fallback planes the shipped bars
+# RETURN**, over sixteen optics, of which 263 score below oracle fidelity
 # 0.95:
 #
-#   this arm  (reading < 1/1.06)     flags 161, EVERY ONE of them wrong,
-#                                    ZERO false alarms, 63 wrong ones missed
+#   this arm  (reading < 1/1.06)     flags 192, EVERY ONE of them wrong,
+#                                    ZERO false alarms, 71 wrong ones missed
 #   the launched-power bracket's
 #   loss side (< 0.5, the shipped
 #   ``_MB_POWER_RATIO_MIN``)         flags  47, every one wrong, 0 false
-#   the same at a tighter 0.889      flags 215, every one wrong, 0 false,
+#   the same at a tighter 0.889      flags 254, every one wrong, 0 false,
 #                                    only 9 wrong ones missed
 #
 # So a reading that orders the fallback route's accuracy DOES exist and is
