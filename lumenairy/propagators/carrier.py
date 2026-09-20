@@ -1681,6 +1681,98 @@ _TRANSPORTS = ('sziklas', 'collins')
 #: NOT a geometric margin -- the radii are read from the field on every call.
 _COLLINS_TAIL_FRAC = 1e-6
 
+#: MAINTAINER SWITCH, DEFAULT OFF: an ACCURACY-keyed fallback for
+#: ``gap_kernel='auto'`` near a geometric focus.  ``None`` is the shipped
+#: value and reproduces 5.47.0's behaviour exactly -- the condition below is
+#: not evaluated at all, so nothing measured, nothing allocated, no byte
+#: moved.  Setting it to a float (the measurement below says ``1e-4``) ARMS
+#: the rule with that ``tau``.  One line.
+#:
+#: WHAT IT WOULD DO, AND WHY IT IS NOT ON.  The existing ``k4`` gate bounds
+#: REPRESENTABILITY -- whether the exact kernel's impulse response wraps the
+#: reduced frame -- and it is the right gate for what it bounds.  It does not
+#: bound ACCURACY, and near a geometric focus the two part company: MEASURED
+#: 2026-09-19 across three fixtures and two builds, ``k4`` sits 4.65 decades
+#: below its bar of 1 where the exact kernel's departure from the paraxial
+#: oracle is 4.7e-06, and still 2 decades below it where that departure is
+#: 2.3e-03.  The departure obeys ONE law on all four readings,
+#:
+#:     departure_relL2 = sqrt(3/2) * k |z_eff| theta_env^4 / 8
+#:
+#: with ``theta_env`` the ENVELOPE's own ``1/e^2`` half-angle (not the beam's;
+#: the refinement is applied to the envelope, and the quartic makes the
+#: difference a factor of 4.0e+05 on the hygiene-2 fixture).  The constant is
+#: ``sqrt(<u^8>) = sqrt(3/2) = 1.224745`` exactly, the RMS moment of a quartic
+#: phase over a 2-D circular Gaussian; it predicts VERIFY-B4 F3's 2.3497e-03
+#: to a ratio of 1.00002 and the 498x between the two fixtures to four digits.
+#:
+#: TWO REASONS IT IS THE MAINTAINER'S DECISION AND NOT THIS PACKAGE'S.  The
+#: oracle is PARAXIAL, so it can say how far the exact kernel departs from the
+#: paraxial truth and cannot say which kernel is more physical -- on a leg
+#: where the exact kernel IS the better physics, this rule trades accuracy for
+#: agreement with an oracle.  And it MOVES ANSWERS on any leg it fires on,
+#: which needs a Migration note.  The chain's own
+#: :data:`_GAP_ENV_PHI_TOL_DEFAULT` = 0.3 is NOT a usable ``tau`` here: it
+#: would need ``z_eff > 9.8e+05 m`` to trip on the hygiene-2 fixture, i.e.
+#: never.  ``tau`` has to be set from the accuracy actually wanted, and
+#: ``tests/unit/test_wave5_h2_near_focus_table.py`` measures what ``1e-4``
+#: buys: the hygiene-2 ladder stays INERT (worst departure 4.7e-06) and
+#: VERIFY-B4 F3's 1 um and 10 um rungs fall back (2.3e-03 and 2.3e-04).
+_GAP_KERNEL_ACCURACY_TAU = None
+
+#: ``sqrt(<u^8>)`` under the spectral weight ``exp(-2 u^2)`` of a 2-D circular
+#: Gaussian -- the RMS-vs-peak moment of a quartic phase, and the constant of
+#: the departure law above.  ``sqrt(3/2)``; the same integral in 1-D gives
+#: ``sqrt(105/256) = 0.6404``, which is why the number is not universal and is
+#: written with its geometry.
+_QUARTIC_RMS_MOMENT = 1.2247448713915890
+
+
+def _collins_envelope_half_angle(spectrum, dx, dy, wavelength):
+    """The envelope's analytic ``1/e^2`` angular half-width, from its own
+    sampled angular spectrum.
+
+    For a Gaussian envelope the angular INTENSITY is
+    ``exp(-2 theta^2 / theta_0^2)``, whose second moment is
+    ``<theta^2> = theta_0^2 / 4``.  So ``theta_0 = 2 sqrt(<theta^2>)``, read
+    from the same power marginals the containment radii are read from -- a
+    measurement, not a fitted width, and exact for the Gaussian the law was
+    derived on.
+
+    This is NOT the measured CONTAINMENT half-width
+    (:func:`_collins_angle_support`), and the difference is the whole point of
+    the law: on the hygiene-2 fixture the containment radius reads
+    1.9531e-03 rad against an analytic 7.9512e-04 rad, and the departure is
+    QUARTIC in the angle, so using the wrong one is a factor of 36.
+    """
+    Ny, Nx = np.shape(spectrum)[-2], np.shape(spectrum)[-1]
+    Sx, Sy = _collins_power_marginals(spectrum)
+    out = []
+    for S, n, d in ((Sx, Nx, dx), (Sy, Ny, dy if dy else dx)):
+        f = np.fft.fftfreq(int(n), d=float(d))
+        tot = float(S.sum())
+        if not (tot > 0.0):
+            out.append(0.0)
+            continue
+        m2 = float((S * (f * f)).sum() / tot) * float(wavelength) ** 2
+        out.append(2.0 * float(np.sqrt(max(m2, 0.0))))
+    return out[0], out[1]
+
+
+def _collins_exact_kernel_departure(z_eff, theta_env, wavelength):
+    """``sqrt(3/2) k |z_eff| theta_env^4 / 8`` -- the measured departure law.
+
+    What the exact-kernel refinement CHANGES, relative, against the paraxial
+    kernel.  Derived and re-measured on three fixtures and two builds; see
+    :data:`_GAP_KERNEL_ACCURACY_TAU` for the readings and for why the rule it
+    feeds is off by default.
+    """
+    if not np.isfinite(z_eff):
+        return float('inf')
+    k = 2.0 * np.pi / float(wavelength)
+    th = abs(float(theta_env))
+    return float(_QUARTIC_RMS_MOMENT * k * abs(float(z_eff)) * th ** 4 / 8.0)
+
 
 def _check_transport(value, fn):
     """Validate a ``transport`` argument strictly and return it unchanged.
@@ -2348,6 +2440,20 @@ def _collins_transport(env, R_in, z, wavelength, dx, dy, *,
                     f"theta^4/8 of the beam's own angle).  Pass gap_kernel='auto' "
                     f"to take the ABCD-Fresnel integral here, or 'fresnel' to take "
                     f"it everywhere.")
+        # ACCURACY-KEYED FALLBACK, OFF BY DEFAULT.  See
+        # :data:`_GAP_KERNEL_ACCURACY_TAU`: with the shipped ``None`` nothing
+        # below is evaluated and the leg is 5.47.0 to the byte.  Only 'auto'
+        # falls back; an EXPLICIT 'exact' is honoured, because the caller has
+        # asked for the refinement and silently replacing it is the D4 shape
+        # the vocabulary gate exists to remove.
+        dep = None
+        if (kernel == 'exact' and _GAP_KERNEL_ACCURACY_TAU is not None):
+            th_ex, th_ey = _collins_envelope_half_angle(S, dx, dy, wavelength)
+            dep = _collins_exact_kernel_departure(
+                z_eff, max(th_ex, th_ey), wavelength)
+            if dep > float(_GAP_KERNEL_ACCURACY_TAU) \
+                    and _kernel_asked != 'exact':
+                kernel = 'fresnel'
         if kernel == 'exact':
             env_a = _collins_exact_kernel_correction(
                 S, z_eff, wavelength, dx, dy, tilt, xp, is_jax, bld)
@@ -2362,6 +2468,10 @@ def _collins_transport(env, R_in, z, wavelength, dx, dy, *,
             dx_out, dy_out, N_out_x, N_out_y, centre_out, wavelength)
         st['k4'] = k4
         st['kernel'] = kernel
+        # Published only when the accuracy rule is ARMED, so the shipped
+        # stats dict is unchanged (it is a bit-identity key).
+        if dep is not None:
+            st['kernel_departure'] = dep
         if stats_out is not None:
             stats_out.update(st)
         _check_collins_sampling(fn, on_collins_sampling, st,

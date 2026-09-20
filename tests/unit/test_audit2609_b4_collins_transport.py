@@ -675,18 +675,79 @@ class TestGateCTwoGroupChain:
                 assert abs(r - rb) / rb <= best + 1e-12, (r, rb, best)
 
     def test_the_two_transports_agree_on_this_chain(self, p5_arms):
-        """Every leg here is in the TRANSFER-FUNCTION half of the quadrature
-        split (measured K1 = 1.92 > 1 on the 40 mm gap), so ``'collins'``
-        evaluates the same integral by the same quadrature the default does and
-        the two are equal to the bit.  That is the complementarity claim
-        arriving at the chain level, not a coincidence."""
+        """``'collins'`` evaluates the same integral by the same quadrature the
+        default does, so the two agree -- WHERE THAT PREMISE HOLDS, which this
+        id now measures instead of assuming.
+
+        RESTATED 2026-09-19 (VERIFY-WAVE5-HYGIENE2 V-D19).  This was one
+        ``np.array_equal`` on a 2048x2048 chain.  Bit equality is true only
+        while every leg stays in the TRANSFER-FUNCTION half of the quadrature
+        split, which is a MEASURED condition the assertion did not make --
+        testing-standards shape S1/S5, an exact comparison conditioned on a
+        reading that straddles a threshold.  It was not hypothetical: in one
+        48-file sweep the two arms differed in the sixth significant figure
+        (~8.5e-06 relative), which is a QUADRATURE SWITCH and not round-off.
+        That failure did NOT reproduce -- four sweep-scale runs and two
+        isolated runs, one failure, and both prefixes ending here pass -- and
+        it is not attributable to this branch; the fragility is real either
+        way, and by the repository's own standard ("flaky = bad math") a green
+        rerun is not the answer.
+
+        THE CLAIM IS NOW IN TWO PARTS.
+
+        PREMISE, asserted first and failing on its own terms: every Collins
+        leg took the transfer-function form, AND its decision reading is
+        clear of the threshold by a margin.  The switch happens at
+        ``max(K1, K3) > 1``; MEASURED on this fixture 2026-09-19,
+        ``K1 = 1.9167``, ``K3 = 2.1387``, so the margin is 2.139 -- 114 %
+        above the threshold.  These readings are products of about ten
+        float64 quantities, so their cross-build spread is ~1e-15 relative;
+        the premise bar of 1.5 sits fifteen decades above that spread and
+        below the measurement, so what it can report is a FIXTURE walking
+        toward the threshold, which is exactly the thing that would make the
+        claim below conditional again.
+
+        CLAIM: the two fields then agree to a DERIVED bar rather than to the
+        bit.  Under the premise both arms run the same code, so the only
+        admissible difference is a last-bit re-association; ``1e3 * eps`` of
+        the peak bounds that generously for a 2048-point pairwise reduction
+        (``log2(2048) = 11``).  MEASURED here: exactly 0.0, bit-identical.
+        The gap on the other side is the failure this exists to catch, the
+        quadrature switch at 8.5e-06 of peak -- 7.6 decades above the bar.
+        """
         a = np.asarray(p5_arms['sziklas_res'].field)
         b = np.asarray(p5_arms['collins_res'].field)
-        assert np.array_equal(a, b)
-        forms = [st.get('collins_form')
-                 for st in p5_arms['collins_res'].stages
-                 if st.get('collins_form')]
-        assert forms and set(forms) == {'tf'}, forms
+
+        # --- PREMISE ---------------------------------------------------
+        stages = [st for st in p5_arms['collins_res'].stages
+                  if st.get('collins_form')]
+        forms = [st['collins_form'] for st in stages]
+        assert forms and set(forms) == {'tf'}, (
+            f"PREMISE: the Collins arm did not stay in the transfer-function "
+            f"half of the quadrature split (forms {forms}); the two arms are "
+            f"then evaluating the same integral by DIFFERENT quadratures and "
+            f"the agreement below is not a theorem about this chain")
+        margins = [max(max(st.get('collins_k1') or (0.0, 0.0)),
+                       max(st.get('collins_k3') or (0.0, 0.0)))
+                   for st in stages]
+        assert min(margins) > 1.5, (
+            f"PREMISE: a leg's quadrature decision reads {min(margins):.4f}, "
+            f"within 50 % of the threshold of 1 (measured 2.1387 on this "
+            f"fixture 2026-09-19).  A reading that close is one fixture "
+            f"change from flipping the route, and the agreement below would "
+            f"then be conditional on a measurement no assertion makes.")
+
+        # --- CLAIM -----------------------------------------------------
+        peak = float(np.max(np.abs(a)))
+        assert peak > 0.0, "PREMISE: the chain returned an empty field"
+        bar = 1e3 * float(np.finfo(np.float64).eps) * peak
+        got = float(np.max(np.abs(a - b)))
+        assert got <= bar, (
+            f"the two transports disagree by {got:.6e} (={got / peak:.3e} of "
+            f"peak) against a derived re-association bar of {bar:.6e}.  Both "
+            f"legs report the transfer-function form, so they ran the same "
+            f"code: a difference at this scale is a quadrature or quadrature-"
+            f"ORDER change, not round-off.")
 
 
 # ===========================================================================

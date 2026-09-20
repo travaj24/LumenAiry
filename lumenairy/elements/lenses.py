@@ -157,8 +157,10 @@ class _LensesFacade(_types.ModuleType):
             f"it HERE would bind a shadow that nothing looks at.  This is "
             f"refused rather than accepted silently (VERIFY-WP-B11c D3): the "
             f"same statement against {_KERNELS.__name__} does what you mean.  "
-            f"Reading lumenairy.elements.lenses.{name} is unaffected and "
-            f"returns the same object.")
+            f"Reading lumenairy.elements.lenses.{name} is unaffected by this "
+            f"refusal; note that it returns the object bound at IMPORT time, "
+            f"so read it from {_KERNELS.__name__} while a substitute is in "
+            f"place.")
 
     def __getattr__(self, name):
         if name in _LIVE_FORWARD_NAMES:

@@ -661,3 +661,197 @@ def test_the_sziklas_transport_loses_the_focus_and_the_collins_one_does_not(
         f"the Sziklas transport reads {rel_sz_near:.3e} at 1 um and "
         f"{rel_sz_far:.3e} at 5 mm; the near-focus degradation this row is "
         f"about is gone")
+
+
+# ===========================================================================
+# The maintainer's decision, measured but NOT taken: an accuracy-keyed
+# fallback for gap_kernel='auto' near a focus (VERIFY-WAVE5-HYGIENE2)
+# ===========================================================================
+#
+# WHAT IS SHIPPED: nothing.  ``carrier._GAP_KERNEL_ACCURACY_TAU`` is ``None``,
+# the condition is not evaluated, and the leg is 5.47.0 to the byte -- proved
+# archive-to-archive over 245 fixture keys on both builds.  The rule below is
+# ARMED by setting that one constant to a float.
+#
+# WHY IT IS A DECISION AND NOT A FIX.  The oracle is PARAXIAL, so it can say
+# how far the exact kernel departs from the paraxial truth and cannot say which
+# kernel is more physical; on a leg where the exact kernel IS the better
+# physics the rule would trade accuracy for agreement with an oracle.  And it
+# moves answers on any leg it fires on.  These ids measure what the rule WOULD
+# do so the decision can be taken on numbers.
+
+#: VERIFY-B4 F3's fixture, the one whose ladder actually approaches ``A = 0``.
+_F3 = dict(lam=1.064e-6, n=1024, dx=4e-6, w=0.30e-3, R=-40e-3,
+           dx_out=5.6447e-06, n_out=128)
+
+
+def _f3_env():
+    x = _axis(_F3['n'], _F3['dx'])
+    return np.exp(-(x[None, :] ** 2 + x[:, None] ** 2)
+                  / _F3['w'] ** 2).astype(np.complex128)
+
+
+def _f3_leg(dz, gap_kernel, stats=None):
+    env = _f3_env()
+    z = -_F3['R'] - dz
+    return _collins_transport(
+        env, _F3['R'], z, _F3['lam'], _F3['dx'], _F3['dx'],
+        dx_out=_F3['dx_out'], dy_out=_F3['dx_out'],
+        N_out_x=_F3['n_out'], N_out_y=_F3['n_out'], R_ref=float('inf'),
+        gap_kernel=gap_kernel, on_collins_sampling='ignore', stats_out=stats)
+
+
+def test_the_departure_law_predicts_what_the_refinement_actually_changes():
+    """The law the rule would be keyed on, checked against the thing it
+    predicts on BOTH fixtures before anything is keyed on it.
+
+        departure_relL2 = sqrt(3/2) * k |z_eff| theta_env^4 / 8
+
+    with ``theta_env`` the ENVELOPE's analytic ``1/e^2`` half-angle, read from
+    its own sampled spectrum as ``2 sqrt(<theta^2>)`` (exact for a Gaussian).
+    MEASURED 2026-09-19, law against measurement: 4.7162e-06 vs 4.7136e-06 on
+    the hygiene-2 fixture at 1 um from focus (0.06 %), and 2.3496e-03 vs
+    2.3496e-03 on VERIFY-B4 F3's at 1 um (0.002 %) -- two fixtures 498x apart
+    in departure.  BAR 1 %, about 1.2 decades above the worst of those.
+
+    PREMISE first: the measured half-angle must be the ANALYTIC one, not the
+    containment radius (which reads 2.46x larger on the hygiene-2 fixture and
+    is quartic in the answer, i.e. 36x).
+    """
+    from lumenairy.propagators import carrier as CA
+
+    # --- the hygiene-2 fixture -----------------------------------------
+    w_in = float(np.sqrt(LAM * (F ** 2 + ZR ** 2) / (np.pi * ZR)))
+    R_in = -(F ** 2 + ZR ** 2) / F
+    x = _axis(N_IN, DX_IN)
+    env = np.exp(-(x[None, :] ** 2 + x[:, None] ** 2)
+                 / w_in ** 2).astype(np.complex128)
+    S = np.fft.fft2(np.ascontiguousarray(env, dtype=np.complex128))
+    th_x, th_y = CA._collins_envelope_half_angle(S, DX_IN, DX_IN, LAM)
+    analytic = float(LAM / (np.pi * w_in))
+    assert max(th_x, th_y) == pytest.approx(analytic, rel=1e-6), (
+        f"PREMISE: the measured 1/e^2 half-angle {max(th_x, th_y):.6e} is not "
+        f"the analytic {analytic:.6e}; the law is written in the analytic "
+        f"angle and the whole point of the correction is WHICH angle")
+
+    d = 1e-6
+    z = F - d
+    st = {}
+    a = _collins_transport(env, R_in, z, LAM, DX_IN, DX_IN, dx_out=DX_IN,
+                           dy_out=DX_IN, N_out_x=N_IN, N_out_y=N_IN,
+                           R_ref=float('inf'), gap_kernel='exact',
+                           on_collins_sampling='ignore', stats_out=st)
+    b = _collins_transport(env, R_in, z, LAM, DX_IN, DX_IN, dx_out=DX_IN,
+                           dy_out=DX_IN, N_out_x=N_IN, N_out_y=N_IN,
+                           R_ref=float('inf'), gap_kernel='fresnel',
+                           on_collins_sampling='ignore')
+    z_eff = abs(float(st['abcd'][1]) / float(st['abcd'][0]))
+    law = CA._collins_exact_kernel_departure(z_eff, max(th_x, th_y), LAM)
+    got = _rel(a, b)
+    assert law == pytest.approx(got, rel=1e-2), (
+        f"hygiene-2 fixture: the law says {law:.4e}, the refinement changes "
+        f"{got:.4e}")
+
+    # --- VERIFY-B4 F3's fixture, 498x away in departure ------------------
+    S3 = np.fft.fft2(np.ascontiguousarray(_f3_env(), dtype=np.complex128))
+    t3 = max(CA._collins_envelope_half_angle(S3, _F3['dx'], _F3['dx'],
+                                             _F3['lam']))
+    st3 = {}
+    a3 = _f3_leg(1e-6, 'exact', st3)
+    b3 = _f3_leg(1e-6, 'fresnel')
+    ze3 = abs(float(st3['abcd'][1]) / float(st3['abcd'][0]))
+    law3 = CA._collins_exact_kernel_departure(ze3, t3, _F3['lam'])
+    got3 = _rel(a3, b3)
+    assert law3 == pytest.approx(got3, rel=1e-2), (
+        f"F3 fixture: the law says {law3:.4e}, the refinement changes "
+        f"{got3:.4e}")
+    # PREMISE for "one law, two fixtures": they must actually be far apart.
+    assert got3 / got > 100.0, (
+        f"PREMISE: the two fixtures' departures are {got3:.3e} and {got:.3e}, "
+        f"only {got3 / got:.1f}x apart; one constant serving both is not a "
+        f"law if both are the same reading")
+
+
+def test_the_shipped_default_does_not_evaluate_the_accuracy_rule_at_all():
+    """OFF means OFF: no measurement, no extra key, no changed decision.
+
+    The switch is ``None``, so ``'auto'`` resolves by the ``k4``
+    REPRESENTABILITY gate alone -- which on F3's worst rung sits 2 decades
+    below its bar while the departure is 2.3e-03, the very gap the rule would
+    close.  ``stats_out`` must not grow a ``kernel_departure`` key either: the
+    stats dict is a bit-identity key of this campaign's probes.
+    """
+    from lumenairy.propagators import carrier as CA
+    assert CA._GAP_KERNEL_ACCURACY_TAU is None, (
+        "the accuracy-keyed fallback is ARMED in the shipped source.  It is a "
+        "maintainer decision that moves answers near a focus and needs a "
+        "Migration note; it is not this package's to take.")
+    st = {}
+    _f3_leg(1e-6, 'auto', st)
+    assert st['kernel'] == 'exact'
+    assert 'kernel_departure' not in st
+    assert st['k4'] < 1e-2, (
+        f"the k4 representability gate reads {st['k4']:.4e} here, not the "
+        f"~9.1e-03 measured; the 'two decades below its bar while the "
+        f"departure is 2.3e-03' reading is what makes this a decision")
+
+
+def test_tau_1e_4_leaves_this_ladder_inert_and_catches_f3(monkeypatch,
+                                                          fixture_env):
+    """THE DECISION, at the tau the measurement recommends.
+
+    ``tau = 1e-4`` (a tenth of a per-mille of the field) is the value the
+    numbers point at, and this id is what it buys, measured on both fixtures:
+
+    * the hygiene-2 ladder is INERT -- its worst departure is 4.7e-06 at 1 um
+      from focus, 1.3 decades under tau, so every rung keeps ``'exact'`` and
+      no answer moves;
+    * VERIFY-B4 F3's 1 um and 10 um rungs FALL BACK (2.3496e-03 and
+      2.3491e-04, both over tau) and its 100 um rung does not (2.3438e-05).
+
+    So the rule is a near-focus rule and not a blanket one, which is the
+    property that makes it ratifiable.  The third arm is the D4 rule: an
+    EXPLICIT ``gap_kernel='exact'`` is honoured even over tau, because
+    silently replacing what the caller asked for is the shape the vocabulary
+    gate exists to remove.
+    """
+    from lumenairy.propagators import carrier as CA
+    monkeypatch.setattr(CA, '_GAP_KERNEL_ACCURACY_TAU', 1e-4)
+
+    # --- inert on the hygiene-2 ladder ---------------------------------
+    _q, R_in, _w, env = fixture_env
+    for d in (1e-6, 1e-5, 1e-4, 1e-3, 5e-3):
+        st = {}
+        _collins_transport(env, R_in, F - d, LAM, DX_IN, DX_IN, dx_out=DX_IN,
+                           dy_out=DX_IN, N_out_x=N_IN, N_out_y=N_IN,
+                           R_ref=float('inf'), gap_kernel='auto',
+                           on_collins_sampling='ignore', stats_out=st)
+        assert st['kernel'] == 'exact', (
+            f"tau = 1e-4 made the hygiene-2 ladder fall back at d = {d:.0e} "
+            f"(departure {st.get('kernel_departure'):.4e}); it is supposed to "
+            f"be inert on this fixture, which is how tau was chosen")
+        assert st['kernel_departure'] < 1e-4
+
+    # --- and it catches F3's two near rungs ----------------------------
+    got = {}
+    for dz in (1e-6, 1e-5, 1e-4):
+        st = {}
+        _f3_leg(dz, 'auto', st)
+        got[dz] = (st['kernel'], st['kernel_departure'])
+    assert got[1e-6][0] == 'fresnel' and got[1e-5][0] == 'fresnel', (
+        f"tau = 1e-4 did not catch F3's near rungs: {got}")
+    assert got[1e-4][0] == 'exact', (
+        f"tau = 1e-4 fired at 100 um from focus, where the departure is "
+        f"{got[1e-4][1]:.4e}; the rule would not be near-focus any more")
+    # two-sided: the two rungs it catches are over tau and the one it
+    # does not is under, by margins, not by a hair
+    assert got[1e-6][1] > 10.0 * 1e-4 and got[1e-5][1] > 2.0 * 1e-4
+    assert got[1e-4][1] < 0.3 * 1e-4
+
+    # --- an EXPLICIT 'exact' is honoured -------------------------------
+    st = {}
+    _f3_leg(1e-6, 'exact', st)
+    assert st['kernel'] == 'exact', (
+        "an explicit gap_kernel='exact' was silently replaced by 'fresnel'; "
+        "that is the D4 silent-downgrade shape, and the accuracy rule is only "
+        "for 'auto'")
