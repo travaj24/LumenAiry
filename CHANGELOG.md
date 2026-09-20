@@ -10,7 +10,7 @@ section 4 left, built to the plan in `PLAN_WAVE5_LEFTOVERS_2026_09_14.md`.
 Entries are added as each item lands; the release text is assembled at the
 close.
 
-### Changed -- lens-traced (WP-B7c round 3): the pixel-halving arbiter's half-pitch lattice gets ONE definition and a stated convention, the Pearcey route stops calling the branch sum's reading the cusp field's, a fallback says its dark tail is unarbitrated, and the bar is re-derived on 1196 planes over sixteen optics
+### Changed -- lens-traced (WP-B7c round 3): the pixel-halving arbiter's half-pitch lattice gets ONE definition and a stated convention, the Pearcey route stops calling the branch sum's reading the cusp field's, a fallback says its dark tail is unarbitrated, and the bar is re-derived on 1304 planes over sixteen optics
 
 **No field and no reading moves.**  Archive to archive over a 157-case matrix
 on seventeen optics, a child process per tree with `lumenairy.__file__`
@@ -50,7 +50,7 @@ was measured on, which is not the same question as what it BUYS: a new
 the cusp route) with `pixel_continuity_scope_note` carrying it in words.  An
 unknown scope raises rather than reaching a caller with the key absent.
 
-**The bar, re-derived.**  1196 oracle-scored planes over sixteen prescriptions
+**The bar, re-derived.**  1304 oracle-scored planes over sixteen prescriptions
 and twenty-one (prescription, grid) pairs -- round 2's eight, the f/1.2 optic
 round 2 excluded for its oracle's sake, the five its verification added, and
 three new (a true even-ASPHERE with a non-monotone focal locus, a
@@ -61,7 +61,7 @@ relative L2, 0.999973-1.000000 in fidelity).  Two of round 2's statements do
 not survive it:
 
 * **the two FIDELITY populations OVERLAP.**  Round 2's strongest claim was
-  that they do not, with no accept bar chosen; at 367 fold-ring planes it
+  that they do not, with no accept bar chosen; at 394 fold-ring planes it
   closes -- worst RETURNED 0.9421 (the NA 0.41 plano-convex, reading 1.0133,
   carrying 1.27x the oracle's energy) against best REFUSED 0.9520.  So "right"
   and "wrong" can no longer be read off the guard's own split, and the accept
@@ -70,27 +70,27 @@ not survive it:
   smooth in z near a fold onset, so refining the ladder keeps finding readings
   closer to the bar: scanning the SAME optics three times at 10-30x
   refinement, the fold-ring gap reads 1.371x at 468 planes, 1.032x at 882 and
-  **1.0045x** at 1196, with no floor.  Round 2's "7 % gap" and its
+  **1.0045x** at 1304, with no floor.  Round 2's "7 % gap" and its
   verification's "3.8 %" are both readings of their ladders.
 
 The bar is **kept at 1.06**: its two-sided margin here is 1.00047x, below the
 1 % that would call for re-centring, and the geometric centre of the gap it
-sits in over all 1196 planes is **1.0600253** -- 1.06 to three figures IS the
+sits in over all 1304 planes is **1.0600253** -- 1.06 to three figures IS the
 derived centre.  Its derivation is now a COST and not a gap: at an accept
-criterion of fidelity 0.95 it costs **1 false refusal and 2 misses** over 367
+criterion of fidelity 0.95 it costs **1 false refusal and 2 misses** over 394
 fold-ring planes, where 1.04 costs five times the false refusals for the same
 misses, 1.08 costs three times the misses for the same false refusals, and a
-bar derived from the converged reading's own spread costs 9-61 false refusals
+bar derived from the converged reading's own spread costs 9-63 false refusals
 (that spread is 5.9e-4, while the reading's spread on healthy FOLD planes is
 36x larger -- the fixed reference does not hold where the guard works).
 
-**The fallback route.**  Over the **437 fallback planes the shipped bars
-RETURN**, 224 score below oracle fidelity 0.95 and the range reaches 0.5358;
+**The fallback route.**  Over the **476 fallback planes the shipped bars
+RETURN**, 263 score below oracle fidelity 0.95 and the range reaches 0.5358;
 round 2 quoted "returned down to 0.764" from a population a fifth the size.  A
 reading that ORDERS that population exists and is already reported: the LOSS
-side of the continuity reading flags 161 planes and every one of them is
+side of the continuity reading flags 192 planes and every one of them is
 wrong, with zero false alarms, and the launched-power bracket below 0.889
-flags 215 with none false and only 9 wrong ones missed.  Their bars are set
+flags 254 with none false and only 9 wrong ones missed.  Their bars are set
 for the fold-ring route, where the completion replaces the dark side -- an
 argument that is false on the fallback route, where the deficit reaches the
 caller verbatim.  Thirteen returned planes are left that nothing sees, the
