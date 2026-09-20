@@ -960,11 +960,26 @@ archive-to-archive on BOTH builds**, and the sensitivity control on the same
 |---|---|---|---|---|---|
 | base -> branch, WIN-py3.14 | 245 | **245** | 0 | 0 | 0 |
 | base -> branch, WSL-py3.12 | 245 | **245** | 0 | 0 | 0 |
+| base -> the FINAL committed tree, WIN-py3.14 | 245 | **245** | 0 | 0 | 0 |
+| base -> the FINAL committed tree, WSL-py3.12 | 245 | **245** | 0 | 0 | 0 |
 | **control**: WIN vs WSL on the base | 245 | 46 | **199** | 0 | 0 |
 
-The control is what makes the first two rows mean something: the same
-instrument separates two builds on 199 of 245 keys and cannot separate the two
-trees on any.
+The control is what makes the other rows mean something: the same instrument
+separates two builds on 199 of 245 keys and cannot separate the two trees on
+any.  The last two rows are re-taken on the tree as committed, after every
+edit in this round including the accuracy-switch code, so the claim is about
+what ships and not about a snapshot taken halfway through.
+
+ONE observable behaviour change is intended and is NOT in these keys: the lens
+facade's refusal MESSAGE (V-D21).  Its text is a digest key of
+`validation/probe_wave5_hyg2/probe_lens_d3.py`, so that probe's 32
+expected-to-differ keys differ by one more thing than they did; the refusal's
+type, its target set and everything `dir()` / `vars()` / `import *` report are
+untouched, and `tests/unit/test_verify_b11c_structure.py` reads 57 passed.
+
+The chirp phase-budget threshold (V-D5) is the other intended behaviour change,
+and it is a WARNING change: no route's arithmetic moves, which is why it is
+inside the 245/245 rather than beside it.
 
 ---
 
