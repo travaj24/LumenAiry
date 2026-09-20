@@ -1,0 +1,432 @@
+{
+ "meta": {
+  "cpu_count": 24,
+  "file": "C:\\tmp/lum_vc2\\lumenairy\\__init__.py",
+  "lumenairy": "5.48.1",
+  "min_sample_s": 1.5,
+  "n_rays": 100000,
+  "numpy": "2.4.4",
+  "python": "3.14.6",
+  "repeats": 7
+ },
+ "microbench_cpu_s": {
+  "added": 0.000560760498046875,
+  "note": "each body does the divide AND an identical multiply to restore the arrays; the reported number is half the measured body, i.e. the divide half alone",
+  "removed": 7.915496826171875e-05
+ },
+ "passes_saved_formula": "4 * n_refracting - 10",
+ "renormalize": {
+  "asphere3_control": {
+   "cpu_exit": 0.78125,
+   "cpu_surface": 1.296875,
+   "n_refracting": 3,
+   "n_surfaces": 3,
+   "normdir_share_exit": 0.005033287241815531,
+   "passes_saved": 2,
+   "predicted_saving_fraction": -0.0002492881682981928,
+   "predicted_saving_s": -0.00032329559326171875,
+   "predicted_speedup": 0.9997507739608046,
+   "profile_share_of_hoisted_block": -0.00645534032584473,
+   "refl_share_exit": 0.021170253068624068,
+   "refl_share_surface": 0.014714912742779338,
+   "reps": 1,
+   "speedup_cpu": 1.66,
+   "speedup_wall": 1.1265755421884962
+  },
+  "conic3_control": {
+   "cpu_exit": 0.05126953125,
+   "cpu_surface": 0.05517578125,
+   "n_refracting": 3,
+   "n_surfaces": 3,
+   "normdir_share_exit": 0.008789350221588395,
+   "passes_saved": 2,
+   "predicted_saving_fraction": -0.005859375,
+   "predicted_saving_s": -0.00032329559326171875,
+   "predicted_speedup": 0.9941747572815534,
+   "profile_share_of_hoisted_block": 0.0047028042853480626,
+   "refl_share_exit": 0.04555247588281106,
+   "refl_share_surface": 0.050255280168159125,
+   "reps": 32,
+   "speedup_cpu": 1.0761904761904761,
+   "speedup_wall": 1.0931336684522268
+  },
+  "doublet3": {
+   "cpu_exit": 0.022216796875,
+   "cpu_surface": 0.024169921875,
+   "n_refracting": 3,
+   "n_surfaces": 3,
+   "normdir_share_exit": 0.018006803721328127,
+   "passes_saved": 2,
+   "predicted_saving_fraction": -0.01337594696969697,
+   "predicted_saving_s": -0.00032329559326171875,
+   "predicted_speedup": 0.9868006074056769,
+   "profile_share_of_hoisted_block": 0.013912505651375973,
+   "refl_share_exit": 0.10068599734445455,
+   "refl_share_surface": 0.11459850299583052,
+   "reps": 64,
+   "speedup_cpu": 1.0879120879120878,
+   "speedup_wall": 1.1010586364184443
+  },
+  "ladder13": {
+   "cpu_exit": 0.0732421875,
+   "cpu_surface": 0.07080078125,
+   "n_refracting": 13,
+   "n_surfaces": 13,
+   "normdir_share_exit": 0.0051859215502455935,
+   "passes_saved": 42,
+   "predicted_saving_fraction": 0.006613685344827586,
+   "predicted_saving_s": 0.00046825408935546875,
+   "predicted_speedup": 1.0066577173927782,
+   "profile_share_of_hoisted_block": 0.020587083718638544,
+   "refl_share_exit": 0.10726712287349441,
+   "refl_share_surface": 0.12785420659213295,
+   "reps": 32,
+   "speedup_cpu": 0.9666666666666667,
+   "speedup_wall": 0.9895865649188985
+  },
+  "stack7": {
+   "cpu_exit": 0.05712890625,
+   "cpu_surface": 0.05078125,
+   "n_refracting": 7,
+   "n_surfaces": 7,
+   "normdir_share_exit": 0.008852302989453097,
+   "passes_saved": 18,
+   "predicted_saving_fraction": -0.00013146033653846153,
+   "predicted_saving_s": -6.67572021484375e-06,
+   "predicted_speedup": 0.99986855694301,
+   "profile_share_of_hoisted_block": 0.023447546205626946,
+   "refl_share_exit": 0.1037061313805806,
+   "refl_share_surface": 0.12715367758620755,
+   "reps": 32,
+   "speedup_cpu": 0.8888888888888888,
+   "speedup_wall": 0.8849577706823706
+  },
+  "two_mirror": {
+   "cpu_exit": 0.01336669921875,
+   "cpu_surface": 0.01397705078125,
+   "n_refracting": 2,
+   "n_surfaces": 2,
+   "normdir_share_exit": 0.036405602381234824,
+   "passes_saved": -2,
+   "predicted_saving_fraction": -0.028793668122270744,
+   "predicted_saving_s": -0.0004024505615234375,
+   "predicted_speedup": 0.9720122032099748,
+   "profile_share_of_hoisted_block": 0.0208928115601959,
+   "refl_share_exit": 0.08482817882866417,
+   "refl_share_surface": 0.10572099038886007,
+   "reps": 256,
+   "speedup_cpu": 1.0456621004566211,
+   "speedup_wall": 1.011668239209427
+  }
+ },
+ "sphere_normal": {
+  "asphere3_control": {
+   "cpu_analytic": 0.859375,
+   "cpu_generic": 0.703125,
+   "n_surfaces": 3,
+   "normal_share_analytic": 0.27229968449776476,
+   "normal_share_generic": 0.34080779228433705,
+   "profile": {
+    "analytic": {
+     "normal_block": 0.7589124,
+     "normal_share": 0.27229968449776476,
+     "normalize_directions": 0.012179500000000001,
+     "normalize_directions_share": 0.004370035339178179,
+     "per_func": {
+      "_normalize_directions": 0.012179500000000001,
+      "_refract": 0.0491957,
+      "_surface_normal": 0.0229625,
+      "_surface_sag_derivative": 0.7236752000000001,
+      "_surface_sag_derivatives_xy": 0.012274700000000001,
+      "trace": 0.0686663
+     },
+     "refract_reflect": 0.0491957,
+     "refract_reflect_share": 0.017651541322353786,
+     "total_tottime": 2.7870483999999998
+    },
+    "generic": {
+     "normal_block": 0.7366708000000001,
+     "normal_share": 0.34080779228433705,
+     "normalize_directions": 0.0101908,
+     "normalize_directions_share": 0.00471459442889717,
+     "per_func": {
+      "_normalize_directions": 0.0101908,
+      "_refract": 0.048507400000000006,
+      "_surface_normal": 0.0210953,
+      "_surface_sag_derivative": 0.7037976,
+      "_surface_sag_derivatives_xy": 0.011777900000000001,
+      "trace": 0.06672660000000001
+     },
+     "refract_reflect": 0.048507400000000006,
+     "refract_reflect_share": 0.022441095674558095,
+     "total_tottime": 2.161543299999999
+    }
+   },
+   "reps": 1,
+   "speedup_cpu": 0.8181818181818182,
+   "speedup_wall": 1.0190632791064085
+  },
+  "conic3_control": {
+   "cpu_analytic": 0.052734375,
+   "cpu_generic": 0.053955078125,
+   "n_surfaces": 3,
+   "normal_share_analytic": 0.16566499143184335,
+   "normal_share_generic": 0.16858258799241388,
+   "profile": {
+    "analytic": {
+     "normal_block": 0.15503740000000002,
+     "normal_share": 0.16566499143184335,
+     "normalize_directions": 0.0091021,
+     "normalize_directions_share": 0.009726035901735847,
+     "per_func": {
+      "_normalize_directions": 0.0091021,
+      "_refract": 0.0426735,
+      "_surface_normal": 0.0188265,
+      "_surface_sag_derivative": 0.13030640000000002,
+      "_surface_sag_derivatives_xy": 0.0059045,
+      "trace": 0.048223800000000004
+     },
+     "refract_reflect": 0.0426735,
+     "refract_reflect_share": 0.04559870722720303,
+     "total_tottime": 0.9358489
+    },
+    "generic": {
+     "normal_block": 0.1294778,
+     "normal_share": 0.16858258799241388,
+     "normalize_directions": 0.008018500000000001,
+     "normalize_directions_share": 0.010440241352704254,
+     "per_func": {
+      "_normalize_directions": 0.008018500000000001,
+      "_refract": 0.0377049,
+      "_surface_normal": 0.016755700000000002,
+      "_surface_sag_derivative": 0.1066779,
+      "_surface_sag_derivatives_xy": 0.0060442000000000004,
+      "trace": 0.045899100000000005
+     },
+     "refract_reflect": 0.0377049,
+     "refract_reflect_share": 0.04909250560323983,
+     "total_tottime": 0.7680378000000002
+    }
+   },
+   "reps": 64,
+   "speedup_cpu": 1.0231481481481481,
+   "speedup_wall": 1.048987316180966
+  },
+  "doublet3": {
+   "cpu_analytic": 0.020263671875,
+   "cpu_generic": 0.022705078125,
+   "n_surfaces": 3,
+   "normal_share_analytic": 0.07264100055964118,
+   "normal_share_generic": 0.10037622105311361,
+   "profile": {
+    "analytic": {
+     "normal_block": 0.0272838,
+     "normal_share": 0.07264100055964118,
+     "normalize_directions": 0.007244700000000001,
+     "normalize_directions_share": 0.019288451636298186,
+     "per_func": {
+      "_normalize_directions": 0.007244700000000001,
+      "_refract": 0.036210200000000005,
+      "_sphere_normal": 0.027077900000000002,
+      "_surface_normal": 0.00020590000000000002,
+      "trace": 0.014906200000000001
+     },
+     "refract_reflect": 0.036210200000000005,
+     "refract_reflect_share": 0.09640684796343321,
+     "total_tottime": 0.3755978000000001
+    },
+    "generic": {
+     "normal_block": 0.0361649,
+     "normal_share": 0.10037622105311361,
+     "normalize_directions": 0.0070124,
+     "normalize_directions_share": 0.019463021120281098,
+     "per_func": {
+      "_normalize_directions": 0.0070124,
+      "_refract": 0.0337241,
+      "_surface_normal": 0.013146600000000001,
+      "_surface_sag_derivative": 0.0228603,
+      "_surface_sag_derivatives_xy": 0.00015800000000000002,
+      "trace": 0.0142547
+     },
+     "refract_reflect": 0.0337241,
+     "refract_reflect_share": 0.09360174413360216,
+     "total_tottime": 0.3602935000000001
+    }
+   },
+   "reps": 64,
+   "speedup_cpu": 1.1204819277108433,
+   "speedup_wall": 1.0883688480966214
+  },
+  "ladder13": {
+   "cpu_analytic": 0.07421875,
+   "cpu_generic": 0.083984375,
+   "n_surfaces": 13,
+   "normal_share_analytic": 0.08716809261635469,
+   "normal_share_generic": 0.11576578188218506,
+   "profile": {
+    "analytic": {
+     "normal_block": 0.10418870000000001,
+     "normal_share": 0.08716809261635469,
+     "normalize_directions": 0.0048997,
+     "normalize_directions_share": 0.004099268955197186,
+     "per_func": {
+      "_normalize_directions": 0.0048997,
+      "_refract": 0.1344884,
+      "_sphere_normal": 0.10356900000000001,
+      "_surface_normal": 0.0006197,
+      "trace": 0.0605592
+     },
+     "refract_reflect": 0.1344884,
+     "refract_reflect_share": 0.11251793435396887,
+     "total_tottime": 1.195261899999999
+    },
+    "generic": {
+     "normal_block": 0.15336880000000003,
+     "normal_share": 0.11576578188218506,
+     "normalize_directions": 0.0074768000000000005,
+     "normalize_directions_share": 0.00564363545895072,
+     "per_func": {
+      "_normalize_directions": 0.0074768000000000005,
+      "_refract": 0.1285811,
+      "_surface_normal": 0.06087190000000001,
+      "_surface_sag_derivative": 0.09142170000000001,
+      "_surface_sag_derivatives_xy": 0.0010752000000000001,
+      "trace": 0.05956670000000001
+     },
+     "refract_reflect": 0.1285811,
+     "refract_reflect_share": 0.09705553917596944,
+     "total_tottime": 1.3248198
+    }
+   },
+   "reps": 16,
+   "speedup_cpu": 1.131578947368421,
+   "speedup_wall": 1.125871279431146
+  },
+  "stack7": {
+   "cpu_analytic": 0.044921875,
+   "cpu_generic": 0.05224609375,
+   "n_surfaces": 7,
+   "normal_share_analytic": 0.08009449383352646,
+   "normal_share_generic": 0.10578775164065735,
+   "profile": {
+    "analytic": {
+     "normal_block": 0.0546136,
+     "normal_share": 0.08009449383352646,
+     "normalize_directions": 0.006672900000000001,
+     "normalize_directions_share": 0.009786253751844573,
+     "per_func": {
+      "_normalize_directions": 0.006672900000000001,
+      "_refract": 0.0749677,
+      "_sphere_normal": 0.0542812,
+      "_surface_normal": 0.0003324,
+      "trace": 0.037614100000000004
+     },
+     "refract_reflect": 0.0749677,
+     "refract_reflect_share": 0.10994514160142642,
+     "total_tottime": 0.6818646000000002
+    },
+    "generic": {
+     "normal_block": 0.0880443,
+     "normal_share": 0.10578775164065735,
+     "normalize_directions": 0.0082892,
+     "normalize_directions_share": 0.009959711541800398,
+     "per_func": {
+      "_normalize_directions": 0.0082892,
+      "_refract": 0.08347750000000001,
+      "_surface_normal": 0.0320683,
+      "_surface_sag_derivative": 0.055671500000000006,
+      "_surface_sag_derivatives_xy": 0.00030450000000000003,
+      "trace": 0.0412415
+     },
+     "refract_reflect": 0.08347750000000001,
+     "refract_reflect_share": 0.10030061046067688,
+     "total_tottime": 0.8322731000000003
+    }
+   },
+   "reps": 32,
+   "speedup_cpu": 1.1630434782608696,
+   "speedup_wall": 1.173349799292163
+  },
+  "two_mirror": {
+   "cpu_analytic": 0.01123046875,
+   "cpu_generic": 0.0152587890625,
+   "n_surfaces": 2,
+   "normal_share_analytic": 0.09799096341445696,
+   "normal_share_generic": 0.11665739368009309,
+   "profile": {
+    "analytic": {
+     "normal_block": 0.0175366,
+     "normal_share": 0.09799096341445696,
+     "normalize_directions": 0.0054150000000000005,
+     "normalize_directions_share": 0.030257921540622727,
+     "per_func": {
+      "_normalize_directions": 0.0054150000000000005,
+      "_reflect": 0.0163086,
+      "_sphere_normal": 0.0174331,
+      "_surface_normal": 0.00010350000000000001,
+      "trace": 0.005813700000000001
+     },
+     "refract_reflect": 0.0163086,
+     "refract_reflect_share": 0.09112914852029542,
+     "total_tottime": 0.17896140000000002
+    },
+    "generic": {
+     "normal_block": 0.024133300000000003,
+     "normal_share": 0.11665739368009309,
+     "normalize_directions": 0.005092500000000001,
+     "normalize_directions_share": 0.024616516486177773,
+     "per_func": {
+      "_normalize_directions": 0.005092500000000001,
+      "_reflect": 0.0181365,
+      "_surface_normal": 0.009748000000000001,
+      "_surface_sag_derivative": 0.01429,
+      "_surface_sag_derivatives_xy": 9.530000000000001e-05,
+      "trace": 0.0058488
+     },
+     "refract_reflect": 0.0181365,
+     "refract_reflect_share": 0.08766960260217244,
+     "total_tottime": 0.2068733
+    }
+   },
+   "reps": 128,
+   "speedup_cpu": 1.358695652173913,
+   "speedup_wall": 1.37601335431759
+  }
+ },
+ "summary": {
+  "control_speedup": [
+   1.0231481481481481,
+   0.8181818181818182
+  ],
+  "normal_share_analytic_range": [
+   0.07264100055964118,
+   0.09799096341445696
+  ],
+  "normal_share_generic_range": [
+   0.10037622105311361,
+   0.11665739368009309
+  ],
+  "renorm_predicted_speedup_range": [
+   0.9720122032099748,
+   1.0066577173927782
+  ],
+  "renorm_profile_share_of_hoisted_block": [
+   0.013912505651375973,
+   0.023447546205626946,
+   0.020587083718638544,
+   0.0208928115601959,
+   0.0047028042853480626,
+   -0.00645534032584473
+  ],
+  "renorm_speedup_median": 1.0609262883235486,
+  "renorm_speedup_range": [
+   0.8888888888888888,
+   1.66
+  ],
+  "sphere_speedup_median": 1.1473112128146452,
+  "sphere_speedup_range": [
+   1.1204819277108433,
+   1.358695652173913
+  ]
+ }
+}

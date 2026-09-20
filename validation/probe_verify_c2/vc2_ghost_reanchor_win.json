@@ -1,0 +1,187 @@
+{
+ "ghost": {
+  "any_path_differs": true,
+  "pairs": [
+   [
+    0,
+    1
+   ],
+   [
+    0,
+    2
+   ],
+   [
+    1,
+    2
+   ]
+  ],
+  "per_path": {
+   "0,1": {
+    "bit_identical": false,
+    "d_energy_fraction_ppm": 0.0,
+    "d_fwhm_mm": 1.4210854715202004e-14,
+    "d_rays_image_plane": 1.3877787807814457e-16,
+    "d_rms_radius_mm": 4.263256414560601e-14,
+    "d_total_transmittance": 0.0,
+    "v_energy_fraction_ppm": 90.16975030189619,
+    "v_fwhm_mm": 67.94456891056065,
+    "v_rms_radius_mm": 34.87994703192663,
+    "v_total_transmittance": 9.016975030189618e-05
+   },
+   "0,2": {
+    "bit_identical": false,
+    "d_energy_fraction_ppm": 0.0,
+    "d_fwhm_mm": 1.7763568394002505e-14,
+    "d_rays_image_plane": 4.163336342344337e-17,
+    "d_rms_radius_mm": 8.881784197001252e-15,
+    "d_total_transmittance": 0.0,
+    "v_energy_fraction_ppm": 2379.294114186636,
+    "v_fwhm_mm": 30.844273165216244,
+    "v_rms_radius_mm": 14.027303315922362,
+    "v_total_transmittance": 0.002379294114186636
+   },
+   "1,2": {
+    "bit_identical": false,
+    "d_energy_fraction_ppm": 0.0,
+    "d_fwhm_mm": 0.0,
+    "d_rays_image_plane": 2.42861286636753e-17,
+    "d_rms_radius_mm": 1.7763568394002505e-15,
+    "d_total_transmittance": 0.0,
+    "v_energy_fraction_ppm": 135.47602546386918,
+    "v_fwhm_mm": 32.82800279651725,
+    "v_rms_radius_mm": 14.537804906692754,
+    "v_total_transmittance": 0.00013547602546386917
+   }
+  },
+  "private_defaults": {
+   "_reflect": {
+    "renormalize": "True",
+    "sphere_normal": "generic"
+   },
+   "_refract": {
+    "renormalize": "True",
+    "sphere_normal": "generic"
+   }
+  },
+  "worst": {
+   "d_energy_fraction_ppm": 0.0,
+   "d_fwhm_mm": 1.7763568394002505e-14,
+   "d_rays_image_plane": 1.3877787807814457e-16,
+   "d_rms_radius_mm": 4.263256414560601e-14,
+   "d_total_transmittance": 0.0
+  }
+ },
+ "meta": {
+  "file": "C:\\tmp/lum_vc2\\lumenairy\\__init__.py",
+  "lumenairy": "5.48.1",
+  "numpy": "2.4.4",
+  "python": "3.14.6"
+ },
+ "reanchor": {
+  "abuse_A_same_lead_any_value": {
+   "guard_token": "sphere_normal: str",
+   "note": "the override is keyed on the token BEFORE the \"=\", so a later release that changes the same default again is re-anchored to the same line with the 5.49.0 reason text and no complaint",
+   "would_accept": [
+    "sphere_normal: str = 'anything'",
+    "sphere_normal: str = None",
+    "sphere_normal: str = 'generic'   # SILENTLY REVERTED"
+   ]
+  },
+  "abuse_B_new_number_is_a_constant": {
+   "mapped_new_numbers": [
+    60,
+    61,
+    82,
+    83
+   ],
+   "note": "EDITED_IN_PLACE maps a base coordinate to a FIXED new number.  If the declaration later moves, the guard still passes whenever whatever now sits at that fixed number happens to start with the same token -- and every one of the four mapped lines is a parameter declaration in a signature, so its NEIGHBOURS start with different tokens but a re-ordered signature puts a different parameter there."
+  },
+  "abuse_C_no_equals": {
+   "note": "with no \"=\" in the base line the token is the WHOLE line, so the guard degenerates to an exact-prefix check -- strict, not loose.  None of the four mapped lines is of that shape."
+  },
+  "abuse_D_version_pinned": {
+   "checks_base_commit": true,
+   "checks_package_version": false,
+   "mentions_version_in_reason_text": true,
+   "note": "the release number lives only in the human-readable reason string; nothing compares it to the package version or to the CHANGELOG block being re-anchored, so the map is permanent rather than scoped to the release that needed it"
+  },
+  "default_base": "96cb2096",
+  "map": {
+   "lumenairy/raytrace/trace.py:60": [
+    60,
+    "WP-C2 5.49.0: renormalize default 'surface' -> 'exit'"
+   ],
+   "lumenairy/raytrace/trace.py:61": [
+    61,
+    "WP-C2 5.49.0: sphere_normal default 'generic' -> 'analytic'"
+   ],
+   "lumenairy/raytrace/world_trace.py:82": [
+    82,
+    "WP-C2 5.49.0: renormalize default 'surface' -> 'exit'"
+   ],
+   "lumenairy/raytrace/world_trace.py:83": [
+    83,
+    "WP-C2 5.49.0: sphere_normal default 'generic' -> 'analytic'"
+   ]
+  },
+  "map_size": 4,
+  "mapped_coordinates": {
+   "lumenairy/raytrace/trace.py:60": {
+    "base_line": "    renormalize: str = 'surface',",
+    "current_line": "    renormalize: str = 'exit',",
+    "fires": true,
+    "how": "edited in place (WP-C2 5.49.0: renormalize default 'surface' -> 'exit')",
+    "leading_token_the_guard_checks": "renormalize: str",
+    "reason": "WP-C2 5.49.0: renormalize default 'surface' -> 'exit'"
+   },
+   "lumenairy/raytrace/trace.py:61": {
+    "base_line": "    sphere_normal: str = 'generic',",
+    "current_line": "    sphere_normal: str = 'analytic',",
+    "fires": true,
+    "how": "edited in place (WP-C2 5.49.0: sphere_normal default 'generic' -> 'analytic')",
+    "leading_token_the_guard_checks": "sphere_normal: str",
+    "reason": "WP-C2 5.49.0: sphere_normal default 'generic' -> 'analytic'"
+   },
+   "lumenairy/raytrace/world_trace.py:82": {
+    "base_line": "    renormalize: str = 'surface',",
+    "current_line": "    renormalize: str = 'exit',",
+    "fires": true,
+    "how": "edited in place (WP-C2 5.49.0: renormalize default 'surface' -> 'exit')",
+    "leading_token_the_guard_checks": "renormalize: str",
+    "reason": "WP-C2 5.49.0: renormalize default 'surface' -> 'exit'"
+   },
+   "lumenairy/raytrace/world_trace.py:83": {
+    "base_line": "    sphere_normal: str = 'generic',",
+    "current_line": "    sphere_normal: str = 'analytic',",
+    "fires": true,
+    "how": "edited in place (WP-C2 5.49.0: sphere_normal default 'generic' -> 'analytic')",
+    "leading_token_the_guard_checks": "sphere_normal: str",
+    "reason": "WP-C2 5.49.0: sphere_normal default 'generic' -> 'analytic'"
+   }
+  },
+  "reanchor_run": {
+   "changed": 27,
+   "changed_sample": [
+    "lumenairy/propagators/system.py:972 -> lumenairy/propagators/system.py:974  [unique]",
+    "`:2889` -> `:2888`  [context (4/4)]",
+    "lumenairy/propagators/system.py:953-978 -> lumenairy/propagators/system.py:955-980  [unique]",
+    "lumenairy/elements/_lens_real.py:2905-2976 -> lumenairy/elements/_lens_real.py:2905-2975  [unique, was lumenairy/elements/_lens_real.py:2906-2976 at 96cb2096]",
+    "lumenairy/propagators/system.py:1863-1875 -> lumenairy/propagators/system.py:1865-1877  [context (4/4)]",
+    "`:928` -> `:930`  [unique]",
+    "`:1985` -> `:1986`  [unique, was `:1736` at 96cb2096]",
+    "raytrace/differential.py:614 -> raytrace/differential.py:838  [unique, was raytrace/differential.py:557 at 96cb2096]"
+   ],
+   "notes": 21,
+   "notes_sample": [
+    "the citing sentence moved or was rewritten, so its citations cannot be checked -- NEEDS A HUMAN: 'Files: `lumenairy/elements/rcwa/_core.py:249-263`.'",
+    "elements/lenses.py:722-810: endpoint 810 beyond the base file -- NEEDS A HUMAN",
+    "optimize/core.py:3032: endpoint 3032 beyond the base file -- NEEDS A HUMAN",
+    "optimize/core.py:987: endpoint 987 beyond the base file -- NEEDS A HUMAN",
+    "optimize/core.py:2044-2054: endpoint 2044 beyond the base file -- NEEDS A HUMAN",
+    "optimize/core.py:2424: endpoint 2424 beyond the base file -- NEEDS A HUMAN",
+    "optimize/core.py:3032: endpoint 3032 beyond the base file -- NEEDS A HUMAN",
+    "optimize/core.py:2069: endpoint 2069 beyond the base file -- NEEDS A HUMAN"
+   ]
+  }
+ }
+}
