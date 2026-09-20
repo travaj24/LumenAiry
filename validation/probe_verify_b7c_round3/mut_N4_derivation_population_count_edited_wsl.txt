@@ -1,0 +1,12 @@
+...........................................F...                          [100%]
+=================================== FAILURES ===================================
+E   AssertionError: the bar derivation cites [204] oracle-scored planes and its consumer cites [1304]; a constant whose stated origin disagrees with itself documents nothing
+    assert ({204} == {1304}
+      
+      Extra items in the left set:
+      204
+      Extra items in the right set:
+      1304
+      Use -v to get more diff)
+/mnt/c/tmp/lum_vmb3_mutw/tests/unit/test_verify_b7c_round3.py:243: AssertionError: the bar derivation cites [204] oracle-scored planes and its consumer cites [1304]; a constant whose stated origin disagrees with itself documents nothing
+1 failed, 46 passed in 56.22s

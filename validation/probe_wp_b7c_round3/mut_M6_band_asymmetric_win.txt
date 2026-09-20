@@ -1,0 +1,24 @@
+.........F.............F.........F......F.                               [100%]
+================================== FAILURES ===================================
+E   AssertionError: the band is no longer symmetric in the log of the reading; both arms must move together or the asymmetry needs its own derivation
+    assert 0.5 == 0.9433962264150942 ± 1.0e-12
+      
+      comparison failed
+      Obtained: 0.5
+      Expected: 0.9433962264150942 ± 1.0e-12
+C:\tmp\lum_mb3_mut\tests\unit\test_audit2609_b7c2_pixel_halving_arbiter.py:514: AssertionError: the band is no longer symmetric in the log of the reading; both arms must move together or the asymmetry needs its own derivation
+E   assert 0.5 == 0.9433962264150942 ± 1.0e-12
+      
+      comparison failed
+      Obtained: 0.5
+      Expected: 0.9433962264150942 ± 1.0e-12
+C:\tmp\lum_mb3_mut\tests\unit\test_audit2609_b7c_multibranch_envelope.py:303: assert 0.5 == 0.9433962264150942 ± 1.0e-12
+E   assert 0.5 == 0.9433962264150942 ± 1.0e-12
+      
+      comparison failed
+      Obtained: 0.5
+      Expected: 0.9433962264150942 ± 1.0e-12
+C:\tmp\lum_mb3_mut\tests\unit\test_verify_b7c_round2.py:413: assert 0.5 == 0.9433962264150942 ± 1.0e-12
+E   assert 0.5 == (1.0 / 1.06)
+C:\tmp\lum_mb3_mut\tests\unit\test_wp_b7c_round3.py:426: assert 0.5 == (1.0 / 1.06)
+4 failed, 38 passed in 68.05s (0:01:08)

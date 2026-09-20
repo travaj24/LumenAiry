@@ -1,0 +1,67 @@
+{
+ "V": 23,
+ "S": 23,
+ "M": 23,
+ "Q": 23,
+ "F_alt": 23,
+ "A": 23,
+ "K": 23,
+ "G": 23,
+ "P": 23,
+ "W": 23,
+ "X": 23,
+ "Y": 23,
+ "Z": 23,
+ "C": 9,
+ "AS": 23,
+ "MC": 23,
+ "HN": 23,
+ "W_alt": 23,
+ "X_alt": 23,
+ "V_alt": 23,
+ "AS_alt": 23
+}
+total planes 469
+start V 23 planes
+start S 23 planes
+start M 23 planes
+start Q 23 planes
+start F_alt 23 planes
+start A 23 planes
+done M rc 0 135.1s
+start K 23 planes
+done V rc 0 141.1s
+start G 23 planes
+done A rc 0 177.1s
+start P 23 planes
+done F_alt rc 0 180.1s
+start W 23 planes
+done Q rc 0 294.2s
+start X 23 planes
+done K rc 0 252.2s
+start Y 23 planes
+done W rc 0 246.2s
+start Z 23 planes
+done S rc 0 462.5s
+start C 9 planes
+done P rc 0 348.4s
+start AS 23 planes
+done C rc 0 66.0s
+start MC 23 planes
+done Y rc 0 294.3s
+start HN 23 planes
+done G rc 0 570.6s
+start W_alt 23 planes
+done Z rc 0 423.3s
+start X_alt 23 planes
+done MC rc 0 336.2s
+start V_alt 23 planes
+done W_alt rc 0 231.1s
+start AS_alt 23 planes
+done V_alt rc 0 138.1s
+done AS rc 0 522.4s
+done X rc 0 765.7s
+done X_alt rc 0 447.5s
+done AS_alt rc 0 609.5s
+done HN rc 0 1134.7s
+ALL DONE 1816.4s

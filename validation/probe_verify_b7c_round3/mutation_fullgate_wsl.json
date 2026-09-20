@@ -1,0 +1,495 @@
+[
+ {
+  "returncode": 1,
+  "tail": [
+   "26 failed, 46 passed in 305.57s (0:05:05)"
+  ],
+  "failed_ids": [],
+  "skipped": [],
+  "id": "M1_alias_bypasses_seam",
+  "doc": "M1 -- an ALIAS that bypasses ``_multibranch_render``.",
+  "files": [
+   "tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py",
+   "tests/unit/test_verify_b7c_multibranch.py",
+   "tests/unit/test_audit2609_b7c_multibranch_envelope.py",
+   "tests/unit/test_verify_b7c_round2.py",
+   "tests/unit/test_wp_b7c_round3.py",
+   "tests/unit/test_verify_b7c_round3.py",
+   "tests/unit/test_niche_r2_pearcey_cusp.py",
+   "tests/unit/test_niche_r5_gbd_vector_catastrophe.py"
+  ],
+  "seconds": 310.7,
+  "caught": true
+ },
+ {
+  "returncode": 1,
+  "tail": [
+   "3 failed, 44 passed in 32.50s"
+  ],
+  "failed_ids": [],
+  "skipped": [],
+  "id": "M2_reads_branch_sum",
+  "doc": "M2 -- the arbiter reads the BRANCH SUM instead of the returned field.",
+  "files": [
+   "tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py",
+   "tests/unit/test_verify_b7c_multibranch.py",
+   "tests/unit/test_audit2609_b7c_multibranch_envelope.py",
+   "tests/unit/test_verify_b7c_round2.py",
+   "tests/unit/test_wp_b7c_round3.py",
+   "tests/unit/test_verify_b7c_round3.py"
+  ],
+  "seconds": 34.6,
+  "caught": true
+ },
+ {
+  "returncode": 1,
+  "tail": [
+   "1 failed, 43 passed, 3 skipped in 35.12s"
+  ],
+  "failed_ids": [],
+  "skipped": [
+   "SKIPPED [1] tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py:435: this build returns the pinned plane; its continuity reads 1.1851, inside the band",
+   "SKIPPED [1] tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py:545: no plane of this ladder reads below the loss arm on this build",
+   "SKIPPED [1] tests/unit/test_verify_b7c_round2.py:267: this build does not straddle the bar at this plane (branch sum 1.0636, completion 1.0021); the unconditional arm above ran instead"
+  ],
+  "id": "M3_bar_1_20",
+  "doc": "M3 -- the bar is loosened to 1.20.",
+  "files": [
+   "tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py",
+   "tests/unit/test_verify_b7c_multibranch.py",
+   "tests/unit/test_audit2609_b7c_multibranch_envelope.py",
+   "tests/unit/test_verify_b7c_round2.py",
+   "tests/unit/test_wp_b7c_round3.py",
+   "tests/unit/test_verify_b7c_round3.py"
+  ],
+  "seconds": 37.3,
+  "caught": true
+ },
+ {
+  "returncode": 1,
+  "tail": [
+   "22 failed, 24 passed, 1 skipped in 15.98s"
+  ],
+  "failed_ids": [],
+  "skipped": [
+   "SKIPPED [1] tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py:545: no plane of this ladder reads below the loss arm on this build"
+  ],
+  "id": "M4_reading_at_N_dx",
+  "doc": "M4 -- the second render is taken at ``(N, dx)``.",
+  "files": [
+   "tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py",
+   "tests/unit/test_verify_b7c_multibranch.py",
+   "tests/unit/test_audit2609_b7c_multibranch_envelope.py",
+   "tests/unit/test_verify_b7c_round2.py",
+   "tests/unit/test_wp_b7c_round3.py",
+   "tests/unit/test_verify_b7c_round3.py"
+  ],
+  "seconds": 17.3,
+  "caught": true
+ },
+ {
+  "returncode": 1,
+  "tail": [
+   "4 failed, 43 passed in 32.52s"
+  ],
+  "failed_ids": [],
+  "skipped": [],
+  "id": "M5_loss_arm_refuses",
+  "doc": "M5 -- the LOSS arm is made to refuse too.",
+  "files": [
+   "tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py",
+   "tests/unit/test_verify_b7c_multibranch.py",
+   "tests/unit/test_audit2609_b7c_multibranch_envelope.py",
+   "tests/unit/test_verify_b7c_round2.py",
+   "tests/unit/test_wp_b7c_round3.py",
+   "tests/unit/test_verify_b7c_round3.py"
+  ],
+  "seconds": 35.2,
+  "caught": true
+ },
+ {
+  "returncode": 1,
+  "tail": [
+   "      comparison failed",
+   "      comparison failed",
+   "4 failed, 43 passed in 37.41s"
+  ],
+  "failed_ids": [],
+  "skipped": [],
+  "id": "M6_band_asymmetric",
+  "doc": "M6 -- the band stops being symmetric in the log of the ratio.",
+  "files": [
+   "tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py",
+   "tests/unit/test_verify_b7c_multibranch.py",
+   "tests/unit/test_audit2609_b7c_multibranch_envelope.py",
+   "tests/unit/test_verify_b7c_round2.py",
+   "tests/unit/test_wp_b7c_round3.py",
+   "tests/unit/test_verify_b7c_round3.py"
+  ],
+  "seconds": 40.8,
+  "caught": true
+ },
+ {
+  "returncode": 1,
+  "tail": [
+   "16 failed, 29 passed, 2 skipped in 17.15s"
+  ],
+  "failed_ids": [],
+  "skipped": [
+   "SKIPPED [1] tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py:475: the refined grid is past the arbiter entry cap on this build, so the reading is not measured there",
+   "SKIPPED [1] tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py:545: no plane of this ladder reads below the loss arm on this build"
+  ],
+  "id": "M7_entry_cap_1e6",
+  "doc": "M7 -- the entry cap is lowered to 1e6 entries.",
+  "files": [
+   "tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py",
+   "tests/unit/test_verify_b7c_multibranch.py",
+   "tests/unit/test_audit2609_b7c_multibranch_envelope.py",
+   "tests/unit/test_verify_b7c_round2.py",
+   "tests/unit/test_wp_b7c_round3.py",
+   "tests/unit/test_verify_b7c_round3.py"
+  ],
+  "seconds": 19.2,
+  "caught": true
+ },
+ {
+  "returncode": 1,
+  "tail": [
+   "20 failed, 27 passed in 18.39s"
+  ],
+  "failed_ids": [],
+  "skipped": [],
+  "id": "M8_arbiter_not_requested",
+  "doc": "M8 -- the completion stops asking for the reading.",
+  "files": [
+   "tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py",
+   "tests/unit/test_verify_b7c_multibranch.py",
+   "tests/unit/test_audit2609_b7c_multibranch_envelope.py",
+   "tests/unit/test_verify_b7c_round2.py",
+   "tests/unit/test_wp_b7c_round3.py",
+   "tests/unit/test_verify_b7c_round3.py"
+  ],
+  "seconds": 20.8,
+  "caught": true
+ },
+ {
+  "returncode": 1,
+  "tail": [
+   "      comparison failed",
+   "11 failed, 33 passed, 3 skipped in 30.49s"
+  ],
+  "failed_ids": [],
+  "skipped": [
+   "SKIPPED [1] tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py:435: this build returns the pinned plane; its continuity reads 0.8438, inside the band",
+   "SKIPPED [1] tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py:545: no plane of this ladder reads below the loss arm on this build",
+   "SKIPPED [1] tests/unit/test_verify_b7c_round2.py:267: this build does not straddle the bar at this plane (branch sum 0.9402, completion 0.9979); the unconditional arm above ran instead"
+  ],
+  "id": "M9_ratio_inverted",
+  "doc": "M9 -- the ratio is inverted.",
+  "files": [
+   "tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py",
+   "tests/unit/test_verify_b7c_multibranch.py",
+   "tests/unit/test_audit2609_b7c_multibranch_envelope.py",
+   "tests/unit/test_verify_b7c_round2.py",
+   "tests/unit/test_wp_b7c_round3.py",
+   "tests/unit/test_verify_b7c_round3.py"
+  ],
+  "seconds": 32.2,
+  "caught": true
+ },
+ {
+  "returncode": 1,
+  "tail": [
+   "6 failed, 41 passed in 28.37s"
+  ],
+  "failed_ids": [],
+  "skipped": [],
+  "id": "M10_fallback_not_arbitrated",
+  "doc": "M10 -- the FALLBACK path stops arbitrating.",
+  "files": [
+   "tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py",
+   "tests/unit/test_verify_b7c_multibranch.py",
+   "tests/unit/test_audit2609_b7c_multibranch_envelope.py",
+   "tests/unit/test_verify_b7c_round2.py",
+   "tests/unit/test_wp_b7c_round3.py",
+   "tests/unit/test_verify_b7c_round3.py"
+  ],
+  "seconds": 30.2,
+  "caught": true
+ },
+ {
+  "returncode": 1,
+  "tail": [
+   "2 failed, 45 passed in 35.30s"
+  ],
+  "failed_ids": [],
+  "skipped": [],
+  "id": "M11_unmeasured_becomes_ok",
+  "doc": "M11 -- an unmeasurable reading silently becomes 'ok'.",
+  "files": [
+   "tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py",
+   "tests/unit/test_verify_b7c_multibranch.py",
+   "tests/unit/test_audit2609_b7c_multibranch_envelope.py",
+   "tests/unit/test_verify_b7c_round2.py",
+   "tests/unit/test_wp_b7c_round3.py",
+   "tests/unit/test_verify_b7c_round3.py"
+  ],
+  "seconds": 37.3,
+  "caught": true
+ },
+ {
+  "returncode": 1,
+  "tail": [
+   "1 failed, 39 passed, 7 skipped in 32.38s"
+  ],
+  "failed_ids": [],
+  "skipped": [
+   "SKIPPED [1] tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py:611: this build has no single-valued refused plane on the doublet ladder",
+   "SKIPPED [1] tests/unit/test_audit2609_b7c_multibranch_envelope.py:196: no rung of the ladder reproduces the blow-up on this build; the invariant arm above ran instead",
+   "SKIPPED [1] tests/unit/test_audit2609_b7c_multibranch_envelope.py:226: no rung of the ladder reproduces the blow-up on this build",
+   "SKIPPED [1] tests/unit/test_audit2609_b7c_multibranch_envelope.py:248: no rung of the ladder reproduces the blow-up on this build",
+   "SKIPPED [1] tests/unit/test_verify_b7c_multibranch.py:264: this build does not refuse the coarse-grid plane",
+   "SKIPPED [1] tests/unit/test_verify_b7c_multibranch.py:341: this build does not separate the two denominators across the bar on the D3 geometry",
+   "SKIPPED [1] tests/unit/test_verify_b7c_multibranch.py:475: this build does not refuse either doublet plane"
+  ],
+  "id": "M12_power_tripwire_off",
+  "doc": "M12 -- the launched-power tripwire is disabled.",
+  "files": [
+   "tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py",
+   "tests/unit/test_verify_b7c_multibranch.py",
+   "tests/unit/test_audit2609_b7c_multibranch_envelope.py",
+   "tests/unit/test_verify_b7c_round2.py",
+   "tests/unit/test_wp_b7c_round3.py",
+   "tests/unit/test_verify_b7c_round3.py"
+  ],
+  "seconds": 34.4,
+  "caught": true
+ },
+ {
+  "returncode": 1,
+  "tail": [
+   "3 failed, 43 passed, 1 skipped in 37.37s"
+  ],
+  "failed_ids": [],
+  "skipped": [
+   "SKIPPED [1] tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py:475: the refined grid is past the arbiter entry cap on this build, so the reading is not measured there"
+  ],
+  "id": "M13_entry_cap_2e6",
+  "doc": "M13 -- the entry cap is lowered to 2e6 entries.",
+  "files": [
+   "tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py",
+   "tests/unit/test_verify_b7c_multibranch.py",
+   "tests/unit/test_audit2609_b7c_multibranch_envelope.py",
+   "tests/unit/test_verify_b7c_round2.py",
+   "tests/unit/test_wp_b7c_round3.py",
+   "tests/unit/test_verify_b7c_round3.py"
+  ],
+  "seconds": 40.2,
+  "caught": true
+ },
+ {
+  "returncode": 1,
+  "tail": [
+   "3 failed, 42 passed, 2 skipped in 38.92s"
+  ],
+  "failed_ids": [],
+  "skipped": [
+   "SKIPPED [1] tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py:545: no plane of this ladder reads below the loss arm on this build",
+   "SKIPPED [1] tests/unit/test_verify_b7c_round2.py:267: this build does not straddle the bar at this plane (branch sum 1.0180, completion 0.9797); the unconditional arm above ran instead"
+  ],
+  "id": "M14_half_pitch_lattice_stops_nesting",
+  "doc": "M14 -- the half-pitch lattice stops NESTING (the hull-aligned",
+  "files": [
+   "tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py",
+   "tests/unit/test_verify_b7c_multibranch.py",
+   "tests/unit/test_audit2609_b7c_multibranch_envelope.py",
+   "tests/unit/test_verify_b7c_round2.py",
+   "tests/unit/test_wp_b7c_round3.py",
+   "tests/unit/test_verify_b7c_round3.py"
+  ],
+  "seconds": 41.8,
+  "caught": true
+ },
+ {
+  "returncode": 1,
+  "tail": [
+   "1 failed, 46 passed in 40.40s"
+  ],
+  "failed_ids": [],
+  "skipped": [],
+  "id": "M15_pearcey_label_claims_the_cusp_field",
+  "doc": "M15 -- the Pearcey cusp route labels the branch sum's reading as the",
+  "files": [
+   "tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py",
+   "tests/unit/test_verify_b7c_multibranch.py",
+   "tests/unit/test_audit2609_b7c_multibranch_envelope.py",
+   "tests/unit/test_verify_b7c_round2.py",
+   "tests/unit/test_wp_b7c_round3.py",
+   "tests/unit/test_verify_b7c_round3.py"
+  ],
+  "seconds": 42.7,
+  "caught": true
+ },
+ {
+  "returncode": 1,
+  "tail": [
+   "2 failed, 45 passed in 40.13s"
+  ],
+  "failed_ids": [],
+  "skipped": [],
+  "id": "M16_scope_always_claims_returned_field",
+  "doc": "M16 -- every route claims the reading arbitrates the field it",
+  "files": [
+   "tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py",
+   "tests/unit/test_verify_b7c_multibranch.py",
+   "tests/unit/test_audit2609_b7c_multibranch_envelope.py",
+   "tests/unit/test_verify_b7c_round2.py",
+   "tests/unit/test_wp_b7c_round3.py",
+   "tests/unit/test_verify_b7c_round3.py"
+  ],
+  "seconds": 42.8,
+  "caught": true
+ },
+ {
+  "returncode": 1,
+  "tail": [
+   "6 failed, 41 passed in 43.34s"
+  ],
+  "failed_ids": [],
+  "skipped": [],
+  "id": "M17_bar_inside_the_converged_spread",
+  "doc": "M17 -- the bar is put inside the converged reading's own spread.",
+  "files": [
+   "tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py",
+   "tests/unit/test_verify_b7c_multibranch.py",
+   "tests/unit/test_audit2609_b7c_multibranch_envelope.py",
+   "tests/unit/test_verify_b7c_round2.py",
+   "tests/unit/test_wp_b7c_round3.py",
+   "tests/unit/test_verify_b7c_round3.py"
+  ],
+  "seconds": 45.4,
+  "caught": true
+ },
+ {
+  "returncode": 1,
+  "tail": [
+   "1 failed, 46 passed in 43.41s"
+  ],
+  "failed_ids": [],
+  "skipped": [],
+  "id": "M18_lattice_rebuilt_inline",
+  "doc": "M18 -- the completion rebuilds the half-pitch lattice inline.",
+  "files": [
+   "tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py",
+   "tests/unit/test_verify_b7c_multibranch.py",
+   "tests/unit/test_audit2609_b7c_multibranch_envelope.py",
+   "tests/unit/test_verify_b7c_round2.py",
+   "tests/unit/test_wp_b7c_round3.py",
+   "tests/unit/test_verify_b7c_round3.py"
+  ],
+  "seconds": 46.1,
+  "caught": true
+ },
+ {
+  "returncode": 1,
+  "tail": [
+   "1 failed, 46 passed in 50.09s"
+  ],
+  "failed_ids": [],
+  "skipped": [],
+  "id": "N1_scope_guard_removed",
+  "doc": "N1 -- the unknown-scope guard is deleted, so the enum accepts",
+  "files": [
+   "tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py",
+   "tests/unit/test_verify_b7c_multibranch.py",
+   "tests/unit/test_audit2609_b7c_multibranch_envelope.py",
+   "tests/unit/test_verify_b7c_round2.py",
+   "tests/unit/test_wp_b7c_round3.py",
+   "tests/unit/test_verify_b7c_round3.py"
+  ],
+  "seconds": 53.3,
+  "caught": true
+ },
+ {
+  "returncode": 1,
+  "tail": [
+   "6 failed, 40 passed, 1 skipped in 46.20s"
+  ],
+  "failed_ids": [],
+  "skipped": [
+   "SKIPPED [1] tests/unit/test_verify_b7c_round2.py:267: this build does not straddle the bar at this plane (branch sum 1.0636, completion 1.0724); the unconditional arm above ran instead"
+  ],
+  "id": "N2_half_pitch_off_by_one_pixel",
+  "doc": "N2 -- ``half_pitch_centres`` is off by ONE FINE PIXEL.",
+  "files": [
+   "tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py",
+   "tests/unit/test_verify_b7c_multibranch.py",
+   "tests/unit/test_audit2609_b7c_multibranch_envelope.py",
+   "tests/unit/test_verify_b7c_round2.py",
+   "tests/unit/test_wp_b7c_round3.py",
+   "tests/unit/test_verify_b7c_round3.py"
+  ],
+  "seconds": 50.3,
+  "caught": true
+ },
+ {
+  "returncode": 1,
+  "tail": [
+   "1 failed, 46 passed in 53.75s"
+  ],
+  "failed_ids": [],
+  "skipped": [],
+  "id": "N3_nesting_breaks_on_odd_N",
+  "doc": "N3 -- the nesting breaks on ODD ``N`` only.",
+  "files": [
+   "tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py",
+   "tests/unit/test_verify_b7c_multibranch.py",
+   "tests/unit/test_audit2609_b7c_multibranch_envelope.py",
+   "tests/unit/test_verify_b7c_round2.py",
+   "tests/unit/test_wp_b7c_round3.py",
+   "tests/unit/test_verify_b7c_round3.py"
+  ],
+  "seconds": 57.2,
+  "caught": true
+ },
+ {
+  "returncode": 1,
+  "tail": [
+   "1 failed, 46 passed in 56.22s"
+  ],
+  "failed_ids": [],
+  "skipped": [],
+  "id": "N4_derivation_population_count_edited",
+  "doc": "N4 -- the derivation comment's POPULATION COUNT is edited.",
+  "files": [
+   "tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py",
+   "tests/unit/test_verify_b7c_multibranch.py",
+   "tests/unit/test_audit2609_b7c_multibranch_envelope.py",
+   "tests/unit/test_verify_b7c_round2.py",
+   "tests/unit/test_wp_b7c_round3.py",
+   "tests/unit/test_verify_b7c_round3.py"
+  ],
+  "seconds": 59.9,
+  "caught": true
+ },
+ {
+  "returncode": 1,
+  "tail": [
+   "1 failed, 46 passed in 57.31s"
+  ],
+  "failed_ids": [],
+  "skipped": [],
+  "id": "N5_scope_note_contradicts_the_constant",
+  "doc": "N5 -- the scope NOTE contradicts the constant it summarises.",
+  "files": [
+   "tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py",
+   "tests/unit/test_verify_b7c_multibranch.py",
+   "tests/unit/test_audit2609_b7c_multibranch_envelope.py",
+   "tests/unit/test_verify_b7c_round2.py",
+   "tests/unit/test_wp_b7c_round3.py",
+   "tests/unit/test_verify_b7c_round3.py"
+  ],
+  "seconds": 61.9,
+  "caught": true
+ }
+]

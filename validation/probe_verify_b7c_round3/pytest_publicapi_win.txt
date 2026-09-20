@@ -1,0 +1,50 @@
+.....F.............                                                      [100%]
+================================== FAILURES ===================================
+___________ test_installed_metadata_version_matches_source_version ____________
+
+    def test_installed_metadata_version_matches_source_version():
+        """The installed distribution's version must equal ``__version__``.
+    
+        Audit 2026-09-11 (V4/P1-7) MEASURED the two apart on the dev box:
+        ``lumenairy.__version__`` read 5.45.1 while
+        ``importlib.metadata.version('lumenairy')`` read 5.43.0, and the editable
+        finder in the ``-X importtime`` trace was generated at 5.21.2 -- i.e. the
+        ``.pth`` shim was 24 releases stale.  Anything reading installed metadata
+        (packaging checks, a user's ``pip show``, a plugin version gate) saw the
+        wrong number, and nothing compared them.
+    
+        Deliberately NOT skipped when the distribution is absent (TESTING_STANDARDS
+        S3: "never ``pytest.skip`` on a resource check").  Every environment that
+        runs this suite installs the package -- every CI job's install line is
+        ``pip install -e ".[...]"`` -- so a missing distribution is a broken
+        environment, and reporting it as a skip is how a gate silently stops
+        gating.  The failure message says exactly what to run.
+        """
+        try:
+            installed = importlib.metadata.version('lumenairy')
+        except importlib.metadata.PackageNotFoundError:  # pragma: no cover
+            raise AssertionError(
+                "lumenairy is importable but has no installed distribution "
+                "metadata, so `importlib.metadata.version('lumenairy')` raises "
+                "PackageNotFoundError.  The suite is running against a bare "
+                "source tree (or a stale editable finder).  Run "
+                "`pip install -e .` from the repository root.")
+>       assert installed == la.__version__, (
+            f"Installed distribution metadata says lumenairy=={installed} but the "
+            f"source says __version__=={la.__version__}.  The editable install is "
+            f"stale: re-run `pip install -e .` from the repository root.  (This "
+            f"drift is invisible to every other test -- anything reading "
+            f"installed metadata, including `pip show` and packaging checks, "
+            f"reports {installed}.)")
+E       AssertionError: Installed distribution metadata says lumenairy==5.47.0 but the source says __version__==5.47.1.  The editable install is stale: re-run `pip install -e .` from the repository root.  (This drift is invisible to every other test -- anything reading installed metadata, including `pip show` and packaging checks, reports 5.47.0.)
+E       assert '5.47.0' == '5.47.1'
+E         
+E         - 5.47.1
+E         ?      ^
+E         + 5.47.0
+E         ?      ^
+
+tests\unit\test_public_api.py:116: AssertionError
+=========================== short test summary info ===========================
+FAILED tests/unit/test_public_api.py::test_installed_metadata_version_matches_source_version
+1 failed, 18 passed in 2.67s

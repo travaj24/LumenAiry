@@ -1,0 +1,210 @@
+........................................................................ [ 17%]
+........................................................................ [ 34%]
+........................................................................ [ 52%]
+........................................................................ [ 69%]
+........................................................................ [ 87%]
+.....................................................                    [100%]
+============================== warnings summary ===============================
+tests/unit/test_v5_21_2_subsystem_audits.py::test_vd1_immersion_na_raises
+  C:\tmp\lum_vmb3\tests\unit\test_v5_21_2_subsystem_audits.py:170: RuntimeWarning: richards_wolf_focus: the pupil array does not span the exit pupil.  The geometric rim sits at rho = f*NA = 6.0000e-04 m but the array only reaches Np*dx_pupil/2 = 3.2000e-05 m (Np=32, dx_pupil=2.0000e-06 m) with the pupil still non-zero at that boundary, so the rim mask never bites and the effective exit pupil becomes a SQUARE (the array boundary) at the array-limited NA_eff=0.0320 instead of the requested NA=0.6000.  The returned focal field is the PSF of that aperture (focal width scales as 1/NA_eff, i.e. about 18.75x too wide).  To deliver the requested NA keep Np*dx_pupil/2 >= f*NA: either dx_pupil >= 3.7500e-05 m at Np=32, or Np >= 600 at dx_pupil=2.0000e-06 m.  If the array-limited aperture is what you want, pass NA <= 0.0320 (or filter this warning).
+    out = richards_wolf_focus(pupil, wl, 0.6, f, dx)
+
+tests/unit/test_v5_21_2_subsystem_audits.py::test_opt1_lg_jax_merit_is_strehl_deficit_not_amplitude
+  C:\tmp\lum_vmb3\tests\unit\test_v5_21_2_subsystem_audits.py:1111: RuntimeWarning: make_lg_aberration_merit_jax: enabling JAX double precision (jax_enable_x64) PROCESS-WIDE -- this changes global JAX float precision for the rest of the process.  Enable it yourself before any JAX work to silence this, or pass enable_x64=False to require-and-raise instead of auto-enabling.
+    m = make_lg_aberration_merit_jax(
+
+tests/unit/test_v5_21_2_subsystem_audits.py::test_opt2_tolerance_merit_populates_rms_and_opd_subcontext
+  C:\tmp\lum_vmb3\tests\unit\test_v5_21_2_subsystem_audits.py:1204: UserWarning: apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=64, dx=8.000 um, semi=0.256 mm). Largest is system aperture_diameter with semi_diameter=6.000 mm (+5.744 mm beyond the grid); the field will be truncated at the grid edge during propagation, silently dropping energy the real lens would have transmitted. Consider increasing N or dx so N*dx/2 >= max(semi_diameter). Affected surfaces: system aperture_diameter=6.00mm.
+    tol.evaluate(ctx)
+
+tests/unit/test_v5_21_2_subsystem_audits.py::test_vhfpi_output_shape_rename_legacy_alias_warns
+tests/unit/test_v5_21_2_subsystem_audits.py::test_vhfpi_output_shape_rename_legacy_alias_warns
+  C:\tmp\lum_vmb3\lumenairy\propagators\vectorial_hfpi.py:734: RuntimeWarning: accumulate_vector_to_grid: HFPI is UNDER-SAMPLED for this output grid: of 200 paths only 0 landed on the 12x10 grid (0.00%), i.e. 0 landed paths per output pixel.  Below 1 per pixel most pixels are EXACTLY ZERO and the returned array is the Monte-Carlo sampling envelope plus shot noise, not a propagated field -- measured on a 128^2 probe at the default cone, two seeds of the same physics agreed to an intensity-shape fidelity of 0.005.  The docstring's guarantee that 'fringe positions and interference contrast are correct' does NOT hold here.  Two levers: raise n_paths, and -- usually far more effective -- narrow ``cone_half_angle`` from its ~90-degree default (a full forward hemisphere) toward the angle the output grid actually subtends, so paths are not spent where they cannot land.  NOTE one path per pixel is necessary, not sufficient: the same probe still only reached seed-to-seed fidelity 0.44 at ~12 paths per pixel.  Pass on_undersampled='silent' to acknowledge.
+    return accumulate_vector_to_grid(
+
+tests/unit/test_v5_21_gbd_maslov_perf.py::test_maslov_output_plane_distance_matches_baked_prescription
+  C:\tmp\lum_vmb3\tests\unit\test_v5_21_gbd_maslov_perf.py:43: UserWarning: apply_real_lens_maslov: 1 prescription aperture(s) exceed the simulation grid (N=64, dx=5.000 um, semi=0.160 mm). Largest is system aperture_diameter with semi_diameter=3.000 mm (+2.840 mm beyond the grid); the field will be truncated at the grid edge during propagation, silently dropping energy the real lens would have transmitted. Consider increasing N or dx so N*dx/2 >= max(semi_diameter). Affected surfaces: system aperture_diameter=3.00mm.
+    F_compose = apply_real_lens_maslov(
+
+tests/unit/test_v5_21_gbd_maslov_perf.py::test_maslov_output_plane_distance_matches_baked_prescription
+  C:\tmp\lum_vmb3\tests\unit\test_v5_21_gbd_maslov_perf.py:43: RuntimeWarning: apply_real_lens_maslov: integration_method='quadrature' with n_v2=48 is under-resolved for this chart (~979 v2 oscillations; want n_v2 >~ 3917).  Uniform quadrature will speckle regardless of output resolution or memory.  Increase n_v2, or use integration_method='local_quadrature' / 'stationary_phase' (the correct evaluators at production NA).
+    F_compose = apply_real_lens_maslov(
+
+tests/unit/test_v5_21_gbd_maslov_perf.py::test_maslov_output_plane_distance_matches_baked_prescription
+  C:\tmp\lum_vmb3\tests\unit\test_v5_21_gbd_maslov_perf.py:46: UserWarning: apply_real_lens_maslov: 1 prescription aperture(s) exceed the simulation grid (N=64, dx=5.000 um, semi=0.160 mm). Largest is system aperture_diameter with semi_diameter=3.000 mm (+2.840 mm beyond the grid); the field will be truncated at the grid edge during propagation, silently dropping energy the real lens would have transmitted. Consider increasing N or dx so N*dx/2 >= max(semi_diameter). Affected surfaces: system aperture_diameter=3.00mm.
+    F_baked = apply_real_lens_maslov(
+
+tests/unit/test_v5_21_gbd_maslov_perf.py::test_maslov_output_plane_distance_matches_baked_prescription
+  C:\tmp\lum_vmb3\tests\unit\test_v5_21_gbd_maslov_perf.py:46: RuntimeWarning: apply_real_lens_maslov: integration_method='quadrature' with n_v2=48 is under-resolved for this chart (~979 v2 oscillations; want n_v2 >~ 3917).  Uniform quadrature will speckle regardless of output resolution or memory.  Increase n_v2, or use integration_method='local_quadrature' / 'stationary_phase' (the correct evaluators at production NA).
+    F_baked = apply_real_lens_maslov(
+
+tests/unit/test_v5_21_gbd_maslov_perf.py::test_maslov_output_plane_distance_matches_baked_prescription
+  C:\tmp\lum_vmb3\tests\unit\test_v5_21_gbd_maslov_perf.py:43: RuntimeWarning: apply_real_lens_maslov: integration_method='quadrature' with n_v2=48 is under-resolved for this chart (~1333 v2 oscillations; want n_v2 >~ 5332).  Uniform quadrature will speckle regardless of output resolution or memory.  Increase n_v2, or use integration_method='local_quadrature' / 'stationary_phase' (the correct evaluators at production NA).
+    F_compose = apply_real_lens_maslov(
+
+tests/unit/test_v5_21_gbd_maslov_perf.py::test_maslov_output_plane_distance_matches_baked_prescription
+  C:\tmp\lum_vmb3\tests\unit\test_v5_21_gbd_maslov_perf.py:46: RuntimeWarning: apply_real_lens_maslov: integration_method='quadrature' with n_v2=48 is under-resolved for this chart (~1333 v2 oscillations; want n_v2 >~ 5332).  Uniform quadrature will speckle regardless of output resolution or memory.  Increase n_v2, or use integration_method='local_quadrature' / 'stationary_phase' (the correct evaluators at production NA).
+    F_baked = apply_real_lens_maslov(
+
+tests/unit/test_v5_21_gbd_maslov_perf.py::test_maslov_focus_roi_equals_full_grid_crop
+  C:\tmp\lum_vmb3\tests\unit\test_v5_21_gbd_maslov_perf.py:63: UserWarning: apply_real_lens_maslov: 1 prescription aperture(s) exceed the simulation grid (N=96, dx=5.000 um, semi=0.240 mm). Largest is system aperture_diameter with semi_diameter=3.000 mm (+2.760 mm beyond the grid); the field will be truncated at the grid edge during propagation, silently dropping energy the real lens would have transmitted. Consider increasing N or dx so N*dx/2 >= max(semi_diameter). Affected surfaces: system aperture_diameter=3.00mm.
+    F_full = apply_real_lens_maslov(E, normalize_output='none', **kw)
+
+tests/unit/test_v5_21_gbd_maslov_perf.py::test_maslov_focus_roi_equals_full_grid_crop
+  C:\tmp\lum_vmb3\tests\unit\test_v5_21_gbd_maslov_perf.py:63: RuntimeWarning: apply_real_lens_maslov: integration_method='quadrature' with n_v2=48 is under-resolved for this chart (~1334 v2 oscillations; want n_v2 >~ 5334).  Uniform quadrature will speckle regardless of output resolution or memory.  Increase n_v2, or use integration_method='local_quadrature' / 'stationary_phase' (the correct evaluators at production NA).
+    F_full = apply_real_lens_maslov(E, normalize_output='none', **kw)
+
+tests/unit/test_v5_21_gbd_maslov_perf.py::test_maslov_focus_roi_equals_full_grid_crop
+  C:\tmp\lum_vmb3\tests\unit\test_v5_21_gbd_maslov_perf.py:65: UserWarning: apply_real_lens_maslov: 1 prescription aperture(s) exceed the simulation grid (N=96, dx=5.000 um, semi=0.240 mm). Largest is system aperture_diameter with semi_diameter=3.000 mm (+2.760 mm beyond the grid); the field will be truncated at the grid edge during propagation, silently dropping energy the real lens would have transmitted. Consider increasing N or dx so N*dx/2 >= max(semi_diameter). Affected surfaces: system aperture_diameter=3.00mm.
+    F_roi = apply_real_lens_maslov(E, roi=(0.0, 0.0, 10 * dx), **kw)
+
+tests/unit/test_v5_21_gbd_maslov_perf.py::test_maslov_focus_roi_equals_full_grid_crop
+  C:\tmp\lum_vmb3\tests\unit\test_v5_21_gbd_maslov_perf.py:65: UserWarning: apply_real_lens_maslov: roi= cannot honour normalize_output='power' -- that scale is a global reduction over the FULL output grid, and the ROI path evaluates only the window.  Returning the RAW field (the normalize_output='none' scale), which for a typical chart is many orders of magnitude below the power-normalised full-grid field.  Pass normalize_output='none' (explicit -- silences this warning), or an explicit scalar factor, or drop roi= for a normalised full grid.
+    F_roi = apply_real_lens_maslov(E, roi=(0.0, 0.0, 10 * dx), **kw)
+
+tests/unit/test_v5_21_gbd_maslov_perf.py::test_maslov_focus_roi_equals_full_grid_crop
+  C:\tmp\lum_vmb3\tests\unit\test_v5_21_gbd_maslov_perf.py:65: RuntimeWarning: apply_real_lens_maslov: integration_method='quadrature' with n_v2=48 is under-resolved for this chart (~1334 v2 oscillations; want n_v2 >~ 5334).  Uniform quadrature will speckle regardless of output resolution or memory.  Increase n_v2, or use integration_method='local_quadrature' / 'stationary_phase' (the correct evaluators at production NA).
+    F_roi = apply_real_lens_maslov(E, roi=(0.0, 0.0, 10 * dx), **kw)
+
+tests/unit/test_v5_21_gbd_maslov_perf.py::test_maslov_focus_roi_equals_full_grid_crop
+  C:\tmp\lum_vmb3\tests\unit\test_v5_21_gbd_maslov_perf.py:70: UserWarning: apply_real_lens_maslov: 1 prescription aperture(s) exceed the simulation grid (N=96, dx=5.000 um, semi=0.240 mm). Largest is system aperture_diameter with semi_diameter=3.000 mm (+2.760 mm beyond the grid); the field will be truncated at the grid edge during propagation, silently dropping energy the real lens would have transmitted. Consider increasing N or dx so N*dx/2 >= max(semi_diameter). Affected surfaces: system aperture_diameter=3.00mm.
+    F_off = apply_real_lens_maslov(E, roi=(off * dx, 0.0, 6 * dx), **kw)
+
+tests/unit/test_v5_21_gbd_maslov_perf.py::test_maslov_focus_roi_equals_full_grid_crop
+  C:\tmp\lum_vmb3\tests\unit\test_v5_21_gbd_maslov_perf.py:70: UserWarning: apply_real_lens_maslov: roi= cannot honour normalize_output='power' -- that scale is a global reduction over the FULL output grid, and the ROI path evaluates only the window.  Returning the RAW field (the normalize_output='none' scale), which for a typical chart is many orders of magnitude below the power-normalised full-grid field.  Pass normalize_output='none' (explicit -- silences this warning), or an explicit scalar factor, or drop roi= for a normalised full grid.
+    F_off = apply_real_lens_maslov(E, roi=(off * dx, 0.0, 6 * dx), **kw)
+
+tests/unit/test_v5_21_gbd_maslov_perf.py::test_maslov_focus_roi_equals_full_grid_crop
+  C:\tmp\lum_vmb3\tests\unit\test_v5_21_gbd_maslov_perf.py:70: RuntimeWarning: apply_real_lens_maslov: integration_method='quadrature' with n_v2=48 is under-resolved for this chart (~1334 v2 oscillations; want n_v2 >~ 5334).  Uniform quadrature will speckle regardless of output resolution or memory.  Increase n_v2, or use integration_method='local_quadrature' / 'stationary_phase' (the correct evaluators at production NA).
+    F_off = apply_real_lens_maslov(E, roi=(off * dx, 0.0, 6 * dx), **kw)
+
+tests/unit/test_v5_21_gbd_maslov_perf.py::test_fft_reconstruct_matches_dense_uniform_Q
+  C:\tmp\lum_vmb3\tests\unit\test_v5_21_gbd_maslov_perf.py:107: RuntimeWarning: reconstruct_field_from_beamlets is using the dense O(beamlets * Ny * Nx) path (window=None) with 16384 beamlets on a 128x128 grid. Pass window=5.0 for the bounded-support scatter-add (accuracy-preserving, tail ~1e-11) to avoid the N^2 speed / memory footgun.
+    dense = reconstruct_field_from_beamlets(b, Ny=N, Nx=N, dx=dx,
+
+tests/unit/test_v5_21_gbd_maslov_perf.py::test_fft_reconstruct_anamorphic_diagonal_Q
+  C:\tmp\lum_vmb3\tests\unit\test_v5_21_gbd_maslov_perf.py:144: RuntimeWarning: reconstruct_field_from_beamlets is using the dense O(beamlets * Ny * Nx) path (window=None) with 16384 beamlets on a 128x128 grid. Pass window=5.0 for the bounded-support scatter-add (accuracy-preserving, tail ~1e-11) to avoid the N^2 speed / memory footgun.
+    dense = reconstruct_field_from_beamlets(b, Ny=N, Nx=N, dx=dx, dy=dy,
+
+tests/unit/test_v5_21_lens_accuracy_extensions.py::test_maslov_auto_rejects_bad_poly_order
+  C:\tmp\lum_vmb3\tests\unit\test_v5_21_lens_accuracy_extensions.py:113: UserWarning: apply_real_lens_maslov: 1 prescription aperture(s) exceed the simulation grid (N=32, dx=5.000 um, semi=0.080 mm). Largest is system aperture_diameter with semi_diameter=3.000 mm (+2.920 mm beyond the grid); the field will be truncated at the grid edge during propagation, silently dropping energy the real lens would have transmitted. Consider increasing N or dx so N*dx/2 >= max(semi_diameter). Affected surfaces: system aperture_diameter=3.00mm.
+    apply_real_lens_maslov(E, prescription=_singlet(2e-3), wavelength=LAM,
+
+tests/unit/test_v5_21_maslov_jax_caustic.py::test_maslov_integration_method_auto_matches_and_is_fast
+  C:\tmp\lum_vmb3\tests\unit\test_v5_21_maslov_jax_caustic.py:131: UserWarning: apply_real_lens_maslov: 1 prescription aperture(s) exceed the simulation grid (N=64, dx=4.000 um, semi=0.128 mm). Largest is system aperture_diameter with semi_diameter=1.500 mm (+1.372 mm beyond the grid); the field will be truncated at the grid edge during propagation, silently dropping energy the real lens would have transmitted. Consider increasing N or dx so N*dx/2 >= max(semi_diameter). Affected surfaces: system aperture_diameter=1.50mm.
+    Fa = apply_real_lens_maslov(E, prescription=_singlet(back, ap),
+
+tests/unit/test_v5_21_maslov_jax_caustic.py::test_maslov_integration_method_auto_matches_and_is_fast
+  C:\tmp\lum_vmb3\tests\unit\test_v5_21_maslov_jax_caustic.py:134: UserWarning: apply_real_lens_maslov: 1 prescription aperture(s) exceed the simulation grid (N=64, dx=4.000 um, semi=0.128 mm). Largest is system aperture_diameter with semi_diameter=1.500 mm (+1.372 mm beyond the grid); the field will be truncated at the grid edge during propagation, silently dropping energy the real lens would have transmitted. Consider increasing N or dx so N*dx/2 >= max(semi_diameter). Affected surfaces: system aperture_diameter=1.50mm.
+    Fq = apply_real_lens_maslov(E, prescription=_singlet(back, ap),
+
+tests/unit/test_v5_21_maslov_jax_caustic.py::test_maslov_integration_method_auto_matches_and_is_fast
+  C:\tmp\lum_vmb3\tests\unit\test_v5_21_maslov_jax_caustic.py:137: UserWarning: apply_real_lens_maslov: 1 prescription aperture(s) exceed the simulation grid (N=64, dx=4.000 um, semi=0.128 mm). Largest is system aperture_diameter with semi_diameter=1.500 mm (+1.372 mm beyond the grid); the field will be truncated at the grid edge during propagation, silently dropping energy the real lens would have transmitted. Consider increasing N or dx so N*dx/2 >= max(semi_diameter). Affected surfaces: system aperture_diameter=1.50mm.
+    Fl = apply_real_lens_maslov(E, prescription=_singlet(back, ap),
+
+tests/unit/test_v5_21_maslov_jax_caustic.py::test_maslov_integration_method_auto_matches_and_is_fast
+  C:\tmp\lum_vmb3\tests\unit\test_v5_21_maslov_jax_caustic.py:140: UserWarning: apply_real_lens_maslov: 1 prescription aperture(s) exceed the simulation grid (N=64, dx=4.000 um, semi=0.128 mm). Largest is system aperture_diameter with semi_diameter=1.500 mm (+1.372 mm beyond the grid); the field will be truncated at the grid edge during propagation, silently dropping energy the real lens would have transmitted. Consider increasing N or dx so N*dx/2 >= max(semi_diameter). Affected surfaces: system aperture_diameter=1.50mm.
+    Fs = apply_real_lens_maslov(E, prescription=_singlet(back, ap),
+
+tests/unit/test_v5_21_maslov_jax_caustic.py::test_maslov_integration_method_auto_matches_and_is_fast
+  C:\tmp\lum_vmb3\tests\unit\test_v5_21_maslov_jax_caustic.py:131: UserWarning: apply_real_lens_maslov: 1 prescription aperture(s) exceed the simulation grid (N=64, dx=4.000 um, semi=0.128 mm). Largest is system aperture_diameter with semi_diameter=5.000 mm (+4.872 mm beyond the grid); the field will be truncated at the grid edge during propagation, silently dropping energy the real lens would have transmitted. Consider increasing N or dx so N*dx/2 >= max(semi_diameter). Affected surfaces: system aperture_diameter=5.00mm.
+    Fa = apply_real_lens_maslov(E, prescription=_singlet(back, ap),
+
+tests/unit/test_v5_21_maslov_jax_caustic.py::test_maslov_integration_method_auto_matches_and_is_fast
+  C:\tmp\lum_vmb3\tests\unit\test_v5_21_maslov_jax_caustic.py:131: RuntimeWarning: apply_real_lens_maslov: integration_method='auto' resolved to 'stationary_phase' because uniform quadrature would need n_v2 ~ 1353 samples (cap 256).  The leading-order saddle evaluation is only accurate where the integrand really is oscillatory -- near the lens EXIT plane of a focusing system it is not (the v2-Hessian and the Jacobian both collapse there) and it can be O(1) wrong.  For an observation plane at or near the exit vertex pass integration_method='quadrature' with an explicit n_v2, or use apply_real_lens_traced / apply_real_lens_fga; for a plane near focus pass output_plane_distance= and keep this evaluator.
+    Fa = apply_real_lens_maslov(E, prescription=_singlet(back, ap),
+
+tests/unit/test_v5_21_maslov_jax_caustic.py::test_maslov_integration_method_auto_matches_and_is_fast
+  C:\tmp\lum_vmb3\tests\unit\test_v5_21_maslov_jax_caustic.py:134: UserWarning: apply_real_lens_maslov: 1 prescription aperture(s) exceed the simulation grid (N=64, dx=4.000 um, semi=0.128 mm). Largest is system aperture_diameter with semi_diameter=5.000 mm (+4.872 mm beyond the grid); the field will be truncated at the grid edge during propagation, silently dropping energy the real lens would have transmitted. Consider increasing N or dx so N*dx/2 >= max(semi_diameter). Affected surfaces: system aperture_diameter=5.00mm.
+    Fq = apply_real_lens_maslov(E, prescription=_singlet(back, ap),
+
+tests/unit/test_v5_21_maslov_jax_caustic.py::test_maslov_integration_method_auto_matches_and_is_fast
+  C:\tmp\lum_vmb3\tests\unit\test_v5_21_maslov_jax_caustic.py:134: RuntimeWarning: apply_real_lens_maslov: integration_method='quadrature' with n_v2=256 is under-resolved for this chart (~338 v2 oscillations; want n_v2 >~ 1351).  Uniform quadrature will speckle regardless of output resolution or memory.  Increase n_v2, or use integration_method='local_quadrature' / 'stationary_phase' (the correct evaluators at production NA).
+    Fq = apply_real_lens_maslov(E, prescription=_singlet(back, ap),
+
+tests/unit/test_v5_21_maslov_jax_caustic.py::test_maslov_integration_method_auto_matches_and_is_fast
+  C:\tmp\lum_vmb3\tests\unit\test_v5_21_maslov_jax_caustic.py:137: UserWarning: apply_real_lens_maslov: 1 prescription aperture(s) exceed the simulation grid (N=64, dx=4.000 um, semi=0.128 mm). Largest is system aperture_diameter with semi_diameter=5.000 mm (+4.872 mm beyond the grid); the field will be truncated at the grid edge during propagation, silently dropping energy the real lens would have transmitted. Consider increasing N or dx so N*dx/2 >= max(semi_diameter). Affected surfaces: system aperture_diameter=5.00mm.
+    Fl = apply_real_lens_maslov(E, prescription=_singlet(back, ap),
+
+tests/unit/test_v5_21_maslov_jax_caustic.py::test_maslov_integration_method_auto_matches_and_is_fast
+  C:\tmp\lum_vmb3\tests\unit\test_v5_21_maslov_jax_caustic.py:140: UserWarning: apply_real_lens_maslov: 1 prescription aperture(s) exceed the simulation grid (N=64, dx=4.000 um, semi=0.128 mm). Largest is system aperture_diameter with semi_diameter=5.000 mm (+4.872 mm beyond the grid); the field will be truncated at the grid edge during propagation, silently dropping energy the real lens would have transmitted. Consider increasing N or dx so N*dx/2 >= max(semi_diameter). Affected surfaces: system aperture_diameter=5.00mm.
+    Fs = apply_real_lens_maslov(E, prescription=_singlet(back, ap),
+
+tests/unit/test_v5_21_maslov_jax_caustic.py::test_maslov_fold_split_matches_manual_chain
+  C:\tmp\lum_vmb3\tests\unit\test_v5_21_maslov_jax_caustic.py:189: UserWarning: apply_real_lens_maslov: 1 prescription aperture(s) exceed the simulation grid (N=80, dx=5.000 um, semi=0.200 mm). Largest is system aperture_diameter with semi_diameter=4.000 mm (+3.800 mm beyond the grid); the field will be truncated at the grid edge during propagation, silently dropping energy the real lens would have transmitted. Consider increasing N or dx so N*dx/2 >= max(semi_diameter). Affected surfaces: system aperture_diameter=4.00mm.
+    Ff = apply_real_lens_maslov(E, prescription=folded, fold_split=True, **kw)
+
+tests/unit/test_v5_21_maslov_jax_caustic.py::test_maslov_fold_split_matches_manual_chain
+  C:\tmp\lum_vmb3\tests\unit\test_v5_21_maslov_jax_caustic.py:195: UserWarning: apply_real_lens_maslov: 1 prescription aperture(s) exceed the simulation grid (N=80, dx=5.000 um, semi=0.200 mm). Largest is system aperture_diameter with semi_diameter=4.000 mm (+3.800 mm beyond the grid); the field will be truncated at the grid edge during propagation, silently dropping energy the real lens would have transmitted. Consider increasing N or dx so N*dx/2 >= max(semi_diameter). Affected surfaces: system aperture_diameter=4.00mm.
+    Em = apply_real_lens_maslov(Em, prescription=lg['prescription'], **kw)
+
+tests/unit/test_v5_21_maslov_jax_caustic.py::test_maslov_fold_split_matches_manual_chain
+  C:\tmp\lum_vmb3\tests\unit\test_v5_21_maslov_jax_caustic.py:204: UserWarning: apply_real_lens_maslov: 1 prescription aperture(s) exceed the simulation grid (N=80, dx=5.000 um, semi=0.200 mm). Largest is system aperture_diameter with semi_diameter=4.000 mm (+3.800 mm beyond the grid); the field will be truncated at the grid edge during propagation, silently dropping energy the real lens would have transmitted. Consider increasing N or dx so N*dx/2 >= max(semi_diameter). Affected surfaces: system aperture_diameter=4.00mm.
+    Fc = apply_real_lens_maslov(E, prescription=_folded_rx(-100e-3),
+
+tests/unit/test_v5_21_maslov_jax_caustic.py::test_maslov_fold_split_noop_on_unfolded
+  C:\tmp\lum_vmb3\tests\unit\test_v5_21_maslov_jax_caustic.py:223: UserWarning: apply_real_lens_maslov: 1 prescription aperture(s) exceed the simulation grid (N=64, dx=5.000 um, semi=0.160 mm). Largest is system aperture_diameter with semi_diameter=4.000 mm (+3.840 mm beyond the grid); the field will be truncated at the grid edge during propagation, silently dropping energy the real lens would have transmitted. Consider increasing N or dx so N*dx/2 >= max(semi_diameter). Affected surfaces: system aperture_diameter=4.00mm.
+    F0 = apply_real_lens_maslov(E, prescription=presc, wavelength=0.633e-6,
+
+tests/unit/test_v5_21_maslov_jax_caustic.py::test_maslov_fold_split_noop_on_unfolded
+  C:\tmp\lum_vmb3\lumenairy\elements\lenses_maslov.py:2205: UserWarning: split_prescription_at_mirrors: prescription None has no elements / all_thicknesses key, so it is returned as ONE refractive leg without inspecting it for mirrors.  If the design is folded, run it through normalize_prescription (or reload it with a loader that emits the full element list) first -- otherwise the fold is silently flattened.
+    _legs = split_prescription_at_mirrors(prescription)
+
+tests/unit/test_v5_21_maslov_jax_caustic.py::test_maslov_fold_split_noop_on_unfolded
+  C:\tmp\lum_vmb3\tests\unit\test_v5_21_maslov_jax_caustic.py:225: UserWarning: apply_real_lens_maslov: 1 prescription aperture(s) exceed the simulation grid (N=64, dx=5.000 um, semi=0.160 mm). Largest is system aperture_diameter with semi_diameter=4.000 mm (+3.840 mm beyond the grid); the field will be truncated at the grid edge during propagation, silently dropping energy the real lens would have transmitted. Consider increasing N or dx so N*dx/2 >= max(semi_diameter). Affected surfaces: system aperture_diameter=4.00mm.
+    F1 = apply_real_lens_maslov(E, prescription=presc, wavelength=0.633e-6,
+
+tests/unit/test_v5_21_maslov_jax_caustic.py::test_maslov_vector_polarization
+  C:\tmp\lum_vmb3\tests\unit\test_v5_21_maslov_jax_caustic.py:250: UserWarning: apply_real_lens_maslov: 1 prescription aperture(s) exceed the simulation grid (N=72, dx=6.000 um, semi=0.216 mm). Largest is system aperture_diameter with semi_diameter=5.000 mm (+4.784 mm beyond the grid); the field will be truncated at the grid edge during propagation, silently dropping energy the real lens would have transmitted. Consider increasing N or dx so N*dx/2 >= max(semi_diameter). Affected surfaces: system aperture_diameter=5.00mm.
+    out = apply_real_lens_maslov_vector(
+
+tests/unit/test_v5_21_maslov_jax_caustic.py::test_maslov_vector_polarization
+  C:\tmp\lum_vmb3\tests\unit\test_v5_21_maslov_jax_caustic.py:250: RuntimeWarning: apply_real_lens_maslov: integration_method='auto' resolved to 'stationary_phase' because uniform quadrature would need n_v2 ~ 1736 samples (cap 256).  The leading-order saddle evaluation is only accurate where the integrand really is oscillatory -- near the lens EXIT plane of a focusing system it is not (the v2-Hessian and the Jacobian both collapse there) and it can be O(1) wrong.  For an observation plane at or near the exit vertex pass integration_method='quadrature' with an explicit n_v2, or use apply_real_lens_traced / apply_real_lens_fga; for a plane near focus pass output_plane_distance= and keep this evaluator.
+    out = apply_real_lens_maslov_vector(
+
+tests/unit/test_v5_21_maslov_jax_caustic.py::test_maslov_vector_polarization
+  C:\tmp\lum_vmb3\tests\unit\test_v5_21_maslov_jax_caustic.py:250: RuntimeWarning: apply_real_lens_maslov: integration_method='auto' resolved to 'stationary_phase' because uniform quadrature would need n_v2 ~ 2248 samples (cap 256).  The leading-order saddle evaluation is only accurate where the integrand really is oscillatory -- near the lens EXIT plane of a focusing system it is not (the v2-Hessian and the Jacobian both collapse there) and it can be O(1) wrong.  For an observation plane at or near the exit vertex pass integration_method='quadrature' with an explicit n_v2, or use apply_real_lens_traced / apply_real_lens_fga; for a plane near focus pass output_plane_distance= and keep this evaluator.
+    out = apply_real_lens_maslov_vector(
+
+tests/unit/test_v5_21_maslov_jax_caustic.py::test_maslov_vector_polarization
+  C:\tmp\lum_vmb3\tests\unit\test_v5_21_maslov_jax_caustic.py:257: UserWarning: apply_real_lens_maslov: 1 prescription aperture(s) exceed the simulation grid (N=72, dx=6.000 um, semi=0.216 mm). Largest is system aperture_diameter with semi_diameter=5.000 mm (+4.784 mm beyond the grid); the field will be truncated at the grid edge during propagation, silently dropping energy the real lens would have transmitted. Consider increasing N or dx so N*dx/2 >= max(semi_diameter). Affected surfaces: system aperture_diameter=5.00mm.
+    scal = apply_real_lens_maslov(E0, prescription=singlet, wavelength=lam,
+
+tests/unit/test_v5_21_maslov_jax_caustic.py::test_maslov_vector_polarization
+  C:\tmp\lum_vmb3\tests\unit\test_v5_21_maslov_jax_caustic.py:257: RuntimeWarning: apply_real_lens_maslov: integration_method='auto' resolved to 'stationary_phase' because uniform quadrature would need n_v2 ~ 1736 samples (cap 256).  The leading-order saddle evaluation is only accurate where the integrand really is oscillatory -- near the lens EXIT plane of a focusing system it is not (the v2-Hessian and the Jacobian both collapse there) and it can be O(1) wrong.  For an observation plane at or near the exit vertex pass integration_method='quadrature' with an explicit n_v2, or use apply_real_lens_traced / apply_real_lens_fga; for a plane near focus pass output_plane_distance= and keep this evaluator.
+    scal = apply_real_lens_maslov(E0, prescription=singlet, wavelength=lam,
+
+tests/unit/test_v5_21_pmm2d_staggered_oblique.py::test_staggered_per_order_orientation_vs_1d[0.0]
+  C:\tmp\lum_vmb3\tests\unit\test_v5_21_pmm2d_staggered_oblique.py:83: WoodNudgeWarning: pmm_efficiency_2d_staggered: a diffracted order sits EXACTLY at cut-off (Wood / Rayleigh anomaly) at the requested wavelength 6e-07 m, where this solver's half-space mode basis is degenerate (kz = 0 gives two coincident modes and a singular interface match).  The solve is being run at 6.0000006e-07 m instead (relative shift +1.000e-07) -- a DIFFERENT problem.  The answer is exact for that wavelength; measured on the Lambda = lambda Moharam mount it differs from the exact-lambda limit by 4.05e-04 relative in TM R0.  Move the wavelength off the anomaly yourself, or read the result's wl_eff.
+    o1, R1, T1 = pmm_efficiency_2d_staggered(
+
+tests/unit/test_v5_21_pmm_threaded_sweep.py::test_2d_threaded_sweep_byte_identical
+  C:\tmp\lum_vmb3\tests\unit\test_v5_21_pmm_threaded_sweep.py:70: DeprecationWarning: PMM2DStack is a TRANSITIONAL alias for PMM2DStackHybrid and is scheduled to be repointed to the no-floor pure stack (PMM2DStackPure) in a future release -- a silent results change (Fourier floor -> no floor, different convergence knobs).  Import PMM2DStackHybrid to keep the current behaviour, or PMM2DStackPure for the pure method.
+    st = PMM2DStack(0.7e-6, n_substrate=1.5, n_superstrate=1.0, degree=7,
+
+tests/unit/test_v5_21_pmm_threaded_sweep.py::test_2d_threaded_sweep_byte_identical
+  C:\tmp\lum_vmb3\lumenairy\elements\pmm\stack2d.py:2302: UserWarning: PMMStack.solve: energy not conserved (max R+T = 1.03 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is unreliable; reduce n_slices or raise degree.
+    o, R1, T1, j1 = sub.solve()
+
+tests/unit/test_v5_21_pmm_threaded_sweep.py::test_2d_threaded_sweep_byte_identical
+  C:\tmp\lum_vmb3\lumenairy\elements\pmm\stack2d.py:2302: UserWarning: PMMStack.solve: energy not conserved (max R+T = 1.02 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is unreliable; reduce n_slices or raise degree.
+    o, R1, T1, j1 = sub.solve()
+
+tests/unit/test_v5_21_pmm_threaded_sweep.py::test_2d_threaded_sweep_byte_identical
+  C:\tmp\lum_vmb3\lumenairy\elements\pmm\stack2d.py:2302: UserWarning: PMMStack.solve: energy not conserved (max R+T = 1.01 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is unreliable; reduce n_slices or raise degree.
+    o, R1, T1, j1 = sub.solve()
+
+tests/unit/test_v5_21_pmm_threaded_sweep.py::test_2d_threaded_sweep_byte_identical
+  C:\tmp\lum_vmb3\tests\unit\test_v5_21_pmm_threaded_sweep.py:90: UserWarning: PMMStack.solve: energy not conserved (max R+T = 1.03 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is unreliable; reduce n_slices or raise degree.
+    out = st.set_source(float(w), theta=0.1, phi=0.2).solve()
+
+tests/unit/test_v5_21_pmm_threaded_sweep.py::test_2d_threaded_sweep_byte_identical
+  C:\tmp\lum_vmb3\tests\unit\test_v5_21_pmm_threaded_sweep.py:90: UserWarning: PMMStack.solve: energy not conserved (max R+T = 1.02 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is unreliable; reduce n_slices or raise degree.
+    out = st.set_source(float(w), theta=0.1, phi=0.2).solve()
+
+tests/unit/test_v5_21_pmm_threaded_sweep.py::test_2d_threaded_sweep_byte_identical
+  C:\tmp\lum_vmb3\tests\unit\test_v5_21_pmm_threaded_sweep.py:90: UserWarning: PMMStack.solve: energy not conserved (max R+T = 1.01 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is unreliable; reduce n_slices or raise degree.
+    out = st.set_source(float(w), theta=0.1, phi=0.2).solve()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+413 passed, 2 deselected, 51 warnings in 1513.44s (0:25:13)

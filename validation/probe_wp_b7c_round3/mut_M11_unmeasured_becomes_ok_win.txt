@@ -1,0 +1,14 @@
+..F............................F..........                               [100%]
+================================== FAILURES ===================================
+E   AssertionError: assert 'ok' == 'not_measured'
+      
+      - not_measured
+      + ok
+C:\tmp\lum_mb3_mut\tests\unit\test_audit2609_b7c2_pixel_halving_arbiter.py:263: AssertionError: assert 'ok' == 'not_measured'
+E   AssertionError: past the entry cap the decision reads 'ok'; a consumer cannot tell "converged" from "not asked"
+    assert 'ok' == 'not_measured'
+      
+      - not_measured
+      + ok
+C:\tmp\lum_mb3_mut\tests\unit\test_verify_b7c_round2.py:353: AssertionError: past the entry cap the decision reads 'ok'; a consumer cannot tell "converged" from "not asked"
+2 failed, 40 passed in 70.55s (0:01:10)

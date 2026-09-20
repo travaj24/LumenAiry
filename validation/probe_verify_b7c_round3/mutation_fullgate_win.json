@@ -1,0 +1,104 @@
+[
+ {
+  "returncode": 1,
+  "tail": [
+   "1 failed, 46 passed in 39.87s"
+  ],
+  "failed_ids": [],
+  "skipped": [],
+  "id": "N1_scope_guard_removed",
+  "doc": "N1 -- the unknown-scope guard is deleted, so the enum accepts",
+  "files": [
+   "tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py",
+   "tests/unit/test_verify_b7c_multibranch.py",
+   "tests/unit/test_audit2609_b7c_multibranch_envelope.py",
+   "tests/unit/test_verify_b7c_round2.py",
+   "tests/unit/test_wp_b7c_round3.py",
+   "tests/unit/test_verify_b7c_round3.py"
+  ],
+  "seconds": 42.9,
+  "caught": true
+ },
+ {
+  "returncode": 1,
+  "tail": [
+   "6 failed, 40 passed, 1 skipped in 40.17s"
+  ],
+  "failed_ids": [],
+  "skipped": [
+   "SKIPPED [1] tests\\unit\\test_verify_b7c_round2.py:267: this build does not straddle the bar at this plane (branch sum 1.0636, completion 1.0724); the unconditional arm above ran instead"
+  ],
+  "id": "N2_half_pitch_off_by_one_pixel",
+  "doc": "N2 -- ``half_pitch_centres`` is off by ONE FINE PIXEL.",
+  "files": [
+   "tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py",
+   "tests/unit/test_verify_b7c_multibranch.py",
+   "tests/unit/test_audit2609_b7c_multibranch_envelope.py",
+   "tests/unit/test_verify_b7c_round2.py",
+   "tests/unit/test_wp_b7c_round3.py",
+   "tests/unit/test_verify_b7c_round3.py"
+  ],
+  "seconds": 44.7,
+  "caught": true
+ },
+ {
+  "returncode": 1,
+  "tail": [
+   "1 failed, 46 passed in 56.57s"
+  ],
+  "failed_ids": [],
+  "skipped": [],
+  "id": "N3_nesting_breaks_on_odd_N",
+  "doc": "N3 -- the nesting breaks on ODD ``N`` only.",
+  "files": [
+   "tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py",
+   "tests/unit/test_verify_b7c_multibranch.py",
+   "tests/unit/test_audit2609_b7c_multibranch_envelope.py",
+   "tests/unit/test_verify_b7c_round2.py",
+   "tests/unit/test_wp_b7c_round3.py",
+   "tests/unit/test_verify_b7c_round3.py"
+  ],
+  "seconds": 60.3,
+  "caught": true
+ },
+ {
+  "returncode": 1,
+  "tail": [
+   "1 failed, 46 passed in 51.83s"
+  ],
+  "failed_ids": [],
+  "skipped": [],
+  "id": "N4_derivation_population_count_edited",
+  "doc": "N4 -- the derivation comment's POPULATION COUNT is edited.",
+  "files": [
+   "tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py",
+   "tests/unit/test_verify_b7c_multibranch.py",
+   "tests/unit/test_audit2609_b7c_multibranch_envelope.py",
+   "tests/unit/test_verify_b7c_round2.py",
+   "tests/unit/test_wp_b7c_round3.py",
+   "tests/unit/test_verify_b7c_round3.py"
+  ],
+  "seconds": 56.5,
+  "caught": true
+ },
+ {
+  "returncode": 1,
+  "tail": [
+   "1 failed, 46 passed in 55.57s"
+  ],
+  "failed_ids": [],
+  "skipped": [],
+  "id": "N5_scope_note_contradicts_the_constant",
+  "doc": "N5 -- the scope NOTE contradicts the constant it summarises.",
+  "files": [
+   "tests/unit/test_audit2609_b7c2_pixel_halving_arbiter.py",
+   "tests/unit/test_verify_b7c_multibranch.py",
+   "tests/unit/test_audit2609_b7c_multibranch_envelope.py",
+   "tests/unit/test_verify_b7c_round2.py",
+   "tests/unit/test_wp_b7c_round3.py",
+   "tests/unit/test_verify_b7c_round3.py"
+  ],
+  "seconds": 59.2,
+  "caught": true
+ }
+]

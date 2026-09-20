@@ -1,0 +1,62 @@
+{
+ "AS_alt": 22,
+ "AS": 22,
+ "A": 22,
+ "C": 11,
+ "F_alt": 22,
+ "G": 33,
+ "HN": 33,
+ "K": 22,
+ "MC": 22,
+ "M": 32,
+ "P": 22,
+ "Q": 22,
+ "S": 22,
+ "V_alt": 22,
+ "V": 22,
+ "W_alt": 22,
+ "W": 22,
+ "X_alt": 33,
+ "X": 33,
+ "Y": 22,
+ "Z": 33
+}
+total 516
+start A 22
+start AS 22
+start AS_alt 22
+start C 11
+start F_alt 22
+done C 0 183.5s
+start G 33
+done A 0 331.0s
+start HN 33
+done F_alt 0 346.0s
+start K 22
+done K 0 469.8s
+start M 32
+done AS 0 1017.3s
+start MC 22
+done M 0 348.9s
+start P 22
+done AS_alt 0 1510.9s
+start Q 22
+done MC 0 599.0s
+start S 22
+done G 0 1610.1s
+start V 22
+done P 0 650.0s
+start V_alt 22
+done V_alt 0 267.7s
+start W 22
+done V 0 301.0s
+start W_alt 22
+done Q 0 586.7s
+start X 33
+done S 0 881.3s
+start X_alt 33
+done W 0 418.1s
+start Y 22
+done W_alt 0 478.8s
+start Z 33
+done Y 0 535.4s

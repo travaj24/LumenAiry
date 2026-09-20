@@ -1,0 +1,45 @@
+F.....FFFs..FF.FF.F.F.....FFFFF....FF.F..F                               [100%]
+================================== FAILURES ===================================
+E   IndexError: boolean index did not match indexed array along axis 0; size of axis is 512 but size of corresponding boolean axis is 1024
+C:\tmp\lum_mb3_mut\lumenairy\elements\_lens_traced_uniform.py:1760: IndexError: boolean index did not match indexed array along axis 0; size of axis is 512 but size of corresponding boolean axis is 1024
+E   IndexError: boolean index did not match indexed array along axis 0; size of axis is 512 but size of corresponding boolean axis is 1024
+C:\tmp\lum_mb3_mut\lumenairy\elements\_lens_traced_uniform.py:1760: IndexError: boolean index did not match indexed array along axis 0; size of axis is 512 but size of corresponding boolean axis is 1024
+E   IndexError: boolean index did not match indexed array along axis 0; size of axis is 640 but size of corresponding boolean axis is 1280
+C:\tmp\lum_mb3_mut\lumenairy\elements\_lens_traced_uniform.py:1760: IndexError: boolean index did not match indexed array along axis 0; size of axis is 640 but size of corresponding boolean axis is 1280
+E   IndexError: boolean index did not match indexed array along axis 0; size of axis is 1280 but size of corresponding boolean axis is 2560
+C:\tmp\lum_mb3_mut\lumenairy\elements\_lens_traced_uniform.py:1760: IndexError: boolean index did not match indexed array along axis 0; size of axis is 1280 but size of corresponding boolean axis is 2560
+E   AssertionError: z=5412 um returned a field gaining 1.352x the launched power with both readings inside their bands
+    assert 1.3518381766765355 <= 1.25
+C:\tmp\lum_mb3_mut\tests\unit\test_verify_b7c_multibranch.py:219: AssertionError: z=5412 um returned a field gaining 1.352x the launched power with both readings inside their bands
+E   IndexError: boolean index did not match indexed array along axis 0; size of axis is 1280 but size of corresponding boolean axis is 2560
+C:\tmp\lum_mb3_mut\lumenairy\elements\_lens_traced_uniform.py:1760: IndexError: boolean index did not match indexed array along axis 0; size of axis is 1280 but size of corresponding boolean axis is 2560
+E   IndexError: boolean index did not match indexed array along axis 0; size of axis is 512 but size of corresponding boolean axis is 1024
+C:\tmp\lum_mb3_mut\lumenairy\elements\_lens_traced_uniform.py:1760: IndexError: boolean index did not match indexed array along axis 0; size of axis is 512 but size of corresponding boolean axis is 1024
+E   IndexError: boolean index did not match indexed array along axis 0; size of axis is 512 but size of corresponding boolean axis is 1024
+C:\tmp\lum_mb3_mut\lumenairy\elements\_lens_traced_uniform.py:1760: IndexError: boolean index did not match indexed array along axis 0; size of axis is 512 but size of corresponding boolean axis is 1024
+E   IndexError: boolean index did not match indexed array along axis 0; size of axis is 512 but size of corresponding boolean axis is 1024
+C:\tmp\lum_mb3_mut\lumenairy\elements\_lens_traced_uniform.py:1760: IndexError: boolean index did not match indexed array along axis 0; size of axis is 512 but size of corresponding boolean axis is 1024
+E   IndexError: boolean index did not match indexed array along axis 0; size of axis is 512 but size of corresponding boolean axis is 1024
+C:\tmp\lum_mb3_mut\lumenairy\elements\_lens_traced_uniform.py:1760: IndexError: boolean index did not match indexed array along axis 0; size of axis is 512 but size of corresponding boolean axis is 1024
+E   IndexError: boolean index did not match indexed array along axis 0; size of axis is 512 but size of corresponding boolean axis is 1024
+C:\tmp\lum_mb3_mut\lumenairy\elements\_lens_traced_uniform.py:1760: IndexError: boolean index did not match indexed array along axis 0; size of axis is 512 but size of corresponding boolean axis is 1024
+E   IndexError: boolean index did not match indexed array along axis 0; size of axis is 512 but size of corresponding boolean axis is 1024
+C:\tmp\lum_mb3_mut\lumenairy\elements\_lens_traced_uniform.py:1760: IndexError: boolean index did not match indexed array along axis 0; size of axis is 512 but size of corresponding boolean axis is 1024
+E   IndexError: boolean index did not match indexed array along axis 0; size of axis is 640 but size of corresponding boolean axis is 1280
+C:\tmp\lum_mb3_mut\lumenairy\elements\_lens_traced_uniform.py:1760: IndexError: boolean index did not match indexed array along axis 0; size of axis is 640 but size of corresponding boolean axis is 1280
+E   IndexError: boolean index did not match indexed array along axis 0; size of axis is 512 but size of corresponding boolean axis is 1024
+C:\tmp\lum_mb3_mut\lumenairy\elements\_lens_traced_uniform.py:1760: IndexError: boolean index did not match indexed array along axis 0; size of axis is 512 but size of corresponding boolean axis is 1024
+E   IndexError: boolean index did not match indexed array along axis 0; size of axis is 640 but size of corresponding boolean axis is 1280
+C:\tmp\lum_mb3_mut\lumenairy\elements\_lens_traced_uniform.py:1760: IndexError: boolean index did not match indexed array along axis 0; size of axis is 640 but size of corresponding boolean axis is 1280
+E   IndexError: boolean index did not match indexed array along axis 0; size of axis is 512 but size of corresponding boolean axis is 1024
+C:\tmp\lum_mb3_mut\lumenairy\elements\_lens_traced_uniform.py:1760: IndexError: boolean index did not match indexed array along axis 0; size of axis is 512 but size of corresponding boolean axis is 1024
+E   IndexError: boolean index did not match indexed array along axis 0; size of axis is 512 but size of corresponding boolean axis is 1024
+C:\tmp\lum_mb3_mut\lumenairy\elements\_lens_traced_uniform.py:1760: IndexError: boolean index did not match indexed array along axis 0; size of axis is 512 but size of corresponding boolean axis is 1024
+E   IndexError: boolean index did not match indexed array along axis 0; size of axis is 512 but size of corresponding boolean axis is 1024
+C:\tmp\lum_mb3_mut\lumenairy\elements\_lens_traced_uniform.py:1760: IndexError: boolean index did not match indexed array along axis 0; size of axis is 512 but size of corresponding boolean axis is 1024
+E   AssertionError: the pinned blow-up plane reads 1.0000, not clear of the bar 1.06 by the 1.5x this claim needs; move the plane to one that still blows up on this build rather than skipping
+    assert 1.0 > (1.5 * 1.06)
+C:\tmp\lum_mb3_mut\tests\unit\test_wp_b7c_round3.py:448: AssertionError: the pinned blow-up plane reads 1.0000, not clear of the bar 1.06 by the 1.5x this claim needs; move the plane to one that still blows up on this build rather than skipping
+=========================== short test summary info ===========================
+SKIPPED [1] tests\unit\test_audit2609_b7c2_pixel_halving_arbiter.py:545: no plane of this ladder reads below the loss arm on this build
+19 failed, 22 passed, 1 skipped in 40.26s

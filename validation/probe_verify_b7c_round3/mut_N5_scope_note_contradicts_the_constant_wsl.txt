@@ -1,0 +1,8 @@
+............................................F..                          [100%]
+=================================== FAILURES ===================================
+E   AssertionError: the note says the continuity loss arm flags 0 planes; the constant's own derivation says something else
+    assert None
+     +  where None = <function search at 0x7f7de79e0400>('flags 0, EVERY ONE of them wrong', '"""\nlumenairy.elements._lens_traced_multibranch -- MULTI-BRANCH (multi-arrival)\nray-traced lens field, valid THROUG...float(_AIRY_TAIL_CELLS * l_airy),\n                 l_airy=float(l_airy))\n        return E_out, d\n    return E_out\n')
+     +    where <function search at 0x7f7de79e0400> = re.search
+/mnt/c/tmp/lum_vmb3_mutw/tests/unit/test_verify_b7c_round3.py:279: AssertionError: the note says the continuity loss arm flags 0 planes; the constant's own derivation says something else
+1 failed, 46 passed in 57.31s

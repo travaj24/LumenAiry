@@ -1,0 +1,22 @@
+.........F..F...................F.......FF                               [100%]
+================================== FAILURES ===================================
+E   AssertionError: assert 'not_measured' == 'not_converged_loss'
+      
+      - not_converged_loss
+      + not_measured
+C:\tmp\lum_mb3_mut\tests\unit\test_audit2609_b7c2_pixel_halving_arbiter.py:555: AssertionError: assert 'not_measured' == 'not_converged_loss'
+E   AssertionError: z=5412 um returned a field gaining 1.352x the launched power with both readings inside their bands
+    assert 1.3518381766765355 <= 1.25
+C:\tmp\lum_mb3_mut\tests\unit\test_verify_b7c_multibranch.py:219: AssertionError: z=5412 um returned a field gaining 1.352x the launched power with both readings inside their bands
+E   AssertionError: z = 1775 um falls back and returns the branch sum, but no reading of it was recorded
+    assert None is not None
+     +  where None = <built-in method get of dict object at 0x0000028C1380D800>('pixel_continuity')
+     +    where <built-in method get of dict object at 0x0000028C1380D800> = {'c0': None, 'c1': None, 'detJ': array([[nan, nan, nan, ..., nan, nan, nan],\n       [nan, nan, nan, ..., nan, nan, nan... nan, nan, ..., nan, nan, nan],\n       [nan, nan, nan, ..., nan, nan, nan]], shape=(201, 201)), 'fell_back': True, ...}.get
+C:\tmp\lum_mb3_mut\tests\unit\test_verify_b7c_round2.py:391: AssertionError: z = 1775 um falls back and returns the branch sum, but no reading of it was recorded
+E   AssertionError: no reading at z = 400 um (decision='not_measured'); the converged control needs one
+    assert None is not None
+C:\tmp\lum_mb3_mut\tests\unit\test_wp_b7c_round3.py:401: AssertionError: no reading at z = 400 um (decision='not_measured'); the converged control needs one
+E   AssertionError: (None, 'not_measured')
+    assert (None is not None)
+C:\tmp\lum_mb3_mut\tests\unit\test_wp_b7c_round3.py:442: AssertionError: (None, 'not_measured')
+5 failed, 37 passed in 61.81s (0:01:01)

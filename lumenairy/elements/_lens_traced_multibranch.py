@@ -245,18 +245,85 @@ _ENERGY_COLLAPSE_FACTOR = 0.5
 # 0.9804 against smallest broken 1.106) -- which is why this second arm
 # exists.
 #
-# THE BAR.  The gap between the largest returned reading (1.0221, the fast
-# singlet at z = 1073 um, fidelity 0.9742) and the smallest refused one
-# (1.092, the same optic at z = 1074 um, fidelity 0.9302) is 1.0683x, whose
-# geometric centre is 1.0564 -- 1.06 to three figures.  Margins: 1.037x above
-# the largest returned reading and 1.030x below the smallest refused one.
-# Neither is decades, and that is stated rather than papered over: this is a
-# 7 % gap, measured on eight optics and two builds, and a ninth optic could
-# narrow it.  What makes it usable where round 1's was not is that it is a
-# gap at all, and that the quantity has a FIXED reference -- a converged
-# quadrature reads 1 exactly, at any pitch, on any optic -- so the bar is a
-# tolerance on a known value rather than a boundary between two moving
-# populations.
+# RE-MEASURED (WP-B7c round 3, 2026-09-19) on **1304 oracle-scored planes**
+# over SIXTEEN prescriptions and twenty-one (prescription, grid) pairs --
+# round 2's eight, the f/1.2 optic round 2 EXCLUDED for its oracle's sake,
+# the five the round-2 verification added (including an N-SF10 at NA 0.387),
+# and three new: a true even-ASPHERE with a non-monotone focal locus, a
+# CONCAVE-FIRST positive meniscus, and a plano-convex at **NA 0.41**.  394 of
+# those planes take the completion route.  Scored against a band-limited
+# ANGULAR SPECTRUM at full radius, itself bracketed by an exact azimuthal
+# quadrature of the Rayleigh-Sommerfeld integral evaluated at the output
+# grid's own pixels (agreement 2e-3 .. 7e-3 in relative L2 and 2e-6 .. 3e-5 in
+# fidelity, each arm converged a decade below that).  Populations, probes and
+# JSON in ``validation/probe_wp_b7c_round3/``; the tables are in
+# ``WP-B7c_ROUND3_REPORT.md``.
+#
+#   * the 250 fold-ring planes the guard RETURNS read 0.8724 .. 1.0595 and
+#     their fields score 0.9421 .. 0.9985 against the oracle;
+#   * the 144 it REFUSES read 1.0643 .. 3.9988 and their fields score
+#     0.0018 .. 0.9520.
+#
+# TWO THINGS ROUND 2 CLAIMED DO NOT SURVIVE THIS POPULATION, and they are the
+# reason this block is rewritten rather than extended.
+#
+# (1) The two FIDELITY populations OVERLAP.  Round 2's strongest statement was
+# that they do not, with no accept bar chosen; the round-2 verification
+# narrowed the separation from (0.9593, 0.9302) to (0.9747, 0.9578) on 124
+# planes, and at 394 it closes: the worst RETURNED fold-ring field scores
+# 0.9421 (the NA 0.41 plano-convex at z = 2069.3 um, reading 1.0133, carrying
+# 1.27x the oracle's energy) against a best REFUSED of 0.9520 (a plano-first
+# N-BAK4 at z = 4929.0 um, reading 1.0812).  The guard's own split therefore
+# no longer separates right fields from wrong ones without an accept
+# criterion, and choosing that criterion is a maintainer decision.
+#
+# (2) The bar's MARGIN is a property of the z ladder, not of the quantity.
+# The reading is not smooth in z near a fold onset (the round-2 verification
+# measured 1.0002 -> 1.1810 -> 0.9989 over 20 nm of defocus), so refining the
+# ladder keeps finding readings closer to the bar.  Measured here by scanning
+# the SAME optics three times, each ladder ~10-30x finer than the last:
+#
+#     planes    fold-ring gap    two-sided margin (fold / all planes)
+#      468         1.371x          1.040x / 1.013x
+#      882         1.032x          1.012x / 1.0008x
+#     1304         1.0045x         1.00047x / 1.00047x
+#
+# The "7 % gap" of round 2 and the "3.8 %" of its verification are both
+# readings of their ladders.  There is no sign of a floor, so no margin
+# statement can be made about this bar at all -- which is why the derivation
+# below is a COST and not a gap.
+#
+# THE BAR IS KEPT AT 1.06, and it is derived rather than inherited.  The
+# two-sided margin at 1.06 on this population is 1.00047x, below the 1 % that
+# would call for re-centring; the geometric centre of the gap it sits in is
+# **1.0600253** over all 1304 planes -- i.e. 1.06 to three figures IS the
+# derived centre, and the constant does not move.  (The fold-ring-only centre
+# is 1.0619; moving there changes no fold-ring decision and returns one more
+# wrong field over all planes.)  What the bar costs, by fidelity band:
+#
+#   fold ring, accept at 0.95:   1 false refusal,   2 misses   (of 394)
+#   fold ring, accept at 0.883: 22 false refusals,  0 misses
+#   all planes, accept at 0.95:  1 false refusal, 265 misses   (of 1304)
+#
+# and every alternative measured is worse on one axis or both: 1.04 costs 5
+# false refusals on the fold ring for no fewer misses, 1.08 costs 4 more
+# misses for no fewer false refusals, and a bar derived from the CONVERGED
+# reading's own spread (below) costs 9-63 false refusals.
+#
+# THE FIXED REFERENCE IS NOT EXACT, and it does not hold where the guard
+# works.  Round 2 argued that a converged quadrature "reads 1 exactly, on any
+# optic, at any plane, at any grid", which is what would make this bar a
+# tolerance on a known value.  Measured on 102 planes over all seventeen
+# optics chosen by a GEOMETRIC criterion (at least a quarter of the paraxial
+# focal distance short of the interior fold, so no reading selects the planes
+# its own spread is measured on): **0.99941 .. 1.00044**, rms 1.5e-4.  The
+# residue is the window-edge term ``_HALF_PITCH_CENTRE_OFFSET`` documents --
+# it reads 1.4e-3 on a window too small to contain the field and 1.2e-4 on
+# every larger one.  But on HEALTHY FOLD planes the same reading spreads by
+# up to 2.1e-2, 36x more, because a collapsing ring is exactly where a
+# point-sampled estimator is noisiest.  So the reference is a tolerance on a
+# known value only far from the caustic, and the bar has to clear the
+# near-caustic spread, not the far-field one.
 #
 # Upper arm: above this the render has NOT converged in the pixel and the
 # uniform completion built on it REFUSES
@@ -271,20 +338,139 @@ _PIXEL_CONTINUITY_MAX = 1.06
 # ``[1/_PIXEL_CONTINUITY_MAX, _PIXEL_CONTINUITY_MAX]`` and neither arm is
 # arbitrary relative to the other.
 #
-# IT DOES NOT REFUSE, and the asymmetry is physical rather than timid: the
-# completion keeps the branch sum's BRIGHT side verbatim, so a bright-side
-# excess reaches the caller's field, while the DARK side is exactly what the
-# completion replaces, so a dark-side deficit does not.  Measured (WP-B7c
-# round 2, 2026-09-15) on the air-spaced doublet at z = 2903 um: the branch
-# sum reads 0.9419 -- 6 % short -- while the completed field's power is
-# 0.997x the oracle's and its fidelity 0.9910.  Over the whole round-2
-# population no fold-ring plane is refused on this arm and none needs to be;
-# the only loss-side readings that correspond to a wrong field are on
-# FALLBACK planes, where the module has already warned that the completion
-# does not apply, and there the nearest returned reading (0.854, oracle
-# fidelity 0.904) and the nearest wrong one (0.726, fidelity 0.837) leave
-# 1.18x on ONE optic -- not a population a bar can be derived on.
+# IT DOES NOT REFUSE, and on the FOLD-RING route the asymmetry is physical
+# rather than timid: the completion keeps the branch sum's BRIGHT side
+# verbatim, so a bright-side excess reaches the caller's field, while the DARK
+# side is exactly what the completion replaces, so a dark-side deficit does
+# not.  Measured (WP-B7c round 2, 2026-09-15) on the air-spaced doublet at
+# z = 2903 um: the branch sum reads 0.9419 -- 6 % short -- while the completed
+# field's power is 0.997x the oracle's and its fidelity 0.9910.  Over the
+# round-3 population no fold-ring plane needs refusing on this arm either.
+#
+# THAT JUSTIFICATION IS FALSE ON THE FALLBACK ROUTE, and round 2 had too
+# small a sample to see it: there the completion DECLINED, the returned field
+# IS the bright-side-only branch sum, and a dark-side deficit reaches the
+# caller verbatim.  Round 2 saw one optic's worth of that ("the nearest
+# returned reading 0.854 ... not a population a bar can be derived on");
+# WP-B7c round 3 measures it on **476 fallback planes the shipped bars
+# RETURN**, over sixteen optics, of which 263 score below oracle fidelity
+# 0.95:
+#
+#   this arm  (reading < 1/1.06)     flags 192, EVERY ONE of them wrong,
+#                                    ZERO false alarms, 71 wrong ones missed
+#   the launched-power bracket's
+#   loss side (< 0.5, the shipped
+#   ``_MB_POWER_RATIO_MIN``)         flags  47, every one wrong, 0 false
+#   the same at a tighter 0.889      flags 254, every one wrong, 0 false,
+#                                    only 9 wrong ones missed
+#
+# So a reading that orders the fallback route's accuracy DOES exist and is
+# already reported -- it is this arm and the bracket's loss side, whose bars
+# are set for a route where a dark deficit does not reach the caller.  After
+# both, and after the fallback ``reason``, THIRTEEN returned planes remain
+# that nothing sees, the worst at fidelity 0.5358 with every reading nominal
+# (the slow control at z = 22.74 mm: this reading 0.98722, the bracket
+# 0.9883).  Making either arm refuse on the fallback route is a behaviour
+# change with a Migration cost and is left as a maintainer decision; the cost
+# table is in ``WP-B7c_ROUND3_REPORT.md`` section 7, and
+# ``_lens_traced_uniform._PIXEL_CONTINUITY_SCOPES`` is where a caller is told
+# that this route is the one where the loss arms mean something.
 _PIXEL_CONTINUITY_MIN = 1.0 / _PIXEL_CONTINUITY_MAX
+
+# WHERE THE HALF-PITCH RENDER'S PIXEL CENTRES SIT (WP-B7c round 3, E5).
+#
+# THE CONVENTION IS NESTING.  A render of ``N_r`` pixels at pitch ``dx_r``
+# puts its centres on ``(j - N_r/2) dx_r``, which is the library's own
+# sampling convention (and the one the odd-N centring item of the audit's
+# handoff 4.6 is about).  Applied at ``(2N, dx/2)`` it puts fine pixel ``2j``
+# EXACTLY on coarse pixel ``j``'s centre, so the fine lattice CONTAINS the
+# coarse one and the half-pitch render re-samples the same points plus three
+# interleaved sub-lattices.  ``half_pitch_centres`` below is the single
+# definition of it: the branch sum's own fine render and the consumer's
+# half-pitch completion both take their geometry from there, so the two
+# halves of the ratio cannot be taken on different lattices.
+#
+# WHAT NESTING BUYS, and why the alternative was measured and rejected.
+# Nesting is what makes the reading's two calibration points hold:
+#
+#   * ``~4 per halving`` when the quadrature has stopped being unbiased.  A
+#     mapped triangle that catches a coarse centre catches the COINCIDENT
+#     fine centre too, so ``p_out(dx/2) >= p_out(dx)/4`` always and the
+#     reading is bounded by 4 in the collapse limit -- which is the identity
+#     VERIFY-WP-B7c measured by hand on four optics (S 107 -> 27.3 -> 7.40,
+#     M 504 -> 127 -> 32.2, Q 11238 -> 2810 -> 703, F 2.98 -> 1.42 -> 1.04);
+#   * a LOW-VARIANCE ratio.  The two renders are point-sampled estimators of
+#     the same area integral; nested lattices make them positively
+#     correlated, so the ratio's sampling noise is far below either
+#     estimator's own.
+#
+# The alternative -- offsetting the fine lattice by half a fine pixel so the
+# two Voronoi HULLS coincide exactly -- was built and measured this round
+# (``validation/probe_wp_b7c_round3/r3ab.py``, ``ab_win.json``).  It is
+# strictly worse: with no shared sample points a collapsed triangle can catch
+# a coarse centre and NO fine centre, so the bounded ``~4`` becomes unbounded
+# (measured 7343.9 at VERIFY-B7b's own blow-up plane, where the nested
+# lattice reads 3.998), the ratio's variance rises (the branch sum at that
+# fixture's z = 1761 um moves from 1.0636 to 1.0180 and the completion from
+# 1.0021 to 0.9797, on a field whose oracle fidelity is unchanged at 0.9879),
+# and the module's own shipped gate refuses it.  The report has the
+# populations.
+#
+# WHAT NESTING COSTS, and it is stated rather than papered over.  The two
+# lattices have the same WIDTH but not the same Voronoi hull: the coarse hull
+# is ``[-(N+1) dx/2, (N-1) dx/2]`` and the fine one
+# ``[-(2N+1) dx/4, (2N-1) dx/4]``, so the fine lattice's centres reach half a
+# coarse pixel further out on the ``+x`` and ``+y`` edges and start a quarter
+# of a coarse pixel short on the other two.  Where light reaches the window
+# edge the two integrals are therefore not over the identical rectangle, and
+# a converged render reads 1 to O(1/N) rather than exactly.  Round 2 stated
+# that reference as "1 exactly, on any optic, at any plane, at any grid"; it
+# is not exact, and section 4 of ``WP-B7c_ROUND3_REPORT.md`` carries the
+# measured distribution of what it does read (round 2's verification measured
+# 0.999529 .. 1.000207 on one slow optic's eight planes; round 3 measures the
+# spread over the whole population).  The bar below clears that spread by
+# decades, which is what makes it a tolerance on a known value; it is not a
+# tolerance on an EXACT value.
+#
+# The constant is kept as a named knob rather than inlined so that the
+# alternative stays measurable from a probe without editing the library, and
+# so that a change of convention has to change a line that carries this
+# derivation.
+_HALF_PITCH_CENTRE_OFFSET = 0.0
+
+
+def _render_centre_origin(N_r, N_coarse):
+    """Origin of a render's pixel-centre lattice, in pixels of that render.
+
+    Pixel ``j`` of a render of ``N_r`` pixels at pitch ``dx_r`` has its centre
+    at ``(j - origin) * dx_r``.  ``N_r/2`` for the caller's own grid -- the
+    library's sampling convention -- and ``N_r/2 - _HALF_PITCH_CENTRE_OFFSET``
+    for the arbiter's HALF-PITCH render, which at the shipped offset of zero
+    is the same rule and therefore NESTS the fine lattice on the coarse one.
+    See ``_HALF_PITCH_CENTRE_OFFSET`` for why nesting is the convention, what
+    it costs, and what the alternative measured.
+
+    One definition, two callers: ``_multibranch_render._render`` and
+    ``half_pitch_centres``.
+    """
+    if int(N_r) == int(N_coarse):
+        return N_r / 2.0
+    return N_r / 2.0 - _HALF_PITCH_CENTRE_OFFSET
+
+
+def half_pitch_centres(N, dx):
+    """The 1-D pixel-centre lattice of the arbiter's half-pitch render.
+
+    A consumer that completes ``pixel_halved_field`` (the uniform fold
+    completion does) must evaluate its completion on the SAME lattice the
+    branch sum rasterised onto, or the two halves of the reading are taken on
+    different geometry.  This is that lattice, and it is the only place it is
+    written down -- the completion used to rebuild it inline, which is a seam
+    the two could drift apart at.
+    """
+    return ((np.arange(2 * int(N)) - _render_centre_origin(2 * int(N), int(N)))
+            * (0.5 * float(dx)))
+
 
 # Entry cap on the ARBITER's own render, in array entries of the FINE grid.
 # The fine render allocates one complex128 image of ``(2 N)^2``, and the
@@ -982,7 +1168,18 @@ def _multibranch_render(
         Called once with ``(N, dx)`` -- byte-identically to the straight-line
         code it replaces -- and, when the arbiter is requested, once more with
         ``(2 * N, dx / 2)``.
+
+        The pixel-centre lattice comes from ``_render_centre_origin`` rather
+        than from ``N_r / 2`` written here, so that the half-pitch render and
+        the consumer's half-pitch completion take their geometry from ONE
+        definition (WP-B7c round 3, E5).  At the shipped offset the two
+        lattices NEST -- fine pixel ``2j`` sits exactly on coarse pixel ``j``
+        -- which is what bounds the reading at ~4 in the collapse limit and
+        keeps the ratio's sampling noise below either render's own; see
+        ``_HALF_PITCH_CENTRE_OFFSET`` for the derivation and for what nesting
+        costs at the window edge.
         """
+        _org = _render_centre_origin(N_r, N)
         # per-branch contribution lists (assembled after the loop so the caustic
         # band can swap coalescing PAIRS for the Ludwig uniform-fold field)
         br_idx: list = []      # flat pixel index (x-major)
@@ -998,12 +1195,12 @@ def _multibranch_render(
             xmx = np.maximum(np.maximum(x0, x1), x2)[good]
             ymn = np.minimum(np.minimum(y0, y1), y2)[good]
             ymx = np.maximum(np.maximum(y0, y1), y2)[good]
-            pxmin = np.maximum(0, np.floor(xmn / dx_r + N_r / 2.0).astype(np.int64))
+            pxmin = np.maximum(0, np.floor(xmn / dx_r + _org).astype(np.int64))
             pxmax = np.minimum(N_r - 1,
-                               np.ceil(xmx / dx_r + N_r / 2.0).astype(np.int64))
-            pymin = np.maximum(0, np.floor(ymn / dx_r + N_r / 2.0).astype(np.int64))
+                               np.ceil(xmx / dx_r + _org).astype(np.int64))
+            pymin = np.maximum(0, np.floor(ymn / dx_r + _org).astype(np.int64))
             pymax = np.minimum(N_r - 1,
-                               np.ceil(ymx / dx_r + N_r / 2.0).astype(np.int64))
+                               np.ceil(ymx / dx_r + _org).astype(np.int64))
             keep = (pxmax >= pxmin) & (pymax >= pymin)
 
             def _g(a):
@@ -1101,8 +1298,8 @@ def _multibranch_render(
                 # valid grid index and no mask is needed.
                 vmask = (((gx <= pxmax[s, None, None])
                           & (gy <= pymax[s, None, None])) if _padded else None)
-                PX = (gx - N_r / 2.0) * dx_r
-                PY = (gy - N_r / 2.0) * dx_r
+                PX = (gx - _org) * dx_r
+                PY = (gy - _org) * dx_r
                 X0 = x0k[s, None, None]
                 Y0 = y0k[s, None, None]
                 # barycentric coordinates
@@ -1454,6 +1651,14 @@ def _multibranch_render(
                        # output through the same control instead of deciding
                        # on a reading of an intermediate it does not return.
                        # ``None`` unless the arbiter was asked for.
+                       #
+                       # ITS SAMPLING IS ``half_pitch_centres(N, dx)``, and
+                       # a consumer that completes this array must evaluate
+                       # its completion on that lattice rather than on one it
+                       # rebuilds (WP-B7c round 3, E5).  At the shipped
+                       # convention that lattice NESTS on the caller's -- fine
+                       # pixel ``2j`` is coarse pixel ``j`` -- which is what
+                       # the ~4-per-halving identity rests on.
                        'pixel_halved_field': _E_half,
                        'grid_power': p_out}
     return E_out

@@ -1,0 +1,3072 @@
+{
+ "summary": {
+  "n": 157,
+  "identical": 116,
+  "moved": 0,
+  "newly_refused": 0,
+  "newly_returned": 0,
+  "both_refused": 41,
+  "tree_a": {
+   "lumenairy": "C:\\tmp\\lum_mb3_pre\\lumenairy\\__init__.py",
+   "version": "5.47.1",
+   "python": "3.14.6",
+   "numpy": "2.4.4",
+   "mem_budget": "2048",
+   "bar": 1.06
+  },
+  "tree_b": {
+   "lumenairy": "C:\\tmp\\lum_mb3_post\\lumenairy\\__init__.py",
+   "version": "5.47.1",
+   "python": "3.14.6",
+   "numpy": "2.4.4",
+   "mem_budget": "2048",
+   "bar": 1.06
+  }
+ },
+ "rows": [
+  {
+   "id": "V_uni_ok",
+   "verdict": "identical",
+   "a": {
+    "sha256": "f15e44a86d4cb3df31ca87a43f396272dc07a8f0ba8fd8f317ce5aa16cc48430",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.62054511724862e-07
+   },
+   "b": {
+    "sha256": "f15e44a86d4cb3df31ca87a43f396272dc07a8f0ba8fd8f317ce5aa16cc48430",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.62054511724862e-07
+   }
+  },
+  {
+   "id": "V_uni_bad",
+   "verdict": "identical",
+   "a": {
+    "sha256": "b0d88b1cabc36db74901a77f173227d866b17c8be799fb1c59a58d29edc26739",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.6300414447252026e-07
+   },
+   "b": {
+    "sha256": "b0d88b1cabc36db74901a77f173227d866b17c8be799fb1c59a58d29edc26739",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.6300414447252026e-07
+   }
+  },
+  {
+   "id": "V_uni_fb",
+   "verdict": "both_refused",
+   "a": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side field this completion is built on carries 4.07e+04x the launched power that rea"
+   },
+   "b": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side field this completion is built on carries 4.07e+04x the launched power that rea"
+   }
+  },
+  {
+   "id": "V_uni_edge",
+   "verdict": "identical",
+   "a": {
+    "sha256": "bdc9761b16b96d69e657fc21708ef33fcde1499e7706cc2743bfcd0a00dc0b1c",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.7149842053557828e-07
+   },
+   "b": {
+    "sha256": "bdc9761b16b96d69e657fc21708ef33fcde1499e7706cc2743bfcd0a00dc0b1c",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.7149842053557828e-07
+   }
+  },
+  {
+   "id": "V_mb_ok",
+   "verdict": "identical",
+   "a": {
+    "sha256": "9cf52ba913185bd78fb426326f23fbc3fd3e8e3f6c5be8c05dfb8be7064e28c1",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.4965219186074593e-07
+   },
+   "b": {
+    "sha256": "9cf52ba913185bd78fb426326f23fbc3fd3e8e3f6c5be8c05dfb8be7064e28c1",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.4965219186074593e-07
+   }
+  },
+  {
+   "id": "V_uni_vertex",
+   "verdict": "identical",
+   "a": {
+    "sha256": "778c70709ca627098c6476f3bc49b32967ee8c2d3fdfadfcd841d20c69dcb634",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.6661544956051857e-07
+   },
+   "b": {
+    "sha256": "778c70709ca627098c6476f3bc49b32967ee8c2d3fdfadfcd841d20c69dcb634",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.6661544956051857e-07
+   }
+  },
+  {
+   "id": "V_uni_plain",
+   "verdict": "identical",
+   "a": {
+    "sha256": "2e8808fe5ca2a28eeae044e2dc382a468601f16d877c6260b6f8cf2ba93eef73",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 2.1637263429630184e-07
+   },
+   "b": {
+    "sha256": "2e8808fe5ca2a28eeae044e2dc382a468601f16d877c6260b6f8cf2ba93eef73",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 2.1637263429630184e-07
+   }
+  },
+  {
+   "id": "V_uni_sub4",
+   "verdict": "identical",
+   "a": {
+    "sha256": "8fe1da8b480d5807033dae1182ca755e89d4b49b017ffd7e6fc14f41762fc255",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.604617832757561e-07
+   },
+   "b": {
+    "sha256": "8fe1da8b480d5807033dae1182ca755e89d4b49b017ffd7e6fc14f41762fc255",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.604617832757561e-07
+   }
+  },
+  {
+   "id": "V_uni_c64",
+   "verdict": "identical",
+   "a": {
+    "sha256": "17d214f7d5d036c2b91d86ce61471002b62b0d72275c36f783e955dc4e69355b",
+    "dtype": "complex64",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.6205450593750002e-07
+   },
+   "b": {
+    "sha256": "17d214f7d5d036c2b91d86ce61471002b62b0d72275c36f783e955dc4e69355b",
+    "dtype": "complex64",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.6205450593750002e-07
+   }
+  },
+  {
+   "id": "S_uni_ok",
+   "verdict": "identical",
+   "a": {
+    "sha256": "f92df38a3c2cd71c810db089345e97f52338991ba84624aba4f57711cb8acfca",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.5176043271868647e-07
+   },
+   "b": {
+    "sha256": "f92df38a3c2cd71c810db089345e97f52338991ba84624aba4f57711cb8acfca",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.5176043271868647e-07
+   }
+  },
+  {
+   "id": "S_uni_bad",
+   "verdict": "identical",
+   "a": {
+    "sha256": "28d8ccaf9ea31a7c15779de68c4bdda9b6d80b8f563aa536791394e028121456",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.2367356162495274e-07
+   },
+   "b": {
+    "sha256": "28d8ccaf9ea31a7c15779de68c4bdda9b6d80b8f563aa536791394e028121456",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.2367356162495274e-07
+   }
+  },
+  {
+   "id": "S_uni_fb",
+   "verdict": "both_refused",
+   "a": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side field this completion is built on carries 6.94e+04x the launched power that rea"
+   },
+   "b": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side field this completion is built on carries 6.94e+04x the launched power that rea"
+   }
+  },
+  {
+   "id": "S_uni_edge",
+   "verdict": "identical",
+   "a": {
+    "sha256": "63ee577abe4929434c7a61235237a8524761ca2d23039ae4e45a67b362b5d393",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.297601613678484e-07
+   },
+   "b": {
+    "sha256": "63ee577abe4929434c7a61235237a8524761ca2d23039ae4e45a67b362b5d393",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.297601613678484e-07
+   }
+  },
+  {
+   "id": "S_mb_ok",
+   "verdict": "identical",
+   "a": {
+    "sha256": "f92df38a3c2cd71c810db089345e97f52338991ba84624aba4f57711cb8acfca",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.5176043271868647e-07
+   },
+   "b": {
+    "sha256": "f92df38a3c2cd71c810db089345e97f52338991ba84624aba4f57711cb8acfca",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.5176043271868647e-07
+   }
+  },
+  {
+   "id": "S_uni_vertex",
+   "verdict": "identical",
+   "a": {
+    "sha256": "d33e286500d2f651234fe2434ef9a22d53ce97196964373ad4121c6d6cb5fd28",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.7004252272335324e-07
+   },
+   "b": {
+    "sha256": "d33e286500d2f651234fe2434ef9a22d53ce97196964373ad4121c6d6cb5fd28",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.7004252272335324e-07
+   }
+  },
+  {
+   "id": "S_uni_plain",
+   "verdict": "both_refused",
+   "a": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the field this call would return (the plain multibranch field) has NOT CONVERGED in the output pixel.  Rast"
+   },
+   "b": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the reading this call decides on -- taken on the plain multibranch field -- has NOT CONVERGED in the output"
+   }
+  },
+  {
+   "id": "S_uni_sub4",
+   "verdict": "identical",
+   "a": {
+    "sha256": "4ee7eb456a25651e0073e29147ef07fd6dfe00c79343460ac3c5a6363fcdcedc",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.517517029960592e-07
+   },
+   "b": {
+    "sha256": "4ee7eb456a25651e0073e29147ef07fd6dfe00c79343460ac3c5a6363fcdcedc",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.517517029960592e-07
+   }
+  },
+  {
+   "id": "S_uni_c64",
+   "verdict": "identical",
+   "a": {
+    "sha256": "9a6993cc313e59263794e6b642879f2202a69bf8dff7e943831bd380de7eec1a",
+    "dtype": "complex64",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.5176042578125002e-07
+   },
+   "b": {
+    "sha256": "9a6993cc313e59263794e6b642879f2202a69bf8dff7e943831bd380de7eec1a",
+    "dtype": "complex64",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.5176042578125002e-07
+   }
+  },
+  {
+   "id": "M_uni_ok",
+   "verdict": "identical",
+   "a": {
+    "sha256": "4581620584f1e1eb47362843336d8515006d7cbc8ad63a7aa3703f646da3c4b7",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.747917347190947e-07
+   },
+   "b": {
+    "sha256": "4581620584f1e1eb47362843336d8515006d7cbc8ad63a7aa3703f646da3c4b7",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.747917347190947e-07
+   }
+  },
+  {
+   "id": "M_uni_bad",
+   "verdict": "both_refused",
+   "a": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side field this completion is built on carries 7.111e+04x the launched power that re"
+   },
+   "b": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side field this completion is built on carries 7.111e+04x the launched power that re"
+   }
+  },
+  {
+   "id": "M_uni_fb",
+   "verdict": "identical",
+   "a": {
+    "sha256": "809ba354dd2034c69481de1f73236c2563eb9c002d53640e29ecc00cfe8a4fff",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 7.350125194479511e-08
+   },
+   "b": {
+    "sha256": "809ba354dd2034c69481de1f73236c2563eb9c002d53640e29ecc00cfe8a4fff",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 7.350125194479511e-08
+   }
+  },
+  {
+   "id": "M_uni_edge",
+   "verdict": "both_refused",
+   "a": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side field this completion is built on carries 2.681e+04x the launched power that re"
+   },
+   "b": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side field this completion is built on carries 2.681e+04x the launched power that re"
+   }
+  },
+  {
+   "id": "M_mb_ok",
+   "verdict": "identical",
+   "a": {
+    "sha256": "4581620584f1e1eb47362843336d8515006d7cbc8ad63a7aa3703f646da3c4b7",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.747917347190947e-07
+   },
+   "b": {
+    "sha256": "4581620584f1e1eb47362843336d8515006d7cbc8ad63a7aa3703f646da3c4b7",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.747917347190947e-07
+   }
+  },
+  {
+   "id": "M_uni_vertex",
+   "verdict": "identical",
+   "a": {
+    "sha256": "db80a915095e9637fbe0135604d49e8d10c7d4ac8a80885b450b11b3180dd238",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 2.340308761268603e-07
+   },
+   "b": {
+    "sha256": "db80a915095e9637fbe0135604d49e8d10c7d4ac8a80885b450b11b3180dd238",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 2.340308761268603e-07
+   }
+  },
+  {
+   "id": "M_uni_plain",
+   "verdict": "identical",
+   "a": {
+    "sha256": "b7e1b7864842c5832990a74fe8324b64a0bc781cc35863368f81b9347b65e3cd",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 2.0292884321362244e-07
+   },
+   "b": {
+    "sha256": "b7e1b7864842c5832990a74fe8324b64a0bc781cc35863368f81b9347b65e3cd",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 2.0292884321362244e-07
+   }
+  },
+  {
+   "id": "M_uni_sub4",
+   "verdict": "identical",
+   "a": {
+    "sha256": "edfe639a944588ce871079570d022ed2c6d42e51c83716172cd7a1b6ca45f0bc",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.7591531156955773e-07
+   },
+   "b": {
+    "sha256": "edfe639a944588ce871079570d022ed2c6d42e51c83716172cd7a1b6ca45f0bc",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.7591531156955773e-07
+   }
+  },
+  {
+   "id": "M_uni_c64",
+   "verdict": "identical",
+   "a": {
+    "sha256": "6c6ae71a8bdba12002d3e701ef0a73b8847f26e910777bfc4ee4994736246005",
+    "dtype": "complex64",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.7479174781249997e-07
+   },
+   "b": {
+    "sha256": "6c6ae71a8bdba12002d3e701ef0a73b8847f26e910777bfc4ee4994736246005",
+    "dtype": "complex64",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.7479174781249997e-07
+   }
+  },
+  {
+   "id": "Q_uni_ok",
+   "verdict": "identical",
+   "a": {
+    "sha256": "315858da0c4a3fb5a1c7fa718368c9d927ef7ce7c47856c6fd27ff3d92831c30",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 3.7063189700822504e-07
+   },
+   "b": {
+    "sha256": "315858da0c4a3fb5a1c7fa718368c9d927ef7ce7c47856c6fd27ff3d92831c30",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 3.7063189700822504e-07
+   }
+  },
+  {
+   "id": "Q_uni_bad",
+   "verdict": "identical",
+   "a": {
+    "sha256": "67d9840290ac7e2b59e6541808d4c75c5d05923ea5607dd175a9e6ede3ea93e3",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 3.805245426707008e-07
+   },
+   "b": {
+    "sha256": "67d9840290ac7e2b59e6541808d4c75c5d05923ea5607dd175a9e6ede3ea93e3",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 3.805245426707008e-07
+   }
+  },
+  {
+   "id": "Q_uni_fb",
+   "verdict": "identical",
+   "a": {
+    "sha256": "3cfe3401eb67a869f1c320f417e09190644ee2ed5f9798d03422f7ac6cef7e6a",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 3.7697823091344913e-07
+   },
+   "b": {
+    "sha256": "3cfe3401eb67a869f1c320f417e09190644ee2ed5f9798d03422f7ac6cef7e6a",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 3.7697823091344913e-07
+   }
+  },
+  {
+   "id": "Q_uni_edge",
+   "verdict": "identical",
+   "a": {
+    "sha256": "08622794e09d85cad715805578df1d438bdee429edfb2768734e2a2ac708db83",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 3.695740541662874e-07
+   },
+   "b": {
+    "sha256": "08622794e09d85cad715805578df1d438bdee429edfb2768734e2a2ac708db83",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 3.695740541662874e-07
+   }
+  },
+  {
+   "id": "Q_mb_ok",
+   "verdict": "identical",
+   "a": {
+    "sha256": "7ebabe97e201180fe29da58435b5f1bb0aa87811262e52dc985eec1ad522445e",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 2.76675929581759e-07
+   },
+   "b": {
+    "sha256": "7ebabe97e201180fe29da58435b5f1bb0aa87811262e52dc985eec1ad522445e",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 2.76675929581759e-07
+   }
+  },
+  {
+   "id": "Q_uni_vertex",
+   "verdict": "identical",
+   "a": {
+    "sha256": "a8f7510e53b4570d6f1abd4f8d97b3dd51ed80dc5f9e4c255dbd9b538b6bfd47",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 3.56467696986606e-07
+   },
+   "b": {
+    "sha256": "a8f7510e53b4570d6f1abd4f8d97b3dd51ed80dc5f9e4c255dbd9b538b6bfd47",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 3.56467696986606e-07
+   }
+  },
+  {
+   "id": "Q_uni_plain",
+   "verdict": "identical",
+   "a": {
+    "sha256": "ba71a9a6359e6994dba9f035adae8c620282c157696184504bc91364ec80dfb0",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 6.052668423559029e-07
+   },
+   "b": {
+    "sha256": "ba71a9a6359e6994dba9f035adae8c620282c157696184504bc91364ec80dfb0",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 6.052668423559029e-07
+   }
+  },
+  {
+   "id": "Q_uni_sub4",
+   "verdict": "identical",
+   "a": {
+    "sha256": "121cfa58582891b36d5fcef9fc3537563e4207cf3318dc18aad15d7c64f0481e",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 3.710075078034698e-07
+   },
+   "b": {
+    "sha256": "121cfa58582891b36d5fcef9fc3537563e4207cf3318dc18aad15d7c64f0481e",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 3.710075078034698e-07
+   }
+  },
+  {
+   "id": "Q_uni_c64",
+   "verdict": "identical",
+   "a": {
+    "sha256": "14aae8e2258e2af811bea8009dffdf5cc3fb4a4f0a94fb1cbe3577cb04379a72",
+    "dtype": "complex64",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 3.7063191953125e-07
+   },
+   "b": {
+    "sha256": "14aae8e2258e2af811bea8009dffdf5cc3fb4a4f0a94fb1cbe3577cb04379a72",
+    "dtype": "complex64",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 3.7063191953125e-07
+   }
+  },
+  {
+   "id": "F_alt_uni_ok",
+   "verdict": "identical",
+   "a": {
+    "sha256": "1d22d465f4b01d7815bf6dfd10817b3c7294b67809eb969cf721095ecbf3e684",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "power": 7.436116122461309e-08
+   },
+   "b": {
+    "sha256": "1d22d465f4b01d7815bf6dfd10817b3c7294b67809eb969cf721095ecbf3e684",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "power": 7.436116122461309e-08
+   }
+  },
+  {
+   "id": "F_alt_uni_bad",
+   "verdict": "both_refused",
+   "a": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side field this completion is built on carries 5009x the launched power that reaches"
+   },
+   "b": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side field this completion is built on carries 5009x the launched power that reaches"
+   }
+  },
+  {
+   "id": "F_alt_uni_fb",
+   "verdict": "both_refused",
+   "a": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side field this completion is built on carries 18.33x the launched power that reache"
+   },
+   "b": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side field this completion is built on carries 18.33x the launched power that reache"
+   }
+  },
+  {
+   "id": "F_alt_uni_edge",
+   "verdict": "both_refused",
+   "a": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side field this completion is built on carries 135.9x the launched power that reache"
+   },
+   "b": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side field this completion is built on carries 135.9x the launched power that reache"
+   }
+  },
+  {
+   "id": "F_alt_mb_ok",
+   "verdict": "identical",
+   "a": {
+    "sha256": "4c4f0927530d31768fd88c1e8c7cbd1ac79fefa8fff4037513867097f096c3ab",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "power": 6.88069463139925e-08
+   },
+   "b": {
+    "sha256": "4c4f0927530d31768fd88c1e8c7cbd1ac79fefa8fff4037513867097f096c3ab",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "power": 6.88069463139925e-08
+   }
+  },
+  {
+   "id": "F_alt_uni_vertex",
+   "verdict": "identical",
+   "a": {
+    "sha256": "0edc16e5a3a5f16271dee6e201bdc1d9d6fc2c09616a85739d754a0cb6049e65",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "power": 7.489229961286252e-08
+   },
+   "b": {
+    "sha256": "0edc16e5a3a5f16271dee6e201bdc1d9d6fc2c09616a85739d754a0cb6049e65",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "power": 7.489229961286252e-08
+   }
+  },
+  {
+   "id": "F_alt_uni_plain",
+   "verdict": "identical",
+   "a": {
+    "sha256": "f73db1f07d9232fb3f5bb827bcbf7566c7fdfbca33b2f803bc39fcb5ebd525bf",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "power": 8.742876472819027e-08
+   },
+   "b": {
+    "sha256": "f73db1f07d9232fb3f5bb827bcbf7566c7fdfbca33b2f803bc39fcb5ebd525bf",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "power": 8.742876472819027e-08
+   }
+  },
+  {
+   "id": "F_alt_uni_sub4",
+   "verdict": "identical",
+   "a": {
+    "sha256": "f44d3912d356439ec79049991fc1990a2d354412fbf1b814314c98b9c94f0caa",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "power": 7.430702216194337e-08
+   },
+   "b": {
+    "sha256": "f44d3912d356439ec79049991fc1990a2d354412fbf1b814314c98b9c94f0caa",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "power": 7.430702216194337e-08
+   }
+  },
+  {
+   "id": "F_alt_uni_c64",
+   "verdict": "identical",
+   "a": {
+    "sha256": "b9d00889928bab97d8620939b276387685bf3bc18f3cc038e260a53e4a555ccd",
+    "dtype": "complex64",
+    "shape": [
+     640,
+     640
+    ],
+    "power": 7.436115968749999e-08
+   },
+   "b": {
+    "sha256": "b9d00889928bab97d8620939b276387685bf3bc18f3cc038e260a53e4a555ccd",
+    "dtype": "complex64",
+    "shape": [
+     640,
+     640
+    ],
+    "power": 7.436115968749999e-08
+   }
+  },
+  {
+   "id": "A_uni_ok",
+   "verdict": "identical",
+   "a": {
+    "sha256": "b4f56d99552c6ad94cc1d046d2de1d6f7e96f960a70f74f7bad53d600d92fd29",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 2.725589104490417e-07
+   },
+   "b": {
+    "sha256": "b4f56d99552c6ad94cc1d046d2de1d6f7e96f960a70f74f7bad53d600d92fd29",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 2.725589104490417e-07
+   }
+  },
+  {
+   "id": "A_uni_bad",
+   "verdict": "both_refused",
+   "a": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side field this completion is built on carries 2.022e+04x the launched power that re"
+   },
+   "b": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side field this completion is built on carries 2.022e+04x the launched power that re"
+   }
+  },
+  {
+   "id": "A_uni_fb",
+   "verdict": "both_refused",
+   "a": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side field this completion is built on carries 2.901e+04x the launched power that re"
+   },
+   "b": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side field this completion is built on carries 2.901e+04x the launched power that re"
+   }
+  },
+  {
+   "id": "A_uni_edge",
+   "verdict": "both_refused",
+   "a": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side field this completion is built on carries 8484x the launched power that reaches"
+   },
+   "b": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side field this completion is built on carries 8484x the launched power that reaches"
+   }
+  },
+  {
+   "id": "A_mb_ok",
+   "verdict": "identical",
+   "a": {
+    "sha256": "5632cc23ae2032347c48e35a047b13c615841cf089ced1907082957efa78017a",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 2.4495853481771975e-07
+   },
+   "b": {
+    "sha256": "5632cc23ae2032347c48e35a047b13c615841cf089ced1907082957efa78017a",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 2.4495853481771975e-07
+   }
+  },
+  {
+   "id": "A_uni_vertex",
+   "verdict": "identical",
+   "a": {
+    "sha256": "3bf36be45ff280db08960d02c95bff1570c67e6ca521c7b641aea2977eed09af",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 2.720308257464098e-07
+   },
+   "b": {
+    "sha256": "3bf36be45ff280db08960d02c95bff1570c67e6ca521c7b641aea2977eed09af",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 2.720308257464098e-07
+   }
+  },
+  {
+   "id": "A_uni_plain",
+   "verdict": "both_refused",
+   "a": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the field this call would return (the completed fold field) has NOT CONVERGED in the output pixel.  Rasteri"
+   },
+   "b": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the reading this call decides on -- taken on the completed fold field -- has NOT CONVERGED in the output pi"
+   }
+  },
+  {
+   "id": "A_uni_sub4",
+   "verdict": "identical",
+   "a": {
+    "sha256": "f1f5685d636409972abb8d93efe0f1dd561a3ebab11d7d8420e634f81bd1a7e4",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 2.727984932253963e-07
+   },
+   "b": {
+    "sha256": "f1f5685d636409972abb8d93efe0f1dd561a3ebab11d7d8420e634f81bd1a7e4",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 2.727984932253963e-07
+   }
+  },
+  {
+   "id": "A_uni_c64",
+   "verdict": "identical",
+   "a": {
+    "sha256": "5205daab22b096df3b02f4af49417e29a96071ed7034d0d4f7991e505decd274",
+    "dtype": "complex64",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 2.72558900390625e-07
+   },
+   "b": {
+    "sha256": "5205daab22b096df3b02f4af49417e29a96071ed7034d0d4f7991e505decd274",
+    "dtype": "complex64",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 2.72558900390625e-07
+   }
+  },
+  {
+   "id": "K_uni_ok",
+   "verdict": "identical",
+   "a": {
+    "sha256": "8dc964d1cb1501c9f32490907acb72b455792a36a51b5cc1f65320b88734404d",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.9539920002798636e-07
+   },
+   "b": {
+    "sha256": "8dc964d1cb1501c9f32490907acb72b455792a36a51b5cc1f65320b88734404d",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.9539920002798636e-07
+   }
+  },
+  {
+   "id": "K_uni_bad",
+   "verdict": "both_refused",
+   "a": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side field this completion is built on carries 3.63e+04x the launched power that rea"
+   },
+   "b": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side field this completion is built on carries 3.63e+04x the launched power that rea"
+   }
+  },
+  {
+   "id": "K_uni_fb",
+   "verdict": "both_refused",
+   "a": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side field this completion is built on carries 7.653x the launched power that reache"
+   },
+   "b": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side field this completion is built on carries 7.653x the launched power that reache"
+   }
+  },
+  {
+   "id": "K_uni_edge",
+   "verdict": "both_refused",
+   "a": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side field this completion is built on carries 1.288e+04x the launched power that re"
+   },
+   "b": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side field this completion is built on carries 1.288e+04x the launched power that re"
+   }
+  },
+  {
+   "id": "K_mb_ok",
+   "verdict": "identical",
+   "a": {
+    "sha256": "c8059b6e45136c5beaaa36903c55d36f5ed84409203c72930e313a059ca90ef3",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.7263758942032528e-07
+   },
+   "b": {
+    "sha256": "c8059b6e45136c5beaaa36903c55d36f5ed84409203c72930e313a059ca90ef3",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.7263758942032528e-07
+   }
+  },
+  {
+   "id": "K_uni_vertex",
+   "verdict": "identical",
+   "a": {
+    "sha256": "9fc46511cf0e1cced48f691bff2baa00a04a91a0c77836ab52aca7691df3fe30",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.9900834154386723e-07
+   },
+   "b": {
+    "sha256": "9fc46511cf0e1cced48f691bff2baa00a04a91a0c77836ab52aca7691df3fe30",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.9900834154386723e-07
+   }
+  },
+  {
+   "id": "K_uni_plain",
+   "verdict": "identical",
+   "a": {
+    "sha256": "fdd6c58ebe50a89fd3e3a25ff17ef398d3fa66c4d83bb9107f518d9e94281ff6",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 2.6457461158306137e-07
+   },
+   "b": {
+    "sha256": "fdd6c58ebe50a89fd3e3a25ff17ef398d3fa66c4d83bb9107f518d9e94281ff6",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 2.6457461158306137e-07
+   }
+  },
+  {
+   "id": "K_uni_sub4",
+   "verdict": "identical",
+   "a": {
+    "sha256": "16242d9400270f1de65b5b1a8bfcd9d2c059af0a376b2c520e50067199721ea5",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.9570589201072632e-07
+   },
+   "b": {
+    "sha256": "16242d9400270f1de65b5b1a8bfcd9d2c059af0a376b2c520e50067199721ea5",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.9570589201072632e-07
+   }
+  },
+  {
+   "id": "K_uni_c64",
+   "verdict": "identical",
+   "a": {
+    "sha256": "0e129de1c941a5b3e7570f347ad34c204600aaed6fbdfa998b39052d8be22763",
+    "dtype": "complex64",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.9539918749999998e-07
+   },
+   "b": {
+    "sha256": "0e129de1c941a5b3e7570f347ad34c204600aaed6fbdfa998b39052d8be22763",
+    "dtype": "complex64",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.9539918749999998e-07
+   }
+  },
+  {
+   "id": "G_uni_ok",
+   "verdict": "both_refused",
+   "a": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the field this call would return (the completed fold field) has NOT CONVERGED in the output pixel.  Rasteri"
+   },
+   "b": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the reading this call decides on -- taken on the completed fold field -- has NOT CONVERGED in the output pi"
+   }
+  },
+  {
+   "id": "G_uni_bad",
+   "verdict": "both_refused",
+   "a": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side field this completion is built on carries 9021x the launched power that reaches"
+   },
+   "b": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side field this completion is built on carries 9021x the launched power that reaches"
+   }
+  },
+  {
+   "id": "G_uni_fb",
+   "verdict": "identical",
+   "a": {
+    "sha256": "da866e669e4391fa72eda49e753ee160d66b8b9155178b54465ed40d2941dfaf",
+    "dtype": "complex128",
+    "shape": [
+     768,
+     768
+    ],
+    "power": 6.203725215842566e-08
+   },
+   "b": {
+    "sha256": "da866e669e4391fa72eda49e753ee160d66b8b9155178b54465ed40d2941dfaf",
+    "dtype": "complex128",
+    "shape": [
+     768,
+     768
+    ],
+    "power": 6.203725215842566e-08
+   }
+  },
+  {
+   "id": "G_uni_edge",
+   "verdict": "both_refused",
+   "a": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side field this completion is built on carries 2085x the launched power that reaches"
+   },
+   "b": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side field this completion is built on carries 2085x the launched power that reaches"
+   }
+  },
+  {
+   "id": "G_mb_ok",
+   "verdict": "identical",
+   "a": {
+    "sha256": "0e6438cf5977f9e89436a252638a40dcaf63664198a7c8a6f922ceba01d623fd",
+    "dtype": "complex128",
+    "shape": [
+     768,
+     768
+    ],
+    "power": 1.3448143490053492e-07
+   },
+   "b": {
+    "sha256": "0e6438cf5977f9e89436a252638a40dcaf63664198a7c8a6f922ceba01d623fd",
+    "dtype": "complex128",
+    "shape": [
+     768,
+     768
+    ],
+    "power": 1.3448143490053492e-07
+   }
+  },
+  {
+   "id": "G_uni_vertex",
+   "verdict": "identical",
+   "a": {
+    "sha256": "9740761c2fa6815c9eade71a56485c6e6aab6c84ba5796cfc54b15022eccc172",
+    "dtype": "complex128",
+    "shape": [
+     768,
+     768
+    ],
+    "power": 9.800010186722621e-08
+   },
+   "b": {
+    "sha256": "9740761c2fa6815c9eade71a56485c6e6aab6c84ba5796cfc54b15022eccc172",
+    "dtype": "complex128",
+    "shape": [
+     768,
+     768
+    ],
+    "power": 9.800010186722621e-08
+   }
+  },
+  {
+   "id": "G_uni_plain",
+   "verdict": "both_refused",
+   "a": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the field this call would return (the completed fold field) has NOT CONVERGED in the output pixel.  Rasteri"
+   },
+   "b": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the reading this call decides on -- taken on the completed fold field -- has NOT CONVERGED in the output pi"
+   }
+  },
+  {
+   "id": "G_uni_sub4",
+   "verdict": "identical",
+   "a": {
+    "sha256": "9f41b21fc16ed7d2427c39200a493f5b836e7da078548192accfe1e972462eb8",
+    "dtype": "complex128",
+    "shape": [
+     768,
+     768
+    ],
+    "power": 1.0270831366113222e-07
+   },
+   "b": {
+    "sha256": "9f41b21fc16ed7d2427c39200a493f5b836e7da078548192accfe1e972462eb8",
+    "dtype": "complex128",
+    "shape": [
+     768,
+     768
+    ],
+    "power": 1.0270831366113222e-07
+   }
+  },
+  {
+   "id": "G_uni_c64",
+   "verdict": "both_refused",
+   "a": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the field this call would return (the completed fold field) has NOT CONVERGED in the output pixel.  Rasteri"
+   },
+   "b": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the reading this call decides on -- taken on the completed fold field -- has NOT CONVERGED in the output pi"
+   }
+  },
+  {
+   "id": "P_uni_ok",
+   "verdict": "identical",
+   "a": {
+    "sha256": "98c8dc2ceb4754e23fbf81a473289c6a61c0b18b782eddece879aadb68c4073b",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.7860774793869485e-07
+   },
+   "b": {
+    "sha256": "98c8dc2ceb4754e23fbf81a473289c6a61c0b18b782eddece879aadb68c4073b",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.7860774793869485e-07
+   }
+  },
+  {
+   "id": "P_uni_bad",
+   "verdict": "both_refused",
+   "a": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side field this completion is built on carries 6983x the launched power that reaches"
+   },
+   "b": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side field this completion is built on carries 6983x the launched power that reaches"
+   }
+  },
+  {
+   "id": "P_uni_fb",
+   "verdict": "identical",
+   "a": {
+    "sha256": "a037c6d0ce85531ff4c4433002236084108231f4b01fb5b9b1067bf34bdc6ac3",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.2748239015870471e-07
+   },
+   "b": {
+    "sha256": "a037c6d0ce85531ff4c4433002236084108231f4b01fb5b9b1067bf34bdc6ac3",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.2748239015870471e-07
+   }
+  },
+  {
+   "id": "P_uni_edge",
+   "verdict": "both_refused",
+   "a": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side field this completion is built on carries 2383x the launched power that reaches"
+   },
+   "b": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side field this completion is built on carries 2383x the launched power that reaches"
+   }
+  },
+  {
+   "id": "P_mb_ok",
+   "verdict": "identical",
+   "a": {
+    "sha256": "2611ec34eb32b501c5c3daec025ea4fc02fd20972728fe0280340682b16c74ab",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.732950255913103e-07
+   },
+   "b": {
+    "sha256": "2611ec34eb32b501c5c3daec025ea4fc02fd20972728fe0280340682b16c74ab",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.732950255913103e-07
+   }
+  },
+  {
+   "id": "P_uni_vertex",
+   "verdict": "identical",
+   "a": {
+    "sha256": "2c57d7c7a1ddb83b53e2edcb20ec22683eea5ae94bda1322ea9dd3c518e1b67b",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.7916631031655362e-07
+   },
+   "b": {
+    "sha256": "2c57d7c7a1ddb83b53e2edcb20ec22683eea5ae94bda1322ea9dd3c518e1b67b",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.7916631031655362e-07
+   }
+  },
+  {
+   "id": "P_uni_plain",
+   "verdict": "identical",
+   "a": {
+    "sha256": "f7b8a0eb5b8c11cb769c6330b99eb6ac9367159ea004f8e82552e68daa4449a6",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.9872924614843455e-07
+   },
+   "b": {
+    "sha256": "f7b8a0eb5b8c11cb769c6330b99eb6ac9367159ea004f8e82552e68daa4449a6",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.9872924614843455e-07
+   }
+  },
+  {
+   "id": "P_uni_sub4",
+   "verdict": "identical",
+   "a": {
+    "sha256": "fa701101655ae7d0fcee30404c244a6477e9e8c29920a1f79a090d5448a199e9",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.7880243412235764e-07
+   },
+   "b": {
+    "sha256": "fa701101655ae7d0fcee30404c244a6477e9e8c29920a1f79a090d5448a199e9",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.7880243412235764e-07
+   }
+  },
+  {
+   "id": "P_uni_c64",
+   "verdict": "identical",
+   "a": {
+    "sha256": "fe6358484aa4e2a0b208a6cd35bdcb6c712f797058cdf9aed76fa4ffa9dc51ba",
+    "dtype": "complex64",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.7860774640624998e-07
+   },
+   "b": {
+    "sha256": "fe6358484aa4e2a0b208a6cd35bdcb6c712f797058cdf9aed76fa4ffa9dc51ba",
+    "dtype": "complex64",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.7860774640624998e-07
+   }
+  },
+  {
+   "id": "W_uni_ok",
+   "verdict": "identical",
+   "a": {
+    "sha256": "0a2ccca55039a319428b77d44ec272aaa02f72e0c82cac1ce73b5da7e7dda55c",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 2.3842622663761656e-07
+   },
+   "b": {
+    "sha256": "0a2ccca55039a319428b77d44ec272aaa02f72e0c82cac1ce73b5da7e7dda55c",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 2.3842622663761656e-07
+   }
+  },
+  {
+   "id": "W_uni_bad",
+   "verdict": "both_refused",
+   "a": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side field this completion is built on carries 3.696e+04x the launched power that re"
+   },
+   "b": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side field this completion is built on carries 3.696e+04x the launched power that re"
+   }
+  },
+  {
+   "id": "W_uni_fb",
+   "verdict": "identical",
+   "a": {
+    "sha256": "820649c933000c50a721431c3f2b185e758494b3b250a011b5d5c3e547e1865e",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.262129832030993e-07
+   },
+   "b": {
+    "sha256": "820649c933000c50a721431c3f2b185e758494b3b250a011b5d5c3e547e1865e",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.262129832030993e-07
+   }
+  },
+  {
+   "id": "W_uni_edge",
+   "verdict": "both_refused",
+   "a": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side field this completion is built on carries 1.548e+04x the launched power that re"
+   },
+   "b": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side field this completion is built on carries 1.548e+04x the launched power that re"
+   }
+  },
+  {
+   "id": "W_mb_ok",
+   "verdict": "identical",
+   "a": {
+    "sha256": "909d04299826eaaf9c121a557e5c94e22fed70629366ff0e33a31014e800f5de",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 2.119027737885823e-07
+   },
+   "b": {
+    "sha256": "909d04299826eaaf9c121a557e5c94e22fed70629366ff0e33a31014e800f5de",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 2.119027737885823e-07
+   }
+  },
+  {
+   "id": "W_uni_vertex",
+   "verdict": "identical",
+   "a": {
+    "sha256": "566e1e8aaf3f8241e65221a8c3813d51b707d691f4670f1aa044c432b5ba06c6",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 2.452635311562163e-07
+   },
+   "b": {
+    "sha256": "566e1e8aaf3f8241e65221a8c3813d51b707d691f4670f1aa044c432b5ba06c6",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 2.452635311562163e-07
+   }
+  },
+  {
+   "id": "W_uni_plain",
+   "verdict": "both_refused",
+   "a": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the field this call would return (the completed fold field) has NOT CONVERGED in the output pixel.  Rasteri"
+   },
+   "b": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the reading this call decides on -- taken on the completed fold field -- has NOT CONVERGED in the output pi"
+   }
+  },
+  {
+   "id": "W_uni_sub4",
+   "verdict": "both_refused",
+   "a": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the field this call would return (the completed fold field) has NOT CONVERGED in the output pixel.  Rasteri"
+   },
+   "b": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the reading this call decides on -- taken on the completed fold field -- has NOT CONVERGED in the output pi"
+   }
+  },
+  {
+   "id": "W_uni_c64",
+   "verdict": "identical",
+   "a": {
+    "sha256": "ecaca5999498bcb3f23f75d62372597ef3b2e28a9e73e4420551393bc026bb1c",
+    "dtype": "complex64",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 2.38426245e-07
+   },
+   "b": {
+    "sha256": "ecaca5999498bcb3f23f75d62372597ef3b2e28a9e73e4420551393bc026bb1c",
+    "dtype": "complex64",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 2.38426245e-07
+   }
+  },
+  {
+   "id": "X_uni_ok",
+   "verdict": "identical",
+   "a": {
+    "sha256": "3bd20cb1da84cab7b0d6e16e99d31ddd37da7cef4a6882f7bbd2da40907e241f",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "power": 1.7399430417755765e-07
+   },
+   "b": {
+    "sha256": "3bd20cb1da84cab7b0d6e16e99d31ddd37da7cef4a6882f7bbd2da40907e241f",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "power": 1.7399430417755765e-07
+   }
+  },
+  {
+   "id": "X_uni_bad",
+   "verdict": "both_refused",
+   "a": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side field this completion is built on carries 3304x the launched power that reaches"
+   },
+   "b": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side field this completion is built on carries 3304x the launched power that reaches"
+   }
+  },
+  {
+   "id": "X_uni_fb",
+   "verdict": "identical",
+   "a": {
+    "sha256": "8ff0b393a6bd42257568bf27c61bedfe93f6ad6071dbb71652eb4d2a30c6cef5",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "power": 1.2713004581160561e-07
+   },
+   "b": {
+    "sha256": "8ff0b393a6bd42257568bf27c61bedfe93f6ad6071dbb71652eb4d2a30c6cef5",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "power": 1.2713004581160561e-07
+   }
+  },
+  {
+   "id": "X_uni_edge",
+   "verdict": "both_refused",
+   "a": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side field this completion is built on carries 1096x the launched power that reaches"
+   },
+   "b": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side field this completion is built on carries 1096x the launched power that reaches"
+   }
+  },
+  {
+   "id": "X_mb_ok",
+   "verdict": "identical",
+   "a": {
+    "sha256": "b04d638d0313fe0856a4b05974a8f0697f3a84e39f828d97a266dd4493686bfe",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "power": 1.7112207339455897e-07
+   },
+   "b": {
+    "sha256": "b04d638d0313fe0856a4b05974a8f0697f3a84e39f828d97a266dd4493686bfe",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "power": 1.7112207339455897e-07
+   }
+  },
+  {
+   "id": "X_uni_vertex",
+   "verdict": "identical",
+   "a": {
+    "sha256": "621eb133062e7632237b0ec54bb7aba00b647a16a17e60de9075b937413ab0cc",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "power": 1.7349438003130153e-07
+   },
+   "b": {
+    "sha256": "621eb133062e7632237b0ec54bb7aba00b647a16a17e60de9075b937413ab0cc",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "power": 1.7349438003130153e-07
+   }
+  },
+  {
+   "id": "X_uni_plain",
+   "verdict": "identical",
+   "a": {
+    "sha256": "50dc263e4d533838fd904922d57faf5db82fcefa68f61f42f343a33313470839",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "power": 1.8393731740227172e-07
+   },
+   "b": {
+    "sha256": "50dc263e4d533838fd904922d57faf5db82fcefa68f61f42f343a33313470839",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "power": 1.8393731740227172e-07
+   }
+  },
+  {
+   "id": "X_uni_sub4",
+   "verdict": "identical",
+   "a": {
+    "sha256": "655111aa09eaa7cdfb09cf61aebd84d746a5cdd9e1ef2f8036e1225eb25327c4",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "power": 1.7390659182121485e-07
+   },
+   "b": {
+    "sha256": "655111aa09eaa7cdfb09cf61aebd84d746a5cdd9e1ef2f8036e1225eb25327c4",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "power": 1.7390659182121485e-07
+   }
+  },
+  {
+   "id": "X_uni_c64",
+   "verdict": "identical",
+   "a": {
+    "sha256": "429a683ed1ed0258338eee754d744239b451f51f9b218222355f9de3c6efd27f",
+    "dtype": "complex64",
+    "shape": [
+     640,
+     640
+    ],
+    "power": 1.7399429906249998e-07
+   },
+   "b": {
+    "sha256": "429a683ed1ed0258338eee754d744239b451f51f9b218222355f9de3c6efd27f",
+    "dtype": "complex64",
+    "shape": [
+     640,
+     640
+    ],
+    "power": 1.7399429906249998e-07
+   }
+  },
+  {
+   "id": "Y_uni_ok",
+   "verdict": "identical",
+   "a": {
+    "sha256": "e8b7838fa3c3784a40cff857d74fc50bfdf30b9ecd629342c6f40ccaf39539c6",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.7786861322629482e-07
+   },
+   "b": {
+    "sha256": "e8b7838fa3c3784a40cff857d74fc50bfdf30b9ecd629342c6f40ccaf39539c6",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.7786861322629482e-07
+   }
+  },
+  {
+   "id": "Y_uni_bad",
+   "verdict": "both_refused",
+   "a": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side field this completion is built on carries 1.869e+04x the launched power that re"
+   },
+   "b": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side field this completion is built on carries 1.869e+04x the launched power that re"
+   }
+  },
+  {
+   "id": "Y_uni_fb",
+   "verdict": "both_refused",
+   "a": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side field this completion is built on carries 3.855e+04x the launched power that re"
+   },
+   "b": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side field this completion is built on carries 3.855e+04x the launched power that re"
+   }
+  },
+  {
+   "id": "Y_uni_edge",
+   "verdict": "both_refused",
+   "a": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side field this completion is built on carries 6851x the launched power that reaches"
+   },
+   "b": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side field this completion is built on carries 6851x the launched power that reaches"
+   }
+  },
+  {
+   "id": "Y_mb_ok",
+   "verdict": "identical",
+   "a": {
+    "sha256": "64171b57ad1cbfc8d92b0fb9cc9e6ed1c2f4ac7f68170cdafbe0b25a8a119202",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.6775460006873692e-07
+   },
+   "b": {
+    "sha256": "64171b57ad1cbfc8d92b0fb9cc9e6ed1c2f4ac7f68170cdafbe0b25a8a119202",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.6775460006873692e-07
+   }
+  },
+  {
+   "id": "Y_uni_vertex",
+   "verdict": "identical",
+   "a": {
+    "sha256": "34bbb3bdb24c26e07441469ff38c186fab9289dae9ce0c8a6fdb2e7e60cd052f",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.7855036923361445e-07
+   },
+   "b": {
+    "sha256": "34bbb3bdb24c26e07441469ff38c186fab9289dae9ce0c8a6fdb2e7e60cd052f",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.7855036923361445e-07
+   }
+  },
+  {
+   "id": "Y_uni_plain",
+   "verdict": "identical",
+   "a": {
+    "sha256": "3c1d3a782af95a92fa6ea25a352ef65b9dd2a982bc6e9dbff093cbcc41367491",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 2.2770477922644508e-07
+   },
+   "b": {
+    "sha256": "3c1d3a782af95a92fa6ea25a352ef65b9dd2a982bc6e9dbff093cbcc41367491",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 2.2770477922644508e-07
+   }
+  },
+  {
+   "id": "Y_uni_sub4",
+   "verdict": "identical",
+   "a": {
+    "sha256": "55367ff709093d19fa7be62047cf634c63d14c7a38fedc49c29a10ce39ece556",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.7884253843259243e-07
+   },
+   "b": {
+    "sha256": "55367ff709093d19fa7be62047cf634c63d14c7a38fedc49c29a10ce39ece556",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.7884253843259243e-07
+   }
+  },
+  {
+   "id": "Y_uni_c64",
+   "verdict": "identical",
+   "a": {
+    "sha256": "93f1a7357268571e0efbb14755503d4f3c7c82aab274c2279faf3488caf0ba9a",
+    "dtype": "complex64",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.7786860874999997e-07
+   },
+   "b": {
+    "sha256": "93f1a7357268571e0efbb14755503d4f3c7c82aab274c2279faf3488caf0ba9a",
+    "dtype": "complex64",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.7786860874999997e-07
+   }
+  },
+  {
+   "id": "Z_uni_ok",
+   "verdict": "identical",
+   "a": {
+    "sha256": "d63a9d8df8644a653c183da2e04721a6b098030a4bfee5d2cb193d0e8abff683",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.222966081620404e-07
+   },
+   "b": {
+    "sha256": "d63a9d8df8644a653c183da2e04721a6b098030a4bfee5d2cb193d0e8abff683",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.222966081620404e-07
+   }
+  },
+  {
+   "id": "Z_uni_bad",
+   "verdict": "both_refused",
+   "a": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side field this completion is built on carries 3.712e+04x the launched power that re"
+   },
+   "b": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side field this completion is built on carries 3.712e+04x the launched power that re"
+   }
+  },
+  {
+   "id": "Z_uni_fb",
+   "verdict": "identical",
+   "a": {
+    "sha256": "c0a8f96de2aea60d0fe2b336e36b767294f68cd87682c8bdca8a317137035660",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 3.752112030130142e-08
+   },
+   "b": {
+    "sha256": "c0a8f96de2aea60d0fe2b336e36b767294f68cd87682c8bdca8a317137035660",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 3.752112030130142e-08
+   }
+  },
+  {
+   "id": "Z_uni_edge",
+   "verdict": "both_refused",
+   "a": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side field this completion is built on carries 7703x the launched power that reaches"
+   },
+   "b": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side field this completion is built on carries 7703x the launched power that reaches"
+   }
+  },
+  {
+   "id": "Z_mb_ok",
+   "verdict": "identical",
+   "a": {
+    "sha256": "d63a9d8df8644a653c183da2e04721a6b098030a4bfee5d2cb193d0e8abff683",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.222966081620404e-07
+   },
+   "b": {
+    "sha256": "d63a9d8df8644a653c183da2e04721a6b098030a4bfee5d2cb193d0e8abff683",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.222966081620404e-07
+   }
+  },
+  {
+   "id": "Z_uni_vertex",
+   "verdict": "identical",
+   "a": {
+    "sha256": "8a686fe02c3625546efbe878c95cc76d247238b60c44fea957ecab5249ccb5c9",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.8191142127274113e-07
+   },
+   "b": {
+    "sha256": "8a686fe02c3625546efbe878c95cc76d247238b60c44fea957ecab5249ccb5c9",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.8191142127274113e-07
+   }
+  },
+  {
+   "id": "Z_uni_plain",
+   "verdict": "identical",
+   "a": {
+    "sha256": "15f77cab41bf3efdafc187892ac54a3607045efe1b8d82b9b7f571528bbb35d9",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.642698878269336e-07
+   },
+   "b": {
+    "sha256": "15f77cab41bf3efdafc187892ac54a3607045efe1b8d82b9b7f571528bbb35d9",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.642698878269336e-07
+   }
+  },
+  {
+   "id": "Z_uni_sub4",
+   "verdict": "identical",
+   "a": {
+    "sha256": "4a596c41e2e061f994837ae495d9ccc6ecd1164e393c7b5d3713cd2842e768b7",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.222162153399978e-07
+   },
+   "b": {
+    "sha256": "4a596c41e2e061f994837ae495d9ccc6ecd1164e393c7b5d3713cd2842e768b7",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.222162153399978e-07
+   }
+  },
+  {
+   "id": "Z_uni_c64",
+   "verdict": "identical",
+   "a": {
+    "sha256": "267767c71910a5079fc3da1567bc2cdecd6645c04732f4432a1fb8c405b8018e",
+    "dtype": "complex64",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.2229661e-07
+   },
+   "b": {
+    "sha256": "267767c71910a5079fc3da1567bc2cdecd6645c04732f4432a1fb8c405b8018e",
+    "dtype": "complex64",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.2229661e-07
+   }
+  },
+  {
+   "id": "C_uni_ok",
+   "verdict": "identical",
+   "a": {
+    "sha256": "1a1e7371d977020af2b70f235842165149bb3c5d974163758fcf213b6f6e5f55",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 4.216837003503654e-07
+   },
+   "b": {
+    "sha256": "1a1e7371d977020af2b70f235842165149bb3c5d974163758fcf213b6f6e5f55",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 4.216837003503654e-07
+   }
+  },
+  {
+   "id": "C_uni_bad",
+   "verdict": "both_refused",
+   "a": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the field this call would return (the plain multibranch field) has NOT CONVERGED in the output pixel.  Rast"
+   },
+   "b": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the reading this call decides on -- taken on the plain multibranch field -- has NOT CONVERGED in the output"
+   }
+  },
+  {
+   "id": "C_uni_fb",
+   "verdict": "identical",
+   "a": {
+    "sha256": "b958de6b0668af6c3bdc565baa412b2ab7d05097e17b01c9b23b84c1f7b2a845",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 4.221325597609806e-07
+   },
+   "b": {
+    "sha256": "b958de6b0668af6c3bdc565baa412b2ab7d05097e17b01c9b23b84c1f7b2a845",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 4.221325597609806e-07
+   }
+  },
+  {
+   "id": "C_uni_edge",
+   "verdict": "identical",
+   "a": {
+    "sha256": "7a0f56440f88ee657d207593038038fc1791be4883bde5c405808a1249da1f0b",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 4.242204681081734e-07
+   },
+   "b": {
+    "sha256": "7a0f56440f88ee657d207593038038fc1791be4883bde5c405808a1249da1f0b",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 4.242204681081734e-07
+   }
+  },
+  {
+   "id": "C_mb_ok",
+   "verdict": "identical",
+   "a": {
+    "sha256": "1a1e7371d977020af2b70f235842165149bb3c5d974163758fcf213b6f6e5f55",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 4.216837003503654e-07
+   },
+   "b": {
+    "sha256": "1a1e7371d977020af2b70f235842165149bb3c5d974163758fcf213b6f6e5f55",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 4.216837003503654e-07
+   }
+  },
+  {
+   "id": "C_uni_vertex",
+   "verdict": "identical",
+   "a": {
+    "sha256": "6024eebe01111fc442a6a4083a3a515024070864456cde88399ae506f58bab7f",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 4.21809463922642e-07
+   },
+   "b": {
+    "sha256": "6024eebe01111fc442a6a4083a3a515024070864456cde88399ae506f58bab7f",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 4.21809463922642e-07
+   }
+  },
+  {
+   "id": "C_uni_plain",
+   "verdict": "identical",
+   "a": {
+    "sha256": "1a1e7371d977020af2b70f235842165149bb3c5d974163758fcf213b6f6e5f55",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 4.216837003503654e-07
+   },
+   "b": {
+    "sha256": "1a1e7371d977020af2b70f235842165149bb3c5d974163758fcf213b6f6e5f55",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 4.216837003503654e-07
+   }
+  },
+  {
+   "id": "C_uni_sub4",
+   "verdict": "identical",
+   "a": {
+    "sha256": "4941ba13cc9d6a783182617e2b631ec1d1286edcb4b6c6ad0e7331483d2c9427",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 4.214984087748971e-07
+   },
+   "b": {
+    "sha256": "4941ba13cc9d6a783182617e2b631ec1d1286edcb4b6c6ad0e7331483d2c9427",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 4.214984087748971e-07
+   }
+  },
+  {
+   "id": "C_uni_c64",
+   "verdict": "identical",
+   "a": {
+    "sha256": "43eb7b1853b38375a802c4390f754dd82d651cb02b79a1b6a98951e8697e8a09",
+    "dtype": "complex64",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 4.2168371874999997e-07
+   },
+   "b": {
+    "sha256": "43eb7b1853b38375a802c4390f754dd82d651cb02b79a1b6a98951e8697e8a09",
+    "dtype": "complex64",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 4.2168371874999997e-07
+   }
+  },
+  {
+   "id": "AS_uni_ok",
+   "verdict": "identical",
+   "a": {
+    "sha256": "f79b7b3dbc8f24bf348f1a6f113b0e79ec25a0ef4df405efe26a9ecb83240b05",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 6.237046558688502e-07
+   },
+   "b": {
+    "sha256": "f79b7b3dbc8f24bf348f1a6f113b0e79ec25a0ef4df405efe26a9ecb83240b05",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 6.237046558688502e-07
+   }
+  },
+  {
+   "id": "AS_uni_bad",
+   "verdict": "both_refused",
+   "a": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side field this completion is built on carries 3402x the launched power that reaches"
+   },
+   "b": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side field this completion is built on carries 3402x the launched power that reaches"
+   }
+  },
+  {
+   "id": "AS_uni_fb",
+   "verdict": "identical",
+   "a": {
+    "sha256": "4edddcbeb4e9426f6dc69549e9aa84cdde33c56ba8856d96af67810f9a643be7",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 6.41492183589226e-07
+   },
+   "b": {
+    "sha256": "4edddcbeb4e9426f6dc69549e9aa84cdde33c56ba8856d96af67810f9a643be7",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 6.41492183589226e-07
+   }
+  },
+  {
+   "id": "AS_uni_edge",
+   "verdict": "both_refused",
+   "a": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side field this completion is built on carries 1396x the launched power that reaches"
+   },
+   "b": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side field this completion is built on carries 1396x the launched power that reaches"
+   }
+  },
+  {
+   "id": "AS_mb_ok",
+   "verdict": "identical",
+   "a": {
+    "sha256": "0b78fb8b4bf0065c78c758bce21ef6f3bb6bfe8f2de3ac928f7c20acddd42cdc",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 6.126746562530745e-07
+   },
+   "b": {
+    "sha256": "0b78fb8b4bf0065c78c758bce21ef6f3bb6bfe8f2de3ac928f7c20acddd42cdc",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 6.126746562530745e-07
+   }
+  },
+  {
+   "id": "AS_uni_vertex",
+   "verdict": "identical",
+   "a": {
+    "sha256": "df8957d6b83cb56a4c42d66170c0e7ceade214826557dc54a901847f3efb42cd",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 5.885448778888937e-07
+   },
+   "b": {
+    "sha256": "df8957d6b83cb56a4c42d66170c0e7ceade214826557dc54a901847f3efb42cd",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 5.885448778888937e-07
+   }
+  },
+  {
+   "id": "AS_uni_plain",
+   "verdict": "identical",
+   "a": {
+    "sha256": "3bb34b1bde6d7f055acda195043b4c36d84d42c4bc7a94db0fc0681fea661a65",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 6.749024382830057e-07
+   },
+   "b": {
+    "sha256": "3bb34b1bde6d7f055acda195043b4c36d84d42c4bc7a94db0fc0681fea661a65",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 6.749024382830057e-07
+   }
+  },
+  {
+   "id": "AS_uni_sub4",
+   "verdict": "identical",
+   "a": {
+    "sha256": "25a25154dfbda96884296ecbe46f3e6df70ad9c2387b3b4dd06f035c094164f1",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 6.321227914866032e-07
+   },
+   "b": {
+    "sha256": "25a25154dfbda96884296ecbe46f3e6df70ad9c2387b3b4dd06f035c094164f1",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 6.321227914866032e-07
+   }
+  },
+  {
+   "id": "AS_uni_c64",
+   "verdict": "identical",
+   "a": {
+    "sha256": "812de4a5f7524d7eb225b796debd691ebc0521b1473af809399a06903724f987",
+    "dtype": "complex64",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 6.237046400000001e-07
+   },
+   "b": {
+    "sha256": "812de4a5f7524d7eb225b796debd691ebc0521b1473af809399a06903724f987",
+    "dtype": "complex64",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 6.237046400000001e-07
+   }
+  },
+  {
+   "id": "MC_uni_ok",
+   "verdict": "identical",
+   "a": {
+    "sha256": "3cd532700ead68c71075d633f31f04b3f443fe0053d55942261814816ff1fabf",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.8694601934003632e-07
+   },
+   "b": {
+    "sha256": "3cd532700ead68c71075d633f31f04b3f443fe0053d55942261814816ff1fabf",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.8694601934003632e-07
+   }
+  },
+  {
+   "id": "MC_uni_bad",
+   "verdict": "both_refused",
+   "a": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side field this completion is built on carries 1.62e+04x the launched power that rea"
+   },
+   "b": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side field this completion is built on carries 1.62e+04x the launched power that rea"
+   }
+  },
+  {
+   "id": "MC_uni_fb",
+   "verdict": "identical",
+   "a": {
+    "sha256": "362848f41debdc52fa5eeb94754ab9ef3c24c13f69e202534a76a2fed30aed1d",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.9742879660235701e-07
+   },
+   "b": {
+    "sha256": "362848f41debdc52fa5eeb94754ab9ef3c24c13f69e202534a76a2fed30aed1d",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.9742879660235701e-07
+   }
+  },
+  {
+   "id": "MC_uni_edge",
+   "verdict": "both_refused",
+   "a": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side field this completion is built on carries 4540x the launched power that reaches"
+   },
+   "b": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side field this completion is built on carries 4540x the launched power that reaches"
+   }
+  },
+  {
+   "id": "MC_mb_ok",
+   "verdict": "identical",
+   "a": {
+    "sha256": "76b2a430347b503382719e70fcd6a838e4a84803a5591ee0d00d6927de997f92",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.7889553478437122e-07
+   },
+   "b": {
+    "sha256": "76b2a430347b503382719e70fcd6a838e4a84803a5591ee0d00d6927de997f92",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.7889553478437122e-07
+   }
+  },
+  {
+   "id": "MC_uni_vertex",
+   "verdict": "identical",
+   "a": {
+    "sha256": "c683027ffce81a03789b71f467e87a96eedb22dd92dfe5ed975f41b749b37724",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.884106850596574e-07
+   },
+   "b": {
+    "sha256": "c683027ffce81a03789b71f467e87a96eedb22dd92dfe5ed975f41b749b37724",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.884106850596574e-07
+   }
+  },
+  {
+   "id": "MC_uni_plain",
+   "verdict": "identical",
+   "a": {
+    "sha256": "98a665b33df8ed2b6a0e7e07a46e31e71f2644a772b73607a35aa6c0870281a1",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 2.173133199821288e-07
+   },
+   "b": {
+    "sha256": "98a665b33df8ed2b6a0e7e07a46e31e71f2644a772b73607a35aa6c0870281a1",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 2.173133199821288e-07
+   }
+  },
+  {
+   "id": "MC_uni_sub4",
+   "verdict": "identical",
+   "a": {
+    "sha256": "170b5a0b703c7e7fb81745d0d7ae8e6b3810d0d56ae4747484309c8f0c8385dc",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.8739500952977932e-07
+   },
+   "b": {
+    "sha256": "170b5a0b703c7e7fb81745d0d7ae8e6b3810d0d56ae4747484309c8f0c8385dc",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.8739500952977932e-07
+   }
+  },
+  {
+   "id": "MC_uni_c64",
+   "verdict": "identical",
+   "a": {
+    "sha256": "7eb9bcd7b8633b8a3e0b3200ba072a70d1e153205448c685769b4995c7bd7c96",
+    "dtype": "complex64",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.86946021640625e-07
+   },
+   "b": {
+    "sha256": "7eb9bcd7b8633b8a3e0b3200ba072a70d1e153205448c685769b4995c7bd7c96",
+    "dtype": "complex64",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.86946021640625e-07
+   }
+  },
+  {
+   "id": "HN_uni_ok",
+   "verdict": "identical",
+   "a": {
+    "sha256": "17b6a7ab59c06d26413e95e6a345f75c1730f56784d8ca7e75a8e519aa8554b3",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "power": 7.917570826341537e-07
+   },
+   "b": {
+    "sha256": "17b6a7ab59c06d26413e95e6a345f75c1730f56784d8ca7e75a8e519aa8554b3",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "power": 7.917570826341537e-07
+   }
+  },
+  {
+   "id": "HN_uni_bad",
+   "verdict": "both_refused",
+   "a": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side field this completion is built on carries 4.548e+04x the launched power that re"
+   },
+   "b": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side field this completion is built on carries 4.548e+04x the launched power that re"
+   }
+  },
+  {
+   "id": "HN_uni_fb",
+   "verdict": "both_refused",
+   "a": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the field this call would return (the plain multibranch field) has NOT CONVERGED in the output pixel.  Rast"
+   },
+   "b": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the reading this call decides on -- taken on the plain multibranch field -- has NOT CONVERGED in the output"
+   }
+  },
+  {
+   "id": "HN_uni_edge",
+   "verdict": "both_refused",
+   "a": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side field this completion is built on carries 2.409e+04x the launched power that re"
+   },
+   "b": {
+    "error": "RuntimeError",
+    "msg": "apply_real_lens_traced_uniform (also reached via apply_real_lens_traced(caustic='uniform')): the multibranch bright-side field this completion is built on carries 2.409e+04x the launched power that re"
+   }
+  },
+  {
+   "id": "HN_mb_ok",
+   "verdict": "identical",
+   "a": {
+    "sha256": "9f8819855aa1db0cc2d35519c850b57e3fa259342bf5c9a4e08a17990317e384",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "power": 7.704388017914141e-07
+   },
+   "b": {
+    "sha256": "9f8819855aa1db0cc2d35519c850b57e3fa259342bf5c9a4e08a17990317e384",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "power": 7.704388017914141e-07
+   }
+  },
+  {
+   "id": "HN_uni_vertex",
+   "verdict": "identical",
+   "a": {
+    "sha256": "e86c7471043b718ad4da468b6e86fe73232eeaa7161a961cad48bf124dbc081c",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "power": 6.413042098727564e-07
+   },
+   "b": {
+    "sha256": "e86c7471043b718ad4da468b6e86fe73232eeaa7161a961cad48bf124dbc081c",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "power": 6.413042098727564e-07
+   }
+  },
+  {
+   "id": "HN_uni_plain",
+   "verdict": "identical",
+   "a": {
+    "sha256": "2dadc0b8473d2411cd28895b7c81a7c30328fd7f5691b1526112e20fc3b3aba2",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "power": 9.030400744868713e-07
+   },
+   "b": {
+    "sha256": "2dadc0b8473d2411cd28895b7c81a7c30328fd7f5691b1526112e20fc3b3aba2",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "power": 9.030400744868713e-07
+   }
+  },
+  {
+   "id": "HN_uni_sub4",
+   "verdict": "identical",
+   "a": {
+    "sha256": "39db9c40adc319cca082aed068a045ac5a09a4183c62cc92905f0982bb78250f",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "power": 7.920311530197834e-07
+   },
+   "b": {
+    "sha256": "39db9c40adc319cca082aed068a045ac5a09a4183c62cc92905f0982bb78250f",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "power": 7.920311530197834e-07
+   }
+  },
+  {
+   "id": "HN_uni_c64",
+   "verdict": "identical",
+   "a": {
+    "sha256": "00a77e9fb1ab9704647b4848b81313f83701053652009ef39a17b3771e684d72",
+    "dtype": "complex64",
+    "shape": [
+     640,
+     640
+    ],
+    "power": 7.917571249999999e-07
+   },
+   "b": {
+    "sha256": "00a77e9fb1ab9704647b4848b81313f83701053652009ef39a17b3771e684d72",
+    "dtype": "complex64",
+    "shape": [
+     640,
+     640
+    ],
+    "power": 7.917571249999999e-07
+   }
+  },
+  {
+   "id": "W_alt_uni_ok",
+   "verdict": "identical",
+   "a": {
+    "sha256": "d7300f451742fc3e19fc54547573af6ac3b79440fff1922a072415f6e6fd66fd",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "power": 2.404264097999401e-07
+   },
+   "b": {
+    "sha256": "d7300f451742fc3e19fc54547573af6ac3b79440fff1922a072415f6e6fd66fd",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "power": 2.404264097999401e-07
+   }
+  },
+  {
+   "id": "X_alt_uni_ok",
+   "verdict": "identical",
+   "a": {
+    "sha256": "a1255f4c28f41252dec0d1baa46462b58ebaaeccf805f28124c4bd556f0e869e",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.7409721424173564e-07
+   },
+   "b": {
+    "sha256": "a1255f4c28f41252dec0d1baa46462b58ebaaeccf805f28124c4bd556f0e869e",
+    "dtype": "complex128",
+    "shape": [
+     512,
+     512
+    ],
+    "power": 1.7409721424173564e-07
+   }
+  },
+  {
+   "id": "V_alt_uni_ok",
+   "verdict": "identical",
+   "a": {
+    "sha256": "5e80a8de4cedfcf1272e0af09a238dfd691c023651276d9b69747407e9e73529",
+    "dtype": "complex128",
+    "shape": [
+     400,
+     400
+    ],
+    "power": 1.4660840141142083e-07
+   },
+   "b": {
+    "sha256": "5e80a8de4cedfcf1272e0af09a238dfd691c023651276d9b69747407e9e73529",
+    "dtype": "complex128",
+    "shape": [
+     400,
+     400
+    ],
+    "power": 1.4660840141142083e-07
+   }
+  },
+  {
+   "id": "AS_alt_uni_ok",
+   "verdict": "identical",
+   "a": {
+    "sha256": "e2c38873f5d6f7b73c43b3b4c10f6e74535c2f3fb370110e54f5e85ebbe5b096",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "power": 6.150817613517166e-07
+   },
+   "b": {
+    "sha256": "e2c38873f5d6f7b73c43b3b4c10f6e74535c2f3fb370110e54f5e85ebbe5b096",
+    "dtype": "complex128",
+    "shape": [
+     640,
+     640
+    ],
+    "power": 6.150817613517166e-07
+   }
+  }
+ ]
+}

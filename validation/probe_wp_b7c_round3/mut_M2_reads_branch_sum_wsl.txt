@@ -1,0 +1,6 @@
+.............................F............                               [100%]
+=================================== FAILURES ===================================
+E   AssertionError: the completion recorded the BRANCH SUM's reading as its own: 1.063604833920187 == 1.063604833920187.  The CFU swap rewrites the fold band and the whole dark side, so the two are not the same number, and the field this call returns is the completed one
+    assert 1.063604833920187 != 1.063604833920187
+/mnt/c/tmp/lum_mb3_mut2/tests/unit/test_verify_b7c_round2.py:261: AssertionError: the completion recorded the BRANCH SUM's reading as its own: 1.063604833920187 == 1.063604833920187.  The CFU swap rewrites the fold band and the whole dark side, so the two are not the same number, and the field this call returns is the completed one
+1 failed, 41 passed in 42.50s
