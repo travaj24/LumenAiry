@@ -466,14 +466,16 @@ lattice 3.65x too wide carrying 60.7x the power it went in with, and the
 readout's guard refused it -- correctly.  With that leg falling back, the
 same two censuses read:
 
-| census (both builds) | 49ddf4bd | 5.49.0 |
-|---|---|---|
-| 192 ordinary chain cells: identical / moved / **ok -> raised** | — | 192 / 0 / **0** |
-| 103 archive keys, default vs default: **ok -> raised** / raised -> ok | — | **0** / 2 |
-| 103 archive keys with `transport='sziklas'` | — | **103 identical** |
+| census, 5.49.0 against 49ddf4bd, both builds | reading |
+|---|---|
+| 192 ordinary chain cells: identical / moved / **ok -> raised** | 192 / 0 / **0** |
+| the same, Kelly warnings / cells carrying one | 0 / 0 |
+| 103 archive keys, default vs default: **ok -> raised** / raised -> ok | **0** / 2 |
+| 103 archive keys with `transport='sziklas'`: identical | **103 of 103** |
 
 The two raised -> ok are the `dx_out` / `carrier_out` keywords the old
-transport refused and this one accepts.
+transport refused and this one accepts -- a call that RAISED at 5.48.1 and
+returns now, which is the direction nobody needs a migration note for.
 
 The one remaining exception is the JAX one: `jax.grad` / `jax.jit` through
 `propagate_carrier_referenced` now refuses by default, because the Collins

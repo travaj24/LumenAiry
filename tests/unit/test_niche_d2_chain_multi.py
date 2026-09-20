@@ -139,7 +139,7 @@ _LEG_CAL = {}
 #: and ignored (WP-C3 round 2: the key is route-SELECTING, not refused --
 #: an earlier revision of this comment described the 5.46-5.48 contract).
 #: So these fixtures are about the readout whose stop plane they are
-#: sizing.  Of the nine uses of this constant, six pass a ``standoff``;
+#: sizing.  Of the TEN uses of this constant, seven pass a ``standoff``;
 #: the other three
 #: (``test_default_refuses_the_periodic_replica_regime``,
 #: ``..._auto_window_is_independent_of_congruence_order`` and
