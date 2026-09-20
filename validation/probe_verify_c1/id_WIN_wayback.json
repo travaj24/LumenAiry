@@ -1,0 +1,113 @@
+{
+ "aperture": {
+  "identical": [
+   "v_algebra_operator_annular",
+   "v_algebra_operator_circ",
+   "v_algebra_operator_square",
+   "v_annulus",
+   "v_annulus_decentred_anamorphic",
+   "v_asm_of_apertured",
+   "v_chain_jax_jit",
+   "v_chain_numpy",
+   "v_chain_numpy_rect",
+   "v_circ",
+   "v_circ_complex64",
+   "v_circ_decentred",
+   "v_circ_edge_samples_8",
+   "v_circ_nan_outside",
+   "v_circ_odd_grid",
+   "v_cupy_direct",
+   "v_evaluate_prescription_stop",
+   "v_jax_direct",
+   "v_jones_field",
+   "v_lyot_annular",
+   "v_lyot_outer_only",
+   "v_psf_of_apertured",
+   "v_rect",
+   "v_rect_anamorphic_grid",
+   "v_rs_spatial_of_apertured"
+  ],
+  "moved": [
+   {
+    "base_dtype": "complex128",
+    "base_neg_zero": [
+     3152,
+     3027
+    ],
+    "base_sha": "386c993dff648a07",
+    "name": "v_chain_jax_eager",
+    "new_dtype": "complex128",
+    "new_neg_zero": [
+     0,
+     0
+    ],
+    "new_sha": "a04e643236c6bb2d"
+   },
+   {
+    "base_dtype": "complex128",
+    "base_neg_zero": [
+     3160,
+     3238
+    ],
+    "base_sha": "8f4a17644f864ff8",
+    "name": "v_chain_jax_eager_annular",
+    "new_dtype": "complex128",
+    "new_neg_zero": [
+     0,
+     0
+    ],
+    "new_sha": "380d168aa8524712"
+   }
+  ],
+  "n_identical": 25,
+  "n_moved": 2,
+  "n_total": 27,
+  "only_base": [],
+  "only_new": []
+ },
+ "base": {
+  "arm": "default",
+  "file": "fx_PRE_WIN_default.json",
+  "lumenairy_file": "C:\\tmp\\lum_vc1_base\\lumenairy\\__init__.py",
+  "python": "3.14.6"
+ },
+ "label": "WIN_wayback",
+ "new": {
+  "arm": "hard",
+  "file": "fx_NEW_WIN_hard.json",
+  "lumenairy_file": "C:\\tmp\\lum_vc1\\lumenairy\\__init__.py",
+  "python": "3.14.6"
+ },
+ "plain": {
+  "identical": [
+   "p_apodized_pupil",
+   "p_asm",
+   "p_axicon",
+   "p_chain_jax_lens_only",
+   "p_chain_lens_only",
+   "p_fraunhofer_mft",
+   "p_gaussian_aperture",
+   "p_gaussian_beam",
+   "p_hf_freespace",
+   "p_mirror_with_aperture_diameter",
+   "p_pmm",
+   "p_rcwa",
+   "p_real_lens_thin",
+   "p_rs_spatial_gaussian",
+   "p_rs_transfer",
+   "p_thin_grating",
+   "p_thin_lens",
+   "p_thin_lens_aplanatic",
+   "p_turbulence",
+   "p_vortex_phase_mask",
+   "p_zernike_aberration",
+   "p_zernike_basis"
+  ],
+  "moved": [],
+  "n_identical": 22,
+  "n_moved": 0,
+  "n_total": 22,
+  "only_base": [],
+  "only_new": []
+ }
+}
