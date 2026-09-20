@@ -66,6 +66,8 @@ Runtime: whole file ~20 s on the reference box; the slowest id is the
 third-optic ladder at ~4 s.  No test is ``slow``.
 """
 import gc
+import shutil
+import tempfile
 import tracemalloc
 
 import numpy as np
@@ -658,7 +660,7 @@ def test_verify_c1r2_the_grey_branch_costs_one_grid_and_is_flat_in_n_sub():
 
 
 # ===========================================================================
-# R8 -- the Migration table's codegen recipe covers one of two styles
+# R8 -- the Migration table's codegen recipe now covers BOTH styles
 # ===========================================================================
 
 _CODEGEN_RX = {
@@ -674,32 +676,162 @@ _CODEGEN_RX = {
     'aperture_diameter': 1.8e-3,
 }
 
+#: The one rim-bearing line each style emits for a STOP surface, anchored as
+#: an EXACT string so the ids below fail on the anchor (loudly) rather than on
+#: a silent no-op edit if either emission ever changes.
+_CODEGEN_UNROLLED_CALL = ('la.apply_aperture(E, dx, shape="circular", '
+                          'params={"diameter": 1.79999999999999995e-03})')
+_CODEGEN_SYSTEM_ELEM = ("{'type': 'aperture', 'shape': 'circular', "
+                        "'params': {'diameter': 1.79999999999999995e-03}}")
 
-def test_verify_c1r2_the_codegen_migration_recipe_misses_the_system_style():
-    """R8.  ``Migration-Guide.md``'s 5.49.0 table gives, for "a script emitted
-    by ``lumenairy.io.codegen`` for a STOP surface", the way back "edit the
-    generated ``la.apply_aperture(...)`` call, or re-pin".
 
-    ``generate_simulation_script`` has TWO public styles.  ``'unrolled'``
-    emits exactly that call, so the recipe applies.  ``'system'`` emits an
-    element list instead -- ``{'type': 'aperture', 'shape': 'circular',
-    'params': {...}}`` with no ``'edge'`` key and no ``la.apply_aperture(...)``
-    call anywhere -- so the recipe names something that is not in the file.
-    Its way back is ``'edge': 'hard'`` in the emitted element dict, which the
-    table does not say.
-
-    The id asserts both halves, so it stays honest if either style changes.
-    """
+def _codegen_script(style):
     from lumenairy.io.codegen import generate_simulation_script
-    unrolled = generate_simulation_script(_CODEGEN_RX, wavelength=633e-9,
-                                          N=128, dx=40e-6, style='unrolled')
-    system = generate_simulation_script(_CODEGEN_RX, wavelength=633e-9,
-                                        N=128, dx=40e-6, style='system')
-    assert 'la.apply_aperture(E, dx, shape="circular"' in unrolled
-    assert "'edge'" not in unrolled
-    assert "{'type': 'aperture', 'shape': 'circular'" in system
+    return generate_simulation_script(_CODEGEN_RX, wavelength=633e-9,
+                                      N=128, dx=40e-6, style=style)
+
+
+def test_verify_c1r2_the_codegen_way_back_is_style_specific():
+    """R8.  ``Migration-Guide.md``'s 5.49.0 table used to give ONE codegen
+    recipe -- "edit the generated ``la.apply_aperture(...)`` call, or re-pin"
+    -- for "a script emitted by ``lumenairy.io.codegen`` for a STOP surface".
+
+    ``generate_simulation_script`` has TWO public styles and they need
+    different recipes.  ``'unrolled'`` (the default) emits exactly that call,
+    so the old recipe applies to it.  ``'system'`` emits an element list
+    instead -- ``{'type': 'aperture', 'shape': 'circular', 'params': {...}}``
+    with no ``'edge'`` key and **no ``la.apply_aperture(`` anywhere in the
+    file** -- so the old recipe named something the reader cannot find; its
+    way back is ``'edge': 'hard'`` inside the emitted element dict.  The
+    Migration table now carries a row for each.
+
+    The id asserts the emitted TEXT of both styles (so it stays honest if
+    either generator changes) and that the guide names both recipes.
+    """
+    import pathlib
+
+    unrolled = _codegen_script('unrolled')
+    system = _codegen_script('system')
+    assert _CODEGEN_UNROLLED_CALL in unrolled
+    assert "'edge'" not in unrolled and 'edge=' not in unrolled
+    assert _CODEGEN_SYSTEM_ELEM in system
     assert 'la.apply_aperture(' not in system
     assert "'edge'" not in system
+
+    guide = (pathlib.Path(__file__).resolve().parents[2]
+             / 'Migration-Guide.md').read_text(encoding='utf-8',
+                                               errors='replace')
+    body = guide.split('## 5.49.0')[1].split(chr(10) + '## ')[0]
+    assert "style='unrolled'" in body, 'the unrolled codegen row is gone'
+    assert "style='system'" in body, 'the system codegen row is gone'
+    assert "`'edge': 'hard'` to the generated" in body, (
+        'the system-style way back no longer names the element-dict key')
+
+
+def test_verify_c1r2_both_codegen_styles_reproduce_the_hard_rim_when_executed():
+    """R8's other half, and the thing VERIFY-C1-ROUND2 recorded as unmeasured
+    ("a generated script executed end to end"): the two recipes are checked by
+    RUNNING the generated scripts, not by reading their text.
+
+    For each style the script is generated twice -- once untouched, once with
+    that style's own way back applied exactly as the Migration table words it
+    (``edge="hard"`` appended to the ``la.apply_aperture(...)`` call;
+    ``'edge': 'hard'`` added to the emitted element dict) -- written to a
+    temporary directory and executed in a SUBPROCESS with
+    ``stdin=subprocess.DEVNULL``.  The unrolled template's own ``__main__``
+    driver ends in ``plt.show()``, so it is replaced by a digest driver rather
+    than run.
+
+    The decisions, all on exact bytes of the exit-plane field, so there is no
+    bar here to be per-build:
+
+      * each style's way-back digest DIFFERS from its own untouched digest --
+        the recipe actually bites in a generated script, which is what the
+        table promises;
+      * the two styles agree with each other on BOTH arms -- one default
+        answer and one pre-5.49 answer, two spellings.  Without this second
+        claim the first would be satisfied by a system-style recipe that
+        changed the answer to something else entirely.
+
+    (That those way-back bytes ARE the pre-5.49 library's is the
+    archive-to-archive half, which cannot be asserted from inside one tree; it
+    is measured by
+    ``validation/probe_wpc1_round3/probe_r8_codegen_execute.py`` against a
+    ``git archive 49ddf4bd`` extraction, on both builds.)
+
+    Runtime ~25 s: four subprocess runs of a 128 x 128 three-element chain.
+    """
+    import hashlib  # noqa: F401 -- the generated driver imports its own
+    import os
+    import subprocess
+    import sys
+
+    import lumenairy
+
+    root = os.path.dirname(os.path.dirname(os.path.abspath(
+        lumenairy.__file__)))
+    tmp = tempfile.mkdtemp()
+    env = dict(os.environ)
+    env['PYTHONPATH'] = root
+    for var in ('OMP_NUM_THREADS', 'OPENBLAS_NUM_THREADS', 'MKL_NUM_THREADS'):
+        env[var] = '1'
+
+    DRIVER_UNROLLED = (
+        chr(10) + 'import hashlib as _h' + chr(10)
+        + '_E, _planes = run_simulation(verbose=False)' + chr(10)
+        + "print('DIGEST ' + _h.blake2b(_E.tobytes(), "
+          "digest_size=8).hexdigest())" + chr(10))
+    DRIVER_SYSTEM = (
+        chr(10) + 'import hashlib as _h' + chr(10)
+        + "print('DIGEST ' + _h.blake2b(E_out.tobytes(), "
+          "digest_size=8).hexdigest())" + chr(10))
+
+    def _digest(style, way_back):
+        src = _codegen_script(style)
+        if style == 'unrolled':
+            assert src.count(_CODEGEN_UNROLLED_CALL) == 1, 'unrolled anchor'
+            if way_back:
+                src = src.replace(_CODEGEN_UNROLLED_CALL,
+                                  _CODEGEN_UNROLLED_CALL[:-1]
+                                  + ', edge="hard")')
+            head = "if __name__ == '__main__':"
+            assert head in src, 'the unrolled template lost its driver'
+            src = src[:src.index(head)] + DRIVER_UNROLLED
+        else:
+            assert src.count(_CODEGEN_SYSTEM_ELEM) == 1, 'system anchor'
+            if way_back:
+                src = src.replace(_CODEGEN_SYSTEM_ELEM,
+                                  _CODEGEN_SYSTEM_ELEM[:-1]
+                                  + ", 'edge': 'hard'}")
+            src += DRIVER_SYSTEM
+        tag = '{0}_{1}'.format(style, 'wayback' if way_back else 'default')
+        path = os.path.join(tmp, 'gen_{0}.py'.format(tag))
+        with open(path, 'w', encoding='utf-8') as fh:
+            fh.write(src)
+        run = subprocess.run([sys.executable, path],
+                             stdin=subprocess.DEVNULL, capture_output=True,
+                             text=True, env=env, cwd=tmp, timeout=600)
+        assert run.returncode == 0, (tag, run.returncode, run.stdout[-1500:],
+                                     run.stderr[-1500:])
+        hits = [ln for ln in run.stdout.splitlines()
+                if ln.startswith('DIGEST ')]
+        assert len(hits) == 1, (tag, run.stdout[-1500:])
+        got = hits[0].split()[1]
+        assert len(got) == 16, (tag, got)
+        return got
+
+    d = {}
+    try:
+        for style in ('unrolled', 'system'):
+            for way_back in (False, True):
+                d[(style, way_back)] = _digest(style, way_back)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+    assert d[('unrolled', True)] != d[('unrolled', False)], d
+    assert d[('system', True)] != d[('system', False)], d
+    assert d[('unrolled', False)] == d[('system', False)], d
+    assert d[('unrolled', True)] == d[('system', True)], d
 
 
 # ===========================================================================
