@@ -105,8 +105,7 @@ def _ev(rx, **kw):
 def _private_hard(rx):
     """The ONLY way back before round 2 -- the private builder plus a
     hand-driven chain -- kept here as the independent reference."""
-    from lumenairy.propagators.system import (_prescription_to_elements,
-                                              propagate_through_system)
+    from lumenairy.propagators.system import _prescription_to_elements, propagate_through_system
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
         elements = [dict(e, edge='hard') if e.get('type') == 'aperture' else e

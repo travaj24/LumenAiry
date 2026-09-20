@@ -38,8 +38,7 @@ def _verdict(fn):
 
 def main(out_path):
     from lumenairy.elements.elements import apply_aperture
-    from lumenairy.propagators.system import (propagate_through_system,
-                                              propagate_through_system_jax)
+    from lumenairy.propagators.system import propagate_through_system, propagate_through_system_jax
     try:
         import jax
         jax.config.update('jax_enable_x64', True)

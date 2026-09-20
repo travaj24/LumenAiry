@@ -17,8 +17,8 @@ The gaps, each named in
       the NumPy chain calls it unconditionally.  So an element with no
       usable ``params`` carries an ILLEGAL rim keyword silently past both
       JAX routes while the NumPy chain raises.  Measured on both builds,
-      7 element shapes out of 7.  ``identical=True`` at ``49ddf4bd``, so the
-      split is WP-C1's own and round 2 did not close it.
+      7 element shapes out of 7, of which 6 read ``identical=True`` at
+      ``49ddf4bd``, so the split is WP-C1's own and round 2 did not close it.
   R2  ``edge_samples=True`` is ACCEPTED as 1 -- which is exactly the
       pre-5.49 pixel-centre rim -- while ``edge_samples=False`` is refused
       as "not a positive integer".  The shipped census row is named
@@ -143,7 +143,9 @@ _UNRESOLVABLE_BAD_RIMS = [
     'through _resolve_aperture_params and skip it when that returns None, so '
     'an unresolvable aperture element carries an illegal rim past them while '
     'the NumPy chain raises.  Measured 2026-09-20 on both builds, 7 element '
-    'shapes out of 7; identical=True on a git archive 49ddf4bd extraction, so '
+    'shapes out of 7, of which 6 read identical=True on a git archive '
+    '49ddf4bd extraction (the seventh, a None diameter, already split there '
+    'for an unrelated reason), so '
     'the split is WP-C1\'s and round 2 did not close it.  Requested edit: '
     'move the _aperture_edge_kwargs(elem) call in _system_element_signature '
     'and in the JAX slow path ABOVE the "resolved is None" guard.  Remove '

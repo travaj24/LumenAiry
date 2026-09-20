@@ -48,8 +48,7 @@ def masks():
 
 
 def main(out_path):
-    from lumenairy.analysis.plotting import (_auto_n_bins,
-                                             _radial_rms_profile)
+    from lumenairy.analysis.plotting import _auto_n_bins, _radial_rms_profile
     hard, grey = masks()
     out = {'lumenairy_file': lumenairy.__file__,
            'python': sys.version.split()[0], 'numpy': np.__version__}
@@ -134,8 +133,10 @@ def main(out_path):
         rms_g2 - rms_h2) / abs(rms_h2)
 
     # ---- site wrapper_merits.py:266 -- the merit's integration mask -------
-    from lumenairy.optimize.wrapper_merits import (_get_wrapper_merit_cache,
-                                                   _clear_wrapper_merit_cache)
+    from lumenairy.optimize.wrapper_merits import (
+        _clear_wrapper_merit_cache,
+        _get_wrapper_merit_cache,
+    )
     _clear_wrapper_merit_cache()
     cdtype = np.complex128
     ch = _get_wrapper_merit_cache(N, DX, hard, cdtype)

@@ -45,9 +45,9 @@ def _verdict(fn):
 
 
 def main(out_path):
-    from lumenairy.propagators.system import (propagate_through_system,
-                                              propagate_through_system_jax)
     import jax
+
+    from lumenairy.propagators.system import propagate_through_system, propagate_through_system_jax
     jax.config.update('jax_enable_x64', True)
     import jax.numpy as jnp
 
