@@ -102,7 +102,6 @@ def _pin_mem_budget(monkeypatch):
     monkeypatch.setenv('LUMENAIRY_MEM_BUDGET_MB', str(int(_MEM_BUDGET_MB)))
 
 
-
 # ===========================================================================
 # Glass: a dispersionless MODEL index registered here, so the oracle and the
 # library read the same number by construction and glass modelling is out of

@@ -135,7 +135,6 @@ def _pin_mem_budget(monkeypatch):
     monkeypatch.setenv('LUMENAIRY_MEM_BUDGET_MB', str(int(_MEM_BUDGET_MB)))
 
 
-
 def _singlet(last=None, R2=None, semi=_SEMI, glass=_GLASS, R1=_R, t=_T):
     s0 = {'radius': R1, 'conic': 0.0, 'thickness': t, 'glass_before': 'air',
           'glass_after': glass, 'semi_diameter': semi}
