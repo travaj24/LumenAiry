@@ -501,3 +501,274 @@ commit, not during).
   readings are non-monotone in `edge_samples` (2 -> 3.4183e-03 is marginally
   better than 4 -> 3.4928e-03), so the knee statement is kernel-specific and is
   asserted only where it was measured.
+
+---
+
+# Round 2 (VERIFY-WP-C1) -- 2026-09-20
+
+The four defects, the recorded items and the one surviving mutant from
+[`VERIFY_WP-C1.md`](VERIFY_WP-C1.md) (verdict SHIP after four defects), closed
+on `feat/c1-gray-edge-round2` off `verify/c1-gray-edge` (`7ea01ede`).
+
+Everything below was **re-measured in this round**, never read off the
+verification.  Both builds every time, with
+`OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1` on the command
+line and `lumenairy.__file__` printed by every probe: Windows py3.14.6 /
+numpy 2.4.4 / jax 0.11.0 and WSL py3.12.3 / numpy 2.4.6 / jax 0.10.2, both
+scipy-openblas.  Every mutant is a fresh `git archive` extraction with one
+edit, run from its own tree so `lumenairy` cannot bind to the worktree.
+
+## D1 (P2) -- the jit'd JAX route accepted `edge_samples` values the other two refused
+
+**Change.**  `apply_aperture`'s two guards are hoisted out of its body into
+`lumenairy/elements/elements.py::_validate_edge_kwargs`, which `apply_aperture`
+itself calls and which `system.py::_aperture_edge_kwargs` -- the ONE place both
+backends read the element -- now calls too.  One function, three call sites; not
+a second copy of the guards.  A module-level `_EDGE_UNSET` sentinel separates
+"the caller named no such key" from the named value `None`, which is illegal and
+must raise.  `_system_element_signature` keeps its `str()` / `int()` coercions,
+and a comment there records that they are now safe because by the time they run
+the value is known to be one of the two legal strings and an exact positive
+integer.
+
+**Proof.**  The verification's own reproducer, re-run on both builds, now reads
+`identical=True` on every row -- same verdict AND same message on all three
+routes:
+
+| element key | NumPy chain | JAX eager | JAX jit |
+|---|---|---|---|
+| `{'edge': 'soft'}`, `{'edge': None}`, `{'edge': ''}` | ValueError | ValueError | ValueError |
+| `{'edge_samples': 0}`, `-2`, `False` | ValueError | ValueError | ValueError |
+| **`{'edge_samples': 2.5}`** | **ValueError** | **ValueError** | **ValueError** (was ACCEPTED, silently using 2) |
+| **`{'edge_samples': '4'}`** | **ValueError** | **ValueError** | **ValueError** (was ACCEPTED) |
+| `{'edge_samples': 4.0}`, `{'edge': 'hard'}`, `{'edge': 'gray'}` | accepted | accepted | accepted, byte-identical |
+
+The two strict xfails in
+`test_verify_c1_gray_edge.py::test_verify_c1_all_three_chain_routes_agree_on_an_edge_element`
+FLIPPED to passes and their markers are gone with the defect: that file is now
+**28 passed, 0 xfailed** where it was 26 passed + 2 xfailed.  The census is
+re-asserted independently in the shipped WP-C1 file by
+`test_c1_all_three_chain_routes_refuse_a_bad_edge_element_identically` (eight
+illegal element dicts, asserting the same `(raised, message)` tuple on all three
+routes, because two routes raising for DIFFERENT reasons would satisfy a
+verdict-only assertion) and its companion
+`test_c1_the_three_chain_routes_accept_the_legal_edge_elements` (three legal
+spellings, so the census cannot be satisfied by a guard that refuses
+everything).
+
+**Mutation.**  Reverting only the new call (`if kw: _validate_edge_kwargs(**kw)`
+-> `return kw`) on a fresh archive of the final commit reddens **6 ids** across
+the two files: the two rows that were xfails, plus `edge_none`,
+`edge_samples_non_integer_float`, `edge_samples_string` and
+`edge_samples_bool_false` in the new census.  The extra four are the
+message-equality assertion earning its keep -- without the shared guard those
+rows still raise on all three routes, but not with the same text.
+
+## D2 (P3) -- "grey beats hard" asserted with `<=`, which equality satisfies
+
+**Change.**  `tests/unit/test_audit2609_a8_verify.py`'s `assert e_g4 <= e_hard`
+becomes `assert e_hard / e_g4 >= 1.5`, with the derivation and the three
+re-measured ratios in the docstring's "Bars" paragraph.
+
+**Proof.**  Re-measured on that id's own three fixtures by
+`validation/probe_verify_c1/probe_d2_ratio.py` (`d2_ratio_WIN.json`,
+`d2_ratio_WSL.json`), **identical to sixteen significant figures on both
+builds** -- a mask sum is an integer count over `n_sub**2`, with no BLAS in it:
+
+| fixture | `e_hard` | `e_g4` | ratio |
+|---|---|---|---|
+| D/dx = 37, dy/dx = 1.0, offset 0.37 px | 4.845644e-03 | 8.348003e-04 | **5.804555** |
+| D/dx = 63, dy/dx = 2.5, offset 0.13 px | 7.202868e-04 | 8.170338e-05 | **8.815875** |
+| D/dx = 145, dy/dx = 0.4, offset 0.29 px | 6.077725e-05 | 3.049807e-05 | **1.992823** |
+
+so 1.5 sits **1.3285x below** the smallest real reading and 1.5x above the
+degenerate 1.0 where "grey IS hard" lives -- a gap on both sides, which is what
+`docs/TESTING_STANDARDS.md` rule 5 asks for.  The binding fixture is the 145-px
+one, which is right: a 145-pixel rim is already well sampled, so the staircase
+it has to beat is the mildest of the three.
+
+**Mutation.**  M5 (`edge='hard'` falling through to the GREY mask) on a fresh
+archive of the final commit: the id goes red on **all three params**, where
+under the `<=` bar it was green on all three.  `test_audit2609_a8_verify.py` is
+4 failed / 32 passed under M5 and **36 passed** unmutated.
+
+## D3 (doc) -- "no usable order at all" restated as the rate gap
+
+**Change.**  Three places, one claim: the CHANGELOG `## [Unreleased]`
+paragraph, `Migration-Guide.md` section 5.49.0 "### Why", and `apply_aperture`'s
+own docstring.  All three now say the hard edge is **first order at best and its
+step orders are erratic**, keep the 54 % / 53 % rise as the REFERENCE OPTIC's
+reading, and say in plain terms that whether the staircase error rises at a
+given refinement depends on where the rim falls on the lattice at each N.
+
+**Proof.**  The verification's independent optic (lambda = 1064 nm,
+a = 62.5 um, window 400 um, z = 4.0 mm RS / 2.5 mm HF) re-run in this round,
+`validation/probe_verify_c1/ladder_v_R2_WIN.json` and `..._R2_WSL.json`:
+
+| kernel | arm | step orders | ladder gain | mean order |
+|---|---|---|---|---|
+| RS spatial | hard | 1.680 / 0.203 / 1.359 | 9.4555x | **1.0804** |
+| RS spatial | gray | 1.443 / 2.602 / 1.766 | 56.128x | **1.9369** |
+| HF quadrature | hard | 1.674 / 0.202 / 1.337 | 9.2699x | **1.0709** |
+| HF quadrature | gray | 1.737 / 2.133 / 1.620 | 44.947x | **1.8301** |
+
+Every hard step order is positive, so on this optic the arm falls monotonically
+-- and still gains only 9.5x / 9.3x against 56.1x / 44.9x.  The default arm
+reads `default is bit-identical to ['gray']` on both kernels and both builds.
+
+One correction this round made by re-deriving rather than reading: the HF hard
+MEAN order is **1.0709**, not the 1.06 printed in `VERIFY_WP-C1.md` section
+2.1's table and carried into `test_verify_c1_gray_edge.py`'s docstring
+(`log2(9.2699)/3 = 1.0709`).  No assertion read it; the docstring now quotes
+four digits and names the slip, and the CHANGELOG restatement quotes the
+corrected value.
+
+## D4 (P2) -- `lumenairy.evaluate` moved with no way back
+
+**Change.**  `evaluate` takes `aperture_edge=None` and
+`aperture_edge_samples=None`, threaded into `_prescription_to_elements` and
+stamped onto every `'aperture'` element it emits for an `is_stop=True` surface.
+`None` stamps nothing, so an unkeyworded call still takes `apply_aperture`'s own
+default and no call pins today's default into tomorrow's answer.  Both are
+validated once, before the decomposition runs, through the same
+`_validate_edge_kwargs` D1 introduced, so a misspelled rim is refused with
+`apply_aperture`'s own message rather than at the aperture step.
+
+**Proof, archive-to-archive.**  `git archive 49ddf4bd` extracted to its own tree
+and run from inside it, against this tree run from inside this one
+(`validation/probe_verify_c1/probe_d4_evaluate_wayback.py`,
+`d4_evaluate_{PRE,R2}_{WIN,WSL}.json`), on the verification's own STOP-surface
+prescription:
+
+| arm | Windows py3.14 | WSL py3.12 |
+|---|---|---|
+| parent (`49ddf4bd`) default | `e7b1f67b9b19d547` | `0b97c205be347dfa` |
+| this tree, default | `59115e8eb2b2b0d0` | `193bf1d920e2ac88` |
+| this tree, `aperture_edge='hard'` | **`e7b1f67b9b19d547`** | **`0b97c205be347dfa`** |
+| this tree, `aperture_edge_samples=1` | `e7b1f67b9b19d547` | `0b97c205be347dfa` |
+| this tree, `aperture_edge='gray', ..._samples=4` | `59115e8eb2b2b0d0` | `193bf1d920e2ac88` |
+
+so the way back is exact on both builds, and `edge_samples=1` landing on the
+same bytes is what proves the SECOND keyword reaches the element too.  Both
+builds refuse `aperture_edge='soft'` and `aperture_edge_samples=2.5` with
+`apply_aperture`'s own message.  A prescription with NO stop surface is
+byte-identical with and without the keyword, which is the docstring's own claim
+checked rather than asserted.
+
+**Docs.**  `Migration-Guide.md` section 5.49.0's "What moves" table gains three
+rows -- this entry point with its keyword, the GUI **Coronagraph dock** Stop 3
+(`lumenairy/ui/coronagraph_dock.py:376`, reached from the Stop 3 leg at :261,
+calls `apply_lyot_stop`), and the worked AO loop in
+`lumenairy/analysis/ao.py:33`'s module docstring -- plus a recipe line.  The
+CHANGELOG's Migration paragraph names all three and gains an `### Added` block
+for the keyword.  `GUI_CHANGELOG.md`, which had no entry for this release at
+all, gains an `## [Unreleased]` block for the dock's moved Stop 3 answer and
+says plainly that the dock exposes no control restoring the old bytes.
+
+`test_verify_c1_evaluate_takes_the_new_rim_and_has_no_public_way_back` is
+restated as `..._and_its_way_back_is_one_keyword` and now asserts the bytes; the
+shipped WP-C1 file gains
+`test_c1_evaluates_way_back_is_one_keyword_and_reaches_the_stop`.
+
+## M3 -- the mutant that survived all 2796 ids
+
+**Change.**  `tests/unit/test_c1_gray_edge_default.py` gains
+`test_c1_the_jit_kernel_carries_the_elements_edge_samples`, parametrized on the
+two ends of the contract (`edge_samples` 1, which IS the pre-5.49 pixel-centre
+indicator, and 4, the shipped default).  It compares the jit'd kernel to the
+eager JAX route and to the NumPy chain BIT FOR BIT, then asserts that 1 and 4
+really are different masks on the fixture, so the identities cannot be three
+routes agreeing on one default.
+
+**Proof.**  M3 (`n_sub = None` in `_system_element_signature`) on a fresh
+archive of the final commit: the two C1 files are **5 failed, 54 passed**,
+where the mutant survived the verification's entire 61-file / 2796-id sweep.
+The `[4]` param stays green and must: 4 IS the default, so dropping the
+element's value cannot change that arm's answer -- which is exactly why a
+single-value test would have missed this and why the id is parametrized on both
+ends.
+
+## The recorded items
+
+* `lumenairy/algebra/apertures.py`'s class summary and section banner now read
+  "Sharp-edged (unapodized) amplitude aperture with selectable shape." and
+  "Aperture (sharp-edged amplitude mask)", matching the wording WP-C1 used in
+  `elements.py`.  Docstring only: the history-fingerprint gate is green without
+  a re-record, which is the evidence that nothing moved.
+* `.test_durations`: all **31** ids of `tests/unit/test_c1_gray_edge_default.py`
+  (WP-C1's 17 plus round 2's 14) spliced, measured serially with the three BLAS
+  variables pinned on the command line through `pytest-split
+  --store-durations`, 12.04 s total; the one id left stale by round 2's rename
+  removed.  16 624 -> **16 655** entries, re-parsed as JSON, existing key order
+  preserved.  `test_audit2609_a15a_durations_staleness.py` is 4 passed.
+* Section 2.4's "a rim on a 64-pixel disk is about 1.5 %" is now the measured
+  **48 / 4096 = 1.17 %** on that test's own fixture (`test_audit_misc.py`
+  `field`: N = 64, dx = 5 um, complex64, D = 97.5 um), i.e. a whole-rim
+  divergence sits **4.27x inside** the 5 %-of-pixels bar.
+
+## The runs
+
+All with the three BLAS variables on the command line, `-p no:randomly
+--capture=sys -q`, `PYTHONPATH` naming the tree under test.  The sweep was run
+on a FROZEN tree (`90f6a9cd`, `git status` clean, both builds launched after the
+last code, test and CHANGELOG commit); only this addendum was added afterwards,
+and no test in the sweep reads this file.
+
+| what | Windows py3.14 | WSL py3.12 |
+|---|---|---|
+| the 58-file sweep -- 32 aperture-touching files + census + walkers + dispatcher pins + public API + doc consistency + A17 + `test_audit2609_a15a_durations_staleness.py` + `test_audit_except_budget.py` + both C1 files | **2724 passed, 14 skipped, 0 failed** in 18:33 | **2713 passed, 21 skipped, 4 failed** in 26:27, all four premise-gated (below) |
+| `tests/unit/test_c1_gray_edge_default.py` + `tests/unit/test_verify_c1_gray_edge.py` | **59 passed** (31 + 28), 0 xfailed | in sweep |
+| `tests/unit/test_audit2609_a8_verify.py` | **36 passed** | in sweep |
+| `tests/unit/test_audit2609_a15a_durations_staleness.py` | **4 passed** in 1:00 | in sweep |
+| `validation/elements/test_elements.py` | **31 passed** | -- |
+| M3 mutant, the two C1 files | **5 failed, 54 passed** | -- |
+| D1-revert mutant, the two C1 files | **6 failed, 53 passed** | -- |
+| M5 mutant, `test_audit2609_a8_verify.py` | **4 failed, 32 passed** | -- |
+| `ruff check lumenairy/ tests/ scripts/` (WSL) | -- | **All checks passed!** |
+| `python -m mypy` (no args) | **Success: no issues found in 33 source files** | -- |
+| `python scripts/record_history_fingerprints.py --check` | **OK: every history document matches its module** (rc 0) | -- |
+
+**The four WSL reds, premise-gated, none a library finding.**  All four are
+GREEN on the Windows lane on this same commit, and three of the four fail
+identically under WSL on a `git archive 49ddf4bd` extraction (the fourth skips
+there on a different premise gate), so none of them is round 2's:
+
+* `test_public_api.py::test_installed_metadata_version_matches_source_version`
+  -- the WSL venv's editable install metadata against a 5.48.1 source.  The
+  remedy is `pip install -e .` in `~/lumvenv`, which is the box's to do.
+* `test_v5_3_2_walker_source_line_citation.py::test_v18_5_the_5_47_0_block_citations_name_the_right_lines`
+  and `::test_v18_5_companion_reanchor_tool_exists_and_covers_the_cited_files`
+  -- both shell out to `git`, which from WSL cannot resolve this worktree's
+  `.git` file (it points at a Windows path).  Both are green on Windows on this
+  commit, and the first one is the gate round 2 satisfied by re-anchoring the
+  `[5.47.0]` citations three times as the line numbers in
+  `lumenairy/propagators/system.py` shifted.
+* `test_v5_2_3_walker_changelog_content.py::test_v16_synthetic_fabrication_is_caught`
+  -- same root: the walker returns rc = 2 ("the git plumbing failed") where the
+  test expects rc = 1.  Green on Windows.
+
+## What round 2 could not measure
+
+* **CuPy under WSL** -- still absent; the CuPy arm is Windows-only.
+* **A GPU device for the JAX arm.**  Both builds' JAX runs are on the CPU
+  backend.  The D1 refusal is pure Python and runs before any device work, so it
+  is not expected to be device-specific, but that is reasoning, not a
+  measurement.
+* **The whole 14 666-id unit suite.**  What was run is the 58-file sweep, the
+  two C1 files under three mutants, the durations gate and one validation file.
+  A release gate needs the full matrix.
+* **`test_v16_synthetic_fabrication_is_caught` on a base-commit WORKTREE under
+  WSL.**  It is green on Windows here and fails on the base tree's own premise,
+  but the exact rc = 2 path could not be reproduced on a base-commit worktree
+  from WSL, because a second worktree has the same unresolvable `.git` file.
+* **Whether any external caller passes an `apply_aperture` result into a
+  boolean-casting consumer** (`plotting.py:1757`'s `count_nonzero` pixel count,
+  `wrapper_merits.py:266`).  VERIFY-C1 measured the dilation (+1.37 %); the
+  exposure still cannot be measured from here, and round 2 changed nothing about
+  it.
+* **`Migration-Guide.md` still has no 5.48.0 section.**  VERIFY-C1 section 5
+  says what one would have to contain; back-filling another release's guide
+  entry is not this round's scope either.
+* **The peak-memory claim** in `apply_aperture`'s grey-branch comment ("measured
+  6.0 float64 grids at N = 2048, against 5.0 for the hard edge").  Still not
+  re-measured; it needs an allocator trace.
