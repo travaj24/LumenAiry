@@ -1041,9 +1041,10 @@ def test_the_shipped_source_never_says_the_rule_is_off_while_it_is_armed():
     counter-arm on a synthetic stale copy -- otherwise the id would pass just
     as well if the phrase it greps for had been renamed away.
 
-    Measured 2026-09-20 on both builds: with the column-0 paragraph present
-    53 of the docstring's 55 non-blank lines come back from ``cleandoc`` with
-    a four-space prefix; with it indented, 0 do.
+    Measured 2026-09-20 on both builds: on the parent tree, with the column-0
+    paragraph present, 53 of that docstring's 55 non-blank lines come back
+    from ``cleandoc`` with a four-space prefix; here, with it indented (and
+    with the D5 paragraph added, so 66 lines), 0 do.
     """
     stale = 'OFF BY DEFAULT'
     src = inspect.getsource(CA)
