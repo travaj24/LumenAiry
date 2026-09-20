@@ -606,8 +606,10 @@ def test_as_c_order_makes_the_numpy_path_contiguous():
 # 6.  The chirp phase budget is an error LAW, not a cliff
 # ===========================================================================
 
-def test_the_chirp_phase_error_is_linear_in_the_budget_and_dense_is_immune():
-    """What ``_bluestein_2d``'s phase-budget guard is guarding.
+def test_the_chirp_phase_error_is_linear_and_a_shared_phase_reference_is_blind(
+):
+    """What ``_bluestein_2d``'s phase-budget guard is guarding, and what a
+    reference that shares a route's phase can and cannot see.
 
     (The threshold read ``1e15`` when this was written; Round 2 derived it
     from the law below and it is now ``1e-6/eps = 4.5036e9``.  This id is
@@ -617,14 +619,31 @@ def test_the_chirp_phase_error_is_linear_in_the_budget_and_dense_is_immune():
     The chirp signal's phase is rounded to float64 BEFORE ``exp``, so the
     chirp-Z routes' relative error tracks the budget LINEARLY --
     ``rel ~ eps * alpha * N_max^2`` -- and there is no cliff to sit just
-    below.  The dense route reduces its argument modulo one turn and carries
-    no such phase at all.
+    below.
+
+    CORRECTED 2026-09-20 (VERIFY-WAVE5-HYGIENE2 round 2, D-1).  This id was
+    called ``..._and_dense_is_immune`` and its last two assertions read the
+    dense route against :func:`_pairwise_reference`, which forms its phase as
+    ``alpha*k*n`` in float64 and then reduces it -- the same two roundings
+    :func:`_direct_matrix_2d` commits.  The dense route therefore agreed with
+    it to the summation floor by CONSTRUCTION, at every budget, and calling
+    that immunity was reading the instrument.  Measured against an
+    exactly-reduced reference the dense route obeys the SAME ``eps*budget``
+    law with a constant 1.5x to 11.8x smaller; that measurement and its bars
+    live in ``tests/unit/test_wave5_h2_mft_direct.py::
+    test_both_routes_follow_the_budget_law_and_dense_wins_by_a_bounded_factor``
+    and are not duplicated here.
+
+    What the dense arm asserts NOW is the blindness itself, as a decision
+    about the instrument: against a reference sharing its phase the dense
+    route sits at the summation floor at EVERY budget, and the chirp route
+    does not.  That is a real, falsifiable statement -- it fails the moment
+    the dense route stops reducing its phase modulo one turn -- and it is the
+    premise the corrected reading rests on.
 
     Deliberately NOT a pin on the warning threshold: moving that threshold is
     a behaviour change owed to the maintainer, and this id stays true whatever
-    it becomes.  What is asserted is the law's own fitted slope, its constant
-    (which must be ``eps``), and the dense route's immunity -- all derived
-    here, none remembered.
+    it becomes.
     """
     import warnings
 
@@ -665,14 +684,18 @@ def test_the_chirp_phase_error_is_linear_in_the_budget_and_dense_is_immune():
         assert 0.1 * eps * b < r < 10.0 * eps * b, (
             f"at budget {b:.0e} the chirp route reads {r:.3e}, outside the "
             f"decade around eps*budget = {eps * b:.3e}")
+    # THE INSTRUMENT, not the route: a reference whose phase is formed the
+    # way the dense route forms it agrees with the dense route to the
+    # summation floor at every budget, and with the chirp route not at all.
     assert max(dense_rel) < 100.0 * eps, (
-        f"the dense route's worst residual over the budget ladder is "
-        f"{max(dense_rel):.3e}, past 100*eps = {100.0 * eps:.3e}; its "
-        f"modulo-one-turn reduction has stopped being exact")
+        f"the dense route's worst residual against a reference that shares "
+        f"its phase is {max(dense_rel):.3e}, past 100*eps = "
+        f"{100.0 * eps:.3e}; either its modulo-one-turn reduction has "
+        f"stopped being exact or the reference has stopped sharing it")
     assert max(chirp_rel) / max(dense_rel) > 1e6, (
-        f"PREMISE: the two routes are only "
+        f"PREMISE: against this reference the two routes are only "
         f"{max(chirp_rel) / max(dense_rel):.1e}x apart at the top of the "
-        f"ladder; the immunity claim is not being exercised")
+        f"ladder; the blindness this id records is not being exercised")
 
 
 def test_the_public_mft_method_vocabulary_is_closed_and_documented():

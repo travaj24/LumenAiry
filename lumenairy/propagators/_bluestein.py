@@ -315,7 +315,9 @@ def _direct_matrix_2d(
       before calling ``exp`` (below), so it does not spend float64 mantissa on
       a phase of ``pi*alpha*N^2`` radians the way the chirp signals do.  It is
       therefore the natural reference for the two chirp-Z reductions, and the
-      report derives their agreement bar against it.
+      report derives their agreement bar against it.  It is the more accurate
+      route at a given budget by a BOUNDED factor and not by decades -- see
+      the Notes below and :func:`_bluestein_2d`'s.
 
     It is NOT the default anywhere and nothing in the library selects it
     automatically: at the shapes the MFT propagators are written for the
@@ -350,14 +352,23 @@ def _direct_matrix_2d(
 
     Notes
     -----
-    **Phase construction.**  ``t = alpha*(n - cI)*(k - cO)`` is formed in
-    float64 and then reduced by ``t - rint(t)``, which is EXACT for
-    ``|t| <= 2**52`` (``rint(t)`` is an integer and the difference is a
-    multiple of ``ulp(t)``, so no bit is lost in the subtraction).  Only the
-    fractional turn reaches ``exp``, so the ``pi*alpha*N^2`` phase-budget
-    warning :func:`_bluestein_2d` carries does not apply to this route.  The
+    **Phase construction, and why the budget still applies** (corrected
+    2026-09-20, VERIFY-WAVE5-HYGIENE2 round 2 D-1).
+    ``t = alpha*(n - cI)*(k - cO)`` is formed in float64 and then reduced by
+    ``t - rint(t)``, which is EXACT for ``|t| <= 2**52`` (``rint(t)`` is an
+    integer and the difference is a multiple of ``ulp(t)``, so no bit is lost
+    in the subtraction).  Only the fractional turn reaches ``exp``.  The
     irreducible error is the two roundings in forming ``t`` itself, amplified
-    by ``2*pi``.
+    by ``2*pi`` -- and THAT is the phase budget: ``eps * |t|`` is
+    ``eps * |alpha| * n * k <= eps * budget``, so this route follows the same
+    ``rel ~ eps * budget`` law :func:`_bluestein_2d`'s guard is derived from,
+    with a smaller constant.  An earlier wording drew the opposite conclusion
+    from the same two sentences ("so the ``pi*alpha*N^2`` phase-budget warning
+    :func:`_bluestein_2d` carries does not apply to this route"); MEASURED
+    against an exactly-reduced reference at N=24 -> M=12, this route reads
+    6.9e-12 / 1.1e-07 / 8.6e-05 / 6.7e-02 at budgets 1e5 / 1e9 / 1e12 / 1e15,
+    identical on both builds.  What it does NOT pay is the chirp signals'
+    extra factor of 1.5 to 11.8.
 
     **Association order.**  The two products are taken in whichever order costs
     fewer multiply-adds, decided from the four grid sizes ALONE (a pure
@@ -536,9 +547,34 @@ def _bluestein_2d(
         rel L2   1.5e-08 2.0e-06 1.9e-04 1.3e-02 2.5e-01 1.6e+00
 
     i.e. ``rel ~ eps * budget`` to within a small factor over the whole range.
-    The dense route (``method='direct'``) reads 2.8e-16 .. 4.5e-16 at EVERY
-    budget tested, because it reduces ``t`` by ``t - rint(t)`` before calling
-    ``exp`` and therefore has no chirp phase to lose.
+
+    THE DENSE ROUTE OBEYS THE SAME LAW (corrected 2026-09-20,
+    VERIFY-WAVE5-HYGIENE2 round 2 D-1).  An earlier wording here said it
+    "reads 2.8e-16 .. 4.5e-16 at EVERY budget tested, because it reduces
+    ``t`` by ``t - rint(t)`` before calling ``exp`` and therefore has no chirp
+    phase to lose".  The premise is true and the conclusion is not: the
+    REDUCTION is exact, but the float64 product ``alpha*(n - cI)*(k - cO)``
+    that it reduces has already discarded the low bits of a value needing
+    ~63 of them, and no later reduction recovers a bit that is gone.  So the
+    dense route's phase error is ``~eps * |alpha| * n * k <= eps * budget``
+    -- the same law, with a smaller constant.  The 2.8e-16 reading was a
+    measurement of the INSTRUMENT: a ``math.fsum`` reference that forms
+    ``t`` the same way agrees with the dense route by construction.
+
+    MEASURED 2026-09-20 against a reference whose phase is reduced EXACTLY
+    (``fractions.Fraction``), N=24 -> M=12, identical to the digit on both
+    builds (``validation/probe_wave5_hyg2_round3/r3_budget_exact.py``):
+
+        budget            1e5     1e9     1e12    1e15
+        chirp-Z rel L2    2.8e-11 1.6e-07 1.9e-04 2.3e-01
+        dense rel L2      6.9e-12 1.1e-07 8.6e-05 6.7e-02
+
+    on the non-centred convention, with fitted slopes of 0.96 (chirp-Z) and
+    0.99 (dense) over nine and ten decades.  The dense route is the more
+    accurate of the two at every budget, by a factor of 1.5 .. 4.0 on that
+    convention and 4.4 .. 11.8 on the centred one -- a bounded factor, not
+    an immunity.  ``method='direct'`` therefore buys a smaller error at the
+    same budget; only a smaller ``|alpha| * N_max^2`` buys a smaller budget.
 
     The guard's threshold is derived from that law and not from taste:
     ``_PHASE_BUDGET_MAX = 1e-6 / eps ~ 4.5e9`` is the budget at which six
@@ -568,11 +604,20 @@ def _bluestein_2d(
     target_cdtype = np.dtype(target_cdtype)
 
     # ----- 0a) direct route (opt-in) ----------------------------------------
-    # Taken BEFORE the chirp phase-budget guard below, deliberately: that
-    # warning is a statement about the chirp signals' float64 phase, and this
-    # route has none -- it reduces its argument modulo one turn.  Warning here
-    # would be a false positive on the one route the warning's own advice
-    # ("fall back to a regular FFT propagator") is the alternative to.
+    # Taken BEFORE the chirp phase-budget guard below.  The guard is SCOPED to
+    # the chirp signals' float64 phase, which this route does not build; what
+    # it is NOT is a statement that this route is accurate at that budget.
+    # MEASURED 2026-09-20 (round 2 D-1) at 2.2x the threshold on the shipped
+    # N=24 -> M=12 fixture: chirp-Z 2.028e-06 and warning, dense 1.079e-06 and
+    # SILENT -- i.e. the dense route is quiet at a budget where it has itself
+    # passed the 1e-6 the threshold is named for, by a factor of 1.9 rather
+    # than by decades.  Widening the guard to this route is a behaviour change
+    # owed to the maintainer and is recorded as an open item in
+    # ``docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/
+    # WAVE5_HYGIENE2_REPORT.md``; the scoping is gated two-sidedly by
+    # ``tests/unit/test_wave5_h2_mft_direct.py::
+    # test_the_chirp_phase_guard_fires_on_the_chirp_route_and_not_the_dense_one``
+    # so it cannot change silently either way.
     if method == 'direct':
         return _direct_matrix_2d(
             E, alpha_x, alpha_y, N_out_y, N_out_x,
@@ -593,10 +638,18 @@ def _bluestein_2d(
             f"Bluestein chirp phase argument ~{phase_budget:.1e} exceeds the "
             f"float64 chirp budget {_PHASE_BUDGET_MAX:.1e}; the chirp-Z "
             f"routes' relative error at this budget is "
-            f"~{phase_budget * _EPS64:.1e}.  Reduce N or alpha, pass "
-            f"method='direct' (the dense route reduces its phase modulo one "
-            f"turn and measured 3e-16 at every budget tested), or fall back "
-            f"to a regular FFT propagator.",
+            f"~{phase_budget * _EPS64:.1e}.  EVERY route here follows "
+            f"rel ~ eps * budget with budget = |alpha| * N_max^2, so the way "
+            f"out is a smaller BUDGET and not a different route: fewer "
+            f"samples on whichever of N_in / N_out sets N_max, or a smaller "
+            f"|alpha| -- for the MFT propagators alpha = dx*dx_out/(lambda "
+            f"z), so a finer output pitch, a finer input pitch or a longer z "
+            f"-- or a regular FFT propagator, which spends no such phase at "
+            f"all.  method='direct' is the more accurate route at the SAME "
+            f"budget, but only by a bounded factor (MEASURED 2026-09-20, "
+            f"1.5x .. 11.8x over ten decades of budget at N=24 -> M=12 on "
+            f"both index conventions and both builds), so it is a smaller "
+            f"error and not an escape from this one.",
             RuntimeWarning, stacklevel=2)
 
     # ----- 0) separable route (v5.33.2) --------------------------------------

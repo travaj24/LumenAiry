@@ -58,6 +58,8 @@ test_the_two_reductions_margins_move_in_opposite_directions_with_n``.
 """
 from __future__ import annotations
 
+import math
+
 import numpy as np
 import pytest
 
@@ -354,17 +356,77 @@ def test_the_two_primitives_report_the_same_first_error():
             f"{seen}")
 
 
+def _exact_phase_rows(alpha, n_in, n_out):
+    """``frac(alpha * n * k)`` in ``[-1/2, 1/2)``, reduced EXACTLY.
+
+    ``alpha`` is a float64 and therefore an exact rational; ``n`` and ``k``
+    are integers.  Formed in :class:`fractions.Fraction`, the product and its
+    fractional part are exact, so the ONE float64 rounding happens on a number
+    already inside ``[-1/2, 1/2)`` and the phase keeps all 53 bits whatever
+    the budget.
+
+    This is the one thing the route does NOT do, and it is the whole reason
+    this helper exists (VERIFY-WAVE5-HYGIENE2 round 2, D-1): a reference that
+    forms ``t = alpha*k*n`` in float64 and then reduces it commits the same
+    two roundings the route commits, and therefore agrees with the route by
+    CONSTRUCTION at every budget.  The kernel is separable, so only
+    ``n_in * n_out`` exact reductions are needed per axis.
+    """
+    from fractions import Fraction
+    fa = Fraction(alpha)
+    T = np.empty((n_out, n_in), dtype=np.float64)
+    for k in range(n_out):
+        fk = Fraction(k)
+        for n in range(n_in):
+            t = fa * fk * n
+            t -= math.floor(t)                  # exact, into [0, 1)
+            if t >= Fraction(1, 2):
+                t -= 1                          # exact, into [-1/2, 1/2)
+            T[k, n] = float(t)
+    return T
+
+
 def _fsum_reference(E, alpha, M, sign=-1):
-    """The same sum again, but summed by ``math.fsum`` -- correctly rounded.
+    """The same sum again, correctly rounded in BOTH senses: an EXACT phase
+    and a ``math.fsum`` summation.
 
     :func:`_pairwise_reference` is the right reference for comparing two
     SUMMATIONS, because it commits the same class of error as the routes it is
     compared against.  It is the wrong reference for measuring how much a
-    CHIRP PHASE costs, because at a large phase budget the reference's own
-    chirp is as wrong as the route's.  ``math.fsum`` is exact to the last bit
-    of the true sum, so what is left is the phase.
+    PHASE costs, because at a large budget the reference's own phase is as
+    wrong as the route's.
+
+    REBUILT 2026-09-20 (VERIFY-WAVE5-HYGIENE2 round 2, D-1).  Until then this
+    helper made only the SUMMATION correctly rounded and formed its phase as
+    ``ty = alpha * ky * n_y`` followed by ``ty - rint(ty)`` -- the two
+    roundings :func:`_direct_matrix_2d` itself commits.  Against it the dense
+    route read 2.8e-16 .. 4.5e-16 at every budget, which was a measurement of
+    the instrument and not of the route: it is what a reference that shares a
+    route's phase reads about that route.  The phase is now reduced exactly
+    (:func:`_exact_phase_rows`), which is what makes the two ids below able to
+    see the dense route's own ``eps * budget`` error at all.
     """
-    import math
+    ny, nx = E.shape
+    Wy = np.exp(1j * sign * 2.0 * np.pi * _exact_phase_rows(alpha, ny, M))
+    Wx = np.exp(1j * sign * 2.0 * np.pi * _exact_phase_rows(alpha, nx, M))
+    out = np.empty((M, M), dtype=np.complex128)
+    for ky in range(M):
+        wy = Wy[ky]
+        for kx in range(M):
+            T = E * (wy[:, None] * Wx[kx][None, :])
+            out[ky, kx] = complex(math.fsum(T.real.ravel()),
+                                  math.fsum(T.imag.ravel()))
+    return out
+
+
+def _naive_phase_reference(E, alpha, M, sign=-1):
+    """The reference :func:`_fsum_reference` USED to be: correctly-rounded
+    SUMMATION over a phase formed the way the route forms it.
+
+    Kept, and used, as the premise arm of the id below: it is what makes
+    "the reference is the instrument" a measurable statement rather than an
+    argument.
+    """
     ny, nx = E.shape
     n_x = np.arange(nx, dtype=np.float64)
     n_y = np.arange(ny, dtype=np.float64)
@@ -381,13 +443,18 @@ def _fsum_reference(E, alpha, M, sign=-1):
     return out
 
 
-def _chirp_and_dense_at(budget, N=24, M=12, seed=5):
-    """``(rel_chirp, warned_chirp, rel_dense, warned_dense)`` at one budget."""
+def _chirp_and_dense_at(budget, N=24, M=12, seed=5, naive_ref=False):
+    """``(rel_chirp, warned_chirp, rel_dense, warned_dense)`` at one budget.
+
+    ``naive_ref=True`` measures against :func:`_naive_phase_reference`
+    instead -- the instrument arm, not a second claim.
+    """
     import warnings as _w
     from lumenairy.propagators._bluestein import _bluestein_2d as _b2
     E = _rand(N, N, seed=seed)
     alpha = budget / float(N) ** 2
-    ref = _fsum_reference(E, alpha, M)
+    ref = (_naive_phase_reference(E, alpha, M) if naive_ref
+           else _fsum_reference(E, alpha, M))
     out = []
     for kw in ({}, {'method': 'direct'}):
         with _w.catch_warnings(record=True) as caught:
@@ -399,39 +466,144 @@ def _chirp_and_dense_at(budget, N=24, M=12, seed=5):
     return tuple(out)
 
 
-def test_the_chirp_phase_error_is_linear_in_the_budget_and_dense_is_immune():
-    """THE LAW the threshold is derived from, re-measured by the gate itself.
+def test_the_exact_phase_reference_is_exact_where_float64_can_check_it():
+    """THE PREMISE the two ids below rest on: the reference's own phase.
 
-    Against a ``math.fsum`` correctly-rounded reference, the chirp-Z routes'
-    relative L2 is LINEAR in the phase budget ``alpha * N_max^2`` -- there is
-    no cliff to sit just below, and the historical "approaches float64
-    precision limit (1e15-1e16)" wording described a cliff that does not
-    exist.  MEASURED 2026-09-19 on both builds: 1.98e-10, 1.41e-08, 1.84e-04,
-    2.48e-01 at budgets 1e6, 1e8, 1e12, 1e15, against ``eps * budget`` of
-    2.22e-10, 2.22e-08, 2.22e-04, 2.22e-01 -- the same number to within a
-    factor of 1.5 over nine decades.  The dense route reads 3.1e-16 ..
-    1.8e-16 at every one of them.
+    :func:`_exact_phase_rows` is only useful if it is genuinely a DIFFERENT
+    instrument from the one the route carries, and genuinely the SAME
+    transform.  Both directions are measured here, on the arithmetic itself
+    rather than through a transform:
+
+    * where the float64 product ``alpha*n*k`` is EXACT -- a dyadic ``alpha``,
+      so no bit is thrown away -- the exact reduction and the route's
+      reduction must agree exactly, modulo whole turns (``rint``'s
+      ties-to-even resolves ``|t| = 1/2`` the other way, and that is a whole
+      turn apart, not an error).  MEASURED 2026-09-20 on both builds: the
+      fractional part of the difference is EXACTLY 0.0 at every one of four
+      dyadic alphas;
+    * where it is not exact -- the shipped ``alpha = 1e12/24^2`` -- they must
+      PART, or the exact reference would be measuring nothing.  MEASURED
+      5.293e-05 of a turn, identical on both builds.
+
+    The gap between 0.0 and 5.3e-05 is the whole instrument; there is no bar
+    here that noise could cross, because the first reading is exactly zero by
+    construction and the second is eleven decades above float64 round-off.
+    """
+    for alpha in (0.125, 0.5, 2.0 ** -7, 3.0 * 2.0 ** -5):
+        T_exact = _exact_phase_rows(alpha, 24, 12)
+        n = np.arange(24, dtype=np.float64)
+        k = np.arange(12, dtype=np.float64)
+        t = alpha * k[:, None] * n[None, :]
+        T_route = t - np.rint(t)
+        d = T_exact - T_route
+        assert np.array_equal(d, np.rint(d)), (
+            f"at the dyadic alpha = {alpha!r} the float64 product alpha*n*k "
+            f"is exactly representable, so the exact reduction and the "
+            f"route's must differ by a whole number of turns; the worst "
+            f"fractional departure is {np.max(np.abs(d - np.rint(d))):.3e}")
+    alpha = 1e12 / 24.0 ** 2
+    T_exact = _exact_phase_rows(alpha, 24, 12)
+    t = alpha * np.arange(12.0)[:, None] * np.arange(24.0)[None, :]
+    d = T_exact - (t - np.rint(t))
+    parted = float(np.max(np.abs(d - np.rint(d))))
+    assert parted > 1e-9, (
+        f"at a budget of 1e12 the exact and float64 reductions agree to "
+        f"{parted:.3e} of a turn; the exact reference would then be the same "
+        f"instrument as the route and could not measure its phase error")
+
+
+def test_both_routes_follow_the_budget_law_and_dense_wins_by_a_bounded_factor():
+    """THE LAW the threshold is derived from, re-measured by the gate itself,
+    against a reference whose phase is EXACT.
+
+    The relative L2 of BOTH routes is LINEAR in the phase budget
+    ``alpha * N_max^2`` -- there is no cliff to sit just below, and the
+    historical "approaches float64 precision limit (1e15-1e16)" wording
+    described a cliff that does not exist.
+
+    CORRECTED 2026-09-20 (VERIFY-WAVE5-HYGIENE2 round 2, D-1).  This id used
+    to be called ``..._and_dense_is_immune`` and asserted ``rd < 1e-14``.  It
+    could not fail: :func:`_fsum_reference` formed its phase with the same two
+    float64 roundings :func:`_direct_matrix_2d` commits, so the two agreed by
+    construction.  With the reference's phase reduced exactly, MEASURED on the
+    shipped N = 24 -> M = 12 fixture, IDENTICAL TO THE DIGIT on Windows
+    py3.14 and WSL py3.12 (``validation/probe_wave5_hyg2_round3/
+    r3_budget_exact.py``):
+
+        budget            1e5       1e9       1e12      1e15
+        chirp-Z rel L2    2.772e-11 1.635e-07 1.865e-04 2.285e-01
+        DENSE rel L2      6.871e-12 1.104e-07 8.621e-05 6.739e-02
+        eps * budget      2.220e-11 2.220e-07 2.220e-04 2.220e-01
+        chirp / dense     4.035     1.481     2.163     3.391
+
+    WHAT IS ASSERTED, and why each bar has a gap on both sides.
+
+    1.  Both routes obey ``rel = C * eps * budget`` with ``C`` inside
+        ``[0.03, 5]``.  MEASURED ``C``: 0.74 .. 1.25 (chirp-Z) and 0.30 ..
+        0.50 (dense), so both sit a full decade inside each edge.  The
+        refuted hypothesis -- the dense route immune, reading the summation
+        floor of 3.2e-16 -- puts ``C`` at 1.4e-12 at a budget of 1e12, ten
+        decades BELOW the lower edge.  The smallest real signal on the other
+        side is an O(1) wrong answer, ``C = 4.5e10`` at the bottom rung, ten
+        decades ABOVE the upper edge.
+    2.  The fitted slope of each route over TEN decades of budget is 1 within
+        0.1.  The band is derived from the rival hypotheses, not from taste:
+        a budget-INDEPENDENT route fits slope 0 and a quadratic one fits
+        slope 2, so 0.1 is one ninth of the distance to the nearer of them.
+        MEASURED 0.992 (chirp-Z) and 0.998 (dense).
+    3.  The dense route is the more accurate one at every budget, by a
+        BOUNDED factor: ``1 < chirp/dense < 30``.  MEASURED 1.48 .. 4.04 here
+        and 4.4 .. 11.8 on the centred index convention, against a factor of
+        6.3e9 at a budget of 1e12 if the immunity reading were true -- eight
+        decades above the upper edge.
+    4.  PREMISE-GATED on the instrument: the same routes measured against the
+        OLD naive-phase reference read the summation floor, which is what
+        makes claim 3 a statement about the route rather than a reading of
+        the reference.
 
     Nothing here pins the THRESHOLD; the next id does that, so this one stays
     true whatever the threshold becomes.
     """
     from lumenairy.propagators._bluestein import _EPS64
-    budgets = (1e6, 1e8, 1e10, 1e12)
+    budgets = (1e5, 1e9, 1e12, 1e15)
     rows = [(b,) + _chirp_and_dense_at(b) for b in budgets]
     for b, rc, _wc, rd, _wd in rows:
         pred = _EPS64 * b
-        assert 0.2 * pred < rc < 5.0 * pred, (
-            f"at budget {b:.0e} the chirp-Z relative error is {rc:.3e}, not "
-            f"the measured law eps*budget = {pred:.3e} (factor "
-            f"{rc / pred:.2f}); the threshold is derived from that law")
-        assert rd < 1e-14, (
-            f"at budget {b:.0e} the DENSE route reads {rd:.3e}; it reduces "
-            f"its phase by t - rint(t) and must be immune to the budget")
-    slope = np.polyfit(np.log([r[0] for r in rows]),
-                       np.log([r[1] for r in rows]), 1)[0]
-    assert abs(slope - 1.0) < 0.1, (
-        f"the chirp error grows as budget^{slope:.4f}, not linearly; the "
-        f"derivation of the threshold below does not hold")
+        for name, r in (('chirp-Z', rc), ('DENSE', rd)):
+            assert 0.03 * pred < r < 5.0 * pred, (
+                f"at budget {b:.0e} the {name} relative error is {r:.3e}, "
+                f"outside C in [0.03, 5] times eps*budget = {pred:.3e} "
+                f"(C = {r / pred:.4f}).  Both routes follow that law -- the "
+                f"dense one with a smaller constant, NOT with immunity")
+        factor = rc / rd
+        assert 1.0 < factor < 30.0, (
+            f"at budget {b:.0e} the chirp-Z route is {factor:.3f}x the dense "
+            f"route's error.  Below 1 the dense route stopped being the more "
+            f"accurate one; above 30 it has stopped obeying the same law "
+            f"(measured 1.48 .. 4.04 on this fixture, 2026-09-20)")
+    x = np.log10([r[0] for r in rows])
+    for name, col in (('chirp-Z', 1), ('dense', 3)):
+        slope = float(np.polyfit(x, np.log10([r[col] for r in rows]), 1)[0])
+        assert abs(slope - 1.0) < 0.1, (
+            f"the {name} error grows as budget^{slope:.4f} over "
+            f"{x.max() - x.min():.0f} decades, not linearly; slope 0 would "
+            f"be a budget-independent route and slope 2 a quadratic law, and "
+            f"the threshold's derivation rests on this being 1")
+    assert x.max() - x.min() >= 5.0, (
+        "PREMISE: the ladder spans fewer than five decades of budget, which "
+        "is not enough to tell a linear law from a constant")
+
+    # ... and the PREMISE for all of it: against the reference this file used
+    # to carry, the dense route reads the summation floor at every budget --
+    # i.e. the old reading measured the instrument.
+    for b in (1e9, 1e12):
+        _rc, _wc, rd_naive, _wd = _chirp_and_dense_at(b, naive_ref=True)
+        assert rd_naive < 1e-14, (
+            f"PREMISE: at budget {b:.0e} the dense route departs from a "
+            f"reference that forms its phase the SAME way by {rd_naive:.3e}; "
+            f"that reference is supposed to agree with it by construction, "
+            f"and the contrast between the two references is what this id's "
+            f"correction rests on")
 
 
 def test_the_phase_budget_threshold_is_the_budget_that_keeps_six_figures():
@@ -442,10 +614,15 @@ def test_the_phase_budget_threshold_is_the_budget_that_keeps_six_figures():
     threshold with only one side is a preference:
 
     * just BELOW it the routes are quiet AND still accurate -- MEASURED
-      5.32e-07 at the threshold itself, inside the 1e-6 the threshold is
+      6.786e-07 at 0.9x the threshold, inside the 1e-6 the threshold is
       named for;
     * just ABOVE it the guard fires AND the error really has passed 1e-6 --
-      MEASURED 1.90e-06 at a budget of 1e10.
+      MEASURED 2.028e-06 at 2.2x the threshold.
+
+    Both readings RE-MEASURED 2026-09-20 against the exact-phase reference
+    (round 2, D-1) and identical on both builds; the old 5.32e-07 / 1.90e-06
+    were the same quantities against the naive-phase reference, which for the
+    CHIRP route differs only in the last figure.
 
     WHY THE OLD 1e15 IS GONE (VERIFY-WAVE5-HYGIENE2 V-D5).  It was 7.5 decades
     late: at 1e12 the route returned an answer wrong in the fourth significant
@@ -470,13 +647,36 @@ def test_the_phase_budget_threshold_is_the_budget_that_keeps_six_figures():
 
     rc_hi, w_hi, rd_hi, wd_hi = _chirp_and_dense_at(_PHASE_BUDGET_MAX * 2.2)
     assert w_hi, "the guard did not fire above its threshold"
-    assert not wd_hi, (
-        "the dense route warned; it has no chirp phase to lose and its "
-        "method= is the warning's own advice")
     assert rc_hi > 1e-6, (
         f"just above the threshold the chirp-Z error is {rc_hi:.3e}, still "
         f"inside 1e-6 -- the threshold would be firing early")
-    assert rd_hi < 1e-14, f"the dense route moved to {rd_hi:.3e}"
+
+    # THE GUARD'S SCOPE, restated 2026-09-20 (round 2, D-1).  This used to
+    # read `assert not wd_hi` with the reason "it has no chirp phase to lose"
+    # and `assert rd_hi < 1e-14`.  The first is the shipped DECISION and
+    # stays; the reason does not, and the second was the instrument.  What is
+    # asserted now is the decision plus the gap it leaves, so the gap cannot
+    # widen in silence: the dense route is quiet at 2.2x the threshold while
+    # its OWN error there is past the 1e-6 the threshold is named for.
+    # MEASURED 2026-09-20 on both builds: dense 1.079e-06 against chirp-Z
+    # 2.028e-06, a factor of 1.880.  Widening the guard to the dense route is
+    # a behaviour change owed to the maintainer and is an open item in
+    # WAVE5_HYGIENE2_REPORT.md.
+    assert not wd_hi, (
+        "the dense route warned.  That may well be the better behaviour -- "
+        "it is measured at 1.079e-06 at this budget -- but it is a "
+        "behaviour change, and this id is what makes it a decision rather "
+        "than a drift")
+    assert 1e-8 < rd_hi < rc_hi, (
+        f"at 2.2x the threshold the dense route reads {rd_hi:.3e} against "
+        f"the chirp-Z route's {rc_hi:.3e}.  Below 1e-8 it would be back at "
+        f"the summation floor (3.2e-16, the reading a reference sharing its "
+        f"phase gives); at or above rc_hi it would have stopped being the "
+        f"more accurate route.  MEASURED 1.079e-06, factor "
+        f"{rc_hi / rd_hi:.3f}")
+    assert rd_lo < rc_lo, (
+        f"below the threshold the dense route ({rd_lo:.3e}) is no longer "
+        f"the more accurate one ({rc_lo:.3e})")
 
 
 def test_no_shipped_mft_grid_comes_near_the_phase_budget():
@@ -521,15 +721,23 @@ def test_no_shipped_mft_grid_comes_near_the_phase_budget():
 
 
 def test_the_chirp_phase_guard_fires_on_the_chirp_route_and_not_the_dense_one():
-    """The phase-budget warning is a statement about the CHIRP
-    signals' float64 phase, and its advice ("fall back to a regular FFT
-    propagator") is about the route that has them.  The dense route reduces its
-    argument modulo one turn, so it has no such phase -- warning there would be
-    a false positive on the one route that is the alternative.
+    """The phase-budget warning is SCOPED to the chirp signals' float64
+    phase, which the dense route does not build.
 
-    Two-sided, and the accuracy half is the point: at a phase budget of 1e17
-    the chirp route's answer departs from the pairwise reference by order
-    unity while the dense route stays at the summation floor.
+    Two-sided: the chirp route warns and the dense route does not.  That is
+    the shipped decision and this id is what keeps it one.
+
+    WHAT THE SECOND HALF IS AND IS NOT (restated 2026-09-20,
+    VERIFY-WAVE5-HYGIENE2 round 2, D-1).  ``max|dense - ref|`` here is
+    measured against :func:`_pairwise_reference`, which forms its phase with
+    the same two float64 roundings the dense route commits.  So this arm is a
+    SUMMATION check -- the dense route's two BLAS products against a pairwise
+    sum, inside the derived ``(g_dense + g_pair)*eps*sum|E|`` bar -- and NOT
+    an accuracy claim about the phase.  It used to be described as "the dense
+    route stays at the summation floor", which read as the latter.  The
+    dense route's own phase error at this budget is enormous (the law is
+    ``rel ~ eps * budget`` for BOTH routes, and this budget is 1e17); the
+    exact-reference id above is where that is measured.
     """
     N, M = 24, 12
     E = _rand(N, N, seed=77)
@@ -609,12 +817,21 @@ def test_the_association_order_is_a_function_of_the_shapes_alone():
 
 
 def test_the_phase_reduction_is_exact_so_a_huge_index_product_is_not_lost():
-    """``t - rint(t)`` is exact for ``|t| <= 2**52``; that is what lets the
-    dense route carry a phase budget the chirp route cannot.
+    """``t - rint(t)`` is exact for ``|t| <= 2**52``: the REDUCTION loses
+    nothing.
 
     Checked on the arithmetic itself rather than through a transform: the
     reduced value must be EXACTLY representable, i.e. adding back the integer
     returns the original bit for bit.
+
+    WHAT THIS DOES NOT SAY (restated 2026-09-20, round 2 D-1).  An earlier
+    wording added "that is what lets the dense route carry a phase budget the
+    chirp route cannot".  It does not: the reduction is exact, but the
+    float64 PRODUCT ``alpha*(n - cI)*(k - cO)`` handed to it has already
+    thrown away the low bits of a value needing ~63 of them, and an exact
+    reduction of an inexact number is still inexact.  What the exactness of
+    this step buys is that the dense route's error is ``eps*|t|`` and not
+    more.
     """
     rng = np.random.default_rng(11)
     t = rng.uniform(-1e12, 1e12, size=4096)

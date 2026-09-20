@@ -268,10 +268,21 @@ def angular_spectrum_propagate_mft(
         intermediate and the output.  MEASURED peak, ``N = 1024``,
         ``M = 32``: **1.8 MB against 159.6 MB**; at ``M = 512``,
         29.4 MB against 319.0 MB.  For ACCURACY, when the chirp phase
-        budget ``alpha * N_max^2`` is large: the dense route reduces its
-        phase argument modulo one turn and is exact where the chirp signals
-        are not (measured ``1.9e-04`` relative error on the chirp route at a
-        budget of 1e12, ``3.7e-16`` on the dense one).  For TIME, only
+        budget ``alpha * N_max^2`` is large -- but by a BOUNDED factor and
+        not by decades (corrected 2026-09-20, VERIFY-WAVE5-HYGIENE2 round 2
+        D-1).  BOTH routes follow ``rel ~ eps * budget``; the dense route
+        reduces its phase argument modulo one turn and so carries the smaller
+        constant, while the float64 product it reduces has already lost the
+        low bits the budget is made of.  MEASURED against a reference whose
+        phase is reduced EXACTLY, at ``N = 24 -> M = 12`` and identical on
+        both builds: ``1.9e-04`` relative error on the chirp route at a
+        budget of 1e12 against ``8.6e-05`` on the dense one, a factor of 2.2
+        (4.4 on the centred index convention).  The earlier reading here,
+        ``3.7e-16`` "exact where the chirp signals are not", was measured
+        against a reference that formed its own phase the way the dense route
+        does and therefore could not see this.  A smaller BUDGET -- fewer
+        samples, or a smaller ``alpha = dx*dx_out/(lambda z)`` -- is the only
+        thing that buys accuracy back by decades.  For TIME, only
         below the crossover -- roughly ``M <= N/4`` on Windows py3.14, where at
         ``M >= N/2`` with ``N >= 512`` the separable chirp-Z route is 1.2x to
         3.0x faster.  The TIME crossover is PER-BUILD: on WSL py3.12, where
@@ -948,10 +959,21 @@ def fresnel_propagate_mft(
         intermediate and the output.  MEASURED peak, ``N = 1024``,
         ``M = 32``: **1.8 MB against 159.6 MB**; at ``M = 512``,
         29.4 MB against 319.0 MB.  For ACCURACY, when the chirp phase
-        budget ``alpha * N_max^2`` is large: the dense route reduces its
-        phase argument modulo one turn and is exact where the chirp signals
-        are not (measured ``1.9e-04`` relative error on the chirp route at a
-        budget of 1e12, ``3.7e-16`` on the dense one).  For TIME, only
+        budget ``alpha * N_max^2`` is large -- but by a BOUNDED factor and
+        not by decades (corrected 2026-09-20, VERIFY-WAVE5-HYGIENE2 round 2
+        D-1).  BOTH routes follow ``rel ~ eps * budget``; the dense route
+        reduces its phase argument modulo one turn and so carries the smaller
+        constant, while the float64 product it reduces has already lost the
+        low bits the budget is made of.  MEASURED against a reference whose
+        phase is reduced EXACTLY, at ``N = 24 -> M = 12`` and identical on
+        both builds: ``1.9e-04`` relative error on the chirp route at a
+        budget of 1e12 against ``8.6e-05`` on the dense one, a factor of 2.2
+        (4.4 on the centred index convention).  The earlier reading here,
+        ``3.7e-16`` "exact where the chirp signals are not", was measured
+        against a reference that formed its own phase the way the dense route
+        does and therefore could not see this.  A smaller BUDGET -- fewer
+        samples, or a smaller ``alpha = dx*dx_out/(lambda z)`` -- is the only
+        thing that buys accuracy back by decades.  For TIME, only
         below the crossover -- roughly ``M <= N/4`` on Windows py3.14, where at
         ``M >= N/2`` with ``N >= 512`` the separable chirp-Z route is 1.2x to
         3.0x faster.  The TIME crossover is PER-BUILD: on WSL py3.12, where
@@ -1230,10 +1252,21 @@ def fraunhofer_propagate_mft(
         intermediate and the output.  MEASURED peak, ``N = 1024``,
         ``M = 32``: **1.8 MB against 159.6 MB**; at ``M = 512``,
         29.4 MB against 319.0 MB.  For ACCURACY, when the chirp phase
-        budget ``alpha * N_max^2`` is large: the dense route reduces its
-        phase argument modulo one turn and is exact where the chirp signals
-        are not (measured ``1.9e-04`` relative error on the chirp route at a
-        budget of 1e12, ``3.7e-16`` on the dense one).  For TIME, only
+        budget ``alpha * N_max^2`` is large -- but by a BOUNDED factor and
+        not by decades (corrected 2026-09-20, VERIFY-WAVE5-HYGIENE2 round 2
+        D-1).  BOTH routes follow ``rel ~ eps * budget``; the dense route
+        reduces its phase argument modulo one turn and so carries the smaller
+        constant, while the float64 product it reduces has already lost the
+        low bits the budget is made of.  MEASURED against a reference whose
+        phase is reduced EXACTLY, at ``N = 24 -> M = 12`` and identical on
+        both builds: ``1.9e-04`` relative error on the chirp route at a
+        budget of 1e12 against ``8.6e-05`` on the dense one, a factor of 2.2
+        (4.4 on the centred index convention).  The earlier reading here,
+        ``3.7e-16`` "exact where the chirp signals are not", was measured
+        against a reference that formed its own phase the way the dense route
+        does and therefore could not see this.  A smaller BUDGET -- fewer
+        samples, or a smaller ``alpha = dx*dx_out/(lambda z)`` -- is the only
+        thing that buys accuracy back by decades.  For TIME, only
         below the crossover -- roughly ``M <= N/4`` on Windows py3.14, where at
         ``M >= N/2`` with ``N >= 512`` the separable chirp-Z route is 1.2x to
         3.0x faster.  The TIME crossover is PER-BUILD: on WSL py3.12, where
