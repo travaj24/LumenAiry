@@ -670,3 +670,434 @@ JSON.
    box; the runner mix of EPYC 9V74 and 7763 with older wheels was not
    sampled.  Every bar in the new test file is derived at runtime from a
    quantity the running build measures.
+
+
+---
+
+# Round 2 (VERIFY-WP-B12b) -- 2026-09-19
+
+The independent re-verification of this package
+(`fixes/VERIFY_WP-B12b.md`, verdict **SHIP**) filed eight findings.  D-1 was
+closed by the verification's own nine ids.  This addendum closes the other
+seven: two LIBRARY defects (D-5, D-4), one test defect (D-2), one published
+number (D-3), one evidence-methodology note (D-6) and three wording items
+(D-7, D-8 and the nit inside claim 4).  Branch `fix/wp-b12b-gbd-round2`,
+worktree `C:\tmp\lum_gbd2`, off the integration tip `76019ede`.
+
+**The environment, stated once.**  Every invocation below carried
+`OMP_NUM_THREADS=OPENBLAS_NUM_THREADS=MKL_NUM_THREADS=1` **and**
+`LUMENAIRY_MEM_BUDGET_MB=2048` on the command line (D-6: a GBD field's digest
+depends on that variable through the public entry), and pytest ran with
+`--capture=sys -p no:randomly`.  Two builds throughout: **Windows** py3.14.6 /
+numpy 2.4.4 / scipy 1.17.1 and **WSL** py3.12.3 / numpy 2.4.6 / scipy 1.17.1.
+The PRE tree is my own `git archive 76019ede` extracted into
+`C:\tmp\lum_gbd2_pre`, run in its own process with `cwd` and `PYTHONPATH` set
+there, `lumenairy.__file__` printed and asserted to live under it, and the arm
+DETECTED from the library's own source (`'_require_forward_going_local_exit'
+in inspect.getsource(gbd)`) rather than passed on the command line.
+
+**The box.**  Between 8 and 12 other heavy python processes (sibling Wave-5
+agents, and my own parallel Windows / WSL probe arms) were resident for most
+of this package.  Wall clocks are REPORTED, never asserted; no test in this
+package contains a timing assertion.
+
+**Probes.**  All under `validation/probe_wp_b12b_round2/`.  Nothing is
+re-implemented: the fixtures and the 3-D oracle are the VERIFIER's own
+(`validation/probe_verify_b12b/vb12b_common.py`), imported by path from the
+probe tree so a PRE arm running against an archived `lumenairy` still scores
+against one oracle and one fixture table.
+
+| probe | what | outputs |
+|---|---|---|
+| `probe_r1_guards.py` | the two guard decisions at five routes onto the local branch, on the verifier's immersed fixture and two of my own; the boundary bisected AT THE CALL SITE; the mirror through both branches | `probe_r1_guards_{pre,post}_*.json` |
+| `probe_r2_identity.py` | 15 air fixtures x 2 planes + the three local entry points, archive to archive | `probe_r2_identity_{pre,post}_*.json` |
+| `probe_r3_budget.py` | D-6 re-taken through the public entry, one CHILD PROCESS per budget | `probe_r3_budget_post_*.json` |
+| `probe_r4_probec.py` | D-3: the builder's own `probe_c_decompose.py` re-run and its JSONs read back | `probe_r4_probec_post_*.json` |
+| `probe_r5_mirror.py` | D-4's two headline numbers re-measured, both signs of `z_image` | `probe_r5_mirror_{pre,post}_*.json` |
+| `pre_b12_beamlet_fn.py.txt` | the PRE (1218b24f) source of the beamlet function, committed as DATA for the D-2 fail-before | -- |
+
+---
+
+## R2.1 D-5 (P2, LIBRARY) -- the immersed exit is guarded, through the FGA helper
+
+**What changed.**  `lumenairy/propagators/gbd.py`,
+`apply_prescription_persurface_to_beamlets`, the LOCAL branch, immediately
+after `z_image` is resolved -- where the length of the index-free leg first
+exists, rather than after the ray trace has been paid for:
+
+```python
+        _require_forward_going_local_exit(
+            surfs, 'apply_prescription_persurface_to_beamlets')
+        from .fga import _require_non_immersed_exit
+        _require_non_immersed_exit(
+            surfs, wavelength, z_image,
+            'apply_prescription_persurface_to_beamlets')
+```
+
+**One tolerance, not two.**  The import is the shared helper, not a copy.  A
+module-level `from .fga import _require_non_immersed_exit` was measured to
+import cleanly from five entry modules (`lumenairy`, `lumenairy.elements`,
+`lumenairy.propagators`, `lumenairy.raytrace`, `lumenairy.propagators.gbd`
+and `...fga` first), so there is no cycle today -- but it would make
+`propagators.gbd` eagerly depend on `propagators.fga`, which
+`propagators/__init__.py` documents as cycle-free, and `fga` already reaches
+into `gbd` through a function-level import of the same shape.  The
+function-level form was chosen for that reason and the measurement is
+recorded here rather than the claim.
+
+**The premise, measured (both builds, identical to every printed digit).**
+
+| fixture | `n_exit` | `z_image` | waves the index-free leg omits |
+|---|---|---|---|
+| the verifier's `immersed` (n = 1.72) | 1.72 | 2 mm | **1846.2589642118448** |
+| mine, water-like | 1.333 | 0.6 mm | 315.7798324970187 |
+| mine, oil-like | 1.5180 | 0.6 mm | 491.09943307174024 |
+| mine, AIR control | **exactly 1.0** | 0.6 mm | **0.0** |
+| the verifier's AIR control | **exactly 1.0** | 2 mm | **0.0** |
+
+The 1846.26 figure reproduces VERIFY-WP-B12b section 9.1 to every printed
+digit, from a different probe.
+
+**The decision, at five routes (`probe_r1_guards.py`).**  Rows are
+`refused` / `served`; PRE is the archive tree, POST this branch.  The two
+builds are **cell-for-cell identical**.
+
+| route | air (PRE) | air (POST) | immersed (PRE) | immersed (POST) |
+|---|---|---|---|---|
+| `apply_prescription_persurface_to_beamlets` | served | served | **served** | **refused** |
+| `apply_real_lens_gbd` | served | served | **served** | **refused** |
+| `apply_real_lens_universal(method='gbd')` | served | served | **served** | **refused** |
+| `propagate_gbd_through_prescription(per_surface=True)` | served | served | **served** | **refused** |
+| the `world_output_plane` branch | served | served | **served** | **served** |
+
+The last row is the one to read carefully: the world branch is deliberately
+NOT guarded.  Its own leg is likewise index-free, so it has the same defect,
+but WP-B12b's contract for that branch is bit-identity and the class was never
+measured there; it is recorded as an open item below rather than changed on an
+argument.
+
+**The boundary, bisected AT THE SHIPPED CALL SITE, two-sided.**
+`resolve_exit_index` is monkeypatched so the index is a free variable, and
+the bundle handed to the function is a TRIPWIRE whose first attribute access
+raises -- the function touches `beamlets.positions` immediately after the
+guards and before anything expensive -- so a 60-step bisection runs the real
+call site for the cost of the guard.  Identical on both builds:
+
+| `z_image` | `fga._immersed_exit_tolerance` | the GBD site's boundary | relative gap | 1.01x | 0.99x |
+|---|---|---|---|---|---|
+| 0 | 1.000000e-03 | 1.000000e-03 | 1.73e-15 | refused | served |
+| lambda (633 nm) | 1.000000e-03 | 1.000000e-03 | 1.73e-15 | refused | served |
+| 10 um | 6.330000e-05 | 6.330000e-05 | 1.70e-13 | refused | served |
+| 0.35 mm | 1.808571e-06 | 1.808571e-06 | 3.53e-11 | refused | served |
+| 2 mm | 3.165000e-07 | 3.165000e-07 | 3.09e-10 | refused | served |
+| 10 mm | 6.330000e-08 | 6.330000e-08 | 3.20e-10 | refused | served |
+
+On the PRE tree the same bisection reports UNGUARDED at every leg (an exit
+index of 2.0 is served), which is the other half of the contrast.
+
+**The pins.**  `tests/unit/test_wp_b12b_round2.py`:
+`test_an_immersed_exit_is_refused_at_every_local_gbd_entry_point` (4 ids, two
+media each), `test_an_air_terminated_prescription_is_not_refused_at_any_entry_point`
+(4 ids), `test_the_gbd_site_refuses_at_the_fga_helper_s_own_tolerance` (the
+bisection, plus a third claim: monkeypatching `fga._immersed_exit_tolerance`
+to 7x its value moves the GBD site's boundary to the new number, which a
+private copy of the arithmetic could not do -- the durability point
+VERIFY-WAVE5-E D3 made for the `fga` pins), and
+`test_deleting_the_immersed_guard_from_the_gbd_site_reddens_a_named_check`,
+which deletes the guard statement from the shipped function's own source with
+`ast` (so a reflow cannot make the mutation a silent no-op), rebinds it
+through VERIFY-WP-B12b's own recompile vehicle, and asserts the NAMED check
+goes red while the OTHER guard still fires.
+
+---
+
+## R2.2 D-4 (P2, LIBRARY) -- the mirror-terminated local branch is refused, and the refusal does not name a dead end
+
+**What ships is the REFUSAL, not a sign fix**, exactly as the verification
+recommended: `Nz2` feeds `new_dir`, the leg length and the Moebius step, so a
+one-line flip would trade a loud wrong answer for a quiet one.
+`_require_forward_going_local_exit` raises `NotImplementedError` when the last
+surface (skipping trailing coordinate breaks, through
+`_last_optical_surface`) is a mirror.
+
+**The two headline numbers, RE-MEASURED rather than quoted**
+(`probe_r5_mirror.py`, the PRE archive tree, the verifier's own concave
+R = -15 mm fixture, its own 3-D tracer; Windows and WSL identical to every
+printed digit but one ULP of the leg residual).  A refusal whose message
+quotes a number nobody re-measured is the right-conclusion-wrong-numbers
+shape `docs/TESTING_STANDARDS.md` warns about, so both were re-taken, at BOTH
+signs of `z_image`:
+
+| arm | returned spot RMS | vs the TRUE focal RMS (7.118e-09 m) | returned `N` sign | leg residual vs the true optical path |
+|---|---|---|---|---|
+| `z_image = +|f|` (+7.499 mm) | **1.4334e-04 m** | **20137x** | **+1** (traced `-1`) | 3.285e-04 waves |
+| `z_image = -|f|` | 7.1183e-09 m | **0.9999999999995587** | **+1** (traced `-1`) | **0.4911 waves** |
+
+Three readings, and one correction to this package's own message.
+
+1. **The mechanism is confirmed exactly.**  The returned spot RMS at
+   `z_image = +|f|` (1.4334e-04 m) EQUALS the traced spot RMS at
+   `z = -|f|` (1.4334e-04 m).  That is what "the returned positions are the
+   truth at the mirrored plane" means, measured rather than argued: `dt.ux`
+   has already flipped with `N`, and `Nz2` has not, so the two sign errors
+   compose into a reflection of the image plane.
+2. **At `z_image = -|f|` nothing in the spot warns the caller.**  The
+   transverse positions reproduce the true focus to one part in `1e12` of the
+   focal RMS -- and the leg is still wrong by **0.4911 waves** after the
+   circular mean is removed, reproducing VERIFY-WP-B12b's 0.48 waves.  This is
+   the silent half, and it is why a refusal rather than a warning is the right
+   shape.
+3. **The 7756x ratio is quadrature-dependent; the decision is not.**  Its
+   denominator is a diffraction-scale number, so it moves with the ray
+   quadrature and pupil weighting the oracle uses (5.001e-08 m in
+   VERIFY-WP-B12b, 7.118e-09 m on my 121-ray Gaussian-weighted quadrature).
+   The shipped message was edited to say "four decades wider than the traced
+   one -- 7.8e3 x and 2.0e4 x on two independent ray quadratures" instead of
+   pinning one of them as if it were exact.
+
+**The remedy the open item named does not exist -- re-measured.**  On both
+builds and in both trees:
+
+| `world_output_plane` on a terminating mirror | `'auto'` | explicit `(p0, R_out)` |
+|---|---|---|
+| CURVED (R = -15 mm, and my own R = -8 mm) | `NotImplementedError` ("curved (powered) fold mirrors are not yet supported") | the same `NotImplementedError` |
+| FLAT | `ValueError` (`paraxial_focus_world`: no focus to find behind a flat fold) | **SERVED** |
+
+So the shipped message distinguishes the two instead of collapsing them: it
+says no route serves a CURVED terminating mirror yet, and names
+`world_output_plane=(p0, R_out)` for a FLAT one.  `test_the_mirror_refusal_
+does_not_send_the_caller_to_a_dead_end` asserts both halves *after measuring
+them in the same id*, so the message is checked against what the other branch
+actually does on the running build, not against what it said last time.
+
+**Scope, stated as a decision.**  The guard covers a mirror-TERMINATED
+prescription -- the class VERIFY-WP-B12b measured.  A fold mirror in the
+MIDDLE of a prescription reaching the local branch is left alone: it is what
+`world_output_plane` exists for (and that branch serves a flat fold: the
+periscope id in `tests/unit/test_gbd_feature_complete.py` is green
+unchanged), it is LOUD rather than silent through the local branch, and
+widening the guard would change behaviour nothing here has measured.
+`test_a_transmissive_prescription_and_a_mid_prescription_fold_are_served`
+pins that scope with the premise that the fixture really does contain a
+mirror and really does not end in one.
+
+**The pins.**  `test_a_mirror_terminated_prescription_is_refused_on_the_local_branch`
+(3 fixtures: the verifier's R = -15 mm, my R = -8 mm, and a FLAT one -- the
+flat arm matters because the defect is the unsigned `Nz2`, which has nothing
+to do with the sag), premise-gated on the library's own
+`_exit_direction_sign`; and
+`test_deleting_the_mirror_guard_from_the_gbd_site_reddens_a_named_check`,
+which additionally asserts that the UNGUARDED branch returns `N` sign `+1`
+where the prescription sends the light toward `-1`.
+
+**A defect in the verification's own gate, found while closing this.**
+`tests/unit/test_verify_b12b_gbd_projection.py::test_a_mirror_terminated_local_
+branch_is_refused_or_carries_the_direction` was
+`xfail(raises=AssertionError, strict=True)` with the note "this xfail turns
+RED the day either remedy lands, which is the point".  It would not have:
+BOTH ends of the id raise `AssertionError` -- the served arm through its final
+assertion, the refused arm through an `except` clause that re-raises as one --
+so a landing remedy leaves it quietly xfailed, and `strict=True` only catches
+an XPASS.  The xfail is removed, the refusal asserted directly, the
+world-branch premise kept, and the message checked for the curved/flat
+distinction.  That file now reads **9 passed** where it read 8 passed +
+1 xfailed.
+
+---
+
+## R2.3 Byte identity where no guard fires
+
+Two independent checks, because they fail differently.
+
+**Archive to archive** (`probe_r2_identity.py`, Windows, PRE = `git archive
+76019ede` against this branch, `LUMENAIRY_MEM_BUDGET_MB=2048` pinned on both
+arms).  Fifteen air-terminated fixtures -- VERIFY-WP-B12b's eight (one optic,
+last surface varied: conic, conic + k, even asphere, flat-base asphere,
+biconic, freeform, field-frame decentre, flat last), WP-B12b's own six, and
+mine -- at TWO planes each (the exit vertex and the fixture's own traced best
+focus):
+
+> **30 of 30 field digests IDENTICAL, 0 differ**, plus the three local public
+> entry points byte-identical to one another in BOTH trees
+> (`f799fc7c4666b585...`).
+
+Two of those digests are this package's own published ones, reproduced from a
+different probe and a different oracle module: `077c35f46f9f283c32736e99` for
+the flat-base aspheric at its focus (VERIFY-WP-B12b section 6.1's POST
+Windows digest) and `9c44ed861a987b97d2ce2065` for the flat control at the
+vertex (its section 5.1).
+
+**In-process, guard-deleted** (`test_neither_guard_moves_one_byte_of_an_air_
+terminated_field`).  The same function with BOTH guard statements removed from
+its own source by `ast` and rebound returns fields whose SHA-256 equals the
+shipped ones on two air fixtures, at a pinned budget, with the mutation itself
+premise-gated (the recompiled function must be a different object, and it must
+SERVE the immersed fixture, or the identity would be vacuous).
+
+---
+
+## R2.4 D-2 (P3) -- the assertion that could not fail
+
+`test_the_module_carries_no_second_sag_kernel` asserted
+`"'radius'" not in fn_flat` on a token stream built two lines above it with
+`tokenize.STRING` tokens DROPPED.  A quoted attribute name IS a STRING token,
+so the searched text could never contain it.
+
+**Proven, not argued.**  The PRE source of the beamlet function at commit
+`1218b24f` -- which literally reads the last surface's radius through
+`getattr` -- is committed as DATA in
+`validation/probe_wp_b12b_round2/pre_b12_beamlet_fn.py.txt`, extracted with
+`git show` + `ast` and cut at its first `def` so the explanatory header can
+neither satisfy nor defeat either form.
+`test_the_second_sag_kernel_check_now_fails_against_the_pre_source` runs all
+three arms:
+
+| arm | result |
+|---|---|
+| the OLD form, verbatim, against the PRE text | **passes** -- the defect |
+| the REPAIRED check against the PRE text | **fails**, naming the read it found |
+| the REPAIRED check against the SHIPPED function | passes |
+
+The repaired check is one function,
+`test_audit2609_b12b_gbd_projection.last_surface_radius_reads`, which both
+files call, so the two cannot drift.  It searches the SOURCE TEXT with
+whitespace removed for three spellings (the `getattr` form the deleted copy
+used, its double-quoted twin, and a plain attribute read); the cost is that a
+COMMENT could trip it, which is the conservative direction.
+
+---
+
+## R2.5 D-3 (P3) -- section 7.4's published pair, corrected
+
+Section 7.4 published **8.318e-17 / 8.298e-17** radians for probe C's flat
+control.  The shipped JSONs contain `6.796869888613907e-17` (Windows) and
+`6.760231407720553e-17` (WSL).  Re-running `probe_c_decompose.py` unchanged on
+this tree reproduces both files number for number on both builds -- the only
+line that moves is the embedded `"version"` string (5.47.0 -> 5.47.1), which
+tracks the tree and not the measurement, so the artefacts were left as
+committed.  Section 7.4 now carries the JSONs' numbers with the correction
+dated in place; the re-run is recorded in `probe_r4_probec_*.json`.
+
+---
+
+## R2.6 D-6 (P3, evidence) -- the memory budget, re-taken and now pinned
+
+Re-measured through the PUBLIC entry with ONE CHILD PROCESS PER BUDGET, so
+the variable is read at the value the child started with and nothing caches
+across arms:
+
+| `LUMENAIRY_MEM_BUDGET_MB` | Windows digest | WSL digest | max abs diff vs unset |
+|---|---|---|---|
+| unset | `f799fc7c...` | `2d7f8e01...` | 0 |
+| 4096 | `f799fc7c...` | `2d7f8e01...` | 0 |
+| 2048 | `f799fc7c...` | `2d7f8e01...` | 0 |
+| 512 | `f799fc7c...` | `2d7f8e01...` | 0 |
+| **64** | **`7dafcd23...`** | **`be147743...`** | 1.741e-15 / 1.759e-15 relative |
+| **8** | **`cb6a219f...`** | **`44618976...`** | 2.162e-15 / 2.005e-15 relative |
+
+The bytes move and the field does not: the variable is a hard CEILING on the
+`mem_budget_mb` keyword, so anything at or above the 512 default is a no-op,
+and below it `_reconstruct_windowed`'s chunking regroups a scatter-add.
+
+**What was changed as a result.**  `LUMENAIRY_MEM_BUDGET_MB` is now pinned by
+an autouse fixture in all three B12b test files, and `mem_budget_mb` is passed
+explicitly wherever the entry point has it.  One asymmetry is worth recording:
+`propagate_gbd_through_prescription` has NO `mem_budget_mb` keyword at all, so
+for that entry the environment variable is the ONLY pin -- which is why the
+pin is a fixture and not a keyword at each call site.  The finding is also in
+that file's module docstring, in section 7's preamble above, and in the
+CHANGELOG entry.
+
+---
+
+## R2.7 D-7, D-8 and the nit inside claim 4 -- restated in place
+
+* **D-7** (section 4.2).  "The five exit-vertex rows agree to 1.3e-06 of
+  fidelity" is the largest deviation from their MEAN; the SPREAD is
+  **1.98e-06**.  Both are now given, with the five readings.
+* **D-8** (section 5, the JAX row).  "`grep -n 'jax\|jnp'
+  lumenairy/propagators/gbd.py` finds no import" returns **12** matches
+  (docstrings, `is_jax_array`, a `jnp.at[].add` comment).  The substance --
+  no `import jax`, no `import jax.numpy`, no JAX per-surface GBD path -- is
+  right and is restated as what was actually checked.
+* **Claim 4's nit** (section 4.5).  "Their last-bits agreement is a property
+  of the build" is wrong.  With the beamlet FRAME named, the verification
+  found the two entry points byte-identical on both builds in both trees, and
+  this round reproduces that on a third fixture: `apply_real_lens_gbd`,
+  `apply_real_lens_universal(method='gbd')` and
+  `propagate_gbd_through_prescription(per_surface=True)` all return
+  `f799fc7c4666b585...` in BOTH trees on Windows.  What separates them is the
+  frame and the chunk boundaries the coherent sum is grouped by -- one route
+  prunes dark beamlets up front and the other lets the trace vignette them,
+  reaching the same live set by different roads.  The test file's decision
+  (byte identity for the dispatcher pair, a 0.999 fidelity bar for this one)
+  is unchanged and still right; it just holds for a different reason.
+
+---
+
+## R2.8 Open items after round 2
+
+1. **The `world_output_plane` branch's own image leg is index-free too.**
+   Measured here (`probe_r1_guards.py`, both builds): that branch SERVES an
+   immersed prescription in both trees.  It is not guarded, because its
+   `surfs` come from `_unfolded_equivalent_surfaces` (which rewrites the
+   surface list) and refusing on a rewritten list was not measured; WP-B12b's
+   bit-identity contract for that branch was kept instead.
+2. **A fold mirror in the MIDDLE of a prescription through the LOCAL branch.**
+   Out of the new guard's scope by decision, not by oversight (R2.2).  It is
+   loud today, and `world_output_plane` serves the flat case.
+3. **A signed-`N` local branch that would SERVE a mirror-terminated
+   prescription** is not attempted.  The refusal is a cost decision.  What it
+   would take: a signed propagation-direction convention carried through
+   `new_dir`, the leg length `t` and `_freespace_tensor_moebius_np`'s branch
+   choice at once, plus a reconstruction frame that knows which way the
+   grid's `+z` points; and a 3-D oracle arm for a CURVED terminating mirror,
+   which neither package has (`probe_r5_mirror.py`'s tracer is the starting
+   point -- it already produces the exit-vertex state and the true focal spot
+   for this class, which is what such an arm would score against).  The world
+   branch's own refusal of a powered fold would have to be lifted in the same
+   change or the two branches would disagree about which classes exist.
+4. **The GPU reconstruction path and the vector GBD path** are untouched and
+   unmeasured here, as in the verification: the guards sit upstream of both.
+5. **The CI cross-build spread.**  Both builds here are the same box; the
+   runner mix was not sampled.  Every bar in the new file is derived at run
+   time from a quantity the running build measures.
+
+---
+
+## R2.9 Tests run
+
+| selection | build | result |
+|---|---|---|
+| `test_wp_b12b_round2.py` (NEW, 22 ids) | Windows | see R2.10 |
+| `test_audit2609_b12b_gbd_projection.py` (14) + `test_verify_b12b_gbd_projection.py` (9) + `test_wp_b12b_round2.py` (22) | Windows | **45 passed** in 96.7 s |
+| the GBD + FGA + reference-plane selection (21 files) | Windows / WSL | see R2.10 |
+| the census / walker / dispatcher-pin / public-API / doc-consistency sweep + `test_audit_except_budget.py` | Windows | see R2.10 |
+
+`test_verify_b12b_gbd_projection.py` reads **9 passed** where it read 8 passed
++ 1 xfailed, because its mirror id is now a real decision (R2.2).
+
+| gate | result |
+|---|---|
+| `python scripts/record_history_fingerprints.py --check` | **OK: every history document matches its module** (`lumenairy.propagators.gbd.md` re-recorded) |
+| `python scripts/check_doc_identifiers.py` | **OK**, 621 distinct, 0 unresolved |
+| `.test_durations` | 16 396 -> **16 418** entries, valid JSON, **22** new ids, largest **5.03 s** |
+
+---
+
+## R2.10 What I could not measure
+
+1. **The CI cross-build spread** -- as above.
+2. **The GPU reconstruction path** (`use_gpu=True`): no CUDA device here.
+   The guards run before any device transfer, so they are upstream of it, but
+   that is an argument and not a measurement.
+3. **A CURVED terminating mirror served correctly by the world branch.**  I
+   did not attempt it; R2.8 item 3 says what it would take.  What I did
+   measure is that the branch refuses the class today, on both builds and in
+   both trees, so the refusal's message is not sending anyone anywhere that
+   works.
+4. **`scripts/check_source_line_citations.py`** audits the topmost RELEASED
+   block (v5.47.1 here) and reports "no source-file:line citations in the
+   v5.47.1 block; nothing to verify" (exit 2).  It does not look at
+   `## [Unreleased]`, so it says nothing about this package either way; the
+   reading is identical before and after this branch.

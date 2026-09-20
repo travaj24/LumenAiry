@@ -1061,6 +1061,102 @@ Pinned by `tests/unit/test_audit2609_b12b_gbd_projection.py`; the full
 measurement is
 `docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/WP-B12b_GBD_REPORT.md`.
 
+**Open items.**  That report listed five; its independent re-verification
+(`fixes/VERIFY_WP-B12b.md`, verdict SHIP) confirmed the first two, found both
+worse than recorded, and found that the remedy the second one named does not
+exist.  Both are now CLOSED -- as refusals, not as repairs -- by the entry
+immediately below, which also records what stays open (the
+`world_output_plane` branch's own index-free leg, a mid-prescription fold
+through the local branch, and a signed-`N` local branch for a
+mirror-terminated system).  Items 3, 4 and 5 are answered by the
+verification's own measurements (the biconic, freeform and field-frame arms
+now have diffraction scores, 0.4127 -> 0.99945, 0.2490 -> 0.99946 and
+2.3e-07 -> 0.99945 against an independent 3-D oracle) and are carried in the
+report's Round 2 addendum.
+
+### Fixed -- GBD: the per-surface local branch refuses an immersed exit medium and a mirror-terminated prescription instead of serving a wrong field silently
+
+`lumenairy.propagators.gbd.apply_prescription_persurface_to_beamlets`'s
+local-frame branch builds its image-side leg by hand as `t = z_image / Nz2`
+with `Nz2 = 1/sqrt(1 + ux^2 + uy^2)`.  Two classes of prescription reach that
+leg, are wrong there, and were returned with no warning.  Both were reachable
+through the public `apply_real_lens_gbd`.
+
+**An IMMERSED exit medium.**  `t` carries no exit index, while the projection
+that produced the beamlet's accumulated optical path resolves one
+(`raytrace.exit_vertex.resolve_exit_index`), so the leg silently assumes the
+optic terminates in vacuum.  On a conic singlet exiting into n = 1.72 with a
+2 mm image leg the returned phase matches a VACUUM prediction to **7.3e-05
+waves** and omits **1846.26 waves** of optical path -- two orders of magnitude
+larger than the largest sag defect the entry above repaired (16.28 waves).
+The four `lumenairy/propagators/fga.py` sites already refuse this class (see
+the exit-vertex / immersed-exit entry above); GBD was the last unguarded
+consumer and now calls the SAME `fga._require_non_immersed_exit`, so the
+tolerance keeps exactly ONE definition (`fga._immersed_exit_tolerance`,
+`|n - 1| > waves_budget * lambda / max(|z_image|, lambda)` with a 1e-3-wave
+budget).  Measured through the shipped GBD call site by bisection, the
+boundary it decides on IS that helper's own return, at six image legs from
+0 to 10 mm, two-sided at 1.01x (refused) and 0.99x (served).
+
+**A MIRROR-terminated prescription.**  `Nz2` is positive whatever the true
+direction cosine `N`, and it feeds three things at once -- the returned
+direction, the leg length and the branch-safe Moebius free-space step -- so
+after a mirror all three run along `+z` while the light travels toward `-z`.
+Measured against an independent 3-D tracer on a concave R = -15 mm mirror
+whose geometric focus is 7.5 mm behind the vertex: at `z_image = +f` the
+returned spot RMS is **7756x** the traced one (3.879e-04 m against 5.001e-08 m)
+and the returned `N` sign is `+1` against a traced `-1`; flipping the sign of
+`z_image` recovers the transverse positions to 2.830e-19 m but leaves a
+**0.48-wave** piston.  A one-line sign flip would trade a loud wrong answer
+for a quiet one, so the branch REFUSES this class with a named error.
+
+The refusal deliberately does NOT send the caller to `world_output_plane`, as
+the previous entry's open item recommended: measured on both builds, that
+branch raises `NotImplementedError: world_output_plane: curved (powered) fold
+mirrors are not yet supported` on exactly this class.  It DOES serve a FLAT
+terminating mirror through an explicit `(p0, R_out)` plane, which the message
+says instead of collapsing the two cases.
+
+**Migration.**  No prescription this library serves today is affected: every
+GBD fixture in the suite exits into air through a transmissive last surface,
+and `glass.get_glass_index('air', lambda)` is exactly 1.0 on this registry, so
+the immersed guard's boundary is never approached.  Shipped fields are
+BYTE-IDENTICAL across this change, checked archive-to-archive (a `git archive`
+of the integration tip against this branch, 15 fixtures x 2 planes on both
+builds, including the three public local entry points) and in-process against
+the same function with both guard statements deleted from its source.  A
+caller who really does terminate a prescription in a medium must add the
+immersion medium as an explicit last element, or use a propagator that carries
+the exit index through its image leg; a caller with a mirror-terminated system
+must propagate to the mirror and continue the reverse leg themselves.
+
+**Known issues / still open.**  (1) The `world_output_plane` branch's own leg
+is likewise index-free and is deliberately NOT guarded here -- it was measured
+to serve an immersed prescription, and WP-B12b's byte-identity contract for
+that branch was kept rather than traded for an unmeasured extension.  (2) A
+fold mirror in the MIDDLE of a prescription through the LOCAL branch is out of
+the new guard's scope: it is what `world_output_plane` exists for, and it is
+loud (non-finite energy / a smeared spot) rather than silent.  (3) A signed-`N`
+local branch that would SERVE a mirror-terminated prescription is not
+attempted; the refusal is a cost decision, recorded as such.
+
+Pinned by `tests/unit/test_wp_b12b_round2.py` (22 ids, both guards with a
+fail-before that deletes the guard statement from the shipped function's own
+source); the measurement is the "Round 2 (VERIFY-WP-B12b)" addendum in
+`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/WP-B12b_GBD_REPORT.md`
+and its probes are under `validation/probe_wp_b12b_round2/`.
+
+**Evidence note for anyone re-taking a GBD byte-identity reading.**  A GBD
+field's SHA-256 depends on `LUMENAIRY_MEM_BUDGET_MB` through the public entry
+point: `_reconstruct_windowed` chunks each bucket of the coherent beamlet sum
+to stay under the budget and the chunk boundaries change the grouping of a
+scatter-add.  Measured with only that variable varied (one fixture, both
+builds): unset / 4096 / 2048 / 512 give one digest, 64 and 8 give two others,
+while the fields agree to 1.7e-15 and 2.2e-15 relative.  The variable is a
+CEILING on the `mem_budget_mb` keyword, and
+`propagate_gbd_through_prescription` has no such keyword at all, so pin the
+environment variable, not only the keyword.  No solver answer depends on it.
+
 ## [5.47.1] — 2026-09-15
 
 The publish verification of the `v5.47.0` tag (run 34939783790) stopped before the
