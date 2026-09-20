@@ -764,6 +764,15 @@ def test_vc2_the_edited_in_place_override_accepts_a_reverted_default():
     inside the check and the map cannot outlive its release.  A refusal is
     recorded with BOTH lines instead of falling through silently.
 
+    ROUND 3 added a fifth field (VERIFY-WP-C2 round 2, defect VR2-D7): the
+    content digest alone still accepted the EXACT expected content under a
+    DIFFERENT enclosing ``def``, so each entry records the enclosing
+    definition and the override refuses a line whose nearest preceding
+    module-level ``def`` / ``class`` is not it.  Measured on ``9aec3743``:
+    the wrong-``def`` line FIRED with 0 refusals.  The fixture below
+    therefore carries a module-level ``def trace(`` above the mapped
+    coordinate, and the wrong-``def`` case is one of the abuses.
+
     Both the BASE and the CURRENT file contents are supplied here, so the
     arm is a pure unit test of the guard and needs neither a git checkout
     nor the base commit to be present.
@@ -776,13 +785,15 @@ def test_vc2_the_edited_in_place_override_accepts_a_reverted_default():
         'map has been retired, delete this arm.')
     entry = ra.EDITED_IN_PLACE[(tgt, 61)]
     assert entry[0] == 61, entry
-    assert len(entry) == 4, (
-        f'D7 asks for (new_num, reason, content digest, recorded_for); '
-        f'this entry carries {len(entry)} fields: {entry}')
+    assert len(entry) == 5, (
+        f'D7 asks for (new_num, reason, content digest, recorded_for) and '
+        f'VR2-D7 for the enclosing definition; this entry carries '
+        f'{len(entry)} fields: {entry}')
+    assert entry[4] == 'def trace(', entry
 
-    base_lines = (['# pad'] * 60
-                  + ["    sphere_normal: str = 'generic',",
-                     '    ) -> None:'])
+    base_lines = ['# pad'] * 60
+    base_lines[54] = 'def trace('
+    base_lines += ["    sphere_normal: str = 'generic',", '    ) -> None:']
     assert base_lines[60] == "    sphere_normal: str = 'generic',"
     real_lines = ra.lines
 
@@ -824,6 +835,25 @@ def test_vc2_the_edited_in_place_override_accepts_a_reverted_default():
         assert len(refusals) == 1, (label, refusals)
         assert refusals[0]['found_line'] == text.strip(), refusals[0]
         assert refusals[0]['base_line'] == base_lines[60].strip(), refusals[0]
+
+    # VR2-D7: the EXACT expected content, under the WRONG enclosing
+    # definition.  The digest matches -- that is the point -- so this is
+    # refused by the OWNER check and by nothing else.
+    wrong_def = list(base_lines)
+    wrong_def[54] = 'def trace_a_different_thing('
+    wrong_def[60] = "    sphere_normal: str = 'analytic',"
+    num, refusals = _try(wrong_def)
+    assert num is None, (
+        'the EDITED_IN_PLACE override still accepts the expected content '
+        'under a DIFFERENT enclosing def; VR2-D7 asks for the citation to '
+        'be refused rather than re-anchored to the right text in the wrong '
+        'function.')
+    assert len(refusals) == 1, refusals
+    assert refusals[0]['expected_digest'] == refusals[0]['found_digest'], (
+        'the wrong-def case was refused by the DIGEST, so this arm is not '
+        'measuring the owner guard: the content is supposed to be exactly '
+        'right.')
+    assert refusals[0]['expected_owner'] == 'def trace(', refusals[0]
 
     # the guard IS two-sided for an unrelated line, and for a short file
     unrelated = list(base_lines)
