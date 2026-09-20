@@ -1,0 +1,32 @@
+{
+ "a": "validation/probe_verify_c5/v_item2_base_win.json",
+ "a_stamp": "C:\\tmp\\vc5_arch\\base\\lumenairy\\__init__.py",
+ "b": "validation/probe_verify_c5/v_item2_head_win.json",
+ "b_stamp": "C:\\tmp\\lum_vc5\\lumenairy\\__init__.py",
+ "identical": [
+  "default/512/8MB",
+  "legacy/320/512MB",
+  "legacy/320/64MB",
+  "legacy/320/8MB",
+  "legacy/512/512MB",
+  "legacy/512/64MB",
+  "legacy/512/8MB",
+  "measured/320/512MB",
+  "measured/320/64MB",
+  "measured/320/8MB",
+  "measured/512/512MB",
+  "measured/512/64MB",
+  "measured/512/8MB",
+  "windowed/320/8MB",
+  "windowed/512/8MB"
+ ],
+ "moved": [
+  "default/320/512MB",
+  "default/320/8MB",
+  "default/512/512MB"
+ ],
+ "n_identical": 15,
+ "n_moved": 3,
+ "only_in_a": [],
+ "only_in_b": []
+}
