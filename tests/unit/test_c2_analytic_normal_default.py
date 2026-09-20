@@ -1221,6 +1221,114 @@ def test_c2_the_ghost_path_asks_the_library_default_normal_route():
 
 
 # ===========================================================================
+# 6d -- the private-layer docstrings say what the release actually did (D11)
+# ===========================================================================
+
+#: The four private-layer sentences that became FALSE the moment the two
+#: public defaults moved, quoted verbatim from the 5.48.x source.  Each is
+#: matched against a whitespace-flattened file, so re-wrapping a paragraph
+#: does not make the arm pass by accident.
+_D11_STALE_SENTENCES = {
+    'surface.py::_sphere_normal': (
+        'surface.py',
+        "That band is reachable only under ``sphere_normal='analytic'``; "
+        'the shipped default is the generic route on both sides.'),
+    'surface.py::_surface_normal': (
+        'surface.py',
+        'The default is the generic sag-derivative route, which is the '
+        'arithmetic every caller has always got'),
+    'intersection.py::_intersect_surface': (
+        'intersection.py',
+        'It is opt-in because it differs in the last bit from the '
+        'sag-derivative route every caller has been getting.'),
+    'intersection.py::_refract': (
+        'intersection.py',
+        "``'generic'`` is the sag-derivative dispatch every caller has "
+        'always used'),
+}
+
+#: What each of them must say instead.  Asserted as well as the absence,
+#: so the arm cannot be satisfied by DELETING the paragraph.
+_D11_REPLACEMENTS = {
+    'surface.py::_sphere_normal': (
+        'surface.py',
+        'which is the SHIPPED DEFAULT of :func:`trace.trace` / '
+        ':func:`world_trace.trace_world` since WP-C2 moved it'),
+    'surface.py::_surface_normal': (
+        'surface.py',
+        'THIS PRIVATE DEFAULT DID NOT MOVE when WP-C2 moved the two '
+        'public ones'),
+    'intersection.py::_intersect_surface': (
+        'intersection.py',
+        'It is the DEFAULT for :func:`trace.trace` / ``trace_world`` '
+        'since WP-C2 moved it'),
+    'intersection.py::_refract': (
+        'intersection.py',
+        'is the sag-derivative dispatch and the default of THIS PRIVATE '
+        'helper'),
+}
+
+
+def _c2_raytrace_source(name):
+    """Whitespace-flattened source of a ``lumenairy/raytrace`` module, read
+    through the IMPORTED package so the arm follows ``PYTHONPATH`` and can
+    be pointed at an archive of an earlier commit."""
+    import re
+    path = pathlib.Path(la.__file__).parent / 'raytrace' / name
+    return re.sub(r'\s+', ' ', path.read_text(encoding='cp1252'))
+
+
+def test_c2_no_private_docstring_claims_the_generic_route_is_shipped():
+    """WP-C2 rewrote the two PUBLIC docstrings and left four private-layer
+    sentences behind that had become false (VERIFY-WP-C2 defect D11, its
+    only P1).
+
+    The worst of them is ``_sphere_normal``'s own account of the rim band:
+    "the shipped default is the generic route on both sides", in the very
+    function a reader opens to ask whether the band is reachable.  It is
+    the OPPOSITE of what the release did, and neither the doc-consistency
+    gate nor the walker citation gate reads prose, so nothing caught it.
+
+    This arm is two-sided by construction: it asserts that each stale
+    sentence is GONE and that its replacement is THERE, so it cannot be
+    satisfied by deleting the paragraph -- and it reads the source through
+    the imported package, so pointing ``PYTHONPATH`` at a ``git archive``
+    of the WP-C2 branch tip turns it red on all four.
+
+    MEASURED 2026-09-20: run against ``git archive eadc67ba`` (the WP-C2
+    branch tip) this test FAILS naming all four sentences; against this
+    tree it passes.
+    """
+    still_there = []
+    for key, (mod, sentence) in _D11_STALE_SENTENCES.items():
+        if sentence in _c2_raytrace_source(mod):
+            still_there.append(key)
+    assert not still_there, (
+        f'{len(still_there)} private ray-tracer docstring(s) still tell a '
+        f'reader that the generic sag-derivative route is what ships: '
+        f'{sorted(still_there)}.  The shipped default of trace / '
+        f'trace_world is the CLOSED FORM, so these sentences say the '
+        f'opposite of the CHANGELOG and the Migration Guide, in the '
+        f'functions a reader opens to check.')
+
+    missing = []
+    for key, (mod, sentence) in _D11_REPLACEMENTS.items():
+        if sentence not in _c2_raytrace_source(mod):
+            missing.append((key, sentence))
+    assert not missing, (
+        f'the corrected private docstrings are gone as well as the stale '
+        f'ones -- {[k for k, _s in missing]}.  D11 asks for the text to be '
+        f'REWRITTEN, not deleted; a reader who opens _sphere_normal still '
+        f'has to be told that the rim band is reachable at the default.')
+
+    # PREMISE, so a red above cannot mean "the whole work package was
+    # reverted": the two PUBLIC docstrings still say the defaults moved.
+    assert 'THIS DEFAULT MOVED' in _c2_raytrace_source('trace.py'), (
+        'trace.py no longer says the defaults moved, so this arm has '
+        'nothing to compare the private docstrings against.')
+
+
+# ===========================================================================
 # 7 -- the mutation matrix, stated
 # ===========================================================================
 
@@ -1246,6 +1354,7 @@ def test_c2_mutation_matrix_is_stated_and_each_arm_is_named():
     | an entry point that traces loses a keyword   | ``test_c2_every_entry_point_that_traces_carries_both_keywords`` |
     | a forwarded keyword defaults to today's value | ``test_c2_none_stamps_nothing_on_the_entry_points`` |
     | the ghost leg drifts off trace's normal      | ``test_c2_the_ghost_path_asks_the_library_default_normal_route`` |
+    | a private docstring says generic is shipped  | ``test_c2_no_private_docstring_claims_the_generic_route_is_shipped`` |
     """
     import sys
     mod = sys.modules[__name__]
@@ -1263,7 +1372,8 @@ def test_c2_mutation_matrix_is_stated_and_each_arm_is_named():
             'test_c2_the_exit_hoist_does_not_accumulate_with_surface_count',
             'test_c2_every_entry_point_that_traces_carries_both_keywords',
             'test_c2_none_stamps_nothing_on_the_entry_points',
-            'test_c2_the_ghost_path_asks_the_library_default_normal_route'):
+            'test_c2_the_ghost_path_asks_the_library_default_normal_route',
+            'test_c2_no_private_docstring_claims_the_generic_route_is_shipped'):
         assert callable(getattr(mod, name, None)), (
             f'{name} named in the mutation matrix no longer exists; '
             f'either restore it or update the table above.')

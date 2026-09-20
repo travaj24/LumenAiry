@@ -720,8 +720,18 @@ def _sphere_normal(x, y, R):
     ``R = 51.68 mm``, ``x = y = 0.036541451242116801 m`` gives
     ``nz = 1.0000000000005e-2`` and a refracted ray here, ``NaN`` and a
     ``RAY_NAN`` kill through the generic route.  That band is reachable
-    only under ``sphere_normal='analytic'``; the shipped default is the
-    generic route on both sides.
+    only under ``sphere_normal='analytic'`` -- which is the SHIPPED
+    DEFAULT of :func:`trace.trace` / :func:`world_trace.trace_world` since
+    WP-C2 moved it (the CHANGELOG entry carries the release number), so it
+    is reachable BY DEFAULT; ``sphere_normal='generic'`` is the way back.
+    Measured (VERIFY-WP-C2, both builds): 580 000 rays over twelve
+    prescription and field combinations move ZERO alive flags and zero
+    error codes, and the band does not exist on the meridian at all -- the
+    two gate expressions agree EXACTLY at ``y = 0``, bisected at eight
+    radii of both signs.  What a real design meets at the rim is the CLAMP
+    below, not the band: a ball lens or hemisphere (clear semi-diameter
+    ``|R|``) loses 4.9 % of a rim-packed bundle to ``RAY_NAN`` on BOTH
+    routes, unchanged by the flip.
 
     A NOT-FINITE position propagates into all three components (the
     S11-7 policy the shared core ``conic_sag_derivs`` already
@@ -747,12 +757,23 @@ def _surface_normal(x, y, surface, *, analytic_sphere=False):
         Take the closed-form :func:`_sphere_normal` when the surface is a
         pure sphere (:func:`_is_pure_spherical` -- the same predicate the
         intersection fast path selects on).  The default is the generic
-        sag-derivative route, which is the arithmetic every caller has
-        always got; the two agree to ~1e-16 over the working aperture and
-        the closed form is closer to the truth at most heights, but not
-        at all of them (see :func:`_sphere_normal` for where the two are
-        both at the conditioning limit of ``sqrt(1 - h^2/R^2)``).  Either
-        way it is a different last bit, so the switch is explicit.  See
+        sag-derivative route.
+
+        THIS PRIVATE DEFAULT DID NOT MOVE when WP-C2 moved the two public
+        ones, and that is deliberate: it is what the finite-difference
+        differential path gets, so its arithmetic is unchanged by
+        construction.  It is no longer "the arithmetic every caller gets",
+        though -- :func:`trace.trace` and
+        :func:`world_trace.trace_world` now pass ``True`` at every pure
+        sphere, and ``analysis.ghost`` opts in through
+        :func:`trace._library_trace_default` so that its ghost legs agree
+        with the public tracer in the last bit.
+
+        The two routes agree to ~1e-16 over the working aperture and the
+        closed form is closer to the truth at most heights, but not at all
+        of them (see :func:`_sphere_normal` for where the two are both at
+        the conditioning limit of ``sqrt(1 - h^2/R^2)``).  Either way it is
+        a different last bit, so the switch is explicit.  See
         ``trace(sphere_normal=...)``.
     """
     if analytic_sphere and _is_pure_spherical(surface):

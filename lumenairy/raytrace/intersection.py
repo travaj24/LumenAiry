@@ -156,8 +156,10 @@ def _intersect_surface(rays, surface, n_medium=1.0):
     on the SAME predicate as this intersection.  That pairing is what
     makes it safe: it is the normal of the sphere the intersection
     actually solved, at the point the intersection actually returned.
-    It is opt-in because it differs in the last bit from the
-    sag-derivative route every caller has been getting.
+    It is the DEFAULT for :func:`trace.trace` / ``trace_world`` since
+    WP-C2 moved it (the CHANGELOG entry carries the release number) and
+    opt-IN for every direct caller of :func:`_refract` / :func:`_reflect`,
+    because it differs in the last bit from the sag-derivative route.
     """
     R = surface.radius
     kc = surface.conic
@@ -569,12 +571,15 @@ def _refract(rays, surface, n1, n2, *, renormalize=True,
         sees, so their arithmetic is unchanged by construction.
     sphere_normal : ``'generic'`` (default) | ``'analytic'``
         Which route computes the surface normal for a PURE SPHERE.
-        ``'generic'`` is the sag-derivative dispatch every caller has
-        always used; ``'analytic'`` is the closed form
-        ``(-x/R, -y/R, sqrt(1 - h^2/R^2))``, which is both cheaper and
-        more accurate but differs in the last bit.  Non-spherical
-        surfaces take the generic route either way.  See
-        ``trace(sphere_normal=...)``.
+        ``'generic'`` is the sag-derivative dispatch and the default of
+        THIS PRIVATE helper; ``trace`` passes ``'analytic'`` -- the closed
+        form ``(-x/R, -y/R, sqrt(1 - h^2/R^2))``, which is both cheaper
+        and more accurate but differs in the last bit.  A direct caller
+        that wants to agree with the public tracer asks
+        :func:`trace._library_trace_default` rather than naming a route,
+        so it tracks the next default flip instead of pinning this one
+        (``analysis.ghost`` does).  Non-spherical surfaces take the
+        generic route either way.  See ``trace(sphere_normal=...)``.
     """
     nx, ny, nz = _surface_normal(
         rays.x, rays.y, surface,

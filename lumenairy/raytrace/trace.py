@@ -1592,7 +1592,7 @@ def _library_trace_default(keyword: str) -> Any:
     library's default moves again the caller moves with it rather than
     silently pinning the route this release happens to ship.  That is the
     difference between "the ghost path agrees with ``trace``" and "the
-    ghost path agrees with what ``trace`` did in 5.49.0".
+    ghost path agrees with the route ``trace`` happened to ship with".
 
     The private defaults of ``_refract`` / ``_reflect`` do NOT move: they
     stay ``sphere_normal='generic'`` / ``renormalize=True``, which is what

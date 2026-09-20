@@ -939,19 +939,18 @@ def test_vc2_the_private_docstrings_still_describe_the_old_defaults():
     Four of their sentences became false the moment the default moved, and
     the first is the one a reader reaches for to answer exactly the question
     the Migration note raises -- ``_sphere_normal``'s own account of the rim
-    band says "the shipped default is the generic route on both sides",
-    which is the opposite of what the release did.
+    band said "the shipped default is the generic route on both sides",
+    which is the opposite of what the release did (defect D11, the only P1).
 
-    Neither the doc-consistency gate nor the walker citation gate reads
-    prose, so nothing else catches this.  This verifier does not edit
-    ``lumenairy/``, so the arm PINS the defect instead: it is green while
-    the stale text is there and goes RED the moment someone corrects it,
-    which is when VERIFY_WP-C2.md defect D11 should be closed and this arm
-    inverted to assert the replacement text.  D11 carries that text.
+    ROUND 2 CLOSED IT and this arm is INVERTED: each of the four sentences
+    is now asserted ABSENT and its replacement asserted PRESENT, so the arm
+    cannot be satisfied by deleting the paragraph either.  The shipped WP-C2
+    file carries the same census with the fail-before demonstration against
+    a ``git archive eadc67ba`` tree (4 of 4 stale sentences, both builds).
     """
     def _flat(path):
         return re.sub(r'\s+', ' ', (REPO / 'lumenairy' / 'raytrace'
-                                    / path).read_text(encoding='utf-8'))
+                                    / path).read_text(encoding='cp1252'))
 
     surface_src = _flat('surface.py')
     isect_src = _flat('intersection.py')
@@ -982,12 +981,43 @@ def test_vc2_the_private_docstrings_still_describe_the_old_defaults():
             "``'generic'`` is the sag-derivative dispatch every caller has "
             'always used'),
     }
-    still_there = [k for k, (src, txt) in stale.items()
-                   if re.sub(r'\s+', ' ', txt) in src]
-    assert len(still_there) == 4, (
-        f'the private ray-tracer docstrings have changed: '
-        f'{sorted(set(stale) - set(still_there))} no longer carry the '
-        f'pre-5.49.0 text.  If VERIFY_WP-C2.md defect D11 has been '
-        f'actioned, close it and INVERT this arm to assert the '
-        f'replacement wording (D11 carries it verbatim).  If the text '
-        f'merely drifted, this arm has stopped protecting anything.')
+    still_there = [k for k, (src_, txt) in stale.items()
+                   if re.sub(r'\s+', ' ', txt) in src_]
+    assert not still_there, (
+        f'{sorted(still_there)} still claim the generic sag-derivative '
+        f'route is what ships.  The shipped default is the CLOSED FORM; '
+        f'VERIFY_WP-C2.md defect D11 carries the replacement wording.')
+
+    corrected = {
+        'surface.py::_sphere_normal': (
+            surface_src,
+            'which is the SHIPPED DEFAULT of :func:`trace.trace` / '
+            ':func:`world_trace.trace_world` since WP-C2 moved it'),
+        'surface.py::_surface_normal': (
+            surface_src,
+            'THIS PRIVATE DEFAULT DID NOT MOVE when WP-C2 moved the two '
+            'public ones'),
+        'intersection.py::_intersect_surface': (
+            isect_src,
+            'It is the DEFAULT for :func:`trace.trace` / ``trace_world`` '
+            'since WP-C2 moved it'),
+        'intersection.py::_refract': (
+            isect_src,
+            'is the sag-derivative dispatch and the default of THIS '
+            'PRIVATE helper'),
+    }
+    missing = [k for k, (src_, txt) in corrected.items()
+               if re.sub(r'\s+', ' ', txt) not in src_]
+    assert not missing, (
+        f'{sorted(missing)} lost their corrected wording as well as the '
+        f'stale wording.  D11 asks for a REWRITE, not a deletion: a reader '
+        f'who opens _sphere_normal must still be told that the rim band is '
+        f'reachable at the shipped default.')
+
+    # and no shipped source line may name a forward version while saying so
+    for src_ in (surface_src, isect_src):
+        assert '5.49.0' not in src_, (
+            'a private docstring now names 5.49.0; the version-narrative '
+            'gate (test_public_api.py) forbids a forward token in '
+            'lumenairy/ -- describe the change and let the CHANGELOG carry '
+            'the number.')
