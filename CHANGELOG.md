@@ -3481,7 +3481,7 @@ message and the function's docstring say so.  Behaviour is unchanged --
 the JAX path is still ASM-only and still refuses both, and an
 `method='asm'` JAX chain is byte-identical.
 
-Files: `lumenairy/propagators/system.py:2031-2043`, `:1730-1738`.
+Files: `lumenairy/propagators/system.py:2049-2061`, `:1730-1738`.
 
 <!-- WP-VERIFY_WP-B3b: Propagator call sites: verifier follow-ups -->
 ### Fixed -- a `method='fresnel'` chain step warns again when the chain window holds only part of the beam (K6)

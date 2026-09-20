@@ -16657,7 +16657,6 @@
   "tests/unit/test_verify_c1_round2.py::test_verify_c1r2_a_bigger_rim_does_not_mean_a_milder_staircase_to_beat": 0.20579770000040298,
   "tests/unit/test_verify_c1_round2.py::test_verify_c1r2_a_bool_edge_samples_is_answered_the_same_way_everywhere": 1.0513669999927515,
   "tests/unit/test_verify_c1_round2.py::test_verify_c1r2_a_prescription_with_no_stop_is_byte_identical": 0.0153472999954829,
-  "tests/unit/test_verify_c1_round2.py::test_verify_c1r2_edge_samples_true_is_bit_for_bit_the_pre_5_49_rim": 0.01063350000185892,
   "tests/unit/test_verify_c1_round2.py::test_verify_c1r2_evaluates_rim_is_refused_before_the_decomposition_runs": 0.0012377000020933338,
   "tests/unit/test_verify_c1_round2.py::test_verify_c1r2_evaluates_rim_reaches_every_stop_not_only_the_first": 0.04156449999572942,
   "tests/unit/test_verify_c1_round2.py::test_verify_c1r2_every_route_refuses_a_bad_rim_on_an_unresolvable_element[diameter_none_edge_soft-kw4-params4]": 0.007134200001019053,
@@ -16668,7 +16667,6 @@
   "tests/unit/test_verify_c1_round2.py::test_verify_c1r2_the_boolean_cast_moves_a_plotted_radial_rms_curve": 0.012756100004480686,
   "tests/unit/test_verify_c1_round2.py::test_verify_c1r2_the_boolean_cast_moves_a_wrapper_merits_integration": 0.018226699998194817,
   "tests/unit/test_verify_c1_round2.py::test_verify_c1r2_the_boolean_cast_moves_the_auto_radial_bin_count": 0.0063259999951696955,
-  "tests/unit/test_verify_c1_round2.py::test_verify_c1r2_the_codegen_migration_recipe_misses_the_system_style": 0.0011226999922655523,
   "tests/unit/test_verify_c1_round2.py::test_verify_c1r2_the_default_arm_is_the_grey_arm_on_the_third_optic": 0.04413589999603573,
   "tests/unit/test_verify_c1_round2.py::test_verify_c1r2_the_grey_branch_costs_one_grid_and_is_flat_in_n_sub": 4.98528819999774,
   "tests/unit/test_verify_c1_round2.py::test_verify_c1r2_the_hard_arms_rise_is_common_and_its_steps_exceed_two": 4.152593900005741,
@@ -16676,6 +16674,14 @@
   "tests/unit/test_verify_c1_round2.py::test_verify_c1r2_the_int_refusal_family_names_the_library[None]": 0.002449399995384738,
   "tests/unit/test_verify_c1_round2.py::test_verify_c1r2_the_int_refusal_family_names_the_library[value1]": 0.016828300009365194,
   "tests/unit/test_verify_c1_round2.py::test_verify_c1r2_the_ratio_bar_holds_on_its_own_three_fixtures": 0.45308409999415744,
-  "tests/unit/test_verify_c1_round2.py::test_verify_c1r2_the_unresolvable_split_is_real_and_not_a_collection_quirk": 0.004126599997107405,
-  "tests/unit/test_verify_c1_round2.py::test_verify_c1r2_there_is_exactly_one_rim_guard_with_three_call_sites": 0.1495017999986885
+  "tests/unit/test_verify_c1_round2.py::test_verify_c1r2_there_is_exactly_one_rim_guard_with_three_call_sites": 0.1495017999986885,
+  "tests/unit/test_verify_c1_round2.py::test_verify_c1r2_the_unresolvable_rim_refusal_is_one_answer_and_neutral": 0.266612,
+  "tests/unit/test_verify_c1_round2.py::test_verify_c1r2_a_bool_edge_samples_no_longer_selects_the_pre_5_49_rim": 0.004002,
+  "tests/unit/test_verify_c1_round2.py::test_verify_c1r2_the_wrapper_merit_array_branch_is_out_of_the_librarys_reach": 0.017155,
+  "tests/unit/test_verify_c1_round2.py::test_verify_c1r2_the_codegen_way_back_is_style_specific": 0.003534,
+  "tests/unit/test_verify_c1_round2.py::test_verify_c1r2_both_codegen_styles_reproduce_the_hard_rim_when_executed": 9.479578,
+  "tests/unit/test_verify_c1_round2.py::test_verify_c1r2_the_rim_keyword_is_validated_and_inert_on_a_factory_shape": 0.531111,
+  "tests/unit/test_c1_gray_edge_default.py::test_c1_all_three_chain_routes_refuse_a_bad_edge_element_identically[edge_samples_bool_true-bad8]": 0.001101,
+  "tests/unit/test_c1_gray_edge_default.py::test_c1_all_three_chain_routes_refuse_a_bad_edge_element_identically[edge_samples_numpy_bool_true-bad9]": 0.001135,
+  "tests/unit/test_c1_gray_edge_default.py::test_c1_all_three_chain_routes_refuse_a_bad_edge_element_identically[edge_samples_none-bad10]": 0.001138
 }

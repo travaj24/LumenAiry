@@ -1,7 +1,7 @@
 <!-- lumenairy-history-doc
 module: lumenairy/propagators/system.py
-ast_sha256: 84f5a80089541bcd5b283f85e03fdd2c57b6f205b964022c14fd79f4a634b077
-token_sha256: 1cea4aaaa72f3a51f50c81bf09c9e4a01e762b8ff982ea2862ca0c40f3124d75
+ast_sha256: d0c77f23cc59d21e8f3ab144dc4c5a35417b31dee010629d5b0ae4fc97695f0e
+token_sha256: 0d82e19122e561698ac4eac2c43987b6d47e1836bb415b2191a5702e123a8114
 pre_relocation_lines: 1919
 recorded_by: WP-A17 SWEEP-1 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
@@ -12,6 +12,7 @@ re_recorded: 2026-09-14 -- Wave 5 item D (handoff 4.4): the six warnings.warn li
 re_recorded: 2026-09-20 -- WP-C1: the 'aperture' element forwards edge/edge_samples on both backends, and the two JAX routes call elements.apply_aperture instead of carrying their own pixel-centre indicator
 re_recorded: 2026-09-20 -- VERIFY-C1 D1: _aperture_edge_kwargs now validates the element through elements._validate_edge_kwargs, so the jit'd kernel's static signature can no longer accept an element the NumPy chain and the eager JAX route refuse.
 re_recorded: 2026-09-20 -- VERIFY-C1 D4: evaluate gains aperture_edge= / aperture_edge_samples=, stamped by _prescription_to_elements onto every 'aperture' element it emits for an is_stop surface, so the entry point's way back is reachable without a private call; validated once through the shared guard before the decomposition runs.
+re_recorded: 2026-09-20 -- WP-C1 round 3 R1: the rim reader _aperture_edge_kwargs(elem) is hoisted ABOVE the _resolve_aperture_params gate in _system_element_signature and in propagate_through_system_jax's slow path, so an 'aperture' element whose params do not resolve is read -- and refused -- once on every route.  Before the hoist both JAX routes returned before reading the rim and carried an illegal edge / edge_samples silently past, while propagate_through_system (which calls the reader unconditionally) raised: 7 element shapes out of 7 split on both builds, 0 of 7 after.  Also documentation: evaluate's aperture_edge paragraph gains the FACTORY-shape clause (a surfaces+thicknesses prescription becomes one 'real_lens' element, so the keyword is validated and then inert).
 -->
 
 # Version history -- `lumenairy/propagators/system.py`

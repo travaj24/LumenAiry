@@ -57,8 +57,10 @@ def _attempt(fn):
 
 def main(out_path):
     from lumenairy.optimize import core as _core
-    from lumenairy.optimize.wrapper_merits import (_clear_wrapper_merit_cache,
-                                                   _get_wrapper_merit_cache)
+    from lumenairy.optimize.wrapper_merits import (
+        _clear_wrapper_merit_cache,
+        _get_wrapper_merit_cache,
+    )
 
     E = np.ones((N, N), dtype=complex)
     hard = np.real(apply_aperture(E, DX, 'circular', {'diameter': D},
