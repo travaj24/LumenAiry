@@ -514,10 +514,15 @@ def test_the_collins_carrier_leg_cannot_fire_the_shape_rule(monkeypatch):
 def _guide_section():
     with open(_GUIDE, encoding='utf-8', errors='replace') as fh:
         text = fh.read()
-    start = text.find("## 5.49.0 -- `method='auto'` selects the direct-matrix")
-    assert start >= 0, "the 5.49.0 section is gone from Migration-Guide.md"
-    end = text.find('\n## ', start + 10)
-    return text[start:end if end > 0 else len(text)]
+    # The 5.49.0 release consolidates the eight default flips under ONE
+    # `## 5.49.0` header; this work package is the `###` subsection below it.
+    start = text.find("### `method='auto'` selects the direct-matrix")
+    assert start >= 0, (
+        "the direct-matrix MFT subsection is gone from Migration-Guide.md's "
+        "5.49.0 section")
+    ends = [e for e in (text.find('\n### ', start + 10),
+                        text.find('\n## ', start + 10)) if e > 0]
+    return text[start:min(ends) if ends else len(text)]
 
 
 def test_the_guide_names_every_entry_point_that_carries_mft_method():
