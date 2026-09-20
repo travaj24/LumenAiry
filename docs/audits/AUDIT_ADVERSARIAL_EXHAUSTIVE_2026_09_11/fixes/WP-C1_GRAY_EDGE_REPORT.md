@@ -895,6 +895,74 @@ handler, so a failure in the eager call -- which runs second -- silently dropped
 `chain_eager_` and turned a 23-fixture comparison into a 22-fixture one on this
 box.  The round-3 copy records both keys with the message.)
 
+### The gates
+
+All with `-p no:randomly --capture=sys -q`, `OMP_NUM_THREADS=1
+OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1` on the command line, and
+`PYTHONPATH` naming the tree under test.  The file list is
+[`validation/probe_wpc1_round3/_sweep_files.txt`](../../../../validation/probe_wpc1_round3/_sweep_files.txt)
+(**101** files: the verifier's 81 plus twenty that reach
+`plotting.py`'s `_radial_rms_profile` / `_auto_n_bins`,
+`optimize/wrapper_merits.py` or `io/codegen.py`, which R6 and R8 touch).
+Tails: `_sweep_WIN_tail.txt`, `_sweep_WSL_tail.txt`.
+
+| what | Windows py3.14.6 | WSL py3.12.3 |
+|---|---|---|
+| the 101-file sweep | **3 failed, 4377 passed, 15 skipped, 0 xfailed** in 26:16 | **4 failed, 4352 passed, 39 skipped, 0 xfailed** in 30:57 |
+| `tests/unit/test_verify_c1_round2.py` | **27 passed, 0 xfailed** | **27 passed, 0 xfailed** |
+| `test_c1_gray_edge_default.py` + `test_verify_c1_gray_edge.py` | **62 passed** (34 + 28) | in sweep |
+| `tests/unit/test_audit2609_a8_verify.py` | **36 passed** | **36 passed** |
+| `tests/unit/test_audit2609_a15a_durations_staleness.py` | **4 passed** in 76.06 s | in sweep |
+| `tests/unit/test_public_api.py` (no forward version token in `lumenairy/`) | **9 passed** | premise-gated red, below |
+| `ruff check lumenairy/ tests/ scripts/ validation/probe_wpc1_round3/` | -- | **All checks passed!** |
+| `python -m mypy` (no args) | **Success: no issues found in 33 source files** | -- |
+| `python scripts/record_history_fingerprints.py --check` | **OK: every history document matches its module** | -- |
+| `python scripts/reanchor_citations.py --base f4f18851 --block "[5.47.0]"` | **1 re-anchored** | -- |
+
+**The seven reds, and why none is round 3's.**  Each was re-run from inside
+this round's own `git archive 0a80e4a2` extraction, on the build that fails it.
+
+*Windows (3, all in files this round ADDED to the sweep -- the verifier's
+81-file list did not contain them, so this is the first time they have been run
+in a C1 gate):*
+
+* `test_niche_audit_w3_infra.py::TestA6EstimateAsmMemory::test_est_bounds_measured_first_call_peak[512-complex128]`
+  and `[1024-complex128]` -- `estimate_asm_memory` does not bound the measured
+  fresh-interpreter first-call peak on this numpy: `82 208 358 B` against
+  `94 237 845 B` (ratio 0.872) and `162 109 849 B` against `169 744 107 B`
+  (0.955).  **Identical on the PRE tree**, and both PASS under WSL
+  (numpy 2.4.6), so it is this Windows build's allocator, not a library change.
+* `test_v4_15_agent_e.py::TestUI6and7PsfMtfDockRayAccumulation::test_no_last_write_wins`
+  -- asserts `'np.add.at' in` the source of
+  `PsfMtfDock._load_from_raytrace`, which no longer uses it.  **Identical on the
+  PRE tree**; SKIPS under WSL (no PySide6).
+
+*WSL (4, the same four round 2 and VERIFY-C1-ROUND2 name):*
+
+* `test_public_api.py::test_installed_metadata_version_matches_source_version`
+  -- the WSL venv's editable install metadata against a 5.48.1 source.
+* `test_v5_3_2_walker_source_line_citation.py::test_v18_5_the_5_47_0_block_citations_name_the_right_lines`
+  and `::test_v18_5_companion_reanchor_tool_exists_and_covers_the_cited_files`
+  -- both shell out to `git`, which from WSL cannot resolve this worktree's
+  `.git` file (it points at a Windows path).  Both green on Windows.
+* `test_v5_2_3_walker_changelog_content.py::test_v16_synthetic_fabrication_is_caught`
+  -- same root; the walker returns rc = 2 where the test expects rc = 1.
+
+Re-run from inside `git archive 0a80e4a2` under WSL, those three files give
+**3 failed, 19 passed, 3 skipped** -- the same three failures, with
+`test_v16_synthetic_fabrication_is_caught` SKIPPING there on a different
+premise gate, exactly as VERIFY-C1-ROUND2 describes.
+
+**One red WAS round 3's, and it is fixed** (`95e59b51`).  The first Windows
+sweep also reported
+`test_audit2609_a17_history_lint.py::test_no_module_accumulates_more_version_history`:
+R2's guard comment and its `Raises` clause said "the pre-5.49 rim", which the
+A17 ratchet counts as version-history narrative
+(`lumenairy/elements/elements.py`: 15 -> 17).  Both now say "the binary
+pixel-centre rim" -- what the sentence means, and what `apply_aperture`'s own
+`edge` documentation calls it -- so the ratchet is respected rather than
+re-baselined.  Green on both builds afterwards.
+
 ### The commits
 
 | sha | item |
@@ -908,6 +976,9 @@ box.  The round-3 copy records both keys with the message.)
 | `2ef80b80` | R7 -- the peak-memory comment states the build-free claim |
 | `f56f0264` | R8 -- one codegen recipe per style, and the scripts are RUN |
 | `516fadff` | the two recorded-not-filed items |
+| `06f58fef` | this addendum, the neutrality probe and the module docstring |
+| `20f1bd6d` | citations re-anchored, fingerprints re-recorded, durations spliced |
+| `95e59b51` | the A17 ratchet: R2's comments stop narrating a version |
 
 ### What round 3 could not measure
 
