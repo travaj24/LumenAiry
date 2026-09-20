@@ -2400,7 +2400,7 @@ branch, concentric otherwise), at the same total degree.
 **What it changes is the conditioning of the solve, and nothing else.**  The
 Zernike set of total degree `<= order` and the tensor-Chebyshev total-degree
 set are two bases of the SAME space -- `(order+1)(order+2)/2` terms either way,
-verified by rank and by projection (`_lens_traced.py:3763`) -- so the same
+verified by rank and by projection (`_lens_traced.py:4130`) -- so the same
 samples with the same weights minimise the same residual over the same space
 and return the same polynomial.  Measured end to end on niche D7's `K = -n^2`
 Fermat singlet against its analytic decentre-invariant oracle, the decentred
@@ -2521,7 +2521,7 @@ it by 2.2e-12 -- a change of basis, not a change of answer.
 
 That is fix D5 / `FIX_G8_PROBE`'s finding for the fit's ORDER, restated for its
 BASIS, and it is now stated on the parameter itself
-(`lumenairy/elements/_lens_traced.py:8539`).  Documentation only: no behaviour
+(`lumenairy/elements/_lens_traced.py:8906`).  Documentation only: no behaviour
 moves, and `scripts/record_history_fingerprints.py --check` is OK without a
 re-record, because both fingerprints drop docstrings.
 
@@ -4400,7 +4400,7 @@ the opt-in for an area-true statistic.
 `aspheric_coeffs`, so every `jacobian='auto'` consumer silently fell back to the
 finite-difference primitive there -- 9 traced rays per base ray and ~4e-8 of
 truncation.  `_adrt_step` now carries the even-power polynomial departure
-(`raytrace/differential.py:557`): the exact conic root seeds a FIXED 6-step
+(`raytrace/differential.py:614`): the exact conic root seeds a FIXED 6-step
 Newton refinement onto `conic + polynomial`
 (`:477` `_adrt_aspheric_intersect`, `:445` `_adrt_poly_sag`, `:463`
 `_adrt_conic_sag`), and the normal comes from the implicit `F = z - S(u) - P(u)`
@@ -4423,7 +4423,7 @@ a `k = -0.6` base:
 | bit-identical from | 2 Newton steps (shipped budget: 6) |
 
 The numba forward-AD kernel is EXCLUDED for aspheric surfaces
-(`differential.py:748`): its inlined primitives replicate the CONIC arithmetic
+(`differential.py:805`): its inlined primitives replicate the CONIC arithmetic
 only, so left eligible it would have traced an asphere as its base conic --
 right shape, wrong surface, silently.  Freeforms, biconics
 (`radius_y` / `conic_y` / `aspheric_coeffs_y`) and field-frame decenter / tilt
