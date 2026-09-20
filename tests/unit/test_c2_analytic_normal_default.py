@@ -1329,6 +1329,104 @@ def test_c2_no_private_docstring_claims_the_generic_route_is_shipped():
 
 
 # ===========================================================================
+# 6e -- the release text's byte-identity counts ARE the probe's counts (D12)
+# ===========================================================================
+
+def _c2_repo_root():
+    return pathlib.Path(la.__file__).resolve().parents[1]
+
+
+def _c2_byte_identity_json(build):
+    import json
+    path = (_c2_repo_root() / 'validation' / 'probe_c2_analytic_normal'
+            / f'byte_identity_old_kw_{build}.json')
+    with path.open(encoding='utf-8') as fh:
+        return json.load(fh)
+
+
+def test_c2_the_release_text_byte_identity_counts_match_the_probe_json():
+    """The CHANGELOG and the Migration Guide both carried a byte-identity
+    count the probe's OWN committed output contradicts: "938 of 1008 ... and
+    the 70 that are not", against `n_moved = 74` (Windows) and 73 (WSL) in
+    `byte_identity_old_kw_*.json`, i.e. 934 and 935 identical
+    (VERIFY-WP-C2 defect D12).
+
+    Two user-facing documents were wrong, and they are the ones a reader
+    quotes.  The fix is not to retype the numbers but to make the JSON the
+    source of truth for them: this arm derives every count from the
+    committed JSONs and requires the release text to contain exactly those,
+    so the next time the probe is re-run and the text is not, the gate
+    fires instead of the reader.
+
+    The PREMISES are asserted first -- the two JSONs exist, disagree with
+    each other by one array, and carry the family breakdown -- so a pass
+    cannot come from a missing file or an empty document.
+    """
+    win = _c2_byte_identity_json('win')
+    wsl = _c2_byte_identity_json('wsl')
+
+    # --- premises
+    assert win['n_common'] == wsl['n_common'] == 1008, (
+        win['n_common'], wsl['n_common'])
+    assert win['n_values'] == wsl['n_values'] == 1630399, (
+        win['n_values'], wsl['n_values'])
+    assert win['n_moved'] != wsl['n_moved'], (
+        'the two builds now report the same moved count; this arm exists '
+        'because they differed by one array (74 vs 73), so re-derive the '
+        'claim rather than dropping the per-build split.')
+    assert win['moved_families'], 'no family breakdown in the Windows JSON'
+
+    n_total = win['n_common']
+    win_moved, wsl_moved = win['n_moved'], wsl['n_moved']
+    win_same, wsl_same = n_total - win_moved, n_total - wsl_moved
+
+    root = _c2_repo_root()
+    changelog = (root / 'CHANGELOG.md').read_text(encoding='utf-8')
+    guide = (root / 'Migration-Guide.md').read_text(encoding='utf-8')
+    entry = changelog.split('## [Unreleased]')[1].split('## [5.48.1]')[0]
+    assert 'WP-C2' in entry, (
+        'the Unreleased block no longer contains the WP-C2 entry, so this '
+        'arm has nothing to check.')
+    guide_section = guide.split(
+        "## 5.49.0 -- the ray tracer's `sphere_normal` default")[1]
+
+    import re as _re
+
+    def _flat(t):
+        return _re.sub(r'\s+', ' ', t)
+
+    entry, guide_section = _flat(entry), _flat(guide_section)
+    for name, text in (('CHANGELOG [Unreleased] C2 entry', entry),
+                       ('Migration-Guide 5.49.0 C2 section', guide_section)):
+        assert f'{win_same} of {n_total}' in text, (
+            f'{name} does not state "{win_same} of {n_total}" -- the '
+            f'Windows byte-identity count the committed probe JSON '
+            f'reports ({n_total} arrays, {win_moved} moved).')
+        assert str(wsl_same) in text, (
+            f'{name} does not state the WSL count {wsl_same} '
+            f'({wsl_moved} moved).')
+        assert str(win_moved) in text and str(wsl_moved) in text, (
+            f'{name} does not state both moved counts '
+            f'({win_moved} Windows, {wsl_moved} WSL).')
+        # the stale pair must be gone, not merely joined by the right one
+        assert '938 of 1008' not in text, (
+            f'{name} still carries the superseded "938 of 1008"; the '
+            f'probe JSON says {win_same}.')
+        assert 'the 70 that are not' not in text, (
+            f'{name} still carries the superseded "the 70 that are not"; '
+            f'the probe JSON says {win_moved}.')
+
+    # the family breakdown the text quotes is the JSON's, item by item
+    for family, count in sorted(win['moved_families'].items()):
+        assert f'`{family}` {count}' in entry, (
+            f'the CHANGELOG entry does not carry the measured breakdown '
+            f'"{family} {count}" from byte_identity_old_kw_win.json '
+            f'({win["moved_families"]}).')
+    assert sum(win['moved_families'].values()) == win_moved, (
+        win['moved_families'], win_moved)
+
+
+# ===========================================================================
 # 7 -- the mutation matrix, stated
 # ===========================================================================
 
@@ -1355,6 +1453,7 @@ def test_c2_mutation_matrix_is_stated_and_each_arm_is_named():
     | a forwarded keyword defaults to today's value | ``test_c2_none_stamps_nothing_on_the_entry_points`` |
     | the ghost leg drifts off trace's normal      | ``test_c2_the_ghost_path_asks_the_library_default_normal_route`` |
     | a private docstring says generic is shipped  | ``test_c2_no_private_docstring_claims_the_generic_route_is_shipped`` |
+    | the release text's counts drift off the JSON | ``test_c2_the_release_text_byte_identity_counts_match_the_probe_json`` |
     """
     import sys
     mod = sys.modules[__name__]
@@ -1373,7 +1472,8 @@ def test_c2_mutation_matrix_is_stated_and_each_arm_is_named():
             'test_c2_every_entry_point_that_traces_carries_both_keywords',
             'test_c2_none_stamps_nothing_on_the_entry_points',
             'test_c2_the_ghost_path_asks_the_library_default_normal_route',
-            'test_c2_no_private_docstring_claims_the_generic_route_is_shipped'):
+            'test_c2_no_private_docstring_claims_the_generic_route_is_shipped',
+            'test_c2_the_release_text_byte_identity_counts_match_the_probe_json'):
         assert callable(getattr(mod, name, None)), (
             f'{name} named in the mutation matrix no longer exists; '
             f'either restore it or update the table above.')

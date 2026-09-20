@@ -54,15 +54,23 @@ on WSL.
 
 **What moves.**  The routes are not bit-identical: measured `max |dx| =
 2.8e-17 m`, `max |dopd| = 8.3e-17 m`, `max |dL| = 2.8e-16` over a 1500-ray
-sweep.  Archive to archive against 49ddf4bd, over 1008 arrays and 1 630 399
-values, 461 arrays move with the new default and none moves by more than
-1.8e-11 absolute or 3.4e-13 relative; with `sphere_normal='generic'` passed
-explicitly, 938 of 1008 are byte-identical and the 70 that are not are exactly
-the entry points that trace INTERNALLY and expose no keyword to pass (see the
-Migration note).  Those counts are THIS change alone, measured before the
-`renormalize` default below moved; with both flips the same sweep reads 595
-moved and 934 of 1008 identical with both old keywords passed.  Prescriptions with no pure sphere are byte-identical either
-way.  CPU / JAX `trace` parity does not move at all: 3.5e-18 m in position and
+sweep.  Archive to archive against 49ddf4bd, over **1008 arrays and 1 630 399
+values**, each side run in its own process against a read-only archive
+(`validation/probe_c2_analytic_normal/byte_identity_*.json`): with **both old
+keywords passed explicitly, 934 of 1008 are byte-identical on Windows (74
+move) and 935 on WSL (73 move)**, and the arrays that move are exactly the
+answers of the entry points that trace INTERNALLY -- `trace_prescription` 27,
+`refocus` 26, `ray_fan_data` 8, `opd_fan_data` 8, `spot_rms` 4 and
+`through_focus` 1 on Windows; the same less `through_focus` on WSL.  Those
+entry points now take the two keywords themselves (see the Migration note), so
+that residue has a way back too, re-measured at 742 of 742 arrays identical
+over all sixteen of them.  At the DEFAULTS the same sweep moves **595 arrays
+on Windows and 594 on WSL**, none by more than **2.4e-11 absolute or 3.4e-13
+relative**.  (That sweep carries BOTH flips: `renormalize='exit'` below
+applies to every prescription, sphere or not.  The 461 recorded for
+`sphere_normal` alone was taken before the second flip landed and is not in the
+committed JSON, so it is not re-stated here.)  Prescriptions with no pure
+sphere are byte-identical either way.  CPU / JAX `trace` parity does not move at all: 3.5e-18 m in position and
 3.1e-17 m in OPL under all four `(renormalize, sphere_normal)` combinations,
 with the alive masks equal, on both builds -- the JAX tracer has always used a
 closed-form sphere normal, so this flip moves the CPU tracer TOWARD it rather
@@ -103,13 +111,24 @@ clamp -- a band one ULP of `h` wide -- a ray the generic route killed as
 instead, and vice versa.  If a prescription deliberately works rays past
 `0.9999 R^2` of a spherical surface it is in a region where NEITHER route
 resolves the normal better than about 1e-12 relative, and it should carry an
-explicit clear aperture rather than rely on the clamp.  Second, the entry
-points that trace INTERNALLY -- `trace_prescription`, `raytrace_system`,
-`ray_fan_data`, `opd_fan_data`, `spot_rms` / `spot_geo_radius` / `refocus` on
-their results, and `through_focus_rms` -- do NOT expose `sphere_normal`, so
-there is no keyword to pass there; a caller who needs the pre-5.49.0 arithmetic
-through those must build the bundle and call `trace(..., sphere_normal='generic')`
-directly.  Every measured number is in
+explicit clear aperture rather than rely on the clamp.  Second, the SIXTEEN entry
+points that trace INTERNALLY all take the same keyword and forward it
+verbatim: `trace_prescription` and `raytrace_system`
+(`lumenairy.raytrace.trace`); `ray_fan_data`, `ray_fan_data_world`,
+`opd_fan_data`, `opd_fan_data_world` and `through_focus_rms`
+(`raytrace.ray_fan`); `paraxial_focus_world` (`raytrace.world`);
+`ray_transfer_jacobian` (`raytrace.differential`); `caustic_diagnostic`,
+`eval_image_plane_wfe` and `plot_lens_layout` (`analysis`);
+`fit_canonical_polynomials` and `fit_hf_polynomials`
+(`propagators.asymptotic_canonical_fit`); and the two lens propagators
+`apply_real_lens_traced` and `apply_real_lens_maslov` (`elements`).  Each
+defaults to `None`, which names nothing, so an unkeyworded call takes the
+library's default of the day and no call site pins this release's.  Their way
+back is byte-identical, measured archive to archive at **742 of 742 arrays on
+both builds**, with all sixteen shown to move at the default.  `spot_rms`,
+`spot_geo_radius` and `refocus` take no keyword because they do not trace --
+they consume a `TraceResult` -- and the JAX entry points take none because the
+JAX tracer uses a closed-form normal ALWAYS and has no switch.  Every measured number is in
 `docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/WP-C2_ANALYTIC_NORMAL_REPORT.md`
 and `validation/probe_c2_analytic_normal/`.
 
@@ -164,12 +183,11 @@ consumer that reads HISTORY direction cosines (`result.rays_at(i)` for
 `i < len(surfaces) - 1`) and treats them as exactly unit.  Under the new
 default those carry up to `n_surfaces * eps` of drift -- 1.8e-15 on a
 13-surface stack -- while `result.image_rays` is unit to 2.2e-16 as before.
-The same entry points that expose no `sphere_normal` expose no `renormalize`
-either (`trace_prescription`, `raytrace_system`, `ray_fan_data`,
-`opd_fan_data`, `through_focus_rms`, and `spot_rms` / `spot_geo_radius` /
-`refocus` on their results); a caller who needs the old arithmetic through
-those must build the bundle and call `trace(..., renormalize='surface')`
-directly.
+The same sixteen entry points that take `sphere_normal=` take
+`renormalize=` as well, with the same `None` default and the same verbatim
+forward, so the old arithmetic is one keyword away through any of them.  The
+JAX entry points take neither: the JAX body never rescales, so there is no
+per-surface pass to hoist and nothing to switch.
 
 ### Changed -- tests (WP-C2): the two pins WP-B9 called knife-edge become decisions with bars this build derives, and the mechanism both B9 reports named is measurably not the one
 

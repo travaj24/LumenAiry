@@ -1792,10 +1792,15 @@ result = trace(rays, surfaces, wavelength, sphere_normal='generic')
 result = trace_world(rays, world_surfaces, wavelength, sphere_normal='generic')
 ```
 
-Archive to archive against 49ddf4bd, with that keyword passed, 938 of 1008
-recorded arrays (1 630 399 values) are byte-identical on both development
-mounts; the 70 that are not are exactly the entry points listed under
-"No keyword there" below.
+Archive to archive against 49ddf4bd, with BOTH old keywords passed, **934 of
+1008** recorded arrays (1 630 399 values) are byte-identical on the Windows
+mount and **935 of 1008** on the WSL one; the **74** that are not (73 on WSL)
+are exactly the answers of the entry points listed under "Every entry point has
+one" below -- `trace_prescription` 27, `refocus` 26, `ray_fan_data` 8,
+`opd_fan_data` 8, `spot_rms` 4 and `through_focus` 1 on Windows, the same less
+`through_focus` on WSL.  Those entry points now carry the keywords themselves,
+and that way back was measured separately: 742 of 742 arrays byte-identical
+over all sixteen, on both mounts.
 
 **What you get if you do nothing.**  A 1.08x to 1.44x faster trace on
 prescriptions that contain spherical surfaces (medians 1.12x and 1.19x on the
@@ -1829,12 +1834,43 @@ algorithm -- so give the surface an explicit clear aperture instead of relying
 on the clamp to define the edge.  The clamp itself is unchanged in 5.49.0 and
 stays until a vignetting decision is taken on its own merits.
 
-**No keyword there.**  These entry points trace internally and do not expose
-`sphere_normal`, so there is no one-keyword way back through them:
-`trace_prescription`, `raytrace_system`, `ray_fan_data`, `opd_fan_data`,
-`through_focus_rms`, and `spot_rms` / `spot_geo_radius` / `refocus` applied to
-their results.  A caller who needs the pre-5.49.0 arithmetic through those must
-build the bundle and call `trace(..., sphere_normal='generic')` directly.
+**Every entry point has one.**  Sixteen exported functions trace INTERNALLY,
+so their answers moved with `trace`.  All sixteen take `sphere_normal=` and
+`renormalize=` themselves -- same names, same accepted values -- and forward
+them verbatim to the trace they make:
+
+| entry point | module |
+|---|---|
+| `trace_prescription`, `raytrace_system` | `lumenairy.raytrace.trace` |
+| `ray_fan_data`, `ray_fan_data_world`, `opd_fan_data`, `opd_fan_data_world`, `through_focus_rms` | `lumenairy.raytrace.ray_fan` |
+| `paraxial_focus_world` | `lumenairy.raytrace.world` |
+| `ray_transfer_jacobian` | `lumenairy.raytrace.differential` |
+| `caustic_diagnostic` | `lumenairy.analysis.aberration` |
+| `eval_image_plane_wfe` | `lumenairy.analysis.image_plane_wfe` |
+| `plot_lens_layout` | `lumenairy.analysis.plotting` |
+| `fit_canonical_polynomials`, `fit_hf_polynomials` | `lumenairy.propagators.asymptotic_canonical_fit` |
+| `apply_real_lens_traced` | `lumenairy.elements` |
+| `apply_real_lens_maslov` | `lumenairy.elements` |
+
+Each defaults to `None`, which names nothing: an unkeyworded call takes
+whatever the library's default is at the time it runs, so no call site pins
+today's default into tomorrow's answer.  Pass
+`sphere_normal='generic', renormalize='surface'` through any of them for the
+pre-5.49.0 arithmetic -- byte-identical, measured archive to archive at 742 of
+742 arrays on both development mounts, with all sixteen shown to move at the
+default so the identity is not a keyword going nowhere.
+
+`spot_rms`, `spot_geo_radius` and `refocus` take no keyword because they do
+not trace: they consume a `TraceResult`, so their answers move only because
+their input does.  Trace the bundle with the keyword and hand the result to
+them.
+
+The **JAX** entry points -- `trace_jax`, `apply_real_lens_traced_jax`,
+`apply_real_lens_maslov_jax`, `fit_canonical_polynomials_jax`,
+`ray_transfer_jacobian_jax` -- take neither keyword, and that is structural
+rather than an omission: the JAX tracer has always used a closed-form sphere
+normal and has no per-surface rescale to hoist, so there is no switch to
+expose.  Their answers do not move in 5.49.0.
 
 **Unchanged on purpose.**  The private helpers `_refract`, `_reflect` and
 `_surface_normal` keep their old defaults (`sphere_normal='generic'`,
@@ -1879,7 +1915,7 @@ them as exactly unit, pass `renormalize='surface'`.
 stacks, with every `alive` mask and error code equal.  The difference does not
 grow with surface count.
 
-**No keyword there** -- the same list as for `sphere_normal`:
-`trace_prescription`, `raytrace_system`, `ray_fan_data`, `opd_fan_data`,
-`through_focus_rms`, and `spot_rms` / `spot_geo_radius` / `refocus` applied to
-their results.
+**Every entry point has one** -- the same sixteen as for `sphere_normal`,
+each taking `renormalize=` (default `None`) and forwarding it verbatim.  The
+JAX entry points take neither keyword: the JAX body never rescales, so there is
+no per-surface pass to hoist and nothing to switch.
