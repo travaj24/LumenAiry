@@ -572,6 +572,45 @@ def _load_reanchor_module(name):
     return module
 
 
+def _base_changelog_or_fail(module):
+    """``git show <base>:CHANGELOG.md``, with the two failure modes separated.
+
+    A gate that cannot reach its base commit has NOT verified anything, so it
+    fails rather than skips (TESTING_STANDARDS S3 -- "never ``pytest.skip`` on
+    a resource check"; a skipped citation gate is how V-D2 shipped).  But the
+    reader is owed the difference between "a citation is wrong" and "git
+    cannot see this repository from here", so the two say different things.
+
+    MEASURED 2026-09-19: running this suite from WSL against a WINDOWS git
+    worktree, ``git rev-parse --git-dir`` itself fails -- the worktree's
+    ``.git`` file holds ``gitdir: D:/.../.git/worktrees/<name>``, a path that
+    does not exist under WSL.  The same condition already makes
+    ``test_v16_synthetic_fabrication_is_caught`` red on that lane, on the base
+    tree as well as on this one, so it is an environment fact and not a
+    finding.  On a CI clone and on Windows, both resolve.
+    """
+    probe = subprocess.run(['git', 'rev-parse', '--git-dir'], cwd=_REPO_ROOT,
+                           capture_output=True, text=True, encoding='utf-8')
+    if probe.returncode != 0 or 'not a git repository' in (probe.stderr or ''):
+        pytest.fail(
+            f"ENVIRONMENT, not a citation finding: git cannot resolve this "
+            f"repository from {_REPO_ROOT} ({(probe.stderr or '').strip()[:160]}).  "
+            f"This is the WSL-against-a-Windows-worktree condition that also "
+            f"makes test_v16_synthetic_fabrication_is_caught red on that lane, "
+            f"on the base tree too.  The citation content gate cannot run "
+            f"without the base commit, and it does not skip.")
+    before = subprocess.run(
+        ['git', 'show', f'{_V547_BASE}:CHANGELOG.md'],
+        cwd=_REPO_ROOT, capture_output=True, text=True, encoding='utf-8')
+    if before.returncode != 0 or not before.stdout:
+        pytest.fail(
+            f"git show {_V547_BASE}:CHANGELOG.md failed (rc="
+            f"{before.returncode}).  The content check needs the base tree; a "
+            f"clone that cannot reach it must FAIL here rather than skip -- a "
+            f"skipped citation gate is how V-D2 shipped.")
+    return before.stdout
+
+
 def test_v18_5_companion_reanchor_tool_exists_and_covers_the_cited_files():
     """The content checker is a repo tool, and its coverage is the whole point.
 
@@ -590,16 +629,10 @@ def test_v18_5_companion_reanchor_tool_exists_and_covers_the_cited_files():
     module = _load_reanchor_module('_reanchor_v18_5a')
     # Every file the 5.47.0 block cites by a source line must be OWNED, or the
     # check cannot see it.  Derived from the block itself, not listed here.
-    before = subprocess.run(
-        ['git', 'show', f'{_V547_BASE}:CHANGELOG.md'],
-        cwd=_REPO_ROOT, capture_output=True, text=True, encoding='utf-8')
-    if before.returncode != 0 or not before.stdout:
-        pytest.fail(
-            f'git show {_V547_BASE}:CHANGELOG.md failed (rc='
-            f'{before.returncode}); the content check needs the base tree.')
-    lo, hi = module._block_span(before.stdout, _V547_BLOCK)
+    base_text = _base_changelog_or_fail(module)
+    lo, hi = module._block_span(base_text, _V547_BLOCK)
     cited = {t.rsplit(':', 1)[0]
-             for t in module.CITE_RE.findall(before.stdout[lo:hi])
+             for t in module.CITE_RE.findall(base_text[lo:hi])
              if not t.startswith('`')}
     # Only tails that name a real shipped module: a citation into a test file,
     # a script or a doc is outside this tool's remit.  The tail is kept whole
@@ -637,17 +670,9 @@ def test_v18_5_the_5_47_0_block_citations_name_the_right_lines():
                     'test_v18_5_companion_reanchor_tool_exists_and_covers'
                     '_the_cited_files')
     module = _load_reanchor_module('_reanchor_v18_5b')
-    before = subprocess.run(
-        ['git', 'show', f'{_V547_BASE}:CHANGELOG.md'],
-        cwd=_REPO_ROOT, capture_output=True, text=True, encoding='utf-8')
-    if before.returncode != 0 or not before.stdout:
-        pytest.fail(
-            f'git show {_V547_BASE}:CHANGELOG.md failed (rc='
-            f'{before.returncode}).  The content check needs the base tree; a '
-            f'clone that cannot reach it must FAIL here rather than skip -- a '
-            f'skipped citation gate is how V-D2 shipped.')
-    lo, hi = module._block_span(before.stdout, _V547_BLOCK)
-    owned_cites = [t for t in module.CITE_RE.findall(before.stdout[lo:hi])
+    base_text = _base_changelog_or_fail(module)
+    lo, hi = module._block_span(base_text, _V547_BLOCK)
+    owned_cites = [t for t in module.CITE_RE.findall(base_text[lo:hi])
                    if not t.startswith('`')
                    and module.owner_of(t.rsplit(':', 1)[0])]
     assert len(owned_cites) >= 10, (

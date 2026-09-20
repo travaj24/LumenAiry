@@ -1134,14 +1134,25 @@ upward to `h = 3e-1`: the ratio of the disagreement to its own floor is
 0.077 .. 0.737, so the factor of ten carries 13.6x at the worst rung; best
 7.55e-15 at `h = 1e-1`, at the TOP of the ladder.
 
-`P''' == 0` is MEASURED by its SCALING, not assumed: a five-point third
-difference of a quadratic returns pure round-off, which grows as `eps|P|/h^3`
--- measured -7.11e-12, -2.84e-08, -1.42e-05, +7.11e-03 at `h = 1e-1 .. 1e-4`,
-1e3 per decade to three digits with the sign flipping.  **And the instrument is
-not blind**: the same ladder on `(|E(0,0)|^2)^3` returns a CONSTANT
-`P''' = +2.235e-04` over four decades, a disagreement falling exactly 10x per
-decade, a fitted slope of `h^2`, and a real U with its minimum at `h = 1e-4`;
-the truncation model predicts it to three significant figures.
+`P''' == 0` is MEASURED, not assumed -- and the FIRST spelling of that
+measurement was wrong in an instructive way.  A five-point third difference of
+a quadratic returns pure round-off, which grows as `eps|P|/h^3`, and the first
+cut asserted that per-decade GROWTH: -7.11e-12, -2.84e-08, -1.42e-05,
++7.11e-03 at `h = 1e-1 .. 1e-4` on Windows, 1e3 per decade to three digits with
+the sign flipping.  **It was red on WSL**, because round-off is free to come
+out EXACTLY 0.0 and at `h = 1e-4` on that build it does -- a ratio whose
+numerator may be zero is not a statistic, which is this repository's own S4
+shape, committed here by the round that was fixing S-shapes.  The build-free
+form is a BOUND, which zero satisfies and a real derivative does not: the
+estimate over its own `eps|P|/h^3` floor reads **0.36 (WIN) and 1.09 (WSL)** at
+`h = 1e-1`, against a bar of 100.
+
+**And the instrument is not blind**: the same ladder on `(|E(0,0)|^2)^3`
+returns a CONSTANT `P''' = +2.235e-04` over four decades, a disagreement
+falling exactly 10x per decade, a fitted slope of `h^2`, and a real U with its
+minimum at `h = 1e-4`; the truncation model predicts it to three significant
+figures, and the same floor statistic reads **1.9e+04 .. 7.0e+08** -- two
+decades clear of the quadratic merit's bar on one side and six on the other.
 
 ### V-D8 -- CLOSED.  See the corrected "Stated tolerance" paragraph above.
 
@@ -1275,6 +1286,27 @@ does not grow a `kernel_departure` key while it is.
   Gaussian is paraxial, so it measures how far the exact kernel departs from
   the paraxial truth and cannot say which kernel is more physical -- which is
   half of why the `tau` rule is not shipped armed.
+* **An uncontended box, on either build.**  Two other agents were running
+  their own pytest sweeps on this workstation throughout: the Windows 49-file
+  sweep took 1440 s and the WSL one 5388 s for the same 49 files, at 12-25 %
+  of one core.  Nothing here reads a wall clock as a claim, and the 23 ids
+  spliced into `.test_durations` were re-timed in a focused 87 s run rather
+  than from their position in the sweep -- but the absolute seconds in that
+  file carry the contention, and are stated rather than presented as an idle
+  reading.
+
+* **The two WSL reds that are not findings.**  `test_public_api.py::
+  test_installed_metadata_version_matches_source_version` fails because
+  `~/lumvenv` holds a stale editable install (metadata 5.11.0 against a source
+  5.47.0); the verification reproduced it on the BASE archive in the same venv.
+  `test_v5_2_3_walker_changelog_content.py::
+  test_v16_synthetic_fabrication_is_caught` and this round's two V18.5
+  citation ids fail because, from WSL, this WINDOWS worktree's `.git` pointer
+  (`gitdir: D:/.../worktrees/lum_hyg3`) does not resolve, so no `git show`
+  works at all.  The two new ids now say `ENVIRONMENT, not a citation finding`
+  and name that condition -- they still FAIL rather than skip, because a
+  skipped citation gate is how V-D2 shipped.  All four are green on Windows.
+
 * **An uncontended Windows timing ladder.**  Unchanged; the crossover is a
   ratio taken under the same conditions for all three routes and is what the
   decision rests on.

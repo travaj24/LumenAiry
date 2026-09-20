@@ -818,21 +818,27 @@ def test_the_central_difference_through_this_merit_has_no_truncation_branch():
 
     ``_collins_transport`` is linear in the envelope, so ``P = sum|L a|^2`` is
     an exact quadratic form and its third derivative is identically zero.  A
-    quantity that is zero is not something a test may assume; here it is read
-    off the ladder by its SCALING.  A five-point third difference of a
-    quadratic returns pure round-off, which grows as ``eps |P| / h^3``: a
-    thousandfold per decade of ``h``.  A genuine ``P'''`` would instead be
-    CONSTANT across the ladder.
+    quantity that is zero is not something a test may assume, so it is read
+    off the ladder -- but NOT by a ratio.  A five-point third difference of a
+    quadratic returns pure round-off, and round-off is free to come out
+    EXACTLY 0.0: MEASURED 2026-09-19 on WSL py3.12, the estimate reads
+    ``+0.00000e+00`` at ``h = 1e-4`` while Windows py3.14 reads
+    ``+7.11e-03`` at the same rung.  A first cut of this id asserted a
+    per-decade GROWTH ratio and was red on WSL for exactly that reason -- a
+    ratio whose denominator or numerator may be zero is not a statistic, which
+    is this repository's own S4 shape.
 
-    MEASURED 2026-09-19 (Windows py3.14, and the same conclusion on WSL):
-    the estimate reads -7.11e-12, -2.84e-08, -1.42e-05, +7.11e-03, +2.84e+01
-    at h = 1e-1, 1e-2, 1e-3, 1e-4, 1e-5 -- 1e3 per decade to three digits,
-    with the SIGN flipping, which is round-off and not a derivative.
+    THE BUILD-FREE FORM is a BOUND: a round-off third difference is bounded by
+    the floor it comes from, ``eps |P| / h^3``, and zero satisfies that bound
+    while a real derivative does not.  MEASURED at ``h = 1e-1``, estimate over
+    its own floor: **0.36 (WIN) and 1.09 (WSL)**, against a bar of 100.  The
+    falsification arm is the next id, where the same statistic on a genuinely
+    cubic merit reads **1.9e+04 .. 7.0e+08** over the same ladder -- two
+    decades clear of this bar on one side and six on the other.
 
-    The falsification arm is the next id: on a genuinely cubic merit the same
-    ladder returns a constant ``P'''`` and a textbook ``h^2`` truncation arm,
-    so the absence here is a fact about this merit and not about the
-    instrument.
+    The second assertion is the one the previous id's bar actually needs: the
+    implied truncation contribution ``|P'''| h^2 / (6|g|)`` stays under the
+    cancellation floor at every rung, on both builds.
     """
     amp0 = jnp.asarray(np.real(_gauss()))
     merit = _merit_factory(gap_kernel='fresnel',
@@ -840,6 +846,7 @@ def test_the_central_difference_through_this_merit_has_no_truncation_branch():
     a = np.asarray(amp0)
     ij = np.unravel_index(int(np.argmax(a)), a.shape)
     P0 = float(merit(amp0))
+    eps = float(np.finfo(np.float64).eps)
 
     ests = []
     for h in (1e-1, 1e-2, 1e-3, 1e-4):
@@ -849,18 +856,17 @@ def test_the_central_difference_through_this_merit_has_no_truncation_branch():
             return float(merit(jnp.asarray(ap)))
         ests.append((h, (_at(+1, 2) - 2 * _at(+1) + 2 * _at(-1) - _at(-1, 2))
                      / (2.0 * h ** 3)))
-    # Round-off scaling: each decade of h multiplies the estimate by ~1e3.
-    ratios = [abs(ests[i + 1][1]) / abs(ests[i][1])
-              for i in range(len(ests) - 1)]
-    assert all(r > 100.0 for r in ratios), (
-        f"the third-difference estimate does not grow like eps|P|/h^3 over "
-        f"the ladder (per-decade ratios {['%.1f' % r for r in ratios]}), so it "
-        f"is NOT pure round-off: this merit has a real third derivative and "
-        f"the cancellation-only bar in the previous id is not the right "
-        f"model.  P0={P0:.6e}")
+
+    over = [(h, p3, abs(p3) / (eps * abs(P0) / h ** 3))
+            for h, p3 in ests if abs(p3) > 100.0 * eps * abs(P0) / h ** 3]
+    assert not over, (
+        f"the third-difference estimate exceeds 100x the round-off floor "
+        f"eps|P|/h^3 at {[f'h={h:.0e}: {p:.3e} ({r:.1f}x)' for h, p, r in over]}"
+        f" -- so it is NOT pure round-off: this merit has a real third "
+        f"derivative and the cancellation-only bar in the previous id is not "
+        f"the right model.  P0={P0:.6e}")
     # and the implied truncation contribution is below the cancellation floor
     # at every rung, which is the statement the bar actually needs.
-    eps = float(np.finfo(np.float64).eps)
     g_ij = float(np.asarray(jax.grad(merit)(amp0))[ij])
     for h, p3 in ests:
         trunc = abs(p3) * h * h / (6.0 * abs(g_ij))
@@ -909,13 +915,24 @@ def test_the_same_ladder_does_find_a_truncation_branch_on_a_cubic_merit():
             / (2.0 * h ** 3)
         rows.append((h, abs(fd - g_ij) / abs(g_ij), p3))
 
-    # PREMISE: P''' is a real, CONSTANT number here (the opposite reading from
-    # the quadratic merit's 1e3-per-decade round-off growth).
+    # PREMISE: P''' is a real, CONSTANT number here, and it sits DECADES above
+    # its own round-off floor -- the opposite reading from the quadratic
+    # merit, whose estimate is bounded BY that floor (and is exactly 0.0 at
+    # one rung on WSL).  Both halves, because "constant" alone would also
+    # describe a constant that is pure noise.
+    eps = float(np.finfo(np.float64).eps)
     p3s = [abs(r[2]) for r in rows]
     assert max(p3s) / min(p3s) < 1.1, (
         f"PREMISE FAILED: the third-difference estimate is not constant over "
         f"the ladder ({['%.4e' % p for p in p3s]}), so this merit is not the "
         f"cubic control it is meant to be")
+    floors = [abs(p3) / (eps * abs(P0) / h ** 3) for h, _rel, p3 in rows]
+    assert min(floors) > 1e4, (
+        f"PREMISE FAILED: the cubic merit's third difference is only "
+        f"{min(floors):.3g}x its own round-off floor (measured 1.9e+04 .. "
+        f"7.0e+08 on 2026-09-19).  The quadratic merit's id passes at <= 100x "
+        f"that floor, so if this control drops toward 100 the two readings "
+        f"stop being separable and both bars become noise")
     # THE CLAIM: the disagreement IS the truncation model, to 10 %, and it
     # falls as h^2 -- neither is true of the shipped quadratic merit.
     for h, rel, p3 in rows:
