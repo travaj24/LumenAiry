@@ -64,6 +64,23 @@ CHIRP_SIDE = [('c_32_2', 32, 2), ('c_64_4', 64, 4), ('c_96_6', 96, 6),
 #: rational kills it at every shape rather than at the ones that happen to have
 #: a factor of 3 in ``N^2``.
 GENERIC = 1.0 / 3.0
+if '--generic' in sys.argv:
+    GENERIC = float(sys.argv[sys.argv.index('--generic') + 1])
+
+
+def _t_is_exact(alpha, N, M):
+    """Is ``t = alpha*n*k`` EXACTLY representable in float64 at every index?
+
+    If it is, ``t - rint(t)`` is exact and the dense route's phase carries no
+    error at all -- the route agrees with an exactly-reduced reference BY
+    CONSTRUCTION, and a gap measured at that fixture is a property of the
+    fixture and not of the routes.  ``alpha`` is a float64 and therefore an
+    exact dyadic rational ``p * 2**e``; the product with two integers stays
+    exact while ``p*n*k`` fits in 53 bits.
+    """
+    fr = Fraction(float(alpha))
+    p = fr.numerator
+    return bool(abs(p) * (N - 1) * max(M - 1, 1) < (1 << 53))
 
 
 def exact_reference(np, E, alpha_x, alpha_y, M_y, M_x, sign):
@@ -162,6 +179,7 @@ def main(tree, budgets):
             row = {'budget': budget, 'tag': tag, 'N': N, 'M': M,
                    'ratio': M / N, 'alpha': alpha,
                    'actual_budget': alpha * float(max(N, M)) ** 2,
+                   'alpha_makes_t_exact': _t_is_exact(alpha, N, M),
                    'rule_says_direct': says, 'sum_abs_E': sumabs, **bars,
                    'maxabs_chirp': mc, 'maxabs_sep': ms, 'maxabs_dense': md,
                    'maxabs_auto': ma,
@@ -268,8 +286,9 @@ def main(tree, budgets):
              and r['room_chirp_decades'] is not None]),
     }
     print('SUMMARY', out['summary'], flush=True)
+    tag = '' if GENERIC == 1.0 / 3.0 else f"_g{GENERIC:g}"
     v4lib.write_json(out, os.path.join(
-        HERE, f"v4_accuracy_{v4lib.short_tag()}.json"))
+        HERE, f"v4_accuracy{tag}_{v4lib.short_tag()}.json"))
 
 
 def _arg(flag, default=None):

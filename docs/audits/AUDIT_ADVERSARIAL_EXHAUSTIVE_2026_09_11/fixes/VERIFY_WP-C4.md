@@ -32,7 +32,7 @@ the scratchpad, and the defects below carry the exact requested edit.
 | `v4_purity.py` | `v4_purity_{win,wsl}.json` | the selection under perturbations that are not a shape, the DISPATCH under seven input variants, no third arithmetic, the warning counts, and the JAX arms |
 | `v4_bitid.py` + `v4_bitid_compare.py` | `v4_bitid_{base,branch}_{win,wsl}.json`, `v4_bitid_compare_{win,wsl}.json` | byte identity archive-to-archive and the SPLIT checked against the rule |
 | `v4_entry.py` + `v4_entry_compare.py` | `v4_entry_{base,branch}_{win,wsl}.json`, `v4_entry_compare_{win,wsl}.json` | every public entry point that reaches the MFT, what moves, and whether a keyword brings it back |
-| `v4_accuracy.py` | `v4_accuracy_{win,wsl}.json` | the exactly-reduced reference, the re-derived bars, the degeneracy controls and the impostor control |
+| `v4_accuracy.py` | `v4_accuracy_{win,wsl}.json`, `v4_accuracy_g1_{win,wsl}.json` | the exactly-reduced reference, the re-derived bars, the degeneracy controls and the impostor control |
 | `v4_blas.py` | `v4_blas_{win,wsl}.json` | four `OPENBLAS_CORETYPE`s x two thread counts |
 | `v4_mutations.py` | `v4_mutations_{win,wsl}.json` | eight source-level mutations against the whole shipped file |
 | `v4_census_plugin.py` | `v4_census_{win,wsl}.json` | where the rule fires in the shipped suite, and through which caller |
@@ -54,7 +54,7 @@ the scratchpad, and the defects below carry the exact requested edit.
 | 4 | no third arithmetic: 88/88 match the named route, 0 match neither | **CONFIRMED and extended to 288 cases** | both primitives x both signs x both `separable` x centred/off-centre x 2 budgets (one under the guard, one past it) x 12 shapes = **288 cases**: matched neither **0**, agrees with the rule **288/288**, on BOTH builds. |
 | 5 | byte identity archive-to-archive vs `49ddf4bd` | **CONFIRMED** | my own 468-key set (13 shapes, of which only 2 coincide with the branch's 12; a different field, a different `alpha` law and different centre conventions, so no FIXTURE is shared): `method='bluestein'` **117/117 identical**, `method='separable'` **117/117**, `_MFT_DIRECT_NEVER` **117/117**; no keyword **63 identical / 54 moved**, and the split **agrees with the rule at 117/117, 0 disagreements**. Identical on both builds. |
 | 5a | every moved public entry point has a ONE-KEYWORD way back | **REFUTED -- 7 public entry points have none** | archive-to-archive at a captured shape and at a refused one, both builds: `compute_psf`, `resample_field`, `propagate` (asm and fresnel legs), `carrier_referenced_focus_readout`, `carrier_referenced_exact_focus_readout`, `re_reference` all MOVE and expose no route keyword; `propagate_traced_carrier_chain` reaches the same primitive through `_collins_transport`. The four that DO have one (`fresnel/fraunhofer/angular_spectrum_propagate_mft`, `asm_propagate`) reproduce the base bytes exactly. See **V-C4-D2** and the entry-point table. |
-| 6 | accuracy: all inside derived two-sided bars, min room 1.54 decades; dense 31x-485x closer in the captured region | **CONFIRMED** | my own `fractions.Fraction` + `math.fsum` reference, bars re-derived from the code: 17 shapes x 2 budgets = **34 rows, all inside their own bars on BOTH builds, minimum room 1.606 (WIN) / 1.605 (WSL) decades**. `'auto'` matched neither route **0 times**; matched the route the rule names **34/34**. At the higher budget the dense-side gap is **21.5x to 91.8x** (my `alpha` carries a generic non-dyadic factor, so my budget is ~333 where the branch's is 1000 -- the direction and the mechanism reproduce). At a budget of 1 the gap is **0.62x to 1.45x**: the branch's own statement that the advantage is about the PHASE and not the summation is confirmed. |
+| 6 | accuracy: all inside derived two-sided bars, min room 1.54 decades; dense 31x-485x closer in the captured region | **CONFIRMED** | my own `fractions.Fraction` + `math.fsum` reference, bars re-derived from the code: 17 shapes x 2 budgets = **34 rows, all inside their own bars on BOTH builds, minimum room 1.606 (WIN) / 1.605 (WSL) decades**. `'auto'` matched neither route **0 times**; matched the route the rule names **34/34**. At the higher budget the dense-side gap is **21.5x to 91.8x** with a non-dyadic `alpha` at every shape; with the branch's own `alpha` it reads **28.2 .. 34.3** where the dense phase is genuinely rounded and **202 .. 397** where `alpha` makes it exact -- see **V-C4-N5**, which is why the quoted 31x-485x is two populations. At a budget of 1 the gap is **0.62x to 1.45x**: the branch's own statement that the advantage is about the PHASE and not the summation is confirmed. |
 | 6a | the degenerate `alpha = 1e15/4096` control | **CONFIRMED** | `1e15/4096 = 244140625000.0` is an exact integer in float64 (`is_integer()` True), and at a DYADIC `alpha` the exact reduction and the route's `t - rint(t)` agree with **max &#124;frac difference&#124; exactly 0.0** -- so a power-of-two fixture with a dyadic `alpha` measures the instrument. At a generic `alpha` they part (4.77e-07 at my fixture). Both builds. |
 | 6b | is the bar `R/4` with `R = N_max^2/((N-1)(M-1))` DERIVED, and is it two-sided? | **two-sided CONFIRMED; the derivation carries a factor-2 slip that the `/4` absorbs** | an IMPOSTOR dense arm (the separable answer returned in its place) reads a gap of **0.995 .. 1.003** against bars of 10.1 .. 16.3, i.e. **10x to 16x UNDER** -- the bar really is two-sided. But `R` is about TWICE the ratio the kernels imply: the chirp kernel is `exp(i*pi*alpha*m^2)` over `&#124;m&#124; <= L - N_out`, which is `alpha*(L-N_out)^2/2` TURNS, against the dense route's `alpha*(N-1)*(M-1)`. The `/4` is a CHOSEN safety factor, not a derived one. See **V-C4-D6**. |
 | 7 | BLAS sweep: dense digests take 2-3 values, the route takes one, everything inside the bar | **CONFIRMED on BOTH builds** | 8 cells per build (`OPENBLAS_CORETYPE` in {HASWELL, NEHALEM, SANDYBRIDGE, KATMAI} x `OPENBLAS_NUM_THREADS` in {1,4}), `threadpoolctl` confirming the architecture actually changes in every cell: distinct dense digests per shape **3 / 2 / 2** (both builds), distinct chirp digests **1 / 1 / 1**, distinct routes **1** everywhere, `all_inside_bars` **true**, `route_follows_rule_everywhere` **true**.  The threads axis alone moves nothing at these sizes; the CORETYPE does. |
@@ -415,6 +415,34 @@ the dense route and one -- `1024x1024 -> 1024x8`, ratios `(1, 1/128)` -- is
 SLOWER, 0.995 and 1.188 over two rounds.  So `min` is measurably unsafe and
 `max` is measurably conservative; the report should simply say what the
 conservatism costs.
+
+**V-C4-N5 -- the headline "31x to 485x" is two populations, and only the
+smaller number is a comparison of the routes.**  The branch's accuracy ladder
+holds `alpha = budget / N_max^2`, and at `budget = 1e3` that value is EXACTLY
+representable whenever `N_max^2`'s odd part divides 125 -- which is true at
+`64 -> 2`, `128 -> 4`, `160 -> 5`, `256 -> 8`, `128 -> 2` and (in my ladder)
+`320 -> 10`.  At those fixtures `t = alpha*n*k` is exact, `t - rint(t)` is
+exact, and the dense route's phase carries NO error at all: it agrees with an
+exactly-reduced reference by construction, which is the same degeneracy the
+report itself identifies at `1e15` and keeps as a labelled control.
+
+Re-measured with the branch's own `alpha` (my probe, `--generic 1.0
+--budgets 1000`), the dense-side gap splits cleanly:
+
+| `alpha*n*k` exact? | shapes | gap |
+|---|---|---|
+| NO (a real comparison) | `96 -> 3`, `192 -> 6`, `224 -> 7` | **28.2 .. 34.3** (WIN) / **27.9 .. 34.0** (WSL); the branch reads 43.4 / 31.6 / 30.9 at the same three |
+| YES (dense exact by construction) | `64 -> 2`, `128 -> 4`, `160 -> 5`, `256 -> 8`, `128 -> 2`, `320 -> 10` | **202 .. 397** (WIN) / **209 .. 408** (WSL); the branch reads 146 .. 485 |
+
+With a non-dyadic `alpha` at EVERY shape (my default, `GENERIC = 1/3`) the
+whole dense-side ladder reads **21.5 .. 91.8**, and it tracks `R` as the
+derivation says it should.  So the mechanism is confirmed and the ordering is
+confirmed; it is the upper end of the quoted range that is a property of the
+fixture.  Suggested edit: quote "about 30x at fixtures where the dense route's
+phase is genuinely rounded, and larger where `alpha` happens to make it exact",
+and mark the five exact-`alpha` rows of §4.3 the way `64 -> 2` is marked at
+`1e15`.  Evidence: `validation/probe_verify_c4/v4_accuracy_g1_{win,wsl}.json`
+(`alpha_makes_t_exact` is recorded per row).
 
 **V-C4-N4 -- one row of the shipped mutation table is narrower than the
 measurement.**  `WP-C4_MFT_DIRECT_DEFAULT_REPORT.md` §10 records
