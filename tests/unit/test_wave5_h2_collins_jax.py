@@ -136,7 +136,15 @@ def test_no_jax_twin_of_the_collins_chain_exists():
     the gate rather than by a reviewer.  Every private Collins name in the
     module is listed and none may carry a backend suffix; and the module must
     not import a ``*_jax*`` sibling for this chain.
+
+    The source half of the check reads the module's CODE, docstrings stripped
+    (2026-09-19).  A raw substring search over the whole file fired on a
+    docstring that merely CITED this test file by name -- a false positive on
+    a cross-reference, which is the opposite of what the gate is for.  Stripped
+    of docstrings the search still covers every import, every definition and
+    every call, which is where a per-flavour twin would have to appear.
     """
+    import ast
     import pathlib
     names = [n for n in dir(CA) if n.startswith('_collins')]
     assert names, "the Collins chain vanished; this inventory is stale"
@@ -147,7 +155,98 @@ def test_no_jax_twin_of_the_collins_chain_exists():
                 f"{n} looks like a per-backend copy of a Collins helper; the "
                 f"chain is meant to be one xp-parametrised implementation")
     src = pathlib.Path(CA.__file__).read_text(encoding='cp1252')
-    assert '_collins_jax' not in src and 'collins_jax' not in src
+    tree = ast.parse(src)
+    code = '\n'.join(
+        _body_source(src, n) for n in ast.walk(tree)
+        if isinstance(n, ast.FunctionDef))
+    # module-level statements too, minus the module docstring
+    code += '\n' + '\n'.join(
+        ast.get_source_segment(src, s) or ''
+        for s in tree.body
+        if not (isinstance(s, ast.Expr) and isinstance(s.value, ast.Constant)
+                and isinstance(s.value.value, str))
+        and not isinstance(s, ast.FunctionDef))
+    assert '_collins_jax' not in code and 'collins_jax' not in code
+
+
+def _body_source(src, node):
+    """A function's source with its DOCSTRING removed.
+
+    A census that reads docstrings counts a cross-reference as a second
+    implementation.  Every statement is taken through
+    ``ast.get_source_segment`` except a leading string expression.
+    """
+    import ast
+    body = node.body
+    if (body and isinstance(body[0], ast.Expr)
+            and isinstance(body[0].value, ast.Constant)
+            and isinstance(body[0].value.value, str)):
+        body = body[1:]
+    return '\n'.join(ast.get_source_segment(src, s) or '' for s in body)
+
+
+def test_the_exact_dispersion_is_written_once():
+    """ONE kernel, ONE implementation -- the campaign's standing rule, gated.
+
+    MEASURED 2026-09-19 (VERIFY-WAVE5-HYGIENE2 V-D22): THREE transcriptions of
+    ``sqrt(k^2 - |k s + q|^2) - k N + (s.q)/N`` lived in ``carrier.py`` --
+    ``_exact_tf_2d_xp`` (``xp``-parametrised), ``_exact_envelope_tf_step``
+    (NumPy-only, and written twice inside itself), and
+    ``_collins_exact_kernel_correction`` (``(xp, is_jax, bld)``-parametrised
+    by H2-2) -- with the same ``|s|^2 < 1`` guard written three times under
+    three different error prefixes.  They are one kernel with two uses: the
+    first two add the piston ``k z``, the third subtracts the paraxial
+    ``|q|^2/(2k)`` instead.
+
+    Three independent tokens are censused, not one, because a future author
+    could split any one of them off on its own: the ``q = 0`` subtraction
+    (``root0``), the radical's shifted-frequency form, and the evanescent
+    guard.  Docstrings are stripped, so a cross-reference is not counted as an
+    implementation.
+
+    This is the gate that had to LAND WITH the consolidation.  The only thing
+    that caught a conjugated exact kernel before it was
+    ``test_audit2609_b4_collins_transport.py::TestSameTheorem``, an AGREEMENT
+    test between two of these transcriptions -- and MEASURED on the
+    consolidated tree, a sign flip of the single kernel leaves that file
+    reading 9 passed, because both transports now move together.  The sign is
+    pinned directly instead, in
+    ``test_wave5_h2_near_focus_table.py::
+    test_the_measured_departure_is_the_quartic_times_one_constant``.
+    """
+    import ast
+    import pathlib
+    src = pathlib.Path(CA.__file__).read_text(encoding='cp1252')
+    tree = ast.parse(src)
+    defs = [n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)]
+    assert len(defs) > 100, (
+        f"only {len(defs)} function definitions parsed out of carrier.py; the "
+        f"census is not reading the module")
+
+    def owners(token):
+        return sorted({n.name for n in defs
+                       if token in _body_source(src, n)})
+
+    for token, what in (
+            ('root0', 'the q = 0 subtraction k N'),
+            ('ax * ax + ay * ay', 'the shifted-frequency radical'),
+            ('s2 < 1.0', 'the evanescent-carrier guard')):
+        got = owners(token)
+        assert got == ['_exact_dispersion_phase'], (
+            f"{what} ({token!r}) is implemented in {got} -- it must live in "
+            f"_exact_dispersion_phase and nowhere else.  ONE "
+            f"xp-parametrised implementation per numerical kernel is this "
+            f"campaign's standing rule, and the specific cost of breaking it "
+            f"here is measured: with two copies, the only guard on the "
+            f"kernel's SIGN was an agreement test between them.")
+
+    # ... and the one implementation is reached from all three sites.
+    for site in ('_exact_tf_2d_xp', '_exact_envelope_tf_step',
+                 '_collins_exact_kernel_correction'):
+        node = next(n for n in defs if n.name == site)
+        assert '_exact_dispersion_phase(' in _body_source(src, node), (
+            f"{site} no longer calls _exact_dispersion_phase; a fourth "
+            f"transcription has appeared, or the site was deleted")
 
 
 @pytest.mark.parametrize("name", ('_collins_exact_kernel_correction',

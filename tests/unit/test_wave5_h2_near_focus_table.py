@@ -563,6 +563,48 @@ def test_the_measured_departure_is_the_quartic_times_one_constant(
         f"the constant is not shared: converging {C_conv:.4f} vs collimated "
         f"{C_coll:.4f}; the law does not carry across geometries")
 
+    # ---- THE SIGN (VERIFY-WAVE5-HYGIENE2 V-D4) ---------------------------
+    # |e^{i phi} - 1| is EVEN in phi, so EVERY magnitude in this file -- the
+    # relative L2 against the oracle, the departure above, the monotonicity,
+    # both power-law slopes and C itself -- is invariant under phi -> -phi.
+    # MEASURED 2026-09-19, both builds: flipping the refinement's z_eff left
+    # all 14 ids in this file green while the intensity-weighted mean of
+    # arg(exact/fresnel) flipped -1.926583e-06 -> +1.926587e-06.  The file's
+    # sign-blindness is proved live, not argued.
+    #
+    # Until 2026-09-19 the LIBRARY was still guarded, but only by
+    # test_audit2609_b4_collins_transport.py::TestSameTheorem, which is a
+    # cross-IMPLEMENTATION agreement test between two transcriptions of the
+    # same kernel.  V-D22 consolidated those transcriptions into one
+    # (carrier.py::_exact_dispersion_phase), so that guard no longer sees a
+    # sign flip of the kernel itself -- both transports now move together.
+    # MEASURED on this tree with the consolidated kernel negated: the b4 file
+    # reads 126 passed (the guard is gone) and THIS id fails.  So this pin is
+    # not defence in depth any more; it is the guard.
+    #
+    # THE PHYSICS, and why the bar is not a taste.  sqrt(k^2-q^2) < k-q^2/(2k)
+    # for every real q, so the exact kernel RETARDS relative to the paraxial
+    # one and on a leg with z_eff > 0 the mean correction phase is NEGATIVE.
+    # Its size is the <u^4> = 1/2 moment of the same quartic whose
+    # sqrt(<u^8>) = sqrt(3/2) moment the magnitude law above uses:
+    #     <arg(exact/fresnel)> = -k z_eff theta_env^4 / 16 = -quartic/2.
+    # BAR: 1 %.  The two moments were measured against their analytic values
+    # on three independent fixtures at 0.002 %, 0.04 % and 0.2 % (2026-09-19,
+    # both builds), so 1 % sits ~0.7 decades above the worst measured
+    # agreement; the failure it must catch -- a conjugated kernel -- is a
+    # factor of TWO away and is caught by the sign assertion first.
+    wgt = np.abs(b.env) ** 2
+    mean_phi = float((wgt * np.angle(a.env / b.env)).sum() / wgt.sum())
+    assert mean_phi < 0.0, (
+        f"the exact-kernel correction ADVANCES the envelope (mean phase "
+        f"{mean_phi:+.4e}); sqrt(k^2-q^2) - k + q^2/(2k) is negative for every "
+        f"real q, so on a leg with z_eff > 0 the refinement must RETARD it -- "
+        f"the kernel's z_eff carries the wrong sign")
+    assert abs(mean_phi) == pytest.approx(quartic / 2.0, rel=1e-2), (
+        f"the mean correction phase is {mean_phi:.4e}, not the derived "
+        f"-k z_eff theta_env^4/16 = {-quartic / 2.0:.4e} (the <u^4> = 1/2 "
+        f"moment beside the sqrt(<u^8>) = sqrt(3/2) moment C is fitted on)")
+
 
 def test_the_sziklas_transport_loses_the_focus_and_the_collins_one_does_not(
         fixture_env):

@@ -597,6 +597,118 @@ def _freq_1d_bld(N, d, bld):
     return 2.0 * np.pi * f
 
 
+def _evanescent_tilt_message(fn, L, M, s2):
+    """The ONE refusal for a non-propagating carrier direction.
+
+    Two phrasings ship and both are reproduced verbatim, because an
+    archive-to-archive bit-identity probe folds an exception's MESSAGE into
+    its digest and one of the three call sites is digested through its
+    evanescent-tilt refusal.  ``_exact_tf_2d_xp`` names the tilt itself; the
+    two envelope-side callers name themselves.  One guard, one place to change
+    it -- the point of the consolidation below."""
+    if fn == '_exact_tf_2d_xp':
+        return (f"carrier tilt (L, M) = ({L}, {M}) has |s|^2 = {s2} >= 1: "
+                f"that is an evanescent (non-propagating) carrier direction.")
+    return (f"{fn}: |tilt|^2 = {s2!r} must be < 1 (direction cosines).")
+
+
+def _exact_dispersion_phase(qx, qy, k, tilt, bld, fn):
+    r"""``sqrt(k^2 - |k s + q|^2) - k N + (s.q)/N`` on ``bld``, as a full grid.
+
+    THE ONE PLACE the non-paraxial dispersion is written in this module.  It
+    returns only the ``q``-DEPENDENT remainder: callers multiply by their own
+    reduced distance and add their own piston (``k z``) or subtract their own
+    paraxial term (``|q|^2/(2k)``).
+
+    THE EXPANSION.  With the carrier's transverse direction cosines
+    ``s = (L, M)`` and ``N = sqrt(1 - |s|^2)``::
+
+        sqrt(k^2 - |k s + q|^2)
+            = k N - (s.q)/N - |q|^2/(2 k N) - (s.q)^2/(2 k N^3) + ...
+
+    The ``q = 0`` value ``k N`` and the linear term ``(s.q)/N`` are subtracted
+    here because every caller already owns them -- the piston
+    ``exp(i k z (1/N - 1))`` and the chief-ray advance ``x_c += L z / N`` are
+    applied outside -- so what is left is the diffraction operator and
+    nothing else.  At ``s = 0`` this collapses to ``sqrt(k^2 - |q|^2) - k``.
+    ``k^2 - |k s + q|^2 < 0`` is clamped to zero (a pure band limit, no growing
+    exponentials), which is what the library's band-limited ASM also does.
+
+    WHY IT IS ONE FUNCTION (VERIFY-WAVE5-HYGIENE2 V-D22).  This radical, this
+    tilt algebra and this ``|s|^2 < 1`` guard were transcribed THREE times in
+    this module -- in :func:`_exact_tf_2d_xp` (``xp``-parametrised), in
+    :func:`_exact_envelope_tf_step` (NumPy-only, and written twice inside
+    itself), and in :func:`_collins_exact_kernel_correction` -- under three
+    different error prefixes.  They are one kernel with two uses: the first two
+    add the piston ``k z``, the third subtracts the paraxial ``|q|^2/(2k)``
+    instead.  H2-2 parametrised one of the three and left the others, so the
+    module carried an ``xp`` copy, a ``bld`` copy and a NumPy-only copy of one
+    radical.  A sign mutation of one copy was caught in 2026-09 ONLY because
+    another copy disagreed with it -- an agreement test between two
+    transcriptions, which consolidating removes -- which is why the sign is now
+    pinned directly, in
+    ``tests/unit/test_wave5_h2_near_focus_table.py``.  The single-definition
+    census is ``test_the_exact_dispersion_is_written_once``, in the H2-2
+    backend test file beside it.
+
+    BUILD COST.  The ``L == M == 0`` NumPy arm below is the in-place fast path
+    :func:`_exact_envelope_tf_step` profiled and kept: at ``N = 2048`` this
+    build, not the FFT pair, was 60 % of an exact step (tottime 0.711 s of a
+    1.181 s cumtime) and the step peaked at 4.00 complex128 full grids.  Writing
+    the radical through ``out=`` rather than as a whole-grid expression is an
+    in-place re-association by addition and multiplication only -- both
+    commutative to the bit in IEEE-754 -- so it is BIT-identical to the general
+    arm, not merely close; that was verified at every shipped shape when the
+    fast path was written, and it is why routing all three sites through this
+    one function moves no bytes.  ``lin`` is skipped at zero tilt for the same
+    reason: ``0.0 * q`` is a grid of signed zeros and ``x + (-0.0) == x`` for
+    every ``x`` including both zeros.
+
+    Parameters
+    ----------
+    qx, qy : 1-D float64 arrays on ``bld``
+        The angular-frequency axes, in the caller's OWN layout (natural for the
+        Collins correction and the envelope step, ``ifftshift``-ed for
+        :func:`_exact_tf_2d_xp`).  They are taken rather than built because the
+        two layouts are not bit-identical to each other and each site's is part
+        of its byte-identity contract.
+    k : float
+        ``2 pi / wavelength``.
+    tilt : (L, M)
+        Carrier transverse direction cosines.
+    bld : module
+        The FIELD-INDEPENDENT build namespace (``np`` for a JAX field, the
+        device namespace for CuPy) -- never ``jax.numpy``, which is why the
+        ``out=`` forms below are always available.
+    fn : str
+        The caller's name, for the refusal message.
+    """
+    L, M = float(tilt[0]), float(tilt[1])
+    s2 = L * L + M * M
+    if not (s2 < 1.0):
+        raise ValueError(_evanescent_tilt_message(fn, L, M, s2))
+    Nz = float(np.sqrt(1.0 - s2))
+    root0 = float(np.sqrt(max(k * k * (1.0 - s2), 0.0)))         # = k*N
+    if bld is np and L == 0.0 and M == 0.0:
+        ny, nx = int(qy.shape[0]), int(qx.shape[0])
+        phase = np.empty((ny, nx), dtype=np.float64)
+        np.add((qx * qx)[None, :], (qy * qy)[:, None], out=phase)
+        np.subtract(k * k, phase, out=phase)
+        np.maximum(phase, 0.0, out=phase)
+        np.sqrt(phase, out=phase)
+        phase -= root0
+        return phase
+    ax = k * L + qx[None, :]
+    ay = k * M + qy[:, None]
+    rad = k * k - (ax * ax + ay * ay)
+    bld.maximum(rad, 0.0, out=rad)
+    phase = bld.sqrt(rad)
+    phase -= root0
+    if L or M:
+        phase += (L * qx[None, :] + M * qy[:, None]) / Nz         # (s.q)/N
+    return phase
+
+
 def _exact_tf_2d_xp(E, z, wavelength, dx, dy, tilt, xp, is_jax, bld):
     """Backend (CuPy / JAX) EXACT, tilt-aware envelope transfer-function step --
     the ``xp`` analogue of :func:`_exact_envelope_tf_step`.
@@ -612,29 +724,18 @@ def _exact_tf_2d_xp(E, z, wavelength, dx, dy, tilt, xp, is_jax, bld):
     Built natural-layout on ``bld`` in float64 then moved to the device by
     :func:`_tf_phase_to_H`, exactly as :func:`_fresnel_tf_2d_xp` does -- which
     also gives the complex64 ``mod 2*pi`` phase folding for free (important
-    here, since ``k z`` is large and the exact root carries full precision)."""
+    here, since ``k z`` is large and the exact root carries full precision).
+
+    The radical, the tilt algebra and the ``|s|^2 < 1`` refusal are
+    :func:`_exact_dispersion_phase` -- the module's ONE non-paraxial
+    dispersion.  This function's share is the piston ``k z`` and the reduced
+    distance."""
     Ny, Nx = E.shape
     k = 2.0 * np.pi / wavelength
-    L, M = float(tilt[0]), float(tilt[1])
-    s2 = L * L + M * M
-    if not (s2 < 1.0):
-        raise ValueError(
-            f"carrier tilt (L, M) = ({L}, {M}) has |s|^2 = {s2} >= 1: that is "
-            "an evanescent (non-propagating) carrier direction.")
-    Nz = float(np.sqrt(1.0 - s2))
     kx = bld.fft.ifftshift(_freq_1d_bld(Nx, dx, bld))
     ky = bld.fft.ifftshift(_freq_1d_bld(Ny, dy, bld))
-    KX = kx[None, :]
-    KY = ky[:, None]
-    ax = k * L + KX
-    ay = k * M + KY
-    rad = k * k - (ax * ax + ay * ay)
-    # evanescent band -> clamp rather than NaN, matching the NumPy path
-    rad = bld.maximum(rad, 0.0)
-    root = bld.sqrt(rad)
-    root0 = float(np.sqrt(max(k * k * (1.0 - s2), 0.0)))
-    lin = (L * KX + M * KY) / Nz
-    arg = (k * z) + z * (root - root0 + lin)
+    arg = (k * z) + z * _exact_dispersion_phase(kx, ky, k, tilt, bld,
+                                                '_exact_tf_2d_xp')
     H = _tf_phase_to_H(arg, _cdtype_of(E), xp, is_jax, bld)
     out = xp.fft.ifft2(xp.fft.fft2(E) * H)
     if _is_complex(E) and out.dtype != E.dtype:
@@ -1396,7 +1497,7 @@ def _exact_envelope_tf_step(E_env, z_eff, wavelength, dx, dy, tilt=(0.0, 0.0)):
     band-limit, no growing exponentials), which is also what the library's
     band-limited ASM does.
 
-    BUILD COST, and why the two shortcuts below are BIT-IDENTICAL rather than
+    BUILD COST, and why the two shortcuts are BIT-IDENTICAL rather than
     "close enough".  Profiled at N = 2048 this build -- not the FFT pair --
     was 60 % of the step (tottime 0.711 s of a 1.181 s cumtime against 0.223 /
     0.208 s for the two transforms) and the step peaked at 4.00 complex128
@@ -1407,14 +1508,14 @@ def _exact_envelope_tf_step(E_env, z_eff, wavelength, dx, dy, tilt=(0.0, 0.0)):
       ``cos + i sin`` through the same libm calls, so the values are equal to
       the last bit (measured max difference exactly 0.0), and it never
       materialises the complex128 ``1j*phase`` temporary: 4.00 -> 2.50 grids.
-    * on the UNTILTED path (``L == M == 0``, the default), ``ax == KX`` and
-      ``ay == KY`` identically and ``lin`` is a whole grid of exact zeros, so
-      ``kx^2[None,:] + ky^2[:,None]`` is the same sum of the same two operands
-      as ``ax*ax + ay*ay`` and the remaining arithmetic is an in-place
-      re-association by addition/multiplication ONLY (both commutative to the
-      bit in IEEE-754).  2.50 -> 1.50 grids and a further ~1.35x, again at
-      exactly 0.0 difference -- verified against the whole-grid expression at
-      every shipped shape in the regression test.
+    * the UNTILTED in-place radical, 2.50 -> 1.50 grids and a further ~1.35x.
+      That arm now lives INSIDE :func:`_exact_dispersion_phase` and serves all
+      three of this module's exact-kernel sites; the argument for why it is
+      bit-identical is given there.
+
+    The radical itself is :func:`_exact_dispersion_phase` (V-D22) -- one
+    implementation, not the three transcriptions this module used to carry.
+    What is left here is the reduced distance and the ``k z_eff`` piston.
     """
     from .fft_infra import _fft2, _ifft2
     E = np.ascontiguousarray(E_env, dtype=np.complex128)
@@ -1423,34 +1524,10 @@ def _exact_envelope_tf_step(E_env, z_eff, wavelength, dx, dy, tilt=(0.0, 0.0)):
     # kx, ky in natural FFT layout (rad/m)
     kx = 2.0 * np.pi * np.fft.fftfreq(nx, d=dx)
     ky = 2.0 * np.pi * np.fft.fftfreq(ny, d=(dy if dy else dx))
-    L, M = float(tilt[0]), float(tilt[1])
-    s2 = L * L + M * M
-    if not (s2 < 1.0):
-        raise ValueError(
-            f"_exact_envelope_tf_step: |tilt|^2 = {s2!r} must be < 1 (direction "
-            f"cosines).")
-    Nz = float(np.sqrt(1.0 - s2))
-    root0 = float(np.sqrt(max(k * k * (1.0 - s2), 0.0)))     # = k*N
-    if L == 0.0 and M == 0.0:
-        phase = np.empty((ny, nx), dtype=np.float64)
-        np.add((kx * kx)[None, :], (ky * ky)[:, None], out=phase)
-        np.subtract(k * k, phase, out=phase)
-        np.maximum(phase, 0.0, out=phase)
-        np.sqrt(phase, out=phase)
-        phase -= root0
-        phase *= z_eff
-        phase += k * z_eff
-    else:
-        KX = kx[None, :]
-        KY = ky[:, None]
-        # |k s + q|^2
-        ax = k * L + KX
-        ay = k * M + KY
-        rad = k * k - (ax * ax + ay * ay)
-        np.maximum(rad, 0.0, out=rad)
-        root = np.sqrt(rad)
-        lin = (L * KX + M * KY) / Nz                         # (s.q)/N
-        phase = (k * z_eff) + z_eff * (root - root0 + lin)
+    phase = _exact_dispersion_phase(kx, ky, k, tilt, np,
+                                    '_exact_envelope_tf_step')
+    phase *= z_eff
+    phase += k * z_eff
     H = np.empty((ny, nx), dtype=np.complex128)
     np.cos(phase, out=H.real)
     np.sin(phase, out=H.imag)
@@ -2009,22 +2086,12 @@ def _collins_exact_kernel_correction(spectrum, z_eff, wavelength, dx, dy,
     k = 2.0 * np.pi / wavelength
     qx = 2.0 * np.pi * bld.fft.fftfreq(nx, d=dx)
     qy = 2.0 * np.pi * bld.fft.fftfreq(ny, d=(dy if dy else dx))
-    L, M = float(tilt[0]), float(tilt[1])
-    s2 = L * L + M * M
-    if not (s2 < 1.0):
-        raise ValueError(
-            f"_collins_exact_kernel_correction: |tilt|^2 = {s2!r} must be < 1 "
-            f"(direction cosines).")
-    Nz = float(np.sqrt(1.0 - s2))
-    root0 = float(np.sqrt(max(k * k * (1.0 - s2), 0.0)))
-    ax = k * L + qx[None, :]
-    ay = k * M + qy[:, None]
-    rad = k * k - (ax * ax + ay * ay)
-    bld.maximum(rad, 0.0, out=rad)
-    phase = bld.sqrt(rad)
-    phase -= root0
-    if L or M:
-        phase += (L * qx[None, :] + M * qy[:, None]) / Nz
+    # The radical and the tilt algebra are the module's ONE non-paraxial
+    # dispersion (V-D22); this function's share is the PARAXIAL subtraction
+    # below -- which is the only thing that makes this a kernel RATIO rather
+    # than a kernel -- and the reduced distance.
+    phase = _exact_dispersion_phase(qx, qy, k, tilt, bld,
+                                    '_collins_exact_kernel_correction')
     phase += ((qx * qx)[None, :] + (qy * qy)[:, None]) / (2.0 * k)
     phase *= z_eff
     corr = _tf_phase_to_H(phase, np.complex128, xp, is_jax, bld)
