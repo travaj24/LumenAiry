@@ -392,13 +392,46 @@ it also runs on CuPy on the build box despite its broken cuFFT (3.8e-16 against
 NumPy).
 
 Decision owed: whether a threshold should select the dense route automatically.
-Recommendation (medium confidence): not yet.  A memory-based threshold is
-build-free and defensible; a time-based one is not, and either moves answers
-in the last bits on every grid it captures (a Migration note).  A second,
-smaller finding is also the maintainer's: the chirp-Z route's phase-budget
-warning fires at `alpha N^2 > 1e15`, three decades after the route's error has
-become visible (1.9e-4 at 1e12, 0.25 at 1e15, silent at both); moving it
-changes warning behaviour, so it is recorded and not moved.
+Recommendation at the time (medium confidence): not yet.  A memory-based
+threshold is build-free and defensible; a time-based one is not, and either
+moves answers in the last bits on every grid it captures (a Migration note).
+A second, smaller finding was also the maintainer's: the chirp-Z route's
+phase-budget warning fires at `alpha N^2 > 1e15`, three decades after the
+route's error has become visible (1.9e-4 at 1e12, 0.25 at 1e15, silent at
+both); moving it changes warning behaviour, so it was recorded and not moved.
+
+**DECIDED 2026-09-20 -- the dense route becomes the default where it is never
+slower, and the rule is a SHAPE and not a clock (WP-C4, shipped in 5.49.0).**
+The objection the recommendation rested on is a real one and the rule is built
+around it rather than against it: the constant is compared against
+`max(N_out/N_in)` at run time and never against a timing, and its VALUE is the
+INTERSECTION of the two builds' safe regions rather than either build's
+crossover.  `_MFT_DIRECT_MAX_RATIO = 1/32`, read by `_auto_selects_direct`, a
+pure function of the four grid sizes; `_MFT_DIRECT_ALWAYS` and
+`_MFT_DIRECT_NEVER` are the documented ends, and `_MFT_DIRECT_NEVER` restores
+the pre-5.49.0 dispatch byte for byte at every shape.
+
+Three things the decision needed that hygiene-2 did not have:
+
+* **1/16 is not safe and the earlier numbers could not say so.**  Re-measured
+  three independent rounds of best-of-nine, worst round: the dense route is
+  1.38 to 1.45 times SLOWER on WSL at `N = 1024, M = 64` -- the very shape
+  `WAVE5_HYGIENE2_REPORT.md` and `VERIFY_WAVE5_HYGIENE2.md` read opposite ways.
+  At 1/32 the worst reading is 0.477 (WIN) and 0.954 (WSL).
+* **the accuracy gap is bigger exactly where the rule fires**, and for a
+  reason: the chirp-Z route's phase argument reaches `alpha*max(N,M)^2` while
+  the dense route's reaches only `alpha*(N-1)*(M-1)`, so at `M <= N/32` the
+  dense route is 31x to 485x nearer an exactly-reduced reference, not the
+  1.5-12x of a summation-only comparison.
+* **the flip does not silence the phase-budget warning.**  It now runs before
+  `'auto'` chooses, so a caller past the budget still hears it on a
+  dense-selected shape and the message names the route taken.  An explicit
+  `method='direct'` stays silent -- that half of item 2 above is still open and
+  is still the maintainer's.
+
+Evidence: `fixes/WP-C4_MFT_DIRECT_DEFAULT_REPORT.md`,
+`validation/probe_c4_mft_direct/`,
+`tests/unit/test_c4_mft_direct_default.py`.
 
 ### 4.3 MEASURED, verification in flight: the near-focus exact-kernel table (Wave 5 hygiene item 20; informs 1.5)
 

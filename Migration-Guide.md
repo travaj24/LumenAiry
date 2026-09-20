@@ -7,11 +7,12 @@ migration recipe -- "I bumped from v4.X to v4.Y, what do I change?".
 
 ## Versions covered
 
-v4.13 through v5.47.  Sections are in version order; the newest is
-[5.47.0 -- adversarial audit remediation, Wave 4 (2026-09-14)](#5470----adversarial-audit-remediation-wave-4-2026-09-14)
-at the end of this file; the 5.46.0 section before it is the largest single
-batch of behaviour changes the library has shipped, and 5.47.0 is the wave that
-implemented what it deferred.
+v4.13 through v5.49.  Sections are in version order; the newest is
+[5.49.0 -- `method='auto'` selects the direct-matrix MFT route at a small output grid](#5490----methodauto-selects-the-direct-matrix-mft-route-at-a-small-output-grid)
+at the end of this file.  The 5.46.0 section is the largest single batch of
+behaviour changes the library has shipped, 5.47.0 is the wave that implemented
+what it deferred, and 5.49.0 is the release that turns the settings those waves
+shipped switchable into the defaults their measurements supported.
 
 Only behavior shifts that **require user code changes** or **change
 numerical answers** are listed.  Pure additions (new functions, new
@@ -1774,3 +1775,137 @@ no-op on the fixed polynomial space; the wall-corner cure is the hp mesh), Levin
 the RCWA Toeplitz inverses (12 to 20 times slower and two decades less accurate than the
 shipped inverse), the chessboard FFT-shift identity (bit-identical only on power-of-two
 grids).
+
+
+---
+
+## 5.49.0 -- `method='auto'` selects the direct-matrix MFT route at a small output grid
+
+### What changed
+
+The matrix-Fourier-transform propagators evaluate their transform as one sum by
+one of three routes.  Until 5.49.0 the default, `method='auto'`, always took a
+chirp-Z (Bluestein) reduction; the dense matrix-Fourier route shipped in 5.48
+as an opt-in `method='direct'`.  `'auto'` now DECIDES FROM THE SHAPES: it takes
+the dense route where that route was measured never slower on either build, and
+the chirp-Z reduction everywhere else.
+
+**Affected entry points**
+
+* `lumenairy.fresnel_propagate_mft`
+* `lumenairy.fraunhofer_propagate_mft`
+* `lumenairy.angular_spectrum_propagate_mft`
+* `lumenairy.resample_field(method='chirpz')` (its chirp-Z leg calls the same
+  primitive; it has no `method=` of this vocabulary, so the way back there is
+  the module constant below)
+* the carrier readouts and `_collins_transport`, which reach the same primitive
+* `propagate(method='asm' | 'fresnel' | 'fraunhofer', output_dx=..., N_out=...)`,
+  which forwards to the three above
+
+### The rule, in one sentence
+
+`method='auto'` takes the dense route when BOTH output-over-input grid ratios,
+`N_out_y / Ny_in` and `N_out_x / Nx_in`, sit at or under
+`lumenairy.propagators._bluestein._MFT_DIRECT_MAX_RATIO`, which is **1/32**.
+
+It is a pure function of the four grid sizes and that one constant --
+`_auto_selects_direct(Ny_in, Nx_in, N_out_y, N_out_x)` -- so the route a call
+takes is predictable from its arguments, identical on every build and every
+backend, and unchanged by the clock, the environment, the thread count or the
+array's contents.
+
+### Does this affect me?
+
+Compute `max(N_out_y/Ny_in, N_out_x/Nx_in)` for your call.
+
+| your ratio | what you get | bytes vs 5.48.1 |
+|---|---|---|
+| `> 1/32` | the chirp-Z route, exactly as before | **identical** |
+| `<= 1/32` | the dense matrix-Fourier route | move in the last bits |
+
+Every focal-zoom grid these propagators are written for -- an output grid the
+same size as the input, or a zoomed window of comparable size -- is in the first
+row and does not move.  The second row is the strongly-decimating case: reading a
+64 x 64 window out of a 4096 x 4096 fine grid, or resampling a field down by
+more than 32x.
+
+### Recipe -- keep the previous route, byte for byte
+
+Per call, with a keyword:
+
+```python
+# Old (<= 5.48.1), and new if you want the same bytes:
+E = la.fresnel_propagate_mft(E_in, z, wl, dx, dx_out, N_out,
+                             method='bluestein')     # the 2-D chirp-Z route
+# ... or 'separable', if you were on the two-pass chirp-Z arm
+```
+
+For a whole process, with the constant -- which is also the way back for
+`resample_field(method='chirpz')` and the carrier readouts, neither of which
+exposes the keyword:
+
+```python
+from lumenairy.propagators import _bluestein as _bl
+_bl._MFT_DIRECT_MAX_RATIO = _bl._MFT_DIRECT_NEVER    # 0.0 -- never select it
+```
+
+Both are byte-identical to 5.48.1 at every shape, proved archive to archive on
+Windows py3.14 and WSL py3.12: 138 of 138 fixtures identical on the
+`'bluestein'` arm, 138 of 138 on the `'separable'` arm, and 138 of 138 with the
+constant set to never.
+
+`_bl._MFT_DIRECT_ALWAYS` (`float('inf')`) is the other end: every shape takes
+the dense route.
+
+### Recipe -- take the new default, and what it buys
+
+Change nothing.  At the shapes the rule captures you get, MEASURED on both
+builds:
+
+* **less memory, by a lot, and that ordering is build-free.**  `tracemalloc`
+  peak at `N = 1024, M = 32`: 1.85 MB, against 34.7 MB for the separable
+  chirp-Z route and 159.6 MB for the 2-D one.  Across a 42-shape ladder the
+  dense route is the smallest at 42 of 42 shapes on both builds, by 6.4x to
+  334.9x, and the readings are identical to the byte across builds.
+* **less time.**  Worst dense-over-fallback ratio at `M/N <= 1/32`, over three
+  independent rounds: 0.477 on Windows py3.14 and 0.954 on WSL py3.12 -- never
+  slower on either, which is the criterion the boundary was set from.
+* **a closer answer.**  Against a reference whose phase is reduced exactly, at a
+  phase budget of 1e3, the dense route is 31x to 485x nearer the exact sum.  The
+  mechanism is the reason the gap grows exactly where the rule fires: the
+  chirp-Z route's phase argument reaches `alpha * max(N, M)^2` while the dense
+  route's reaches only `alpha * (N-1) * (M-1)`.
+* **a route that needs no FFT.**  It is two matrix products, so it runs wherever
+  `xp.matmul` does.  On a box whose cuFFT is unusable, CuPy calls at these
+  shapes now succeed where 5.48.1 raised `ImportError: cufft`.
+
+### One warning you may now hear that you did not
+
+The chirp phase-budget guard (`RuntimeWarning: Bluestein chirp phase argument
+~...`) is now evaluated by `'auto'` BEFORE it picks a route, so a caller past
+the budget still hears about it on a shape the new rule sends to the dense
+route; the message says which route it took.  This is a diagnostic the default
+flip would otherwise have removed.  A caller who passes `method='direct'`
+explicitly is still silent -- that is the unchanged 5.48 behaviour.
+
+The threshold itself has not moved.  If you were silent before, you are silent
+now: at the natural MFT grids `alpha = zoom/N`, so the budget is of order
+`zoom*N ~ 1e4`, five decades under the `4.5e9` threshold.
+
+### Caveats
+
+* The three routes agree to round-off, **not** bit for bit -- they are different
+  association orders over the same sum.  A test that pins MFT bytes across this
+  boundary on a small output grid must pass the keyword.
+* The dense route's two matrix products go through BLAS, so its last bits move
+  with the BLAS kernel and the thread count.  Do not pin them; compare against a
+  reference with a derived bar.
+* The constant is the largest ladder ratio at which the dense route was measured
+  never slower on BOTH builds.  Its margin is thin at one shape (WSL
+  `N = 1024, M = 32`, where the dense route is faster by 5 to 18 %) and wide
+  everywhere else.  1/64 is the ratio with a two-fold margin at every shape, if
+  a deployment wants more headroom; 1/16 is NOT safe (on WSL at
+  `N = 1024, M = 64` the dense route is 1.4x slower).
+
+Full measurements, with the box's load recorded:
+`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/WP-C4_MFT_DIRECT_DEFAULT_REPORT.md`.

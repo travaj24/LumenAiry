@@ -4,6 +4,115 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+### Changed -- MFT propagators (WP-C4): `method='auto'` now SELECTS the direct-matrix route where it was measured never slower on either build, which is `N_out/N_in <= 1/32`
+
+`fresnel_propagate_mft`, `fraunhofer_propagate_mft` and
+`angular_spectrum_propagate_mft` -- and the two primitives behind them,
+`_bluestein_2d` and `_bluestein_centred_2d` -- have taken a chirp-Z (Bluestein)
+reduction through their transform since they were written.  5.48 added the
+dense matrix-Fourier route (`_direct_matrix_2d`: two matrix products, no
+zero-padding, no chirp signal) as an opt-in `method='direct'` and measured it
+the most accurate and the cheapest in memory of the three routes.  What it
+would not do was select it automatically, because the TIME crossover is
+per-build.  This release selects it from the SHAPE instead.
+
+**The rule.**  One module constant, `_MFT_DIRECT_MAX_RATIO = 1/32`, and one
+function, `_auto_selects_direct(Ny_in, Nx_in, N_out_y, N_out_x)`.  `'auto'`
+takes the dense route when BOTH per-axis `N_out/N_in` ratios sit at or under
+the constant -- the MAX of the two decides, so neither axis may be past the
+boundary -- and otherwise reproduces the pre-5.49.0 dispatch exactly.  The
+decision reads four integers and that one constant and nothing else: no clock,
+no environment variable, no thread count, no backend, no array contents.
+MEASURED over 30 shapes under ten perturbations that are not a shape (the clock
+advanced, `OMP_NUM_THREADS` / `OPENBLAS_NUM_THREADS` / `MKL_NUM_THREADS` /
+`SCIPY_FFT_WORKERS` / `LUMENAIRY_MEM_BUDGET_MB` set high, set low and removed,
+the caches filled and dropped, the RNG advanced, the scipy-FFT switches flipped
+both ways, another thread): **30 of 30 shapes give one answer on both builds**,
+and the constant is the one thing that does move it (0 of 30 at
+`_MFT_DIRECT_NEVER`, 30 of 30 at `_MFT_DIRECT_ALWAYS`, 15 of 30 as shipped).
+
+**Why 1/32 and not 1/16.**  Fresh ladder on both builds -- `N` in
+{64,128,256,512,1024,2048} x `M` in {16,32,64,128,256,512,1024}, 42 shapes,
+best of five, cold, the box's load recorded in the probe JSON -- and then the
+shapes that decide the boundary re-measured on their own, three independent
+rounds of best-of-nine each, verdict on the WORST round.  The comparison is
+against `min(chirp-Z 2-D, separable)`, the FASTER of the two routes `'auto'`
+could otherwise have taken, because either can be the one a given caller was
+on.  Worst dense-over-fallback ratio:
+
+| M/N | 1/64 | 1/32 | 1/16 | 1/8 |
+|---|---|---|---|---|
+| Windows py3.14 | 0.206 | **0.477** | 0.713 | 1.427 |
+| WSL py3.12 | 0.561 | **0.954** | 1.450 | 2.982 |
+
+1/16 is not safe on both builds: on WSL at `N = 1024, M = 64` the dense route
+is 1.38 to 1.45 times SLOWER, in all three rounds.  That is precisely the shape
+the two earlier campaigns disagreed about -- `WAVE5_HYGIENE2_REPORT.md`'s WSL
+table reads dense losing there and `VERIFY_WAVE5_HYGIENE2.md`'s re-measurement
+reads it winning -- which is why it was re-measured on its own rather than read
+off either.  1/32 is the INTERSECTION of the two builds' safe regions.  Its
+margin is thin at one shape (WSL `N = 1024, M = 32`: 0.844 / 0.877 / 0.954) and
+wide everywhere else; 1/64 is the ratio with a two-fold margin at every shape,
+if more headroom is ever wanted.
+
+**Memory never argues against it, and that half IS build-free.**  The dense
+route's `tracemalloc` peak is the smallest of the three at 42 of 42 shapes on
+both builds, by 6.4x to 334.9x, and the readings are identical to the byte
+across builds.  At `N = 1024, M = 32`: **1.85 MB against 34.7 MB (separable)
+and 159.6 MB (chirp-Z 2-D)**; at `N = 2048, M = 64`, 7.4 MB against 138.5 and
+638.3.
+
+**Accuracy.**  Against a reference whose phase is reduced EXACTLY
+(`fractions.Fraction` for the phase, `math.fsum` for the sum), 16 shapes x 2
+budgets on both builds, every route sits inside a DERIVED two-sided bar with
+1.54 decades of room at the tightest.  The bar is route-specific and that is
+the finding: the chirp-Z route builds `exp(i*pi*alpha*n^2)` with `n` up to
+`max(N, M)`, so it spends `alpha*N_max^2` of phase, while the dense route
+builds `exp(2*pi*i*alpha*n*k)` with `k < M`, so it spends only
+`alpha*(N-1)*(M-1)`.  In the region the rule captures that ratio IS the accuracy
+gap: at a phase budget of 1e3 the dense route is **31x to 485x** closer to the
+exact answer (Windows and WSL agree to the second figure), where a
+summation-only comparison at a budget of 1 reads the two routes within 0.64x to
+2.66x of each other.  Hygiene-2 round 3's budget ladder reproduces to the digit
+on both builds.
+
+**One behaviour change that is not a byte move.**  The chirp phase-budget guard
+now runs BEFORE `'auto'` chooses, so a caller who was being warned at a high
+budget still is on a shape the new rule captures -- a default flip may not take
+a diagnostic away -- and the message names the route actually taken.  A caller
+who NAMES `method='direct'` is still silent, which is the unchanged 5.48
+decision and stays gated two-sidedly.
+
+**Every backend, and one capability gained.**  The selection matched NumPy's on
+JAX and on CuPy at 30 of 30 shapes; JAX dispatched as the rule says at 8 of 8
+shapes, eager and under `jit`, on both builds.  On this box, whose cuFFT DLL is
+broken, the four rule-captured CuPy shapes now RUN -- the dense route uses no
+FFT -- inside a derived bar, where on 5.48.1 all four raise
+`ImportError: cufft`.  The four chirp-side shapes still raise on both.
+
+**Migration.**  This MOVES ANSWERS in their last bits, on every call to
+`fresnel_propagate_mft`, `fraunhofer_propagate_mft`,
+`angular_spectrum_propagate_mft`, `resample_field(method='chirpz')` or the
+carrier readouts whose output grid is at least 32x coarser than its input --
+the three routes agree to round-off, not bit for bit, because they are
+different association orders over the same sum.  Nothing else moves: at
+`N_out > N_in/32`, which is every focal-zoom grid these propagators are written
+for, the default is byte-identical to 5.48.1 (proved archive-to-archive on two
+builds over 138 no-keyword fixtures, of which the 81 above the boundary are
+identical and the 57 below it are exactly the ones the rule captures -- 138 of
+138 keys agree with the rule, 0 disagree).  THE WAY BACK is one keyword or one
+constant, and both are byte-identical to 5.48.1 at every shape: pass
+`method='separable'` or `method='bluestein'` on the call (138 of 138 keys
+identical on both arms and both builds), or set
+`lumenairy.propagators._bluestein._MFT_DIRECT_MAX_RATIO =
+lumenairy.propagators._bluestein._MFT_DIRECT_NEVER` once for a whole process
+(138 of 138 identical).  `_MFT_DIRECT_ALWAYS` is the other end -- every shape
+on the dense route.  A caller who pins bytes across the 5.48 -> 5.49 boundary
+on a small output grid should take the keyword; a caller who wants the smaller
+memory, the better accuracy and a route that needs no FFT should take the new
+default and change nothing.
+
+
 ## [5.48.1] — 2026-09-20
 
 The publish verification of the `v5.48.0` tag stopped in its slow lane, so 5.48.0
