@@ -199,9 +199,13 @@ reference the error is LINEAR in the budget (`rel ~ eps*budget`, measured over
 11 decades at two geometries on both builds) -- there is no cliff to sit just
 below -- so the threshold is read off the law at the accuracy wanted:
 `1e-6/eps = 4.5036e9`, the budget that still leaves six significant figures
-(measured `5.32e-07` there).  **This is a change in warning behaviour, not a
-change of answer**: no route's arithmetic moves, and a caller between the old
-and new thresholds now hears about an error they were already paying.  Shipped
+(measured `6.786e-07` at 0.9x it and `2.028e-06` at 2.2x it -- re-measured
+2026-09-20 against an exactly-reduced-phase reference, identical on both
+builds).  **This is a change in warning behaviour, not a change of answer**:
+no route's arithmetic moves, and a caller between the old and new thresholds
+now hears about an error they were already paying.  The dense route is quiet at
+2.2x the threshold while reading `1.079e-06` itself; that gap is now gated
+two-sidedly and recorded as an open item rather than closed here.  Shipped
 callers stay silent -- at the natural MFT grids `alpha = zoom/N`, so
 `budget = zoom*N` is of order 1e4 -- which is asserted rather than asserted to
 be obvious.
@@ -461,10 +465,33 @@ The dense route is the smaller in memory at **every** shape measured (the chirp-
 route pads each axis to `L = next_fast_len(N + M - 1)` and holds several `L^2`
 working arrays; the dense route holds two `M x N` kernels, one intermediate and
 the output, and pads nothing), and the faster one below a time crossover at about
-`M = N/4`.  It is also the more accurate: it reduces its phase argument modulo one
-turn before calling `exp`, so `_bluestein_2d`'s `alpha * N_max^2` phase budget does
-not apply to it -- at a budget of 1e12 the chirp route reads `1.9e-04` relative
-against an independently summed reference and the dense route `3.7e-16`.
+`M = N/4`.  It is also the more accurate at a given budget, but by a BOUNDED
+FACTOR and not by decades (corrected 2026-09-20, VERIFY-WAVE5-HYGIENE2 round 2
+D-1).  `_direct_matrix_2d` reduces its phase argument modulo one turn before
+calling `exp`, and that reduction is exact -- but the float64 product
+`alpha*(n - cI)*(k - cO)` it reduces has already discarded the low bits of a
+value needing ~63 of them, so this route obeys the SAME `rel ~ eps * budget`
+law `_bluestein_2d`'s guard is derived from, with a smaller constant.  The
+`3.7e-16` first published here was a measurement of the INSTRUMENT: against a
+reference that forms its own phase the same way, the dense route agrees by
+construction at every budget.  Against a reference whose phase is reduced
+EXACTLY (`fractions.Fraction`), at `N` = 24 -> `M` = 12 and identical to the
+digit on both builds:
+
+| budget | 1e5 | 1e9 | 1e12 | 1e15 |
+|---|---|---|---|---|
+| chirp-Z rel L2 | 2.772e-11 | 1.635e-07 | 1.865e-04 | 2.285e-01 |
+| dense rel L2 | 6.871e-12 | 1.104e-07 | 8.621e-05 | 6.739e-02 |
+| `eps * budget` | 2.220e-11 | 2.220e-07 | 2.220e-04 | 2.220e-01 |
+| chirp / dense | 4.04 | 1.48 | 2.16 | 3.39 |
+
+with fitted slopes of 0.992 (chirp-Z) and 0.998 (dense) over ten decades, and a
+factor of 4.4 .. 11.8 on the centred index convention.  So `method='direct'`
+buys a smaller ERROR at the same budget; only a smaller `|alpha| * N_max^2` --
+fewer samples, or a smaller `alpha = dx*dx_out/(lambda z)` -- buys a smaller
+BUDGET.  The warning now says exactly that, and no route's arithmetic moved:
+417 value keys are byte-identical archive-to-archive on both builds, with 36
+warning keys differing and all 36 above the threshold on a chirp method.
 
 It needs no transform at all -- two matrix products -- so it runs wherever
 `xp.matmul` does: measured returning complex128 agreeing with the NumPy route to
@@ -482,10 +509,12 @@ Nothing selects the dense route automatically.  A threshold-automatic switch wou
 move answers on existing fixtures at round-off, so it is a maintainer decision and
 the measured crossover table is in
 `docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/WAVE5_HYGIENE2_REPORT.md`
-for it to be taken from.  Also recorded there, unfixed because changing it moves
-warning behaviour: `_bluestein_2d`'s phase-budget warning fires at
-`alpha * N_max^2 > 1e15`, three decades after the chirp route has already lost
-four digits (`1.9e-04` at 1e12, `2.5e-01` at 1e15 -- silent at both).
+for it to be taken from.  (The paragraph that stood here recorded `_bluestein_2d`'s
+phase-budget warning as firing at `alpha * N_max^2 > 1e15`, "unfixed because
+changing it moves warning behaviour".  It WAS fixed later in this same
+unreleased block -- see **The chirp phase-budget warning** above, where the
+threshold is re-derived to `1e-6/eps = 4.5036e9` -- so the two paragraphs no
+longer contradict each other.)
 
 ### Changed -- Wave 5 hygiene 2 (H2-2, audit item 18): `_collins_transport` runs on the field's own backend
 
@@ -2802,9 +2831,9 @@ its docstring rated at "< 0.1 %", and the single-FFT Fresnel output
 chirp sits at exactly Nyquist at the grid edge by construction.
 
 `method` (new, `{'spline', 'chirpz'}`, keyword-only, default `'spline'`;
-`mft.py:600`) adds the band-limited alternative: transform to the centred
+`mft.py:611`) adds the band-limited alternative: transform to the centred
 spectrum and inverse-transform it straight onto the output grid with
-`_bluestein_centred_2d` (`_resample_field_chirpz`, `mft.py:539`), which
+`_bluestein_centred_2d` (`_resample_field_chirpz`, `mft.py:550`), which
 is the trigonometric (Dirichlet-kernel) interpolant of the samples. Its
 MTF is exactly 1 at every frequency the input grid represents. Measured
 on the same Gaussian-times-carrier fixture K6 used (power ratio after
@@ -2830,7 +2859,7 @@ reconstruction is **periodic** with period `N_in*dx_in`, so an output
 window wider than the input extent returns replicas rather than the
 zeros the spline pads with — measured power ratio exactly 4.000000 for a
 2× window, where the spline gives 1.000000. That case now warns, reusing
-the MFT family's faithful-zone diagnostic (`mft.py:819`), which grew a
+the MFT family's faithful-zone diagnostic (`mft.py:830`), which grew a
 per-axis `N_out_y` for the non-square extent-preserving default
 (`mft.py:95`). And neither leg anti-aliases on down-sampling.
 
@@ -2970,7 +2999,7 @@ rescaled by the **x** ratio -- wrong by `Nx/Ny`, with no diagnostic.
 Because there is no resample left to crop, the leg no longer calls
 `_warn_system_resample_crop` (`system.py:361`); the `'sas'` leg still
 does, unchanged.  `fresnel_propagate_mft` carries the same K1
-chirp-sampling guard (`lumenairy/propagators/mft.py:1074`) plus its own
+chirp-sampling guard (`lumenairy/propagators/mft.py:1096`) plus its own
 faithful-zone warning with period `lambda*|z|/dx_in`, so no diagnostic
 is lost -- see Migration for the two messages whose wording moves.
 
@@ -3092,7 +3121,7 @@ with a 0.30 cyc/px carrier, **0.993922** (x1.25), 0.998015 (x1.5),
 for a contained one.  With an exact-period `N_out` the reading is 1 to
 -1.1e-16 .. +6.7e-16.
 
-Docstring only: `lumenairy/propagators/mft.py:655-680`.  The module's
+Docstring only: `lumenairy/propagators/mft.py:666-691`.  The module's
 AST and token fingerprints are unchanged, which is
 `scripts/record_history_fingerprints.py --check` confirming it.
 Tests: `tests/unit/test_audit2609_b3b_resample_call_sites.py::TestF6TheUnitMtfIsAPropertyOfTheWindow`
@@ -3198,7 +3227,7 @@ where the default lands on the period exactly.  The fixture the paragraph quotes
 exact, which is why it read as true.
 
 Corrected in place with that reading added
-(`lumenairy/propagators/mft.py:661-670`).  Docstring only:
+(`lumenairy/propagators/mft.py:672-681`).  Docstring only:
 `scripts/record_history_fingerprints.py --check` reports
 `lumenairy.propagators.mft` OK.
 
