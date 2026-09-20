@@ -1264,8 +1264,9 @@ def evaluate(
         :func:`propagate_through_system`.  ``aperture_edge='hard'``
         reproduces the binary pixel-centre answer BIT FOR BIT (proved
         archive-to-archive against the parent commit on both builds; the
-        CHANGELOG's Migration note records which release moved it).  Prescriptions with no STOP surface emit no aperture
-        element, so this keyword changes nothing for them.
+        CHANGELOG's Migration note records which release moved it).
+        Prescriptions with no STOP surface emit no aperture element, so
+        this keyword changes nothing for them.
     aperture_edge_samples : int, optional
         Sub-samples per axis for ``aperture_edge='gray'``; ``None`` takes
         ``apply_aperture``'s own default of 4, which is the measured knee.
