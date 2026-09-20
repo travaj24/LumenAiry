@@ -526,8 +526,15 @@ def _fft2_pair(xp, is_jax):
     back rather than the wrappers called is
     :func:`~lumenairy.propagators._bluestein._bluestein_2d`'s chirp-kernel
     cache, which is keyed on ``fft2 is fft_infra._fft2`` -- routing the NumPy
-    path through ``backend.fft2`` would make that test false and silently turn
-    the cache off for every Collins leg.
+    path through ``backend.fft2`` would make that test false.  MEASURED
+    2026-09-19 (VERIFY-WAVE5-HYGIENE2 V-D9): with the shipped
+    ``_EXACT_READOUT_SEPARABLE_BLUESTEIN = True`` a Collins leg takes the
+    SEPARABLE route inside ``_bluestein_2d``, which never reaches that cache at
+    all -- 0 entries and 0 hits over three legs, both builds -- so the cache is
+    off for every Collins leg today, and the identity is what keeps it
+    available to the ``separable=False`` route and to every other caller of the
+    2-D arm.  (A wrapper does turn it off where it is live: 1 entry / 2 hits
+    becomes 0 / 0, worth 3.3x of wall time on WSL.)
 
     (:mod:`lumenairy.propagators.mft` writes the same three-arm dispatch inline
     at four call sites.  Folding those into this helper is a separate change:
@@ -2167,8 +2174,55 @@ def _collins_transport(env, R_in, z, wavelength, dx, dy, *,
     exists to remove, and a conservative grid-edge guard would refuse legs whose
     measured departure from the analytic ABCD field is 5.6e-08 of peak (the
     reading :func:`_collins_sampling_stats` records).  Eager JAX and CuPy
-    arrays measure normally and take both decisions as NumPy does."""
+    arrays measure normally and take both decisions as NumPy does.
+
+    One EXCEPTION to "refuses unless ``gap_kernel='fresnel'``", because the
+    code is narrower than the rule and the difference is worth naming (V-D11,
+    MEASURED 2026-09-19).  An ASTIGMATIC carrier has no exact-kernel arm at all
+    -- the kernel clause is guarded by ``Ax == Ay``, since
+    ``sqrt(k^2 - qx^2 - qy^2)`` does not separate and the two axes have
+    different ``B/A`` -- so ``gap_kernel='auto'`` takes no MEASURED decision
+    there and IS accepted under a trace (max|grad| = 1.9999999996 through
+    ``jax.grad``).  It is numerically benign: the eager path resolves that same
+    configuration to ``'fresnel'`` too.  Explicit ``'exact'`` is refused
+    earlier, by the astigmatic gate above.
+
+    TWO TRACED SHAPES THAT ARE NOT THE ENVELOPE, and are refused by name rather
+    than by whatever JAX raises first:
+
+    * a traced SCALAR (``z``, ``R_in``, ``dx``, ...).  The leg's ABCD entries,
+      its output lattice and its chirp screens are built from these as PYTHON
+      floats, so only the ENVELOPE may be traced here.  Until 2026-09-19 a
+      ``jax.grad`` w.r.t. ``z`` raised ``ConcretizationTypeError ... The
+      problem arose with the 'float' function`` from ``float(z)`` inside
+      :func:`_collins_envelope_abcd`, and w.r.t. ``dx`` a
+      ``TracerArrayConversionError`` -- neither naming Collins, the transport,
+      or a remedy (V-D13).
+    * a CONCRETE ``jax.numpy`` envelope CLOSED OVER by a jitted function.
+      ``_is_traced`` is correctly False for it, so the measuring branch runs --
+      but inside a jit trace every ``jax.numpy`` operation is STAGED, so the
+      measurement transform's output is a Tracer and
+      ``_collins_power_marginals``'s ``to_numpy`` raised
+      ``TracerArrayConversionError``, for all four spellings including the
+      otherwise-allowed ``fresnel``/``ignore`` (V-D12).  A closed-over NumPy
+      constant runs fine, and so does passing the envelope as an ARGUMENT of
+      the traced function, which is what the message says to do.
+      (``jax.core.trace_state_clean`` is not available on either jax version
+      here, so the value-level check on the transform's OUTPUT is the portable
+      form.)"""
     from ._bluestein import _bluestein_centred_2d
+
+    # V-D13.  Only the ENVELOPE may be traced here.  Refused by name, before
+    # anything concretises one of these behind a float() or an asarray().
+    for _nm, _v in (('R_in', R_in), ('z', z), ('wavelength', wavelength),
+                    ('dx', dx), ('dy', dy), ('R_ref', R_ref)):
+        if _is_traced(_v):
+            raise ValueError(
+                f"{fn}: {_nm} is a JAX Tracer.  The leg's ABCD entries, its "
+                f"output lattice and its chirp screens are built from these "
+                f"as PYTHON floats, so only the ENVELOPE may be traced here.  "
+                f"Differentiate with respect to the field, or rebuild the "
+                f"call at each concrete {_nm}.")
 
     R_ix, R_iy, _ = _parse_carrier(R_in, fn)
     R_rx, R_ry, _ = _parse_carrier(R_ref, fn)
@@ -2254,6 +2308,22 @@ def _collins_transport(env, R_in, z, wavelength, dx, dy, *,
         # leaves the angular marginals (and therefore theta) exactly as they are;
         # only the spatial support moves, and that is re-measured after it.
         S = fft2(_as_c_order(env_a, np.complex128, xp))
+        # V-D12.  ``env_a`` is concrete, so ``_is_traced`` above was correctly
+        # False -- but a CLOSED-OVER jnp constant inside a jit/grad trace has
+        # every jax.numpy operation STAGED, so this transform's output IS a
+        # Tracer and the two measured decisions cannot be taken on it.  The
+        # check is on the OUTPUT because there is no portable trace-state
+        # predicate on either jax version here.
+        if _is_traced(S):
+            raise ValueError(
+                f"{fn}: the envelope is a concrete array, but an enclosing "
+                f"jax.jit / jax.grad trace STAGES every jax.numpy operation, "
+                f"so this measurement transform's output is a Tracer and the "
+                f"two measured decisions cannot be taken on it.  Pass the "
+                f"envelope as an ARGUMENT of the traced function -- then "
+                f"gap_kernel='fresnel' with on_collins_sampling='ignore' runs "
+                f"and every other spelling is refused by name -- or move the "
+                f"call outside the trace.")
         th_x, th_y = _collins_angle_support(S, dx, dy, wavelength,
                                             _COLLINS_TAIL_FRAC)
         z_eff = (B / Ax) if Ax != 0.0 else float('inf')

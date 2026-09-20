@@ -28,6 +28,19 @@ release, or a change of FFT backend rather than pinning today's.
 
 ``jax_enable_x64`` is forced on: in float32 the comparison would be measuring
 JAX's default dtype policy, not the port.
+
+WHAT THIS FILE DOES NOT GATE, AND WHERE IT IS GATED INSTEAD (V-D14).  Two of
+H2-2's threadings are invisible to every VALUE test here, and that was measured
+rather than argued: ``_backend_of`` returns ``bld = np`` for NumPy AND for JAX,
+so only CuPy would see the ``bld`` threading in ``_collins_axis_chirp``, and
+``np.asarray`` / ``np.ascontiguousarray`` agree on VALUES for every input, so
+``_as_c_order``'s contiguity is unobservable too.  Both mutations leave all of
+this file's ids and all 93 of the author's bit-identity keys unchanged.  They
+are closed STRUCTURALLY, and by someone else's file, which is why they are not
+re-gated here -- one gate per claim:
+``tests/unit/test_verify_wave5_hyg2.py::
+test_the_axis_chirp_builds_on_the_bld_it_is_handed`` (a recording namespace)
+and ``::test_as_c_order_makes_the_numpy_path_contiguous`` (a layout assertion).
 """
 from __future__ import annotations
 
@@ -504,6 +517,118 @@ def test_a_traced_envelope_refuses_the_decisions_it_cannot_measure(kw, needle):
         jax.grad(_merit_factory(**kw))(amp)
     assert needle in str(exc.value)
     assert "trace-safe" in str(exc.value)
+
+
+def test_an_astigmatic_auto_is_accepted_under_a_trace_because_it_measures_nothing():
+    """The rule is "refuses unless ``gap_kernel='fresnel'``"; the CODE is
+    narrower, and the difference is gated rather than left to a reader
+    (VERIFY-WAVE5-HYGIENE2 V-D11).
+
+    An ASTIGMATIC carrier has no exact-kernel arm at all -- the kernel clause
+    is guarded by ``Ax == Ay``, because ``sqrt(k^2 - qx^2 - qy^2)`` does not
+    separate and the two axes have different ``B/A`` -- so ``'auto'`` takes no
+    MEASURED decision there and is accepted.  Numerically benign: the eager
+    path resolves the same configuration to ``'fresnel'`` too, which is the
+    second half of this id.  MEASURED 2026-09-19: max|grad| = 2.0008 through
+    ``jax.grad``, and the eager call reports ``kernel == 'fresnel'``.
+    """
+    amp = jnp.asarray(np.real(_gauss()))
+    kw = dict(dx_out=DX, dy_out=DX, N_out_x=N, N_out_y=N,
+              R_ref=(-0.045, -0.07), gap_kernel='auto',
+              on_collins_sampling='ignore')
+
+    def merit(a):
+        out = CA._collins_transport(a.astype(jnp.complex128),
+                                    (-0.05, -0.08), Z, WL, DX, DX, **kw)
+        return jnp.sum(jnp.abs(out) ** 2)
+
+    g = np.asarray(jax.grad(merit)(amp))
+    assert np.all(np.isfinite(g)) and float(np.max(np.abs(g))) > 0.0, (
+        "the astigmatic 'auto' arm did not run under a trace; if it now "
+        "refuses, the docstring's exception paragraph is what is stale")
+    # ... and the decision it would have taken eagerly is 'fresnel' anyway,
+    # which is why accepting it is benign rather than a silent default.
+    st = {}
+    CA._collins_transport(_gauss(), (-0.05, -0.08), Z, WL, DX, DX,
+                          stats_out=st, **kw)
+    assert st['kernel'] == 'fresnel', (
+        f"the eager astigmatic 'auto' resolved to {st['kernel']!r}; the traced "
+        f"arm accepts 'auto' only because there is no exact arm to resolve to")
+    # the explicit spelling is still refused, and earlier
+    with pytest.raises(ValueError, match="ASTIGMATIC"):
+        CA._collins_transport(_gauss(), (-0.05, -0.08), Z, WL, DX, DX,
+                              **dict(kw, gap_kernel='exact'))
+
+
+def test_a_traced_scalar_argument_is_refused_by_name():
+    """Only the ENVELOPE may be traced (V-D13).
+
+    ``jax.grad`` with respect to ``z`` used to raise
+    ``ConcretizationTypeError ... The problem arose with the 'float'
+    function`` from ``float(z)`` inside ``_collins_envelope_abcd``, and with
+    respect to ``dx`` a ``TracerArrayConversionError`` -- neither naming
+    Collins, the transport, or a remedy.  The leg's ABCD entries, its output
+    lattice and its chirp screens are built from these as Python floats, so the
+    refusal is a statement about the design and not a limitation to apologise
+    for.
+    """
+    env = jnp.asarray(_gauss(), dtype=jnp.complex128)
+    kw = dict(dx_out=DX, dy_out=DX, N_out_x=N, N_out_y=N, R_ref=R_REF,
+              gap_kernel='fresnel', on_collins_sampling='ignore')
+
+    def by_z(z):
+        return jnp.sum(jnp.abs(CA._collins_transport(
+            env, R_IN, z, WL, DX, DX, **kw)) ** 2)
+
+    def by_R(r):
+        return jnp.sum(jnp.abs(CA._collins_transport(
+            env, r, Z, WL, DX, DX, **kw)) ** 2)
+
+    for fn_, arg, name in ((by_z, Z, 'z'), (by_R, R_IN, 'R_in')):
+        with pytest.raises(ValueError) as exc:
+            jax.grad(fn_)(arg)
+        msg = str(exc.value)
+        assert f"{name} is a JAX Tracer" in msg, msg
+        assert 'ENVELOPE' in msg and 'Differentiate with respect to the field' \
+            in msg, msg
+
+
+def test_a_closed_over_jax_constant_under_jit_is_refused_by_name():
+    """The one traced shape ``_is_traced(env)`` cannot see (V-D12).
+
+    A CONCRETE ``jax.numpy`` array closed over by a jitted function is not a
+    Tracer, so the measuring branch correctly runs -- but inside a jit trace
+    every ``jax.numpy`` operation is STAGED, so the measurement transform's
+    OUTPUT is a Tracer and ``_collins_power_marginals``'s ``to_numpy`` raised
+    ``TracerArrayConversionError``, for all four spellings INCLUDING the
+    otherwise-allowed ``fresnel``/``ignore``.
+
+    Both directions are asserted: the jnp constant is refused by name, and a
+    closed-over NUMPY constant still runs (it is host data, and nothing about
+    it is staged).
+    """
+    env_j = jnp.asarray(_gauss(), dtype=jnp.complex128)
+    env_n = _gauss()
+    kw = dict(dx_out=DX, dy_out=DX, N_out_x=N, N_out_y=N, R_ref=R_REF,
+              gap_kernel='fresnel', on_collins_sampling='ignore')
+
+    def closed_jnp(x):
+        out = CA._collins_transport(env_j, R_IN, Z, WL, DX, DX, **kw)
+        return jnp.sum(jnp.abs(out) ** 2) * x
+
+    with pytest.raises(ValueError) as exc:
+        jax.jit(closed_jnp)(1.0)
+    msg = str(exc.value)
+    assert 'concrete array' in msg and 'STAGES' in msg, msg
+    assert 'as an ARGUMENT of the traced function' in msg, msg
+
+    def closed_np(x):
+        out = CA._collins_transport(env_n, R_IN, Z, WL, DX, DX, **kw)
+        return jnp.sum(jnp.abs(jnp.asarray(out)) ** 2) * x
+
+    assert float(jax.jit(closed_np)(1.0)) > 0.0, (
+        "a closed-over NUMPY constant must still run under jit; if it does "
+        "not, the refusal above is too broad")
 
 
 def test_stats_out_is_refused_under_a_trace():
