@@ -1,0 +1,202 @@
+# The PRE source of ``lumenairy.propagators.gbd.
+# apply_prescription_persurface_to_beamlets`` at commit 1218b24f (the
+# WP-B12 head, i.e. the last commit BEFORE WP-B12b deleted the in-line
+# conic-sag copy), extracted verbatim with ``git show`` + ``ast`` and
+# committed here as DATA, not as importable code -- the ``.txt`` suffix is
+# deliberate.
+#
+# It exists so VERIFY-WP-B12b D-2 can be proven rather than argued: the
+# assertion ``"'radius'" not in fn_flat`` in
+# ``tests/unit/test_audit2609_b12b_gbd_projection.py`` PASSES against this
+# text, which literally reads ``getattr(surfs[-1], 'radius', np.inf)``,
+# because the token loop two lines above it drops STRING tokens.  The
+# repaired check must FAIL here.  ``tests/unit/test_wp_b12b_round2.py``
+# runs both against this file.
+# ---------------------------------------------------------------------------
+def apply_prescription_persurface_to_beamlets(
+    beamlets: BeamletBundle,
+    prescription: Dict[str, Any],
+    wavelength: float,
+    *,
+    z_image: Optional[float] = None,
+    world_output_plane: Any = None,
+    jacobian: str = 'auto',
+) -> BeamletBundle:
+    """Per-surface tensor-Q evolution of a beamlet bundle through a prescription.
+
+    The per-element form of :func:`apply_abcd_to_beamlets` (which applies a
+    single whole-system paraxial ABCD).  Each beamlet's complex parameter is
+    evolved **surface by surface** via the real per-ray differential ray
+    transfer (:func:`lumenairy.raytrace.ray_transfer_jacobian`), so the
+    scalar ``Q`` promotes to a ``(N, 2, 2)`` complex-symmetric TENSOR that
+    captures off-axis **astigmatism** and higher-order aberration the paraxial
+    system ABCD cannot.  The beamlets are carried through the refracting
+    surfaces (generalized Collins ``Q_out = (C + D Q)(A + B Q)^{-1}``, amplitude
+    ``1/sqrt(det(A + B Q))`` accumulated per surface so the sqrt branch stays
+    unambiguous, plus the base-ray OPL piston), then a branch-safe tensor
+    free-space to the image plane.
+
+    NumPy backend (the trace + finite-difference Jacobian are numpy); the
+    returned bundle's tensor ``Q`` reconstructs via the tensor branch of
+    :func:`reconstruct_field_from_beamlets`.  Dead beamlets (vignette / TIR /
+    miss) are dropped.
+
+    Parameters
+    ----------
+    beamlets : BeamletBundle
+        Source-plane bundle (scalar or tensor Q).
+    prescription : dict
+    wavelength : float
+    z_image : float, optional
+        Axial distance from the last surface vertex to the output/image plane
+        [m].  Defaults to the system back focal length
+        (``system_abcd_prescription`` BFL).
+    """
+    import copy as _copy
+
+    from ..raytrace import surfaces_from_prescription, system_abcd_prescription
+    from ..raytrace.differential import (
+        ray_transfer_jacobian,
+        ray_transfer_jacobian_analytic,
+    )
+
+    # 'auto' (the default) prefers the truncation-free analytic
+    # differential ray transfer (one dual-number trace, no per-surface (N,4,4)
+    # inverse) and transparently falls back to the finite-difference Jacobian
+    # (9N traces) for any surface type the analytic path does not yet cover
+    # (raising NotImplementedError).  The two agree to ~1e-8 where both apply;
+    # analytic is exact (no FD step), so 'auto' never lowers accuracy vs 'fd'.
+    if jacobian == 'auto':
+        _jac_candidates = [ray_transfer_jacobian_analytic, ray_transfer_jacobian]
+    elif jacobian == 'analytic':
+        _jac_candidates = [ray_transfer_jacobian_analytic]
+    elif jacobian == 'fd':
+        _jac_candidates = [ray_transfer_jacobian]
+    else:
+        raise ValueError(
+            f"jacobian must be 'auto', 'fd' or 'analytic', got {jacobian!r}.")
+
+    if world_output_plane is not None:
+        # Evolve Q on the UNFOLDED-EQUIVALENT straight system: a fold mirror
+        # makes the local trace reflect (N flips sign -> the slope ``u = L/N``
+        # flips, corrupting the slope phase-space Q evolution).  The straight
+        # equivalent (flat mirrors -> transmissive identity, thicknesses = world
+        # geometric gaps) has no sign flip and the true path lengths, so Q
+        # evolves correctly; the fold geometry re-enters only via the world
+        # trace in the reframe.  Base-ray positions then come from the world
+        # trace, Q from this straight evolution.
+        surfs = _unfolded_equivalent_surfaces(prescription, wavelength)
+    else:
+        surfs = list(surfaces_from_prescription(prescription))
+        if z_image is None:
+            _res = system_abcd_prescription(prescription, wavelength)
+            z_image = float(_res[2])
+    # Trace to the LAST surface vertex (zero its transfer); the image-side
+    # free-space is done branch-safe below (its single leg crosses the focus).
+    surfs[-1] = _copy.copy(surfs[-1])
+    try:
+        surfs[-1].thickness = 0.0
+    except (AttributeError, TypeError):
+        pass
+
+    pos = np.asarray(beamlets.positions)
+    dr = np.asarray(beamlets.directions)
+    x = pos[:, 0].astype(np.float64)
+    y = pos[:, 1].astype(np.float64)
+    Nz = dr[:, 2]
+    ux = (dr[:, 0] / Nz).astype(np.float64)
+    uy = (dr[:, 1] / Nz).astype(np.float64)
+
+    dt = None
+    _jac_err = None
+    for _jac in _jac_candidates:
+        try:
+            dt = _jac(x, y, ux, uy, surfs, wavelength, per_surface=True)
+            break
+        except NotImplementedError as _e:
+            _jac_err = _e            # analytic unsupported here -> try next (FD)
+    if dt is None:
+        raise (_jac_err or RuntimeError(
+            'apply_prescription_persurface_to_beamlets: no ray-transfer '
+            'Jacobian backend succeeded.'))
+    n = x.shape[0]
+    I2 = np.eye(2)[None, :, :]
+    Qsrc = np.asarray(beamlets.Q)
+    Q = (Qsrc.astype(np.complex128) if _q_is_tensor(Qsrc)
+         else Qsrc[:, None, None] * I2)
+    amp = np.ones(n, dtype=np.complex128)
+    k0 = 2.0 * np.pi / wavelength
+
+    for k in range(dt.jacobian.shape[0]):
+        J = dt.jacobian[k]
+        A = J[:, 0:2, 0:2]
+        B = J[:, 0:2, 2:4]
+        C = J[:, 2:4, 0:2]
+        D = J[:, 2:4, 2:4]
+        ABQ = A + B @ Q
+        # S5 (audit): conjugated Collins factor -- see apply_abcd_to_beamlets.
+        amp = amp / np.conj(np.sqrt(_det2x2(ABQ)))
+        Q = (C + D @ Q) @ _inv2x2(ABQ, np)
+        Q = 0.5 * (Q + np.transpose(Q, (0, 2, 1)))
+    # base-ray OPL piston (input plane -> last vertex): where the wavefront
+    # aberration enters (different beamlets accumulate different OPL).
+    amp = amp * np.exp(1j * k0 * dt.opd)
+
+    if world_output_plane is not None:
+        # Reframe onto a WORLD-frame output plane (large folds -- e.g. a
+        # periscope -- reverse the propagation axis, so the fixed local x-y
+        # grid is meaningless).  World-trace the base rays through the folded
+        # prescription, express each at the plane's local (x, y), and free-space
+        # the (isotropic-or-tensor) Q to the plane.  See _reframe_beamlets_to_
+        # world_plane.  Reduces to the local +z path on an unfolded system.
+        new_pos, new_dir, Q, amp2, alive = _reframe_beamlets_to_world_plane(
+            beamlets, prescription, wavelength, Q, amp, k0, world_output_plane)
+        new_amp = np.asarray(beamlets.amplitude) * amp2
+        w0 = np.asarray(beamlets.waist0)
+        return BeamletBundle(
+            positions=new_pos[alive], directions=new_dir[alive], Q=Q[alive],
+            amplitude=new_amp[alive], waist0=w0[alive])
+
+    # branch-safe tensor free-space to the image plane (per-eigenvalue sqrt so
+    # the focus-crossing Gouy phase is unambiguous; eigenvalues have Im<0).
+    inv = 1.0 / np.sqrt(1.0 + dt.ux ** 2 + dt.uy ** 2)
+    Lx = dt.ux * inv
+    My = dt.uy * inv
+    Nz2 = inv
+    # v5.22 FIX (per-surface GBD OPL piston): the differential trace leaves the
+    # bundle at the last-surface INTERSECTION (z = sag(r)), not the vertex plane
+    # -- dt.opd / dt.x / dt.y are all referenced there.  The image-side leg below
+    # assumes the vertex plane (z = 0), so a POWERED last surface injects a
+    # spurious sag(r) of defocus into the OPL piston (measured as ~2x the exit
+    # wavefront curvature for a curved exit surface; the error vanishes only when
+    # the last surface happens to be planar).  Every OTHER consumer of the
+    # ray-transfer OPL applies the same SIGNED (not abs) `-sag/N` vertex
+    # correction -- see _lens_traced.py (`-final.z / final.N`) and _lens_jax.py;
+    # this path was the sole omission.  Fold -sag(r) into the leg length so the
+    # piston, transverse position and Q are all referenced to the vertex plane.
+    _Rl = float(getattr(surfs[-1], 'radius', np.inf))
+    _kl = float(getattr(surfs[-1], 'conic', 0.0) or 0.0)
+    if np.isfinite(_Rl) and _Rl != 0.0:
+        _cl = 1.0 / _Rl
+        _r2 = dt.x ** 2 + dt.y ** 2
+        _sag = _cl * _r2 / (1.0 + np.sqrt(np.maximum(
+            1.0 - (1.0 + _kl) * _cl * _cl * _r2, 0.0)))
+    else:
+        _sag = np.zeros_like(dt.x)
+    t = (z_image - _sag) / Nz2
+    Q, amp = _freespace_tensor_moebius_np(Q, amp, t, k0)   # shared (S2-14)
+    new_pos = np.stack([dt.x + t * Lx, dt.y + t * My,
+                        np.zeros_like(dt.x)], axis=-1)
+    new_dir = np.stack([Lx, My, Nz2], axis=-1)
+    new_amp = np.asarray(beamlets.amplitude) * amp
+    # Scrub any non-finite row so no NaN enters the coherent sum -- the same
+    # mask the world branch applies (D2): defense-in-depth with the FD
+    # backend's companion-aliveness fix for FD-fallback surfaces (aspheres /
+    # freeforms) with rim-adjacent beamlets.
+    alive = (np.asarray(dt.alive, dtype=bool)
+             & np.isfinite(new_pos).all(axis=1) & np.isfinite(new_amp)
+             & np.isfinite(Q).all(axis=(1, 2)))
+    w0 = np.asarray(beamlets.waist0)
+    return BeamletBundle(
+        positions=new_pos[alive], directions=new_dir[alive], Q=Q[alive],
+        amplitude=new_amp[alive], waist0=w0[alive])

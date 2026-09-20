@@ -1,0 +1,47 @@
+{
+ "arm": "post",
+ "arm_tokens": {
+  "immersed_guard": true,
+  "mirror_guard": true
+ },
+ "env": {
+  "arm": "post",
+  "arm_tokens": {
+   "immersed_guard": true,
+   "mirror_guard": true
+  },
+  "build": "linux_312",
+  "env": {
+   "LUMENAIRY_MEM_BUDGET_MB": "2048",
+   "MKL_NUM_THREADS": "1",
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "PYTHONPATH": "/mnt/c/tmp/lum_gbd2:/mnt/c/tmp/lum_gbd2/validation/probe_wp_b12b_round2",
+   "R2_TREE": "/mnt/c/tmp/lum_gbd2"
+  },
+  "lumenairy_file": "/mnt/c/tmp/lum_gbd2/lumenairy/__init__.py",
+  "lumenairy_version": "5.47.1",
+  "numpy": "2.4.6",
+  "platform": "Linux-4.4.0-26100-Microsoft-x86_64-with-glibc2.39",
+  "python": "3.12.3 (main, Mar 23 2026, 19:04:32) [GCC 13.3.0]",
+  "scipy": "1.17.1"
+ },
+ "fixtures": {
+  "verifier_mirror_R15": {
+   "arms": {
+    "z_image=+|f|": {
+     "decision": "refused",
+     "message": "apply_prescription_persurface_to_beamlets: the prescription's LAST surface is a MIRROR, and the local-frame branch cannot serve a mirror-terminated prescription.  Its image-side leg is built from Nz2 = 1/sqrt(1 + ux^2 + uy^2), which is positive whatever the true N, so after a mirror the returned direction, the leg t = z_image/Nz2 and the Moebius free-space step all run along +z while the light tra"
+    },
+    "z_image=-|f|": {
+     "decision": "refused",
+     "message": "apply_prescription_persurface_to_beamlets: the prescription's LAST surface is a MIRROR, and the local-frame branch cannot serve a mirror-terminated prescription.  Its image-side leg is built from Nz2 = 1/sqrt(1 + ux^2 + uy^2), which is positive whatever the true N, so after a mirror the returned direction, the leg t = z_image/Nz2 and the Moebius free-space step all run along +z while the light tra"
+    }
+   },
+   "n_sign_traced": -1.0,
+   "spot_rms_at_focus": 7.118279684308797e-09,
+   "spot_rms_at_minus_focus": 0.00014333798307543752,
+   "z_focus": -0.007499097624683209
+  }
+ }
+}

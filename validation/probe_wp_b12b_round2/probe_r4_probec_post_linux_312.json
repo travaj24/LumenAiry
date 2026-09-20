@@ -1,0 +1,74 @@
+{
+ "arm": "post",
+ "arm_tokens": {
+  "immersed_guard": true,
+  "mirror_guard": true
+ },
+ "env": {
+  "arm": "post",
+  "arm_tokens": {
+   "immersed_guard": true,
+   "mirror_guard": true
+  },
+  "build": "linux_312",
+  "env": {
+   "LUMENAIRY_MEM_BUDGET_MB": "2048",
+   "MKL_NUM_THREADS": "1",
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "PYTHONPATH": "/mnt/c/tmp/lum_gbd2:/mnt/c/tmp/lum_gbd2/validation/probe_wp_b12b_round2",
+   "R2_TREE": "/mnt/c/tmp/lum_gbd2"
+  },
+  "lumenairy_file": "/mnt/c/tmp/lum_gbd2/lumenairy/__init__.py",
+  "lumenairy_version": "5.47.1",
+  "numpy": "2.4.6",
+  "platform": "Linux-4.4.0-26100-Microsoft-x86_64-with-glibc2.39",
+  "python": "3.12.3 (main, Mar 23 2026, 19:04:32) [GCC 13.3.0]",
+  "scipy": "1.17.1"
+ },
+ "json_linux_312": {
+  "max_relative_dphase_rad": [
+   "3.443787435906078e-06",
+   "6.885596585603451e-06",
+   "3.441809149716978e-06",
+   "3.442175511476754e-06",
+   "6.8833863778104225e-06",
+   "3.4412108663743212e-06",
+   "6.867783799956453e-06",
+   "9.921147011993154e-06",
+   "3.0533632119770507e-06",
+   "1.7867661360886307e-06",
+   "3.1176362176998406e-06",
+   "1.3308700816114545e-06",
+   "6.760231407720553e-17",
+   "6.760231407720553e-17",
+   "6.760231407720553e-17"
+  ]
+ },
+ "json_win32_314": {
+  "max_relative_dphase_rad": [
+   "3.4437874359710244e-06",
+   "6.885596585668328e-06",
+   "3.4418091497175676e-06",
+   "3.442175511545597e-06",
+   "6.883386377880583e-06",
+   "3.441210866375988e-06",
+   "6.8677837999591e-06",
+   "9.921147011998761e-06",
+   "3.0533632119806066e-06",
+   "1.7867661360919145e-06",
+   "3.1176362177008164e-06",
+   "1.3308700816087732e-06",
+   "6.796869888613907e-17",
+   "6.796869888613907e-17",
+   "6.796869888613907e-17"
+  ]
+ },
+ "published_in_report": {
+  "linux_312": "8.298e-17",
+  "win32_314": "8.318e-17"
+ },
+ "rerun_returncode": 0,
+ "rerun_tail": "hase 3.442e-06 rad\nconic_k_last       beamlets   6353\n    full_vs_fs_sag_sec         relQ 6.062e-05  relAmp 7.401e-06  dPos 0.000e+00 m  dPhase 3.442e-06 rad\n    full_vs_state_only         relQ 4.333e-04  relAmp 9.859e-05  dPos 0.000e+00 m  dPhase 6.883e-06 rad\n    fs_sag_sec_vs_state_only   relQ 4.337e-04  relAmp 1.058e-04  dPos 0.000e+00 m  dPhase 3.441e-06 rad\nasphere_field      beamlets   6353\n    full_vs_fs_sag_sec         relQ 7.037e-05  relAmp 4.145e-06  dPos 0.000e+00 m  dPhase 6.868e-06 rad\n    full_vs_state_only         relQ 3.021e-04  relAmp 7.426e-05  dPos 0.000e+00 m  dPhase 9.921e-06 rad\n    fs_sag_sec_vs_state_only   relQ 3.023e-04  relAmp 7.812e-05  dPos 0.000e+00 m  dPhase 3.053e-06 rad\nasphere_flat_base  beamlets   6353\n    full_vs_fs_sag_sec         relQ 2.109e-05  relAmp 6.078e-06  dPos 0.000e+00 m  dPhase 1.787e-06 rad\n    full_vs_state_only         relQ 2.811e-04  relAmp 8.304e-05  dPos 0.000e+00 m  dPhase 3.118e-06 rad\n    fs_sag_sec_vs_state_only   relQ 2.828e-04  relAmp 8.869e-05  dPos 0.000e+00 m  dPhase 1.331e-06 rad\nflat_last_lasf9    beamlets   6565\n    full_vs_fs_sag_sec         relQ 0.000e+00  relAmp 0.000e+00  dPos 0.000e+00 m  dPhase 6.760e-17 rad\n    full_vs_state_only         relQ 0.000e+00  relAmp 0.000e+00  dPos 0.000e+00 m  dPhase 6.760e-17 rad\n    fs_sag_sec_vs_state_only   relQ 0.000e+00  relAmp 0.000e+00  dPos 0.000e+00 m  dPhase 6.760e-17 rad\n[wrote] /mnt/c/tmp/lum_gbd2/validation/probe_gbd_projection/probe_c_decompose_linux_312.json\n",
+ "this_build": "linux_312"
+}

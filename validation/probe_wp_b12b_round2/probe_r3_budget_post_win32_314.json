@@ -1,0 +1,110 @@
+{
+ "agreement_vs_unset": {
+  "2048": {
+   "byte_identical": true,
+   "max_abs_diff": 0.0,
+   "rel": 0.0
+  },
+  "4096": {
+   "byte_identical": true,
+   "max_abs_diff": 0.0,
+   "rel": 0.0
+  },
+  "512": {
+   "byte_identical": true,
+   "max_abs_diff": 0.0,
+   "rel": 0.0
+  },
+  "64": {
+   "byte_identical": false,
+   "max_abs_diff": 4.6629367034256575e-15,
+   "rel": 1.7408777994798884e-15
+  },
+  "8": {
+   "byte_identical": false,
+   "max_abs_diff": 5.7902148899581444e-15,
+   "rel": 2.1617399500063207e-15
+  },
+  "unset": {
+   "byte_identical": true,
+   "max_abs_diff": 0.0,
+   "rel": 0.0
+  }
+ },
+ "arm": "post",
+ "arm_tokens": {
+  "immersed_guard": true,
+  "mirror_guard": true
+ },
+ "distinct_digests": [
+  "7dafcd2334f2291641ba9085827e86d5f4df0a5a189c68e7bbb12ff5b5604927",
+  "cb6a219fe8f9084ee866bb306b5059e5d1330f815aa733190540692de16e1b05",
+  "f799fc7c4666b5851f79b41cd214711d04093afa7ac03dc0e2645f1edd0d802d"
+ ],
+ "env": {
+  "arm": "post",
+  "arm_tokens": {
+   "immersed_guard": true,
+   "mirror_guard": true
+  },
+  "build": "win32_314",
+  "env": {
+   "LUMENAIRY_MEM_BUDGET_MB": "2048",
+   "MKL_NUM_THREADS": "1",
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "PYTHONPATH": "C:/tmp/lum_gbd2;C:/tmp/lum_gbd2/validation/probe_wp_b12b_round2",
+   "R2_TREE": "C:/tmp/lum_gbd2"
+  },
+  "lumenairy_file": "C:\\tmp\\lum_gbd2\\lumenairy\\__init__.py",
+  "lumenairy_version": "5.47.1",
+  "numpy": "2.4.4",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "python": "3.14.6 (tags/v3.14.6:c63aec6, Jun 10 2026, 10:26:10) [MSC v.1944 64 bit (AMD64)]",
+  "scipy": "1.17.1"
+ },
+ "rows": [
+  {
+   "budget": "unset",
+   "digest": "f799fc7c4666b5851f79b41cd214711d04093afa7ac03dc0e2645f1edd0d802d",
+   "energy": "2472.5497980368536",
+   "peak": "2.678497425160327",
+   "real_sum": "139.41711832402848"
+  },
+  {
+   "budget": "4096",
+   "digest": "f799fc7c4666b5851f79b41cd214711d04093afa7ac03dc0e2645f1edd0d802d",
+   "energy": "2472.5497980368536",
+   "peak": "2.678497425160327",
+   "real_sum": "139.41711832402848"
+  },
+  {
+   "budget": "2048",
+   "digest": "f799fc7c4666b5851f79b41cd214711d04093afa7ac03dc0e2645f1edd0d802d",
+   "energy": "2472.5497980368536",
+   "peak": "2.678497425160327",
+   "real_sum": "139.41711832402848"
+  },
+  {
+   "budget": "512",
+   "digest": "f799fc7c4666b5851f79b41cd214711d04093afa7ac03dc0e2645f1edd0d802d",
+   "energy": "2472.5497980368536",
+   "peak": "2.678497425160327",
+   "real_sum": "139.41711832402848"
+  },
+  {
+   "budget": "64",
+   "digest": "7dafcd2334f2291641ba9085827e86d5f4df0a5a189c68e7bbb12ff5b5604927",
+   "energy": "2472.5497980368536",
+   "peak": "2.6784974251603266",
+   "real_sum": "139.41711832402848"
+  },
+  {
+   "budget": "8",
+   "digest": "cb6a219fe8f9084ee866bb306b5059e5d1330f815aa733190540692de16e1b05",
+   "energy": "2472.5497980368536",
+   "peak": "2.6784974251603266",
+   "real_sum": "139.41711832402842"
+  }
+ ]
+}

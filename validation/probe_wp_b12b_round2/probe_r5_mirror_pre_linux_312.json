@@ -1,0 +1,61 @@
+{
+ "arm": "pre",
+ "arm_tokens": {
+  "immersed_guard": false,
+  "mirror_guard": false
+ },
+ "env": {
+  "arm": "pre",
+  "arm_tokens": {
+   "immersed_guard": false,
+   "mirror_guard": false
+  },
+  "build": "linux_312",
+  "env": {
+   "LUMENAIRY_MEM_BUDGET_MB": "2048",
+   "MKL_NUM_THREADS": "1",
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "PYTHONPATH": "/mnt/c/tmp/lum_gbd2_pre:/mnt/c/tmp/lum_gbd2/validation/probe_wp_b12b_round2",
+   "R2_TREE": "/mnt/c/tmp/lum_gbd2_pre"
+  },
+  "lumenairy_file": "/mnt/c/tmp/lum_gbd2_pre/lumenairy/__init__.py",
+  "lumenairy_version": "5.47.1",
+  "numpy": "2.4.6",
+  "platform": "Linux-4.4.0-26100-Microsoft-x86_64-with-glibc2.39",
+  "python": "3.12.3 (main, Mar 23 2026, 19:04:32) [GCC 13.3.0]",
+  "scipy": "1.17.1"
+ },
+ "fixtures": {
+  "verifier_mirror_R15": {
+   "arms": {
+    "z_image=+|f|": {
+     "decision": "served",
+     "leg_piston_signed_waves": 0.1616543003229145,
+     "leg_piston_true_abs_waves": 0.1616543003229145,
+     "leg_resid_signed_waves": 0.0003285231069718586,
+     "leg_resid_true_abs_waves": 0.0003285231069718586,
+     "n_beamlets": 121,
+     "n_sign_returned": 1.0,
+     "spot_rms": 0.00014333798307543752,
+     "spot_rms_ratio_vs_focus": 20136.60454946791
+    },
+    "z_image=-|f|": {
+     "decision": "served",
+     "leg_piston_signed_waves": -0.25026981313096935,
+     "leg_piston_true_abs_waves": 0.17881694557339942,
+     "leg_resid_signed_waves": 0.0005447997317420745,
+     "leg_resid_true_abs_waves": 0.4910815308202058,
+     "n_beamlets": 121,
+     "n_sign_returned": 1.0,
+     "spot_rms": 7.118279684305655e-09,
+     "spot_rms_ratio_vs_focus": 0.9999999999995587
+    }
+   },
+   "n_sign_traced": -1.0,
+   "spot_rms_at_focus": 7.118279684308797e-09,
+   "spot_rms_at_minus_focus": 0.00014333798307543752,
+   "z_focus": -0.007499097624683209
+  }
+ }
+}
