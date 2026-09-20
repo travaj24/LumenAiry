@@ -72,6 +72,17 @@ N; the probe records that rather than assuming it.
 | ladder gain | **9.46x** | **56.1x** | | **9.27x** | **44.9x** | |
 | mean order | **1.08** | **1.94** | | **1.06** | **1.83** | |
 
+> **Erratum (WP-C1 round 3, 2026-09-20).**  The HF hard `mean order` above
+> reads **1.06**; the value the ladder in the same row gives is **1.0709**
+> (`log2(9.2699) / 3`, and `9.2699x` is this table's own HF hard ladder gain).
+> Round 2 corrected the figure in `test_verify_c1_gray_edge.py` and in the
+> CHANGELOG and VERIFY-C1-ROUND2 confirmed it there; this table, the report of
+> record, still printed the slip.  No assertion reads this line.  Re-measured
+> on both builds by `validation/probe_verify_c1_round2/probe_d3_ladder.py` and
+> `validation/probe_wpc1_round3/d3_ladder_R3_*.json`, which print
+> `HF_hard ... gain=9.2699x mean=1.0709` identically on Windows py3.14.6 and
+> WSL py3.12.3.  The rest of the table reproduces to every printed digit.
+
 Run against the PRE archive the last column reads `default is bit-identical to
 ['hard']` and the hard and gray columns are unchanged in every digit; run
 against the branch it reads `['gray']`.  Windows and WSL agree to twelve

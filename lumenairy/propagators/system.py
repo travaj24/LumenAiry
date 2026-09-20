@@ -1266,7 +1266,17 @@ def evaluate(
         archive-to-archive against the parent commit on both builds; the
         CHANGELOG's Migration note records which release moved it).
         Prescriptions with no STOP surface emit no aperture element, so
-        this keyword changes nothing for them.
+        this keyword changes nothing for them.  Nor does it bite on a
+        FACTORY-shape prescription (``surfaces`` + ``thicknesses``, e.g.
+        from :func:`~lumenairy.make_singlet`): that shape becomes a single
+        ``'real_lens'`` element whose ``aperture_diameter`` is the lens's
+        OWN mask and was never an ``apply_aperture`` rim, so the keyword is
+        VALIDATED (a misspelling still raises) and then has no effect.
+        Measured 2026-09-20 (VERIFY-C1-ROUND2, recorded item): on a
+        ``make_singlet`` prescription the default, ``aperture_edge='hard'``
+        and ``aperture_edge_samples=16`` return the same bytes, while
+        ``aperture_edge='soft'`` raises.  The prescription DOES carry an
+        ``aperture_diameter`` key, which is why this is worth saying.
     aperture_edge_samples : int, optional
         Sub-samples per axis for ``aperture_edge='gray'``; ``None`` takes
         ``apply_aperture``'s own default of 4, which is the measured knee.

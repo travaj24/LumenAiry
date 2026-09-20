@@ -936,6 +936,55 @@ def test_verify_c1r2_a_prescription_with_no_stop_is_byte_identical():
         assert field(**kw) == base, kw
 
 
+def test_verify_c1r2_the_rim_keyword_is_validated_and_inert_on_a_factory_shape():
+    """VERIFY-C1-ROUND2's recorded (not filed) item, now a docstring clause in
+    ``evaluate`` and asserted here.
+
+    A FACTORY-shape prescription (``surfaces`` + ``thicknesses``, e.g. from
+    ``la.make_singlet``) carries an ``aperture_diameter`` key, so a reader can
+    reasonably expect ``aperture_edge=`` to bite on it.  It does not: that
+    shape decomposes to a single ``'real_lens'`` element whose
+    ``aperture_diameter`` is the lens's OWN mask and was never an
+    ``apply_aperture`` rim.  The keyword is VALIDATED and then inert.
+
+    Both halves are asserted, because either alone would be misleading: the
+    inertness (three spellings, identical bytes) AND the refusal surviving
+    (a misspelled rim still raises ``apply_aperture``'s own message), plus the
+    premise that no ``'aperture'`` element is emitted at all -- without which
+    the byte identity would be proving something else.
+    """
+    import warnings
+
+    import lumenairy as la
+    from lumenairy.propagators.system import _prescription_to_elements
+
+    rx = la.make_singlet(R1=0.032, R2=-0.075, d=4e-4, glass='N-BK7',
+                         aperture=1.8e-3)
+    assert 'aperture_diameter' in rx
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        els = _prescription_to_elements(rx, aperture_edge='hard',
+                                        aperture_edge_samples=7)
+    assert [e.get('type') for e in els] == ['real_lens'], els
+    assert not [e for e in els if e.get('type') == 'aperture'], els
+
+    def field(**kw):
+        src = la.Source.gaussian(N=128, dx=40e-6, wavelength=633e-9,
+                                 w0=0.9e-3)
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            return np.asarray(la.evaluate(rx, src, **kw).field).tobytes()
+
+    base = field()
+    assert field(aperture_edge='hard') == base
+    assert field(aperture_edge='gray', aperture_edge_samples=16) == base
+    assert field(aperture_edge_samples=16) == base
+    with pytest.raises(ValueError, match='apply_aperture'):
+        field(aperture_edge='soft')
+    with pytest.raises(ValueError, match='apply_aperture'):
+        field(aperture_edge_samples=0)
+
+
 def test_verify_c1r2_evaluates_rim_is_refused_before_the_decomposition_runs():
     """D4 says both keywords are "validated once, before the decomposition
     runs".  Measured rather than read: on a prescription whose decomposition
