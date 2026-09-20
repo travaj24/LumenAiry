@@ -1,0 +1,7 @@
+{
+ "lumenairy_file": "C:\\tmp\\vh3arch\\pre112\\lumenairy\\__init__.py",
+ "cupy": "14.0.1",
+ "device_array": "cupy.ndarray",
+ "public_collins": "TypeError: Implicit conversion to a NumPy array is not allowed. Please use `.get()` to construct a NumPy array explicitly.",
+ "cupy_fft2": "ImportError: DLL load failed while importing cufft: The specified module could not be found."
+}

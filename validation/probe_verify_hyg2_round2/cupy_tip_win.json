@@ -1,0 +1,7 @@
+{
+ "lumenairy_file": "C:\\tmp\\lum_vhyg3\\lumenairy\\__init__.py",
+ "cupy": "14.0.1",
+ "device_array": "cupy.ndarray",
+ "public_collins": "ImportError: DLL load failed while importing cufft: The specified module could not be found.",
+ "cupy_fft2": "ImportError: DLL load failed while importing cufft: The specified module could not be found."
+}
