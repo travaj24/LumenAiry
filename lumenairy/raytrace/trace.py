@@ -156,26 +156,34 @@ def trace(
         HISTORY BUNDLES ARE NOT UNIT.  Under ``output_filter='all'``
         only the FINAL bundle is rescaled, so the intermediate
         ``ray_history`` bundles carry ``| |d| - 1 |`` BOUNDED BY
-        ``n_surfaces * eps`` -- measured 6.7e-16 on a 3-surface stack
-        rising to **1.8e-15 on a 13-surface stack**.
+        ``2 * n_surfaces * eps`` -- measured 6.7e-16 on a 3-surface
+        stack rising to **1.8e-15 on a 13-surface stack**.
 
-        ``n_surfaces * eps`` is the BOUND, and the coefficient in front
-        of it is NOT constant.  Measured on a 3 / 5 / 7 / 9 / 11 /
-        13-surface ladder (spherical and conic stacks, 4000 rays,
-        identical to the last digit on both development builds), the
-        ratio to ``n_surfaces * eps`` runs **1.00 at three surfaces down
-        to 0.54-0.62 at thirteen** -- 1.00, 0.80, 0.79, 0.67-0.83,
-        0.55-0.68, 0.54-0.62 across the ladder families.  So size a
-        tolerance from ``n_surfaces * eps`` itself: "about 0.6 of it"
-        is a reading at the LONG end and is 40 % under on a triplet,
-        which is the commonest case.
+        ``n_surfaces * eps`` is NOT a bound.  It holds on a ladder of
+        one element repeated and is exceeded on ordinary stacks of
+        different radii and glasses: measured over 90 combinations of
+        surface count (3, 5, 7, 9, 13), glass (N-BK7, N-SF5, N-SF11),
+        radius pair and field angle (0, 2, 5 deg), **21 exceed it**,
+        worst **1.6667** on a THREE-surface N-SF11 stack at 5 deg
+        (1.1102e-15 against 6.6613e-16) -- so a consumer who sizes a
+        tolerance from ``n_surfaces * eps`` on a triplet, the commonest
+        case, is 40 % under.  ``2 * n_surfaces * eps`` holds on all 90
+        with the worst reading at **0.8333** of it, i.e. 1.2x to spare.
+        Every one of the 90 is identical to the last digit on both
+        development builds.
+
+        The coefficient in front of ``n_surfaces * eps`` is NOT
+        constant either: across the same 90 it runs **1.00 to 1.67 at
+        three surfaces down to 0.50-0.96 at thirteen**.  So size a
+        tolerance from ``2 n_surfaces eps``.
 
         ``1e-15`` -- the bound this docstring carried before the default
-        moved -- is first exceeded at the **SEVENTH** surface
-        (1.22e-15), not the eighth: five surfaces read 8.88e-16.
-        The final bundle is unit to 2.2e-16 on every rung.  A consumer
-        that reads HISTORY direction cosines as exactly unit should pass
-        ``renormalize='surface'``.
+        moved -- is first exceeded between the **THIRD and the SEVENTH**
+        surface depending on the stack (measured 1.1102e-15 at three on
+        the N-SF11 ladder and 1.22e-15 at seven on the repeated N-BK7
+        one), not the eighth.  The final bundle is unit to 2.2e-16 on
+        every one of the 90.  A consumer that reads HISTORY direction
+        cosines as exactly unit should pass ``renormalize='surface'``.
     sphere_normal : ``'analytic'`` (the default) | ``'generic'``
         Which route computes the surface normal at a PURE SPHERE
         (:func:`surface._is_pure_spherical`: finite radius, no conic,

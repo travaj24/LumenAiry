@@ -672,14 +672,32 @@ def test_c2_history_bundles_are_not_unit_under_the_new_default():
         drift    6.66e-16 8.88e-16 1.22e-15 1.67e-15 1.67e-15 1.78e-15
         / n*eps    1.000  0.800  0.786  0.833  0.682  0.615
 
-    so `n_surfaces * eps` is the BOUND and 0.6 is 40 % under on a
-    triplet -- the commonest case.  `1e-15` is first exceeded at the
-    SEVENTH surface (1.22e-15 against 8.88e-16 at five), not the
-    eighth.
+    ROUND 3 (VERIFY-WP-C2 round 2, defect VR2-D2): the envelope is
+    `2 * n_surfaces * eps`, not `n_surfaces * eps`.  `n eps` holds on
+    THIS ladder -- one element repeated -- and is exceeded on ordinary
+    stacks of different radii and glasses.  Re-measured this round over
+    90 combinations of surface count (3, 5, 7, 9, 13), glass (N-BK7,
+    N-SF5, N-SF11), radius pair and field angle (0, 2, 5 deg),
+    identical to the last digit on BOTH builds
+    (`validation/probe_c2_round3/r3_history_drift_{win,wsl}.json`):
+
+        exceeding n eps                 21 of 90
+        worst ratio to n eps            1.6667 (3 surfaces, N-SF11, 5 deg:
+                                        1.1102e-15 against 6.6613e-16)
+        exceeding 2 n eps                0 of 90
+        worst ratio to 2 n eps          0.8333 -- 1.2x of headroom
+        ratio range, 3 -> 13 surfaces   1.00-1.67 -> 0.50-0.96
+        1e-15 first exceeded at         3, 5 or 7 surfaces by stack
+        final bundle drift              2.2e-16 on every one of the 90
+
+    so 0.6 is 40 % under on a triplet -- the commonest case -- and so is
+    1.0.  On THIS ladder `1e-15` is first exceeded at the SEVENTH
+    surface (1.22e-15 against 8.88e-16 at five), which is why the band
+    below is 5..9 and survives the restatement.
 
     Four claims are asserted here, because making `'exit'` the default
     makes this load-bearing for every history consumer: the drift stays
-    inside the derived `n_surfaces * eps` envelope, it GROWS with
+    inside the derived `2 * n_surfaces * eps` envelope, it GROWS with
     surface count (so the envelope is the right shape and not an
     accident), the coefficient FALLS with surface count (so the bound
     cannot be restated as a constant times `n * eps`), and the final
@@ -711,8 +729,15 @@ def test_c2_history_bundles_are_not_unit_under_the_new_default():
                         + np.asarray(r.N)[m] ** 2)
             worst = max(worst, float(np.max(np.abs(d - 1.0))))
         drifts.append((len(S), worst))
-        # the derived envelope, not a reading
-        assert worst <= len(S) * eps, (len(S), worst, len(S) * eps)
+        # the derived envelope, not a reading.  VERIFY-WP-C2 round 2
+        # (2026-09-20): the envelope is 2 n eps.  n eps holds on THIS
+        # ladder and is exceeded by up to 1.6667x on an ordinary stack
+        # of different radii and glasses -- 21 of 90 (surface count,
+        # glass, radius pair, field angle) combinations exceed it, worst
+        # 1.1102e-15 against 6.6613e-16 on a 3-surface N-SF11 stack at
+        # 5 deg; 2 n eps holds on all 90, worst reading 0.8333 of it,
+        # both builds identical to the last digit.
+        assert worst <= 2 * len(S) * eps, (len(S), worst, 2 * len(S) * eps)
         # and the FINAL bundle is unit whatever the history does
         f = res.image_rays
         m = np.asarray(f.alive)
@@ -733,8 +758,8 @@ def test_c2_history_bundles_are_not_unit_under_the_new_default():
     # surfaces against 0.615 at thirteen on BOTH builds -- a 1.63x fall --
     # and the bar is a RATIO, so nothing here pins a reading.
     ratios = [(n, d / (n * eps)) for n, d in drifts]
-    assert all(r <= 1.0 + 4 * eps for _n, r in ratios), (
-        f'the drift left the n_surfaces * eps envelope: {ratios}')
+    assert all(r <= 2.0 + 4 * eps for _n, r in ratios), (
+        f'the drift left the 2 * n_surfaces * eps envelope: {ratios}')
     first, last = ratios[0][1], ratios[-1][1]
     assert first > 1.25 * last, (
         f'the ratio to n_surfaces * eps no longer FALLS with surface '

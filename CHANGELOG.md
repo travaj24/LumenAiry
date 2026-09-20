@@ -266,21 +266,34 @@ docstring promised that under `output_filter='all'` the intermediate
 | history drift, worst | 6.66e-16 | 8.88e-16 | **1.22e-15** | 1.67e-15 | 1.67e-15 | 1.78e-15 |
 | as a fraction of `n_surfaces * eps` | **1.000** | 0.800 | 0.786 | 0.833 | 0.682 | **0.615** |
 
-So `n_surfaces * eps` is the BOUND -- it holds on every rung -- and the
-coefficient in front of it is NOT constant: it runs from **1.000 at three
-surfaces to 0.615 at thirteen**.  A consumer sizing a tolerance from "about
-0.6 of `n * eps`" would be 40 % under on a triplet, the commonest case, so the
-docstring states the bound and the measured range rather than a coefficient.
-`1e-15` was a reading from a short stack and is first exceeded at the
-**SEVENTH** surface (1.22e-15 against 8.88e-16 at five), not the eighth.  The
-FINAL bundle is unit to 2.2e-16 on every rung, on every `output_filter`.
+`n_surfaces * eps` holds on that ladder, which is one element repeated, and it
+is NOT a bound.  Re-measured over 90 combinations of surface count (3, 5, 7,
+9, 13), glass (N-BK7, N-SF5, N-SF11), radius pair and field angle (0, 2,
+5 deg), identical to the last digit on both builds:
+
+| envelope | combinations exceeding it, of 90 | worst reading |
+|---|---|---|
+| `n_surfaces * eps` | **21** | **1.6667** -- 1.1102e-15 against 6.6613e-16, a 3-surface N-SF11 stack at 5 deg |
+| `2 * n_surfaces * eps` | **0** | 0.8333, i.e. 1.2x of headroom |
+
+So the documented envelope is **`2 * n_surfaces * eps`**, and the coefficient
+in front of `n_surfaces * eps` is NOT constant: across the same 90 it runs
+from **1.00-1.67 at three surfaces to 0.50-0.96 at thirteen**.  A consumer
+sizing a tolerance from `n * eps` -- or from "about 0.6 of it" -- is 40 %
+under on a triplet, the commonest case, so the docstring states `2 n eps` and
+the measured range rather than a coefficient.  `1e-15` was a reading from a
+short stack and is first exceeded between the **THIRD and the SEVENTH**
+surface depending on the stack (1.1102e-15 at three on the N-SF11 ladder,
+1.22e-15 at seven on the repeated N-BK7 one), not the eighth.  The FINAL
+bundle is unit to 2.2e-16 on every one of the 90, on every `output_filter`.
 
 **Migration.**  Pass `renormalize='surface'` to `trace` / `trace_world` for the
 pre-5.49.0 arithmetic; it is byte-identical.  One case genuinely needs it: a
 consumer that reads HISTORY direction cosines (`result.rays_at(i)` for
 `i < len(surfaces) - 1`) and treats them as exactly unit.  Under the new
-default those carry up to `n_surfaces * eps` of drift -- 1.8e-15 on a
-13-surface stack -- while `result.image_rays` is unit to 2.2e-16 as before.
+default those carry up to `2 * n_surfaces * eps` of drift -- 1.8e-15 on a
+13-surface stack -- while the image-plane bundle is unit to 2.2e-16 as
+before.
 The same sixteen entry points that take `sphere_normal=` take
 `renormalize=` as well, with the same `None` default and the same verbatim
 forward, so the old arithmetic is one keyword away through any of them.  The

@@ -1948,22 +1948,30 @@ which is the argument section 1.3 of the maintainer ledger records.
 **The one case that genuinely needs the old setting.**  Under
 `output_filter='all'` only the FINAL bundle is rescaled, so the intermediate
 `ray_history` bundles -- `result.rays_at(i)` for `i < len(surfaces) - 1` --
-carry `| |d| - 1 |` BOUNDED BY `n_surfaces * eps`, measured on a ladder that
-is identical to the last digit on both development mounts:
+carry `| |d| - 1 |` BOUNDED BY `2 * n_surfaces * eps`, measured on a ladder
+that is identical to the last digit on both development mounts:
 
 | surfaces | 3 | 5 | 7 | 9 | 11 | 13 |
 |---|---|---|---|---|---|---|
 | history drift, worst | 6.66e-16 | 8.88e-16 | **1.22e-15** | 1.67e-15 | 1.67e-15 | 1.78e-15 |
 | as a fraction of `n_surfaces * eps` | **1.000** | 0.800 | 0.786 | 0.833 | 0.682 | **0.615** |
 
-Size a tolerance from `n_surfaces * eps` itself, not from a coefficient: the
-ratio is 1.000 at three surfaces and 0.615 at thirteen, so "about 0.6 of it"
-is 40 % under on a triplet.  (The `<= 1e-15` the 5.48.x docstring promised was
-a reading from a short stack; it is first exceeded at the **seventh** surface,
-1.22e-15 against 8.88e-16 at five.)  The image-plane bundle that
-`trace` returns is unit to 2.2e-16 as
-before, on every `output_filter`.  If your code reads history direction
-cosines and treats them as exactly unit, pass `renormalize='surface'`.
+**Size a tolerance from `2 * n_surfaces * eps`, not from `n_surfaces * eps`.**
+That ladder is one element repeated, and `n_surfaces * eps` does not survive
+ordinary stacks.  Re-measured over 90 combinations of surface count (3, 5, 7,
+9, 13), glass (N-BK7, N-SF5, N-SF11), radius pair and field angle (0, 2,
+5 deg), identical to the last digit on both mounts: **21 of 90 exceed
+`n_surfaces * eps`**, worst **1.6667** (1.1102e-15 against 6.6613e-16 on a
+three-surface N-SF11 stack at 5 deg), while **none of the 90 exceeds
+`2 * n_surfaces * eps`**, the worst reading being 0.8333 of it.  The
+coefficient is not constant either -- 1.00-1.67 at three surfaces down to
+0.50-0.96 at thirteen -- so "about 0.6 of `n eps`" is 40 % under on a
+triplet, and so is 1.0.  (The `<= 1e-15` the 5.48.x docstring promised was a
+reading from a short stack; it is first exceeded between the **third** and
+the **seventh** surface depending on the stack.)  The image-plane bundle that
+`trace` returns is unit to 2.2e-16 as before, on every `output_filter`.  If
+your code reads history direction cosines and treats them as exactly unit,
+pass `renormalize='surface'`.
 
 **What else moves:** `max |dx| = 6.6e-17 m`, `max |dopd| = 1.7e-16 m`,
 `max |dL| = 7.2e-16` over a 3-to-13-surface ladder on spherical and conic
