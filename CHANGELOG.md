@@ -215,8 +215,10 @@ sampled spectrum), is compared with `tau`, and `'auto'` resolves to `'fresnel'`
 above it.  An EXPLICIT `gap_kernel='exact'` is never overridden.
 
 Why: the existing `k4` gate bounds REPRESENTABILITY -- whether the exact
-kernel's impulse response wraps the reduced frame `z_eff = B/A` -- and near a
-geometric focus that stops tracking accuracy.  Measured on VERIFY-B4 F3's
+kernel's impulse response wraps the reduced frame `z_eff = B/A` -- and
+wherever `k |z_eff| theta_env^4` is large, which is near a geometric focus at
+a fixed envelope angle and on a wide envelope at a fixed distance, that stops
+tracking accuracy.  Measured on VERIFY-B4 F3's
 fixture (`w = 0.3 mm`, N = 1024, `dx` 4 um, `lambda` 1.064 um), one micron
 short of the focus `k4` reads 9.1e-03 against a bar of 1 -- two decades of
 margin, nothing warns -- while the exact kernel departs from the analytic
@@ -227,7 +229,8 @@ Because the departure is linear in `|z_eff|` and QUARTIC in `theta_env`, the
 rule is a band in `k |z_eff| theta_env^4` -- near-focus at a fixed envelope
 angle, wide-envelope at a fixed distance.  It fires exactly where
 `|z_eff| > 8 tau / (sqrt(3/2) k theta_env^4)`.  Measured on both builds
-(`validation/probe_c5_three_defaults/item1_*.json`):
+(`validation/probe_c5_three_defaults/item1_*.json` for the first two rows,
+`validation/probe_c5_round2/r2_d6_band_*.json` for the third):
 
 | fixture | `theta_env` | band in z_eff | band as distance to `A = 0` | what fires |
 |---|---|---|---|---|
