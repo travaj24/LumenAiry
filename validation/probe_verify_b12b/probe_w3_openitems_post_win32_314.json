@@ -1,0 +1,81 @@
+{
+ "env": {
+  "platform": "win32",
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "lumenairy_version": "5.47.0",
+  "lumenairy_file": "C:\\tmp\\lum_vgbd\\lumenairy\\__init__.py",
+  "mem_budget": "4096",
+  "threads": [
+   "1",
+   "1",
+   "1"
+  ]
+ },
+ "arm": "post",
+ "mutation": "",
+ "mirror": {
+  "local": [
+   {
+    "z_image": 0.0075,
+    "pos_err_vs_truth": 0.0007848042032446731,
+    "spot_rms": 0.0003879315258019643,
+    "truth_spot_rms": 5.001376466407184e-08,
+    "dir_z_sign": 1.0,
+    "true_N_sign": -1.0,
+    "leg_phase_resid_waves": 0.0003135173880929149,
+    "leg_piston_waves": 0.16165351616694237,
+    "leg_true_waves": 9618.869338037068,
+    "leg_meas_waves_mod1": -0.0999040763010649
+   },
+   {
+    "z_image": -0.0075,
+    "pos_err_vs_truth": 2.829850749593843e-19,
+    "spot_rms": 5.0013764664026845e-08,
+    "truth_spot_rms": 5.001376466407184e-08,
+    "dir_z_sign": 1.0,
+    "true_N_sign": -1.0,
+    "leg_phase_resid_waves": 0.4834198526932293,
+    "leg_piston_waves": -0.10086065296799533,
+    "leg_true_waves": 9618.869338037068,
+    "leg_meas_waves_mod1": 0.011302041276884162
+   }
+  ],
+  "world": {
+   "error": "NotImplementedError: world_output_plane: curved (powered) fold mirrors are not yet supported (a flat fold is invariant to Q, a curved one is not).  Use per-surface world differential transfer, or a flat fold."
+  },
+  "f": 0.0075,
+  "truth_spot_rms": 5.001376466407184e-08
+ },
+ "immersed": {
+  "n_exit": 1.72,
+  "z_image": 0.002,
+  "reachable": true,
+  "resid_with_n_exit_waves": 0.06805064614434093,
+  "resid_vacuum_waves": 7.304634556746306e-05,
+  "missing_waves": 1846.2589642118448,
+  "has_fga_immersed_guard": false,
+  "apply_real_lens_gbd_immersed": "served"
+ },
+ "world_plane": [
+  {
+   "key": "conic",
+   "mutation": "",
+   "z": 0.004987066192383205,
+   "fidelity": 0.9995624139274613,
+   "rel_l2": 0.021770051452216194,
+   "peak": 15.885240373563667,
+   "sha": "4e06e8fa09f506f79af0ba2b"
+  },
+  {
+   "key": "asph",
+   "mutation": "",
+   "z": 0.005265258796422286,
+   "fidelity": 0.999570519399076,
+   "rel_l2": 0.021563059471672672,
+   "peak": 14.937793435782126,
+   "sha": "d8fffe71d866b08693fb7e7d"
+  }
+ ]
+}
