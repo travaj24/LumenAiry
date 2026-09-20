@@ -436,7 +436,14 @@ plumbing: it called `np.asarray` / `np.ascontiguousarray(..., dtype=np.complex12
 and then `_fft2`, `_collins_angle_support`, `_collins_exact_kernel_correction`,
 `_collins_space_support`, `_collins_sampling_stats` and `_bluestein_centred_2d`,
 none of which took an `xp`.  It now runs on NumPy, CuPy and JAX, selected by the
-array the caller passes, exactly as every other leg in the module is.
+array the caller passes, exactly as every other leg in the module is -- and so
+does the PUBLIC leg above it.  (The first spelling of this entry claimed the
+second half without it being true: `_collins_carrier_leg` still opened with
+`env_a = np.asarray(env)`, so `propagate_carrier_referenced(transport='collins')`
+demoted an eager JAX array to host NumPy, raised a bare `TypeError` on CuPy and a
+raw `TracerArrayConversionError` under a trace.  Measured and corrected in the
+Round 2 entry below; the demotion was BITWISE equal to the NumPy arm, which is
+why no test could see it.)
 
 There is no `_jax` twin of anything.  The chain is threaded with the module's own
 `(xp, is_jax, bld)` triple (`_backend_of`), its own device-move helper (`_to_dev`)

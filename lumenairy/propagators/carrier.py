@@ -1832,8 +1832,16 @@ def _collins_input_box(env, dx, dy, wavelength, frac, spectrum=None):
     marginals -- so no isotropic (and needlessly conservative) radial bound is
     taken."""
     if spectrum is None:
-        from .fft_infra import _fft2
-        spectrum = _fft2(np.ascontiguousarray(env, dtype=np.complex128))
+        # The field's OWN transform, not a host one: an inline
+        # ``_fft2(np.ascontiguousarray(env, ...))`` here demoted an eager JAX
+        # array to NumPy and raised a bare TypeError on CuPy, at the one site
+        # the public ``transport='collins'`` leg reaches (V-D3).  The
+        # MEASUREMENT that follows is still host-side, through
+        # ``to_numpy`` -- that is deliberate and is what keeps the NumPy
+        # summation order, and therefore the bit-identity contract, intact.
+        xp, is_jax, _bld = _backend_of(env)
+        fft2, _ifft2 = _fft2_pair(xp, is_jax)
+        spectrum = fft2(_as_c_order(env, np.complex128, xp))
     r_x, r_y = _collins_space_support(env, dx, dy, frac)
     th_x, th_y = _collins_angle_support(spectrum, dx, dy, wavelength, frac)
     return r_x, r_y, th_x, th_y
@@ -2400,8 +2408,41 @@ def _collins_carrier_leg(env, R, z, wavelength, dx, dy, *,
     floor sets the lattice, and ``K3 = K1 << 1`` there, so the
     transfer-function route is never taken and this transport never enters the
     near-focus split.  ``collins_form`` is published on the stage so a reader
-    can see which quadrature ran, beside ``collins_k1`` / ``k2`` / ``k3``."""
-    env_a = np.asarray(env)
+    can see which quadrature ran, beside ``collins_k1`` / ``k2`` / ``k3``.
+
+    BACKENDS.  The leg runs in the FIELD'S OWN namespace, resolved by the same
+    :func:`_backend_of` triple :func:`_collins_transport` uses, so the port is
+    reachable from ``propagate_carrier_referenced(transport='collins')`` and
+    not only from the private transport.  Until 5.48 this line read
+    ``env_a = np.asarray(env)``: an eager JAX array was silently demoted to
+    host NumPy (bitwise equal to the NumPy arm, so no test could see it), a
+    CuPy array raised a bare ``TypeError: Implicit conversion to a NumPy array
+    is not allowed`` naming neither the leg nor the transport, and a Tracer
+    raised a raw ``TracerArrayConversionError`` even when the caller had
+    passed BOTH of the transport's documented ways out.  MEASURED 2026-09-19
+    (VERIFY-WAVE5-HYGIENE2 V-D3).
+
+    UNDER A TRACE this leg REFUSES, and unlike :func:`_collins_transport` it
+    has no spelling that makes it run: the leg RESOLVES its own output lattice
+    and its own quadrature from the envelope's measured phase-space box, so
+    there are three measured decisions here, not two, and the third has no
+    caller-supplied alternative.  The message says which call to use instead.
+    """
+    xp, _is_jax, _bld = _backend_of(env)
+    if _is_traced(env):
+        raise ValueError(
+            f"{fn}: the envelope is a JAX Tracer (inside jax.jit / jax.grad).  "
+            f"This leg resolves its OUTPUT LATTICE and its QUADRATURE by "
+            f"measuring the envelope's own phase-space box -- the support "
+            f"radii r_x/r_y and the angular half-widths th_x/th_y -- and a "
+            f"Tracer has no entries to measure, so unlike _collins_transport "
+            f"there is no spelling of this call that takes those decisions for "
+            f"it.  Call _collins_transport directly with an explicit "
+            f"(dx_out, dy_out, N_out_x, N_out_y, R_ref), gap_kernel='fresnel' "
+            f"and on_collins_sampling='ignore', having checked the Kelly "
+            f"conditions on a concrete array first -- or move this call "
+            f"outside the trace.")
+    env_a = xp.asarray(env)
     if z == 0:
         return CarrierReferencedField(
             env_a.copy(), R, (dx if dy == dx else (dx, dy)))

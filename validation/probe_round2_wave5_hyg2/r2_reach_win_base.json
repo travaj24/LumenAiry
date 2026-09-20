@@ -1,0 +1,28 @@
+{
+ "cupy": {
+  "msg": "Implicit conversion to a NumPy array is not allowed. Please use `.get()` to construct a NumPy array explicitly.",
+  "outcome": "raised",
+  "type": "TypeError"
+ },
+ "cupy_version": "14.0.1",
+ "eager_jax": {
+  "module": "numpy",
+  "outcome": "ok",
+  "type": "ndarray"
+ },
+ "jax_version": "0.11.0",
+ "jax_vs_numpy_bitwise_equal": true,
+ "jax_vs_numpy_rel": 0.0,
+ "numpy": {
+  "module": "numpy",
+  "outcome": "ok",
+  "type": "ndarray"
+ },
+ "traced": {
+  "msg": "The numpy.ndarray conversion method __array__() was called on traced array with shape complex128[64,64]\nSee https://docs.jax.dev/en/latest/errors.html#jax.errors.TracerArrayConversionError",
+  "outcome": "raised",
+  "type": "TracerArrayConversionError"
+ },
+ "tree": "C:/tmp/r2_arch/base",
+ "version": "5.47.0"
+}

@@ -305,7 +305,18 @@ def test_the_private_transport_agrees_across_backends(gap_kernel):
 
 @pytest.mark.parametrize("transport", ('collins', 'sziklas'))
 def test_the_public_entry_agrees_across_backends(transport):
-    """The public entry point, so the claim is about what a caller gets."""
+    """The public entry point, so the claim is about what a caller gets.
+
+    THE FIRST THING THIS ASSERTS IS THAT IT IS COMPARING TWO BACKENDS.  Until
+    2026-09-19 the ``collins`` arm of this id compared NumPy to NumPy and
+    could not have failed if ``_collins_transport``'s JAX arm had been
+    deleted: ``_collins_carrier_leg`` opened with ``env_a = np.asarray(env)``,
+    so the public leg demoted an eager JAX array to host NumPy and returned a
+    ``numpy.ndarray`` that was BITWISE equal to the NumPy arm
+    (VERIFY-WAVE5-HYGIENE2 V-D3).  A parity test whose two arms are the same
+    array module is not a parity test, and nothing in the old assertion said
+    so.  The type check below is therefore the PREMISE, not a nicety.
+    """
     env = _gauss()
     bar = _fft_spread_bar(env)
     kw = dict(wavelength=WL, dx=DX, transport=transport,
@@ -315,9 +326,64 @@ def test_the_public_entry_agrees_across_backends(transport):
     a = CA.propagate_carrier_referenced(env, R_IN, Z, **kw)
     b = CA.propagate_carrier_referenced(
         jnp.asarray(env, dtype=jnp.complex128), R_IN, Z, **kw)
-    assert _rel(b.env, a.env) < bar
+
+    # PREMISE: the two arms really are two backends.
+    assert isinstance(a.env, np.ndarray), (
+        f"the NumPy arm returned {type(a.env).__name__}, not an ndarray")
+    assert not isinstance(b.env, np.ndarray), (
+        f"transport={transport!r}: the JAX arm came back as "
+        f"{type(b.env).__name__}, i.e. the public entry DEMOTED the caller's "
+        f"array to host NumPy.  The comparison below would then be NumPy "
+        f"against NumPy and would pass with the JAX arm of the transport "
+        f"deleted -- which is exactly what it used to do.")
+    assert type(b.env).__module__.split('.')[0] in ('jax', 'jaxlib'), (
+        f"the JAX arm came back as {type(b.env).__module__}."
+        f"{type(b.env).__name__}")
+
+    got = _rel(b.env, a.env)
+    assert got < bar, (
+        f"transport={transport!r}: JAX vs NumPy {got:.3e} exceeds the measured "
+        f"FFT-spread bar {bar:.3e}")
+    # Two-sided: the bar has to sit below something real, or the agreement is
+    # a statement about noise.  The signal here is the leg's own answer scale.
+    assert bar < 1e-3, (
+        f"the measured FFT-spread bar {bar:.3e} is not far below unity; the "
+        f"relative comparison above has stopped discriminating")
     assert float(b.R) == float(a.R)
     assert float(b.dx) == float(a.dx)
+
+
+def test_the_public_collins_leg_refuses_a_trace_by_name():
+    """Under a trace the PUBLIC leg refuses with a designed ``ValueError``.
+
+    It cannot do what ``_collins_transport`` does and offer a spelling that
+    runs: the leg resolves its own OUTPUT LATTICE and its own QUADRATURE from
+    the envelope's measured phase-space box, so there is a third measured
+    decision with no caller-supplied alternative.  Before 2026-09-19 this
+    raised a raw ``TracerArrayConversionError`` from ``np.asarray`` -- naming
+    neither the leg nor a remedy -- EVEN when the caller passed both of the
+    transport's documented ways out (V-D3).
+    """
+    amp = jnp.asarray(np.real(_gauss()))
+
+    def merit(a):
+        out = CA.propagate_carrier_referenced(
+            a.astype(jnp.complex128), R_IN, Z, wavelength=WL, dx=DX,
+            transport='collins', gap_kernel='fresnel',
+            on_collins_sampling='ignore')
+        return jnp.sum(jnp.abs(out.env) ** 2)
+
+    with pytest.raises(ValueError) as exc:
+        jax.grad(merit)(amp)
+    msg = str(exc.value)
+    assert 'Tracer' in msg
+    assert '_collins_transport' in msg, (
+        "the refusal must name the call that CAN be traced; a refusal with no "
+        "way forward is the shape this repository refuses to ship")
+    for needle in ('dx_out', 'gap_kernel', 'on_collins_sampling'):
+        assert needle in msg, f"the refusal does not name {needle}"
+    # ... and it is the DESIGNED error, not JAX's own concretisation failure.
+    assert 'TracerArrayConversionError' not in type(exc.value).__name__
 
 
 def test_the_astigmatic_arm_crosses_backends_too():
