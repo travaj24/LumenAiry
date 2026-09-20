@@ -156,7 +156,7 @@ condition stays.  Separately, `'traced'`'s sampling guard should be looked at
 by its owner, since the shipped `ray_subsample` refuses every caustic fixture
 built so far.
 
-### 1.5 `gap_kernel='auto'` near a focus (VERIFY-B4 F3; near-focus table PENDING, Wave 5 hygiene item 20)
+### 1.5 `gap_kernel='auto'` near a focus (VERIFY-B4 F3; resolved by the near-focus table, see 4.3)
 
 What it is.  A carrier leg's exact-kernel refinement is applied over the
 reduced frame `z_eff = B/A`, which diverges at a focus.  Its wrap guard K4
@@ -180,10 +180,10 @@ condition of the same shape (`k |z_eff| theta^4 / 8` against
 drop to `'fresnel'` where the refinement stops helping; VERIFY-B4 estimates it
 at eight lines and did not write it because it changes what `'auto'` means.
 
-Recommendation: deferred to the PENDING near-focus table (section 4.3), which
-sweeps `gap_kernel` x transport x distance-to-focus on a validated fixture and
-will state a derived threshold.  The direction is clear (add the condition);
-the number is not yet.
+Recommendation: see section 4.3, which reconciles this fixture with the
+hygiene-2 one under a single law and recommends adding the condition, keyed on
+the envelope's analytic angle with `tau = 1e-4`, shipped behind a switch
+defaulting off.
 
 ### 1.6 The odd-N grid-centring convention (WP-B11 item 13; render alignment PENDING, WP-B7c round 3)
 
@@ -423,12 +423,27 @@ rung (its wrap guard reads 2e-5 against a bar of 1) and the departure peaks at
 4.7e-6, so the automatic fallback VERIFY-B4 F3 proposed would fire five decades
 too eagerly if keyed on the beam angle.
 
-What is not yet reconciled: VERIFY-B4 F3 measured 2.35e-3 for `'auto'` one
-micron from focus on ITS fixture (w = 0.3 mm, N = 1024, dx 4 um, lambda
-1.064 um).  The two fixtures differ, and the verification now in flight
-rebuilds both.  Hygiene part 2's recommendation is NO CHANGE to
-`gap_kernel='auto'`; item 1.5 stays open until both fixtures have been read
-side by side.
+RECONCILED by VERIFY-WAVE5-HYGIENE2 (both fixtures rebuilt, both builds).  The
+constant is exactly `sqrt(3/2)` -- the RMS moment of a quartic phase over a
+2-D circular Gaussian -- so the law is universal for Gaussian envelopes as a
+geometry factor, and it predicts VERIFY-B4 F3's 2.35e-3 to a ratio of 1.00002
+and the 498x between the two fixtures to four digits.  The two reports
+disagreed because the hygiene-2 ladder's carrier focus sits 31.7 um beyond its
+waist, so its `z_eff` never exceeds 12 m; walked to its own carrier focus the
+SAME fixture pays 1.5e-4 at 1 um and 1.5e-3 at 0.1 um short of `A = 0`, and
+F3's fixture, whose ladder does approach `A = 0`, pays 2.35e-3 at `z_eff` =
+1600 m against 1.7e-14 for `'fresnel'`.  The wrap guard cannot serve as the
+condition: it sits 4.7 decades under its bar where the departure is 4.7e-6 and
+still 2 decades under it where the departure is 2.3e-3.
+
+Recommendation (revised, medium-high confidence): YES, add the accuracy-keyed
+fallback, keyed on the distance to `A = 0` in the envelope's analytic angle
+(`sqrt(3/2) k |z_eff| theta_env^4 / 8` against a tolerance `tau`), with `tau`
+set from the accuracy wanted: `tau = 1e-4` leaves the hygiene-2 ladder inert
+and makes F3's 1 um and 10 um rungs fall back.  It ships behind a switch
+defaulting OFF (Wave 5 hygiene round 2), so the decision is one line.  Caveat
+both ways: the oracle is paraxial, so it measures the departure but not which
+kernel is the more physical.  Item 1.5 is resolved by this paragraph.
 
 ### 4.4 MEASURED, verification in flight: the Newton worker pool's join timeout and the interpreter-exit hang (WP-B13 follow-ups)
 
