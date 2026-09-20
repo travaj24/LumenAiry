@@ -1772,10 +1772,6 @@ def _system_element_signature(elem: Dict[str, Any]) -> Optional[Tuple]:
     if etype == 'aperture':
         xc = float(elem.get('xc', 0.0))
         yc = float(elem.get('yc', 0.0))
-        resolved = _resolve_aperture_params(elem)
-        if resolved is None:
-            return None
-        shape, halves = resolved
         # WP-C1: the rim rendering is part of the STATIC
         # signature -- two elements that differ only in ``edge`` are two
         # different kernels, not one kernel silently serving both.
@@ -1785,7 +1781,19 @@ def _system_element_signature(elem: Dict[str, Any]) -> Optional[Tuple]:
         # one of the two legal strings or an exact positive integer.  Before
         # that guard existed they were the whole difference between this
         # route and the other two.
+        # VERIFY-C1-ROUND2 R1: read (and therefore REFUSE) the rim BEFORE the
+        # params gate.  ``_resolve_aperture_params`` returns None for an
+        # element with no usable params, and returning there first let an
+        # illegal ``edge`` / ``edge_samples`` past both JAX routes while
+        # ``propagate_through_system`` -- which calls this reader
+        # unconditionally -- raised on the same dict.  Measured 2026-09-20 on
+        # both builds, 7 element shapes out of 7, of which 6 read
+        # identical=True at ``49ddf4bd``, so the split arrived with WP-C1.
         edge_kw = _aperture_edge_kwargs(elem)
+        resolved = _resolve_aperture_params(elem)
+        if resolved is None:
+            return None
+        shape, halves = resolved
         edge = (str(edge_kw['edge']) if 'edge' in edge_kw else None)
         n_sub = (int(edge_kw['edge_samples'])
                  if 'edge_samples' in edge_kw else None)
@@ -2178,10 +2186,16 @@ def propagate_through_system_jax(E_in: np.ndarray,
             # same way, rim included.
             xc = elem.get('xc', 0.0)
             yc = elem.get('yc', 0.0)
+            # VERIFY-C1-ROUND2 R1: read (and therefore REFUSE) the rim
+            # BEFORE the params gate, for the same reason as in
+            # ``_system_element_signature``: an element whose params do not
+            # resolve is a no-op here, and reading the rim INSIDE the
+            # ``resolved is not None`` block let an illegal rim keyword past
+            # this route while the NumPy chain raised on the same dict.
+            edge_kw = _aperture_edge_kwargs(elem)
             resolved = _resolve_aperture_params(elem)
             if resolved is not None:
                 shape, halves = resolved
-                edge_kw = _aperture_edge_kwargs(elem)
                 if shape == 'circular':
                     ap_params = {'diameter': 2.0 * float(halves[0])}
                 elif shape == 'rectangular':

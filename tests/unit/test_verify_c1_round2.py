@@ -125,7 +125,7 @@ def _four_routes(elem_kw, params=None, N=64, dx=1.25e-6):
 
 
 # ===========================================================================
-# R1 -- D1 is closed only for elements whose params resolve
+# R1 -- D1 was closed only for elements whose params resolve (CLOSED, round 3)
 # ===========================================================================
 
 _UNRESOLVABLE_BAD_RIMS = [
@@ -138,18 +138,6 @@ _UNRESOLVABLE_BAD_RIMS = [
 
 
 @pytest.mark.parametrize('label,kw,params', _UNRESOLVABLE_BAD_RIMS)
-@pytest.mark.xfail(strict=True, reason=(
-    'VERIFY-C1-ROUND2 R1: both JAX routes reach _aperture_edge_kwargs only '
-    'through _resolve_aperture_params and skip it when that returns None, so '
-    'an unresolvable aperture element carries an illegal rim past them while '
-    'the NumPy chain raises.  Measured 2026-09-20 on both builds, 7 element '
-    'shapes out of 7, of which 6 read identical=True on a git archive '
-    '49ddf4bd extraction (the seventh, a None diameter, already split there '
-    'for an unrelated reason), so '
-    'the split is WP-C1\'s and round 2 did not close it.  Requested edit: '
-    'move the _aperture_edge_kwargs(elem) call in _system_element_signature '
-    'and in the JAX slow path ABOVE the "resolved is None" guard.  Remove '
-    'this marker with the fix.'))
 def test_verify_c1r2_every_route_refuses_a_bad_rim_on_an_unresolvable_element(
         label, kw, params):
     """The contract the shipped census asserts -- "one element dict is
@@ -159,10 +147,19 @@ def test_verify_c1r2_every_route_refuses_a_bad_rim_on_an_unresolvable_element(
     Round 2 put the refusal in ``_aperture_edge_kwargs`` and asserted the
     census on a fixed ``params={'diameter': 5.3e-5}``, which resolves on every
     row, so the fixed fixture could not see this.  These five element shapes
-    resolve to ``None`` and split every time: the NumPy chain raises, both JAX
-    routes return a field.  Two-sided: the id also asserts the NumPy chain
-    really does raise, so a "fix" that makes every route silent would not
-    satisfy it.
+    resolve to ``None`` and, before round 3, split every time: the NumPy chain
+    raised, both JAX routes returned a field.  Two-sided: the id also asserts
+    the NumPy chain really does raise, so a "fix" that makes every route
+    silent would not satisfy it.
+
+    CLOSED by WP-C1 round 3, which hoists the ``_aperture_edge_kwargs(elem)``
+    call ABOVE the ``_resolve_aperture_params`` gate in
+    ``_system_element_signature`` and in the JAX slow path, so the element is
+    read -- and refused -- once, whatever its params say.  All five params
+    carried ``xfail(strict=True)`` until that landed; the markers are the
+    independent fail-before and they are gone with the fix.  Re-measured
+    2026-09-20 after the hoist, both builds: 0 of 7 element shapes split
+    (7 of 7 before it).  Raw JSON: ``validation/probe_wpc1_round3/``.
     """
     got = _four_routes(kw, params=params)
     assert got['numpy_chain'][0], (
@@ -175,24 +172,38 @@ def test_verify_c1r2_every_route_refuses_a_bad_rim_on_an_unresolvable_element(
     )
 
 
-def test_verify_c1r2_the_unresolvable_split_is_real_and_not_a_collection_quirk():
-    """The other side of R1, asserted POSITIVELY so the defect is pinned by a
-    passing id as well as by the strict xfails above: on an element with no
-    ``params`` key and an illegal ``edge``, the NumPy chain raises and both
-    JAX routes return a finite field.
+def test_verify_c1r2_the_unresolvable_rim_refusal_is_one_answer_and_neutral():
+    """The other side of R1, and the id that says what round 3 changed.
 
-    This is the id that goes red when R1 is fixed, and it is the one whose
-    failure message says what changed.
+    Before round 3 this id asserted the SPLIT -- "the NumPy chain raises and
+    both JAX routes return a finite field" -- so that the defect was pinned by
+    a passing id as well as by the five strict xfails above.  The hoist closes
+    the split, so the id is restated as the contract that replaced it, with
+    both sides measured:
+
+      * ILLEGAL rim, unresolvable params: all FOUR entry points -- the
+        function itself and the chain's three routes -- give the same
+        ``(raised, "Type: message")``, and that message names
+        ``apply_aperture``.  (Before the hoist: NumPy raised, both JAX routes
+        returned a field, on 7 element shapes out of 7, both builds.)
+      * LEGAL rim, unresolvable params: nothing raises on any route, i.e. the
+        hoist refuses an illegal rim without turning a legal no-op element
+        into an error.  That is the neutrality half, and without it a "fix"
+        that simply raised on every unresolvable element would satisfy the
+        first half.
     """
-    got = _four_routes({'edge': 'soft'}, params=None)
-    assert got['numpy_chain'][0] and 'apply_aperture' in got['numpy_chain'][1]
+    bad = _four_routes({'edge': 'soft'}, params=None)
+    assert bad['numpy_chain'][0] and 'apply_aperture' in bad['numpy_chain'][1]
+    assert len(set(bad.values())) == 1, bad
+    good = _four_routes({'edge': 'hard'}, params=None)
+    assert not any(v[0] for v in good.values()), good
     jax = _jax_or_none()
     if jax is None:
         import importlib.util
         assert importlib.util.find_spec('jax') is None
         return
-    assert got['jax_eager'] == (False, ''), got['jax_eager']
-    assert got['jax_jit'] == (False, ''), got['jax_jit']
+    assert set(bad) == {'apply_aperture', 'numpy_chain', 'jax_eager',
+                        'jax_jit'}, sorted(bad)
 
 
 # ===========================================================================
@@ -242,15 +253,6 @@ def test_verify_c1r2_edge_samples_true_is_bit_for_bit_the_pre_5_49_rim():
 
 
 @pytest.mark.parametrize('value', [None, [4], 4 + 0j])
-@pytest.mark.xfail(strict=True, reason=(
-    'VERIFY-C1-ROUND2 R3: _validate_edge_kwargs lets int() raise its own '
-    'TypeError for these, so the message names neither apply_aperture nor '
-    'edge_samples -- while {"edge": None} on the same guard gets '
-    'apply_aperture\'s own ValueError.  evaluate\'s Raises section promises '
-    '"a ValueError ... the same refusal, from the same guard" for '
-    'aperture_edge_samples, which is wrong for this family.  Requested edit: '
-    'catch the TypeError in _validate_edge_kwargs and re-raise with the same '
-    'ValueError text the other branch uses.  Remove this marker with the fix.'))
 def test_verify_c1r2_the_int_refusal_family_names_the_library(value):
     """Every refusal a caller can trigger through the rim keywords should name
     the function whose contract it is -- which is what the shipped census
