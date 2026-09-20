@@ -638,20 +638,57 @@ refusal or an aliased answer.
 
 ---
 
-## 8. Test runs
+## 8. Files changed
 
-Exact commands in section 9.  Counts and tails are in the final report.
-
-## 9. Files changed
+41 files, +8435 / -193 against 49ddf4bd.
 
 | file | what |
 |---|---|
-| `lumenairy/propagators/carrier.py` | the default on three signatures; `_collins_readout_k1` and the readout's route resolution; `_publish_readout_route`; the leg's fallback routed through the Sziklas entry point and opened to astigmatic carriers; three internal call sites named; docstrings |
-| `docs/history/carrier.md` | re-recorded with its reason (`--check` green over every module) |
+| `lumenairy/propagators/carrier.py` | the default on three signatures; `_collins_readout_k1`, the readout's route resolution and `_publish_readout_route`; `_FOCUS_READOUT_STOP_PLANE_KEYS` and the selection that replaced the refusal; the leg's fallback routed through the Sziklas ENTRY POINT and opened to astigmatic carriers and to an inverted frame; three internal call sites named; the trace refusal's ways out; docstrings |
+| `docs/history/carrier.md` | re-recorded twice, each with its reason; `--check` green over 124 modules |
 | `tests/unit/test_c3_collins_default.py` | NEW, 25 ids |
-| `tests/unit/test_audit2609_b4_collins_transport.py` | three classes restated (section 4.1) |
-| `tests/unit/test_niche_d2_chain_multi.py` | the standoff/period fixtures name their transport (section 4.1) |
+| `tests/unit/test_audit2609_b4_collins_transport.py` | four classes restated (4.2) |
+| `tests/unit/test_carrier_referenced.py` | two restated, both arms asserted |
+| `tests/unit/test_niche_d2_chain_multi.py` | `_SZIKLAS_STANDOFF` and the six `standoff=` fixtures plus the three period ones |
+| `tests/unit/test_niche_d3_guards.py` | `_linearity_error` names the co-moving lattice it needs |
+| `tests/unit/test_niche_d4_dgrating.py` | `_run`, the hand-split pair and `TestSplitLegPathDependence` |
+| `tests/unit/test_niche_d5_dx_flatness_gate.py` | the broken-configuration demonstration, with the new reading recorded |
+| `tests/unit/test_niche_d6_exact_tilted_leg.py` | `_run_chain` gained an opt-in `transport=`, forwarded only when NAMED |
+| `tests/unit/test_niche_exact_gap_kernel.py` | the split helper, the collimated branch, the astigmatic refusal (both transports) |
+| `tests/unit/test_niche_k2_carrier_backends.py` | the `jax.grad` leg |
+| `tests/unit/test_niche_r8_tiltaware_chain_api.py` | the exact-focus fail-before, plus a new default arm |
+| `tests/unit/test_fix_v1_v8_readout_guard_and_standoff.py` | the V3 chain scope's `_chain` |
+| `tests/unit/test_wave5_h2_near_focus_table.py` | `_sziklas()` names its own transport |
+| `tests/unit/test_audit2609_a24_decentre_calibration.py` | the standoff-resolver falsifier |
 | `scripts/check_doc_identifiers.py` | three curated stage-dict keys |
 | `CHANGELOG.md` | four blocks inside `## [Unreleased]` plus the Migration paragraph; 12 citations in the `[5.47.0]` block re-anchored |
 | `Migration-Guide.md` | the 5.49.0 section |
-| `validation/probe_c3_collins_default/` | `clib.py`, four probes, the bit-identity driver, and the JSON for both builds |
+| `validation/probe_c3_collins_default/` | `clib.py`, four probes, the bit-identity driver, the WSL per-class runner, and the JSON for both builds |
+
+## 9. Test runs
+
+Every command prefixed with
+`OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1`, `--capture=sys`,
+`-p no:randomly`, one process at a time.  Counts and tails are in the
+hand-back report; the reproducible list is:
+
+```
+# the blast set, both builds (WSL runs the b4 file ONE CLASS AT A TIME --
+# the whole file stalls there at TestGateCTwoGroupChain, pre-existing)
+python -m pytest $(cat validation/probe_c3_collins_default/blast_files.txt)        tests/unit/test_c3_collins_default.py
+bash validation/probe_c3_collins_default/run_wsl_blast.sh
+
+# the census / walker / dispatcher-pin / public-API / doc-consistency sweep
+python -m pytest tests/unit/test_audit2609_a21_doc_identifiers.py   tests/unit/test_audit2609_a23_census_mechanism.py   tests/unit/test_public_api.py   tests/unit/test_v4_16_2_dispatcher_pin_doc_consistency.py   tests/unit/test_audit_except_budget.py   tests/unit/test_ci_kernel_consistency.py   tests/unit/test_audit2609_a17_history_lint.py   tests/unit/test_audit2609_a22_history_fingerprint_tool.py   tests/unit/test_v*walker*.py tests/unit/test_v*dispatcher_pin*.py
+
+# the probes
+python validation/probe_c3_collins_default/probe_oracle_ladders.py <tree> <out>
+python validation/probe_c3_collins_default/probe_cupy_arm.py <tree> <out>
+python validation/probe_c3_collins_default/run_c3_bitid.py        --probe .../probe_sziklas_bitid.py --base <base> --branch <mine>        --out-dir validation/probe_c3_collins_default --tag sziklasbit_win
+
+# the gates
+wsl ruff check lumenairy/ tests/ scripts/
+python -m mypy
+python scripts/record_history_fingerprints.py --check
+python scripts/reanchor_citations.py --base f4f18851 --block "[5.47.0]" --check
+```
