@@ -1085,10 +1085,22 @@ CHANGELOG entry.
 | `test_wp_b12b_round2.py` (NEW, 22 ids) | Windows | see R2.10 |
 | `test_audit2609_b12b_gbd_projection.py` (14) + `test_verify_b12b_gbd_projection.py` (9) + `test_wp_b12b_round2.py` (22) | Windows | **45 passed** in 96.7 s |
 | the GBD + FGA + reference-plane selection (21 files) | Windows / WSL | see R2.10 |
-| the census / walker / dispatcher-pin / public-API / doc-consistency sweep + `test_audit_except_budget.py` | Windows | see R2.10 |
+| the census / walker / dispatcher-pin / public-API / doc-consistency sweep + `test_audit_except_budget.py` (30 files, 1404 ids) | Windows | **1389 passed, 14 skipped, 1 failed** in 280.9 s -- the one red is PRE-EXISTING and environmental (below) |
 
 `test_verify_b12b_gbd_projection.py` reads **9 passed** where it read 8 passed
 + 1 xfailed, because its mirror id is now a real decision (R2.2).
+
+**The one red in the sweep is not this package.**
+`test_public_api.py::test_installed_metadata_version_matches_source_version`
+fails on this box with "Installed distribution metadata says
+lumenairy==5.47.0 but the source says `__version__`==5.47.1.  The editable
+install is stale".  It is a property of the box's `pip install -e .`, not of
+any branch: `lumenairy/__init__.py` reads `__version__ = "5.47.1"` at the
+integration tip `76019ede` as well, and this package's diff does not touch
+that file at all (`git diff 76019ede -- lumenairy/__init__.py` is empty).
+Re-running that single id reproduces it in 0.9 s with the same two strings.
+Reported, not fixed: re-installing the editable package would change state
+this package does not own.
 
 | gate | result |
 |---|---|
