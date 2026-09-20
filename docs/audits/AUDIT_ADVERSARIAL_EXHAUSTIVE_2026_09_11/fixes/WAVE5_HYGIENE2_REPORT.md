@@ -133,11 +133,26 @@ bars of 4.14e-12 / 1.91e-11 / 4.80e-11.
 
 **Stated tolerance.**  The three routes agree to
 `(g_a + g_b) * eps * sum|E|` and are measured **1.47 to 2.59 decades** inside
-it -- the margin narrows with `n`, as it should, because the growth factors are
-upper bounds and the actual errors grow more slowly.  The dense route is the
-most accurate of the three at every case, by a factor of **2.4 to 12.6**,
-because it does not spend mantissa on a chirp phase.  They are NOT bit for bit
-equal and no caller may assume they are.
+it.  The dense route is the most accurate of the three at every case, by a
+factor of **2.4 to 12.6**, because it does not spend mantissa on a chirp phase.
+They are NOT bit for bit equal and no caller may assume they are.
+
+**CORRECTED, Round 2 (V-D8).**  An earlier wording here said "the margin
+narrows with `n`, as it should, because the growth factors are upper bounds and
+the actual errors grow more slowly".  That is backwards twice over: a bar that
+grows faster than its quantity gives a WIDENING margin, and the two routes do
+OPPOSITE things.  The DENSE route's margin WIDENS with `n` (1.84 -> 3.60
+decades from 16x16->8x8 to 256x256->128x128, measured on both builds) because
+its error grows like `sqrt(n)` against a bar that grows like `n`; the chirp-Z
+routes' margin NARROWS (1.93 -> 0.73 over the same ladder) because theirs grows
+faster than `3*log2(L^2) * eps * sum|E|`.  The bar is a bound for both at every
+shape measured -- never crossed up to N = 256 on either build -- and the shapes
+the shipped test file uses (max 32x24) are 1.6-2.4 decades inside it, so the
+shipped assertions are sound.  The chirp-Z half of the bar is the one with a
+finite lifetime: extrapolating the measured trend it would first be crossed
+near `N ~ 4000-5000`, outside anything this file exercises but inside nothing
+about the formula that says so.  Gated as a TREND by
+`tests/unit/test_verify_wave5_hyg2.py::test_the_two_reductions_margins_move_in_opposite_directions_with_n`.
 
 ### The phase budget -- where the dense route is not merely an alternative
 
@@ -160,6 +175,20 @@ three decades after the chirp route has already lost four digits.  At a budget o
 nothing.  Moving the threshold changes warning behaviour on existing callers, so
 it is a maintainer decision and not this package's to take.
 
+**FIXED IN ROUND 2, AND IT WAS WORSE THAN THREE DECADES (V-D5).**  Against a
+`math.fsum` correctly-rounded reference -- the pairwise reference above is the
+wrong instrument here, because at a large budget its own chirp is as wrong as
+the route's -- the error is LINEAR in the budget, `rel ~ eps * budget`,
+measured over 11 decades at two geometries on both builds.  There is no cliff:
+1.5e-08 already at a budget of 1e8, and the first budget that warned at all was
+3.16e15, by which point the answer was 25 % wrong.  The threshold is now
+`1e-6/eps = 4.5036e9`, the budget at which six significant figures remain
+(measured 5.32e-07 there), and the message names the error the budget implies
+and offers `method='direct'` beside the old advice.  This is a change in
+WARNING behaviour and not a byte move; shipped callers stay silent, because at
+the natural MFT grids `alpha = zoom/N` and `budget = zoom*N ~ 1e4`, which
+`tests/unit/test_wave5_h2_mft_direct.py` asserts as its own claim.
+
 The dense route is taken BEFORE that guard, deliberately: warning on the one
 route the warning's own advice is the alternative to would be a false positive.
 
@@ -169,7 +198,11 @@ It is two matrix products, so it runs wherever `xp.matmul` does.  MEASURED
 2026-09-19 on this box, whose cuFFT DLL is broken (the reason
 `tests/unit/test_niche_k2_carrier_backends.py` skips its propagating CuPy arms):
 `_direct_matrix_2d` with `xp=cupy` returns complex128 agreeing with the NumPy
-route to **3.79e-16** relative.  The suite asserts the PROPERTY rather than the
+route to **3.79e-16** relative on this fixture.  The reading is
+FIXTURE-DEPENDENT and the single number needed its fixture (V-D16e):
+independently re-measured at **2.803e-16** (16x16->8x8), **4.451e-16**
+(64->32), **5.309e-16** (128x96->48x64) and **3.556e-16** (centred 32->16).
+JAX also runs the route, eager and under `jit`, at 3.72e-16 / 3.61e-16.  The suite asserts the PROPERTY rather than the
 reading -- the function takes no `fft2` / `ifft2` argument and its body mentions
 no transform, no `next_fast_len` and no padding -- because asserting the CuPy
 reading would mean skipping on a resource check.
@@ -238,13 +271,22 @@ WSL py3.12:
 | 1024 | 512 | 0.5758 | **0.0177** | 0.1225 | separable |
 | 1448 | 1448 | 2.1609 | **0.5849** | 1.0211 | separable |
 
-**The time crossover is PER-BUILD and the two builds disagree by a factor of
-about four in where it sits.**  On Windows the dense route is the fastest up to
+**The time crossover is PER-BUILD, and the two builds disagree by a factor of
+TWO in where it sits, not four.**  (Re-measured in Round 2: at N = 1024 the
+Windows crossover brackets `M/N` in (1/8, 1/4) and the WSL one in (1/16, 1/8)
+-- adjacent octaves sharing the endpoint `M = N/8`.  The original "Windows
+`M <~ N/4`, WSL `M ~ N/16`" quotes the OUTER edge of each bracket, which is
+what made it read as 4x.  The decision the claim carries -- per-build,
+therefore no threshold may ship -- is unchanged.)  On Windows the dense route is the fastest up to
 roughly `M = N/4`; on WSL, where scipy's pocketfft drives the separable route's
 1-D passes with its own worker pool (`SCIPY_FFT_WORKERS = -1`, which
 `OMP_NUM_THREADS=1` does not constrain), the separable route wins from about
 `M = N/16`.  The 2-D chirp-Z route is the slowest of the three at every shape on
-both builds.
+WSL and at most shapes on Windows; at `M >= N/2` with `N >= 1448` the Windows
+ordering between it and the dense route is inside the run-to-run spread of a
+contended box (re-measured both ways on two runs -- 1448x1448 reads chirp-Z
+1.5587 vs dense 1.4957 in the table above and dense 1.4120 vs chirp-Z 0.8540 on
+the re-run) and is NOT build-free, unlike the MEMORY ordering.
 
 That disagreement is the reason no threshold ships.  A threshold-automatic switch
 keyed on time would be a per-build constant -- exactly the shape the testing
@@ -321,8 +363,16 @@ Two new helpers, each with a reason that is not stylistic:
 * **`_fft2_pair(xp, is_jax)`** returns `lumenairy.backend.fft2`'s dispatch as the
   CALLABLES.  Identity is the point, not equivalence: `_bluestein_2d` keys its
   chirp-kernel FFT cache on `fft2 is fft_infra._fft2`, so routing the NumPy path
-  through the `backend.fft2` wrapper would make that test false and silently turn
-  the cache off for every Collins leg.  A test asserts the identity AND that the
+  through the `backend.fft2` wrapper would make that test false.  **CORRECTED,
+  Round 2 (V-D9):** the sentence used to continue "and silently turn the cache
+  off for every Collins leg", whose premise fails.  MEASURED over three
+  identical legs on both builds: with the shipped
+  `_EXACT_READOUT_SEPARABLE_BLUESTEIN = True` a Collins leg takes the SEPARABLE
+  route (`_bluestein.py:561`), which never reaches that cache at all -- 0
+  entries and 0 hits -- so the cache is off for every Collins leg today, and
+  the identity is what keeps it available to the `separable=False` route and to
+  every other caller of the 2-D arm (where a wrapper really does cost 1 entry /
+  2 hits -> 0 / 0, worth 3.3x of wall time on WSL).  A test asserts the identity AND that the
   callable agrees with `backend.fft2` bit for bit on both backends, so there is one
   dispatch and not two.
 * **`_as_c_order(a, dtype, xp)`** because `jax.numpy` has no `ascontiguousarray` at
@@ -364,13 +414,19 @@ MEASURED 2026-09-15/19, Windows py3.14, 64x64 Gaussian at 8 um, `R` = -50 mm,
 | quantity | reading |
 |---|---|
 | single-FFT NumPy-vs-JAX spread | 2.6853e-16 |
-| bar (x6 chain depth) | 1.6112e-15 |
+| bar (x6 chain depth, PRE-FLOOR) | 1.6112e-15 |
+| bar the test actually asserts against, `max(6*spread, 32*eps)` | **7.105e-15** |
 | JAX vs NumPy, `gap_kernel='fresnel'` | 8.2711e-16 |
 | JAX vs NumPy, `gap_kernel='auto'` / `'exact'` | 9.6583e-16 |
 | smallest real signal on the fixture (exact vs fresnel kernel) | 1.0741e-06 |
 
 Two-sided: the disagreement is below the bar, and the bar is nine decades below
-the smallest real signal.  The test asserts BOTH, so if the two ever met it would
+the smallest real signal.  (V-D16f: the table's 1.6112e-15 is the PRE-FLOOR
+term; `_fft_spread_bar` takes `max(6*spread, 32*eps)` and on this fixture the
+floor dominates by 4.4x, so what is actually asserted against is 7.105e-15 and
+the measured 8.2711e-16 is 0.94 decades inside it, not 0.29.  The floor is well
+reasoned -- a spread measured as exactly zero would make the bar zero -- and
+`32` has no stated origin either.)  The test asserts BOTH, so if the two ever met it would
 say the comparison had become noise instead of passing.  The astigmatic arm and
 the tilted exact kernel carry their own arms.  `jax_enable_x64` is forced on --
 in float32 the comparison would measure JAX's dtype policy, not the port.
@@ -436,10 +492,14 @@ cannot pass on a degenerate fixture.
    warn -- and warning once per TRACE rather than once per call is a different
    contract.  Not attempted; recorded.
 2. **CuPy was not exercised on the device.**  `fft_infra.CUPY_AVAILABLE` reads
-   False on this Windows build (the known broken cuFFT DLL recorded in
-   `test_niche_k2_carrier_backends.py`), so the CuPy arm of the port is exercised
-   structurally (the same code path, `bld is xp`) but not run on hardware.  Stated
-   as a gap, not claimed as coverage.
+   **True** on this Windows build (cupy 14.0.1, one visible device) -- the
+   earlier "reads False" was wrong, corrected in Round 2 (V-D10) -- but the
+   FIRST TRANSFORM raises `ImportError: DLL load failed while importing cufft`,
+   the known broken-DLL condition `test_niche_k2_carrier_backends.py` records.
+   So the CuPy arm of the port is exercised structurally (the same code path,
+   `bld is xp`) but not run on hardware.  The CONCLUSION stands; the evidence
+   cited for it did not.  (`_as_c_order`'s CuPy half and H2-1's dense MFT
+   kernel DO run on the device, because neither needs a transform.)
 
 ### Tests
 
@@ -504,8 +564,11 @@ constraints -- window (`6 w / N`), amplitude (`w/8`) and curvature
 | converging, 5 mm from focus | **carrier applied twice** | **1.35** | -- |
 
 Identical to all printed digits on both builds.  The two Collins spellings agree
-with each other exactly; the wrong spelling -- one of the two that produced
-WP-B11's O(1) residuals -- is twelve decades away from the right one.
+with each other to **1.334e-05 relative** (6.4e-18 absolute on a 4.8e-13
+quantity) -- "identical to all printed digits" is true and "exactly" was not
+(V-D16a); the test's own bar (`<= 1e-3 * max`) was already the honest one.  The
+wrong spelling -- one of the two that produced WP-B11's O(1) residuals -- is
+twelve decades away from the right one.
 
 The collimated `'auto'` row is the independent confirmation that the bookkeeping
 is right: its residual is not a bug but the paraxial ORACLE's own error, and it is
@@ -550,6 +613,15 @@ co-moving grid: at 1 um the plain co-moving pitch would be `m*dx` = 1.30e-08 m a
 the leg returns 1.9098e-06 m, i.e. the automatic carrier -> through-waist ASM
 bridge -> carrier split engaged.  That bridge costs 7.3e-04 relative on this
 fixture, and the Collins transport goes direct and does not pay it.
+
+**The Sziklas column has TWO mechanisms and this paragraph named one (V-D16b).**
+Its WORST rung is the one the prose skipped: **300 um reads 1.1565e-02 with the
+bridge OFF**, because the co-moving window there holds only 1.99 beam radii and
+the edge truncation is `exp(-3.97) = 1.879e-02`.  At 1 / 3 / 5 mm the window
+opens to 4.1 / 5.0 / 5.1 radii and the reading tracks that truncation to within
+3x.  So the column is "the bridge, within 100 um" AND "edge truncation of a
+collapsing co-moving window, at 300 um", and the second is the larger of the
+two.
 
 ### The correction to the framing -- WHOSE angle
 
@@ -638,14 +710,39 @@ set `tau` against:
 
 **A rule keyed on the BEAM's angle would fire five decades too eagerly** (the
 beam-angle quartic is 1.541 at 1 um, 5.1x the 0.3 tolerance, while the actual
-departure is 4.7e-06).  VERIFY-B4 F3's own reading (2.4e-3 against 1.7e-14 one
-micron from focus) is a different fixture and this report does not claim to
-reproduce it; what this report adds is the angle the term has to be evaluated at
-and the constant that turns it into a number.
+departure is 4.7e-06).
+
+**WHOSE framing that is, corrected (V-D16c).**  The 4.0e5 arithmetic is right
+for **WP-B11 sec. 2.20**, which did use the beam's 20 mrad.  **VERIFY-B4 F3
+itself used the ENVELOPE's MEASURED containment angle** (2.8574e-03 rad), which
+over-predicts by **33.5x -- 1.5 decades, not five**.  Attributing the
+beam-angle framing to F3 was wrong; what remains true, and is the point, is
+that the term has to be evaluated at the envelope's ANALYTIC `1/e^2`
+half-angle, and that the measured containment radius is not that angle either.
+F3's own reading (2.4e-3 against 1.7e-14 one micron from focus) was a different
+fixture, and Round 2 DID reproduce it: rebuilt exactly, the law predicts
+2.3496e-03 against a measured 2.3496e-03.
 
 **Recommendation: no change.**  The existing `k4` wrap gate is keyed on the right
 angle already and correctly does not fire.  Nothing in this package moves a
 default.
+
+**That recommendation is a defensible reading of THIS ladder and is not
+defensible in general (V-D16d), and Round 2 restates it.**  The "4.7e-06
+falling monotonically to 2.3e-08" bound is a bound on the ladder's closest
+approach to `A = 0`, not on the fixture: the ladder measures `d` from the
+WAIST, and this carrier's geometric focus sits 31.66 um further on, so `z_eff`
+caps at 12.27 m.  Walked to its own carrier focus the SAME fixture pays
+**1.5431e-04 at 1 um and 1.5431e-03 at 0.1 um**, 327x the published worst case;
+and VERIFY-B4 F3's fixture, whose ladder does approach `A = 0`, pays
+**2.3497e-03 at `z_eff` = 1600 m** against `'fresnel'` at **1.7042e-14**.  The
+`k4` gate cannot serve there: it is 4.65 decades below its bar where the
+departure is 4.7e-06 and still 2 decades below it where the departure is
+2.3e-03, because it bounds REPRESENTABILITY and not accuracy.  Round 2 ships
+the accuracy-keyed condition **behind a switch that is OFF**
+(`carrier._GAP_KERNEL_ACCURACY_TAU = None`, one line to arm), with the decision
+measured at `tau = 1e-4`: the hygiene-2 ladder stays inert and F3's 1 um and
+10 um rungs fall back.  The default still moves nothing.
 
 ### Tests
 
@@ -790,9 +887,10 @@ The brief named these and this package does not touch them:
 ## What could not be measured
 
 * **CuPy on the device, for the Collins port.**  `fft_infra.CUPY_AVAILABLE` reads
-  False on this Windows build (the cuFFT DLL problem
-  `tests/unit/test_niche_k2_carrier_backends.py` already records), and WSL has no
-  CuPy at all.  The Collins chain needs a working cuFFT, so its CuPy arm is
+  **True** on this Windows build (V-D10 -- the earlier "reads False" was wrong);
+  what fails is the first transform, with the `ImportError: DLL load failed
+  while importing cufft` that `tests/unit/test_niche_k2_carrier_backends.py`
+  already records.  WSL has no CuPy at all.  The Collins chain needs a working cuFFT, so its CuPy arm is
   exercised structurally (`bld is xp`, `out=` supported, `cupy.fft.fftfreq`
   present, one shared implementation) but was not run on hardware.  H2-1's dense
   MFT kernel is the exception and WAS run there, because it uses no transform at
@@ -802,7 +900,7 @@ The brief named these and this package does not touch them:
   with every repeat kept in the JSON, and the report leans the crossover decision
   on the MEMORY ordering (build-free, identical on both builds at all 29 shapes)
   rather than on the times (per-build, and the two builds' crossovers differ by
-  about 4x).
+  about 2x -- see the correction in the crossover section).
 * **A non-paraxial oracle for H2-3.**  The analytic Gaussian is a paraxial
   solution, so it cannot referee `'exact'` against `'fresnel'` on physical
   accuracy.  The report measures the exact kernel's DEPARTURE from the paraxial
@@ -813,3 +911,355 @@ The brief named these and this package does not touch them:
   and this report measures; no attempt was made to reproduce it, and this report
   does not claim its numbers are wrong -- only that the angle the quartic is
   evaluated at has to be the envelope's.
+
+---
+
+# Round 2 (VERIFY-WAVE5-HYGIENE2) -- 2026-09-19
+
+Every one of the verification's 22 findings, closed or answered, on branch
+`refactor/wave5-hygiene-2-round2` against `112c3049`.  Nothing in this round
+moves a shipped default: **245 of 245 fixture keys are byte-identical
+archive-to-archive on BOTH builds**, and the sensitivity control on the same
+245 keys is 199 differing between the two builds.
+
+## How this round was gated
+
+* **Archive-to-archive, from `git archive`.**  Both arms are read-only
+  extractions -- `112c3049` into `C:/tmp/r2_arch/base` and this tree's index
+  object into `C:/tmp/r2_arch/branch` -- and the probe runs in a child process
+  whose `cwd` and `PYTHONPATH` name one tree.  `hlib.anchor` prints what bound
+  and refuses to continue outside it.  Probe and JSON:
+  `validation/probe_round2_wave5_hyg2/`.
+* **One harness, not a third copy.**  The round-2 probes import
+  `validation/probe_wave5_hyg2/hlib.py` from the WORKTREE, so both arms fold
+  their results through identical code and only `lumenairy` comes from the
+  archive.
+* **Both builds, every time.**  Windows py3.14 (numpy 2.4.4, scipy 1.17.1, jax
+  0.11.0, CuPy 14.0.1 with a device and a broken cuFFT DLL) and WSL py3.12
+  (numpy 2.4.6 on scipy-openblas SkylakeX, scipy 1.17.1, jax 0.10.2, no CuPy),
+  with `OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
+  LUMENAIRY_MEM_BUDGET_MB=8192 PYTHONHASHSEED=0` on the COMMAND LINE and
+  pytest run with `--capture=sys -p no:randomly`.
+* **Decisions, not readings.**  Every bar this round adds is derived at runtime
+  from a quantity the running build measures, two-sided, and premise-gated.
+
+### The byte-identity count, stated
+
+`validation/probe_round2_wave5_hyg2/r2_kernel_bitid.py`, **245 keys**:
+
+| group | keys | what |
+|---|---|---|
+| `tf::exact::` | 5 grids x (4 reduced distances x 4 tilts + 3 refusals + complex64 + anisotropic pitch) | `_exact_envelope_tf_step`, every arm |
+| `tf::xp::` | 3 grids x (3 tilts + 1 refusal) | `_exact_tf_2d_xp` on `xp = np` |
+| `corr::` | 4 grids x (4 `z_eff` x 3 tilts + refusal + anisotropic pitch) | `_collins_exact_kernel_correction` |
+| `transport::` | 3 envelopes x (3 `gap_kernel` x 2 references + astigmatic + astigmatic-refusal + tilted + off-centre) + 3 guard dispositions with their stats dicts + `B = 0` | `_collins_transport` |
+| `public::` | 2 transports x (3 `gap_kernel` x 3 envelopes + a tilted second-wavelength leg + a collimated leg + `z = 0`) | `propagate_carrier_referenced` |
+| `readout::`, `nearfocus::` | 2 tilts + 4 distances x 2 transports | the exact focus readout and the near-focus ladder |
+
+| comparison | keys | identical | differing | only-base | only-branch |
+|---|---|---|---|---|---|
+| base -> branch, WIN-py3.14 | 245 | **245** | 0 | 0 | 0 |
+| base -> branch, WSL-py3.12 | 245 | **245** | 0 | 0 | 0 |
+| **control**: WIN vs WSL on the base | 245 | 46 | **199** | 0 | 0 |
+
+The control is what makes the first two rows mean something: the same
+instrument separates two builds on 199 of 245 keys and cannot separate the two
+trees on any.
+
+---
+
+## Per finding
+
+### V-D1 -- BLOCKER, CLOSED.  `.test_durations`
+
+The 121 ids of the branch's four new files were timed SERIALLY in one process
+with BLAS pinned on the command line (121 passed in 28.89 s, 25.9 s of timed
+work) and SPLICED into the committed JSON -- 121 insertions, 0 deletions,
+16 265 -> 16 386 entries, re-parsed as JSON.  Every pre-existing entry is
+untouched, which is what keeps the other weights on one scale.  Gate:
+**WIN 4 passed in 83.14 s, WSL 4 passed in 60.81 s** (base read 4 passed,
+branch read 1 failed / 3 passed).  Commit `0a75c5ad`.
+
+### V-D2 -- BLOCKER, CLOSED.  Sixteen stale citations, and the tool that could not see them
+
+All sixteen re-anchored BY CONTENT from `git show f4f18851:<path>`:
+`mft.py` `:489->527`, `:769->807`, `:972->1050`, `:605-630->643-668` and the
+hand-shifted range `:645-654->649-658`; `carrier.py` `:1966->2041`,
+`:1564->1621`, `:1626->1683`, `:2266->2418`, `:1830->1895`, `:1700->1765` with
+its bare sibling `` `:1736`->`:1801` ``, `:2127->2279`, `:1906->1971`,
+`:1868->1933`, and `propagators/carrier.py:1068->1125`.  The two the branch had
+re-anchored CORRECTLY (`mft.py:550->588`, `carrier.py:1541->1598`) are left
+alone, which the tool decides rather than assumes.
+
+The tool moved from `validation/probe_wp_b11c/` to `scripts/reanchor_citations.py`
+and gained four things, each answering a measured blindness: `--base` and
+`--block` as parameters; automatic resolution of any citation tail that names
+exactly one module under `lumenairy/` (the hand-kept `OWNED` map saw 19 of the
+5.47.0 block's citations, the resolver sees all 107); per-ENDPOINT anchoring of
+ranges; and a `def NAME` fallback for a citation whose line is a definition
+whose SIGNATURE changed (the only reason `_collins_axis_chirp` and
+`_collins_exact_kernel_correction` could not be anchored).  The alignment is
+now by citing-SENTENCE skeleton rather than by substituting the base token,
+which is the only way to see a citation someone has already re-anchored to a
+different wrong number -- the `+34` where the content moved `+38`.
+
+Gated by three new ids in `tests/unit/test_v5_3_2_walker_source_line_citation.py`
+(V18's own file, beside the blind spot they close).  **Before/after proved on
+this tree: with the stale CHANGELOG restored, V18 still reads `ok=107 drift=0`,
+rc=0 -- and the new id FAILS.**  Commit `33a69080`.
+
+### V-D3 -- MAJOR, CLOSED.  The port now reaches the public leg
+
+`_collins_carrier_leg` resolves `(xp, is_jax, bld)` with the same `_backend_of`
+the transport uses, and `_collins_input_box` takes its own forward transform
+through `_fft2_pair` / `_as_c_order`.  MEASURED on both archives, both builds
+(`r2_reach_{win,wsl}_{base,branch}.json`):
+
+| input | base `112c3049` | this tree |
+|---|---|---|
+| numpy | `ndarray` | `ndarray` |
+| eager JAX | **`numpy.ndarray`** (silent host demotion) | **`jaxlib ArrayImpl`** |
+| traced | raw `TracerArrayConversionError` | the designed `ValueError` |
+| CuPy | `TypeError: Implicit conversion to a NumPy array is not allowed` | `ImportError: DLL load failed while importing cufft` -- i.e. it STAYED on the device to the transform |
+
+and the JAX-vs-NumPy relative difference through the public leg reads **exactly
+0.0 on base** -- bitwise equal, because both arms were NumPy -- against
+4.1309e-16 (WIN) / 4.1251e-16 (WSL) now.  That `0.0` is why no value test could
+see it.
+
+`test_the_public_entry_agrees_across_backends[collins]` is restated: the type
+check is now the PREMISE, with the failure message saying why a demoted arm
+makes the comparison vacuous.  A new id asserts the traced refusal is reachable
+through the public entry, is a clean `ValueError`, and names
+`_collins_transport`, `dx_out`, `gap_kernel` and `on_collins_sampling` -- the
+leg cannot offer a spelling that RUNS, because it resolves its own output
+lattice and quadrature from the measured phase-space box, a third measured
+decision with no caller alternative.  The CHANGELOG sentence is corrected in
+place with what was actually true recorded beside it.  Commit `4638f601`.
+
+### V-D22 -- CLOSED, and it is the item that made V-D4 load-bearing
+
+`carrier.py::_exact_dispersion_phase` is now the ONE place the non-paraxial
+dispersion is written.  It takes the caller's own frequency axes (the three
+sites' layouts are not bit-identical to each other and each one's is part of
+its byte-identity contract), and the in-place NumPy fast path that was
+`_exact_envelope_tf_step`'s alone now lives inside it and serves all three
+sites.  The two shipped evanescent-carrier phrasings are reproduced verbatim by
+`_evanescent_tilt_message`, because a bit-identity probe folds an exception's
+message into its digest.
+
+**Byte-identity: 245/245 on both builds** (the table above).
+
+**The guard this removes, measured.**  Mutation arms on this tree:
+
+| arm | `b4::TestSameTheorem` | `test_wave5_h2_near_focus_table.py` |
+|---|---|---|
+| M-A: the ONE consolidated kernel negated | **9 passed** -- the agreement guard is GONE, because both transports now move together | **5 failed / 9 passed** |
+| M-B: the Collins reduced distance negated (the verifier's own arm) | 2 failed / 7 passed | **1 failed / 13 passed** -- and the single failure IS the new sign assertion |
+| M-C: BOTH callers' reduced distance negated | 2 failed / 7 passed | 2 failed / 12 passed |
+| none | 9 passed | 14 passed |
+
+M-A is the defect a single shared kernel newly makes possible and it is exactly
+the conjugation: the Collins total becomes `exp(i(k z_eff - z_eff(root-root0)))`
+and so does the Sziklas one, so a cross-IMPLEMENTATION agreement test cannot
+see it.  That is V-D22's warning, reproduced.
+
+Pinned by `test_the_exact_dispersion_is_written_once`, which censuses THREE
+independent tokens (the `q = 0` subtraction, the shifted-frequency radical, the
+evanescent guard) with docstrings stripped, and asserts all three sites still
+call the one helper.  Commit `e9341583`.
+
+### V-D4 -- CLOSED.  The sign the near-focus file could not see
+
+Added to `test_the_measured_departure_is_the_quartic_times_one_constant`: the
+intensity-weighted mean of `arg(exact/fresnel)` must be NEGATIVE (the exact
+kernel RETARDS -- `sqrt(k^2-q^2) < k - q^2/(2k)` for every real `q`) and must
+equal the derived `-k z_eff theta_env^4/16`, the `<u^4> = 1/2` moment beside
+the `sqrt(<u^8>) = sqrt(3/2)` moment the magnitude law is fitted on.  Bar 1 %,
+~0.7 decades above the worst of three independent fixtures' measured agreement
+(0.002 %, 0.04 %, 0.2 %).  Before/after in the M-B row above.
+
+### V-D5 -- CLOSED.  The chirp phase budget, 7.5 decades late
+
+`_PHASE_BUDGET_MAX = 1e-6 / eps = 4.5036e9`, derived from the measured law
+rather than from taste.  Against a `math.fsum` correctly-rounded reference at
+N=24 M=12:
+
+| budget | 1e6 | 1e8 | 1e9 | 4.5e9 | 1e10 | 1e12 | 1e15 |
+|---|---|---|---|---|---|---|---|
+| chirp-Z rel L2 | 1.98e-10 | 1.41e-08 | 2.10e-07 | **5.32e-07** | 1.90e-06 | 1.84e-04 | 2.48e-01 |
+| dense rel L2 | 3.10e-16 | 3.20e-16 | 3.29e-16 | 1.84e-16 | 3.29e-16 | 3.20e-16 | 2.83e-16 |
+| warned? | no | no | no | **no** | **yes** | yes | yes |
+
+Three ids: the LAW (slope 1.000 +- 0.1 over four decades, dense immune, and the
+threshold deliberately NOT pinned so it stays true whatever the threshold
+becomes), the THRESHOLD two-sided, and the QUIET-CALLER side (four natural
+focal-zoom grids, budget computed from the caller's own numbers, each >= 3
+decades under the threshold and each run with `RuntimeWarning` promoted to an
+error).  **This is a change in WARNING behaviour and not a byte move**; it is
+recorded as such in the constant's own comment and in the Notes.
+
+### V-D6 -- CLOSED.  The gradient's shape bar
+
+`corr > 1.0 - 1e-6` is replaced by the leg's own measured departure from a
+scaled isometry.  `c = <g,a>/<a,a>`, `r = |g - c a|/|c a|`, and Pearson's
+shortfall is second order: `1 - corr ~ r^2/2`.  MEASURED on the shipped
+fixture, both builds: `r = 4.998e-04`, `1 - corr = 3.1689e-07`,
+`(1-corr)/r^2 = 1.2686`.  Bars `r^2/100 < 1 - corr < 10 r^2` -- 7.9x above,
+127x below -- with `0 < r < 1e-1` asserted first as the premise the expansion
+needs.
+
+### V-D7 -- CLOSED.  The `eps^(2/3)` floor model
+
+`P(a) = sum|L a|^2` is an exact quadratic form, so `P''' == 0`, so there is no
+truncation branch to balance against cancellation and `eps^(2/3)` is ~4.7
+decades loose.  The bar is now the cancellation branch itself, PER RUNG:
+`rel <= 10 * eps |P| / (h |g|)`.  MEASURED over a ten-rung ladder extended
+upward to `h = 3e-1`: the ratio of the disagreement to its own floor is
+0.077 .. 0.737, so the factor of ten carries 13.6x at the worst rung; best
+7.55e-15 at `h = 1e-1`, at the TOP of the ladder.
+
+`P''' == 0` is MEASURED by its SCALING, not assumed: a five-point third
+difference of a quadratic returns pure round-off, which grows as `eps|P|/h^3`
+-- measured -7.11e-12, -2.84e-08, -1.42e-05, +7.11e-03 at `h = 1e-1 .. 1e-4`,
+1e3 per decade to three digits with the sign flipping.  **And the instrument is
+not blind**: the same ladder on `(|E(0,0)|^2)^3` returns a CONSTANT
+`P''' = +2.235e-04` over four decades, a disagreement falling exactly 10x per
+decade, a fitted slope of `h^2`, and a real U with its minimum at `h = 1e-4`;
+the truncation model predicts it to three significant figures.
+
+### V-D8 -- CLOSED.  See the corrected "Stated tolerance" paragraph above.
+
+### V-D9, V-D10, V-D16a-f -- CLOSED.  Report prose
+
+Each is corrected IN PLACE above, beside the sentence it replaces, so the
+report reads as one document rather than a document plus errata: the
+`_fft2_pair` cache consequence (measured 0/0 on the shipped separable route),
+`CUPY_AVAILABLE` (reads **True**; the first transform is what fails), the two
+Collins spellings' 1.334e-05 (not "exactly"), the Sziklas column's SECOND
+mechanism (300 um reads 1.1565e-02 with the bridge OFF), whose angle VERIFY-B4
+F3 actually used (the envelope's measured containment angle -- 33.5x, not five
+decades), the "no change" recommendation (a bound on the ladder, not on the
+fixture), the CuPy 3.79e-16 (fixture-dependent, 2.803e-16 .. 5.309e-16 over
+four), and the JAX bar (the `32*eps` FLOOR dominates by 4.4x, so 7.105e-15 is
+what is asserted against).  The timing claims are corrected too: the crossover
+differs by 2x and not 4x, and "the 2-D chirp-Z route is the slowest at every
+shape on both builds" does not survive on Windows.
+
+### V-D11, V-D12, V-D13 -- CLOSED.  Three traced shapes
+
+* **V-D11**: an ASTIGMATIC carrier with `gap_kernel='auto'` RUNS under a trace
+  (max|grad| = 2.0008 on this fixture), because the kernel clause is guarded by
+  `Ax == Ay` and there is no exact arm to resolve to.  The docstring now says
+  so and a new id gates BOTH halves -- the traced arm runs, and the eager arm
+  resolves the same configuration to `'fresnel'` anyway, which is why accepting
+  it is benign rather than a silent default.
+* **V-D13**: six scalar arguments are checked up front and refused by name.
+* **V-D12**: a concrete `jnp` array CLOSED OVER by a jitted function is not a
+  Tracer, but the measurement transform's OUTPUT is, so that is where the check
+  went.  Both directions gated: the `jnp` constant is refused by name, a
+  closed-over NUMPY constant still runs (measured 88.357... under `jit`).
+
+### V-D14 -- CLOSED by citation, not by duplication
+
+The `bld` threading in `_collins_axis_chirp` and `_as_c_order`'s contiguity are
+invisible to every VALUE test, and that is measured: `_backend_of` returns
+`bld = np` for NumPy AND for JAX, so only CuPy would differ, and `np.asarray` /
+`np.ascontiguousarray` agree on values for every input.  They are closed by the
+verification's own `test_the_axis_chirp_builds_on_the_bld_it_is_handed` and
+`test_as_c_order_makes_the_numpy_path_contiguous`.  One gate per claim: the
+H2-2 test file's docstring now points at them.
+
+### V-D15 -- CLOSED.  Seven docstrings naming a release that does not exist
+
+Dropped from all seven; the CHANGELOG carries the number, which is the practice
+the repository's last five releases follow (0, 0, 0, 1 false positive, 0
+mentions at the release commit's PARENT; the release commit touches exactly one
+library file).  GATED by
+`test_public_api.py::test_no_shipped_source_claims_a_version_the_package_has_not_reached`,
+which exempts deprecation horizons and carries a falsification arm.  A token
+qualifies only when it cannot be a float (three dotted components, or a `v`
+prefix): MEASURED 1181 qualifying tokens across `lumenairy/`, 0 forward.
+
+### V-D17, V-D18 -- CLOSED
+
+`_bluestein_centred_2d` validates `sign` and then `method` before it reads
+`E.shape`, so both primitives report the same first error; gated over three
+`(sign, method)` combinations.  The three public MFT docstrings are widened to
+the full `_SUM_METHODS`.
+
+### V-D19 -- RESTATED, and the non-reproducing red is not chased
+
+`b4::TestGateCTwoGroupChain::test_the_two_transports_agree_on_this_chain` is
+split into a PREMISE and a CLAIM.  Premise: every Collins leg took the
+transfer-function form AND its decision reading is clear of the threshold --
+MEASURED on this fixture `K1 = 1.9167`, `K3 = 2.1387`, margin **2.139**, 114 %
+above the threshold of 1, against a premise bar of 1.5.  Claim: the two fields
+agree to `1e3 * eps` of the peak, a derived re-association bound for a
+2048-point pairwise reduction.  MEASURED: **exactly 0.0, bit-identical**
+(`r2_b4chain_win.json`).  The failure mode it must catch -- a quadrature switch
+-- appeared once at 8.5e-06 of peak, 7.6 decades above the bar.  The
+non-reproducing red is not chased and not rerun away; the shape that invited it
+is gone.
+
+### V-D20, V-D21 -- CLOSED
+
+The probe harness's tree guard catches `ValueError: Paths don't have the same
+drive` and says `WRONG TREE` instead (both copies, since they are two copies of
+one function).  The lens facade's refusal message now says the read "is
+unaffected by this refusal; note that it returns the object bound at IMPORT
+time, so read it from `_lens_kernels` while a substitute is in place" --
+verified live: while `_lens_kernels.X` holds a substitute, `lenses.X` returns
+the ORIGINAL.
+
+### The maintainer question -- ANSWERED, MEASURED, AND NOT SHIPPED
+
+`gap_kernel='auto'` does NOT gain an accuracy-keyed fallback.  The condition is
+in the source behind `carrier._GAP_KERNEL_ACCURACY_TAU = None`, which is one
+line to arm and which, left alone, is not evaluated at all -- part of the
+245/245.
+
+The law it is keyed on is re-derived and re-measured on both fixtures:
+
+```
+departure_relL2 = sqrt(3/2) * k |z_eff| theta_env^4 / 8
+```
+
+with `theta_env` read from the envelope's own spectrum as `2 sqrt(<theta^2>)`,
+which is exact for a Gaussian.  MEASURED, law vs the thing it predicts:
+
+| fixture | rung | `z_eff` | law | measured |
+|---|---|---|---|---|
+| hygiene-2 | 1 um from focus | 12.2666 m | 4.7162e-06 | 4.7136e-06 |
+| hygiene-2 | 100 um | 3.0277 m | 1.1641e-06 | 1.1641e-06 |
+| VERIFY-B4 F3 | 1 um | 1599.96 m | **2.3496e-03** | **2.3496e-03** |
+| VERIFY-B4 F3 | 10 um | 159.96 m | 2.3490e-04 | 2.3491e-04 |
+
+and the measured half-angle equals the analytic `lambda/(pi w)` to 16 digits on
+F3 and to 7 on the hygiene-2 fixture.  `tau = 1e-4` leaves the hygiene-2 ladder
+INERT (worst 4.7e-06, 1.3 decades under) and makes F3's 1 um and 10 um rungs
+fall back while its 100 um rung does not (2.3438e-05).  An EXPLICIT
+`gap_kernel='exact'` is honoured even over `tau`, because silently replacing
+what the caller asked for is the D4 shape.  Three ids measure all of this; one
+of them asserts the switch is OFF in the shipped source and that `stats_out`
+does not grow a `kernel_departure` key while it is.
+
+## What could not be measured, this round
+
+* **CuPy on the device for anything that transforms.**  `CUPY_AVAILABLE` is
+  True and `cupy.fft.fft2` raises `ImportError: DLL load failed while importing
+  cufft`; WSL has no CuPy.  V-D3's CuPy row is therefore a statement about
+  WHERE the failure now happens (inside cuFFT rather than at a host conversion
+  in `carrier.py`), which is the observable that moved, not a device run.
+* **Whether V-D19's red is a branch regression.**  Unchanged from the
+  verification: it appeared once in four sweep-scale runs, did not reproduce,
+  and both prefixes ending at it pass.  The bisect that would settle it is ~12
+  hours of machine time and was not attempted.  The assertion's SHAPE is fixed
+  either way.
+* **A non-paraxial oracle for the near-focus law.**  Unchanged.  The analytic
+  Gaussian is paraxial, so it measures how far the exact kernel departs from
+  the paraxial truth and cannot say which kernel is more physical -- which is
+  half of why the `tau` rule is not shipped armed.
+* **An uncontended Windows timing ladder.**  Unchanged; the crossover is a
+  ratio taken under the same conditions for all three routes and is what the
+  decision rests on.
