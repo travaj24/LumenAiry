@@ -607,10 +607,37 @@ def test_verify_a8_e7_gray_edge_beats_hard_at_anamorphic_and_offset_rims(
         D/dx = 145, dy/dx = 0.4, offset 0.29 px : 1.992823   <- the worst
 
     so 1.5 sits 1.33x below the smallest real reading and 1.5x above the
-    degenerate 1.0, which is a gap on both sides.  The 145-px fixture is the
-    binding one because a 145-pixel rim is already well sampled, so the
-    staircase it beats is the mildest of the three -- which is the right
-    fixture for the bar to be derived from.
+    degenerate 1.0, which is a gap on both sides.
+
+    The 145-px fixture is the binding one, but NOT because a bigger rim is a
+    milder staircase (VERIFY-C1 ROUND2 defect R4, which refuted that reading
+    of it).  The ratio is set by where each arm's SIGNED area error falls
+    relative to ZERO, and at ``D/dx = 145`` the hard arm happens to be near a
+    crossing.  A 30-point scan of that fixture's neighbourhood -- the same
+    ``D``, ``dy/dx`` in {0.4, 0.5, 1.0} and ten offsets -- finds FOUR ratios
+    below 1.0, the worst **0.003602** at ``dy/dx = 1.0, offset 0.23``, where
+
+        e_hard = +2.188924e-07   against   e_g4 = +6.077725e-05
+
+    i.e. the hard arm is ~278x BETTER there, purely because its staircase
+    error is passing through zero; the three shipped fixtures' own signed
+    readings are -4.845644e-03 / -8.348003e-04, -7.202868e-04 / +8.170338e-05
+    and +6.077725e-05 / +3.049807e-05.  So the ratio is **not monotone in the
+    rim width**: it inverts wherever the hard arm's signed error crosses zero,
+    which on this fixture family happens inside ``D/dx = 145`` itself as the
+    offset moves from 0.29 (ratio 1.9928) to 0.23 (ratio 0.0036) -- one
+    neighbouring offset away.  The grey arm cannot compensate, because its own
+    sub-sample quantisation residual (about 3e-05 to 8e-05 here) does not
+    shrink with ``D``; see VERIFY_WP-C1.md sec. 2.5, and note that the
+    second-order convergence claim is a FIELD property, not an AREA one.
+
+    Consequence for a future re-pinner: the bar is a pin on THESE THREE
+    fixtures and must be RE-MEASURED, not extrapolated, if they change.
+    "Pick a bigger D, the staircase will be milder" is the opposite of what
+    the data does.  Re-measured 2026-09-20, character-identical on Windows
+    py3.14 / numpy 2.4.4 and WSL py3.12 / numpy 2.4.6; raw JSON in
+    ``validation/probe_verify_c1_round2/d2_ratio_R2_*.json`` and
+    ``validation/probe_wpc1_round3/d2_ratio_R3_*.json``.
     """
     N, dx = 512, 1e-6
     dy = dx * dy_ratio
