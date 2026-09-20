@@ -7,12 +7,13 @@ migration recipe -- "I bumped from v4.X to v4.Y, what do I change?".
 
 ## Versions covered
 
-v4.13 through v5.49.  Sections are in version order; the newest is
-[5.49.0 -- `method='auto'` selects the direct-matrix MFT route at a small output grid](#5490----methodauto-selects-the-direct-matrix-mft-route-at-a-small-output-grid)
-at the end of this file.  The 5.46.0 section is the largest single batch of
+v4.13 through v5.49.  Sections are in version order; the newest, 5.49.0, is at
+the end of this file.  The 5.46.0 section is the largest single batch of
 behaviour changes the library has shipped, 5.47.0 is the wave that implemented
-what it deferred, and 5.49.0 is the release that turns the settings those waves
-shipped switchable into the defaults their measurements supported.
+what it deferred, 5.48.0 finished that audit's handoff (two answers move from
+wrong to right, several silent wrong answers become refusals), and 5.49.0 is the
+release that turns the settings those waves shipped switchable into the defaults
+their measurements supported.
 
 Only behavior shifts that **require user code changes** or **change
 numerical answers** are listed.  Pure additions (new functions, new
@@ -1776,6 +1777,166 @@ the RCWA Toeplitz inverses (12 to 20 times slower and two decades less accurate 
 shipped inverse), the chessboard FFT-shift identity (bit-identical only on power-of-two
 grids).
 
+
+---
+
+## 5.48.0 -- adversarial audit remediation, Wave 5 (2026-09-20)
+
+Wave 5 finishes the 2026-09-11 audit's handoff: the open work items, the hygiene the
+earlier waves deferred, and the follow-ups their verifications raised (the `WP-B12`,
+`WP-B13`, `WP-B11c` and hygiene-2 reports under
+[`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/`](docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/)).
+5.48.1 is this release plus one test repair; nothing below changes between the two.
+No numerical DEFAULT moves in this release (the defaults that measured better are the
+subject of 5.49.0).  Two ANSWERS move, both from wrong to right and both without a way
+back; several calls that used to serve a wrong field silently now refuse; one warning
+threshold moves; the deprecation horizon slips.  Everything else is opt-in or byte-identical.
+
+### Answers that move (no signature change, no way back)
+
+**Frozen-Gaussian swarm, curved last surface (`apply_real_lens_fga`, `apply_real_lens_fga_vector`,
+`apply_real_lens_universal(method='fga')`, and `apply_real_lens_auto` when it dispatches to FGA).**
+The image-side free-space leg was added to the beamlet state as if that state sat on the last
+surface's VERTEX plane, while the ray-transfer primitives return it ON the surface (`z = sag(rho)`).
+Every beamlet therefore carried a spurious optical path of `n_exit * sag(rho) * sec(theta)` and a
+spurious transverse offset of `sag(rho) * u` -- a defocus-plus-spherical term growing with the
+square of the pupil radius: 7.79 waves at the rim of an N-SF11 R = +/-1.6 mm biconvex at 633 nm,
+5.36 waves on a bent N-LAK22 singlet, 1.06 waves on a weakly curved meniscus, exactly zero on a flat
+last surface.  The four FGA sites now project to the exit-vertex plane through one shared
+implementation (exact for conic, even-aspheric, biconic, freeform and field-frame surfaces, and
+through a mirror).  Against a brute-force Rayleigh-Sommerfeld oracle the fields go from fidelity
+0.07-0.53 to 0.9995-0.9998.  **Every FGA field on a prescription whose last surface is curved
+changes**, and so does the caustic-zone estimate on such a prescription (its near edge moves by
+about the last surface's sag, 0.4-0.5 % of the focal distance) and therefore any routing decision
+that sat at the edge of that zone.  There is no keyword that restores the old fields; they are
+reachable only from the parent commit.  A prescription whose last surface is FLAT is unaffected,
+bit for bit.  Callers who pinned FGA output digests on a curved-last-surface prescription must
+re-record them.  The primitives `ray_transfer_jacobian` and `ray_transfer_jacobian_analytic` gain
+`reference='surface' | 'exit_vertex'`; their default `'surface'` is unchanged.
+
+**Gaussian beamlet decomposition, per-surface branch, non-conic or mirror last surface
+(`apply_real_lens_gbd`, `apply_prescription_persurface_to_beamlets`,
+`propagate_gbd_through_prescription(per_surface=True)`, `apply_real_lens_universal(method='gbd')`).**
+The per-surface image leg carried its own in-line CONIC sag correction, which is wrong on an even
+asphere, a biconic, a freeform, a field-frame decentred or tilted surface, and a mirror.  It now
+uses the same shared exit-vertex projection as the FGA entry above, with the Jacobian projected
+together with the state (`J_v = P J`) rather than composed with a plain free-space step.  **Every
+field on a prescription whose last surface is one of those classes changes**, from wrong to right,
+with no way back.  A CONIC last surface moves only in the fifth decimal (5.5e-5 relative in the
+beamlet `Q`, 6.9e-6 in amplitude, 8.9e-6 rad of phase; base-ray positions and optical paths are
+bit-identical) because of the Jacobian projection.  A FLAT last surface and the
+`world_output_plane` branch are bit-identical.  Callers who pinned per-surface GBD digests on an
+aspheric, biconic, freeform, field-frame or mirror last surface must re-record them.
+
+### Calls that now refuse instead of answering
+
+**Uniform caustic completion on a blown-up multibranch field (`apply_real_lens_traced_uniform`,
+`apply_real_lens_traced(caustic='uniform')`).**  The completion accepted a multibranch
+reconstruction carrying 93x to 6097x the launched power (an axial-focus ring collapsing onto a
+handful of pixel centres) and reported `fell_back=False` with a good-looking fit residual.  It now
+refuses when the bracketed multibranch power ratio leaves the band whose upper edge is the
+multibranch's own gain tripwire (`_MB_POWER_RATIO_MAX = _ENERGY_BLOWUP_FACTOR = 2.0`, derived on
+five optics and 51 fold planes against the direct oracle: accepted planes read 0.82-1.25, the
+smallest broken one 5.85).  Every refused field has already emitted the multibranch's own
+`RuntimeWarning`.  The LOSS side is reported, not refused (a multibranch field that loses energy is
+this module's normal input).  The diagnostics carry `multibranch_power_ratio`,
+`multibranch_power_ratio_bracketed`, `multibranch_power_ratio_band` and `power_ratio_decision` on
+every return path; the multibranch's own diagnostics gain `n_branch_max`, `launched_power` and
+`launched_power_triangles`.  Falling back is not a remedy (the fallback target is the same field)
+and there is no keyword that serves the refused field.
+
+**FGA image leg into a non-unit exit index (the four FGA sites, including the caustic-zone
+estimate).**  The image leg is index-free, so an exit medium with `n != 1` was served wrong by
+`|n - 1| * z_image * sec` of optical path.  It is now refused with a named error when
+`|n - 1| > 1e-3 * lambda / max(|z_image|, lambda)` (a one-milliwave budget over the leg).  No
+prescription served today reaches it: `get_glass_index('air', lambda)` is exactly 1.0 on this
+registry.  A caller who registers a purge gas or an index-matching fluid as the exit medium (real
+air at STP, `n - 1 = 2.77e-4`, is refused at any image distance beyond 10 um) needs the open
+follow-up "carry `n_exit` in the FGA image leg", not a looser tolerance.
+
+**GBD per-surface local branch, immersed exit or mirror-terminated prescription.**  Both classes
+were served wrong with no warning (a mirror-terminated system returned positions at `z = +f`
+while the light is at `z = -f`; spot RMS four decades wide).  Both now refuse with a named error.
+No shipped prescription is affected (every GBD fixture exits into air through a transmissive
+surface; fields are byte-identical archive-to-archive).  A caller who really terminates in a
+medium must add it as an explicit last element or use a propagator that carries the exit index; a
+caller with a mirror-terminated system must propagate to the mirror and continue the reverse leg
+themselves.  `world_output_plane` serves a FLAT terminating mirror through an explicit `(p0, R_out)`
+plane and raises `NotImplementedError` on a curved fold mirror; the refusal message says which.
+
+**Writes to eight moved names on `lumenairy.elements.lenses`.**  WP-B11c moved
+`CUPY_AVAILABLE`, `_is_cupy_array`, `_ensure_cupy_loaded`, `_load_numba`,
+`_get_aspheric_sag_accum_numba`, `_ensure_numexpr_loaded`, `_collect_semi_diameters` and
+`_warn_if_aperture_exceeds_grid` to `lumenairy.elements._lens_kernels`; a `monkeypatch.setattr` or
+`del` on the old module silently reached nothing (or removed the re-export for the rest of the
+process).  Setting or deleting any of the eight on `lenses` now raises `AttributeError` naming
+`_lens_kernels` as the address that works.  Reading is untouched: same object, same `import *`
+surface, same `dir()`.  This affects test code that patches, not library callers.
+
+**`_collins_transport` under a JAX trace.**  The transport now runs on the field's own backend
+(NumPy, JAX, CuPy; the NumPy path is byte-identical).  Two of its decisions MEASURE the envelope,
+which a tracer cannot supply, so under `jax.jit` / `jax.grad` it refuses unless the caller has taken
+both decisions (`gap_kernel='fresnel'`, `on_collins_sampling='ignore'`); the message names both.
+An eager JAX or CuPy array measures normally.
+
+### Values that move in the last bits (no signature change)
+
+**Dead rays in the exit-vertex projection.**  A ray that never reached the last surface is now
+frozen by the projection instead of being pushed along an undefined direction; every row that
+DID reach the surface is byte-identical (30 of 30 cells, both builds).  Only callers reading the
+positions of dead rays out of a Jacobian result see a change.
+
+### Warning text
+
+**The chirp phase-budget warning on the matrix-Fourier-transform propagators
+(`fresnel_propagate_mft`, `fraunhofer_propagate_mft`, `angular_spectrum_propagate_mft` on the
+chirp-Z routes).**  It fired at `alpha * N_max^2 > 1e15`, where the routes are already 25 % wrong.
+The error is linear in the budget (`rel ~ eps * budget`, measured over 11 decades), so the
+threshold is now read off that law at six significant figures: `1e-6 / eps = 4.5036e9`.  No
+answer moves; a caller between the two thresholds now hears about an error they were already
+paying.  At the natural MFT grids the budget is of order 1e4, so shipped callers stay silent.
+
+**Deprecation warnings** for the three GBD aliases now read "will be removed in v5.50
+(rescheduled from v5.48)" -- see the next section.
+
+### Deprecation horizon: 5.48 -> 5.50
+
+`lumenairy._deprecation.NEXT_REMOVAL_VERSION` moves from `'5.48'` to `'5.50'` and
+`REMOVAL_SCHEDULE` gains `{'5.48': '5.50'}`.  Nothing is removed in this release.  The three GBD
+aliases `gbd_field_to_asm`, `asm_field_to_gbd` and `match_global_phase` (deprecated in 5.46) keep
+working until 5.50, and the `CarrierField` attribute-assignment freeze resolves to 5.50 through the
+same registry.  Code that reads a removal version through `resolve_removal_version` gets the live
+horizon; code that pinned the literal `'5.48'` must update.
+
+### Opt-in additions, default byte-identical
+
+MFT: `method='direct'` on the three MFT entry points and on `_bluestein_2d` /
+`_bluestein_centred_2d` selects the dense matrix-Fourier route (two matrix products,
+`O(M N^2 + M^2 N)`, not the `O(N^2 M^2)` the old Notes quoted); in 5.48 the default `'auto'` is
+the pre-5.48 dispatch exactly (179 of 179 fixtures byte-identical), and 5.49.0 changes what
+`'auto'` selects.  Collins transport on JAX and CuPy backends (NumPy 84 of 84 byte-identical; the
+trace-time refusal is listed above).  The near-focus exact-kernel measurement lands as a table
+and tests with no default moved (5.49.0 acts on it).  `ray_transfer_jacobian(reference=)` and
+`ray_transfer_jacobian_analytic(reference=)`, default `'surface'` unchanged.
+
+Lens-traced Newton pool: a broken worker pool (a worker dies while the executor's feeder thread is
+mid-write, so every pending future fails with `BrokenProcessPool`) falls back to serial instead of
+hanging the process on an untimed join, and the answer is bit-identical to the pooled one; the persistent pool is no longer rebuilt on almost
+every dispatch; teardown, census and shutdown follow-ups closed.  No field moves.
+
+Structure: WP-B11c moved the RCWA BLAS-thread cap into `lumenairy/elements/rcwa/_blas.py` (the
+public names re-export from `rcwa/_core.py` as the same objects; a test that substitutes one of
+the cap's mutable names must patch `rcwa._blas`) and the lens sag kernels with their CuPy / numba
+/ numexpr plumbing from `lenses.py` into `_lens_kernels.py` (see the write refusal above; the
+S4-20 `exp(-1j*k0*opd)` convention marker moved with them).  Every existing import spelling
+resolves to the same object.  Public answers unchanged.
+
+Documentation: `set_fft_double_buffer`'s registered doc no longer claims "values are byte-identical
+either way" without qualification.  The transform's VALUES are; the object handed back is a live
+workspace view in one mode and a private copy in the other, which a downstream NumPy expression's
+temporary elision can distinguish on some builds.  The Maslov vector-normalisation ULP bar and the
+C8 inverse-support bound are re-derived at run time; two published claims about the 5.47.0
+known-red fixes are corrected against their own re-measurement.
 
 ---
 
