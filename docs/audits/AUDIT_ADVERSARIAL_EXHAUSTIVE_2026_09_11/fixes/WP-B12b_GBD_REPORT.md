@@ -838,18 +838,18 @@ signs of `z_image`:
 
 | arm | returned spot RMS | vs the TRUE focal RMS (7.118e-09 m) | returned `N` sign | leg residual vs the true optical path |
 |---|---|---|---|---|
-| `z_image = +|f|` (+7.499 mm) | **1.4334e-04 m** | **20137x** | **+1** (traced `-1`) | 3.285e-04 waves |
-| `z_image = -|f|` | 7.1183e-09 m | **0.9999999999995587** | **+1** (traced `-1`) | **0.4911 waves** |
+| `z_image = +f` (+7.499 mm) | **1.4334e-04 m** | **20137x** | **+1** (traced `-1`) | 3.285e-04 waves |
+| `z_image = -f` (-7.499 mm) | 7.1183e-09 m | **0.9999999999995587** | **+1** (traced `-1`) | **0.4911 waves** |
 
 Three readings, and one correction to this package's own message.
 
 1. **The mechanism is confirmed exactly.**  The returned spot RMS at
-   `z_image = +|f|` (1.4334e-04 m) EQUALS the traced spot RMS at
-   `z = -|f|` (1.4334e-04 m).  That is what "the returned positions are the
+   `z_image = +f` (1.4334e-04 m) EQUALS the traced spot RMS at
+   `z = -f` (1.4334e-04 m).  That is what "the returned positions are the
    truth at the mirrored plane" means, measured rather than argued: `dt.ux`
    has already flipped with `N`, and `Nz2` has not, so the two sign errors
    compose into a reflection of the image plane.
-2. **At `z_image = -|f|` nothing in the spot warns the caller.**  The
+2. **At `z_image = -f` nothing in the spot warns the caller.**  The
    transverse positions reproduce the true focus to one part in `1e12` of the
    focal RMS -- and the leg is still wrong by **0.4911 waves** after the
    circular mean is removed, reproducing VERIFY-WP-B12b's 0.48 waves.  This is
