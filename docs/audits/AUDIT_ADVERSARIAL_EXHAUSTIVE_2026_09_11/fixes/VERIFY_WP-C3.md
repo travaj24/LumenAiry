@@ -980,7 +980,27 @@ fires on LARGE `|z_eff|`.
   paraxiality was BOUNDED (3.92e-05 on axis, 1.13e-03 in L2) rather than
   removed.  Both library transports are paraxial too, so the comparison is
   like-for-like.
-* **`OPENBLAS_CORETYPE=SkylakeX`** — illegal instruction on this Zen 3 host.
+* **`OPENBLAS_CORETYPE=SkylakeX`** — illegal instruction on this Zen 3 host
+  (Ryzen 9 5950X, no `avx512f`).  Worth recording for the next person:
+  `numpy.show_config()` reports "SkylakeX", but that is the BUILD label, not
+  the runtime pick.
+* **A base-tree WORKTREE** for the `test_v16_synthetic_fabrication_is_caught`
+  pre-existing red — only an archive was available, and the id SKIPS there
+  rather than failing, so §4.4's wording could be neither confirmed nor
+  refuted (see D12).
+* **The `1.2359` in §0** — it is in no saved probe JSON and no spelling of the
+  free leg reproduces it.  This verification can say it is not what the code
+  returns; it cannot say where it came from.
+* **A fully NON-paraxial truth.**  The independent Fresnel reference's own
+  paraxiality was BOUNDED (3.92e-05 on axis, 1.13e-03 in L2) rather than
+  removed.  Both library transports are paraxial too, so every comparison here
+  is like-for-like, but the true physical field below the ~1e-3 level is not
+  established.
+* **The merged tree was not put through the full blast set** — the 3-way merge
+  was built to measure the interaction, and its one new red (§5) was found by
+  running the four files both branches touch.  A full merged run is the gate
+  that should precede the tag, and it is a maintainer action, not a
+  verification one.
 
 ---
 
