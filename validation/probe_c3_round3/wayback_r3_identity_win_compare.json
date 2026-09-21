@@ -1,0 +1,46 @@
+{
+ "arms": {
+  "way": {
+   "bind_stdout": [
+    "[bind] lumenairy.__file__ = C:\\tmp\\lum_c3d\\lumenairy\\__init__.py",
+    "[bind] lumenairy.__version__ = 5.48.1",
+    "[bind] tree = C:\\tmp\\lum_c3d",
+    "[probe_wayback] spelling=sziklas keys=103 build=WIN-py3.14"
+   ],
+   "build": "WIN-py3.14",
+   "n_keys": 103,
+   "seconds": 23.8,
+   "spelling": "sziklas",
+   "tree": "C:\\tmp\\lum_c3d"
+  },
+  "waypre": {
+   "bind_stdout": [
+    "[bind] lumenairy.__file__ = C:\\tmp\\c3d_pre\\lumenairy\\__init__.py",
+    "[bind] lumenairy.__version__ = 5.48.1",
+    "[bind] tree = C:\\tmp\\c3d_pre",
+    "[probe_wayback] spelling=sziklas keys=103 build=WIN-py3.14"
+   ],
+   "build": "WIN-py3.14",
+   "n_keys": 103,
+   "seconds": 26.4,
+   "spelling": "sziklas",
+   "tree": "C:\\tmp\\c3d_pre"
+  }
+ },
+ "comparisons": {
+  "waypre:way": {
+   "differ": [],
+   "differ_detail": {},
+   "n_differ": 0,
+   "n_identical": 103,
+   "n_keys_left": 103,
+   "n_keys_right": 103,
+   "n_shared": 103,
+   "only_left": [],
+   "only_right": [],
+   "verdict": "IDENTICAL"
+  }
+ },
+ "python": "C:\\Users\\Tesla\\AppData\\Local\\Programs\\Python\\Python314\\python.exe",
+ "tag": "c3dwb_win"
+}

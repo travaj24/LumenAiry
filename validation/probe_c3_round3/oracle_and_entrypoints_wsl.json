@@ -1,0 +1,241 @@
+{
+ "tree": "/mnt/c/tmp/lum_c3d",
+ "lumenairy": "/mnt/c/tmp/lum_c3d/lumenairy/__init__.py",
+ "python": "3.12.3",
+ "numpy": "2.4.6",
+ "platform": "Linux-4.4.0-26100-Microsoft-x86_64-with-glibc2.39",
+ "readout_default_transport": "collins",
+ "c_moment_certification": [
+  {
+   "lam": 1.31e-06,
+   "w_in": 0.001,
+   "r0": -0.02,
+   "ext": 4.0,
+   "z": 0.0004,
+   "w_law_um": 980.0000141940242,
+   "w_abcd_um": 980.0000141940636,
+   "rel": 4.0270365823339004e-14
+  },
+  {
+   "lam": 1.31e-06,
+   "w_in": 0.001,
+   "r0": -0.02,
+   "ext": 4.0,
+   "z": 0.004,
+   "w_law_um": 800.0017387709105,
+   "w_abcd_um": 800.0017387709429,
+   "rel": 4.0521968123619824e-14
+  },
+  {
+   "lam": 1.31e-06,
+   "w_in": 0.001,
+   "r0": -0.02,
+   "ext": 4.0,
+   "z": 0.01,
+   "w_law_um": 500.017387425982,
+   "w_abcd_um": 500.01738742600224,
+   "rel": 4.054775120891046e-14
+  },
+  {
+   "lam": 1.31e-06,
+   "w_in": 0.001,
+   "r0": -0.02,
+   "ext": 4.0,
+   "z": 0.018000000000000002,
+   "w_law_um": 100.28128559094041,
+   "w_abcd_um": 100.2812855909443,
+   "rel": 3.865150654775506e-14
+  },
+  {
+   "lam": 1.31e-06,
+   "w_in": 0.001,
+   "r0": -0.02,
+   "ext": 4.0,
+   "z": 0.0194,
+   "w_law_um": 31.07153768842877,
+   "w_abcd_um": 31.07153768842874,
+   "rel": 8.723435120570722e-16
+  },
+  {
+   "lam": 8.5e-07,
+   "w_in": 0.0006,
+   "r0": -0.0075,
+   "ext": 4.0,
+   "z": 0.00015,
+   "w_law_um": 588.0000038905243,
+   "w_abcd_um": 588.0000038905481,
+   "rel": 4.038099901416382e-14
+  },
+  {
+   "lam": 8.5e-07,
+   "w_in": 0.0006,
+   "r0": -0.0075,
+   "ext": 4.0,
+   "z": 0.0015,
+   "w_law_um": 480.0004765919,
+   "w_abcd_um": 480.00047659191955,
+   "rel": 4.0657541099340675e-14
+  },
+  {
+   "lam": 8.5e-07,
+   "w_in": 0.0006,
+   "r0": -0.0075,
+   "ext": 4.0,
+   "z": 0.00375,
+   "w_law_um": 300.00476588369304,
+   "w_abcd_um": 300.0047658837052,
+   "rel": 4.047623808931364e-14
+  },
+  {
+   "lam": 8.5e-07,
+   "w_in": 0.0006,
+   "r0": -0.0075,
+   "ext": 4.0,
+   "z": 0.00675,
+   "w_law_um": 60.07715831757467,
+   "w_abcd_um": 60.077158317576625,
+   "rel": 3.2484291286842436e-14
+  },
+  {
+   "lam": 8.5e-07,
+   "w_in": 0.0006,
+   "r0": -0.0075,
+   "ext": 4.0,
+   "z": 0.007274999999999999,
+   "w_law_um": 18.29650823061022,
+   "w_abcd_um": 18.296508230612442,
+   "rel": 1.216626996434166e-13
+  },
+  {
+   "lam": 8.5e-07,
+   "w_in": 0.0002,
+   "r0": -0.02,
+   "ext": 6.0,
+   "z": 0.0004,
+   "w_law_um": 196.0007469838335,
+   "w_abcd_um": 196.00074698383352,
+   "rel": 1.382905663842867e-16
+  },
+  {
+   "lam": 8.5e-07,
+   "w_in": 0.0002,
+   "r0": -0.02,
+   "ext": 6.0,
+   "z": 0.004,
+   "w_law_um": 160.0914795423936,
+   "w_abcd_um": 160.0914795423936,
+   "rel": 0.0
+  },
+  {
+   "lam": 8.5e-07,
+   "w_in": 0.0002,
+   "r0": -0.02,
+   "ext": 6.0,
+   "z": 0.01,
+   "w_law_um": 100.91090817128728,
+   "w_abcd_um": 100.91090817128728,
+   "rel": 0.0
+  },
+  {
+   "lam": 8.5e-07,
+   "w_in": 0.0002,
+   "r0": -0.02,
+   "ext": 6.0,
+   "z": 0.018000000000000002,
+   "w_law_um": 31.511218589113096,
+   "w_abcd_um": 31.511218589113163,
+   "rel": 2.150428920694149e-15
+  },
+  {
+   "lam": 8.5e-07,
+   "w_in": 0.0002,
+   "r0": -0.02,
+   "ext": 6.0,
+   "z": 0.0194,
+   "w_law_um": 26.921769252847753,
+   "w_abcd_um": 26.921769252847618,
+   "rel": 5.034040307226578e-15
+  }
+ ],
+ "a_matched": {
+  "w0_closed_form_um": 8.339719018015314,
+  "w_abcd_at_focus_um": 8.339719018015316,
+  "analytic_peak_intensity": 14377.956414383429,
+  "abcd_peak_intensity": 14377.95641438342,
+  "moment_law_at_focus_um": 8.339719018011786,
+  "sziklas": {
+   "peak_vs_abcd": 0.9999204453155568,
+   "relL2_vs_abcd": 0.0009351307751380594,
+   "containment": 3.212815060979721,
+   "standoff_um": 222.39250714706805,
+   "warnings": []
+  },
+  "collins": {
+   "peak_vs_abcd": 0.9999298005642074,
+   "relL2_vs_abcd": 0.00093497572746617,
+   "containment": 3.367679469811123,
+   "standoff_um": 222.39250714706805,
+   "warnings": []
+  }
+ },
+ "b_gated": {
+  "r_eff_mm": -9.09090909090909,
+  "w_abcd_at_target_um": 241.52027979409078,
+  "moment_law_at_target_um": 241.52027979409078,
+  "resolved_sziklas": {
+   "raised": null,
+   "peak_vs_abcd": 1.0010487846640976,
+   "relL2_vs_abcd": 0.00035794275919801574,
+   "containment": 3.199644039423314,
+   "containment_model": 3.1999999999999935,
+   "standoff_um": 5929.850649997878
+  },
+  "resolved_sziklas_default": "returned",
+  "resolved_collins": {
+   "raised": null,
+   "peak_vs_abcd": 0.9999986371647641,
+   "relL2_vs_abcd": 2.60615351684408e-06,
+   "containment": 5.019970161635624,
+   "containment_model": 5.019970161635624,
+   "standoff_um": 5929.850649997878
+  },
+  "resolved_collins_default": "returned",
+  "gated_sziklas": {
+   "raised": null,
+   "peak_vs_abcd": 1.409319570831399,
+   "relL2_vs_abcd": 0.10022126315060166,
+   "containment": 0.8662159997518982,
+   "containment_model": 0.499740906580087,
+   "standoff_um": 1705.8706692295589
+  },
+  "gated_sziklas_default": "RuntimeError",
+  "gated_collins": {
+   "raised": null,
+   "peak_vs_abcd": 0.9999981102741854,
+   "relL2_vs_abcd": 9.771728898948502e-07,
+   "containment": 2.8402696063648745,
+   "containment_model": 2.840268972258554,
+   "standoff_um": 1705.8706692295589
+  },
+  "gated_collins_default": "returned"
+ },
+ "d_entrypoints": {
+  "call_sites": [
+   {
+    "file": "propagators/carrier.py",
+    "line": 11705,
+    "names_transport": true,
+    "splat": true
+   },
+   {
+    "file": "propagators/carrier.py",
+    "line": 11743,
+    "names_transport": true,
+    "splat": true
+   }
+  ],
+  "gui_files_mentioning_focus_readout": [],
+  "chain_transport_default": "collins",
+  "multi_transport_default": "collins"
+ }
+}

@@ -1,0 +1,112 @@
+{
+ "arms": {
+  "mine": {
+   "build": "WSL-py3.12",
+   "n_keys": 103,
+   "seconds": 52.0,
+   "spelling": "default",
+   "tree": "/mnt/c/tmp/lum_c3d"
+  },
+  "pre": {
+   "build": "WSL-py3.12",
+   "n_keys": 103,
+   "seconds": 52.2,
+   "spelling": "default",
+   "tree": "/mnt/c/tmp/c3d_pre"
+  },
+  "way": {
+   "build": "WSL-py3.12",
+   "n_keys": 103,
+   "seconds": 50.1,
+   "spelling": "sziklas",
+   "tree": "/mnt/c/tmp/lum_c3d"
+  },
+  "waypre": {
+   "build": "WSL-py3.12",
+   "n_keys": 103,
+   "seconds": 50.2,
+   "spelling": "sziklas",
+   "tree": "/mnt/c/tmp/c3d_pre"
+  }
+ },
+ "comparisons": {
+  "pre:mine": {
+   "differ": [
+    "P1-focus-readout-collimated",
+    "P1-focus-readout-containment-ignore",
+    "P1-focus-readout-containment-warn",
+    "P1-focus-readout-standoff-1mm",
+    "P1-focus-readout-standoff-3mm"
+   ],
+   "n_differ": 5,
+   "n_identical": 98,
+   "n_shared": 103,
+   "verdict": "DIFFERS"
+  },
+  "pre:way": {
+   "differ": [
+    "C1-bare-final",
+    "C1-bare-final-long",
+    "C1-bare-zero-distance",
+    "C2-readout",
+    "C2-readout-bandlimit-off",
+    "C2-readout-bandlimit-on",
+    "C2-readout-centre",
+    "C2-readout-containment-ignore",
+    "C2-readout-containment-warn",
+    "C2-readout-long",
+    "C2-readout-replica-repeat",
+    "C2-readout-replica-zero",
+    "C2-readout-standoff-2mm",
+    "C2-readout-standoff-5mm",
+    "C2-readout-zero-distance",
+    "C3-exact-kernel",
+    "C3-fresnel-bare",
+    "C3-fresnel-kernel",
+    "C4-collimated-input",
+    "C4-single-group",
+    "C5-final-leg-auto-readout",
+    "C5-final-leg-exact-bare",
+    "C5-final-leg-exact-readout",
+    "J1-jax-focuscross",
+    "M1-K1",
+    "M1-K1-long",
+    "M1-K2",
+    "M1-K2-long",
+    "M2-K1-standoff",
+    "M2-K1-zero-distance",
+    "M2-K2-standoff",
+    "M3-K1-fresnel",
+    "M3-K1-tile2",
+    "M3-K2-incoherent",
+    "M4-K1-final-leg-exact",
+    "S1-convlong-auto",
+    "S1-convlong-fresnel",
+    "S1-diverging-auto",
+    "S1-diverging-fresnel",
+    "S1-farpastfocus-auto",
+    "S1-farpastfocus-fresnel",
+    "S1-focuscross-auto",
+    "S1-focuscross-fresnel",
+    "S1-nearfocus-auto",
+    "S1-nearfocus-fresnel",
+    "S2-exactkernel-focuscross",
+    "S3-astig-focuscross",
+    "S7-carrierout-refused",
+    "S7-dxout-refused"
+   ],
+   "n_differ": 49,
+   "n_identical": 54,
+   "n_shared": 103,
+   "verdict": "DIFFERS"
+  },
+  "waypre:way": {
+   "differ": [],
+   "n_differ": 0,
+   "n_identical": 103,
+   "n_shared": 103,
+   "verdict": "IDENTICAL"
+  }
+ },
+ "tag": "c3d_wsl"
+}
