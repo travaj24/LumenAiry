@@ -452,16 +452,29 @@ class TestDefaultIsByteIdentical:
         is about is therefore asserted directly -- the readout still HAS a
         stop plane on both settings, and still refuses the one-step form's
         own vocabulary -- instead of by the absence of a keyword.
+
+        AND ROUND 3 (maintainer decision 2026-09-20) MOVES THAT KEYWORD'S
+        DEFAULT to ``'collins'``, because the standoff leg is measured at
+        relative L2 4.7340e-05 there against 2.4049 on the co-moving one
+        (converged dense separable Fresnel oracle; ``test_c3_collins_default
+        .py::test_the_focus_readouts_standoff_leg_takes_that_readouts_own_
+        transport`` is the id that grades them).  That is a decision about
+        the QUADRATURE and it leaves this id's claim untouched: what is
+        asserted below is that BOTH settings still go through a stop plane,
+        which is what "it is still the standoff readout" means, and that the
+        two settings hand the guard DIFFERENT stop planes, which is what
+        makes ``transport='sziklas'`` a real way back rather than a
+        decoration.  The default's VALUE is pinned here only so that a
+        silent move of it cannot pass unnoticed by this file.
         """
         import inspect
         p = inspect.signature(C.carrier_referenced_focus_readout).parameters
         assert 'on_collins_sampling' not in p, (
             'the standoff readout took the one-step form\'s Kelly guard '
             'keyword, which means it is no longer only the standoff readout')
-        assert p['transport'].default == 'sziklas', (
-            'the standoff readout moved its own default; this entry point has '
-            'no other way back, and the resolver and guard around the leg '
-            'are derived about the co-moving stop plane')
+        assert p['transport'].default == 'collins', (
+            'the standoff readout moved its own default away from the '
+            'quadrature WP-C3 round 3 measured as the accurate one')
         # the STOP PLANE is still there on both settings, which is the
         # property "it is the Sziklas readout" actually means.
         n, dx = 128, 4e-6
@@ -469,6 +482,7 @@ class TestDefaultIsByteIdentical:
         X, Y = np.meshgrid(x, x)
         env = np.exp(-(X ** 2 + Y ** 2) / (120e-6 ** 2)).astype(
             np.complex128)
+        _cont = {}
         for tr in ('sziklas', 'collins'):
             pd = {}
             with warnings.catch_warnings():
@@ -481,6 +495,12 @@ class TestDefaultIsByteIdentical:
             assert pd['standoff'] == 1e-3 and 'containment' in pd, (
                 f'transport={tr!r} did not go through a stop plane, so this '
                 f'entry point is no longer the standoff readout: {pd!r}')
+            _cont[tr] = pd['containment']
+        # the way back is a real way back: the two settings hand the guard
+        # different stop planes (measured 2026-09-20, this fixture with the
+        # guard waived: co-moving 1.8394 measured /
+        # 0.1746 modelled, Collins 4.5754 / 4.5768).
+        assert _cont['sziklas'] != _cont['collins'], _cont
 
         # ``replica_fill``: its CONSEQUENCE as well as its spelling.  WP-B4
         # pinned the literal ``'repeat'`` at the tail of this method; WP-C5
@@ -499,20 +519,39 @@ class TestDefaultIsByteIdentical:
         assert fill in ('repeat', 'zero'), (
             f'replica_fill grew a third value {fill!r} without this '
             f'vocabulary gate being told')
-        n2, dx2, so2 = 128, 4e-6, 1e-4
+        n2, dx2, so2, dxo2 = 128, 4e-6, 1e-4, 1e-6
         x2 = (np.arange(n2) - n2 / 2) * dx2
         X2, Y2 = np.meshgrid(x2, x2)
         e2 = np.exp(-(X2 ** 2 + Y2 ** 2) / (120e-6 ** 2)).astype(
             np.complex128)
+        # THE WINDOW IS RESOLVED FROM THIS BUILD'S OWN PERIOD, NOT PINNED
+        # (WP-C3 round 3, 2026-09-20).  The Bluestein period here is a
+        # property of the STOP grid, and which stop grid the leg returns is
+        # exactly what ``transport`` chooses: the same leg reports 230.4000 um
+        # of period on the co-moving stop plane and 445.3012 um on the Collins
+        # one, so the 409.6 um window this line used to pin overshot the first
+        # and not the second -- the premise below would have gone quietly
+        # false when the default moved, which is standards shape S3.  A probe
+        # pass reads the period (it does not depend on ``N_out``), and the
+        # window is then sized at TWO periods so the corner sampled below is
+        # ~1.4 periods from the field's own origin on either transport.
+        pd0 = {}
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            C.carrier_referenced_focus_readout(
+                e2, -0.03, 0.03, 633e-9, dx2, dx_out=dxo2, N_out=64,
+                standoff=so2, on_replica='ignore',
+                on_focus_containment='ignore', _period_out=pd0)
+        n_out2 = 2 * int(np.ceil(2.0 * min(pd0['period']) / dxo2 / 2.0))
         pd2 = {}
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
             F = np.asarray(C.carrier_referenced_focus_readout(
-                e2, -0.03, 0.03, 633e-9, dx2, dx_out=2e-7, N_out=2048,
+                e2, -0.03, 0.03, 633e-9, dx2, dx_out=dxo2, N_out=n_out2,
                 standoff=so2, on_replica='ignore',
                 on_focus_containment='ignore', _period_out=pd2))
         per = min(pd2['period'])
-        win = 2048 * 2e-7
+        win = n_out2 * dxo2
         assert win > per, (
             f'the fixture no longer reaches outside one Bluestein period '
             f'({win * 1e6:.4f} um against {per * 1e6:.4f} um), so it cannot '

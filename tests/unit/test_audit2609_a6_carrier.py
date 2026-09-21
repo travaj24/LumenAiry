@@ -144,29 +144,75 @@ class TestC1FocusReadoutContainment:
     def test_the_pre_fix_leg_really_was_that_bad(self):
         """FAIL-BEFORE, in process: revert the resolver's beam term (its only
         change) and confirm the audit's measured column reappears -- so the
-        test above is pinning a real defect and not a fixture artefact."""
+        test above is pinning a real defect and not a fixture artefact.
+
+        WHAT THE CLAIM IS, PHYSICALLY, AND WHY IT NAMES A TRANSPORT (WP-C3
+        round 3, 2026-09-20).  The pre-C1 resolver sized the leg from the
+        CARRIER alone, so it stopped SHORT.  What makes a short leg expensive
+        is not its length: it is that the CO-MOVING grid has contracted by
+        the time the beam lands on it, and the periodic Bluestein
+        reconstruction then wraps the halo that grid no longer holds.  The
+        Collins stop plane does not contract -- its pitch is floored at the
+        one that still holds the ABCD image of the measured input box -- so
+        the SAME leg costs almost nothing there.  Both are read below, and it
+        is the pair that makes this a decision about the grid rather than a
+        reading of one number.
+
+        ORACLE (independent of both quadratures): the analytic Gaussian-ABCD
+        focal field in closed form.  The readout plane IS this fixture's
+        geometric focus, so the truth is ``w0 = lambda |R| / (pi w_in)`` and
+        a peak intensity of ``(w_in / w0)^2`` -- 14377.956414 here, which the
+        matched readout reads to 0.99992 on BOTH transports.  For a Gaussian
+        that closed form is the exact second-moment law
+        ``<r^2>(z) = <r^2> + 2 z <r.theta> + z^2 <theta^2>``: the two agree
+        to 1.2e-13 relative over 15 cells spanning three fixtures and
+        ``z/|R|`` from 0.02 to 0.97 (measured 2026-09-20, both builds).  The
+        old spelling normalised by the library's own matched readout, which
+        is the library grading itself.
+
+        MEASURED 2026-09-20 on WIN-py3.14 and WSL-py3.12 (identical to
+        3.3e-16), the pre-fix leg's focal peak as a fraction of the analytic
+        peak, and the containment the guard read:
+
+            R/R0   co-moving   its containment   Collins   its containment
+            0.98   0.745373         1.387        0.997221       2.441
+            0.95   0.187898         0.909        0.997137       2.460
+            0.90   0.026307         0.863        0.995544       2.441
+
+        BARS.  The co-moving arm keeps the audit's own three bars unchanged
+        (1.2x above each measured value, and 4x-37x under the post-fix
+        0.985+).  The Collins arm is barred at 0.95 -- 1.05x under its worst
+        measured row, and 1.34x / 5.3x / 37.8x above the co-moving reading on
+        the same row -- so no single field can satisfy both arms, and what
+        separates them is the grid the leg returned."""
         e_phys, r0, dx, w0 = _c1_fixture()
         z = -r0
         kw = dict(dx_out=w0 / 8.0, N_out=64, on_replica='ignore',
                   on_focus_containment='ignore')
-        env_ref = C.carrier_referenced_envelope(e_phys, r0, LAM, dx)
-        f_ref = C.carrier_referenced_focus_readout(
-            env_ref, r0, z, LAM, dx,
-            standoff=_pre_fix_standoff(env_ref, r0, z, dx), **kw)
+        # the analytic focal peak intensity of the fixture's own beam
+        # ((w_in/w0)^2 with w_in = 1.0 mm, the _c1_fixture input radius).
+        peak_truth = (1.0e-3 / w0) ** 2
         got = {}
+        for tr in ('sziklas', 'collins'):
+            for frac in (0.98, 0.95, 0.90):
+                r = frac * r0
+                env = C.carrier_referenced_envelope(e_phys, r, LAM, dx)
+                s_old = _pre_fix_standoff(env, r, z, dx)
+                f = C.carrier_referenced_focus_readout(
+                    env, r, z, LAM, dx, standoff=s_old, transport=tr, **kw)
+                got[tr, frac] = float((np.abs(f) ** 2).max() / peak_truth)
+        # measured pre-fix on the CO-MOVING grid: 0.745373 / 0.187898 /
+        # 0.026307 (the audit's CARRIER/p6c.out read 0.745432 / 0.187913 /
+        # 0.026309 against the library's own matched readout, which is
+        # 0.99992 of the analytic peak used here).  Bars at 1.2x above each
+        # measured value and comfortably under the post-fix 0.985+.
+        assert got['sziklas', 0.98] < 0.90, got
+        assert got['sziklas', 0.95] < 0.23, got
+        assert got['sziklas', 0.90] < 0.04, got
+        # ... and the SAME leg on the Collins stop plane, which does not
+        # contract: measured 0.997221 / 0.997137 / 0.995544, barred at 0.95.
         for frac in (0.98, 0.95, 0.90):
-            r = frac * r0
-            env = C.carrier_referenced_envelope(e_phys, r, LAM, dx)
-            s_old = _pre_fix_standoff(env, r, z, dx)
-            f = C.carrier_referenced_focus_readout(
-                env, r, z, LAM, dx, standoff=s_old, **kw)
-            got[frac] = float((np.abs(f).max() / np.abs(f_ref).max()) ** 2)
-        # measured pre-fix: 0.745432 / 0.187913 / 0.026309 (CARRIER/p6c.out).
-        # Bars at 1.2x above each measured value and comfortably under the
-        # post-fix 0.985+.
-        assert got[0.98] < 0.90, got
-        assert got[0.95] < 0.23, got
-        assert got[0.90] < 0.04, got
+            assert got['collins', frac] > 0.95, (frac, got)
 
     def test_a_flat_envelope_resolves_the_identical_leg(self):
         """The beam term must be EXACTLY zero when the carrier already is the
@@ -236,37 +282,81 @@ class TestC1FocusReadoutContainment:
 
     def test_the_containment_guard_refuses_the_pre_fix_landing(self):
         """The guard is the second, independent half of the fix: it measures
-        the beam that ACTUALLY landed.  Fed the pre-fix leg it must refuse the
-        rows whose peak collapsed.
+        the beam that ACTUALLY landed.  Fed the pre-fix leg it must refuse
+        the rows whose peak collapsed -- and it must NOT refuse a landing
+        that did not collapse, which is what makes it a DECISION about the
+        field rather than a reading of one grid.
 
-        FLOOR (``_FOCUS_READOUT_CONTAINMENT_MIN`` = 1.0 beam radii of
-        co-moving half-width): measured containment on those rows is 0.909 and
-        0.863 -- 1.10x and 1.16x under the floor -- while the narrowest leg
-        the resolver ever DELIBERATELY chooses across its own 60-cell
-        calibration matrix measures 1.257, i.e. 1.26x over it.  That two-sided
-        clearance is ~1.2x, not decades, and is why the floor is a refusal of
-        the unfittable rather than a quality bar."""
+        RESTATED ON BOTH TRANSPORTS (WP-C3 round 3, 2026-09-20).  Until the
+        readout's ``transport`` default moved, this id read one quadrature
+        and asserted a refusal.  Both are read now, and the guard's decision
+        tracks the damage on each of them.  ORACLE: the analytic
+        Gaussian-ABCD focal peak ``(w_in/w0)^2`` -- the closed form that IS
+        the exact second-moment law for a Gaussian (the two agree to 1.2e-13
+        over 15 cells; see the sibling id above).
+
+        MEASURED 2026-09-20, both builds identical to 3e-16:
+
+            R/R0   leg         containment   peak vs the oracle   default
+            0.95   co-moving      0.909            0.187898       REFUSES
+            0.90   co-moving      0.863            0.026307       REFUSES
+            0.95   Collins        2.460            0.997137       returns
+            0.90   Collins        2.441            0.995544       returns
+
+        FLOOR (``_FOCUS_READOUT_CONTAINMENT_MIN`` = 1.0 beam radii of the
+        half-width of whatever grid the leg RETURNED): the two refused rows
+        are 1.10x and 1.16x under it, and the two returned ones 2.44x and
+        2.46x over it, while the narrowest leg the resolver ever
+        DELIBERATELY chooses across its own 60-cell calibration matrix
+        measures 1.257, i.e. 1.26x over.  That two-sided clearance is ~1.2x,
+        not decades, and is why the floor is a refusal of the unfittable
+        rather than a quality bar.
+
+        BARS ON THE FIELD, which is the half that is not about a grid: a
+        REFUSED row must read below 0.25 of the analytic peak (1.33x over the
+        worse refused reading, 4.0x under the returned ones) and a RETURNED
+        row above 0.95 (1.05x under the worse returned reading).  Neither
+        co-moving bar was moved; the Collins arm is added as the other
+        side."""
         e_phys, r0, dx, w0 = _c1_fixture()
         z = -r0
+        peak_truth = (1.0e-3 / w0) ** 2
         kw = dict(dx_out=w0 / 8.0, N_out=64, on_replica='ignore')
         for frac in (0.95, 0.90):
             env = C.carrier_referenced_envelope(e_phys, frac * r0, LAM, dx)
             s_old = _pre_fix_standoff(env, frac * r0, z, dx)
+            # CO-MOVING: the guard refuses, and the field it refused really
+            # had collapsed.
             with pytest.raises(RuntimeError, match='does not fit the co-moving'):
                 C.carrier_referenced_focus_readout(
-                    env, frac * r0, z, LAM, dx, standoff=s_old, **kw)
+                    env, frac * r0, z, LAM, dx, standoff=s_old,
+                    transport='sziklas', **kw)
             # 'warn' still returns the (bad) field, 'ignore' is silent
             with pytest.warns(RuntimeWarning, match='does not fit the co-moving'):
                 out = C.carrier_referenced_focus_readout(
                     env, frac * r0, z, LAM, dx, standoff=s_old,
-                    on_focus_containment='warn', **kw)
+                    transport='sziklas', on_focus_containment='warn', **kw)
             assert np.isfinite(out).all()
+            assert float((np.abs(out) ** 2).max() / peak_truth) < 0.25, frac
             with warnings.catch_warnings(record=True) as w:
                 warnings.simplefilter('always')
                 C.carrier_referenced_focus_readout(
                     env, frac * r0, z, LAM, dx, standoff=s_old,
-                    on_focus_containment='ignore', **kw)
+                    transport='sziklas', on_focus_containment='ignore', **kw)
             assert not [x for x in w if 'co-moving' in str(x.message)]
+            # COLLINS: the same leg lands on a grid that still holds the
+            # beam, so there is nothing to refuse -- and the field is right.
+            pd = {}
+            with warnings.catch_warnings(record=True) as w:
+                warnings.simplefilter('always')
+                f_c = C.carrier_referenced_focus_readout(
+                    env, frac * r0, z, LAM, dx, standoff=s_old,
+                    transport='collins', _period_out=pd, **kw)
+            assert not [x for x in w if 'co-moving' in str(x.message)], (
+                frac, pd)
+            assert pd['containment'] > C._FOCUS_READOUT_CONTAINMENT_MIN, pd
+            assert float((np.abs(f_c) ** 2).max() / peak_truth) > 0.95, (
+                frac, pd)
 
     def test_the_guard_is_silent_on_the_whole_shipped_matrix(self):
         """No false positives where the resolver's premise holds: 60 cells of

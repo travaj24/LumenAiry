@@ -423,28 +423,40 @@ def test_every_internal_transport_call_site_names_its_transport():
 
 
 def test_the_focus_readouts_standoff_leg_takes_that_readouts_own_transport():
-    """The Sziklas readout's carrier leg onto the stop plane is a CHOICE with
-    a keyword, not a pin (WP-C3 round 2, VERIFY-WP-C3 D8).
+    """The standoff readout's carrier leg onto the stop plane is a CHOICE
+    with a keyword, not a pin, and the choice is decided by the measurement
+    (WP-C3 round 2 for the keyword, VERIFY-WP-C3 D8; round 3 for the
+    default, maintainer decision 2026-09-20).
 
-    WP-C3 pinned it to ``'sziklas'`` with no way for a caller to say
+    WP-C3 pinned the leg to ``'sziklas'`` with no way for a caller to say
     otherwise, which is the shape "an internal site that is pinned never
     benefits from an improved default and becomes a silent second code path"
-    describes.  Round 2 gives it a keyword.  The DEFAULT stays ``'sziklas'``
-    -- this entry point is public, took no ``transport`` before, and the
-    standoff resolver and the containment guard around the leg are derived
-    about the co-moving stop plane -- but the better quadrature is reachable
-    and the difference is measured rather than asserted.
+    describes.  Round 2 gave it a keyword but left the default on the pinned
+    value, on the grounds that the standoff resolver and the containment
+    guard around the leg are derived about the co-moving stop plane.  They
+    are -- and they still run, and still say something well defined, on a
+    Collins stop plane, while the ANSWER on this fixture is three decades
+    better.  Round 3 takes the accuracy and keeps ``transport='sziklas'`` as
+    the one-keyword way back.
 
     THREE ARMS, so neither side can be empty:
 
-    * the DEFAULT still RAISES the documented containment ``RuntimeError``
-      here, which is the 5.48.1 behaviour this entry point keeps;
-    * ``transport='collins'`` RETURNS on the same call, and lands within
-      1e-3 of a converged dense separable Fresnel quadrature written here,
-      where the default's own answer (guard waived) is three decades away;
+    * the DEFAULT (``'collins'``) RETURNS on this call and lands within 1e-3
+      of a converged dense separable Fresnel quadrature written here;
+    * ``transport='sziklas'`` -- the way back, and the 5.48.1 behaviour --
+      RAISES the documented containment ``RuntimeError`` on the same call,
+      and with the guard waived its answer is three decades from the same
+      quadrature;
     * the two really did hand the guard different stop planes, so the keyword
       selects something rather than being decorative.
     """
+    import inspect
+    assert inspect.signature(
+        CA.carrier_referenced_focus_readout
+    ).parameters['transport'].default == 'collins', (
+        'the standoff readout is no longer defaulting to the quadrature the '
+        'three arms below measure as the accurate one')
+
     n, dx = 128, 4e-6
     x = _axis(n, dx)
     X, Y = np.meshgrid(x, x)
@@ -453,20 +465,19 @@ def test_the_focus_readouts_standoff_leg_takes_that_readouts_own_transport():
 
     with pytest.raises(RuntimeError, match='co-moving grid at the stop plane'):
         CA.carrier_referenced_focus_readout(env, -0.03, 0.03, 633e-9, dx,
-                                            **kw)
+                                            transport='sziklas', **kw)
 
     pd_c, pd_s = {}, {}
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
         got_c = CA.carrier_referenced_focus_readout(
-            env, -0.03, 0.03, 633e-9, dx, transport='collins',
-            _period_out=pd_c, **kw)
+            env, -0.03, 0.03, 633e-9, dx, _period_out=pd_c, **kw)
         got_s = CA.carrier_referenced_focus_readout(
-            env, -0.03, 0.03, 633e-9, dx, on_focus_containment='ignore',
-            _period_out=pd_s, **kw)
+            env, -0.03, 0.03, 633e-9, dx, transport='sziklas',
+            on_focus_containment='ignore', _period_out=pd_s, **kw)
     assert np.all(np.isfinite(got_c)), (
-        'transport="collins" did not return a finite field on the fixture '
-        'the default refuses, so the decision above has no consequence')
+        'the default did not return a finite field on the fixture the way '
+        'back refuses, so the decision above has no consequence')
     assert pd_c['containment'] != pd_s['containment'], (
         f"the two transports handed the guard the same stop plane "
         f"({pd_c['containment']:.6g} vs {pd_s['containment']:.6g}), so the "
@@ -504,10 +515,11 @@ def test_the_focus_readouts_standoff_leg_takes_that_readouts_own_transport():
     # its self-consistency against a sampled sum ~4.5e-5, so 1e-3 is two
     # decades above anything the oracle itself could be wrong by, and 0.1 is
     # two decades above THAT.  Measured 2026-09-20 on both builds:
-    # collins 4.7340e-05, sziklas 2.4049 -- 50 000x apart.
+    # collins (the default since round 3) 4.7340e-05, sziklas (the way back)
+    # 2.4049 -- 50 000x apart.
     assert r_c < 1e-3, (
-        f'the collins standoff leg is {r_c:.4e} from the converged '
-        f'quadrature, which is not the reason this keyword exists')
+        f'the default standoff leg is {r_c:.4e} from the converged '
+        f'quadrature, which is not the reason this default was moved')
     assert r_s > 0.1, (
         f'the co-moving standoff leg reads {r_s:.4e} here, so this fixture '
         f'no longer shows the difference the keyword was added for')

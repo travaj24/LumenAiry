@@ -266,9 +266,36 @@ class TestVerifyC1Quadratic:
         MEASURED on this fixture (R = -20 mm, w_env = 200 um, ext = 6,
         residual 1/R_env = -60 /m, lambda = 0.85 um):
             pre  : leg 1705.9 um, containment 0.866 measured / 0.500 modelled,
-                   guard REFUSES, peak 1.408x low
+                   guard REFUSES, peak 1.4093x the analytic one
             post : leg 5929.9 um (the brute-force boundary to 8 significant
                    figures), containment 3.1996 / 3.2000, guard silent
+
+        READ ON BOTH TRANSPORTS (WP-C3 round 3, 2026-09-20).  The SOLVER is
+        transport-free -- it is a closed form in the input grid's extent and
+        the beam's own fitted wavefront -- and it names the identical leg
+        either way (5929.850650 um to every printed digit).  What the two
+        quadratures differ in is the GRID the leg lands on, so the readout
+        arms below are taken on each, against an oracle that owes nothing to
+        either: the analytic Gaussian-ABCD field of the COMPOSED curvature
+        (carrier -20 mm with the envelope's own -60 /m residual, i.e.
+        R_eff = -9.0909 mm), written in this file.  For a Gaussian that form
+        is the exact second-moment law ``<r^2>(z) = <r^2> + 2 z <r.theta> +
+        z^2 <theta^2>``; the two agree to 1.2e-13 relative over 15 cells
+        (measured 2026-09-20, both builds).
+
+            leg          transport   containment   piston-free relL2
+            resolved     co-moving     3.199644        3.5794e-04
+            resolved     Collins       5.019970        2.6062e-06
+            gated (pre)  co-moving     0.866216        1.0022e-01  REFUSES
+            gated (pre)  Collins       2.840270        9.7717e-07
+
+        So the defect the verifier found is a defect of the RESOLVER -- it
+        halves the leg, 5929.85 um to 1705.87 um -- and the COST of that
+        shortened leg is paid on the co-moving grid, which is why the
+        fail-before arm names ``transport='sziklas'`` and says so.  The
+        Collins arm is its other side: same leg, same beam, 1e-7 from the
+        oracle and no refusal.  Both builds agree to the last printed digit
+        on every row.
         """
         lam, k = self.LAM, 2.0 * np.pi / self.LAM
         n, w2, ext, r = 512, 200e-6, 6.0, -20e-3
@@ -301,17 +328,51 @@ class TestVerifyC1Quadratic:
         # limited by the bisection bracket, not by the solver; measured 1.2e-11.
         assert (z - s_new) == pytest.approx(edge, rel=2e-6), (s_new, edge)
 
+        # ORACLE for the field arms: the analytic Gaussian-ABCD field of the
+        # COMPOSED curvature, on the readout's own output lattice.
+        xo = _grid(48, 1e-6)
+        truth, _ = _abcd_field(xo, w_env, 1.0 / (1.0 / r + inv_fit), z, lam)
+
+        def _rel(f):
+            ph = np.angle(np.vdot(truth, f))
+            return float(np.linalg.norm(f * np.exp(-1j * ph) - truth)
+                         / np.linalg.norm(truth))
+
         pd = {}
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter('always')
-            C.carrier_referenced_focus_readout(
+            f_s = C.carrier_referenced_focus_readout(
                 env, r, z, lam, dx, dx_out=1e-6, N_out=48,
                 on_replica='ignore', on_focus_containment='warn',
-                _period_out=pd)
+                transport='sziklas', _period_out=pd)
         assert pd['containment'] > C._FOCUS_READOUT_CONTAINMENT_MIN, pd
+        # the resolver solves for EQUALITY with the margin on the grid it was
+        # derived about, so this arm is an equality (measured 3.199644).
         assert pd['containment'] == pytest.approx(C._FOCUS_STANDOFF_MARGIN,
                                                   rel=2e-3), pd
         assert not [x for x in w if 'co-moving' in str(x.message)]
+        # The SAME leg on the Collins stop plane.  The resolver names the
+        # identical standoff (it is a property of the input grid and the
+        # beam), and the grid it lands on is WIDER, which is the safe
+        # direction: measured 5.019970 against the 3.2 target, 1.57x over.
+        pdc = {}
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter('always')
+            f_c = C.carrier_referenced_focus_readout(
+                env, r, z, lam, dx, dx_out=1e-6, N_out=48,
+                on_replica='ignore', on_focus_containment='warn',
+                transport='collins', _period_out=pdc)
+        assert pdc['standoff'] == pd['standoff'], (pd, pdc)
+        assert pdc['containment'] >= C._FOCUS_STANDOFF_MARGIN, pdc
+        assert not [x for x in w if 'co-moving' in str(x.message)]
+        # and both resolved legs agree with the oracle.  BARS: the co-moving
+        # arm measures 3.5794e-04 and the Collins arm 2.6062e-06 (both builds
+        # to the last printed digit), so 3e-3 is 8.4x over the worse of the
+        # two and 1e-4 is 38x over the better -- while the SHORTENED leg
+        # below reads 1.0022e-01 on the co-moving grid, 280x above the looser
+        # bar.
+        assert _rel(f_s) < 3e-3, _rel(f_s)
+        assert _rel(f_c) < 1e-4, _rel(f_c)
 
         # FAIL-BEFORE: the pre-fix gate, restored in process
         real = C._beam_containment_standoff
@@ -334,8 +395,35 @@ class TestVerifyC1Quadratic:
             with pytest.raises(RuntimeError, match='does not fit the co-moving'):
                 C.carrier_referenced_focus_readout(
                     env, r, z, lam, dx, dx_out=1e-6, N_out=48,
-                    on_replica='ignore', _period_out=pd2)
+                    on_replica='ignore', transport='sziklas', _period_out=pd2)
             assert pd2['containment'] < 1.0, pd2
+            with warnings.catch_warnings():
+                warnings.simplefilter('ignore')
+                f_bad = C.carrier_referenced_focus_readout(
+                    env, r, z, lam, dx, dx_out=1e-6, N_out=48,
+                    on_replica='ignore', transport='sziklas',
+                    on_focus_containment='ignore')
+            # what the refusal was protecting: measured 1.0022e-01 against
+            # the analytic field, 280x the 3e-3 the resolved leg clears.
+            assert _rel(f_bad) > 3e-2, _rel(f_bad)
+            # THE OTHER SIDE.  The same shortened leg on the Collins stop
+            # plane lands at 2.840270 radii and is 9.7717e-07 from the same
+            # oracle, so what the pre-fix gate costs is the CO-MOVING grid's
+            # contraction and not the leg length.  Bars: containment > 2.0
+            # (1.42x under the measured value and 2.0x over the refusal
+            # floor) and relL2 < 1e-4 (100x over the measured one, and 1000x
+            # under the co-moving reading on the identical leg).
+            pd3 = {}
+            with warnings.catch_warnings(record=True) as w3:
+                warnings.simplefilter('always')
+                f3 = C.carrier_referenced_focus_readout(
+                    env, r, z, lam, dx, dx_out=1e-6, N_out=48,
+                    on_replica='ignore', transport='collins',
+                    _period_out=pd3)
+            assert pd3['standoff'] == pd2['standoff'], (pd2, pd3)
+            assert pd3['containment'] > 2.0, pd3
+            assert not [x for x in w3 if 'co-moving' in str(x.message)], pd3
+            assert _rel(f3) < 1e-4, _rel(f3)
         finally:
             C._beam_containment_standoff = real
 
@@ -415,15 +503,16 @@ class TestVerifyC1AgainstTheAnalyticFocus:
         e = np.exp(-r2 / w_in ** 2) * np.exp(1j * k * r2 / (2.0 * r0))
         return e, r0, dx, w_in
 
-    @pytest.mark.parametrize('frac,peak_bar,rel_bar,pre_peak', [
+    @pytest.mark.parametrize('frac,peak_bar,rel_bar,pre_peak,pre_peak_collins', [
         # (carrier/truth, post-fix peak bar, post-fix relL2 bar,
-        #  MEASURED pre-fix peak on this fixture)
-        (1.00, 0.99, 0.010, 0.999799),
-        (0.97, 0.90, 0.080, 0.216767),
-        (0.93, 0.85, 0.150, 0.024932),
+        #  MEASURED pre-fix peak on the CO-MOVING stop plane,
+        #  MEASURED pre-fix peak on the COLLINS stop plane)
+        (1.00, 0.99, 0.010, 0.999799, 0.999807),
+        (0.97, 0.90, 0.080, 0.216767, 0.995531),
+        (0.93, 0.85, 0.150, 0.024932, 0.988807),
     ])
     def test_the_readout_matches_the_analytic_focus_at_a_new_na(
-            self, frac, peak_bar, rel_bar, pre_peak):
+            self, frac, peak_bar, rel_bar, pre_peak, pre_peak_collins):
         """ORACLE: ``_abcd_field`` -- the analytic Gaussian ABCD focal field,
         amplitude, curvature and Gouy phase, written in this file.  Fixture:
         lambda = 0.85 um, NA = 0.08, w = 0.6 mm, N = 1024, ext = 4 -- none of
@@ -445,7 +534,22 @@ class TestVerifyC1AgainstTheAnalyticFocus:
         value and 4.3x-37x over the measured pre-fix one, and each relL2 bar
         1.4x-1.9x over the post-fix value and 3.9x-13x under the pre-fix one.
         The higher NA is why the post-fix numbers here are worse than the WP's
-        0.9995..0.9852 at NA 0.05 -- the leg error scales as NA^3."""
+        0.9995..0.9852 at NA 0.05 -- the leg error scales as NA^3.
+
+        BOTH TRANSPORTS (WP-C3 round 3, 2026-09-20).  The POST-fix arm is a
+        statement about the FIELD, and the field does not know which
+        quadrature carried it to the stop plane: the two read
+        0.999798958 / 0.999807084, 0.973250758 / 0.973251243 and
+        0.919520924 / 0.919520924 against this oracle -- 8.1e-06, 4.9e-07 and
+        0.0e+00 apart -- so both are asserted against the SAME bars, plus an
+        agreement bar of 1e-3 between them (123x over the worst of the
+        three).  The PRE-fix arm is not: the carrier-only leg is expensive
+        only because the co-moving grid has contracted by the time the beam
+        lands on it, and the same leg on the Collins stop plane reads
+        0.999807 / 0.995531 / 0.988807.  That arm therefore names
+        ``transport='sziklas'`` for the collapse it is about and carries the
+        Collins reading beside it.  Both builds (WIN-py3.14, WSL-py3.12) are
+        identical on every number above to 3e-16."""
         lam = self.LAM
         e_phys, r0, dx, w_in = self._fixture()
         z = -r0
@@ -456,19 +560,24 @@ class TestVerifyC1AgainstTheAnalyticFocus:
 
         r = frac * r0
         env = C.carrier_referenced_envelope(e_phys, r, lam, dx)
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter('always')
-            f = C.carrier_referenced_focus_readout(
-                env, r, z, lam, dx, dx_out=dx_out, N_out=n_out,
-                on_replica='ignore')
-        pist = np.angle(np.vdot(truth, f))
-        rel = float(np.linalg.norm(f * np.exp(-1j * pist) - truth)
-                    / np.linalg.norm(truth))
-        peak = float((np.abs(f) ** 2).max() / (np.abs(truth) ** 2).max())
-        assert peak > peak_bar, (frac, peak)
-        assert peak < 1.02, (frac, peak)        # and no manufactured energy
-        assert rel < rel_bar, (frac, rel)
-        assert not [x for x in w if 'co-moving' in str(x.message)]
+        peaks = {}
+        for tr in ('sziklas', 'collins'):
+            with warnings.catch_warnings(record=True) as w:
+                warnings.simplefilter('always')
+                f = C.carrier_referenced_focus_readout(
+                    env, r, z, lam, dx, dx_out=dx_out, N_out=n_out,
+                    on_replica='ignore', transport=tr)
+            pist = np.angle(np.vdot(truth, f))
+            rel = float(np.linalg.norm(f * np.exp(-1j * pist) - truth)
+                        / np.linalg.norm(truth))
+            peak = float((np.abs(f) ** 2).max() / (np.abs(truth) ** 2).max())
+            assert peak > peak_bar, (tr, frac, peak)
+            assert peak < 1.02, (tr, frac, peak)   # no manufactured energy
+            assert rel < rel_bar, (tr, frac, rel)
+            assert not [x for x in w if 'co-moving' in str(x.message)]
+            peaks[tr] = peak
+        # the resolved readout is the same FIELD on either quadrature
+        assert abs(peaks['sziklas'] - peaks['collins']) < 1e-3, peaks
         # FAIL-BEFORE on the same fixture: the resolver's beam term reverted
         real = C._beam_containment_standoff
         try:
@@ -476,24 +585,35 @@ class TestVerifyC1AgainstTheAnalyticFocus:
             s_pre = C._default_focus_standoff(env, r, z, lam, dx)
         finally:
             C._beam_containment_standoff = real
-        with warnings.catch_warnings():
-            warnings.simplefilter('ignore')
-            f_pre = C.carrier_referenced_focus_readout(
-                env, r, z, lam, dx, dx_out=dx_out, N_out=n_out,
-                standoff=s_pre, on_replica='ignore',
-                on_focus_containment='ignore')
-        got_pre = float((np.abs(f_pre) ** 2).max()
-                        / (np.abs(truth) ** 2).max())
-        assert got_pre == pytest.approx(pre_peak, rel=5e-2), (frac, got_pre)
+        got = {}
+        for tr in ('sziklas', 'collins'):
+            with warnings.catch_warnings():
+                warnings.simplefilter('ignore')
+                f_pre = C.carrier_referenced_focus_readout(
+                    env, r, z, lam, dx, dx_out=dx_out, N_out=n_out,
+                    standoff=s_pre, on_replica='ignore', transport=tr,
+                    on_focus_containment='ignore')
+            got[tr] = float((np.abs(f_pre) ** 2).max()
+                            / (np.abs(truth) ** 2).max())
+        # the CO-MOVING collapse this id exists to pin, at its measured value
+        assert got['sziklas'] == pytest.approx(pre_peak, rel=5e-2), (
+            frac, got)
+        # and the SAME leg on the Collins stop plane, which does not
+        # contract: measured 0.999807 / 0.995531 / 0.988807, held to 1 % of
+        # the row's own measurement so the pair is a decision, not a reading.
+        assert got['collins'] == pytest.approx(pre_peak_collins, rel=1e-2), (
+            frac, got)
 
-    @pytest.mark.parametrize('frac,peak_bar,pre_peak', [
-        # (carrier/truth, post-fix peak bar, MEASURED peak on the pre-fix leg)
-        (0.99, 0.97, 0.912560),
-        (0.97, 0.92, 0.300483),
-        (0.93, 0.85, 0.025460),
+    @pytest.mark.parametrize('frac,peak_bar,pre_peak,pre_peak_collins', [
+        # (carrier/truth, post-fix peak bar,
+        #  MEASURED peak on the pre-fix leg, CO-MOVING stop plane,
+        #  MEASURED peak on the pre-fix leg, COLLINS stop plane)
+        (0.99, 0.97, 0.912560, 0.997466),
+        (0.97, 0.92, 0.300483, 0.994369),
+        (0.93, 0.85, 0.025460, 0.988228),
     ])
     def test_a_narrow_grid_resolves_and_the_guard_sees_the_pre_fix_leg(
-            self, frac, peak_bar, pre_peak):
+            self, frac, peak_bar, pre_peak, pre_peak_collins):
         """VERIFY-A6 OI-1, implemented 2026-09-12.
 
         Before: the beam term could only ask for ``_FOCUS_STANDOFF_MARGIN``
@@ -520,8 +640,21 @@ class TestVerifyC1AgainstTheAnalyticFocus:
         BARS: each peak bar sits 1.02x under its measured post-fix value and
         1.06x / 3.1x / 35x over the measured pre-fix one; the containment claim
         is equality with the target to 1e-3 (the resolver solves for it); and
-        the pre-fix leg must be REFUSED by the default disposition, which is
-        the two-sided half of the bar."""
+        the pre-fix leg must be REFUSED, which is the two-sided half of the
+        bar.
+
+        BOTH TRANSPORTS (WP-C3 round 3, 2026-09-20).  The resolved arm is
+        about the FIELD and reads 0.990892194 / 0.990824496,
+        0.954704328 / 0.954670358 and 0.883643926 / 0.883658270 on the two
+        quadratures -- 6.8e-05, 3.4e-05 and 1.4e-05 apart -- so both clear
+        the same bars, and the containment lands on the achievable target on
+        both (2.5980768 / 2.5980833 against a target of 2.5980763).  The
+        REFUSAL arm is about the co-moving grid: the pre-fix leg collapses
+        the peak there and is refused, while the SAME leg on the Collins stop
+        plane lands at 2.45 radii and reads 0.997466 / 0.994369 / 0.988228,
+        so it is not refused and there is nothing there to refuse.  That arm
+        therefore names ``transport='sziklas'``, with the Collins reading
+        beside it.  Both builds identical to 3e-16 on every number here."""
         lam = self.LAM
         e_phys, r0, dx, w_in = self._fixture(ext=3.0)
         z = -r0
@@ -531,19 +664,25 @@ class TestVerifyC1AgainstTheAnalyticFocus:
         r = frac * r0
         env = C.carrier_referenced_envelope(e_phys, r, lam, dx)
 
-        pd = {}
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter('always')
-            f = C.carrier_referenced_focus_readout(
-                env, r, z, lam, dx, dx_out=dx_out, N_out=n_out,
-                on_replica='ignore', _period_out=pd)
-        peak = float((np.abs(f) ** 2).max() / (np.abs(truth) ** 2).max())
-        assert peak > peak_bar, (frac, peak)
-        assert not [x for x in w if 'co-moving' in str(x.message)]
-        # the grid cannot give 3.2, and the resolver knows it
-        assert pd['containment_target'] < C._FOCUS_STANDOFF_MARGIN
-        assert pd['containment'] == pytest.approx(pd['containment_target'],
-                                                  rel=1e-3), pd
+        pd, peaks = {}, {}
+        for tr in ('sziklas', 'collins'):
+            pdt = {}
+            with warnings.catch_warnings(record=True) as w:
+                warnings.simplefilter('always')
+                f = C.carrier_referenced_focus_readout(
+                    env, r, z, lam, dx, dx_out=dx_out, N_out=n_out,
+                    on_replica='ignore', transport=tr, _period_out=pdt)
+            peak = float((np.abs(f) ** 2).max() / (np.abs(truth) ** 2).max())
+            assert peak > peak_bar, (tr, frac, peak)
+            assert not [x for x in w if 'co-moving' in str(x.message)]
+            # the grid cannot give 3.2, and the resolver knows it
+            assert pdt['containment_target'] < C._FOCUS_STANDOFF_MARGIN
+            assert pdt['containment'] == pytest.approx(
+                pdt['containment_target'], rel=1e-3), (tr, pdt)
+            peaks[tr] = peak
+            if tr == 'sziklas':
+                pd = pdt
+        assert abs(peaks['sziklas'] - peaks['collins']) < 1e-3, peaks
 
         # FAIL-BEFORE: the pre-fix leg, and the guard must now refuse it
         real = C._beam_containment_standoff
@@ -556,16 +695,32 @@ class TestVerifyC1AgainstTheAnalyticFocus:
         with pytest.raises(RuntimeError, match='does not fit the co-moving'):
             C.carrier_referenced_focus_readout(
                 env, r, z, lam, dx, dx_out=dx_out, N_out=n_out,
-                standoff=s_pre, on_replica='ignore')
+                standoff=s_pre, on_replica='ignore', transport='sziklas')
         pd2 = {}
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
             f2 = C.carrier_referenced_focus_readout(
                 env, r, z, lam, dx, dx_out=dx_out, N_out=n_out,
-                standoff=s_pre, on_replica='ignore',
+                standoff=s_pre, on_replica='ignore', transport='sziklas',
                 on_focus_containment='ignore', _period_out=pd2)
         got_pre = float((np.abs(f2) ** 2).max() / (np.abs(truth) ** 2).max())
         assert got_pre == pytest.approx(pre_peak, rel=5e-2), (frac, got_pre)
+        # THE OTHER SIDE: the same leg on the Collins stop plane is neither
+        # refused nor collapsed (measured 2.45 radii, peak 0.997466 /
+        # 0.994369 / 0.988228), which is what makes the refusal above a
+        # statement about the co-moving grid.
+        pd3 = {}
+        with warnings.catch_warnings(record=True) as w3:
+            warnings.simplefilter('always')
+            f3 = C.carrier_referenced_focus_readout(
+                env, r, z, lam, dx, dx_out=dx_out, N_out=n_out,
+                standoff=s_pre, on_replica='ignore', transport='collins',
+                _period_out=pd3)
+        assert not [x for x in w3 if 'co-moving' in str(x.message)], pd3
+        assert pd3['containment'] > C._FOCUS_READOUT_CONTAINMENT_MIN, pd3
+        got_c = float((np.abs(f3) ** 2).max() / (np.abs(truth) ** 2).max())
+        assert got_c == pytest.approx(pre_peak_collins, rel=1e-2), (frac,
+                                                                    got_c)
 
     def test_the_contained_control_on_the_same_narrow_grid_is_untouched(self):
         """The other side of the bar: on the SAME ext = 3.0 grid the MATCHED
