@@ -4875,9 +4875,15 @@ def carrier_referenced_focus_readout(
     # whole contract is to be the pre-flip answer in every bit -- which also
     # makes the chain's own ``transport='sziklas'`` the one keyword that
     # selects the co-moving standoff leg from every chain entry point.
-    cr = propagate_carrier_referenced(env, R, z_stop, wavelength, dx,
-                                      gap_kernel=gap_kernel, tilt=tilt,
-                                      transport=transport)
+    # The Collins standoff leg reaches the matrix Fourier transform, so the
+    # readout's ``mft_method`` must ride along or a caller naming a route
+    # would be answered by the default one on this leg (VERIFY-WP-C4 round 2's
+    # spy reads the FIRST transform call).  The Sziklas leg reaches none and
+    # refuses the keyword, so it is handed only to the Collins leg.
+    cr = propagate_carrier_referenced(
+        env, R, z_stop, wavelength, dx, gap_kernel=gap_kernel, tilt=tilt,
+        transport=transport,
+        **({'mft_method': mft_method} if transport == 'collins' else {}))
     env_s, R_s, dx_s = cr.env, cr.R, cr.dx
     if isinstance(dx_s, tuple):
         dx_s = dx_s[0]

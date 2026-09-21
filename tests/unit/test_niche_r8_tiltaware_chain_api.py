@@ -394,8 +394,15 @@ def _manual_chain(env0, groups, R0, dx0, final_distance, focus_readout=None):
         env = la.carrier_referenced_envelope(E_exit, R_out, _WL, cdx)
         R = R_out
     if focus_readout is not None:
+        # The orchestrator's readout FALLBACK names ``transport='sziklas'`` at
+        # both its call sites (the pre-flip answer in every bit is its
+        # contract), while the public readout's own default moved to the
+        # Collins standoff leg in 5.49.0.  This helper reproduces what the
+        # orchestrator does, so it names the same leg; whether the chain's
+        # fallback should take the more accurate leg is a filed decision.
         return np.asarray(la.carrier_referenced_focus_readout(
-            env, R, final_distance, _WL, cdx, **focus_readout))
+            env, R, final_distance, _WL, cdx, transport='sziklas',
+            **focus_readout))
     if final_distance:
         cr = la.propagate_carrier_referenced(env, R, final_distance, _WL, cdx)
         env, R, cdx = cr.env, cr.R, cr.dx
