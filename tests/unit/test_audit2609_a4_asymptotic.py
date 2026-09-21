@@ -328,6 +328,29 @@ def test_y3_grad_wrt_image_point_matches_a_converged_finite_difference():
 
     Bar: 1e-2.  Above the measured 7.0e-04 by 14x, and 2 decades below the
     8.6e-01 the default-``w_o`` path scored pre-fix.
+
+    RESTATED 2026-09-21 (the 5.49.0 matrix).  The draft probed both slots AT
+    the symmetric stationary point, where the true derivative is zero by
+    symmetry: the numbers it compared were the fit's residual asymmetry, a
+    rounding-level quantity.  5.49.0's analytic sphere normal made the fit
+    symmetric to 1e-14, the derivative shrank towards its true zero, and the
+    RELATIVE comparison became a reading that moved with the build --
+    MEASURED rel 3.5e-03 (Windows, jax 0.11 / numpy 2.4.4), 1.09e-02 (WSL,
+    jax 0.10 / numpy 2.4.6) and 5.8e-02 (the CI runner), the finite
+    difference itself changing by 1.4e-02 between steps h and h/2 on WSL,
+    i.e. not converged on the merit's 3.7e15 scale.  The claim, stated as
+    itself: ``jax.grad`` matches a CONVERGED finite difference of the same
+    function.  So the merit is normalised to 1 at the stationary point,
+    each slot is probed 0.3 of its own scale away from the symmetric point
+    (``w_s`` for the source point, ``w_o`` for the image direction) with the
+    step a hundredth of that displacement, and the finite difference's
+    convergence (h against h/2) is asserted as the PREMISE before it is used
+    as the oracle.  MEASURED on both builds: rel 4.7e-09 / 9.0e-10 (s2x) and
+    5.2e-07 / 2.2e-06 (vx), FD convergence 5.4e-09 .. 3.4e-06 -- the 1e-2
+    bar is unchanged and now sits three decades above the reading on every
+    build.  (A half-coupling probe point was tried first and rejected: the
+    coupling stays above 0.5 out to where the fit's own domain ends and the
+    evaluation returns NaN.)
     """
     jax = pytest.importorskip('jax')
     jax.config.update('jax_enable_x64', True)
@@ -347,23 +370,43 @@ def test_y3_grad_wrt_image_point_matches_a_converged_finite_difference():
     w_o = 1.0 / math.sqrt(float(np.linalg.eigvalsh(np.real(
         _y3_M(fit, v, w_s, w_p, vc)))[-1]))
 
-    def merit(t, slot):
-        s2x = t if slot == 's2x' else 0.0
-        vx = t if slot == 'vx' else v[0]
+    def coupling(s2x, vx):
         return jnp.abs(aberration_tensor_lg00_jax(
             fit, (s2x, 0.0), (vx, v[1]), source_point=(0.0, 0.0),
             w_s=w_s, w_p=w_p, w_o=w_o, v2_centre=vc)) ** 2
 
-    for slot, t0, h in (('s2x', 0.0, 1e-6), ('vx', float(v[0]), 1e-5)):
-        g = float(jax.grad(lambda t: merit(t, slot))(t0))
-        def f(t):
-            return float(merit(t, slot))
-        fd = (-f(t0 + 2 * h) + 8 * f(t0 + h)
-              - 8 * f(t0 - h) + f(t0 - 2 * h)) / (12 * h)
-        rel = abs(g - fd) / max(abs(fd), 1e-300)
+    L0 = float(coupling(0.0, float(v[0])))
+    assert L0 > 0.0 and math.isfinite(L0)
+
+    for slot, base, scale in (('s2x', 0.0, w_s), ('vx', float(v[0]), w_o)):
+        # Probe 0.3 of the slot's own scale off the symmetric point, where
+        # the derivative is not zero by symmetry; step = 1e-2 of that.
+        t0 = base + 0.3 * scale
+        h = 1e-2 * scale
+
+        def merit(t, _slot=slot):
+            return (coupling(t, float(v[0])) if _slot == 's2x'
+                    else coupling(0.0, t)) / L0
+
+        g = float(jax.grad(merit)(t0))
+
+        def fd5(hh):
+            def f(t):
+                return float(merit(t))
+            return (-f(t0 + 2 * hh) + 8 * f(t0 + hh)
+                    - 8 * f(t0 - hh) + f(t0 - 2 * hh)) / (12 * hh)
+
+        fd_h, fd_h2 = fd5(h), fd5(h / 2)
+        conv = abs(fd_h - fd_h2) / max(abs(fd_h2), 1e-300)
+        assert conv < 1e-3, (
+            f'PREMISE d/d{slot}: the 5-point FD is not converged on this '
+            f'build (h -> h/2 moves it by {conv:.3e}; measured 5.4e-09 .. '
+            f'3.4e-06), so it cannot serve as the oracle here')
+        rel = abs(g - fd_h2) / max(abs(fd_h2), 1e-300)
         assert rel < 1e-2, (
             f'd/d{slot}: jax.grad {g:.9e} vs converged 5-point FD '
-            f'{fd:.9e}, rel {rel:.3e} (measured 7.7e-05 / 7.0e-04)')
+            f'{fd_h2:.9e}, rel {rel:.3e} (measured 4.7e-09 / 9.0e-10 for s2x, '
+            f'5.2e-07 / 2.2e-06 for vx on the two builds)')
 
 
 def _y3_M(fit, v, w_s, w_p, vc):
