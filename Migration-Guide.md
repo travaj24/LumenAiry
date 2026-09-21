@@ -2851,7 +2851,7 @@ distances, with and without a focus readout, and no knob named anywhere --
 relay legs are long and coarse, so their chirp-Z is not representable and
 they resolve to the co-moving step.  What the flip buys shows up where the
 chirp-Z IS representable: at and past the carrier's geometric focus, and on
-fine grids.  (An earlier cut of this release moved 52 of those 192 cells and
+fine grids.  (An earlier cut of this release moved about 51 of those 192 cells and
 raised on 22; every one of those was the flat-reference leg with no fallback,
 which is fixed.)  A focus READOUT moves only where the chain's own exit
 lattice satisfies `K1 = 2 dx (|A| r/|B| + theta)/lambda <= 1`; everywhere else

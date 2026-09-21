@@ -916,7 +916,7 @@ That single line explains both blockers:
 
 | census | base 49ddf4bd | branch BEFORE | branch AFTER |
 |---|---|---|---|
-| 192 ordinary chain cells: IDENTICAL / MOVED / OK->RAISED | — | 118 / 52 / **22** | **192 / 0 / 0** |
+| 192 ordinary chain cells: IDENTICAL / MOVED / OK->RAISED | — | 119 / 51 / **22** (the IDENTICAL/MOVED split moves one or two cells between SESSIONS -- 118/52 and 117/53 were also measured, on one cell whose base-tree peak differs by 3.9e-11; the 22 and the Kelly counts are stable) | **192 / 0 / 0** |
 | the same, Kelly warnings / cells | 0 / 0 | 74 / 51 | **0 / 0** |
 | 12-configuration reproducer: returns / raises | 12 / 0 | 1 / **11** | **12 / 0** |
 | 103 archive keys, default vs default: OK->RAISED / RAISED->OK | — | **23** / 2 | **0** / 2 |
@@ -925,9 +925,11 @@ That single line explains both blockers:
 The two RAISED->OK are the `dx_out` / `carrier_out` keywords the old
 transport refuses and this one accepts.
 
-**What this costs the flip's story, and it should be said plainly.**  All 52
-MOVED cells of the 192 were the same aliased flat-reference leg, so on
-ORDINARY relay chains the flip is now bit-identical end to end.  That is what
+**What this costs the flip's story, and it should be said plainly.**  Every
+MOVED and every RAISING cell of the 192 was the same aliased flat-reference
+leg (51 and 22 as measured in VERIFY-WP-C3 ROUND 2; the MOVED count is a
+per-session reading, see the table), so on ORDINARY relay chains the flip is
+now bit-identical end to end.  That is what
 the complementary selection is supposed to do -- an ordinary relay leg is
 long and coarse, its chirp-Z is not representable, and the transfer-function
 form IS the co-moving step -- and the ladder in §2 still shows what the flip
@@ -1125,18 +1127,40 @@ arithmetic, they return different LATTICES: the co-moving pitch collapses as
 leg resolves a flat reference and floors its pitch at `2 r_out/N` = 6.3126 um,
 which puts about TWO samples inside EE80 where the co-moving grid puts six.
 
-**What this round can and cannot say.**  It can say the two disagree by
-11.2 % of EE80 on a real aberrated composition, that the co-moving column
-matches the Debye oracle and the Collins column does not, and that the
-disagreement is reachable on the SHIPPED DEFAULT.  It cannot say whether the
-Collins field is wrong or only its returned sampling is: separating those
-needs the near-focus accuracy study on an aberrated design that §7 already
-lists as owed, on a common lattice, against a non-paraxial truth.  So the id
-NAMES `transport='sziklas'` -- the lattice its metric was calibrated on --
-and gains a second arm that MEASURES the default on the same chain and
-asserts the two still disagree, so that closing the gap turns the test red
-and forces this section to be re-read.  The Migration guide carries it as a
-near-focus caveat with the way back.
+**SETTLED IN VERIFY-WP-C3 ROUND 2 (2026-09-20): it is the LATTICE, not the
+field.**  Round 2 could say only that the two columns disagree by 11.2 % of
+EE80; the re-verification separated the two possibilities and the answer is
+that the Collins FIELD is right and only the lattice it had to choose is
+coarse.  Three measurements, WIN-py3.14 and WSL-py3.12 agreeing to every
+printed digit:
+
+* **the same leg on a lattice that resolves the spot.**  Driving the
+  identical Collins final leg with an explicit `dx_out` -- no interpolation,
+  no new oracle -- reads EE80 **11.0090 / 10.9921 / 11.0708 / 10.9417 /
+  10.9083 um** at `dx_out` = 0.25 / 0.5 / 1 / 2 / 3 um, against the Debye
+  oracle's 11.1102 um and the co-moving arm's 11.0139 um.  Five pitches
+  spanning 12x all read 10.91-11.07 um.  Only the floored 6.3126 um pitch
+  reads 12.3588 um;
+* **one common lattice.**  Both final-leg envelopes resampled onto ONE
+  0.5 um lattice by a full-N separable band-limited inverse DFT, same metric
+  and same window for both arms, read EE80 **11.0575 um** and **11.0568 um**
+  -- **0.006 % apart** -- with intensity maps agreeing to 1.29e-04 in
+  relative L2;
+* **the library already says it.**  The shipped leg emits `the Collins
+  chirp-Z stage is under-sampled -- K2 (output) 5.1055`, which is exactly the
+  complaint that the requested output pitch does not resolve the field.
+
+So nothing in `lumenairy/` is wrong here -- no P1, no P2 -- and the remedy is
+the caller's `dx_out`.  The id still NAMES `transport='sziklas'`, because
+that is the lattice its 6 % metric was calibrated on, and still carries the
+second arm that measures the 11.2 %; what changed is that the arm now
+describes a READOUT PITCH rather than an open physics question.  **The real
+follow-up, and it is a 5.49.1 item**: let a near-focus readout name its own
+output pitch, so the floor `2 r_out / N` -- which is what holds the ABCD
+image of a 25.9 mm input box in `N` samples, and which no single `N = 4096`
+lattice can reconcile with an 11 um spot -- is not the only lattice on
+offer.  The Migration guide carries it as a near-focus caveat whose remedy
+is `dx_out`.
 
 ### R2.4 What round 2 did not close
 
@@ -1153,11 +1177,14 @@ near-focus caveat with the way back.
 * **A fully NON-paraxial truth.**  Every oracle here is paraxial, as are both
   transports, so the comparisons are like-for-like but the true physical
   field below ~1e-3 is not established.
-* **THE NEAR-FOCUS ACCURACY QUESTION OF R2.3b**, which is the largest thing
-  this round leaves open: on a real aberrated composition the Collins leg at
-  `A = 0.0067` reads EE80 11.2 % away from a Debye oracle the co-moving step
-  matches, and whether that is the field or the returned sampling is not
-  settled here.
+* ~~**THE NEAR-FOCUS ACCURACY QUESTION OF R2.3b**~~ -- **CLOSED by
+  VERIFY-WP-C3 ROUND 2, 2026-09-20.**  It is the returned SAMPLING, not the
+  field: the same Collins leg reads EE80 11.0090 / 10.9921 / 11.0708 /
+  10.9417 / 10.9083 um at `dx_out` 0.25 / 0.5 / 1 / 2 / 3 um against the
+  oracle's 11.1102 um, and on one common 0.5 um lattice the two arms agree to
+  0.006 %.  What remains is a FEATURE request, filed as a 5.49.1 item: a
+  near-focus readout that can name its own output pitch instead of taking the
+  `2 r_out / N` floor.
 * **The merged tree's full 54-file blast set.**  The merge was measured on
   the files the two branches touch and on the ids VERIFY-WP-C5 listed; a full
   merged run is the gate that should precede the tag and it is a maintainer

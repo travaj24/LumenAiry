@@ -198,13 +198,22 @@ def _run_composed_chain(WL, N=4096, dx=2.0e-6, transport='sziklas'):
 
     against this test's own oracle, whose EE80 the ``'sziklas'`` column
     matches to better than the 6 % bar and the ``'collins'`` column misses by
-    11.2 %.  The Collins reading is not obviously the FIELD being wrong -- its
-    floored pitch puts only ~2 samples inside EE80 where the co-moving one
-    puts ~6 -- but this test cannot tell those apart, and arbitrating it needs
-    a near-focus accuracy study on an aberrated composition that WP-C3's own
-    section 7 already lists as owed.  So this id names the transport whose
-    lattice its metric was calibrated on, and the open question is FILED in
-    the WP-C3 report's round-2 section rather than hidden here.
+    11.2 %.
+
+    SETTLED 2026-09-20 (VERIFY-WP-C3 ROUND 2): it is the LATTICE, not the
+    field.  Resampled onto one common 0.5 um lattice by exact full-N
+    band-limited interpolation the two arms read EE80 11.0575 um and
+    11.0568 um -- 0.006 % apart -- and their intensity maps agree to
+    1.29e-04 in relative L2; and the SAME Collins leg driven with an
+    explicit ``dx_out`` reads EE80 11.0090 / 10.9921 / 11.0708 / 10.9417 /
+    10.9083 um at 0.25 / 0.5 / 1 / 2 / 3 um against the oracle's 11.1102 um,
+    reading 12.3588 um only on its own floored 6.3126 um pitch.  The leg
+    says so itself: it emits ``the Collins chirp-Z stage is under-sampled --
+    K2 (output) 5.1055``.  This id keeps ``transport='sziklas'`` because
+    that is the lattice its 6 % metric was calibrated on, and the second arm
+    keeps measuring the 11.2 % because that gap is the READOUT PITCH and
+    will close when a near-focus readout can ask for the pitch it needs --
+    not because the two transports disagree about the field.
 
     (Before round 2 this chain passed on the default by luck: its GAP leg ran
     an under-sampled chirp-Z at K1 = 1.0566 because a flat-resolving leg had
@@ -272,18 +281,22 @@ def test_stepB_composed_doublet_relay_matches_debye():
         # ... and the DEFAULT transport is measured on the same chain rather
         # than left unsaid (WP-C3 round 2).  This arm does not grade the
         # default against the oracle -- see `_run_composed_chain`'s docstring
-        # for why that question is open -- it RECORDS that the two disagree,
-        # so a future change that closes the gap turns this assertion red and
-        # forces the note above to be re-read.
+        # for why the disagreement is the returned LATTICE and not the field
+        # -- it RECORDS that the two disagree, so a future change that closes
+        # the gap turns this assertion red and forces the note above to be
+        # re-read.
         (_r2c, e50c, e80c), _mc, _rc = _run_composed_chain(
             _WL, transport='collins')
         gap80 = abs(e80c - e80) / e80
         assert gap80 > 0.05, (
             f'the two transports now agree on this composition to '
             f'{gap80:.2%} of EE80 (collins {e80c * 1e6:.4f} um against '
-            f'sziklas {e80 * 1e6:.4f} um).  That is the OPEN near-focus '
-            f'question in the WP-C3 report closing; re-read its round-2 '
-            f'section and retire this arm with the measurement.')
+            f'sziklas {e80 * 1e6:.4f} um).  That is the READOUT PITCH, not a '
+            f'physics disagreement (VERIFY-WP-C3 ROUND 2 sec. 4): the two '
+            f'arms agree to 0.006 % on one common lattice.  A near-focus '
+            f'readout that can name its own output pitch would close this '
+            f'gap, and this arm should then be retired with that '
+            f'measurement.')
     finally:
         la.clear_asm_caches()
 
