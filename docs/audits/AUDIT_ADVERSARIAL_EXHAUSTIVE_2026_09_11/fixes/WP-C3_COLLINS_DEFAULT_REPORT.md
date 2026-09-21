@@ -1168,9 +1168,12 @@ near-focus caveat with the way back.
 
 ### R2.5 The round-2 gates, re-measured at the FINAL code tip (7a2cf19f)
 
-Every row below was run again after the last commit that touches code or
-tests, so none of them is inherited from an earlier state of the branch (the
-only commit after `7a2cf19f` is this documentation update).  WIN = py3.14 on this machine,
+Every row below was run again after `7a2cf19f`, the last commit that changes
+what any of them executes, so none is inherited from an earlier state of the
+branch.  The two commits after it change prose only -- this report section,
+and `test_verify_c3_collins_default.py`'s module docstring, which still
+described xfail markers round 2 had removed -- and that file was re-run after
+its edit: **14 passed** (11.7 s), ruff clean.  WIN = py3.14 on this machine,
 WSL = py3.12 in `~/lumvenv`; every pytest run carries
 `OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1` on the command
 line and `--capture=sys`.
