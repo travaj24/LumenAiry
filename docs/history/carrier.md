@@ -1,7 +1,7 @@
 <!-- lumenairy-history-doc
 module: lumenairy/propagators/carrier.py
-ast_sha256: 1b6569f7873c4d666a34753fc1a3055c13cd53b8e977016b0be96c8f8c6579ba
-token_sha256: 42a6145ec55142467c01f5221936a047762d19dc8b151ebf0d67295ebd5cb737
+ast_sha256: 38b98aba3277de8f2017244081b1061384997fa59a26014bc2e56e115921e6c6
+token_sha256: 0361f5a362017643fef97c79bf367c032750fcf1da59158a80e7a56850454f36
 pre_relocation_lines: 11602
 recorded_by: WP-A17 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
@@ -22,6 +22,7 @@ re_recorded: 2026-09-20 -- WP-C5 item 1 (ledger 1.5 / 4.3): _GAP_KERNEL_ACCURACY
 re_recorded: 2026-09-20 -- WP-C5 item 3 (ledger 1.7): replica_fill defaults to 'zero' on carrier_referenced_focus_readout, carrier_referenced_exact_focus_readout and _collins_focus_readout, so a readout no longer hands back periodic copies it never measured; _fill_readout_replicas publishes the fill it applied and _publish_readout_containment copies it onto each chain stage as readout_replica_fill.  The blanking is confined to the samples outside one period of the transform's own reported period -- inside it the two fills are byte-identical and a faithful window is returned by identity -- and the replica REFUSAL is untouched (it is taken before any fill runs).  'repeat' reproduces 5.48.x bit for bit; archive-to-archive 16 of 20 digested readouts identical on both builds, the four that move all default-fill calls on windows past one period
 re_recorded: 2026-09-20 -- WP-C4 round 2 (VERIFY-WP-C4 D2): mft_method= added and threaded to the MFT call, so the shape rule's default flip keeps a one-keyword way back at every public entry point; None stamps nothing and no answer moves
 re_recorded: 2026-09-20 -- 5.49.0 integration merge: WP-C5 round 2 (replica_fill='zero' default, the k|z_eff|theta^4 rule armed at 1e-4, the fill's periodicity restated) merged with WP-C4 round 3 (mft_method= threaded through the readouts and chains, with Parameters entries); the merged module is the union of both branches' carrier.py
+re_recorded: 2026-09-20 -- 5.49.0 integration merge: WP-C3 round 2 (transport='collins' default with the resolving readout, the flat-reference fallback, the stop-plane keys selecting the Sziklas readout, the standoff readout's transport= keyword) merged onto the C4 x C5 carrier.py; the merged module is the union of the three branches
 -->
 
 # Version history -- `lumenairy/propagators/carrier.py`
