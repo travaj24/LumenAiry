@@ -220,7 +220,7 @@ from .twod_staggered import (
     _wood_eps_reals,
 )
 
-__all__ = ["PMM2DStackPure"]
+__all__ = ["PMM2DStackPure", "material_key"]
 
 #: Lossless-closure tripwire window for the pure staggered cascade.  DERIVED
 #: 2026-09-09 by MEASUREMENT over 40 lossless SCALAR configurations of this
@@ -515,6 +515,172 @@ def _warn_stag_closure(R_eff, T_eff, layers, eps_sup, eps_sub):
                 f"under-resolved or the solve sits inside a Rayleigh cutoff: "
                 f"raise n_modes (M), or detune the wavelength / use "
                 f"PMM2DStackHybrid near a cutoff.", stacklevel=3)
+
+
+# --------------------------------------------------------------------------- #
+# geometry viewers -- shared styling
+# --------------------------------------------------------------------------- #
+#: Face-colour ramps for :func:`_stag_material_style`.  A metal runs copper to
+#: bronze and DARKENS with |Re eps|; a dielectric runs bone to slate and darkens
+#: with its index.  The point of keying colour on the physics rather than on the
+#: order materials happen to appear in is that the same material is the same
+#: colour in every figure, and copper never comes out green.
+_STAG_METAL_LO, _STAG_METAL_HI = (0.93, 0.78, 0.60), (0.44, 0.23, 0.09)
+#: |Re eps| at which the metal ramp saturates.
+_STAG_METAL_FULL = 150.0
+#: The dielectric ramp, as ``(index, colour)`` stops.  A single two-colour
+#: interpolation put everything between 1.7 and 2.0 at the same lightness, which
+#: is precisely the band real dielectrics occupy, so the stops move through HUE
+#: as well: bone, sand, sage, teal, indigo.
+_STAG_DIEL_STOPS = (
+    (1.00, (0.97, 0.96, 0.92)),
+    (1.50, (0.90, 0.84, 0.62)),
+    (1.80, (0.60, 0.76, 0.62)),
+    (2.10, (0.33, 0.64, 0.70)),
+    (2.60, (0.18, 0.36, 0.62)),
+)
+#: Edge colours.  Fill carries the physics and cannot separate two materials
+#: that are physically near-identical; the edge carries IDENTITY, which can.
+#: The choice is a deterministic function of the identity key, NOT of the order
+#: materials appear in -- an order-of-appearance cycle gave the same material
+#: different edges in two panels of one figure, which is exactly the drift these
+#: viewers exist to prevent.
+_STAG_EDGE_CYCLE = (
+    "#1b1b1b", "#c02a2a", "#1d5fa8", "#1f8a3c", "#8a4bc0",
+    "#c07a12", "#0f8f8f", "#a8145a", "#5a6a20", "#6b4a2a",
+    "#2f4858", "#9c3d1a", "#3b6ea5", "#4f7d2a", "#7a3b7a",
+    "#b5651d",
+)
+
+
+def _stag_edge_map(layers):
+    """Edge colour per DISTINCT material of a whole stack.
+
+    Assignment is made once over the stack's entire material set, sorted, so
+    every panel of a figure agrees and two materials never share an edge while
+    the palette has colours left.  Two earlier designs were rejected by
+    measurement: order-of-appearance gave the same material different edges in
+    two panels of one figure, and a deterministic hash into this palette put
+    five of six materials on one colour.
+    """
+    keys = set()
+    for L in layers:
+        cell = L.get("eps_cell")
+        if cell is not None:
+            a = np.asarray(cell)
+            for i in range(a.shape[0]):
+                for j in range(a.shape[1]):
+                    keys.add(_stag_eps_key(a[i, j]))
+        else:
+            e = L.get("eps", L.get("eps33", L.get("eps_uniform")))
+            if e is not None:
+                keys.add(_stag_eps_key(e))
+    return {k: _STAG_EDGE_CYCLE[i % len(_STAG_EDGE_CYCLE)]
+            for i, k in enumerate(sorted(keys))}
+
+
+def _stag_eps_parts(eps):
+    """``(eps_xx, eps_yy, eps_xy)`` of a scalar or block-form entry."""
+    a = np.asarray(eps)
+    if a.ndim == 2:
+        return complex(a[0, 0]), complex(a[1, 1]), complex(a[0, 1])
+    return complex(a), complex(a), 0j
+
+
+def _stag_eps_key(eps):
+    """Material IDENTITY of a cell entry, to nine digits.
+
+    Two entries share a key only if they would reflect identically, so a tensor
+    at one director angle never merges with the same tensor at another, and a
+    scalar never merges with a tensor that happens to share ``eps_xx``.
+    """
+    exx, eyy, exy = _stag_eps_parts(eps)
+    return (round(exx.real, 9), round(exx.imag, 9), round(eyy.real, 9),
+            round(eyy.imag, 9), round(exy.real, 9), round(exy.imag, 9))
+
+
+def _stag_eps_label(key):
+    """Fallback legend text for an identity key, when no name was supplied."""
+    exx = complex(key[0], key[1])
+    eyy = complex(key[2], key[3])
+    exy = complex(key[4], key[5])
+    if abs(eyy - exx) > 1e-9 or abs(exy) > 1e-9:
+        return f"tensor, eps_xx={exx.real:.3g}{exx.imag:+.3g}j"
+    if abs(exx.imag) < 1e-12:
+        return f"eps={exx.real:.4g}"
+    return f"eps={exx.real:.4g}{exx.imag:+.3g}j"
+
+
+def _stag_material_style(eps):
+    """``(facecolor, hatch)`` for one permittivity, keyed on the physics.
+
+    A metal (``Re eps < 0``) is drawn in the copper-to-bronze family and darkens
+    with ``|Re eps|``; a dielectric is drawn on a multi-stop ramp that moves
+    through hue with refractive index, so the 1.7 to 2.0 band where real
+    dielectrics crowd is separated rather than flattened.  An ANISOTROPIC entry keeps its family colour and gains a
+    hatch, so a tensor cell can never be mistaken on the page for the scalar with
+    the same ``eps_xx`` -- which is exactly the confusion a flat categorical
+    palette invites.
+    """
+    exx, eyy, exy = _stag_eps_parts(eps)
+    aniso = abs(eyy - exx) > 1e-12 or abs(exy) > 1e-12
+    e = 0.5 * (exx + eyy)
+    if e.real < 0.0:
+        f = min(1.0, abs(e.real) / _STAG_METAL_FULL)
+        col = tuple(_STAG_METAL_LO[k] + f * (_STAG_METAL_HI[k] - _STAG_METAL_LO[k])
+                    for k in range(3))
+    else:
+        col = _stag_diel_colour(float(np.sqrt(max(e.real, 0.0))))
+    return col, ("///" if aniso else "")
+
+
+def _stag_diel_colour(n_eff):
+    """Interpolate the dielectric stops at refractive index ``n_eff``."""
+    stops = _STAG_DIEL_STOPS
+    if n_eff <= stops[0][0]:
+        return stops[0][1]
+    if n_eff >= stops[-1][0]:
+        return stops[-1][1]
+    for (n0, c0), (n1, c1) in zip(stops[:-1], stops[1:]):
+        if n0 <= n_eff <= n1:
+            f = (n_eff - n0) / (n1 - n0)
+            return tuple(c0[k] + f * (c1[k] - c0[k]) for k in range(3))
+    return stops[-1][1]
+
+
+def material_key(eps):
+    """Public identity key of a permittivity, for naming materials in the viewers.
+
+    A ``(3, 3)`` tensor cannot be a dictionary key -- numpy arrays are not
+    hashable -- so a tensor material is named through this:
+
+    >>> names = {material_key(lc_tensor), "LC"}          # doctest: +SKIP
+
+    A scalar needs no help and may be passed directly.  Both forms are accepted
+    by ``material_names``, as is a sequence of ``(eps, name)`` pairs.
+    """
+    return _stag_eps_key(eps)
+
+
+def _stag_style_maps(material_names, material_colors):
+    """Normalise the user's naming onto identity keys.
+
+    ``material_names`` may be a mapping keyed by scalar permittivity or by an
+    identity key, OR any sequence of ``(eps, name)`` pairs -- the sequence form
+    exists because a block-form tensor is unhashable and so cannot be a key at
+    all, which an example caught the first time one was named.
+    """
+    items = []
+    if material_names:
+        if hasattr(material_names, "items"):
+            items = list(material_names.items())
+        else:
+            items = [tuple(p) for p in material_names]
+    names = {}
+    for k, v in items:
+        names[k if isinstance(k, tuple) and len(k) == 6 else _stag_eps_key(k)] = v
+    cols = dict(material_colors or {})
+    return names, cols
 
 
 class PMM2DStackPure(PerOrderAmplitudesMixin):
@@ -1265,6 +1431,190 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
                                             np.asarray(T).ravel()]))
             out.append(float(np.max(np.abs(vals[0] - vals[1]))))
         return (max(out) if out else 0.0), out
+
+    # ------------------------------------------------------------- viewers
+    def _layer_bounds(self, L, axis):
+        """Segment boundaries of one layer on ``axis`` (0 = x, 1 = y), metres.
+
+        Read from the layer's own record: the stored wall array when the layer
+        carries one, otherwise the uniform lattice its cell shape implies.  This
+        is the whole point of the viewers -- the picture comes out of the same
+        record the solve consumes, so it cannot drift from the physics.
+        """
+        period = self.period_x if axis == 0 else self.period_y
+        w = L.get("wx" if axis == 0 else "wy")
+        if w is not None and not np.isscalar(w):
+            b = np.asarray(w, dtype=float).ravel()
+            if b.size >= 2:
+                return b
+        if L.get("kind") == "patterned":
+            n = int(np.asarray(L["eps_cell"]).shape[axis])
+        else:
+            n = int(w) if (w is not None and np.isscalar(w)) else 1
+        return np.linspace(0.0, period, n + 1)
+
+    def _layer_entry(self, L, i, j):
+        """The permittivity the solver uses in segment ``(i, j)`` of a layer."""
+        cell = L.get("eps_cell")
+        if cell is not None:
+            a = np.asarray(cell)
+            return a[min(i, a.shape[0] - 1), min(j, a.shape[1] - 1)]
+        if L.get("kind") == "magnetic":
+            e = L.get("eps_uniform")
+            if e is None:
+                e = L.get("eps")
+            return e
+        return L.get("eps", L.get("eps33"))
+
+    def plot_geometry(self, axes=None, material_names=None, material_colors=None):
+        """Draw each layer's exact-wall ``(x, y)`` cell map, one panel per layer.
+
+        The pure staggered family stores every layer's walls analytically, so every
+        rectangle here is a wall the solver actually uses -- there is no
+        pixelation and no resampling.  Colours come from
+        :func:`_stag_material_style`, which keys them on the permittivity itself,
+        and an anisotropic cell is hatched.
+
+        Parameters
+        ----------
+        axes : sequence of matplotlib Axes, optional
+            One per layer; created when omitted.
+        material_names : dict, optional
+            ``{eps: name}`` for the legend.  ``eps`` may be a scalar, a ``(3, 3)``
+            block-form tensor, or an identity key from :func:`_stag_eps_key`.
+        material_colors : dict, optional
+            ``{name: color}``, overriding the physics-keyed default for the
+            materials you have named.
+
+        Returns
+        -------
+        list of matplotlib Axes -- use ``axes[0].figure.savefig(...)`` to save.
+        """
+        import matplotlib.pyplot as plt
+        from matplotlib.patches import Rectangle
+        if not self._layers:
+            raise ValueError(
+                "PMM2DStackPure.plot_geometry: add layers first.")
+        names, cols = _stag_style_maps(material_names, material_colors)
+        edges = _stag_edge_map(self._layers)
+        n = len(self._layers)
+        if axes is None:
+            _fig, axes = plt.subplots(1, n, figsize=(3.2 * n, 3.4),
+                                      squeeze=False)
+            axes = list(axes[0])
+        seen = {}
+        for ax, L in zip(axes, self._layers):
+            bx = self._layer_bounds(L, 0)
+            by = self._layer_bounds(L, 1)
+            for i in range(len(bx) - 1):
+                for j in range(len(by) - 1):
+                    e = self._layer_entry(L, i, j)
+                    key = _stag_eps_key(e)
+                    col, hatch = _stag_material_style(e)
+                    col = cols.get(names.get(key), col)
+                    edge = edges.get(key, "#1b1b1b")
+                    seen[key] = (col, hatch, edge)
+                    ax.add_patch(Rectangle(
+                        (bx[i], by[j]), bx[i + 1] - bx[i], by[j + 1] - by[j],
+                        facecolor=col, hatch=hatch, edgecolor=edge, lw=0.7))
+            ax.set_xlim(0.0, self.period_x)
+            ax.set_ylim(0.0, self.period_y)
+            ax.set_aspect("equal")
+            sl = L.get("slant", (0.0, 0.0))
+            extra = "" if _slant_is_zero(sl) else f"  slant {sl[0]:+.3g}, {sl[1]:+.3g}"
+            ax.set_title(f"t = {L['thickness']:.3g} m{extra}", fontsize=8)
+            ax.set_xlabel("x [m]", fontsize=8)
+        axes[0].set_ylabel("y [m]", fontsize=8)
+        axes[-1].legend(handles=[Rectangle((0, 0), 1, 1, facecolor=c,
+                                           hatch=h, edgecolor=e, lw=1.0)
+                                 for c, h, e in seen.values()],
+                        labels=[names.get(k) or _stag_eps_label(k)
+                                for k in seen],
+                        fontsize=7, loc="center left", handlelength=2.6,
+                        handleheight=1.6, bbox_to_anchor=(1.02, 0.5))
+        return axes
+
+    def plot_section(self, y=None, ax=None, material_names=None,
+                     material_colors=None, along="x"):
+        """Draw a z cross-section, sliced out of the same cells the solve uses.
+
+        ``along='x'`` cuts at a fixed ``y`` (default: the middle of the cell) and
+        draws x against z; ``along='y'`` cuts at a fixed ``x``.  A layer carrying
+        a slant is drawn as the parallelogram that slant implies, centred on the
+        layer, with ``+t_x`` moving the TOP edge toward ``+x`` -- the public sign
+        convention :meth:`add_layer` documents.  The half-spaces are drawn as
+        bands labelled with their indices.
+
+        Returns
+        -------
+        matplotlib Axes.
+        """
+        import matplotlib.pyplot as plt
+        from matplotlib.patches import Polygon, Rectangle
+        if not self._layers:
+            raise ValueError(
+                "PMM2DStackPure.plot_section: add layers first.")
+        if along not in ("x", "y"):
+            raise ValueError(
+                f"PMM2DStackPure.plot_section: along must be 'x' or 'y', "
+                f"got {along!r}.")
+        axis = 0 if along == "x" else 1
+        other = 1 - axis
+        names, cols = _stag_style_maps(material_names, material_colors)
+        edges = _stag_edge_map(self._layers)
+        period = self.period_x if axis == 0 else self.period_y
+        cut = (0.5 * (self.period_y if axis == 0 else self.period_x)
+               if y is None else float(y))
+        if ax is None:
+            _fig, ax = plt.subplots(figsize=(7.5, 5.0))
+        total = float(sum(L["thickness"] for L in self._layers))
+        seen = {}
+        z = 0.0
+        for L in self._layers:
+            t = float(L["thickness"])
+            b = self._layer_bounds(L, axis)
+            bo = self._layer_bounds(L, other)
+            jj = int(np.clip(np.searchsorted(bo, cut) - 1, 0, len(bo) - 2))
+            sl = L.get("slant", (0.0, 0.0))[axis]
+            sh = 0.5 * t * float(sl)
+            for i in range(len(b) - 1):
+                e = (self._layer_entry(L, i, jj) if axis == 0
+                     else self._layer_entry(L, jj, i))
+                key = _stag_eps_key(e)
+                col, hatch = _stag_material_style(e)
+                col = cols.get(names.get(key), col)
+                edge = edges.get(key, "#1b1b1b")
+                seen[key] = (col, hatch, edge)
+                x0, x1 = b[i], b[i + 1]
+                ax.add_patch(Polygon(
+                    [(x0 + sh, -z), (x1 + sh, -z),
+                     (x1 - sh, -z - t), (x0 - sh, -z - t)],
+                    closed=True, facecolor=col, hatch=hatch,
+                    edgecolor=edge, lw=0.7))
+            z += t
+        band = 0.18 * total if total > 0 else 1.0
+        ax.add_patch(Rectangle((0.0, 0.0), period, band, facecolor="0.88",
+                               edgecolor="none"))
+        ax.add_patch(Rectangle((0.0, -total - band), period, band,
+                               facecolor="0.72", edgecolor="none"))
+        ax.text(0.01 * period, 0.5 * band,
+                f"superstrate n = {complex(self.n_sup):.4g}", fontsize=8,
+                va="center")
+        ax.text(0.01 * period, -total - 0.5 * band,
+                f"substrate n = {complex(self.n_sub):.4g}", fontsize=8,
+                va="center")
+        ax.set_xlim(0.0, period)
+        ax.set_ylim(-total - band, band)
+        ax.set_xlabel(f"{along} [m]   (section at "
+                      f"{'y' if axis == 0 else 'x'} = {cut:.4g} m)")
+        ax.set_ylabel("z [m]  (0 = top of the first layer)")
+        ax.legend(handles=[Rectangle((0, 0), 1, 1, facecolor=c, hatch=h,
+                                     edgecolor=e, lw=1.0)
+                           for c, h, e in seen.values()],
+                  labels=[names.get(k) or _stag_eps_label(k) for k in seen],
+                  fontsize=7, loc="center left", handlelength=2.6,
+                  handleheight=1.6, bbox_to_anchor=(1.02, 0.5))
+        return ax
 
     def set_source(self, wavelength, *, theta=0.0, phi=0.0):
         """Set the incident plane wave: vacuum ``wavelength`` (m), polar

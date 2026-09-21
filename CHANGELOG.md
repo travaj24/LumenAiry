@@ -4,6 +4,48 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+### Added -- geometry viewers for the pure staggered 2-D stack
+
+`PMM2DStackPure` was the only stack family in the library that could not draw
+itself: `PMMStack`, `RCWAStack`, `SegmentStackGeometry` and `PMM2DStackHybrid`
+all have a geometry view, and the contract they keep is that the picture is read
+out of the same layer records the solve consumes, so a figure cannot drift from
+the physics it claims to show.
+
+`PMM2DStackPure.plot_geometry()` draws one panel per layer with that layer's
+exact `(x, y)` walls -- the stored wall array on the per-layer-grid path, the
+lattice the cell shape implies on the shared path -- and no resampling of any
+kind.  `PMM2DStackPure.plot_section()` draws a z cross-section at a chosen `y`
+(or `x`), sliced out of the same cell arrays, with the half-spaces as labelled
+bands.  **A layer carrying a slant is drawn as the parallelogram that slant
+implies**, centred on the layer, `+t_x` moving the top edge toward `+x`: a
+viewer that drew a slanted layer as a rectangle would hide the one property of
+this family that has no other visible consequence.
+
+Colour is keyed on the permittivity rather than on the order materials happen to
+appear in, so the same material is the same colour in every figure without the
+caller supplying a palette: a metal (`Re eps < 0`) is drawn in the copper-to-
+bronze family and darkens with `|Re eps|`, a dielectric on a bone-to-slate ramp
+keyed on index, and an anisotropic cell keeps its family colour and gains a
+hatch, so a tensor can never be mistaken on the page for the scalar sharing its
+`eps_xx`.  The identity that drives the legend carries `eps_xx`, `eps_yy` and
+`eps_xy`, so one liquid crystal at two director angles occupies two entries
+instead of merging into one.
+
+`material_names` accepts a scalar permittivity, an identity key, or a sequence
+of `(eps, name)` pairs; the new public `material_key(eps)` exists because a
+`(3, 3)` tensor is unhashable and so cannot be a dictionary key at all -- which
+the example caught the first time a tensor was named.  `material_colors`
+overrides the default for named materials, which is the remedy when two
+optically near-identical dielectrics (alumina at 1.746 and carbonitride at
+1.781, say) come out nearly the same colour, as the physics says they should.
+
+Gates: `tests/unit/test_v5_49_pmm2d_pure_viewer.py` (17), each one disarmed and
+re-run to confirm it bites.  Audit:
+`docs/audits/AUDIT_PMM2D_PURE_VIEWER_2026_09_21.md`.  Example:
+`examples/16_pmm2d_pure_geometry_view.py`.
+
+
 ## [5.49.0] — 2026-09-21
 
 The eight numerical defaults the 2026-09-11 adversarial audit measured and left
