@@ -32,11 +32,16 @@ Two consequences the shipped documentation does not draw:
   non-degenerate leg -- the one-step readout is unreachable on such a field at
   ANY grid and ANY final distance, which refining ``dx`` does not change.
 
-The last class carries the two contract gaps as STRICT xfails, the
-repository's own instrument for a gap a verification finds and does not fix
-(``test_v4_14_0_dispatcher_pin_apply_lens.py``: "the xfail markers will turn
-into ``passed`` results without any test change", and ``xfail_strict`` is on,
-so closing the gap turns the marker itself red and forces its removal).
+The last class carried the contract gaps this verification FILED as STRICT
+xfails, the repository's own instrument for a gap a verification finds and
+does not fix (``test_v4_14_0_dispatcher_pin_apply_lens.py``: "the xfail
+markers will turn into ``passed`` results without any test change", and
+``xfail_strict`` is on, so closing the gap turns the marker itself red and
+forces its removal).  WP-C3 ROUND 2 (2026-09-20) closed all five of them --
+D1, D2, D4, D5 and D6 -- so every marker is GONE and each id now runs as an
+ordinary assertion, with a dated CLOSED-BY comment above it naming what
+changed.  The class keeps its name because the ids are still the verifier's
+claims, asserted the same way; nothing in it is skipped or xfailed.
 """
 
 from __future__ import annotations
