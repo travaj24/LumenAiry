@@ -16358,6 +16358,7 @@
   "tests/unit/test_verify_c3_collins_default.py::TestTheResolvedRouteIsTwoSided::test_the_three_route_keys_are_absent_on_the_sziklas_spelling": 0.9374186999921221,
   "tests/unit/test_verify_c3_collins_default.py::TestTheRouteConditionIsAStaircase::test_the_angle_term_is_bounded_by_one_and_quantised_in_two_over_N": 0.017063400009647012,
   "tests/unit/test_verify_c3_collins_default.py::TestTheRouteConditionIsAStaircase::test_the_smallest_step_the_condition_can_take_is_two_over_N": 0.18898260001151357,
+  "tests/unit/test_verify_c3_round2.py::test_the_near_focus_ee80_gap_is_the_returned_lattice_not_the_field": 1.0466815999971004,
   "tests/unit/test_verify_hyg2_round2.py::test_a_phase_budget_reference_must_not_reduce_its_phase_like_the_route": 0.18,
   "tests/unit/test_verify_hyg2_round2.py::test_no_call_site_negates_the_one_kernel": 0.37,
   "tests/unit/test_verify_hyg2_round2.py::test_the_accuracy_rule_is_never_executed_while_tau_is_none": 0.77,

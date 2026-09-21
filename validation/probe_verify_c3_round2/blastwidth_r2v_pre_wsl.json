@@ -1,0 +1,1139 @@
+{
+ "tree": "/mnt/c/tmp/vc3b_pre4d",
+ "lumenairy": "/mnt/c/tmp/vc3b_pre4d/lumenairy/__init__.py",
+ "python": "3.12.3",
+ "numpy": "2.4.6",
+ "default_transport": "collins",
+ "cells": {
+  "f60|g1|N256|w1.5|rinf|fd5.0|ro0": {
+   "outcome": "returned",
+   "sha": "e0f43e3ec0d163f3c6fa0df7a8f815058d11e272c04c07fbfdd8726f1ad4b9ca",
+   "kelly": 0,
+   "peak": 7.832576539339372
+  },
+  "f60|g1|N256|w1.5|rinf|fd5.0|ro1": {
+   "outcome": "returned",
+   "sha": "9f613d4fcb7b4d52b1d632d33242976c93471de11924c977555105768414a3b5",
+   "kelly": 0,
+   "peak": 7.852648061222255
+  },
+  "f60|g1|N256|w1.5|rinf|fd15.0|ro0": {
+   "outcome": "returned",
+   "sha": "c2b0d9c7de2d3b139f8b3bce339677d0f69e0bf7b96115630024852c29c87f64",
+   "kelly": 0,
+   "peak": 16.117400185545783
+  },
+  "f60|g1|N256|w1.5|rinf|fd15.0|ro1": {
+   "outcome": "returned",
+   "sha": "06782c3cfb3999ea53c6bc2f83f37f4c4982ed0cdc77197730dfd2a1c3ff38c7",
+   "kelly": 0,
+   "peak": 16.112906374840527
+  },
+  "f60|g1|N256|w1.5|r0.06|fd5.0|ro0": {
+   "outcome": "returned",
+   "sha": "b15f1a5910e890a258f08ea772dd249f8baf6bc9e385eba6cac8b6f2829f2f67",
+   "kelly": 0,
+   "peak": 0.5739797474036553
+  },
+  "f60|g1|N256|w1.5|r0.06|fd5.0|ro1": {
+   "outcome": "returned",
+   "sha": "d3bdbbb2a7928c5261b289ad5661341f4a69d99d65a54cd15dc4a1c4a915b7f1",
+   "kelly": 0,
+   "peak": 0.5912273288438564
+  },
+  "f60|g1|N256|w1.5|r0.06|fd15.0|ro0": {
+   "outcome": "returned",
+   "sha": "a3df5cff97b5331495a808b5ab6d23e9fcb6fead4adf2bfa1ca7eeef74763346",
+   "kelly": 0,
+   "peak": 0.6176154712173983
+  },
+  "f60|g1|N256|w1.5|r0.06|fd15.0|ro1": {
+   "outcome": "returned",
+   "sha": "7b32be2e5647baae80ca9f49f9604f29b123b4366b03a3005bd120c9e4bb7e23",
+   "kelly": 0,
+   "peak": 0.6441414300352482
+  },
+  "f60|g1|N256|w3.0|rinf|fd5.0|ro0": {
+   "outcome": "returned",
+   "sha": "bb5688f61ad08966021d123d3a580875a49d64ecd2475e67fc0d04a17e67b16f",
+   "kelly": 1,
+   "peak": 6421.622088378905
+  },
+  "f60|g1|N256|w3.0|rinf|fd5.0|ro1": {
+   "outcome": "returned",
+   "sha": "d87304b435c84d816cf5ba9fc5ee9efd63d8f8fef968445acb1aff3715dc47bb",
+   "kelly": 0,
+   "peak": 8.052465874451128
+  },
+  "f60|g1|N256|w3.0|rinf|fd15.0|ro0": {
+   "outcome": "returned",
+   "sha": "029ae25390158f78749d50c8c673106668a6c2832ca45524ec0d4548dc3638d8",
+   "kelly": 1,
+   "peak": 3039.7512236670605
+  },
+  "f60|g1|N256|w3.0|rinf|fd15.0|ro1": {
+   "outcome": "returned",
+   "sha": "abc421f64f0d8367438104a8943ed751e3012c132c596f6201f122d0bfd122fb",
+   "kelly": 0,
+   "peak": 17.03302710863152
+  },
+  "f60|g1|N256|w3.0|r0.06|fd5.0|ro0": {
+   "outcome": "returned",
+   "sha": "1b64c417d3d44984343d7fea898213bc22dcb14c49257afa5268ea3e2978e6fd",
+   "kelly": 1,
+   "peak": 4157.114759260708
+  },
+  "f60|g1|N256|w3.0|r0.06|fd5.0|ro1": {
+   "outcome": "returned",
+   "sha": "e441717a3b5afd3571958a9fb4ff59f31d95e7be2412f0a0048b3b265835b5f8",
+   "kelly": 0,
+   "peak": 0.6584646347132385
+  },
+  "f60|g1|N256|w3.0|r0.06|fd15.0|ro0": {
+   "outcome": "returned",
+   "sha": "26cfafc2369bcaa2a27c225afd4dc7c74028d3539feb6dce51a6c70e4edc8f55",
+   "kelly": 1,
+   "peak": 1289.3788025785232
+  },
+  "f60|g1|N256|w3.0|r0.06|fd15.0|ro1": {
+   "outcome": "returned",
+   "sha": "30e1f4ff4d408c8d6cd26d9dbb247db5ec42875b7d540adbb86a91a8532bba2c",
+   "kelly": 0,
+   "peak": 0.704477989963772
+  },
+  "f60|g1|N512|w1.5|rinf|fd5.0|ro0": {
+   "outcome": "returned",
+   "sha": "70840a8848581b7b957e4b8ca934681f8a31e2dd2d7a1d63f8a3fef297161f0c",
+   "kelly": 0,
+   "peak": 2.6568111821936102
+  },
+  "f60|g1|N512|w1.5|rinf|fd5.0|ro1": {
+   "outcome": "returned",
+   "sha": "80c7ea69a0e78d76b8f3ad8a435556bd07d8e58a6a71084b379c6422ef8a82e2",
+   "kelly": 0,
+   "peak": 2.6230285592330134
+  },
+  "f60|g1|N512|w1.5|rinf|fd15.0|ro0": {
+   "outcome": "returned",
+   "sha": "dbc6cfdd2017eb4d552bcd3fcbe457148d77050d78a48062b0da30dde96cce45",
+   "kelly": 0,
+   "peak": 5.97328683215404
+  },
+  "f60|g1|N512|w1.5|rinf|fd15.0|ro1": {
+   "outcome": "returned",
+   "sha": "5e8e175456478f19ef2b5f4d899a676b309ab0064578cb9dca00d7e410bb0ce3",
+   "kelly": 0,
+   "peak": 5.901603423013202
+  },
+  "f60|g1|N512|w1.5|r0.06|fd5.0|ro0": {
+   "outcome": "returned",
+   "sha": "14e7aea1d65b77dbe8e9ac8af8d5a9ceac33c5ec80e3a4d1daad66f3a7658915",
+   "kelly": 0,
+   "peak": 0.5741082344945316
+  },
+  "f60|g1|N512|w1.5|r0.06|fd5.0|ro1": {
+   "outcome": "returned",
+   "sha": "b44bc9c94a2c5a050b7fe81bd96280201db73f58573350487c8dc35ca0abbb2d",
+   "kelly": 0,
+   "peak": 0.5741130112395292
+  },
+  "f60|g1|N512|w1.5|r0.06|fd15.0|ro0": {
+   "outcome": "returned",
+   "sha": "2ebbfbac12a1d62dc6833157f1b441b0d7277404b5ba90eb7dcce1e9540a76c3",
+   "kelly": 0,
+   "peak": 0.6246192924718484
+  },
+  "f60|g1|N512|w1.5|r0.06|fd15.0|ro1": {
+   "outcome": "returned",
+   "sha": "6748f7228403aadbe2cf9635ea452a72916c985246a2cc88a6c024bf9843f101",
+   "kelly": 0,
+   "peak": 0.6247477359357653
+  },
+  "f60|g1|N512|w3.0|rinf|fd5.0|ro0": {
+   "outcome": "returned",
+   "sha": "0e034da065232c87c548a49d8bc7caaaae34477f9ad0e1e1df6d385a87aa96c0",
+   "kelly": 1,
+   "peak": 1182.572868251971
+  },
+  "f60|g1|N512|w3.0|rinf|fd5.0|ro1": {
+   "outcome": "returned",
+   "sha": "b0b369b2a6d6f482c82c4428e95fa3b6532b1dcc6d2aaa0db1b0e043e6ebb670",
+   "kelly": 0,
+   "peak": 2.84542948499067
+  },
+  "f60|g1|N512|w3.0|rinf|fd15.0|ro0": {
+   "outcome": "returned",
+   "sha": "23c63abafb557234b61114fb1d31f7a1e57cae0486c8f59915fdfe1df72bc4b7",
+   "kelly": 1,
+   "peak": 327.88563211853256
+  },
+  "f60|g1|N512|w3.0|rinf|fd15.0|ro1": {
+   "outcome": "returned",
+   "sha": "c2a69ced9e663e5533c4662fcbd53fc99715e704b771508c574830f5f487887a",
+   "kelly": 0,
+   "peak": 6.132419359223897
+  },
+  "f60|g1|N512|w3.0|r0.06|fd5.0|ro0": {
+   "outcome": "returned",
+   "sha": "d531ae5ac1414649ffd9bae0152a32cad0c39625813d9bcef895627ce20942ae",
+   "kelly": 1,
+   "peak": 1805.5174161976947
+  },
+  "f60|g1|N512|w3.0|r0.06|fd5.0|ro1": {
+   "outcome": "returned",
+   "sha": "e9b33bcd03bf737a388f5977fbb86c1dab1f7966baa9820bcae0adc0cf671ab8",
+   "kelly": 0,
+   "peak": 0.5790546012497427
+  },
+  "f60|g1|N512|w3.0|r0.06|fd15.0|ro0": {
+   "outcome": "returned",
+   "sha": "de17464c40035b8eb5c12304a9155561943addd8bb300bf4a76435ab1e8e15bd",
+   "kelly": 1,
+   "peak": 126.75638191656704
+  },
+  "f60|g1|N512|w3.0|r0.06|fd15.0|ro1": {
+   "outcome": "returned",
+   "sha": "09799d8e80849716050017ea584ee60bf2fd3c74eeb51902cdcbc8b1e8e7f887",
+   "kelly": 0,
+   "peak": 0.6432327961345065
+  },
+  "f60|g2|N256|w1.5|rinf|fd5.0|ro0": {
+   "outcome": "returned",
+   "sha": "fe1dea4a77fc8c872c514f3c66c58f54fb2a001c941c6177aae72a1ed025ec8a",
+   "kelly": 0,
+   "peak": 317.0673461173501
+  },
+  "f60|g2|N256|w1.5|rinf|fd5.0|ro1": {
+   "outcome": "returned",
+   "sha": "1a6a7cc5d08430c2198d79fec8d4f5fadbd85cfe2ee905083b47be3b77055ec8",
+   "kelly": 0,
+   "peak": 312.8038277393199
+  },
+  "f60|g2|N256|w1.5|rinf|fd15.0|ro0": {
+   "outcome": "returned",
+   "sha": "f126f93c38f291ee7e55ed675426a91ee3b7b5d86682af8a5826be8ff5c45e1a",
+   "kelly": 0,
+   "peak": 411.0715833382864
+  },
+  "f60|g2|N256|w1.5|rinf|fd15.0|ro1": {
+   "outcome": "returned",
+   "sha": "2fccf9b4aec2f6ebbb222dce3f40c00b2a44f7c4fd6c000d5cf5439d25c5526b",
+   "kelly": 0,
+   "peak": 423.4416887673274
+  },
+  "f60|g2|N256|w1.5|r0.06|fd5.0|ro0": {
+   "outcome": "returned",
+   "sha": "67863fda099f09c03855345449f23922d48938a33202f4d0a25293145e83af6f",
+   "kelly": 0,
+   "peak": 0.8070316364480004
+  },
+  "f60|g2|N256|w1.5|r0.06|fd5.0|ro1": {
+   "outcome": "returned",
+   "sha": "711ffe4ddfcba680fec8ad89ec98bbe668fc251bf32561f2e05f6b48d688e3cb",
+   "kelly": 0,
+   "peak": 0.8723654771158843
+  },
+  "f60|g2|N256|w1.5|r0.06|fd15.0|ro0": {
+   "outcome": "returned",
+   "sha": "d06cb758c17fa453a2344e6fef472fb89b652fd06b316a44c5e7848f7f74ab97",
+   "kelly": 0,
+   "peak": 1.3769478922137823
+  },
+  "f60|g2|N256|w1.5|r0.06|fd15.0|ro1": {
+   "outcome": "returned",
+   "sha": "762f44d225bfd1e3f68c148c85b636323e7d3a0f6bb40527379774b20f11fbde",
+   "kelly": 0,
+   "peak": 1.62236795125843
+  },
+  "f60|g2|N256|w3.0|rinf|fd5.0|ro0": {
+   "outcome": "returned",
+   "sha": "e233eba889e4607d1e58bb4d25368d89ed58f12f04151fffccb69fd2a1b2e269",
+   "kelly": 2,
+   "peak": 3564775.747898269
+  },
+  "f60|g2|N256|w3.0|rinf|fd5.0|ro1": {
+   "outcome": "returned",
+   "sha": "e3c449e0020e29a120599f47843cac68f5af4dc51195a82691d0d77a2d348d49",
+   "kelly": 1,
+   "peak": 7243.900368203112
+  },
+  "f60|g2|N256|w3.0|rinf|fd15.0|ro0": {
+   "outcome": "returned",
+   "sha": "2ccd79eb9b82022da0894f0073bf030b4696c3be1050155d0b9c561eac8264a4",
+   "kelly": 2,
+   "peak": 659923.8208770341
+  },
+  "f60|g2|N256|w3.0|rinf|fd15.0|ro1": {
+   "outcome": "returned",
+   "sha": "7000c96fe18b83f13429c4dcffe1f8d7c37744ed8400692d6bc6ce1bb549867e",
+   "kelly": 1,
+   "peak": 7985.775583193072
+  },
+  "f60|g2|N256|w3.0|r0.06|fd5.0|ro0": {
+   "outcome": "returned",
+   "sha": "6aba23c5aa4890eaa39a75ff28a30d5fec98274979df5b2883e9a7da726eae2f",
+   "kelly": 2,
+   "peak": 13734427.391403731
+  },
+  "f60|g2|N256|w3.0|r0.06|fd5.0|ro1": {
+   "outcome": "raised",
+   "exc": "RuntimeError",
+   "msg": "carrier_referenced_focus_readout: the beam does not fit the co-moving grid at the stop plane.  The grid half-width there is 5618.0258 um against a measured ampl"
+  },
+  "f60|g2|N256|w3.0|r0.06|fd15.0|ro0": {
+   "outcome": "returned",
+   "sha": "c05e9fb60a3c0c777b5bdb3ae2ddef95a082e05a7c5f6ba86d1c563f6bbe1632",
+   "kelly": 2,
+   "peak": 3660304.843840751
+  },
+  "f60|g2|N256|w3.0|r0.06|fd15.0|ro1": {
+   "outcome": "raised",
+   "exc": "RuntimeError",
+   "msg": "carrier_referenced_focus_readout: the beam does not fit the co-moving grid at the stop plane.  The grid half-width there is 4679.3011 um against a measured ampl"
+  },
+  "f60|g2|N512|w1.5|rinf|fd5.0|ro0": {
+   "outcome": "returned",
+   "sha": "31a37393746a0bd00132dcf6120caa792d4bb20bb3384349fb8f0ced0d3d5f87",
+   "kelly": 0,
+   "peak": 17.721787497023165
+  },
+  "f60|g2|N512|w1.5|rinf|fd5.0|ro1": {
+   "outcome": "returned",
+   "sha": "10ada703806242a4ff8dcd061dbfef1f47dcbc019dc7721eafde06d41eee880c",
+   "kelly": 0,
+   "peak": 14.174979987862388
+  },
+  "f60|g2|N512|w1.5|rinf|fd15.0|ro0": {
+   "outcome": "returned",
+   "sha": "4543c19712015a09e1fde011bcebdcc9cfa91cbc64f88da360361d56f72f2dbb",
+   "kelly": 1,
+   "peak": 52.744921940864344
+  },
+  "f60|g2|N512|w1.5|rinf|fd15.0|ro1": {
+   "outcome": "returned",
+   "sha": "bfd915975b544063df6e0bd68d15550fe0470eea3d14f9a6d671b51f0e9d1513",
+   "kelly": 0,
+   "peak": 48.92018965699975
+  },
+  "f60|g2|N512|w1.5|r0.06|fd5.0|ro0": {
+   "outcome": "returned",
+   "sha": "c827478eaa7336acbd78dd018338ac3ba44172f7eceb4e55edf0c8105bacdc5c",
+   "kelly": 0,
+   "peak": 0.8201103961582314
+  },
+  "f60|g2|N512|w1.5|r0.06|fd5.0|ro1": {
+   "outcome": "returned",
+   "sha": "562baa7dcd369e43ed96630072fe4111242979d2758f0fc1ffa976b6550a24b9",
+   "kelly": 0,
+   "peak": 0.8551436069577545
+  },
+  "f60|g2|N512|w1.5|r0.06|fd15.0|ro0": {
+   "outcome": "returned",
+   "sha": "fd8d45c3047ff7d71c8d09fbda39a3cd5c118c28188b6297f8bd57e12f7ff0c4",
+   "kelly": 0,
+   "peak": 1.417431743182405
+  },
+  "f60|g2|N512|w1.5|r0.06|fd15.0|ro1": {
+   "outcome": "returned",
+   "sha": "3b7e6e79717220c08d62be9878e80f1f2649c71322a42963296a96d248878037",
+   "kelly": 0,
+   "peak": 1.5093453034920312
+  },
+  "f60|g2|N512|w3.0|rinf|fd5.0|ro0": {
+   "outcome": "returned",
+   "sha": "0986b4bf5da7948e8ce496fbd1b73e96d934145bb3161179b2a9e37d421bad4e",
+   "kelly": 2,
+   "peak": 208120.01801625272
+  },
+  "f60|g2|N512|w3.0|rinf|fd5.0|ro1": {
+   "outcome": "raised",
+   "exc": "RuntimeError",
+   "msg": "carrier_referenced_focus_readout: the beam does not fit the co-moving grid at the stop plane.  The grid half-width there is 3813.3019 um against a measured ampl"
+  },
+  "f60|g2|N512|w3.0|rinf|fd15.0|ro0": {
+   "outcome": "returned",
+   "sha": "c1593ca71578d584ae8b3ac2b5df16b544a3ea093aa953201aa42abd65baea54",
+   "kelly": 2,
+   "peak": 19462.270232013416
+  },
+  "f60|g2|N512|w3.0|rinf|fd15.0|ro1": {
+   "outcome": "raised",
+   "exc": "RuntimeError",
+   "msg": "carrier_referenced_focus_readout: the beam does not fit the co-moving grid at the stop plane.  The grid half-width there is 3040.0942 um against a measured ampl"
+  },
+  "f60|g2|N512|w3.0|r0.06|fd5.0|ro0": {
+   "outcome": "returned",
+   "sha": "160a5b0651dd66b4397dd57493e390a770c35446bd2d9fbc51734625bc6094e6",
+   "kelly": 2,
+   "peak": 1080162.8655994348
+  },
+  "f60|g2|N512|w3.0|r0.06|fd5.0|ro1": {
+   "outcome": "raised",
+   "exc": "RuntimeError",
+   "msg": "carrier_referenced_focus_readout: the beam does not fit the co-moving grid at the stop plane.  The grid half-width there is 6202.3106 um against a measured ampl"
+  },
+  "f60|g2|N512|w3.0|r0.06|fd15.0|ro0": {
+   "outcome": "returned",
+   "sha": "0024bb7baa5a58722171b312c0effafae9223d6ba5553de07ba1b092176c3c4f",
+   "kelly": 2,
+   "peak": 177276.24957119915
+  },
+  "f60|g2|N512|w3.0|r0.06|fd15.0|ro1": {
+   "outcome": "raised",
+   "exc": "RuntimeError",
+   "msg": "carrier_referenced_focus_readout: the beam does not fit the co-moving grid at the stop plane.  The grid half-width there is 5030.2925 um against a measured ampl"
+  },
+  "f120|g1|N256|w1.5|rinf|fd5.0|ro0": {
+   "outcome": "returned",
+   "sha": "8542e3a9b51ae2436b4f515a9942568527284733739e19c65591a1bfb7b8ac3c",
+   "kelly": 0,
+   "peak": 3.100570240400421
+  },
+  "f120|g1|N256|w1.5|rinf|fd5.0|ro1": {
+   "outcome": "returned",
+   "sha": "58413cd9cf0f81a3eb63a02ac6a742c18db243a624521f140f6daba57a24eee4",
+   "kelly": 0,
+   "peak": 3.122093100628831
+  },
+  "f120|g1|N256|w1.5|rinf|fd15.0|ro0": {
+   "outcome": "returned",
+   "sha": "4b069c5f11adb5f3dc95173f6c5fd5e9bca925bb60474f6908ae7a34855ca0cb",
+   "kelly": 0,
+   "peak": 4.979004933280566
+  },
+  "f120|g1|N256|w1.5|rinf|fd15.0|ro1": {
+   "outcome": "returned",
+   "sha": "3a340680245825d39a9e86d7cb379f6b829ceccd1a8b9898ba0db3ef639ca55c",
+   "kelly": 0,
+   "peak": 5.048134013031066
+  },
+  "f120|g1|N256|w1.5|r0.06|fd5.0|ro0": {
+   "outcome": "returned",
+   "sha": "bc78cddc55b619f14047700bf18c346104cb959bb81c0d4123c40c5bfe548e61",
+   "kelly": 0,
+   "peak": 0.5040776008613186
+  },
+  "f120|g1|N256|w1.5|r0.06|fd5.0|ro1": {
+   "outcome": "returned",
+   "sha": "f0aa197f3bb9b0820f82ca915f1d5dd72f480fb6fd335cce65de93b8c277f60c",
+   "kelly": 0,
+   "peak": 0.5106452723842534
+  },
+  "f120|g1|N256|w1.5|r0.06|fd15.0|ro0": {
+   "outcome": "returned",
+   "sha": "1f7e1ca8a9a245fb0e3de0147b2c5b6dcfe0e1eddacf3c0d6250d20ac5f7abd5",
+   "kelly": 0,
+   "peak": 0.46062114989903175
+  },
+  "f120|g1|N256|w1.5|r0.06|fd15.0|ro1": {
+   "outcome": "returned",
+   "sha": "c33eea8a3efc82602e81a8e042aad46cc2032e55e8451f22b47762a2a4cd2226",
+   "kelly": 0,
+   "peak": 0.46926168978301047
+  },
+  "f120|g1|N256|w3.0|rinf|fd5.0|ro0": {
+   "outcome": "returned",
+   "sha": "e4f0238c5ba38ad4ddf9924405ae1865166419268807b13e2ce6da2269f71365",
+   "kelly": 1,
+   "peak": 15686.123236123729
+  },
+  "f120|g1|N256|w3.0|rinf|fd5.0|ro1": {
+   "outcome": "returned",
+   "sha": "8c960ce299659eea693ee25f1c6bea161b13b159f6671e196cb32587d991209a",
+   "kelly": 0,
+   "peak": 3.167013015383422
+  },
+  "f120|g1|N256|w3.0|rinf|fd15.0|ro0": {
+   "outcome": "returned",
+   "sha": "f4db34ee2d569563596bb6090a04222fa946161edb514a54d86ae10053a33b06",
+   "kelly": 1,
+   "peak": 872.7878747066607
+  },
+  "f120|g1|N256|w3.0|rinf|fd15.0|ro1": {
+   "outcome": "returned",
+   "sha": "c85516d04f500458aa51fd014f049c768913de72ef2bd9b4764ad655743c3866",
+   "kelly": 0,
+   "peak": 5.304055167179966
+  },
+  "f120|g1|N256|w3.0|r0.06|fd5.0|ro0": {
+   "outcome": "returned",
+   "sha": "632b0a9f71deffa547c2487e4f9920bf6a98c95241e71224cb2c2a3ad15b2ceb",
+   "kelly": 1,
+   "peak": 8656.005210260697
+  },
+  "f120|g1|N256|w3.0|r0.06|fd5.0|ro1": {
+   "outcome": "returned",
+   "sha": "f3607b746eccc9e29ba5897b2f23e15f435d96ca62b04d340adda7e64f417e87",
+   "kelly": 0,
+   "peak": 0.5476292866460457
+  },
+  "f120|g1|N256|w3.0|r0.06|fd15.0|ro0": {
+   "outcome": "returned",
+   "sha": "4889935457e20144e457e8a3103a6ede9beef0d14c459db3272628e255f65c1e",
+   "kelly": 1,
+   "peak": 666.5200958024136
+  },
+  "f120|g1|N256|w3.0|r0.06|fd15.0|ro1": {
+   "outcome": "returned",
+   "sha": "34905da3dcc20309944e87fd650ac3457dd1f52749ab40f62c8a5d402437ed46",
+   "kelly": 0,
+   "peak": 0.5127071540339841
+  },
+  "f120|g1|N512|w1.5|rinf|fd5.0|ro0": {
+   "outcome": "returned",
+   "sha": "ee2837b0769168764844b5a9b8f6dcb9727a6ebd0a520cf9b3363f892ae637a3",
+   "kelly": 0,
+   "peak": 1.65909667297424
+  },
+  "f120|g1|N512|w1.5|rinf|fd5.0|ro1": {
+   "outcome": "returned",
+   "sha": "f1afe12620eceaf3922a81600d87fb827c03c3dd94356e977040de22c08ec5a8",
+   "kelly": 0,
+   "peak": 1.6380756251627766
+  },
+  "f120|g1|N512|w1.5|rinf|fd15.0|ro0": {
+   "outcome": "returned",
+   "sha": "f1c59fc43e495a419d6249c7d8a2818dbcb4daa9af81223a61a3acaa041d42dd",
+   "kelly": 0,
+   "peak": 2.2231521320216423
+  },
+  "f120|g1|N512|w1.5|rinf|fd15.0|ro1": {
+   "outcome": "returned",
+   "sha": "286e2fa9042cdd41bc81af035c171641622415a6c249798a3ce79bf22ec6c44d",
+   "kelly": 0,
+   "peak": 2.2097543504412966
+  },
+  "f120|g1|N512|w1.5|r0.06|fd5.0|ro0": {
+   "outcome": "returned",
+   "sha": "a7b16602a0c8edaf5eff0239b24e35e770e143f9c2b509f5541f18ce12aeb5f9",
+   "kelly": 0,
+   "peak": 0.5040458133789764
+  },
+  "f120|g1|N512|w1.5|r0.06|fd5.0|ro1": {
+   "outcome": "returned",
+   "sha": "09f10df4024d93a77aa0807ac700b5fadd3d1ec3e204ce63de2d29796bdd4d62",
+   "kelly": 0,
+   "peak": 0.5040762946321578
+  },
+  "f120|g1|N512|w1.5|r0.06|fd15.0|ro0": {
+   "outcome": "returned",
+   "sha": "0863f54aa064ec1199ba440d078f631b299a07605aeafdbf5669167b9de74df0",
+   "kelly": 0,
+   "peak": 0.46550254161322874
+  },
+  "f120|g1|N512|w1.5|r0.06|fd15.0|ro1": {
+   "outcome": "returned",
+   "sha": "88a4ebe924d0ab8ad1283ee815cb102c10cf8aa5dd0b123e802e3a83b1bee71c",
+   "kelly": 0,
+   "peak": 0.4655505656127862
+  },
+  "f120|g1|N512|w3.0|rinf|fd5.0|ro0": {
+   "outcome": "returned",
+   "sha": "40b435222f99ec213baefe5a2d555cf6ca7491928ffdacba5d2da1649ef51f51",
+   "kelly": 1,
+   "peak": 628.9204264399979
+  },
+  "f120|g1|N512|w3.0|rinf|fd5.0|ro1": {
+   "outcome": "returned",
+   "sha": "36ba317da09ef26ba473a0836cee2fb7d555d1d92075f400d997d64a9c93be61",
+   "kelly": 0,
+   "peak": 1.7218034750209292
+  },
+  "f120|g1|N512|w3.0|rinf|fd15.0|ro0": {
+   "outcome": "returned",
+   "sha": "f9ddd32a8bb841fa0ddd030066573e5a26a89a4d784161c4ce11dede441b9d3f",
+   "kelly": 1,
+   "peak": 60.63335692442459
+  },
+  "f120|g1|N512|w3.0|rinf|fd15.0|ro1": {
+   "outcome": "returned",
+   "sha": "22683afbae717925da7d58110a5059930c0dbaa2e8c9db91b0e4b36125128401",
+   "kelly": 0,
+   "peak": 2.256623394884824
+  },
+  "f120|g1|N512|w3.0|r0.06|fd5.0|ro0": {
+   "outcome": "returned",
+   "sha": "3f6cbe085488a80a54c9bbb68a707d4b4665dfd8f11176689b9c916348aef908",
+   "kelly": 1,
+   "peak": 701.2695705188481
+  },
+  "f120|g1|N512|w3.0|r0.06|fd5.0|ro1": {
+   "outcome": "returned",
+   "sha": "4d0a9968fbc782756f506cbeaf1fb2e46022b653894802c0d64fb6dfe2aa8c46",
+   "kelly": 0,
+   "peak": 0.5069280461362773
+  },
+  "f120|g1|N512|w3.0|r0.06|fd15.0|ro0": {
+   "outcome": "returned",
+   "sha": "1b3be1741355dd5f24debaf440f01310ac23d1338b593aae2872d4758b49b2eb",
+   "kelly": 1,
+   "peak": 108.17541619879812
+  },
+  "f120|g1|N512|w3.0|r0.06|fd15.0|ro1": {
+   "outcome": "returned",
+   "sha": "8215dc7b15fdb1b517db3547e3bbdd376fe230cf8b84a4f8630db2e1e3423550",
+   "kelly": 0,
+   "peak": 0.47101544352094604
+  },
+  "f120|g2|N256|w1.5|rinf|fd5.0|ro0": {
+   "outcome": "returned",
+   "sha": "c1fcbab665b98c2a616254d80ee644d6397d313e45d8cace44981f6206974ea2",
+   "kelly": 0,
+   "peak": 11.322859846044292
+  },
+  "f120|g2|N256|w1.5|rinf|fd5.0|ro1": {
+   "outcome": "returned",
+   "sha": "d630a6eafb91707d44313a29d6ea4dd9c1964c2bf678248e2b59ee2fb2e77cb8",
+   "kelly": 0,
+   "peak": 10.637639790188564
+  },
+  "f120|g2|N256|w1.5|rinf|fd15.0|ro0": {
+   "outcome": "returned",
+   "sha": "25e55951241a382012083ccf1b16660c40a09e0d23a6ebd8a0fde024408aeacd",
+   "kelly": 0,
+   "peak": 40.49211043193653
+  },
+  "f120|g2|N256|w1.5|rinf|fd15.0|ro1": {
+   "outcome": "returned",
+   "sha": "e0fe0c48af631065dbf43fc010ed5a522f88246f35249d709781a0a84ac5dc5d",
+   "kelly": 0,
+   "peak": 40.77063921031852
+  },
+  "f120|g2|N256|w1.5|r0.06|fd5.0|ro0": {
+   "outcome": "returned",
+   "sha": "78437216c32604969614bd2ee9e01dff9d8bc4500c72bcb4d2942a76b48a68e9",
+   "kelly": 0,
+   "peak": 0.481218097089028
+  },
+  "f120|g2|N256|w1.5|r0.06|fd5.0|ro1": {
+   "outcome": "returned",
+   "sha": "7498ba272fc94143ddd460af6c0a653e1256d73c6d0c04142493297ad33c8d03",
+   "kelly": 0,
+   "peak": 0.4980913150910173
+  },
+  "f120|g2|N256|w1.5|r0.06|fd15.0|ro0": {
+   "outcome": "returned",
+   "sha": "3e4562d4cfc98fef27485914941d94e253552941c7f7a850e648b94d643a0459",
+   "kelly": 0,
+   "peak": 0.521114140544896
+  },
+  "f120|g2|N256|w1.5|r0.06|fd15.0|ro1": {
+   "outcome": "returned",
+   "sha": "a25c6a90ef268da5de212f27252bb451c8ec8bdb78b78aedcd9d66048daac03f",
+   "kelly": 0,
+   "peak": 0.5356247071612055
+  },
+  "f120|g2|N256|w3.0|rinf|fd5.0|ro0": {
+   "outcome": "returned",
+   "sha": "4aa6aaf8b384f7fb882ce96e3d3973a8177305f83dceec836ab8413382b54d08",
+   "kelly": 2,
+   "peak": 3018876.0466704024
+  },
+  "f120|g2|N256|w3.0|rinf|fd5.0|ro1": {
+   "outcome": "raised",
+   "exc": "RuntimeError",
+   "msg": "carrier_referenced_focus_readout: the beam does not fit the co-moving grid at the stop plane.  The grid half-width there is 4476.2897 um against a measured ampl"
+  },
+  "f120|g2|N256|w3.0|rinf|fd15.0|ro0": {
+   "outcome": "returned",
+   "sha": "5568c4909850b63f9218e650257560e55d7747b30944d96976aad222bff5516b",
+   "kelly": 2,
+   "peak": 302597.397251529
+  },
+  "f120|g2|N256|w3.0|rinf|fd15.0|ro1": {
+   "outcome": "raised",
+   "exc": "RuntimeError",
+   "msg": "carrier_referenced_focus_readout: the beam does not fit the co-moving grid at the stop plane.  The grid half-width there is 4099.4575 um against a measured ampl"
+  },
+  "f120|g2|N256|w3.0|r0.06|fd5.0|ro0": {
+   "outcome": "returned",
+   "sha": "7af0612d34f34963eeed1cab44fad458806c5f70e6ec2d7d2c01dcde8c9790a1",
+   "kelly": 2,
+   "peak": 54276443.96550987
+  },
+  "f120|g2|N256|w3.0|r0.06|fd5.0|ro1": {
+   "outcome": "raised",
+   "exc": "RuntimeError",
+   "msg": "carrier_referenced_focus_readout: the beam does not fit the co-moving grid at the stop plane.  The grid half-width there is 5906.8477 um against a measured ampl"
+  },
+  "f120|g2|N256|w3.0|r0.06|fd15.0|ro0": {
+   "outcome": "returned",
+   "sha": "35d92f194a76ced284e98c9c1c2c575063cf215fea5f140c8e8404bab2faccca",
+   "kelly": 2,
+   "peak": 7777281.066091697
+  },
+  "f120|g2|N256|w3.0|r0.06|fd15.0|ro1": {
+   "outcome": "raised",
+   "exc": "RuntimeError",
+   "msg": "carrier_referenced_focus_readout: the beam does not fit the co-moving grid at the stop plane.  The grid half-width there is 5392.5191 um against a measured ampl"
+  },
+  "f120|g2|N512|w1.5|rinf|fd5.0|ro0": {
+   "outcome": "returned",
+   "sha": "cfce4cfc605aef0559aa82b7a4887d5df207f92ba0ccdc81003791971700af40",
+   "kelly": 0,
+   "peak": 3.4799261588072015
+  },
+  "f120|g2|N512|w1.5|rinf|fd5.0|ro1": {
+   "outcome": "returned",
+   "sha": "d01a8e73adac4cbd5a1f744a492448e22373950632378cc8a24bc4ec048725f8",
+   "kelly": 0,
+   "peak": 3.11839195395071
+  },
+  "f120|g2|N512|w1.5|rinf|fd15.0|ro0": {
+   "outcome": "returned",
+   "sha": "662bbf219208841bf49eb5950f208caacc2af7273e59ab04b5ca2c45ab49e18e",
+   "kelly": 0,
+   "peak": 8.802379431981501
+  },
+  "f120|g2|N512|w1.5|rinf|fd15.0|ro1": {
+   "outcome": "returned",
+   "sha": "db91222d3c4a72eeda7d16b4ebfebb173840d646bc6ce48d31472b018dd59421",
+   "kelly": 0,
+   "peak": 8.797263871114867
+  },
+  "f120|g2|N512|w1.5|r0.06|fd5.0|ro0": {
+   "outcome": "returned",
+   "sha": "a103c933a23406616d0bf6093e941644a99c6c8fe025f9ef46788a330d7f6fd0",
+   "kelly": 0,
+   "peak": 0.48643975623801006
+  },
+  "f120|g2|N512|w1.5|r0.06|fd5.0|ro1": {
+   "outcome": "returned",
+   "sha": "23f275e9efed5f94fb983e3aedf209a77117a52e111782eefb9b8d963414a043",
+   "kelly": 0,
+   "peak": 0.4871112205168339
+  },
+  "f120|g2|N512|w1.5|r0.06|fd15.0|ro0": {
+   "outcome": "returned",
+   "sha": "07c412ac34badeca6b9aa96edb3490c4e89af826701dbdbe8db68ef45597195b",
+   "kelly": 0,
+   "peak": 0.5334007725045335
+  },
+  "f120|g2|N512|w1.5|r0.06|fd15.0|ro1": {
+   "outcome": "returned",
+   "sha": "36b2878550fe2f0ad014cad574be96c9b360c0ae336e3a41e80e543e2516f893",
+   "kelly": 0,
+   "peak": 0.5333363167074596
+  },
+  "f120|g2|N512|w3.0|rinf|fd5.0|ro0": {
+   "outcome": "returned",
+   "sha": "27dface9eb057123433bed571313cbc82fad690780c97aef7f2868ac15579c47",
+   "kelly": 2,
+   "peak": 132864.58106789214
+  },
+  "f120|g2|N512|w3.0|rinf|fd5.0|ro1": {
+   "outcome": "raised",
+   "exc": "RuntimeError",
+   "msg": "carrier_referenced_focus_readout: the beam does not fit the co-moving grid at the stop plane.  The grid half-width there is 4676.9691 um against a measured ampl"
+  },
+  "f120|g2|N512|w3.0|rinf|fd15.0|ro0": {
+   "outcome": "returned",
+   "sha": "04cf21143f45bf7c6e23fedf4b706f3be89b0781aa7847bb2d7c07f76e6ea9b6",
+   "kelly": 2,
+   "peak": 28062.294434243926
+  },
+  "f120|g2|N512|w3.0|rinf|fd15.0|ro1": {
+   "outcome": "raised",
+   "exc": "RuntimeError",
+   "msg": "carrier_referenced_focus_readout: the beam does not fit the co-moving grid at the stop plane.  The grid half-width there is 4273.5251 um against a measured ampl"
+  },
+  "f120|g2|N512|w3.0|r0.06|fd5.0|ro0": {
+   "outcome": "returned",
+   "sha": "8f4c64982c16d4e12770eb3cc24ab49eb95a68be9d0d4cc811afa47a1d9e8557",
+   "kelly": 2,
+   "peak": 3725930.4061444155
+  },
+  "f120|g2|N512|w3.0|r0.06|fd5.0|ro1": {
+   "outcome": "raised",
+   "exc": "RuntimeError",
+   "msg": "carrier_referenced_focus_readout: the beam does not fit the co-moving grid at the stop plane.  The grid half-width there is 7255.3935 um against a measured ampl"
+  },
+  "f120|g2|N512|w3.0|r0.06|fd15.0|ro0": {
+   "outcome": "returned",
+   "sha": "36fa167d16b98d82df38f822657ad9af3b11526eed469f9885379f006041cb2b",
+   "kelly": 2,
+   "peak": 308456.70663099637
+  },
+  "f120|g2|N512|w3.0|r0.06|fd15.0|ro1": {
+   "outcome": "raised",
+   "exc": "RuntimeError",
+   "msg": "carrier_referenced_focus_readout: the beam does not fit the co-moving grid at the stop plane.  The grid half-width there is 6546.8398 um against a measured ampl"
+  },
+  "f300|g1|N256|w1.5|rinf|fd5.0|ro0": {
+   "outcome": "returned",
+   "sha": "cf7a836d003b57d358292a089b65885c81d8b7b4b22bb11403eee0b4358dc3a7",
+   "kelly": 0,
+   "peak": 1.580418097912755
+  },
+  "f300|g1|N256|w1.5|rinf|fd5.0|ro1": {
+   "outcome": "returned",
+   "sha": "7b8bf87152c91e8325b02ae257851002018b25571bc89069637eb66dbafe81d6",
+   "kelly": 0,
+   "peak": 1.5860843077485094
+  },
+  "f300|g1|N256|w1.5|rinf|fd15.0|ro0": {
+   "outcome": "returned",
+   "sha": "0726f86dc0f04ce953be7cdf6effc58eb825469044ef999a9b8362f3d64e74a4",
+   "kelly": 0,
+   "peak": 1.9128503823414276
+  },
+  "f300|g1|N256|w1.5|rinf|fd15.0|ro1": {
+   "outcome": "returned",
+   "sha": "e756e4febecd6d9ca8f73a354fff2c79d9109c92ee7eb14066d3ea493e3cd821",
+   "kelly": 0,
+   "peak": 1.939072134289927
+  },
+  "f300|g1|N256|w1.5|r0.06|fd5.0|ro0": {
+   "outcome": "returned",
+   "sha": "b2a518f6270a1ebdcb0cbe990edeb818014f8f141e84ed04f91b2c7cd2ee50de",
+   "kelly": 0,
+   "peak": 0.4843871396028939
+  },
+  "f300|g1|N256|w1.5|r0.06|fd5.0|ro1": {
+   "outcome": "returned",
+   "sha": "f67ee4404493218ab9427330d5c6dd460c4e728d521cae1c4c0faa57441841f2",
+   "kelly": 0,
+   "peak": 0.520296324123153
+  },
+  "f300|g1|N256|w1.5|r0.06|fd15.0|ro0": {
+   "outcome": "returned",
+   "sha": "a9c816aecbb2e58ab9e3f33c16a5eaf236cb72ca9d2d80163d60d35d1cabab9a",
+   "kelly": 0,
+   "peak": 0.4051781839432895
+  },
+  "f300|g1|N256|w1.5|r0.06|fd15.0|ro1": {
+   "outcome": "returned",
+   "sha": "0b99d9aa48ed9e762543a1b2880d1852f614157a09e6c95e7614886b580329aa",
+   "kelly": 0,
+   "peak": 0.43778744173849965
+  },
+  "f300|g1|N256|w3.0|rinf|fd5.0|ro0": {
+   "outcome": "returned",
+   "sha": "ebe330e2c0c44bd406c24f25a551066c3d8770b8a8dd98e05e9c8d9e92a702ea",
+   "kelly": 1,
+   "peak": 4700.478124657626
+  },
+  "f300|g1|N256|w3.0|rinf|fd5.0|ro1": {
+   "outcome": "returned",
+   "sha": "34da3162d7ce7b64f3e3e561b61bbefe0dc291ca180a1018770677b2f04125bb",
+   "kelly": 0,
+   "peak": 1.608673688817169
+  },
+  "f300|g1|N256|w3.0|rinf|fd15.0|ro0": {
+   "outcome": "returned",
+   "sha": "c98bcb321626895416fec1de90708750d62e973837c4dbcd021d30b53aa53373",
+   "kelly": 1,
+   "peak": 566.8342960882236
+  },
+  "f300|g1|N256|w3.0|rinf|fd15.0|ro1": {
+   "outcome": "returned",
+   "sha": "7ea48827027dc384cc6612b5873344cb2b2c14942b171d2fab4b652484ed02d9",
+   "kelly": 0,
+   "peak": 1.9957229107139611
+  },
+  "f300|g1|N256|w3.0|r0.06|fd5.0|ro0": {
+   "outcome": "returned",
+   "sha": "5326974b81275ea02a4d5c03ef1b740f6781fa6e4d642c6075ff4b82b638f4fc",
+   "kelly": 1,
+   "peak": 6227.823067767685
+  },
+  "f300|g1|N256|w3.0|r0.06|fd5.0|ro1": {
+   "outcome": "returned",
+   "sha": "22f3395fc9c18e3a6ada27ad9a7426c74f2b6a15a29d539ed2b8afe2ad7fcb3d",
+   "kelly": 0,
+   "peak": 0.5683933378927379
+  },
+  "f300|g1|N256|w3.0|r0.06|fd15.0|ro0": {
+   "outcome": "returned",
+   "sha": "c8b8b58aac7fa569bccffc6d74e5380944b56bc1b65205e3655a0d762b7ecf32",
+   "kelly": 1,
+   "peak": 1069.2071670969449
+  },
+  "f300|g1|N256|w3.0|r0.06|fd15.0|ro1": {
+   "outcome": "returned",
+   "sha": "9c247a92ccb26b75c218fdd7d4ddc1042a64ecc562bb316ae1ac93c38d21a50b",
+   "kelly": 0,
+   "peak": 0.505406321757378
+  },
+  "f300|g1|N512|w1.5|rinf|fd5.0|ro0": {
+   "outcome": "returned",
+   "sha": "94295a7532975c3b4b7ce4c13c149768796f30d4cbac06107b1232deaa2c683d",
+   "kelly": 0,
+   "peak": 1.2114797053021897
+  },
+  "f300|g1|N512|w1.5|rinf|fd5.0|ro1": {
+   "outcome": "returned",
+   "sha": "1cab3b2a43fb4ace1169d216614d513556e8157c3563d7b97ad5fbc0d23bce9f",
+   "kelly": 0,
+   "peak": 1.2084250316325171
+  },
+  "f300|g1|N512|w1.5|rinf|fd15.0|ro0": {
+   "outcome": "returned",
+   "sha": "674ed7b3175df8392aa974026f39c8ac701eaff8eabceecf61f3a0830af197ba",
+   "kelly": 0,
+   "peak": 1.3578547485999772
+  },
+  "f300|g1|N512|w1.5|rinf|fd15.0|ro1": {
+   "outcome": "returned",
+   "sha": "c317206d266ec724821a1537a715003cddaa2b9a95e42fe3cde0e88689b8ea84",
+   "kelly": 0,
+   "peak": 1.3580404202524439
+  },
+  "f300|g1|N512|w1.5|r0.06|fd5.0|ro0": {
+   "outcome": "returned",
+   "sha": "a7072987f21944e3cbc796425b576f76eb77fa8f656111a864c164511d4b9f37",
+   "kelly": 0,
+   "peak": 0.4842703029692589
+  },
+  "f300|g1|N512|w1.5|r0.06|fd5.0|ro1": {
+   "outcome": "returned",
+   "sha": "e72011afac9a5b8c3addd12e4a51a22b53dbc85449b8c31dec4c0fbdeacfcf63",
+   "kelly": 0,
+   "peak": 0.4929759081246718
+  },
+  "f300|g1|N512|w1.5|r0.06|fd15.0|ro0": {
+   "outcome": "returned",
+   "sha": "9f6bfef9e5a01b332a3ea492feaf397ca613d9ab4e24af9c9eb33b78e5e24480",
+   "kelly": 0,
+   "peak": 0.4095762215601315
+  },
+  "f300|g1|N512|w1.5|r0.06|fd15.0|ro1": {
+   "outcome": "returned",
+   "sha": "5ee4825a6fbbb3ab12d7e87c626f130d6a3dfc911e02e54bcccf43689ac91837",
+   "kelly": 0,
+   "peak": 0.42637066471352314
+  },
+  "f300|g1|N512|w3.0|rinf|fd5.0|ro0": {
+   "outcome": "returned",
+   "sha": "4128bef925aeba1adcfb1f72ce2fda42b58a248526d67a6d6cad169f2261a576",
+   "kelly": 1,
+   "peak": 995.0918184035114
+  },
+  "f300|g1|N512|w3.0|rinf|fd5.0|ro1": {
+   "outcome": "returned",
+   "sha": "0a1548d088cfa613a9aeca3722fc9acc17fe820c0363e778a7602b20f293c0cf",
+   "kelly": 0,
+   "peak": 1.2179340152367526
+  },
+  "f300|g1|N512|w3.0|rinf|fd15.0|ro0": {
+   "outcome": "returned",
+   "sha": "af60d64be4e724b3d926d014c7805001e7494ab72c9c81467197ff3f010fd1cd",
+   "kelly": 1,
+   "peak": 59.9958411244626
+  },
+  "f300|g1|N512|w3.0|rinf|fd15.0|ro1": {
+   "outcome": "returned",
+   "sha": "7109f30280ef945b89956915287c7fc2c459aa330514745edd0f76b57b75a352",
+   "kelly": 0,
+   "peak": 1.3794642084770947
+  },
+  "f300|g1|N512|w3.0|r0.06|fd5.0|ro0": {
+   "outcome": "returned",
+   "sha": "bcdd3c88fed76478919b353df3cfe92dc8bf33eeb0e5f9742e063f6d385fe76e",
+   "kelly": 1,
+   "peak": 1011.3477201686843
+  },
+  "f300|g1|N512|w3.0|r0.06|fd5.0|ro1": {
+   "outcome": "returned",
+   "sha": "93404b06a1be8043374941b9773f0867334f0517102cc512fddef04ac95c95c2",
+   "kelly": 0,
+   "peak": 0.5198335953242864
+  },
+  "f300|g1|N512|w3.0|r0.06|fd15.0|ro0": {
+   "outcome": "returned",
+   "sha": "0c4bffa417e0e439750dfd24b13d3ec2836c07899b5b21d4f877a6ff0fefea51",
+   "kelly": 1,
+   "peak": 239.26500504037446
+  },
+  "f300|g1|N512|w3.0|r0.06|fd15.0|ro1": {
+   "outcome": "returned",
+   "sha": "d6b59ef87b15c3592a941fe1d52eda24b8c8c968c26349b2b287fc63aa8e15fb",
+   "kelly": 0,
+   "peak": 0.4690763788577392
+  },
+  "f300|g2|N256|w1.5|rinf|fd5.0|ro0": {
+   "outcome": "returned",
+   "sha": "469f528e8136115730301af0056c3f46695cf6cb8f026115af6ae48ce44757e1",
+   "kelly": 0,
+   "peak": 2.3501879316892818
+  },
+  "f300|g2|N256|w1.5|rinf|fd5.0|ro1": {
+   "outcome": "returned",
+   "sha": "fb0ad62c40c2e4a9510db8dde8a8858da605c1d188a9ee3da4364b984598ad7b",
+   "kelly": 0,
+   "peak": 2.2379233853058627
+  },
+  "f300|g2|N256|w1.5|rinf|fd15.0|ro0": {
+   "outcome": "returned",
+   "sha": "484013cd761ae54ecb853e951c12e6f79b81e055919e2ad13a5ab185bfc24e41",
+   "kelly": 0,
+   "peak": 4.295565411808487
+  },
+  "f300|g2|N256|w1.5|rinf|fd15.0|ro1": {
+   "outcome": "returned",
+   "sha": "16cad9ce26d361c4d4642c48e7d7b4c89f134b22f0d6fa56966092b6acf5431c",
+   "kelly": 0,
+   "peak": 4.316315256280302
+  },
+  "f300|g2|N256|w1.5|r0.06|fd5.0|ro0": {
+   "outcome": "returned",
+   "sha": "67ea6dad7258c767b80fc1523c62085f4b30d5470742e82950ca1d41111df7d8",
+   "kelly": 0,
+   "peak": 0.3730251869416447
+  },
+  "f300|g2|N256|w1.5|r0.06|fd5.0|ro1": {
+   "outcome": "returned",
+   "sha": "7b03a350b5ffcff4a250a776171d2fab6191f64795f5496b367719fb2ea88092",
+   "kelly": 0,
+   "peak": 0.4031531726377168
+  },
+  "f300|g2|N256|w1.5|r0.06|fd15.0|ro0": {
+   "outcome": "returned",
+   "sha": "3a6f34e4e4f0d136b5f2ebb57898d5198306caeaaea9758d06987577a1b3dd1e",
+   "kelly": 0,
+   "peak": 0.33619767030755354
+  },
+  "f300|g2|N256|w1.5|r0.06|fd15.0|ro1": {
+   "outcome": "returned",
+   "sha": "bd2e24fa6999719789311bf55f72cc1a45b4ae9e04e72ce88ad366e218b93a17",
+   "kelly": 0,
+   "peak": 0.36214693562380096
+  },
+  "f300|g2|N256|w3.0|rinf|fd5.0|ro0": {
+   "outcome": "returned",
+   "sha": "527c23f974ad384ecb067876180c4625fac647e90a72b22e52c9c4903d8a3d60",
+   "kelly": 2,
+   "peak": 2722019.6099703955
+  },
+  "f300|g2|N256|w3.0|rinf|fd5.0|ro1": {
+   "outcome": "raised",
+   "exc": "RuntimeError",
+   "msg": "carrier_referenced_focus_readout: the beam does not fit the co-moving grid at the stop plane.  The grid half-width there is 4684.6343 um against a measured ampl"
+  },
+  "f300|g2|N256|w3.0|rinf|fd15.0|ro0": {
+   "outcome": "returned",
+   "sha": "eb049cdf5d4c3a712a7ae6eada7f5d93514ff722a63434f8a4d183bba8cd87d3",
+   "kelly": 2,
+   "peak": 219447.57059982457
+  },
+  "f300|g2|N256|w3.0|rinf|fd15.0|ro1": {
+   "outcome": "raised",
+   "exc": "RuntimeError",
+   "msg": "carrier_referenced_focus_readout: the beam does not fit the co-moving grid at the stop plane.  The grid half-width there is 4646.1911 um against a measured ampl"
+  },
+  "f300|g2|N256|w3.0|r0.06|fd5.0|ro0": {
+   "outcome": "returned",
+   "sha": "f77b190d60d3eed059ecc835d96e083ccddc81387b6d5ad53b269d21eb9ec800",
+   "kelly": 1,
+   "peak": 3220.562425895127
+  },
+  "f300|g2|N256|w3.0|r0.06|fd5.0|ro1": {
+   "outcome": "raised",
+   "exc": "RuntimeError",
+   "msg": "carrier_referenced_focus_readout: the beam does not fit the co-moving grid at the stop plane.  The grid half-width there is 7313.8624 um against a measured ampl"
+  },
+  "f300|g2|N256|w3.0|r0.06|fd15.0|ro0": {
+   "outcome": "returned",
+   "sha": "1d6f8e33ccb9670114e3bc463673d5d6ed6a943d1596ba40aa894dab555651d4",
+   "kelly": 2,
+   "peak": 15332509.298421564
+  },
+  "f300|g2|N256|w3.0|r0.06|fd15.0|ro1": {
+   "outcome": "raised",
+   "exc": "RuntimeError",
+   "msg": "carrier_referenced_focus_readout: the beam does not fit the co-moving grid at the stop plane.  The grid half-width there is 7112.9261 um against a measured ampl"
+  },
+  "f300|g2|N512|w1.5|rinf|fd5.0|ro0": {
+   "outcome": "returned",
+   "sha": "8131b6dc65463c341698e029b1b7415a52cf7912c2f23e68283eea735be3ec5e",
+   "kelly": 0,
+   "peak": 1.5131766295885527
+  },
+  "f300|g2|N512|w1.5|rinf|fd5.0|ro1": {
+   "outcome": "returned",
+   "sha": "3b974aed18f15b9860495e580048607f957791e1641a8fbc5df31a1ae7b3e8a1",
+   "kelly": 0,
+   "peak": 1.5083402504502665
+  },
+  "f300|g2|N512|w1.5|rinf|fd15.0|ro0": {
+   "outcome": "returned",
+   "sha": "f241dd4af31538d67753f14db8b89608a67b397d5332f1c93ea280ff2a4926c3",
+   "kelly": 0,
+   "peak": 2.048623337582049
+  },
+  "f300|g2|N512|w1.5|rinf|fd15.0|ro1": {
+   "outcome": "returned",
+   "sha": "ec584df0981b2d93dd7fbcefe80f3ee736a479f0fb9eefa886a19664df33601c",
+   "kelly": 0,
+   "peak": 2.0539686897697247
+  },
+  "f300|g2|N512|w1.5|r0.06|fd5.0|ro0": {
+   "outcome": "returned",
+   "sha": "0e44072bc5ff9087c2820189de31e7ccd8d3f8ba7b7d01236c61035167f42d19",
+   "kelly": 0,
+   "peak": 0.3770583437529544
+  },
+  "f300|g2|N512|w1.5|r0.06|fd5.0|ro1": {
+   "outcome": "returned",
+   "sha": "1d10684869fa130c07aeb8dbdd69333d5cac1685ad5428fdc4d5e9f1154f1b07",
+   "kelly": 0,
+   "peak": 0.378399083598399
+  },
+  "f300|g2|N512|w1.5|r0.06|fd15.0|ro0": {
+   "outcome": "returned",
+   "sha": "73b636a833e76653cc178f91ca72970451387f8b08f31531a98189bc1bd56375",
+   "kelly": 0,
+   "peak": 0.34406406895189195
+  },
+  "f300|g2|N512|w1.5|r0.06|fd15.0|ro1": {
+   "outcome": "returned",
+   "sha": "361a435a4ea208a59e935b86bfd6222a5a1063ab0ccc599e916cf64a96a6eb0f",
+   "kelly": 0,
+   "peak": 0.34551777475090867
+  },
+  "f300|g2|N512|w3.0|rinf|fd5.0|ro0": {
+   "outcome": "returned",
+   "sha": "eb69cb3544ae54a2320b0eb30ecef378c75e915d4f1251206b8df6331bf65b67",
+   "kelly": 2,
+   "peak": 278424.5362814769
+  },
+  "f300|g2|N512|w3.0|rinf|fd5.0|ro1": {
+   "outcome": "raised",
+   "exc": "RuntimeError",
+   "msg": "carrier_referenced_focus_readout: the beam does not fit the co-moving grid at the stop plane.  The grid half-width there is 5122.8726 um against a measured ampl"
+  },
+  "f300|g2|N512|w3.0|rinf|fd15.0|ro0": {
+   "outcome": "returned",
+   "sha": "6cb817f48bee3796272fc1478e4e275df3f8a02ce1641615ebc9476e8c1b6f21",
+   "kelly": 2,
+   "peak": 34729.17795371581
+  },
+  "f300|g2|N512|w3.0|rinf|fd15.0|ro1": {
+   "outcome": "raised",
+   "exc": "RuntimeError",
+   "msg": "carrier_referenced_focus_readout: the beam does not fit the co-moving grid at the stop plane.  The grid half-width there is 5158.3259 um against a measured ampl"
+  },
+  "f300|g2|N512|w3.0|r0.06|fd5.0|ro0": {
+   "outcome": "returned",
+   "sha": "24b4d5e06513417e28efe7240ac5cebcd986b8ad9ac4eb558c666fc430579d17",
+   "kelly": 2,
+   "peak": 3336960.004317009
+  },
+  "f300|g2|N512|w3.0|r0.06|fd5.0|ro1": {
+   "outcome": "raised",
+   "exc": "RuntimeError",
+   "msg": "carrier_referenced_focus_readout: the beam does not fit the co-moving grid at the stop plane.  The grid half-width there is 7951.2046 um against a measured ampl"
+  },
+  "f300|g2|N512|w3.0|r0.06|fd15.0|ro0": {
+   "outcome": "returned",
+   "sha": "426f3f852a9d739fecf0b67fd8e6a8582373c0030e8eb14fc85bd60975f7c55c",
+   "kelly": 2,
+   "peak": 315608.07418163604
+  },
+  "f300|g2|N512|w3.0|r0.06|fd15.0|ro1": {
+   "outcome": "raised",
+   "exc": "RuntimeError",
+   "msg": "carrier_referenced_focus_readout: the beam does not fit the co-moving grid at the stop plane.  The grid half-width there is 7681.0087 um against a measured ampl"
+  }
+ }
+}

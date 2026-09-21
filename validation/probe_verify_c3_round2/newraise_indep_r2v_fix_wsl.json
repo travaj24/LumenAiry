@@ -1,0 +1,153 @@
+{
+ "tree": "/mnt/c/tmp/lum_vc3b",
+ "lumenairy": "/mnt/c/tmp/lum_vc3b/lumenairy/__init__.py",
+ "python": "3.12.3",
+ "numpy": "2.4.6",
+ "default_transport": "collins",
+ "rows": [
+  {
+   "N": 512,
+   "dx_um": 20.0,
+   "w_mm": 2.0,
+   "final_distance": 0.005,
+   "outcome": "returned",
+   "peak": 3.1891607177307666,
+   "route": "sziklas",
+   "route_k1": 19.65431326668792,
+   "reason": "k1",
+   "carrier_warnings": []
+  },
+  {
+   "N": 512,
+   "dx_um": 20.0,
+   "w_mm": 2.0,
+   "final_distance": 0.008,
+   "outcome": "returned",
+   "peak": 4.1404473803523265,
+   "route": "sziklas",
+   "route_k1": 11.904460660942636,
+   "reason": "k1",
+   "carrier_warnings": []
+  },
+  {
+   "N": 512,
+   "dx_um": 20.0,
+   "w_mm": 2.0,
+   "final_distance": 0.02,
+   "outcome": "returned",
+   "peak": 9.354442623064829,
+   "route": "sziklas",
+   "route_k1": 4.154608055197345,
+   "reason": "k1",
+   "carrier_warnings": []
+  },
+  {
+   "N": 256,
+   "dx_um": 20.0,
+   "w_mm": 2.0,
+   "final_distance": 0.005,
+   "outcome": "returned",
+   "peak": 3.184859900677453,
+   "route": "sziklas",
+   "route_k1": 11.705131491528677,
+   "reason": "k1",
+   "carrier_warnings": []
+  },
+  {
+   "N": 256,
+   "dx_um": 20.0,
+   "w_mm": 2.0,
+   "final_distance": 0.008,
+   "outcome": "returned",
+   "peak": 4.0927999170176275,
+   "route": "sziklas",
+   "route_k1": 7.271657253106822,
+   "reason": "k1",
+   "carrier_warnings": []
+  },
+  {
+   "N": 256,
+   "dx_um": 20.0,
+   "w_mm": 2.0,
+   "final_distance": 0.02,
+   "outcome": "returned",
+   "peak": 9.347355682649106,
+   "route": "sziklas",
+   "route_k1": 2.838183014684968,
+   "reason": "k1",
+   "carrier_warnings": []
+  },
+  {
+   "N": 512,
+   "dx_um": 20.0,
+   "w_mm": 3.0,
+   "final_distance": 0.005,
+   "outcome": "returned",
+   "peak": 3.279145134999831,
+   "route": "sziklas",
+   "route_k1": 21.636006617515953,
+   "reason": "k1",
+   "carrier_warnings": []
+  },
+  {
+   "N": 512,
+   "dx_um": 20.0,
+   "w_mm": 3.0,
+   "final_distance": 0.008,
+   "outcome": "returned",
+   "peak": 4.18997861788665,
+   "route": "sziklas",
+   "route_k1": 13.083241354418671,
+   "reason": "k1",
+   "carrier_warnings": []
+  },
+  {
+   "N": 512,
+   "dx_um": 20.0,
+   "w_mm": 3.0,
+   "final_distance": 0.02,
+   "outcome": "returned",
+   "peak": 9.858808999557167,
+   "route": "sziklas",
+   "route_k1": 4.530476091321394,
+   "reason": "k1",
+   "carrier_warnings": []
+  },
+  {
+   "N": 1024,
+   "dx_um": 10.0,
+   "w_mm": 2.0,
+   "final_distance": 0.005,
+   "outcome": "returned",
+   "peak": 1.631373253074247,
+   "route": "sziklas",
+   "route_k1": 10.216547788805746,
+   "reason": "k1",
+   "carrier_warnings": []
+  },
+  {
+   "N": 1024,
+   "dx_um": 10.0,
+   "w_mm": 2.0,
+   "final_distance": 0.008,
+   "outcome": "returned",
+   "peak": 1.8983122687521496,
+   "route": "sziklas",
+   "route_k1": 6.315439551454233,
+   "reason": "k1",
+   "carrier_warnings": []
+  },
+  {
+   "N": 1024,
+   "dx_um": 10.0,
+   "w_mm": 2.0,
+   "final_distance": 0.02,
+   "outcome": "returned",
+   "peak": 3.749786495479312,
+   "route": "sziklas",
+   "route_k1": 2.414331314102718,
+   "reason": "k1",
+   "carrier_warnings": []
+  }
+ ]
+}

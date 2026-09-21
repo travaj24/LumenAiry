@@ -1,0 +1,51 @@
+{
+ "tree": "/mnt/c/tmp/lum_vc3b",
+ "lumenairy": "/mnt/c/tmp/lum_vc3b/lumenairy/__init__.py",
+ "python": "3.12.3",
+ "numpy": "2.4.6",
+ "final_distance": 0.01,
+ "rows": [
+  {
+   "N": 256,
+   "dx_um": 40.0,
+   "exit_dx_um": 40.0,
+   "exit_R_mm": -118.14018000637012,
+   "r2_exit_um": 1414.9977244900076,
+   "mix": -1.1991584085280753e-06,
+   "theta_rms_mrad": 13.853867644001925,
+   "ORACLE_r2m_um": 1413.3040568154788,
+   "sziklas_r2m_um": 1295.3594013252132,
+   "sziklas_ratio_to_oracle": 0.9165468641220602,
+   "collins_r2m_um": 1295.3594013252132,
+   "collins_ratio_to_oracle": 0.9165468641220602
+  },
+  {
+   "N": 512,
+   "dx_um": 20.0,
+   "exit_dx_um": 20.0,
+   "exit_R_mm": -118.14018000637012,
+   "r2_exit_um": 1396.6014245560111,
+   "mix": -1.785586097012853e-05,
+   "theta_rms_mrad": 21.826424659414197,
+   "ORACLE_r2m_um": 1281.0220923194952,
+   "sziklas_r2m_um": 1278.4007207813852,
+   "sziklas_ratio_to_oracle": 0.9979536874860889,
+   "collins_r2m_um": 1278.4007207813852,
+   "collins_ratio_to_oracle": 0.9979536874860889
+  },
+  {
+   "N": 1024,
+   "dx_um": 10.0,
+   "exit_dx_um": 10.0,
+   "exit_R_mm": -118.14018000637012,
+   "r2_exit_um": 1391.9997421790706,
+   "mix": -3.2715911157129124e-05,
+   "theta_rms_mrad": 23.572493118523703,
+   "ORACLE_r2m_um": 1157.1133489275376,
+   "sziklas_r2m_um": 1274.1528507772896,
+   "sziklas_ratio_to_oracle": 1.101147827875488,
+   "collins_r2m_um": 1274.1528507772896,
+   "collins_ratio_to_oracle": 1.101147827875488
+  }
+ ]
+}

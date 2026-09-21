@@ -1,0 +1,1761 @@
+{
+ "digests": {
+  "C1-bare-final": "3373dbd73e16cf0daed09eab6e973e7db3748ade4010fd7608da76e63128403a",
+  "C1-bare-final-long": "2dbbd3df47102e32ccf6f12e382aab40be384a5880cc673c8d49b92a64e75fe4",
+  "C1-bare-zero-distance": "49cd01dfd711818453bc18c6b0601183a37483b2cac76899b5fa6247f872781f",
+  "C2-readout": "82fefcd2645ac2d430bf7700a06c18222b0830235e0507b5cc09756ba3f891d1",
+  "C2-readout-bandlimit-off": "4ce818ba8adc236d38f5693217c34533394840d004a14035eaf7b7d8afc7c45f",
+  "C2-readout-bandlimit-on": "4ce818ba8adc236d38f5693217c34533394840d004a14035eaf7b7d8afc7c45f",
+  "C2-readout-centre": "e1374c9a7d540bc0b6ffe7a8cf02539ea7b5dc885e8d29c18015e02172090afb",
+  "C2-readout-containment-ignore": "4ce818ba8adc236d38f5693217c34533394840d004a14035eaf7b7d8afc7c45f",
+  "C2-readout-containment-warn": "4ce818ba8adc236d38f5693217c34533394840d004a14035eaf7b7d8afc7c45f",
+  "C2-readout-long": "decbe8c39666dd12863214059777b801aaa86b60d7a211c52a54fab20e89593a",
+  "C2-readout-replica-repeat": "82fefcd2645ac2d430bf7700a06c18222b0830235e0507b5cc09756ba3f891d1",
+  "C2-readout-replica-zero": "82fefcd2645ac2d430bf7700a06c18222b0830235e0507b5cc09756ba3f891d1",
+  "C2-readout-standoff-2mm": "595e98a001a6031692526be6a06a6c67d47e31f9f2ca0cf2d682d3a5f18b5759",
+  "C2-readout-standoff-5mm": "ef7a8b5ebc6e886bb29394a8d167f72a566b87250d63b439633dbcc95eb5c41d",
+  "C2-readout-zero-distance": "9ae4d3f04b6f6d091683d1e3cdfec39fa7413bfe12119fbe8ee7bcef54e396da",
+  "C3-exact-kernel": "82fefcd2645ac2d430bf7700a06c18222b0830235e0507b5cc09756ba3f891d1",
+  "C3-fresnel-bare": "923f09ce1bea58116a920613c9373a9b74a3626a27b7392d52252b0331e481fc",
+  "C3-fresnel-kernel": "25079bf71305f80fe00175513dfd1338e6495fe45992a36d68c5b42275c73ca4",
+  "C4-collimated-input": "ce0c49768d9360f56ccdea797b70a60af8547ce59c13dd8c7947277c215e6bcc",
+  "C4-single-group": "b27c0652c4fee14491096980d7e74646bd11793dc3007eff9735ab309c6f27b0",
+  "C5-final-leg-auto-readout": "075ffcfc27a16e259d2fbc95e470c11542c67fce1d9530dd5cb21864c2a43903",
+  "C5-final-leg-exact-bare": "3373dbd73e16cf0daed09eab6e973e7db3748ade4010fd7608da76e63128403a",
+  "C5-final-leg-exact-readout": "faf221230f24c792aa4ffdfe6798cb1951c6ad6eff0da7d1a04f0c50f4dfb6e1",
+  "J1-jax-astig": "db2ffa2fb342d8fd1d066ff2684f6d6813ca44b75169cc556353fd33cbca3e5c",
+  "J1-jax-collimated": "52dfc5042c5fda3c00a4a595a289978f4d6e24b246686465d493b1f92a7bea76",
+  "J1-jax-convshort": "0809634065c3c5a4d9d1a2f3b900942bf77e31ffda9bbfc8abde52bfbb60cb37",
+  "J1-jax-convshort-fresnel": "ad4415fada8a4aab4e9ce248132ae20f6cbcc51eca81f156e579fa8f314742e8",
+  "J1-jax-focuscross": "f9a82b8db8299624834fd2f65342c03cdf65fa1713c29da77583e4784bb9487f",
+  "J1-jax-tilt-exact": "8d2ff16051ced28a3e7772ef40b3d02fe23c12af48f83304fd256e4671c80b79",
+  "J1-jax-zerolen": "5fb317ca28e701127cb2da71c16e5f6053b58ef159eeff2b1ce637085691adf5",
+  "M1-K1": "4fe43b1f6b07847fd8e986b2cd62a012e58ec565963d43fbb675ff4d7a032cd4",
+  "M1-K1-long": "4710d3c3747774d17296d7f786ea129ac028a621f934c6448bffa8748cd7a202",
+  "M1-K2": "5c15405e7d871bd75e4dc0bc13a290ec06ffdaa2f5e974443e2f650871630d68",
+  "M1-K2-long": "90b759cb7a72a435b27014c10d534f590006896bab065ed33a5cc6aa9cf8a7d3",
+  "M2-K1-standoff": "71a403a708757d5cdc1aa57c4387e9e3b0bb2850b3cdafd9cafb2dd51eb84cd4",
+  "M2-K1-zero-distance": "019a297a44ac9d3297463e39d1908b38591a2615d3e7e2d59527a0d92f0ba026",
+  "M2-K2-standoff": "b34e87c8a4fdd95f06fda0257137d0ab7d40fa5fc4e46a00e016ca046c604ee3",
+  "M3-K1-fresnel": "818971967b7fa998da338e7855741ec761f4b91b979842d350e89991f32d36f1",
+  "M3-K1-tile2": "0a73219b34719b3e5e7d1670ed643db60839848f40cad3c58fd87c1ee27c9260",
+  "M3-K2-incoherent": "55d7e2ec0a7812736743c7b2384706448d1fafc35042416ee7b0341626ac4899",
+  "M4-K1-final-leg-exact": "a676d8910ac5f527a0256811f2e65bae7cadfcbbce79c8b705174126d0ed178c",
+  "P1-focus-readout": "6df6af53d3949530be5b3315c9ed0a79093607a54ee9182398376c29f13c9545",
+  "P1-focus-readout-bandlimit-off": "f64a33134469b7d54827413e31d5a6b0ce96b2bfb0f2275656ca5d908d327f1b",
+  "P1-focus-readout-centre": "11f42e789c0db3f15082edc0d6d1bc01e0828de319d0609ae3f8dfbd4c288a32",
+  "P1-focus-readout-collimated": "a90ef486a6cc4862fe3417672bfba661d4d069d4dec907f12df6e50bdf66c904",
+  "P1-focus-readout-containment-ignore": "675d7fd85a368d87a675aa729fe07edcf3bf2c7a4aec676f58b410cce620da4d",
+  "P1-focus-readout-containment-warn": "fbfe6ec39e83873ada234ad7b3797e115d0cd19282211b996c7c89335a665f3b",
+  "P1-focus-readout-exactkernel": "6df6af53d3949530be5b3315c9ed0a79093607a54ee9182398376c29f13c9545",
+  "P1-focus-readout-fresnel": "6df6af53d3949530be5b3315c9ed0a79093607a54ee9182398376c29f13c9545",
+  "P1-focus-readout-replica-repeat": "6df6af53d3949530be5b3315c9ed0a79093607a54ee9182398376c29f13c9545",
+  "P1-focus-readout-replica-zero": "6df6af53d3949530be5b3315c9ed0a79093607a54ee9182398376c29f13c9545",
+  "P1-focus-readout-standoff-1mm": "3ee8d9b33f8bd744888917e1c823f2710b1cc4913a6bdd3a871224e86e894223",
+  "P1-focus-readout-standoff-3mm": "3454c02f2109a8107c88baf4fa4118ef21b803d409f0ff099b7cc5f9f629e559",
+  "P1-focus-readout-tilt": "6df6af53d3949530be5b3315c9ed0a79093607a54ee9182398376c29f13c9545",
+  "P2-exact-focus-readout": "f2a41c89c8d21cb12633300800364360a08025fb669ddb1242195f82b720ba68",
+  "P2-exact-focus-readout-bandlimit-off": "2fe0585d439dbe4f2859e7da099077e5a446c88b181029b4fac0be84009e8154",
+  "P2-exact-focus-readout-replica-zero": "f2a41c89c8d21cb12633300800364360a08025fb669ddb1242195f82b720ba68",
+  "P2-exact-focus-readout-tilt": "3a3f890492ff79ff3889655798bf57f4406996af5cd04496eb196923560c5d28",
+  "P2-exact-focus-readout-window": "f2a41c89c8d21cb12633300800364360a08025fb669ddb1242195f82b720ba68",
+  "P3-aperture": "41de4e68e609741891f63c49a423fc60dd2da6044a99746e81a6bde554cd8abd",
+  "P3-aperture-transmission": "5c63256612b8d9e0f8dcae43724c6fafda75167ac9e0a635f830d4c53d01a1b3",
+  "P3-envelope": "036cb55f4f76a42adc2db521d1d9cd18397e6de2300d18f56c0390f4040e173a",
+  "P3-fit-radius": "8fe6f9ca3175a5739d39544e0469d947ad4c06eab1794585055e139890f0d273",
+  "P3-reconstruct": "64cc4cb206d6fe4ead1068b1fdb2e61b2f6784a430aa3ab91c10ae8c1ead45fe",
+  "S1-back-auto": "ca0b3bb3405eecdcbc8159945c4492b55ccd422d3947c6a3a21330ab1387e5fd",
+  "S1-back-fresnel": "c3510fe8228f3fdb61865d1a1ef3f1237ca21f7c77c3ab1739b31495ff0d44af",
+  "S1-backcollimated-auto": "2a1274de1d57bf8ff958ed4c3e9305cac4017e579d7f24d7b661de2b6d1eaca8",
+  "S1-backcollimated-fresnel": "66e39acd27ccafcf774dbe42fde44098ecd2d3d7879253d14d2ed75558c5012b",
+  "S1-collimated-auto": "4805bbb07e58662fb0e6142d4238f539cb2a0a2f364d1f5d8c55802af70162a5",
+  "S1-collimated-fresnel": "5587070c24a76d4cc9f1ddbadda54a015a621fcc9990f6a170f99f07d02b2367",
+  "S1-convlong-auto": "3ccedc138ada50ab09c1668085af782949977d13b0a02366bd1c361c2aca8bfc",
+  "S1-convlong-fresnel": "eb9644d51a0208998e2c98aa1ba1036edb05783336a6bb4c53ec452e1196cab2",
+  "S1-convshort-auto": "5ac77780a3c53afdd0aad08f9158ec4047ac6cad18076b1efebd35c4050c9d7f",
+  "S1-convshort-fresnel": "de412e74380873ad5b637653ea8b0b067dd63d6391cdc573c6927b331415671e",
+  "S1-diverging-auto": "4393e5966ca3c4560426bd9f2cb883bdc7821dac274174d020c78ba4edfcc73f",
+  "S1-diverging-fresnel": "9352050c1a0e643539a900ce9d7b004b14299f5868968cd2142a05d7418bd548",
+  "S1-farpastfocus-auto": "3c3363b1833bf94153662adddd90ad440d5b9caaa265c31250e55b984736b6a6",
+  "S1-farpastfocus-fresnel": "d3f1ff46fb14f7b2070bc84fbdceb036c6bd8fea4e28987b74919427a88f3773",
+  "S1-focuscross-auto": "406f8933bab898c66831ce3671618f8bb1dbb02b4132555a99e6df6bb51c9574",
+  "S1-focuscross-fresnel": "b957f8b50c324f5ca5c4e4a64be9a96f592c56d7a98912a8aa1e0f90fbba52ba",
+  "S1-nearfocus-auto": "3240303ffef5e9f8114243e5b2447997cf30b2eb5aeab9acfee8d27e8b52f54d",
+  "S1-nearfocus-fresnel": "455e7963c35c981ff630bd9a219d8dace7729549a77749f4b47b7ed259d9a57b",
+  "S1-zerolen-auto": "20d37f152343d54676b4b91968661d79bdb109a939b0b54e064e185659e9acef",
+  "S1-zerolen-fresnel": "20d37f152343d54676b4b91968661d79bdb109a939b0b54e064e185659e9acef",
+  "S2-exactkernel-collimated": "4805bbb07e58662fb0e6142d4238f539cb2a0a2f364d1f5d8c55802af70162a5",
+  "S2-exactkernel-convshort": "5ac77780a3c53afdd0aad08f9158ec4047ac6cad18076b1efebd35c4050c9d7f",
+  "S2-exactkernel-focuscross": "406f8933bab898c66831ce3671618f8bb1dbb02b4132555a99e6df6bb51c9574",
+  "S3-astig-auto": "e742843dabbaf1e8f23e11d9f41114ce7d96b1989332486835b9abdbd4f08eb2",
+  "S3-astig-focuscross": "f6e2251b84b074ab300d3fdcdd36eb8a0d6668c1cb945662bcdbc0f9801f084c",
+  "S3-astig-fresnel": "e742843dabbaf1e8f23e11d9f41114ce7d96b1989332486835b9abdbd4f08eb2",
+  "S3-astig-onefinite": "9852cd9dfd35e369be6378a84d6965b37dcf7e6578f2430f318094244b53af19",
+  "S4-complex64-auto": "6298a908bc6f192af7ab9843c1abb5664758833379dcd1612ce304a55cfe826b",
+  "S4-complex64-collimated": "8cf9911b3c72ee2ea25d0c1ead9679a1383b1aa03e244c2ab604de2963f22aaf",
+  "S4-complex64-fresnel": "7ca8cd859e8577348755bcc61ab4a6021853e8988d1edd68564f3e2e383d79fa",
+  "S4-float64-input": "5ac77780a3c53afdd0aad08f9158ec4047ac6cad18076b1efebd35c4050c9d7f",
+  "S5-tilt-auto": "33cfaf19e7181679c58afe7c8d8db45bd6019041a4e1cd86fa16feeb97d4091c",
+  "S5-tilt-collimated": "54bf920b6e75faad51086339512fc9a170d238e82844af4b6232e4f9a495a818",
+  "S5-tilt-exact": "33cfaf19e7181679c58afe7c8d8db45bd6019041a4e1cd86fa16feeb97d4091c",
+  "S6-aniso-pitch": "0b9d8185142254d7ed88cebb586b6fda679ffbdc2459cca71a4385c01141e397",
+  "S6-rect-grid": "a98c0b4599b4ceb520f0ac1414d744d225a40ae2abb03eebac0efe151132dd83",
+  "S7-carrierout-refused": "9437afcb189781290ad24f3c4fc50c7f947ad6c39376673d6360db958dc58e45",
+  "S7-dxout-refused": "ddac3518f93292e549b2800cee234a0eab34310c44676e02295003f54125b0d5",
+  "S7-oncollins-error": "5ac77780a3c53afdd0aad08f9158ec4047ac6cad18076b1efebd35c4050c9d7f"
+ },
+ "meta": {
+  "build": "WIN-py3.14",
+  "python": "3.14.6",
+  "spelling": "default",
+  "tree": "C:\\tmp\\lum_vc3b"
+ },
+ "notes": {
+  "C1-bare-final": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": [
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diame"
+    ],
+    [
+     "RuntimeWarning",
+     "propagate_traced_carrier_chain: the free-space leg into groups[1] (bcx) is outside the SZIKLAS-SIEGMAN FRAME's validity: the measured envelope spread 1.390e-02 "
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with semi_diame"
+    ]
+   ]
+  },
+  "C1-bare-final-long": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": [
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diame"
+    ],
+    [
+     "RuntimeWarning",
+     "propagate_traced_carrier_chain: the free-space leg into groups[1] (bcx) is outside the SZIKLAS-SIEGMAN FRAME's validity: the measured envelope spread 1.390e-02 "
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with semi_diame"
+    ]
+   ]
+  },
+  "C1-bare-zero-distance": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": [
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diame"
+    ],
+    [
+     "RuntimeWarning",
+     "propagate_traced_carrier_chain: the free-space leg into groups[1] (bcx) is outside the SZIKLAS-SIEGMAN FRAME's validity: the measured envelope spread 1.390e-02 "
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with semi_diame"
+    ]
+   ]
+  },
+  "C2-readout": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": [
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diame"
+    ],
+    [
+     "RuntimeWarning",
+     "propagate_traced_carrier_chain: the free-space leg into groups[1] (bcx) is outside the SZIKLAS-SIEGMAN FRAME's validity: the measured envelope spread 1.390e-02 "
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with semi_diame"
+    ]
+   ]
+  },
+  "C2-readout-bandlimit-off": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": [
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diame"
+    ],
+    [
+     "RuntimeWarning",
+     "propagate_traced_carrier_chain: the free-space leg into groups[1] (bcx) is outside the SZIKLAS-SIEGMAN FRAME's validity: the measured envelope spread 1.390e-02 "
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with semi_diame"
+    ]
+   ]
+  },
+  "C2-readout-bandlimit-on": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": [
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diame"
+    ],
+    [
+     "RuntimeWarning",
+     "propagate_traced_carrier_chain: the free-space leg into groups[1] (bcx) is outside the SZIKLAS-SIEGMAN FRAME's validity: the measured envelope spread 1.390e-02 "
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with semi_diame"
+    ]
+   ]
+  },
+  "C2-readout-centre": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": [
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diame"
+    ],
+    [
+     "RuntimeWarning",
+     "propagate_traced_carrier_chain: the free-space leg into groups[1] (bcx) is outside the SZIKLAS-SIEGMAN FRAME's validity: the measured envelope spread 1.390e-02 "
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with semi_diame"
+    ]
+   ]
+  },
+  "C2-readout-containment-ignore": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": [
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diame"
+    ],
+    [
+     "RuntimeWarning",
+     "propagate_traced_carrier_chain: the free-space leg into groups[1] (bcx) is outside the SZIKLAS-SIEGMAN FRAME's validity: the measured envelope spread 1.390e-02 "
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with semi_diame"
+    ]
+   ]
+  },
+  "C2-readout-containment-warn": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": [
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diame"
+    ],
+    [
+     "RuntimeWarning",
+     "propagate_traced_carrier_chain: the free-space leg into groups[1] (bcx) is outside the SZIKLAS-SIEGMAN FRAME's validity: the measured envelope spread 1.390e-02 "
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with semi_diame"
+    ]
+   ]
+  },
+  "C2-readout-long": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": [
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diame"
+    ],
+    [
+     "RuntimeWarning",
+     "propagate_traced_carrier_chain: the free-space leg into groups[1] (bcx) is outside the SZIKLAS-SIEGMAN FRAME's validity: the measured envelope spread 1.390e-02 "
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with semi_diame"
+    ]
+   ]
+  },
+  "C2-readout-replica-repeat": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": [
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diame"
+    ],
+    [
+     "RuntimeWarning",
+     "propagate_traced_carrier_chain: the free-space leg into groups[1] (bcx) is outside the SZIKLAS-SIEGMAN FRAME's validity: the measured envelope spread 1.390e-02 "
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with semi_diame"
+    ]
+   ]
+  },
+  "C2-readout-replica-zero": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": [
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diame"
+    ],
+    [
+     "RuntimeWarning",
+     "propagate_traced_carrier_chain: the free-space leg into groups[1] (bcx) is outside the SZIKLAS-SIEGMAN FRAME's validity: the measured envelope spread 1.390e-02 "
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with semi_diame"
+    ]
+   ]
+  },
+  "C2-readout-standoff-2mm": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": [
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diame"
+    ],
+    [
+     "RuntimeWarning",
+     "propagate_traced_carrier_chain: the free-space leg into groups[1] (bcx) is outside the SZIKLAS-SIEGMAN FRAME's validity: the measured envelope spread 1.390e-02 "
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with semi_diame"
+    ]
+   ]
+  },
+  "C2-readout-standoff-5mm": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": [
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diame"
+    ],
+    [
+     "RuntimeWarning",
+     "propagate_traced_carrier_chain: the free-space leg into groups[1] (bcx) is outside the SZIKLAS-SIEGMAN FRAME's validity: the measured envelope spread 1.390e-02 "
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with semi_diame"
+    ]
+   ]
+  },
+  "C2-readout-zero-distance": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": [
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diame"
+    ],
+    [
+     "RuntimeWarning",
+     "propagate_traced_carrier_chain: the free-space leg into groups[1] (bcx) is outside the SZIKLAS-SIEGMAN FRAME's validity: the measured envelope spread 1.390e-02 "
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with semi_diame"
+    ]
+   ]
+  },
+  "C3-exact-kernel": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": [
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diame"
+    ],
+    [
+     "RuntimeWarning",
+     "propagate_traced_carrier_chain: the free-space leg into groups[1] (bcx) is outside the SZIKLAS-SIEGMAN FRAME's validity: the measured envelope spread 1.390e-02 "
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with semi_diame"
+    ]
+   ]
+  },
+  "C3-fresnel-bare": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": [
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diame"
+    ],
+    [
+     "RuntimeWarning",
+     "propagate_traced_carrier_chain: the free-space leg into groups[1] (bcx) is outside the SZIKLAS-SIEGMAN FRAME's validity: the measured envelope spread 1.390e-02 "
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with semi_diame"
+    ]
+   ]
+  },
+  "C3-fresnel-kernel": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": [
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diame"
+    ],
+    [
+     "RuntimeWarning",
+     "propagate_traced_carrier_chain: the free-space leg into groups[1] (bcx) is outside the SZIKLAS-SIEGMAN FRAME's validity: the measured envelope spread 1.390e-02 "
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with semi_diame"
+    ]
+   ]
+  },
+  "C4-collimated-input": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": [
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=55.000 um, semi=7.040 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=55.000 um, semi=7.040 mm). Largest is system aperture_diameter with semi_diame"
+    ],
+    [
+     "RuntimeWarning",
+     "propagate_traced_carrier_chain: the free-space leg into groups[1] (bcx) is outside the SZIKLAS-SIEGMAN FRAME's validity: the measured envelope spread 1.224e-02 "
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=48.396 um, semi=6.195 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=48.396 um, semi=6.195 mm). Largest is system aperture_diameter with semi_diame"
+    ],
+    [
+     "RuntimeWarning",
+     "apply_real_lens_traced: amplitude_model='ray_density' energy self-check FAILED -- exit power / aperture-transmitted input power = 1.538687, outside the document"
+    ]
+   ]
+  },
+  "C4-single-group": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": [
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diame"
+    ]
+   ]
+  },
+  "C5-final-leg-auto-readout": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": [
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diame"
+    ],
+    [
+     "RuntimeWarning",
+     "propagate_traced_carrier_chain: the free-space leg into groups[1] (bcx) is outside the SZIKLAS-SIEGMAN FRAME's validity: the measured envelope spread 1.390e-02 "
+    ],
+    [
+     "RuntimeWarning",
+     "propagate_traced_carrier_chain: the final group's measured exit NA 0.12731 sits within 20% of na_exact_threshold=0.15 -- BELOW (routing PARAXIAL).  final_leg='a"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with semi_diame"
+    ]
+   ]
+  },
+  "C5-final-leg-exact-bare": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": [
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diame"
+    ],
+    [
+     "RuntimeWarning",
+     "propagate_traced_carrier_chain: the free-space leg into groups[1] (bcx) is outside the SZIKLAS-SIEGMAN FRAME's validity: the measured envelope spread 1.390e-02 "
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with semi_diame"
+    ]
+   ]
+  },
+  "C5-final-leg-exact-readout": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": [
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diame"
+    ],
+    [
+     "RuntimeWarning",
+     "propagate_traced_carrier_chain: the free-space leg into groups[1] (bcx) is outside the SZIKLAS-SIEGMAN FRAME's validity: the measured envelope spread 1.390e-02 "
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=2048, dx=3.147 um, semi=3.222 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=2048, dx=3.147 um, semi=3.222 mm). Largest is system aperture_diameter with semi_diame"
+    ],
+    [
+     "RuntimeWarning",
+     "apply_real_lens_traced: the inverse-characteristic per-pixel evaluator refused to build -- guard G7: the exit fit has 169 retained samples for 120 total-degree-"
+    ]
+   ]
+  },
+  "J1-jax-astig": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": []
+  },
+  "J1-jax-collimated": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": []
+  },
+  "J1-jax-convshort": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": []
+  },
+  "J1-jax-convshort-fresnel": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": []
+  },
+  "J1-jax-focuscross": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": []
+  },
+  "J1-jax-tilt-exact": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": []
+  },
+  "J1-jax-zerolen": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": []
+  },
+  "M1-K1": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": [
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diame"
+    ],
+    [
+     "RuntimeWarning",
+     "propagate_traced_carrier_chain: the free-space leg into groups[1] (bcx) is outside the SZIKLAS-SIEGMAN FRAME's validity: the measured envelope spread 1.390e-02 "
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with semi_diame"
+    ],
+    [
+     "RuntimeWarning",
+     "propagate_traced_carrier_chain_multi: congruence 'congruence0' -- its 64 x 0.4000 um readout window holds 0.22 % of the power the chain delivered (power_out 5.2"
+    ]
+   ]
+  },
+  "M1-K1-long": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": [
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diame"
+    ],
+    [
+     "RuntimeWarning",
+     "propagate_traced_carrier_chain: the free-space leg into groups[1] (bcx) is outside the SZIKLAS-SIEGMAN FRAME's validity: the measured envelope spread 1.390e-02 "
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with semi_diame"
+    ],
+    [
+     "RuntimeWarning",
+     "propagate_traced_carrier_chain_multi: congruence 'congruence0' -- its 64 x 0.4000 um readout window holds 0.42 % of the power the chain delivered (power_out 1.0"
+    ]
+   ]
+  },
+  "M1-K2": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": [
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diame"
+    ],
+    [
+     "RuntimeWarning",
+     "propagate_traced_carrier_chain: the free-space leg into groups[1] (bcx) is outside the SZIKLAS-SIEGMAN FRAME's validity: the measured envelope spread 1.390e-02 "
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with semi_diame"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diame"
+    ],
+    [
+     "RuntimeWarning",
+     "propagate_traced_carrier_chain: the free-space leg into groups[1] (bcx) is outside the SZIKLAS-SIEGMAN FRAME's validity: the measured envelope spread 1.390e-02 "
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with semi_diame"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diame"
+    ],
+    [
+     "RuntimeWarning",
+     "propagate_traced_carrier_chain: the free-space leg into groups[1] (bcx) is outside the SZIKLAS-SIEGMAN FRAME's validity: the measured envelope spread 1.390e-02 "
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with semi_diame"
+    ],
+    [
+     "RuntimeWarning",
+     "propagate_traced_carrier_chain_multi: congruence 'congruence0' -- its 64 x 0.4000 um readout window holds 0.22 % of the power the chain delivered (power_out 5.2"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diame"
+    ],
+    [
+     "RuntimeWarning",
+     "propagate_traced_carrier_chain: the free-space leg into groups[1] (bcx) is outside the SZIKLAS-SIEGMAN FRAME's validity: the measured envelope spread 1.390e-02 "
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with semi_diame"
+    ],
+    [
+     "RuntimeWarning",
+     "propagate_traced_carrier_chain_multi: congruence 'congruence1' -- its 64 x 0.4000 um readout window holds 0.22 % of the power the chain delivered (power_out 1.6"
+    ]
+   ]
+  },
+  "M1-K2-long": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": [
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diame"
+    ],
+    [
+     "RuntimeWarning",
+     "propagate_traced_carrier_chain: the free-space leg into groups[1] (bcx) is outside the SZIKLAS-SIEGMAN FRAME's validity: the measured envelope spread 1.390e-02 "
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with semi_diame"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diame"
+    ],
+    [
+     "RuntimeWarning",
+     "propagate_traced_carrier_chain: the free-space leg into groups[1] (bcx) is outside the SZIKLAS-SIEGMAN FRAME's validity: the measured envelope spread 1.390e-02 "
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with semi_diame"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diame"
+    ],
+    [
+     "RuntimeWarning",
+     "propagate_traced_carrier_chain: the free-space leg into groups[1] (bcx) is outside the SZIKLAS-SIEGMAN FRAME's validity: the measured envelope spread 1.390e-02 "
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with semi_diame"
+    ],
+    [
+     "RuntimeWarning",
+     "propagate_traced_carrier_chain_multi: congruence 'congruence0' -- its 64 x 0.4000 um readout window holds 0.42 % of the power the chain delivered (power_out 1.0"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diame"
+    ],
+    [
+     "RuntimeWarning",
+     "propagate_traced_carrier_chain: the free-space leg into groups[1] (bcx) is outside the SZIKLAS-SIEGMAN FRAME's validity: the measured envelope spread 1.390e-02 "
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with semi_diame"
+    ],
+    [
+     "RuntimeWarning",
+     "propagate_traced_carrier_chain_multi: congruence 'congruence1' -- its 64 x 0.4000 um readout window holds 0.42 % of the power the chain delivered (power_out 3.1"
+    ]
+   ]
+  },
+  "M2-K1-standoff": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": [
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diame"
+    ],
+    [
+     "RuntimeWarning",
+     "propagate_traced_carrier_chain: the free-space leg into groups[1] (bcx) is outside the SZIKLAS-SIEGMAN FRAME's validity: the measured envelope spread 1.390e-02 "
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with semi_diame"
+    ],
+    [
+     "RuntimeWarning",
+     "propagate_traced_carrier_chain_multi: congruence 'congruence0' -- its 64 x 0.4000 um readout window holds 0.22 % of the power the chain delivered (power_out 5.2"
+    ]
+   ]
+  },
+  "M2-K1-zero-distance": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": [
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diame"
+    ],
+    [
+     "RuntimeWarning",
+     "propagate_traced_carrier_chain: the free-space leg into groups[1] (bcx) is outside the SZIKLAS-SIEGMAN FRAME's validity: the measured envelope spread 1.390e-02 "
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with semi_diame"
+    ],
+    [
+     "RuntimeWarning",
+     "propagate_traced_carrier_chain_multi: congruence 'congruence0' -- its 64 x 0.4000 um readout window holds 0.02 % of the power the chain delivered (power_out 5.2"
+    ]
+   ]
+  },
+  "M2-K2-standoff": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": [
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diame"
+    ],
+    [
+     "RuntimeWarning",
+     "propagate_traced_carrier_chain: the free-space leg into groups[1] (bcx) is outside the SZIKLAS-SIEGMAN FRAME's validity: the measured envelope spread 1.390e-02 "
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with semi_diame"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diame"
+    ],
+    [
+     "RuntimeWarning",
+     "propagate_traced_carrier_chain: the free-space leg into groups[1] (bcx) is outside the SZIKLAS-SIEGMAN FRAME's validity: the measured envelope spread 1.390e-02 "
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with semi_diame"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diame"
+    ],
+    [
+     "RuntimeWarning",
+     "propagate_traced_carrier_chain: the free-space leg into groups[1] (bcx) is outside the SZIKLAS-SIEGMAN FRAME's validity: the measured envelope spread 1.390e-02 "
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with semi_diame"
+    ],
+    [
+     "RuntimeWarning",
+     "propagate_traced_carrier_chain_multi: congruence 'congruence0' -- its 64 x 0.4000 um readout window holds 0.22 % of the power the chain delivered (power_out 5.2"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diame"
+    ],
+    [
+     "RuntimeWarning",
+     "propagate_traced_carrier_chain: the free-space leg into groups[1] (bcx) is outside the SZIKLAS-SIEGMAN FRAME's validity: the measured envelope spread 1.390e-02 "
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with semi_diame"
+    ],
+    [
+     "RuntimeWarning",
+     "propagate_traced_carrier_chain_multi: congruence 'congruence1' -- its 64 x 0.4000 um readout window holds 0.22 % of the power the chain delivered (power_out 1.6"
+    ]
+   ]
+  },
+  "M3-K1-fresnel": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": [
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diame"
+    ],
+    [
+     "RuntimeWarning",
+     "propagate_traced_carrier_chain: the free-space leg into groups[1] (bcx) is outside the SZIKLAS-SIEGMAN FRAME's validity: the measured envelope spread 1.390e-02 "
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with semi_diame"
+    ],
+    [
+     "RuntimeWarning",
+     "propagate_traced_carrier_chain_multi: congruence 'congruence0' -- its 64 x 0.4000 um readout window holds 0.22 % of the power the chain delivered (power_out 5.2"
+    ]
+   ]
+  },
+  "M3-K1-tile2": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": [
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diame"
+    ],
+    [
+     "RuntimeWarning",
+     "propagate_traced_carrier_chain: the free-space leg into groups[1] (bcx) is outside the SZIKLAS-SIEGMAN FRAME's validity: the measured envelope spread 1.390e-02 "
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with semi_diame"
+    ],
+    [
+     "RuntimeWarning",
+     "propagate_traced_carrier_chain_multi: congruence 'congruence0' -- its 2 x 0.4000 um readout window holds 0.00 % of the power the chain delivered (power_out 5.09"
+    ]
+   ]
+  },
+  "M3-K2-incoherent": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": [
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diame"
+    ],
+    [
+     "RuntimeWarning",
+     "propagate_traced_carrier_chain: the free-space leg into groups[1] (bcx) is outside the SZIKLAS-SIEGMAN FRAME's validity: the measured envelope spread 1.390e-02 "
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with semi_diame"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diame"
+    ],
+    [
+     "RuntimeWarning",
+     "propagate_traced_carrier_chain: the free-space leg into groups[1] (bcx) is outside the SZIKLAS-SIEGMAN FRAME's validity: the measured envelope spread 1.390e-02 "
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with semi_diame"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diame"
+    ],
+    [
+     "RuntimeWarning",
+     "propagate_traced_carrier_chain: the free-space leg into groups[1] (bcx) is outside the SZIKLAS-SIEGMAN FRAME's validity: the measured envelope spread 1.390e-02 "
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with semi_diame"
+    ],
+    [
+     "RuntimeWarning",
+     "propagate_traced_carrier_chain_multi: congruence 'congruence0' -- its 64 x 0.4000 um readout window holds 0.22 % of the power the chain delivered (power_out 5.2"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diame"
+    ],
+    [
+     "RuntimeWarning",
+     "propagate_traced_carrier_chain: the free-space leg into groups[1] (bcx) is outside the SZIKLAS-SIEGMAN FRAME's validity: the measured envelope spread 1.390e-02 "
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=25.172 um, semi=3.222 mm). Largest is system aperture_diameter with semi_diame"
+    ],
+    [
+     "RuntimeWarning",
+     "propagate_traced_carrier_chain_multi: congruence 'congruence1' -- its 64 x 0.4000 um readout window holds 0.22 % of the power the chain delivered (power_out 1.6"
+    ]
+   ]
+  },
+  "M4-K1-final-leg-exact": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": [
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=256, dx=40.857 um, semi=5.230 mm). Largest is system aperture_diameter with semi_diame"
+    ],
+    [
+     "RuntimeWarning",
+     "propagate_traced_carrier_chain: the free-space leg into groups[1] (bcx) is outside the SZIKLAS-SIEGMAN FRAME's validity: the measured envelope spread 1.390e-02 "
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=2048, dx=3.147 um, semi=3.222 mm). Largest is system aperture_diameter with sem"
+    ],
+    [
+     "UserWarning",
+     "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=2048, dx=3.147 um, semi=3.222 mm). Largest is system aperture_diameter with semi_diame"
+    ],
+    [
+     "RuntimeWarning",
+     "apply_real_lens_traced: the inverse-characteristic per-pixel evaluator refused to build -- guard G7: the exit fit has 169 retained samples for 120 total-degree-"
+    ],
+    [
+     "RuntimeWarning",
+     "propagate_traced_carrier_chain_multi: congruence 'congruence0' -- its 64 x 0.4000 um readout window holds 0.22 % of the power the chain delivered (power_out 5.2"
+    ]
+   ]
+  },
+  "P1-focus-readout": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": []
+  },
+  "P1-focus-readout-bandlimit-off": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": []
+  },
+  "P1-focus-readout-centre": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": []
+  },
+  "P1-focus-readout-collimated": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": []
+  },
+  "P1-focus-readout-containment-ignore": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": []
+  },
+  "P1-focus-readout-containment-warn": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": [
+    [
+     "RuntimeWarning",
+     "carrier_referenced_focus_readout: the beam does not fit the co-moving grid at the stop plane.  The grid half-width there is 8.5333 um against a measured amplitu"
+    ]
+   ]
+  },
+  "P1-focus-readout-exactkernel": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": []
+  },
+  "P1-focus-readout-fresnel": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": []
+  },
+  "P1-focus-readout-replica-repeat": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": []
+  },
+  "P1-focus-readout-replica-zero": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": []
+  },
+  "P1-focus-readout-standoff-1mm": {
+   "detail": "carrier_referenced_focus_readout: the beam does not fit the co-moving grid at the stop plane.  The grid half-width there is 8.5333 um against a measured amplitude radius of 4.6391 um -- a containment ",
+   "outcome": "raised",
+   "type": "RuntimeError",
+   "warnings": []
+  },
+  "P1-focus-readout-standoff-3mm": {
+   "detail": "carrier_referenced_focus_readout: the beam does not fit the co-moving grid at the stop plane.  The grid half-width there is 25.2770 um against a measured amplitude radius of 34.0242 um -- a containmen",
+   "outcome": "raised",
+   "type": "RuntimeError",
+   "warnings": []
+  },
+  "P1-focus-readout-tilt": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": []
+  },
+  "P2-exact-focus-readout": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": []
+  },
+  "P2-exact-focus-readout-bandlimit-off": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": []
+  },
+  "P2-exact-focus-readout-replica-zero": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": []
+  },
+  "P2-exact-focus-readout-tilt": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": []
+  },
+  "P2-exact-focus-readout-window": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": []
+  },
+  "P3-aperture": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "CarrierReferencedField",
+   "warnings": []
+  },
+  "P3-aperture-transmission": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "tuple",
+   "warnings": []
+  },
+  "P3-envelope": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "ndarray",
+   "warnings": []
+  },
+  "P3-fit-radius": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "float",
+   "warnings": []
+  },
+  "P3-reconstruct": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "ndarray",
+   "warnings": []
+  },
+  "S1-back-auto": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": []
+  },
+  "S1-back-fresnel": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": []
+  },
+  "S1-backcollimated-auto": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": []
+  },
+  "S1-backcollimated-fresnel": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": []
+  },
+  "S1-collimated-auto": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": []
+  },
+  "S1-collimated-fresnel": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": []
+  },
+  "S1-convlong-auto": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": []
+  },
+  "S1-convlong-fresnel": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": []
+  },
+  "S1-convshort-auto": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": []
+  },
+  "S1-convshort-fresnel": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": []
+  },
+  "S1-diverging-auto": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": []
+  },
+  "S1-diverging-fresnel": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": []
+  },
+  "S1-farpastfocus-auto": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": []
+  },
+  "S1-farpastfocus-fresnel": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": []
+  },
+  "S1-focuscross-auto": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": []
+  },
+  "S1-focuscross-fresnel": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": []
+  },
+  "S1-nearfocus-auto": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": []
+  },
+  "S1-nearfocus-fresnel": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": []
+  },
+  "S1-zerolen-auto": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": []
+  },
+  "S1-zerolen-fresnel": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": []
+  },
+  "S2-exactkernel-collimated": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": []
+  },
+  "S2-exactkernel-convshort": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": []
+  },
+  "S2-exactkernel-focuscross": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": []
+  },
+  "S3-astig-auto": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": []
+  },
+  "S3-astig-focuscross": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": []
+  },
+  "S3-astig-fresnel": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": []
+  },
+  "S3-astig-onefinite": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": []
+  },
+  "S4-complex64-auto": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": []
+  },
+  "S4-complex64-collimated": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": []
+  },
+  "S4-complex64-fresnel": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": []
+  },
+  "S4-float64-input": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": []
+  },
+  "S5-tilt-auto": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": []
+  },
+  "S5-tilt-collimated": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": []
+  },
+  "S5-tilt-exact": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": []
+  },
+  "S6-aniso-pitch": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": []
+  },
+  "S6-rect-grid": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": []
+  },
+  "S7-carrierout-refused": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": [
+    [
+     "RuntimeWarning",
+     "propagate_carrier_referenced: the Collins chirp-Z stage is under-sampled -- K3 (period) 1.1647: the chirp-Z sums over the INPUT lattice, so its output repeats w"
+    ]
+   ]
+  },
+  "S7-dxout-refused": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": []
+  },
+  "S7-oncollins-error": {
+   "detail": "",
+   "outcome": "ok",
+   "type": "dict",
+   "warnings": []
+  }
+ }
+}

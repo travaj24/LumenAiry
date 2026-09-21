@@ -1,0 +1,153 @@
+{
+ "tree": "C:\\tmp\\lum_vc3b",
+ "lumenairy": "C:\\tmp\\lum_vc3b\\lumenairy\\__init__.py",
+ "python": "3.14.6",
+ "numpy": "2.4.4",
+ "default_transport": "collins",
+ "rows": [
+  {
+   "N": 512,
+   "dx_um": 20.0,
+   "w_mm": 2.0,
+   "final_distance": 0.005,
+   "outcome": "returned",
+   "peak": 3.189160717799543,
+   "route": "sziklas",
+   "route_k1": 19.65431326668792,
+   "reason": "k1",
+   "carrier_warnings": []
+  },
+  {
+   "N": 512,
+   "dx_um": 20.0,
+   "w_mm": 2.0,
+   "final_distance": 0.008,
+   "outcome": "returned",
+   "peak": 4.1404473803895385,
+   "route": "sziklas",
+   "route_k1": 11.904460660942636,
+   "reason": "k1",
+   "carrier_warnings": []
+  },
+  {
+   "N": 512,
+   "dx_um": 20.0,
+   "w_mm": 2.0,
+   "final_distance": 0.02,
+   "outcome": "returned",
+   "peak": 9.354442623203346,
+   "route": "sziklas",
+   "route_k1": 4.154608055197345,
+   "reason": "k1",
+   "carrier_warnings": []
+  },
+  {
+   "N": 256,
+   "dx_um": 20.0,
+   "w_mm": 2.0,
+   "final_distance": 0.005,
+   "outcome": "returned",
+   "peak": 3.184859900476199,
+   "route": "sziklas",
+   "route_k1": 11.705131491528677,
+   "reason": "k1",
+   "carrier_warnings": []
+  },
+  {
+   "N": 256,
+   "dx_um": 20.0,
+   "w_mm": 2.0,
+   "final_distance": 0.008,
+   "outcome": "returned",
+   "peak": 4.092799916868213,
+   "route": "sziklas",
+   "route_k1": 7.271657253106822,
+   "reason": "k1",
+   "carrier_warnings": []
+  },
+  {
+   "N": 256,
+   "dx_um": 20.0,
+   "w_mm": 2.0,
+   "final_distance": 0.02,
+   "outcome": "returned",
+   "peak": 9.347355682708162,
+   "route": "sziklas",
+   "route_k1": 2.838183014684968,
+   "reason": "k1",
+   "carrier_warnings": []
+  },
+  {
+   "N": 512,
+   "dx_um": 20.0,
+   "w_mm": 3.0,
+   "final_distance": 0.005,
+   "outcome": "returned",
+   "peak": 3.2791451349982412,
+   "route": "sziklas",
+   "route_k1": 21.636006617515953,
+   "reason": "k1",
+   "carrier_warnings": []
+  },
+  {
+   "N": 512,
+   "dx_um": 20.0,
+   "w_mm": 3.0,
+   "final_distance": 0.008,
+   "outcome": "returned",
+   "peak": 4.189978617886548,
+   "route": "sziklas",
+   "route_k1": 13.083241354418671,
+   "reason": "k1",
+   "carrier_warnings": []
+  },
+  {
+   "N": 512,
+   "dx_um": 20.0,
+   "w_mm": 3.0,
+   "final_distance": 0.02,
+   "outcome": "returned",
+   "peak": 9.858808999567724,
+   "route": "sziklas",
+   "route_k1": 4.530476091321394,
+   "reason": "k1",
+   "carrier_warnings": []
+  },
+  {
+   "N": 1024,
+   "dx_um": 10.0,
+   "w_mm": 2.0,
+   "final_distance": 0.005,
+   "outcome": "returned",
+   "peak": 1.6313732530649612,
+   "route": "sziklas",
+   "route_k1": 10.216547788805746,
+   "reason": "k1",
+   "carrier_warnings": []
+  },
+  {
+   "N": 1024,
+   "dx_um": 10.0,
+   "w_mm": 2.0,
+   "final_distance": 0.008,
+   "outcome": "returned",
+   "peak": 1.8983122687452159,
+   "route": "sziklas",
+   "route_k1": 6.315439551454233,
+   "reason": "k1",
+   "carrier_warnings": []
+  },
+  {
+   "N": 1024,
+   "dx_um": 10.0,
+   "w_mm": 2.0,
+   "final_distance": 0.02,
+   "outcome": "returned",
+   "peak": 3.7497864954419704,
+   "route": "sziklas",
+   "route_k1": 2.414331314102718,
+   "reason": "k1",
+   "carrier_warnings": []
+  }
+ ]
+}

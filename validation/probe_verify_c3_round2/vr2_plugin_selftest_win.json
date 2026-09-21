@@ -1,0 +1,124 @@
+{
+ "tau": 0.0001,
+ "counts": {
+  "tests/unit/test_wave5_h2_near_focus_table.py::test_a_collimated_gaussian_lands_at_the_oracle_floor_on_the_paraxial_arm": {
+   "collins_legs": 1,
+   "tau_evaluated": 0,
+   "tau_fired": 0,
+   "departure_min": null,
+   "departure_max": null
+  },
+  "tests/unit/test_wave5_h2_near_focus_table.py::test_the_exact_kernels_departure_on_a_collimated_leg_is_the_quartic": {
+   "collins_legs": 3,
+   "tau_evaluated": 2,
+   "tau_fired": 2,
+   "departure_min": 0.00018371173070873856,
+   "departure_max": 0.00018371173070873856
+  },
+  "tests/unit/test_wave5_h2_near_focus_table.py::test_both_spellings_of_the_output_reference_give_the_same_field": {
+   "collins_legs": 2,
+   "tau_evaluated": 0,
+   "tau_fired": 0,
+   "departure_min": null,
+   "departure_max": null
+  },
+  "tests/unit/test_wave5_h2_near_focus_table.py::test_the_sziklas_transport_reproduces_the_oracle_far_from_focus": {
+   "collins_legs": 1,
+   "tau_evaluated": 0,
+   "tau_fired": 0,
+   "departure_min": null,
+   "departure_max": null
+  },
+  "tests/unit/test_wave5_h2_near_focus_table.py::test_a_double_applied_carrier_is_the_failure_mode_the_bar_excludes": {
+   "collins_legs": 1,
+   "tau_evaluated": 0,
+   "tau_fired": 0,
+   "departure_min": null,
+   "departure_max": null
+  },
+  "tests/unit/test_wave5_h2_near_focus_table.py::test_the_paraxial_arm_holds_the_oracle_floor_all_the_way_to_the_focus": {
+   "collins_legs": 5,
+   "tau_evaluated": 0,
+   "tau_fired": 0,
+   "departure_min": null,
+   "departure_max": null
+  },
+  "tests/unit/test_wave5_h2_near_focus_table.py::test_auto_and_exact_are_the_same_row_everywhere_on_the_ladder": {
+   "collins_legs": 10,
+   "tau_evaluated": 10,
+   "tau_fired": 0,
+   "departure_min": 2.2960350534282642e-08,
+   "departure_max": 4.716053369308438e-06
+  },
+  "tests/unit/test_wave5_h2_near_focus_table.py::test_the_kernel_gate_never_fires_on_this_fixture": {
+   "collins_legs": 5,
+   "tau_evaluated": 5,
+   "tau_fired": 0,
+   "departure_min": 2.2960350534282642e-08,
+   "departure_max": 4.716053369308438e-06
+  },
+  "tests/unit/test_wave5_h2_near_focus_table.py::test_the_exact_kernels_departure_falls_monotonically_away_from_the_focus": {
+   "collins_legs": 5,
+   "tau_evaluated": 5,
+   "tau_fired": 0,
+   "departure_min": 2.2960350534282642e-08,
+   "departure_max": 4.716053369308438e-06
+  },
+  "tests/unit/test_wave5_h2_near_focus_table.py::test_the_departure_is_linear_in_the_reduced_distance": {
+   "collins_legs": 18,
+   "tau_evaluated": 12,
+   "tau_fired": 0,
+   "departure_min": 2.2960350534282642e-08,
+   "departure_max": 4.716053369308438e-06
+  },
+  "tests/unit/test_wave5_h2_near_focus_table.py::test_the_departure_is_quartic_in_the_envelopes_own_angle": {
+   "collins_legs": 12,
+   "tau_evaluated": 6,
+   "tau_fired": 1,
+   "departure_min": 3.0302797533963337e-07,
+   "departure_max": 0.00029801274114475717
+  },
+  "tests/unit/test_wave5_h2_near_focus_table.py::test_the_measured_departure_is_the_quartic_times_one_constant": {
+   "collins_legs": 5,
+   "tau_evaluated": 3,
+   "tau_fired": 1,
+   "departure_min": 1.1641122700967069e-06,
+   "departure_max": 0.00018371173070873856
+  },
+  "tests/unit/test_wave5_h2_near_focus_table.py::test_the_sziklas_transport_loses_the_focus_and_the_collins_one_does_not": {
+   "collins_legs": 1,
+   "tau_evaluated": 0,
+   "tau_fired": 0,
+   "departure_min": null,
+   "departure_max": null
+  },
+  "tests/unit/test_wave5_h2_near_focus_table.py::test_the_departure_law_predicts_what_the_refinement_actually_changes": {
+   "collins_legs": 4,
+   "tau_evaluated": 4,
+   "tau_fired": 2,
+   "departure_min": 4.7160533693084405e-06,
+   "departure_max": 0.0023495517243853686
+  },
+  "tests/unit/test_wave5_h2_near_focus_table.py::test_tau_none_does_not_evaluate_the_accuracy_rule_at_all": {
+   "collins_legs": 1,
+   "tau_evaluated": 0,
+   "tau_fired": 0,
+   "departure_min": null,
+   "departure_max": null
+  },
+  "tests/unit/test_wave5_h2_near_focus_table.py::test_the_shipped_default_arms_the_rule_at_tau_1e_4": {
+   "collins_legs": 1,
+   "tau_evaluated": 1,
+   "tau_fired": 1,
+   "departure_min": 0.002349551724385367,
+   "departure_max": 0.002349551724385367
+  },
+  "tests/unit/test_wave5_h2_near_focus_table.py::test_tau_1e_4_leaves_this_ladder_inert_and_catches_f3": {
+   "collins_legs": 9,
+   "tau_evaluated": 9,
+   "tau_fired": 3,
+   "departure_min": 2.2960350534282642e-08,
+   "departure_max": 0.002349551724385367
+  }
+ }
+}

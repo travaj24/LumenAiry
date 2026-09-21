@@ -1,0 +1,171 @@
+{
+ "tree": "C:\\tmp\\lum_vc3b",
+ "lumenairy": "C:\\tmp\\lum_vc3b\\lumenairy\\__init__.py",
+ "python": "3.14.6",
+ "numpy": "2.4.4",
+ "default_transport": "collins",
+ "prefix": {
+  "method_sziklas": "phase_screen",
+  "method_collins": "phase_screen",
+  "gap_dx_sziklas_um": 1.4103792870687537,
+  "gap_dx_collins_um": 1.4103792870687537,
+  "gap_R_sziklas": "-0.11960055474113014",
+  "gap_R_collins": "-0.11960055474113014",
+  "R3_sziklas": -0.029348869287108673,
+  "R3_collins": -0.029348869287108673,
+  "env3_bit_identical": true,
+  "env3_max_abs_diff": 0.0,
+  "gap_warn_collins": []
+ },
+ "final_leg_geometry": {
+  "z_img_m": 0.02915331384227653,
+  "R3": -0.029348869287108673,
+  "A": 0.006663133864514448,
+  "dx_in_um": 1.4103792870687537
+ },
+ "as_shipped": {
+  "sziklas": {
+   "dx_out_um": 0.10523702801679989,
+   "R_out": "-0.00019555544483214338",
+   "r2m_um": 8.708385873590297,
+   "EE50_um": 7.289039249144477,
+   "EE80_um": 11.013879229917436,
+   "peak": 14495.682391188888,
+   "power": 3.5329937751573095e-06,
+   "warnings": []
+  },
+  "collins": {
+   "dx_out_um": 6.312578471190773,
+   "R_out": "inf",
+   "r2m_um": 8.71642340320487,
+   "EE50_um": 6.2930004873272125,
+   "EE80_um": 12.35882028561613,
+   "peak": 14498.064902592632,
+   "power": 3.5330784702502353e-06,
+   "warnings": [
+    "propagate_carrier_referenced: the Collins chirp-Z stage is under-sampled -- K2 (output) 5.1055: the requested output pitch does not resolve "
+   ]
+  }
+ },
+ "oracle": {
+  "method": "ring_huygens",
+  "EE50_um": 7.3538886775051795,
+  "EE80_um": 11.110187825882784
+ },
+ "common_lattice_sizing": {
+  "half_extent_um": 215.52543337840618,
+  "win_um": 168.10983803515683,
+  "NC": 860,
+  "extent_sziklas_um": 431.05086675681235,
+  "extent_collins_um": 25856.321417997406
+ },
+ "common_lattice": {
+  "NC": 860,
+  "dx_um": 0.5,
+  "win_um": 168.10983803515683,
+  "sziklas": {
+   "r2m_um": 8.703956462247403,
+   "EE50_um": 7.269130443201359,
+   "EE80_um": 11.057457453715017,
+   "peak": 14495.682391188904,
+   "power_in_window": 3.5329935441637977e-06
+  },
+  "collins": {
+   "r2m_um": 8.709619539826516,
+   "EE50_um": 7.268630852107399,
+   "EE80_um": 11.056771055406188,
+   "peak": 14498.064902592632,
+   "power_in_window": 3.5330303271964417e-06
+  },
+  "intensity_relL2": 0.00012895579422802993,
+  "intensity_relL2_scalefree": 0.00012611794726618354
+ },
+ "collins_named_lattice_ladder": [
+  {
+   "dx_out_um": 0.25,
+   "dx_returned_um": 0.25,
+   "R_out": "inf",
+   "r2m_um": 8.716456938374266,
+   "EE50_um": 7.289277991137664,
+   "EE80_um": 11.009007919656748,
+   "peak": 14498.064902592632,
+   "power": 3.5330443216807236e-06,
+   "warnings": []
+  },
+  {
+   "dx_out_um": 0.5,
+   "dx_returned_um": 0.5,
+   "R_out": "inf",
+   "r2m_um": 8.716455650151252,
+   "EE50_um": 7.311937437767115,
+   "EE80_um": 10.992056566231641,
+   "peak": 14498.064902592623,
+   "power": 3.5330483233010422e-06,
+   "warnings": []
+  },
+  {
+   "dx_out_um": 1.0,
+   "dx_returned_um": 1.0,
+   "R_out": "inf",
+   "r2m_um": 8.716447849088782,
+   "EE50_um": 7.226576591326695,
+   "EE80_um": 11.070832709623417,
+   "peak": 14498.064902592632,
+   "power": 3.5330502542339546e-06,
+   "warnings": []
+  },
+  {
+   "dx_out_um": 2.0,
+   "dx_returned_um": 2.0,
+   "R_out": "inf",
+   "r2m_um": 8.716457846676771,
+   "EE50_um": 7.207757142839731,
+   "EE80_um": 10.941745432076425,
+   "peak": 14498.064902592632,
+   "power": 3.533052643091825e-06,
+   "warnings": [
+    "propagate_carrier_referenced: the Collins chirp-Z stage is under-sampled -- K2 (output) 1.6176: the requested output pitch does not resolve "
+   ]
+  },
+  {
+   "dx_out_um": 3.0,
+   "dx_returned_um": 3.0,
+   "R_out": "inf",
+   "r2m_um": 8.716465351358627,
+   "EE50_um": 6.9138392410300025,
+   "EE80_um": 10.9083271800616,
+   "peak": 14498.064902592627,
+   "power": 3.533054853995945e-06,
+   "warnings": [
+    "propagate_carrier_referenced: the Collins chirp-Z stage is under-sampled -- K2 (output) 2.4264: the requested output pitch does not resolve "
+   ]
+  },
+  {
+   "dx_out_um": 6.312600000000001,
+   "dx_returned_um": 6.312600000000001,
+   "R_out": "inf",
+   "r2m_um": 8.716423673624602,
+   "EE50_um": 6.292998593751269,
+   "EE80_um": 12.358810654382584,
+   "peak": 14498.06490259264,
+   "power": 3.5330784705460653e-06,
+   "warnings": [
+    "propagate_carrier_referenced: the Collins chirp-Z stage is under-sampled -- K2 (output) 5.1056: the requested output pitch does not resolve "
+   ]
+  }
+ ],
+ "sziklas_named_lattice_ladder": [
+  {
+   "dx_out_um": 0.25,
+   "raised": "ValueError: propagate_carrier_referenced: dx_out / carrier_out are the FREELY CHOSEN output lattice and reference of the Collins transport and have no meaning on transport="
+  },
+  {
+   "dx_out_um": 0.5,
+   "raised": "ValueError: propagate_carrier_referenced: dx_out / carrier_out are the FREELY CHOSEN output lattice and reference of the Collins transport and have no meaning on transport="
+  },
+  {
+   "dx_out_um": 1.0,
+   "raised": "ValueError: propagate_carrier_referenced: dx_out / carrier_out are the FREELY CHOSEN output lattice and reference of the Collins transport and have no meaning on transport="
+  }
+ ]
+}
