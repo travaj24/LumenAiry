@@ -4467,7 +4467,7 @@ def carrier_referenced_focus_readout(
     on_replica: str = 'error',
     replica_fill: str = 'zero',
     on_focus_containment: str = 'error',
-    transport: str = 'sziklas',
+    transport: str = 'collins',
     mft_method: Optional[str] = None,
     _period_out: Optional[dict] = None,
 ) -> np.ndarray:
@@ -4633,13 +4633,71 @@ def carrier_referenced_focus_readout(
         folded in -- energy that was created rather than measured.  That
         tripwire is only reachable with ``on_replica`` downgraded AND
         ``replica_fill='repeat'``, which is what leaves the replicas in.
-    transport : {'sziklas', 'collins'}, default 'sziklas'
+    transport : {'sziklas', 'collins'}, default 'collins'
         Which quadrature carries the beam over the CARRIER LEG onto the stop
         plane (``z - standoff``).  Nothing else about this readout is
         transport-dependent: the standoff resolver, the reconstruction, the
         final Bluestein zoom and both guards are the same code either way,
         and :func:`_check_focus_containment` measures whatever grid the leg
         returned.
+
+        THE DEFAULT IS THE ACCURATE ONE, AND THAT IS WHY IT IS THE DEFAULT
+        (maintainer decision 2026-09-20; WP-C3 round 3).  Against a converged
+        dense separable Fresnel oracle (self-consistency 4.470e-05,
+        convergence 64x -> 256x 5.14e-07) on the 128-grid fixture this
+        function's own tests use (``w = 120 um``, ``R = -30 mm``,
+        ``z = 30 mm``, ``standoff = 1 mm``) the COLLINS leg reads relative L2
+        **4.7340e-05** against the oracle and the co-moving one **2.4049**
+        (best global scale 2.2738, peak ratio 5.1433).  Over five geometries
+        x six standoffs the co-moving leg trips the ``on_focus_containment``
+        refusal on **7 of 30** and returns relL2 up to 4.876 on several of
+        the rest; the Collins leg refuses **0 of 30** and reads relL2
+        <= 3.846e-03 everywhere, <= 5.3e-04 on 27 of 30.  (An independent
+        re-measurement on its own five-by-six set and its own Simpson oracle
+        -- VERIFY-WP-C3 ROUND 2 -- reads 4.750712e-05 against 2.40498948,
+        13 of 30 refusals on the co-moving leg and 0 of 30 on the Collins
+        one; the published 7-of-30 was taken on geometries the tree does not
+        record.)  The reason is the co-moving grid itself: it CONTRACTS
+        toward the focus, so the stop plane it offers is the one the
+        containment guard exists to complain about, while the Collins leg
+        resolves a pitch that still holds the beam's own phase-space box.
+
+        WHAT THE APPARATUS AROUND THE LEG MEANS ON A COLLINS STOP PLANE.
+        WP-C3 pinned this leg to ``'sziklas'`` and round 2 turned the pin
+        into this keyword while leaving the default where it was, on the
+        argument that :func:`_default_focus_standoff`,
+        :func:`_beam_containment_standoff` and
+        :func:`_achievable_focus_margin` are all derived about the CO-MOVING
+        stop plane.  They are, and each of them still says something well
+        defined on a Collins leg.  The resolver picks the leg LENGTH from the
+        input grid's extent in beam radii and the beam's own fitted
+        wavefront -- properties of the beam and of the INPUT plane, not of
+        the quadrature that carries it -- so it names the same standoff
+        either way.  The guard then measures ``env_stop`` and ``dx_stop``,
+        whatever grid the leg actually RETURNED, against the beam's Gaussian
+        ABCD width at that plane.  What differs is the returned pitch: the
+        co-moving one contracts with the carrier, while the Collins leg's is
+        floored at the pitch that still holds the ABCD image of the measured
+        input box.  So on this transport the resolver is sizing a leg for a
+        grid NARROWER than the one it gets, which is the safe direction, and
+        the guard reads a real margin rather than a collapsing one.  That is
+        why the same fixture refuses on the co-moving grid and clears here,
+        and why the numbers above are an accuracy result and not a waived
+        guard.
+
+        WHAT MOVES, AND THE WAY BACK.  Flipping this default moves **5** of
+        the WP-C3 package's 103 archive-to-archive keys -- all five this
+        readout's own -- and raises **nothing** (0 of 103 ok -> raise).  The
+        192-cell ordinary-chain census does not move at all, because
+        :func:`propagate_traced_carrier_chain` names ``transport=`` on its
+        readout at both call sites.  ``transport='sziklas'`` reproduces the
+        pre-flip bytes on every one of those five keys, and it is the one
+        keyword that does so at every entry point that reaches this readout:
+        the chain and :func:`propagate_traced_carrier_chain_multi` select the
+        co-moving standoff leg through their own ``transport='sziklas'``.
+        The 5.48.x answer is therefore always one keyword away -- and near a
+        focus it is the LESS accurate one, so read the measurement above
+        before reaching for it.
     mft_method : {None, 'auto', 'bluestein', 'separable', 'direct'}, optional
         Which route through the matrix Fourier transform this call's readout
         takes, forwarded to the primitive as its ``method=``.  ``None`` (the
@@ -4647,51 +4705,6 @@ def carrier_referenced_focus_readout(
         own default governs.  The one-call way back to the dispatch this
         entry point had before the MFT shape rule is ``'bluestein'`` (see
         the MFT shape-rule section of ``Migration-Guide.md``).
-
-        NEW IN WP-C3 ROUND 2, AND THE DEFAULT IS THE OLD BEHAVIOUR ON
-        PURPOSE.  Until round 2 this leg was PINNED to ``'sziklas'`` with no
-        way for a caller to say otherwise, which made it a silent second code
-        path -- an internal site that can never benefit from an improved
-        default.  It is a documented CHOICE now, and the measurement that
-        makes the choice worth having is this: against a converged dense
-        separable Fresnel oracle (self-consistency 4.470e-05, convergence
-        64x -> 256x 5.14e-07) on the 128-grid fixture this function's own
-        tests use (``w = 120 um``, ``R = -30 mm``, ``z = 30 mm``,
-        ``standoff = 1 mm``) the COLLINS leg reads relative L2 **4.7340e-05**
-        and the co-moving one **2.4049** (best global scale 2.2738, peak
-        ratio 5.1433).  Over five geometries x six standoffs the co-moving
-        leg trips the ``on_focus_containment`` refusal on **7 of 30** and
-        returns relL2 up to 4.876 on several of the rest; the Collins leg
-        refuses **0 of 30** and reads relL2 <= 3.846e-03 everywhere,
-        <= 5.3e-04 on 27 of 30.  The reason is the co-moving grid itself: it
-        CONTRACTS toward the focus, so the stop plane it offers is the one
-        the containment guard exists to complain about, while the Collins leg
-        resolves a pitch that still holds the beam's own phase-space box.
-
-        WHY IT IS NOT THE DEFAULT HERE, when it is the default on every entry
-        point that takes a ``transport``.  Two reasons, and both are about
-        this function rather than about the quadrature.  FIRST, this entry
-        point is public and took no ``transport`` before, so moving its
-        default would move a public answer for every existing caller
-        (measured: 5 of this package's 103 archive-to-archive keys, all five
-        this readout's own).  SECOND, and the real one, the machinery AROUND
-        the leg is derived about the co-moving stop plane:
-        :func:`_default_focus_standoff` sizes the leg from the contraction,
-        :func:`_beam_containment_standoff` and
-        :func:`_achievable_focus_margin` are stated in beam radii of that
-        grid, and the Bluestein period below is ``N * dx`` of it.  On a
-        Collins leg that apparatus still RUNS and still produces the better
-        answer above, but it is no longer solving the problem it was derived
-        for.  Re-deriving it -- or retiring it, which is the accounting the
-        WP-C3 report's section 7 sets out -- is the follow-up; flipping the
-        default before that would ship a resolver and a guard written about a
-        grid this function no longer produces.
-
-        So ``transport='collins'`` is the accurate setting near a focus and
-        it is one keyword away, and the default is unchanged from the
-        releases before round 2 in every bit (0 of 103 archive keys move).
-        :func:`propagate_traced_carrier_chain`'s readout FALLBACK names
-        ``'sziklas'`` explicitly, for the same reason it always did.
     Returns
     -------
     E_out : ndarray, complex, shape (N_out, N_out)
@@ -4812,12 +4825,14 @@ def carrier_referenced_focus_readout(
         standoff = abs(z)
     z_stop = z - np.copysign(standoff, z) if z != 0.0 else -standoff
 
-    # THE STANDOFF LEG TAKES THIS FUNCTION'S OWN ``transport`` (WP-C3 round 2,
-    # VERIFY-WP-C3 D8).  WP-C3 PINNED it to ``'sziklas'`` because an internal
-    # call site that rides a public default inherits every future move of it,
-    # and because the containment guard below is written about the co-moving
-    # grid.  Both halves of that were re-measured in round 2 and only the
-    # first survived.
+    # THE STANDOFF LEG TAKES THIS FUNCTION'S OWN ``transport``, AND ITS
+    # DEFAULT IS ``'collins'`` (WP-C3 round 3, maintainer decision
+    # 2026-09-20; VERIFY-WP-C3 D8).  WP-C3 PINNED it to ``'sziklas'`` because
+    # an internal call site that rides a public default inherits every future
+    # move of it, and because the containment guard below is written about
+    # the co-moving grid.  Both halves of that were re-measured in round 2
+    # and only the first survived; round 3 answers that half with the keyword
+    # rather than with the default.
     #
     # The PHYSICS goes the other way.  Against a converged dense separable
     # Fresnel oracle (self-consistency 4.470e-05, convergence 64x->256x
@@ -4833,16 +4848,29 @@ def carrier_referenced_focus_readout(
     # The GUARD is not the reason to pin, either: it measures ``env_stop`` and
     # ``dx_stop`` -- whatever grid the leg RETURNED -- and its model arm is the
     # beam's own Gaussian ABCD width at ``z_stop``, which is a property of the
-    # beam and not of the quadrature.  What the pin actually protects is the
+    # beam and not of the quadrature.  What the pin actually protected is the
     # WAY BACK: this entry point had no ``transport`` keyword, so moving it
     # would have moved a public answer with no one-keyword way back (5 of this
     # package's 103 archive keys, all of them this readout's).  Round 2 gives
     # it the keyword instead of the pin, so the campaign's rule is satisfied
     # and the better quadrature is the default here as it is everywhere else.
     #
+    # WHAT THE FLIP COST, MEASURED (round 3).  8 ids across
+    # ``test_audit2609_a6_carrier.py`` and
+    # ``test_audit2609_a6_verify_carrier.py`` asserted properties of the
+    # CO-MOVING stop plane this readout used to provide.  Each is re-derived
+    # against an oracle that owes nothing to either quadrature -- the exact
+    # second-moment law ``<r^2>(z) = <r^2> + 2 z <r.theta> + z^2 <theta^2>``
+    # read off the exit field, a converged Huygens quadrature, or power
+    # conservation -- and the ones whose claim really is about the co-moving
+    # GRID rather than about the physics now name ``transport='sziklas'``
+    # and say so.  No bar was loosened to make a red go green.
+    #
     # ``propagate_traced_carrier_chain``'s readout FALLBACK still names
     # ``transport='sziklas'`` at its two call sites, because that fallback's
-    # whole contract is to be the pre-flip answer in every bit.
+    # whole contract is to be the pre-flip answer in every bit -- which also
+    # makes the chain's own ``transport='sziklas'`` the one keyword that
+    # selects the co-moving standoff leg from every chain entry point.
     cr = propagate_carrier_referenced(env, R, z_stop, wavelength, dx,
                                       gap_kernel=gap_kernel, tilt=tilt,
                                       transport=transport)
