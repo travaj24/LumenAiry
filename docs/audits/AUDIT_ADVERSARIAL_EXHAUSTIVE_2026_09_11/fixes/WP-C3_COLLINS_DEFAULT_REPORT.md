@@ -1040,13 +1040,54 @@ exceeds tau, so `'auto'` drops to `'fresnel'` and the departure falls to
 LAW is asserted on an explicit `gap_kernel='exact'` (which tau never
 overrides) and what `'auto'` resolves to is asserted on whichever arm the
 shipped constant makes live, with no skip on either.  Measured: **17 passed**
-on this branch (tau `None`) and **17 passed** on the merged tree (tau
-`1e-4`).  The rest of the ids VERIFY-WP-C5 listed are green on the merged
-tree: `test_niche_d3_guards.py` + `test_niche_d2_chain_multi.py::
-test_memory_budget_is_honoured` + `test_niche_exact_gap_kernel.py` +
-`test_niche_c3_gap_paraxial_guard.py` read **183 passed, 1 skipped**, and
-`test_c3_collins_default.py` + `test_verify_c3_collins_default.py` +
-`test_niche_gap_frame_observable.py` are green there too.
+on this branch (tau `None`) and **18 passed** on the merged tree (tau `1e-4`;
+WP-C5 adds one id of its own to that file, which is why the count rises).
+
+**The merged tree, rebuilt from the FINAL round-2 tip and re-run whole**
+(2026-09-20, WIN-py3.14):
+
+| merged run | tail |
+|---|---|
+| the twelve C3 / C5-listed files | **364 passed, 1 skipped** (19:43) |
+| `test_audit2609_b4_collins_transport.py` | **130 passed** (4:44) |
+| `test_wave5_h2_near_focus_table.py` alone | **18 passed** (7.6 s) |
+| `test_niche_d3_guards.py` + `test_niche_d2_chain_multi.py` + `test_niche_exact_gap_kernel.py` + `test_niche_c3_gap_paraxial_guard.py` | **220 passed, 1 skipped** (11:41) |
+
+with `test_c3_collins_default.py`, `test_verify_c3_collins_default.py`,
+`test_niche_gap_frame_observable.py`, `test_verify_hyg2_round2.py`,
+`test_fix_v1_v8_readout_guard_and_standoff.py` and
+`test_niche_tight_focus_readout.py` inside the first row.  The same files on
+this branch read **130 passed** for b4 (4:55) and **17 passed** for the
+near-focus file.
+
+**What conflicts, and why one of them was round 2's own doing.**  Outside
+`carrier.py` the merge leaves three conflicts, and they were measured rather
+than predicted:
+
+| file | conflict | resolution |
+|---|---|---|
+| `Migration-Guide.md` | both branches write a 5.49.0 section | by hand, they are different sections |
+| `docs/history/carrier.md` | both re-record the same module | re-record once after the merge |
+| `tests/unit/test_fix_v1_v8_readout_guard_and_standoff.py` | both add to the V3 chain scope | union; the two additions are independent |
+| `tests/unit/test_audit2609_b4_collins_transport.py` | **none, after 7a2cf19f** | -- |
+
+That last row started as a conflict of exactly the kind this section exists
+to prevent.  WP-B4's signature id pins `replica_fill`'s default as a LITERAL
+(`== 'repeat'`); WP-C5 item 3 changes that one line to `'zero'`.  Round 2's
+first attempt restated the pin as its CONSEQUENCE **in place**, which still
+collided -- git had nothing unchanged between the two sides -- and the
+unresolved markers made the module a `SyntaxError`, which then took
+`test_verify_c3_collins_default.py` down with it because it imports that
+file's fixtures: the merged tree read **11 failed, 353 passed, 1 skipped**,
+every failure collateral.  The fix is positional: the literal is left exactly
+where and as WP-B4 wrote it, at the tail of the method with the unchanged
+`standoff` assertion above it as separating context, so WP-C5's one-line edit
+merges cleanly and each branch asserts the default its own source has (the
+merged file reads `== 'zero'`).  What round 2 adds -- that the standoff
+readout still OWNS the fill, and that the behaviour the live default implies
+is the behaviour observed on a window measured to exceed one Bluestein period
+(409.6 um against 230.4 um) -- sits above that context line and is correct
+under BOTH values, so it needs no edit from WP-C5 either.
 
 Finally, "naming `'sziklas'` is the pre-flip arithmetic in every bit" is a
 TRANSPORT statement and stays true; at RELEASE level WP-C5 item 3 also moves
@@ -1124,3 +1165,37 @@ near-focus caveat with the way back.
 * **Re-deriving the focus-standoff apparatus for a Collins standoff leg**,
   which is what would let `carrier_referenced_focus_readout`'s new keyword
   default to the more accurate quadrature (R2.2, D8).
+
+### R2.5 The round-2 gates, re-measured at the FINAL code tip (7a2cf19f)
+
+Every row below was run again after the last commit that touches code or
+tests, so none of them is inherited from an earlier state of the branch (the
+only commit after `7a2cf19f` is this documentation update).  WIN = py3.14 on this machine,
+WSL = py3.12 in `~/lumvenv`; every pytest run carries
+`OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1` on the command
+line and `--capture=sys`.
+
+| gate | build | result |
+|---|---|---|
+| `test_audit2609_b4_collins_transport.py`, whole file | WIN | **130 passed** (4:55) |
+| `...::TestDefaultIsByteIdentical` (the class round 2 last touched) | WSL | **11 passed** (18.9 s) |
+| b4 + `test_niche_p8_capstone.py` + `test_niche_d2_chain_multi.py` + `test_niche_d3_guards.py` | WIN | **215 passed** (19:53) |
+| census / walker / dispatch / dispatcher-pin / public-API / doc-identifier / doc-consistency / except-budget / kernel-consistency sweep | WIN | **754 passed, 14 skipped** (3:47) |
+| `test_audit2609_a21_doc_identifiers.py` + `test_public_api.py` | WIN | **14 passed** (16.6 s) |
+| `test_audit_except_budget.py` | WIN | **4 passed** |
+| `test_audit2609_a15a_durations_staleness.py` | WIN | **4 passed** (28.2 s) |
+| `test_wave5_h2_near_focus_table.py` | WIN | **17 passed** (9.6 s) |
+| `ruff check lumenairy/ tests/ scripts/`, then whole repo | WSL | **All checks passed!** twice |
+| `python -m mypy` (no arguments) | WIN | **Success: no issues found in 33 source files** |
+| `scripts/record_history_fingerprints.py --check` | WIN | **OK: every history document matches its module** |
+| `scripts/reanchor_citations.py --base f4f18851 --block "[5.47.0]" --check` | WIN | **0 re-anchored** |
+| `.test_durations` | -- | 16642 keys, valid JSON |
+
+One thing the citation gate is worth stating precisely, because its
+whole-repo mode is noisy and that noise is NOT this branch's: run with no
+arguments, `scripts/reanchor_citations.py --check` reports **25 re-anchored
+and 21 NEEDS-A-HUMAN** -- and it reports exactly the same 25 and 21 on a
+worktree at the base commit `49ddf4bd`, over files this package never touches
+(`optimize/core.py`, `elements/lenses.py`, `elements/rcwa/_core.py`,
+`raytrace/differential.py`).  The drift is pre-existing; the block this
+package owns is clean.
