@@ -612,16 +612,29 @@ def _split_env(n=256, dx=20e-6, w=1.5e-3):
 
 def _one_and_two(R, kernel, z1=_SPLIT_Z1, z2=_SPLIT_Z2, n=256, dx=20e-6,
                  w=1.5e-3):
+    """``transport='sziklas'`` NAMED (WP-C3).
+
+    Every claim this helper feeds is about the CO-MOVING step's composition
+    across a split -- a single leg against the same leg cut in two, on the
+    pitch the co-moving frame forces (``m*dx``, so ``b1.dx`` is what the
+    second half must run on).  The Collins quadrature does not split legs at
+    all and resolves its own output pitch, so "the split is inert" is a
+    statement about the transport that splits, and it is named rather than
+    inherited from a default that has moved once already.
+    """
     import warnings
     env, dx = _split_env(n, dx, w)
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
         one = propagate_carrier_referenced(env, R, z1 + z2, WL, dx,
-                                           gap_kernel=kernel)
+                                           gap_kernel=kernel,
+                                           transport='sziklas')
         b1 = propagate_carrier_referenced(env, R, z1, WL, dx,
-                                          gap_kernel=kernel)
+                                          gap_kernel=kernel,
+                                          transport='sziklas')
         two = propagate_carrier_referenced(b1.env, b1.R, z2, WL, b1.dx,
-                                           gap_kernel=kernel)
+                                           gap_kernel=kernel,
+                                           transport='sziklas')
     return env, one, two
 
 
@@ -802,13 +815,21 @@ def test_a_collimated_leg_honours_the_gap_kernel():
     """``R = +/-inf`` used to call ``fresnel_tf_propagate`` unconditionally, so
     the knob (and ``tilt``) were silently dropped on exactly the leg where the
     exact kernel is EXACT -- m = 1, no frame rescaling.  Measured before the
-    fix: exact-vs-fresnel on a collimated leg was 0.000e+00."""
+    fix: exact-vs-fresnel on a collimated leg was 0.000e+00.
+
+    ``transport='sziklas'`` NAMED (WP-C3).  ``R = +/-inf`` is a BRANCH of that
+    transport's entry point -- the one that short-circuits to a same-grid
+    ``_exact_envelope_tf_step`` -- and ``ref`` below is that branch's own
+    implementation, compared bitwise.  There is no such branch on the Collins
+    quadrature, which evaluates the ABCD integral for ``A = 1`` like any
+    other leg."""
     env = _gaussian(256, 1e-6, 20e-6)
+    _kw = dict(transport='sziklas')
     ex = propagate_carrier_referenced(env, np.inf, 2e-3, WL, 1e-6,
-                                      gap_kernel='exact')
+                                      gap_kernel='exact', **_kw)
     fr = propagate_carrier_referenced(env, np.inf, 2e-3, WL, 1e-6,
-                                      gap_kernel='fresnel')
-    au = propagate_carrier_referenced(env, np.inf, 2e-3, WL, 1e-6)
+                                      gap_kernel='fresnel', **_kw)
+    au = propagate_carrier_referenced(env, np.inf, 2e-3, WL, 1e-6, **_kw)
     assert not np.array_equal(np.asarray(ex.env), np.asarray(fr.env)), (
         'a collimated leg still ignores gap_kernel')
     assert np.array_equal(np.asarray(au.env), np.asarray(ex.env)), (
@@ -818,19 +839,29 @@ def test_a_collimated_leg_honours_the_gap_kernel():
     assert np.array_equal(np.asarray(ex.env), ref)
     # tilt reaches it too (it used to be dropped on this branch)
     tl = propagate_carrier_referenced(env, np.inf, 2e-3, WL, 1e-6,
-                                      gap_kernel='exact', tilt=(0.1, 0.05))
+                                      gap_kernel='exact', tilt=(0.1, 0.05),
+                                      **_kw)
     assert not np.array_equal(np.asarray(tl.env), np.asarray(ex.env))
 
 
 def test_an_astigmatic_carrier_refuses_the_exact_kernel_instead_of_downgrading():
     """The exact kernel sqrt(k^2 - qx^2 - qy^2) does NOT separate, so the
     per-axis astigmatic transform cannot carry it.  It used to accept
-    ``gap_kernel='exact'`` and run the paraxial per-axis kernel anyway."""
+    ``gap_kernel='exact'`` and run the paraxial per-axis kernel anyway.
+
+    Both transports refuse it, for two DIFFERENT reasons that are worth
+    keeping apart, so both are asserted: the co-moving step's per-axis
+    transform has no exact kernel to run, and the Collins quadrature adds a
+    second reason -- the two axes then have different reduced distances
+    ``B/A``, so there is not even one ``z_eff`` to build a kernel over
+    (WP-C3).
+    """
     env = _gaussian(128, 2e-6, 30e-6)
-    with pytest.raises(ValueError, match='astigmatic'):
-        propagate_carrier_referenced(env, (0.5, 0.7), 1e-3, WL, 2e-6,
-                                     gap_kernel='exact')
-    # 'auto' and 'fresnel' are accepted (documented: paraxial on this path)
-    for good in ('auto', 'fresnel'):
-        propagate_carrier_referenced(env, (0.5, 0.7), 1e-3, WL, 2e-6,
-                                     gap_kernel=good)
+    for tr in ('sziklas', 'collins'):
+        with pytest.raises(ValueError, match='(?i)astigmatic'):
+            propagate_carrier_referenced(env, (0.5, 0.7), 1e-3, WL, 2e-6,
+                                         gap_kernel='exact', transport=tr)
+        # 'auto' and 'fresnel' are accepted (documented: paraxial on this path)
+        for good in ('auto', 'fresnel'):
+            propagate_carrier_referenced(env, (0.5, 0.7), 1e-3, WL, 2e-6,
+                                         gap_kernel=good, transport=tr)

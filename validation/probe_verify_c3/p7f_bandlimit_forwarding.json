@@ -1,0 +1,72 @@
+{
+ "sziklas|bandlimit=True": {
+  "which_readout": [
+   "sziklas_readout"
+  ],
+  "kwargs": {
+   "sziklas_readout": [
+    [
+     "N_out",
+     "_period_out",
+     "bandlimit",
+     "dx_out",
+     "gap_kernel"
+    ]
+   ]
+  },
+  "route": null
+ },
+ "sziklas|bandlimit=False": {
+  "which_readout": [
+   "sziklas_readout"
+  ],
+  "kwargs": {
+   "sziklas_readout": [
+    [
+     "N_out",
+     "_period_out",
+     "bandlimit",
+     "dx_out",
+     "gap_kernel"
+    ]
+   ]
+  },
+  "route": null
+ },
+ "collins|bandlimit=True": {
+  "which_readout": [
+   "collins_readout"
+  ],
+  "kwargs": {
+   "collins_readout": [
+    [
+     "N_out",
+     "_period_out",
+     "dx_out",
+     "fn",
+     "gap_kernel",
+     "on_collins_sampling"
+    ]
+   ]
+  },
+  "route": "collins"
+ },
+ "collins|bandlimit=False": {
+  "which_readout": [
+   "collins_readout"
+  ],
+  "kwargs": {
+   "collins_readout": [
+    [
+     "N_out",
+     "_period_out",
+     "dx_out",
+     "fn",
+     "gap_kernel",
+     "on_collins_sampling"
+    ]
+   ]
+  },
+  "route": "collins"
+ }
+}

@@ -1089,6 +1089,554 @@ with the `|r(v_c)| / sigma_min(H)` bound asserted alongside and the premise that
 
 Both files are green under all four `(renormalize, sphere_normal)` default
 combinations on both builds.
+### Changed -- carrier (WP-C3): `transport='collins'` is the traced carrier chain's DEFAULT, the chain's focus readout RESOLVES its quadrature, and the transport runs on CuPy
+
+**This moves answers.**  It is the maintainer's decision of
+`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/MAINTAINER_DECISIONS_2026_09.md`
+section 1.2, taken after WP-B4 built the transport, VERIFY-WP-B4 re-measured
+it and Wave-5 hygiene-2 put it on the field's own backend.  See the
+**Migration** paragraph below for every entry point that moves, exactly which
+legs move, the near-focus interaction, and the way back.
+
+**What the transport buys, measured against an analytic Gaussian oracle** with
+the absolute phase in it (piston AND Gouy, not a piston-free shape
+comparison), written in this library's `exp(-i omega t)` / `exp(+i k z)`
+pairing.  `lambda = 1.064 um`, `w = 0.30 mm`, N = 512 at six `1/e` radii,
+`R = -40 mm`, relative L2, both builds agreeing to five decimals:
+
+| leg | `A = 1 + z/R` | `'sziklas'` | `'collins'` |
+|---|---|---|---|
+| diverging | +1.125 | 2.2258e-05 | 2.2258e-05 (same array) |
+| converging | +0.5 | 1.0676e-04 | **3.9502e-05** |
+| ON the focus | 0 | **refuses** (`R_carrier == 0`) | **3.8791e-05** |
+| just past it | -0.025 | 1.9181e-04 | **4.0668e-05** |
+| well past it | -0.5 | 7.8566e-02 | **4.3728e-05** |
+| astigmatic | +0.5 / +0.636 | 9.8910e-05 | **3.9194e-05** |
+
+The fixture's own grid-truncation floor is **6.51e-05**, computed from the
+fixture by quadrature (`_truncation_floor()` in
+`tests/unit/test_c3_collins_default.py` reads 6.509862159796115e-05 on this
+build).  The Collins column sits AT OR BELOW it at every cell, so those
+readings are the grid's error and not the transport's, and the 1796.7x at
+`A = -0.5` is the co-moving frame having inverted through the waist (the
+other cells read 2.70x, 4.72x and 2.52x, and the diverging one is the same
+array on both transports).  An earlier revision of this paragraph quoted
+3.87e-05 as the floor; that is the ladder's own focus-cell READING, which
+made "within 13 % of that floor" circular (VERIFY-WP-C3 claim 3).  The focus cell is the
+qualitative one -- the shipped transport cannot land there at all.
+
+**The readout RESOLVES, and that is what makes the flip safe.**  Flipping the
+three signatures alone would have been a defect, and this is the finding the
+package turns on.  MEASURED 2026-09-20 on WP-B4's own two-group relay, on the
+array the chain itself hands the condition, the un-resolved ONE-STEP Collins
+focus readout returns a window PEAK intensity of **9017.103** and a
+window-centre **1971.389**, against a converged sinc-upsampled direct Fresnel
+quadrature over the same exit field whose window peak is **0.9250737** and
+whose centre is **0.9234085** -- **9748x** peak-to-peak and **2135x**
+centre-to-centre -- because the chain's exit pitch does not sample the
+readout's pre-chirp (K1 = 82.36047 on that lattice, exit pitch 76.5444 um,
+exit support radius 6.7359 mm).  The true value is not this module's opinion:
+the same envelope carried the same 8 mm by the chain's own FREE leg, where
+the complementary selection already existed, reads **0.9234085** on axis --
+agreeing with that quadrature to 2.2e-08 in modulus and 2.0e-08 rad in phase
+-- with the power conserved to 2.8289e-05 through both transports.  (An
+earlier revision of this paragraph read "9017 where the field's true value is
+1.2359, a factor of 7295"; no spelling of the free leg reproduces 1.2359, and
+9017 is the window MAXIMUM rather than an on-axis sample -- VERIFY-WP-C3
+claim 1, re-measured in round 2.)
+
+**And the bar is a conservative choice on a SLOPE, not a cliff.**  On a dial
+fixture where only K1 moves, relative L2 against an analytic Gaussian is flat
+at the fixture's own floor -- 5.33e-06 to 9.30e-06 -- from K1 = 0.1 all the
+way to K1 = 1.2, and the knee is at 1.5 / 2.0 / 3.0 / 5.0 reading 6.10e-05 /
+8.50e-03 / 1.85e-01 / 9.29e-01.  K1 <= 1 costs about +25 % over the floor and
+buys a decade of margin before the knee.  K1 is also a STAIRCASE: it is
+`space_term + angle_term` with both support radii read off GRID COORDINATES,
+so `angle_term` lies in `{2j/N}` and is bounded above by exactly 1 -- a
+margin quoted below one quantum `2/N` describes nothing (on a w-ladder at
+N = 512 the reading jumps from 0.99983553 straight to 1.00409618), and where
+the envelope's angular support is GRID-CLIPPED `angle_term` is exactly 1, so
+`K1 > 1` at every leg length and no refinement of the grid can reach the bar.
+That is a stronger safety argument for the design-121 route than the margin
+below is, and it is the one to read.  VERIFY-WP-B4 F1 named that
+quantity as the binding constraint on a flip and recommended keeping the
+Sziklas readout for short final legs; the chain now does exactly that, as a
+RESOLUTION rather than as a keyword:
+
+* `transport='sziklas'` is the Sziklas readout and nothing else;
+* `transport='collins'` is the one-step Collins readout where
+  `K1 = 2 dx (|A| r/|B| + theta)/lambda <= 1` on the chain's exit lattice, and
+  the Sziklas readout -- with the same arguments the pre-flip default passed,
+  hence bit-identically -- where it is not.  Which route ran is published on
+  the readout stage as `readout_route`, `readout_route_k1` and
+  `readout_route_reason`, and only on that transport, so the Sziklas `stages`
+  list stays a bit-identity key.
+
+K1 alone routes.  K3 is already owned by `on_replica` (which defaults to
+`'error'` and covers the window on both routes) and K2 cannot make the
+returned samples wrong -- the transform evaluates the integral exactly AT the
+requested points whether or not they resolve the field (VERIFY-WP-B4 row 8).
+
+**On a real design, measured.**  WP-B4 section 5's first missing gate was the
+design-121 acceptance, deferred there because its assets were untracked.  They
+are tracked here (`validation/repro_traced_carrier_121/`), so the chain was
+run on the REAL geometry with the design's own launch, both transports, one
+process:
+
+| N | FWHM (um) sziklas / collins | EE3 (%) | EE6 (%) | Collins readout route |
+|---|---|---|---|---|
+| 512 | 6.6013 / 6.6013 | 32.17 / 32.17 | 67.54 / 67.54 | sziklas (K1 = 1.0293) |
+| 1024 | 6.6110 / 6.6147 | 32.41 / 32.37 | 68.08 / 68.02 | **collins** (K1 = 0.99958) |
+| 2048 | 6.6127 / 6.6159 | 32.48 / 32.44 | 68.21 / 68.16 | **collins** (K1 = 0.58573) |
+
+Zero Kelly warnings on every row.  At N = 512 the readout resolves to the
+Sziklas route and the two are identical to every printed digit; at N = 1024
+and 2048 the one-step Collins readout runs and the answers agree to 0.05 % of
+FWHM and 0.05 EE points.  The route flipping with the grid on a real design is
+the clearest single picture of what the resolution does.  These are NOT the
+shipped acceptance's absolute numbers (3.450 / 88.8 / 99.6): that runner uses
+`final_leg='auto'` at NFC = 8192 with a through-focus scan, and running IT
+against this branch needs its hard-coded `sys.path` line parameterised.  That,
+and the 8x4 Dammann fan through `..._multi`, remain owed.
+
+### Fixed -- carrier (WP-C3): FOUR geometries had no fallback on `transport='collins'` -- a COLLIMATED carrier returned NaN, and an ASTIGMATIC one, a leg PAST the focus and a leg resolving a FLAT output reference each ran an under-sampled chirp-Z
+
+All four were opt-in before this release and would have been the default
+after it, and all four were found by RUNNING the flip -- three against the
+existing suite, and the fourth (the flat reference) against a deliberately
+ordinary 192-cell chain sweep, where it was the cause of every moved and
+every raising cell.  The stop-plane keys also changed
+contract in the same round: see the Migration paragraph.
+
+A leg that resolves to the transfer-function form called `_carrier_step_fast`,
+which is only the NO-CROSSING FAST PATH of the Sziklas transport.  A
+collimated carrier never reaches it on the Sziklas side -- the entry point
+short-circuits `R = +/-inf` to a same-grid exact transfer-function step,
+because `m = R_out/R = inf/inf` is NaN -- so `transport='collins'` with
+`R = inf` returned an **all-NaN envelope on `dx = nan`**, having correctly
+resolved `collins_form='tf'` at K1 = 0.79 and K3 = 1.29.  `r_in=np.inf` is
+one of the commonest chain inputs.
+
+Separately, an astigmatic carrier was excluded from the fallback entirely, on
+the grounds that the transfer-function form has no per-axis version.  That is
+true of `_carrier_step_fast` and false of the Sziklas TRANSPORT, whose entry
+point routes an astigmatic carrier to the separable per-axis step and returns
+the very triple the leg promises.  MEASURED on WP-B4's astigmatic fixture
+(`R = (-40, -55) mm`, `z = 5 mm`, N = 1024 at 4 um): the chirp-Z ran at
+K1 = 1.0222 and K3 = 2.7997, so the returned window spanned 2.8 periods and
+its outer samples were wrapped copies of inner ones.
+
+Third, a leg PAST the carrier's geometric focus (`A < 0`) was excluded from
+the fallback on the grounds that "`m <= 0` is the split this transport exists
+to avoid".  That is the right instinct and the wrong rule: avoiding the split
+is what the chirp-Z buys WHERE THE CHIRP-Z IS REPRESENTABLE, and where it is
+not there is nothing to buy.  MEASURED on `test_carrier_referenced.py`'s
+focus-crossing oracle (`w0 = 4 um` at 30 mm, N = 2048): at `z = 45 mm` the
+chirp-Z ran at K1 = 1.5907 and K3 = 2.5924 and read a windowed r2m of
+**3333.4 um against the analytic Gaussian's 1105.7** -- 3.0x -- while the
+Sziklas split matches that oracle to better than 1 %.  At `z = 60 mm` it ran
+at K1 = 2.3831 / K3 = 3.8886.
+
+ONE change fixes all four: the fallback calls
+`propagate_carrier_referenced(..., transport='sziklas')` instead of one branch
+of it, and every exclusion that was a property of that ONE branch is dropped.
+The fallback is then the Sziklas ANSWER in every branch it has -- collimated,
+astigmatic, near-focus bridge, focus crossing -- which is also what makes
+"the legs that move are exactly those with `N dx^2 <= lambda |z_eff|`"
+(VERIFY-WP-B4 F2) literally true rather than nearly true.
+
+**A FOURTH geometry had no fallback and it was the one that mattered: a leg
+that resolves a FLAT output reference.**  `tf_available` carried `and not
+flat`, on the stated grounds that a flat-resolving leg is one the Sziklas
+transport could never evaluate.  That is true only of the `A == 0` sub-case
+(the carrier's own focus, equivalently `R_out == 0`), which the `A != 0`
+conjunct already excludes on its own.  `flat` is ALSO resolved whenever the
+geometric reference's space-bandwidth `4 r_out theta/(|A| lambda)` exceeds
+`N`, and there `R_out = R + z` is finite and non-zero and the co-moving step
+evaluates the leg perfectly well.  MEASURED 2026-09-20 on a single N-BK7
+biconvex with a collimated launch and a bare 10 mm final leg -- NOWHERE near
+a focus (`R_out = -108 mm`, `A = 0.915`), the flat test clearing `N` by
+1.9 % -- the chirp-Z ran at Kelly K1 = 29.1734 / 14.4718 / 7.6621 at
+N = 256/512/1024 and read a second-moment radius of 3823.75 / 3847.81 /
+4099.07 um, DIVERGING with refinement, against the exact free-space
+second-moment law's 1413.30 / 1281.02 / 1157.11 (2.7055x / 3.0037x /
+3.5425x), while the co-moving step read 0.9165x / 0.9980x / 1.1011x and
+converged.  The same hole is what made an ordinary two-group relay's chain
+exit unusable and its focus readout refuse: see the Migration paragraph.
+`and not flat` is dropped, so such a leg falls back like every other
+unrepresentable leg -- and the flat form is KEPT where the chirp-Z IS
+representable (the `A == 0` landing still runs it at K1 = K3 = 0.0312 and
+still returns `R = inf`).
+
+`A == 0` exactly is now the ONLY geometry without a fallback, and it is the
+honest boundary: the Sziklas transport re-references to `R_out = 0`, which
+`carrier_referenced_envelope` refuses.
+
+### Changed -- carrier (WP-C3): `focus_readout`'s three SZIKLAS-ONLY keys SELECT the Sziklas readout instead of being refused or silently dropped
+
+`standoff` and `on_focus_containment` describe the Sziklas readout's stop
+plane, and `bandlimit` band-limits its separate angular-spectrum zoom leg.  WP-B4 REFUSED them on `transport='collins'`, correctly at the time:
+that transport had no stop plane and no fallback, so the keys had no referent
+and accepting them would have been the accept-and-ignore shape the vocabulary
+gates exist to remove.  Since the readout resolves its quadrature they have a
+referent again, so naming one now SELECTS that route -- the key does exactly
+what it says, nothing is accepted and ignored, and the stage records
+`readout_route_reason='sziklas_only_key'`.
+
+**`bandlimit` JOINED THEM, because it was the shape the other two were taken
+off.**  It was accepted, dropped from the readout's kwargs on the Collins
+route and silently ignored.  MEASURED on a fixture that really takes the
+one-step route (N = 512 at 8 um, w = 0.30 mm, f = 300 mm singlet,
+`final_distance` 50 mm, K1 = 0.7698266441481303): `bandlimit=False` moved the
+`'sziklas'` answer and left the `'collins'` one bit-identical, with no
+warning and no refusal -- and called directly it moves the answer by relative
+L2 1.066e-01 to 1.007e+00 across six fixtures, so it is not an inert knob.
+The constant is `_FOCUS_READOUT_SZIKLAS_ONLY_KEYS` and the published reason
+is `'sziklas_only_key'` rather than `'stop_plane_key'`, because `bandlimit`
+is not a stop-plane key; 5.49.0 is the first release to publish either
+spelling.
+
+MEASURED 2026-09-20, which is why this is not a style preference: with the
+refusal in place and the default flipped, **38 of the 54 reported failure
+sections** in the 54-file carrier-touching run carried that refusal's own
+message, and so did all 22 fixture-setup errors -- every one of them a caller
+who legitimately wants the standoff-based readout.
+
+### Fixed -- carrier (WP-C3): INTERNAL call sites rode the public `transport` default
+
+`carrier_referenced_focus_readout`'s own carrier step onto the standoff plane
+is the Sziklas readout's own machinery, not the caller's choice of transport,
+and it took whatever the public default was.  With the default flipped and
+that call left implicit the readout **stopped raising** its documented
+containment `RuntimeError` on a fixture where it had raised (co-moving
+half-width 8.5333 um against a measured amplitude radius of 4.6391 um),
+because the Collins leg resolves its own output pitch and the grid it handed
+the containment guard was no longer the co-moving one the guard is written
+about.  It was found by the archive-to-archive probe as one moved key, not by
+reading the diff.
+
+The two `transport != 'collins'` arms of the chain's gap and final legs NAME
+`transport='sziklas'`, and so do the chain's two calls to its readout
+FALLBACK, whose whole contract is to be the pre-flip answer in every bit.
+`tests/unit/test_c3_collins_default.py` gates the property with an AST census
+that walks every shipped module, excuses a `**kwargs` splat only by a pinned
+allow-list of four forwarders, and refuses an alias or a dynamic lookup of an
+entry point -- 7 of 7 un-named placements caught.
+
+**The readout's OWN standoff leg keeps the pinned arithmetic, but as a
+DOCUMENTED CHOICE rather than a pin** -- see the
+`carrier_referenced_focus_readout` entry below.
+
+### Added -- carrier (WP-C3): `carrier_referenced_focus_readout(transport=...)`, defaulting to the behaviour it already had
+
+The readout's carrier step onto the STOP PLANE is an ordinary free-space leg
+and both transports implement it, but until now it was PINNED to `'sziklas'`
+with no way for a caller to say otherwise -- an internal site that can never
+benefit from an improved default, which is the shape a pin is criticised for.
+It is a documented choice now.  **The default is `'sziklas'`, so nothing
+moves**: 0 of this package's 103 archive-to-archive keys, on both builds.
+Nothing else about the readout is transport-dependent either -- the standoff
+resolver, the reconstruction, the Bluestein zoom and both guards are the same
+code on either setting, and the containment guard measures whatever grid the
+leg returned.
+
+**What `transport='collins'` buys, and why it is not the default HERE.**
+Against a converged dense separable Fresnel oracle (self-consistency
+4.470e-05, convergence 64x -> 256x 5.14e-07) on this readout's own 128-grid
+fixture (`w = 120 um`, `R = -30 mm`, `z = 30 mm`, `standoff = 1 mm`), the
+Collins leg reads relative L2 **4.7340e-05** and the co-moving one **2.4049**
+(best global scale 2.2738, peak ratio 5.1433).  Over five geometries x six
+standoffs the co-moving leg trips the `on_focus_containment` refusal on
+**7 of 30** and returns relL2 up to 4.876 on several of the rest; the Collins
+leg refuses **0 of 30** and reads relL2 <= 3.846e-03 everywhere, <= 5.3e-04
+on 27 of 30.  The co-moving grid CONTRACTS toward the focus, so the stop
+plane it offers is the one the containment guard exists to complain about.
+
+Two reasons the default stays where it was, and both are about this function
+rather than the quadrature.  FIRST, it is public and took no `transport`
+before, so moving its default would move a public answer for every existing
+caller with no way back for code already written.  SECOND, and the real one,
+the machinery AROUND the leg is derived about the co-moving stop plane --
+`_default_focus_standoff` sizes the leg from the contraction,
+`_beam_containment_standoff` and `_achievable_focus_margin` are stated in
+beam radii of that grid, and the Bluestein period is `N * dx` of it.  On a
+Collins leg that apparatus still runs and still produces the better answer
+above, but it is no longer solving the problem it was derived for.
+Re-deriving or retiring it is the follow-up the report's section 7 accounts
+for; flipping the default first would ship a resolver and a guard written
+about a grid the function no longer produces.
+
+### Changed -- carrier (WP-C3): the CuPy arm of the Collins transport
+
+WP-B4 section 5 item 8 named the backends as the precondition for "a default
+every backend reaches".  Hygiene-2 H2-2 threaded `(xp, is_jax, bld)` through
+the whole chain and proved the JAX half; its own "decisions owed" item 2
+recorded that the CuPy half was exercised structurally and not on hardware.
+This release closes the structural side and measures as much of the hardware
+side as exists:
+
+* there is still ONE implementation per kernel and no `_cupy` twin.  A
+  structural census walks the CALL GRAPH from the three Collins entry helpers
+  and requires every helper it reaches either to carry the backend triple
+  (with the specific parameters each one owes) or to be declared host-side
+  **with its reason**; a new helper on the path with neither property fails
+  the census as unclassified;
+* the transform is the library's own backend FFT dispatcher, by identity on
+  the NumPy side (`_bluestein_2d` keys its chirp-kernel cache on that
+  identity) and by the dispatcher's own `_is_cupy_array` branch on the device
+  side, asserted rather than assumed;
+* every FIELD-INDEPENDENT grid the chain builds RUNS ON THE DEVICE here and
+  is compared to the host build: the axis chirp agrees to <= 0.7 ULP of 1 at
+  three grids, `_tf_phase_to_H` to 4.6e-17, and `_exact_dispersion_phase` to
+  EXACTLY 0.0 both untilted and tilted (cupy 14.0.1, one visible device);
+* a host demotion is closed structurally, because no VALUE test on any
+  backend can see one: `np.asarray(env)` is bitwise a no-op on NumPy and a
+  silent device copy elsewhere.  The census matches AST call nodes, not
+  substrings.
+
+**The device run of the whole leg is OWED.**  `cupy.fft` on every box
+available to this package raises `ImportError: DLL load failed while
+importing cufft`, so the arm that runs the leg on the device and compares it
+to NumPy against a bar measured from the two backends' own FFTs is written
+and has never executed.  What the broken-cuFFT box asserts instead is a
+decision, not an absence: the public leg with a device array in must fail AT
+the device transform -- naming cufft -- and must NOT fail earlier with
+`TypeError: Implicit conversion to a NumPy array is not allowed`, which is
+the signature of a host demotion.
+
+### Fixed -- carrier: the public traced chain host-demoted a DEVICE field before any transform
+
+`_chain_entry_congruence_stats` -- the chain-entry congruence diagnostic that
+runs on the default `on_multi_congruence='warn'` -- opened with
+`E = np.asarray(env)`.  That is a bitwise no-op on NumPy and raises
+`TypeError: Implicit conversion to a NumPy array is not allowed` on a CuPy
+device array, so the PUBLIC chain died there, on both transports, before any
+transform ran -- which is exactly the signature this package's own CuPy
+decision says must not happen.  It pulls through `backend.to_numpy` now, the
+idiom `_collins_power_marginals` already used.  MEASURED after, with cupy
+14.0.1: the single-step leg, the chain on its defaults and the chain with
+every guard silenced all fail AT `cupy.fft.fft2` with `ImportError: DLL load
+failed while importing cufft` -- the broken-cuFFT decision -- and none of
+them with an implicit-conversion `TypeError`.
+
+### Migration -- `transport='collins'` is the carrier chain's default
+
+**Every public entry point that moves**, all three being the entry points
+that take `transport=`:
+
+* `lumenairy.propagate_carrier_referenced`
+* `lumenairy.propagate_traced_carrier_chain`
+* `lumenairy.propagate_traced_carrier_chain_multi`
+
+`carrier_referenced_focus_readout` GAINS a `transport` of its own in this
+release (see its entry above), but its DEFAULT does not move -- 0 of 103
+archive keys -- so a caller of it is unaffected unless they pass the new
+keyword.  `carrier_referenced_exact_focus_readout` does **not** take
+`transport` and does not move.
+
+`final_leg='exact'`'s own leg runs no carrier transport -- its fine retrace
+and exact-sphere Bluestein readout are unchanged -- but the chain's GAP legs
+do, so a `final_leg='exact'` chain's returned field moves wherever a gap leg
+moves.  MEASURED after the flat-reference fix: the returned field is
+bit-identical on six ordinary two-group relays AND on this package's own
+103-key chain fixture (field sha, `dx`, `R`, `n_stages` and all five warnings
+equal to 49ddf4bd; peak 79.78066764070186 bare and 80.46777771966885 with a
+readout).  What moves on those archive keys is the per-stage DIAGNOSTIC dict
+-- `collins_form` / `collins_k1` / `k2` / `k3` / `collins_kernel` /
+`collins_flat_reference` / `collins_dx_floor_hit` are published on a Collins
+gap leg and absent on a Sziklas one -- so `stages` and `repr(stages)` differ
+while nothing the chain RETURNS does.  Where a gap leg IS representable on
+the chirp-Z the field moves like any other chain's, and the way back is the
+same one keyword.
+
+**Exactly which legs move.**  A free leg RESOLVES its quadrature, and the two
+evaluations are exact complements, so the legs that move are exactly those
+with
+
+    N dx^2 <= lambda |z_eff|
+
+(VERIFY-WP-B4 F2) — checkable per design without running anything, and
+NECESSARY rather than sufficient: the resolved output pitch is floored at the
+value that still holds the beam's phase-space box, so where that floor bites
+K3 is larger than the co-moving reading and the leg falls back anyway.  Every
+other leg resolves to the transfer-function form, which IS the Sziklas step,
+and is bit-identical.  A focus READOUT moves only where the chain's exit
+lattice satisfies `K1 = 2 dx (|A| r/|B| + theta)/lambda <= 1`; everywhere
+else it is the pre-flip Sziklas readout, bit for bit, and says so on its
+stage.
+
+**The near-focus interaction, and it is the one to read before upgrading.**
+With Collins the default, a gap leg near a geometric focus is no longer split
+into carrier -> through-waist ASM bridge -> carrier, and the exact-kernel
+refinement that `gap_kernel='auto'` applies is then applied over a reduced
+frame `z_eff = B/A` that diverges at the focus.  The refinement's own dropped
+quartic is `sqrt(3/2) k |z_eff| theta_env^4 / 8` in the ENVELOPE's analytic
+angle, and its wrap guard K4 bounds the WRAP of the kernel, not its accuracy:
+on VERIFY-WP-B4's F3 fixture (`w = 0.3 mm`, N = 1024, dx 4 um,
+`lambda = 1.064 um`) `'auto'` costs **2.35e-3** relative L2 at 1 um short of
+`A = 0`, against **1.71e-14** for `gap_kernel='fresnel'`, while K4 sits three
+decades under its bar and nothing warns.  The cost is LINEAR in `|z_eff|` and
+independent of N (2.35e-4 / 2.36e-5 / 2.41e-6 at 10 um / 100 um / 1 mm).  A
+caller reading a plane within a few hundred microns of a carrier focus should
+pass `gap_kernel='fresnel'`, which is the ABCD-Fresnel integral the Collins
+stage already is.
+
+**The accuracy-keyed automatic fallback that does this for you SHIPS ON in
+5.49.0, at `tau = 1e-4`.**  It exists in the source as
+`carrier._GAP_KERNEL_ACCURACY_TAU`.  It is `None` in THIS package and the
+maintainer turned it on in WP-C5 (ledger 0.1), so the 5.49.0 tree has it
+armed and the manual `gap_kernel='fresnel'` above is a belt-and-braces
+measure rather than the only remedy.  **The two interact, and the
+interaction is one way round**: the switch is reached only through
+`_collins_transport`, so it is INERT before this flip and LIVE after it, on
+exactly the legs this flip moves onto the chirp-Z.  What it fires on is
+`k |z_eff| theta_env^4` -- a WIDE ENVELOPE as much as a near focus, because
+the criterion is quartic in the envelope's own angular half-width -- and it
+drops `gap_kernel='auto'` to the paraxial kernel inside the band it derives.
+An EXPLICIT `gap_kernel='exact'` is never overridden, and
+`gap_kernel='fresnel'` is unaffected.  MEASURED on a real 3-way merge of the
+two branches: `lumenairy/propagators/carrier.py` merges with ZERO conflicts,
+the merged line reads `_GAP_KERNEL_ACCURACY_TAU = 1e-4` beside
+`transport: str = 'collins'` on all four signatures, and one shipped id --
+`test_wave5_h2_near_focus_table.py::test_the_exact_kernels_departure_on_a_
+collimated_leg_is_the_quartic`, whose fixture's predicted quartic is 1.5e-4
+and therefore OVER tau -- saw its departure fall from 1.5e-4 to 6.2873e-15.
+That id is restated here on both values of the constant, so neither branch
+ships a red the other creates.
+
+**A NEAR-FOCUS CAVEAT, measured on a real composed chain and not yet
+settled.**  A leg that lands very close to the carrier's own geometric focus
+is the one place where the two transports return different output LATTICES
+rather than different arithmetic on one: the co-moving pitch collapses as
+`|A| dx` and the Sziklas step takes its near-focus bridge, while the Collins
+leg resolves a FLAT reference and floors its pitch at `2 r_out/N`.  MEASURED
+2026-09-20 on this repository's own capstone composition (traced doublet +
+carrier gap leg + universal-gated relay + carrier final leg onto the paraxial
+image, graded against an independent ring-Huygens Debye integral), with the
+final leg at `A = 1 + z/R = 0.006663` and K1 = K3 = 0.9549:
+
+| final leg | pitch returned | EE50 | EE80 |
+|---|---|---|---|
+| `transport='sziklas'` | co-moving + bridge | 7.2890 um | **11.0139 um** |
+| `transport='collins'` | 6.3126 um (the floor) | 6.2930 um | **12.3588 um** |
+
+The co-moving column matches that oracle inside 6 % and the Collins column
+misses by 11.2 %.  Whether that is the FIELD or only the returned sampling --
+the floored pitch puts about two samples inside EE80 where the co-moving grid
+puts six -- is not settled here, and settling it needs the near-focus
+accuracy study on an aberrated design that the report's section 7 already
+lists as owed.  **If you read a spot metric off a leg that lands within a
+percent of a carrier focus, pass `transport='sziklas'` until that is closed**,
+and see `fixes/WP-C3_COLLINS_DEFAULT_REPORT.md` section R2.3b for the whole
+measurement.
+
+**The K3 warning.**  `on_collins_sampling` defaults to `'warn'`, so callers
+who never saw the Kelly sampling warning could in principle start seeing it.
+MEASURED across the shipped fixtures this package drives -- 21 Collins calls
+covering the single-step ladder, both chain prescriptions with and without a
+readout, the multi orchestrator at K = 1 and K = 2, and the focus readouts --
+the count is **zero**, on both builds.  Before the readout resolution landed,
+**five of those 21 CALLS fired EIGHT warnings** (one from `_multi` at K = 1,
+four at K = 2, one from the chain readout, one from the singlet and one from
+the doublet), all of them K1 and all of them from the one-step readout, which
+is the defect the resolution removes.  An earlier revision of this paragraph
+said "the same 21 calls fired five warnings", counting CALLS and WARNINGS as
+one number.
+
+**And the zero generalises, which it did not before the flat-reference fix.**
+On a 192-cell sweep of deliberately ordinary chains -- three prescriptions,
+one and two groups, two grids, two beam widths, collimated and converging
+launches, two final distances, with and without a focus readout, and no knob
+named anywhere -- the count is **0 warnings over 0 cells**, against 49ddf4bd's
+0, on both builds.  Before the fix the same sweep read **74 warnings over 51
+cells (26.6 %)**.  The guard is not dead: a caller-NAMED output lattice has no
+complementary form to fall back to and the guard still speaks there, which is
+asserted separately.
+
+**What does NOT change, although an earlier reading of this flip said it
+would.**  `focus_readout={'standoff': ...}` and
+`focus_readout={'on_focus_containment': ...}` (and the same keys inside
+`output_grid` on `..._multi`) keep working exactly as before.  Since 5.46.0
+those two keys were REFUSED on an explicit `transport='collins'`, correctly:
+that transport had no stop plane and no fallback, so they had no referent.
+Now that the readout resolves its quadrature they have one, so naming either
+key SELECTS the Sziklas readout -- the key does exactly what it says, nothing
+is accepted and ignored, and the stage records
+`readout_route_reason='stop_plane_key'`.  `final_distance=0` with a
+`focus_readout` also still works, for the same reason.
+
+**No public call that worked on 5.48.1 raises on 5.49.0**, with ONE exception,
+and it is a JAX one.  That sentence is MEASURED rather than asserted, and it
+was measured false on the first cut of this package: a 192-cell sweep of
+ordinary chains (the one above) then read **22 cells going ok -> RuntimeError
+(11.5 %)**, and an independent 103-key archive-to-archive set read **23 of 103**
+doing the same, on both builds, all of them the Sziklas focus readout's
+containment refusal.  The cause was the flat-reference leg with no fallback
+(see the Fixed entry above): the aliased gap leg handed the chain an exit
+lattice 3.65x too wide carrying 60.7x the power it went in with, and the
+readout's guard refused it -- correctly.  With that leg falling back, the
+same two censuses read:
+
+| census, 5.49.0 against 49ddf4bd, both builds | reading |
+|---|---|
+| 192 ordinary chain cells: identical / moved / **ok -> raised** | 192 / 0 / **0** |
+| the same, Kelly warnings / cells carrying one | 0 / 0 |
+| 103 archive keys, default vs default: **ok -> raised** / raised -> ok | **0** / 2 |
+| 103 archive keys with `transport='sziklas'`: identical | **103 of 103** |
+
+The two raised -> ok are the `dx_out` / `carrier_out` keywords the old
+transport refused and this one accepts -- a call that RAISED at 5.48.1 and
+returns now, which is the direction nobody needs a migration note for.
+
+The one remaining exception is the JAX one: `jax.grad` / `jax.jit` through
+`propagate_carrier_referenced` now refuses by default, because the Collins
+leg resolves its output lattice and its quadrature by MEASURING the envelope
+and a Tracer has no entries to measure.  The refusal names three ways out,
+shortest first, and the shortest is `transport='sziklas'` -- which is what
+the call did before.  Silently switching transport under a trace was
+considered and rejected: the two transports return different output LATTICES
+near a focus, so the gradient would be of a different array than the eager
+call's.
+
+**The way back is one keyword, and it costs no bits** -- with ONE
+release-level caveat that is not this package's: WP-C5 moves
+`replica_fill`'s default from `'repeat'` to `'zero'` in the same release, and
+that hits the SZIKLAS side too, so on the merged 5.49.0 tree
+`transport='sziklas'` is the pre-flip TRANSPORT in every bit but a readout
+whose window exceeds one period and that waives `on_replica` also needs
+`replica_fill='repeat'` to reproduce 5.48.1 exactly.  (The shipped
+`on_replica='error'` refuses such a window first, so the caveat is reachable
+only with that guard downgraded.)  Otherwise: pass `transport='sziklas'` and
+you get the pre-5.49.0 arithmetic.  That is proved
+ARCHIVE TO ARCHIVE rather than asserted: `git archive 49ddf4bd lumenairy`
+extracted twice with this package's `carrier.py` substituted into one of them
+(`diff -rq` reports that one file and no other), one child process per tree
+with `lumenairy.__file__` asserted under it and `LUMENAIRY_MEM_BUDGET_MB`
+pinned, the base arm spelled to pass **no** `transport=` at all and the
+branch arm spelled `transport='sziklas'`.  **42 of 42 keys EQUAL on both
+builds** (Windows py3.14 and WSL py3.12), the keys covering every single-step
+branch including the focus crossing, the collimated and astigmatic arms,
+complex64, the tilted exact kernel, both public readouts, the reconstruct /
+envelope / fit-radius / aperture helpers, the chain with `repr(stages)` and
+its `standoff` / `bandlimit` / zero-distance variants, and the multi
+orchestrator at K = 1 and K = 2.  Each key folds the returned arrays, the
+carrier, the pitch, the returned object's type and every warning in EMISSION
+order, so a reworded or reordered guard is a moved key.
+
+**What a later release could retire, and what it would take.**  The
+focus-standoff machinery (`_default_focus_standoff`, `_beam_containment_
+standoff`, `_check_focus_containment`, `_small_extent_focus_standoff_f`,
+`_achievable_focus_margin` and the `_FOCUS_STANDOFF_*` /
+`_FOCUS_READOUT_CONTAINMENT_*` constants) is **kept**, and this release makes
+it load-bearing rather than vestigial: it now serves both `'sziklas'` AND the
+default's own readout fallback, which is the route most chain readouts take.
+Retiring it would need the one-step readout to be representable on real exit
+lattices, i.e. `K1 <= 1` where it reads **82.36047 / 41.44910 / 21.42248 /
+10.94410** at N = 256/512/1024/2048 on WP-B4's relay, halving per doubling of
+N -- so N ~ 32768, not the ~16000 an earlier revision quoted -- and only
+where the envelope's angular support is INSIDE the band: where it is
+grid-clipped `angle_term` is exactly 1 and there is no N at all.  See
+`fixes/WP-C3_COLLINS_DEFAULT_REPORT.md` for the accounting.
 
 ## [5.48.1] — 2026-09-20
 
@@ -4499,6 +5047,7 @@ C1 and the WP-A25 replica regime).
 1168) gives for an arbitrary ABCD system, factored as chirp x chirp-Z x chirp
 (`lumenairy/propagators/carrier.py:2242` `_collins_transport`).  In this
 (`lumenairy/propagators/carrier.py:2266` `_collins_transport`).  In this
+(`lumenairy/propagators/carrier.py:2225` `_collins_transport`).  In this
 library's `exp(-i omega t)` / `exp(+i k z)` convention (CONVENTIONS sec. 7 -- the
 complex conjugate of the form printed in Collins' paper, which uses the opposite
 time convention):
@@ -4509,6 +5058,7 @@ time convention):
 with the envelope-to-envelope system "attach the input carrier, fly `z`, remove
 the chosen output carrier" (`carrier.py:1824`):
 the chosen output carrier" (`carrier.py:1848`):
+the chosen output carrier" (`carrier.py:1807`):
 
     A = 1 + z/R_in = m,   B = z,   C = 1/R_in - A/R_ref,   D = 1 - z/R_ref
 
@@ -4519,6 +5069,7 @@ zero and past it as a leg crosses the geometric focus, and the transform carries
 `A <= 0` natively.  The three stages are the module's own separable screen
 (`_radial_carrier_phase`'s per-axis factor, `carrier.py:1886`), the separable
 (`_radial_carrier_phase`'s per-axis factor, `carrier.py:1910`), the separable
+(`_radial_carrier_phase`'s per-axis factor, `carrier.py:1869`), the separable
 centred Bluestein the readouts already run (`_bluestein_centred_2d`), and a
 second separable screen.  At `R_ref = R + z` and `dx_out = m*dx` the result is
 term for term `_carrier_step_fast` -- measured agreement 7.6e-12 and 3.2e-12 of
@@ -4529,6 +5080,7 @@ What the free pitch buys, measured:
 * **the image-plane readout is one step.**  `transport='collins'` lands the
   target plane directly on the caller's `(dx_out, N_out)` (`carrier.py:2740`),
   target plane directly on the caller's `(dx_out, N_out)` (`carrier.py:2759`),
+  target plane directly on the caller's `(dx_out, N_out)` (`carrier.py:2926`),
   with no standoff plane, no beam-containment resolution and no near-focus
   bridge.  Against an analytic Gaussian-ABCD oracle carrying the absolute piston
   and Gouy phase, over NA 0.03-0.45 x grid extents 1.5-10 beam radii (30 cells),
@@ -4555,6 +5107,7 @@ What the free pitch buys, measured:
   measured phase-space box, so it carries the leg's own diffraction and cannot
   follow `A` to zero (`carrier.py:2106`); and where referencing to the
   follow `A` to zero (`carrier.py:2130`); and where referencing to the
+  follow `A` to zero (`carrier.py:2089`); and where referencing to the
   collapsing ray sphere `R + z` would need more samples than the grid has, the
   output is referenced FLAT instead, which is the physical statement that the
   wavefront is flat at the waist.  Measured 0.1 mm before a 40 mm focus: pitch
@@ -4568,6 +5121,7 @@ What the free pitch buys, measured:
 `'warn'`) is written against Kelly, *Appl. Opt.* **53**, 2861 (2014) rather than
 against a geometric margin (`carrier.py:1976`, `:2012`).  Three conditions, each
 against a geometric margin (`carrier.py:2000`, `:2036`).  Three conditions, each
+against a geometric margin (`carrier.py:1959`, `:1995`).  Three conditions, each
 a ratio against the Nyquist rate itself with the bar at 1 and no margin,
 evaluated on the field's own measured `1 - 1e-6`-power support in BOTH domains
 rather than at the grid edge:
@@ -4584,6 +5138,7 @@ rather than at the grid edge:
   disagree.
 
 The tolerance is the one number `_COLLINS_TAIL_FRAC = 1e-6` (`carrier.py:1709`),
+The tolerance is the one number `_COLLINS_TAIL_FRAC = 1e-6` (`carrier.py:1691`),
 the power allowed outside the support radii the ratios are formed from, so the
 aliased power is bounded by it and the field error by its square root.  Stated
 fail-before, as a ladder over four grids at A = 0.9, B = 3 mm: at K1 = 49.694 /
@@ -4594,6 +5149,7 @@ is what says it is the aliasing -- while the complementary quadrature sits at
 
 **Quadrature selection, and why it is not a threshold** (`carrier.py:2566`).  The
 **Quadrature selection, and why it is not a threshold** (`carrier.py:2587`).  The
+**Quadrature selection, and why it is not a threshold** (`carrier.py:2544`).  The
 chirp-Z form needs `K1 <= 1`, which with `r` at the grid half-width is
 `N dx^2 <= lambda |z_eff|`; the transfer-function form (`_carrier_step_fast`)
 samples the kernel on the frequency lattice instead and needs the same
@@ -4612,12 +5168,14 @@ enough to trip `_near_focus_needs_bridge` has `|A| < 0.02` and therefore
 ABCD-Fresnel integral, and `'exact'` pre-applies the diagonal exact/Fresnel
 kernel ratio on the input grid (`carrier.py:2182`), which is an exact operator
 kernel ratio on the input grid (`carrier.py:2206`), which is an exact operator
+kernel ratio on the input grid (`carrier.py:2165`), which is an exact operator
 identity because both kernels are diagonal in the same basis.  That refinement
 lives on the REDUCED frame `z_eff = B/A`, which is unbounded as a leg approaches
 the geometric focus, so it is applied only where its own group delay
 `|z_eff| theta (1/sqrt(1-theta^2) - 1)` fits inside the grid it is applied on
 (`carrier.py:2144`); an explicit `gap_kernel='exact'` there is REFUSED rather
 (`carrier.py:2168`); an explicit `gap_kernel='exact'` there is REFUSED rather
+(`carrier.py:2127`); an explicit `gap_kernel='exact'` there is REFUSED rather
 than silently downgraded, and `'auto'` takes the ABCD-Fresnel integral and
 records `collins_kernel='fresnel'`.  Applying it anyway leaves the core right and
 destroys the halo: measured against a direct summation of the same integral on

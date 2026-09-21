@@ -1,0 +1,42 @@
+{
+ "tree": "C:\\tmp\\c3b_mut9",
+ "caught": 7,
+ "n": 7,
+ "rows": {
+  "A_module_level_helper": {
+   "caught": true,
+   "tail": "1 failed in 7.21s",
+   "why": "f'propagators/carrier.py::{_f}' for _f in _SPLAT_FORWARDERS), ("
+  },
+  "B_inside_existing_fn": {
+   "caught": true,
+   "tail": "1 failed in 7.48s",
+   "why": "f'propagators/carrier.py::{_f}' for _f in _SPLAT_FORWARDERS), ("
+  },
+  "C_splat_in_non_forwarder": {
+   "caught": true,
+   "tail": "1 failed in 8.30s",
+   "why": "f'propagators/carrier.py::{_f}' for _f in _SPLAT_FORWARDERS), ("
+  },
+  "C2_splat_dict_literal": {
+   "caught": true,
+   "tail": "1 failed in 7.99s",
+   "why": "f'propagators/carrier.py::{_f}' for _f in _SPLAT_FORWARDERS), ("
+  },
+  "D_module_level_alias": {
+   "caught": true,
+   "tail": "1 failed in 8.30s",
+   "why": "f'propagators/carrier.py::{_f}' for _f in _SPLAT_FORWARDERS), ("
+  },
+  "E_globals_lookup": {
+   "caught": true,
+   "tail": "1 failed in 7.34s",
+   "why": "f'propagators/carrier.py::{_f}' for _f in _SPLAT_FORWARDERS), ("
+  },
+  "F_other_module": {
+   "caught": true,
+   "tail": "1 failed in 7.61s",
+   "why": "f'propagators/carrier.py::{_f}' for _f in _SPLAT_FORWARDERS), ("
+  }
+ }
+}

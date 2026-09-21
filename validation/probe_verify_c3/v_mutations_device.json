@@ -1,0 +1,87 @@
+{
+ "tree": "C:\\tmp\\vc3_mutD",
+ "rows": [
+  {
+   "mutation": "BASELINE (pristine)",
+   "outcome": "OUTCOME|ImportError|DLL load failed while importing cufft: The specified module could not be found.|__init__.py:88 import_module"
+  },
+  {
+   "mutation": "M1_float_on_device_array",
+   "why": "float(x) on a device array -- forces a host sync / concretisation",
+   "injected": "    _vdbg = float(env[0, 0].real)\n",
+   "outcome": "OUTCOME|ImportError|DLL load failed while importing cufft: The specified module could not be found.|__init__.py:88 import_module"
+  },
+  {
+   "mutation": "M2_np_asarray_control",
+   "why": "THE CONTROL: the exact spelling V-D3 fixed",
+   "injected": "    _vdbg = np.asarray(env)\n",
+   "outcome": "OUTCOME|TypeError|Implicit conversion to a NumPy array is not allowed. Please use `.get()` to construct a NumPy array explicitly.|core.pyx:1699 cupy._core.core._ndarray_base.__array__"
+  },
+  {
+   "mutation": "M3_item_on_device_array",
+   "why": "x.item() -- host pull of one element",
+   "injected": "    _vdbg = env.ravel()[0].item()\n",
+   "outcome": "OUTCOME|ImportError|DLL load failed while importing cufft: The specified module could not be found.|__init__.py:88 import_module"
+  },
+  {
+   "mutation": "M4_math_call_on_element",
+   "why": "a math. call on a device-array element",
+   "injected": "    import math as _vmath\n    _vdbg = _vmath.sqrt(abs(env[0, 0]))\n",
+   "outcome": "OUTCOME|ImportError|DLL load failed while importing cufft: The specified module could not be found.|__init__.py:88 import_module"
+  },
+  {
+   "mutation": "M5_numpy_constant_times_device",
+   "why": "a NumPy CONSTANT array combined with the device array",
+   "injected": "    env_a = env_a * np.arange(env_a.shape[-1])\n",
+   "outcome": "OUTCOME|TypeError|Unsupported type <class 'numpy.ndarray'>|_scalar.pyx:142 cupy._core._scalar.CScalar.__init__"
+  },
+  {
+   "mutation": "M6_np_exp_on_device",
+   "why": "np.exp applied to the device array",
+   "injected": "    _vdbg = np.exp(env)\n",
+   "outcome": "OUTCOME|ImportError|DLL load failed while importing cufft: The specified module could not be found.|__init__.py:88 import_module"
+  },
+  {
+   "mutation": "M7_alias_np",
+   "why": "the demotion behind an alias",
+   "injected": "    _vnp = np\n    _vdbg = _vnp.asarray(env)\n",
+   "outcome": "OUTCOME|TypeError|Implicit conversion to a NumPy array is not allowed. Please use `.get()` to construct a NumPy array explicitly.|core.pyx:1699 cupy._core.core._ndarray_base.__array__"
+  },
+  {
+   "mutation": "M8_nested_function",
+   "why": "the demotion inside a nested function",
+   "injected": "    def _vinner():\n        return np.asarray(env)\n    _vdbg = _vinner\n",
+   "outcome": "OUTCOME|ImportError|DLL load failed while importing cufft: The specified module could not be found.|__init__.py:88 import_module"
+  },
+  {
+   "mutation": "M8b_comprehension",
+   "why": "the demotion inside a comprehension",
+   "injected": "    _vdbg = [np.asarray(env) for _ in range(1)]\n",
+   "outcome": "OUTCOME|TypeError|Implicit conversion to a NumPy array is not allowed. Please use `.get()` to construct a NumPy array explicitly.|core.pyx:1699 cupy._core.core._ndarray_base.__array__"
+  },
+  {
+   "mutation": "M9_full_module_name",
+   "why": "np.asarray reached through the full module name",
+   "injected": "    import numpy\n    _vdbg = numpy.asarray(env)\n",
+   "outcome": "OUTCOME|TypeError|Implicit conversion to a NumPy array is not allowed. Please use `.get()` to construct a NumPy array explicitly.|core.pyx:1699 cupy._core.core._ndarray_base.__array__"
+  },
+  {
+   "mutation": "M10_astype_via_result_type",
+   "why": "env.astype(...) via np.result_type on the device array",
+   "injected": "    env_a = env_a.astype(np.result_type(env, np.complex128))\n",
+   "outcome": "OUTCOME|ImportError|DLL load failed while importing cufft: The specified module could not be found.|__init__.py:88 import_module"
+  },
+  {
+   "mutation": "M11_renamed_local",
+   "why": "the same np.asarray, on a local the field was renamed into",
+   "injected": "    _vtmp = env\n    _vdbg = np.asarray(_vtmp)\n",
+   "outcome": "OUTCOME|TypeError|Implicit conversion to a NumPy array is not allowed. Please use `.get()` to construct a NumPy array explicitly.|core.pyx:1699 cupy._core.core._ndarray_base.__array__"
+  },
+  {
+   "mutation": "M12_ascontiguous_on_spectrum",
+   "why": "the OTHER normaliser the census lists, same spelling",
+   "injected": "    _vdbg = np.ascontiguousarray(env)\n",
+   "outcome": "OUTCOME|TypeError|Implicit conversion to a NumPy array is not allowed. Please use `.get()` to construct a NumPy array explicitly.|core.pyx:1699 cupy._core.core._ndarray_base.__array__"
+  }
+ ]
+}

@@ -1,0 +1,73 @@
+{
+ "N": 2048,
+ "assets": "present",
+ "build": "WIN-py3.14",
+ "delta": {
+  "ee3_points": -0.0436764279275792,
+  "ee6_points": -0.05341768048300821,
+  "fwhm_um": 0.0031915650945002483,
+  "peak_ratio": 0.9983725879587015
+ },
+ "doe_period_um": 113.75662596454582,
+ "launch": {
+  "R1_mm": 2.0007361513684163,
+  "dx0_um": 1.0,
+  "w0_um": 4.0,
+  "w_z1_mm": 0.20853134251750735,
+  "z1_mm": 2.0
+ },
+ "lumenairy": "C:\\tmp\\lum_c3\\lumenairy\\__init__.py",
+ "n_groups_post": 6,
+ "n_groups_pre": 2,
+ "rows": [
+  {
+   "centroid_x_um": -0.003624129194163878,
+   "collins_forms": [],
+   "ee12": 85.63651191220293,
+   "ee3": 32.479385708772476,
+   "ee6": 68.21411374103928,
+   "fwhm_um": 6.612701284512584,
+   "n_kelly": 0,
+   "n_stages": 8,
+   "peak": 1022.4629328016864,
+   "power": 6.662756818370726e-08,
+   "raised": null,
+   "readout_route": null,
+   "readout_route_k1": null,
+   "readout_route_reason": null,
+   "seconds": 81.07,
+   "transport": "sziklas"
+  },
+  {
+   "centroid_x_um": -0.003655445411209819,
+   "collins_forms": [
+    "chirp-z",
+    "tf",
+    "tf",
+    "tf",
+    "tf",
+    "tf",
+    "tf",
+    "chirp-z"
+   ],
+   "ee12": 85.59970454087382,
+   "ee3": 32.4357092808449,
+   "ee6": 68.16069606055628,
+   "fwhm_um": 6.615892849607084,
+   "n_kelly": 0,
+   "n_stages": 8,
+   "peak": 1020.7989643130636,
+   "power": 6.661865957790444e-08,
+   "raised": null,
+   "readout_route": "collins",
+   "readout_route_k1": 0.5857281125141514,
+   "readout_route_reason": "representable",
+   "seconds": 74.45,
+   "transport": "collins"
+  }
+ ],
+ "tree": "C:\\tmp\\lum_c3",
+ "wavelength": 1.31e-06,
+ "zmx": "D:\\Metacept\\Neurophos\\Python_Test_Scripts\\Free_Space_Optics\\Reverse_Symmetric_ASM\\tx4designstudy121\\20260707 dll Tx02-MSOP16.zmx",
+ "zmx_exists": true
+}

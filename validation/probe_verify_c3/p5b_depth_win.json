@@ -1,0 +1,745 @@
+{
+ "label": "MUT-DEPTH-WIN",
+ "lumenairy_file": "C:\\tmp\\vc3_mutC\\lumenairy\\__init__.py",
+ "legs": [
+  {
+   "case": "collimated-auto",
+   "leg_calls": 1,
+   "leg_max_depth": 1,
+   "pcr_max_depth": 1,
+   "form": "tf",
+   "k1": 1.122236254699248,
+   "k3": 3.0796992481203,
+   "flat": false,
+   "error": null
+  },
+  {
+   "case": "converging-auto",
+   "leg_calls": 1,
+   "leg_max_depth": 1,
+   "pcr_max_depth": 1,
+   "form": "tf",
+   "k1": 0.9846422697368419,
+   "k3": 2.6947368421052627,
+   "flat": false,
+   "error": null
+  },
+  {
+   "case": "back-prop-auto",
+   "leg_calls": 1,
+   "leg_max_depth": 1,
+   "pcr_max_depth": 1,
+   "form": "tf",
+   "k1": 1.993664826127819,
+   "k3": 5.517794486215537,
+   "flat": false,
+   "error": null
+  },
+  {
+   "case": "diverging-auto",
+   "leg_calls": 1,
+   "leg_max_depth": 1,
+   "pcr_max_depth": 1,
+   "form": "tf",
+   "k1": 0.5489279840225563,
+   "k3": 1.4756892230576435,
+   "flat": false,
+   "error": null
+  },
+  {
+   "case": "A=0-auto",
+   "leg_calls": 1,
+   "leg_max_depth": 1,
+   "pcr_max_depth": 0,
+   "form": "chirp-z",
+   "k1": 0.021484374999999997,
+   "k3": 0.021484374999999997,
+   "flat": true,
+   "error": null
+  },
+  {
+   "case": "near-focus-auto",
+   "leg_calls": 1,
+   "leg_max_depth": 1,
+   "pcr_max_depth": 0,
+   "form": "chirp-z",
+   "k1": 0.021518782098015114,
+   "k3": 0.021518782098015117,
+   "flat": true,
+   "error": null
+  },
+  {
+   "case": "past-focus-auto",
+   "leg_calls": 1,
+   "leg_max_depth": 1,
+   "pcr_max_depth": 1,
+   "form": "tf",
+   "k1": 1.5906596757319367,
+   "k3": 2.5923889903346695,
+   "flat": false,
+   "error": null
+  },
+  {
+   "case": "far-past-focus-auto",
+   "leg_calls": 1,
+   "leg_max_depth": 1,
+   "pcr_max_depth": 1,
+   "form": "tf",
+   "k1": 2.383063714953661,
+   "k3": 3.8885898468251585,
+   "flat": false,
+   "error": null
+  },
+  {
+   "case": "zero-length-auto",
+   "leg_calls": 1,
+   "leg_max_depth": 1,
+   "pcr_max_depth": 0,
+   "form": null,
+   "k1": null,
+   "k3": null,
+   "flat": null,
+   "error": null
+  },
+  {
+   "case": "small-collimated-auto",
+   "leg_calls": 1,
+   "leg_max_depth": 1,
+   "pcr_max_depth": 1,
+   "form": "tf",
+   "k1": 0.9467120853080567,
+   "k3": 1.2941548183254343,
+   "flat": false,
+   "error": null
+  },
+  {
+   "case": "hi-angle-flat-auto",
+   "leg_calls": 1,
+   "leg_max_depth": 1,
+   "pcr_max_depth": 0,
+   "form": "chirp-z",
+   "k1": 1.7699248120300746,
+   "k3": 1.769924812030075,
+   "flat": true,
+   "error": null
+  },
+  {
+   "case": "collimated-fresnel",
+   "leg_calls": 1,
+   "leg_max_depth": 1,
+   "pcr_max_depth": 1,
+   "form": "tf",
+   "k1": 1.122236254699248,
+   "k3": 3.0796992481203,
+   "flat": false,
+   "error": null
+  },
+  {
+   "case": "converging-fresnel",
+   "leg_calls": 1,
+   "leg_max_depth": 1,
+   "pcr_max_depth": 1,
+   "form": "tf",
+   "k1": 0.9846422697368419,
+   "k3": 2.6947368421052627,
+   "flat": false,
+   "error": null
+  },
+  {
+   "case": "back-prop-fresnel",
+   "leg_calls": 1,
+   "leg_max_depth": 1,
+   "pcr_max_depth": 1,
+   "form": "tf",
+   "k1": 1.993664826127819,
+   "k3": 5.517794486215537,
+   "flat": false,
+   "error": null
+  },
+  {
+   "case": "diverging-fresnel",
+   "leg_calls": 1,
+   "leg_max_depth": 1,
+   "pcr_max_depth": 1,
+   "form": "tf",
+   "k1": 0.5489279840225563,
+   "k3": 1.4756892230576435,
+   "flat": false,
+   "error": null
+  },
+  {
+   "case": "A=0-fresnel",
+   "leg_calls": 1,
+   "leg_max_depth": 1,
+   "pcr_max_depth": 0,
+   "form": "chirp-z",
+   "k1": 0.021484374999999997,
+   "k3": 0.021484374999999997,
+   "flat": true,
+   "error": null
+  },
+  {
+   "case": "near-focus-fresnel",
+   "leg_calls": 1,
+   "leg_max_depth": 1,
+   "pcr_max_depth": 0,
+   "form": "chirp-z",
+   "k1": 0.021518782098015114,
+   "k3": 0.021518782098015117,
+   "flat": true,
+   "error": null
+  },
+  {
+   "case": "past-focus-fresnel",
+   "leg_calls": 1,
+   "leg_max_depth": 1,
+   "pcr_max_depth": 1,
+   "form": "tf",
+   "k1": 1.5906596757319367,
+   "k3": 2.5923889903346695,
+   "flat": false,
+   "error": null
+  },
+  {
+   "case": "far-past-focus-fresnel",
+   "leg_calls": 1,
+   "leg_max_depth": 1,
+   "pcr_max_depth": 1,
+   "form": "tf",
+   "k1": 2.383063714953661,
+   "k3": 3.8885898468251585,
+   "flat": false,
+   "error": null
+  },
+  {
+   "case": "zero-length-fresnel",
+   "leg_calls": 1,
+   "leg_max_depth": 1,
+   "pcr_max_depth": 0,
+   "form": null,
+   "k1": null,
+   "k3": null,
+   "flat": null,
+   "error": null
+  },
+  {
+   "case": "small-collimated-fresnel",
+   "leg_calls": 1,
+   "leg_max_depth": 1,
+   "pcr_max_depth": 1,
+   "form": "tf",
+   "k1": 0.9467120853080567,
+   "k3": 1.2941548183254343,
+   "flat": false,
+   "error": null
+  },
+  {
+   "case": "hi-angle-flat-fresnel",
+   "leg_calls": 1,
+   "leg_max_depth": 1,
+   "pcr_max_depth": 0,
+   "form": "chirp-z",
+   "k1": 1.7699248120300746,
+   "k3": 1.769924812030075,
+   "flat": true,
+   "error": null
+  },
+  {
+   "case": "collimated-exact",
+   "leg_calls": 1,
+   "leg_max_depth": 1,
+   "pcr_max_depth": 1,
+   "form": "tf",
+   "k1": 1.122236254699248,
+   "k3": 3.0796992481203,
+   "flat": false,
+   "error": null
+  },
+  {
+   "case": "converging-exact",
+   "leg_calls": 1,
+   "leg_max_depth": 1,
+   "pcr_max_depth": 1,
+   "form": "tf",
+   "k1": 0.9846422697368419,
+   "k3": 2.6947368421052627,
+   "flat": false,
+   "error": null
+  },
+  {
+   "case": "back-prop-exact",
+   "leg_calls": 1,
+   "leg_max_depth": 1,
+   "pcr_max_depth": 1,
+   "form": "tf",
+   "k1": 1.993664826127819,
+   "k3": 5.517794486215537,
+   "flat": false,
+   "error": null
+  },
+  {
+   "case": "diverging-exact",
+   "leg_calls": 1,
+   "leg_max_depth": 1,
+   "pcr_max_depth": 1,
+   "form": "tf",
+   "k1": 0.5489279840225563,
+   "k3": 1.4756892230576435,
+   "flat": false,
+   "error": null
+  },
+  {
+   "case": "A=0-exact",
+   "leg_calls": 1,
+   "leg_max_depth": 1,
+   "pcr_max_depth": 0,
+   "form": null,
+   "k1": null,
+   "k3": null,
+   "flat": null,
+   "error": "ValueError: _collins_carrier_leg: gap_kernel='exact' cannot be honoured on this leg.  The exact kernel enters a carrier transport as"
+  },
+  {
+   "case": "near-focus-exact",
+   "leg_calls": 1,
+   "leg_max_depth": 1,
+   "pcr_max_depth": 0,
+   "form": "chirp-z",
+   "k1": 0.021518782098015114,
+   "k3": 0.021518782098015117,
+   "flat": true,
+   "error": null
+  },
+  {
+   "case": "past-focus-exact",
+   "leg_calls": 1,
+   "leg_max_depth": 1,
+   "pcr_max_depth": 1,
+   "form": "tf",
+   "k1": 1.5906596757319367,
+   "k3": 2.5923889903346695,
+   "flat": false,
+   "error": null
+  },
+  {
+   "case": "far-past-focus-exact",
+   "leg_calls": 1,
+   "leg_max_depth": 1,
+   "pcr_max_depth": 1,
+   "form": "tf",
+   "k1": 2.383063714953661,
+   "k3": 3.8885898468251585,
+   "flat": false,
+   "error": null
+  },
+  {
+   "case": "zero-length-exact",
+   "leg_calls": 1,
+   "leg_max_depth": 1,
+   "pcr_max_depth": 0,
+   "form": null,
+   "k1": null,
+   "k3": null,
+   "flat": null,
+   "error": null
+  },
+  {
+   "case": "small-collimated-exact",
+   "leg_calls": 1,
+   "leg_max_depth": 1,
+   "pcr_max_depth": 1,
+   "form": "tf",
+   "k1": 0.9467120853080567,
+   "k3": 1.2941548183254343,
+   "flat": false,
+   "error": null
+  },
+  {
+   "case": "hi-angle-flat-exact",
+   "leg_calls": 1,
+   "leg_max_depth": 1,
+   "pcr_max_depth": 0,
+   "form": "chirp-z",
+   "k1": 1.7699248120300746,
+   "k3": 1.769924812030075,
+   "flat": true,
+   "error": null
+  },
+  {
+   "case": "astigmatic-auto",
+   "leg_calls": 1,
+   "leg_max_depth": 1,
+   "pcr_max_depth": 1,
+   "form": "tf",
+   "k1": 1.0221679019993162,
+   "k3": 2.7997265892002727,
+   "flat": false,
+   "error": null
+  },
+  {
+   "case": "astig-past-focus-auto",
+   "leg_calls": 1,
+   "leg_max_depth": 1,
+   "pcr_max_depth": 0,
+   "form": "chirp-z",
+   "k1": 0.06734903665413532,
+   "k3": 0.1283208020050125,
+   "flat": false,
+   "error": null
+  },
+  {
+   "case": "astigmatic-fresnel",
+   "leg_calls": 1,
+   "leg_max_depth": 1,
+   "pcr_max_depth": 1,
+   "form": "tf",
+   "k1": 1.0221679019993162,
+   "k3": 2.7997265892002727,
+   "flat": false,
+   "error": null
+  },
+  {
+   "case": "astig-past-focus-fresnel",
+   "leg_calls": 1,
+   "leg_max_depth": 1,
+   "pcr_max_depth": 0,
+   "form": "chirp-z",
+   "k1": 0.06734903665413532,
+   "k3": 0.1283208020050125,
+   "flat": false,
+   "error": null
+  },
+  {
+   "case": "tilted",
+   "leg_calls": 1,
+   "leg_max_depth": 1,
+   "pcr_max_depth": 1,
+   "form": "tf",
+   "k1": 0.9846422697368419,
+   "k3": 2.6947368421052627,
+   "flat": false,
+   "error": null
+  },
+  {
+   "case": "tilted-past-focus",
+   "leg_calls": 1,
+   "leg_max_depth": 1,
+   "pcr_max_depth": 1,
+   "form": "tf",
+   "k1": 1.5906596757319367,
+   "k3": 2.5923889903346695,
+   "flat": false,
+   "error": null
+  },
+  {
+   "case": "caller-dx_out",
+   "leg_calls": 1,
+   "leg_max_depth": 1,
+   "pcr_max_depth": 0,
+   "form": "chirp-z",
+   "k1": 0.9846422697368419,
+   "k3": 0.769924812030075,
+   "flat": false,
+   "error": null
+  },
+  {
+   "case": "caller-carrier_out",
+   "leg_calls": 1,
+   "leg_max_depth": 1,
+   "pcr_max_depth": 0,
+   "form": "chirp-z",
+   "k1": 0.9846422697368419,
+   "k3": 2.6947368421052627,
+   "flat": true,
+   "error": null
+  },
+  {
+   "case": "caller-dx_out+carrier_out",
+   "leg_calls": 1,
+   "leg_max_depth": 1,
+   "pcr_max_depth": 0,
+   "form": "chirp-z",
+   "k1": 0.9846422697368419,
+   "k3": 0.769924812030075,
+   "flat": false,
+   "error": null
+  }
+ ],
+ "public": [
+  {
+   "case": "collimated-auto",
+   "leg_calls": 1,
+   "leg_max_depth": 1,
+   "pcr_max_depth": 2,
+   "error": null
+  },
+  {
+   "case": "converging-auto",
+   "leg_calls": 1,
+   "leg_max_depth": 1,
+   "pcr_max_depth": 2,
+   "error": null
+  },
+  {
+   "case": "back-prop-auto",
+   "leg_calls": 1,
+   "leg_max_depth": 1,
+   "pcr_max_depth": 2,
+   "error": null
+  },
+  {
+   "case": "diverging-auto",
+   "leg_calls": 1,
+   "leg_max_depth": 1,
+   "pcr_max_depth": 2,
+   "error": null
+  },
+  {
+   "case": "A=0-auto",
+   "leg_calls": 1,
+   "leg_max_depth": 1,
+   "pcr_max_depth": 1,
+   "error": null
+  },
+  {
+   "case": "near-focus-auto",
+   "leg_calls": 1,
+   "leg_max_depth": 1,
+   "pcr_max_depth": 1,
+   "error": null
+  },
+  {
+   "case": "past-focus-auto",
+   "leg_calls": 1,
+   "leg_max_depth": 1,
+   "pcr_max_depth": 2,
+   "error": null
+  },
+  {
+   "case": "far-past-focus-auto",
+   "leg_calls": 1,
+   "leg_max_depth": 1,
+   "pcr_max_depth": 2,
+   "error": null
+  },
+  {
+   "case": "zero-length-auto",
+   "leg_calls": 0,
+   "leg_max_depth": 0,
+   "pcr_max_depth": 1,
+   "error": null
+  },
+  {
+   "case": "small-collimated-auto",
+   "leg_calls": 1,
+   "leg_max_depth": 1,
+   "pcr_max_depth": 2,
+   "error": null
+  },
+  {
+   "case": "hi-angle-flat-auto",
+   "leg_calls": 1,
+   "leg_max_depth": 1,
+   "pcr_max_depth": 1,
+   "error": null
+  },
+  {
+   "case": "collimated-fresnel",
+   "leg_calls": 1,
+   "leg_max_depth": 1,
+   "pcr_max_depth": 2,
+   "error": null
+  },
+  {
+   "case": "converging-fresnel",
+   "leg_calls": 1,
+   "leg_max_depth": 1,
+   "pcr_max_depth": 2,
+   "error": null
+  },
+  {
+   "case": "back-prop-fresnel",
+   "leg_calls": 1,
+   "leg_max_depth": 1,
+   "pcr_max_depth": 2,
+   "error": null
+  },
+  {
+   "case": "diverging-fresnel",
+   "leg_calls": 1,
+   "leg_max_depth": 1,
+   "pcr_max_depth": 2,
+   "error": null
+  },
+  {
+   "case": "A=0-fresnel",
+   "leg_calls": 1,
+   "leg_max_depth": 1,
+   "pcr_max_depth": 1,
+   "error": null
+  },
+  {
+   "case": "near-focus-fresnel",
+   "leg_calls": 1,
+   "leg_max_depth": 1,
+   "pcr_max_depth": 1,
+   "error": null
+  },
+  {
+   "case": "past-focus-fresnel",
+   "leg_calls": 1,
+   "leg_max_depth": 1,
+   "pcr_max_depth": 2,
+   "error": null
+  },
+  {
+   "case": "far-past-focus-fresnel",
+   "leg_calls": 1,
+   "leg_max_depth": 1,
+   "pcr_max_depth": 2,
+   "error": null
+  },
+  {
+   "case": "zero-length-fresnel",
+   "leg_calls": 0,
+   "leg_max_depth": 0,
+   "pcr_max_depth": 1,
+   "error": null
+  },
+  {
+   "case": "small-collimated-fresnel",
+   "leg_calls": 1,
+   "leg_max_depth": 1,
+   "pcr_max_depth": 2,
+   "error": null
+  },
+  {
+   "case": "hi-angle-flat-fresnel",
+   "leg_calls": 1,
+   "leg_max_depth": 1,
+   "pcr_max_depth": 1,
+   "error": null
+  },
+  {
+   "case": "collimated-exact",
+   "leg_calls": 1,
+   "leg_max_depth": 1,
+   "pcr_max_depth": 2,
+   "error": null
+  },
+  {
+   "case": "converging-exact",
+   "leg_calls": 1,
+   "leg_max_depth": 1,
+   "pcr_max_depth": 2,
+   "error": null
+  },
+  {
+   "case": "back-prop-exact",
+   "leg_calls": 1,
+   "leg_max_depth": 1,
+   "pcr_max_depth": 2,
+   "error": null
+  },
+  {
+   "case": "diverging-exact",
+   "leg_calls": 1,
+   "leg_max_depth": 1,
+   "pcr_max_depth": 2,
+   "error": null
+  },
+  {
+   "case": "A=0-exact",
+   "leg_calls": 1,
+   "leg_max_depth": 1,
+   "pcr_max_depth": 1,
+   "error": "ValueError: propagate_carrier_referenced: gap_kernel='exact' cannot be honoured on this leg.  The exact kernel enters a carrier tran"
+  },
+  {
+   "case": "near-focus-exact",
+   "leg_calls": 1,
+   "leg_max_depth": 1,
+   "pcr_max_depth": 1,
+   "error": null
+  },
+  {
+   "case": "past-focus-exact",
+   "leg_calls": 1,
+   "leg_max_depth": 1,
+   "pcr_max_depth": 2,
+   "error": null
+  },
+  {
+   "case": "far-past-focus-exact",
+   "leg_calls": 1,
+   "leg_max_depth": 1,
+   "pcr_max_depth": 2,
+   "error": null
+  },
+  {
+   "case": "zero-length-exact",
+   "leg_calls": 0,
+   "leg_max_depth": 0,
+   "pcr_max_depth": 1,
+   "error": null
+  },
+  {
+   "case": "small-collimated-exact",
+   "leg_calls": 1,
+   "leg_max_depth": 1,
+   "pcr_max_depth": 2,
+   "error": null
+  },
+  {
+   "case": "hi-angle-flat-exact",
+   "leg_calls": 1,
+   "leg_max_depth": 1,
+   "pcr_max_depth": 1,
+   "error": null
+  },
+  {
+   "case": "astigmatic-auto",
+   "leg_calls": 1,
+   "leg_max_depth": 1,
+   "pcr_max_depth": 2,
+   "error": null
+  },
+  {
+   "case": "astig-past-focus-auto",
+   "leg_calls": 1,
+   "leg_max_depth": 1,
+   "pcr_max_depth": 1,
+   "error": null
+  },
+  {
+   "case": "astigmatic-fresnel",
+   "leg_calls": 1,
+   "leg_max_depth": 1,
+   "pcr_max_depth": 2,
+   "error": null
+  },
+  {
+   "case": "astig-past-focus-fresnel",
+   "leg_calls": 1,
+   "leg_max_depth": 1,
+   "pcr_max_depth": 1,
+   "error": null
+  },
+  {
+   "case": "tilted",
+   "leg_calls": 1,
+   "leg_max_depth": 1,
+   "pcr_max_depth": 2,
+   "error": null
+  },
+  {
+   "case": "tilted-past-focus",
+   "leg_calls": 1,
+   "leg_max_depth": 1,
+   "pcr_max_depth": 2,
+   "error": null
+  }
+ ],
+ "worst_leg_depth": 1,
+ "worst_pcr_depth": 2
+}

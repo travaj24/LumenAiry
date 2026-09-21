@@ -1,0 +1,141 @@
+{
+ "LUMENAIRY_ROOT": "/mnt/c/tmp/vc3_head",
+ "N": 512,
+ "anchor_held": true,
+ "build": "WSL-py3.12-np2.4.6",
+ "carrier_file": "/mnt/c/tmp/vc3_head/lumenairy/propagators/carrier.py",
+ "doe_period_um": 113.75662596454582,
+ "env": {
+  "MKL_NUM_THREADS": "1",
+  "NUMBA_NUM_THREADS": null,
+  "OMP_NUM_THREADS": "1",
+  "OPENBLAS_CORETYPE": null,
+  "OPENBLAS_NUM_THREADS": "1"
+ },
+ "env_digest": 65.33881991264187,
+ "force_route": "",
+ "launch": {
+  "R1_mm": 2.0007361513684163,
+  "dx0_um": 4.0,
+  "w0_um": 4.0,
+  "w_z1_mm": 0.20853134251750735,
+  "z1_mm": 2.0
+ },
+ "lumenairy_post": "/mnt/c/tmp/vc3_head/lumenairy/__init__.py",
+ "lumenairy_pre": "/mnt/c/tmp/vc3_head/lumenairy/__init__.py",
+ "n_groups_post": 6,
+ "n_groups_pre": 2,
+ "numpy": "2.4.6",
+ "rows": [
+  {
+   "all_warnings": [
+    "_sphere_parab_conversion: the band-limit radius r_safe=11.457 mm = (|R|^3 lambda/d)^(1/3) at R=47.907 mm, d=max(dx, dy)=",
+    "_sphere_parab_conversion: the band-limit radius r_safe=2.084 mm = (|R|^3 lambda/d)^(1/3) at R=-7.712 mm, d=max(dx, dy)=6",
+    "_sphere_parab_conversion: the band-limit radius r_safe=5.711 mm = (|R|^3 lambda/d)^(1/3) at R=-21.139 mm, d=max(dx, dy)=",
+    "propagate_traced_carrier_chain: the free-space leg into groups[5] (Lens S21-S22) is outside the SZIKLAS-SIEGMAN FRAME's ",
+    "propagate_traced_carrier_chain: the free-space leg into groups[6] (Lens S23-S24) is outside the SZIKLAS-SIEGMAN FRAME's ",
+    "propagate_traced_carrier_chain: the free-space leg into groups[7] (Lens S25-S27) is outside the SZIKLAS-SIEGMAN FRAME's "
+   ],
+   "centroid_x_um": -0.004131297573581059,
+   "ee12": 85.10262469601732,
+   "ee3": 32.165227580214996,
+   "ee6": 67.53884418876927,
+   "fwhm_um": 6.601328925055009,
+   "k1_calls": [],
+   "n_kelly": 0,
+   "n_stages": 8,
+   "peak": 988.0422631378602,
+   "power": 6.49743635842424e-08,
+   "raised": null,
+   "readout_route": null,
+   "readout_route_k1": null,
+   "readout_route_reason": null,
+   "seconds": 29.12,
+   "transport": "sziklas"
+  },
+  {
+   "all_warnings": [
+    "_sphere_parab_conversion: the band-limit radius r_safe=11.457 mm = (|R|^3 lambda/d)^(1/3) at R=47.907 mm, d=max(dx, dy)=",
+    "_sphere_parab_conversion: the band-limit radius r_safe=2.084 mm = (|R|^3 lambda/d)^(1/3) at R=-7.712 mm, d=max(dx, dy)=6",
+    "_sphere_parab_conversion: the band-limit radius r_safe=5.711 mm = (|R|^3 lambda/d)^(1/3) at R=-21.139 mm, d=max(dx, dy)=",
+    "propagate_traced_carrier_chain: the free-space leg into groups[5] (Lens S21-S22) is outside the SZIKLAS-SIEGMAN FRAME's ",
+    "propagate_traced_carrier_chain: the free-space leg into groups[6] (Lens S23-S24) is outside the SZIKLAS-SIEGMAN FRAME's ",
+    "propagate_traced_carrier_chain: the free-space leg into groups[7] (Lens S25-S27) is outside the SZIKLAS-SIEGMAN FRAME's "
+   ],
+   "centroid_x_um": -0.004131297573581059,
+   "ee12": 85.10262469601732,
+   "ee3": 32.165227580214996,
+   "ee6": 67.53884418876927,
+   "fwhm_um": 6.601328925055009,
+   "k1_calls": [
+    {
+     "Ax": 0.0008590631199385523,
+     "Ay": 0.0008590631199385523,
+     "B": 0.0077058,
+     "Nx": 512,
+     "Ny": 512,
+     "R_x": -0.0077124254602782,
+     "R_y": -0.0077124254602782,
+     "angle_x": {
+      "index": 511,
+      "margin_above": 1.0000000003431241e-06,
+      "margin_below": 2.371347962651539e-05,
+      "radius": 7527.570516531763,
+      "step_radius": 0.0
+     },
+     "angle_y": {
+      "index": 511,
+      "margin_above": 1.0000000002254939e-06,
+      "margin_below": 2.371347962663302e-05,
+      "radius": 7527.570516531763,
+      "step_radius": 0.0
+     },
+     "dx": 6.642249300779303e-05,
+     "dy": 6.642249300779303e-05,
+     "env_absmax": 0.17650273228512042,
+     "env_l2": 3.8860248052099164,
+     "frac": 1e-06,
+     "k1_library": 1.0292860630174718,
+     "k1_mine": 1.0292860630174718,
+     "k1_step_if_r_moves_one_sample": 0.0007509246927556858,
+     "k1_step_if_theta_moves_one_sample": 0.0,
+     "k1x": 1.0292860630174718,
+     "k1y": 1.0292860630174718,
+     "space_x": {
+      "index": 78,
+      "margin_above": 5.520305859516919e-07,
+      "margin_below": 1.1592947092883476e-06,
+      "radius": 0.002590477227303928,
+      "step_radius": 6.642249300779302e-05
+     },
+     "space_y": {
+      "index": 78,
+      "margin_above": 5.520305860693221e-07,
+      "margin_below": 1.1592947091707172e-06,
+      "radius": 0.002590477227303928,
+      "step_radius": 6.642249300779302e-05
+     },
+     "th_x": 0.00986111737665661,
+     "th_y": 0.00986111737665661,
+     "z": 0.0077058
+    }
+   ],
+   "n_kelly": 0,
+   "n_stages": 8,
+   "peak": 988.0422631378602,
+   "power": 6.49743635842424e-08,
+   "raised": null,
+   "readout_route": "sziklas",
+   "readout_route_k1": 1.0292860630174718,
+   "readout_route_reason": "k1",
+   "seconds": 30.08,
+   "transport": "collins"
+  }
+ ],
+ "transports": [
+  "sziklas",
+  "collins"
+ ],
+ "tree": "/mnt/c/tmp/vc3_head",
+ "zmx": "/mnt/d/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Reverse_Symmetric_ASM/tx4designstudy121/20260707 dll Tx02-MSOP16.zmx"
+}

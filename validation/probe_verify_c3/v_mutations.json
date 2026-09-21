@@ -1,0 +1,142 @@
+{
+ "tree": "C:\\tmp\\vc3_mutD",
+ "rows": [
+  {
+   "mutation": "BASELINE (pristine)",
+   "why": "--",
+   "returncode": 0,
+   "census_fired": false,
+   "tail": "..                                                                       [100%]\n2 passed, 24 deselected in 1.87s\n"
+  },
+  {
+   "mutation": "M1_float_on_device_array",
+   "why": "float(x) on a device array -- forces a host sync / concretisation",
+   "injected": "    _vdbg = float(env[0, 0].real)\n",
+   "demotion_census_rc": 0,
+   "demotion_census_fired": false,
+   "xp_census_rc": 0,
+   "xp_census_fired": false,
+   "tail_demotion": ".                                                                        [100%]\n1 passed, 25 deselected in 0.96s\n"
+  },
+  {
+   "mutation": "M2_np_asarray_control",
+   "why": "THE CONTROL: the exact spelling V-D3 fixed",
+   "injected": "    _vdbg = np.asarray(env)\n",
+   "demotion_census_rc": 1,
+   "demotion_census_fired": true,
+   "xp_census_rc": 0,
+   "xp_census_fired": false,
+   "tail_demotion": "s_transport: line 2341: np.asarray(env, ...)']\n\ntests\\unit\\test_c3_collins_default.py:759: AssertionError\n=========================== short test summary info ===========================\nFAILED tests/unit/test_c3_collins_default.py::test_no_collins_helper_demotes_the_field_to_host_numpy\n!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!\n1 failed, 25 deselected in 5.16s\n"
+  },
+  {
+   "mutation": "M3_item_on_device_array",
+   "why": "x.item() -- host pull of one element",
+   "injected": "    _vdbg = env.ravel()[0].item()\n",
+   "demotion_census_rc": 0,
+   "demotion_census_fired": false,
+   "xp_census_rc": 0,
+   "xp_census_fired": false,
+   "tail_demotion": ".                                                                        [100%]\n1 passed, 25 deselected in 0.72s\n"
+  },
+  {
+   "mutation": "M4_math_call_on_element",
+   "why": "a math. call on a device-array element",
+   "injected": "    import math as _vmath\n    _vdbg = _vmath.sqrt(abs(env[0, 0]))\n",
+   "demotion_census_rc": 0,
+   "demotion_census_fired": false,
+   "xp_census_rc": 0,
+   "xp_census_fired": false,
+   "tail_demotion": ".                                                                        [100%]\n1 passed, 25 deselected in 1.18s\n"
+  },
+  {
+   "mutation": "M5_numpy_constant_times_device",
+   "why": "a NumPy CONSTANT array combined with the device array",
+   "injected": "    env_a = env_a * np.arange(env_a.shape[-1])\n",
+   "demotion_census_rc": 0,
+   "demotion_census_fired": false,
+   "xp_census_rc": 0,
+   "xp_census_fired": false,
+   "tail_demotion": ".                                                                        [100%]\n1 passed, 25 deselected in 1.36s\n"
+  },
+  {
+   "mutation": "M6_np_exp_on_device",
+   "why": "np.exp applied to the device array",
+   "injected": "    _vdbg = np.exp(env)\n",
+   "demotion_census_rc": 0,
+   "demotion_census_fired": false,
+   "xp_census_rc": 0,
+   "xp_census_fired": false,
+   "tail_demotion": ".                                                                        [100%]\n1 passed, 25 deselected in 0.98s\n"
+  },
+  {
+   "mutation": "M7_alias_np",
+   "why": "the demotion behind an alias",
+   "injected": "    _vnp = np\n    _vdbg = _vnp.asarray(env)\n",
+   "demotion_census_rc": 0,
+   "demotion_census_fired": false,
+   "xp_census_rc": 0,
+   "xp_census_fired": false,
+   "tail_demotion": ".                                                                        [100%]\n1 passed, 25 deselected in 0.82s\n"
+  },
+  {
+   "mutation": "M8_nested_function",
+   "why": "the demotion inside a nested function",
+   "injected": "    def _vinner():\n        return np.asarray(env)\n    _vdbg = _vinner\n",
+   "demotion_census_rc": 1,
+   "demotion_census_fired": true,
+   "xp_census_rc": 0,
+   "xp_census_fired": false,
+   "tail_demotion": "s_transport: line 2342: np.asarray(env, ...)']\n\ntests\\unit\\test_c3_collins_default.py:759: AssertionError\n=========================== short test summary info ===========================\nFAILED tests/unit/test_c3_collins_default.py::test_no_collins_helper_demotes_the_field_to_host_numpy\n!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!\n1 failed, 25 deselected in 1.95s\n"
+  },
+  {
+   "mutation": "M8b_comprehension",
+   "why": "the demotion inside a comprehension",
+   "injected": "    _vdbg = [np.asarray(env) for _ in range(1)]\n",
+   "demotion_census_rc": 1,
+   "demotion_census_fired": true,
+   "xp_census_rc": 0,
+   "xp_census_fired": false,
+   "tail_demotion": "s_transport: line 2341: np.asarray(env, ...)']\n\ntests\\unit\\test_c3_collins_default.py:759: AssertionError\n=========================== short test summary info ===========================\nFAILED tests/unit/test_c3_collins_default.py::test_no_collins_helper_demotes_the_field_to_host_numpy\n!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!\n1 failed, 25 deselected in 2.37s\n"
+  },
+  {
+   "mutation": "M9_full_module_name",
+   "why": "np.asarray reached through the full module name",
+   "injected": "    import numpy\n    _vdbg = numpy.asarray(env)\n",
+   "demotion_census_rc": 0,
+   "demotion_census_fired": false,
+   "xp_census_rc": 0,
+   "xp_census_fired": false,
+   "tail_demotion": ".                                                                        [100%]\n1 passed, 25 deselected in 0.82s\n"
+  },
+  {
+   "mutation": "M10_astype_via_result_type",
+   "why": "env.astype(...) via np.result_type on the device array",
+   "injected": "    env_a = env_a.astype(np.result_type(env, np.complex128))\n",
+   "demotion_census_rc": 0,
+   "demotion_census_fired": false,
+   "xp_census_rc": 0,
+   "xp_census_fired": false,
+   "tail_demotion": ".                                                                        [100%]\n1 passed, 25 deselected in 0.86s\n"
+  },
+  {
+   "mutation": "M11_renamed_local",
+   "why": "the same np.asarray, on a local the field was renamed into",
+   "injected": "    _vtmp = env\n    _vdbg = np.asarray(_vtmp)\n",
+   "demotion_census_rc": 0,
+   "demotion_census_fired": false,
+   "xp_census_rc": 0,
+   "xp_census_fired": false,
+   "tail_demotion": ".                                                                        [100%]\n1 passed, 25 deselected in 1.15s\n"
+  },
+  {
+   "mutation": "M12_ascontiguous_on_spectrum",
+   "why": "the OTHER normaliser the census lists, same spelling",
+   "injected": "    _vdbg = np.ascontiguousarray(env)\n",
+   "demotion_census_rc": 1,
+   "demotion_census_fired": true,
+   "xp_census_rc": 0,
+   "xp_census_fired": false,
+   "tail_demotion": "t: line 2341: np.ascontiguousarray(env, ...)']\n\ntests\\unit\\test_c3_collins_default.py:759: AssertionError\n=========================== short test summary info ===========================\nFAILED tests/unit/test_c3_collins_default.py::test_no_collins_helper_demotes_the_field_to_host_numpy\n!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!\n1 failed, 25 deselected in 1.89s\n"
+  }
+ ]
+}

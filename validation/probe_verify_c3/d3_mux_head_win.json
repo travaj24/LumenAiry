@@ -1,0 +1,148 @@
+{
+ "tree": "C:\\tmp\\vc3_head\\lumenairy\\propagators\\carrier.py",
+ "default_transport": "collins",
+ "LIBRARY-DEFAULT": {
+  "launch_off_max_abs": 0.0,
+  "launch_off_equal": true,
+  "shape_off": [
+   512,
+   512
+  ],
+  "norm_on6": 63.47785809908533,
+  "shape_on6": [
+   512,
+   512
+  ],
+  "shape_on4": [
+   512,
+   512
+  ],
+  "moved": 0.0,
+  "abs_diff": 0.0,
+  "bar": 1.0,
+  "passes_bar": false,
+  "bad6": 1.7340110089989822,
+  "good6": 0.1751595838714804,
+  "bad4": 1.7340110089989822,
+  "lin_shapes": [
+   [
+    512,
+    512
+   ],
+   [
+    512,
+    512
+   ],
+   [
+    512,
+    512
+   ],
+   [
+    512,
+    512
+   ],
+   [
+    512,
+    512
+   ]
+  ],
+  "sep": 9.899606808105206,
+  "deg_ratio": 1.0
+ },
+ "sziklas": {
+  "launch_off_max_abs": 0.0,
+  "launch_off_equal": true,
+  "shape_off": [
+   512,
+   512
+  ],
+  "norm_on6": 0.037822414942512664,
+  "shape_on6": [
+   512,
+   512
+  ],
+  "shape_on4": [
+   512,
+   512
+  ],
+  "moved": 22.5526539501776,
+  "abs_diff": 0.0054193697791559605,
+  "bar": 1.0,
+  "passes_bar": true,
+  "bad6": 1.6462265362767432,
+  "good6": 0.00831245978054869,
+  "bad4": 115.24895826678058,
+  "lin_shapes": [
+   [
+    512,
+    512
+   ],
+   [
+    512,
+    512
+   ],
+   [
+    512,
+    512
+   ],
+   [
+    512,
+    512
+   ],
+   [
+    512,
+    512
+   ]
+  ],
+  "sep": 198.04324829684518,
+  "deg_ratio": 70.00795803440163
+ },
+ "collins": {
+  "launch_off_max_abs": 0.0,
+  "launch_off_equal": true,
+  "shape_off": [
+   512,
+   512
+  ],
+  "norm_on6": 63.47785809908533,
+  "shape_on6": [
+   512,
+   512
+  ],
+  "shape_on4": [
+   512,
+   512
+  ],
+  "moved": 0.0,
+  "abs_diff": 0.0,
+  "bar": 1.0,
+  "passes_bar": false,
+  "bad6": 1.7340110089989822,
+  "good6": 0.1751595838714804,
+  "bad4": 1.7340110089989822,
+  "lin_shapes": [
+   [
+    512,
+    512
+   ],
+   [
+    512,
+    512
+   ],
+   [
+    512,
+    512
+   ],
+   [
+    512,
+    512
+   ],
+   [
+    512,
+    512
+   ]
+  ],
+  "sep": 9.899606808105206,
+  "deg_ratio": 1.0
+ }
+}

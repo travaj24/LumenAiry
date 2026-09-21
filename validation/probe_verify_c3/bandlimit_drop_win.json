@@ -1,0 +1,54 @@
+{
+ "lumenairy": "C:\\tmp\\lum_vc3\\validation\\probe_verify_c3\\..\\..\\lumenairy\\__init__.py",
+ "python": "3.14.6",
+ "numpy": "2.4.4",
+ "rows": [
+  {
+   "final_distance": 0.05,
+   "expected_route": "collins",
+   "route": "collins",
+   "k1": 0.7698266441481303,
+   "reason": "representable",
+   "collins_sha_no_bandlimit": "62c633dbcc375b1007e267ddffa2836f7da8e12d9497ea8d80f9bcfc65028275",
+   "collins_sha_with_bandlimit": "62c633dbcc375b1007e267ddffa2836f7da8e12d9497ea8d80f9bcfc65028275",
+   "collins_bandlimit_is_INERT": true,
+   "sziklas_sha_no_bandlimit": "64af0f30f2001444a6f67c6dc876cf712c2ceb45ef4c118b6a210eafbf30fc5c",
+   "sziklas_sha_with_bandlimit": "d3ea87ab44ec6b9cb5b2e95e5da39a319c067163c20f53552c0ae6c648e0ecf6",
+   "sziklas_bandlimit_is_INERT": false,
+   "warnings_with_bandlimit_on_collins": [
+    "UserWarning: apply_real_lens_traced: 1 prescription aperture(s) exceed the simulati",
+    "UserWarning: apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "RuntimeWarning: deterministic least-squares: the Gram matrix screened as numerically s",
+    "RuntimeWarning: deterministic least-squares: the Gram matrix screened as numerically s",
+    "RuntimeWarning: deterministic least-squares: the Gram matrix screened as numerically s"
+   ],
+   "refused": false
+  },
+  {
+   "final_distance": 0.008,
+   "expected_route": "sziklas",
+   "route": "sziklas",
+   "k1": 1.7342235907130157,
+   "reason": "k1",
+   "collins_sha_no_bandlimit": "ca1dd2b0b2a5847154eff02ace054ebcb06903edbf5c31c3727ea5d1544a24d4",
+   "collins_sha_with_bandlimit": "ca1dd2b0b2a5847154eff02ace054ebcb06903edbf5c31c3727ea5d1544a24d4",
+   "collins_bandlimit_is_INERT": true,
+   "sziklas_sha_no_bandlimit": "ca1dd2b0b2a5847154eff02ace054ebcb06903edbf5c31c3727ea5d1544a24d4",
+   "sziklas_sha_with_bandlimit": "ca1dd2b0b2a5847154eff02ace054ebcb06903edbf5c31c3727ea5d1544a24d4",
+   "sziklas_bandlimit_is_INERT": true,
+   "warnings_with_bandlimit_on_collins": [
+    "UserWarning: apply_real_lens_traced: 1 prescription aperture(s) exceed the simulati",
+    "UserWarning: apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "RuntimeWarning: deterministic least-squares: the Gram matrix screened as numerically s",
+    "RuntimeWarning: deterministic least-squares: the Gram matrix screened as numerically s",
+    "RuntimeWarning: deterministic least-squares: the Gram matrix screened as numerically s"
+   ],
+   "refused": false
+  }
+ ],
+ "standoff_contrast": {
+  "route": "sziklas",
+  "reason": "stop_plane_key",
+  "k1": null
+ }
+}

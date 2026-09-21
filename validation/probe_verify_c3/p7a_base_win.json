@@ -1,0 +1,42 @@
+{
+ "none|sziklas": {
+  "ok": true,
+  "route_keys": [],
+  "peak": 0.9492556776219685
+ },
+ "none|collins": {
+  "ok": false,
+  "exc": "ValueError",
+  "msg": "angular_spectrum_propagate: dx must be a finite real scalar; got nan."
+ },
+ "standoff|sziklas": {
+  "ok": true,
+  "route_keys": [],
+  "peak": 0.9492022947452262
+ },
+ "standoff|collins": {
+  "ok": false,
+  "exc": "ValueError",
+  "msg": "propagate_traced_carrier_chain: focus_readout key(s) ['standoff'] describe the STOP PLANE of the Sziklas readout -- the length of its fine Bluestein-zoom leg and the guard on what the contracted co-moving grid held there"
+ },
+ "on_focus_containment|sziklas": {
+  "ok": true,
+  "route_keys": [],
+  "peak": 0.9492556776219685
+ },
+ "on_focus_containment|collins": {
+  "ok": false,
+  "exc": "ValueError",
+  "msg": "propagate_traced_carrier_chain: focus_readout key(s) ['on_focus_containment'] describe the STOP PLANE of the Sziklas readout -- the length of its fine Bluestein-zoom leg and the guard on what the contracted co-moving gri"
+ },
+ "both|sziklas": {
+  "ok": true,
+  "route_keys": [],
+  "peak": 0.9492022947452262
+ },
+ "both|collins": {
+  "ok": false,
+  "exc": "ValueError",
+  "msg": "propagate_traced_carrier_chain: focus_readout key(s) ['on_focus_containment', 'standoff'] describe the STOP PLANE of the Sziklas readout -- the length of its fine Bluestein-zoom leg and the guard on what the contracted c"
+ }
+}

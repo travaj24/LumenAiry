@@ -1,0 +1,17 @@
+{
+ "build": "WSL-py3.12",
+ "carrier_file": "/mnt/c/tmp/lum_c3/lumenairy/propagators/carrier.py",
+ "device_helpers": null,
+ "premise": {
+  "cupy_importable": false,
+  "elementwise_error": null,
+  "elementwise_ok": false,
+  "fft_error": null,
+  "fft_ok": false,
+  "import_error": "ModuleNotFoundError: No module named 'cupy'",
+  "n_devices": null,
+  "version": null
+ },
+ "public_leg": null,
+ "tree": "/mnt/c/tmp/lum_c3"
+}

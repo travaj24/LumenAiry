@@ -1,0 +1,427 @@
+{
+ "label": "HEAD-WSL",
+ "lumenairy_file": "/mnt/c/tmp/vc3_head/lumenairy/__init__.py",
+ "k1_counter": false,
+ "k1_scan": {
+  "8": {
+   "k1": 2.0037955414694664,
+   "route": "sziklas",
+   "reason": "k1",
+   "k1_calls": null
+  },
+  "20": {
+   "k1": 1.1556752407175865,
+   "route": "sziklas",
+   "reason": "k1",
+   "k1_calls": null
+  },
+  "30": {
+   "k1": 0.9672040627727245,
+   "route": "collins",
+   "reason": "representable",
+   "k1_calls": null
+  },
+  "40": {
+   "k1": 0.8729684738002934,
+   "route": "collins",
+   "reason": "representable",
+   "k1_calls": null
+  },
+  "50": {
+   "k1": 0.8164271204168349,
+   "route": "collins",
+   "reason": "representable",
+   "k1_calls": null
+  },
+  "60": {
+   "k1": 0.7787328848278624,
+   "route": "collins",
+   "reason": "representable",
+   "k1_calls": null
+  }
+ },
+ "fd_collins_route": 0.03,
+ "baseline": {
+  "collins_route": "collins",
+  "collins_reason": "representable",
+  "collins_k1": 0.9672040627727245,
+  "collins_k1_calls": null,
+  "sha_collins": "358311c31ff55a035ca098d389c7ecbe9b93cfa4dafd842b6f3156e443ca4e23",
+  "sha_sziklas": "8b39ba9c6e92406edbaf83219f986e80d3a11717819d53f49978e438b9623866",
+  "differ": true,
+  "peak_collins": 0.9491943981652354,
+  "peak_sziklas": 0.9492556776219683
+ },
+ "stopkey_standoff": {
+  "raised": null,
+  "route": "sziklas",
+  "reason": "stop_plane_key",
+  "route_k1": null,
+  "k1_calls": null,
+  "sha": "1f5fc0699cc102b13f54d255cdf1096b5ed519460fbe1f61605537c0b7496a3c",
+  "sha_sziklas": "1f5fc0699cc102b13f54d255cdf1096b5ed519460fbe1f61605537c0b7496a3c",
+  "field_bit_identical_to_sziklas": true,
+  "equals_collins_baseline": false,
+  "stage_keys_only_in_one": [
+   [
+    "collins_dx_floor_hit",
+    "collins"
+   ],
+   [
+    "collins_flat_reference",
+    "collins"
+   ],
+   [
+    "collins_form",
+    "collins"
+   ],
+   [
+    "collins_k1",
+    "collins"
+   ],
+   [
+    "collins_k2",
+    "collins"
+   ],
+   [
+    "collins_k3",
+    "collins"
+   ],
+   [
+    "collins_kernel",
+    "collins"
+   ],
+   [
+    "readout_route",
+    "collins"
+   ],
+   [
+    "readout_route_k1",
+    "collins"
+   ],
+   [
+    "readout_route_reason",
+    "collins"
+   ]
+  ],
+  "stage_values_that_differ": []
+ },
+ "stopkey_on_focus_containment": {
+  "raised": null,
+  "route": "sziklas",
+  "reason": "stop_plane_key",
+  "route_k1": null,
+  "k1_calls": null,
+  "sha": "8b39ba9c6e92406edbaf83219f986e80d3a11717819d53f49978e438b9623866",
+  "sha_sziklas": "8b39ba9c6e92406edbaf83219f986e80d3a11717819d53f49978e438b9623866",
+  "field_bit_identical_to_sziklas": true,
+  "equals_collins_baseline": false,
+  "stage_keys_only_in_one": [
+   [
+    "collins_dx_floor_hit",
+    "collins"
+   ],
+   [
+    "collins_flat_reference",
+    "collins"
+   ],
+   [
+    "collins_form",
+    "collins"
+   ],
+   [
+    "collins_k1",
+    "collins"
+   ],
+   [
+    "collins_k2",
+    "collins"
+   ],
+   [
+    "collins_k3",
+    "collins"
+   ],
+   [
+    "collins_kernel",
+    "collins"
+   ],
+   [
+    "readout_route",
+    "collins"
+   ],
+   [
+    "readout_route_k1",
+    "collins"
+   ],
+   [
+    "readout_route_reason",
+    "collins"
+   ]
+  ],
+  "stage_values_that_differ": []
+ },
+ "stopkey_both": {
+  "raised": null,
+  "route": "sziklas",
+  "reason": "stop_plane_key",
+  "route_k1": null,
+  "k1_calls": null,
+  "sha": "1f5fc0699cc102b13f54d255cdf1096b5ed519460fbe1f61605537c0b7496a3c",
+  "sha_sziklas": "1f5fc0699cc102b13f54d255cdf1096b5ed519460fbe1f61605537c0b7496a3c",
+  "field_bit_identical_to_sziklas": true,
+  "equals_collins_baseline": false,
+  "stage_keys_only_in_one": [
+   [
+    "collins_dx_floor_hit",
+    "collins"
+   ],
+   [
+    "collins_flat_reference",
+    "collins"
+   ],
+   [
+    "collins_form",
+    "collins"
+   ],
+   [
+    "collins_k1",
+    "collins"
+   ],
+   [
+    "collins_k2",
+    "collins"
+   ],
+   [
+    "collins_k3",
+    "collins"
+   ],
+   [
+    "collins_kernel",
+    "collins"
+   ],
+   [
+    "readout_route",
+    "collins"
+   ],
+   [
+    "readout_route_k1",
+    "collins"
+   ],
+   [
+    "readout_route_reason",
+    "collins"
+   ]
+  ],
+  "stage_values_that_differ": []
+ },
+ "other_keys_on_k1ok_chain": {
+  "bandlimit": {
+   "sziklas": {
+    "raised": null,
+    "identical_to_no_key": true,
+    "route": null,
+    "reason": null,
+    "n_warn": 5
+   },
+   "collins": {
+    "raised": null,
+    "identical_to_no_key": true,
+    "route": "collins",
+    "reason": "representable",
+    "n_warn": 5
+   }
+  },
+  "centre_out": {
+   "sziklas": {
+    "raised": null,
+    "identical_to_no_key": false,
+    "route": null,
+    "reason": null,
+    "n_warn": 5
+   },
+   "collins": {
+    "raised": null,
+    "identical_to_no_key": false,
+    "route": "collins",
+    "reason": "representable",
+    "n_warn": 5
+   }
+  },
+  "window_factor": {
+   "sziklas": {
+    "raised": null,
+    "identical_to_no_key": true,
+    "route": null,
+    "reason": null,
+    "n_warn": 5
+   },
+   "collins": {
+    "raised": null,
+    "identical_to_no_key": true,
+    "route": "collins",
+    "reason": "representable",
+    "n_warn": 5
+   }
+  },
+  "n_fine_cap": {
+   "sziklas": {
+    "raised": null,
+    "identical_to_no_key": true,
+    "route": null,
+    "reason": null,
+    "n_warn": 5
+   },
+   "collins": {
+    "raised": null,
+    "identical_to_no_key": true,
+    "route": "collins",
+    "reason": "representable",
+    "n_warn": 5
+   }
+  },
+  "on_n_fine_cap": {
+   "sziklas": {
+    "raised": null,
+    "identical_to_no_key": true,
+    "route": null,
+    "reason": null,
+    "n_warn": 5
+   },
+   "collins": {
+    "raised": null,
+    "identical_to_no_key": true,
+    "route": "collins",
+    "reason": "representable",
+    "n_warn": 5
+   }
+  },
+  "max_fine_launch_points": {
+   "sziklas": {
+    "raised": null,
+    "identical_to_no_key": true,
+    "route": null,
+    "reason": null,
+    "n_warn": 5
+   },
+   "collins": {
+    "raised": null,
+    "identical_to_no_key": true,
+    "route": "collins",
+    "reason": "representable",
+    "n_warn": 5
+   }
+  },
+  "ram_budget": {
+   "sziklas": {
+    "raised": null,
+    "identical_to_no_key": true,
+    "route": null,
+    "reason": null,
+    "n_warn": 5
+   },
+   "collins": {
+    "raised": null,
+    "identical_to_no_key": true,
+    "route": "collins",
+    "reason": "representable",
+    "n_warn": 5
+   }
+  },
+  "dx_fine": {
+   "sziklas": {
+    "raised": null,
+    "identical_to_no_key": true,
+    "route": null,
+    "reason": null,
+    "n_warn": 5
+   },
+   "collins": {
+    "raised": null,
+    "identical_to_no_key": true,
+    "route": "collins",
+    "reason": "representable",
+    "n_warn": 5
+   }
+  },
+  "N_fine": {
+   "sziklas": {
+    "raised": null,
+    "identical_to_no_key": true,
+    "route": null,
+    "reason": null,
+    "n_warn": 5
+   },
+   "collins": {
+    "raised": null,
+    "identical_to_no_key": true,
+    "route": "collins",
+    "reason": "representable",
+    "n_warn": 5
+   }
+  },
+  "on_readout_window": {
+   "sziklas": {
+    "raised": null,
+    "identical_to_no_key": true,
+    "route": null,
+    "reason": null,
+    "n_warn": 5
+   },
+   "collins": {
+    "raised": null,
+    "identical_to_no_key": true,
+    "route": "collins",
+    "reason": "representable",
+    "n_warn": 5
+   }
+  },
+  "readout_window_tol": {
+   "sziklas": {
+    "raised": null,
+    "identical_to_no_key": true,
+    "route": null,
+    "reason": null,
+    "n_warn": 5
+   },
+   "collins": {
+    "raised": null,
+    "identical_to_no_key": true,
+    "route": "collins",
+    "reason": "representable",
+    "n_warn": 5
+   }
+  },
+  "on_replica": {
+   "sziklas": {
+    "raised": null,
+    "identical_to_no_key": true,
+    "route": null,
+    "reason": null,
+    "n_warn": 5
+   },
+   "collins": {
+    "raised": null,
+    "identical_to_no_key": true,
+    "route": "collins",
+    "reason": "representable",
+    "n_warn": 5
+   }
+  },
+  "replica_fill": {
+   "sziklas": {
+    "raised": null,
+    "identical_to_no_key": true,
+    "route": null,
+    "reason": null,
+    "n_warn": 5
+   },
+   "collins": {
+    "raised": null,
+    "identical_to_no_key": true,
+    "route": "collins",
+    "reason": "representable",
+    "n_warn": 5
+   }
+  }
+ }
+}

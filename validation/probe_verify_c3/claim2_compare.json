@@ -1,0 +1,382 @@
+{
+ "k1_dial": [
+  {
+   "k1": 0.1,
+   "z": 0.057547433035714274,
+   "k1_measured": 0.1,
+   "rel_l2_win": 1.0854834771300876e-05,
+   "rel_l2_wsl": 1.0854834771302231e-05,
+   "ratio": 0.9999999999998751,
+   "on_axis_rel_err_win": 7.908211145907956e-06,
+   "on_axis_rel_err_wsl": 7.908211146372872e-06,
+   "n_kelly_win": 0,
+   "n_kelly_wsl": 0
+  },
+  {
+   "k1": 0.2,
+   "z": 0.02633526596549636,
+   "k1_measured": 0.2,
+   "rel_l2_win": 7.802328651280387e-06,
+   "rel_l2_wsl": 7.802328651277314e-06,
+   "ratio": 1.000000000000394,
+   "on_axis_rel_err_win": 2.5258699740154655e-05,
+   "on_axis_rel_err_wsl": 2.5258699740154655e-05,
+   "n_kelly_win": 0,
+   "n_kelly_wsl": 0
+  },
+  {
+   "k1": 0.3,
+   "z": 0.01707451309850863,
+   "k1_measured": 0.3,
+   "rel_l2_win": 6.387834715623093e-06,
+   "rel_l2_wsl": 6.387834715618102e-06,
+   "ratio": 1.0000000000007814,
+   "on_axis_rel_err_win": 1.738572849874738e-05,
+   "on_axis_rel_err_wsl": 1.7385728498078495e-05,
+   "n_kelly_win": 0,
+   "n_kelly_wsl": 0
+  },
+  {
+   "k1": 0.5,
+   "z": 0.010024391561059906,
+   "k1_measured": 0.5000000000000001,
+   "rel_l2_win": 5.3835803812581065e-06,
+   "rel_l2_wsl": 5.383580381261749e-06,
+   "ratio": 0.9999999999993234,
+   "on_axis_rel_err_win": 1.004234638987958e-05,
+   "on_axis_rel_err_wsl": 1.00423463892125e-05,
+   "n_kelly_win": 0,
+   "n_kelly_wsl": 0
+  },
+  {
+   "k1": 0.7,
+   "z": 0.00709488900440313,
+   "k1_measured": 0.7,
+   "rel_l2_win": 5.332920000544249e-06,
+   "rel_l2_wsl": 5.332920000545551e-06,
+   "ratio": 0.9999999999997559,
+   "on_axis_rel_err_win": 3.350698486563054e-07,
+   "on_axis_rel_err_wsl": 3.3506984910071103e-07,
+   "n_kelly_win": 0,
+   "n_kelly_wsl": 0
+  },
+  {
+   "k1": 0.8,
+   "z": 0.0061903613225668735,
+   "k1_measured": 0.8000000000000002,
+   "rel_l2_win": 5.602230674233674e-06,
+   "rel_l2_wsl": 5.6022306742461025e-06,
+   "ratio": 0.9999999999977816,
+   "on_axis_rel_err_win": 5.757504507591127e-08,
+   "on_axis_rel_err_wsl": 5.757504485374615e-08,
+   "n_kelly_win": 0,
+   "n_kelly_wsl": 0
+  },
+  {
+   "k1": 0.9,
+   "z": 0.005490391137682986,
+   "k1_measured": 0.9,
+   "rel_l2_win": 6.008110107322767e-06,
+   "rel_l2_wsl": 6.008110107329928e-06,
+   "ratio": 0.999999999998808,
+   "on_axis_rel_err_win": 3.070341933506311e-06,
+   "on_axis_rel_err_wsl": 3.0703419343948685e-06,
+   "n_kelly_win": 0,
+   "n_kelly_wsl": 0
+  },
+  {
+   "k1": 0.95,
+   "z": 0.005196590943024365,
+   "k1_measured": 0.9500000000000001,
+   "rel_l2_win": 6.2904285044128345e-06,
+   "rel_l2_wsl": 6.29042850440701e-06,
+   "ratio": 1.000000000000926,
+   "on_axis_rel_err_win": 3.998393345497437e-06,
+   "on_axis_rel_err_wsl": 3.998393345941696e-06,
+   "n_kelly_win": 0,
+   "n_kelly_wsl": 0
+  },
+  {
+   "k1": 0.99,
+   "z": 0.0049832607182946935,
+   "k1_measured": 0.99,
+   "rel_l2_win": 6.568389941738347e-06,
+   "rel_l2_wsl": 6.568389941740537e-06,
+   "ratio": 0.9999999999996666,
+   "on_axis_rel_err_win": 7.643409004767488e-06,
+   "on_axis_rel_err_wsl": 7.643409005433855e-06,
+   "n_kelly_win": 0,
+   "n_kelly_wsl": 0
+  },
+  {
+   "k1": 1.0,
+   "z": 0.004932637117346938,
+   "k1_measured": 1.0,
+   "rel_l2_win": 6.643699789890607e-06,
+   "rel_l2_wsl": 6.64369978989528e-06,
+   "ratio": 0.9999999999992966,
+   "on_axis_rel_err_win": 2.462334216463036e-06,
+   "on_axis_rel_err_wsl": 2.4623342164630354e-06,
+   "n_kelly_win": 0,
+   "n_kelly_wsl": 0
+  },
+  {
+   "k1": 1.01,
+   "z": 0.004883031715789709,
+   "k1_measured": 1.01,
+   "rel_l2_win": 6.7196774455536695e-06,
+   "rel_l2_wsl": 6.719677445555455e-06,
+   "ratio": 0.9999999999997343,
+   "on_axis_rel_err_win": 7.583704744019336e-06,
+   "on_axis_rel_err_wsl": 7.583704742908739e-06,
+   "n_kelly_win": 1,
+   "n_kelly_wsl": 1
+  },
+  {
+   "k1": 1.05,
+   "z": 0.004694201486296934,
+   "k1_measured": 1.0500000000000003,
+   "rel_l2_win": 7.08923714396203e-06,
+   "rel_l2_wsl": 7.089237143959453e-06,
+   "ratio": 1.0000000000003635,
+   "on_axis_rel_err_win": 2.120665299080365e-06,
+   "on_axis_rel_err_wsl": 2.120665299524593e-06,
+   "n_kelly_win": 1,
+   "n_kelly_wsl": 1
+  },
+  {
+   "k1": 1.1,
+   "z": 0.004477754155516672,
+   "k1_measured": 1.1,
+   "rel_l2_win": 7.626201649640585e-06,
+   "rel_l2_wsl": 7.626201649637975e-06,
+   "ratio": 1.0000000000003422,
+   "on_axis_rel_err_win": 9.196237192260903e-06,
+   "on_axis_rel_err_wsl": 9.196237192038794e-06,
+   "n_kelly_win": 1,
+   "n_kelly_wsl": 1
+  },
+  {
+   "k1": 1.2,
+   "z": 0.004099685203071994,
+   "k1_measured": 1.2,
+   "rel_l2_win": 9.29917089260684e-06,
+   "rel_l2_wsl": 9.299170892610354e-06,
+   "ratio": 0.9999999999996222,
+   "on_axis_rel_err_win": 2.236256228613954e-05,
+   "on_axis_rel_err_wsl": 2.2362562286361634e-05,
+   "n_kelly_win": 1,
+   "n_kelly_wsl": 1
+  },
+  {
+   "k1": 1.5,
+   "z": 0.003271117246240601,
+   "k1_measured": 1.5,
+   "rel_l2_win": 6.095377057040461e-05,
+   "rel_l2_wsl": 6.095377057040772e-05,
+   "ratio": 0.9999999999999489,
+   "on_axis_rel_err_win": 0.00010004717336539581,
+   "on_axis_rel_err_wsl": 0.00010004717336450752,
+   "n_kelly_win": 1,
+   "n_kelly_wsl": 1
+  },
+  {
+   "k1": 2.0,
+   "z": 0.0024468987275028118,
+   "k1_measured": 2.0,
+   "rel_l2_win": 0.008497541041414987,
+   "rel_l2_wsl": 0.008497541041414975,
+   "ratio": 1.0000000000000013,
+   "on_axis_rel_err_win": 0.0069887279467201165,
+   "on_axis_rel_err_wsl": 0.006988727946719005,
+   "n_kelly_win": 1,
+   "n_kelly_wsl": 1
+  },
+  {
+   "k1": 3.0,
+   "z": 0.0016269954889678382,
+   "k1_measured": 3.0,
+   "rel_l2_win": 0.18465337860867628,
+   "rel_l2_wsl": 0.18465337860867626,
+   "ratio": 1.0000000000000002,
+   "on_axis_rel_err_win": 0.6495705071999072,
+   "on_axis_rel_err_wsl": 0.6495705071999078,
+   "n_kelly_win": 1,
+   "n_kelly_wsl": 1
+  },
+  {
+   "k1": 5.0,
+   "z": 0.0009741571736453199,
+   "k1_measured": 5.0,
+   "rel_l2_win": 0.9293765796460991,
+   "rel_l2_wsl": 0.9293765796460991,
+   "ratio": 1.0,
+   "on_axis_rel_err_win": 7.772527953240711,
+   "on_axis_rel_err_wsl": 7.772527953240709,
+   "n_kelly_win": 1,
+   "n_kelly_wsl": 1
+  }
+ ],
+ "route_vs_bits_win": [
+  {
+   "CONSISTENT": true,
+   "N": 256,
+   "bit_identical_to_sziklas": true,
+   "case": "k1_route_sziklas",
+   "final_distance": 0.008,
+   "keys_on_sziklas_side": [],
+   "readout_route": "sziklas",
+   "readout_route_k1": 82.36047195201569,
+   "readout_route_reason": "k1",
+   "rel_l2_vs_sziklas": 0.0
+  },
+  {
+   "CONSISTENT": true,
+   "N": 256,
+   "bit_identical_to_sziklas": true,
+   "case": "stop_plane_standoff",
+   "final_distance": 0.008,
+   "keys_on_sziklas_side": [],
+   "readout_route": "sziklas",
+   "readout_route_k1": null,
+   "readout_route_reason": "stop_plane_key",
+   "rel_l2_vs_sziklas": 0.0
+  },
+  {
+   "CONSISTENT": true,
+   "N": 256,
+   "bit_identical_to_sziklas": true,
+   "case": "stop_plane_containment",
+   "final_distance": 0.008,
+   "keys_on_sziklas_side": [],
+   "readout_route": "sziklas",
+   "readout_route_k1": null,
+   "readout_route_reason": "stop_plane_key",
+   "rel_l2_vs_sziklas": 0.0
+  },
+  {
+   "CONSISTENT": true,
+   "N": 1024,
+   "bit_identical_to_sziklas": false,
+   "case": "representable_route_collins",
+   "final_distance": 0.046,
+   "keys_on_sziklas_side": [],
+   "readout_route": "collins",
+   "readout_route_k1": 0.9860640654214481,
+   "readout_route_reason": "representable",
+   "rel_l2_vs_sziklas": 0.02252861168840735
+  },
+  {
+   "CONSISTENT": true,
+   "N": 1024,
+   "bit_identical_to_sziklas": false,
+   "case": "representable_route_collins_2",
+   "final_distance": 0.0462,
+   "keys_on_sziklas_side": [],
+   "readout_route": "collins",
+   "readout_route_k1": 0.9674389392881269,
+   "readout_route_reason": "representable",
+   "rel_l2_vs_sziklas": 0.01936867287982933
+  }
+ ],
+ "route_vs_bits_wsl": [
+  {
+   "CONSISTENT": true,
+   "N": 256,
+   "bit_identical_to_sziklas": true,
+   "case": "k1_route_sziklas",
+   "final_distance": 0.008,
+   "keys_on_sziklas_side": [],
+   "readout_route": "sziklas",
+   "readout_route_k1": 82.36047195201569,
+   "readout_route_reason": "k1",
+   "rel_l2_vs_sziklas": 0.0
+  },
+  {
+   "CONSISTENT": true,
+   "N": 256,
+   "bit_identical_to_sziklas": true,
+   "case": "stop_plane_standoff",
+   "final_distance": 0.008,
+   "keys_on_sziklas_side": [],
+   "readout_route": "sziklas",
+   "readout_route_k1": null,
+   "readout_route_reason": "stop_plane_key",
+   "rel_l2_vs_sziklas": 0.0
+  },
+  {
+   "CONSISTENT": true,
+   "N": 256,
+   "bit_identical_to_sziklas": true,
+   "case": "stop_plane_containment",
+   "final_distance": 0.008,
+   "keys_on_sziklas_side": [],
+   "readout_route": "sziklas",
+   "readout_route_k1": null,
+   "readout_route_reason": "stop_plane_key",
+   "rel_l2_vs_sziklas": 0.0
+  },
+  {
+   "CONSISTENT": true,
+   "N": 1024,
+   "bit_identical_to_sziklas": false,
+   "case": "representable_route_collins",
+   "final_distance": 0.046,
+   "keys_on_sziklas_side": [],
+   "readout_route": "collins",
+   "readout_route_k1": 0.9860640654214481,
+   "readout_route_reason": "representable",
+   "rel_l2_vs_sziklas": 0.022528611688400133
+  },
+  {
+   "CONSISTENT": true,
+   "N": 1024,
+   "bit_identical_to_sziklas": false,
+   "case": "representable_route_collins_2",
+   "final_distance": 0.0462,
+   "keys_on_sziklas_side": [],
+   "readout_route": "collins",
+   "readout_route_k1": 0.9674389392881269,
+   "readout_route_reason": "representable",
+   "rel_l2_vs_sziklas": 0.019368672862166855
+  }
+ ],
+ "d_zero_win": {
+  "chain_fd0_default": {
+   "k1": Infinity,
+   "ok": true,
+   "peak": 1.0457759728748013,
+   "reason": "k1",
+   "route": "sziklas"
+  },
+  "chain_fd0_sziklas": {
+   "k1": null,
+   "ok": true,
+   "peak": 1.0457759728748013,
+   "reason": null,
+   "route": null
+  },
+  "fd0_bit_identical": true,
+  "one_step_at_z0": "ValueError: _collins_focus_readout: transport='collins' has no zero-length form -- the Collins integral's B is the leg, and at B = 0",
+  "readout_k1_at_z0": Infinity
+ },
+ "d_zero_wsl": {
+  "chain_fd0_default": {
+   "k1": Infinity,
+   "ok": true,
+   "peak": 1.045775972875136,
+   "reason": "k1",
+   "route": "sziklas"
+  },
+  "chain_fd0_sziklas": {
+   "k1": null,
+   "ok": true,
+   "peak": 1.045775972875136,
+   "reason": null,
+   "route": null
+  },
+  "fd0_bit_identical": true,
+  "one_step_at_z0": "ValueError: _collins_focus_readout: transport='collins' has no zero-length form -- the Collins integral's B is the leg, and at B = 0",
+  "readout_k1_at_z0": Infinity
+ }
+}

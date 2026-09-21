@@ -618,8 +618,19 @@ def _env0():
 
 
 def _run(groups, **kw):
+    """``transport='sziklas'`` for every chain in this module (WP-C3).
+
+    The DOE bookkeeping claim is an EQUIVALENCE between a leg the chain
+    transports in ONE piece and the same leg a caller hand-splits in TWO --
+    and a split composes exactly only on the co-moving step, which is proved
+    in ``test_niche_exact_gap_kernel`` and is what the comments below are
+    about.  The Collins quadrature does not split a leg and resolves its own
+    output pitch per leg, so the one-piece and two-piece runs land on
+    different lattices and the equivalence has nothing to compare.  Named
+    rather than inherited, because the library default has moved.
+    """
     k = dict(r_in=np.inf, ray_subsample=4, final_distance=FD,
-             final_leg='paraxial')
+             final_leg='paraxial', transport='sziklas')
     k.update(kw)
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
@@ -692,14 +703,15 @@ def runs(_shipped_fft_for_this_module):
             for ktag, gk in (('', 'auto'), ('_fr', 'fresnel')):
                 a = chain(_env0(), pre, LAM, DX0, r_in=np.inf, ray_subsample=4,
                           final_distance=D1, final_leg='paraxial',
+                          transport='sziklas',
                           carrier_reference=cref, gap_kernel=gk, **tk)
                 env_a = carrier_referenced_envelope(a.field, a.R, LAM, a.dx)
                 b = chain(env_a,
                           [{'prescription': G2, 'gap_before': TDOE + D2}], LAM,
                           a.dx, r_in=la.TiltedCarrier(a.R, dL, 0.0, 0.0, 0.0),
                           ray_subsample=4, final_distance=FD,
-                          final_leg='paraxial', carrier_reference=cref,
-                          gap_kernel=gk, **tk)
+                          final_leg='paraxial', transport='sziklas',
+                          carrier_reference=cref, gap_kernel=gk, **tk)
                 out['manual' + tag + ktag] = b
                 out['doe' + tag + ktag] = (
                     out['split_a'] if (not tag and not ktag) else
@@ -1154,12 +1166,16 @@ class TestSplitLegPathDependence:
         z1, z2 = self.LEG_1, self.LEG_2
 
         def _pair(kernel):
-            one = propagate_carrier_referenced(env, R, z1 + z2, LAM, dx,
-                                               gap_kernel=kernel)
-            b1 = propagate_carrier_referenced(env, R, z1, LAM, dx,
-                                              gap_kernel=kernel)
+            # transport='sziklas' NAMED (WP-C3): every reading in this class
+            # is a CO-MOVING PITCH ratio between a leg and the same leg cut in
+            # two, and both the split and the pitch telescoping are that
+            # transport's.  The Collins quadrature does not split a leg and
+            # resolves its own output pitch, so there is no re-grid to measure.
+            _kw = dict(gap_kernel=kernel, transport='sziklas')
+            one = propagate_carrier_referenced(env, R, z1 + z2, LAM, dx, **_kw)
+            b1 = propagate_carrier_referenced(env, R, z1, LAM, dx, **_kw)
             two = propagate_carrier_referenced(b1.env, b1.R, z2, LAM, b1.dx,
-                                               gap_kernel=kernel)
+                                               **_kw)
             return one, two
 
         with warnings.catch_warnings():
@@ -1205,9 +1221,13 @@ class TestSplitLegPathDependence:
         z1, z2 = self.LEG_1, self.LEG_2
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
-            one = propagate_carrier_referenced(env, R, z1 + z2, LAM, dx)
-            b1 = propagate_carrier_referenced(env, R, z1, LAM, dx)
-            two = propagate_carrier_referenced(b1.env, b1.R, z2, LAM, b1.dx)
+            # transport='sziklas' NAMED, for the reason _pair above gives:
+            # the bridge re-grid this corner is about is that transport's.
+            _kw = dict(transport='sziklas')
+            one = propagate_carrier_referenced(env, R, z1 + z2, LAM, dx, **_kw)
+            b1 = propagate_carrier_referenced(env, R, z1, LAM, dx, **_kw)
+            two = propagate_carrier_referenced(b1.env, b1.R, z2, LAM, b1.dx,
+                                               **_kw)
         ratio = max(one.dx / two.dx, two.dx / one.dx)
         assert ratio > min_ratio, (
             f"R={R * 1e3:.4f} mm: expected a re-grid, got pitch ratio "

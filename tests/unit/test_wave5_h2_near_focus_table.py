@@ -170,15 +170,35 @@ def test_a_collimated_gaussian_lands_at_the_oracle_floor_on_the_paraxial_arm():
 
 
 def test_the_exact_kernels_departure_on_a_collimated_leg_is_the_quartic():
-    """The same case with ``gap_kernel='auto'`` (which resolves to the EXACT
-    kernel) does NOT land at the oracle's floor, and the amount by which it
-    misses is the beam's own dropped quartic ``k z theta^4 / 8``.
+    """The EXACT kernel does not land at the paraxial oracle's floor, and the
+    amount by which it misses is the beam's own dropped quartic
+    ``k z theta^4 / 8``.
 
     That is the independent confirmation that the bookkeeping is right AND
     that the exact kernel does what theory says: the residual is not a bug, it
     is the paraxial oracle's own error, of the predicted size.  Asserted as a
     RATIO within a factor of two, which is the honest claim for an L2 average
     against a peak-angle prediction.
+
+    THIS ID IS STATED ON BOTH VALUES OF ``_GAP_KERNEL_ACCURACY_TAU`` (WP-C3
+    round 2; the interaction VERIFY-WP-C3 section 5 found, and the one red
+    that exists ONLY in the C3 x C5 merge).  As first written it drove
+    ``gap_kernel='auto'`` and relied on ``'auto'`` resolving to the exact
+    kernel.  Two 5.49.0 defaults move under that assumption at once:
+
+    * WP-C3 flips ``transport`` to ``'collins'``, so this call reaches
+      ``_collins_transport`` -- where the accuracy-keyed near-focus fallback
+      lives.  The Sziklas co-moving step never consults it;
+    * WP-C5 arms that fallback at ``tau = 1e-4`` (maintainer's decision,
+      ledger 0.1), and THIS FIXTURE'S predicted quartic is 1.5e-4, which
+      EXCEEDS it -- so on the merged tree ``'auto'`` drops to ``'fresnel'``
+      and the departure collapses to 6.2873e-15 (measured on a real 3-way
+      merge, 2026-09-20).
+
+    So the quartic law is asserted on the spelling tau can never override --
+    an EXPLICIT ``gap_kernel='exact'`` -- and what ``'auto'`` does is asserted
+    separately, on whichever arm the shipped constant makes live.  Nothing is
+    skipped on either arm.
     """
     q_a = complex(0.0, -ZR)
     w_a = _w_of_q(q_a)
@@ -190,15 +210,41 @@ def test_the_exact_kernels_departure_on_a_collimated_leg_is_the_quartic():
                  / w_a ** 2).astype(np.complex128)
     theta = LAM / (np.pi * w_a)
     predicted = K * abs(z) * theta ** 4 / 8.0
-    got = propagate_carrier_referenced(env, float('inf'), z, LAM, dx,
-                                       gap_kernel='auto')
-    fld = carrier_referenced_reconstruct(got.env, got.R, LAM, got.dx)
-    xo = _axis(N_IN, got.dx)
-    rel = _rel(fld, _q_field(xo, xo, q_a, z))
-    assert 0.5 < rel / predicted < 2.0, (
+    xo_of = lambda g: _axis(N_IN, g.dx)                       # noqa: E731
+
+    def _departure(kernel):
+        g = propagate_carrier_referenced(env, float('inf'), z, LAM, dx,
+                                         gap_kernel=kernel)
+        f = carrier_referenced_reconstruct(g.env, g.R, LAM, g.dx)
+        return _rel(f, _q_field(xo_of(g), xo_of(g), q_a, z))
+
+    # THE LAW, on the spelling no default can take away.
+    rel_exact = _departure('exact')
+    assert 0.5 < rel_exact / predicted < 2.0, (
         f"the exact kernel's departure from the paraxial oracle is "
-        f"{rel:.4e}, not the predicted quartic {predicted:.4e} "
-        f"(ratio {rel / predicted:.4f})")
+        f"{rel_exact:.4e}, not the predicted quartic {predicted:.4e} "
+        f"(ratio {rel_exact / predicted:.4f})")
+
+    # ... and what ``'auto'`` resolves to, on the arm that is live here.
+    from lumenairy.propagators.carrier import _GAP_KERNEL_ACCURACY_TAU as TAU
+    rel_auto = _departure('auto')
+    rel_fresnel = _departure('fresnel')
+    if TAU is None or predicted <= float(TAU):
+        assert rel_auto == rel_exact, (
+            f"the accuracy-keyed fallback is off (tau = {TAU!r}) or this "
+            f"leg's predicted quartic {predicted:.4e} is inside it, so "
+            f"'auto' must BE the exact kernel here; it read "
+            f"{rel_auto:.4e} against {rel_exact:.4e}")
+    else:
+        assert rel_auto == rel_fresnel, (
+            f"tau = {TAU!r} and this leg's predicted quartic "
+            f"{predicted:.4e} exceeds it, so 'auto' must have dropped to the "
+            f"PARAXIAL kernel; it read {rel_auto:.4e} against fresnel's "
+            f"{rel_fresnel:.4e} and exact's {rel_exact:.4e}")
+        assert rel_auto < 0.01 * rel_exact, (
+            f"the fallback fired but bought nothing: 'auto' {rel_auto:.4e} "
+            f"against 'exact' {rel_exact:.4e} on a leg whose oracle IS "
+            f"paraxial")
 
 
 def test_both_spellings_of_the_output_reference_give_the_same_field(
@@ -622,9 +668,13 @@ def test_the_sziklas_transport_loses_the_focus_and_the_collins_one_does_not(
     q, R_in, _w, env = fixture_env
 
     def _sziklas(d):
+        # ``transport='sziklas'`` NAMED (WP-C3): this closure IS the Sziklas
+        # arm of the comparison, and it used to reach it through the library
+        # default, which has since moved to 'collins'.
         z = F - d
         sz = propagate_carrier_referenced(env, R_in, z, LAM, DX_IN,
-                                          gap_kernel='fresnel')
+                                          gap_kernel='fresnel',
+                                          transport='sziklas')
         fld = carrier_referenced_reconstruct(sz.env, sz.R, LAM, sz.dx)
         xo = _axis(N_IN, float(sz.dx))
         return sz, _rel(fld, _q_field(xo, xo, q, z)),             _floor_bar(z, N_IN, float(sz.dx), _w_of_q(q + z))

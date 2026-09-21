@@ -150,7 +150,14 @@ def test_the_exact_final_leg_never_enters_the_paraxial_focus_standoff_resolver()
 def test_the_paraxial_final_leg_does_enter_it():
     """The falsifier for the test above: the same poison, on the same fixture,
     with ``final_leg='paraxial'`` -- which is the route
-    ``carrier_referenced_focus_readout`` owns, so the resolver MUST run."""
+    ``carrier_referenced_focus_readout`` owns, so the resolver MUST run.
+
+    ``transport='sziklas'`` NAMED (WP-C3).  ``_default_focus_standoff`` is
+    that readout's own resolver and exists only because its grid collapses at
+    the target; the Collins readout lands the target in one step and has no
+    standoff to resolve, so on the default this fixture reaches the resolver
+    only when the one-step form is not representable -- which is a property of
+    the fixture, not of the routing this falsifier is about."""
     _d6._ram_guard()
     seen = []
     _real = _car._default_focus_standoff
@@ -164,7 +171,8 @@ def test_the_paraxial_final_leg_does_enter_it():
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
             _d6._run_chain(la.TiltedCarrier(np.inf, 0.0, 0.0, 0.0, 0.0),
-                           final_leg='paraxial', centre_out=(0.0, 0.0))
+                           final_leg='paraxial', centre_out=(0.0, 0.0),
+                           transport='sziklas')
     finally:
         _car._default_focus_standoff = _real
     assert seen, ('the paraxial final leg did not reach '

@@ -1,0 +1,95 @@
+{
+ "label": "HEAD-WIN",
+ "lumenairy_file": "C:\\tmp\\vc3_head\\lumenairy\\__init__.py",
+ "A": 0.1100000000000001,
+ "R": -0.0022471910112359553,
+ "z": 0.002,
+ "theta_rad": 0.10640000000000001,
+ "theta_over_nyquist": 0.8,
+ "m_sziklas": 0.11000000000000006,
+ "analytic": {
+  "w_out_um": 33.07715244140365,
+  "R_out": -0.000248491980793236,
+  "centroid_x_um": 212.8,
+  "sigma_x_um": 16.538576220701824,
+  "sigma_y_um": 16.538576220701824
+ },
+ "power_in": 1.4137166941154067e-07,
+ "collins_fresnel": {
+  "gap_kernel": "fresnel",
+  "form": "chirp-z",
+  "k1": 1.1230192669172934,
+  "k3": 1.1230192669172936,
+  "flat": true,
+  "dx_out_um": 0.5834436035156253,
+  "R_out": "inf",
+  "window_half_um": 298.72312500000015,
+  "centroid_x_um": 162.41231240732728,
+  "centroid_y_um": -2.903056127920717e-15,
+  "sigma_x_um": 151.97958394492758,
+  "sigma_y_um": 16.538576220701856,
+  "power": 1.5708197001024373e-07,
+  "power_ratio": 1.1111276443441402,
+  "warnings": [
+   "_collins_carrier_leg: the Collins chirp-Z stage is under-sampled -- K1 (input) 1.1230: the product of the envelope and the pre-chirp exp(i k A u^2/2B) is sampled at 1.1230x its own Nyquist rate over t"
+  ]
+ },
+ "sziklas_fresnel": {
+  "dx_out_um": 0.44000000000000017,
+  "R_out": "-0.0002471910112359552",
+  "window_half_um": 225.2800000000001,
+  "centroid_x_um": 109.50911669278383,
+  "centroid_y_um": 0.0,
+  "sigma_x_um": 177.83716262693756,
+  "sigma_y_um": 16.53857622069712,
+  "power": 1.4137166941154075e-07,
+  "power_ratio": 1.0000000000000007
+ },
+ "collins_auto": {
+  "gap_kernel": "auto",
+  "form": "chirp-z",
+  "k1": 1.124673402255639,
+  "k3": 1.1230192669172936,
+  "flat": true,
+  "dx_out_um": 0.5834436035156253,
+  "R_out": "inf",
+  "window_half_um": 298.72312500000015,
+  "centroid_x_um": 157.64936571153578,
+  "centroid_y_um": -2.8654947006050515e-15,
+  "sigma_x_um": 159.76609938888149,
+  "sigma_y_um": 16.539011254863983,
+  "power": 1.5914102913113323e-07,
+  "power_ratio": 1.1256925082200522,
+  "warnings": [
+   "_collins_carrier_leg: the Collins chirp-Z stage is under-sampled -- K1 (input) 1.1247: the product of the envelope and the pre-chirp exp(i k A u^2/2B) is sampled at 1.1247x its own Nyquist rate over t"
+  ]
+ },
+ "sziklas_auto": {
+  "dx_out_um": 0.44000000000000017,
+  "R_out": "-0.0002471910112359552",
+  "window_half_um": 225.2800000000001,
+  "centroid_x_um": 100.41449026192106,
+  "centroid_y_um": 0.0,
+  "sigma_x_um": 183.8330732375967,
+  "sigma_y_um": 16.539017471023357,
+  "power": 1.4137166941154075e-07,
+  "power_ratio": 1.0000000000000007
+ },
+ "control_analytic": {
+  "w_out_um": 33.07715244140365,
+  "sigma_x_um": 16.538576220701824
+ },
+ "control_collins": {
+  "form": "chirp-z",
+  "k1": 0.3241911419172935,
+  "flat": false,
+  "sigma_x_um": 16.538576220701856,
+  "power_ratio": 1.0000000000000018,
+  "dx_out_um": 0.4400000000000004
+ },
+ "control_sziklas": {
+  "sigma_x_um": 16.538576220702712,
+  "power_ratio": 1.0000000000000002,
+  "dx_out_um": 0.44000000000000017
+ }
+}

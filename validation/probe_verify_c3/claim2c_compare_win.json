@@ -1,0 +1,60 @@
+{
+ "identical": 9,
+ "differ": 0,
+ "per_config": {
+  "bare_final_leg": {
+   "base": "55b1d70ba7044ea3917f99399dd1d6f2b92d27e4541d1e155b2a9045903d8daf",
+   "branch": "55b1d70ba7044ea3917f99399dd1d6f2b92d27e4541d1e155b2a9045903d8daf",
+   "identical": true,
+   "stages_repr_len": 956
+  },
+  "bare_final_leg_zero": {
+   "base": "68b264b7f185ae9c4080438af0fe0ffad237da6a89954a682ec47204dd4e6bbf",
+   "branch": "68b264b7f185ae9c4080438af0fe0ffad237da6a89954a682ec47204dd4e6bbf",
+   "identical": true,
+   "stages_repr_len": 956
+  },
+  "readout": {
+   "base": "e2231d06a989439aa6a424aa05a68994e75a51e2df21de64fcd8bbab38915cc8",
+   "branch": "e2231d06a989439aa6a424aa05a68994e75a51e2df21de64fcd8bbab38915cc8",
+   "identical": true,
+   "stages_repr_len": 1208
+  },
+  "readout_N512": {
+   "base": "cedf201a8e11b071d689f73e09b9d5007fb2bcb7143f0fa15fc3f2531e4efb20",
+   "branch": "cedf201a8e11b071d689f73e09b9d5007fb2bcb7143f0fa15fc3f2531e4efb20",
+   "identical": true,
+   "stages_repr_len": 1215
+  },
+  "readout_centre_out": {
+   "base": "d63de795140d0e37d5e2d054ab89e10b40d8daf1692180b9f1ede798b0fdd7cd",
+   "branch": "d63de795140d0e37d5e2d054ab89e10b40d8daf1692180b9f1ede798b0fdd7cd",
+   "identical": true,
+   "stages_repr_len": 1208
+  },
+  "readout_containment": {
+   "base": "e2231d06a989439aa6a424aa05a68994e75a51e2df21de64fcd8bbab38915cc8",
+   "branch": "e2231d06a989439aa6a424aa05a68994e75a51e2df21de64fcd8bbab38915cc8",
+   "identical": true,
+   "stages_repr_len": 1208
+  },
+  "readout_fd0": {
+   "base": "7f4ffa28abf2ca357424ce59965bca654ac0efd9677bb07d4262e8366fe44520",
+   "branch": "7f4ffa28abf2ca357424ce59965bca654ac0efd9677bb07d4262e8366fe44520",
+   "identical": true,
+   "stages_repr_len": 1198
+  },
+  "readout_fresnel": {
+   "base": "63761f991221e20079b454754b67b535585a667cb6f9430802a79b2928ece154",
+   "branch": "63761f991221e20079b454754b67b535585a667cb6f9430802a79b2928ece154",
+   "identical": true,
+   "stages_repr_len": 1210
+  },
+  "readout_standoff": {
+   "base": "e4b44a0fc579f9adeed7ae7d9622c28b5782285bc2d9186d5fc13d17e4710e16",
+   "branch": "e4b44a0fc579f9adeed7ae7d9622c28b5782285bc2d9186d5fc13d17e4710e16",
+   "identical": true,
+   "stages_repr_len": 1210
+  }
+ }
+}

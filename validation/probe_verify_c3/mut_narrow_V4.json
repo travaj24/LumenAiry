@@ -1,0 +1,15 @@
+{
+ "V4_cupy_branch_takes_numpy_fft": {
+  "failed": [
+   "tests/unit/test_wave5_h2_collins_jax.py::test_a_closed_over_jax_constant_under_jit_is_refused_by_name",
+   "tests/unit/test_wave5_h2_collins_jax.py::test_an_astigmatic_auto_is_accepted_under_a_trace_because_it_measures_nothing",
+   "tests/unit/test_wave5_h2_collins_jax.py::test_jax_grad_through_the_collins_transport_matches_a_central_difference",
+   "tests/unit/test_wave5_h2_collins_jax.py::test_jit_of_the_transport_matches_the_eager_traced_call",
+   "tests/unit/test_wave5_h2_collins_jax.py::test_the_central_difference_through_this_merit_has_no_truncation_branch",
+   "tests/unit/test_wave5_h2_collins_jax.py::test_the_gradient_is_not_trivially_zero_or_constant",
+   "tests/unit/test_wave5_h2_collins_jax.py::test_the_same_statistic_finds_a_truncation_branch_on_a_cubic_merit"
+  ],
+  "tail": "7 failed, 35 passed in 88.93s (0:01:28)",
+  "rc": 1
+ }
+}

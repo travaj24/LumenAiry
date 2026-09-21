@@ -1,0 +1,10 @@
+{
+ "tree": "C:\\tmp\\c3b_base",
+ "lumenairy": "C:\\tmp\\c3b_base\\lumenairy\\__init__.py",
+ "default_transport": "sziklas",
+ "legs": [],
+ "method": "phase_screen",
+ "r2m_um": 8.708385873590297,
+ "e50_um": 7.289039249144477,
+ "e80_um": 11.013879229917436
+}

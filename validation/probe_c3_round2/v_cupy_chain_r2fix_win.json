@@ -1,0 +1,51 @@
+{
+ "build": "WIN-py3.14-np2.4.4",
+ "carrier_file": "C:\\tmp\\lum_c3b\\lumenairy\\propagators\\carrier.py",
+ "rows": [
+  {
+   "error": "propagate_traced_carrier_chain: groups[0] must be a prescription dict (with 'surfaces'), a group-spec dict (with 'prescription') or a DOE entry (with 'doe'); got dict.",
+   "error_type": "ValueError",
+   "frames": [
+    "v_cupy_chain.py:54 main",
+    "carrier.py:10872 propagate_traced_carrier_chain"
+   ],
+   "is_implicit_conversion_TypeError": false,
+   "kwargs": {},
+   "label": "defaults",
+   "names_cufft": false,
+   "outcome": "raised"
+  },
+  {
+   "error": "propagate_traced_carrier_chain: groups[0] must be a prescription dict (with 'surfaces'), a group-spec dict (with 'prescription') or a DOE entry (with 'doe'); got dict.",
+   "error_type": "ValueError",
+   "frames": [
+    "v_cupy_chain.py:54 main",
+    "carrier.py:10872 propagate_traced_carrier_chain"
+   ],
+   "is_implicit_conversion_TypeError": false,
+   "kwargs": {
+    "on_multi_congruence": "ignore"
+   },
+   "label": "on_multi_congruence=ignore",
+   "names_cufft": false,
+   "outcome": "raised"
+  },
+  {
+   "error": "propagate_traced_carrier_chain: groups[0] must be a prescription dict (with 'surfaces'), a group-spec dict (with 'prescription') or a DOE entry (with 'doe'); got dict.",
+   "error_type": "ValueError",
+   "frames": [
+    "v_cupy_chain.py:54 main",
+    "carrier.py:10872 propagate_traced_carrier_chain"
+   ],
+   "is_implicit_conversion_TypeError": false,
+   "kwargs": {
+    "on_multi_congruence": "ignore",
+    "traced_kwargs": "{'on_undersample': 'silent', 'on_noncollimated': 'silent'}"
+   },
+   "label": "+ on_undersample/noncollimated silent",
+   "names_cufft": false,
+   "outcome": "raised"
+  }
+ ],
+ "tree": "C:\\tmp\\lum_c3b"
+}

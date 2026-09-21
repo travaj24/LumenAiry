@@ -1,0 +1,46 @@
+{
+ "arms": {
+  "base": {
+   "bind_stdout": [
+    "[bind] lumenairy.__file__ = C:\\tmp\\c3b_base\\lumenairy\\__init__.py",
+    "[bind] lumenairy.__version__ = 5.48.1",
+    "[bind] tree = C:\\tmp\\c3b_base",
+    "[probe_wayback] spelling=default keys=103 build=WIN-py3.14"
+   ],
+   "build": "WIN-py3.14",
+   "n_keys": 103,
+   "seconds": 38.2,
+   "spelling": "default",
+   "tree": "C:\\tmp\\c3b_base"
+  },
+  "fix": {
+   "bind_stdout": [
+    "[bind] lumenairy.__file__ = C:\\tmp\\lum_c3b\\lumenairy\\__init__.py",
+    "[bind] lumenairy.__version__ = 5.48.1",
+    "[bind] tree = C:\\tmp\\lum_c3b",
+    "[probe_wayback] spelling=sziklas keys=103 build=WIN-py3.14"
+   ],
+   "build": "WIN-py3.14",
+   "n_keys": 103,
+   "seconds": 36.0,
+   "spelling": "sziklas",
+   "tree": "C:\\tmp\\lum_c3b"
+  }
+ },
+ "comparisons": {
+  "base:fix": {
+   "differ": [],
+   "differ_detail": {},
+   "n_differ": 0,
+   "n_identical": 103,
+   "n_keys_left": 103,
+   "n_keys_right": 103,
+   "n_shared": 103,
+   "only_left": [],
+   "only_right": [],
+   "verdict": "IDENTICAL"
+  }
+ },
+ "python": "C:\\Users\\Tesla\\AppData\\Local\\Programs\\Python\\Python314\\python.exe",
+ "tag": "r2b_win"
+}

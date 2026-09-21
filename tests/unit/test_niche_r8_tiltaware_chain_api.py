@@ -555,13 +555,27 @@ def test_r8_focus_readout_matches_analytic_no_spurious_spots():
 
 def test_r8_focus_readout_survives_exact_focus():
     """fail-before / pass-after: landing EXACTLY at the carrier focus with a
-    plain carrier step raises (R_out == 0, the co-moving frame is singular); the
-    packaged readout returns a clean finite focused spot at the same plane."""
+    plain CO-MOVING carrier step raises (R_out == 0, that frame is singular);
+    the packaged readout returns a clean finite focused spot at the same
+    plane.
+
+    ``transport='sziklas'`` NAMED on the fail-before arm (WP-C3), because the
+    singularity is that transport's and the flip is exactly what removes it:
+    the Collins quadrature carries ``A = 0`` as an ordinary value, so the same
+    call on the default returns a finite field.  Both are asserted, so this
+    reads as the comparison it now is rather than as a refusal that quietly
+    stopped happening."""
     N, dx, w, R = 1024, 6e-6, 1.2e-3, -30e-3
     env = _converging_gaussian(N, dx, w, R)
     zf = -R
     with pytest.raises(ValueError):
-        la.propagate_carrier_referenced(env, R, zf, _WL, dx)
+        la.propagate_carrier_referenced(env, R, zf, _WL, dx,
+                                        transport='sziklas')
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        _coll = la.propagate_carrier_referenced(env, R, zf, _WL, dx)
+    assert np.all(np.isfinite(np.asarray(_coll.env)))
+    assert float(np.abs(np.asarray(_coll.env)).max()) > 0.0
     E = np.asarray(la.carrier_referenced_focus_readout(
         env, R, zf, _WL, dx, dx_out=0.15e-6, N_out=512))
     assert np.isfinite(E).all() and float(np.abs(E).max()) > 0.0

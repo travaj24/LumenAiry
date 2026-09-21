@@ -1,0 +1,153 @@
+{
+ "arms": {
+  "base": {
+   "bind_stdout": [
+    "[bind] lumenairy.__file__ = C:\\tmp\\c3b_base\\lumenairy\\__init__.py",
+    "[bind] lumenairy.__version__ = 5.48.1",
+    "[bind] tree = C:\\tmp\\c3b_base",
+    "[probe_wayback] spelling=default keys=103 build=WIN-py3.14"
+   ],
+   "build": "WIN-py3.14",
+   "n_keys": 103,
+   "seconds": 52.2,
+   "spelling": "default",
+   "tree": "C:\\tmp\\c3b_base"
+  },
+  "fix": {
+   "bind_stdout": [
+    "[bind] lumenairy.__file__ = C:\\tmp\\lum_c3b\\lumenairy\\__init__.py",
+    "[bind] lumenairy.__version__ = 5.48.1",
+    "[bind] tree = C:\\tmp\\lum_c3b",
+    "[probe_wayback] spelling=sziklas keys=103 build=WIN-py3.14"
+   ],
+   "build": "WIN-py3.14",
+   "n_keys": 103,
+   "seconds": 43.0,
+   "spelling": "sziklas",
+   "tree": "C:\\tmp\\lum_c3b"
+  },
+  "nopin": {
+   "bind_stdout": [
+    "[bind] lumenairy.__file__ = C:\\tmp\\c3b_mut_nopin\\lumenairy\\__init__.py",
+    "[bind] lumenairy.__version__ = 5.48.1",
+    "[bind] tree = C:\\tmp\\c3b_mut_nopin",
+    "[probe_wayback] spelling=sziklas keys=103 build=WIN-py3.14"
+   ],
+   "build": "WIN-py3.14",
+   "n_keys": 103,
+   "seconds": 40.1,
+   "spelling": "sziklas",
+   "tree": "C:\\tmp\\c3b_mut_nopin"
+  }
+ },
+ "comparisons": {
+  "base:fix": {
+   "differ": [],
+   "differ_detail": {},
+   "n_differ": 0,
+   "n_identical": 103,
+   "n_keys_left": 103,
+   "n_keys_right": 103,
+   "n_shared": 103,
+   "only_left": [],
+   "only_right": [],
+   "verdict": "IDENTICAL"
+  },
+  "base:nopin": {
+   "differ": [
+    "P1-focus-readout-collimated",
+    "P1-focus-readout-containment-ignore",
+    "P1-focus-readout-containment-warn",
+    "P1-focus-readout-standoff-1mm",
+    "P1-focus-readout-standoff-3mm"
+   ],
+   "differ_detail": {
+    "P1-focus-readout-collimated": {
+     "left": {
+      "detail": "",
+      "outcome": "ok",
+      "type": "dict",
+      "warnings": []
+     },
+     "right": {
+      "detail": "",
+      "outcome": "ok",
+      "type": "dict",
+      "warnings": []
+     }
+    },
+    "P1-focus-readout-containment-ignore": {
+     "left": {
+      "detail": "",
+      "outcome": "ok",
+      "type": "dict",
+      "warnings": []
+     },
+     "right": {
+      "detail": "",
+      "outcome": "ok",
+      "type": "dict",
+      "warnings": []
+     }
+    },
+    "P1-focus-readout-containment-warn": {
+     "left": {
+      "detail": "",
+      "outcome": "ok",
+      "type": "dict",
+      "warnings": [
+       [
+        "RuntimeWarning",
+        "carrier_referenced_focus_readout: the beam does not fit the co-moving grid at the stop plane.  The grid half-width there is 8.5333 um against a measured amplitu"
+       ]
+      ]
+     },
+     "right": {
+      "detail": "",
+      "outcome": "ok",
+      "type": "dict",
+      "warnings": []
+     }
+    },
+    "P1-focus-readout-standoff-1mm": {
+     "left": {
+      "detail": "carrier_referenced_focus_readout: the beam does not fit the co-moving grid at the stop plane.  The grid half-width there is 8.5333 um against a measured amplitude radius of 4.6391 um -- a containment ",
+      "outcome": "raised",
+      "type": "RuntimeError",
+      "warnings": []
+     },
+     "right": {
+      "detail": "",
+      "outcome": "ok",
+      "type": "dict",
+      "warnings": []
+     }
+    },
+    "P1-focus-readout-standoff-3mm": {
+     "left": {
+      "detail": "carrier_referenced_focus_readout: the beam does not fit the co-moving grid at the stop plane.  The grid half-width there is 25.2770 um against a measured amplitude radius of 34.0242 um -- a containmen",
+      "outcome": "raised",
+      "type": "RuntimeError",
+      "warnings": []
+     },
+     "right": {
+      "detail": "",
+      "outcome": "ok",
+      "type": "dict",
+      "warnings": []
+     }
+    }
+   },
+   "n_differ": 5,
+   "n_identical": 98,
+   "n_keys_left": 103,
+   "n_keys_right": 103,
+   "n_shared": 103,
+   "only_left": [],
+   "only_right": [],
+   "verdict": "DIFFERS"
+  }
+ },
+ "python": "C:\\Users\\Tesla\\AppData\\Local\\Programs\\Python\\Python314\\python.exe",
+ "tag": "r2_win"
+}

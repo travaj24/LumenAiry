@@ -1,0 +1,360 @@
+{
+ "bar_ulps_of_one": 8.0,
+ "build": "WIN-py3.14-np2.4.4",
+ "carrier_file": "C:\\tmp\\vc3_head\\lumenairy\\propagators\\carrier.py",
+ "device_helpers": [
+  {
+   "R": -0.031,
+   "bitwise_equal": false,
+   "dx": 5.5e-06,
+   "helper": "_collins_axis_chirp",
+   "max_abs": 1.1102230246251565e-16,
+   "max_phase_rad": 6.638262235768682,
+   "n": 96,
+   "rel_l2": 4.0904176304949736e-17,
+   "ulps_of_one": 0.5
+  },
+  {
+   "R": 0.017,
+   "bitwise_equal": false,
+   "dx": 2.75e-06,
+   "helper": "_collins_axis_chirp",
+   "max_abs": 1.5700924586837752e-16,
+   "max_phase_rad": 48.4202657197245,
+   "n": 384,
+   "rel_l2": 4.895554005657085e-17,
+   "ulps_of_one": 0.7071067811865476
+  },
+  {
+   "R": -0.0075,
+   "bitwise_equal": false,
+   "dx": 1.9e-06,
+   "helper": "_collins_axis_chirp",
+   "max_abs": 1.5700924586837752e-16,
+   "max_phase_rad": 372.55818159690983,
+   "n": 1024,
+   "rel_l2": 4.36446265021536e-17,
+   "ulps_of_one": 0.7071067811865476
+  },
+  {
+   "R": -0.11,
+   "bitwise_equal": false,
+   "dx": 8.5e-07,
+   "helper": "_collins_axis_chirp",
+   "max_abs": 1.5700924586837752e-16,
+   "max_phase_rad": 20.33542832060695,
+   "n": 2048,
+   "rel_l2": 4.5913441962586345e-17,
+   "ulps_of_one": 0.7071067811865476
+  },
+  {
+   "bitwise_equal": false,
+   "helper": "_collins_axis_chirp[offset]",
+   "max_abs": 1.5700924586837752e-16,
+   "n": 512,
+   "rel_l2": 4.5881675870638596e-17,
+   "ulps_of_one": 0.7071067811865476
+  },
+  {
+   "bitwise_equal": true,
+   "helper": "_collins_axis_chirp[complex64]",
+   "max_abs": 0.0,
+   "n": 512,
+   "rel_l2": 0.0,
+   "ulps_of_one": 0.0
+  },
+  {
+   "arg_max": 100000.0,
+   "bitwise_equal": false,
+   "helper": "_tf_phase_to_H[c128]",
+   "max_abs": 1.5700924586837752e-16,
+   "n": 256,
+   "rel_l2": 4.62888278677869e-17,
+   "ulps_of_one": 0.7071067811865476
+  },
+  {
+   "arg_max": 3000.0,
+   "bitwise_equal": false,
+   "helper": "_tf_phase_to_H[c128]",
+   "max_abs": 1.5700924586837752e-16,
+   "n": 768,
+   "rel_l2": 4.621824798176633e-17,
+   "ulps_of_one": 0.7071067811865476
+  },
+  {
+   "bitwise_equal": false,
+   "helper": "_tf_phase_to_H[c64]",
+   "max_abs": 4.195986813514223e-08,
+   "n": 256,
+   "note": "NumPy arm ignores target dtype (xp is np branch) so this row compares a float32 device build to a float64 host build ON PURPOSE",
+   "rel_l2": 2.0541962642096245e-08,
+   "ulps_of_one": 188970446.4979417
+  },
+  {
+   "bitwise_equal": true,
+   "helper": "_exact_dispersion_phase",
+   "max_abs": 0.0,
+   "n": 200,
+   "rel_l2": 0.0,
+   "tilt": [
+    0.0,
+    0.0
+   ],
+   "ulps_of_one": 0.0
+  },
+  {
+   "bitwise_equal": true,
+   "helper": "_exact_dispersion_phase",
+   "max_abs": 0.0,
+   "n": 200,
+   "rel_l2": 0.0,
+   "tilt": [
+    0.02,
+    -0.01
+   ],
+   "ulps_of_one": 0.0
+  },
+  {
+   "bitwise_equal": true,
+   "helper": "_exact_dispersion_phase",
+   "max_abs": 0.0,
+   "n": 200,
+   "rel_l2": 0.0,
+   "tilt": [
+    0.31,
+    0.22
+   ],
+   "ulps_of_one": 0.0
+  },
+  {
+   "bitwise_equal": true,
+   "helper": "_exact_dispersion_phase",
+   "max_abs": 0.0,
+   "n": 512,
+   "rel_l2": 0.0,
+   "tilt": [
+    0.0,
+    0.0
+   ],
+   "ulps_of_one": 0.0
+  },
+  {
+   "bitwise_equal": true,
+   "helper": "_exact_dispersion_phase",
+   "max_abs": 0.0,
+   "n": 512,
+   "rel_l2": 0.0,
+   "tilt": [
+    0.02,
+    -0.01
+   ],
+   "ulps_of_one": 0.0
+  },
+  {
+   "bitwise_equal": true,
+   "helper": "_exact_dispersion_phase",
+   "max_abs": 0.0,
+   "n": 512,
+   "rel_l2": 0.0,
+   "tilt": [
+    0.31,
+    0.22
+   ],
+   "ulps_of_one": 0.0
+  }
+ ],
+ "env": {
+  "MKL_NUM_THREADS": "1",
+  "NUMBA_NUM_THREADS": null,
+  "OMP_NUM_THREADS": "1",
+  "OPENBLAS_CORETYPE": null,
+  "OPENBLAS_NUM_THREADS": "1"
+ },
+ "eps": 2.220446049250313e-16,
+ "host_side": {
+  "backend_of": {
+   "bld": "cupy",
+   "bld_is_xp": true,
+   "is_jax": false,
+   "xp": "cupy"
+  },
+  "input_box": "ImportError: DLL load failed while importing cufft: The specified module could not be found.",
+  "space_support_device": [
+   0.00021999999999999998,
+   0.00021999999999999998
+  ],
+  "space_support_host": [
+   0.00021999999999999998,
+   0.00021999999999999998
+  ]
+ },
+ "premise": {
+  "cuda_runtime_version": 12090,
+  "cupy_fft_import_error": null,
+  "device_name": "NVIDIA GeForce RTX 4070 Ti",
+  "elementwise_error": null,
+  "elementwise_ok": true,
+  "fft_error": "ImportError: DLL load failed while importing cufft: The specified module could not be found.",
+  "fft_ok": false,
+  "importable": true,
+  "n_devices": 1,
+  "version": "14.0.1"
+ },
+ "public_legs": [
+  {
+   "error": "DLL load failed while importing cufft: The specified module could not be found.",
+   "error_type": "ImportError",
+   "is_implicit_conversion_TypeError": false,
+   "label": "propagate_carrier_referenced(device, collins, fresnel)",
+   "names_cufft": true,
+   "outcome": "raised",
+   "raised_in": [
+    "carrier.py:2650 _collins_carrier_leg",
+    "carrier.py:1952 _collins_input_box",
+    "fft_infra.py:2253 _fft2",
+    "_fft.py:750 fft2",
+    "__init__.py:85 __getattr__",
+    "__init__.py:88 import_module"
+   ],
+   "reached_device_transform": true
+  },
+  {
+   "error": "DLL load failed while importing cufft: The specified module could not be found.",
+   "error_type": "ImportError",
+   "is_implicit_conversion_TypeError": false,
+   "label": "propagate_carrier_referenced(device, collins, exact)",
+   "names_cufft": true,
+   "outcome": "raised",
+   "raised_in": [
+    "carrier.py:2650 _collins_carrier_leg",
+    "carrier.py:1952 _collins_input_box",
+    "fft_infra.py:2253 _fft2",
+    "_fft.py:750 fft2",
+    "__init__.py:85 __getattr__",
+    "__init__.py:88 import_module"
+   ],
+   "reached_device_transform": true
+  },
+  {
+   "error": "DLL load failed while importing cufft: The specified module could not be found.",
+   "error_type": "ImportError",
+   "is_implicit_conversion_TypeError": false,
+   "label": "propagate_carrier_referenced(device, sziklas)",
+   "names_cufft": true,
+   "outcome": "raised",
+   "raised_in": [
+    "carrier.py:1604 _carrier_step_fast",
+    "carrier.py:947 _envelope_tf_step",
+    "carrier.py:747 _exact_tf_2d_xp",
+    "_fft.py:750 fft2",
+    "__init__.py:85 __getattr__",
+    "__init__.py:88 import_module"
+   ],
+   "reached_device_transform": true
+  },
+  {
+   "error": "DLL load failed while importing cufft: The specified module could not be found.",
+   "error_type": "ImportError",
+   "is_implicit_conversion_TypeError": false,
+   "label": "_collins_focus_readout(device)",
+   "names_cufft": true,
+   "outcome": "raised",
+   "raised_in": [
+    "carrier.py:2894 _collins_focus_readout",
+    "carrier.py:2411 _collins_transport",
+    "fft_infra.py:2253 _fft2",
+    "_fft.py:750 fft2",
+    "__init__.py:85 __getattr__",
+    "__init__.py:88 import_module"
+   ],
+   "reached_device_transform": true
+  },
+  {
+   "error": "DLL load failed while importing cufft: The specified module could not be found.",
+   "error_type": "ImportError",
+   "is_implicit_conversion_TypeError": false,
+   "label": "_collins_transport(device)",
+   "names_cufft": true,
+   "outcome": "raised",
+   "raised_in": [
+    "v_cupy.py:230 <lambda>",
+    "carrier.py:2411 _collins_transport",
+    "fft_infra.py:2253 _fft2",
+    "_fft.py:750 fft2",
+    "__init__.py:85 __getattr__",
+    "__init__.py:88 import_module"
+   ],
+   "reached_device_transform": true
+  },
+  {
+   "error": "DLL load failed while importing cufft: The specified module could not be found.",
+   "error_type": "ImportError",
+   "is_implicit_conversion_TypeError": false,
+   "label": "_collins_carrier_leg(device)",
+   "names_cufft": true,
+   "outcome": "raised",
+   "raised_in": [
+    "carrier.py:2650 _collins_carrier_leg",
+    "carrier.py:1952 _collins_input_box",
+    "fft_infra.py:2253 _fft2",
+    "_fft.py:750 fft2",
+    "__init__.py:85 __getattr__",
+    "__init__.py:88 import_module"
+   ],
+   "reached_device_transform": true
+  },
+  {
+   "error": "DLL load failed while importing cufft: The specified module could not be found.",
+   "error_type": "ImportError",
+   "is_implicit_conversion_TypeError": false,
+   "label": "_collins_input_box(device)",
+   "names_cufft": true,
+   "outcome": "raised",
+   "raised_in": [
+    "v_cupy.py:240 <lambda>",
+    "carrier.py:1952 _collins_input_box",
+    "fft_infra.py:2253 _fft2",
+    "_fft.py:750 fft2",
+    "__init__.py:85 __getattr__",
+    "__init__.py:88 import_module"
+   ],
+   "reached_device_transform": true
+  },
+  {
+   "error": "DLL load failed while importing cufft: The specified module could not be found.",
+   "error_type": "ImportError",
+   "is_implicit_conversion_TypeError": false,
+   "label": "_collins_readout_k1(device)",
+   "names_cufft": true,
+   "outcome": "raised",
+   "raised_in": [
+    "carrier.py:2818 _collins_readout_k1",
+    "carrier.py:1952 _collins_input_box",
+    "fft_infra.py:2253 _fft2",
+    "_fft.py:750 fft2",
+    "__init__.py:85 __getattr__",
+    "__init__.py:88 import_module"
+   ],
+   "reached_device_transform": true
+  },
+  {
+   "error": "Implicit conversion to a NumPy array is not allowed. Please use `.get()` to construct a NumPy array explicitly.",
+   "error_type": "TypeError",
+   "is_implicit_conversion_TypeError": true,
+   "label": "propagate_traced_carrier_chain(device, collins)",
+   "names_cufft": false,
+   "outcome": "raised",
+   "raised_in": [
+    "v_cupy.py:181 _call",
+    "v_cupy.py:248 <lambda>",
+    "carrier.py:10537 propagate_traced_carrier_chain",
+    "carrier.py:6411 _check_chain_entry_congruence",
+    "carrier.py:6377 _chain_entry_congruence_stats",
+    "core.pyx:1699 cupy._core.core._ndarray_base.__array__"
+   ],
+   "reached_device_transform": false
+  }
+ ],
+ "tree": "C:\\tmp\\vc3_head",
+ "worst_ulps_of_one_excl_c64": 0.7071067811865476
+}

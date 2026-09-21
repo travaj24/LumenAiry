@@ -1,0 +1,528 @@
+{
+ "build": "WIN-py3.14-np2.4.4",
+ "carrier_file": "C:\\tmp\\vc3_head\\lumenairy\\propagators\\carrier.py",
+ "census1": {
+  "host_side_entries": 14,
+  "host_side_entries_NOT_reached": [
+   "_collins_readout_k1",
+   "_publish_readout_route"
+  ],
+  "host_side_entries_actually_reached": [
+   "_check_collins_sampling",
+   "_check_transport",
+   "_collins_angle_support",
+   "_collins_containment_radius",
+   "_collins_envelope_abcd",
+   "_collins_envelope_half_angle",
+   "_collins_exact_kernel_departure",
+   "_collins_kernel_wrap_ratio",
+   "_collins_leg_output_axis",
+   "_collins_power_marginals",
+   "_collins_sampling_stats",
+   "_collins_space_support"
+  ],
+  "n_reached": 66,
+  "parameter_check_failures": [],
+  "reached_collins_prefixed": [
+   "_collins_angle_support",
+   "_collins_axis_chirp",
+   "_collins_carrier_leg",
+   "_collins_containment_radius",
+   "_collins_envelope_abcd",
+   "_collins_envelope_half_angle",
+   "_collins_exact_kernel_correction",
+   "_collins_exact_kernel_departure",
+   "_collins_focus_readout",
+   "_collins_input_box",
+   "_collins_kernel_wrap_ratio",
+   "_collins_leg_output_axis",
+   "_collins_power_marginals",
+   "_collins_sampling_stats",
+   "_collins_space_support",
+   "_collins_transport"
+  ],
+  "reached_not_collins_prefixed": [
+   "_as_c_order",
+   "_asm_axis",
+   "_axis_amp_radius",
+   "_axis_bridge",
+   "_axis_carrier_phase",
+   "_axis_collimated_step",
+   "_axis_near_focus_needs_bridge",
+   "_axis_step",
+   "_axis_step_fast",
+   "_backend_of",
+   "_broadcast_axis",
+   "_build_carrier_phase",
+   "_carrier_step_fast",
+   "_cdtype_of",
+   "_check_collins_sampling",
+   "_check_gap_kernel",
+   "_check_guard_action",
+   "_check_readout_replica",
+   "_check_transport",
+   "_envelope_amp_centroid",
+   "_envelope_amp_radius",
+   "_envelope_tf_step",
+   "_evanescent_tilt_message",
+   "_exact_dispersion_phase",
+   "_exact_envelope_tf_step",
+   "_exact_tf_2d_xp",
+   "_fft2_pair",
+   "_fill_readout_replicas",
+   "_freq_1d_bld",
+   "_freq_sq_1d_bld",
+   "_fresnel_tf_2d_xp",
+   "_fresnel_tf_axis",
+   "_guard_dispose",
+   "_is_complex",
+   "_is_traced",
+   "_match_env_dtype",
+   "_narrow_rows",
+   "_near_focus_needs_bridge",
+   "_parse_carrier",
+   "_phasor_c64",
+   "_phasor_rows",
+   "_propagate_carrier_astigmatic",
+   "_propagate_carrier_focus_crossing",
+   "_radial_carrier_phase",
+   "_tf_phase_to_H",
+   "_to_dev",
+   "_warn_paraxial_kernel_drops_tilt",
+   "carrier_referenced_envelope",
+   "carrier_referenced_reconstruct",
+   "propagate_carrier_referenced"
+  ],
+  "reached_sorted": [
+   "_as_c_order",
+   "_asm_axis",
+   "_axis_amp_radius",
+   "_axis_bridge",
+   "_axis_carrier_phase",
+   "_axis_collimated_step",
+   "_axis_near_focus_needs_bridge",
+   "_axis_step",
+   "_axis_step_fast",
+   "_backend_of",
+   "_broadcast_axis",
+   "_build_carrier_phase",
+   "_carrier_step_fast",
+   "_cdtype_of",
+   "_check_collins_sampling",
+   "_check_gap_kernel",
+   "_check_guard_action",
+   "_check_readout_replica",
+   "_check_transport",
+   "_collins_angle_support",
+   "_collins_axis_chirp",
+   "_collins_carrier_leg",
+   "_collins_containment_radius",
+   "_collins_envelope_abcd",
+   "_collins_envelope_half_angle",
+   "_collins_exact_kernel_correction",
+   "_collins_exact_kernel_departure",
+   "_collins_focus_readout",
+   "_collins_input_box",
+   "_collins_kernel_wrap_ratio",
+   "_collins_leg_output_axis",
+   "_collins_power_marginals",
+   "_collins_sampling_stats",
+   "_collins_space_support",
+   "_collins_transport",
+   "_envelope_amp_centroid",
+   "_envelope_amp_radius",
+   "_envelope_tf_step",
+   "_evanescent_tilt_message",
+   "_exact_dispersion_phase",
+   "_exact_envelope_tf_step",
+   "_exact_tf_2d_xp",
+   "_fft2_pair",
+   "_fill_readout_replicas",
+   "_freq_1d_bld",
+   "_freq_sq_1d_bld",
+   "_fresnel_tf_2d_xp",
+   "_fresnel_tf_axis",
+   "_guard_dispose",
+   "_is_complex",
+   "_is_traced",
+   "_match_env_dtype",
+   "_narrow_rows",
+   "_near_focus_needs_bridge",
+   "_parse_carrier",
+   "_phasor_c64",
+   "_phasor_rows",
+   "_propagate_carrier_astigmatic",
+   "_propagate_carrier_focus_crossing",
+   "_radial_carrier_phase",
+   "_tf_phase_to_H",
+   "_to_dev",
+   "_warn_paraxial_kernel_drops_tilt",
+   "carrier_referenced_envelope",
+   "carrier_referenced_reconstruct",
+   "propagate_carrier_referenced"
+  ],
+  "unclassified_any_prefix": [
+   "_asm_axis",
+   "_axis_amp_radius",
+   "_axis_bridge",
+   "_axis_carrier_phase",
+   "_axis_collimated_step",
+   "_axis_near_focus_needs_bridge",
+   "_axis_step",
+   "_axis_step_fast",
+   "_backend_of",
+   "_broadcast_axis",
+   "_build_carrier_phase",
+   "_carrier_step_fast",
+   "_cdtype_of",
+   "_check_gap_kernel",
+   "_check_guard_action",
+   "_check_readout_replica",
+   "_envelope_amp_centroid",
+   "_envelope_amp_radius",
+   "_envelope_tf_step",
+   "_evanescent_tilt_message",
+   "_exact_envelope_tf_step",
+   "_exact_tf_2d_xp",
+   "_fill_readout_replicas",
+   "_freq_1d_bld",
+   "_freq_sq_1d_bld",
+   "_fresnel_tf_2d_xp",
+   "_fresnel_tf_axis",
+   "_guard_dispose",
+   "_is_complex",
+   "_is_traced",
+   "_match_env_dtype",
+   "_narrow_rows",
+   "_near_focus_needs_bridge",
+   "_parse_carrier",
+   "_phasor_c64",
+   "_phasor_rows",
+   "_propagate_carrier_astigmatic",
+   "_propagate_carrier_focus_crossing",
+   "_radial_carrier_phase",
+   "_warn_paraxial_kernel_drops_tilt",
+   "carrier_referenced_envelope",
+   "carrier_referenced_reconstruct",
+   "propagate_carrier_referenced"
+  ],
+  "unclassified_collins_prefixed": [],
+  "xp_parametrised_entries": 11
+ },
+ "census2": {
+  "collins_call_graph_functions_NOT_in_shipped_sites": [
+   "_as_c_order",
+   "_asm_axis",
+   "_axis_amp_radius",
+   "_axis_bridge",
+   "_axis_carrier_phase",
+   "_axis_collimated_step",
+   "_axis_near_focus_needs_bridge",
+   "_axis_step",
+   "_axis_step_fast",
+   "_backend_of",
+   "_broadcast_axis",
+   "_build_carrier_phase",
+   "_carrier_step_fast",
+   "_cdtype_of",
+   "_check_collins_sampling",
+   "_check_gap_kernel",
+   "_check_guard_action",
+   "_check_readout_replica",
+   "_check_transport",
+   "_collins_angle_support",
+   "_collins_axis_chirp",
+   "_collins_containment_radius",
+   "_collins_envelope_abcd",
+   "_collins_envelope_half_angle",
+   "_collins_exact_kernel_departure",
+   "_collins_kernel_wrap_ratio",
+   "_collins_leg_output_axis",
+   "_collins_power_marginals",
+   "_collins_sampling_stats",
+   "_collins_space_support",
+   "_envelope_amp_centroid",
+   "_envelope_amp_radius",
+   "_envelope_tf_step",
+   "_evanescent_tilt_message",
+   "_exact_dispersion_phase",
+   "_exact_envelope_tf_step",
+   "_exact_tf_2d_xp",
+   "_fft2_pair",
+   "_fill_readout_replicas",
+   "_freq_1d_bld",
+   "_freq_sq_1d_bld",
+   "_fresnel_tf_2d_xp",
+   "_fresnel_tf_axis",
+   "_guard_dispose",
+   "_is_complex",
+   "_is_traced",
+   "_match_env_dtype",
+   "_narrow_rows",
+   "_near_focus_needs_bridge",
+   "_parse_carrier",
+   "_phasor_c64",
+   "_phasor_rows",
+   "_propagate_carrier_astigmatic",
+   "_propagate_carrier_focus_crossing",
+   "_radial_carrier_phase",
+   "_tf_phase_to_H",
+   "_to_dev",
+   "_warn_paraxial_kernel_drops_tilt",
+   "carrier_referenced_envelope",
+   "carrier_referenced_reconstruct",
+   "propagate_carrier_referenced"
+  ],
+  "public_entry_call_graph_size": 136,
+  "shipped_hits": {},
+  "shipped_reading": "clean",
+  "shipped_sites": [
+   "_collins_transport",
+   "_collins_carrier_leg",
+   "_collins_focus_readout",
+   "_collins_input_box",
+   "_collins_exact_kernel_correction"
+  ],
+  "wide_hits_anywhere_in_module": {
+   "_carrier_fit_alias_fraction": [
+    "line 3575: np.asarray(Call(func=Name(id='to_numpy', ctx=Load())"
+   ],
+   "_chain_entry_congruence_stats": [
+    "line 6377: np.asarray(env)"
+   ],
+   "_chain_envelope_stats": [
+    "line 8835: np.asarray(env)"
+   ],
+   "_chain_result_metrics": [
+    "line 9372: np.asarray(Attribute(value=Name(id='res', ctx=Load()"
+   ],
+   "_collins_containment_radius": [
+    "line 1861: np.asarray(coord)"
+   ],
+   "_collins_power_marginals": [
+    "line 1837: np.asarray(Call(func=Name(id='to_numpy', ctx=Load())"
+   ],
+   "_crop_about_centre": [
+    "line 6000: np.asarray(env)",
+    "line 6014: np.ascontiguousarray(Subscript(value=Name(id='e', ctx=Load()))"
+   ],
+   "_doe_pair": [
+    "line 8689: np.asarray(value)"
+   ],
+   "_exact_envelope_tf_step": [
+    "line 1536: np.ascontiguousarray(E_env)"
+   ],
+   "_fine_trace_group_exit": [
+    "line 9361: np.asarray(E_exit)",
+    "line 9217: np.asarray(env_f)",
+    "line 9221: np.asarray(env_f)",
+    "line 9231: np.asarray(E_full)",
+    "line 9238: np.asarray(E_full)",
+    "line 9173: np.asarray(E_full)",
+    "line 9227: np.asarray(E_full)",
+    "line 9170: np.asarray(E_full)"
+   ],
+   "_fourier_upsample_crop": [
+    "line 5892: np.asarray(env)",
+    "line 5905: np.ascontiguousarray(Subscript(value=Name(id='env', ctx=Load()"
+   ],
+   "_gap_envelope_angular_spread": [
+    "line 8163: np.asarray(E)"
+   ],
+   "_group_chief_transfer": [
+    "line 7701: np.asarray(Attribute(value=Name(id='im', ctx=Load())",
+    "line 7702: np.asarray(Attribute(value=Name(id='im', ctx=Load())",
+    "line 7703: np.asarray(Attribute(value=Name(id='im', ctx=Load())",
+    "line 7704: np.asarray(Attribute(value=Name(id='im', ctx=Load())",
+    "line 7705: np.asarray(Attribute(value=Name(id='im', ctx=Load())"
+   ],
+   "_multi_parallel_results": [
+    "line 12226: np.asarray(Subscript(value=Name(id='s', ctx=Load()))"
+   ],
+   "_multi_worker_run": [
+    "line 12079: np.asarray(Attribute(value=Name(id='res', ctx=Load()"
+   ],
+   "_parse_carrier": [
+    "line 3107: np.asarray(R_carrier)"
+   ],
+   "_parse_chain_carrier": [
+    "line 7570: np.asarray(r_in)"
+   ],
+   "_run_chain_dx_self_check": [
+    "line 9465: np.asarray(Call(func=Name(id='to_numpy', ctx=Load())"
+   ],
+   "_shift_envelope": [
+    "line 7736: np.asarray(env)",
+    "line 7744: np.asarray(e)"
+   ],
+   "_warn_paraxial_kernel_drops_tilt": [
+    "line 902: np.asarray(R_carrier)"
+   ],
+   "carrier_referenced_aperture": [
+    "line 4157: np.asarray(mask)"
+   ],
+   "carrier_referenced_exact_focus_readout": [
+    "line 7110: np.asarray(Call(func=Name(id='to_numpy', ctx=Load())",
+    "line 7142: np.asarray(env)",
+    "line 7323: np.asarray(env_f)",
+    "line 7133: np.asarray(E)",
+    "line 7312: np.asarray(env_f)"
+   ],
+   "propagate_traced_carrier_chain": [
+    "line 11102: np.asarray(E_exit)",
+    "line 11320: np.asarray(IfExp(test=Name(id='_collins_ro', ctx=Lo)",
+    "line 11402: np.asarray(field)",
+    "line 10645: np.asarray(env)",
+    "line 10804: np.asarray(env)",
+    "line 11022: np.asarray(field)",
+    "line 11049: np.asarray(env_axis)",
+    "line 11193: np.asarray(env)",
+    "line 11202: np.asarray(env)",
+    "line 11298: np.asarray(field)",
+    "line 11388: np.asarray(env)",
+    "line 11398: np.asarray(field)",
+    "line 10636: np.asarray(env)",
+    "line 11053: np.asarray(env_axis)",
+    "line 11064: np.asarray(E_full)",
+    "line 11072: np.asarray(E_full)",
+    "line 11191: np.asarray(env)",
+    "line 11200: np.asarray(env)",
+    "line 11396: np.asarray(field)",
+    "line 11036: np.asarray(E_full)",
+    "line 11060: np.asarray(E_full)",
+    "line 11034: np.asarray(E_full)"
+   ],
+   "propagate_traced_carrier_chain_multi": [
+    "line 13204: np.asarray(Attribute(value=Name(id='res', ctx=Load()",
+    "line 13002: np.asarray(Subscript(value=Name(id='s', ctx=Load()))",
+    "line 13231: np.asarray(fld)"
+   ]
+  },
+  "wide_hits_on_public_call_graph": {
+   "_chain_entry_congruence_stats": [
+    "line 6377: np.asarray(env)"
+   ],
+   "_chain_envelope_stats": [
+    "line 8835: np.asarray(env)"
+   ],
+   "_chain_result_metrics": [
+    "line 9372: np.asarray(Attribute(value=Name(id='res', ctx=Load()"
+   ],
+   "_collins_containment_radius": [
+    "line 1861: np.asarray(coord)"
+   ],
+   "_collins_power_marginals": [
+    "line 1837: np.asarray(Call(func=Name(id='to_numpy', ctx=Load())"
+   ],
+   "_crop_about_centre": [
+    "line 6000: np.asarray(env)",
+    "line 6014: np.ascontiguousarray(Subscript(value=Name(id='e', ctx=Load()))"
+   ],
+   "_doe_pair": [
+    "line 8689: np.asarray(value)"
+   ],
+   "_exact_envelope_tf_step": [
+    "line 1536: np.ascontiguousarray(E_env)"
+   ],
+   "_fine_trace_group_exit": [
+    "line 9361: np.asarray(E_exit)",
+    "line 9217: np.asarray(env_f)",
+    "line 9221: np.asarray(env_f)",
+    "line 9231: np.asarray(E_full)",
+    "line 9238: np.asarray(E_full)",
+    "line 9173: np.asarray(E_full)",
+    "line 9227: np.asarray(E_full)",
+    "line 9170: np.asarray(E_full)"
+   ],
+   "_fourier_upsample_crop": [
+    "line 5892: np.asarray(env)",
+    "line 5905: np.ascontiguousarray(Subscript(value=Name(id='env', ctx=Load()"
+   ],
+   "_gap_envelope_angular_spread": [
+    "line 8163: np.asarray(E)"
+   ],
+   "_group_chief_transfer": [
+    "line 7701: np.asarray(Attribute(value=Name(id='im', ctx=Load())",
+    "line 7702: np.asarray(Attribute(value=Name(id='im', ctx=Load())",
+    "line 7703: np.asarray(Attribute(value=Name(id='im', ctx=Load())",
+    "line 7704: np.asarray(Attribute(value=Name(id='im', ctx=Load())",
+    "line 7705: np.asarray(Attribute(value=Name(id='im', ctx=Load())"
+   ],
+   "_multi_parallel_results": [
+    "line 12226: np.asarray(Subscript(value=Name(id='s', ctx=Load()))"
+   ],
+   "_parse_carrier": [
+    "line 3107: np.asarray(R_carrier)"
+   ],
+   "_parse_chain_carrier": [
+    "line 7570: np.asarray(r_in)"
+   ],
+   "_run_chain_dx_self_check": [
+    "line 9465: np.asarray(Call(func=Name(id='to_numpy', ctx=Load())"
+   ],
+   "_shift_envelope": [
+    "line 7736: np.asarray(env)",
+    "line 7744: np.asarray(e)"
+   ],
+   "_warn_paraxial_kernel_drops_tilt": [
+    "line 902: np.asarray(R_carrier)"
+   ],
+   "carrier_referenced_exact_focus_readout": [
+    "line 7110: np.asarray(Call(func=Name(id='to_numpy', ctx=Load())",
+    "line 7142: np.asarray(env)",
+    "line 7323: np.asarray(env_f)",
+    "line 7133: np.asarray(E)",
+    "line 7312: np.asarray(env_f)"
+   ],
+   "propagate_traced_carrier_chain": [
+    "line 11102: np.asarray(E_exit)",
+    "line 11320: np.asarray(IfExp(test=Name(id='_collins_ro', ctx=Lo)",
+    "line 11402: np.asarray(field)",
+    "line 10645: np.asarray(env)",
+    "line 10804: np.asarray(env)",
+    "line 11022: np.asarray(field)",
+    "line 11049: np.asarray(env_axis)",
+    "line 11193: np.asarray(env)",
+    "line 11202: np.asarray(env)",
+    "line 11298: np.asarray(field)",
+    "line 11388: np.asarray(env)",
+    "line 11398: np.asarray(field)",
+    "line 10636: np.asarray(env)",
+    "line 11053: np.asarray(env_axis)",
+    "line 11064: np.asarray(E_full)",
+    "line 11072: np.asarray(E_full)",
+    "line 11191: np.asarray(env)",
+    "line 11200: np.asarray(env)",
+    "line 11396: np.asarray(field)",
+    "line 11036: np.asarray(E_full)",
+    "line 11060: np.asarray(E_full)",
+    "line 11034: np.asarray(E_full)"
+   ],
+   "propagate_traced_carrier_chain_multi": [
+    "line 13204: np.asarray(Attribute(value=Name(id='res', ctx=Load()",
+    "line 13002: np.asarray(Subscript(value=Name(id='s', ctx=Load()))",
+    "line 13231: np.asarray(fld)"
+   ]
+  }
+ },
+ "census3": {
+  "bitwise_equal_to_backend_fft2": true,
+  "dispatcher_heads": {
+   "def _fft2(x):": {
+    "first_120": " |     \"\"\" |     2-D FFT dispatcher. |  |     Priority order: |         1. CuPy (if input is a CuPy array) |         2. pyFFTW via t",
+    "has_is_cupy_array": true
+   },
+   "def _ifft2(x):": {
+    "first_120": " |     \"\"\" |     2-D inverse FFT dispatcher. |  |     Same priority as :func:`_fft2`.  Uses a separate cache slot for |     the in",
+    "has_is_cupy_array": true
+   }
+  },
+  "fft2_is_fft_infra_fft2": true,
+  "ifft2_is_fft_infra_ifft2": true,
+  "jax_pair_is_jnp": true
+ },
+ "numpy_aliases": [
+  "np"
+ ],
+ "tree": "C:\\tmp\\vc3_head"
+}

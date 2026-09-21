@@ -276,6 +276,18 @@ def chain_fixture():
 
 def _chain(fx, L, centre_out, on_replica='error', n_out=128,
            replica_fill=None):
+    """``transport='sziklas'`` NAMED (WP-C3).
+
+    Every V3 chain claim here is stated in units of the readout's PERIOD --
+    a window one whole period from the chief ray returns a bit-identical
+    ghost, the residual walks several periods, the guard refuses at one
+    period.  That period is ``N * dx`` of the co-moving grid at the SZIKLAS
+    readout's stop plane; the Collins readout's is ``lambda |z| / dx`` of the
+    chain's input grid and is 3.8x larger on this fixture, so the same
+    walk is a fraction of a period there and the demonstration has nothing
+    to demonstrate.  The guard itself is transport-independent and is
+    exercised on both by ``test_c3_collins_default.py``.
+    """
     fr = {'dx_out': 0.5e-6, 'N_out': n_out, 'centre_out': centre_out,
           'on_replica': on_replica}
     if replica_fill is not None:
@@ -285,7 +297,8 @@ def _chain(fx, L, centre_out, on_replica='error', n_out=128,
         return C.propagate_traced_carrier_chain(
             fx['E'], [fx['g']], r_in=fx['TC'](np.inf, L, 0.0, 0.0, 0.0),
             wavelength=_CHAIN_WL, dx=fx['dx'], final_distance=fx['fd'],
-            focus_readout=fr, final_leg='paraxial', traced_kwargs=fx['tkw'])
+            focus_readout=fr, final_leg='paraxial', traced_kwargs=fx['tkw'],
+            transport='sziklas')
 
 
 def _chain_state(fx, L):
