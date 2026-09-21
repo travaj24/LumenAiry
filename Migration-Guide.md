@@ -3003,7 +3003,7 @@ res = la.propagate_traced_carrier_chain(E, groups, wl, dx,
                                         gap_kernel='exact', ...)
 ```
 
-#### A near-focus caveat, measured and not yet settled
+#### A near-focus caveat: it is the returned LATTICE, and the remedy is `dx_out`
 
 A leg landing very close to the carrier's own geometric focus is the one
 place where the two transports return different output LATTICES rather than
@@ -3021,16 +3021,33 @@ against an independent ring-Huygens Debye integral), with the final leg at
 | `transport='collins'` | 6.3126 um (the floor) | 6.2930 um | **12.3588 um** |
 
 The co-moving column matches that oracle inside 6 % and the Collins column
-misses by 11.2 %.  Whether that is the field or only the returned sampling is
-not settled -- the floored pitch puts about two samples inside EE80 where the
-co-moving grid puts six.  **If you read a spot metric off a leg that lands
-within a percent of a carrier focus, pass `transport='sziklas'` until that is
-closed:**
+misses by 11.2 %.  **SETTLED 2026-09-20: that is the returned SAMPLING, not
+the field.**  The floored pitch puts about two samples inside EE80 where the
+co-moving grid puts six, and the leg says so itself -- it emits `the Collins
+chirp-Z stage is under-sampled -- K2 (output) 5.1055`.  Driven with an
+explicit `dx_out`, the identical leg reads EE80 **11.0090 / 10.9921 /
+11.0708 / 10.9417 / 10.9083 um** at 0.25 / 0.5 / 1 / 2 / 3 um, against the
+oracle's 11.1102 um; resampled onto one common 0.5 um lattice by exact
+full-N band-limited interpolation the two arms read 11.0575 um and
+11.0568 um, **0.006 % apart**.
+
+**So if you read a spot metric off a leg that lands within a percent of a
+carrier focus, ask for a pitch that resolves the spot** -- that is the fix,
+and it keeps the more accurate quadrature:
 
 ```python
-env4, R4, dx4 = la.propagate_carrier_referenced(
-    env3, R3, z_to_image, wl, dx3, transport='sziklas')
+# the Collins leg on a lattice that resolves the spot (a readout, so the
+# output pitch is yours to choose):
+F = la.carrier_referenced_focus_readout(env3, R3, z_to_image, wl, dx3,
+                                        dx_out=0.5e-6, N_out=512)
 ```
+
+`transport='sziklas'` is still the way back to the 5.48.1 arithmetic, but it
+is NOT the remedy for this: the two arms agree about the field, and only one
+of them let you choose the lattice.  A bare
+`propagate_carrier_referenced` leg has no `dx_out` of its own -- its output
+pitch is the floor `2 r_out/N` -- which is why a near-focus readout that can
+name its own output pitch is a filed follow-up.
 
 #### The Kelly sampling warning
 

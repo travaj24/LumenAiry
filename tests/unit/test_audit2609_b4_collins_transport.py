@@ -455,11 +455,12 @@ class TestDefaultIsByteIdentical:
 
         AND ROUND 3 (maintainer decision 2026-09-20) MOVES THAT KEYWORD'S
         DEFAULT to ``'collins'``, because the standoff leg is measured at
-        relative L2 4.7340e-05 there against 2.4049 on the co-moving one
-        (converged dense separable Fresnel oracle; ``test_c3_collins_default
-        .py::test_the_focus_readouts_standoff_leg_takes_that_readouts_own_
-        transport`` is the id that grades them).  That is a decision about
-        the QUADRATURE and it leaves this id's claim untouched: what is
+        relative L2 4.7340e-05 there against 2.4049 on the co-moving one,
+        against a converged dense separable Fresnel oracle.  The id that
+        grades the two lives in ``test_c3_collins_default.py``
+        (``test_the_focus_readouts_standoff_leg_takes_that_readouts_own_
+        transport``); this one does not re-grade them.  That decision is
+        about the QUADRATURE and it leaves this id's claim untouched: what is
         asserted below is that BOTH settings still go through a stop plane,
         which is what "it is still the standoff readout" means, and that the
         two settings hand the guard DIFFERENT stop planes, which is what
@@ -496,11 +497,15 @@ class TestDefaultIsByteIdentical:
                 f'transport={tr!r} did not go through a stop plane, so this '
                 f'entry point is no longer the standoff readout: {pd!r}')
             _cont[tr] = pd['containment']
-        # the way back is a real way back: the two settings hand the guard
-        # different stop planes (measured 2026-09-20, this fixture with the
-        # guard waived: co-moving 1.8394 measured /
-        # 0.1746 modelled, Collins 4.5754 / 4.5768).
-        assert _cont['sziklas'] != _cont['collins'], _cont
+        # The way back is a real way back: the two settings hand the guard
+        # different stop planes.  MEASURED 2026-09-20 on this fixture with
+        # the guard waived, both builds: co-moving 1.8394 measured / 0.1746
+        # modelled, Collins 4.5754 / 4.5768 -- a gap of 2.736 beam radii.
+        # BAR 0.5 radii, which is 5.5x under the measured gap and 2x over the
+        # largest cross-build spread anything in this file exhibits; a float
+        # ``!=`` would pass on two grids that differ in the last bit, which
+        # is not what "the keyword selects something" means.
+        assert abs(_cont['collins'] - _cont['sziklas']) > 0.5, _cont
 
         # ``replica_fill``: its CONSEQUENCE as well as its spelling.  WP-B4
         # pinned the literal ``'repeat'`` at the tail of this method; WP-C5

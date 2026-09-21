@@ -4852,19 +4852,23 @@ def carrier_referenced_focus_readout(
     # WAY BACK: this entry point had no ``transport`` keyword, so moving it
     # would have moved a public answer with no one-keyword way back (5 of this
     # package's 103 archive keys, all of them this readout's).  Round 2 gives
-    # it the keyword instead of the pin, so the campaign's rule is satisfied
-    # and the better quadrature is the default here as it is everywhere else.
+    # it the keyword instead of the pin; round 3 takes the default, so the
+    # campaign's rule is satisfied and the better quadrature is the default
+    # here as it is everywhere else.
     #
     # WHAT THE FLIP COST, MEASURED (round 3).  8 ids across
     # ``test_audit2609_a6_carrier.py`` and
     # ``test_audit2609_a6_verify_carrier.py`` asserted properties of the
     # CO-MOVING stop plane this readout used to provide.  Each is re-derived
-    # against an oracle that owes nothing to either quadrature -- the exact
+    # against an oracle that owes nothing to either quadrature -- the
+    # analytic Gaussian-ABCD field, which for a Gaussian IS the exact
     # second-moment law ``<r^2>(z) = <r^2> + 2 z <r.theta> + z^2 <theta^2>``
-    # read off the exit field, a converged Huygens quadrature, or power
-    # conservation -- and the ones whose claim really is about the co-moving
-    # GRID rather than about the physics now name ``transport='sziklas'``
-    # and say so.  No bar was loosened to make a red go green.
+    # (the two agree to 1.2e-13 relative over 15 cells; the law is read off
+    # the ENVELOPE with the carrier composed in closed form, so nothing
+    # differentiates an under-sampled phase) -- and the ones whose claim
+    # really is about the co-moving GRID rather than about the physics now
+    # name ``transport='sziklas'`` and say so.  No bar was loosened to make a
+    # red go green.
     #
     # ``propagate_traced_carrier_chain``'s readout FALLBACK still names
     # ``transport='sziklas'`` at its two call sites, because that fallback's
