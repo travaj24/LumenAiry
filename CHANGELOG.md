@@ -1327,21 +1327,100 @@ entry point -- 7 of 7 un-named placements caught.
 DOCUMENTED CHOICE rather than a pin** -- see the
 `carrier_referenced_focus_readout` entry below.
 
+### Changed -- carrier (WP-C3 round 3): `carrier_referenced_focus_readout(transport=...)` DEFAULTS to `'collins'`, because that is the accurate quadrature near a focus
+
+The readout's carrier step onto the STOP PLANE is an ordinary free-space leg.
+WP-C3 pinned it to the co-moving step; round 2 turned the pin into the
+`transport` keyword below and left the default where it was.  **The
+maintainer decided on 2026-09-20 that accuracy wins**, and the default is the
+Collins transport.
+
+**The measurement.**  Against a converged dense separable Fresnel oracle
+(self-consistency 4.470e-05, convergence 64x -> 256x 5.14e-07) on this
+readout's own 128-grid fixture (`w = 120 um`, `R = -30 mm`, `z = 30 mm`,
+`standoff = 1 mm`), the Collins leg reads relative L2 **4.7340e-05** and the
+co-moving one **2.4049** (best global scale 2.2738, peak ratio 5.1433) --
+50 000x apart.  Over five geometries x six standoffs the co-moving leg trips
+the `on_focus_containment` refusal on **7 of 30** and returns relL2 up to
+4.876 on several of the rest; the Collins leg refuses **0 of 30** and reads
+relL2 <= 3.846e-03 everywhere, <= 5.3e-04 on 27 of 30.  An independent
+re-measurement on its own five-by-six set and its own composite-Simpson
+oracle reads 4.750712e-05 against 2.40498948, with 13 of 30 refusals on the
+co-moving leg and 0 of 30 on the Collins one.  The co-moving grid CONTRACTS
+toward the focus, so the stop plane it offers is the one the containment
+guard exists to complain about; the Collins leg floors its pitch at the value
+that still holds the ABCD image of the measured input box.
+
+**What moves.**  **5** of this release's 103 archive-to-archive keys, on both
+builds, and all five are this readout's own: two that RAISED the containment
+`RuntimeError` now return (`standoff=1 mm`, where the co-moving half-width is
+8.5333 um against a measured amplitude radius of 4.6391 um, and
+`standoff=3 mm`, 25.2770 um against 34.0242 um), one stops emitting that
+warning, and two return different bytes.  **Nothing raises that did not raise
+before** -- 0 of 103 ok -> raised, on both builds.  The **192-cell
+ordinary-chain census does not move at all** (192 / 0 / 0, both builds),
+because `propagate_traced_carrier_chain` names `transport=` on its readout at
+both of its call sites: a chain caller does not see this flip.
+
+**The way back is one keyword, and it is exact.**  `transport='sziklas'`
+reproduces the pre-flip bytes on **103 of 103** keys on both builds -- not
+only on the five that move -- proved `git archive` to `git archive`.  It is
+the same keyword at every entry point that reaches this readout: the two
+internal call sites both name it, and
+`propagate_traced_carrier_chain_multi` reaches the readout only through the
+chain.  Near a focus it is the LESS accurate setting; the numbers above are
+the reason to leave it alone.
+
+**The apparatus around the leg still says something well defined.**  Round
+2's reason for not flipping was that `_default_focus_standoff`,
+`_beam_containment_standoff` and `_achievable_focus_margin` are derived about
+the co-moving stop plane.  Re-measured: the resolver picks a leg LENGTH from
+the input grid's extent and the beam's own fitted wavefront -- properties of
+the input plane, not of the quadrature -- and names the identical standoff on
+either (5929.850650 um to every printed digit on the downward-quadratic
+fixture); the guard reads whatever grid the leg RETURNED and models the
+beam's own Gaussian ABCD width there.  What differs is that the Collins
+pitch is floored where the co-moving one contracts, so on this transport the
+resolver is sizing a leg for a grid NARROWER than the one it gets -- it aims
+short, which is the safe direction (containment 3.199644 on the co-moving
+grid, where the resolver solves for equality with its 3.2 target, and
+5.019970 on the Collins one).
+
+**Eight tests were re-derived, and no bar was loosened.**  Eight ids across
+`test_audit2609_a6_carrier.py` and `test_audit2609_a6_verify_carrier.py`
+asserted properties of the co-moving stop plane.  Each is now measured on
+BOTH transports against the analytic Gaussian-ABCD field -- which for a
+Gaussian IS the exact second-moment law `<r^2>(z) = <r^2> + 2 z <r.theta> +
+z^2 <theta^2>`, the two agreeing to 1.2e-13 over 15 cells -- and restated
+with a two-sided bar.  The finding that stands out: the pre-C1 carrier-only
+standoff leg's 4-40x focal-peak collapse is what the CO-MOVING grid's
+contraction does to a short leg, not a property of the leg length.  The same
+leg on the Collins stop plane reads 0.997221 / 0.997137 / 0.995544 of the
+analytic focal peak where the co-moving one reads 0.745373 / 0.187898 /
+0.026307.  The fail-before arms therefore name `transport='sziklas'` and say
+so; the resolved-leg arms, which are claims about the FIELD, read the same on
+either quadrature (8.1e-06 apart at worst in peak) and are asserted on both.
+
 ### Added -- carrier (WP-C3): `carrier_referenced_focus_readout(transport=...)`, defaulting to the behaviour it already had
 
 The readout's carrier step onto the STOP PLANE is an ordinary free-space leg
 and both transports implement it, but until now it was PINNED to `'sziklas'`
 with no way for a caller to say otherwise -- an internal site that can never
 benefit from an improved default, which is the shape a pin is criticised for.
-It is a documented choice now.  **The default is `'sziklas'`, so nothing
-moves**: 0 of this package's 103 archive-to-archive keys, on both builds.
+It is a documented choice now.  **When this keyword was added its default
+was `'sziklas'`, so nothing moved**: 0 of this package's 103
+archive-to-archive keys, on both builds.  (The default moved to `'collins'`
+later in the same release -- see the round-3 entry above -- and
+`transport='sziklas'` is the way back to the arithmetic this paragraph
+describes.)
 Nothing else about the readout is transport-dependent either -- the standoff
 resolver, the reconstruction, the Bluestein zoom and both guards are the same
 code on either setting, and the containment guard measures whatever grid the
 leg returned.
 
-**What `transport='collins'` buys, and why it is not the default HERE.**
-Against a converged dense separable Fresnel oracle (self-consistency
+**What `transport='collins'` buys, and why it was not the default at the
+time this keyword was added.**  Against a converged dense separable Fresnel
+oracle (self-consistency
 4.470e-05, convergence 64x -> 256x 5.14e-07) on this readout's own 128-grid
 fixture (`w = 120 um`, `R = -30 mm`, `z = 30 mm`, `standoff = 1 mm`), the
 Collins leg reads relative L2 **4.7340e-05** and the co-moving one **2.4049**
@@ -1352,19 +1431,22 @@ leg refuses **0 of 30** and reads relL2 <= 3.846e-03 everywhere, <= 5.3e-04
 on 27 of 30.  The co-moving grid CONTRACTS toward the focus, so the stop
 plane it offers is the one the containment guard exists to complain about.
 
-Two reasons the default stays where it was, and both are about this function
-rather than the quadrature.  FIRST, it is public and took no `transport`
-before, so moving its default would move a public answer for every existing
-caller with no way back for code already written.  SECOND, and the real one,
-the machinery AROUND the leg is derived about the co-moving stop plane --
+Two reasons the default stayed where it was when the keyword landed, and
+both are about this function rather than the quadrature.  FIRST, it is public
+and took no `transport` before, so moving its default would move a public
+answer for every existing caller with no way back for code already written --
+which the keyword itself then provided.  SECOND, the machinery AROUND the leg
+is derived about the co-moving stop plane --
 `_default_focus_standoff` sizes the leg from the contraction,
 `_beam_containment_standoff` and `_achievable_focus_margin` are stated in
 beam radii of that grid, and the Bluestein period is `N * dx` of it.  On a
 Collins leg that apparatus still runs and still produces the better answer
 above, but it is no longer solving the problem it was derived for.
 Re-deriving or retiring it is the follow-up the report's section 7 accounts
-for; flipping the default first would ship a resolver and a guard written
-about a grid the function no longer produces.
+for.  ROUND 3 re-measured that second reason and found the apparatus still
+well defined on a Collins stop plane -- the resolver is transport-free and
+the guard reads the grid the leg returned -- which is what let the default
+move; see the round-3 entry above.
 
 ### Changed -- carrier (WP-C3): the CuPy arm of the Collins transport
 

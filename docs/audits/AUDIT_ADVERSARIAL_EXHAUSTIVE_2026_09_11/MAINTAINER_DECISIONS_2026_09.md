@@ -44,8 +44,10 @@ direct-matrix MFT route through a build-free automatic selection (4.2).
 near-focus kernel switch ON (0.1), honest dense memory accounting as the
 default with the floor made loud (0.2), zeroed replicas as the default with
 the zeroing provably confined to the replica region (0.3); and NOT adding a
-loss-arm refusal on the multibranch fallback route (0.4).  The remaining
-entries (0.5 onward) are still open.
+loss-arm refusal on the multibranch fallback route (0.4).
+**Decided 2026-09-20 (later still), also shipping in 5.49.0:** the focus
+readout's internal standoff leg takes the accurate quadrature by default
+(0.8).  The remaining entries (0.5 onward) are still open.
 
 ### 0.1 The near-focus kernel switch (details in 1.5 and 4.3)
 
@@ -249,6 +251,77 @@ Confidence high on the mechanism; the convention is yours.
   file is needed to pin one importer convention, CaF2 has two dispersion
   sources 2.8e-5 apart, an HDF5 `lzf` write hangs on this box, and two UI
   checks need a real PySide6 (3.1 to 3.5).
+
+### 0.8 The focus readout's own internal leg (details in the WP-C3 report's Round 3 section)
+
+What it is.  `carrier_referenced_focus_readout` is the helper for reading a
+beam at or near its focus.  It cannot do that in one step, because the grid
+that holds the whole beam is too coarse to resolve the focal spot, so it works
+in two: it carries the beam to a STOP PLANE a short distance before the
+target, and then zooms onto the fine output grid the caller asked for.  That
+first carry is an ordinary free-space step, and the library has two ways of
+doing it -- the older "co-moving" one, whose grid shrinks along with the
+converging beam, and the newer "Collins" one, whose grid is held at a pitch
+wide enough to keep the beam on it.  Until now the helper always used the
+older one, with no way for a caller to say otherwise.
+
+What was measured, and by whom.  WP-C3 built the newer step and pinned this
+helper to the older one; its independent verification (VERIFY-WP-C3, finding
+D8) measured the two against a reference calculation that uses neither -- a
+dense direct integral, refined until it stopped changing.  On the helper's own
+test beam the newer step is wrong by 4.7 parts in 100 000; the older one is
+wrong by a factor of 2.4, and its answer is 5.1x too bright at the peak.
+Across thirty combinations of beam and stop-plane distance the older step
+REFUSES to answer on seven of them -- it detects that its own shrinking grid
+has lost the beam -- while the newer one answers all thirty and is wrong by
+less than four parts in a thousand everywhere.  A second, independently
+written verification reproduced all of this on its own beams and its own
+reference calculation, and found the older step refusing on thirteen of its
+thirty.
+
+What the choice cost, in plain language.  A second round of WP-C3 gave the
+helper a keyword so a caller could ask for the newer step, but left the
+DEFAULT on the older one, for one reason worth taking seriously: the
+machinery that decides how far before the target to stop, and the safety
+check that complains when the beam no longer fits, were both written about
+the older step's shrinking grid.  Re-measured for this decision, neither is
+left solving the wrong problem.  The distance-chooser reads only the input
+grid and the beam's own curvature -- it names the identical distance on
+either step -- and the safety check measures whatever grid the step actually
+returned.  What differs is the direction of the error: on the newer step the
+chooser is picking a stopping distance for a grid NARROWER than the one it
+will get, so it stops earlier than it needs to, which is the safe way round.
+
+DECIDED 2026-09-20: accuracy wins.  The helper's default is the newer step.
+
+What that moves.  Of the 103 stored calls this release compares against the
+previous one, FIVE move, and all five are this helper's own.  Two of them
+used to REFUSE and now answer; one stops emitting a warning; two return
+slightly different numbers.  Nothing that answered before now refuses.  A
+caller who reaches this helper through the traced chain sees NO change at all
+-- the chain names the step it wants, so the 192-cell sweep of ordinary
+chains is unchanged, cell for cell, on both machines tested.  The way back is
+the single keyword `transport='sziklas'`, and it reproduces the previous
+release's numbers on all 103 stored calls, not merely on the five that moved.
+
+What it required.  Eight stored tests asserted things about the older step's
+shrinking grid and had to be re-derived.  That was done by measuring each
+claim on BOTH steps against a truth that depends on neither, and restating it
+with a bound that both must satisfy for their own measured reasons; where a
+claim really was about the old grid rather than about the physics, the test
+now names the old step and says why.  No bound was widened to make a failing
+test pass.
+
+What is still open, and is a 5.49.1 item.  When the traced chain meets a
+readout its one-step form cannot represent, it falls back to this helper and
+names the OLDER step, because that fallback's contract is to reproduce the
+previous release exactly.  Near a focus that is now the less accurate of the
+two, so whether the fallback should move is a separate decision with its own
+blast radius.  Two smaller items are filed with it: the safety check's message
+still says "co-moving grid" whichever step ran (nothing measured reaches it on
+the newer step, but the wording would be wrong if it did), and a near-focus
+readout that can name its own output pitch, which is what would close the last
+open item of the WP-C3 round-2 report.
 
 ---
 

@@ -1229,3 +1229,152 @@ worktree at the base commit `49ddf4bd`, over files this package never touches
 (`optimize/core.py`, `elements/lenses.py`, `elements/rcwa/_core.py`,
 `raytrace/differential.py`).  The drift is pre-existing; the block this
 package owns is clean.
+
+---
+
+## Round 3 (maintainer decision: the standoff leg) -- 2026-09-20
+
+Round 2 gave `carrier_referenced_focus_readout` a `transport` keyword and
+left its default on `'sziklas'`, recording in R2.2 that the physics goes the
+other way and that flipping would turn 8 a6 ids red.  **The maintainer
+decided on 2026-09-20 that accuracy wins**: the default is `'collins'` and
+the 8 ids are re-derived.  This section records what that cost and what it
+bought, measured on WIN-py3.14 and WSL-py3.12.
+
+### R3.1 The decision, and the argument that changed
+
+The measurement did not change -- D8's numbers stand and round 2 confirmed
+them independently (relative L2 **4.7340e-05** on the Collins standoff leg
+against **2.4049** on the co-moving one; round 2's own Simpson oracle read
+4.750712e-05 against 2.40498948, and 13 of 30 refusals against 0 of 30 on
+its own five-by-six sweep).  What changed is the weight given to round 2's
+second reason for not flipping: that `_default_focus_standoff`,
+`_beam_containment_standoff` and `_achievable_focus_margin` are derived about
+the CO-MOVING stop plane.
+
+Re-examined and measured, that apparatus is not left solving the wrong
+problem:
+
+* **the resolver is transport-free.**  It picks a leg LENGTH from the input
+  grid's extent in beam radii and the beam's own fitted wavefront -- both
+  properties of the INPUT plane -- and it names the identical standoff on
+  either quadrature (measured on the downward-quadratic fixture:
+  5929.850650 um to every printed digit on both);
+* **the guard measures what the leg returned.**  `_check_focus_containment`
+  reads `env_stop` and `dx_stop`, and its modelled arm is the beam's own
+  Gaussian ABCD width at `z_stop`.  Neither is a property of the quadrature;
+* **the direction of the mismatch is the safe one.**  The Collins leg's
+  returned pitch is floored at the value that still holds the ABCD image of
+  the measured input box, while the co-moving one contracts.  So on the
+  Collins transport the resolver is sizing a leg for a grid NARROWER than
+  the one it gets: it aims short.  Measured on the same fixture, the
+  resolved leg lands at containment 3.199644 on the co-moving grid (the
+  resolver solves for equality with the 3.2 target) and 5.019970 on the
+  Collins one.
+
+### R3.2 What moved
+
+| census | PRE (`wave5/with-c3`) vs this branch, both at the DEFAULT | WIN-py3.14 | WSL-py3.12 |
+|---|---|---|---|
+| 103 archive keys: IDENTICAL / MOVED | | **98 / 5** | **98 / 5** |
+| 103 archive keys: OK->RAISED | | **0** | **0** |
+| 103 archive keys: RAISED->OK | | **2** | **2** |
+| 192 ordinary chain cells: IDENTICAL / MOVED / OK->RAISED | | **192 / 0 / 0** | **192 / 0 / 0** |
+| 192-cell Kelly warnings | | 0 -> 0 | 0 -> 0 |
+
+The five that move are all this readout's own, and they are the whole of the
+`P1-focus-readout-*` family that the standoff leg's accuracy touches:
+
+| key | PRE | this branch |
+|---|---|---|
+| `P1-focus-readout-standoff-1mm` | **RAISED** (the co-moving half-width at the stop plane is 8.5333 um against a measured amplitude radius of 4.6391 um) | returns |
+| `P1-focus-readout-standoff-3mm` | **RAISED** (25.2770 um against 34.0242 um) | returns |
+| `P1-focus-readout-containment-warn` | returns, with the containment `RuntimeWarning` | returns, silent |
+| `P1-focus-readout-containment-ignore` | returns | returns, different bytes |
+| `P1-focus-readout-collimated` | returns | returns, different bytes |
+
+Nothing raises that did not raise before, on either build.  The 192-cell
+ordinary-chain census does not move at all, because
+`propagate_traced_carrier_chain` names `transport=` on its readout at both
+call sites -- so no chain caller sees this flip unless they call the readout
+directly.
+
+### R3.3 The way back
+
+`transport='sziklas'` on `carrier_referenced_focus_readout` reproduces the
+PRE tree's bytes on **103 of 103** keys, on **both builds** -- not only on
+the five that move.  Measured as `git archive wave5/with-c3` with the
+`sziklas` spelling against this branch with the `sziklas` spelling:
+`IDENTICAL`, 0 differing keys, WIN and WSL.
+
+One keyword is the way back at EVERY entry point that reaches this readout.
+An AST census of the whole shipped package finds exactly two internal call
+sites (`carrier.py` 11705 and 11743, both in `propagate_traced_carrier_chain`)
+and both name `transport='sziklas'` explicitly, for the fallback's own
+bit-identity contract; `propagate_traced_carrier_chain_multi` reaches the
+readout only through the chain.  No module under `lumenairy/ui/` names
+`carrier_referenced_focus_readout`, `focus_readout` or `transport`, so no GUI
+dock reaches this leg at all.
+
+### R3.4 The eight ids, re-derived
+
+Each of the eight asserted a property of the CO-MOVING stop plane, which is
+why each went red.  Each is now measured on BOTH transports against an oracle
+that owes nothing to either -- the analytic Gaussian-ABCD field, which for a
+Gaussian IS the exact second-moment law `<r^2>(z) = <r^2> + 2 z <r.theta> +
+z^2 <theta^2>`; the two agree to **1.2e-13** relative over 15 cells spanning
+three fixtures and `z/|R|` from 0.02 to 0.97, on both builds, which is what
+makes the closed form usable as the law rather than as a model.
+
+| id | the claim | co-moving | Collins |
+|---|---|---|---|
+| `a6::TestC1FocusReadoutContainment::test_the_pre_fix_leg_really_was_that_bad` | the carrier-only leg costs 4-40x of focal peak | peak 0.745373 / 0.187898 / 0.026307 of the analytic focal peak | **0.997221 / 0.997137 / 0.995544** |
+| `a6::TestC1FocusReadoutContainment::test_the_containment_guard_refuses_the_pre_fix_landing` | the guard refuses exactly the landings whose peak collapsed | containment 0.909 / 0.863, REFUSES, peak 0.188 / 0.026 | containment 2.460 / 2.441, returns, peak 0.997 / 0.996 |
+| `verify::TestVerifyC1Quadratic::test_the_downward_quadratic_still_resolves_a_leg` | the downward-opening quadratic still has a qualifying stop plane | resolved leg containment 3.199644 (= the 3.2 target), relL2 3.5794e-04; gated (pre-fix) leg 0.866216, REFUSES, relL2 1.0022e-01 | 5.019970, relL2 **2.6062e-06**; gated leg 2.840270, returns, relL2 **9.7717e-07** |
+| `verify::TestVerifyC1AgainstTheAnalyticFocus::test_the_readout_matches_the_analytic_focus_at_a_new_na` (x2) | the resolved readout matches the analytic focus; the pre-fix leg does not | post 0.999798958 / 0.973250758 / 0.919520924; pre 0.999799 / 0.216767 / 0.024932 | post 0.999807084 / 0.973251243 / 0.919520924 (8.1e-06, 4.9e-07, 0.0e+00 apart); pre **0.999807 / 0.995531 / 0.988807** |
+| `verify::TestVerifyC1AgainstTheAnalyticFocus::test_a_narrow_grid_resolves_and_the_guard_sees_the_pre_fix_leg` (x3) | on a grid below the 3.2-radius knee the resolver targets what the grid can give, and the guard refuses the pre-fix leg | post 0.990892194 / 0.954704328 / 0.883643926, containment = target 2.5980768; pre 0.912560 / 0.300483 / 0.025460, REFUSES | post 0.990824496 / 0.954670358 / 0.883658270 (6.8e-05, 3.4e-05, 1.4e-05 apart), containment 2.5980833; pre **0.997466 / 0.994369 / 0.988228**, returns |
+
+Two readings run through every row.  The POST-fix arm -- the physics claim --
+is the SAME field on either quadrature, to 8.1e-06 at worst in peak, so it is
+asserted on both against the same bars with an agreement bar between them.
+The PRE-fix arm is not: the carrier-only leg's 4-40x collapse is what the
+CO-MOVING grid's contraction does to a short leg, and the same leg on the
+Collins stop plane loses at most 1.8 % of peak.  Those arms therefore name
+`transport='sziklas'` and say why, exactly as round 2 did for the V3 chain
+scope ids, and each carries the Collins reading beside it as its other side.
+No bar was loosened: every co-moving bar is the number it was.
+
+Two ids outside the a6 files moved for the same cause and are re-derived the
+same way: `test_c3_collins_default.py::test_the_focus_readouts_standoff_leg_
+takes_that_readouts_own_transport` (the DEFAULT now returns within 1e-3 of
+the converged quadrature and the WAY BACK raises; the three arms and their
+bars are unchanged) and `test_audit2609_b4_collins_transport.py::TestDefault
+IsByteIdentical::test_the_public_readout_is_still_the_sziklas_readout` (the
+signature pin is now `'collins'`, and the way back is asserted by the two
+settings handing the guard different stop planes -- 1.8394 measured / 0.1746
+modelled against 4.5754 / 4.5768).  That id's `replica_fill` arm carried a
+409.6 um window pinned against the CO-MOVING period of 230.4000 um, which does
+not overshoot the Collins period of 445.3012 um; the window is resolved from
+the build's own reported period now, at two periods, which is
+`TESTING_STANDARDS.md` rule 3 rather than a pinned lattice.
+
+### R3.5 What round 3 did not close
+
+* **The guard's message still says "the beam does not fit the CO-MOVING
+  grid"** on both transports.  It is reached 0 of 30 times on the Collins
+  leg in D8's sweep and 0 of 30 in round 2's own, so nothing measured emits
+  it there -- but the wording would be wrong if it did.  Changing it moves a
+  string that four test files match on; filed as a 5.49.1 wording item.
+* **The chain's readout FALLBACK still names `transport='sziklas'`.**  When a
+  chain on `transport='collins'` meets a readout the one-step form cannot
+  represent, it falls back to the standoff readout on the CO-MOVING leg --
+  which this section measures as the less accurate one near a focus.  That
+  pin is a contract (`test_c3_collins_default.py::test_the_readout_resolves_
+  its_quadrature_and_the_fallback_is_bit_identical` asserts the fallback is
+  the pre-flip answer in every bit), so moving it is a separate decision with
+  its own blast radius, not a follow-on of this one.  Filed.
+* **A near-focus readout that names its own output pitch** (R2.3b's real
+  follow-up), which is the same shape one level up: it would let the readout
+  ask for the lattice it needs instead of taking a floor.
+* **The device (CuPy) arm**, unchanged from round 2: `cupy.fft` still raises
+  `ImportError: DLL load failed while importing cufft` on this box.
