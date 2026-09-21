@@ -626,7 +626,8 @@ def _dense_in_a_fresh_process(mode, N, budget_mb, n=256, seed=17):
     p = subprocess.run(
         [sys.executable, '-c', _RSS_ARM_CHILD, str(mode), str(int(N)),
          str(float(budget_mb)), str(int(n)), str(int(seed))],
-        capture_output=True, text=True, env=env, timeout=1800)
+        stdin=subprocess.DEVNULL, capture_output=True, text=True, env=env,
+        timeout=1800)
     assert p.returncode == 0 and p.stdout.strip(), (
         f"the {mode!r} RSS arm's child exited {p.returncode}\n"
         f"--- stdout ---\n{p.stdout[-2000:]}\n"
