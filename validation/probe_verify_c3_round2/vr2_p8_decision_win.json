@@ -1,0 +1,33 @@
+{
+ "tree": "C:\\tmp\\lum_vc3b",
+ "lumenairy": "C:\\tmp\\lum_vc3b\\lumenairy\\__init__.py",
+ "python": "3.14.6",
+ "numpy": "2.4.4",
+ "fixture": {
+  "N": 256,
+  "dx": 1e-06,
+  "w": 9e-05,
+  "R": -0.04,
+  "z": 0.039731999999999996,
+  "A": 0.0067,
+  "wavelength": 1.31e-06
+ },
+ "R_sziklas": "-0.00026800000000000435",
+ "R_collins": "inf",
+ "R_collins_named": "inf",
+ "dx_sziklas_um": 0.45,
+ "dx_collins_um": 27.009618701171874,
+ "dx_collins_named_um": 0.45,
+ "win_um": 51.84,
+ "EE80_sziklas_um": 46.11293489148582,
+ "EE80_collins_um": 38.212718486445496,
+ "EE80_collins_named_um": 46.06729583248142,
+ "samples_in_EE80_collins": 1.4147818563905736,
+ "samples_in_EE80_sziklas": 102.47318864774627,
+ "err_on_returned_lattice": 0.17132321817362794,
+ "err_on_common_lattice": 0.0009897235799847248,
+ "warnings": [
+  "propagate_carrier_referenced: the Collins chirp-Z stage is under-sampled -- K2 (output) 3.7192: the requested "
+ ],
+ "separation": 173.1020879347667
+}

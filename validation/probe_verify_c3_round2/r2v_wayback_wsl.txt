@@ -1,0 +1,100 @@
+{
+ "tag": "r2v_wayback_wsl",
+ "arms": {
+  "base": {
+   "tree": "/mnt/c/tmp/vc3b_base49",
+   "spelling": "default",
+   "build": "WSL-py3.12",
+   "n_keys": 103,
+   "seconds": 59.3
+  },
+  "fix": {
+   "tree": "/mnt/c/tmp/lum_vc3b",
+   "spelling": "default",
+   "build": "WSL-py3.12",
+   "n_keys": 103,
+   "seconds": 57.6
+  },
+  "fixsz": {
+   "tree": "/mnt/c/tmp/lum_vc3b",
+   "spelling": "sziklas",
+   "build": "WSL-py3.12",
+   "n_keys": 103,
+   "seconds": 61.2
+  }
+ },
+ "comparisons": {
+  "base:fix": {
+   "n_shared": 103,
+   "n_identical": 54,
+   "n_differ": 49,
+   "differ": [
+    "C1-bare-final",
+    "C1-bare-final-long",
+    "C1-bare-zero-distance",
+    "C2-readout",
+    "C2-readout-bandlimit-off",
+    "C2-readout-bandlimit-on",
+    "C2-readout-centre",
+    "C2-readout-containment-ignore",
+    "C2-readout-containment-warn",
+    "C2-readout-long",
+    "C2-readout-replica-repeat",
+    "C2-readout-replica-zero",
+    "C2-readout-standoff-2mm",
+    "C2-readout-standoff-5mm",
+    "C2-readout-zero-distance",
+    "C3-exact-kernel",
+    "C3-fresnel-bare",
+    "C3-fresnel-kernel",
+    "C4-collimated-input",
+    "C4-single-group",
+    "C5-final-leg-auto-readout",
+    "C5-final-leg-exact-bare",
+    "C5-final-leg-exact-readout",
+    "J1-jax-focuscross",
+    "M1-K1",
+    "M1-K1-long",
+    "M1-K2",
+    "M1-K2-long",
+    "M2-K1-standoff",
+    "M2-K1-zero-distance",
+    "M2-K2-standoff",
+    "M3-K1-fresnel",
+    "M3-K1-tile2",
+    "M3-K2-incoherent",
+    "M4-K1-final-leg-exact",
+    "S1-convlong-auto",
+    "S1-convlong-fresnel",
+    "S1-diverging-auto",
+    "S1-diverging-fresnel",
+    "S1-farpastfocus-auto",
+    "S1-farpastfocus-fresnel",
+    "S1-focuscross-auto",
+    "S1-focuscross-fresnel",
+    "S1-nearfocus-auto",
+    "S1-nearfocus-fresnel",
+    "S2-exactkernel-focuscross",
+    "S3-astig-focuscross",
+    "S7-carrierout-refused",
+    "S7-dxout-refused"
+   ],
+   "only_left": [],
+   "only_right": [],
+   "verdict": "DIFFERS"
+  },
+  "base:fixsz": {
+   "n_shared": 103,
+   "n_identical": 103,
+   "n_differ": 0,
+   "differ": [],
+   "only_left": [],
+   "only_right": [],
+   "verdict": "IDENTICAL"
+  }
+ }
+}
+sed] S7-carrierout-refused -> ValueError: propagate_carrier_referenced: dx_out / carrier_out are the FREELY CHOSEN output lattice and reference of the Collins transport and have no meaning on transport=
+[raised] P1-focus-readout-standoff-1mm -> RuntimeError: carrier_referenced_focus_readout: the beam does not fit the co-moving grid at the stop plane.  The grid half-width there is 8.5333 um against a measured amplitu
+[raised] P1-focus-readout-standoff-3mm -> RuntimeError: carrier_referenced_focus_readout: the beam does not fit the co-moving grid at the stop plane.  The grid half-width there is 25.2770 um against a measured amplit
+[keys] 103 keys -> /mnt/c/tmp/lum_vc3b/validation/probe_verify_c3_round2/r2v_wayback_wsl_fixsz.json

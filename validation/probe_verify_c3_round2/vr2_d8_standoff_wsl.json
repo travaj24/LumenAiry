@@ -1,0 +1,442 @@
+{
+ "tree": "/mnt/c/tmp/lum_vc3b",
+ "lumenairy": "/mnt/c/tmp/lum_vc3b/lumenairy/__init__.py",
+ "python": "3.12.3",
+ "numpy": "2.4.6",
+ "readout_has_transport_kw": true,
+ "readout_transport_default": "sziklas",
+ "oracle_256x_vs_512x_relL2": 4.2995916150399925e-16,
+ "analytic_w_out_um": 50.37253948858487,
+ "oracle_vs_abcd_amp_relL2": 8.095151796755426e-05,
+ "fixture": {
+  "N": 128,
+  "dx": 4e-06,
+  "wl": 6.33e-07,
+  "w": 0.00012,
+  "R": -0.03,
+  "z": 0.03,
+  "standoff": 0.001,
+  "dx_out": 2e-07,
+  "N_out": 32
+ },
+ "headline": {
+  "sziklas": {
+   "raised": "RuntimeError: carrier_referenced_focus_readout: the beam does not fit the co-moving grid at the stop plane.  The grid half-width there is 8.5333 um against a measured amplitude radius of 4.6391 um -- a containment ",
+   "warnings": [],
+   "vs_oracle": null
+  },
+  "sziklas_guard_warn": {
+   "raised": null,
+   "warnings": [
+    "carrier_referenced_focus_readout: the beam does not fit the co-moving grid at the stop plane.  The grid half-width there"
+   ],
+   "vs_oracle": {
+    "relL2": 2.4049894840869106,
+    "relL2_phase_free": 1.2738413447950414,
+    "relL2_scale_free": 0.0018137497846908266,
+    "best_scale_abs": 2.2738346686107413,
+    "peak_ratio": 5.143274054224106
+   }
+  },
+  "collins": {
+   "raised": null,
+   "warnings": [],
+   "vs_oracle": {
+    "relL2": 4.750711683026078e-05,
+    "relL2_phase_free": 4.7326016071930564e-05,
+    "relL2_scale_free": 4.627072058360536e-05,
+    "best_scale_abs": 0.999990059437703,
+    "peak_ratio": 0.9999761704470578
+   }
+  },
+  "collins_guard_warn": {
+   "raised": null,
+   "warnings": [],
+   "vs_oracle": {
+    "relL2": 4.750711683026078e-05,
+    "relL2_phase_free": 4.7326016071930564e-05,
+    "relL2_scale_free": 4.627072058360536e-05,
+    "best_scale_abs": 0.999990059437703,
+    "peak_ratio": 0.9999761704470578
+   }
+  }
+ },
+ "sweep": [
+  {
+   "geom": 0,
+   "standoff_mm": 0.2,
+   "sziklas": {
+    "raised": null,
+    "relL2": 0.008892945912074473
+   },
+   "collins": {
+    "raised": null,
+    "relL2": 4.865270673460837e-05
+   }
+  },
+  {
+   "geom": 0,
+   "standoff_mm": 0.5,
+   "sziklas": {
+    "raised": null,
+    "relL2": 0.008892945912546578
+   },
+   "collins": {
+    "raised": null,
+    "relL2": 4.741306362395199e-05
+   }
+  },
+  {
+   "geom": 0,
+   "standoff_mm": 1.0,
+   "sziklas": {
+    "raised": "RuntimeError",
+    "relL2": null
+   },
+   "collins": {
+    "raised": null,
+    "relL2": 4.7507116830229414e-05
+   }
+  },
+  {
+   "geom": 0,
+   "standoff_mm": 2.0,
+   "sziklas": {
+    "raised": "RuntimeError",
+    "relL2": null
+   },
+   "collins": {
+    "raised": null,
+    "relL2": 4.859759506181354e-05
+   }
+  },
+  {
+   "geom": 0,
+   "standoff_mm": 4.0,
+   "sziklas": {
+    "raised": "RuntimeError",
+    "relL2": null
+   },
+   "collins": {
+    "raised": null,
+    "relL2": 5.555902186947082e-05
+   }
+  },
+  {
+   "geom": 0,
+   "standoff_mm": 8.0,
+   "sziklas": {
+    "raised": null,
+    "relL2": 0.061368556178131
+   },
+   "collins": {
+    "raised": null,
+    "relL2": 0.000150181889703493
+   }
+  },
+  {
+   "geom": 1,
+   "standoff_mm": 0.2,
+   "sziklas": {
+    "raised": null,
+    "relL2": 0.0005682909898075658
+   },
+   "collins": {
+    "raised": null,
+    "relL2": 9.37764732236387e-06
+   }
+  },
+  {
+   "geom": 1,
+   "standoff_mm": 0.5,
+   "sziklas": {
+    "raised": null,
+    "relL2": 0.0005682909840602533
+   },
+   "collins": {
+    "raised": null,
+    "relL2": 9.367494850749977e-06
+   }
+  },
+  {
+   "geom": 1,
+   "standoff_mm": 1.0,
+   "sziklas": {
+    "raised": "RuntimeError",
+    "relL2": null
+   },
+   "collins": {
+    "raised": null,
+    "relL2": 1.3029123467430582e-05
+   }
+  },
+  {
+   "geom": 1,
+   "standoff_mm": 2.0,
+   "sziklas": {
+    "raised": "RuntimeError",
+    "relL2": null
+   },
+   "collins": {
+    "raised": null,
+    "relL2": 1.0516219366428159e-05
+   }
+  },
+  {
+   "geom": 1,
+   "standoff_mm": 4.0,
+   "sziklas": {
+    "raised": "RuntimeError",
+    "relL2": null
+   },
+   "collins": {
+    "raised": null,
+    "relL2": 2.2670622027872767e-05
+   }
+  },
+  {
+   "geom": 1,
+   "standoff_mm": 8.0,
+   "sziklas": {
+    "raised": null,
+    "relL2": 0.0391814014450228
+   },
+   "collins": {
+    "raised": null,
+    "relL2": 3.183547254114949e-05
+   }
+  },
+  {
+   "geom": 2,
+   "standoff_mm": 0.2,
+   "sziklas": {
+    "raised": null,
+    "relL2": 0.010948274912858897
+   },
+   "collins": {
+    "raised": null,
+    "relL2": 2.4497094282397213e-05
+   }
+  },
+  {
+   "geom": 2,
+   "standoff_mm": 0.5,
+   "sziklas": {
+    "raised": "RuntimeError",
+    "relL2": null
+   },
+   "collins": {
+    "raised": null,
+    "relL2": 0.00011442373311653459
+   }
+  },
+  {
+   "geom": 2,
+   "standoff_mm": 1.0,
+   "sziklas": {
+    "raised": "RuntimeError",
+    "relL2": null
+   },
+   "collins": {
+    "raised": null,
+    "relL2": 0.00011055048312792015
+   }
+  },
+  {
+   "geom": 2,
+   "standoff_mm": 2.0,
+   "sziklas": {
+    "raised": "RuntimeError",
+    "relL2": null
+   },
+   "collins": {
+    "raised": null,
+    "relL2": 0.0001440907668582688
+   }
+  },
+  {
+   "geom": 2,
+   "standoff_mm": 4.0,
+   "sziklas": {
+    "raised": "RuntimeError",
+    "relL2": null
+   },
+   "collins": {
+    "raised": null,
+    "relL2": 8.603066633580999e-05
+   }
+  },
+  {
+   "geom": 2,
+   "standoff_mm": 8.0,
+   "sziklas": {
+    "raised": null,
+    "relL2": 0.026088299053170866
+   },
+   "collins": {
+    "raised": null,
+    "relL2": 0.00012092519792607332
+   }
+  },
+  {
+   "geom": 3,
+   "standoff_mm": 0.2,
+   "sziklas": {
+    "raised": null,
+    "relL2": 2.031988633037679e-05
+   },
+   "collins": {
+    "raised": null,
+    "relL2": 1.1615290885810789e-06
+   }
+  },
+  {
+   "geom": 3,
+   "standoff_mm": 0.5,
+   "sziklas": {
+    "raised": null,
+    "relL2": 2.03198833327236e-05
+   },
+   "collins": {
+    "raised": null,
+    "relL2": 1.410603137548507e-05
+   }
+  },
+  {
+   "geom": 3,
+   "standoff_mm": 1.0,
+   "sziklas": {
+    "raised": "RuntimeError",
+    "relL2": null
+   },
+   "collins": {
+    "raised": null,
+    "relL2": 1.5910527642305657e-05
+   }
+  },
+  {
+   "geom": 3,
+   "standoff_mm": 2.0,
+   "sziklas": {
+    "raised": "RuntimeError",
+    "relL2": null
+   },
+   "collins": {
+    "raised": null,
+    "relL2": 1.7482425601969347e-05
+   }
+  },
+  {
+   "geom": 3,
+   "standoff_mm": 4.0,
+   "sziklas": {
+    "raised": null,
+    "relL2": 0.2541302808902485
+   },
+   "collins": {
+    "raised": null,
+    "relL2": 1.4073982577300372e-05
+   }
+  },
+  {
+   "geom": 3,
+   "standoff_mm": 8.0,
+   "sziklas": {
+    "raised": null,
+    "relL2": 0.008600288078947485
+   },
+   "collins": {
+    "raised": null,
+    "relL2": 5.7697676049739295e-06
+   }
+  },
+  {
+   "geom": 4,
+   "standoff_mm": 0.2,
+   "sziklas": {
+    "raised": null,
+    "relL2": 1.8149299897223776e-05
+   },
+   "collins": {
+    "raised": null,
+    "relL2": 3.1842283824540777e-07
+   }
+  },
+  {
+   "geom": 4,
+   "standoff_mm": 0.5,
+   "sziklas": {
+    "raised": null,
+    "relL2": 1.8149292645783083e-05
+   },
+   "collins": {
+    "raised": null,
+    "relL2": 4.268452278490716e-06
+   }
+  },
+  {
+   "geom": 4,
+   "standoff_mm": 1.0,
+   "sziklas": {
+    "raised": null,
+    "relL2": 1.8149298423842653e-05
+   },
+   "collins": {
+    "raised": null,
+    "relL2": 3.6826074799999256e-06
+   }
+  },
+  {
+   "geom": 4,
+   "standoff_mm": 2.0,
+   "sziklas": {
+    "raised": "RuntimeError",
+    "relL2": null
+   },
+   "collins": {
+    "raised": null,
+    "relL2": 3.755742346769844e-06
+   }
+  },
+  {
+   "geom": 4,
+   "standoff_mm": 4.0,
+   "sziklas": {
+    "raised": null,
+    "relL2": 0.10693871338941494
+   },
+   "collins": {
+    "raised": null,
+    "relL2": 4.0183099933166585e-06
+   }
+  },
+  {
+   "geom": 4,
+   "standoff_mm": 8.0,
+   "sziklas": {
+    "raised": null,
+    "relL2": 0.0015635443993991512
+   },
+   "collins": {
+    "raised": null,
+    "relL2": 4.3434751048869726e-06
+   }
+  }
+ ],
+ "sweep_raise_counts": {
+  "sziklas": 13,
+  "collins": 0
+ },
+ "sweep_relL2_sziklas": {
+  "n": 17,
+  "max": 0.2541302808902485,
+  "n_le_5p3e-4": 5,
+  "n_le_3.846e-3": 8
+ },
+ "sweep_relL2_collins": {
+  "n": 30,
+  "max": 0.000150181889703493,
+  "n_le_5p3e-4": 30,
+  "n_le_3.846e-3": 30
+ }
+}

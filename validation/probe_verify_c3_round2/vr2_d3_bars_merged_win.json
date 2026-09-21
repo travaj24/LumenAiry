@@ -1,0 +1,19 @@
+{
+ "tree": "C:\\tmp\\vc3b_merge",
+ "lumenairy": "C:\\tmp\\vc3b_merge\\lumenairy\\__init__.py",
+ "python": "3.14.6",
+ "tau": 0.0001,
+ "chain_default_transport": "collins",
+ "bad6": 1.6462265362767432,
+ "good6": 0.00831245978054869,
+ "bad4": 115.24895826678058,
+ "sep_bad6_over_good6": 198.04324829684518,
+ "bar_sep": 5.0,
+ "ratio_bad4_over_bad6": 70.00795803440163,
+ "bar_deg": 2.0,
+ "collins_counts": {
+  "collins_legs": 0,
+  "tau_evaluated": 0,
+  "tau_fired": 0
+ }
+}

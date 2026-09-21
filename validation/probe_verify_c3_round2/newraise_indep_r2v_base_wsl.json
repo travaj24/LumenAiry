@@ -1,0 +1,153 @@
+{
+ "tree": "/mnt/c/tmp/vc3b_base49",
+ "lumenairy": "/mnt/c/tmp/vc3b_base49/lumenairy/__init__.py",
+ "python": "3.12.3",
+ "numpy": "2.4.6",
+ "default_transport": "sziklas",
+ "rows": [
+  {
+   "N": 512,
+   "dx_um": 20.0,
+   "w_mm": 2.0,
+   "final_distance": 0.005,
+   "outcome": "returned",
+   "peak": 3.1891607177307666,
+   "route": null,
+   "route_k1": null,
+   "reason": null,
+   "carrier_warnings": []
+  },
+  {
+   "N": 512,
+   "dx_um": 20.0,
+   "w_mm": 2.0,
+   "final_distance": 0.008,
+   "outcome": "returned",
+   "peak": 4.1404473803523265,
+   "route": null,
+   "route_k1": null,
+   "reason": null,
+   "carrier_warnings": []
+  },
+  {
+   "N": 512,
+   "dx_um": 20.0,
+   "w_mm": 2.0,
+   "final_distance": 0.02,
+   "outcome": "returned",
+   "peak": 9.354442623064829,
+   "route": null,
+   "route_k1": null,
+   "reason": null,
+   "carrier_warnings": []
+  },
+  {
+   "N": 256,
+   "dx_um": 20.0,
+   "w_mm": 2.0,
+   "final_distance": 0.005,
+   "outcome": "returned",
+   "peak": 3.184859900677453,
+   "route": null,
+   "route_k1": null,
+   "reason": null,
+   "carrier_warnings": []
+  },
+  {
+   "N": 256,
+   "dx_um": 20.0,
+   "w_mm": 2.0,
+   "final_distance": 0.008,
+   "outcome": "returned",
+   "peak": 4.0927999170176275,
+   "route": null,
+   "route_k1": null,
+   "reason": null,
+   "carrier_warnings": []
+  },
+  {
+   "N": 256,
+   "dx_um": 20.0,
+   "w_mm": 2.0,
+   "final_distance": 0.02,
+   "outcome": "returned",
+   "peak": 9.347355682649106,
+   "route": null,
+   "route_k1": null,
+   "reason": null,
+   "carrier_warnings": []
+  },
+  {
+   "N": 512,
+   "dx_um": 20.0,
+   "w_mm": 3.0,
+   "final_distance": 0.005,
+   "outcome": "returned",
+   "peak": 3.279145134999831,
+   "route": null,
+   "route_k1": null,
+   "reason": null,
+   "carrier_warnings": []
+  },
+  {
+   "N": 512,
+   "dx_um": 20.0,
+   "w_mm": 3.0,
+   "final_distance": 0.008,
+   "outcome": "returned",
+   "peak": 4.18997861788665,
+   "route": null,
+   "route_k1": null,
+   "reason": null,
+   "carrier_warnings": []
+  },
+  {
+   "N": 512,
+   "dx_um": 20.0,
+   "w_mm": 3.0,
+   "final_distance": 0.02,
+   "outcome": "returned",
+   "peak": 9.858808999557167,
+   "route": null,
+   "route_k1": null,
+   "reason": null,
+   "carrier_warnings": []
+  },
+  {
+   "N": 1024,
+   "dx_um": 10.0,
+   "w_mm": 2.0,
+   "final_distance": 0.005,
+   "outcome": "returned",
+   "peak": 1.631373253074247,
+   "route": null,
+   "route_k1": null,
+   "reason": null,
+   "carrier_warnings": []
+  },
+  {
+   "N": 1024,
+   "dx_um": 10.0,
+   "w_mm": 2.0,
+   "final_distance": 0.008,
+   "outcome": "returned",
+   "peak": 1.8983122687521496,
+   "route": null,
+   "route_k1": null,
+   "reason": null,
+   "carrier_warnings": []
+  },
+  {
+   "N": 1024,
+   "dx_um": 10.0,
+   "w_mm": 2.0,
+   "final_distance": 0.02,
+   "outcome": "returned",
+   "peak": 3.749786495479312,
+   "route": null,
+   "route_k1": null,
+   "reason": null,
+   "carrier_warnings": []
+  }
+ ]
+}

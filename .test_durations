@@ -16951,5 +16951,6 @@
   "tests/unit/test_verify_c3_collins_default.py::TestTheResolvedRouteIsTwoSided::test_the_stop_plane_key_selects_and_k1_is_not_even_computed": 0.9458156000036979,
   "tests/unit/test_verify_c3_collins_default.py::TestTheResolvedRouteIsTwoSided::test_the_three_route_keys_are_absent_on_the_sziklas_spelling": 0.9374186999921221,
   "tests/unit/test_verify_c3_collins_default.py::TestTheRouteConditionIsAStaircase::test_the_angle_term_is_bounded_by_one_and_quantised_in_two_over_N": 0.017063400009647012,
-  "tests/unit/test_verify_c3_collins_default.py::TestTheRouteConditionIsAStaircase::test_the_smallest_step_the_condition_can_take_is_two_over_N": 0.18898260001151357
+  "tests/unit/test_verify_c3_collins_default.py::TestTheRouteConditionIsAStaircase::test_the_smallest_step_the_condition_can_take_is_two_over_N": 0.18898260001151357,
+  "tests/unit/test_verify_c3_round2.py::test_the_near_focus_ee80_gap_is_the_returned_lattice_not_the_field": 1.0466815999971004
 }
