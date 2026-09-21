@@ -4,6 +4,23 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+## [5.49.0] — 2026-09-21
+
+The eight numerical defaults the 2026-09-11 adversarial audit measured and left
+switchable become the defaults their measurements supported, by maintainer
+decision on 2026-09-20 (`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/MAINTAINER_DECISIONS_2026_09.md`, section 0): the grey aperture edge, the
+analytic sphere normal and exit-side renormalisation in the ray tracer, the
+Collins carrier transport, the direct-matrix route of the matrix Fourier
+transform at small output grids, the near-focus exact-kernel switch, honest
+memory accounting for the dense GBD reconstruction, and zeroed readout
+replicas.  Every flip has a one-keyword way back at every public entry point
+that moves, proved byte-identical against 5.48.1 on two builds, and each was
+built, independently verified and re-measured before it merged (the `WP-C1`
+to `WP-C5` reports and their `VERIFY_WP-C*` verifications under
+`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/`).  The 5.49.0
+section of `Migration-Guide.md` lists, per flip, what moves, who is affected
+and the way back.  Nothing is removed; the deprecation horizon stays at 5.50.
+
 ### Changed -- MFT propagators (WP-C4): `method='auto'` now SELECTS the direct-matrix route where it was measured never slower on either build, which is `N_out/N_in <= 1/32` AND at least 16 multiply-adds per transcendental
 
 `fresnel_propagate_mft`, `fraunhofer_propagate_mft` and
