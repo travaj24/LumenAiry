@@ -414,24 +414,78 @@ def test_importing_lumenairy_does_not_import_backend_scipy_or_scipy_linalg():
     forward actually saves -- ``scipy.special`` is still pulled in by
     ``scipy.fft``, which ``propagators/fft_infra.py`` imports eagerly and
     which is outside this work package (recorded in the WP-A16 report).
+
+    RESTATED 2026-09-21 (the 5.49.0 matrix): the first draft read
+    ``'scipy.linalg' in sys.modules`` after ``import lumenairy`` and called
+    it lumenairy's doing.  That premise is scipy's, not ours: on scipy 1.18
+    ``import scipy.special`` alone loads ``scipy.linalg`` (through
+    ``scipy.special._ellip_harm_2``), MEASURED in a CI-like venv with
+    numpy 2.5.3 / scipy 1.18.1, where the draft went red on every Python
+    while scipy 1.17.1 kept it green.  The claim, stated as itself: importing
+    lumenairy adds neither ``lumenairy.backend.scipy`` nor ``scipy.linalg``
+    BEYOND what the scipy submodules it imports eagerly (``scipy.fft``,
+    ``scipy.special``) already bring in on the installed scipy.  The
+    baseline is measured in the same fresh interpreter, so the decision is
+    the same on every scipy: a lumenairy module importing ``scipy.linalg``
+    at module scope is caught on scipy 1.17 (where it is the only importer)
+    exactly as it would be on 1.18 -- the AST arm below sees it either way.
     """
     code = (
         'import sys; sys.path.insert(0, %r)\n'
+        'import scipy.fft, scipy.special\n'
+        'base = set(sys.modules)\n'
         'import lumenairy\n'
+        'new = set(sys.modules) - base\n'
         'print("backend.scipy", "lumenairy.backend.scipy" in sys.modules)\n'
-        'print("scipy.linalg", "scipy.linalg" in sys.modules)\n'
+        'print("scipy.linalg", "scipy.linalg" in new)\n'
+        'print("baseline.linalg", "scipy.linalg" in base)\n'
+        'print("loaded", ",".join(sorted(m for m in new '
+        'if m.startswith("lumenairy"))))\n'
         % str(REPO.parent))
     out = subprocess.run([sys.executable, '-c', code], capture_output=True,
                          text=True, stdin=subprocess.DEVNULL,
                          cwd=str(REPO.parent))
     assert out.returncode == 0, out.stderr[-2000:]
-    lines = dict(ln.rsplit(' ', 1) for ln in out.stdout.strip().splitlines())
+    lines = dict(ln.split(' ', 1) for ln in out.stdout.strip().splitlines())
     assert lines['backend.scipy'] == 'False', (
         'import lumenairy still loads lumenairy.backend.scipy eagerly; the '
         'PEP 562 forward in backend/__init__.py is not doing its job.')
     assert lines['scipy.linalg'] == 'False', (
-        'import lumenairy still loads scipy.linalg; something imports '
+        'import lumenairy loads scipy.linalg beyond what scipy.fft and '
+        'scipy.special already bring in on this scipy (baseline had it: '
+        + lines['baseline.linalg'] + '); something imports '
         'lumenairy.backend.scipy (or scipy.linalg) at module scope again.')
+    # The STRUCTURAL arm, independent of scipy's own import graph: no
+    # lumenairy module that package import loads names scipy.linalg or the
+    # scipy backend at module scope.
+    import ast
+    offenders = []
+    for name in (lines.get('loaded') or '').split(','):
+        if not name:
+            continue
+        rel = name.replace('.', '/')
+        path = REPO / (rel + '.py')
+        if not path.is_file():
+            path = REPO / rel / '__init__.py'
+        if not path.is_file():
+            continue
+        tree = ast.parse(path.read_text(encoding='utf-8'))
+        for node in tree.body:          # module scope only
+            if isinstance(node, ast.Import):
+                names = [a.name for a in node.names]
+            elif isinstance(node, ast.ImportFrom):
+                names = [node.module or '']
+                if node.module in ('scipy',) and any(
+                        a.name == 'linalg' for a in node.names):
+                    names.append('scipy.linalg')
+            else:
+                continue
+            if any(n.startswith('scipy.linalg') or n.endswith('backend.scipy')
+                   for n in names):
+                offenders.append((name, node.lineno))
+    assert not offenders, (
+        'these package-import-loaded modules import scipy.linalg or the scipy '
+        f'backend at module scope: {offenders}')
 
 
 def test_backend_scipy_still_resolves_every_way_it_used_to():
