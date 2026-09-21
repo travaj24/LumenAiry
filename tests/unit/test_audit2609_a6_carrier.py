@@ -1109,20 +1109,44 @@ class TestC5SmallerItems:
             assert (float(np.abs(a - b).max()) / float(np.abs(a).max())
                     < 1e-12), nn
 
-    def test_the_gap_kernel_comment_no_longer_contradicts_itself(self):
+    def test_the_gap_kernel_comment_no_longer_contradicts_itself(self, monkeypatch):
         """``_carrier_step_fast`` carried two statements four lines apart --
         "'auto' ... resolves by BACKEND" and "'auto' resolves to 'exact'
         everywhere" -- and ``propagate_carrier_referenced`` claimed its fast
         path was byte-identical "on the default gap_kernel='fresnel'" when the
         default is 'auto'.  The behaviour is pinned here so the prose and the
-        code cannot drift apart again."""
+        code cannot drift apart again.
+
+        RESTATED for the 5.49.0 integration (WP-C3 x WP-C5): the accuracy-keyed
+        rule ``_GAP_KERNEL_ACCURACY_TAU`` now ships ARMED and the default
+        transport is Collins, so on this leg ``'auto'`` may resolve to the
+        paraxial kernel where the exact one's departure exceeds tau.  The
+        first draft pinned ``'auto' IS 'exact'`` unconditionally, which was
+        true only while the rule was disarmed.  The claim, stated as itself:
+        ``'auto'`` returns EXACTLY one of the two named kernels' arrays (never
+        a third arithmetic), and with the rule disarmed it is the exact
+        kernel -- so if the armed default took the paraxial arm, the rule is
+        what chose it.  Two-sided on both arms of the live constant."""
         n, dx = 64, 2e-6
         env = _gauss(n, dx, 20e-6).astype(complex)
-        a = C.propagate_carrier_referenced(env, 50e-3, 1e-3, LAM, dx,
-                                           gap_kernel='auto').env
-        b = C.propagate_carrier_referenced(env, 50e-3, 1e-3, LAM, dx,
-                                           gap_kernel='exact').env
-        c = C.propagate_carrier_referenced(env, 50e-3, 1e-3, LAM, dx,
-                                           gap_kernel='fresnel').env
-        assert np.array_equal(a, b)          # 'auto' IS 'exact', on numpy too
-        assert not np.array_equal(a, c)
+
+        def run(kernel):
+            return C.propagate_carrier_referenced(env, 50e-3, 1e-3, LAM, dx,
+                                                  gap_kernel=kernel).env
+
+        b, c = run('exact'), run('fresnel')
+        assert not np.array_equal(b, c), (
+            'PREMISE: the two named kernels agree on this leg, so nothing here '
+            'can tell which one auto took')
+        a = run('auto')
+        is_exact, is_fresnel = np.array_equal(a, b), np.array_equal(a, c)
+        assert is_exact != is_fresnel, (
+            "'auto' returned neither named kernel's array, or both -- a third "
+            'arithmetic, which is the drift this id exists to catch')
+        # Disarm the rule: 'auto' must then be the exact kernel, on numpy too.
+        monkeypatch.setattr(C, '_GAP_KERNEL_ACCURACY_TAU', None)
+        a_disarmed = run('auto')
+        assert np.array_equal(a_disarmed, b), (
+            "with the accuracy-keyed rule disarmed 'auto' is no longer the "
+            'exact kernel')
+        assert not np.array_equal(a_disarmed, c)
