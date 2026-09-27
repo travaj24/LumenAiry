@@ -1,0 +1,79 @@
+{
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "lumenairy": "C:\\tmp\\lum_curved\\lumenairy\\__init__.py",
+  "machine": "Tesla_Ryzen",
+  "whiten_eig": true,
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ },
+ "a_over_px": 0.05,
+ "M": 8,
+ "rows": [
+  {
+   "fixture": "stripe",
+   "arm": "correct",
+   "closure": 2.2802361858698106e-06,
+   "max_dRT": 0.0
+  },
+  {
+   "fixture": "stripe",
+   "arm": "trap_H_minusR_gram",
+   "closure": 2.2802361863139e-06,
+   "max_dRT": 8.326672684688674e-16
+  },
+  {
+   "fixture": "stripe",
+   "arm": "trap_Hmix_halfspaces_minusR",
+   "closure": 0.15746386669430845,
+   "max_dRT": 0.10645940690336808
+  },
+  {
+   "fixture": "stripe",
+   "arm": "trap_F_no_cofactor",
+   "closure": 0.4172792981902851,
+   "max_dRT": 0.2152194883201609
+  },
+  {
+   "fixture": "stripe",
+   "arm": "trap_J_no_area_element",
+   "closure": 0.41727937374705437,
+   "max_dRT": 0.21521937372587396
+  },
+  {
+   "fixture": "pillar",
+   "arm": "correct",
+   "closure": 1.0298763173377523e-06,
+   "max_dRT": 0.0
+  },
+  {
+   "fixture": "pillar",
+   "arm": "trap_H_minusR_gram",
+   "closure": 1.0298763126748156e-06,
+   "max_dRT": 1.099120794378905e-14
+  },
+  {
+   "fixture": "pillar",
+   "arm": "trap_Hmix_halfspaces_minusR",
+   "closure": 0.13286851091705154,
+   "max_dRT": 0.05347536865451882
+  },
+  {
+   "fixture": "pillar",
+   "arm": "trap_F_no_cofactor",
+   "closure": 0.3943286248697828,
+   "max_dRT": 0.06427916526563981
+  },
+  {
+   "fixture": "pillar",
+   "arm": "trap_J_no_area_element",
+   "closure": 0.3948840032633294,
+   "max_dRT": 0.0643274127042236
+  }
+ ]
+}

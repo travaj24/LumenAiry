@@ -1,0 +1,214 @@
+{
+ "note": "one region solve per child process; BLAS pinned to 1 thread; timings are upper bounds on a loaded box",
+ "rows": [
+  {
+   "kind": "rect3_shipped",
+   "M": 6,
+   "whiten": false,
+   "t_assemble": 0.09013959998264909,
+   "t_modes": 3.6659936999203637,
+   "dof": 450,
+   "peak_rss_mb": 116.58984375,
+   "box_cpu_percent_before": 91.1,
+   "box_avail_gb_before": 1.5874710083007812
+  },
+  {
+   "kind": "rect3_scratch",
+   "M": 6,
+   "whiten": false,
+   "t_assemble": 0.14100099995266646,
+   "t_modes": 3.135471999994479,
+   "dof": 450,
+   "peak_rss_mb": 118.0078125,
+   "box_cpu_percent_before": 87.2,
+   "box_avail_gb_before": 1.9845390319824219
+  },
+  {
+   "kind": "rect3_scratch",
+   "M": 6,
+   "whiten": true,
+   "t_assemble": 0.14647829998284578,
+   "t_modes": 0.5394817999331281,
+   "dof": 450,
+   "peak_rss_mb": 120.6328125,
+   "box_cpu_percent_before": 97.2,
+   "box_avail_gb_before": 1.1262092590332031
+  },
+  {
+   "kind": "circle3",
+   "M": 6,
+   "whiten": false,
+   "t_assemble": 0.10952430008910596,
+   "t_modes": 2.776927800034173,
+   "dof": 450,
+   "peak_rss_mb": 119.7890625,
+   "box_cpu_percent_before": 96.3,
+   "box_avail_gb_before": 0.9748268127441406
+  },
+  {
+   "kind": "circle3",
+   "M": 6,
+   "whiten": true,
+   "t_assemble": 0.12486870004795492,
+   "t_modes": 0.4858273999998346,
+   "dof": 450,
+   "peak_rss_mb": 120.828125,
+   "box_cpu_percent_before": 94.4,
+   "box_avail_gb_before": 6.968360900878906
+  },
+  {
+   "kind": "rect3_shipped",
+   "M": 8,
+   "whiten": false,
+   "t_assemble": 0.4255323000252247,
+   "t_modes": 22.99283560004551,
+   "dof": 882,
+   "peak_rss_mb": 219.51953125,
+   "box_cpu_percent_before": 95.6,
+   "box_avail_gb_before": 5.946998596191406
+  },
+  {
+   "kind": "rect3_scratch",
+   "M": 8,
+   "whiten": false,
+   "t_assemble": 0.484269900014624,
+   "t_modes": 25.5305459999945,
+   "dof": 882,
+   "peak_rss_mb": 223.140625,
+   "box_cpu_percent_before": 76.1,
+   "box_avail_gb_before": 0.9158554077148438
+  },
+  {
+   "kind": "rect3_scratch",
+   "M": 8,
+   "whiten": true,
+   "t_assemble": 0.6169704999774694,
+   "t_modes": 2.8989529000828043,
+   "dof": 882,
+   "peak_rss_mb": 226.10546875,
+   "box_cpu_percent_before": 95.3,
+   "box_avail_gb_before": 1.45361328125
+  },
+  {
+   "kind": "circle3",
+   "M": 8,
+   "whiten": false,
+   "t_assemble": 0.6429408000549302,
+   "t_modes": 27.25434900005348,
+   "dof": 882,
+   "peak_rss_mb": 223.578125,
+   "box_cpu_percent_before": 82.2,
+   "box_avail_gb_before": 1.0981826782226562
+  },
+  {
+   "kind": "circle3",
+   "M": 8,
+   "whiten": true,
+   "t_assemble": 0.5487085999920964,
+   "t_modes": 2.539233100018464,
+   "dof": 882,
+   "peak_rss_mb": 225.58984375,
+   "box_cpu_percent_before": 73.7,
+   "box_avail_gb_before": 1.9923057556152344
+  },
+  {
+   "kind": "rect3_shipped",
+   "M": 10,
+   "whiten": false,
+   "t_assemble": 1.5518025000346825,
+   "t_modes": 150.6980585999554,
+   "dof": 1458,
+   "peak_rss_mb": 458.2265625,
+   "box_cpu_percent_before": 75.1,
+   "box_avail_gb_before": 1.66156005859375
+  },
+  {
+   "kind": "rect3_scratch",
+   "M": 10,
+   "whiten": false,
+   "t_assemble": 2.537243800004944,
+   "t_modes": 127.87446340010501,
+   "dof": 1458,
+   "peak_rss_mb": 467.2890625,
+   "box_cpu_percent_before": 99.4,
+   "box_avail_gb_before": 2.323200225830078
+  },
+  {
+   "kind": "rect3_scratch",
+   "M": 10,
+   "whiten": true,
+   "t_assemble": 1.7459814000176266,
+   "t_modes": 12.372508800006472,
+   "dof": 1458,
+   "peak_rss_mb": 471.125,
+   "box_cpu_percent_before": 80.6,
+   "box_avail_gb_before": 1.3410110473632812
+  },
+  {
+   "kind": "circle3",
+   "M": 10,
+   "whiten": false,
+   "t_assemble": 1.8852858999744058,
+   "t_modes": 117.79188799997792,
+   "dof": 1458,
+   "peak_rss_mb": 467.14453125,
+   "box_cpu_percent_before": 76.6,
+   "box_avail_gb_before": 1.5611076354980469
+  },
+  {
+   "kind": "circle3",
+   "M": 10,
+   "whiten": true,
+   "t_assemble": 1.9886526999762282,
+   "t_modes": 12.014282500022091,
+   "dof": 1458,
+   "peak_rss_mb": 470.9765625,
+   "box_cpu_percent_before": 78.2,
+   "box_avail_gb_before": 0.7205848693847656
+  },
+  {
+   "kind": "rect5_scratch",
+   "M": 6,
+   "whiten": true,
+   "t_assemble": 1.4026459000306204,
+   "t_modes": 7.46985729993321,
+   "dof": 1250,
+   "peak_rss_mb": 368.59765625,
+   "box_cpu_percent_before": 72.2,
+   "box_avail_gb_before": 1.8525276184082031
+  },
+  {
+   "kind": "fillet5",
+   "M": 6,
+   "whiten": true,
+   "t_assemble": 1.2943933999631554,
+   "t_modes": 7.176649700035341,
+   "dof": 1250,
+   "peak_rss_mb": 368.32421875,
+   "box_cpu_percent_before": 74.8,
+   "box_avail_gb_before": 0.8946990966796875
+  },
+  {
+   "kind": "rect5_scratch",
+   "M": 8,
+   "whiten": true,
+   "t_assemble": 6.886989600025117,
+   "t_modes": 53.303537699976005,
+   "dof": 2450,
+   "peak_rss_mb": 1172.51953125,
+   "box_cpu_percent_before": 76.5,
+   "box_avail_gb_before": 0.4639549255371094
+  },
+  {
+   "kind": "fillet5",
+   "M": 8,
+   "whiten": true,
+   "t_assemble": 17.74235019995831,
+   "t_modes": 60.293268400011584,
+   "dof": 2450,
+   "peak_rss_mb": 1172.640625,
+   "box_cpu_percent_before": 96.3,
+   "box_avail_gb_before": 0.8512229919433594
+  }
+ ]
+}

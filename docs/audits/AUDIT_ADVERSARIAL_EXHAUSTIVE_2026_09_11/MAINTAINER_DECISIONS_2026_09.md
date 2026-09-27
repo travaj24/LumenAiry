@@ -323,6 +323,38 @@ the newer step, but the wording would be wrong if it did), and a near-focus
 readout that can name its own output pitch, which is what would close the last
 open item of the WP-C3 round-2 report.
 
+### 0.9 Curved boundaries for the pure staggered 2-D PMM (decided 2026-09-26 to build; plan in `docs/audits/PLAN_PMM2D_CURVED_CELLS_2026_09_26.md`)
+
+What it is.  The pure (no-floor) 2-D PMM -- `pmm_jones_2d_staggered` and
+`PMM2DStackPure` -- can today only describe features whose walls are straight
+and axis-aligned, so a circular pillar or a pillar with rounded corners has to
+be approximated by a staircase of rectangles, which is both expensive and
+wrong at the few-percent level.  The capability is a COORDINATE MAP: the
+solver keeps its straight rectangular grid in new coordinates, and the map
+bends that grid in the real plane so that the circle, ellipse, fillet or
+sinusoidal wall is exactly one of the grid lines.
+
+DECIDED 2026-09-26: build it.  The plan is a measured design, not yet code:
+five probes (in `validation/probe_pmm2d_curved/`, committed with the plan)
+confirmed the approach on a scratch copy of the solver.  On a circular
+dielectric pillar the mapped solve agrees with an independent 3-D
+finite-element calculation to 1.9e-6 per diffraction order -- inside that
+calculation's own 8.3e-6 uncertainty -- where the library's Fourier solver
+with the exact disk shape is still 3.3e-3 away and staircases of 4 and 8
+steps are 7.1e-2 and 5.4e-2 away.
+
+What the maintainer is still asked (plan section 7, each with a measured
+recommendation): whether the map belongs to the whole stack (recommended) or
+to each layer; whether four unavoidable "pinch points" per closed curve are
+acceptable (recommended: measured harmless); whether fillets are shipped as a
+geometry-fidelity feature knowing they do not speed up convergence (they move
+the zeroth-order transmission by up to 7.4e-3, but the efficiencies stay
+limited by the pillar's top and bottom rims); whether a faster eigensolver
+the probes found (about 10x on the same problems, but it changes the last
+bits of every existing answer) should be its own separate decision
+(recommended: yes); and the release shape (recommended: the first three
+phases as 5.50.0).
+
 ---
 
 ## 1. Numerical defaults that measured better but move fixtures
