@@ -460,16 +460,21 @@ def test_scope_refusals_name_their_phase():
         TS.pmm_efficiency_2d_staggered(_P, _P, _cell("stripe"), 1.45, 1.0,
                                        0.5, _WL, cmap=cm)
     st = PMM2DStackPure(_P, _P, n_modes=4, cmap=cm)
-    with pytest.raises(NotImplementedError, match="Phase D"):
-        st.add_layer(0.2, eps=np.diag([2.0, 2.5, 2.0]).astype(complex))
-    with pytest.raises(NotImplementedError, match="Phase D"):
-        st.add_layer(0.2, eps=2.0, mu=1.5)
+    # Phase D (2026-10-03) lifted the BLOCK-FORM tensor and mu refusals these
+    # lines used to pin (block-form tensors and mu are routed under a map,
+    # gates in tests/unit/test_pmm2d_staggered_curved_d.py); the
+    # OUT-OF-PLANE tensor and the slant stay refused, naming Phase E
+    oop = np.diag([2.0, 2.5, 2.0]).astype(complex)
+    oop[0, 2] = oop[2, 0] = 0.3
+    with pytest.raises(NotImplementedError, match="Phase E"):
+        st.add_layer(0.2, eps=oop)
+    with pytest.raises(NotImplementedError, match="Phase E"):
+        st.add_layer(0.2, eps=2.0, mu=oop)
     with pytest.raises(NotImplementedError, match="Phase E"):
         st.add_layer(0.2, eps_cell=_cell("stripe"), slant=(0.1, 0.0))
-    with pytest.raises(NotImplementedError, match="Phase D"):
+    with pytest.raises(NotImplementedError, match="Phase E"):
         TS.Granet2DTransverseE(_P, _P, cm.u_walls, cm.v_walls, 4,
-                               _cell("stripe"), mu_cell=np.ones((3, 3)),
-                               cmap=cm)
+                               np.broadcast_to(oop, (3, 3, 3, 3)), cmap=cm)
     with pytest.raises(ValueError, match="union-grid|common"):
         st.add_layer(0.2, eps_cell=np.ones((2, 2)))
     with pytest.raises(ValueError, match="wall grid"):

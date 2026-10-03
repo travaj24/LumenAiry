@@ -2140,6 +2140,74 @@ def _stag_map_eff(eps, sg, g11, g12, g22):
             "c22": g22 / sg, "c33": 1.0 / sg}
 
 
+def _stag_map_eff_tensor(eps, mu, xu, xv, yu, yv):
+    """The effective-tensor weights of a BLOCK-FORM ``eps`` (and optional
+    block-form ``mu``) under the map, from the Jacobian ITSELF at a set of
+    nodes -- Phase D of the curved-cell plan
+    (``docs/audits/BUILD_PMM2D_CURVED_D_2026_10_03.md``, section 2).
+
+    With covariant fields ``E' = J^T E``, ``H' = J^T H`` (``J = [[x_u, x_v],
+    [y_u, y_v]]``, ``sg = det J``) the curl equations keep their Cartesian
+    form in ``(u, v)`` with the transformation-optics congruence (Ward &
+    Pendry 1996; Weiss et al., Opt. Express 17, 8051 (2009), Eqs. 7-12;
+    Kuchenmeister, Opt. Express 22, 1342 (2014)):
+
+        eps'_t  = sg J^-1 eps_t J^-T = adj(J) eps_t adj(J)^T / sg
+        eps'_33 = sg eps_33
+        chi_t   = [mu'_t]^-1 = J^T [mu_t]^-1 J / sg
+        chi_33  = 1 / (sg mu_33)
+
+    ``adj(J) = sg J^-1 = [[y_v, -x_v], [-y_u, x_u]]``.  The ORDER matters for
+    a non-symmetric (gyrotropic) tensor: ``eps'_ij = adj_ik eps_kl adj_jl /
+    sg`` -- ``J^-1`` on the left, ``J^-T`` on the right; swapping them (or
+    transposing ``eps``) reverses the gyration, which no efficiency can see
+    and the Jones matrix does.  ``chi_t`` is the POINTWISE inverse of ``mu'``
+    at each node, taken BEFORE quadrature (``mu`` is constant per cell but
+    ``J`` is not, so inverting a cell average would be a different operator).
+    ``mu = None`` is vacuum: ``chi_t = g / sg``, ``chi_33 = 1 / sg``.
+
+    ``eps`` / ``mu``: ``(..., 3, 3)`` broadcast against the node arrays
+    ``xu .. yv`` (``mu`` may be ``None``).  Returns the dict of
+    :func:`_stag_map_eff` (keys ``e11 .. e33``, ``c11 .. c33``).  A scalar
+    material with ``mu = None`` keeps the scalar route
+    :func:`_stag_map_eff` (bytes of Phases A-C); this function with
+    ``eps = s I`` reproduces it to round-off (unit-gated)."""
+    sg = xu * yv - xv * yu
+    # adj(J) rows: A[0] = (y_v, -x_v), A[1] = (-y_u, x_u)
+    A = ((yv, -xv), (-yu, xu))
+    Jm = ((xu, xv), (yu, yv))
+    e = eps
+    out = {}
+    for i, ki in ((0, "1"), (1, "2")):
+        for j, kj in ((0, "1"), (1, "2")):
+            acc = 0.0
+            for k in (0, 1):
+                for m in (0, 1):
+                    acc = acc + A[i][k] * e[..., k, m] * A[j][m]
+            out["e" + ki + kj] = acc / sg
+    out["e33"] = e[..., 2, 2] * sg
+    if mu is None:
+        out["c11"] = (xu * xu + yu * yu) / sg
+        out["c12"] = (xu * xv + yu * yv) / sg
+        out["c21"] = out["c12"]
+        out["c22"] = (xv * xv + yv * yv) / sg
+        out["c33"] = 1.0 / sg
+        return out
+    m11, m12 = mu[..., 0, 0], mu[..., 0, 1]
+    m21, m22 = mu[..., 1, 0], mu[..., 1, 1]
+    det = m11 * m22 - m12 * m21
+    K = ((m22 / det, -m12 / det), (-m21 / det, m11 / det))   # [mu_t]^-1
+    for i, ki in ((0, "1"), (1, "2")):
+        for j, kj in ((0, "1"), (1, "2")):
+            acc = 0.0
+            for k in (0, 1):
+                for m in (0, 1):
+                    acc = acc + Jm[k][i] * K[k][m] * Jm[m][j]
+            out["c" + ki + kj] = acc / sg
+    out["c33"] = 1.0 / (sg * mu[..., 2, 2])
+    return out
+
+
 def _stag_map_detj_refuse(sg, where):
     bad = ~np.isfinite(sg) | (sg <= 0.0)
     if np.any(bad):
@@ -2151,9 +2219,16 @@ def _stag_map_detj_refuse(sg, where):
             f"allowed only at a cell CORNER, the singular vertices).")
 
 
-def _stag_map_weights(bx, by, cmap, eps_cell, rule):
+def _stag_map_weights(bx, by, cmap, eps_cell, rule, mu_cell=None):
     """Effective-tensor weights at every quadrature node of every ``(u, v)``
-    cell, for a SCALAR ``eps_cell`` under the map ``cmap``.
+    cell, for ``eps_cell`` (and ``mu_cell``) under the map ``cmap``.
+
+    A SCALAR ``(Nx, Ny)`` ``eps_cell`` with no ``mu_cell`` takes the scalar
+    route below (the metric alone; the bytes of Phases A-C).  A BLOCK-FORM
+    ``(Nx, Ny, 3, 3)`` tensor, or any ``mu_cell`` (scalar ``(Nx, Ny)`` or
+    block-form), takes the general congruence of
+    :func:`_stag_map_eff_tensor`, which needs the Jacobian itself (Phase D);
+    a scalar cell is promoted to ``eps I`` there.
 
     With ``J = [[x_u, x_v], [y_u, y_v]]``, ``g = J^T J`` and ``sg = sqrt(g) =
     det J`` (plan section 2.1; Weiss et al. 2009 Eqs. 7-12):
@@ -2175,6 +2250,9 @@ def _stag_map_weights(bx, by, cmap, eps_cell, rule):
     nq = xg.size
     Nx, Ny = bx.N, by.N
     shp = (Nx, Ny, nq, nq)
+    if np.ndim(eps_cell) == 4 or mu_cell is not None:
+        return _stag_map_weights_tensor(bx, by, cmap, eps_cell, mu_cell,
+                                        quad, xg, shp)
     sg = np.empty(shp)
     g11 = np.empty(shp)
     g12 = np.empty(shp)
@@ -2205,6 +2283,58 @@ def _stag_map_weights(bx, by, cmap, eps_cell, rule):
         _stag_map_detj_refuse(sgp, (sx, sy))
         Wp = _stag_map_eff(eps[sx, sy], sgp, xu * xu + yu * yu,
                            xu * xv + yu * yv, xv * xv + yv * yv)
+        for k, v in Wp.items():
+            P[k][(sx, sy)] = v
+    return {k: _StagNodeWeight(W[k], P[k]) for k in W}
+
+
+def _stag_map_as33(spec, Nx, Ny):
+    """A ``(Nx, Ny)`` scalar or ``(Nx, Ny, 3, 3)`` block-form cell as a
+    ``(Nx, Ny, 3, 3)`` tensor cell (a scalar ``s`` becomes ``s I``)."""
+    a = np.asarray(spec, dtype=_C)
+    if a.ndim == 4:
+        return a
+    out = np.zeros((Nx, Ny, 3, 3), dtype=_C)
+    for k in range(3):
+        out[:, :, k, k] = a
+    return out
+
+
+def _stag_map_weights_tensor(bx, by, cmap, eps_cell, mu_cell, quad, xg, shp):
+    """The tensor / magnetic branch of :func:`_stag_map_weights`: the
+    Jacobian at every node of the tensor rule (and of every corner-rule
+    cell), then the ONE congruence :func:`_stag_map_eff_tensor`.  Same
+    return layout and the same ``det J > 0`` refusal as the scalar route."""
+    Nx, Ny = bx.N, by.N
+    J4 = [np.empty(shp) for _ in range(4)]          # xu, xv, yu, yv
+    for sx in range(Nx):
+        U = 0.5 * (bx.xb[sx] + bx.xb[sx + 1]) + bx.Jn[sx] * xg
+        for sy in range(Ny):
+            V = 0.5 * (by.xb[sy] + by.xb[sy + 1]) + by.Jn[sy] * xg
+            _X, _Y, xu, xv, yu, yv = cmap.geom(sx, sy, U, V)
+            for arr, val in zip(J4, (xu, xv, yu, yv)):
+                arr[sx, sy] = val
+    xu, xv, yu, yv = J4
+    sg = xu * yv - xv * yu
+    bad = ~np.isfinite(sg) | (sg <= 0.0)
+    if np.any(bad):
+        sx, sy = (int(i) for i in np.argwhere(bad)[0][:2])
+        _stag_map_detj_refuse(sg[sx, sy], (sx, sy))
+    e33 = _stag_map_as33(eps_cell, Nx, Ny)
+    m33 = None if mu_cell is None else _stag_map_as33(mu_cell, Nx, Ny)
+    W = _stag_map_eff_tensor(
+        e33[:, :, None, None], None if m33 is None else m33[:, :, None, None],
+        xu, xv, yu, yv)
+    if quad is None:
+        return W
+    P = {k: {} for k in W}
+    for (sx, sy), (ru, rv, _w) in quad.points.items():
+        U = 0.5 * (bx.xb[sx] + bx.xb[sx + 1]) + bx.Jn[sx] * ru[0]
+        V = 0.5 * (by.xb[sy] + by.xb[sy + 1]) + by.Jn[sy] * rv[0]
+        _X, _Y, pu, pv, qu, qv = cmap.geom_points(sx, sy, U, V)
+        _stag_map_detj_refuse(pu * qv - pv * qu, (sx, sy))
+        Wp = _stag_map_eff_tensor(
+            e33[sx, sy], None if m33 is None else m33[sx, sy], pu, pv, qu, qv)
         for k, v in Wp.items():
             P[k][(sx, sy)] = v
     return {k: _StagNodeWeight(W[k], P[k]) for k in W}
@@ -2501,6 +2631,8 @@ class Granet2DTransverseE:
                     "(block-form) second-order pencil only.")
             self.mu_cell = mu
             self.magnetic = True
+        if self.cmap is not None:
+            self._init_map_weights()
         if self.offplane:
             self._assemble_oop()
         else:
@@ -2518,17 +2650,26 @@ class Granet2DTransverseE:
                 f"{fn}: cmap must follow the map protocol of "
                 f"lumenairy.elements.pmm._curvemap (geom(sx, sy, U, V) and "
                 f"fingerprint), got {type(cmap).__name__}.")
-        if self.eps_cell.ndim != 2:
+        # Phase D: a BLOCK-FORM tensor eps and a block-form mu are routed
+        # (the congruence sqrt(g) J^-1 eps J^-T per node,
+        # _stag_map_eff_tensor).  An OUT-OF-PLANE tensor stays refused: the
+        # first-order out-of-plane generator eliminates G3 assuming mu = 1,
+        # and a map makes mu' != 1 everywhere (Phase E).
+        if self.eps_cell.ndim == 4 and _tile_is_offplane(self.eps_cell):
             raise NotImplementedError(
-                f"{fn}: a TENSOR eps_cell under a coordinate map is not "
-                f"implemented yet (the congruence sqrt(g) J^-1 eps J^-T on a "
-                f"tensor cell is Phase D of the curved-cell plan); pass a "
-                f"scalar (Nx, Ny) eps_cell.")
+                f"{fn}: an OUT-OF-PLANE tensor eps_cell (e_xz / e_yz / e_zx "
+                f"/ e_zy above the relative 1e-12 floor) under a coordinate "
+                f"map is not implemented -- the out-of-plane first-order "
+                f"generator has no permeability blocks and a map makes every "
+                f"region magnetic (Phase E of the curved-cell plan).  "
+                f"BLOCK-FORM tensors are accepted.")
         if mu_cell is not None:
-            raise NotImplementedError(
-                f"{fn}: mu_cell under a coordinate map is not implemented "
-                f"yet (a material permeability under the map is Phase D of "
-                f"the curved-cell plan).")
+            mu_a = np.asarray(mu_cell)
+            if mu_a.ndim == 4 and _tile_is_offplane(mu_a):
+                raise NotImplementedError(
+                    f"{fn}: an OUT-OF-PLANE mu_cell under a coordinate map is "
+                    f"not implemented (Phase E of the curved-cell plan); "
+                    f"BLOCK-FORM permeability tensors are accepted.")
         if not _slant_is_zero(_norm_slant_pair(slant, fn)):
             raise NotImplementedError(
                 f"{fn}: slant= together with a coordinate map is not "
@@ -2557,9 +2698,18 @@ class Granet2DTransverseE:
         self._qrule = _StagMapQuad(
             self.bx.M, _stag_map_nodes(self.bx, self.by, cmap, self.bx.M),
             _stag_map_singular_corners(cmap))
-        self._mapw = _stag_map_weights(self.bx, self.by, cmap, self.eps_cell,
-                                       self._qrule)
         self._qcache = {}
+        # the node weights need the VALIDATED mu_cell, so they are evaluated
+        # in __init__ after the magnetic block (_init_map_weights)
+
+    def _init_map_weights(self):
+        """The effective-tensor node weights of this solver's cell under its
+        map: the scalar route for a scalar non-magnetic cell (Phases A-C),
+        the general congruence for a tensor and / or magnetic one (Phase D;
+        ``chi_t`` is the pointwise inverse of ``mu'`` at every node)."""
+        self._mapw = _stag_map_weights(self.bx, self.by, self.cmap,
+                                       self.eps_cell, self._qrule,
+                                       mu_cell=self.mu_cell)
 
     # --- per-axis 1-D ingredient matrices between set pairs (no eps) ---------
     def _axis_mats(self):
@@ -4628,6 +4778,7 @@ def pmm_jones_2d_staggered(
     cmap=None,
     shapes=None,
     background_eps=None,
+    background_mu=None,
 ):
     """Rigorous 2-D crossed grating with a FULL ``(3, 3)`` ANISOTROPIC cell --
     in-plane OR out-of-plane -- by the canonical NO-FLOOR staggered PMM: the
@@ -4812,8 +4963,10 @@ def pmm_jones_2d_staggered(
     ``e13``/``e31`` swap.
     """
     from .stack2d_pure import PMM2DStackPure  # (cycle-free: lazy)
-    if shapes is not None or background_eps is not None:
-        # THE SHAPE LAYER (Phase C): the one-layer stack, byte for byte
+    if (shapes is not None or background_eps is not None
+            or background_mu is not None):
+        # THE SHAPE LAYER (Phase C): the one-layer stack, byte for byte;
+        # per-shape mu= and background_mu= since Phase D
         bad = [nm for nm, v in (("eps_cell", eps_cell), ("cmap", cmap),
                                 ("mu_cell", mu_cell)) if v is not None]
         if not _slant_is_zero(_norm_slant_pair(slant,
@@ -4833,6 +4986,7 @@ def pmm_jones_2d_staggered(
                                n_orders=int(n_orders), symmetry=symmetry)
         stack.add_layer(float(depth), shapes=shapes,
                         background_eps=background_eps,
+                        background_mu=background_mu,
                         max_pencil_dof=max_pencil_dof)
         stack.set_source(float(wavelength), theta=float(theta),
                          phi=float(phi))
