@@ -1,0 +1,7 @@
+v4_slab.py lc th2b 4,5,6,7,8
+v4_slab.py lc th3 4,5,6,7,8
+v4_slab.py lc c3 4,5,6,7,8
+v4_slab.py gyrol_gyrol none 4,5,6,7 0.17,-0.08
+v4_slab.py dirgen_gyro none 4,5,6,7 0.17,-0.08
+v4_slab.py dirgen_gyro sh4 4,5,6,7 0.17,-0.08
+v4_slab.py dirgen_syml th3 4,5,6,7

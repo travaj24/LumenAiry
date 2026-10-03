@@ -1,0 +1,117 @@
+{
+ "none_0.1": {
+  "none": {
+   "worst": 7.958298123294753e-10,
+   "clo": 0.29271549869993674
+  },
+  "qz_off": "RAISES LinAlgError: Matrix is not positive definite"
+ },
+ "sh4_0.1": {
+  "none": {
+   "worst": 1.6132933030926868e-11,
+   "clo": 0.2927154990788694
+  },
+  "qz_off": "RAISES LinAlgError: Matrix is not positive definite"
+ },
+ "none_0.01": {
+  "none": {
+   "worst": 9.246666674399603e-10,
+   "clo": 0.03459692126434599
+  },
+  "qz_off": {
+   "worst": 0.032617758548301956,
+   "clo": 0.0021041919348607774
+  }
+ },
+ "sh4_0.01": {
+  "none": {
+   "worst": 1.8462811869308043e-11,
+   "clo": 0.03459692182425678
+  },
+  "qz_off": {
+   "worst": 0.032631807359401854,
+   "clo": 0.002104200478456386
+  }
+ },
+ "none_0.001": {
+  "none": {
+   "worst": 9.40540295778327e-10,
+   "clo": 0.003520594792429832
+  },
+  "qz_off": {
+   "worst": 0.003321484624868698,
+   "clo": 0.0002096486617487736
+  }
+ },
+ "sh4_0.001": {
+  "none": {
+   "worst": 1.8712886154032838e-11,
+   "clo": 0.003520595374266855
+  },
+  "qz_off": {
+   "worst": 0.003322666462253321,
+   "clo": 0.00021034810817444072
+  }
+ },
+ "none_1e-05": {
+  "none": {
+   "worst": 9.423213895970453e-10,
+   "clo": 3.5273318109818597e-05
+  },
+  "qz_off": {
+   "worst": 3.328113857603565e-05,
+   "clo": 2.096014307340077e-06
+  }
+ },
+ "sh4_1e-05": {
+  "none": {
+   "worst": 1.8730752544102822e-11,
+   "clo": 3.52739023905535e-05
+  },
+  "qz_off": {
+   "worst": 3.329264535534282e-05,
+   "clo": 2.1037622339736828e-06
+  }
+ },
+ "none_1e-08": {
+  "none": {
+   "worst": 9.423428124744585e-10,
+   "clo": 3.468938603035099e-08
+  },
+  "qz_off": {
+   "worst": 3.393150382891008e-08,
+   "clo": 2.648283148332098e-09
+  }
+ },
+ "sh4_1e-08": {
+  "none": {
+   "worst": 1.8725676029354353e-11,
+   "clo": 3.5273712062355855e-08
+  },
+  "qz_off": {
+   "worst": 3.329487829883959e-08,
+   "clo": 2.1027436458709303e-09
+  }
+ },
+ "none_1e-11": {
+  "none": {
+   "worst": 9.42341089981069e-10,
+   "clo": 6.151928966247056e-10
+  },
+  "qz_off": {
+   "worst": 9.4071133330654e-10,
+   "clo": 5.910278932930169e-10
+  }
+ },
+ "note": "transcribed from the probe's stdout (the run was stopped by its 1500 s timeout before the s = 1e-13 rung and the final dump)",
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "lumenairy": "C:\\tmp\\lum_vcurved_e1\\lumenairy\\__init__.py",
+  "threads": {
+   "OMP_NUM_THREADS": null,
+   "OPENBLAS_NUM_THREADS": null,
+   "MKL_NUM_THREADS": null
+  }
+ }
+}

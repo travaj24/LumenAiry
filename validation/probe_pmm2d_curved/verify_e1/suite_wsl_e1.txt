@@ -1,0 +1,5 @@
+/mnt/c/tmp/lum_vcurved_e1/lumenairy/__init__.py
+.....................x....                                               [100%]
+=========================== short test summary info ============================
+XFAIL tests/unit/test_verify_pmm2d_curved_e1.py::test_ve1_the_out_of_plane_mu_refusal_states_the_current_reason - V-E1-1: _require_inplane_mu (solver, Jones entry, uniform / slanted stack layers) still says the out-of-plane first-order generator 'has no mu blocks' -- false since Phase E1; flip when the wording is fixed
+25 passed, 1 xfailed in 103.47s (0:01:43)

@@ -1,0 +1,14 @@
+..x....                                                                  [100%]
+============================== slowest durations ==============================
+10.29s call     tests/unit/test_verify_pmm2d_curved_e1.py::test_ve1_gauge_constants_are_map_independent_on_a_c2_broken_cell
+0.39s call     tests/unit/test_verify_pmm2d_curved_e1.py::test_ve1_parity_reduction_under_a_centred_circle_map_is_scope_not_correctness
+0.32s call     tests/unit/test_verify_pmm2d_curved_e1.py::test_ve1_the_permeability_side_of_B_stays_hpd_under_the_circle_map
+0.16s call     tests/unit/test_verify_pmm2d_curved_e1.py::test_ve1_the_qz_fallback_is_load_bearing_for_a_weakly_lossy_mu
+0.04s call     tests/unit/test_verify_pmm2d_curved_e1.py::test_ve1_map_keeps_mu_block_form_and_the_composite_frame_is_tau
+0.03s call     tests/unit/test_verify_pmm2d_curved_e1.py::test_ve1_an_out_of_plane_mu_is_refused_loudly_at_every_entry
+0.01s call     tests/unit/test_verify_pmm2d_curved_e1.py::test_ve1_the_out_of_plane_mu_refusal_states_the_current_reason
+
+(14 durations < 0.005s hidden.  Use -vv to show these durations.)
+=========================== short test summary info ===========================
+XFAIL tests/unit/test_verify_pmm2d_curved_e1.py::test_ve1_the_out_of_plane_mu_refusal_states_the_current_reason - V-E1-1: _require_inplane_mu (solver, Jones entry, uniform / slanted stack layers) still says the out-of-plane first-order generator 'has no mu blocks' -- false since Phase E1; flip when the wording is fixed
+6 passed, 1 xfailed in 12.14s

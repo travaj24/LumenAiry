@@ -17067,5 +17067,12 @@
   "tests/unit/test_verify_pmm2d_curved_d.py::test_verify_d_geom_slot_4_is_the_inverse_plain_gram_for_both_consumers": 0.32,
   "tests/unit/test_verify_pmm2d_curved_d.py::test_verify_d_gyrotropic_mu_under_a_shear_matches_an_independent_berreman": 15.91,
   "tests/unit/test_verify_pmm2d_curved_d.py::test_verify_d_material_key_walker_exemption_states_its_reason": 0.005,
-  "tests/unit/test_pmm2d_staggered_curved_e1.py::test_e1_3m_a_transposed_mu_is_caught_by_the_non_symmetric_gates": 2.51
+  "tests/unit/test_pmm2d_staggered_curved_e1.py::test_e1_3m_a_transposed_mu_is_caught_by_the_non_symmetric_gates": 2.51,
+  "tests/unit/test_verify_pmm2d_curved_e1.py::test_ve1_gauge_constants_are_map_independent_on_a_c2_broken_cell": 10.29,
+  "tests/unit/test_verify_pmm2d_curved_e1.py::test_ve1_parity_reduction_under_a_centred_circle_map_is_scope_not_correctness": 0.39,
+  "tests/unit/test_verify_pmm2d_curved_e1.py::test_ve1_the_permeability_side_of_B_stays_hpd_under_the_circle_map": 0.32,
+  "tests/unit/test_verify_pmm2d_curved_e1.py::test_ve1_the_qz_fallback_is_load_bearing_for_a_weakly_lossy_mu": 0.16,
+  "tests/unit/test_verify_pmm2d_curved_e1.py::test_ve1_map_keeps_mu_block_form_and_the_composite_frame_is_tau": 0.04,
+  "tests/unit/test_verify_pmm2d_curved_e1.py::test_ve1_an_out_of_plane_mu_is_refused_loudly_at_every_entry": 0.03,
+  "tests/unit/test_verify_pmm2d_curved_e1.py::test_ve1_the_out_of_plane_mu_refusal_states_the_current_reason": 0.01
 }

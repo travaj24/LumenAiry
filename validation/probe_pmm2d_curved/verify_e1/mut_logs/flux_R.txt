@@ -1,0 +1,64 @@
+C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pytest_benchmark\logger.py:44: PytestBenchmarkWarning: Benchmarks are automatically disabled because xdist plugin is active.Benchmarks cannot be performed reliably in a parallelized environment.
+  warner(PytestBenchmarkWarning(text))
+C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pytest_benchmark\logger.py:44: PytestBenchmarkWarning: Benchmarks are automatically disabled because xdist plugin is active.Benchmarks cannot be performed reliably in a parallelized environment.
+  warner(PytestBenchmarkWarning(text))
+C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pytest_benchmark\logger.py:44: PytestBenchmarkWarning: Benchmarks are automatically disabled because xdist plugin is active.Benchmarks cannot be performed reliably in a parallelized environment.
+  warner(PytestBenchmarkWarning(text))
+C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pytest_benchmark\logger.py:44: PytestBenchmarkWarning: Benchmarks are automatically disabled because xdist plugin is active.Benchmarks cannot be performed reliably in a parallelized environment.
+  warner(PytestBenchmarkWarning(text))
+C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pytest_benchmark\logger.py:44: PytestBenchmarkWarning: Benchmarks are automatically disabled because xdist plugin is active.Benchmarks cannot be performed reliably in a parallelized environment.
+  warner(PytestBenchmarkWarning(text))
+bringing up nodes...
+bringing up nodes...
+
+......F........x..........                                               [100%]
+================================== FAILURES ===================================
+______ test_e1_3m_oop_eps_with_mu_matches_the_eps_mu_oracle[lossy-None] _______
+[gw3] win32 -- Python 3.14.6 C:\Users\Tesla\AppData\Local\Programs\Python\Python314\python.exe
+
+mu = 'lossy', cmap = None
+
+    @pytest.mark.parametrize("mu,cmap", [
+        ("gyro", None), ("lossy", None), ("gyro", "shear")])
+    def test_e1_3m_oop_eps_with_mu_matches_the_eps_mu_oracle(mu, cmap):
+        """An out-of-plane eps with a block-form material mu -- refused until
+        this phase -- against the independent (eps, mu) oracle, R / T / both
+        Jones, conical.  GYRO (Hermitian, non-reciprocal) keeps the whitened
+        eig; LOSSY makes chi_t non-Hermitian and takes the QZ branch.  Measured
+        2026-10-03 (``e3m_*.json``; ``e_unit_readings.json`` key ``e1_3m``):
+        unmapped M = 6: gyro 6.5e-12 / 1.25e-11 (Jt), lossy 3.3e-12 / 7.4e-12;
+        the sheared map at M = 5 6.1e-10 (Jt; 1.4e-13 by M = 7).  Bars 1e-9
+        (unmapped M = 6, 1.9 decades above) and 1e-8 (mapped M = 5, 1.2 decades
+        above); the wrong-gauge arms of the slab sit at 1e-3 .. 0.4."""
+        m = {"gyro": _MU_GYRO, "lossy": _MU_LOSSY}[mu]
+        ref = _mu_berreman(_NONREC, m, *_CON)
+        if cmap is None:
+>           r = _slab(_NONREC, None, 6, *_CON, mu=m, oracle=ref)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\unit\test_pmm2d_staggered_curved_e1.py:499: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+tests\unit\test_pmm2d_staggered_curved_e1.py:130: in _slab
+    _o, R, T, J = st.solve(jones=True)
+                  ^^^^^^^^^^^^^^^^^^^^
+lumenairy\elements\pmm\stack2d_pure.py:2388: in solve
+    cached = _region_modes_oop(sol,
+lumenairy\elements\pmm\twod_staggered.py:101: in _region_modes_oop
+    Cholesky-whitened to a standard eig while the in-plane path pays a QZ).
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\numpy\linalg\_linalg.py:876: in cholesky
+    r = gufunc(a, signature=signature)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+err = 'invalid value', flag = 8
+
+    def _raise_linalgerror_nonposdef(err, flag):
+>       raise LinAlgError("Matrix is not positive definite")
+E       numpy.linalg.LinAlgError: Matrix is not positive definite
+
+C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\numpy\linalg\_linalg.py:148: LinAlgError
+=========================== short test summary info ===========================
+XFAIL tests/unit/test_verify_pmm2d_curved_e1.py::test_ve1_the_out_of_plane_mu_refusal_states_the_current_reason - V-E1-1: _require_inplane_mu (solver, Jones entry, uniform / slanted stack layers) still says the out-of-plane first-order generator 'has no mu blocks' -- false since Phase E1; flip when the wording is fixed
+FAILED tests/unit/test_pmm2d_staggered_curved_e1.py::test_e1_3m_oop_eps_with_mu_matches_the_eps_mu_oracle[lossy-None]
+1 failed, 24 passed, 1 xfailed in 92.81s (0:01:32)

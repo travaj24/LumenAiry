@@ -1,0 +1,94 @@
+{
+ "ref": "pre",
+ "n_ref": 199,
+ "cmp": {
+  "post": {
+   "produced": 199,
+   "common": 199,
+   "identical": 199,
+   "differ": [],
+   "missing": [],
+   "errors": {}
+  },
+  "posttrap": {
+   "produced": 199,
+   "common": 199,
+   "identical": 199,
+   "differ": [],
+   "missing": [],
+   "errors": {}
+  },
+  "postchitrap": {
+   "produced": 153,
+   "common": 153,
+   "identical": 153,
+   "differ": [],
+   "missing": [
+    "map_c3off_scalar_M4_obl.Agen",
+    "map_c3off_scalar_M4_obl.Bgen",
+    "map_c3off_scalar_M4_obl.Et_blocks",
+    "map_c3off_scalar_M4_obl.Et_offdiag",
+    "map_c3off_scalar_M4_obl.Ggram_blocks",
+    "map_c3off_scalar_M4_obl.Lmat",
+    "map_c3off_scalar_M4_obl.Rmat",
+    "map_c3off_scalar_M4_obl.Schur",
+    "map_c3off_scalar_M4_obl.Stt",
+    "map_c3off_scalar_M4_obl.modes",
+    "map_c5_mul_M3.Agen",
+    "map_c5_mul_M3.Bgen",
+    "map_c5_mul_M3.Et_blocks",
+    "map_c5_mul_M3.Et_offdiag",
+    "map_c5_mul_M3.Ggram_blocks",
+    "map_c5_mul_M3.Lmat",
+    "map_c5_mul_M3.Rmat",
+    "map_c5_mul_M3.Schur",
+    "map_c5_mul_M3.Stt",
+    "map_c5_mul_M3.modes",
+    "map_sh_lc_mug_M4_con.Agen",
+    "map_sh_lc_mug_M4_con.Bgen",
+    "map_sh_lc_mug_M4_con.Et_blocks",
+    "map_sh_lc_mug_M4_con.Et_offdiag",
+    "map_sh_lc_mug_M4_con.Ggram_blocks",
+    "map_sh_lc_mug_M4_con.Lmat",
+    "map_sh_lc_mug_M4_con.Rmat",
+    "map_sh_lc_mug_M4_con.Schur",
+    "map_sh_lc_mug_M4_con.Stt",
+    "map_sh_lc_mug_M4_con.modes",
+    "map_th_lc_M4.Agen",
+    "map_th_lc_M4.Bgen",
+    "map_th_lc_M4.Et_blocks",
+    "map_th_lc_M4.Et_offdiag",
+    "map_th_lc_M4.Ggram_blocks",
+    "map_th_lc_M4.Lmat",
+    "map_th_lc_M4.Rmat",
+    "map_th_lc_M4.Schur",
+    "map_th_lc_M4.Stt",
+    "map_th_lc_M4.modes",
+    "s_shapes_circle_lc_mu.abs",
+    "s_shapes_circle_lc_mu.modal",
+    "s_shapes_circle_lc_mu.out",
+    "s_shapes_ellipse_scalar_con.abs",
+    "s_shapes_ellipse_scalar_con.modal",
+    "s_shapes_ellipse_scalar_con.out"
+   ],
+   "errors": {
+    "map_c3off_scalar_M4_obl": "AssertionError: _chi_* reached under a map",
+    "map_th_lc_M4": "AssertionError: _chi_* reached under a map",
+    "map_sh_lc_mug_M4_con": "AssertionError: _chi_* reached under a map",
+    "map_c5_mul_M3": "AssertionError: _chi_* reached under a map",
+    "s_shapes_circle_lc_mu": "AssertionError: _chi_* reached under a map",
+    "s_shapes_ellipse_scalar_con": "AssertionError: _chi_* reached under a map"
+   }
+  }
+ },
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "lumenairy": "C:\\tmp\\lum_vcurved_e1\\lumenairy\\__init__.py",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": null,
+   "MKL_NUM_THREADS": null
+  }
+ }
+}

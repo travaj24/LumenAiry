@@ -1,0 +1,23 @@
+v5_pillar.py curved c3 4 oop 0 0
+v5_pillar.py curved c3 5 oop 0 0
+v5_pillar.py curved c3 6 oop 0 0
+v5_pillar.py curved c3 7 oop 0 0
+v5_pillar.py curved c3 8 oop 0 0
+v5_pillar.py curved c3 9 oop 0 0
+v5_pillar.py curved c5 4 oop 0 0
+v5_pillar.py curved c5 5 oop 0 0
+v5_pillar.py curved c5 6 oop 0 0
+v5_pillar.py curved c5 7 oop 0 0
+v5_pillar.py stair 1 4 oop
+v5_pillar.py stair 1 6 oop
+v5_pillar.py stair 1 8 oop
+v5_pillar.py stair 2 4 oop
+v5_pillar.py stair 2 5 oop
+v5_pillar.py stair 2 6 oop
+v5_pillar.py stair 4 3 oop
+v5_pillar.py stair 4 4 oop
+v5_pillar.py rcwa 9 oop
+v5_pillar.py rcwa 11 oop
+v5_pillar.py rcwa 13 oop
+v5_pillar.py rcwa 15 oop
+v5_pillar.py rcwa 17 oop

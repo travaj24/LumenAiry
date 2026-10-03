@@ -1,0 +1,19 @@
+v5_pillar.py recip c3 5 0.15
+v5_pillar.py recip c3 6 0.15
+v5_pillar.py recip c3 7 0.15
+v5_pillar.py recip c5 5 0.15
+v5_pillar.py recip c3 6 0
+v5_pillar.py curved c3 5 oop 22 38
+v5_pillar.py curved c3 6 oop 22 38
+v5_pillar.py curved c3 7 oop 22 38
+v5_pillar.py curved c3 8 oop 22 38
+v5_pillar.py curved c5 5 oop 22 38
+v5_pillar.py curved c5 6 oop 22 38
+v5_pillar.py curved c3 5 eps35 22 38 0.15
+v5_pillar.py curved c3 6 eps35 22 38 0.15
+v5_pillar.py curved c3 7 eps35 22 38 0.15
+v5_pillar.py curved c3 8 eps35 22 38 0.15
+v5_pillar.py curved c5 5 eps35 22 38 0.15
+v5_pillar.py curved c5 6 eps35 22 38 0.15
+v5_pillar.py rcwa 9 oop 22 38
+v5_pillar.py rcwa 13 oop 22 38

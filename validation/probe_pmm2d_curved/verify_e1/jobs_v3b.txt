@@ -1,0 +1,2 @@
+v3_gauge.py same 5
+v3_gauge.py same 6

@@ -1,0 +1,75 @@
+{
+ "i_unmapped": {
+  "engaged": true,
+  "t_dense": 1.262036400003126,
+  "t_reduced": 0.4309124999999767,
+  "speedup": 2.9287532851871183,
+  "eig": 5.874317330260757e-14,
+  "stack": 5.829781102306697e-13
+ },
+ "a_centred_circle": {
+  "shipped_refuses": true,
+  "bgen_hermitian": true,
+  "residual_A_B": [
+   3.478601698873067e-14,
+   2.6250613815669387e-16
+  ],
+  "accepted": true,
+  "t_dense": 1.0831239000035566,
+  "t_reduced": 0.46877329999551876,
+  "speedup": 2.3105494703173384,
+  "eig": 1.8033300150333174e-14,
+  "stack": 1.262323578998803e-13
+ },
+ "b_offcentre_circle": {
+  "shipped_refuses": true,
+  "bgen_hermitian": true,
+  "residual_A_B": null,
+  "accepted": false,
+  "t_dense": 1.270115799998166
+ },
+ "c_unmapped_gyro_mu": {
+  "shipped_refuses": true,
+  "bgen_hermitian": true,
+  "residual_A_B": [
+   3.683940464185991e-15,
+   8.112398847555087e-17
+  ],
+  "accepted": true,
+  "t_dense": 1.4108004000008805,
+  "t_reduced": 0.4620236999980989,
+  "speedup": 3.0535238776856803,
+  "eig": 4.67750705902202e-14,
+  "stack": 6.983375695653343e-13
+ },
+ "d_unmapped_lossy_mu": {
+  "shipped_refuses": true,
+  "bgen_hermitian": false,
+  "residual_A_B": [
+   4.255759152753366e-15,
+   8.112398847555087e-17
+  ],
+  "accepted": false,
+  "t_dense": 7.616932099997939
+ },
+ "e_centred_circle_lossy_mu": {
+  "shipped_refuses": true,
+  "bgen_hermitian": false,
+  "residual_A_B": [
+   2.670575748786861e-14,
+   3.747880369380994e-16
+  ],
+  "accepted": false,
+  "t_dense": 9.586984000001394
+ },
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "lumenairy": "C:\\tmp\\lum_vcurved_e1\\lumenairy\\__init__.py",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ }
+}

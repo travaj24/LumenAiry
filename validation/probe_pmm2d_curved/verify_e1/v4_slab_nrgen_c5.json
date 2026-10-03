@@ -1,0 +1,19 @@
+{
+ "n_M4": {
+  "dRT": 3.1680420509161422e-09,
+  "dJr": 3.2857088518812625e-09,
+  "dJt": 1.3800443099694967e-08,
+  "clo": 2.8948140551321444e-09,
+  "wall": 12.626222300001245
+ },
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "lumenairy": "C:\\tmp\\lum_vcurved_e1\\lumenairy\\__init__.py",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ }
+}
