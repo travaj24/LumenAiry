@@ -1872,6 +1872,123 @@ def _stag_map_quad_rule(M, nq=None):
     return xg, wg, V, Vp
 
 
+def _stag_duffy_points(corners, n):
+    """The CORNER (Duffy) rule of a cell that owns singular vertices --
+    Phase B's quadrature decision (``docs/audits/BUILD_PMM2D_CURVED_B_
+    2026_10_02.md``, section 2).
+
+    At a singular vertex of a transfinite map (``det J = 0``, e.g. the
+    circle's four 45-degree points) the effective tensors grow like
+    ``1 / distance``.  A tensor Gauss rule then converges only ALGEBRAICALLY:
+    the Legendre moments of the weights fall like ``n^-2`` (measured 5.6e-3,
+    1.4e-3, 3.6e-4, ... at ``n = 20, 40, 80`` on the 3 x 3 circle, no
+    1e-13 before ``n ~ 1e5``).  The Duffy transformation (Duffy, SIAM J.
+    Numer. Anal. 19, 1260 (1982)) removes the singularity exactly: a
+    triangle with one vertex ON the singular corner ``c`` is mapped from the
+    unit square ``(xi, eta)`` by ``P = c + xi [(A - c) + eta (o - A)]``,
+    whose Jacobian ``xi |...|`` cancels the ``1 / distance``, so the
+    transformed integrand is analytic and an ``n x n`` Gauss rule on it
+    converges SPECTRALLY (measured: moment error 1e-14 at ``n = 16``).
+
+    ``corners`` lists the cell's singular corners as ``(cs, ct)`` in
+    ``{-1, +1}^2`` (the reference square ``[-1, 1]^2``).  With more than one,
+    the cell is first split at its centre into four quadrants, so every piece
+    owns at most one; a piece that owns one is cut along its diagonal from
+    that corner into two collapsed triangles, a piece that owns none gets the
+    ``n x n`` tensor rule.  Returns ``(s, t, w)``: reference points and
+    weights (summing to 4, the reference area)."""
+    xg, wg = leggauss(int(n))
+    a = 0.5 * (xg + 1.0)
+    wa = 0.5 * wg
+    XI, ETA = np.meshgrid(a, a, indexing="ij")
+    WXE = np.outer(wa, wa)
+    corners = [tuple(int(v) for v in c) for c in corners]
+    if len(corners) > 1:
+        pieces = []
+        for qs in (-1, 1):
+            for qt in (-1, 1):
+                own = [c for c in corners if c == (qs, qt)]
+                pieces.append(((min(0, qs), min(0, qt)),
+                               (max(0, qs), max(0, qt)), own))
+    else:
+        pieces = [((-1, -1), (1, 1), corners)]
+    S, T, W = [], [], []
+    for lo, hi, own in pieces:
+        lo = np.asarray(lo, dtype=float)
+        hi = np.asarray(hi, dtype=float)
+        if not own:
+            xs = 0.5 * (lo[0] + hi[0]) + 0.5 * (hi[0] - lo[0]) * xg
+            ts = 0.5 * (lo[1] + hi[1]) + 0.5 * (hi[1] - lo[1]) * xg
+            S.append(np.repeat(xs, xg.size))
+            T.append(np.tile(ts, xg.size))
+            W.append(np.outer(wg, wg).ravel()
+                     * (0.25 * (hi[0] - lo[0]) * (hi[1] - lo[1])))
+            continue
+        cs, ct = own[0]
+        c = np.array([lo[0] if cs < 0 else hi[0], lo[1] if ct < 0 else hi[1]])
+        o = np.array([hi[0] if cs < 0 else lo[0], hi[1] if ct < 0 else lo[1]])
+        for A in (np.array([o[0], c[1]]), np.array([c[0], o[1]])):
+            e1 = A - c
+            e2 = o - A
+            jac = abs(e1[0] * e2[1] - e1[1] * e2[0])
+            Pp = c[None, None, :] + XI[..., None] * (
+                e1[None, None, :] + ETA[..., None] * e2[None, None, :])
+            S.append(Pp[..., 0].ravel())
+            T.append(Pp[..., 1].ravel())
+            W.append((WXE * XI * jac).ravel())
+    return np.concatenate(S), np.concatenate(T), np.concatenate(W)
+
+
+def _stag_map_singular_corners(cmap):
+    """``{(sx, sy): [(cs, ct), ...]}`` -- the cells that own a singular
+    vertex of ``cmap`` and the corners (in ``{-1, +1}^2``) they own, read from
+    the map's ``singular_vertices`` (none for a map without the attribute)."""
+    out = {}
+    for sx, sy, cu, cv in getattr(cmap, "singular_vertices", None) or ():
+        out.setdefault((int(sx), int(sy)), set()).add(
+            (2 * int(cu) - 1, 2 * int(cv) - 1))
+    return {k: sorted(v) for k, v in out.items()}
+
+
+class _StagMapQuad:
+    """The quadrature of the mapped assembly: ONE tensor Gauss-Legendre rule
+    (``n`` nodes per axis, :func:`_stag_map_quad_rule`) for every regular
+    cell, and the corner (Duffy) rule of :func:`_stag_duffy_points` (``n``
+    nodes per direction per piece) for every cell that owns a singular
+    vertex.  ``points[(sx, sy)] = (rule_u, rule_v, w)`` with each axis rule in
+    the ``(nodes, ones, V, Vp)`` layout of :func:`_stag_map_quad_rule`, so
+    the ONE axis-factor kernel :func:`_stag_quad_axis_factor` serves both."""
+
+    def __init__(self, M, n, corners):
+        self.M = int(M)
+        self.n = int(n)
+        self.tensor = _stag_map_quad_rule(self.M, self.n)
+        self.points = {}
+        for cell, cs in corners.items():
+            s, t, w = _stag_duffy_points(cs, self.n)
+            one = np.ones_like(s)
+            Vs, Vps = _modleg_value_deriv(self.M, s)
+            Vt, Vpt = _modleg_value_deriv(self.M, t)
+            self.points[cell] = ((s, one, Vs, Vps), (t, one, Vt, Vpt), w)
+
+
+class _StagNodeWeight:
+    """A per-NODE weight of the mapped assembly: ``t`` the ``(Nx, Ny, nq,
+    nq)`` array on the tensor rule (every cell; the slots of the corner-rule
+    cells are evaluated but not used) and ``p`` the ``{(sx, sy): (Nq,)}``
+    values on the corner rule's points."""
+
+    __slots__ = ("t", "p")
+
+    def __init__(self, t, p):
+        self.t = t
+        self.p = p
+
+    def any(self):
+        return bool(np.any(self.t)) or any(bool(np.any(v)) for v in
+                                           self.p.values())
+
+
 #: Relative tolerance on the Legendre MOMENTS of the map's geometric weights
 #: that the adaptive node count of :func:`_stag_map_nodes` must meet.  1e-13
 #: sits two to three decades above the moments' own round-off (~1e-16 x the
@@ -1882,6 +1999,16 @@ _STAG_MAP_QUAD_TOL = 1.0e-13
 #: weight arrays, ~94 MB on a 3 x 3 grid at 256).  Reaching it WARNS with the
 #: moment error actually achieved.
 _STAG_MAP_QUAD_CAP = 256
+
+
+def _stag_map_geom5(xu, xv, yu, yv):
+    """The five geometric weight functions of the map -- ``sqrt(g)``,
+    ``1 / sqrt(g)``, ``g11 / sqrt(g)``, ``g12 / sqrt(g)``, ``g22 /
+    sqrt(g)`` -- whose moments the node count must resolve."""
+    sg = xu * yv - xv * yu
+    with np.errstate(divide="ignore", invalid="ignore"):
+        return (sg, 1.0 / sg, (xu * xu + yu * yu) / sg,
+                (xu * xv + yu * yv) / sg, (xv * xv + yv * yv) / sg)
 
 
 def _stag_map_nodes(bx, by, cmap, M, tol=None, cap=None):
@@ -1903,26 +2030,43 @@ def _stag_map_nodes(bx, by, cmap, M, tol=None, cap=None):
     ``n`` and ``2 n`` nodes to :data:`_STAG_MAP_QUAD_TOL` relative, in every
     cell; ``n`` is then returned.  Polynomial weights (the identity map)
     pass at the first check, so the identity map runs the planning rule
-    ``2 M + 8`` exactly."""
+    ``2 M + 8`` exactly.
+
+    Phase B: a cell that owns a SINGULAR vertex (``det J = 0`` at a corner,
+    :func:`_stag_map_singular_corners`) is measured -- and later assembled --
+    on the corner (Duffy) rule with ``n`` nodes per direction per piece
+    (:func:`_stag_duffy_points`); on the tensor rule its moments would only
+    fall like ``n^-2`` and the criterion would run to the cap
+    (``validation/probe_pmm2d_curved/build_b/b1_quadrature_demand_M6.json``)."""
     from numpy.polynomial.legendre import legvander
     tol = _STAG_MAP_QUAD_TOL if tol is None else float(tol)
     cap = _STAG_MAP_QUAD_CAP if cap is None else int(cap)
     deg = 2 * int(M) - 2
+    corners = _stag_map_singular_corners(cmap)
 
     def moments(n):
         xg, wg = leggauss(n)
         Pv = legvander(xg, deg) * wg[:, None]            # (n, deg+1)
         out = []
         for sx in range(bx.N):
-            U = 0.5 * (bx.xb[sx] + bx.xb[sx + 1]) + bx.Jn[sx] * xg
+            cu = 0.5 * (bx.xb[sx] + bx.xb[sx + 1])
             for sy in range(by.N):
-                V = 0.5 * (by.xb[sy] + by.xb[sy + 1]) + by.Jn[sy] * xg
-                _X, _Y, xu, xv, yu, yv = cmap.geom(sx, sy, U, V)
-                sg = xu * yv - xv * yu
-                with np.errstate(divide="ignore", invalid="ignore"):
-                    fs = (sg, 1.0 / sg, (xu * xu + yu * yu) / sg,
-                          (xu * xv + yu * yv) / sg, (xv * xv + yv * yv) / sg)
-                out.append([Pv.T @ f @ Pv for f in fs])
+                cv = 0.5 * (by.xb[sy] + by.xb[sy + 1])
+                cs = corners.get((sx, sy))
+                if cs is None:
+                    U = cu + bx.Jn[sx] * xg
+                    V = cv + by.Jn[sy] * xg
+                    _X, _Y, xu, xv, yu, yv = cmap.geom(sx, sy, U, V)
+                    out.append([Pv.T @ f @ Pv
+                                for f in _stag_map_geom5(xu, xv, yu, yv)])
+                    continue
+                s, t, w = _stag_duffy_points(cs, n)
+                _X, _Y, xu, xv, yu, yv = cmap.geom_points(
+                    sx, sy, cu + bx.Jn[sx] * s, cv + by.Jn[sy] * t)
+                Ps = legvander(s, deg) * w[:, None]
+                Pt = legvander(t, deg)
+                out.append([Ps.T @ (f[:, None] * Pt)
+                            for f in _stag_map_geom5(xu, xv, yu, yv)])
         return out
 
     n = 2 * int(M) + 8
@@ -1955,6 +2099,27 @@ def _stag_map_nodes(bx, by, cmap, M, tol=None, cap=None):
     return n
 
 
+def _stag_map_eff(eps, sg, g11, g12, g22):
+    """The effective-tensor weights of a SCALAR ``eps`` from the metric at a
+    set of nodes (any common shape; ``eps`` broadcast against it)."""
+    off = -g12 / sg
+    return {"e11": eps * (g22 / sg), "e12": eps * off, "e21": eps * off,
+            "e22": eps * (g11 / sg), "e33": eps * sg,
+            "c11": g11 / sg, "c12": g12 / sg, "c21": g12 / sg,
+            "c22": g22 / sg, "c33": 1.0 / sg}
+
+
+def _stag_map_detj_refuse(sg, where):
+    bad = ~np.isfinite(sg) | (sg <= 0.0)
+    if np.any(bad):
+        raise ValueError(
+            f"Granet2DTransverseE: the coordinate map has det J <= 0 (or a "
+            f"non-finite Jacobian) at a quadrature node inside cell "
+            f"{where} -- min det J there {float(np.nanmin(sg)):.3e}.  The map "
+            f"must not fold the plane anywhere inside a cell (det J = 0 is "
+            f"allowed only at a cell CORNER, the singular vertices).")
+
+
 def _stag_map_weights(bx, by, cmap, eps_cell, rule):
     """Effective-tensor weights at every quadrature node of every ``(u, v)``
     cell, for a SCALAR ``eps_cell`` under the map ``cmap``.
@@ -1966,12 +2131,16 @@ def _stag_map_weights(bx, by, cmap, eps_cell, rule):
         eps'_33 = eps sg
         chi_t  = [mu'_t]^-1 = g / sg,      chi33 = 1 / sg
 
-    Returns a dict of ``(Nx, Ny, nq, nq)`` arrays keyed ``e11 e12 e21 e22 e33``
-    (permittivity) and ``c11 c12 c21 c22 c33`` (inverse permeability), first
-    node index along ``u``.  RAISES if ``det J <= 0`` (or is not finite) at ANY
-    node -- a map may be singular at an isolated cell corner, which no Gauss
-    node touches, but never inside a cell."""
-    xg = rule[0]
+    ``rule`` is the Phase-A tensor rule tuple (returns a dict of
+    ``(Nx, Ny, nq, nq)`` arrays keyed ``e11 e12 e21 e22 e33`` (permittivity)
+    and ``c11 c12 c21 c22 c33`` (inverse permeability), first node index
+    along ``u``) or a :class:`_StagMapQuad` (returns the same keys as
+    :class:`_StagNodeWeight` s carrying the corner-rule values too).  RAISES
+    if ``det J <= 0`` (or is not finite) at ANY node -- a map may be singular
+    at an isolated cell corner, which no node touches, but never inside a
+    cell."""
+    quad = rule if isinstance(rule, _StagMapQuad) else None
+    xg = quad.tensor[0] if quad is not None else rule[0]
     nq = xg.size
     Nx, Ny = bx.N, by.N
     shp = (Nx, Ny, nq, nq)
@@ -1991,21 +2160,26 @@ def _stag_map_weights(bx, by, cmap, eps_cell, rule):
     bad = ~np.isfinite(sg) | (sg <= 0.0)
     if np.any(bad):
         sx, sy = (int(i) for i in np.argwhere(bad)[0][:2])
-        raise ValueError(
-            f"Granet2DTransverseE: the coordinate map has det J <= 0 (or a "
-            f"non-finite Jacobian) at a quadrature node inside cell "
-            f"({sx}, {sy}) -- min det J there "
-            f"{float(np.nanmin(sg[sx, sy])):.3e}.  The map must not fold the "
-            f"plane anywhere inside a cell.")
-    eps = np.asarray(eps_cell, dtype=_C)[:, :, None, None]
-    off = -g12 / sg
-    return {"e11": eps * (g22 / sg), "e12": eps * off, "e21": eps * off,
-            "e22": eps * (g11 / sg), "e33": eps * sg,
-            "c11": g11 / sg, "c12": g12 / sg, "c21": g12 / sg,
-            "c22": g22 / sg, "c33": 1.0 / sg}
+        _stag_map_detj_refuse(sg[sx, sy], (sx, sy))
+    eps = np.asarray(eps_cell, dtype=_C)
+    W = _stag_map_eff(eps[:, :, None, None], sg, g11, g12, g22)
+    if quad is None:
+        return W
+    P = {k: {} for k in W}
+    for (sx, sy), (ru, rv, _w) in quad.points.items():
+        U = 0.5 * (bx.xb[sx] + bx.xb[sx + 1]) + bx.Jn[sx] * ru[0]
+        V = 0.5 * (by.xb[sy] + by.xb[sy + 1]) + by.Jn[sy] * rv[0]
+        _X, _Y, xu, xv, yu, yv = cmap.geom_points(sx, sy, U, V)
+        sgp = xu * yv - xv * yu
+        _stag_map_detj_refuse(sgp, (sx, sy))
+        Wp = _stag_map_eff(eps[sx, sy], sgp, xu * xu + yu * yu,
+                           xu * xv + yu * yv, xv * xv + yv * yv)
+        for k, v in Wp.items():
+            P[k][(sx, sy)] = v
+    return {k: _StagNodeWeight(W[k], P[k]) for k in W}
 
 
-def _stag_quad_axis_factor(basis, s, lset, op, rset, rule, cache):
+def _stag_quad_axis_factor(basis, s, lset, op, rset, rule, cache, tag="t"):
     """Per-node 1-D factor of the quadrature assembly on segment ``s``,
     restricted to the global functions SUPPORTED there:
     ``F[p, i, j] = scale * w_p * conj(L_i)^(a)(p) * R_j^(b)(p)``, the flavour
@@ -2014,8 +2188,11 @@ def _stag_quad_axis_factor(basis, s, lset, op, rset, rule, cache):
     is the segment's ``J_n`` for a mass and 1 for one derivative
     (``d/dx = (1/J_n) d/du`` against ``dx = J_n du``) -- the same scalings
     :meth:`Basis1D._global_matrix` and
-    :meth:`Granet2DTransverseE._eps_dir` apply."""
-    key = (id(basis), s, lset, op, rset)
+    :meth:`Granet2DTransverseE._eps_dir` apply.  ``tag`` names the rule in
+    the cache key (``'t'`` the shared tensor rule; the corner rule of a cell
+    passes its own, with unit ``w_p`` -- its 2-D weights are applied by the
+    caller)."""
+    key = (id(basis), s, lset, op, rset, tag)
     hit = cache.get(key)
     if hit is not None:
         return hit
@@ -2056,27 +2233,54 @@ def _stag_quad_weighted(bx, by, xspec, yspec, W, rule, cache=None):
     with ``I = ix + q_x iy`` (the solver's ``kron(y, x)`` ordering).
     ``xspec = (lset, op, rset)`` names the x test set, the flavour
     (``'m'`` / ``'d'`` / ``'dL'``) and the x trial set; ``yspec`` likewise.
-    ``W`` is the ``(Nx, Ny, nq, nq)`` node weight of
-    :func:`_stag_map_weights` -- the weight VARIES inside a cell, which is the
-    whole point -- and ``rule`` the shared :func:`_stag_map_quad_rule`.  A
-    weight that is identically zero (the shear terms of a separable map)
-    returns the zero block without quadrature."""
+    ``W`` is the node weight of :func:`_stag_map_weights` -- the weight
+    VARIES inside a cell, which is the whole point -- either an ``(Nx, Ny,
+    nq, nq)`` array on the tensor rule ``rule`` (a :func:`_stag_map_quad_rule`
+    tuple), or a :class:`_StagNodeWeight` with ``rule`` a
+    :class:`_StagMapQuad`, whose corner-rule cells are summed over their
+    Duffy points instead (same factor kernel, ``loc = sum_q w_q W_q
+    X_q Y_q``).  A weight that is identically zero (the shear terms of a
+    separable map) returns the zero block without quadrature."""
     if cache is None:
         cache = {}
     qx, qy = bx.dim, by.dim
     out = np.zeros((qy, qx, qy, qx), dtype=_C)
-    if not np.any(W):
-        return out.reshape(qy * qx, qy * qx)
-    fx = [_stag_quad_axis_factor(bx, sx, xspec[0], xspec[1], xspec[2], rule,
+    if isinstance(W, _StagNodeWeight):
+        if not W.any():
+            return out.reshape(qy * qx, qy * qx)
+        Wt, Wp = W.t, W.p
+        trule, prules = rule.tensor, rule.points
+    else:
+        if not np.any(W):
+            return out.reshape(qy * qx, qy * qx)
+        Wt, Wp = W, {}
+        trule = rule.tensor if isinstance(rule, _StagMapQuad) else rule
+        prules = {}
+        if isinstance(rule, _StagMapQuad) and rule.points:
+            raise ValueError("_stag_quad_weighted: a rule with corner (Duffy) "
+                             "cells needs a _StagNodeWeight weight.")
+    fx = [_stag_quad_axis_factor(bx, sx, xspec[0], xspec[1], xspec[2], trule,
                                  cache) for sx in range(bx.N)]
-    fy = [_stag_quad_axis_factor(by, sy, yspec[0], yspec[1], yspec[2], rule,
+    fy = [_stag_quad_axis_factor(by, sy, yspec[0], yspec[1], yspec[2], trule,
                                  cache) for sy in range(by.N)]
     for sx in range(bx.N):
-        sLx, sRx, Fx = fx[sx]
         for sy in range(by.N):
-            sLy, sRy, Fy = fy[sy]
-            T = np.einsum("pr,rab->pab", W[sx, sy], Fy, optimize=True)
-            loc = np.einsum("pij,pab->aibj", Fx, T, optimize=True)
+            pr = prules.get((sx, sy))
+            if pr is not None:
+                ru, rv, wq = pr
+                sLx, sRx, Fx = _stag_quad_axis_factor(
+                    bx, sx, xspec[0], xspec[1], xspec[2], ru, cache,
+                    tag=("p", sx, sy))
+                sLy, sRy, Fy = _stag_quad_axis_factor(
+                    by, sy, yspec[0], yspec[1], yspec[2], rv, cache,
+                    tag=("p", sx, sy))
+                loc = np.einsum("q,qij,qab->aibj", wq * Wp[(sx, sy)], Fx, Fy,
+                                optimize=True)
+            else:
+                sLx, sRx, Fx = fx[sx]
+                sLy, sRy, Fy = fy[sy]
+                T = np.einsum("pr,rab->pab", Wt[sx, sy], Fy, optimize=True)
+                loc = np.einsum("pij,pab->aibj", Fx, T, optimize=True)
             out[np.ix_(sLy, sLx, sRy, sRx)] += loc
     return out.reshape(qy * qx, qy * qx)
 
@@ -2314,8 +2518,12 @@ class Granet2DTransverseE:
                     f"map's (u, v) wall grid {bounds!r} -- with a map, pass "
                     f"wx = cmap.u_walls and wy = cmap.v_walls.")
         self.cmap = cmap
-        self._qrule = _stag_map_quad_rule(
-            self.bx.M, _stag_map_nodes(self.bx, self.by, cmap, self.bx.M))
+        # Phase B: the cells that own a singular vertex (det J = 0 at a
+        # corner) run the corner (Duffy) rule, every other cell the tensor
+        # rule; one adaptive node count serves both (_stag_map_nodes)
+        self._qrule = _StagMapQuad(
+            self.bx.M, _stag_map_nodes(self.bx, self.by, cmap, self.bx.M),
+            _stag_map_singular_corners(cmap))
         self._mapw = _stag_map_weights(self.bx, self.by, cmap, self.eps_cell,
                                        self._qrule)
         self._qcache = {}
