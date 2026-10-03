@@ -1997,7 +1997,10 @@ class _StagNodeWeight:
 _STAG_MAP_QUAD_TOL = 1.0e-13
 #: Hard cap on the nodes per axis per cell (memory: ten (Nx, Ny, nq, nq)
 #: weight arrays, ~94 MB on a 3 x 3 grid at 256).  Reaching it WARNS with the
-#: moment error actually achieved.
+#: moment error actually achieved.  The count doubles from ``2 M + 8``, so the
+#: EFFECTIVE cap is the largest ``2^k (2 M + 8) <= 256`` -- 144 at ``M = 5``,
+#: 160 at ``M = 6``, 192 at ``M = 8`` (Phase A verifier D5) -- and the search
+#: evaluates the moments at up to twice that.
 _STAG_MAP_QUAD_CAP = 256
 
 
@@ -2057,12 +2060,17 @@ def _stag_map_nodes(bx, by, cmap, M, tol=None, cap=None):
                     U = cu + bx.Jn[sx] * xg
                     V = cv + by.Jn[sy] * xg
                     _X, _Y, xu, xv, yu, yv = cmap.geom(sx, sy, U, V)
+                    # det J FIRST (Phase A verifier D3): a folding map must
+                    # raise here, on the base rule, not double to the cap
+                    # and print a quadrature warning before the refusal
+                    _stag_map_detj_refuse(xu * yv - xv * yu, (sx, sy))
                     out.append([Pv.T @ f @ Pv
                                 for f in _stag_map_geom5(xu, xv, yu, yv)])
                     continue
                 s, t, w = _stag_duffy_points(cs, n)
                 _X, _Y, xu, xv, yu, yv = cmap.geom_points(
                     sx, sy, cu + bx.Jn[sx] * s, cv + by.Jn[sy] * t)
+                _stag_map_detj_refuse(xu * yv - xv * yu, (sx, sy))
                 Ps = legvander(s, deg) * w[:, None]
                 Pt = legvander(t, deg)
                 out.append([Ps.T @ (f[:, None] * Pt)
@@ -4570,9 +4578,18 @@ def pmm_jones_2d_staggered(
         (see :class:`Granet2DTransverseE`).  In this phase a map takes a
         SCALAR ``eps_cell`` only, at any incidence; a tensor cell,
         ``mu_cell`` or ``slant`` together with a map raise
-        ``NotImplementedError``.  The only shipped maps are the identity and
-        the separable per-axis stretch
-        (:class:`~lumenairy.elements.pmm._curvemap.SeparableStretch`).
+        ``NotImplementedError``.
+
+        .. warning:: **A map takes ``(u, v)`` walls, not physical ones.**  A
+           material boundary sits at the IMAGE of its ``(u, v)`` wall, so
+           passing the physical wall positions as ``u_walls`` of a
+           :class:`~lumenairy.elements.pmm._curvemap.SeparableStretch`
+           silently builds a DIFFERENT device (measured 0.081 off the
+           intended one by the Phase A verifier, defect D6).  Build a stretch
+           with :meth:`SeparableStretch.from_physical_walls
+           <lumenairy.elements.pmm._curvemap.SeparableStretch.from_physical_walls>`,
+           and build curved geometry with ``shapes=`` (the primitives place
+           every wall at its physical boundary's preimage themselves).
 
     Returns
     -------

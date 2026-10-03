@@ -745,7 +745,12 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         mortar), a uniform or patterned TENSOR layer, ``mu`` / ``mu_cell``
         and ``slant`` together with a map all raise ``NotImplementedError``,
         and so do the two viewers (they would draw the ``(u, v)`` cells, not
-        the physical ones).
+        the physical ones).  A map takes ``(u, v)`` walls: pass PHYSICAL wall
+        positions through
+        :meth:`~lumenairy.elements.pmm._curvemap.SeparableStretch.from_physical_walls`
+        (passing them as ``u_walls`` silently builds a different device,
+        Phase A verifier D6), or describe the geometry with
+        ``add_layer(shapes=...)``, which places every wall itself.
     """
 
     def __init__(self, period_x, period_y=None, *, n_superstrate=1.0,
