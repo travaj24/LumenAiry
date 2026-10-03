@@ -5937,14 +5937,22 @@ def _interface_smatrix_mortar_2d(Wa, Va, Wb, Vb, ga, gb, cr, kron_apply):
     valid solve inside the conditioning bar everywhere) and screens on the
     ``gecon`` estimate the factors already carry."""
     lhsE = _stag_blk2_apply(gb.V1, gb.V2, Wb, gb.qq, kron_apply)
-    rhsE = _stag_blk2_apply(cr.C1H(), cr.C2H(), Wa, ga.qq, kron_apply)
+    # PHASE E2 (curved cells): two layers on DIFFERENT coordinate maps carry
+    # a NON-separable cross-mass (``cr.dense``, a
+    # ``_curvemortar.StagCrossOpsMapped``), applied as a matrix; each side's
+    # own mass stays its plain separable Gram.  Separable ``cr`` = the
+    # shipped arithmetic, bit for bit.
+    dense = getattr(cr, "dense", False)
+    rhsE = (cr.EH @ Wa if dense else
+            _stag_blk2_apply(cr.C1H(), cr.C2H(), Wa, ga.qq, kron_apply))
     A = _guarded_mortar_solve(
         lhsE, rhsE, "pmm2d staggered mortar interface (MassE_B W_B)", ga, gb)
     # the V1/V2 SWAP on the H row (see the docstring) -- load-bearing, and
     # invisible to any conforming-grid identity test
     hb_a, hb_c = _stag_h_blocks(ga, cr)
     lhsH = _stag_blk2_apply(hb_a[0], hb_a[1], Va, ga.qq, kron_apply)
-    rhsH = _stag_blk2_apply(hb_c[0], hb_c[1], Vb, gb.qq, kron_apply)
+    rhsH = (cr.H @ Vb if dense else
+            _stag_blk2_apply(hb_c[0], hb_c[1], Vb, gb.qq, kron_apply))
     B = _guarded_mortar_solve(
         lhsH, rhsH, "pmm2d staggered mortar interface (MassH_A V_A)", ga, gb)
     BA = B @ A
@@ -5986,16 +5994,25 @@ def _interface_smatrix_general_mortar_2d(six_a, six_b, ga, gb, cr, kron_apply):
     Wf_a, Vf_a, _lf_a, Wb_a, Vb_a, _lb_a = six_a[:6]
     Wf_b, Vf_b, _lf_b, Wb_b, Vb_b, _lb_b = six_b[:6]
     ma = Wf_a.shape[1]
-    ceh, cE = (cr.C1H(), cr.C2H()), (gb.V1, gb.V2)
-    E1 = _stag_blk2_apply(ceh[0], ceh[1], Wb_a, ga.qq, kron_apply)
-    E2 = -_stag_blk2_apply(cE[0], cE[1], Wf_b, gb.qq, kron_apply)
-    E3 = -_stag_blk2_apply(ceh[0], ceh[1], Wf_a, ga.qq, kron_apply)
-    E4 = _stag_blk2_apply(cE[0], cE[1], Wb_b, gb.qq, kron_apply)
+    cE = (gb.V1, gb.V2)
     hb_a, hb_c = _stag_h_blocks(ga, cr)
+    if getattr(cr, "dense", False):
+        # PHASE E2: the NON-separable cross-mass of two differently mapped
+        # layers (see _interface_smatrix_mortar_2d)
+        E1 = cr.EH @ Wb_a
+        E3 = -(cr.EH @ Wf_a)
+        H2 = -(cr.H @ Vf_b)
+        H4 = cr.H @ Vb_b
+    else:
+        ceh = (cr.C1H(), cr.C2H())
+        E1 = _stag_blk2_apply(ceh[0], ceh[1], Wb_a, ga.qq, kron_apply)
+        E3 = -_stag_blk2_apply(ceh[0], ceh[1], Wf_a, ga.qq, kron_apply)
+        H2 = -_stag_blk2_apply(hb_c[0], hb_c[1], Vf_b, gb.qq, kron_apply)
+        H4 = _stag_blk2_apply(hb_c[0], hb_c[1], Vb_b, gb.qq, kron_apply)
+    E2 = -_stag_blk2_apply(cE[0], cE[1], Wf_b, gb.qq, kron_apply)
+    E4 = _stag_blk2_apply(cE[0], cE[1], Wb_b, gb.qq, kron_apply)
     H1 = _stag_blk2_apply(hb_a[0], hb_a[1], Vb_a, ga.qq, kron_apply)
-    H2 = -_stag_blk2_apply(hb_c[0], hb_c[1], Vf_b, gb.qq, kron_apply)
     H3 = -_stag_blk2_apply(hb_a[0], hb_a[1], Vf_a, ga.qq, kron_apply)
-    H4 = _stag_blk2_apply(hb_c[0], hb_c[1], Vb_b, gb.qq, kron_apply)
     A = np.block([[E1, E2], [H1, H2]])
     B = np.block([[E3, E4], [H3, H4]])
     # ROUND 3 / DEFECT V1: this site takes its decision on the RESIDUAL, not on

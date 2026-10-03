@@ -1796,9 +1796,17 @@ class StagGridOps:
     takes the plain square modal match rather than a mortar."""
 
     __slots__ = ("bx", "by", "M", "q", "qq", "Mtt_x", "Mbb_x", "Mtt_y",
-                 "Mbb_y", "V1", "V2", "_key")
+                 "Mbb_y", "V1", "V2", "_key", "cmap")
 
-    def __init__(self, period_x, period_y, wx, wy, M, taux, tauy):
+    def __init__(self, period_x, period_y, wx, wy, M, taux, tauy, cmap=None):
+        # ``cmap`` (Phase E2 of the curved-cell plan): the layer's OWN
+        # coordinate map, on whose ``(u, v)`` wall grid ``wx`` / ``wy`` lie.
+        # The Grams below are the PLAIN ``du dv`` Grams either way (the
+        # metric-free flux form); the map enters only the cross-mass between
+        # two grids (:class:`StagCrossOpsMapped`) and the grid's KEY, so two
+        # layers on the same walls but different maps never share a square
+        # interface.  ``None`` (every shipped caller) changes nothing.
+        self.cmap = cmap
         self.M = int(M)
         self.bx = Basis1D(period_x, wx, M, taux)
         self.by = Basis1D(period_y, wy, M, tauy)
@@ -1815,6 +1823,8 @@ class StagGridOps:
         self.V2 = (self.Mbb_y, self.Mtt_x)
         self._key = (_stag_basis_fingerprint(self.bx),
                      _stag_basis_fingerprint(self.by))
+        if cmap is not None:
+            self._key = self._key + (cmap.fingerprint,)
 
     def key(self):
         return self._key
