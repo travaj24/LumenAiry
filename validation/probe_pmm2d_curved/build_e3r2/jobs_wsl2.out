@@ -1,0 +1,18 @@
+multilayer twin-numpy 1.9e-14  reach 1.9e-14  ratio 1.01
+scalar_conical_lossy twin-numpy 1.4e-15  reach 2.7e-15  ratio 0.53
+scalar_pillar twin-numpy 2.0e-15  reach 3.1e-15  ratio 0.65
+sinusoid twin-numpy 2.7e-15  reach 1.0e-15  ratio 2.67
+tensor_lc twin-numpy 3.3e-16  reach 1.3e-15  ratio 0.25
+/mnt/c/tmp/lum_curved_e3b/validation/probe_pmm2d_curved/build_e3r2/r7_parity_reach_wsl.json
+ellipse_a 3 rule on grad change 5.70e-11 3.27e-11 value change 9.4e-16 4.4e-16
+ellipse_a 3 rule off grad change 6.96e-03 2.77e-01 value change 9.4e-16 4.4e-16
+/mnt/c/tmp/lum_curved_e3b/validation/probe_pmm2d_curved/build_e3r2/r5_gauge_ellipse_a_M3_wsl.json
+fillet_sq_w 3 rule on grad change 8.47e-11 1.23e-10 value change 1.4e-14 1.6e-14
+fillet_sq_w 3 rule off grad change 2.32e-01 3.01e-01 value change 1.4e-14 1.6e-14
+/mnt/c/tmp/lum_curved_e3b/validation/probe_pmm2d_curved/build_e3r2/r5_gauge_fillet_sq_w_M3_wsl.json
+sinusoid {'eager_ref': ['8d559494d4ab4a40', '72a44152d8661f93', '67b0ef89707a510b'], 'eager_traced': ['7415162f84175b20', 'bf4ee5591e40d0a2', '5109753ff052bf79'], 'jit': ['690710cd9f62b713', '3bdf75425a2512fb', '72477b312f449bec'], 'T_jit': [0.0, 0.0, 0.0, 0.0]}
+square_pillar {'eager_ref': ['033da78b9756f33f', '7795f005df57c034', 'bd30de7193ad9ba7'], 'eager_traced': ['d8c6cd67abdc332b', '169e4f338180971e', 'a70f06f7b103ed43'], 'jit': ['05d9996a07e76c38', 'e7d8166f64e0e1d2', '63c9779f32e2aa0e'], 'T_jit': [0.0, 0.0, 0.0, 0.0]}
+ellipse_sym {'eager_ref': ['7a9e64d6f4c39735', 'd4dd4fcd21a29d09', '8e6338568359d443'], 'eager_traced': ['570cdcf4133538ec', '0e70d5d43ec75a75', 'f94a0ad0705feb77'], 'jit': ['7c141db3e1d8dbcf', 'cc92e2fa658349f9', '9acd7e4ac40c3bcb'], 'T_jit': [0.0, 0.0, 0.0, 0.0]}
+rect_oblique {'eager_ref': ['9cd8ab49b9e14f88', '3f06a74b35d6b070', '2173f4ada8384c28'], 'eager_traced': ['99f87ec861d88335', 'ae1d80ae88000f3f', '6ee971ea290cb860'], 'jit': ['fc5d1c050bcf79d8', '630fc9b923d9511c', '6647e11a33f964b5'], 'T_jit': [0.0, 0.0, 0.0, 0.0]}
+circle_tensor_magnetic_two_layer {'eager_ref': ['9d6e40da34ea01e5', '0e073d88fb1f33fd', '9f9a69e6839e2fce']}
+/mnt/c/tmp/lum_curved_e3b/validation/probe_pmm2d_curved/build_e3r2/r3_fwd_bytes_preE3_M3_wsl.json

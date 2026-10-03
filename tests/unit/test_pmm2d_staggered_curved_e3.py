@@ -40,6 +40,7 @@ import pytest  # noqa: E402
 from lumenairy.backend import JAX_AVAILABLE  # noqa: E402
 from lumenairy.elements.pmm import (  # noqa: E402
     Circle,
+    Ellipse,
     FilletRect,
     PMM2DStackPure,
     Rect,
@@ -724,3 +725,331 @@ def test_e3_numpy_backend_rejects_params():
         warnings.simplefilter("ignore")
         with pytest.raises(ValueError, match="backend"):
             PMM2DStackPure(_P, _P, backend="torch")
+
+
+# =========================================================================== #
+# ROUND 2 (VERIFY-E3, 2026-10-03) -- degenerate CLUSTERS in the reverse pass
+# =========================================================================== #
+# Readings: ``validation/probe_pmm2d_curved/build_e3r2/`` (``_win`` / ``_wsl``:
+# Windows jax 0.11.0, WSL jax 0.10.2), every bar derived there and stated
+# below with both builds' readings.
+def test_e3r2_no_eig_level_rule_can_see_the_in_cluster_block():
+    """WHY the fix wraps eig AND its consumer.  ``A0 = diag(1, 1, 2)`` (an
+    exact pair), ``L_X(A) = Re tr(expm(A) X)`` evaluated through the
+    eigenpairs.  For ``X1 = E_12`` (an in-cluster off-diagonal) and
+    ``X2 = 0`` the consumer hands eig the SAME cotangent (zero, to round-off)
+    -- yet the true gradients (``jax.scipy.linalg.expm``) differ by ``e``.
+    No rule at the eig boundary can return both; the cluster rule
+    (``rcwa._jax_eig_cluster_adjoint``) recovers both, and on a random
+    similarity of ``diag(1, 1, 2, 3)`` it matches the expm oracle where the
+    plain eig VJP does not.  Measured on the similarity case
+    (``r9_matrix_oracle_{win,wsl}.json``): the rule 2.2e-9 / 1.6e-10
+    relative, the plain VJP 0.30 / 1.01 (win / wsl -- build-dependent, as
+    V-E3-1 was); bars 1e-7 / > 1e-2."""
+    import jax
+    import jax.numpy as jnp
+    from jax.scipy.linalg import expm
+
+    from lumenairy.elements.rcwa._core import (
+        _jax_eig_cluster_adjoint,
+        _jax_eig_stable,
+    )
+
+    def eig_fn(L, G):
+        return _jax_eig_stable()(L)
+
+    def via_eig(A, X, gap):
+        def consumer(eigs):
+            lam, V = eigs[0]
+            M = V @ jnp.diag(jnp.exp(lam)) @ jnp.linalg.inv(V)
+            return jnp.real(jnp.trace(M @ X))
+        return _jax_eig_cluster_adjoint(eig_fn, [(A, None)], consumer,
+                                        gap_rel=gap)
+
+    def oracle(A, X):
+        return jnp.real(jnp.trace(expm(A) @ X))
+
+    A0 = jnp.diag(jnp.asarray([1.0, 1.0, 2.0], dtype=complex))
+    X1 = jnp.zeros((3, 3), complex).at[0, 1].set(1.0)
+    X2 = jnp.zeros((3, 3), complex)
+    # the consumer's cotangent at the exact eigenpairs: identical (zero)
+    lam, V = _jax_eig_stable()(A0)
+    for X in (X1, X2):
+        def cons(lv, X=X):
+            lam_, V_ = lv
+            M = V_ @ jnp.diag(jnp.exp(lam_)) @ jnp.linalg.inv(V_)
+            return jnp.real(jnp.trace(M @ X))
+        _v, vj = jax.vjp(cons, (lam, V))
+        lb, Vb = vj(1.0)[0]
+        assert float(jnp.max(jnp.abs(lb))) + float(jnp.max(jnp.abs(Vb))) \
+            < 1e-14
+    g1 = jax.grad(lambda A: oracle(A, X1), holomorphic=False)(
+        A0.real)
+    assert abs(float(g1[1, 0]) - np.e) < 1e-12     # the true gradient
+    for X in (X1, X2):
+        gt = np.asarray(jax.grad(lambda A, X=X: oracle(A, X))(A0.real))
+        gr = np.asarray(jax.grad(lambda A, X=X: via_eig(
+            A.astype(complex), X, None))(A0.real))
+        assert np.max(np.abs(gr - gt)) <= 1e-7 * max(1.0, np.max(
+            np.abs(gt)))
+    # a random similarity of diag(1, 1, 2, 3), a random direction
+    rng = np.random.default_rng(7)
+    Q = jnp.asarray(rng.standard_normal((4, 4)) + 1j * rng.standard_normal(
+        (4, 4)))
+    D = jnp.diag(jnp.asarray([1.0, 1.0, 2.0, 3.0], dtype=complex))
+    A1 = Q @ D @ jnp.linalg.inv(Q)
+    B = jnp.asarray(rng.standard_normal((4, 4)) + 1j * rng.standard_normal(
+        (4, 4)))
+    X = jnp.asarray(rng.standard_normal((4, 4)) + 1j * rng.standard_normal(
+        (4, 4)))
+    gt = float(jax.grad(lambda t: oracle(A1 + t * B, X))(0.0))
+    gr = float(jax.grad(lambda t: via_eig(A1 + t * B, X, None))(0.0))
+    gp = float(jax.grad(lambda t: via_eig(A1 + t * B, X, 0.0))(0.0))
+    assert abs(gr - gt) <= 1e-7 * abs(gt), (gr, gt)
+    assert abs(gp - gt) > 1e-2 * abs(gt), (gp, gt)
+
+
+_SYM = {
+    "square_w": (0.5, lambda x: [Rect(0.6, 0.6, x, 0.5, 3.5)]),
+    "ellipse_a": (0.33, lambda x: [Ellipse(0.6, 0.6, x, 0.33, 3.5)]),
+    "fillet_sq_w": (0.6, lambda x: [FilletRect(0.6, 0.6, x, 0.6, 0.1,
+                                               3.5)]),
+}
+
+
+@functools.lru_cache(maxsize=None)
+def _sym_fns(case, M=3):
+    """(x0, f, jit f) of R00, T00 E_x, T00 E_y for a symmetric reference
+    whose parameter BREAKS the four-fold symmetry (V-E3-1)."""
+    import jax
+    import jax.numpy as jnp
+    x0, shp = _SYM[case]
+    st = PMM2DStackPure(_P, _P, n_superstrate=1.0, n_substrate=1.45,
+                        n_modes=M, n_orders=2, backend="jax")
+    st.add_layer(0.45, shapes=shp(x0), background_eps=1.0)
+    st.set_source(_WL)
+    tw = st.jax_twin()
+
+    def f(x):
+        p = tw.params()
+        p["layers"][0]["shapes"] = shp(x)
+        _o, R, T, J = st.solve(params=p)
+        return jnp.stack([R[0, tw.p0], T[0, tw.p0], T[1, tw.p0]])
+    return x0, f, jax.jit(f)
+
+
+def _jac(f, x0, gap=None):
+    """jit(jacrev) of ``f`` traced with the cluster rule's ``gap_rel``
+    (None = default, 0 = the rule off: the E3 build's adjoint)."""
+    import jax
+
+    import lumenairy.elements.pmm._jax_twod_staggered as JT
+    JT._E3_EIG_CLUSTER_GAP_REL = gap
+    try:
+        return np.asarray(jax.jit(jax.jacrev(lambda x: f(x)))(x0))
+    finally:
+        JT._E3_EIG_CLUSTER_GAP_REL = None
+
+
+def _fdv(fj, x0, scale=_P):
+    """Richardson FD (h / P = 3e-4, 1e-4) of a vector function."""
+    rows = []
+    for hs in (3e-4, 1e-4):
+        h = hs * scale
+        rows.append((np.asarray(fj(x0 + h)) - np.asarray(fj(x0 - h)))
+                    / (2 * h))
+    return (9.0 * rows[1] - rows[0]) / 8.0
+
+
+@pytest.mark.parametrize("case", sorted(_SYM))
+def test_e3r2_symmetry_breaking_gradient_at_a_symmetric_cell(case):
+    """V-E3-1 FIXED.  A parameter that breaks the four-fold symmetry of the
+    evaluated cell (a square pillar's width alone, a circle deformed into an
+    ellipse, a square fillet's width) at M = 3, AD vs the twin's own
+    Richardson FD (``r2_dev_<case>_M3_final_{win,wsl}.json``):
+
+    ==========  =====================  =====================
+    case        rule on (win / wsl)    rule off (win / wsl)
+    ==========  =====================  =====================
+    square_w    1.9e-10 / 4.4e-10      3.1e-3 / 3.8e-2
+    ellipse_a   8.6e-11 / 1.8e-11      6.5e-3 / 2.8e-2
+    fillet_sq_w 4.1e-9 / 4.0e-9        2.9e-1 / 7.5e-1
+    ==========  =====================  =====================
+
+    (the square vs FD(numpy) is the verifier's own arm; for the curved cells
+    FD(numpy) differs from FD(twin) by the documented frozen-grid offset,
+    5e-4 / 2e-5 here.)  Bar 1e-7: 25x above the fillet's reading, four
+    decades below the smallest rule-off error; the fail-before arm (the rule
+    off) must exceed 1e-3."""
+    x0, f, fj = _sym_fns(case)
+    fd = _fdv(fj, x0)
+    sc = np.max(np.abs(fd))
+    on = _jac(f, x0)
+    off = _jac(f, x0, gap=0.0)
+    assert np.max(np.abs(on - fd)) / sc < 1e-7, (on, fd)
+    assert np.max(np.abs(off - fd)) / sc > 1e-3, (off, fd)
+
+
+def test_e3r2_near_symmetric_cells_are_inside_the_rule():
+    """The NEAR-degenerate zone: an ellipse 1e-13 (relative) off the circle,
+    d / d a.  The E3 build's adjoint reads 5.3e-2 (win) here and was still
+    3.3e-6 at 1e-11; the rule 6.7e-11 / 1.9e-11 (win / wsl) over the whole
+    sweep 0 .. 1e-4 (``r6_offsym_M3_{win,wsl}.json``).  Bars 1e-7 / > 1e-3."""
+    import jax
+    import jax.numpy as jnp
+    st = PMM2DStackPure(_P, _P, n_superstrate=1.0, n_substrate=1.45,
+                        n_modes=3, n_orders=2, backend="jax")
+    st.add_layer(0.45, shapes=[Ellipse(0.6, 0.6, 0.33, 0.33, 3.5)],
+                 background_eps=1.0)
+    st.set_source(_WL)
+    tw = st.jax_twin()
+    b = 0.33 * (1.0 + 1e-13)
+
+    def g(a):
+        p = tw.params()
+        p["layers"][0]["shapes"] = [Ellipse(0.6, 0.6, a, b, 3.5)]
+        _o, R, T, J = st.solve(params=p)
+        return jnp.stack([R[0, tw.p0], T[0, tw.p0], T[1, tw.p0]])
+    fd = _fdv(jax.jit(g), 0.33)
+    sc = np.max(np.abs(fd))
+    assert np.max(np.abs(_jac(g, 0.33) - fd)) / sc < 1e-7
+    assert np.max(np.abs(_jac(g, 0.33, gap=0.0) - fd)) / sc > 1e-3
+
+
+def _rotating_eig(orig, seed):
+    """``_stag_geneig_jax`` whose basis inside every EXACT cluster
+    (gap <= 1e-12 max|lam|) is replaced by a random unitary rotation of it,
+    and every mode by a random phase -- an equally valid eigensolver."""
+    import jax
+    import jax.numpy as jnp
+
+    def eig(L, G, tau_rel=None):
+        lam, V = orig(L, G, tau_rel)
+        n = lam.shape[0]
+        s = jnp.max(jnp.abs(lam))
+        K = (jnp.abs(lam[:, None] - lam[None, :]) <= 1e-12 * s) | jnp.eye(
+            n, dtype=bool)
+        rng = np.random.default_rng(seed * 1000 + n)
+        X = rng.standard_normal((n, n)) + 1j * rng.standard_normal((n, n))
+        Y = jnp.where(K, X, 0.0)
+        w, Q = jnp.linalg.eigh(jnp.conj(Y).T @ Y)
+        U = Y @ ((Q * (1.0 / jnp.sqrt(w))[None, :]) @ jnp.conj(Q).T)
+        return lam, V @ jax.lax.stop_gradient(U)
+    return eig
+
+
+def test_e3r2_gradient_is_invariant_under_a_rotation_inside_each_cluster(
+        monkeypatch):
+    """THE GAUGE TEST.  LAPACK's basis inside a degenerate cluster is
+    arbitrary; replacing it by a random unitary rotation (and every mode by a
+    random phase) must not move anything the twin returns.  Square pillar,
+    d / d w, M = 3 (``r5_gauge_square_w_M3_{win,wsl}.json``): the forward
+    values move by 2.6e-15 (round-off), the gradient with the cluster rule
+    by 1.6e-10 / 4.3e-10 (win / wsl), the E3 build's adjoint (rule off) by
+    0.23 / 0.24 -- V-E3-1 WAS this dependence.  Bars: values 1e-12, rule on
+    1e-8, rule off > 1e-3."""
+    import jax
+
+    import lumenairy.elements.pmm._jax_twod_staggered as JT
+    x0, f, _fj = _sym_fns("square_w")
+    orig = JT._stag_geneig_jax
+    base = {g: _jac(f, x0, gap=g) for g in (None, 0.0)}
+    v0 = np.asarray(jax.jit(lambda x: f(x))(x0))
+    monkeypatch.setattr(JT, "_stag_geneig_jax", _rotating_eig(orig, 1))
+    v1 = np.asarray(jax.jit(lambda x: f(x))(x0))
+    rot = {g: _jac(f, x0, gap=g) for g in (None, 0.0)}
+    sc = np.max(np.abs(base[None]))
+    assert np.max(np.abs(v1 - v0)) < 1e-12
+    assert np.max(np.abs(rot[None] - base[None])) / sc < 1e-8
+    assert np.max(np.abs(rot[0.0] - base[0.0])) / sc > 1e-3
+
+
+def test_e3r2_the_rule_leaves_every_forward_value_byte_identical():
+    """The rule acts in the reverse pass only: R, T and the Jones matrix
+    with the rule on and off are BYTE-identical (eager and under jit; the
+    probe ``r3_fwd_bytes`` compares 84 / 84 SHA-256 against the E3 build
+    ``d4e92eb5`` on 14 fixtures on both builds)."""
+    import jax
+
+    import lumenairy.elements.pmm._jax_twod_staggered as JT
+    x0, f, _fj = _sym_fns("square_w")
+    vals = {}
+    for g in (None, 0.0):
+        JT._E3_EIG_CLUSTER_GAP_REL = g
+        try:
+            vals[g] = (np.asarray(f(x0 + 0.01)),
+                       np.asarray(jax.jit(lambda x: f(x))(x0 + 0.01)))
+        finally:
+            JT._E3_EIG_CLUSTER_GAP_REL = None
+    for a, b in zip(vals[None], vals[0.0]):
+        assert np.array_equal(a, b)
+
+
+@pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
+    "MAINTAINER ITEM (round 2 of the E3 build, pre-existing, not E3): the "
+    "RCWA JAX path's gradient is wrong for a SYMMETRY-BREAKING parameter at "
+    "a four-fold symmetric cell -- the V-E3-1 class (the shared "
+    "_jax_eig_stable VJP at a degenerate pair): 23 % (TE) / 39 % (TM) "
+    "relative; the symmetry-KEEPING control is exact (2.8e-10) "
+    "(r4_other_twins_rcwa2d_win.json).  Fix: route its eigs through "
+    "rcwa._jax_eig_cluster_adjoint; remove the marker with the fix."))
+def test_e3r2_rcwa_jax_symmetry_breaking_gradient_at_a_symmetric_cell():
+    """``rcwa_efficiency_2d`` (JAX eps_cell), a 15 x 15 pixel cell (centre
+    block eps 4, side blocks 1.5, corners 1), t added to the two x-side
+    blocks only, d R / d t and d T / d t of the (0, 0), (+-1, 0) orders, TE,
+    vs the NumPy Richardson FD.  Bar 1e-6."""
+    import jax
+    import jax.numpy as jnp
+
+    from lumenairy.elements.rcwa import rcwa_efficiency_2d
+    base3 = np.array([[1.0, 1.5, 1.0], [1.5, 4.0, 1.5], [1.0, 1.5, 1.0]])
+    xs3 = np.zeros((3, 3))
+    xs3[0, 1] = xs3[2, 1] = 1.0
+    base, dirn = (np.kron(a, np.ones((5, 5))) for a in (base3, xs3))
+    o, _R, _T = rcwa_efficiency_2d(_P, _P, base.astype(complex), 1.45, 1.0,
+                                   0.45, _WL, n_orders_x=3, n_orders_y=3)
+    o = np.asarray(o)
+    idx = [int(np.nonzero((o[:, 0] == a) & (o[:, 1] == b))[0][0])
+           for a, b in ((0, 0), (1, 0), (-1, 0))]
+
+    def f(t, xp):
+        eps = (xp.asarray(base) + t * xp.asarray(dirn)).astype(complex)
+        _o, R, T = rcwa_efficiency_2d(_P, _P, eps, 1.45, 1.0, 0.45, _WL,
+                                      n_orders_x=3, n_orders_y=3)
+        return xp.concatenate([xp.stack([R[i] for i in idx]),
+                               xp.stack([T[i] for i in idx])])
+    g = np.asarray(jax.jit(jax.jacrev(lambda t: f(t, jnp)))(0.0))
+    fd = _fdv(lambda t: f(t, np), 0.0, scale=1.0)
+    assert np.max(np.abs(g - fd)) / np.max(np.abs(fd)) < 1e-6
+
+
+@pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
+    "MAINTAINER ITEM (pre-existing, documented in the W9 note of "
+    "rcwa._core as 'exactly 0.0 stays unrecoverable'): the 1-D PMM twin's "
+    "d / d(angle) AT EXACTLY normal incidence on a symmetric grating -- the "
+    "angle splits the half-spaces' +-m pairs -- is wrong: 28 % (TE) / 590 % "
+    "(TM) relative on the +-1 orders (r4_other_twins_pmm1d_win.json).  Fix: "
+    "the cluster rule; remove the marker with the fix."))
+def test_e3r2_pmm1d_jax_angle_gradient_at_normal_incidence():
+    """``pmm_efficiency_1d`` (JAX), period 1.2, ridge n 2 / groove 1, duty
+    0.5, depth 0.45, degree 12, TE: d R_{+-1} / d angle and d T_{+-1} /
+    d angle at angle 0 vs the NumPy Richardson FD.  Bar 1e-6."""
+    import jax
+    import jax.numpy as jnp
+
+    from lumenairy.elements.pmm import pmm_efficiency_1d
+    o, _R, _T = pmm_efficiency_1d(_P, 2.0, 1.0, 1.45, 1.0, 0.45, 0.5, _WL,
+                                  degree=12, stabilize=False)
+    o = np.asarray(o)
+    idx = [int(np.nonzero(o == m)[0][0]) for m in (1, -1)]
+
+    def f(t, xp):
+        _o, R, T = pmm_efficiency_1d(_P, xp.asarray(2.0 + 0j), 1.0, 1.45,
+                                     1.0, 0.45, 0.5, _WL, angle=t,
+                                     degree=12, stabilize=False)
+        return xp.concatenate([xp.stack([R[i] for i in idx]),
+                               xp.stack([T[i] for i in idx])])
+    g = np.asarray(jax.jit(jax.jacrev(lambda t: f(t, jnp)))(0.0))
+    fd = _fdv(lambda t: f(t, np), 0.0, scale=1.0)
+    assert np.max(np.abs(g - fd)) / np.max(np.abs(fd)) < 1e-6
+

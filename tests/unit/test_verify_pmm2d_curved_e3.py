@@ -166,12 +166,6 @@ def test_ve3_symmetric_control_rect_width_gradient_matches_numpy():
     assert np.max(np.abs(g - fd)) / np.max(np.abs(fd)) < 1e-7
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "V-E3-1 (P1): at an exactly four-fold symmetric cell the regularised "
-    "eigenvector VJP drops the in-pair coupling of the degenerate Bloch "
-    "modes, so a SYMMETRY-BREAKING shape gradient (a square pillar's width "
-    "alone) is wrong: 3.1e-3 relative at M = 3, 25 % at M = 4, 14 % at M = "
-    "5 (v6b_symbreak_square_w_M*.json).  Remove this marker with the fix."))
 def test_ve3_symmetry_breaking_gradient_at_a_square_pillar():
     """d / d w of a SQUARE pillar (w = h = 0.5; w moved alone breaks the
     four-fold symmetry and splits the degenerate pairs to first order) vs
@@ -189,20 +183,31 @@ def test_ve3_the_eig_regularisation_is_load_bearing():
     VJP's broadening set to ZERO.  On the non-square pillar the round-off-
     split pairs of the half-space geometric eig then carry 1 / dlam ~ 1e16
     and the width gradient is off by 0.117 relative at M = 3
-    (``v6b_symbreak_rect_nonsq_w_M3_win.json``; default 3e-11).  Bar: the
-    mutant must be off by > 1e-3, the default within 1e-7."""
+    (``v6b_symbreak_rect_nonsq_w_M3_win.json``; default 3e-11).
+
+    RESTATED in round 2 of the build (the degenerate-cluster rule): those
+    round-off-split pairs are now CLUSTERS whose adjoint is evaluated at a
+    lifted, resolved point, so the broadening is no longer what carries them
+    -- the rule is.  Mutant = the rule off AND tau 0: must be off by > 1e-3
+    (the 0.117 above); the rule on with tau 0: within 1e-7 (measured 3.0e-11,
+    the FD's floor), the default within 1e-7."""
     import jax
 
     import lumenairy.elements.pmm._jax_twod_staggered as JT
     x0, fj, gj, fn, f = _twin_fns("rect_w")
     fd = _rich(fn, x0)
-    JT._E3_EIG_TAU_REL = 0.0
-    try:
-        gm = np.asarray(jax.jit(jax.jacrev(lambda x: f(x)))(x0))
-    finally:
-        JT._E3_EIG_TAU_REL = None
     sc = np.max(np.abs(fd))
-    assert np.max(np.abs(gm - fd)) / sc > 1e-3
+    out = {}
+    for name, gap in (("mutant", 0.0), ("rule_tau0", None)):
+        JT._E3_EIG_TAU_REL = 0.0
+        JT._E3_EIG_CLUSTER_GAP_REL = gap
+        try:
+            out[name] = np.asarray(jax.jit(jax.jacrev(lambda x: f(x)))(x0))
+        finally:
+            JT._E3_EIG_TAU_REL = None
+            JT._E3_EIG_CLUSTER_GAP_REL = None
+    assert np.max(np.abs(out["mutant"] - fd)) / sc > 1e-3
+    assert np.max(np.abs(out["rule_tau0"] - fd)) / sc < 1e-7
     assert np.max(np.abs(np.asarray(gj(x0)) - fd)) / sc < 1e-7
 
 

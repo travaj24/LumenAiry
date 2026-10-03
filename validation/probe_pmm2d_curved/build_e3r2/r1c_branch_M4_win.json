@@ -1,0 +1,83 @@
+{
+ "M": 4,
+ "square": {
+  "geom": {
+   "s": 52.32556880523965,
+   "n_exact_members": 162,
+   "cluster_to_branch_rel": [
+    0.005810652623154424,
+    0.013580194606528779
+   ],
+   "any_eig_to_branch_rel": [
+    0.005810652623154424,
+    0.013580194606528779
+   ]
+  },
+  "layer": {
+   "s": 51.31709743464393,
+   "n_exact_members": 82,
+   "cluster_to_branch_rel": [
+    0.0010301832184421776
+   ],
+   "any_eig_to_branch_rel": [
+    0.0008810148707637684
+   ]
+  }
+ },
+ "circle": {
+  "geom": {
+   "s": 112.59305193983684,
+   "n_exact_members": 82,
+   "cluster_to_branch_rel": [
+    0.00257547652117345,
+    0.006094611914621998
+   ],
+   "any_eig_to_branch_rel": [
+    0.00257547652117345,
+    0.005574966480398872
+   ]
+  },
+  "layer": {
+   "s": 219.89841551627353,
+   "n_exact_members": 82,
+   "cluster_to_branch_rel": [
+    0.0002814276056065857
+   ],
+   "any_eig_to_branch_rel": [
+    0.00025354593350764124
+   ]
+  }
+ },
+ "fillet_sq": {
+  "geom": {
+   "s": 1221.919716643351,
+   "n_exact_members": 226,
+   "cluster_to_branch_rel": [
+    0.00024974238481933683,
+    0.000577441978888276
+   ],
+   "any_eig_to_branch_rel": [
+    0.0002497420098750105,
+    0.0005771947996127332
+   ]
+  },
+  "layer": {
+   "s": 1725.2830212839458,
+   "n_exact_members": 226,
+   "cluster_to_branch_rel": [
+    5.4925750737870616e-06
+   ],
+   "any_eig_to_branch_rel": [
+    2.109462729387987e-06
+   ]
+  }
+ },
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "jax": "0.11.0",
+  "lumenairy": "C:\\tmp\\lum_curved_e3b\\lumenairy\\__init__.py",
+  "platform": "win32",
+  "build": "win"
+ }
+}

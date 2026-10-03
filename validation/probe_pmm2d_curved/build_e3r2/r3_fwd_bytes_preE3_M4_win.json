@@ -1,0 +1,222 @@
+{
+ "M": 4,
+ "label": "preE3",
+ "scalar_pillar": {
+  "eager_ref": [
+   "d627e8cc6d9f4ada",
+   "d0ae217691b9296c",
+   "9edc454231593de2"
+  ]
+ },
+ "scalar_conical_lossy": {
+  "eager_ref": [
+   "116ed8a9f35117b5",
+   "8d2c2dc833f034ce",
+   "460cd1f0be360b3c"
+  ]
+ },
+ "tensor_lc": {
+  "eager_ref": [
+   "0e866e709026744a",
+   "48239db5aedc2b12",
+   "fc3430863bd59bb6"
+  ]
+ },
+ "magnetic_tensor": {
+  "eager_ref": [
+   "e5f835d634742e6a",
+   "19f4a91d79429d8b",
+   "b741dd37f0c71665"
+  ]
+ },
+ "multilayer": {
+  "eager_ref": [
+   "32cf05cdbfb39d68",
+   "9986ab09fccd0842",
+   "b22f773744f1a3b6"
+  ]
+ },
+ "uniform_only": {
+  "eager_ref": [
+   "395a3eb9f1f323d8",
+   "cc11b472fc30e0db",
+   "0a9acb35f49386bc"
+  ]
+ },
+ "circle": {
+  "eager_ref": [
+   "e542a53fb8b0871d",
+   "c87a1e4bcbd7a6ca",
+   "ec484d66bed9e57c"
+  ],
+  "eager_traced": [
+   "1f81f4bc79391632",
+   "e6fd4d25a50cc42c",
+   "51e6ccd895e029ff"
+  ],
+  "jit": [
+   "2c2cab5fe4053e29",
+   "e34cc9be17eab70d",
+   "0f0d18f1ae6c1118"
+  ],
+  "T_jit": [
+   0.0,
+   0.0,
+   0.0,
+   0.0
+  ]
+ },
+ "circle_conical": {
+  "eager_ref": [
+   "f69de1785adbf447",
+   "ab0df093620af375",
+   "f53a4e77caf6b04c"
+  ],
+  "eager_traced": [
+   "82d74defe2bb6d40",
+   "7382884fda643381",
+   "cfa661f4657f8697"
+  ],
+  "jit": [
+   "aefde23190b18eca",
+   "36c8905f9e6106b8",
+   "664e269100385e9f"
+  ],
+  "T_jit": [
+   0.0,
+   0.0,
+   0.0,
+   0.0
+  ]
+ },
+ "fillet": {
+  "eager_ref": [
+   "a3b1fff82f7faa62",
+   "e7d382f9c158dfa2",
+   "0fd4769e131a4af3"
+  ],
+  "eager_traced": [
+   "4b0cfa069d888190",
+   "9992534088cc4d83",
+   "8de8df41d618b5ac"
+  ],
+  "jit": [
+   "35dbb45d1638b85b",
+   "a1548c18fd312e5f",
+   "072adc625765a0d7"
+  ],
+  "T_jit": [
+   0.0,
+   0.0,
+   0.0,
+   0.0
+  ]
+ },
+ "sinusoid": {
+  "eager_ref": [
+   "02f2c2f7da07cf09",
+   "dcca2a40f1b0fd94",
+   "10388d0c90806b4c"
+  ],
+  "eager_traced": [
+   "8bb30181dc814df8",
+   "b5c8288dfe641964",
+   "3fd571d0498604d9"
+  ],
+  "jit": [
+   "88c7e7f843e10687",
+   "d3a7dcfcb39d7020",
+   "5b0b13dfa93eb5b2"
+  ],
+  "T_jit": [
+   0.0,
+   0.0,
+   0.0,
+   0.0
+  ]
+ },
+ "square_pillar": {
+  "eager_ref": [
+   "73f49ad8601e2bfe",
+   "5fc412d37d720153",
+   "daa61fc391c86127"
+  ],
+  "eager_traced": [
+   "bac9e85d2fd4b607",
+   "552c71592106bacd",
+   "2b7c88ed9b7bfc88"
+  ],
+  "jit": [
+   "1015ff406f978edf",
+   "e4a8b0ef8e363143",
+   "899619818536a28c"
+  ],
+  "T_jit": [
+   0.0,
+   0.0,
+   0.0,
+   0.0
+  ]
+ },
+ "ellipse_sym": {
+  "eager_ref": [
+   "08098fbb1c61a544",
+   "6d4731cb48aaee06",
+   "036815c076cc8697"
+  ],
+  "eager_traced": [
+   "e5668bc39bf47efb",
+   "1486326b072da91d",
+   "1c432207067f375c"
+  ],
+  "jit": [
+   "718df34eaed6e152",
+   "c7c4395e4b4d833c",
+   "a9d6f0c2d73e4cec"
+  ],
+  "T_jit": [
+   0.0,
+   0.0,
+   0.0,
+   0.0
+  ]
+ },
+ "rect_oblique": {
+  "eager_ref": [
+   "193ed84d7b3aa4dc",
+   "5359f1162b6bf259",
+   "5de640f0e60c257b"
+  ],
+  "eager_traced": [
+   "0a974656880aed6a",
+   "7be0d803629484e1",
+   "30e082e3f9f00a7b"
+  ],
+  "jit": [
+   "debdf535129e2f2e",
+   "08fe0bf477713b3d",
+   "a352621f5ed47f07"
+  ],
+  "T_jit": [
+   0.0,
+   0.0,
+   0.0,
+   0.0
+  ]
+ },
+ "circle_tensor_magnetic_two_layer": {
+  "eager_ref": [
+   "c6e015b62591227c",
+   "9986d2147099b58e",
+   "051987d5df4d9d02"
+  ]
+ },
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "jax": "0.11.0",
+  "lumenairy": "C:\\tmp\\e3r2_preE3\\lumenairy\\__init__.py",
+  "platform": "win32",
+  "build": "win"
+ }
+}

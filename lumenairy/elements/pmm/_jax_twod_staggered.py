@@ -95,6 +95,15 @@ __all__ = ["StagJaxTwin"]
 #: four-fold symmetric circle.
 _E3_EIG_TAU_REL = None
 
+#: The degenerate-CLUSTER rule of the reverse pass (verifier V-E3-1; round 2
+#: of the build record): ``rcwa._jax_eig_cluster_adjoint``'s ``gap_rel`` and
+#: ``split_rel``.  ``None`` = that function's defaults
+#: (``rcwa._core._EIG_CLUSTER_GAP_REL`` / ``_EIG_CLUSTER_SPLIT_REL``); a
+#: ``gap_rel <= 0`` switches the rule off (the plain eig VJP, whose gradient
+#: is WRONG for a symmetry-breaking parameter at a symmetric cell).
+_E3_EIG_CLUSTER_GAP_REL = None
+_E3_EIG_CLUSTER_SPLIT_REL = None
+
 
 def _stag_geneig_jax(L, G, tau_rel=None):
     """Differentiable eig of the IN-PLANE pencil ``L W = g2 G W`` (``G = -R``,
@@ -569,108 +578,57 @@ class StagJaxTwin:
         qq = self.qq
         Nx, Ny = self.Nx, self.Ny
 
-        # ---- the shared geometric eig (half-spaces + uniform scalar layers)
+        # ---- STAGE 1: every eig PROBLEM of the solve (the shared geometric
+        # pencil when the map is traced; one per distinct patterned layer)
+        # and every eigenpair-free quantity.  The eigs and their CONSUMER
+        # (stage 2, below) run through ``rcwa._jax_eig_cluster_adjoint``,
+        # whose reverse rule is correct at DEGENERATE eigenvalue clusters
+        # (the four-fold symmetric cell, verifier V-E3-1); the forward values
+        # are those of the plain composition.
+        from ..rcwa._core import _jax_eig_cluster_adjoint
+        problems: list[Any] = []
+        anchors: list[Any] = []
+        sh = None
         if traced_map:
             sh = _shadow(self.sol_h, xp,
                          jnp.full((Nx, Ny), self.eps_sup0, dtype=cj), None,
                          cm)
-            L0 = sh.Stt - sh.Schur
-            g2_geo, W0 = _stag_geneig_jax(L0, -sh.Rmat)
-            geom = TS._homog_geom_from_eig(sh, g2_geo, W0, xp=xp)
-        else:
-            geom = self.geom_ref
-        Wsup, Vsup, _l = TS._homog_region_modes(geom, eps_sup, xp=xp)
-        Wsub, Vsub, _l = TS._homog_region_modes(geom, eps_sub, xp=xp)
-        # (a template without a traced map keeps W0 a NumPy constant; the
-        # cascade's array-namespace dispatch needs ONE backend)
-        Wsup, Vsup, Wsub, Vsub = (jnp.asarray(a) for a in (Wsup, Vsup, Wsub,
-                                                           Vsub))
-
-        # ---- per-layer modes
-        modes = []
-        cache: dict[Any, Any] = {}
+            problems.append((sh.Stt - sh.Schur, -sh.Rmat))
+            # the consumer's branch points in g2_geo: g2 = g2_geo + eps = 0
+            # for every homogeneous region (reference values: the anchors
+            # only size the degenerate-cluster lift)
+            anchors.append(tuple(-complex(e) for e in self._homog_eps_ref()))
+        lay_ix: list[Any] = []     # per layer: None (uniform) or the problem
+        seen: dict[Any, Any] = {}
         for rec, lp in zip(self.layers, p["layers"]):
-            t = lp["thickness"]
             if rec["kind"] == "uniform":
-                W, V, lam = TS._homog_region_modes(
-                    geom, jnp.asarray(lp["eps"]).astype(cj), xp=xp)
-            else:
-                ref = rec["ref"]
-                # dedupe on the reference key AND the identity of the traced
-                # leaves (two layers sharing one traced cell share one eig)
-                dkey = (rec["ref_key"], id(lp["eps"]), id(lp.get("mu")))
-                hit = cache.get(dkey)
-                if hit is None:
-                    eps_c, mu_c = self._layer_cells(rec, lp)
-                    shl = _shadow(ref, xp, eps_c, mu_c, cm)
-                    g2, Wl = _stag_geneig_jax(shl.Lmat, -shl.Rmat)
-                    W, V, lam, _g = TS._region_modes_from_eig(shl, g2, Wl,
-                                                              xp=xp)
-                    hit = cache[dkey] = (W, V, lam)
-                W, V, lam = hit
-            modes.append((jnp.asarray(W), jnp.asarray(V), jnp.asarray(lam),
-                          t))
-
-        # ---- the square Redheffer cascade (rcwa._core's algebra, as the
-        # NumPy stack's)
-        nlay = len(modes)
-        ifc = [_interface_smatrix(Wsup, Vsup, modes[0][0], modes[0][1])]
-        for i in range(1, nlay):
-            ifc.append(_interface_smatrix(modes[i - 1][0], modes[i - 1][1],
-                                          modes[i][0], modes[i][1]))
-        ifc.append(_interface_smatrix(modes[-1][0], modes[-1][1], Wsub,
-                                      Vsub))
-        S = ifc[0]
-        for i in range(nlay):
-            S = _redheffer_star(S, _propagation_smatrix(modes[i][2],
-                                                        k0 * modes[i][3]))
-            S = _redheffer_star(S, ifc[i + 1])
-        S11, _S12, S21, _S22 = S
-
-        # ---- far field + incident decomposition
+                lay_ix.append(None)
+                continue
+            # dedupe on the reference key AND the identity of the traced
+            # leaves (two layers sharing one traced cell share one eig)
+            dkey = (rec["ref_key"], id(lp["eps"]), id(lp.get("mu")))
+            hit = seen.get(dkey)
+            if hit is None:
+                eps_c, mu_c = self._layer_cells(rec, lp)
+                shl = _shadow(rec["ref"], xp, eps_c, mu_c, cm)
+                problems.append((shl.Lmat, -shl.Rmat))
+                anchors.append((0.0,))            # q = sqrt(g2)
+                hit = seen[dkey] = (len(problems) - 1, shl)
+            lay_ix.append(hit)
         if not self.mapped:
             P1, P2 = self.P_far
-            Hsup = TS._pmm2d_project_orders(P1, P2, Wsup, qq, xp=xp)
-            Hsub = TS._pmm2d_project_orders(P1, P2, Wsub, qq, xp=xp)
+            P12 = P21 = None
+        elif traced_map:
+            P1, P2, P12, P21 = TS._far_projector_mapped(
+                self.bx, self.by, self.ox, self.oy, self.a0x, self.a0y,
+                cm, xp=xp, nq_cells=self.far_nq)
         else:
-            if traced_map:
-                P1, P2, P12, P21 = TS._far_projector_mapped(
-                    self.bx, self.by, self.ox, self.oy, self.a0x, self.a0y,
-                    cm, xp=xp, nq_cells=self.far_nq)
-            else:
-                P1, P2, P12, P21 = self.P_far
-            Hsup = TS._pmm2d_project_orders(P1, P2, Wsup, qq, P12, P21, xp=xp)
-            Hsub = TS._pmm2d_project_orders(P1, P2, Wsub, qq, P12, P21, xp=xp)
+            P1, P2, P12, P21 = self.P_far
         Nfo, p0 = self.Nfo, self.p0
         kxv, kyv = self.kxv, self.kyv
         kz_ref, kz_trn, kz_inc, safe_r, safe_t = TS._pmm2d_order_kz(
             eps_sup, eps_sub, kxv, kyv, self.kx0, self.ky0, xp=xp)
-        if self.mapped:
-            cinc_map = TS._stag_incident_coeffs_mapped(
-                geom, self.bx, self.by, cm, self.a0x, self.a0y,
-                H0=Hsup[np.array([p0, Nfo + p0]), :], xp=xp,
-                nq_cells=self.inc_nq)
-        else:
-            cinc_map = self._unmapped_cinc()
-        R_rows, T_rows, j_cols = [], [], []
-        for col, (ex0, ey0) in enumerate(((1.0, 0.0), (0.0, 1.0))):
-            long_inc = self.kx0 * ex0 + self.ky0 * ey0
-            einc_sq = 1.0 + (long_inc / kz_inc) ** 2
-            cinc = cinc_map[:, col]
-            r_ord = Hsup @ (S11 @ cinc)
-            t_ord = Hsub @ (S21 @ cinc)
-            rx, ry = r_ord[:Nfo], r_ord[Nfo:]
-            tx, ty = t_ord[:Nfo], t_ord[Nfo:]
-            rz = -(kxv * rx + kyv * ry) / safe_r
-            tz = -(kxv * tx + kyv * ty) / safe_t
-            Re, Te = _project_efficiency(xp, kz_ref, kz_trn, kz_inc,
-                                         rx, ry, rz, tx, ty, tz, einc_sq)
-            R_rows.append(Re)
-            T_rows.append(Te)
-            j_cols.append(xp.stack([rx[p0], ry[p0]]))
-        R_eff = xp.stack(R_rows)
-        T_eff = xp.stack(T_rows)
-        jmat = xp.stack(j_cols, axis=1)
+        poison = None
         if traced_map or ok_topo is not None:
             ok = _min_detj(self.sol_h, cm, xp) > 0.0
             if ok_topo is not None:
@@ -679,13 +637,117 @@ class StagJaxTwin:
             # jnp.where would hand the cotangent to the finite branch and
             # return a silent zero gradient at the event)
             poison = xp.where(ok, 1.0, xp.nan)
-            R_eff = R_eff * poison
-            T_eff = T_eff * poison
-            jmat = jmat * poison
+
+        def consumer(eigs):
+            """STAGE 2: everything that depends on an eigenpair."""
+            # ---- the shared geometric eig (half-spaces + uniform layers)
+            if traced_map:
+                g2_geo, W0 = eigs[0]
+                geom = TS._homog_geom_from_eig(sh, g2_geo, W0, xp=xp)
+            else:
+                geom = self.geom_ref
+            Wsup, Vsup, _l = TS._homog_region_modes(geom, eps_sup, xp=xp)
+            Wsub, Vsub, _l = TS._homog_region_modes(geom, eps_sub, xp=xp)
+            # (a template without a traced map keeps W0 a NumPy constant; the
+            # cascade's array-namespace dispatch needs ONE backend)
+            Wsup, Vsup, Wsub, Vsub = (jnp.asarray(a) for a in (Wsup, Vsup,
+                                                               Wsub, Vsub))
+
+            # ---- per-layer modes
+            modes = []
+            cache: dict[Any, Any] = {}
+            for lp, hit in zip(p["layers"], lay_ix):
+                t = lp["thickness"]
+                if hit is None:
+                    W, V, lam = TS._homog_region_modes(
+                        geom, jnp.asarray(lp["eps"]).astype(cj), xp=xp)
+                else:
+                    k, shl = hit
+                    got = cache.get(k)
+                    if got is None:
+                        g2, Wl = eigs[k]
+                        W, V, lam, _g = TS._region_modes_from_eig(
+                            shl, g2, Wl, xp=xp)
+                        got = cache[k] = (W, V, lam)
+                    W, V, lam = got
+                modes.append((jnp.asarray(W), jnp.asarray(V),
+                              jnp.asarray(lam), t))
+
+            # ---- the square Redheffer cascade (rcwa._core's algebra, as the
+            # NumPy stack's)
+            nlay = len(modes)
+            ifc = [_interface_smatrix(Wsup, Vsup, modes[0][0], modes[0][1])]
+            for i in range(1, nlay):
+                ifc.append(_interface_smatrix(modes[i - 1][0],
+                                              modes[i - 1][1],
+                                              modes[i][0], modes[i][1]))
+            ifc.append(_interface_smatrix(modes[-1][0], modes[-1][1], Wsub,
+                                          Vsub))
+            S = ifc[0]
+            for i in range(nlay):
+                S = _redheffer_star(S, _propagation_smatrix(
+                    modes[i][2], k0 * modes[i][3]))
+                S = _redheffer_star(S, ifc[i + 1])
+            S11, _S12, S21, _S22 = S
+
+            # ---- far field + incident decomposition
+            if not self.mapped:
+                Hsup = TS._pmm2d_project_orders(P1, P2, Wsup, qq, xp=xp)
+                Hsub = TS._pmm2d_project_orders(P1, P2, Wsub, qq, xp=xp)
+            else:
+                Hsup = TS._pmm2d_project_orders(P1, P2, Wsup, qq, P12, P21,
+                                                xp=xp)
+                Hsub = TS._pmm2d_project_orders(P1, P2, Wsub, qq, P12, P21,
+                                                xp=xp)
+            if self.mapped:
+                cinc_map = TS._stag_incident_coeffs_mapped(
+                    geom, self.bx, self.by, cm, self.a0x, self.a0y,
+                    H0=Hsup[np.array([p0, Nfo + p0]), :], xp=xp,
+                    nq_cells=self.inc_nq)
+            else:
+                cinc_map = self._unmapped_cinc()
+            R_rows, T_rows, j_cols = [], [], []
+            for col, (ex0, ey0) in enumerate(((1.0, 0.0), (0.0, 1.0))):
+                long_inc = self.kx0 * ex0 + self.ky0 * ey0
+                einc_sq = 1.0 + (long_inc / kz_inc) ** 2
+                cinc = cinc_map[:, col]
+                r_ord = Hsup @ (S11 @ cinc)
+                t_ord = Hsub @ (S21 @ cinc)
+                rx, ry = r_ord[:Nfo], r_ord[Nfo:]
+                tx, ty = t_ord[:Nfo], t_ord[Nfo:]
+                rz = -(kxv * rx + kyv * ry) / safe_r
+                tz = -(kxv * tx + kyv * ty) / safe_t
+                Re, Te = _project_efficiency(xp, kz_ref, kz_trn, kz_inc,
+                                             rx, ry, rz, tx, ty, tz, einc_sq)
+                R_rows.append(Re)
+                T_rows.append(Te)
+                j_cols.append(xp.stack([rx[p0], ry[p0]]))
+            R_eff = xp.stack(R_rows)
+            T_eff = xp.stack(T_rows)
+            jmat = xp.stack(j_cols, axis=1)
+            if poison is not None:
+                R_eff = R_eff * poison
+                T_eff = T_eff * poison
+                jmat = jmat * poison
+            return R_eff, T_eff, jmat
+
+        R_eff, T_eff, jmat = _jax_eig_cluster_adjoint(
+            _stag_geneig_jax, problems, consumer,
+            gap_rel=_E3_EIG_CLUSTER_GAP_REL,
+            split_rel=_E3_EIG_CLUSTER_SPLIT_REL, anchors=anchors)
         orders2d = np.stack([self.order_x, self.order_y], axis=1)
         return orders2d, R_eff, T_eff, jmat
 
     # ------------------------------------------------------------ helpers
+    def _homog_eps_ref(self):
+        """The reference scalar permittivities of every homogeneous region
+        that is solved from the shared geometric eig (the half-spaces and the
+        uniform scalar layers)."""
+        out = [self.eps_sup0, self.eps_sub0]
+        out += [rec["eps"] for rec in self.layers if rec["kind"] == "uniform"
+                and np.ndim(rec["eps"]) == 0]
+        return out
+
     def _shape_params(self, p, cmap):
         """Resolve the SHAPE layers of ``p``: when any shape (or a
         background) differs from the reference objects, replay the merge on

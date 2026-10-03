@@ -1,0 +1,42 @@
+square_w 3 gap 1e-06 split 1e-07 vsFDtwin 1.88e-10 vsFDnumpy 1.93e-10 run 0.31s
+square_w 3 gap 0.0 split 0.0 vsFDtwin 3.11e-03 vsFDnumpy 3.11e-03 run 0.11s
+C:\tmp\lum_curved_e3b\validation\probe_pmm2d_curved\build_e3r2\r2_dev_square_w_M3_final_win.json
+square_w 4 gap 1e-06 split 1e-07 vsFDtwin 4.86e-10 vsFDnumpy 4.22e-10 run 1.02s
+square_w 4 gap 0.0 split 0.0 vsFDtwin 2.50e-01 vsFDnumpy 2.50e-01 run 0.22s
+C:\tmp\lum_curved_e3b\validation\probe_pmm2d_curved\build_e3r2\r2_dev_square_w_M4_final_win.json
+square_w 5 gap 1e-06 split 1e-07 vsFDtwin 1.60e-09 vsFDnumpy 1.12e-09 run 5.37s
+square_w 5 gap 0.0 split 0.0 vsFDtwin 1.39e-01 vsFDnumpy 1.39e-01 run 0.88s
+C:\tmp\lum_curved_e3b\validation\probe_pmm2d_curved\build_e3r2\r2_dev_square_w_M5_final_win.json
+ellipse_a 3 gap 1e-06 split 1e-07 vsFDtwin 8.63e-11 vsFDnumpy 5.06e-04 run 0.21s
+ellipse_a 3 gap 0.0 split 0.0 vsFDtwin 6.53e-03 vsFDnumpy 7.03e-03 run 0.08s
+C:\tmp\lum_curved_e3b\validation\probe_pmm2d_curved\build_e3r2\r2_dev_ellipse_a_M3_final_win.json
+ellipse_a 4 gap 1e-06 split 1e-07 vsFDtwin 5.13e-11 vsFDnumpy 7.87e-05 run 0.74s
+ellipse_a 4 gap 0.0 split 0.0 vsFDtwin 2.99e-03 vsFDnumpy 2.99e-03 run 0.23s
+C:\tmp\lum_curved_e3b\validation\probe_pmm2d_curved\build_e3r2\r2_dev_ellipse_a_M4_final_win.json
+square_wh 3 gap 1e-06 split 1e-07 vsFDtwin 4.11e-11 vsFDnumpy 1.33e-11 run 0.17s
+square_wh 3 gap 0.0 split 0.0 vsFDtwin 4.11e-11 vsFDnumpy 1.33e-11 run 0.20s
+C:\tmp\lum_curved_e3b\validation\probe_pmm2d_curved\build_e3r2\r2_dev_square_wh_M3_final_win.json
+rect_nonsq_w 3 gap 1e-06 split 1e-07 vsFDtwin 3.40e-11 vsFDnumpy 3.00e-11 run 0.18s
+rect_nonsq_w 3 gap 0.0 split 0.0 vsFDtwin 3.38e-11 vsFDnumpy 3.00e-11 run 0.18s
+C:\tmp\lum_curved_e3b\validation\probe_pmm2d_curved\build_e3r2\r2_dev_rect_nonsq_w_M3_final_win.json
+fillet_sq_w 3 gap 1e-06 split 1e-07 vsFDtwin 4.14e-09 vsFDnumpy 2.02e-05 run 2.28s
+fillet_sq_w 3 gap 0.0 split 0.0 vsFDtwin 2.86e-01 vsFDnumpy 2.86e-01 run 0.41s
+C:\tmp\lum_curved_e3b\validation\probe_pmm2d_curved\build_e3r2\r2_dev_fillet_sq_w_M3_final_win.json
+square_w 3 rule on grad change 1.57e-10 3.28e-10 value change 1.7e-15 1.2e-15
+square_w 3 rule off grad change 2.26e-01 1.71e-01 value change 1.7e-15 1.2e-15
+C:\tmp\lum_curved_e3b\validation\probe_pmm2d_curved\build_e3r2\r5_gauge_square_w_M3_win.json
+square_w 4 rule on grad change 7.81e-10 2.06e-09 value change 4.2e-15 5.1e-15
+square_w 4 rule off grad change 2.72e-01 3.54e-01 value change 4.2e-15 5.1e-15
+C:\tmp\lum_curved_e3b\validation\probe_pmm2d_curved\build_e3r2\r5_gauge_square_w_M4_win.json
+sinusoid {'eager_ref': ['02f2c2f7da07cf09', 'dcca2a40f1b0fd94', '10388d0c90806b4c'], 'eager_traced': ['8bb30181dc814df8', 'b5c8288dfe641964', '3fd571d0498604d9'], 'jit': ['88c7e7f843e10687', 'd3a7dcfcb39d7020', '5b0b13dfa93eb5b2'], 'T_jit': [0.0, 0.0, 0.0, 0.0]}
+square_pillar {'eager_ref': ['73f49ad8601e2bfe', '5fc412d37d720153', 'daa61fc391c86127'], 'eager_traced': ['bac9e85d2fd4b607', '552c71592106bacd', '2b7c88ed9b7bfc88'], 'jit': ['1015ff406f978edf', 'e4a8b0ef8e363143', '899619818536a28c'], 'T_jit': [0.0, 0.0, 0.0, 0.0]}
+ellipse_sym {'eager_ref': ['08098fbb1c61a544', '6d4731cb48aaee06', '036815c076cc8697'], 'eager_traced': ['e5668bc39bf47efb', '1486326b072da91d', '1c432207067f375c'], 'jit': ['718df34eaed6e152', 'c7c4395e4b4d833c', 'a9d6f0c2d73e4cec'], 'T_jit': [0.0, 0.0, 0.0, 0.0]}
+rect_oblique {'eager_ref': ['193ed84d7b3aa4dc', '5359f1162b6bf259', '5de640f0e60c257b'], 'eager_traced': ['0a974656880aed6a', '7be0d803629484e1', '30e082e3f9f00a7b'], 'jit': ['debdf535129e2f2e', '08fe0bf477713b3d', 'a352621f5ed47f07'], 'T_jit': [0.0, 0.0, 0.0, 0.0]}
+circle_tensor_magnetic_two_layer {'eager_ref': ['c6e015b62591227c', '9986d2147099b58e', '051987d5df4d9d02']}
+C:\tmp\lum_curved_e3b\validation\probe_pmm2d_curved\build_e3r2\r3_fwd_bytes_post_M4_win.json
+ellipse_a 3 rule on grad change 6.59e-11 7.32e-11 value change 2.7e-15 1.4e-15
+ellipse_a 3 rule off grad change 2.66e-02 2.44e-01 value change 2.7e-15 1.4e-15
+C:\tmp\lum_curved_e3b\validation\probe_pmm2d_curved\build_e3r2\r5_gauge_ellipse_a_M3_win.json
+fillet_sq_w 3 rule on grad change 9.63e-10 1.02e-09 value change 2.0e-13 2.7e-13
+fillet_sq_w 3 rule off grad change 5.17e-01 2.81e+00 value change 2.0e-13 2.7e-13
+C:\tmp\lum_curved_e3b\validation\probe_pmm2d_curved\build_e3r2\r5_gauge_fillet_sq_w_M3_win.json

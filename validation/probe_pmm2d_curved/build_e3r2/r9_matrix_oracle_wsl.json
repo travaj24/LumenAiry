@@ -1,0 +1,15 @@
+{
+ "oracle": -39.59262059721951,
+ "rule": -39.592620590829966,
+ "plain": 0.5473929396747685,
+ "rule_rel": 1.6138212737847182e-10,
+ "plain_rel": 1.0138256304184423,
+ "env": {
+  "python": "3.12.3",
+  "numpy": "2.4.6",
+  "jax": "0.10.2",
+  "lumenairy": "/mnt/c/tmp/lum_curved_e3b/lumenairy/__init__.py",
+  "platform": "linux",
+  "build": "wsl"
+ }
+}

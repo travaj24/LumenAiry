@@ -1,0 +1,4 @@
+r5_gauge.py 3 square_w
+r5_gauge.py 4 square_w
+r5_gauge.py 3 ellipse_a
+r5_gauge.py 3 fillet_sq_w
