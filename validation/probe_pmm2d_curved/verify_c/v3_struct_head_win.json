@@ -1,0 +1,74 @@
+{
+ "rects_normal": {
+  "fired": [
+   "lumenairy.elements.pmm.twod_staggered._stag_map_nodes"
+  ],
+  "solved": false,
+  "err": "TRAP lumenairy.elements.pmm.twod_staggered._stag_map_nodes"
+ },
+ "rects_conical": {
+  "fired": [
+   "lumenairy.elements.pmm.twod_staggered._stag_map_nodes"
+  ],
+  "solved": false,
+  "err": "TRAP lumenairy.elements.pmm.twod_staggered._stag_map_nodes"
+ },
+ "rects_tensor_oblique": {
+  "fired": [],
+  "solved": false,
+  "add_layer_raised": "PMM2DStackPure.add_layer: layer 2 carries a TENSOR permittivity, and the stack's merged map is CURVED.  The effective tensor under a map is sqrt(g) J^-1 eps J^-T, which needs the Jacobian itself (not only the metric the scalar route uses) -- Phase D of the curved-cell plan.  A tensor is accepted whe"
+ },
+ "rects_roundoff_normal": {
+  "fired": [
+   "lumenairy.elements.pmm.twod_staggered._stag_map_nodes"
+  ],
+  "solved": false,
+  "err": "TRAP lumenairy.elements.pmm.twod_staggered._stag_map_nodes"
+ },
+ "rects_roundoff_tensor": {
+  "fired": [],
+  "solved": false,
+  "add_layer_raised": "PMM2DStackPure.add_layer: layer 2 carries a TENSOR permittivity, and the stack's merged map is CURVED.  The effective tensor under a map is sqrt(g) J^-1 eps J^-T, which needs the Jacobian itself (not only the metric the scalar route uses) -- Phase D of the curved-cell plan.  A tensor is accepted whe"
+ },
+ "jones_rect": {
+  "fired": [],
+  "solved": true
+ },
+ "rect_vs_integer_grid": {
+  "0.0,0.0": {
+   "bytes_equal": false,
+   "maxdiff": 8.548717289613705e-15
+  },
+  "0.3,0.6": {
+   "bytes_equal": false,
+   "maxdiff": 3.096981282535438e-10
+  }
+ },
+ "control_circle": {
+  "fired": [
+   "lumenairy.elements.pmm.twod_staggered._stag_map_nodes"
+  ],
+  "solved": false,
+  "err": "TRAP lumenairy.elements.pmm.twod_staggered._stag_map_nodes"
+ },
+ "control_incident_only": {
+  "fired": [
+   "SP._stag_incident_coeffs_mapped"
+  ],
+  "solved": false
+ },
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "lumenairy": "c:\\tmp\\lum_vcurved_c\\lumenairy\\__init__.py",
+  "tree": "post",
+  "build": "win",
+  "machine": "Tesla_Ryzen",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ }
+}

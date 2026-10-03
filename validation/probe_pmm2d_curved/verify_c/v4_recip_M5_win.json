@@ -1,0 +1,27 @@
+{
+ "M": 5,
+ "theta": 20.0,
+ "phi": 30.0,
+ "l2norm": {
+  "(-1,0)": 0.00010817664141513084,
+  "(0,-1)": 8.997936529487813e-05
+ },
+ "lstsq": {
+  "(-1,0)": 6.132796373251037e-05,
+  "(0,-1)": 0.00013874316758169525
+ },
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "lumenairy": "c:\\tmp\\lum_vcurved_c\\lumenairy\\__init__.py",
+  "tree": "post",
+  "build": "win",
+  "machine": "Tesla_Ryzen",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ }
+}

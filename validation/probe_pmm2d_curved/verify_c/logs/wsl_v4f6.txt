@@ -1,0 +1,5 @@
+circle 6 l2norm {'airy_err': 1.432416821156579e-06, 'n_orders_2_vs_5': 0.0, 'wall_s': 23.930164098739624}
+circle 6 l2 {'airy_err': 7.994593866356148e-06, 'n_orders_2_vs_5': 0.0, 'wall_s': 22.44853401184082}
+circle 6 lstsq {'airy_err': 1.3991362894927306e-06, 'n_orders_2_vs_5': 2.8867051393710597e-07, 'wall_s': 20.96051836013794}
+circle 6 modepick {'airy_err': 1.2341975317298193e-06, 'n_orders_2_vs_5': 0.0, 'wall_s': 21.460062265396118}
+wrote v4_film_circle_M6_t25_p40_wsl.json

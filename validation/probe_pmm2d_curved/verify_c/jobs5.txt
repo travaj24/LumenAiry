@@ -1,0 +1,15 @@
+ladder sine_edge 4
+ladder sine_edge 5
+ladder sine_edge 6
+ladder sine_edge 7
+ladder sine_edge 8
+ladder sine_mid 4
+ladder sine_mid 5
+ladder sine_mid 6
+ladder sine_mid 7
+ladder sine_mid 8
+ladder ellipse5 4
+ladder ellipse5 5
+ladder ellipse5 6
+ladder ellipse5 7
+ladder ellipse5 8

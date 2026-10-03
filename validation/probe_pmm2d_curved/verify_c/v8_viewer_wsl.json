@@ -1,0 +1,188 @@
+{
+ "circle": {
+  "n_lines": 4,
+  "n_pts": 256,
+  "drawn_off_outline_max": 3.3306690738754696e-16,
+  "outline_not_drawn_max": 2.5643481278536662e-05,
+  "uniform_panel_lines": 0,
+  "section_y0.6": {
+   "n": 2,
+   "err": 2.220446049250313e-16
+  }
+ },
+ "circle_core": {
+  "n_lines": 12,
+  "n_pts": 768,
+  "drawn_off_outline_max": 3.885780586188048e-16,
+  "outline_not_drawn_max": 5.9222603266406715e-06,
+  "uniform_panel_lines": 0,
+  "section_y0.6": {
+   "n": 2,
+   "err": 5.551115123125783e-17
+  }
+ },
+ "fillet": {
+  "n_lines": 12,
+  "n_pts": 768,
+  "drawn_off_outline_max": 2.636779683484747e-16,
+  "outline_not_drawn_max": 1.5516788042590062e-06,
+  "uniform_panel_lines": 0,
+  "section_y0.6": {
+   "n": 2,
+   "err": 5.551115123125783e-17
+  }
+ },
+ "ellipse": {
+  "n_lines": 4,
+  "n_pts": 256,
+  "drawn_off_outline_max": 2.220446049250313e-16,
+  "outline_not_drawn_max": 3.496838356142895e-05,
+  "uniform_panel_lines": 0,
+  "section_y0.6": {
+   "n": 2,
+   "err": 2.220446049250313e-16
+  }
+ },
+ "ellipse_rot": {
+  "n_lines": 4,
+  "n_pts": 256,
+  "drawn_off_outline_max": 2.486899575160351e-16,
+  "outline_not_drawn_max": 3.108300761010551e-05,
+  "uniform_panel_lines": 0,
+  "section_y0.6": {
+   "n": 2,
+   "err": 2.7755575615628914e-17
+  }
+ },
+ "ellipse_rot_neg": {
+  "n_lines": 4,
+  "n_pts": 256,
+  "drawn_off_outline_max": 3.1086244689504386e-16,
+  "outline_not_drawn_max": 3.108300761012313e-05,
+  "uniform_panel_lines": 0,
+  "section_y0.6": {
+   "n": 2,
+   "err": 8.326672684688674e-17
+  }
+ },
+ "sine_ridge": {
+  "n_lines": 6,
+  "n_pts": 384,
+  "drawn_off_outline_max": 1.1102230246251565e-16,
+  "outline_not_drawn_max": 3.7298159902054984e-05,
+  "uniform_panel_lines": 0,
+  "section_y0.6": {
+   "n": 2,
+   "err": 5.551115123125783e-17
+  }
+ },
+ "sine_halfplane_y": {
+  "n_lines": 4,
+  "n_pts": 256,
+  "drawn_off_outline_max": 2.220446049250313e-16,
+  "outline_not_drawn_max": 9.862091605005805e-05,
+  "uniform_panel_lines": 0,
+  "section_y0.6": {
+   "n": 0,
+   "err": 0.0
+  }
+ },
+ "annulus": {
+  "layer1": {
+   "n_lines": 4,
+   "n_pts": 256,
+   "drawn_off_outline_max": 2.498001805406602e-16,
+   "outline_not_drawn_max": 1.9426879756423432e-05
+  },
+  "layer2": {
+   "n_lines": 12,
+   "n_pts": 768,
+   "drawn_off_outline_max": 4.440892098500626e-16,
+   "outline_not_drawn_max": 1.0792807614956601e-05
+  },
+  "layer1_vs_layer2_outline": {
+   "n_lines": 4,
+   "n_pts": 256,
+   "drawn_off_outline_max": 0.20000000000000026,
+   "outline_not_drawn_max": 0.2000194268797565
+  },
+  "section_l1": {
+   "n": 2,
+   "err": 5.551115123125783e-17
+  },
+  "section_l2": {
+   "n": 2,
+   "err": 4.440892098500626e-16
+  }
+ },
+ "circle_fillet": {
+  "layer1": {
+   "n_lines": 4,
+   "n_pts": 256,
+   "drawn_off_outline_max": 2.7755575615628914e-16,
+   "outline_not_drawn_max": 1.5541503805227563e-05
+  },
+  "layer2": {
+   "n_lines": 20,
+   "n_pts": 1280,
+   "drawn_off_outline_max": 4.440892098500626e-16,
+   "outline_not_drawn_max": 1.745638654805902e-06
+  },
+  "layer1_vs_layer2_outline": {
+   "n_lines": 4,
+   "n_pts": 256,
+   "drawn_off_outline_max": 0.3085786437626904,
+   "outline_not_drawn_max": 0.3991168824543142
+  },
+  "section_l1": {
+   "n": 2,
+   "err": 1.1102230246251565e-16
+  },
+  "section_l2": {
+   "n": 2,
+   "err": 2.220446049250313e-16
+  }
+ },
+ "sine_circle": {
+  "layer1": {
+   "n_lines": 8,
+   "n_pts": 512,
+   "drawn_off_outline_max": 5.551115123125783e-17,
+   "outline_not_drawn_max": 6.266699859677174e-06
+  },
+  "layer2": {
+   "n_lines": 6,
+   "n_pts": 384,
+   "drawn_off_outline_max": 3.3306690738754696e-16,
+   "outline_not_drawn_max": 2.331225570756379e-05
+  },
+  "layer1_vs_layer2_outline": {
+   "n_lines": 8,
+   "n_pts": 512,
+   "drawn_off_outline_max": 0.44605824938757727,
+   "outline_not_drawn_max": 0.5484212699161769
+  },
+  "section_l1": {
+   "n": 1,
+   "err": 2.7755575615628914e-17
+  },
+  "section_l2": {
+   "n": 2,
+   "err": 5.551115123125783e-17
+  }
+ },
+ "env": {
+  "python": "3.12.3",
+  "numpy": "2.4.6",
+  "scipy": "1.17.1",
+  "lumenairy": "/mnt/c/tmp/lum_vcurved_c/lumenairy/__init__.py",
+  "tree": "post",
+  "build": "wsl",
+  "machine": "TeslaRyzen",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ }
+}

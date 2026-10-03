@@ -1,0 +1,39 @@
+lone_circle                        SOLVE EXACT     grid 3x3 paint_wrong [0] on 0/800 cover 2.8e-08 detJmin 8.07e-02 spread 1.37
+lone_circle_offcentre              SOLVE EXACT     grid 3x3 paint_wrong [0] on 0/800 cover 2.3e-08 detJmin 8.07e-02 spread 1.37
+annulus_2layer                     SOLVE EXACT     grid 5x5 paint_wrong [0, 0] on 0/3200 cover 1.9e-08 detJmin 3.68e-02 spread 1.38
+annulus_2layer_offc                SOLVE EXACT     grid 5x5 paint_wrong [0, 0] on 0/3200 cover 1.5e-08 detJmin 3.82e-02 spread 1.38
+annulus_1layer                     SOLVE EXACT     grid 5x5 paint_wrong [0] on 0/3200 cover 1.9e-08 detJmin 3.68e-02 spread 1.38
+annulus_ratio_1.2                  SOLVE EXACT     grid 5x5 paint_wrong [0, 0] on 0/3200 cover 2.3e-08 detJmin 3.19e-02 spread 1.38
+same_circle_two_layers             SOLVE EXACT     grid 3x3 paint_wrong [0, 0] on 0/1600 cover 2.8e-08 detJmin 8.07e-02 spread 1.37
+circle3x3_vs_circle5x5             RAISE ValueError: compile_shapes: layer 1: Circle(cx=0.6, cy=0.6, r=0.36) and layer 2: Circle(cx=0.6, cy=0.6, r=0.36) need DIFFERENT physical positions for th
+circle_vs_ellipse_a_eq_b           SOLVE EXACT     grid 3x3 paint_wrong [0, 0] on 0/1600 cover 2.8e-08 detJmin 8.07e-02 spread 1.37
+circle_vs_r_1e-13                  SOLVE EXACT     grid 3x3 paint_wrong [0, 0] on 0/1600 cover 2.8e-08 detJmin 8.07e-02 spread 1.37
+circle_vs_r_1e-10                  RAISE ValueError: compile_shapes: the merged u-walls np.float64(0.3454415587473871) and np.float64(0.3454415587728429) are only 2.5455804131269133e-11 apart (
+circle_vs_r_1e-6                   RAISE ValueError: compile_shapes: the merged u-walls np.float64(0.34544130421440167) and np.float64(0.3454415587728429) are only 2.545584412150248e-07 apart (
+fillet_vs_fillet_same_box_diff_r   RAISE ValueError: compile_shapes: the merged map FOLDS (det J <= 0, min 0.000e+00) in the cell u in [0.317574, 0.335147], v in [0.42, 0.78], which is bounded 
+fillet_vs_fillet_nested_diff_r     SOLVE EXACT     grid 9x9 paint_wrong [0, 0] on 0/8000 cover 2.3e-09 detJmin 4.66e-02 spread 1.37
+circle_beside_fillet               SOLVE EXACT     grid 7x7 paint_wrong [0, 0] on 0/4000 cover 2.3e-08 detJmin 1.47e-02 spread 1.38
+circle_wall_in_fillet_arc_row      SOLVE EXACT     grid 7x7 paint_wrong [0, 0] on 0/4000 cover 6.6e-09 detJmin 4.66e-02 spread 1.38
+three_circles_equal                SOLVE EXACT     grid 7x7 paint_wrong [0] on 0/4800 cover 2.8e-08 detJmin 5.06e-02 spread 1.46
+three_circles_r_0.30_0.36_0.40     RAISE ValueError: compile_shapes: the merged map FOLDS (det J <= 0, min -2.958e+00) in the cell u in [0.345442, 0.854558], v in [0.317157, 0.345442], which is
+two_circles_r_0.30_0.40            RAISE ValueError: compile_shapes: the merged map FOLDS (det J <= 0, min -2.497e-01) in the cell u in [0.387868, 0.812132], v in [0.317157, 0.387868], which is
+two_circles_r_0.25_0.36            SOLVE EXACT     grid 5x5 paint_wrong [0] on 0/2400 cover 2.8e-08 detJmin 7.42e-02 spread 1.44
+two_circles_r_0.3_0.3_dy           SOLVE EXACT     grid 5x5 paint_wrong [0] on 0/2400 cover 2.3e-08 detJmin 6.78e-02 spread 1.38
+two_circles_two_layers_r_0.3_0.4   RAISE ValueError: compile_shapes: the merged map FOLDS (det J <= 0, min -2.497e-01) in the cell u in [0.387868, 0.812132], v in [0.317157, 0.387868], which is
+sine_x_left_of_circle_A0.05        SOLVE EXACT     grid 4x4 paint_wrong [0, 0] on 0/2800 cover 2.3e-08 detJmin 6.07e-02 spread 1.51
+sine_x_left_of_circle_A0.14        SOLVE EXACT     grid 4x4 paint_wrong [0, 0] on 0/2800 cover 2.3e-08 detJmin 6.07e-02 spread 1.90
+sine_x_crossing_circle             SOLVE EXACT     grid 4x4 paint_wrong [0, 0] on 0/2800 cover 2.3e-08 detJmin 6.07e-02 spread 1.81
+sine_y_under_circle_A0.05          SOLVE EXACT     grid 4x4 paint_wrong [0, 0] on 0/2800 cover 2.6e-08 detJmin 6.07e-02 spread 1.48
+ridge_under_circle                 SOLVE EXACT     grid 5x5 paint_wrong [0, 0] on 0/3200 cover 2.3e-08 detJmin 6.07e-02 spread 1.62
+stripe_under_circle_crossing       RAISE ValueError: compile_shapes: the outlines of layer 1: Rect(cx=0.6, cy=0.6, w=1.2, h=0.2) and layer 2: Circle(cx=0.6, cy=0.6, r=0.36) CROSS in plan view. 
+stripe_beside_circle               SOLVE EXACT     grid 4x4 paint_wrong [0, 0] on 0/2800 cover 2.8e-08 detJmin 6.07e-02 spread 1.37
+rect_far_right_wall_in_bulge       SOLVE EXACT     grid 5x5 paint_wrong [0, 0] on 0/2400 cover 2.8e-08 detJmin 6.68e-02 spread 1.38
+rect_far_right_wall_above_bulge    SOLVE EXACT     grid 5x5 paint_wrong [0, 0] on 0/1600 cover 2.8e-08 detJmin 8.07e-02 spread 1.37
+rect_far_right_wall_just_above     SOLVE EXACT     grid 5x5 paint_wrong [0, 0] on 0/1600 cover 2.8e-08 detJmin 2.99e-02 spread 1.37
+small_square_over_disk             SOLVE EXACT     grid 5x5 paint_wrong [0, 0] on 0/3200 cover 3.9e-09 detJmin 4.04e-02 spread 1.37
+square_off_centre_over_disk        SOLVE EXACT     grid 5x5 paint_wrong [0, 0] on 0/3200 cover 7.7e-09 detJmin 3.74e-02 spread 1.38
+rect_corner_at_circle_45deg        SOLVE EXACT     grid 4x4 paint_wrong [0, 0] on 0/1600 cover 2.8e-08 detJmin 8.07e-02 spread 1.37
+rect_corner_on_circle_30deg        RAISE ValueError: compile_shapes: the merged map FOLDS (det J <= 0, min -3.412e+00) in the cell u in [0.345442, 0.854558], v in [0.854558, 0.88], which is bou
+circle_through_rect_corner_same_layer SOLVE EXACT     grid 4x4 paint_wrong [0] on 0/1600 cover 2.8e-08 detJmin 8.07e-02 spread 1.37
+macro-cell blend: max |y - v0| of a straight u-wall inside the circle's top cell: {'v0=0.86': 0.1038, 'v0=0.88': 0.0977, 'v0=0.9': 0.0916, 'v0=0.96': 0.0733, 'v0=1.0': 0.061, 'v0=1.1': 0.0305, 'v0->arc (limit)': 0.1054, 'r - r/sqrt2': np.float64(0.1054)}
+wrote v2_merge_wsl.json

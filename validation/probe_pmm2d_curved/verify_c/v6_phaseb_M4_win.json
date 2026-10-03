@@ -1,0 +1,40 @@
+{
+ "scenario": "phaseb",
+ "M": 4,
+ "grid": [
+  3,
+  3
+ ],
+ "closure": 0.00541653138551379,
+ "absorption": [
+  [
+   9.167119463551038e-16,
+   6.190821694614267e-16
+  ],
+  [
+   0.20882766942268177,
+   0.20596409662708107
+  ]
+ ],
+ "abs_lossless_layer1": 9.167119463551038e-16,
+ "abs_balance": 0.0045272253658386885,
+ "vacuum_id_same_map": true,
+ "vacuum_id": 1.4613310561628623e-14,
+ "phaseb_fingerprint_equal": true,
+ "phaseb": 1.4613310561628623e-14,
+ "wall_s": 8.518559217453003,
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "lumenairy": "c:\\tmp\\lum_vcurved_c\\lumenairy\\__init__.py",
+  "tree": "post",
+  "build": "win",
+  "machine": "Tesla_Ryzen",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ }
+}
