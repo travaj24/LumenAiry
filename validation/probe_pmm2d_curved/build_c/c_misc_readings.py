@@ -6,6 +6,8 @@
   c_misc_readings.py d6      the SeparableStretch wall trap (verifier D6)
   c_misc_readings.py c11     the viewer outline deviation and its
                              fail-before; the section boundaries
+  c_misc_readings.py ell     the ROTATED ellipse (moved corner vertices)
+                             against its y-mirror: R(m, n; +a) = R(m, -n; -a)
   c_misc_readings.py c16     how far a SCALAR-route surrogate of a tensor
                              under the circle map is from the true
                              effective tensor sqrt(g) J^-1 eps J^-T
@@ -128,6 +130,36 @@ def c16():
            "map_changes_tensor_rel": float(worst_map)}
     print(res, flush=True)
     C.dump("c_misc_c16.json", res)
+
+
+def ell():
+    from lumenairy.elements.pmm import Ellipse
+    res = {"env": C.env_record()}
+    for M in (4, 5):
+        out = []
+        for al in (np.deg2rad(20.0), -np.deg2rad(20.0)):
+            st = C.PMM2DStackPure(C.P, C.P, n_superstrate=C.N_SUP,
+                                  n_substrate=C.N_SUB, n_modes=M, n_orders=3)
+            st.add_layer(C.DEPTH, shapes=[Ellipse(0.6, 0.6, 0.40, 0.28, 4.0,
+                                                  angle=al)],
+                         background_eps=1.0)
+            st.set_source(C.WL)
+            o, R, T, _J = st.solve()
+            out.append((np.asarray(o), np.asarray(R), np.asarray(T)))
+        (o1, R1, T1), (o2, R2, T2) = out
+        idx = {(int(m), int(n)): k for k, (m, n) in enumerate(o1)}
+        mir = same = 0.0
+        for (m, n), k in idx.items():
+            j = idx[(m, -n)]
+            mir = max(mir, float(np.max(np.abs(R1[:, k] - R2[:, j]))),
+                      float(np.max(np.abs(T1[:, k] - T2[:, j]))))
+            same = max(same, float(np.max(np.abs(R1[:, k] - R1[:, j]))),
+                       float(np.max(np.abs(T1[:, k] - T1[:, j]))))
+        res[f"M{M}"] = {"mirror": mir, "unmirrored_failbefore": same,
+                        "closure": float(np.max(np.abs(R1.sum(1) + T1.sum(1)
+                                                       - 1)))}
+    print(res, flush=True)
+    C.dump("c_misc_ell.json", res)
 
 
 if __name__ == "__main__":

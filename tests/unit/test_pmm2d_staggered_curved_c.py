@@ -829,3 +829,33 @@ def test_c16_tensors_ride_the_identity_map_and_are_refused_under_a_curve():
         st.add_layer(0.2, eps=eps_t)
         st.add_layer(0.3, shapes=[Circle(0.6, 0.6, 0.3, 4.0)],
                      background_eps=1.0)
+
+
+# =========================================================================== #
+# C17 -- the rotated ellipse (moved corner vertices) obeys its mirror
+# =========================================================================== #
+def test_c17_rotated_ellipse_is_its_own_mirror_image():
+    """The ROTATED ellipse is the one primitive whose disk-cell corners are
+    MOVED onto the outline (no axis-aligned rectangle is inscribed in a
+    rotated ellipse), so its transition cells carry a bilinear shear the
+    other layouts do not.  Physical identity: the ellipse at +a is the
+    y-mirror of the ellipse at -a, so at normal incidence R(m, n; +a) =
+    R(m, -n; -a) for both inputs.  Measured 2026-10-03
+    (``c_misc_ell.json``): 1.5e-14 (M = 4), 8.6e-13 (M = 5); bar 1e-10 (2
+    decades above).  Fail-before: the same identity WITHOUT the mirror
+    (R(m, n; +a) against R(m, -n; +a)) reads 2.6e-2 / 1.8e-2 -- the rotated
+    device is genuinely asymmetric, so the identity has teeth."""
+    def solve(al):
+        _s, o, R, T, _J = _stack([(_DEPTH, ([Ellipse(0.6, 0.6, 0.40, 0.28,
+                                                     4.0, angle=al)], 1.0))],
+                                 4)
+        return {(int(m), int(n)): (R[:, k], T[:, k])
+                for k, (m, n) in enumerate(o)}
+    a = np.deg2rad(20.0)
+    p, q = solve(a), solve(-a)
+    mir = max(float(np.max(np.abs(p[(m, n)][s] - q[(m, -n)][s])))
+              for (m, n) in p for s in (0, 1))
+    same = max(float(np.max(np.abs(p[(m, n)][s] - p[(m, -n)][s])))
+               for (m, n) in p for s in (0, 1))
+    assert mir <= 1e-10, mir
+    assert same >= 1e-3, same

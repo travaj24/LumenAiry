@@ -71,7 +71,7 @@ each table).  Tests: `tests/unit/test_pmm2d_staggered_curved_c.py`.
 | viewers | `stack2d_pure.py` (`_mapped_cell_outline`, `_plot_mapped_layer`, `_mapped_section`) | a mapped stack draws every cell's PHYSICAL image with no wall lines and the material boundaries as curves; `plot_section` reads the material along the physical cut (exact outlines for shape layers), every boundary bisected to round-off.  Phase A's refusal lifted. |
 | Phase A verifier fold-ins | `twod_staggered.py`, docs | D3 (det J checked before the node search doubles), D5 (effective cap stated), D6 (the `cmap=` docstrings point at `from_physical_walls` and `shapes=`), D7 (BUILD_A 4.5e-15 -> 5.2e-15); D1 / D2 were already closed by Phase B (F-B1, the corner rule) and the verifier's six decision tests pass unchanged. |
 | docs | module docstrings of `shapes2d.py`, `twod_staggered.py` (scope note rewritten), `stack2d_pure.py`; `CHANGELOG.md`; `docs/PMM_ROADMAP.md` (the 2-D curved row and its phase); `docs/cookbook.md` (a curved-cells entry) | -- |
-| tests | `tests/unit/test_pmm2d_staggered_curved_c.py` | gates C1-C16 (section 3). |
+| tests | `tests/unit/test_pmm2d_staggered_curved_c.py` | gates C1-C17 (section 3). |
 
 Not touched: `Basis1D`, the assembly, the corner rule, the far projector, the
 eigensolver (QZ), the mortar.
@@ -376,6 +376,15 @@ true `sqrt(g) J^-1 eps_t J^-T` at the circle map's nodes (0.125 even where
 `J = I`), and the map changes the tensor by up to 25x near the singular
 vertices (`c_misc_c16.json`) -- Phase D work is genuinely required.
 
+### 3.15 C17 -- the rotated ellipse obeys its mirror
+
+The rotated `Ellipse` is the one primitive whose disk-cell corners are MOVED
+onto the outline.  The ellipse at +20 deg is the y-mirror of the one at
+-20 deg, so `R(m, n; +a) = R(m, -n; -a)`: 1.5e-14 (M = 4), 8.6e-13 (M = 5);
+without the mirror the same comparison reads 2.6e-2 / 1.8e-2 (the device is
+genuinely asymmetric); closure 1.4e-3 / 3.4e-3 (`c_misc_ell.json`).  Unit bar
+1e-10.
+
 ---
 
 ## 4. Findings
@@ -447,7 +456,7 @@ one quadrature pass per solve; a shape costs the wall grid it needs (a circle
 3 x 3, a fillet 5 x 5, a circle and a fillet in two layers 7 x 7 -- the pencil
 grows as the square of the segment count).
 
-Unit tests (`tests/unit/test_pmm2d_staggered_curved_c.py`, 20 tests), on the
+Unit tests (`tests/unit/test_pmm2d_staggered_curved_c.py`, 21 tests; the first full run had 20 -- C17 was added after it), on the
 saturated box with `-n 4`: `20 passed in 218 s`; slowest 73 s (C6, 7 x 7 at
 M = 3), 61 s (C2), 46 s (C3), 39 s (C13), 38 s (C9 film) -- each about 3-5x
 its idle time on this box (Phase B's comparable tests read 15-17 s idle).
