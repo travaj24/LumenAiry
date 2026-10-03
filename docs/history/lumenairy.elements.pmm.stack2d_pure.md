@@ -1,7 +1,7 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/pmm/stack2d_pure.py
-ast_sha256: 83d7cf4df8cf9b918ed90ca1c0daa9585155ba130378634bfe4c70eacc93a48c
-token_sha256: 7d2e5b8ae08bbc6ce94f44f1027f0c0ed4f95da0084cf51ed2deae633232970b
+ast_sha256: 26cf15537b232da947d45450437a51377caaf580781e99a98809edffd2e25a52
+token_sha256: d8743486657d15962b2269fbc8fccff0fc4ce002f8c00b4fa8347032f429d7ea
 pre_relocation_lines: 2190
 recorded_by: WP-A17 SWEEP-2 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
@@ -11,6 +11,7 @@ re_recorded: 2026-09-21 -- geometry viewers added: plot_geometry, plot_section, 
 re_recorded: 2026-10-02 -- the curved-cell map, Phase A: PMM2DStackPure(cmap=) -- a stack-owned coordinate map on the shared-grid solve (mapped homogeneous solver + geometric eig, plain flux Gram, cofactor far field), its scope refusals (per-layer, tensor, mu, slant, viewers) (BUILD_PMM2D_CURVED_A_2026_10_02)
 re_recorded: 2026-10-03 -- the curved-cell map, Phase C: add_layer(shapes=, background_eps=) and the stack-level merge of every shape layer into ONE map (_add_shapes_layer / _recompile_shapes; rectangles only -> the unmapped solver on the merged walls), the exact renormalised modal decomposition of the incident field under a map (_stag_incident_coeffs_mapped), the viewers drawing mapped cells as curves (_mapped_cell_outline / _plot_mapped_layer / _mapped_section) (BUILD_PMM2D_CURVED_C_2026_10_02)
 re_recorded: 2026-10-03 -- the curved-cell map, Phase C: the shape-layer rollback in _add_shapes_layer restructured from a broad except to try/finally (the except-budget gate; behaviour unchanged -- a refused merge restores the stack and the error propagates)
+re_recorded: 2026-10-03 -- the curved-cell map, Phase D: tensor and magnetic layers under a map -- _require_map_scope refuses only out-of-plane tensors (eps or mu) and slant (Phase E); add_layer(background_mu=) and per-shape mu (a magnetic shape layer is recorded as kind='magnetic'); the merge's tensor refusals narrowed to out-of-plane; a uniform mu layer may join a shape stack, a raw mu_cell may not (BUILD_PMM2D_CURVED_D_2026_10_03)
 -->
 
 # Version history -- `lumenairy/elements/pmm/stack2d_pure.py`

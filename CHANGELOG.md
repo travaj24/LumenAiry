@@ -4,6 +4,80 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+### Added -- pure 2-D PMM (curved cells, Phase D): anisotropic and magnetic materials inside curved cells
+
+Curved cells (circles, ellipses, rounded corners, sinusoidal walls) of the
+pure (no-floor) staggered 2-D PMM can now hold ANISOTROPIC and MAGNETIC
+materials.  Until now a liquid crystal or any other tensor
+permittivity on a circle raised `NotImplementedError`; now it is solved, and
+so is a relative permeability:
+
+```python
+import numpy as np
+from lumenairy.elements.pmm import Circle, Rect, pmm_jones_2d_staggered
+from lumenairy.elements.rcwa._core import uniaxial_tensor
+
+lc = uniaxial_tensor(1.5, 1.8, np.pi / 2, phi=np.pi / 6)   # director in the plane, 30 deg
+orders, R, T, J = pmm_jones_2d_staggered(
+    1.2e-6, 1.2e-6, None, 1.45, 1.0, 0.5e-6, 1.0e-6, n_modes=8,
+    shapes=[Rect(0.6e-6, 0.6e-6, 1.2e-6, 1.2e-6, eps=4.0),     # a slab ...
+            Circle(0.6e-6, 0.6e-6, 0.36e-6, eps=lc)],          # ... with an LC-filled hole
+    background_eps=1.0)
+```
+
+What it means physically.  The solver bends its grid so a circle is an exact
+grid line; inside the bent grid a material looks different -- it is
+squeezed and sheared along with the grid.  For an ordinary (isotropic)
+material only the grid's stretching enters; for an anisotropic one (a
+liquid-crystal director, a magneto-optic, gyrotropic medium) the direction
+of the material axes matters too, so the solver now carries the full
+Jacobian of the bending through the material at every integration point.
+A permeability rides along the same way.  A shape takes `mu=` next to its
+`eps` (`Circle(..., eps=..., mu=np.diag([2, 2, 1]))`), a shape layer takes
+`background_mu=`, and a uniform layer `add_layer(t, eps=..., mu=...)` -- all
+under the stack's curved map.
+
+* NO SHIPPED ANSWER MOVES.  Without a map: 122 of 122 SHA-256 hashes over
+  every dispatch branch (tensor, magnetic, out-of-plane, slant, the mortar,
+  absorption) and 181 of 181 on the Phase A verifier's set are
+  byte-identical to the Phase C commit -- and that set includes 13 MAPPED
+  SCALAR solves, so no circle, fillet or stretch answer of Phases A-C moved
+  either.
+* Gates (`docs/audits/BUILD_PMM2D_CURVED_D_2026_10_03.md`): a uniform
+  liquid-crystal film and a gyrotropic film under a stretch, a sheared map
+  and the circle map match the exact Berreman 4x4 answer -- reflection,
+  transmission AND the complex Jones matrix -- to ~1e-13 by `M = 8`; the
+  liquid-crystal circular pillar's two independent grid layouts agree to
+  2.5e-6 and the shipped 2-D tensor RCWA with the exact disk form factor
+  approaches that answer like 1/N (Richardson to 5.6e-5); Li's published
+  gyrotropic crossed grating (J. Opt. A 5:345 (2003)) is reproduced to the
+  shipped 8.74e-5 under an identity map and converges under a stretch; a
+  magnetic film matches the exact (eps, mu) slab to 5.5e-14; a magnetic
+  pillar is the electromagnetic dual of its dielectric twin; reciprocity
+  holds spectrally at oblique and conical incidence.
+* Every engineered defect of the transformation -- the tensor transposed,
+  the two Jacobian sides swapped, `sqrt(g)` dropped from `eps_zz`, the
+  mixed components' sign flipped, the permeability inverted after the
+  integration instead of before, the H recovery through the wrong Gram --
+  is caught by two decades or more.  Three of them are invisible to the
+  efficiencies of a uniform film (a transposed gyrotropic tensor and a
+  mirrored director change only the Jones matrix; `eps_zz` does not enter at
+  normal incidence), which is why the gates read the Jones matrix and run
+  at oblique incidence.
+* Cost: a tensor or magnetic cell costs what a scalar curved cell costs
+  (same pencil, assembly within the load noise).
+* Limits: an OUT-OF-PLANE tensor (a tilted director, `eps_xz != 0`) or
+  `slant=` under a curved map still raises (Phase E of the curved-cell plan);
+  `compile_shapes` returns the permeability grid only with `with_mu=True`
+  and refuses the four-output form for a magnetic layer rather than drop
+  `mu` silently.
+* Folded in from the Phase B verifier: a user `EdgeCurve` whose analytic
+  derivative disagrees with its value is now refused (it moved R / T by
+  3.2e-2 silently); the mapped stack's missing `n_orders` cap is documented
+  as deliberate (measured window-free above it to 9.3e-16); the
+  `material_key` export of the stack viewers is registered with the
+  `__all__` walker.
+
 ### Added -- pure 2-D PMM (curved cells, Phase C): the shape primitives and the public API
 
 You can now describe a layer of the pure (no-floor) staggered 2-D PMM by the

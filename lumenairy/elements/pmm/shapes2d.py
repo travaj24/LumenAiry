@@ -91,15 +91,25 @@ converge faster: they are capped near 1e-5 per rung by the pillar's top and
 bottom RIM, which no in-plane rounding removes (planning section 3.4, Phase B
 gates B6 / B7).  Use a fillet because the fabricated device has one.
 
+Materials: anisotropic and magnetic shapes
+------------------------------------------
+Every primitive takes ``eps`` as a scalar or a ``(3, 3)`` BLOCK-FORM tensor
+(in-plane anisotropy: a liquid-crystal director lying in the plane, a
+gyrotropic ``e12 = -e21``; ``e13 = e23 = e31 = e32 = 0``) and an optional
+relative permeability ``mu=`` of the same two kinds.  The layer's
+``background_mu=`` (default 1) fills the rest; a shape without ``mu`` paints
+``mu = 1``.  Under a curved map a tensor is carried through the map by the
+congruence ``sqrt(g) J^-1 eps J^-T`` (and ``chi_t = J^T mu_t^-1 J /
+sqrt(g)``) evaluated at every quadrature node -- the effective tensor needs
+the Jacobian itself, not only the metric a scalar uses (Phase D,
+``docs/audits/BUILD_PMM2D_CURVED_D_2026_10_03.md``).  A liquid-crystal-filled
+circular hole is ``[Rect(..., eps=4.0), Circle(..., eps=lc_tensor)]``.
+
 Known limits
 ------------
-* A TENSOR permittivity on a shape is accepted and routed when the merged map
-  is the identity (rectangles only); under a curved map it raises
-  ``NotImplementedError`` -- the effective tensor
-  ``sqrt(g) J^-1 eps J^-T`` needs the Jacobian itself, not only the metric,
-  which is Phase D of the curved-cell plan.
-* Out-of-plane tensors, ``slant=``, ``mu`` and per-layer grids under a map are
-  Phase D / E.
+* OUT-OF-PLANE tensors (a tilted director, ``e13 != 0``), ``slant=`` and
+  per-layer grids under a curved map are Phase E and raise; with rectangles
+  only (no map) an out-of-plane tensor is accepted.
 * A FilletRect's flat sides lie on the grid lines through its 45-degree
   points (the Phase B layout the gates were measured on), so another shape's
   straight edge cannot coincide with a fillet's flat side (it would close a
@@ -225,10 +235,13 @@ def _fmt(v):
 class Shape2D:
     """Base class of the shape primitives.  A shape knows its physical
     outline (:meth:`signed_distance`, :meth:`boundary_points`,
-    :meth:`area`, :meth:`perimeter`), its material ``eps`` (a scalar or a
-    ``(3, 3)`` block-form tensor, PUBLIC ``Im(eps) > 0`` for loss) and its
-    own wall layout for a given period (private; :func:`compile_shapes`
-    reads it).  ``name`` labels the shape in every error message."""
+    :meth:`area`, :meth:`perimeter`), its material -- ``eps`` (a scalar or a
+    ``(3, 3)`` block-form tensor, PUBLIC ``Im(eps) > 0`` for loss) and the
+    optional relative permeability ``mu`` (``None`` = 1; a scalar or a
+    ``(3, 3)`` block-form tensor) -- and its own wall layout for a given
+    period (private; :func:`compile_shapes` reads it).  Every primitive
+    takes ``mu=`` as a keyword.  ``name`` labels the shape in every error
+    message."""
 
     #: True when the outline contains a curve (or a moved vertex), so the
     #: shape needs a non-identity map.
@@ -327,9 +340,9 @@ class Rect(Shape2D):
 
     No map is needed for a rectangle: its four sides are straight walls at
     their physical positions.  A stack (or :func:`compile_shapes` call) made
-    of rectangles only runs the shipped UNMAPPED solver on those walls, and
-    that is the one case in which a TENSOR ``eps`` is accepted (there is no
-    Jacobian to compose it with).
+    of rectangles only runs the shipped UNMAPPED solver on those walls (no
+    Jacobian to compose a tensor with), where any tensor ``eps`` -- block-form
+    or out-of-plane -- and any ``mu=`` are accepted.
 
     Example -- a 400 nm square silicon-nitride pillar in a 1.2 um cell::
 

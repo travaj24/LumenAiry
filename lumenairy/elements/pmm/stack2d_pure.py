@@ -57,10 +57,15 @@ physical outlines of its features (:mod:`lumenairy.elements.pmm.shapes2d`),
 and the stack merges every shape layer into ONE wall grid and ONE map shared
 by every layer and both half-spaces (each interface stays a square match);
 ``PMM2DStackPure(cmap=...)`` takes an explicit map instead.  Under a curved
-map the layers are SCALAR (tensor / magnetic materials are Phase D of the
-curved-cell plan, out-of-plane / slant / per-layer maps Phase E); a stack of
-rectangles only needs no map and runs the unmapped solver on the merged
-walls.  ``docs/audits/BUILD_PMM2D_CURVED_C_2026_10_02.md``.
+map a layer may be ANISOTROPIC and MAGNETIC (Phase D): a block-form tensor
+``eps`` / ``mu`` -- uniform, on a shape (``Circle(..., eps=lc_tensor,
+mu=...)``) or as ``eps_cell`` / ``mu_cell`` under an explicit map -- is
+carried through the map by the congruence ``sqrt(g) J^-1 eps J^-T`` at
+every quadrature node; out-of-plane tensors, slant and per-layer maps are
+Phase E and raise.  A stack of rectangles only needs no map and runs the
+unmapped solver on the merged walls.
+``docs/audits/BUILD_PMM2D_CURVED_C_2026_10_02.md``,
+``docs/audits/BUILD_PMM2D_CURVED_D_2026_10_03.md``.
 
 A layer may also be MAGNETIC: ``add_layer(..., mu=scalar | (3,3))`` or
 ``add_layer(..., mu_cell=(Nx,Ny) | (Nx,Ny,3,3))`` gives it a BLOCK-FORM
@@ -758,12 +763,14 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         field components with the map's effective tensors (a block-form
         tensor AND magnetic region; see
         :class:`~lumenairy.elements.pmm.twod_staggered.Granet2DTransverseE`).
-        Uniform layers still share the eps-free geometric eig.  A map takes
-        SCALAR permittivity only, on the shared grid only:
+        Uniform SCALAR layers still share the eps-free geometric eig.
+        Since Phase D a map takes block-form TENSOR layers (uniform or
+        patterned) and ``mu`` / ``mu_cell`` as well (each its own region
+        eig, deduped with the map fingerprint); on the shared grid only:
         ``layer_grids='per-layer'`` (different maps per layer, a curved
-        mortar -- Phase E), a uniform or patterned TENSOR layer, ``mu`` /
-        ``mu_cell`` (Phase D) and ``slant`` (Phase E) together with a map all
-        raise ``NotImplementedError``.  The two viewers draw the PHYSICAL
+        mortar -- Phase E), an OUT-OF-PLANE tensor (``eps`` or ``mu``) and
+        ``slant`` (Phase E) together with a map raise
+        ``NotImplementedError``.  The two viewers draw the PHYSICAL
         images of the cells (curved edges as curves).  Under a map the
         incident plane wave enters through its exact L2 modal decomposition
         (it is not an exact discrete half-space mode when the map is not
@@ -1064,14 +1071,17 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         one), a map that folds between two outlines that come too close, a
         segment below the sliver contract.  Rectangles only give an
         IDENTITY map: the stack then runs the shipped UNMAPPED solver on the
-        rectangles' walls, and a tensor ``eps`` (on a shape, the background
-        or a uniform layer) is accepted.  Under a CURVED map a tensor raises
-        ``NotImplementedError`` (Phase D of the curved-cell plan), as do
-        ``mu`` / ``mu_cell`` and ``slant`` (Phase D / E); raw ``eps_cell``
-        layers cannot be mixed with shape layers (describe rectangles with
-        :class:`~lumenairy.elements.pmm.Rect`), nor can an explicit
-        ``cmap=``; and ``layer_grids='per-layer'`` with shapes raises (a
-        curved mortar, Phase E)."""
+        rectangles' walls, and any tensor ``eps`` (on a shape, the
+        background or a uniform layer) is accepted.  Under a CURVED map a
+        BLOCK-FORM tensor ``eps`` and a permeability are accepted too (Phase
+        D): a shape takes ``mu=`` next to its ``eps``, ``background_mu=``
+        (default 1) is the layer's permeability where no shape is painted,
+        and a uniform ``mu=`` layer may join a shape stack; an OUT-OF-PLANE
+        tensor and ``slant`` raise ``NotImplementedError`` (Phase E).  Raw
+        ``eps_cell`` / ``mu_cell`` layers cannot be mixed with shape layers
+        (describe rectangles with :class:`~lumenairy.elements.pmm.Rect`),
+        nor can an explicit ``cmap=``; and ``layer_grids='per-layer'`` with
+        shapes raises (a curved mortar, Phase E)."""
         self._modal = None      # geometry change supersedes retained amplitudes
         self._internal = None
         if (shapes is not None or background_eps is not None

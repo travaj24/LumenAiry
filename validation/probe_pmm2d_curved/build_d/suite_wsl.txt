@@ -1,0 +1,23 @@
+3.12.3 2.4.6 1.17.1
+bringing up nodes...
+bringing up nodes...
+
+........................................................................ [ 80%]
+..................                                                       [100%]
+============================= slowest 15 durations =============================
+146.91s call     tests/unit/test_pmm2d_staggered_curved_b.py::test_b4_staircases_converge_toward_the_curved_circle
+91.37s call     tests/unit/test_pmm2d_staggered_curved_a.py::test_a4_te_stripe_under_stretch_matches_the_1d_oracle
+84.95s call     tests/unit/test_pmm2d_staggered_curved_b.py::test_b6_fillet_moves_the_efficiencies_far_above_convergence
+58.32s call     tests/unit/test_pmm2d_staggered_curved_b.py::test_b3_circle_lands_on_the_saved_fem_oracle
+50.75s call     tests/unit/test_pmm2d_staggered_curved_b.py::test_b5_circle_modes_converge_spectrally
+47.50s call     tests/unit/test_pmm2d_staggered_curved_b.py::test_b9_ellipse_against_the_exact_form_factor_rcwa
+45.59s call     tests/unit/test_pmm2d_staggered_curved_c.py::test_c6_two_layer_stack_on_the_merged_map
+41.16s call     tests/unit/test_pmm2d_staggered_curved_c.py::test_c2_circle_primitive_is_the_phase_b_map_and_lands_on_the_fem
+35.81s call     tests/unit/test_pmm2d_staggered_curved_c.py::test_c9_incident_renormalisation_keeps_the_film_exact
+35.18s call     tests/unit/test_pmm2d_staggered_curved_b.py::test_b5_square_pillar_modes_stall
+34.60s call     tests/unit/test_pmm2d_staggered_curved_c.py::test_c13_two_by_two_circle_array_is_the_halved_period
+33.21s call     tests/unit/test_verify_pmm2d_curved_b.py::test_verify_b_circle_fourfold_symmetry_is_exact
+33.17s call     tests/unit/test_pmm2d_staggered_curved_b.py::test_b9_sinusoidal_wall_mirror_and_exact_form_factor
+32.69s call     tests/unit/test_verify_pmm2d_curved_b.py::test_verify_b_normal_kink_is_harmless_and_position_shift_is_not
+28.56s call     tests/unit/test_verify_pmm2d_curved_b.py::test_verify_b_circle_lands_on_a_second_fem_radius
+90 passed in 341.16s (0:05:41)

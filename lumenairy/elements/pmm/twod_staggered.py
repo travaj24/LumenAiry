@@ -186,9 +186,16 @@ Scope / limitations
   ``docs/audits/BUILD_PMM2D_CURVED_A_2026_10_02.md``, ``..._B_...``,
   ``..._C_...``); a circular pillar
   lands on an independent 3-D finite-element oracle to 1.9e-6 per order.
-  Remaining limits under a map: a TENSOR or MAGNETIC material (Phase D of
-  the curved-cell plan), out-of-plane tensors, ``slant=``, per-layer grids
-  (each a different map per layer) and the JAX twin (Phase E) raise; two
+  ANISOTROPIC and MAGNETIC materials ride a map too (Phase D,
+  ``docs/audits/BUILD_PMM2D_CURVED_D_2026_10_03.md``): a BLOCK-FORM
+  ``eps`` / ``mu`` tensor (in-plane anisotropy -- a liquid-crystal director
+  in the plane, a gyrotropic ``e12 = -e21``) becomes ``sqrt(g) J^-1 eps
+  J^-T`` (and ``chi_t = J^T mu_t^-1 J / sqrt(g)``) at every quadrature node,
+  :func:`_stag_map_eff_tensor`; a uniform tensor film under a curved map
+  matches the Berreman 4x4 oracle, Jones matrix included, to ~1e-13.
+  Remaining limits under a map: OUT-OF-PLANE tensors (``eps`` or ``mu``),
+  ``slant=``, per-layer grids (each a different map per layer) and the JAX
+  twin (Phase E) raise; two
   outlines that cross in plan view cannot share one map (raises, naming
   both); and :func:`pmm_efficiency_2d_staggered` takes no map (use the
   Jones entry).  A rounded corner is GEOMETRY FIDELITY, not a convergence
@@ -2506,10 +2513,13 @@ class Granet2DTransverseE:
                 (``J = d(x, y)/d(u, v)``, ``g = J^T J``, ``sqrt(g) = det J``).
                 Every mapped region is therefore a block-form TENSOR and
                 MAGNETIC region (vacuum included), assembled by 2-D Gauss
-                quadrature (:func:`_stag_quad_weighted`).  In this phase a
-                map takes SCALAR ``eps_cell`` only: a tensor cell, ``mu_cell``
-                or ``slant`` together with a map raise
-                ``NotImplementedError``.
+                quadrature (:func:`_stag_quad_weighted`).  A BLOCK-FORM
+                tensor ``eps_cell`` and a ``mu_cell`` (scalar or block-form)
+                are accepted (Phase D): the general congruence
+                ``eps' = sqrt(g) J^-1 eps J^-T``, ``chi_t = J^T [mu_t]^-1 J
+                / sqrt(g)`` per node (:func:`_stag_map_eff_tensor`); an
+                OUT-OF-PLANE tensor or ``slant`` together with a map raise
+                ``NotImplementedError`` (Phase E).
     """
 
     def __init__(self, px, py, wx, wy, M, eps_cell,
@@ -4886,10 +4896,11 @@ def pmm_jones_2d_staggered(
         gives the permittivity of each cell of the map's ``(u, v)`` wall grid
         (its shape must equal ``cmap.shape``), and the solve runs on the
         covariant field components with the effective tensors of the map
-        (see :class:`Granet2DTransverseE`).  In this phase a map takes a
-        SCALAR ``eps_cell`` only, at any incidence; a tensor cell,
-        ``mu_cell`` or ``slant`` together with a map raise
-        ``NotImplementedError``.
+        (see :class:`Granet2DTransverseE`).  A map takes a scalar or a
+        BLOCK-FORM tensor ``eps_cell`` and an optional ``mu_cell`` (Phase D;
+        the effective tensors ``sqrt(g) J^-1 eps J^-T``), at any incidence;
+        an OUT-OF-PLANE tensor or ``slant`` together with a map raise
+        ``NotImplementedError`` (Phase E).
 
         .. warning:: **A map takes ``(u, v)`` walls, not physical ones.**  A
            material boundary sits at the IMAGE of its ``(u, v)`` wall, so
@@ -4901,9 +4912,10 @@ def pmm_jones_2d_staggered(
            <lumenairy.elements.pmm._curvemap.SeparableStretch.from_physical_walls>`,
            and build curved geometry with ``shapes=`` (the primitives place
            every wall at its physical boundary's preimage themselves).
-    shapes, background_eps : optional
+    shapes, background_eps, background_mu : optional
         The single-layer convenience of
-        ``PMM2DStackPure.add_layer(shapes=..., background_eps=...)``: the
+        ``PMM2DStackPure.add_layer(shapes=..., background_eps=...,
+        background_mu=...)``: the
         layer's cross-section as a list of shape primitives
         (:class:`~lumenairy.elements.pmm.Rect`,
         :class:`~lumenairy.elements.pmm.FilletRect`,
@@ -4916,7 +4928,11 @@ def pmm_jones_2d_staggered(
         outline an exact grid line, walls at the outlines' preimages), and the
         result is BYTE-IDENTICAL to the one-layer stack.  See
         :mod:`lumenairy.elements.pmm.shapes2d` for the layouts, the refusals
-        and the limits (a tensor ``eps`` under a curved map is Phase D).
+        and the limits.  A shape's ``eps`` may be a BLOCK-FORM ``(3, 3)``
+        tensor and it may carry a permeability ``mu=`` (Phase D);
+        ``background_mu`` (default 1) is the permeability where no shape is
+        painted.  An OUT-OF-PLANE tensor under a curved map raises (Phase
+        E).
         Under a CURVED map the incident plane wave is not an exact discrete
         half-space mode (the covariant field ``J^T E`` is not a polynomial),
         so it enters through its exact L2 modal decomposition; ``R`` / ``T``

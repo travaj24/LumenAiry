@@ -420,8 +420,38 @@ st.plot_geometry()                             # the outlines drawn as curves
 Notes: `Circle(..., core=0.5)` selects the 5 x 5 layout (better at oblique
 incidence, 2.8x the pencil); a fillet is geometry fidelity (it changes the
 device), not a convergence accelerator; outlines in different layers must not
-cross in plan view (the merge raises, naming both); a tensor material under a
-curved map is not supported yet (rectangles-only layers accept tensors).
+cross in plan view (the merge raises, naming both).
+
+#### A liquid-crystal-filled circular hole (anisotropic and magnetic shapes)
+
+A shape's `eps` may be a `(3, 3)` BLOCK-FORM tensor -- in-plane anisotropy,
+such as a liquid-crystal director lying in the plane -- and a shape may carry
+a relative permeability `mu=`; under the curved map the solver carries the
+grid's full Jacobian through the material at every integration point
+(`sqrt(g) J^-1 eps J^-T`).  An out-of-plane tensor (a tilted director)
+under a curved map is not supported yet.
+
+```python
+import numpy as np
+from lumenairy.elements.pmm import Circle, Rect, PMM2DStackPure
+from lumenairy.elements.rcwa._core import uniaxial_tensor
+
+p = 1.2e-6
+lc = uniaxial_tensor(1.5, 1.8, np.pi / 2, phi=np.deg2rad(30.0))  # director at 30 deg
+
+st = PMM2DStackPure(p, n_substrate=1.45, n_modes=7)
+# a silicon-nitride slab (n = 2) with a 360 nm-radius hole filled with LC
+st.add_layer(0.5e-6, shapes=[Rect(0.6e-6, 0.6e-6, p, p, eps=4.0),
+                             Circle(0.6e-6, 0.6e-6, 0.36e-6, eps=lc)],
+             background_eps=1.0)
+# a magnetic cap layer: the same circle with mu_t = 1.5 (shapes share one map)
+st.add_layer(0.1e-6, shapes=[Circle(0.6e-6, 0.6e-6, 0.36e-6, eps=2.25,
+                                    mu=np.diag([1.5, 1.5, 1.0]))],
+             background_eps=1.0)
+st.set_source(1.0e-6)
+orders, R, T, J = st.solve()
+# J[0, 1] != 0: the rotated in-plane LC director converts x into y polarization
+```
 
 ### Phase retrieval (Gerchberg-Saxton CGH design)
 
