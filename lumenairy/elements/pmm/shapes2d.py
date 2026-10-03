@@ -223,6 +223,21 @@ class Shape2D:
         self.eps = _as_eps(eps, type(self).__name__)
         self._name = name
 
+    def __setattr__(self, key, value):
+        # IMMUTABLE once built: a stack compiles its shapes into the merged
+        # wall grid and map at add_layer, so a shape changed afterwards would
+        # leave that compiled map silently STALE.  Build a new shape instead.
+        if self.__dict__.get("_frozen", False):
+            raise AttributeError(
+                f"{self.name}: shape primitives are immutable (a stack has "
+                f"already compiled this one into its wall grid and map); "
+                f"build a new {type(self).__name__} instead of setting "
+                f"{key!r}.")
+        object.__setattr__(self, key, value)
+
+    def _freeze(self):
+        object.__setattr__(self, "_frozen", True)
+
     @property
     def name(self):
         return self._name or self._default_name()
@@ -310,6 +325,7 @@ class Rect(Shape2D):
         self.w, self.h = float(w), float(h)
         if not (self.w > 0.0 and self.h > 0.0):
             raise ValueError(f"{self.name}: w and h must be > 0.")
+        self._freeze()
 
     def _default_name(self):
         return (f"Rect(cx={_fmt(self.cx)}, cy={_fmt(self.cy)}, "
@@ -406,6 +422,7 @@ class FilletRect(Shape2D):
                 f"min(w, h) / 2 = {0.5 * min(self.w, self.h)!r} (the straight "
                 f"sides would vanish; a fully rounded square is a Circle).")
         self.curved = self.r > 0.0
+        self._freeze()
 
     def _default_name(self):
         return (f"FilletRect(cx={_fmt(self.cx)}, cy={_fmt(self.cy)}, "
@@ -555,6 +572,7 @@ class Circle(Shape2D):
                              f"or a fraction in (0, 1) (5 x 5 layout), got "
                              f"{core!r}.")
         self.core = None if core is None else float(core)
+        self._freeze()
 
     def _default_name(self):
         return (f"Circle(cx={_fmt(self.cx)}, cy={_fmt(self.cy)}, "
@@ -680,6 +698,7 @@ class Ellipse(Shape2D):
             raise ValueError(
                 f"{self.name}: |angle| must be < pi / 4 (45 degrees); rotate "
                 f"by a quarter-turn by swapping a and b instead.")
+        self._freeze()
 
     def _default_name(self):
         s = (f"Ellipse(cx={_fmt(self.cx)}, cy={_fmt(self.cy)}, "
@@ -812,6 +831,7 @@ class SinusoidalWall(Shape2D):
             raise ValueError(f"{self.name}: width must be > 0.")
         self.curved = self.amplitude != 0.0
         self._periods = None          # (p_run, p_pos), set by _layout
+        self._freeze()
 
     def _default_name(self):
         s = (f"SinusoidalWall(axis={self.axis!r}, x0={_fmt(self.x0)}, "
@@ -887,7 +907,12 @@ class SinusoidalWall(Shape2D):
 
     def _layout(self, px, py):
         p_run, p_pos = (py, px) if self.axis == "x" else (px, py)
-        self._periods = (p_run, p_pos)
+        if self._periods not in (None, (p_run, p_pos)):
+            raise ValueError(
+                f"{self.name}: this wall was compiled for the periods "
+                f"{self._periods}; build a new SinusoidalWall for another "
+                f"cell.")
+        object.__setattr__(self, "_periods", (p_run, p_pos))
         A = abs(self.amplitude)
         for base in self._bases():
             if not (base - A >= _STAG_MIN_SEG_FRAC * p_pos
