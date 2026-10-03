@@ -361,6 +361,38 @@ item with its own build and one verifier (plan section 4.5).
 
 ---
 
+### 0.10 The deprecation removals scheduled for 5.48 and slipped to 5.50 are EXECUTED in 5.50.0, not slipped again (decided 2026-10-03)
+
+What it is.  `lumenairy._deprecation` carried `NEXT_REMOVAL_VERSION = '5.50'`
+and `REMOVAL_SCHEDULE = {'5.48': '5.50'}`: the three GBD aliases
+(`gbd_field_to_asm`, `asm_field_to_gbd`, `match_global_phase`, deprecated in
+5.46) and the `CarrierField` attribute-assignment freeze were scheduled for
+removal at 5.48 and slipped once, at 5.48.0, to 5.50.  `check_removal_schedule`
+refuses a horizon that has shipped, so 5.50.0 (the curved-cell release) could
+not carry these constants: the choice was a second slip to 5.52 or executing
+the removals.  The maintainer chose to EXECUTE them in 5.50.0.  The work and
+its measurements are in `docs/audits/BUILD_REMOVALS_5_50_0_2026_10_03.md`; the
+registry becomes empty, `NEXT_REMOVAL_VERSION` moves to '5.52' as the default
+horizon for any shim that rots without an entry, and the CHANGELOG's
+`### Removed` section is the record.
+
+### 0.11 The symmetric-point gradient defects of the RCWA JAX path and the 1-D PMM twin are root-caused and FIXED in 5.50.0 (decided 2026-10-03)
+
+What it is.  Round 2 of the curved-cell Phase E3 build found, pre-existing and
+outside its own scope, that two of the library's JAX twins return a wrong
+reverse-mode gradient for a parameter that BREAKS a symmetry at a point where
+that symmetry holds: `rcwa_efficiency_2d` at a four-fold-symmetric cell (23 to
+47 percent relative, build-dependent) and `pmm_efficiency_1d` with respect to
+the angle at exactly normal incidence (28 percent TE, 590 percent TM; the W9
+note in `rcwa._core` had recorded "exactly 0.0 stays unrecoverable").  Both were
+pinned as strict xfails in `tests/unit/test_pmm2d_staggered_curved_e3.py` and
+listed as maintainer items.  The maintainer decided they are not to ship as
+documented limits: the root cause of each is to be established by
+discriminating measurement and fixed in 5.50.0, with one shared mechanism if
+the cause is the degenerate-cluster adjoint class that round 2 identified for
+the 2-D twin.  The work is recorded in
+`docs/audits/BUILD_JAX_SYMMETRIC_POINT_GRADIENTS_2026_10_03.md`.
+
 ## 1. Numerical defaults that measured better but move fixtures
 
 ### 1.1 `apply_aperture(edge='gray')` as the default (WP-B11 item 9)
