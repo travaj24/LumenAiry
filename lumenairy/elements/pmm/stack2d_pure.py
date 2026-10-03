@@ -715,7 +715,12 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
     n_orders : int, optional
         Half-width of the retained Rayleigh order set for the once-only forward
         far-field projection.  The result is independent of this (no floor) as
-        long as it covers the propagating orders.  Default 7.
+        long as it covers the propagating orders.  Default 7.  The per-layer
+        path caps it at ``(q - 1) // 2`` of its END grids (it RAISES above);
+        a stack under a coordinate map (``cmap=`` / ``shapes=``) takes any
+        value, because its far field is a quadrature integral and its incident
+        field a window-free modal decomposition (measured window-free to
+        round-off above that cap).
     layer_grids : {'shared', 'per-layer'}, optional
         ``'shared'`` (default) solves ONE union grid at ONE modal count and is
         the pre-2026-09-11 path unchanged.  ``'per-layer'`` gives every layer
@@ -2444,7 +2449,18 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         else:
             # the pulled-back projector with the COFACTOR det J * J^-T
             # (twod_staggered._far_projector_mapped); the incident overlap
-            # below inherits it through Hsup
+            # below inherits it through Hsup.
+            # NO n_orders CAP here, unlike the per-layer path's
+            # ``(q - 1) // 2`` (Phase B verifier note N-3), on purpose: the
+            # mapped far field is a quadrature INTEGRAL of the represented
+            # field against each plane wave, defined for any order, and the
+            # mapped incident field is the window-free modal decomposition
+            # (no least squares over the window), so the cap's reason -- order
+            # slots of the separable projector aliasing one another inside the
+            # least-squares incident overlap -- does not arise.  Measured: the
+            # nine low orders at n_orders = 2 vs 6 / 9 (M = 4, cap 4) and
+            # 7 / 10 (M = 5, cap 5) on the 3 x 3 circle agree to <= 9.3e-16
+            # (validation/probe_pmm2d_curved/build_d/d0_norders_cap.json).
             P1, P2, P12, P21 = _far_projector_2d(bx, by, ox, oy, a0x, a0y,
                                                  cmap=cmap)
             Hsup = _pmm2d_project_orders(P1, P2, Wsup, qq, P12, P21)
