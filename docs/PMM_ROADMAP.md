@@ -246,7 +246,8 @@ Granet's transfinite curved-quad mapping (Sec.3A) on the pure staggered PMM:
 a z-independent coordinate map owned by the STACK, the covariant effective
 tensors, a 2-D Gauss quadrature of every weighted block with a Duffy corner
 rule at the four singular vertices of each closed curve, the cofactor far
-field, and the exact modal decomposition of the incident wave.  Shape
+field, and the unique L2 modal projection (window-free) of the incident
+wave.  Shape
 primitives (`Rect`, `FilletRect`, `Circle`, `Ellipse`, `SinusoidalWall`)
 lay out the walls and the map from PHYSICAL geometry; the stack merges every
 layer's shapes into one map.  A circular pillar lands on an independent 3-D
@@ -266,8 +267,12 @@ tensors and SLANT through the map (the first-order generator gains
 permeability blocks; a slanted layer under a map is the composite frame
 `x = Phi(u, v) + t w`): an out-of-plane slab under a sheared map matches
 Berreman, both Jones matrices, to ~1e-13, and an out-of-plane eps with a
-material mu is solved with or without a map.  Still open: per-layer maps
-and the JAX twin under a map (curved-cell PLAN Phases E2 / E3).  The convergence of the EFFICIENCIES stays
+material mu is solved with or without a map.  Phase E2 (2026-10-03) gives
+every layer of a per-layer stack its own map, joined by a non-separable
+curved mortar, so outlines that cross in plan view can be stacked
+(`docs/audits/BUILD_PMM2D_CURVED_E2_2026_10_03.md`).  Still open: the JAX
+twin under a map (curved-cell PLAN Phase E3, approved 2026-10-02 -- not
+this roadmap's own Phase E).  The convergence of the EFFICIENCIES stays
 rim-capped (~1e-5 per rung) for curved pillars as for square ones: the
 in-plane curvature is resolved spectrally, the pillar's top and bottom rim
 is not (a z-direction question).

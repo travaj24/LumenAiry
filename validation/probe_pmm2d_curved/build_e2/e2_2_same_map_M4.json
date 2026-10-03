@@ -1,0 +1,31 @@
+{
+ "th0.0_ph0.0": {
+  "perlayer_vs_shared": 0.0,
+  "perlayer_bytes_equal": true,
+  "forced_mortar_vs_shared": 1.4432899320127035e-15,
+  "forced_wall": 7.442011200000707,
+  "hswap_off_vs_shared": 1.1021316822859093
+ },
+ "th0.3_ph0.0": {
+  "perlayer_vs_shared": 0.0,
+  "perlayer_bytes_equal": true,
+  "forced_mortar_vs_shared": 1.3322676295501878e-15,
+  "forced_wall": 6.581751500001701,
+  "hswap_off_vs_shared": 0.9204810078286573
+ },
+ "th0.3_ph0.7": {
+  "perlayer_vs_shared": 0.0,
+  "perlayer_bytes_equal": true,
+  "forced_mortar_vs_shared": 3.0792470469794305e-15,
+  "forced_wall": 7.657116200003657,
+  "hswap_off_vs_shared": 0.8011577341059295
+ },
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "tree": "c:\\tmp\\lum_curved_e2",
+  "lumenairy": "C:\\tmp\\lum_curved_e2\\lumenairy",
+  "platform": "Windows-11-10.0.26200-SP0"
+ }
+}

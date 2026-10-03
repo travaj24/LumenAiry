@@ -209,11 +209,13 @@ Scope / limitations
   ``kappa = chi_t tau``); a uniform out-of-plane slab under a sheared map
   matches the Berreman 4x4 oracle, both Jones matrices included, to ~1e-13.
   Remaining limits under a map: an OUT-OF-PLANE permeability (refused with
-  or without a map), per-layer grids (each a different map per layer) and
-  the JAX twin (Phase E2 / E3) raise; two
-  outlines that cross in plan view cannot share one map (raises, naming
-  both); and :func:`pmm_efficiency_2d_staggered` takes no map (use the
-  Jones entry).  A rounded corner is GEOMETRY FIDELITY, not a convergence
+  or without a map) and the JAX twin (Phase E3) raise; two outlines that
+  cross in plan view cannot share ONE map (raises, naming both) -- with
+  ``layer_grids='per-layer'`` each layer then keeps its own map and the
+  layers are joined by the curved mortar
+  (:class:`~lumenairy.elements.pmm._curvemortar.StagCrossOpsMapped`, Phase
+  E2, ``docs/audits/BUILD_PMM2D_CURVED_E2_2026_10_03.md``); and
+  :func:`pmm_efficiency_2d_staggered` takes no map (use the Jones entry).  A rounded corner is GEOMETRY FIDELITY, not a convergence
   accelerator: the efficiencies stay rim-capped (next item).
   A constant TILT of the walls is supported with or without a map: see
   SLANT below.
@@ -1824,9 +1826,17 @@ class StagGridOps:
     takes the plain square modal match rather than a mortar."""
 
     __slots__ = ("bx", "by", "M", "q", "qq", "Mtt_x", "Mbb_x", "Mtt_y",
-                 "Mbb_y", "V1", "V2", "_key")
+                 "Mbb_y", "V1", "V2", "_key", "cmap")
 
-    def __init__(self, period_x, period_y, wx, wy, M, taux, tauy):
+    def __init__(self, period_x, period_y, wx, wy, M, taux, tauy, cmap=None):
+        # ``cmap`` (Phase E2 of the curved-cell plan): the layer's OWN
+        # coordinate map, on whose ``(u, v)`` wall grid ``wx`` / ``wy`` lie.
+        # The Grams below are the PLAIN ``du dv`` Grams either way (the
+        # metric-free flux form); the map enters only the cross-mass between
+        # two grids (:class:`StagCrossOpsMapped`) and the grid's KEY, so two
+        # layers on the same walls but different maps never share a square
+        # interface.  ``None`` (every shipped caller) changes nothing.
+        self.cmap = cmap
         self.M = int(M)
         self.bx = Basis1D(period_x, wx, M, taux)
         self.by = Basis1D(period_y, wy, M, tauy)
@@ -1843,6 +1853,8 @@ class StagGridOps:
         self.V2 = (self.Mbb_y, self.Mtt_x)
         self._key = (_stag_basis_fingerprint(self.bx),
                      _stag_basis_fingerprint(self.by))
+        if cmap is not None:
+            self._key = self._key + (cmap.fingerprint,)
 
     def key(self):
         return self._key
@@ -3885,7 +3897,7 @@ def _far_projector_mapped(bx: Basis1D, by: Basis1D, ox, oy, alpha0x, alpha0y,
 def _stag_incident_load_mapped(bx: Basis1D, by: Basis1D, cmap, alpha0x,
                                alpha0y, e0):
     """The L2 LOAD vector of the incident plane wave under the curved-cell
-    map ``cmap`` -- the right-hand side of its EXACT modal decomposition
+    map ``cmap`` -- the right-hand side of its unique L2 modal projection
     (Phase C of the curved-cell plan; Phase B finding F-B4, Phase A verifier
     D4).
 
@@ -3976,7 +3988,7 @@ def _stag_incident_coeffs_mapped(geom, bx: Basis1D, by: Basis1D, cmap,
     under the map ``cmap`` for the two lab inputs ``E_x`` and ``E_y``
     (columns).
 
-    Two steps.  (1) The exact L2 modal decomposition ``C = W0^-1 G^-1 b``:
+    Two steps.  (1) The unique L2 modal projection ``C = W0^-1 G^-1 b``:
     ``b`` the L2 load of :func:`_stag_incident_load_mapped`, ``W0`` the
     shared geometric eigenvectors and ``G^-1`` the inverse PLAIN block Gram,
     both from the mapped :func:`_homog_geom_cache` tuple ``geom``.  It is
@@ -5246,7 +5258,8 @@ def pmm_jones_2d_staggered(
         E).
         Under a CURVED map the incident plane wave is not an exact discrete
         half-space mode (the covariant field ``J^T E`` is not a polynomial),
-        so it enters through its exact L2 modal decomposition; ``R`` / ``T``
+        so it enters through its unique L2 modal projection (window-free);
+        ``R`` / ``T``
         are then independent of ``n_orders`` to round-off, and a vacuum
         spacer on top moves them only at the discretisation-error level
         (falling with ``n_modes``; measured in

@@ -1,0 +1,41 @@
+{
+ "M": 4,
+ "two_circles_r_0.30_0.40": {
+  "one_layer": "refused: compile_shapes: the merged map FOLDS (det J <= 0, min -2.497e-01) in the cell u in [0.387868, 0.812132], v in [0.317157,",
+  "two_layers_shared": "refused: compile_shapes: the merged map FOLDS (det J <= 0, min -2.497e-01) in the cell u in [0.387868, 0.812132], v in [0.317157,",
+  "perlayer_fast_path": false,
+  "perlayer_closure": [
+   0.0034324943381536244,
+   0.010789719952425392
+  ],
+  "wall": 23.538872099998116
+ },
+ "equal_circles_dy_0.05": {
+  "one_layer": "refused: compile_shapes: the merged map FOLDS (det J <= 0, min -8.106e-01) in the cell u in [0.387868, 0.812132], v in [0.787132,",
+  "two_layers_shared": "refused: compile_shapes: the merged map FOLDS (det J <= 0, min -8.106e-01) in the cell u in [0.387868, 0.812132], v in [0.787132,",
+  "perlayer_fast_path": false,
+  "perlayer_closure": [
+   0.018975439745410827,
+   0.007317258433563012
+  ],
+  "wall": 15.908223699996597
+ },
+ "rect_touching_circle_30deg": {
+  "one_layer": "refused: compile_shapes: the merged map FOLDS (det J <= 0, min -3.412e+00) in the cell u in [0.345442, 0.854558], v in [0.854558,",
+  "two_layers_shared": "refused: compile_shapes: the merged map FOLDS (det J <= 0, min -3.412e+00) in the cell u in [0.345442, 0.854558], v in [0.854558,",
+  "perlayer_fast_path": false,
+  "perlayer_closure": [
+   0.01502174657540667,
+   0.010809391354415387
+  ],
+  "wall": 7.779775200004224
+ },
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "tree": "c:\\tmp\\lum_curved_e2",
+  "lumenairy": "C:\\tmp\\lum_curved_e2\\lumenairy",
+  "platform": "Windows-11-10.0.26200-SP0"
+ }
+}

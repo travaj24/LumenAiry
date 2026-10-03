@@ -1,0 +1,5 @@
+FAILED tests/unit/test_pmm2d_staggered_curved_e2.py::test_e2_3_two_stretches_converge_to_the_unmapped_device
+FAILED tests/unit/test_pmm2d_staggered_curved_e2.py::test_e2_4_crossing_outlines_solve_through_the_curved_mortar
+FAILED tests/unit/test_pmm2d_staggered_curved_e2.py::test_e2_6_oblique_and_conical_closure_and_reciprocity
+FAILED tests/unit/test_pmm2d_staggered_curved_e2.py::test_e2_7_three_layers_on_three_maps
+4 failed, 8 passed in 149.47s (0:02:29)

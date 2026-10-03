@@ -1,0 +1,35 @@
+{
+ "M": 5,
+ "L1_mapped_closure": [
+  4.3185621115160444e-05,
+  0.0004461260638235487
+ ],
+ "L1_unmapped_closure": [
+  1.4260009509436955e-05,
+  0.00011227858222995213
+ ],
+ "L1_mapped_vs_unmapped": 0.0021177254647244403,
+ "L2_mapped_closure": [
+  0.00010141838523725077,
+  0.0005608759048446599
+ ],
+ "L2_unmapped_closure": [
+  1.5004358585479771e-05,
+  1.1851366430670751e-05
+ ],
+ "L2_mapped_vs_unmapped": 0.0006756555361929761,
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "lumenairy": "c:\\tmp\\lum_vcurved_e2\\lumenairy\\__init__.py",
+  "tree": "post",
+  "build": "win",
+  "machine": "Tesla_Ryzen",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ }
+}

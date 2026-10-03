@@ -1,0 +1,34 @@
+{
+ "geom": "conc",
+ "M": 4,
+ "s=7e-05": {
+  "n": 96,
+  "change": 8.96239927345527e-14,
+  "warnings": [],
+  "wall_adaptive": 181.14191740000388,
+  "rel_fine": "RuntimeError: curved mortar: a quadrature node could not be inverted in the neighbouring layer's map.",
+  "rel_primary_a": 1.3521037033570046e-07,
+  "rel_primary_b": 6.652980368734024e-10,
+  "wall_checks": 55.72275699999591,
+  "absmax": 0.3731753919499128
+ },
+ "s=5e-05": {
+  "raised": "RuntimeError: curved mortar: a quadrature node could not be inverted in the neighbouring layer's map.",
+  "warnings": [],
+  "wall_adaptive": 124.67968719999772
+ },
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "lumenairy": "c:\\tmp\\lum_vcurved_e2\\lumenairy\\__init__.py",
+  "tree": "post",
+  "build": "win",
+  "machine": "Tesla_Ryzen",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ }
+}

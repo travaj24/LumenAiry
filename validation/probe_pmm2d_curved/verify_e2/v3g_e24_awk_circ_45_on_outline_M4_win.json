@@ -1,0 +1,26 @@
+{
+ "mode": "awk",
+ "argv": [
+  "awk",
+  "circ_45_on_outline",
+  "4"
+ ],
+ "refusal": "compile_shapes: the outlines of layer 1: Circle(cx=0.5, cy=0.5, r=0.3) and layer 2: Circle(cx=0.8921",
+ "fast": false,
+ "exception": "NotImplementedError: curved mortar: the overlap of cell (1, 1) of the upper layer's map and cell (1, 1) of the lower layer's touches a SINGULAR vertex (det J = 0, a closed curve's 45-degree point) of BOTH maps; the cross-mass integrand is singular in either layer's coordinates there.  Move one outline so the two maps' singular vertices do not share a cell overlap, or use layer_grids='shared' (one merged map) when the outlines do not cross.",
+ "tb": "^^^^^^^^\n  File \"c:\\tmp\\lum_vcurved_e2\\lumenairy\\elements\\pmm\\stack2d_pure.py\", line 3258, in _cross\n    hit = StagCrossOpsMapped(ga, gb)\n  File \"C:\\tmp\\lum_vcurved_e2\\validation\\probe_pmm2d_curved\\verify_e2\\v3g_fix.py\", line 22, in _rec_init\n    _orig_init(self, ga, gb, tol=tol)\n    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^\n  File \"c:\\tmp\\lum_vcurved_e2\\lumenairy\\elements\\pmm\\_curvemortar.py\", line 1099, in __init__\n    X, n, chg = curved_cross_mass_adaptive(ga, gb, tol=tol)\n                ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^\n  File \"c:\\tmp\\lum_vcurved_e2\\lumenairy\\elements\\pmm\\_curvemortar.py\", line 1058, in curved_cross_mass_adaptive\n    X0 = curved_cross_mass(ga, gb, n)\n  File \"c:\\tmp\\lum_vcurved_e2\\lumenairy\\elements\\pmm\\_curvemortar.py\", line 940, in curved_cross_mass\n    default, exc = _assign_pairs(A, B)\n                   ~~~~~~~~~~~~~^^^^^^\n  File \"c:\\tmp\\lum_vcurved_e2\\lumenairy\\elements\\pmm\\_curvemortar.py\", line 889, in _assign_pairs\n    raise NotImplementedError(\n    ...<7 lines>...\n        f\"when the outlines do not cross.\")\nNotImplementedError: curved mortar: the overlap of cell (1, 1) of the upper layer's map and cell (1, 1) of the lower layer's touches a SINGULAR vertex (det J = 0, a closed curve's 45-degree point) of BOTH maps; the cross-mass integrand is singular in either layer's coordinates there.  Move one outline so the two maps' singular vertices do not share a cell overlap, or use layer_grids='shared' (one merged map) when the outlines do not cross.\n",
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "lumenairy": "c:\\tmp\\lum_vcurved_e2\\lumenairy\\__init__.py",
+  "tree": "post",
+  "build": "win",
+  "machine": "Tesla_Ryzen",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ }
+}

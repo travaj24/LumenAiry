@@ -1,0 +1,36 @@
+{
+ "M": 8,
+ "merged_wall": 252.02472920000582,
+ "merged_grid": [
+  4,
+  4
+ ],
+ "merged_pencil": 1568,
+ "perlayer_wall": 47.769093499999144,
+ "perlayer_modal_counts": [
+  8,
+  12
+ ],
+ "perlayer_pencils": [
+  882,
+  968
+ ],
+ "cross_mass": [
+  {
+   "wall": 1.1137701999978162,
+   "n": 36,
+   "qq_a": 441,
+   "qq_b": 484
+  }
+ ],
+ "cross_mass_wall": 1.1137701999978162,
+ "ratio_perlayer_over_merged": 0.18954129482305596,
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "tree": "c:\\tmp\\lum_curved_e2",
+  "lumenairy": "C:\\tmp\\lum_curved_e2\\lumenairy",
+  "platform": "Windows-11-10.0.26200-SP0"
+ }
+}

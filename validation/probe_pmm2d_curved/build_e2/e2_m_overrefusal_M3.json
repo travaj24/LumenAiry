@@ -1,0 +1,38 @@
+{
+ "M": 3,
+ "two_circles_r_0.30_0.40": {
+  "one_layer": "refused: compile_shapes: the merged map FOLDS (det J <= 0, min -2.497e-01) in the cell u in [0.387868, 0.812132], v in [0.317157,",
+  "two_layers_shared": "refused: compile_shapes: the merged map FOLDS (det J <= 0, min -2.497e-01) in the cell u in [0.387868, 0.812132], v in [0.317157,",
+  "perlayer_fast_path": false,
+  "perlayer_closure": [
+   0.012857657461819771,
+   0.03693981380856948
+  ],
+  "wall": 22.230976400001964
+ },
+ "equal_circles_dy_0.05": {
+  "one_layer": "refused: compile_shapes: the merged map FOLDS (det J <= 0, min -8.106e-01) in the cell u in [0.387868, 0.812132], v in [0.787132,",
+  "two_layers_shared": "refused: compile_shapes: the merged map FOLDS (det J <= 0, min -8.106e-01) in the cell u in [0.387868, 0.812132], v in [0.787132,",
+  "perlayer_fast_path": false,
+  "perlayer_closure": [
+   0.013469141246116756,
+   0.07487686244995873
+  ],
+  "wall": 19.238425400006236
+ },
+ "rect_touching_circle_30deg": {
+  "one_layer": "refused: compile_shapes: the merged map FOLDS (det J <= 0, min -3.412e+00) in the cell u in [0.345442, 0.854558], v in [0.854558,",
+  "two_layers_shared": "refused: compile_shapes: the merged map FOLDS (det J <= 0, min -3.412e+00) in the cell u in [0.345442, 0.854558], v in [0.854558,",
+  "perlayer_fast_path": false,
+  "perlayer_error": "ValueError: PMM2DStackPure.solve: n_orders=4 exceeds what this stack's END grids can carry.  The forward Rayleigh projection has q = N (M - 1) columns per axis -- 6 at the ",
+  "wall": 0.035112799996568356
+ },
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "tree": "c:\\tmp\\lum_curved_e2",
+  "lumenairy": "C:\\tmp\\lum_curved_e2\\lumenairy",
+  "platform": "Windows-11-10.0.26200-SP0"
+ }
+}

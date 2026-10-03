@@ -1,0 +1,16 @@
+{
+ "M": 5,
+ "X11": 1.2841205330586759e-14,
+ "X22": 5.432817639863628e-15,
+ "X12": 0.0,
+ "X21": 0.0,
+ "X11_without_psi_prime": 0.42261693958599234,
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "tree": "c:\\tmp\\lum_curved_e2",
+  "lumenairy": "C:\\tmp\\lum_curved_e2\\lumenairy",
+  "platform": "Windows-11-10.0.26200-SP0"
+ }
+}

@@ -75,6 +75,89 @@ seen differently at every point, and the solver carries that too.
   per-layer maps and the JAX twin are separate phases (E2, E3); the parity
   (normal-incidence) accelerator is not used under a map or with a
   permeability (a separate plan item).
+### Added -- pure 2-D PMM (curved cells, Phase E2): a different curved map in every layer
+
+With `layer_grids='per-layer'` every layer of `PMM2DStackPure` may now carry
+its OWN curved map, so two layers whose curved outlines CROSS in plan view --
+a circular pillar over a sinusoidal wall that runs through it -- can be
+stacked.  One coordinate map cannot carry two crossing curves, so until now
+the stack-wide shape merge refused such a pair; now each layer keeps its own
+map and the two are joined by a CURVED MORTAR:
+
+```python
+from lumenairy.elements.pmm import Circle, PMM2DStackPure, SinusoidalWall
+
+# n_modes=7: ~1.6e-3 from the converged R / T on this device (n_modes=4
+# is a smoke rung, 1e-1 off; see the accuracy class below)
+st = PMM2DStackPure(1.2e-6, 1.2e-6, n_substrate=1.45, n_modes=7,
+                    layer_grids="per-layer")
+st.add_layer(0.3e-6, shapes=[Circle(0.6e-6, 0.6e-6, 0.36e-6, eps=4.0)],
+             background_eps=1.0)
+st.add_layer(0.25e-6, shapes=[SinusoidalWall("x", 0.6e-6, 0.12e-6, eps=2.25)],
+             background_eps=1.0)
+st.set_source(1.0e-6)
+orders, R, T, J = st.solve()
+```
+
+What it means physically.  Neighbouring layers are coupled by requiring
+the tangential field to match across their common interface; with two
+different curved grids that match is an overlap integral of one layer's
+field against the other's over the physical cell, which no longer splits
+into a product of 1-D integrals.  It is computed by a quadrature that is cut
+along the other layer's grid lines (so every piece is smooth and the rule
+converges spectrally -- ~1e-14 by 16 to 20 nodes per piece), with the coordinate
+map inverted by Newton at each node.
+
+* `add_layer(..., cmap=)` (per-layer stacks) gives a layer an explicit map;
+  `add_layer(shapes=...)` compiles each shape layer's own map.  When the
+  shapes of every layer DO fit one map (outlines that do not cross), the
+  stack runs that merged map exactly as `layer_grids='shared'` does --
+  byte for byte.  Raw `eps_cell` layers may join a per-layer shape stack.
+* NO SHIPPED ANSWER MOVES: 134 of 134 SHA-256 hashes over every dispatch
+  branch, including 12 of the shipped per-layer mortar (non-conforming
+  pairs at normal / oblique / conical incidence with absorption, the
+  generalized mortar, a taper), are byte-identical to the Phase D commit.
+* Gates (`docs/audits/BUILD_PMM2D_CURVED_E2_2026_10_03.md`): two layers on the
+  SAME map through the curved mortar reproduce the shared solve to 3e-15;
+  under two separable stretches the cross-mass equals an independent 1-D
+  factorisation to 1.3e-14; the crossing circle / sinusoid pair closes
+  energy to 2.4e-5 at `M = 6` and 1e-6 at `M = 7 .. 8` (closure is not the
+  accuracy: against an independent conforming map and RCWA the R / T error
+  is 1.4e-2 at `M = 6` and 1e-3 at `M = 8`), a lossless layer next to a
+  lossy one absorbs < 3e-13, reflection reciprocity holds at oblique and
+  conical incidence to 1e-6 .. 7e-6 at `M = 7`, and three layers on three
+  different maps close to 3e-6 at `M = 7`.  A wall grazing a neighbour's
+  curve (a cut shorter than the wall sampling) is found and integrated (the
+  Phase E2 verifier's V-E2-D1, fixed).
+* ACCURACY CLASS, measured: like every own-walls-only mortar, an interface
+  where a pillar's outline cuts through the neighbour's cells converges
+  algebraically (the pillar's rim singularity seen through a non-conforming
+  cut; the verifier measured a tail exponent of 1.8 .. 2.2 that keeps its
+  value at eps 1.1 and 1.02 while its size falls with the contrast) -- the
+  same class as the shipped separable mortar on the same geometry.  On the
+  circle over a crossing wall: R / T within ~1e-2 at `M = 6`, ~1e-3 at
+  `M = 8 .. 10`; where a merged map exists the per-layer route stalls near
+  3e-4 from `M = 8` while the merged map reaches 2e-5 (a circle over a
+  non-crossing wall agrees with the merged-map answer to 1e-2 at `M = 5 .. 6`
+  and 4.5e-4 at `M = 7`; the merged map is itself 1e-2 from its converged
+  value at `M = 5 .. 6`).  Prefer `layer_grids='shared'` (the merged map)
+  whenever the outlines do not cross.
+* DEFAULTS: a shape layer without `n_modes` takes the finest shape layer's
+  per-axis count (q-matching); a homogeneous layer rides its neighbour's
+  grid (the nearest non-riding layer above, else below).  Naming `n_modes`
+  on ANY layer -- even the stack's own `M` -- takes a mergeable stack off the
+  merged-map fast path and exempts that layer from q-matching (it moves
+  R / T by 0.12 / 0.028 at `M = 4 / 5` on the E2-4 device).
+* KNOWN LIMITS: two layers whose maps both have a singular vertex (two
+  closed curves) in the same cell overlap raise, naming the cells -- this
+  refuses most crossing pairs of closed curves (46 of 56 crossing circle
+  pairs sampled, `verify_e2/v2c_circle_pairs_win.json`); one circle on two
+  wall layouts (a `grid_hint` refinement) is accepted.  Outlines in adjacent
+  layers closer than ~6e-5 of the period (nearly coincident curves) cannot be
+  inverted and raise, naming the two layers.  Two shapes in ONE layer whose
+  merge refuses (the Phase C verifier's supercells, V-D3) have NO route yet:
+  putting them in two layers is a different device (0.4 .. 0.5 apart in
+  R / T), not a workaround; the hybrid merge is deferred.
 
 ### Added -- pure 2-D PMM (curved cells, Phase D): anisotropic and magnetic materials inside curved cells
 
@@ -163,7 +246,7 @@ EXACTLY instead of as a staircase of rectangles:
 ```python
 from lumenairy.elements.pmm import Circle, FilletRect, PMM2DStackPure
 
-st = PMM2DStackPure(1.2e-6, n_substrate=1.45, n_modes=7)
+st = PMM2DStackPure(1.2e-6, n_substrate=1.45, n_modes=4)
 st.add_layer(0.5e-6, shapes=[Circle(0.6e-6, 0.6e-6, 0.3e-6, eps=4.0)],
              background_eps=1.0)
 st.add_layer(0.2e-6, shapes=[FilletRect(0.6e-6, 0.6e-6, 0.9e-6, 0.9e-6,
@@ -213,8 +296,8 @@ fillet because the fabricated device has one.
   to the bit: the circle lands on the independent 3-D finite-element oracle
   as before: 7.8e-6 per diffraction order at `M = 11`,
   inside the oracle's own 8.3e-6 mesh spread.
-* Under a curved map the incident plane wave now enters through its EXACT
-  modal decomposition (an L2 projection, renormalised on the specular
+* Under a curved map the incident plane wave now enters through its unique
+  L2 modal projection (window-free; an L2 projection, renormalised on the specular
   order) instead of an under-determined least-squares fit: the round-off
   floor of the curved solve drops from 6.8e-10 to 8.0e-15 at `M = 6`, and
   `R` / `T` no longer depend on `n_orders` (2.9e-7 before, below 1e-15
@@ -266,7 +349,7 @@ number: `docs/audits/BUILD_PMM2D_CURVED_B_2026_10_02.md`.
   `M = 6` (falling with `M`) and carry a geometry-dependent round-off floor
   of 1e-9 .. 1e-8, both from the windowed least-squares incident projection
   inherited from Phase A (its verifier's F-V2); measured, not changed in
-  this phase -- Phase C's exact modal decomposition of the incident wave
+  this phase -- Phase C's unique L2 modal projection (window-free) of the incident wave
   removes both (window dependence down to 9.4e-16).
 * Found by the Phase B verifier and fixed in Phase D: a `TransfiniteMap`
   edge curve whose analytic derivative disagreed with its value was accepted

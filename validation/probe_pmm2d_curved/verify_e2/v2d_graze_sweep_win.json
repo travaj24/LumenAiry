@@ -1,0 +1,90 @@
+{
+ "rows": [
+  {
+   "delta": 0.0,
+   "kernel_vs_brute": 4.7048654439040966e-15,
+   "kernel_n": 27,
+   "kernel_change": 7.729421800699605e-15,
+   "samples_x8_vs_brute": 4.7048654439040966e-15,
+   "sliver_length": 0.0
+  },
+  {
+   "delta": 1e-07,
+   "kernel_vs_brute": 1.757409461334158e-10,
+   "kernel_n": 27,
+   "kernel_change": 7.729421435034776e-15,
+   "samples_x8_vs_brute": 1.7574100564435983e-10,
+   "sliver_length": 0.0004931235552491997
+  },
+  {
+   "delta": 1e-06,
+   "kernel_vs_brute": 5.55740884672561e-09,
+   "kernel_n": 27,
+   "kernel_change": 7.729418144058528e-15,
+   "samples_x8_vs_brute": 2.352431609061286e-15,
+   "sliver_length": 0.0015593936024673521
+  },
+  {
+   "delta": 1e-05,
+   "kernel_vs_brute": 3.136562124352626e-15,
+   "kernel_n": 27,
+   "kernel_change": 8.1774655384908e-15,
+   "samples_x8_vs_brute": 3.136562124352626e-15,
+   "sliver_length": 0.004931235552491998
+  },
+  {
+   "delta": 3e-05,
+   "kernel_vs_brute": 2.352399337356378e-15,
+   "kernel_n": 27,
+   "kernel_change": 7.39325506026292e-15,
+   "samples_x8_vs_brute": 2.5764373694855568e-15,
+   "sliver_length": 0.008541150521006124
+  },
+  {
+   "delta": 0.0001,
+   "kernel_vs_brute": 2.5763520720466635e-15,
+   "kernel_n": 27,
+   "kernel_change": 7.729056216140007e-15,
+   "samples_x8_vs_brute": 2.5763520720466635e-15,
+   "sliver_length": 0.015593936024673521
+  },
+  {
+   "delta": 0.0003,
+   "kernel_vs_brute": 1.792075485099568e-15,
+   "kernel_n": 27,
+   "kernel_change": 7.616320811673174e-15,
+   "samples_x8_vs_brute": 1.792075485099568e-15,
+   "sliver_length": 0.02700948948471318
+  },
+  {
+   "delta": 0.001,
+   "kernel_vs_brute": 2.9111609177988083e-15,
+   "kernel_n": 27,
+   "kernel_change": 7.613805477319982e-15,
+   "samples_x8_vs_brute": 2.9111609177988083e-15,
+   "sliver_length": 0.049312355524919985
+  },
+  {
+   "delta": 0.003,
+   "kernel_vs_brute": 2.3491162131367e-15,
+   "kernel_n": 27,
+   "kernel_change": 7.382936669858214e-15,
+   "samples_x8_vs_brute": 2.3491162131367e-15,
+   "sliver_length": 0.08541150521006124
+  }
+ ],
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "lumenairy": "c:\\tmp\\lum_vcurved_e2\\lumenairy\\__init__.py",
+  "tree": "post",
+  "build": "win",
+  "machine": "Tesla_Ryzen",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ }
+}

@@ -429,7 +429,7 @@ def test_c5_refusals_name_both_shapes_and_layers():
     compile_shapes(_P, _P, [Rect(0.3, 0.6, 0.2, 0.2, 2.0),           # shared
                             Rect(0.5, 0.6, 0.2, 0.2, 3.0)], 1.0)     # wall
     # the fillet radius below the sliver contract: named, with the remedy
-    with pytest.raises(ValueError, match=r"radius=0.*1\.414e-3|1\.414e-3.*"
+    with pytest.raises(ValueError, match=r"radius=0.*1\.4142e-3|1\.4142e-3.*"
                                          r"radius=0"):
         compile_shapes(_P, _P, [FilletRect(0.6, 0.6, 0.6, 0.6, 1.5e-3, 4.0)],
                        1.0)
@@ -439,12 +439,18 @@ def test_c5_refusals_name_both_shapes_and_layers():
     # one too -- accepted now, gates in test_pmm2d_staggered_curved_e1.py)
     oop = np.diag([4.0, 3.0, 3.5]).astype(complex)
     oop[0, 2] = oop[2, 0] = 0.4
+    # Phase E1 (2026-10-03) lifted the out-of-plane refusal this arm used to
+    # pin: an out-of-plane eps rides the map (BUILD_PMM2D_CURVED_E1).
     compile_and_add = PMM2DStackPure(_P, _P, n_modes=4)
     compile_and_add.add_layer(
         0.3, shapes=[Circle(0.6, 0.6, 0.3, oop)], background_eps=1.0)
-    with pytest.raises(NotImplementedError, match="Phase E"):
-        PMM2DStackPure(_P, _P, layer_grids="per-layer").add_layer(
-            0.3, shapes=[Circle(0.6, 0.6, 0.3, 4.0)], background_eps=1.0)
+    # Phase E2 (2026-10-03) lifted the per-layer + shapes refusal this arm
+    # used to pin: every shape layer now compiles its own map, joined by the
+    # curved mortar (tests/unit/test_pmm2d_staggered_curved_e2.py); a lone
+    # shape layer merges, so the stack takes the merged-map fast path
+    st_pl = PMM2DStackPure(_P, _P, layer_grids="per-layer").add_layer(
+        0.3, shapes=[Circle(0.6, 0.6, 0.3, 4.0)], background_eps=1.0)
+    assert st_pl._perlayer_fast_ok()
     with pytest.raises(ValueError, match="eps_cell"):
         st.add_layer(0.2, eps_cell=np.ones((3, 3)))
     cm3, eps3 = _circle3_explicit()

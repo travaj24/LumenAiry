@@ -1,0 +1,31 @@
+{
+ "M": 5,
+ "perlayer": {
+  "vs_union": 0.027649259170973883,
+  "closure": [
+   0.011922482972716586,
+   0.0006791701887567392
+  ],
+  "M_stripe": 5
+ },
+ "perlayer_qmatch": {
+  "vs_union": 0.005059402081227182,
+  "closure": [
+   7.434938235595379e-05,
+   2.529602280143539e-05
+  ],
+  "M_stripe": 7
+ },
+ "union_closure": [
+  0.00011022314324837801,
+  5.633709779795382e-06
+ ],
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "tree": "c:\\tmp\\lum_curved_e2",
+  "lumenairy": "C:\\tmp\\lum_curved_e2\\lumenairy",
+  "platform": "Windows-11-10.0.26200-SP0"
+ }
+}

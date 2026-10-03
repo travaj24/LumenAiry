@@ -1,0 +1,2 @@
+FAILED tests/unit/test_pmm2d_staggered_curved_e2.py::test_e2_4_crossing_outlines_solve_through_the_curved_mortar
+1 failed, 11 passed in 307.69s (0:05:07)

@@ -1,0 +1,38 @@
+{
+ "geom": "offx",
+ "M": 4,
+ "s=1e-05": {
+  "raised": "NotImplementedError: curved mortar: the overlap of cell (1, 1) of the upper layer's map and cell (1, 1) of the lower layer's touches a SINGULAR vertex (det J = 0, a closed curve's 45-degree point) of BOTH maps; the cross-mass integrand is singular in either layer's coordinates there.  Move one outline so the two maps' singular vertices do not share a cell overlap, or use layer_grids='shared' (one merged map) when the outlines do not cross.",
+  "warnings": [],
+  "wall_adaptive": 2.1389234000016586
+ },
+ "s=1e-06": {
+  "raised": "NotImplementedError: curved mortar: the overlap of cell (1, 1) of the upper layer's map and cell (1, 1) of the lower layer's touches a SINGULAR vertex (det J = 0, a closed curve's 45-degree point) of BOTH maps; the cross-mass integrand is singular in either layer's coordinates there.  Move one outline so the two maps' singular vertices do not share a cell overlap, or use layer_grids='shared' (one merged map) when the outlines do not cross.",
+  "warnings": [],
+  "wall_adaptive": 1.9625720999974874
+ },
+ "s=1e-07": {
+  "raised": "NotImplementedError: curved mortar: the overlap of cell (1, 1) of the upper layer's map and cell (1, 1) of the lower layer's touches a SINGULAR vertex (det J = 0, a closed curve's 45-degree point) of BOTH maps; the cross-mass integrand is singular in either layer's coordinates there.  Move one outline so the two maps' singular vertices do not share a cell overlap, or use layer_grids='shared' (one merged map) when the outlines do not cross.",
+  "warnings": [],
+  "wall_adaptive": 2.332646400005615
+ },
+ "s=1e-08": {
+  "raised": "NotImplementedError: curved mortar: the overlap of cell (1, 1) of the upper layer's map and cell (1, 1) of the lower layer's touches a SINGULAR vertex (det J = 0, a closed curve's 45-degree point) of BOTH maps; the cross-mass integrand is singular in either layer's coordinates there.  Move one outline so the two maps' singular vertices do not share a cell overlap, or use layer_grids='shared' (one merged map) when the outlines do not cross.",
+  "warnings": [],
+  "wall_adaptive": 1.6055864000009024
+ },
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "lumenairy": "c:\\tmp\\lum_vcurved_e2\\lumenairy\\__init__.py",
+  "tree": "post",
+  "build": "win",
+  "machine": "Tesla_Ryzen",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ }
+}

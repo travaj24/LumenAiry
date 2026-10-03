@@ -768,6 +768,20 @@ build and one verifier, like the other phases (section 6).
   (clipping curved cells) -- the expensive route; the cheap route is a common
   map (the Phase C merge), which covers every stack whose curved features do
   not overlap in plan view.
+  **BUILT 2026-10-03 (Phase E2,
+  `docs/audits/BUILD_PMM2D_CURVED_E2_2026_10_03.md`, verified
+  `VERIFY_PMM2D_CURVED_E2_2026_10_03.md`)**: the cut-cell cross-mass, the
+  Phase C merge kept as the fast path.  STILL OPEN after E2: (a) crossing
+  CLOSED curves in adjacent layers are mostly refused (a cell pair touching
+  a singular vertex of both maps; 46 of 56 crossing circle pairs) --
+  splitting such a cell between the two maps; (b) the Phase C verifier's
+  V-D3, shapes in ONE layer that the per-edge merge over-refuses
+  (supercells of different radii) -- the hybrid merge (claims for material
+  boundaries, the macro-cell blend for foreign walls), DEFERRED; splitting
+  the layer is a different device, not a workaround; (c) the own-walls-only
+  accuracy class of any non-conforming mortar (1e-2 at M = 6, 1e-3 at
+  M = 8 .. 10 on the E2-4 device); (d) the incident wave as the discrete
+  (0, 0) eigenmode pair ("mode-pick", the Phase C verifier's measurement).
 * **The JAX twin**: none exists for the staggered solver.
 * **Parity reduction for symmetric maps**: out-of-plane only; the shipped
   structural check on the assembled pencil already falls back safely.

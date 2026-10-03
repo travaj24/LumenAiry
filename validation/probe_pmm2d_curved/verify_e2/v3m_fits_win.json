@@ -1,0 +1,26 @@
+{
+ "perlayer_vs_rcwa_normal_M4-7": {
+  "exp_rate_per_M": 1.3402179506566751,
+  "alg_exponent": 7.076648914282956
+ },
+ "perlayer_vs_rcwa_normal_M7-10": {
+  "exp_rate_per_M": 0.2487953612222549,
+  "alg_exponent": 2.110136042759549
+ },
+ "merged_vs_rcwa_normal_M4-8": {
+  "exp_rate_per_M": 1.300835321055088,
+  "alg_exponent": 7.487953510513296
+ },
+ "merged_selfdiff_normal_M4-7": {
+  "exp_rate_per_M": 1.2548635344831438,
+  "alg_exponent": 6.754161084779382
+ },
+ "perlayer_selfdiff_normal_M4-9": {
+  "exp_rate_per_M": 0.8989051678659143,
+  "alg_exponent": 5.62995077941657
+ },
+ "perlayer_vs_rcwa_obl_M4-10": {
+  "exp_rate_per_M": 0.666218535015804,
+  "alg_exponent": 4.465989556262807
+ }
+}

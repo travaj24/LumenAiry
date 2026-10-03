@@ -454,6 +454,25 @@ class SeparableStretch(CellMap):
         zero = np.zeros(shp)
         return X, Y, xu, zero, zero, yv
 
+    def geom_points(self, sx, sy, U, V):
+        """The pointwise form of :meth:`geom`, vectorised (the base-class
+        default loops over distinct ``U``; the curved mortar of Phase E2
+        evaluates a separable map at thousands of scattered nodes)."""
+        U = np.asarray(U, dtype=float).ravel()
+        V = np.asarray(V, dtype=float).ravel()
+        if self.fx is None:
+            fu, dfu = U.copy(), np.ones_like(U)
+        else:
+            fu, dfu = self.fx(U, self.period_x)
+        if self.fy is None:
+            hv, dhv = V.copy(), np.ones_like(V)
+        else:
+            hv, dhv = self.fy(V, self.period_y)
+        zero = np.zeros(U.shape)
+        return (np.asarray(fu, dtype=float), np.asarray(hv, dtype=float),
+                np.asarray(dfu, dtype=float), zero, zero.copy(),
+                np.asarray(dhv, dtype=float))
+
     def _key(self):
         return (None if self.fx is None else self.fx.key(),
                 None if self.fy is None else self.fy.key())

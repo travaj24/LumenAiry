@@ -1,7 +1,7 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/pmm/stack2d_pure.py
-ast_sha256: 7ee796835b9f7c44baa8a79d94530ad52d5c8063bde4179c8aa073a233638455
-token_sha256: b556b79dc24af603b39d6a59d98b4d3a0cf62bf218ca5875481ac192b69aff28
+ast_sha256: c3a583feba82d89159f652d51e28cfedcc957188c7a809d918b7946fd9b2ac31
+token_sha256: 0804f63668ed6939c933d8ebe159f48fe15cc5edf99335f787bae4fe1203dce7
 pre_relocation_lines: 2190
 recorded_by: WP-A17 SWEEP-2 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
@@ -12,6 +12,9 @@ re_recorded: 2026-10-02 -- the curved-cell map, Phase A: PMM2DStackPure(cmap=) -
 re_recorded: 2026-10-03 -- the curved-cell map, Phase C: add_layer(shapes=, background_eps=) and the stack-level merge of every shape layer into ONE map (_add_shapes_layer / _recompile_shapes; rectangles only -> the unmapped solver on the merged walls), the exact renormalised modal decomposition of the incident field under a map (_stag_incident_coeffs_mapped), the viewers drawing mapped cells as curves (_mapped_cell_outline / _plot_mapped_layer / _mapped_section) (BUILD_PMM2D_CURVED_C_2026_10_02)
 re_recorded: 2026-10-03 -- the curved-cell map, Phase C: the shape-layer rollback in _add_shapes_layer restructured from a broad except to try/finally (the except-budget gate; behaviour unchanged -- a refused merge restores the stack and the error propagates)
 re_recorded: 2026-10-03 -- the curved-cell map, Phase D: tensor and magnetic layers under a map -- _require_map_scope refuses only out-of-plane tensors (eps or mu) and slant (Phase E); add_layer(background_mu=) and per-shape mu (a magnetic shape layer is recorded as kind='magnetic'); the merge's tensor refusals narrowed to out-of-plane; a uniform mu layer may join a shape stack, a raw mu_cell may not (BUILD_PMM2D_CURVED_D_2026_10_03)
+re_recorded: 2026-10-03 -- the curved-cell map, Phase E2: per-layer maps -- add_layer(cmap=) on per-layer stacks, per-layer shape layers on their own maps with the stack-wide merge kept as the fast path (_recompile_shapes_perlayer / _perlayer_fast_ok), the curved mortar on the per-layer cascade (StagCrossOpsMapped, mapped end grids: cofactor far field + unique L2 incident projection), the q-matching default and homogeneous-layer riding (_perlayer_geometry), per-layer viewers (_layer_map) (BUILD_PMM2D_CURVED_E2_2026_10_03)
+re_recorded: 2026-10-03 -- the curved-cell map, Phase E2 verifier fold-in: convergence_floor isolates a shape layer on its OWN map (and an explicit per-layer cmap= layer under its map) instead of straight walls (V-E2-D10) (VERIFY_PMM2D_CURVED_E2_2026_10_03)
+re_recorded: 2026-10-03 -- the curved-cell map, Phase E2 verifier fold-in: solve() names the two layers when the curved mortar cannot invert a node (V-E2-D6) (VERIFY_PMM2D_CURVED_E2_2026_10_03)
 re_recorded: 2026-10-03 -- curved-cell Phase E1 (2026-10-03): out-of-plane eps and slant accepted under a map / with shapes, slant x mu and OOP eps x mu accepted (refusals lifted, docstrings updated); no line the history document quotes changed
 -->
 
