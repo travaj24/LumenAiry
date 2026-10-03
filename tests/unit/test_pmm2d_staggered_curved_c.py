@@ -429,7 +429,7 @@ def test_c5_refusals_name_both_shapes_and_layers():
     compile_shapes(_P, _P, [Rect(0.3, 0.6, 0.2, 0.2, 2.0),           # shared
                             Rect(0.5, 0.6, 0.2, 0.2, 3.0)], 1.0)     # wall
     # the fillet radius below the sliver contract: named, with the remedy
-    with pytest.raises(ValueError, match=r"radius=0.*1\.4142e-3|1\.4142e-3.*"
+    with pytest.raises(ValueError, match=r"radius=0.*1\.414e-3|1\.414e-3.*"
                                          r"radius=0"):
         compile_shapes(_P, _P, [FilletRect(0.6, 0.6, 0.6, 0.6, 1.5e-3, 4.0)],
                        1.0)

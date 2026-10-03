@@ -88,7 +88,7 @@ EXACTLY instead of as a staircase of rectangles:
 ```python
 from lumenairy.elements.pmm import Circle, FilletRect, PMM2DStackPure
 
-st = PMM2DStackPure(1.2e-6, n_substrate=1.45, n_modes=4)
+st = PMM2DStackPure(1.2e-6, n_substrate=1.45, n_modes=7)
 st.add_layer(0.5e-6, shapes=[Circle(0.6e-6, 0.6e-6, 0.3e-6, eps=4.0)],
              background_eps=1.0)
 st.add_layer(0.2e-6, shapes=[FilletRect(0.6e-6, 0.6e-6, 0.9e-6, 0.9e-6,
@@ -112,7 +112,7 @@ both half-spaces; two layers may share a curve, and the merge refuses -- at
 the `add_layer` that causes it, naming both shapes and their layers --
 outlines that cross in plan view, two different curves on one cell edge, a
 map that folds between two outlines that come too close, and segments below
-the solver's sliver contract (a fillet radius below sqrt(2) x 1e-3 = 1.4142e-3 of the period is
+the solver's sliver contract (a fillet radius below 1.414e-3 of the period is
 refused with the advice to use a sharp corner).
 `pmm_jones_2d_staggered(..., eps_cell=None, shapes=[...],
 background_eps=...)` is the single-layer convenience (byte-identical to the
@@ -191,8 +191,7 @@ number: `docs/audits/BUILD_PMM2D_CURVED_B_2026_10_02.md`.
   `M = 6` (falling with `M`) and carry a geometry-dependent round-off floor
   of 1e-9 .. 1e-8, both from the windowed least-squares incident projection
   inherited from Phase A (its verifier's F-V2); measured, not changed in
-  this phase -- Phase C's unique L2 modal projection (window-free) of the
-  incident wave
+  this phase -- Phase C's exact modal decomposition of the incident wave
   removes both (window dependence down to 9.4e-16).
 * Found by the Phase B verifier and fixed in Phase D: a `TransfiniteMap`
   edge curve whose analytic derivative disagreed with its value was accepted
