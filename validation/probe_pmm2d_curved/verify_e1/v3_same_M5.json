@@ -1,0 +1,95 @@
+{
+ "ok": {
+  "map_vs_unmapped": {
+   "RT": 7.261189699725445e-05,
+   "Jr": 2.2147322002745194e-05,
+   "Jt": 5.4795971308792626e-05
+  },
+  "unmapped_vs_ok": {
+   "RT": 0.0,
+   "Jr": 0.0,
+   "Jt": 0.0
+  },
+  "map_vs_ok": {
+   "RT": 0.0,
+   "Jr": 0.0,
+   "Jt": 0.0
+  },
+  "clo_map": 3.0419456908958864e-07
+ },
+ "rot+": {
+  "map_vs_unmapped": {
+   "RT": 8.78276720758242e-05,
+   "Jr": 2.4938736532116713e-05,
+   "Jt": 5.2083913337652974e-05
+  },
+  "unmapped_vs_ok": {
+   "RT": 0.029503301046429613,
+   "Jr": 0.007604363588192992,
+   "Jt": 0.0033290929229034733
+  },
+  "map_vs_ok": {
+   "RT": 0.029498108014131004,
+   "Jr": 0.007605104611805453,
+   "Jt": 0.0033345484055621673
+  },
+  "clo_map": 2.8727771428371796e-07
+ },
+ "h+i": {
+  "refused": {
+   "none": "_ConditioningError(\"rcwa generalized interface (T22): the explicit inverse is numerically singular (equilibrated rcond = 4.21e-14 < 1e-10, and the inverse misses its own equation A X = I by 2.7e-06 > ",
+   "map": "_ConditioningError(\"rcwa generalized interface (T22): the explicit inverse is numerically singular (equilibrated rcond = 2.96e-14 < 1e-10, and the inverse misses its own equation A X = I by 1.22e-06 >"
+  }
+ },
+ "h+1": {
+  "map_vs_unmapped": {
+   "RT": 0.0061314175892350775,
+   "Jr": 0.000940969533280248,
+   "Jt": 0.00022289906794623418
+  },
+  "unmapped_vs_ok": {
+   "RT": 2.655635390709578,
+   "Jr": 0.7791243244430297,
+   "Jt": 0.06822475897293423
+  },
+  "map_vs_ok": {
+   "RT": 2.657124987840584,
+   "Jr": 0.7789159564135653,
+   "Jt": 0.06818827748903661
+  },
+  "clo_map": 6.270239382936681
+ },
+ "maprot": {
+  "map_vs_unmapped": {
+   "RT": 0.029504928197620635,
+   "Jr": 0.007595623298012117,
+   "Jt": 0.003349166357423264
+  },
+  "unmapped_vs_ok": {
+   "RT": 0.0,
+   "Jr": 0.0,
+   "Jt": 0.0
+  },
+  "map_vs_ok": {
+   "RT": 0.029498108014131004,
+   "Jr": 0.007605104611805453,
+   "Jt": 0.0033345484055621673
+  },
+  "clo_map": 2.8727771428371796e-07
+ },
+ "maph": {
+  "refused": {
+   "map": "_ConditioningError(\"rcwa generalized interface (T22): the explicit inverse is numerically singular (equilibrated rcond = 2.96e-14 < 1e-10, and the inverse misses its own equation A X = I by 1.22e-06 >"
+  }
+ },
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "lumenairy": "C:\\tmp\\lum_vcurved_e1\\lumenairy\\__init__.py",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ }
+}

@@ -1,0 +1,129 @@
+C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pytest_benchmark\logger.py:44: PytestBenchmarkWarning: Benchmarks are automatically disabled because xdist plugin is active.Benchmarks cannot be performed reliably in a parallelized environment.
+  warner(PytestBenchmarkWarning(text))
+C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pytest_benchmark\logger.py:44: PytestBenchmarkWarning: Benchmarks are automatically disabled because xdist plugin is active.Benchmarks cannot be performed reliably in a parallelized environment.
+  warner(PytestBenchmarkWarning(text))
+C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pytest_benchmark\logger.py:44: PytestBenchmarkWarning: Benchmarks are automatically disabled because xdist plugin is active.Benchmarks cannot be performed reliably in a parallelized environment.
+  warner(PytestBenchmarkWarning(text))
+C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pytest_benchmark\logger.py:44: PytestBenchmarkWarning: Benchmarks are automatically disabled because xdist plugin is active.Benchmarks cannot be performed reliably in a parallelized environment.
+  warner(PytestBenchmarkWarning(text))
+C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pytest_benchmark\logger.py:44: PytestBenchmarkWarning: Benchmarks are automatically disabled because xdist plugin is active.Benchmarks cannot be performed reliably in a parallelized environment.
+  warner(PytestBenchmarkWarning(text))
+bringing up nodes...
+bringing up nodes...
+
+.......F.......xF.......F.                                               [100%]
+================================== FAILURES ===================================
+______ test_e1_3m_oop_eps_with_mu_matches_the_eps_mu_oracle[lossy-None] _______
+[gw1] win32 -- Python 3.14.6 C:\Users\Tesla\AppData\Local\Programs\Python\Python314\python.exe
+
+mu = 'lossy', cmap = None
+
+    @pytest.mark.parametrize("mu,cmap", [
+        ("gyro", None), ("lossy", None), ("gyro", "shear")])
+    def test_e1_3m_oop_eps_with_mu_matches_the_eps_mu_oracle(mu, cmap):
+        """An out-of-plane eps with a block-form material mu -- refused until
+        this phase -- against the independent (eps, mu) oracle, R / T / both
+        Jones, conical.  GYRO (Hermitian, non-reciprocal) keeps the whitened
+        eig; LOSSY makes chi_t non-Hermitian and takes the QZ branch.  Measured
+        2026-10-03 (``e3m_*.json``; ``e_unit_readings.json`` key ``e1_3m``):
+        unmapped M = 6: gyro 6.5e-12 / 1.25e-11 (Jt), lossy 3.3e-12 / 7.4e-12;
+        the sheared map at M = 5 6.1e-10 (Jt; 1.4e-13 by M = 7).  Bars 1e-9
+        (unmapped M = 6, 1.9 decades above) and 1e-8 (mapped M = 5, 1.2 decades
+        above); the wrong-gauge arms of the slab sit at 1e-3 .. 0.4."""
+        m = {"gyro": _MU_GYRO, "lossy": _MU_LOSSY}[mu]
+        ref = _mu_berreman(_NONREC, m, *_CON)
+        if cmap is None:
+>           r = _slab(_NONREC, None, 6, *_CON, mu=m, oracle=ref)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\unit\test_pmm2d_staggered_curved_e1.py:499: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+tests\unit\test_pmm2d_staggered_curved_e1.py:130: in _slab
+    _o, R, T, J = st.solve(jones=True)
+                  ^^^^^^^^^^^^^^^^^^^^
+lumenairy\elements\pmm\stack2d_pure.py:2388: in solve
+    cached = _region_modes_oop(sol,
+lumenairy\elements\pmm\twod_staggered.py:4534: in _region_modes_oop
+    Lc = np.linalg.cholesky(Bmat)             # Bmat HPD (block Gram)
+         ^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\numpy\linalg\_linalg.py:876: in cholesky
+    r = gufunc(a, signature=signature)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+err = 'invalid value', flag = 8
+
+    def _raise_linalgerror_nonposdef(err, flag):
+>       raise LinAlgError("Matrix is not positive definite")
+E       numpy.linalg.LinAlgError: Matrix is not positive definite
+
+C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\numpy\linalg\_linalg.py:148: LinAlgError
+_____ test_ve1_the_permeability_side_of_B_stays_hpd_under_the_circle_map ______
+[gw2] win32 -- Python 3.14.6 C:\Users\Tesla\AppData\Local\Programs\Python\Python314\python.exe
+
+    def test_ve1_the_permeability_side_of_B_stays_hpd_under_the_circle_map():
+        """``-R = C[chi_t]C`` with the Duffy-weighted vacuum ``chi_t = g / sg``
+        (pointwise eigenvalues down to ~2e-3 near the singular vertices) and a
+        lossless gyrotropic mu in the disk: Hermitian to round-off (5e-17), its
+        smallest generalised eigenvalue against the PLAIN Gram 0.30 / 0.26 /
+        0.23 at M = 6 / 7 / 8 (``v2b_hpd_6_7_8.json``; r 0.45 p: 0.22 .. 0.17)
+        -- bounded away from zero, the Cholesky never fails.  At the unit size
+        (M = 5) bar >= 0.1 (a decade below the trend; 0 would mean the
+        whitening is unsafe); a LOSSY mu flags ``_bgen_hermitian = False``."""
+        import scipy.linalg as sla
+        P = 1.0
+        cm = CM._circle_map_3x3(P, 0.3)[0]
+        eps = np.broadcast_to(_EYE, (3, 3, 3, 3)).copy()
+        eps[1, 1] = _DIR
+        mc = np.broadcast_to(_EYE, (3, 3, 3, 3)).copy()
+        mc[1, 1] = _MU_GYRO
+        s = TS.Granet2DTransverseE(P, P, cm.u_walls, cm.v_walls, 5, eps,
+                                   mu_cell=mc, cmap=cm)
+        qq = s.q * s.q
+        mR = s.Bgen[:2 * qq, :2 * qq]
+        assert float(np.abs(mR - mR.conj().T).max() / np.abs(mR).max()) <= 1e-14
+        assert s._bgen_hermitian
+        Gp = np.zeros_like(mR)
+        Gp[:qq, :qq] = s.Bgen[3 * qq:, 3 * qq:]
+        Gp[qq:, qq:] = s.Bgen[2 * qq:3 * qq, 2 * qq:3 * qq]
+        gev = sla.eigh(0.5 * (mR + mR.conj().T), Gp, eigvals_only=True)
+        assert float(gev[0]) >= 0.1, gev[0]
+        np.linalg.cholesky(s.Bgen)
+        mc[1, 1] = _MU_GYRO_LOSSY
+        s2 = TS.Granet2DTransverseE(P, P, cm.u_walls, cm.v_walls, 4, eps,
+                                    mu_cell=mc, cmap=cm)
+>       assert not s2._bgen_hermitian
+E       assert not True
+E        +  where True = <lumenairy.elements.pmm.twod_staggered.Granet2DTransverseE object at 0x000001DC46FD9BE0>._bgen_hermitian
+
+tests\unit\test_verify_pmm2d_curved_e1.py:199: AssertionError
+_______ test_ve1_the_qz_fallback_is_load_bearing_for_a_weakly_lossy_mu ________
+[gw2] win32 -- Python 3.14.6 C:\Users\Tesla\AppData\Local\Programs\Python\Python314\python.exe
+
+    def test_ve1_the_qz_fallback_is_load_bearing_for_a_weakly_lossy_mu():
+        """A symmetric permeability with loss ``Im mu ~ 1e-3``: the shipped
+        structural flag (``-R`` non-Hermitian above 1e-12 relative) sends the
+        region eig to QZ and the slab meets the oracle (``v7b_qz_weak.json``,
+        M = 5 conical: 9.4e-10 unmapped).  With the flag forced True the
+        Cholesky -- which reads only the lower triangle -- does NOT fail for a
+        weak loss: it returns a SILENTLY wrong answer, 3.3e-3 (and 3.3 x the
+        loss all the way down: 3.3e-5 at 1e-5, 3.4e-8 at 1e-8; a strong loss,
+        >= 0.03, fails loudly in the Cholesky instead).  Bars at M = 4 conical
+        (unmapped): correct <= 1e-6 (measured 4.6e-7-class), forced-off >=
+        1e-3, no exception."""
+        s = 1e-3
+        mu = np.array([[1.4, 0.15, 0], [0.15, 1.25, 0], [0, 0, 1.1]], complex)
+        mu = mu + 1j * s * np.diag([1.0, 0.7, 0.9])
+        mu[0, 1] = mu[1, 0] = 0.15 + 0.2j * s
+        th, ph = np.deg2rad(22.0), np.deg2rad(63.0)
+>       assert _slab_err(_DIR, mu, 4, th, ph) <= 1e-6
+E       assert 0.0033220330920764596 <= 1e-06
+E        +  where 0.0033220330920764596 = _slab_err(array([[2.6502199 +0.j, 0.25607266+0.j, 0.33243751+0.j],\n       [0.25607266+0.j, 2.50336459+0.j, 0.25050964+0.j],\n       [0.33243751+0.j, 0.25050964+0.j, 2.63561551+0.j]]), array([[1.4 +0.001j , 0.15+0.0002j, 0.  +0.j    ],\n       [0.15+0.0002j, 1.25+0.0007j, 0.  +0.j    ],\n       [0.  +0.j    , 0.  +0.j    , 1.1 +0.0009j]]), 4, np.float64(0.3839724354387525), np.float64(1.0995574287564276))
+
+tests\unit\test_verify_pmm2d_curved_e1.py:375: AssertionError
+=========================== short test summary info ===========================
+XFAIL tests/unit/test_verify_pmm2d_curved_e1.py::test_ve1_the_out_of_plane_mu_refusal_states_the_current_reason - V-E1-1: _require_inplane_mu (solver, Jones entry, uniform / slanted stack layers) still says the out-of-plane first-order generator 'has no mu blocks' -- false since Phase E1; flip when the wording is fixed
+FAILED tests/unit/test_pmm2d_staggered_curved_e1.py::test_e1_3m_oop_eps_with_mu_matches_the_eps_mu_oracle[lossy-None]
+FAILED tests/unit/test_verify_pmm2d_curved_e1.py::test_ve1_the_permeability_side_of_B_stays_hpd_under_the_circle_map
+FAILED tests/unit/test_verify_pmm2d_curved_e1.py::test_ve1_the_qz_fallback_is_load_bearing_for_a_weakly_lossy_mu
+3 failed, 22 passed, 1 xfailed in 82.18s (0:01:22)

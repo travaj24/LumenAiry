@@ -1,0 +1,27 @@
+{
+ "tau_variation": {
+  "c3": 5.687973893189249,
+  "c3_r45": 5.68797389318928,
+  "c5": 12.402389202437982
+ },
+ "pillar": {
+  "eps35_c3_n_M6": {
+   "tau_t": 0.008667197274026942,
+   "tau_J": 0.02320003137275848
+  },
+  "eps35_c3_c_M6": {
+   "tau_t": 0.031722482555208154,
+   "tau_J": 0.08038652328939927
+  }
+ },
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "lumenairy": "C:\\tmp\\lum_vcurved_e1\\lumenairy\\__init__.py",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ }
+}

@@ -1,0 +1,238 @@
+{
+ "checks": [
+  {
+   "label": "E1-1 200/200 identical",
+   "claimed": 200,
+   "json": 200,
+   "ok": true
+  },
+  {
+   "label": "E1-3 shear conical M5 dRT",
+   "claimed": 1.9e-10,
+   "json": 1.9245316451588224e-10,
+   "ok": true
+  },
+  {
+   "label": "E1-3 shear conical M5 dJr",
+   "claimed": 9.2e-11,
+   "json": 9.24506334911283e-11,
+   "ok": true
+  },
+  {
+   "label": "E1-3 shear conical M5 dJt",
+   "claimed": 3.1e-10,
+   "json": 3.1080708002084527e-10,
+   "ok": true
+  },
+  {
+   "label": "E1-3 shear conical M7 dRT",
+   "claimed": 8.2e-14,
+   "json": 8.215650382226158e-14,
+   "ok": true
+  },
+  {
+   "label": "E1-3 shear conical M7 dJr",
+   "claimed": 3.4e-14,
+   "json": 3.3542145894065807e-14,
+   "ok": true
+  },
+  {
+   "label": "E1-3 shear conical M7 dJt",
+   "claimed": 7.1e-14,
+   "json": 7.115732815332013e-14,
+   "ok": true
+  },
+  {
+   "label": "E1-3 s05g3 oblique M8 dJt",
+   "claimed": 1.4e-11,
+   "json": 1.4195354440531973e-11,
+   "ok": true
+  },
+  {
+   "label": "E1-3 s15g3 oblique M8 dJt",
+   "claimed": 1.5e-09,
+   "json": 1.4758439634284293e-09,
+   "ok": true
+  },
+  {
+   "label": "E1-3 s15g3 LC oblique M8 dJt",
+   "claimed": 3.2e-09,
+   "json": 3.15798836556886e-09,
+   "ok": true
+  },
+  {
+   "label": "E1-3 arms shear normal correct dRT",
+   "claimed": 6.5e-14,
+   "json": 6.461498003318411e-14,
+   "ok": true
+  },
+  {
+   "label": "E1-3 arms shear normal +1j dJr",
+   "claimed": 0.014,
+   "json": 0.01368923172447702,
+   "ok": true
+  },
+  {
+   "label": "E1-3 arms shear normal +1j dJt",
+   "claimed": 0.4,
+   "json": 0.3955231513191597,
+   "ok": true
+  },
+  {
+   "label": "E1-3 arms shear conical rot+ dJt",
+   "claimed": 0.12,
+   "json": 0.12022049191751957,
+   "ok": true
+  },
+  {
+   "label": "E1-3 arms shear conical rot+ dRT",
+   "claimed": 0.0017,
+   "json": 0.00167651283718262,
+   "ok": true
+  },
+  {
+   "label": "E1-4 c3 normal M8 dRT",
+   "claimed": 8.9e-14,
+   "json": 8.948397578478762e-14,
+   "ok": true
+  },
+  {
+   "label": "E1-4 c3 normal M6 dJt",
+   "claimed": 1.3e-10,
+   "json": 1.3439745715728115e-10,
+   "ok": true
+  },
+  {
+   "label": "E1-4 c5 normal M6 dRT",
+   "claimed": 1.4e-13,
+   "json": 1.361133428190442e-13,
+   "ok": true
+  },
+  {
+   "label": "E1-5 c5 M7 vs c3 M10",
+   "claimed": 4e-06,
+   "json": 3.957659901687727e-06,
+   "ok": true
+  },
+  {
+   "label": "E1-5 RCWA Richardson (25,29)",
+   "claimed": 7e-05,
+   "json": 6.95972105074355e-05,
+   "ok": true
+  },
+  {
+   "label": "E1-5 c5 M4 to c3 top",
+   "claimed": 0.00032,
+   "json": 0.0003184958919731362,
+   "ok": true
+  },
+  {
+   "label": "E1-5 stair k1 M4",
+   "claimed": 0.045,
+   "json": 0.0450446815276096,
+   "ok": true
+  },
+  {
+   "label": "E1-6 c5 M7 vs c3 M10",
+   "claimed": 2.3e-05,
+   "json": 2.297329595235542e-05,
+   "ok": true
+  },
+  {
+   "label": "E1-6 zstair (4,8)",
+   "claimed": 0.00022,
+   "json": 0.00021981445687753454,
+   "ok": true
+  },
+  {
+   "label": "E1-6 zstair (8,16)",
+   "claimed": 0.00026,
+   "json": 0.00025848520915873474,
+   "ok": true
+  },
+  {
+   "label": "E1-6 stair k1 M10",
+   "claimed": 0.076,
+   "json": 0.07625608812268111,
+   "ok": true
+  },
+  {
+   "label": "E1-6 c5 M4",
+   "claimed": 0.00063,
+   "json": 0.0006270718912996243,
+   "ok": true
+  },
+  {
+   "label": "E1-7 slanted recip M7",
+   "claimed": 1.5e-06,
+   "json": 1.4562511954085977e-06,
+   "ok": true
+  },
+  {
+   "label": "E1-7 slanted nonrec M7",
+   "claimed": 0.0055,
+   "json": 0.005542592126339944,
+   "ok": true
+  },
+  {
+   "label": "E1-7 slanted transposed M7",
+   "claimed": 1.4e-06,
+   "json": 1.3914124839010944e-06,
+   "ok": true
+  },
+  {
+   "label": "E1-7 slanted nonrec M5",
+   "claimed": 0.0062,
+   "json": 0.006168419361355856,
+   "ok": true
+  },
+  {
+   "label": "E1-9 pillar no_mu_blocks dRT",
+   "claimed": 0.071,
+   "json": 0.07143827725673542,
+   "ok": true
+  },
+  {
+   "label": "E1-9 pillar rot_flip dRT",
+   "claimed": 0.048,
+   "json": 0.04846300129610459,
+   "ok": true
+  },
+  {
+   "label": "E1-10 inplane mapped M8 total",
+   "claimed": 22.8,
+   "json": 22.75160699999833,
+   "ok": true
+  },
+  {
+   "label": "E1-10 oop mapped M8 total",
+   "claimed": 18.5,
+   "json": 18.451918699996895,
+   "ok": true
+  },
+  {
+   "label": "E1-10 oop mapped peak MB",
+   "claimed": 501,
+   "json": 501.0371265411377,
+   "ok": true
+  },
+  {
+   "label": "E1-10 oop slant mapped total",
+   "claimed": 13.5,
+   "json": 13.51131329999771,
+   "ok": true
+  }
+ ],
+ "n": 37,
+ "mismatch": 0,
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "lumenairy": "C:\\tmp\\lum_vcurved_e1\\lumenairy\\__init__.py",
+  "threads": {
+   "OMP_NUM_THREADS": null,
+   "OPENBLAS_NUM_THREADS": null,
+   "MKL_NUM_THREADS": null
+  }
+ }
+}

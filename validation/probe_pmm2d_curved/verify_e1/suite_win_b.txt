@@ -1,0 +1,210 @@
+C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pytest_benchmark\logger.py:44: PytestBenchmarkWarning: Benchmarks are automatically disabled because xdist plugin is active.Benchmarks cannot be performed reliably in a parallelized environment.
+  warner(PytestBenchmarkWarning(text))
+C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pytest_benchmark\logger.py:44: PytestBenchmarkWarning: Benchmarks are automatically disabled because xdist plugin is active.Benchmarks cannot be performed reliably in a parallelized environment.
+  warner(PytestBenchmarkWarning(text))
+C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pytest_benchmark\logger.py:44: PytestBenchmarkWarning: Benchmarks are automatically disabled because xdist plugin is active.Benchmarks cannot be performed reliably in a parallelized environment.
+  warner(PytestBenchmarkWarning(text))
+C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pytest_benchmark\logger.py:44: PytestBenchmarkWarning: Benchmarks are automatically disabled because xdist plugin is active.Benchmarks cannot be performed reliably in a parallelized environment.
+  warner(PytestBenchmarkWarning(text))
+C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pytest_benchmark\logger.py:44: PytestBenchmarkWarning: Benchmarks are automatically disabled because xdist plugin is active.Benchmarks cannot be performed reliably in a parallelized environment.
+  warner(PytestBenchmarkWarning(text))
+C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pytest_benchmark\logger.py:44: PytestBenchmarkWarning: Benchmarks are automatically disabled because xdist plugin is active.Benchmarks cannot be performed reliably in a parallelized environment.
+  warner(PytestBenchmarkWarning(text))
+C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pytest_benchmark\logger.py:44: PytestBenchmarkWarning: Benchmarks are automatically disabled because xdist plugin is active.Benchmarks cannot be performed reliably in a parallelized environment.
+  warner(PytestBenchmarkWarning(text))
+bringing up nodes...
+bringing up nodes...
+
+........................................................................ [ 26%]
+..........................s.......s..ss................................. [ 53%]
+..........s..........................ss................................. [ 80%]
+.........xx....x....................................                     [100%]
+============================== warnings summary ===============================
+tests/unit/test_v5_13_0_pmm2d_hybrid_sweep.py::test_prepared_solve_matches_single_call[li struct te]
+tests/unit/test_v5_13_0_pmm2d_hybrid_sweep.py::test_prepared_solve_matches_single_call[laurent struct te]
+tests/unit/test_v5_13_0_pmm2d_hybrid_sweep.py::test_prepared_solve_matches_single_call[li lossy te]
+tests/unit/test_v5_13_0_pmm2d_hybrid_sweep.py::test_prepared_solve_matches_single_call[li struct tm]
+tests/unit/test_v5_13_0_pmm2d_hybrid_sweep.py::test_prepared_solve_matches_single_call[uniform layer]
+tests/unit/test_v5_13_0_pmm2d_hybrid_sweep.py::test_sweep_wrapper_matches_loop_and_conserves
+  C:\tmp\lum_vcurved_e1\lumenairy\elements\pmm\twod.py:1373: WoodNudgeWarning: pmm_efficiency_2d: a diffracted order sits EXACTLY at cut-off (Wood / Rayleigh anomaly) at the requested wavelength 5e-07 m, where this solver's half-space mode basis is degenerate (kz = 0 gives two coincident modes and a singular interface match).  The solve is being run at 5.0000005e-07 m instead (relative shift +1.000e-07) -- a DIFFERENT problem.  The answer is exact for that wavelength; measured on the Lambda = lambda Moharam mount it differs from the exact-lambda limit by 4.05e-04 relative in TM R0.  Move the wavelength off the anomaly yourself, or read the result's wl_eff.
+    res = _pmm2d_solve_core(
+
+tests/unit/test_v5_13_0_pmm2d_hybrid_sweep.py::test_prepared_solve_matches_single_call[li struct te]
+tests/unit/test_v5_13_0_pmm2d_hybrid_sweep.py::test_prepared_solve_matches_single_call[laurent struct te]
+tests/unit/test_v5_13_0_pmm2d_hybrid_sweep.py::test_prepared_solve_matches_single_call[li lossy te]
+tests/unit/test_v5_13_0_pmm2d_hybrid_sweep.py::test_prepared_solve_matches_single_call[li struct tm]
+tests/unit/test_v5_13_0_pmm2d_hybrid_sweep.py::test_prepared_solve_matches_single_call[uniform layer]
+  C:\tmp\lum_vcurved_e1\tests\unit\test_v5_13_0_pmm2d_hybrid_sweep.py:63: WoodNudgeWarning: prepare_pmm_2d(...).solve: a diffracted order sits EXACTLY at cut-off (Wood / Rayleigh anomaly) at the requested wavelength 5e-07 m, where this solver's half-space mode basis is degenerate (kz = 0 gives two coincident modes and a singular interface match).  The solve is being run at 5.0000005e-07 m instead (relative shift +1.000e-07) -- a DIFFERENT problem.  The answer is exact for that wavelength; measured on the Lambda = lambda Moharam mount it differs from the exact-lambda limit by 4.05e-04 relative in TM R0.  Move the wavelength off the anomaly yourself, or read the result's wl_eff.
+    res = prep.solve(w)
+
+tests/unit/test_v5_13_0_pmm2d_hybrid_sweep.py::test_sweep_wrapper_matches_loop_and_conserves
+  C:\tmp\lum_vcurved_e1\lumenairy\elements\pmm\twod.py:1975: WoodNudgeWarning: prepare_pmm_2d(...).solve: a diffracted order sits EXACTLY at cut-off (Wood / Rayleigh anomaly) at the requested wavelength 5e-07 m, where this solver's half-space mode basis is degenerate (kz = 0 gives two coincident modes and a singular interface match).  The solve is being run at 5.0000005e-07 m instead (relative shift +1.000e-07) -- a DIFFERENT problem.  The answer is exact for that wavelength; measured on the Lambda = lambda Moharam mount it differs from the exact-lambda limit by 4.05e-04 relative in TM R0.  Move the wavelength off the anomaly yourself, or read the result's wl_eff.
+    res = prepared.solve(float(w))
+
+tests/unit/test_v5_14_0_pmm2d_stabilize.py::test_stabilize_jones_consistent_with_direct
+  C:\tmp\lum_vcurved_e1\tests\unit\test_v5_14_0_pmm2d_stabilize.py:63: _EnergyWarning: pmm_jones_2d: lossless energy closure violated (sum R+T - 2 = +2.790e-02, structure is provably lossless): the truncation is numerically unstable here and the PER-ORDER efficiencies are suspect.  Pass stabilize=True (retries nearby truncations) or change n_orders.  If a LAYER permittivity is EXACTLY EQUAL to that of a medium built in exact arithmetic -- a half-space REGION (a groove, or a rotated director's ordinary no^2, equal to n_substrate^2 or n_superstrate^2) or a UNIFORM LAYER of the same stack -- the mode match is exactly, not nearly, degenerate at EVERY truncation and no n_orders helps.  That class was repaired on 2026-09-11 (the modal branch cut), so seeing this warning on such a geometry is a report-worthy regression rather than a modelling choice: please report it with the cell.
+    o1, R1, T1, J1 = pmm_jones_2d(_P, _P, tc, 1.5, 1.0, _DEP, _WL,
+
+tests/unit/test_v5_14_0_pmm2d_stack.py::test_single_scalar_layer_matches_direct
+  C:\tmp\lum_vcurved_e1\tests\unit\test_v5_14_0_pmm2d_stack.py:50: DeprecationWarning: PMM2DStack is a TRANSITIONAL alias for PMM2DStackHybrid and is scheduled to be repointed to the no-floor pure stack (PMM2DStackPure) in a future release -- a silent results change (Fourier floor -> no floor, different convergence knobs).  Import PMM2DStackHybrid to keep the current behaviour, or PMM2DStackPure for the pure method.
+    st = PMM2DStack(_P, n_substrate=1.5, n_superstrate=1.0, degree=9,
+
+tests/unit/test_v5_14_0_pmm2d_stack.py::test_single_scalar_layer_matches_direct
+  C:\tmp\lum_vcurved_e1\tests\unit\test_v5_14_0_pmm2d_stack.py:53: UserWarning: PMMStack.solve: energy not conserved (max R+T = 1.02 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is unreliable; reduce n_slices or raise degree.
+    o_s, R_s, T_s, _j = st.set_source(_WL).solve()
+
+tests/unit/test_v5_14_0_pmm2d_stack.py::test_single_tensor_layer_matches_pmm_jones_2d
+  C:\tmp\lum_vcurved_e1\tests\unit\test_v5_14_0_pmm2d_stack.py:76: DeprecationWarning: PMM2DStack is a TRANSITIONAL alias for PMM2DStackHybrid and is scheduled to be repointed to the no-floor pure stack (PMM2DStackPure) in a future release -- a silent results change (Fourier floor -> no floor, different convergence knobs).  Import PMM2DStackHybrid to keep the current behaviour, or PMM2DStackPure for the pure method.
+    st = PMM2DStack(_P, n_substrate=1.5, n_superstrate=1.0, degree=9,
+
+tests/unit/test_v5_14_0_pmm2d_stack.py::test_single_tensor_layer_matches_pmm_jones_2d
+  C:\tmp\lum_vcurved_e1\tests\unit\test_v5_14_0_pmm2d_stack.py:80: _EnergyWarning: pmm_jones_2d: lossless energy closure violated (sum R+T - 2 = +1.210e-03, structure is provably lossless): the truncation is numerically unstable here and the PER-ORDER efficiencies are suspect.  Pass stabilize=True (retries nearby truncations) or change n_orders.  If a LAYER permittivity is EXACTLY EQUAL to that of a medium built in exact arithmetic -- a half-space REGION (a groove, or a rotated director's ordinary no^2, equal to n_substrate^2 or n_superstrate^2) or a UNIFORM LAYER of the same stack -- the mode match is exactly, not nearly, degenerate at EVERY truncation and no n_orders helps.  That class was repaired on 2026-09-11 (the modal branch cut), so seeing this warning on such a geometry is a report-worthy regression rather than a modelling choice: please report it with the cell.
+    o_d, R_d, T_d, J_d = pmm_jones_2d(_P, _P, tc, 1.5, 1.0, 0.25e-6, _WL,
+
+tests/unit/test_v5_14_0_pmm2d_stack.py::test_uniform_film_split_is_identity
+  C:\tmp\lum_vcurved_e1\tests\unit\test_v5_14_0_pmm2d_stack.py:95: DeprecationWarning: PMM2DStack is a TRANSITIONAL alias for PMM2DStackHybrid and is scheduled to be repointed to the no-floor pure stack (PMM2DStackPure) in a future release -- a silent results change (Fourier floor -> no floor, different convergence knobs).  Import PMM2DStackHybrid to keep the current behaviour, or PMM2DStackPure for the pure method.
+    st = PMM2DStack(_P, n_substrate=1.5, n_superstrate=1.0, degree=9,
+
+tests/unit/test_v5_14_0_pmm2d_stack.py::test_uniform_film_split_is_identity
+  C:\tmp\lum_vcurved_e1\tests\unit\test_v5_14_0_pmm2d_stack.py:102: UserWarning: PMMStack.solve: energy not conserved (max R+T = 1.01 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is unreliable; reduce n_slices or raise degree.
+    return st.set_source(_WL).solve()
+
+tests/unit/test_v5_14_0_pmm2d_stack.py::test_two_patterned_layers_vs_rcwastack
+  C:\tmp\lum_vcurved_e1\tests\unit\test_v5_14_0_pmm2d_stack.py:114: DeprecationWarning: PMM2DStack is a TRANSITIONAL alias for PMM2DStackHybrid and is scheduled to be repointed to the no-floor pure stack (PMM2DStackPure) in a future release -- a silent results change (Fourier floor -> no floor, different convergence knobs).  Import PMM2DStackHybrid to keep the current behaviour, or PMM2DStackPure for the pure method.
+    st = PMM2DStack(_P, n_substrate=1.5, n_superstrate=1.0, degree=9,
+
+tests/unit/test_v5_14_0_pmm2d_stack.py::test_tapered_vertical_limit_matches_straight_pillar
+  C:\tmp\lum_vcurved_e1\tests\unit\test_v5_14_0_pmm2d_stack.py:138: DeprecationWarning: PMM2DStack is a TRANSITIONAL alias for PMM2DStackHybrid and is scheduled to be repointed to the no-floor pure stack (PMM2DStackPure) in a future release -- a silent results change (Fourier floor -> no floor, different convergence knobs).  Import PMM2DStackHybrid to keep the current behaviour, or PMM2DStackPure for the pure method.
+    st_t = PMM2DStack(_P, n_substrate=1.5, n_superstrate=1.0, degree=9,
+
+tests/unit/test_v5_14_0_pmm2d_stack.py::test_tapered_vertical_limit_matches_straight_pillar
+  C:\tmp\lum_vcurved_e1\tests\unit\test_v5_14_0_pmm2d_stack.py:143: UserWarning: PMMStack.solve: energy not conserved (max R+T = 1.02 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is unreliable; reduce n_slices or raise degree.
+    o_t, R_t, T_t, J_t = st_t.set_source(_WL).solve()
+
+tests/unit/test_v5_14_0_pmm2d_stack.py::test_tapered_vertical_limit_matches_straight_pillar
+  C:\tmp\lum_vcurved_e1\tests\unit\test_v5_14_0_pmm2d_stack.py:144: DeprecationWarning: PMM2DStack is a TRANSITIONAL alias for PMM2DStackHybrid and is scheduled to be repointed to the no-floor pure stack (PMM2DStackPure) in a future release -- a silent results change (Fourier floor -> no floor, different convergence knobs).  Import PMM2DStackHybrid to keep the current behaviour, or PMM2DStackPure for the pure method.
+    st_s = PMM2DStack(_P, n_substrate=1.5, n_superstrate=1.0, degree=9,
+
+tests/unit/test_v5_14_0_pmm2d_stack.py::test_tapered_vertical_limit_matches_straight_pillar
+  C:\tmp\lum_vcurved_e1\tests\unit\test_v5_14_0_pmm2d_stack.py:149: UserWarning: PMMStack.solve: energy not conserved (max R+T = 1.02 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is unreliable; reduce n_slices or raise degree.
+    o_s, R_s, T_s, J_s = st_s.set_source(_WL).solve()
+
+tests/unit/test_v5_14_0_pmm2d_stack.py::test_true_taper_conserves_energy
+  C:\tmp\lum_vcurved_e1\tests\unit\test_v5_14_0_pmm2d_stack.py:155: DeprecationWarning: PMM2DStack is a TRANSITIONAL alias for PMM2DStackHybrid and is scheduled to be repointed to the no-floor pure stack (PMM2DStackPure) in a future release -- a silent results change (Fourier floor -> no floor, different convergence knobs).  Import PMM2DStackHybrid to keep the current behaviour, or PMM2DStackPure for the pure method.
+    st = PMM2DStack(_P, n_substrate=1.5, n_superstrate=1.0, degree=9,
+
+tests/unit/test_v5_14_0_pmm2d_stack.py::test_true_taper_conserves_energy
+  C:\tmp\lum_vcurved_e1\tests\unit\test_v5_14_0_pmm2d_stack.py:163: UserWarning: PMMStack.solve: energy not conserved (max R+T = 1.02 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is unreliable; reduce n_slices or raise degree.
+    o, R, T, _j = st.set_source(_WL).solve()
+
+tests/unit/test_v5_14_0_pmm2d_stack.py::test_sweep_matches_per_wavelength
+  C:\tmp\lum_vcurved_e1\tests\unit\test_v5_14_0_pmm2d_stack.py:174: DeprecationWarning: PMM2DStack is a TRANSITIONAL alias for PMM2DStackHybrid and is scheduled to be repointed to the no-floor pure stack (PMM2DStackPure) in a future release -- a silent results change (Fourier floor -> no floor, different convergence knobs).  Import PMM2DStackHybrid to keep the current behaviour, or PMM2DStackPure for the pure method.
+    st = PMM2DStack(_P, n_substrate=1.5, n_superstrate=1.0, degree=9,
+
+tests/unit/test_v5_14_0_pmm2d_stack.py::test_sweep_matches_per_wavelength
+  C:\tmp\lum_vcurved_e1\lumenairy\elements\pmm\stack2d.py:2302: WoodNudgeWarning: PMM2DStackHybrid.solve: a diffracted order sits EXACTLY at cut-off (Wood / Rayleigh anomaly) at the requested wavelength 6e-07 m, where this solver's half-space mode basis is degenerate (kz = 0 gives two coincident modes and a singular interface match).  The solve is being run at 6.0000006e-07 m instead (relative shift +1.000e-07) -- a DIFFERENT problem.  The answer is exact for that wavelength; measured on the Lambda = lambda Moharam mount it differs from the exact-lambda limit by 4.05e-04 relative in TM R0.  Move the wavelength off the anomaly yourself, or read the result's wl_eff.
+    o, R1, T1, j1 = sub.solve()
+
+tests/unit/test_v5_14_0_pmm2d_stack.py::test_sweep_matches_per_wavelength
+  C:\tmp\lum_vcurved_e1\lumenairy\elements\pmm\stack2d.py:2302: UserWarning: PMMStack.solve: energy not conserved (max R+T = 1.02 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is unreliable; reduce n_slices or raise degree.
+    o, R1, T1, j1 = sub.solve()
+
+tests/unit/test_v5_14_0_pmm2d_stack.py::test_sweep_matches_per_wavelength
+  C:\tmp\lum_vcurved_e1\lumenairy\elements\pmm\stack2d.py:2302: UserWarning: PMMStack.solve: energy not conserved (max R+T = 1.01 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is unreliable; reduce n_slices or raise degree.
+    o, R1, T1, j1 = sub.solve()
+
+tests/unit/test_v5_14_0_pmm2d_stack.py::test_sweep_matches_per_wavelength
+  C:\tmp\lum_vcurved_e1\tests\unit\test_v5_14_0_pmm2d_stack.py:180: UserWarning: PMMStack.solve: energy not conserved (max R+T = 1.02 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is unreliable; reduce n_slices or raise degree.
+    o1, R1, T1, _ = st.set_source(float(w)).solve()
+
+tests/unit/test_v5_14_0_pmm2d_stack.py::test_sweep_matches_per_wavelength
+  C:\tmp\lum_vcurved_e1\tests\unit\test_v5_14_0_pmm2d_stack.py:180: WoodNudgeWarning: PMM2DStackHybrid.solve: a diffracted order sits EXACTLY at cut-off (Wood / Rayleigh anomaly) at the requested wavelength 6e-07 m, where this solver's half-space mode basis is degenerate (kz = 0 gives two coincident modes and a singular interface match).  The solve is being run at 6.0000006e-07 m instead (relative shift +1.000e-07) -- a DIFFERENT problem.  The answer is exact for that wavelength; measured on the Lambda = lambda Moharam mount it differs from the exact-lambda limit by 4.05e-04 relative in TM R0.  Move the wavelength off the anomaly yourself, or read the result's wl_eff.
+    o1, R1, T1, _ = st.set_source(float(w)).solve()
+
+tests/unit/test_v5_14_0_pmm2d_stack.py::test_sweep_matches_per_wavelength
+  C:\tmp\lum_vcurved_e1\tests\unit\test_v5_14_0_pmm2d_stack.py:180: UserWarning: PMMStack.solve: energy not conserved (max R+T = 1.01 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is unreliable; reduce n_slices or raise degree.
+    o1, R1, T1, _ = st.set_source(float(w)).solve()
+
+tests/unit/test_v5_14_0_pmm2d_stack.py::test_builder_validation
+  C:\tmp\lum_vcurved_e1\tests\unit\test_v5_14_0_pmm2d_stack.py:194: DeprecationWarning: PMM2DStack is a TRANSITIONAL alias for PMM2DStackHybrid and is scheduled to be repointed to the no-floor pure stack (PMM2DStackPure) in a future release -- a silent results change (Fourier floor -> no floor, different convergence knobs).  Import PMM2DStackHybrid to keep the current behaviour, or PMM2DStackPure for the pure method.
+    st = PMM2DStack(_P)
+
+tests/unit/test_v5_14_0_pmm2d_stack.py::test_builder_validation
+  C:\tmp\lum_vcurved_e1\tests\unit\test_v5_14_0_pmm2d_stack.py:202: DeprecationWarning: PMM2DStack is a TRANSITIONAL alias for PMM2DStackHybrid and is scheduled to be repointed to the no-floor pure stack (PMM2DStackPure) in a future release -- a silent results change (Fourier floor -> no floor, different convergence knobs).  Import PMM2DStackHybrid to keep the current behaviour, or PMM2DStackPure for the pure method.
+    PMM2DStack(_P).add_layer(0.1e-6, eps=2.0).solve()
+
+tests/unit/test_v5_14_0_pmm2d_stack.py::test_builder_validation
+  C:\tmp\lum_vcurved_e1\tests\unit\test_v5_14_0_pmm2d_stack.py:204: DeprecationWarning: PMM2DStack is a TRANSITIONAL alias for PMM2DStackHybrid and is scheduled to be repointed to the no-floor pure stack (PMM2DStackPure) in a future release -- a silent results change (Fourier floor -> no floor, different convergence knobs).  Import PMM2DStackHybrid to keep the current behaviour, or PMM2DStackPure for the pure method.
+    PMM2DStack(_P).set_source(_WL).solve()
+
+tests/unit/test_v5_14_0_pmm2d_stack.py::test_builder_validation
+  C:\tmp\lum_vcurved_e1\tests\unit\test_v5_14_0_pmm2d_stack.py:206: DeprecationWarning: PMM2DStack is a TRANSITIONAL alias for PMM2DStackHybrid and is scheduled to be repointed to the no-floor pure stack (PMM2DStackPure) in a future release -- a silent results change (Fourier floor -> no floor, different convergence knobs).  Import PMM2DStackHybrid to keep the current behaviour, or PMM2DStackPure for the pure method.
+    PMM2DStack(_P, formulation="bogus")
+
+tests/unit/test_v5_14_0_pmm2d_stack.py::test_builder_validation
+  C:\tmp\lum_vcurved_e1\tests\unit\test_v5_14_0_pmm2d_stack.py:214: DeprecationWarning: PMM2DStack is a TRANSITIONAL alias for PMM2DStackHybrid and is scheduled to be repointed to the no-floor pure stack (PMM2DStackPure) in a future release -- a silent results change (Fourier floor -> no floor, different convergence knobs).  Import PMM2DStackHybrid to keep the current behaviour, or PMM2DStackPure for the pure method.
+    PMM2DStack(_P).add_layer(0.1e-6, eps_tensor_cell=bad)
+
+tests/unit/test_v5_14_0_pmm2d_conical.py::test_conical_jones_matches_rcwa
+  C:\tmp\lum_vcurved_e1\tests\unit\test_v5_14_0_pmm2d_conical.py:163: _EnergyWarning: pmm_jones_2d: lossless energy closure violated (sum R+T - 2 = +3.721e-04, structure is provably lossless): the truncation is numerically unstable here and the PER-ORDER efficiencies are suspect.  Pass stabilize=True (retries nearby truncations) or change n_orders.  If a LAYER permittivity is EXACTLY EQUAL to that of a medium built in exact arithmetic -- a half-space REGION (a groove, or a rotated director's ordinary no^2, equal to n_substrate^2 or n_superstrate^2) or a UNIFORM LAYER of the same stack -- the mode match is exactly, not nearly, degenerate at EVERY truncation and no n_orders helps.  That class was repaired on 2026-09-11 (the modal branch cut), so seeing this warning on such a geometry is a report-worthy regression rather than a modelling choice: please report it with the cell.
+    o1, R1, T1, J1 = pmm_jones_2d(_P, _P, tc, 1.5, 1.0, _DEP, _WL,
+
+tests/unit/test_v5_14_0_pmm2d_conical.py::test_conical_jones_matches_rcwa
+  C:\tmp\lum_vcurved_e1\tests\unit\test_v5_14_0_pmm2d_conical.py:163: _EnergyWarning: pmm_jones_2d: lossless energy closure violated (sum R+T - 2 = +1.387e-04, structure is provably lossless): the truncation is numerically unstable here and the PER-ORDER efficiencies are suspect.  Pass stabilize=True (retries nearby truncations) or change n_orders.  If a LAYER permittivity is EXACTLY EQUAL to that of a medium built in exact arithmetic -- a half-space REGION (a groove, or a rotated director's ordinary no^2, equal to n_substrate^2 or n_superstrate^2) or a UNIFORM LAYER of the same stack -- the mode match is exactly, not nearly, degenerate at EVERY truncation and no n_orders helps.  That class was repaired on 2026-09-11 (the modal branch cut), so seeing this warning on such a geometry is a report-worthy regression rather than a modelling choice: please report it with the cell.
+    o1, R1, T1, J1 = pmm_jones_2d(_P, _P, tc, 1.5, 1.0, _DEP, _WL,
+
+tests/unit/test_v5_14_0_pmm2d_conical.py::test_conical_jones_matches_rcwa
+  C:\tmp\lum_vcurved_e1\tests\unit\test_v5_14_0_pmm2d_conical.py:163: _EnergyWarning: pmm_jones_2d: lossless energy closure violated (sum R+T - 2 = +1.412e-04, structure is provably lossless): the truncation is numerically unstable here and the PER-ORDER efficiencies are suspect.  Pass stabilize=True (retries nearby truncations) or change n_orders.  If a LAYER permittivity is EXACTLY EQUAL to that of a medium built in exact arithmetic -- a half-space REGION (a groove, or a rotated director's ordinary no^2, equal to n_substrate^2 or n_superstrate^2) or a UNIFORM LAYER of the same stack -- the mode match is exactly, not nearly, degenerate at EVERY truncation and no n_orders helps.  That class was repaired on 2026-09-11 (the modal branch cut), so seeing this warning on such a geometry is a report-worthy regression rather than a modelling choice: please report it with the cell.
+    o1, R1, T1, J1 = pmm_jones_2d(_P, _P, tc, 1.5, 1.0, _DEP, _WL,
+
+tests/unit/test_v5_14_0_pmm2d_conical.py::test_wood_anomaly_wavelength_does_not_crash
+  C:\tmp\lum_vcurved_e1\lumenairy\elements\pmm\twod.py:1545: WoodNudgeWarning: pmm_efficiency_2d_cell: a diffracted order sits EXACTLY at cut-off (Wood / Rayleigh anomaly) at the requested wavelength 6e-07 m, where this solver's half-space mode basis is degenerate (kz = 0 gives two coincident modes and a singular interface match).  The solve is being run at 6.0000006e-07 m instead (relative shift +1.000e-07) -- a DIFFERENT problem.  The answer is exact for that wavelength; measured on the Lambda = lambda Moharam mount it differs from the exact-lambda limit by 4.05e-04 relative in TM R0.  Move the wavelength off the anomaly yourself, or read the result's wl_eff.
+    res = _pmm2d_solve_core(
+
+tests/unit/test_v5_14_0_pmm2d_oop.py::test_vanishing_offplane_matches_inplane_path
+  C:\tmp\lum_vcurved_e1\tests\unit\test_v5_14_0_pmm2d_oop.py:46: _EnergyWarning: pmm_jones_2d: lossless energy closure violated (sum R+T - 2 = +3.603e-02, structure is provably lossless): the truncation is numerically unstable here and the PER-ORDER efficiencies are suspect.  Pass stabilize=True (retries nearby truncations) or change n_orders.  If a LAYER permittivity is EXACTLY EQUAL to that of a medium built in exact arithmetic -- a half-space REGION (a groove, or a rotated director's ordinary no^2, equal to n_substrate^2 or n_superstrate^2) or a UNIFORM LAYER of the same stack -- the mode match is exactly, not nearly, degenerate at EVERY truncation and no n_orders helps.  That class was repaired on 2026-09-11 (the modal branch cut), so seeing this warning on such a geometry is a report-worthy regression rather than a modelling choice: please report it with the cell.
+    o1, R1, T1, J1 = pmm_jones_2d(_P, _P, tc, 1.5, 1.0, _DEP, _WL,
+
+tests/unit/test_v5_14_0_pmm2d_oop.py::test_vanishing_offplane_matches_inplane_path
+  C:\tmp\lum_vcurved_e1\tests\unit\test_v5_14_0_pmm2d_oop.py:48: _EnergyWarning: pmm_jones_2d: lossless energy closure violated (sum R+T - 2 = +3.603e-02, structure is provably lossless): the truncation is numerically unstable here and the PER-ORDER efficiencies are suspect.  Pass stabilize=True (retries nearby truncations) or change n_orders.  If a LAYER permittivity is EXACTLY EQUAL to that of a medium built in exact arithmetic -- a half-space REGION (a groove, or a rotated director's ordinary no^2, equal to n_substrate^2 or n_superstrate^2) or a UNIFORM LAYER of the same stack -- the mode match is exactly, not nearly, degenerate at EVERY truncation and no n_orders helps.  That class was repaired on 2026-09-11 (the modal branch cut), so seeing this warning on such a geometry is a report-worthy regression rather than a modelling choice: please report it with the cell.
+    o2, R2, T2, J2 = pmm_jones_2d(_P, _P, tc_oop, 1.5, 1.0, _DEP, _WL,
+
+tests/unit/test_v5_14_0_pmm2d_oop.py::test_y_uniform_oop_grating_matches_1d
+  C:\tmp\lum_vcurved_e1\tests\unit\test_v5_14_0_pmm2d_oop.py:109: _EnergyWarning: pmm_jones_2d: lossless energy closure violated (sum R+T - 2 = +2.076e-03, structure is provably lossless): the truncation is numerically unstable here and the PER-ORDER efficiencies are suspect.  Pass stabilize=True (retries nearby truncations) or change n_orders.  If a LAYER permittivity is EXACTLY EQUAL to that of a medium built in exact arithmetic -- a half-space REGION (a groove, or a rotated director's ordinary no^2, equal to n_substrate^2 or n_superstrate^2) or a UNIFORM LAYER of the same stack -- the mode match is exactly, not nearly, degenerate at EVERY truncation and no n_orders helps.  That class was repaired on 2026-09-11 (the modal branch cut), so seeing this warning on such a geometry is a report-worthy regression rather than a modelling choice: please report it with the cell.
+    o2, R2, T2, J2 = pmm_jones_2d(_P, _P, tc, 1.5, 1.0, _DEP, _WL,
+
+tests/unit/test_v5_14_0_pmm2d_oop.py::test_nonreciprocal_total_power_matches_1d_not_unity
+  C:\tmp\lum_vcurved_e1\tests\unit\test_v5_14_0_pmm2d_oop.py:144: _EnergyWarning: pmm_jones_2d: lossless energy closure violated (sum R+T - 2 = +1.150e-02, structure is provably lossless): the truncation is numerically unstable here and the PER-ORDER efficiencies are suspect.  Pass stabilize=True (retries nearby truncations) or change n_orders.  If a LAYER permittivity is EXACTLY EQUAL to that of a medium built in exact arithmetic -- a half-space REGION (a groove, or a rotated director's ordinary no^2, equal to n_substrate^2 or n_superstrate^2) or a UNIFORM LAYER of the same stack -- the mode match is exactly, not nearly, degenerate at EVERY truncation and no n_orders helps.  That class was repaired on 2026-09-11 (the modal branch cut), so seeing this warning on such a geometry is a report-worthy regression rather than a modelling choice: please report it with the cell.
+    o2, R2, T2, _J2 = pmm_jones_2d(_P, _P, tc, 1.5, 1.0, _DEP, _WL,
+
+tests/unit/test_v5_21_pmm2d_staggered_oblique.py::test_staggered_per_order_orientation_vs_1d[0.0]
+  C:\tmp\lum_vcurved_e1\tests\unit\test_v5_21_pmm2d_staggered_oblique.py:83: WoodNudgeWarning: pmm_efficiency_2d_staggered: a diffracted order sits EXACTLY at cut-off (Wood / Rayleigh anomaly) at the requested wavelength 6e-07 m, where this solver's half-space mode basis is degenerate (kz = 0 gives two coincident modes and a singular interface match).  The solve is being run at 6.0000006e-07 m instead (relative shift +1.000e-07) -- a DIFFERENT problem.  The answer is exact for that wavelength; measured on the Lambda = lambda Moharam mount it differs from the exact-lambda limit by 4.05e-04 relative in TM R0.  Move the wavelength off the anomaly yourself, or read the result's wl_eff.
+    o1, R1, T1 = pmm_efficiency_2d_staggered(
+
+tests/unit/test_verify_pmm2d_perlayer_slant.py::test_slanted_split_converges_through_the_mortar
+  C:\tmp\lum_vcurved_e1\tests\unit\test_verify_pmm2d_perlayer_slant.py:127: UserWarning: PMM2DStackPure.add_layer: eps_cell is a SEGMENT grid (every row and column is an ELEMENT), not the PIXEL grid the hybrid family takes -- and your grid has 4x4 segments and only 2x1 DISTINCT strips (adjacent identical rows/columns), so the SAME geometry -- the same walls, to the segment -- is expressible on the uniform 2x2 lattice at pencil 72, 64x less QZ time and 16x less memory.  This builds a 288x288 dense generalized pencil instead of 72x72; the cost is CUBIC in the segment count (measured 498 s CPU / 8.4 GB for a 12-segment half-fill pillar that needs 4, against 0.22 s for the same array through pmm_efficiency_2d_cell).  Pass the reduced grid, or pass max_pencil_dof=... to acknowledge a deliberate h-refinement.
+    st.add_layer(_DEP / 2, eps_cell=_CELL4, slant=slant, n_modes=MB)
+
+tests/unit/test_verify_pmm2d_perlayer_slant.py::test_slanted_split_converges_through_the_mortar
+tests/unit/test_verify_pmm2d_perlayer_slant.py::test_slanted_split_across_non_conforming_grids_matches_the_1d_oracle[28.0-22.0]
+tests/unit/test_verify_pmm2d_perlayer_slant.py::test_slanted_split_across_non_conforming_grids_matches_the_1d_oracle[28.0-22.0]
+tests/unit/test_verify_pmm2d_perlayer_slant.py::test_slanted_split_across_non_conforming_grids_matches_the_1d_oracle[28.0-22.0]
+tests/unit/test_verify_pmm2d_perlayer_slant.py::test_slanted_split_across_non_conforming_grids_matches_the_1d_oracle[15.0-0.0]
+tests/unit/test_verify_pmm2d_perlayer_slant.py::test_slanted_split_across_non_conforming_grids_matches_the_1d_oracle[15.0-0.0]
+tests/unit/test_verify_pmm2d_perlayer_slant.py::test_slanted_split_across_non_conforming_grids_matches_the_1d_oracle[15.0-0.0]
+  C:\tmp\lum_vcurved_e1\tests\unit\test_verify_pmm2d_perlayer_slant.py:127: UserWarning: PMM2DStackPure.add_layer: eps_cell is a SEGMENT grid (every row and column is an ELEMENT), not the PIXEL grid the hybrid family takes -- and your grid has 4x4 segments and only 2x1 DISTINCT strips (adjacent identical rows/columns), so the SAME geometry -- the same walls, to the segment -- is expressible on the uniform 2x2 lattice at pencil 128, 64x less QZ time and 16x less memory.  This builds a 512x512 dense generalized pencil instead of 128x128; the cost is CUBIC in the segment count (measured 498 s CPU / 8.4 GB for a 12-segment half-fill pillar that needs 4, against 0.22 s for the same array through pmm_efficiency_2d_cell).  Pass the reduced grid, or pass max_pencil_dof=... to acknowledge a deliberate h-refinement.
+    st.add_layer(_DEP / 2, eps_cell=_CELL4, slant=slant, n_modes=MB)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+SKIPPED [1] tests\unit\test_v5_2_3_walker_changelog_content.py:113: No audit-closure bullets in latest CHANGELOG block OR no PREV_TAG resolvable; nothing to verify.  (script exit 2)
+SKIPPED [1] tests\unit\test_v5_2_walker_changelog_changeset.py:207: No audit IDs cited in CHANGELOG.md ``## [5.49.0]`` block; V12.2 has nothing to verify.
+SKIPPED [1] tests\unit\test_v5_2_walker_changelog_changeset.py:262: CHANGELOG ``## [5.49.0]`` block has no ``X pass / Y collected / Z skip / W xfail`` claim; V12.3 has nothing to reconcile.
+SKIPPED [1] tests\unit\test_v5_2_walker_changelog_changeset.py:307: CHANGELOG ``## [5.49.0]`` block declares no audit closures; V12.4 has no enforcement to apply.
+SKIPPED [1] tests\unit\test_v5_3_walker_changelog_self_citation.py:366: CHANGELOG ``## [5.49.0]`` block has no ``CHANGELOG.md: X -> Y lines`` claim; V17.3 has nothing to verify.
+SKIPPED [1] tests\unit\test_v5_3_walker_changelog_self_citation.py:152: CHANGELOG ``## [5.49.0]`` block has no canonical ``X pass + Y skip + Z xfail`` self-citation; V17.1 has nothing to verify.
+SKIPPED [1] tests\unit\test_v5_3_walker_changelog_self_citation.py:290: CHANGELOG ``## [5.49.0]`` block has no ``N files touched`` claim; V17.2 has nothing to verify.
+XFAIL tests/unit/test_verify_pmm2d_curved_c.py::test_vc4_rectangles_only_merge_is_the_identity_to_round_off - V-D1: a rectangles-only merge whose walls coincide only to round-off is not recognised as the identity map (mapped solver; tensors refused)
+XFAIL tests/unit/test_verify_pmm2d_curved_c.py::test_vc5_rotated_ellipse_lays_out_over_its_documented_range - V-D2: the rotated Ellipse's layout (corners at the PARAMETRIC 45-degree points) folds for aspect 2 at 20 deg, aspect 5 at 10 deg
+XFAIL tests/unit/test_verify_pmm2d_curved_e1.py::test_ve1_the_out_of_plane_mu_refusal_states_the_current_reason - V-E1-1: _require_inplane_mu (solver, Jones entry, uniform / slanted stack layers) still says the out-of-plane first-order generator 'has no mu blocks' -- false since Phase E1; flip when the wording is fixed
+258 passed, 7 skipped, 3 xfailed, 55 warnings in 776.23s (0:12:56)

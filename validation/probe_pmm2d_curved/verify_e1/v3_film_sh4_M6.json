@@ -1,0 +1,108 @@
+{
+ "n_ok": {
+  "dRT": 8.448797217397441e-14,
+  "dJr": 2.9865565439561614e-14,
+  "dJt": 4.889020164512078e-14,
+  "clo": 7.005507285384738e-14
+ },
+ "n_rot+": {
+  "dRT": 5.040412531798211e-14,
+  "dJr": 3.089945337698771e-14,
+  "dJt": 5.620611142840864e-14,
+  "clo": 5.6621374255882984e-14
+ },
+ "n_h+i": {
+  "error": "_ConditioningError(\"rcwa generalized interface (T22): the explicit inverse is numerically singular (equilibrated rcond = 1.59e-11 < 1e-10, and the inverse misses its own equation A X = I by 1.71e-08 > 1e-08 in the same scaling, on a 800 x 800 block).  Returning it would give a number no build agrees"
+ },
+ "n_h+1": {
+  "dRT": 2.328456882166671,
+  "dJr": 1.2619542242284911,
+  "dJt": 1.1153536142711793,
+  "clo": 3.6647258621797985
+ },
+ "n_maprot": {
+  "dRT": 5.040412531798211e-14,
+  "dJr": 3.089945337698771e-14,
+  "dJt": 5.620611142840864e-14,
+  "clo": 5.6621374255882984e-14
+ },
+ "n_maph": {
+  "error": "_ConditioningError(\"rcwa generalized interface (T22): the explicit inverse is numerically singular (equilibrated rcond = 1.59e-11 < 1e-10, and the inverse misses its own equation A X = I by 1.71e-08 > 1e-08 in the same scaling, on a 800 x 800 block).  Returning it would give a number no build agrees"
+ },
+ "o_ok": {
+  "dRT": 1.1106671138350066e-12,
+  "dJr": 4.0518208621839884e-13,
+  "dJt": 1.5031877956464823e-12,
+  "clo": 9.001688283660769e-13
+ },
+ "o_rot+": {
+  "dRT": 0.0019661004589947087,
+  "dJr": 0.029888212787792235,
+  "dJt": 0.266086466561464,
+  "clo": 1.0481615575486103e-12
+ },
+ "o_h+i": {
+  "error": "_ConditioningError(\"rcwa generalized interface (T22): the explicit inverse is numerically singular (equilibrated rcond = 3.48e-12 < 1e-10, and the inverse misses its own equation A X = I by 3.34e-08 > 1e-08 in the same scaling, on a 800 x 800 block).  Returning it would give a number no build agrees"
+ },
+ "o_h+1": {
+  "dRT": 1.3464297429942105,
+  "dJr": 0.9559353751037613,
+  "dJt": 0.8731085899957499,
+  "clo": 2.0374495870119915
+ },
+ "o_maprot": {
+  "dRT": 0.0019661004589947087,
+  "dJr": 0.029888212787792235,
+  "dJt": 0.266086466561464,
+  "clo": 1.0481615575486103e-12
+ },
+ "o_maph": {
+  "error": "_ConditioningError(\"rcwa generalized interface (T22): the explicit inverse is numerically singular (equilibrated rcond = 3.48e-12 < 1e-10, and the inverse misses its own equation A X = I by 3.34e-08 > 1e-08 in the same scaling, on a 800 x 800 block).  Returning it would give a number no build agrees"
+ },
+ "c_ok": {
+  "dRT": 1.241229341530925e-13,
+  "dJr": 3.4064198459939826e-14,
+  "dJt": 7.02613373768471e-14,
+  "clo": 1.254552017826427e-13
+ },
+ "c_rot+": {
+  "dRT": 0.0006389018147435269,
+  "dJr": 0.014764449338997933,
+  "dJt": 0.1301895972352677,
+  "clo": 1.9484414082171497e-13
+ },
+ "c_h+i": {
+  "dRT": 0.000728122922293517,
+  "dJr": 0.0417402225017904,
+  "dJt": 1.2756866142610543,
+  "clo": 0.00017189205051271195
+ },
+ "c_h+1": {
+  "dRT": 1.685424293461933,
+  "dJr": 1.020244685249853,
+  "dJt": 0.9088800605094838,
+  "clo": 2.4932344026264666
+ },
+ "c_maprot": {
+  "dRT": 0.0006389018147435269,
+  "dJr": 0.014764449338997933,
+  "dJt": 0.1301895972352677,
+  "clo": 1.9484414082171497e-13
+ },
+ "c_maph": {
+  "dRT": 0.000728122922293517,
+  "dJr": 0.0417402225017904,
+  "dJt": 1.2756866142610543,
+  "clo": 0.00017189205051271195
+ },
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "lumenairy": "C:\\tmp\\lum_vcurved_e1\\lumenairy\\__init__.py",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ }
+}

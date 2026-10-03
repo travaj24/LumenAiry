@@ -1,0 +1,6 @@
+v4_slab.py dirgen sh4 4,5,6,7
+v4_slab.py gyrol_gyrol sh4 4,5,6,7
+v4_slab.py gyrol_gyrol th3 4,5,6,7
+v4_slab.py gyrol_gyrol c3 4,5,6,7
+v4_slab.py nrgen c5 4,5
+v4_slab.py dirgen_gyro c3 4,5,6,7

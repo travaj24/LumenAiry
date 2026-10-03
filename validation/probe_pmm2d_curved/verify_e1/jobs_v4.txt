@@ -1,0 +1,31 @@
+v4_slab.py dirgen none 4,5,6,7,8
+v4_slab.py dirgen th3 4,5,6,7,8
+v4_slab.py dirgen th2b 4,5,6,7,8
+v4_slab.py dirgen sh4 4,5,6,7,8
+v4_slab.py dirgen c3 4,5,6,7,8
+v4_slab.py dirgen c5 4,5,6
+v4_slab.py nrgen none 4,5,6,7,8
+v4_slab.py nrgen th3 4,5,6,7,8
+v4_slab.py nrgen th2b 4,5,6,7,8
+v4_slab.py nrgen sh4 4,5,6,7,8
+v4_slab.py nrgen c3 4,5,6,7,8
+v4_slab.py nrgen c5 4,5,6
+v4_slab.py gyrol_gyrol none 4,5,6,7,8
+v4_slab.py gyrol_gyrol th3 4,5,6,7,8
+v4_slab.py gyrol_gyrol th2b 4,5,6,7,8
+v4_slab.py gyrol_gyrol sh4 4,5,6,7,8
+v4_slab.py gyrol_gyrol c3 4,5,6,7,8
+v4_slab.py gyrol_gyrol c5 4,5,6
+v4_slab.py dirgen_gyro none 4,5,6,7,8
+v4_slab.py dirgen_gyro th3 4,5,6,7,8
+v4_slab.py dirgen_gyro th2b 4,5,6,7,8
+v4_slab.py dirgen_gyro sh4 4,5,6,7,8
+v4_slab.py dirgen_gyro c3 4,5,6,7,8
+v4_slab.py dirgen_gyro c5 4,5,6
+v4_slab.py dirgen th3 4,5,6,7 0.17,-0.08
+v4_slab.py dirgen sh4 4,5,6,7 0.17,-0.08
+v4_slab.py dirgen c3 4,5,6,7 0.17,-0.08
+v4_slab.py gyrol_gyrol th3 4,5,6,7 0.17,-0.08
+v4_slab.py gyrol_gyrol sh4 4,5,6,7 0.17,-0.08
+v4_slab.py gyrol_gyrol c3 4,5,6,7 0.17,-0.08
+v4_slab.py dirgen none 4,5,6,7 0.17,-0.08

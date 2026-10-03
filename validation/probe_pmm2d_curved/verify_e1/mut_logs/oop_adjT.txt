@@ -1,0 +1,200 @@
+C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pytest_benchmark\logger.py:44: PytestBenchmarkWarning: Benchmarks are automatically disabled because xdist plugin is active.Benchmarks cannot be performed reliably in a parallelized environment.
+  warner(PytestBenchmarkWarning(text))
+C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pytest_benchmark\logger.py:44: PytestBenchmarkWarning: Benchmarks are automatically disabled because xdist plugin is active.Benchmarks cannot be performed reliably in a parallelized environment.
+  warner(PytestBenchmarkWarning(text))
+C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pytest_benchmark\logger.py:44: PytestBenchmarkWarning: Benchmarks are automatically disabled because xdist plugin is active.Benchmarks cannot be performed reliably in a parallelized environment.
+  warner(PytestBenchmarkWarning(text))
+C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pytest_benchmark\logger.py:44: PytestBenchmarkWarning: Benchmarks are automatically disabled because xdist plugin is active.Benchmarks cannot be performed reliably in a parallelized environment.
+  warner(PytestBenchmarkWarning(text))
+C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pytest_benchmark\logger.py:44: PytestBenchmarkWarning: Benchmarks are automatically disabled because xdist plugin is active.Benchmarks cannot be performed reliably in a parallelized environment.
+  warner(PytestBenchmarkWarning(text))
+bringing up nodes...
+bringing up nodes...
+
+..F...FFF....F...FF......x                                               [100%]
+================================== FAILURES ===================================
+_________ test_e1_3_oop_slab_under_a_sheared_map_is_the_berreman_slab _________
+[gw3] win32 -- Python 3.14.6 C:\Users\Tesla\AppData\Local\Programs\Python\Python314\python.exe
+
+    def test_e1_3_oop_slab_under_a_sheared_map_is_the_berreman_slab():
+        """The sheared bilinear map (non-diagonal J) is EXACT for a uniform slab
+        at normal incidence and spectral off it.  Measured 2026-10-03
+        (``e3_slab_shear_nonrec_*.json``): normal M = 4: R / T 3.3e-14,
+        Jr 2.3e-15, Jt 2.9e-14; conical (25, 40 deg) M = 5: 1.9e-10 / 9.2e-11
+        / 3.1e-10 (M = 7: 8.2e-14).  Bars 1e-11 (normal, 2.5 decades above) and
+        3e-9 (conical M = 5, 1.0 decade above); the wrong gauges sit at 1e-3 ..
+        0.4 (next test)."""
+        r = _slab(_NONREC, _shear(_SLAB["P"]), 4)
+>       assert max(r[:3]) <= 1e-11, r
+E       AssertionError: (4.969025851855879e-06, 2.73773536903425e-05, 0.000176060928249719, 2.2103360031167085e-08)
+E       assert 0.000176060928249719 <= 1e-11
+E        +  where 0.000176060928249719 = max((4.969025851855879e-06, 2.73773536903425e-05, 0.000176060928249719))
+
+tests\unit\test_pmm2d_staggered_curved_e1.py:356: AssertionError
+____________ test_e1_3_both_gauge_constants_are_pinned_under_a_map ____________
+[gw1] win32 -- Python 3.14.6 C:\Users\Tesla\AppData\Local\Programs\Python\Python314\python.exe
+
+    def test_e1_3_both_gauge_constants_are_pinned_under_a_map():
+        """``_OOP_ROT_SIGN`` and ``_OOP_H_GAUGE`` are MAP-INDEPENDENT: at their
+        shipped values the sheared-map slab is Berreman (previous test); flipped,
+        it misses by the SAME amounts as the unmapped slab (``e3_arms_*.json``,
+        M = 6: rot +1 -> Jt 0.12 conical / 0.16 oblique, invisible at normal
+        (7e-14: the rotation maps the normal mount onto itself); H gauge +1j ->
+        Jr 1.4e-2 / Jt 0.40 at normal with R / T BLIND (4.3e-14); +1 -> the
+        lossless trap broken, closure 0.10).  At the unit sizes see
+        ``e_unit_readings.json`` key ``e1_3_gauge``.  Bars: conical rot +1
+        >= 1e-3 on Jt, normal rot +1 <= 1e-11 (the blindness, two-sided);
+        +1j: Jr >= 1e-3 while R / T <= 1e-11; +1: closure >= 1e-2."""
+        cm = _shear(_SLAB["P"])
+        with _patched(TS, "_OOP_ROT_SIGN", 1.0):
+            rc = _slab(_NONREC, cm, 5, *_CON)
+            rn = _slab(_NONREC, cm, 4)
+        assert rc[2] >= 1e-3, rc
+>       assert max(rn[:3]) <= 1e-11, rn
+E       AssertionError: (5.001726647788085e-06, 2.73683706272709e-05, 0.00017604836396711376, 1.9644668447504898e-08)
+E       assert 0.00017604836396711376 <= 1e-11
+E        +  where 0.00017604836396711376 = max((5.001726647788085e-06, 2.73683706272709e-05, 0.00017604836396711376))
+
+tests\unit\test_pmm2d_staggered_curved_e1.py:377: AssertionError
+______________ test_e1_3_chi33_is_seen_only_off_normal_incidence ______________
+[gw2] win32 -- Python 3.14.6 C:\Users\Tesla\AppData\Local\Programs\Python\Python314\python.exe
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x00000250B22AE520>
+
+    def test_e1_3_chi33_is_seen_only_off_normal_incidence(monkeypatch):
+        """chi33 without sqrt(g) (equivalently the G rows' G3 taken as the bare
+        strong curl): a uniform slab at NORMAL incidence never excites the
+        longitudinal curl (c3 = 0), so the defect is invisible there (sheared
+        map, M = 6: 7.3e-14) and caught at oblique incidence (5.1e-4 R / T,
+        2.5e-3 Jt) -- the out-of-plane twin of Phase D's no_sg_e33 finding
+        (``e3_arms_shear_nonrec_*_M6.json``).  Unit size
+        (``e_unit_readings.json`` key ``e1_3_chi33``, M = 5): oblique >= 1e-5,
+        normal <= 1e-11."""
+        orig = TS._stag_map_eff_tensor
+    
+        def f(eps, mu, xu, xv, yu, yv, **kw):
+            out = orig(eps, mu, xu, xv, yu, yv, **kw)
+            if kw.get("oop"):
+                out["c33"] = out["c33"] * (xu * yv - xv * yu)
+            return out
+        monkeypatch.setattr(TS, "_stag_map_eff_tensor", f)
+        cm = _shear(_SLAB["P"])
+        assert max(_slab(_NONREC, cm, 5, *_OBL)[:3]) >= 1e-5
+>       assert max(_slab(_NONREC, cm, 5)[:3]) <= 1e-11
+E       assert 0.00017592039208533619 <= 1e-11
+E        +  where 0.00017592039208533619 = max((5.040931428348938e-06, 2.842347078479232e-05, 0.00017592039208533619))
+
+tests\unit\test_pmm2d_staggered_curved_e1.py:445: AssertionError
+______ test_e1_3m_oop_eps_with_mu_matches_the_eps_mu_oracle[gyro-shear] _______
+[gw0] win32 -- Python 3.14.6 C:\Users\Tesla\AppData\Local\Programs\Python\Python314\python.exe
+
+mu = 'gyro', cmap = 'shear'
+
+    @pytest.mark.parametrize("mu,cmap", [
+        ("gyro", None), ("lossy", None), ("gyro", "shear")])
+    def test_e1_3m_oop_eps_with_mu_matches_the_eps_mu_oracle(mu, cmap):
+        """An out-of-plane eps with a block-form material mu -- refused until
+        this phase -- against the independent (eps, mu) oracle, R / T / both
+        Jones, conical.  GYRO (Hermitian, non-reciprocal) keeps the whitened
+        eig; LOSSY makes chi_t non-Hermitian and takes the QZ branch.  Measured
+        2026-10-03 (``e3m_*.json``; ``e_unit_readings.json`` key ``e1_3m``):
+        unmapped M = 6: gyro 6.5e-12 / 1.25e-11 (Jt), lossy 3.3e-12 / 7.4e-12;
+        the sheared map at M = 5 6.1e-10 (Jt; 1.4e-13 by M = 7).  Bars 1e-9
+        (unmapped M = 6, 1.9 decades above) and 1e-8 (mapped M = 5, 1.2 decades
+        above); the wrong-gauge arms of the slab sit at 1e-3 .. 0.4."""
+        m = {"gyro": _MU_GYRO, "lossy": _MU_LOSSY}[mu]
+        ref = _mu_berreman(_NONREC, m, *_CON)
+        if cmap is None:
+            r = _slab(_NONREC, None, 6, *_CON, mu=m, oracle=ref)
+            assert max(r[:3]) <= 1e-9, r
+        else:
+            r = _slab(_NONREC, _shear(_SLAB["P"]), 5, *_CON, mu=m, oracle=ref)
+>           assert max(r[:3]) <= 1e-8, r
+E           AssertionError: (5.964269034541836e-06, 8.1378461171298e-05, 0.00044233909186993075, 1.1670848176770221e-08)
+E           assert 0.00044233909186993075 <= 1e-08
+E            +  where 0.00044233909186993075 = max((5.964269034541836e-06, 8.1378461171298e-05, 0.00044233909186993075))
+
+tests\unit\test_pmm2d_staggered_curved_e1.py:503: AssertionError
+___________ test_e1_6_slanted_uniform_slab_under_a_map_is_the_slab ____________
+[gw2] win32 -- Python 3.14.6 C:\Users\Tesla\AppData\Local\Programs\Python\Python314\python.exe
+
+    def test_e1_6_slanted_uniform_slab_under_a_map_is_the_slab():
+        """A SLANTED uniform slab is the slab (a shear of a homogeneous medium is
+        a coordinate change): under the sheared map the composite frame -- the
+        congruence of the congruence, tau = J^-1 t varying across every cell,
+        kappa = chi_t tau -- must reproduce Berreman.  Measured 2026-10-03
+        (``e3_slab_shear_nonrec_*_slant+0.20-0.10.json``): normal M = 5 R / T
+        7.1e-11, Jr 4.5e-15, Jt 2.6e-14 (M = 7 1.3e-13); oblique M = 5 8.0e-9 /
+        1.6e-9 / 6.2e-8 (M = 7 8.5e-12 / 1.9e-12 / 8.0e-11).  Bars 1e-9 (normal
+        M = 5, 1.1 decades above) and 1e-6 (oblique M = 5, 1.2 decades above).
+        Fail-before arms below."""
+        cm = _shear(_SLAB["P"])
+        r = _slab(_NONREC, cm, 5, slant=(0.2, -0.1))
+>       assert max(r[:3]) <= 1e-9, r
+E       AssertionError: (3.770587018296634e-05, 0.00020397160827386092, 0.000702973081748427, 4.234632100530433e-08)
+E       assert 0.000702973081748427 <= 1e-09
+E        +  where 0.000702973081748427 = max((3.770587018296634e-05, 0.00020397160827386092, 0.000702973081748427))
+
+tests\unit\test_pmm2d_staggered_curved_e1.py:621: AssertionError
+_____________ test_e1_4_oop_film_under_the_circle_map_is_spectral _____________
+[gw3] win32 -- Python 3.14.6 C:\Users\Tesla\AppData\Local\Programs\Python\Python314\python.exe
+
+    def test_e1_4_oop_film_under_the_circle_map_is_spectral():
+        """The four singular vertices of the circle map and the 4 q^2 generator
+        together: a uniform out-of-plane film under the 3 x 3 circle map is
+        spectral to round-off at normal incidence (``e3_slab_c3_nonrec_normal``:
+        R / T 1.6e-6, 1.4e-8, 2.3e-11, 1.6e-13 at M = 4 .. 7; Jt 2.3e-6 ..
+        6.6e-13; the 5 x 5 map 7.3e-12 by M = 5) and at oblique / conical
+        incidence four decades behind (F-B6: 2.6e-9 / 1.1e-9 at M = 8).  Bars:
+        M = 6 <= 1e-9 (0.9 decades above Jt 1.3e-10) and the M = 4 -> 6 drop
+        >= 3 decades (measured 4.2)."""
+        cm = _circle(_SLAB["P"])
+        r4 = _slab(_NONREC, cm, 4)
+        r6 = _slab(_NONREC, cm, 6)
+>       assert max(r6[:3]) <= 1e-9, r6
+E       AssertionError: (2.5016501844568606e-05, 0.00019474326615015266, 0.0008171650926156101, 1.0794642735234561e-08)
+E       assert 0.0008171650926156101 <= 1e-09
+E        +  where 0.0008171650926156101 = max((2.5016501844568606e-05, 0.00019474326615015266, 0.0008171650926156101))
+
+tests\unit\test_pmm2d_staggered_curved_e1.py:560: AssertionError
+___________ test_e1_6_slanted_circle_lands_on_its_converged_answer ____________
+[gw3] win32 -- Python 3.14.6 C:\Users\Tesla\AppData\Local\Programs\Python\Python314\python.exe
+
+    def test_e1_6_slanted_circle_lands_on_its_converged_answer():
+        """A slanted circular pillar (eps 4, r 0.36, public slant (0.2, 0)): the
+        5 x 5 composite map at M = 4 against the saved 3 x 3 M = 10 rung
+        (``e6_curved_eps4_c3_*_M10``; its own last rung change 3.8e-5; the c5
+        M = 7 rung agrees with it to 2.3e-5).  The two staircase limits approach
+        it (``e6_summary.json``): the shipped slant solver on 4 / 8 / 16-step
+        in-plane staircases 7.6e-2 / 5.3e-2 / 9.1e-3 (each converged in M to its
+        own device), and the exact-disk RCWA z-staircase (16 slices, 25 orders,
+        Richardson in 1 / N and then in 1 / N_z^2) 2.2e-4.  Measured: c5 M = 4
+        6.3e-4.  Bar 2e-3 (0.5 decades).  Fail-before: the 4-step staircase on
+        the shipped slant solver at M = 4, 6.6e-2 (>= 2e-2), and the pillar
+        slanted the OTHER way (``e6_curved_eps4_c3_*_s-0.200_0.000_M8``, read
+        from the saved rung: 2.5e-2 from the answer, asserted >= 1e-2 -- and
+        exactly the x-mirror image of the +0.2 rung, R(m, n; -t) = R(-m, n; +t)
+        to 1.7e-13, so the slant's SIGN is a physical identity of the composite
+        frame, not a convention that happens to fit)."""
+        ref = _saved_vec("e6_curved_eps4_c3_t0.0000_p0.0000_M10.json")
+        _st, o, R, T = _pillar("c5", 4.0 * _EYE3, 4, slant=(0.2, 0.0))
+>       assert float(np.abs(_vec(o, R, T) - ref).max()) <= 2e-3
+E       AssertionError: assert 0.005242380600453844 <= 0.002
+E        +  where 0.005242380600453844 = float(np.float64(0.005242380600453844))
+E        +    where np.float64(0.005242380600453844) = <built-in method max of numpy.ndarray object at 0x0000029EE72457D0>()
+E        +      where <built-in method max of numpy.ndarray object at 0x0000029EE72457D0> = array([4.92326404e-04, 3.58658130e-05, 3.64180159e-05, 2.71553377e-04,\n       2.71553377e-04, 0.00000000e+00, 0.000000...4.02169775e-04, 8.67313526e-05, 8.67313526e-05,\n       9.06532308e-04, 1.54314392e-03, 9.06532307e-04, 1.54314392e-03]).max
+E        +        where array([4.92326404e-04, 3.58658130e-05, 3.64180159e-05, 2.71553377e-04,\n       2.71553377e-04, 0.00000000e+00, 0.000000...4.02169775e-04, 8.67313526e-05, 8.67313526e-05,\n       9.06532308e-04, 1.54314392e-03, 9.06532307e-04, 1.54314392e-03]) = <ufunc 'absolute'>((array([0.02236627, 0.00647707, 0.00981361, 0.01583164, 0.01583164,\n       0.        , 0.        , 0.        , 0.      ...6166091, 0.10969585, 0.09058865,\n       0.13106095, 0.13106095, 0.07712305, 0.07633872, 0.07712305,\n       0.07633872]) - array([0.02187394, 0.0064412 , 0.00985003, 0.0161032 , 0.0161032 ,\n       0.        , 0.        , 0.        , 0.      ...6150473, 0.11028928, 0.09099082,\n       0.13114768, 0.13114768, 0.07802958, 0.07479557, 0.07802958,\n       0.07479557])))
+E        +          where <ufunc 'absolute'> = np.abs
+E        +          and   array([0.02236627, 0.00647707, 0.00981361, 0.01583164, 0.01583164,\n       0.        , 0.        , 0.        , 0.      ...6166091, 0.10969585, 0.09058865,\n       0.13106095, 0.13106095, 0.07712305, 0.07633872, 0.07712305,\n       0.07633872]) = _vec(array([[-3, -3],\n       [-2, -3],\n       [-1, -3],\n       [ 0, -3],\n       [ 1, -3],\n       [ 2, -3],\n       [ 3, -3],...       [-3,  3],\n       [-2,  3],\n       [-1,  3],\n       [ 0,  3],\n       [ 1,  3],\n       [ 2,  3],\n       [ 3,  3]]), array([[0.        , 0.        , 0.        , 0.        , 0.        ,\n        0.        , 0.        , 0.        , 0.    ...  0.        , 0.        , 0.        , 0.        , 0.        ,\n        0.        , 0.        , 0.        , 0.        ]]), array([[0.        , 0.        , 0.        , 0.        , 0.        ,\n        0.        , 0.        , 0.        , 0.    ...  0.        , 0.        , 0.        , 0.        , 0.        ,\n        0.        , 0.        , 0.        , 0.        ]]))
+
+tests\unit\test_pmm2d_staggered_curved_e1.py:664: AssertionError
+=========================== short test summary info ===========================
+XFAIL tests/unit/test_verify_pmm2d_curved_e1.py::test_ve1_the_out_of_plane_mu_refusal_states_the_current_reason - V-E1-1: _require_inplane_mu (solver, Jones entry, uniform / slanted stack layers) still says the out-of-plane first-order generator 'has no mu blocks' -- false since Phase E1; flip when the wording is fixed
+FAILED tests/unit/test_pmm2d_staggered_curved_e1.py::test_e1_3_oop_slab_under_a_sheared_map_is_the_berreman_slab
+FAILED tests/unit/test_pmm2d_staggered_curved_e1.py::test_e1_3_both_gauge_constants_are_pinned_under_a_map
+FAILED tests/unit/test_pmm2d_staggered_curved_e1.py::test_e1_3_chi33_is_seen_only_off_normal_incidence
+FAILED tests/unit/test_pmm2d_staggered_curved_e1.py::test_e1_3m_oop_eps_with_mu_matches_the_eps_mu_oracle[gyro-shear]
+FAILED tests/unit/test_pmm2d_staggered_curved_e1.py::test_e1_6_slanted_uniform_slab_under_a_map_is_the_slab
+FAILED tests/unit/test_pmm2d_staggered_curved_e1.py::test_e1_4_oop_film_under_the_circle_map_is_spectral
+FAILED tests/unit/test_pmm2d_staggered_curved_e1.py::test_e1_6_slanted_circle_lands_on_its_converged_answer
+7 failed, 18 passed, 1 xfailed in 119.60s (0:01:59)

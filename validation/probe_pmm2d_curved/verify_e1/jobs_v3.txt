@@ -1,0 +1,8 @@
+v3_gauge.py same 5
+v3_gauge.py same 6
+v3_gauge.py same 7
+v3_gauge.py film th3 6
+v3_gauge.py film c3off 6
+v3_gauge.py film sh4 6
+v3_gauge.py film none 6
+v3_gauge.py pillar 6 4

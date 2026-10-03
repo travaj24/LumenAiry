@@ -1,0 +1,69 @@
+{
+ "ok": {
+  "curved_vs_stair": {
+   "v": 0.02333323440427415,
+   "Jr": 0.0029985702874387797,
+   "Jt": 0.021010827972155196
+  },
+  "curved_vs_ok": {
+   "v": 0.0,
+   "Jr": 0.0,
+   "Jt": 0.0
+  },
+  "stair_vs_ok": {
+   "v": 0.0,
+   "Jr": 0.0,
+   "Jt": 0.0
+  }
+ },
+ "rot+": {
+  "curved_vs_stair": {
+   "v": 0.02333019289250937,
+   "Jr": 0.0029972246102795866,
+   "Jt": 0.021010544747004672
+  },
+  "curved_vs_ok": {
+   "v": 0.038683148907106446,
+   "Jr": 6.470016930952127e-06,
+   "Jt": 4.754447893297348e-06
+  },
+  "stair_vs_ok": {
+   "v": 0.03325077370014541,
+   "Jr": 5.234402033604728e-06,
+   "Jt": 3.7629160711620564e-06
+  }
+ },
+ "h+i": {
+  "error": "_ConditioningError(\"rcwa generalized interface (T22): the explicit inverse is numerically singular (equilibrated rcond = 6.37e-17 < 1e-10, and the inverse misses its own equation A X = I by 0.00285 > 1e-08 in the same scaling, on a 288 x 288 block).  Returning it would give a number no build agrees "
+ },
+ "maprot": {
+  "curved_vs_stair": {
+   "v": 0.043661607406552366,
+   "Jr": 0.0029976195753488232,
+   "Jt": 0.02101230031963327
+  },
+  "curved_vs_ok": {
+   "v": 0.038683148907106446,
+   "Jr": 6.470016930952127e-06,
+   "Jt": 4.754447893297348e-06
+  },
+  "stair_vs_ok": {
+   "v": 0.0,
+   "Jr": 0.0,
+   "Jt": 0.0
+  }
+ },
+ "maph": {
+  "error": "_ConditioningError(\"rcwa generalized interface (T22): the explicit inverse is numerically singular (equilibrated rcond = 6.37e-17 < 1e-10, and the inverse misses its own equation A X = I by 0.00285 > 1e-08 in the same scaling, on a 288 x 288 block).  Returning it would give a number no build agrees "
+ },
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "lumenairy": "C:\\tmp\\lum_vcurved_e1\\lumenairy\\__init__.py",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ }
+}

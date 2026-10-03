@@ -1,0 +1,27 @@
+{
+ "map_creates_t3_rel": 0.0,
+ "composite_tau_identity": 2.6645352591003757e-15,
+ "composite_kappa_chitt_schur_rel": 5.79313422128094e-13,
+ "refusals": {
+  "solver_nomap": "NotImplementedError: Granet2DTransverseE: OUT-OF-PLANE permeability (m_xz / m_yz / m_zx / m_zy above the relative 1e-12 floor) is not implemented -- the magnetic route generalizes the SECOND-ORDER (2 q^2) block-form pencil (Granet Eq. 6: [[m11, m12, 0], [m21, m22, 0], [0, 0, m33]]), and the out-of-plane first-order generator has no mu blocks.  Pass a BLOCK-FORM mu.",
+  "solver_map": "NotImplementedError: Granet2DTransverseE: an OUT-OF-PLANE mu_cell under a coordinate map is not implemented (out-of-plane permeability is refused with or without a map); BLOCK-FORM permeability tensors are accepted.",
+  "solver_slant": "NotImplementedError: Granet2DTransverseE: OUT-OF-PLANE permeability (m_xz / m_yz / m_zx / m_zy above the relative 1e-12 floor) is not implemented -- the magnetic route generalizes the SECOND-ORDER (2 q^2) block-form pencil (Granet Eq. 6: [[m11, m12, 0], [m21, m22, 0], [0, 0, m33]]), and the out-of-plane first-order generator has no mu blocks.  Pass a BLOCK-FORM mu.",
+  "jones_nomap": "NotImplementedError: pmm_jones_2d_staggered: OUT-OF-PLANE permeability (m_xz / m_yz / m_zx / m_zy above the relative 1e-12 floor) is not implemented -- the magnetic route generalizes the SECOND-ORDER (2 q^2) block-form pencil (Granet Eq. 6: [[m11, m12, 0], [m21, m22, 0], [0, 0, m33]]), and the out-of-plane first-order generator has no mu blocks.  Pass a BLOCK-FORM mu.",
+  "jones_map": "NotImplementedError: pmm_jones_2d_staggered: OUT-OF-PLANE permeability (m_xz / m_yz / m_zx / m_zy above the relative 1e-12 floor) is not implemented -- the magnetic route generalizes the SECOND-ORDER (2 q^2) block-form pencil (Granet Eq. 6: [[m11, m12, 0], [m21, m22, 0], [0, 0, m33]]), and the out-of-plane first-order generator has no mu blocks.  Pass a BLOCK-FORM mu.",
+  "stack_uniform_mu_nomap": "NotImplementedError: PMM2DStackPure.add_layer: OUT-OF-PLANE permeability (m_xz / m_yz / m_zx / m_zy above the relative 1e-12 floor) is not implemented -- the magnetic route generalizes the SECOND-ORDER (2 q^2) block-form pencil (Granet Eq. 6: [[m11, m12, 0], [m21, m22, 0], [0, 0, m33]]), and the out-of-plane first-order generator has no mu blocks.  Pass a BLOCK-FORM mu.",
+  "stack_uniform_mu_map": "NotImplementedError: PMM2DStackPure.add_layer: an OUT-OF-PLANE tensor mu (m_xz / m_yz / m_zx / m_zy above the relative 1e-12 floor) under a coordinate map is not implemented (an out-of-plane permeability is refused with or without a map).  BLOCK-FORM permeability tensors are accepted.",
+  "stack_mucell_map": "NotImplementedError: PMM2DStackPure.add_layer: an OUT-OF-PLANE tensor mu_cell (m_xz / m_yz / m_zx / m_zy above the relative 1e-12 floor) under a coordinate map is not implemented (an out-of-plane permeability is refused with or without a map).  BLOCK-FORM permeability tensors are accepted.",
+  "stack_slant_mu": "NotImplementedError: PMM2DStackPure.add_layer: OUT-OF-PLANE permeability (m_xz / m_yz / m_zx / m_zy above the relative 1e-12 floor) is not implemented -- the magnetic route generalizes the SECOND-ORDER (2 q^2) block-form pencil (Granet Eq. 6: [[m11, m12, 0], [m21, m22, 0], [0, 0, m33]]), and the out-of-plane first-order generator has no mu blocks.  Pass a BLOCK-FORM mu.",
+  "shape_circle_mu": "NotImplementedError: PMM2DStackPure.add_layer: layer 1 carries an OUT-OF-PLANE permeability tensor (m_xz / m_yz / m_zx / m_zy above the relative 1e-12 floor); an out-of-plane permeability is not implemented, with or without a map.  BLOCK-FORM permeability is accepted."
+ },
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "lumenairy": "C:\\tmp\\lum_vcurved_e1\\lumenairy\\__init__.py",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ }
+}

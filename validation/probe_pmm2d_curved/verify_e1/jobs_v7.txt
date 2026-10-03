@@ -1,0 +1,11 @@
+v7_mutations.py none
+v7_mutations.py tau_J
+v7_mutations.py tau_t
+v7_mutations.py qz_off
+v7_mutations.py chi33_unmapped
+v7_mutations.py chi_unmapped
+v7_mutations.py oop_over_sg
+v7_mutations.py oop_adjT
+v7_mutations.py double_rot
+v7_mutations.py flux_R
+v7_mutations.py mu_blocks_off
