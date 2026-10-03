@@ -1,0 +1,11 @@
+shipped aspect 1.05 {5: 'EXACT', 10: 'EXACT', 20: 'EXACT', 30: 'EXACT', 40: 'FOLD', 44.9: 'FOLD', -30: 'EXACT'}
+shipped aspect 1.5 {5: 'EXACT', 10: 'EXACT', 20: 'EXACT', 30: 'FOLD', 40: 'FOLD', 44.9: 'FOLD', -30: 'FOLD'}
+shipped aspect 2.0 {5: 'EXACT', 10: 'EXACT', 20: 'FOLD', 30: 'FOLD', 40: 'FOLD', 44.9: 'FOLD', -30: 'FOLD'}
+shipped aspect 3.0 {5: 'EXACT', 10: 'EXACT', 20: 'FOLD', 30: 'FOLD', 40: 'FOLD', 44.9: 'FOLD', -30: 'FOLD'}
+shipped aspect 5.0 {5: 'EXACT', 10: 'FOLD', 20: 'FOLD', 30: 'FOLD', 40: 'FOLD', 44.9: 'FOLD', -30: 'FOLD'}
+normal45 aspect 1.05 {5: 'EXACT', 10: 'EXACT', 20: 'EXACT', 30: 'EXACT', 40: 'EXACT', 44.9: 'EXACT', -30: 'EXACT'}
+normal45 aspect 1.5 {5: 'EXACT', 10: 'EXACT', 20: 'EXACT', 30: 'EXACT', 40: 'EXACT', 44.9: 'EXACT', -30: 'EXACT'}
+normal45 aspect 2.0 {5: 'EXACT', 10: 'EXACT', 20: 'EXACT', 30: 'EXACT', 40: 'EXACT', 44.9: 'EXACT', -30: 'EXACT'}
+normal45 aspect 3.0 {5: 'EXACT', 10: 'EXACT', 20: 'EXACT', 30: 'EXACT', 40: 'EXACT', 44.9: 'EXACT', -30: 'EXACT'}
+normal45 aspect 5.0 {5: 'EXACT', 10: 'EXACT', 20: 'EXACT', 30: 'EXACT', 40: 'EXACT', 44.9: 'EXACT', -30: 'EXACT'}
+wrote v5b_ellipse_layout_wsl.json

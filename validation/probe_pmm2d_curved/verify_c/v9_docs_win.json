@@ -1,0 +1,55 @@
+{
+ "Rect": {
+  "ok": true,
+  "closure": 9.826595093187507e-11,
+  "wall_s": 55.47342872619629
+ },
+ "FilletRect": {
+  "ok": true,
+  "closure": 3.124859850878181e-06,
+  "wall_s": 260.21036887168884
+ },
+ "Circle": {
+  "ok": true,
+  "closure": 2.5860338199290567e-05,
+  "wall_s": 42.56241011619568
+ },
+ "Ellipse": {
+  "ok": true,
+  "wall_s": 0.010514974594116211
+ },
+ "SinusoidalWall": {
+  "ok": true,
+  "wall_s": 0.01209878921508789
+ },
+ "compile_shapes": {
+  "ok": true,
+  "eps_cell_as_documented": true,
+  "wall_s": 0.009445667266845703
+ },
+ "cookbook": {
+  "ok": true,
+  "closure": 0.00025869703057823656,
+  "wall_s": 1074.8632247447968
+ },
+ "changelog": {
+  "ok": null,
+  "status": "NOT FINISHED: killed by the probe's own 7000 s wall-clock timeout (about 4,700 CPU-s on this example alone, single-threaded, loaded box); n_modes=7 on a 7 x 7 merged grid = pencil 3528 DOF",
+  "same_code_at_n_modes_4": 0.0012815906302365843
+ },
+ "note": "reconstructed from logs/v9_docs.log after the run was killed at its 7000 s timeout during the CHANGELOG example",
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "lumenairy": "c:\\tmp\\lum_vcurved_c\\lumenairy\\__init__.py",
+  "tree": "post",
+  "build": "win",
+  "machine": "Tesla_Ryzen",
+  "threads": {
+   "OMP_NUM_THREADS": null,
+   "OPENBLAS_NUM_THREADS": null,
+   "MKL_NUM_THREADS": null
+  }
+ }
+}

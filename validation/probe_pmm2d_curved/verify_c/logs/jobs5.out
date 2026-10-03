@@ -1,0 +1,15 @@
+done ladder sine_edge 5 rc=0
+done ladder sine_edge 6 rc=0
+done ladder sine_edge 4 rc=0
+done ladder sine_edge 7 rc=0
+done ladder sine_mid 4 rc=0
+done ladder sine_mid 5 rc=0
+done ladder sine_mid 6 rc=0
+done ladder sine_edge 8 rc=0
+done ladder sine_mid 7 rc=0
+done ladder ellipse5 4 rc=0
+done ladder sine_mid 8 rc=0
+done ladder ellipse5 5 rc=0
+done ladder ellipse5 6 rc=0
+done ladder ellipse5 7 rc=0
+done ladder ellipse5 8 rc=0

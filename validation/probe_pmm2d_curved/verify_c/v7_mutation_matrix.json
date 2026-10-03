@@ -1,0 +1,174 @@
+{
+ "m01_rot_ellipse_walls_not_preimage": {
+  "what": "rotated Ellipse: the disk corners left at their (u, v) wall positions (identity) and the edges straight -- the outline drawn on the walls instead of on their images",
+  "failed": [
+   "test_c12_mapped_area_perimeter_and_det_j_of_every_primitive",
+   "test_c17_rotated_ellipse_is_its_own_mirror_image"
+  ],
+  "errors": [],
+  "tail": [
+   "2 failed, 19 passed in 103.71s (0:01:43)"
+  ],
+  "caught": true
+ },
+ "m02_merge_drops_layer2_curves": {
+  "what": "the merge drops every curve of layers >= 2 (their edges straight)",
+  "failed": [
+   "test_c16_tensors_ride_the_identity_map_and_are_refused_under_a_curve"
+  ],
+  "errors": [],
+  "tail": [
+   "1 failed, 20 passed in 103.04s (0:01:43)"
+  ],
+  "caught": true
+ },
+ "m03_ignore_background_eps": {
+  "what": "compile_shapes / the stack ignore background_eps (vacuum)",
+  "failed": [],
+  "errors": [],
+  "tail": [
+   "21 passed in 104.36s (0:01:44)"
+  ],
+  "caught": false
+ },
+ "m04_fingerprint_ignores_radius": {
+  "what": "the Arc key (map fingerprint) ignores the radius",
+  "failed": [],
+  "errors": [],
+  "tail": [
+   "21 passed in 102.89s (0:01:42)"
+  ],
+  "caught": false
+ },
+ "m05_no_renormalisation": {
+  "what": "the F-B4 order-0 renormalisation dropped (bare L2)",
+  "failed": [
+   "test_c4_primitive_places_the_boundary_where_it_is_and_converges",
+   "test_c9_incident_renormalisation_keeps_the_film_exact"
+  ],
+  "errors": [],
+  "tail": [
+   "2 failed, 19 passed in 103.17s (0:01:43)"
+  ],
+  "caught": true
+ },
+ "m06_sliver_constant_halved": {
+  "what": "the shape layer's sliver constant halved (merge, fillet, inside)",
+  "failed": [
+   "test_c5_refusals_name_both_shapes_and_layers"
+  ],
+  "errors": [],
+  "tail": [
+   "1 failed, 20 passed in 109.20s (0:01:49)"
+  ],
+  "caught": true
+ },
+ "m07_viewer_draws_uv": {
+  "what": "the viewer draws the (u, v) cell outline",
+  "failed": [
+   "test_c11_viewer_draws_the_analytic_outline"
+  ],
+  "errors": [],
+  "tail": [
+   "1 failed, 20 passed in 94.77s (0:01:34)"
+  ],
+  "caught": true
+ },
+ "m08_identity_never": {
+  "what": "rectangles never recognised as the identity map",
+  "failed": [
+   "test_c16_tensors_ride_the_identity_map_and_are_refused_under_a_curve",
+   "test_c1_rectangles_ride_the_unmapped_solver",
+   "test_c3_fillet_primitive_is_the_phase_b_map_and_moves_the_device"
+  ],
+  "errors": [],
+  "tail": [
+   "3 failed, 18 passed in 96.83s (0:01:36)"
+  ],
+  "caught": true
+ },
+ "m09_claim_tol_loose": {
+  "what": "vertex / edge claims compared at 1e-2 p",
+  "failed": [],
+  "errors": [],
+  "tail": [
+   "21 passed in 97.04s (0:01:37)"
+  ],
+  "caught": false
+ },
+ "m10_no_crossing_check": {
+  "what": "the plan-view CROSSING test disabled",
+  "failed": [
+   "test_c5_refusals_name_both_shapes_and_layers"
+  ],
+  "errors": [],
+  "tail": [
+   "1 failed, 20 passed in 101.66s (0:01:41)"
+  ],
+  "caught": true
+ },
+ "m11_no_fold_naming": {
+  "what": "the fold scan that names the shapes skipped",
+  "failed": [
+   "test_c5_refusals_name_both_shapes_and_layers"
+  ],
+  "errors": [],
+  "tail": [
+   "1 failed, 20 passed in 104.54s (0:01:44)"
+  ],
+  "caught": true
+ },
+ "m12_chord_interior_claims": {
+  "what": "an interior crossing of a curved edge placed on the CHORD",
+  "failed": [],
+  "errors": [],
+  "tail": [
+   "21 passed in 113.24s (0:01:53)"
+  ],
+  "caught": false
+ },
+ "m13_paint_reversed": {
+  "what": "painting order reversed (the first shape wins)",
+  "failed": [],
+  "errors": [],
+  "tail": [
+   "21 passed in 100.26s (0:01:40)"
+  ],
+  "caught": false
+ },
+ "m14_load_no_conj": {
+  "what": "the incident L2 load without the conj on the test functions",
+  "failed": [
+   "test_c10_oblique_and_conical_shapes_route_is_the_explicit_map"
+  ],
+  "errors": [],
+  "tail": [
+   "1 failed, 20 passed in 106.44s (0:01:46)"
+  ],
+  "caught": true
+ },
+ "m15_sine_phase_dropped": {
+  "what": "SinusoidalWall: the map's curve ignores phase= (the outline methods keep it)",
+  "failed": [],
+  "errors": [],
+  "tail": [
+   "21 passed in 106.23s (0:01:46)"
+  ],
+  "caught": false
+ },
+ "m16_fillet_tangency_on_wall": {
+  "what": "FilletRect: the arcs' radius 1e-3 off the declared r (outline methods keep r) -- caught only if the endpoint check is tight",
+  "failed": [
+   "test_c12_mapped_area_perimeter_and_det_j_of_every_primitive",
+   "test_c3_fillet_primitive_is_the_phase_b_map_and_moves_the_device",
+   "test_c4_a_primitive_never_takes_u_walls_for_physical_ones",
+   "test_c5_refusals_name_both_shapes_and_layers",
+   "test_c6_two_layer_stack_on_the_merged_map"
+  ],
+  "errors": [],
+  "tail": [
+   "5 failed, 16 passed in 66.00s (0:01:05)"
+  ],
+  "caught": true
+ }
+}

@@ -1,0 +1,32 @@
+{
+ "case": "ellipse5",
+ "M": 5,
+ "R00": [
+  0.030688839042347187,
+  0.027127663376160814
+ ],
+ "T00": [
+  0.39228025767359187,
+  0.8616467749361602
+ ],
+ "closure": 0.005873666776099462,
+ "grid": [
+  3,
+  3
+ ],
+ "wall_s": 3.1449203491210938,
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "lumenairy": "c:\\tmp\\lum_vcurved_c\\lumenairy\\__init__.py",
+  "tree": "post",
+  "build": "win",
+  "machine": "Tesla_Ryzen",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ }
+}

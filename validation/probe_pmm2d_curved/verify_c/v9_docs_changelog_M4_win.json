@@ -1,0 +1,21 @@
+{
+ "ok": true,
+ "n_modes": 4,
+ "closure": 0.0012815906302365843,
+ "wall_s": 187.1168749332428,
+ "code": "\nfrom lumenairy.elements.pmm import Circle, FilletRect, PMM2DStackPure\n\nst = PMM2DStackPure(1.2e-6, n_substrate=1.45, n_modes=4)\nst.add_layer(0.5e-6, shapes=[Circle(0.6e-6, 0.6e-6, 0.3e-6, eps=4.0)],\n             background_eps=1.0)\nst.add_layer(0.2e-6, shapes=[FilletRect(0.6e-6, 0.6e-6, 0.9e-6, 0.9e-6,\n                                        0.09e-6, eps=2.25)],\n             background_eps=1.0)\nst.set_source(1.0e-6)\norders, R, T, jones = st.solve()\n",
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "lumenairy": "c:\\tmp\\lum_vcurved_c\\lumenairy\\__init__.py",
+  "tree": "post",
+  "build": "win",
+  "machine": "Tesla_Ryzen",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ }
+}

@@ -1,0 +1,23 @@
+{
+ "M": 5,
+ "theta": 20.0,
+ "phi": 30.0,
+ "modepick": {
+  "(-1,0)": 4.381092801515607e-05,
+  "(0,-1)": 6.675066396191753e-05
+ },
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "lumenairy": "c:\\tmp\\lum_vcurved_c\\lumenairy\\__init__.py",
+  "tree": "post",
+  "build": "win",
+  "machine": "Tesla_Ryzen",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ }
+}
