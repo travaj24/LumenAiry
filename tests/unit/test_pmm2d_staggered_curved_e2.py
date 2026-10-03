@@ -622,6 +622,92 @@ def test_e2_v10_convergence_floor_reads_each_layer_on_its_own_map():
     assert np.all(np.isfinite(p2))
 
 
+def test_e2_v5_v6_adaptive_rule_steps_and_inversion_failures(monkeypatch):
+    """V-E2-D5: the adaptive rule compares only rungs a factor >= 1.5 apart
+    (it compared n 93 with the cap 96 and under-reported ~9x) and its
+    warning names the actual cause.  V-E2-D6: a node the inversion cannot
+    resolve raises naming both cells, the rung and the remedy; the solve
+    names the two LAYERS; a finer rung that fails keeps the last good one,
+    with a warning."""
+    circ, sinx = _maps()
+    ga = TS.StagGridOps(_P, _P, circ.u_walls, circ.v_walls, 3, 1.0, 1.0,
+                        cmap=circ)
+    gb = TS.StagGridOps(_P, _P, sinx.u_walls, sinx.v_walls, 3, 1.0, 1.0,
+                        cmap=sinx)
+    seen = []
+    orig = CMM.curved_cross_mass
+
+    def rec(a, b, n, **k):
+        seen.append(n)
+        return orig(a, b, n, **k)
+    monkeypatch.setattr(CMM, "curved_cross_mass", rec)
+    with pytest.warns(UserWarning, match="nearly coincide"):
+        CMM.curved_cross_mass_adaptive(ga, gb, tol=1e-30, cap=20)
+    assert seen == [7, 11, 17]                       # 26 > 20: stops
+    assert all(b / a >= 1.5 for a, b in zip(seen[:-1], seen[1:]))
+    monkeypatch.undo()
+    # a failing finer rung keeps the last good one
+    calls = []
+
+    def flaky(a, b, n, **k):
+        calls.append(n)
+        if len(calls) > 2:
+            raise RuntimeError("curved mortar: injected")
+        return orig(a, b, n, **k)
+    monkeypatch.setattr(CMM, "curved_cross_mass", flaky)
+    with pytest.warns(UserWarning, match="injected"):
+        X, n, chg = CMM.curved_cross_mass_adaptive(ga, gb, tol=1e-30)
+    assert n == calls[1] and np.all(np.isfinite(X))
+    monkeypatch.undo()
+    # the inversion failure: cells, rung, remedy; the solve names layers
+    oi = CMM._MapView.invert
+
+    def bad(self, sx, sy, X, Y, guess=None, tol=None):
+        U, V, ok = oi(self, sx, sy, X, Y, guess=guess, tol=tol)
+        return U, V, (ok & False) if guess is not None else ok
+    monkeypatch.setattr(CMM._MapView, "invert", bad)
+    with pytest.raises(RuntimeError, match=r"cell \(.*1e-3 of the period"):
+        CMM.curved_cross_mass(ga, gb, 7)
+    st = _stack([(_D1, _circ(), 1.0), (_D2, _sinw(), 1.0)], 3)
+    with pytest.raises(RuntimeError, match="between layer 1 and layer 2"):
+        _solve(st)
+
+
+def test_e2_v11_one_circle_on_two_layouts_is_not_refused():
+    """V-E2-D11: the same physical circle on a ``grid_hint`` (5 x 5) map and
+    on its plain 3 x 3 map share their singular vertices on different cell
+    rectangles, which the both-singular rule refused.  Both maps are the
+    SAME function of (u, v) (a refinement keeps each base cell's blend), so
+    the transition is the identity and the cross-mass must equal the shipped
+    SEPARABLE cross-mass of the two wall grids.  Measured 2026-10-03: 1.6e-15;
+    bar 1e-12 (``e2_v11_layouts.json``; with the overlap test off it is
+    refused).  Fail-before: two DIFFERENT, CROSSING circles (r 0.30 at the
+    centre, r 0.26 at (0.72, 0.67) -- the verifier's ``test_ve2_4`` pair)
+    still raise, with the honest limit message (V-E2-D2)."""
+    from lumenairy.elements.pmm import _curvemap as CM2
+    c3 = compile_shapes(_P, _P, _circ(), 1.0)[3]
+    c5 = compile_shapes(_P, _P, _circ(), 1.0, grid_hint=5)[3]
+    assert isinstance(c5, CM2.RefinedMap)
+    ga = TS.StagGridOps(_P, _P, c3.u_walls, c3.v_walls, 3, 1.0, 1.0, cmap=c3)
+    gb = TS.StagGridOps(_P, _P, c5.u_walls, c5.v_walls, 3, 1.0, 1.0, cmap=c5)
+    # the integrand is polynomial on every piece (identity transition): a
+    # fixed 6-node rule is exact
+    X = CMM.curved_cross_mass(ga, gb, 6)
+    g0a = TS.StagGridOps(_P, _P, c3.u_bounds, c3.v_bounds, 3, 1.0, 1.0)
+    g0b = TS.StagGridOps(_P, _P, c5.u_bounds, c5.v_bounds, 3, 1.0, 1.0)
+    cr = TS.StagCrossOps(g0a, g0b)
+    Xs = np.zeros_like(X)
+    Xs[:g0b.qq, :g0a.qq] = np.kron(*cr.C1H())
+    Xs[g0b.qq:, g0a.qq:] = np.kron(*cr.C2H())
+    assert np.abs(X - Xs).max() / np.abs(Xs).max() <= 1e-12
+    ca = compile_shapes(_P, _P, [Circle(0.6, 0.6, 0.30, 4.0)], 1.0)[3]
+    cb = compile_shapes(_P, _P, [Circle(0.72, 0.67, 0.26, 4.0)], 1.0)[3]
+    gd = TS.StagGridOps(_P, _P, ca.u_walls, ca.v_walls, 3, 1.0, 1.0, cmap=ca)
+    gc = TS.StagGridOps(_P, _P, cb.u_walls, cb.v_walls, 3, 1.0, 1.0, cmap=cb)
+    with pytest.raises(NotImplementedError, match="CROSSING closed curves"):
+        CMM.curved_cross_mass(gd, gc, 6)
+
+
 def test_e2_v1_circle_graze_sliver_is_found_and_scales_like_its_area(
         monkeypatch):
     """V-E2-D1 on the CIRCLE (the verifier's ``test_ve2_3`` is the sinusoid

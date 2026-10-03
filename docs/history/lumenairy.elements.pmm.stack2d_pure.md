@@ -1,7 +1,7 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/pmm/stack2d_pure.py
-ast_sha256: 8b4a609f2792cd48d03879464b59bece209c45fcadabe08cff0ddc6664c8c42d
-token_sha256: 7380fbc3c1e7edbf557dd202321bb08574b93686861a39c2c4e24c16630d80aa
+ast_sha256: c3a583feba82d89159f652d51e28cfedcc957188c7a809d918b7946fd9b2ac31
+token_sha256: 0804f63668ed6939c933d8ebe159f48fe15cc5edf99335f787bae4fe1203dce7
 pre_relocation_lines: 2190
 recorded_by: WP-A17 SWEEP-2 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
@@ -14,6 +14,7 @@ re_recorded: 2026-10-03 -- the curved-cell map, Phase C: the shape-layer rollbac
 re_recorded: 2026-10-03 -- the curved-cell map, Phase D: tensor and magnetic layers under a map -- _require_map_scope refuses only out-of-plane tensors (eps or mu) and slant (Phase E); add_layer(background_mu=) and per-shape mu (a magnetic shape layer is recorded as kind='magnetic'); the merge's tensor refusals narrowed to out-of-plane; a uniform mu layer may join a shape stack, a raw mu_cell may not (BUILD_PMM2D_CURVED_D_2026_10_03)
 re_recorded: 2026-10-03 -- the curved-cell map, Phase E2: per-layer maps -- add_layer(cmap=) on per-layer stacks, per-layer shape layers on their own maps with the stack-wide merge kept as the fast path (_recompile_shapes_perlayer / _perlayer_fast_ok), the curved mortar on the per-layer cascade (StagCrossOpsMapped, mapped end grids: cofactor far field + exact incident decomposition), the q-matching default and homogeneous-layer riding (_perlayer_geometry), per-layer viewers (_layer_map) (BUILD_PMM2D_CURVED_E2_2026_10_03)
 re_recorded: 2026-10-03 -- the curved-cell map, Phase E2 verifier fold-in: convergence_floor isolates a shape layer on its OWN map (and an explicit per-layer cmap= layer under its map) instead of straight walls (V-E2-D10) (VERIFY_PMM2D_CURVED_E2_2026_10_03)
+re_recorded: 2026-10-03 -- the curved-cell map, Phase E2 verifier fold-in: solve() names the two layers when the curved mortar cannot invert a node (V-E2-D6) (VERIFY_PMM2D_CURVED_E2_2026_10_03)
 -->
 
 # Version history -- `lumenairy/elements/pmm/stack2d_pure.py`

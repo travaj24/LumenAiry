@@ -912,8 +912,15 @@ def _cut_cell_nodes(Pm, sx, sy, Om, edges, n, cut=True):
                                      guess=(gu[s], gv[s]))
         if not np.all(ok):
             raise RuntimeError(
-                "curved mortar: a quadrature node could not be inverted in "
-                "the neighbouring layer's map.")
+                f"curved mortar: a quadrature node of cell ({sx}, {sy}) "
+                f"could not be inverted in cell ({cx}, {cy}) of the "
+                f"neighbouring layer's map at n = {n}.  Outlines in "
+                f"adjacent layers that nearly coincide or nearly touch "
+                f"(measured: concentric circles closer than ~6e-5 of the "
+                f"period) put the two maps' singular points closer than the "
+                f"inversion resolves: make the outlines identical (the "
+                f"stack then merges them) or move them >= 1e-3 of the "
+                f"period apart.")
     return pu, pv, W, osx.copy(), osy.copy(), qu, qv
 
 
@@ -932,6 +939,30 @@ def _same_cell(A, ac, B, bc):
     U = A.ub[ac[0]] + x * (A.ub[ac[0] + 1] - A.ub[ac[0]])
     V = A.vb[ac[1]] + x * (A.vb[ac[1] + 1] - A.vb[ac[1]])
     UU, VV = (a.ravel() for a in np.meshgrid(U, V, indexing="ij"))
+    ga = A.geom(ac[0], ac[1], UU, VV)
+    gb = B.geom(bc[0], bc[1], UU, VV)
+    return all(float(np.max(np.abs(p - q))) <= 1e-12 * A.scale
+               for p, q in zip(ga, gb))
+
+
+def _same_map_on_overlap(A, ac, B, bc):
+    """True when the ``(u, v)`` rectangles of cell ``ac`` of ``A`` and cell
+    ``bc`` of ``B`` overlap and both maps evaluate identically (positions
+    and Jacobians to 1e-12 of the period) on a probe grid of the overlap --
+    one physical map on two wall layouts (a ``grid_hint`` refinement of the
+    other; Phase E2 verifier V-E2-D11).  The transition is then the
+    identity there."""
+    u0 = max(A.ub[ac[0]], B.ub[bc[0]])
+    u1 = min(A.ub[ac[0] + 1], B.ub[bc[0] + 1])
+    v0 = max(A.vb[ac[1]], B.vb[bc[1]])
+    v1 = min(A.vb[ac[1] + 1], B.vb[bc[1] + 1])
+    t = 1e-9 * A.scale
+    if u1 - u0 <= t or v1 - v0 <= t:
+        return False
+    x, _w = _gl01(7)
+    UU, VV = (a.ravel() for a in np.meshgrid(u0 + x * (u1 - u0),
+                                             v0 + x * (v1 - v0),
+                                             indexing="ij"))
     ga = A.geom(ac[0], ac[1], UU, VV)
     gb = B.geom(bc[0], bc[1], UU, VV)
     return all(float(np.max(np.abs(p - q))) <= 1e-12 * A.scale
@@ -963,7 +994,9 @@ def _assign_pairs(A, B):
                     marks.setdefault(key, set()).add(side)
     out = {}
     for key, sides in marks.items():
-        if len(sides) == 2 and _same_cell(A, key[0], B, key[1]):
+        if len(sides) == 2 and (_same_cell(A, key[0], B, key[1])
+                                or _same_map_on_overlap(A, key[0], B,
+                                                        key[1])):
             # the two layers carry the SAME map on the SAME cell (a shared
             # singular vertex, e.g. one circle in both layers): the
             # transition map is the identity there and the integrand is
@@ -975,10 +1008,11 @@ def _assign_pairs(A, B):
                 f"layer's map and cell {key[1]} of the lower layer's touches "
                 f"a SINGULAR vertex (det J = 0, a closed curve's 45-degree "
                 f"point) of BOTH maps; the cross-mass integrand is singular "
-                f"in either layer's coordinates there.  Move one outline so "
-                f"the two maps' singular vertices do not share a cell "
-                f"overlap, or use layer_grids='shared' (one merged map) "
-                f"when the outlines do not cross.")
+                f"in either layer's coordinates there.  This refuses most "
+                f"pairs of CROSSING closed curves (two circles crossing "
+                f"off-axis); outlines offset along x or y may pass.  "
+                f"Splitting such a cell between the two maps is not "
+                f"implemented (Phase E2 verifier V-E2-D2).")
         out[key] = sides.pop()
     return default, out
 
@@ -1138,24 +1172,41 @@ def curved_cross_mass_adaptive(ga, gb, tol=None, cap=None):
     import warnings
     tol = _CURVE_MORTAR_QUAD_TOL if tol is None else float(tol)
     cap = _CURVE_MORTAR_QUAD_CAP if cap is None else int(cap)
+    # every comparison is between two rungs a factor 1.5 apart (the Phase E2
+    # verifier V-E2-D5: comparing n 93 with the cap 96 under-reported the
+    # error ~9x); identical to the plain doubling whenever the rule converges
     n = min(max(ga.M, gb.M) + 4, cap)
-    X0 = curved_cross_mass(ga, gb, n)
+    X1 = curved_cross_mass(ga, gb, n)
+    n1, chg = n, np.inf
+    failed = None
     while True:
-        n1 = min(int(np.ceil(1.5 * n)), cap)
-        X1 = curved_cross_mass(ga, gb, n1) if n1 > n else X0
-        sc = float(np.max(np.abs(X1))) or 1.0
-        chg = float(np.max(np.abs(X1 - X0))) / sc
-        if chg <= tol or n1 >= cap:
+        n2 = int(np.ceil(1.5 * n1))
+        if n2 > cap:
             break
-        n, X0 = n1, X1
+        try:
+            X2 = curved_cross_mass(ga, gb, n2)
+        except RuntimeError as ex:
+            # a finer rung puts nodes closer to a singular point than the
+            # inversion resolves (V-E2-D6): keep the last good rung, warn
+            failed = ex
+            break
+        sc = float(np.max(np.abs(X2))) or 1.0
+        chg = float(np.max(np.abs(X2 - X1))) / sc
+        n1, X1 = n2, X2
+        if chg <= tol:
+            break
     if chg > tol:
+        why = ("" if failed is None else
+               f"  The rung after n = {n1} failed: {failed}")
         warnings.warn(
             f"PMM2DStackPure: the curved mortar's cross-mass between two "
             f"differently mapped layers did not settle to {tol:.0e} within "
             f"{n1} Gauss nodes per sub-interval (last change {chg:.2e}); the "
-            f"interface carries a quadrature error of that order.  The two "
-            f"maps are too different inside a cell -- add walls (grid_hint) "
-            f"where they are steep.", stacklevel=4)
+            f"interface carries a quadrature error of that order.  Typical "
+            f"cause: outlines in adjacent layers that nearly coincide or "
+            f"nearly touch (a closed curve's 45-degree point close to the "
+            f"other outline); make them identical or move them >= 1e-3 of "
+            f"the period apart.{why}", stacklevel=4)
     return X1, n1, chg
 
 

@@ -1,0 +1,12 @@
+{
+ "rel": 1.6459714979859375e-15,
+ "failbefore": "refused: curved mortar: the overlap of cell (1, 1) of the upper layer's map and cell (2, 2) of the lower laye",
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "tree": "c:\\tmp\\lum_curved_e2",
+  "lumenairy": "C:\\tmp\\lum_curved_e2\\lumenairy",
+  "platform": "Windows-11-10.0.26200-SP0"
+ }
+}

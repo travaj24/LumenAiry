@@ -184,6 +184,11 @@ def test_vc4_rectangles_only_merge_is_the_identity_to_round_off():
                         Rect(0.95, 0.3, 0.2, 0.3, 2.25)], 1.0),
            ("layer 2", [Rect(0.6, 0.6, 1.2, 0.4, 3.0)], 1.5)]
     assert SH._merge(_P, _P, lay)[4]
+    # V-E2-D8: a claim on a wall merged within _WALL_SNAP (5e-13 p apart)
+    r1 = Rect(0.45, 0.6, 0.3, 0.4, 4.0)
+    x2 = 0.3 + 5e-13 * _P
+    r2 = Rect(0.5 * (x2 + 0.96), 0.54, 0.96 - x2, 0.6, 3.0)
+    assert SH._merge(_P, _P, [("a", [r1], 1.0), ("b", [r2], 1.0)])[4]
 
 
 def test_vc5_rotated_ellipse_lays_out_over_its_documented_range():

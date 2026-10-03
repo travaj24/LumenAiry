@@ -160,8 +160,10 @@ _CLAIM_TOL = 1e-12
 #: outlines read ~1e-16; a real crossing is a finite fraction of a feature.
 _CROSS_TOL = 1e-9
 #: A vertex claim this close to its merged grid vertex (relative to the
-#: period) is the grid vertex itself: a few ulps, far below any real move.
-_VERTEX_SNAP = 1e-13
+#: period) is the grid vertex itself.  It equals the wall snap: walls within
+#: _WALL_SNAP are merged, so a claim on the discarded wall sits up to that
+#: far off the merged vertex (Phase E2 verifier V-E2-D8).
+_VERTEX_SNAP = _WALL_SNAP
 #: The fillet radius below which the fillet's own segment ``r / sqrt 2``
 #: breaks the sliver contract: ``sqrt(2) * _STAG_MIN_SEG_FRAC`` of the period.
 _FILLET_MIN_FRAC = float(np.sqrt(2.0)) * _STAG_MIN_SEG_FRAC

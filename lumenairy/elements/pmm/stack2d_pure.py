@@ -3307,18 +3307,26 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
             # shipped square interface and reproduces layer_grids='shared'
             # BIT-EXACTLY (the 1-D contract, lifted to 2-D).
             same = (ga.key() == gb.key()) and not force_mortar
+            if not same:
+                try:
+                    cr = _cross(ga, gb)
+                except RuntimeError as ex:
+                    la = "the superstrate" if ia is None else f"layer {ia + 1}"
+                    lb = "the substrate" if ib is None else f"layer {ib + 1}"
+                    raise RuntimeError(
+                        f"PMM2DStackPure.solve: the curved mortar between "
+                        f"{la} and {lb}: {ex}") from ex
             if any_oop:
                 if same:
                     return _interface_smatrix_general(
                         _modes_to_M(sa[0], sa[1], sa[3], sa[4]),
                         _modes_to_M(sb[0], sb[1], sb[3], sb[4]))
                 return _interface_smatrix_general_mortar_2d(
-                    sa, sb, ga, gb, _cross(ga, gb), _stag_kron_apply)
+                    sa, sb, ga, gb, cr, _stag_kron_apply)
             if same:
                 return _interface_smatrix(sa[0], sa[1], sb[0], sb[1])
             return _interface_smatrix_mortar_2d(
-                sa[0], sa[1], sb[0], sb[1], ga, gb, _cross(ga, gb),
-                _stag_kron_apply)
+                sa[0], sa[1], sb[0], sb[1], ga, gb, cr, _stag_kron_apply)
 
         ifc = [_ifc(None, 0)]
         for i in range(1, nlay):
