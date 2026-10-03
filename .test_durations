@@ -17036,5 +17036,9 @@
   "tests/unit/test_pmm2d_staggered_curved_d.py::test_d9_mixed_sign_is_rt_blind_on_a_stretched_film_and_jones_visible": 1.51,
   "tests/unit/test_pmm2d_staggered_curved_d.py::test_d9_no_sg_e33_is_caught_only_off_normal_incidence": 7.54,
   "tests/unit/test_pmm2d_staggered_curved_d.py::test_d_refusals_keep_out_of_plane_and_raw_mu_cells_out": 0.03,
-  "tests/unit/test_pmm2d_staggered_curved_d.py::test_d_shapes_carry_mu_and_the_shapes_route_is_the_explicit_route": 0.52
+  "tests/unit/test_pmm2d_staggered_curved_d.py::test_d_shapes_carry_mu_and_the_shapes_route_is_the_explicit_route": 0.52,
+  "tests/unit/test_verify_pmm2d_curved_d.py::test_verify_d_curve_derivative_check_refuses_a_small_derivative_bug": 0.01,
+  "tests/unit/test_verify_pmm2d_curved_d.py::test_verify_d_geom_slot_4_is_the_inverse_plain_gram_for_both_consumers": 0.32,
+  "tests/unit/test_verify_pmm2d_curved_d.py::test_verify_d_gyrotropic_mu_under_a_shear_matches_an_independent_berreman": 15.91,
+  "tests/unit/test_verify_pmm2d_curved_d.py::test_verify_d_material_key_walker_exemption_states_its_reason": 0.005
 }

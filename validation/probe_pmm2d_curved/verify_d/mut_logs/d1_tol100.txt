@@ -1,0 +1,23 @@
+........F....................                                            [100%]
+================================== FAILURES ===================================
+_____ test_verify_d_curve_derivative_check_refuses_a_small_derivative_bug _____
+
+    def test_verify_d_curve_derivative_check_refuses_a_small_derivative_bug():
+        """``TransfiniteMap`` refuses an edge curve whose analytic derivative is
+        not d/ds of its value at ``1e-6 x max(period, |d|)``.  The only existing
+        gate (``test_verify_b_inconsistent_curve_derivative_is_refused``) uses a
+        10 % bug, so the bar could be loosened 10^4-fold unseen (the verifier's
+        mutation 'd1_tol100' -- the bar x 100 -- passed every existing test).
+        Here a 3e-5 derivative bug must be refused (the check's central
+        difference is good to ~1e-10 relative at h = 1e-6, so 3e-5 sits 1.5
+        decades above the bar and 0.5 decades below the loosened one), and the
+        correct curve must be accepted."""
+        CM.TransfiniteMap(*_sine_edges(CM.Sinusoid))
+>       with pytest.raises(ValueError, match="derivative"):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE <class 'ValueError'>
+
+tests\unit\test_verify_pmm2d_curved_d.py:235: Failed
+=========================== short test summary info ===========================
+FAILED tests/unit/test_verify_pmm2d_curved_d.py::test_verify_d_curve_derivative_check_refuses_a_small_derivative_bug
+1 failed, 28 passed in 780.65s (0:13:00)

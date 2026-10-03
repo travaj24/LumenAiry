@@ -1,0 +1,114 @@
+C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pytest_benchmark\logger.py:44: PytestBenchmarkWarning: Benchmarks are automatically disabled because xdist plugin is active.Benchmarks cannot be performed reliably in a parallelized environment.
+  warner(PytestBenchmarkWarning(text))
+C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pytest_benchmark\logger.py:44: PytestBenchmarkWarning: Benchmarks are automatically disabled because xdist plugin is active.Benchmarks cannot be performed reliably in a parallelized environment.
+  warner(PytestBenchmarkWarning(text))
+C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pytest_benchmark\logger.py:44: PytestBenchmarkWarning: Benchmarks are automatically disabled because xdist plugin is active.Benchmarks cannot be performed reliably in a parallelized environment.
+  warner(PytestBenchmarkWarning(text))
+C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pytest_benchmark\logger.py:44: PytestBenchmarkWarning: Benchmarks are automatically disabled because xdist plugin is active.Benchmarks cannot be performed reliably in a parallelized environment.
+  warner(PytestBenchmarkWarning(text))
+bringing up nodes...
+bringing up nodes...
+
+...........FF..............F..                                           [100%]
+================================== FAILURES ===================================
+________________ test_d7_vacuum_painted_with_mu_one_is_vacuum _________________
+[gw2] win32 -- Python 3.14.6 C:\Users\Tesla\AppData\Local\Programs\Python\Python314\python.exe
+
+    def test_d7_vacuum_painted_with_mu_one_is_vacuum():
+        """A physical identity across the two routes: layer 2 painted with a
+        vacuum Rect that carries an explicit mu = I (the magnetic TENSOR route
+        under the map) equals a uniform vacuum layer 2 (the scalar route) on
+        the same merged map.  Measured 2026-10-03 (``d_unit_stack.json``, M = 3):
+        3.1e-15 (bar 1e-9, 5.5 decades above); fail-before: the same Rect with
+        mu = 1.1 moves R / T / Jones by 2.3e-2 (bar >= 1e-3)."""
+        a = _d7(3, _LC30, "vac_mu")
+        b = _d7(3, _LC30, "uniform")
+        c = _d7(3, _LC30, "paint11")
+        assert a[0].cmap.fingerprint == b[0].cmap.fingerprint
+    
+        def d(x, y):
+            return max(np.abs(x[1] - y[1]).max(), np.abs(x[2] - y[2]).max(),
+                       np.abs(x[3] - y[3]).max())
+>       assert d(a, b) <= 1e-9, d(a, b)
+E       AssertionError: np.float64(0.005738105483463273)
+E       assert np.float64(0.005738105483463273) <= 1e-09
+E        +  where np.float64(0.005738105483463273) = <function test_d7_vacuum_painted_with_mu_one_is_vacuum.<locals>.d at 0x000001BB2F5CC040>((<lumenairy.elements.pmm.stack2d_pure.PMM2DStackPure object at 0x000001BB33C8D050>, array([[0.        , 0.        , 0....array([[ 0.01030917-0.1863432j ,  0.03815976+0.00331104j],\n       [ 0.03816181+0.0033136j , -0.03551182-0.19081243j]])), (<lumenairy.elements.pmm.stack2d_pure.PMM2DStackPure object at 0x000001BB33C756D0>, array([[0.        , 0.        , 0....array([[ 0.01322713-0.19128398j,  0.03929447+0.00190665j],\n       [ 0.03929647+0.00190923j, -0.03401598-0.19406981j]])))
+
+tests\unit\test_pmm2d_staggered_curved_d.py:724: AssertionError
+_________ test_d6_magnetic_pillar_is_the_dual_of_its_dielectric_twin __________
+[gw0] win32 -- Python 3.14.6 C:\Users\Tesla\AppData\Local\Programs\Python\Python314\python.exe
+
+    def test_d6_magnetic_pillar_is_the_dual_of_its_dielectric_twin():
+        """Electromagnetic duality with VACUUM half-spaces: the E_x input of a
+        magnetic disk (eps 1, mu = diag(2, 2, 1)) is the E_y input of the
+        dielectric disk (eps = diag(2, 2, 1), mu 1), order by order -- two
+        DIFFERENT weight paths under the same circle map (the chi blocks vs the
+        eps blocks).  Not a discrete identity: the residual falls with M to the
+        rung-change level.  Measured 2026-10-03 (``d6_summary.json``, 3 x 3 map):
+        5.4e-3, 8.9e-4, 5.8e-4, 8.6e-6, 3.2e-5, 1.2e-5 at M = 4 .. 9 (5 x 5:
+        2.3e-4 .. 2.6e-5 at M = 4 .. 6); the comparison WITHOUT the polarization
+        swap stays at 0.048.  Bars at M = 5: duality <= 3e-3 (0.53 decades above
+        8.9e-4), control >= 1e-2 (0.69 decades under 4.85e-2)."""
+        cm = _circle(_P)
+        one = np.broadcast_to(_EYE3, (3, 3, 3, 3)).copy()
+        mu = one.copy()
+        mu[1, 1] = np.diag([2.0, 2.0, 1.0])
+    
+        def run(eps, mu_c):
+            st = PMM2DStackPure(_P, _P, n_superstrate=1.0, n_substrate=1.0,
+                                n_modes=5, n_orders=3, cmap=cm)
+            if mu_c is None:
+                st.add_layer(0.5, eps_cell=eps)
+            else:
+                st.add_layer(0.5, eps_cell=eps, mu_cell=mu_c)
+            st.set_source(1.0)
+            o, R, T, _J = st.solve(jones=True)
+            i = _idx(o)
+            return np.asarray(R)[:, i], np.asarray(T)[:, i]
+        Rm, Tm = run(one, mu)
+        Re, Te = run(mu, None)
+        dual = max(np.abs(Rm[0] - Re[1]).max(), np.abs(Tm[0] - Te[1]).max(),
+                   np.abs(Rm[1] - Re[0]).max(), np.abs(Tm[1] - Te[0]).max())
+        ctrl = max(np.abs(Rm[0] - Re[0]).max(), np.abs(Tm[0] - Te[0]).max())
+>       assert dual <= 3e-3, dual
+E       AssertionError: np.float64(0.0032720639868950574)
+E       assert np.float64(0.0032720639868950574) <= 0.003
+
+tests\unit\test_pmm2d_staggered_curved_d.py:636: AssertionError
+__ test_verify_d_gyrotropic_mu_under_a_shear_matches_an_independent_berreman __
+[gw1] win32 -- Python 3.14.6 C:\Users\Tesla\AppData\Local\Programs\Python\Python314\python.exe
+
+    def test_verify_d_gyrotropic_mu_under_a_shear_matches_an_independent_berreman():
+        """A uniform eps-2 film with a GYROTROPIC permeability under a 4 x 4
+        sheared map (bilinear cells: the covariant plane-wave field is exact) vs
+        the eps+mu Berreman above.  Measured 2026-10-03 (``v2_summary.json``,
+        ``v_unit_readings.json``): NORMAL incidence M = 4: R / T 2.1e-15 and the
+        complex Jones 7.8e-15 (bar 1e-10: round-off, 4 decades of margin);
+        CONICAL (20 deg, 40 deg) M = 4: 2.7e-10 / 3.2e-10 (bar 1e-8, 1.5
+        decades; the bilinear map is exact at normal incidence and spectral
+        off it -- 2.9e-14 / 8.5e-14 at M = 5).
+    
+        Fail-before arms, each a one-token bug in the magnetic branch of
+        ``_stag_map_eff_tensor`` that EVERY Phase D unit gate passes (they use a
+        diagonal mu, and normal incidence for every magnetic gate):
+        * mu TRANSPOSED in chi (``J^T mu^-T J``): Jones 0.141 at normal
+          incidence while R / T stays 5.4e-15 (blind), bar >= 1e-2;
+        * chi_33 without sqrt(g) (``1 / mu_33``): blind at normal incidence
+          (7.9e-15, asserted <= 1e-10), conical M = 4 Jones 2.0e-4 / R,T 1.3e-5
+          (bar >= 1e-6, 2.3 decades under the Jones reading);
+        * the two sides of chi swapped (``J mu^-1 J^T``): R / T 6.2e-4, Jones
+          8.3e-3 at normal incidence (bar >= 1e-4)."""
+        nRT, nJ = _mag_film(4, 0.0, 0.0)
+        assert nRT <= 1e-10 and nJ <= 1e-10, (nRT, nJ)
+        th, ph = np.deg2rad(20.0), np.deg2rad(40.0)
+        cRT, cJ = _mag_film(4, th, ph)
+>       assert cRT <= 1e-8 and cJ <= 1e-8, (cRT, cJ)
+E       AssertionError: (1.2993976294506382e-05, 0.00020276903335269433)
+E       assert (1.2993976294506382e-05 <= 1e-08)
+
+tests\unit\test_verify_pmm2d_curved_d.py:186: AssertionError
+=========================== short test summary info ===========================
+FAILED tests/unit/test_pmm2d_staggered_curved_d.py::test_d7_vacuum_painted_with_mu_one_is_vacuum
+FAILED tests/unit/test_pmm2d_staggered_curved_d.py::test_d6_magnetic_pillar_is_the_dual_of_its_dielectric_twin
+FAILED tests/unit/test_verify_pmm2d_curved_d.py::test_verify_d_gyrotropic_mu_under_a_shear_matches_an_independent_berreman
+3 failed, 27 passed in 201.14s (0:03:21)

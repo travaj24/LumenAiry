@@ -1,0 +1,21 @@
+{
+ "pre_keys": 176,
+ "post_keys": 176,
+ "common": 176,
+ "equal": 176,
+ "differ": [],
+ "trap_equal": true,
+ "extra_post": {
+  "rect_tensor@shapes_vs_explicit": 6.373027439110501e-09,
+  "rect_tensor_mag@shapes_vs_explicit": 1.1213260193519906e-08
+ },
+ "extra_pre": {
+  "rect_tensor@shapes_vs_explicit": 6.373027439110501e-09
+ },
+ "wsl": {
+  "pre_keys": 176,
+  "post_keys": 176,
+  "equal": 176,
+  "win_eq_wsl": 120
+ }
+}

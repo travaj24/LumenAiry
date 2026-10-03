@@ -1,0 +1,59 @@
+v6_mag.py dual c3 4 sym
+v6_mag.py dual c3 5 sym
+v6_mag.py dual c3 6 sym
+v6_mag.py dual c3 7 sym
+v6_mag.py dual c3 8 sym
+v6_mag.py dual c3 9 sym
+v6_mag.py dual c3 4 gyro
+v6_mag.py dual c3 5 gyro
+v6_mag.py dual c3 6 gyro
+v6_mag.py dual c3 7 gyro
+v6_mag.py dual c3 8 gyro
+v6_mag.py dual c3 9 gyro
+v6_mag.py dual c3 4 diag
+v6_mag.py dual c3 5 diag
+v6_mag.py dual c3 6 diag
+v6_mag.py dual c3 7 diag
+v6_mag.py dual c3 8 diag
+v6_mag.py dual c3 9 diag
+v6_mag.py dual c5 4 sym
+v6_mag.py dual c5 5 sym
+v6_mag.py dual c5 6 sym
+v6_mag.py dual c5 7 sym
+v6_mag.py dual c5 4 gyro
+v6_mag.py dual c5 5 gyro
+v6_mag.py dual c5 6 gyro
+v6_mag.py dual c5 7 gyro
+v6_mag.py muafter h2s 5 ok
+v6_mag.py muafter h2s 6 ok
+v6_mag.py muafter h2s 7 ok
+v6_mag.py muafter h2s 8 ok
+v6_mag.py muafter h2s 9 ok
+v6_mag.py muafter sh4s 3 ok
+v6_mag.py muafter sh4s 4 ok
+v6_mag.py muafter sh4s 5 ok
+v6_mag.py muafter sh4s 6 ok
+v6_mag.py muafter c3 5 ok
+v6_mag.py muafter c3 6 ok
+v6_mag.py muafter c3 7 ok
+v6_mag.py muafter h2s 5 after
+v6_mag.py muafter h2s 6 after
+v6_mag.py muafter h2s 7 after
+v6_mag.py muafter h2s 8 after
+v6_mag.py muafter h2s 9 after
+v6_mag.py muafter sh4s 3 after
+v6_mag.py muafter sh4s 4 after
+v6_mag.py muafter sh4s 5 after
+v6_mag.py muafter sh4s 6 after
+v6_mag.py muafter c3 5 after
+v6_mag.py muafter c3 6 after
+v6_mag.py muafter c3 7 after
+v6_mag.py stack 3 lossless
+v6_mag.py stack 3 lossyeps
+v6_mag.py stack 3 lossymu
+v6_mag.py stack 4 lossless
+v6_mag.py stack 4 lossyeps
+v6_mag.py stack 4 lossymu
+v6_mag.py stack 5 lossless
+v6_mag.py stack 5 lossyeps
+v6_mag.py stack 5 lossymu

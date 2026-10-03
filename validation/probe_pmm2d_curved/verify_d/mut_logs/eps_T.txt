@@ -1,0 +1,140 @@
+C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pytest_benchmark\logger.py:44: PytestBenchmarkWarning: Benchmarks are automatically disabled because xdist plugin is active.Benchmarks cannot be performed reliably in a parallelized environment.
+  warner(PytestBenchmarkWarning(text))
+C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pytest_benchmark\logger.py:44: PytestBenchmarkWarning: Benchmarks are automatically disabled because xdist plugin is active.Benchmarks cannot be performed reliably in a parallelized environment.
+  warner(PytestBenchmarkWarning(text))
+C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pytest_benchmark\logger.py:44: PytestBenchmarkWarning: Benchmarks are automatically disabled because xdist plugin is active.Benchmarks cannot be performed reliably in a parallelized environment.
+  warner(PytestBenchmarkWarning(text))
+C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pytest_benchmark\logger.py:44: PytestBenchmarkWarning: Benchmarks are automatically disabled because xdist plugin is active.Benchmarks cannot be performed reliably in a parallelized environment.
+  warner(PytestBenchmarkWarning(text))
+bringing up nodes...
+bringing up nodes...
+
+...FFFF...F...............                                               [100%]
+================================== FAILURES ===================================
+_________ test_d5_li2003_under_the_identity_map_is_the_unmapped_solve _________
+[gw1] win32 -- Python 3.14.6 C:\Users\Tesla\AppData\Local\Programs\Python\Python314\python.exe
+
+    def test_d5_li2003_under_the_identity_map_is_the_unmapped_solve():
+        """Li's gyrotropic crossed grating (J. Opt. A 5:345 2003, Example 1 --
+        the published Table 1, REFLECTED orders, incident E_x) through the
+        TENSOR route under an IDENTITY TransfiniteMap on the same walls.
+        Bit-for-bit is not available (the quadrature reassociates the sums,
+        plan P1); measured 2026-10-03 (``d_unit_li.json``): R / T / Jones
+        4.5e-14 from the unmapped solve at M = 6 (bar 1e-11, 2.3 decades
+        above), and at M = 8 the identity map reproduces the shipped 8.74e-05
+        table deviation to the printed digits (``d5_li_summary.json``,
+        8.739349639e-05 vs 8.739349637e-05)."""
+        cm = CM.TransfiniteMap(np.array([0.0, 1.2 * _LAM, 2.4 * _LAM]),
+                               np.array([0.0, 0.7 * _LAM, 1.4 * _LAM]))
+        du, Ru, Tu, Ju = _li(6)
+        di, Ri, Ti, Ji = _li(6, cmap=cm)
+        d = max(np.abs(Ru - Ri).max(), np.abs(Tu - Ti).max(),
+                np.abs(Ju - Ji).max())
+>       assert d <= 1e-11, d
+E       AssertionError: np.float64(0.8925553023221948)
+E       assert np.float64(0.8925553023221948) <= 1e-11
+
+tests\unit\test_pmm2d_staggered_curved_d.py:560: AssertionError
+__________ test_d5_li2003_under_a_stretch_keeps_the_gyrotropic_sign ___________
+[gw1] win32 -- Python 3.14.6 C:\Users\Tesla\AppData\Local\Programs\Python\Python314\python.exe
+
+    def test_d5_li2003_under_a_stretch_keeps_the_gyrotropic_sign():
+        """The same grating under a sine stretch of both axes (a = 0.05 p_x,
+        -0.03 p_y) with the walls at the PREIMAGES of the physical walls (the
+        same device).  Measured 2026-10-03 (``d_unit_li.json``, M = 8): Li's
+        first row 1.40e-4 (bar 5e-4 = the shipped G2 bar, Li's own four-decimal
+        rounding at truncation order 23; 0.55 decades above), his SECOND row
+        (the cross terms reversed) missed by 1.32e-2; the swapped cell lands on
+        the second row (1.41e-4) and misses the first by 1.32e-2 (bar >= 1e-3,
+        1.1 decades under).  So the gyrotropic sign survives the map -- on a
+        PATTERNED gyrotropic grating the transpose IS R / T-visible (the two
+        rows differ in the (1, -1) / (1, 1) pair), unlike on a uniform film.
+        The build doc's ladder: 1.45e-2 .. 1.1e-4 from the unmapped M = 10
+        answer over M = 5 .. 9, converging to it (the stretch costs a rung or
+        two, as Phase A measured)."""
+        cm = _li_stretch()
+        dev, *_ = _li(8, cmap=cm)
+>       assert dev[0] <= 5e-4 and dev[1] >= 1e-3, dev
+E       AssertionError: [np.float64(0.01317898000778168), np.float64(0.00014096425292102477)]
+E       assert (np.float64(0.01317898000778168) <= 0.0005)
+
+tests\unit\test_pmm2d_staggered_curved_d.py:579: AssertionError
+_______ test_d2_tensor_films_under_a_stretch_and_a_shear_match_berreman _______
+[gw0] win32 -- Python 3.14.6 C:\Users\Tesla\AppData\Local\Programs\Python\Python314\python.exe
+
+    def test_d2_tensor_films_under_a_stretch_and_a_shear_match_berreman():
+        """A uniform LC (rotated in-plane uniaxial) and a GYROTROPIC film under
+        the a = 0.05 p sine stretch of both axes, against ``berreman_jones_1d``
+        (R, T and the complex Jones matrix).  Measured 2026-10-03
+        (``d_unit_film.json``): LC 5.1e-6 / 9.9e-10, gyro 7.3e-6 / 1.4e-9 (R / T)
+        at M = 4 / 6, Jones 1.4e-6 / 2.8e-10 and 2.1e-6 / 4.2e-10.  Bars: M = 6
+        <= 1e-8 (0.84 decades above the worst 1.44e-9) and a M = 4 -> 6 drop
+        >= 3 decades (3.7 measured).  The build doc's ladder reaches 6.9e-14 /
+        1.3e-13 at M = 8 and 5.6e-13 at the 33:1 stretch (the stop condition
+        1e-9 by M = 8 is met by four decades).  The SHEARED bilinear map makes
+        the plane-wave field an exact polynomial: <= 6.8e-15 at M = 4, bar 1e-11.
+        Fail-before (the shear distinguishes J^-1 eps J^-T from J^-T eps J^-1,
+        a stretch cannot -- its J is diagonal): the side-swapped congruence on
+        the LC film reads 7.0e-4 (R / T) / 2.6e-3 (Jones) at M = 4."""
+        cs = _stretch(_G3["P"], 0.05)
+        for t in (_LC, _GYRO):
+            r4 = _film(t, cs, 4)
+            r6 = _film(t, cs, 6)
+>           assert max(r6[0], r6[1]) <= 1e-8, r6[:2]
+E           AssertionError: (1.4374204049261152e-09, 0.14955283270764588)
+E           assert 0.14955283270764588 <= 1e-08
+E            +  where 0.14955283270764588 = max(1.4374204049261152e-09, 0.14955283270764588)
+
+tests\unit\test_pmm2d_staggered_curved_d.py:370: AssertionError
+___________ test_d3_tensor_films_under_the_circle_map_are_spectral ____________
+[gw2] win32 -- Python 3.14.6 C:\Users\Tesla\AppData\Local\Programs\Python\Python314\python.exe
+
+    def test_d3_tensor_films_under_the_circle_map_are_spectral():
+        """The LC and gyrotropic films under the 3 x 3 CIRCLE map (four singular
+        vertices, the Duffy corner rule; a general, non-diagonal J everywhere).
+        Measured 2026-10-03 (``d_unit_film.json``): LC 2.5e-6 -> 7.7e-11 (R / T),
+        2.9e-6 -> 1.7e-10 (Jones); gyro 2.0e-6 -> 4.4e-11, 2.9e-6 -> 1.7e-10 at
+        M = 4 -> 6.  Bars: M = 6 <= 1e-9 (0.77 decades above the worst 1.74e-10)
+        and the R / T drop >= 3 decades (4.4 / 4.6 measured).  The build doc's
+        ladder reaches 2.4e-13 / 1.4e-13 at M = 8 and is spectral at conical
+        incidence too (8.8e-11 / 9.9e-11 at M = 8)."""
+        cm = _circle(_G3["P"])
+        for t in (_LC, _GYRO):
+            r4 = _film(t, cm, 4)
+            r6 = _film(t, cm, 6)
+>           assert max(r6[0], r6[1]) <= 1e-9, r6[:2]
+E           AssertionError: (4.413913679002235e-11, 0.1495528326245111)
+E           assert 0.1495528326245111 <= 1e-09
+E            +  where 0.1495528326245111 = max(4.413913679002235e-11, 0.1495528326245111)
+
+tests\unit\test_pmm2d_staggered_curved_d.py:416: AssertionError
+_________ test_d2_gyrotropic_jones_sees_the_transpose_and_rt_does_not _________
+[gw0] win32 -- Python 3.14.6 C:\Users\Tesla\AppData\Local\Programs\Python\Python314\python.exe
+
+    def test_d2_gyrotropic_jones_sees_the_transpose_and_rt_does_not():
+        """THE transpose-convention gate, both halves asserted.  For a uniform
+        gyrotropic film the efficiencies are TRANSPOSE-BLIND (eps^T is the
+        opposite magnetization; per-input power sums are equal), only the Jones
+        matrix sees the sign.  Measured 2026-10-03 (``d_unit_film.json``), the
+        s05 stretch at M = 5: correct Jones 4.7e-8; TRANSPOSED Jones 0.1496
+        (bar >= 1e-2: 1.2 decades under it, 5.3 decades above the correct
+        arm's bar 1e-7), while the transposed R / T error equals the correct
+        one to 1.9e-15 (bar 1e-12 on the difference) -- an R / T gate would
+        pass a transposed build.  The film's own gyrotropic signature: J01 / J10
+        = -1 + 6.0e-7 (M = 5; bar 1e-5)."""
+        cs = _stretch(_G3["P"], 0.05)
+        dRT, dJ, J = _film(_GYRO, cs, 5)
+        with _mutate("transpose"):
+            tRT, tJ, _Jt = _film(_GYRO, cs, 5)
+>       assert dJ <= 1e-7, dJ
+E       AssertionError: 0.14955283667265387
+E       assert 0.14955283667265387 <= 1e-07
+
+tests\unit\test_pmm2d_staggered_curved_d.py:394: AssertionError
+=========================== short test summary info ===========================
+FAILED tests/unit/test_pmm2d_staggered_curved_d.py::test_d5_li2003_under_the_identity_map_is_the_unmapped_solve
+FAILED tests/unit/test_pmm2d_staggered_curved_d.py::test_d5_li2003_under_a_stretch_keeps_the_gyrotropic_sign
+FAILED tests/unit/test_pmm2d_staggered_curved_d.py::test_d2_tensor_films_under_a_stretch_and_a_shear_match_berreman
+FAILED tests/unit/test_pmm2d_staggered_curved_d.py::test_d3_tensor_films_under_the_circle_map_are_spectral
+FAILED tests/unit/test_pmm2d_staggered_curved_d.py::test_d2_gyrotropic_jones_sees_the_transpose_and_rt_does_not
+5 failed, 21 passed in 163.77s (0:02:43)

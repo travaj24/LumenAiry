@@ -1,0 +1,36 @@
+C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pytest_benchmark\logger.py:44: PytestBenchmarkWarning: Benchmarks are automatically disabled because xdist plugin is active.Benchmarks cannot be performed reliably in a parallelized environment.
+  warner(PytestBenchmarkWarning(text))
+C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pytest_benchmark\logger.py:44: PytestBenchmarkWarning: Benchmarks are automatically disabled because xdist plugin is active.Benchmarks cannot be performed reliably in a parallelized environment.
+  warner(PytestBenchmarkWarning(text))
+C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pytest_benchmark\logger.py:44: PytestBenchmarkWarning: Benchmarks are automatically disabled because xdist plugin is active.Benchmarks cannot be performed reliably in a parallelized environment.
+  warner(PytestBenchmarkWarning(text))
+C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pytest_benchmark\logger.py:44: PytestBenchmarkWarning: Benchmarks are automatically disabled because xdist plugin is active.Benchmarks cannot be performed reliably in a parallelized environment.
+  warner(PytestBenchmarkWarning(text))
+bringing up nodes...
+bringing up nodes...
+
+..............F...........                                               [100%]
+================================== FAILURES ===================================
+______ test_d_shapes_carry_mu_and_the_shapes_route_is_the_explicit_route ______
+[gw1] win32 -- Python 3.14.6 C:\Users\Tesla\AppData\Local\Programs\Python\Python314\python.exe
+
+    def test_d_shapes_carry_mu_and_the_shapes_route_is_the_explicit_route():
+        """``compile_shapes(..., with_mu=True)`` returns the permeability grid as
+        a fifth output, painted like eps (a shape without mu paints 1, the
+        background takes ``background_mu``); the four-output form REFUSES a
+        magnetic layer (it would drop mu silently).  The shapes route with mu
+        equals ``compile_shapes(with_mu=True)`` + ``cmap=`` + ``eps_cell=`` +
+        ``mu_cell=`` BYTE FOR BYTE (``d_unit_shapes.json``: bytes equal)."""
+        sh = [Circle(0.6, 0.6, 0.36, _LC30, mu=np.diag([1.5, 1.5, 1.0]))]
+        with pytest.raises(ValueError, match="with_mu=True"):
+            compile_shapes(_P, _P, sh, 1.0)
+        eps, xw, yw, cm, mu = compile_shapes(_P, _P, sh, 1.0, background_mu=1.2,
+                                             with_mu=True)
+>       assert mu.shape == (3, 3, 3, 3)
+               ^^^^^^^^
+E       AttributeError: 'NoneType' object has no attribute 'shape'
+
+tests\unit\test_pmm2d_staggered_curved_d.py:850: AttributeError
+=========================== short test summary info ===========================
+FAILED tests/unit/test_pmm2d_staggered_curved_d.py::test_d_shapes_carry_mu_and_the_shapes_route_is_the_explicit_route
+1 failed, 25 passed in 162.01s (0:02:42)
