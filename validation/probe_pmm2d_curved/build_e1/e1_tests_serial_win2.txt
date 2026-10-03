@@ -1,0 +1,51 @@
+============================= test session starts =============================
+platform win32 -- Python 3.14.6, pytest-9.0.3, pluggy-1.6.0 -- C:\Users\Tesla\AppData\Local\Programs\Python\Python314\python.exe
+cachedir: .pytest_cache
+benchmark: 5.2.3 (defaults: timer=time.perf_counter disable_gc=False min_rounds=5 min_time=0.000005 max_time=1.0 calibration_precision=10 warmup=False warmup_iterations=100000)
+rootdir: C:\tmp\lum_curved_e1
+configfile: pyproject.toml
+plugins: anyio-4.13.0, benchmark-5.2.3, cov-7.1.0, split-0.11.0, timeout-2.4.0, xdist-3.8.0, zarr-3.1.6
+collecting ... collected 19 items
+
+tests/unit/test_pmm2d_staggered_curved_e1.py::test_e1_1_shipped_dispatch_never_reaches_the_e1_code PASSED [  5%]
+tests/unit/test_pmm2d_staggered_curved_e1.py::test_e1_2_identity_map_is_the_shipped_out_of_plane_generator[None] PASSED [ 10%]
+tests/unit/test_pmm2d_staggered_curved_e1.py::test_e1_2_identity_map_is_the_shipped_out_of_plane_generator[slant1] PASSED [ 15%]
+tests/unit/test_pmm2d_staggered_curved_e1.py::test_e1_3_oop_slab_under_a_sheared_map_is_the_berreman_slab PASSED [ 21%]
+tests/unit/test_pmm2d_staggered_curved_e1.py::test_e1_3_both_gauge_constants_are_pinned_under_a_map PASSED [ 26%]
+tests/unit/test_pmm2d_staggered_curved_e1.py::test_e1_3_the_permeability_blocks_are_load_bearing_under_a_map PASSED [ 31%]
+tests/unit/test_pmm2d_staggered_curved_e1.py::test_e1_3_chi33_is_seen_only_off_normal_incidence PASSED [ 36%]
+tests/unit/test_pmm2d_staggered_curved_e1.py::test_e1_3_oop_slab_under_a_stretch_converges_like_the_inplane_film PASSED [ 42%]
+tests/unit/test_pmm2d_staggered_curved_e1.py::test_e1_3m_the_mu_oracle_is_berreman_at_mu_one PASSED [ 47%]
+tests/unit/test_pmm2d_staggered_curved_e1.py::test_e1_3m_oop_eps_with_mu_matches_the_eps_mu_oracle[gyro-None] PASSED [ 52%]
+tests/unit/test_pmm2d_staggered_curved_e1.py::test_e1_3m_oop_eps_with_mu_matches_the_eps_mu_oracle[lossy-None] PASSED [ 57%]
+tests/unit/test_pmm2d_staggered_curved_e1.py::test_e1_3m_oop_eps_with_mu_matches_the_eps_mu_oracle[gyro-shear] PASSED [ 63%]
+tests/unit/test_pmm2d_staggered_curved_e1.py::test_e1_3m_a_transposed_mu_is_caught_by_the_non_symmetric_gates PASSED [ 68%]
+tests/unit/test_pmm2d_staggered_curved_e1.py::test_e1_4_oop_film_under_the_circle_map_is_spectral PASSED [ 73%]
+tests/unit/test_pmm2d_staggered_curved_e1.py::test_e1_5_oop_pillar_lands_on_its_converged_answer PASSED [ 78%]
+tests/unit/test_pmm2d_staggered_curved_e1.py::test_e1_6_slanted_uniform_slab_under_a_map_is_the_slab PASSED [ 84%]
+tests/unit/test_pmm2d_staggered_curved_e1.py::test_e1_6_the_shear_must_be_composed_with_the_map PASSED [ 89%]
+tests/unit/test_pmm2d_staggered_curved_e1.py::test_e1_6_slanted_circle_lands_on_its_converged_answer PASSED [ 94%]
+tests/unit/test_pmm2d_staggered_curved_e1.py::test_e1_7_slant_oop_curved_is_reciprocal_and_a_nonreciprocal_one_obeys_its_transpose PASSED [100%]
+
+============================== slowest durations ==============================
+11.65s call     tests/unit/test_pmm2d_staggered_curved_e1.py::test_e1_7_slant_oop_curved_is_reciprocal_and_a_nonreciprocal_one_obeys_its_transpose
+7.05s call     tests/unit/test_pmm2d_staggered_curved_e1.py::test_e1_2_identity_map_is_the_shipped_out_of_plane_generator[None]
+6.73s call     tests/unit/test_pmm2d_staggered_curved_e1.py::test_e1_5_oop_pillar_lands_on_its_converged_answer
+6.37s call     tests/unit/test_pmm2d_staggered_curved_e1.py::test_e1_6_slanted_circle_lands_on_its_converged_answer
+6.35s call     tests/unit/test_pmm2d_staggered_curved_e1.py::test_e1_2_identity_map_is_the_shipped_out_of_plane_generator[slant1]
+6.14s call     tests/unit/test_pmm2d_staggered_curved_e1.py::test_e1_4_oop_film_under_the_circle_map_is_spectral
+3.31s call     tests/unit/test_pmm2d_staggered_curved_e1.py::test_e1_3_chi33_is_seen_only_off_normal_incidence
+3.11s call     tests/unit/test_pmm2d_staggered_curved_e1.py::test_e1_6_the_shear_must_be_composed_with_the_map
+3.11s call     tests/unit/test_pmm2d_staggered_curved_e1.py::test_e1_3_both_gauge_constants_are_pinned_under_a_map
+3.02s call     tests/unit/test_pmm2d_staggered_curved_e1.py::test_e1_6_slanted_uniform_slab_under_a_map_is_the_slab
+2.58s call     tests/unit/test_pmm2d_staggered_curved_e1.py::test_e1_3m_oop_eps_with_mu_matches_the_eps_mu_oracle[gyro-shear]
+2.51s call     tests/unit/test_pmm2d_staggered_curved_e1.py::test_e1_3m_a_transposed_mu_is_caught_by_the_non_symmetric_gates
+2.37s call     tests/unit/test_pmm2d_staggered_curved_e1.py::test_e1_3_oop_slab_under_a_sheared_map_is_the_berreman_slab
+1.79s call     tests/unit/test_pmm2d_staggered_curved_e1.py::test_e1_3m_oop_eps_with_mu_matches_the_eps_mu_oracle[lossy-None]
+1.57s call     tests/unit/test_pmm2d_staggered_curved_e1.py::test_e1_1_shipped_dispatch_never_reaches_the_e1_code
+0.76s call     tests/unit/test_pmm2d_staggered_curved_e1.py::test_e1_3_the_permeability_blocks_are_load_bearing_under_a_map
+0.72s call     tests/unit/test_pmm2d_staggered_curved_e1.py::test_e1_3m_oop_eps_with_mu_matches_the_eps_mu_oracle[gyro-None]
+0.34s call     tests/unit/test_pmm2d_staggered_curved_e1.py::test_e1_3_oop_slab_under_a_stretch_converges_like_the_inplane_film
+
+(39 durations < 0.005s hidden.  Use -vv to show these durations.)
+======================== 19 passed in 70.22s (0:01:10) ========================

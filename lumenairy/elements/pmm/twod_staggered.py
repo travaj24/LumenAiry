@@ -321,6 +321,7 @@ in ``docs/audits/EXPERIMENT_PMM2D_STAGGERED_OOP_2026_09_09.md`` (candidate
 from __future__ import annotations
 
 import warnings
+from typing import NamedTuple
 
 import numpy as np
 import scipy.linalg as sla
@@ -3997,7 +3998,8 @@ def _stag_incident_coeffs_mapped(geom, bx: Basis1D, by: Basis1D, cmap,
     The ONE place the stack's mapped incident decomposition lives (a test
     reaches the shipped least-squares overlap by making it return
     ``None``)."""
-    W0, Ginv = geom[0], geom[4]
+    geom = _stag_homog_geom(geom)
+    W0, Ginv = geom.W0, geom.inv_plain_gram
     B = np.stack([_stag_incident_load_mapped(bx, by, cmap, alpha0x, alpha0y,
                                              e0)
                   for e0 in ((1.0, 0.0), (0.0, 1.0))], axis=1)
@@ -4578,6 +4580,38 @@ def _modes_as_general(W, V, lam):
     return W, V, lam, W, -V, -lam
 
 
+class _StagHomogGeom(NamedTuple):
+    """What :func:`_homog_geom_cache` returns, read BY NAME by its consumers
+    (Phase D verifier F-D3, folded in on the Phase E1 branch).
+
+    ``inv_plain_gram`` -- the inverse of the PLAIN ``(u, v)`` L2 block Gram
+    ``blockdiag(G1, G2)`` -- feeds TWO consumers that both need exactly that
+    object: the half-spaces' Eq.-25 H partner (:func:`_homog_region_modes`)
+    and the L2 modal projection of the incident wave under a map
+    (:func:`_stag_incident_coeffs_mapped`).  Without a map it is
+    ``inv(-R)``; under a map ``-R = C[chi_t]C`` is a DIFFERENT operator, so
+    "fixing" this field for the pencil would silently break both.  A
+    ``NamedTuple``, so every positional read (``geom[4]``) and unpack of the
+    6-tuple keeps working; the consumers coerce a plain tuple with
+    :func:`_stag_homog_geom` and read the fields by name."""
+
+    W0: np.ndarray
+    g2_geo: np.ndarray
+    GW0: np.ndarray
+    SttW0: np.ndarray
+    inv_plain_gram: np.ndarray
+    qq: int
+
+
+def _stag_homog_geom(geom):
+    """``geom`` as a :class:`_StagHomogGeom` (itself when it already is one;
+    the first six slots of any tuple otherwise -- a positional 6-tuple, or a
+    test's patched tuple that appends slots after them)."""
+    if isinstance(geom, _StagHomogGeom):
+        return geom
+    return _StagHomogGeom(*tuple(geom)[:6])
+
+
 def _homog_geom_cache(solver: Granet2DTransverseE):
     """Pre-solve the eps-FREE geometric eig shared by EVERY homogeneous region.
 
@@ -4643,7 +4677,7 @@ def _homog_geom_cache(solver: Granet2DTransverseE):
     # Pre-fold the eps-free pieces of the H-partner recovery (Eq.25): for a
     # homogeneous region Lhh = Et + Stt = eps*G + Stt, so Lhh @ W0 = eps*(G W0) +
     # (Stt W0) -- both terms eps-free and reusable across regions.
-    return W0, g2_geo, G @ W0, Stt @ W0, Ginv, qq
+    return _StagHomogGeom(W0, g2_geo, G @ W0, Stt @ W0, Ginv, qq)
 
 
 def _homog_region_modes(geom, eps):
@@ -4657,7 +4691,9 @@ def _homog_region_modes(geom, eps):
     pre-folded ``Lhh @ W0 = eps*(G W0) + (Stt W0)`` -- a cheap scalar combination, no
     matmul against a fresh operator.  Returns ``(W, V, lam)`` (g2 is not needed
     downstream for the half-spaces)."""
-    W0, g2_geo, GW0, SttW0, Ginv, qq = geom
+    geom = _stag_homog_geom(geom)
+    W0, g2_geo, GW0, SttW0 = geom.W0, geom.g2_geo, geom.GW0, geom.SttW0
+    Ginv, qq = geom.inv_plain_gram, geom.qq
     g2 = g2_geo + eps
     q = np.sqrt(np.asarray(g2, dtype=_C))
     q = _forward_branch_flip(q)            # shared scalar-vertical selector (S1-8)

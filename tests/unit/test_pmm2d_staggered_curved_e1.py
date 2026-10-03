@@ -503,6 +503,45 @@ def test_e1_3m_oop_eps_with_mu_matches_the_eps_mu_oracle(mu, cmap):
         assert max(r[:3]) <= 1e-8, r
 
 
+def test_e1_3m_a_transposed_mu_is_caught_by_the_non_symmetric_gates(
+        monkeypatch):
+    """Phase D verifier's surviving mutant, closed here: the permeability
+    TRANSPOSED inside chi (``mu -> mu^T`` in the map's congruence and in the
+    unmapped per-cell inverse).  Every Phase D gate used a diagonal mu, so it
+    survived all 26 Phase D ids; the E1-3m gates carry a NON-SYMMETRIC
+    (gyrotropic, ``m12 = -m21 = 0.3i``) mu on a CONICAL slab, unmapped and
+    under the sheared map.  Measured 2026-10-03 (this build, the
+    ``test_e1_3m_oop_eps_with_mu_matches_the_eps_mu_oracle[gyro-*]``
+    fixtures): the mutant misses the (eps, mu) oracle by 8.4e-3 on R / T and
+    0.63 on Jt (both arms), with the lossless closure untouched (1e-11 /
+    6e-10: the lossless trap), against 1.25e-11 / 6.1e-10 correct.  Bar
+    >= 1e-3 on R / T (0.9 decades below the defect, 6 above the correct
+    arms)."""
+    orig_t = TS._stag_map_eff_tensor
+
+    def ft(eps, mu, *a, **k):
+        return orig_t(eps, None if mu is None else np.swapaxes(mu, -1, -2),
+                      *a, **k)
+    orig_c = TS.Granet2DTransverseE._chi_maps
+
+    def fc(self):
+        m = self.mu_cell
+        if self.cmap is None and m is not None and m.ndim == 4:
+            self.mu_cell = np.swapaxes(m, -1, -2)
+            try:
+                return orig_c(self)
+            finally:
+                self.mu_cell = m
+        return orig_c(self)
+    monkeypatch.setattr(TS, "_stag_map_eff_tensor", ft)
+    monkeypatch.setattr(TS.Granet2DTransverseE, "_chi_maps", fc)
+    ref = _mu_berreman(_NONREC, _MU_GYRO, *_CON)
+    r = _slab(_NONREC, None, 6, *_CON, mu=_MU_GYRO, oracle=ref)
+    assert r[0] >= 1e-3, r
+    r = _slab(_NONREC, _shear(_SLAB["P"]), 5, *_CON, mu=_MU_GYRO, oracle=ref)
+    assert r[0] >= 1e-3, r
+
+
 # =========================================================================== #
 # E1-4 -- an out-of-plane film under the CIRCLE map (singular vertices)
 # =========================================================================== #

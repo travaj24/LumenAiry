@@ -835,3 +835,81 @@ Test tails, both builds:
   checks passed!`
 * History fingerprints: `stack2d_pure` re-recorded with the reason;
   `twod_staggered.py` and `shapes2d.py` have no history document.
+
+---
+
+## 9. Addendum -- the Phase D verifier, folded in (2026-10-03)
+
+Merged `verify/pmm2d-curved-d` (`936be59e`; `.test_durations` dict-union);
+its four decision tests pass on this tree (section 9.5), including the pin
+that `_homog_geom_cache`'s slot 4 is the inverse PLAIN block Gram (4.7e-14)
+and 0.40 away from `inv(-R)` under a map.
+
+### 9.1 Wording (VERIFY_D section 10)
+
+D-1 (a transposed gyrotropic film is R / T-blind at NORMAL incidence only;
+conical 9.9e-4), D-3 (films under the circle map reach ~1e-13 by `M = 8` at
+normal incidence, ~1e-10 conical) and D-4 (the LC30 pillar is fixed to ~4e-6;
+the RCWA Richardson value is a 1e-4-class corroboration) applied to
+BUILD_D and the CHANGELOG verbatim.  D-2 (the walker's forward version
+tokens) was already done on this branch (commit `4079b09a`, kept by
+`4cda1e1b`).
+
+### 9.2 `_homog_geom_cache` returns a NamedTuple read by name (F-D3)
+
+`_StagHomogGeom(W0, g2_geo, GW0, SttW0, inv_plain_gram, qq)`: the two
+consumers of slot 4 -- the half-spaces' Eq.-25 H partner
+(`_homog_region_modes`) and the mapped incident L2 projection
+(`_stag_incident_coeffs_mapped`) -- now coerce a plain tuple through
+`_stag_homog_geom` (its first six slots) and
+read `inv_plain_gram` BY NAME, so the coupling is visible; positional reads
+and 6-tuple unpacks (the verifier's test, Phases A / D's patched arms, the
+per-layer path) keep working.  Bit identity re-gated on the 200-key E1-1
+set: **200 / 200** SHA-256 equal to `eae470d9` (`e1_bytes_postnt.json`).
+
+### 9.3 A non-symmetric mu on a conical film in every magnetic E1 gate
+
+The verifier's mu-transposed-in-chi mutant survived all 26 Phase D ids
+because every Phase D magnetic gate used a diagonal mu.  The E1 magnetic
+gates are the three `test_e1_3m_oop_eps_with_mu_matches_the_eps_mu_oracle`
+ids, ALL at conical incidence (25, 40 deg); two of them --
+`[gyro-None]` and `[gyro-shear]` -- carry the NON-SYMMETRIC gyrotropic mu
+(`m12 = -m21 = 0.3i`); `[lossy-None]` a symmetric lossy one (the QZ branch).
+The mutant, applied to both chi paths (the map's congruence and the
+unmapped per-cell inverse), misses the (eps, mu) oracle by 8.4e-3 on R / T
+and 0.63 on Jt on BOTH gyro arms, with the lossless closure untouched (1e-11
+/ 6e-10: the lossless trap), against 1.25e-11 / 6.1e-10 correct.  Added as
+its own decision: `test_e1_3m_a_transposed_mu_is_caught_by_the_non_symmetric_gates`
+(bar >= 1e-3 on R / T).  The E1-3m ladders (3.4) carry the gyro mu at all
+three mounts on all four maps.
+
+### 9.4 Convergence slows past M = 10 on curved disks (plan 3.3)
+
+The pillar's top and bottom rim carry an edge singularity no in-plane map
+removes (plan 3.3 / 3.4; Phase B's scalar disk sits at ~1e-6 per rung at
+`M = 11 / 12`; the Phase D verifier measured the LC30 tensor disk's c3
+ladder slowing from a decade per rung to ~1.3x per rung past `M = 10`, 3.5e-6
+/ 2.8e-6 at `M = 11 / 12`).  The E1 pillars obey the same cap: the OOP30
+disk's c3 rung change is 1.0e-5 at 9 -> 10 and the two topologies agree to
+4.0e-6, i.e. the E1-5 answer is fixed to the ~1e-5 .. 4e-6 level, not
+better; the slanted disk's c3 rung change is 3.8e-5 at 9 -> 10 (c5 vs c3
+2.3e-5).  The E1 claims above are stated at that level; the slab, film and
+reciprocity gates (no rim inside the measured quantity, or an identity) are
+not affected.
+
+### 9.5 Tails after the fold-in
+
+* Windows, `tests/unit/test_pmm2d_staggered_curved_e1.py` serial:
+  `19 passed in 70.22s` (`e1_tests_serial_win2.txt`).
+* Windows, `-n 6`: the E1 file, Phase D's ids, the merged verifier files
+  (A, B, C, D), curved A / B / C, magnetic, anisotropic, OOP, slant, the
+  `__all__` walker, doc identifiers, history lint / relocation / fingerprint
+  tool, dispatcher doc consistency, except budget and public API:
+  `1093 passed, 2 xfailed in 569.22s` (`suite_foldin_win.txt`; the xfails
+  are vc4 / vc5, E2's).  The first run of this sweep caught the NamedTuple
+  coercion choking on Phase D's patched 7-slot `hgram_R` tuple
+  (`test_d6_*`, 2 failed); the consumers now take the first six slots of a
+  plain tuple (`_stag_homog_geom`), and the sweep above is the re-run.
+* Byte identity after the refactor: 200 / 200 (9.2).  `python -m mypy`:
+  no issues in 33 files; WSL ruff: all checks passed; history fingerprints
+  `--check`: no drift.
