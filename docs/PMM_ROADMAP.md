@@ -260,8 +260,14 @@ RCWA at 29 x 29 orders is 3.3e-3 away).  Plan:
 block-form tensors and permeabilities through the map (the congruence
 `sqrt(g) J^-1 eps J^-T` at every quadrature node): a tensor film matches
 Berreman (Jones included) to ~1e-13, a liquid-crystal pillar's two layouts
-agree to 2.5e-6.  Still open: out-of-plane tensors / slant / per-layer maps
-/ the JAX twin under a map (curved-cell Phase E, approved 2026-10-02).  The convergence of the EFFICIENCIES stays
+agree to 2.5e-6.  The JAX twin (curved-cell Phase E3,
+`docs/audits/BUILD_PMM2D_CURVED_E3_2026_10_03.md`): `PMM2DStackPure(backend='jax')`
+/ `pmm_jones_2d_staggered(..., backend='jax')` differentiate the shared-grid
+in-plane path -- materials, thicknesses, indices and shape parameters (the
+first curved gradient of the library: d T00 / d r of a circle, AD vs a
+converged FD 2.3e-8 relative at M = 6).  Still open: out-of-plane tensors /
+slant / per-layer maps under a map (curved-cell Phases E1 / E2, approved
+2026-10-02).  The convergence of the EFFICIENCIES stays
 rim-capped (~1e-5 per rung) for curved pillars as for square ones: the
 in-plane curvature is resolved spectrally, the pillar's top and bottom rim
 is not (a z-direction question).

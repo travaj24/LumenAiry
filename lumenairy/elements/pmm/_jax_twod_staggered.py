@@ -75,10 +75,14 @@ required; ``jnp.linalg.eig`` is CPU-only.
 from __future__ import annotations
 
 import copy
+from typing import Any
 
 import numpy as np
 
+from ..rcwa._core import _norm_slant_pair, _slant_is_zero
 from . import twod_staggered as TS
+from ._core import _guarded_lstsq
+from .twod_jones import _tile_is_offplane
 
 _C = np.complex128
 
@@ -193,7 +197,7 @@ def _traced_shape_merge(parts, ref_layers, t_layers, px, py, cmap_ref):
     devs = []
 
     def walls(g, attr):
-        vals = [None] * g.b.size
+        vals: list[Any] = [None] * g.b.size
         vals[0], vals[-1] = 0.0, g.period
         for (_w, _s, lay_r), lay_t in zip(items, lays_t):
             for wr, wt in zip(getattr(lay_r, attr), getattr(lay_t, attr)):
@@ -204,7 +208,8 @@ def _traced_shape_merge(parts, ref_layers, t_layers, px, py, cmap_ref):
                     devs.append(wt - vals[k])
         return vals
     U1, V1 = walls(gu, "u_walls"), walls(gv, "v_walls")
-    vcl, ecl = {}, {}
+    vcl: dict[Any, list[Any]] = {}
+    ecl: dict[Any, list[Any]] = {}
     for (_w, _s, lay_r), lay_t in zip(items, lays_t):
         ends = {}
         vt = lay_t.vertices
@@ -281,7 +286,8 @@ def _traced_shape_merge(parts, ref_layers, t_layers, px, py, cmap_ref):
     uc, vc = parts["uc"], parts["vc"]
     N = uc.size
     cj = jnp.complex128
-    cells, mus = [], []
+    cells: list[Any] = []
+    mus: list[Any] = []
     for (shp_r, bg_r, bgm_r), (shp_t, bg_t, bgm_t) in zip(ref_layers,
                                                         t_layers):
         tensor = np.ndim(SH._as_eps(bg_r, "bg")) == 2 or any(
@@ -344,7 +350,7 @@ class StagJaxTwin:
                 f"E2 of the curved-cell plan) is NumPy-only.  Use the default "
                 f"layer_grids='shared'.")
         for k, L in enumerate(stack._layers):
-            if not TS._slant_is_zero(L.get("slant")):
+            if not _slant_is_zero(L.get("slant")):
                 raise NotImplementedError(
                     f"{fn}: layer {k + 1} is SLANTED; slant runs the "
                     f"out-of-plane first-order generator, which has no JAX "
@@ -360,7 +366,7 @@ class StagJaxTwin:
                 a = np.asarray(c)
                 t33 = (a[None, None] if (uni and a.shape == (3, 3)) else
                        a if (not uni and a.ndim == 4) else None)
-                if t33 is not None and TS._tile_is_offplane(t33):
+                if t33 is not None and _tile_is_offplane(t33):
                     raise NotImplementedError(
                         f"{fn}: layer {k + 1} carries an OUT-OF-PLANE tensor "
                         f"(e_xz / e_yz / e_zx / e_zy); the out-of-plane "
@@ -386,7 +392,7 @@ class StagJaxTwin:
         cmap = stack.cmap
         # THE SHAPE LAYERS: the reference merge, with its intermediates (the
         # structure a traced shape parameter is replayed on)
-        self.shape_parts = None
+        self.shape_parts: dict[str, Any] | None = None
         self.shape_idx = []
         if stack._shapes_map:
             from .shapes2d import _merge
@@ -436,9 +442,10 @@ class StagJaxTwin:
         self.qq = (Nx * (M - 1)) * (Ny * (M - 1))
         # per-layer reference solvers (deduplicated like the stack's eig cache)
         self.layers = []
-        refs = {}
+        refs: dict[Any, Any] = {}
         for L in stack._layers:
-            rec = dict(kind=L["kind"], thickness=L["thickness"])
+            rec: dict[str, Any] = dict(kind=L["kind"],
+                                       thickness=L["thickness"])
             if L["kind"] == "uniform":
                 rec["eps"] = L["eps"]
             else:
@@ -456,16 +463,16 @@ class StagJaxTwin:
                 else:
                     cell = L["eps_cell"]
                     rec["eps"] = cell
-                key = ((cell.shape, cell.tobytes()) if mcell is None else
-                       (cell.shape, cell.tobytes(), mcell.shape,
-                        mcell.tobytes()))
-                ref = refs.get(key)
+                rkey = ((cell.shape, cell.tobytes()) if mcell is None else
+                        (cell.shape, cell.tobytes(), mcell.shape,
+                         mcell.tobytes()))
+                ref = refs.get(rkey)
                 if ref is None:
-                    ref = refs[key] = TS.Granet2DTransverseE(
+                    ref = refs[rkey] = TS.Granet2DTransverseE(
                         px, py, gx, gy, M, cell, alpha0x=a0x, alpha0y=a0y,
                         k0=k0, mu_cell=mcell, **mkw)
                 rec["ref"] = ref
-                rec["ref_key"] = key
+                rec["ref_key"] = rkey
             self.layers.append(rec)
         # the order set and the far field
         ox = np.arange(-self.n_orders, self.n_orders + 1)
@@ -478,7 +485,8 @@ class StagJaxTwin:
         self.kyv = ky0 + self.order_y * (wl / py)
         if not self.mapped:
             self.P_far = TS._far_projector_2d(bx, by, ox, ox, a0x, a0y)
-            self.far_nq = self.inc_nq = None
+            self.far_nq: dict[Any, int] | None = None
+            self.inc_nq: dict[Any, int] | None = None
         else:
             self.far_nq, self.inc_nq = {}, {}
             self.P_far = TS._far_projector_mapped(bx, by, ox, ox, a0x, a0y,
@@ -580,7 +588,7 @@ class StagJaxTwin:
 
         # ---- per-layer modes
         modes = []
-        cache = {}
+        cache: dict[Any, Any] = {}
         for rec, lp in zip(self.layers, p["layers"]):
             t = lp["thickness"]
             if rec["kind"] == "uniform":
@@ -768,6 +776,7 @@ class StagJaxTwin:
                 f"are refused by the merge ({exc}) -- outside the twin's "
                 f"frozen topology.") from None
         ref = self.shape_parts
+        assert ref is not None              # a shapes template (caller)
 
         def owners(pt, g):
             # wall owners as ITEM INDICES (the owner labels carry the shape
@@ -826,7 +835,7 @@ class StagJaxTwin:
         cols = []
         for ex0, ey0 in ((1.0, 0.0), (0.0, 1.0)):
             rhs = np.concatenate([ex0 * delta, ey0 * delta])
-            cols.append(TS._guarded_lstsq(
+            cols.append(_guarded_lstsq(
                 Hsup, rhs, "PMM2DStackPure far-field Rayleigh projection"))
         self._cinc_unmapped = np.stack(cols, axis=1)
         return self._cinc_unmapped
@@ -851,7 +860,7 @@ def _pmm_jones_2d_staggered_jax(period_x, period_y, eps_cell, n_substrate,
             f"CONCRETE -- they set the Bloch glue and the wall grid of the "
             f"basis, which the twin freezes.  Trace materials, the depth, the "
             f"half-space indices or shape parameters instead.")
-    if not TS._slant_is_zero(TS._norm_slant_pair(slant, fn)):
+    if not _slant_is_zero(_norm_slant_pair(slant, fn)):
         raise NotImplementedError(
             f"{fn}: slant= has no JAX twin (slant under a map is Phase E1 of "
             f"the curved-cell plan); use backend='numpy'.")
