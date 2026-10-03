@@ -13,11 +13,11 @@ SHAPES' analytic ``contains`` which material is there, and it samples every
 material boundary of the painted grid through the map and asks which two
 materials lie on either side.
 
-Two further tests PIN open defects (``xfail(strict=True)``): they flip to
-XPASS -- and fail, so the marker must be removed -- when the defect is
-fixed with the edits given in the verify doc (V-D1 the rectangles-only
-identity test misses round-off; V-D2 the rotated ellipse folds over most of
-its documented angle range).
+Two further tests PINNED open defects (``xfail(strict=True)``) until the
+edits given in the verify doc landed (2026-10-03, folded in on the Phase E1
+branch; the markers removed): V-D1 the rectangles-only identity test missed
+round-off; V-D2 the rotated ellipse folded over most of its documented angle
+range.
 
 Fixture: square period 1.2 (lambda = 1 in the doc's probes), eps 4 / 2.25
 features on vacuum unless stated.  Geometry only (no eigen-solve): each test
@@ -149,7 +149,7 @@ def test_vc2_merged_map_is_exact_against_the_analytic_outlines(name):
     off its outline."""
     period, layers = _SCENARIOS[name]
     lab = [(f"layer {k + 1}", sh, bg) for k, (sh, bg) in enumerate(layers)]
-    _U, _V, cmap, cells, ident = SH._merge(period, period, lab)
+    _U, _V, cmap, cells, ident = SH._merge(period, period, lab)[:5]
     assert not ident
     bad_in, bad_b = _wrong_map(cmap, cells, [sh for sh, _ in layers],
                                [bg for _, bg in layers])
@@ -170,9 +170,6 @@ def test_vc3_one_outline_in_two_layouts_is_refused_not_merged():
                                                core=0.5)], 1.0)])
 
 
-@pytest.mark.xfail(strict=True, reason="V-D1: a rectangles-only merge whose "
-                   "walls coincide only to round-off is not recognised as "
-                   "the identity map (mapped solver; tensors refused)")
 def test_vc4_rectangles_only_merge_is_the_identity_to_round_off():
     """Rectangles need no map, and the stack then runs the UNMAPPED solver
     (and accepts tensors).  Two layers of rectangles whose shared wall is
@@ -189,9 +186,6 @@ def test_vc4_rectangles_only_merge_is_the_identity_to_round_off():
     assert SH._merge(_P, _P, lay)[4]
 
 
-@pytest.mark.xfail(strict=True, reason="V-D2: the rotated Ellipse's layout "
-                   "(corners at the PARAMETRIC 45-degree points) folds for "
-                   "aspect 2 at 20 deg, aspect 5 at 10 deg")
 def test_vc5_rotated_ellipse_lays_out_over_its_documented_range():
     """``Ellipse(..., angle=)`` documents ``|angle| < 45 deg``.  Measured
     (``v5b_ellipse_layout_win.json``): the shipped layout FOLDS for aspect

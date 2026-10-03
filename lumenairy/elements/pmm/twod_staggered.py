@@ -3884,7 +3884,7 @@ def _far_projector_mapped(bx: Basis1D, by: Basis1D, ox, oy, alpha0x, alpha0y,
 def _stag_incident_load_mapped(bx: Basis1D, by: Basis1D, cmap, alpha0x,
                                alpha0y, e0):
     """The L2 LOAD vector of the incident plane wave under the curved-cell
-    map ``cmap`` -- the right-hand side of its EXACT modal decomposition
+    map ``cmap`` -- the right-hand side of its unique L2 modal projection
     (Phase C of the curved-cell plan; Phase B finding F-B4, Phase A verifier
     D4).
 
@@ -3975,7 +3975,7 @@ def _stag_incident_coeffs_mapped(geom, bx: Basis1D, by: Basis1D, cmap,
     under the map ``cmap`` for the two lab inputs ``E_x`` and ``E_y``
     (columns).
 
-    Two steps.  (1) The exact L2 modal decomposition ``C = W0^-1 G^-1 b``:
+    Two steps.  (1) The unique L2 modal projection ``C = W0^-1 G^-1 b``:
     ``b`` the L2 load of :func:`_stag_incident_load_mapped`, ``W0`` the
     shared geometric eigenvectors and ``G^-1`` the inverse PLAIN block Gram,
     both from the mapped :func:`_homog_geom_cache` tuple ``geom``.  It is
@@ -5210,7 +5210,8 @@ def pmm_jones_2d_staggered(
         E).
         Under a CURVED map the incident plane wave is not an exact discrete
         half-space mode (the covariant field ``J^T E`` is not a polynomial),
-        so it enters through its exact L2 modal decomposition; ``R`` / ``T``
+        so it enters through its unique L2 modal projection (window-free);
+        ``R`` / ``T``
         are then independent of ``n_orders`` to round-off, and a vacuum
         spacer on top moves them only at the discretisation-error level
         (falling with ``n_modes``; measured in

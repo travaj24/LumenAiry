@@ -273,7 +273,7 @@ _KNOWN_ALL_SYMMETRY_EXEMPTIONS = frozenset({
     ('lumenairy.elements.bor.sem_radial', 'equalize_meshes'),
 
     # ---- elements.pmm.shapes2d (curved-cell shape primitives) -------------
-    # v5.50 (curved-cell Phase C, 2026-10-02): the shape primitives of the
+    # curved-cell Phase C (2026-10-02, unreleased): the shape primitives of the
     # pure staggered 2-D PMM carry GENERIC geometric names (``Rect``,
     # ``Circle``, ``Ellipse``, ...) that would be ambiguous in the ~450-name
     # top-level surface of an optics library (apertures, masks and pupils
@@ -299,7 +299,7 @@ _KNOWN_ALL_SYMMETRY_EXEMPTIONS = frozenset({
     ('lumenairy.elements.pmm.shapes2d', 'compile_shapes'),
 
     # ---- elements.pmm.stack2d_pure (the stack viewers' material naming) ---
-    # v5.50 (exported by the maintainer's commit 4ec402bc, 2026-09-21, the
+    # unreleased (exported by the maintainer's commit 4ec402bc, 2026-09-21, the
     # pure-stack geometry viewers; registered here 2026-10-03 in curved-cell
     # Phase D): ``material_key(eps)`` turns a (3, 3) permittivity tensor --
     # an unhashable numpy array -- into the identity key the viewers'
