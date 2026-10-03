@@ -590,6 +590,38 @@ def test_e2_api_per_layer_maps_refusals_and_viewer():
 # =========================================================================== #
 # The Phase E2 verifier's fold-in (VERIFY_PMM2D_CURVED_E2_2026_10_03.md)
 # =========================================================================== #
+def test_e2_v10_convergence_floor_reads_each_layer_on_its_own_map():
+    """V-E2-D10: ``convergence_floor`` isolated a shape layer on STRAIGHT
+    walls (another device; 0.14 off at M = 3) and raised on the fast path.
+    Now a shape layer is isolated on its OWN map: the floor of the circle
+    layer equals the circle alone on its map at M vs M + 2 to round-off
+    (bar 1e-12), and a fast-path stack does not raise."""
+    st = _stack([(_D1, _circ(), 1.0), (_D2, _sinw(), 1.0)], 3)
+    st.set_source(_WL)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        floor, per = st.convergence_floor()
+    own = st._layers[0]["own"]
+    vals = []
+    for M in (3, 5):
+        s1 = PMM2DStackPure(_P, _P, n_superstrate=_NSUP, n_substrate=_NSUB,
+                            n_modes=M, n_orders=3, layer_grids="per-layer")
+        s1.add_layer(_D1, eps_cell=own["cell"], cmap=own["cmap"], n_modes=M)
+        s1.set_source(_WL)
+        o, R, T = s1.solve(jones=False)
+        vals.append(np.concatenate([np.asarray(R).ravel(),
+                                    np.asarray(T).ravel()]))
+    assert abs(per[0] - float(np.max(np.abs(vals[0] - vals[1])))) <= 1e-12
+    assert floor >= per[0]
+    fast = _stack([(_D1, _circ(), 1.0), (_D2, None, 2.25)], 3)
+    assert fast._perlayer_fast_ok()
+    fast.set_source(_WL)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        f2, p2 = fast.convergence_floor()
+    assert np.all(np.isfinite(p2))
+
+
 def test_e2_v1_circle_graze_sliver_is_found_and_scales_like_its_area(
         monkeypatch):
     """V-E2-D1 on the CIRCLE (the verifier's ``test_ve2_3`` is the sinusoid

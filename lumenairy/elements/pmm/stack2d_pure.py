@@ -2010,7 +2010,36 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
                     n_modes=M, n_orders=_nord,
                     symmetry=self.symmetry, layer_grids="per-layer")
                 kw = dict(thickness=L["thickness"], n_modes=M)
-                if L["kind"] == "patterned":
+                own = L.get("own")
+                if own is not None and own["cmap"] is not None:
+                    # PHASE E2: a shape layer on its OWN curved map is that
+                    # map's (u, v) cell; on straight walls it would be
+                    # another device (Phase E2 verifier V-E2-D10)
+                    kw.update(eps_cell=own["cell"], cmap=own["cmap"])
+                    if own["mu"] is not None:
+                        kw["mu_cell"] = own["mu"]
+                elif own is not None:
+                    kw.update(eps_cell=own["cell"],
+                              x_walls=_stag_interior(own["wx"]),
+                              y_walls=_stag_interior(own["wy"]))
+                    if own["mu"] is not None:
+                        kw["mu_cell"] = own["mu"]
+                elif L.get("cmap") is not None:
+                    # an explicit per-layer map (add_layer(..., cmap=))
+                    kw["cmap"] = L["cmap"]
+                    if L["kind"] == "patterned":
+                        kw["eps_cell"] = L["eps_cell"]
+                    elif L["kind"] == "uniform":
+                        kw["eps"] = L["eps"]
+                    elif L["kind"] == "uniform_tensor":
+                        kw["eps"] = L["eps33"]
+                    else:                   # magnetic
+                        kw.update(
+                            **({"eps": L["eps"]} if L["eps_uniform"]
+                               else {"eps_cell": L["eps"]}),
+                            **({"mu": L["mu"]} if L["mu_uniform"]
+                               else {"mu_cell": L["mu"]}))
+                elif L["kind"] == "patterned":
                     kw.update(eps_cell=L["eps_cell"], x_walls=_stag_interior(
                         L["wx"]), y_walls=_stag_interior(L["wy"]))
                 elif L["kind"] == "uniform":

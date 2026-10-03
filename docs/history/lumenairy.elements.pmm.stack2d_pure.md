@@ -1,7 +1,7 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/pmm/stack2d_pure.py
-ast_sha256: d9e3ed43bfff3d1605206b4d954fbc8062061280c8817d61904d979eb47426af
-token_sha256: 60d795d88869ac9c62bd5d1634aa54ebb7f9d6da9946db395bcf709296a58553
+ast_sha256: 8b4a609f2792cd48d03879464b59bece209c45fcadabe08cff0ddc6664c8c42d
+token_sha256: 7380fbc3c1e7edbf557dd202321bb08574b93686861a39c2c4e24c16630d80aa
 pre_relocation_lines: 2190
 recorded_by: WP-A17 SWEEP-2 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
@@ -13,6 +13,7 @@ re_recorded: 2026-10-03 -- the curved-cell map, Phase C: add_layer(shapes=, back
 re_recorded: 2026-10-03 -- the curved-cell map, Phase C: the shape-layer rollback in _add_shapes_layer restructured from a broad except to try/finally (the except-budget gate; behaviour unchanged -- a refused merge restores the stack and the error propagates)
 re_recorded: 2026-10-03 -- the curved-cell map, Phase D: tensor and magnetic layers under a map -- _require_map_scope refuses only out-of-plane tensors (eps or mu) and slant (Phase E); add_layer(background_mu=) and per-shape mu (a magnetic shape layer is recorded as kind='magnetic'); the merge's tensor refusals narrowed to out-of-plane; a uniform mu layer may join a shape stack, a raw mu_cell may not (BUILD_PMM2D_CURVED_D_2026_10_03)
 re_recorded: 2026-10-03 -- the curved-cell map, Phase E2: per-layer maps -- add_layer(cmap=) on per-layer stacks, per-layer shape layers on their own maps with the stack-wide merge kept as the fast path (_recompile_shapes_perlayer / _perlayer_fast_ok), the curved mortar on the per-layer cascade (StagCrossOpsMapped, mapped end grids: cofactor far field + exact incident decomposition), the q-matching default and homogeneous-layer riding (_perlayer_geometry), per-layer viewers (_layer_map) (BUILD_PMM2D_CURVED_E2_2026_10_03)
+re_recorded: 2026-10-03 -- the curved-cell map, Phase E2 verifier fold-in: convergence_floor isolates a shape layer on its OWN map (and an explicit per-layer cmap= layer under its map) instead of straight walls (V-E2-D10) (VERIFY_PMM2D_CURVED_E2_2026_10_03)
 -->
 
 # Version history -- `lumenairy/elements/pmm/stack2d_pure.py`
