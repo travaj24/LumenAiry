@@ -1,0 +1,3 @@
+circ_sin M=4: kernel n=18 change=5.5e-14 3.8s
+  events 9, outer nodes 1600
+  inner segments 7692, nodes 1591760

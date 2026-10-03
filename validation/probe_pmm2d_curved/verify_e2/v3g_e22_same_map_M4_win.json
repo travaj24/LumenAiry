@@ -1,0 +1,251 @@
+{
+ "M": 4,
+ "ellipse_rot_th0.0_ph0.0": {
+  "grid": [
+   3,
+   3
+  ],
+  "perlayer_vs_shared": 0.0,
+  "perlayer_bytes": true,
+  "forced_vs_shared": 1.2212453270876722e-15,
+  "hswap_off_vs_shared": 0.8637016427643578,
+  "closure_shared": [
+   0.08561120423658741,
+   0.08559611074735096
+  ],
+  "absorbed_shared": [
+   0.08561120423658741,
+   0.08559611074735096
+  ],
+  "forced_n": [
+   12
+  ],
+  "forced_change": [
+   2.109996196153589e-15
+  ],
+  "wall_shared": 2.86071179999999,
+  "wall_forced": 15.8093957999954
+ },
+ "ellipse_rot_th0.33_ph0.0": {
+  "grid": [
+   3,
+   3
+  ],
+  "perlayer_vs_shared": 0.0,
+  "perlayer_bytes": true,
+  "forced_vs_shared": 2.886579864025407e-15,
+  "hswap_off_vs_shared": 1.0110250847803133,
+  "closure_shared": [
+   0.09558617456356844,
+   0.03925638288257083
+  ],
+  "absorbed_shared": [
+   0.09558617456356844,
+   0.03925638288257083
+  ],
+  "forced_n": [
+   12
+  ],
+  "forced_change": [
+   2.109996196153589e-15
+  ],
+  "wall_shared": 0.5877799000008963,
+  "wall_forced": 16.633661799998663
+ },
+ "ellipse_rot_th0.33_ph1.1": {
+  "grid": [
+   3,
+   3
+  ],
+  "perlayer_vs_shared": 0.0,
+  "perlayer_bytes": true,
+  "forced_vs_shared": 3.219646771412954e-15,
+  "hswap_off_vs_shared": 1.0497564940215327,
+  "closure_shared": [
+   0.10050907573053147,
+   0.10626276482297037
+  ],
+  "absorbed_shared": [
+   0.10050907573053147,
+   0.10626276482297048
+  ],
+  "forced_n": [
+   12
+  ],
+  "forced_change": [
+   2.109996196153589e-15
+  ],
+  "wall_shared": 0.5833954999980051,
+  "wall_forced": 16.474336700004642
+ },
+ "circle_off_th0.0_ph0.0": {
+  "grid": [
+   3,
+   3
+  ],
+  "perlayer_vs_shared": 0.0,
+  "perlayer_bytes": true,
+  "forced_vs_shared": 1.3130836921966066e-15,
+  "hswap_off_vs_shared": 0.9021564448000962,
+  "closure_shared": [
+   0.08427634458911948,
+   0.08429971697271732
+  ],
+  "absorbed_shared": [
+   0.08427634458911948,
+   0.08429971697271732
+  ],
+  "forced_n": [
+   12
+  ],
+  "forced_change": [
+   2.141633920959023e-15
+  ],
+  "wall_shared": 0.6463654000035604,
+  "wall_forced": 13.850262400002975
+ },
+ "circle_off_th0.33_ph0.0": {
+  "grid": [
+   3,
+   3
+  ],
+  "perlayer_vs_shared": 0.0,
+  "perlayer_bytes": true,
+  "forced_vs_shared": 7.840950111415168e-16,
+  "hswap_off_vs_shared": 1.0326244859536466,
+  "closure_shared": [
+   0.09168337593840858,
+   0.08797897481486372
+  ],
+  "absorbed_shared": [
+   0.09168337593840847,
+   0.08797897481486372
+  ],
+  "forced_n": [
+   12
+  ],
+  "forced_change": [
+   2.141633920959023e-15
+  ],
+  "wall_shared": 0.683884099998977,
+  "wall_forced": 13.476781800003664
+ },
+ "circle_off_th0.33_ph1.1": {
+  "grid": [
+   3,
+   3
+  ],
+  "perlayer_vs_shared": 0.0,
+  "perlayer_bytes": true,
+  "forced_vs_shared": 2.9976021664879227e-15,
+  "hswap_off_vs_shared": 0.9008297332341917,
+  "closure_shared": [
+   0.11330699854992721,
+   0.1129418343823011
+  ],
+  "absorbed_shared": [
+   0.11330699854992721,
+   0.1129418343823011
+  ],
+  "forced_n": [
+   12
+  ],
+  "forced_change": [
+   2.141633920959023e-15
+  ],
+  "wall_shared": 0.7867225000009057,
+  "wall_forced": 17.755931100000453
+ },
+ "fillet_off_th0.0_ph0.0": {
+  "grid": [
+   5,
+   5
+  ],
+  "perlayer_vs_shared": 0.0,
+  "perlayer_bytes": true,
+  "forced_vs_shared": 3.219646771412954e-15,
+  "hswap_off_vs_shared": 0.6806191400017433,
+  "closure_shared": [
+   0.0856988053866179,
+   0.08689959731038366
+  ],
+  "absorbed_shared": [
+   0.0856988053866179,
+   0.08689959731038366
+  ],
+  "forced_n": [
+   12
+  ],
+  "forced_change": [
+   1.1444396365562766e-15
+  ],
+  "wall_shared": 18.866817699999956,
+  "wall_forced": 55.59106919999613
+ },
+ "fillet_off_th0.33_ph0.0": {
+  "grid": [
+   5,
+   5
+  ],
+  "perlayer_vs_shared": 0.0,
+  "perlayer_bytes": true,
+  "forced_vs_shared": 2.55351295663786e-15,
+  "hswap_off_vs_shared": 0.6295271456299826,
+  "closure_shared": [
+   0.09158975953378257,
+   0.09564325130516671
+  ],
+  "absorbed_shared": [
+   0.09158975953378257,
+   0.09564325130516671
+  ],
+  "forced_n": [
+   12
+  ],
+  "forced_change": [
+   1.1444396365562766e-15
+  ],
+  "wall_shared": 18.489019000000553,
+  "wall_forced": 54.22736399999849
+ },
+ "fillet_off_th0.33_ph1.1": {
+  "grid": [
+   5,
+   5
+  ],
+  "perlayer_vs_shared": 0.0,
+  "perlayer_bytes": true,
+  "forced_vs_shared": 3.219646771412954e-15,
+  "hswap_off_vs_shared": 0.745704510632674,
+  "closure_shared": [
+   0.14635022985072066,
+   0.13841248187127508
+  ],
+  "absorbed_shared": [
+   0.14635022985072066,
+   0.13841248187127508
+  ],
+  "forced_n": [
+   12
+  ],
+  "forced_change": [
+   1.1444396365562766e-15
+  ],
+  "wall_shared": 20.69652109999879,
+  "wall_forced": 58.47454230000585
+ },
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "lumenairy": "c:\\tmp\\lum_vcurved_e2\\lumenairy\\__init__.py",
+  "tree": "post",
+  "build": "win",
+  "machine": "Tesla_Ryzen",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ }
+}

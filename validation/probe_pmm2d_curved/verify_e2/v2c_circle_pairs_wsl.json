@@ -1,0 +1,468 @@
+{
+ "rows": [
+  {
+   "ra": 0.36,
+   "rb": 0.34,
+   "dx": 0.05,
+   "dy": 0.0,
+   "status": "REFUSED",
+   "min_sing_sep": 0.03854590039974304
+  },
+  {
+   "ra": 0.36,
+   "rb": 0.34,
+   "dx": 0.05,
+   "dy": 0.07,
+   "status": "REFUSED",
+   "min_sing_sep": 0.06637685929828692
+  },
+  {
+   "ra": 0.36,
+   "rb": 0.34,
+   "dx": 0.05,
+   "dy": 0.15,
+   "status": "REFUSED",
+   "min_sing_sep": 0.14051030478405363
+  },
+  {
+   "ra": 0.36,
+   "rb": 0.34,
+   "dx": 0.12,
+   "dy": 0.0,
+   "status": "REFUSED",
+   "min_sing_sep": 0.10679834947369074
+  },
+  {
+   "ra": 0.36,
+   "rb": 0.34,
+   "dx": 0.12,
+   "dy": 0.07,
+   "status": "REFUSED",
+   "min_sing_sep": 0.1196912213279748
+  },
+  {
+   "ra": 0.36,
+   "rb": 0.34,
+   "dx": 0.12,
+   "dy": 0.15,
+   "status": "REFUSED",
+   "min_sing_sep": 0.17223021443168826
+  },
+  {
+   "ra": 0.36,
+   "rb": 0.34,
+   "dx": 0.2,
+   "dy": 0.0,
+   "status": "REFUSED",
+   "min_sing_sep": 0.18639513338740263
+  },
+  {
+   "ra": 0.36,
+   "rb": 0.34,
+   "dx": 0.2,
+   "dy": 0.07,
+   "status": "REFUSED",
+   "min_sing_sep": 0.19407021091137425
+  },
+  {
+   "ra": 0.36,
+   "rb": 0.34,
+   "dx": 0.2,
+   "dy": 0.15,
+   "status": "REFUSED",
+   "min_sing_sep": 0.23021838558939717
+  },
+  {
+   "ra": 0.36,
+   "rb": 0.26,
+   "dx": 0.05,
+   "dy": 0.15,
+   "status": "REFUSED",
+   "min_sing_sep": 0.08194955004475683
+  },
+  {
+   "ra": 0.36,
+   "rb": 0.26,
+   "dx": 0.12,
+   "dy": 0.0,
+   "status": "solved",
+   "min_sing_sep": 0.08619418339727372
+  },
+  {
+   "ra": 0.36,
+   "rb": 0.26,
+   "dx": 0.12,
+   "dy": 0.07,
+   "status": "REFUSED",
+   "min_sing_sep": 0.04929444507154124
+  },
+  {
+   "ra": 0.36,
+   "rb": 0.26,
+   "dx": 0.12,
+   "dy": 0.15,
+   "status": "REFUSED",
+   "min_sing_sep": 0.09336077236144978
+  },
+  {
+   "ra": 0.36,
+   "rb": 0.26,
+   "dx": 0.2,
+   "dy": 0.0,
+   "status": "solved",
+   "min_sing_sep": 0.14736257582079013
+  },
+  {
+   "ra": 0.36,
+   "rb": 0.26,
+   "dx": 0.2,
+   "dy": 0.07,
+   "status": "REFUSED",
+   "min_sing_sep": 0.1292912750959107
+  },
+  {
+   "ra": 0.36,
+   "rb": 0.26,
+   "dx": 0.2,
+   "dy": 0.15,
+   "status": "REFUSED",
+   "min_sing_sep": 0.15166583437591244
+  },
+  {
+   "ra": 0.36,
+   "rb": 0.26,
+   "dx": 0.3,
+   "dy": 0.0,
+   "status": "REFUSED",
+   "min_sing_sep": 0.15542289856582997
+  },
+  {
+   "ra": 0.36,
+   "rb": 0.26,
+   "dx": 0.3,
+   "dy": 0.07,
+   "status": "REFUSED",
+   "min_sing_sep": 0.1384080288928091
+  },
+  {
+   "ra": 0.36,
+   "rb": 0.26,
+   "dx": 0.3,
+   "dy": 0.15,
+   "status": "REFUSED",
+   "min_sing_sep": 0.1595088523029613
+  },
+  {
+   "ra": 0.36,
+   "rb": 0.18,
+   "dx": 0.12,
+   "dy": 0.15,
+   "status": "REFUSED",
+   "min_sing_sep": 0.023858350082677175
+  },
+  {
+   "ra": 0.36,
+   "rb": 0.18,
+   "dx": 0.2,
+   "dy": 0.0,
+   "status": "solved",
+   "min_sing_sep": 0.14658892098166418
+  },
+  {
+   "ra": 0.36,
+   "rb": 0.18,
+   "dx": 0.2,
+   "dy": 0.07,
+   "status": "solved",
+   "min_sing_sep": 0.09257008625181029
+  },
+  {
+   "ra": 0.36,
+   "rb": 0.18,
+   "dx": 0.2,
+   "dy": 0.15,
+   "status": "REFUSED",
+   "min_sing_sep": 0.07618756834612209
+  },
+  {
+   "ra": 0.36,
+   "rb": 0.18,
+   "dx": 0.3,
+   "dy": 0.0,
+   "status": "solved",
+   "min_sing_sep": 0.1513188781862943
+  },
+  {
+   "ra": 0.36,
+   "rb": 0.18,
+   "dx": 0.3,
+   "dy": 0.07,
+   "status": "solved",
+   "min_sing_sep": 0.09989150118832742
+  },
+  {
+   "ra": 0.36,
+   "rb": 0.18,
+   "dx": 0.3,
+   "dy": 0.15,
+   "status": "REFUSED",
+   "min_sing_sep": 0.0849331308235193
+  },
+  {
+   "ra": 0.3,
+   "rb": 0.34,
+   "dx": 0.05,
+   "dy": 0.0,
+   "status": "solved",
+   "min_sing_sep": 0.035659120505893066
+  },
+  {
+   "ra": 0.3,
+   "rb": 0.34,
+   "dx": 0.05,
+   "dy": 0.07,
+   "status": "REFUSED",
+   "min_sing_sep": 0.04702951095439052
+  },
+  {
+   "ra": 0.3,
+   "rb": 0.34,
+   "dx": 0.05,
+   "dy": 0.15,
+   "status": "REFUSED",
+   "min_sing_sep": 0.12363774302782801
+  },
+  {
+   "ra": 0.3,
+   "rb": 0.34,
+   "dx": 0.12,
+   "dy": 0.0,
+   "status": "REFUSED",
+   "min_sing_sep": 0.09597799175128184
+  },
+  {
+   "ra": 0.3,
+   "rb": 0.34,
+   "dx": 0.12,
+   "dy": 0.07,
+   "status": "REFUSED",
+   "min_sing_sep": 0.10075701923917993
+  },
+  {
+   "ra": 0.3,
+   "rb": 0.34,
+   "dx": 0.12,
+   "dy": 0.15,
+   "status": "REFUSED",
+   "min_sing_sep": 0.15240240656357948
+  },
+  {
+   "ra": 0.3,
+   "rb": 0.34,
+   "dx": 0.2,
+   "dy": 0.0,
+   "status": "REFUSED",
+   "min_sing_sep": 0.17402957076604894
+  },
+  {
+   "ra": 0.3,
+   "rb": 0.34,
+   "dx": 0.2,
+   "dy": 0.07,
+   "status": "REFUSED",
+   "min_sing_sep": 0.17671019644143515
+  },
+  {
+   "ra": 0.3,
+   "rb": 0.34,
+   "dx": 0.2,
+   "dy": 0.15,
+   "status": "REFUSED",
+   "min_sing_sep": 0.21047805141338774
+  },
+  {
+   "ra": 0.3,
+   "rb": 0.26,
+   "dx": 0.05,
+   "dy": 0.0,
+   "status": "solved",
+   "min_sing_sep": 0.03565912050589303
+  },
+  {
+   "ra": 0.3,
+   "rb": 0.26,
+   "dx": 0.05,
+   "dy": 0.07,
+   "status": "REFUSED",
+   "min_sing_sep": 0.04702951095439059
+  },
+  {
+   "ra": 0.3,
+   "rb": 0.26,
+   "dx": 0.05,
+   "dy": 0.15,
+   "status": "REFUSED",
+   "min_sing_sep": 0.12363774302782814
+  },
+  {
+   "ra": 0.3,
+   "rb": 0.26,
+   "dx": 0.12,
+   "dy": 0.0,
+   "status": "REFUSED",
+   "min_sing_sep": 0.09597799175128179
+  },
+  {
+   "ra": 0.3,
+   "rb": 0.26,
+   "dx": 0.12,
+   "dy": 0.07,
+   "status": "REFUSED",
+   "min_sing_sep": 0.10075701923917985
+  },
+  {
+   "ra": 0.3,
+   "rb": 0.26,
+   "dx": 0.12,
+   "dy": 0.15,
+   "status": "REFUSED",
+   "min_sing_sep": 0.1524024065635795
+  },
+  {
+   "ra": 0.3,
+   "rb": 0.26,
+   "dx": 0.2,
+   "dy": 0.0,
+   "status": "REFUSED",
+   "min_sing_sep": 0.17402957076604889
+  },
+  {
+   "ra": 0.3,
+   "rb": 0.26,
+   "dx": 0.2,
+   "dy": 0.07,
+   "status": "REFUSED",
+   "min_sing_sep": 0.17671019644143504
+  },
+  {
+   "ra": 0.3,
+   "rb": 0.26,
+   "dx": 0.2,
+   "dy": 0.15,
+   "status": "REFUSED",
+   "min_sing_sep": 0.2104780514133877
+  },
+  {
+   "ra": 0.3,
+   "rb": 0.26,
+   "dx": 0.3,
+   "dy": 0.0,
+   "status": "REFUSED",
+   "min_sing_sep": 0.1000605892513133
+  },
+  {
+   "ra": 0.3,
+   "rb": 0.26,
+   "dx": 0.3,
+   "dy": 0.07,
+   "status": "REFUSED",
+   "min_sing_sep": 0.10465334942884251
+  },
+  {
+   "ra": 0.3,
+   "rb": 0.26,
+   "dx": 0.3,
+   "dy": 0.15,
+   "status": "REFUSED",
+   "min_sing_sep": 0.15500593584466865
+  },
+  {
+   "ra": 0.3,
+   "rb": 0.18,
+   "dx": 0.05,
+   "dy": 0.15,
+   "status": "REFUSED",
+   "min_sing_sep": 0.0738841965717009
+  },
+  {
+   "ra": 0.3,
+   "rb": 0.18,
+   "dx": 0.12,
+   "dy": 0.07,
+   "status": "REFUSED",
+   "min_sing_sep": 0.03815666098983796
+  },
+  {
+   "ra": 0.3,
+   "rb": 0.18,
+   "dx": 0.12,
+   "dy": 0.15,
+   "status": "REFUSED",
+   "min_sing_sep": 0.07402351369066267
+  },
+  {
+   "ra": 0.3,
+   "rb": 0.18,
+   "dx": 0.2,
+   "dy": 0.0,
+   "status": "solved",
+   "min_sing_sep": 0.14303452206738654
+  },
+  {
+   "ra": 0.3,
+   "rb": 0.18,
+   "dx": 0.2,
+   "dy": 0.07,
+   "status": "REFUSED",
+   "min_sing_sep": 0.11610116527887092
+  },
+  {
+   "ra": 0.3,
+   "rb": 0.18,
+   "dx": 0.2,
+   "dy": 0.15,
+   "status": "REFUSED",
+   "min_sing_sep": 0.13229901881847048
+  },
+  {
+   "ra": 0.3,
+   "rb": 0.18,
+   "dx": 0.3,
+   "dy": 0.0,
+   "status": "solved",
+   "min_sing_sep": 0.0935587891022234
+  },
+  {
+   "ra": 0.3,
+   "rb": 0.18,
+   "dx": 0.3,
+   "dy": 0.07,
+   "status": "REFUSED",
+   "min_sing_sep": 0.04211713540045582
+  },
+  {
+   "ra": 0.3,
+   "rb": 0.18,
+   "dx": 0.3,
+   "dy": 0.15,
+   "status": "REFUSED",
+   "min_sing_sep": 0.07614067832347327
+  }
+ ],
+ "n": 56,
+ "refused": 46,
+ "env": {
+  "python": "3.12.3",
+  "numpy": "2.4.6",
+  "scipy": "1.17.1",
+  "lumenairy": "/mnt/c/tmp/lum_vcurved_e2/lumenairy/__init__.py",
+  "tree": "post",
+  "build": "wsl",
+  "machine": "TeslaRyzen",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ }
+}

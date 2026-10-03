@@ -1,0 +1,79 @@
+{
+ "default_checks": {
+  "qmatch_default": [
+   4,
+   6
+  ],
+  "qmatch_named_kept": [
+   4,
+   4
+  ],
+  "qmatch_named_raises_other": [
+   6,
+   9
+  ],
+  "homog_not_matched": [
+   4,
+   4
+  ],
+  "homog_rides_circle": true,
+  "uniform_Ms_reported": [
+   4,
+   11,
+   6
+  ],
+  "uniform_rides_above": true,
+  "uniform_geo_M_used": 4,
+  "uniform_named_no_ride": true,
+  "uniform_named_grid_N": 1,
+  "unmapped_no_ride": true,
+  "fast_plain": true,
+  "fast_named_same_M": false
+ },
+ "map_Nxy": {
+  "circle": [
+   3,
+   3
+  ],
+  "sinus_x": [
+   2,
+   2
+  ],
+  "ellipse": [
+   3,
+   3
+  ],
+  "two_circles_2.4": [
+   5,
+   5
+  ],
+  "rect_stripe": [
+   3,
+   3
+  ]
+ },
+ "convergence_floor": {
+  "floor": 0.020138289085808614,
+  "per_layer": [
+   0.020138289085808614,
+   0.011067978028387104
+  ],
+  "circle_own_residual_mapaware": 0.13090800859642143,
+  "layer0_has_cmap": true,
+  "layer0_kind": "patterned"
+ },
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "lumenairy": "c:\\tmp\\lum_vcurved_e2\\lumenairy\\__init__.py",
+  "tree": "post",
+  "build": "win",
+  "machine": "Tesla_Ryzen",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ }
+}

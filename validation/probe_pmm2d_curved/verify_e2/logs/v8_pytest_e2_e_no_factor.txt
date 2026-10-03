@@ -1,0 +1,2 @@
+FAILED tests/unit/test_pmm2d_staggered_curved_e2.py::test_e2_3_two_stretches_converge_to_the_unmapped_device
+1 failed, 11 passed in 175.01s (0:02:55)

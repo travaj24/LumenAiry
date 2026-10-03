@@ -1,0 +1,243 @@
+{
+ "theta_deg": 25.0,
+ "phi_deg": 40.0,
+ "M_ref_merged": 7,
+ "merged": [
+  {
+   "M": 5,
+   "d_vs_ref": 0.025061148063443908,
+   "d_vs_next": 0.01704138286519663,
+   "closure": 0.0016686736960119797,
+   "wall": 95.98592609999469,
+   "pencil": 512,
+   "modal_counts": null
+  },
+  {
+   "M": 6,
+   "d_vs_ref": 0.011037128984618241,
+   "d_vs_next": 0.011037128984618241,
+   "closure": 0.0005119883527862079,
+   "wall": 163.3446810999958,
+   "pencil": 800,
+   "modal_counts": null
+  },
+  {
+   "M": 7,
+   "d_vs_ref": 0.0,
+   "d_vs_next": null,
+   "closure": 4.40839741879806e-05,
+   "wall": 796.2355384999973,
+   "pencil": 1152,
+   "modal_counts": null
+  }
+ ],
+ "perlayer": [
+  {
+   "M": 4,
+   "d_vs_merged_ref": 0.09490427786875921,
+   "d_vs_merged_sameM": null,
+   "d_vs_next": 0.06807790842303996,
+   "closure": 0.0019594866462553373,
+   "wall": 7.939105299999937,
+   "pencil": null,
+   "modal_counts": [
+    4,
+    6
+   ]
+  },
+  {
+   "M": 5,
+   "d_vs_merged_ref": 0.027783694077530854,
+   "d_vs_merged_sameM": 0.020301228848712383,
+   "d_vs_next": 0.01832312502014155,
+   "closure": 7.636028180524335e-05,
+   "wall": 12.270947400000296,
+   "pencil": null,
+   "modal_counts": [
+    5,
+    7
+   ]
+  },
+  {
+   "M": 6,
+   "d_vs_merged_ref": 0.013659838334120052,
+   "d_vs_merged_sameM": 0.00798738168469093,
+   "d_vs_next": 0.015071949641117181,
+   "closure": 3.114600338882667e-05,
+   "wall": 54.98456480000459,
+   "pencil": null,
+   "modal_counts": [
+    6,
+    9
+   ]
+  },
+  {
+   "M": 7,
+   "d_vs_merged_ref": 0.004200251974446401,
+   "d_vs_merged_sameM": 0.004200251974446401,
+   "d_vs_next": 0.009258616023571475,
+   "closure": 7.068292993128722e-07,
+   "wall": 103.15828880000481,
+   "pencil": null,
+   "modal_counts": [
+    7,
+    10
+   ]
+  },
+  {
+   "M": 8,
+   "d_vs_merged_ref": 0.005453223435342602,
+   "d_vs_merged_sameM": null,
+   "d_vs_next": 0.00710161603871079,
+   "closure": 6.467428078638093e-07,
+   "wall": 265.26886090000335,
+   "pencil": null,
+   "modal_counts": [
+    8,
+    12
+   ]
+  },
+  {
+   "M": 9,
+   "d_vs_merged_ref": 0.00358650778363101,
+   "d_vs_merged_sameM": null,
+   "d_vs_next": 0.0016213086234144747,
+   "closure": 1.7260062268320553e-08,
+   "wall": 484.2154088000025,
+   "pencil": null,
+   "modal_counts": [
+    9,
+    13
+   ]
+  },
+  {
+   "M": 10,
+   "d_vs_merged_ref": 0.004562192504049642,
+   "d_vs_merged_sameM": null,
+   "d_vs_next": null,
+   "closure": 4.5853514318849875e-09,
+   "wall": 801.5228677999985,
+   "pencil": null,
+   "modal_counts": [
+    10,
+    15
+   ]
+  }
+ ],
+ "rcwa": [
+  {
+   "file": "v3m_rcwa_S1200x300_th25_ph40_win.json",
+   "n_orders": 4,
+   "d_vs_merged_ref": 0.009407774002749308,
+   "closure": 1.021405182655144e-14,
+   "wall": 23.16076299999986,
+   "d_vs_perlayer_top": 0.010513462102154203
+  },
+  {
+   "file": "v3m_rcwa_S1200x300_th25_ph40_win.json",
+   "n_orders": 6,
+   "d_vs_merged_ref": 0.006130231464102076,
+   "closure": 4.729550084903167e-14,
+   "wall": 4.978258300005109,
+   "d_vs_perlayer_top": 0.007363057237747633,
+   "richardson1_d_vs_merged_ref": 0.006212083845665822,
+   "richardson1_d_vs_perlayer_top": 0.0032847134072040013
+  },
+  {
+   "file": "v3m_rcwa_S1200x300_th25_ph40_win.json",
+   "n_orders": 8,
+   "d_vs_merged_ref": 0.0042940529831551055,
+   "closure": 6.616929226765933e-14,
+   "wall": 20.928826700001082,
+   "d_vs_perlayer_top": 0.005779720368215002,
+   "richardson1_d_vs_merged_ref": 0.004354280745090228,
+   "richardson1_d_vs_perlayer_top": 0.0019964128744987125,
+   "richardson2_d_vs_merged_ref": 0.0022642522569426005,
+   "richardson2_d_vs_perlayer_top": 0.0038589371249391213
+  },
+  {
+   "file": "v3m_rcwa_S1200x300_th25_ph40_win.json",
+   "n_orders": 10,
+   "d_vs_merged_ref": 0.0035264165185820984,
+   "closure": 3.2085445411667024e-14,
+   "wall": 44.369424500000605,
+   "d_vs_perlayer_top": 0.004727375716111204,
+   "richardson1_d_vs_merged_ref": 0.004011937418502282,
+   "richardson1_d_vs_perlayer_top": 0.0016030652037943016,
+   "richardson2_d_vs_merged_ref": 0.0034556295127964876,
+   "richardson2_d_vs_perlayer_top": 0.002373431756911293
+  },
+  {
+   "file": "v3m_rcwa_S1200x300_th25_ph40_win.json",
+   "n_orders": 12,
+   "d_vs_merged_ref": 0.0034102449606699947,
+   "closure": 6.983302824892235e-14,
+   "wall": 109.36253269999725,
+   "d_vs_perlayer_top": 0.004011944557111319,
+   "richardson1_d_vs_merged_ref": 0.003799350828544032,
+   "richardson1_d_vs_perlayer_top": 0.0017618482224181914,
+   "richardson2_d_vs_merged_ref": 0.0033476043248824028,
+   "richardson2_d_vs_perlayer_top": 0.002343211760036823
+  },
+  {
+   "file": "v3m_rcwa_S1200x300_th25_ph40_win.json",
+   "n_orders": 14,
+   "d_vs_merged_ref": 0.0033108685346566052,
+   "closure": 3.3306690738754696e-13,
+   "wall": 198.48045609999826,
+   "d_vs_perlayer_top": 0.003506243843291207,
+   "richardson1_d_vs_merged_ref": 0.0035915091025736506,
+   "richardson1_d_vs_perlayer_top": 0.0018724266319767313,
+   "richardson2_d_vs_merged_ref": 0.003045924571901726,
+   "richardson2_d_vs_perlayer_top": 0.0021626949570667797
+  },
+  {
+   "file": "v3m_rcwa_S1200x300_th25_ph40_win.json",
+   "n_orders": 16,
+   "d_vs_merged_ref": 0.0032291250090517726,
+   "closure": 8.690825836765725e-13,
+   "wall": 435.11233140000695,
+   "d_vs_perlayer_top": 0.0031357907648436045,
+   "richardson1_d_vs_merged_ref": 0.0034792934295520064,
+   "richardson1_d_vs_perlayer_top": 0.001925708055632927,
+   "richardson2_d_vs_merged_ref": 0.0031286194513586163,
+   "richardson2_d_vs_perlayer_top": 0.0020922125045603757
+  }
+ ],
+ "rcwa_best": "Richardson-1 at n_orders 16",
+ "vs_rcwa_best": {
+  "merged": {
+   "5": 0.028540441492995915,
+   "6": 0.014516422414170248,
+   "7": 0.0034792934295520064
+  },
+  "perlayer": {
+   "4": 0.09385616402645736,
+   "5": 0.03126298750708286,
+   "6": 0.017139131763672058,
+   "7": 0.003751797504060163,
+   "8": 0.006699490229729932,
+   "9": 0.0015091436708711825,
+   "10": 0.001925708055632927
+  }
+ },
+ "stair": [],
+ "ref_R00_T00": [
+  [
+   0.018060121378479482,
+   0.011607507964925377
+  ],
+  [
+   0.5314673576889497,
+   0.5243069752841251
+  ]
+ ],
+ "fit_perlayer_vs_merged_ref": {
+  "exp_rate_per_M": 0.969204381579408,
+  "alg_exponent": 4.807370963015679
+ },
+ "fit_merged_vs_ref": {
+  "exp_rate_per_M": 0.8200538097186159,
+  "alg_exponent": 4.49784339350158
+ }
+}

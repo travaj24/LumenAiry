@@ -1,0 +1,9 @@
+circ_sin M=4: kernel n=18 change=5.5e-14 2.2s
+  events 9, outer nodes 1600
+  inner segments 7692, nodes 1591760
+  max inversion residual 2.52e-01
+  brute 329.0s  E-row {'11': 1.5905807465987937e-09, '12': 1.675336091309994e-09, '21': 6.95110073588857e-10, '22': 7.672380059513073e-10, 'all': 1.675336091309994e-09, 'scale': 0.19470896745358612}
+  H-row kernel vs brute {'H11': 7.672380059513073e-10, 'H12': 1.675336091309994e-09, 'H21': 6.95110073588857e-10, 'H22': 1.5905807465987937e-09, 'all': 1.675336091309994e-09}
+  H identity on brute X vs brute H 1.43e-16
+  fail-before (H without off-diagonal cofactor) 2.16e-01
+wrote v2_brute_circ_sin_M4_n20_win.json

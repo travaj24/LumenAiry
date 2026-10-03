@@ -1,0 +1,62 @@
+{
+ "geom": "diag",
+ "M": 4,
+ "s=1e-05": {
+  "n": 96,
+  "change": 7.550695247835868e-08,
+  "warnings": [
+   "PMM2DStackPure: the curved mortar's cross-mass between two differently mapped layers did not settle to 1e-12 within 96 Gauss nodes per sub-interval (last change 7.55e-08); the interface carries a quadrature error of that order.  The two maps are too different inside a cell -- add walls (grid_hint) where they are steep."
+  ],
+  "wall_adaptive": 107.84053109999513,
+  "rel_fine": 6.431329592369009e-07,
+  "rel_primary_a": 1.5769026117190396e-06,
+  "rel_primary_b": 1.2669910427924385e-05,
+  "wall_checks": 96.2402060999957,
+  "absmax": 0.4048743642595102
+ },
+ "s=1e-06": {
+  "n": 96,
+  "change": 7.599846805316482e-08,
+  "warnings": [
+   "PMM2DStackPure: the curved mortar's cross-mass between two differently mapped layers did not settle to 1e-12 within 96 Gauss nodes per sub-interval (last change 7.60e-08); the interface carries a quadrature error of that order.  The two maps are too different inside a cell -- add walls (grid_hint) where they are steep."
+  ],
+  "wall_adaptive": 147.19185600000492,
+  "rel_fine": 6.482173113774191e-07,
+  "rel_primary_a": 1.5771569473283304e-06,
+  "rel_primary_b": 1.2670326561754604e-05,
+  "wall_checks": 90.10440530000051,
+  "absmax": 0.40486017537714614
+ },
+ "s=1e-07": {
+  "n": 96,
+  "change": 7.604762481927148e-08,
+  "warnings": [
+   "PMM2DStackPure: the curved mortar's cross-mass between two differently mapped layers did not settle to 1e-12 within 96 Gauss nodes per sub-interval (last change 7.60e-08); the interface carries a quadrature error of that order.  The two maps are too different inside a cell -- add walls (grid_hint) where they are steep."
+  ],
+  "wall_adaptive": 113.35132559999329,
+  "rel_fine": 6.487258048878793e-07,
+  "rel_primary_a": 1.5771823700483799e-06,
+  "rel_primary_b": 1.2670368155526573e-05,
+  "wall_checks": 87.04548030000296,
+  "absmax": 0.4048587564846567
+ },
+ "s=1e-08": {
+  "raised": "RuntimeError: curved mortar: a quadrature node could not be inverted in the neighbouring layer's map.",
+  "warnings": [],
+  "wall_adaptive": 33.42229550000047
+ },
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "lumenairy": "c:\\tmp\\lum_vcurved_e2\\lumenairy\\__init__.py",
+  "tree": "post",
+  "build": "win",
+  "machine": "Tesla_Ryzen",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ }
+}

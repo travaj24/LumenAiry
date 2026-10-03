@@ -1,0 +1,44 @@
+{
+ "concentric_0.36_0.30": {
+  "accepted": true,
+  "default": "a",
+  "n_exc": 5,
+  "merge_ok": true,
+  "fast_path": false
+ },
+ "concentric_0.36_0.20": {
+  "accepted": true,
+  "default": "a",
+  "n_exc": 5,
+  "merge_ok": true,
+  "fast_path": false
+ },
+ "nested_offc": {
+  "accepted": true,
+  "default": "a",
+  "n_exc": 5,
+  "merge_ok": true,
+  "fast_path": false
+ },
+ "disjoint": {
+  "accepted": true,
+  "default": "a",
+  "n_exc": 2,
+  "merge_ok": true,
+  "fast_path": false
+ },
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "lumenairy": "c:\\tmp\\lum_vcurved_e2\\lumenairy\\__init__.py",
+  "tree": "post",
+  "build": "win",
+  "machine": "Tesla_Ryzen",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ }
+}

@@ -1,0 +1,5 @@
+..xx.............                                                        [100%]
+=========================== short test summary info ============================
+XFAIL tests/unit/test_verify_pmm2d_curved_e2.py::test_ve2_3_grazing_cut_is_not_lost_between_samples - V-E2-D1: _cell_pieces samples the pulled-back wall at 65 points and drops a piece that lies between two samples -- a grazing cut of 1e-6 (sliver 1.6e-3 long) is missed: 5.6e-9 off, adaptive change 8e-15 (verify_e2/v2d_graze_sweep_win.json)
+XFAIL tests/unit/test_verify_pmm2d_curved_e2.py::test_ve2_4_two_crossing_circles_have_a_cross_mass - V-E2-D2: two CROSSING circles are refused when a cell pair touches a 45-degree point of both maps -- 46 of 56 sampled crossing layouts (verify_e2/v2c_circle_pairs_win.json), not only 'nearly coincident 45-degree points' as BUILD_E2 3.5 states
+15 passed, 2 xfailed in 145.62s (0:02:25)

@@ -1,0 +1,45 @@
+{
+ "mode": "vacuum",
+ "argv": [
+  "vacuum",
+  "circ",
+  "6"
+ ],
+ "perlayer_vs_shared_spacer": 0.0,
+ "bytes_equal": true,
+ "spacer_vs_alone": 2.1912290359702227e-05,
+ "perlayer_vs_alone": 2.1912290359702227e-05,
+ "noride_vs_alone": 0.0018545518442856235,
+ "noride_n": [
+  35
+ ],
+ "perlayer_n": [],
+ "closure": [
+  0.00045152978681928246,
+  0.0004515297867815349
+ ],
+ "noride_closure": [
+  0.0004283327455620878,
+  0.00043091949260620765
+ ],
+ "walls": [
+  29.50171820000105,
+  18.933028500003275,
+  20.699851900004433,
+  21.043317900002876
+ ],
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "lumenairy": "c:\\tmp\\lum_vcurved_e2\\lumenairy\\__init__.py",
+  "tree": "post",
+  "build": "win",
+  "machine": "Tesla_Ryzen",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ }
+}

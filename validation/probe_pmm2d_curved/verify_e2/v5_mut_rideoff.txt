@@ -1,0 +1,4 @@
+
+tests\unit\test_pmm2d_staggered_curved_e2.py:398: AssertionError
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 6 passed in 44.16s

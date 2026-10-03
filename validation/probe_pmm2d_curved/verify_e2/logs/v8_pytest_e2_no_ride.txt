@@ -1,0 +1,2 @@
+FAILED tests/unit/test_pmm2d_staggered_curved_e2.py::test_e2_4_vacuum_layer_identity_and_the_merged_map_both_ways
+1 failed, 11 passed in 349.60s (0:05:49)

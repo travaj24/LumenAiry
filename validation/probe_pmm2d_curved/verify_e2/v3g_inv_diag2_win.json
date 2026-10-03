@@ -1,0 +1,371 @@
+{
+ "circ_45_near_g5_n8": {
+  "ok": true,
+  "change": null
+ },
+ "circ_45_near_g5_n12": {
+  "ok": true,
+  "change": 0.00014086742064868386
+ },
+ "circ_45_near_g5_n18": {
+  "ok": true,
+  "change": 6.891030887820408e-05
+ },
+ "circ_45_near_g5_n27": {
+  "ok": true,
+  "change": 3.251074101100844e-05
+ },
+ "circ_45_near_g5_n41": {
+  "ok": true,
+  "change": 1.5139775176791795e-05
+ },
+ "circ_45_near_g5_n62": {
+  "ok": true,
+  "change": 6.46233888790958e-06
+ },
+ "circ_45_near_g5_n93": {
+  "ok": false,
+  "err": "RuntimeError: curved mortar: a quadrature node could not be inverted in the neighbouring layer's map.",
+  "fail": [
+   {
+    "primary_cell": [
+     3,
+     2
+    ],
+    "primary_walls": [
+     [
+      0.0,
+      0.2878679656440358,
+      0.5,
+      0.7121320343559643,
+      0.9060660171779822,
+      1.1
+     ],
+     [
+      0.0,
+      0.2878679656440358,
+      0.5,
+      0.7121320343559643,
+      0.9060660171779822,
+      1.1
+     ]
+    ],
+    "other_walls": [
+     [
+      0.0,
+      0.17805800858899107,
+      0.35611601717798214,
+      0.7122320343559643,
+      0.9950747468305832,
+      1.1
+     ],
+     [
+      0.0,
+      0.21464466094067267,
+      0.42928932188134533,
+      0.7121320343559643,
+      0.9060660171779822,
+      1.1
+     ]
+    ],
+    "primary_sing": true,
+    "other_sing": true,
+    "msg": "curved mortar: a quadrature node could not be inverted in the neighbouring layer's map."
+   }
+  ]
+ },
+ "circ_45_near_g5_n96": {
+  "ok": false,
+  "err": "RuntimeError: curved mortar: a quadrature node could not be inverted in the neighbouring layer's map.",
+  "fail": [
+   {
+    "primary_cell": [
+     3,
+     2
+    ],
+    "primary_walls": [
+     [
+      0.0,
+      0.2878679656440358,
+      0.5,
+      0.7121320343559643,
+      0.9060660171779822,
+      1.1
+     ],
+     [
+      0.0,
+      0.2878679656440358,
+      0.5,
+      0.7121320343559643,
+      0.9060660171779822,
+      1.1
+     ]
+    ],
+    "other_walls": [
+     [
+      0.0,
+      0.17805800858899107,
+      0.35611601717798214,
+      0.7122320343559643,
+      0.9950747468305832,
+      1.1
+     ],
+     [
+      0.0,
+      0.21464466094067267,
+      0.42928932188134533,
+      0.7121320343559643,
+      0.9060660171779822,
+      1.1
+     ]
+    ],
+    "primary_sing": true,
+    "other_sing": true,
+    "msg": "curved mortar: a quadrature node could not be inverted in the neighbouring layer's map."
+   }
+  ]
+ },
+ "circ_45_near_g7_n8": {
+  "ok": true,
+  "change": null
+ },
+ "circ_45_near_g7_n12": {
+  "ok": true,
+  "change": 0.00033182902255693566
+ },
+ "circ_45_near_g7_n18": {
+  "ok": true,
+  "change": 0.00011748464057943166
+ },
+ "circ_45_near_g7_n27": {
+  "ok": true,
+  "change": 5.7717343582383786e-05
+ },
+ "circ_45_near_g7_n41": {
+  "ok": true,
+  "change": 2.7698509906152012e-05
+ },
+ "circ_45_near_g7_n62": {
+  "ok": false,
+  "err": "RuntimeError: curved mortar: a quadrature node could not be inverted in the neighbouring layer's map.",
+  "fail": [
+   {
+    "primary_cell": [
+     3,
+     4
+    ],
+    "primary_walls": [
+     [
+      0.0,
+      0.17805800858899107,
+      0.35611601717798214,
+      0.5341740257669731,
+      0.7122320343559643,
+      0.8536533905932737,
+      0.9950747468305832,
+      1.1
+     ],
+     [
+      0.0,
+      0.10732233047033633,
+      0.21464466094067267,
+      0.42928932188134533,
+      0.5707106781186548,
+      0.7121320343559643,
+      0.9060660171779822,
+      1.1
+     ]
+    ],
+    "other_walls": [
+     [
+      0.0,
+      0.1439339828220179,
+      0.2878679656440358,
+      0.5,
+      0.6060660171779821,
+      0.7121320343559643,
+      0.9060660171779822,
+      1.1
+     ],
+     [
+      0.0,
+      0.1439339828220179,
+      0.2878679656440358,
+      0.5,
+      0.6060660171779821,
+      0.7121320343559643,
+      0.9060660171779822,
+      1.1
+     ]
+    ],
+    "primary_sing": true,
+    "other_sing": true,
+    "msg": "curved mortar: a quadrature node could not be inverted in the neighbouring layer's map."
+   }
+  ]
+ },
+ "circ_45_near_g7_n93": {
+  "ok": false,
+  "err": "RuntimeError: curved mortar: a quadrature node could not be inverted in the neighbouring layer's map.",
+  "fail": [
+   {
+    "primary_cell": [
+     5,
+     4
+    ],
+    "primary_walls": [
+     [
+      0.0,
+      0.1439339828220179,
+      0.2878679656440358,
+      0.5,
+      0.6060660171779821,
+      0.7121320343559643,
+      0.9060660171779822,
+      1.1
+     ],
+     [
+      0.0,
+      0.1439339828220179,
+      0.2878679656440358,
+      0.5,
+      0.6060660171779821,
+      0.7121320343559643,
+      0.9060660171779822,
+      1.1
+     ]
+    ],
+    "other_walls": [
+     [
+      0.0,
+      0.17805800858899107,
+      0.35611601717798214,
+      0.5341740257669731,
+      0.7122320343559643,
+      0.8536533905932737,
+      0.9950747468305832,
+      1.1
+     ],
+     [
+      0.0,
+      0.10732233047033633,
+      0.21464466094067267,
+      0.42928932188134533,
+      0.5707106781186548,
+      0.7121320343559643,
+      0.9060660171779822,
+      1.1
+     ]
+    ],
+    "primary_sing": true,
+    "other_sing": true,
+    "msg": "curved mortar: a quadrature node could not be inverted in the neighbouring layer's map."
+   }
+  ]
+ },
+ "circ_45_near_g7_n96": {
+  "ok": false,
+  "err": "RuntimeError: curved mortar: a quadrature node could not be inverted in the neighbouring layer's map.",
+  "fail": [
+   {
+    "primary_cell": [
+     5,
+     4
+    ],
+    "primary_walls": [
+     [
+      0.0,
+      0.1439339828220179,
+      0.2878679656440358,
+      0.5,
+      0.6060660171779821,
+      0.7121320343559643,
+      0.9060660171779822,
+      1.1
+     ],
+     [
+      0.0,
+      0.1439339828220179,
+      0.2878679656440358,
+      0.5,
+      0.6060660171779821,
+      0.7121320343559643,
+      0.9060660171779822,
+      1.1
+     ]
+    ],
+    "other_walls": [
+     [
+      0.0,
+      0.17805800858899107,
+      0.35611601717798214,
+      0.5341740257669731,
+      0.7122320343559643,
+      0.8536533905932737,
+      0.9950747468305832,
+      1.1
+     ],
+     [
+      0.0,
+      0.10732233047033633,
+      0.21464466094067267,
+      0.42928932188134533,
+      0.5707106781186548,
+      0.7121320343559643,
+      0.9060660171779822,
+      1.1
+     ]
+    ],
+    "primary_sing": true,
+    "other_sing": true,
+    "msg": "curved mortar: a quadrature node could not be inverted in the neighbouring layer's map."
+   }
+  ]
+ },
+ "circ_45_near_gNone_n8": {
+  "ok": true,
+  "change": null
+ },
+ "circ_45_near_gNone_n12": {
+  "ok": true,
+  "change": 5.159225864045864e-05
+ },
+ "circ_45_near_gNone_n18": {
+  "ok": true,
+  "change": 2.505091372355416e-05
+ },
+ "circ_45_near_gNone_n27": {
+  "ok": true,
+  "change": 1.1746335592074831e-05
+ },
+ "circ_45_near_gNone_n41": {
+  "ok": true,
+  "change": 5.4514924865225205e-06
+ },
+ "circ_45_near_gNone_n62": {
+  "ok": true,
+  "change": 2.328875921136293e-06
+ },
+ "circ_45_near_gNone_n93": {
+  "ok": true,
+  "change": 9.523800757794146e-07
+ },
+ "circ_45_near_gNone_n96": {
+  "ok": true,
+  "change": 4.399132393637395e-08
+ },
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "lumenairy": "c:\\tmp\\lum_vcurved_e2\\lumenairy\\__init__.py",
+  "tree": "post",
+  "build": "win",
+  "machine": "Tesla_Ryzen",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ }
+}

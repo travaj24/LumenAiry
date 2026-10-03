@@ -1,0 +1,43 @@
+v4_ladder.py ref 10 4 2.25
+v4_ladder.py ref 10 1.1 1.1
+v4_ladder.py ref 9 4 2.25
+v4_ladder.py ref 9 1.1 1.1
+v4_ladder.py pl 9 4 2.25
+v4_ladder.py pl 9 1.1 1.1
+v4_ladder.py ploff 9 4 2.25
+v4_ladder.py nat 10 4 2.25 0.6 0.12
+v4_ladder.py pl 8 4 2.25
+v4_ladder.py pl 8 1.1 1.1
+v4_ladder.py ploff 8 4 2.25
+v4_ladder.py ref 8 4 2.25
+v4_ladder.py ref 8 1.1 1.1
+v4_ladder.py nat 9 4 2.25 0.6 0.12
+v4_ladder.py ploff 9 4 2.25 0.6 0.12
+v4_ladder.py pl 7 4 2.25
+v4_ladder.py pl 7 1.1 1.1
+v4_ladder.py ploff 7 4 2.25
+v4_ladder.py ref 7 4 2.25
+v4_ladder.py ref 7 1.1 1.1
+v4_ladder.py nat 8 4 2.25 0.6 0.12
+v4_ladder.py ploff 8 4 2.25 0.6 0.12
+v4_ladder.py pl 6 4 2.25
+v4_ladder.py pl 6 1.1 1.1
+v4_ladder.py ploff 6 4 2.25
+v4_ladder.py ref 6 4 2.25
+v4_ladder.py ref 6 1.1 1.1
+v4_ladder.py nat 7 4 2.25 0.6 0.12
+v4_ladder.py ploff 7 4 2.25 0.6 0.12
+v4_ladder.py pl 5 4 2.25
+v4_ladder.py pl 5 1.1 1.1
+v4_ladder.py ploff 5 4 2.25
+v4_ladder.py ref 5 4 2.25
+v4_ladder.py ref 5 1.1 1.1
+v4_ladder.py nat 6 4 2.25 0.6 0.12
+v4_ladder.py ploff 6 4 2.25 0.6 0.12
+v4_ladder.py nat 5 4 2.25 0.6 0.12
+v4_ladder.py ploff 5 4 2.25 0.6 0.12
+v4_ladder.py nat 4 4 2.25 0.6 0.12
+v4_ladder.py ploff 4 4 2.25 0.6 0.12
+v4_ladder.py pl 4 1.1 1.1
+v4_ladder.py ploff 4 4 2.25
+v4_ladder.py ref 4 1.1 1.1

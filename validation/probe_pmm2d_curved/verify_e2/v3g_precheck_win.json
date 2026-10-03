@@ -1,0 +1,178 @@
+{
+ "i_circ_sin": {
+  "fast": false,
+  "refusal": "compile_shapes: the outlines of layer 1: Circle(cx=0.52, cy=0.58, r=0.33) and layer 2: SinusoidalWall(axis='x', x0=0.5, amplitude=0.1) CROSS in plan view.  One coordinate map cannot carry two crossing curves exactly (a common map for intersecting curves is Phase E of the curved-cell plan); move the shapes apart, nest one inside the other, or split the layer.",
+  "grids": [
+   [
+    3,
+    3
+   ],
+   [
+    2,
+    2
+   ]
+  ],
+  "mapped": [
+   true,
+   true
+  ]
+ },
+ "ii_circ_circ": {
+  "fast": false,
+  "refusal": "compile_shapes: the outlines of layer 1: Circle(cx=0.48, cy=0.5, r=0.28) and layer 2: Circle(cx=0.68, cy=0.62, r=0.26) CROSS in plan view.  One coordinate map cannot carry two crossing curves exactly (a common map for intersecting curves is Phase E of the curved-cell plan); move the shapes apart, nest one inside the other, or split the layer.",
+  "grids": [
+   [
+    3,
+    3
+   ],
+   [
+    3,
+    3
+   ]
+  ],
+  "mapped": [
+   true,
+   true
+  ]
+ },
+ "iii_fil_sin": {
+  "fast": false,
+  "refusal": "compile_shapes: the outlines of layer 1: FilletRect(cx=0.55, cy=0.55, w=0.5, h=0.5, r=0.15) and layer 2: SinusoidalWall(axis='y', x0=0.36, amplitude=0.1) CROSS in plan view.  One coordinate map cannot carry two crossing curves exactly (a common map for intersecting curves is Phase E of the curved-cell plan); move the shapes apart, nest one inside the other, or split the layer.",
+  "grids": [
+   [
+    5,
+    5
+   ],
+   [
+    2,
+    2
+   ]
+  ],
+  "mapped": [
+   true,
+   true
+  ]
+ },
+ "tangent_out": {
+  "fast": true,
+  "refusal": null,
+  "grids": [
+   [
+    3,
+    3
+   ],
+   [
+    2,
+    2
+   ]
+  ],
+  "mapped": [
+   true,
+   true
+  ]
+ },
+ "graze_in": {
+  "fast": false,
+  "refusal": "compile_shapes: the outlines of layer 1: Circle(cx=0.55, cy=0.55, r=0.3) and layer 2: SinusoidalWall(axis='x', x0=0.1505, amplitude=0.1) CROSS in plan view.  One coordinate map cannot carry two crossing curves exactly (a common map for intersecting curves is Phase E of the curved-cell plan); move the shapes apart, nest one inside the other, or split the layer.",
+  "grids": [
+   [
+    3,
+    3
+   ],
+   [
+    2,
+    2
+   ]
+  ],
+  "mapped": [
+   true,
+   true
+  ]
+ },
+ "sin_thru_45": {
+  "fast": false,
+  "refusal": "compile_shapes: the outlines of layer 1: Circle(cx=0.52, cy=0.58, r=0.33) and layer 2: SinusoidalWall(axis='x', x0=0.828939, amplitude=0.08) CROSS in plan view.  One coordinate map cannot carry two crossing curves exactly (a common map for intersecting curves is Phase E of the curved-cell plan); move the shapes apart, nest one inside the other, or split the layer.",
+  "grids": [
+   [
+    3,
+    3
+   ],
+   [
+    2,
+    2
+   ]
+  ],
+  "mapped": [
+   true,
+   true
+  ]
+ },
+ "rect_wall_at_45": {
+  "fast": false,
+  "refusal": "compile_shapes: the outlines of layer 1: Circle(cx=0.52, cy=0.58, r=0.33) and layer 2: Rect(cx=0.903345, cy=0.5, w=0.3, h=0.5) CROSS in plan view.  One coordinate map cannot carry two crossing curves exactly (a common map for intersecting curves is Phase E of the curved-cell plan); move the shapes apart, nest one inside the other, or split the layer.",
+  "grids": [
+   [
+    3,
+    3
+   ],
+   [
+    3,
+    3
+   ]
+  ],
+  "mapped": [
+   true,
+   false
+  ]
+ },
+ "circ_45_near": {
+  "fast": false,
+  "refusal": "compile_shapes: the outlines of layer 1: Circle(cx=0.5, cy=0.5, r=0.3) and layer 2: Circle(cx=0.853653, cy=0.570711, r=0.2) CROSS in plan view.  One coordinate map cannot carry two crossing curves exactly (a common map for intersecting curves is Phase E of the curved-cell plan); move the shapes apart, nest one inside the other, or split the layer.",
+  "grids": [
+   [
+    3,
+    3
+   ],
+   [
+    3,
+    3
+   ]
+  ],
+  "mapped": [
+   true,
+   true
+  ]
+ },
+ "circ_45_on_outline": {
+  "fast": false,
+  "refusal": "compile_shapes: the outlines of layer 1: Circle(cx=0.5, cy=0.5, r=0.3) and layer 2: Circle(cx=0.892132, cy=0.712132, r=0.18) CROSS in plan view.  One coordinate map cannot carry two crossing curves exactly (a common map for intersecting curves is Phase E of the curved-cell plan); move the shapes apart, nest one inside the other, or split the layer.",
+  "grids": [
+   [
+    3,
+    3
+   ],
+   [
+    3,
+    3
+   ]
+  ],
+  "mapped": [
+   true,
+   true
+  ]
+ },
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "lumenairy": "c:\\tmp\\lum_vcurved_e2\\lumenairy\\__init__.py",
+  "tree": "post",
+  "build": "win",
+  "machine": "Tesla_Ryzen",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ }
+}

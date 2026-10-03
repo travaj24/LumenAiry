@@ -1,0 +1,151 @@
+{
+ "geom": "diag",
+ "s=0.0001": {
+  "merge_refusal": "compile_shapes: the merged u-walls 0.8545584412271571 and 0.8546584412271572 are only 0.00010000000000010001 apart (8.33e-05 of the period) -- below the staggered solver's SLIVER CONTRACT (no segment narrower than 1e-3 of the period, twod_staggered._STAG_MIN_SEG_FRAC).  The walls belong to layer 1: Circle(cx=0.6, cy=0.6, r=0.36) and layer 2: Circle(cx=0.99608, cy=0.99608, r=0.2).  Align the two outlines exactly (a shared wall is free) or move them apart.",
+  "fast_ok": false,
+  "closure": 0.015708364164048638,
+  "R": [
+   [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.01462059356334712,
+    0.0,
+    0.0,
+    0.0,
+    0.017923487204133847,
+    0.008816488606215325,
+    0.04824376703888625,
+    0.0,
+    0.0,
+    0.0,
+    0.007278092008963713,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.017922013071898064,
+    0.0,
+    0.0,
+    0.0,
+    0.014619996479463356,
+    0.008817087549050756,
+    0.007277702726548687,
+    0.0,
+    0.0,
+    0.0,
+    0.04824513222590899,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ]
+  ],
+  "T": [
+   [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.007943625860466992,
+    0.0666981620377558,
+    0.01622627401178256,
+    0.0,
+    0.0,
+    0.0876552252350346,
+    0.5018136618692932,
+    0.09553144572235495,
+    0.0,
+    0.0,
+    0.008658297961448383,
+    0.09301783076989549,
+    0.009865065330256294,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.007943683990635513,
+    0.08765825041560815,
+    0.008658212046041126,
+    0.0,
+    0.0,
+    0.06669855074832592,
+    0.5018111321431743,
+    0.09301715910480299,
+    0.0,
+    0.0,
+    0.016226919644841537,
+    0.09553016808221469,
+    0.009865627607437207,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ]
+  ],
+  "warnings": [
+   "PMM2DStackPure: the curved mortar's cross-mass between two differently mapped layers did not settle to 1e-12 within 96 Gauss nodes per sub-interval (last change 7.06e-08); the interface carries a quadrature error of that order.  The two maps are too different inside a cell -- add walls (grid_hint) w"
+  ],
+  "mortar_calls": [
+   [
+    96,
+    7.060433142523592e-08
+   ]
+  ],
+  "wall": 184.89631070000178
+ },
+ "s=1e-08": {
+  "merge_refusal": "compile_shapes: the merged u-walls 0.8545584412271571 and 0.8545584512271571 are only 1.0000000050247593e-08 apart (8.33e-09 of the period) -- below the staggered solver's SLIVER CONTRACT (no segment narrower than 1e-3 of the period, twod_staggered._STAG_MIN_SEG_FRAC).  The walls belong to layer 1: Circle(cx=0.6, cy=0.6, r=0.36) and layer 2: Circle(cx=0.99598, cy=0.99598, r=0.2).  Align the two outlines exactly (a shared wall is free) or move them apart.",
+  "fast_ok": false,
+  "raised": "RuntimeError: curved mortar: a quadrature node could not be inverted in the neighbouring layer's map.",
+  "mortar_calls": [],
+  "wall": 49.08332640000299
+ },
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "lumenairy": "c:\\tmp\\lum_vcurved_e2\\lumenairy\\__init__.py",
+  "tree": "post",
+  "build": "win",
+  "machine": "Tesla_Ryzen",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ }
+}

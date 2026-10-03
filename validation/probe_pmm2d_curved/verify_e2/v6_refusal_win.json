@@ -1,0 +1,320 @@
+{
+ "two_circles_r_0.30_0.40": {
+  "one_layer_shared": {
+   "ok": false,
+   "type": "ValueError",
+   "msg": "compile_shapes: the merged map FOLDS (det J <= 0, min -2.497e-01) in the cell u in [0.387868, 0.812132], v in [0.317157, 0.387868], which is bounded by layer 1: Circle(cx=0.6, cy=0.6, r=0.3), layer 1: Circle(cx=1.8, cy=0.6, r=0.4).  An outline bulges past a neighbouring wall: two outlines are too close in plan view, or a straight wall of one shape crosses the arc bulge of another shape (even far away along that wall -- e.g. pillars of different radii in one row).  Move them apart (or align the straight wall with the curved shape's bounding box); a common map for them is Phase E of the curved-cell plan."
+  },
+  "one_layer_per-layer": {
+   "ok": false,
+   "type": "ValueError",
+   "msg": "compile_shapes: the merged map FOLDS (det J <= 0, min -2.497e-01) in the cell u in [0.387868, 0.812132], v in [0.317157, 0.387868], which is bounded by layer 1: Circle(cx=0.6, cy=0.6, r=0.3), layer 1: Circle(cx=1.8, cy=0.6, r=0.4).  An outline bulges past a neighbouring wall: two outlines are too close in plan view, or a straight wall of one shape crosses the arc bulge of another shape (even far away along that wall -- e.g. pillars of different radii in one row).  Move them apart (or align the straight wall with the curved shape's bounding box); a common map for them is Phase E of the curved-cell plan."
+  },
+  "two_layers_shared": {
+   "ok": false,
+   "type": "ValueError",
+   "msg": "compile_shapes: the merged map FOLDS (det J <= 0, min -2.497e-01) in the cell u in [0.387868, 0.812132], v in [0.317157, 0.387868], which is bounded by layer 1: Circle(cx=0.6, cy=0.6, r=0.3), layer 2: Circle(cx=1.8, cy=0.6, r=0.4).  An outline bulges past a neighbouring wall: two outlines are too close in plan view, or a straight wall of one shape crosses the arc bulge of another shape (even far away along that wall -- e.g. pillars of different radii in one row).  Move them apart (or align the straight wall with the curved shape's bounding box); a common map for them is Phase E of the curved-cell plan."
+  },
+  "two_layers_perlayer": {
+   "ok": true,
+   "merge_refusal": "compile_shapes: the merged map FOLDS (det J <= 0, min -2.497e-01) in the cell u in [0.387868, 0.812132], v in [0.317157, 0.387868], which is bounded by layer 1: Circle(cx=0.6, cy=0.6, r=0.3), layer 2: Circle(cx=1.8, cy=0.6, r=0.4).  An outline bulges past a neighbouring wall: two outlines are too close in plan view, or a straight wall of one shape crosses the arc bulge of another shape (even far away along that wall -- e.g. pillars of different radii in one row).  Move them apart (or align the straight wall with the curved shape's bounding box); a common map for them is Phase E of the curved-cell plan.",
+   "fast_ok": false,
+   "own_grids": [
+    [
+     3,
+     3
+    ],
+    [
+     3,
+     3
+    ]
+   ]
+  },
+  "both_shapes_in_each_of_two_perlayer": {
+   "ok": false,
+   "type": "ValueError",
+   "msg": "compile_shapes: the merged map FOLDS (det J <= 0, min -2.497e-01) in the cell u in [0.387868, 0.812132], v in [0.317157, 0.387868], which is bounded by layer 1: Circle(cx=0.6, cy=0.6, r=0.3), layer 1: Circle(cx=1.8, cy=0.6, r=0.4).  An outline bulges past a neighbouring wall: two outlines are too close in plan view, or a straight wall of one shape crosses the arc bulge of another shape (even far away along that wall -- e.g. pillars of different radii in one row).  Move them apart (or align the straight wall with the curved shape's bounding box); a common map for them is Phase E of the curved-cell plan."
+  },
+  "second_layer_t=0.0": {
+   "ok": false,
+   "type": "ValueError",
+   "msg": "PMM2DStackPure.add_layer: thickness must be > 0."
+  },
+  "second_layer_t=-0.1": {
+   "ok": false,
+   "type": "ValueError",
+   "msg": "PMM2DStackPure.add_layer: thickness must be > 0."
+  },
+  "second_layer_t=1e-12": {
+   "ok": true,
+   "fast_ok": false
+  },
+  "macro_geometry_verdict": "EXACT",
+  "macro_geometry": {
+   "layers": [
+    {
+     "layer": 1,
+     "paint_wrong": 0,
+     "paint_checked": 1296,
+     "boundary_side_mismatch": 0,
+     "boundary_points_checked": 3200,
+     "outline_covered_max": 3.0873379019968894e-08,
+     "outline_visible": 2000,
+     "n_boundary_edges": 144
+    }
+   ],
+   "detJ_min": 0.0455630203673717,
+   "sigma_spread_max": 1.3766001521450284,
+   "grid": [
+    6,
+    6
+   ]
+  },
+  "macro_grid": [
+   6,
+   6
+  ]
+ },
+ "equal_circles_dy_0.05": {
+  "one_layer_shared": {
+   "ok": false,
+   "type": "ValueError",
+   "msg": "compile_shapes: the merged map FOLDS (det J <= 0, min -8.106e-01) in the cell u in [0.387868, 0.812132], v in [0.787132, 0.837132], which is bounded by layer 1: Circle(cx=0.6, cy=0.575, r=0.3), layer 1: Circle(cx=1.8, cy=0.625, r=0.3).  An outline bulges past a neighbouring wall: two outlines are too close in plan view, or a straight wall of one shape crosses the arc bulge of another shape (even far away along that wall -- e.g. pillars of different radii in one row).  Move them apart (or align the straight wall with the curved shape's bounding box); a common map for them is Phase E of the curved-cell plan."
+  },
+  "one_layer_per-layer": {
+   "ok": false,
+   "type": "ValueError",
+   "msg": "compile_shapes: the merged map FOLDS (det J <= 0, min -8.106e-01) in the cell u in [0.387868, 0.812132], v in [0.787132, 0.837132], which is bounded by layer 1: Circle(cx=0.6, cy=0.575, r=0.3), layer 1: Circle(cx=1.8, cy=0.625, r=0.3).  An outline bulges past a neighbouring wall: two outlines are too close in plan view, or a straight wall of one shape crosses the arc bulge of another shape (even far away along that wall -- e.g. pillars of different radii in one row).  Move them apart (or align the straight wall with the curved shape's bounding box); a common map for them is Phase E of the curved-cell plan."
+  },
+  "two_layers_shared": {
+   "ok": false,
+   "type": "ValueError",
+   "msg": "compile_shapes: the merged map FOLDS (det J <= 0, min -8.106e-01) in the cell u in [0.387868, 0.812132], v in [0.787132, 0.837132], which is bounded by layer 1: Circle(cx=0.6, cy=0.575, r=0.3), layer 2: Circle(cx=1.8, cy=0.625, r=0.3).  An outline bulges past a neighbouring wall: two outlines are too close in plan view, or a straight wall of one shape crosses the arc bulge of another shape (even far away along that wall -- e.g. pillars of different radii in one row).  Move them apart (or align the straight wall with the curved shape's bounding box); a common map for them is Phase E of the curved-cell plan."
+  },
+  "two_layers_perlayer": {
+   "ok": true,
+   "merge_refusal": "compile_shapes: the merged map FOLDS (det J <= 0, min -8.106e-01) in the cell u in [0.387868, 0.812132], v in [0.787132, 0.837132], which is bounded by layer 1: Circle(cx=0.6, cy=0.575, r=0.3), layer 2: Circle(cx=1.8, cy=0.625, r=0.3).  An outline bulges past a neighbouring wall: two outlines are too close in plan view, or a straight wall of one shape crosses the arc bulge of another shape (even far away along that wall -- e.g. pillars of different radii in one row).  Move them apart (or align the straight wall with the curved shape's bounding box); a common map for them is Phase E of the curved-cell plan.",
+   "fast_ok": false,
+   "own_grids": [
+    [
+     3,
+     3
+    ],
+    [
+     3,
+     3
+    ]
+   ]
+  },
+  "both_shapes_in_each_of_two_perlayer": {
+   "ok": false,
+   "type": "ValueError",
+   "msg": "compile_shapes: the merged map FOLDS (det J <= 0, min -8.106e-01) in the cell u in [0.387868, 0.812132], v in [0.787132, 0.837132], which is bounded by layer 1: Circle(cx=0.6, cy=0.575, r=0.3), layer 1: Circle(cx=1.8, cy=0.625, r=0.3).  An outline bulges past a neighbouring wall: two outlines are too close in plan view, or a straight wall of one shape crosses the arc bulge of another shape (even far away along that wall -- e.g. pillars of different radii in one row).  Move them apart (or align the straight wall with the curved shape's bounding box); a common map for them is Phase E of the curved-cell plan."
+  },
+  "second_layer_t=0.0": {
+   "ok": false,
+   "type": "ValueError",
+   "msg": "PMM2DStackPure.add_layer: thickness must be > 0."
+  },
+  "second_layer_t=-0.1": {
+   "ok": false,
+   "type": "ValueError",
+   "msg": "PMM2DStackPure.add_layer: thickness must be > 0."
+  },
+  "second_layer_t=1e-12": {
+   "ok": true,
+   "fast_ok": false
+  },
+  "macro_geometry_verdict": "EXACT",
+  "macro_geometry": {
+   "layers": [
+    {
+     "layer": 1,
+     "paint_wrong": 0,
+     "paint_checked": 1296,
+     "boundary_side_mismatch": 0,
+     "boundary_points_checked": 3200,
+     "outline_covered_max": 2.315503433436561e-08,
+     "outline_visible": 2000,
+     "n_boundary_edges": 144
+    }
+   ],
+   "detJ_min": 0.045275158028255325,
+   "sigma_spread_max": 1.3769359433927406,
+   "grid": [
+    6,
+    6
+   ]
+  },
+  "macro_grid": [
+   6,
+   6
+  ]
+ },
+ "equal_circles_dy_0.02": {
+  "one_layer_shared": {
+   "ok": false,
+   "type": "ValueError",
+   "msg": "compile_shapes: the merged map FOLDS (det J <= 0, min -3.683e+00) in the cell u in [0.387868, 0.812132], v in [0.802132, 0.822132], which is bounded by layer 1: Circle(cx=0.6, cy=0.59, r=0.3), layer 1: Circle(cx=1.8, cy=0.61, r=0.3).  An outline bulges past a neighbouring wall: two outlines are too close in plan view, or a straight wall of one shape crosses the arc bulge of another shape (even far away along that wall -- e.g. pillars of different radii in one row).  Move them apart (or align the straight wall with the curved shape's bounding box); a common map for them is Phase E of the curved-cell plan."
+  },
+  "one_layer_per-layer": {
+   "ok": false,
+   "type": "ValueError",
+   "msg": "compile_shapes: the merged map FOLDS (det J <= 0, min -3.683e+00) in the cell u in [0.387868, 0.812132], v in [0.802132, 0.822132], which is bounded by layer 1: Circle(cx=0.6, cy=0.59, r=0.3), layer 1: Circle(cx=1.8, cy=0.61, r=0.3).  An outline bulges past a neighbouring wall: two outlines are too close in plan view, or a straight wall of one shape crosses the arc bulge of another shape (even far away along that wall -- e.g. pillars of different radii in one row).  Move them apart (or align the straight wall with the curved shape's bounding box); a common map for them is Phase E of the curved-cell plan."
+  },
+  "two_layers_shared": {
+   "ok": false,
+   "type": "ValueError",
+   "msg": "compile_shapes: the merged map FOLDS (det J <= 0, min -3.683e+00) in the cell u in [0.387868, 0.812132], v in [0.802132, 0.822132], which is bounded by layer 1: Circle(cx=0.6, cy=0.59, r=0.3), layer 2: Circle(cx=1.8, cy=0.61, r=0.3).  An outline bulges past a neighbouring wall: two outlines are too close in plan view, or a straight wall of one shape crosses the arc bulge of another shape (even far away along that wall -- e.g. pillars of different radii in one row).  Move them apart (or align the straight wall with the curved shape's bounding box); a common map for them is Phase E of the curved-cell plan."
+  },
+  "two_layers_perlayer": {
+   "ok": true,
+   "merge_refusal": "compile_shapes: the merged map FOLDS (det J <= 0, min -3.683e+00) in the cell u in [0.387868, 0.812132], v in [0.802132, 0.822132], which is bounded by layer 1: Circle(cx=0.6, cy=0.59, r=0.3), layer 2: Circle(cx=1.8, cy=0.61, r=0.3).  An outline bulges past a neighbouring wall: two outlines are too close in plan view, or a straight wall of one shape crosses the arc bulge of another shape (even far away along that wall -- e.g. pillars of different radii in one row).  Move them apart (or align the straight wall with the curved shape's bounding box); a common map for them is Phase E of the curved-cell plan.",
+   "fast_ok": false,
+   "own_grids": [
+    [
+     3,
+     3
+    ],
+    [
+     3,
+     3
+    ]
+   ]
+  },
+  "both_shapes_in_each_of_two_perlayer": {
+   "ok": false,
+   "type": "ValueError",
+   "msg": "compile_shapes: the merged map FOLDS (det J <= 0, min -3.683e+00) in the cell u in [0.387868, 0.812132], v in [0.802132, 0.822132], which is bounded by layer 1: Circle(cx=0.6, cy=0.59, r=0.3), layer 1: Circle(cx=1.8, cy=0.61, r=0.3).  An outline bulges past a neighbouring wall: two outlines are too close in plan view, or a straight wall of one shape crosses the arc bulge of another shape (even far away along that wall -- e.g. pillars of different radii in one row).  Move them apart (or align the straight wall with the curved shape's bounding box); a common map for them is Phase E of the curved-cell plan."
+  },
+  "second_layer_t=0.0": {
+   "ok": false,
+   "type": "ValueError",
+   "msg": "PMM2DStackPure.add_layer: thickness must be > 0."
+  },
+  "second_layer_t=-0.1": {
+   "ok": false,
+   "type": "ValueError",
+   "msg": "PMM2DStackPure.add_layer: thickness must be > 0."
+  },
+  "second_layer_t=1e-12": {
+   "ok": true,
+   "fast_ok": false
+  },
+  "macro_geometry_verdict": "EXACT",
+  "macro_geometry": {
+   "layers": [
+    {
+     "layer": 1,
+     "paint_wrong": 0,
+     "paint_checked": 1296,
+     "boundary_side_mismatch": 0,
+     "boundary_points_checked": 3200,
+     "outline_covered_max": 2.3155034278854458e-08,
+     "outline_visible": 2000,
+     "n_boundary_edges": 144
+    }
+   ],
+   "detJ_min": 0.04242740692167113,
+   "sigma_spread_max": 1.3775160559099564,
+   "grid": [
+    6,
+    6
+   ]
+  },
+  "macro_grid": [
+   6,
+   6
+  ]
+ },
+ "rect_touching_circle_30deg": {
+  "one_layer_shared": {
+   "ok": false,
+   "type": "ValueError",
+   "msg": "compile_shapes: the merged map FOLDS (det J <= 0, min -3.412e+00) in the cell u in [0.345442, 0.854558], v in [0.854558, 0.88], which is bounded by layer 1: Circle(cx=0.6, cy=0.6, r=0.36), layer 1: Rect(cx=0.961769, cy=0.83, w=0.1, h=0.1).  An outline bulges past a neighbouring wall: two outlines are too close in plan view, or a straight wall of one shape crosses the arc bulge of another shape (even far away along that wall -- e.g. pillars of different radii in one row).  Move them apart (or align the straight wall with the curved shape's bounding box); a common map for them is Phase E of the curved-cell plan."
+  },
+  "one_layer_per-layer": {
+   "ok": false,
+   "type": "ValueError",
+   "msg": "compile_shapes: the merged map FOLDS (det J <= 0, min -3.412e+00) in the cell u in [0.345442, 0.854558], v in [0.854558, 0.88], which is bounded by layer 1: Circle(cx=0.6, cy=0.6, r=0.36), layer 1: Rect(cx=0.961769, cy=0.83, w=0.1, h=0.1).  An outline bulges past a neighbouring wall: two outlines are too close in plan view, or a straight wall of one shape crosses the arc bulge of another shape (even far away along that wall -- e.g. pillars of different radii in one row).  Move them apart (or align the straight wall with the curved shape's bounding box); a common map for them is Phase E of the curved-cell plan."
+  },
+  "two_layers_shared": {
+   "ok": false,
+   "type": "ValueError",
+   "msg": "compile_shapes: the merged map FOLDS (det J <= 0, min -3.412e+00) in the cell u in [0.345442, 0.854558], v in [0.854558, 0.88], which is bounded by layer 1: Circle(cx=0.6, cy=0.6, r=0.36), layer 2: Rect(cx=0.961769, cy=0.83, w=0.1, h=0.1).  An outline bulges past a neighbouring wall: two outlines are too close in plan view, or a straight wall of one shape crosses the arc bulge of another shape (even far away along that wall -- e.g. pillars of different radii in one row).  Move them apart (or align the straight wall with the curved shape's bounding box); a common map for them is Phase E of the curved-cell plan."
+  },
+  "two_layers_perlayer": {
+   "ok": true,
+   "merge_refusal": "compile_shapes: the merged map FOLDS (det J <= 0, min -3.412e+00) in the cell u in [0.345442, 0.854558], v in [0.854558, 0.88], which is bounded by layer 1: Circle(cx=0.6, cy=0.6, r=0.36), layer 2: Rect(cx=0.961769, cy=0.83, w=0.1, h=0.1).  An outline bulges past a neighbouring wall: two outlines are too close in plan view, or a straight wall of one shape crosses the arc bulge of another shape (even far away along that wall -- e.g. pillars of different radii in one row).  Move them apart (or align the straight wall with the curved shape's bounding box); a common map for them is Phase E of the curved-cell plan.",
+   "fast_ok": false,
+   "own_grids": [
+    [
+     3,
+     3
+    ],
+    [
+     3,
+     3
+    ]
+   ]
+  },
+  "both_shapes_in_each_of_two_perlayer": {
+   "ok": false,
+   "type": "ValueError",
+   "msg": "compile_shapes: the merged map FOLDS (det J <= 0, min -3.412e+00) in the cell u in [0.345442, 0.854558], v in [0.854558, 0.88], which is bounded by layer 1: Circle(cx=0.6, cy=0.6, r=0.36), layer 1: Rect(cx=0.961769, cy=0.83, w=0.1, h=0.1).  An outline bulges past a neighbouring wall: two outlines are too close in plan view, or a straight wall of one shape crosses the arc bulge of another shape (even far away along that wall -- e.g. pillars of different radii in one row).  Move them apart (or align the straight wall with the curved shape's bounding box); a common map for them is Phase E of the curved-cell plan."
+  },
+  "second_layer_t=0.0": {
+   "ok": false,
+   "type": "ValueError",
+   "msg": "PMM2DStackPure.add_layer: thickness must be > 0."
+  },
+  "second_layer_t=-0.1": {
+   "ok": false,
+   "type": "ValueError",
+   "msg": "PMM2DStackPure.add_layer: thickness must be > 0."
+  },
+  "second_layer_t=1e-12": {
+   "ok": true,
+   "fast_ok": false
+  },
+  "macro_geometry_verdict": "WRONG MAP",
+  "macro_geometry": {
+   "layers": [
+    {
+     "layer": 1,
+     "paint_wrong": 23,
+     "paint_checked": 900,
+     "boundary_side_mismatch": 600,
+     "boundary_points_checked": 2400,
+     "outline_covered_max": 0.021023466949357656,
+     "outline_visible": 2000,
+     "n_boundary_edges": 108
+    }
+   ],
+   "detJ_min": 0.04642655629909764,
+   "sigma_spread_max": 1.3765158657496817,
+   "grid": [
+    5,
+    5
+   ]
+  },
+  "macro_grid": [
+   5,
+   5
+  ]
+ },
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "lumenairy": "c:\\tmp\\lum_vcurved_e2\\lumenairy\\__init__.py",
+  "tree": "post",
+  "build": "win",
+  "machine": "Tesla_Ryzen",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ }
+}
