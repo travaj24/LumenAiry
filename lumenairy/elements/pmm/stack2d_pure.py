@@ -61,11 +61,15 @@ map a layer may be ANISOTROPIC and MAGNETIC (Phase D): a block-form tensor
 ``eps`` / ``mu`` -- uniform, on a shape (``Circle(..., eps=lc_tensor,
 mu=...)``) or as ``eps_cell`` / ``mu_cell`` under an explicit map -- is
 carried through the map by the congruence ``sqrt(g) J^-1 eps J^-T`` at
-every quadrature node; out-of-plane tensors, slant and per-layer maps are
-Phase E and raise.  A stack of rectangles only needs no map and runs the
+every quadrature node; an OUT-OF-PLANE ``eps`` (a director tilted out of
+the plane) and a ``slant=`` layer ride the map too (Phase E1: the
+first-order generator's permeability blocks, and the composite frame
+``x = Phi(u, v) + t w`` for a slanted layer); an out-of-plane ``mu`` and
+per-layer maps raise.  A stack of rectangles only needs no map and runs the
 unmapped solver on the merged walls.
 ``docs/audits/BUILD_PMM2D_CURVED_C_2026_10_02.md``,
-``docs/audits/BUILD_PMM2D_CURVED_D_2026_10_03.md``.
+``docs/audits/BUILD_PMM2D_CURVED_D_2026_10_03.md``,
+``docs/audits/BUILD_PMM2D_CURVED_E1_2026_10_03.md``.
 
 A layer may also be MAGNETIC: ``add_layer(..., mu=scalar | (3,3))`` or
 ``add_layer(..., mu_cell=(Nx,Ny) | (Nx,Ny,3,3))`` gives it a BLOCK-FORM
@@ -102,9 +106,10 @@ generalized cascade, as an out-of-plane layer does -- a sheared cell IS an
 out-of-plane cell in the frame.  Slant on a UNIFORM layer is accepted and is a
 physical no-op.  The bookkeeping a shear adds is ONE unimodular phase per order
 on the TRANSMITTED amplitudes (the frame anchor); R and the reflection Jones
-need nothing.  Out of scope, all raising: MIXED slants between PATTERNED
-layers, a mix of vertical and slanted layers ABOVE a pattern, ``mu`` with a
-slant, and ``retain_internal`` on a slanted stack.  See
+need nothing.  A slanted layer may be magnetic and may sit under a map (shape
+layers included) since Phase E1.  Out of scope, all raising: MIXED slants
+between PATTERNED layers, a mix of vertical and slanted layers ABOVE a
+pattern, and ``retain_internal`` on a slanted stack.  See
 :mod:`lumenairy.elements.pmm.twod_staggered`, "SLANT".
 Two ACCURACY notes on that scope, measured 2026-09-10
 (``docs/audits/VERIFY_PMM2D_STAGGERED_SLANT_2026_09_10.md`` D3/D4): the
@@ -768,9 +773,10 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         patterned) and ``mu`` / ``mu_cell`` as well (each its own region
         eig, deduped with the map fingerprint); on the shared grid only:
         ``layer_grids='per-layer'`` (different maps per layer, a curved
-        mortar -- Phase E), an OUT-OF-PLANE tensor (``eps`` or ``mu``) and
-        ``slant`` (Phase E) together with a map raise
-        ``NotImplementedError``.  The two viewers draw the PHYSICAL
+        mortar -- Phase E2) and an OUT-OF-PLANE ``mu`` together with a map
+        raise ``NotImplementedError``; an OUT-OF-PLANE ``eps`` and a
+        ``slant`` are accepted since Phase E1 (the first-order generator's
+        permeability blocks; ``docs/audits/BUILD_PMM2D_CURVED_E1_2026_10_03.md``).  The two viewers draw the PHYSICAL
         images of the cells (curved edges as curves).  Under a map the
         incident plane wave enters through its exact L2 modal decomposition
         (it is not an exact discrete half-space mode when the map is not
@@ -1006,9 +1012,10 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         the ``eps`` side is allowed (uniform eps + patterned mu included; the
         uniform side is broadcast onto the union grid).  A magnetic layer takes
         its own region eig -- it cannot ride the shared eps-free geometric one
-        -- and is deduped by ``(eps bytes, mu bytes)``.  OUT-OF-PLANE mu, and
-        mu together with an out-of-plane eps, raise ``NotImplementedError``
-        (the first-order generator has no permeability blocks).
+        -- and is deduped by ``(eps bytes, mu bytes)``.  OUT-OF-PLANE mu
+        raises ``NotImplementedError``; mu together with an out-of-plane eps
+        (or a slant) is accepted since Phase E1 of the curved-cell plan (the
+        first-order generator's permeability blocks).
 
         ``slant=(t_x, t_y)`` (or a bare scalar ``t_x``) makes this ONE EXACT
         SLANTED layer instead of a z-staircase: the whole cross-section
@@ -1033,8 +1040,9 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         and is a physical no-op (a shear of a homogeneous medium is a
         coordinate change).
 
-        RESTRICTIONS, all raising: ``slant`` with ``mu`` / ``mu_cell`` (the
-        first-order generator has no permeability blocks); a stack whose
+        A slant may be combined with ``mu`` / ``mu_cell`` and with a map or
+        ``shapes=`` (Phase E1: the composite frame ``x = Phi(u, v) + t w``).
+        RESTRICTIONS, all raising: a stack whose
         PATTERNED layers do not all share ONE slant, or in which the layers
         ABOVE a patterned layer carry a mix of that slant and vertical -- both
         raise from :meth:`solve`, where the whole stack is visible, because the
@@ -1073,7 +1081,8 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         D): a shape takes ``mu=`` next to its ``eps``, ``background_mu=``
         (default 1) is the layer's permeability where no shape is painted,
         and a uniform ``mu=`` layer may join a shape stack; an OUT-OF-PLANE
-        tensor and ``slant`` raise ``NotImplementedError`` (Phase E).  Raw
+        ``eps`` and ``slant=`` are accepted too (Phase E1), an out-of-plane
+        ``mu`` raises ``NotImplementedError``.  Raw
         ``eps_cell`` / ``mu_cell`` layers cannot be mixed with shape layers
         (describe rectangles with :class:`~lumenairy.elements.pmm.Rect`),
         nor can an explicit ``cmap=``; and ``layer_grids='per-layer'`` with

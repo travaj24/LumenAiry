@@ -146,10 +146,15 @@ check, and measured at 2.1e-01 against the analytic oracle (build doc
 ``BUILD_PMM2D_STAGGERED_MAGNETIC_2026_09_10.md`` M1b) where the correct
 separation reads 1.9e-14.
 
-Scope of the magnetic route: IN-PLANE (block-form) only -- an out-of-plane
-``mu``, or a ``mu`` together with an out-of-plane ``eps``, raises
-``NotImplementedError`` (the first-order out-of-plane generator has no
-permeability blocks).  Half-spaces stay NONMAGNETIC: the Rayleigh flux
+Scope of the magnetic route: a BLOCK-FORM ``mu`` (an out-of-plane ``mu``
+raises ``NotImplementedError``).  A block-form ``mu`` together with an
+OUT-OF-PLANE ``eps`` (or a slant) is accepted since Phase E1 of the
+curved-cell plan: the first-order generator carries the SAME permeability
+operators -- ``R = C[chi_t]C`` on its B side, ``K_tz`` in its E rows, the
+``chi33``-weighted ``G3`` projection -- through the shared
+:meth:`Granet2DTransverseE._chi_R` / ``_chi_Ktz`` / ``_chi_Gw``
+(``docs/audits/BUILD_PMM2D_CURVED_E1_2026_10_03.md``).  Half-spaces stay
+NONMAGNETIC: the Rayleigh flux
 normalisation and the incident-amplitude overlap both assume the vacuum wave
 impedance, so ``mu_superstrate`` / ``mu_substrate`` exist only to RAISE.  A
 uniform magnetic layer cannot ride the shared eps-free geometric eig
@@ -193,14 +198,25 @@ Scope / limitations
   J^-T`` (and ``chi_t = J^T mu_t^-1 J / sqrt(g)``) at every quadrature node,
   :func:`_stag_map_eff_tensor`; a uniform tensor film under a curved map
   matches the Berreman 4x4 oracle, Jones matrix included, to ~1e-13.
-  Remaining limits under a map: OUT-OF-PLANE tensors (``eps`` or ``mu``),
-  ``slant=``, per-layer grids (each a different map per layer) and the JAX
-  twin (Phase E) raise; two
+  OUT-OF-PLANE tensors (a director tilted out of the plane) and ``slant=``
+  ride a map too (Phase E1, ``docs/audits/BUILD_PMM2D_CURVED_E1_2026_10_03.md``):
+  every mapped region is magnetic (``chi_t = g / sqrt(g)`` even in vacuum),
+  so the first-order generator carries permeability blocks (``R =
+  C[chi_t]C`` on its B side, ``K_tz`` in its E rows, the ``chi33``-weighted
+  ``G3`` projection -- the in-plane pencil's own operators), the congruence
+  adds the out-of-plane entries ``adj(J) e_t3``, and a slanted layer under a
+  map is the composite frame ``x = Phi(u, v) + t w`` (``tau = J^-1 t``,
+  ``kappa = chi_t tau``); a uniform out-of-plane slab under a sheared map
+  matches the Berreman 4x4 oracle, both Jones matrices included, to ~1e-13.
+  Remaining limits under a map: an OUT-OF-PLANE permeability (refused with
+  or without a map), per-layer grids (each a different map per layer) and
+  the JAX twin (Phase E2 / E3) raise; two
   outlines that cross in plan view cannot share one map (raises, naming
   both); and :func:`pmm_efficiency_2d_staggered` takes no map (use the
   Jones entry).  A rounded corner is GEOMETRY FIDELITY, not a convergence
   accelerator: the efficiencies stay rim-capped (next item).
-  A constant TILT of the walls is supported without a map: see SLANT below.
+  A constant TILT of the walls is supported with or without a map: see
+  SLANT below.
 * **Corner-capped.**  A right-angle dielectric pillar has field singularities at
   its four corners, so the bound-mode (and hence efficiency) convergence is
   ALGEBRAIC, not spectral -- monotone with NO floor, but at-best RCWA-parity
@@ -259,9 +275,20 @@ z-dependent, which brings back a dilation generator, a non-normal pencil with
 no valid mode selector and a distorted far field).  A shrinking cross-section
 still needs a z-staircase.
 
+SLANT x MAP and SLANT x MU (Phase E1 of the curved-cell plan, 2026-10-03).  A
+slanted layer under a coordinate map (``cmap=`` / ``shapes=``) is the
+COMPOSITE frame ``(x, y, z) = (Phi(u, v) + t w, w)`` -- the cross-section,
+curved outline included, translated by ``t z``.  Its tensors are the map's
+congruence of the shear's; the shear's metric reaches the generator only as
+``tau = J^-1 t`` (the shear in ``(u, v)``, varying across a curved cell) and
+``kappa = chi_t tau``; the tangential covariant fields are the map's, so the
+far field, the incident decomposition and the frame-anchor phase are
+unchanged.  A material ``mu`` with a slant takes the same blocks.  Slant stays
+a LAYER property (``add_layer(..., slant=)``), not a shape property.
+
 Out of scope for the slant, all raising: MIXED slants between PATTERNED layers,
-a mix of vertical and slanted layers ABOVE a pattern, ``mu`` together with a
-slant, ``retain_internal`` on a slanted stack, and
+a mix of vertical and slanted layers ABOVE a pattern, ``retain_internal`` on a
+slanted stack, and
 :func:`pmm_efficiency_2d_staggered` (single-polarization efficiencies are not
 well-posed for a cell that is out-of-plane in the frame).  Derivation and every
 measured number: ``docs/audits/EXPERIMENT_PMM2D_STAGGERED_SLANT_2026_09_10.md``
@@ -2579,9 +2606,14 @@ class Granet2DTransverseE:
                 tensor ``eps_cell`` and a ``mu_cell`` (scalar or block-form)
                 are accepted (Phase D): the general congruence
                 ``eps' = sqrt(g) J^-1 eps J^-T``, ``chi_t = J^T [mu_t]^-1 J
-                / sqrt(g)`` per node (:func:`_stag_map_eff_tensor`); an
-                OUT-OF-PLANE tensor or ``slant`` together with a map raise
-                ``NotImplementedError`` (Phase E).
+                / sqrt(g)`` per node (:func:`_stag_map_eff_tensor`).  An
+                OUT-OF-PLANE ``eps_cell`` and ``slant`` are accepted too
+                (Phase E1): the congruence adds the out-of-plane entries
+                ``adj(J) e_t3``, a slant composes with the map as ``x =
+                Phi(u, v) + t w`` (``tau = J^-1 t``), and the first-order
+                generator carries the permeability blocks
+                (:meth:`_assemble_oop_general`).  An out-of-plane ``mu_cell``
+                raises ``NotImplementedError``.
     """
 
     def __init__(self, px, py, wx, wy, M, eps_cell,
@@ -5141,8 +5173,9 @@ def pmm_jones_2d_staggered(
         (see :class:`Granet2DTransverseE`).  A map takes a scalar or a
         BLOCK-FORM tensor ``eps_cell`` and an optional ``mu_cell`` (Phase D;
         the effective tensors ``sqrt(g) J^-1 eps J^-T``), at any incidence;
-        an OUT-OF-PLANE tensor or ``slant`` together with a map raise
-        ``NotImplementedError`` (Phase E).
+        an OUT-OF-PLANE ``eps_cell`` and ``slant`` are accepted too (Phase
+        E1, the first-order generator with permeability blocks); an
+        out-of-plane ``mu_cell`` raises ``NotImplementedError``.
 
         .. warning:: **A map takes ``(u, v)`` walls, not physical ones.**  A
            material boundary sits at the IMAGE of its ``(u, v)`` wall, so
