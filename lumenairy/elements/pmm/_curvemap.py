@@ -58,8 +58,24 @@ A map is any object with
   geometry, used to key caches.
 
 :class:`CellMap` is the base class that supplies the shared validation;
-:class:`IdentityMap` and :class:`SeparableStretch` are the two maps this
-phase ships (the curved shape maps come later).
+:class:`IdentityMap` and :class:`SeparableStretch` (Phase A) bend nothing;
+:class:`TransfiniteMap` (Phase B) is the general CURVED map: you name grid
+edges that must be curves -- :class:`Line`, :class:`Arc`,
+:class:`EllipseArc`, :class:`Sinusoid` -- and it fills in every cell by
+blending that cell's four edge curves, so a circle, an ellipse, a rounded
+corner or a sinusoidal wall becomes an exact grid line.  It is still an
+expert-level object (you lay out the walls and the curves yourself, as the
+private ``_circle_map_3x3`` / ``_circle_map_5x5`` / ``_fillet_map_5x5`` /
+``_ellipse_map_3x3`` / ``_sine_stripe_map_3x3`` builders below do); the shape
+primitives that do it for you are Phase C.
+
+The singular vertices.  A smooth closed curve made of grid lines of a tensor
+grid must turn 90 degrees in ``(u, v)`` where it does not turn at all in
+``(x, y)`` -- four such cell corners per curve, where ``det J = 0`` and the
+effective tensors grow like ``1 / distance``.  They are allowed (at cell
+corners only, listed by ``singular_vertices``), and the solver integrates
+the cells that own one with a Duffy-collapsed rule
+(:func:`~lumenairy.elements.pmm.twod_staggered._stag_duffy_points`).
 
 Validation (``CellMap.validate``)
 ---------------------------------

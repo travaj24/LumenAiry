@@ -2079,12 +2079,20 @@ def _stag_map_nodes(bx, by, cmap, M, tol=None, cap=None):
             break
         err = 0.0
         for cl, ch in zip(m_lo, m_hi):
-            for a, b in zip(cl, ch):
-                s = float(np.max(np.abs(b)))
-                if s > 0.0 and np.all(np.isfinite(a)):
-                    err = max(err, float(np.max(np.abs(a - b))) / s)
-                elif not np.all(np.isfinite(a)):
+            # scales: sqrt(g) and 1 / sqrt(g) each on their own; the three
+            # metric weights g11 / sqrt(g), g12 / sqrt(g), g22 / sqrt(g) are
+            # the entries of ONE tensor (chi_t) and share its scale -- a map
+            # with a TINY shear (g12 ~ 1e-6) would otherwise be held to 1e-13
+            # relative on round-off-sized moments and run to the cap (a Phase
+            # B build finding)
+            sc = [float(np.max(np.abs(b))) for b in ch]
+            ts = max(sc[2:])
+            for k, (a, b) in enumerate(zip(cl, ch)):
+                s = sc[k] if k < 2 else ts
+                if not np.all(np.isfinite(a)):
                     err = np.inf
+                elif s > 0.0:
+                    err = max(err, float(np.max(np.abs(a - b))) / s)
         if err <= tol or n2 > cap:
             break
         n, m_lo = n2, m_hi
@@ -2268,12 +2276,14 @@ def _stag_quad_weighted(bx, by, xspec, yspec, W, rule, cache=None):
             pr = prules.get((sx, sy))
             if pr is not None:
                 ru, rv, wq = pr
+                # the tag names the cell AND the axis: the two axis rules of
+                # a corner cell differ even when bx is by
                 sLx, sRx, Fx = _stag_quad_axis_factor(
                     bx, sx, xspec[0], xspec[1], xspec[2], ru, cache,
-                    tag=("p", sx, sy))
+                    tag=("p", sx, sy, "u"))
                 sLy, sRy, Fy = _stag_quad_axis_factor(
                     by, sy, yspec[0], yspec[1], yspec[2], rv, cache,
-                    tag=("p", sx, sy))
+                    tag=("p", sx, sy, "v"))
                 loc = np.einsum("q,qij,qab->aibj", wq * Wp[(sx, sy)], Fx, Fy,
                                 optimize=True)
             else:
