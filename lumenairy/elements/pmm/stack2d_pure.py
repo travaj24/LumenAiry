@@ -210,7 +210,7 @@ from .twod_staggered import (
     _region_modes_oop,
     _require_inplane_mu,
     _require_nonmagnetic_halfspace,
-    _stag_incident_load_mapped,
+    _stag_incident_coeffs_mapped,
     _stag_kron_apply,
     _stag_mortared_axes,
     _tile_needs_oop,
@@ -2364,13 +2364,14 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
             # the L2 projection of the covariant incident field onto the
             # staggered basis (plain Gram, the load of
             # _stag_incident_load_mapped), then the half-space modes,
-            # cinc = W0^-1 G^-1 b -- unique and window-free.  Without a map
-            # the shipped overlap is kept bit for bit.
-            _W0, _Ginv = geom[0], geom[4]
-            _B = np.stack([_stag_incident_load_mapped(bx, by, cmap, a0x, a0y,
-                                                      e0)
-                           for e0 in ((1.0, 0.0), (0.0, 1.0))], axis=1)
-            cinc_map = np.linalg.solve(_W0, _Ginv @ _B)
+            # cinc = W0^-1 G^-1 b -- unique and window-free -- renormalised
+            # by 2 x 2 so that its own ORDER-0 far field is exactly the
+            # input (the efficiency normalisation; only order 0 enters, so
+            # the window independence survives).  Without a map the shipped
+            # overlap is kept bit for bit.
+            cinc_map = _stag_incident_coeffs_mapped(
+                geom, bx, by, cmap, a0x, a0y,
+                H0=Hsup[[p0, Nfo + p0], :])
         for col, (ex0, ey0) in enumerate(((1.0, 0.0), (0.0, 1.0))):
             long_inc = kx0 * ex0 + ky0 * ey0
             einc_sq = 1.0 + (long_inc / kz_inc) ** 2 if kz_inc != 0 else 1.0

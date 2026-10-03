@@ -167,18 +167,33 @@ than ~1e-4 on ``R`` per order.
 
 Scope / limitations
 -------------------
-* **Axis-aligned RECTANGULAR pillars only** -- the walls must coincide with the
-  segment boundaries of the ``(Nx, Ny)`` ``eps_cell`` grid (Eq. 26).  CURVED
-  boundaries need a coordinate map: the curved-cell map's machinery is in
-  (``cmap=`` on :class:`Granet2DTransverseE`, :func:`pmm_jones_2d_staggered`
-  and ``PMM2DStackPure``; the covariant effective tensors, the 2-D quadrature
-  assembly of every weighted block, the plain-Gram H partner and the
-  cofactor far field -- build doc
-  ``docs/audits/BUILD_PMM2D_CURVED_A_2026_10_02.md``), but the only maps
-  shipped so far are the identity and a separable per-axis STRETCH, which
-  redistributes resolution without curving any wall; the curved shape maps
-  (circles, fillets, sinusoidal walls) are not implemented yet.
-  A constant TILT of the walls IS supported: see SLANT below.
+* **Rectangles on the bare grid; curved outlines through a coordinate map.**
+  Without a map every material wall must coincide with a segment boundary of
+  the ``(Nx, Ny)`` ``eps_cell`` grid (Eq. 26), so a bare grid models
+  axis-aligned rectangles exactly.  CURVED outlines -- circles, ellipses,
+  rounded (filleted) corners, sinusoidal walls -- are modelled EXACTLY
+  through a coordinate map that bends the grid so the outline is a grid
+  line: describe the layer with the shape primitives
+  (:mod:`lumenairy.elements.pmm.shapes2d`: ``Rect``, ``FilletRect``,
+  ``Circle``, ``Ellipse``, ``SinusoidalWall``) through
+  ``pmm_jones_2d_staggered(..., shapes=..., background_eps=...)`` or
+  ``PMM2DStackPure.add_layer(shapes=...)``, or pass an explicit map with
+  ``cmap=`` (:mod:`lumenairy.elements.pmm._curvemap`).  The machinery: the
+  covariant effective tensors, the 2-D quadrature of every weighted block
+  with a corner (Duffy) rule at the four singular vertices of each closed
+  curve, the plain-Gram H partner, the cofactor far field and the exact
+  modal decomposition of the incident wave (build docs
+  ``docs/audits/BUILD_PMM2D_CURVED_A_2026_10_02.md``, ``..._B_...``,
+  ``..._C_...``); a circular pillar
+  lands on an independent 3-D finite-element oracle to 1.9e-6 per order.
+  Remaining limits under a map: a TENSOR or MAGNETIC material (Phase D of
+  the curved-cell plan), out-of-plane tensors, ``slant=``, per-layer grids
+  (each a different map per layer) and the JAX twin (Phase E) raise; two
+  outlines that cross in plan view cannot share one map (raises, naming
+  both); and :func:`pmm_efficiency_2d_staggered` takes no map (use the
+  Jones entry).  A rounded corner is GEOMETRY FIDELITY, not a convergence
+  accelerator: the efficiencies stay rim-capped (next item).
+  A constant TILT of the walls is supported without a map: see SLANT below.
 * **Corner-capped.**  A right-angle dielectric pillar has field singularities at
   its four corners, so the bound-mode (and hence efficiency) convergence is
   ALGEBRAIC, not spectral -- monotone with NO floor, but at-best RCWA-parity
@@ -3536,6 +3551,44 @@ def _stag_incident_load_mapped(bx: Basis1D, by: Basis1D, cmap, alpha0x,
                 iys, Yv = vals[ys]
                 out[np.ix_(iys, ixs)] += Yv @ f.T @ Xv.T
     return np.concatenate([b1.ravel(), b2.ravel()])
+
+
+def _stag_incident_coeffs_mapped(geom, bx: Basis1D, by: Basis1D, cmap,
+                                 alpha0x, alpha0y, H0=None):
+    """``(2 q^2, 2)`` -- the incident MODAL amplitudes of the superstrate
+    under the map ``cmap`` for the two lab inputs ``E_x`` and ``E_y``
+    (columns).
+
+    Two steps.  (1) The exact L2 modal decomposition ``C = W0^-1 G^-1 b``:
+    ``b`` the L2 load of :func:`_stag_incident_load_mapped`, ``W0`` the
+    shared geometric eigenvectors and ``G^-1`` the inverse PLAIN block Gram,
+    both from the mapped :func:`_homog_geom_cache` tuple ``geom``.  It is
+    unique, so it has no minimum-norm draw (the round-off floor of the
+    shipped least-squares overlap) and does not see the far-field window.
+    (2) With ``H0`` -- the two ORDER-0 rows ``[E_x; E_y]`` of the
+    superstrate's far projector applied to its modes -- the 2 x 2
+    renormalisation ``C (H0 C)^-1``, which makes the discrete incident
+    field's own specular far field EXACTLY the input polarization.  The
+    efficiencies are normalised to a unit incident order-0 amplitude, so
+    without it the L2 projection's representation error (its far field is
+    ``delta_00`` only to ~1e-7 at M = 6 on the 3 x 3 circle) enters R / T
+    directly: measured on a uniform film under that map against the exact
+    Airy slab, 8.8e-08 (L2 alone), 4.3e-11 (the least-squares overlap),
+    8.4e-12 (L2 renormalised) at M = 6
+    (``validation/probe_pmm2d_curved/build_c/c9b_film_M6.json``).  Only
+    order 0 enters, so the window independence survives.
+
+    The ONE place the stack's mapped incident decomposition lives (a test
+    reaches the shipped least-squares overlap by making it return
+    ``None``)."""
+    W0, Ginv = geom[0], geom[4]
+    B = np.stack([_stag_incident_load_mapped(bx, by, cmap, alpha0x, alpha0y,
+                                             e0)
+                  for e0 in ((1.0, 0.0), (0.0, 1.0))], axis=1)
+    C = np.linalg.solve(W0, Ginv @ B)
+    if H0 is None:
+        return C
+    return C @ np.linalg.inv(H0 @ C)
 
 
 def _pmm2d_project_orders(P1, P2, Wmodes, qq, P12=None, P21=None):

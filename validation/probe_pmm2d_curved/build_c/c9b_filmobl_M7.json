@@ -1,0 +1,25 @@
+{
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "lumenairy": "C:\\tmp\\lum_curved_c\\lumenairy\\__init__.py",
+  "tree": "post",
+  "machine": "Tesla_Ryzen",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ },
+ "M": 7,
+ "kind": "filmobl",
+ "circle_t25.0_p0.0_lstsq": 2.061777362172279e-07,
+ "circle_t25.0_p0.0_l2norm": 2.1287162932370762e-07,
+ "identity_t25.0_p0.0_lstsq": 2.433608869978343e-13,
+ "identity_t25.0_p0.0_l2norm": 2.5712765250318625e-13,
+ "circle_t25.0_p40.0_lstsq": 6.315196221517994e-08,
+ "circle_t25.0_p40.0_l2norm": 6.474505465092761e-08,
+ "identity_t25.0_p40.0_lstsq": 4.3076653355456074e-14,
+ "identity_t25.0_p40.0_l2norm": 4.241051954068098e-14
+}
