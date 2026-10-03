@@ -151,10 +151,6 @@ def test_ve1_an_out_of_plane_mu_is_refused_loudly_at_every_entry():
         assert "permeability" in msg or "mu" in msg, (name, msg)
 
 
-@pytest.mark.xfail(strict=True, reason="V-E1-1: _require_inplane_mu (solver, "
-                   "Jones entry, uniform / slanted stack layers) still says "
-                   "the out-of-plane first-order generator 'has no mu blocks' "
-                   "-- false since Phase E1; flip when the wording is fixed")
 def test_ve1_the_out_of_plane_mu_refusal_states_the_current_reason():
     for name, fn in _oop_mu_calls().items():
         with pytest.raises(NotImplementedError) as ei:

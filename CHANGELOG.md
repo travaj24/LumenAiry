@@ -68,7 +68,7 @@ seen differently at every point, and the solver carries that too.
   read the Jones matrices.
 * Cost: a mapped out-of-plane region costs 1.2-1.5x an unmapped
   out-of-plane region on the same walls and about what Phase D's mapped
-  in-plane region costs (0.8-1.0x: the out-of-plane path's whitened eig is
+  in-plane region costs (0.6-1.0x: the out-of-plane path's whitened eig is
   faster than the in-plane QZ at twice the size), at 2.0-2.3x its peak
   memory (loaded box, upper bounds).
 * Limits: an out-of-plane PERMEABILITY still raises (with or without a map);

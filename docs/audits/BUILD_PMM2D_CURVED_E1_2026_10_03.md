@@ -485,8 +485,10 @@ The two independent topologies agree to 4.0e-6 (c5 `M = 7`, dof 3600, vs c3
 RCWA's ENVELOPE falls like 1 / N toward that answer and its 1 / N Richardson
 pairs reach 7.0e-5 -- the RCWA's 1/N floor (its local rate wanders, as
 Phase D's D4 recorded; a 1e-4-class reference); the staircases converge in M
-to different devices, strictly decreasing toward the curved answer (1.9e-2,
-1.7e-2, 3.7e-3).  `fff_nv` was NOT the exact-disk RCWA used, as the brief
+to different devices, the 16-step one closest to the curved answer (1.9e-2,
+1.7e-2, 3.7e-3; the independent verification's fixture had the 4-step
+staircase closer than the 8-step one, so "strictly decreasing" is not a
+general property).  `fff_nv` was NOT the exact-disk RCWA used, as the brief
 suggested: its validated-scope gate refuses a disk (non-separable geometry)
 and it builds its factorization from the pixel cell, which would put the
 O(1/S) staircase back in; the exact form factor enters through Phase D's
@@ -541,8 +543,10 @@ vanishes in the exact solution) and 0.14 (Jt) at oblique; `kappa` without
 The two limits agree: the shipped slant solver's in-plane staircases fall
 toward the curved composite answer (7.6e-2, 5.3e-2, 9.1e-3; each converged
 in M to its own device), and the z-staircase of exact disks, extrapolated in
-both its order count and its slice count, lands within 2.2e-4 of it -- the
-RCWA's own 1 / N class (the z-limit's last step is 2.7e-4).  The z-staircase
+both its order count and its slice count, corroborates it at the 2e-4 ..
+4e-4 level -- the RCWA's own extrapolation floor: the slice extrapolation
+is cleanly second order, the order one is 1 / N in its envelope but not
+settled rung to rung (the z-limit's last step is 2.7e-4).  The z-staircase
 of the CURVED solve itself was not measurable: each slice's circle sits at a
 different centre, and one stack-wide map cannot carry overlapping circles at
 different centres (the merge refuses crossing outlines) -- that needs

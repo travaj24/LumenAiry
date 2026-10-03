@@ -788,12 +788,14 @@ def _require_inplane_mu(fn_name, tile33):
     """Block-form gate for a ``(..., 3, 3)`` PERMEABILITY tile (Granet Eq. 6,
     ``[[m11, m12, 0], [m21, m22, 0], [0, 0, m33]]``).
 
-    Magnetic anisotropy is IN-PLANE only in this engine: the paper's
-    ``R = C[chi_t]C`` / ``K_tz = C[chi_t][d2;-d1]`` / ``S_tt(chi33)`` route
-    generalizes the SECOND-ORDER pencil, while the out-of-plane FIRST-ORDER
-    generator (:meth:`Granet2DTransverseE._assemble_oop`) carries no ``mu``
-    blocks at all (its ``G3``/``E3`` eliminations assume ``mu = 1``).  So an
-    out-of-plane ``mu`` raises, at the SAME RELATIVE ``1e-12 * scale`` floor
+    Magnetic anisotropy is BLOCK-FORM only in this engine: the paper's
+    ``R = C[chi_t]C`` / ``K_tz = C[chi_t][d2;-d1]`` / ``S_tt(chi33)``
+    operators serve the SECOND-ORDER pencil and (since Phase E1) the
+    out-of-plane FIRST-ORDER generator, and both read ``chi_t =
+    [mu_t]^-1`` and ``chi33 = 1 / m33``.  An out-of-plane ``mu`` would need
+    the full 3 x 3 constitutive split (``chi_tt = (mu^-1)_tt`` and ``tau =
+    -mu^{3t} / mu^{33}`` from the material), so it raises, at the SAME
+    RELATIVE ``1e-12 * scale`` floor
     the permittivity uses (:func:`~lumenairy.elements.pmm.twod_jones._tile_is_offplane`):
     a physically in-plane tensor built by ROTATING a diagonal one carries
     ~1e-16 float noise in the xz/yz/zx/zy slots and must NOT be rejected.
@@ -810,10 +812,12 @@ def _require_inplane_mu(fn_name, tile33):
         raise NotImplementedError(
             f"{fn_name}: OUT-OF-PLANE permeability (m_xz / m_yz / m_zx / "
             f"m_zy above the relative 1e-12 floor) is not implemented -- the "
-            f"magnetic route generalizes the SECOND-ORDER (2 q^2) block-form "
-            f"pencil (Granet Eq. 6: [[m11, m12, 0], [m21, m22, 0], "
-            f"[0, 0, m33]]), and the out-of-plane first-order generator has "
-            f"no mu blocks.  Pass a BLOCK-FORM mu.")
+            f"magnetic route takes a BLOCK-FORM mu (Granet Eq. 6: [[m11, m12, "
+            f"0], [m21, m22, 0], [0, 0, m33]]) in both the in-plane pencil and "
+            f"the out-of-plane first-order generator; an out-of-plane mu needs "
+            f"the full 3 x 3 constitutive split (chi_tt = (mu^-1)_tt, tau = "
+            f"-mu^{{3t}} / mu^{{33}}), which is not implemented.  Pass a "
+            f"BLOCK-FORM mu.")
     det = (tile33[..., 0, 0] * tile33[..., 1, 1]
            - tile33[..., 0, 1] * tile33[..., 1, 0])
     scale = max(float(np.max(np.abs(tile33))), 1.0)
@@ -4472,8 +4476,12 @@ def _region_modes_oop(solver: Granet2DTransverseE, *, symmetry=False):
 
     Three things are load-bearing and each is measured, not assumed:
 
-    1. **The eig.**  ``B = blkdiag(Ggram1, Ggram2, Ggram2, Ggram1)`` is
-       Hermitian positive definite (it is a block Gram), so the pencil is
+    1. **The eig.**  On the shipped branch ``B = blkdiag(Ggram1, Ggram2,
+       Ggram2, Ggram1)`` is a block Gram; on the permeability branch (a map
+       or a material ``mu``, Phase E1) its E rows hold ``-R = C[chi_t]C``,
+       Hermitian positive definite for a pointwise HPD ``chi_t`` and NOT
+       Hermitian for a lossy ``mu``, which takes ``sla.eig`` (QZ) instead.
+       Where ``B`` is Hermitian positive definite the pencil is
        Cholesky-WHITENED to a standard eig rather than handed to a QZ.  That is
        why the ``4 q^2`` out-of-plane path costs only 1.7-2.4x the ``2 q^2``
        in-plane path, which pays ``scipy.linalg.eig(L, G)``.
