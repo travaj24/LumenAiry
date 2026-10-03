@@ -1053,3 +1053,23 @@ def test_e3r2_pmm1d_jax_angle_gradient_at_normal_incidence():
     fd = _fdv(lambda t: f(t, np), 0.0, scale=1.0)
     assert np.max(np.abs(g - fd)) / np.max(np.abs(fd)) < 1e-6
 
+
+def test_e3r2_an_ellipse_inside_the_sliver_margin_is_poisoned_when_traced():
+    """V-E3-3 for the primitive whose bounding box needed the round-2
+    trace-safe ``Ellipse.bbox``: frozen at a = b = 0.5 (c = 0.6), a = 0.5995
+    leaves 5e-4 P to the cell edge (sliver 1.2e-3 P) -> NaN value and
+    gradient when traced; a = 0.59 finite."""
+    import jax
+    st = _stack([dict(thickness=0.4, shapes=[Ellipse(0.6, 0.6, 0.5, 0.5,
+                                                     3.5)],
+                      background_eps=1.0)], M=3)
+    tw = st.jax_twin()
+
+    def f(a):
+        p = tw.params()
+        p["layers"][0]["shapes"] = [Ellipse(0.6, 0.6, a, 0.5, 3.5)]
+        return st.solve(params=p)[2][0, tw.p0]
+    fj = jax.jit(f)
+    assert np.isfinite(float(fj(0.59)))
+    assert np.isnan(float(fj(0.5995)))
+    assert np.isnan(float(jax.jit(jax.grad(f))(0.5995)))

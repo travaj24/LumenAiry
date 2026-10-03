@@ -291,6 +291,25 @@ def _traced_shape_merge(parts, ref_layers, t_layers, px, py, cmap_ref):
                           * (1.0 - 1e-9))
     for d in devs:
         ok = ok & (jnp.max(jnp.abs(d)) <= tol)
+    # the merge's INSIDE-THE-CELL contracts, traced (a concrete call is
+    # refused by the merge; verifier V-E3-3): a sinusoidal wall's
+    # base -+ |amplitude| at least the sliver width inside the cell
+    # (SinusoidalWall._layout), any other curved shape's bounding box at least
+    # the sliver width from the cell edges, a rectangle's inside it
+    # (Shape2D._check_inside)
+    for (_w, sh_r, _l), sh_t in zip(items, flat_t):
+        if isinstance(sh_r, SH.SinusoidalWall):
+            pp = px if sh_r.axis == "x" else py
+            A = jnp.abs(sh_t.amplitude)
+            for base in sh_t._bases():
+                ok = ok & (base - A >= TS._STAG_MIN_SEG_FRAC * pp) & (
+                    base + A <= pp * (1.0 - TS._STAG_MIN_SEG_FRAC))
+            continue
+        x0, x1, y0, y1 = sh_t.bbox()
+        strict = not isinstance(sh_r, SH.Rect)
+        mx = TS._STAG_MIN_SEG_FRAC * px if strict else -1e-12 * px
+        my = TS._STAG_MIN_SEG_FRAC * py if strict else -1e-12 * py
+        ok = ok & (x0 >= mx) & (y0 >= my) & (x1 <= px - mx) & (y1 <= py - my)
     # painting (the reference's masks, the traced materials)
     uc, vc = parts["uc"], parts["vc"]
     N = uc.size

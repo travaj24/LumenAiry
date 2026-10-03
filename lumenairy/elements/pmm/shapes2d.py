@@ -826,9 +826,16 @@ class Ellipse(Shape2D):
         return self.cx + ca * X - sa * Y, self.cy + sa * X + ca * Y
 
     def bbox(self):
-        ca, sa = np.cos(self.angle), np.sin(self.angle)
-        ex = np.hypot(self.a * ca, self.b * sa)
-        ey = np.hypot(self.a * sa, self.b * ca)
+        # array-module generic (Phase E3 round 2): the JAX twin's traced
+        # inside-the-cell guard calls it on TRACED parameters; with concrete
+        # ones it is the NumPy statement, byte for byte
+        if self._traced():
+            import jax.numpy as xp
+        else:
+            xp = np
+        ca, sa = xp.cos(self.angle), xp.sin(self.angle)
+        ex = xp.hypot(self.a * ca, self.b * sa)
+        ey = xp.hypot(self.a * sa, self.b * ca)
         return (self.cx - ex, self.cx + ex, self.cy - ey, self.cy + ey)
 
     def signed_distance(self, x, y):

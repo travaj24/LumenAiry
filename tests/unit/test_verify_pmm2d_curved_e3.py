@@ -11,9 +11,10 @@ h / P = 3e-4 and 1e-4 rungs (h^2 truncation, ratio 3).  Every bar is derived
 from a measurement of 2026-10-03 (Windows 11, CPython 3.14.6, numpy 2.4.4,
 jax 0.11.0; WSL CPython 3.12.3, jax 0.10.2), stated next to the assertion.
 
-Two arms are ``xfail(strict=True)``: they pin DEFECTS the verifier found
-(V-E3-1, V-E3-3) and turn into passing gates when the fix lands -- remove
-the marker with the fix.
+Two arms were ``xfail(strict=True)`` pins of DEFECTS the verifier found
+(V-E3-1, V-E3-3); round 2 of the build fixed both and removed the markers
+(``docs/audits/BUILD_PMM2D_CURVED_E3_2026_10_03.md``, "Round 2").  The
+regularisation arm was restated for the degenerate-cluster rule there.
 """
 import os
 
@@ -273,12 +274,6 @@ def test_ve3_rectangles_at_oblique_incidence_run_the_mapped_route():
 # =========================================================================== #
 # E3-4 -- the merge's inside-the-cell contract inside the trace (V-E3-3)
 # =========================================================================== #
-@pytest.mark.xfail(strict=True, reason=(
-    "V-E3-3 (P3): the traced topology guard does not replay the merge's "
-    "inside-the-cell contract (Shape2D._check_inside / SinusoidalWall's "
-    "margin): a circle whose outline is within the sliver width of the "
-    "cell edge is REFUSED concretely but returns a finite value and "
-    "gradient when traced (v5_events_M3_win.json).  Remove with the fix."))
 def test_ve3_inside_the_cell_contract_is_poisoned_when_traced():
     """Twin frozen at r = 0.5 (c = 0.6, P = 1.2): r = 0.5995 leaves 5e-4 P
     between the outline and the cell edge (sliver 1.2e-3 P).  Concrete:
