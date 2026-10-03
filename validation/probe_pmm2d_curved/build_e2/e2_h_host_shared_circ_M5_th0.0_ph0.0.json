@@ -1,0 +1,21 @@
+{
+ "arm": "shared_circ",
+ "M": 5,
+ "theta": 0.0,
+ "phi": 0.0,
+ "err_vs_airy": 1.702570806560999e-08,
+ "nonspecular": 1.473756923663283e-09,
+ "wall": 6.851413099997444,
+ "closure": [
+  1.0061277588846451e-08,
+  1.006127570146731e-08
+ ],
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "tree": "c:\\tmp\\lum_curved_e2",
+  "lumenairy": "C:\\tmp\\lum_curved_e2\\lumenairy",
+  "platform": "Windows-11-10.0.26200-SP0"
+ }
+}

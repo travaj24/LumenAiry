@@ -1,0 +1,61 @@
+{
+ "M": 5,
+ "closure_shipped": [
+  0.0001756789397122649,
+  8.952097019632177e-05
+ ],
+ "inv_tol_1e3": {
+  "d_RT": 2.55351295663786e-15,
+  "closure": [
+   0.00017567893971293103,
+   8.952097019743199e-05
+  ],
+  "wall": 3.1396360999933677
+ },
+ "maps_ignored": {
+  "d_RT": 0.06707070528613834,
+  "closure": [
+   0.00020213637854504807,
+   4.412328235248175e-05
+  ],
+  "wall": 2.2254382999963127
+ },
+ "nocut": {
+  "d_RT": 6.812126652568085e-05,
+  "closure": [
+   0.0001755974791008974,
+   8.956194935272332e-05
+  ],
+  "wall": 2.836513599999307
+ },
+ "hswap_off": {
+  "d_RT": 0.5105742211983187,
+  "closure": [
+   0.099118560815036,
+   0.11521349515138968
+  ],
+  "wall": 3.4655119000017294
+ },
+ "fast_forced": {
+  "d_RT": 0.0,
+  "closure": [
+   0.0001756789397122649,
+   8.952097019632177e-05
+  ],
+  "wall": 3.305880400002934,
+  "merge_refusal": "compile_shapes: layer 1: Circle(cx=0.6, cy=0.6, r=0.36) and layer 2: SinusoidalWall(axis='x', x0=0.6, amplitude=0.12) need DIFFERENT physical positions for the same grid vertex (near x = 0.6, y = 0.24: (np.float64(0.5999999999999999), np.float64(0.24)) vs (np.float64(0.7166193116685604), np.float64(0.3454415587728429))) -- their outlines meet in one cell in two different ways (e.g. a rounded corner over a sharp one, or an edge laid on another shape's flat side).  One map cannot carry both; a common map for them is Phase E of the curved-cell plan.",
+  "fast_ok": false
+ },
+ "nonoverlap_perlayer_vs_merged": {
+  "shipped": 0.01142123469688705,
+  "maps_ignored": 0.03888216034590164
+ },
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "tree": "c:\\tmp\\lum_curved_e2",
+  "lumenairy": "C:\\tmp\\lum_curved_e2\\lumenairy",
+  "platform": "Windows-11-10.0.26200-SP0"
+ }
+}

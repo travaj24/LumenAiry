@@ -1,0 +1,24 @@
+{
+ "same_circle_tau1.0": {
+  "rel": 2.528317823354403e-15,
+  "wall": 10.60878390000289
+ },
+ "same_circle_tau(0.7648421872844885-0.644217687237691j)": {
+  "rel": 2.528317823354403e-15,
+  "wall": 9.677529699998558
+ },
+ "unmapped_walls_tau1.0": {
+  "rel": 7.315167850201993e-16
+ },
+ "unmapped_walls_tau(0.7648421872844885-0.644217687237691j)": {
+  "rel": 7.315167850201993e-16
+ },
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "tree": "c:\\tmp\\lum_curved_e2",
+  "lumenairy": "C:\\tmp\\lum_curved_e2\\lumenairy",
+  "platform": "Windows-11-10.0.26200-SP0"
+ }
+}

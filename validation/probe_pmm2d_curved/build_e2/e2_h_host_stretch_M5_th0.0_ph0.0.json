@@ -1,0 +1,21 @@
+{
+ "arm": "stretch",
+ "M": 5,
+ "theta": 0.0,
+ "phi": 0.0,
+ "err_vs_airy": 0.00014415040323667583,
+ "nonspecular": 1.7852932127579133e-07,
+ "wall": 7.482411199998751,
+ "closure": [
+  0.00013393787642002053,
+  4.796946693785831e-05
+ ],
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "tree": "c:\\tmp\\lum_curved_e2",
+  "lumenairy": "C:\\tmp\\lum_curved_e2\\lumenairy",
+  "platform": "Windows-11-10.0.26200-SP0"
+ }
+}

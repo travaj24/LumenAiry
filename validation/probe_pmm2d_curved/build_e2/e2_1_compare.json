@@ -1,0 +1,21 @@
+{
+ "n_pre": 134,
+ "n_post": 170,
+ "n_common": 134,
+ "n_equal": 134,
+ "differing": [],
+ "n_mortar": 12,
+ "n_mortar_equal": 12,
+ "idmap_total": 36,
+ "idmap_changed": 28,
+ "idmap_unchanged": [
+  "scalar_int3_M5@idmap.Agen",
+  "scalar_int3_M5@idmap.Bgen",
+  "scalar_nonuni3_M5@idmap.Agen",
+  "scalar_nonuni3_M5@idmap.Bgen",
+  "scalar_int3_M5_obl@idmap.Agen",
+  "scalar_int3_M5_obl@idmap.Bgen",
+  "uniform_int2_M5@idmap.Agen",
+  "uniform_int2_M5@idmap.Bgen"
+ ]
+}
