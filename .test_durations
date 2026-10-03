@@ -17061,5 +17061,9 @@
   "tests/unit/test_verify_pmm2d_curved_e2.py::test_ve2_3_grazing_cut_is_not_lost_between_samples": 2.5,
   "tests/unit/test_verify_pmm2d_curved_e2.py::test_ve2_4_two_crossing_circles_have_a_cross_mass": 0.1,
   "tests/unit/test_verify_pmm2d_curved_e2.py::test_ve2_5_square_root_substitution_keeps_the_rule_under_its_cap": 17.9,
-  "tests/unit/test_verify_pmm2d_curved_e2.py::test_ve2_6_q_matching_and_riding_are_two_sided": 0.3
+  "tests/unit/test_verify_pmm2d_curved_e2.py::test_ve2_6_q_matching_and_riding_are_two_sided": 0.3,
+  "tests/unit/test_pmm2d_staggered_curved_e2.py::test_e2_v1_circle_graze_sliver_is_found_and_scales_like_its_area": 20.43,
+  "tests/unit/test_pmm2d_staggered_curved_e2.py::test_e2_v11_one_circle_on_two_layouts_is_not_refused": 16.12,
+  "tests/unit/test_pmm2d_staggered_curved_e2.py::test_e2_v10_convergence_floor_reads_each_layer_on_its_own_map": 5.07,
+  "tests/unit/test_pmm2d_staggered_curved_e2.py::test_e2_v5_v6_adaptive_rule_steps_and_inversion_failures": 2.67
 }

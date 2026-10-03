@@ -62,8 +62,9 @@ grid and give every hard edge its exact curve.  Two layers may share a curve
 shapes and their layers:
 
 * two outlines that CROSS in plan view (a circle in one layer cut by the edge
-  of a rectangle in another) -- one map cannot make both exact; a common map
-  for two crossing curves is Phase E of the curved-cell plan;
+  of a rectangle in another) -- one map cannot make both exact; with
+  ``layer_grids='per-layer'`` shapes in DIFFERENT layers keep their own maps
+  instead (Phase E2, the curved mortar);
 * two different curves on one cell edge, or two different images of one grid
   vertex (a filleted corner in one layer over a sharp corner in another --
   "different curves in one cell");
@@ -115,9 +116,10 @@ circular hole is ``[Rect(..., eps=4.0), Circle(..., eps=lc_tensor)]``.
 
 Known limits
 ------------
-* OUT-OF-PLANE tensors (a tilted director, ``e13 != 0``), ``slant=`` and
-  per-layer grids under a curved map are Phase E and raise; with rectangles
-  only (no map) an out-of-plane tensor is accepted.
+* OUT-OF-PLANE tensors (a tilted director, ``e13 != 0``) under a curved map
+  are Phase E and raise; ``slant=`` and a STACK-wide ``cmap=`` with
+  ``layer_grids='per-layer'`` raise (per-layer maps are Phase E2); with
+  rectangles only (no map) an out-of-plane tensor is accepted.
 * A FilletRect's flat sides lie on the grid lines through its 45-degree
   points (the Phase B layout the gates were measured on), so another shape's
   straight edge cannot coincide with a fillet's flat side (it would close a
@@ -1138,10 +1140,12 @@ def _merge(px, py, layers, grid_hint=None):
                 raise ValueError(
                     f"compile_shapes: the outlines of {wa} and {wb} CROSS in "
                     f"plan view.  One coordinate map cannot carry two "
-                    f"crossing curves exactly (a common map for intersecting "
-                    f"curves is Phase E of the curved-cell plan); move the "
-                    f"shapes apart, nest one inside the other, or split the "
-                    f"layer.")
+                    f"crossing curves exactly.  Move the shapes apart or nest "
+                    f"one inside the other; if the outlines are in DIFFERENT "
+                    f"layers, PMM2DStackPure(..., layer_grids='per-layer') "
+                    f"joins the layers' own maps by the curved mortar (Phase "
+                    f"E2); outlines in ONE layer cannot be split into two "
+                    f"layers without changing the device.")
     # -- the merged walls -----------------------------------------------------
     gu, gv = _Grid1D(px, "u"), _Grid1D(py, "v")
     for who, _sh, lay in items:
@@ -1201,8 +1205,9 @@ def _merge(px, py, layers, grid_hint=None):
                     f"-- their outlines meet in one cell in two "
                     f"different ways (e.g. a rounded corner over a sharp one, "
                     f"or an edge laid on another shape's flat side).  One map "
-                    f"cannot carry both; a common map for them is Phase E of "
-                    f"the curved-cell plan.")
+                    f"cannot carry both.  If the shapes are in DIFFERENT "
+                    f"layers, layer_grids='per-layer' gives each layer its "
+                    f"own map (Phase E2).")
         V[key] = xy0
     # A claim within a few ulps of its grid vertex IS the grid vertex: two
     # shapes' walls are snapped into one (_WALL_SNAP) but their vertex
@@ -1355,8 +1360,10 @@ def _check_fold(tm, gu, gv, vclaims, eclaims, n=12):
                 f"arc bulge of another shape (even far away along that wall "
                 f"-- e.g. pillars of different radii in one row).  Move them "
                 f"apart (or align the straight wall with the curved shape's "
-                f"bounding box); a common map for them is Phase E of the "
-                f"curved-cell plan.")
+                f"bounding box).  If the shapes are in DIFFERENT layers, "
+                f"layer_grids='per-layer' gives each layer its own map "
+                f"(Phase E2); shapes in ONE layer have no route yet (the "
+                f"hybrid merge is deferred).")
 
 
 def compile_shapes(period_x, period_y, shapes, background_eps, *,

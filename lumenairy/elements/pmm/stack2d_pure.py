@@ -171,8 +171,12 @@ entirely and reproduce ``layer_grids='shared'`` BIT-EXACTLY.
   merge) and the stack then runs that map exactly as ``'shared'``; outlines
   that CROSS in plan view keep their own maps.  A shape layer without
   ``n_modes`` takes the finest shape layer's ``q = N (M - 1)``, and a
-  HOMOGENEOUS layer rides its neighbour's grid (no mortar at that
-  interface).  Like every own-walls-only mortar, an interface whose
+  HOMOGENEOUS layer rides its neighbour's grid -- the nearest non-riding
+  layer above, else below (no mortar at that interface); a uniform layer
+  that names ``n_modes`` / ``grid`` / walls keeps its own grid.  Naming
+  ``n_modes`` on ANY layer, even the stack's own ``M``, takes a mergeable
+  stack off the merged-map fast path and exempts that layer from
+  q-matching (measured 0.12 / 0.028 in R / T at M = 4 / 5).  Like every own-walls-only mortar, an interface whose
   neighbour's outline cuts through this layer's cells (the rim of a pillar
   under a non-conforming grid) converges ALGEBRAICALLY -- measured, the
   same class as the separable mortar on the same geometry

@@ -16,7 +16,9 @@ map and the two are joined by a CURVED MORTAR:
 ```python
 from lumenairy.elements.pmm import Circle, PMM2DStackPure, SinusoidalWall
 
-st = PMM2DStackPure(1.2e-6, 1.2e-6, n_substrate=1.45, n_modes=4,
+# n_modes=7: ~1.6e-3 from the converged R / T on this device (n_modes=4
+# is a smoke rung, 1e-1 off; see the accuracy class below)
+st = PMM2DStackPure(1.2e-6, 1.2e-6, n_substrate=1.45, n_modes=7,
                     layer_grids="per-layer")
 st.add_layer(0.3e-6, shapes=[Circle(0.6e-6, 0.6e-6, 0.36e-6, eps=4.0)],
              background_eps=1.0)
@@ -32,7 +34,7 @@ different curved grids that match is an overlap integral of one layer's
 field against the other's over the physical cell, which no longer splits
 into a product of 1-D integrals.  It is computed by a quadrature that is cut
 along the other layer's grid lines (so every piece is smooth and the rule
-converges spectrally -- ~1e-15 by 16 nodes per piece), with the coordinate
+converges spectrally -- ~1e-14 by 16 to 20 nodes per piece), with the coordinate
 map inverted by Newton at each node.
 
 * `add_layer(..., cmap=)` (per-layer stacks) gives a layer an explicit map;
@@ -48,20 +50,43 @@ map inverted by Newton at each node.
   SAME map through the curved mortar reproduce the shared solve to 3e-15;
   under two separable stretches the cross-mass equals an independent 1-D
   factorisation to 1.3e-14; the crossing circle / sinusoid pair closes
-  energy to 2.4e-5 at `M = 6` and 1e-6 at `M = 7 .. 8`, a lossless layer next
-  to a lossy one absorbs < 1e-13, reflection reciprocity holds at oblique and
+  energy to 2.4e-5 at `M = 6` and 1e-6 at `M = 7 .. 8` (closure is not the
+  accuracy: against an independent conforming map and RCWA the R / T error
+  is 1.4e-2 at `M = 6` and 1e-3 at `M = 8`), a lossless layer next to a
+  lossy one absorbs < 3e-13, reflection reciprocity holds at oblique and
   conical incidence to 1e-6 .. 7e-6 at `M = 7`, and three layers on three
-  different maps close to 2e-6 at `M = 7`.
-* LIMITS, measured: like every own-walls-only mortar, an interface where a
-  pillar's outline cuts through the neighbour's cells converges
-  algebraically (the pillar rim), in the same class as the shipped
-  separable mortar on the same geometry -- so a circle over a non-crossing
-  wall agrees with the merged-map answer to 1e-2 at `M = 5 .. 6` and 4.5e-4
-  at `M = 7`; prefer `layer_grids='shared'` (the merged map) whenever the
-  outlines do not cross.  A shape layer without `n_modes` takes the finest
-  shape layer's per-axis count; a homogeneous layer rides its neighbour's
-  grid.  Two layers whose maps both have a singular vertex (two closed
-  curves) in the same cell overlap raise, naming the cells.
+  different maps close to 3e-6 at `M = 7`.  A wall grazing a neighbour's
+  curve (a cut shorter than the wall sampling) is found and integrated (the
+  Phase E2 verifier's V-E2-D1, fixed).
+* ACCURACY CLASS, measured: like every own-walls-only mortar, an interface
+  where a pillar's outline cuts through the neighbour's cells converges
+  algebraically (the pillar's rim singularity seen through a non-conforming
+  cut; the verifier measured a tail exponent of 1.8 .. 2.2 that keeps its
+  value at eps 1.1 and 1.02 while its size falls with the contrast) -- the
+  same class as the shipped separable mortar on the same geometry.  On the
+  circle over a crossing wall: R / T within ~1e-2 at `M = 6`, ~1e-3 at
+  `M = 8 .. 10`; where a merged map exists the per-layer route stalls near
+  3e-4 from `M = 8` while the merged map reaches 2e-5 (a circle over a
+  non-crossing wall agrees with the merged-map answer to 1e-2 at `M = 5 .. 6`
+  and 4.5e-4 at `M = 7`; the merged map is itself 1e-2 from its converged
+  value at `M = 5 .. 6`).  Prefer `layer_grids='shared'` (the merged map)
+  whenever the outlines do not cross.
+* DEFAULTS: a shape layer without `n_modes` takes the finest shape layer's
+  per-axis count (q-matching); a homogeneous layer rides its neighbour's
+  grid (the nearest non-riding layer above, else below).  Naming `n_modes`
+  on ANY layer -- even the stack's own `M` -- takes a mergeable stack off the
+  merged-map fast path and exempts that layer from q-matching (it moves
+  R / T by 0.12 / 0.028 at `M = 4 / 5` on the E2-4 device).
+* KNOWN LIMITS: two layers whose maps both have a singular vertex (two
+  closed curves) in the same cell overlap raise, naming the cells -- this
+  refuses most crossing pairs of closed curves (46 of 56 crossing circle
+  pairs sampled, `verify_e2/v2c_circle_pairs_win.json`); one circle on two
+  wall layouts (a `grid_hint` refinement) is accepted.  Outlines in adjacent
+  layers closer than ~6e-5 of the period (nearly coincident curves) cannot be
+  inverted and raise, naming the two layers.  Two shapes in ONE layer whose
+  merge refuses (the Phase C verifier's supercells, V-D3) have NO route yet:
+  putting them in two layers is a different device (0.4 .. 0.5 apart in
+  R / T), not a workaround; the hybrid merge is deferred.
 
 ### Added -- pure 2-D PMM (curved cells, Phase D): anisotropic and magnetic materials inside curved cells
 

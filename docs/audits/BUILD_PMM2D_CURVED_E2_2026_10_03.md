@@ -1,6 +1,7 @@
 # BUILD -- curved cells for the pure staggered 2-D PMM, Phase E2 (a different curved map in every layer: the non-separable curved mortar)
 
-Date: 2026-10-03.  Status: BUILT + gated, not pushed.
+Date: 2026-10-03.  Status: BUILT + gated + VERIFIED (verifier fold-in,
+section 10), not pushed.
 Mount: worktree `C:/tmp/lum_curved_e2`, branch `feat/pmm2d-curved-e2-perlayer`,
 built on `eae470d9` (Phase D), with the Phase C verifier branch merged
 (`verify/pmm2d-curved-c`, `eff64792`) and its defects folded in (section 6).
@@ -140,7 +141,7 @@ circle / crossing-sinusoid pair):
 
 | quantity | measured |
 |---|---|
-| Newton inversion per node | **31.5 us** (circle map), **21.7 us** (sinusoid), max error 9.8e-15 / 1.1e-15 over 36 000 random nodes; one Gordon-Hall evaluation 0.36 us / point.  At M = 8 the whole curved cross-mass is **1.1 s** of a 48 s per-layer solve (`e2_9_cost_M8.json`). |
+| Newton inversion per node | **31.5 us** (circle map), **21.7 us** (sinusoid), max error 9.8e-15 / 1.1e-15 over 36 000 / 16 000 random nodes; one Gordon-Hall evaluation 0.36 us / point.  At M = 8 the whole curved cross-mass is **1.1 s** of a 48 s per-layer solve (`e2_9_cost_M8.json`). |
 | conditioning of the non-separable cross-mass | `cond(X)` **769** against **829** for the separable cross-mass of the same two grids unmapped and **878** for the plain Gram -- no conditioning penalty.  The mortar's solves see `X` only on the right-hand side (their operands are each side's own Gram times its modes, unchanged). |
 | (ii) composite rule: exact or not | **NOT exact, algebraic**: relative error of the cross-mass 4.2e-2, 1.4e-2, 8.1e-3, 8.6e-4, 3.2e-4, 2.0e-4 at n = 8 .. 256 nodes per cell per axis (31 s at 256).  The cut rule: 1.4e-6, 3.2e-10, 5.5e-14, 6.8e-15, 1.0e-15 at n = 6, 9, 12, 18, 27 -- spectral. In the stack the composite rule at n = 64 moves the E2-4 device by 6.8e-5 at M = 5 (`e2_8_mutations_M5.json`, arm `nocut`): below that rung's discretisation level, but it is a floor that does not fall with M. |
 
@@ -174,7 +175,10 @@ exact Airy slab), at M = 6 (`e2_h_host_sin_circ_vac_*.json`):
 | (8, 6) | 3.9e-9 |
 | (8, 8) | 2.2e-10 |
 
-The coarse side limits; the fine side does not.  **Decision**: a shape layer
+The coarse side limits; the fine side does not.  (These are explicit
+``cmap=`` films with ``n_modes`` given per layer, where the default itself
+never applies -- they measure the mechanism, not the default; the default
+is pinned two-sided by the verifier's ``test_ve2_6``.)  **Decision**: a shape layer
 that does not name `n_modes` takes the finest shape layer's `q`
 (`M_i = max(M, ceil(q_max / N_i) + 1)`), the shipped neighbour rule's analogue
 for patterned layers.  Single-map references reach 1e-11 .. 1e-13 by M = 6 / 7
@@ -192,7 +196,14 @@ measured, keeping the vacuum layer on its own sinusoid map under the
 circle's rim costs 2.1e-3 / 3.4e-3 / 2.7e-3 at M = 4 / 5 / 6
 (`e2_4_vacuum_M*.json`, `noride_vs_alone`).  An all-unmapped per-layer stack
 never rides (no mapped neighbour) -- the shipped bytes are untouched (E2-1).
-`_e2_no_ride` is the test instrument.
+`_e2_no_ride` is the test instrument.  A rider takes the nearest non-riding
+layer ABOVE, else below; riding above vs below differs only at the
+discretisation level (verifier V5).  A uniform layer that names
+`n_modes` / `grid` / walls keeps its own grid, and naming `n_modes` on ANY
+layer -- even the stack's own `M` -- takes a mergeable stack off the
+merged-map fast path and exempts that layer from q-matching: measured 0.12 /
+0.028 in R / T at M = 4 / 5 (verifier V5).  Documented in the
+`stack2d_pure` module docstring and the CHANGELOG.
 
 ### 2.6 V-D3 (the Phase C verifier): a hybrid merge -- measured, deferred
 
@@ -208,13 +219,17 @@ material boundaries, the macro-cell blend for foreign walls.  Measured here
 | equal circles, dy 0.05 | FOLD | FOLD | 7.5e-2 / 1.9e-2 / 9.6e-3 |
 | rectangle touching a circle at 30 deg | FOLD | FOLD | (n_orders cap at M = 3) / 1.5e-2 / 1.6e-3 |
 
-With the shapes in DIFFERENT layers E2 now solves all three (the per-layer
-maps are what the merge could not build).  In ONE layer they still refuse:
+E2 solves the DIFFERENT two-layer devices (each shape in a layer of its
+own); they are not the over-refused one-layer supercells and not a
+workaround: against the one-layer macro-cell (t 0.5) the splits differ by
+0.43-0.51 in R / T at M = 3..5 and do not converge to it (verifier V6; a
+zero-thickness split is refused).  In ONE layer they still refuse:
 the curved mortar couples layers, not shapes within a layer, so a same-layer
 supercell needs the hybrid merge itself, which changes Phase C's map
-construction and its pinned fingerprints.  **Deferred** (not built), with the
-message and docstring fixed per the verifier (section 6) and the
-verifier's `v10_macro.py` as the measured prototype.
+construction and its pinned fingerprints.  **V-D3 stays DEFERRED, not closed** (not built), with the messages and
+docstring fixed per both verifiers (sections 6 and 10: no "split the layer"
+advice) and the Phase C verifier's `v10_macro.py` as the measured
+prototype; recorded in the plan's open list.
 
 ---
 
@@ -287,6 +302,15 @@ The merge refuses ("... CROSS in plan view"), the per-layer maps solve.
 The STOP condition (closure <= 1e-4 by M = 8) is met at M = 6.  Fail-before:
 the H-row swap off reads closure 0.10 / 0.12 at M = 5.
 
+**Closure is NOT the accuracy.**  Against an independent conforming merged
+map and RCWA (the Phase E2 verifier's V3, the two agreeing to 4.3e-4) the
+R / T error of this device is 1.1e-1, 3.0e-2, 1.4e-2, 1.6e-3, 1.0e-3,
+9.6e-4, 7.2e-4 at M = 4 .. 10 (conical 25 / 40 deg: 9.4e-2 .. 6.7e-3, not
+monotone); closure understates it by 2-5 decades; the rung-to-rung change
+tracks it within 2x.  The ACCURACY CLASS of the curved mortar on a
+patterned / patterned interface whose outlines cut each other's cells is
+therefore ~1e-2 at M = 6 and ~1e-3 at M = 8 .. 10 (section 4.3).
+
 **Absorption** (disk lossy, eps 4 + 0.3i; `e2_4_absorb_M4.json`): the LOSSLESS
 wall layer absorbs 1.5e-15 / 4.6e-16 (each layer's PLAIN Gram is its flux
 form -- the Phase A rule carried across the mortar); with `-R` as the flux
@@ -319,7 +343,10 @@ curved mortar (`_e2_per_layer_maps`):
 | 6 | 9.7e-3 | 1.8e-4 | 2.8e-5 |
 | 7 | 4.5e-4 | 8.5e-6 | 5.1e-6 |
 
-The two converge to one answer, slowly -- section 4.3.  Unit bar M = 4 <= 0.2.
+At M <= 8 the merged map's own error dominates this column (merged vs
+merged M10: 1.05e-1, 1.01e-2, 9.75e-3, 4.34e-4, 4.14e-4); the per-layer
+limitation appears beyond M = 8 as a stall near 3e-4 while the merged map
+reaches 1.8e-5 at M = 9 (verifier V4).  Unit bar M = 4 <= 0.2.
 
 ### 3.5 E2-5 -- the mortar's own convergence (quadrature vs node count, fixed M)
 
@@ -342,10 +369,13 @@ Unit bar (circle / sinusoid, M = 4): n = 12 <= 1e-11, the adaptive result
 **Its limit, measured** (`e2_n_near_singular.json`): two CIRCLE maps whose
 singular vertices approach -- r 0.36 against 0.30 / 0.34 / 0.355 / 0.3599 --
 need n = 41 / 41 / 62 / 96 (the cap), all converged to <= 2.2e-13; at
-1.2e-6 apart a node inversion fails (a `RuntimeError` naming the inversion).
-Concentric circles do not cross, so a real stack of them takes the fast
-path; the limit is for crossing curves with nearly coincident 45-degree
-points.
+-- superseded by the verifier (V-E2-D6): below 5e-5 .. 7e-5 apart (M = 4) a
+node inversion fails, and at 7e-5 .. 3e-4 the n >= 112 rules already fail.
+Concentric or near-tangent circles closer than the sliver contract are
+refused by the merge, so a per-layer stack DOES route them through the
+curved mortar (dr 1e-4 solves at n 96; dr 1e-6 raises from solve(), now
+naming the two layers, the cells, the rung and the remedy).  Crossing
+circles never reach this limit: they are refused up front (V-E2-D2).
 
 ### 3.6 E2-6 -- oblique and conical incidence through the curved mortar
 
@@ -404,7 +434,8 @@ loaded box, upper bounds, ratios within one run):
 | 8 | 4 x 4, 1568, 252 s | (8, 12), 882 / 968, 47.8 s | 1.11 s (36) | 0.19 |
 
 The per-layer route is cheaper per solve (two smaller pencils instead of one
-merged 4 x 4 one; the eig is cubic) and the curved cross-mass is 2-11 % of it.
+merged 4 x 4 one; the eig is cubic) and the curved cross-mass is 2-12 % of it (circle / sinusoid; circle /
+circle spends most of the solve in it, verifier V3g).
 It is LESS accurate per rung where an outline cuts the neighbour's cells
 (3.4, 4.3), so the merged map stays the default whenever it exists.
 
@@ -450,6 +481,10 @@ geometry:
 
 So the per-layer curved route answers to the 1e-2 .. 1e-4 level at practical
 M on patterned-patterned interfaces, in the shipped mortar's class.  The
+cause is CONFIRMED by the Phase E2 verifier (V4): the algebraic tail (rung
+exponent p_M 1.8 .. 2.2 at eps 4) keeps its exponent at eps 1.1 and 1.02
+while its size relative to the scattered amplitude falls in proportion to
+delta-eps -- the rim singularity seen through a non-conforming cut.  The
 merged map (Phase C), being conforming, converges like the lone circle
 (rim-capped at ~1e-5 per rung, plan 3.4; slowed beyond M = 10 by the rim
 edge, Phase C table 3.2: 1.7e-5 at M = 10, 7.8e-6 at M = 11 against the FEM).
@@ -573,3 +608,78 @@ cd /c/tmp/lum_curved_e2 && python -m pytest tests/unit/test_pmm2d_staggered_curv
   found were fixed).
 * WSL ruff 0.15.16 on `lumenairy/`, the touched tests and
   `validation/probe_pmm2d_curved/build_e2/`: `All checks passed!`
+
+---
+
+## 10. The Phase E2 verifier fold-in (`VERIFY_PMM2D_CURVED_E2_2026_10_03.md`)
+
+Merged `verify/pmm2d-curved-e2` (`2fd951d5`, `--no-ff`, durations
+dict-union).  Verdict there: SHIP after documentation edits, no P1.
+
+| item | what was done | evidence |
+|---|---|---|
+| V-E2-D1 (P2, code) | `_cell_pieces` runs a GRAZING refinement (`_grazing_refine`, the verifier's prototype: every between-sample dip into, or excursion out of, the cell resolved on a 257-point sub-grid) before reading its runs; a piece end that meets the outer direction nearly tangentially (`tan < 0.1`) counts as a tangency in the inner-direction choice and takes the square-root substitution | section 10.1; `test_ve2_3` flips to a plain gate |
+| V-E2-D2 (P2, known limit) | the both-singular refusal now states the limit (most crossing closed-curve pairs; splitting the cell is not implemented) with no inapplicable advice; CHANGELOG and plan record it | `test_ve2_4` stays a strict xfail (the pin) |
+| V-E2-D3 (P2, docs) | closure is not the accuracy: the accuracy class stated (3.4, CHANGELOG); the CHANGELOG example uses `n_modes=7` (1.6e-3 on this device) with the reason | -- |
+| V-E2-D5 / D6 (P3, code) | the adaptive rule compares only rungs >= 1.5x apart, keeps the last good rung when a finer one fails to invert (warning), and its warning names the real cause (no unreachable `grid_hint` advice); the inversion failure names both cells, the rung and the remedy, and `solve()` names the two layers; the scope sentence of 3.5 corrected | unit test `test_e2_v5_v6_...` |
+| V-E2-D7 (P3, docs) | V-D3 recorded as deferred (2.6); the CROSS / FOLD / vertex-claim messages and the `shapes2d` known limits no longer advise splitting a layer | -- |
+| V-E2-D8 (P3, code) | `_VERTEX_SNAP = _WALL_SNAP`; pinned in `test_vc4` (a claim 5e-13 p off) | `test_vc4` |
+| V-E2-D9 (P3, docs) | the numbers (2-12 %, 36 000 / 16 000 nodes, the merged-map column, < 3e-13, 3e-6, "16 to 20 nodes", the roadmap's Phase E1 / E3, the history reason line, the riding docs) | -- |
+| V-E2-D10 (P2, code) | `convergence_floor` isolates a shape layer on its OWN map (straight walls were another device, 0.14 off at M = 3) and an explicit per-layer `cmap=` layer under its map; no longer raises on the fast path | unit test `test_e2_v10_...` (the circle layer's floor equals the shape alone on its map to 1e-12) |
+| V-E2-D11 (P3, code) | a both-singular cell pair whose two maps are the same function of `(u, v)` on the rectangles' overlap (one circle on a `grid_hint` map and on its plain map) is integrated (identity transition), not refused | `e2_v11_layouts.json`: 1.6e-15 against the separable cross-mass; overlap test off -> refused; unit test `test_e2_v11_...` |
+| defaults, two-sided (verifier item 9) | riding above vs below, the `n_modes` exemption from q-matching and from the fast path -- documented (2.5); the 1e-6 vs 3.9e-9 claim restated as an explicit-`cmap=` film measurement (2.4) | verifier `test_ve2_6` |
+| the rim cause (verifier item 8) | cited (4.3) | verifier V4 |
+
+### 10.1 V-E2-D1, measured against the verifier's physical brute force
+
+`validation/probe_pmm2d_curved/build_e2/e2_g_graze_{pre,post}.json`, M = 4
+(the verifier's `verify_e2/v2_brute.py` as the oracle; its own floor on
+circle pairs is ~5e-10, measured here 5.0e-10 between its n = 20 and 28 on a
+non-grazing circle pair, where the kernel agrees with it to 5.2e-10):
+
+| case (M = 4) | kernel vs brute, BEFORE | kernel vs brute, AFTER | what the fix adds (kernel with / without the refinement) |
+|---|---|---|---|
+| sinusoid crest, x-wall graze delta = 0 | -- | 8.7e-15 | -- |
+| ... delta = 1e-7 | 1.8e-10 | 8.7e-15 | -- |
+| ... delta = 1e-6 | **5.6e-9** (silent: adaptive change 7.7e-15) | **8.3e-15** | 5.6e-9 |
+| ... delta = 3e-5 | 8.3e-15 | 8.3e-15 | -- |
+| circle bottom, y-wall graze delta = 1e-7 | 6.8e-7 | 6.8e-7 | 1.2e-10 |
+| ... delta = 1e-6 | 6.4e-7 | 6.5e-7 | 3.7e-9 |
+| ... delta = 1e-5 | 4.7e-7 (warned at the cap, n 96) | 4.7e-7 (n 62, no warning) | 0 (the sliver is sampled) |
+| circle, wall 1e-3 / 1e-6 BELOW / touching / 0.03 below / 0.03 above (no graze) | -- | 5.4e-10 / 5.4e-10 / 5.4e-10 / 5.2e-10 / 5.6e-10 | -- |
+
+The sinusoid graze is fixed to round-off.  On the circle, the refinement
+finds the sliver the 65-sample run logic dropped -- its share scales like
+the sliver's area, 1.17e-10 at 1e-7 and 3.70e-9 at 1e-6, a ratio of
+31.6 = 10^1.5 (`e2_g_prepost.json`; unit test `test_e2_v1_...`).  The
+REMAINING ~6.5e-7 against the brute force is the ORACLE's, not the
+kernel's: at that graze the brute force's own n = 20 vs n = 28 change is
+4.2e-7 (against 5.0e-10 on a non-grazing circle pair; `e2_g_oracle_selfchange.json`), with the wall just
+below or touching the circle (no cut) the two agree to its 5.4e-10 floor
+(`e2_g_oracle_check.json`), and the kernel's cross-mass is continuous and
+LINEAR across the graze (relative change 1.9196 x delta from delta = -1e-3
+to +1e-3, no jump at 0; `e2_g_continuity.json`).  The verifier's reading that the circle needs a further square-root
+substitution is therefore not confirmed; the near-tangency treatment was
+built anyway (a piece end with `tan < 0.1` counts as a tangency in the
+inner-direction choice and takes the substitution) and is gated by the
+verifier's `test_ve2_5`.  Second build (WSL): section 10.2.
+
+### 10.2 Tails after the fold-in (both builds)
+
+* Windows (CPython 3.14.6, numpy 2.4.4, scipy 1.17.1), curved A-D + E2 + the
+  A / B / C / E2 verifier files + the mortar, per-layer-grid and mortar-fix
+  files + history relocation, doc identifiers, except budget, `-n 4`:
+  `950 passed, 1 skipped, 1 xfailed in 311.50s` (the xfail: `test_ve2_4`,
+  the V-E2-D2 pin; `test_ve2_3` passes as a plain gate).  The broad 70-file
+  sweep run before the machine's restart, on the same code: `1681 passed,
+  8 skipped, 1 xfailed in 1114.44s`.  The four new ids, serially: 20.4 s
+  (`test_e2_v1_...`), 16.1 s (`_v11_`), 5.1 s (`_v10_`), 2.7 s (`_v5_v6_`).
+* WSL Ubuntu second build (CPython 3.12.3, numpy 2.4.6, scipy 1.17.1): the
+  same test set without the three hygiene files, `-n 4`: `189 passed,
+  1 skipped, 1 xfailed in 293.34s`; the circle-graze shares on WSL equal the
+  Windows ones to every printed digit (`e2_g_prepost_wsl.json`).
+* E2-1 re-run after the fold-in: 134 / 134 still identical to `eae470d9`.
+* `record_history_fingerprints.py --check`: OK.  `python -m mypy`
+  (configured list): no issues in 33 files.  WSL ruff 0.15.16: all checks
+  passed.
+

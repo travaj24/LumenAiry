@@ -266,7 +266,7 @@ stack its own map, joined by a non-separable curved mortar, so outlines that
 cross in plan view can be stacked
 (`docs/audits/BUILD_PMM2D_CURVED_E2_2026_10_03.md`).  Still open:
 out-of-plane tensors / slant / the JAX twin under a map (curved-cell PLAN
-Phase D / E, approved 2026-10-02 -- not this roadmap's own Phase E).  The convergence of the EFFICIENCIES stays
+Phase E1 / E3, approved 2026-10-02 -- not this roadmap's own Phase E).  The convergence of the EFFICIENCIES stays
 rim-capped (~1e-5 per rung) for curved pillars as for square ones: the
 in-plane curvature is resolved spectrally, the pillar's top and bottom rim
 is not (a z-direction question).
