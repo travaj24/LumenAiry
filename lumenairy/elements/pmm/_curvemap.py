@@ -111,7 +111,8 @@ import numpy as np
 from numpy.polynomial.legendre import leggauss
 
 __all__ = ["Arc", "CellMap", "EdgeCurve", "EllipseArc", "IdentityMap", "Line",
-           "SeparableStretch", "SineStretch", "Sinusoid", "TransfiniteMap"]
+           "RefinedMap", "SeparableStretch", "SineStretch", "Sinusoid",
+           "TransfiniteMap"]
 
 #: Relative tolerance of the map validation (periodicity and the boundary
 #: check), in units of the period for positions and of the Jacobian scale for
@@ -494,6 +495,14 @@ class EdgeCurve:
         v, _ = self(np.array([0.0, 1.0]))
         return v[0], v[1]
 
+    def piece(self, s0, s1):  # pragma: no cover - protocol
+        """The sub-curve from ``s = s0`` to ``s = s1``, re-parametrised on
+        ``[0, 1]`` and UNIFORM in the same parameter (Phase C: a wall of
+        another shape that crosses this edge splits it into pieces, and the
+        transfinite blend of each sub-cell must place its points exactly where
+        the whole edge did).  ``piece(0, 1)`` is the curve itself."""
+        raise NotImplementedError
+
 
 class Line(EdgeCurve):
     """The straight segment from ``P`` (``s = 0``) to ``Q`` (``s = 1``),
@@ -512,6 +521,12 @@ class Line(EdgeCurve):
 
     def key(self):
         return ("Line", tuple(self.P), tuple(self.Q))
+
+    def piece(self, s0, s1):
+        if s0 == 0.0 and s1 == 1.0:
+            return self
+        d = self.Q - self.P
+        return Line(self.P + float(s0) * d, self.P + float(s1) * d)
 
 
 class Arc(EdgeCurve):
@@ -570,6 +585,13 @@ class Arc(EdgeCurve):
         return ("Arc", tuple(self.center), self.radius, self.theta0,
                 self.theta1)
 
+    def piece(self, s0, s1):
+        if s0 == 0.0 and s1 == 1.0:
+            return self
+        sw = self.theta1 - self.theta0
+        return Arc(self.center, self.radius, self.theta0 + float(s0) * sw,
+                   self.theta0 + float(s1) * sw)
+
 
 class EllipseArc(EdgeCurve):
     """An arc of the ellipse with ``semi_axes = (a, b)`` about ``center``,
@@ -607,6 +629,14 @@ class EllipseArc(EdgeCurve):
     def key(self):
         return ("EllipseArc", tuple(self.center), self.a, self.b, self.t0,
                 self.t1, self.angle)
+
+    def piece(self, s0, s1):
+        if s0 == 0.0 and s1 == 1.0:
+            return self
+        sw = self.t1 - self.t0
+        return EllipseArc(self.center, (self.a, self.b),
+                          self.t0 + float(s0) * sw, self.t0 + float(s1) * sw,
+                          angle=self.angle)
 
 
 class Sinusoid(EdgeCurve):
@@ -649,6 +679,20 @@ class Sinusoid(EdgeCurve):
     def key(self):
         return ("Sinusoid", self.base, self.amplitude, self.period, self.t0,
                 self.t1, self.phase, self.along)
+
+    def piece(self, s0, s1):
+        if s0 == 0.0 and s1 == 1.0:
+            return self
+        sw = self.t1 - self.t0
+        return self.between(self.t0 + float(s0) * sw,
+                            self.t0 + float(s1) * sw)
+
+    def between(self, t0, t1):
+        """The piece between the running coordinates ``t0`` and ``t1`` given
+        EXACTLY (the parameter of a sinusoid is the running coordinate itself,
+        so a piece cut at a wall position needs no ``s`` arithmetic)."""
+        return Sinusoid(self.base, self.amplitude, self.period, t0, t1,
+                        phase=self.phase, along=self.along)
 
 
 class TransfiniteMap(CellMap):
@@ -860,6 +904,93 @@ class TransfiniteMap(CellMap):
         return (self.vertex_images.tobytes(),
                 tuple((k, self.curved_edges[k].key())
                       for k in sorted(self.curved_edges)))
+
+
+class RefinedMap(CellMap):
+    """A FINER wall grid on an unchanged geometry: the h-refinement of a map.
+
+    What it is for.  The staggered basis needs a SQUARE wall grid
+    (``Nx == Ny``), and a shape layout is rarely square (a circle and a
+    rectangle side by side can need five ``u`` walls and three ``v`` walls).
+    Adding a wall to square it up must not move any material boundary, so
+    the added wall is a SUBDIVISION of the base map's cells: every fine cell
+    lies inside one cell of ``base`` and the map there IS the base cell's own
+    blend, evaluated at the fine cell's points.  Nothing physical changes --
+    the image of every base grid line, curved or straight, is exactly what it
+    was -- and only the solver's resolution is redistributed (Phase C of the
+    curved-cell plan; the plan's "a wall that crosses another shape's curved
+    macro-cell subdivides it, and each sub-cell takes the macro-cell's blend
+    evaluated on its sub-rectangle").
+
+    Parameters
+    ----------
+    base : CellMap
+        The map to refine (in practice a :class:`TransfiniteMap`).
+    u_walls, v_walls : increasing ``(N + 1,)`` arrays
+        The fine boundary arrays; each must CONTAIN every boundary of the base
+        grid (to ``1e-13`` of the period -- a base wall that is not a fine
+        wall would put a kink of the map inside a fine cell, where the
+        quadrature assumes an analytic map, and is refused).
+
+    The singular vertices of ``base`` are carried over to the fine cells that
+    own them, so the solver's corner (Duffy) rule still runs exactly where the
+    map pinches.  The fingerprint is the base's plus the fine walls."""
+
+    def __init__(self, base, u_walls, v_walls):
+        if not isinstance(base, CellMap):
+            raise TypeError(f"RefinedMap: base must be a CellMap, got "
+                            f"{type(base).__name__}.")
+        self.base = base
+        self._init_walls(u_walls, v_walls, base.period_x, base.period_y)
+        self._owner_u = self._owners(self.u_bounds, base.u_bounds,
+                                     self.period_x, "u")
+        self._owner_v = self._owners(self.v_bounds, base.v_bounds,
+                                     self.period_y, "v")
+        self.validate()
+
+    @staticmethod
+    def _owners(fine, coarse, period, axis):
+        """Index of the base segment holding each fine segment; refuses a
+        base wall that is not a fine wall."""
+        tol = 1e-13 * float(period)
+        for c in coarse:
+            if float(np.min(np.abs(fine - c))) > tol:
+                raise ValueError(
+                    f"RefinedMap: the base {axis}-wall {c!r} is not a wall of "
+                    f"the fine grid -- a refinement must keep every base "
+                    f"wall (the map may kink there).")
+        mids = 0.5 * (fine[:-1] + fine[1:])
+        return np.clip(np.searchsorted(coarse, mids) - 1, 0, coarse.size - 2)
+
+    def geom(self, sx, sy, U, V):
+        return self.base.geom(int(self._owner_u[sx]), int(self._owner_v[sy]),
+                              U, V)
+
+    def geom_points(self, sx, sy, U, V):
+        return self.base.geom_points(int(self._owner_u[sx]),
+                                     int(self._owner_v[sy]), U, V)
+
+    @property
+    def singular_vertices(self):
+        """The base's singular vertices, re-indexed onto the fine cells that
+        own them (the fine cell inside the base cell with that corner)."""
+        out = []
+        tol = 1e-13 * max(self.period_x, self.period_y)
+        bu, bv = self.base.u_bounds, self.base.v_bounds
+        for bsx, bsy, cu, cv in self.base.singular_vertices:
+            u = bu[bsx + cu]
+            v = bv[bsy + cv]
+            iu = int(np.argmin(np.abs(self.u_bounds - u)))
+            iv = int(np.argmin(np.abs(self.v_bounds - v)))
+            if (abs(self.u_bounds[iu] - u) > tol
+                    or abs(self.v_bounds[iv] - v) > tol):
+                continue                      # unreachable: walls are kept
+            out.append((iu - cu, iv - cv, cu, cv))
+        return sorted(out)
+
+    def _key(self):
+        return ("RefinedMap", type(self.base).__name__,
+                self.base.fingerprint)
 
 
 # =========================================================================== #
