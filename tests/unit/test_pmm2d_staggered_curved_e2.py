@@ -388,7 +388,7 @@ def test_e2_4_vacuum_layer_identity_and_the_merged_map_both_ways():
     to the shared stack; forced through the curved mortar it agrees with
     the merged map at the non-conforming mortar's level -- 9.9e-2, 1.1e-2,
     9.7e-3, 4.5e-4 at M = 4 .. 7 (``e2_4_merged_M*.json``; the shipped
-    separable analogue 2.8e-2 / 9.7e-3 / 5.6e-3 at M = 4 .. 6,
+    separable analogue 2.8e-2 / 9.7e-3 / 5.6e-3 at M = 5 .. 7,
     ``e2_w_shipped_baseline_M*.json``).  Bar at M = 4: <= 0.2 (0.3 decades
     up); the ladder is the build doc's."""
     lay = [(_D2, _sinw(eps=1.0), 1.0), (_D1, _circ(), 1.0)]
@@ -493,7 +493,7 @@ def test_e2_6_oblique_and_conical_closure_and_reciprocity():
 def test_e2_7_three_layers_on_three_maps():
     """A circle, a sinusoidal wall along x crossing it, a sinusoidal wall
     along y crossing both: two curved mortars in one cascade.  Measured
-    (``e2_7_three_M*.json``): closure 1.5e-3, 1.2e-4, 7.4e-5, 2.1e-6 at
+    (``e2_7_three_M*.json``): closure 1.5e-3, 2.1e-4, 7.4e-5, 2.9e-6 at
     M = 4 .. 7; with the middle layer lossy the two LOSSLESS layers absorb
     <= 2.5e-14 (M = 4) .. 2.7e-13 (M = 7).  Bars at M = 4: closure <= 1e-2,
     lossless absorption <= 1e-10."""
