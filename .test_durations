@@ -16996,7 +16996,7 @@
   "tests/unit/test_pmm2d_staggered_curved_c.py::test_c13_two_by_two_circle_array_is_the_halved_period": 39.13,
   "tests/unit/test_pmm2d_staggered_curved_c.py::test_c14_circle_is_four_fold_symmetric_and_an_ellipse_is_not": 5.87,
   "tests/unit/test_pmm2d_staggered_curved_c.py::test_c15_a_compiled_shape_cannot_go_stale": 0.19,
-  "tests/unit/test_pmm2d_staggered_curved_c.py::test_c16_tensors_ride_the_identity_map_and_are_refused_under_a_curve": 5.7,
+  "tests/unit/test_pmm2d_staggered_curved_c.py::test_c16_tensors_ride_the_identity_map_and_the_curved_map": 5.7,
   "tests/unit/test_pmm2d_staggered_curved_c.py::test_c17_rotated_ellipse_is_its_own_mirror_image": 8.67,
   "tests/unit/test_pmm2d_staggered_curved_c.py::test_c1_no_shapes_never_reaches_the_phase_c_code": 26.72,
   "tests/unit/test_pmm2d_staggered_curved_c.py::test_c1_rectangles_ride_the_unmapped_solver": 24.91,

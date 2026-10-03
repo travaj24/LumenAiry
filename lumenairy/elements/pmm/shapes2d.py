@@ -199,6 +199,22 @@ def _as_eps(eps, who):
     return a.copy()
 
 
+def _as_mu(mu, who):
+    """A scalar (complex, nonzero) or a ``(3, 3)`` block-form permeability,
+    validated (an out-of-plane ``mu`` is refused by the solver, naming the
+    phase that would carry it)."""
+    a = np.asarray(mu, dtype=complex)
+    if a.ndim == 0:
+        if not np.isfinite(a) or a == 0:
+            raise ValueError(f"{who}: mu must be finite and nonzero, got "
+                             f"{mu!r}.")
+        return complex(a)
+    if a.shape != (3, 3) or not np.all(np.isfinite(a)):
+        raise ValueError(f"{who}: mu must be a scalar or a finite (3, 3) "
+                         f"block-form tensor, got shape {a.shape}.")
+    return a.copy()
+
+
 def _fmt(v):
     return f"{float(v):.6g}"
 
@@ -218,8 +234,11 @@ class Shape2D:
     #: shape needs a non-identity map.
     curved = True
 
-    def __init__(self, eps, name):
+    def __init__(self, eps, name, mu=None):
         self.eps = _as_eps(eps, type(self).__name__)
+        # Phase D: an optional relative PERMEABILITY (a scalar or a (3, 3)
+        # block-form tensor), painted with the shape like its eps
+        self.mu = None if mu is None else _as_mu(mu, type(self).__name__)
         self._name = name
 
     def __setattr__(self, key, value):
@@ -250,6 +269,11 @@ class Shape2D:
     @property
     def is_tensor(self):
         return np.ndim(self.eps) == 2
+
+    @property
+    def is_magnetic(self):
+        """True when the shape carries a permeability ``mu``."""
+        return self.mu is not None
 
     def bbox(self):  # pragma: no cover - protocol
         """``(x0, x1, y0, y1)`` -- the physical bounding box."""
@@ -318,8 +342,8 @@ class Rect(Shape2D):
 
     curved = False
 
-    def __init__(self, cx, cy, w, h, eps, *, name=None):
-        super().__init__(eps, name)
+    def __init__(self, cx, cy, w, h, eps, *, mu=None, name=None):
+        super().__init__(eps, name, mu)
         self.cx, self.cy = float(cx), float(cy)
         self.w, self.h = float(w), float(h)
         if not (self.w > 0.0 and self.h > 0.0):
@@ -406,8 +430,8 @@ class FilletRect(Shape2D):
         orders, R, T, J = st.solve()
     """
 
-    def __init__(self, cx, cy, w, h, r, eps, *, name=None):
-        super().__init__(eps, name)
+    def __init__(self, cx, cy, w, h, r, eps, *, mu=None, name=None):
+        super().__init__(eps, name, mu)
         self.cx, self.cy = float(cx), float(cy)
         self.w, self.h = float(w), float(h)
         self.r = float(r)
@@ -469,7 +493,7 @@ class FilletRect(Shape2D):
     def _layout(self, px, py):
         if self.r == 0.0:
             return Rect(self.cx, self.cy, self.w, self.h, self.eps,
-                        name=self.name)._layout(px, py)
+                        mu=self.mu, name=self.name)._layout(px, py)
         rmin = _FILLET_MIN_FRAC * max(px, py)
         if self.r < rmin * (1.0 - 1e-9):
             raise ValueError(
@@ -561,8 +585,8 @@ class Circle(Shape2D):
             shapes=[disk], background_eps=1.0, n_modes=8)
     """
 
-    def __init__(self, cx, cy, r, eps, *, core=None, name=None):
-        super().__init__(eps, name)
+    def __init__(self, cx, cy, r, eps, *, core=None, mu=None, name=None):
+        super().__init__(eps, name, mu)
         self.cx, self.cy, self.r = float(cx), float(cy), float(r)
         if not self.r > 0.0:
             raise ValueError(f"{self.name}: r must be > 0.")
@@ -687,8 +711,9 @@ class Ellipse(Shape2D):
         eps_cell, xw, yw, cmap = compile_shapes(1.2e-6, 1.2e-6, [post], 1.0)
     """
 
-    def __init__(self, cx, cy, a, b, eps, *, angle=0.0, name=None):
-        super().__init__(eps, name)
+    def __init__(self, cx, cy, a, b, eps, *, angle=0.0, mu=None,
+                 name=None):
+        super().__init__(eps, name, mu)
         self.cx, self.cy = float(cx), float(cy)
         self.a, self.b = float(a), float(b)
         self.angle = float(angle)
@@ -810,8 +835,8 @@ class SinusoidalWall(Shape2D):
     """
 
     def __init__(self, axis, x0, amplitude, period_count=1, phase=0.0, *,
-                 eps, width=None, name=None):
-        super().__init__(eps, name)
+                 eps, width=None, mu=None, name=None):
+        super().__init__(eps, name, mu)
         if axis not in ("x", "y"):
             raise ValueError(f"SinusoidalWall: axis must be 'x' (the wall "
                              f"position is an x, running along y) or 'y', "
@@ -1040,14 +1065,17 @@ def _crossing(A, B, tol):
 def _merge(px, py, layers, grid_hint=None):
     """The core of :func:`compile_shapes` for one or many layers.
 
-    ``layers`` is a list of ``(label, shapes, background_eps)``.  Returns
-    ``(u_bounds, v_bounds, cmap, cells, identity)`` -- ``cells`` one
-    ``(N, N)`` (or ``(N, N, 3, 3)``) permittivity grid per layer, ``identity``
-    True when the merged map is the identity (no curve, no moved vertex)."""
+    ``layers`` is a list of ``(label, shapes, background_eps)`` or
+    ``(label, shapes, background_eps, background_mu)``.  Returns
+    ``(u_bounds, v_bounds, cmap, cells, identity, mu_cells)`` -- ``cells``
+    one ``(N, N)`` (or ``(N, N, 3, 3)``) permittivity grid per layer,
+    ``identity`` True when the merged map is the identity (no curve, no moved
+    vertex), ``mu_cells`` one permeability grid per layer (``None`` for a
+    layer with no ``mu`` anywhere; a shape without ``mu`` paints ``mu = 1``)."""
     px, py = float(px), float(py)
     scale = max(px, py)
     items = []
-    for lab, shapes, _bg in layers:
+    for lab, shapes, *_bg in layers:
         for sh in shapes:
             if not isinstance(sh, Shape2D):
                 raise TypeError(
@@ -1179,8 +1207,11 @@ def _merge(px, py, layers, grid_hint=None):
     uc = 0.5 * (U[:-1] + U[1:])
     vc = 0.5 * (Vb[:-1] + Vb[1:])
     cells = []
-    for lab, shapes, bg in layers:
+    mu_cells = []
+    for lab, shapes, bg, *bgm in layers:
         bgv = _as_eps(bg, "compile_shapes: background_eps")
+        bgmu = bgm[0] if bgm else None
+        mu_cells.append(_paint_mu(shapes, bgmu, px, py, uc, vc))
         tensor = np.ndim(bgv) == 2 or any(sh.is_tensor for sh in shapes)
         N = uc.size
         if tensor:
@@ -1199,7 +1230,36 @@ def _merge(px, py, layers, grid_hint=None):
             else:
                 cell[m] = sh.eps
         cells.append(cell)
-    return U, Vb, cmap, cells, identity
+    return U, Vb, cmap, cells, identity, mu_cells
+
+
+def _paint_mu(shapes, background_mu, px, py, uc, vc):
+    """The permeability grid of one layer, painted exactly like its eps
+    (same cells, same order): ``None`` when neither the background nor any
+    shape carries a ``mu``; a shape without ``mu`` paints ``mu = 1``."""
+    if background_mu is None and not any(sh.is_magnetic for sh in shapes):
+        return None
+    bgv = 1.0 + 0.0j if background_mu is None else _as_mu(
+        background_mu, "compile_shapes: background_mu")
+    mus = [bgv] + [sh.mu if sh.is_magnetic else 1.0 + 0.0j for sh in shapes]
+    tensor = any(np.ndim(m) == 2 for m in mus)
+    N = uc.size
+    if tensor:
+        cell = np.empty((N, N, 3, 3), dtype=complex)
+        cell[:] = bgv if np.ndim(bgv) == 2 else bgv * np.eye(3)
+    else:
+        cell = np.full((N, N), bgv, dtype=complex)
+    for sh, m in zip(shapes, mus[1:]):
+        lay = sh._layout(px, py)
+        msk = np.zeros((N, N), dtype=bool)
+        for (u0, u1, v0, v1) in lay.fill:
+            msk |= ((uc[:, None] > u0) & (uc[:, None] < u1)
+                    & (vc[None, :] > v0) & (vc[None, :] < v1))
+        if tensor:
+            cell[msk] = m if np.ndim(m) == 2 else m * np.eye(3)
+        else:
+            cell[msk] = m
+    return cell
 
 
 def _check_fold(tm, gu, gv, vclaims, eclaims, n=12):
@@ -1244,7 +1304,7 @@ def _check_fold(tm, gu, gv, vclaims, eclaims, n=12):
 
 
 def compile_shapes(period_x, period_y, shapes, background_eps, *,
-                   grid_hint=None):
+                   grid_hint=None, background_mu=None, with_mu=False):
     """Lay out a list of shape primitives as the staggered solver's wall grid
     and coordinate map: ``(eps_cell, x_walls, y_walls, cmap)``.
 
@@ -1271,11 +1331,22 @@ def compile_shapes(period_x, period_y, shapes, background_eps, *,
         The minimum number of segments per axis; the widest segments are
         halved until it is met (and the grid stays square).  Use it to add
         resolution where the map is steep without moving any outline.
+    background_mu : complex or (3, 3), optional
+        The relative permeability where no shape is painted (default 1).
+    with_mu : bool, optional
+        Return the permeability grid as a FIFTH output (``None`` when no
+        material is magnetic).  Required as soon as any shape carries ``mu=``
+        or ``background_mu`` is given -- the four-output form would drop the
+        permeability silently, so it RAISES instead.
 
     Returns
     -------
     eps_cell : ``(N, N)`` complex array (``(N, N, 3, 3)`` if any material is
-        a tensor) -- the permittivity of each ``(u, v)`` cell.
+        a tensor) -- the permittivity of each ``(u, v)`` cell.  A tensor is
+        BLOCK-FORM (in-plane anisotropy: ``e13 = e23 = e31 = e32 = 0``) and
+        is routed under a curved map since Phase D (the congruence
+        ``sqrt(g) J^-1 eps J^-T`` at every quadrature node); an out-of-plane
+        tensor under a curved map raises in the solver (Phase E).
     x_walls, y_walls : ``(N + 1,)`` float arrays -- the ``(u, v)`` wall grid
         (boundary arrays from 0 to the period).  Where the map is the
         identity -- on the cell edges and away from every curve -- these are
@@ -1285,6 +1356,8 @@ def compile_shapes(period_x, period_y, shapes, background_eps, *,
         :class:`~lumenairy.elements.pmm._curvemap.RefinedMap` of one when the
         grid was squared up), fingerprinted.  For rectangles only it is the
         identity map.
+    mu_cell : (only with ``with_mu=True``) the ``(N, N)`` /
+        ``(N, N, 3, 3)`` permeability of each cell, or ``None``.
 
     The four outputs feed the explicit-map entry
     ``pmm_jones_2d_staggered(px, py, eps_cell, ..., cmap=cmap)`` or
@@ -1310,7 +1383,14 @@ def compile_shapes(period_x, period_y, shapes, background_eps, *,
     shapes = list(shapes)
     if not shapes:
         raise ValueError("compile_shapes: pass at least one shape.")
-    U, Vb, cmap, cells, _ident = _merge(period_x, period_y,
-                                        [(None, shapes, background_eps)],
-                                        grid_hint)
+    U, Vb, cmap, cells, _ident, mus = _merge(
+        period_x, period_y, [(None, shapes, background_eps, background_mu)],
+        grid_hint)
+    if with_mu:
+        return cells[0], U, Vb, cmap, mus[0]
+    if mus[0] is not None:
+        raise ValueError(
+            "compile_shapes: a shape (or background_mu) carries a "
+            "permeability mu, which the four-output form would drop; pass "
+            "with_mu=True to receive the mu_cell as a fifth output.")
     return cells[0], U, Vb, cmap

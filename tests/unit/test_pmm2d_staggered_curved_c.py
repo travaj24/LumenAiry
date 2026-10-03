@@ -434,12 +434,14 @@ def test_c5_refusals_name_both_shapes_and_layers():
         compile_shapes(_P, _P, [FilletRect(0.6, 0.6, 0.6, 0.6, 1.5e-3, 4.0)],
                        1.0)
     compile_shapes(_P, _P, [FilletRect(0.6, 0.6, 0.6, 0.6, 1.8e-3, 4.0)], 1.0)
-    # scope refusals name their phase
-    with pytest.raises(NotImplementedError, match="Phase D"):
+    # scope refusals name their phase (Phase D, 2026-10-03, routes a
+    # BLOCK-FORM tensor on a circle; an OUT-OF-PLANE one stays refused)
+    oop = np.diag([4.0, 3.0, 3.5]).astype(complex)
+    oop[0, 2] = oop[2, 0] = 0.4
+    with pytest.raises(NotImplementedError, match="Phase E"):
         compile_and_add = PMM2DStackPure(_P, _P, n_modes=4)
         compile_and_add.add_layer(
-            0.3, shapes=[Circle(0.6, 0.6, 0.3, np.diag([4.0, 3.0, 3.5]))],
-            background_eps=1.0)
+            0.3, shapes=[Circle(0.6, 0.6, 0.3, oop)], background_eps=1.0)
     with pytest.raises(NotImplementedError, match="Phase E"):
         PMM2DStackPure(_P, _P, layer_grids="per-layer").add_layer(
             0.3, shapes=[Circle(0.6, 0.6, 0.3, 4.0)], background_eps=1.0)
@@ -799,18 +801,22 @@ def test_c15_a_compiled_shape_cannot_go_stale():
                           1.0)[3].fingerprint == st.cmap.fingerprint
 
 
-def test_c16_tensors_ride_the_identity_map_and_are_refused_under_a_curve():
-    """Phase D makes tensors under a map correct; Phase C routes them where
-    no map is needed.  A TENSOR rectangle rides the unmapped solver and
+def test_c16_tensors_ride_the_identity_map_and_the_curved_map():
+    """Phase C routes tensors where no map is needed; Phase D makes them
+    correct under a map.  A TENSOR rectangle rides the unmapped solver and
     equals the shipped integer-grid tensor solve (walls 0.4, 0.8 as an array
     vs the integer lattice: ULP-close, gate N2 of the mortar build) --
     measured 2026-10-02 3.6e-15 (``c_unit_c16.json``), bar 1e-12.  The same
-    tensor on a circle raises naming Phase D: the effective tensor
-    ``sqrt(g) J^-1 eps J^-T`` needs the Jacobian, not only the metric the
-    scalar route carries (``c_misc_c16.json``: the best scalar surrogate
-    ``s sqrt(g) g^-1`` of eps_t = [[4, 0.3], [0.3, 3]] is 0.20 off the true
-    effective tensor at the circle map's nodes -- Phase D work is genuinely
-    required, not a routing choice)."""
+    tensor on a circle needs the Jacobian itself (``c_misc_c16.json``: the
+    best scalar surrogate ``s sqrt(g) g^-1`` of eps_t = [[4, 0.3], [0.3, 3]]
+    is 0.20 off the true ``sqrt(g) J^-1 eps J^-T`` at the circle map's
+    nodes); Phase C refused it naming Phase D, and since Phase D
+    (2026-10-03) it SOLVES -- its gates are in
+    ``tests/unit/test_pmm2d_staggered_curved_d.py``.  Here: the circle and a
+    uniform tensor layer under a curved shape map solve and close (lossless,
+    M = 4: closure recorded <= 1e-2, the M = 4 discretisation level of the
+    circle, Phase B's ladder), and an OUT-OF-PLANE tensor raises naming
+    Phase E."""
     eps_t = np.array([[4.0, 0.3, 0], [0.3, 3.0, 0], [0, 0, 3.5]], complex)
     st, o, R, T, J = _stack([(_DEPTH, ([Rect(0.6, 0.6, 0.4, 0.4, eps_t)],
                                        1.0))], 5)
@@ -822,11 +828,22 @@ def test_c16_tensors_ride_the_identity_map_and_are_refused_under_a_curve():
     d = max(np.abs(R - R2).max(), np.abs(T - T2).max(),
             np.abs(J - np.asarray(J2)).max())
     assert d <= 1e-12, d
-    with pytest.raises(NotImplementedError, match="Phase D"):
-        _stack([(_DEPTH, ([Circle(0.6, 0.6, 0.3, eps_t)], 1.0))], 4)
-    with pytest.raises(NotImplementedError, match="Phase D"):
+    _st, _o, Rc, Tc, _J = _stack([(_DEPTH, ([Circle(0.6, 0.6, 0.3, eps_t)],
+                                            1.0))], 4)
+    assert np.abs(Rc.sum(1) + Tc.sum(1) - 1.0).max() <= 1e-2
+    st = PMM2DStackPure(_P, _P, n_modes=4, n_orders=3)
+    st.add_layer(0.2, eps=eps_t)
+    st.add_layer(0.3, shapes=[Circle(0.6, 0.6, 0.3, 4.0)], background_eps=1.0)
+    st.set_source(_WL)
+    _o, Ru, Tu = st.solve()[:3]
+    assert np.abs(Ru.sum(1) + Tu.sum(1) - 1.0).max() <= 1e-2
+    oop = eps_t.copy()
+    oop[1, 2] = oop[2, 1] = 0.25
+    with pytest.raises(NotImplementedError, match="Phase E"):
+        _stack([(_DEPTH, ([Circle(0.6, 0.6, 0.3, oop)], 1.0))], 4)
+    with pytest.raises(NotImplementedError, match="Phase E"):
         st = PMM2DStackPure(_P, _P, n_modes=4)
-        st.add_layer(0.2, eps=eps_t)
+        st.add_layer(0.2, eps=oop)
         st.add_layer(0.3, shapes=[Circle(0.6, 0.6, 0.3, 4.0)],
                      background_eps=1.0)
 

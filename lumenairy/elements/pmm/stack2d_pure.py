@@ -207,6 +207,7 @@ from ._core import (
     _redheffer_star,
     _redheffer_star_rect,
 )
+from .twod_jones import _tile_is_offplane
 from .twod_staggered import (
     _C,
     Granet2DTransverseE,
@@ -886,36 +887,41 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
 
     def _require_map_scope(self, *, eps=None, eps_cell=None, mu=None,
                            mu_cell=None, slant=None):
-        """Refuse, under a map, every layer kind Phase A does not cover."""
+        """Refuse, under a map, every layer kind the curved-cell phases built
+        so far do not cover: a SLANT and an OUT-OF-PLANE tensor (``eps`` or
+        ``mu``) -- both Phase E.  Block-form tensors and ``mu`` / ``mu_cell``
+        are routed since Phase D (the congruence ``sqrt(g) J^-1 eps J^-T``,
+        :func:`~lumenairy.elements.pmm.twod_staggered._stag_map_eff_tensor`)."""
         if self.cmap is None:
             return
         fn = "PMM2DStackPure.add_layer"
-        if mu is not None or mu_cell is not None:
-            raise NotImplementedError(
-                f"{fn}: mu / mu_cell under a coordinate map is not "
-                f"implemented yet (a material permeability under the map is "
-                f"Phase D of the curved-cell plan).")
         if not _slant_is_zero(_norm_slant_pair(slant, fn)):
             raise NotImplementedError(
                 f"{fn}: slant= under a coordinate map is not implemented (the "
                 f"shear composes with the map -- Phase E of the curved-cell "
                 f"plan).")
-        spec = eps if eps is not None else eps_cell
-        a = np.asarray(spec)
-        tensor = (eps is not None and a.ndim != 0) or (
-            eps_cell is not None and a.ndim == 4)
-        if tensor:
-            raise NotImplementedError(
-                f"{fn}: a TENSOR permittivity under a coordinate map is not "
-                f"implemented yet (the congruence sqrt(g) J^-1 eps J^-T on a "
-                f"tensor is Phase D of the curved-cell plan); pass a scalar "
-                f"eps or a scalar (Nx, Ny) eps_cell.")
+        for what, spec, uni in (("eps", eps, True), ("eps_cell", eps_cell,
+                                                     False),
+                                ("mu", mu, True), ("mu_cell", mu_cell, False)):
+            if spec is None:
+                continue
+            a = np.asarray(spec)
+            t33 = (a[None, None] if (uni and a.shape == (3, 3)) else
+                   a if (not uni and a.ndim == 4) else None)
+            if t33 is not None and _tile_is_offplane(t33):
+                raise NotImplementedError(
+                    f"{fn}: an OUT-OF-PLANE tensor {what} (e_xz / e_yz / "
+                    f"e_zx / e_zy above the relative 1e-12 floor) under a "
+                    f"coordinate map is not implemented -- the out-of-plane "
+                    f"first-order generator has no permeability blocks and a "
+                    f"map makes every region magnetic (Phase E of the "
+                    f"curved-cell plan).  BLOCK-FORM tensors are accepted.")
 
     # ------------------------------------------------------------------ build
     def add_layer(self, thickness, *, eps=None, eps_cell=None, mu=None,
                   mu_cell=None, slant=None, x_walls=None, y_walls=None,
                   grid=None, n_modes=None, max_pencil_dof=None, shapes=None,
-                  background_eps=None):
+                  background_eps=None, background_mu=None):
         """Append a layer.  Pass exactly ONE of ``eps`` or ``eps_cell``, and
         at most one of ``mu`` (uniform) or ``mu_cell`` (patterned).
 
@@ -1068,13 +1074,15 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         curved mortar, Phase E)."""
         self._modal = None      # geometry change supersedes retained amplitudes
         self._internal = None
-        if shapes is not None or background_eps is not None:
+        if (shapes is not None or background_eps is not None
+                or background_mu is not None):
             return self._add_shapes_layer(
                 thickness, shapes, background_eps,
                 others=dict(eps=eps, eps_cell=eps_cell, mu=mu,
                             mu_cell=mu_cell, x_walls=x_walls,
                             y_walls=y_walls, grid=grid, n_modes=n_modes),
-                slant=slant, max_pencil_dof=max_pencil_dof)
+                slant=slant, max_pencil_dof=max_pencil_dof,
+                background_mu=background_mu)
         if self._shapes_map and eps_cell is not None:
             raise ValueError(
                 "PMM2DStackPure.add_layer: this stack's patterned layers are "
@@ -1082,11 +1090,13 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
                 "and map), so a raw eps_cell layer cannot join it -- its "
                 "cells would refer to a grid the merge does not know.  "
                 "Describe the layer with shapes (Rect for rectangles).")
-        if self._shapes_map and (mu is not None or mu_cell is not None):
-            raise NotImplementedError(
-                "PMM2DStackPure.add_layer: mu / mu_cell in a stack with "
-                "shape layers is not implemented (a material permeability "
-                "under a map is Phase D of the curved-cell plan).")
+        if self._shapes_map and mu_cell is not None:
+            raise ValueError(
+                "PMM2DStackPure.add_layer: this stack's patterned layers are "
+                "given by shapes= (the stack merges them into one wall grid "
+                "and map), so a raw mu_cell cannot join it -- its cells would "
+                "refer to a grid the merge does not know.  Give the shapes "
+                "their mu= (and the layer background_mu=), or a uniform mu.")
         if self._shapes_map and not _slant_is_zero(
                 _norm_slant_pair(slant, "PMM2DStackPure.add_layer")):
             raise NotImplementedError(
@@ -1175,7 +1185,7 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         return self._finish_layer(_pl)
 
     def _add_shapes_layer(self, thickness, shapes, background_eps, *,
-                          others, slant, max_pencil_dof):
+                          others, slant, max_pencil_dof, background_mu=None):
         """``add_layer(shapes=..., background_eps=...)`` (Phase C of the
         curved-cell plan): record the layer, then re-merge EVERY shape layer
         of the stack into one wall grid and one map; on any refusal the stack
@@ -1209,8 +1219,10 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
                 f"(compile_shapes() returns the map and eps_cell of a shape "
                 f"layer if you want the explicit route).")
         for L in self._layers:
+            uniform_mag = (L.get("kind") == "magnetic"
+                           and L.get("eps_uniform") and L.get("mu_uniform"))
             if L.get("kind") in ("patterned", "magnetic") and \
-                    "shapes" not in L:
+                    "shapes" not in L and not uniform_mag:
                 raise ValueError(
                     f"{fn}: this stack already holds a patterned layer given "
                     f"by eps_cell / mu_cell; shape layers merge into a wall "
@@ -1231,6 +1243,7 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         rec = dict(kind="patterned", thickness=t, eps_cell=None,
                    slant=(0.0, 0.0), shapes=shapes,
                    background_eps=background_eps,
+                   background_mu=background_mu,
                    max_pencil_dof=max_pencil_dof)
         self._layers.append(rec)
         merged = False
@@ -1259,33 +1272,59 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         fn = "PMM2DStackPure.add_layer"
         idx = [k for k, L in enumerate(self._layers) if "shapes" in L]
         layers = [(f"layer {k + 1}", self._layers[k]["shapes"],
-                   self._layers[k]["background_eps"]) for k in idx]
-        U, V, cmap, cells, identity = _merge(self.period_x, self.period_y,
-                                             layers)
+                   self._layers[k]["background_eps"],
+                   self._layers[k].get("background_mu")) for k in idx]
+        U, V, cmap, cells, identity, mus = _merge(self.period_x,
+                                                  self.period_y, layers)
         if not identity:
-            for (lab, _sh, _bg), cell in zip(layers, cells):
-                if cell.ndim == 4:
-                    raise NotImplementedError(
-                        f"{fn}: {lab} carries a TENSOR permittivity, and the "
-                        f"stack's merged map is CURVED.  The effective tensor "
-                        f"under a map is sqrt(g) J^-1 eps J^-T, which needs "
-                        f"the Jacobian itself (not only the metric the scalar "
-                        f"route uses) -- Phase D of the curved-cell plan.  A "
-                        f"tensor is accepted when every shape layer is made "
-                        f"of rectangles (no map).")
+            # Phase D: block-form tensors (eps and mu) ride the curved map;
+            # an OUT-OF-PLANE tensor does not (Phase E)
+            for (lab, _sh, _bg, _bm), cell, mcell in zip(layers, cells, mus):
+                for what, c in (("permittivity", cell),
+                                ("permeability", mcell)):
+                    if c is not None and c.ndim == 4 and _tile_is_offplane(c):
+                        raise NotImplementedError(
+                            f"{fn}: {lab} carries an OUT-OF-PLANE tensor "
+                            f"{what} (e_xz / e_yz / e_zx / e_zy above the "
+                            f"relative 1e-12 floor), and the stack's merged "
+                            f"map is CURVED.  The out-of-plane generator has "
+                            f"no permeability blocks and a map makes every "
+                            f"region magnetic -- Phase E of the curved-cell "
+                            f"plan.  BLOCK-FORM tensors are accepted; an "
+                            f"out-of-plane tensor is accepted when every "
+                            f"shape layer is made of rectangles (no map).")
             for k, L in enumerate(self._layers):
-                if "shapes" not in L and L["kind"] == "uniform_tensor":
-                    raise NotImplementedError(
-                        f"{fn}: layer {k + 1} is a uniform TENSOR layer and "
-                        f"the merged shape map is CURVED (a tensor under a "
-                        f"map is Phase D of the curved-cell plan).")
+                if "shapes" in L:
+                    continue
+                for key in ("eps33", "eps", "mu"):
+                    c = L.get(key)
+                    if (c is not None and np.shape(c) == (3, 3)
+                            and _tile_is_offplane(np.asarray(c)[None, None])):
+                        raise NotImplementedError(
+                            f"{fn}: layer {k + 1} is a uniform OUT-OF-PLANE "
+                            f"tensor layer and the merged shape map is "
+                            f"CURVED (an out-of-plane tensor under a map is "
+                            f"Phase E of the curved-cell plan).")
         for k, cell in zip(idx, cells):
             _validate_stag_cost(fn, int(self.M), cell,
                                 max_pencil_dof=self._layers[k].get(
                                     "max_pencil_dof"),
                                 check=("raise",))
-        for k, cell in zip(idx, cells):
-            self._layers[k]["eps_cell"] = cell
+        for k, cell, mcell in zip(idx, cells, mus):
+            L = self._layers[k]
+            L["eps_cell"] = cell
+            if mcell is None:
+                # a plain patterned shape layer
+                L["kind"] = "patterned"
+                for key in ("eps", "eps_uniform", "mu", "mu_uniform"):
+                    L.pop(key, None)
+            else:
+                # a MAGNETIC shape layer (Phase D): recorded exactly like an
+                # add_layer(eps_cell=, mu_cell=) layer, so the solve, the
+                # lossless predicate, the Wood guard and the eig dedupe treat
+                # it as the magnetic layer it is
+                L.update(kind="magnetic", eps=cell, eps_uniform=False,
+                         mu=mcell, mu_uniform=False)
         self._shapes_map = True
         self._grid = (U.size - 1, V.size - 1)
         if identity:
