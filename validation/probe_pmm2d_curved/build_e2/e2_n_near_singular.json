@@ -1,0 +1,39 @@
+{
+ "r2=0.3": {
+  "n": 41,
+  "change": 1.6712119527507544e-14,
+  "warned": false,
+  "wall": 24.452351799998723
+ },
+ "r2=0.34": {
+  "n": 41,
+  "change": 2.1836844127844188e-13,
+  "warned": false,
+  "wall": 23.607607400001143
+ },
+ "r2=0.355": {
+  "n": 62,
+  "change": 3.6211898418753524e-14,
+  "warned": false,
+  "wall": 30.393231499998365
+ },
+ "r2=0.3599": {
+  "n": 96,
+  "change": 2.9901951481781147e-14,
+  "warned": false,
+  "wall": 50.986976400003186
+ },
+ "r2=0.36000119999999997": {
+  "raised": "RuntimeError: curved mortar: a quadrature node could not be inverted in the neighbouring layer's map.",
+  "warned": false,
+  "wall": 25.38981100000092
+ },
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "tree": "c:\\tmp\\lum_curved_e2",
+  "lumenairy": "C:\\tmp\\lum_curved_e2\\lumenairy",
+  "platform": "Windows-11-10.0.26200-SP0"
+ }
+}

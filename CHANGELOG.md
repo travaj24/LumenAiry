@@ -4,6 +4,65 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+### Added -- pure 2-D PMM (curved cells, Phase E2): a different curved map in every layer
+
+With `layer_grids='per-layer'` every layer of `PMM2DStackPure` may now carry
+its OWN curved map, so two layers whose curved outlines CROSS in plan view --
+a circular pillar over a sinusoidal wall that runs through it -- can be
+stacked.  One coordinate map cannot carry two crossing curves, so until now
+the stack-wide shape merge refused such a pair; now each layer keeps its own
+map and the two are joined by a CURVED MORTAR:
+
+```python
+from lumenairy.elements.pmm import Circle, PMM2DStackPure, SinusoidalWall
+
+st = PMM2DStackPure(1.2e-6, 1.2e-6, n_substrate=1.45, n_modes=7,
+                    layer_grids="per-layer")
+st.add_layer(0.3e-6, shapes=[Circle(0.6e-6, 0.6e-6, 0.36e-6, eps=4.0)],
+             background_eps=1.0)
+st.add_layer(0.25e-6, shapes=[SinusoidalWall("x", 0.6e-6, 0.12e-6, eps=2.25)],
+             background_eps=1.0)
+st.set_source(1.0e-6)
+orders, R, T, J = st.solve()
+```
+
+What it means physically.  Neighbouring layers are coupled by requiring
+the tangential field to match across their common interface; with two
+different curved grids that match is an overlap integral of one layer's
+field against the other's over the physical cell, which no longer splits
+into a product of 1-D integrals.  It is computed by a quadrature that is cut
+along the other layer's grid lines (so every piece is smooth and the rule
+converges spectrally -- ~1e-15 by 16 nodes per piece), with the coordinate
+map inverted by Newton at each node.
+
+* `add_layer(..., cmap=)` (per-layer stacks) gives a layer an explicit map;
+  `add_layer(shapes=...)` compiles each shape layer's own map.  When the
+  shapes of every layer DO fit one map (outlines that do not cross), the
+  stack runs that merged map exactly as `layer_grids='shared'` does --
+  byte for byte.  Raw `eps_cell` layers may join a per-layer shape stack.
+* NO SHIPPED ANSWER MOVES: 134 of 134 SHA-256 hashes over every dispatch
+  branch, including 12 of the shipped per-layer mortar (non-conforming
+  pairs at normal / oblique / conical incidence with absorption, the
+  generalized mortar, a taper), are byte-identical to the Phase D commit.
+* Gates (`docs/audits/BUILD_PMM2D_CURVED_E2_2026_10_03.md`): two layers on the
+  SAME map through the curved mortar reproduce the shared solve to 3e-15;
+  under two separable stretches the cross-mass equals an independent 1-D
+  factorisation to 1.3e-14; the crossing circle / sinusoid pair closes
+  energy to 2.4e-5 at `M = 6` and 1e-6 at `M = 7 .. 8`, a lossless layer next
+  to a lossy one absorbs < 1e-13, reflection reciprocity holds at oblique and
+  conical incidence to 1e-6 .. 7e-6 at `M = 7`, and three layers on three
+  different maps close to 2e-6 at `M = 7`.
+* LIMITS, measured: like every own-walls-only mortar, an interface where a
+  pillar's outline cuts through the neighbour's cells converges
+  algebraically (the pillar rim), in the same class as the shipped
+  separable mortar on the same geometry -- so a circle over a non-crossing
+  wall agrees with the merged-map answer to 1e-2 at `M = 5 .. 6` and 4.5e-4
+  at `M = 7`; prefer `layer_grids='shared'` (the merged map) whenever the
+  outlines do not cross.  A shape layer without `n_modes` takes the finest
+  shape layer's per-axis count; a homogeneous layer rides its neighbour's
+  grid.  Two layers whose maps both have a singular vertex (two closed
+  curves) in the same cell overlap raise, naming the cells.
+
 ### Added -- pure 2-D PMM (curved cells, Phase D): anisotropic and magnetic materials inside curved cells
 
 Curved cells (circles, ellipses, rounded corners, sinusoidal walls) of the

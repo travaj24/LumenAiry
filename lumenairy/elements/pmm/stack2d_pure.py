@@ -61,11 +61,18 @@ map a layer may be ANISOTROPIC and MAGNETIC (Phase D): a block-form tensor
 ``eps`` / ``mu`` -- uniform, on a shape (``Circle(..., eps=lc_tensor,
 mu=...)``) or as ``eps_cell`` / ``mu_cell`` under an explicit map -- is
 carried through the map by the congruence ``sqrt(g) J^-1 eps J^-T`` at
-every quadrature node; out-of-plane tensors, slant and per-layer maps are
-Phase E and raise.  A stack of rectangles only needs no map and runs the
-unmapped solver on the merged walls.
+every quadrature node; out-of-plane tensors and slant are Phase E and
+raise.  A stack of rectangles only needs no map and runs the unmapped
+solver on the merged walls.  With ``layer_grids='per-layer'`` every layer
+may carry its OWN map (Phase E2): shape layers whose outlines CROSS in plan
+view (a circle over a sinusoidal wall running through it -- one map cannot
+carry both) are joined by the CURVED MORTAR, a non-separable cross-mass
+integrated over the physical cell
+(:mod:`lumenairy.elements.pmm._curvemortar`); when the outlines do fit one
+map the stack runs it exactly as ``'shared'`` does.
 ``docs/audits/BUILD_PMM2D_CURVED_C_2026_10_02.md``,
-``docs/audits/BUILD_PMM2D_CURVED_D_2026_10_03.md``.
+``docs/audits/BUILD_PMM2D_CURVED_D_2026_10_03.md``,
+``docs/audits/BUILD_PMM2D_CURVED_E2_2026_10_03.md``.
 
 A layer may also be MAGNETIC: ``add_layer(..., mu=scalar | (3,3))`` or
 ``add_layer(..., mu_cell=(Nx,Ny) | (Nx,Ny,3,3))`` gives it a BLOCK-FORM
@@ -155,6 +162,21 @@ entirely and reproduce ``layer_grids='shared'`` BIT-EXACTLY.
   carrying two layers' walls is their common refinement -- the union grid
   itself -- so there is no local enrichment to widen.  Per-layer grids here are
   own-walls-only, and own-walls-only works.
+* PER-LAYER MAPS (Phase E2).  ``add_layer(..., cmap=)`` or ``shapes=`` puts
+  a layer on its OWN coordinate map; two neighbours on different maps are
+  coupled by the same weak pairing, whose cross-mass is then an integral
+  over the PHYSICAL cell of one basis pulled back against the other
+  (non-separable; :mod:`lumenairy.elements.pmm._curvemortar`).  Shape layers
+  are first merged into ONE map when their outlines allow it (the Phase C
+  merge) and the stack then runs that map exactly as ``'shared'``; outlines
+  that CROSS in plan view keep their own maps.  A shape layer without
+  ``n_modes`` takes the finest shape layer's ``q = N (M - 1)``, and a
+  HOMOGENEOUS layer rides its neighbour's grid (no mortar at that
+  interface).  Like every own-walls-only mortar, an interface whose
+  neighbour's outline cuts through this layer's cells (the rim of a pillar
+  under a non-conforming grid) converges ALGEBRAICALLY -- measured, the
+  same class as the separable mortar on the same geometry
+  (``docs/audits/BUILD_PMM2D_CURVED_E2_2026_10_03.md``).
 
 **A per-layer solve can be STATIONARY IN ONE KNOB AND WRONG.**  Measured on a
 two-layer pillar pair: walking one layer's ``n_modes`` across four rungs gave
@@ -780,11 +802,12 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         Uniform SCALAR layers still share the eps-free geometric eig.
         Since Phase D a map takes block-form TENSOR layers (uniform or
         patterned) and ``mu`` / ``mu_cell`` as well (each its own region
-        eig, deduped with the map fingerprint); on the shared grid only:
-        ``layer_grids='per-layer'`` (different maps per layer, a curved
-        mortar -- Phase E), an OUT-OF-PLANE tensor (``eps`` or ``mu``) and
-        ``slant`` (Phase E) together with a map raise
-        ``NotImplementedError``.  The two viewers draw the PHYSICAL
+        eig, deduped with the map fingerprint).  An OUT-OF-PLANE tensor
+        (``eps`` or ``mu``) and ``slant`` (Phase E) together with a map
+        raise ``NotImplementedError``, and so does this STACK-wide map with
+        ``layer_grids='per-layer'``: there every layer owns its map
+        (``add_layer(..., cmap=)`` or ``shapes=``; Phase E2, the curved
+        mortar).  The two viewers draw the PHYSICAL
         images of the cells (curved edges as curves).  Under a map the
         incident plane wave enters through its exact L2 modal decomposition
         (it is not an exact discrete half-space mode when the map is not

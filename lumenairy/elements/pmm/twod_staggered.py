@@ -194,11 +194,13 @@ Scope / limitations
   :func:`_stag_map_eff_tensor`; a uniform tensor film under a curved map
   matches the Berreman 4x4 oracle, Jones matrix included, to ~1e-13.
   Remaining limits under a map: OUT-OF-PLANE tensors (``eps`` or ``mu``),
-  ``slant=``, per-layer grids (each a different map per layer) and the JAX
-  twin (Phase E) raise; two
-  outlines that cross in plan view cannot share one map (raises, naming
-  both); and :func:`pmm_efficiency_2d_staggered` takes no map (use the
-  Jones entry).  A rounded corner is GEOMETRY FIDELITY, not a convergence
+  ``slant=`` and the JAX twin (Phase E) raise; two outlines that cross in
+  plan view cannot share ONE map (raises, naming both) -- with
+  ``layer_grids='per-layer'`` each layer then keeps its own map and the
+  layers are joined by the curved mortar
+  (:class:`~lumenairy.elements.pmm._curvemortar.StagCrossOpsMapped`, Phase
+  E2, ``docs/audits/BUILD_PMM2D_CURVED_E2_2026_10_03.md``); and
+  :func:`pmm_efficiency_2d_staggered` takes no map (use the Jones entry).  A rounded corner is GEOMETRY FIDELITY, not a convergence
   accelerator: the efficiencies stay rim-capped (next item).
   A constant TILT of the walls is supported without a map: see SLANT below.
 * **Corner-capped.**  A right-angle dielectric pillar has field singularities at

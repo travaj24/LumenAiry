@@ -1,7 +1,7 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/pmm/_core.py
-ast_sha256: 09fb0f3b4ddaaa7576bd2b403325821a5c03df6dfc78826a42a63c7522ffc755
-token_sha256: 467a3ba9ad7afb9a27282d13545236a7c56e83f7be9d05e736636f0f346e043a
+ast_sha256: 1fab3753c56b2ef2518188e25bce48e7063996e0e0e4167c2f558957dbdd6e4a
+token_sha256: 523999e35d0af483f2b44ede9b152cb8b29d1cb3239e901aa17c779fc999d556
 pre_relocation_lines: 7690
 recorded_by: WP-A17 SWEEP-2 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
@@ -9,6 +9,7 @@ re_recorded: 2026-09-12 -- _ARCHIVE_SLANT_FOLD string constant moved into this d
 re_recorded: 2026-09-12 -- ruff isort combine-as-imports (pyproject.toml, WP-A16 recommendation): aliased import statements from the same module merged into one; the set of bound names is unchanged
 re_recorded: 2026-09-13 -- the on-cut band comparison and the forward selector moved to the shared lumenairy/_branchcut.py leaf; each engine keeps its own derived scale (bit-identical, WP-B11a item 1)
 re_recorded: 2026-09-14 -- Wave-5 item D (CI run 34914295323): DIGEST-SCHEME change, not a code change -- token_fingerprint now feeds an f-string to the digest as ONE STRING record holding its exact source text instead of the running tokenizer's FSTRING_START/FSTRING_MIDDLE/FSTRING_END run, so the recorded value is a property of the file rather than of the interpreter that read it; PEP 701 made CPython 3.12 tokenize f-strings differently from 3.11, these digests were recorded on 3.12+, and all five py3.11 CI shards read a different token_sha256 for byte-identical sources (110 of 123 documents, measured).  The module source is unchanged and ast_sha256 is unchanged.
+re_recorded: 2026-10-03 -- the curved-cell map, Phase E2: _interface_smatrix_mortar_2d / _interface_smatrix_general_mortar_2d apply a DENSE (non-separable) cross operator when cr.dense -- two layers on different coordinate maps; the separable arithmetic is unchanged (BUILD_PMM2D_CURVED_E2_2026_10_03)
 -->
 
 # Version history -- `lumenairy/elements/pmm/_core.py`

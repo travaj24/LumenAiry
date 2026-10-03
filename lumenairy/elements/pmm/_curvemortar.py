@@ -142,8 +142,10 @@ class _MapView:
         self.Nx = self.ub.size - 1
         self.Ny = self.vb.size - 1
         self.identity = cmap is None
-        self.sing = {}            # (sx, sy) -> [physical singular points]
-        self.sing_uv = {}
+        # (sx, sy) -> [physical singular points] / [(u, v, x, y)]
+        self.sing: dict[tuple[int, int], list[tuple[float, float]]] = {}
+        self.sing_uv: dict[tuple[int, int],
+                           list[tuple[float, float, float, float]]] = {}
         if self.identity:
             return
         # INTERIOR sample points (Gauss nodes): a Newton guess must never sit
@@ -175,7 +177,6 @@ class _MapView:
                                      ub_s * 0 + self.vb[sy + 1]])
                 Xb, Yb = self.geom(sx, sy, Ub, Vb)[:2]
                 self.bbox[sx, sy] = (Xb.min(), Xb.max(), Yb.min(), Yb.max())
-        self.sing_uv = {}
         for sx, sy, cu, cv in getattr(cmap, "singular_vertices", None) or ():
             u = self.ub[sx + cu]
             v = self.vb[sy + cv]
@@ -359,7 +360,7 @@ class _MapView:
         U = np.zeros(n)
         V = np.zeros(n)
         found = np.zeros(n, dtype=bool)
-        lists = [[] for _ in range(n)] if closure else None
+        lists: list[list[tuple[int, int]]] = [[] for _ in range(n)]
         m = 1e-3 * self.scale        # a prefilter: generous on purpose
         for sx in range(self.Nx):
             for sy in range(self.Ny):
@@ -423,6 +424,14 @@ class _Piece:
     dpu, dpv)`` on ``[t0, t1]``."""
 
     __slots__ = ("edge", "t0", "t1", "tau", "pu", "pv", "dpu", "dpv")
+    edge: tuple[object, ...]
+    t0: float
+    t1: float
+    tau: np.ndarray
+    pu: np.ndarray
+    pv: np.ndarray
+    dpu: np.ndarray
+    dpv: np.ndarray
 
 
 def _pullback(Pm, sx, sy, Om, e, tau, guess=None):
@@ -716,8 +725,9 @@ def _cut_cell_nodes(Pm, sx, sy, Om, edges, n, cut=True):
         return UU, VV, WW, osx, osy, qu, qv
     pieces = _cell_pieces(Pm, sx, sy, Om, edges)
     # ---- the inner direction: fewest tangencies (ties -> u) ------------
-    flat = {"u": [], "v": []}   # inner direction -> pieces parallel to it
-    tang = {"u": {}, "v": {}}
+    # inner direction -> pieces parallel to it / tangency parameters
+    flat: dict[str, list[int]] = {"u": [], "v": []}
+    tang: dict[str, dict[int, list[float]]] = {"u": {}, "v": {}}
     ftol = _CURVE_MORTAR_FLAT_TOL * Pm.scale
     for k, pc in enumerate(pieces):
         for inner, oc in (("u", pc.pv), ("v", pc.pu)):
@@ -751,22 +761,22 @@ def _cut_cell_nodes(Pm, sx, sy, Om, edges, n, cut=True):
             ov = ra[1] if inner == "u" else ra[0]
             arcs.append((pc, ta, tb, float(min(ov)), float(max(ov))))
     bps.sort()
-    merged = []
+    merged: list[tuple[float, bool]] = []
     for o, sq in bps:
         o = min(max(o, o0), o1)
         if merged and o - merged[-1][0] <= 1e-13 * Pm.scale:
             merged[-1] = (merged[-1][0], merged[-1][1] or sq)
         else:
             merged.append((o, sq))
-    on, ow = [], []
+    on_p, ow_p = [], []
     for (oa, sa), (ob, sb) in zip(merged[:-1], merged[1:]):
         if ob - oa <= tiny:
             continue
         x, w = _outer_rule(oa, ob, sa, sb, n)
-        on.append(x)
-        ow.append(w)
-    on = np.concatenate(on)
-    ow = np.concatenate(ow)
+        on_p.append(x)
+        ow_p.append(w)
+    on = np.concatenate(on_p)
+    ow = np.concatenate(ow_p)
     # ---- crossings per outer node ---------------------------------------
     cross = [[i0, i1] for _ in range(on.size)]
     for pc, ta, tb, olo, ohi in arcs:
@@ -774,22 +784,17 @@ def _cut_cell_nodes(Pm, sx, sy, Om, edges, n, cut=True):
         if hit.size == 0:
             continue
         ii = _crossings(Pm, sx, sy, Om, pc, ta, tb, inner, on[hit])
-        for k, v in zip(hit, ii):
-            cross[k].append(float(min(max(v, i0), i1)))
+        for kh, v in zip(hit.tolist(), ii):
+            cross[kh].append(float(min(max(v, i0), i1)))
     xg, wg = _gl01(n)
-    seg_o, seg_w, seg_a, seg_b = [], [], [], []
+    segs = []
     for k in range(on.size):
         cs = sorted(cross[k])
         for a, b in zip(cs[:-1], cs[1:]):
             if b - a > tiny:
-                seg_o.append(on[k])
-                seg_w.append(ow[k])
-                seg_a.append(a)
-                seg_b.append(b)
-    seg_o = np.asarray(seg_o)
-    seg_w = np.asarray(seg_w)
-    seg_a = np.asarray(seg_a)
-    seg_b = np.asarray(seg_b)
+                segs.append((on[k], ow[k], a, b))
+    seg_o, seg_w, seg_a, seg_b = (np.asarray(c, dtype=float)
+                                  for c in zip(*segs))
     # locate every sub-interval's midpoint in the other map
     mid = 0.5 * (seg_a + seg_b)
     if inner == "u":
@@ -864,7 +869,7 @@ def _assign_pairs(A, B):
         default = "b"
     else:
         default = "a"
-    marks = {}
+    marks: dict[tuple[tuple[int, int], tuple[int, int]], set[str]] = {}
     for side, M_own, M_oth in (("a", A, B), ("b", B, A)):
         for cell, pts in M_own.sing.items():
             for x, y in pts:
