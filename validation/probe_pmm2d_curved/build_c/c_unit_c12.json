@@ -1,0 +1,95 @@
+{
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "lumenairy": "C:\\tmp\\lum_curved_c\\lumenairy\\__init__.py",
+  "tree": "post",
+  "machine": "Tesla_Ryzen",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ },
+ "rect": {
+  "area_rel": 2.220446049250313e-16,
+  "perimeter_rel": 2.220446049250313e-16,
+  "min_detJ": 0.9999999999999996,
+  "grid": [
+   3,
+   3
+  ],
+  "map": "TransfiniteMap"
+ },
+ "circle3": {
+  "area_rel": -3.774758283725532e-15,
+  "perimeter_rel": 0.0,
+  "min_detJ": 0.005411876126184767,
+  "grid": [
+   3,
+   3
+  ],
+  "map": "TransfiniteMap"
+ },
+ "circle5": {
+  "area_rel": -4.440892098500626e-16,
+  "perimeter_rel": -2.220446049250313e-16,
+  "min_detJ": 0.002833437857298171,
+  "grid": [
+   5,
+   5
+  ],
+  "map": "TransfiniteMap"
+ },
+ "fillet": {
+  "area_rel": -1.1102230246251565e-16,
+  "perimeter_rel": 2.220446049250313e-16,
+  "min_detJ": 0.00312022703161563,
+  "grid": [
+   5,
+   5
+  ],
+  "map": "TransfiniteMap"
+ },
+ "ellipse": {
+  "area_rel": -3.3306690738754696e-15,
+  "perimeter_rel": 2.220446049250313e-16,
+  "min_detJ": 0.005411876126184434,
+  "grid": [
+   3,
+   3
+  ],
+  "map": "TransfiniteMap"
+ },
+ "ellipse_rot": {
+  "area_rel": -3.774758283725532e-15,
+  "perimeter_rel": 2.220446049250313e-16,
+  "min_detJ": 0.006128810797793038,
+  "grid": [
+   3,
+   3
+  ],
+  "map": "TransfiniteMap"
+ },
+ "sine_ridge": {
+  "area_rel": 0.0,
+  "perimeter_rel": -2.220446049250313e-16,
+  "min_detJ": 0.6005172903724187,
+  "grid": [
+   3,
+   3
+  ],
+  "map": "RefinedMap"
+ },
+ "sine_y_half": {
+  "area_rel": -2.220446049250313e-16,
+  "perimeter_rel": 4.440892098500626e-16,
+  "min_detJ": 0.8400137918115167,
+  "grid": [
+   2,
+   2
+  ],
+  "map": "RefinedMap"
+ }
+}

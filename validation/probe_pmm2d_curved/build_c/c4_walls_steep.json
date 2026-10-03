@@ -1,0 +1,264 @@
+{
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "lumenairy": "C:\\tmp\\lum_curved_c\\lumenairy\\__init__.py",
+  "tree": "post",
+  "machine": "Tesla_Ryzen",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ },
+ "prim": [
+  {
+   "cell": [
+    0,
+    0
+   ],
+   "singular": false,
+   "smax_ratio": 1.0000000000000002,
+   "det_ratio": 1.0000000000000007
+  },
+  {
+   "cell": [
+    0,
+    1
+   ],
+   "singular": false,
+   "smax_ratio": 1.3741743636941517,
+   "det_ratio": 1.4222151457953591
+  },
+  {
+   "cell": [
+    0,
+    2
+   ],
+   "singular": false,
+   "smax_ratio": 1.0000000000000002,
+   "det_ratio": 1.0000000000000007
+  },
+  {
+   "cell": [
+    1,
+    0
+   ],
+   "singular": false,
+   "smax_ratio": 1.3741743636941517,
+   "det_ratio": 1.422215145795358
+  },
+  {
+   "cell": [
+    1,
+    1
+   ],
+   "singular": true,
+   "smax_ratio": 1.2584729798201373,
+   "det_ratio": 49.51891600589407
+  },
+  {
+   "cell": [
+    1,
+    2
+   ],
+   "singular": false,
+   "smax_ratio": 1.374174363694151,
+   "det_ratio": 1.4222151457953587
+  },
+  {
+   "cell": [
+    2,
+    0
+   ],
+   "singular": false,
+   "smax_ratio": 1.0,
+   "det_ratio": 1.0
+  },
+  {
+   "cell": [
+    2,
+    1
+   ],
+   "singular": false,
+   "smax_ratio": 1.3741743636941506,
+   "det_ratio": 1.4222151457953587
+  },
+  {
+   "cell": [
+    2,
+    2
+   ],
+   "singular": false,
+   "smax_ratio": 1.0,
+   "det_ratio": 1.0
+  }
+ ],
+ "lattice": [
+  {
+   "cell": [
+    0,
+    0
+   ],
+   "singular": false,
+   "smax_ratio": 1.0301786677918796,
+   "det_ratio": 1.370410458144173
+  },
+  {
+   "cell": [
+    0,
+    1
+   ],
+   "singular": false,
+   "smax_ratio": 1.5874977417252896,
+   "det_ratio": 1.4204122502913215
+  },
+  {
+   "cell": [
+    0,
+    2
+   ],
+   "singular": false,
+   "smax_ratio": 1.0301786677918792,
+   "det_ratio": 1.3704104581441727
+  },
+  {
+   "cell": [
+    1,
+    0
+   ],
+   "singular": false,
+   "smax_ratio": 1.5874977417252891,
+   "det_ratio": 1.4204122502913212
+  },
+  {
+   "cell": [
+    1,
+    1
+   ],
+   "singular": true,
+   "smax_ratio": 1.2584729798201375,
+   "det_ratio": 49.51891600589425
+  },
+  {
+   "cell": [
+    1,
+    2
+   ],
+   "singular": false,
+   "smax_ratio": 1.5874977417252893,
+   "det_ratio": 1.420412250291321
+  },
+  {
+   "cell": [
+    2,
+    0
+   ],
+   "singular": false,
+   "smax_ratio": 1.0301786677918794,
+   "det_ratio": 1.3704104581441732
+  },
+  {
+   "cell": [
+    2,
+    1
+   ],
+   "singular": false,
+   "smax_ratio": 1.58749774172529,
+   "det_ratio": 1.420412250291321
+  },
+  {
+   "cell": [
+    2,
+    2
+   ],
+   "singular": false,
+   "smax_ratio": 1.0301786677918796,
+   "det_ratio": 1.3704104581441718
+  }
+ ],
+ "inner": [
+  {
+   "cell": [
+    0,
+    0
+   ],
+   "singular": false,
+   "smax_ratio": 1.0282778929690841,
+   "det_ratio": 1.341425150358724
+  },
+  {
+   "cell": [
+    0,
+    1
+   ],
+   "singular": false,
+   "smax_ratio": 1.5669450118536643,
+   "det_ratio": 1.4205626661979254
+  },
+  {
+   "cell": [
+    0,
+    2
+   ],
+   "singular": false,
+   "smax_ratio": 1.0282778929690843,
+   "det_ratio": 1.3414251503587238
+  },
+  {
+   "cell": [
+    1,
+    0
+   ],
+   "singular": false,
+   "smax_ratio": 1.566945011853665,
+   "det_ratio": 1.4205626661979263
+  },
+  {
+   "cell": [
+    1,
+    1
+   ],
+   "singular": true,
+   "smax_ratio": 1.258472979820137,
+   "det_ratio": 49.51891600589414
+  },
+  {
+   "cell": [
+    1,
+    2
+   ],
+   "singular": false,
+   "smax_ratio": 1.5669450118536652,
+   "det_ratio": 1.4205626661979267
+  },
+  {
+   "cell": [
+    2,
+    0
+   ],
+   "singular": false,
+   "smax_ratio": 1.0282778929690843,
+   "det_ratio": 1.3414251503587238
+  },
+  {
+   "cell": [
+    2,
+    1
+   ],
+   "singular": false,
+   "smax_ratio": 1.5669450118536645,
+   "det_ratio": 1.4205626661979267
+  },
+  {
+   "cell": [
+    2,
+    2
+   ],
+   "singular": false,
+   "smax_ratio": 1.0282778929690843,
+   "det_ratio": 1.3414251503587238
+  }
+ ]
+}

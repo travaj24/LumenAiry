@@ -34,10 +34,12 @@ import lumenairy  # noqa: E402
 assert os.path.normcase(os.path.abspath(lumenairy.__file__)).startswith(ROOT), (
     f"lumenairy imported from {lumenairy.__file__}, not {ROOT}")
 
-from lumenairy.elements.pmm import PMM2DStackPure  # noqa: E402
-from lumenairy.elements.pmm import _curvemap as CM  # noqa: E402
-from lumenairy.elements.pmm import stack2d_pure as SP  # noqa: E402
-from lumenairy.elements.pmm import twod_staggered as TS  # noqa: E402
+from lumenairy.elements.pmm import (  # noqa: E402,F401 -- re-exported
+    PMM2DStackPure,
+    _curvemap as CM,
+    stack2d_pure as SP,
+    twod_staggered as TS,
+)
 
 P = 1.2
 WL = 1.0

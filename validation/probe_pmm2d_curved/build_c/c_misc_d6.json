@@ -1,0 +1,24 @@
+{
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "lumenairy": "C:\\tmp\\lum_curved_c\\lumenairy\\__init__.py",
+  "tree": "post",
+  "machine": "Tesla_Ryzen",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ },
+ "walls_asked": [
+  0.2,
+  0.65
+ ],
+ "walls_built": [
+  0.2692820323027551,
+  0.6292944763917984
+ ],
+ "max_off": 0.06928203230275509
+}

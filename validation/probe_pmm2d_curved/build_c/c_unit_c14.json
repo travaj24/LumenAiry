@@ -1,0 +1,19 @@
+{
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "lumenairy": "C:\\tmp\\lum_curved_c\\lumenairy\\__init__.py",
+  "tree": "post",
+  "machine": "Tesla_Ryzen",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ },
+ "circle_M5": 2.7908231281514873e-14,
+ "circle_M6": 8.24618151540335e-14,
+ "ellipse_1.02_M5": 0.0058381010898352625,
+ "ellipse_1.02_M6": 0.005951343125536843
+}
