@@ -117,7 +117,6 @@ import numpy as np
 from ._curvemap import (
     Arc,
     EllipseArc,
-    Line,
     RefinedMap,
     Sinusoid,
     TransfiniteMap,
@@ -620,7 +619,7 @@ class Circle(Shape2D):
             ]
             return _Layout(u, v, verts, edges, [(u[0], u[1], v[0], v[1])])
         # Phase B's _circle_map_5x5 (inner = core), generalised to (cx, cy)
-        c = np.array([cx, cy])
+        c5 = np.array([cx, cy])
         a1x = cx - r / np.sqrt(2.0)
         a1y = cy - r / np.sqrt(2.0)
         hin = self.core * r / np.sqrt(2.0)
@@ -630,7 +629,7 @@ class Circle(Shape2D):
         phi = np.arcsin(hin / r)
 
         def circ(th):
-            return (c[0] + r * np.cos(th), c[1] + r * np.sin(th))
+            return (c5[0] + r * np.cos(th), c5[1] + r * np.sin(th))
 
         # loop vertices: local index 1..4 of the 6-wall grid -> u[k - 1]
         def img(i, j):
@@ -645,20 +644,21 @@ class Circle(Shape2D):
 
         loop = [(i, j) for i in (1, 2, 3, 4) for j in (1, 2, 3, 4)
                 if i in (1, 4) or j in (1, 4)]
-        im = {(i, j): np.asarray(img(i, j), dtype=float) for i, j in loop}
-        verts = {(u[i - 1], v[j - 1]): im[(i, j)] for i, j in loop}
+        im = {(i, j): np.array(img(i, j), dtype=np.float64)
+              for i, j in loop}
+        verts5 = {(u[i - 1], v[j - 1]): im[(i, j)] for i, j in loop}
         edges = []
         for i in (1, 2, 3):
             for j in (1, 4):
                 edges.append(_HardEdge(
                     "h", v[j - 1], u[i - 1], u[i],
-                    Arc.through(im[(i, j)], im[(i + 1, j)], c)))
+                    Arc.through(im[(i, j)], im[(i + 1, j)], c5)))
         for j in (1, 2, 3):
             for i in (1, 4):
                 edges.append(_HardEdge(
                     "v", u[i - 1], v[j - 1], v[j],
-                    Arc.through(im[(i, j)], im[(i, j + 1)], c)))
-        return _Layout(u, v, verts, edges, [(u[0], u[3], v[0], v[3])])
+                    Arc.through(im[(i, j)], im[(i, j + 1)], c5)))
+        return _Layout(u, v, verts5, edges, [(u[0], u[3], v[0], v[3])])
 
 
 class Ellipse(Shape2D):
@@ -765,8 +765,8 @@ class Ellipse(Shape2D):
              (("BL", 225), ("BR", 315), ("TR", 45), ("TL", 135))}
         u = [0.5 * (P["BL"][0] + P["TL"][0]), 0.5 * (P["BR"][0] + P["TR"][0])]
         v = [0.5 * (P["BL"][1] + P["BR"][1]), 0.5 * (P["TL"][1] + P["TR"][1])]
-        verts = {(u[0], v[0]): P["BL"], (u[1], v[0]): P["BR"],
-                 (u[1], v[1]): P["TR"], (u[0], v[1]): P["TL"]}
+        vrot = {(u[0], v[0]): P["BL"], (u[1], v[0]): P["BR"],
+                (u[1], v[1]): P["TR"], (u[0], v[1]): P["TL"]}
         ax = (a, b)
         al = self.angle
         edges = [
@@ -779,7 +779,7 @@ class Ellipse(Shape2D):
             _HardEdge("v", u[1], v[0], v[1],
                       EllipseArc(c, ax, -45 * _DEG, 45 * _DEG, angle=al)),
         ]
-        return _Layout(u, v, verts, edges, [(u[0], u[1], v[0], v[1])])
+        return _Layout(u, v, vrot, edges, [(u[0], u[1], v[0], v[1])])
 
 
 class SinusoidalWall(Shape2D):
@@ -1004,8 +1004,8 @@ class _Grid1D:
     def check_slivers(self):
         d = np.diff(self.b)
         bar = _STAG_MIN_SEG_FRAC * self.period * (1.0 - 1e-9)
-        for k in np.nonzero(d < bar)[0]:
-            k = int(k)
+        for kk in np.nonzero(d < bar)[0]:
+            k = int(kk)
             who = sorted(set(self.owners[k]) | set(self.owners[k + 1]))
             raise ValueError(
                 f"compile_shapes: the merged {self.axis}-walls "
@@ -1086,8 +1086,8 @@ def _merge(px, py, layers, grid_hint=None):
     U1, V1 = gu.b, gv.b
     nx, ny = U1.size - 1, V1.size - 1
     # -- claims on vertices and edges -----------------------------------------
-    vclaims = {}
-    eclaims = {}
+    vclaims: dict[tuple[int, int], list[tuple[np.ndarray, str]]] = {}
+    eclaims: dict[tuple[str, int, int], list[tuple[object, str]]] = {}
     for who, _sh, lay in items:
         ends = {}
         for (u, v), xy in lay.vertices.items():
@@ -1106,10 +1106,10 @@ def _merge(px, py, layers, grid_hint=None):
                 run = V1
                 pa, pb = ends[(i, ia)], ends[(i, ib)]
             for k in range(ia, ib):
-                key = ("h", k, j) if e.kind == "h" else ("v", i, k)
+                ekey = ("h", k, j) if e.kind == "h" else ("v", i, k)
                 ta = e.a if k == ia else float(run[k])
                 tb = e.b if k + 1 == ib else float(run[k + 1])
-                eclaims.setdefault(key, []).append(
+                eclaims.setdefault(ekey, []).append(
                     (_curve_piece(e, ta, tb), who))
             for k in range(ia + 1, ib):
                 key = (k, j) if e.kind == "h" else (i, k)
@@ -1135,8 +1135,8 @@ def _merge(px, py, layers, grid_hint=None):
         V[key] = xy0
     curved = {}
     s5 = np.linspace(0.0, 1.0, 5)
-    for key, cl in eclaims.items():
-        kind, i, j = key
+    for ek, ecl in eclaims.items():
+        kind, i, j = ek
         P0 = V[i, j]
         P1 = V[i + 1, j] if kind == "h" else V[i, j + 1]
 
@@ -1144,9 +1144,9 @@ def _merge(px, py, layers, grid_hint=None):
             if c is None:
                 return P0[None, :] + s5[:, None] * (P1 - P0)[None, :]
             return c(s5)[0]
-        c0, w0 = cl[0]
+        c0, w0 = ecl[0]
         ref = samples(c0)
-        for c, w in cl[1:]:
+        for c, w in ecl[1:]:
             if float(np.max(np.abs(samples(c) - ref))) > tol:
                 raise ValueError(
                     f"compile_shapes: {w0} and {w} place DIFFERENT curves on "
@@ -1154,9 +1154,9 @@ def _merge(px, py, layers, grid_hint=None):
                     f"{_fmt(ref[2, 1])}).  Two layers may share a curve but "
                     f"not lay two different outlines on one grid line; a "
                     f"common map for them is Phase E of the curved-cell plan.")
-        cc = next((c for c, _w in cl if c is not None), None)
+        cc = next((c for c, _w in ecl if c is not None), None)
         if cc is not None:
-            curved[key] = cc
+            curved[ek] = cc
     tm = TransfiniteMap(U1, V1, V, curved, _validate=False)
     _check_fold(tm, gu, gv, vclaims, eclaims)
     tm.validate(n=12)
@@ -1224,9 +1224,9 @@ def _check_fold(tm, gu, gv, vclaims, eclaims, n=12):
             for key in ((sx, sy), (sx + 1, sy), (sx, sy + 1),
                         (sx + 1, sy + 1)):
                 who |= {w for _xy, w in vclaims.get(key, ())}
-            for key in (("h", sx, sy), ("h", sx, sy + 1), ("v", sx, sy),
-                        ("v", sx + 1, sy)):
-                who |= {w for _c, w in eclaims.get(key, ())}
+            for ekey in (("h", sx, sy), ("h", sx, sy + 1), ("v", sx, sy),
+                         ("v", sx + 1, sy)):
+                who |= {w for _c, w in eclaims.get(ekey, ())}
             who.discard("the unit-cell edge")
             raise ValueError(
                 f"compile_shapes: the merged map FOLDS (det J <= 0, min "

@@ -70,6 +70,13 @@ Each exemption MUST cite WHY the name is legitimately submodule-only:
   reachable via ``la.raytrace.*`` but kept off the top level
   because they are inter-bundle adapters (a small audience).
 
+* ``(lumenairy.elements.pmm[.shapes2d], <shape primitive>)`` -- the
+  curved-cell shape primitives (``Rect``, ``FilletRect``, ``Circle``,
+  ``Ellipse``, ``SinusoidalWall``, ``Shape2D``, ``compile_shapes``) carry
+  generic geometric names that would be ambiguous at the top level of an
+  optics library; they are the input vocabulary of the staggered 2-D PMM
+  and stay under ``la.elements.pmm.*``.
+
 * ``(lumenairy.raytrace.jax_trace, *)`` -- ``JaxPrescription`` /
   ``trace_jax_with_params`` are JAX-only entry points reachable via
   ``la.raytrace.*``; the JAX-side gradient pipeline has its own
@@ -264,6 +271,32 @@ _KNOWN_ALL_SYMMETRY_EXEMPTIONS = frozenset({
     ('lumenairy.elements.bor.sem_radial', 'sem_layer_modes'),
     ('lumenairy.elements.bor.sem_radial', 'sem_interface_smatrix'),
     ('lumenairy.elements.bor.sem_radial', 'equalize_meshes'),
+
+    # ---- elements.pmm.shapes2d (curved-cell shape primitives) -------------
+    # v5.50 (curved-cell Phase C, 2026-10-02): the shape primitives of the
+    # pure staggered 2-D PMM carry GENERIC geometric names (``Rect``,
+    # ``Circle``, ``Ellipse``, ...) that would be ambiguous in the ~450-name
+    # top-level surface of an optics library (apertures, masks and pupils
+    # are circles and rectangles too).  They are the input vocabulary of
+    # ONE engine (``pmm_jones_2d_staggered(shapes=)`` /
+    # ``PMM2DStackPure.add_layer(shapes=)``, both at top level) and stay
+    # namespaced under ``la.elements.pmm.*`` -- same rationale as the
+    # ``eme`` / ``bor`` building blocks above.  Exempted at the defining
+    # module and at the subpackage re-export.
+    ('lumenairy.elements.pmm', 'Circle'),
+    ('lumenairy.elements.pmm', 'Ellipse'),
+    ('lumenairy.elements.pmm', 'FilletRect'),
+    ('lumenairy.elements.pmm', 'Rect'),
+    ('lumenairy.elements.pmm', 'Shape2D'),
+    ('lumenairy.elements.pmm', 'SinusoidalWall'),
+    ('lumenairy.elements.pmm', 'compile_shapes'),
+    ('lumenairy.elements.pmm.shapes2d', 'Circle'),
+    ('lumenairy.elements.pmm.shapes2d', 'Ellipse'),
+    ('lumenairy.elements.pmm.shapes2d', 'FilletRect'),
+    ('lumenairy.elements.pmm.shapes2d', 'Rect'),
+    ('lumenairy.elements.pmm.shapes2d', 'Shape2D'),
+    ('lumenairy.elements.pmm.shapes2d', 'SinusoidalWall'),
+    ('lumenairy.elements.pmm.shapes2d', 'compile_shapes'),
 
     # ---- backend (package re-export of RandomState) -----------------------
     # ``RandomState`` IS at top level so this is NOT in the exemption

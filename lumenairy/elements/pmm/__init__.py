@@ -13,9 +13,9 @@ test-imported / monkeypatched privates (the slant dispatch spies these)."""
 from ._core import *
 from .conical import pmm_jones_1d_conical, pmm_jones_1d_conical_tensor
 from .oned import *
+from .shapes2d import *
 from .stack import *
 from .stack2d import *
-from .shapes2d import *
 from .stack2d_pure import *
 from .twod import *
 from .twod_jones import *
