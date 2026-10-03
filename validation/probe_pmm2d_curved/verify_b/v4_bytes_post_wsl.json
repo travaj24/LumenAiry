@@ -1,0 +1,46 @@
+{
+ "lumenairy": "/mnt/c/tmp/lum_vcurved_b/lumenairy/__init__.py",
+ "op_scalar_Lmat": "f6eb7e12bed547d997ee4f5327b91132270e5c13d0f16f7762a62bfddc139872",
+ "op_scalar_Rmat": "6b0f7d0ad4aadd3b31b291142e90bc98de9bf94afc79e958b8a1cb11a4cd9c04",
+ "op_scalar_Stt": "2c23445cd7a7daa0fae468c5e6ef9e7ca02c2a39d065078f57254b0685f06cb8",
+ "op_scalar_Schur": "1216eeca15647ea87d0ec4670fccc534349c7102c14ed293ba0a38868957c5ef",
+ "op_tensor_Lmat": "d5efa68e69c15215b0820587877a866a1e10a76427c0cc61d6fb032dc27f23ec",
+ "op_tensor_Rmat": "6b0f7d0ad4aadd3b31b291142e90bc98de9bf94afc79e958b8a1cb11a4cd9c04",
+ "op_tensor_Stt": "2c23445cd7a7daa0fae468c5e6ef9e7ca02c2a39d065078f57254b0685f06cb8",
+ "op_tensor_Schur": "84054fe690459049802c19c3044239f74eb2edd2e0285db86a398f139bd30e47",
+ "op_magnetic_Lmat": "7a764281e1f1616d8cda8fa5a19a6b3e23a6190957fc4770ca8a36966cc3bee4",
+ "op_magnetic_Rmat": "d3353a1fffebcce323f36f6531f1eb9b9bb52da59e3c3fa010976e8627037165",
+ "op_magnetic_Stt": "b9bb64148cc83e94cf3d32234b6c756df3f3f1da6ff2364eb84db179eea08df7",
+ "op_magnetic_Schur": "12cf08c698a2b54d397aba925101ef86a51cbbe77eacc18abbafa5a9e7ce5c6b",
+ "op_slant_Lmat": null,
+ "op_slant_Rmat": null,
+ "op_slant_Stt": null,
+ "op_slant_Schur": null,
+ "stack3_R": "57d11360be66b1e6581ab0289a29d1fb405bac605e369aa7fff0e99a6070a3f0",
+ "stack3_T": "1dfa59c876e2a69bd7da4f0a897fd22f8e35273696f74be980ac548a1e4f4347",
+ "stack3_J": "45fe4b299727c30cc51b88d3b14ee22d7597f3d1633f42d48973c572f85bb2cc",
+ "stack3_o": "aad52bf6377fe73481988c9b9fd4913292656b1e3e2e458d67d1bc53baadaf60",
+ "stack3_abs": "172f52523efed89e3fba8677a3cc0222a50aa3da23ccfea9f5fb24267626624f",
+ "stackpl_R": "f610afb369b72cd542a2317f965a199567d3aa1408fca7e1c8128855dd4333ec",
+ "stackpl_T": "376791f22491703d434e9e8756aca893ec972c7a16d58c0eca4087ee08f188ec",
+ "jones_direct": [
+  "aad52bf6377fe73481988c9b9fd4913292656b1e3e2e458d67d1bc53baadaf60",
+  "ad0d4718522a1ab46a073a05e0abc3179475f6178e5727a75733049b47ada257",
+  "38a91713fdfd4ac6b40c9377e3d18b35a9fcff6dbbb16a41ba3c20e120596d80",
+  "388c5933f49622c03532e46be938f35c26de809f3ba07eb9a6bed080d715affe"
+ ],
+ "eff_direct": [
+  "aad52bf6377fe73481988c9b9fd4913292656b1e3e2e458d67d1bc53baadaf60",
+  "c36dddab25ddaca4fd3083b3326c974bde82e40becff36b7849c643ec4946bc9",
+  "be5d8d9cd30947ed7428e060293cc5fa472e61e02c2d90ddae0880741af85227"
+ ],
+ "basis": [
+  "cac2f2c92c932970c6dfacf72f967d0cfa1027335b6f9497d49a4c74edaaf96d",
+  "54d587bb97facaf1febc33bb8e11beef8398fa4169e07eb68e8e365cf006dff2",
+  "fead9042b88b4359177af39554eede84878b83a9f18a233c4c64ef3ccea33905",
+  "f3db639d694f97471c6e1a649538ee3bcce69668173ef32cc489b721f25b8abd",
+  "564cec4ae15dca7c610b5f78979cf2f7d27cc0d7837759f415f6bab76df07194",
+  "db148985628cabdac1212bae18f29410bb84cf43cc95623caeb83b1776617a59",
+  "f4ac203137e2cb37fbbffdebba178cc866a7e341fd522bdf1bc16c0f677a779f"
+ ]
+}

@@ -1,0 +1,3 @@
+momentum 6 curved 10
+momentum 7 curved 12
+momentum 5 curved 9

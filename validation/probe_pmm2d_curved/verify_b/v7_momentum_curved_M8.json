@@ -1,0 +1,27 @@
+{
+ "M": 8,
+ "map": "curved",
+ "leak_max_per_order": 1.2763206117357223e-09,
+ "leak_total_per_input": [
+  3.4148793730392783e-09,
+  4.3922755038502707e-10
+ ],
+ "leak_unmapped_max_per_order": 1.9776963803186776e-26,
+ "n0_orders_vs_unmapped": 1.4343175499531569e-06,
+ "closure": 5.512332812429577e-10,
+ "warnings": [],
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "lumenairy": "C:\\tmp\\lum_vcurved_b\\lumenairy\\__init__.py",
+  "machine": "Tesla_Ryzen",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  },
+  "when": "2026-10-03 00:32:14"
+ }
+}

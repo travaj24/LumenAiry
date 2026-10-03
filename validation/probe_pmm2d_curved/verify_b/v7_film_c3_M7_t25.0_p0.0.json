@@ -1,0 +1,22 @@
+{
+ "kind": "c3",
+ "M": 7,
+ "theta": 25.0,
+ "phi": 0.0,
+ "err": 2.0617790486010534e-07,
+ "wall_s": 83.41676783561707,
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "lumenairy": "C:\\tmp\\lum_vcurved_b\\lumenairy\\__init__.py",
+  "machine": "Tesla_Ryzen",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  },
+  "when": "2026-10-03 00:14:19"
+ }
+}
