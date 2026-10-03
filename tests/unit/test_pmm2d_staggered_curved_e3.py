@@ -1073,3 +1073,31 @@ def test_e3r2_an_ellipse_inside_the_sliver_margin_is_poisoned_when_traced():
     assert np.isfinite(float(fj(0.59)))
     assert np.isnan(float(fj(0.5995)))
     assert np.isnan(float(jax.jit(jax.grad(f))(0.5995)))
+
+
+def test_e3r2_a_chained_cluster_far_from_the_reference_stays_finite():
+    """REGRESSION of the rule's first draft (found by re-running the
+    verifier's V-E3-3 events): a fillet frozen at r = 0.05 and evaluated at
+    r = 0.00192 (1.6e-3 P, near its sliver limit) has CHAINS of
+    near-degenerate eigenvalues (95 and 76 of 200 in a chain at gap 1e-6);
+    a pairwise cluster mask then made a masked Gram block indefinite (min
+    eigenvalue -6.3e-4) and the gradient NaN.  The clusters are now the
+    connected components (transitive closure) and a non-finite lift is
+    dropped.  The cell is not symmetric here, so the rule must agree with
+    the plain VJP: measured 1.0e-9 relative (both 1.3e-6 from an FD that
+    is outside its h^2 range, premise 16 instead of 11.4 --
+    ``r10_fillet_far_from_reference_win.json``).  Bars: finite, 1e-7."""
+    import jax
+    st = _stack([dict(thickness=0.4, shapes=[FilletRect(0.6, 0.6, 0.6, 0.5,
+                                                        0.05, 4.0)],
+                      background_eps=1.0)], M=3)
+    tw = st.jax_twin()
+
+    def f(r):
+        p = tw.params()
+        p["layers"][0]["shapes"] = [FilletRect(0.6, 0.6, 0.6, 0.5, r, 4.0)]
+        return st.solve(params=p)[2][0, tw.p0]
+    on = float(_jac(f, 0.00192))
+    off = float(_jac(f, 0.00192, gap=0.0))
+    assert np.isfinite(on)
+    assert abs(on - off) <= 1e-7 * abs(off), (on, off)

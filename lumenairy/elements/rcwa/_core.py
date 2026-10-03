@@ -4507,6 +4507,10 @@ def _require_inplane_tensor(fn_name, *tensors, allow_offplane=False):
 # an exact degeneracy for reach (measured: 1e-13 takes theta=1e-8 from 43% to
 # ~5%, while removing the floor entirely makes the exactly degenerate point
 # 7.7x WORSE -- 1.71e-02 against 2.22e-03).
+# The resolution, where the CONSUMER of the eigenpairs is available as a
+# function, is :func:`_jax_eig_cluster_adjoint` below (the pure staggered
+# 2-D PMM twin uses it; the other twins do not yet -- a maintainer item of
+# docs/audits/BUILD_PMM2D_CURVED_E3_2026_10_03.md, "Round 2").
 
 # Fraction of ``max|lam|`` below which an eigenvalue splitting is treated as
 # unresolved by the eigenvector VJP (see the block comment above).
@@ -4699,8 +4703,16 @@ def _eig_cluster_lift(lam, V, G, gap_rel, split_rel, anchors=()):
     eye = jnp.eye(n, dtype=bool)
     close = (jnp.abs(lam[:, None] - lam[None, :]) <= gap_rel * scale) & ~eye
     member = jnp.any(close, axis=1)
-    K = close | (eye & member[:, None])
-    Kf = K.astype(jnp.float64)
+    # clusters are the CONNECTED COMPONENTS of the pairwise relation (a
+    # chain of near-degenerate eigenvalues is one cluster): the transitive
+    # closure, by ceil(log2 n) squarings.  Without it a masked Gram block is
+    # not a Gram matrix and need not be positive definite (measured: a
+    # fillet far from its reference, 76 chained members of 200, min
+    # eigenvalue -6.3e-4 -> NaN gradient).
+    Kf = (close | (eye & member[:, None])).astype(jnp.float64)
+    for _ in range(max(1, int(np.ceil(np.log2(max(n, 2)))))):
+        Kf = jnp.where(Kf @ Kf > 0, 1.0, 0.0)
+    K = Kf > 0
     rng = np.random.default_rng(20261003 + int(n))
     X = (rng.standard_normal((n, n))
          + 1j * rng.standard_normal((n, n))) / np.sqrt(2.0)
@@ -4730,6 +4742,9 @@ def _eig_cluster_lift(lam, V, G, gap_rel, split_rel, anchors=()):
         Y = Y * (step / (split_rel * scale))[:, None]
     Z = Sm @ Y @ Sp                       # cluster blocks, zero elsewhere
     N = V @ jnp.linalg.solve(V.T, Z.T).T  # V Z V^-1
+    # a lift that is not finite (an ill-posed cluster block) is dropped: the
+    # stencil's weights sum to one, so that eig then gets the plain VJP
+    N = jnp.where(jnp.all(jnp.isfinite(N)), N, 0.0)
     return (split_rel * scale) * N, jnp.any(close)
 
 
