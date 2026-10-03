@@ -118,10 +118,12 @@ under the stack's curved map.
 * Gates (`docs/audits/BUILD_PMM2D_CURVED_D_2026_10_03.md`): a uniform
   liquid-crystal film and a gyrotropic film under a stretch, a sheared map
   and the circle map match the exact Berreman 4x4 answer -- reflection,
-  transmission AND the complex Jones matrix -- to ~1e-13 by `M = 8`; the
+  transmission AND the complex Jones matrix -- to ~1e-13 by `M = 8` at
+  normal incidence (~1e-10 at conical incidence under the circle map); the
   liquid-crystal circular pillar's two independent grid layouts agree to
-  2.5e-6 and the shipped 2-D tensor RCWA with the exact disk form factor
-  approaches that answer like 1/N (Richardson to 5.6e-5); Li's published
+  ~4e-6 (the finer layout still moves 3e-6 per rung at `M = 11 / 12`) and the shipped 2-D tensor RCWA with the exact disk form factor
+  approaches that answer like 1/N (a 1e-4-class corroboration: its
+  Richardson pairs wander 5e-5 .. 3e-4); Li's published
   gyrotropic crossed grating (J. Opt. A 5:345 (2003)) is reproduced to the
   shipped 8.74e-5 under an identity map and converges under a stretch; a
   magnetic film matches the exact (eps, mu) slab to 5.5e-14; a magnetic
@@ -132,8 +134,8 @@ under the stack's curved map.
   mixed components' sign flipped, the permeability inverted after the
   integration instead of before, the H recovery through the wrong Gram --
   is caught by two decades or more.  Three of them are invisible to the
-  efficiencies of a uniform film (a transposed gyrotropic tensor and a
-  mirrored director change only the Jones matrix; `eps_zz` does not enter at
+  efficiencies of a uniform film (at normal incidence a transposed
+  gyrotropic tensor and a mirrored director change only the Jones matrix; `eps_zz` does not enter at
   normal incidence), which is why the gates read the Jones matrix and run
   at oblique incidence.
 * Cost: a tensor or magnetic cell costs what a scalar curved cell costs
