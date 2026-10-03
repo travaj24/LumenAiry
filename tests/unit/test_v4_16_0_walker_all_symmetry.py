@@ -298,6 +298,20 @@ _KNOWN_ALL_SYMMETRY_EXEMPTIONS = frozenset({
     ('lumenairy.elements.pmm.shapes2d', 'SinusoidalWall'),
     ('lumenairy.elements.pmm.shapes2d', 'compile_shapes'),
 
+    # ---- elements.pmm.stack2d_pure (the stack viewers' material naming) ---
+    # v5.50 (exported by the maintainer's commit 4ec402bc, 2026-09-21, the
+    # pure-stack geometry viewers; registered here 2026-10-03 in curved-cell
+    # Phase D): ``material_key(eps)`` turns a (3, 3) permittivity tensor --
+    # an unhashable numpy array -- into the identity key the viewers'
+    # ``material_names`` / ``material_colors`` dictionaries are keyed on (the
+    # palette is keyed on the PHYSICS, the material, not on the layer).  It
+    # is a viewer palette helper of ONE class (``PMM2DStackPure.plot_geometry``
+    # / ``plot_section``, reached through that class), not a solver API, and
+    # the generic name ``material_key`` would be ambiguous at the top level of
+    # an optics library with several material models -- same rationale as the
+    # shape primitives above.
+    ('lumenairy.elements.pmm.stack2d_pure', 'material_key'),
+
     # ---- backend (package re-export of RandomState) -----------------------
     # ``RandomState`` IS at top level so this is NOT in the exemption
     # set -- listed here as a no-op anchor for the audit reader.
