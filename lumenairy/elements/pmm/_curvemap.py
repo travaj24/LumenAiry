@@ -1063,7 +1063,6 @@ class TransfiniteMap(CellMap):
         memo = getattr(self, "_memo", None)
         if memo is None or not requests:
             return
-        import jax.numpy as jnp
         tag = "g" if grid else "p"
         todo = [(sx, sy, U, V) for sx, sy, U, V in requests
                 if (tag, sx, sy, np.asarray(U).tobytes(),

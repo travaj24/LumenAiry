@@ -194,8 +194,8 @@ Scope / limitations
   :func:`_stag_map_eff_tensor`; a uniform tensor film under a curved map
   matches the Berreman 4x4 oracle, Jones matrix included, to ~1e-13.
   Remaining limits under a map: OUT-OF-PLANE tensors (``eps`` or ``mu``),
-  ``slant=``, per-layer grids (each a different map per layer) and the JAX
-  twin (Phase E) raise; two
+  ``slant=`` and per-layer grids (each a different map per layer) (Phase E)
+  raise; two
   outlines that cross in plan view cannot share one map (raises, naming
   both); and :func:`pmm_efficiency_2d_staggered` takes no map (use the
   Jones entry).  A rounded corner is GEOMETRY FIDELITY, not a convergence
@@ -212,13 +212,26 @@ Scope / limitations
 * Single layer per entry (cascade with
   :class:`~lumenairy.elements.pmm.PMM2DStackPure`); scalar TE/TM through
   :func:`pmm_efficiency_2d_staggered`, full ``(3, 3)`` tensors through
-  :func:`pmm_jones_2d_staggered`; NumPy/SciPy dense eig (not
-  JAX-differentiable).
+  :func:`pmm_jones_2d_staggered`; NumPy/SciPy dense eig.
+* JAX-DIFFERENTIABLE (Phase E3 of the curved-cell plan,
+  ``docs/audits/BUILD_PMM2D_CURVED_E3_2026_10_03.md``):
+  ``pmm_jones_2d_staggered(..., backend='jax')`` and
+  ``PMM2DStackPure(backend='jax')`` run a twin of the shared-grid IN-PLANE
+  path (scalar, block-form tensor and magnetic cells, with and without a
+  map) whose gradients flow to the materials, the thicknesses, the
+  half-space indices and the SHAPE PARAMETERS (a circle's radius, a
+  fillet's radius, a sinusoid's amplitude, a rectangle's width).  It runs
+  THIS module's assembly and kernels with ``xp = jax.numpy`` (the ``xp=``
+  arguments below; NumPy is byte-identical) and freezes every discrete
+  decision -- wall grid and topology, quadrature node counts, corner
+  cells, wavelength and angles -- at the concrete reference geometry; a
+  shape parameter moves the IMAGES of the frozen cells.  Out-of-plane
+  tensors, slant and per-layer grids have no twin (Phases E1 / E2).
 * A UNIFORM TENSOR region is NOT eps-free-separable (``K_zt`` mixes e11/e21
   while ``Meps33`` carries e33 alone), so it takes a full region eig like a
   patterned cell -- the shared geometric eig :func:`_homog_geom_cache` is
   scalar-only and raises on a tensor assembly.
-* ANISOTROPIC HALF-SPACES and the JAX twin stay out of scope.
+* ANISOTROPIC HALF-SPACES stay out of scope (also for the JAX twin).
 
 SLANT (roadmap Phase D, 2026-09-10)
 -----------------------------------
