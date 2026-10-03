@@ -1,0 +1,22 @@
+v4_pillar.py rcwa 16
+v4_pillar.py rcwa 15
+v4_pillar.py rcwa 14
+v4_pillar.py rcwa 13
+v4_pillar.py rcwa 12
+v4_pillar.py rcwa 11
+v4_pillar.py rcwa 10
+v4_pillar.py rcwa 9
+v4_pillar.py rcwa 8
+v4_pillar.py rcwa 7
+v4_pillar.py rcwa 6
+v4_pillar.py rcwa 5
+v4_pillar.py rcwa 4
+v4_pillar.py curved c3 4
+v4_pillar.py curved c3 5
+v4_pillar.py curved c3 6
+v4_pillar.py curved c3 7
+v4_pillar.py curved c3 8
+v4_pillar.py curved c3 9
+v4_pillar.py curved c5 4
+v4_pillar.py curved c5 5
+v4_pillar.py curved c5 6

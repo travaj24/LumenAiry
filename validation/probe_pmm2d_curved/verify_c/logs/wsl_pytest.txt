@@ -1,0 +1,104 @@
+/home/travaj/lumvenv/lib/python3.12/site-packages/pytest_benchmark/logger.py:44: PytestBenchmarkWarning: Benchmarks are automatically disabled because xdist plugin is active.Benchmarks cannot be performed reliably in a parallelized environment.
+  warner(PytestBenchmarkWarning(text))
+/home/travaj/lumvenv/lib/python3.12/site-packages/pytest_benchmark/logger.py:44: PytestBenchmarkWarning: Benchmarks are automatically disabled because xdist plugin is active.Benchmarks cannot be performed reliably in a parallelized environment.
+  warner(PytestBenchmarkWarning(text))
+/home/travaj/lumvenv/lib/python3.12/site-packages/pytest_benchmark/logger.py:44: PytestBenchmarkWarning: Benchmarks are automatically disabled because xdist plugin is active.Benchmarks cannot be performed reliably in a parallelized environment.
+  warner(PytestBenchmarkWarning(text))
+/home/travaj/lumvenv/lib/python3.12/site-packages/pytest_benchmark/logger.py:44: PytestBenchmarkWarning: Benchmarks are automatically disabled because xdist plugin is active.Benchmarks cannot be performed reliably in a parallelized environment.
+  warner(PytestBenchmarkWarning(text))
+/home/travaj/lumvenv/lib/python3.12/site-packages/pytest_benchmark/logger.py:44: PytestBenchmarkWarning: Benchmarks are automatically disabled because xdist plugin is active.Benchmarks cannot be performed reliably in a parallelized environment.
+  warner(PytestBenchmarkWarning(text))
+bringing up nodes...
+bringing up nodes...
+
+........................................................x.x.F........... [ 80%]
+......F..........                                                        [100%]
+=================================== FAILURES ===================================
+_______________ test_all_submodule_entries_reexported_or_exempt ________________
+[gw2] linux -- Python 3.12.3 /home/travaj/lumvenv/bin/python
+
+    def test_all_submodule_entries_reexported_or_exempt():
+        """Every name in a submodule's ``__all__`` MUST either appear at
+        top-level ``lumenairy.__all__``, or be listed in
+        :data:`_KNOWN_ALL_SYMMETRY_EXEMPTIONS` with a cited rationale.
+        """
+        top_all = set(getattr(la, '__all__', []))
+        failures = []
+        for submod, name in _DISCOVERED_PAIRS:
+            if name in top_all:
+                continue
+            if (submod, name) in _KNOWN_ALL_SYMMETRY_EXEMPTIONS:
+                continue
+            failures.append(
+                f"{submod}.__all__ exports {name!r} but it is not in "
+                f"``lumenairy.__all__``.  Either:\n"
+                f"    1. Add ``from .{submod[len('lumenairy.'):]} import "
+                f"{name}`` to lumenairy/__init__.py and append "
+                f"{name!r} to the top-level __all__, OR\n"
+                f"    2. Rename to ``_{name}`` and remove from the "
+                f"submodule's __all__ (mark internal), OR\n"
+                f"    3. Add ``({submod!r}, {name!r})`` to "
+                f"``_KNOWN_ALL_SYMMETRY_EXEMPTIONS`` in this file with "
+                f"a cited rationale in the module docstring.\n"
+                f"    (This is the v4.14.0 audit P1-NEW-4 sibling-gap "
+                f"pattern generalised to all names.)")
+        if failures:
+>           raise AssertionError(
+                "Submodule __all__ entries not re-exported at top level:\n"
+                "  - " + "\n  - ".join(failures))
+E           AssertionError: Submodule __all__ entries not re-exported at top level:
+E             - lumenairy.elements.pmm.stack2d_pure.__all__ exports 'material_key' but it is not in ``lumenairy.__all__``.  Either:
+E               1. Add ``from .elements.pmm.stack2d_pure import material_key`` to lumenairy/__init__.py and append 'material_key' to the top-level __all__, OR
+E               2. Rename to ``_material_key`` and remove from the submodule's __all__ (mark internal), OR
+E               3. Add ``('lumenairy.elements.pmm.stack2d_pure', 'material_key')`` to ``_KNOWN_ALL_SYMMETRY_EXEMPTIONS`` in this file with a cited rationale in the module docstring.
+E               (This is the v4.14.0 audit P1-NEW-4 sibling-gap pattern generalised to all names.)
+
+tests/unit/test_v4_16_0_walker_all_symmetry.py:412: AssertionError
+____________ test_installed_metadata_version_matches_source_version ____________
+[gw2] linux -- Python 3.12.3 /home/travaj/lumvenv/bin/python
+
+    def test_installed_metadata_version_matches_source_version():
+        """The installed distribution's version must equal ``__version__``.
+    
+        Audit 2026-09-11 (V4/P1-7) MEASURED the two apart on the dev box:
+        ``lumenairy.__version__`` read 5.45.1 while
+        ``importlib.metadata.version('lumenairy')`` read 5.43.0, and the editable
+        finder in the ``-X importtime`` trace was generated at 5.21.2 -- i.e. the
+        ``.pth`` shim was 24 releases stale.  Anything reading installed metadata
+        (packaging checks, a user's ``pip show``, a plugin version gate) saw the
+        wrong number, and nothing compared them.
+    
+        Deliberately NOT skipped when the distribution is absent (TESTING_STANDARDS
+        S3: "never ``pytest.skip`` on a resource check").  Every environment that
+        runs this suite installs the package -- every CI job's install line is
+        ``pip install -e ".[...]"`` -- so a missing distribution is a broken
+        environment, and reporting it as a skip is how a gate silently stops
+        gating.  The failure message says exactly what to run.
+        """
+        try:
+            installed = importlib.metadata.version('lumenairy')
+        except importlib.metadata.PackageNotFoundError:  # pragma: no cover
+            raise AssertionError(
+                "lumenairy is importable but has no installed distribution "
+                "metadata, so `importlib.metadata.version('lumenairy')` raises "
+                "PackageNotFoundError.  The suite is running against a bare "
+                "source tree (or a stale editable finder).  Run "
+                "`pip install -e .` from the repository root.")
+>       assert installed == la.__version__, (
+            f"Installed distribution metadata says lumenairy=={installed} but the "
+            f"source says __version__=={la.__version__}.  The editable install is "
+            f"stale: re-run `pip install -e .` from the repository root.  (This "
+            f"drift is invisible to every other test -- anything reading "
+            f"installed metadata, including `pip show` and packaging checks, "
+            f"reports {installed}.)")
+E       AssertionError: Installed distribution metadata says lumenairy==5.11.0 but the source says __version__==5.49.0.  The editable install is stale: re-run `pip install -e .` from the repository root.  (This drift is invisible to every other test -- anything reading installed metadata, including `pip show` and packaging checks, reports 5.11.0.)
+E       assert '5.11.0' == '5.49.0'
+E         
+E         - 5.49.0
+E         + 5.11.0
+
+tests/unit/test_public_api.py:117: AssertionError
+=========================== short test summary info ============================
+FAILED tests/unit/test_v4_16_0_walker_all_symmetry.py::test_all_submodule_entries_reexported_or_exempt
+FAILED tests/unit/test_public_api.py::test_installed_metadata_version_matches_source_version
+2 failed, 85 passed, 2 xfailed in 244.17s (0:04:04)

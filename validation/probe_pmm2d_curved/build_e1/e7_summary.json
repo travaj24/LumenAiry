@@ -1,0 +1,51 @@
+{
+ "curved": {
+  "5": {
+   "nonrec_vs_same": 0.0018121506311039384,
+   "nonrec_vs_transposed": 0.00013662883856236513,
+   "reciprocal_control": 0.00013902086650996806
+  },
+  "7": {
+   "nonrec_vs_same": 0.0021881339829363314,
+   "nonrec_vs_transposed": 2.8431569974209092e-06,
+   "reciprocal_control": 3.0180453631720172e-06
+  }
+ },
+ "slanted": {
+  "5": {
+   "nonrec_vs_same": 0.006168419361355856,
+   "nonrec_vs_transposed": 8.621683076374953e-05,
+   "reciprocal_control": 0.00012862025961425314
+  },
+  "7": {
+   "nonrec_vs_same": 0.005542592126339944,
+   "nonrec_vs_transposed": 1.3914124839010944e-06,
+   "reciprocal_control": 1.4562511954085977e-06
+  }
+ },
+ "stair": {
+  "5": {
+   "nonrec_vs_same": 0.024997481218225235,
+   "nonrec_vs_transposed": 3.963345271553592e-05,
+   "reciprocal_control": 3.2247438920322835e-05
+  },
+  "7": {
+   "nonrec_vs_same": 0.022336410940758902,
+   "nonrec_vs_transposed": 6.91946642726593e-08,
+   "reciprocal_control": 8.505861426311156e-08
+  }
+ },
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "lumenairy": "C:\\tmp\\lum_curved_e1\\lumenairy\\__init__.py",
+  "tree": "post",
+  "machine": "Tesla_Ryzen",
+  "threads": {
+   "OMP_NUM_THREADS": null,
+   "OPENBLAS_NUM_THREADS": null,
+   "MKL_NUM_THREADS": null
+  }
+ }
+}

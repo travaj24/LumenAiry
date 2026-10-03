@@ -1,0 +1,18 @@
+{
+ "map": "h2s",
+ "M": 8,
+ "arm": "ok",
+ "dRT": 1.639308902512404e-08,
+ "dJ": 7.547935981299813e-08,
+ "wall_s": 124.25537469999836,
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "lumenairy": "C:\\tmp\\lum_vcurved_d\\lumenairy\\__init__.py",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ }
+}

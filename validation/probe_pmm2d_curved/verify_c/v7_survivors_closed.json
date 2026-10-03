@@ -1,0 +1,30 @@
+{
+ "phase_c_survivors_closed_by": {
+  "m02_merge_drops_layer2_curves": [
+   "test_vc2[annulus]",
+   "test_vc2[circle_cuts_fillet_row]",
+   "test_vc2[phased_sine_circle]"
+  ],
+  "m03_ignore_background_eps": [
+   "test_vc1_painting_order_and_background_eps_are_honoured",
+   "test_vc2[phased_sine_circle]"
+  ],
+  "m04_fingerprint_ignores_radius": "EQUIVALENT: an Arc's radius is fixed by its centre and its end vertices, which the TransfiniteMap key already holds (vertex_images); fillets r vs r(1+1e-12) still fingerprint differently under the mutant",
+  "m09_claim_tol_loose": [
+   "test_vc3_one_outline_in_two_layouts_is_refused_not_merged"
+  ],
+  "m12_chord_interior_claims": [
+   "test_vc2[annulus]",
+   "test_vc2[circle_cuts_fillet_row]",
+   "test_vc2[phased_sine_circle]"
+  ],
+  "m13_paint_reversed": [
+   "test_vc1_painting_order_and_background_eps_are_honoured"
+  ],
+  "m15_sine_phase_dropped": [
+   "test_vc2[phased_sine_circle]"
+  ]
+ },
+ "file": "tests/unit/test_verify_pmm2d_curved_c.py",
+ "run": "each mutant tree, pytest tests/unit/test_verify_pmm2d_curved_c.py (2026-10-03, Windows)"
+}

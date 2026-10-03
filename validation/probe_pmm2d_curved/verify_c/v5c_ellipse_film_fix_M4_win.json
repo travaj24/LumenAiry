@@ -1,0 +1,28 @@
+{
+ "M": 4,
+ "tree": "c:\\tmp\\vcc_fix",
+ "film_err": 5.419903553960381e-06,
+ "R00": [
+  0.031294509504202074,
+  0.026117641018869105
+ ],
+ "T00": [
+  0.14339129103821224,
+  0.1670584651022037
+ ],
+ "closure": 0.0033846182389332125,
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "lumenairy": "c:\\tmp\\vcc_fix\\lumenairy\\__init__.py",
+  "tree": "pre",
+  "build": "win",
+  "machine": "Tesla_Ryzen",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ }
+}

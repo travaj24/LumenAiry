@@ -1,0 +1,88 @@
+C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pytest_benchmark\logger.py:44: PytestBenchmarkWarning: Benchmarks are automatically disabled because xdist plugin is active.Benchmarks cannot be performed reliably in a parallelized environment.
+  warner(PytestBenchmarkWarning(text))
+C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pytest_benchmark\logger.py:44: PytestBenchmarkWarning: Benchmarks are automatically disabled because xdist plugin is active.Benchmarks cannot be performed reliably in a parallelized environment.
+  warner(PytestBenchmarkWarning(text))
+C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pytest_benchmark\logger.py:44: PytestBenchmarkWarning: Benchmarks are automatically disabled because xdist plugin is active.Benchmarks cannot be performed reliably in a parallelized environment.
+  warner(PytestBenchmarkWarning(text))
+C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pytest_benchmark\logger.py:44: PytestBenchmarkWarning: Benchmarks are automatically disabled because xdist plugin is active.Benchmarks cannot be performed reliably in a parallelized environment.
+  warner(PytestBenchmarkWarning(text))
+bringing up nodes...
+bringing up nodes...
+
+...........F..F...F...........                                           [100%]
+================================== FAILURES ===================================
+________________ test_d7_vacuum_painted_with_mu_one_is_vacuum _________________
+[gw1] win32 -- Python 3.14.6 C:\Users\Tesla\AppData\Local\Programs\Python\Python314\python.exe
+
+    def test_d7_vacuum_painted_with_mu_one_is_vacuum():
+        """A physical identity across the two routes: layer 2 painted with a
+        vacuum Rect that carries an explicit mu = I (the magnetic TENSOR route
+        under the map) equals a uniform vacuum layer 2 (the scalar route) on
+        the same merged map.  Measured 2026-10-03 (``d_unit_stack.json``, M = 3):
+        3.1e-15 (bar 1e-9, 5.5 decades above); fail-before: the same Rect with
+        mu = 1.1 moves R / T / Jones by 2.3e-2 (bar >= 1e-3)."""
+        a = _d7(3, _LC30, "vac_mu")
+        b = _d7(3, _LC30, "uniform")
+        c = _d7(3, _LC30, "paint11")
+        assert a[0].cmap.fingerprint == b[0].cmap.fingerprint
+    
+        def d(x, y):
+            return max(np.abs(x[1] - y[1]).max(), np.abs(x[2] - y[2]).max(),
+                       np.abs(x[3] - y[3]).max())
+        assert d(a, b) <= 1e-9, d(a, b)
+>       assert d(c, b) >= 1e-3, d(c, b)
+E       AssertionError: np.float64(1.7763568394002505e-15)
+E       assert np.float64(1.7763568394002505e-15) >= 0.001
+E        +  where np.float64(1.7763568394002505e-15) = <function test_d7_vacuum_painted_with_mu_one_is_vacuum.<locals>.d at 0x000001BFFFB935E0>((<lumenairy.elements.pmm.stack2d_pure.PMM2DStackPure object at 0x000001BF8B3D6250>, array([[0.        , 0.        , 0....array([[ 0.01322713-0.19128398j,  0.03929447+0.00190665j],\n       [ 0.03929647+0.00190923j, -0.03401598-0.19406981j]])), (<lumenairy.elements.pmm.stack2d_pure.PMM2DStackPure object at 0x000001BF8B32B530>, array([[0.        , 0.        , 0....array([[ 0.01322713-0.19128398j,  0.03929447+0.00190665j],\n       [ 0.03929647+0.00190923j, -0.03401598-0.19406981j]])))
+
+tests\unit\test_pmm2d_staggered_curved_d.py:725: AssertionError
+______ test_d_shapes_carry_mu_and_the_shapes_route_is_the_explicit_route ______
+[gw1] win32 -- Python 3.14.6 C:\Users\Tesla\AppData\Local\Programs\Python\Python314\python.exe
+
+    def test_d_shapes_carry_mu_and_the_shapes_route_is_the_explicit_route():
+        """``compile_shapes(..., with_mu=True)`` returns the permeability grid as
+        a fifth output, painted like eps (a shape without mu paints 1, the
+        background takes ``background_mu``); the four-output form REFUSES a
+        magnetic layer (it would drop mu silently).  The shapes route with mu
+        equals ``compile_shapes(with_mu=True)`` + ``cmap=`` + ``eps_cell=`` +
+        ``mu_cell=`` BYTE FOR BYTE (``d_unit_shapes.json``: bytes equal)."""
+        sh = [Circle(0.6, 0.6, 0.36, _LC30, mu=np.diag([1.5, 1.5, 1.0]))]
+>       with pytest.raises(ValueError, match="with_mu=True"):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE <class 'ValueError'>
+
+tests\unit\test_pmm2d_staggered_curved_d.py:846: Failed
+___________ test_d_refusals_keep_out_of_plane_and_raw_mu_cells_out ____________
+[gw2] win32 -- Python 3.14.6 C:\Users\Tesla\AppData\Local\Programs\Python\Python314\python.exe
+
+    def test_d_refusals_keep_out_of_plane_and_raw_mu_cells_out():
+        """Phase E stays refused, naming it: an OUT-OF-PLANE tensor eps or mu
+        under a map (the solver, the stack's uniform layer, a shape).  A raw
+        ``mu_cell`` cannot join a shape stack (its cells would refer to a grid
+        the merge does not know); a UNIFORM ``mu`` layer can."""
+        oop = np.diag([2.0, 2.5, 2.0]).astype(complex)
+        oop[0, 2] = oop[2, 0] = 0.3
+        cm = _circle(_P)
+        with pytest.raises(NotImplementedError, match="Phase E"):
+            TS.Granet2DTransverseE(_P, _P, cm.u_walls, cm.v_walls, 4,
+                                   np.broadcast_to(oop, (3, 3, 3, 3)), cmap=cm)
+        with pytest.raises(NotImplementedError, match="Phase E"):
+            TS.Granet2DTransverseE(_P, _P, cm.u_walls, cm.v_walls, 4,
+                                   np.ones((3, 3), complex),
+                                   mu_cell=np.broadcast_to(oop, (3, 3, 3, 3)),
+                                   cmap=cm)
+        st = PMM2DStackPure(_P, _P, n_modes=4, cmap=cm)
+        with pytest.raises(NotImplementedError, match="Phase E"):
+            st.add_layer(0.2, eps=oop)
+        with pytest.raises(NotImplementedError, match="Phase E"):
+            st.add_layer(0.2, eps=2.0, mu=oop)
+>       with pytest.raises(NotImplementedError, match="Phase E"):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE <class 'NotImplementedError'>
+
+tests\unit\test_pmm2d_staggered_curved_d.py:887: Failed
+=========================== short test summary info ===========================
+FAILED tests/unit/test_pmm2d_staggered_curved_d.py::test_d7_vacuum_painted_with_mu_one_is_vacuum
+FAILED tests/unit/test_pmm2d_staggered_curved_d.py::test_d_shapes_carry_mu_and_the_shapes_route_is_the_explicit_route
+FAILED tests/unit/test_pmm2d_staggered_curved_d.py::test_d_refusals_keep_out_of_plane_and_raw_mu_cells_out
+3 failed, 27 passed in 186.71s (0:03:06)

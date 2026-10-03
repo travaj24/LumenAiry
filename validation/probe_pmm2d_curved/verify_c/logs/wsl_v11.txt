@@ -1,0 +1,12 @@
+tapered after shapes: ValueError: PMM2DStackPure.add_tapered_pillar: a taper is a z-staircase whose slices have DIFFERENT wall positions, so it needs layer_grids='per-layer' (each slice on its own non-uniform grid, adjacent slices coupled by an L2 mortar).  On the shared union grid the walls would have to land on ONE lattice: a 2-de
+2 circle steps: {'grid': [5, 5], 'radii': [0.3, 0.42]}
+3 circle steps: {'grid': [7, 7], 'radii': [0.3, 0.36, 0.42]}
+4 circle steps: {'grid': [9, 9], 'radii': [0.3, 0.33999999999999997, 0.38, 0.42]}
+6 circle steps: {'grid': [13, 13], 'radii': [0.3, 0.324, 0.348, 0.372, 0.396, 0.42]}
+pedestal 0.6 RAISE: compile_shapes: the merged map FOLDS (det J <= 0, min 0.000e+00) in the cell u in [0.3, 0.317574], v in [0.36, 0.84], which is bounded by layer 1: FilletRect(cx
+pedestal 0.6012 ok
+pedestal 0.62 ok
+pedestal 0.7 ok
+two circles r2/r1: {1.0: 'ok', 1.05: 'FOLD', 1.1: 'FOLD', 1.2: 'FOLD', 1.3: 'FOLD', 1.4: 'FOLD', 1.414: 'ok', 1.42: 'ok', 1.5: 'ok', 1.7: 'ok'}
+two equal circles, dy: {0.0: 'ok', 0.02: 'FOLD', 0.05: 'FOLD', 0.1: 'ok', 0.2: 'ok'}
+wrote v11_departures_wsl.json

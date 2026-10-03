@@ -1,0 +1,42 @@
+film circle 4 0 0
+film circle 5 0 0
+film circle 5 25 0
+film circle 5 25 40
+film circle 6 0 0
+film circle 6 25 0
+film circle 6 25 40
+film circle 7 0 0
+film circle 7 25 0
+film circle 7 25 40
+film circle 8 0 0
+film circle 8 25 0
+film circle 8 25 40
+film stretch 4 25 0
+film stretch 4 25 40
+film stretch 5 0 0
+film stretch 5 25 0
+film stretch 5 25 40
+film stretch 6 0 0
+film stretch 6 25 0
+film stretch 6 25 40
+film stretch 7 0 0
+film stretch 7 25 0
+film stretch 7 25 40
+film stretch 8 0 0
+film stretch 8 25 0
+film stretch 8 25 40
+spacer circle 4
+spacer stretch 4
+spacer circle 5
+spacer stretch 5
+spacer circle 6
+spacer stretch 6
+spacer circle 7
+spacer stretch 7
+spacer circle 8
+spacer stretch 8
+spacer circle 9
+spacer stretch 9
+recip 5
+recip 6
+recip 7

@@ -1,0 +1,45 @@
+C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pytest_benchmark\logger.py:44: PytestBenchmarkWarning: Benchmarks are automatically disabled because xdist plugin is active.Benchmarks cannot be performed reliably in a parallelized environment.
+  warner(PytestBenchmarkWarning(text))
+C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pytest_benchmark\logger.py:44: PytestBenchmarkWarning: Benchmarks are automatically disabled because xdist plugin is active.Benchmarks cannot be performed reliably in a parallelized environment.
+  warner(PytestBenchmarkWarning(text))
+C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pytest_benchmark\logger.py:44: PytestBenchmarkWarning: Benchmarks are automatically disabled because xdist plugin is active.Benchmarks cannot be performed reliably in a parallelized environment.
+  warner(PytestBenchmarkWarning(text))
+C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pytest_benchmark\logger.py:44: PytestBenchmarkWarning: Benchmarks are automatically disabled because xdist plugin is active.Benchmarks cannot be performed reliably in a parallelized environment.
+  warner(PytestBenchmarkWarning(text))
+bringing up nodes...
+bringing up nodes...
+
+...........................F..                                           [100%]
+================================== FAILURES ===================================
+__ test_verify_d_gyrotropic_mu_under_a_shear_matches_an_independent_berreman __
+[gw0] win32 -- Python 3.14.6 C:\Users\Tesla\AppData\Local\Programs\Python\Python314\python.exe
+
+    def test_verify_d_gyrotropic_mu_under_a_shear_matches_an_independent_berreman():
+        """A uniform eps-2 film with a GYROTROPIC permeability under a 4 x 4
+        sheared map (bilinear cells: the covariant plane-wave field is exact) vs
+        the eps+mu Berreman above.  Measured 2026-10-03 (``v2_summary.json``,
+        ``v_unit_readings.json``): NORMAL incidence M = 4: R / T 2.1e-15 and the
+        complex Jones 7.8e-15 (bar 1e-10: round-off, 4 decades of margin);
+        CONICAL (20 deg, 40 deg) M = 4: 2.7e-10 / 3.2e-10 (bar 1e-8, 1.5
+        decades; the bilinear map is exact at normal incidence and spectral
+        off it -- 2.9e-14 / 8.5e-14 at M = 5).
+    
+        Fail-before arms, each a one-token bug in the magnetic branch of
+        ``_stag_map_eff_tensor`` that EVERY Phase D unit gate passes (they use a
+        diagonal mu, and normal incidence for every magnetic gate):
+        * mu TRANSPOSED in chi (``J^T mu^-T J``): Jones 0.141 at normal
+          incidence while R / T stays 5.4e-15 (blind), bar >= 1e-2;
+        * chi_33 without sqrt(g) (``1 / mu_33``): blind at normal incidence
+          (7.9e-15, asserted <= 1e-10), conical M = 4 Jones 2.0e-4 / R,T 1.3e-5
+          (bar >= 1e-6, 2.3 decades under the Jones reading);
+        * the two sides of chi swapped (``J mu^-1 J^T``): R / T 6.2e-4, Jones
+          8.3e-3 at normal incidence (bar >= 1e-4)."""
+        nRT, nJ = _mag_film(4, 0.0, 0.0)
+>       assert nRT <= 1e-10 and nJ <= 1e-10, (nRT, nJ)
+E       AssertionError: (5.440092820663267e-15, 0.14148361538272344)
+E       assert (5.440092820663267e-15 <= 1e-10 and 0.14148361538272344 <= 1e-10)
+
+tests\unit\test_verify_pmm2d_curved_d.py:183: AssertionError
+=========================== short test summary info ===========================
+FAILED tests/unit/test_verify_pmm2d_curved_d.py::test_verify_d_gyrotropic_mu_under_a_shear_matches_an_independent_berreman
+1 failed, 29 passed in 152.12s (0:02:32)

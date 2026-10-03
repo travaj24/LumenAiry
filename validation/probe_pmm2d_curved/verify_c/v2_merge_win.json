@@ -1,0 +1,1194 @@
+{
+ "lone_circle": {
+  "note": "",
+  "outcome": "SOLVE",
+  "identity": false,
+  "geometry": {
+   "layers": [
+    {
+     "layer": 1,
+     "paint_wrong": 0,
+     "paint_checked": 324,
+     "boundary_side_mismatch": 0,
+     "boundary_points_checked": 800,
+     "outline_covered_max": 2.778604113462535e-08,
+     "outline_visible": 1000,
+     "n_boundary_edges": 36
+    }
+   ],
+   "detJ_min": 0.08072919876077267,
+   "sigma_spread_max": 1.3681353123771018,
+   "grid": [
+    3,
+    3
+   ]
+  },
+  "verdict": "EXACT",
+  "grid": [
+   3,
+   3
+  ],
+  "fingerprint": "add0de55d7d1f01b"
+ },
+ "lone_circle_offcentre": {
+  "note": "",
+  "outcome": "SOLVE",
+  "identity": false,
+  "geometry": {
+   "layers": [
+    {
+     "layer": 1,
+     "paint_wrong": 0,
+     "paint_checked": 324,
+     "boundary_side_mismatch": 0,
+     "boundary_points_checked": 800,
+     "outline_covered_max": 2.315503433436561e-08,
+     "outline_visible": 1000,
+     "n_boundary_edges": 36
+    }
+   ],
+   "detJ_min": 0.080729198760773,
+   "sigma_spread_max": 1.3706489764437084,
+   "grid": [
+    3,
+    3
+   ]
+  },
+  "verdict": "EXACT",
+  "grid": [
+   3,
+   3
+  ],
+  "fingerprint": "cdf1f1643858a317"
+ },
+ "annulus_2layer": {
+  "note": "",
+  "outcome": "SOLVE",
+  "identity": false,
+  "geometry": {
+   "layers": [
+    {
+     "layer": 1,
+     "paint_wrong": 0,
+     "paint_checked": 900,
+     "boundary_side_mismatch": 0,
+     "boundary_points_checked": 800,
+     "outline_covered_max": 1.929586190829724e-08,
+     "outline_visible": 1000,
+     "n_boundary_edges": 36
+    },
+    {
+     "layer": 2,
+     "paint_wrong": 0,
+     "paint_checked": 900,
+     "boundary_side_mismatch": 0,
+     "boundary_points_checked": 2400,
+     "outline_covered_max": 1.0719923393409658e-08,
+     "outline_visible": 1000,
+     "n_boundary_edges": 108
+    }
+   ],
+   "detJ_min": 0.03679524670902801,
+   "sigma_spread_max": 1.3751772649696352,
+   "grid": [
+    5,
+    5
+   ]
+  },
+  "verdict": "EXACT",
+  "grid": [
+   5,
+   5
+  ],
+  "fingerprint": "cea7b05b2bd5ac97"
+ },
+ "annulus_2layer_offc": {
+  "note": "",
+  "outcome": "SOLVE",
+  "identity": false,
+  "geometry": {
+   "layers": [
+    {
+     "layer": 1,
+     "paint_wrong": 0,
+     "paint_checked": 900,
+     "boundary_side_mismatch": 0,
+     "boundary_points_checked": 800,
+     "outline_covered_max": 1.5436689704273476e-08,
+     "outline_visible": 1000,
+     "n_boundary_edges": 36
+    },
+    {
+     "layer": 2,
+     "paint_wrong": 0,
+     "paint_checked": 900,
+     "boundary_side_mismatch": 0,
+     "boundary_points_checked": 2400,
+     "outline_covered_max": 7.350804853700765e-09,
+     "outline_visible": 1000,
+     "n_boundary_edges": 108
+    }
+   ],
+   "detJ_min": 0.038193540413511196,
+   "sigma_spread_max": 1.3751704816378187,
+   "grid": [
+    5,
+    5
+   ]
+  },
+  "verdict": "EXACT",
+  "grid": [
+   5,
+   5
+  ],
+  "fingerprint": "816c64b9952c60b8"
+ },
+ "annulus_1layer": {
+  "note": "",
+  "outcome": "SOLVE",
+  "identity": false,
+  "geometry": {
+   "layers": [
+    {
+     "layer": 1,
+     "paint_wrong": 0,
+     "paint_checked": 900,
+     "boundary_side_mismatch": 0,
+     "boundary_points_checked": 3200,
+     "outline_covered_max": 1.929586190829724e-08,
+     "outline_visible": 2000,
+     "n_boundary_edges": 144
+    }
+   ],
+   "detJ_min": 0.03679524670902801,
+   "sigma_spread_max": 1.3751772649696352,
+   "grid": [
+    5,
+    5
+   ]
+  },
+  "verdict": "EXACT",
+  "grid": [
+   5,
+   5
+  ],
+  "fingerprint": "cea7b05b2bd5ac97"
+ },
+ "annulus_ratio_1.2": {
+  "note": "ratio < sqrt2: inner 45-deg wall sits inside the outer bulge zone?",
+  "outcome": "SOLVE",
+  "identity": false,
+  "geometry": {
+   "layers": [
+    {
+     "layer": 1,
+     "paint_wrong": 0,
+     "paint_checked": 900,
+     "boundary_side_mismatch": 0,
+     "boundary_points_checked": 800,
+     "outline_covered_max": 2.3155034278854458e-08,
+     "outline_visible": 1000,
+     "n_boundary_edges": 36
+    },
+    {
+     "layer": 2,
+     "paint_wrong": 0,
+     "paint_checked": 900,
+     "boundary_side_mismatch": 0,
+     "boundary_points_checked": 2400,
+     "outline_covered_max": 1.9295862019319543e-08,
+     "outline_visible": 1000,
+     "n_boundary_edges": 108
+    }
+   ],
+   "detJ_min": 0.031901074806633734,
+   "sigma_spread_max": 1.3771186105817603,
+   "grid": [
+    5,
+    5
+   ]
+  },
+  "verdict": "EXACT",
+  "grid": [
+   5,
+   5
+  ],
+  "fingerprint": "35ffd3b514866f64"
+ },
+ "same_circle_two_layers": {
+  "note": "",
+  "outcome": "SOLVE",
+  "identity": false,
+  "geometry": {
+   "layers": [
+    {
+     "layer": 1,
+     "paint_wrong": 0,
+     "paint_checked": 324,
+     "boundary_side_mismatch": 0,
+     "boundary_points_checked": 800,
+     "outline_covered_max": 2.778604113462535e-08,
+     "outline_visible": 1000,
+     "n_boundary_edges": 36
+    },
+    {
+     "layer": 2,
+     "paint_wrong": 0,
+     "paint_checked": 324,
+     "boundary_side_mismatch": 0,
+     "boundary_points_checked": 800,
+     "outline_covered_max": 2.778604113462535e-08,
+     "outline_visible": 1000,
+     "n_boundary_edges": 36
+    }
+   ],
+   "detJ_min": 0.08072919876077267,
+   "sigma_spread_max": 1.3681353123771018,
+   "grid": [
+    3,
+    3
+   ]
+  },
+  "verdict": "EXACT",
+  "grid": [
+   3,
+   3
+  ],
+  "fingerprint": "add0de55d7d1f01b"
+ },
+ "circle3x3_vs_circle5x5": {
+  "note": "SAME physical outline, two layouts",
+  "outcome": "RAISE",
+  "type": "ValueError",
+  "message": "compile_shapes: layer 1: Circle(cx=0.6, cy=0.6, r=0.36) and layer 2: Circle(cx=0.6, cy=0.6, r=0.36) need DIFFERENT physical positions for the same grid vertex (near x = 0.462234, y = 0.267403: (np.float64(0.46223396434856745), np.float64(0.26740336829593686)) vs (np.float64(0.47272077938642143), np.float64(0.26325083519034526))) -- their outlines meet in one cell in two different ways (e.g. a rounded corner over a sharp one, or an edge laid on another shape's flat side).  One map cannot carry both; a common map for them is Phase E of the curved-cell plan.",
+  "names_in_message": [
+   "Circle(cx=0.6, cy=0.6, r=0.36)",
+   "Circle(cx=0.6, cy=0.6, r=0.36)"
+  ]
+ },
+ "circle_vs_ellipse_a_eq_b": {
+  "note": "SAME outline, EllipseArc",
+  "outcome": "SOLVE",
+  "identity": false,
+  "geometry": {
+   "layers": [
+    {
+     "layer": 1,
+     "paint_wrong": 0,
+     "paint_checked": 324,
+     "boundary_side_mismatch": 0,
+     "boundary_points_checked": 800,
+     "outline_covered_max": 2.778604113462535e-08,
+     "outline_visible": 1000,
+     "n_boundary_edges": 36
+    },
+    {
+     "layer": 2,
+     "paint_wrong": 0,
+     "paint_checked": 324,
+     "boundary_side_mismatch": 0,
+     "boundary_points_checked": 800,
+     "outline_covered_max": 2.778604113462535e-08,
+     "outline_visible": 1000,
+     "n_boundary_edges": 36
+    }
+   ],
+   "detJ_min": 0.08072919876077267,
+   "sigma_spread_max": 1.3681353123771018,
+   "grid": [
+    3,
+    3
+   ]
+  },
+  "verdict": "EXACT",
+  "grid": [
+   3,
+   3
+  ],
+  "fingerprint": "add0de55d7d1f01b"
+ },
+ "circle_vs_r_1e-13": {
+  "note": "",
+  "outcome": "SOLVE",
+  "identity": false,
+  "geometry": {
+   "layers": [
+    {
+     "layer": 1,
+     "paint_wrong": 0,
+     "paint_checked": 324,
+     "boundary_side_mismatch": 0,
+     "boundary_points_checked": 800,
+     "outline_covered_max": 2.778604113462535e-08,
+     "outline_visible": 1000,
+     "n_boundary_edges": 36
+    },
+    {
+     "layer": 2,
+     "paint_wrong": 0,
+     "paint_checked": 324,
+     "boundary_side_mismatch": 0,
+     "boundary_points_checked": 800,
+     "outline_covered_max": 2.7786077105851348e-08,
+     "outline_visible": 1000,
+     "n_boundary_edges": 36
+    }
+   ],
+   "detJ_min": 0.08072919876077267,
+   "sigma_spread_max": 1.3681353123771018,
+   "grid": [
+    3,
+    3
+   ]
+  },
+  "verdict": "EXACT",
+  "grid": [
+   3,
+   3
+  ],
+  "fingerprint": "add0de55d7d1f01b"
+ },
+ "circle_vs_r_1e-10": {
+  "note": "",
+  "outcome": "RAISE",
+  "type": "ValueError",
+  "message": "compile_shapes: the merged u-walls np.float64(0.3454415587473871) and np.float64(0.3454415587728429) are only 2.5455804131269133e-11 apart (2.12e-11 of the period) -- below the staggered solver's SLIVER CONTRACT (no segment narrower than 1e-3 of the period, twod_staggered._STAG_MIN_SEG_FRAC).  The walls belong to layer 1: Circle(cx=0.6, cy=0.6, r=0.36) and layer 2: Circle(cx=0.6, cy=0.6, r=0.36).  Align the two outlines exactly (a shared wall is free) or move them apart.",
+  "names_in_message": [
+   "Circle(cx=0.6, cy=0.6, r=0.36)",
+   "Circle(cx=0.6, cy=0.6, r=0.36)"
+  ]
+ },
+ "circle_vs_r_1e-6": {
+  "note": "",
+  "outcome": "RAISE",
+  "type": "ValueError",
+  "message": "compile_shapes: the merged u-walls np.float64(0.34544130421440167) and np.float64(0.3454415587728429) are only 2.545584412150248e-07 apart (2.12e-07 of the period) -- below the staggered solver's SLIVER CONTRACT (no segment narrower than 1e-3 of the period, twod_staggered._STAG_MIN_SEG_FRAC).  The walls belong to layer 1: Circle(cx=0.6, cy=0.6, r=0.36) and layer 2: Circle(cx=0.6, cy=0.6, r=0.36).  Align the two outlines exactly (a shared wall is free) or move them apart.",
+  "names_in_message": [
+   "Circle(cx=0.6, cy=0.6, r=0.36)",
+   "Circle(cx=0.6, cy=0.6, r=0.36)"
+  ]
+ },
+ "fillet_vs_fillet_same_box_diff_r": {
+  "note": "same box, different radius: different curves on one corner",
+  "outcome": "RAISE",
+  "type": "ValueError",
+  "message": "compile_shapes: the merged map FOLDS (det J <= 0, min 0.000e+00) in the cell u in [0.317574, 0.335147], v in [0.42, 0.78], which is bounded by layer 1: FilletRect(cx=0.6, cy=0.6, w=0.6, h=0.6, r=0.06), layer 2: FilletRect(cx=0.6, cy=0.6, w=0.6, h=0.6, r=0.12).  An outline bulges past a neighbouring wall: two outlines are too close in plan view, or a straight wall of one shape passes through the curved transition cell of another.  Move them apart (or align the straight wall with the curved shape's bounding box); a common map for them is Phase E of the curved-cell plan.",
+  "names_in_message": [
+   "FilletRect(cx=0.6, cy=0.6, w=0.6, h=0.6, r=0.06)",
+   "FilletRect(cx=0.6, cy=0.6, w=0.6, h=0.6, r=0.12)"
+  ]
+ },
+ "fillet_vs_fillet_nested_diff_r": {
+  "note": "",
+  "outcome": "SOLVE",
+  "identity": false,
+  "geometry": {
+   "layers": [
+    {
+     "layer": 1,
+     "paint_wrong": 0,
+     "paint_checked": 2916,
+     "boundary_side_mismatch": 0,
+     "boundary_points_checked": 2400,
+     "outline_covered_max": 9.647314102590665e-10,
+     "outline_visible": 1000,
+     "n_boundary_edges": 108
+    },
+    {
+     "layer": 2,
+     "paint_wrong": 0,
+     "paint_checked": 2916,
+     "boundary_side_mismatch": 0,
+     "boundary_points_checked": 5600,
+     "outline_covered_max": 2.315355533165154e-09,
+     "outline_visible": 1000,
+     "n_boundary_edges": 252
+    }
+   ],
+   "detJ_min": 0.04658278357873369,
+   "sigma_spread_max": 1.3743582501597116,
+   "grid": [
+    9,
+    9
+   ]
+  },
+  "verdict": "EXACT",
+  "grid": [
+   9,
+   9
+  ],
+  "fingerprint": "25b884633040a171"
+ },
+ "circle_beside_fillet": {
+  "note": "",
+  "outcome": "SOLVE",
+  "identity": false,
+  "geometry": {
+   "layers": [
+    {
+     "layer": 1,
+     "paint_wrong": 0,
+     "paint_checked": 1764,
+     "boundary_side_mismatch": 0,
+     "boundary_points_checked": 800,
+     "outline_covered_max": 2.315503433436561e-08,
+     "outline_visible": 1000,
+     "n_boundary_edges": 36
+    },
+    {
+     "layer": 2,
+     "paint_wrong": 0,
+     "paint_checked": 1764,
+     "boundary_side_mismatch": 0,
+     "boundary_points_checked": 3200,
+     "outline_covered_max": 1.9294629653861903e-09,
+     "outline_visible": 1000,
+     "n_boundary_edges": 144
+    }
+   ],
+   "detJ_min": 0.014665166638030712,
+   "sigma_spread_max": 1.3750320766713573,
+   "grid": [
+    7,
+    7
+   ]
+  },
+  "verdict": "EXACT",
+  "grid": [
+   7,
+   7
+  ],
+  "fingerprint": "2c1f36ab40411bad"
+ },
+ "circle_wall_in_fillet_arc_row": {
+  "note": "circle's top 45-deg wall v=0.66 cuts the fillet's arc row [0.629, 0.7]",
+  "outcome": "SOLVE",
+  "identity": false,
+  "geometry": {
+   "layers": [
+    {
+     "layer": 1,
+     "paint_wrong": 0,
+     "paint_checked": 1764,
+     "boundary_side_mismatch": 0,
+     "boundary_points_checked": 1200,
+     "outline_covered_max": 6.55287468731558e-09,
+     "outline_visible": 1000,
+     "n_boundary_edges": 54
+    },
+    {
+     "layer": 2,
+     "paint_wrong": 0,
+     "paint_checked": 1764,
+     "boundary_side_mismatch": 0,
+     "boundary_points_checked": 2800,
+     "outline_covered_max": 1.9294629653861903e-09,
+     "outline_visible": 1000,
+     "n_boundary_edges": 126
+    }
+   ],
+   "detJ_min": 0.046582783578737796,
+   "sigma_spread_max": 1.3764700764080453,
+   "grid": [
+    7,
+    7
+   ]
+  },
+  "verdict": "EXACT",
+  "grid": [
+   7,
+   7
+  ],
+  "fingerprint": "c078c07d010c251a"
+ },
+ "three_circles_equal": {
+  "note": "",
+  "outcome": "SOLVE",
+  "identity": false,
+  "geometry": {
+   "layers": [
+    {
+     "layer": 1,
+     "paint_wrong": 0,
+     "paint_checked": 1764,
+     "boundary_side_mismatch": 0,
+     "boundary_points_checked": 4800,
+     "outline_covered_max": 2.778604113462535e-08,
+     "outline_visible": 3000,
+     "n_boundary_edges": 216
+    }
+   ],
+   "detJ_min": 0.05059499057038008,
+   "sigma_spread_max": 1.4588045875855435,
+   "grid": [
+    7,
+    7
+   ]
+  },
+  "verdict": "EXACT",
+  "grid": [
+   7,
+   7
+  ],
+  "fingerprint": "447775f361760451"
+ },
+ "three_circles_r_0.30_0.36_0.40": {
+  "note": "a supercell of different radii (the metasurface case)",
+  "outcome": "RAISE",
+  "type": "ValueError",
+  "message": "compile_shapes: the merged map FOLDS (det J <= 0, min -2.958e+00) in the cell u in [0.345442, 0.854558], v in [0.317157, 0.345442], which is bounded by layer 1: Circle(cx=0.6, cy=0.6, r=0.36), layer 1: Circle(cx=3, cy=0.6, r=0.4).  An outline bulges past a neighbouring wall: two outlines are too close in plan view, or a straight wall of one shape passes through the curved transition cell of another.  Move them apart (or align the straight wall with the curved shape's bounding box); a common map for them is Phase E of the curved-cell plan.",
+  "names_in_message": [
+   "Circle(cx=0.6, cy=0.6, r=0.36)",
+   "Circle(cx=3, cy=0.6, r=0.4)"
+  ]
+ },
+ "two_circles_r_0.30_0.40": {
+  "note": "",
+  "outcome": "RAISE",
+  "type": "ValueError",
+  "message": "compile_shapes: the merged map FOLDS (det J <= 0, min -2.497e-01) in the cell u in [0.387868, 0.812132], v in [0.317157, 0.387868], which is bounded by layer 1: Circle(cx=0.6, cy=0.6, r=0.3), layer 1: Circle(cx=1.8, cy=0.6, r=0.4).  An outline bulges past a neighbouring wall: two outlines are too close in plan view, or a straight wall of one shape passes through the curved transition cell of another.  Move them apart (or align the straight wall with the curved shape's bounding box); a common map for them is Phase E of the curved-cell plan.",
+  "names_in_message": [
+   "Circle(cx=0.6, cy=0.6, r=0.3)",
+   "Circle(cx=1.8, cy=0.6, r=0.4)"
+  ]
+ },
+ "two_circles_r_0.25_0.36": {
+  "note": "ratio 1.44 > sqrt 2",
+  "outcome": "SOLVE",
+  "identity": false,
+  "geometry": {
+   "layers": [
+    {
+     "layer": 1,
+     "paint_wrong": 0,
+     "paint_checked": 900,
+     "boundary_side_mismatch": 0,
+     "boundary_points_checked": 2400,
+     "outline_covered_max": 2.778604113462535e-08,
+     "outline_visible": 2000,
+     "n_boundary_edges": 108
+    }
+   ],
+   "detJ_min": 0.07418105649341145,
+   "sigma_spread_max": 1.4385995678608414,
+   "grid": [
+    5,
+    5
+   ]
+  },
+  "verdict": "EXACT",
+  "grid": [
+   5,
+   5
+  ],
+  "fingerprint": "5a9e1fe837663ca9"
+ },
+ "two_circles_r_0.3_0.3_dy": {
+  "note": "equal radii, centres offset 0.1 in y",
+  "outcome": "SOLVE",
+  "identity": false,
+  "geometry": {
+   "layers": [
+    {
+     "layer": 1,
+     "paint_wrong": 0,
+     "paint_checked": 900,
+     "boundary_side_mismatch": 0,
+     "boundary_points_checked": 2400,
+     "outline_covered_max": 2.3155034445387912e-08,
+     "outline_visible": 2000,
+     "n_boundary_edges": 108
+    }
+   ],
+   "detJ_min": 0.06781774853565459,
+   "sigma_spread_max": 1.3763386084794986,
+   "grid": [
+    5,
+    5
+   ]
+  },
+  "verdict": "EXACT",
+  "grid": [
+   5,
+   5
+  ],
+  "fingerprint": "eb72f588268660c1"
+ },
+ "two_circles_two_layers_r_0.3_0.4": {
+  "note": "",
+  "outcome": "RAISE",
+  "type": "ValueError",
+  "message": "compile_shapes: the merged map FOLDS (det J <= 0, min -2.497e-01) in the cell u in [0.387868, 0.812132], v in [0.317157, 0.387868], which is bounded by layer 1: Circle(cx=0.6, cy=0.6, r=0.3), layer 2: Circle(cx=1.8, cy=0.6, r=0.4).  An outline bulges past a neighbouring wall: two outlines are too close in plan view, or a straight wall of one shape passes through the curved transition cell of another.  Move them apart (or align the straight wall with the curved shape's bounding box); a common map for them is Phase E of the curved-cell plan.",
+  "names_in_message": [
+   "Circle(cx=0.6, cy=0.6, r=0.3)",
+   "Circle(cx=1.8, cy=0.6, r=0.4)"
+  ]
+ },
+ "sine_x_left_of_circle_A0.05": {
+  "note": "",
+  "outcome": "SOLVE",
+  "identity": false,
+  "geometry": {
+   "layers": [
+    {
+     "layer": 1,
+     "paint_wrong": 0,
+     "paint_checked": 576,
+     "boundary_side_mismatch": 0,
+     "boundary_points_checked": 1600,
+     "outline_covered_max": 6.445388550485214e-09,
+     "outline_visible": 1000,
+     "n_boundary_edges": 72
+    },
+    {
+     "layer": 2,
+     "paint_wrong": 0,
+     "paint_checked": 576,
+     "boundary_side_mismatch": 0,
+     "boundary_points_checked": 1200,
+     "outline_covered_max": 2.3155034223343307e-08,
+     "outline_visible": 1000,
+     "n_boundary_edges": 54
+    }
+   ],
+   "detJ_min": 0.060650914047411075,
+   "sigma_spread_max": 1.5050871424758958,
+   "grid": [
+    4,
+    4
+   ]
+  },
+  "verdict": "EXACT",
+  "grid": [
+   4,
+   4
+  ],
+  "fingerprint": "4dbec0f92e363030"
+ },
+ "sine_x_left_of_circle_A0.14": {
+  "note": "max x of the wall 0.29 vs circle 0.30",
+  "outcome": "SOLVE",
+  "identity": false,
+  "geometry": {
+   "layers": [
+    {
+     "layer": 1,
+     "paint_wrong": 0,
+     "paint_checked": 576,
+     "boundary_side_mismatch": 0,
+     "boundary_points_checked": 1600,
+     "outline_covered_max": 1.804642148796968e-08,
+     "outline_visible": 1000,
+     "n_boundary_edges": 72
+    },
+    {
+     "layer": 2,
+     "paint_wrong": 0,
+     "paint_checked": 576,
+     "boundary_side_mismatch": 0,
+     "boundary_points_checked": 1200,
+     "outline_covered_max": 2.3155034223343307e-08,
+     "outline_visible": 1000,
+     "n_boundary_edges": 54
+    }
+   ],
+   "detJ_min": 0.060650914047411075,
+   "sigma_spread_max": 1.8984784531077252,
+   "grid": [
+    4,
+    4
+   ]
+  },
+  "verdict": "EXACT",
+  "grid": [
+   4,
+   4
+  ],
+  "fingerprint": "00ba4b35ab753704"
+ },
+ "sine_x_crossing_circle": {
+  "note": "",
+  "outcome": "SOLVE",
+  "identity": false,
+  "geometry": {
+   "layers": [
+    {
+     "layer": 1,
+     "paint_wrong": 0,
+     "paint_checked": 576,
+     "boundary_side_mismatch": 0,
+     "boundary_points_checked": 1600,
+     "outline_covered_max": 1.2890568333222129e-08,
+     "outline_visible": 1000,
+     "n_boundary_edges": 72
+    },
+    {
+     "layer": 2,
+     "paint_wrong": 0,
+     "paint_checked": 576,
+     "boundary_side_mismatch": 0,
+     "boundary_points_checked": 1200,
+     "outline_covered_max": 2.3155034223343307e-08,
+     "outline_visible": 1000,
+     "n_boundary_edges": 54
+    }
+   ],
+   "detJ_min": 0.060650914047411075,
+   "sigma_spread_max": 1.8141184285538334,
+   "grid": [
+    4,
+    4
+   ]
+  },
+  "verdict": "EXACT",
+  "grid": [
+   4,
+   4
+  ],
+  "fingerprint": "3d1f4fd18278ca7e"
+ },
+ "sine_y_under_circle_A0.05": {
+  "note": "the wall's h edge cut at the circle's u walls",
+  "outcome": "SOLVE",
+  "identity": false,
+  "geometry": {
+   "layers": [
+    {
+     "layer": 1,
+     "paint_wrong": 0,
+     "paint_checked": 576,
+     "boundary_side_mismatch": 0,
+     "boundary_points_checked": 1600,
+     "outline_covered_max": 2.5744430494384495e-08,
+     "outline_visible": 1000,
+     "n_boundary_edges": 72
+    },
+    {
+     "layer": 2,
+     "paint_wrong": 0,
+     "paint_checked": 576,
+     "boundary_side_mismatch": 0,
+     "boundary_points_checked": 1200,
+     "outline_covered_max": 2.3155034278854458e-08,
+     "outline_visible": 1000,
+     "n_boundary_edges": 54
+    }
+   ],
+   "detJ_min": 0.060650914047411075,
+   "sigma_spread_max": 1.4799870531236845,
+   "grid": [
+    4,
+    4
+   ]
+  },
+  "verdict": "EXACT",
+  "grid": [
+   4,
+   4
+  ],
+  "fingerprint": "49b019ae47fff00c"
+ },
+ "ridge_under_circle": {
+  "note": "the ridge (0.12..1.08 in x) and the circle overlap in plan view, outlines do not cross",
+  "outcome": "SOLVE",
+  "identity": false,
+  "geometry": {
+   "layers": [
+    {
+     "layer": 1,
+     "paint_wrong": 0,
+     "paint_checked": 900,
+     "boundary_side_mismatch": 0,
+     "boundary_points_checked": 2000,
+     "outline_covered_max": 1.031253481020833e-08,
+     "outline_visible": 2000,
+     "n_boundary_edges": 90
+    },
+    {
+     "layer": 2,
+     "paint_wrong": 0,
+     "paint_checked": 900,
+     "boundary_side_mismatch": 0,
+     "boundary_points_checked": 1200,
+     "outline_covered_max": 2.3155034223343307e-08,
+     "outline_visible": 1000,
+     "n_boundary_edges": 54
+    }
+   ],
+   "detJ_min": 0.060650914047411075,
+   "sigma_spread_max": 1.618705331102342,
+   "grid": [
+    5,
+    5
+   ]
+  },
+  "verdict": "EXACT",
+  "grid": [
+   5,
+   5
+  ],
+  "fingerprint": "1e468cd2b18f4bc1"
+ },
+ "stripe_under_circle_crossing": {
+  "note": "an electrode stripe under a pillar",
+  "outcome": "RAISE",
+  "type": "ValueError",
+  "message": "compile_shapes: the outlines of layer 1: Rect(cx=0.6, cy=0.6, w=1.2, h=0.2) and layer 2: Circle(cx=0.6, cy=0.6, r=0.36) CROSS in plan view.  One coordinate map cannot carry two crossing curves exactly (a common map for intersecting curves is Phase E of the curved-cell plan); move the shapes apart, nest one inside the other, or split the layer.",
+  "names_in_message": [
+   "Rect(cx=0.6, cy=0.6, w=1.2, h=0.2)",
+   "Circle(cx=0.6, cy=0.6, r=0.36)"
+  ]
+ },
+ "stripe_beside_circle": {
+  "note": "",
+  "outcome": "SOLVE",
+  "identity": false,
+  "geometry": {
+   "layers": [
+    {
+     "layer": 1,
+     "paint_wrong": 0,
+     "paint_checked": 576,
+     "boundary_side_mismatch": 0,
+     "boundary_points_checked": 1600,
+     "outline_covered_max": 4.0602658877040594e-16,
+     "outline_visible": 502,
+     "n_boundary_edges": 72
+    },
+    {
+     "layer": 2,
+     "paint_wrong": 0,
+     "paint_checked": 576,
+     "boundary_side_mismatch": 0,
+     "boundary_points_checked": 1200,
+     "outline_covered_max": 2.778604113462535e-08,
+     "outline_visible": 1000,
+     "n_boundary_edges": 54
+    }
+   ],
+   "detJ_min": 0.06065091404741063,
+   "sigma_spread_max": 1.3732074131876546,
+   "grid": [
+    4,
+    4
+   ]
+  },
+  "verdict": "EXACT",
+  "grid": [
+   4,
+   4
+  ],
+  "fingerprint": "463b2e837e0c4919"
+ },
+ "rect_far_right_wall_in_bulge": {
+  "note": "rect far to the right; its wall y=0.7 lies in the circle's bulge zone (0.855..0.96)? (y0 = 0.7, y1 = 1.0)",
+  "outcome": "SOLVE",
+  "identity": false,
+  "geometry": {
+   "layers": [
+    {
+     "layer": 1,
+     "paint_wrong": 0,
+     "paint_checked": 900,
+     "boundary_side_mismatch": 0,
+     "boundary_points_checked": 1200,
+     "outline_covered_max": 2.778604113462535e-08,
+     "outline_visible": 1000,
+     "n_boundary_edges": 54
+    },
+    {
+     "layer": 2,
+     "paint_wrong": 0,
+     "paint_checked": 900,
+     "boundary_side_mismatch": 0,
+     "boundary_points_checked": 1200,
+     "outline_covered_max": 2.220446049250313e-16,
+     "outline_visible": 1000,
+     "n_boundary_edges": 54
+    }
+   ],
+   "detJ_min": 0.0667610640438906,
+   "sigma_spread_max": 1.3756039853490492,
+   "grid": [
+    5,
+    5
+   ]
+  },
+  "verdict": "EXACT",
+  "grid": [
+   5,
+   5
+  ],
+  "fingerprint": "edfdb0ddd60fabbb"
+ },
+ "rect_far_right_wall_above_bulge": {
+  "note": "rect far right, walls 0.98 / 1.18: above the circle's top 0.96",
+  "outcome": "SOLVE",
+  "identity": false,
+  "geometry": {
+   "layers": [
+    {
+     "layer": 1,
+     "paint_wrong": 0,
+     "paint_checked": 900,
+     "boundary_side_mismatch": 0,
+     "boundary_points_checked": 800,
+     "outline_covered_max": 2.778604113462535e-08,
+     "outline_visible": 1000,
+     "n_boundary_edges": 36
+    },
+    {
+     "layer": 2,
+     "paint_wrong": 0,
+     "paint_checked": 900,
+     "boundary_side_mismatch": 0,
+     "boundary_points_checked": 800,
+     "outline_covered_max": 4.440892098500626e-16,
+     "outline_visible": 1000,
+     "n_boundary_edges": 36
+    }
+   ],
+   "detJ_min": 0.08072919876077267,
+   "sigma_spread_max": 1.370335360806476,
+   "grid": [
+    5,
+    5
+   ]
+  },
+  "verdict": "EXACT",
+  "grid": [
+   5,
+   5
+  ],
+  "fingerprint": "18105195519e793b"
+ },
+ "rect_far_right_wall_just_above": {
+  "note": "rect bottom wall at 0.9615: 1.5e-3 above the circle's top",
+  "outcome": "SOLVE",
+  "identity": false,
+  "geometry": {
+   "layers": [
+    {
+     "layer": 1,
+     "paint_wrong": 0,
+     "paint_checked": 900,
+     "boundary_side_mismatch": 0,
+     "boundary_points_checked": 800,
+     "outline_covered_max": 2.778604113462535e-08,
+     "outline_visible": 1000,
+     "n_boundary_edges": 36
+    },
+    {
+     "layer": 2,
+     "paint_wrong": 0,
+     "paint_checked": 900,
+     "boundary_side_mismatch": 0,
+     "boundary_points_checked": 800,
+     "outline_covered_max": 4.440892098500626e-16,
+     "outline_visible": 1000,
+     "n_boundary_edges": 36
+    }
+   ],
+   "detJ_min": 0.029949905306835507,
+   "sigma_spread_max": 1.370335360806476,
+   "grid": [
+    5,
+    5
+   ]
+  },
+  "verdict": "EXACT",
+  "grid": [
+   5,
+   5
+  ],
+  "fingerprint": "b6a4e36be8110860"
+ },
+ "small_square_over_disk": {
+  "note": "",
+  "outcome": "SOLVE",
+  "identity": false,
+  "geometry": {
+   "layers": [
+    {
+     "layer": 1,
+     "paint_wrong": 0,
+     "paint_checked": 900,
+     "boundary_side_mismatch": 0,
+     "boundary_points_checked": 2400,
+     "outline_covered_max": 3.859172426068369e-09,
+     "outline_visible": 1000,
+     "n_boundary_edges": 108
+    },
+    {
+     "layer": 2,
+     "paint_wrong": 0,
+     "paint_checked": 900,
+     "boundary_side_mismatch": 0,
+     "boundary_points_checked": 800,
+     "outline_covered_max": 2.220446049250313e-16,
+     "outline_visible": 1000,
+     "n_boundary_edges": 36
+    }
+   ],
+   "detJ_min": 0.040354178755670045,
+   "sigma_spread_max": 1.3745193800369244,
+   "grid": [
+    5,
+    5
+   ]
+  },
+  "verdict": "EXACT",
+  "grid": [
+   5,
+   5
+  ],
+  "fingerprint": "4f9543a48cd1e105"
+ },
+ "square_off_centre_over_disk": {
+  "note": "",
+  "outcome": "SOLVE",
+  "identity": false,
+  "geometry": {
+   "layers": [
+    {
+     "layer": 1,
+     "paint_wrong": 0,
+     "paint_checked": 900,
+     "boundary_side_mismatch": 0,
+     "boundary_points_checked": 2400,
+     "outline_covered_max": 7.71785095012837e-09,
+     "outline_visible": 1000,
+     "n_boundary_edges": 108
+    },
+    {
+     "layer": 2,
+     "paint_wrong": 0,
+     "paint_checked": 900,
+     "boundary_side_mismatch": 0,
+     "boundary_points_checked": 800,
+     "outline_covered_max": 2.220446049250313e-16,
+     "outline_visible": 1000,
+     "n_boundary_edges": 36
+    }
+   ],
+   "detJ_min": 0.03740450248731386,
+   "sigma_spread_max": 1.3755814685537997,
+   "grid": [
+    5,
+    5
+   ]
+  },
+  "verdict": "EXACT",
+  "grid": [
+   5,
+   5
+  ],
+  "fingerprint": "1d2150185d887e10"
+ },
+ "rect_corner_at_circle_45deg": {
+  "note": "rect corner exactly the circle's 45-deg point (touching)",
+  "outcome": "SOLVE",
+  "identity": false,
+  "geometry": {
+   "layers": [
+    {
+     "layer": 1,
+     "paint_wrong": 0,
+     "paint_checked": 576,
+     "boundary_side_mismatch": 0,
+     "boundary_points_checked": 800,
+     "outline_covered_max": 2.778604113462535e-08,
+     "outline_visible": 1000,
+     "n_boundary_edges": 36
+    },
+    {
+     "layer": 2,
+     "paint_wrong": 0,
+     "paint_checked": 576,
+     "boundary_side_mismatch": 0,
+     "boundary_points_checked": 800,
+     "outline_covered_max": 4.440892098500626e-16,
+     "outline_visible": 1000,
+     "n_boundary_edges": 36
+    }
+   ],
+   "detJ_min": 0.08072919876077267,
+   "sigma_spread_max": 1.3681353123771018,
+   "grid": [
+    4,
+    4
+   ]
+  },
+  "verdict": "EXACT",
+  "grid": [
+   4,
+   4
+  ],
+  "fingerprint": "5b048f3f9489f044"
+ },
+ "rect_corner_on_circle_30deg": {
+  "note": "rect corner exactly ON the circle at 30 deg (touching)",
+  "outcome": "RAISE",
+  "type": "ValueError",
+  "message": "compile_shapes: the merged map FOLDS (det J <= 0, min -3.412e+00) in the cell u in [0.345442, 0.854558], v in [0.854558, 0.88], which is bounded by layer 1: Circle(cx=0.6, cy=0.6, r=0.36), layer 2: Rect(cx=0.961769, cy=0.83, w=0.1, h=0.1).  An outline bulges past a neighbouring wall: two outlines are too close in plan view, or a straight wall of one shape passes through the curved transition cell of another.  Move them apart (or align the straight wall with the curved shape's bounding box); a common map for them is Phase E of the curved-cell plan.",
+  "names_in_message": [
+   "Circle(cx=0.6, cy=0.6, r=0.36)",
+   "Rect(cx=0.961769, cy=0.83, w=0.1, h=0.1)"
+  ]
+ },
+ "circle_through_rect_corner_same_layer": {
+  "note": "",
+  "outcome": "SOLVE",
+  "identity": false,
+  "geometry": {
+   "layers": [
+    {
+     "layer": 1,
+     "paint_wrong": 0,
+     "paint_checked": 576,
+     "boundary_side_mismatch": 0,
+     "boundary_points_checked": 1600,
+     "outline_covered_max": 2.778604113462535e-08,
+     "outline_visible": 2000,
+     "n_boundary_edges": 72
+    }
+   ],
+   "detJ_min": 0.08072919876077267,
+   "sigma_spread_max": 1.3681353123771018,
+   "grid": [
+    4,
+    4
+   ]
+  },
+  "verdict": "EXACT",
+  "grid": [
+   4,
+   4
+  ],
+  "fingerprint": "5b048f3f9489f044"
+ },
+ "macro_cell_blend_bulge": {
+  "v0=0.86": 0.10378059348192403,
+  "v0=0.88": 0.09767585268886969,
+  "v0=0.9": 0.09157111189581524,
+  "v0=0.96": 0.0732568895166521,
+  "v0=1.0": 0.06104740793054342,
+  "v0=1.1": 0.030523703965271487,
+  "v0->arc (limit)": 0.10544155866740146,
+  "r - r/sqrt2": 0.1054415587728429
+ },
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "lumenairy": "c:\\tmp\\lum_vcurved_c\\lumenairy\\__init__.py",
+  "tree": "post",
+  "build": "win",
+  "machine": "Tesla_Ryzen",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ }
+}

@@ -1,0 +1,1 @@
+e6_slant.py curved c3 8 0 0 eps4 -0.2 0

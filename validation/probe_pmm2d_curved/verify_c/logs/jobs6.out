@@ -1,0 +1,7 @@
+done circle_sine 3 rc=0
+done annulus 3 rc=0
+done phaseb 4 rc=0
+done circle_sine 4 rc=0
+done phaseb 5 rc=0
+done annulus 4 rc=0
+done fillets 3 rc=0

@@ -266,15 +266,18 @@ The c5 `M = 8` rung (dof 2450) sits 2.5e-6 from c3 `M = 10` (dof 1458), its
 own last rung change 5.0e-6: the two independent topologies agree at the
 level of their own convergence.
 
-* **The curved answer is converged**: the two INDEPENDENT topologies agree
-  to 2.5e-6 (c3 `M = 10` vs c5 `M = 8`; 3.1e-6 at c5 `M = 7`), and both
-  ladders fall onto it.
+* **The curved answer is fixed to ~4e-6**: the two INDEPENDENT topologies
+  agree to 1e-6 .. 4e-6 (c3 `M = 10 .. 12` vs c5 `M = 8`; VERIFY_D s 4),
+  inside the c3 ladder's own last rung changes (3.5e-6, 2.8e-6 at `M = 11 /
+  12` -- the rate slows past `M = 10`, the pillar rim's edge singularity,
+  plan 3.3), and both ladders fall onto it.
 * **The RCWA family approaches it algebraically, as 1 / N.**  Distance x N
   = 0.082, 0.085, 0.088, 0.087, 0.086, 0.086 over N = 9 .. 29 (within +-4 %;
   the Phase B verifier's D-5 check), the local rate from successive
   differences 0.91, 0.73, 0.91, 1.19; the Richardson pairs fall toward the
-  curved answer (8.9e-4 .. 5.6e-5) and nowhere else -- a 1e-4-class
-  reference whose limit is the curved answer.  The patched route's
+  curved answer (a 1e-4-class corroboration: pairs wander 5e-5 .. 3e-4 to
+  N = 33, a 1/N least-squares fit 7.7e-5 -- VERIFY_D s 4) and nowhere else
+  -- a reference whose limit is the curved answer.  The patched route's
   self-check: the SAME exact-disk patch on a scalar disk equals the shipped
   `rcwa_efficiency_2d_shapes` to 1.9e-16 (9 orders) / 6.6e-14 (17 orders)
   (`d4_rcwa_scalar_n{4,8}.json`) -- the patch is the shipped Laurent
@@ -475,8 +478,9 @@ Every defect is caught by at least one gate by two decades or more, and
 each gate's blindness is the physics:
 
 * **transpose**: only the GYRO Jones (film) and the Li rows (patterned) see
-  it; every R / T of a symmetric tensor, and the gyrotropic FILM's R / T,
-  are transpose-blind.
+  it; every R / T of a symmetric tensor, and the gyrotropic film's R / T AT
+  NORMAL INCIDENCE, are transpose-blind (at conical incidence the
+  transposed gyrotropic film moves R / T by 9.9e-4: VERIFY_D s 2).
 * **side** (`J^-T eps J^-1`): invisible under the stretch (diagonal `J`);
   every gate with a non-diagonal `J` (shear, circle) sees it.
 * **no_sg_e33**: `eps'_33` enters only the div(D) = 0 Schur term, which a
@@ -527,7 +531,8 @@ map at normal incidence and the brief on a film under a stretch.  Measured
 `J^-T eps J^-1` coincide (the side swap is invisible); at NORMAL incidence
 `eps'_33` never enters (`E_z = 0`); a mirrored director (the mixed-sign
 flip) leaves a uniform film's R / T unchanged; and a transposed gyrotropic
-tensor leaves a uniform film's R / T unchanged.  The gate set here therefore
+tensor leaves a uniform film's R / T unchanged at NORMAL incidence (at
+conical incidence it is R / T-visible, 9.9e-4: VERIFY_D s 2).  The gate set here therefore
 adds a SHEARED bilinear map (non-diagonal `J`, still exact), OBLIQUE /
 conical films, the JONES matrix on every film, and the patterned Li grating
 and tensor pillar -- every defect is then caught by two decades or more

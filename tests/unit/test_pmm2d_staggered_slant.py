@@ -1049,18 +1049,20 @@ def test_b11_refusal_mixed_frame_offset_above_a_pattern():
 
 
 def test_b11_refusal_magnetic_and_retain_internal_and_efficiency_entry():
-    """The remaining three refusals, each with its reason in the message.
+    """The remaining refusals, each with its reason in the message.
 
-    ``mu`` -- the first-order generator carries no permeability blocks;
+    ``mu`` WAS the first: the first-order generator carried no permeability
+    blocks until Phase E1 of the curved-cell plan (2026-10-03) gave it them,
+    so a slanted magnetic layer is ACCEPTED now (gates in
+    ``tests/unit/test_pmm2d_staggered_curved_e1.py``);
     ``retain_internal`` -- ``_flux_at`` evaluates in the SHEARED frame, where
     the lateral offset has not been undone;
     ``pmm_efficiency_2d_staggered`` -- a sheared scalar cell is an
     out-of-plane cell in the frame, so its single-polarization efficiencies are
     not well-posed (the same reason it already refuses a tensor cell).
     """
-    with pytest.raises(NotImplementedError, match="mu"):
-        PMM2DStackPure(PX, PY, n_modes=4).add_layer(
-            DEP, eps_cell=SCA, mu=1.4, slant=(T35, 0.0))
+    PMM2DStackPure(PX, PY, n_modes=4).add_layer(
+        DEP, eps_cell=SCA, mu=1.4, slant=(T35, 0.0))
     st = PMM2DStackPure(PX, PY, n_superstrate=NSUP, n_substrate=NSUB,
                         n_modes=4, n_orders=3)
     st.add_layer(DEP, eps_cell=SCA, slant=(T35, 0.0))

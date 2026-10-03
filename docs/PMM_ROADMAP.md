@@ -18,7 +18,7 @@ Legend: ✅ shipped · 🔄 in flight · ⬜ planned · ❌ open/known-hard ·
 | **1-D oblique + slant** | ❌ cross-term unresolved | ❌ | ❌ | ❌ |
 | **2-D vertical** (rect pillars) | ✅ `pmm_efficiency_2d` (FMM-floored) + ✅ `pmm_efficiency_2d_staggered` (no-floor) | ✅ (via `eps_cell` grid; staggered) | ✅ `pmm_jones_2d` (FMM-floored, incl. out-of-plane) + ✅ `pmm_jones_2d_staggered` (no-floor, FULL (3,3) incl. out-of-plane) | ✅ (via the `eps_cell` tensor grid, both engines) |
 | **2-D slanted** | ✅ `PMM2DStackHybrid(slant=)` (FMM-floored) + ✅ `pmm_jones_2d_staggered(slant=)` / `PMM2DStackPure.add_layer(slant=)` (no-floor) | ✅ (via the `eps_cell` grid, both engines) | ✅ hybrid (IN-PLANE tensors only) + ✅ staggered (FULL (3,3) incl. out-of-plane) | ✅ (via the `eps_cell` tensor grid) |
-| **2-D curved** (circle / ellipse / fillet / sinusoid) | ✅ `pmm_jones_2d_staggered(shapes=)` / `PMM2DStackPure.add_layer(shapes=)` (no-floor; shape primitives `Rect`, `FilletRect`, `Circle`, `Ellipse`, `SinusoidalWall`, or an explicit `cmap=`) | ✅ (per-cell scalar under the map) | ✅ block-form (in-plane) tensors and `mu` under the map (curved-cell Phase D); ⬜ out-of-plane tensors under a map = Phase E | ✅ (per-shape `eps` / `mu` tensors, or `eps_cell` / `mu_cell` with an explicit `cmap=`) |
+| **2-D curved** (circle / ellipse / fillet / sinusoid) | ✅ `pmm_jones_2d_staggered(shapes=)` / `PMM2DStackPure.add_layer(shapes=)` (no-floor; shape primitives `Rect`, `FilletRect`, `Circle`, `Ellipse`, `SinusoidalWall`, or an explicit `cmap=`) | ✅ (per-cell scalar under the map) | ✅ block-form (in-plane) tensors and `mu` under the map (curved-cell Phase D); ✅ out-of-plane tensors and slant under the map (curved-cell PLAN Phase E1) | ✅ (per-shape `eps` / `mu` tensors, or `eps_cell` / `mu_cell` with an explicit `cmap=`) |
 
 Plus: `PMMStack` (multilayer 1-D), `grating_convergence_class` /
 `classify_from_grating` (Li-Granet edge convergence predictor).
@@ -260,8 +260,14 @@ RCWA at 29 x 29 orders is 3.3e-3 away).  Plan:
 block-form tensors and permeabilities through the map (the congruence
 `sqrt(g) J^-1 eps J^-T` at every quadrature node): a tensor film matches
 Berreman (Jones included) to ~1e-13, a liquid-crystal pillar's two layouts
-agree to 2.5e-6.  Still open: out-of-plane tensors / slant / per-layer maps
-/ the JAX twin under a map (curved-cell Phase E, approved 2026-10-02).  The convergence of the EFFICIENCIES stays
+agree to 2.5e-6.  Curved-cell PLAN Phase E1
+(`docs/audits/BUILD_PMM2D_CURVED_E1_2026_10_03.md`) carries OUT-OF-PLANE
+tensors and SLANT through the map (the first-order generator gains
+permeability blocks; a slanted layer under a map is the composite frame
+`x = Phi(u, v) + t w`): an out-of-plane slab under a sheared map matches
+Berreman, both Jones matrices, to ~1e-13, and an out-of-plane eps with a
+material mu is solved with or without a map.  Still open: per-layer maps
+and the JAX twin under a map (curved-cell PLAN Phases E2 / E3).  The convergence of the EFFICIENCIES stays
 rim-capped (~1e-5 per rung) for curved pillars as for square ones: the
 in-plane curvature is resolved spectrally, the pillar's top and bottom rim
 is not (a z-direction question).

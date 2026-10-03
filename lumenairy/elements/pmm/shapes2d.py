@@ -93,10 +93,11 @@ gates B6 / B7).  Use a fillet because the fabricated device has one.
 
 Materials: anisotropic and magnetic shapes
 ------------------------------------------
-Every primitive takes ``eps`` as a scalar or a ``(3, 3)`` BLOCK-FORM tensor
-(in-plane anisotropy: a liquid-crystal director lying in the plane, a
-gyrotropic ``e12 = -e21``; ``e13 = e23 = e31 = e32 = 0``) and an optional
-relative permeability ``mu=`` of the same two kinds.  The layer's
+Every primitive takes ``eps`` as a scalar or a ``(3, 3)`` tensor (in-plane
+anisotropy: a liquid-crystal director lying in the plane, a gyrotropic
+``e12 = -e21``; or, since Phase E1, an OUT-OF-PLANE tensor -- a director
+tilted out of the plane, ``e13 != 0``) and an optional relative permeability
+``mu=`` (a scalar or a BLOCK-FORM tensor).  The layer's
 ``background_mu=`` (default 1) fills the rest; a shape without ``mu`` paints
 ``mu = 1``.  Under a curved map a tensor is carried through the map by the
 congruence ``sqrt(g) J^-1 eps J^-T`` (and ``chi_t = J^T mu_t^-1 J /
@@ -104,12 +105,21 @@ sqrt(g)``) evaluated at every quadrature node -- the effective tensor needs
 the Jacobian itself, not only the metric a scalar uses (Phase D,
 ``docs/audits/BUILD_PMM2D_CURVED_D_2026_10_03.md``).  A liquid-crystal-filled
 circular hole is ``[Rect(..., eps=4.0), Circle(..., eps=lc_tensor)]``.
+An out-of-plane tensor adds the congruence's off-block entries ``adj(J)
+e_t3`` and runs the first-order generator with its permeability blocks
+(Phase E1, ``docs/audits/BUILD_PMM2D_CURVED_E1_2026_10_03.md``).
+
+Slant.  A slanted (tilted-axis) feature is a LAYER property, as without
+shapes: ``PMM2DStackPure.add_layer(t, shapes=[...], background_eps=...,
+slant=(t_x, t_y))`` translates the whole cross-section -- curved outlines
+included -- by ``t z`` from the layer's top face down (the composite frame
+``x = Phi(u, v) + t w``, Phase E1).  Shapes themselves take no slant.
 
 Known limits
 ------------
-* OUT-OF-PLANE tensors (a tilted director, ``e13 != 0``), ``slant=`` and
-  per-layer grids under a curved map are Phase E and raise; with rectangles
-  only (no map) an out-of-plane tensor is accepted.
+* An OUT-OF-PLANE permeability and per-layer grids under a curved map raise
+  (an out-of-plane ``mu`` with or without a map; per-layer maps are Phase
+  E2).
 * A FilletRect's flat sides lie on the grid lines through its 45-degree
   points (the Phase B layout the gates were measured on), so another shape's
   straight edge cannot coincide with a fillet's flat side (it would close a
@@ -1359,7 +1369,7 @@ def compile_shapes(period_x, period_y, shapes, background_eps, *,
         BLOCK-FORM (in-plane anisotropy: ``e13 = e23 = e31 = e32 = 0``) and
         is routed under a curved map since Phase D (the congruence
         ``sqrt(g) J^-1 eps J^-T`` at every quadrature node); an out-of-plane
-        tensor under a curved map raises in the solver (Phase E).
+        tensor is routed too since Phase E1.
     x_walls, y_walls : ``(N + 1,)`` float arrays -- the ``(u, v)`` wall grid
         (boundary arrays from 0 to the period).  Where the map is the
         identity -- on the cell edges and away from every curve -- these are

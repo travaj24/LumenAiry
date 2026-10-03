@@ -61,11 +61,15 @@ map a layer may be ANISOTROPIC and MAGNETIC (Phase D): a block-form tensor
 ``eps`` / ``mu`` -- uniform, on a shape (``Circle(..., eps=lc_tensor,
 mu=...)``) or as ``eps_cell`` / ``mu_cell`` under an explicit map -- is
 carried through the map by the congruence ``sqrt(g) J^-1 eps J^-T`` at
-every quadrature node; out-of-plane tensors, slant and per-layer maps are
-Phase E and raise.  A stack of rectangles only needs no map and runs the
+every quadrature node; an OUT-OF-PLANE ``eps`` (a director tilted out of
+the plane) and a ``slant=`` layer ride the map too (Phase E1: the
+first-order generator's permeability blocks, and the composite frame
+``x = Phi(u, v) + t w`` for a slanted layer); an out-of-plane ``mu`` and
+per-layer maps raise.  A stack of rectangles only needs no map and runs the
 unmapped solver on the merged walls.
 ``docs/audits/BUILD_PMM2D_CURVED_C_2026_10_02.md``,
-``docs/audits/BUILD_PMM2D_CURVED_D_2026_10_03.md``.
+``docs/audits/BUILD_PMM2D_CURVED_D_2026_10_03.md``,
+``docs/audits/BUILD_PMM2D_CURVED_E1_2026_10_03.md``.
 
 A layer may also be MAGNETIC: ``add_layer(..., mu=scalar | (3,3))`` or
 ``add_layer(..., mu_cell=(Nx,Ny) | (Nx,Ny,3,3))`` gives it a BLOCK-FORM
@@ -102,9 +106,10 @@ generalized cascade, as an out-of-plane layer does -- a sheared cell IS an
 out-of-plane cell in the frame.  Slant on a UNIFORM layer is accepted and is a
 physical no-op.  The bookkeeping a shear adds is ONE unimodular phase per order
 on the TRANSMITTED amplitudes (the frame anchor); R and the reflection Jones
-need nothing.  Out of scope, all raising: MIXED slants between PATTERNED
-layers, a mix of vertical and slanted layers ABOVE a pattern, ``mu`` with a
-slant, and ``retain_internal`` on a slanted stack.  See
+need nothing.  A slanted layer may be magnetic and may sit under a map (shape
+layers included) since Phase E1.  Out of scope, all raising: MIXED slants
+between PATTERNED layers, a mix of vertical and slanted layers ABOVE a
+pattern, and ``retain_internal`` on a slanted stack.  See
 :mod:`lumenairy.elements.pmm.twod_staggered`, "SLANT".
 Two ACCURACY notes on that scope, measured 2026-09-10
 (``docs/audits/VERIFY_PMM2D_STAGGERED_SLANT_2026_09_10.md`` D3/D4): the
@@ -768,9 +773,10 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         patterned) and ``mu`` / ``mu_cell`` as well (each its own region
         eig, deduped with the map fingerprint); on the shared grid only:
         ``layer_grids='per-layer'`` (different maps per layer, a curved
-        mortar -- Phase E), an OUT-OF-PLANE tensor (``eps`` or ``mu``) and
-        ``slant`` (Phase E) together with a map raise
-        ``NotImplementedError``.  The two viewers draw the PHYSICAL
+        mortar -- Phase E2) and an OUT-OF-PLANE ``mu`` together with a map
+        raise ``NotImplementedError``; an OUT-OF-PLANE ``eps`` and a
+        ``slant`` are accepted since Phase E1 (the first-order generator's
+        permeability blocks; ``docs/audits/BUILD_PMM2D_CURVED_E1_2026_10_03.md``).  The two viewers draw the PHYSICAL
         images of the cells (curved edges as curves).  Under a map the
         incident plane wave enters through its exact L2 modal decomposition
         (it is not an exact discrete half-space mode when the map is not
@@ -894,22 +900,19 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
 
     def _require_map_scope(self, *, eps=None, eps_cell=None, mu=None,
                            mu_cell=None, slant=None):
-        """Refuse, under a map, every layer kind the curved-cell phases built
-        so far do not cover: a SLANT and an OUT-OF-PLANE tensor (``eps`` or
-        ``mu``) -- both Phase E.  Block-form tensors and ``mu`` / ``mu_cell``
-        are routed since Phase D (the congruence ``sqrt(g) J^-1 eps J^-T``,
-        :func:`~lumenairy.elements.pmm.twod_staggered._stag_map_eff_tensor`)."""
+        """Refuse, under a map, every layer kind the curved-cell phases do not
+        cover.  Block-form tensors and ``mu`` / ``mu_cell`` are routed since
+        Phase D (the congruence ``sqrt(g) J^-1 eps J^-T``,
+        :func:`~lumenairy.elements.pmm.twod_staggered._stag_map_eff_tensor`);
+        an OUT-OF-PLANE ``eps`` and a ``slant`` since Phase E1 (the
+        first-order generator with permeability blocks,
+        ``docs/audits/BUILD_PMM2D_CURVED_E1_2026_10_03.md``).  What remains
+        refused is an OUT-OF-PLANE PERMEABILITY, which is refused without a
+        map too (``slant`` is accepted and unused here)."""
         if self.cmap is None:
             return
         fn = "PMM2DStackPure.add_layer"
-        if not _slant_is_zero(_norm_slant_pair(slant, fn)):
-            raise NotImplementedError(
-                f"{fn}: slant= under a coordinate map is not implemented (the "
-                f"shear composes with the map -- Phase E of the curved-cell "
-                f"plan).")
-        for what, spec, uni in (("eps", eps, True), ("eps_cell", eps_cell,
-                                                     False),
-                                ("mu", mu, True), ("mu_cell", mu_cell, False)):
+        for what, spec, uni in (("mu", mu, True), ("mu_cell", mu_cell, False)):
             if spec is None:
                 continue
             a = np.asarray(spec)
@@ -917,12 +920,11 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
                    a if (not uni and a.ndim == 4) else None)
             if t33 is not None and _tile_is_offplane(t33):
                 raise NotImplementedError(
-                    f"{fn}: an OUT-OF-PLANE tensor {what} (e_xz / e_yz / "
-                    f"e_zx / e_zy above the relative 1e-12 floor) under a "
-                    f"coordinate map is not implemented -- the out-of-plane "
-                    f"first-order generator has no permeability blocks and a "
-                    f"map makes every region magnetic (Phase E of the "
-                    f"curved-cell plan).  BLOCK-FORM tensors are accepted.")
+                    f"{fn}: an OUT-OF-PLANE tensor {what} (m_xz / m_yz / "
+                    f"m_zx / m_zy above the relative 1e-12 floor) under a "
+                    f"coordinate map is not implemented (an out-of-plane "
+                    f"permeability is refused with or without a map).  "
+                    f"BLOCK-FORM permeability tensors are accepted.")
 
     # ------------------------------------------------------------------ build
     def add_layer(self, thickness, *, eps=None, eps_cell=None, mu=None,
@@ -1010,9 +1012,10 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         the ``eps`` side is allowed (uniform eps + patterned mu included; the
         uniform side is broadcast onto the union grid).  A magnetic layer takes
         its own region eig -- it cannot ride the shared eps-free geometric one
-        -- and is deduped by ``(eps bytes, mu bytes)``.  OUT-OF-PLANE mu, and
-        mu together with an out-of-plane eps, raise ``NotImplementedError``
-        (the first-order generator has no permeability blocks).
+        -- and is deduped by ``(eps bytes, mu bytes)``.  OUT-OF-PLANE mu
+        raises ``NotImplementedError``; mu together with an out-of-plane eps
+        (or a slant) is accepted since Phase E1 of the curved-cell plan (the
+        first-order generator's permeability blocks).
 
         ``slant=(t_x, t_y)`` (or a bare scalar ``t_x``) makes this ONE EXACT
         SLANTED layer instead of a z-staircase: the whole cross-section
@@ -1037,8 +1040,9 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         and is a physical no-op (a shear of a homogeneous medium is a
         coordinate change).
 
-        RESTRICTIONS, all raising: ``slant`` with ``mu`` / ``mu_cell`` (the
-        first-order generator has no permeability blocks); a stack whose
+        A slant may be combined with ``mu`` / ``mu_cell`` and with a map or
+        ``shapes=`` (Phase E1: the composite frame ``x = Phi(u, v) + t w``).
+        RESTRICTIONS, all raising: a stack whose
         PATTERNED layers do not all share ONE slant, or in which the layers
         ABOVE a patterned layer carry a mix of that slant and vertical -- both
         raise from :meth:`solve`, where the whole stack is visible, because the
@@ -1077,7 +1081,8 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         D): a shape takes ``mu=`` next to its ``eps``, ``background_mu=``
         (default 1) is the layer's permeability where no shape is painted,
         and a uniform ``mu=`` layer may join a shape stack; an OUT-OF-PLANE
-        tensor and ``slant`` raise ``NotImplementedError`` (Phase E).  Raw
+        ``eps`` and ``slant=`` are accepted too (Phase E1), an out-of-plane
+        ``mu`` raises ``NotImplementedError``.  Raw
         ``eps_cell`` / ``mu_cell`` layers cannot be mixed with shape layers
         (describe rectangles with :class:`~lumenairy.elements.pmm.Rect`),
         nor can an explicit ``cmap=``; and ``layer_grids='per-layer'`` with
@@ -1107,12 +1112,6 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
                 "and map), so a raw mu_cell cannot join it -- its cells would "
                 "refer to a grid the merge does not know.  Give the shapes "
                 "their mu= (and the layer background_mu=), or a uniform mu.")
-        if self._shapes_map and not _slant_is_zero(
-                _norm_slant_pair(slant, "PMM2DStackPure.add_layer")):
-            raise NotImplementedError(
-                "PMM2DStackPure.add_layer: a SLANTED layer cannot share a "
-                "stack with shape layers (slant x shapes is Phase E of the "
-                "curved-cell plan).")
         if (eps is None) == (eps_cell is None):
             raise ValueError(
                 "PMM2DStackPure.add_layer: pass exactly ONE of eps (uniform) or "
@@ -1126,20 +1125,15 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
             raise ValueError("PMM2DStackPure.add_layer: thickness must be > 0.")
         sl = _norm_slant_pair(slant, "PMM2DStackPure.add_layer")
         if mu is not None or mu_cell is not None:
-            if not _slant_is_zero(sl):
-                raise NotImplementedError(
-                    "PMM2DStackPure.add_layer: slant= together with mu / "
-                    "mu_cell is not implemented -- a SLANTED layer runs the "
-                    "OUT-OF-PLANE first-order generator, which carries no "
-                    "permeability blocks (it eliminates G3 assuming mu = 1).  "
-                    "The shear's own metric anisotropy is absorbed "
-                    "analytically; a MATERIAL mu is not.  Drop mu, or "
-                    "z-staircase the slanted magnetic layer.")
+            # a SLANTED magnetic layer is accepted since Phase E1 of the
+            # curved-cell plan: the first-order generator carries the
+            # permeability blocks (BUILD_PMM2D_CURVED_E1_2026_10_03.md)
             self._add_magnetic_layer(
                 t, eps, eps_cell, mu, mu_cell,
                 max_pencil_dof=max_pencil_dof,
                 M=int(_pl.get("M") or self.M),
-                walls_given=(x_walls is not None or y_walls is not None))
+                walls_given=(x_walls is not None or y_walls is not None),
+                slant=sl)
             return self._finish_layer(_pl)
         if eps is not None:
             e = np.asarray(eps, dtype=_C)
@@ -1210,11 +1204,10 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
             raise ValueError(
                 f"{fn}: shapes= describes the whole layer; it cannot be "
                 f"combined with {', '.join(given)}.")
-        if not _slant_is_zero(_norm_slant_pair(slant, fn)):
-            raise NotImplementedError(
-                f"{fn}: slant= together with shapes= is not implemented (the "
-                f"shear composes with the map -- Phase E of the curved-cell "
-                f"plan).")
+        # slant= with shapes= is accepted since Phase E1 of the curved-cell
+        # plan: the slanted layer's frame is the composite map
+        # x = Phi(u, v) + t w (BUILD_PMM2D_CURVED_E1_2026_10_03.md)
+        sl = _norm_slant_pair(slant, fn)
         if self.layer_grids != "shared":
             raise NotImplementedError(
                 f"{fn}: shapes= with layer_grids='per-layer' is not "
@@ -1239,10 +1232,6 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
                     f"grid of their own, so the two kinds cannot be mixed.  "
                     f"Describe that layer with shapes (Rect for "
                     f"rectangles).")
-            if not _slant_is_zero(L.get("slant")):
-                raise NotImplementedError(
-                    f"{fn}: this stack holds a SLANTED layer; slant x shapes "
-                    f"is Phase E of the curved-cell plan.")
         t = float(thickness)
         if not t > 0:
             raise ValueError(f"{fn}: thickness must be > 0.")
@@ -1251,7 +1240,7 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
             raise ValueError(f"{fn}: shapes= must hold at least one shape "
                              f"(a uniform layer is add_layer(t, eps=...)).")
         rec = dict(kind="patterned", thickness=t, eps_cell=None,
-                   slant=(0.0, 0.0), shapes=shapes,
+                   slant=sl, shapes=shapes,
                    background_eps=background_eps,
                    background_mu=background_mu,
                    max_pencil_dof=max_pencil_dof)
@@ -1288,33 +1277,18 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
                                                   self.period_y, layers)
         if not identity:
             # Phase D: block-form tensors (eps and mu) ride the curved map;
-            # an OUT-OF-PLANE tensor does not (Phase E)
-            for (lab, _sh, _bg, _bm), cell, mcell in zip(layers, cells, mus):
-                for what, c in (("permittivity", cell),
-                                ("permeability", mcell)):
-                    if c is not None and c.ndim == 4 and _tile_is_offplane(c):
-                        raise NotImplementedError(
-                            f"{fn}: {lab} carries an OUT-OF-PLANE tensor "
-                            f"{what} (e_xz / e_yz / e_zx / e_zy above the "
-                            f"relative 1e-12 floor), and the stack's merged "
-                            f"map is CURVED.  The out-of-plane generator has "
-                            f"no permeability blocks and a map makes every "
-                            f"region magnetic -- Phase E of the curved-cell "
-                            f"plan.  BLOCK-FORM tensors are accepted; an "
-                            f"out-of-plane tensor is accepted when every "
-                            f"shape layer is made of rectangles (no map).")
-            for k, L in enumerate(self._layers):
-                if "shapes" in L:
-                    continue
-                for key in ("eps33", "eps", "mu"):
-                    c = L.get(key)
-                    if (c is not None and np.shape(c) == (3, 3)
-                            and _tile_is_offplane(np.asarray(c)[None, None])):
-                        raise NotImplementedError(
-                            f"{fn}: layer {k + 1} is a uniform OUT-OF-PLANE "
-                            f"tensor layer and the merged shape map is "
-                            f"CURVED (an out-of-plane tensor under a map is "
-                            f"Phase E of the curved-cell plan).")
+            # Phase E1: so does an OUT-OF-PLANE eps (the first-order
+            # generator's permeability blocks).  An out-of-plane PERMEABILITY
+            # stays refused, with or without a map.
+            for (lab, _sh, _bg, _bm), mcell in zip(layers, mus):
+                if (mcell is not None and mcell.ndim == 4
+                        and _tile_is_offplane(mcell)):
+                    raise NotImplementedError(
+                        f"{fn}: {lab} carries an OUT-OF-PLANE permeability "
+                        f"tensor (m_xz / m_yz / m_zx / m_zy above the "
+                        f"relative 1e-12 floor); an out-of-plane "
+                        f"permeability is not implemented, with or without "
+                        f"a map.  BLOCK-FORM permeability is accepted.")
         for k, cell in zip(idx, cells):
             _validate_stag_cost(fn, int(self.M), cell,
                                 max_pencil_dof=self._layers[k].get(
@@ -1438,7 +1412,7 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
 
     def _add_magnetic_layer(self, t, eps, eps_cell, mu, mu_cell,
                             *, max_pencil_dof=None, M=None,
-                            walls_given=False):
+                            walls_given=False, slant=(0.0, 0.0)):
         """The ``mu`` / ``mu_cell`` branch of :meth:`add_layer` (kept apart so
         the NONMAGNETIC code path above is untouched, byte for byte).
 
@@ -1457,18 +1431,15 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
                 "PMM2DStackPure.add_layer: pass at most ONE of mu (uniform) "
                 "or mu_cell (patterned).")
         fn = "PMM2DStackPure.add_layer"
-        oop_msg = (
-            "{0}: a MAGNETIC layer with an OUT-OF-PLANE eps is not "
-            "implemented -- the out-of-plane first-order generator carries no "
-            "permeability blocks.  Use a BLOCK-FORM eps with mu, or drop mu."
-        ).format(fn)
+        # An OUT-OF-PLANE eps with mu (and a slanted magnetic layer) is
+        # accepted since Phase E1: the first-order generator carries the
+        # permeability blocks.  The e33 != 0 gate still runs.
         if eps is not None:
             e = np.asarray(eps, dtype=_C)
             if e.ndim == 0:
                 eps_spec, eps_uni = _C(eps), True
             elif e.shape == (3, 3):
-                if _tile_needs_oop(fn, e[None, None]):
-                    raise NotImplementedError(oop_msg)
+                _tile_needs_oop(fn, e[None, None])
                 eps_spec, eps_uni = e, True
             else:
                 raise ValueError(
@@ -1476,8 +1447,6 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
                     f"block-form tensor, got shape {e.shape}.")
         else:
             eps_spec = _validate_stag_cell(fn, eps_cell)
-            if eps_spec.ndim == 4 and _tile_needs_oop(fn, eps_spec):
-                raise NotImplementedError(oop_msg)
             eps_uni = False
         if mu is not None:
             m = np.asarray(mu, dtype=_C)
@@ -1528,7 +1497,7 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
                     f"staggered cascade); got {grid} after {self._grid}.")
         self._layers.append(dict(kind="magnetic", thickness=t, eps=eps_spec,
                                  eps_uniform=eps_uni, mu=mu_spec,
-                                 mu_uniform=mu_uni, slant=(0.0, 0.0)))
+                                 mu_uniform=mu_uni, slant=tuple(slant)))
         return self
 
     # ------------------------------------------------------------- tapers

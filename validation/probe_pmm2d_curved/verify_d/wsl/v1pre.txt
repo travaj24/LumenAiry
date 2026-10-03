@@ -1,0 +1,5 @@
+Traceback (most recent call last):
+  File "/mnt/c/tmp/lum_vcurved_d/validation/probe_pmm2d_curved/verify_d/v1_bytes.py", line 242, in <module>
+    s.add_layer(0.4, shapes=[Rect(0.55, 0.55, 0.5, 0.5, lc(30), **kw)],
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: Rect.__init__() got an unexpected keyword argument 'mu'

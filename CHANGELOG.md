@@ -4,6 +4,78 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+### Added -- pure 2-D PMM (curved cells, Phase E1): out-of-plane tensors and slanted walls inside curved cells
+
+Curved cells (circles, ellipses, rounded corners, sinusoidal walls) of the
+pure (no-floor) staggered 2-D PMM now take a permittivity tensor whose axis
+is tilted OUT of the plane (a liquid-crystal director with `eps_xz != 0`),
+and a layer may be SLANTED (`slant=`) while it holds curved shapes.  An
+out-of-plane tensor may also carry a permeability now, with or without a
+curved map, and a slanted layer may be magnetic.  All of these raised
+`NotImplementedError` before.
+
+```python
+import numpy as np
+from lumenairy.elements.pmm import Circle, PMM2DStackPure
+from lumenairy.elements.rcwa._core import uniaxial_tensor
+
+lc = uniaxial_tensor(1.5, 1.8, np.deg2rad(60.0), phi=np.deg2rad(30.0))  # director 30 deg out of plane
+st = PMM2DStackPure(1.2e-6, n_substrate=1.45, n_modes=4)
+st.add_layer(0.5e-6, shapes=[Circle(0.6e-6, 0.6e-6, 0.36e-6, eps=lc)],
+             background_eps=1.0, slant=(0.2, 0.0))       # a slanted LC pillar
+st.set_source(1.0e-6, theta=np.deg2rad(25.0), phi=np.deg2rad(40.0))
+orders, R, T, J = st.solve()
+```
+
+What it means physically.  To make a circle an exact grid line the solver
+bends its grid, and inside the bent grid every material -- vacuum included
+-- looks anisotropic AND magnetic.  The solver's out-of-plane path assumed a
+non-magnetic medium; it now carries the permeability the bending creates,
+using the same operators its in-plane path already used for magnetic
+materials.  A slanted layer is the cross-section, curved outline included,
+translated sideways with depth; under the bent grid the tilt direction is
+seen differently at every point, and the solver carries that too.
+
+* NO SHIPPED ANSWER MOVES.  200 of 200 SHA-256 hashes over every dispatch
+  branch (Phase D's set plus 78 out-of-plane and slant keys: the parity
+  reduction on and off, slanted stacks, an out-of-plane stack with
+  absorption, and the Phase D mapped tensor and magnetic solves) are
+  byte-identical to the Phase D commit: an unmapped non-magnetic
+  out-of-plane or slanted layer runs the shipped arithmetic.
+* Gates (`docs/audits/BUILD_PMM2D_CURVED_E1_2026_10_03.md`): a uniform
+  out-of-plane slab under a sheared map matches the exact Berreman 4x4
+  answer -- reflection, transmission AND both Jones matrices -- to ~1e-13
+  (exact at normal incidence from `M = 4`), and under a 33:1 stretch it
+  converges exactly as an in-plane film under the same map does; an
+  out-of-plane eps with a magnetic, gyrotropic or lossy permeability matches
+  an independent (eps, mu) 4x4 oracle to ~1e-11; an out-of-plane circular
+  pillar's two grid layouts agree to 4.0e-6 and the exact-disk tensor RCWA
+  approaches the answer like 1/N; a slanted circular pillar's two layouts
+  agree to 2.3e-5, the shipped slant solver's staircases and an exact-disk
+  RCWA z-staircase both approach it, and the opposite slant is its exact
+  mirror image (1.7e-13); a slanted, out-of-plane, curved pillar is
+  reciprocal, its non-reciprocal twin is not, and the twin's transposed
+  tensor restores reciprocity.
+* The two measured gauge constants of the out-of-plane path
+  (`_OOP_ROT_SIGN`, `_OOP_H_GAUGE`) are unchanged and measured
+  map-independent: flipping either one misses the mapped slab by the same
+  amount as the unmapped one.
+* Every engineered defect -- the permeability blocks dropped, `sqrt(g)`
+  dropped from the longitudinal permeability, the tilt NOT composed with the
+  grid's bending, a gauge constant flipped -- is caught by at least one gate
+  by two decades or more; dropping the permeability blocks keeps the energy
+  closure at 1e-7 while missing the oracle by 5e-2, which is why the gates
+  read the Jones matrices.
+* Cost: a mapped out-of-plane region costs 1.2-1.5x an unmapped
+  out-of-plane region on the same walls and about what Phase D's mapped
+  in-plane region costs (0.8-1.0x: the out-of-plane path's whitened eig is
+  faster than the in-plane QZ at twice the size), at 2.0-2.3x its peak
+  memory (loaded box, upper bounds).
+* Limits: an out-of-plane PERMEABILITY still raises (with or without a map);
+  per-layer maps and the JAX twin are separate phases (E2, E3); the parity
+  (normal-incidence) accelerator is not used under a map or with a
+  permeability (a separate plan item).
+
 ### Added -- pure 2-D PMM (curved cells, Phase D): anisotropic and magnetic materials inside curved cells
 
 Curved cells (circles, ellipses, rounded corners, sinusoidal walls) of the
@@ -46,10 +118,12 @@ under the stack's curved map.
 * Gates (`docs/audits/BUILD_PMM2D_CURVED_D_2026_10_03.md`): a uniform
   liquid-crystal film and a gyrotropic film under a stretch, a sheared map
   and the circle map match the exact Berreman 4x4 answer -- reflection,
-  transmission AND the complex Jones matrix -- to ~1e-13 by `M = 8`; the
+  transmission AND the complex Jones matrix -- to ~1e-13 by `M = 8` at
+  normal incidence (~1e-10 at conical incidence under the circle map); the
   liquid-crystal circular pillar's two independent grid layouts agree to
-  2.5e-6 and the shipped 2-D tensor RCWA with the exact disk form factor
-  approaches that answer like 1/N (Richardson to 5.6e-5); Li's published
+  ~4e-6 (the finer layout still moves 3e-6 per rung at `M = 11 / 12`) and the shipped 2-D tensor RCWA with the exact disk form factor
+  approaches that answer like 1/N (a 1e-4-class corroboration: its
+  Richardson pairs wander 5e-5 .. 3e-4); Li's published
   gyrotropic crossed grating (J. Opt. A 5:345 (2003)) is reproduced to the
   shipped 8.74e-5 under an identity map and converges under a stretch; a
   magnetic film matches the exact (eps, mu) slab to 5.5e-14; a magnetic
@@ -60,14 +134,15 @@ under the stack's curved map.
   mixed components' sign flipped, the permeability inverted after the
   integration instead of before, the H recovery through the wrong Gram --
   is caught by two decades or more.  Three of them are invisible to the
-  efficiencies of a uniform film (a transposed gyrotropic tensor and a
-  mirrored director change only the Jones matrix; `eps_zz` does not enter at
+  efficiencies of a uniform film (at normal incidence a transposed
+  gyrotropic tensor and a mirrored director change only the Jones matrix; `eps_zz` does not enter at
   normal incidence), which is why the gates read the Jones matrix and run
   at oblique incidence.
 * Cost: a tensor or magnetic cell costs what a scalar curved cell costs
   (same pencil, assembly within the load noise).
 * Limits: an OUT-OF-PLANE tensor (a tilted director, `eps_xz != 0`) or
-  `slant=` under a curved map still raises (Phase E of the curved-cell plan);
+  `slant=` under a curved map still raises (Phase E of the curved-cell plan;
+  lifted by Phase E1, above);
   `compile_shapes` returns the permeability grid only with `with_mu=True`
   and refuses the four-output form for a magnetic layer rather than drop
   `mu` silently.

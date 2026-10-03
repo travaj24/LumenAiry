@@ -1,0 +1,13 @@
+C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pytest_benchmark\logger.py:44: PytestBenchmarkWarning: Benchmarks are automatically disabled because xdist plugin is active.Benchmarks cannot be performed reliably in a parallelized environment.
+  warner(PytestBenchmarkWarning(text))
+C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pytest_benchmark\logger.py:44: PytestBenchmarkWarning: Benchmarks are automatically disabled because xdist plugin is active.Benchmarks cannot be performed reliably in a parallelized environment.
+  warner(PytestBenchmarkWarning(text))
+C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pytest_benchmark\logger.py:44: PytestBenchmarkWarning: Benchmarks are automatically disabled because xdist plugin is active.Benchmarks cannot be performed reliably in a parallelized environment.
+  warner(PytestBenchmarkWarning(text))
+C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pytest_benchmark\logger.py:44: PytestBenchmarkWarning: Benchmarks are automatically disabled because xdist plugin is active.Benchmarks cannot be performed reliably in a parallelized environment.
+  warner(PytestBenchmarkWarning(text))
+bringing up nodes...
+bringing up nodes...
+
+..........................                                               [100%]
+26 passed in 131.10s (0:02:11)

@@ -1,0 +1,190 @@
+C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pytest_benchmark\logger.py:44: PytestBenchmarkWarning: Benchmarks are automatically disabled because xdist plugin is active.Benchmarks cannot be performed reliably in a parallelized environment.
+  warner(PytestBenchmarkWarning(text))
+C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pytest_benchmark\logger.py:44: PytestBenchmarkWarning: Benchmarks are automatically disabled because xdist plugin is active.Benchmarks cannot be performed reliably in a parallelized environment.
+  warner(PytestBenchmarkWarning(text))
+C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pytest_benchmark\logger.py:44: PytestBenchmarkWarning: Benchmarks are automatically disabled because xdist plugin is active.Benchmarks cannot be performed reliably in a parallelized environment.
+  warner(PytestBenchmarkWarning(text))
+C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\pytest_benchmark\logger.py:44: PytestBenchmarkWarning: Benchmarks are automatically disabled because xdist plugin is active.Benchmarks cannot be performed reliably in a parallelized environment.
+  warner(PytestBenchmarkWarning(text))
+bringing up nodes...
+bringing up nodes...
+
+.FF...F....FF.......F.....                                               [100%]
+================================== FAILURES ===================================
+_______ test_d1_tensor_route_at_eps_times_identity_is_the_scalar_route ________
+[gw1] win32 -- Python 3.14.6 C:\Users\Tesla\AppData\Local\Programs\Python\Python314\python.exe
+
+    def test_d1_tensor_route_at_eps_times_identity_is_the_scalar_route():
+        """The two expressions of ONE formula agree: a scalar cell promoted to
+        ``eps I`` through the general congruence equals the scalar route.
+        Measured 2026-10-03 (``d2_scalar.json``, M = 5): operators 1.1e-15
+        (shear) / 3.1e-15 (circle) relative, R / T / Jones 6.0e-15 / 1.3e-14.
+        Bars 1e-12 (2.5 decades above).  Fail-before: the tensor route with
+        the mixed weights negated moves the operators by 0.13 (shear) / 0.97
+        (circle) (``d_unit_scalar_mixed.json``) -- the scalar cell carries a
+        mixed e12' = -eps g12 / sqrt(g) under a sheared map."""
+        k0 = 2 * np.pi
+        for cm in (_shear(_P), _circle(_P)):
+            e = np.ones((3, 3), complex)
+            e[1, 1] = 4.0
+            e33 = np.zeros((3, 3, 3, 3), complex)
+            for k in range(3):
+                e33[..., k, k] = e
+            s1 = TS.Granet2DTransverseE(_P, _P, cm.u_walls, cm.v_walls, 5, e,
+                                        k0=k0, cmap=cm)
+            s2 = TS.Granet2DTransverseE(_P, _P, cm.u_walls, cm.v_walls, 5, e33,
+                                        k0=k0, cmap=cm)
+            sc = max(np.abs(s1.Lmat).max(), np.abs(s1.Rmat).max())
+            d = max(np.abs(s1.Lmat - s2.Lmat).max(),
+                    np.abs(s1.Rmat - s2.Rmat).max()) / sc
+>           assert d <= 1e-12, d
+E           AssertionError: np.float64(0.30358279214904244)
+E           assert np.float64(0.30358279214904244) <= 1e-12
+
+tests\unit\test_pmm2d_staggered_curved_d.py:340: AssertionError
+_____________ test_d4_tensor_pillar_lands_on_its_converged_answer _____________
+[gw1] win32 -- Python 3.14.6 C:\Users\Tesla\AppData\Local\Programs\Python\Python314\python.exe
+
+    def test_d4_tensor_pillar_lands_on_its_converged_answer():
+        """The LC30 disk (r 0.36, director at 30 deg) in air on n = 1.45: the
+        5 x 5 circle map at M = 4 (dof 450) against the CONVERGED tensor answer
+        -- the 3 x 3 map at M = 10, which the INDEPENDENT 5 x 5 topology at M = 7
+        reproduces to 3.1e-6 (``d4_summary.json``).  Measured 2026-10-03: 3.3e-4
+        (bar 1e-3, 0.48 decades above).  The two families the brief names as
+        oracles approach that same answer from far away (build doc ladders): the
+        shipped 2-D tensor RCWA with the EXACT disk form factor at 9 .. 29
+        orders per axis 9.1e-3 .. 3.0e-3 (distance x N within 0.082 .. 0.088 --
+        1 / N; Richardson pairs down to 5.6e-5), and the shipped staggered
+        solver on the 4 / 8 / 16-step staircases 1.7e-2 / 1.4e-2 / 5.4e-3.
+        Fail-before here: the 4-step staircase at M = 4 (the shipped code, no
+        map), 4.8e-2 -- >= 1e-2, 1 decade above the bar."""
+        with open(os.path.join(_PROBE, "d4_curved_c3_M10.json"),
+                  encoding="utf-8") as fh:
+            ref = json.load(fh)
+        ref = np.array(ref["vec"])
+        o, R, T = _lc30_pillar(CM._circle_map_5x5(_P, 0.36)[0], 4)
+        d = float(np.abs(_vec(o, R, T) - ref).max())
+>       assert d <= 1e-3, d
+E       AssertionError: 0.03210686926884698
+E       assert 0.03210686926884698 <= 0.001
+
+tests\unit\test_pmm2d_staggered_curved_d.py:495: AssertionError
+__________ test_d5_li2003_under_a_stretch_keeps_the_gyrotropic_sign ___________
+[gw1] win32 -- Python 3.14.6 C:\Users\Tesla\AppData\Local\Programs\Python\Python314\python.exe
+
+    def test_d5_li2003_under_a_stretch_keeps_the_gyrotropic_sign():
+        """The same grating under a sine stretch of both axes (a = 0.05 p_x,
+        -0.03 p_y) with the walls at the PREIMAGES of the physical walls (the
+        same device).  Measured 2026-10-03 (``d_unit_li.json``, M = 8): Li's
+        first row 1.40e-4 (bar 5e-4 = the shipped G2 bar, Li's own four-decimal
+        rounding at truncation order 23; 0.55 decades above), his SECOND row
+        (the cross terms reversed) missed by 1.32e-2; the swapped cell lands on
+        the second row (1.41e-4) and misses the first by 1.32e-2 (bar >= 1e-3,
+        1.1 decades under).  So the gyrotropic sign survives the map -- on a
+        PATTERNED gyrotropic grating the transpose IS R / T-visible (the two
+        rows differ in the (1, -1) / (1, 1) pair), unlike on a uniform film.
+        The build doc's ladder: 1.45e-2 .. 1.1e-4 from the unmapped M = 10
+        answer over M = 5 .. 9, converging to it (the stretch costs a rung or
+        two, as Phase A measured)."""
+        cm = _li_stretch()
+        dev, *_ = _li(8, cmap=cm)
+>       assert dev[0] <= 5e-4 and dev[1] >= 1e-3, dev
+E       AssertionError: [np.float64(0.018415845001181895), np.float64(0.022399124495188376)]
+E       assert (np.float64(0.018415845001181895) <= 0.0005)
+
+tests\unit\test_pmm2d_staggered_curved_d.py:579: AssertionError
+_________ test_d6_magnetic_pillar_is_the_dual_of_its_dielectric_twin __________
+[gw2] win32 -- Python 3.14.6 C:\Users\Tesla\AppData\Local\Programs\Python\Python314\python.exe
+
+    def test_d6_magnetic_pillar_is_the_dual_of_its_dielectric_twin():
+        """Electromagnetic duality with VACUUM half-spaces: the E_x input of a
+        magnetic disk (eps 1, mu = diag(2, 2, 1)) is the E_y input of the
+        dielectric disk (eps = diag(2, 2, 1), mu 1), order by order -- two
+        DIFFERENT weight paths under the same circle map (the chi blocks vs the
+        eps blocks).  Not a discrete identity: the residual falls with M to the
+        rung-change level.  Measured 2026-10-03 (``d6_summary.json``, 3 x 3 map):
+        5.4e-3, 8.9e-4, 5.8e-4, 8.6e-6, 3.2e-5, 1.2e-5 at M = 4 .. 9 (5 x 5:
+        2.3e-4 .. 2.6e-5 at M = 4 .. 6); the comparison WITHOUT the polarization
+        swap stays at 0.048.  Bars at M = 5: duality <= 3e-3 (0.53 decades above
+        8.9e-4), control >= 1e-2 (0.69 decades under 4.85e-2)."""
+        cm = _circle(_P)
+        one = np.broadcast_to(_EYE3, (3, 3, 3, 3)).copy()
+        mu = one.copy()
+        mu[1, 1] = np.diag([2.0, 2.0, 1.0])
+    
+        def run(eps, mu_c):
+            st = PMM2DStackPure(_P, _P, n_superstrate=1.0, n_substrate=1.0,
+                                n_modes=5, n_orders=3, cmap=cm)
+            if mu_c is None:
+                st.add_layer(0.5, eps_cell=eps)
+            else:
+                st.add_layer(0.5, eps_cell=eps, mu_cell=mu_c)
+            st.set_source(1.0)
+            o, R, T, _J = st.solve(jones=True)
+            i = _idx(o)
+            return np.asarray(R)[:, i], np.asarray(T)[:, i]
+        Rm, Tm = run(one, mu)
+        Re, Te = run(mu, None)
+        dual = max(np.abs(Rm[0] - Re[1]).max(), np.abs(Tm[0] - Te[1]).max(),
+                   np.abs(Rm[1] - Re[0]).max(), np.abs(Tm[1] - Te[0]).max())
+        ctrl = max(np.abs(Rm[0] - Re[0]).max(), np.abs(Tm[0] - Te[0]).max())
+>       assert dual <= 3e-3, dual
+E       AssertionError: np.float64(0.004092465471380646)
+E       assert np.float64(0.004092465471380646) <= 0.003
+
+tests\unit\test_pmm2d_staggered_curved_d.py:636: AssertionError
+________________ test_d7_vacuum_painted_with_mu_one_is_vacuum _________________
+[gw0] win32 -- Python 3.14.6 C:\Users\Tesla\AppData\Local\Programs\Python\Python314\python.exe
+
+    def test_d7_vacuum_painted_with_mu_one_is_vacuum():
+        """A physical identity across the two routes: layer 2 painted with a
+        vacuum Rect that carries an explicit mu = I (the magnetic TENSOR route
+        under the map) equals a uniform vacuum layer 2 (the scalar route) on
+        the same merged map.  Measured 2026-10-03 (``d_unit_stack.json``, M = 3):
+        3.1e-15 (bar 1e-9, 5.5 decades above); fail-before: the same Rect with
+        mu = 1.1 moves R / T / Jones by 2.3e-2 (bar >= 1e-3)."""
+        a = _d7(3, _LC30, "vac_mu")
+        b = _d7(3, _LC30, "uniform")
+        c = _d7(3, _LC30, "paint11")
+        assert a[0].cmap.fingerprint == b[0].cmap.fingerprint
+    
+        def d(x, y):
+            return max(np.abs(x[1] - y[1]).max(), np.abs(x[2] - y[2]).max(),
+                       np.abs(x[3] - y[3]).max())
+>       assert d(a, b) <= 1e-9, d(a, b)
+E       AssertionError: np.float64(0.0012503642343346276)
+E       assert np.float64(0.0012503642343346276) <= 1e-09
+E        +  where np.float64(0.0012503642343346276) = <function test_d7_vacuum_painted_with_mu_one_is_vacuum.<locals>.d at 0x000001F4509522A0>((<lumenairy.elements.pmm.stack2d_pure.PMM2DStackPure object at 0x000001F456192030>, array([[0.        , 0.        , 0....array([[ 0.01177224-0.19481819j,  0.03868453+0.00046804j],\n       [ 0.0386856 +0.00046924j, -0.03466984-0.19590554j]])), (<lumenairy.elements.pmm.stack2d_pure.PMM2DStackPure object at 0x000001F456192140>, array([[0.        , 0.        , 0....array([[ 0.01061088-0.19435489j,  0.03832881+0.00046726j],\n       [ 0.03832982+0.00046847j, -0.0354528 -0.19542306j]])))
+
+tests\unit\test_pmm2d_staggered_curved_d.py:724: AssertionError
+____________ test_d9_no_sg_e33_is_caught_only_off_normal_incidence ____________
+[gw0] win32 -- Python 3.14.6 C:\Users\Tesla\AppData\Local\Programs\Python\Python314\python.exe
+
+    def test_d9_no_sg_e33_is_caught_only_off_normal_incidence():
+        """sqrt(g) dropped from eps'_33 changes only the div(D) = 0 Schur term,
+        which a plane wave at NORMAL incidence never exercises (E_z = 0).
+        Measured 2026-10-03 (``d_unit_no_sg_e33.json``, LC film under the
+        circle map): normal incidence M = 5: 2.81462e-8 mutated vs 2.81470e-8
+        correct (blind: the gate must be oblique -- recorded, asserted <= 1e-12
+        on the difference); CONICAL (25, 40), M = 6: correct 8.7e-8 (bar 1e-6),
+        mutated 1.2e-4, flat in M (bar >= 1e-5)."""
+        cm = _circle(_G3["P"])
+        th, ph = np.deg2rad(25.0), np.deg2rad(40.0)
+        good = _film(_LC, cm, 6, theta=th, phi=ph)
+        n_good = _film(_LC, cm, 5)
+        with _mutate("no_sg_e33"):
+            bad = _film(_LC, cm, 6, theta=th, phi=ph)
+            n_bad = _film(_LC, cm, 5)
+>       assert good[0] <= 1e-6 and bad[0] >= 1e-5, (good[0], bad[0])
+E       AssertionError: (0.00011939734260033724, 0.0011973290862897779)
+E       assert (0.00011939734260033724 <= 1e-06)
+
+tests\unit\test_pmm2d_staggered_curved_d.py:816: AssertionError
+=========================== short test summary info ===========================
+FAILED tests/unit/test_pmm2d_staggered_curved_d.py::test_d1_tensor_route_at_eps_times_identity_is_the_scalar_route
+FAILED tests/unit/test_pmm2d_staggered_curved_d.py::test_d4_tensor_pillar_lands_on_its_converged_answer
+FAILED tests/unit/test_pmm2d_staggered_curved_d.py::test_d5_li2003_under_a_stretch_keeps_the_gyrotropic_sign
+FAILED tests/unit/test_pmm2d_staggered_curved_d.py::test_d6_magnetic_pillar_is_the_dual_of_its_dielectric_twin
+FAILED tests/unit/test_pmm2d_staggered_curved_d.py::test_d7_vacuum_painted_with_mu_one_is_vacuum
+FAILED tests/unit/test_pmm2d_staggered_curved_d.py::test_d9_no_sg_e33_is_caught_only_off_normal_incidence
+6 failed, 20 passed in 222.95s (0:03:42)

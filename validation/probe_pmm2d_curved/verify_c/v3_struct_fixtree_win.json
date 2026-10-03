@@ -1,0 +1,73 @@
+{
+ "rects_normal": {
+  "fired": [],
+  "solved": true,
+  "unmapped": true,
+  "closure": 5.619368728929791e-05
+ },
+ "rects_conical": {
+  "fired": [],
+  "solved": true,
+  "unmapped": true,
+  "closure": 3.001978879043493e-05
+ },
+ "rects_tensor_oblique": {
+  "fired": [],
+  "solved": true,
+  "unmapped": true,
+  "closure": 5.614877932139106e-05
+ },
+ "rects_roundoff_normal": {
+  "fired": [],
+  "solved": true,
+  "unmapped": true,
+  "closure": 0.0001265180278444064
+ },
+ "rects_roundoff_tensor": {
+  "fired": [],
+  "solved": true,
+  "unmapped": true,
+  "closure": 0.00012587149769666128
+ },
+ "jones_rect": {
+  "fired": [],
+  "solved": true
+ },
+ "rect_vs_integer_grid": {
+  "0.0,0.0": {
+   "bytes_equal": false,
+   "maxdiff": 8.548717289613705e-15
+  },
+  "0.3,0.6": {
+   "bytes_equal": false,
+   "maxdiff": 3.096981282535438e-10
+  }
+ },
+ "control_circle": {
+  "fired": [
+   "lumenairy.elements.pmm.twod_staggered._stag_map_nodes"
+  ],
+  "solved": false,
+  "err": "TRAP lumenairy.elements.pmm.twod_staggered._stag_map_nodes"
+ },
+ "control_incident_only": {
+  "fired": [
+   "SP._stag_incident_coeffs_mapped"
+  ],
+  "solved": false
+ },
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "lumenairy": "c:\\tmp\\vcc_fix\\lumenairy\\__init__.py",
+  "tree": "pre",
+  "build": "win",
+  "machine": "Tesla_Ryzen",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ }
+}

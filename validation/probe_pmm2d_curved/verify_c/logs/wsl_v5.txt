@@ -1,0 +1,30 @@
+fillet_offc_w_ne_h                       SOLVE EXACT     grid (5, 5) paint 0 side 0 cover 1.7e-09 area 2.0e-16 detJmin 4.66e-02 spread 1.37
+fillet_r_1.414e-3p                       RAISE ValueError: FilletRect(cx=0.6, cy=0.6, w=0.6, h=0.6, r=0.0016968): the fillet radius r = 0.0016967999999999998 is below 1.414e-3 of the period (0.0016970562748477
+fillet_r_sqrt2e-3p_exact                 SOLVE EXACT     grid (5, 5) paint 0 side 0 cover 3.3e-11 area 6.2e-16 detJmin 4.66e-02 spread 1.37
+fillet_r_1.5e-3p                         SOLVE EXACT     grid (5, 5) paint 0 side 0 cover 3.5e-11 area 9.3e-16 detJmin 4.66e-02 spread 1.37
+fillet_r_1.3e-3p                         RAISE ValueError: FilletRect(cx=0.6, cy=0.6, w=0.6, h=0.6, r=0.00156): the fillet radius r = 0.00156 is below 1.414e-3 of the period (0.0016970562748477142).  The fille
+fillet_r_0                               SOLVE EXACT     grid (3, 3) paint 0 side 0 cover 2.2e-16 area nan detJmin 1.00e+00 spread 1.00
+fillet_nonsquare_period                  RAISE ValueError: FilletRect(cx=0.6, cy=0.4, w=0.6, h=0.4, r=0.001136): the fillet radius r = 0.001136 is below 1.414e-3 of the period (0.0016970562748477142).  The fil
+circle_offc                              SOLVE EXACT     grid (3, 3) paint 0 side 0 cover 2.5e-08 area 4.9e-16 detJmin 8.07e-02 spread 1.37
+circle_core_offc                         SOLVE EXACT     grid (5, 5) paint 0 side 0 cover 3.4e-09 area 1.6e-16 detJmin 4.32e-02 spread 1.42
+circle_tangent_r0.5p                     RAISE ValueError: Circle(cx=0.6, cy=0.6, r=0.6): the shape must lie at least the sliver width 1e-3 of the period from the cell edges the unit cell [0, 1.2] x [0, 1.2] (
+circle_r0.5p_minus_1e-3p                 RAISE ValueError: Circle(cx=0.6, cy=0.6, r=0.5988): the shape must lie at least the sliver width 1e-3 of the period from the cell edges the unit cell [0, 1.2] x [0, 1.2
+circle_overlap_r0.6p                     RAISE ValueError: Circle(cx=0.6, cy=0.6, r=0.72): the shape must lie at least the sliver width 1e-3 of the period from the cell edges the unit cell [0, 1.2] x [0, 1.2] 
+ellipse_aspect5                          SOLVE EXACT     grid (3, 3) paint 0 side 0 cover 3.9e-08 area 5.3e-16 detJmin 8.07e-02 spread 4.03
+ellipse_aspect5_rot30_offc               RAISE ValueError: compile_shapes: the merged map FOLDS (det J <= 0, min -3.150e+00) in the cell u in [0, 0.375051], v in [0.52101, 0.61899], which is bounded by Ellipse
+ellipse_rot44.9                          RAISE ValueError: compile_shapes: the merged map FOLDS (det J <= 0, min -1.550e+00) in the cell u in [0, 0.424695], v in [0.499826, 0.700174], which is bounded by Ellip
+aspect 1.05 {5: 'ok', 10: 'ok', 15: 'ok', 20: 'ok', 25: 'ok', 30: 'ok', 35: 'ok', 40: 'FOLD', 44: 'FOLD'}
+aspect 1.2 {5: 'ok', 10: 'ok', 15: 'ok', 20: 'ok', 25: 'ok', 30: 'ok', 35: 'FOLD', 40: 'FOLD', 44: 'FOLD'}
+aspect 1.5 {5: 'ok', 10: 'ok', 15: 'ok', 20: 'ok', 25: 'FOLD', 30: 'FOLD', 35: 'FOLD', 40: 'FOLD', 44: 'FOLD'}
+aspect 2.0 {5: 'ok', 10: 'ok', 15: 'ok', 20: 'FOLD', 25: 'FOLD', 30: 'FOLD', 35: 'FOLD', 40: 'FOLD', 44: 'FOLD'}
+aspect 3.0 {5: 'ok', 10: 'ok', 15: 'FOLD', 20: 'FOLD', 25: 'FOLD', 30: 'FOLD', 35: 'FOLD', 40: 'FOLD', 44: 'FOLD'}
+aspect 5.0 {5: 'ok', 10: 'FOLD', 15: 'FOLD', 20: 'FOLD', 25: 'FOLD', 30: 'FOLD', 35: 'FOLD', 40: 'FOLD', 44: 'FOLD'}
+sine_halfplane_x                         SOLVE EXACT     grid (2, 2) paint 0 side 0 cover 6.2e-08 area nan detJmin 6.08e-01 spread 1.64
+sine_near_edge_1.5e-3p                   SOLVE EXACT     grid (2, 2) paint 0 side 0 cover 9.2e-08 area nan detJmin 2.52e-02 spread 2.06
+sine_touch_edge                          RAISE ValueError: SinusoidalWall(axis='x', x0=0.3, amplitude=0.3): the wall 0.3 -+ |amplitude| 0.3 must lie inside the cell (0, 1.2) by at least the sliver width 1e-3 o
+sine_ridge_y_n3_phase                    SOLVE WRONG MAP grid (3, 3) paint 0 side 0 cover 2.7e-07 area nan detJmin 6.71e-01 spread 2.05
+sine_ridge_steep                         SOLVE EXACT     grid (3, 3) paint 0 side 0 cover 5.6e-08 area nan detJmin 2.94e-01 spread 1.70
+rect_spanning_x                          SOLVE EXACT     grid (3, 3) paint 0 side 0 cover 2.2e-16 area nan detJmin 1.00e+00 spread 1.00
+sine perimeter rel err vs polyline 1.3669834939893636e-11
+ellipse perimeter rel err 2.1136995164915347e-16
+wrote v5_primitives_geom_wsl.json

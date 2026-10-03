@@ -853,16 +853,23 @@ def test_g7_out_of_plane_mu_raises():
                                mu_cell=_oop(_EYE, 0, 2, 0.3), degree=4)
 
 
-def test_g7_mu_with_an_out_of_plane_eps_raises():
-    with pytest.raises(NotImplementedError, match="out-of-plane|OUT-OF-PLANE"):
-        pmm_jones_2d_staggered(_P, _P, _oop(4.0 * _EYE, 1, 2, 0.4), 1.0, 1.0,
-                               _DEP, _WL, mu_cell=_uni(_EYE), degree=4)
-    with pytest.raises(NotImplementedError):
-        PMM2DStackPure(_P, _P).add_layer(
-            _DEP, eps_cell=_oop(4.0 * _EYE, 1, 2, 0.4), mu_cell=_uni(_EYE))
-    with pytest.raises(NotImplementedError):
-        PMM2DStackPure(_P, _P).add_layer(
-            _DEP, eps=_oop(4.0 * _EYE, 0, 2, 0.4)[0, 0], mu=2.0)
+def test_g7_mu_with_an_out_of_plane_eps_is_accepted_since_phase_e1():
+    """Raised until Phase E1 of the curved-cell plan (2026-10-03) gave the
+    out-of-plane first-order generator its permeability blocks; the physics
+    gates are in ``tests/unit/test_pmm2d_staggered_curved_e1.py``.  Here: the
+    three spellings that used to raise build and solve, and ``mu = I``
+    through them equals the nonmagnetic out-of-plane solve to round-off (the
+    permeability branch at chi = I is the shipped generator: measured
+    <= 1e-13 on R / T / Jones, 2026-10-03; bar 1e-10)."""
+    oc = _oop(4.0 * _EYE, 1, 2, 0.4)
+    a = pmm_jones_2d_staggered(_P, _P, oc, 1.0, 1.0, _DEP, _WL,
+                               mu_cell=_uni(_EYE), degree=4)
+    b = pmm_jones_2d_staggered(_P, _P, oc, 1.0, 1.0, _DEP, _WL, degree=4)
+    for x, y in zip(a[1:], b[1:]):
+        assert float(np.max(np.abs(np.asarray(x) - np.asarray(y)))) <= 1e-10
+    PMM2DStackPure(_P, _P).add_layer(_DEP, eps_cell=oc, mu_cell=_uni(_EYE))
+    PMM2DStackPure(_P, _P).add_layer(
+        _DEP, eps=_oop(4.0 * _EYE, 0, 2, 0.4)[0, 0], mu=2.0)
 
 
 def test_g7_magnetic_half_space_raises():

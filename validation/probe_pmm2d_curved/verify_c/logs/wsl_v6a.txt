@@ -1,0 +1,2 @@
+{'scenario': 'annulus', 'M': 3, 'grid': [5, 5], 'closure': 0.011105753040705824, 'absorption': [[1.3436644498564685e-14, 1.4452940760773312e-14], [0.23416962778004646, 0.23276543423238702]], 'abs_lossless_layer1': 1.4452940760773312e-14, 'abs_balance': 0.0070929221708557755, 'vacuum_id_same_map': True, 'vacuum_id': 1.7974510768681284e-13, 'wall_s': 9.648606777191162}
+wrote v6_annulus_M3_wsl.json
