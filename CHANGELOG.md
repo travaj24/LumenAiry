@@ -4,6 +4,46 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+### Added -- pure 2-D PMM (curved cells, Phase A): the coordinate-map machinery, gated on a separable stretch
+
+The pure (no-floor) staggered 2-D PMM can now solve a cell under a COORDINATE
+MAP `(x, y) = Phi(u, v)`: the solver keeps its straight `(u, v)` wall grid and
+the map bends (in this phase: stretches) it in the physical plane.  This is
+Phase A of `docs/audits/PLAN_PMM2D_CURVED_CELLS_2026_09_26.md`; the curved
+shape maps (circles, fillets, sinusoidal walls) come in later phases.  Build
+doc and every number: `docs/audits/BUILD_PMM2D_CURVED_A_2026_10_02.md`.
+
+* NO SHIPPED ANSWER MOVES.  `cmap=None` (the default everywhere) is a dispatch
+  to the shipped Kronecker assembly; 109 of 109 SHA-256 hashes of operators,
+  modes, R / T / Jones and absorption over every dispatch branch of the family
+  are byte-identical to the parent commit (gate A1).
+* The map is reachable only through `pmm_jones_2d_staggered(..., cmap=)` and
+  `PMM2DStackPure(..., cmap=)` (one map owned by the stack, shared by every
+  layer and both half-spaces).  `pmm_efficiency_2d_staggered(..., cmap=)`
+  raises and points at the Jones entry.  Maps live in
+  `lumenairy.elements.pmm._curvemap`: the protocol (`CellMap`: `geom`,
+  `fingerprint`, `validate`), `IdentityMap`, `SineStretch` and
+  `SeparableStretch` (with `from_physical_walls`).
+* Under a map the solver works on the covariant field components with the
+  effective tensors `eps' = sqrt(g) g^-1 eps`, `mu' = sqrt(g) g^-1`; every
+  mapped region is a tensor + magnetic region, all 18 weighted blocks are
+  assembled by 2-D Gauss quadrature in one function
+  (`_stag_quad_weighted`), the H partner and the absorption flux use the
+  PLAIN block Gram, and the far field uses the cofactor `det J J^-T`.
+  Measured: the identity map reproduces the shipped operators to 5.5e-14; a
+  uniform film under a 33:1 stretch matches the Airy slab to 1.3e-12 at
+  `M = 6`; a stripe under the stretch converges to the exact 1-D oracle
+  (9.7e-07 at `M = 10`); the three traps of the plan each fail loudly when
+  re-introduced (0.22 without the cofactor, 0.16 closure with mixed H
+  partners, 0.070 absorption defect with `-R` as the flux form).
+* Found in the build and fixed: the planning probe's fixed quadrature
+  (`2 M + 8` nodes) leaves R / T up to 5.2e-04 wrong under a strong stretch;
+  the node count is now chosen from the map (Legendre-moment convergence of
+  the geometric weights), and the identity map keeps `2 M + 8`.
+* In this phase a map takes scalar permittivity on the shared grid only:
+  tensor or magnetic layers, `slant`, `layer_grids='per-layer'` and the two
+  viewers raise under a map, naming the phase that adds them.
+
 ### Added -- geometry viewers for the pure staggered 2-D stack
 
 `PMM2DStackPure` was the only stack family in the library that could not draw

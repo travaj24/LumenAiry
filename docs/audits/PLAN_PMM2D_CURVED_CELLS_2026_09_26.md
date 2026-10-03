@@ -746,7 +746,12 @@ regions), so the fail-before is `-R` as the Eq.-25 Gram, which must now be
 visible even without mixing helpers (measure it).  **Estimate.**  4-6
 agent-hours build, 2 verify.
 
-### 4.5 Phase E -- deferred unless cheap
+### 4.5 Phase E -- approved 2026-10-02 (built after D)
+
+2026-10-02: the maintainer approved all four items below -- out-of-plane
+tensors under a map, slant x curved, per-layer maps (the non-separable curved
+mortar) and the JAX twin -- to be built after Phase D.  Each gets its own
+build and one verifier, like the other phases (section 6).
 
 * **Out-of-plane tensors under a map** (a tilted-director LC in a circular
   cell): the first-order generator eliminates `G3` assuming `mu = 1`

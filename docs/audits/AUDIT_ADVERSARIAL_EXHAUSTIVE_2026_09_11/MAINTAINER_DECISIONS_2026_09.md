@@ -355,6 +355,10 @@ bits of every existing answer) should be its own separate decision
 (recommended: yes); and the release shape (recommended: the first three
 phases as 5.50.0).
 
+2026-10-02: Phase E (out-of-plane tensors under a map, slant x curved,
+per-layer maps, the JAX twin) is APPROVED, to be built after Phase D, each
+item with its own build and one verifier (plan section 4.5).
+
 ---
 
 ## 1. Numerical defaults that measured better but move fixtures
