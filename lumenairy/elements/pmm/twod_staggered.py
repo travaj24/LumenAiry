@@ -5296,6 +5296,12 @@ def pmm_jones_2d_staggered(
         raise ValueError(f"pmm_jones_2d_staggered: backend must be 'numpy' "
                          f"or 'jax', got {backend!r}.")
     if backend == "jax":
+        from ...backend import JAX_AVAILABLE
+        if not JAX_AVAILABLE:
+            raise ImportError(
+                "pmm_jones_2d_staggered(backend='jax'): JAX is not available "
+                "(not installed, or switched off by the "
+                "LUMENAIRY_DISABLE_JAX environment variable).")
         from ._jax_twod_staggered import _pmm_jones_2d_staggered_jax
         return _pmm_jones_2d_staggered_jax(
             period_x, period_y, eps_cell, n_substrate, n_superstrate, depth,

@@ -50,12 +50,31 @@ built with, and frozen into the template:
 A traced shape parameter then moves the IMAGES of the frozen grid (vertex
 images and edge curves) -- the map, its analytic Jacobian, the geometric
 weights at the frozen nodes -- and nothing else, so the traced function is
-smooth in the parameter.  As argued and measured in the build record, the
-discrete solution does not depend on WHERE the frozen ``(u, v)`` walls sit,
-only on the physical images of the cells, so the twin evaluated at a
-parameter ``p`` reproduces the NumPy solve built at ``p`` (whose own grid
-moves with ``p``) to round-off at normal incidence and to the level of the
-incident decomposition's representation error at oblique incidence.
+smooth in the parameter.  The in-plane operators do not depend on WHERE
+the frozen ``(u, v)`` walls sit, only on the physical images of the cells;
+the incident decomposition does (its L2 projection weights each cell by its
+frozen ``(u, v)`` area).  So the twin evaluated at ``p`` differs from the
+NumPy solve built at ``p`` (whose own grid moves with ``p``) by the incident
+representation error -- zero for affine cells at normal incidence and for a
+sinusoidal wall, 5.5e-6 on T at M = 4 for a 0.03 P change of a circle's
+radius (at normal incidence), and nonzero for affine cells at oblique
+incidence (verifier V-E3-2: a rectangles-only stack's twin runs the
+identity-map route there, NumPy the unmapped one).
+
+The reverse pass through DEGENERATE eigenvalues
+--------------------------------------------
+A four-fold symmetric cell has exactly degenerate Bloch-mode pairs, and a
+parameter that breaks the symmetry (a square pillar's width alone, a circle
+deformed into an ellipse) splits them to first order.  The derivative of the
+solve is well defined there, but it is not recoverable from the eig's own
+cotangent (``rcwa._core``, the block above ``_jax_eig_cluster_adjoint``), so
+the twin hands its eig problems AND their consumer (everything downstream of
+the eigenpairs) to ``rcwa._jax_eig_cluster_adjoint``: the forward pass is the
+plain composition, byte for byte; the reverse pass evaluates the standard
+VJP at lifted points where every cluster is resolved, and combines them to
+O(d^4) (round 2 of the build record; verifier V-E3-1).  Reverse mode only:
+``jax.jvp`` / ``jacfwd`` / ``hessian`` raise ``TypeError`` and a nested
+``grad`` raises ``NotImplementedError``.
 
 A parameter path that CHANGES the topology -- a fold (``det J <= 0`` at a
 node), a segment crossing the sliver contract, two snapped walls separating,
@@ -113,7 +132,9 @@ def _stag_geneig_jax(L, G, tau_rel=None):
     generalized eig, so the pencil is reduced to the standard eig of
     ``G^-1 L`` (same eigenvalues, same eigenvectors -- ``G`` is invertible)
     and differentiated through the library's ONE gauge-stable custom-VJP eig
-    ``rcwa._jax_eig_stable`` (Lorentzian-broadened eigenvector cotangent).
+    ``rcwa._jax_eig_stable`` (Lorentzian-broadened eigenvector cotangent);
+    :meth:`StagJaxTwin.solve` routes it through
+    ``rcwa._jax_eig_cluster_adjoint`` (degenerate clusters).
     Every quantity downstream (R, T, the Jones matrix) is invariant under a
     per-mode rescaling of ``W``, so the different eigenvector normalisation
     of the two eigensolvers is invisible in the outputs."""

@@ -195,26 +195,47 @@ _PAR = {
 }
 
 
+#: PER-FIXTURE parity bars (round 2 of the build, verifier observation on
+#: E3-2): 30x that fixture's eig-stage round-off REACH -- the NumPy stack with
+#: its QZ replaced by the standard eig of G^-1 L (the twin's reduction, an
+#: equally exact algorithm) minus the shipped stack, max over R, T, J -- the
+#: larger of the two builds, rounded up (``r7_parity_reach_{win,wsl}.json``).
+#: The twin's own difference sits at 0.25 .. 2.9x the reach on every fixture
+#: (both builds), so the factor 30 leaves >= 10x; the upper gap is the
+#: cofactor mutation of E3-9 (6.6e-2) and V-E3-2's oblique-rectangle route
+#: difference (2.5e-4), nine decades above.  Readings (reach win / wsl;
+#: twin - numpy win / wsl) next to each bar.
+_PAR_BAR = {
+    "circle": 3e-13,  # reach 8.3e-15 / 7.3e-15; twin 6.4e-15 / 6.7e-15
+    "circle_conical": 4e-13,  # reach 8.8e-15 / 1.2e-14; twin 7.0e-15 / 1.4e-14
+    "circle_tensor_magnetic_two_layer": 3e-13,  # 7.7e-15 / 6.7e-15; 6.2e-15 / 5.3e-15
+    "fillet": 3e-12,  # reach 5.1e-14 / 7.1e-14; twin 2.8e-14 / 4.9e-14
+    "magnetic_tensor": 1e-13,  # reach 3.1e-15 / 2.3e-15; twin 2.9e-15 / 2.1e-15
+    "multilayer": 6e-13,  # reach 1.3e-14 / 1.9e-14; twin 1.1e-14 / 1.9e-14
+    "scalar_conical_lossy": 1e-13,  # 3.3e-15 / 2.7e-15; 2.8e-15 / 1.4e-15
+    "scalar_pillar": 1e-13,  # reach 1.2e-15 / 3.1e-15; twin 1.6e-15 / 2.0e-15
+    "sinusoid": 4e-14,  # reach 1.1e-15 / 1.0e-15; twin 3.2e-15 / 2.7e-15
+    "tensor_lc": 5e-14,  # reach 1.4e-15 / 1.3e-15; twin 7.8e-16 / 3.3e-16
+}
+
+
 @pytest.mark.parametrize("name", sorted(_PAR))
 def test_e3_2_forward_parity_twin_vs_numpy(name):
     """The twin's R / T / Jones equal the NumPy stack's to round-off.
 
-    Measured 2026-10-03 (``f2_parity_M3.json`` / ``_M4.json``, 22 fixtures):
-    max |twin - numpy| 3.4e-14 at M = 3 (5.3e-13 at M = 4, the fillet); the
-    round-off REACH of the eig stage alone -- the NumPy stack with its QZ
-    replaced by the standard eig of G^-1 L, an equally exact algorithm --
-    reaches 5.1e-14 (M = 3) / 6.2e-13 (M = 4) over the same set, and the
-    twin sits within 2.9x of it fixture by fixture; the assembled operators
-    agree to <= 6.1e-14 relative.  Bar 5e-12: two decades above the M = 3
-    maximum and 8x the M = 4 reach; the upper gap: the cofactor mutation of
-    E3-9 moves the mapped T by 6.6e-2 (``f9_mutations_M4.json``), ten
-    decades above."""
+    Bar PER FIXTURE (``_PAR_BAR``, round 2): 30x the fixture's own eig-stage
+    round-off reach.  (The E3 build gated every fixture at one global 5e-12
+    -- two decades above the M = 3 maximum; its 22-fixture f2 set reads
+    3.4e-14 at M = 3 and 5.3e-13 at M = 4.)  The rectangles-only shape stack
+    at OBLIQUE incidence is not in this set: it runs a different incident
+    decomposition in the twin (V-E3-2, gated by
+    ``test_e3r2_oblique_rectangles_converge_at_the_measured_rate``)."""
     fx = _PAR[name]
     kw = {k: v for k, v in fx.items() if k != "layers"}
     o, R, T, J = _stack(fx["layers"], M=3, backend="numpy", **kw).solve()
     _o, Rj, Tj, Jj = _stack(fx["layers"], M=3, **kw).solve()
     for a, b in ((Rj, R), (Tj, T), (Jj, J)):
-        assert _amax(a, b) <= 5e-12, (name, _amax(a, b))
+        assert _amax(a, b) <= _PAR_BAR[name], (name, _amax(a, b))
 
 
 # =========================================================================== #
@@ -696,7 +717,8 @@ def test_e3_refusals_name_the_follow_up():
 
 def test_e3_disable_jax_switch_and_x64_are_honoured(monkeypatch):
     """``LUMENAIRY_DISABLE_JAX`` (read into ``backend.JAX_AVAILABLE``) turns
-    the backend off with an ImportError naming the switch; without
+    the backend off with an ImportError naming the switch (and, for the
+    convenience entry, naming the entry); without
     ``jax_enable_x64`` the twin RAISES (``_require_jax_x64``) instead of
     silently computing in complex64."""
     import jax
@@ -705,6 +727,10 @@ def test_e3_disable_jax_switch_and_x64_are_honoured(monkeypatch):
     monkeypatch.setattr(B, "JAX_AVAILABLE", False)
     with pytest.raises(ImportError, match="LUMENAIRY_DISABLE_JAX"):
         PMM2DStackPure(_P, _P, n_modes=3, backend="jax")
+    # the convenience entry names ITSELF (round 2, verifier V-E3-4)
+    with pytest.raises(ImportError, match=r"pmm_jones_2d_staggered\(backend"):
+        pmm_jones_2d_staggered(_P, _P, np.ones((2, 2), complex), 1.45, 1.0,
+                               0.4, _WL, degree=3, n_orders=2, backend="jax")
     monkeypatch.setattr(B, "JAX_AVAILABLE", True)
     st = _stack(_circle_layers(), M=3)
     jax.config.update("jax_enable_x64", False)
@@ -990,8 +1016,9 @@ def test_e3r2_the_rule_leaves_every_forward_value_byte_identical():
     "RCWA JAX path's gradient is wrong for a SYMMETRY-BREAKING parameter at "
     "a four-fold symmetric cell -- the V-E3-1 class (the shared "
     "_jax_eig_stable VJP at a degenerate pair): 23 % (TE) / 39 % (TM) "
-    "relative; the symmetry-KEEPING control is exact (2.8e-10) "
-    "(r4_other_twins_rcwa2d_win.json).  Fix: route its eigs through "
+    "relative on Windows, 28 % / 47 % on WSL (build-dependent); the "
+    "symmetry-KEEPING control is exact (<= 6.9e-10) "
+    "(r4_other_twins_rcwa2d_{win,wsl}.json).  Fix: route its eigs through "
     "rcwa._jax_eig_cluster_adjoint; remove the marker with the fix."))
 def test_e3r2_rcwa_jax_symmetry_breaking_gradient_at_a_symmetric_cell():
     """``rcwa_efficiency_2d`` (JAX eps_cell), a 15 x 15 pixel cell (centre
@@ -1028,7 +1055,8 @@ def test_e3r2_rcwa_jax_symmetry_breaking_gradient_at_a_symmetric_cell():
     "rcwa._core as 'exactly 0.0 stays unrecoverable'): the 1-D PMM twin's "
     "d / d(angle) AT EXACTLY normal incidence on a symmetric grating -- the "
     "angle splits the half-spaces' +-m pairs -- is wrong: 28 % (TE) / 590 % "
-    "(TM) relative on the +-1 orders (r4_other_twins_pmm1d_win.json).  Fix: "
+    "(TM) relative on the +-1 orders, both builds "
+    "(r4_other_twins_pmm1d_{win,wsl}.json).  Fix: "
     "the cluster rule; remove the marker with the fix."))
 def test_e3r2_pmm1d_jax_angle_gradient_at_normal_incidence():
     """``pmm_efficiency_1d`` (JAX), period 1.2, ridge n 2 / groove 1, duty
@@ -1073,6 +1101,40 @@ def test_e3r2_an_ellipse_inside_the_sliver_margin_is_poisoned_when_traced():
     assert np.isfinite(float(fj(0.59)))
     assert np.isnan(float(fj(0.5995)))
     assert np.isnan(float(jax.jit(jax.grad(f))(0.5995)))
+
+
+def test_e3r2_oblique_rectangles_converge_at_the_measured_rate():
+    """V-E3-2 (documented, not changed): a rectangles-only ``shapes=`` stack
+    at OBLIQUE incidence runs the twin's identity-map route (L2 incident
+    projection) and NumPy's unmapped route (least-squares overlap); they
+    differ by the incident representation error, which must CONVERGE at the
+    measured rate.  T, theta 0.3, the verifier's fixture: 2.5e-4 / 3.8e-5 /
+    6.5e-7 at M = 3 / 4 / 5 (``v4b_rect_conical_M*_win.json``; this
+    probe's ``r8_oblique_rate_{win,wsl}.json``).  Pinned: M = 3 inside
+    [1e-5, 1e-3]; each step at least 3x (M 3 -> 4, measured 6.6x) and 10x
+    (M 4 -> 5, measured 58x) smaller; ``geometry='static'`` reproduces the
+    NumPy route to 1e-12 (8.5e-15)."""
+    from lumenairy.elements.pmm._jax_twod_staggered import StagJaxTwin
+    shp = [Rect(0.6, 0.55, 0.47, 0.42, 3.6)]
+    d = {}
+    for M in (3, 4, 5):
+        _o, _R, T, _J = _stack([dict(thickness=0.4, shapes=shp,
+                                     background_eps=1.0)], M=M,
+                               theta=0.3).solve()
+        _o, _R, Tn, _J = _stack([dict(thickness=0.4, shapes=shp,
+                                      background_eps=1.0)], M=M, theta=0.3,
+                                backend="numpy").solve()
+        d[M] = float(np.max(np.abs(np.asarray(T) - Tn)))
+        if M == 3:
+            tws = StagJaxTwin(_stack([dict(thickness=0.4, shapes=shp,
+                                           background_eps=1.0)], M=3,
+                                     theta=0.3, backend="numpy"),
+                              geometry="static")
+            _o, _R, Ts, _J = tws.solve()
+            assert np.max(np.abs(np.asarray(Ts) - Tn)) < 1e-12
+    assert 1e-5 <= d[3] <= 1e-3, d
+    assert d[4] <= d[3] / 3.0, d
+    assert d[5] <= d[4] / 10.0, d
 
 
 def test_e3r2_a_chained_cluster_far_from_the_reference_stays_finite():
