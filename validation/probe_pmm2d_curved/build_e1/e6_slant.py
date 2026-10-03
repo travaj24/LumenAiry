@@ -30,7 +30,7 @@ import os
 import sys
 import time
 
-import _common as C
+import _common as C  # noqa: F401 -- pins lumenairy to this tree
 import _e1common as E
 import e5_pillar as E5
 import numpy as np

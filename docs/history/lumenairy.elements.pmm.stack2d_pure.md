@@ -1,7 +1,7 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/pmm/stack2d_pure.py
-ast_sha256: 26cf15537b232da947d45450437a51377caaf580781e99a98809edffd2e25a52
-token_sha256: d8743486657d15962b2269fbc8fccff0fc4ce002f8c00b4fa8347032f429d7ea
+ast_sha256: 7ee796835b9f7c44baa8a79d94530ad52d5c8063bde4179c8aa073a233638455
+token_sha256: b556b79dc24af603b39d6a59d98b4d3a0cf62bf218ca5875481ac192b69aff28
 pre_relocation_lines: 2190
 recorded_by: WP-A17 SWEEP-2 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
@@ -12,6 +12,7 @@ re_recorded: 2026-10-02 -- the curved-cell map, Phase A: PMM2DStackPure(cmap=) -
 re_recorded: 2026-10-03 -- the curved-cell map, Phase C: add_layer(shapes=, background_eps=) and the stack-level merge of every shape layer into ONE map (_add_shapes_layer / _recompile_shapes; rectangles only -> the unmapped solver on the merged walls), the exact renormalised modal decomposition of the incident field under a map (_stag_incident_coeffs_mapped), the viewers drawing mapped cells as curves (_mapped_cell_outline / _plot_mapped_layer / _mapped_section) (BUILD_PMM2D_CURVED_C_2026_10_02)
 re_recorded: 2026-10-03 -- the curved-cell map, Phase C: the shape-layer rollback in _add_shapes_layer restructured from a broad except to try/finally (the except-budget gate; behaviour unchanged -- a refused merge restores the stack and the error propagates)
 re_recorded: 2026-10-03 -- the curved-cell map, Phase D: tensor and magnetic layers under a map -- _require_map_scope refuses only out-of-plane tensors (eps or mu) and slant (Phase E); add_layer(background_mu=) and per-shape mu (a magnetic shape layer is recorded as kind='magnetic'); the merge's tensor refusals narrowed to out-of-plane; a uniform mu layer may join a shape stack, a raw mu_cell may not (BUILD_PMM2D_CURVED_D_2026_10_03)
+re_recorded: 2026-10-03 -- curved-cell Phase E1 (2026-10-03): out-of-plane eps and slant accepted under a map / with shapes, slant x mu and OOP eps x mu accepted (refusals lifted, docstrings updated); no line the history document quotes changed
 -->
 
 # Version history -- `lumenairy/elements/pmm/stack2d_pure.py`
