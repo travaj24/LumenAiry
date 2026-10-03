@@ -1,0 +1,19 @@
+{
+ "eps_cell_traced_value_vs_numpy": 3.58046925441613e-15,
+ "eps_cell_AD": -0.1528414959173781,
+ "eps_cell_FDnumpy": -0.15284149590631216,
+ "eps_cell_rel": 7.240150093600941e-11,
+ "mu_cell_traced_value_vs_numpy": 2.4980018054066022e-15,
+ "mu_cell_AD": 0.00635705788812408,
+ "mu_cell_FDnumpy": 0.0063570578829845225,
+ "mu_cell_rel": 8.084804759096805e-10,
+ "mu_cell_traced_scale_value_vs_numpy": 2.4980018054066022e-15,
+ "env": {
+  "python": "3.12.3",
+  "numpy": "2.4.6",
+  "jax": "0.10.2",
+  "lumenairy": "/mnt/c/tmp/lum_vcurved_e3/lumenairy/__init__.py",
+  "platform": "linux",
+  "build": "wsl"
+ }
+}

@@ -1,0 +1,13 @@
+FAILED tests/unit/test_pmm2d_staggered_curved_e3.py::test_e3_2_forward_parity_twin_vs_numpy[circle]
+FAILED tests/unit/test_pmm2d_staggered_curved_e3.py::test_e3_2_forward_parity_twin_vs_numpy[circle_conical]
+FAILED tests/unit/test_pmm2d_staggered_curved_e3.py::test_e3_2_forward_parity_twin_vs_numpy[circle_tensor_magnetic_two_layer]
+FAILED tests/unit/test_pmm2d_staggered_curved_e3.py::test_e3_2_forward_parity_twin_vs_numpy[fillet]
+FAILED tests/unit/test_pmm2d_staggered_curved_e3.py::test_e3_2_forward_parity_twin_vs_numpy[magnetic_tensor]
+FAILED tests/unit/test_pmm2d_staggered_curved_e3.py::test_e3_2_forward_parity_twin_vs_numpy[multilayer]
+FAILED tests/unit/test_pmm2d_staggered_curved_e3.py::test_e3_2_forward_parity_twin_vs_numpy[scalar_conical_lossy]
+FAILED tests/unit/test_pmm2d_staggered_curved_e3.py::test_e3_2_forward_parity_twin_vs_numpy[scalar_pillar]
+FAILED tests/unit/test_pmm2d_staggered_curved_e3.py::test_e3_2_forward_parity_twin_vs_numpy[sinusoid]
+FAILED tests/unit/test_pmm2d_staggered_curved_e3.py::test_e3_2_forward_parity_twin_vs_numpy[tensor_lc]
+FAILED tests/unit/test_pmm2d_staggered_curved_e3.py::test_e3_5_gradients_through_degenerate_modes
+FAILED tests/unit/test_pmm2d_staggered_curved_e3.py::test_e3_convenience_entry_matches_numpy_and_traces_eps
+12 failed, 15 passed in 294.86s (0:04:54)

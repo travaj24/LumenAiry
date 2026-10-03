@@ -1,0 +1,9 @@
+FAILED tests/unit/test_pmm2d_staggered_curved_e3.py::test_e3_3_circle_radius_gradient_matches_fd
+FAILED tests/unit/test_pmm2d_staggered_curved_e3.py::test_e3_3_rectangle_width_gradient_matches_numpy_fd
+FAILED tests/unit/test_pmm2d_staggered_curved_e3.py::test_e3_3_material_and_depth_gradients_match_fd
+FAILED tests/unit/test_pmm2d_staggered_curved_e3.py::test_e3_4_a_fold_inside_the_trace_is_nan_and_a_path_inside_is_finite
+FAILED tests/unit/test_pmm2d_staggered_curved_e3.py::test_e3_5_gradients_through_degenerate_modes
+FAILED tests/unit/test_pmm2d_staggered_curved_e3.py::test_e3_5_mutations_of_the_eig_derivative_are_caught
+FAILED tests/unit/test_pmm2d_staggered_curved_e3.py::test_e3_6_jit_compiles_once_for_every_radius
+FAILED tests/unit/test_pmm2d_staggered_curved_e3.py::test_e3_7_stripe_gradients_match_the_1d_pmm_twin
+8 failed, 19 passed in 152.18s (0:02:32)

@@ -1,0 +1,70 @@
+{
+ "build": "win",
+ "pre_keys": 164,
+ "pre_error_keys": [],
+ "classes": [
+  "A1.scalar",
+  "A2.scalar",
+  "A3.tensor",
+  "A4.magnetic",
+  "A5.magnetic",
+  "A6.geom",
+  "A6.homog",
+  "B.circle",
+  "B.ellipse",
+  "B.fillet",
+  "B.rect",
+  "B.sine",
+  "B.two",
+  "C.curve",
+  "C.far",
+  "C.forward",
+  "C.inv",
+  "C.order",
+  "D.entry",
+  "D.merge",
+  "D.multilayer",
+  "D.oop",
+  "D.per",
+  "D.shapes",
+  "D.slant",
+  "D.two"
+ ],
+ "post": {
+  "keys": 164,
+  "equal": 164,
+  "differ": [],
+  "missing": [],
+  "jax_imported": true,
+  "twin_imported": false,
+  "blocked_hits": []
+ },
+ "post_blocktwin": {
+  "keys": 164,
+  "equal": 164,
+  "differ": [],
+  "missing": [],
+  "jax_imported": true,
+  "twin_imported": false,
+  "blocked_hits": []
+ },
+ "post_blockjax": {
+  "keys": 164,
+  "equal": 164,
+  "differ": [],
+  "missing": [],
+  "jax_imported": false,
+  "twin_imported": false,
+  "blocked_hits": []
+ },
+ "pre_blockjax": {
+  "keys": 164,
+  "equal": 164,
+  "differ": [],
+  "missing": [],
+  "jax_imported": false,
+  "twin_imported": false,
+  "blocked_hits": []
+ },
+ "pre_vs_pre_blockjax_differ": []
+}

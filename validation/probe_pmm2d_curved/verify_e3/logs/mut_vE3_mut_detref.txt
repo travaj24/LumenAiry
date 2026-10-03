@@ -1,0 +1,2 @@
+FAILED tests/unit/test_pmm2d_staggered_curved_e3.py::test_e3_3_rectangle_width_gradient_matches_numpy_fd
+1 failed, 26 passed in 327.27s (0:05:27)

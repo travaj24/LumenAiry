@@ -17063,5 +17063,15 @@
   "tests/unit/test_pmm2d_staggered_curved_e3.py::test_e3_convenience_entry_matches_numpy_and_traces_eps": 16.1,
   "tests/unit/test_pmm2d_staggered_curved_e3.py::test_e3_refusals_name_the_follow_up": 0.2,
   "tests/unit/test_pmm2d_staggered_curved_e3.py::test_e3_disable_jax_switch_and_x64_are_honoured": 0.21,
-  "tests/unit/test_pmm2d_staggered_curved_e3.py::test_e3_numpy_backend_rejects_params": 0.02
+  "tests/unit/test_pmm2d_staggered_curved_e3.py::test_e3_numpy_backend_rejects_params": 0.02,
+  "tests/unit/test_verify_pmm2d_curved_e3.py::test_ve3_numpy_solves_never_import_the_twin_module": 19.5,
+  "tests/unit/test_verify_pmm2d_curved_e3.py::test_ve3_symmetric_control_rect_width_gradient_matches_numpy": 26.6,
+  "tests/unit/test_verify_pmm2d_curved_e3.py::test_ve3_symmetry_breaking_gradient_at_a_square_pillar": 24.1,
+  "tests/unit/test_verify_pmm2d_curved_e3.py::test_ve3_the_eig_regularisation_is_load_bearing": 24.0,
+  "tests/unit/test_verify_pmm2d_curved_e3.py::test_ve3_sinusoid_wall_position_gradient_matches_numpy_fd": 18.1,
+  "tests/unit/test_verify_pmm2d_curved_e3.py::test_ve3_rectangles_at_oblique_incidence_run_the_mapped_route": 17.6,
+  "tests/unit/test_verify_pmm2d_curved_e3.py::test_ve3_inside_the_cell_contract_is_poisoned_when_traced": 10.5,
+  "tests/unit/test_verify_pmm2d_curved_e3.py::test_ve3_twin_module_holds_no_renamed_copy_of_a_shared_kernel": 1.0,
+  "tests/unit/test_verify_pmm2d_curved_e3.py::test_ve3_forward_mode_and_second_derivatives_raise": 16.5,
+  "tests/unit/test_verify_pmm2d_curved_e3.py::test_ve3_stripe_pairs_are_a_parity_selection_rule": 4.4
 }

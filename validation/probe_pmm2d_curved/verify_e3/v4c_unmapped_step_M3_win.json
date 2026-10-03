@@ -1,0 +1,19 @@
+{
+ "M": 3,
+ "d2_max": 6.948971758014011e-07,
+ "d2_median": 1.6488341048059851e-07,
+ "at_w": [
+  0.47209999999999996,
+  0.47222
+ ],
+ "nq_change_between": "no nq change",
+ "n_nq_changes_in_scan": 0,
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "jax": "0.11.0",
+  "lumenairy": "C:\\tmp\\lum_vcurved_e3\\lumenairy\\__init__.py",
+  "platform": "win32",
+  "build": "win"
+ }
+}

@@ -1,0 +1,6 @@
+v6b_symbreak.py 4 square_w
+v6b_symbreak.py 5 square_w
+v6b_symbreak.py 3 ellipse_a
+v6b_symbreak.py 4 ellipse_a
+v6b_symbreak.py 3 fillet_sq_w
+v6b_symbreak.py 4 square_wh

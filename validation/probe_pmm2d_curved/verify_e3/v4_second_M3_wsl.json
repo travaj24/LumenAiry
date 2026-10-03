@@ -1,0 +1,24 @@
+{
+ "mode": "second",
+ "M": 3,
+ "second": {
+  "rect_w": {
+   "nested_grad_error": "NotImplementedError('Derivatives of non-symmetric eigenvectors are only valid under assumptions on the input that JAX cannot check (see the enable_eigvec_derivs argument to jax.lax.linalg.eig). Pass enable_eigvec_derivs=True to jax.lax.linalg.eig to opt in. See https://github.com/jax-ml/jax/issues/2",
+   "hessian_error": "NotImplementedError: Derivatives of non-symmetric eigenvectors are only valid under assumptions on the input that JAX cannot check (see the enable_eigvec_derivs argument to jax.lax.linalg.eig). Pass enable_eigvec_derivs=T",
+   "jvp_error": "TypeError: can't apply forward-mode autodiff (jvp) to a custom_vjp function."
+  },
+  "circle_r": {
+   "nested_grad_error": "NotImplementedError('Derivatives of non-symmetric eigenvectors are only valid under assumptions on the input that JAX cannot check (see the enable_eigvec_derivs argument to jax.lax.linalg.eig). Pass enable_eigvec_derivs=True to jax.lax.linalg.eig to opt in. See https://github.com/jax-ml/jax/issues/2",
+   "hessian_error": "NotImplementedError: Derivatives of non-symmetric eigenvectors are only valid under assumptions on the input that JAX cannot check (see the enable_eigvec_derivs argument to jax.lax.linalg.eig). Pass enable_eigvec_derivs=T",
+   "jvp_error": "TypeError: can't apply forward-mode autodiff (jvp) to a custom_vjp function."
+  }
+ },
+ "env": {
+  "python": "3.12.3",
+  "numpy": "2.4.6",
+  "jax": "0.10.2",
+  "lumenairy": "/mnt/c/tmp/lum_vcurved_e3/lumenairy/__init__.py",
+  "platform": "linux",
+  "build": "wsl"
+ }
+}

@@ -1,0 +1,15 @@
+done v4_grads.py second 3 rc=0
+done v4_grads.py jac 3 rc=0
+done v3_parity.py 3 rc=0
+done v4_grads.py film 3 rc=0
+done v4_grads.py ladder 3 rc=0
+done v6b_symbreak.py 3 square_w rc=0
+done v8_stripe.py grad 7 rc=0
+done v2_frozen.py circle 4 twin numpy rc=0
+done v6b_symbreak.py 4 square_w rc=0
+done v6b_symbreak.py 3 square_wh rc=0
+done v2_frozen.py sinex 4 twin numpy rc=0
+done q1_entry_traced_cell.py rc=0
+done v7_jit.py 4 rc=0
+done v4b_rect_conical.py 4 rc=0
+done v5_events.py 3 rc=0
