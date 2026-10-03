@@ -1,0 +1,9 @@
+e7_onsager.py stair 5
+e7_onsager.py stair 7
+e7_onsager.py curved 5
+e7_onsager.py curved 7
+e7_onsager.py slanted 5
+e7_onsager.py slanted 7
+e7_onsager.py stair 9
+e7_onsager.py curved 9
+e7_onsager.py slanted 9

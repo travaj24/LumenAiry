@@ -1,0 +1,23 @@
+e3_slab.py ladder shear nonrec normal 4,5,6,7 slant=0.2,-0.1
+e3_slab.py ladder s05g3 nonrec normal 4,5,6,7,8 slant=0.2,-0.1
+e3_slab.py ladder none nonrec normal 4,5,6,7,8 slant=0.2,-0.1
+e3_slab.py ladder shear eps_iso normal 4,5,6,7 slant=0.2,-0.1
+e3_slab.py arms shear nonrec normal 6 tau_unmapped,no_slant_blocks,kappa_no_chi,no_mu_blocks,chi33_no_sg,g3_strong,rot_flip,hgauge_plus_i,hgauge_one slant=0.2,-0.1
+e3_slab.py arms id3 nonrec normal 6 tau_unmapped,no_slant_blocks,kappa_no_chi,no_mu_blocks,chi33_no_sg,g3_strong,rot_flip,hgauge_plus_i,hgauge_one slant=0.2,-0.1
+e3_slab.py arms none nonrec normal 6 tau_unmapped,no_slant_blocks,kappa_no_chi,no_mu_blocks,chi33_no_sg,g3_strong,rot_flip,hgauge_plus_i,hgauge_one slant=0.2,-0.1
+e3_slab.py ladder shear nonrec oblique 4,5,6,7 slant=0.2,-0.1
+e3_slab.py ladder s05g3 nonrec oblique 4,5,6,7,8 slant=0.2,-0.1
+e3_slab.py ladder none nonrec oblique 4,5,6,7,8 slant=0.2,-0.1
+e3_slab.py ladder shear eps_iso oblique 4,5,6,7 slant=0.2,-0.1
+e3_slab.py arms shear nonrec oblique 6 tau_unmapped,no_slant_blocks,kappa_no_chi,no_mu_blocks,chi33_no_sg,g3_strong,rot_flip,hgauge_plus_i,hgauge_one slant=0.2,-0.1
+e3_slab.py arms id3 nonrec oblique 6 tau_unmapped,no_slant_blocks,kappa_no_chi,no_mu_blocks,chi33_no_sg,g3_strong,rot_flip,hgauge_plus_i,hgauge_one slant=0.2,-0.1
+e3_slab.py arms none nonrec oblique 6 tau_unmapped,no_slant_blocks,kappa_no_chi,no_mu_blocks,chi33_no_sg,g3_strong,rot_flip,hgauge_plus_i,hgauge_one slant=0.2,-0.1
+e3_slab.py ladder shear nonrec conical 4,5,6,7 slant=0.2,-0.1
+e3_slab.py ladder s05g3 nonrec conical 4,5,6,7,8 slant=0.2,-0.1
+e3_slab.py ladder none nonrec conical 4,5,6,7,8 slant=0.2,-0.1
+e3_slab.py ladder shear eps_iso conical 4,5,6,7 slant=0.2,-0.1
+e3_slab.py arms shear nonrec conical 6 tau_unmapped,no_slant_blocks,kappa_no_chi,no_mu_blocks,chi33_no_sg,g3_strong,rot_flip,hgauge_plus_i,hgauge_one slant=0.2,-0.1
+e3_slab.py arms id3 nonrec conical 6 tau_unmapped,no_slant_blocks,kappa_no_chi,no_mu_blocks,chi33_no_sg,g3_strong,rot_flip,hgauge_plus_i,hgauge_one slant=0.2,-0.1
+e3_slab.py arms none nonrec conical 6 tau_unmapped,no_slant_blocks,kappa_no_chi,no_mu_blocks,chi33_no_sg,g3_strong,rot_flip,hgauge_plus_i,hgauge_one slant=0.2,-0.1
+e2_identity.py 5
+e2_identity.py 7

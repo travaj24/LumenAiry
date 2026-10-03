@@ -1,0 +1,58 @@
+{
+ "M": 6,
+ "reps": 2,
+ "inplane_mapped": {
+  "assembly": 0.3942878999951063,
+  "eig": 2.5665929000024335,
+  "total": 2.9608807999975397,
+  "peak_MB": 65.50001621246338,
+  "dim": 450,
+  "assembly_best": 0.3496461000031559,
+  "eig_best": 2.5665929000024335
+ },
+ "oop_mapped": {
+  "assembly": 0.46464250000281027,
+  "eig": 2.4694014999986393,
+  "total": 2.9340440000014496,
+  "peak_MB": 133.36943340301514,
+  "dim": 900,
+  "assembly_best": 0.46464250000281027,
+  "eig_best": 2.4694014999986393
+ },
+ "oop_slant_mapped": {
+  "assembly": 0.5043398999987403,
+  "eig": 2.4685965000026044,
+  "total": 2.9729364000013447,
+  "peak_MB": 140.145601272583,
+  "dim": 900,
+  "assembly_best": 0.5043398999987403,
+  "eig_best": 2.4685965000026044
+ },
+ "oop_unmapped": {
+  "assembly": 0.17034250000142492,
+  "eig": 2.3023242999988724,
+  "total": 2.4726668000002974,
+  "peak_MB": 112.86323165893555,
+  "dim": 900,
+  "assembly_best": 0.1668290999950841,
+  "eig_best": 2.3023242999988724
+ },
+ "ratio_oop_mapped_vs_inplane_mapped": 0.9909362106045903,
+ "ratio_oop_slant_mapped_vs_inplane_mapped": 1.0040716262552059,
+ "ratio_oop_unmapped_vs_inplane_mapped": 0.8351119031885215,
+ "ratio_oop_mapped_vs_oop_unmapped": 1.1865909308933564,
+ "peak_ratio_oop_mapped_vs_inplane_mapped": 2.0361740517804257,
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "lumenairy": "C:\\tmp\\lum_curved_e1\\lumenairy\\__init__.py",
+  "tree": "post",
+  "machine": "Tesla_Ryzen",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ }
+}
