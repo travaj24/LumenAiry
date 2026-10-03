@@ -335,6 +335,20 @@ def _stag_interior(spec):
     return np.asarray(spec, dtype=float)[1:-1].copy()
 
 
+def _cell_is_homogeneous(cell, mcell):
+    """True when a compiled shape layer paints ONE material everywhere (its
+    eps cell, and mu cell if any, constant over the grid)."""
+    c = np.asarray(cell)
+    flat = c.reshape((-1,) + c.shape[2:])
+    if not np.all(flat == flat[0]):
+        return False
+    if mcell is None:
+        return True
+    m = np.asarray(mcell)
+    mf = m.reshape((-1,) + m.shape[2:])
+    return bool(np.all(mf == mf[0]))
+
+
 def _spec_is_lossless(spec, uniform):
     """True when a layer's ``eps`` / ``mu`` specification absorbs nothing:
     exactly real if scalar, Hermitian if a ``(3, 3)`` tensor (per cell)."""
@@ -855,6 +869,15 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         # shipped unmapped solver runs on (self._shape_walls).
         self._shapes_map = False
         self._shape_walls = None
+        # PHASE E2 (per-layer maps): with layer_grids='per-layer' every shape
+        # layer compiles its OWN map; the stack-wide merge of Phase C is kept
+        # as the FAST PATH when it succeeds (_shapes_fast) and the stack has
+        # nothing else per-layer.  _e2_per_layer_maps is a TEST INSTRUMENT
+        # (never set by library code) that disables the fast path, so a stack
+        # whose maps merge can be driven through the curved mortar too.
+        self._shapes_fast = False
+        self._merge_refusal = None
+        self._e2_per_layer_maps = False
         if cmap is not None:
             self._init_map(cmap)
         self._src = None
@@ -867,11 +890,12 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         fn = "PMM2DStackPure"
         if self.layer_grids != "shared":
             raise NotImplementedError(
-                f"{fn}: cmap= with layer_grids='per-layer' is not implemented "
-                f"-- per-layer grids under a map need a curved (non-separable) "
-                f"mortar between the layers' partitions, which is Phase E of "
-                f"the curved-cell plan.  Use the default layer_grids='shared' "
-                f"(one map, one grid, every interface a square match).")
+                f"{fn}: a STACK-wide cmap= with layer_grids='per-layer' is "
+                f"not implemented -- with per-layer grids every layer owns "
+                f"its map (Phase E2 of the curved-cell plan): pass it per "
+                f"layer, add_layer(..., cmap=...), or describe the layer with "
+                f"add_layer(shapes=...).  Use the default "
+                f"layer_grids='shared' for ONE map shared by every layer.")
         if not callable(getattr(cmap, "geom", None)) or not hasattr(
                 cmap, "fingerprint"):
             raise TypeError(
@@ -891,6 +915,67 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
                 f"the staggered basis requires it), got {nx} x {ny}.")
         self.cmap = cmap
         self._grid = (nx, ny)
+
+    def _check_layer_map(self, cmap, *, eps_cell=None, mu_cell=None,
+                         eps=None, mu=None, slant=None, walls=()):
+        """Validate a PER-LAYER map (``add_layer(..., cmap=)``, Phase E2):
+        per-layer grids only, the map protocol, the periods, a square grid,
+        the cell shapes, and the scope refusals (slant, out-of-plane
+        tensors) of the stack-wide map."""
+        fn = "PMM2DStackPure.add_layer"
+        if self.layer_grids != "per-layer":
+            raise ValueError(
+                f"{fn}: cmap= on a LAYER is the per-layer route "
+                f"(layer_grids='per-layer', every layer its own map, joined "
+                f"by the curved mortar).  For ONE map shared by every layer "
+                f"pass it to the stack: PMM2DStackPure(..., cmap=...).")
+        if any(w is not None for w in walls):
+            raise ValueError(
+                f"{fn}: cmap= fixes the layer's (u, v) wall grid; it cannot "
+                f"be combined with x_walls / y_walls / grid.")
+        if not callable(getattr(cmap, "geom", None)) or not hasattr(
+                cmap, "fingerprint"):
+            raise TypeError(
+                f"{fn}: cmap must follow the map protocol of "
+                f"lumenairy.elements.pmm._curvemap (geom(sx, sy, U, V) and "
+                f"fingerprint), got {type(cmap).__name__}.")
+        for per, mper, ax in ((self.period_x, cmap.period_x, "x"),
+                              (self.period_y, cmap.period_y, "y")):
+            if abs(float(mper) - per) > 1e-12 * per:
+                raise ValueError(
+                    f"{fn}: the map's {ax}-period {mper!r} differs from the "
+                    f"stack's {per!r}.")
+        nx, ny = cmap.shape
+        if nx != ny:
+            raise ValueError(
+                f"{fn}: the map's (u, v) wall grid must be SQUARE (Nx == Ny; "
+                f"the staggered basis requires it), got {nx} x {ny}.")
+        for what, c in (("eps_cell", eps_cell), ("mu_cell", mu_cell)):
+            if c is not None and tuple(np.shape(c)[:2]) != (nx, ny):
+                raise ValueError(
+                    f"{fn}: {what} has shape {np.shape(c)[:2]}, but the "
+                    f"layer's map has a {nx} x {ny} (u, v) wall grid -- one "
+                    f"entry per (u, v) cell.")
+        if not _slant_is_zero(_norm_slant_pair(slant, fn)):
+            raise NotImplementedError(
+                f"{fn}: slant= under a coordinate map is not implemented (the "
+                f"shear composes with the map -- Phase E of the curved-cell "
+                f"plan).")
+        for what, spec, uni in (("eps", eps, True), ("eps_cell", eps_cell,
+                                                     False),
+                                ("mu", mu, True), ("mu_cell", mu_cell, False)):
+            if spec is None:
+                continue
+            a = np.asarray(spec)
+            t33 = (a[None, None] if (uni and a.shape == (3, 3)) else
+                   a if (not uni and a.ndim == 4) else None)
+            if t33 is not None and _tile_is_offplane(t33):
+                raise NotImplementedError(
+                    f"{fn}: an OUT-OF-PLANE tensor {what} under a coordinate "
+                    f"map is not implemented -- the out-of-plane first-order "
+                    f"generator has no permeability blocks and a map makes "
+                    f"every region magnetic (Phase E of the curved-cell "
+                    f"plan).  BLOCK-FORM tensors are accepted.")
 
     def _require_map_scope(self, *, eps=None, eps_cell=None, mu=None,
                            mu_cell=None, slant=None):
@@ -928,7 +1013,7 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
     def add_layer(self, thickness, *, eps=None, eps_cell=None, mu=None,
                   mu_cell=None, slant=None, x_walls=None, y_walls=None,
                   grid=None, n_modes=None, max_pencil_dof=None, shapes=None,
-                  background_eps=None, background_mu=None):
+                  background_eps=None, background_mu=None, cmap=None):
         """Append a layer.  Pass exactly ONE of ``eps`` or ``eps_cell``, and
         at most one of ``mu`` (uniform) or ``mu_cell`` (patterned).
 
@@ -1080,12 +1165,38 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         tensor and ``slant`` raise ``NotImplementedError`` (Phase E).  Raw
         ``eps_cell`` / ``mu_cell`` layers cannot be mixed with shape layers
         (describe rectangles with :class:`~lumenairy.elements.pmm.Rect`),
-        nor can an explicit ``cmap=``; and ``layer_grids='per-layer'`` with
-        shapes raises (a curved mortar, Phase E)."""
+        nor can an explicit ``cmap=``.
+
+        PER-LAYER MAPS (``layer_grids='per-layer'``, Phase E2 of the
+        curved-cell plan).  Every shape layer then compiles its OWN wall grid
+        and map, and two neighbouring layers on different maps are joined by
+        the CURVED MORTAR -- a non-separable cross-mass integrated over the
+        physical cell (:mod:`lumenairy.elements.pmm._curvemortar`) -- so the
+        outlines of two layers MAY cross in plan view (a circle over a
+        sinusoidal wall that runs through it), which the stack-wide merge
+        refuses.  When the merge DOES succeed and no layer asks for anything
+        per-layer (``n_modes`` / ``grid`` / walls / ``cmap`` / a raw
+        ``eps_cell``), the stack runs the merged map exactly as
+        ``layer_grids='shared'`` does (the fast path, byte for byte).  Raw
+        ``eps_cell`` layers may join a per-layer shape stack (each on its own
+        grid).  ``n_modes=`` is accepted with ``shapes=`` there.
+
+        ``cmap=`` (``layer_grids='per-layer'`` only) is this layer's OWN
+        coordinate map (:mod:`lumenairy.elements.pmm._curvemap`): its
+        ``(u, v)`` wall grid is the layer's grid and ``eps_cell`` (or
+        ``mu_cell``) gives the permittivity of its ``(u, v)`` cells; a UNIFORM
+        layer with ``cmap=`` is solved on that map.  It excludes ``x_walls`` /
+        ``y_walls`` / ``grid`` / ``shapes``; an OUT-OF-PLANE tensor and
+        ``slant`` under it raise (Phase E).  On the shared path the map is
+        the stack's (``PMM2DStackPure(..., cmap=)``)."""
         self._modal = None      # geometry change supersedes retained amplitudes
         self._internal = None
         if (shapes is not None or background_eps is not None
                 or background_mu is not None):
+            if cmap is not None:
+                raise ValueError(
+                    "PMM2DStackPure.add_layer: shapes= makes the layer's map "
+                    "itself; it cannot be combined with cmap=.")
             return self._add_shapes_layer(
                 thickness, shapes, background_eps,
                 others=dict(eps=eps, eps_cell=eps_cell, mu=mu,
@@ -1093,14 +1204,19 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
                             y_walls=y_walls, grid=grid, n_modes=n_modes),
                 slant=slant, max_pencil_dof=max_pencil_dof,
                 background_mu=background_mu)
-        if self._shapes_map and eps_cell is not None:
+        if cmap is not None:
+            self._check_layer_map(cmap, eps_cell=eps_cell, mu_cell=mu_cell,
+                                  eps=eps, mu=mu, slant=slant,
+                                  walls=(x_walls, y_walls, grid))
+        per_layer_mix = self.layer_grids == "per-layer"
+        if self._shapes_map and eps_cell is not None and not per_layer_mix:
             raise ValueError(
                 "PMM2DStackPure.add_layer: this stack's patterned layers are "
                 "given by shapes= (the stack merges them into one wall grid "
                 "and map), so a raw eps_cell layer cannot join it -- its "
                 "cells would refer to a grid the merge does not know.  "
                 "Describe the layer with shapes (Rect for rectangles).")
-        if self._shapes_map and mu_cell is not None:
+        if self._shapes_map and mu_cell is not None and not per_layer_mix:
             raise ValueError(
                 "PMM2DStackPure.add_layer: this stack's patterned layers are "
                 "given by shapes= (the stack merges them into one wall grid "
@@ -1118,7 +1234,7 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
                 "PMM2DStackPure.add_layer: pass exactly ONE of eps (uniform) or "
                 "eps_cell (patterned).")
         _pl = self._perlayer_spec(eps, eps_cell, x_walls, y_walls, grid,
-                                  n_modes)
+                                  n_modes, cmap=cmap)
         self._require_map_scope(eps=eps, eps_cell=eps_cell, mu=mu,
                                 mu_cell=mu_cell, slant=slant)
         t = float(thickness)
@@ -1205,23 +1321,23 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
             raise ValueError(
                 f"{fn}: shapes= and background_eps= go together (the "
                 f"permittivity where no shape is painted is required).")
-        given = [k for k, v in others.items() if v is not None]
+        per_layer = self.layer_grids == "per-layer"
+        n_modes = others.get("n_modes") if per_layer else None
+        given = [k for k, v in others.items() if v is not None
+                 and not (per_layer and k == "n_modes")]
         if given:
             raise ValueError(
                 f"{fn}: shapes= describes the whole layer; it cannot be "
                 f"combined with {', '.join(given)}.")
+        if n_modes is not None and int(n_modes) < 3:
+            raise ValueError(
+                f"{fn}: n_modes (modified-Legendre count M) must be >= 3, "
+                f"got {n_modes!r}.")
         if not _slant_is_zero(_norm_slant_pair(slant, fn)):
             raise NotImplementedError(
                 f"{fn}: slant= together with shapes= is not implemented (the "
                 f"shear composes with the map -- Phase E of the curved-cell "
                 f"plan).")
-        if self.layer_grids != "shared":
-            raise NotImplementedError(
-                f"{fn}: shapes= with layer_grids='per-layer' is not "
-                f"implemented -- the stack merges every shape layer into ONE "
-                f"map; different maps per layer need a curved "
-                f"(non-separable) mortar, Phase E of the curved-cell plan.  "
-                f"Use the default layer_grids='shared'.")
         if self.cmap is not None and not self._shapes_map:
             raise ValueError(
                 f"{fn}: this stack was built with an explicit cmap=; shape "
@@ -1232,7 +1348,7 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
             uniform_mag = (L.get("kind") == "magnetic"
                            and L.get("eps_uniform") and L.get("mu_uniform"))
             if L.get("kind") in ("patterned", "magnetic") and \
-                    "shapes" not in L and not uniform_mag:
+                    "shapes" not in L and not uniform_mag and not per_layer:
                 raise ValueError(
                     f"{fn}: this stack already holds a patterned layer given "
                     f"by eps_cell / mu_cell; shape layers merge into a wall "
@@ -1255,6 +1371,12 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
                    background_eps=background_eps,
                    background_mu=background_mu,
                    max_pencil_dof=max_pencil_dof)
+        if per_layer:
+            # PHASE E2: the layer's own modal count (the map and walls are
+            # filled in by the per-layer compile)
+            rec.update(M=int(self.M if n_modes is None else n_modes),
+                       n_modes_given=True,
+                       pl_keywords=n_modes is not None)
         self._layers.append(rec)
         merged = False
         try:
@@ -1270,6 +1392,7 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
                 else:
                     self.cmap, self._shape_walls = None, None
                     self._shapes_map, self._grid = False, None
+                    self._shapes_fast, self._merge_refusal = False, None
         if max_pencil_dof is not None:
             self._stag_cost_ack = True
         return self
@@ -1277,7 +1400,109 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
     def _recompile_shapes(self):
         """Merge the shapes of every shape layer into ONE wall grid and ONE
         map (:func:`~lumenairy.elements.pmm.shapes2d._merge`), then give
-        every shape layer its ``eps_cell`` on that grid."""
+        every shape layer its ``eps_cell`` on that grid.  With
+        ``layer_grids='per-layer'`` see :meth:`_recompile_shapes_perlayer`."""
+        if self.layer_grids == "per-layer":
+            return self._recompile_shapes_perlayer()
+        return self._recompile_shapes_merged()
+
+    def _recompile_shapes_perlayer(self):
+        """PHASE E2: every shape layer compiles its OWN wall grid and map
+        (``L['own']``: ``cell``, ``mu``, ``cmap`` -- ``None`` for rectangles
+        only -- and the walls), which the per-layer cascade joins by the
+        curved mortar.  The stack-wide merge of Phase C is then attempted:
+        when it succeeds the stack keeps the merged map too, and
+        :meth:`solve` takes it (the FAST PATH, byte-identical to
+        ``layer_grids='shared'``) whenever no layer asks for anything
+        per-layer (:meth:`_perlayer_fast_ok`).  A merge REFUSAL (crossing
+        outlines, two curves on one edge, a fold, a sliver of the MERGED
+        grid) is not an error here -- it is the case this path exists for --
+        and is kept in ``_merge_refusal``."""
+        from .shapes2d import _merge
+        fn = "PMM2DStackPure.add_layer"
+        for k, L in enumerate(self._layers):
+            if "shapes" not in L or L.get("own") is not None:
+                continue
+            U, V, cm, cells, identity, mus = _merge(
+                self.period_x, self.period_y,
+                [(f"layer {k + 1}", L["shapes"], L["background_eps"],
+                  L.get("background_mu"))])
+            cell, mcell = cells[0], mus[0]
+            if not identity:
+                for what, c in (("permittivity", cell),
+                                ("permeability", mcell)):
+                    if c is not None and c.ndim == 4 and _tile_is_offplane(c):
+                        raise NotImplementedError(
+                            f"{fn}: layer {k + 1} carries an OUT-OF-PLANE "
+                            f"tensor {what} on a CURVED map (an out-of-plane "
+                            f"tensor under a map is Phase E of the "
+                            f"curved-cell plan).  BLOCK-FORM tensors are "
+                            f"accepted.")
+            _validate_stag_cost(fn, int(L.get("M") or self.M), cell,
+                                max_pencil_dof=L.get("max_pencil_dof"),
+                                check=("raise",))
+            own = dict(cell=cell, mu=mcell, cmap=None if identity else cm,
+                       homogeneous=_cell_is_homogeneous(cell, mcell))
+            if identity:
+                own.update(wx=_stag_walls_spec(self.period_x, U, U.size - 1,
+                                               "x_walls", fn),
+                           wy=_stag_walls_spec(self.period_y, V, V.size - 1,
+                                               "y_walls", fn))
+            else:
+                own.update(wx=cm.u_walls, wy=cm.v_walls)
+            L["own"] = own
+            L.update(wx=own["wx"], wy=own["wy"], cmap=own["cmap"])
+        self._shapes_map = True
+        self._shapes_fast = False
+        try:
+            self._recompile_shapes_merged()
+            self._shapes_fast = True
+            self._merge_refusal = None
+        except (ValueError, NotImplementedError) as ex:
+            # the outlines have no common map: the per-layer maps carry the
+            # stack (and the merged-map state is cleared)
+            self._merge_refusal = str(ex)
+            self.cmap, self._shape_walls, self._grid = None, None, None
+            for L in self._layers:
+                own = L.get("own")
+                if own is None:
+                    continue
+                L["eps_cell"] = own["cell"]
+                if own["mu"] is None:
+                    L["kind"] = "patterned"
+                    for key in ("eps", "eps_uniform", "mu", "mu_uniform"):
+                        L.pop(key, None)
+                else:
+                    L.update(kind="magnetic", eps=own["cell"],
+                             eps_uniform=False, mu=own["mu"],
+                             mu_uniform=False)
+
+    def _perlayer_fast_ok(self):
+        """True when a ``layer_grids='per-layer'`` stack may run the merged
+        shape map on the shared-grid path (the Phase C fast path): the merge
+        succeeded and no layer asked for anything per-layer -- its own
+        ``n_modes`` / ``grid`` / walls / ``cmap``, or a raw ``eps_cell`` /
+        ``mu_cell`` (which lives on a grid the merge does not know)."""
+        if not (self._shapes_fast and self._shapes_map):
+            return False
+        if self._e2_per_layer_maps:
+            return False
+        for L in self._layers:
+            if L.get("pl_keywords") or L.get("cmap") is not None and \
+                    "shapes" not in L:
+                return False
+            if "shapes" in L:
+                continue
+            if L["kind"] == "patterned":
+                return False
+            if L["kind"] == "magnetic" and not (L.get("eps_uniform")
+                                                and L.get("mu_uniform")):
+                return False
+        return True
+
+    def _recompile_shapes_merged(self):
+        """The stack-wide merge (Phase C): ONE wall grid and ONE map for
+        every shape layer."""
         from .shapes2d import _merge
         fn = "PMM2DStackPure.add_layer"
         idx = [k for k, L in enumerate(self._layers) if "shapes" in L]
@@ -1342,7 +1567,8 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         else:
             self.cmap, self._shape_walls = cmap, None
 
-    def _perlayer_spec(self, eps, eps_cell, x_walls, y_walls, grid, n_modes):
+    def _perlayer_spec(self, eps, eps_cell, x_walls, y_walls, grid, n_modes,
+                       cmap=None):
         """Validate the four PER-LAYER-GRID keywords and turn them into the
         record fields ``(wx, wy, M)`` -- or ``{}`` on the shared path, where
         all four are REFUSED.
@@ -1390,6 +1616,12 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
             raise ValueError(
                 f"{fn}: n_modes (modified-Legendre count M) must be >= 3, got "
                 f"{n_modes!r}.")
+        if cmap is not None:
+            # PHASE E2: the layer's OWN map fixes its (u, v) wall grid
+            return {"wx": cmap.u_walls, "wy": cmap.v_walls, "M": M,
+                    "n_modes_given": (eps_cell is not None
+                                      or n_modes is not None),
+                    "cmap": cmap, "pl_keywords": True}
         if eps_cell is not None:
             if grid is not None:
                 raise ValueError(
@@ -1410,7 +1642,8 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
                         f"walls given, eps_cell is the STRIP TILE -- shape "
                         f"(len(x_walls) + 1, len(y_walls) + 1) for interior "
                         f"wall lists, exactly the hybrid's `tile`.")
-            return {"wx": wx, "wy": wy, "M": M, "n_modes_given": True}
+            return {"wx": wx, "wy": wy, "M": M, "n_modes_given": True,
+                    "pl_keywords": True}
         # UNIFORM (scalar / tensor / magnetic-uniform): no walls of its own.
         if grid is not None and (x_walls is not None or y_walls is not None):
             raise ValueError(
@@ -1427,7 +1660,8 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
                 f"(Nx == Ny), got {_stag_walls_n(wx)} and "
                 f"{_stag_walls_n(wy)}.  The wall POSITIONS may differ freely.")
         return {"wx": wx, "wy": wy, "M": M,
-                "n_modes_given": n_modes is not None}
+                "n_modes_given": n_modes is not None,
+                "pl_keywords": any(v is not None for v in given.values())}
 
     def _finish_layer(self, pl):
         """Attach the per-layer grid record produced by :meth:`_perlayer_spec`
@@ -1814,14 +2048,25 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
             return e
         return L.get("eps", L.get("eps33"))
 
-    def _mapped_cell_outline(self, sx, sy, n=64):
+    def _layer_map(self, L):
+        """The coordinate map layer ``L`` is solved (and drawn) on: the
+        stack's map on the shared path; with per-layer grids (Phase E2) the
+        merged shape map when the stack takes the fast path, else the
+        layer's OWN map (``None`` for an unmapped layer)."""
+        if self.layer_grids != "per-layer":
+            return self.cmap
+        if "shapes" in L and self._shapes_fast and self._perlayer_fast_ok():
+            return self.cmap
+        return L.get("cmap")
+
+    def _mapped_cell_outline(self, sx, sy, n=64, cm=None):
         """The PHYSICAL outline of ``(u, v)`` cell ``(sx, sy)`` under the
-        stack's map: ``{'b', 'r', 't', 'l'}`` -> ``(n, 2)`` points along its
-        bottom, right, top and left edges (each running counter-clockwise),
-        evaluated through the map itself, so a curved edge is drawn as the
-        curve the solver uses (the transfinite blend reproduces every edge
-        curve exactly on its edge)."""
-        cm = self.cmap
+        stack's map (or the layer map ``cm``): ``{'b', 'r', 't', 'l'}`` ->
+        ``(n, 2)`` points along its bottom, right, top and left edges (each
+        running counter-clockwise), evaluated through the map itself, so a
+        curved edge is drawn as the curve the solver uses (the transfinite
+        blend reproduces every edge curve exactly on its edge)."""
+        cm = self.cmap if cm is None else cm
         u0, u1 = cm.u_bounds[sx], cm.u_bounds[sx + 1]
         v0, v1 = cm.v_bounds[sy], cm.v_bounds[sy + 1]
         s = np.linspace(0.0, 1.0, n)
@@ -1834,13 +2079,13 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
             out[side] = np.stack([X, Y], 1)
         return out
 
-    def _plot_mapped_layer(self, ax, L, names, cols, edges, seen):
+    def _plot_mapped_layer(self, ax, L, names, cols, edges, seen, cm=None):
         """Draw one layer of a MAPPED stack: every ``(u, v)`` cell as its
         physical image (curved edges as curves, no wall lines), then the
         MATERIAL boundaries -- the cell edges between two different
         permittivities -- as curves.  Returns the boundary lines drawn."""
         from matplotlib.patches import Polygon
-        cm = self.cmap
+        cm = self.cmap if cm is None else cm
         nx, ny = cm.shape
         keys = {}
         polys = {}
@@ -1852,7 +2097,7 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
                 col, hatch = _stag_material_style(e)
                 col = cols.get(names.get(key), col)
                 seen[key] = (col, hatch, edges.get(key, "#1b1b1b"))
-                o = self._mapped_cell_outline(i, j)
+                o = self._mapped_cell_outline(i, j, cm=cm)
                 polys[(i, j)] = o
                 ax.add_patch(Polygon(np.concatenate([o["b"], o["r"], o["t"],
                                                      o["l"]]),
@@ -1871,7 +2116,7 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
                                          color="#1b1b1b", lw=0.9)
         return lines
 
-    def _mapped_section(self, L, axis, cut, n=1025):
+    def _mapped_section(self, L, axis, cut, n=1025, cm=None):
         """``[(a, b, eps), ...]`` -- the material runs along the PHYSICAL
         line ``y = cut`` (``axis = 0``) or ``x = cut`` (``axis = 1``) through
         one layer of a mapped stack.  A shape layer is read from its shapes'
@@ -1892,12 +2137,12 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
                 return e
         else:
             from matplotlib.path import Path
-            cm = self.cmap
+            cm = self.cmap if cm is None else cm
             nx, ny = cm.shape
             cells = []
             for i in range(nx):
                 for j in range(ny):
-                    o = self._mapped_cell_outline(i, j, 128)
+                    o = self._mapped_cell_outline(i, j, 128, cm=cm)
                     cells.append((Path(np.concatenate([o["b"], o["r"],
                                                        o["t"], o["l"]])),
                                   self._layer_entry(L, i, j)))
@@ -1965,10 +2210,13 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
             axes = list(axes[0])
         seen = {}
         for ax, L in zip(axes, self._layers):
-            if self.cmap is not None:
-                # a MAPPED stack (shape layers or an explicit cmap=): draw
-                # the physical images of the cells, outlines as curves
-                self._plot_mapped_layer(ax, L, names, cols, edges, seen)
+            cm_L = self._layer_map(L)
+            if cm_L is not None:
+                # a MAPPED layer (shape layers or an explicit cmap=; with
+                # per-layer grids its own map): draw the physical images of
+                # the cells, outlines as curves
+                self._plot_mapped_layer(ax, L, names, cols, edges, seen,
+                                        cm=cm_L)
                 ax.set_xlim(0.0, self.period_x)
                 ax.set_ylim(0.0, self.period_y)
                 ax.set_aspect("equal")
@@ -2043,10 +2291,12 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         z = 0.0
         for L in self._layers:
             t = float(L["thickness"])
-            if self.cmap is not None:
-                # a MAPPED stack: the material along the physical cut line,
+            cm_L = self._layer_map(L)
+            if cm_L is not None:
+                # a MAPPED layer: the material along the physical cut line,
                 # its boundaries located to round-off by bisection
-                for x0, x1, e in self._mapped_section(L, axis, cut):
+                for x0, x1, e in self._mapped_section(L, axis, cut,
+                                                      cm=cm_L):
                     key = _stag_eps_key(e)
                     col, hatch = _stag_material_style(e)
                     col = cols.get(names.get(key), col)
@@ -2301,7 +2551,7 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
                 "sum_j t_j d_j has not been undone, so the retained "
                 "amplitudes are not lab-referenced.  Solve without "
                 "retain_internal, or z-staircase the slanted layer.")
-        if self.layer_grids == "per-layer":
+        if self.layer_grids == "per-layer" and not self._perlayer_fast_ok():
             return self._solve_per_layer(jones=jones,
                                          retain_internal=retain_internal)
         # Multi-patterned (A|B) cascades are fully supported: the historical
@@ -2665,6 +2915,23 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
                      or L.get("n_modes_given", False))
             if fixed:
                 base[i] = int(L["M"])
+        # PHASE E2: a SHAPE layer that did not name n_modes matches the
+        # FINEST shape layer's per-axis count q = N (M - 1).  Its own map
+        # often has fewer segments (a sinusoidal wall: 2 x 2, a circle:
+        # 3 x 3), and the curved mortar between two maps is limited by the
+        # coarser space -- measured on an all-vacuum stack across a sinusoid
+        # and a circle map at M = 6: 1.0e-6 from the exact slab, 3.9e-9 with
+        # the sinusoid layer at M = 8 (q 14 against the circle's 15)
+        # (docs/audits/BUILD_PMM2D_CURVED_E2_2026_10_03.md, section 2.4).
+        own = [i for i, L in enumerate(Ls) if L.get("own") is not None
+               and not L["own"].get("homogeneous")]
+        if own:
+            q_max = max(_stag_walls_n(Ls[i]["wx"]) * (base[i] - 1)
+                        for i in own)
+            for i in own:
+                if not Ls[i].get("pl_keywords"):
+                    Ni = _stag_walls_n(Ls[i]["wx"])
+                    base[i] = max(base[i], int(-(-q_max // Ni)) + 1)
         out = []
         for i, L in enumerate(Ls):
             if base[i] is not None:
@@ -2678,6 +2945,49 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
                 out.append(int(L["M"]))
             else:
                 out.append(max(3, int(-(-q_nb // Nu)) + 1))
+        return out
+
+    def _perlayer_geometry(self, Ms):
+        """Each layer's ``(wx, wy, M, cmap)`` on the per-layer path.
+
+        PHASE E2: a layer whose material is HOMOGENEOUS needs no map of its
+        own, so it RIDES its neighbour's grid (the nearest layer above that
+        does not ride, else below) and the interface to that neighbour is
+        the plain square match instead of a curved mortar: a homogeneous
+        shape layer always, a uniform ``eps`` layer without per-layer
+        keywords when a NEIGHBOUR carries a map (an all-unmapped per-layer
+        stack is unchanged, bit for bit).  ``_e2_no_ride`` (a test
+        instrument) keeps every layer on its own grid."""
+        Ls = self._layers
+        geo = [(L["wx"], L["wy"], int(M), L.get("cmap"))
+               for L, M in zip(Ls, Ms)]
+        if getattr(self, "_e2_no_ride", False):
+            return geo
+        n = len(Ls)
+
+        def mapped(i):
+            return 0 <= i < n and geo[i][3] is not None
+
+        rider = []
+        for i, L in enumerate(Ls):
+            own = L.get("own")
+            if own is not None:
+                rider.append(bool(own.get("homogeneous")))
+            elif (L["kind"] in ("uniform", "uniform_tensor")
+                  and not L.get("pl_keywords") and L.get("cmap") is None):
+                rider.append(mapped(i - 1) or mapped(i + 1))
+            else:
+                rider.append(False)
+        if all(rider):
+            return geo
+        out = list(geo)
+        for i in range(n):
+            if not rider[i]:
+                continue
+            j = next((k for k in range(i - 1, -1, -1) if not rider[k]), None)
+            if j is None:
+                j = next(k for k in range(i + 1, n) if not rider[k])
+            out[i] = geo[j]
         return out
 
     def _solve_per_layer(self, *, jones, retain_internal, force_mortar=False):
@@ -2728,16 +3038,21 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
 
         grids_pre, grids_by_key = {}, {}
 
-        def _grid(wx, wy, M):
-            pre = (_wkey(wx), _wkey(wy), int(M))
+        def _grid(wx, wy, M, cmap=None):
+            pre = (_wkey(wx), _wkey(wy), int(M),
+                   None if cmap is None else cmap.fingerprint)
             g = grids_pre.get(pre)
             if g is None:
-                g = StagGridOps(px, py, wx, wy, M, taux, tauy)
+                # PHASE E2: a layer's OWN map rides its grid (cmap=None, the
+                # shipped call, for every unmapped layer)
+                g = (StagGridOps(px, py, wx, wy, M, taux, tauy)
+                     if cmap is None else
+                     StagGridOps(px, py, wx, wy, M, taux, tauy, cmap=cmap))
                 g = grids_by_key.setdefault(g.key(), g)
                 grids_pre[pre] = g
             return g
 
-        gof = [_grid(L["wx"], L["wy"], M) for L, M in zip(self._layers, Ms)]
+        gof = [_grid(*gm) for gm in self._perlayer_geometry(Ms)]
         # The band ABOVE the width contract is accepted and measurably
         # degraded, so it must not be silent.  This is the one place where the
         # NEIGHBOURS are known, so the warning is conditioned on the stack
@@ -2765,7 +3080,11 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         # a shipped surface RAISES (open item O-9), because a user who asks for
         # orders the end grids cannot carry should be told, not quietly served
         # fewer.
-        cap = min((g_sup.q - 1) // 2, (g_sub.q - 1) // 2)
+        # PHASE E2: a MAPPED end grid has no cap (its far field is a
+        # quadrature integral and its incident field the window-free modal
+        # decomposition -- the shared mapped path's reasoning, measured there)
+        _caps = [(g.q - 1) // 2 for g in (g_sup, g_sub) if g.cmap is None]
+        cap = min(_caps) if _caps else self.n_orders
         if self.n_orders > cap:
             raise ValueError(
                 f"PMM2DStackPure.solve: n_orders={self.n_orders} exceeds what "
@@ -2787,6 +3106,10 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
             return (g.bx.N if g.bx.uniform else g.bx.xb,
                     g.by.N if g.by.uniform else g.by.xb)
 
+        def _mkw(g):
+            # PHASE E2: a mapped grid's regions are solved under its map
+            return {} if g.cmap is None else {"cmap": g.cmap}
+
         def _geo(g):
             hit = geo_cache.get(g.key())
             if hit is None:
@@ -2794,7 +3117,7 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
                 sol = Granet2DTransverseE(
                     px, py, wxg, wyg, g.M,
                     np.full((g.bx.N, g.by.N), eps_sup),
-                    alpha0x=a0x, alpha0y=a0y, k0=k0)
+                    alpha0x=a0x, alpha0y=a0y, k0=k0, **_mkw(g))
                 hit = _homog_geom_cache(sol)
                 geo_cache[g.key()] = hit
             return hit
@@ -2808,6 +3131,50 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
             sl = L.get("slant", (0.0, 0.0))
             slanted = not _slant_is_zero(sl)
             Nx, Ny = g.bx.N, g.by.N
+            own = L.get("own")
+            if own is not None and own.get("homogeneous") and \
+                    own["mu"] is None and own["cell"].ndim == 2:
+                # PHASE E2: a HOMOGENEOUS shape layer (one material painted
+                # everywhere) is a uniform film on whatever grid it rides
+                W, V, lam = _homog_region_modes(_geo(g),
+                                                _C(own["cell"].flat[0]))
+                modes.append(_modes_as_general(W, V, lam)
+                             + (L["thickness"],))
+                continue
+            if own is not None:
+                # PHASE E2: a shape layer on its OWN map and grid (its
+                # eps_cell may hold the MERGED fast-path cells); a
+                # homogeneous tensor / magnetic one is broadcast onto the
+                # grid it rides
+                cell_o, mu_o = own["cell"], own["mu"]
+                if own.get("homogeneous") and cell_o.shape[:2] != (Nx, Ny):
+                    cell_o = _as_layer_cell(cell_o[0, 0], True, Nx, Ny)
+                    if mu_o is not None:
+                        mu_o = _as_layer_cell(mu_o[0, 0], True, Nx, Ny)
+                own = dict(own, cell=cell_o, mu=mu_o)
+                key = (g.key(), own["cell"].shape, own["cell"].tobytes(),
+                       None if own["mu"] is None else own["mu"].tobytes())
+                cached = eig_cache.get(key)
+                if cached is None:
+                    wxg, wyg = _walls_of(g)
+                    sol = Granet2DTransverseE(
+                        px, py, wxg, wyg, g.M, own["cell"],
+                        alpha0x=a0x, alpha0y=a0y, k0=k0,
+                        mu_cell=own["mu"], **_mkw(g))
+                    if sol.offplane:
+                        # an out-of-plane tensor on a RECTANGLES-only layer
+                        # (no map; under a map it was refused at add_layer)
+                        cached = _region_modes_oop(sol,
+                                                   symmetry=self.symmetry)
+                    else:
+                        Wl, Vl, lam_l, _g2 = _region_modes(sol)
+                        cached = _modes_as_general(Wl, Vl, lam_l)
+                    eig_cache[key] = cached
+                any_oop = any_oop or (
+                    own["cell"].ndim == 4
+                    and _tile_needs_oop("PMM2DStackPure.solve", own["cell"]))
+                modes.append(cached + (L["thickness"],))
+                continue
             if L["kind"] == "uniform" and not slanted:
                 W, V, lam = _homog_region_modes(_geo(g), L["eps"])
                 six = _modes_as_general(W, V, lam)
@@ -2837,7 +3204,8 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
                     sol = Granet2DTransverseE(
                         px, py, wxg, wyg, g.M, cell,
                         alpha0x=a0x, alpha0y=a0y, k0=k0,
-                        mu_cell=mcell, slant=sl if slanted else None)
+                        mu_cell=mcell, slant=sl if slanted else None,
+                        **_mkw(g))
                     if sol.offplane:
                         cached = _region_modes_oop(sol, symmetry=self.symmetry)
                     else:
@@ -2857,7 +3225,13 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
             key = (ga.key(), gb.key())
             hit = cross_cache.get(key)
             if hit is None:
-                hit = StagCrossOps(ga, gb)
+                if ga.cmap is None and gb.cmap is None:
+                    hit = StagCrossOps(ga, gb)
+                else:
+                    # PHASE E2: two grids on DIFFERENT maps (or one mapped,
+                    # one not) -- the non-separable curved cross-mass
+                    from ._curvemortar import StagCrossOpsMapped
+                    hit = StagCrossOpsMapped(ga, gb)
                 cross_cache[key] = hit
             return hit
 
@@ -2931,10 +3305,18 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         order_x = np.tile(ox, len(oy))
         order_y = np.repeat(oy, len(ox))
         Nfo = len(order_x)
-        P1s, P2s = _far_projector_2d(g_sup.bx, g_sup.by, ox, oy, a0x, a0y)
-        P1t, P2t = _far_projector_2d(g_sub.bx, g_sub.by, ox, oy, a0x, a0y)
-        Hsup = _pmm2d_project_orders(P1s, P2s, Wsup, g_sup.qq)
-        Hsub = _pmm2d_project_orders(P1t, P2t, Wsub, g_sub.qq)
+        def _end_project(g, Wm):
+            if g.cmap is None:
+                P1e, P2e = _far_projector_2d(g.bx, g.by, ox, oy, a0x, a0y)
+                return _pmm2d_project_orders(P1e, P2e, Wm, g.qq)
+            # PHASE E2: a MAPPED end grid projects with the cofactor
+            # (the shared mapped path's projector)
+            P1e, P2e, P12e, P21e = _far_projector_2d(
+                g.bx, g.by, ox, oy, a0x, a0y, cmap=g.cmap)
+            return _pmm2d_project_orders(P1e, P2e, Wm, g.qq, P12e, P21e)
+
+        Hsup = _end_project(g_sup, Wsup)
+        Hsub = _end_project(g_sub, Wsub)
         kxv = kx0 + order_x * (wl / px)
         kyv = ky0 + order_y * (wl / py)
         kz_ref, kz_trn, kz_inc, safe_r, safe_t = _pmm2d_order_kz(
@@ -2957,12 +3339,23 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         R_rows, T_rows, j_cols, cinc_cols = [], [], [], []
         amp = {k: np.zeros((2, Nfo), dtype=_C)
                for k in ("rx", "ry", "tx", "ty")}
+        cinc_map = None
+        if g_sup.cmap is not None:
+            # PHASE E2: a MAPPED top grid takes the exact L2 modal
+            # decomposition of the incident wave (the shared mapped path's,
+            # Phase C gate C9); an unmapped one keeps the shipped overlap
+            cinc_map = _stag_incident_coeffs_mapped(
+                _geo(g_sup), g_sup.bx, g_sup.by, g_sup.cmap, a0x, a0y,
+                H0=Hsup[[p0, Nfo + p0], :])
         for col, (ex0, ey0) in enumerate(((1.0, 0.0), (0.0, 1.0))):
             long_inc = kx0 * ex0 + ky0 * ey0
             einc_sq = 1.0 + (long_inc / kz_inc) ** 2 if kz_inc != 0 else 1.0
-            rhs = np.concatenate([ex0 * delta, ey0 * delta])
-            cinc = _guarded_lstsq(
-                Hsup, rhs, "PMM2DStackPure far-field Rayleigh projection")
+            if cinc_map is not None:
+                cinc = cinc_map[:, col]
+            else:
+                rhs = np.concatenate([ex0 * delta, ey0 * delta])
+                cinc = _guarded_lstsq(
+                    Hsup, rhs, "PMM2DStackPure far-field Rayleigh projection")
             cinc_cols.append(cinc)
             r_ord = Hsup @ (S11 @ cinc)
             t_ord = Hsub @ (S21 @ cinc)

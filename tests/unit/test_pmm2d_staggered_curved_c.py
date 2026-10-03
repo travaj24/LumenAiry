@@ -442,9 +442,13 @@ def test_c5_refusals_name_both_shapes_and_layers():
         compile_and_add = PMM2DStackPure(_P, _P, n_modes=4)
         compile_and_add.add_layer(
             0.3, shapes=[Circle(0.6, 0.6, 0.3, oop)], background_eps=1.0)
-    with pytest.raises(NotImplementedError, match="Phase E"):
-        PMM2DStackPure(_P, _P, layer_grids="per-layer").add_layer(
-            0.3, shapes=[Circle(0.6, 0.6, 0.3, 4.0)], background_eps=1.0)
+    # Phase E2 (2026-10-03) lifted the per-layer + shapes refusal this arm
+    # used to pin: every shape layer now compiles its own map, joined by the
+    # curved mortar (tests/unit/test_pmm2d_staggered_curved_e2.py); a lone
+    # shape layer merges, so the stack takes the merged-map fast path
+    st_pl = PMM2DStackPure(_P, _P, layer_grids="per-layer").add_layer(
+        0.3, shapes=[Circle(0.6, 0.6, 0.3, 4.0)], background_eps=1.0)
+    assert st_pl._perlayer_fast_ok()
     with pytest.raises(ValueError, match="eps_cell"):
         st.add_layer(0.2, eps_cell=np.ones((3, 3)))
     cm3, eps3 = _circle3_explicit()
