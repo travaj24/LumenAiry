@@ -364,9 +364,11 @@ item with its own build and one verifier (plan section 4.5).
 ### 0.10 The deprecation removals scheduled for 5.48 and slipped to 5.50 are EXECUTED in 5.50.0, not slipped again (decided 2026-10-03)
 
 What it is.  `lumenairy._deprecation` carried `NEXT_REMOVAL_VERSION = '5.50'`
-and `REMOVAL_SCHEDULE = {'5.48': '5.50'}`: the three GBD aliases
-(`gbd_field_to_asm`, `asm_field_to_gbd`, `match_global_phase`, deprecated in
-5.46) and the `CarrierField` attribute-assignment freeze were scheduled for
+and `REMOVAL_SCHEDULE = {'5.48': '5.50'}`: the three no-op GBD converters
+(`gbd_asm_gouy_phase`, `gbd_field_to_asm`, `asm_field_to_gbd`, deprecated in
+5.46; the 5.48 records named `match_global_phase` in place of
+`gbd_asm_gouy_phase` by mistake -- it was never deprecated and stays public)
+and the `CarrierField` attribute-assignment freeze were scheduled for
 removal at 5.48 and slipped once, at 5.48.0, to 5.50.  `check_removal_schedule`
 refuses a horizon that has shipped, so 5.50.0 (the curved-cell release) could
 not carry these constants: the choice was a second slip to 5.52 or executing
