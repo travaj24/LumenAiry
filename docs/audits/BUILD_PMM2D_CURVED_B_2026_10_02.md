@@ -273,7 +273,8 @@ The shipped staggered PMM on the planner's 4k-step staircases (walls at
 shipped code is byte-identical, so the planner's saved staircase JSON are
 this tree's answers -- `p3_circle_stair_k{1,2,4}.json`): distance to the FEM
 7.07e-02 (k = 1, `M = 10`), 5.36e-02 (k = 2, `M = 7`), 5.65e-03 (k = 4,
-`M = 4`) -- the planner's 7.1e-2 / 5.4e-2 / 5.7e-3 reproduced
+`M = 4`; PRE-ASYMPTOTIC in `M` -- 5.5e-4 from its `M = 3` rung, Phase B
+verifier D-5, 2026-10-03) -- the planner's 7.1e-2 / 5.4e-2 / 5.7e-3 reproduced
 (`b4_circle.json`, `stair`).  Ordering: strictly decreasing.  Direction: the
 cosine between each staircase step and (curved answer - previous staircase)
 is 0.930 (k = 1 -> 2, `M = 10 / 7` vs c3 `M = 10`), 0.991 (k = 2 -> 4) and
@@ -326,27 +327,33 @@ top rung against the sharp square at `M = 12` (`b6_fillet.json`, `limit`):
 
 The planner's P4 shifts (R00 -2.6e-4 / -7.5e-4 / -1.7e-3, T00 +4.6e-4 /
 +1.7e-3 / +7.4e-3) are reproduced.  MONOTONE in r for r / side >= 0.05, each
-step 3-50x above the fillets' own rung changes.  The r -> 0 LIMIT: the
-constant of the fit `dT00 = c + a r^2 + b r^3` through r / side = 0.05, 0.1,
-0.2 is +6.9e-05 (`dR00`: -5.4e-05) -- 0.9 % (3 %) of the r / side = 0.2
-shift, four to five times the fillets' own top-rung changes (1.3e-5 ..
-1.7e-5) and six times the sharp square's (1.1e-5): a three-point fit with
-no `r^4` term, so it bounds the limit at the 5e-5 level rather than proving
-it to 1e-5; the two
+step 3-50x above the fillets' own rung changes.  The r -> 0 LIMIT
+(CORRECTED 2026-10-03, Phase B verifier D-3, its section 7.4): a
+three-parameter fit through three radii has zero residual by construction,
+and its constant depends on the basis -- `c + a r^2 + b r^3` gives +6.9e-05
+(`dT00`) / -5.4e-05 (`dR00`), other bases through the same three points span
+1.6e-4 -- so this build's three-point constant bounds nothing.  The physical
+leading power is not `r^2` but `r^(2 lambda) ~ r^1.61`, from the corner
+exponent `lambda = 0.806` of a 90-degree eps-4 corner (rounding a corner
+whose field is `rho^(lambda - 1)` removes energy `~ r^(2 lambda)`).  With
+FIVE radii the verifier's `c + a r^1.61 + b r^3` fit (residual 1.5e-6 /
+5.6e-6, ten times better than `c + a r^2 + b r^3`) puts the limit on the
+sharp square to ~3e-5 (+1.1e-5 R00 / -2.6e-5 T00 against the `M = 14`
+square), which is the smallest fillet's own last rung and the square
+reference's own uncertainty.  The two
 small fillets (r / side 0.01, 0.02, inside the sliver band of plan 4.3,
 fillet segment 1.5e-3 and 2.9e-3 of the period) sit within their OWN rung
 change of the square (|dT00| 2.9e-5, 5.5e-5 against 2.4e-4, 1.9e-4).  So the
-limit is the sharp square to the fillets' convergence, which is slower than
-the square's for small r -- the curvature of an arc of radius `r` must be
-resolved inside a cell `r / sqrt 2` wide -- and the plan's "to the sharp
-square's own convergence" is met only to within that factor.  STOP condition
+limit is the sharp square to ~3e-5.  Small fillets converge slowly not
+because of the arc's curvature alone but because the NEIGHBOURING cells must
+resolve the corner field down to the scale `r`.  STOP condition
 (plan 4.2: a fillet with r / side >= 0.05 not below 1e-4 per rung by
 `M = 8`): not met (the all-orders rung change at 7 -> 8 is 1.7e-5 / 1.3e-5 /
 1.4e-5 for r / side 0.05 / 0.1 / 0.2).
 
 Unit tests: `test_b6_fillet_moves_the_efficiencies_far_above_convergence`
 (r / side 0.2 at `M = 5` vs the square at `M = 6`: R00 -1.80e-3 <= -5e-4,
-T00 +7.65e-3 >= +2e-3) and `test_b6_fillet_modes_approach_the_square_as_r_squared`
+T00 +7.65e-3 >= +2e-3) and `test_b6_fillet_modes_approach_the_square_as_a_power_of_r`
 (the leading Bloch `n_eff^2`, which sees no rim: square 3.0079446, r / side
 0.05 3.0070140, 0.2 2.9901856 (`b5_modes_*.json`), monotone, and the
 distance ratio 19 against r^2's 16, inside [8, 32] -- an offset limit would
@@ -378,9 +385,11 @@ the shipped staggered PMM (`b9_shapes.json`):
 | sinusoidal ridge, A = 0.12, 3 x 3 map | 1.6e-3 (6), 9.9e-5 (7), 3.2e-5 (8), 1.8e-5 (9), 9.3e-6 (10); top `M = 11` | 2.6e-11 | 2.14e-2 (9), 1.45e-2 (13), 1.10e-2 (17), 8.8e-3 (21), 7.3e-3 (25), 6.3e-3 (29) | 1.2e-3, 6.7e-4, 4.6e-4, 3.2e-4, 2.4e-4 | 6.4e-2 (1, 6), 6.8e-2 (2, 6), 1.7e-2 (4, 4) |
 
 Both behave like the circle: the curved ladder converges to the rim-capped
-1e-5-per-rung level, the exact-form-factor RCWA approaches it algebraically
-(and its Richardson extrapolation keeps falling toward it, with no sign of
-converging elsewhere), the staircases approach it from far away -- for the
+1e-5-per-rung level, the exact-form-factor RCWA's ENVELOPE falls like
+`1 / N` toward it (distance x N within +-4 % over N = 9 .. 33), but
+successive pairs do not (local rate 0.2 .. 1.8 -- Phase B verifier D-5,
+2026-10-03), so its Richardson pair is a 1e-3-class reference (it keeps
+falling toward the curved answer, with no sign of converging elsewhere), the staircases approach it from far away -- for the
 ellipse monotonically (9.1e-2, 5.3e-2, 6.1e-3), for the sinusoid only at the
 8-row staircase (the 2-row and 4-row staircases sample the wall at +-A and
 +-0.71 A and sit equally far, 6.4e-2 / 6.8e-2; 1.7e-2 at 8 rows).  The
@@ -469,7 +478,16 @@ kernel identity (`test_b8_corner_rule_is_the_tensor_kernel_on_smooth_weights`,
 first run).  The solver always builds two `Basis1D` objects, so no solve was
 affected; the cache key now names the axis (commit `66624d61`).
 
-### 4.4 F-B4 -- the curved solve's R / T carry a ~1e-9 round-off floor from the minimum-norm incident projection (formulation finding, measured, NOT changed)
+### 4.4 F-B4 -- the curved solve's R / T depend on the far-field window at ~1e-7 and carry a 1e-9 .. 1e-8 round-off floor, both from the windowed least-squares incident projection (formulation finding, measured, NOT changed here; fixed in Phase C)
+
+CORRECTED 2026-10-03 (Phase B verifier D-2): the floor is geometry
+dependent -- 1e-9 at r = 0.36, 1.1e-8 at r = 0.48 -- and it comes with a
+SYSTEMATIC `n_orders` dependence of ~1e-7 at `M = 6` that is NOT round-off.
+Widening the window until the system is overdetermined removes only the
+round-off draw; a window dependence of 5e-8 .. 1.3e-7 remains.  The real fix
+is Phase C's exact modal decomposition of the mapped incident wave
+(`BUILD_PMM2D_CURVED_C_2026_10_02.md`, 3.8: `n_orders` dependence down to
+9.4e-16, the floor to 8.0e-15 at `M = 6`).  The original text follows.
 
 A random relative perturbation of 1e-15 of the HALF-SPACES' effective
 weights (the patterned layer untouched) moves the 3 x 3 circle's R / T by
@@ -493,8 +511,10 @@ decades under the rung-to-rung change), so nothing was changed here, and
 every unit bar sits >= 2 decades above the floor.  Recommended for Phase C
 (where the stack gains the shape layer): an exact modal decomposition of the
 mapped incident field (its covariant L2 projection with the plain Gram, then
-the half-space mode matrix) instead of the windowed least squares, or a
-window sized to be overdetermined whenever a map is present.  The floor
+the half-space mode matrix) instead of the windowed least squares.  (An
+overdetermined window is NOT a fix: it removes the round-off draw only, the
+window dependence remains, and it exceeds the per-layer order cap -- Phase B
+verifier D-2.)  The floor
 falls spectrally with `M` (6.8e-10, 1.4e-11, 2.1e-13 at `M = 6, 8, 10`;
 the window dependence 2.1e-7 at `M = 6`, 1.5e-9 at `M = 8`,
 `b11_floor_window_M8.json`).  Not traced: the y-mirror residual of the
@@ -513,7 +533,17 @@ share its scale; Phase A's stretch counts are unchanged (36 / 40 / 24 / 28
 and 144 / 160 / 192 / 112 at `a = 0.05 / 0.15 p`, `M = 5 / 6 / 8 / 10`, the
 `a8_cost.json` values) (commit `66624d61`).
 
-### 4.6 F-B6 -- the 3 x 3 circle map costs resolution at oblique incidence
+### 4.6 F-B6 -- a curved map costs resolution at oblique incidence (budget by dof, not by topology)
+
+CORRECTED 2026-10-03 (Phase B verifier D-4): the "four to six decades
+behind" comparison below is at EQUAL `M`.  At equal dof the 3 x 3 and 5 x 5
+films are equal and the oblique pillar's 5 x 5 map is ~5x better per dof;
+the cost is the curved map COMPOSED with the oblique Bloch phase (3 .. 4.7
+decades against straight walls at equal dof), not the 3 x 3 topology.  At
+oblique incidence a curved map needs more `M` (or more, smaller cells) than
+straight walls for the same accuracy, because the basis must resolve the
+Bloch phase composed with the map; budget by dof, not by topology.  The
+original text follows (its last sentence is superseded).
 
 A uniform film at 25 degrees under the 3 x 3 circle map reads 7.2e-4, 6.8e-5,
 3.5e-6, 2.1e-7, 1.0e-8 (`M = 4 .. 8`) -- spectral, but four to six decades

@@ -16978,7 +16978,7 @@
   "tests/unit/test_pmm2d_staggered_curved_b.py::test_b5_square_pillar_modes_stall": 6.45,
   "tests/unit/test_pmm2d_staggered_curved_b.py::test_b10_oblique_circle_is_reciprocal_and_mirror_symmetric": 5.36,
   "tests/unit/test_pmm2d_staggered_curved_b.py::test_b10_conical_circle_is_reciprocal": 5.47,
-  "tests/unit/test_pmm2d_staggered_curved_b.py::test_b6_fillet_modes_approach_the_square_as_r_squared": 5.79,
+  "tests/unit/test_pmm2d_staggered_curved_b.py::test_b6_fillet_modes_approach_the_square_as_a_power_of_r": 5.79,
   "tests/unit/test_pmm2d_staggered_curved_b.py::test_b6_fillet_moves_the_efficiencies_far_above_convergence": 17.15,
   "tests/unit/test_pmm2d_staggered_curved_b.py::test_b7_same_area_square_is_not_a_fillet": 2.4,
   "tests/unit/test_pmm2d_staggered_curved_b.py::test_b10_film_under_the_circle_map_at_conical_incidence": 2.92,

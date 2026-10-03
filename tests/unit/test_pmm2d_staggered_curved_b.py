@@ -737,18 +737,22 @@ def _r00_t00(kind, ratio, M):
     return float(R[1, i0]), float(T[1, i0])
 
 
-def test_b6_fillet_modes_approach_the_square_as_r_squared():
+def test_b6_fillet_modes_approach_the_square_as_a_power_of_r():
     """The in-plane Bloch modes (no rim) see the fillet cleanly: the leading
     n_eff^2 FALLS monotonically with the fillet radius and its distance to the
-    sharp square shrinks like r^2 as r -> 0 (the area removed is (4 - pi)
-    r^2).  Measured 2026-10-02 (``b5_modes_*.json``): sharp square (3 x 3,
-    M = 8) 3.0079446; r / side = 0.05 (M = 6) 3.0070140; 0.2 (M = 6)
-    2.9901856 -- differences to the square 9.3e-4 and 1.78e-2, ratio 19
-    (r^2 predicts 16).  Each value is converged to <= 1.2e-5 (rung changes
-    to M = 9 / 12), two decades under the smaller difference.  Bars:
-    monotone with steps >= 1e-4; the ratio in [8, 32] -- a map whose r -> 0
-    limit missed the square by an OFFSET would read ~1, a linear approach 4
-    (both outside), the measured 19 sits 0.4 decades inside each end."""
+    sharp square vanishes as r -> 0 with a power BETWEEN the corner exponent
+    2 lambda = 1.61 (lambda = 0.806 for a 90-degree eps-4 corner: rounding a
+    corner whose field is rho^(lambda - 1) removes energy ~ r^(2 lambda)) and
+    2 (the area removed, (4 - pi) r^2) -- restated 2026-10-03 after the Phase
+    B verifier's D-3.  Measured 2026-10-02 (``b5_modes_*.json``): sharp
+    square (3 x 3, M = 8) 3.0079446; r / side = 0.05 (M = 6) 3.0070140; 0.2
+    (M = 6) 2.9901856 -- differences to the square 9.3e-4 and 1.78e-2, ratio
+    19 (r^2 predicts 16, r^1.61 9.3).  Each value is converged to <= 1.2e-5
+    (rung changes to M = 9 / 12), two decades under the smaller difference.
+    Bars: monotone with steps >= 1e-4; the ratio in [8, 32], which ACCEPTS
+    both powers (9.3 and 16) and REJECTS a map whose r -> 0 limit missed the
+    square by an OFFSET (~1) or a linear approach (4); the measured 19 sits
+    0.4 decades inside each end."""
     w = np.array([0.0, 0.3, 0.9, _P])
     eps = np.ones((3, 3), complex)
     eps[1, 1] = 4.0

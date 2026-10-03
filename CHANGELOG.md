@@ -113,9 +113,17 @@ number: `docs/audits/BUILD_PMM2D_CURVED_B_2026_10_02.md`.
   periodic across the cell boundary -- only the derivative ALONG each side
   must be (every curved map violated the stronger form); a map with a tiny
   shear was held to round-off by the node-count criterion; the curved
-  solve's R / T carry a ~1e-9 round-off floor set by the minimum-norm
-  incident projection when the far-field window is small (measured, not
-  changed in this phase).
+  solve's R / T depend on the far-field window (`n_orders`) at ~1e-7 at
+  `M = 6` (falling with `M`) and carry a geometry-dependent round-off floor
+  of 1e-9 .. 1e-8, both from the windowed least-squares incident projection
+  inherited from Phase A (its verifier's F-V2); measured, not changed in
+  this phase -- Phase C's exact modal decomposition of the incident wave
+  removes both (window dependence down to 9.4e-16).
+* Found by the Phase B verifier and fixed in Phase D: a `TransfiniteMap`
+  edge curve whose analytic derivative disagreed with its value was accepted
+  silently (a 10 % derivative bug moved R / T by 3.2e-2 at `M = 5`); the
+  constructor now checks each curve's derivative against a central
+  difference of its value and refuses a mismatch.
 
 ### Added -- pure 2-D PMM (curved cells, Phase A): the coordinate-map machinery, gated on a separable stretch
 
