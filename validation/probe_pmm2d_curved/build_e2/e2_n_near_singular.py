@@ -6,7 +6,6 @@ stack takes the merged map; this measures the kernel's own limit.)"""
 import time
 import warnings
 
-import numpy as np
 from _common import CM, TS, P, dump
 
 from lumenairy.elements.pmm import _curvemortar as CMM

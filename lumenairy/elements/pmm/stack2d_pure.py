@@ -809,7 +809,8 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         (``add_layer(..., cmap=)`` or ``shapes=``; Phase E2, the curved
         mortar).  The two viewers draw the PHYSICAL
         images of the cells (curved edges as curves).  Under a map the
-        incident plane wave enters through its exact L2 modal decomposition
+        incident plane wave enters through its unique L2 modal projection
+        (window-free)
         (it is not an exact discrete half-space mode when the map is not
         polynomial): ``R`` / ``T`` are independent of ``n_orders`` to
         round-off, while a vacuum spacer on top moves them at the
@@ -2848,7 +2849,7 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
             # (2 (2 n_orders + 1)^2 equations, 2 q^2 unknowns): its
             # minimum-norm draw carried a round-off floor (6.8e-10 at M = 6
             # on the 3 x 3 circle) and made R / T depend on n_orders at the
-            # discretisation level.  The EXACT modal decomposition instead:
+            # discretisation level.  The unique L2 modal projection instead:
             # the L2 projection of the covariant incident field onto the
             # staggered basis (plain Gram, the load of
             # _stag_incident_load_mapped), then the half-space modes,
@@ -3364,8 +3365,8 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
                for k in ("rx", "ry", "tx", "ty")}
         cinc_map = None
         if g_sup.cmap is not None:
-            # PHASE E2: a MAPPED top grid takes the exact L2 modal
-            # decomposition of the incident wave (the shared mapped path's,
+            # PHASE E2: a MAPPED top grid takes the unique L2 modal
+            # projection of the incident wave (the shared mapped path's,
             # Phase C gate C9); an unmapped one keeps the shipped overlap
             cinc_map = _stag_incident_coeffs_mapped(
                 _geo(g_sup), g_sup.bx, g_sup.by, g_sup.cmap, a0x, a0y,

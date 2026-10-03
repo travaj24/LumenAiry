@@ -68,7 +68,15 @@ shapes and their layers:
   vertex (a filleted corner in one layer over a sharp corner in another --
   "different curves in one cell");
 * a merged map that FOLDS (``det J <= 0``) in a cell between two outlines
-  that come too close;
+  that come too close -- including shapes that are far apart: a wall of one
+  shape that crosses the arc "bulge" of another (between its 45-degree
+  points and its extreme) is kept straight and folds the cell.  Measured
+  (Phase C verifier V-D3): two circles side by side in one row with radius
+  ratio between 1 and 1.414, or equal circles whose centres differ by
+  0.02-0.05 of the period in y, raise.  With
+  ``PMM2DStackPure(..., layer_grids='per-layer')`` shapes in DIFFERENT
+  layers then keep their own maps (Phase E2, the curved mortar); within one
+  layer they still raise;
 * a segment narrower than the staggered solver's SLIVER CONTRACT (1e-3 of the
   period, ``twod_staggered._STAG_MIN_SEG_FRAC``), naming the shapes whose
   walls bound it.
@@ -151,6 +159,9 @@ _CLAIM_TOL = 1e-12
 #: other by more than this (relative to the period).  Shared or touching
 #: outlines read ~1e-16; a real crossing is a finite fraction of a feature.
 _CROSS_TOL = 1e-9
+#: A vertex claim this close to its merged grid vertex (relative to the
+#: period) is the grid vertex itself: a few ulps, far below any real move.
+_VERTEX_SNAP = 1e-13
 #: The fillet radius below which the fillet's own segment ``r / sqrt 2``
 #: breaks the sliver contract: ``sqrt(2) * _STAG_MIN_SEG_FRAC`` of the period.
 _FILLET_MIN_FRAC = float(np.sqrt(2.0)) * _STAG_MIN_SEG_FRAC
@@ -419,7 +430,7 @@ class FilletRect(Shape2D):
     line and the map is analytic inside every cell.
 
     ``r = 0`` is the sharp-cornered :class:`Rect` (same walls, no map).  A
-    radius ``0 < r < 1.414e-3`` of the period is REFUSED: the fillet's own
+    radius ``0 < r < sqrt(2) x 1e-3`` of the period (1.4142e-3) is REFUSED: the fillet's own
     segment is ``r / sqrt 2`` wide, and the staggered solver's sliver contract
     forbids segments narrower than 1e-3 of the period
     (``twod_staggered._STAG_MIN_SEG_FRAC``) -- at that size the rounding is
@@ -511,8 +522,10 @@ class FilletRect(Shape2D):
         if self.r < rmin * (1.0 - 1e-9):
             raise ValueError(
                 f"{self.name}: the fillet radius r = {self.r!r} is below "
-                f"1.414e-3 of the period ({rmin!r}).  The fillet's own wall "
-                f"segment is r / sqrt 2 = {self.r / np.sqrt(2.0)!r} wide, and "
+                f"sqrt(2) x 1e-3 (1.4142e-3) of the period ({rmin!r}).  The "
+                f"fillet's "
+                f"own wall "
+                f"segment is r / sqrt 2 = {float(self.r / np.sqrt(2.0))!r} wide, and "
                 f"the staggered solver's SLIVER CONTRACT refuses any segment "
                 f"narrower than 1e-3 of the period "
                 f"(twod_staggered._STAG_MIN_SEG_FRAC): a narrow segment "
@@ -704,9 +717,9 @@ class Ellipse(Shape2D):
     (radians, ``|angle| < pi / 4``; a quarter-turn is a swap of ``a`` and
     ``b``).
 
-    Layout: 3 x 3, the middle cell the disk, its corners the ellipse's points
-    at PARAMETRIC angles 45, 135, 225, 315 degrees (``c + Rot(angle) (a cos t,
-    b sin t)``) and its edges :class:`~lumenairy.elements.pmm._curvemap.EllipseArc`
+    Layout: 3 x 3, the middle cell the disk, its corners the points where
+    the outline's outward normal points at 45, 135, 225, 315 degrees, and its
+    edges :class:`~lumenairy.elements.pmm._curvemap.EllipseArc`
     s.  Axis-aligned (``angle = 0``), those corners are the corners of an
     axis-aligned rectangle and sit at their own physical positions (the
     Phase B gate layout, to the bit).  Rotated, they are not, so the four
@@ -799,23 +812,37 @@ class Ellipse(Shape2D):
             ]
             return _Layout(u, v, verts, edges, [(u[0], u[1], v[0], v[1])])
         c = (self.cx, self.cy)
-        P = {k: np.array(self._pt(t * _DEG)) for k, t in
-             (("BL", 225), ("BR", 315), ("TR", 45), ("TL", 135))}
+        al = self.angle
+
+        # the corners where the OUTWARD NORMAL points at 225 / 315 / 45 /
+        # 135 degrees in the lab (the analogue of the circle's 45-degree
+        # points): parametric t = atan2(b sin(psi - angle), a cos(psi -
+        # angle)).  The parametric 45-degree points fold the side cells for
+        # aspect >= 1.5 at 30 deg, 2 at 20 deg, 5 at 10 deg (Phase C
+        # verifier V-D2).
+        def tn(psi):
+            p = psi * _DEG - al
+            return float(np.arctan2(b * np.sin(p), a * np.cos(p)))
+        tBL = tn(225.0) % (2 * np.pi)
+        tBR = tBL + (tn(315.0) - tBL) % (2 * np.pi)
+        tTR = tBR + (tn(45.0) - tBR) % (2 * np.pi)
+        tTL = tTR + (tn(135.0) - tTR) % (2 * np.pi)
+        P = {k: np.array(self._pt(t)) for k, t in
+             (("BL", tBL), ("BR", tBR), ("TR", tTR), ("TL", tTL))}
         u = [0.5 * (P["BL"][0] + P["TL"][0]), 0.5 * (P["BR"][0] + P["TR"][0])]
         v = [0.5 * (P["BL"][1] + P["BR"][1]), 0.5 * (P["TL"][1] + P["TR"][1])]
         vrot = {(u[0], v[0]): P["BL"], (u[1], v[0]): P["BR"],
                 (u[1], v[1]): P["TR"], (u[0], v[1]): P["TL"]}
         ax = (a, b)
-        al = self.angle
         edges = [
             _HardEdge("h", v[0], u[0], u[1],
-                      EllipseArc(c, ax, 225 * _DEG, 315 * _DEG, angle=al)),
+                      EllipseArc(c, ax, tBL, tBR, angle=al)),
             _HardEdge("h", v[1], u[0], u[1],
-                      EllipseArc(c, ax, 135 * _DEG, 45 * _DEG, angle=al)),
+                      EllipseArc(c, ax, tTL, tTR, angle=al)),
             _HardEdge("v", u[0], v[0], v[1],
-                      EllipseArc(c, ax, 225 * _DEG, 135 * _DEG, angle=al)),
+                      EllipseArc(c, ax, tBL + 2 * np.pi, tTL, angle=al)),
             _HardEdge("v", u[1], v[0], v[1],
-                      EllipseArc(c, ax, -45 * _DEG, 45 * _DEG, angle=al)),
+                      EllipseArc(c, ax, tBR, tTR, angle=al)),
         ]
         return _Layout(u, v, vrot, edges, [(u[0], u[1], v[0], v[1])])
 
@@ -1047,7 +1074,7 @@ class _Grid1D:
             who = sorted(set(self.owners[k]) | set(self.owners[k + 1]))
             raise ValueError(
                 f"compile_shapes: the merged {self.axis}-walls "
-                f"{self.b[k]!r} and {self.b[k + 1]!r} are only "
+                f"{float(self.b[k])!r} and {float(self.b[k + 1])!r} are only "
                 f"{float(d[k])!r} apart ({float(d[k]) / self.period:.3g} of "
                 f"the period) -- below the staggered solver's SLIVER "
                 f"CONTRACT (no segment narrower than 1e-3 of the period, "
@@ -1167,13 +1194,26 @@ def _merge(px, py, layers, grid_hint=None):
                 raise ValueError(
                     f"compile_shapes: {w0} and {w} need DIFFERENT physical "
                     f"positions for the same grid vertex (near x = "
-                    f"{_fmt(xy0[0])}, y = {_fmt(xy0[1])}: {tuple(xy0)} vs "
-                    f"{tuple(xy)}) -- their outlines meet in one cell in two "
+                    f"{_fmt(xy0[0])}, y = {_fmt(xy0[1])}: "
+                    f"{tuple(map(float, xy0))} vs {tuple(map(float, xy))}) "
+                    f"-- their outlines meet in one cell in two "
                     f"different ways (e.g. a rounded corner over a sharp one, "
                     f"or an edge laid on another shape's flat side).  One map "
                     f"cannot carry both; a common map for them is Phase E of "
                     f"the curved-cell plan.")
         V[key] = xy0
+    # A claim within a few ulps of its grid vertex IS the grid vertex: two
+    # shapes' walls are snapped into one (_WALL_SNAP) but their vertex
+    # claims keep each shape's own arithmetic (cx - w / 2 vs cy + h / 2), and
+    # a straight edge's interior crossing is placed by linear interpolation;
+    # both land 1 ulp off the merged wall, which would make a rectangles-only
+    # merge a non-identity map (the mapped solver, tensors refused).
+    # (Phase C verifier V-D1.)
+    G = np.empty_like(V)
+    G[..., 0] = U1[:, None]
+    G[..., 1] = V1[None, :]
+    near = np.max(np.abs(V - G), axis=-1) <= _VERTEX_SNAP * scale
+    V[near] = G[near]
     curved = {}
     s5 = np.linspace(0.0, 1.0, 5)
     for ek, ecl in eclaims.items():
@@ -1309,8 +1349,9 @@ def _check_fold(tm, gu, gv, vclaims, eclaims, n=12):
                 f"{_fmt(tm.v_bounds[sy + 1])}], which is bounded by "
                 f"{', '.join(sorted(who)) or 'the cell edges'}.  An outline "
                 f"bulges past a neighbouring wall: two outlines are too close "
-                f"in plan view, or a straight wall of one shape passes "
-                f"through the curved transition cell of another.  Move them "
+                f"in plan view, or a straight wall of one shape crosses the "
+                f"arc bulge of another shape (even far away along that wall "
+                f"-- e.g. pillars of different radii in one row).  Move them "
                 f"apart (or align the straight wall with the curved shape's "
                 f"bounding box); a common map for them is Phase E of the "
                 f"curved-cell plan.")
@@ -1381,7 +1422,8 @@ def compile_shapes(period_x, period_y, shapes, background_eps, *,
 
     Raises ``ValueError`` (naming the shapes) for crossing outlines, two
     different curves on one cell edge, a folding map, a sliver segment
-    (below 1e-3 of the period), a fillet radius below 1.414e-3 of the period,
+    (below 1e-3 of the period), a fillet radius below sqrt(2) x 1e-3 of
+    the period,
     or a shape outside the unit cell.
 
     Example -- a circular hole (r = 300 nm) in a silicon slab::
