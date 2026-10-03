@@ -1,0 +1,125 @@
+{
+ "n_common": 109,
+ "n_identical": 109,
+ "differing": [],
+ "only_post": [
+  "scalar_int3_M5@idmap.Agen",
+  "scalar_int3_M5@idmap.Bgen",
+  "scalar_int3_M5@idmap.Et_blocks",
+  "scalar_int3_M5@idmap.Et_offdiag",
+  "scalar_int3_M5@idmap.Ggram_blocks",
+  "scalar_int3_M5@idmap.Lmat",
+  "scalar_int3_M5@idmap.Rmat",
+  "scalar_int3_M5@idmap.Schur",
+  "scalar_int3_M5@idmap.Stt",
+  "scalar_int3_M5_obl@idmap.Agen",
+  "scalar_int3_M5_obl@idmap.Bgen",
+  "scalar_int3_M5_obl@idmap.Et_blocks",
+  "scalar_int3_M5_obl@idmap.Et_offdiag",
+  "scalar_int3_M5_obl@idmap.Ggram_blocks",
+  "scalar_int3_M5_obl@idmap.Lmat",
+  "scalar_int3_M5_obl@idmap.Rmat",
+  "scalar_int3_M5_obl@idmap.Schur",
+  "scalar_int3_M5_obl@idmap.Stt",
+  "scalar_nonuni3_M5@idmap.Agen",
+  "scalar_nonuni3_M5@idmap.Bgen",
+  "scalar_nonuni3_M5@idmap.Et_blocks",
+  "scalar_nonuni3_M5@idmap.Et_offdiag",
+  "scalar_nonuni3_M5@idmap.Ggram_blocks",
+  "scalar_nonuni3_M5@idmap.Lmat",
+  "scalar_nonuni3_M5@idmap.Rmat",
+  "scalar_nonuni3_M5@idmap.Schur",
+  "scalar_nonuni3_M5@idmap.Stt",
+  "uniform_int2_M5@idmap.Agen",
+  "uniform_int2_M5@idmap.Bgen",
+  "uniform_int2_M5@idmap.Et_blocks",
+  "uniform_int2_M5@idmap.Et_offdiag",
+  "uniform_int2_M5@idmap.Ggram_blocks",
+  "uniform_int2_M5@idmap.Lmat",
+  "uniform_int2_M5@idmap.Rmat",
+  "uniform_int2_M5@idmap.Schur",
+  "uniform_int2_M5@idmap.Stt"
+ ],
+ "idmap_blocks_differing_from_nomap": 28,
+ "idmap_blocks_total": 36,
+ "idmap_per_block": {
+  "scalar_int3_M5@idmap.Agen": false,
+  "scalar_int3_M5@idmap.Bgen": false,
+  "scalar_int3_M5@idmap.Et_blocks": true,
+  "scalar_int3_M5@idmap.Et_offdiag": true,
+  "scalar_int3_M5@idmap.Ggram_blocks": true,
+  "scalar_int3_M5@idmap.Lmat": true,
+  "scalar_int3_M5@idmap.Rmat": true,
+  "scalar_int3_M5@idmap.Schur": true,
+  "scalar_int3_M5@idmap.Stt": true,
+  "scalar_int3_M5_obl@idmap.Agen": false,
+  "scalar_int3_M5_obl@idmap.Bgen": false,
+  "scalar_int3_M5_obl@idmap.Et_blocks": true,
+  "scalar_int3_M5_obl@idmap.Et_offdiag": true,
+  "scalar_int3_M5_obl@idmap.Ggram_blocks": true,
+  "scalar_int3_M5_obl@idmap.Lmat": true,
+  "scalar_int3_M5_obl@idmap.Rmat": true,
+  "scalar_int3_M5_obl@idmap.Schur": true,
+  "scalar_int3_M5_obl@idmap.Stt": true,
+  "scalar_nonuni3_M5@idmap.Agen": false,
+  "scalar_nonuni3_M5@idmap.Bgen": false,
+  "scalar_nonuni3_M5@idmap.Et_blocks": true,
+  "scalar_nonuni3_M5@idmap.Et_offdiag": true,
+  "scalar_nonuni3_M5@idmap.Ggram_blocks": true,
+  "scalar_nonuni3_M5@idmap.Lmat": true,
+  "scalar_nonuni3_M5@idmap.Rmat": true,
+  "scalar_nonuni3_M5@idmap.Schur": true,
+  "scalar_nonuni3_M5@idmap.Stt": true,
+  "uniform_int2_M5@idmap.Agen": false,
+  "uniform_int2_M5@idmap.Bgen": false,
+  "uniform_int2_M5@idmap.Et_blocks": true,
+  "uniform_int2_M5@idmap.Et_offdiag": true,
+  "uniform_int2_M5@idmap.Ggram_blocks": true,
+  "uniform_int2_M5@idmap.Lmat": true,
+  "uniform_int2_M5@idmap.Rmat": true,
+  "uniform_int2_M5@idmap.Schur": true,
+  "uniform_int2_M5@idmap.Stt": true
+ },
+ "idmap_max_abs_diff": {
+  "scalar_int3_M5": {
+   "Rmat": 6.38378239159465e-16,
+   "Lmat": 9.721390359374027e-15,
+   "Lmat_rel": 1.113515885563212e-14
+  },
+  "scalar_nonuni3_M5": {
+   "Rmat": 1.4432899320127035e-15,
+   "Lmat": 1.9984014443252818e-14,
+   "Lmat_rel": 9.88054949787753e-15
+  },
+  "scalar_int3_M5_obl": {
+   "Rmat": 6.38378239159465e-16,
+   "Lmat": 9.70751284962802e-15,
+   "Lmat_rel": 1.111829554463595e-14
+  },
+  "uniform_int2_M5": {
+   "Rmat": 1.6653345369377348e-15,
+   "Lmat": 9.103828801926284e-15,
+   "Lmat_rel": 1.4022298388339327e-14
+  }
+ },
+ "env_pre": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "lumenairy": "C:\\tmp\\curved_pre_a\\lumenairy\\__init__.py",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ },
+ "env_post": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "lumenairy": "C:\\tmp\\lum_curved\\lumenairy\\__init__.py",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ }
+}
