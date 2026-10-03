@@ -1,0 +1,80 @@
+{
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "lumenairy": "C:\\tmp\\lum_curved_b\\lumenairy\\__init__.py",
+  "machine": "Tesla_Ryzen",
+  "threads": {
+   "OMP_NUM_THREADS": null,
+   "OPENBLAS_NUM_THREADS": null,
+   "MKL_NUM_THREADS": null
+  }
+ },
+ "rows": [
+  {
+   "pair": [
+    [
+     1,
+     7
+    ],
+    [
+     2,
+     5
+    ]
+   ],
+   "target": "unit-test sizes vs curved c3 M=7",
+   "cos": 0.9328285802104856,
+   "dist_a": 0.07115962733611281,
+   "dist_b": 0.052478037531875604
+  },
+  {
+   "pair": [
+    [
+     1,
+     10
+    ],
+    [
+     2,
+     7
+    ]
+   ],
+   "target": "planner tops vs curved c3 M=10",
+   "cos": 0.9302177580158146,
+   "dist_a": 0.07070063191569784,
+   "dist_b": 0.053627906375202455
+  },
+  {
+   "pair": [
+    [
+     2,
+     7
+    ],
+    [
+     4,
+     4
+    ]
+   ],
+   "target": "k2 -> k4 vs curved c3 M=10",
+   "cos": 0.9908767165243427,
+   "dist_a": 0.053627906375202455,
+   "dist_b": 0.005636046931034644
+  },
+  {
+   "pair": [
+    [
+     1,
+     10
+    ],
+    [
+     4,
+     4
+    ]
+   ],
+   "target": "k1 -> k4 vs the FEM",
+   "cos": 0.9969026201414813,
+   "dist_a": 0.07068412564836349,
+   "dist_b": 0.0056525531982322685
+  }
+ ]
+}

@@ -1,0 +1,164 @@
+{
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "lumenairy": "C:\\tmp\\lum_curved_b\\lumenairy\\__init__.py",
+  "machine": "Tesla_Ryzen",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ },
+ "airy_normal": [
+  0.033735943356934604,
+  0.03373594335693461
+ ],
+ "rows": [
+  {
+   "arm": "oblique",
+   "map": "c3",
+   "M": 4,
+   "theta_deg": 25.0,
+   "phi_deg": 0.0,
+   "err": 0.0007154271191216477
+  },
+  {
+   "arm": "oblique",
+   "map": "c3",
+   "M": 5,
+   "theta_deg": 25.0,
+   "phi_deg": 0.0,
+   "err": 6.830539815116943e-05
+  },
+  {
+   "arm": "oblique",
+   "map": "c3",
+   "M": 6,
+   "theta_deg": 25.0,
+   "phi_deg": 0.0,
+   "err": 3.548881540638149e-06
+  },
+  {
+   "arm": "oblique",
+   "map": "c3",
+   "M": 7,
+   "theta_deg": 25.0,
+   "phi_deg": 0.0,
+   "err": 2.061777362172279e-07
+  },
+  {
+   "arm": "oblique",
+   "map": "c3",
+   "M": 8,
+   "theta_deg": 25.0,
+   "phi_deg": 0.0,
+   "err": 9.951541257713359e-09
+  },
+  {
+   "arm": "oblique",
+   "map": "c5",
+   "M": 4,
+   "theta_deg": 25.0,
+   "phi_deg": 0.0,
+   "err": 7.778962916038523e-07
+  },
+  {
+   "arm": "oblique",
+   "map": "c5",
+   "M": 5,
+   "theta_deg": 25.0,
+   "phi_deg": 0.0,
+   "err": 7.921906575170112e-09
+  },
+  {
+   "arm": "oblique",
+   "map": "c5",
+   "M": 6,
+   "theta_deg": 25.0,
+   "phi_deg": 0.0,
+   "err": 7.193001749783434e-11
+  },
+  {
+   "arm": "oblique",
+   "map": "c5",
+   "M": 7,
+   "theta_deg": 25.0,
+   "phi_deg": 0.0,
+   "err": 6.732392421326949e-13
+  },
+  {
+   "arm": "oblique",
+   "map": "c3",
+   "M": 4,
+   "theta_deg": 25.0,
+   "phi_deg": 40.0,
+   "err": 0.0003279042311986326
+  },
+  {
+   "arm": "oblique",
+   "map": "c3",
+   "M": 5,
+   "theta_deg": 25.0,
+   "phi_deg": 40.0,
+   "err": 2.6753461854656102e-05
+  },
+  {
+   "arm": "oblique",
+   "map": "c3",
+   "M": 6,
+   "theta_deg": 25.0,
+   "phi_deg": 40.0,
+   "err": 1.3991362605159097e-06
+  },
+  {
+   "arm": "oblique",
+   "map": "c3",
+   "M": 7,
+   "theta_deg": 25.0,
+   "phi_deg": 40.0,
+   "err": 6.315196221517994e-08
+  },
+  {
+   "arm": "oblique",
+   "map": "c3",
+   "M": 8,
+   "theta_deg": 25.0,
+   "phi_deg": 40.0,
+   "err": 3.3638135610303266e-09
+  },
+  {
+   "arm": "oblique",
+   "map": "c5",
+   "M": 4,
+   "theta_deg": 25.0,
+   "phi_deg": 40.0,
+   "err": 2.44299661722458e-07
+  },
+  {
+   "arm": "oblique",
+   "map": "c5",
+   "M": 5,
+   "theta_deg": 25.0,
+   "phi_deg": 40.0,
+   "err": 2.630648365808952e-09
+  },
+  {
+   "arm": "oblique",
+   "map": "c5",
+   "M": 6,
+   "theta_deg": 25.0,
+   "phi_deg": 40.0,
+   "err": 3.02405878116474e-11
+  },
+  {
+   "arm": "oblique",
+   "map": "c5",
+   "M": 7,
+   "theta_deg": 25.0,
+   "phi_deg": 40.0,
+   "err": 2.5068835896036035e-13
+  }
+ ]
+}

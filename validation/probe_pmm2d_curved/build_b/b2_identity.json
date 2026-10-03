@@ -1,0 +1,55 @@
+{
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "lumenairy": "C:\\tmp\\lum_curved_b\\lumenairy\\__init__.py",
+  "machine": "Tesla_Ryzen",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ },
+ "fixture": "A2 pillar, non-uniform walls",
+ "tf_singular_vertices": [],
+ "rows": [
+  {
+   "M": 5,
+   "nq_identity": 18,
+   "nq_transfinite": 18,
+   "corner_cells_transfinite": [],
+   "Rmat_tf_vs_kron": 2.784124097246724e-15,
+   "Rmat_tf_vs_idmap": 1.0708169604795063e-16,
+   "Lmat_tf_vs_kron": 9.88054949787753e-15,
+   "Lmat_tf_vs_idmap": 4.970057987351582e-15,
+   "Stt_tf_vs_kron": 9.892153239611497e-15,
+   "Stt_tf_vs_idmap": 4.917115349743539e-15,
+   "Schur_tf_vs_kron": 8.245717765247781e-15,
+   "Schur_tf_vs_idmap": 2.7313940097383132e-15,
+   "RT_tf_vs_kron": 6.3976601794024646e-15,
+   "RT_tf_vs_idmap": 9.381384558082573e-15,
+   "RT_idmap_vs_kron": 9.270362255620057e-15,
+   "J_tf_vs_idmap": 1.3296340292538043e-14
+  },
+  {
+   "M": 7,
+   "nq_identity": 22,
+   "nq_transfinite": 22,
+   "corner_cells_transfinite": [],
+   "Rmat_tf_vs_kron": 7.281555331260645e-15,
+   "Rmat_tf_vs_idmap": 1.0708169604795143e-16,
+   "Lmat_tf_vs_kron": 4.803533430995102e-14,
+   "Lmat_tf_vs_idmap": 3.280213047140774e-14,
+   "Stt_tf_vs_kron": 4.786972057210641e-14,
+   "Stt_tf_vs_idmap": 3.2688690175424035e-14,
+   "Schur_tf_vs_kron": 1.5475828014883922e-14,
+   "Schur_tf_vs_idmap": 9.679426976582073e-15,
+   "RT_tf_vs_kron": 4.138356324290271e-14,
+   "RT_tf_vs_idmap": 2.7325364193586665e-14,
+   "RT_idmap_vs_kron": 4.932165786897258e-14,
+   "J_tf_vs_idmap": 4.3750018256074726e-14
+  }
+ ],
+ "bilinear_closed_form_max_abs": 8.881784197001252e-16
+}
