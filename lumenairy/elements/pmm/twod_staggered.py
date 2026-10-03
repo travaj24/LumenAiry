@@ -4117,6 +4117,8 @@ def pmm_efficiency_2d_staggered(
     slant=None,
     max_pencil_dof: int = _MAX_STAG_PENCIL_DOF,
     cmap=None,
+    shapes=None,
+    background_eps=None,
 ) -> Efficiency2D:
     """Rigorous diffraction efficiencies of a 2-D crossed grating of axis-aligned
     rectangular pillars by the canonical no-floor Polynomial Modal Method (Granet
@@ -4202,6 +4204,11 @@ def pmm_efficiency_2d_staggered(
         an integer uniform grid only, and under a map every region is a
         block-form tensor region whose two polarizations need not decouple.
         Use :func:`pmm_jones_2d_staggered` (``cmap=``), which drives both.
+    shapes, background_eps : optional
+        Accepted only as ``None``.  Shape primitives (curved cells,
+        :mod:`lumenairy.elements.pmm.shapes2d`) RAISE here for the same
+        reason as ``cmap=`` (plan section 7, Q5); use
+        ``pmm_jones_2d_staggered(..., shapes=..., background_eps=...)``.
 
     Returns
     -------
@@ -4228,6 +4235,16 @@ def pmm_efficiency_2d_staggered(
     DOF on vertical pillars, the win being accuracy quality (no floor, exact
     sidewalls, position invariance).  NumPy/SciPy dense generalized eig.
     """
+    if shapes is not None or background_eps is not None:
+        raise NotImplementedError(
+            "pmm_efficiency_2d_staggered: shapes= (curved-cell shape "
+            "primitives) is not accepted by this single-polarization entry -- "
+            "it takes an integer uniform grid only, and a shape layer is "
+            "solved on a coordinate map under which every region is a "
+            "block-form tensor region.  Use pmm_jones_2d_staggered(period_x, "
+            "period_y, None, n_substrate, n_superstrate, depth, wavelength, "
+            "shapes=..., background_eps=...), which drives BOTH "
+            "polarizations and returns (orders, R, T, jones).")
     if cmap is not None:
         raise NotImplementedError(
             "pmm_efficiency_2d_staggered: cmap= (a coordinate map for curved "
@@ -4468,6 +4485,8 @@ def pmm_jones_2d_staggered(
     slant=None,
     max_pencil_dof: int = _MAX_STAG_PENCIL_DOF,
     cmap=None,
+    shapes=None,
+    background_eps=None,
 ):
     """Rigorous 2-D crossed grating with a FULL ``(3, 3)`` ANISOTROPIC cell --
     in-plane OR out-of-plane -- by the canonical NO-FLOOR staggered PMM: the
@@ -4590,6 +4609,29 @@ def pmm_jones_2d_staggered(
            <lumenairy.elements.pmm._curvemap.SeparableStretch.from_physical_walls>`,
            and build curved geometry with ``shapes=`` (the primitives place
            every wall at its physical boundary's preimage themselves).
+    shapes, background_eps : optional
+        The single-layer convenience of
+        ``PMM2DStackPure.add_layer(shapes=..., background_eps=...)``: the
+        layer's cross-section as a list of shape primitives
+        (:class:`~lumenairy.elements.pmm.Rect`,
+        :class:`~lumenairy.elements.pmm.FilletRect`,
+        :class:`~lumenairy.elements.pmm.Circle`,
+        :class:`~lumenairy.elements.pmm.Ellipse`,
+        :class:`~lumenairy.elements.pmm.SinusoidalWall`) painted in order onto
+        ``background_eps``.  Pass ``eps_cell=None``; ``shapes=`` is mutually
+        exclusive with ``eps_cell``, ``cmap``, ``mu_cell`` and ``slant`` (each
+        raises).  The walls and the coordinate map are built for you (every
+        outline an exact grid line, walls at the outlines' preimages), and the
+        result is BYTE-IDENTICAL to the one-layer stack.  See
+        :mod:`lumenairy.elements.pmm.shapes2d` for the layouts, the refusals
+        and the limits (a tensor ``eps`` under a curved map is Phase D).
+        Under a CURVED map the incident plane wave is not an exact discrete
+        half-space mode (the covariant field ``J^T E`` is not a polynomial),
+        so it enters through its exact L2 modal decomposition; ``R`` / ``T``
+        are then independent of ``n_orders`` to round-off, and a vacuum
+        spacer on top moves them only at the discretisation-error level
+        (falling with ``n_modes``; measured in
+        ``docs/audits/BUILD_PMM2D_CURVED_C_2026_10_02.md``).
 
     Returns
     -------
@@ -4629,6 +4671,31 @@ def pmm_jones_2d_staggered(
     ``e13``/``e31`` swap.
     """
     from .stack2d_pure import PMM2DStackPure  # (cycle-free: lazy)
+    if shapes is not None or background_eps is not None:
+        # THE SHAPE LAYER (Phase C): the one-layer stack, byte for byte
+        bad = [nm for nm, v in (("eps_cell", eps_cell), ("cmap", cmap),
+                                ("mu_cell", mu_cell)) if v is not None]
+        if not _slant_is_zero(_norm_slant_pair(slant,
+                                               "pmm_jones_2d_staggered")):
+            bad.append("slant")
+        if bad:
+            raise ValueError(
+                f"pmm_jones_2d_staggered: shapes= describes the layer and "
+                f"builds its own map; it cannot be combined with "
+                f"{', '.join(bad)} (pass eps_cell=None).")
+        _require_nonmagnetic_halfspace("pmm_jones_2d_staggered",
+                                       mu_superstrate, mu_substrate)
+        M = int(degree if n_modes is None else n_modes)
+        stack = PMM2DStackPure(period_x, period_y,
+                               n_superstrate=n_superstrate,
+                               n_substrate=n_substrate, n_modes=M,
+                               n_orders=int(n_orders), symmetry=symmetry)
+        stack.add_layer(float(depth), shapes=shapes,
+                        background_eps=background_eps,
+                        max_pencil_dof=max_pencil_dof)
+        stack.set_source(float(wavelength), theta=float(theta),
+                         phi=float(phi))
+        return stack.solve(jones=True)
     # Validate HERE so the message names this entry, then hand the checked cell
     # to the single-layer pure cascade (one implementation of the physics).
     cell = _validate_stag_cell("pmm_jones_2d_staggered", eps_cell)

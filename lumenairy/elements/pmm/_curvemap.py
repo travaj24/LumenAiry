@@ -760,7 +760,8 @@ class TransfiniteMap(CellMap):
     fillet maps landed on an independent 3-D finite-element oracle."""
 
     def __init__(self, u_walls, v_walls, vertex_images=None,
-                 curved_edges=None, period_x=None, period_y=None):
+                 curved_edges=None, period_x=None, period_y=None, *,
+                 _validate=True):
         self._init_walls(u_walls, v_walls, period_x, period_y)
         Nx, Ny = self.shape
         if vertex_images is None:
@@ -816,7 +817,11 @@ class TransfiniteMap(CellMap):
                         f"two cells sharing this edge would not meet (the "
                         f"map must be continuous across every grid line).")
             self.curved_edges[(kind, i, j)] = crv
-        self.validate(n=12)
+        if _validate:
+            # (the shape layer passes False to locate a fold itself and name
+            # the shapes involved, then calls validate(n=12) -- the same
+            # check, never skipped)
+            self.validate(n=12)
 
     def edge(self, kind, i, j):
         """The curve of edge ``(kind, i, j)`` -- the given curve, or the

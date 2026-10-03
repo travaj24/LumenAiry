@@ -815,6 +815,12 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         # THE CURVED-CELL MAP (stack-owned).  None = the shipped stack; the
         # map, when given, fixes the union grid up front.
         self.cmap = None
+        # THE SHAPE LAYER (Phase C): set by add_layer(shapes=...).  The stack
+        # merges every shape layer into ONE map (self.cmap) -- or, when the
+        # merged map is the identity (rectangles only), into the walls the
+        # shipped unmapped solver runs on (self._shape_walls).
+        self._shapes_map = False
+        self._shape_walls = None
         if cmap is not None:
             self._init_map(cmap)
         self._src = None
@@ -882,7 +888,8 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
     # ------------------------------------------------------------------ build
     def add_layer(self, thickness, *, eps=None, eps_cell=None, mu=None,
                   mu_cell=None, slant=None, x_walls=None, y_walls=None,
-                  grid=None, n_modes=None, max_pencil_dof=None):
+                  grid=None, n_modes=None, max_pencil_dof=None, shapes=None,
+                  background_eps=None):
         """Append a layer.  Pass exactly ONE of ``eps`` or ``eps_cell``, and
         at most one of ``mu`` (uniform) or ``mu_cell`` (patterned).
 
@@ -1003,9 +1010,63 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         NOTE this models a slanted (tilted-axis, CONSTANT cross-section)
         feature.  It does NOT model a TAPER (shrinking cross-section) -- no
         shear absorbs a dilation.  A tapered feature still needs a
-        z-staircase."""
+        z-staircase.
+
+        ``shapes=[...]`` with ``background_eps=`` (both required together, and
+        instead of ``eps`` / ``eps_cell``) describes a PATTERNED layer by its
+        physical outlines -- :class:`~lumenairy.elements.pmm.Rect`,
+        :class:`~lumenairy.elements.pmm.FilletRect`,
+        :class:`~lumenairy.elements.pmm.Circle`,
+        :class:`~lumenairy.elements.pmm.Ellipse`,
+        :class:`~lumenairy.elements.pmm.SinusoidalWall` -- painted in order
+        onto ``background_eps`` (curved cells; module
+        :mod:`lumenairy.elements.pmm.shapes2d`).  The STACK owns the map: the
+        shapes of EVERY shape layer are merged into ONE wall grid and ONE
+        coordinate map (the union of their walls, every outline an exact grid
+        line), which every layer and both half-spaces share, so every
+        interface stays a square modal match.  A uniform layer rides the
+        merged map with its constant ``eps``.  The merge runs HERE, so a
+        conflict raises at the ``add_layer`` that causes it, naming both
+        shapes and their layers: outlines that cross in plan view, two
+        different curves on one cell edge (a rounded corner over a sharp
+        one), a map that folds between two outlines that come too close, a
+        segment below the sliver contract.  Rectangles only give an
+        IDENTITY map: the stack then runs the shipped UNMAPPED solver on the
+        rectangles' walls, and a tensor ``eps`` (on a shape, the background
+        or a uniform layer) is accepted.  Under a CURVED map a tensor raises
+        ``NotImplementedError`` (Phase D of the curved-cell plan), as do
+        ``mu`` / ``mu_cell`` and ``slant`` (Phase D / E); raw ``eps_cell``
+        layers cannot be mixed with shape layers (describe rectangles with
+        :class:`~lumenairy.elements.pmm.Rect`), nor can an explicit
+        ``cmap=``; and ``layer_grids='per-layer'`` with shapes raises (a
+        curved mortar, Phase E)."""
         self._modal = None      # geometry change supersedes retained amplitudes
         self._internal = None
+        if shapes is not None or background_eps is not None:
+            return self._add_shapes_layer(
+                thickness, shapes, background_eps,
+                others=dict(eps=eps, eps_cell=eps_cell, mu=mu,
+                            mu_cell=mu_cell, x_walls=x_walls,
+                            y_walls=y_walls, grid=grid, n_modes=n_modes),
+                slant=slant, max_pencil_dof=max_pencil_dof)
+        if self._shapes_map and eps_cell is not None:
+            raise ValueError(
+                "PMM2DStackPure.add_layer: this stack's patterned layers are "
+                "given by shapes= (the stack merges them into one wall grid "
+                "and map), so a raw eps_cell layer cannot join it -- its "
+                "cells would refer to a grid the merge does not know.  "
+                "Describe the layer with shapes (Rect for rectangles).")
+        if self._shapes_map and (mu is not None or mu_cell is not None):
+            raise NotImplementedError(
+                "PMM2DStackPure.add_layer: mu / mu_cell in a stack with "
+                "shape layers is not implemented (a material permeability "
+                "under a map is Phase D of the curved-cell plan).")
+        if self._shapes_map and not _slant_is_zero(
+                _norm_slant_pair(slant, "PMM2DStackPure.add_layer")):
+            raise NotImplementedError(
+                "PMM2DStackPure.add_layer: a SLANTED layer cannot share a "
+                "stack with shape layers (slant x shapes is Phase E of the "
+                "curved-cell plan).")
         if (eps is None) == (eps_cell is None):
             raise ValueError(
                 "PMM2DStackPure.add_layer: pass exactly ONE of eps (uniform) or "
@@ -1086,6 +1147,121 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         self._layers.append(dict(kind="patterned", thickness=t, eps_cell=cell,
                                  slant=sl))
         return self._finish_layer(_pl)
+
+    def _add_shapes_layer(self, thickness, shapes, background_eps, *,
+                          others, slant, max_pencil_dof):
+        """``add_layer(shapes=..., background_eps=...)`` (Phase C of the
+        curved-cell plan): record the layer, then re-merge EVERY shape layer
+        of the stack into one wall grid and one map; on any refusal the stack
+        is left exactly as it was."""
+        fn = "PMM2DStackPure.add_layer"
+        if shapes is None or background_eps is None:
+            raise ValueError(
+                f"{fn}: shapes= and background_eps= go together (the "
+                f"permittivity where no shape is painted is required).")
+        given = [k for k, v in others.items() if v is not None]
+        if given:
+            raise ValueError(
+                f"{fn}: shapes= describes the whole layer; it cannot be "
+                f"combined with {', '.join(given)}.")
+        if not _slant_is_zero(_norm_slant_pair(slant, fn)):
+            raise NotImplementedError(
+                f"{fn}: slant= together with shapes= is not implemented (the "
+                f"shear composes with the map -- Phase E of the curved-cell "
+                f"plan).")
+        if self.layer_grids != "shared":
+            raise NotImplementedError(
+                f"{fn}: shapes= with layer_grids='per-layer' is not "
+                f"implemented -- the stack merges every shape layer into ONE "
+                f"map; different maps per layer need a curved "
+                f"(non-separable) mortar, Phase E of the curved-cell plan.  "
+                f"Use the default layer_grids='shared'.")
+        if self.cmap is not None and not self._shapes_map:
+            raise ValueError(
+                f"{fn}: this stack was built with an explicit cmap=; shape "
+                f"layers make their own map.  Use one or the other "
+                f"(compile_shapes() returns the map and eps_cell of a shape "
+                f"layer if you want the explicit route).")
+        for L in self._layers:
+            if L.get("kind") in ("patterned", "magnetic") and \
+                    "shapes" not in L:
+                raise ValueError(
+                    f"{fn}: this stack already holds a patterned layer given "
+                    f"by eps_cell / mu_cell; shape layers merge into a wall "
+                    f"grid of their own, so the two kinds cannot be mixed.  "
+                    f"Describe that layer with shapes (Rect for "
+                    f"rectangles).")
+            if not _slant_is_zero(L.get("slant")):
+                raise NotImplementedError(
+                    f"{fn}: this stack holds a SLANTED layer; slant x shapes "
+                    f"is Phase E of the curved-cell plan.")
+        t = float(thickness)
+        if not t > 0:
+            raise ValueError(f"{fn}: thickness must be > 0.")
+        shapes = tuple(shapes)
+        if not shapes:
+            raise ValueError(f"{fn}: shapes= must hold at least one shape "
+                             f"(a uniform layer is add_layer(t, eps=...)).")
+        rec = dict(kind="patterned", thickness=t, eps_cell=None,
+                   slant=(0.0, 0.0), shapes=shapes,
+                   background_eps=background_eps,
+                   max_pencil_dof=max_pencil_dof)
+        self._layers.append(rec)
+        try:
+            self._recompile_shapes()
+        except Exception:
+            self._layers.pop()
+            if any("shapes" in L for L in self._layers):
+                self._recompile_shapes()
+            else:
+                self.cmap, self._shape_walls = None, None
+                self._shapes_map, self._grid = False, None
+            raise
+        if max_pencil_dof is not None:
+            self._stag_cost_ack = True
+        return self
+
+    def _recompile_shapes(self):
+        """Merge the shapes of every shape layer into ONE wall grid and ONE
+        map (:func:`~lumenairy.elements.pmm.shapes2d._merge`), then give
+        every shape layer its ``eps_cell`` on that grid."""
+        from .shapes2d import _merge
+        fn = "PMM2DStackPure.add_layer"
+        idx = [k for k, L in enumerate(self._layers) if "shapes" in L]
+        layers = [(f"layer {k + 1}", self._layers[k]["shapes"],
+                   self._layers[k]["background_eps"]) for k in idx]
+        U, V, cmap, cells, identity = _merge(self.period_x, self.period_y,
+                                             layers)
+        if not identity:
+            for (lab, _sh, _bg), cell in zip(layers, cells):
+                if cell.ndim == 4:
+                    raise NotImplementedError(
+                        f"{fn}: {lab} carries a TENSOR permittivity, and the "
+                        f"stack's merged map is CURVED.  The effective tensor "
+                        f"under a map is sqrt(g) J^-1 eps J^-T, which needs "
+                        f"the Jacobian itself (not only the metric the scalar "
+                        f"route uses) -- Phase D of the curved-cell plan.  A "
+                        f"tensor is accepted when every shape layer is made "
+                        f"of rectangles (no map).")
+            for k, L in enumerate(self._layers):
+                if "shapes" not in L and L["kind"] == "uniform_tensor":
+                    raise NotImplementedError(
+                        f"{fn}: layer {k + 1} is a uniform TENSOR layer and "
+                        f"the merged shape map is CURVED (a tensor under a "
+                        f"map is Phase D of the curved-cell plan).")
+        for k, cell in zip(idx, cells):
+            _validate_stag_cost(fn, int(self.M), cell,
+                                max_pencil_dof=self._layers[k].get(
+                                    "max_pencil_dof"),
+                                check=("raise",))
+        for k, cell in zip(idx, cells):
+            self._layers[k]["eps_cell"] = cell
+        self._shapes_map = True
+        self._grid = (U.size - 1, V.size - 1)
+        if identity:
+            self.cmap, self._shape_walls = None, (U, V)
+        else:
+            self.cmap, self._shape_walls = cmap, None
 
     def _perlayer_spec(self, eps, eps_cell, x_walls, y_walls, grid, n_modes):
         """Validate the four PER-LAYER-GRID keywords and turn them into the
@@ -1855,10 +2031,10 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         if self.layer_grids != "shared" or getattr(self, "_stag_cost_ack",
                                                    False):
             return
-        if self.cmap is not None:
-            # the MAP owns the grid (its (u, v) walls are not a uniform
-            # lattice a caller could shrink), so there is no followable
-            # redundancy advice to give
+        if self.cmap is not None or self._shapes_map:
+            # the MAP (or the shape layer) owns the grid (its walls are not a
+            # uniform lattice a caller could shrink), so there is no
+            # followable redundancy advice to give
             return
         # ONCE per geometry: a wavelength/angle sweep calls solve() many times
         # on one stack and the advice cannot change between them.  A new
@@ -1938,7 +2114,11 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         # Shared eps-free geometric eig -> both half-spaces AND every uniform
         # layer (degeneracy-safe; all share the eigenvectors W0).
         cmap = self.cmap
-        if cmap is None:
+        if cmap is None and self._shape_walls is not None:
+            # SHAPE LAYERS whose merged map is the identity (rectangles
+            # only): the shipped unmapped solver on the rectangles' walls
+            gx, gy, mkw = self._shape_walls[0], self._shape_walls[1], {}
+        elif cmap is None:
             gx, gy, mkw = Nx, Ny, {}
         else:
             # THE CURVED-CELL MAP: every region is solved on the map's
